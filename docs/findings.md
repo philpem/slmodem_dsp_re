@@ -83391,3 +83391,270 @@ temptation on seeing red immediately after a fix was to widen the fix until
 the light went green, which would have installed exactly the false accept the
 case was meant to prevent.
 
+---
+
+### 7810. A TWO-ELEMENT PERMUTATION DOMAIN IS A DECODING, NOT A FIT -- three of five closed, and the compiler REORDERED in all three
+
+7766 gave a rule for acting on a store-order difference: measure what the
+compiler did to OUR order first, and act only where our emission IS our source,
+because then the object's emission is the author's source.  **That rule is
+sound and it is too strong.**  In all three functions closed here GCC 3.4.2
+reordered our source, 7766's licence was therefore unavailable, and the
+author's order was still recoverable -- because the set of source spellings
+that could produce the difference is *two*, both were compiled, and exactly one
+maps onto the object.
+
+    _ZN18V92Phase4Modulator13resetBeforRRNEv                2 of  81  -> EXACT
+    _ZN18V92Phase4Modulator27recivedPartTwoSilenceRrnSUVEv 35 of 177  -> EXACT
+    _ZN18V92Phase4Modulator15enterRepeatedCPEv             15 of 139  -> EXACT
+    _ZN18V92Phase4Modulator10recivedSUVEv                  37 of 177  -> grade 1
+
+`byteident.py` grade 0 **422 of 1251 -> 425**, grade 0-or-1 **471 -> 475**,
+BYTES 124 -> 120, measured at `579b0ed4` plus this commit on GCC 3.4.2 exact
+after a full `tools/toolchain/build.sh`.  `--list-exact` was taken on both
+sides and diffed: **441 lines before, 444 after, three added and none
+removed.**  A count would not have shown that (2900).
+
+#### The argument, stated so it can be attacked
+
+7761 wrote `resetBeforRRN` up as the counterexample that withdrew the licence to
+read a store order off the object: our source is `word_1c4 = 0; word_1c0 = 0;`,
+which is the object's own emitted order, and GCC emits it SWAPPED, sinking the
+load of `cp` between the two.  Two bytes of eighty-one.
+
+The question 7761 did not ask is what the compiler does to the OTHER spelling.
+It was compiled:
+
+    source (1c4, 1c0)  ->  emitted (1c0, 1c4)      -- 2 bytes wrong
+    source (1c0, 1c4)  ->  emitted (1c4, 1c0)      -- EXACT
+
+So on this pair the map is a **bijection**, and the object's emission has a
+unique preimage.  That is 7766's `dftfreqinit` argument with a transposition in
+place of the identity: in both cases the map from source order to emitted order
+is measured in the function itself and then inverted.  It is not a search over
+spellings, because the domain is exhausted -- there is no third order to try.
+
+**THE BRANCH THAT WOULD HAVE KILLED IT, and it had to be excluded by
+measurement.**  If GCC had emitted `(1c0, 1c4)` for BOTH source orders the map
+would be constant, no source order would produce the object's bytes, and those
+two bytes would not be a store-order difference at all.  Nothing before the
+compile distinguished the two cases.
+
+**WHAT THE ARGUMENT ASSUMES, and it is load-bearing.**  That the author's source
+differs from ours *only* in the order of these two statements.  Source texts
+outside that family could reach the same emission and the enumeration says
+nothing about them.  The claim is exactly: within the family of texts differing
+from ours only in this transposition, the object's emission has one preimage.
+
+**NATURALNESS IS NOT PART OF THE ARGUMENT and was checked anyway.**  The header
+declares `word_1c0` (+0x1c0) before `word_1c4` (+0x1c4), so the recovered order
+is ascending declaration order -- but `resetRRNSecondSection`, 61 bytes and
+already EXACT, writes `word_1c4 = 0;` first.  The author is not consistent, so
+naturalness carries nothing here and the claim rests on the measured map.
+
+#### The other two are one shape, and the corroboration is in the file's own banner
+
+`enterRepeatedCP` and the two SUV handlers end with the four-statement block
+this file has documented since finding 4754 -- `cp->byte_00 = k;
+cp->infoToBits(); pattern = cp->getBitVector(patternLength); word_1b0 =
+patternLength / cp->bitsPerSymbol;`.  Our source had one extra statement wedged
+INSIDE that block, between `getBitVector` and the division: `symbolCount = 0;`
+in `enterRepeatedCP`, `word_1c4 = 1;` in the two handlers.  It was put there
+because the object emits its store there.
+
+It does, and that is scheduling.  GCC sinks an independent store into the
+division's instruction schedule; the only question is HOW FAR, and the two
+source positions give two different answers:
+
+    enterRepeatedCP, symbolCount = 0 BEFORE the division
+        emitted after 1 of the division's 3 setup instructions   15 bytes wrong
+    enterRepeatedCP, symbolCount = 0 AFTER  the division
+        emitted after 3 of them, which is the blob               EXACT
+
+    the SUV handlers, word_1c4 = 1 BEFORE the division
+        emitted before the `div`                     35 / 37 bytes wrong
+    the SUV handlers, word_1c4 = 1 AFTER  the division
+        emitted between the `div` and the store of its quotient
+                             recivedPartTwoSilenceRrnSUV EXACT, recivedSUV 2
+
+(`recivedSUV` keeps two bytes for a reason that is not its source; 7812.)
+
+**THE DOMAIN IS TWO BECAUSE A STORE DOES NOT CROSS A CALL, AND THAT WAS
+MEASURED IN THIS FUNCTION RATHER THAN ASSERTED.**  It is the claim the whole
+argument rests on -- it is what makes an enumeration exhaustive rather than a
+search -- and this finding's own subject is a claim outrunning its evidence, so
+it does not get to be a compiler fact quoted from memory.  All six positions
+`enterRepeatedCP`'s tail offers were compiled and the store's place relative to
+the two calls recorded:
+
+    symbolCount = 0 after ...                    where the store lands   diff
+      (first, before state =)          store, infoToBits, getBitVector    48
+      state = V92P4M_STATE_REPEATED_CPU  store, infoToBits, getBitVector  43
+      cp->byte_00 = 0                    store, infoToBits, getBitVector  37
+      cp->infoToBits()                   infoToBits, store, getBitVector  35
+      pattern = cp->getBitVector(...)    infoToBits, getBitVector, store  15
+      word_1b0 = patternLength / ...     infoToBits, getBitVector, store   0
+    blob                                 infoToBits, getBitVector, store
+
+**The store never crosses a call in either direction**, at any of the six.  The
+object emits it after both, so only the last two positions are candidates at
+all, and of those exactly one is byte-identical.  The enumeration is therefore
+complete over the statement's whole range and not just over a pair somebody
+chose -- six compiles, one preimage.
+
+**AND THE RECOVERED SPELLING RESTORES THE BLOCK THE FILE ALREADY CLAIMED.**
+That is an independent witness, from source structure rather than from the byte
+comparison: with the change, all six sites end with the same contiguous four
+statements and the handler-specific store follows them, which is what finding
+4754 says the object holds once per function.  The old spelling broke the block
+in three of the six and kept it in the other three.
+
+**A HYPOTHESIS THAT DID NOT WORK, recorded because it was the better-motivated
+one.**  The blob puts `mov $0x1,%ecx; mov %ecx,0x1c4(%ebx)` between the `div`
+and the store of its quotient, which is the shape a NAMED INTERMEDIATE produces
+-- `unsigned int n = patternLength / cp->bitsPerSymbol; word_1c4 = 1;
+word_1b0 = n;`.  Compiled: it goes from 37 differing bytes to 2 and does NOT
+reach the object.  The plain reordering, which had the lower prior, is exact.
+
+#### The rule this leaves
+
+**Before permuting anything, count the family.**  Where the difference is the
+placement of ONE statement and the ordering constraints leave it two possible
+positions, compile both: either exactly one reproduces the object -- a decoding,
+whatever the compiler did to our order -- or neither does, and the difference is
+not statement order at all.  Where the family is large, this is 617's spelling
+search and the answer has not changed.  7811 is the large case, in the same
+batch and the same class, and it closed nothing.
+
+---
+
+### 7811. `V92Phase4Modulator::reset`: FOURTEEN SPELLINGS ENUMERATED, AND THE OBJECT'S STORE ORDER IS NOT REACHABLE FROM ANY OF THEM
+
+290 bytes, 75 instructions against 75, 46 differing bytes -- the largest in this
+batch and the one that stayed BYTES.  It is 617's `toneiir_reset` exactly: the
+object's emitted store order
+
+    0xc  0x44  0x40  0x42  0x0  0x43  0x4
+
+is **verbatim our source order**, and GCC hoists our `byte_42` store two slots
+to emit `0xc 0x42 0x44 0x40 0x0 0x43 0x4`.  So 7766's licence is unavailable
+here too, and 7810's is what was tried instead: enumerate the family.
+
+The family taken was every position of the one statement whose store moved --
+`byte_42 = bitsArg;`, seven positions among the block's seven statements --
+crossed with both orders of the adjacent independent pair `word_44 = suvLimit;`
+/ `amplitude = amplitudeArg;`, since 7810 establishes that GCC transposes such a
+pair.  Fourteen compiles, every one measured, differing bytes of 290:
+
+    byte_42 at position         0    1    2    3*   4    5    6
+      word_44 before amplitude  SIZE SIZE  49   46   47   27   27
+      amplitude before word_44  SIZE SIZE SIZE SIZE SIZE SIZE SIZE
+                                          (* = our current spelling)
+
+**NOT ONE OF THE FOURTEEN EMITS `0x44` BEFORE `0x40`.**  The blob does.  The
+best two cells, 27 of 290, put `0x42` in the object's fourth slot and then emit
+`0xc 0x40 0x44 0x42 ...` -- the other pair swapped.  Swapping that pair in the
+SOURCE does not swap it in the emission; it changes the function's SIZE by 15 or
+17 bytes, in all seven positions.
+
+So within this family the object's store order is unreachable, and the residual
+46 bytes are not a permutation of these statements.  **A negative from an
+exhausted family is worth more than a shrug**: it says the next person should
+look upstream of statement order -- at the argument loads, whose registers also
+differ -- and should not re-run this search.
+
+Two of the fourteen cells (positions 5 and 6) produce IDENTICAL output, so even
+had one closed, the preimage would not have been unique.  Worth knowing before
+the next enumeration: injectivity is a property to check, not to assume.
+
+**THE 27 WAS DECLINED AND THAT IS THE POINT.**  It is 19 bytes closer and it is
+not a grade; 7630's whole argument is that byte-count proximity is the weak
+number.  It also separates `byte_42 = bitsArg;` from
+`bitsPerSymbol = (unsigned char)(bitsArg + 2);`, the only other statement that
+reads `bitsArg`, which is a spelling with nothing to recommend it but its byte
+count.  Taking it would have been fitting the compiler with the fit visible in
+the diff.
+
+`alpha_equal` rejects `reset` at **row 6**, and the row is the difference rather
+than an artefact: blob `mov 0x34(%esp),%eax` against ours `mov 0x28(%esp),%ecx`
+-- a different STACK SLOT, so a different argument, which no renaming can
+reconcile.  The blob reads `suvLimit` third and `bitsArg` fourth; we read
+`bitsArg` third and `suvLimit` fourth.  That is the same fact the store order
+shows, seen at the loads.
+
+---
+
+### 7812. TWO CHARACTER-IDENTICAL BODIES IN ONE TRANSLATION UNIT COMPILE TO DIFFERENT BYTES, AND IT FOLLOWS THE POSITION
+
+`recivedSUV` and `recivedPartTwoSilenceRrnSUV` are the same statements in the
+same order in the same file -- finding 1237's ruling, the original spelled the
+body twice.  **The blob's two bodies are byte-for-byte identical; ours are
+not.**  Measured, not inherited from the file's banner: 177 bytes each, the
+blob's differ at zero offsets and ours differ at 0x9 and 0xf.
+
+That is the whole residual after 7810.  With the statement order recovered,
+`recivedPartTwoSilenceRrnSUV` is EXACT and `recivedSUV` is two bytes off:
+
+    row 3   blob `mov 0x1c4(%ebx),%eax`   ours `mov 0x1c4(%ebx),%ecx`
+    row 4   blob `test %eax,%eax`         ours `test %ecx,%ecx`
+
+`alpha_equal` accepts it, so it is grade 1 and it is register allocation.
+
+**IT FOLLOWS THE POSITION IN THE TRANSLATION UNIT, NOT THE TEXT.**  The two
+definitions were swapped -- same two bodies, the names exchanged -- and
+recompiled: the difference moved with the slot.  Whichever body comes FIRST gets
+`%ecx`; the second gets `%eax`, which is the blob's.
+
+    as-is      recivedSUV BYTES 2   recivedPartTwoSilenceRrnSUV EXACT
+    swapped    recivedSUV EXACT     recivedPartTwoSilenceRrnSUV BYTES 2
+    restored   recivedSUV BYTES 2   recivedPartTwoSilenceRrnSUV EXACT
+
+**IT IS NOT `-frename-registers`.**  That was the first guess -- a post-reload
+pass is where a positional effect would be expected.  Compiled with and without
+it: the twins differ at 0x9 and 0xf either way, and both stay two bytes from the
+blob.  The flag is not the cause, and the cause is not established here.
+
+**WHAT IT LICENSES ABOUT THE ORDER OF THE TWO IN OUR FILE: nothing.**  The blob
+puts `recivedSUV` at `.text+0x17130` and `recivedPartTwoSilenceRrnSUV` at
+`.text+0x17200`, so `recivedSUV` is first in the original's source too and our
+file already agrees.  Reordering them would move the two bytes onto the other
+symbol and change no total.  **The original's FIRST copy behaves like our
+SECOND**, so whatever carries the effect is somewhere in the translation unit
+ahead of both, and it is not the pair.
+
+**THE TRAP THIS CLOSES.**  Two identical source bodies emitting different bytes
+reads as a defect in one of them, and a pass looking at `recivedSUV` alone would
+go hunting for a source difference that does not exist.  It is 614's class:
+free, and expensive to chase.
+
+**THE SIX MUTATION ANCHORS.**  Reordering statements detaches every
+`test/mutations/*.json` anchor whose `find` spans them -- six in
+`v92p4gen.json`, every one reporting "matches 0 time(s)", which is what
+`anchorcheck.py` is for and what made `make phase` red before this commit.  Each
+was rewritten against the new text with the mutation it expresses unchanged:
+198 suites, 8,959 mutations, 0 anchors matching other than exactly once.
+
+**AND REATTACHED IS NOT CAUGHT.**  `anchorcheck.py` proves a `find` matches
+once; it cannot prove the mutation is still detected, and `make phase` does not
+run `mutate.py` -- the snapshot is hashing only.  That is findings 2157 and
+3002's shape, verdicts vanishing with nobody counting them, so the suite was
+run: **`v92p4gen`, 103 mutations, 103 caught, 0 NOT caught, 0 unusable, 0
+equivalent**, all six rewritten rows among them.  `mutsnap.py --check` reports
+198 of 198 registered suites STALE, which is the tree's standing condition and
+not this commit's -- but `--strict` is what a merge passes, so it wants a
+refresh there.
+
+**THE RECTIFICATION HARNESS THIS BATCH NEEDED.**  `byteident.py` does not print
+WHERE `alpha_equal` rejected, and 7768's format requires it.  A mirror of
+`alpha_equal` that stops at the first failing row was written for this pass and
+validated against the tool it mirrors over the whole tree: **821 pairs offered
+to `alpha_equal`, agreement on 821, 0 disagreements, 44 ACCEPT and 777 REJECT**
+-- so it is shown to fire in both directions rather than trusted for printing
+nothing (finding 134).  It lives in the pass's scratch directory, not in
+`tools/`; folding it into `byteident.py` as a `--why` flag is a small job for
+whoever wants the column permanently.
+
+**THESE NUMBERS 7810-7812 WERE TAKEN WITH A GAP.**  `master` held 7769 and a
+sibling worktree branch already held 7804 when this was written, and that agent
+is still writing.  Expect to renumber at merge.
+

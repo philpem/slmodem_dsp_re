@@ -718,10 +718,20 @@ void V92Phase4Modulator::recivedSUVtag()
  * helper the object does not have.  Finding 4754.
  *
  * `recivedSUV` and `recivedPartTwoSilenceRrnSUV` are 177 bytes each and the
- * same 177 bytes: same guard, same modulus test, same `.rodata.str1.4:0x3c40`
- * string, same tail.  Two ordinary GLOBAL symbols, not linkonce and not an
- * alias, so the original spelled the body twice -- finding 1237's ruling for
- * `reset` against the constructor, one class over.
+ * same 177 bytes -- MEASURED, not asserted: the blob's two bodies compare
+ * byte for byte equal.  Same guard, same modulus test, same
+ * `.rodata.str1.4:0x3c40` string, same tail.  Two ordinary GLOBAL symbols, not
+ * linkonce and not an alias, so the original spelled the body twice --
+ * finding 1237's ruling for `reset` against the constructor, one class over.
+ *
+ * **THE FOUR-STATEMENT BLOCK IS CONTIGUOUS AND NOTHING BELONGS INSIDE IT.**
+ * `word_1c4 = 1` in the two SUV handlers and `symbolCount = 0` in
+ * `enterRepeatedCP` used to sit between `getBitVector` and the division,
+ * because the object EMITS their stores there; GCC 3.4.2 at these flags sinks
+ * an independent store into the division's schedule, so writing them after the
+ * block is what produces the object's emission.  Three functions became
+ * byte-identical when they were moved out.  Finding 7810 -- do not "tidy" them
+ * back in.
  * ===========================================================================
  */
 
@@ -747,8 +757,8 @@ void V92Phase4Modulator::recivedSUV()
 	cp->byte_00 = 0;
 	cp->infoToBits();
 	pattern = cp->getBitVector(patternLength);
-	word_1c4 = 1;
 	word_1b0 = patternLength / cp->bitsPerSymbol;
+	word_1c4 = 1;
 }
 
 /* recivedPartTwoSilenceRrnSUV (.text+0x17200, 177 B).  The same body again;
@@ -770,8 +780,8 @@ void V92Phase4Modulator::recivedPartTwoSilenceRrnSUV()
 	cp->byte_00 = 0;
 	cp->infoToBits();
 	pattern = cp->getBitVector(patternLength);
-	word_1c4 = 1;
 	word_1b0 = patternLength / cp->bitsPerSymbol;
+	word_1c4 = 1;
 }
 
 /*
@@ -962,11 +972,21 @@ void V92Phase4Modulator::resetBeforFPE()
 	flag_3c = 1;
 }
 
-/* resetBeforRRN (.text+0x16ea0, 81 B). */
+/*
+ * resetBeforRRN (.text+0x16ea0, 81 B).
+ *
+ * THE FIRST TWO STORES ARE WRITTEN IN THE ORDER THE COMPILER REVERSES, NOT THE
+ * ORDER IT EMITS.  The object emits `0x1c4` then `0x1c0`; GCC 3.4.2 at these
+ * flags sinks the load of `cp` between the two and swaps them, so ascending
+ * source order gives descending emission.  Both orders were compiled: the
+ * source below is EXACT and the other spelling misses by exactly those two
+ * bytes, which makes the map on this pair a bijection and the object's order
+ * decodable.  Finding 7810.
+ */
 void V92Phase4Modulator::resetBeforRRN()
 {
-	word_1c4 = 0;
 	word_1c0 = 0;
+	word_1c4 = 0;
 	symbolCount = 0;
 	cp->word_110 = 0;
 	word_28 = 1;
@@ -1033,8 +1053,8 @@ void V92Phase4Modulator::enterRepeatedCP()
 	cp->byte_00 = 0;
 	cp->infoToBits();
 	pattern = cp->getBitVector(patternLength);
-	symbolCount = 0;
 	word_1b0 = patternLength / cp->bitsPerSymbol;
+	symbolCount = 0;
 }
 
 /*
@@ -1516,6 +1536,18 @@ int V92Phase4Modulator::generateSymbol()
  *     pattern = cp->getBitVector(patternLength)
  *     e2uExtended = 0
  *     for (i = 0; i < nSymbols; i++) generateSymbol()
+ *
+ * THAT LIST IS THE OBJECT'S EMITTED ORDER AND IT IS NOT THE AUTHOR'S SOURCE
+ * ORDER -- 617's ruling, and here it is measured rather than inherited.  Our
+ * source is written in exactly that order and GCC hoists `byte_42` two slots,
+ * so the map is not the identity.  The whole single-statement family was then
+ * enumerated: every one of the seven positions of `byte_42 = bitsArg`, crossed
+ * with both orders of `word_44`/`amplitude`, fourteen compiles.  **NONE of the
+ * fourteen emits `0x44` before `0x40`, which the object does**, so the
+ * remaining 46 bytes are not a permutation of these statements at all and no
+ * spelling in the family can close them.  Closest was 27 of 290, in a spelling
+ * that separates `byte_42` from `bitsPerSymbol`, and it was declined: closer
+ * bytes are not a grade.  Finding 7811 -- do not re-run the search.
  *
  * THE AMPLITUDE HANDED TO THE MAPPER IS RE-READ FROM THE FIELD, not passed
  * through from the argument: `movswl 0x40(%esi),%eax` at .text+0x1907b, where
