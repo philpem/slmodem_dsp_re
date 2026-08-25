@@ -89910,12 +89910,21 @@ The seven are `calculateLinearMeanAndVar`, `printErrorHistogramAndReset`,
 
 **AND THE MAGNITUDE MATTERS AS MUCH AS THE FACT.** Every one of the seven is a
 move/arith swap of one or two instructions and **not one has an x87 imbalance**,
-which is the bucket that carried `setToDefault`'s wrong field types. A move
-against an arithmetic instruction at this size is `lea 0x1(%eax),%edx` against
-`mov %eax,%edx ; inc %edx`, or a store folded into an addressing mode -- an
-encoding choice, not a field the header typed wrongly. So the cluster does not
-reproduce `setToDefault`'s defect and the delta-0 reading survives for 22 of 29
-outright and for the other 7 with a named, bounded residual.
+which is the bucket that carried `setToDefault`'s wrong field types. That is
+the comparison that matters against it and it is measured, not argued.
+
+**TWO OF THE SEVEN ARE TRACED TO THE INSTRUCTION AND FIVE ARE NOT.**
+`detectRNot` and `detectRfNot` are one shape: the object hoists the constant
+zero into `%ebx` at entry (`xor %ebx,%ebx`) and spends it with `mov %ebx,%eax`
+at each `return 0`, where we re-materialise it in place with `xor %eax,%eax` --
+a move against an arithmetic instruction, same value, allocation and not a
+field. The other five -- `calculateLinearMeanAndVar`,
+`printErrorHistogramAndReset`, `V90Jd::V90Jd`, `V92Modem::~V92Modem` and
+`V92Modem::reset` -- were bucketed and NOT traced, so lever 2 is not excluded
+on them: it is bounded to at most two non-x87 instructions each, and anybody
+working one of those five should read its own diff before believing the total.
+The honest reading of the run is 22 of 29 confirmed encoding-only, 2 traced and
+explained, 5 bounded.
 
 The scan is `ae6_buckets.py`'s shape and it is worth rebuilding rather than
 trusting this list: it took `byteident.insns` and `byteident._padding` for its
