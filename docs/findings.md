@@ -84367,3 +84367,40 @@ negative result can be argued at; forty rows is not.
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7778 when 7779-7781 were
 written and sibling worktrees are writing concurrently; expect to renumber at
 merge.
+
+### 7782. RULING: byte identity is taken when the enumeration is exhausted, and the fit-versus-recovery worry does not block it
+
+7770 closed three functions by writing a statement order the author may not
+have written, and flagged the tension honestly: 617 treats byte identity as
+EVIDENCE that the author's source was recovered, so manufacturing byte
+identity could be read as inverting the inference.  The question was put to
+the project owner with `resetBeforRRN` as the concrete case -- two bytes of
+eighty-one, closable by transposing two stores.
+
+**The ruling is: do it.**  Byte identity is the target and it is taken.
+
+The line that keeps 617 intact is the one 7770 and 7779 already drew and
+which two passes applied in both directions:
+
+- **Take it** when the candidate space is EXHAUSTED and exactly one element
+  maps onto the object.  `resetBeforRRN`'s domain had two members and both
+  were compiled; `externalReset`'s had six distinct emissions from all 3!
+  orderings.  That is a decoding: the object's emission has a unique preimage,
+  so the source is derived from the object rather than fitted to it.
+- **Decline it** when you are hill-climbing on byte count.  A pass declined
+  `V92Phase4Modulator::reset` at 27 differing bytes of 290 because its
+  14-spelling enumeration contained NO match, and another declined a 2-of-387
+  near-miss because the enumeration had been completed before any cell was
+  read.  Closer bytes are not a grade.
+
+So the two rules do not actually conflict.  617 is about what byte identity
+LICENSES YOU TO CONCLUDE; this is about what you are allowed to WRITE.  An
+exhausted enumeration supports both: the bytes match, and the preimage is
+unique, so the conclusion 617 wants is available.  What 617 forbids is
+treating a match found by search as though it were a match found by decoding,
+and nothing here does that.
+
+**What must still be recorded, every time**: which side of the line a closure
+falls on, and what the enumeration's domain was.  A finding that says "closed
+by reordering" without saying how many spellings were compiled is not
+reviewable and does not carry the licence.
