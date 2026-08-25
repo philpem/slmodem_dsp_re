@@ -2407,6 +2407,28 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
  * EIGHT DEBUG GATES, ALL `> 1`, each re-reading the level.  A sweep over
  * {0, 2} cannot separate `> 1` from `> 0`; `t_v90modchain`'s three-level
  * sweep is the shape this needs.
+ *
+ * THE DISPATCH VALUE IS READ INTO A NAMED LOCAL BEFORE `qcSampleCount` IS
+ * ADVANCED, and the object is what says so.  Written the obvious way --
+ * `qcSampleCount += n;` and then `switch (modem.demodulator->word_3c)` -- GCC
+ * splits the load chain around the store:
+ *
+ *     blob   mov 0x175c(%esi),%edx    ours   mov 0x6fac(%esi),%ebx
+ *            mov 0x6fac(%esi),%ebx           mov 0x175c(%esi),%edx
+ *            mov 0x3c(%edx),%eax             add %edi,%ebx
+ *            add %edi,%ebx                   mov %ebx,0x6fac(%esi)
+ *            mov %ebx,0x6fac(%esi)           mov 0x3c(%edx),%eax
+ *
+ * -- 17 bytes of 779, and the blob completes the whole `word_3c` load before
+ * the store.  With the value in a local declared ahead of the `+=` it is
+ * EXACT.  The local also has to sit where it is for a reason that is not
+ * cosmetic: `V90Modem::progress` is what RUNS the demodulator, so it is what
+ * sets `word_3c`, and the read cannot be hoisted above the call.
+ *
+ * (7770 records a named intermediate as its better-motivated hypothesis that
+ * FAILED, reaching 2 bytes and not 0.  It is the same construct and this time
+ * it lands; the difference is that there the object's shape was a scheduling
+ * sink and here it is a load the object completes early.)
  * ===========================================================================
  */
 
@@ -2428,9 +2450,11 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 
 	modem.progress(rxbits, *(unsigned int *)nrx, in, n);
 
+	unsigned int state = modem.demodulator->word_3c;
+
 	qcSampleCount += (int)n;
 
-	switch (modem.demodulator->word_3c) {
+	switch (state) {
 	case 0x3a:			/* 0xf8d0 */
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(

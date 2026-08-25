@@ -22,8 +22,8 @@
  },
  {
   "label": "the sample count is advanced after the dispatch rather than before",
-  "find": "\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);\n\n\tqcSampleCount += (int)n;\n\n\tswitch (modem.demodulator->word_3c) {",
-  "replace": "\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);\n\n\tswitch (modem.demodulator->word_3c) {"
+  "find": "\tunsigned int state = modem.demodulator->word_3c;\n\n\tqcSampleCount += (int)n;\n\n\tswitch (state) {",
+  "replace": "\tunsigned int state = modem.demodulator->word_3c;\n\n\tswitch (state) {"
  },
  {
   "label": "the sample count counts down",
@@ -37,8 +37,8 @@
  },
  {
   "label": "the dispatch is on the phase 3 demodulator's state",
-  "find": "\tqcSampleCount += (int)n;\n\n\tswitch (modem.demodulator->word_3c) {",
-  "replace": "\tqcSampleCount += (int)n;\n\n\tswitch (modem.demodulator->phase3Demodulator->state) {"
+  "find": "\tunsigned int state = modem.demodulator->word_3c;",
+  "replace": "\tunsigned int state = modem.demodulator->phase3Demodulator->state;"
  },
  {
   "label": "the ANSpcm-demod-over code is 0x39",
