@@ -887,18 +887,27 @@ V90Equalizer::setDfeCoeff(float *src, unsigned int n)
  * The `+ 8` on the length is the same slack `reset` and the constructor use,
  * and the arrays cleared are the RAW pointers, so the clear starts before the
  * aligned view and the eight extra entries are what keeps it in the block.
+ *
+ * THE `+ 8` IS IN THE LOOP CONDITION AND NOT IN A TEMPORARY, and the object
+ * says which.  With `n = length + 8` above the loop, GCC cannot fold the
+ * known `i == 0` into the zero-trip test and emits `cmp %ebx,%eax / jae`;
+ * with the bound in the condition it emits the object's `cmp $0x0,%ebx /
+ * jbe`, which is also what the FIRST loop of each of these two functions
+ * emits from a plain member bound, on our side and the blob's.  That first
+ * loop is the in-function control 617 and 7766 require before a spelling is
+ * changed for a codegen difference.  `reset` still writes the temporary --
+ * see finding 7775 for why it was left there.
  */
 void
 V90Equalizer::zeroLinearEquCoefs()
 {
-	unsigned int i, n;
+	unsigned int i;
 
 	for (i = 0; i < linearEquLength; i++)
 		linearEquCoefs[i] = 0;
 
 	if (mmxMode != 0) {
-		n = linearEquLength + 8;
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < linearEquLength + 8; i++) {
 			linearEquMmxCoefs[i] = 0;
 			array_d8[i] = 0;
 		}
@@ -908,14 +917,13 @@ V90Equalizer::zeroLinearEquCoefs()
 void
 V90Equalizer::zeroDfeCoefs()
 {
-	unsigned int i, n;
+	unsigned int i;
 
 	for (i = 0; i < dfeLength; i++)
 		dfeCoefs[i] = 0;
 
 	if (mmxMode != 0) {
-		n = dfeLength + 8;
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < dfeLength + 8; i++) {
 			dfeMmxCoefs[i] = 0;
 			array_118[i] = 0;
 		}

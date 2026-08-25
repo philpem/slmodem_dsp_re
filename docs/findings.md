@@ -83701,3 +83701,346 @@ Verdict-neutral by measurement, which is the only thing that makes a refactor
 of a certifier safe to land: EXACT 425, REGALLOC 45, grade 0-or-1 475, BYTES
 120, SIZE 653 before and after, and the self-test's 18 cases (6 accept, 12
 reject) unchanged.
+
+### 7774. THE FOUR `V90Resampler` CONSTRUCTORS: A C1/C2 ASYMMETRY RECOVERED THE DEFINITION ORDER, AND THE `Pf` ONE HAD A STATEMENT WE NEVER WROTE
+
+Four symbols, 271 bytes each, 63 to 99 differing bytes, all four now **EXACT**.
+It is the largest single closure in this refinement wave and neither half of it
+was a permutation.
+
+**THE BRIEF SAID `C1` AND `C2` ARE ONE BODY, AND THE OBJECT SAYS OTHERWISE.**
+Checked before anything was edited, by comparing `C1` against `C2` *inside*
+each object rather than across them:
+
+    blob  C1(f)  vs C2(f)    47 differing    ours  C1(f)  vs C2(f)    0
+    blob  C1(Pf) vs C2(Pf)    0              ours  C1(Pf) vs C2(Pf)  47
+
+Both objects have one pair whose two copies are byte-identical and one whose
+copies differ, and **they are opposite pairs**.  `nm -n` says why: the blob
+emits `C1(f), C2(f), C1(Pf), C2(Pf)` and we emitted `C1(Pf), C2(Pf), C1(f),
+C2(f)`.  In BOTH objects it is the FIRST-emitted pair whose two clones diverge
+(class ORDER -- same instruction multiset, different schedule) and the second
+whose clones agree.  So the divergence is a property of emission position, and
+the two objects disagree about which constructor sits in it.
+
+**GCC 3.4.2 EMITS FUNCTIONS IN REVERSE DEFINITION ORDER TOO, VERIFIED ON OUR
+OWN OBJECT FIRST** -- 7765 established that for file-scope data; here
+`src/pump/v90/V90Resampler.cpp` defined the `float cutoff` constructor first
+and the `float *bank` one second, and our object emits them the other way
+round.  So the blob's layout says the original defined `float *bank` FIRST.
+
+Swapping the two definitions made **both** copies of the `float cutoff`
+constructor byte-identical, and moved the `float *bank` pair from 99/82
+differing to 86/86 -- it took on the blob's own C1==C2 shape at the same time.
+The whole translation unit's emission order is now the blob's, **12 symbols
+for 12**, which is a confirmation the byte count could not give.
+
+**AND THE `Pf` CONSTRUCTOR HAS A STATEMENT THE `f` ONE DOES NOT.**  With the
+`f` pair exact, the remaining 86 bytes had a witness that nothing else in this
+wave had: two functions from ONE source shape, one of them proved right.  The
+blob's `Pf` constructor is **69 instructions against the `f` one's 68** --
+padding stripped, both 271 bytes, the difference absorbed by alignment -- and
+the extra instruction is `mov %edx,0xac(%esi)`, a zero into `timingHistoryIndex`
+between the `sysdep_malloc` and the `timingHistoryLen` store.  Adding
+
+    timingHistoryIndex = 0;
+
+to that constructor and to no other made both its copies EXACT.  It is
+redundant -- `reset()` is called three statements later and zeroes the same
+field -- which is why no differential test could ever have found it, and why
+the instruction count could: this is 7480's shape, an ABSENCE, and 7630 is
+explicit that absence is the one thing a count does detect.
+
+**TWO CONTROLS, BECAUSE "REORDER THE FILE" WOULD OTHERWISE BE A LICENCE TO
+PERMUTE ANYTHING, AND THE SECOND ONE BOUNDS THE CLAIM.**
+
+*Plain functions do not move.*  Moving `spectralDesign` to the blob's relative
+position inside `V90ConstellationDesigner.cpp` changed **nothing**: 74
+differing bytes before the move and 74 after.
+
+*And neither does every clone pair.*  `V90Equalizer.cpp` has the same
+signature on its DESTRUCTOR -- blob `D1` vs `D2` differ by 2 bytes, ours by 0
+-- and it has two clone pairs, so the emission slot is steerable there.
+Measured rather than assumed: **our `C1`/`C2` are internally identical AND
+emitted first**, which already refutes "the first-emitted pair always
+diverges"; and moving the destructor's definition above the constructor's put
+`D2, D1` into the blob's slot (ahead of the constructor pair) and changed
+**nothing at all** -- 52 and 50 differing bytes before and after, our `D1` and
+`D2` still identical to each other.
+
+So the mechanism is real where it was measured and is NOT a general law about
+clone pairs.  What is established is that these two constructors' bytes depend
+on which of them is emitted first, and that matching the blob's order made
+four functions exact.  Why the compiler schedules one clone differently from
+the other is not settled here, and the destructor case says the trigger is
+narrower than "first in the file".  **Reorder a file only for a clone pair,
+only with the before/after measured, and expect it to do nothing.**
+
+---
+
+### 7775. AN INVENTED TEMPORARY IN A LOOP BOUND, AND THE CONTROL WAS THE LOOP ABOVE IT
+
+`V90Equalizer::zeroLinearEquCoefs` and `zeroDfeCoefs` are 115-byte twins, 17
+and 19 differing bytes, and the whole difference was four rows:
+
+    blob   cmp $0x0,%ebx / jbe        cmp %eax,%ebx / ja
+    ours   cmp %ebx,%eax / jae        cmp %ebx,%eax / jb
+
+-- the loop-entry guard and the back edge of the second loop, the same test
+with the operands the other way round, three bytes against two.  The byte
+COUNT matched only because the extra byte reappeared as alignment padding.
+
+**THE CONTROL IS IN THE FUNCTION, WHICH IS 7766'S RULE AND NOT 7761'S SURVEY.**
+The FIRST loop of the same function -- `for (i = 0; i < dfeLength; i++)`,
+bound read straight from the member -- emits `cmp $0x0,%edx / jbe` and
+`cmp %eax,%edx / ja` on BOTH sides.  So this compiler, at these flags, in this
+function, produces the blob's form from that spelling, and the second loop's
+disagreement is a difference in what we wrote rather than in what the
+scheduler did.
+
+What we wrote was a temporary the author did not:
+
+    n = dfeLength + 8;                 for (i = 0; i < dfeLength + 8; i++)
+    for (i = 0; i < n; i++)      ->
+
+With the bound in the condition GCC folds the known `i == 0` into the
+zero-trip test and emits the blob's `cmp $0x0`.  Both twins moved on the one
+edit -- 17 -> 2 and 19 -> 2 -- and both are position-for-position identical,
+promoted to grade 1.
+
+**THE RESIDUAL TWO BYTES CANNOT BE A SOURCE PROPERTY AND THE BLOB PROVES IT.**
+What is left in each is the register holding the `mmxMode` load: the blob uses
+`%eax` in `zeroLinearEquCoefs` and `%ecx` in `zeroDfeCoefs`, from source that
+is identical but for the array names, and we use `%ebx` and `%eax`.  Neither
+object is internally consistent, so no spelling decides it.  Free.
+
+**`V90Equalizer::reset` HAS THE SAME PATTERN THREE TIMES AND THE EDIT WAS
+DECLINED.**  Its `mmxArraysPresent` block writes `n = linearEquLength + 8`,
+`n = word_1c + 8` and `n = dfeLength + 8`, and inlining all three makes **36
+instructions across the three loops exact**, taking the function from 492
+differing bytes to 329.  It also takes it from 862 bytes to 878 -- out of
+`byteident`'s BYTES bucket and into SIZE.
+
+The 862 was two wrongs cancelling, and that was measured rather than assumed:
+with the change reverted the tail is equally divergent, because the blob loads
+BOTH fade ratios (`flds 0x17c`, `flds 0x180`) before the first `fcom` and we
+load one, clamp it and load the other.
+
+**THE EDIT IS CORRECT AND IT IS WITHHELD BECAUSE IT IS COUPLED TO AN OPEN
+DEFECT, WHICH IS THE ONLY REASON THAT COUNTS.**  The two are not independent:
+removing the temporaries changes the register pressure the x87 tail is
+allocated under, and the tail then needs an extra `fld %st(0)` and its
+consequences -- sixteen bytes that were previously missing.  So this is not
+"leave it, the number looks worse"; it is that applying half of a coupled pair
+puts the function in a state neither the blob nor our own analysis endorses.
+Whoever closes the `clamp_fade_ratio` divergence must apply the loop edit in
+the same commit, and the loop edit alone is 36 instructions of proof that it
+is waiting there.
+
+---
+
+### 7776. `setBllState`: A `static` HELPER WAS THE WHOLE DIFFERENCE, AND THIRTEEN SIBLING ARMS WERE THE CONTROL
+
+693 bytes, 142 instructions against 142, 11 differing bytes, and only four
+rows differed.  Two were a register name.  The other two:
+
+    blob   mov %edx,0x4c(%ebx)      ours   mov 0xf4(%ecx),%eax
+           mov 0xf4(%ecx),%eax             mov %edx,0x4c(%ebx)
+
+-- the `V90_BLL_TRN1_QC_SLOW` arm, where the load of the second gain is
+hoisted above the store of the first.
+
+**THE FUNCTION CARRIES ITS OWN CONTROL, THIRTEEN TIMES OVER.**  The switch has
+sixteen arms and thirteen of them are the same two statements -- `bllK1 =
+params->X_K1; bllK2 = params->X_K2;` -- and every one of those thirteen emits
+load, store, load, store, identically on both sides.  So the compiler is not
+reordering this shape; the arm that differs is the arm that is written
+differently.
+
+It was written through a helper, because `include/dsplib/V90Parameters.h` is
+frozen and declares +0x0f4 as an `int`:
+
+    static float asFloat(int bits) { float f; __builtin_memcpy(...); return f; }
+    bllK2 = asFloat(params->unnamed_0f4);
+
+The function boundary is what let GCC hoist the load.  Copying the four bytes
+at the site instead --
+`__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2)` -- gives the
+blob's order exactly: position-for-position identical, 2 bytes left, promoted
+to grade 1.  The helper is gone and the two mutations in
+`test/mutations/v90resampler.json` that anchored on its call site were
+re-anchored on the `memcpy`; both still name a real defect.
+
+The residual two bytes are `stateSamples = 0` going through `%eax` in the blob
+and `%esi` in ours, with both registers dead either way.  Free.
+
+---
+
+### 7777. FOUR THINGS THAT DID NOT WORK, WITH THEIR NUMBERS
+
+Recorded because a refuted hypothesis is the cheapest thing this record can
+give the next pass, and because two of these are the shapes that look most
+like the ones that DID work.
+
+**1. The `V90ConstellationDesigner` constructor: two spellings, both worse,
+and the stopping rule was set before either was tried.**  13 instructions,
+eight stores, 34 differing bytes, class ORDER.  Our source order
+
+    byte_08, word_48, byte_38, power, params, minRate, maxRate, preFilter
+
+is the BLOB'S EMITTED ORDER exactly, and GCC scrambles ours to
+`0x08, 0x38, 0x48, 0x50, 0x30, 0x00, 0x4c, 0x44`.  By 7766's test the
+inference is therefore unavailable -- the compiler demonstrably reorders this
+function -- so only genuinely different CONSTRUCTS were tried, not
+permutations.  A member-initialiser list in declaration order: **49** differing
+bytes.  A body in declaration order: **49**.  Against 34 for what is there.
+Two draws from a space of 8! and both worse; stopped, per the rule set in
+advance.  The blob's order is neither ascending nor descending, so there is
+nothing to decode from it.
+
+**2. `V90Equalizer::reset`'s fade ratios, read into locals before clamping.**
+The blob loads `LINEAR_EQU_FADE_LEFT_EDGE_RATIO` and `..._RIGHT_...` both
+before the first `fcom`; we load one, clamp it, then load the other.  Writing
+
+    left = params->...LEFT...;  right = params->...RIGHT...;
+    left = clamp_fade_ratio(left);  right = clamp_fade_ratio(right);
+
+does not produce the double load: **847 bytes and 518 differing**, against 862
+and 492.  Worse on both, and it leaves the BYTES bucket.
+
+**3. `spectralDesign` as a ternary.**  The blob loads `mappingParams` before
+the `id > rate` compare and we load it after, which is what a ternary's
+address-first evaluation looked like it would fix:
+`mappingParams->shaperId = (id > rate) ? rate : id;` gives **200 bytes and 49
+instructions** against the blob's 188 and 44.  Both arms already compile the
+`if` form to the same value-producing branch shape the blob has, so the
+ternary bought nothing and cost twelve bytes.
+
+**4. Reordering a plain function's definition.**  See 7774.  Moving
+`spectralDesign` within its file left its bytes untouched, 74 before and 74
+after.  This is the CONTROL that keeps 7774's file reorder from becoming a
+general licence, and it is the reason 7774 is a finding about clone pairs
+rather than about file layout.
+
+**5. Pointing 7774's clone-pair lever at `V90Equalizer`'s destructor, which is
+the entry most worth reading.**  `D1` and `D2` are 52 and 50 differing bytes
+and they carry 7774's signature exactly -- blob `D1` vs `D2` differ by 2
+bytes, ours by 0 -- and the file has two clone pairs, so the emission slot IS
+steerable.  Moving the destructor's definition above the constructor's put
+`D2, D1` ahead of the constructor pair, matching the blob's relative order,
+and changed **nothing**: 52 and 50 before, 52 and 50 after, our two clones
+still identical to each other.  Measured beside it: our `C1`/`C2` were already
+emitted FIRST and are internally identical, which refutes "the first-emitted
+pair diverges" on its own.  7774's claim is narrowed in 7774 itself as a
+result, and this is why: a finding that had been allowed to state the
+mechanism generally would have sent the next agent to reorder files.
+
+---
+
+### 7778. THE ELEVEN THAT ARE LEFT, EACH WITH THE ROW `alpha_equal` REJECTED ON -- MEASURED, NOT THE FIRST ROW THAT DIFFERS
+
+Eighteen symbols in three files, 6,882 bytes, all in `byteident`'s BYTES
+bucket at the start.  Four became EXACT (7774), three were promoted to grade 1
+(7775, 7776), and eleven are still BYTES.  **Only two of the eleven are the
+free column**; the rest are code differences and are named as such rather than
+shrugged at, which is 2900's warning.
+
+- **`findMinValueIndex`** and **`findConstelMaxValueIndex`** (7 of 86 each).
+  Position for position identical, every immediate, displacement and operand
+  width the same; a clean `%ebx`/`%esi` swap at rows 6, 7, 13, 15, 16, 28 and
+  30.  **`alpha_equal` rejects at row 28, and the cause is that its walk has
+  no control flow.**  Rows 21 and 23 are the epilogue's `pop %ebx` and
+  `pop %esi` -- identical on both sides, and `pop` is a definition, so they
+  rebind both registers to THEMSELVES.  Rows 26 to 31 are an out-of-line block
+  reached by the `jbe` at row 20 and never entered by falling through the
+  epilogue; the linear walk carries the pops' identity bindings into it, and
+  row 28's `cmp %ebx,%eax` against `cmp %esi,%eax` contradicts them.  Free.
+
+  **THE FIRST VERSION OF THIS ENTRY BLAMED THE PROLOGUE AND WAS WRONG**, and
+  it was wrong in 7769's exact shape: a plausible mechanism reasoned out from
+  a disassembly instead of measured.  The rows quoted throughout this finding
+  are now `alpha_equal`'s OWN rejection index, taken by re-execing its source
+  with the loop enumerated; the instrumented copy is checked against the real
+  function on all 18 `--self-test` cases before any row is quoted.  Note the
+  indices are over the FULL instruction list, padding included, so they do not
+  line up with a padding-stripped diff.
+
+  **NOT FIXED HERE.**  7762's ruling that a pass must not widen the tool that
+  grades it applies to this pass exactly as it did to that one, and giving
+  `alpha_equal` control flow is a much larger change than 7769's padding
+  guard was.
+- **`V90ConstellationDesigner` C1 and C2** (34 of 54).  Statement order, and
+  7777's entry 1 for the two spellings that were tried.  Rejected at row 2 --
+  blob `mov 0x10(%esp),%edx` against our `movb $0x16,0x38(%eax)`, which is the
+  reordering itself.
+- **`V90Equalizer::enterChannelVerification`** (12 of 116).  28 instructions
+  against 28.  The blob materialises the `V90_BLL_PRE_ANSPCM` argument as
+  `mov $0xb,%ebx` BEFORE the `setDfeBeta` call, reusing the callee-saved
+  register that was holding the two zero float arguments; we materialise it
+  after the call, in `%edx`.  Every instruction is otherwise the same and the
+  two calls' displacements differ only because of the shift.  Rejected at row
+  13, on that instruction: blob `mov $0xb,%ebx` against our `mov %esi,(%esp)`.
+  Free -- scheduling across a call plus the allocation that follows it.
+- **`V90Equalizer::~V90Equalizer`**, D1 (52 of 541) and D2 (50).  **113 blob
+  instructions against our 112**, at 541 bytes both.  We TAIL-CALL the last
+  `sysdep_free` -- row 54 of the padding-stripped listing is
+  `jmp .+215 @sysdep_free` -- and the blob calls it and returns through the
+  common epilogue.  Every `jne` above it differs by exactly 16 in its
+  displacement as a consequence, which is why `alpha_equal` rejects at row 5
+  (`jne .+304` against `jne .+320`) while the cause is 45 rows further down.  A source shape that suppresses the tail
+  call is the thing to look for; nothing obvious does, and `array_12c` being
+  last inside the `mmxArraysPresent` block is the object's own order (the
+  file comment records that the free order is not the allocation order).
+- **`V90Equalizer::reset`** (446 of 862).  Two independent divergences, and
+  7775 closes one of them at the cost of the size match.  The other is the
+  `clamp_fade_ratio` pair: the blob keeps the 0.0f loaded at the top of the
+  function live on the x87 stack, loads both fade ratios before the first
+  `fcom %st(2)`, and branches `jae` where we branch `jb`, so the two clamps'
+  blocks are laid out in the other order.  `alpha_equal` does not reach a row
+  at all: it compares the FULL instruction lists, our padding runs to 244
+  instructions against the blob's 242, and it rejects on the length.
+- **`spectralDesign`** (74 of 188).  44 instructions against 44, and the only
+  structural difference is that the blob loads `mappingParams` (`this+0x4`)
+  BEFORE the `id > rate` compare and we load it after -- in both arms.
+  **The value-to-destination map is identical on both sides**, checked
+  because a matching multiset does not prove it (7760): six stores, `0x624`
+  from the clamped id, `0x628` from `+0x3a8`, `0x620` from `+0x3b8`, `0x62c`
+  from `+0x3ac`, `0x630` from `+0x3b0`, `0x634` from `+0x3b4`, the same pairs
+  on both sides with only the registers differing.  Rejected at row 6 -- blob
+  `mov 0x4(%eax),%ecx` against our `mov 0x3bc(%ecx),%eax`, which is the
+  displaced load itself and not a consequence of it.  7777's entry 3 for the
+  spelling that was tried.
+- **`calcMtoMatchKtarget`** (129 of 215).  **67 blob instructions against our
+  72**, at 215 bytes both.  Five instructions we emit that the blob does not,
+  so this is a structural difference and no permutation reaches it.
+  `alpha_equal` rejects on the length.  Not attempted.
+- **`adjustConstellationsPower`** (1671 of 2132).  636 against 632.  Different
+  code, `alpha_equal` rejects on the length, and the brief said not to start
+  here.  Not attempted.
+
+**THE SLICE'S SCORE, BASELINE FIRST.**  Measured on rebuilt `build/tc_out`
+(7769's staleness guard now refuses otherwise), GCC 3.4.2 exact, from
+`579b0ed4`:
+
+    before   grade 0  422 of 1251 (33.7%)   grade 0 or 1  471   BYTES 124
+    after    grade 0  426 of 1251 (34.1%)   grade 0 or 1  478   BYTES 117
+
+`--list-exact` diffed as a SET across the commit and not as a count (2900,
+7768): **four lines added, none removed**, and the four are the four
+`V90Resampler` constructors.
+
+**`compare.py --ratchet` WAS RUN AND IT GAINED**, because the grade-0 set
+diff cannot see a function that loses MNEMONIC agreement while staying
+non-exact: `compared 986->1251, identical 350->510, same_size 71->88`.
+
+**AND NOT ONE OF THIS SLICE'S SEVEN CHANGES WAS A WIDTH OR A SIGNEDNESS.**
+Seven source edits -- one definition-order swap, one added statement, two loop
+bounds, one helper removed, and two mutation re-anchorings -- and 7768 reported
+the same of its three.  7630 sells the BYTES bucket as where 613's family
+hides; over the 38 functions of these two waves it has held none.  What it has
+held instead is a definition order, a missing statement, a loop bound and a
+helper function.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7769 when this was
+written and a sibling agent is writing concurrently; expect to renumber at
+merge.
