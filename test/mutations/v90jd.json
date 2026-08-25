@@ -54,8 +54,8 @@
  },
  {
   "label": "the CRC's two feedback taps are transposed",
-  "find": "\n\t\tcrc[3] = tap3;\n\t\tcrc[10] = tap10;",
-  "replace": "\n\t\tcrc[3] = tap10;\n\t\tcrc[10] = tap3;"
+  "find": "\t\t\tcrc[3] = tap3;\n\t\t\tcrc[10] = tap10;\n\t\t\tcrc[15] = t & 1;\n\t\t}\n\t}\n\n\t/* And group 3 is the CRC, low bit first. */",
+  "replace": "\t\t\tcrc[3] = tap10;\n\t\t\tcrc[10] = tap3;\n\t\t\tcrc[15] = t & 1;\n\t\t}\n\t}\n\n\t/* And group 3 is the CRC, low bit first. */"
  },
  {
   "label": "the destructor is not empty",
@@ -169,8 +169,8 @@
  },
  {
   "label": "the unpacker's CRC taps are transposed",
-  "find": "\t\t\tcrc[3] = tap3;\n\t\t\tcrc[10] = tap10;",
-  "replace": "\t\t\tcrc[3] = tap10;\n\t\t\tcrc[10] = tap3;"
+  "find": "\t\t\tcrc[3] = tap3;\n\t\t\tcrc[10] = tap10;\n\t\t\tcrc[15] = t & 1;\n\t\t}\n\n\t\tsum = 0;",
+  "replace": "\t\t\tcrc[3] = tap10;\n\t\t\tcrc[10] = tap3;\n\t\t\tcrc[15] = t & 1;\n\t\t}\n\n\t\tsum = 0;"
  },
  {
   "label": "the received CRC is compared as a low bit, not a magnitude",

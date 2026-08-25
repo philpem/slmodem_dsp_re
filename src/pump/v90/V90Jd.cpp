@@ -180,38 +180,63 @@ V90Jd::getMaxLookahead()
 }
 
 /*
- * The CRC-16 the message carries, as the object computes it: sixteen ints,
- * one per bit, shifting down toward crc[0], with the feedback
+ * ===========================================================================
+ * THE CRC-16 THE MESSAGE CARRIES, and it is written out INLINE in both bodies
+ * below rather than through a shared helper.  That is a measurement, not a
+ * style choice, and finding F7940 is the whole of it.
+ *
+ * The arithmetic first.  Sixteen ints, one per bit, shifting down toward
+ * crc[0], with the feedback
  *
  *     t = <input bit> + crc[0]
  *
  * folded into positions 3, 10 and 15.  The three sums are `add` and the
  * result is masked to one bit afterwards, which is XOR spelled as addition;
  * that is why the input byte is used unmasked -- only its low bit can reach
- * the answer.
- *
- * Sixteen ints to hold sixteen bits is the original's choice, not a
- * convenience here: the register lives at +0x4c as `int crc[16]` and
+ * the answer.  Sixteen ints to hold sixteen bits is the original's choice,
+ * not a convenience here: the register lives at +0x4c as `int crc[16]` and
  * `resetCrc()` writes it there.
+ *
+ * NOW THE SHAPE, WHICH IS 74 OF THE 149 INSTRUCTIONS.  In the object the CRC
+ * register is NOT IN MEMORY while the group loop runs.  GCC 3.4.2 loads
+ * crc[0..15] into sixteen stack slots BEFORE the loop (0x1e9af..0x1ea2d),
+ * runs both groups entirely on the slots, and writes all sixteen back AFTER
+ * it (0x1eaec..0x1eb5a); there is not one store to `0x4c(%edi)` between.
+ * That promotion is why the frame is `sub $0x48,%esp` -- sixteen ints plus
+ * the two loop variables -- and it does not happen unless the source meets
+ * BOTH of two conditions, each measured by removing it:
+ *
+ *   1. THE SHIFT IS WRITTEN OUT.  Rolled as `for (i = 0; i <= 14; i++)
+ *      crc[i] = crc[i + 1];` every element sits at a VARIABLE address, no
+ *      address is loop-invariant, and nothing can be promoted: the body
+ *      compiles to 75 instructions and 218 bytes against 149 and 534, with
+ *      `mov 0x4(%ecx,%edx,4),%eax` where the object has slot copies.
+ *
+ *   2. BOTH SIDES ARE MEMBER SUBSCRIPTS OF `this`, not pointers.  A helper
+ *      taking `int *crc` and `const unsigned char *in` -- the obvious
+ *      factoring, and the one this file used to have -- reaches the loop as
+ *      two INDIRECT_REFs that GCC cannot tell apart, so the stores have to
+ *      stay in case the byte read aliases them, and the promotion collapses
+ *      to a per-group reload.  Written as `crc[i]` and `bits[...]`, the two
+ *      are component references to different fields of one record, GCC
+ *      proves they cannot overlap, and the stores sink out of the loop.
+ *      Measured in four steps: helper with pointers 75 insns; shift written
+ *      out 141; helper given `V90Jd *` but keeping `int *crc` 137; both
+ *      sides member subscripts 149, which is the object's count exactly.
+ *
+ * IT IS NOT AN ALIASING PROBLEM IN THE C SENSE, and that was tested twice:
+ * casting the input read to `const int *` and then to `const float *` -- the
+ * latter genuinely cannot alias `int` under -fstrict-aliasing -- moved
+ * nothing while the pointers stayed pointers.  What GCC 3.4.2 needs is the
+ * COMPONENT REFERENCE, not a compatible alias set.
+ *
+ * AND THE INPUT IS SUBSCRIPTED, NOT WALKED.  `*in++` over a local pointer
+ * costs the same disambiguation and gives nothing back: the object's
+ * `movzbl (%ebx),%eax; inc %ebx` and its `dec %esi; jns` countdown are
+ * produced by strength reduction FROM the subscript, so writing the pointer
+ * by hand reaches 136 instructions and stops.  Finding F7941.
+ * ===========================================================================
  */
-static void
-v90jd_crc_bits(int *crc, const unsigned char *in)
-{
-	int k;
-
-	for (k = 0; k <= 15; k++) {
-		int t = in[k] + crc[0];
-		int tap3 = (crc[4] + t) & 1;
-		int tap10 = (crc[11] + t) & 1;
-		int i;
-
-		for (i = 0; i <= 14; i++)
-			crc[i] = crc[i + 1];
-		crc[3] = tap3;
-		crc[10] = tap10;
-		crc[15] = t & 1;
-	}
-}
 
 /*
  * ===========================================================================
@@ -250,7 +275,7 @@ v90jd_crc_bits(int *crc, const unsigned char *in)
  * THE FEEDBACK IS `add` FOLLOWED BY `and $0x1`, never `xor`: 0x1ea50, 0x1ea74,
  * 0x1eaa9 and the three masks at 0x1ea7e, 0x1eaaf, 0x1eab2.  The bit is loaded
  * `movzbl` and goes in unmasked, so only its low bit can reach the answer --
- * the same shape `v90jd_crc_bits` already carries for `getBitVector`.
+ * the same shape the CRC block above carries for `getBitVector`.
  *
  * THE INPUT POINTER is `0x8(%esp)`, which starts at `this` and takes
  * `addl $0x11` once per group while `%ebx` is set to it plus `0x14`; `this`
@@ -302,8 +327,46 @@ V90Jd::packData()
 		crc[i] = 1;
 
 	/* Sixteen payload bits from each group, the leading 0 of each skipped. */
-	for (g = 0; g <= 1; g++)
-		v90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);
+	for (g = 0; g <= 1; g++) {
+		int k;
+
+		for (k = 0; k <= 15; k++) {
+			int t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]
+			    + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+
+			/*
+			 * The shift.  Rolled, this is
+			 *
+			 *	int i;
+			 *	for (i = 0; i <= 14; i++)
+			 *		crc[i] = crc[i + 1];
+			 *
+			 * and that spelling is condition 1 above: it keeps
+			 * every element at a variable address and costs the
+			 * promotion, 74 of the 149 instructions.
+			 */
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+	}
 
 	/* Group 3 carries the CRC, low bit first. */
 	for (i = 0; i <= 15; i++)
@@ -332,11 +395,54 @@ V90Jd::getBitVector()
 
 	/*
 	 * Over groups 1 and 2, sixteen bits each, skipping the leading 0 of
-	 * each: the object walks a pointer that starts at `this + 0x14` and
-	 * advances by the 17-byte stride once.
+	 * each.  The object walks a pointer that starts at `this + 0x14` and
+	 * advances by the 17-byte stride once -- and THAT POINTER IS NOT
+	 * WRITTEN HERE ON PURPOSE.  It is what strength reduction makes of the
+	 * subscript below; spelling it `*in++` over a local hands GCC 3.4.2 an
+	 * INDIRECT_REF it cannot tell apart from the CRC's stores, costs the
+	 * promotion of the CRC register out of memory, and lands 13
+	 * instructions short of the object.  Finding F7941.
 	 */
-	for (g = 0; g <= 1; g++)
-		v90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);
+	for (g = 0; g <= 1; g++) {
+		int k;
+
+		for (k = 0; k <= 15; k++) {
+			int t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]
+			    + crc[0];
+			int tap3 = (crc[4] + t) & 1;
+			int tap10 = (crc[11] + t) & 1;
+
+			/*
+			 * The shift.  Rolled, this is
+			 *
+			 *	int i;
+			 *	for (i = 0; i <= 14; i++)
+			 *		crc[i] = crc[i + 1];
+			 *
+			 * and that spelling is condition 1 above: it keeps
+			 * every element at a variable address and costs the
+			 * promotion, 74 of the 149 instructions.
+			 */
+			crc[0] = crc[1];
+			crc[1] = crc[2];
+			crc[2] = crc[3];
+			crc[3] = crc[4];
+			crc[4] = crc[5];
+			crc[5] = crc[6];
+			crc[6] = crc[7];
+			crc[7] = crc[8];
+			crc[8] = crc[9];
+			crc[9] = crc[10];
+			crc[10] = crc[11];
+			crc[11] = crc[12];
+			crc[12] = crc[13];
+			crc[13] = crc[14];
+			crc[14] = crc[15];
+			crc[3] = tap3;
+			crc[10] = tap10;
+			crc[15] = t & 1;
+		}
+	}
 
 	/* And group 3 is the CRC, low bit first. */
 	for (i = 0; i <= 15; i++)
@@ -409,7 +515,8 @@ V90Jd::unPackReset()
  * is called twice with a 17-byte stride.  The payload is contiguous here, so
  * the two are the same thirty-two bytes in the same order and the register
  * agrees with what the packer put on the wire.  It is written inline rather
- * than through `v90jd_crc_bits` because the object's loop bound is 31.
+ * than through a shared helper because the object's loop bound is 31,
+ * and because a helper taking pointers costs the promotion above anyway.
  *
  * THE COMPARISON IS A SUM OF ABSOLUTE DIFFERENCES, not a bitwise test:
  * `sub %edi,%edx; mov %edx,%eax; sar $0x1f,%eax; xor %eax,%edx; sub %eax,%edx`
