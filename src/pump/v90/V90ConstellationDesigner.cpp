@@ -218,11 +218,43 @@ V90ConstellationDesigner::V90ConstellationDesigner(V90Parameters *p,
 						   V90PreFilter *pf,
 						   V90ConstellationPower *cp)
 {
+	/*
+	 * `byte_38 = 0x16;` SITS BELOW THE TWO POINTER STORES, AND THAT MUCH
+	 * IS DECODED FROM THE OBJECT -- the slot it occupies inside the run
+	 * below them is not.
+	 *
+	 * All 8! = 40,320 orders of these eight statements were compiled with
+	 * the period compiler in a stand-alone model of this class, validated
+	 * first by checking that the order below-but-one (`byte_38` third,
+	 * which is what this constructor used to say) reproduces our own
+	 * object's thirteen instructions exactly.  The 40,320 cells give 6,624
+	 * DISTINCT emissions -- so the map is very far from constant, which is
+	 * refinement.md lever 1's killing branch and it is excluded here by
+	 * measurement -- and **thirteen of them emit the blob's body**.
+	 *
+	 * Thirteen preimages is rule 0's middle case: a FACT, not an order.
+	 * The pairwise relations true in all thirteen are
+	 *
+	 *     byte_08   before  everything else
+	 *     power     before  params, byte_38, minRate, maxRate, preFilter
+	 *     params    before  byte_38, minRate, maxRate, preFilter
+	 *     word_48   before  minRate, maxRate, preFilter
+	 *     minRate   before  maxRate;  preFilter LAST in all thirteen
+	 *
+	 * and the only two our old order broke were the two naming `byte_38`:
+	 * it has to follow BOTH pointer stores.  Moving it to just after
+	 * `params` is the smallest edit that lands in the set; the other two
+	 * cells reachable without moving anything else (`byte_38` after
+	 * `minRate`, or after `maxRate`) are equally exact and there is
+	 * nothing in the object to separate the three.  It was 34 differing
+	 * bytes of 54 on both clones, rejected at row 2, `mov 0x10(%esp),%edx`
+	 * against `movb $0x16,0x38(%eax)`.
+	 */
 	byte_08 = 0;
 	word_48 = 0;
-	byte_38 = 0x16;
 	power = cp;
 	params = p;
+	byte_38 = 0x16;
 	minRate = 28000;
 	maxRate = 56000;
 	preFilter = pf;
@@ -285,6 +317,37 @@ V90ConstellationDesigner::pow6(short x)
  * THE LIMIT IS UNSIGNED because the rate argument is, whatever
  * `SPECTRAL_SHAPER_ID`'s own `int` says -- `ja` in one arm and `jbe` in the
  * other, from the same source expression.
+ *
+ * ===========================================================================
+ * THE ARM-LOCAL `mp` IS THE ONLY SPELLING THAT KEEPS THE SIZE, AND
+ * `shaperSR` COMING SECOND IS DECODED
+ * ===========================================================================
+ *
+ * This was 74 differing bytes of 188 at 44 instructions against 44 (7778), and
+ * it closed in two stages, each measured on the real translation unit.
+ *
+ * 1. **The load position.**  The blob loads `this->mappingParams` -- the
+ *    `mov 0x4(%eax),%ecx` at .text+0x4797b -- BEFORE the clamp's compare, in
+ *    BOTH arms; writing the six stores through `mappingParams->` puts that
+ *    load after the branch and `byteident --why` rejected at row 6 on exactly
+ *    it.  Nine spellings were compiled: the base, a local hoisted to function
+ *    scope, a local inside each arm, locals for `params` too in both orders,
+ *    and the same five with the clamp as a ternary.  **Only the arm-local
+ *    keeps the function's 188 bytes** -- every function-scope hoist and every
+ *    ternary changes the size -- and it took the residual to 22.
+ *
+ * 2. **The store order, and this one is a DECODING.**  With that local in
+ *    place, ALL 720 orders of the six stores were compiled, the same
+ *    permutation in both arms.  They give 22 distinct verdicts, so the map is
+ *    not constant, and **exactly ONE cell reaches zero differing bytes**:
+ *    `Id, SR, A1, A2, B1, B2`.  The nearest miss is at 8 bytes and there are
+ *    six of those, so the preimage is unique and isolated -- refinement.md's
+ *    rule 0 in its strongest form, and 7782's ruling takes the bytes.
+ *
+ * So `shaperSR` really is written second, before `shaperA1`, even though the
+ * fields sit at +0x620 and +0x628 and the parameters at +0x3b8 and +0x3a8.
+ * A tidying pass that sorts these six lines by offset or by name will put 74
+ * bytes back; the order is evidence.
  */
 void
 V90ConstellationDesigner::spectralDesign(unsigned int rate,
@@ -293,25 +356,29 @@ V90ConstellationDesigner::spectralDesign(unsigned int rate,
 	unsigned int id;
 
 	if (cond == V90_SPECTRAL_GERMAN_PBX) {
+		V90MappingParams *mp = mappingParams;
+
 		id = (unsigned int)params->GERMAN_PBX_SPECTRAL_SHAPER_ID;
 		if (id > rate)
 			id = rate;
-		mappingParams->shaperId = id;
-		mappingParams->shaperA1 = params->GERMAN_PBX_SPECTRAL_SHAPER_A1;
-		mappingParams->shaperSR = params->GERMAN_PBX_SPECTRAL_SHAPER_SR;
-		mappingParams->shaperA2 = params->GERMAN_PBX_SPECTRAL_SHAPER_A2;
-		mappingParams->shaperB1 = params->GERMAN_PBX_SPECTRAL_SHAPER_B1;
-		mappingParams->shaperB2 = params->GERMAN_PBX_SPECTRAL_SHAPER_B2;
+		mp->shaperId = id;
+		mp->shaperSR = params->GERMAN_PBX_SPECTRAL_SHAPER_SR;
+		mp->shaperA1 = params->GERMAN_PBX_SPECTRAL_SHAPER_A1;
+		mp->shaperA2 = params->GERMAN_PBX_SPECTRAL_SHAPER_A2;
+		mp->shaperB1 = params->GERMAN_PBX_SPECTRAL_SHAPER_B1;
+		mp->shaperB2 = params->GERMAN_PBX_SPECTRAL_SHAPER_B2;
 	} else {
+		V90MappingParams *mp = mappingParams;
+
 		id = (unsigned int)params->SPECTRAL_SHAPER_ID;
 		if (id > rate)
 			id = rate;
-		mappingParams->shaperId = id;
-		mappingParams->shaperA1 = params->SPECTRAL_SHAPER_A1;
-		mappingParams->shaperSR = params->SPECTRAL_SHAPER_SR;
-		mappingParams->shaperA2 = params->SPECTRAL_SHAPER_A2;
-		mappingParams->shaperB1 = params->SPECTRAL_SHAPER_B1;
-		mappingParams->shaperB2 = params->SPECTRAL_SHAPER_B2;
+		mp->shaperId = id;
+		mp->shaperSR = params->SPECTRAL_SHAPER_SR;
+		mp->shaperA1 = params->SPECTRAL_SHAPER_A1;
+		mp->shaperA2 = params->SPECTRAL_SHAPER_A2;
+		mp->shaperB1 = params->SPECTRAL_SHAPER_B1;
+		mp->shaperB2 = params->SPECTRAL_SHAPER_B2;
 	}
 }
 

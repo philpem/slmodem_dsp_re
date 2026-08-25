@@ -187,7 +187,6 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 	}
 
 	self->flags_173a[0] = 0;
-	self->bitPointer = 0;
 	self->flags_173a[1] = 0;
 	self->flags_173a[2] = 0;
 	self->flag_173d = 0;
@@ -202,6 +201,36 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 
 	self->nofBits = 0;
 	self->cpNofBits = 0;
+	/*
+	 * `bitPointer = 0;` BELONGS BELOW THE BAUD TABLE AND NOT BESIDE
+	 * `flags_173a[0]`, AND THE POSITION IS DECODED RATHER THAN CHOSEN --
+	 * but only to within a run of six slots, so read the paragraph before
+	 * moving it back.
+	 *
+	 * It used to be the second statement of this block, which is where
+	 * the object's own store order puts it, and the compiler then hoisted
+	 * the `cpNofBits` store past it: 28 of 495 bytes differed and
+	 * `byteident --why` rejected at row 68, `%ax,0x1738(%ebx)` against
+	 * `%ax,0x7dcc(%ebx)`.  The three 16-bit zero stores -- `bitPointer`
+	 * (+0x1738), `nofBits` (+0x1736) and `cpNofBits` (+0x7dcc) -- came out
+	 * in a rotation of the source order, each taking its zero register in
+	 * emission order.
+	 *
+	 * Seventy cells were compiled with the period compiler: every position
+	 * of each of the three word stores in this 21-statement block (21 each)
+	 * and all 3! orders of the three among their own slots.  **Six reach
+	 * zero differing bytes and they are consecutive** -- `bitPointer`
+	 * anywhere after `cpNofBits` and before `nofTransmitSequences`.  The
+	 * two neighbours of that run are 4 bytes out and nothing else is below
+	 * 5, so the run's EDGES are sharp and its interior is not resolvable.
+	 *
+	 * So this decodes a FACT and not an order (refinement.md's rule 0):
+	 * the author wrote this store after the CP bit counters, not with the
+	 * flag byte at +0x173a.  The slot inside the run is ours; grouping it
+	 * with the other two 16-bit counters is the only reason it is here
+	 * rather than three lines lower.
+	 */
+	self->bitPointer = 0;
 	self->terminateJa = 0;
 	self->terminateCp = 0;
 	self->terminateCpNot = 0;

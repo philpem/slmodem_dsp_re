@@ -86034,3 +86034,445 @@ which is finding 134's argument, arrived at again from the other end.
 
 Both arms shown firing by injection: the dropped `-D` exits 1, and the inert
 header exits 1 against the floor.  0.4 s over the whole tree.
+
+======================================================================
+
+### 7820. THE V.90 BYTES CLUSTER: FOUR CLOSED ON STATEMENT ORDER, AND THREE OF THE FOUR DECODE A FACT RATHER THAN AN ORDER
+
+Fifteen symbols in five files, 5,685 bytes, every one of them in `byteident`'s
+BYTES bucket at the start -- so nothing here is missing and nothing is extra
+except where lever 2 says so, and the whole cluster is a question about form.
+
+**BASELINE FIRST, and the SET was diffed, not the count** (2900, 7768).  GCC
+3.4.2 exact, `build/tc_out` rebuilt by `tools/toolchain/build.sh` on both
+sides:
+
+    before   grade 0  479 of 1251 (38.3%)   0-or-1  509   REGALLOC 25  BYTES 91  SIZE 648
+    after    grade 0  483 of 1251 (38.6%)   0-or-1  513   REGALLOC 25  BYTES 87  SIZE 648
+
+`--list-exact` across the commit: **four lines added, none removed.**  SIZE and
+REGALLOC did not move by one symbol, so all four gains came out of BYTES and
+there were no bystanders in either direction.
+
+    _ZN24V90ConstellationDesignerC1E...          34 of 54   -> EXACT
+    _ZN24V90ConstellationDesignerC2E...          34 of 54   -> EXACT
+    _ZN24V90ConstellationDesigner14spectralDesignE...
+                                                 74 of 188  -> EXACT
+    VPCMXF_Create                                28 of 495  -> EXACT
+
+**THE PATTERN THAT MADE ALL FOUR TRACTABLE, AND IT IS WORTH STATING ON ITS
+OWN.**  In every one of them **our source order already WAS the blob's
+emission order**, and the compiler permuted ours.  That is not a coincidence:
+a reconstruction writes the statements down in the order the object's stores
+come out, so the object's emission is the first thing anybody transcribes.
+What is wanted is the PREIMAGE of that order under GCC 3.4.2's scheduling, and
+it is never the order itself.  Anyone reading a store-order difference here
+should check that first -- if our source reads like the disassembly, the
+source is the ANSWER SHEET and not the candidate.
+
+**THE HARNESS, because it is what made 720- and 5,040-cell domains affordable
+and it is reusable.**  Compiling the REAL translation unit rather than a model
+of it, one container pass over every variant, then `byteident.py`'s own `body`
+and `verdict` on each object -- so the number printed per cell is the same
+number the tree-wide tool prints, with no second implementation of the
+comparison to disagree with it (7773's rule).  Measured cost: **0.03 s a cell
+for a 500-line file and 0.25 s for a 1,500-line one**, which is what turns
+"enumerate, do not search" from advice into something a pass can actually
+afford.  For a small class a stand-alone MODEL is faster still -- 40,320 cells
+in twelve minutes -- and it must be validated before it is believed: the model
+below was checked to reproduce our committed object's thirteen instructions
+exactly from our committed source order before any cell of it was read.
+
+Each closure's domain and which side of rule 0 it falls on is in 7821, 7822 and
+7826; 7823 and 7824 are the two measured negatives, and the eleven that did not
+close are in 7825.
+
+======================================================================
+
+### 7821. `spectralDesign`: TWO STAGES, AND THE SECOND IS A UNIQUE PREIMAGE OF 720 -- `shaperSR` IS WRITTEN BEFORE `shaperA1`
+
+74 differing bytes of 188, 44 instructions against 44, and 7778 had already
+named the structural difference: the blob loads `this->mappingParams`
+(`mov 0x4(%eax),%ecx`) BEFORE the clamp's compare, in both arms, and we load
+it after.  7777's entry 3 had tried the clamp as a ternary and 7796's control 4
+had moved the whole function inside its file; both measured 74 before and 74
+after.
+
+**STAGE 1, NINE SPELLINGS, AND EIGHT OF THEM CHANGE THE FUNCTION'S SIZE.**
+Base; a `V90MappingParams *` local hoisted to function scope; the same local
+declared inside each arm; locals for `params` as well, in both declaration
+orders; and all five again with the clamp written as a ternary.  Scored on the
+real file:
+
+    base                       BYTES 74      ternary, no local        SIZE 12
+    mp hoisted to fn scope     SIZE   3      ternary, mp fn scope     SIZE  9
+    mp inside each arm         BYTES 22      ternary, mp in arm       SIZE 12
+    mp+p fn scope              SIZE   5      ternary, mp+p fn scope   SIZE  7
+    p then mp, fn scope        SIZE   5
+
+Only the ARM-LOCAL keeps the object's 188 bytes.  Every function-scope hoist
+costs the size, which is a much sharper discriminator than the byte count --
+a spelling that changes how much code there is has been excluded before its
+bytes are looked at.
+
+**THIS IS 7775'S LEVER RUN BACKWARDS, AND IT IS THE STRONGER INSTANCE.**  There
+the reconstruction had INVENTED a temporary the author did not write (`n =
+dfeLength + 8` in a loop bound) and deleting it moved two twins from 17 and 19
+differing bytes to 2 -- but the same edit applied to `V90Equalizer::reset`
+took that function from 862 bytes to 878, out of BYTES and into SIZE, and is
+withheld for it.  Here the temporary is one the author DID write, and the size
+runs the other way: the arm-local is the only cell of the nine that KEEPS the
+byte count, and the eight that lose it are the ones without it or with it in
+the wrong scope.  So 7775's warning -- that a local can buy bytes and cost the
+size match -- is exactly what the size column was watched for, and it is what
+picked the cell.
+
+**STAGE 2, ALL 720 STORE ORDERS, AND ONE CELL.**  With that local in place the
+residual was legible for the first time -- 7802's shape, a difference that 52
+bytes of register noise had been hiding.  It was two loads and their two
+stores interleaved differently.  So all 6! orders of the six stores were
+compiled, the same permutation applied to both arms:
+
+    22 distinct verdicts over 720 cells   -- so the map is NOT constant, which
+                                             is lever 1's killing branch, and
+                                             it is excluded by measurement
+    EXACT   0 differing bytes   x1     Id, SR, A1, A2, B1, B2
+    BYTES   8                   x6
+    BYTES  12                   x8
+    BYTES  16                   x9
+    BYTES  22                   x1     Id, A1, SR, A2, B1, B2  (what we had)
+
+**One preimage, isolated, nearest miss at 8.**  That is rule 0's strongest
+case: the author's ORDER is decoded, not merely a fact about it.  `shaperSR`
+is written second, before `shaperA1`, although the two fields sit at +0x620
+and +0x628 and their sources at +0x3b8 and +0x3a8 -- so every ordering a tidy
+mind would impose on those six lines, by offset or by name, is wrong, and the
+source now carries a comment saying so.
+
+**The domain is stated as what it is: 720 orders CONDITIONAL on stage 1's
+spelling.**  The full product is 9 x 720 and was not run.  What licenses the
+conditioning is that eight of stage 1's nine cells are the wrong SIZE, which
+no store permutation repairs.
+
+======================================================================
+
+### 7822. `V90ConstellationDesigner`'s CONSTRUCTOR PAIR: ALL 40,320 ORDERS COMPILED, 6,624 DISTINCT EMISSIONS, THIRTEEN PREIMAGES -- A FACT, AND THE FACT IS THAT ONE BYTE STORE FOLLOWS BOTH POINTER STORES
+
+34 differing bytes of 54 on both clones, 13 instructions against 13, rejected
+at row 2 -- blob `mov 0x10(%esp),%edx` against our `movb $0x16,0x38(%eax)`,
+which is the reordering itself.  7777's entry 1 had tried two spellings and
+stopped; two spellings is a search.
+
+The body is eight independent stores, so the domain is 8! and finite.  A
+stand-alone model of the class was written -- the four offsets the constructor
+touches, the pad between them, nothing else -- and **validated first**: our
+committed source order compiles, in the model, to our committed object's
+thirteen instructions in the same order with the same registers.  Then all
+40,320 orders, one container pass, twelve minutes:
+
+    40,320 cells  ->  6,624 DISTINCT emissions  ->  13 reach the blob's body
+
+Thirteen preimages is rule 0's middle case, so what is decoded is a FACT.  The
+pairwise relations true in ALL thirteen:
+
+    byte_08   before  every other statement
+    power     before  params, byte_38, minRate, maxRate, preFilter
+    params    before  byte_38, minRate, maxRate, preFilter
+    word_48   before  minRate, maxRate, preFilter
+    minRate   before  maxRate
+    preFilter LAST, in all thirteen
+
+Our old order broke exactly two of them, and both name the same statement:
+**`byte_38 = 0x16;` has to follow BOTH pointer stores.**  It had been written
+third, with the other scalar initialisers.  Moving it to just after `params`
+is the smallest edit that lands in the set; two other cells are reachable
+without moving anything else (`byte_38` after `minRate`, or after `maxRate`)
+and are equally exact.  Nothing in the object separates the three, so the
+comment in the source says which part is evidence and which part is ours.
+
+**The clone pair moved together, both C1 and C2, at no extra cost** -- which is
+what a body-level difference does and is worth contrasting with 7823, where a
+clone pair's difference was NOT a body-level one and did not move at all.
+
+======================================================================
+
+### 7823. `V90Phase4Demodulator`: THE CARRIED `onedef.py` DUPLICATE MEASURED RATHER THAN BELIEVED, AND THE FILE'S EMISSION ORDER IS ACHIEVABLE, EXACT, AND WORTH NOTHING
+
+7795 left the C1/C2 pair -- 53 differing bytes of 225 each, 58 instructions
+against 58, no padding on either side, rejected at row 34 on
+`0x4c(%esp),%edx | 0x50(%esp),%eax`, a stack slot four bytes apart -- as the
+one clone pair in the tree where 7774's definition-order lever had never been
+applied, "for want of turns rather than for a reason", and said the next pass
+should start by reading both definitions of the class.
+
+**FIRST, THE DUPLICATE, AND IT HAS NOT DIVERGED.**  Both definitions were
+compiled under the period compiler with offset and `sizeof` assertions rather
+than read:
+
+    partial (include/dsplib/V90SessionFlag.h)        sizeof 0x2ffc
+    fuller  (include/dsplib/V90Phase4Demodulator.h)  sizeof 0x351c
+    both agree, to the byte, on every field the partial models:
+        sessionFlag +0x00, int_0038 +0x38, int_003c +0x3c,
+        phase4Modulator +0x50
+
+So the divergence is the EXTENT and nothing else: 0x520 bytes that the partial
+model does not know about, all of it beyond the embedded modulator.  The
+partial's own two pads cover exactly the spans the fuller model fills in, which
+is 7584's repair holding.
+
+**AND THE FAILURE MODE IS THE LOUD ONE, WHICH IS THE PART CLAUDE.md CANNOT SAY
+IN GENERAL.**  A third probe with both headers in one translation unit was
+compiled: `error: redefinition of 'class V90Phase4Demodulator'`, with
+`V90SessionFlag.h:91` named as the previous definition.  Two definitions of one
+type is silent when they reach a program through separate translation units and
+LOUD when they reach one `#include` list, and this pair is the second kind.
+The consequence is that no translation unit can hold both, so no `sizeof` can
+be taken against the wrong one -- and the five translation units that reach the
+partial model (`VPcmFloModem.cpp`, `V90Phase3Demodulator.cpp`,
+`V90SessionFlag.cpp`, `x_v90digital.cpp`, `t_v90sessionflag.cpp`) were checked
+and **none of them writes `sizeof(V90Phase4Demodulator)` at all.**  The hazard
+is latent and 7584's account of it stands; it is still the tree's last carried
+ODR debt and removing it is still progress.
+
+**THEN THE REORDER, AND IT IS A CLEAN NULL.**  Our object and the blob differ
+by exactly TWO adjacent transpositions, both BELOW the clone pair:
+
+    ours   ... detectFPE  getV92  getV90  reset  getDecision
+    blob   ... detectFPE  getV90  getV92  getDecision  reset
+
+All six orderings of the file's four bottom definition blocks were compiled and
+every symbol scored.  **Two of the six achieve the blob's `nm -n` order exactly,
+15 symbols for 15** -- so this is not 7797's "reachable but expensive" case;
+it is reorder-only, no macro or datum had to be hoisted, and the order is
+simply achieved.  What it pays:
+
+    C1 and C2                53 of 225   ->  53 of 225   in ALL SIX CELLS
+    reset                   136 of 504   ->  137 of 504
+    getV92Decision     SIZE 443          ->  SIZE 450
+    the ten EXACT symbols    unchanged
+
+Zero gained, two slightly worse, and **the clone pair does not move by a single
+byte under any of the six.**  Not kept: 7797's ruling that the measurement is
+the deliverable and the diff is not.
+
+**WHY IT CANNOT WORK HERE, AND THIS IS THE USEFUL PART.**  7796 established
+that the carrier is UPSTREAM of the function rather than its own index.  This
+pair is at emission index 0 and 1 of its object, in both trees, and there is
+nothing above it in the file but `typedef char` offset assertions, which emit
+no code.  **There is nothing upstream to move.**  So 7795's "the lever was not
+applied" now reads "the lever has no purchase": a clone pair at index 0 is
+outside lever 3's reach by construction, and the 53 bytes are not an emission-
+order difference.  Together with 7796's 0-of-9 and 7801's BYTES column not
+moving by one symbol, that is a third confirmation of "aim at REGALLOC files,
+not BYTES files" -- this file has no REGALLOC symbol at all.
+
+======================================================================
+
+### 7824. `V90Phase4Demodulator::reset`: 5,151 CELLS, 54 DISTINCT VERDICTS, NO PREIMAGE -- SO IT IS NOT THE OPENING BLOCK'S STATEMENT ORDER
+
+136 differing bytes of 504, 130 code instructions against 130, rejected at row
+8, `movl` against `mov`.  The function opens with eleven independent scalar
+stores and -- 7820's pattern -- our source order is already the blob's
+emission order, so the compiler is permuting ours and the preimage is what is
+wanted.
+
+Two domains, both run to completion on the real translation unit:
+
+    every position of each of the eleven statements     111 cells
+    ALL 7! orders of the first seven, the last four
+    (int_0040, int_0044, int_0048, uchar_0030) held   5,040 cells
+
+    54 distinct verdicts   -- not a constant map
+    minimum                90 of 504   x9    int_3510 moved anywhere past
+                                             position 4
+    our committed order   136 of 504
+    NO CELL REACHES ZERO
+
+By lever 1's own rule that settles it the other way round, exactly as
+`SpectralShaper::reset`'s ten cells did (7795): either one member of an
+exhausted family reproduces the object or none does and the difference is not
+statement order.  None does.
+
+**AND THE 90 IS NOT TAKEN.**  It is 46 bytes closer and it is a hill-climb;
+7782's ruling is that bytes are taken when the space is exhausted and one
+element maps, and declined when you are searching.  Recording the number is
+the point -- a later pass that finds the real cause can check it against this
+one -- but committing it would be fitting the compiler.
+
+The last four statements were held rather than permuted because the 111-cell
+sweep showed the emission insensitive to all four (136 -> 137..139 for every
+position of each).  That is a stated restriction of the domain and not a
+claim that 11! contains no preimage.
+
+======================================================================
+
+### 7825. THE ELEVEN THAT ARE LEFT IN THE V.90 BYTES CLUSTER, WITH `alpha_equal`'s OWN REJECTION ROW AND THE PADDING-STRIPPED INSTRUCTION COUNTS
+
+**Every row and count below was RE-TAKEN on the tree as committed**, on a
+`build/tc_out` rebuilt after the four edits -- not carried over from the
+baseline sweep.  That is not a formality: four of these eleven live in
+`V90ConstellationDesigner.cpp`, the file this batch edited twice, and a BYTES
+symbol whose differing-byte count moves stays in BYTES, keeps the bucket count
+where it was and never shows up in a `--list-exact` diff.  Nothing tree-wide
+can see it.  7764 is the precedent -- a fix that changed three functions its
+author never disassembled.  **Nothing moved**: `adjustConstellationsPower`
+1671 and 636-against-632, `calcMtoMatchKtarget` 129 and 67-against-71, and both
+`findMinValueIndex` and `findConstelMaxValueIndex` still 7 of 86 rejecting at
+row 28, before and after.  Counts are `instrcount.py`'s, padding excluded
+(7794).
+
+**LEVER 2 FIRES ON THREE OF THE FIFTEEN AND ON NO OTHERS**, which is the
+padding-corrected sweep the playbook asks for on every function in a batch:
+
+    adjustConstellationsPower   1671 of 2132   blob 636 vs ours 632  blob +4
+    V90SpectralShaper::process   279 of  362   blob 125 vs ours 122  blob +3
+    calcMtoMatchKtarget          129 of  215   blob  67 vs ours  71  ours +4
+
+The other twelve are instruction-for-instruction equal.
+
+- **`calcMtoMatchKtarget` (129 of 215).**  7778 called it structural and did
+  not attempt it.  The excess is now NAMED: the mnemonic multiset differs by
+  **one `fxch` and three `mov`, and by nothing else.**  The cause is visible in
+  the first two instructions -- the blob loads `flds 0x1c(%esp)`, the
+  `kTarget` argument, as its SECOND instruction, before either `log10`; we load
+  it sixteen rows later, after the x87 control word is stashed.  That leaves
+  our `fld1` needing an `fxch %st(1)` the blob does not need, and three moves
+  to shuffle what the blob had a callee-saved register for.  A source spelling
+  that converts `kTarget` before `lm` and `l2` are computed is the thing to
+  look for.  Rejects on LENGTH.
+- **`V90SpectralShaper::process` (279 of 362).**  7795 exhausted the arm-order
+  family -- four spellings, all giving an identical 279, a constant map -- so
+  the blob's three extra instructions are something else.  The multiset says
+  what: **`mov` -5, `inc` +2, `cmp` +1, `ja` +1, `jne` +1, `je` -1, `jmp` -1,
+  `lea` -1.**  The blob's frame is `sub $0x1c,%esp` against our `sub $0xc`, and
+  it spills two values (`0x14(%esp)`, `0x18(%esp)`) that we re-load from the
+  object instead.  So this is an induction-variable and spill difference, not
+  an absent statement, and the `+3` must not be read as one.  Rejects on
+  LENGTH.
+- **`adjustConstellationsPower` (1671 of 2132).**  636 against 632, different
+  code, rejects on LENGTH.  Not attempted -- 2,132 bytes and 636 instructions
+  is a delegation, not a batch item.  The direction is recorded: the blob has
+  four instructions we do not.
+
+**FOUR ARE FREE AND THREE OF THE FOUR WERE ALREADY RULED SO.**  Carried
+forward with today's rows:
+
+- `findMinValueIndex` and `findConstelMaxValueIndex`, 7 of 86 each.  Row 28
+  USE CONFLICT, `ebx` wants `esi`, already bound to `ebx`; blob `%ebx,%eax`
+  against ours `%esi,%eax`.  A clean `%ebx`/`%esi` swap, and the rejection is
+  `alpha_equal`'s linear walk carrying the epilogue's identity bindings into
+  an out-of-line block (7778).
+- `V90BitsToSymbol::process(unsigned int &, short *)`, 11 of 375.  Row 98 USE
+  CONFLICT, `edi` wants `edi`, already bound to `esi`, printing the same text
+  on both sides -- the signature of a register PERMUTATION, which is a cycle
+  and not a renaming (7795).
+- `V90SpectralShaper::reset`, 15 of 200.  Row 36 NON-REGISTER OPERAND,
+  `0x8(%esi),%edx | (%esi),%ecx`.  Ten cells enumerated with no preimage;
+  what is left is an addressing base (7795).
+- **`V90BitsToSymbol::process(unsigned char *, unsigned int &, short *)`, 55 of
+  484, is NEW to this column and the evidence is the multiset.**  133 code
+  instructions against 133 and **the mnemonic multisets are identical -- 123
+  against 123 with not one mnemonic differing.**  The only positional
+  difference is in the prologue: the blob materialises `xor %eax,%eax` as its
+  second instruction and we emit the same `xor` six rows later, into `%edi`;
+  everything after it is a register permutation.  Rejects at row 1, MNEMONIC
+  `xor` against `mov`, which is that displacement and not a code difference.
+  Scheduling, so free.
+
+**ONE LEVER-7 SIGHTING, REPORTED AND NOT EDITED**, because a sibling pass owns
+that backlog tree-wide:
+
+    _ZN15V90BitsToSymbolD1Ev    ours 68 bytes, blob 84
+    _ZN15V90BitsToSymbolD2Ev    ours 68 bytes, blob 84
+
+Both are 7786's exact shape at the destructor's last free: we emit
+`add $0x8,%esp ; pop %ebx ; jmp sysdep_free`, a sibling call, where the blob
+emits `mov %eax,(%esp) ; call sysdep_free` and returns through the common
+epilogue.  They are in the SIZE bucket, so nothing aimed at BYTES would have
+looked at them -- which is 7786's own observation about the four it found
+there.
+
+**`DSPLIB_REPRODUCE_BUGS` APPEARS IN NONE OF THE FIVE FILES**, checked with a
+grep rather than assumed, so 6810's pair of checks has nothing to bind to in
+this cluster.
+
+**AND NO MUTATION ANCHOR MOVED, WHICH IS NOT SOMETHING A REORDERING PASS MAY
+ASSUME.**  `test/mutations/*.json` anchors on source TEXT, so a permutation
+that leaves the compiler's output alone can still leave an anchor pointing at
+nothing -- and a set whose `find` no longer matches reads NOT CAUGHT, which is
+the same output an untested claim gives.  Four sets name the two files this
+batch edited; all **71 anchors still resolve, each exactly once**:
+
+    v90cd         4    v90cdadjust  35    v90cdctor  8    vpcmxfcreate  24
+
+The two whose own functions were edited were then re-run live rather than
+inferred: `v90cdctor` **8 of 8 caught**, and `vpcmxfcreate` **21 caught, 0 NOT
+caught, 3 equivalent**, which is its recorded snapshot to the row -- including
+"the bit pointer is not reset", whose anchor sits on the very statement 7826
+moved.  `spectralDesign` has no mutation of its own in any set, and the six
+stores it reorders are to six distinct fields, so no observation of memory
+could separate the orders in any case; the second tier is the only thing that
+can see it, and that is the whole point of the closure.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7804 and a sibling
+worktree 7811 when this was written; 7820 onwards was chosen to leave room.
+Expect to renumber at merge.
+
+======================================================================
+
+### 7826. `VPCMXF_Create`: THE PREIMAGE IS A RUN OF SIX CONSECUTIVE SLOTS WITH SHARP EDGES, SO `bitPointer` IS WRITTEN AFTER THE CP BIT COUNTERS AND THE SLOT INSIDE THE RUN IS NOT RECOVERABLE
+
+28 differing bytes of 495, 120 instructions against 120, and this symbol had
+never been through a refinement pass -- it is not in 7778's eleven, 7788's
+negatives or 7795's fifteen.  `byteident --why` rejects at row 68,
+`%ax,0x1738(%ebx)` against `%ax,0x7dcc(%ebx)`: the same instruction storing the
+same zero, four thousand bytes apart in the object it is writing into.
+
+**THE WHOLE DIFFERENCE IS THE POSITION OF ONE 16-BIT STORE.**  The function's
+tail is 21 stores into the freshly constructed `VPcmFloModem`, three of them
+16-bit zeros -- `bitPointer` (+0x1738), `nofBits` (+0x1736) and `cpNofBits`
+(+0x7dcc).  Each takes a zeroed register, and the registers are handed out in
+EMISSION order, `%ax` then `%si` then `%cx`, on both sides:
+
+    blob   ... 173a, [1738 %ax], 173b..173e, 217..21c, [1736 %si], [7dcc %cx], 7dce ...
+    ours   ... 173a, [7dcc %ax], [1738 %si], 173b..173e, 217..21c, [1736 %cx], 7dce ...
+
+Every other store is in the same place.  Our source order was 7820's pattern
+again -- it already reads as the blob's emission order, `bitPointer` second --
+and the compiler hoisted the `cpNofBits` store past it.
+
+**SEVENTY CELLS, FOUR FAMILIES, AND SIX OF THEM REACH ZERO.**  Every position
+of each of the three word stores in the 21-statement block (21 cells each) and
+all 3! orders of the three among their own three slots:
+
+    bitPointer @13 .. @18    EXACT, 0 differing bytes    <-- six consecutive
+    bitPointer @12, @19      BYTES 4                     <-- the two neighbours
+    bitPointer @11           BYTES 5
+    everything else          BYTES 14 .. 38
+    our committed order      BYTES 28
+    all 21 cpNofBits cells   BYTES 25 .. 38  -- moving the store the compiler
+                                                HOISTED never helps
+    all six 3! orders        BYTES 24 .. 27
+
+Several preimages, so rule 0 says a FACT and not an order -- but the FACT here
+is unusually sharp, because the six are CONSECUTIVE and both edges are one
+step away from a cell that is 4 bytes out.  What is decoded is a bound on
+both sides: **`bitPointer = 0;` is written after `cpNofBits = 0;` and before
+`nofTransmitSequences = 0;`.**  It was written at the top of the block beside
+the flag byte at +0x173a, which is where the object's store order puts it and
+which is wrong.
+
+The slot chosen inside the run is ours and the source says so: it goes with
+the other two 16-bit counters, which is a reason to write it there and not
+evidence that the author did.
+
+**AND THE FAMILY THAT FOUND NOTHING IS WORTH AS MUCH AS THE ONE THAT DID.**
+The obvious move -- take the store the compiler HOISTED and push it around --
+is the one that cannot work: all 21 positions of `cpNofBits` score between 25
+and 38 and not one of them improves on the 28 we already had.  The statement
+to move is the one the hoisted store jumped OVER.  That is a general enough
+shape to say out loud: when GCC lifts a store out of a run, the source defect
+is in the run, not in the store.
+
+**Its file's other symbol did not move.**  `VPCMXF_Delete` stays SIZE at 109
+blob bytes against our 117, untouched by this edit and unexamined here.
