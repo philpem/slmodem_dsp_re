@@ -24,23 +24,23 @@
  },
  {
   "label": "the argument lands one field early",
-  "find": "\tshort_1ea6 = 0;\n\tuint_1ea8 = n;",
-  "replace": "\tshort_1ea6 = (short)n;\n\tuint_1ea8 = 0;"
+  "find": "\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;",
+  "replace": "\tshort_1ea6 = (short)n;\n\tshort_1e9c = 0;\n\tuint_1ea8 = 0;"
  },
  {
   "label": "+0x1ea4 keeps whatever it found",
-  "find": "\tshort_1e9c = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;",
-  "replace": "\tshort_1e9c = 0;\n\tshort_1ea6 = 0;"
+  "find": "\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;",
+  "replace": "\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;"
  },
  {
   "label": "the study clears the last decision's code as well",
-  "find": "\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;",
-  "replace": "\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;"
+  "find": "\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;",
+  "replace": "\tuint_1eb0 = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;"
  },
  {
   "label": "+0x1eb0 keeps whatever it found",
-  "find": "\tdecisionFramePosition = 0;\n\tuint_1eb0 = 0;\n}",
-  "replace": "\tdecisionFramePosition = 0;\n}"
+  "find": "\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;",
+  "replace": "\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = n;"
  },
  {
   "label": "hardDecision records the frame position after the advance, not before",
@@ -509,8 +509,8 @@
  },
  {
   "label": "+0x1eac is cleared with the words either side of it",
-  "find": "\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n",
-  "replace": "\tuint_1eb0 = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n"
+  "find": "\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;",
+  "replace": "\tuint_1eb0 = 0;\n\tdecisionCode = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;"
  },
  {
   "label": "the study length keeps whatever it held",
@@ -529,8 +529,8 @@
  },
  {
   "label": "reset's own code loop stops one cell short of 128",
-  "find": "\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tuint_1eb0 = 0;\n",
-  "replace": "\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tuint_1eb0 = 0;\n"
+  "find": "\t\tfor (code = 0; code < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;",
+  "replace": "\t\tfor (code = 0; code + 1 < V90DEMAPPER_LEVELS; code++)\n\t\t\tadiDetector->clearCamulativeVal(phase, code);\n\n\tuint_1eb0 = 0;\n\tdecisionFramePosition = 0;\n\tshort_1ea4 = 0;\n\tshort_1ea6 = 0;\n\tshort_1e9c = 0;\n\tuint_1ea8 = 0;\n\tlinearMappStudyEnabled = 0;"
  },
  {
   "label": "the delay bound is not strict",

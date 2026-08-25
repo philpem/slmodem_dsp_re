@@ -356,12 +356,28 @@ V90Demapper::~V90Demapper()
  * truncation nor the 16-bit compare.  The width also matches the callee:
  * `clearCamulativeVal(short, short)` says so in its mangling.
  *
- * THE SIX STORES ARE NOT IN THE OBJECT'S ORDER AND THAT IS NOT EVIDENCE.
- * They are six plain stores with no call between them, so the scheduler was
- * free to interleave them with the argument reload it needed anyway (finding
- * 617); what IS in the object is their widths -- 16-bit at +0x1e9c, +0x1ea4,
- * +0x1ea6 and +0x1eae, 32-bit at +0x1ea8 and +0x1eb0 -- and the header
- * declares each accordingly.
+ * THE SIX STORES ARE IN THE OBJECT'S ORDER, AND THIS PARAGRAPH USED TO SAY
+ * THE OPPOSITE.  It read "not in the object's order and that is not
+ * evidence -- six plain stores with no call between them, so the scheduler
+ * was free to interleave them".  That was reasoning about the compiler rather
+ * than measuring it, and lever 1 is explicit that nothing before the compile
+ * separates a constant map from a bijection.
+ *
+ * ENUMERATED, ALL 6! = 720 ORDERINGS (finding 7820).  The map is a perfect
+ * BIJECTION -- 720 orderings, 720 DISTINCT emissions, so the scheduler
+ * reorders nothing here at all -- and exactly ONE cell reaches positional byte
+ * identity.  The preimage is unique, so this is a decoded ORDER and not a
+ * decoded fact, and 7782's ruling takes the bytes.
+ *
+ * The recovered order is the object's own emission order read straight off the
+ * disassembly, +0x1eb0, +0x1eae, +0x1ea4, +0x1ea6, +0x1e9c, +0x1ea8.  What had
+ * been in this file was ASCENDING FIELD ORDER, which is the transcriber's
+ * tidying and not the author's -- the trap lever 1 names, where our source
+ * order looks like an answer and is only ever a restatement of the header.
+ *
+ * The widths are unchanged and were never in doubt: 16-bit at +0x1e9c, +0x1ea4,
+ * +0x1ea6 and +0x1eae, 32-bit at +0x1ea8 and +0x1eb0, and the header declares
+ * each accordingly.
  */
 void
 V90Demapper::resetLinearMappStudy(unsigned int n)
@@ -372,12 +388,12 @@ V90Demapper::resetLinearMappStudy(unsigned int n)
 		for (code = 0; code < V90DEMAPPER_LEVELS; code++)
 			adiDetector->clearCamulativeVal(phase, code);
 
-	short_1e9c = 0;
+	uint_1eb0 = 0;
+	decisionFramePosition = 0;
 	short_1ea4 = 0;
 	short_1ea6 = 0;
+	short_1e9c = 0;
 	uint_1ea8 = n;
-	decisionFramePosition = 0;
-	uint_1eb0 = 0;
 }
 
 /*
