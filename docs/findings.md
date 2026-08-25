@@ -88367,3 +88367,93 @@ emission, the preimage is not unique, and applying it moved the tree's EXACT
 set by nothing at all -- 9a's null, recorded without the diff. The harness's
 cell 0 reproduced `build/tc_out`'s object md5 exactly and two of its three
 controls moved, so the domain is unconfounded.
+
+### 7847. `V92Transmitter::process`: THE FRAME SLOTS ARE THE DECLARATION ORDER AND THE LAST BYTE IS LEVER 9 ON AN ADDRESS
+
+355 bytes, 110 differing, 102 instructions against 102. `--why` rejects at
+
+    row 22   blob   mov %al,(%ecx,%edi,1)
+             ours   mov %al,(%edi,%ecx,1)
+
+-- the same effective address with base and index exchanged in the ModRM byte.
+Scale is 1, so nothing about the types decides which register is the base: the
+PLUS operand order in the tree does, and `bitBuffer[bitsBuffered]` has two
+`COMPONENT_REF`s where `tree_swap_operands_p` canonicalises one way and the
+object went the other. **Lever 9's own remedy applies -- read the member into a
+local first, and one operand becomes a `DECL_P` so the swap stops.**
+
+The other visible hunk was `lea 0x70(%esp),%ebx` against our
+`lea 0x30(%esp),%ebx` at the same frame size (0xac both), which is the three
+local arrays -- `int precoded[]`, `float shaped[]`, `float points[]` -- sitting
+in different slots.
+
+**The cross product separates the two facts, which is what lever 2's TABLE
+paragraph asks for.** All 3! declaration orders crossed with four spellings of
+the store (`bitBuffer[bitsBuffered]`, `*(bitBuffer + bitsBuffered)`,
+`*(bitsBuffered + bitBuffer)`, and the local pointer) = **24 cells, TWELVE
+distinct emissions, exactly ONE at positional byte identity**:
+
+    float points[V92TX_FRAME_SYMBOLS];
+    float shaped[V92TX_FRAME_SYMBOLS];
+    int   precoded[V92TX_PRECODER_SYMBOLS];
+
+with `unsigned char *buf = bitBuffer; buf[bitsBuffered] = bits[i];`. The table
+shows the declaration order alone takes 110 differing bytes to **one**, and the
+local closes that one; the three explicit `+` spellings are pairwise identical
+to the subscript, so the operand order is NOT respellable and only the DECL
+change reaches it -- exactly 9's "rewriting the source comparison the other way
+round changes nothing, because both spellings fold to one RTL".
+
+CLOSED, recovery side of 7782. Grade 0 527 -> 528.
+
+### 7848. `unitePhasesInfoOfUref`: `--why`'s PADDING-STRIPPED COUNT IS WRONG WHEN A FUNCTION CONTAINS `mov %reg,%reg`, AND THE +1 IS A SECOND `flds` OF THE NaN
+
+**The two counters disagreed, and that is the finding's first half.**
+
+    byteident --why : blob 214, ours 215  (204 against 204 padding-stripped)
+    instrcount.py   : ours 203, blob 202, delta +1
+
+`updateUref` in the same file agrees across both at +2, so this is not a
+general offset. Counting objdump rows inside `st_size` and applying
+`byteident._padding` by hand gives 207 on both sides; instrcount drops **12**
+rows per side and byteident drops **10** from the blob and **11** from ours.
+The two extra rows instrcount drops are `mov %esi,%esi` -- GCC's two-byte
+alignment nop for a loop head **inside** a function.
+`byteident._padding('mov', '%esi,%esi')` returns **False**; `instrcount` has its
+own `_SELFMOV` regex and returns True, and its docstring says why.
+
+So **instrcount is right and `--why`'s parenthesis is wrong**: the blob has two
+self-moves here and we have one, the error does not cancel, and a real
+**+1 EXTRA in ours** is reported as EQUAL. Any refinement pass that triages off
+`--why`'s padding-stripped counts will skip lever 2 on every function with an
+aligned loop head in it. `refinement.md`'s lever 2 now carries the warning.
+The predicate was NOT fixed here: `_padding` also feeds `insns()` and therefore
+grade 1, so changing it moves the gate's own numbers and wants its own change
+with the SET diffed, not a side effect of a refinement pass.
+
+**The extra instruction, once the triage is right.** The blob's prologue loads
+THREE x87 constants and holds them for the whole function -- NaN, 1.0, 0.5 --
+and ours loads FOUR, the NaN twice from two identical `.rodata.cst4` slots
+(lever 11's "two slots with the same bytes in one TU say nothing" in its other
+direction: here the duplicate slot IS the difference). The blob spills
+`bestVar` to `0xc(%esp)` with `fstps` and reloads it with `flds 0xc(%esp)`
+after the loop; we keep it live on the x87 stack and pay a second
+materialisation of the constant instead. The rest of the 280 differing bytes is
+a systematic `%ebx`/`%esi` exchange through the body.
+
+**All 6! = 720 orderings of the function's six local declarations give ONE
+distinct emission.** GCC 3.4.2 lays this frame out by size and alignment, not
+by source order -- which is the opposite of 7847's result three files away,
+where three same-scope arrays DID follow the declaration order, and the
+difference is that those three are the same kind of object and these six are
+not. So there is nothing to recover from the declaration and the residual is
+x87 stack allocation. Unchanged, declined.
+
+**And `V90Phase4Demodulator`'s definition order is spent, for `reset` as well
+as for the constructors.** 7808 measured six orderings of the file's bottom
+blocks against C1/C2; the four blocks `getDecision`, `getV90Decision`,
+`getV92Decision` and `reset` were re-run here at the full **4! = 24 cells**.
+`reset` gives **two** distinct emissions, 136 and 137 differing bytes, and
+neither is zero; C1 gives **one** emission over all 24, so the map is constant
+for it and 7808's index-0 corollary is confirmed from the other direction;
+`getDecision` is EXACT in all 24. Lever 3 is closed on this file.

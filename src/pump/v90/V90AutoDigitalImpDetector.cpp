@@ -834,6 +834,22 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 	 * leaves it uninitialised: the only path that reads it without having
 	 * written it is D281's, and giving it a value here would be inventing
 	 * behaviour the blob does not have rather than reproducing it.
+	 *
+	 * THE DECLARATION ORDER HERE IS A CONSTANT MAP, AND THE +1 IS ONE
+	 * EXTRA `flds` OF THE NaN.  All 6! = 720 orderings of these six
+	 * declarations were compiled on the period compiler and give **one**
+	 * distinct emission -- GCC 3.4.2 lays this frame out by size and
+	 * alignment, not by source order, so unlike `V92Transmitter::process`
+	 * (7847) there is nothing to recover here.  What the 280 differing
+	 * bytes of 748 actually are: a systematic `%ebx`/`%esi` exchange
+	 * through the whole body, plus one instruction.  The blob loads three
+	 * x87 constants in its prologue (NaN, 1.0, 0.5) and we load FOUR --
+	 * the NaN twice, from two identical `.rodata.cst4` slots.  The blob
+	 * spills `bestVar` to `0xc(%esp)` with `fstps` and reloads it after
+	 * the loop; we keep it on the x87 stack and pay a second
+	 * materialisation of the constant for it.  That is x87 stack
+	 * allocation, and no spelling of this declaration reaches it.
+	 * Finding 7848.
 	 */
 	float bestVar = __builtin_nanf("");
 	float bestValue;

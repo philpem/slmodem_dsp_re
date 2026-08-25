@@ -199,6 +199,19 @@ it the other way inverts the diagnosis. Three of this cluster's four real
 deltas are EXTRAS in our code, not absences, which is the opposite of the
 lever's worked example and wants a different search.
 
+**AND `--why`'s PADDING-STRIPPED COUNTS ARE THEMSELVES WRONG WHEREVER THE
+FUNCTION CONTAINS A `mov %reg,%reg` (7848).** `byteident._padding` knows `nop`
+and the `lea 0x0(...)` forms and **does not know the two-byte self-move**, which
+is what GCC emits to align a loop head inside a function; `instrcount.py` does,
+through its own `_SELFMOV` regex. So on `unitePhasesInfoOfUref` `--why` prints
+**"204 against 204 with alignment padding stripped"** -- EQUAL, lever 2 does not
+apply -- while the true code counts are blob 202 against ours 203, a real
+**+1 EXTRA**. The blob has two self-moves there and we have one, so the error
+does not even cancel. **`instrcount.py` is the authority for the count and
+`--why`'s parenthesis is not**; where the two disagree, disassemble and count.
+Fixing `_padding` would move grade 1 as well as the message, so it has not been
+done inside a refinement pass.
+
 **A SECOND OBSERVABLE, INDEPENDENT OF THE BYTE GRADE:** the order of `.rodata`
 strings a function references. It agrees or disagrees without reference to any
 instruction, so it corroborates a statement-order decoding that the byte grade

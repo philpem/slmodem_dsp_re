@@ -525,13 +525,39 @@ V92Transmitter::process(unsigned char *bits, unsigned int nbits, short *out,
 	unsigned int i;
 
 	for (i = 0; i < nbits; i++) {
-		bitBuffer[bitsBuffered] = bits[i];
+		/*
+		 * THE BUFFER GOES THROUGH A LOCAL, AND IT IS THE OBJECT'S
+		 * ADDRESSING MODE THAT SAYS SO.  The blob stores with
+		 * `mov %al,(%ecx,%edi,1)` -- base `bitsBuffered`, index
+		 * `bitBuffer` -- and `bitBuffer[bitsBuffered]` gives the two
+		 * the other way round.  Both are COMPONENT_REFs, so
+		 * `tree_swap_operands_p` canonicalises the PLUS; reading one
+		 * into a local makes it a DECL and the swap stops, which is
+		 * refinement.md lever 9's own remedy.  Scale is 1, so nothing
+		 * about the types forces which register is the base.
+		 */
+		unsigned char *buf = bitBuffer;
+
+		buf[bitsBuffered] = bits[i];
 		bitsBuffered++;
 
 		if (bitsBuffered >= (unsigned int)K) {
-			int precoded[V92TX_PRECODER_SYMBOLS];
-			float shaped[V92TX_FRAME_SYMBOLS];
+			/*
+			 * DECLARED points, shaped, precoded -- the frame slots
+			 * are the object's, not a preference: the blob builds
+			 * the pre-filter's argument with `lea 0x70(%esp),%ebx`
+			 * where our old order gave `lea 0x30(%esp)`.  The
+			 * cross product of all 3! declaration orders with four
+			 * spellings of the store above was compiled on the
+			 * period compiler -- 24 cells, TWELVE distinct
+			 * emissions, exactly ONE at positional byte identity.
+			 * The table separates the two facts: the declaration
+			 * order alone takes 110 differing bytes of 355 to ONE,
+			 * and the local closes that one.  Finding 7847.
+			 */
 			float points[V92TX_FRAME_SYMBOLS];
+			float shaped[V92TX_FRAME_SYMBOLS];
+			int precoded[V92TX_PRECODER_SYMBOLS];
 			unsigned int k;
 			unsigned int j;
 

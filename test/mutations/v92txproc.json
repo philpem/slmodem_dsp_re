@@ -25,13 +25,13 @@
  },
  {
   "label": "the input byte is stored one place late",
-  "find": "\t\tbitBuffer[bitsBuffered] = bits[i];\n\t\tbitsBuffered++;",
-  "replace": "\t\tbitsBuffered++;\n\t\tbitBuffer[bitsBuffered] = bits[i];"
+  "find": "\t\tbuf[bitsBuffered] = bits[i];\n\t\tbitsBuffered++;",
+  "replace": "\t\tbitsBuffered++;\n\t\tbuf[bitsBuffered] = bits[i];"
  },
  {
   "label": "the buffer is filled from the input's front every time",
-  "find": "\t\tbitBuffer[bitsBuffered] = bits[i];",
-  "replace": "\t\tbitBuffer[bitsBuffered] = bits[0];"
+  "find": "\t\tbuf[bitsBuffered] = bits[i];",
+  "replace": "\t\tbuf[bitsBuffered] = bits[0];"
  },
  {
   "label": "the modulus encoder is given the caller's bits directly",
