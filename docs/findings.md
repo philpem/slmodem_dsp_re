@@ -87429,3 +87429,70 @@ The fix is `rm -f <target> && cp ...`, which breaks the link instead of writing
 through it, and it is now in the driver with the reason beside it.  Anything
 building a variant tree with `cp -al` needs the same, or a copy that is not
 hardlinked at all.
+
+======================================================================
+### 7823. `--why`'s BARE `False` IS NOT ALWAYS AN ABSENCE -- IT COUNTS ALIGNMENT NOPS
+
+**Reserved block: 7819-7822 above; this one takes 7823 from the same sweep.**
+
+`docs/method/refinement.md` and every brief written off it say the same thing
+about `byteident.py --why`: *a bare `False` means the two instruction sequences
+differ in LENGTH, that is itself a diagnosis -- an absence or an extra -- and
+lever 2 is what you want then.*  **That routing is wrong for at least one
+symbol in this cluster, and the reason is structural rather than incidental.**
+
+`alpha_why` opens with
+
+    if len(x) != len(y):
+        return False
+
+over the rows `insns()` returns, and **`insns()` does not strip padding**.
+`instrcount.py` does -- it imports `byteident.py`'s own `_padding` predicate
+for exactly that reason, after counting intra-function padding as code once
+inverted the triage of five functions (7793).  So the two tools answer
+different questions and can disagree, and `--why` is the one without the
+filter.
+
+**MEASURED, over the five bare-`False` symbols in the V.90 BYTES cluster.**
+`instrcount.py`'s own columns are `ours, blob, delta` and the delta is
+OURS MINUS BLOB, which is worth stating because reading it the other way round
+inverts every diagnosis in the table:
+
+    calcMtoMatchKtarget          ours 71  blob 67   +4   we emit FOUR MORE
+    updateUref                   ours 66  blob 64   +2   we emit TWO MORE
+    unitePhasesInfoOfUref        ours 203 blob 202  +1   we emit ONE MORE
+    SpectralShaper::process      ours 122 blob 125  -3   the blob has THREE MORE
+    printErrorHistogramAndReset  ours 86  blob 86    0   EQUAL
+
+**`printErrorHistogramAndReset` is EQUAL on code and still prints a bare
+`False`**, because the raw row counts are 88 against 100: the blob carries a
+couple of alignment nops and we carry fourteen.  Its 136 differing bytes of 362
+are therefore NOT a missing or extra statement, and lever 2 has nothing to say
+about it.  7793 had already recorded this symbol as "+12 and is EQUAL"; what is
+new is that `--why` still routes a reader to the wrong lever for it.
+
+**AND THREE OF THE OTHER FOUR ARE EXTRAS, NOT ABSENCES.**  Lever 2's worked
+example is an absence -- a dead store the object has and we do not -- and the
+lever reads naturally as "find the missing statement".  Here three of four
+deltas run the other way: OUR code is longer.  That is our factoring emitting
+more, not the author's statement missing, and it wants a different search.
+Only `SpectralShaper::process` has the absence shape, and the brief's own note
+already records its multiset as saying spill/induction rather than an absent
+statement.
+
+**THE PRESENTATION FIX 7818 ASKED FOR IS THE RIGHT ONE AND IS NOT ENOUGH.**
+7818 suggested `--why` say *"instruction counts differ, N against M"* rather
+than `False`.  It should say so over PADDING-STRIPPED counts, or it will
+report a difference of twelve nops as a difference of twelve instructions --
+which is the same defect in the message that 7793 fixed in the tool.
+
+**A SECOND IMPLEMENTATION GOT THIS WRONG WHILE CHECKING IT, which is 7773's
+rule collecting another instance.**  A scratch script written to separate
+padding from code here applied `byteident._padding` directly to `insns()` rows
+and disagreed with `instrcount.py` on four of the five symbols -- it read
+`calcMtoMatchKtarget` as blob 67 / ours 72 against the true 67 / 71, and
+`unitePhasesInfoOfUref` as 204 / 204 against 202 / 203, which would have
+reported a real one-instruction extra as "padding only".  `instrcount.py`
+counts over the symbol's `nm` extent rather than over `objdump
+--disassemble=`, and that is the difference.  **Use `instrcount.py` for this
+question; do not re-derive it beside it.**
