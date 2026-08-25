@@ -82046,3 +82046,60 @@ were, `objtree` read 201 objects for 200 sources.
    the real file for four of them, `V90DilDescriptorSettings.cpp`, and the two
    sitting side by side in a report is the bracket and the TU, not a
    contradiction.
+
+======================================================================
+
+### 7630. GRADE 0 IS THE 100% LINE, AND THE INSTRUCTION COUNT WAS EXACT AND WRONG
+
+**All bytes exact, on a function basis, is the target.** Not a byte-count
+ratio, not a mnemonic match, not an instruction count. `byteident.py`'s grade 0
+is that line and nothing else is.
+
+This has to be written down because the tree drifted off it. Finding 7480
+caught a missing call in `exitPhase3` by instruction count -- 174 against 186,
+with every branch, store and call already matching -- and that success got
+generalised into "instruction count is a completeness check" and put into six
+consecutive agent briefs.
+
+**It is not one, and finding 7607 is the counterexample.** `qcLineVerification`
+came out **159 instructions against the blob's 159** and was WRONG: it copied
+the verification status with all 32 bits where the object uses `movzwl`. The
+field's only writers are `movl $0` and `movl $1`, so no value the object can
+hold exposes the difference and no differential test could ever fail on it. The
+two `(unsigned short)` casts that fixed it were worth exactly the two bytes
+between 777 and 779.
+
+**So instruction count detects ABSENCE, never WIDTH.** A missing call changes
+the count; a wrong operand width does not. Both are defects, only one is
+visible, and the visible one is the rarer.
+
+#### The refinement worklist, and it is a real list
+
+Measured at `73bec261` on GCC 3.4.2 exact: **78 functions are the same size
+with the same instruction sequence and different bytes.** That is precisely the
+bucket `qcLineVerification` sat in -- every cheap check green, bytes wrong --
+and it is where a width or signedness defect hides with nothing to report it.
+
+    tools/toolchain/byteident.py          the grades
+    then, over the BYTES bucket, the subset whose mnemonic
+    sequences also match -- 78 of 132 today
+
+The largest are `V90Resampler::setBllState` (693), `V90Phase4Modulator::
+setRdRtSymbols` (512), `v8_V21_Init` (492), `V92Parameters::setToDefault` (477)
+and `VPcmFloModem::externalReset` (387).
+
+**Not every one is a defect** -- grade 2's free column lives here too:
+scheduling, 614's discarded upper half, 2411's integer if-conversion. But every
+DEFECT of 613's family is in this list, and the list is 78 long rather than
+1,244, which is what makes it worth a pass.
+
+`extcheck.py` is the existing aid for exactly this and its own precision is
+recorded as one report in five (finding 2402), so it triages the list rather
+than deciding it. `dis.py` decides it.
+
+#### What to say in a brief instead
+
+Not "instruction count is a completeness check". Say: **an instruction-count
+GAP is a missing call until proven otherwise; an instruction-count MATCH proves
+nothing about operand width, and the byte comparison is the only thing that
+does.**

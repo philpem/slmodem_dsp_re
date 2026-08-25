@@ -297,6 +297,17 @@ That may still be functionally equivalent -- deciding needs the dataflow, which
 is grade 2 and is a judgement -- but it is not the same instructions, and the
 older number counted it as if it were.
 
+**GRADE 0 IS THE 100% LINE.** All bytes exact, on a function basis — not a
+byte-count ratio, not a mnemonic match, not an instruction count. Finding 7630
+records how the tree drifted off that: 7480's success at catching a missing
+call by instruction count was generalised into "instruction count is a
+completeness check" and briefed six times, and then `qcLineVerification` came
+out 159 instructions against 159 and wrong, its `movzwl` copied as 32 bits. An
+instruction-count GAP is a missing call until proven otherwise; an
+instruction-count MATCH says nothing about operand width. **78 functions today
+are the same size with the same instruction sequence and different bytes** —
+that is the refinement worklist, and every defect of 613's family is in it.
+
 **Grade 1's renaming is PER LIVE RANGE, not per function.** A single
 bijection held across a whole function rejected 20 pairs that differ in nothing
 but allocation -- the blob puts two successive values in `%eax` where ours puts
