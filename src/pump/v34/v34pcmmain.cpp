@@ -81,6 +81,40 @@
  * "nonlinearEncoder", "constellationShaping" and "rateMask" -- so five of the
  * six bytes are named by the object and the sixth, at +5, is not.
  */
+/*
+ * The two receiver counters as `indicateJaTransmission` reaches them: the
+ * object anchors a pointer at `obj + 4` and reads them at +0x248 and +0x24c
+ * through it, so
+ * these are `v34fsk.h`'s `v90_receiver` (+0x24c) and `k56flex_receiver`
+ * (+0x250) less the anchor.  The `OB4_` prefix is what says the base is the
+ * anchor and not the object; nothing else in the tree may use these.
+ *
+ * THEY LIVE HERE AND NOT BESIDE THEIR USER, which is 7799's rule and not a
+ * preference: a macro placed next to its first user ends up BELOW it after
+ * any lever-3 permutation, the identifier then survives unexpanded with
+ * different text, and that is not always a compile error.  This file is a
+ * live lever-3 candidate -- 3 of 16 in the blob's `nm -n` order -- so
+ * somebody will permute it.
+ */
+#define OB4_ANCHOR		4
+#define OB4_V90_RECEIVER	0x248		/* v34fsk.h's v90_receiver     */
+#define OB4_K56_RECEIVER	0x24c		/* v34fsk.h's k56flex_receiver */
+
+/*
+ * And tie them to the header, because nothing else does: `make phase`'s
+ * offsets tier reads `__builtin_offsetof` annotations and these are raw
+ * numbers.  Without this pair, a future edit to `struct v34_object` moves the
+ * fields and leaves these two reading whatever is now there -- which is the
+ * failure mode CLAUDE.md's naming rules exist to prevent, and it would pass
+ * every test that does not happen to drive both arms.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char ob4_v90_check[(OB4_ANCHOR + OB4_V90_RECEIVER ==
+    (int)__builtin_offsetof(struct v34_object, v90_receiver)) ? 1 : -1];
+typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
+    (int)__builtin_offsetof(struct v34_object, k56flex_receiver)) ? 1 : -1];
+#endif
+
 #define SESS_MP			0x1744
 #define SESS_PCM		0x610c
 #define SESS_GATE		0x6120
@@ -1581,32 +1615,6 @@ V34GiveINFO1dBits(void *objp, const short *bits)
  * no C++ object among them.  Its two callers are both inside `v34handshak`,
  * which is why the declaration sits in `v34hshak.h` beside `v90Phase34`.
  */
-/*
- * The two receiver counters as THIS function reaches them: the object anchors
- * a pointer at `obj + 4` and reads them at +0x248 and +0x24c through it, so
- * these are `v34fsk.h`'s `v90_receiver` (+0x24c) and `k56flex_receiver`
- * (+0x250) less the anchor.  The `OB4_` prefix is what says the base is the
- * anchor and not the object; nothing else in the tree may use these.
- */
-#define OB4_ANCHOR		4
-#define OB4_V90_RECEIVER	0x248		/* v34fsk.h's v90_receiver     */
-#define OB4_K56_RECEIVER	0x24c		/* v34fsk.h's k56flex_receiver */
-
-/*
- * And tie them to the header, because nothing else does: `make phase`'s
- * offsets tier reads `__builtin_offsetof` annotations and these are raw
- * numbers.  Without this pair, a future edit to `struct v34_object` moves the
- * fields and leaves these two reading whatever is now there -- which is the
- * failure mode CLAUDE.md's naming rules exist to prevent, and it would pass
- * every test that does not happen to drive both arms.
- */
-#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
-typedef char ob4_v90_check[(OB4_ANCHOR + OB4_V90_RECEIVER ==
-    (int)__builtin_offsetof(struct v34_object, v90_receiver)) ? 1 : -1];
-typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
-    (int)__builtin_offsetof(struct v34_object, k56flex_receiver)) ? 1 : -1];
-#endif
-
 extern "C" void
 indicateJaTransmission(void *objp)
 {
