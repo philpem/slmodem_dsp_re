@@ -86126,30 +86126,58 @@ pattern on** -- the flag finding 612 derived from the object and which took the
 codegen match from 30 to 82.  `-Os` fails the `! optimize_size` guard.
 Reproduced identically on a second file, `V90Equalizer.cpp`.
 
-**THE ADVANCE PREDICTOR, WITH ITS BOUND.**  `large_insn` is 8 for
+**THE ADVANCE TEST, AND IT IS EXACT IN THE DIRECTION THAT MATTERS.**  Compile
+the file twice, with and without `-fno-peephole2`, and compare the candidate
+function.  If its bytes are IDENTICAL, peephole2 did nothing to it, it consumed
+no scratch, and the cursor cannot reach it -- **reordering cannot move that
+symbol, and that is a certificate rather than a filter.**  If they differ and a
+register appears that the `-fno-peephole2` build never uses, a scratch was
+allocated and it can be named.  If they differ with no new register, peephole2
+fired on a pattern that takes no scratch (the xor-zeroing one, lea-to-add):
+undecided, treat as exposed.
+
+Run over the live buckets, one file compiled twice per candidate:
+
+    REGALLOC  25 symbols   12 take a scratch   12 undecided    1 CLEARED
+    BYTES     91 symbols   18 take a scratch   45 undecided   28 CLEARED
+
+**This is what 7801's pre-check could not give.**  3a can establish that a
+file's order is achievable and cannot say what a null result means; this says
+per symbol, before any permutation, that one of the 25 remaining REGALLOC
+symbols and 28 of the 91 BYTES are not reachable by the lever at all.  It also
+explains 7796 and 7801 after the fact -- nearly every REGALLOC symbol is
+peephole2-touched, and that is why aiming whole files at the REGALLOC bucket
+paid 16 of 25 and 5 of 7 while aiming at BYTES paid 0 of 9.
+
+The twelve REGALLOC symbols that take a scratch are `V90CP` C1 (ecx, edx, edi),
+`V90Modem::printTitle` (eax, ecx, edx, edi), `V92Modem::printTitle`,
+`V34EqualizerCleanUp` (eax, ecx, edx), `V90Parameters` C2,
+`V90Phase4Modulator::generateSymbol`, `V92Phase4Modulator::setMappingParams`,
+`V90SignBitsExtractor` C2, `V90Resampler::setBllState`,
+`VPcmFloModem::setPcmSessionType`,
+`V90AutoDigitalImpDetector::applyPadGainToLinMapp` and `dp_v8_exit`.
+
+**AND THE SHAPE READ OFF THE OBJECT IS NOT THE TEST.**  `large_insn` is 8 for
 `pentiumpro_cost` (`i386.c:251`), so the pattern fires on a store of an
 immediate whose ENCODING reaches eight bytes.  `movl $imm32,disp8(%reg)` is
 seven and is left alone; `movl $imm32,disp32(%reg)` is ten and is split.  The
 reproduction shows both in one function: `movl $0x1,0x30(%eax)`,
 `movl $0x0,0x20(%eax)` and `movl $0x0,0x18(%eax)` stay immediate stores, and
-only `+0x2f9c` and `+0x2fa0` are split.  **So the exposed functions are the
-ones that store constants into fields past +0x7f** -- which is most of this
-object's `reset` and constructor bodies.
+only `+0x2f9c` and `+0x2fa0` are split -- **so the shape is functions storing
+constants into fields past +0x7f**, which is most of this object's `reset` and
+constructor bodies.  Counted over the blob (a register loaded with a constant
+whose only use is the immediately following store through it): **218 of 1,859
+functions carry at least one, 406 in all**, led by `v34handshak` at 19 and
+`V92ConvolutionEncoder::makeStateTtransitionTable` at 12.
 
-Counted over the blob by looking for the emitted shape (a register loaded with
-a constant whose only use is the immediately following store through it):
-**218 of 1,859 functions carry at least one, 406 splits in all**, led by
-`v34handshak` at 19 and `V92ConvolutionEncoder::makeStateTtransitionTable` at
-12.  Same compiler and same flags on both sides, so a split in the blob's copy
-of a function is good evidence that ours has one too, and the predictor costs
-nothing to run.
-
-**IT IS A FILTER FOR THE EXPOSED CASE, NOT A CERTIFICATE OF THE NULL.**
-i386.md has 144 `match_scratch` sites, and the read-modify-write group at
-17685-17740 is `! TARGET_READ_MODIFY` / `! TARGET_READ_MODIFY_WRITE`, also
-PPRO-tuned, drawing from the same cursor.  The detector above sees only the
-const-store shape, so a positive count says a function is exposed and a zero
-does not say it is safe.  This is 7801's pre-check rule in a second place.
+**That count is a good read of the object and a bad predictor: over the 25
+REGALLOC symbols it finds 4 where the two compiles find 12.**  i386.md has 144
+`match_scratch` sites and the read-modify-write group at 17685-17740 is
+`! TARGET_READ_MODIFY` / `! TARGET_READ_MODIFY_WRITE`, PPRO-tuned and drawing
+on the same cursor, and the shape detector sees none of it.  Recorded because
+the weak version was written first and would have had somebody skip eight of
+the twelve -- 7801's pre-check rule in a second place, and this time the
+stronger test exists.
 
 **HOW MUCH OF THE EFFECT IT IS: MEASURED, NOT ASSUMED.**  177 swaps over 45
 translation units in `src/pump/`, two arms each:

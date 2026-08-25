@@ -354,22 +354,53 @@ masked by the tune setting (`i386.h:263`), so **`-mtune=i686` — finding 612's
 flag, the one that took the codegen match from 30 to 82 — is exactly and only
 what enables this.**
 
-**THE ADVANCE TEST, AND IT IS FREE.** `large_insn` is 8 for `pentiumpro_cost`
-(`i386.c:251`). `movl $imm32,disp8(%reg)` is seven bytes and is left alone;
-`movl $imm32,disp32(%reg)` is ten and is split. The reproduction shows both in
-one function — `+0x18`, `+0x20`, `+0x30` stay immediate stores and only
-`+0x2f9c` and `+0x2fa0` split. **So the exposed functions are the ones storing
-constants into fields past +0x7f**, which is most of this object's `reset` and
-constructor bodies. Read the emitted shape off either object — a register
-loaded with a constant whose only use is the store immediately after it:
-**218 of the blob's 1,859 functions carry at least one, 406 in all**, led by
-`v34handshak` at 19. Same compiler and flags on both sides, so a split in the
-blob's copy is good evidence ours has one.
+**THE ADVANCE TEST, AND IT IS EXACT IN THE DIRECTION THAT MATTERS.** Compile the
+file twice, with and without `-fno-peephole2`, and compare the candidate
+function. Three outcomes and they are not the same claim:
 
-**IT IS A FILTER FOR THE EXPOSED CASE, NOT A CERTIFICATE OF THE NULL** — 3a's
-rule again. i386.md has 144 `match_scratch` sites and the read-modify-write
-group at 17685 is PPRO-tuned too, drawing on the same cursor; that shape is not
-detected above. A positive count says exposed; a zero does not say safe.
+    bytes IDENTICAL           peephole2 did nothing.  It consumed no scratch,
+                              the cursor cannot reach it, reordering CANNOT
+                              move this symbol.  A definitive clear.
+    bytes differ, and a
+    REGISTER appears that
+    the -fno-peephole2 build
+    never uses               a scratch was allocated.  Exposed, and you can
+                              name the register.
+    bytes differ, no new
+    register                 peephole2 fired on a pattern that takes no
+                              scratch (the xor-zeroing one, lea-to-add).
+                              Undecided -- treat as exposed.
+
+Run over the live buckets on this tree, one file compiled twice per candidate:
+
+    REGALLOC  25 symbols   12 take a scratch   12 undecided    1 CLEARED
+    BYTES     91 symbols   18 take a scratch   45 undecided   28 CLEARED
+
+**That is 3a's missing certificate.** 3a can say a file's order is achievable
+and cannot say a null result means anything; this says, per symbol and before
+any permutation, that 1 of the remaining 25 REGALLOC symbols and 28 of the 91
+BYTES are not reachable by this lever at all. It also explains 7796 and 7801
+after the fact: nearly every REGALLOC symbol is peephole2-touched, which is why
+aiming whole files at that bucket paid and aiming at BYTES did not.
+
+The twelve REGALLOC symbols that take a scratch, with the register peephole2
+gave them, are the list a reordering pass should start from — `V90CP`'s C1
+(`ecx`, `edx`, `edi`), both `printTitle`s, `V90Parameters`' C2, both
+`setMappingParams`, `V90SignBitsExtractor`'s C2, `V34EqualizerCleanUp`,
+`V90Resampler::setBllState`, `VPcmFloModem::setPcmSessionType`,
+`applyPadGainToLinMapp`, `generateSymbol` and `dp_v8_exit`.
+
+**WHY THE SHAPE, READ OFF THE OBJECT, IS NOT THE TEST.** `large_insn` is 8 for
+`pentiumpro_cost` (`i386.c:251`), so `movl $imm32,disp8(%reg)` at seven bytes is
+left alone and `movl $imm32,disp32(%reg)` at ten is split — visible in the
+reproduction, where `+0x18`, `+0x20` and `+0x30` stay immediate stores and only
+`+0x2f9c` and `+0x2fa0` split. Counting that emitted shape gives **218 of the
+blob's 1,859 functions, 406 splits in all**, led by `v34handshak` at 19, and it
+is a good quick read of the object. **It is also a bad predictor: over the 25
+REGALLOC symbols it finds 4 where the exact test finds 12.** i386.md has 144
+`match_scratch` sites and the read-modify-write group at 17685 is PPRO-tuned
+too, drawing on the same cursor. Use the shape to understand what is happening;
+use the two compiles to decide.
 
 **How much of the effect this is, measured.** 177 swaps over 45 units in
 `src/pump/`: **16 bystanders differ with peephole2 and 8 without** — and all
