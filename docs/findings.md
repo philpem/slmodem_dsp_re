@@ -86034,3 +86034,451 @@ which is finding 134's argument, arrived at again from the other end.
 
 Both arms shown firing by injection: the dropped `-D` exits 1, and the inert
 header exits 1 against the floor.  0.4 s over the whole tree.
+
+
+======================================================================
+### 7815. LEVER 7, WAVE 7: THE POPULATION RE-DERIVED, A SWITCH COUNTED AS A TAIL CALL, AND FIFTEEN DESTRUCTORS CLOSED
+
+**Reserved block: 7815-7819.**  Every ref this repository knows about was
+swept for its highest `### <n>.` heading -- `refs/heads`, `refs/remotes` and
+`refs/tags` together.  `master` and `origin/master` stood at **7804** and a
+sibling worktree at **7811**, so the block starts above the highest anywhere
+and not above master's.  Expect to renumber at merge.
+
+**THE CENSUS WAS RE-DERIVED RATHER THAN INHERITED, AND IT MOVED.**  Over the
+**1251** symbols both objects define -- `byteident.py`'s own denominator, and
+this tool prints it on every run:
+
+    agree on whether the function sibcalls   1207
+    WE sibcall, the blob does not              36     (32 of them to sysdep_free)
+    the BLOB sibcalls and we do not             8
+
+7786 measured 1188 / 50 / 13.  The gap is **two things, and only one of them is
+progress.**  Wave 4b closed nine of the fifty and later waves two more, which
+is why the `sysdep_free` column reads 32 against 7786's 41 -- 41 minus wave 4b's
+nine, exactly, which is what cross-validates this count against that one.  The
+rest is an artefact, below.
+
+**AN INDIRECT `jmp *TABLE(,%eax,4)` IS A SWITCH AND WAS BEING COUNTED AS A TAIL
+CALL.**  It carries an `R_386_32` relocation against `.rodata` exactly as a
+relocated direct jump carries one against its callee, so a scanner that
+rewrites the operand from the relocation before testing for the `*` sees a jump
+to a named target outside the function.  The first run of this pass's script
+did that and reported **seven switch statements as sibling calls** --
+`TimingV34`, `setfinalrate` and `v90Phase34` on our side, `B103FP_modem`,
+`RcFixed_Create`, `cadence_create` and `v8_process` on the blob's -- inflating
+both disagreement columns by five between them.  The other trap in the same
+family is bounding a function by its objdump BLOCK rather than its `nm -S`
+size: GCC pads between functions with `jmp <next symbol>`, which is the same
+artefact refinement.md lever 3a records inventing a call edge.
+
+`tools/sibcensus.py` is the corrected tool.  It reports its denominator, and
+`--self-test` carries three cases of which **two are things it must NOT
+report**: `Psd::~Psd`, closed by wave 4b and required to read AGREE;
+`V92deleteConstellations`, still open and required to read DISAGREE; and
+`v90Phase34`, the switch, required to read as no tail call at all.
+
+**WHAT CLOSED.  Fifteen symbols, nine destructor bodies, seven files.**
+
+    _ZN9ScramblerIhhED1Ev  / IhiE / IihE      SIZE 25 vs 29 bytes -> EXACT
+    _ZN11DescramblerIhiED1Ev / IiiE           SIZE 25 vs 29       -> EXACT
+    _ZN10LowPassFIRIfED1Ev                    SIZE 25 vs 29       -> EXACT
+    _ZN5QueueIfED1Ev                          SIZE 25 vs 29       -> EXACT
+    _ZN27ParallelDifferentialDecoderIhED1Ev   SIZE 25 vs 29       -> EXACT
+    _ZN27ParallelDifferentialEncoderIhED1Ev   SIZE 25 vs 29       -> EXACT
+    _ZN13V90SdDetectorD1Ev / D2Ev             SIZE 25 vs 30       -> EXACT
+    _ZN5V90CPD1Ev / D2Ev                      BYTES 3 of 173      -> EXACT
+    _ZN12V90EqualizerD1Ev / D2Ev              BYTES, 541 vs 541   -> EXACT
+
+    grade 0  479 -> 494 of 1251 (38.3% -> 39.5%)   grade 0-or-1  509 -> 524
+    REGALLOC 25 (unmoved)   BYTES 91 -> 87   SIZE 648 -> 637
+
+`--list-exact` was taken on both sides and diffed as a SET, not as a count
+(2900, 7768): **fifteen added, none removed.**  `make phase J=3` green.
+
+**`compare.py --ratchet` WAS RUN TOO, because the grade-0 set diff cannot see a
+function LOSING mnemonic agreement without entering either set** -- 7786 ran it
+for this lever and said why.  It matters more here than there: `Scrambler.h`
+now carries the replacement operator and nine headers include it, so the blast
+radius is every TU reaching any of them rather than four `.cpp` files.
+
+It reports FAILED, and **it reports FAILED on master too**, so the tree was
+A/B'd rather than the verdict taken at face value -- master's `src/` and
+`include/` were checked out over this branch's, rebuilt, and measured:
+
+    stored baseline (stale)   identical 350   same_size 71   compared  986
+    master                    identical 535   same_size 68   compared 1251
+    this branch               identical 560   same_size 66   compared 1251
+
+**Every symbol is accounted for, in both columns.**  `identical` gains exactly
+**25**, which is this pass's twenty-five closures.  `same_size` moves 68 -> 66,
+and that is **four out and two in**:
+
+- **Four left it upwards**: `V90CP` D1/D2 and `V90Equalizer` D1/D2 were the
+  four closures that had been in the BYTES bucket -- same byte count, differing
+  mnemonics -- and are now identical.  The other twenty-one closures were in
+  SIZE and were never in `same_size` to leave it.
+- **Two ARRIVED from SIZE**: `V92Transmitter` D1/D2, which did not close but
+  went from 189 bytes against 173 to **173 against 173 at matching instruction
+  count**.  That is the promotion 7817 kept the file for, showing up here in a
+  second tool that knows nothing about the byte grade.
+
+So nothing regressed in either direction, and the one function this pass kept
+without closing is visible as a gain rather than as noise.
+
+The baseline is not re-blessed here.  It stands at a commit where only 986
+symbols were compared, so master's own drift would be blessed along with this
+pass's, and the ratchet is deliberately outside `make phase`.
+
+**THE `25 vs 29` FAMILY IS THE LEVER'S PURE SHAPE WITH NOTHING ELSE ON TOP, and
+it is worth writing the arithmetic down** because "+1 instruction at the same
+byte count" -- how 7786 described it from `Psd` -- is the special case, not the
+rule.  `Scrambler<h,h>::~Scrambler` is the whole function:
+
+    blob   sub $0xc,%esp ; mov 0x10(%esp),%eax ; mov (%eax),%eax ; test ; jne
+           add $0xc,%esp ; ret
+           mov %eax,(%esp) ; call sysdep_free ; add $0xc,%esp ; ret     11 insns
+
+    ours   mov 0x4(%esp),%eax ; mov (%eax),%eax ; test ; jne ; ret
+           mov %eax,0x4(%esp) ; jmp sysdep_free                          7 insns
+
+The sibcall does not only replace `call`+`ret` with `jmp`; **it deletes the
+frame**, so the `sub`/`add` pair and the second `ret` go with it.  Four
+instructions and four bytes, not one and zero.  Where the destructor does other
+work the frame is needed anyway and the delta collapses to +1, which is what
+`V90Equalizer` (112 vs 113 at 541 bytes both) and `V90CP` (43 vs 44 at 173
+both) show.  **A site is a candidate at either delta**; screening on "+1 at
+equal bytes" would have missed nine of these fifteen.
+
+**EVERY ONE IS A RECOVERY AND NOT A FIT, on the class's own evidence, and the
+test was indexing rather than our own allocation.**  Deriving "it is an array"
+from our `sysdep_malloc(n * sizeof(T))` is the reconstruction arguing for
+itself; the non-circular witness is that the class INDEXES the member, which
+the differential tier has already validated against the blob.
+
+    Scrambler/Descrambler  pLimit is (1+b+c) ELEMENTS; pInitOut = pLimit + c,
+                           and copyHistoryTail copies tailLength of them
+    LowPassFIR<float>      coefficients, nTaps elements, T = float
+    Queue<float>           buf, size elements; last = buf + size - 1
+    PDEncoder/PDDecoder    state_, `for (i...) state_[i] = 0` in the ctor
+    V90SdDetector          history, historyLength floats
+    V90CP                  buf[0..5], each 0x200 bytes of int
+    V90Equalizer           thirteen float* and short* arrays
+
+Every element type is a POD with no destructor, which is the correctness gate:
+on a pointer to a class WITH one, `delete[]` emits a destructor loop and reads
+an array cookie a malloc'd block does not have.  That is wrong behaviour, not
+merely wrong bytes, and it is why the two `void *` members of `V90Equalizer`
+(`block_b4`, `block_b8`) keep an explicit free -- a delete-expression on
+`void *` is ill-formed, and neither is the last free, so neither is a site the
+object says anything about.
+
+**ONLY THE LAST FREE IN EACH DESTRUCTOR IS BYTE-EVIDENCE.**  Away from tail
+position the two spellings emit identically, so the other frees carry
+`delete[]` because a destructor written with it uses it for every member, not
+because the object distinguishes them.  That is stated in each file rather than
+left for a reader to assume, and it is 7786's control H (guard on the first,
+`delete[]` on the second) read as the bound it is.
+
+**THIRTEEN MUTATION ANCHORS MOVED AND WERE RE-POINTED IN THE SAME COMMIT**, the
+outcome 6810 says to expect.  `scrambler` 3, `v90cp` 5, `v90equ` 2,
+`v90sddet` 3; each keeps its MEANING, so "frees without the guard" is still
+that mutation spelled against `delete[]`.  A **fourteenth was avoided rather
+than repaired**: `v90equ`'s "the destructor frees the fixed-point arrays
+whether they exist or not" anchors on `if (mmxArraysPresent != 0) {` and the
+`if (block_b8 != 0)` beneath it, and this pass's new comment had landed between
+them -- hoisting the comment ABOVE the guard put the anchor back without
+touching the JSON.  Done as surgical text edits, 7786 having recorded the first
+attempt at this rewriting both files with `json.dump` and reformatting 260
+lines to change four.  `tools/anchorcheck.py`: **0 of 8,959**.
+
+
+### 7816. AND THE `operator delete[]` DEFINITION'S POSITION IN THE TU IS ITSELF A LEVER-3 CARRIER -- CONSOLIDATING IT COST EIGHT SYMBOLS
+
+This was not the plan and it is the most transferable thing in the pass.
+
+`Scrambler.h` defines `~Scrambler` INLINE, so the replacement `operator
+delete[]` has to be visible in every TU that instantiates it -- a copy seen
+only by `Scrambler.cpp` leaves every other TU referencing the library's
+`_ZdaPv`, which this tree does not link.  A per-file copy is then a
+REDEFINITION the moment two of them meet, and that is not hypothetical:
+`V90Equalizer.cpp` reaches `Scrambler.h` through `V90Phase4Demodulator.h` and
+stopped compiling.
+
+The obvious repair is CLAUDE.md's own instinct -- one definition, in
+`include/dsplib/sysdep.h`, the header that already owns `sysdep_free`.  It
+compiles, `make phase` would have passed, and **the SET diff says it costs
+eight destructors their byte identity**:
+
+    a local copy in each .cpp     FloatFIR D1/D2, FloatARMA D1/D2,
+    (wave 4b's arrangement)       LowPassFIR D1, Queue<f> D1,
+                                  PDDecoder D1, PDEncoder D1        all EXACT
+
+    one copy in sysdep.h          all eight LOST; grade 0 494 -> 486
+
+Four of the eight were **wave 4b's**, closed a pass earlier and silently
+reverted by a tidy-up that touched no destructor and no free.  A count would
+have read 486 against a baseline of 479 and looked like a gain of seven.
+
+**THE CARRIER IS WHERE THE DEFINITION SITS, NOT WHICH DECLARATIONS THE TU HAS.**
+`FloatIIR.cpp` already reached `sysdep.h` transitively through `GenericIIR.h`
+under BOTH arrangements -- it is how the collision was found -- and it kept its
+symbols either way.  So the TU's declaration set was constant across the
+experiment and only the inline function's POSITION moved.  That is
+refinement.md lever 3 with an inline function as the carrier, and lever 3's own
+mechanism note covers it: what is left depends on the IDENTITY of what was
+compiled before, not the amount.
+
+Kept: a local copy in each `.cpp`, where wave 4b put it, and the definition in
+`Scrambler.h` for the one case that genuinely cannot have one -- with every
+file that reaches that header forbidden its own.  **The failure mode is LOUD**
+(a redefinition error, never a silent divergence), which is what makes the
+arrangement safe to leave in place.
+
+**A NOTE FOR WHOEVER TIDIES THIS NEXT.**  "One type, one home" is a rule about
+TYPES and it is about undefined behaviour.  An inline FUNCTION is not covered
+by it, its duplication here is deliberate, and the comment in each file says
+so.  Do not consolidate these without re-running the SET diff.
+
+
+### 7817. THE NINTH SPELLING: SCALAR `delete` ON A *CLASS* POINTER, AND TEN MORE SYMBOLS
+
+**`delete[]` WAS THE WRONG QUESTION AT ALL SIX OF THESE SITES, AND SO WAS
+DECLINING THEM.**  This finding first said all six were "not this lever" on the
+arithmetic -- a 4-instruction delta with a 31-byte gap is not a sibcall, and
+`V90SpectralVerifier` at EQUAL instruction count while the sibcall flag
+disagrees is internally impossible for one.  That reasoning is sound and its
+conclusion was still wrong, because it only ever asked whether `delete[]`
+fitted.  **Ten more symbols closed on a spelling 7786 did not enumerate.**
+
+**THE ENUMERATION HAD A HOLE.**  7786's spelling C was `delete p` on a POD --
+`float *` -- which is `if (p) operator delete(p)` and SIBCALLS.  On a pointer
+to a class **with a destructor** the delete-expression is a different thing:
+
+    delete p    ==>    if (p) { p->~T(); operator delete(p); }
+
+and GCC 3.4.2 does **not** sibcall that second call.  So scalar `delete`
+belongs in BOTH columns of the table depending on what it deletes, and the
+object's shape at these six sites is exactly the expansion above -- which our
+source was open-coding by hand, one statement at a time, and getting a sibling
+`jmp` for it.
+
+**`V92Precoder` MEASURED IT IN ONE COMPILE.**  Replacing
+
+    if (fir1 != 0) { fir1->~FloatFIR(); sysdep_free(fir1); }
+    if (fir2 != 0) { fir2->~FloatFIR(); sysdep_free(fir2); }
+
+with `delete fir1; delete fir2;` over an inline replacement `operator delete`
+took it from **25 instructions / 77 bytes to 29 / 108 -- the blob's, to the
+byte**, D1 and D2 both EXACT.  The 31-byte gap this finding had read as
+"register pressure and control flow" was the whole expansion missing: two
+saved registers, a reload and a second exit path that the hand-written form
+never generates.
+
+**WHAT CLOSED, ten symbols over five files:**
+
+    _ZN11V92PrecoderD1Ev / D2Ev          SIZE 31   25/77  -> 29/108  EXACT
+    _ZN12V92PreFilterD1Ev / D2Ev         SIZE 31   25/77  -> 29/108  EXACT
+    _ZN15V90BitsToSymbolD1Ev / D2Ev      SIZE 16   22/68  -> 27/84   EXACT
+    _ZN15V92BitsToSymbolD1Ev / D2Ev      SIZE 16   22/68  -> 27/84   EXACT
+    _ZN19V90SpectralVerifierD1Ev / D2Ev  SIZE 15   28/90  -> 28/75   EXACT
+
+    grade 0  494 -> 504 of 1251 (39.5% -> 40.3%)   grade 0-or-1  524 -> 534
+    BYTES 87 -> 89    SIZE 637 -> 625
+
+`--list-exact` diffed as a SET at each step: ten added, **none removed**.
+Over the whole pass, **479 -> 504, twenty-five symbols added and none lost**.
+
+**THE SIXTH, `V92Transmitter`, DID NOT CLOSE AND WAS KEPT ANYWAY, because it
+made its residual legible** -- refinement.md's rule from `toneiir_reset`.  It
+was SIZE 16, ours 53 instructions in 189 bytes against 54 in 173.  It is now
+**54 instructions in 173 bytes, the blob's count and the blob's size exactly**,
+with 46 bytes differing: the shape is right and what is left is allocation.
+That is the +2 in the BYTES column above, and it is a promotion, not a loss.
+
+**THE RECOVERY/FIT LINE, PER MEMBER, because this spelling can do real
+damage.**  A delete-expression runs a destructor; an explicit free does not.
+So `delete p` is only the recovery where the object ITSELF makes the destructor
+call, and every site was checked against the disassembly for one:
+
+- Taken, the object calls the destructor: `V92Precoder`'s two `FloatFIR`,
+  `V92PreFilter`'s `FloatFIR` and `FloatIIR`, `V90BitsToSymbol`'s `V90Mapper`,
+  `V92BitsToSymbol`'s `V92Transmitter`, `V90SpectralVerifier`'s `Psd`, and
+  `V92Transmitter`'s `V92Precoder`, `V92PreFilter` and `V92ConvolutionEncoder`.
+- Taken as `delete[]`, POD arrays: `symbols` (`short *`) in both BitsToSymbol,
+  `buf_18` and `spectrum` (`float *`), `bitBuffer` and `byte_58`
+  (`unsigned char *`).
+- **DECLINED: `V92Transmitter::modulusEncoder`.**  It is a
+  `V92ModulusEncoder *` and the blob frees it with **no destructor call at
+  all**.  `delete` would invent one the moment that class gains a non-trivial
+  destructor, and nothing may add a call the object does not make.  It keeps
+  its explicit guarded free, and the file says why.
+
+**THREE COMMENTS WERE CORRECTED IN PLACE**, 6100/6103's shelf-life failure
+again.  `V92Precoder.cpp` said the constructor and destructor go through asm()
+labels and explicit destructor calls because the build has no `<new>`, and that
+"the instruction sequence is the blob's either way; only the spelling differs".
+`V92Transmitter.cpp` said the same.  **The `new` half is kept and the `delete`
+half is withdrawn**: for the constructor both spellings do emit identically,
+which is why the asm() labels stay and lose nothing; for a free in tail
+position they do not, which is what these ten symbols are.  This is the same
+distinction 7786 drew for `V90Phase4Modulator.cpp` and it lands the same way.
+`V90SpectralVerifier.cpp`'s `psd_destruct` asm() label is now **gone** --
+`delete psd` calls `_ZN3PsdD1Ev`, which is the symbol that label named.
+
+**TWENTY-SIX MUTATION ANCHORS MOVED** on top of 7815's thirteen, over
+`v90bits`, `v90specver`, `v92btos`, `v92precoder`, `v92prefilter` and `v92tx`.
+Each keeps its meaning -- "the null test is dropped" is still that mutation,
+now spelled by expanding `delete` back into its guarded form, which is exactly
+what the mutation is testing.  Re-pointed as label-scoped text edits that
+re-parse as JSON before being written; the six files change **45 lines
+between them** and nothing is reformatted.  `tools/anchorcheck.py`: **0 of
+8,959**.
+
+**AND IT BROKE THE MODERN BUILD, WHICH IS THE PART A PERIOD-ONLY MEASUREMENT
+CANNOT SEE.**  `make phase` failed to LINK every test binary:
+
+    undefined reference to `operator delete(void*, unsigned int)'
+
+C++14 added SIZED DEALLOCATION, so GCC 13 calls `operator delete(void *,
+size_t)` for `delete p` on a class with a destructor, and the single-argument
+replacement does not define it.  That is precisely the failure
+`include/dsplib/Resampler.h` records and solves with a member operator -- the
+period differential was **251 passed, 0 failed** at the same moment, because
+GCC 3.4.2 has no such thing.
+
+Fixed with a sized form in each of the six files, guarded on
+`__cplusplus >= 201402L`, which is FALSE under 3.4.2 (199711L).  **The compiler
+that decides byte identity never sees the declaration**, and the check is not
+that sentence: `byteident` reads 504 before and after, unchanged, so the guard
+is inert where it matters.  It is portability plumbing and carries no claim
+about the object -- the alternative, a member `operator delete` on each of the
+eight deleted classes, is the arrangement `Resampler.h` and `GenericIIR.h`
+already use and is the tidier answer if anyone revisits this.
+
+**AND THE FAILURE WAS NEARLY REPORTED AS A PASS.**  The gate was run as
+
+    make phase J=3 > log 2>&1; echo "EXIT=$?"; tail -5 log
+
+whose exit status is **`tail`'s**.  `make` had exited 2; the runner recorded 0;
+the log's own last line said `Error 2` and the tail window did not reach it.
+Two earlier runs in this pass were genuinely green and one was not, and nothing
+distinguished them at the point of reading.  This is findings 134, 2400 and
+3100 in a third costume -- **a verdict that cannot be seen to fail is not a
+verdict** -- and the fix is to put `make`'s own status IN the log:
+
+    make phase J=3 > "$LOG" 2>&1; rc=$?; echo "MAKE_PHASE_EXIT=$rc" >> "$LOG"
+
+**FOR THE NEXT PASS.**  The enumeration is now nine spellings, and the two that
+do not sibcall are `delete[]` and `delete`-on-a-class.  Both are
+delete-EXPRESSIONS, which is the pattern worth carrying: what suppresses the
+tail call is the expression, not the type.  Anywhere this tree open-codes
+`p->~T(); sysdep_free(p);` is a candidate, and the search is one grep.
+
+
+### 7818. THE OTHER DIRECTION -- ALL EIGHT ARE ABSENCES, AND NONE IS A SPELLING
+
+7786 measured thirteen functions where the blob sibcalls and we do not and
+explicitly did not examine them.  Re-measured pairwise with the switch artefact
+removed there are **eight**, and the answer is uniform: every one carries a
+large instruction-count gap, so the difference is body CONTENT and no change of
+free spelling reaches any of it.  A measured negative, recorded so nobody
+repeats it.
+
+    B103AnswerNextState            ours  33 / 128b   blob  52 / 237b   FENCED
+    B103OriginateNextState         ours  42 / 176b   blob  65 / 295b   FENCED
+    txmitquadbit                   ours  48 / 209b   blob 145 / 453b   -97 insns
+    txmitdibit                     ours  30 / 127b   blob  81 / 250b   -51 insns
+    V90AutoDigitalImpDetector
+      ::findPadGain                ours 615 /2808b   blob 628 /2879b   -13 insns
+    V92Modem::V92Modem C1/C2       ours  88 / 353b   blob  95 / 393b    -7 insns
+    v8_fskmodulate                 ours  73 / 272b   blob  66 / 222b    +7 insns
+
+The two `B103*` are behind the standing fence and are reported as fenced, not
+as declined on evidence -- nothing was read of them beyond the counts.
+
+**IN SIX OF THE EIGHT THE BLOB'S TAIL-CALLEE IS NOT OUR LAST STATEMENT AT
+ALL**, which is the shape of the answer rather than a detail.  `txmitdibit` and
+`txmitquadbit` tail-call `txmit`, and we call `V34scrambler` and THEN `txmit`.
+`v8_fskmodulate` tail-calls `v8_txwritequeue`, calls `v8_fsktxfilter` which
+**we do not call at all** -- the one true absence the census names in this
+direction -- and reaches neither of the two functions we do call.  Four more
+tail-call `dsplibs_debug_printf`, so the blob's last act is a diagnostic our
+body places differently.  A function whose final CALLEE differs is not a
+function whose final SPELLING differs.
+
+
+### 7819. THE TWO 3-BYTE C SYMBOLS ARE LEVER 7 EXACTLY, AND THE SPELLING IS NOT REACHABLE FROM C
+
+`V92deleteConstellations` (3 of 173, ours 43 insns vs blob 44) and
+`V92deleteFilterCoefficients` (3 of 106, 31 vs 32) are **the purest instances
+of the signature anywhere in the object**, and both are declined.
+
+`V92deleteFilterCoefficients` is **103 of its 106 bytes identical to the
+blob**, and -- the structural claim, which is the interesting one -- **all
+three differing bytes lie inside a single 13-byte block**, the same 13 bytes on
+both sides:
+
+    blob   mov %eax,(%esp) ; call sysdep_free ; add $0x8,%esp ; pop %ebx ; ret
+    ours   mov %eax,0x10(%esp) ; add $0x8,%esp ; pop %ebx ; jmp sysdep_free
+
+Four guarded frees at +0x5c, +0x60, +0x64, +0x68; the first three are `call`
+on both sides because each jumps back to continue, and only the fourth CAN be a
+sibcall.  The blob declines it.  That is lever 7 with nothing else present.
+
+**AND `delete[]` DOES NOT EXIST IN A `.c`.**  The only spelling of nine now
+known to produce a plain `call` at a destructor's last free is a
+delete-expression, so buying these six bytes means asserting the original
+`V92ParamsInfo` was a `.cpp` of `extern "C"` functions.  That is a real shape in
+this codebase -- `v34hstx1.cpp` is exactly it, nineteen unmangled `T v34tx1_*`
+and zero `_Z` (findings 333, 344, 711) -- so it was TESTED rather than assumed,
+and **the test is a null.**
+
+- The five unmangled `V92*` functions sit contiguously between
+  `_ZN5V92Jd19getJdPhaseBitVectorEv` and `_ZN8V92ModemD2Ev`.  Contiguity
+  proves nothing: the linker packs separate objects contiguously too.
+- The blob's `V92Modem::V92Modem` calls `V92createConstellations` and
+  `V92createFilterCoefficients` **with an `R_386_PC32` relocation**.  Per
+  CLAUDE.md's own rule (306, 333) a relocation's PRESENCE proves nothing --
+  these are global symbols and would carry one from any TU.  Only its ABSENCE
+  decides.
+- So the deciding test is an UNRELOCATED call out of one of the five, which
+  would name a same-TU local.  **There are none, and there are no local (`t`)
+  text symbols anywhere in 0x12d10..0x13990 to be the target of one.**
+
+The TU's language is therefore undecidable from the object by this route, and
+renaming a file to buy a spelling on an undecided premise is fitting.  Declined
+-- with the residual now named to the byte, so that if some other pass settles
+`V92ParamsInfo`'s TU identity these two close immediately.
+
+**THE COLUMN IS NOW NINE, AND EVERY ONE OF THEM IS OUT OF C++'S REACH.**  The
+pass took "we sibcall, the blob does not" from **36 to 9** -- 15 on `delete[]`
+(7815) and 12 on scalar `delete` (7817) -- and what is left contains **no C++
+destructor at all**:
+
+    V92deleteConstellations        lever 7 exactly; `.c`, see above
+    V92deleteFilterCoefficients    lever 7 exactly; `.c`, see above
+    _iir_filter_delete             5 vs 8 insns, 17 vs 23 bytes -- the same
+    K56FLEX_Delete                 shape as 7815's `25 vs 29` family, in `.c`
+    VPCMXF_Delete                  ours 2 insns and 8 bytes BIGGER
+    K56FLEX_Create                 tail call to sysdep_malloc, not a free
+    V8agc                          -123 insns, a whole-body absence
+    VPcmV34GetCurrentRxBitRate     -9 insns
+    V90Phase3Modulator
+      ::generateSymbol             -8; tail-calls generateV90Symbol /
+                                   generateV92Symbol where the blob calls them
+
+The first four are the lever with no spelling available; the last five are not
+the lever.
+
+**`--why` HAS NO REJECTING ROW FOR ANY OF THE NINE, AND THAT IS ITSELF THE
+ANSWER.**  It prints a bare `False`, which reads like a tool artefact and is
+really a diagnosis: `alpha_why` returns `False` -- not a row -- when the two
+instruction sequences differ in LENGTH, and `--why` prints the return value
+verbatim.  Every one of the nine differs in instruction count, so the grade-1
+verdict at all of them is "an absence or an extra", never a per-row
+disagreement.  Worth one line of presentation work in `byteident.py` for
+whoever is next in it: say *"instruction counts differ, N against M"* rather
+than `False`.  **So this lever is finished on the C++ side of the tree**, and what
+would reopen it is a decision about `V92ParamsInfo`'s TU, not another
+spelling.

@@ -12,6 +12,32 @@
 extern "C" void *sysdep_malloc(unsigned size);
 extern "C" void sysdep_free(void *p);
 
+/*
+ * THE REPLACEMENT `operator delete[]`, AND IT IS READ OFF THE OBJECT.  At a
+ * destructor's LAST free the blob makes an ordinary `call sysdep_free` where
+ * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
+ * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
+ * were compiled and only `delete[]` reproduces the object's shape; finding
+ * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ *
+ * Behaviourally it is exactly the guard it replaces: the element type is a POD
+ * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
+ * there is no array cookie to read.
+ *
+ * ONLY THE LAST FREE IN A DESTRUCTOR IS BYTE-EVIDENCE for this.  Away from
+ * tail position the two spellings emit identically, so the others carry the
+ * same spelling because a destructor written with `delete[]` uses it for every
+ * member, not because the object distinguishes them.
+ *
+ * IT IS A LOCAL COPY AND NOT AN INCLUDE ON PURPOSE.  Hoisting this one
+ * definition into `dsplib/sysdep.h` -- which every one of these files already
+ * reaches transitively -- moved it earlier in the translation unit and cost
+ * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
+ * them.  That is refinement.md lever 3 with an inline function as the carrier,
+ * and finding 7816 is the measurement.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
 template <class T>
 T SerialDifferentialEncoder<T>::process(T in)
 {
@@ -54,8 +80,7 @@ template <class T>
 ParallelDifferentialEncoder<T>::~ParallelDifferentialEncoder()
 {
 	/* `state_` is NOT nulled, so a second destruction double-frees. */
-	if (state_)
-		sysdep_free(state_);
+	delete[] state_;
 }
 
 /*
@@ -113,8 +138,7 @@ ParallelDifferentialDecoder<T>::ParallelDifferentialDecoder(unsigned size)
 template <class T>
 ParallelDifferentialDecoder<T>::~ParallelDifferentialDecoder()
 {
-	if (state_)
-		sysdep_free(state_);
+	delete[] state_;
 }
 
 template <class T>

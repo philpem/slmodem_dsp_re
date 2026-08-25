@@ -609,38 +609,31 @@ v90equ_x87_fsqrt(long double x)
  */
 V90Equalizer::~V90Equalizer()
 {
-	if (linearEquCoefs != 0)
-		sysdep_free(linearEquCoefs);
-	if (array_18 != 0)
-		sysdep_free(array_18);
-	if (dfeCoefs != 0)
-		sysdep_free(dfeCoefs);
-	if (array_44 != 0)
-		sysdep_free(array_44);
-	if (linearEquWindow != 0)
-		sysdep_free(linearEquWindow);
-	if (dfeWindow != 0)
-		sysdep_free(dfeWindow);
-	if (meanErrorEnergy != 0)
-		sysdep_free(meanErrorEnergy);
+	delete[] linearEquCoefs;
+	delete[] array_18;
+	delete[] dfeCoefs;
+	delete[] array_44;
+	delete[] linearEquWindow;
+	delete[] dfeWindow;
+	delete[] meanErrorEnergy;
 
+	/*
+	 * `block_b8` and `block_b4` are `void *` -- a delete-expression on
+	 * `void *` is ill-formed, so those two keep the explicit free below.
+	 * Neither is the last free, so neither is a site the object says
+	 * anything about.
+	 */
 	if (mmxArraysPresent != 0) {
 		if (block_b8 != 0)
 			sysdep_free(block_b8);
 		if (block_b4 != 0)
 			sysdep_free(block_b4);
-		if (linearEquMmxCoefs != 0)
-			sysdep_free(linearEquMmxCoefs);
-		if (array_d8 != 0)
-			sysdep_free(array_d8);
-		if (array_ec != 0)
-			sysdep_free(array_ec);
-		if (dfeMmxCoefs != 0)
-			sysdep_free(dfeMmxCoefs);
-		if (array_118 != 0)
-			sysdep_free(array_118);
-		if (array_12c != 0)
-			sysdep_free(array_12c);
+		delete[] linearEquMmxCoefs;
+		delete[] array_d8;
+		delete[] array_ec;
+		delete[] dfeMmxCoefs;
+		delete[] array_118;
+		delete[] array_12c;
 	}
 }
 

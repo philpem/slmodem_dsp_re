@@ -68,12 +68,12 @@
   },
   {
     "label": "the destructor frees the aligned pointer rather than the raw one",
-    "find": "\t\tif (linearEquMmxCoefs != 0)\n\t\t\tsysdep_free(linearEquMmxCoefs);",
-    "replace": "\t\tif (linearEquMmxCoefs != 0)\n\t\t\tsysdep_free(linearEquMmxCoefsAligned);"
+    "find": "\t\tdelete[] linearEquMmxCoefs;",
+    "replace": "\t\tdelete[] linearEquMmxCoefsAligned;"
   },
   {
     "label": "the destructor does not guard the unconditional blocks against null",
-    "find": "\tif (meanErrorEnergy != 0)\n\t\tsysdep_free(meanErrorEnergy);",
+    "find": "\tdelete[] meanErrorEnergy;",
     "replace": "\tsysdep_free(meanErrorEnergy);"
   },
   {

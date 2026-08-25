@@ -55,7 +55,7 @@
  },
  {
   "label": "the raw buffer's null test is dropped",
-  "find": "\tif (bitBuffer != 0)\n\t\tsysdep_free(bitBuffer);",
+  "find": "\tdelete[] bitBuffer;",
   "replace": "\tsysdep_free(bitBuffer);"
  },
  {
@@ -65,32 +65,32 @@
  },
  {
   "label": "the one-byte buffer's null test is dropped",
-  "find": "\tif (byte_58 != 0)\n\t\tsysdep_free(byte_58);",
+  "find": "\tdelete[] byte_58;",
   "replace": "\tsysdep_free(byte_58);"
  },
  {
   "label": "the precoder's null test is dropped",
-  "find": "\tif (precoder != 0) {\n\t\tprecoder->~V92Precoder();",
-  "replace": "\tif (precoder == precoder) {\n\t\tprecoder->~V92Precoder();"
+  "find": "\tdelete precoder;",
+  "replace": "\tprecoder->~V92Precoder();\n\tsysdep_free(precoder);"
  },
  {
   "label": "the precoder is not nulled after its free",
-  "find": "\t\tsysdep_free(precoder);\n\t\tprecoder = 0;",
-  "replace": "\t\tsysdep_free(precoder);"
+  "find": "\tdelete precoder;\n\tprecoder = 0;",
+  "replace": "\tdelete precoder;"
  },
  {
   "label": "the pre-filter is nulled after its free as well",
-  "find": "\t\tsysdep_free(preFilter);\n\t}",
-  "replace": "\t\tsysdep_free(preFilter);\n\t\tpreFilter = 0;\n\t}"
+  "find": "\tdelete preFilter;",
+  "replace": "\tdelete preFilter;\n\tpreFilter = 0;"
  },
  {
   "label": "the destructor frees the precoder where it should free the pre-filter",
-  "find": "\t\tpreFilter->~V92PreFilter();\n\t\tsysdep_free(preFilter);",
-  "replace": "\t\tpreFilter->~V92PreFilter();\n\t\tsysdep_free(precoder);"
+  "find": "\tdelete preFilter;",
+  "replace": "\tdelete precoder;"
  },
  {
   "label": "the convolution encoder is never released",
-  "find": "\tif (convolutionEncoder != 0) {\n\t\tconvolutionEncoder->~V92ConvolutionEncoder();\n\t\tsysdep_free(convolutionEncoder);\n\t}",
-  "replace": "\tif (convolutionEncoder == 0) {\n\t\tconvolutionEncoder->~V92ConvolutionEncoder();\n\t\tsysdep_free(convolutionEncoder);\n\t}"
+  "find": "\tdelete convolutionEncoder;",
+  "replace": "\tif (convolutionEncoder == 0)\n\t\tdelete convolutionEncoder;"
  }
 ]

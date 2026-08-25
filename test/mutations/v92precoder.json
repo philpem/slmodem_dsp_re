@@ -35,23 +35,23 @@
  },
  {
   "label": "the first free's null test is dropped",
-  "find": "\tif (fir1 != 0) {\n\t\tfir1->~FloatFIR();\n\t\tsysdep_free(fir1);\n\t}",
-  "replace": "\tif (fir1 != 0)\n\t\tfir1->~FloatFIR();\n\tsysdep_free(fir1);"
+  "find": "\tdelete fir1;",
+  "replace": "\tfir1->~FloatFIR();\n\tsysdep_free(fir1);"
  },
  {
   "label": "the second free's null test is dropped",
-  "find": "\tif (fir2 != 0) {\n\t\tfir2->~FloatFIR();\n\t\tsysdep_free(fir2);\n\t}",
-  "replace": "\tif (fir2 != 0)\n\t\tfir2->~FloatFIR();\n\tsysdep_free(fir2);"
+  "find": "\tdelete fir2;",
+  "replace": "\tfir2->~FloatFIR();\n\tsysdep_free(fir2);"
  },
  {
   "label": "the destructor nulls the pointer it has just freed",
-  "find": "\t\tfir1->~FloatFIR();\n\t\tsysdep_free(fir1);\n\t}",
-  "replace": "\t\tfir1->~FloatFIR();\n\t\tsysdep_free(fir1);\n\t\tfir1 = 0;\n\t}"
+  "find": "\tdelete fir1;",
+  "replace": "\tdelete fir1;\n\tfir1 = 0;"
  },
  {
   "label": "the destructor frees the first filter twice and the second never",
-  "find": "\t\tfir2->~FloatFIR();\n\t\tsysdep_free(fir2);",
-  "replace": "\t\tfir2->~FloatFIR();\n\t\tsysdep_free(fir1);"
+  "find": "\tdelete fir2;",
+  "replace": "\tdelete fir1;"
  },
  {
   "label": "NOTE: and what the other three members' entries are for",

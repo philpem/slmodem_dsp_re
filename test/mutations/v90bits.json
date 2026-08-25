@@ -62,28 +62,28 @@
  },
  {
   "label": "dtor: the mapper is freed without being destroyed",
-  "find": "\t\tmapper->~V90Mapper();\n\t\tsysdep_free(mapper);",
-  "replace": "\t\tsysdep_free(mapper);"
+  "find": "\tdelete mapper;",
+  "replace": "\tsysdep_free(mapper);"
  },
  {
   "label": "dtor: the mapper is destroyed and not freed",
-  "find": "\t\tmapper->~V90Mapper();\n\t\tsysdep_free(mapper);",
-  "replace": "\t\tmapper->~V90Mapper();"
+  "find": "\tdelete mapper;",
+  "replace": "\tmapper->~V90Mapper();"
  },
  {
   "label": "dtor: the symbol buffer's free is not guarded",
-  "find": "\tif (symbols)\n\t\tsysdep_free(symbols);",
+  "find": "\tdelete[] symbols;",
   "replace": "\tsysdep_free(symbols);"
  },
  {
   "label": "dtor: the symbol buffer is not released",
-  "find": "\tif (symbols)\n\t\tsysdep_free(symbols);",
+  "find": "\tdelete[] symbols;",
   "replace": "\tif (!symbols)\n\t\tsysdep_free(symbols);"
  },
  {
   "label": "dtor: the mapper guard is inverted",
-  "find": "\tif (mapper) {",
-  "replace": "\tif (!mapper) {"
+  "find": "\tdelete mapper;",
+  "replace": "\tif (!mapper) {\n\t\tmapper->~V90Mapper();\n\t\tsysdep_free(mapper);\n\t}"
  },
  {
   "_": [

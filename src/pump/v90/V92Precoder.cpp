@@ -26,14 +26,46 @@
  * over storage that already exists.  Declaring a replacement global
  * `operator new` inline is ill-formed, and a user-declared PLACEMENT form
  * makes GCC emit the null test the blob does not have.  So the constructor
- * calls FloatFIR's by its mangled name and the destructor uses the explicit
- * destructor call, which needs no header.  The instruction sequence is the
- * blob's either way; only the spelling differs.
+ * calls FloatFIR's by its mangled name.
+ *
+ * THIS USED TO END "the instruction sequence is the blob's either way; only
+ * the spelling differs", AND THAT HALF IS WITHDRAWN (finding 7817).  It is
+ * true of the CONSTRUCTOR, which is why that still goes through the asm()
+ * label and loses nothing.  It is false of the DESTRUCTOR: see the
+ * replacement `operator delete` below for the instruction it costs.
  */
 
 #include <stddef.h>
 
 #include "dsplib/V92Precoder.h"
+
+/*
+ * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The
+ * comment above already read the blob's destructor as `delete p` over an
+ * inline wrapper; what it did NOT know is that writing that shape out by hand
+ * is not equivalent.  At the destructor's LAST free the delete-expression
+ * emits an ordinary `call sysdep_free`, and the open-coded
+ * `p->~FloatFIR(); sysdep_free(p)` emits a sibling `jmp` and drops the frame
+ * with it -- 25 instructions and 77 bytes against the blob's 29 and 108.
+ * With `delete` it is byte-identical.  Findings 7786 and 7817,
+ * refinement.md lever 7.
+ */
+extern "C" void sysdep_free(void *p);
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
+ * AND THE SIZED FORM, FOR THE MODERN BUILD ONLY.  C++14 added
+ * `operator delete(void *, size_t)`, and GCC 13 calls it for `delete p` on a
+ * class with a destructor -- an undefined `_ZdlPvj` in a tree that links no
+ * libstdc++, which is the link failure `dsplib/Resampler.h` documents.
+ *
+ * `__cplusplus >= 201402L` is FALSE under GCC 3.4.2 (199711L), so the compiler
+ * that decides byte identity never sees this.  It is portability plumbing and
+ * carries no claim about the object.
+ */
+#if defined(__cplusplus) && __cplusplus >= 201402L
+inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
+#endif
 
 /*
  * Both of these declare their own `extern "C"`.  V92ParamsInfo.h is here
@@ -118,14 +150,8 @@ V92Precoder::V92Precoder(unsigned int nTaps)
  */
 V92Precoder::~V92Precoder()
 {
-	if (fir1 != 0) {
-		fir1->~FloatFIR();
-		sysdep_free(fir1);
-	}
-	if (fir2 != 0) {
-		fir2->~FloatFIR();
-		sysdep_free(fir2);
-	}
+	delete fir1;
+	delete fir2;
 }
 
 /*

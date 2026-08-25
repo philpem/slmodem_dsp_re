@@ -60,22 +60,22 @@
  },
  {
   "label": "the transmitter's null test is dropped",
-  "find": "\tif (transmitter != 0) {\n\t\ttransmitter->~V92Transmitter();",
-  "replace": "\tif (transmitter != (V92Transmitter *)1) {\n\t\ttransmitter->~V92Transmitter();"
+  "find": "\tdelete transmitter;",
+  "replace": "\ttransmitter->~V92Transmitter();\n\tsysdep_free(transmitter);"
  },
  {
   "label": "the symbol buffer's null test is dropped",
-  "find": "\tif (symbols != 0)\n\t\tsysdep_free(symbols);",
+  "find": "\tdelete[] symbols;",
   "replace": "\tsysdep_free(symbols);"
  },
  {
   "label": "the transmitter is freed without being destroyed",
-  "find": "\t\ttransmitter->~V92Transmitter();\n\t\tsysdep_free(transmitter);",
-  "replace": "\t\tsysdep_free(transmitter);"
+  "find": "\tdelete transmitter;",
+  "replace": "\tif (transmitter != 0)\n\t\tsysdep_free(transmitter);"
  },
  {
   "label": "the destructor nulls what it frees",
-  "find": "\tif (symbols != 0)\n\t\tsysdep_free(symbols);\n}",
-  "replace": "\tif (symbols != 0) {\n\t\tsysdep_free(symbols);\n\t\tsymbols = 0;\n\t}\n}"
+  "find": "\tdelete[] symbols;\n}",
+  "replace": "\tdelete[] symbols;\n\tsymbols = 0;\n}"
  }
 ]

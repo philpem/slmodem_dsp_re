@@ -37,6 +37,32 @@
 #include "dsplib/V90CP.h"
 
 /*
+ * THE REPLACEMENT `operator delete[]`, AND IT IS READ OFF THE OBJECT.  At a
+ * destructor's LAST free the blob makes an ordinary `call sysdep_free` where
+ * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
+ * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
+ * were compiled and only `delete[]` reproduces the object's shape; finding
+ * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ *
+ * Behaviourally it is exactly the guard it replaces: the element type is a POD
+ * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
+ * there is no array cookie to read.
+ *
+ * ONLY THE LAST FREE IN A DESTRUCTOR IS BYTE-EVIDENCE for this.  Away from
+ * tail position the two spellings emit identically, so the others carry the
+ * same spelling because a destructor written with `delete[]` uses it for every
+ * member, not because the object distinguishes them.
+ *
+ * IT IS A LOCAL COPY AND NOT AN INCLUDE ON PURPOSE.  Hoisting this one
+ * definition into `dsplib/sysdep.h` -- which every one of these files already
+ * reaches transitively -- moved it earlier in the translation unit and cost
+ * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
+ * them.  That is refinement.md lever 3 with an inline function as the carrier,
+ * and finding 7816 is the measurement.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
+/*
  * Hold the compiler to the map in the header.  tools/offcheck.py does this
  * for the C structs but only parses `struct name {` out of include/dsplib, so
  * a C++ class has to assert its own -- and it is exactly the check that
@@ -138,18 +164,12 @@ V90CP::V90CP()
  */
 V90CP::~V90CP()
 {
-	if (buf[0] != 0)
-		sysdep_free(buf[0]);
-	if (buf[1] != 0)
-		sysdep_free(buf[1]);
-	if (buf[2] != 0)
-		sysdep_free(buf[2]);
-	if (buf[3] != 0)
-		sysdep_free(buf[3]);
-	if (buf[4] != 0)
-		sysdep_free(buf[4]);
-	if (buf[5] != 0)
-		sysdep_free(buf[5]);
+	delete[] buf[0];
+	delete[] buf[1];
+	delete[] buf[2];
+	delete[] buf[3];
+	delete[] buf[4];
+	delete[] buf[5];
 }
 
 /*

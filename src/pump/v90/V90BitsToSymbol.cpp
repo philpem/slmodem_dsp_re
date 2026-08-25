@@ -45,6 +45,42 @@
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/V90BitsToSymbol.h"
+
+/*
+ * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
+ * frees each owned sub-object with `if (p) { T::~T(p); sysdep_free(p); }`,
+ * which is what GCC emits for `delete p` when `operator delete` is an inline
+ * wrapper over `sysdep_free` -- and the blob defines and references no
+ * `_ZdlPv` at all, so the codebase replaced the global operator.
+ *
+ * WRITING IT OUT BY HAND IS NOT EQUIVALENT, and that is the whole of finding
+ * 7817's correction to this file's own older comment.  At the destructor's
+ * LAST free the delete-expression emits an ordinary `call sysdep_free`; the
+ * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
+ * frame with it.  refinement.md lever 7.
+ */
+extern "C" void sysdep_free(void *p);
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
+ * AND THE SIZED FORM, FOR THE MODERN BUILD ONLY.  C++14 added
+ * `operator delete(void *, size_t)`, and GCC 13 calls it for `delete p` on a
+ * class with a destructor -- an undefined `_ZdlPvj` in a tree that links no
+ * libstdc++, which is the link failure `dsplib/Resampler.h` documents.
+ *
+ * `__cplusplus >= 201402L` is FALSE under GCC 3.4.2 (199711L), so the compiler
+ * that decides byte identity never sees this.  It is portability plumbing and
+ * carries no claim about the object.
+ */
+#if defined(__cplusplus) && __cplusplus >= 201402L
+inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
+#endif
+
+/*
+ * NO LOCAL `operator delete[]` HERE.  This file reaches `dsplib/Scrambler.h`,
+ * which carries the one definition, and a second is a redefinition error --
+ * finding 7816, where that loud failure is the point.
+ */
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Mapper.h"
 
@@ -112,12 +148,8 @@ V90BitsToSymbol::V90BitsToSymbol(unsigned int n, V90Parameters *p)
  */
 V90BitsToSymbol::~V90BitsToSymbol()
 {
-	if (mapper) {
-		mapper->~V90Mapper();
-		sysdep_free(mapper);
-	}
-	if (symbols)
-		sysdep_free(symbols);
+	delete mapper;
+	delete[] symbols;
 }
 
 /*
