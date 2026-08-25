@@ -88975,3 +88975,57 @@ Both of these are the same mistake in two costumes: **a number that is easy to
 get was used in place of the number that answers the question.** Byte count
 for completeness (7630), raw instruction count over padding (7793), blob size
 for nearness (7865), and an EXACT-set diff for "nothing got worse" (here).
+
+### 7881. `_padding` did not know the self-move, so `--why`'s stripped counts were the raw counts plus a per-side constant
+
+7848 reported that `--why`'s padding-stripped instruction counts are wrong
+wherever a function contains `mov %reg,%reg`, and it is right. GCC 3.4.2 fills
+two bytes at a loop head with a self-move; `_padding` knew `nop` and the
+`lea 0x0(...)` forms and not that one, while `instrcount.py` did. Reproduced
+on its witness:
+
+    --why said     204 against 204   -- equal, so lever 2 does not apply
+    truth          202 against 203   -- a real extra instruction in OURS
+
+because the blob carries two self-moves there and we carry one. Of the BYTES
+symbols remaining at the time, **13 carried a self-move and 7 disagreed across
+the two sides**, so the triage was unsafe for 7 of 67 and silently so: an
+equal pair of numbers reads as "nothing is missing", which is the one thing
+lever 2 exists to detect.
+
+**AND THE LENGTH CHECK RAN BEFORE THE STRIPPING, WHICH IS THE SAME BUG ONE
+LEVEL UP.** `alpha_why` skipped padding rows inside its comparison loop, but
+returned on `len(x) != len(y)` before the loop ever ran -- so two functions
+whose CODE matched and whose alignment filler did not were rejected on a
+difference in nothing. Padding is now stripped from both sequences at the top,
+where it belongs.
+
+**VERDICT-NEUTRAL BY MEASUREMENT, which is what makes a change to a certifier
+safe to land.** REGALLOC 34 before and 34 after with the SET diffed -- zero
+gained, zero lost -- and the EXACT set byte-identical, as it must be, since
+grade 0 is bytes and padding cannot reach it. So this corrects a REPORTED
+NUMBER without moving any grade, which is the outcome to want: the tool was
+lying about how far away a symbol was, not about whether it had arrived.
+
+7848 deliberately did not make this change, on the grounds that `_padding`
+also feeds `insns()` and therefore grade 1 and so needed its own SET diff.
+That was the right call and this is that diff.
+
+### 7882. The two kept null permutations: the rule is about PRICE, not about nullity
+
+7848 asked whether to keep two block permutations that reach the blob's
+emission order and change not one byte anywhere in the tree
+(`V90ConnectionEvaluator.cpp`, `V90SpectralShaper.cpp`), noting that
+`refinement.md`'s 9a paragraph says "do not keep the diff" for a null result
+while 7796's kept neutral files are the counter-precedent.
+
+**Kept.** The two are not in conflict once the rule is read as what it was
+measuring. 9a's case was `VPcmFloModem.cpp`, which reached 16 of 16 in order,
+gained nothing, and had cost **twelve macro blocks hoisted** on top of the
+permutation -- preprocessor risk, in a tree where a moved `#endif` silently
+swallowed live code (7799). The price was the objection, not the nullity.
+
+These two cost nothing beyond the permutation itself, and what they buy is
+real: the file is now in the object's emission order, which is a measured fact
+recorded in the file, so the next wave does not re-derive it and does not
+re-spend the compiles. `refinement.md` now states the rule in terms of price.

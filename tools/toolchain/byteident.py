@@ -132,9 +132,24 @@ PAD_LEA = re.compile(r"0x0\((%\w+)(?:,%eiz,1)?\),(%\w+)")
 
 
 def _padding(mn, ops):
-    """Is this row alignment padding rather than code?"""
+    """Is this row alignment padding rather than code?
+
+    THE SELF-MOVE WAS MISSING AND IT MADE `--why` LIE.  GCC 3.4.2 fills two
+    bytes at a loop head with `mov %esi,%esi`, which this did not recognise, so
+    the padding-stripped counts it printed were the RAW counts plus a constant
+    that differed between the two sides.  On `unitePhasesInfoOfUref` it printed
+    "204 against 204" -- equal, therefore not lever 2 -- where the blob carries
+    two self-moves and ours one and the true code counts are 202 against 203, a
+    real extra instruction in ours.  Of the BYTES symbols then remaining, 13
+    carried a self-move and 7 disagreed across the two sides, so the triage was
+    unsafe for 7 of 67 and silently so.  `instrcount.py` already knew.
+    """
     if mn.startswith("nop"):
         return True
+    if mn == "mov":
+        f = ops.split(",")
+        if len(f) == 2 and f[0].strip() == f[1].strip() and BARE_REG.fullmatch(f[0].strip()):
+            return True
     if mn != "lea":
         return False
     m = PAD_LEA.fullmatch(ops.strip())
@@ -270,11 +285,21 @@ def alpha_why(x, y):
     # `instrcount.py` is the tool that strips, and the stripped pair is the one
     # to quote.
     #
+    #
+    # STRIP PADDING BEFORE THE LENGTH CHECK, NOT INSIDE THE LOOP.  The per-row
+    # skip below can never run when the two sequences differ in length, because
+    # this check returns first -- so two functions whose CODE matches and whose
+    # alignment filler does not were rejected on length, which is a difference
+    # in nothing.
+    #
+    x = [r for r in x if not _padding(*r)]
+    y = [r for r in y if not _padding(*r)]
+
     if len(x) != len(y):
-        sx = sum(1 for mn, ops in x if not _padding(mn, ops))
-        sy = sum(1 for mn, ops in y if not _padding(mn, ops))
-        return ("INSTRUCTION COUNT differs: blob %d, ours %d  (%d against %d "
-                "with alignment padding stripped)\n"
+        sx = len(x)
+        sy = len(y)
+        return ("INSTRUCTION COUNT differs: blob %d, ours %d  (padding "
+                "already stripped: %d against %d)\n"
                 "        an absence or an extra, so this is lever 2 -- a "
                 "missing or added statement -- and not a renaming"
                 % (len(x), len(y), sx, sy))
@@ -488,6 +513,12 @@ SELF_TESTS = [
     ("a self-based lea with an index is arithmetic, not padding", False,
      ["mov (%esi),%edx", "lea (%edx,%edx,2),%edx", "mov %edx,(%eax)"],
      ["mov (%esi),%ecx", "lea (%eax,%eax,2),%edx", "mov %edx,(%eax)"]),
+    ("a self-move is two-byte loop-head padding, not code", True,
+     ["mov (%esi),%eax", "mov %esi,%esi", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax",                  "mov %eax,(%edi)"]),
+    ("a real move between DIFFERENT registers is not padding", False,
+     ["mov (%esi),%ebx", "mov %ebx,%eax", "mov %eax,(%edi)"],
+     ["mov (%esi),%ebx", "mov %ecx,%eax", "mov %eax,(%edi)"]),
     ("the 3-byte `lea 0x0(%R),%R` padding counts too", True,
      ["mov (%ebx),%eax", "lea 0x0(%esi),%esi", "mov %ebx,(%eax)"],
      ["mov (%esi),%eax", "lea 0x0(%edi),%edi", "mov %esi,(%eax)"]),

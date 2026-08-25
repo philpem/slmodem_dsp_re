@@ -351,6 +351,15 @@ scored clone 2 on the next five files, so read it with the table above and not
 as a pattern -- and the one file whose only
 targets were a C1/C2 pair (`V90Demapper.cpp`) lost a symbol and was reverted.
 
+**THE RULE IS ABOUT PRICE, NOT ABOUT NULLITY** -- read the next paragraph
+that way. Two pure block permutations were kept in wave 9a
+(`V90ConnectionEvaluator.cpp`, `V90SpectralShaper.cpp`): each moves its file
+to the blob's own emission order, changes **not one byte anywhere in the
+tree**, and costs nothing beyond the permutation -- no macro hoists, no
+preprocessor risk. They are kept because the order reached is a durable
+measured fact that stops the next wave re-deriving it, which is 7796's
+kept-neutral precedent. What follows is the case where the price was real.
+
 **A NULL RESULT CAN COST TOO MUCH TO KEEP.** `VPcmFloModem.cpp` reached 16 of
 16 and gained nothing, and reverting it left the tree at 474 -- but reaching it
 had taken twelve macro blocks hoisted on top of the permutation. 7796's kept
