@@ -84477,3 +84477,51 @@ It also carries the three habits that have each cost real time when skipped:
 diff the SET not the count, baseline BEFORE changing anything, and use `--why`
 rather than eyeballing the diff, because the first row that differs is usually
 not the row the comparison rejects on.
+
+### 7785. `V90Jd::packData` is not an unrolling difference: all sixteen combinations enumerated, none reaches the object's size
+
+7783 rejected `-funroll-loops` as a missing period flag and left the reading
+that the original source was STRAIGHT-LINE.  That reading has now been tested
+to exhaustion and it is also wrong, or at least not sufficient.
+
+`packData` has four loops -- 17 stores, 16 stores, 2 calls, 16 copies.  Which
+of them the author wrote out by hand is a **sixteen-element domain**, and all
+sixteen were compiled:
+
+    0000  218      0100  267      1000  291      1100  356
+    0001  266      0101  315      1001  355      1101  404
+    0010  314      0110  379      1010  403      1110  468
+    0011  362      0111  427      1011  451      1111  516
+
+    BLOB: 534
+
+**The maximum is 516 and the object is 534.**  The domain is exhausted and no
+element maps onto it, so by 7782's rule this is not a store-order or a
+loop-shape difference and no amount of choosing between these spellings will
+close it.  That is the constant-map branch 7770 named as the thing that would
+kill an enumeration, appearing for real.
+
+**And the earlier characterisation was wrong.**  "The blob's version is fully
+unrolled" was read off a mnemonic histogram -- 102 `mov` against our 21 -- and
+it does not survive contact with the rest of the histogram.  The blob carries
+`dec`, `jns`, `incl` and `cmpl`, which our fully-unrolled 1111 does not:
+
+                blob    ours(1111)
+      mov        102        64
+      movb         8        24
+      movl         0        13
+      dec/jns    1/1       0/0
+      insns      153       148
+
+So the object has loop control AND is bigger than our fully unrolled version.
+Whatever the extra 18 bytes and 5 instructions are, they are CONTENT we have
+not written, not a different shape for content we have -- the same signature
+as 7774's dead store, where the blob had one more instruction at the same
+size.  The store widths are the other lead: the blob stores through a register
+102 times where we emit byte and long immediates 37 times between us.
+
+**What this closes.**  The unrolling explanation for this function is finished
+-- flag (7783) and source shape (here) both measured and both negative.  The
+next pass should look for a missing statement and for what makes the object's
+stores register-sourced, and should not re-open loop shape without new
+evidence.
