@@ -2397,7 +2397,7 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 			    "(after %d samples), start TONEq...\r\n",
 			    qcSampleCount);
 
-		verificationStatus =
+		verificationStatus = (unsigned short)
 		    modem.demodulator->phase3Demodulator->verificationStatus;
 
 		if (DSPLIB_DEBUG_ON())
@@ -2442,7 +2442,7 @@ VPcmFloModem::qcLineVerification(float *in, float *out, unsigned int n,
 				    "drop detection, with no verification "
 				    "completion status !!!\r\n");
 
-			verificationStatus = modem.demodulator
+			verificationStatus = (unsigned short)modem.demodulator
 			    ->phase3Demodulator->verificationStatus;
 
 			if (DSPLIB_DEBUG_ON())

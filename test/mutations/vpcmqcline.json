@@ -52,8 +52,8 @@
  },
  {
   "label": "the demod-over arm keeps the status it already had",
-  "find": "\t\tverificationStatus =\n\t\t    modem.demodulator->phase3Demodulator->verificationStatus;",
-  "replace": "\t\tverificationStatus = verificationStatus;"
+  "find": "\t\tverificationStatus = (unsigned short)\n\t\t    modem.demodulator->phase3Demodulator->verificationStatus;",
+  "replace": "\t\t(void)0;"
  },
  {
   "label": "the demod-over arm starts in the silence state",
@@ -127,7 +127,7 @@
  },
  {
   "label": "the no-status half copies no verification status",
-  "find": "\t\t\tverificationStatus = modem.demodulator\n\t\t\t    ->phase3Demodulator->verificationStatus;",
+  "find": "\t\t\tverificationStatus = (unsigned short)modem.demodulator\n\t\t\t    ->phase3Demodulator->verificationStatus;",
   "replace": "\t\t\tverificationStatus = 0;"
  },
  {
@@ -304,5 +304,15 @@
   "label": "the dispatch byte is set to 0 rather than 1",
   "find": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 1;",
   "replace": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 0;"
+ },
+ {
+  "label": "the demod-over arm does not narrow the status to sixteen bits",
+  "find": "\t\tverificationStatus = (unsigned short)\n\t\t    modem.demodulator->phase3Demodulator->verificationStatus;",
+  "replace": "\t\tverificationStatus =\n\t\t    modem.demodulator->phase3Demodulator->verificationStatus;"
+ },
+ {
+  "label": "the no-status half does not narrow the status to sixteen bits",
+  "find": "\t\t\tverificationStatus = (unsigned short)modem.demodulator\n\t\t\t    ->phase3Demodulator->verificationStatus;",
+  "replace": "\t\t\tverificationStatus = modem.demodulator\n\t\t\t    ->phase3Demodulator->verificationStatus;"
  }
 ]

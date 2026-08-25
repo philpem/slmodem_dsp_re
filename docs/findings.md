@@ -81310,3 +81310,53 @@ none can fire.  Retiring them would bring `v34pcmmain.cpp` closer to the object
 batch had no other reason to open, it would take the recorder that the
 surviving assertion reads with it, and mutation anchors in four suites sit in
 that file.  Named here as the next pass's work rather than done half way.
+
+### 7607. The `movzwl` this batch's own header recorded, and its `src/` shipped without: two casts, two bytes, and a defect no in-object value can expose
+
+`qcLineVerification` copies `V90Phase3Demodulator::verificationStatus` into
+`VPcmFloModem::verificationStatus` at two sites, and the object does it with a
+SIXTEEN-BIT load:
+
+	f842   0f b7 81 1c 04 00 00   movzwl 0x41c(%ecx),%eax
+	f849   89 86 b4 6f 00 00      mov    %eax,0x6fb4(%esi)
+
+and identically at 0xf8ea.  The 32-bit result IS stored, so this is CLAUDE.md's
+FORCED column and not 614's free one.  `include/dsplib/VPcmFloModem.h` said so
+in the same batch that wrote the member -- and
+`src/pump/v90/VPcmFloModem.cpp` copied the whole 32-bit field at both sites
+anyway.  **The header carried the derivation and the source did not implement
+it**, which is finding 6100's shape with a comment and its own code rather
+than a comment and a tool.
+
+**IT IS FINDING 613's SHAPE AND NO IN-OBJECT PATH CAN EXPOSE IT.**  The source
+field is a full 32 bits -- its only writers anywhere are `movl $0x0` and
+`movl $0x1`, and those two `movzwl` are the ONLY sixteen-bit accesses at
+`0x41c` in the whole of `.text`.  So over every value the field can actually
+hold the two readings agree, and no fixture that reaches this member through
+the object's own state machine can tell them apart.  A fixture has to plant a
+value the object's writers cannot.
+
+`t_vpcmqcline.cpp` does: `QC_STATUS` is `0x1234abcd` and `run_status_width`
+sweeps four more seeds that all have a high half.  Ours stored `0x1234abcd`
+where the blob stored `0x0000abcd`, on eight trials, with the level-2
+transcript agreeing beside them.
+
+**AND THE INSTRUCTION COUNT HAD ALREADY SAID SO, in the one column that was
+not exact.**  Before the fix: 159 instructions against the blob's 159, and
+**777 bytes against 779**.  A `mov` where the object has a `movzwl` is one
+byte per site and there are two sites.  After the two `(unsigned short)`
+casts: 159/159 and **779/779**.  So the size column carried the whole defect
+and the instruction column could not -- which is worth knowing, because 7480's
+rule ("a GAP is a missing call until proven otherwise") is about the
+instruction count and this is a case where that count was exact and wrong.
+
+**How it was caught: a subagent briefed to write the fixture, not to review the
+source.**  The brief said to seed every destination with a sentinel that
+differs from what the function writes (finding 7105), and a sentinel with a
+high half is what that rule produces for a 32-bit word.  The axis was written
+to catch a fixture defect and found a source defect instead.  6402 is the same
+shape -- an agent that measured the tree rather than believing its brief.
+
+The two mutation rows that remove the casts are now in
+`test/mutations/vpcmqcline.json`; before the fix they could not exist, because
+the mutant would have been the shipped source.

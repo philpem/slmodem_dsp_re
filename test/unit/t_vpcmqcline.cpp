@@ -87,9 +87,9 @@
  *   4. THE DEBUG SWEEP IS {0, 1, 2}.  Every one of the eight gates is `> 1`,
  *      and a {0, 2} sweep cannot separate `> 1` from `> 0`.
  *   5. `verificationStatus` IS TAKEN WITH A `movzwl`, AND THE HIGH HALF IS
- *      NOT DRIVEN TWO-SIDEDLY TODAY.  See the `QC_STATUS` block below --
- *      the axis is parked against a defect in `src/`, not omitted, and the
- *      width is still measured on the blob alone by `run_status_width`.
+ *      DRIVEN.  Every trial's status has one, and `run_status_width` sweeps
+ *      four more.  This axis FOUND A DEFECT and the defect is fixed; see the
+ *      `QC_STATUS` block below and finding 7607.
  *   6. `enterWaitForANSpcmDrop` IS IDEMPOTENT.  It returns at once when the
  *      state already holds `P3D_STATE_WAIT_FOR_ANS_PCM_DROP`, so both the
  *      latched and the unlatched entry are driven and each is asserted to
@@ -523,32 +523,28 @@ struct qc_trial {
 
 /*
  * ===========================================================================
- * ONE AXIS IS PARKED, AND IT IS PARKED AGAINST A DEFECT IN `src/`
+ * THIS AXIS FOUND A DEFECT, AND THE DEFECT IS FIXED
  * ===========================================================================
  *
  * The object takes the phase 3 demodulator's verification status with a
  * `movzwl` -- `movzwl 0x41c(%ecx),%eax` at .text+0xf842 and again at +0xf8ea,
  * then `mov %eax,0x6fb4(%esi)` -- so the SOURCE is sixteen bits wide and the
- * 32-bit result is stored.  include/dsplib/VPcmFloModem.h records exactly
- * that and calls it CLAUDE.md's forced column;
- * src/pump/v90/VPcmFloModem.cpp copies the whole 32-bit field at both sites
- * and does not narrow.
+ * 32-bit result is stored.  The first reconstruction of this member copied
+ * the whole 32-bit field at both sites; the two `(unsigned short)` casts that
+ * fix it were the last two BYTES between 777 and the blob's 779.
  *
  * `V90Phase3Demodulator::verificationStatus` is a full 32-bit field -- its
- * writers are `movl $0x0` and `movl $0x1` -- so no in-object path can put a
- * value with a non-zero HIGH half there, and the two readings agree over
- * every value the field actually holds.  That is finding 613's shape exactly:
- * a difference no differential test can see unless the fixture puts a value
- * there that the object's own writers cannot.
+ * writers are `movl $0x0` and `movl $0x1`, and those two `movzwl` are the
+ * ONLY sixteen-bit accesses at that displacement anywhere in `.text` -- so no
+ * in-object path can put a value with a non-zero HIGH half there, and the two
+ * readings agree over every value the field actually holds.  That is finding
+ * 613's shape exactly: a difference no differential test can see unless the
+ * fixture puts a value there that the object's own writers cannot.
  *
- * A seed of 0x1234abcd DOES make it visible, and this file measured it: ours
- * stores 0x1234abcd and the blob stores 0x0000abcd, at VPcmFloModem +0x6fb4,
- * on eight trials and in the level-2 transcript beside them.  The two-sided
- * seeds below are therefore held inside sixteen bits until the source is
- * corrected -- `QC_STATUS` and the four rows around it -- and the width is
- * measured on the BLOB ALONE by `run_status_width`, which is a claim about
- * the object and passes today.  Restore `QC_STATUS` to 0x1234abcd the moment
- * `src/` narrows, and the axis is two-sided again.
+ * So this fixture does.  `QC_STATUS` is 0x1234abcd and `run_status_width`
+ * sweeps four more seeds that all have a high half; ours stored 0x1234abcd
+ * and the blob 0x0000abcd, on eight trials and in the level-2 transcript
+ * beside them, which is what named the defect.  Finding 7607.
  *
  * ===========================================================================
  *
@@ -558,10 +554,11 @@ struct qc_trial {
  * threshold the object compares against.
  */
 /*
- * The two-sided verification status.  SIXTEEN BITS AND NO MORE; see the block
- * above for why, and restore it to 0x1234abcd when src/ narrows the copy.
+ * The two-sided verification status, and it deliberately has a HIGH HALF.
+ * The object narrows the copy to sixteen bits, so a seed that fits in sixteen
+ * would make every one of these rows agree for the wrong reason.
  */
-#define QC_STATUS	0xabcdu
+#define QC_STATUS	0x1234abcdu
 
 #define QC_BELOW	384	/* + 48 = 432 */
 #define QC_EQUAL	432	/* + 48 = 480 */
@@ -1187,8 +1184,8 @@ run_status_width(void)
 	unsigned si, wi;
 	long tag = 0;
 
-	diff_begin("the object narrows the verification status to sixteen "
-		   "bits (BLOB ONLY -- src/ does not; see the file comment)");
+	diff_begin("BOTH SIDES narrow the verification status to sixteen "
+		   "bits");
 
 	for (wi = 0; wi < 2; wi++)
 		for (si = 0; si < sizeof status_v / sizeof status_v[0]; si++) {
@@ -1221,6 +1218,9 @@ run_status_width(void)
 			diff_eq_int("the blob stored the LOW HALF (%ld)",
 				    (long)V(1)->verificationStatus,
 				    (long)(status_v[si] & 0xffffu), tag);
+			diff_eq_int("...and so did ours (%ld)",
+				    (long)V(0)->verificationStatus,
+				    (long)(status_v[si] & 0xffffu), tag);
 			/*
 			 * ANTI-VACUITY: with a status that fits in sixteen
 			 * bits the assertion above holds for a copy of any
@@ -1230,24 +1230,16 @@ run_status_width(void)
 				    (long)(status_v[si] & 0xffffu)
 				    != (long)status_v[si], 1, tag);
 			/*
-			 * AND THE PARK IS GATED RATHER THAN LEFT TO A COMMENT.
-			 * CLAUDE.md is explicit that a paragraph with no gate
-			 * behind it has a comment's shelf life (findings 6100
-			 * and 6103), and the two-sided seed in `qc_v` is held
-			 * inside sixteen bits ONLY because our side stores the
-			 * whole word.  This asserts that it still does, so the
-			 * moment src/pump/v90/VPcmFloModem.cpp narrows the two
-			 * copies this check goes RED and whoever corrected it
-			 * is told to put `QC_STATUS` back to 0x1234abcd and
-			 * delete this group.  It is tools/gccdiverge.json's
-			 * stale-entry rule -- an allow-listed check that
-			 * starts passing fails the gate -- applied to a
-			 * fixture's parked axis.
+			 * AND THE TWO AGREE WITH EACH OTHER, which is not
+			 * implied by the two assertions above: both compare
+			 * against a value this fixture computed, so a common
+			 * mode -- a `qc_poke` that failed to plant the status
+			 * on either side -- would satisfy both.  This is the
+			 * differential claim proper.
 			 */
-			diff_eq_int("OURS still copies the WHOLE word, so the "
-				    "two-sided seed is still parked (%ld)",
+			diff_eq_int("...and the two sides agree (%ld)",
 				    (long)V(0)->verificationStatus,
-				    (long)status_v[si], tag);
+				    (long)V(1)->verificationStatus, tag);
 
 			demolish();
 			tag++;
