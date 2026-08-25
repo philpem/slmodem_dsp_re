@@ -86179,8 +86179,10 @@ the weak version was written first and would have had somebody skip eight of
 the twelve -- 7801's pre-check rule in a second place, and this time the
 stronger test exists.
 
-**HOW MUCH OF THE EFFECT IT IS: MEASURED, NOT ASSUMED.**  177 swaps over 45
-translation units in `src/pump/`, two arms each:
+**HOW MUCH OF THE EFFECT IT IS: MEASURED, NOT ASSUMED.**  184 swaps offered
+over the 47 C++ translation units in `src/pump/{v90,v92,v34}` with four or more
+definitions; 177 ran, and the harness skipped 7 on a compile or a permutation
+that did not apply, which are counted on neither side.  Two arms each:
 
     bystanders differing WITH peephole2      16
     bystanders differing WITHOUT             8

@@ -402,8 +402,11 @@ REGALLOC symbols it finds 4 where the exact test finds 12.** i386.md has 144
 too, drawing on the same cursor. Use the shape to understand what is happening;
 use the two compiles to decide.
 
-**How much of the effect this is, measured.** 177 swaps over 45 units in
-`src/pump/`: **16 bystanders differ with peephole2 and 8 without** — and all
+**How much of the effect this is, measured.** 177 of 184 swaps offered over the
+47 C++ units in `src/pump/` with four or more definitions — the other 7 the
+harness skipped, on a compile or a permutation that did not apply, and they are
+counted on neither side: **16 bystanders differ with peephole2 and 8 without**,
+and all
 eight survivors are one instruction, `movl $imm,(%esp)`, with a different
 `.rodata.str1.1` addend, which is a diagnostic string's pool offset moving with
 the function order and CLAUDE.md's own trap rather than a register choice. All
