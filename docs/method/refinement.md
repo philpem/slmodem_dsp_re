@@ -81,6 +81,23 @@ emission order, or width and signedness. The lens is most useful on a **SIZE**
 symbol, where it converts an apparently structural difference into an
 arithmetic one; on a BYTES symbol it is close to redundant with the bucket.
 
+Bucketing measured on one cluster: of 29 reachable `+0` rows, **22 have every
+bucket agreeing** -- genuinely encoding only -- and **7 cancel**. None of the
+seven had an x87 imbalance, which is the bucket that carried F7960's wrong
+field types, so that defect did not repeat there (F7986). Note what that
+leaves: for five of the seven the cancelling was bucketed but not TRACED, so
+lever 2 is **bounded, not excluded**, on them.
+
+**AND THE LENS DOES NOT BOUND THE MECHANISM — IT IS A WORKLIST, NOT A
+DIAGNOSIS.** A `+0` row can be delta 0 by coincidence, and a symbol can LEAVE
+delta 0 by being fixed. Both happened in one cluster: `V92Modem::progress` was
+`+0` only by accident of two errors, and `V90Modem::progress` went from `+0` to
+`-4` as its defect was corrected (F7983, F7982). The mechanism behind both --
+sibling-call eligibility -- CHANGES the instruction count, so a worklist drawn
+on `|delta|` would have dropped either had it been three instructions
+differently wrong. Use `--near` to find cheap work, never to decide what a
+symbol's defect can be.
+
 - **No preimage** — **but FIRST ask whether the domain was drawn around the
   right code.** A no-preimage result licenses the strong conclusion "the
   difference is not what I thought it was", and that conclusion is only as good
