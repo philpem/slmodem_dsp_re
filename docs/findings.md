@@ -83368,8 +83368,19 @@ redefinitions of the whole register, freeing the 16 or 24 bits they leave
 untouched -- still live, still carrying the old value -- to rebind.  A
 definition now ends a live range only if it writes a full 32-bit register
 (`_full_write`).  This tightens the tool; measured over the tree it demotes
-NOTHING, so no result ever rested on it.  It is a guard against a false accept
-that had not yet been exercised, not a correction to a number.
+NOTHING, so no result ever rested on it.
+
+**AND IT IS EXERCISED BY REAL CODE, WHICH IS A SEPARATE QUESTION FROM
+WHETHER THE COUNT MOVED.**  A count that does not move is equally consistent
+with a rule that is right and a rule that never runs -- the dead-detector
+reading again.  Searched: of the 44 grade 1 symbols, exactly one contains a
+partial-width definition, `VPcmFloModem::setPcmSessionType` with `setne %dl`.
+Under the old rule that row redefined `%edx` and rebound it; under the new one
+`%dl` is a USE and no rebind happens.  Different path, same verdict -- it
+still certifies.  So the rule runs on real code and the tree's one witness
+survives it.  One of 44 is a thin population and this says nothing about a
+case where the two paths would disagree; what it rules out is the tool having
+been tightened into a branch nothing reaches.
 
 **Fire and quiet, against rebuilt objects:**
 
