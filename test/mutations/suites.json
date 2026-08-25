@@ -400,6 +400,10 @@
   "src/pump/v90/V90DilDescriptorSettings.cpp",
   "build/test/t_v90adid"
  ],
+ "v90dilgen": [
+  "src/pump/v90/V90Phase3Modulator.cpp",
+  "build/test/t_v90dilgen"
+ ],
  "v90eqdata": [
   "src/pump/v90/V90Equalizer.cpp",
   "build/test/t_v90eqdata"
@@ -527,6 +531,14 @@
  "v90p4mtab": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90p4mtab"
+ ],
+ "v90p4seq": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4seq"
+ ],
+ "v90packdata": [
+  "src/pump/v90/V90Jd.cpp",
+  "build/test/t_v90packdata"
  ],
  "v90params": [
   "src/pump/v90/V90Parameters.cpp",
@@ -675,6 +687,10 @@
  "v92modulusencoder": [
   "src/pump/v90/V92ModulusEncoder.cpp",
   "build/test/t_moduluscoder"
+ ],
+ "v92mpunpck": [
+  "src/pump/v90/V90MappingParamsInt.cpp",
+  "build/test/t_v92mpunpck"
  ],
  "v92p2info": [
   "src/pump/v90/V92Phase2Info.cpp",

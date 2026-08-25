@@ -3,12 +3,21 @@
  * symbol tables, the six symbol readers, the fifteen state-machine edges and
  * the two data pumps.
  *
- * Reconstructed from dsplibs.o.  THIRTY-FOUR of the class's forty-three
- * members.  The nine that are NOT here are `reset`, `generateSymbol` and the
- * six `generate*` sequence sources.  `setMappingParams`, `generateV90Symbol`
- * and `generateV92Symbol` used to be on that list and are now written; the
- * last two are 2,235 and 3,922 bytes and are where the state machine is
- * dispatched rather than edged, which is the block comment above them.
+ * Reconstructed from dsplibs.o.  THIRTY-NINE of the class's forty-three
+ * members -- `grep -c '^V90Phase4Modulator::'` here, against the 43 distinct
+ * members `nm -S ref/slmodemd/dsplibs.o | grep _ZN18V90Phase4Modulator`
+ * leaves once C1/C2 and D1/D2 are folded.  Re-measure both rather than
+ * believing this sentence; the last two revisions of it were stale before
+ * they were read (findings 6100, 6103).
+ *
+ * THE FOUR THAT ARE NOT HERE are `generateB1d`, `generateTRN2d` and
+ * `generateEd` -- 149 bytes each, and the obvious next batch, since the three
+ * message sources below have just taken the other half of that group -- and
+ * `recivedPartTwoSilenceRrnSUVtag`, which is five bytes.  `setMappingParams`,
+ * `reset`, `generateSymbol`, `generateV90Symbol` and `generateV92Symbol` used
+ * to be on that list and are now written; the last two are 2,235 and 3,922
+ * bytes and are where the state machine is dispatched rather than edged,
+ * which is the block comment above them.
  * `include/dsplib/V90Phase4Modulator.h` carries the object map, the 0x2fac
  * size, the ownership argument and `Phase4ModulatorState`.
  *
@@ -988,6 +997,125 @@ V90Phase4Modulator::generateDataSymbolBeforeRRN()
 
 /*
  * ===========================================================================
+ * THE THREE MESSAGE SOURCES -- generateMP (.text+0x2dbd0), generateCPd
+ * (+0x2e540) and generateSUVd (+0x2e5f0).  `nm -S` gives 0x000000a7 = 167
+ * bytes against each of the three mangled names, and they sit in the object
+ * in this file's order: generateMP between generateEd and generateV90Symbol,
+ * the other two between generateV90Symbol and generateV92Symbol.
+ *
+ * WHAT ONE OF THEM DOES.  Ask the converter how many bits it wants next.  If
+ * it wants none, drain one symbol out of it and return that.  If it wants
+ * some, first scramble the whole of a phase 4 message into `scrambledBits`
+ * and feed that to the converter, and only then drain.  Two calls on one arm,
+ * four on the other, and no field of this object is written by any of them.
+ *
+ * ALL THREE ARE CALLERLESS AND NO CALLER IS ADDED.  `readelf -r` over the
+ * whole 1.2 MB object finds ZERO relocations of any type naming any of the
+ * three -- against 43 naming `V90BitsToSymbol::nofBitsForNextTime`, which is
+ * the denominator that stops the zero being a broken grep.  Neither symbol
+ * pump reaches them: `generateV90Symbol`'s MP arms and `generateV92Symbol`'s
+ * CPd and SUVd arms are written out inline above and below, which is why
+ * three functions that plainly belong to those states are not dispatched from
+ * them.  Supplying a call would be new behaviour with no blob behaviour to
+ * compare it against, which is not reconstruction; 7570's rule for the
+ * orphaned CP unpacker, and the same one here.
+ *
+ * ---------------------------------------------------------------------------
+ * THE THREE BODIES ARE THE SAME BODY, AND THAT IS MEASURED RATHER THAN
+ * ASSUMED.  Over the 167 bytes at each address:
+ *
+ *   generateCPd and generateSUVd     IDENTICAL, all 167 bytes
+ *   generateMP against either        three bytes differ, at body offsets
+ *                                    +0x44, +0x58 and +0x6a: 5c/58/5c here
+ *                                    against 90/8c/90 there
+ *
+ * Those six bytes are the low bytes of four-byte `this`-relative
+ * displacements -- 0x2f5c/0x2f58/0x2f5c against 0x2f90/0x2f8c/0x2f90 -- so
+ * the ONLY difference between the MP source and the other two is which of the
+ * two (pointer, length) pairs feeds the scrambler.  `generateMP` transmits
+ * `V90MP`'s bit vector; generateCPd and generateSUVd BOTH transmit `V90CP`'s.
+ * That the CP pair is spelled twice under two names is the object's, not a
+ * copy left here for symmetry.
+ *
+ * THEY ARE WRITTEN OUT THREE TIMES RATHER THAN FACTORED.  The blob emits
+ * three full 167-byte bodies; a shared helper that the compiler CALLS rather
+ * than inlines is a missing call by 7480's rule, and one it inlines would
+ * have to be proved to inline at all three sites before the source could be
+ * believed.  This file already duplicates for the same reason -- generateRdRt
+ * against generateRdRtNot, generateDataSymbolBeforeFPE against ...RRN -- and
+ * the three below were each derived from `tools/dis.py` separately and only
+ * then diffed against one another.
+ *
+ * ---------------------------------------------------------------------------
+ * THE RETURN TYPE IS NOT FORCED BY THESE 167 BYTES, and saying so is the
+ * point.  The tail is `movswl 0x22(%esp),%eax ; add $0x24,%esp ; pop ; pop ;
+ * ret`, which is what GCC 3.4.2 emits for a `short` return AND for an `int`
+ * return of a `short` local; the two are indistinguishable here.  What
+ * settles it is the class:
+ *
+ *   - `generateDataSymbolBeforeFPE` and `...RRN` are declared `short` above,
+ *     are already written and differentially tested, and close with the
+ *     byte-identical idiom (`movswl 0x16(%esp),%eax` at +0x2d79b);
+ *   - the six sequence readers are `short` for the same reason;
+ *   - `generateSymbol` is the ONE member of this class declared `int`, and
+ *     the header's evidence for that is the `cwtl` AT ITS CALL SITES -- which
+ *     is exactly the evidence a callerless function cannot have.
+ *
+ * The mangled names carry the parameter types and not the return type, so
+ * they say nothing here either.
+ *
+ * ---------------------------------------------------------------------------
+ * TWO THINGS THE INSTRUCTIONS FORCE.
+ *
+ * THE BIT COUNT IS RE-READ AFTER THE SCRAMBLER RETURNS -- `mov 0x2f5c(%esi),
+ * %ebx` at +0x2dc12 for the scrambler's third argument and `mov 0x2f5c(%esi),
+ * %ecx` again at +0x2dc38 for the converter's second.  That is the compiler
+ * being unable to prove `Scrambler<h,h>::process` leaves `*this` alone, not a
+ * second expression in the source; it is one field named twice and must not
+ * be "tidied" into a local, which would delete the reload.
+ *
+ * THE STATUS IS DISCARDED, BOTH TIMES.  Both `V90BitsToSymbol::process`
+ * overloads answer a status in %eax and neither answer is looked at; the
+ * value returned is the `short` the second one wrote through its pointer.
+ *
+ * ---------------------------------------------------------------------------
+ * THE SYMBOL SLOT IS UNINITIALISED, WHICH IS D661's SHAPE ON THE OTHER
+ * PARAMETER.  Nothing writes 0x22(%esp) before the call, and
+ * `V90BitsToSymbol::process(unsigned int &, short *)` writes through
+ * `outSymbols` only when `symbolsBlockSize` is non-zero AND the arm it takes
+ * has something to hand over -- with `symbolsBlockSize` zero it prints
+ * SIZE_NOT_SET and returns, and on the underflow arm it copies
+ * `symbolsDone` entries, which is none when that is zero.  So there are
+ * reachable configurations in which all three return whatever was on the
+ * stack.  Reproduced rather than guarded, exactly as D661 is: an initialiser
+ * would be an instruction the object does not have.  `test/unit/
+ * t_v90p4seq.cpp` keeps those configurations out of its grid and says so,
+ * which is D561's rule -- a trial that reaches undefined behaviour in the
+ * reconstruction is not a differential trial.
+ *
+ * D661 ITSELF DOES NOT APPLY HERE, and a reader coming from the two data
+ * pumps will assume it does.  Their `nofBits` is passed uninitialised; ours
+ * is written by `nofBitsForNextTime` before it is passed, which is the
+ * `mov %eax,0x1c(%esp)` at +0x2dbe4 -- the same store the branch then tests.
+ * ===========================================================================
+ */
+short
+V90Phase4Modulator::generateMP()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.process(mpBits, scrambledBits, mpBitCount);
+		bitsToSymbol->process(scrambledBits, mpBitCount);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
+	return symbol;
+}
+
+/*
+ * ===========================================================================
  * THE TWO SYMBOL PUMPS -- generateV90Symbol (.text+0x2dc80, 0x8bb = 2,235
  * bytes) and generateV92Symbol (+0x2e6a0, 0xf52 = 3,922).
  *
@@ -1318,6 +1446,50 @@ V90Phase4Modulator::generateV90Symbol()
 		break;
 	}
 
+	return symbol;
+}
+
+/*
+ * generateCPd -- .text+0x2e540, 167 bytes.  The block above generateMP is the
+ * derivation for all three; what is particular to this one is the field pair,
+ * `cpBits`/`cpBitCount` at +0x2f8c/+0x2f90, read at +0x2e582, +0x2e596 and
+ * +0x2e5a8.
+ */
+short
+V90Phase4Modulator::generateCPd()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.process(cpBits, scrambledBits, cpBitCount);
+		bitsToSymbol->process(scrambledBits, cpBitCount);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
+	return symbol;
+}
+
+/*
+ * generateSUVd -- .text+0x2e5f0, 167 bytes, and BYTE-FOR-BYTE the function
+ * above: all 167 compared equal, so the CP pair is read here too, at +0x2e632,
+ * +0x2e646 and +0x2e658.  Two names for one body is what the object has, and
+ * the SUVd and CPd states are two states, so it is kept as two members rather
+ * than aliased.  Any test able to separate this from `generateCPd` would be
+ * measuring its own fixture: they cannot differ on any input.
+ */
+short
+V90Phase4Modulator::generateSUVd()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.process(cpBits, scrambledBits, cpBitCount);
+		bitsToSymbol->process(scrambledBits, cpBitCount);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
 	return symbol;
 }
 
