@@ -249,6 +249,18 @@ V90CP::reset()
  * exactly where it is.  The object holds both too -- this symbol and the
  * inlined arithmetic at 0x52230 -- which is finding F3532's shape.
  *
+ * THE CONDITION IS `group * quot`, NOT `quot * group`, AND THAT ORDER IS THE
+ * LAST TWO BYTES.  `imul r,r` takes its destination from whichever operand was
+ * written first, so the object's `mov %ecx,%edx; imul %eax,%edx` is
+ * `group * quot` and ours was `mov %eax,%edx; imul %ecx,%edx`.  All four
+ * spellings of (condition order x then-arm order) were compiled: both with
+ * `group * quot` in the CONDITION are byte-identical and both with
+ * `quot * group` differ in exactly those two bytes, so what is decoded is the
+ * CONDITION's order and the then-arm's is CSE'd away and undetermined.  The
+ * blob confirms it at a second site: `infoToBits` carries this arithmetic
+ * inlined at 0x52230 and spells it `mov %ecx,%edi; div %ecx; imul %eax,%edi`,
+ * the same way round.  Finding F7981.
+ *
  * Everything is unsigned: `div`, not `idiv`.
  */
 void
@@ -259,8 +271,8 @@ V90CP::calcSequenceLength()
 	total = word_3bb0 + 1;
 	group = word_3ba8;
 	quot = total / group;
-	if (quot * group == total)
-		word_3bac = quot * group;
+	if (group * quot == total)
+		word_3bac = group * quot;
 	else
 		word_3bac = (quot + 1) * group;
 }
@@ -833,8 +845,8 @@ V90CP::infoToBits()
 	total = nbits + 1;
 	group = word_3ba8;
 	quot = total / group;
-	if (quot * group == total)
-		word_3bac = quot * group;
+	if (group * quot == total)
+		word_3bac = group * quot;
 	else
 		word_3bac = (quot + 1) * group;
 

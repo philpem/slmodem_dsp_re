@@ -89943,3 +89943,205 @@ with two `jae` and spills the loop's boolean (`setbe 0x1b(%esp)`,
 `test %al,0x1b(%esp)`), where we emit `jb` and a **signed `jg`** with the
 boolean in a register. That difference is present at the baseline too, so it
 is independent of the retyping.
+### F7980. The V.90 delta-0 cluster: what the lens found, and the block
+
+This session took the `--near`/delta-0 framing across `src/pump/v90/` --
+39 symbols in thirteen files with the blob's exact instruction count -- and
+holds **F7980 to F7999**. Baseline at `ad2baac1`, read from the tool: grade 0
+534 of 1251 (42.7%), grade 0-or-1 574, REGALLOC 35, BYTES 66, SIZE 608. Close:
+grade 0 **536**, grade 0-or-1 **576**, REGALLOC 35, BYTES 65, SIZE 607.
+
+**THE LENS IS USEFUL AND IT DOES NOT BOUND THE MECHANISM.** It is very good at
+what it advertises -- `V90CP::calcSequenceLength` (F7981) was two bytes of
+`imul` operand order and the whole domain was four spellings. But the change
+that actually moved this session's numbers, sibling-call eligibility (F7982),
+alters the INSTRUCTION COUNT: `V92Modem::progress` sat at delta 0 by
+coincidence, and the same defect in `V90Modem::progress` was at delta 0 before
+the fix and at **delta -4 after it**. A worklist drawn by delta would have
+dropped either symbol had it been three instructions differently wrong. Read
+delta-0 as a cheap way to find operand-order and statement-order work, not as
+a classification of what is left.
+
+**AND IT SPANS BOTH GRADES, AS THE BRIEF SAID.** Of the three symbols moved
+here two were SIZE at delta 0 and neither was "a different function":
+`V92Modem::progress` was 124 bytes against 121 and is now 121 with two bytes
+differing, `V92Modem::printTitle` was REGALLOC and is EXACT.
+
+### F7981. `calcSequenceLength`: `group * quot`, and the object says so twice
+
+`V90CP::calcSequenceLength` was BYTES, 2 of 101, and the two bytes are one
+multiply's operand order. `imul r32,r32` puts the result in whichever operand
+was loaded first, so
+
+    blob   mov %ecx,%edx ; imul %eax,%edx      group * quot
+    ours   mov %eax,%edx ; imul %ecx,%edx      quot * group
+
+The domain is (condition order x then-arm order) and all four were compiled and
+scored with `byteident.verdict`:
+
+    cond quot*group, arm quot*group    BYTES 2 of 101   (what was there)
+    cond group*quot, arm group*quot    EXACT
+    cond group*quot, arm quot*group    EXACT
+    cond quot*group, arm group*quot    BYTES 2 of 101
+
+**Two of four map, so what is decoded is the CONDITION and not the statement.**
+The then-arm's product is CSE'd with the condition's and its spelling leaves no
+trace; F7782 wants the domain and which fact it fixes, and that is it.
+
+**THE BLOB CONFIRMS IT AT A SECOND SITE.** `V90CP::infoToBits` carries this
+arithmetic inlined at 0x52230 and spells it `mov %ecx,%edi ; div %ecx ;
+imul %eax,%edi` -- the same way round, in a function whose own reconstruction
+is 869 bytes away and could not have been fitted to it. The source's second
+copy is spelled to match. Grade 0 534 -> 535 on this alone; no other symbol in
+`V90CP.cpp` moved, `infoToBits` included.
+
+### F7982. A `switch` COSTS GCC 3.4.2 THE SIBLING CALL, and the object's `jmp` is what tells you
+
+`V92Modem::progress` and `V90Modem::progress` are the same function twice: load
+`side`, and hand all four arguments to one of two objects or print a message.
+Both were written as a `switch` and both were wrong in the same way.
+
+    blob  V92Modem::progress   sub $0xc  ... jmp dsplibs_debug_printf
+                                             jmp V92Modulator::progress
+    ours  V92Modem::progress   sub $0x2c ... call dsplibs_debug_printf
+
+**A `break` out of a `switch` takes the call out of tail position.** The
+gated `dsplibs_debug_printf` in the `default` arm is then a real call, which
+under `-maccumulate-outgoing-args` also grows the frame from the object's 0xc
+to 0x2c to hold its outgoing argument, which moves every displacement in the
+function. An `if`/`else if` chain over the same three cases leaves it in tail
+position and GCC emits the jump.
+
+Five spellings were compiled for `V92Modem`: `switch` with `break`, `switch`
+with `return` (identical output -- GCC does not distinguish them here),
+`switch` with the `default` arm first, `switch` calling `edprintf`, and the
+chain. Only the chain emits `jmp`. Four chain arrangements were then compiled
+and three of them give the object's 121 bytes:
+
+    switch/break        SIZE 124 vs 121, ndiff 3
+    switch/return       SIZE 124 vs 121, ndiff 3
+    switch/default-1st  SIZE 137 vs 121, ndiff 16
+    switch/edprintf     SIZE  90 vs 121, ndiff 31
+    chain, empty arm 1  BYTES 2 of 121, grade 1 REGALLOC
+    chain, nested       BYTES 2 of 121, grade 1 REGALLOC
+    chain, early return BYTES 2 of 121, grade 1 REGALLOC
+
+**THE BRANCHES CANNOT TELL THE TWO SPELLINGS APART AND THE CALLS CAN.** Both
+compile to `test %edx,%edx ; je` then `dec %edx ; je`, the empty arm first, so
+reading the test sequence would have certified the `switch`. This is the
+`call`-versus-`jmp` being FORCED where the branch shape is not.
+
+Residual on `V92Modem::progress`: two bytes, `mov $.LCn,%ecx` against our
+`%edx`, and `alpha_equal` accepts it -- grade 1, not grade 0.
+
+### F7983. The same fix on `V90Modem::progress` is right and does not close it
+
+`V90Modem::progress` had the same `switch` and the same defect -- our object
+carried two `jmp`s and a `call` where the blob carries three `jmp`s -- and the
+chain repairs the exits and the frame. It does not close the symbol, and the
+numbers must be quoted both ways because F7880's blind spot covers exactly
+this:
+
+    before   SIZE  204 bytes vs 188, instruction delta   0
+    after    SIZE  172 bytes vs 188, instruction delta  -4
+
+The four instructions are at 0x19af1..0x19b04, where the blob writes the four
+incoming argument words back into the same stack slots it read them from before
+each tail jump and GCC elides the stores for us. That residual is not
+understood. **It was taken anyway**, because the `call` is a forced encoding
+and the `switch` provably cannot produce the object's jump, and because the
+identical change closed `V92Modem::printTitle` in the sibling file. A reviewer
+who disagrees should read this as one decision on one function, not a licence
+to trade delta for structure generally.
+
+### F7984. `V92Modem::printTitle` is EXACT, and its allocation is UNSTABLE
+
+`printTitle` went REGALLOC (8 of 172, `%eax`/`%ecx`/`%edx` rotated by one
+against the blob) to EXACT, and **nothing in `printTitle` was edited**. It
+closed on SIX unrelated perturbations of `progress` in the same translation
+unit -- default-arm-first, four chain arrangements, and one that made
+`progress` itself much worse -- and stayed REGALLOC on the two that kept the
+`switch`. This is lever 3's carrier at work inside one TU and it is a warning
+as much as a win: **the next edit to `V92Modem.cpp` may take it back out**, and
+whoever sees that should not go looking for a defect in `printTitle`. The
+sibling `V90Modem::printTitle` is the same 8-of-210 rotation and did NOT close
+under the same change.
+
+### F7985. The V90SpectralVerifier converters: 24 spellings, one match, DECLINED
+
+`freqToLeftBin`, `freqToRightBin`, `freqToNearestBin` and
+`getSpectrumOfNearestBin` are BYTES at 6 bytes each and the six bytes are one
+fact -- the fourth inlines `freqToNearestBin`, so all four move together:
+
+    blob   flds 0x1c(%esp) ; fdivs  0x14(%edx)      load the DIVIDEND
+    ours   flds 0x14(%edx) ; fdivrs 0x1c(%esp)      load the divisor
+
+Twenty-four spellings were compiled against GCC 3.4.2 at the tree's flags:
+`this->`, a local copy of the parameter, a local copy of the member, a
+`const float &` bound to the parameter, a pointer to the member, a `float *`
+cast of the parameter, an array member, a reference member, a `const` member, a
+`volatile` member, a `double` intermediate, a `float` temporary for the
+quotient, redundant parentheses, `const` on the parameter, and inline helpers
+taking the operands in either order. **Twenty-three emit `fdivrs`.** The rule
+underneath is stable: for `param / member` the compiler loads the member, every
+time; it loads the dividend only when the dividend is not an incoming argument.
+
+The one spelling that emits the object's form is **`volatile float freq` on the
+parameter**. It mangles identically -- top-level cv-qualifiers are dropped from
+a parameter's type -- and at one read it is semantically inert.
+
+**It is declined, on F7782's line, and the discriminator is the object.** The
+shape `flds <esp-slot>; fdivs <this-relative>` occurs **6 times in the whole
+1.2 MB object** and four of them are these functions. The other two,
+`V90Phase4Demodulator::getV90Decision` and `getV92Decision`, are not this
+mechanism: their `0x30(%esp)` is a LOCAL SPILL SLOT in a 0x4c frame, written by
+`fstps` at 0x267fe and read back at 0x268aa, so their dividend is a computed
+value that never was an argument and needs no `volatile` to be loaded first.
+That leaves `volatile` explaining one file and nothing else in the object, and
+a source that carries it is fitted rather than derived. F7771 declined
+`V92Phase4Modulator::reset` on the same ground and the same file family; this
+is that call again with a larger domain behind it.
+
+Left BYTES, 6 of 50, 6 of 51, 6 of 56 and 6 of 65, and the enumeration is
+written into `src/pump/v90/V90SpectralVerifier.cpp` so nobody repeats it.
+
+### F7986. Bucketing the V.90 delta-0 cluster: the cancellation warning fires 7 times of 29, and never on x87
+
+The sibling pass on `V90Parameters::setToDefault` found a `+0` row that was
+three differences summing to zero -- x87 -18, integer stores +19, clamping -1 --
+so a delta of 0 licenses "the absences and the extras cancel" and not "nothing
+is missing". That correction was applied to the whole V.90 cluster here rather
+than taken on trust. Each side's padding-stripped instructions were bucketed by
+FORM -- x87, move/`lea`, integer arithmetic, branch/call, other -- and the
+per-bucket deltas compared:
+
+    29 delta-0 symbols in src/pump/v90/ bucketed
+    22  every bucket agrees      -- delta 0 really is encoding only
+     7  buckets differ, total 0  -- CANCELLING, lever 2 applies
+
+The seven are `calculateLinearMeanAndVar`, `printErrorHistogramAndReset`,
+`V90Jd::V90Jd`, `detectRfNot`, `detectRNot`, `V92Modem::~V92Modem` and
+`V92Modem::reset`.
+
+**AND THE MAGNITUDE MATTERS AS MUCH AS THE FACT.** Every one of the seven is a
+move/arith swap of one or two instructions and **not one has an x87 imbalance**,
+which is the bucket that carried `setToDefault`'s wrong field types. That is
+the comparison that matters against it and it is measured, not argued.
+
+**TWO OF THE SEVEN ARE TRACED TO THE INSTRUCTION AND FIVE ARE NOT.**
+`detectRNot` and `detectRfNot` are one shape: the object hoists the constant
+zero into `%ebx` at entry (`xor %ebx,%ebx`) and spends it with `mov %ebx,%eax`
+at each `return 0`, where we re-materialise it in place with `xor %eax,%eax` --
+a move against an arithmetic instruction, same value, allocation and not a
+field. The other five -- `calculateLinearMeanAndVar`,
+`printErrorHistogramAndReset`, `V90Jd::V90Jd`, `V92Modem::~V92Modem` and
+`V92Modem::reset` -- were bucketed and NOT traced, so lever 2 is not excluded
+on them: it is bounded to at most two non-x87 instructions each, and anybody
+working one of those five should read its own diff before believing the total.
+The honest reading of the run is 22 of 29 confirmed encoding-only, 2 traced and
+explained, 5 bounded.
+
+The scan is `ae6_buckets.py`'s shape and it is worth rebuilding rather than
+trusting this list: it took `byteident.insns` and `byteident._padding` for its
+input, so it measures what the grading tool measures, and it should be pointed
+at any `--near` worklist before that worklist is believed.

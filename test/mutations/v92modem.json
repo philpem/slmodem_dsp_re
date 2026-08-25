@@ -240,8 +240,8 @@
  },
  {
   "label": "progress forwards on the digital side rather than the analog one",
-  "find": "\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tbreak;\n\n\tcase V92_MODEM_SIDE_ANALOG:\n\t\tmodulator->progress(bits, nbits, out, nSamples);",
-  "replace": "\tcase V92_MODEM_SIDE_ANALOG:\n\t\tbreak;\n\n\tcase V92_MODEM_SIDE_DIGITAL:\n\t\tmodulator->progress(bits, nbits, out, nSamples);"
+  "find": "\tif (modemSide == V92_MODEM_SIDE_DIGITAL) {\n\t} else if (modemSide == V92_MODEM_SIDE_ANALOG) {\n\t\tmodulator->progress(bits, nbits, out, nSamples);",
+  "replace": "\tif (modemSide == V92_MODEM_SIDE_ANALOG) {\n\t} else if (modemSide == V92_MODEM_SIDE_DIGITAL) {\n\t\tmodulator->progress(bits, nbits, out, nSamples);"
  },
  {
   "label": "progress swaps the modulator's first two arguments",

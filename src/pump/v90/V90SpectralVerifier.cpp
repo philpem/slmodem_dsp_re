@@ -213,6 +213,37 @@ V90SpectralVerifier::reset()
  * 0x45db1 is on the INTEGER, after the conversion, so it is not
  * `(unsigned)(f / binWidth + 1.0f)` -- the two disagree for every operand
  * whose quotient is within one ulp below an integer.
+ *
+ * ALL FOUR CONVERTERS ARE SIX BYTES OFF, THE SIX BYTES ARE ONE FACT, AND IT
+ * IS DECLINED.  The object loads the DIVIDEND -- `flds 0x1c(%esp)` then
+ * `fdivs 0x14(%edx)` -- where we load the divisor and reverse the divide,
+ * `flds 0x14(%edx)` then `fdivrs 0x1c(%esp)`.  Same value, same instruction
+ * count, six bytes apart, and `getSpectrumOfNearestBin` inherits it by
+ * inlining `freqToNearestBin`.
+ *
+ * Twenty-four spellings were compiled against GCC 3.4.2 at the tree's flags:
+ * `this->`, a local copy of the parameter, a local copy of the member, a
+ * `const float &` bound to the parameter, a pointer to the member, a
+ * `float *` cast of the parameter, an array member, a reference member, a
+ * `const` member, a `volatile` member, a `double` intermediate, a `float`
+ * temporary for the quotient, redundant parentheses, `const` on the
+ * parameter, and inline helpers taking the two operands in either order.
+ * TWENTY-THREE emit `flds member; fdivrs param`.  The one that emits the
+ * object's form is `volatile float freq` on the PARAMETER -- which mangles
+ * identically, because top-level cv-qualifiers are dropped from a parameter
+ * type, and which is semantically inert here at one read.
+ *
+ * It is declined anyway, on F7782's fit-versus-recovery line.  A
+ * volatile-qualified scalar parameter on a pure arithmetic converter is a
+ * claim about the author that the rest of the object contradicts: the shape
+ * `flds <esp>; fdivs <this-relative>` occurs SIX times in the whole 1.2 MB
+ * object, four of them here, and the other two --
+ * `V90Phase4Demodulator::getV90Decision` and `getV92Decision` -- are not this
+ * mechanism at all.  Their `0x30(%esp)` is a local spill slot inside a 0x4c
+ * frame, written by `fstps` at 0x267fe and read back at 0x268aa, so their
+ * dividend is a computed value in a non-argument slot and needs no `volatile`
+ * to be loaded first.  That leaves `volatile` explaining one file and nothing
+ * else, which is fitting and not deriving.  Finding F7980.
  */
 unsigned int
 V90SpectralVerifier::freqToNearestBin(float freq) const
