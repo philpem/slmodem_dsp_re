@@ -3,6 +3,19 @@
  * `include/dsplib/FloatARMA.h` carries the object map and the difference
  * equation.
  *
+ * THE DEFINITION ORDER IS THE OBJECT'S AND IT IS LOAD-BEARING.  `process(const
+ * float *, float *, unsigned)` comes FIRST, above the constructor, which is
+ * why the emission order is process(Pf), reset, C2, C1, D2, D1, process(f) --
+ * `reset` is hoisted above the constructor that calls it, and everything else
+ * follows the source.  We had all five in the "natural" order and were 0 of 7
+ * against the blob's `nm -n`; this arrangement is 7 of 7 and `reset` went from
+ * nine differing bytes to exact.  All 5! = 120 orderings were compiled on the
+ * period toolchain: three distinct emissions, 30 of them close `reset`, so
+ * what is decoded is the FACT that `process(Pf)` precedes `reset`'s emission
+ * slot and not a unique order -- the `nm -n` agreement is the tiebreaker.
+ * FloatIIR.cpp turned out to have the identical shape.  Do not "tidy" this
+ * back into declaration order; see docs/method/refinement.md lever 3.
+ *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x20(%esp),%ebx` after four pushes and a 12-byte frame --
  * not %ecx, so nothing here needs an attribute (finding 215).
@@ -149,6 +162,64 @@ arma_carry_tail(float *hist, unsigned int taps, unsigned int len)
 }
 
 /*
+ * The block form.  Both positions are written ONCE, after the last sample --
+ * the running pair lives in registers for the whole run -- and a count of
+ * zero returns before the object is read at all, so it does not even fault on
+ * a filter with no history buffers.  `m_fwd` and `m_fbk` are still written
+ * every sample, since they are what the arithmetic goes through.
+ *
+ * The output store reads `m_fwd` back out of the object rather than reusing
+ * the register: `mov 0x2c(%ebp),%edx` then `mov %edx,(%ecx)`.
+ */
+void
+FloatARMA::process(const float *in, float *out, unsigned int count)
+{
+	float *x;
+	float *y;
+	const float *a;
+	const float *b;
+	unsigned int nA, nB;
+	int xp, yp;
+
+	if (count == 0)
+		return;
+
+	x = m_xhist;
+	y = m_yhist;
+	a = m_a;
+	b = m_b;
+	nA = m_nA;
+	nB = m_nB;
+	xp = m_xpos;
+	yp = m_ypos;
+
+	do {
+		x[xp] = *in++;
+		m_fwd = arma_convolve(x + xp, b, nB);
+		m_fbk = arma_convolve(y + yp, a, nA);
+
+		m_fwd = m_fwd - m_fbk;
+		y[yp] = m_fwd;
+
+		yp--;
+		if (yp < 0) {
+			yp = (int)(m_ylen - nA);
+			arma_carry_tail(y, nA, m_ylen);
+		}
+
+		*out++ = m_fwd;
+
+		xp--;
+		if (xp < 0) {
+			xp = (int)(m_xlen - nB);
+			arma_carry_tail(x, nB, m_xlen);
+		}
+	} while (--count != 0);
+
+	m_xpos = xp;
+	m_ypos = yp;
+}
+/*
  * The four zero stores before the first allocation are the object's and are
  * not dead: `sysdep_malloc` is an external call the compiler cannot prove
  * does not read `*this`, so all four have to be in the instruction stream
@@ -278,61 +349,3 @@ FloatARMA::process(float in)
 	return m_fwd;
 }
 
-/*
- * The block form.  Both positions are written ONCE, after the last sample --
- * the running pair lives in registers for the whole run -- and a count of
- * zero returns before the object is read at all, so it does not even fault on
- * a filter with no history buffers.  `m_fwd` and `m_fbk` are still written
- * every sample, since they are what the arithmetic goes through.
- *
- * The output store reads `m_fwd` back out of the object rather than reusing
- * the register: `mov 0x2c(%ebp),%edx` then `mov %edx,(%ecx)`.
- */
-void
-FloatARMA::process(const float *in, float *out, unsigned int count)
-{
-	float *x;
-	float *y;
-	const float *a;
-	const float *b;
-	unsigned int nA, nB;
-	int xp, yp;
-
-	if (count == 0)
-		return;
-
-	x = m_xhist;
-	y = m_yhist;
-	a = m_a;
-	b = m_b;
-	nA = m_nA;
-	nB = m_nB;
-	xp = m_xpos;
-	yp = m_ypos;
-
-	do {
-		x[xp] = *in++;
-		m_fwd = arma_convolve(x + xp, b, nB);
-		m_fbk = arma_convolve(y + yp, a, nA);
-
-		m_fwd = m_fwd - m_fbk;
-		y[yp] = m_fwd;
-
-		yp--;
-		if (yp < 0) {
-			yp = (int)(m_ylen - nA);
-			arma_carry_tail(y, nA, m_ylen);
-		}
-
-		*out++ = m_fwd;
-
-		xp--;
-		if (xp < 0) {
-			xp = (int)(m_xlen - nB);
-			arma_carry_tail(x, nB, m_xlen);
-		}
-	} while (--count != 0);
-
-	m_xpos = xp;
-	m_ypos = yp;
-}

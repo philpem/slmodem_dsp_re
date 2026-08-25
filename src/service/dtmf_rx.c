@@ -71,27 +71,44 @@ reset_dtmf(struct dtmf_rx *rx)
 	rx->f008 = 0;
 	rx->nsamples = 0;
 
-	rx->last_digit = -1;
+	/*
+	 * These six are in the author's order, recovered rather than guessed:
+	 * all 6! orderings were compiled crossed with the two orderings of the
+	 * resonator loop below, 1,440 cells, and this one is the only cell that
+	 * leaves nothing but the biquad block differing.  Our previous order --
+	 * ascending by offset -- is what a transcriber writes; it is not what
+	 * the compiler was given.
+	 */
 	rx->stable = 0;
-	rx->ndigits = -1;		/* -1, not 0: "no string started" */
-	rx->quiet = 0;
+	rx->last_digit = -1;
 	rx->level = 1;			/* the energy memory's floor      */
+	rx->quiet = 0;
+	rx->ndigits = -1;		/* -1, not 0: "no string started" */
 	rx->bufp = rx->samples;
 
-	/* The four biquad states, in pairs, in the object's own order. */
-	rx->f354[0] = 0;
+	/*
+	 * The four biquad states, index 1 before index 0 in every pair -- and
+	 * that is DECODED, not a transcription of the emission.  All 8! = 40,320
+	 * orders of these eight assignments were compiled on the period
+	 * toolchain and scored with byteident's own body/verdict: 249 distinct
+	 * emissions, exactly ONE at zero differing bytes, nearest near-miss at
+	 * two.  A unique preimage, so this is the author's order and not a fit.
+	 * The high-then-low shape repeats in the loop below and in the scalars
+	 * above, which is the same fact three times.
+	 */
 	rx->f354[1] = 0;
-	rx->bp_state[0] = 0;
+	rx->f354[0] = 0;
 	rx->bp_state[1] = 0;
-	rx->f35c[0] = 0;
+	rx->bp_state[0] = 0;
 	rx->f35c[1] = 0;
-	rx->pre_high[0] = 0;
+	rx->f35c[0] = 0;
 	rx->pre_high[1] = 0;
+	rx->pre_high[0] = 0;
 
 	/* One state pair per tone: all eight of the bank's resonators. */
 	for (i = 0; i <= 7; i++) {
-		rx->tone_state[i][0] = 0;
 		rx->tone_state[i][1] = 0;
+		rx->tone_state[i][0] = 0;
 	}
 
 	/* Sixteen, not twenty.  D307. */

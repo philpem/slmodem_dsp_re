@@ -8,6 +8,24 @@
  *   .gnu.linkonce.t._ZN10GenericIIRIfdE7processEPKfPfj  block process
  *   .gnu.linkonce.t._ZN10GenericIIRIfdED1Ev          destructor
  *
+ * THE FLOATIIR HALF'S DEFINITION ORDER IS THE OBJECT'S.  `process(const float
+ * *, float *, unsigned)` comes FIRST, then the constructor, destructor,
+ * `reset` and `setCoefficients` -- which emits as process(Pf), reset, C2, C1,
+ * D2, D1, setCoefficients, with `reset` hoisted above the constructor that
+ * calls it.  FloatARMA.cpp has the identical shape and the same reason.
+ * All 5! = 120 orderings were compiled: three distinct emissions, and 20 of
+ * them both close `GenericIIR<float,double>::reset` and keep the four symbols
+ * that were already exact.  So what is decoded is the FACT that process(Pf)
+ * precedes the constructor, not a unique order; the blob's own `nm -n` picks
+ * this member of the class, and the file went 5 of 12 to 7 of 12 (only the
+ * relative order is recoverable -- 1,008 of the 1,020 blob symbols spanning
+ * this file belong to other translation units).
+ *
+ * Note WHICH symbol that gained: `GenericIIR<float,double>::reset` sits ABOVE
+ * the `#include "dsplib/FloatIIR.h"` and was not moved.  It closed as a
+ * bystander of a permutation aimed below it, which is lever 3's "the carrier
+ * is upstream of the function, not its own index" seen from the other side.
+ *
  * The original was built -fno-exceptions -fno-rtti with no use of new/delete;
  * allocation goes through sysdep_malloc/sysdep_free like the rest of the
  * library.  This file keeps that, so it drops into the same environment.
@@ -224,71 +242,6 @@ template class GenericIIR<float, double>;
 
 #include "dsplib/FloatIIR.h"
 
-FloatIIR::FloatIIR(unsigned ncoeff, float *coeff, unsigned blockSize)
-{
-	m_ncoeff = ncoeff & ~3u;
-	m_coeff = coeff;
-	m_len = m_ncoeff + blockSize;
-	m_hist = (float *)sysdep_malloc(m_len * sizeof(float));
-
-	/*
-	 * A failed allocation leaves m_hist null and is NOT reported: the
-	 * constructor completes, and the first `process` faults.  Reproduced
-	 * rather than fixed -- D55.
-	 */
-	if (m_hist != 0) {
-		for (unsigned i = 0; i < m_len; i++)
-			m_hist[i] = 0.0f;
-	}
-	m_pos = (int)(m_len - m_ncoeff);
-}
-
-FloatIIR::~FloatIIR()
-{
-	/* m_hist is not nulled, so a second delete double-frees.  D56. */
-	delete[] m_hist;
-}
-
-void
-FloatIIR::reset()
-{
-	if (m_hist != 0) {
-		for (unsigned i = 0; i < m_len; i++)
-			m_hist[i] = 0.0f;
-	}
-	m_pos = (int)(m_len - m_ncoeff);
-}
-
-int
-FloatIIR::setCoefficients(float *coeff, unsigned ncoeff)
-{
-	unsigned n = ncoeff & ~3u;
-
-	/*
-	 * The check is against the WHOLE buffer, not the slack, so a tap
-	 * count equal to m_len is refused and one below it is accepted --
-	 * leaving a single sample of block room.
-	 */
-	if (m_len <= n)
-		return -1;
-
-	m_coeff = coeff;
-	if (m_ncoeff == n)
-		return 0;		/* pointer swapped, geometry unchanged */
-
-	m_ncoeff = n;
-
-	/*
-	 * The write position is clamped, not rewound: growing the tap count
-	 * shrinks the room above it, and a position already inside that room
-	 * is pulled down to the new limit.  A position below it is left alone,
-	 * so the history in flight survives the change.
-	 */
-	if (m_pos > (int)(m_len - n))
-		m_pos = (int)(m_len - n);
-	return 0;
-}
-
 void
 FloatIIR::process(const float *in, float *out, unsigned count)
 {
@@ -384,4 +337,69 @@ FloatIIR::process(const float *in, float *out, unsigned count)
 		m_pos = pos;
 		out++;
 	}
+}
+
+FloatIIR::FloatIIR(unsigned ncoeff, float *coeff, unsigned blockSize)
+{
+	m_ncoeff = ncoeff & ~3u;
+	m_coeff = coeff;
+	m_len = m_ncoeff + blockSize;
+	m_hist = (float *)sysdep_malloc(m_len * sizeof(float));
+
+	/*
+	 * A failed allocation leaves m_hist null and is NOT reported: the
+	 * constructor completes, and the first `process` faults.  Reproduced
+	 * rather than fixed -- D55.
+	 */
+	if (m_hist != 0) {
+		for (unsigned i = 0; i < m_len; i++)
+			m_hist[i] = 0.0f;
+	}
+	m_pos = (int)(m_len - m_ncoeff);
+}
+
+FloatIIR::~FloatIIR()
+{
+	/* m_hist is not nulled, so a second delete double-frees.  D56. */
+	delete[] m_hist;
+}
+
+void
+FloatIIR::reset()
+{
+	if (m_hist != 0) {
+		for (unsigned i = 0; i < m_len; i++)
+			m_hist[i] = 0.0f;
+	}
+	m_pos = (int)(m_len - m_ncoeff);
+}
+
+int
+FloatIIR::setCoefficients(float *coeff, unsigned ncoeff)
+{
+	unsigned n = ncoeff & ~3u;
+
+	/*
+	 * The check is against the WHOLE buffer, not the slack, so a tap
+	 * count equal to m_len is refused and one below it is accepted --
+	 * leaving a single sample of block room.
+	 */
+	if (m_len <= n)
+		return -1;
+
+	m_coeff = coeff;
+	if (m_ncoeff == n)
+		return 0;		/* pointer swapped, geometry unchanged */
+
+	m_ncoeff = n;
+
+	/*
+	 * The write position is clamped, not rewound: growing the tap count
+	 * shrinks the room above it, and a position already inside that room
+	 * is pulled down to the new limit.  A position below it is left alone,
+	 * so the history in flight survives the change.
+	 */
+	if (m_pos > (int)(m_len - n))
+		m_pos = (int)(m_len - n);
+	return 0;
 }
