@@ -9822,6 +9822,36 @@
     "the modulator is forwarded rather than the demodulator": "caught",
     "the phase 2 record is forwarded rather than the demodulator": "caught"
    }
+  },
+  "v90p4seq": {
+   "key": "567330e7d52694efc95aa596b92e401995c16274036225d842027834260fe5ed",
+   "summary": "24 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "generateCPd does not scramble at all": "caught",
+    "generateCPd feeds the converter the MP bit count": "caught",
+    "generateCPd feeds the converter the raw message rather than the scrambled copy": "caught",
+    "generateCPd passes the message length to the drain rather than the demand": "caught",
+    "generateCPd scrambles the MP message rather than the CP one": "caught",
+    "generateCPd's guard is inverted": "caught",
+    "generateMP does not scramble at all": "caught",
+    "generateMP drains before it fills rather than after": "caught",
+    "generateMP feeds the converter the CP bit count": "caught",
+    "generateMP feeds the converter the raw message rather than the scrambled copy": "caught",
+    "generateMP holds the message length in a local across the scrambler rather than re-reading the field": "equivalent",
+    "generateMP passes the message length to the drain rather than the demand": "caught",
+    "generateMP returns the drain's status rather than the symbol": "caught",
+    "generateMP scrambles and does not feed the converter": "caught",
+    "generateMP scrambles the CP message rather than the MP one": "caught",
+    "generateMP scrambles the MP vector for the CP length": "caught",
+    "generateMP's guard is inverted": "caught",
+    "generateSUVd does not scramble at all": "caught",
+    "generateSUVd feeds the converter the MP bit count": "caught",
+    "generateSUVd feeds the converter the raw message rather than the scrambled copy": "caught",
+    "generateSUVd passes the message length to the drain rather than the demand": "caught",
+    "generateSUVd scrambles the MP message rather than the CP one": "caught",
+    "generateSUVd's guard is inverted": "caught",
+    "the guard tests the demand for greater-than-zero rather than non-zero": "equivalent"
+   }
   }
  }
 }
