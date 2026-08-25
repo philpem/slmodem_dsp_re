@@ -532,7 +532,28 @@ biquad_filter(short in, struct v8_detector *d, const short *coeff)
 {
 	int acc = in >> 4;
 	int stage1;
-	short x0, y0;
+	/*
+	 * `unsigned short`, AND THE OBJECT IS WHAT DECIDES IT.  Both history
+	 * heads are read at four sites whose 32-bit result is discarded by a
+	 * 16-bit store, so the extension is F614's dead one -- and lever 8
+	 * measured that a dead extension follows the DECLARED TYPE OF THE LOCAL
+	 * being loaded into, not the field's, not the store's and not a cast's.
+	 * The blob loads all four `movzwl`; `short` here gave `movswl`.
+	 *
+	 * Ten cells, two distinct emissions: {short, unsigned short, int,
+	 * unsigned int} x {`x0, y0`, `y0, x0`, one declaration each}, and
+	 * `unsigned short` is the ONLY one of the four that emits the object's
+	 * encoding -- an exhausted domain with a unique preimage on the type.
+	 * It is value-preserving: both are read from `short` fields and stored
+	 * straight back to `short` fields, so every store truncates.
+	 *
+	 * It does not close the symbol and is not expected to: 222 bytes
+	 * against the blob's 224 either way, and the residual two are one
+	 * `lea (%eax,%ebx,1),%ebx` where we emit `add %eax,%ebx`.  This is
+	 * 7803's shape -- a named declaration property recovered on its own
+	 * axis, which makes what is left legible.
+	 */
+	unsigned short x0, y0;
 	int i;
 
 	for (i = 0; i < 2; i++) {
