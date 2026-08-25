@@ -83669,3 +83669,35 @@ whoever wants the column permanently.
 sibling worktree branch already held 7804 when this was written, and that agent
 is still writing.  Expect to renumber at merge.
 
+
+### 7773. `--why`: the rejection row belongs in the tool, and it must not be a second copy of the comparison
+
+Both refinement passes needed the same thing and neither had it: when
+`alpha_equal` says REJECT, WHICH ROW.  Without it a pass can only diff the two
+instruction streams and guess, and the first row that DIFFERS is very often not
+the row the comparison rejects on -- a sibling pass made exactly that mistake
+and corrected it.
+
+`byteident.py --why SYMBOL` now prints both verdicts and, on a rejection, the
+row and the reason:
+
+    _ZN18V92Phase4Modulator5resetEsh23V92Phase4ModulatorStatejj
+    grade 0 verdict: BYTES  (46 byte(s) differ)
+    grade 1 verdict: REJECT
+      row 6 NON-REGISTER OPERAND  0x34(%esp),%eax | 0x28(%esp),%ecx
+
+-- which is the whole diagnosis: a different stack slot is a different
+argument, and no renaming reconciles it.
+
+**IT IS ONE IMPLEMENTATION, DELIBERATELY.**  `alpha_why` does the work and
+returns `None` or a reason; `alpha_equal` is `alpha_why(...) is None`.  The
+explainer began as a separate script with its own copy of the loop and went
+stale INSIDE AN HOUR: after the padding rule was corrected it still tested
+`mx.startswith("nop")` and reported a rejection the real function no longer
+made.  A second copy of a comparison is a second answer to the same question,
+and it will drift toward whichever copy is read less often.
+
+Verdict-neutral by measurement, which is the only thing that makes a refactor
+of a certifier safe to land: EXACT 425, REGALLOC 45, grade 0-or-1 475, BYTES
+120, SIZE 653 before and after, and the self-test's 18 cases (6 accept, 12
+reject) unchanged.

@@ -233,7 +233,7 @@ def insns(path, sym):
     return [tuple(r) for r in rows]
 
 
-def alpha_equal(x, y):
+def alpha_why(x, y):
     """Same instructions and operands up to a register renaming, PER LIVE RANGE.
 
     This is grade 1 and it is STRICTER than `compare.py`, which drops operands
@@ -276,9 +276,9 @@ def alpha_equal(x, y):
         fwd[fu], rev[fv] = fv, fu
         return True
 
-    for (mx, ox), (my, oy) in zip(x, y):
+    for i, ((mx, ox), (my, oy)) in enumerate(zip(x, y)):
         if mx != my:
-            return False
+            return "row %d MNEMONIC  %s vs %s" % (i, mx, my)
         #
         # ALIGNMENT PADDING IS NOT A READ, AND IT IS NOT SPELT `nop`.  The
         # first version of this guard tested `mx.startswith("nop")` and never
@@ -304,7 +304,7 @@ def alpha_equal(x, y):
             continue
         fx, fy = _fields(ox), _fields(oy)
         if len(fx) != len(fy):
-            return False
+            return ("row %d OPERAND COUNT  %s | %s" % (i, ox, oy))
         dx = fx[-1].strip() if fx else ""
         dy = fy[-1].strip() if fy else ""
         #
@@ -326,28 +326,43 @@ def alpha_equal(x, y):
         rx = REGTOK.findall(" ".join(ux))
         ry = REGTOK.findall(" ".join(uy))
         if len(rx) != len(ry):
-            return False
+            return ("row %d REGISTER COUNT  %s | %s" % (i, ox, oy))
         for u, v in zip(rx, ry):
             fu, fv = REG32.get(u), REG32.get(v)
             if fu is None or fv is None:
                 if u != v:
-                    return False
+                    return ("row %d NON-REGISTER  %s vs %s  | %s | %s"
+                            % (i, u, v, ox, oy))
                 continue
             if len(u) != len(v):
-                return False
+                return ("row %d WIDTH  %s vs %s  | %s | %s" % (i, u, v, ox, oy))
             if not bind(fu, fv):
-                return False
+                return ("row %d USE CONFLICT  %s wants %s, already bound to %s\n"
+                        "        blob %s\n        ours %s"
+                        % (i, fu, fv, fwd.get(fu, rev.get(fv)), ox, oy))
         if isdef:
             u, v = dx[1:], dy[1:]
             fu, fv = REG32.get(u), REG32.get(v)
             if fu is None or fv is None:
                 if u != v:
-                    return False
+                    return ("row %d DEST NON-REGISTER  %s vs %s" % (i, u, v))
             elif len(u) != len(v) or not rebind(fu, fv):
-                return False
+                return ("row %d DEST WIDTH  %s vs %s" % (i, u, v))
         if REGTOK.sub("%r", ox) != REGTOK.sub("%r", oy):
-            return False
-    return True
+            return ("row %d NON-REGISTER OPERAND  %s | %s" % (i, ox, oy))
+    return None
+
+
+def alpha_equal(x, y):
+    """Grade 1: same instructions and operands under a register bijection.
+
+    ONE implementation, wrapped.  The rejection-row explainer began life as a
+    separate script with its own copy of this loop, and within an hour it had
+    gone stale -- it still tested `mx.startswith("nop")` after the padding rule
+    moved on, and reported a rejection the real function no longer made.  A
+    second copy of a comparison is a second answer to the same question.
+    """
+    return alpha_why(x, y) is None
 
 
 def verdict(a, ra, b, rb):
@@ -522,6 +537,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list-exact", action="store_true")
+    ap.add_argument("--why", metavar="SYMBOL",
+                    help="print the row alpha_equal rejects SYMBOL on")
     ap.add_argument("--self-test", action="store_true",
                     help="prove alpha_equal both accepts and REJECTS")
     ap.add_argument("--limit", type=int, default=25)
@@ -529,6 +546,28 @@ def main():
 
     if a.self_test:
         return self_test()
+
+    if a.why:
+        k = a.why
+        ours = {}
+        for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
+            for s in sizes(o):
+                ours.setdefault(s, o)
+        if k not in ours:
+            sys.exit("byteident.py: %s is not defined by any object in %s"
+                     % (k, OURS))
+        if k not in sizes(BLOB):
+            sys.exit("byteident.py: the blob does not define %s" % k)
+        ab, ar = body(BLOB, k)
+        bb, br = body(ours[k], k)
+        v, nd = verdict(ab, ar, bb, br)
+        print("  %s\n  grade 0 verdict: %s%s"
+              % (k, v, "" if not nd else "  (%d byte(s) differ)" % nd))
+        why = alpha_why(insns(BLOB, k), insns(ours[k], k))
+        print("  grade 1 verdict: %s" % ("ACCEPT" if why is None else "REJECT"))
+        if why is not None:
+            print("    %s" % why)
+        return 0
 
     blob = sizes(BLOB)
     if not blob:
