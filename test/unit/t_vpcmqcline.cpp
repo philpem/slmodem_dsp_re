@@ -87,7 +87,7 @@
  *   4. THE DEBUG SWEEP IS {0, 1, 2}.  Every one of the eight gates is `> 1`,
  *      and a {0, 2} sweep cannot separate `> 1` from `> 0`.
  *   5. `verificationStatus` IS TAKEN WITH A `movzwl`, AND THE HIGH HALF IS
- *      NOT DRIVEN TWO-SIDEDLY TODAY.  See the QC_WIDE_STATUS block below --
+ *      NOT DRIVEN TWO-SIDEDLY TODAY.  See the `QC_STATUS` block below --
  *      the axis is parked against a defect in `src/`, not omitted, and the
  *      width is still measured on the blob alone by `run_status_width`.
  *   6. `enterWaitForANSpcmDrop` IS IDEMPOTENT.  It returns at once when the
@@ -1168,7 +1168,7 @@ run_rp3(void)
  * ===========================================================================
  *
  * ONE SIDE, ON PURPOSE, and it is not a two-sided comparison withheld out of
- * convenience: `src/` does not narrow (see the QC_WIDE_STATUS block above),
+ * convenience: `src/` does not narrow (see the `QC_STATUS` block above),
  * so a two-sided trial here would be red rather than informative.  What this
  * measures is what the OBJECT does, which is the claim
  * include/dsplib/VPcmFloModem.h makes and which nothing had ever run.
