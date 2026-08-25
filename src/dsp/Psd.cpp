@@ -20,6 +20,8 @@ void *sysdep_malloc(unsigned size);
 void sysdep_free(void *ptr);
 }
 
+inline void operator delete[](void *p) { sysdep_free(p); }
+
 /*
  * Hold the compiler to the map in the header (finding 230); tools/offcheck.py
  * cannot read a class.
@@ -64,10 +66,8 @@ Psd::Psd(unsigned int length, WindowType window, unsigned int overlap)
 /* Window first, spectrum second; neither pointer is nulled. */
 Psd::~Psd()
 {
-	if (m_window != 0)
-		sysdep_free(m_window);
-	if (m_fft != 0)
-		sysdep_free(m_fft);
+	delete[] m_window;
+	delete[] m_fft;
 }
 
 void

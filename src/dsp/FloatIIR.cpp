@@ -38,6 +38,18 @@ void *sysdep_malloc(unsigned size);
 void sysdep_free(void *ptr);
 }
 
+/*
+ * THE REPLACEMENT `operator delete[]`, AND IT IS READ OFF THE OBJECT.  The
+ * blob makes an ordinary `call sysdep_free` at a destructor's LAST free where
+ * an explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one instruction
+ * fewer at the same byte count.  Eight spellings were compiled and only
+ * `delete[]` over an inline replacement reproduces the object's shape; see the
+ * finding for the enumeration.  Behaviourally it is exactly the guard it
+ * replaces: `float` has no destructor, so `delete[] p` is `if (p)
+ * operator delete[](p)` with no array cookie.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
 template <typename Sample, typename Coeff>
 GenericIIR<Sample, Coeff>::GenericIIR(unsigned nden, unsigned nnum,
 				      Coeff *den, Coeff *num,
@@ -79,10 +91,8 @@ GenericIIR<Sample, Coeff>::GenericIIR(unsigned nden, unsigned nnum,
 template <typename Sample, typename Coeff>
 GenericIIR<Sample, Coeff>::~GenericIIR()
 {
-	if (m_inHist)
-		sysdep_free(m_inHist);
-	if (m_outHist)
-		sysdep_free(m_outHist);
+	delete[] m_inHist;
+	delete[] m_outHist;
 }
 
 /*
@@ -236,8 +246,7 @@ FloatIIR::FloatIIR(unsigned ncoeff, float *coeff, unsigned blockSize)
 FloatIIR::~FloatIIR()
 {
 	/* m_hist is not nulled, so a second delete double-frees.  D56. */
-	if (m_hist != 0)
-		sysdep_free(m_hist);
+	delete[] m_hist;
 }
 
 void
