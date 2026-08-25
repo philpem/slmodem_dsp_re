@@ -394,18 +394,42 @@ V90ConstellationDesigner::spectralDesign(unsigned int rate,
  * with `fistpll`, a 64-bit store, and then reads the low dword -- which is
  * how GCC converts a float to `unsigned int` on this target.  A cast to
  * `int` is a 32-bit `fistpl` and would have been one instruction shorter.
+ *
+ * THE TWO LOGARITHMS ARE NOT THE SAME PRECISION AND THE NUMERATOR GOES
+ * FIRST -- which is the difference between this and `realK`, and it is
+ * measured rather than styled.  The object has ONE `fstps`/`flds` round trip
+ * through a four-byte slot in this function and it is on log10(2), so the
+ * denominator is a `float` and the numerator stays in an x87 register at
+ * extended precision; and the object's first `fyl2x` after the early return
+ * is log10(prod), so the numerator is evaluated first, which is also why it
+ * divides with `fdivrp` and not `fdivp`.  Writing log10(2) first cost an
+ * extra `fxch` to bring `prod` back to the top of the stack and, at the
+ * three sites where this function is inlined into a loop, let GCC hoist the
+ * denominator out as a `long double` loop invariant -- five instructions and
+ * a twelve-byte `fstpt` slot the object does not have.
+ *
+ * TWENTY SPELLINGS WERE COMPILED (each log10 as an inline call, an inline
+ * call with a `(float)` cast, a `float` local or a `long double` local, and
+ * both declaration orders where both are locals).  THREE reach the object's
+ * bytes and they emit one byte-identical object, so what is decoded is the
+ * FACT above -- numerator first, extended; denominator second, single -- and
+ * not a unique source form.  The other two spellings are
+ * `log10(prod) / (float)log10(2.0f)` written straight into the `return`, and
+ * the same with only the numerator bound to a local.  Findings 7774 and 7782.
  */
 int
 V90ConstellationDesigner::maxK(V90MappingParams *p)
 {
 	float prod = CONSTELLATION_PRODUCT(p);
+	long double lp;
 	float l2;
 
 	if (prod == 0.0f)
 		return 0;
 
+	lp = x87_log10((long double)prod);
 	l2 = (float)x87_log10((long double)2.0f);
-	return (int)(unsigned int)(x87_log10((long double)prod) / l2 + 1e-6f);
+	return (int)(unsigned int)(lp / l2 + 1e-6f);
 }
 
 /*
