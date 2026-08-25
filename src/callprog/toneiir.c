@@ -14,8 +14,11 @@
  *   _iir_filter_progress   .text 0x07ca50
  *
  * THE DEFINITION ORDER BELOW IS THE OBJECT'S EMISSION ORDER AND IT IS
- * LOAD-BEARING -- the addresses above run in increasing order down the file,
- * which is the cheap check that it still does.  GCC 3.4.2's register
+ * LOAD-BEARING -- the manifest above is in that order, so its addresses run
+ * upwards down the list and the definitions follow the list.  The check that
+ * BOTH still hold is `nm -n --defined-only` on
+ * `build/tc_out/src_callprog_toneiir.c.o` and on the blob, compared over the
+ * symbols both define: 8 of 8 today.  GCC 3.4.2's register
  * allocation depends on the IDENTITY of what it compiled before a function,
  * not only on the function's own text, so moving a definition here moves
  * bytes in its successors: matching the object's order took `toneiir_reset`

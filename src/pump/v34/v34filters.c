@@ -770,7 +770,15 @@ const short hsine2400[16] = {
  * alone, so a definition moved here moves bytes in its successors --
  * `V34EchoCleanUp` reached byte identity on this reorder and nothing else.
  * All 26 emitted symbols now sit at the blob's own index, which is the gate on
- * believing any future null result from this file.  See
+ * believing any future null result from this file.  The check is `nm -n
+ * --defined-only` on `build/tc_out/src_pump_v34_v34filters.c.o` and on the
+ * blob, compared over the symbols both define: 26 of 26 today.  There are no
+ * per-function `.text` comments here to read the order off.
+ *
+ * IT IS NOT SUFFICIENT, and `V34EqualizerCleanUp` is the proof: it sits at the
+ * blob's index 16 of 26 with the blob's own predecessor ahead of it, and it
+ * still lost byte identity on this reorder.  Something further upstream
+ * differs; this file's order is no longer the variable.  See
  * docs/method/refinement.md lever 3.
  *
  * The four file-local helpers and the two macros above them are hoisted ABOVE

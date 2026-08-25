@@ -153,14 +153,23 @@ THE MOST USEFUL THING IN IT.** 7777's control 4 moved ONE plain function,
 measured no change, and 7774 was narrowed to clone pairs on that basis. The
 control's observation is right and the conclusion drawn from it was wrong: a
 single move usually does nothing. Reordering nine whole files to the blob's
-emission order gained **17 symbols and lost none**, and **16 of the 17 are
-plain non-clone functions**. Per-shape yield: plain 16, twin 1, **clone 0**.
+emission order gained **17 symbols and lost none** (7796); five more files
+gained **5 and lost 1** (7820).
 
-**The clone pairs are the part that did not move** -- exactly reversed from
-7774. `ModulusCoder`'s four constructor clones were already in the blob's
-order, 6 of 6, and all four stayed at 25 differing bytes; `V90CP`'s C2 went
-EXACT to REGALLOC; `V90Phase4Modulator`'s C1/C2 merely swapped their 21 and 27
-differing bytes. Both those files were REVERTED for a net loss.
+**THE SHAPE DOES NOT PREDICT THE YIELD. THE BUCKET DOES.** Three passes have
+now scored every shape at both zero and non-zero:
+
+    7774   clone-only     the four V90Resampler constructors, 12 for 12
+    7796   plain 16, twin 1, CLONE 0    over nine files
+    7820   plain 2,  twin 1, CLONE 2    over five files
+
+7796's clone column is the one to distrust, and it is why: `ModulusCoder`'s
+four constructor clones were already in the blob's order and stayed at 25
+differing bytes, `V90CP`'s C2 went EXACT to REGALLOC, `V90Phase4Modulator`'s
+C1/C2 merely swapped their 21 and 27 -- three files' worth of clones, all in
+files that also had gaps or were reverted. 7820 moved all three `Resampler`
+destructors to byte identity in one file. **Do not skip a candidate for its
+shape; skip it for its bucket.**
 
 **The carrier is upstream of the function, not its own index.** Four REGALLOC
 symbols already sat at the blob's emission index, so only their PREDECESSORS
@@ -177,12 +186,76 @@ same counters, different allocation. What is left depends on the IDENTITY of
 what was compiled before rather than the amount: allocation addresses and
 pointer-keyed hash iteration. Do not re-try the counters.
 
-**Aim at REGALLOC files, not BYTES files.** Rate over the nine files touched:
-**16 of 25 REGALLOC candidates closed, 0 of 9 BYTES.** The one file aimed at a
-BYTES bucket paid nothing and lost a symbol. 94 files remain disordered,
-holding 24 of the 32 remaining REGALLOC and 88 of the 94 BYTES. Two regions
-are not reachable by definition order at all: the head, where templates and
-clones interleave, and the cgraph tail.
+**Aim at REGALLOC files, not BYTES files, and this is now the twice-confirmed
+part.** Over 7796's nine files, **16 of 25 REGALLOC candidates closed, 0 of 9
+BYTES**, and the one file aimed at a BYTES bucket paid nothing and lost a
+symbol. Over 7820's five, **5 of 7 REGALLOC closed and the BYTES and SIZE
+counts did not move by ONE symbol tree-wide** -- every gain and the one loss
+was a REGALLOC/EXACT swap.
+
+Re-measured at 7820: of the 165 objects sharing a `.text` symbol with the blob,
+**76 already emit in the blob's order and 89 do not**, and the 89 hold **19 of
+the remaining grade 1 and 63 of the BYTES**. That does not reach the tree's 30
+and 94 because a COMDAT function is in its own `.gnu.linkonce.t.*` section and
+is outside this ordering entirely: 3 grade 1 and 6 BYTES live there. Two
+regions are not reachable by definition order at all: that head, where
+templates and clones interleave, and the cgraph tail.
+
+### 3a. The pre-check, before you permute anything (7820)
+
+Three questions, all answered from the objects, and one of them stops a file
+being permuted into a null nobody can read.
+
+1. **Is the blob's order REACHABLE?** The emission model forces a callee ahead
+   of its caller, so the order is reachable only if no call edge of ours runs
+   caller-first in it. Read the edges off `objdump -dr` and **bound each
+   function by its `nm -S` size**: alignment padding between functions is spelt
+   `jmp <next symbol>` plus nops and reads as a call. That artefact invented
+   `_iir_filter_delete -> _iir_filter_progress` and would have condemned a file
+   that then gained. Check the detector against your OWN emission order -- an
+   edge reading caller-first in your object is an artefact, because the same
+   rule produced it.
+   **It is a filter for the unreachable case, NOT a certificate.** It reads the
+   final object and cannot see an INLINED call, and GCC 3.4 keeps the cgraph
+   edge after inlining. `Resampler.cpp` scans as zero edges and still emits
+   `reset` ahead of both constructor pairs. The only proof is the achieved
+   order after the rebuild.
+2. **Is the blob's span YOURS?** List the blob symbols whose address falls
+   between the file's first and last and check they are all yours.
+   `v34pcmif.c` is 34 of 57 -- the other 23 are in four other files of ours, or
+   unwritten -- so only the RELATIVE order is recoverable there. It gained two
+   anyway: a gap is a reason to discount a file's SILENCE, not to skip it.
+3. **Is a datum or a macro in the way?** A file-scope table between two
+   functions being swapped is lever 4's own effect. Hoist it in a SEPARATE
+   commit and measure that alone. `toneiir.c`'s two `.rodata` blocks, two
+   `#define`s and two file-local statics were hoisted and measured by
+   themselves: every symbol identical, to the differing byte. Data moved as a
+   unit keeps its own relative order, so lever 4 does not fire.
+
+**An `#if` inside a body is safe when it BALANCES.** 7796's rule -- refuse to
+move any chunk containing a `#` line -- is over-strict and freezes
+`V34TimingFiltersInit`, whose `#ifdef DSPLIB_REPRODUCE_BUGS ... #endif` is
+wholly inside the body. The invariant that stops the wave 5 trap is the
+balance: `#if` +1, `#endif` -1, never negative, zero at the end. A bare
+`#define` or `#include` still refuses.
+
+**INDEX-FOR-INDEX AGREEMENT IS NOT SUFFICIENT.** `V34EqualizerCleanUp` sits at
+the blob's index 16 of 26, in a file with no gaps, no unwritten neighbours and
+all 26 symbols in place, with the blob's own predecessor ahead of it -- and it
+went EXACT to grade 1. Achieving the order buys you the right to believe a null;
+it does not buy byte identity.
+
+**A FILE THAT DID NOT CLOSE MAY STILL HAVE MADE ITS RESIDUAL LEGIBLE.**
+`toneiir_reset` went from 22 differing bytes of 60 to ONE, and that one is a
+`movzwl` where we emit `movswl` -- lever 8, a named declaration defect that 22
+bytes of register noise had been hiding (7821). Read the (b) rows, not only
+the (a) ones.
+
+**And name a check the reader can run.** 7796 could say "the `.text+0x...`
+comments run upwards down the file" because both Phase4Modulator files carry
+one per function. Most files carry none, so the portable check -- and the one
+in 7820's five headers -- is `nm -n --defined-only` on `build/tc_out/<file>.o`
+against the blob over the symbols both define, with today's score written in.
 
 **Two traps, both hit while doing it.** An `#endif` travelled with a moved
 chunk twice and STILL COMPILED, silently enlarging an

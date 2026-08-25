@@ -11,9 +11,13 @@
  * `nm -n` on the blob emits the destructor triple first, then
  * `resetHistoryIndex`, `reset`, the `float *bank` constructor,
  * `copyHistoryTail`, `resample`, the two phase accessors, and the `float
- * cutoff` constructor LAST; the definitions below are in that order and the
- * file's `.text` addresses therefore run in increasing order down it, which is
- * the cheap check that it still holds.  GCC 3.4.2's register allocation
+ * cutoff` constructor LAST, and the definitions below are in that order.
+ *
+ * THE CHECK THAT IT STILL HOLDS is `nm -n --defined-only` on
+ * `build/tc_out/src_pump_v90_Resampler.cpp.o` and on the blob, compared over
+ * the symbols both define: 9 of 13 in the same relative position today.  This
+ * file carries no per-function `.text` comments to read the order off, so do
+ * not look for one.  GCC 3.4.2's register allocation
  * depends on the identity of what it compiled before a function, so this is
  * not cosmetic: matching the order took BOTH remaining `~Resampler` clones to
  * byte identity and nothing else was changed.  Nine of the thirteen emitted

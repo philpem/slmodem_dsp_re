@@ -12,7 +12,9 @@
  * `process` comes first and the scalar one last: `nm -n` on the blob gives
  * process(const float*, float*, unsigned), reset, the constructor pair, the
  * destructor pair, setCoefficients, process(float), and all 8 emitted symbols
- * now sit at the blob's own index.  It was worth trying and it PAID NOTHING --
+ * now sit at the blob's own index -- checked with `nm -n --defined-only` on
+ * `build/tc_out/src_dsp_FloatFIR.cpp.o` and on the blob, over the symbols both
+ * define.  It was worth trying and it PAID NOTHING --
  * `FloatFIR::reset` is still grade 1, four differing bytes, a clean
  * `%edx`/`%ecx` swap on `taps`, and every other symbol's differing-byte count
  * is unchanged to the byte.  Recorded rather than reverted because an achieved

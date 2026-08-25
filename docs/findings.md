@@ -85524,6 +85524,10 @@ said clone-only, 7796 said plain-only, and between them they have now scored
 every shape at both zero and non-zero.  What both passes agree on is the
 BUCKET: REGALLOC responds and BYTES does not.  Quote the bucket, not the shape.
 
+(One clause of precision: the deleting destructor is not strictly a clone of
+the other two -- it is the complete-object one plus the `operator delete` --
+so the clone column here is "at least one", which is still not zero.)
+
 **THE TWIN IS 7796'S DISCRIMINATOR AGAIN, IN A `.c` THIS TIME.**
 `VPcmV34ReportStartOfEchoAdapt` and `VPcmV34ReportMiddleOfEchoAdapt` are the
 same three lines with one different string; the first was EXACT and the second
@@ -85547,6 +85551,13 @@ questions, all answerable from the objects alone and all cheap:
     caller-first in OUR object is an artefact, because the same rule made it.
     Shown to fire on `V90Phase4Modulator.cpp`: 14 edges, all 14 callee-first in
     our object.
+    **IT IS A FILTER FOR THE UNREACHABLE CASE AND NOT A CERTIFICATE OF
+    REACHABILITY**, because it reads the FINAL object and cannot see an
+    INLINED call -- GCC 3.4 keeps the cgraph edge after inlining, and it is
+    the cgraph that orders the emission.  `Resampler.cpp` scanned as zero
+    edges and still emits `reset` ahead of both constructor pairs, which is
+    the constructors calling it.  So a clean scan means "no known obstacle",
+    and the only proof is the achieved order re-checked after the rebuild.
   * **Is the blob's span OURS?**  List the blob symbols whose address falls
     between the file's first and last, and check they are all ours.
     `v34pcmif.c` is **34 of 57** -- the other 23 are in `v34pcmmain.cpp`,
@@ -85630,9 +85641,27 @@ the blob's order scatters every one of those groups: it puts
 `V34EchoPreFilterCopy` and `V34PremptxCopy` between `V34InitHilbertFilter` and
 `V34EchoReportCoeff`, and `V34TimingFiltersInit` between `V34TimingFilter` and
 `V34TimingPrefilter`.  The grouping was ours; the order is the author's.  All
-six banners are gone and each file carries a head comment saying the order is
-load-bearing, with the cheap check named: the `.text` addresses run in
-increasing order down the file.
+six banners are gone and each of the five files carries a head comment saying
+the order is load-bearing, with the check named.
+
+**AND THE CHECK NAMED IN THEM IS `nm -n`, NOT THE ADDRESS COMMENTS.**  7796
+could tell a reader to look at the `.text+0x...` comments running upwards down
+the file because both Phase4Modulator files carry one per function.  **Four of
+these five carry none**, and `v34pcmif.c` has two addresses in a prose sentence
+at the top -- so repeating that instruction here would have put an unrunnable
+check in five headers.  What each header now says is: `nm -n --defined-only` on
+`build/tc_out/<file>.o` and on the blob, compared over the symbols both define,
+with today's score written in.  `toneiir.c` is the one that keeps an address
+list, and its list was re-ordered to match the definitions.
+
+**WHERE THE TREE STANDS ON THIS LEVER, RE-MEASURED RATHER THAN SUBTRACTED.**
+Over the 165 objects that share a `.text` symbol with the blob: **76 already
+emit in the blob's order and 89 do not**, and the disordered 89 hold **19 of
+the remaining grade 1 symbols and 63 of the BYTES**.  The denominators do not
+reach the tree's 30 and 94 because a COMDAT function lives in its own
+`.gnu.linkonce.t.*` section and is not in this ordering at all -- 3 grade 1
+and 6 BYTES sit there, which is 7796's unreachable head, counted for the first
+time.
 
 **GATES.**  `make phase J=4` green, period differential 251 passed / 0 failed.
 `anchorcheck.py`: 198 suites, 8,959 mutations, **two anchors detached in
@@ -85640,7 +85669,12 @@ increasing order down the file.
 NEXT function's comment (`}\n\n/*\n * Ask for`) as the disambiguator between
 two near-identical clear sequences.  Re-pointed at the function that now
 follows, with the mutation itself unchanged, and the suite re-run because
-reattached is not caught.
+reattached is not caught: **`v34pcmif`, 126 mutations, 120 caught, 0 NOT
+caught, 0 unusable, 6 equivalent**, with both re-pointed rows among the caught.
+The six equivalents are pre-existing and carry their own `why`.
+`refcheck.py` 7,591 references, 0 dangling -- and it flagged two, both a bare
+`D0` in this finding's own prose, which it reads as a reference to deviation
+zero.  Write the mangled name or the words.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7796 and a sibling
 worktree already held 7812 while this was being written; expect to renumber at

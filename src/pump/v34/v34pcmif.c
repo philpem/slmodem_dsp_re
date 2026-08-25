@@ -9,9 +9,11 @@
  *
  * THE DEFINITION ORDER IS NOW THE OBJECT'S EMISSION ORDER, NOT THE ORDER THEY
  * WERE RECONSTRUCTED IN, and it is load-bearing.  All 34 emitted symbols sit
- * at the blob's own relative index, so the `.text` addresses run in increasing
- * order down the file -- that is the cheap check that it still holds, and the
- * gate on believing any future null result from here.  GCC 3.4.2's register
+ * at the blob's own relative index, which is the gate on believing any future
+ * null result from here.  The check is `nm -n --defined-only` on
+ * `build/tc_out/src_pump_v34_v34pcmif.c.o` and on the blob, compared over the
+ * symbols both define -- 34 of 34 today.  There are no per-function `.text`
+ * comments in this file to read the order off.  GCC 3.4.2's register
  * allocation depends on the identity of what it compiled before a function, so
  * the order moves bytes: `VPcmV34SetTxScale` and `VPcmV34ReportMiddleOfEcho`
  * `Adapt` both reached byte identity on this reorder alone.
