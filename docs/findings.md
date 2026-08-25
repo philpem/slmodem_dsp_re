@@ -84044,3 +84044,326 @@ helper function.
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7769 when this was
 written and a sibling agent is writing concurrently; expect to renumber at
 merge.
+
+======================================================================
+
+### 7800. FOUR MORE IN `VPcmFloModem.cpp`, AND THE COMPILER REORDERED OUR SOURCE IN EVERY ONE
+
+Reserved block for this batch: **7800-7802**.  Every ref this repository knows
+about was swept for its highest `### <n>.` heading -- `refs/heads`,
+`refs/remotes` and `refs/tags` together -- and `master`, `origin/master` and
+this branch all stand at **7778**, with nothing anywhere above it.  The block
+starts at 7800 rather than 7779 because CLAUDE.md asks for a gap and because
+sibling worktrees are writing concurrently.
+
+Six functions were briefed, 12,380 bytes, all in `byteident`'s BYTES bucket.
+**Four are now EXACT**; the two large ones did not close and are 7801 and 7802,
+which say why in more detail than "not attempted".
+
+    _ZN12VPcmFloModem20vPcmResetPhase3ModemEv    2 of  149  -> EXACT
+    _ZN12VPcmFloModem13externalResetEv           5 of  387  -> EXACT
+    _ZN12VPcmFloModem12getV90JaBitsEPs          11 of  158  -> EXACT
+    _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_
+                                                17 of  779  -> EXACT
+
+**THE SCORE, BASELINE FIRST.**  Taken on a full `tools/toolchain/build.sh`
+before any edit and again after, GCC 3.4.2 exact, from `9d9d8c78`:
+
+    before   grade 0  429 of 1251 (34.3%)   grade 0 or 1  482   BYTES 113
+    after    grade 0  433 of 1251 (34.6%)   grade 0 or 1  486   BYTES 109
+
+`--list-exact` diffed as a SET and not as a count (2900, 7768): **four lines
+added, none removed**, and the four are the four above.
+
+**`compare.py --ratchet` WAS RUN AND IT GAINED**, which is the check the
+grade-0 set diff cannot make: a function can lose MNEMONIC agreement while
+staying non-exact and never appear in either set.  The run reports against the
+STORED baseline in `ratchet.json`, which is old -- `compared 986 -> 1251,
+identical 350 -> 514, same_size 71 -> 84`.  **Only the after side of that is a
+measurement taken here.**  7778 records `identical ... -> 510` and
+`same_size ... -> 88` from its own run at the parent commit, so the +4 and the
+-4 are an inference ACROSS COMMITS and not a before/after this pass took.  Said
+that way round because the brief names measuring only after a change as an
+error this project has made four times.
+
+#### Three of the four are 7770's decoding, and the third one needed 3! and not 2
+
+**`vPcmResetPhase3Modem` is `resetBeforRRN` with different offsets.**  Two
+independent stores, the object emits `0x7f64` then `0x7f60`, and writing that
+order does not produce it:
+
+    source (7f64, 7f60)  ->  emitted (7f60, 7f64)   -- 2 bytes wrong
+    source (7f60, 7f64)  ->  emitted (7f64, 7f60)   -- EXACT
+
+**`getV90JaBits` is the same shape with a register consequence attached**, and
+that consequence is the reason it is worth writing down separately.  The
+terminate arm is two statements, `bitPointer = 0;` and `done = 1;`, and the
+blob emits
+
+    xor %eax,%eax ; mov $0x1,%esi ; mov %ax,0x1738(%ecx)
+
+-- a SECOND zero register, because `%esi` is already carrying the 1 by the time
+the store issues.  Ours reused `%esi`: `xor %esi,%esi ; mov %si,0x1738(%ecx) ;
+mov $0x1,%esi`.  Eleven bytes, and it reads like two defects (an order and an
+allocation).  It is one: writing `done = 1;` first produces both.  **A register
+difference downstream of a store-order difference is not independent evidence
+and must not be counted as a second problem** -- had it been, the 11 bytes
+would have looked like more than a two-element family could explain and the
+enumeration would not have been tried.
+
+**`externalReset` is the same argument over a three-element family.**  Three
+short stores sit inside a run of `movb`s; the object emits `0x1738, 0x1736,
+0x7dcc` and our source, which is that order, emits `0x7dcc, 0x1738, 0x1736` --
+GCC rotates it.  All six orders were compiled, differing bytes of 387:
+
+    bitPointer, nofBits,    cpNofBits    5      <- the object's own order
+    bitPointer, cpNofBits,  nofBits      2
+    nofBits,    bitPointer, cpNofBits    4
+    nofBits,    cpNofBits,  bitPointer   0      <- the preimage
+    cpNofBits,  bitPointer, nofBits      5
+    cpNofBits,  nofBits,    bitPointer   4
+
+**THE FAMILY BOUND IS STATED RATHER THAN ASSUMED, because 7770 is explicit
+that it is load-bearing.**  The claim is not "3! is exhaustive over all source
+texts".  It is: permutations of the three SHORT stores among their three
+emitted slots, holding the surrounding byte stores fixed -- and what licenses
+holding them fixed is that those `movb`s already match position for position
+on both sides, before and after.
+
+**AND THE INJECTIVITY WAS CHECKED, WHICH 7771 ASKS FOR.**  The six cells
+produced **six distinct emissions**, so the preimage is unique.  7771 found two
+cells that collided and warned that a hit against a non-injective map is not a
+decoding; here the map is a bijection and the inference is available.
+
+**NOTE THE NEAR MISS AND WHAT IT WOULD HAVE COST.**  Cell 2 is 2 bytes of 387.
+Had the enumeration stopped at "much closer", 7771's declined 27 would have
+been repeated at 2 -- and 2 is far more tempting than 27.  The enumeration was
+run to all six before any cell was read, which is the only thing that makes
+the 0 a decoding rather than the best of a search.
+
+#### `qcLineVerification` is not a permutation, and 7770's failed hypothesis is the one that works
+
+    blob   mov 0x175c(%esi),%edx    ours   mov 0x6fac(%esi),%ebx
+           mov 0x6fac(%esi),%ebx           mov 0x175c(%esi),%edx
+           mov 0x3c(%edx),%eax             add %edi,%ebx
+           add %edi,%ebx                   mov %ebx,0x6fac(%esi)
+           mov %ebx,0x6fac(%esi)           mov 0x3c(%edx),%eax
+
+17 bytes of 779.  Our `qcSampleCount += n;` then `switch (modem.demodulator->
+word_3c)` lets GCC split the dispatch load chain around the store; the blob
+completes the whole load first.  Reading the dispatch value into a named local
+ahead of the `+=` is byte-identical.
+
+**7770 RECORDS A NAMED INTERMEDIATE AS ITS BETTER-MOTIVATED HYPOTHESIS THAT
+FAILED** -- 37 differing bytes to 2, and not to 0.  It is the same construct.
+The difference is what the object's shape was evidence OF: there it was a
+scheduling SINK, a store pushed down into a division's schedule, and a named
+temporary is the wrong tool for that; here it is a load the object completes
+EARLY, which is exactly what a local forces.  **The construct is not the unit
+of evidence; the shape it is being used to explain is.**
+
+No enumeration argument is needed for this one and none is offered: it reaches
+grade 0, and 617's full-text identity is the acceptance test itself.
+
+The local also cannot be hoisted above the `modem.progress` call, and that is
+semantics rather than taste -- `V90Modem::progress` is what RUNS the
+demodulator, so it is what sets `word_3c`.
+
+#### The comments, and the five mutation anchors
+
+Three source comments asserted that these orders were transcribed from the
+object, one of them saying in terms that the order "is not observable and is
+not claimed to be forced".  **All three were false in both halves once the
+edits landed** and now carry the measured map and the table.  A comment that
+records a transcription where the tree has since made a DECODING is 6100's
+defect exactly, and it is worse here than usual because it would tell the next
+reader that the question had been settled the other way.
+
+**FIVE MUTATION ANCHORS MOVED WITH THE STATEMENTS.**  Three in
+`vpcmqcline.json` and two in `vpcmflomodem.json` stopped matching -- `make
+refs` caught all five, twice, as `NOT UNIQUE ... matches 0 time(s)`.  Each was
+re-anchored on the new text and each still names the same defect;
+`tools/mutate.py` was re-run on every one and **all five are still CAUGHT**,
+none unusable and none equivalent.
+
+**AND NONE OF THESE FOUR WAS A WIDTH OR A SIGNEDNESS EITHER.**  7778 reported
+that of its 38, and 7768 of its 3.  7630 sells the BYTES bucket as where 613's
+family hides; over these six it has held none.  What it held was three
+statement orders and a named local.  `qcLineVerification` is the function 7630
+cites for the `movzwl` -- that defect was real and was fixed in 7607, and the
+17 bytes still on it afterwards were a load schedule.  **The bucket is worth
+working and the reason given for working it is not the reason it pays.**
+
+======================================================================
+
+### 7801. `V90Parameters::loadParams`: 295 CALLS VERIFIED AGAINST THE OBJECT, ARGUMENT FOR ARGUMENT, AND THE 2,663 BYTES ARE ALL FREE
+
+The single biggest BYTES symbol in the tree -- 7,894 bytes, 2,663 differing --
+and the brief flagged it as the one a previous pass had already made other
+`V90Parameters` functions byte-identical around.  **It did not close, and the
+reason is worth more than the attempt would have been: there is nothing in its
+source to change.**
+
+It is a straight line of 295 calls to two stubs, three arguments each, in a
+fixed order, with no branch, no local and no store.  The source has no
+permutation freedom at all -- 7770's family has ONE member.
+
+**SO THE QUESTION WAS TURNED ROUND: is the CONTENT right?**  A wrong field
+offset, a wrong callee or a wrong parameter name here is a defect no
+differential test can ever see, because both callees are `xor %eax,%eax; ret`
+in the shipped object and every return value is discarded (finding 6400).  The
+whole call list was walked on both sides, holding an abstract value per
+register and per outgoing stack slot -- `vparse.py`'s method, applied
+comparatively:
+
+    instructions              blob 1781   ours 1781
+    calls                     blob  295   ours  295
+    arg2 offset AND callee, in call order      0 mismatches of 295
+    arg1 parameter NAME, resolved through the
+      relocation's section and addend          0 mismatches of 295,
+                                               0 unresolved on either side
+
+**THE NAME CHECK WAS SHOWN TO FIRE BEFORE ITS CLEAN RUN WAS BELIEVED**, which
+is 134's argument and the one this tree has had to relearn three times (2400,
+2401, 3110).  Compared against our list shifted by one call it reports **294
+mismatches of 294**; aligned it reports 0 of 295.  A checker that could not
+fail would report 0 for both.
+
+So every field, every callee and every one of the 295 parameter names is the
+object's, in the object's order, and the instruction count says nothing is
+missing and nothing is extra.  **The entire 2,663-byte residual is register
+allocation and the order the three outgoing argument stores are emitted in.**
+Measured per call site: only 41 of 295 sites agree on the store order, and the
+disagreements fall into ten different (blob, ours) order pairs rather than
+being one systematic transposition -- so there is no single swap for a source
+edit to make.
+
+**THE VERDICT RESTS ON THE CONTENT CHECK ABOVE AND NOT ON THAT SPREAD.**  The
+first version of this paragraph argued from the spread -- "a source cause would
+show up as one pattern repeated, and an allocator drifting does not" -- and the
+next section refutes it with this function's own data: past call 100 the
+disagreement IS one pattern repeated, thirty-nine times over.  The argument was
+backwards and the reason it did not matter is that it was never the load-bearing
+one.  What carries the verdict is that every field, callee and name is already
+the object's and the instruction count leaves no room for anything else.
+
+`alpha_equal` rejects at **row 10**: blob `%ebx,(%esp)` against our
+`%edx,0x8(%esp)`, a different outgoing SLOT, so grade 1 is unreachable too and
+correctly so -- the instruction sequences differ, not just the names in them.
+
+**THE CONTROL IS THE SIBLING CLASS.**  `V92Parameters::loadParams` is 1,384
+bytes and 54 calls -- counted, not back-solved from the byte ratio -- of
+character-for-character the same construct, and it is **already EXACT**.  So
+the source SHAPE is not what is wrong and no rewrite of the shape is
+indicated.  It is a different translation unit in the same directory, not the
+same file, so 7774's clone-pair and emission-order lever never applied here.
+
+#### The obvious explanation is LENGTH, and the measurement refutes it
+
+"295 calls against 54, so the allocator has further to drift" is the sentence
+this finding first carried.  **It was a mechanism reasoned out from a
+disassembly and not measured, which is the exact defect 7778 had to retract its
+first version for.**  The data to test it was already in hand: bucket the
+per-call-site store-order agreement by CALL INDEX.  Drift predicts a decay.
+
+    calls   0- 29   agree 12 of 30
+    calls  30- 59   agree 12 of 30
+    calls  60- 89   agree 13 of 30
+    calls  90-119   agree  4 of 30
+    calls 120-149   agree  0 of 30
+    calls 150-179   agree  0 of 30      ... and 0 for every bucket after
+    calls 270-294   agree  0 of 25
+
+**It is not a decay, it is a CLIFF.**  Agreement holds flat at about 40% for
+the first ninety-odd calls, the last agreeing site is call **99**, and from
+call 100 to call 294 it is exactly zero -- 195 consecutive sites, not one
+agreement.
+
+**And past the cliff both sides are PERFECTLY PERIODIC, with period five.**
+195 calls is 39 exact cycles of
+
+    blob   201  210  120  102  012
+    ours   210  021  210  012  102
+
+which is where the five (blob, ours) pair types counted 39, 39, 39, 38 and 38
+come from.  The two cycles are not rotations of each other -- ours repeats
+`210` and the blob's five entries are distinct -- so this is two different
+scheduler STEADY STATES, entered at about the hundredth call, and not an
+accumulating error.
+
+**THE CLIFF ALSO KILLS THE LENGTH STORY A SECOND WAY.**  V92's 54 calls sit
+entirely inside the pre-cliff region -- but V90's pre-cliff region agrees only
+40% of the time, while V92's function agrees 100%.  So being short is not
+sufficient either, and **the cause of the V92/V90 asymmetry is OPEN**.  It is
+recorded here as the thing the next pass should start from rather than
+explained: what changes at call 100, and why the sibling never diverges at all.
+
+There are ten non-agreeing (blob, ours) pair types, not nine.
+
+**NOT CLOSABLE FROM SOURCE, and that is a stronger statement than "not
+attempted".**  It is CLAUDE.md's free column, established by exhausting the
+content rather than by shrugging at the diff, which is 2900's warning.
+
+======================================================================
+
+### 7802. `v90RunDemodulator`: REGISTER NORMALISATION TOOK 131 BYTES DOWN TO THREE HUNKS, AND ALL THREE ARE OUTGOING-ARGUMENT STORES
+
+3,013 bytes, 131 differing, **578 blob instructions against our 578**.  No
+absence, so 7774's lever does not apply.  `alpha_equal` rejects at **row 20**:
+`USE CONFLICT edx wants edx, already bound to ecx`, blob `%edx,0x4(%esp)`
+against our `%edx,0x8(%esp)`.
+
+Reading the raw side-by-side gives forty-odd differing rows and no way to tell
+the free ones from the forced ones by eye.  **Erasing register names and
+section-relative relocation addends -- and ONLY those, keeping `%esp` because a
+stack slot is a real operand -- leaves 15 diff lines in three hunks**, and all
+three are the same thing:
+
+    hunk 1  the three argument stores for `V90Modem::progress`
+            blob 0x4, 0x0, 0x8      ours 0x8, 0x0, 0x4
+    hunks 2 and 3  the two `VPcmV34SetV90RateReneg` calls, arms 0x22 and 0x23
+            blob  movzbl 0x173b / mov 0x20c / movswl 0x90 / store 0x8 / store 0x4
+            ours  movzbl 0x173b / store 0x8 / mov 0x20c / movswl 0x90 / store 0x4
+
+**THE VALUE-TO-SLOT MAP IS IDENTICAL ON BOTH SIDES IN ALL THREE**, checked
+because a matching multiset does not prove it (7760): incoming `0x38 -> 0x10`,
+`0x3c -> 0x4`, `0x40 -> 0x8` in hunk 1, and `word_90 -> 0x4`,
+`flags_173a[1] -> 0x8` in the other two.  Same arguments, same positions, one
+scheduling difference each.
+
+**THERE IS NO SOURCE LEVER, and the two candidates were ruled out by
+measurement rather than by taste.**  A call's argument list order is fixed by
+the language, so 7770's family has one member.  The one construct that could
+have moved it -- reading `flags_173a[1]` into a local, which has something to
+recommend it because the very next statement reads the same byte again -- is
+refuted by the instruction count: **both sides emit the `movzbl 0x173b` twice**,
+so both texts read the field twice and neither has the local.
+
+**THE CONTROL IS THE FUNCTION NEXT DOOR, WHICH IS 7775'S RULE AND NOT A
+SURVEY.**  `qcLineVerification` makes the *same* `modem.progress(rxbits,
+*(unsigned int *)nrx, in, n)` call, in the same file, and after 7800 it is
+byte-identical to the object -- argument stores included.  So the call is
+written correctly, and the same text compiles to the blob's store order at one
+site and not at the other.
+
+**WHAT IS MEASURED IS THAT IT IS FREE; WHY IT IS FREE IS NOT.**  The verdict
+rests on the two things that were checked -- the identical value-to-slot maps
+and the twice-emitted `movzbl` that refutes the local -- and those are enough
+for it.  Register pressure at the two sites is the obvious candidate for the
+difference and it was NOT measured, so it is named as a candidate and not as
+the cause.  7801's own length hypothesis died on exactly this distinction.
+
+One thing register normalisation erases had to be checked by hand rather than
+assumed: the `fmuls` against `.rodata.cst4` uses addend 0x28 in the blob and
+0x18 in ours.  **Both slots hold 10.0f.**  A differing constant would have been
+a real defect wearing the same disguise as a section layout difference.
+
+**131 of 3,013 in the free column, and the useful output is the method.**
+Normalise away exactly what CLAUDE.md calls free -- register names, branch
+targets, section-relative addends -- and then read what SURVIVES, instead of
+reading a raw diff and classifying forty rows by eye.  Three hunks is a size a
+negative result can be argued at; forty rows is not.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7778 when 7800-7802 were
+written and sibling worktrees are writing concurrently; expect to renumber at
+merge.
