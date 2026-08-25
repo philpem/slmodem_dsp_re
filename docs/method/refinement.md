@@ -169,11 +169,40 @@ Two negatives already recorded, so nobody repeats them:
   the object's 534, so the domain is exhausted with no match (7785). That is
   lever 1's constant-map branch appearing for real.
 
-### 7. Width and signedness
+### 7. `delete[]` versus an explicit guarded free
+
+**The blob's global `operator delete` IS `sysdep_free`** -- it contains no
+`_Znwj`, `_ZdlPv` or `_ZdaPv` at all, and its compiler-generated `D0Ev`
+destructors tail-call `sysdep_free` exactly where a library `operator delete`
+would call `_ZdlPv`.
+
+The consequence is a one-instruction difference at the same byte count. At a
+destructor's LAST free the object makes a plain `call sysdep_free`; our
+explicit `if (p != 0) sysdep_free(p)` makes a sibling `jmp`. Eight spellings
+were compiled -- guard, braces, implicit `!= 0`, trailing `return`, ternary,
+short-circuit `&&`, if/else, an inlined helper carrying the guard, and scalar
+`delete` -- and **all of them sibcall. Only `delete[]` does not** (7786).
+
+Nine destructors closed on it, four of which were in the SIZE bucket and
+nobody was looking at.
+
+**Sizing, and it must be done pairwise.** Over the 1251 symbols both objects
+define: 1188 agree, **50 where we sibcall and the object does not**, 13 the
+other way. A raw population ratio would have mixed "the blob does not sibcall
+here" with "the blob has no such function". Two hypotheses died before any
+edit -- the blob tail-calls `sysdep_free` 67 times elsewhere, so it is not a
+declaration property, and the disagreement runs both ways, so it is not a
+flag.
+
+**Bounded:** nine of the 50 are C symbols and `delete[]` does not exist in a
+`.c`. `V92deleteConstellations` and `V92deleteFilterCoefficients` are 3 bytes
+each with identical signatures.
+
+### 8. Width and signedness
 
 7630's `movzwl` copied as 32 bits. Equal instruction count hides it completely.
 
-### 8. Operand order in commutative expressions
+### 9. Operand order in commutative expressions
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
 identity.
