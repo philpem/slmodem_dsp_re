@@ -561,9 +561,12 @@ void Descrambler<T, I>::copyHistoryTail()
  * 7867 warns that a raw 0-against-N list cannot tell "we expand it" from "we
  * have not written anybody who would call it", so every site was traced to
  * the blob function containing it and intersected with what this tree
- * defines: 63 of the 75 are in functions we have written, and the twelve
- * that are not are all `V90Phase3Modulator`/`V92Phase3Modulator` generators
- * still unwritten.  Not one of these names is 7867's unwritten-caller noise.
+ * defines: 65 of the 75 are in functions we have written, and the TEN that
+ * are not are all still-unwritten generators -- seven
+ * `V9xPhase3Modulator::generate*` for `process(h)`, and
+ * `V90Phase4Modulator`'s `generateB1d`, `generateTRN2d` and `generateEd` for
+ * the two constant-input forms.  Not one of these names is 7867's
+ * unwritten-caller noise.
  *
  * `Descrambler`'s BULK `process` moves too, and the paragraph above
  * `Scrambler`'s own bulk form used to say it must not, on the ground that the

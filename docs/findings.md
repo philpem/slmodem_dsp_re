@@ -89781,11 +89781,23 @@ come back blob N against ours ZERO:
 
 117 call sites in total.  F7867's noise warning was checked rather than
 quoted: every site was traced to the blob function containing it and
-intersected with what this tree defines, and **105 of 117 are in functions we
+intersected with what this tree defines, and **107 of 117 are in functions we
 have written** -- `V9xPhase3Modulator::generate*`, `V9xPhase4Modulator::
 generate*`, `V90Phase3Demodulator::getV9xDecision`, `V90Demodulator::progress`
-and the six enclosing constructor/destructor pairs.  The twelve that are not
-are unwritten Phase3Modulator generators.
+and the six enclosing constructor/destructor pairs.  The TEN that are not are
+still-unwritten generators: seven `V9xPhase3Modulator::generate*` for
+`process(h)`, and `V90Phase4Modulator`'s `generateB1d`, `generateTRN2d` and
+`generateEd` for the two constant-input forms.
+
+**The first trace of this was SHORT and the correction belongs in the record.**
+The tracing regex was `E(7process|C1|D1)`, which does not match
+`14processAllOnesEPhj` or `15processAllZerosEPhj`, so 27 of the 117 sites were
+never traced at all and the finding first claimed "105 of 117" and "twelve
+unwritten" from a 90-site sample.  The 117 itself was right -- it is the
+relocation SCREEN, which matches on the mangled name and had no such hole.
+This is F6100 and F6103's defect exactly: a count in a comment with no gate
+behind it, and the way to catch it is to make the tool print its denominator
+and then add the columns up.
 
 Moved out ALL AT ONCE -- F7866 measured that the HALF move made four `process`
 bodies worse while no bucket moved -- and APPENDED at the foot of the header so
