@@ -66,6 +66,21 @@ which of these you have, per function (7789 does it per closure):
   `inPhase3` slot collides; `V90Modem` decodes a zero-test and "`dil` stored
   last"; `resetLinearMapping` decodes only the NEGATIVE, that a signed 16-bit
   local is excluded.
+**AND A DELTA OF ZERO IS A SUM, NOT A STATEMENT ABOUT EITHER SIDE.**
+`--near`'s `+0` says the two instruction counts are equal; it does NOT say
+nothing is missing. `V90Parameters::setToDefault` sat at a clean 695 against
+695 and that total was **three differences cancelling** — x87 −18, integer
+stores +19, clamping −1 — with the real cause six fields the header typed
+`int` that are `float` (F7960). **Bucket by instruction FORM before trusting
+the total**: count the `mov`-class stores, the x87 ops and the branches
+separately on each side, and if those disagree while the total is zero, lever 2
+does apply and is cancelling with itself.
+
+Where the sub-counts also agree, `+0` does mean operand order, statement order,
+emission order, or width and signedness. The lens is most useful on a **SIZE**
+symbol, where it converts an apparently structural difference into an
+arithmetic one; on a BYTES symbol it is close to redundant with the bucket.
+
 - **No preimage** — **but FIRST ask whether the domain was drawn around the
   right code.** A no-preimage result licenses the strong conclusion "the
   difference is not what I thought it was", and that conclusion is only as good
