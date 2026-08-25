@@ -440,6 +440,10 @@
   "src/pump/v90/V90Modulator.cpp",
   "build/test/t_v90modprog"
  ],
+ "v90modemreset": [
+  "src/pump/v90/V90Modem.cpp",
+  "build/test/t_v90modemctor"
+ ],
  "v90modprogbts": [
   "src/pump/v90/V90BitsToSymbol.cpp",
   "build/test/t_v90modprog"
