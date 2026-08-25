@@ -154,21 +154,10 @@ public:
 	 * `shl $0x2` on it, which is where `sizeof(T)` is measured -- and the
 	 * body ends in a tail call to `reset(0)`.
 	 */
-	Scrambler(unsigned int a, unsigned int b, unsigned int c)
-	{
-		tailLength = b;
-		pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
-		pInitOut = pLimit + c;
-		pInitTap1 = pInitOut + a;
-		pInitTap2 = pInitOut + b;
-		reset(0);
-	}
+	Scrambler(unsigned int a, unsigned int b, unsigned int c);
 
 	/* `pLimit` is NOT nulled, so a second destruction double-frees. */
-	~Scrambler()
-	{
-		delete[] pLimit;
-	}
+	~Scrambler();
 
 	/*
 	 * Put the three running pointers back to their initial values.  This
@@ -228,21 +217,7 @@ public:
 	 * `I` in the file comment for why it is not `I` here and why nothing
 	 * can tell.
 	 */
-	T process(T in)
-	{
-		T *out = pOut;
-		T r;
-
-		r = (T)(in ^ *pTap1 ^ *pTap2);
-		pTap1--;
-		pTap2--;
-		*out = r;
-		if (--pOut < pLimit) {
-			resetHistoryIndexes();
-			copyHistoryTail();
-		}
-		return r;
-	}
+	T process(T in);
 
 	/*
 	 * `n` symbols.  The result goes to BOTH `out[i]` -- as an `I`, which
@@ -267,43 +242,9 @@ public:
 	 * not recoverable from the mangling; `I *` is chosen to agree with
 	 * `process`'s output parameter.
 	 */
-	void processAllOnes(I *out, unsigned int n)
-	{
-		unsigned int i;
+	void processAllOnes(I *out, unsigned int n);
 
-		for (i = 0; i < n; i++) {
-			T *p = pOut;
-			I r = (I)(1 ^ *pTap1 ^ *pTap2);
-
-			pTap1--;
-			pTap2--;
-			out[i] = r;
-			*p = (T)r;
-			if (--pOut < pLimit) {
-				resetHistoryIndexes();
-				copyHistoryTail();
-			}
-		}
-	}
-
-	void processAllZeros(I *out, unsigned int n)
-	{
-		unsigned int i;
-
-		for (i = 0; i < n; i++) {
-			T *p = pOut;
-			I r = (I)(*pTap1 ^ *pTap2);
-
-			pTap1--;
-			pTap2--;
-			out[i] = r;
-			*p = (T)r;
-			if (--pOut < pLimit) {
-				resetHistoryIndexes();
-				copyHistoryTail();
-			}
-		}
-	}
+	void processAllZeros(I *out, unsigned int n);
 
 	/*
 	 * Data members are public because the original's access specifiers are
@@ -356,20 +297,9 @@ template <class T, class I>
 class Descrambler {
 public:
 	/* Byte for byte the shape of `Scrambler`'s; see its comment. */
-	Descrambler(unsigned int a, unsigned int b, unsigned int c)
-	{
-		tailLength = b;
-		pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
-		pInitOut = pLimit + c;
-		pInitTap1 = pInitOut + a;
-		pInitTap2 = pInitOut + b;
-		reset(0);
-	}
+	Descrambler(unsigned int a, unsigned int b, unsigned int c);
 
-	~Descrambler()
-	{
-		delete[] pLimit;
-	}
+	~Descrambler();
 
 	/* Three word copies, as in `Scrambler`; out of line for its reason. */
 	void resetHistoryIndexes();
@@ -386,40 +316,10 @@ public:
 	void reset(T value);
 
 	/* One symbol.  Store, read back, XOR the two taps, step all three. */
-	T process(T in)
-	{
-		I r;
-
-		*pOut = in;
-		r = (I)(*pOut ^ *pTap1 ^ *pTap2);
-		pTap1--;
-		pTap2--;
-		if (--pOut < pLimit) {
-			resetHistoryIndexes();
-			copyHistoryTail();
-		}
-		return (T)r;
-	}
+	T process(T in);
 
 	/* `n` symbols, the result to `out[i]` as an `I` and nowhere else. */
-	void process(const T *in, I *out, unsigned int n)
-	{
-		unsigned int i;
-
-		for (i = 0; i < n; i++) {
-			I r;
-
-			*pOut = in[i];
-			r = (I)(*pOut ^ *pTap1 ^ *pTap2);
-			pTap1--;
-			pTap2--;
-			out[i] = r;
-			if (--pOut < pLimit) {
-				resetHistoryIndexes();
-				copyHistoryTail();
-			}
-		}
-	}
+	void process(const T *in, I *out, unsigned int n);
 
 	T *pLimit;		/* +0x00 lowest address `pOut` may reach   */
 	T *pInitOut;		/* +0x04 restart value for pOut            */
@@ -480,11 +380,10 @@ public:
  * of instructions with a missing call is an inlining difference and not a
  * missing statement.
  *
- * `Descrambler`'s bulk `process` STAYS IN THE CLASS BODY, and that is the same
- * evidence read the other way: the blob carries no
- * `Descrambler<...>::process(const ...)` symbol at all, so moving it out would
- * make us emit a weak symbol the original does not have.  The two templates
- * differ here because the object says they differ.
+ * `Descrambler`'s bulk `process` MOVES OUT TOO, and the sentence that used to
+ * stand here -- "the blob carries no `Descrambler<...>::process(const ...)`
+ * symbol at all" -- was false when it was written.  See the block at the foot
+ * of this file.
  * ---------------------------------------------------------------------------
  */
 template <class T, class I>
@@ -608,6 +507,183 @@ void Descrambler<T, I>::copyHistoryTail()
 
 	while (n--)
 		*dst++ = *src++;
+}
+
+/*
+ * ===========================================================================
+ * AND THE REMAINING `process` MEMBERS, ON THE RELOCATION COUNT AND NOTHING
+ * ELSE
+ * ===========================================================================
+ *
+ * `objdump -dr` over the blob against ours, `R_386_PC32` sites per mangled
+ * name -- 7867's screening test, which is a COUNT and not a judgement about
+ * which members "look inlineable":
+ *
+ *     _ZN9ScramblerIhiE7processEh            blob 22   ours 0
+ *     _ZN9ScramblerIhhE14processAllOnesEPhj  blob 20   ours 0
+ *     _ZN11DescramblerIiiE7processEi         blob 10   ours 0
+ *     _ZN9ScramblerIhhE7processEh            blob  9   ours 0
+ *     _ZN9ScramblerIhhE15processAllZerosEPhj blob  7   ours 0
+ *     _ZN11DescramblerIhiE7processEh         blob  5   ours 0
+ *     _ZN11DescramblerIhiE7processEPKhPij    blob  2   ours 0
+ *
+ * 7867 warns that a raw 0-against-N list cannot tell "we expand it" from "we
+ * have not written anybody who would call it", so every site was traced to
+ * the blob function containing it and intersected with what this tree
+ * defines: 63 of the 75 are in functions we have written, and the twelve
+ * that are not are all `V90Phase3Modulator`/`V92Phase3Modulator` generators
+ * still unwritten.  Not one of these names is 7867's unwritten-caller noise.
+ *
+ * `Descrambler`'s BULK `process` moves too, and the paragraph above
+ * `Scrambler`'s own bulk form used to say it must not, on the ground that the
+ * blob carries no `Descrambler<...>::process(const ...)` symbol at all.  That
+ * was WRONG and this file's own member table always contradicted it:
+ * `_ZN11DescramblerIhiE7processEPKhPij` is a real 120-byte weak symbol with
+ * two call sites in `V90Demodulator::progress`.  The claim is deleted rather
+ * than corrected in place, because it was never true.
+ *
+ * The definitions are APPENDED here rather than placed beside their siblings:
+ * 7815 measured that moving one inline definition within this family of
+ * headers cost eight destructors their byte identity, so nothing already in
+ * this file changes position.
+ */
+/*
+ * THE CONSTRUCTOR AND DESTRUCTOR ARE OUT OF LINE ON THE SAME COUNT, and both
+ * are the loudest rows the screen has:
+ *
+ *     ~Scrambler / ~Descrambler   blob 26 sites over five instantiations, ours 0
+ *     Scrambler / Descrambler     blob 16 sites over five instantiations, ours 0
+ *
+ * Every one of the 42 is inside a `V90Modulator`, `V92Modulator`,
+ * `V90Demodulator`, `V9xPhase3Modulator`, `V9xPhase4Modulator` or
+ * `V90Phase3Demodulator` constructor or destructor that this tree defines, so
+ * none of them is 7867's unwritten-caller noise.
+ */
+template <class T, class I>
+Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)
+{
+	tailLength = b;
+	pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+	pInitOut = pLimit + c;
+	pInitTap1 = pInitOut + a;
+	pInitTap2 = pInitOut + b;
+	reset(0);
+}
+
+template <class T, class I>
+Scrambler<T, I>::~Scrambler()
+{
+	delete[] pLimit;
+}
+
+template <class T, class I>
+Descrambler<T, I>::Descrambler(unsigned int a, unsigned int b, unsigned int c)
+{
+	tailLength = b;
+	pLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));
+	pInitOut = pLimit + c;
+	pInitTap1 = pInitOut + a;
+	pInitTap2 = pInitOut + b;
+	reset(0);
+}
+
+template <class T, class I>
+Descrambler<T, I>::~Descrambler()
+{
+	delete[] pLimit;
+}
+
+template <class T, class I>
+T Scrambler<T, I>::process(T in)
+{
+	T *out = pOut;
+	T r;
+
+	r = (T)(in ^ *pTap1 ^ *pTap2);
+	pTap1--;
+	pTap2--;
+	*out = r;
+	if (--pOut < pLimit) {
+		resetHistoryIndexes();
+		copyHistoryTail();
+	}
+	return r;
+}
+
+template <class T, class I>
+void Scrambler<T, I>::processAllOnes(I *out, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		T *p = pOut;
+		I r = (I)(1 ^ *pTap1 ^ *pTap2);
+
+		pTap1--;
+		pTap2--;
+		out[i] = r;
+		*p = (T)r;
+		if (--pOut < pLimit) {
+			resetHistoryIndexes();
+			copyHistoryTail();
+		}
+	}
+}
+
+template <class T, class I>
+void Scrambler<T, I>::processAllZeros(I *out, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		T *p = pOut;
+		I r = (I)(*pTap1 ^ *pTap2);
+
+		pTap1--;
+		pTap2--;
+		out[i] = r;
+		*p = (T)r;
+		if (--pOut < pLimit) {
+			resetHistoryIndexes();
+			copyHistoryTail();
+		}
+	}
+}
+
+template <class T, class I>
+T Descrambler<T, I>::process(T in)
+{
+	I r;
+
+	*pOut = in;
+	r = (I)(*pOut ^ *pTap1 ^ *pTap2);
+	pTap1--;
+	pTap2--;
+	if (--pOut < pLimit) {
+		resetHistoryIndexes();
+		copyHistoryTail();
+	}
+	return (T)r;
+}
+
+template <class T, class I>
+void Descrambler<T, I>::process(const T *in, I *out, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++) {
+		I r;
+
+		*pOut = in[i];
+		r = (I)(*pOut ^ *pTap1 ^ *pTap2);
+		pTap1--;
+		pTap2--;
+		out[i] = r;
+		if (--pOut < pLimit) {
+			resetHistoryIndexes();
+			copyHistoryTail();
+		}
+	}
 }
 
 #endif /* DSPLIB_SCRAMBLER_H */
