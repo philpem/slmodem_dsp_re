@@ -756,6 +756,10 @@
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmguard"
  ],
+ "vpcmqcline": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmqcline"
+ ],
  "vpcmrun": [
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmrun"

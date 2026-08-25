@@ -644,6 +644,21 @@ static const struct qc_trial qc_v[] = {
 	{ "level 1, 0x3a", 0x3a, 0, 100, 0, QC_STATUS, 0, 0.0f, NSAMP, 1 },
 	{ "level 1, 0x3b running over", 0x3b, 1, QC_OVER, 0, QC_STATUS, 0,
 	  0.0f, NSAMP, 1 },
+	{ "level 1, 0x3b running below", 0x3b, 1, QC_BELOW, 0, QC_STATUS, 0,
+	  0.0f, NSAMP, 1 },
+	{ "level 1, 0x3b not running", 0x3b, 0, 200, 0, QC_STATUS, 0, 0.0f,
+	  NSAMP, 1 },
+	{ "level 1, tail latched over", 0x11, 1, QC_OVER, 1, QC_STATUS, 0,
+	  0.0f, NSAMP, 1 },
+	/*
+	 * LEVEL 1 ON THE SILENCE-OVER GATE, and it is here because the
+	 * mutation set asked for it: `the silence-over report is made at level
+	 * 1 as well` was the one uncaught row of 58, because no level-1 trial
+	 * reached `qcVerifyState == 2 && qcSampleCount >= 0`.  Every gate in
+	 * this function is `> 1` and each needs its own level-1 witness.
+	 */
+	{ "level 1, silence over", 0x11, 2, -48, 0, QC_STATUS, 0, 0.0f,
+	  NSAMP, 1 },
 	{ "level 2, 0x3a", 0x3a, 0, 100, 0, QC_STATUS, 0, 0.0f, NSAMP, 2 },
 	{ "level 2, 0x3a already waiting", 0x3a, 0, 100, 0, 0x0000beefu,
 	  P3D_WAIT_FOR_ANS_PCM_DROP, 0.0f, NSAMP, 2 },

@@ -1,0 +1,308 @@
+[
+ {
+  "_": [
+   "`VPcmFloModem::qcLineVerification` (.text+0xf750) and",
+   "`vPcmResetPhase3Modem` (.text+0xf200), scored by t_vpcmqcline --",
+   "the only binary that builds a whole VPcmFloModem on both sides AND",
+   "drives these two.  Four other sets over this same source file are",
+   "scored by four other binaries; see test/mutations/suites.json.",
+   "",
+   "WHAT THIS SET CANNOT REACH, and it is the fixture's cost rather",
+   "than an omission: `V90Modem::side` is held at 2 for the",
+   "qcLineVerification trials, so `V90Modem::progress` fans out to",
+   "neither half and the four arguments it forwards reach a callee that",
+   "reads none of them.  `txbits` is dead in the object itself (finding",
+   "7604).  The head of test/unit/t_vpcmqcline.cpp has both arguments."
+  ]
+ },
+ {
+  "label": "the demodulator is not run at all",
+  "find": "\t(void)txbits;\t\t\t/* never read; see the file comment */\n\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);\n",
+  "replace": "\t(void)txbits;\t\t\t/* never read; see the file comment */\n"
+ },
+ {
+  "label": "the sample count is advanced after the dispatch rather than before",
+  "find": "\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);\n\n\tqcSampleCount += (int)n;\n\n\tswitch (modem.demodulator->word_3c) {",
+  "replace": "\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);\n\n\tswitch (modem.demodulator->word_3c) {"
+ },
+ {
+  "label": "the sample count counts down",
+  "find": "\tqcSampleCount += (int)n;",
+  "replace": "\tqcSampleCount -= (int)n;"
+ },
+ {
+  "label": "the sample count is not advanced",
+  "find": "\tqcSampleCount += (int)n;\n",
+  "replace": ""
+ },
+ {
+  "label": "the dispatch is on the phase 3 demodulator's state",
+  "find": "\tqcSampleCount += (int)n;\n\n\tswitch (modem.demodulator->word_3c) {",
+  "replace": "\tqcSampleCount += (int)n;\n\n\tswitch (modem.demodulator->phase3Demodulator->state) {"
+ },
+ {
+  "label": "the ANSpcm-demod-over code is 0x39",
+  "find": "\tcase 0x3a:\t\t\t/* 0xf8d0 */",
+  "replace": "\tcase 0x39:\t\t\t/* 0xf8d0 */"
+ },
+ {
+  "label": "the ANSpcm-drop code is 0x3c",
+  "find": "\tcase 0x3b:\t\t\t/* 0xf819 */",
+  "replace": "\tcase 0x3c:\t\t\t/* 0xf819 */"
+ },
+ {
+  "label": "the demod-over arm keeps the status it already had",
+  "find": "\t\tverificationStatus =\n\t\t    modem.demodulator->phase3Demodulator->verificationStatus;",
+  "replace": "\t\tverificationStatus = verificationStatus;"
+ },
+ {
+  "label": "the demod-over arm starts in the silence state",
+  "find": "\t\tqcVerifyState = 1;\n\t\tqcTerminateRequested = 0;\n\t\tqcSampleCount = 0;",
+  "replace": "\t\tqcVerifyState = 2;\n\t\tqcTerminateRequested = 0;\n\t\tqcSampleCount = 0;"
+ },
+ {
+  "label": "the demod-over arm starts TONEq with the termination already latched",
+  "find": "\t\tqcVerifyState = 1;\n\t\tqcTerminateRequested = 0;\n\t\tqcSampleCount = 0;",
+  "replace": "\t\tqcVerifyState = 1;\n\t\tqcTerminateRequested = 1;\n\t\tqcSampleCount = 0;"
+ },
+ {
+  "label": "the demod-over arm does not restart the sample count",
+  "find": "\t\tqcVerifyState = 1;\n\t\tqcTerminateRequested = 0;\n\t\tqcSampleCount = 0;",
+  "replace": "\t\tqcVerifyState = 1;\n\t\tqcTerminateRequested = 0;"
+ },
+ {
+  "label": "the phase 3 demodulator is not put back to WaitForANSpcmDrop",
+  "find": "\t\tmodem.demodulator->phase3Demodulator\n\t\t    ->enterWaitForANSpcmDrop();\n",
+  "replace": ""
+ },
+ {
+  "label": "the drop arm tests the silence state rather than the tone one",
+  "find": "\tcase 0x3b:\t\t\t/* 0xf819 */\n\t\tif (qcVerifyState == 1) {",
+  "replace": "\tcase 0x3b:\t\t\t/* 0xf819 */\n\t\tif (qcVerifyState == 2) {"
+ },
+ {
+  "label": "the drop arm's 50 ms test is strict",
+  "find": "\t\t\tif (qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {",
+  "replace": "\t\t\tif (qcSampleCount > QC_TONEQ_MIN_SAMPLES) {"
+ },
+ {
+  "label": "the drop arm's 50 ms test is the other way round",
+  "find": "\t\t\tif (qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {",
+  "replace": "\t\t\tif (qcSampleCount <= QC_TONEQ_MIN_SAMPLES) {"
+ },
+ {
+  "label": "the TONEq minimum is 481 samples",
+  "find": "#define QC_TONEQ_MIN_SAMPLES\t480",
+  "replace": "#define QC_TONEQ_MIN_SAMPLES\t481"
+ },
+ {
+  "label": "the silence period is 385 samples",
+  "find": "#define QC_SILENCE_SAMPLES\t384",
+  "replace": "#define QC_SILENCE_SAMPLES\t385"
+ },
+ {
+  "label": "the drop arm counts the silence period DOWN from +384",
+  "find": "\t\t\t\tqcSampleCount = -QC_SILENCE_SAMPLES;\n\t\t\t\tqcVerifyState = 2;",
+  "replace": "\t\t\t\tqcSampleCount = QC_SILENCE_SAMPLES;\n\t\t\t\tqcVerifyState = 2;"
+ },
+ {
+  "label": "the drop arm's expired half leaves the state at 1",
+  "find": "\t\t\t\tqcSampleCount = -QC_SILENCE_SAMPLES;\n\t\t\t\tqcVerifyState = 2;",
+  "replace": "\t\t\t\tqcSampleCount = -QC_SILENCE_SAMPLES;\n\t\t\t\tqcVerifyState = 1;"
+ },
+ {
+  "label": "the drop arm's early half does not latch the termination",
+  "find": "\t\t\t\tqcTerminateRequested = 1;\n\t\t\t}\n\t\t} else {",
+  "replace": "\t\t\t\tqcTerminateRequested = 0;\n\t\t\t}\n\t\t} else {"
+ },
+ {
+  "label": "the no-status half does not latch the termination",
+  "find": "\t\t\tqcSampleCount = 0;\n\t\t\tqcVerifyState = 1;\n\t\t\tqcTerminateRequested = 1;",
+  "replace": "\t\t\tqcSampleCount = 0;\n\t\t\tqcVerifyState = 1;\n\t\t\tqcTerminateRequested = 0;"
+ },
+ {
+  "label": "the no-status half does not restart the sample count",
+  "find": "\t\t\tqcSampleCount = 0;\n\t\t\tqcVerifyState = 1;\n\t\t\tqcTerminateRequested = 1;",
+  "replace": "\t\t\tqcVerifyState = 1;\n\t\t\tqcTerminateRequested = 1;"
+ },
+ {
+  "label": "the no-status half copies no verification status",
+  "find": "\t\t\tverificationStatus = modem.demodulator\n\t\t\t    ->phase3Demodulator->verificationStatus;",
+  "replace": "\t\t\tverificationStatus = 0;"
+ },
+ {
+  "label": "the tail transmits the tone in every state but 1",
+  "find": "\tif (qcVerifyState == 1) {\t/* 0xf873 */\n\t\tsineWave.generate(out, n);",
+  "replace": "\tif (qcVerifyState != 1) {\t/* 0xf873 */\n\t\tsineWave.generate(out, n);"
+ },
+ {
+  "label": "the tail transmits the tone in state 2 as well",
+  "find": "\tif (qcVerifyState == 1) {\t/* 0xf873 */\n\t\tsineWave.generate(out, n);",
+  "replace": "\tif (qcVerifyState >= 1) {\t/* 0xf873 */\n\t\tsineWave.generate(out, n);"
+ },
+ {
+  "label": "the tone is not generated",
+  "find": "\t\tsineWave.generate(out, n);\n",
+  "replace": ""
+ },
+ {
+  "label": "the tone runs one sample short",
+  "find": "\t\tsineWave.generate(out, n);",
+  "replace": "\t\tsineWave.generate(out, n > 0 ? n - 1 : 0);"
+ },
+ {
+  "label": "the termination and the 50 ms test are alternatives",
+  "find": "\t\tif (qcTerminateRequested\n\t\t    && qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {",
+  "replace": "\t\tif (qcTerminateRequested\n\t\t    || qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {"
+ },
+ {
+  "label": "the tail ends TONEq on the timer alone",
+  "find": "\t\tif (qcTerminateRequested\n\t\t    && qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {",
+  "replace": "\t\tif (qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {"
+ },
+ {
+  "label": "the tail's 50 ms test is strict",
+  "find": "\t\tif (qcTerminateRequested\n\t\t    && qcSampleCount >= QC_TONEQ_MIN_SAMPLES) {",
+  "replace": "\t\tif (qcTerminateRequested\n\t\t    && qcSampleCount > QC_TONEQ_MIN_SAMPLES) {"
+ },
+ {
+  "label": "the tail's move to silence leaves the state at 1",
+  "find": "\t\t\tqcSampleCount = -QC_SILENCE_SAMPLES;\n\t\t\tqcVerifyState = 2;\n\t\t}\n\t} else {",
+  "replace": "\t\t\tqcSampleCount = -QC_SILENCE_SAMPLES;\n\t\t}\n\t} else {"
+ },
+ {
+  "label": "the silence half leaves the buffer alone",
+  "find": "\t\tfor (i = 0; i < n; i++)\n\t\t\tout[i] = 0.0f;\n",
+  "replace": ""
+ },
+ {
+  "label": "the silence half clears one sample short",
+  "find": "\t\tfor (i = 0; i < n; i++)\n\t\t\tout[i] = 0.0f;",
+  "replace": "\t\tfor (i = 0; i + 1 < n; i++)\n\t\t\tout[i] = 0.0f;"
+ },
+ {
+  "label": "the period ends out of any state, not only out of 2",
+  "find": "\t\tif (qcVerifyState == 2 && qcSampleCount >= 0) {",
+  "replace": "\t\tif (qcSampleCount >= 0) {"
+ },
+ {
+  "label": "the period ends only after the silence count has gone positive",
+  "find": "\t\tif (qcVerifyState == 2 && qcSampleCount >= 0) {",
+  "replace": "\t\tif (qcVerifyState == 2 && qcSampleCount > 0) {"
+ },
+ {
+  "label": "the period never reports itself over",
+  "find": "\t\t\tret = 1;\n\t\t}\n\t}\n\n\t*nrx = 0;",
+  "replace": "\t\t\tret = 0;\n\t\t}\n\t}\n\n\t*nrx = 0;"
+ },
+ {
+  "label": "the received bit count is left as the demodulator set it",
+  "find": "\t*nrx = 0;\t\t\t/* 0xf7f9 */",
+  "replace": ""
+ },
+ {
+  "label": "the transmit bit count is left alone",
+  "find": "\t*nbits = 0;\t\t\t/* 0xf7ff */",
+  "replace": ""
+ },
+ {
+  "label": "the two output counts are zeroed through the same pointer",
+  "find": "\t*nrx = 0;\t\t\t/* 0xf7f9 */\n\t*nbits = 0;\t\t\t/* 0xf7ff */",
+  "replace": "\t*nrx = 0;\t\t\t/* 0xf7f9 */\n\t*nrx = 0;\t\t\t/* 0xf7ff */"
+ },
+ {
+  "label": "the ANSpcm-demod-over report is made at level 1 as well",
+  "find": "\tcase 0x3a:\t\t\t/* 0xf8d0 */\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tcase 0x3a:\t\t\t/* 0xf8d0 */\n\t\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "the silence-over report is made at level 1 as well",
+  "find": "\t\tif (qcVerifyState == 2 && qcSampleCount >= 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (qcVerifyState == 2 && qcSampleCount >= 0) {\n\t\t\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "the sweep counter is not restarted",
+  "find": "\tsweepCounter = 0;\t\t\t/* +0x1740 */\n",
+  "replace": ""
+ },
+ {
+  "label": "the V.90 parameter block is not reinitialised",
+  "find": "\tsweepCounter = 0;\t\t\t/* +0x1740 */\n\n\tmodem.ptr_49b4->init();\n",
+  "replace": "\tsweepCounter = 0;\t\t\t/* +0x1740 */\n"
+ },
+ {
+  "label": "the session flag is set to zero rather than to the session type",
+  "find": "\tmodem.setSessionFlag((unsigned int)pcmSessionType);",
+  "replace": "\tmodem.setSessionFlag(0);"
+ },
+ {
+  "label": "the modem is reset WITH the session type as its quick-connect flag",
+  "find": "\tmodem.reset(0);",
+  "replace": "\tmodem.reset((unsigned int)pcmSessionType);"
+ },
+ {
+  "label": "the modem is reset with quick connect on",
+  "find": "\tmodem.reset(0);",
+  "replace": "\tmodem.reset(1);"
+ },
+ {
+  "label": "the modem is not reset",
+  "find": "\tmodem.reset(0);\n",
+  "replace": ""
+ },
+ {
+  "label": "the session flag is set after the reset rather than before",
+  "find": "\tmodem.setSessionFlag((unsigned int)pcmSessionType);\n\tmodem.reset(0);",
+  "replace": "\tmodem.reset(0);\n\tmodem.setSessionFlag((unsigned int)pcmSessionType);"
+ },
+ {
+  "label": "the V.92 modem is not reset",
+  "find": "\tv92modem.reset();\n",
+  "replace": ""
+ },
+ {
+  "label": "the echo canceller is not reset",
+  "find": "\techoCanceller.reset();\n",
+  "replace": ""
+ },
+ {
+  "label": "word_7f64 is not cleared",
+  "find": "\tword_7f64 = 0;\n\tword_7f60 = 0;",
+  "replace": "\tword_7f60 = 0;"
+ },
+ {
+  "label": "word_7f60 is not cleared",
+  "find": "\tword_7f64 = 0;\n\tword_7f60 = 0;",
+  "replace": "\tword_7f64 = 0;"
+ },
+ {
+  "label": "the phase-2 bit is withdrawn instead of the retrain one",
+  "find": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_PHASE2;"
+ },
+ {
+  "label": "the whole flag byte is cleared rather than one bit of it",
+  "find": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\tmodem.ptr_49b4->modemParams->unnamed_0003 = 0;"
+ },
+ {
+  "label": "the retrain is asked for rather than withdrawn",
+  "find": "\tmodem.ptr_49b4->modemParams->unnamed_0003 &=\n\t    (unsigned char)~CFG_FLAG3_RETRAIN;",
+  "replace": "\tmodem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;"
+ },
+ {
+  "label": "the oscillator is not restarted",
+  "find": "\tsineWave.phase = 0.0f;\n",
+  "replace": ""
+ },
+ {
+  "label": "the dispatch byte is left where it was",
+  "find": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 1;",
+  "replace": "\tsineWave.phase = 0.0f;"
+ },
+ {
+  "label": "the dispatch byte is set to 0 rather than 1",
+  "find": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 1;",
+  "replace": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 0;"
+ }
+]
