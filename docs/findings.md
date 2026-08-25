@@ -87496,3 +87496,73 @@ reported a real one-instruction extra as "padding only".  `instrcount.py`
 counts over the symbol's `nm` extent rather than over `objdump
 --disassemble=`, and that is the difference.  **Use `instrcount.py` for this
 question; do not re-derive it beside it.**
+
+======================================================================
+### 7825. `V90SpectralShaper::reset`: A SUB-OBJECT NAMED ONCE, AND THE BASE REGISTER THAT SAYS SO
+
+`_ZN17V90SpectralShaper5resetEjjffff`, 200 bytes, was **BYTES 15** and is now
+**EXACT**.  Tree-wide grade 0 **509 -> 510**.
+
+**FIFTEEN DIFFERING BYTES IN ONE CONTIGUOUS RUN, +0x7c..+0x8a**, over six
+instructions, and the whole of it is one thing:
+
+    blob   mov 0x8(%esi),%edx ;  mov %edx,0x20(%ebx)
+    ours   mov 0x8(%esi),%edx ;  ... ;  mov %edx,0x68(%esi)
+
+`ssf` -- the embedded `V90SpectralShapingFilter` -- is at **+0x48**, and
+0x48 + 0x20 = 0x68.  **The two instructions store the same address.**  The blob
+reaches it through `%ebx`, which is still holding `&ssf` from the
+`setFilterCoeff` call two instructions earlier; we recomputed the address off
+`this`.
+
+**THIS IS THE CASE `--why` DESCRIBES ACCURATELY AND MISLEADINGLY AT ONCE.**  It
+reported `row 36 NON-REGISTER OPERAND  0x8(%esi),%edx | (%esi),%ecx`, which
+reads as a different FIELD being loaded.  No field differs; the run is a base
+register and the schedule that follows from it.  A differing displacement is
+only evidence about a field once you have checked what the base holds.
+
+**IT IS ALSO NOT STATEMENT ORDER, AND THAT WAS ALREADY MEASURED.**  Our source
+had `ssf.blockLength = blockLength;` immediately after the two `ssf` calls,
+which is exactly where the blob emits it -- our source was ALREADY in the
+object's emission order for this store -- and lever 1's 10-cell order domain on
+this function had reached no preimage (recorded in the playbook's rule 0).
+Both of those are consistent and both are true; the free variable was somewhere
+neither looked.
+
+**ENUMERATED, 6 SPELLINGS OF HOW THE SOURCE NAMES THE SUB-OBJECT, and the
+domain collapses to TWO distinct emissions:**
+
+    ssf. on all three uses                      BYTES 15
+    resetSSFilter() then ssf.blockLength        BYTES 15
+    (&ssf)->blockLength, ssf. elsewhere         BYTES 15
+    a local POINTER held across all three       EXACT
+    a local REFERENCE held across all three     EXACT
+    resetSSFilter() then a local pointer        EXACT
+
+**THREE PREIMAGES, so a FACT and not a source form** (rule 0): the sub-object
+is named ONCE and the name is held live across all three uses.  The pointer and
+the reference are indistinguishable to GCC 3.4.2, so the file records the fact
+and does not claim to know which the author typed.
+
+**THE NEGATIVE IS THE SHARP HALF, AND IT IS WHAT MAKES THIS A FACT RATHER THAN
+A SHIM.**  Spelling only the STORE through a pointer -- `(&ssf)->blockLength` --
+changes NOTHING; it is still BYTES 15.  What earns the register is the name
+being live ACROSS the two calls.  A pointer materialised at the store alone is
+folded straight back into `this`, so this cannot be described as "adding a
+pointer until the bytes matched": all six cells were compiled, three are the
+shape that works, and the one that isolates the store is the control that says
+why.
+
+**AND IT IS LEVER 9 IN ANOTHER COSTUME.**  Lever 9's fix for an operand order
+is "read the member into a local first", because `tree_swap_operands_p` asks
+whether each operand is a `DECL_P`.  The construct here is the same one and the
+mechanism is a different pass -- naming the sub-object once gives the allocator
+a single value to keep in a register across two calls.  A local variable is an
+ordinary source construct, so this is not the `volatile`/cast class CLAUDE.md
+forbids; the test is that the enumeration contains a matching cell AND a
+non-matching one that differs only in how long the name lives.
+
+**Worth trying elsewhere.**  Any function that touches an embedded sub-object
+three or more times around a call to one of its members is a candidate, and the
+tell in the object is a store whose base register is neither `this` nor freshly
+computed.
