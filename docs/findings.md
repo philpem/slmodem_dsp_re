@@ -90145,3 +90145,333 @@ The scan is `ae6_buckets.py`'s shape and it is worth rebuilding rather than
 trusting this list: it took `byteident.insns` and `byteident._padding` for its
 input, so it measures what the grading tool measures, and it should be pointed
 at any `--near` worklist before that worklist is believed.
+### F8000. DELTA 0 IS A SUM, NOT AN INVENTORY: 20 of 47 `+0` SYMBOLS HAVE DIFFERENT INSTRUCTION FORMS THAT CANCEL
+
+This pass took `byteident.py --near`'s delta-0 head as its worklist -- 47
+symbols under `src/dsp/`, `src/pump/v34/`, `src/v8/`, `src/callprog/` and
+`src/core/` -- briefed that "the same instruction count as the blob" means
+"nothing is missing and nothing is extra, so lever 2 provably does not apply".
+**That reading is wrong and the denominator says how wrong.**
+
+Bucket each side by instruction FORM before trusting the total.  Over the 47:
+
+    OPERANDS     24   mnemonic multiset EQUAL, texts differ -- registers,
+                      displacements, immediates
+    CODE         20   mnemonic multiset DIFFERS while the total is zero
+    PERMUTATION   3   instruction texts EQUAL as a multiset, order differs
+
+**Only 3 of 47 are what delta 0 sounds like.**  The 20 CODE rows are lever 2
+applying and cancelling with itself, and their per-mnemonic deltas are where
+the actual defects are.  `_ZN9ScramblerIihE7processEPKiPhj` reads
+`addl-1 dec-2 inc+1 jb+2 je-1 jmp+1 jne-1 mov-1 movzbl+1 xor+1` -- ten non-zero
+terms summing to exactly zero -- and it is the symbol this pass took to EXACT
+(F8002).  It closed by DISBELIEVING the framing.
+
+The census is a three-way classification and it is worth rebuilding rather
+than inheriting: strip padding with `byteident._padding` AND the two-byte
+self-move (F7881), then compare `Counter(instruction text)`, then
+`Counter(mnemonic)`.  Where the sub-counts also agree, delta 0 really does mean
+operand order, statement order, emission order or width -- but that is 27 of
+47 and not all of them.
+
+The sibling working `V90Parameters::setToDefault` reached the same result from
+one symbol: 695 against 695 was x87 -18, integer stores +19, clamping -1, and
+the cause was six fields typed `int` that are `float`.  Two independent
+measurements, so this is the class's property and not one symbol's.
+
+**Where the framing DID pay:** on a SIZE symbol it converts an apparently
+structural difference into an arithmetic one, which is how the `Scrambler` bulk
+loops got looked at at all.  On a BYTES symbol it is close to redundant with
+the bucket already printed.
+
+### F8001. `Scrambler`/`Descrambler`: THE WHOLE IN-CLASS REMAINDER WAS INLINED AT 117 SITES THE BLOB CALLS
+
+F7867 left a screening test -- for every member defined inside a class body,
+compare `grep -c R_386_PC32.*<mangled>` between the blob and ours -- and its own
+closing paragraph named this family as unmeasured.  Run over it, eleven rows
+come back blob N against ours ZERO:
+
+    _ZN9ScramblerIhiE7processEh             22    _ZN9ScramblerIhhED1Ev          8
+    _ZN9ScramblerIhhE14processAllOnesEPhj   20    _ZN9ScramblerIhhE15processAllZeros 7
+    _ZN11DescramblerIiiE7processEi          10    _ZN11DescramblerIhiE7processEh 5
+    _ZN9ScramblerIhhE7processEh              9    C1 over five = 16, D1 over five = 26
+
+117 call sites in total.  F7867's noise warning was checked rather than
+quoted: every site was traced to the blob function containing it and
+intersected with what this tree defines, and **107 of 117 are in functions we
+have written** -- `V9xPhase3Modulator::generate*`, `V9xPhase4Modulator::
+generate*`, `V90Phase3Demodulator::getV9xDecision`, `V90Demodulator::progress`
+and the six enclosing constructor/destructor pairs.  The TEN that are not are
+still-unwritten generators: seven `V9xPhase3Modulator::generate*` for
+`process(h)`, and `V90Phase4Modulator`'s `generateB1d`, `generateTRN2d` and
+`generateEd` for the two constant-input forms.
+
+**The first trace of this was SHORT and the correction belongs in the record.**
+The tracing regex was `E(7process|C1|D1)`, which does not match
+`14processAllOnesEPhj` or `15processAllZerosEPhj`, so 27 of the 117 sites were
+never traced at all and the finding first claimed "105 of 117" and "twelve
+unwritten" from a 90-site sample.  The 117 itself was right -- it is the
+relocation SCREEN, which matches on the mangled name and had no such hole.
+This is F6100 and F6103's defect exactly: a count in a comment with no gate
+behind it, and the way to catch it is to make the tool print its denominator
+and then add the columns up.
+
+Moved out ALL AT ONCE -- F7866 measured that the HALF move made four `process`
+bodies worse while no bucket moved -- and APPENDED at the foot of the header so
+nothing already in it changes position, which is F7815's cost.
+
+    EXACT     534 -> 544      REGALLOC  35 -> 36
+    BYTES      66 ->  80      SIZE     608 -> 583      grade 0-or-1 574 -> 585
+
+**Ten gained, nothing lost, and every one is a BYSTANDER in `src/pump/v90/`**
+that the header reached -- a tree this pass was fenced out of and did not
+touch: `V92Phase4Modulator`'s `generateRm`, `generateB1u` and `generateTRN2u`,
+`V90Phase3Modulator`'s C1/D1/D2 and `V92Phase3Modulator`'s C1/C2/D1/D2.  The
+twelve delta-0 symbols the pass was aimed at did not move by one byte.
+
+The SIZE-to-SIZE diagonal was watched with a full per-symbol dump of verdict,
+both byte counts and differing-byte count (F7880's rule, since a bucket diff
+cannot see it).  Twelve callers came much closer -- `V90Phase4Modulator::
+generateV92Symbol` 436 differing bytes to 3, `V92Phase4Modulator::
+generateSymbol` 861 to 47, `V90Demodulator::progress` 1971 to 466 -- and two
+moved the other way: `V90Phase3Demodulator::getV90Decision` from a 12-byte size
+gap to 198 and `getV92Decision` from 129 to 393.  Both are 8 KB functions;
+`instrcount.py` reads them -31 and -104 after the move, so the calls are now
+the blob's and the residual is a reconstruction gap under them.
+
+**One claim in the header was FALSE and is deleted rather than softened.**
+`Descrambler`'s bulk `process` was said to have no blob symbol at all;
+`_ZN11DescramblerIhiE7processEPKhPij` is a 120-byte weak symbol with two call
+sites in `V90Demodulator::progress`, and the file's own member table said so
+the whole time.
+
+23 mutation anchors moved with the de-indent and were re-anchored
+mechanically, each checked to match exactly once before anything was written.
+
+### F8002. THE BULK `process` LOOPS ARE `while (n--)` WITH BOTH POINTERS WALKING -- F7861's FACT, IN THE LOOP NOBODY APPLIED IT TO
+
+F7861 read `copyHistoryTail`'s `dec %edx; cmp $0xffffffff,%edx; jne` as
+`while (n--)` with the loop rotated so entry lands on the test, and closed five
+symbols on it.  **Every bulk member has the same entry sequence** and nobody
+looked: `dec %edi; cmp $0xffffffff,%edi; je` against our `cmp %ebp,%edi; jb`
+off an index.  The object also WALKS both pointers -- `xor (%eax),%dl` beside
+`incl 0x24(%esp)` for the input, `mov %dl,0x0(%ebp); inc %ebp` for the output.
+
+`in++` IS ITS OWN STATEMENT AND SITS AFTER BOTH TAP STORES.  The blob spends
+
+    dec %eax / mov %eax,0x18(%esi) / mov %ecx,0x14(%esi) /
+    incl 0x24(%esp) / mov %dl,0x0(%ebp)
+
+**Twenty-two cells over three rounds, six distinct emissions**: the loop shape
+(`while (n--)`, `for (i = 0; i < n; i++)`, `for (; n; n--)`) crossed with the
+input spelling (`*in++` inside the XOR, `*in` with `in++` at each of five
+positions, `in[0]`) and the output spelling (`*out++ = r` against
+`*out = r; out++;`).  Only position 2 emits the object's order, so the position
+has a UNIQUE PREIMAGE; `*out++ = r` and the split form emit the SAME BYTES, so
+that spelling is not observable and what is decoded is the position.
+
+`Descrambler`'s bulk loop is a different body -- it stores the input and reads
+it back -- and wants the input walked INSIDE the store, `*pOut = *in++`, which
+its own five separate-statement positions all lose to: 25 differing bytes
+against 66, 66, 70 and 72.  The two templates differ here because the object
+says they differ, exactly as they do over `process`'s in-class status.
+
+    EXACT  544 -> 545     REGALLOC 36 -> 37     grade 0-or-1 585 -> 587
+
+All five bulk symbols reach the blob's EXACT SIZE, from four different ones:
+
+    Scrambler<i,h>::process(bulk)   131 -> 136 = blob    EXACT
+    Scrambler<h,h>::process(bulk)   115 -> 120 = blob    8 differing
+    processAllOnes                  115 -> 120 = blob    8 differing
+    processAllZeros                 106 -> 120 = blob    8 differing
+    Descrambler<h,i>::process(bulk) 131 -> 120 = blob   25 differing
+
+Nothing else in the tree moved.  Seven mutation anchors were re-anchored onto
+the new bodies and re-checked; suite 36 mutations, 33 caught, 0 NOT caught,
+0 unusable, 3 equivalent, unchanged either side.
+
+### F8003. LEVER 3 IS RETIRED FOR THE WHOLE DSP/V.34/SERVICE SPAN BY A ONE-LINE SCREEN, AND THE SCREEN IS CHEAPER THAN AN ENUMERATION
+
+`refinement.md`'s "what does not work" already says a file whose functions
+never store a constant into a field past `+0x7f` has no scratch to reallocate.
+It has never been run as a FILTER.  Run over the 22 translation units holding
+this pass's worklist, counting `mov $imm,disp(%reg)` with `disp > 0x7f` in OUR
+objects:
+
+    21 of 22 have ZERO.  Only src/pump/v34/v34shell.c has one (1 against 3).
+
+So `peephole2`'s `peep2_find_free_register` never fires in any of them, the
+round-robin cursor F7812 identified never advances, and **definition order
+cannot pay anywhere under `src/dsp/`, `src/pump/v34/`, `src/v8/`,
+`src/callprog/` or `src/core/`** however far out of the blob's order a file
+sits.  That is a negative result over a whole span for the cost of one
+`objdump` pass, and it retires the lever that F7796 and F7801 made the most
+productive one in the playbook.
+
+**It was confirmed against an enumeration before being believed.**
+`GenericToneDetector.cpp` is 4 of 7 in the blob's `nm -n` order with NO gaps
+(span 7/7) -- textbook lever 3a -- and its blob order is readable: D2, D1,
+process(f), process(Pfj), reset, C1, C2 against our C, reset, p(f), p(Pf), D.
+Four block permutations including the blob's own gave **four distinct object
+emissions and not one symbol's verdict or byte count moved**.  F9a's ruling
+applies: the order is achievable, it pays nothing, record it and do not keep
+the diff.
+
+The screen reads OUR objects, not the blob's, and that is the right side: the
+cursor threading is a property of our compilation.
+
+Order against the blob, for the next pass, so nobody re-derives it:
+
+    EXACT order   FloatFIR.cpp 8/8, v34filters.c 26/26, DspMath.cpp 11/11,
+                  toneiir.c 8/8, dp_param.c 3/3, fpm_ecc.c 3/3, v8dp.c 4/4,
+                  Queue.cpp 6/6, SineWave.cpp 3/3, v34scram.c 4/4
+    OUT of order  FloatIIR.cpp 11/12, GenericToneDetector.cpp 4/7,
+                  v34rx.c 10/27, v34hshak.c 11/21, v34shell.c 7/12,
+                  v8util.c 7/14, v8sig.c 7/15, and four fpm_*.c
+                  -- all screened out above except v34shell.c
+
+### F8004. `v8_crc`'s ONE BYTE IS NOT THE `msb` SPELLING: 21 CELLS, 5 EMISSIONS, NO PREIMAGE
+
+The blob loads the CRC zero-extended and then re-signs the LOW 16 BITS:
+
+    blob   movzwl 0x1e(%ecx),%eax / movswl %ax,%edx / shr $0x1f,%edx
+    ours   movzwl 0x1e(%ecx),%eax / mov    %eax,%edx / shr $0xf,%edx
+
+which reads as textbook lever 8 -- a 32-bit local gives GCC the range from its
+own zero-extending load and it folds `(short)x < 0` to `x >> 15`, where a
+16-bit local has no such range and the cast is a real reinterpretation.
+
+**It is a measured NO.**  Twenty-one cells over two rounds, five distinct
+emissions: `{unsigned int, int, unsigned short, short}` locals crossed with
+`(int)(short)crc < 0 ? 1 : 0`, `(short)crc < 0`, `crc & 0x8000`, `crc >> 15`,
+`hs->crc < 0`, a `short` temporary, a declaration split from its assignment,
+and the whole two-local family (`unsigned short c` for the sign beside a
+separate 32-bit accumulator, seven ways).  **The entire two-local round gives
+ONE emission** -- a constant map.
+
+`short crc` alone reproduces the blob's 41 bytes and buys a `cwtl` the blob
+does not have; `unsigned short` costs 43.  The function is a leaf and calls
+nothing, so F7940's callee-set caveat does not apply and the boundary is right.
+Whatever the byte is, it is not this.
+
+### F8005. THE OVERLAY HARNESS FOUND THE REAL HEADER: ELEVEN CELLS, ONE EMISSION, AND THE ONLY THING THAT CAUGHT IT WAS F9a's RULE
+
+`-I/ovl/cN` ahead of `-Iinclude` is F7861's shape and it is HALF of it.  A
+header lives at `include/dsplib/X.h` and is included as `"dsplib/X.h"`, so
+`-I/ovl/cN` looks for `/ovl/cN/dsplib/X.h`, misses, and every cell silently
+compiles the REAL header.  Eleven cells, one distinct object hash, and that
+hash equal to the committed object's.
+
+Nothing failed.  The baseline check passed -- the baseline cell HAS no files,
+so it cannot detect this.  The verdict table was internally consistent.  What
+caught it was F9a's rule that an enumeration whose cells never differ from each
+other is indistinguishable from a broken generator: one hash over eleven cells
+is that, read as a signal instead of a null.  **Print the distinct-emission
+count on every enumeration and refuse to read a null without it.**  The fix is
+`-I/ovl/cN/include -I/ovl/cN`, both roots.
+
+A second generator bug in the same session, for the same reason worth naming:
+`ONES.replace('1 ^ ', '')` to turn `processAllOnes` into `processAllZeros`
+also ate the `1 ^ ` inside `*pTap1 ^ *pTap2`, giving `(I)(*pTap*pTap2)`.  That
+one failed loudly, six cells at once, and cost one round trip.  The silent one
+cost nothing only because the count was printed.
+
+### F8006. `biquad_filter`'s HISTORY LOCALS ARE `unsigned short`, DECODED AND STILL OPEN
+
+Four sites in `src/v8/v8sig.c` load the two biquad history heads and store the
+result straight back into a 16-bit field, so the extension is F614's dead one.
+The blob loads all four `movzwl`; we loaded all four `movswl`.
+
+Lever 8's measured rule is that a dead extension follows the DECLARED TYPE OF
+THE LOCAL being loaded into.  Ten cells -- `{short, unsigned short, int,
+unsigned int}` crossed with `x0, y0`, `y0, x0` and one declaration each -- give
+**two distinct emissions, and `unsigned short` is the only one of the four
+types that emits the object's encoding.**  Unique preimage on the type.  It is
+value-preserving: both are read from `short` fields and stored straight back to
+`short` fields, so every store truncates.
+
+**It closes nothing and is committed anyway**, which is F7803's precedent: 222
+bytes against the blob's 224 either way, `nd` 2 either way, and no symbol
+anywhere in the tree moves by a byte -- `movzwl` and `movswl` are the same
+encoding length, so the whole-tree dump is identical across the change.  What
+is left is one `lea (%eax,%ebx,1),%ebx` where we emit `add %eax,%ebx`, now the
+whole of the difference and legible because the extension is no longer in
+front of it.
+
+### F8007. THE UNWORKED DELTA-0 CANDIDATES, WITH THEIR PER-MNEMONIC DELTAS
+
+F8000's census left these named rather than derived again.  All are `ours minus
+blob` on the mnemonic multiset, padding and self-moves stripped.
+
+**Lever 8, and `datapumpv34` is the biggest signedness surface in the span:**
+
+    datapumpv34       movswl+16 movzwl-9  (plus setl+2 setg+1 test+3 je+3)
+    FPM_PPS_filter    movswl+6 movzbl-1   (plus mov-7 dec-4 neg-2 setl-2)
+    initV34           movswl+1 movzwl-4 movw-2 (plus inc+5 pop+4 xor+3)
+    descrambleGPA     movswl-1 shr-1 shrl+1
+    V34nlencoder      cwtl+1 movswl-1
+    biquad_filter     CLOSED as far as the extension goes, see F8006
+
+**Lever 12, spill width:** `_Z8blackmanIfEvPT_j` spends `fldt+2 fstpt+2` --
+80-bit spills -- against a blob that has none, with `sub $0x14,%esp` against
+the blob's `sub $0x4,%esp`, and the blob holds six more `fxch`.  So the object
+keeps the loop's constants on the x87 stack for the whole loop and we run out
+of registers and spill.  `refinement.md` lever 11 records `hamming<float>` as
+SPENT and a CONSTANT MAP over 18 spellings; `blackman<float>` is its sibling
+and has NOT been enumerated.  Read F8000 first: its total is `+0` and its
+sub-counts are not.
+
+**Loop shape, the same fact as F8002 and not yet exhausted:**
+`Scrambler<h,h>::process(bulk)` still reads `dec-2 inc+1 jb+2 jne-1` after
+F8002 closed its size; its residual 8 bytes are a register rename plus that.
+
+**Scheduling, and no lever addresses it:** `FPM_SRE_init` and `FPM_FSE_init`
+are PERMUTATION -- identical instruction texts as a multiset -- and their
+source order is ALREADY the blob's emission order, which `refinement.md` calls
+the answer sheet.  `FPM_FSE_init`'s eighteen field stores come out of our
+source in exactly the blob's order and GCC permutes ours; the preimage domain
+is 18! and nothing smaller was found.  `_ZN8SineWaveIffEC1Effff` is the same
+shape at 10 instructions: the blob runs its loads one ahead of its stores and
+we pair them, 24 of 32 bytes differing with the multiset identical.
+
+**Declined on F7864's grounds and not re-opened:** `DiffCoder.cpp`'s three
+(COMDAT at address 0, no order exists, and we emit four `C2Ej`/`D2Ev` bodies
+the original never did), `dp_v8_init`/`dp_v8_exit` (bounded by a
+translation-unit boundary this reconstruction chose), `V34EqualizerCleanUp`.
+
+### F8008. `Scrambler.cpp`'s COMDAT SECTION ORDER IS READABLE IN THE BLOB, AND OURS ALREADY MATCHES IT
+
+F7864 says a COMDAT weak is "in its own `.gnu.linkonce.t.*` at address 0, so
+`nm -n` gives a tie-break and not an emission order".  True of `nm`; **not
+true of the SECTION HEADER TABLE.**  `readelf -SW` over the blob lists the
+`.gnu.linkonce.t._ZN9Scrambler*` / `_ZN11Descrambler*` sections in emission
+order, and it is highly structured -- five contiguous per-instantiation blocks,
+each
+
+    D1, resetHistoryIndexes, reset, C1, copyHistoryTail, process*
+
+with `Descrambler<h,i>::process(h)` and `Scrambler<h,h>::process(bulk)`
+trailing at the very end, which is where a partial link puts the members a
+later object file was the first to emit.
+
+Ours is `D2, D1, resetHistoryIndexes, reset, C1, C2, copyHistoryTail,
+process*` -- **the blob's order exactly, plus the clone bodies the blob does
+not have.**  The blob carries no `C2Ejjj` and no `D2Ev` for any of the five
+instantiations, which is what implicit instantiation from use produces and what
+an explicit `template X<T>::X(...);` directive does not: it emits both clones.
+That is F7864's `DiffCoder.cpp` observation, in a second family.
+
+Emission follows the DIRECTIVE order in `Scrambler.cpp`, modulo GCC's cgraph
+putting callees first.  Seven cells over the directive order (current groups
+against the blob's group order, crossed with ctor/dtor present, absent, or
+last) gave six distinct emissions; moving C1/D1 last gains
+`Scrambler<h,h>::C1` and the blob's group order LOSES it, going 2 differing
+bytes to 10.  **Both are declined**: our order already IS the blob's, so a
+permutation away from it to gain one symbol is F7782's hill-climbing, and
+dropping the directives makes C1/D1 absent from this translation unit
+altogether.
+
+Recorded because the section-order reading is a general instrument -- any
+COMDAT-heavy translation unit can be checked against the blob this way -- and
+because the C2/D2 surplus is now confirmed in two template families rather
+than one.

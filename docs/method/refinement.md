@@ -261,6 +261,27 @@ does not even cancel. **`instrcount.py` is the authority for the count and
 Fixing `_padding` would move grade 1 as well as the message, so it has not been
 done inside a refinement pass.
 
+**AND A DELTA OF ZERO IS A SUM, NOT AN INVENTORY -- IT LICENSES "THE ABSENCES
+AND THE EXTRAS CANCEL" AND NOT "NOTHING IS MISSING" (F8000).** `--near`'s
+delta-0 head reads as "same instruction count, so only the encoding differs",
+and over a 47-symbol worklist that was true of **three**. Bucket each side by
+instruction FORM before trusting the total:
+
+    OPERANDS     24   mnemonic multiset EQUAL, texts differ
+    CODE         20   mnemonic multiset DIFFERS while the total is zero
+    PERMUTATION   3   texts equal as a multiset, order differs
+
+`Scrambler<i,h>::process(bulk)` is `addl-1 dec-2 inc+1 jb+2 je-1 jmp+1 jne-1
+mov-1 movzbl+1 xor+1` -- ten non-zero terms summing to zero -- and closing it
+meant disbelieving the framing. `V90Parameters::setToDefault` is the same shape
+independently: 695 against 695 was x87 -18, integer +19, clamping -1, and the
+cause was six fields typed `int` that are `float`. So run the three-way census
+(`Counter(text)`, then `Counter(mnemonic)`, padding AND self-moves stripped)
+and read the per-mnemonic deltas; `movswl` against `movzwl` in unequal numbers
+is lever 8 hiding inside a `+0` row. The framing pays on a SIZE symbol, where
+it turns an apparently structural difference into an arithmetic one; on a BYTES
+symbol it is close to redundant with the bucket you already have.
+
 **A SECOND OBSERVABLE, INDEPENDENT OF THE BYTE GRADE:** the order of `.rodata`
 strings a function references. It agrees or disagrees without reference to any
 instruction, so it corroborates a statement-order decoding that the byte grade
@@ -1040,6 +1061,17 @@ symbol** — so the symbol table looks right and every call site is wrong.
 Count `R_386_PC32` sites against the blob's for the template member; ours had
 zero against nineteen.
 
+**RUN OVER A WHOLE FAMILY IT IS STILL THE BEST-PAYING LEVER HERE (F8001).**
+`Scrambler`/`Descrambler`'s remaining in-class members -- both `process`
+overloads, `processAllOnes`, `processAllZeros` and every constructor and
+destructor -- screened blob 117 against ours 0, and 105 of the 117 sites were
+traced to functions this tree defines rather than left as 7867's
+unwritten-caller noise. Moving all of it at once gained **10 EXACT with nothing
+lost**, every one a bystander in a directory the pass never edited. Two rules
+came with it: move the whole family, because 7866's half-move made four bodies
+worse invisibly; and APPEND the definitions at the foot of the header, because
+7815 is the cost of moving anything already in it.
+
 **IT IS LIVE, AND THE SCREENING TEST IS A RELOCATION COUNT (7867).** 7831's
 measured NO above is real and is about how the lever was REACHED: that pass
 chose it from a brief and went looking for somewhere it might apply. Read the
@@ -1195,6 +1227,20 @@ to encode -- applied to an induction variable.
   drawn from it, so reorder a whole file's leaf block or nothing. Lever 3b says
   which files can pay: a file whose functions never store a constant into a
   field past +0x7f has no scratch to reallocate.
+
+  **RUN THAT AS A FILTER BEFORE PERMUTING ANYTHING -- it is one `objdump` pass
+  and it retires whole directories (F8003).** Count `mov $imm,disp(%reg)` with
+  `disp > 0x7f` in OUR object, per translation unit. Over the 22 files holding
+  one pass's `src/dsp/`, `src/pump/v34/`, `src/v8/`, `src/callprog/` and
+  `src/core/` worklist, **21 of 22 came back ZERO** -- `peep2_find_free_register`
+  never fires, the cursor never advances, and definition order cannot pay
+  anywhere in that span however far out of the blob's order a file sits. It was
+  checked against a real enumeration before being believed:
+  `GenericToneDetector.cpp` is 4 of 7 in the blob's order with no gaps, and four
+  block permutations including the blob's own gave four distinct object
+  emissions with **not one symbol's verdict or byte count moving** -- 9a's null,
+  predicted in advance by the screen. The screen reads OUR objects, which is the
+  right side: the threading is a property of our compilation.
 - **Getting closer.** See lever 1's stopping rule.
 - **`__attribute__((noinline))`, `volatile`, or a cast added to make the output
   match.** Fitting the compiler. Three such shims were found and removed once

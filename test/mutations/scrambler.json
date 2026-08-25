@@ -10,68 +10,68 @@
   },
   {
     "label": "ctor: tailLength is the near tap, not the far one",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = a;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = a;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);"
   },
   {
     "label": "ctor: the buffer is one element longer than 1 + b + c",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((2 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((2 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);"
   },
   {
     "label": "ctor: the allocation is not scaled by sizeof(T) alone",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * (sizeof(T) + 1));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * (sizeof(T) + 1));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);"
   },
   {
     "label": "ctor: pInitOut sits b above pLimit, not c",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + b;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + b;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);"
   },
   {
     "label": "ctor: pInitTap1 takes the far distance",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + b;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + b;\n\tpInitTap2 = pInitOut + b;\n\treset(0);"
   },
   {
     "label": "ctor: pInitTap2 takes the near distance",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + a;\n\t\treset(0);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + a;\n\treset(0);"
   },
   {
     "label": "ctor: the history is seeded with ones, not zeros",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(1);"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(1);"
   },
   {
     "label": "ctor: reset is not called, only the cursors are placed",
-    "find": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tScrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\tresetHistoryIndexes();"
+    "find": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Scrambler<T, I>::Scrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\tresetHistoryIndexes();"
   },
   {
     "label": "dtor: frees nothing",
-    "find": "\t~Scrambler()\n\t{\n\t\tdelete[] pLimit;\n\t}",
-    "replace": "\t~Scrambler()\n\t{\n\t}"
+    "find": "Scrambler<T, I>::~Scrambler()\n{\n\tdelete[] pLimit;\n}",
+    "replace": "Scrambler<T, I>::~Scrambler()\n{\n}"
   },
   {
     "label": "dtor: frees unconditionally, so a null pLimit reaches the allocator",
-    "find": "\t~Scrambler()\n\t{\n\t\tdelete[] pLimit;\n\t}",
-    "replace": "\t~Scrambler()\n\t{\n\t\tsysdep_free(pLimit);\n\t}"
+    "find": "Scrambler<T, I>::~Scrambler()\n{\n\tdelete[] pLimit;\n}",
+    "replace": "Scrambler<T, I>::~Scrambler()\n{\n\tsysdep_free(pLimit);\n}"
   },
   {
     "label": "D ctor: pInitTap2 takes the near distance",
-    "find": "\tDescrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tDescrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + a;\n\t\treset(0);"
+    "find": "Descrambler<T, I>::Descrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Descrambler<T, I>::Descrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + a;\n\treset(0);"
   },
   {
     "label": "D ctor: pInitOut sits at pLimit",
-    "find": "\tDescrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit + c;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);",
-    "replace": "\tDescrambler(unsigned int a, unsigned int b, unsigned int c)\n\t{\n\t\ttailLength = b;\n\t\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\t\tpInitOut = pLimit;\n\t\tpInitTap1 = pInitOut + a;\n\t\tpInitTap2 = pInitOut + b;\n\t\treset(0);"
+    "find": "Descrambler<T, I>::Descrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit + c;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);",
+    "replace": "Descrambler<T, I>::Descrambler(unsigned int a, unsigned int b, unsigned int c)\n{\n\ttailLength = b;\n\tpLimit = (T *)sysdep_malloc((1 + b + c) * sizeof(T));\n\tpInitOut = pLimit;\n\tpInitTap1 = pInitOut + a;\n\tpInitTap2 = pInitOut + b;\n\treset(0);"
   },
   {
     "label": "D dtor: frees nothing",
-    "find": "\t~Descrambler()\n\t{\n\t\tdelete[] pLimit;\n\t}",
-    "replace": "\t~Descrambler()\n\t{\n\t}"
+    "find": "Descrambler<T, I>::~Descrambler()\n{\n\tdelete[] pLimit;\n}",
+    "replace": "Descrambler<T, I>::~Descrambler()\n{\n}"
   },
   {
     "label": "resetHistoryIndexes: pTap1 goes to pInitOut",
@@ -120,78 +120,78 @@
   },
   {
     "label": "process(T): the far tap is not in the XOR (<h,h>, <h,i>)",
-    "find": "\t\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*out = r;\n\t\tif (--pOut < pLimit) {",
-    "replace": "\t\tr = (T)(in ^ *pTap1);\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*out = r;\n\t\tif (--pOut < pLimit) {"
+    "find": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+    "replace": "\tr = (T)(in ^ *pTap1);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {"
   },
   {
     "label": "process(T): the far tap does not step",
-    "find": "\t\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*out = r;\n\t\tif (--pOut < pLimit) {",
-    "replace": "\t\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\t\tpTap1--;\n\t\t*out = r;\n\t\tif (--pOut < pLimit) {"
+    "find": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+    "replace": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\t*out = r;\n\tif (--pOut < pLimit) {"
   },
   {
     "label": "process(T): the restart fires one symbol early",
-    "find": "\t\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*out = r;\n\t\tif (--pOut < pLimit) {",
-    "replace": "\t\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*out = r;\n\t\tif (--pOut <= pLimit) {"
+    "find": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut < pLimit) {",
+    "replace": "\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\tpTap1--;\n\tpTap2--;\n\t*out = r;\n\tif (--pOut <= pLimit) {"
   },
   {
     "label": "process(bulk): the intermediate is T, not I -- finding F870, <i,h>",
-    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
-    "replace": "\t\tT r = (T)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;"
+    "find": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tT r = (T)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;"
   },
   {
     "label": "process(bulk): the far tap is not in the XOR",
-    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
-    "replace": "\t\tI r = (I)(in[i] ^ *pTap1);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;"
+    "find": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tI r = (I)(*in ^ *pTap1);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;"
   },
   {
     "label": "process(bulk): the history is not written",
-    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
-    "replace": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t(void)p;"
+    "find": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t(void)p;"
   },
   {
     "label": "process(bulk): the history is written before the destination",
-    "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
-    "replace": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*p = (T)r;\n\t\tout[i] = r;",
+    "find": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*out++ = r;\n\t\t*p = (T)r;",
+    "replace": "\t\tI r = (I)(*in ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tin++;\n\t\t*p = (T)r;\n\t\t*out++ = r;",
     "equivalent": true,
     "why": "The two destinations are distinct objects in every fixture -- the history is the object's own buffer and `out` is a separate array -- and where a caller could make them overlap both stores carry the same value `r`, so the order cannot be observed.  It is reproduced because the blob emits it in that order, not because a test can see it."
   },
   {
     "label": "processAllOnes: the input constant is 0, so it becomes processAllZeros",
-    "find": "\t\t\tI r = (I)(1 ^ *pTap1 ^ *pTap2);",
-    "replace": "\t\t\tI r = (I)(*pTap1 ^ *pTap2);"
+    "find": "\t\tI r = (I)(1 ^ *pTap1 ^ *pTap2);",
+    "replace": "\t\tI r = (I)(*pTap1 ^ *pTap2);"
   },
   {
     "label": "processAllZeros: the input constant is 1, so it becomes processAllOnes",
-    "find": "\t\t\tI r = (I)(*pTap1 ^ *pTap2);",
-    "replace": "\t\t\tI r = (I)(1 ^ *pTap1 ^ *pTap2);"
+    "find": "\t\tI r = (I)(*pTap1 ^ *pTap2);",
+    "replace": "\t\tI r = (I)(1 ^ *pTap1 ^ *pTap2);"
   },
   {
     "label": "D process(T): XORs the argument rather than reading pOut back",
-    "find": "\t\t*pOut = in;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
-    "replace": "\t\t*pOut = in;\n\t\tr = (I)(in ^ *pTap1 ^ *pTap2);",
+    "find": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
+    "replace": "\t*pOut = in;\n\tr = (I)(in ^ *pTap1 ^ *pTap2);",
     "equivalent": true,
     "why": "`*pOut = in` is a plain `T` store to a `T` object and the read is the next access to that same object, so `*pOut` is `in` for every value and every aliasing of `pOut` with a tap or with the source. The two spellings compute the same number in every case -- including with `pTap1 == pOut`, where both give `*pTap2`, which is why the aliased pass does not separate them either.  The source is known to say `*pOut` because the blob RELOADS `this->pOut` after the store (a store through `unsigned char *` may alias the pointer field), and a `r = in ^ ...` source would not have that reload. That is codegen evidence for a behaviourally invisible detail -- finding F870's second half is the same shape."
   },
   {
     "label": "D process(T): computes before it stores",
-    "find": "\t\t*pOut = in;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
-    "replace": "\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t\t*pOut = in;"
+    "find": "\t*pOut = in;\n\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
+    "replace": "\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t*pOut = in;"
   },
   {
     "label": "D process(bulk): XORs the argument rather than reading pOut back",
-    "find": "\t\t\t*pOut = in[i];\n\t\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
-    "replace": "\t\t\t*pOut = in[i];\n\t\t\tr = (I)(in[i] ^ *pTap1 ^ *pTap2);",
+    "find": "\t\t*pOut = *in++;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
+    "replace": "\t\t*pOut = *in;\n\t\tr = (I)(*in++ ^ *pTap1 ^ *pTap2);",
     "equivalent": true,
     "why": "The single-value entry above carries the argument; this is its bulk twin."
   },
   {
     "label": "D process(bulk): also writes the result to the history",
-    "find": "\t\t\t*pOut = in[i];\n\t\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
-    "replace": "\t\t\t*pOut = in[i];\n\t\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t\t\t*pOut = (T)r;"
+    "find": "\t\t*pOut = *in++;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
+    "replace": "\t\t*pOut = *in++;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);\n\t\t*pOut = (T)r;"
   },
   {
     "label": "D process(bulk): the restart fires one symbol early",
-    "find": "\t\t\tout[i] = r;\n\t\t\tif (--pOut < pLimit) {",
-    "replace": "\t\t\tout[i] = r;\n\t\t\tif (--pOut <= pLimit) {"
+    "find": "\t\t*out++ = r;\n\t\tif (--pOut < pLimit) {",
+    "replace": "\t\t*out++ = r;\n\t\tif (--pOut <= pLimit) {"
   }
 ]
