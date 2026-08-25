@@ -7,6 +7,22 @@
  *
  * PLAIN CDECL, `this` as the first STACK argument (finding 215).
  *
+ * THE DEFINITION ORDER IS THE OBJECT'S EMISSION ORDER AND IT IS LOAD-BEARING.
+ * `nm -n` on the blob emits the destructor triple first, then
+ * `resetHistoryIndex`, `reset`, the `float *bank` constructor,
+ * `copyHistoryTail`, `resample`, the two phase accessors, and the `float
+ * cutoff` constructor LAST; the definitions below are in that order and the
+ * file's `.text` addresses therefore run in increasing order down it, which is
+ * the cheap check that it still holds.  GCC 3.4.2's register allocation
+ * depends on the identity of what it compiled before a function, so this is
+ * not cosmetic: matching the order took BOTH remaining `~Resampler` clones to
+ * byte identity and nothing else was changed.  Nine of the thirteen emitted
+ * symbols now sit at the blob's own index; the four that do not are the
+ * C1/C2 clone order inside each constructor pair, which no source permutation
+ * reaches (finding 7796).  `DOT` is hoisted above every definition because a
+ * macro parked beside its first user ends up below it the next time the order
+ * is corrected.  See docs/method/refinement.md lever 3.
+ *
  * ---------------------------------------------------------------------------
  * WHAT THE CLASS IS
  *
@@ -85,157 +101,6 @@ typedef char rs_size[(sizeof(Resampler) == 0x48) ? 1 : -1];
 #endif
 
 /*
- * The designing constructor.
- *
- * `LowPassFIR<float>` is built on the stack with `taps * phases` taps, a
- * cutoff of `cutoff / phases` and a gain of `phases`, windowed
- * WINDOW_BLACKMAN -- the object passes a literal 3, and DspMath.h records
- * that 3 is Blackman, read from `designWindow`'s switch rather than assumed.
- *
- * THE TRANSPOSE IS THE POINT.  `LowPassFIR` designs one long filter; the
- * polyphase bank wants branch p to hold every phases'th tap, and in REVERSE
- * order, because `resample` walks the history forwards and the coefficients
- * forwards at the same time.  Hence `(taps - 1 - k) * phases + p`.
- */
-Resampler::Resampler(unsigned int nPhases, float scale, unsigned int nTaps,
-		     float cutoff, unsigned int minHistory)
-{
-	unsigned int p, k;
-
-	ppmScale = scale;
-	phases = nPhases;
-	taps = (nTaps >> 2) * 4;
-	historyLen = (taps < minHistory) ? minHistory : 10 * taps;
-
-	history = 0;
-	if (historyLen)
-		history = (float *)sysdep_malloc(historyLen * sizeof(float));
-
-	reset();
-
-	{
-		LowPassFIR<float> fir(taps * phases, cutoff / phases,
-				      WINDOW_BLACKMAN, phases);
-
-		coeffs = (float *)sysdep_malloc(taps * phases * sizeof(float));
-		coeffsBorrowed = 0;
-
-		if (coeffs) {
-			for (p = 0; p < phases; p++)
-				for (k = 0; k < taps; k++)
-					coeffs[p * taps + k] =
-					    fir.coefficients[(taps - 1 - k)
-							     * phases + p];
-		}
-	}
-}
-
-/*
- * The adopting constructor.  `coeffsBorrowed` is 1 and `taps` is taken as
- * given -- see the file comment.
- */
-Resampler::Resampler(unsigned int nPhases, float scale, unsigned int nTaps,
-		     float *bank, unsigned int minHistory)
-{
-	coeffs = bank;
-	phases = nPhases;
-	ppmScale = scale;
-	taps = nTaps;
-	coeffsBorrowed = 1;
-	historyLen = (taps < minHistory) ? minHistory : 10 * taps;
-
-	history = 0;
-	if (historyLen)
-		history = (float *)sysdep_malloc(historyLen * sizeof(float));
-
-	reset();
-}
-
-/*
- * `history` is always ours; `coeffs` only when we designed it.  The object
- * tests `coeffsBorrowed` FIRST and skips the whole second free when it is
- * set, so a borrowed null pointer is never even loaded.
- */
-Resampler::~Resampler()
-{
-	if (history)
-		sysdep_free(history);
-	if (!coeffsBorrowed && coeffs)
-		sysdep_free(coeffs);
-}
-
-/*
- * `historyIndex` starts at `taps`, not at zero: the first `taps` floats of
- * the ring are the past the first inner product needs, and `copyHistoryTail`
- * is what refills them when the cursor wraps.
- */
-void
-Resampler::reset()
-{
-	unsigned int i;
-
-	if (history) {
-		for (i = 0; i < historyLen; i++)
-			history[i] = 0;
-	}
-
-	inputCredit = 0;
-	phase = 0;
-	historyIndex = taps;
-
-	for (i = 0; i < 5; i++)
-		pending[i] = 0;
-
-	pendingCount = 0;
-}
-
-/*
- * Normalized means "in [0, 1) of one input sample", so the stored value is
- * scaled by `phases`.  ANYTHING OUTSIDE [0, 1) GIVES ZERO, including a
- * negative, and the two comparisons are against the 0.0f at
- * .rodata.cst4+0x1d4 and the 1.0f at +0x1d8.
- *
- * `p * phases` is computed at extended precision: `fildll` puts the exact
- * integer on the x87 stack, `fmulp` multiplies there, and the only rounding
- * is the `fstpl` into the `double`.  That is what the tree's default
- * (-mfpmath=387, no -ffloat-store) gives for this expression.
- */
-void
-Resampler::setNormalizedPhase(float p)
-{
-	if (p >= 0.0f && p < 1.0f)
-		phase = p * phases;
-	else
-		phase = 0;
-}
-
-float
-Resampler::getNormalizedPhase() const
-{
-	return phase / phases;
-}
-
-/*
- * Bring the last `taps` samples of the ring to its front.  `resample` does
- * this every time the write cursor reaches the end, so that the inner product
- * for the next output can still reach `taps` samples back.
- */
-void
-Resampler::copyHistoryTail()
-{
-	unsigned int i;
-
-	for (i = 0; i < taps; i++)
-		history[i] = history[historyLen - taps + i];
-}
-
-void
-Resampler::resetHistoryIndex()
-{
-	historyIndex = taps;
-}
-
-/*
  * The inner product, UNROLLED BY FOUR INTO TWO PARTIAL SUMS -- which is the
  * object's shape and not a performance idea of ours.
  *
@@ -307,6 +172,85 @@ Resampler::resetHistoryIndex()
 									\
 		(dst) = (float)(a_ + b_);				\
 	} while (0)
+
+/*
+ * `history` is always ours; `coeffs` only when we designed it.  The object
+ * tests `coeffsBorrowed` FIRST and skips the whole second free when it is
+ * set, so a borrowed null pointer is never even loaded.
+ */
+Resampler::~Resampler()
+{
+	if (history)
+		sysdep_free(history);
+	if (!coeffsBorrowed && coeffs)
+		sysdep_free(coeffs);
+}
+
+void
+Resampler::resetHistoryIndex()
+{
+	historyIndex = taps;
+}
+
+/*
+ * `historyIndex` starts at `taps`, not at zero: the first `taps` floats of
+ * the ring are the past the first inner product needs, and `copyHistoryTail`
+ * is what refills them when the cursor wraps.
+ */
+void
+Resampler::reset()
+{
+	unsigned int i;
+
+	if (history) {
+		for (i = 0; i < historyLen; i++)
+			history[i] = 0;
+	}
+
+	inputCredit = 0;
+	phase = 0;
+	historyIndex = taps;
+
+	for (i = 0; i < 5; i++)
+		pending[i] = 0;
+
+	pendingCount = 0;
+}
+
+/*
+ * The adopting constructor.  `coeffsBorrowed` is 1 and `taps` is taken as
+ * given -- see the file comment.
+ */
+Resampler::Resampler(unsigned int nPhases, float scale, unsigned int nTaps,
+		     float *bank, unsigned int minHistory)
+{
+	coeffs = bank;
+	phases = nPhases;
+	ppmScale = scale;
+	taps = nTaps;
+	coeffsBorrowed = 1;
+	historyLen = (taps < minHistory) ? minHistory : 10 * taps;
+
+	history = 0;
+	if (historyLen)
+		history = (float *)sysdep_malloc(historyLen * sizeof(float));
+
+	reset();
+}
+
+/*
+ * Bring the last `taps` samples of the ring to its front.  `resample` does
+ * this every time the write cursor reaches the end, so that the inner product
+ * for the next output can still reach `taps` samples back.
+ */
+void
+Resampler::copyHistoryTail()
+{
+	unsigned int i;
+
+	for (i = 0; i < taps; i++)
+		history[i] = history[historyLen - taps + i];
+}
 
 /*
  * Turn `n` new input samples into however many output samples the phase
@@ -470,4 +414,76 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 	}
 
 	pending[pendingCount++] = *in;
+}
+
+float
+Resampler::getNormalizedPhase() const
+{
+	return phase / phases;
+}
+
+/*
+ * Normalized means "in [0, 1) of one input sample", so the stored value is
+ * scaled by `phases`.  ANYTHING OUTSIDE [0, 1) GIVES ZERO, including a
+ * negative, and the two comparisons are against the 0.0f at
+ * .rodata.cst4+0x1d4 and the 1.0f at +0x1d8.
+ *
+ * `p * phases` is computed at extended precision: `fildll` puts the exact
+ * integer on the x87 stack, `fmulp` multiplies there, and the only rounding
+ * is the `fstpl` into the `double`.  That is what the tree's default
+ * (-mfpmath=387, no -ffloat-store) gives for this expression.
+ */
+void
+Resampler::setNormalizedPhase(float p)
+{
+	if (p >= 0.0f && p < 1.0f)
+		phase = p * phases;
+	else
+		phase = 0;
+}
+
+/*
+ * The designing constructor.
+ *
+ * `LowPassFIR<float>` is built on the stack with `taps * phases` taps, a
+ * cutoff of `cutoff / phases` and a gain of `phases`, windowed
+ * WINDOW_BLACKMAN -- the object passes a literal 3, and DspMath.h records
+ * that 3 is Blackman, read from `designWindow`'s switch rather than assumed.
+ *
+ * THE TRANSPOSE IS THE POINT.  `LowPassFIR` designs one long filter; the
+ * polyphase bank wants branch p to hold every phases'th tap, and in REVERSE
+ * order, because `resample` walks the history forwards and the coefficients
+ * forwards at the same time.  Hence `(taps - 1 - k) * phases + p`.
+ */
+Resampler::Resampler(unsigned int nPhases, float scale, unsigned int nTaps,
+		     float cutoff, unsigned int minHistory)
+{
+	unsigned int p, k;
+
+	ppmScale = scale;
+	phases = nPhases;
+	taps = (nTaps >> 2) * 4;
+	historyLen = (taps < minHistory) ? minHistory : 10 * taps;
+
+	history = 0;
+	if (historyLen)
+		history = (float *)sysdep_malloc(historyLen * sizeof(float));
+
+	reset();
+
+	{
+		LowPassFIR<float> fir(taps * phases, cutoff / phases,
+				      WINDOW_BLACKMAN, phases);
+
+		coeffs = (float *)sysdep_malloc(taps * phases * sizeof(float));
+		coeffsBorrowed = 0;
+
+		if (coeffs) {
+			for (p = 0; p < phases; p++)
+				for (k = 0; k < taps; k++)
+					coeffs[p * taps + k] =
+					    fir.coefficients[(taps - 1 - k)
+							     * phases + p];
+		}
+	}
 }
