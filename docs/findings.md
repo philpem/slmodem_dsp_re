@@ -89490,3 +89490,49 @@ So `V90Equalizer.cpp`'s real open set is **`reset` and
 `setLinearEquEdgesFadingParams`** -- the `clamp_fade_ratio` pair of F7922 --
 plus fourteen SIZE symbols nobody has aimed at, the largest being `process`
 (blob 9,364, ours 9,244) and `convertEqualizerToMmx` (blob 2,573, ours 2,598).
+
+### F7925. Landing F7920's edit is a decision, not a measurement, and every headline number got worse
+
+F7920 refuted the coupling F7775 withheld its loop edit for, and landed the
+edit. The refutation is measured twice over and is not in question. **What
+follows is the parent's judgement on landing it, recorded because no counter
+supports it.**
+
+    before   BYTES   862 against 862, 446 differing, 208 insns against 210
+    after    SIZE    862 against 878,  16 differing, 208 insns against 211
+
+Grade 0 did not move. The bucket went BYTES to SIZE, the byte size went from
+EQUAL to +16, and the instruction count went from two too many to three.
+
+**Landed anyway, for three reasons, none of which is a count.**
+
+1. **The old equality was two errors cancelling.** F7920 names them: the loop
+   block was 16 bytes short of the object's and the tail is 16 long. `862 =
+   862` was a coincidence that hid both. An honest +16 with one block now
+   byte-for-byte the object's is a better description of where we are than a
+   size match that agreed for the wrong reason.
+2. **Thirty-six instructions became positionally exact** and the whole
+   `mmxArraysPresent` block left the diff. That is content moving toward the
+   object even as the size moves away, which is the distinction CLAUDE.md's
+   forced-versus-free rule exists to make.
+3. **The construct has a control in its own file.** `zeroLinearEquCoefs` and
+   `zeroDfeCoefs` are the same shape and closed from 17 and 19 differing bytes
+   to 2 each on it. So the edit is not a guess about what the author wrote.
+
+**What would have made this wrong.** If any other symbol had moved, or if the
+differential had shifted, or if the construct had no independent witness. The
+EXACT set was diffed across the merge -- **0 gained, 0 lost** -- and the file's
+other 27 symbols do not move by one byte in any of F7920's 96 cells.
+
+**AND THE RESIDUAL IS NOW A SINGLE LOCATED DEFECT** rather than 446 scattered
+bytes: +16 in the x87 tail, present identically in
+`setLinearEquEdgesFadingParams`, which has no loops and no temporaries and
+carries the same pre-materialised duplicate zero. That symbol is the cheaper
+place to attack it and it was never looked at before.
+
+**F7782's ruling does not cover this and should not be stretched to.** That
+ruling is about taking byte IDENTITY when an enumeration is exhausted with a
+unique preimage. Here the enumeration -- 96 cells, 54 distinct emissions --
+has NO preimage, which is rule 0's third case: the difference is not what it
+was thought to be. Nothing was decoded. An edit landed on a positional match
+and a control, and the honest label for that is a judgement.
