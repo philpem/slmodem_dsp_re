@@ -85665,3 +85665,43 @@ reverted rather than kept for a null.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7796 and a sibling
 worktree was writing concurrently; expect to renumber at merge.
+
+### 7800. 7780's register CLIFF was emission order all along, and `loadParams` closed as a bystander
+
+7780 spent a pass on `V90Parameters::loadParams` -- 7,894 bytes, **2,663
+differing**, the largest BYTES symbol in the tree -- and established that there
+was nothing in its source to change: 295 calls to two stubs, three arguments
+each, fixed order, no branch, no local, no store, so the permutation family has
+exactly one member.  It turned the question round and verified the CONTENT
+instead, 1781/1781 instructions and 295/295 argument offsets, callees and
+parameter names, and concluded the 2,663 bytes were entirely the free column.
+
+It also found the shape of the difference and could not explain it: argument
+register agreement flat at about 40% through call 99, then **exactly zero for
+all 195 calls after it**, with both sides perfectly periodic at period five in
+two cycles that are not rotations of each other.  Recorded as OPEN, with the
+cliff as where the next pass should start.
+
+**It is now EXACT, and nobody aimed at it.**  Wave 6 reordered
+`V90Parameters.cpp`'s definitions to the blob's emission order for a different
+target (`V90Parameters::C2`, which did not close), the file went from 0 of 9 in
+order to 7 of 9, and `loadParams` fell out byte-identical.
+
+So the cliff was never a property of the function.  A straight line of 295
+calls has no source freedom and could not have been fixed from the inside; what
+was wrong was **what the compiler had seen before it** -- which is exactly
+7796's finding that the carrier is upstream of the function rather than its own
+index, applied to the largest instance in the tree.  The period-5 structure is
+the allocator cycling with nothing to perturb it, and the cliff at call 99 is
+where the two compilations' allocator states diverged for good.
+
+**What this says about the remaining SIZE and BYTES buckets.**  A function
+whose difference is "all free column" is not necessarily unreachable -- it may
+be reachable from OUTSIDE the function.  Before writing one off as
+allocator-only, check whether its translation unit is in the blob's emission
+order.  Two of the seven closures in that wave were bystanders of exactly this
+kind, and one of them was 2,663 bytes.
+
+7780's content verification stands and was not wasted: it is what makes the
+byte-identity meaningful rather than accidental, and it ruled out 295 ways the
+function could have been wrong while still matching.
