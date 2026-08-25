@@ -210,19 +210,19 @@ DSPMATH_STEP void hanning(T *w, unsigned n)
 		 * `lea 0x1(%esi)` does.  `(unsigned long long)n + 1` would
 		 * quietly not.
 		 */
-		long double inv = 1.0 / (long double)(unsigned long long)(n + 1u);
+		long double inv = 1.0L / (long double)(unsigned long long)(n + 1u);
 		unsigned i;
 
 		for (i = 1; i <= n; i++) {
 			long double x = (long double)(unsigned long long)i;
 			long double c;
 
-			x = x * 6.283185307179586;	/* .rodata.cst8+0x38 */
+			x = x * 6.283185307179586L;	/* .rodata.cst8+0x38 */
 			x = x * inv;
 			__asm__ ("fcos" : "=t" (c) : "0" (x));
 
 			/* .rodata.cst4+0x1dc is 0.5f, a FLOAT here. */
-			w[i - 1] = (T)((1.0 - c) * (long double)0.5f);
+			w[i - 1] = (T)((1.0L - c) * (long double)0.5f);
 		}
 	}
 }

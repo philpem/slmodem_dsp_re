@@ -84548,12 +84548,24 @@ divide-by-zero being reproduced bit for bit rests on those locals.
 correctness change and not only a codegen one: `6.283185307179586L` and
 `6.283185307179586` are different values.
 
-`hanning`'s literals were spelled `long double` too and were changed with
-them, and **that change moved no byte** -- both sides already emitted `fldl`
-against `.rodata.cst8` there.  It is recorded as a spelling aligned with the
-relocation its own comment already cites, NOT as a fix.  `hanning` and
-`blackman` are in the SIZE bucket with 47 and 62 blob instructions against our
-44 and 61, so they carry an ABSENCE and are a different job.
+**`hanning` LOOKS LIKE THE SAME DEFECT AND IS NOT, AND THE EDIT WAS REVERTED.**
+Its literals were spelled `long double` too, so they were changed with
+`hamming`'s -- and the change **moved no byte of `hanning`**, because GCC was
+already narrowing that literal: both spellings emit `fldl` against
+`.rodata.cst8`, and the slot holds the same bits either way,
+`182d4454fb211940`.  So it is not `hamming`'s defect wearing the same
+spelling.  `hamming`'s edit changed the emitted CONSTANT, from a 16-byte
+`.cst16` slot to an 8-byte one; `hanning`'s changed only the source text.
+
+What it did do is add a **duplicate** 8-byte pool slot -- the object gained one
+`.cst8` entry holding a value already there -- so it was not even inert, and an
+edit that perturbs a constant pool in a function this pass never verified
+byte-for-byte is not one to ship for no measured gain.  Reverted; the `.cst8`
+observation is recorded here instead, which is where it was useful.
+
+`hanning` and `blackman` are in the SIZE bucket with 47 and 62 blob
+instructions against our 44 and 61, so they carry an ABSENCE and are a
+different job.
 
 **`V34EchoPreFilter` -- the field is an `int`, and the mask is where this
 stops.  63 -> 55 bytes.**  `p->shift` is declared `int` at +0x64 and the blob
