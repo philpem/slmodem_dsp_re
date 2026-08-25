@@ -378,10 +378,31 @@ Run over the live buckets on this tree, one file compiled twice per candidate:
 
 **That is 3a's missing certificate.** 3a can say a file's order is achievable
 and cannot say a null result means anything; this says, per symbol and before
-any permutation, that 1 of the remaining 25 REGALLOC symbols and 28 of the 91
-BYTES are not reachable by this lever at all. It also explains 7796 and 7801
-after the fact: nearly every REGALLOC symbol is peephole2-touched, which is why
-aiming whole files at that bucket paid and aiming at BYTES did not.
+any permutation, that 1 of the remaining 25 REGALLOC symbols
+(`V92Mapper::reset`) and 28 of the 91 BYTES are not reachable by this lever at
+all. It also explains 7796 and 7801 after the fact: nearly every REGALLOC symbol
+is peephole2-touched, which is why aiming whole files at that bucket paid and
+aiming at BYTES did not.
+
+**AND IT HAS BEEN WATCHED FIRE IN BOTH DIRECTIONS, because a certificate that
+licenses SKIPPING work is exactly the shape `gates.md` rule 3 exists for.**
+Permuting the file every way and comparing only where the symbol did not itself
+move — objdump renders branch targets absolutely, and that artefact reported
+the certificate BROKEN on the first run of the check:
+
+    resetRRNSecondSection   classified "takes a scratch (ecx, edi)"
+                            7 of 28 permutations changed it        FIRES
+    V92Mapper::reset,       all four classified CLEARED
+    freqToNearestBin,       0 of 23 comparable permutations
+    ModulusEncoder C2,      changed any of them                    HOLDS
+    spectralDesign
+    V90Equalizer::process   classified undecided, 0 of 28
+
+**EXPOSED IS NECESSARY AND NOT SUFFICIENT, and that is the part to hold on to.**
+`V90CP`'s C1 takes three scratch registers and held over 21 comparable
+permutations; `generateSymbol` held over 28. The cursor is a state machine and
+most single swaps are no-ops for it — which is 7777's control 4 all over again,
+and the reason 7796 had to permute whole files rather than pairs.
 
 The twelve REGALLOC symbols that take a scratch, with the register peephole2
 gave them, are the list a reordering pass should start from — `V90CP`'s C1
@@ -633,6 +654,14 @@ one symbol on the retype (5850).
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
 identity. That much has always been in this file. What was missing is that the
 lever usually does not work, and why.
+
+**THAT EXAMPLE IS THE FILE'S ONE UNCITED CLAIM, and the mechanism below does not
+cover it.** No finding in the tree records it; a sweep for one found nothing.
+It is also a bitwise `&` of two `COMPONENT_REF`s, *neither* of which is a DECL,
+so the rule below cannot be what swapped it. It is kept because it happened,
+and it is marked because the next reader will otherwise apply a comparison rule
+to a bitwise expression and get nothing. **Everything that follows is measured
+on COMPARISONS.**
 
 **THE MECHANISM, AND IT IS THE ADVANCE TEST.** GCC 3.4.2's
 `tree_swap_operands_p` (`fold-const.c`) returns "swap" when operand 0 is a

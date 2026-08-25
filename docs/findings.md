@@ -86144,10 +86144,39 @@ Run over the live buckets, one file compiled twice per candidate:
 **This is what 7801's pre-check could not give.**  3a can establish that a
 file's order is achievable and cannot say what a null result means; this says
 per symbol, before any permutation, that one of the 25 remaining REGALLOC
-symbols and 28 of the 91 BYTES are not reachable by the lever at all.  It also
-explains 7796 and 7801 after the fact -- nearly every REGALLOC symbol is
-peephole2-touched, and that is why aiming whole files at the REGALLOC bucket
-paid 16 of 25 and 5 of 7 while aiming at BYTES paid 0 of 9.
+symbols -- `V92Mapper::reset` -- and 28 of the 91 BYTES are not reachable by the
+lever at all.  It also explains 7796 and 7801 after the fact: nearly every
+REGALLOC symbol is peephole2-touched, and that is why aiming whole files at the
+REGALLOC bucket paid 16 of 25 and 5 of 7 while aiming at BYTES paid 0 of 9.
+
+**AND IT WAS WATCHED FIRE IN BOTH DIRECTIONS BEFORE THE WORD "CANNOT" WAS
+WRITTEN**, because a certificate that licenses SKIPPING work is finding 134's
+case exactly: a false CLEARED makes a later pass decline a reorder that would
+have paid, and nothing ever reports it.  Each file permuted every way over its
+first eight chunks, comparing only where the symbol did not itself move:
+
+    resetRRNSecondSection   classified "takes a scratch (ecx, edi)"
+                            7 of 28 permutations changed it        FIRES
+    V92Mapper::reset        all four classified CLEARED
+    freqToNearestBin        0 of 23 comparable permutations
+    ModulusEncoder C2       changed any of them                    HOLDS
+    spectralDesign
+    V90Equalizer::process   classified undecided, 0 of 28
+
+**THE FIRST RUN OF THAT CHECK REPORTED THE CERTIFICATE BROKEN AND THE CHECK WAS
+WRONG.**  `FPM_ECC_free` appeared to move under 2 of 4 permutations; both were
+permutations in which the symbol ITSELF moved, and objdump renders branch and
+call targets absolutely, so its text differs for a reason that is not a register
+choice.  That is CLAUDE.md's `dis.py` discipline and `byteident.py`'s own reason
+for making branch targets function-relative, met again from a third direction.
+`FPM_ECC_free` is also not the CLEARED symbol -- it is `undecided`, and naming
+it was an inference from a count of one.
+
+**EXPOSED IS NECESSARY AND NOT SUFFICIENT.**  `V90CP`'s C1 takes three scratch
+registers and held over 21 comparable permutations; `generateSymbol` held over
+28.  The cursor is a state machine, so most single swaps compose to the same
+value and are no-ops for it -- which is 7777's control 4 arriving a third time,
+and the reason 7796 had to permute whole files rather than pairs.
 
 The twelve REGALLOC symbols that take a scratch are `V90CP` C1 (ecx, edx, edi),
 `V90Modem::printTitle` (eax, ecx, edx, edi), `V92Modem::printTitle`,
@@ -86211,7 +86240,7 @@ default and 1520k at `ggc-min-expand=1 ggc-min-heapsize=1`, and the compile
 goes from 0.131 s to 0.234 s collecting.  Do not re-try the counters and do not
 re-try the addresses.
 
-### 7811. `docs/method/refinement.md`: six levers folded in from the whole record, and what was rejected
+### 7811. `docs/method/refinement.md`: the levers folded in from the whole record, and what was rejected
 
 7784 assembled that file from the last six refinement waves.  `docs/findings.md`
 holds 1,684 findings and most of the codegen record predates every lever in it,
@@ -86226,7 +86255,11 @@ written down once and never generalised.
    are dead.
 2. **Lever 9 rewritten from two uncited lines into a bounded lever.**  It
    carried an example with no finding number and no failure case -- the only
-   one in the file like that.  The mechanism is 3529's: GCC 3.4.2's
+   one in the file like that.  The example STAYS uncited and is now marked as
+   such: `rx_energy & rx_tone` is a bitwise `&` of two `COMPONENT_REF`s and the
+   mechanism below is measured on COMPARISONS, so it does not explain the one
+   case that worked.  Saying so turns a seam into a known gap.  The mechanism
+   is 3529's: GCC 3.4.2's
    `tree_swap_operands_p` swaps a comparison whose operand 0 is a `DECL_P` and
    whose operand 1 is not, so the emitted order follows what KIND of tree each
    side is and not how the `if` is spelled.  Four measured failures now bound
