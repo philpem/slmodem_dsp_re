@@ -89727,3 +89727,160 @@ the `refs` prerequisite reports `NOT UNIQUE ... matches 0 time(s)` and `make
 one` exits 2 having never built the test. That is a red from the wrong place
 and reads exactly like a passing suite if you only check the exit code. Build
 the binary as its own target and run it.
+
+### F7960. `V90Parameters::setToDefault`: the +18 BYTES ARE AN x87-VERSUS-INTEGER SPLIT, AND SIX FIELDS THE HEADER CALLED `int` ARE FLOATS THE OBJECT NAMES
+
+3,589 bytes, **695 instructions against 695**, and SIZE at +18. The delta-0
+reading is what makes this tractable: at equal instruction count nothing is
+missing and nothing is extra, so the only thing that can move the SIZE is how
+each constant reaches memory.
+
+**THE ACCOUNTING CAME FIRST AND IT IS EXACT.** Every store to a field offset
+is one of three forms, and their encoded lengths are fixed:
+
+    IMM   movl $0x...,off(%ebp)   10 B at disp32, 7 at disp8
+    REG   mov  %r,off(%ebp)        6 B at disp32, 3 at disp8
+    FP    fsts off(%ebp)           6 B at disp32, 3 at disp8
+
+343 stores on each side. **REG and FP cost the same, so an FP<->REG swap is
+free on size and only IMM matters.** Of 39 sites that differ in class, exactly
+**two** carry any byte cost -- +0x6c and +0x70, +4 each -- and the other +10
+is in the materialisation: the blob spends `fldz` and `fld1` (2 B each) where
+we spend four more `flds` from `.rodata.cst4` (6 B each). Blob 26 IMM / 32 FP
+/ 281 REG against ours 28 / 16 / 295.
+
+**+0x6c AND +0x1b8 ARE FORCED.** The blob stores both with `fsts`. An `int`
+lvalue never reaches the x87 stack -- GCC does not know that the integer
+0x3f800000 is the bit pattern of 1.0f -- so `unnamed_06c = 0x3f800000;` cannot
+compile to what the object contains, whatever else is true. The header had
+already RECORDED the `fsts` beside both fields and left them `int` anyway.
+
+**FOUR MORE ARE DECIDED BY A SECOND OBSERVABLE, INDEPENDENT OF THE BYTE
+GRADE.** The blob materialises a constant once and stores it to several
+offsets, and GCC 3.4.2 can only share one pseudo between two stores whose
+source expressions are the SAME RTL constant -- a `const_int` and a
+`const_double` of the same 32 bits are not. Reading the sharing groups off the
+object:
+
+    0x3f19999a -> +0x60, +0x70          +0x60 is AGC_K, float
+    0x2c0cbccc -> +0xf4, +0x12c, +0x19c both partners float
+    0x2ebaeabf -> +0x1b0, +0x1e4        partner float
+    0x2e83f0ff -> +0x1b4, +0x1f8        partner float
+
+**The detector was shown to fire before a cell of it was read.** In our
+committed object NONE of those four groups exists -- the int constant cannot
+CSE with the float and each is materialised separately -- and in the variant
+with the six fields retyped, three of the four reproduce the blob's grouping
+offset for offset. That is F7840's "two independent observables agreeing" with
+a materialisation group in place of a `.rodata` string order.
+
+**THE ENUMERATION: 128 CELLS, 64 DISTINCT EMISSIONS, NO PREIMAGE.** All 2^7
+type assignments over the seven `unnamed_*` slots F878 typed as `int` were
+compiled on the period compiler in one container pass, against a real copy of
+the tree, scored with `byteident.py`'s own `body`/`verdict`. **Cell 0
+reproduced `build/tc_out`'s committed object md5 for md5.** The map is far
+from constant (64 emissions) and none reaches byte identity.
+
+**WHAT WAS TAKEN IS THE CELL THE EVIDENCE NAMES, NOT THE CELL THAT SCORES
+BEST, and that distinction is the whole of rule 0 here.** Two cells reach
+n=2 (`06c,070,1b8` and `0f4,1b8`) and were NOT taken; the evidenced set of six
+scores n=5. Taking the better number would have been fitting the compiler.
+
+    SIZE n=18, insn 695/695   ->   SIZE n=5, insn 691/695
+
+**+0x328 IS LEFT `int` AND THE NULL IS THE RESULT.** It is a singleton in the
+blob with no sharing partner and is stored from an integer register, so there
+is no forced evidence either way -- and the enumeration proves the object
+cannot distinguish the two readings: all 128 cells are pairwise identical
+across this field's bit, which is exactly why 128 cells give 64 emissions.
+
+**THE TREE.** Grade 0 **534 -> 535**, REGALLOC 35 -> 34, BYTES and SIZE
+unmoved. One gain, zero losses, and the gain is a BYSTANDER:
+`V90Parameters::C2` went REGALLOC to EXACT without being touched. F7880's
+blind spot is covered by hand rather than by the set diff: **all 16
+translation units that include `V90Parameters.h` were compiled from HEAD as a
+control and md5'd against the current build -- 15 byte-identical, only
+`V90Parameters.cpp.o` moved**, so no SIZE-to-SIZE regression is hiding
+anywhere. `make phase` green, period differential 251 passed / 0 failed. The
+one mutation anchor that quoted the old text was re-anchored;
+`tools/anchorcheck.py` is clean at 198 suites / 8,958 mutations and the suite
+re-runs 35 of 37 caught, 0 NOT caught, 2 pre-existing equivalents.
+
+**ONE STALE COMMENT IS LEFT DELIBERATELY.** `src/pump/v90/V90Resampler.cpp`
+opens with a note calling +0x0f4 "an `int` written by `setToDefault`" and the
+header "frozen", and reads the field through `__builtin_memcpy` for that
+reason. The type is now `float` and the memcpy is a same-type copy -- the
+object is byte-identical either way, verified above -- but that file belongs to
+another batch and was not touched. It wants one comment edit and the memcpy
+can become a plain read; F7776 is the reason to MEASURE that rather than assume
+it.
+
+### F7961. `V8Create`: F7830's 720-CELL DOMAIN WAS DRAWN AROUND THE RIGHT BOUNDARY, AND THE DECLINE IS NOW VERIFIED RATHER THAN INHERITED
+
+25 differing bytes of 1,124, **244 instructions against 244**, `--why`
+rejecting at row 16 on `%ecx,0xa50(%esi)` against `0x14(%ebx),%eax`. The whole
+residual is one hunk: the blob emits the `v->cm = cfg->cm` load AFTER the
+`dsplibs_debug_level` load and we hoist it three instructions earlier.
+
+F7830 declined this on 720 orderings, 76 emissions, no preimage. **F7940 says
+a no-preimage result is only as good as the boundary, and a `static` helper
+that gets inlined has no symbol and is invisible to a per-function
+enumeration. So the boundary was checked rather than assumed:**
+
+- `DSPLIB_DEBUG_ON()` is `(dsplibs_debug_level > 1)`, a macro with no body.
+- `sysdep_malloc` is an `extern` declaration, not an inline.
+- `v8hs.c` defines exactly one `static` function, `deadline()`, and `V8Create`
+  does not call it -- it is `v8handshakinit`'s.
+- The object's `V8Create` makes **18 calls and every one carries an
+  `R_386_PC32`**: 16 `dsplibs_debug_printf`, one `v8handshakinit`, one
+  `sysdep_malloc`. No call without a relocation, so no LOCAL callee.
+
+There is nothing inside the function that a per-function domain could have
+missed. **F7830's decline stands, and it is now a measured negative.**
+Unchanged at 25 bytes.
+
+### F7962. `v90RunDemodulator`: THE SAME BOUNDARY CHECK, AND THE TWO `static inline` HELPERS IN THE FILE ARE IN A DIFFERENT FUNCTION
+
+131 differing bytes of 3,013, **577 instructions against 577**. `--why` now
+rejects at **row 17** where F7781 recorded row 20 -- same operands, blob
+`%edx,0x4(%esp)` against ours `%edx,0x8(%esp)`, so it is renumbering ahead of
+the rejection and the same hunk, not movement.
+
+F7846 declined this over 2,218 cells in three domains. The boundary:
+
+- The object's `v90RunDemodulator` makes **51 calls and all 51 carry an
+  `R_386_PC32`** -- and so do all 51 of ours. No LOCAL callee on either side.
+- `VPcmFloModem.cpp` does define two `static inline` helpers, `x87_log10` and
+  `x86_abs`, which is F7940's exact shape. **Both are used only inside
+  `getUinfoValue`** (lines 536 and 558, against this function's 1389-1945), so
+  neither is inlined here.
+- The three hunks are outgoing-argument stores for `V90Modem::progress` and
+  the two `VPcmV34SetV90RateReneg` calls, all three confirmed above as real
+  out-of-line externals, and F7846 established the rejecting site's four
+  arguments are bare parameters with a constant value-to-slot map.
+
+**F7846's decline stands as a measured negative.** Unchanged at 131 bytes.
+
+### F7963. THE DELTA-0 LENS: IT PAID ON THE SIZE SYMBOL AND ADDED NOTHING TO THE TWO BYTES ONES, AND THE NARROW CLAIM IS THE USEFUL ONE
+
+The brief asked whether `--near`'s delta-0 class is a useful lens, nobody
+having worked it before. Measured over the three largest members:
+
+- **`setToDefault`, SIZE, delta 0 -- the lens is what made the pass
+  possible.** The SIZE label reads "a different function" and the delta says
+  the opposite: 695 instructions against 695, so nothing is missing and nothing
+  is extra and the entire +18 is encoding length. That converts an apparently
+  structural difference into an arithmetic one, and the arithmetic closed in
+  one pass onto two store sites and a materialisation. Nobody would have run
+  that accounting on a symbol labelled SIZE.
+- **`v90RunDemodulator` and `V8Create`, both BYTES, delta 0 -- the lens added
+  nothing.** BYTES already means equal byte size, and equal instruction count
+  at equal byte size is nearly implied; `--why` and the prior findings gave the
+  same information. Neither moved.
+
+**So the claim worth carrying is narrower than the brief's framing: delta 0 is
+informative for SIZE symbols, where it is the thing that says the two
+functions are the same shape and the difference is encoding; for BYTES symbols
+it is close to redundant with the bucket.** The SIZE bucket holds 608 symbols
+and `--near` shows many of them at delta 0; that is where this lens has
+somewhere left to pay.

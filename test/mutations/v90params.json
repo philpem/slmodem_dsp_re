@@ -150,9 +150,9 @@
   "replace": "\tAGC_K = 0.61f;"
  },
  {
-  "label": "one of the nine float-valued `unnamed_` slots is written as an int",
-  "find": "\tunnamed_1b8 = 0x2d83f0ff;",
-  "replace": "\tunnamed_1b8 = 15;"
+  "label": "one of the float-valued `unnamed_` slots gets the wrong default",
+  "find": "\tunnamed_1b8 = 1.5e-11f;",
+  "replace": "\tunnamed_1b8 = 15.0f;"
  },
  {
   "label": "the last field of the object is not written",
