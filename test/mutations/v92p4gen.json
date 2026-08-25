@@ -409,13 +409,13 @@
  },
  {
   "label": "recivedSUV does not latch word_1c4",
-  "find": "\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\tword_1c4 = 1;\n}\n\n/* recivedPartTwoSilenceRrnSUV",
-  "replace": "\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}\n\n/* recivedPartTwoSilenceRrnSUV"
+  "find": "\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\tword_1c4 = 1;\n}\n\n/* recivedPartOneSilenceRrnSUV (.text+0x171f0",
+  "replace": "\tword_1b0 = patternLength / cp->bitsPerSymbol;\n}\n\n/* recivedPartOneSilenceRrnSUV (.text+0x171f0"
  },
  {
   "label": "recivedPartTwoSilenceRrnSUV goes to state 7 off a period boundary",
-  "find": "\t\tstate = 6;\n\t\treturn;\n\t}\n\n\tedprintf(\"V92Phase4Modulator: on recivedSUV enter CPu @ %d\\r\\n\",\n\t\t symbolCount);\n\tstate = V92P4M_STATE_CPU;\n\tsymbolCount = 0;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();\n\tpattern = cp->getBitVector(patternLength);\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\tword_1c4 = 1;\n}\n\n/*\n * recivedPartOneSilenceRrnSUVtag",
-  "replace": "\t\tstate = 7;\n\t\treturn;\n\t}\n\n\tedprintf(\"V92Phase4Modulator: on recivedSUV enter CPu @ %d\\r\\n\",\n\t\t symbolCount);\n\tstate = V92P4M_STATE_CPU;\n\tsymbolCount = 0;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();\n\tpattern = cp->getBitVector(patternLength);\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\tword_1c4 = 1;\n}\n\n/*\n * recivedPartOneSilenceRrnSUVtag"
+  "find": "\t\tstate = 6;\n\t\treturn;\n\t}\n\n\tedprintf(\"V92Phase4Modulator: on recivedSUV enter CPu @ %d\\r\\n\",\n\t\t symbolCount);\n\tstate = V92P4M_STATE_CPU;\n\tsymbolCount = 0;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();\n\tpattern = cp->getBitVector(patternLength);\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\tword_1c4 = 1;\n}\n\n/* recivedCP (.text+0x172c0",
+  "replace": "\t\tstate = 7;\n\t\treturn;\n\t}\n\n\tedprintf(\"V92Phase4Modulator: on recivedSUV enter CPu @ %d\\r\\n\",\n\t\t symbolCount);\n\tstate = V92P4M_STATE_CPU;\n\tsymbolCount = 0;\n\tcp->byte_00 = 0;\n\tcp->infoToBits();\n\tpattern = cp->getBitVector(patternLength);\n\tword_1b0 = patternLength / cp->bitsPerSymbol;\n\tword_1c4 = 1;\n}\n\n/* recivedCP (.text+0x172c0"
  },
  {
   "label": "recivedPartOneSilenceRrnSUVtag tests the CP flag the other way",

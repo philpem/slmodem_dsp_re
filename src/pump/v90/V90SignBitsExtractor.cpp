@@ -72,12 +72,6 @@ SBE_OFF(decoder,	0x1c, decoder);
 typedef char v90sbe_size[(sizeof(V90SignBitsExtractor) == 0x28) ? 1 : -1];
 #endif
 
-V90SignBitsExtractor::V90SignBitsExtractor()
-	: oddDecoder(), decoder(V90SBE_DECODER_SIZE)
-{
-	state = 0;
-}
-
 /*
  * Empty, and that is the whole function.  Its twenty-two bytes are the
  * implicit destruction of `decoder` at +0x1c and the frame around it; the
@@ -85,6 +79,12 @@ V90SignBitsExtractor::V90SignBitsExtractor()
  */
 V90SignBitsExtractor::~V90SignBitsExtractor()
 {
+}
+
+V90SignBitsExtractor::V90SignBitsExtractor()
+	: oddDecoder(), decoder(V90SBE_DECODER_SIZE)
+{
+	state = 0;
 }
 
 /*

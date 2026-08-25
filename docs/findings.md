@@ -85286,3 +85286,208 @@ rather than assumed, so 6810's pair of checks has nothing to bind to here.
 worktree 7792 when this was written; expect to renumber at merge.
 
 ======================================================================
+
+### 7796. EMISSION ORDER IS A LEVER ON PLAIN FUNCTIONS, NOT ON CLONE PAIRS -- 7777'S CONTROL 4 IS OVERTURNED, AND WHAT CARRIES THE EFFECT IS UPSTREAM OF THE FUNCTION, NOT ITS INDEX
+
+Seven translation units were permuted into the blob's `nm -n` emission order.
+Over the tree:
+
+    grade 0   433 -> 450  (34.6% -> 36.0%)      REGALLOC  48 -> 32
+    grade 0-or-1  486 -> 487                    SIZE     653 -> 652
+
+**17 gained, 0 lost, and it is the exact SET that was diffed rather than the
+count** -- `--list-exact` before and after, seventeen `>` lines and no `<`.
+
+**7777 CONTROL 4 SAID THIS DOES NOT WORK ON PLAIN FUNCTIONS.  IT DOES.**  That
+control moved ONE plain function (`spectralDesign`) inside its file and
+measured 74 differing bytes before and 74 after, and 7774 was narrowed to
+clone pairs on the strength of it.  Fifteen of these seventeen closures are
+plain non-clone functions.  The control is not wrong -- a single move very
+often does nothing, and three whole files below moved nothing -- but the
+conclusion drawn from it was, and it was the conclusion that would have
+stopped this pass before it started.
+
+**AND THE CLONE PAIRS ARE THE PART THAT DID NOT MOVE.**  Exactly reversed from
+7774's reading:
+
+    ModulusCoder.cpp    4 constructor clones, 25 differing bytes each
+                        order matched 6 of 6, all four unchanged at 25
+    V90CP.cpp           C1/C2 -- C2 went EXACT -> REGALLOC, a LOSS
+    V90SignBitsExtractor.cpp  C2 stays REGALLOC at 2 bytes
+    V90Phase4Modulator.cpp    C1/C2 stay SIZE; the 21 and the 27 differing
+                              bytes SWAPPED between the two clones
+
+So of the three shapes the task asked to be told apart -- clone pair,
+identical-body twin, plain function -- the yield over the seventeen is:
+**plain 16, twin 1, clone 0.**
+
+**THE TWIN IS 7772'S OWN PAIR AND IT CLOSED.**  `V92Phase4Modulator::recivedSUV`
+and `recivedPartTwoSilenceRrnSUV` are the same body spelled twice; 7772 left
+`recivedSUV` at 2 differing bytes and could not say why the blob's FIRST copy
+behaved like our SECOND, concluding only that "whatever carries the effect is
+somewhere in the translation unit ahead of both".  It is.  Neither twin moved
+relative to the other -- `recivedSUV` is first in our file and first in the
+blob, before and after -- and reordering the ELEVEN functions ahead of them
+made `recivedSUV` EXACT with `recivedPartTwoSilenceRrnSUV` still EXACT.
+
+**THE DISCRIMINATOR, WHICH IS THE PART WORTH KEEPING.**  Three of
+`V90Phase4Modulator.cpp`'s eleven REGALLOC symbols were ALREADY at the blob's
+emission index before anything was edited, so their index could not change and
+only their predecessors could:
+
+    generateDataSymbolBeforeFPE   index 32 -> 32   REGALLOC -> EXACT
+    generateDataSymbolBeforeRRN   index 33 -> 33   REGALLOC -> EXACT
+    generateSymbol                index 41 -> 41   REGALLOC -> REGALLOC (2 B)
+    LastPulseDigitDialed (pulse.c) index 2 -> 2    REGALLOC -> EXACT
+
+Three of the four closed WITHOUT MOVING.  **The effect is not a function of a
+function's position in the file; it is a function of what the compiler emitted
+before it.**  That is a stronger and more general claim than 7774's, and it is
+what makes reordering worth doing at all: a file's whole leaf block has to be
+right, not the one symbol being chased.  The fourth, `generateSymbol`, is in
+the cgraph tail rather than the leaf block, where the predecessors did not
+change either.
+
+**AND THAT RULES OUT EVERY GLOBAL COUNTER, MEASURED RATHER THAN ARGUED.**
+7772 established that the positional effect is not `-frename-registers` and
+left the cause open.  The obvious remaining class is a counter that runs
+across a translation unit rather than being reset per function -- `label_num`
+is the visible one, and `DECL_UID` and the insn UIDs advance beside it.  The
+same file was compiled with `-S` from master and from this branch and
+`generateDataSymbolBeforeFPE` compared on its own:
+
+    master   29 lines, labels ['212']    leal 22(%esp),%edx ; movl %edx,8(%esp)
+    branch   29 lines, labels ['212']    leal 22(%esp),%eax ; movl %eax,8(%esp)
+
+**Identical label number, identical instruction count, different registers**,
+and the same for `generateDataSymbolBeforeRRN` at `.L215`.  The label number is
+where `label_num` stood when this function was expanded, so the counter is at
+the SAME VALUE in both compiles -- which it must be, because the same set of
+functions was emitted ahead of it and only their order changed.  The count of
+declarations parsed ahead of it is unchanged for the same reason.
+
+So: same source text, same emission index, same global counters, different
+register allocation.  What is left is state that depends on the IDENTITY of
+what was compiled before rather than on how much -- allocation addresses and
+therefore the iteration order of GCC's pointer-keyed hash tables, which
+`ggc_collect` between functions is enough to perturb.  **That is where the next
+attempt at the cause should start, and the counters should not be re-tried.**
+
+**THE EMISSION-ORDER MODEL, DERIVED FROM OUR OWN OBJECT AND THEN USED TO
+PREDICT.**  GCC 3.4.2's `cgraph_expand_all_functions` walks `cgraph_postorder`
+in reverse, and that postorder is a depth-first traversal over CALLERS.  Two
+consequences, both checked before any file was edited:
+
+  * a function with no caller inside the translation unit is emitted in
+    SOURCE-DEFINITION ORDER -- not reversed.  7774 says "reverse definition
+    order" and that is true of file-scope DATA (7765), not of these.
+  * a function called from inside the unit is emitted BEFORE its caller, and
+    its source position stops mattering.  `V92Phase4Modulator::
+    recivedPartTwoSilenceRrnSUVtag` is one statement, `recivedSUVtag()`, and
+    it sits three slots later in the object than in the source for exactly
+    that reason; `reset` and `generateSymbol` are emitted last in both
+    Phase4Modulators because everything else is their callee.
+
+So a file splits into a LEAF BLOCK, which definition order controls
+completely, and a CGRAPH TAIL, which it does not.  Both Phase4Modulator files'
+leaf blocks now match the blob index for index -- 30 of 30 and 22 of 22 -- and
+that match is the gate on believing a null result.  A file that "changed
+nothing" is only evidence if the order was actually achieved.
+
+**WHAT IS NOT REACHABLE BY REORDERING DEFINITIONS, measured rather than
+assumed.**  Two segments stayed wrong in every file that has them and no
+source permutation touches either:
+
+  * the head, where a template instantiation interleaves with a destructor's
+    clones.  Ours is `D2, Scrambler::reset, Scrambler::process, D1`; the
+    blob's is `Scrambler::reset, Scrambler::process, D2, D1`.
+  * which of C1/C2 comes first, and the cgraph tail's internal order.
+
+**THE PER-FILE LEDGER.**  (a) closed, (b) bytes moved but did not close,
+(c) nothing at all.
+
+    V90Phase4Modulator.cpp   (a) 9 of 11 REGALLOC, plus setRfSymbols from
+                                 SIZE 10 -- a 1,005-byte function, so the
+                                 lever is not confined to register renaming
+                             (b) setMappingParams 4 -> 10 differing, WORSE
+                             (c) generateSymbol, 2 differing, index unchanged
+    V92Phase4Modulator.cpp   (a) 4 of 7 -- generateDataSymbolBeforeRRN,
+                                 recivedCP, recivedSUV, exitCPt
+                             (b) recivedEd 7 -> 5, recivedRt 4 -> 2,
+                                 setMappingParams 4 -> 8 (worse)
+    V90Phase3Demodulator.cpp (a) 2 of 2.  `clearVerificationStatus` was above
+                                 the constructor and the blob emits it below
+                                 the destructor, so the move crosses the
+                                 lifecycle pair.  19 of 19 order match
+    src/call/pulse.c         (a) 1 of 1, without moving
+    V90SignBitsExtractor.cpp (c) nothing.  Destructor above constructor
+    V92Modem.cpp             (c) nothing.  printTitle stays REGALLOC
+    V92Modulator.cpp         (c) nothing.  11 leaf definitions reordered
+    ModulusCoder.cpp         REVERTED.  Order matched 6 of 6 and
+                             ModulusEncoder::progress went EXACT -> SIZE
+    V90CP.cpp                REVERTED.  C2 went EXACT -> REGALLOC; bitsToInfo
+                             improved 41 -> 3 differing and stayed SIZE
+
+**IT GOES BOTH WAYS AND THAT IS THE REASON FOR THE BEFORE/AFTER RULE.**  Two
+files were reverted because matching the blob's order LOST a symbol, and one
+symbol got worse inside a file that gained nine.  A reorder is not free and
+"closer to the blob's layout" is not a grade -- the exact set is.
+
+**THE TWO TRAPS, BOTH HIT.**
+
+*A preprocessor line travels with the chunk above it.*  `#endif` moved twice --
+in `V90SignBitsExtractor.cpp` and `ModulusCoder.cpp` -- and BOTH STILL
+COMPILED, having silently enlarged an `#if __SIZEOF_POINTER__ == 4` region to
+swallow live code.  That is `compilers.md`'s V3 exactly: a guard that fails
+open.  Caught by inspecting the diff for moved `#` lines, and the permutation
+tool now refuses to write when a `#` line falls inside a moved chunk.
+
+*A macro parked beside its first user ends up below it.*  `V90P4M_RI_PERIOD`
+sat next to `generateRdRt`; the reorder moved two users above it and the file
+stopped compiling.  Loud, not silent, and the fix is the rule now written into
+both files: **a macro or a file-scope `static` lives ABOVE the definitions**,
+because the definition order is going to be corrected again.  A macro is a
+compile-time substitution and cannot move codegen, so hoisting it is free.
+
+**AND A SECTION BANNER THAT HEADS A ROLE IS NOT A BLOCK ANY MORE.**  The
+blob's order is the author's source order and it is NOT grouped by role -- the
+V.92 tag handlers are contiguous in it, the six CP-message handlers are not.
+Every banner whose group the permutation scattered was re-scoped rather than
+left asserting an adjacency it no longer has, and both Phase4Modulator files
+carry a head comment saying the order is load-bearing.  The cheap check that
+it still holds is in the files already: the `.text+0x...` addresses in the
+per-function comments now run in increasing order down the file.
+
+**WHAT IS LEFT, AND WHAT THIS SAYS ABOUT IT.**  94 translation units still
+emit in a different order from the blob, holding 24 of the tree's remaining 32
+REGALLOC symbols and 88 of its 108 BYTES.  That is still an upper bound and
+this pass is the estimate to scale it by.  Counted over all NINE files touched,
+the two reverted included:
+
+    REGALLOC candidates        25      closed to EXACT   16   (64%)
+    BYTES-bucket candidates     9      closed             0
+    and one closure came from SIZE, not from either bucket:
+    V90Phase4Modulator::setRfSymbols, 1,005 bytes
+
+**Aim a reorder at a REGALLOC file.  A BYTES-only file did not pay once**, and
+the one file aimed squarely at a BYTES bucket -- `ModulusCoder.cpp`, four
+constructor clones at 25 differing bytes -- moved none of them and lost a
+symbol elsewhere.
+
+**GATES.**  `make phase J=4` green, period differential 251 passed / 0 failed.
+`anchorcheck.py` 198 suites, 8,959 mutations, 0 anchors matching other than
+exactly once -- four detached in the first batch (their `find` ended with the
+NEXT function's comment, which is the disambiguator between two identical
+bodies) and were re-pointed with the mutation itself asserted unchanged.
+Reattached is not caught, so the suites were run: `v92p4gen` 103 of 103,
+`v90p4mgen` 55 of 56 with 1 pre-existing equivalent, and eight more over the
+second batch.  `v90p3ddec`'s 4 NOT caught and `v90p3dreset`'s 1 are
+PRE-EXISTING and that was measured, not assumed: master's own copy of the file
+was restored, both suites re-run against it, and both report the identical 4
+and 1.
+
+**THE PERMUTATIONS ARE PROVED TO BE PERMUTATIONS.**  The tool refuses to write
+unless the file's line multiset is unchanged, so no edit hid inside a reorder.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7781 and two sibling
+worktrees were writing concurrently; expect to renumber at merge.

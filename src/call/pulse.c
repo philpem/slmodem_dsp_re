@@ -32,51 +32,6 @@ call_of(void *modem)
 }
 
 void
-SetPulseMakeTime(void *modem, int ms)
-{
-	struct call *c = call_of(modem);
-
-	if (c == 0)
-		return;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("call: SetPulseMakeTime %lu\n",
-				     (unsigned long)ms);
-
-	c->self->pulse_make = ms;
-}
-
-void
-SetPulseBreakTime(void *modem, int ms)
-{
-	struct call *c = call_of(modem);
-
-	if (c == 0)
-		return;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("call: SetPulseBreakTime %lu\n",
-				     (unsigned long)ms);
-
-	c->self->pulse_break = ms;
-}
-
-/*
- * Note this one does not look at the call object at all -- it just tells the
- * host the pulse dialler is done, by clearing the parameter PulseDialDigit
- * set.  So the host, not the library, owns the "a digit is being pulsed"
- * state; the library only owns the timing.
- */
-void
-LastPulseDigitDialed(void *modem)
-{
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("call: LastPulseDigitDialed...\n");
-
-	modem_set_param(modem, MDMPRM_PULSE_DIAL, 0);
-}
-
-void
 PulseDialDigit(void *modem, int digit)
 {
 	struct call *c = call_of(modem);
@@ -183,4 +138,49 @@ IsPulseDialerReady(void *modem)
 	}
 
 	return remaining == 0;
+}
+
+/*
+ * Note this one does not look at the call object at all -- it just tells the
+ * host the pulse dialler is done, by clearing the parameter PulseDialDigit
+ * set.  So the host, not the library, owns the "a digit is being pulsed"
+ * state; the library only owns the timing.
+ */
+void
+LastPulseDigitDialed(void *modem)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: LastPulseDigitDialed...\n");
+
+	modem_set_param(modem, MDMPRM_PULSE_DIAL, 0);
+}
+
+void
+SetPulseBreakTime(void *modem, int ms)
+{
+	struct call *c = call_of(modem);
+
+	if (c == 0)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: SetPulseBreakTime %lu\n",
+				     (unsigned long)ms);
+
+	c->self->pulse_break = ms;
+}
+
+void
+SetPulseMakeTime(void *modem, int ms)
+{
+	struct call *c = call_of(modem);
+
+	if (c == 0)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("call: SetPulseMakeTime %lu\n",
+				     (unsigned long)ms);
+
+	c->self->pulse_make = ms;
 }
