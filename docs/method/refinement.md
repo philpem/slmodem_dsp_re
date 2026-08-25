@@ -401,9 +401,47 @@ flag.
 `.c`. `V92deleteConstellations` and `V92deleteFilterCoefficients` are 3 bytes
 each with identical signatures.
 
-### 8. Width and signedness
+### 8. Width and signedness — and the DESTINATION's declared type
 
 7630's `movzwl` copied as 32 bits. Equal instruction count hides it completely.
+
+**FIRST ASK WHETHER THE 32-BIT RESULT IS USED, because that decides which
+question you are answering** (CLAUDE.md's forced-versus-free rule):
+
+- **Used** — the extension is live and the difference is evidence about the
+  loaded object's TYPE. Finding 613 is the precedent: a real defect no test
+  could see, because both readings agree over every value the field holds.
+- **Discarded** — a 16-bit value going straight back into a 16-bit slot. This
+  is finding 614's free case, and it is NOT evidence about the field. Read on.
+
+**WHERE THE EXTENSION IS DEAD, IT FOLLOWS THE DECLARED TYPE OF THE LOCAL BEING
+LOADED INTO — not the field, not the store destination, and not a cast.**
+Measured on `toneiir_reset`, six spellings compiled (7803):
+
+    short prev = st->env_band;                  movswl
+    unsigned short prev = st->env_band;         movzwl   <-- the blob
+    int prev = st->env_band;                    movswl
+    unsigned int prev = st->env_band;           movswl
+    short prev = (unsigned short)st->env_band;  movswl
+    short prev; prev = st->env_band;            movswl
+
+A cast does not do it because the load happens first and the conversion after.
+`unsigned int` does not either: the value is still fetched from a signed short
+and then widened. So this is a real, recoverable source property with an
+exhausted two-way domain, and 7782's ruling takes it.
+
+**THE TRAP THIS EXISTS TO PREVENT.** 7802 read exactly this difference as a
+declaration defect in the FIELD and would have retyped `short env_band` to
+unsigned. The blob itself refutes that: it uses `movswl` at
+`toneiir_progress+235`, where the result feeds `imul $0x3f5c,%eax,%ebx`, and
+`movzwl` at three sites where the upper half is discarded. **One field, both
+extensions.** Retyping it would have matched two sites, broken the third, and
+asserted something the object contradicts.
+
+So: if the object uses both extensions on one field, the field's type is not
+what varies — look at each site's destination instead. And verify PER SITE
+when the enclosing functions are not byte-identical: `toneiir_progress` keeping
+its `movswl` is what proved the edit touched only the dead sites.
 
 ### 9. Operand order in commutative expressions
 
