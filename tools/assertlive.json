@@ -1,0 +1,4 @@
+{
+  "live_at_32": 1747,
+  "note": "floor for tools/assertlive.py -- fails on a DECREASE only. Raise it when the tree gains assertions; lower it only in the same commit that deliberately removes some, with a reason."
+}

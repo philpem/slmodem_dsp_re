@@ -85923,3 +85923,114 @@ compare, a signed branch, a truncating cast and a value masked to two bits.
 Nobody has traced `+0x96` against `dis.py` yet, and retyping a struct field
 reaches every function that touches it, so the next pass must trace it and
 re-run the tier rather than change the header on the strength of this one row.
+
+### 7803. `toneiir_reset`: the extension follows the DESTINATION LOCAL's declared type, and the field is signed after all
+
+7802 recorded `toneiir_reset`'s last differing byte as `movzwl` (blob) against
+`movswl` (ours) at `0x96(%eax)` and called it lever 8 -- a declaration defect
+in `short env_band`.  **That reading was wrong, and retyping the field would
+have been a regression dressed as a win.**
+
+**THE FIELD IS SIGNED, AND THE OBJECT SAYS SO ITSELF.**  The blob uses BOTH
+extensions on the same field, which alone rules the declared type out as the
+discriminator:
+
+    toneiir_progress  235   movswl 0x96(%esi),%eax     <- the FORCED site
+                      236   imul   $0x3f5c,%eax,%ebx
+    toneiir_progress  323   movzwl 0x96(%edi),%edx
+                      327   mov    %dx,0x98(%edi)      <- upper half discarded
+    toneiir_create     23   movzwl
+    toneiir_reset       2   movzwl
+
+At 235 the sign-extended 32-bit value is multiplied, so the extension is LIVE
+and the field must be signed.  At 323 and at `toneiir_reset` the value goes
+straight back into a 16-bit slot, so the extension is dead -- CLAUDE.md's
+finding 614 case, listed there as FREE and explicitly not to be chased.
+Retyping `env_band` to `unsigned short` would have matched two sites, broken
+the third, and asserted something about the field that the object contradicts.
+
+**WHAT ACTUALLY DECIDES IT IS THE DECLARED TYPE OF THE LOCAL BEING LOADED
+INTO.**  Six spellings compiled, one matches:
+
+    short prev = st->env_band;                 movswl
+    unsigned short prev = st->env_band;        movzwl   <== the blob
+    int prev = ...;                            movswl
+    unsigned int prev = ...;                   movswl
+    short prev = (unsigned short)st->env_band; movswl
+    short prev; prev = st->env_band;           movswl
+
+So it is neither the source field nor the store destination nor a cast: it is
+the *destination of the load*.  A cast does not do it because the load happens
+first and the conversion after; `unsigned int` does not either, because the
+value is still fetched from a signed short and widened.
+
+Exhausted domain, unique preimage, so 7782's ruling applies and it is taken.
+The same construct appears three times -- `toneiir_create` +184,
+`toneiir_reset` +231, `toneiir_progress` +315 -- and the blob has `movzwl` at
+all three sites, so all three locals were retyped.  Verified per site rather
+than per function, since two of the three functions are grade SIZE:
+
+    toneiir_reset      blob movzwl@2     ours movzwl@2      -> EXACT
+    toneiir_create     blob movzwl@23    ours movzwl@24
+    toneiir_progress   blob movswl@235, movzwl@323
+                       ours movswl@85,  movzwl@180          <- signed site intact
+
+`toneiir_progress` keeping its `movswl` is the check that matters: it proves
+the field is still signed and that the edit touched only the dead-extension
+sites.  Tree 478 -> 479, `make phase` green.
+
+**The general point, and it cost a nearly-wrong edit to learn.**  A `movzwl`
+against a `movswl` is only evidence about a TYPE where the 32-bit result is
+used.  Where it is not, the instruction is still determined by something in
+the source -- here the local's type -- but that something is not the field.
+Finding 2402's one-in-five is about `extcheck.py`'s candidates; this is the
+same discipline one level up.
+
+### 7804. `__SIZEOF_POINTER__`: the guard is right, and the hole was that nothing counted what it protects
+
+The tree guards its compile-time layout assertions on
+`#if __SIZEOF_POINTER__ == 4` because the reconstruction targets a 32-bit
+object and **the layout is expected to move when the tree is built 64-bit**.
+That is the correct design: the period compiler decides, the 64-bit build is a
+portability check, and an offset that shifts with pointer width is not a
+defect.  Measured over 200 source files:
+
+    __SIZEOF_POINTER__ == 4     1747 assertions live over 93 files
+    __SIZEOF_POINTER__ == 8       42 live over  6 files
+    UNDEFINED                     42 live over  6 files
+
+The 42 survivors are the pointer-free structures whose layout genuinely does
+not move -- `v8util.c`'s 27, the two `Jd` unpackers' 12, three whole-structure
+size checks.  So the guard is doing exactly its job.
+
+**THE HOLE: UNDEFINED IS INDISTINGUISHABLE FROM 64-BIT.**  Both give 42.
+GCC 3.4.2 predates the predefine, so if `-D__SIZEOF_POINTER__=4` ever leaves
+`build.sh` or `period_inner.sh`, 1,705 assertions read `#if 0` and vanish while
+every file compiles clean and the gate exits 0.  That has already happened
+once (CLAUDE.md), and 7799 found a second route to it -- a moved `#endif`
+enlarging a guarded region over live code, which also fails open.
+
+Nothing counted them.  `offcheck.py` checks the 1,450 *annotations* against
+`__builtin_offsetof` and reports its denominator, but it runs `gcc -m32`,
+where the predefine exists -- so it is structurally unable to see the period
+build losing the flag.
+
+`tools/assertlive.py` now runs in `make offsets` and fails three ways, because
+they fail differently:
+
+1. **Defining the macro must INCREASE the live count.**  Catches every guard
+   going inert at once.  Self-validating -- no baseline to go stale.
+2. **Both period build scripts must still pass the flag.**  A comparison run
+   with the tool's own flags cannot see a missing `-D` in `build.sh`, and that
+   is precisely the failure that happened.  Only reading the scripts catches
+   it.
+3. **The count must not DECREASE**, floor in `tools/assertlive.json`, same
+   shape as `compare.py --ratchet`.
+
+Check 3 exists because checks 1 and 2 were shown to be insufficient: injecting
+`#if 0` over `V90Parameters.h`'s guard took the tree from 1747 to 1718 and the
+tool still said OK.  **Printing a number is not the same as failing on it** --
+which is finding 134's argument, arrived at again from the other end.
+
+Both arms shown firing by injection: the dropped `-D` exits 1, and the inert
+header exits 1 against the floor.  0.4 s over the whole tree.

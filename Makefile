@@ -500,6 +500,16 @@ strings:
 # exactly when nothing else in the tree can tell.  See tools/offcheck.py.
 offsets:
 	@$(PYTHON) tools/offcheck.py
+#
+# AND THAT THE GUARDED ONES ARE ALIVE.  offcheck compares ANNOTATIONS
+# against __builtin_offsetof under `gcc -m32`, where __SIZEOF_POINTER__ is
+# predefined; it therefore cannot see the period build losing the flag.
+# 1,705 of the tree's assertions exist only at 32 bits, and with the flag
+# missing they read `#if 0` and vanish while every file compiles clean.
+# See tools/assertlive.py -- it fails on an inert guard, a build script
+# that stopped passing -D__SIZEOF_POINTER__=4, and a DECREASE in the count.
+#
+	@$(PYTHON) tools/assertlive.py
 
 # V90Parameters.h and V92Parameters.h against the blob's own `loadParams`.
 #

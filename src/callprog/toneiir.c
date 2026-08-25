@@ -181,7 +181,7 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 	 * first interval's stability test will compare against it.  See D14.
 	 */
 	{
-		short prev = st->env_band;
+		unsigned short prev = st->env_band;
 
 		st->n = 0;
 		st->env_band = 0;
@@ -228,7 +228,7 @@ toneiir_create(struct toneiir *st, const struct toneiir_cfg *cfg)
 void
 toneiir_reset(struct toneiir *st)
 {
-	short prev = st->env_band;
+	unsigned short prev = st->env_band;
 
 	st->env_band = 0;
 	st->n = 0;
@@ -312,7 +312,7 @@ toneiir_progress(struct toneiir *st, short sample)
 		 ? TONEIIR_PRESENT : TONEIIR_ABSENT;
 
 	{
-		short prev = st->env_band;
+		unsigned short prev = st->env_band;
 
 		st->n = 0;
 		st->env_band = 0;
