@@ -454,83 +454,108 @@ V92Modulator::enterPhase3()
 
 /*
  * ===========================================================================
- * V92Modulator::enterPhase4 (.text+0x148b0, 113 bytes)
+ * The four phase 3 exits (.text+0x144f0, +0x14540, +0x14590, +0x145e0),
+ * 68 bytes each.
  *
- * `enterPhase3`'s shape with the PHASE 4 modulator as its subject and one
- * statement fewer: no `resamplerPhaseChange` clear.  A no-op if `phase` is
- * already 2, and the guard is again before the diagnostic.
+ * One shape, four times, with one state code and one callee different in each:
  *
- * THE FIVE ARGUMENTS ARE THE OBJECT'S.  4000 is the amplitude; `byte_0c` is
- * the bit count, zero-extended (`movzbl 0xc(%ebx)`); the state is a literal
- * ZERO, which is one of the fifteen `V92Phase4Modulator` codes nothing names
- * and is why `V92Phase4ModulatorState` carries that one enumerator and no
- * others; the symbol count is zero; and the last is `phase2Info->rtd` in the
- * same slot `enterPhase3` puts it in.
+ *     if (phase3Modulator->state != <code>) return;
+ *     if (dsplibs_debug_level > 1) printf(<message>);
+ *     phase3Modulator-><exit>();
+ *     word_34 = 0;
  *
- * IT IS `byte_0c` HERE AND `byte_0d` IN THE TWO `initiate` MEMBERS, which is
- * the only thing separating the three call sites' argument lists.  Neither
- * byte is written by anything but `reset`, which clears both.
+ * The guard is READ FROM THE SUB-OBJECT, so these are requests rather than
+ * commands: three of the four are safe to call in any state and do nothing.
+ * The phase 3 modulator's own exit members guard again on the same code
+ * (V92Phase3Modulator.h's state table), so the test is duplicated on purpose
+ * -- what this layer adds is the `word_34 = 0`, which only happens when the
+ * transition really is taken.
  *
- * THIS BODY IS ALSO INSIDE `progress`, and as a CALL that GCC inlined rather
- * than as a repeated statement -- .text+0x14e78..+0x14ecb is this function
- * with the same guard, the same message and the same five arguments, and the
- * guard's early exit lands on the join of the statement that FOLLOWS the call.
- * See `progress`.
+ * FOUR SEPARATE BODIES AND NOT A HELPER.  Each is its own blob symbol at its
+ * own address; factoring them into one static would leave four symbols with no
+ * bytes of their own and make every per-function count meaningless (findings
+ * 605, 610).  The duplication is the object's.
  * ===========================================================================
  */
 void
-V92Modulator::enterPhase4()
+V92Modulator::exitJa()
 {
-	if (phase == V92MOD_PHASE_4)
+	if (phase3Modulator->state != V92P3M_STATE_JA)
 		return;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator: enter Phase 4\r\n");
+		dsplibs_debug_printf("V92Modulator: exit Ja\r\n");
 
-	phase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 0,
-			       (unsigned int)phase2Info->rtd);
-	phase = V92MOD_PHASE_4;
-	word_30 = 0;
+	phase3Modulator->exitJa();
+	word_34 = 0;
+}
+
+void
+V92Modulator::exitSilence()
+{
+	if (phase3Modulator->state != V92P3M_STATE_SILENCE)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator: exit Silence\r\n");
+
+	phase3Modulator->exitSilence();
+	word_34 = 0;
+}
+
+void
+V92Modulator::exitSuSecond()
+{
+	if (phase3Modulator->state != V92P3M_STATE_SU_SECOND)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator: exit SuSecond\r\n");
+
+	phase3Modulator->exitSuSecond();
+	word_34 = 0;
+}
+
+/*
+ * The member is `exitTRN1uSecond` and the callee is `exitTRN1u`: the phase 3
+ * modulator has one exit for both TRN1u segments and acts on the SECOND one
+ * (state 12) only.  Both names are the mangling's.
+ */
+void
+V92Modulator::exitTRN1uSecond()
+{
+	if (phase3Modulator->state != V92P3M_STATE_TRN1U_SECOND)
+		return;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator: exit TRN1uSecond\r\n");
+
+	phase3Modulator->exitTRN1u();
 	word_34 = 0;
 }
 
 /*
  * ===========================================================================
- * V92Modulator::enterDataPhase (.text+0x14930, 69 bytes)
+ * V92Modulator::exitCPt (.text+0x14630, 80 bytes)
  *
- * Enter the data phase: tell the bit-to-symbol stage how many symbols a block
- * holds and take the phase counter to 3.  A no-op if `phase` is already 3.
- *
- * ITS DIAGNOSTIC IS NOT GATED AT THIS LEVEL, AND WHAT THAT COSTS IS NOT A LINE.
- * The other nine members here test `dsplibs_debug_level > 1` before they print;
- * this one calls `edprintf` unconditionally, and the object has no
- * `cmpl $0x1,0x0` anywhere in its 69 bytes, so the difference is the author's.
- * `edprintf` FORMATS AND ENCODES whatever the level is -- resetting and then
- * moving its shared key -- and gates only the `dsplibs_debug_printf` at its end,
- * at the same `> 1` (src/core/encode.c).  So the transcript is silent below
- * level 2 exactly as the other nine are, and the visible effect of the missing
- * gate is on the key a later `cEncodeChar` caller would see.
- *
- * `word_34` GOES TO 10 AND NOT TO ZERO, the only member written that stores it
- * anything but zero.  What the code means belongs to `progress`.
- *
- * THE BLOCK SIZE IS RE-READ FROM THE OBJECT (`mov (%ebx),%edx`) rather than
- * from `blockRemaining`, so it is the constructor's derived figure and not
- * whatever is left of the current block.
+ * The same shape as the four above with the PHASE 4 modulator as its subject,
+ * and twelve bytes longer because its guard loads through a second pointer.
+ * State 0 is one of the fifteen `V92Phase4Modulator` codes nothing names, so
+ * the literal stays a literal -- V92Phase4Modulator.h's rule, and a guessed
+ * enumerator here would be exactly the wrong name no test can fail on.
  * ===========================================================================
  */
 void
-V92Modulator::enterDataPhase()
+V92Modulator::exitCPt()
 {
-	if (phase == V92MOD_PHASE_DATA)
+	if (phase4Modulator->state != 0)
 		return;
 
-	edprintf("V92Modulator:enter  Data Phase:\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Modulator: exit CPt\r\n");
 
-	phase = V92MOD_PHASE_DATA;
-	word_30 = 0;
-	word_34 = 10;
-	bitsToSymbol->setSymbolsBlockSize(blockSize);
+	phase4Modulator->exitCPt();
+	word_34 = 0;
 }
 
 /*
@@ -690,108 +715,83 @@ V92Modulator::initiateFPE()
 
 /*
  * ===========================================================================
- * The four phase 3 exits (.text+0x144f0, +0x14540, +0x14590, +0x145e0),
- * 68 bytes each.
+ * V92Modulator::enterPhase4 (.text+0x148b0, 113 bytes)
  *
- * One shape, four times, with one state code and one callee different in each:
+ * `enterPhase3`'s shape with the PHASE 4 modulator as its subject and one
+ * statement fewer: no `resamplerPhaseChange` clear.  A no-op if `phase` is
+ * already 2, and the guard is again before the diagnostic.
  *
- *     if (phase3Modulator->state != <code>) return;
- *     if (dsplibs_debug_level > 1) printf(<message>);
- *     phase3Modulator-><exit>();
- *     word_34 = 0;
+ * THE FIVE ARGUMENTS ARE THE OBJECT'S.  4000 is the amplitude; `byte_0c` is
+ * the bit count, zero-extended (`movzbl 0xc(%ebx)`); the state is a literal
+ * ZERO, which is one of the fifteen `V92Phase4Modulator` codes nothing names
+ * and is why `V92Phase4ModulatorState` carries that one enumerator and no
+ * others; the symbol count is zero; and the last is `phase2Info->rtd` in the
+ * same slot `enterPhase3` puts it in.
  *
- * The guard is READ FROM THE SUB-OBJECT, so these are requests rather than
- * commands: three of the four are safe to call in any state and do nothing.
- * The phase 3 modulator's own exit members guard again on the same code
- * (V92Phase3Modulator.h's state table), so the test is duplicated on purpose
- * -- what this layer adds is the `word_34 = 0`, which only happens when the
- * transition really is taken.
+ * IT IS `byte_0c` HERE AND `byte_0d` IN THE TWO `initiate` MEMBERS, which is
+ * the only thing separating the three call sites' argument lists.  Neither
+ * byte is written by anything but `reset`, which clears both.
  *
- * FOUR SEPARATE BODIES AND NOT A HELPER.  Each is its own blob symbol at its
- * own address; factoring them into one static would leave four symbols with no
- * bytes of their own and make every per-function count meaningless (findings
- * 605, 610).  The duplication is the object's.
+ * THIS BODY IS ALSO INSIDE `progress`, and as a CALL that GCC inlined rather
+ * than as a repeated statement -- .text+0x14e78..+0x14ecb is this function
+ * with the same guard, the same message and the same five arguments, and the
+ * guard's early exit lands on the join of the statement that FOLLOWS the call.
+ * See `progress`.
  * ===========================================================================
  */
 void
-V92Modulator::exitJa()
+V92Modulator::enterPhase4()
 {
-	if (phase3Modulator->state != V92P3M_STATE_JA)
+	if (phase == V92MOD_PHASE_4)
 		return;
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator: exit Ja\r\n");
+		dsplibs_debug_printf("V92Modulator: enter Phase 4\r\n");
 
-	phase3Modulator->exitJa();
-	word_34 = 0;
-}
-
-void
-V92Modulator::exitSilence()
-{
-	if (phase3Modulator->state != V92P3M_STATE_SILENCE)
-		return;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator: exit Silence\r\n");
-
-	phase3Modulator->exitSilence();
-	word_34 = 0;
-}
-
-void
-V92Modulator::exitSuSecond()
-{
-	if (phase3Modulator->state != V92P3M_STATE_SU_SECOND)
-		return;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator: exit SuSecond\r\n");
-
-	phase3Modulator->exitSuSecond();
-	word_34 = 0;
-}
-
-/*
- * The member is `exitTRN1uSecond` and the callee is `exitTRN1u`: the phase 3
- * modulator has one exit for both TRN1u segments and acts on the SECOND one
- * (state 12) only.  Both names are the mangling's.
- */
-void
-V92Modulator::exitTRN1uSecond()
-{
-	if (phase3Modulator->state != V92P3M_STATE_TRN1U_SECOND)
-		return;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator: exit TRN1uSecond\r\n");
-
-	phase3Modulator->exitTRN1u();
+	phase4Modulator->reset(4000, byte_0c, V92P4M_RESET_STATE_ZERO, 0,
+			       (unsigned int)phase2Info->rtd);
+	phase = V92MOD_PHASE_4;
+	word_30 = 0;
 	word_34 = 0;
 }
 
 /*
  * ===========================================================================
- * V92Modulator::exitCPt (.text+0x14630, 80 bytes)
+ * V92Modulator::enterDataPhase (.text+0x14930, 69 bytes)
  *
- * The same shape as the four above with the PHASE 4 modulator as its subject,
- * and twelve bytes longer because its guard loads through a second pointer.
- * State 0 is one of the fifteen `V92Phase4Modulator` codes nothing names, so
- * the literal stays a literal -- V92Phase4Modulator.h's rule, and a guessed
- * enumerator here would be exactly the wrong name no test can fail on.
+ * Enter the data phase: tell the bit-to-symbol stage how many symbols a block
+ * holds and take the phase counter to 3.  A no-op if `phase` is already 3.
+ *
+ * ITS DIAGNOSTIC IS NOT GATED AT THIS LEVEL, AND WHAT THAT COSTS IS NOT A LINE.
+ * The other nine members here test `dsplibs_debug_level > 1` before they print;
+ * this one calls `edprintf` unconditionally, and the object has no
+ * `cmpl $0x1,0x0` anywhere in its 69 bytes, so the difference is the author's.
+ * `edprintf` FORMATS AND ENCODES whatever the level is -- resetting and then
+ * moving its shared key -- and gates only the `dsplibs_debug_printf` at its end,
+ * at the same `> 1` (src/core/encode.c).  So the transcript is silent below
+ * level 2 exactly as the other nine are, and the visible effect of the missing
+ * gate is on the key a later `cEncodeChar` caller would see.
+ *
+ * `word_34` GOES TO 10 AND NOT TO ZERO, the only member written that stores it
+ * anything but zero.  What the code means belongs to `progress`.
+ *
+ * THE BLOCK SIZE IS RE-READ FROM THE OBJECT (`mov (%ebx),%edx`) rather than
+ * from `blockRemaining`, so it is the constructor's derived figure and not
+ * whatever is left of the current block.
  * ===========================================================================
  */
 void
-V92Modulator::exitCPt()
+V92Modulator::enterDataPhase()
 {
-	if (phase4Modulator->state != 0)
+	if (phase == V92MOD_PHASE_DATA)
 		return;
 
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V92Modulator: exit CPt\r\n");
+	edprintf("V92Modulator:enter  Data Phase:\r\n");
 
-	phase4Modulator->exitCPt();
-	word_34 = 0;
+	phase = V92MOD_PHASE_DATA;
+	word_30 = 0;
+	word_34 = 10;
+	bitsToSymbol->setSymbolsBlockSize(blockSize);
 }
 
 /*
