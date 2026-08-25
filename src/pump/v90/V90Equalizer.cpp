@@ -316,6 +316,24 @@ edprint_stat(const char *fmt, float v, long double scale)
  * The parameter is read out of a configuration block, so a NaN is not
  * obviously unreachable, and V90PreFilter.cpp's `setParamEia6` has the same
  * note for the same reason.
+ *
+ * THE SHAPE IS NOT DECODED AND THE DOMAIN IS EXHAUSTED, so do not re-derive
+ * it.  Both callers diverge from the object in the same two ways: we
+ * materialise a SECOND copy of the 0.0f in the entry block (`fld %st(1)`,
+ * `fld %st(0)`) where the object pushes it lazily inside the x < 0 arm, and
+ * the object lays the x < 0 arm out as the FALL-THROUGH where we hoist it out
+ * of line.  Sixteen control-flow spellings, crossed with the loop edit in
+ * `reset` and three call-site spellings -- 96 cells, 54 distinct emissions --
+ * and NOT ONE reaches grade 0 on either caller.  By rule 0 the map simply
+ * misses: the difference is not the clamp's statement shape.  The near
+ * misses are hill-climbing and 7782 declines them: the nested form
+ * (`if (x >= 0.0f) { ... } return 0.0f;`) removes the duplicate zero and
+ * takes `setLinearEquEdgesFadingParams` to 239 bytes against 238, but at 78
+ * instructions against the object's 76 where what is here is 77, and it
+ * takes `reset` out of the BYTES bucket to 850.  Better on bytes, worse on
+ * content, so it is NOT taken.  The PREDICATES are fixed and were never in
+ * the domain -- 2301's sites, and F2304 names these two specifically.
+ * Findings F7922 and F7923.
  */
 static inline float
 clamp_fade_ratio(float x)
@@ -2782,7 +2800,7 @@ V90Equalizer::setLinearEquEdgesFadingParams(float left, float right)
 void
 V90Equalizer::reset(unsigned int cursor)
 {
-	unsigned int i, n;
+	unsigned int i;
 	float left, right, scale;
 
 	edprintf("V90Equalizer: reset\r\n");
@@ -2818,19 +2836,44 @@ V90Equalizer::reset(unsigned int cursor)
 		dfeCoefs[i] = 0;
 	}
 
+	/*
+	 * THE BOUND IS WRITTEN IN THE CONDITION AND NOT HOISTED TO A
+	 * TEMPORARY, and that is a source property this class proves twice
+	 * over rather than a preference.  With `n = X + 8` above the loop GCC
+	 * emits `cmp %reg,%reg / jae` for the zero-trip test; with the bound
+	 * in the condition it folds the known `i == 0` and emits the object's
+	 * `cmp $0x0,%reg / jbe`, and the back edge follows.  All three loops
+	 * here become instruction-for-instruction identical to the object --
+	 * 36 instructions, the whole `mmxArraysPresent` block -- and the same
+	 * one-line change took `zeroLinearEquCoefs` and `zeroDfeCoefs`, which
+	 * are this file's own control for it, from 17 and 19 differing bytes
+	 * to 2 each (finding F7775).
+	 *
+	 * IT COSTS SIXTEEN BYTES AND THAT IS THE CANCELLATION GOING AWAY, NOT
+	 * A REGRESSION.  `reset` measured 862 bytes against the object's 862
+	 * with the temporaries in place; the loop block was 16 bytes SHORT of
+	 * the object's and the x87 tail is 16 bytes LONG, and the two summed
+	 * to a size match that was hiding both.  Finding F7920 measures which
+	 * is which: with this edit the loop block IS the object's, byte for
+	 * byte, and the whole residual is the tail's `clamp_fade_ratio` pair.
+	 *
+	 * F7775 WITHHELD THIS EDIT ON A COUPLING THAT IS NOW REFUTED.  It
+	 * read the +16 as register pressure pushing an extra `fld` into the
+	 * tail; the tail is instruction-for-instruction IDENTICAL with and
+	 * without the edit, only its branch displacements move, and the cost
+	 * is a flat +16 in 47 of 48 clamp-shape x call-site combinations.
+	 * The two divergences are independent.  Finding F7921.
+	 */
 	if (mmxArraysPresent) {
-		n = linearEquLength + 8;
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < linearEquLength + 8; i++) {
 			linearEquMmxCoefs[i] = 0;
 			array_d8[i] = 0;
 		}
 
-		n = word_1c + 8;
-		for (i = 0; i < n; i++)
+		for (i = 0; i < word_1c + 8; i++)
 			array_ec[i] = 0;
 
-		n = dfeLength + 8;
-		for (i = 0; i < n; i++) {
+		for (i = 0; i < dfeLength + 8; i++) {
 			dfeMmxCoefs[i] = 0;
 			array_118[i] = 0;
 			array_12c[i] = 0;
