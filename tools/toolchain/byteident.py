@@ -556,6 +556,9 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list-exact", action="store_true")
+    ap.add_argument("--near", type=int, metavar="N", default=0,
+                    help="list the N symbols closest to closing, by |instruction "
+                         "delta| with alignment padding stripped")
     ap.add_argument("--why", metavar="SYMBOL",
                     help="print the row alpha_equal rejects SYMBOL on")
     ap.add_argument("--self-test", action="store_true",
@@ -565,6 +568,40 @@ def main():
 
     if a.self_test:
         return self_test()
+
+    if a.near:
+        #
+        # SORT BY DELTA, NOT BY SIZE.  A brief that picked targets by BLOB SIZE
+        # sent an agent at symbols whose deltas were -99, +16, -40, +20 and -32
+        # while calling them "the closest to reach"; the real near misses were
+        # plus or minus one to three and none of them was on the list (7865).
+        # Size is how big the function is.  Delta is how far away we are.
+        #
+        blob = sizes(BLOB)
+        ours = {}
+        for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
+            for s in sizes(o):
+                ours.setdefault(s, o)
+        rows = []
+        for k in sorted(x for x in ours if x in blob):
+            ab, ar = body(BLOB, k)
+            bb, br = body(ours[k], k)
+            v, nd = verdict(ab, ar, bb, br)
+            if v in ("EXACT", "UNRESOLVED", "NODATA"):
+                continue
+            try:
+                ia = [r for r in insns(BLOB, k) if not _padding(*r)]
+                ib = [r for r in insns(ours[k], k) if not _padding(*r)]
+            except Exception:
+                continue
+            rows.append((abs(len(ia) - len(ib)), len(ib) - len(ia), v, blob[k], k))
+        rows.sort(key=lambda r: (r[0], -r[3]))
+        print("  %d symbol(s) not yet exact, nearest first by |instruction delta|"
+              "\n  (delta is OURS minus BLOB, padding stripped)\n" % len(rows))
+        print("  %-6s %-9s %8s   %s" % ("delta", "grade", "blob B", "symbol"))
+        for _, d, v, sz, k in rows[:a.near]:
+            print("  %+6d %-9s %8d   %s" % (d, v, sz, k[:70]))
+        return 0
 
     if a.why:
         k = a.why

@@ -88582,3 +88582,44 @@ themselves still in-class with 9, 10, 7 and 5 blob call sites against our 0.
 7543 records moving `Scrambler::process` out as SET-neutral (488 before, 488
 after), and that was measured BEFORE either helper came out of line, so it is
 worth re-measuring now rather than inheriting.
+
+### 7880. The SET diff cannot see a SIZE-to-SIZE regression, and a brief that sorts by size aims at the wrong symbols
+
+Two holes in the parent's own procedure, both found by a wave rather than by
+the parent, and both cheap to close.
+
+**1. "DIFF THE SET, NOT THE COUNT" IS NOT SUFFICIENT.** It has been the
+standing verification all session and it is still right, but its blind spot is
+now measured: the set it diffs is the EXACT set, so **a symbol that stays SIZE
+and gets WORSE is invisible to it**. 7862's half-fix made four `process`
+bodies worse and no bucket moved by one symbol -- SIZE to SIZE, set unchanged,
+count unchanged. It was caught only by reading the byte counts beside the
+buckets.
+
+The rule that follows: a set diff over grade 0 proves nothing was lost FROM
+grade 0. It says nothing about movement inside SIZE or inside BYTES. Where a
+pass edits a symbol it does not close, quote that symbol's differing-byte
+count both sides, because no bucket will do it for you.
+
+**2. SIZE IS HOW BIG THE FUNCTION IS; DELTA IS HOW FAR AWAY WE ARE.** A brief
+listed "the SIZE bucket's near misses" and sorted them by BLOB SIZE --
+
+    398 B  GenericIIR<f,d>::process     392 B  FloatARMA::process
+    393 B  V92Modem C1/C2               392 B  V8SetMessage
+
+-- and their actual instruction deltas are **-99, +16, -40, +20 and -32**.
+The real near misses are plus or minus one to three and **not one of them was
+on the list** (7865). The agent aimed where it was pointed and said so.
+
+`byteident.py --near N` now lists the not-yet-exact symbols sorted by
+`|instruction delta|` with alignment padding stripped, printing the SIGNED
+delta so the sign is visible at a glance -- lever 2 runs both ways and most of
+this tree's are extras. The head of that list is 14 symbols at **delta 0**:
+same instruction count, different bytes, so nothing is missing or extra and
+only the encoding differs. That is a different and much sharper question than
+"which SIZE symbol is small".
+
+Both of these are the same mistake in two costumes: **a number that is easy to
+get was used in place of the number that answers the question.** Byte count
+for completeness (7630), raw instruction count over padding (7793), blob size
+for nearness (7865), and an EXACT-set diff for "nothing got worse" (here).
