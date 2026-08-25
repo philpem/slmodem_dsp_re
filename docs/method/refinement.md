@@ -66,7 +66,16 @@ which of these you have, per function (7789 does it per closure):
   `inPhase3` slot collides; `V90Modem` decodes a zero-test and "`dil` stored
   last"; `resetLinearMapping` decodes only the NEGATIVE, that a signed 16-bit
   local is excluded.
-- **No preimage** — the map is constant or simply misses. The difference is
+- **No preimage** — **but FIRST ask whether the domain was drawn around the
+  right code.** A no-preimage result licenses the strong conclusion "the
+  difference is not what I thought it was", and that conclusion is only as good
+  as the boundary you enumerated over. `packData`'s sixteen-cell domain covered
+  its own four loops and was genuinely exhausted; the CRC lived in a `static`
+  helper whose two loops were never in it, and the answer was there (F7940). A
+  `static` helper that gets inlined has no symbol of its own, so a per-function
+  enumeration cannot see it. **Enumerate over the callee set, not over the
+  function that carries the symbol.** Only once the boundary is right does a
+  no-preimage result mean the map is constant or simply misses. The difference is
   not what you thought it was. Four measured this way in one pass alone
   (7795), and `SpectralShaper::reset` at 10 cells with none reaching zero is
   the cleanest: by lever 1's own rule it is therefore not statement order.
