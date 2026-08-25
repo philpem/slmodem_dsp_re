@@ -1,9 +1,13 @@
 /*
  * V90Jd.cpp -- V.90 Jd message packing.
  *
- * Reconstructed from dsplibs.o V90Jd.cpp.  Two of the class's thirteen
- * methods: `getBitVector()` and `unPackReset()`, which are the two that are
- * leaves.  `include/dsplib/V90Jd.h` carries the object map.
+ * Reconstructed from dsplibs.o V90Jd.cpp.  NINE of the class's thirteen
+ * methods, which is what the header says and what this line used to
+ * contradict: it still read "two -- `getBitVector()` and `unPackReset()`, the
+ * two that are leaves" long after the constructor, the destructor, the three
+ * accessors, `packData` and `unPackData` had landed beside them.  The four
+ * that are still deliberately undefined are the four that SET the message's
+ * fields; `include/dsplib/V90Jd.h` lists them and carries the object map.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x4(%esp),%eax` -- not %ecx, so these are not thiscall and
@@ -275,7 +279,7 @@ V90Jd::getMaxLookahead()
  * THE FEEDBACK IS `add` FOLLOWED BY `and $0x1`, never `xor`: 0x1ea50, 0x1ea74,
  * 0x1eaa9 and the three masks at 0x1ea7e, 0x1eaaf, 0x1eab2.  The bit is loaded
  * `movzbl` and goes in unmasked, so only its low bit can reach the answer --
- * the same shape the CRC block above carries for `getBitVector`.
+ * the same shape the CRC block above carries.
  *
  * THE INPUT POINTER is `0x8(%esp)`, which starts at `this` and takes
  * `addl $0x11` once per group while `%ebx` is set to it plus `0x14`; `this`
@@ -290,18 +294,24 @@ V90Jd::getMaxLookahead()
  * 0x1e9a0 is distinguishable from its absence.
  *
  * THE BODY IS `getBitVector`'s, INSTRUCTION FOR INSTRUCTION.  149 instructions
- * and 515 bytes here against 150 and 518 at 0x1ef10; the one extra instruction
+ * and 534 bytes here against 150 and 537 at 0x1ef10; the one extra instruction
  * is `lea 0x2(%edi),%eax`, the `return bits`, and every other difference is a
  * branch label at the same function-relative offset (+0x10, +0x40, +0xe0,
- * +0x200) or an %edx/%ebx swap the allocator was free to make.  The economical
- * reading is that the original wrote `getBitVector() { packData(); return
- * bits; }` -- which is exactly the shape V92Jd.cpp already has for
- * `getJdBitVector`/`packJdData`, whose 665-byte callee was NOT inlined -- and
- * that GCC inlined this 534-byte one, which would also explain why no
- * relocation names packData: its only caller was inlined away.  THAT IS
- * RECORDED AND NOT ACTED ON.  Writing the call would put a relocation on a
- * symbol the object has none for, and this batch owns packData alone, so the
- * body appears twice in this file exactly as it appears twice in the object.
+ * +0x200) or an %edx/%ebx swap the allocator was free to make.
+ *
+ * SO `getBitVector` IS WRITTEN AS THE CALL, AND THAT IS NOW MEASURED RATHER
+ * THAN BET ON.  F7702 read the duplication as `getBitVector() { packData();
+ * return bits; }` with GCC inlining the 534-byte callee, and declined to write
+ * it on the ground that if GCC refused we would emit a relocation the object
+ * has none for.  It does not refuse.  Compiled at -O3 by GCC 3.4.2 the call
+ * spelling gives 150 instructions with NO `call` in them, and the relocation
+ * ledger comes out the object's way on both counts: nothing in the object
+ * names `_ZN5V90Jd8packDataEv` (0 relocations) and something outside this file
+ * names `_ZN5V90Jd12getBitVectorEv` (1), which is exactly what an inlined-away
+ * sole caller leaves behind.  The near control is real and still holds --
+ * `V92Jd::packJdData` is NOT inlined into its own `getJdBitVector` and carries
+ * its 1 relocation -- so the compiler does not always take this, and the
+ * V.90 case had to be compiled rather than assumed.  Finding F7944.
  * ===========================================================================
  */
 void
@@ -373,81 +383,16 @@ V90Jd::packData()
 		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
 }
 
+/*
+ * 0x1ef10, 537 bytes -- packData's 534 plus `lea 0x2(%edi),%eax`.  The body is
+ * not written out again: the object has it twice because GCC inlined this
+ * call, not because the author wrote it twice, and compiling the call is what
+ * established that (F7944, and the packData comment above for the ledger).
+ */
 unsigned char *
 V90Jd::getBitVector()
 {
-	int i, g;
-
-	/* Group 0 is seventeen 1 bits; the later three each open with a 0. */
-	for (i = 0; i <= 16; i++)
-		bits[i] = 1;
-	bits[V90JD_GROUP1] = 0;
-	bits[V90JD_GROUP2] = 0;
-	bits[V90JD_GROUP3] = 0;
-	bits[68] = 0;
-	bits[69] = 0;
-	bits[70] = 0;
-	bits[71] = 0;
-
-	/* The CRC register starts all ones. */
-	for (i = 0; i <= 15; i++)
-		crc[i] = 1;
-
-	/*
-	 * Over groups 1 and 2, sixteen bits each, skipping the leading 0 of
-	 * each.  The object walks a pointer that starts at `this + 0x14` and
-	 * advances by the 17-byte stride once -- and THAT POINTER IS NOT
-	 * WRITTEN HERE ON PURPOSE.  It is what strength reduction makes of the
-	 * subscript below; spelling it `*in++` over a local hands GCC 3.4.2 an
-	 * INDIRECT_REF it cannot tell apart from the CRC's stores, costs the
-	 * promotion of the CRC register out of memory, and lands 13
-	 * instructions short of the object.  Finding F7941.
-	 */
-	for (g = 0; g <= 1; g++) {
-		int k;
-
-		for (k = 0; k <= 15; k++) {
-			int t = bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]
-			    + crc[0];
-			int tap3 = (crc[4] + t) & 1;
-			int tap10 = (crc[11] + t) & 1;
-
-			/*
-			 * The shift.  Rolled, this is
-			 *
-			 *	int i;
-			 *	for (i = 0; i <= 14; i++)
-			 *		crc[i] = crc[i + 1];
-			 *
-			 * and that spelling is condition 1 above: it keeps
-			 * every element at a variable address and costs the
-			 * promotion, 74 of the 149 instructions.
-			 */
-			crc[0] = crc[1];
-			crc[1] = crc[2];
-			crc[2] = crc[3];
-			crc[3] = crc[4];
-			crc[4] = crc[5];
-			crc[5] = crc[6];
-			crc[6] = crc[7];
-			crc[7] = crc[8];
-			crc[8] = crc[9];
-			crc[9] = crc[10];
-			crc[10] = crc[11];
-			crc[11] = crc[12];
-			crc[12] = crc[13];
-			crc[13] = crc[14];
-			crc[14] = crc[15];
-			crc[3] = tap3;
-			crc[10] = tap10;
-			crc[15] = t & 1;
-		}
-	}
-
-	/* And group 3 is the CRC, low bit first. */
-	for (i = 0; i <= 15; i++)
-		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
-
+	packData();
 	return bits;
 }
 

@@ -89192,6 +89192,11 @@ third SIZE body in the file, is unmoved at 354 of 879 differing bytes and
 
 ### F7943. The call spelling is still gated, and the gate is now much closer
 
+**OVERTURNED BY F7944 IN THE SAME SESSION, and left standing as the reasoning
+rather than the answer.** What follows raised the brief's gate from SIZE to
+byte-identity on its own authority and declined a one-compile test on the
+strength of a confound that does not exist. The compile was run; read F7944.
+
 F7702 asked for `getBitVector() { packData(); return bits; }` -- the cleaner
 source, and probably the original's -- and the project owner wants it tried,
 but only once the sizes match, because the bet on GCC inlining a 534-byte
@@ -89205,3 +89210,43 @@ The near control is unchanged -- `V92Jd::packJdData` is NOT inlined into its
 own `getJdBitVector` and carries 1 relocation -- so the compiler does not always
 take it, and the test is still worth one compile once F7942's row 26 is closed
 or ruled free.
+
+### F7944. `getBitVector() { packData(); return bits; }` COMPILES TO THE OBJECT, and F7702's bet is settled
+
+F7702 read `packData` and `getBitVector` -- 534 and 537 bytes, 149 and 150
+instructions, differing by `lea 0x2(%edi),%eax` and nothing else -- as one body
+written once and inlined, and declined to write the call: if GCC 3.4.2 refused
+a 534-byte callee we would emit a relocation the object has none for. **It does
+not refuse.** With the two bodies the right size at last (F7940, F7941), the
+test cost one compile:
+
+    getBitVector   150 instructions, `sub $0x48,%esp`, and NO `call` in them
+
+and the relocation ledger comes out the object's way on both counts. In the
+blob, `nm`/`objdump -r` over the whole 1.2 MB give **0 relocations naming
+`_ZN5V90Jd8packDataEv`** and **1 naming `_ZN5V90Jd12getBitVectorEv`** -- which
+is exactly what a sole caller that was inlined away leaves behind. Our object
+has no relocation naming either symbol from inside `V90Jd.cpp`, `getBitVector`
+being referenced from another translation unit as it is in the blob.
+
+**THE NEAR CONTROL IS REAL AND STILL HOLDS.** `V92Jd::packJdData` is NOT
+inlined into its own `getJdBitVector` and carries its 1 relocation, so GCC 3.4.2
+does not always take this and the V.90 case had to be compiled rather than
+argued from the V.92 one.
+
+    getBitVector   BYTES 248 of 537 differing  ->  BYTES 247 of 537
+
+-- so the source lost thirty-three lines of duplicated body and the object got
+one byte closer. Tree totals are unmoved: grade 0 534, grade 1 35, grade 0-or-1
+574, BYTES 67, SIZE 607, and `unPackData` still 354 of 879 at 159 instructions
+against 238, checked either side because `--list-exact` cannot see a SIZE
+symbol move (F7880).
+
+**IT COST TWO MUTATION ROWS AND NEITHER CLAIM WAS LOST.** `v90jd` carried two
+rows against getBitVector's own copy of the body, which no longer exists.
+`group 0 is one bit short` was DELETED: `v90packdata` already carries it
+verbatim against packData's loop, and a claim scored in two binaries is scored
+twice. `the CRC's two feedback taps are transposed` was MOVED to `v90packdata`,
+which deliberately had no tap row precisely because `v90jd` owned that claim --
+it is caught there. `v90jd` 39 -> 37 rows, all caught; `v90packdata` 23 -> 24,
+22 caught and the same 2 equivalent. Both notes say why.
