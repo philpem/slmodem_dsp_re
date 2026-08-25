@@ -386,18 +386,49 @@ public:
  * of this file.
  * ---------------------------------------------------------------------------
  */
+/*
+ * THE BULK LOOPS ARE `while (n--)` WITH BOTH POINTERS WALKING, and that is
+ * 7861's decoded fact applied to the loop nobody applied it to.
+ *
+ * 7861 read `copyHistoryTail`'s `dec %edx; cmp $0xffffffff,%edx; jne` as
+ * `while (n--)` with the loop rotated so entry lands on the test, and closed
+ * five symbols on it.  Every bulk member has the SAME entry sequence --
+ * `dec %edi; cmp $0xffffffff,%edi; je` -- and ours had `cmp %ebp,%edi; jb`
+ * off an index.  The object also walks both pointers rather than indexing
+ * them: `xor (%eax),%dl` beside `incl 0x24(%esp)` for the input, and
+ * `mov %dl,0x0(%ebp); inc %ebp` for the output.
+ *
+ * `in++` IS ITS OWN STATEMENT, AFTER BOTH TAP STORES, and that position is a
+ * unique preimage.  The blob spends it at
+ *
+ *     dec %eax / mov %eax,0x18(%esi) / mov %ecx,0x14(%esi) /
+ *     incl 0x24(%esp) / mov %dl,0x0(%ebp)
+ *
+ * Twenty-two cells over three rounds, six distinct emissions: the loop shape
+ * (`while (n--)`, `for (i...)`, `for (; n; n--)`) crossed with the input
+ * spelling (`*in++` in the XOR, `*in` with `in++` at each of five positions,
+ * `in[0]`) and the output spelling (`*out++ = r` against `*out = r; out++;`).
+ * Only position 2 emits the object's order; `*out++ = r` and the split form
+ * emit the SAME BYTES, so what is decoded is the position and not that
+ * spelling.  `Scrambler<int,unsigned char>::process` is EXACT on it.
+ *
+ * `Descrambler`'s bulk loop is a DIFFERENT body -- it stores the input and
+ * reads it back -- and it wants the input walked INSIDE the store,
+ * `*pOut = *in++`, which its own five positions all lose to (25 differing
+ * bytes against 66 to 72).  The two templates differ here because the object
+ * says they differ, exactly as they do over `process`'s in-class status.
+ */
 template <class T, class I>
 void Scrambler<T, I>::process(const T *in, I *out, unsigned int n)
 {
-	unsigned int i;
-
-	for (i = 0; i < n; i++) {
+	while (n--) {
 		T *p = pOut;
-		I r = (I)(in[i] ^ *pTap1 ^ *pTap2);
+		I r = (I)(*in ^ *pTap1 ^ *pTap2);
 
 		pTap1--;
 		pTap2--;
-		out[i] = r;
+		in++;
+		*out++ = r;
 		*p = (T)r;
 		if (--pOut < pLimit) {
 			resetHistoryIndexes();
@@ -613,15 +644,13 @@ T Scrambler<T, I>::process(T in)
 template <class T, class I>
 void Scrambler<T, I>::processAllOnes(I *out, unsigned int n)
 {
-	unsigned int i;
-
-	for (i = 0; i < n; i++) {
+	while (n--) {
 		T *p = pOut;
 		I r = (I)(1 ^ *pTap1 ^ *pTap2);
 
 		pTap1--;
 		pTap2--;
-		out[i] = r;
+		*out++ = r;
 		*p = (T)r;
 		if (--pOut < pLimit) {
 			resetHistoryIndexes();
@@ -633,15 +662,13 @@ void Scrambler<T, I>::processAllOnes(I *out, unsigned int n)
 template <class T, class I>
 void Scrambler<T, I>::processAllZeros(I *out, unsigned int n)
 {
-	unsigned int i;
-
-	for (i = 0; i < n; i++) {
+	while (n--) {
 		T *p = pOut;
 		I r = (I)(*pTap1 ^ *pTap2);
 
 		pTap1--;
 		pTap2--;
-		out[i] = r;
+		*out++ = r;
 		*p = (T)r;
 		if (--pOut < pLimit) {
 			resetHistoryIndexes();
@@ -669,16 +696,14 @@ T Descrambler<T, I>::process(T in)
 template <class T, class I>
 void Descrambler<T, I>::process(const T *in, I *out, unsigned int n)
 {
-	unsigned int i;
-
-	for (i = 0; i < n; i++) {
+	while (n--) {
 		I r;
 
-		*pOut = in[i];
+		*pOut = *in++;
 		r = (I)(*pOut ^ *pTap1 ^ *pTap2);
 		pTap1--;
 		pTap2--;
-		out[i] = r;
+		*out++ = r;
 		if (--pOut < pLimit) {
 			resetHistoryIndexes();
 			copyHistoryTail();
