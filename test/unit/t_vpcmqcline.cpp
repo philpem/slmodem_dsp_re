@@ -1207,9 +1207,13 @@ run_status_width(void)
 
 			if (!build(1000 + (long)tag, 0))
 				continue;
+			qc_poke(0, &t);
 			qc_poke(1, &t);
 			seed_buffers(1000 + tag);
 
+			V(0)->qcLineVerification(sig_in[0], sig_out[0], t.n,
+						 rxbits[0], &nrx[0],
+						 txbits[0], &nbits[0]);
 			ref_qcLineVerification(base[1], sig_in[1], sig_out[1],
 					       t.n, rxbits[1], &nrx[1],
 					       txbits[1], &nbits[1]);
@@ -1217,9 +1221,33 @@ run_status_width(void)
 			diff_eq_int("the blob stored the LOW HALF (%ld)",
 				    (long)V(1)->verificationStatus,
 				    (long)(status_v[si] & 0xffffu), tag);
+			/*
+			 * ANTI-VACUITY: with a status that fits in sixteen
+			 * bits the assertion above holds for a copy of any
+			 * width, so the seeds must all have a high half.
+			 */
 			diff_eq_int("...which is not the whole word (%ld)",
 				    (long)(status_v[si] & 0xffffu)
 				    != (long)status_v[si], 1, tag);
+			/*
+			 * AND THE PARK IS GATED RATHER THAN LEFT TO A COMMENT.
+			 * CLAUDE.md is explicit that a paragraph with no gate
+			 * behind it has a comment's shelf life (findings 6100
+			 * and 6103), and the two-sided seed in `qc_v` is held
+			 * inside sixteen bits ONLY because our side stores the
+			 * whole word.  This asserts that it still does, so the
+			 * moment src/pump/v90/VPcmFloModem.cpp narrows the two
+			 * copies this check goes RED and whoever corrected it
+			 * is told to put `QC_STATUS` back to 0x1234abcd and
+			 * delete this group.  It is tools/gccdiverge.json's
+			 * stale-entry rule -- an allow-listed check that
+			 * starts passing fails the gate -- applied to a
+			 * fixture's parked axis.
+			 */
+			diff_eq_int("OURS still copies the WHOLE word, so the "
+				    "two-sided seed is still parked (%ld)",
+				    (long)V(0)->verificationStatus,
+				    (long)status_v[si], tag);
 
 			demolish();
 			tag++;
