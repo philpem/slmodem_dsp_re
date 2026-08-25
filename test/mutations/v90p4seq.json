@@ -1,0 +1,130 @@
+[
+ {
+  "label": "NOTE: this set covers V90Phase4Modulator::generateMP, generateCPd and generateSUVd and NOTHING ELSE in src/pump/v90/V90Phase4Modulator.cpp.  Several suites over one source with different binaries is the shape v90modprog and v90modulator already have over V90Modulator.cpp.",
+  "note": "EVERY ANCHOR IS A WHOLE FUNCTION, SIGNATURE INCLUDED, and that is forced twice over.  generateCPd and generateSUVd are textually IDENTICAL bodies -- they are the same 167 bytes in the blob -- so no string inside either is unique; and every statement in all three appears again, one tab further in, inside generateV90Symbol and generateV92Symbol, which write the MP and CPd/SUVd states out inline.  A statement-sized anchor matches five to ten times, tools/anchorcheck.py reports that, and tools/mutate.py scores the row UNUSABLE -- which reads as CAUGHT while testing nothing.  Finding 7521.  The anchors were grown to the whole function and every mutant was then re-derived and checked to be a ONE-HUNK diff inside the intended function's line range, because anchorcheck can count matches and cannot see a wrong repair."
+ },
+ {
+  "label": "generateMP scrambles the CP message rather than the MP one",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP scrambles the MP vector for the CP length",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP feeds the converter the CP bit count",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP feeds the converter the raw message rather than the scrambled copy",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(mpBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP does not scramble at all",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP scrambles and does not feed the converter",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP's guard is inverted",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits == 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP passes the message length to the drain rather than the demand",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(mpBitCount, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP returns the drain's status rather than the symbol",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\treturn (short)bitsToSymbol->process(nofBits, &symbol);\n}"
+ },
+ {
+  "label": "generateMP drains before it fills rather than after",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tbitsToSymbol->process(nofBits, &symbol);\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateMP holds the message length in a local across the scrambler rather than re-reading the field",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tunsigned int n = mpBitCount;\n\n\t\tscrambler.process(mpBits, scrambledBits, n);\n\t\tbitsToSymbol->process(scrambledBits, n);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "equivalent": true,
+  "why": "The object RE-READS the field after the call -- `mov 0x2f5c(%esi),%ebx` at +0x2dc12 for the scrambler's third argument and `mov 0x2f5c(%esi),%ecx` again at +0x2dc38 for the converter's second -- because GCC cannot prove `Scrambler<h,h>::process` leaves `*this` alone.  The two spellings can only disagree if that call really does write `mpBitCount`, and the only route is off the end of `scrambledBits`: the buffer is V90P4M_BITS = 0x2ee0 bytes at +0x78 and `mpBits` is the very next field, at +0x2f58, so it takes a message longer than 12,000 bits.  The fixture's largest is 252, and a trial past the buffer would be undefined behaviour in the reconstruction as much as in the object (D561), so it is not one that can be added.  This is 613's class -- a difference the two readings agree on over every value a test may present -- and the object's own instructions are the only evidence there is."
+ },
+ {
+  "label": "the guard tests the demand for greater-than-zero rather than non-zero",
+  "find": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateMP()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits > 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "equivalent": true,
+  "why": "`nofBits` is the `unsigned int` `V90BitsToSymbol::nofBitsForNextTime` returns, so `> 0` and `!= 0` are the same predicate over every value it can hold and GCC 3.4.2 folds both to the same `test %eax,%eax ; jne`. Recorded rather than left out: it is the obvious row to try and its survival has to be argued rather than discovered."
+ },
+ {
+  "label": "generateCPd scrambles the MP message rather than the CP one",
+  "find": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateCPd feeds the converter the MP bit count",
+  "find": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateCPd feeds the converter the raw message rather than the scrambled copy",
+  "find": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(cpBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateCPd's guard is inverted",
+  "find": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits == 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateCPd does not scramble at all",
+  "find": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateCPd passes the message length to the drain rather than the demand",
+  "find": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateCPd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(cpBitCount, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateSUVd scrambles the MP message rather than the CP one",
+  "find": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(mpBits, scrambledBits, mpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateSUVd feeds the converter the MP bit count",
+  "find": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, mpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateSUVd feeds the converter the raw message rather than the scrambled copy",
+  "find": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(cpBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateSUVd's guard is inverted",
+  "find": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits == 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateSUVd does not scramble at all",
+  "find": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}"
+ },
+ {
+  "label": "generateSUVd passes the message length to the drain rather than the demand",
+  "find": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(nofBits, &symbol);\n\treturn symbol;\n}",
+  "replace": "V90Phase4Modulator::generateSUVd()\n{\n\tunsigned int nofBits;\n\tshort symbol;\n\n\tnofBits = bitsToSymbol->nofBitsForNextTime();\n\tif (nofBits != 0) {\n\t\tscrambler.process(cpBits, scrambledBits, cpBitCount);\n\t\tbitsToSymbol->process(scrambledBits, cpBitCount);\n\t}\n\tbitsToSymbol->process(cpBitCount, &symbol);\n\treturn symbol;\n}"
+ }
+]

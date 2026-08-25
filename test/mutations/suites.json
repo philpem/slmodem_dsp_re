@@ -512,6 +512,10 @@
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90p4mgen"
  ],
+ "v90p4seq": [
+  "src/pump/v90/V90Phase4Modulator.cpp",
+  "build/test/t_v90p4seq"
+ ],
  "v90p4mreset": [
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90modchain"
