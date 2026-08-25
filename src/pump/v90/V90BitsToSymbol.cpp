@@ -9,6 +9,21 @@
  * argument -- `mov 0x20(%esp),%ebx` after a 0x1c-byte frame -- not %ecx, so
  * these are not thiscall and nothing here needs an attribute (finding 215).
  *
+ * THE DEFINITION ORDER BELOW IS THE BLOB'S, AND IT IS EVIDENCE RATHER THAN
+ * TASTE.  GCC 3.4.2 emits this file's members in source order, so `nm -n` on
+ * the object reads the original's source order straight off: constructor,
+ * destructor, `reset`, `resetNoSpectral`, `nofBitsForNextTime`,
+ * `setSymbolsBlockSize`, and then the three `process` overloads in the order
+ * (unsigned char *, unsigned &, short *), (unsigned char *, unsigned),
+ * (unsigned &, short *).  We had the two reset members at the BOTTOM and the
+ * three overloads reversed -- 4 of 11 in place.  Permuting the six blocks to
+ * the object's order (refinement.md lever 3; the blocks were moved as whole
+ * units and the file's line multiset checked unchanged) takes the file to
+ * 11 of 11 and closes BOTH of its remaining byte differences,
+ * `process(unsigned char *, unsigned &, short *)` at 55 differing bytes of
+ * 484 and `process(unsigned &, short *)` at 11 of 375, with nothing lost
+ * anywhere in the tree.  Neither function was edited.  Finding 7843.
+ *
  * WHY THE MAPPER IS BUILT THROUGH AN asm() LABEL RATHER THAN `new`.  The
  * blob's constructor is
  *
@@ -154,6 +169,64 @@ V90BitsToSymbol::~V90BitsToSymbol()
 
 /*
  * ===========================================================================
+ * `V90BitsToSymbol::reset` -- 108 bytes at 0x2f8d0
+ * `V90BitsToSymbol::resetNoSpectral` -- 58 bytes at 0x2f940
+ *
+ * THE MAPPER POINTER IS RELOADED FROM THE MEMBER, not carried in a register:
+ * both functions push their two arguments and then `mov (%esi),%edx` to fetch
+ * `this->mapper` (0x2f8ef, 0x2f95f).  Same reading as the constructor's second
+ * argument -- the blob reads the field, so this does.
+ *
+ * `extraSymbols` IS AN UNSIGNED DIVIDE AND THE ZERO IS GUARDED.  The object
+ * builds `6 * shaperId` with `lea (%eax,%eax,2)` and `add %eax,%eax`, then
+ * `f7 f3  div %ebx` at 0x2f919 -- `div`, not `idiv`, although
+ * `V90MappingParams::shaperSR` is declared `int`.  That is the same reading
+ * `V90Mapper::reset` records for its own `6 / shaperSR` and the same one
+ * `V90MAPPER_FRAME`'s `u` suffix exists for.  A zero `shaperSR` skips the
+ * divide with `%eax` already cleared (`xor %eax,%eax` at 0x2f904, before the
+ * test), so the answer is zero and not a trap.
+ *
+ * WHAT IT COUNTS is the symbols the mapper will swallow while its spectral
+ * shaper primes: `V90Mapper::process` suppresses whole frames while +0x6f8
+ * counts down and part of one at the end, `shaperId * signBitGroupSize` in
+ * all, and `6 * shaperId / shaperSR` is that number FOR EVERY `shaperSR` THAT
+ * DIVIDES SIX -- which is every value V.90 uses, and is where the shaper's own
+ * block length comes from.  Two classes, two spellings, one quantity; finding
+ * 7422 has the algebra and the case that separates them.
+ *
+ * `bitsPerFrame` AND `extraSymbols` ARE THE TWO FIELDS THE CONSTRUCTOR LEAVES
+ * ALONE, so a fixture that never zeroes its storage sees both stores directly.
+ * The other three are the constructor's as well as `reset`'s and need the
+ * sentinel treatment finding 7105 describes.
+ * ===========================================================================
+ */
+void
+V90BitsToSymbol::reset(V90MappingParams *mp, PcmType pcm)
+{
+	mapper->reset(mp, pcm);
+
+	bitsPerFrame = mp->word_0;
+
+	if (mp->shaperSR != 0)
+		extraSymbols = V90MAPPER_FRAME * mp->shaperId / mp->shaperSR;
+	else
+		extraSymbols = 0;
+
+	symbolsDone = 0;
+	symbolsBlockSize = 0;
+	extraSymbolsPending = 1;
+}
+
+void
+V90BitsToSymbol::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
+{
+	mapper->resetNoSpectral(mp, pcm);
+
+	bitsPerFrame = mp->word_0;
+}
+
+/*
+ * ===========================================================================
  * `V90BitsToSymbol::nofBitsForNextTime` -- 134 bytes at 0x2f980.
  *
  * HOW MANY BITS THE CALLER MUST HAND OVER TO FILL THE REST OF THE BLOCK.
@@ -203,147 +276,6 @@ V90BitsToSymbol::setSymbolsBlockSize(unsigned int blockSize)
 {
 	symbolsBlockSize = blockSize;
 	return nofBitsForNextTime();
-}
-
-/*
- * ===========================================================================
- * `V90BitsToSymbol::process(unsigned int &, short *)` -- 375 bytes at
- * 0x2fd50.  The other two `process` overloads are NOT written here.
- *
- * THE ANSWER IS A STATUS AND THE STRINGS NAME BOTH OF ITS NON-ZERO VALUES.
- * 1 goes with "SIZE_NOT_SET" and 3 with "BUFFER_UNDERFLOW"; 0 is the silent
- * path and has no message, so the object names two of the three and the
- * third is what is left.
- *
- * THE SHIFT LOOP READS A FIELD THE UNDERFLOW ARM HAS JUST ZEROED, and that is
- * what the blob's constant-propagated `xor %esi,%esi` at 0x2fdf4 is: on the
- * arm that stored `symbolsDone = 0` the compiler knows the loop bound, so it
- * emits the zero rather than a reload, and on the other arm it uses the value
- * loaded at 0x2fdb0.  Two stores to +0x10 on that path -- the zero and then
- * the count of what was kept -- are therefore both in the source and neither
- * is redundant to the compiler.
- *
- * `if (extraSymbolsPending) extraSymbolsPending = 0;` IS THE OBJECT'S, not a
- * clumsy way to write a store.  `cmpb $0x0,0x20(%ebp) ; je ; movb $0x0` --
- * the test is there and a plain assignment would be one `movb`.  It is also
- * on the common path: the size-not-set arm reaches it too.
- * ===========================================================================
- */
-unsigned int
-V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)
-{
-	unsigned int status = 0;
-
-	if (symbolsBlockSize == 0) {
-		status = 1;
-		if (dsplibs_debug_level > 1)
-			dsplibs_debug_printf("V90BitsToSymbol - error: "
-					     "process called, SIZE_NOT_SET"
-					     "\r\n");
-	} else {
-		unsigned int i, kept;
-
-		if (symbolsDone < symbolsBlockSize) {
-			status = 3;
-			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("V90BitsToSymbol - "
-						     "error: process called, "
-						     "BUFFER_UNDERFLOW\r\n");
-			for (i = 0; i < symbolsDone; i++)
-				outSymbols[i] = symbols[i];
-			symbolsDone = 0;
-		} else {
-			for (i = 0; i < symbolsBlockSize; i++)
-				outSymbols[i] = symbols[i];
-		}
-
-		kept = 0;
-		for (i = symbolsBlockSize; i < symbolsDone; i++)
-			symbols[kept++] = symbols[i];
-		symbolsDone = kept;
-
-		nofBits = nofBitsForNextTime();
-	}
-
-	if (extraSymbolsPending)
-		extraSymbolsPending = 0;
-
-	return status;
-}
-
-/*
- * ===========================================================================
- * `V90BitsToSymbol::process(unsigned char *, unsigned int)` -- 180 bytes at
- * 0x2fc90.  THE FILL, where the overload above is the drain.
- *
- * ONE CALL AND FOUR FIELD ACCESSES.  The bits are handed straight to the
- * mapper this class owns, together with a write pointer `symbols +
- * symbolsDone` -- `mov 0x10(%ebx),%eax ; mov 0x8(%ebx),%edx ; lea
- * (%edx,%eax,2),%ecx` -- and the address of a stack local for the count the
- * mapper produced.  `symbolsDone` then advances by that count.  So the two
- * overloads share `symbols` and `symbolsDone` and run in opposite
- * directions: this one appends, the other one hands out a block and shifts
- * the remainder down.
- *
- * THE STATUS IS 2 HERE AND 3 THERE, and the strings are why.  The object's
- * three messages are SIZE_NOT_SET at 0x85b4, BUFFER_OVERFLOW at 0x85ec and
- * BUFFER_UNDERFLOW at 0x8628; this function references the first two and the
- * other overload the first and the third.  0 remains the path with no
- * message.
- *
- * THE OVERFLOW TEST IS AGAINST `nofSymbols` AND THE CLAMP IS TO
- * `symbolsBlockSize`, which are two different fields and not a transcription
- * slip: `cmp 0xc(%ebx),%eax ; jbe` compares the new `symbolsDone` against the
- * BUFFER's capacity, and `mov 0x1c(%ebx),%eax ; mov %eax,0x10(%ebx)` on the
- * failing arm sets `symbolsDone` to the BLOCK size.  It is also written after
- * the store of the sum -- the blob stores `%eax` to +0x10 between the compare
- * and the branch -- so the overflowing value is briefly in the field and then
- * replaced.
- *
- * NOTHING IN THIS FUNCTION BOUNDS THE MAPPER'S WRITE.  The symbols are
- * already in the buffer by the time the capacity is looked at, so status 2 is
- * a report and not a guard, and no sequence of `reset` and `process` over a
- * properly constructed object can raise it without the mapper having already
- * written past the `2 * nofSymbols` allocation.  That is what makes it a
- * poked state in the fixture rather than a driven one -- finding 7430, the
- * same shape as 7422 and 7423.
- *
- * `if (extraSymbolsPending) extraSymbolsPending = 0;` IS THE OBJECT'S HERE
- * TOO, `cmpb $0x0,0x20(%ebx) ; je ; movb $0x0`, and it is on the common path
- * of all three arms exactly as in the other overload.
- * ===========================================================================
- */
-unsigned int
-V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)
-{
-	unsigned int status = 0;
-
-	if (symbolsBlockSize == 0) {
-		status = 1;
-		if (dsplibs_debug_level > 1)
-			dsplibs_debug_printf("V90BitsToSymbol - error: "
-					     "process called, SIZE_NOT_SET"
-					     "\r\n");
-	} else {
-		unsigned int nofOut;
-
-		mapper->process(bits, nofBits, symbols + symbolsDone, nofOut);
-
-		symbolsDone += nofOut;
-		if (symbolsDone > nofSymbols) {
-			status = 2;
-			if (dsplibs_debug_level > 1)
-				dsplibs_debug_printf("V90BitsToSymbol - "
-						     "error: process called, "
-						     "BUFFER_OVERFLOW\r\n");
-			symbolsDone = symbolsBlockSize;
-		}
-	}
-
-	if (extraSymbolsPending)
-		extraSymbolsPending = 0;
-
-	return status;
 }
 
 /*
@@ -445,58 +377,141 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int &nofBits,
 
 /*
  * ===========================================================================
- * `V90BitsToSymbol::reset` -- 108 bytes at 0x2f8d0
- * `V90BitsToSymbol::resetNoSpectral` -- 58 bytes at 0x2f940
+ * `V90BitsToSymbol::process(unsigned char *, unsigned int)` -- 180 bytes at
+ * 0x2fc90.  THE FILL, where the overload above is the drain.
  *
- * THE MAPPER POINTER IS RELOADED FROM THE MEMBER, not carried in a register:
- * both functions push their two arguments and then `mov (%esi),%edx` to fetch
- * `this->mapper` (0x2f8ef, 0x2f95f).  Same reading as the constructor's second
- * argument -- the blob reads the field, so this does.
+ * ONE CALL AND FOUR FIELD ACCESSES.  The bits are handed straight to the
+ * mapper this class owns, together with a write pointer `symbols +
+ * symbolsDone` -- `mov 0x10(%ebx),%eax ; mov 0x8(%ebx),%edx ; lea
+ * (%edx,%eax,2),%ecx` -- and the address of a stack local for the count the
+ * mapper produced.  `symbolsDone` then advances by that count.  So the two
+ * overloads share `symbols` and `symbolsDone` and run in opposite
+ * directions: this one appends, the other one hands out a block and shifts
+ * the remainder down.
  *
- * `extraSymbols` IS AN UNSIGNED DIVIDE AND THE ZERO IS GUARDED.  The object
- * builds `6 * shaperId` with `lea (%eax,%eax,2)` and `add %eax,%eax`, then
- * `f7 f3  div %ebx` at 0x2f919 -- `div`, not `idiv`, although
- * `V90MappingParams::shaperSR` is declared `int`.  That is the same reading
- * `V90Mapper::reset` records for its own `6 / shaperSR` and the same one
- * `V90MAPPER_FRAME`'s `u` suffix exists for.  A zero `shaperSR` skips the
- * divide with `%eax` already cleared (`xor %eax,%eax` at 0x2f904, before the
- * test), so the answer is zero and not a trap.
+ * THE STATUS IS 2 HERE AND 3 THERE, and the strings are why.  The object's
+ * three messages are SIZE_NOT_SET at 0x85b4, BUFFER_OVERFLOW at 0x85ec and
+ * BUFFER_UNDERFLOW at 0x8628; this function references the first two and the
+ * other overload the first and the third.  0 remains the path with no
+ * message.
  *
- * WHAT IT COUNTS is the symbols the mapper will swallow while its spectral
- * shaper primes: `V90Mapper::process` suppresses whole frames while +0x6f8
- * counts down and part of one at the end, `shaperId * signBitGroupSize` in
- * all, and `6 * shaperId / shaperSR` is that number FOR EVERY `shaperSR` THAT
- * DIVIDES SIX -- which is every value V.90 uses, and is where the shaper's own
- * block length comes from.  Two classes, two spellings, one quantity; finding
- * 7422 has the algebra and the case that separates them.
+ * THE OVERFLOW TEST IS AGAINST `nofSymbols` AND THE CLAMP IS TO
+ * `symbolsBlockSize`, which are two different fields and not a transcription
+ * slip: `cmp 0xc(%ebx),%eax ; jbe` compares the new `symbolsDone` against the
+ * BUFFER's capacity, and `mov 0x1c(%ebx),%eax ; mov %eax,0x10(%ebx)` on the
+ * failing arm sets `symbolsDone` to the BLOCK size.  It is also written after
+ * the store of the sum -- the blob stores `%eax` to +0x10 between the compare
+ * and the branch -- so the overflowing value is briefly in the field and then
+ * replaced.
  *
- * `bitsPerFrame` AND `extraSymbols` ARE THE TWO FIELDS THE CONSTRUCTOR LEAVES
- * ALONE, so a fixture that never zeroes its storage sees both stores directly.
- * The other three are the constructor's as well as `reset`'s and need the
- * sentinel treatment finding 7105 describes.
+ * NOTHING IN THIS FUNCTION BOUNDS THE MAPPER'S WRITE.  The symbols are
+ * already in the buffer by the time the capacity is looked at, so status 2 is
+ * a report and not a guard, and no sequence of `reset` and `process` over a
+ * properly constructed object can raise it without the mapper having already
+ * written past the `2 * nofSymbols` allocation.  That is what makes it a
+ * poked state in the fixture rather than a driven one -- finding 7430, the
+ * same shape as 7422 and 7423.
+ *
+ * `if (extraSymbolsPending) extraSymbolsPending = 0;` IS THE OBJECT'S HERE
+ * TOO, `cmpb $0x0,0x20(%ebx) ; je ; movb $0x0`, and it is on the common path
+ * of all three arms exactly as in the other overload.
  * ===========================================================================
  */
-void
-V90BitsToSymbol::reset(V90MappingParams *mp, PcmType pcm)
+unsigned int
+V90BitsToSymbol::process(unsigned char *bits, unsigned int nofBits)
 {
-	mapper->reset(mp, pcm);
+	unsigned int status = 0;
 
-	bitsPerFrame = mp->word_0;
+	if (symbolsBlockSize == 0) {
+		status = 1;
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V90BitsToSymbol - error: "
+					     "process called, SIZE_NOT_SET"
+					     "\r\n");
+	} else {
+		unsigned int nofOut;
 
-	if (mp->shaperSR != 0)
-		extraSymbols = V90MAPPER_FRAME * mp->shaperId / mp->shaperSR;
-	else
-		extraSymbols = 0;
+		mapper->process(bits, nofBits, symbols + symbolsDone, nofOut);
 
-	symbolsDone = 0;
-	symbolsBlockSize = 0;
-	extraSymbolsPending = 1;
+		symbolsDone += nofOut;
+		if (symbolsDone > nofSymbols) {
+			status = 2;
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf("V90BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_OVERFLOW\r\n");
+			symbolsDone = symbolsBlockSize;
+		}
+	}
+
+	if (extraSymbolsPending)
+		extraSymbolsPending = 0;
+
+	return status;
 }
 
-void
-V90BitsToSymbol::resetNoSpectral(V90MappingParams *mp, PcmType pcm)
+/*
+ * ===========================================================================
+ * `V90BitsToSymbol::process(unsigned int &, short *)` -- 375 bytes at
+ * 0x2fd50.  The other two `process` overloads are NOT written here.
+ *
+ * THE ANSWER IS A STATUS AND THE STRINGS NAME BOTH OF ITS NON-ZERO VALUES.
+ * 1 goes with "SIZE_NOT_SET" and 3 with "BUFFER_UNDERFLOW"; 0 is the silent
+ * path and has no message, so the object names two of the three and the
+ * third is what is left.
+ *
+ * THE SHIFT LOOP READS A FIELD THE UNDERFLOW ARM HAS JUST ZEROED, and that is
+ * what the blob's constant-propagated `xor %esi,%esi` at 0x2fdf4 is: on the
+ * arm that stored `symbolsDone = 0` the compiler knows the loop bound, so it
+ * emits the zero rather than a reload, and on the other arm it uses the value
+ * loaded at 0x2fdb0.  Two stores to +0x10 on that path -- the zero and then
+ * the count of what was kept -- are therefore both in the source and neither
+ * is redundant to the compiler.
+ *
+ * `if (extraSymbolsPending) extraSymbolsPending = 0;` IS THE OBJECT'S, not a
+ * clumsy way to write a store.  `cmpb $0x0,0x20(%ebp) ; je ; movb $0x0` --
+ * the test is there and a plain assignment would be one `movb`.  It is also
+ * on the common path: the size-not-set arm reaches it too.
+ * ===========================================================================
+ */
+unsigned int
+V90BitsToSymbol::process(unsigned int &nofBits, short *outSymbols)
 {
-	mapper->resetNoSpectral(mp, pcm);
+	unsigned int status = 0;
 
-	bitsPerFrame = mp->word_0;
+	if (symbolsBlockSize == 0) {
+		status = 1;
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("V90BitsToSymbol - error: "
+					     "process called, SIZE_NOT_SET"
+					     "\r\n");
+	} else {
+		unsigned int i, kept;
+
+		if (symbolsDone < symbolsBlockSize) {
+			status = 3;
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf("V90BitsToSymbol - "
+						     "error: process called, "
+						     "BUFFER_UNDERFLOW\r\n");
+			for (i = 0; i < symbolsDone; i++)
+				outSymbols[i] = symbols[i];
+			symbolsDone = 0;
+		} else {
+			for (i = 0; i < symbolsBlockSize; i++)
+				outSymbols[i] = symbols[i];
+		}
+
+		kept = 0;
+		for (i = symbolsBlockSize; i < symbolsDone; i++)
+			symbols[kept++] = symbols[i];
+		symbolsDone = kept;
+
+		nofBits = nofBitsForNextTime();
+	}
+
+	if (extraSymbolsPending)
+		extraSymbolsPending = 0;
+
+	return status;
 }
