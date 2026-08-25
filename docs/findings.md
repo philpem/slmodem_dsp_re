@@ -83404,7 +83404,7 @@ case was meant to prevent.
 
 ---
 
-### 7810. A TWO-ELEMENT PERMUTATION DOMAIN IS A DECODING, NOT A FIT -- three of five closed, and the compiler REORDERED in all three
+### 7770. A TWO-ELEMENT PERMUTATION DOMAIN IS A DECODING, NOT A FIT -- three of five closed, and the compiler REORDERED in all three
 
 7766 gave a rule for acting on a store-order difference: measure what the
 compiler did to OUR order first, and act only where our emission IS our source,
@@ -83488,7 +83488,7 @@ source positions give two different answers:
         emitted between the `div` and the store of its quotient
                              recivedPartTwoSilenceRrnSUV EXACT, recivedSUV 2
 
-(`recivedSUV` keeps two bytes for a reason that is not its source; 7812.)
+(`recivedSUV` keeps two bytes for a reason that is not its source; 7772.)
 
 **THE DOMAIN IS TWO BECAUSE A STORE DOES NOT CROSS A CALL, AND THAT WAS
 MEASURED IN THIS FUNCTION RATHER THAN ASSERTED.**  It is the claim the whole
@@ -83534,12 +83534,12 @@ placement of ONE statement and the ordering constraints leave it two possible
 positions, compile both: either exactly one reproduces the object -- a decoding,
 whatever the compiler did to our order -- or neither does, and the difference is
 not statement order at all.  Where the family is large, this is 617's spelling
-search and the answer has not changed.  7811 is the large case, in the same
+search and the answer has not changed.  7771 is the large case, in the same
 batch and the same class, and it closed nothing.
 
 ---
 
-### 7811. `V92Phase4Modulator::reset`: FOURTEEN SPELLINGS ENUMERATED, AND THE OBJECT'S STORE ORDER IS NOT REACHABLE FROM ANY OF THEM
+### 7771. `V92Phase4Modulator::reset`: FOURTEEN SPELLINGS ENUMERATED, AND THE OBJECT'S STORE ORDER IS NOT REACHABLE FROM ANY OF THEM
 
 290 bytes, 75 instructions against 75, 46 differing bytes -- the largest in this
 batch and the one that stayed BYTES.  It is 617's `toneiir_reset` exactly: the
@@ -83549,12 +83549,12 @@ object's emitted store order
 
 is **verbatim our source order**, and GCC hoists our `byte_42` store two slots
 to emit `0xc 0x42 0x44 0x40 0x0 0x43 0x4`.  So 7766's licence is unavailable
-here too, and 7810's is what was tried instead: enumerate the family.
+here too, and 7770's is what was tried instead: enumerate the family.
 
 The family taken was every position of the one statement whose store moved --
 `byte_42 = bitsArg;`, seven positions among the block's seven statements --
 crossed with both orders of the adjacent independent pair `word_44 = suvLimit;`
-/ `amplitude = amplitudeArg;`, since 7810 establishes that GCC transposes such a
+/ `amplitude = amplitudeArg;`, since 7770 establishes that GCC transposes such a
 pair.  Fourteen compiles, every one measured, differing bytes of 290:
 
     byte_42 at position         0    1    2    3*   4    5    6
@@ -83595,7 +83595,7 @@ shows, seen at the loads.
 
 ---
 
-### 7812. TWO CHARACTER-IDENTICAL BODIES IN ONE TRANSLATION UNIT COMPILE TO DIFFERENT BYTES, AND IT FOLLOWS THE POSITION
+### 7772. TWO CHARACTER-IDENTICAL BODIES IN ONE TRANSLATION UNIT COMPILE TO DIFFERENT BYTES, AND IT FOLLOWS THE POSITION
 
 `recivedSUV` and `recivedPartTwoSilenceRrnSUV` are the same statements in the
 same order in the same file -- finding 1237's ruling, the original spelled the
@@ -83603,7 +83603,7 @@ body twice.  **The blob's two bodies are byte-for-byte identical; ours are
 not.**  Measured, not inherited from the file's banner: 177 bytes each, the
 blob's differ at zero offsets and ours differ at 0x9 and 0xf.
 
-That is the whole residual after 7810.  With the statement order recovered,
+That is the whole residual after 7770.  With the statement order recovered,
 `recivedPartTwoSilenceRrnSUV` is EXACT and `recivedSUV` is two bytes off:
 
     row 3   blob `mov 0x1c4(%ebx),%eax`   ours `mov 0x1c4(%ebx),%ecx`
@@ -83665,7 +83665,7 @@ nothing (finding 134).  It lives in the pass's scratch directory, not in
 `tools/`; folding it into `byteident.py` as a `--why` flag is a small job for
 whoever wants the column permanently.
 
-**THESE NUMBERS 7810-7812 WERE TAKEN WITH A GAP.**  `master` held 7769 and a
+**THESE NUMBERS 7770-7772 WERE TAKEN WITH A GAP.**  `master` held 7769 and a
 sibling worktree branch already held 7804 when this was written, and that agent
 is still writing.  Expect to renumber at merge.
 

@@ -730,7 +730,7 @@ void V92Phase4Modulator::recivedSUVtag()
  * because the object EMITS their stores there; GCC 3.4.2 at these flags sinks
  * an independent store into the division's schedule, so writing them after the
  * block is what produces the object's emission.  Three functions became
- * byte-identical when they were moved out.  Finding 7810 -- do not "tidy" them
+ * byte-identical when they were moved out.  Finding 7770 -- do not "tidy" them
  * back in.
  * ===========================================================================
  */
@@ -981,7 +981,7 @@ void V92Phase4Modulator::resetBeforFPE()
  * source order gives descending emission.  Both orders were compiled: the
  * source below is EXACT and the other spelling misses by exactly those two
  * bytes, which makes the map on this pair a bijection and the object's order
- * decodable.  Finding 7810.
+ * decodable.  Finding 7770.
  */
 void V92Phase4Modulator::resetBeforRRN()
 {
@@ -1547,7 +1547,7 @@ int V92Phase4Modulator::generateSymbol()
  * remaining 46 bytes are not a permutation of these statements at all and no
  * spelling in the family can close them.  Closest was 27 of 290, in a spelling
  * that separates `byte_42` from `bitsPerSymbol`, and it was declined: closer
- * bytes are not a grade.  Finding 7811 -- do not re-run the search.
+ * bytes are not a grade.  Finding 7771 -- do not re-run the search.
  *
  * THE AMPLITUDE HANDED TO THE MAPPER IS RE-READ FROM THE FIELD, not passed
  * through from the argument: `movswl 0x40(%esi),%eax` at .text+0x1907b, where
