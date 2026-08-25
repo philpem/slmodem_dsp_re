@@ -397,7 +397,7 @@
   "build/test/t_v90demprog"
  ],
  "v90dil": [
-  "src/pump/v90/V90Dil.cpp",
+  "src/pump/v90/V90DilDescriptorSettings.cpp",
   "build/test/t_v90adid"
  ],
  "v90eqdata": [
@@ -439,6 +439,10 @@
  "v90modprog": [
   "src/pump/v90/V90Modulator.cpp",
   "build/test/t_v90modprog"
+ ],
+ "v90modemreset": [
+  "src/pump/v90/V90Modem.cpp",
+  "build/test/t_v90modemctor"
  ],
  "v90modprogbts": [
   "src/pump/v90/V90BitsToSymbol.cpp",
@@ -751,6 +755,10 @@
  "vpcmguard": [
   "src/pump/v90/vpcm.c",
   "build/test/t_vpcmguard"
+ ],
+ "vpcmqcline": [
+  "src/pump/v90/VPcmFloModem.cpp",
+  "build/test/t_vpcmqcline"
  ],
  "vpcmrun": [
   "src/pump/v90/vpcm.c",

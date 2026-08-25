@@ -1,5 +1,58 @@
 /*
- * t_vpcmguard.c -- the unwritten boundary, watched STOPPING.
+ * t_vpcmguard.c -- the unwritten boundary, and THE BOUNDARY IS NOW EMPTY.
+ *
+ * ===========================================================================
+ * WHAT CHANGED, AND WHY TWO OF THIS FILE'S THREE GROUPS ARE GONE
+ * ===========================================================================
+ *
+ * This file watched a guard STOP.  `VPcmV34Progress` called seven symbols
+ * nobody had reconstructed and carried a weak-reference-plus-guard for each;
+ * this binary put the object into the line-verification state, whose only
+ * unwritten callee was `VPcmFloModem::qcLineVerification`, forked, and
+ * required the child to have died of SIGABRT.
+ *
+ * `qcLineVerification` and `vPcmResetPhase3Modem` were the last two, and both
+ * are now in src/pump/v90/VPcmFloModem.cpp.  **All seven are written**, so
+ * every guard below `VPcmV34Progress` is unreachable and there is nothing
+ * left in this tree for a fork to watch abort.  The two groups that drove one
+ * are therefore deleted rather than weakened -- a group whose premise has
+ * ceased to hold does not become a better test by being made to pass.
+ *
+ * WHAT SURVIVES IS THE CLAIM THAT MATTERS, and it survives in both
+ * directions.  Every one of the twelve symbols is asserted PRESENT, through a
+ * WEAK declaration so that the comparison is a comparison; and the soft path
+ * is still driven end to end, with `v34pcm_unwritten()` required to report
+ * `V34PCM_WRITTEN` afterwards.  That second assertion is the whole of the old
+ * watch turned the right way up: if any of the seven ever stops being linked,
+ * its guard fires, the recorder takes its code, and this reads non-WRITTEN.
+ *
+ * `v34pcmmain.cpp` keeps the machinery -- four `v34pcm_notwritten` call sites,
+ * the recorder and the abort -- and it is now dead code.  Retiring it is a
+ * separate change to a file this batch had no other reason to touch, and it
+ * would take the recorder with it; finding 7606.
+ *
+ * ===========================================================================
+ * THE SESSION HAS TO SURVIVE A REAL CALL NOW
+ * ===========================================================================
+ *
+ * The third group used to reach a guard that returned 0 without touching the
+ * hand-built session.  It now reaches `qcLineVerification` itself, which
+ * dereferences two pointers before it does anything else: `V90Modem::progress`
+ * through `modem` and then `modem.demodulator->word_3c`.  So the session is
+ * given a `V90ModemSide` of 2 -- outside {0, 1}, the arm that fans out to
+ * neither half and only prints -- and a real (zeroed) block for the
+ * demodulator to point at.  With `word_3c` zero the dispatch takes its
+ * default, `qcVerifyState` is zero so the silence half runs, and the member
+ * returns 0, which is the same 0 the guard used to return.  Every assertion
+ * below it is therefore unchanged, including `f0004`.
+ *
+ * That is t_v90rundemod.cpp's `side = 2` device for the same reason: keep the
+ * real demodulator out of a binary that is not about it.
+ *
+ * ---------------------------------------------------------------------------
+ * The historical note follows, because it is still the argument for the
+ * assertions that remain.
+ * ---------------------------------------------------------------------------
  *
  * THE BOUNDARY MOVED, AND THAT IS WHAT THIS FILE IS NOW ABOUT.  It used to
  * watch `vpcm_run` stop on the five `VPcmV34Main.cpp` entry points it calls,
@@ -11,21 +64,14 @@
  * quietly stopped being linked would put `vpcm_run` back on `vpcm_notwritten`
  * and NOTHING else in this tree would notice.
  *
- * WHAT IS UNWRITTEN NOW IS ONE LEVEL DOWN, AND IT IS FOUR.  `VPcmV34Progress`
- * called seven symbols nobody had reconstructed -- 7,922 bytes belonging to
- * the V.90 and V.92 arms -- and carries the same weak-reference-plus-guard
- * arrangement for them that `vpcm.c` carried for the five.  Three have since
- * been written: `GenericToneDetector::process(float *, unsigned)` at 422
- * bytes, and `v90RateReneg` and `v90RateRenegSilence` at 555 and 983 in
- * `src/pump/v34/v34pcmmain.cpp`.  The tone detector's weak reference now
- * resolves; the two transmitters have no weak reference left at all, because
- * the file that called them defines them, so their guards are gone rather
- * than satisfied.  FOUR remain, 5,962 bytes, and all four are
- * `VPcmFloModem` members.
- *
- * This binary is the one that DRIVES one of those guards: it puts the object
- * in the line-verification state, whose `VPcmFloModem::qcLineVerification` is
- * among the four, and requires the child to have died of SIGABRT.
+ * THE SEVEN ONE LEVEL DOWN went the same way, one and two at a time:
+ * `GenericToneDetector::process(float *, unsigned)` at 422 bytes, then
+ * `v90RateReneg` and `v90RateRenegSilence` at 555 and 983 in
+ * `src/pump/v34/v34pcmmain.cpp`, then `runPcmModem` and `v90RunDemodulator`,
+ * and finally `qcLineVerification` and `vPcmResetPhase3Modem`.  The tone
+ * detector's weak reference resolves; the two transmitters have no weak
+ * reference left at all, because the file that called them defines them, so
+ * their guards are gone rather than satisfied.
  *
  * NONE OF THEM IS ON A V.34 CALL, which is finding 1454's measurement and the
  * reason `t_vpcmrun`'s four-way comparison of a real 33,600 connect passed
@@ -33,12 +79,13 @@
  * The guard is what stands between "a path this tree cannot take" and a call
  * through a null pointer.
  *
- * WHY IT HAS TO BE WATCHED RATHER THAN REASONED ABOUT.  gates.md's pattern:
+ * WHY IT HAD TO BE WATCHED RATHER THAN REASONED ABOUT.  gates.md's pattern:
  * a guard that silently returned would leave a `.process` running and
  * carrying nothing, and its output -- a buffer of silence -- is exactly what
  * a modem that had correctly transmitted nothing produces.  Nothing about the
- * result distinguishes the two.  So the claim is made the only way it can be:
- * fork, call it, and require the child to have died of SIGABRT.
+ * result distinguishes the two.  So the claim was made the only way it could
+ * be: fork, call it, and require the child to have died of SIGABRT.  That is
+ * the argument the surviving `V34PCM_WRITTEN` assertion inherits.
  *
  * The soft half is `v34hshak.c`'s rule, and finding 547's argument: a test
  * that dies cannot then be asked WHICH path it took, so the stop is what a
@@ -46,13 +93,9 @@
  * always recorded either way.
  */
 
-#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/types.h>
-#include <sys/wait.h>
-#include <unistd.h>
 
 #include "harness.h"
 
@@ -71,8 +114,8 @@
 #include "dsplib/vpcm.h"
 
 /*
- * THE SEVEN, BY THEIR LINK NAMES -- four still unresolved and three defined,
- * declared here so that all three crossings are asserted.
+ * THE SEVEN, BY THEIR LINK NAMES -- all seven defined now, declared here so
+ * that every crossing is asserted.
  *
  * Five of them are C++ members and their mangled names are ordinary C
  * identifiers, so a C file can name them directly and does -- declaring the
@@ -80,10 +123,11 @@
  * SYMBOL rather than the signature.  The parameter lists are deliberately
  * empty: nothing here calls any of them.
  *
- * Weak for the reason above, and the reason is sharper here: four of these are
- * genuinely undefined in this binary, so a plain declaration would both fold
- * the test and leave an undefined reference at the link.  The other three are
- * weak only so that all seven claims are made the same way.
+ * Weak for the reason above.  None of the seven is undefined any more, so the
+ * attribute no longer saves a link -- what it still does is stop GCC folding
+ * `f != 0` to true at compile time, which would make all seven assertions
+ * vacuous and leave a symbol dropping out of the build undetected.  That is
+ * the whole remaining point of this file, so the attribute stays.
  */
 extern void _ZN12VPcmFloModem11runPcmModemEPfS0_jPiS1_S1_S1_(void)
 	__attribute__((weak));
@@ -119,6 +163,28 @@ static struct vpcm_root root;
 static unsigned char session[0x7f68];
 
 /*
+ * What `modem.demodulator` points at.  `qcLineVerification` reads exactly one
+ * word of it -- `word_3c`, the demodulator's event code -- and zero is its
+ * default arm.  0x100 is comfortably more than the one field and is not a
+ * claim about `sizeof(V90Demodulator)`; nothing here depends on the size.
+ */
+static unsigned char demod[0x100];
+
+/*
+ * Three offsets inside the session, spelled as literals because this is a C
+ * file and the classes are C++.  `VPcmFloModem` embeds a `V90Modem` at
+ * +0x1758 (include/dsplib/VPcmFloModem.h); that object's `demodulator` is its
+ * +0x04 and its `side` is its +0x49bc, so 0x175c and 0x6114 here.  Both are
+ * asserted against the object map by t_vpcmflomodem.cpp's offset checks,
+ * which is what keeps these literals honest.
+ */
+#define SESS_DEMODULATOR	0x175c
+#define SESS_MODEM_SIDE		0x6114
+
+/* Outside {0, 1}: V90Modem::progress fans out to neither half. */
+#define V90_SIDE_ILLEGAL	2
+
+/*
  * +0x0000 is `status`, and 4 is the line-verification state -- the arm at
  * .text+0xb9f7 whose one call is the unwritten `qcLineVerification`.
  * +0x0262 is the running flag; zero makes `VPcmV34Progress` return at its
@@ -135,6 +201,7 @@ root_reset(void)
 
 	memset(&root, 0, sizeof(root));
 	memset(session, 0, sizeof(session));
+	memset(demod, 0, sizeof(demod));
 	root.dp.id = 34;
 	root.dp.modem = (void *)0xD1A1u;
 	root.dp.dp_data = &root;
@@ -143,6 +210,10 @@ root_reset(void)
 	obj->status = GUARD_STATUS;
 	obj->p3548 = session;
 	*(short *)((unsigned char *)obj + 0x262) = 1;
+
+	/* See the file comment: the line-verification arm is a real call now. */
+	*(void **)(session + SESS_DEMODULATOR) = demod;
+	*(unsigned int *)(session + SESS_MODEM_SIDE) = V90_SIDE_ILLEGAL;
 }
 
 int
@@ -151,14 +222,12 @@ main(void)
 	short in[FRAG], out[FRAG];
 	int rc = 0;
 	int i;
-	pid_t pid;
-	int wstatus = 0;
 
 	for (i = 0; i < FRAG; i++)
 		in[i] = (short)(i * 37 - 500);
 
-	diff_begin("all five VPcmV34* entry points are WRITTEN, and of the "
-		   "seven below them three are not");
+	diff_begin("all five VPcmV34* entry points are WRITTEN, and so are "
+		   "all seven below them");
 	/*
 	 * ALL FIVE ARE NOW DEFINED, two in `src/pump/v34/v34pcmif.c` and
 	 * three in `src/pump/v34/v34pcmmain.cpp`, and this block is where
@@ -195,11 +264,23 @@ main(void)
 	 */
 	diff_eq_int("v90RunDemodulator is now DEFINED, so the three are two",
 		    _ZN12VPcmFloModem17v90RunDemodulatorEPfjPiS1_ != 0, 1, 0);
-	diff_eq_int("qcLineVerification is unresolved",
+	/*
+	 * AND THESE TWO CLOSE THE SET.  `qcLineVerification` (.text+0xf750,
+	 * 779 bytes) and `vPcmResetPhase3Modem` (.text+0xf200, 149 bytes) are
+	 * reconstructed in src/pump/v90/VPcmFloModem.cpp; findings 7603 and
+	 * 7604.  Both assertions are INVERTED rather than deleted, exactly as
+	 * `v90RunDemodulator`'s was: the guard surface is the claim, and a
+	 * symbol silently dropping out of it is what this file notices.  With
+	 * these two the boundary below `VPcmV34Progress` is EMPTY, which is
+	 * why the two groups that used to follow are gone -- see the head of
+	 * this file.
+	 */
+	diff_eq_int("qcLineVerification is now DEFINED",
 		    _ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_
-		    == 0, 1, 0);
-	diff_eq_int("vPcmResetPhase3Modem is unresolved",
-		    _ZN12VPcmFloModem20vPcmResetPhase3ModemEv == 0, 1, 0);
+		    != 0, 1, 0);
+	diff_eq_int("vPcmResetPhase3Modem is now DEFINED, so the boundary is "
+		    "empty",
+		    _ZN12VPcmFloModem20vPcmResetPhase3ModemEv != 0, 1, 0);
 	/*
 	 * SIX NOW, BECAUSE ONE OF THE SEVEN HAS BEEN WRITTEN.
 	 * `GenericToneDetector::process(float *, unsigned)` is 422 bytes in
@@ -236,41 +317,20 @@ main(void)
 		    (int)sizeof(struct v34_object), VPCM_V34_BYTES, 0);
 	rc |= diff_end();
 
-	/* --- the guard STOPS ------------------------------------------- */
+	/*
+	 * THE GROUP THAT WATCHED THE GUARD STOP IS GONE, and so is the one
+	 * that then asked it which callee it had stopped on.  Both forked,
+	 * called `vpcm_run` with `qcLineVerification` unresolved, and required
+	 * SIGABRT; there is no unresolved callee left below `VPcmV34Progress`
+	 * for either to reach, and a test whose premise has ceased to hold
+	 * does not improve by being made to pass.  The head of this file has
+	 * the argument and finding 7606 the disposition.
+	 */
 
-	diff_begin("an unwritten callee inside VPcmV34Progress aborts, and it "
-		   "is watched doing it");
-	root_reset();
-	fflush(stdout);
-	fflush(stderr);
-	pid = fork();
-	if (pid == 0) {
-		/*
-		 * No `v34pcm_unwritten_reset` here: this child has NOT said it
-		 * intends to read the code afterwards, so the rule is that it
-		 * stops.  If it returns, `_exit(0)` records that it did and
-		 * the parent's claim fails on the exit status rather than on
-		 * a signal that never arrived.
-		 */
-		(void)vpcm_run(&root.dp, in, out, FRAG);
-		_exit(0);
-	}
-	diff_eq_int("fork", pid > 0, 1, 0);
-	if (pid > 0) {
-		diff_eq_int("waitpid", waitpid(pid, &wstatus, 0) == pid, 1, 0);
-		diff_eq_int("the child did not return from vpcm_run",
-			    WIFEXITED(wstatus), 0, 0);
-		diff_eq_int("...it was killed by a signal",
-			    WIFSIGNALED(wstatus), 1, 0);
-		diff_eq_int("...and the signal is SIGABRT",
-			    WIFSIGNALED(wstatus) ? WTERMSIG(wstatus) : 0,
-			    SIGABRT, 0);
-	}
-	rc |= diff_end();
+	/* --- and the whole path still runs ----------------------------- */
 
-	/* --- and it says WHICH ----------------------------------------- */
-
-	diff_begin("...and a test that asks by name gets the code instead");
+	diff_begin("VPcmV34Progress runs the line-verification arm end to "
+		   "end, and no guard fires");
 	root_reset();
 	/*
 	 * Before: nothing has been recorded.  A record that was already set
@@ -287,15 +347,23 @@ main(void)
 	diff_eq_int("vpcm_run returns DPSTAT_OK in soft mode",
 		    vpcm_run(&root.dp, in, out, FRAG), DPSTAT_OK, 0);
 	/*
-	 * FIRST WINS, and the first this fixture can reach is
-	 * `qcLineVerification`: state 4 is the one arm of the seventeen whose
-	 * only unwritten call is that member, and the arm it returns into
-	 * cannot reach any of the other three.  The remaining three are
-	 * recorded here as UNREACHED by this fixture rather than claimed --
-	 * each needs a session object this file has no way to build.
+	 * AND NOTHING WAS RECORDED, WHICH IS THE WHOLE WATCH TURNED THE RIGHT
+	 * WAY UP.  State 4 used to be the one arm of the seventeen whose only
+	 * unwritten call was `qcLineVerification`, and this assertion used to
+	 * read `V34PCM_UNWRITTEN_QCLINE`.  The member is written, so the arm
+	 * calls it and the recorder stays at `V34PCM_WRITTEN`.  If any of the
+	 * seven ever stops being linked, its guard fires on this very call,
+	 * the recorder takes its code, and this fails -- which is what the
+	 * SIGABRT group used to be for and is the only part of it that can
+	 * still be true.
+	 *
+	 * `v34pcm_unwritten_reset` above is what puts the recorder in SOFT
+	 * mode, so a guard that did fire would be recorded rather than
+	 * aborting; that is finding 547's rule and is why this assertion can
+	 * exist at all.
 	 */
-	diff_eq_int("...having recorded the callee it could not reach",
-		    v34pcm_unwritten(), V34PCM_UNWRITTEN_QCLINE, 0);
+	diff_eq_int("...and no guard fired: nothing was recorded",
+		    v34pcm_unwritten(), V34PCM_WRITTEN, 0);
 	/*
 	 * AND IT RAN TO THE END.  The tail at 0x3f19 moves `count` samples out
 	 * of the output queue and compacts it whether or not anything was

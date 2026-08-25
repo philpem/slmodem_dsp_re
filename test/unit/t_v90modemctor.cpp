@@ -170,6 +170,16 @@
 #include "dsplib/debug.h"
 #include "dsplib/modem_params.h"
 
+/*
+ * `run_reset` needs the three complete types V90Modem.h only forward-declares:
+ * the descriptor, so that `dilb` can be `sizeof(tagV90DILdescriptor)` wide and
+ * its fields asserted by name, and the two side objects, so that the arm each
+ * `reset` took is a claim about a named field rather than about an offset.
+ */
+#include "dsplib/V90DilDescriptorSettings.h"
+#include "dsplib/V90Demodulator.h"
+#include "dsplib/V90Modulator.h"
+
 extern "C" {
 /*
  * The two enum arguments are declared as their underlying types.  Both are
@@ -199,6 +209,10 @@ void modem_dtor1(void *self) asm("_ZN8V90ModemD1Ev");
 void modem_dtor2(void *self) asm("_ZN8V90ModemD2Ev");
 void ref_modem_dtor1(void *self) asm("ref__ZN8V90ModemD1Ev");
 void ref_modem_dtor2(void *self) asm("ref__ZN8V90ModemD2Ev");
+
+/* `V90Modem::reset`, .text+0x199a0; see run_reset below. */
+void ref_modem_reset(void *self, unsigned int qcFlag)
+	asm("ref__ZN8V90Modem5resetEj");
 
 /*
  * The five sub-object destructors, used ONLY by the null sweep's teardown:
@@ -245,11 +259,16 @@ typedef void (*dtorfn)(void *);
 typedef char v90modem_is_0x49c0[(sizeof(V90Modem) == MODEM_SIZE) ? 1 : -1];
 
 /*
- * The DIL descriptor.  `tagV90DILdescriptor` is incomplete here -- V90Modem.h
- * forward-declares it -- and the constructor only stores the pointer, so the
- * block is bytes.  96 is comfortably more than the 0x2c the packers reach.
+ * The DIL descriptor.  THE CONSTRUCTOR ONLY STORES THE POINTER AND `reset`
+ * WRITES THROUGH IT, which is why this is a whole descriptor plus a guard and
+ * not the 96 bytes it was while only the lifecycle pair ran here.
+ * `setDilDescriptor` fills `dilCode` to 144 entries, whose last byte is
+ * +0x1a2, so 96 would have been a 323-byte scribble past the block -- made
+ * identically by both sides, so it would have compared equal and passed.
+ * The 64 bytes past the object are compared against the seed on every trial.
  */
-#define DIL_BYTES	96
+#define DIL_GUARD	64
+#define DIL_BYTES	((int)sizeof(tagV90DILdescriptor) + DIL_GUARD)
 
 #define MP_SLOT		(sizeof(struct _tagModemParameters) + 64)
 
@@ -1230,6 +1249,332 @@ run_transcripts(const char *name, ctorfn our_ctor, ctorfn ref_ctor,
 	return diff_end();
 }
 
+
+/*
+ * ===========================================================================
+ * `V90Modem::reset` -- .text+0x199a0, 221 bytes
+ * ===========================================================================
+ *
+ * The lifecycle pair above builds the graph this needs and nothing else in
+ * the tree does, which is why `reset` is tested here rather than in a fixture
+ * of its own: the analogue arm calls `setDilDescriptor` through the
+ * descriptor the CONSTRUCTOR was handed and `V90Demodulator::reset` on the
+ * 0x298 block the constructor allocated, so a hand-built pair of slots would
+ * have to stand up both.
+ *
+ * ===========================================================================
+ * THE ONE CORNER THAT PARTS THE TWO READINGS
+ * ===========================================================================
+ *
+ * `PROBING_MODE` non-zero masks quick connect, and the object masks the
+ * VARIABLE rather than the descriptor select alone -- `xor %esi,%esi` at
+ * 0x19a6d, where `%esi` is `qcFlag`, before rejoining the common path.  So a
+ * reconstruction that chose `DIL_TYPE_ADI` on the probe path but still passed
+ * the CALLER's flag to `V90Demodulator::reset` agrees with the object on
+ * every other corner and differs only where `PROBING_MODE` and `qcFlag` are
+ * BOTH non-zero.  That corner is driven, and `sawMasked` asserts it was
+ * reached; the pair of assertions on `quickConnect` beside it is what makes
+ * the difference visible rather than merely present.
+ *
+ * `qcFlag` IS SWEPT OVER MORE THAN {0, 1}.  `V90Demodulator::reset` stores
+ * its argument WHOLE into `quickConnect` and into the equaliser's, while the
+ * descriptor select is a truth test -- so a value of 2 or 0xffffffff tells a
+ * forwarded flag from a re-derived `dilType != DIL_TYPE_ADI`, which agree
+ * over {0, 1} and part company everywhere else.
+ *
+ * ===========================================================================
+ * THE DESCRIPTOR IS SHARED, SO IT IS SNAPSHOT-RUN-RESTORE-RUN
+ * ===========================================================================
+ *
+ * Both sides were constructed against the SAME `dilb`, which is what makes
+ * `V90Modem::dil` compare equal (finding 1105).  `setDilDescriptor` WRITES
+ * through it, so without restoring the block between the two calls the second
+ * writer would hide the first and a reconstruction that wrote nothing at all
+ * would pass.  Finding 805's shape, and `run_ctor` above already uses it for
+ * the modem parameter block.
+ *
+ * `dilb` HAD TO GROW.  It was 96 bytes, which was "comfortably more than the
+ * 0x2c the packers reach" while the constructor only STORED the pointer;
+ * `setDilDescriptor` fills `dilCode` to 144, whose last byte is +0x1a2, so 96
+ * would have been a 323-byte scribble into whatever the linker parked next --
+ * identically on both sides, so it would have PASSED while measuring nothing.
+ * It is now `sizeof(tagV90DILdescriptor)` plus a guard, and the guard is
+ * compared against the seed on every trial.
+ *
+ * ===========================================================================
+ * THE THREE ARMS
+ * ===========================================================================
+ *
+ *   side 0  `modulator->reset()`, and NOTHING touches the descriptor -- which
+ *           is asserted against the seed rather than left to the comparison,
+ *           because both sides leaving it alone compares equal too.
+ *   side 1  the analogue arm above.
+ *   side 2  `printTitle()` and a gated "Illegal modemSide", and the object is
+ *           compared against a snapshot of ITSELF taken before the call.
+ *
+ * The debug sweep is {0, 1, 2} because every gate here is `cmpl $0x1` and a
+ * {0, 2} sweep cannot separate `> 1` from `> 0`.
+ */
+
+#define SLOT_PARM	5
+#define PARM_PROBING_MODE	0x004
+#define PARM_LINE_CONNECTION	0x00c
+#define PARM_PRE_FILTER_GAIN	0x04c
+
+/*
+ * Two parameters held at 0 on both sides, for t_v90rundemod.cpp's reason:
+ * `PRE_FILTER_GAIN` at -1 sends `V90PreFilter::selectFilter` into
+ * `autoSelection`, which reads the Phase 2 record's `L2` through a pointer a
+ * freshly constructed demodulator has not filled.  Nothing `reset` decides is
+ * affected.
+ */
+static void
+reset_prepare_params(int side, int probing)
+{
+	unsigned char *p = (unsigned char *)slot_ptr(side, SLOT_PARM);
+
+	if (p == 0)
+		return;
+	*(int *)(p + PARM_PROBING_MODE) = probing;
+	*(int *)(p + PARM_LINE_CONNECTION) = 0;
+	*(int *)(p + PARM_PRE_FILTER_GAIN) = 0;
+}
+
+struct reset_trial {
+	unsigned int	side;
+	int		probing;
+	unsigned int	qcFlag;
+	unsigned int	level;
+};
+
+static const struct reset_trial reset_v[] = {
+	/* The analogue arm: every corner of (PROBING_MODE, qcFlag). */
+	{ 1, 0, 0u, 0 }, { 1, 0, 1u, 0 }, { 1, 0, 2u, 0 },
+	{ 1, 0, 0xffffffffu, 0 },
+	{ 1, 1, 0u, 0 }, { 1, 1, 1u, 0 }, { 1, 1, 2u, 0 },
+	{ 1, 1, 0xffffffffu, 0 },
+	/*
+	 * `PROBING_MODE` with a zero LOW BYTE and a zero low half.  The object
+	 * tests the whole word (`cmpl $0x0`); a byte or short test would take
+	 * the other arm on these two and on nothing else.
+	 */
+	{ 1, 0x100, 1u, 0 }, { 1, 0x10000, 1u, 0 },
+	{ 1, -1, 1u, 0 },
+
+	/* The digital arm and the illegal one. */
+	{ 0, 0, 0u, 0 }, { 0, 0, 1u, 0 }, { 0, 1, 1u, 0 },
+	{ 2, 0, 0u, 0 }, { 2, 0, 1u, 0 }, { 2, 1, 1u, 0 },
+
+	/* The same corners again at each of the three debug levels. */
+	{ 1, 0, 1u, 1 }, { 1, 1, 1u, 1 }, { 0, 0, 1u, 1 }, { 2, 0, 1u, 1 },
+	{ 1, 0, 1u, 2 }, { 1, 1, 1u, 2 }, { 1, 0, 0u, 2 }, { 1, 1, 0u, 2 },
+	{ 0, 0, 1u, 2 }, { 2, 0, 1u, 2 }, { 1, 0, 2u, 2 }
+};
+
+#define NRESET	((int)(sizeof(reset_v) / sizeof(reset_v[0])))
+
+static int
+run_reset(ctorfn our_ctor, ctorfn ref_ctor, dtorfn our_dtor, dtorfn ref_dtor)
+{
+	static unsigned char before[MODEM_SLOT];
+	static unsigned char dil_seed[DIL_BYTES];
+	int trial, k;
+	int sawMasked = 0, sawUnmasked = 0;
+	int sawSide[3];
+	int quiet = 0, loud = 0;
+	int qcLenMasked = -1, qcLenUnmasked = -1;
+
+	diff_begin("V90Modem::reset");
+
+	sawSide[0] = sawSide[1] = sawSide[2] = 0;
+	dsplib_debug_capture_on = 1;
+
+	for (trial = 0; trial < NRESET; trial++) {
+		const struct reset_trial *r = &reset_v[trial];
+		struct trial_args t;
+		unsigned int qcSeen;
+		int side;
+		int allocs;
+
+		t.side = r->side;
+		t.nofSymbols = 8;
+		t.compMode = (int)(trial & 1);
+		t.flag = 0x5a5a0000u + (unsigned)trial;
+		t.codec = trial % 5;
+
+		seed_all(1000 + trial, &t);
+		harness_alloc_reset();
+		shared_save(mp_pre, dil_pre);
+		run_side(0, our_ctor, &t);
+		shared_restore(mp_pre, dil_pre);
+		run_side(1, ref_ctor, &t);
+
+		for (side = 0; side < 2; side++)
+			reset_prepare_params(side, r->probing);
+
+		/*
+		 * THE DESCRIPTOR IS RESEEDED AFTER CONSTRUCTION and never
+		 * zeroed: `setDilDescriptor` writes only as far as each count
+		 * says, and over a zeroed block "not written" and "written
+		 * zero" are the same bytes (finding 7602).
+		 */
+		{
+			int i;
+
+			for (i = 0; i < DIL_BYTES; i++) {
+				unsigned char v = nextb();
+
+				dilb[i] = v != 0 ? v : (unsigned char)0xa5;
+			}
+			memcpy(dil_seed, dilb, DIL_BYTES);
+		}
+
+		memcpy(before, mobj[1], MODEM_SLOT);
+
+		dsplib_debug_capture_reset();
+		dsplibs_debug_level = r->level;
+		ref_dsplibs_debug_level = r->level;
+
+		allocs = harness_alloc.allocs;
+
+		((V90Modem *)mobj[0])->reset(r->qcFlag);
+		memcpy(dil_ours, dilb, DIL_BYTES);
+		memcpy(dilb, dil_seed, DIL_BYTES);
+
+		ref_modem_reset(mobj[1], r->qcFlag);
+
+		dsplibs_debug_level = 0;
+		ref_dsplibs_debug_level = 0;
+
+		diff_eq_int("reset allocated nothing (%ld)",
+			    harness_alloc.allocs - allocs, 0, trial);
+
+		ptrmap_take();
+
+		/* The object whole, translated, and every one of the six slots. */
+		translate_pair(tobj[0], tobj[1], mobj[0], mobj[1], MODEM_SIZE);
+		diff_eq_obj_(__FILE__, __LINE__, "after V90Modem::reset",
+			     "V90Modem", tobj[0], tobj[1], MODEM_SIZE, trial);
+		for (k = 0; k < NSLOT; k++)
+			cmp_slot(k, trial);
+
+		diff_eq_int("nothing stored past the object (trial %ld)",
+			    memcmp(mobj[0] + MODEM_SIZE, sown + MODEM_SIZE,
+				   GUARD) == 0
+			    && memcmp(mobj[1] + MODEM_SIZE, sown + MODEM_SIZE,
+				      GUARD) == 0, 1, trial);
+
+		/* The descriptor, ours against the blob's over the same seed. */
+		diff_eq_obj_(__FILE__, __LINE__, "after V90Modem::reset",
+			     "the DIL descriptor", dil_ours, dilb, DIL_BYTES,
+			     trial);
+		diff_eq_obj_(__FILE__, __LINE__,
+			     "nothing is stored past the descriptor",
+			     "the DIL guard",
+			     dilb + sizeof(tagV90DILdescriptor),
+			     dil_seed + sizeof(tagV90DILdescriptor),
+			     DIL_BYTES - sizeof(tagV90DILdescriptor), trial);
+
+		diff_eq_int("the transcripts agree (%ld)",
+			    strcmp(dsplib_debug_capture_text(0),
+				   dsplib_debug_capture_text(1)) == 0, 1,
+			    trial);
+		diff_eq_int("the transcript line counts agree (%ld)",
+			    (long)dsplib_debug_capture_lines(0),
+			    (long)dsplib_debug_capture_lines(1), trial);
+		if (dsplib_debug_capture_lines(1) == 0)
+			quiet++;
+		else
+			loud++;
+
+		sawSide[r->side < 3 ? r->side : 2] = 1;
+
+		/*
+		 * THE ARMS, ASSERTED BY VALUE ON THE BLOB'S SIDE, so that each
+		 * is a claim about the object and not about the two sides
+		 * agreeing.
+		 */
+		if (r->side == 1) {
+			V90Demodulator *d =
+			    (V90Demodulator *)pmap.slot[1][SLOT_DEM];
+			tagV90DILdescriptor *dd =
+			    (tagV90DILdescriptor *)dilb;
+
+			qcSeen = r->probing != 0 ? 0u : r->qcFlag;
+
+			diff_eq_int("the demodulator was reset (%ld)",
+				    (long)d->inPhase3, 0, trial);
+			diff_eq_int("V90Demodulator::reset got the MASKED "
+				    "flag (%ld)", (long)d->quickConnect,
+				    (long)qcSeen, trial);
+			diff_eq_int("the descriptor's dilCount (%ld)",
+				    (long)dd->dilCount, 144, trial);
+			diff_eq_int("the DilType the mask chose (%ld)",
+				    (long)dd->seq1Length,
+				    qcSeen != 0 ? 60 : 120, trial);
+
+			if (r->probing != 0 && r->qcFlag != 0) {
+				sawMasked = 1;
+				qcLenMasked = dd->seq1Length;
+			} else if (r->probing == 0 && r->qcFlag != 0) {
+				sawUnmasked = 1;
+				qcLenUnmasked = dd->seq1Length;
+			}
+		} else {
+			/*
+			 * NEITHER OTHER ARM TOUCHES THE DESCRIPTOR, and that is
+			 * asserted against the SEED: both sides leaving it
+			 * alone compares equal, so the two-sided comparison
+			 * above cannot say it.
+			 */
+			diff_eq_obj_(__FILE__, __LINE__,
+				     "the descriptor is untouched off the "
+				     "analogue arm", "the DIL descriptor",
+				     dilb, dil_seed, DIL_BYTES, trial);
+		}
+
+		if (r->side == 0) {
+			V90Modulator *m =
+			    (V90Modulator *)pmap.slot[1][SLOT_MOD];
+
+			diff_eq_int("V90Modulator::reset cleared state (%ld)",
+				    (long)m->state, 0, trial);
+			diff_eq_int("...symbolCount (%ld)",
+				    (long)m->symbolCount, 0, trial);
+			diff_eq_int("...eventCode (%ld)", (long)m->eventCode,
+				    0, trial);
+		}
+
+		if (r->side > 1)
+			diff_eq_int("the illegal arm stored nothing (%ld)",
+				    memcmp(before, mobj[1], MODEM_SLOT) == 0,
+				    1, trial);
+
+		teardown(0, our_dtor, t.side);
+		teardown(1, ref_dtor, t.side);
+		diff_eq_int("nothing left allocated (trial %ld)",
+			    harness_alloc.live, 0, trial);
+	}
+
+	dsplib_debug_capture_on = 0;
+
+	diff_eq_int("the probe-masked corner was reached", sawMasked, 1, 0);
+	diff_eq_int("and the unmasked one", sawUnmasked, 1, 0);
+	/*
+	 * AND THE TWO DIFFER.  Without this the mask could be a no-op and
+	 * every assertion above would still hold.
+	 */
+	diff_eq_int("the mask changes which descriptor is installed",
+		    qcLenMasked == 120 && qcLenUnmasked == 60, 1, 0);
+	diff_eq_int("side 0 was driven", sawSide[0], 1, 0);
+	diff_eq_int("side 1 was driven", sawSide[1], 1, 0);
+	diff_eq_int("side 2 was driven", sawSide[2], 1, 0);
+	diff_eq_int("both arms of the debug gate were taken",
+		    quiet > 0 && loud > 0, 1, 0);
+
+	return diff_end();
+}
+
 /* ============================================================== congruence */
 
 /*
@@ -1337,6 +1682,9 @@ main(void)
 		       modem_dtor1, ref_modem_dtor1, 1);
 	rc |= run_ctor("V90Modem::V90Modem (C2)", modem_ctor2, ref_modem_ctor2,
 		       modem_dtor2, ref_modem_dtor2, 0);
+
+	rc |= run_reset(modem_ctor1, ref_modem_ctor1, modem_dtor1,
+			ref_modem_dtor1);
 
 	rc |= run_dtor_live("V90Modem::~V90Modem (D1)", modem_ctor1,
 			    ref_modem_ctor1, modem_dtor1, ref_modem_dtor1);

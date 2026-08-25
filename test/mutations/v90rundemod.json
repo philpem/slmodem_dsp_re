@@ -52,8 +52,8 @@
  },
  {
   "label": "the demodulator is run with the wrong sample count",
-  "find": "\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);",
-  "replace": "\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n - 1);"
+  "find": "\t/* 0xd890.  Unconditional; there is no gate in front of it. */\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n);",
+  "replace": "\t/* 0xd890.  Unconditional; there is no gate in front of it. */\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n - 1);"
  },
  {
   "label": "the SD arm does not latch byte_6118",

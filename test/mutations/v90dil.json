@@ -73,5 +73,175 @@
   "label": "treat the DIL code as signed",
   "find": "\t\tunsigned int code = dil->dilCode[i];",
   "replace": "\t\tunsigned int code = (unsigned int)(int)(signed char)dil->dilCode[i];"
+ },
+ {
+  "label": "the DIL entry count is taken from the sequence length table",
+  "find": "\td->dilCount = N[type];",
+  "replace": "\td->dilCount = Lsp[type];"
+ },
+ {
+  "label": "the DIL entry count is read from the ADI row whatever the type",
+  "find": "\td->dilCount = N[type];",
+  "replace": "\td->dilCount = N[0];",
+  "equivalent": true,
+  "why": "`N` is {144, 144}: its two rows are the same byte, so no DilType can part `N[type]` from `N[0]`.  src/pump/v90/V90DilDescriptorSettings.cpp records the identity and t_v90adid's setDilDescriptor group names it as untestable rather than leaving it an unexplained survivor."
+ },
+ {
+  "label": "seq1Length is read from the ADI row whatever the type",
+  "find": "\td->seq1Length = Lsp[type];",
+  "replace": "\td->seq1Length = Lsp[0];"
+ },
+ {
+  "label": "seq2Length is read from the quick-connect row whatever the type",
+  "find": "\td->seq2Length = Ltp[type];",
+  "replace": "\td->seq2Length = Ltp[1];"
+ },
+ {
+  "label": "the two sequence lengths are stored the other way round",
+  "find": "\td->seq1Length = Lsp[type];\n\td->seq2Length = Ltp[type];",
+  "replace": "\td->seq1Length = Ltp[type];\n\td->seq2Length = Lsp[type];",
+  "equivalent": true,
+  "why": "`Lsp` and `Ltp` hold the SAME pair {120, 60}, so the two stores write the same byte and swapping their sources is a no-op.  The DESTINATIONS are still separable and the next mutation is that claim."
+ },
+ {
+  "label": "both sequence lengths come from seq1's",
+  "find": "\td->seq2Length = Ltp[type];",
+  "replace": "\td->seq2Length = d->seq1Length + 1;"
+ },
+ {
+  "label": "seq1 is filled from the ADI pattern whatever the type",
+  "find": "\t\td->seq1[i] = SP[type][i];",
+  "replace": "\t\td->seq1[i] = SP[0][i];"
+ },
+ {
+  "label": "seq1 is filled from the transmit pattern",
+  "find": "\t\td->seq1[i] = SP[type][i];",
+  "replace": "\t\td->seq1[i] = TP[type][i];"
+ },
+ {
+  "label": "seq1 is filled to the whole array rather than to seq1Length",
+  "find": "\tfor (i = 0; i < Lsp[type]; i++)\n\t\td->seq1[i] = SP[type][i];",
+  "replace": "\tfor (i = 0; i < 128; i++)\n\t\td->seq1[i] = SP[type][i];"
+ },
+ {
+  "label": "seq1's fill runs one past the length",
+  "find": "\tfor (i = 0; i < Lsp[type]; i++)\n\t\td->seq1[i] = SP[type][i];",
+  "replace": "\tfor (i = 0; i <= Lsp[type]; i++)\n\t\td->seq1[i] = SP[type][i];"
+ },
+ {
+  "label": "seq1's fill stops one short",
+  "find": "\tfor (i = 0; i < Lsp[type]; i++)\n\t\td->seq1[i] = SP[type][i];",
+  "replace": "\tfor (i = 0; i + 1 < Lsp[type]; i++)\n\t\td->seq1[i] = SP[type][i];"
+ },
+ {
+  "label": "seq1's bound is the transmit pattern's length",
+  "find": "\tfor (i = 0; i < Lsp[type]; i++)\n\t\td->seq1[i] = SP[type][i];",
+  "replace": "\tfor (i = 0; i < Ltp[type]; i++)\n\t\td->seq1[i] = SP[type][i];",
+  "equivalent": true,
+  "why": "`Lsp` and `Ltp` are the same pair {120, 60}, so the two bounds are the same number for every DilType.  Named here rather than left as an unexplained survivor."
+ },
+ {
+  "label": "seq2 is filled from the ADI pattern whatever the type",
+  "find": "\t\td->seq2[i] = TP[type][i];",
+  "replace": "\t\td->seq2[i] = TP[0][i];"
+ },
+ {
+  "label": "seq2 is filled from the sequence-1 pattern",
+  "find": "\t\td->seq2[i] = TP[type][i];",
+  "replace": "\t\td->seq2[i] = SP[type][i];"
+ },
+ {
+  "label": "seq2 is filled to the whole array rather than to seq2Length",
+  "find": "\tfor (i = 0; i < Ltp[type]; i++)\n\t\td->seq2[i] = TP[type][i];",
+  "replace": "\tfor (i = 0; i < 128; i++)\n\t\td->seq2[i] = TP[type][i];"
+ },
+ {
+  "label": "the ucode set is filled to the whole array rather than to dilCount",
+  "find": "\tfor (i = 0; i < N[type]; i++)\n\t\td->dilCode[i] = TO[type][i];",
+  "replace": "\tfor (i = 0; i < 256; i++)\n\t\td->dilCode[i] = TO[type][i];"
+ },
+ {
+  "label": "the ucode set is filled to the sequence length instead",
+  "find": "\tfor (i = 0; i < N[type]; i++)\n\t\td->dilCode[i] = TO[type][i];",
+  "replace": "\tfor (i = 0; i < Lsp[type]; i++)\n\t\td->dilCode[i] = TO[type][i];"
+ },
+ {
+  "label": "the ucode set is read from the ADI row whatever the type",
+  "find": "\t\td->dilCode[i] = TO[type][i];",
+  "replace": "\t\td->dilCode[i] = TO[0][i];",
+  "equivalent": true,
+  "why": "`TO`'s two rows are byte-for-byte identical -- the DilType changes how long each segment is and how long the two patterns are, never WHICH training symbols are sent.  V90DilDescriptorSettings.cpp's table comment records the measurement; no fixture can part these two readings."
+ },
+ {
+  "label": "the segment lengths are read from the ADI row whatever the type",
+  "find": "\t\td->segmentSize[i] = H[type][i];",
+  "replace": "\t\td->segmentSize[i] = H[0][i];"
+ },
+ {
+  "label": "the segment lengths come from the reference codes",
+  "find": "\t\td->segmentSize[i] = H[type][i];",
+  "replace": "\t\td->segmentSize[i] = REF[type][i];"
+ },
+ {
+  "label": "the segment length loop stops one short",
+  "find": "\tfor (i = 0; i < 8; i++)\n\t\td->segmentSize[i] = H[type][i];",
+  "replace": "\tfor (i = 0; i < 7; i++)\n\t\td->segmentSize[i] = H[type][i];"
+ },
+ {
+  "label": "the segment codes come from the segment lengths",
+  "find": "\t\td->segmentCode[i] = REF[type][i];",
+  "replace": "\t\td->segmentCode[i] = H[type][i];"
+ },
+ {
+  "label": "the segment codes are read from the ADI row whatever the type",
+  "find": "\t\td->segmentCode[i] = REF[type][i];",
+  "replace": "\t\td->segmentCode[i] = REF[0][i];",
+  "equivalent": true,
+  "why": "`REF`'s two rows are identical, 78 seven times and 25.  Same class as the `TO` row above."
+ },
+ {
+  "label": "the segment code loop stops one short",
+  "find": "\tfor (i = 0; i < 8; i++)\n\t\td->segmentCode[i] = REF[type][i];",
+  "replace": "\tfor (i = 0; i < 7; i++)\n\t\td->segmentCode[i] = REF[type][i];"
+ },
+ {
+  "label": "the quick-connect sequence length is 61 rather than 60",
+  "find": "static unsigned char Lsp[DIL_TYPES] = { 120, 60 };",
+  "replace": "static unsigned char Lsp[DIL_TYPES] = { 120, 61 };"
+ },
+ {
+  "label": "the DIL entry count is 143",
+  "find": "static unsigned char N[DIL_TYPES] = { 144, 144 };",
+  "replace": "static unsigned char N[DIL_TYPES] = { 143, 143 };"
+ },
+ {
+  "label": "the quick-connect segment lengths keep the ADI row's middle",
+  "find": "\t{   9,  19,  19,  19,  19,  19,  19,   9 },",
+  "replace": "\t{   9,  39,  19,  19,  19,  19,  19,   9 },"
+ },
+ {
+  "label": "the last reference code is 78 like the other seven",
+  "find": "\t{  78,  78,  78,  78,  78,  78,  78,  25 },\n\t{  78,  78,  78,  78,  78,  78,  78,  25 },",
+  "replace": "\t{  78,  78,  78,  78,  78,  78,  78,  78 },\n\t{  78,  78,  78,  78,  78,  78,  78,  78 },"
+ },
+ {
+  "label": "one bit of the ADI transmit pattern is flipped inside the quick-connect span",
+  "find": "\t\t  0,   1,   1,   0,   1,   0,   1,   1,   0,   1,   0,   1,   0,   0,   0,   0,\n\t\t  0,   0,   1,   1,   1,   1,   1,   1,   1,   0,   0,   0,   0,   0,   0,   1,",
+  "replace": "\t\t  0,   1,   1,   0,   1,   0,   1,   1,   0,   1,   0,   1,   0,   0,   0,   1,\n\t\t  0,   0,   1,   1,   1,   1,   1,   1,   1,   0,   0,   0,   0,   0,   0,   1,"
+ },
+ {
+  "label": "the two DilTypes report each other's descriptor",
+  "find": "\tcase DIL_TYPE_ADI:\n\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI.\\r\\n\");\n\t\tbreak;\n\n\tcase DIL_TYPE_ADI_QC:\n\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI_QC.\\r\\n\");",
+  "replace": "\tcase DIL_TYPE_ADI:\n\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI_QC.\\r\\n\");\n\t\tbreak;\n\n\tcase DIL_TYPE_ADI_QC:\n\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI.\\r\\n\");"
+ },
+ {
+  "label": "the ADI arm says nothing",
+  "find": "\tcase DIL_TYPE_ADI:\n\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI.\\r\\n\");\n\t\tbreak;",
+  "replace": "\tcase DIL_TYPE_ADI:\n\t\tbreak;"
+ },
+ {
+  "label": "the report is gated on the debug level at the call site as well",
+  "find": "\tcase DIL_TYPE_ADI_QC:\n\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI_QC.\\r\\n\");",
+  "replace": "\tcase DIL_TYPE_ADI_QC:\n\t\tif (dsplibs_debug_level > 2)\n\t\t\tedprintf(\"V90DilDescriptorSettings: DIL descriptor set to \"\n\t\t\t \"option ADI_QC.\\r\\n\");"
  }
 ]

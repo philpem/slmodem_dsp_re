@@ -213,6 +213,35 @@ public:
 	void progress(int *bits, unsigned int &nofBits, float *samples,
 		      unsigned int nofSymbols);
 
+	/*
+	 * `reset` -- .text+0x199a0, 0xdd = 221 bytes, and THE SIDE SWITCH
+	 * AGAIN: it prints a gated banner, calls `printTitle`, and then hands
+	 * the work to `V90Modulator::reset()` on the digital side and to
+	 * `V90Demodulator::reset(unsigned int)` on the analogue one.  Both
+	 * live arms are tail JUMPS, exactly as in `progress`, so the return
+	 * type is the two callees' and both are `void`.
+	 *
+	 * THE ANALOGUE ARM IS THE ONE WITH CONTENT, and it does two things
+	 * the digital arm does not:
+	 *
+	 *   - `ptr_49b4->PROBING_MODE` VETOES QUICK CONNECT.  When it is
+	 *     non-zero the object prints "due to probe mode quick connect is
+	 *     masked !!!" and forces `qcFlag` to zero, so what reaches BOTH
+	 *     the descriptor selection and `V90Demodulator::reset` is the
+	 *     masked value and not the argument.  The `xor %esi,%esi` at
+	 *     0x19a74 is that store and it happens before the `edprintf`
+	 *     returns.
+	 *   - it SELECTS THE DIL DESCRIPTOR, `setDilDescriptor(dil, qcFlag ?
+	 *     DIL_TYPE_ADI_QC : DIL_TYPE_ADI)`, which is this object's only
+	 *     call of that function and the only place a `DilType` is
+	 *     constructed anywhere in the blob.
+	 *
+	 * The argument is `unsigned int` from the mangling (`Ej`) and is
+	 * tested with `test %esi,%esi`, so any non-zero value selects quick
+	 * connect; it is not compared against 1.
+	 */
+	void reset(unsigned int qcFlag);
+
 	void setSessionFlag(unsigned int flag);
 
 	/* --- data members; the mangling never carries one (finding 226) --- */

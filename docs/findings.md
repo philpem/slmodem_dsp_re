@@ -81487,3 +81487,562 @@ drawn from**, and a probe that prints the scalar without it will support
 whichever reading its author already had.  The probe RUNNER here was
 fire-checked before any of this and the fire check passed; what had no control
 was every detector hanging off it.
+
+======================================================================
+
+### 7600. `V90Dil.cpp` was an invented name and the blob carries the real one, `V90DilDescriptorSettings.cpp`; the tables prove the membership
+
+`include/dsplib/V90Dil.h` and `src/pump/v90/V90Dil.cpp` were named by the
+batch that wrote `calculateDilLength`, and that file said so at the top:
+"a free function, not a member -- its mangling has no class component -- so it
+needs a home of its own".  A home of its own had to be *invented* because
+nothing then said what the original's was.
+
+**Two things say so now, and they are independent.**
+
+1. `readelf -sW` lists an `STT_FILE` entry `V90DilDescriptorSettings.cpp`,
+   #244 of the blob's 283.
+2. `setDilDescriptor`'s two `edprintf` messages, `.rodata.str1.4+0x8710` and
+   `+0x8754`, both open `"V90DilDescriptorSettings: "`.  Every neighbouring
+   diagnostic in this area names a **class and a member** -- "V90Modem Reset:
+   Illegal modemSide", "V90Modem progress: Illegal modemSide",
+   "V90Phase3Demodulator: enter ..." -- and these two name the file, because
+   there is no class to name.  CLAUDE.md's evidence rule 1.
+
+**THE TRANSLATION UNIT IS FOUR FREE FUNCTIONS, and two of the four are proved
+rather than inferred.**  In `.text` order:
+
+	0x31c60  setDilDescriptor(tagV90DILdescriptor *, DilType)   0x131
+	0x31da0  getSegmentPointer(PcmType, int)                    0x073
+	0x31e20  calculateDilLength(DilType, PcmType)               0x0f1
+	0x31f20  calculateDilLength(tagV90DILdescriptor *, PcmType) 0x0c4
+
+contiguous, bounded below by `V90SignBitsExtractor::process` (ends 0x31c51)
+and above by `ModulusDecoder::ModulusDecoder` (0x31ff0), and every one a
+mangled free function with no class component.  The eight tables below are
+**LOCAL** `.data` symbols, and a local symbol can only be referenced from its
+own translation unit; `tools/relocscan.py --range .data:0x480-0x8c4` finds
+seventeen references and every one is in `[0x31c70, 0x31ee4]`, which is
+`setDilDescriptor` and `calculateDilLength(DilType, PcmType)`.  So those two
+are necessarily one file.  The other two are adjacency plus the overload
+relationship, which is weaker and is labelled as such.
+
+Both files are renamed by `git mv`, six references updated -- `t_v90adid.cpp`,
+`V90Phase3Demodulator.cpp`, two header comments, `tools/offcheck.py`'s
+`SKIP_HEADERS` and `test/mutations/suites.json`'s `v90dil` row -- and the
+include guard becomes `DSPLIB_V90DILDESCRIPTORSETTINGS_H`.  **Findings before
+this one that name `V90Dil.cpp` or `V90Dil.h` mean these files**; history is
+not renamed (CLAUDE.md, and 212/213's worked example).
+
+`getSegmentPointer` and `calculateDilLength(DilType, PcmType)` are still
+unwritten and `tools/service.py --list none` puts both in "no entry point
+reaches it", so neither blocks a link and neither is in this batch.
+
+### 7601. Seven of the eight DIL table names are Recommendation V.90's own notation; `TO` is not, and none of the CONTENTS is derivable from the spec
+
+**The names.**  `N`, `SP`, `TP`, `H`, `REF`, `Lsp` and `Ltp` are the
+Recommendation's, not the author's invention.  Table 12/V.90 in section 8.3.1
+defines the DIL descriptor's bit fields as
+
+	18:25          N
+	35:41          LSP - 1
+	43:49          LTP - 1
+	52:67          SP           (continuing every 16 bits)
+	52+a:67+a      TP           (continuing every 16 bits)
+	52+b:58+b ...  H1 .. H8
+	120+b:126+b .. REF1 .. REF8
+
+and section 8.4.1 ("DIL") defines every one of them again in prose: "The DIL
+consists of N DIL-segments of length Lc", "Eight Hc values are used to
+calculate the length of the DIL-segments", "Eight Ucodes, REFc, define the
+PCM codeword used as a reference symbol", "A single Sign Pattern (SP) and
+Training Pattern (TP) is used for the entire DIL", "1 <= LSP <= 128; and 1 <=
+LTP <= 128".  The abbreviations list at the end of the Recommendation carries
+`Hc`, `Lc` and `N` again.  The object's `Lsp` and `Ltp` are the spec's `LSP`
+and `LTP` down-cased, and they hold the length itself where the descriptor's
+bit field holds length minus one.
+
+**`TO` IS NOT THE SPEC'S.**  Section 8.3.1 spells that field out as "The Ucode
+of the training symbol used for the 1st DIL segment" and section 8.4.1 as "A
+set of N Ucodes determine the training symbol that is assigned to each
+DIL-segment", and neither gives it a symbol.  So seven of eight are the
+Recommendation's notation and the eighth is the author's own name for the
+ucode set.
+
+**The contents are NOT derivable from the Recommendation, and this is the
+useful half of the answer.**  V.90 gives ranges and semantics and no values:
+
+	0 <= N <= 255                      N = 144 in both rows
+	1 <= LSP <= 128, 1 <= LTP <= 128   120 and 60
+	7 bits for Hc                      19, 39, 9
+	7 bits for REFc, 7 for each ucode  78, 25; max ucode 116
+	Lc = (Hc + 1) * 6 symbols          the existing calculateDilLength
+
+Every observed value satisfies all of it and none of it is determined by it:
+**which** DIL to request is the analogue modem's choice, and these two rows
+are this vendor's.  `T-REC-V.92-200011` and its three amendments add nothing
+-- V.92 inherits V.90's phase 3 and republishes no DIL values.  So this is
+**not** the situation `docs/method/conformance-plan.md` records for Table
+1/V.90, whose 512 published numbers `ulaw2linear`/`alaw2linear` reproduce with
+zero mismatches: there is no published table to check these against, and a
+conformance test here would have nothing to be a test of.  Not chased further,
+per the brief.
+
+**One free corroboration each way.**  `calculateDilLength`, written before any
+of this, sums `6 * segmentSize[seg] + 6` over `dilCount` entries -- which is
+exactly section 8.4.1's `Lc = (Hc + 1) * 6` over the `N` DIL-segments.  So
+`tagV90DILdescriptor::segmentSize` **is** the spec's `Hc` and `dilCount` its
+`N`, derived from the object by two batches that never met.  The struct's
+field names are left alone rather than renamed to the spec's: they are real
+names already, not `pad_`/`type_` placeholders, and finding 7481 is what a
+rename in this area costs.  The correspondence is recorded in
+`V90DilDescriptorSettings.h` instead:
+
+	dilCount     N        seq1     SP    segmentSize  Hc
+	seq1Length   LSP      seq2     TP    segmentCode  REFc
+	seq2Length   LTP                     dilCode      the N Ucodes
+
+### 7602. The eight tables are two-row arrays chosen by `DilType`, and `setDilDescriptor` writes only as far as each count says
+
+**The shapes are forced, not chosen.**  `setDilDescriptor` indexes `N`, `Lsp`
+and `Ltp` by `%ecx` itself, `SP` and `TP` by `%ecx << 7`, `TO` by `%ecx << 8`,
+and `H` and `REF` by `lea 0x0(,%ecx,8)`, where `%ecx` is the `DilType`
+argument.  The eight symbol sizes agree exactly -- 2, 2, 2, 256, 256, 16, 16,
+512 -- so every table is two rows and there are exactly two `DilType`s.
+
+**They are not `const`.**  All eight are `d` (LOCAL OBJECT) in `.data`,
+section 143.  A `static const unsigned char` array goes to `.rodata` under
+GCC 3.4.2 at `-O3`, so the author wrote them without the qualifier; nothing
+writes them.  Pasting `tabdump.py`'s output verbatim, which emits `static
+const`, would have put ours in the wrong section.
+
+**`DilType` is `{ DIL_TYPE_ADI = 0, DIL_TYPE_ADI_QC = 1 }`.**  The values are
+the object's -- `test %ecx,%ecx; je` to the message ending "option ADI." and
+`dec %ecx; je` to the one ending "option ADI_QC." -- and the two words are the
+author's.  Only the `DIL_TYPE_` prefix is ours, following
+`PcmType`/`PCM_TYPE_*`.
+
+**What the two rows differ in.**  `TO`'s two rows are **byte-for-byte
+identical** and so are `REF`'s.  `DilType` changes only `H` (39 against 19
+through the middle) and the two pattern lengths (120 against 60).  So ADI_QC
+is the same 144-ucode sweep at roughly half the dwell, which is what a
+quick-connect variant of an impairment-learning sequence should be -- and it
+is the one check on the arm-to-enumerator mapping that does not depend on
+reading the two strings.
+
+Three counts agree with the tables they count: `N` is 144 and each `TO` row
+has exactly 144 non-zero entries before its tail of zeros; `Lsp` is 120/60 and
+each `SP` row is zero from that index; `Ltp` likewise for `TP`.
+
+**AND THE FUNCTION WRITES ONLY AS FAR AS EACH COUNT SAYS.**  `seq1` past
+`seq1Length`, `seq2` past `seq2Length` and `dilCode` past `dilCount` are left
+alone; only `segmentSize` and `segmentCode` are filled unconditionally, and
+their loops are `cmp $0x7,%edx; jbe` where the other three are `cmp %edx,%eax;
+ja` against a **reloaded** count.  This is finding 7105 inverted: a fixture
+that zeroes the descriptor first cannot tell "not written" from "written
+zero", so the descriptor is seeded with a distinctive pattern and the ADI_QC
+row -- 60 and 60, leaving 68 bytes of each pattern array and 112 ucode slots
+untouched -- is the arm that exercises the boundary.
+
+**The three bounds are re-read inside their loops** (0x31cad, 0x31ce0,
+0x31d10) because the `unsigned char` store may alias the `unsigned char`
+table, so GCC cannot hoist them; a local would be hoisted and would emit a
+different loop.  Finding 2302 is the same shape the other way round.
+
+**An out-of-range `DilType` is not testable and must not be tested.**  Every
+index is `type` scaled by the row width with no bound check, so a `type` of 2
+reads past the end of all eight tables and what lies there is `.data`'s own
+layout -- the blob's for the blob and GCC's choice for ours.  The object's
+only constructor of a `DilType` is `V90Modem::reset`'s `qcFlag ? 1 : 0`, so no
+in-object path can produce one.
+
+### 7603. `qcLineVerification` names the four words `externalReset` zeroes, and one of them has to be signed
+
+`VPcmFloModem.h` carried `word_6f98`, `word_6fac`, `word_6fb0` and `word_6fb4`
+with the note "nothing reconstructed reads any of them, so they are
+offset-named".  `qcLineVerification` is the **only** member of the class that
+touches any of the four, and it touches all four together: they are the whole
+state of the quick-connect line-verification period and of nothing else.  Its
+seven `dsplibs_debug_printf` messages, all prefixed `"VPcmFloModem (QC
+LineVerify): "`, are what name them -- evidence rule 1.
+
+	word_6f98  ->  qcVerifyState          0 waiting, 1 TONEq, 2 silence
+	word_6fac  ->  qcSampleCount          int, NOT unsigned
+	word_6fb0  ->  qcTerminateRequested   0/1 latch
+	word_6fb4  ->  verificationStatus
+
+`qcVerifyState`'s three values come from the object; the word "state" is
+inference over three arms and is labelled as such in the header.
+`qcTerminateRequested` is named by the message at the site that sets it,
+"TONEq termination requested, still bellow 50mS" (the author's spelling).
+`verificationStatus` is a **copy** of `V90Phase3Demodulator::verificationStatus`,
+which this tree already names that, and `v34pcmmain.cpp` is the reader -- it
+compares `local_short` against this word to choose "short phase2 due to same
+line verification".
+
+**`qcSampleCount` IS `int`, AND THAT IS CLAUDE.md's FORCED COLUMN.**  `jle` at
+0xf8a2 and 0xf931 against `$0x1df`, and `js` at 0xf96c: an unsigned count
+would be `jbe` and could never be negative at all.  It has to be signed
+because the silence period is spelled as a **negative** count, `0xfffffe80` =
+-384, that counts up through zero.
+
+**Two constants fall out with a sample rate behind them.**  "still bellow
+50mS" beside `cmp $0x1df` gives 480 samples = 50 ms, and the rate that makes
+that true, 9600 Hz, is the one this class's `SineWave` is constructed with
+(4800.0f, 980.0f, 0.0f, 9600.0f).  The silence is then 384/9600 = 40 ms.
+
+**And `+0x6fa4` is not a word at all** -- `vPcmResetPhase3Modem` stores zero
+there and 0x6f9c + 8 is `sineWave.phase`, the third of the embedded
+`SineWave<float, float>`'s four `Tparam`s.  The store is an integer `mov
+$0x0`, which is what GCC emits for `= 0.0f` because the bit pattern is zero,
+so nothing in the instruction says "float" and only the field map does.  It
+restarts the TONEq oscillator, and `qcLineVerification` is its only caller.
+
+The rename touched eighteen sites over five files and one mutation anchor
+(`vpcmctor`'s "the three tail fields ... are not cleared" pair).  A grep for
+each of the four names assigned to itself is clean, which is finding 7481's
+check.
+
+### 7604. `qcLineVerification` never reads its sixth argument, and the two it writes are the two a fixture would have watched
+
+`_ZN12VPcmFloModem18qcLineVerificationEPfS0_jPiS1_S1_S1_` is `runPcmModem`'s
+mangling exactly, so the header declares the same seven parameters --
+`(float *in, float *out, unsigned int n, int *rxbits, int *nrx, int *txbits,
+int *nbits)`.  **`txbits` is never read**: there is no reference to
+`0x48(%esp)` anywhere in the 779 bytes.  That is what an entry point with a
+fixed argument list looks like when one entry has nothing to say, and it is
+recorded here rather than left as a fixture that looks incomplete -- **no
+mutation can ever be caught on that parameter.**
+
+**`*nrx` and `*nbits` are both zeroed on every path** (0xf7f9 and 0xf7ff),
+including the paths that ran `V90Modem::progress` with `*nrx` as its
+`unsigned int &`.  So the bit count the demodulator hands back is discarded
+unconditionally, and a test that watched `*nrx` for evidence that `progress`
+ran would be watching the one word this function guarantees is zero.
+
+**Two more forced types.**  `verificationStatus`'s source is
+`movzwl 0x41c(%ecx)` whose 32-bit result **is** stored, so the read is sixteen
+bits wide -- CLAUDE.md's forced case, not 614's free one, even though both the
+field it comes from and the field it goes to are declared 32 bits.  And the
+two event codes this function dispatches on, 0x3a and 0x3b, are **past the end
+of both existing tables** over the same field: `v90RunDemodulator`'s runs to
+0x2b and `runPcmModem`'s to 0x35.  They are this period's alone, which is why
+the dispatch is two `cmp`s and not a third jump table.
+
+**One site repeats another and the repetition is real.**  The 0x3b arm's
+"TONEq already running and 50 ms are up" branch prints the same message and
+makes the same two stores as the `qcTerminateRequested` test in the common
+tail, and then falls into the **silence** half rather than the tone half --
+0xf95f jumps to 0xf7d3, past the `qcVerifyState == 1` test, because the store
+it just made settles that test.  Two source statements, not one: after the
+first the buffer is zeroed, after the second it has just been filled by
+`SineWave::generate`.
+
+### 7605. One anchor had to grow, and the proof is a byte-for-byte identity on the file where both were unambiguous
+
+`v90rundemod`'s "the demodulator is run with the wrong sample count" anchored
+on the single line `modem.progress(rxbits, *(unsigned int *)nrx, in, n);`,
+which was unique in `VPcmFloModem.cpp` until `qcLineVerification` landed in
+the same file calling `V90Modem::progress` with the same argument list.
+`anchorcheck.py` reported `matches 2 time(s)` and `make one` refused --
+loudly, which is the good case; findings 347 and 7521 are what a
+doubly-matching anchor costs when it is only reported UNUSABLE.
+
+The anchor is grown upward by the site's own comment line,
+`/* 0xd890.  Unconditional; there is no gate in front of it. */`.
+`tools/reanchor.py` exists for exactly this and would have chosen the same
+occurrence; the edit was made by hand and checked against the tool's rule.
+
+**7521's test, and it is not "the grown anchor is unique".**  What has to be
+proved is that it mutates the SAME SITE.  So: take `9ddfc5bc`'s
+`VPcmFloModem.cpp`, where **both** anchors match exactly once, apply each, and
+compare the two mutants.
+
+	master:  short anchor matches 1, grown anchor matches 1
+	short  sha256 f96ce52891514c0855a462c625a950bb16f9e3b3f833acbf8b3642895057b41b
+	grown  sha256 f96ce52891514c0855a462c625a950bb16f9e3b3f833acbf8b3642895057b41b
+	BYTE-FOR-BYTE IDENTICAL, and 4 bytes from the baseline (not vacuous)
+	HEAD:    short anchor matches 2, grown anchor matches 1
+	the grown anchor's enclosing definition at HEAD is v90RunDemodulator
+
+The last line matters on its own: uniqueness at HEAD would be satisfied just
+as well by an anchor that had drifted onto the `qcLineVerification`
+occurrence, and that is the wrong-repair 7521 warns `anchorcheck` cannot see.
+
+**AND THE SUITE WAS RE-RUN, which is the half the static proof cannot give.**
+`v90rundemod` comes back **77 mutations: 74 caught, 1 NOT caught, 0 unusable,
+2 equivalent** -- identical to its stored verdict at `9ddfc5bc` -- and a
+row-by-row comparison of all 77 verdicts against master's snapshot shows
+**NONE changed**.  The repaired row's own verdict is `uncaught` before and
+`uncaught` after.
+
+That it is UNCAUGHT is not the repair's doing and is worth stating plainly:
+`t_v90rundemod` holds `V90Modem::side` at 2 so that `V90Equalizer::process`'s
+`gccdiverge` entry cannot reach the binary, and `V90Modem::progress` then
+reads none of its four arguments -- so `n` against `n - 1` changes nothing
+that can be observed.  It was the suite's one NOT caught before this batch and
+it still is.  A repair that had drifted onto the other occurrence would have
+shown up here as a verdict that moved, and none did.
+
+### 7606. The unwritten boundary below `VPcmV34Progress` is now EMPTY, and `t_vpcmguard` loses the two groups whose premise that was
+
+`t_vpcmguard` existed to watch a guard **stop**.  `VPcmV34Progress` called
+seven symbols nobody had reconstructed and `v34pcmmain.cpp` carries a weak
+declaration plus a `v34pcm_notwritten` guard for each; this binary put the
+V.34 object into status 4 -- line verification, the one arm of the seventeen
+whose only unwritten callee was `VPcmFloModem::qcLineVerification` -- forked,
+called `vpcm_run`, and required the child to have died of SIGABRT.  Findings
+985 and 987, and gates.md's argument for why it has to be watched rather than
+reasoned about.
+
+`qcLineVerification` and `vPcmResetPhase3Modem` are the last two of the seven.
+**All seven are written**, so every guard below `VPcmV34Progress` is
+unreachable and there is nothing in the tree for a fork to watch abort.
+
+**THIS IS THE FAILURE THIS BATCH WAS MOST LIKELY TO BE SURPRISED BY, and it is
+worth naming as a shape.**  `v34pcmmain.cpp` defines `DSPLIB_VPCMFLO_UNWRITTEN`
+before including `VPcmFloModem.h`, so its declarations of all four entry points
+are weak **there**; until this batch, two of them resolved to zero and the
+pointer test skipped the call.  Writing a member therefore changed which branch
+an already-passing test took, in a file the batch never opened.  `make phase`
+on the `src/`-only commit -- before a single new fixture existed -- is what
+attributed it: **245 passed, 1 failed, and the one is `t_vpcmguard` at exit
+139**, two assertions inverted and a SIGSEGV where a SIGABRT was expected.  Run
+that build first when a batch makes a weak symbol resolve.
+
+**Two of the three groups are deleted rather than weakened.**  A group whose
+premise has ceased to hold does not become a better test by being made to
+pass, and there is no other unresolved callee to re-point it at.  What
+survives:
+
+* **all twelve symbols asserted PRESENT** -- the five `VPcmV34*` entry points
+  and the seven below them -- through WEAK declarations, which is what keeps
+  the comparison a comparison (finding 985: a plain declaration lets GCC fold
+  `f != 0` to true and every assertion goes vacuous).  The attribute no longer
+  saves a link; stopping the fold is now its whole job.
+* **the soft path driven end to end**, with `v34pcm_unwritten()` required to
+  report `V34PCM_WRITTEN` afterwards.  That is the old watch turned the right
+  way up: if any of the seven ever stops being linked, its guard fires on that
+  very call, the recorder takes its code, and this reads non-WRITTEN.  It is
+  the assertion `V34PCM_UNWRITTEN_QCLINE` used to be, with the expected value
+  moved.
+
+**The third group had to be given a session that survives a real call.**  It
+used to reach a guard that returned 0 without touching the hand-built object;
+it now reaches `qcLineVerification`, which dereferences `modem` and then
+`modem.demodulator->word_3c` before anything else.  So the session gets a
+`V90ModemSide` of 2 -- outside {0, 1}, the arm that fans out to neither half
+-- and a zeroed block for `demodulator` to point at.  `word_3c` is then 0, the
+dispatch takes its default, `qcVerifyState` is 0 so the silence half runs, and
+the member returns 0: **the same 0 the guard returned**, so `f0004`, both queue
+counts and the echo-history assertion are unchanged.  That is
+`t_v90rundemod.cpp`'s `side = 2` device used for the same reason -- keep the
+real demodulator out of a binary that is not about it.
+
+**The machinery in `src/pump/v34/v34pcmmain.cpp` is now dead code and is
+RETAINED.**  Four `v34pcm_notwritten` call sites, the recorder and the abort:
+none can fire.  Retiring them would bring `v34pcmmain.cpp` closer to the object
+-- the author wrote unconditional calls -- but it is a change to a file this
+batch had no other reason to open, it would take the recorder that the
+surviving assertion reads with it, and mutation anchors in four suites sit in
+that file.  Named here as the next pass's work rather than done half way.
+
+**AND DELETING THE TWO GROUPS COST NOTHING MEASURABLE, which was NOT assumed.**
+Two suites are bound to this binary and both were re-run after the rewrite:
+
+	vpcmguard   2 mutations: 1 caught, 1 NOT caught, 0 unusable, 0 equivalent
+	vpcmweak    1 mutations: 0 caught, 1 NOT caught, 0 unusable, 0 equivalent
+
+Both are **identical to their stored verdicts at `9ddfc5bc`**.  `vpcmguard`'s
+caught row is "the mute path is always taken, so the guard is never reached",
+and the surviving third group still catches it -- with the mute path forced,
+`VPcmV34Progress` is never entered, so `f0004`, both queue counts and the echo
+history all move.  Its NOT-caught row is "the guard returns quietly instead of
+stopping", which was already uncatchable at master because all five
+`VPcmV34*` entry points are defined and `vpcm_notwritten` is unreachable;
+`vpcmweak`'s single row is uncatchable for the same reason one level down.
+So the two rows this rewrite might have cost were the two the tree had already
+lost to its own progress, and it did not cost a third.  Measured because
+`mutsnap.py --check` tolerates STALE and the gate would not have said.
+
+### 7607. The `movzwl` this batch's own header recorded, and its `src/` shipped without: two casts, two bytes, and a defect no in-object value can expose
+
+`qcLineVerification` copies `V90Phase3Demodulator::verificationStatus` into
+`VPcmFloModem::verificationStatus` at two sites, and the object does it with a
+SIXTEEN-BIT load:
+
+	f842   0f b7 81 1c 04 00 00   movzwl 0x41c(%ecx),%eax
+	f849   89 86 b4 6f 00 00      mov    %eax,0x6fb4(%esi)
+
+and identically at 0xf8ea.  The 32-bit result IS stored, so this is CLAUDE.md's
+FORCED column and not 614's free one.  `include/dsplib/VPcmFloModem.h` said so
+in the same batch that wrote the member -- and
+`src/pump/v90/VPcmFloModem.cpp` copied the whole 32-bit field at both sites
+anyway.  **The header carried the derivation and the source did not implement
+it**, which is finding 6100's shape with a comment and its own code rather
+than a comment and a tool.
+
+**IT IS FINDING 613's SHAPE AND NO IN-OBJECT PATH CAN EXPOSE IT.**  The source
+field is a full 32 bits -- its only writers anywhere are `movl $0x0` and
+`movl $0x1`, and those two `movzwl` are the ONLY sixteen-bit accesses at
+`0x41c` in the whole of `.text`.  So over every value the field can actually
+hold the two readings agree, and no fixture that reaches this member through
+the object's own state machine can tell them apart.  A fixture has to plant a
+value the object's writers cannot.
+
+`t_vpcmqcline.cpp` does: `QC_STATUS` is `0x1234abcd` and `run_status_width`
+sweeps four more seeds that all have a high half.  Ours stored `0x1234abcd`
+where the blob stored `0x0000abcd`, on eight trials, with the level-2
+transcript agreeing beside them.
+
+**AND THE INSTRUCTION COUNT HAD ALREADY SAID SO, in the one column that was
+not exact.**  Before the fix: 159 instructions against the blob's 159, and
+**777 bytes against 779**.  A `mov` where the object has a `movzwl` is one
+byte per site and there are two sites.  After the two `(unsigned short)`
+casts: 159/159 and **779/779**.  So the size column carried the whole defect
+and the instruction column could not -- which is worth knowing, because 7480's
+rule ("a GAP is a missing call until proven otherwise") is about the
+instruction count and this is a case where that count was exact and wrong.
+
+**How it was caught: a subagent briefed to write the fixture, not to review the
+source.**  The brief said to seed every destination with a sentinel that
+differs from what the function writes (finding 7105), and a sentinel with a
+high half is what that rule produces for a 32-bit word.  The axis was written
+to catch a fixture defect and found a source defect instead.  6402 is the same
+shape -- an agent that measured the tree rather than believing its brief.
+
+The two mutation rows that remove the casts are now in
+`test/mutations/vpcmqcline.json`; before the fix they could not exist, because
+the mutant would have been the shipped source.
+
+### 7608. The numbers the twelve-symbol batch landed at, and what the `VPcmV34Main.cpp +72` span reads now
+
+Twelve symbols, **2,516 bytes**, every address and size confirmed with
+`nm -S` against `ref/slmodemd/dsplibs.o` before anything was written:
+
+	0000f750  0x30b  779  VPcmFloModem::qcLineVerification(float*, float*,
+	                          unsigned int, int*, int*, int*, int*)
+	00031c60  0x131  305  setDilDescriptor(tagV90DILdescriptor*, DilType)
+	000199a0  0x0dd  221  V90Modem::reset(unsigned int)
+	0000f200  0x095  149  VPcmFloModem::vPcmResetPhase3Modem()
+	                1454  four functions
+	00000480  512  TO      00000680   16  H      00000690    2  N
+	00000692   16  REF     000006c0  256  TP     000007c0  256  SP
+	000008c0    2  Ltp     000008c2    2  Lsp
+	                1062  eight LOCAL `.data` objects
+
+`closure.py --missing` agrees exactly: `qcLineVerification` closes over itself
+alone at 779, and `vPcmResetPhase3Modem` over 11 symbols and 1,737 bytes --
+the other three functions and all eight tables.  779 + 1,737 = 2,516.
+
+#### `make phase`
+
+	baseline (9ddfc5bc)   period differential: 246 passed, 0 failed   exit 0
+	final                 period differential: 247 passed, 0 failed   exit 0
+	phase boundary: differential, 64-bit, interop, coverage and debug sites all OK
+	                measured: 34739/36636 src/ lines over 174 file(s),
+	                          1001 debug sites, 35 anchored deviation sites
+
+**The count moved by exactly one and the one is a BINARY, not a check.**
+`period_inner.sh` counts one per test binary; this batch added `t_vpcmqcline`
+and extended three existing fixtures in place, so three of the four functions
+move no count at all.  Their checks are inside `t_v90adid`, `t_v90modemctor`
+and `t_vpcmqcline`'s own groups.
+
+#### Instruction counts against the blob's
+
+	              ours   blob   ourbytes   blobbytes
+	qcLineVerification     159    159        779         779   exact
+	setDilDescriptor        86     86        305         305   exact
+	vPcmResetPhase3Modem    38     38        149         149   exact
+	V90Modem::reset         61     60        222         221   +1, explained
+
+Three of four are exact in BOTH columns -- same instruction count and the same
+byte count, which is a stronger statement than either alone.  The fourth is
+`+1` and the excess is named rather than left open: the masked probing path
+ends `xor %eax,%eax ; jmp` in ours and a bare `jmp` in the object, because the
+object CROSS-JUMPS it into the `else` arm's own `xor` at 0x19a28 where ours
+materialises a second copy.  Every instruction either side is identical and
+both reach `mov %eax,0x4(%esp)` with `%eax` zero; it is basic-block placement,
+617's free column.  **An excess and not a gap, which is the benign direction**
+(7480).
+
+`qcLineVerification`'s byte column is the one that earned its keep: it read
+777 against 779 until the two `(unsigned short)` casts of finding 7607 went
+in, and the instruction column was exact and wrong the whole time.
+
+#### Coverage
+
+	translated  75.1% -> 75.3%   551,739 -> 553,193 bytes, 1,240 -> 1,244 symbols
+
+**+1,454 bytes and +4 symbols, exactly the four functions and nothing else.**
+The 1,062 bytes of tables do not appear because `coverage.py` counts `.text`.
+`tested` moves 1,224 of 1,240 to 1,228 of 1,244 and stays at 99.9%, and the
+`VPcmV34Main.cpp +72` row of the unwritten rollup drops 9,321 bytes / 77
+symbols to 7,867 / 73 -- the same 1,454 and the same 4 seen from the other
+side.
+
+**THE FILE WAS REGENERATED TWICE AND THE SECOND RUN CHANGED NOTHING.**  The
+first green `make phase` ran on a tree where `objtree` read **201 objects for
+200 sources** -- four stale `V90Dil.o` left behind by 7600's rename, in
+`build/repro`, `build/src`, `build/64` and `build-cov/repro`.  The link lines
+are `patsubst` over `$(CXXSRC)` so none of the four was ever linked and the
+differential result was never at risk, but finding 7586 is precisely about
+`coverage.md` regenerated from a tree that was not what it looked like.  So
+the four were deleted and the whole gate re-run at 200/200: **247 passed, 0
+failed, and `git diff docs/coverage.md` empty** -- the file regenerates
+byte-identically.  The numbers above are from the clean tree.
+
+	mutation snapshot: 9 current, 185 stale, 0 never recorded, of 194 registered
+
+against master's 1 current of 192.  Nine were re-run because this batch either
+created them, changed their driver, or changed an anchor in them:
+`vpcmqcline`, `v90modemreset`, `v90dil`, `v90adid`, `v90modemctor`, `vpcmep3`,
+`vpcmguard`, `vpcmweak` and `v90rundemod`.
+
+Of the nine, three had no prior verdict to compare against -- `vpcmqcline` and
+`v90modemreset` are new, and `v90dil` changed by design from 15 rows to 47.
+**The other six came back IDENTICAL to their stored verdict at `9ddfc5bc`, row
+by row**, which is what says the three fixtures this batch extended and the one
+driver it rewrote took nothing away.  Six of six, not six of nine: there is no
+seventh that regressed.
+
+#### Mutation suites
+
+	vpcmqcline      60 mutations: 60 caught, 0 NOT caught, 0 unusable, 0 equivalent
+	v90dil          47 mutations: 42 caught, 0 NOT caught, 0 unusable, 5 equivalent
+	v90modemreset   20 mutations: 19 caught, 0 NOT caught, 0 unusable, 1 equivalent
+
+`v90dil` was 33 and is 47.  **The six equivalents are pre-declared with
+reasons rather than discovered**, and every one of them is a consequence of
+7602: `TO`'s two rows are byte-identical, `REF`'s are identical, `N` is
+`{144, 144}` and `Lsp` and `Ltp` are the SAME pair `{120, 60}` -- so four
+row-selection and bound mutations cannot be caught by any fixture, whatever it
+drives.  The sixth is `V90Modem::reset`: masking the variable and writing
+`demodulator->reset(PROBING_MODE ? 0 : qcFlag)` are the same program.
+
+#### The span
+
+	tools/service.py: read 200 object(s) from build/src/ (200 source file(s) under src/)
+	DATA MODE  100 symbols  44264 bytes      (was 104 and 45718)
+	DATA, by span:  `VPcmV34Main.cpp +72` IS NOT LISTED
+
+**-4 symbols and -1,454 bytes, and the span is gone from the DATA list
+entirely.**  The denominator is quoted beside it because a zero from an empty
+or partial object tree is finding 3055's failure mode; four stale
+`V90Dil.o` objects left by the rename had to be deleted first, and until they
+were, `objtree` read 201 objects for 200 sources.
+
+**TWO THINGS A READER WHO RUNS THE TOOL MUST NOT BE SURPRISED BY.**
+
+1. `VPcmV34Main.cpp +72` still appears under **"no entry point reaches it"**,
+   holding 24 symbols including `calculateDilLength(DilType, PcmType)` and
+   `getSegmentPointer`.  The brief's claim is about the DATA-mode span, and
+   that is the one at zero.
+2. **`VPcmV34Main.cpp +72` is a `tumap` BRACKET, not a translation unit.**
+   `tumap.py` recovers hard `.text` extents for only 19 of 283 TUs and reports
+   the rest as a shared bracket named after its nearest anchor, so a symbol
+   filed under that label is not from `VPcmV34Main.cpp`.  Finding 7600 names
+   the real file for four of them, `V90DilDescriptorSettings.cpp`, and the two
+   sitting side by side in a report is the bracket and the TU, not a
+   contradiction.

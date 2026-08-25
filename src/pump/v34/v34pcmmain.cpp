@@ -2772,7 +2772,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					    "phase2 upon DP Manager setting..."
 					    "\r\n");
 			} else if (obj->local_short
-				   == (int)sess->word_6fb4) {
+				   == (int)sess->verificationStatus) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "VPcmV34Main: Moving to short "

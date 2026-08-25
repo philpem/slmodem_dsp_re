@@ -4353,7 +4353,7 @@
    }
   },
   "v90adid": {
-   "key": "f993456a87f599490d6bb3239a7be32a9984ed4ac9bc355724b91e11127fca8e",
+   "key": "daa99ab2da698e1da7b7c21baf960eaba6abc2985ad6ea3e61833fe8ead8103a",
    "summary": "482 mutations: 462 caught (458 by test, 0 by strings), 3 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
    "verdicts": {
     "DIL: drop the redundant marked test inside the run": "equivalent",
@@ -5908,21 +5908,53 @@
    }
   },
   "v90dil": {
-   "key": "bf56ea8756937e48a5798d94c4ef671961176202400aa716c8b73f11385438b6",
-   "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "3f9f4f4b5fc951ed4587aad559ff8c8f14e8238c3aac4468c8a0f2dbe528364f",
+   "summary": "47 mutations: 42 caught (42 by test, 0 by strings), 0 NOT caught, 0 unusable, 5 equivalent, 0 MIScounted",
    "verdicts": {
     "always take the A-law row": "caught",
     "always take the mu-law row": "caught",
+    "both sequence lengths come from seq1's": "caught",
     "clamp the segment index into segmentSize": "caught",
     "drop the constant six from each term": "caught",
     "make the boundary test strict": "caught",
+    "one bit of the ADI transmit pattern is flipped inside the quick-connect span": "caught",
     "run the outer loop one entry short": "caught",
     "scale the length code by five": "caught",
+    "seq1 is filled from the ADI pattern whatever the type": "caught",
+    "seq1 is filled from the transmit pattern": "caught",
+    "seq1 is filled to the whole array rather than to seq1Length": "caught",
+    "seq1's bound is the transmit pattern's length": "equivalent",
+    "seq1's fill runs one past the length": "caught",
+    "seq1's fill stops one short": "caught",
+    "seq1Length is read from the ADI row whatever the type": "caught",
+    "seq2 is filled from the ADI pattern whatever the type": "caught",
+    "seq2 is filled from the sequence-1 pattern": "caught",
+    "seq2 is filled to the whole array rather than to seq2Length": "caught",
+    "seq2Length is read from the quick-connect row whatever the type": "caught",
     "shift the first mu-law boundary up one segment": "caught",
     "shift the last A-law boundary": "caught",
     "swap the two row lengths": "caught",
     "take the code from seq1 rather than dilCode": "caught",
     "take the length code from segmentCode": "caught",
+    "the ADI arm says nothing": "caught",
+    "the DIL entry count is 143": "caught",
+    "the DIL entry count is read from the ADI row whatever the type": "equivalent",
+    "the DIL entry count is taken from the sequence length table": "caught",
+    "the last reference code is 78 like the other seven": "caught",
+    "the quick-connect segment lengths keep the ADI row's middle": "caught",
+    "the quick-connect sequence length is 61 rather than 60": "caught",
+    "the report is gated on the debug level at the call site as well": "caught",
+    "the segment code loop stops one short": "caught",
+    "the segment codes are read from the ADI row whatever the type": "equivalent",
+    "the segment codes come from the segment lengths": "caught",
+    "the segment length loop stops one short": "caught",
+    "the segment lengths are read from the ADI row whatever the type": "caught",
+    "the segment lengths come from the reference codes": "caught",
+    "the two DilTypes report each other's descriptor": "caught",
+    "the two sequence lengths are stored the other way round": "equivalent",
+    "the ucode set is filled to the sequence length instead": "caught",
+    "the ucode set is filled to the whole array rather than to dilCount": "caught",
+    "the ucode set is read from the ADI row whatever the type": "equivalent",
     "treat the DIL code as signed": "caught",
     "use eight boundaries under A-law too": "caught",
     "use seven boundaries under mu-law too": "caught"
@@ -6166,7 +6198,7 @@
    }
   },
   "v90modemctor": {
-   "key": "722d668f2b9a2c783a3827dd88603ec12a8a80606aa78c3eef58f7c6ff7c55fa",
+   "key": "fd86499ecd9578ebd6395d701f71b552099c9fb6beceb527c77c3e8f584437ce",
    "summary": "26 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the DIL descriptor is not stored": "caught",
@@ -6195,6 +6227,32 @@
     "dtor: the modulator is freed without being destroyed": "caught",
     "dtor: the parameter block is released without being destroyed": "equivalent",
     "dtor: the phase 2 record is freed without its guard": "caught"
+   }
+  },
+  "v90modemreset": {
+   "key": "21da4db5b4b9269b49b53d67bac2016d85d4a4ec013d5172b2b3b57e69abbdad",
+   "summary": "20 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "printTitle runs only on a legal side": "caught",
+    "probe mode forces quick connect ON": "caught",
+    "probe mode masks the descriptor but not the demodulator's flag": "caught",
+    "probe mode reports itself and masks nothing": "caught",
+    "the banner prints the masked flag rather than the argument": "caught",
+    "the demodulator is always reset without quick connect": "caught",
+    "the demodulator is handed the DilType rather than the flag": "caught",
+    "the demodulator is not reset": "caught",
+    "the descriptor is always the ADI one": "caught",
+    "the descriptor is installed after the demodulator is reset": "caught",
+    "the descriptor is not installed at all": "caught",
+    "the digital arm does not reset the modulator": "caught",
+    "the illegal-side report is not gated": "caught",
+    "the mask is re-derived at the call rather than applied to the variable": "equivalent",
+    "the opening banner is not gated": "caught",
+    "the probe-mode report is not made": "caught",
+    "the probe-mode test is narrowed to a byte": "caught",
+    "the probe-mode test is narrowed to a short": "caught",
+    "the probe-mode test is on the connection type": "caught",
+    "the two DilTypes are chosen the other way round": "caught"
    }
   },
   "v90modprog": {
@@ -7498,7 +7556,7 @@
    }
   },
   "v90rundemod": {
-   "key": "d9b5d281722406a79a6ebf2a5e016e608cfe6d101c53c1a37e45470181c9370a",
+   "key": "d631e7addfbb3ca6404124ac35b386fe5c2c36b6c7b127bdfe291cc4954edb7e",
    "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "MP: the gate is inverted": "caught",
@@ -9532,7 +9590,7 @@
    }
   },
   "vpcmep3": {
-   "key": "ae227c820c58b821cb96e78b4a34cf56ba28cf5d5b096fba8fa0c6acac9001d4",
+   "key": "96802a1c23a7f7e7253858a24750f4155f2714c7df3f3ca76ba7a7a6ed921bdd",
    "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "externalReset writes the six flags only once": "equivalent",
@@ -9616,11 +9674,77 @@
    }
   },
   "vpcmguard": {
-   "key": "4345844e6e7f029ff2e50ea43a98d52ab39f7acd497218a54fcbca362852d44c",
+   "key": "9237e37a9f838a7b8f377450fc2082d57c92b86f673f64b665d94fbad0bdfe01",
    "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the guard returns quietly instead of stopping": "uncaught",
     "the mute path is always taken, so the guard is never reached": "caught"
+   }
+  },
+  "vpcmqcline": {
+   "key": "95ab0f4d6dd17d8b1c886d90a2c6a9fae53eabd5f26af8ff0a0e9a63efedd738",
+   "summary": "60 mutations: 60 caught (60 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the ANSpcm-demod-over code is 0x39": "caught",
+    "the ANSpcm-demod-over report is made at level 1 as well": "caught",
+    "the ANSpcm-drop code is 0x3c": "caught",
+    "the TONEq minimum is 481 samples": "caught",
+    "the V.90 parameter block is not reinitialised": "caught",
+    "the V.92 modem is not reset": "caught",
+    "the demod-over arm does not narrow the status to sixteen bits": "caught",
+    "the demod-over arm does not restart the sample count": "caught",
+    "the demod-over arm keeps the status it already had": "caught",
+    "the demod-over arm starts TONEq with the termination already latched": "caught",
+    "the demod-over arm starts in the silence state": "caught",
+    "the demodulator is not run at all": "caught",
+    "the dispatch byte is left where it was": "caught",
+    "the dispatch byte is set to 0 rather than 1": "caught",
+    "the dispatch is on the phase 3 demodulator's state": "caught",
+    "the drop arm counts the silence period DOWN from +384": "caught",
+    "the drop arm tests the silence state rather than the tone one": "caught",
+    "the drop arm's 50 ms test is strict": "caught",
+    "the drop arm's 50 ms test is the other way round": "caught",
+    "the drop arm's early half does not latch the termination": "caught",
+    "the drop arm's expired half leaves the state at 1": "caught",
+    "the echo canceller is not reset": "caught",
+    "the modem is not reset": "caught",
+    "the modem is reset WITH the session type as its quick-connect flag": "caught",
+    "the modem is reset with quick connect on": "caught",
+    "the no-status half copies no verification status": "caught",
+    "the no-status half does not latch the termination": "caught",
+    "the no-status half does not narrow the status to sixteen bits": "caught",
+    "the no-status half does not restart the sample count": "caught",
+    "the oscillator is not restarted": "caught",
+    "the period ends only after the silence count has gone positive": "caught",
+    "the period ends out of any state, not only out of 2": "caught",
+    "the period never reports itself over": "caught",
+    "the phase 3 demodulator is not put back to WaitForANSpcmDrop": "caught",
+    "the phase-2 bit is withdrawn instead of the retrain one": "caught",
+    "the received bit count is left as the demodulator set it": "caught",
+    "the retrain is asked for rather than withdrawn": "caught",
+    "the sample count counts down": "caught",
+    "the sample count is advanced after the dispatch rather than before": "caught",
+    "the sample count is not advanced": "caught",
+    "the session flag is set after the reset rather than before": "caught",
+    "the session flag is set to zero rather than to the session type": "caught",
+    "the silence half clears one sample short": "caught",
+    "the silence half leaves the buffer alone": "caught",
+    "the silence period is 385 samples": "caught",
+    "the silence-over report is made at level 1 as well": "caught",
+    "the sweep counter is not restarted": "caught",
+    "the tail ends TONEq on the timer alone": "caught",
+    "the tail transmits the tone in every state but 1": "caught",
+    "the tail transmits the tone in state 2 as well": "caught",
+    "the tail's 50 ms test is strict": "caught",
+    "the tail's move to silence leaves the state at 1": "caught",
+    "the termination and the 50 ms test are alternatives": "caught",
+    "the tone is not generated": "caught",
+    "the tone runs one sample short": "caught",
+    "the transmit bit count is left alone": "caught",
+    "the two output counts are zeroed through the same pointer": "caught",
+    "the whole flag byte is cleared rather than one bit of it": "caught",
+    "word_7f60 is not cleared": "caught",
+    "word_7f64 is not cleared": "caught"
    }
   },
   "vpcmrun": {
@@ -9776,7 +9900,7 @@
    }
   },
   "vpcmweak": {
-   "key": "a0bbd051a8238a5210dbd33c794f2c91a195636dc7b8d447fc37a237a060e872",
+   "key": "dcf2c4325a651f0659d584642a1f044631e4a8515170cb5659abacb668066232",
    "summary": "1 mutations: 0 caught (0 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the comparing translation unit declares the five plain, not weak": "uncaught"

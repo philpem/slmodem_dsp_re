@@ -1,0 +1,117 @@
+[
+ {
+  "_": [
+   "`V90Modem::reset` -- the gated banner, printTitle, and a three-way",
+   "switch on `side` with one arm doing work.  t_v90modemctor's",
+   "run_reset builds a real V90Modem on both sides, sweeps side over",
+   "{0, 1, 2}, PROBING_MODE over five values and qcFlag over four, and",
+   "asserts the descriptor and the demodulator's own quickConnect.",
+   "",
+   "`V90Modem.cpp` also carries `progress`, whose mutations are",
+   "test/mutations/v90modprogmodem.json against t_v90modprog; nothing",
+   "here touches it."
+  ]
+ },
+ {
+  "label": "probe mode reports itself and masks nothing",
+  "find": "\t\t\t\t \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;",
+  "replace": "\t\t\t\t \"masked !!!\\r\\n\");"
+ },
+ {
+  "label": "probe mode masks the descriptor but not the demodulator's flag",
+  "find": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE) {\n\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n\t\t\tqcFlag = 0;\n\t\t}\n\n\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);",
+  "replace": "\tcase V90_MODEM_SIDE_ANALOG:\n\t\tif (ptr_49b4->PROBING_MODE)\n\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n\n\t\tif (qcFlag && !ptr_49b4->PROBING_MODE)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;\n\n\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);"
+ },
+ {
+  "label": "the mask is re-derived at the call rather than applied to the variable",
+  "find": "\t\tdemodulator->reset(qcFlag);",
+  "replace": "\t\tdemodulator->reset(ptr_49b4->PROBING_MODE ? 0u : qcFlag);",
+  "equivalent": true,
+  "why": "The object masks the VARIABLE -- `xor %esi,%esi` at 0x19a6d, where %esi is `qcFlag` -- and this spelling recomputes the same mask at the one remaining reader.  Nothing between the two sites writes PROBING_MODE, so the two programs agree on every input; it is here because it is the near-miss of the mutation above, and separating a defect from a rewrite is the point of recording it as equivalent rather than as a gap."
+ },
+ {
+  "label": "probe mode forces quick connect ON",
+  "find": "\t\t\tqcFlag = 0;",
+  "replace": "\t\t\tqcFlag = 1;"
+ },
+ {
+  "label": "the probe-mode report is not made",
+  "find": "\t\t\tedprintf(\"due to probe mode quick connect is \"\n\t\t\t\t \"masked !!!\\r\\n\");\n",
+  "replace": ""
+ },
+ {
+  "label": "the probe-mode test is on the connection type",
+  "find": "\t\tif (ptr_49b4->PROBING_MODE) {",
+  "replace": "\t\tif (ptr_49b4->LINE_CONNECTION_TYPE) {"
+ },
+ {
+  "label": "the probe-mode test is narrowed to a byte",
+  "find": "\t\tif (ptr_49b4->PROBING_MODE) {",
+  "replace": "\t\tif ((unsigned char)ptr_49b4->PROBING_MODE) {"
+ },
+ {
+  "label": "the probe-mode test is narrowed to a short",
+  "find": "\t\tif (ptr_49b4->PROBING_MODE) {",
+  "replace": "\t\tif ((unsigned short)ptr_49b4->PROBING_MODE) {"
+ },
+ {
+  "label": "the two DilTypes are chosen the other way round",
+  "find": "\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI_QC;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI;",
+  "replace": "\t\tif (qcFlag)\n\t\t\tdilType = DIL_TYPE_ADI;\n\t\telse\n\t\t\tdilType = DIL_TYPE_ADI_QC;"
+ },
+ {
+  "label": "the descriptor is always the ADI one",
+  "find": "\t\tsetDilDescriptor(dil, dilType);",
+  "replace": "\t\tsetDilDescriptor(dil, DIL_TYPE_ADI);"
+ },
+ {
+  "label": "the descriptor is not installed at all",
+  "find": "\t\tsetDilDescriptor(dil, dilType);\n",
+  "replace": ""
+ },
+ {
+  "label": "the demodulator is handed the DilType rather than the flag",
+  "find": "\t\tdemodulator->reset(qcFlag);",
+  "replace": "\t\tdemodulator->reset((unsigned int)dilType);"
+ },
+ {
+  "label": "the demodulator is always reset without quick connect",
+  "find": "\t\tdemodulator->reset(qcFlag);",
+  "replace": "\t\tdemodulator->reset(0);"
+ },
+ {
+  "label": "the demodulator is not reset",
+  "find": "\t\tdemodulator->reset(qcFlag);\n",
+  "replace": ""
+ },
+ {
+  "label": "the digital arm does not reset the modulator",
+  "find": "\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tmodulator->reset();\n\t\tbreak;",
+  "replace": "\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tbreak;"
+ },
+ {
+  "label": "printTitle runs only on a legal side",
+  "find": "\t\t\t\t     qcFlag);\n\n\tprintTitle();\n\n\tswitch (side) {\n\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tmodulator->reset();",
+  "replace": "\t\t\t\t     qcFlag);\n\n\tswitch (side) {\n\tcase V90_MODEM_SIDE_DIGITAL:\n\t\tprintTitle();\n\t\tmodulator->reset();"
+ },
+ {
+  "label": "the opening banner is not gated",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);",
+  "replace": "\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);"
+ },
+ {
+  "label": "the illegal-side report is not gated",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"V90Modem Reset: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");",
+  "replace": "\t\tdsplibs_debug_printf(\"V90Modem Reset: Illegal \"\n\t\t\t\t\t     \"modemSide\\r\\n\");"
+ },
+ {
+  "label": "the banner prints the masked flag rather than the argument",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);\n\n\tprintTitle();",
+  "replace": "\tprintTitle();\n\n\tif (side == V90_MODEM_SIDE_ANALOG && ptr_49b4->PROBING_MODE)\n\t\tqcFlag = 0;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V90Modem Reset, qcFlag = %d\\r\\n\",\n\t\t\t\t     qcFlag);"
+ },
+ {
+  "label": "the descriptor is installed after the demodulator is reset",
+  "find": "\t\tsetDilDescriptor(dil, dilType);\n\t\tdemodulator->reset(qcFlag);",
+  "replace": "\t\tdemodulator->reset(qcFlag);\n\t\tsetDilDescriptor(dil, dilType);"
+ }
+]

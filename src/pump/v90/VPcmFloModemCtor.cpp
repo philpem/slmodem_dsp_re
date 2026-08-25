@@ -247,10 +247,10 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	cpNofBits = 0;
 	nofTransmitSequences = 0;
 
-	word_6f98 = 0;
-	word_6fb0 = 0;
-	word_6fac = 0;
-	word_6fb4 = 0;
+	qcVerifyState = 0;
+	qcTerminateRequested = 0;
+	qcSampleCount = 0;
+	verificationStatus = 0;
 
 	/*
 	 * `andb $0xfb,0x3(%edi)` at 0xfca5 -- bit 2 of `unnamed_0003`, and

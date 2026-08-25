@@ -8,7 +8,7 @@
  *
  * so three things are settled before a byte of the object is read: the
  * descriptor is NOT const (`P19...`, where a `const` would give `PK19...`,
- * emit a different symbol, and link against nothing -- V90Dil.h makes the
+ * emit a different symbol, and link against nothing -- V90DilDescriptorSettings.h makes the
  * same point about `calculateDilLength`); the bit output is one `unsigned
  * char` per bit, not one `short`; and the count is written through an `int *`
  * rather than a `short *`.  The blob's store is `mov %ebp,(%edx)`, a full

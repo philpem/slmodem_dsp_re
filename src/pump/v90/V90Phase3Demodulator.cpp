@@ -39,7 +39,7 @@ extern "C" {
 #include "dsplib/debug.h"
 }
 
-#include "dsplib/V90Dil.h"
+#include "dsplib/V90DilDescriptorSettings.h"
 #include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V92Jd.h"
 
