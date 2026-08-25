@@ -89774,6 +89774,28 @@ with the six fields retyped, three of the four reproduce the blob's grouping
 offset for offset. That is F7840's "two independent observables agreeing" with
 a materialisation group in place of a `.rodata` string order.
 
+**AND ALL FOUR GROUPS WERE RE-READ BY HAND OUT OF `tools/dis.py` BEFORE BEING
+BELIEVED, because the scanner that found them has an incomplete kill rule.**
+It retires a register when an instruction's last operand names it, which does
+not see an IMPLICIT clobber -- `mull 0x38(%edi)` writes `%eax` and `%edx` and
+names neither -- and this function has two `mull`s. An over-merge would
+manufacture a group out of two unrelated constants, and the "our object has
+none of these groups" control cannot exclude it, since the same tool with the
+same gap ran on both sides. Checked instruction by instruction, no register is
+redefined between its load and its stores in any of the four:
+`%edi` at 29a3c stores +0x60 and +0x70; `%edi` at 29bd2 stores +0xf4, +0x12c
+and +0x19c with no `%edi` write anywhere in the 89-line window; `%ebx` at
+29d45 stores +0x1b0 and +0x1e4; `%edx` at 29d50 stores +0x1b4 and +0x1f8 and
+is not reloaded until 29e0c, after both. No `mull`, `div`, `call`, `cltd` or
+`imul` occurs in any window.
+
+**+0x1b4 IS THE THINNEST OF THE SIX AND THE REASON IS NAMED.** Its group
+`0x2e83f0ff -> +0x1b4, +0x1f8` is the one the retyped variant did NOT
+reproduce -- our allocator materialises the two separately. The evidence is
+the BLOB's grouping, which is hand-verified above; non-reproduction on our
+side is register allocation, which is free, and is not evidence against the
+type.
+
 **THE ENUMERATION: 128 CELLS, 64 DISTINCT EMISSIONS, NO PREIMAGE.** All 2^7
 type assignments over the seven `unnamed_*` slots F878 typed as `int` were
 compiled on the period compiler in one container pass, against a real copy of
@@ -89788,6 +89810,22 @@ scores n=5. Taking the better number would have been fitting the compiler.
 
     SIZE n=18, insn 695/695   ->   SIZE n=5, insn 691/695
 
+**THE EDIT TOOK THIS SYMBOL OUT OF THE DELTA-0 CLASS, AND THAT IS NOT LEVER 2
+AND NOT EVIDENCE AGAINST THE TYPES.** `--why` now routes to
+`INSTRUCTION COUNT differs: blob 695, ours 691 ... an absence or an extra`,
+which is F7823's false positive in a new costume. The four are not a missing
+statement: **we now emit 347 store instructions against the blob's 343**, and
+the deficit is elsewhere -- six fewer `fxch` (the blob keeps four constants
+live on the x87 stack and pays 13 `fxch` reaching `%st(3)`; we keep two and
+pay 7) plus the clamping region's own churn.
+
+**AND THE BASELINE'S 695/695 WAS TWO WRONGS CANCELLING, WHICH IS THE MOST
+USEFUL THING THIS SYMBOL TAUGHT.** Bucketing every instruction by form and
+encoded length at the baseline: the x87 group netted **-18** instructions, the
+integer materialise-and-store group netted **+19**, and the clamping region
+**-1**. They summed to exactly zero, so the symbol reported a perfect
+instruction-count match while three separate differences were live inside it.
+That is F7920's shape with the instruction count in place of the byte count.
 **+0x328 IS LEFT `int` AND THE NULL IS THE RESULT.** It is a singleton in the
 blob with no sharing partner and is stored from an integer register, so there
 is no forced evidence either way -- and the enumeration proves the object
@@ -89884,3 +89922,24 @@ functions are the same shape and the difference is encoding; for BYTES symbols
 it is close to redundant with the bucket.** The SIZE bucket holds 608 symbols
 and `--near` shows many of them at delta 0; that is where this lens has
 somewhere left to pay.
+
+**AND THE LENS CARRIES ITS OWN COUNTEREXAMPLE, FROM THE SAME SYMBOL.** A delta
+of 0 is a SUM, and this one was three differences summing to zero -- x87 -18,
+integer stores +19, clamping -1 (F7960). "Nothing is missing and nothing is
+extra" is therefore not what delta 0 licenses; what it licenses is "the
+absences and the extras cancel", which is a weaker and occasionally a much
+weaker statement. Bucket by instruction FORM before trusting the total: it
+costs one script, it is what found the real structure here, and the corrected
+reading is that a delta-0 SIZE symbol is worth opening, not that it is
+close.
+
+**TWO THINGS THIS PASS MEASURED AND LEFT FOR THE NEXT ONE, both inside
+`V90Parameters.cpp`.** `V90Parameters::loadModemParamsData` is **SIZE n=16 at
+100 instructions against 100** -- the identical shape to the symbol above,
+untouched by this edit, and the natural next application of the three-form
+accounting. And `setToDefault`'s own residual n=5 still contains a SIGNEDNESS
+difference, which is the forced class: the blob clamps the two rate indexes
+with two `jae` and spills the loop's boolean (`setbe 0x1b(%esp)`,
+`test %al,0x1b(%esp)`), where we emit `jb` and a **signed `jg`** with the
+boolean in a register. That difference is present at the baseline too, so it
+is independent of the retyping.
