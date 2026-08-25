@@ -85492,7 +85492,7 @@ unless the file's line multiset is unchanged, so no edit hid inside a reorder.
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7781 and two sibling
 worktrees were writing concurrently; expect to renumber at merge.
 
-### 7810. EMISSION ORDER, WAVE 6: SEVEN MORE SYMBOLS, FIVE OF THE TEN TARGETS, AND TWO FILES REVERTED -- ONE FOR A LOSS AND ONE FOR ITS PRICE
+### 7797. EMISSION ORDER, WAVE 6: SEVEN MORE SYMBOLS, FIVE OF THE TEN TARGETS, AND TWO FILES REVERTED -- ONE FOR A LOSS AND ONE FOR ITS PRICE
 
 Six translation units were permuted into the blob's `nm -n` emission order,
 aimed at the ten REGALLOC symbols 7796 left in them.  **Four are kept and two
@@ -85594,7 +85594,7 @@ with the file's other seven slots now matching the blob.  That is 7796's
 of a file: 7 of 9 slots right, and the two that are wrong are the clone pair's
 internal order.
 
-### 7811. A FILE-SCOPE STATIC THAT CALLS A MEMBER DRAGS THAT MEMBER TO THE HEAD OF THE EMISSION ORDER -- OUR FACTORING, NOT THE AUTHOR'S
+### 7798. A FILE-SCOPE STATIC THAT CALLS A MEMBER DRAGS THAT MEMBER TO THE HEAD OF THE EMISSION ORDER -- OUR FACTORING, NOT THE AUTHOR'S
 
 `V90AutoDigitalImpDetector.cpp` reordered to the blob's order reached **23 of
 34** slots and stopped.  One symbol was wrong and everything downstream of it
@@ -85628,7 +85628,7 @@ go below that member, because its position decides the member's.  Check for
 one whenever a reorder lands short and the shortfall is a single symbol at
 index 0.
 
-### 7812. THE `#endif` TRAP'S DETECTOR HAS TO RUN BOTH ARMS OF THE GUARD, AND A LINE COUNT CANNOT SEE THE MACRO TRAP AT ALL
+### 7799. THE `#endif` TRAP'S DETECTOR HAS TO RUN BOTH ARMS OF THE GUARD, AND A LINE COUNT CANNOT SEE THE MACRO TRAP AT ALL
 
 Wave 5 caught both preprocessor traps by INSPECTING THE DIFF for moved `#`
 lines.  This pass tried to mechanise that and the first two attempts were dead

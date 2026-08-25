@@ -200,7 +200,7 @@ targets were a C1/C2 pair (`V90Demapper.cpp`) lost a symbol and was reverted.
 had taken twelve macro blocks hoisted on top of the permutation. 7796's kept
 neutral files were reorder-only. The measurement is the deliverable: record
 that the order is achievable and pays nothing, and do not keep the diff.
-Findings 7810 and 7811.
+Findings 7797 and 7798.
 
 **A FILE-SCOPE `static` THAT CALLS A MEMBER FUNCTION SETS THAT MEMBER'S
 EMISSION SLOT, so it is the exception to "statics live above".** Wave 6's
@@ -210,7 +210,7 @@ THIS RECONSTRUCTION introduced, sitting at the top of the file with
 `o->isAltRbs(...)` in its body. Moving that one helper below its own first user
 took the file to 34 of 34. The object inlines the call, so the original had no
 such edge -- our factoring was setting the order. Check for it whenever a
-reorder lands short by a single symbol sitting at index 0. Finding 7811.
+reorder lands short by a single symbol sitting at index 0. Finding 7798.
 
 **Two traps, both hit while doing it.** An `#endif` travelled with a moved
 chunk twice and STILL COMPILED, silently enlarging an
@@ -236,7 +236,7 @@ DEAD.** Compare the SORTED MULTISET of preprocessed non-blank lines against
   that is not always a compile error, so wave 5's loud case is not the general
   shape.
 
-Shown firing on both injections and clean on everything committed. Finding 7812.
+Shown firing on both injections and clean on everything committed. Finding 7799.
 
 ### 4. File-scope declaration order
 
