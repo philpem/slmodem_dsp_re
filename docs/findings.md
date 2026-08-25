@@ -88102,3 +88102,45 @@ The symbol is at emission index 0 of its TU in both objects (`nm -n` agrees
 nothing upstream could have moved it.  That is what licensed working from
 inside the function on a file the brief had fenced against another
 permutation.
+
+### 7833. Renumbering at merge by regex rewrote two DSP coefficients, and the differential test would have caught it only by luck
+
+Every parallel batch allocates findings numbers at write time and the parent
+renumbers them at merge -- eight times today. The procedure has been a regex
+over the branch's files. **It is unsound in two ways and both fired on the same
+merge.**
+
+**1. A FINDING NUMBER AND A FILTER COEFFICIENT ARE THE SAME FOUR DIGITS.**
+Rewriting `\b782[0-5]\b` over `src/**/*.c*` changed
+
+    src/callprog/elliptic.c:75    8192, -14430,   7822,  ->  7829
+    src/callprog/elliptic.c:236   8192, -14947,   7726,   8192, -15415,   7823,  ->  7830
+
+-- two elliptic filter coefficients, in a file the branch had never touched.
+The differential test would very likely have caught it, and that is not a
+defence: it is exactly the "wrong-but-plausible" commit CLAUDE.md's one
+unrelaxed rule is about, and the reason it would have been caught is that this
+tree happens to test those filters. A coefficient in a less-covered table would
+have gone in silently and read as a transcription of the object.
+
+**2. A CITATION ON MASTER IS NOT THE BRANCH'S TO RENUMBER.** The same sweep
+rewrote `finding 7820` in `V90Demapper.cpp` -- a sibling wave's number, already
+correct on master -- and two `(7823)` citations in `refinement.md` that pointed
+at the sibling's `--why` finding, which is the very finding those sentences are
+about. `refcheck.py` passed throughout, because all four still RESOLVED. That
+is 212/213's failure mode: a reference that resolves and points at the wrong
+entry is the one thing the checker cannot see.
+
+**What the procedure has to be instead**, and it is not much more work:
+
+- Rewrite only the files the BRANCH changed -- `git diff --name-only HEAD <branch>`
+  intersected with the merge's conflicted set, never a `glob`.
+- Match a CITATION, not an integer: `finding NNNN`, `(NNNN)`, `### NNNN.`,
+  `7826-7831`. Never a bare `\bNNNN\b` in a `.c` or `.h`.
+- Afterwards, `git diff` the merge and read every changed line that is not
+  inside `docs/` -- four digits changing inside a brace-initialised table is
+  visible in one pass and invisible in a summary.
+
+Caught here by reading the diff rather than by any check, which is the third
+time today a green gate sat on top of something wrong: 7799's dead detectors,
+7822's harness writing through a hardlink, and this.
