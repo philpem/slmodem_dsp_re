@@ -84367,3 +84367,311 @@ negative result can be argued at; forty rows is not.
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7778 when 7779-7781 were
 written and sibling worktrees are writing concurrently; expect to renumber at
 merge.
+
+
+### 7790. `delete[]`: THE DESTRUCTOR SPELLING THE OBJECT'S *SIBLING CALLS* DECODE, AND NINE FUNCTIONS CLOSED ON IT
+
+**Reserved block: 7790-7792.**  Every ref this repository knows about was swept
+for its highest `### <n>.` heading -- `refs/heads`, `refs/remotes` and
+`refs/tags` together -- and the highest anywhere was **7785** (`master`), with
+`origin/master` at 7784 and three sibling worktree branches at 7781.  The block
+starts at 7790 rather than 7786 because CLAUDE.md asks for a gap and because
+sibling worktrees are writing concurrently.  Expect to renumber at merge.
+
+**THE SIGNAL IS AN INSTRUCTION THE BLOB HAS AND WE DO NOT, AND IT IS THE SAME
+ONE NINE TIMES.**  `Psd::~Psd` is 58 bytes on both sides, three bytes wrong,
+and **23 blob instructions against our 22**.  The extra one is not extra work:
+
+    blob   mov %eax,(%esp) ; call sysdep_free ; add $0x8,%esp ; pop %ebx ; ret
+    ours   mov %eax,0x10(%esp) ; add $0x8,%esp ; pop %ebx ; jmp sysdep_free
+
+We emit a **sibling call** at the destructor's last free and the object emits
+an ordinary call.  `call`+`ret` is one instruction more than `jmp`, which is
+the whole of the difference.
+
+**IT IS SYSTEMATIC, AND THE POPULATION FIGURE ALONE WOULD HAVE MISLED.**  A
+first count said the blob sibcalls out of 4 destructors and we out of 50 --
+but the two objects define different symbol sets, so that ratio mixes "the blob
+does not sibcall here" with "the blob has no such function".  Compared
+**pairwise over the 1,251 symbols both define**, which is `byteident`'s own
+denominator:
+
+    agree on the sibcall set    1188
+    WE sibcall, blob does not     50      (41 of them to `sysdep_free`)
+    BLOB sibcalls, we do not      13
+
+**Two hypotheses died cheaply before any source was touched.**  The blob
+tail-calls `sysdep_free` 67 times elsewhere, so it is not a property of that
+function's declaration; and the disagreement runs in BOTH directions, so it is
+not a compiler flag.  The blob has no `.eh_frame`, no `.gcc_except_table` and
+no personality routine, so `-fno-exceptions` is confirmed rather than suspected
+and exceptions are not the cause either.
+
+**THE ENUMERATION.**  Eight spellings of "free two members if non-null" were
+compiled with the period compiler in a scratch probe -- apparatus, not `src/`
+-- and classified by whether the last free is a `jmp` or a `call`:
+
+    A  if (p != 0) sysdep_free(p);        SIBCALL   (what src/ wrote)
+    B  delete[] p;                        call+ret  <== THE BLOB'S SHAPE
+    C  delete p;   (scalar)               SIBCALL
+    D  p ? sysdep_free(p) : (void)0;      SIBCALL
+    E  (void)(p && (sysdep_free(p), 0));  SIBCALL
+    F  inlined helper carrying the guard  SIBCALL
+    G  if (...) ... else (void)0;         SIBCALL
+    H  guard on the first, delete[] on
+       the second                         call+ret
+
+**Exactly one of eight maps**, and H is the control that says it is the
+EXPRESSION and not something global about the function: changing only the last
+free changes only that call.  B is also **20 instructions against A's 19**,
+which is the +1 the blob has.
+
+**THE INDEPENDENT WITNESS IS THE COMPILER-GENERATED CODE.**  The blob's four
+`D0Ev` deleting destructors tail-call `sysdep_free` directly, and a `D0Ev` body
+is `this->~T(); operator delete(this);` written by the front end.  Had
+`operator delete` been the library's, `D0Ev` would call `_ZdlPv` -- and the
+blob defines and references no `_Znwj`, `_Znaj`, `_ZdlPv` or `_ZdaPv` at all.
+So this codebase **replaces global `operator delete` with something that
+inlines to `sysdep_free`**, which is what makes `delete[] p` compile to a call
+to `sysdep_free` rather than to a library symbol.  That is read off the object,
+not assumed.
+
+**BEHAVIOURALLY IT IS THE GUARD IT REPLACES.**  `float` has no destructor, so
+`delete[] p` on a `float *` is `if (p) operator delete[](p)` with no array
+cookie -- the same test and the same call.  `make phase` is green and the
+period differential is 251 passed, 0 failed.
+
+**WHAT CLOSED.**  Nine destructors, four translation units:
+
+    _ZN3PsdD1Ev / D2Ev                  3 of  58  each -> EXACT
+    _ZN9FloatARMAD1Ev / D2Ev            3 of  90  each -> EXACT
+    _ZN10GenericIIRIfdED1Ev             3 of  58       -> EXACT
+    _ZN8FloatFIRD1Ev / D2Ev             (SIZE bucket)  -> EXACT
+    _ZN8FloatIIRD1Ev / D2Ev             (SIZE bucket)  -> EXACT
+
+    grade 0  433 -> 442 of 1251   grade 0-or-1  486 -> 495
+    BYTES    109 -> 104           SIZE          653 -> 649
+
+`--list-exact` was taken on both sides and diffed as a SET, not as a count
+(2900, 7768): **nine added, none removed.**  Four of the nine were in the SIZE
+bucket and so were never in this pass's brief at all -- the count would have
+hidden that too, in the other direction.  `compare.py --ratchet` was run
+because the grade-0 set diff cannot see a function LOSING mnemonic agreement
+without entering either set: it **gained**, `identical 350 -> 523` against the
+stored baseline, and 7779 records 514 at its own commit, so the +9 is this
+pass's.
+
+**THE CLAIM IS BOUNDED, AND NINE OF THE FIFTY ARE NOT EXPLAINED BY IT.**
+`delete[]` does not exist in a `.c`, so the decoding covers the C++ subset
+only.  The C cases keep the same signature and are left open, named here for
+whoever owns them: `_iir_filter_delete`, `RcFixed_Delete`, `K56FLEX_Delete`,
+`VPCMXF_Delete`, `V92deleteConstellations`, `V92deleteFilterCoefficients`,
+`V8agc`, `VPcmV34GetCurrentRxBitRate` and
+`V90Phase3Modulator::generateSymbol`.  **`V92deleteConstellations` and
+`V92deleteFilterCoefficients` are 3 bytes each in the global BYTES list** --
+the destructors' exact signature -- and both are in `V92ParamsInfo.c`.
+
+**TWO COMMENTS IN THE TREE NOW READ AS CONTRADICTING THIS, AND BOTH ARE
+CORRECTED IN PLACE** (findings 6100 and 6103 are the same shelf-life failure).
+`V92EchoCanceller.cpp` argued that the object cannot have used `delete`
+"because `delete` would call `operator delete`, and the object calls
+`sysdep_free`" -- an inference that is incomplete once `operator delete` IS
+`sysdep_free`.  `V90Phase4Modulator.cpp` records that a replacement global
+`operator new` is ill-formed.  **Neither ruling is reversed and the difference
+matters**: for `new`, both spellings emit identically, so the tree chose the
+well-formed one and lost nothing, and that comment says so itself.  For a free
+in TAIL POSITION the two spellings emit DIFFERENTLY and only one matches, so
+this is new evidence rather than a reversal.  Away from tail position the two
+are identical, which is why nothing had noticed -- `V92EchoCanceller`'s own
+destructor has statements after its frees and is unaffected either way.
+
+**THE STANDARDS POSITION, STATED SO THE NEXT READER DOES NOT HAVE TO REDERIVE
+IT.**  C++98 17.4.3.4 forbids `inline` on a replacement `operator delete`.
+GCC 3.4.2 and GCC 13 both accept it silently -- no diagnostic from either, and
+`make phase`'s modern tier is green -- and the blob is evidence about what the
+author wrote, not about what the standard permits.
+
+**FOUR MUTATION ANCHORS MOVED AND WERE RE-ANCHORED IN THE SAME COMMIT**, which
+is the outcome 6810 says to expect whenever a fix rewrites the text a mutation
+matches.  `psd`'s "the destructor forgets the spectrum buffer" and "frees the
+window twice", and `floatarma`'s "forgets the output history" and "frees the
+denominator twice and never the numerator", all matched **0 times** after the
+edit and `make phase` failed at `refs`.  Each was re-pointed at the `delete[]`
+text with its MEANING unchanged; `tools/anchorcheck.py` is back to **0 of
+8,959**.  The first repair rewrote both JSON files with `json.dump` and
+reformatted 260 lines to change four; it was reverted and redone as a surgical
+text edit, **6 lines**.  Neither suite could be re-scored to a fresh baseline:
+`t_psd` is a declared `gccdiverge` binary (1453, x87 excess precision in
+`realfft`), `tools/mutate.py` judges a mutant caught by a non-zero exit and
+refuses a binary that is already red, and all 198 registered suites read
+`stale` in this tree rather than only these two.
+
+
+### 7791. THREE MORE, AND EACH ONE IS A DIFFERENT KIND OF FORCED
+
+**`V34EqualizerUpdateDelayLine` -- an `if`/`else`, not a ternary. EXACT.**
+14 of 59 bytes, and **17 blob instructions against our 18**.  The blob forms
+the incremented cursor with `lea 0x1(%edx),%eax`, which leaves `%edx` holding
+the OLD cursor for the second store; the ternary makes GCC 3.4.2 `inc %edx`,
+`cmp`, and then `mov %edx,%eax` to get it back out -- one instruction more at
+the same byte count.  Six spellings were compiled:
+
+    A  c++; q->cursor = (c == TAPS) ? 0 : c;       BYTES 14   17/18
+    B  int next = c + 1; ... ternary               SIZE  29   17/24
+    C  next declared after the stores, ternary     BYTES 14   17/18
+    D  (c + 1 == TAPS) ? 0 : c + 1                 SIZE   8   17/14
+    E  int next = c + 1; if/else                   SIZE  27   17/23
+    F  c++; if (c == TAPS) ... else ...            EXACT  0   17/17
+
+**Exactly one of six maps**, and the four that miss do so in three different
+directions, so this is a decoding and not a hill climb.
+
+**`hamming<float>` -- the constant pool says `double`.  48 -> 44 bytes.**  The
+blob loads three constants with `fldl` from `.rodata.cst8`; we loaded three
+with `fldt` from `.rodata.cst16`.  An 8-byte pool slot is a `double` and a
+16-byte one is an x87 `long double`, so the LITERALS' type is forced.  It was
+decomposed rather than assumed, because the first attempt changed the literals
+and the variables together and could not tell which mattered:
+
+    var=long double  lit=long double   BYTES 48   44/44   (as written)
+    var=long double  lit=double        BYTES 44   44/44
+    var=double       lit=double        BYTES 44   44/44
+    var=double       lit=long double   SIZE  10   44/46
+
+**The variables' width is invisible and the literals' is not**, which is
+exactly right for x87: every register is 80 bits whatever the C type says, but
+a constant in memory has a width the load instruction names.  So only the
+literals were changed and `long double` locals were kept -- the narrower claim
+is the one the evidence supports, and the existing comment about the `n == 1`
+divide-by-zero being reproduced bit for bit rests on those locals.
+`t_dspmath` is green over 462,336 checks on the cosine windows.  This is a
+correctness change and not only a codegen one: `6.283185307179586L` and
+`6.283185307179586` are different values.
+
+`hanning`'s literals were spelled `long double` too and were changed with
+them, and **that change moved no byte** -- both sides already emitted `fldl`
+against `.rodata.cst8` there.  It is recorded as a spelling aligned with the
+relocation its own comment already cites, NOT as a fix.  `hanning` and
+`blackman` are in the SIZE bucket with 47 and 62 blob instructions against our
+44 and 61, so they carry an ABSENCE and are a different job.
+
+**`V34EchoPreFilter` -- the field is an `int`, and the mask is where this
+stops.  63 -> 55 bytes.**  `p->shift` is declared `int` at +0x64 and the blob
+loads all 32 bits of it (`mov 0x64(%edi),%edx`); our `(unsigned char)` cast
+made GCC emit `movzbl` and a separate `and $0x1f`, two instructions more at the
+same 139 bytes.  The cast was **provably redundant**: `(unsigned char)x & 31`
+and `x & 31` are equal for every `int` x, because the mask discards bits 5..7
+either way.  So removing it cannot change behaviour, and it does not.
+
+    uchar    + `& 31`    BYTES 63   49/50
+    uchar    + bare      BYTES 62   49/50
+    unsigned + `& 31`    BYTES 55   49/50     <== taken
+    int      + `& 31`    BYTES 55   49/50
+    unsigned + bare      BYTES 43   49/49
+    int      + bare      BYTES 43   49/49
+
+**DROPPING THE MASK TOO REACHES 43 AND MATCHES THE BLOB'S INSTRUCTION COUNT
+EXACTLY, AND IS DECLINED.**  49 against 49 is a strong hint that the original
+wrote a bare `>> shift` and let `sar %cl` do the masking, which is undefined C
+for a shift the object can put above 31.  It is not taken: it does not close
+the function, and "nothing wrong-but-plausible" outranks eight bytes.  The
+multiply's operand order was compiled both ways at the same time and moved
+nothing, so it is free and is not the residual.
+
+    grade 0  442 -> 443 of 1251   BYTES 104 -> 103
+    --list-exact diffed as a SET: one added, none removed.
+
+
+### 7792. THE NEGATIVES, EACH WITH THE ROW `alpha_equal` REJECTED ON
+
+Recorded because a measured negative is worth more than a shrug, and because
+two of these are rejected on something that is NOT the difference the bytes
+are.
+
+**`V34Filter2` (5 of 61, 26/26) -- THE SPELLING SPACE IS EXHAUSTED.**  Rejected
+at **row 15, `USE CONFLICT eax wants ecx, already bound to eax`**, blob
+`%eax,%ecx` against our `%ecx,%eax`: the blob's product lands in the register
+holding `carry` and ours in the one holding `coeff[k]`.  Five spellings of the
+loop body were compiled -- `carry * coeff[k]`, `coeff[k] * carry`, the product
+through a named temporary, `acc +=`, and hoisting `carry = old` above the
+accumulate.  **The first four emit identically, 5 bytes and 26 instructions
+every time**, and the fifth is worse (SIZE 2, 27 instructions).  So the choice
+of destination register is the allocator's and there is no source lever.
+
+**`V34InitializeImplementationSpecific` (111 of 181, 32/32) -- THE OBJECT
+REFUTES ITS OWN ORDER.**  Rejected at **row 1, `MNEMONIC mov vs lea`**.  It is
+fifteen straight-line stores and nothing else, so the first question was
+whether any of them goes to the wrong place.  Each stored register was resolved
+back to what was last moved into it and the two sides compared **as a map**
+rather than as two instruction lists (7760: a matching multiset does not prove
+a matching assignment): **0 mismatches of 15**, every value to the same offset.
+So it is purely an order.
+
+And the order is **free, on the object's own evidence**.  The function is two
+structurally identical blocks -- the same seven assignments to `echo0` and to
+`echo1` -- and the blob emits them in two DIFFERENT orders:
+
+    echo0   dlen, hist, cursor, dline, coeff, taps, coeff_frac
+    echo1   dlen, cursor, hist, coeff, dline, coeff_frac, taps
+
+One source order, two emitted orders, one compiler, one function.  No source
+order can be decoded from an emission that disagrees with itself, and 15!
+is not a family anything could enumerate anyway.
+
+**`indicateJaTransmission` (24 of 57) -- BLOB 14 INSTRUCTIONS AGAINST OUR 13,
+AND THE EXTRA ONE NAMES A STRUCTURE WE DO NOT MODEL.**  The blob does
+`add $0x4,%eax` and then reads `0x248(%eax)` and `0x24c(%eax)`; we read
+`0x24c(%eax)` and `0x250(%eax)` directly.  **The effective addresses are the
+same on both sides**, so this is not a wrong offset -- it is a base pointer to
+a sub-object at `v34_object + 4` that the original took once and used twice.
+`include/dsplib/v34fsk.h` has a bare `int f0004` there and no sub-structure,
+and `tools/whichfield.py` confirms +0x24c and +0x250 are `v90_receiver` and
+`k56flex_receiver` as flat members.  **Inventing a struct to fit would be
+naming something wrongly, which CLAUDE.md ranks below leaving it padded** and
+which 3120 declined on the same ground.  Named for the next pass: if the
+`add $0x4` base shows up in other `v34_object` functions, there is a real
+sub-object to model and this closes with it.
+
+**`FPM_SRE_init` (44 of 574, 150/150)** -- rejected at **row 22,
+`MNEMONIC movw vs movl`**, which reads like a width and is not: the same
+multiset of stores appears on both sides and only their positions move.  The
+blob emits `adapt = 1` (`movl $0x1,0x48(%ebx)`) AFTER the four `movw $0x0`
+zeroing stores at +0x38..+0x3e; we emit it immediately after `acquiring = 1`.
+A twenty-assignment prologue is not a family that can be exhausted, so no
+attempt was made -- this is 7770's method declining to apply rather than
+failing.
+
+**The rest of the slice, with the row and nothing claimed about it:**
+
+    _Z7hammingIfEvPT_j          44 of  104  44/44  row 1  MNEMONIC xor vs push
+    V34EchoPreFilter            55 of  139  49/50  (no alpha row; see 7791)
+    V34EchoHistoryBackwardClean 247 of 404 139/136 ABSENCE, blob 3 more
+    VPcmV34RequestDPNotification 7 of   89  23/23  row 13 MNEMONIC xor vs mov
+    VPcmV34GetCurrentTxBaudRate 35 of   44  14/14  row 1  MNEMONIC cmpw vs lea
+    V8Create                   167 of 1124 246/247 ABSENCE, ours 1 more
+    FPM_atan                   290 of  409 116/110 ABSENCE, blob 6 more
+    FPM_FSE_init                56 of  458 120/120 row 15 MNEMONIC rep vs movl
+    dp_runtime_create           53 of  298  78/78  row 47 MNEMONIC mov vs movl
+    reset_dtmf                  35 of  275  65/65  row 7  MNEMONIC xor vs mov
+    create_cid_dtmf             35 of  370  84/84  row 13 MNEMONIC xor vs mov
+    FloatFIR::process          244 of  287 107/104 ABSENCE, blob 3 more
+    GenericIIR<f,d>::C1         85 of  107  31/33  ABSENCE, ours 2 more
+    FloatARMA::reset             9 of  114  38/38  row 30 MNEMONIC sub vs mov
+    GenericIIR<f,d>::reset       9 of  122  41/41  row 33 MNEMONIC mov vs sub
+    VPcmV34SetDelays           116 of  259  66/65  ABSENCE, ours 1 more
+
+**SIX OF THOSE CARRY AN INSTRUCTION-COUNT DELTA, WHICH IS THE LEVER THAT PAID
+IN THIS PASS AND THE ONE TO SPEND THE NEXT PASS ON.**  Every closure here and
+in 7790 came from that column; the `.rodata` definition-order lever that the
+brief ranked first produced nothing, and its reloc-kind sweep produced exactly
+one hit (`hamming`).  The counts are reliable only with alignment padding
+stripped WHEREVER IT OCCURS -- GCC pads branch targets inside a function, and a
+trailing-only filter counts internal `nop` and `lea 0x0(%esi,%eiz,1),%esi` as
+code.  A first run of this table with a trailing-only filter reported
+`V34EchoHistoryBackwardClean` as an absence of 3 that does not exist and missed
+`hamming`'s of 1 that does.
+
+**`FloatARMA::reset` and `GenericIIR<f,d>::reset` are mirror images** -- 9
+bytes each, `sub vs mov` at row 30 and `mov vs sub` at row 33 -- and they are
+sibling classes in two files.  A decoding on one is a hypothesis for the other
+and must be measured on it, not transferred.
