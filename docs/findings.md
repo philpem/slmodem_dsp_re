@@ -89079,3 +89079,270 @@ separately.
 `refcheck.py` accepts the prefix as OPTIONAL, deliberately, so the bare
 remainder keeps resolving. The prefix is what makes a future sweep safe; it is
 not what makes the checker work.
+
+======================================================================
+
+### F7920. `V90Equalizer::reset`'s 862 BYTES WERE TWO WRONGS CANCELLING, AND THE MEASUREMENT NAMES WHICH IS WHICH
+
+*Reserved block: **F7920-F7924**.  Every ref this repository knows --
+`refs/heads`, `refs/remotes` and `refs/tags` -- was swept for its highest
+`### <n>.` heading and all of them stand at **F7883**, with nothing anywhere
+above it.  The block starts at F7920 rather than F7884 because CLAUDE.md asks
+for a gap and sibling worktrees write concurrently.*
+
+F7775 measured that inlining `reset`'s three `n = X + 8` loop bounds into their
+loop conditions makes 36 instructions exact and grows the function 862 -> 878,
+and **withheld the edit** on the ground that the growth was register pressure
+coupled to `clamp_fade_ratio`.  The edit is now applied.  What it does is not
+what F7775 thought.
+
+**THE LOOP BLOCK BECOMES THE OBJECT'S, INSTRUCTION FOR INSTRUCTION.**  With the
+bound in the condition GCC folds the known `i == 0` into the zero-trip test and
+emits the object's `cmp $0x0,%reg / jbe` where the temporary gives
+`cmp %reg,%reg / jae`; the back edge follows, and so does the middle loop's
+`jmp` to its bottom test, which we had been missing entirely.  The whole
+`mmxArraysPresent` block -- rows 69 to 106 of the padding-stripped listing --
+drops out of the blob diff.  That is F7775's 36, reproduced.
+
+**SO THE 862 WAS A COINCIDENCE AND THIS IS WHAT IT WAS MADE OF.**  After the
+edit the loop block IS the object's, byte for byte, and the function is 878
+against 862.  Therefore before the edit our loop block was **16 bytes SHORT**
+of the object's and the x87 tail is **16 bytes LONG**, and the two summed to a
+size match that put the symbol in `byteident`'s BYTES bucket and hid both.
+F7775 said "two wrongs cancelling" and could not say which; this is the
+arithmetic.
+
+**WHAT IT COSTS AND WHAT IT BUYS, BOTH MEASURED ON THE REBUILT TREE.**
+
+    grade 0    535 of 1251 (42.8%)  ->  535 of 1251 (42.8%)   unchanged
+    grade 0/1  574                  ->  574                   unchanged
+    REGALLOC    34                  ->   34                   unchanged
+    BYTES       65                  ->   64
+    SIZE       609                  ->  610
+    reset      BYTES 446 of 862     ->  SIZE 16 (blob 862, ours 878)
+
+The only symbol that moves anywhere in the tree is `reset` itself, and it moves
+between two buckets neither of which is a grade.
+
+**THE EXACT SET WAS DIFFED, NOT INFERRED** (2900 and 7768's rule, and F7778's
+own practice).  The commit changes one object, so the two arms were taken by
+swapping the pre-edit object into `build/tc_out` -- the harness cell already
+proved byte-identical to it -- and running `--list-exact` on each: **554 lines
+before, 554 after, and the only lines that differ in the whole listing are the
+two summary counts** (`BYTES 65 -> 64`, `SIZE 609 -> 610`).  Not one symbol
+entered or left the exact set.
+
+**AND `compare.py --ratchet` WAS RUN ON BOTH ARMS, because the grade-0 set diff
+cannot see a function that loses MNEMONIC agreement while staying non-exact.**
+`identical` is **598 on both arms** -- nothing lost mnemonic agreement --
+and `same_size` goes **44 -> 43**, which is `reset` itself leaving the
+same-byte-count bucket and is the whole point of the change.
+
+**THE RATCHET FAILS ON BOTH ARMS AND THE FAILURE IS PRE-EXISTING, NOT THIS
+COMMIT'S.**  `tools/toolchain/ratchet.json` was last blessed at `ad6c0c1b`
+(2026-08-16) at `compared 986, identical 350, same_size 71`; the tree today
+compares **1251** and matches **598**.  Master alone already reads `same_size
+44` against that floor.  The populations are not comparable, and the direction
+is not even bad: a function moving from `same_size` into `identical` is an
+improvement, and `identical` has gained 248 since the floor was set.  **It is
+NOT re-blessed here** -- doing so would bless 27 other symbols' movement this
+wave did not measure.  Whoever re-blesses it should say what the other 27 are.
+
+`--why` now reads
+
+    grade 0 verdict: SIZE  (16 byte(s) differ)
+    INSTRUCTION COUNT differs: blob 208, ours 211  (padding already stripped)
+
+against 208/210 before.  The count moved AWAY by one because the edit added the
+`jmp` the object HAS and we lacked, which cancels an absence rather than an
+extra -- read the sign per block, not per function.
+
+**THIS IS NOT HILL-CLIMBING AND THE DISTINCTION IS 7782'S.**  Nothing here is
+taken on byte count; the byte count got worse.  What is taken is a
+36-instruction block reaching positional identity, on a source property this
+file proves with its own control: `zeroLinearEquCoefs` and `zeroDfeCoefs` are
+the same construct and the same one-line change took them from 17 and 19
+differing bytes to 2 each (F7775).  A cancellation removed is worth more than a
+size match kept, because the size match was measuring nothing.
+
+---
+
+### F7921. THE COUPLING F7775 WITHHELD THE EDIT FOR DOES NOT EXIST -- 47 OF 48 CELLS AT A FLAT +16
+
+*The thing this wave was sent to test, and it is a negative.*
+
+F7775's reason for withholding was specific and mechanical: "removing the
+temporaries changes the register pressure the x87 tail is allocated under, and
+the tail then needs an extra `fld %st(0)` and its consequences -- sixteen bytes
+that were previously missing."  **Two independent measurements refute it.**
+
+**1. THE TAIL DOES NOT MOVE.**  Diffing `reset` between our own two objects,
+with and without the edit, the x87 tail is **instruction for instruction
+identical** -- the same `fld %st(0)`, the same `fstp`s, the same `fcom`s, the
+same block layout.  The only thing that changes below the loops is that every
+branch displacement shifts by exactly 16, which is the mechanical consequence
+of code ABOVE it growing.  There is no extra `fld` and no consequence of one.
+
+**2. THE COST IS FLAT ACROSS THE WHOLE CROSS PRODUCT.**  Sixteen
+`clamp_fade_ratio` control-flow spellings x three call-site spellings x the
+loop edit on and off = 96 cells, compiled as the REAL translation unit on GCC
+3.4.2 at the tree's flags and scored with `byteident.py`'s own `body` and
+`verdict` (7773's rule).  The loop edit costs **exactly +16 bytes in 47 of the
+48 (clamp x call) pairs**.  The single exception is the `Q` shape at call
+site 2, and it was read rather than waved at: there the edit changes the three
+loop guards' ENCODINGS (`cmp %reg,%reg` at two bytes -> `cmp $0x0,%reg` at
+three) **without** adding the middle loop's `jmp` -- 206 instructions on both
+sides against 211 everywhere else -- so the growth is absorbed by the
+allocation that cell happens to have rather than paid for.  It is a cell where
+the edit does LESS, not one where the coupling reappears.
+
+A difference that costs the same 16 bytes whatever the clamp is spelled as is
+not coupled to the clamp.  That is lever 2's cross-product test used in the
+direction it was written for: a cell that changes one difference and not the
+other proves the two are independent, which no single comparison can.
+
+**AND THE CLEANEST EVIDENCE IS A FUNCTION F7775 NEVER LOOKED AT.**
+`setLinearEquEdgesFadingParams` is `reset`'s last five statements exposed, it
+is the other `clamp_fade_ratio` caller, and it has **no loops and no
+temporaries at all** -- yet it carries the identical defect, the same
+pre-materialised duplicate zero (`fld %st(1)` in its entry block).  A
+divergence that appears in a function with no loop temporaries cannot be caused
+by loop temporaries.
+
+**WHAT TO TAKE FROM IT.**  A coupling claim is a claim about a cross product
+and needs one; F7775 inferred it from a single before/after on one function
+where the two effects happened to sum to zero.  The withheld-edit protocol was
+right in shape -- it kept a correct edit from landing for a stated, falsifiable
+reason, and said what would falsify it -- and the reason was checkable in about
+a minute of compiler time once the harness existed.  **Withhold with a stated
+mechanism, and make the next wave test the mechanism before it inherits the
+conclusion.**
+
+---
+
+### F7922. `clamp_fade_ratio`: 96 CELLS, 54 DISTINCT EMISSIONS, NO PREIMAGE
+
+*Rule 0's third case, measured.  The difference is not the clamp's statement
+shape.*
+
+Both callers diverge from the object in the same two ways:
+
+- we materialise a **second copy of the 0.0f in the entry block** -- `fld
+  %st(1)` in `setLinearEquEdgesFadingParams`, `fld %st(0)` in `reset` -- where
+  the object pushes it lazily inside the `x < 0` arm (`fstp %st(0); fld
+  %st(1)`);
+- the object lays the `x < 0` arm out as the **fall-through** and puts the 0.5f
+  check out of line; we do the opposite.
+
+The domain: sixteen control-flow spellings (early return, nested both ways,
+`else if` chains assigning a local or the parameter, two ternary chains, an
+explicit `else` on each, the bounds as named locals, the zero alone as a local,
+a single-exit default, an `&&` in-range test first), crossed with three
+call-site spellings and the loop edit.  **96 cells, 54 distinct emissions, and
+not one reaches grade 0 on either caller.**
+
+**THE PREDICATES WERE NEVER IN THE DOMAIN AND THAT IS DELIBERATE.**
+`!(x >= 0.0f)` and `!(x <= 0.5f)` are 2301 sites -- F2304 names
+`clamp_fade_ratio` as holding two of them by itself -- so a NaN's routing is
+behaviour, not spelling, and every one of the sixteen shapes is NaN-identical
+to master.  Testing the upper bound first was excluded for exactly that reason:
+`!(NaN <= 0.5f)` is true, so it would return 0.5f where the object returns
+0.0f.
+
+**THE DETECTOR FIRES, WHICH IS WHAT MAKES THE NULL READABLE** (F134, and F9a's
+argument).  54 distinct emissions from 96 cells is not a constant map and not a
+broken generator; on the small caller alone the shapes separate into ten
+emission classes spanning 210 to 281 bytes against the object's 238.
+
+**THE NEAR MISSES ARE DECLINED, AND 7782 IS WHY.**  The nested form
+(`if (x >= 0.0f) { if (x <= 0.5f) return x; return 0.5f; } return 0.0f;`, which
+four spellings share one emission with) removes the duplicate zero, reproduces
+the object's entry block exactly, and takes `setLinearEquEdgesFadingParams` to
+**239 bytes against 238** -- from 245.  It is still not taken: it goes to **78
+instructions against the object's 76** where master is 77, because it inverts
+the block layout, and it takes `reset` from BYTES 446 to SIZE 850.  Better on
+bytes, worse on content, and no cell in an exhausted domain maps.  Closer bytes
+are not a grade.
+
+**WHAT IS LEFT, WITH BOTH SIDES' COUNTS, SINCE NEITHER SYMBOL CLOSES.**
+
+    setLinearEquEdgesFadingParams   SIZE  7   blob 238, ours 245   76 vs 77 insns
+    reset                           SIZE 16   blob 862, ours 878   208 vs 211 insns
+
+`--why` rejects both on length: `reset` at `blob 208, ours 211` with padding
+stripped, `setLinearEquEdgesFadingParams` at 76 against 77.  The residual in
+both is now exactly the clamp pair and nothing else.
+
+**THE BLAST RADIUS IS TWO SYMBOLS AND THAT WAS MEASURED, NOT ASSUMED**, which
+bounds F7880's blind spot here.  Across all 96 cells the file's other 27
+symbols do not move by one byte in any cell -- checked by comparing every
+symbol's `(verdict, differing count)` against the master cell, not by counting
+the exact set, precisely because a symbol that stays SIZE and gets WORSE is
+invisible to a set diff.
+
+---
+
+### F7923. WHAT A VARIANT HARNESS OWES, RESTATED, AND THE ONE THAT CAUGHT ITSELF
+
+Three things this pass's harness did, each of which is somebody's earlier scar:
+
+**IT WAS VALIDATED AGAINST THE COMMITTED OBJECT BEFORE A CELL WAS READ.**  The
+master cell compiles to a file **byte-identical to
+`build/tc_out/src_pump_v90_V90Equalizer.cpp.o`**, checked with `cmp`, and
+re-checked after the generator was changed.  This is not a model, it is the
+real translation unit, and it still had to prove it.
+
+**THE REAL TREE COULD NOT BE REACHED.**  `include/` and `tools/` are
+bind-mounted **read-only**; the only writable mount is a directory the harness
+created; nothing is copied with a link-preserving copy anywhere.  `git status`
+was clean after every run.  F7822's `cp -al` wrote THROUGH the hardlinks into
+`src/` and nothing failed.
+
+**THE GENERATOR'S ONE BUG FAILED LOUDLY, AND IT IS THE INTERESTING PART.**  The
+loop edit removes `n` from `reset`'s declaration, and `unsigned int i, n;` is
+also the declaration of **three other members of the same file** --
+`enterPhase4`, `enterFPE` and `enterRRN`.  An unanchored string replace took
+`n` out of all four.  All 48 affected cells failed to compile with "`n'
+undeclared", naming the three functions.  Anchoring the replacement on `reset`'s
+own signature fixed it.  Had the same edit happened to be LEGAL in the other
+three, this would have been F7822's shape again: a harness quietly measuring
+something other than what it claimed, with every cell compiling and passing.
+**A textual edit to one function must be anchored on that function**, and the
+cheapest anchor is the signature line.
+
+**NO MUTATION ANCHOR MOVED, SO NOTHING WAS RE-ANCHORED AND NOTHING WAS
+RE-RUN.**  `anchorcheck.py` reads **198 suites, 8,959 mutations, 0 skipped, 0
+anchors matching other than exactly once** after the edit.  The three loops and
+the `n` declaration are quoted by no anchor -- `v90equ.json`'s nearest neighbour
+is the CONSTRUCTOR's `array_ec` malloc and its `mmxArraysPresent != 0` anchor is
+the DESTRUCTOR's -- so there is no caught/not-caught to report, and that is the
+answer rather than a step skipped.  `refcheck.py`: 7,698 references, 0
+dangling, 0 stale.
+
+Cost, for the next pass's budget: 96 cells of a 3,000-line C++ translation unit
+in one container pass, well under a minute of compiler time.  F7805's rates
+hold.
+
+---
+
+### F7924. TWO SYMBOLS THE BRIEF CARRIED AS OPEN ARE EXACT ON MASTER
+
+Re-measured at `c577f550` before any edit, because a brief is a comment with no
+gate behind it and CLAUDE.md's own rule is to check a stated live defect against
+the tool:
+
+    V90Equalizer::~V90Equalizer  D1              EXACT  541 of 541
+    V90Equalizer::~V90Equalizer  D2              EXACT  541 of 541
+    V90Equalizer::enterChannelVerification       EXACT  116 of 116
+
+F7778 has the destructors at 52 and 50 differing bytes with the cause named as
+lever 7 -- we tail-call the last `sysdep_free` and the object does not -- and
+has `enterChannelVerification` at 12 of 116, rejected at row 13 on scheduling
+across a call.  Both closed in the intervening waves: the destructors to wave
+7's `delete[]` sweep (F7814, F7816) and `enterChannelVerification` as a named
+BYSTANDER of a file reorder nobody aimed at it (F7801).
+
+So `V90Equalizer.cpp`'s real open set is **`reset` and
+`setLinearEquEdgesFadingParams`** -- the `clamp_fade_ratio` pair of F7922 --
+plus fourteen SIZE symbols nobody has aimed at, the largest being `process`
+(blob 9,364, ours 9,244) and `convertEqualizerToMmx` (blob 2,573, ours 2,598).
