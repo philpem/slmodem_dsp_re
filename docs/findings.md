@@ -84047,17 +84047,17 @@ merge.
 
 ======================================================================
 
-### 7800. FOUR MORE IN `VPcmFloModem.cpp`, AND THE COMPILER REORDERED OUR SOURCE IN EVERY ONE
+### 7779. FOUR MORE IN `VPcmFloModem.cpp`, AND THE COMPILER REORDERED OUR SOURCE IN EVERY ONE
 
-Reserved block for this batch: **7800-7802**.  Every ref this repository knows
+Reserved block for this batch: **7779-7781**.  Every ref this repository knows
 about was swept for its highest `### <n>.` heading -- `refs/heads`,
 `refs/remotes` and `refs/tags` together -- and `master`, `origin/master` and
 this branch all stand at **7778**, with nothing anywhere above it.  The block
-starts at 7800 rather than 7779 because CLAUDE.md asks for a gap and because
+starts at 7779 rather than 7779 because CLAUDE.md asks for a gap and because
 sibling worktrees are writing concurrently.
 
 Six functions were briefed, 12,380 bytes, all in `byteident`'s BYTES bucket.
-**Four are now EXACT**; the two large ones did not close and are 7801 and 7802,
+**Four are now EXACT**; the two large ones did not close and are 7780 and 7781,
 which say why in more detail than "not attempted".
 
     _ZN12VPcmFloModem20vPcmResetPhase3ModemEv    2 of  149  -> EXACT
@@ -84196,7 +84196,7 @@ working and the reason given for working it is not the reason it pays.**
 
 ======================================================================
 
-### 7801. `V90Parameters::loadParams`: 295 CALLS VERIFIED AGAINST THE OBJECT, ARGUMENT FOR ARGUMENT, AND THE 2,663 BYTES ARE ALL FREE
+### 7780. `V90Parameters::loadParams`: 295 CALLS VERIFIED AGAINST THE OBJECT, ARGUMENT FOR ARGUMENT, AND THE 2,663 BYTES ARE ALL FREE
 
 The single biggest BYTES symbol in the tree -- 7,894 bytes, 2,663 differing --
 and the brief flagged it as the one a previous pass had already made other
@@ -84306,7 +84306,7 @@ content rather than by shrugging at the diff, which is 2900's warning.
 
 ======================================================================
 
-### 7802. `v90RunDemodulator`: REGISTER NORMALISATION TOOK 131 BYTES DOWN TO THREE HUNKS, AND ALL THREE ARE OUTGOING-ARGUMENT STORES
+### 7781. `v90RunDemodulator`: REGISTER NORMALISATION TOOK 131 BYTES DOWN TO THREE HUNKS, AND ALL THREE ARE OUTGOING-ARGUMENT STORES
 
 3,013 bytes, 131 differing, **578 blob instructions against our 578**.  No
 absence, so 7774's lever does not apply.  `alpha_equal` rejects at **row 20**:
@@ -84341,7 +84341,7 @@ so both texts read the field twice and neither has the local.
 
 **THE CONTROL IS THE FUNCTION NEXT DOOR, WHICH IS 7775'S RULE AND NOT A
 SURVEY.**  `qcLineVerification` makes the *same* `modem.progress(rxbits,
-*(unsigned int *)nrx, in, n)` call, in the same file, and after 7800 it is
+*(unsigned int *)nrx, in, n)` call, in the same file, and after 7779 it is
 byte-identical to the object -- argument stores included.  So the call is
 written correctly, and the same text compiles to the blob's store order at one
 site and not at the other.
@@ -84351,7 +84351,7 @@ rests on the two things that were checked -- the identical value-to-slot maps
 and the twice-emitted `movzbl` that refutes the local -- and those are enough
 for it.  Register pressure at the two sites is the obvious candidate for the
 difference and it was NOT measured, so it is named as a candidate and not as
-the cause.  7801's own length hypothesis died on exactly this distinction.
+the cause.  7780's own length hypothesis died on exactly this distinction.
 
 One thing register normalisation erases had to be checked by hand rather than
 assumed: the `fmuls` against `.rodata.cst4` uses addend 0x28 in the blob and
@@ -84364,6 +84364,6 @@ targets, section-relative addends -- and then read what SURVIVES, instead of
 reading a raw diff and classifying forty rows by eye.  Three hunks is a size a
 negative result can be argued at; forty rows is not.
 
-**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7778 when 7800-7802 were
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7778 when 7779-7781 were
 written and sibling worktrees are writing concurrently; expect to renumber at
 merge.
