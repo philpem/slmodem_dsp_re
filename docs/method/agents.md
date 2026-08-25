@@ -111,6 +111,18 @@ What works:
 - **After adding to a shared file, re-run every suite over it and read the
   UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
   that does not fail (finding 347).
+- **THE SESSION SCRATCHPAD IS SHARED BETWEEN AGENTS, so a generic filename is a
+  collision waiting to happen.** Every agent under one session gets the same
+  scratch directory. A refinement pass wrote its own `order.py` there over the
+  parent's `order.py` — different contents, same name, and the parent's next
+  run died on an absolute path baked into the agent's copy, pointing at a
+  worktree that had since been removed. The failure is loud but it lands well
+  after the overwrite, in a session that did nothing wrong.
+
+  Name scratch files for the pass that owns them (`w6order.py`, `tnenum.py`)
+  and never write an absolute worktree path into one — resolve it at run time
+  from the current directory. A brief that spawns parallel agents should say
+  this; the ones in this tree now do.
 - **Give each batch a macro-name prefix of its own.** `T41_`, `T44_`, `T46_`
   were introduced against `#define` collisions and turned out to be just as
   useful as the thing that makes an anchor unique: a shared call line is what

@@ -106,6 +106,26 @@ iteration aid. It is NOT a suite result and cannot be a baseline` instead.
 Verified by grepping the subset output for what the parser looks for and
 getting zero matches (finding 555).
 
+#### Two checks passing is not evidence a third is unnecessary
+
+`assertlive.py` guards the 1,705 layout assertions that exist only under
+`__SIZEOF_POINTER__ == 4`. It began with two checks: defining the macro must
+INCREASE the live count, and both period build scripts must still pass
+`-D__SIZEOF_POINTER__=4`. Both were shown firing by injection, and both are
+sound.
+
+They are also jointly insufficient, which only injection revealed: putting
+`#if 0` over ONE header's guard took the tree from 1747 live assertions to
+1718, and the tool printed the smaller number and said OK. A single file going
+inert is invisible to a comparison that only asks whether the macro does
+anything at all. So a third check was added -- the count must not DECREASE,
+floored in `tools/assertlive.json` in the same shape as `compare.py --ratchet`
+-- and the injection now exits 1. Finding 7804.
+
+The rule that generalises: **when a check has more than one way to fail, inject
+each way separately.** A detector shown firing on one defect has been shown to
+detect that defect, not the class.
+
 ### 3. A detector nobody has seen fire is not a detector
 
 Finding 134's argument, and it has been quoted against four separate tools.

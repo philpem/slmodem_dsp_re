@@ -352,15 +352,52 @@ came from getting that backwards.
   used. `movzwl` where we emit `movswl` on a value that indexes a table means
   the declared type differs. That found a real defect no test could see
   (613), because the two readings agree over every value the field holds.
-- **Free, so ignore it:** register allocation. Instruction scheduling. The
-  extension on a load whose upper half is discarded — a 16-bit field copy can
-  use either instruction (614). Chasing these means permuting source until the
-  output matches, which is fitting the compiler, not recovering the source.
+- **NOT FREE, ONLY FREE OF THE THING YOU FIRST BLAMED.** This bullet used to
+  read "free, so ignore it: register allocation, instruction scheduling, the
+  extension on a load whose upper half is discarded (614)", and two of those
+  three have since been steered to byte identity. What is true is narrower:
+  **they are not determined by the statement you are looking at.** They are
+  determined from outside it, and that outside thing is a real source property.
+  - **Register allocation** follows the translation unit's EMISSION ORDER.
+    Reordering nine files' function definitions to the blob's own order gained
+    17 symbols and lost none (7796), and it later took `loadParams` — 7,894
+    bytes, 2,663 differing, the largest such symbol in the tree — to byte
+    identity as a BYSTANDER of a reorder aimed at something else (7800). The
+    carrier is upstream of the function, not its own index.
+  - **A dead extension** follows the declared type of the LOCAL being loaded
+    into — not the field, not the store destination, and not a cast; six
+    spellings compiled, one matches (7803). 614 is still right that the FIELD's
+    type is not what varies, and the blob proves it by using both extensions on
+    one field.
+  - So do not chase these INSIDE the function. Look outward.
 - **In between, and it needs the strong test:** statement order. GCC does NOT
   simply preserve it — `toneiir_reset`'s source is already in the object's
-  order and the compiler reorders ours (617). A store-order difference is a
-  hint; the acceptance test is FULL-TEXT identity, operands included. Two
-  functions passed it, seventeen did not and were left alone.
+  order and the compiler reorders ours (617). The acceptance test is FULL-TEXT
+  identity, operands included.
+  **ENUMERATE, DO NOT SEARCH.** The candidate spellings are a small finite
+  family: compile ALL of them. If exactly one maps onto the object you have
+  DECODED the author's order, and this holds even where the compiler reordered
+  your source, which 617's rule had made look impossible (7770). If several
+  map, you have decoded a specific FACT and the finding must say which. If none
+  does, the difference is not statement order at all — 16 spellings of
+  `packData`'s loops, maximum 516 against the object's 534 (7785).
+
+**THE RULING ON FIT VERSUS RECOVERY (7782), because these levers all raise
+it.** Byte identity is the target and it is TAKEN when the candidate space is
+exhausted and exactly one element maps onto the object — the preimage is
+unique, so the source is derived from the object rather than fitted to it.
+It is DECLINED when you are hill-climbing on byte count: one pass declined
+`V92Phase4Modulator::reset` at 27 differing bytes of 290 because its
+14-spelling enumeration contained no match, and another declined a 2-of-387
+near-miss because the enumeration was completed before any cell was read.
+Closer bytes are not a grade. Record which side of the line a closure falls on
+and what the domain was; "closed by reordering" without the domain is not
+reviewable.
+
+**`docs/method/refinement.md` is the playbook for all of this** — rule 0 and
+nine levers, each with the measurement that established it AND the case where
+it failed. Read it before a refinement pass. It is where these entries are
+maintained; this section is the summary.
 
 ### The tools, and their precision
 
