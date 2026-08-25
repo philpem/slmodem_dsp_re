@@ -87211,3 +87211,41 @@ whoever is next in it: say *"instruction counts differ, N against M"* rather
 than `False`.  **So this lever is finished on the C++ side of the tree**, and what
 would reopen it is a decision about `V92ParamsInfo`'s TU, not another
 spelling.
+
+### 7825. `--why` printed a bare `False` for a length difference, which reads like a tool artefact and had already misled a reader
+
+`alpha_why` returns `None` when two instruction sequences are alpha-equal and a
+reason string when they are not -- except at the very first check, where a
+length mismatch returned a bare `False`. `--why` printed that verbatim:
+
+    grade 1 verdict: REJECT
+      False
+
+Two independent passes asked for this line in the same afternoon, and the
+second had the sharper reason: it is not merely uninformative, it is
+**ambiguous in a way that produced a wrong sentence**. A pass reasoned from
+the bare `False` that "the instruction counts differ" and quoted 632 against
+636 in support -- but `alpha_why` compares UNSTRIPPED `insns()` rows, so what
+the `False` actually witnessed was 649 against 653. The measurement it was
+supporting came from `instrcount.py` and was right; the sentence justifying it
+was not.
+
+That is finding 7793 wearing a third costume: alignment padding counted as
+code inverted the triage of five functions there, and here it silently sat
+between a verdict and the number quoted for it. `--why` now prints both pairs
+and names which one to use:
+
+    INSTRUCTION COUNT differs: blob 653, ours 649  (636 against 632 with
+    alignment padding stripped)
+        an absence or an extra, so this is lever 2 -- a missing or added
+        statement -- and not a renaming
+
+Verdict-neutral by measurement, which is the only thing that makes a change to
+a certifier safe to land: EXACT 508, REGALLOC 25, grade 0-or-1 538, BYTES 85,
+SIZE 625 before and after, and the self-test's 18 cases unchanged.
+
+**A boolean returned from a function whose contract is "a reason or None" is a
+type error the language will not catch and the caller will print.** Worth
+looking for elsewhere: `False` is falsy, `None` is falsy, and
+`alpha_equal`'s `is None` wrapper made both behave correctly at the only call
+site that mattered -- which is exactly why it survived.

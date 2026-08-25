@@ -257,8 +257,27 @@ def alpha_why(x, y):
     code equivalent, and `--self-test` exists for that reason: four of its
     eight cases are things this must still REJECT.
     """
+    #
+    # A LENGTH DIFFERENCE IS A DIAGNOSIS, NOT A TOOL ARTEFACT.  This returned a
+    # bare `False`, which `--why` printed verbatim and which reads exactly like
+    # something the tool failed to do -- and it has already misled a reader into
+    # quoting it as evidence of an absence.  Two independent passes asked for
+    # this line.
+    #
+    # THE COUNTS ARE REPORTED BOTH WAYS ON PURPOSE.  The raw pair is ambiguous
+    # between alignment padding and real code, which is the whole of finding
+    # 7793: counting padding as code inverted the triage of five functions.
+    # `instrcount.py` is the tool that strips, and the stripped pair is the one
+    # to quote.
+    #
     if len(x) != len(y):
-        return False
+        sx = sum(1 for mn, ops in x if not _padding(mn, ops))
+        sy = sum(1 for mn, ops in y if not _padding(mn, ops))
+        return ("INSTRUCTION COUNT differs: blob %d, ours %d  (%d against %d "
+                "with alignment padding stripped)\n"
+                "        an absence or an extra, so this is lever 2 -- a "
+                "missing or added statement -- and not a renaming"
+                % (len(x), len(y), sx, sy))
     fwd, rev = {"esp": "esp", "ebp": "ebp"}, {"esp": "esp", "ebp": "ebp"}
 
     def bind(fu, fv):
