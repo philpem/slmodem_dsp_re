@@ -106,6 +106,12 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  */
 V90CP::V90CP()
 {
+	/*
+	 * Six allocations written out, which is the object's shape.  Rolled,
+	 * this is:
+	 *     for (i = 0; i < 6; i++)
+	 *             buf[i] = (int *)sysdep_malloc(V90CP_BUFSIZE);
+	 */
 	buf[0] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 	buf[1] = (int *)sysdep_malloc(V90CP_BUFSIZE);
 	buf[2] = (int *)sysdep_malloc(V90CP_BUFSIZE);

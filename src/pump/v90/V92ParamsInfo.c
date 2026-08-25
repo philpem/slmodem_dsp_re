@@ -89,6 +89,12 @@ frac_of(float v)
 void
 V92createConstellations(struct V92ParamsInfo *p)
 {
+	/*
+	 * Rolled, this is:
+	 *     for (i = 0; i < 6; i++)
+	 *             p->constellations[i] =
+	 *                     sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
+	 */
 	p->constellations[0] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
 	p->constellations[1] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);
 	p->constellations[2] = sysdep_malloc(V92_PARAMSINFO_CONSTELLATION_SZ);

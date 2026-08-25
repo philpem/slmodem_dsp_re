@@ -369,11 +369,16 @@ came from getting that backwards.
   same bytes in the same places, which is the first question anybody
   actually asks. Grade 1 is the same instructions and operands under a
   renaming taken PER LIVE RANGE, which is what an allocator actually
-  chooses; `--self-test` carries eight cases and six of them are things it
-  must still REJECT, because a looser check fails by calling different code
-  equivalent. **393 of 1,200 at grade 0 and 436 at
-  grade 0-or-1 today**, against `compare.py`'s 480 on the same tree — the
-  144 in between have identical mnemonics and different operands.
+  chooses; `--self-test` carries eighteen cases and TWELVE of them are things
+  it must still REJECT, because a looser check fails by calling different code
+  equivalent. **433 of 1,251 at grade 0 and 486 at grade 0-or-1 today** — read
+  the number from the tool, not from here. `--why SYMBOL` prints the row
+  `alpha_equal` rejects on, which is usually NOT the first row that differs.
+  It refuses to run when `build/tc_out` is older than `src/`, because `make
+  phase` does not build that directory and nothing else does either, so a
+  merge leaves it stale while every count keeps rendering as a clean, plausible
+  and wrong number (7769). `docs/method/refinement.md` is the playbook: eight
+  levers, each with the counterexample that bounds it.
   Relocated fields are compared by TARGET and branch targets are made
   function-relative; without both, a text comparison reports its own
   artefacts rather than the code's.

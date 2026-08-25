@@ -2532,6 +2532,12 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 			dsplibs_debug_printf(
 				"V34DATARATE, precoefs=0, 0, 0, 0, 0, 0\n");
 
+		/*
+		 * Rolled, this is:
+		 *     for (i = 2; i <= 7; i++)
+		 *             rec[i] = 0;
+		 * -- the six zeros the debug line above names as precoefs.
+		 */
 		rec[2] = 0;
 		rec[3] = 0;
 		rec[4] = 0;
