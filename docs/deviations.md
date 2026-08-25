@@ -8679,3 +8679,41 @@ Closing either needs a `default:` arm and a guard that the object does not
 have, so neither is fixed. Anyone linking this library for real should bound
 `shaperSR` to 1..6 at the parameter block, which is where the constraint
 actually lives.
+
+## D940 ⚠ The three phase 4 message sources return an uninitialised `short` on two of `V90BitsToSymbol::process`'s arms
+
+**Where:** `src/pump/v90/V90Phase4Modulator.cpp`, `generateMP`, `generateCPd`
+and `generateSUVd`; blob 0x2dbd0, 0x2e540 and 0x2e5f0, 167 bytes each.
+
+**What the original does:** each reserves a two-byte stack slot, hands its
+address to `V90BitsToSymbol::process(unsigned int &nofBits, short
+*outSymbols)`, and returns what comes back sign-extended:
+
+    2dbec:  8d 54 24 22   lea    0x22(%esp),%edx      ; &symbol
+    2dbf4:  89 54 24 08   mov    %edx,0x8(%esp)
+    2dc02:  e8 ..         call   V90BitsToSymbol::process(unsigned int&, short*)
+    2dc07:  0f bf 44 24 22 movswl 0x22(%esp),%eax     ; read straight back
+
+Nothing writes `0x22(%esp)` before the call in any of the three, and `process`
+writes through that pointer only when it drains a whole block: with
+`symbolsBlockSize` zero it reports SIZE_NOT_SET, and on the BUFFER_UNDERFLOW
+arm it returns without touching `*outSymbols` (finding 7520 has the arm order,
+and it is the object's own: `symbolsDone < symbolsBlockSize` is tested first).
+So there are two reachable configurations in which the returned symbol is
+whatever was on the stack.
+
+**This is D661's shape on the OTHER parameter and D661 itself does not cover
+it.** D661 is about the `unsigned int &nofBits` these same two callees read
+back in `generateDataSymbolBeforeFPE`/`BeforeRRN`; this is about the `short
+*outSymbols`, in three different members, and the arm that leaves it alone is
+the underflow one rather than the size-not-set one.
+
+**Reproduced rather than guarded.** The reconstruction leaves the local
+uninitialised exactly as the object does; the differential test seeds the slot
+identically on both sides so the trials still compare, which is why no test
+fails on it.
+
+**Status:** unmeasured. All three functions are callerless in the blob (zero
+relocations of any kind name them), so no caller exists whose behaviour could
+be affected, and whether the vendor's intended caller would have reached
+either arm cannot be known from this object.

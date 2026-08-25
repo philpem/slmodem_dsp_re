@@ -81487,3 +81487,597 @@ drawn from**, and a probe that prints the scalar without it will support
 whichever reading its author already had.  The probe RUNNER here was
 fire-checked before any of this and the fire check passed; what had no control
 was every detector hanging off it.
+
+### 7700. Six callerless sequence sources, 2,062 bytes, and the reason five of them are callerless is the compiler and not the vendor
+
+Reserved block for this batch: **7700-7719**.  Every ref this repository knows
+about was swept for its highest `### <n>.` heading, `refs/heads`,
+`refs/remotes` and `refs/tags` together: `master`,
+`experiment/v90-digital-termination` and this branch at **7626**, the four
+other agent worktrees at 7605, 7549, 7460 and 7432,
+`feature/digital-termination` and `review/v34-anon-anchor-repair` at 7002,
+`v34-instrumentation` at 6912, and nothing anywhere above 7626.  The block
+starts at 7700 rather than 7627 because CLAUDE.md asks for a gap, because
+7574-7579 is a reserved block whose members were left unwritten, and because a
+sibling holds 6920/6921 that this sweep could not see.
+
+Six symbols, 2,062 bytes, every one with **zero relocations of any kind naming
+it anywhere in the 1.2 MB object**:
+
+| symbol | .text | bytes |
+|---|---|--:|
+| `setParamsInfoFromV92CPUnPck` | 0x33c60 | 601 |
+| `V90Jd::packData()` | 0x1e960 | 534 |
+| `V90Phase3Modulator::generateDIL()` | 0x2b070 | 426 |
+| `V90Phase4Modulator::generateMP()` | 0x2dbd0 | 167 |
+| `V90Phase4Modulator::generateCPd()` | 0x2e540 | 167 |
+| `V90Phase4Modulator::generateSUVd()` | 0x2e5f0 | 167 |
+
+All six are reconstructed, all six remain callerless, and **no call, dispatch
+arm or table entry was added anywhere**.  7581 established that supplying one
+could not be a one-line change in any case, and it stays the repo owner's
+decision.
+
+#### The numbers
+
+`make phase` exits 0.  **`make period` is 250 passed / 0 failed against the
+base commit's 246** -- four new binaries, `t_v92mpunpck`, `t_v90packdata`,
+`t_v90dilgen` and `t_v90p4seq`, and nothing else moved.  The base commit
+`485a5284` was re-measured in this same tree before any change rather than
+taken from the brief, and it read 246 / 0 there too.
+
+`make coverage` reads **75.4%, 553,801 bytes, 1,246 symbols** against
+**75.1%, 551,739 bytes, 1,240 symbols** at the base: **+6 symbols and +2,062
+bytes, which is exactly the six sizes above and nothing else.**  That
+arithmetic is the check that every one of the six claimed its own blob symbol
+and that no helper accidentally claimed a further one.
+
+`tools/closure.py --missing` is **0 symbols, 0 bytes** for each of the six
+individually.  Suite line coverage over `src/` moved from 94.8% (34,633 /
+36,524) to **94.9% (34,718 / 36,591)**.
+
+**145 new mutations across four suites, and every one of the four has a zero
+in the two columns that matter:**
+
+| suite | source | mutations | caught | NOT caught | unusable | equivalent |
+|---|---|--:|--:|--:|--:|--:|
+| `v90dilgen` | `V90Phase3Modulator.cpp` | 64 | 62 | 0 | 0 | 2 |
+| `v92mpunpck` | `V90MappingParamsInt.cpp` | 34 | 31 | 0 | 0 | 3 |
+| `v90p4seq` | `V90Phase4Modulator.cpp` | 24 | 22 | 0 | 0 | 2 |
+| `v90packdata` | `V90Jd.cpp` | 23 | 21 | 0 | 0 | 2 |
+
+The three suites already pinned to files this batch edited were **re-run and
+not re-recorded**, which is 7570's rule: `v90jd` 39/39 caught,
+`v90p3mod` 25/25, `v90unpck` 26 with its 2 known equivalents, and
+`v90modprogp3m` 18/18.  None of them moved.
+
+`tools/mutsnap.py --check` reports 0 MISSING, 0 ORPHANED and 0 INCONSISTENT
+over 196 registered suites.  All 196 read **stale**, which is expected and
+does not fail the gate: `suite_key` hashes the whole of `src/` and `include/`,
+so any edit invalidates every entry.
+
+#### The one asymmetry, stated rather than buried
+
+Five of the six have no call site anywhere in `src/`.  `generateDIL` has four,
+in the two symbol generators, because that is where the blob inlines it (7703,
+7705) -- and those four call sites are not new: they already read
+`dilSymbol(this)` before this batch and now read `generateDIL()`.  Measured
+with the same instrument used on the blob, `readelf -r` counting relocations
+that NAME the symbol, with `generateV90Symbol` as a control that reads 2 in
+both objects:
+
+    BLOB                    generateDIL = 0
+    PERIOD, GCC 3.4.2 -O3   generateDIL = 0     <- reproduces the object
+    MODERN, GCC 13          generateDIL = 4     <- declines to inline
+
+So all six are callerless in the object the period compiler builds, which is
+the compiler that decides.  The modern build's four are an inlining decision,
+not a source difference, and no behaviour rides on it.
+
+
+### 7701. `setParamsInfoFromV92CPUnPck` fills a `V90MappingParams` from a `V92CP`, and it needed no new type
+
+.text+0x33c60, **601 bytes**, `extern "C"`, reconstructed in
+`src/pump/v90/V90MappingParamsInt.cpp` beside the V.90 twin 7570 wrote.
+
+**THREE SYMBOLS WITH ALMOST THE SAME NAME, AND THEY ARE THREE FUNCTIONS.**
+Confirmed with `nm -S` and worth writing down once:
+
+    setParamsInfoFromCPUnPck       0x336b0   622 B   7570's, written
+    setParamsInfoFromV92CPUnPck    0x33c60   601 B   this one
+    V92setParamsInfoFromCPUnPck    0x12f00  2695 B   the one with two callers
+    setV92CPpckFromParamsInfo      0x33920   822 B   this one's exact inverse
+
+#### The source type is the EXISTING `V92CP`, and 7572's trap was checked
+
+All twelve displacements formed off the second argument land on a member
+`include/dsplib/V92CP.h` already declares, at the width the object reads it:
+`+0x01 char_01` (`cmpb`), `+0x02 char_02` (`movsbl`, signed), `+0x08` and
+`+0x0c` the two shaper words, `+0x14..+0x20` the four floats, `+0x24 byte_24`
+the gate, `+0x28 word_28[6]` on a four-byte stride, and `+0x42`/`+0xa2` the
+two mask blocks on a sixteen-byte row.  **No new type was declared**, which
+matters because 7572 is precisely about this tree having already modelled one
+structure twice from opposite ends.  The trap does not bite here and that was
+measured rather than assumed: `V92CP` is the 0x918-byte object `V92Modem`
+allocates and constructs, not the 0xca0-byte message block that `V90CP` and
+`V92CPUnPck` are two names for, and the two share no layout at any offset this
+function uses.
+
+#### Three structural readings, against the V.90 twin
+
+- **The two mask blocks ABUT**: `0xa2 - 0x42 = 0x60 = 6 * 16` exactly, where
+  7570 found `0x9c - 0x3a = 0x62` and two bytes nothing reads.  This is now
+  two independent readers agreeing -- `V92CP.h` derived the 0x60 from the
+  PACKER's `add $0x10,%edi`, and this function derives it from the reading end.
+- **The gate is re-read from the SOURCE on every iteration** (.text+0x33d71
+  reloads the CP pointer, +0x33d75 tests it, both inside the loop the back edge
+  at +0x33e82 closes) -- as in the V.90 twin, and the OPPOSITE of
+  `V92setParamsInfoFromCPUnPck`, which reads back the copies it has just made
+  in the destination.
+- **The bitmap byte ordering AGREES with the V.90 twin** and was derived from
+  this function's own instructions rather than carried over: bit `b` of word
+  `j` becomes byte `j * 16 + (15 - b)`, strictly descending, 127 down to 0.
+
+Two things that differ and are not shared with the twin: the constellation
+selector is **`cp->word_28[i]`, the packer's group numbers, not `i`**, so
+constellation `i` is rebuilt from `short_42[word_28[i]]`; and `distinctIndex`
+is a **32-bit word copy** where the V.90 twin widens a byte.
+
+#### The tail is `setDataBitRate` inlined, and that was re-measured
+
+7570 settled the same question for its own function and this batch did NOT
+carry the answer over, because the two differ in the load: 7570's rate is a
+32-bit `mov` and this one's is a `movsbl` of a `signed char`.  Both spellings
+were compiled on GCC 3.4.2 with the tree's exact flags.  The call form emits
+`cmpb $0x0,0x1(%ebp) ; movsbl 0x2(%ebp),%eax ; je` -- **one** load, before the
+branch.  The open-coded `if` SINKS the `movsbl` into both arms.  The object
+loads once at .text+0x33e90, so the call form is the object's, instruction for
+instruction, and that is 617's full-text acceptance test passed.
+**`add` against `lea` is NOT the discriminator here** and an earlier reading
+thought it was: 7570 itself quotes the standalone `setDataBitRate` using `add`.
+
+#### Instruction count
+
+**180 ours against 185 the blob's, 584 bytes against 601, ZERO calls on both
+sides** -- the three helper calls are inlined by our compiler exactly as by the
+original's, which is the check that the `static` spelling hides no missing
+call.  The -5 is accounted for region by region: the `which < 6` clamp is
+7570's existing idiom at three sites, `cmp $0x6 ; setl ; neg ; and` against our
+`cmp $0x5 ; jle ; xor`, -2 apiece; plus one extra register-to-register move the
+allocator adds in the codec loop's else arm.  Alignment padding is three
+instructions on each side.  The prologue through the `distinctIndex` loop
+(0x33c60..0x33ccd) is **byte-for-byte identical** to the object's.
+
+#### What was driven, and why
+
+No caller constrains the arguments, so the fixture chose them: 17 cases x 2
+gate polarities x 3 repetitions = 102 trials, **2,170 checks** in two groups,
+22 of them offset assertions.
+
+The gate `byte_24` over {0, 1, 0xa5} -- the 0xa5 separates a `setne` producing
+an exact 1 in `word_61c` from a whole-byte copy.  `char_01` over
+{0, 1, 0x5a, -1}, because a gate written `== 1` fails on 0x5a.  `char_02`, the
+rate, over {0, 8, 0x14, 0x1f, 0x21, 0x2a, 0x40, 0x7f, -1, -128}: the two
+constants differ by 12 so the rate must be compared rather than merely
+present, and it is a SIGNED byte whose sum lands in an `unsigned int`, so -128
+exercises `0xffffff88`/`0xffffff94` rather than assuming the wrap.  Mask blocks
+all-zeros, all-ones (which fills 128 bytes, exactly the constellation's extent,
+and cannot overrun it), sparse, two-word, dense and pseudorandom, **including
+pairs whose two arrays differ in WEIGHT, with the split asserted to have
+occurred** -- 7570's point that equal populations make the shared-length
+behaviour invisible.  `word_28` identity, permuted, repeated and
+constant-across-all-six, that last being 7458's shape: an identity permutation
+cannot separate a body that used `i`.
+
+**The destination block was driven at the two fills 7622 measured**, which is
+what grounds this in a real session: all-`0xa5`, the harness allocator's
+pattern that makes `V90Mapper::reset` run 2,779,096,485 iterations and SIGSEGV,
+and all-zero, the plausible-but-wrong fill that runs while asking for zero bits
+for ever.  Both were asserted reached.  A 64-byte guard past each block is
+compared against its seed.
+
+The four `float` fields are left as random bit patterns deliberately -- they
+copy as `movl` (finding 5820), so a NaN passes through untouched where an
+`flds`/`fstps` spelling would quieten a signalling one; they are compared as
+bit patterns and not as values.
+
+`word_28` is kept inside 0..5.  The object neither masks nor bounds it and
+scales it by sixteen, so a 6 reads outside both mask blocks; the blob does that
+too, it is undefined in the reconstruction, and a trial that reaches undefined
+behaviour is not a trial.  Recorded in the source, not exercised.
+
+#### Mutations, and shown to fire
+
+34 mutations: **31 caught, 0 NOT caught, 0 unusable, 3 equivalent.**  The three
+equivalents are all arguments about the code rather than gaps in the test, and
+the third is the sharp one: *the gate read back from the DESTINATION's copy*
+picks the same arm on every trial, because nothing between the write of
+`word_61c` and the loop touches +0x61c, and **what would separate the two
+spellings is a caller scribbling between two calls -- which this function does
+not have.**  The object settles it from the instructions; no test can.
+
+Three defects were injected, built **directly** rather than through `make one`
+and with the binary's mtime compared to prove it rebuilt -- which is 7570's trap
+avoided rather than re-learned, since `make one` runs `anchorcheck.py` before it
+builds and an aborted check prints what a passing one prints.  The two mask
+loops in reverse order turned **315 of 2,148** red; the codec gate reading
+`cp->byte_04`, a line no mutation row quotes, **315**; `distinctIndex` reversed,
+**660**.  The two 315s were proved to be DIFFERENT failure sets by diffing the
+captured output, which is the check that stops a coincidence being read as
+coverage.
+
+`t_v90unpck` is unchanged at 1,098 checks and **none of `v90unpck`'s 26 anchors
+broke**, so no re-anchoring was needed and none was done.
+
+
+### 7702. `V90Jd::packData` is callerless because `getBitVector` INLINED it, and the two are one body
+
+.text+0x1e960, **534 bytes**, reconstructed in `src/pump/v90/V90Jd.cpp`.
+`include/dsplib/V90Jd.h` had declared it and deliberately left it undefined
+since finding 229; that comment is now corrected.
+
+**The finding is why it has no caller.**  `packData` and `getBitVector`
+(0x1e700, 537 bytes, written since finding 229) are the same body.  In the
+BLOB they are **153 instructions and 534 bytes against 154 and 537** -- one
+instruction and three bytes apart, the extra being the `lea 0x2(%edi),%eax`
+that is `getBitVector`'s `return this + 2`, and every remaining difference a
+branch label at an identical function-relative offset.  `getBitVector` carries
+**1** relocation and `packData` **0**.
+
+**The likeliest reading is that the original wrote
+`getBitVector() { packData(); return bits; }` and GCC 3.4.2 inlined the
+534-byte callee**, leaving the standalone symbol with nothing naming it -- and
+that is an INFERENCE, not a measurement, which matters because 7706 leans on
+the same framing for thirty-one other symbols.  What was measured is that the
+two are one body and that only one of them is named by a relocation.  That is
+equally consistent with the original having written the body TWICE, exactly as
+this reconstruction now does.  **Nothing in the object distinguishes the two**,
+and what would is source or a debug build, neither of which exists here.
+
+`V92Jd::packJdData` (665 bytes) is the near control: it is NOT inlined into its
+own `getJdBitVector` and it carries 1 relocation -- which shows the compiler
+does not always take this inline, and therefore that `packData`'s absence of a
+relocation is informative rather than automatic.  It does not settle which
+source shape produced it.
+
+**The body was written out rather than spelled as a call, and that is
+deliberate.**  Writing `getBitVector() { packData(); return bits; }` would be
+the more faithful SOURCE, but it is a bet that GCC 3.4.2 inlines a 534-byte
+callee; if it declined, our object would carry a relocation the blob has none
+for, and the batch's one hard constraint would be broken to gain a shape no
+test can see.  The inference is recorded here and in the source as the
+follow-up for whoever owns `getBitVector` next.
+
+Both layouts the class carries are relevant and they are its two DIRECTIONS,
+not the contradiction D270 recorded: `packData` writes the framed TRANSMIT
+layout on a 17-byte stride -- seventeen 1 bits, the rate mask split **16 and 12**
+across two groups, the constellation size, the lookahead, the CRC over groups
+1 and 2, four trailing zeros -- while `unPackData` fills the flat receive one.
+The 16/12 split is measured off the constructor's two loop bounds and is
+exactly the kind of thing a reconstruction gets plausibly wrong; `V92Jd`'s
+second loop stops one earlier and that bound must not be carried across.
+
+#### The instruction gap is the CLASS's, not this function's, and the sibling proves it
+
+`tools/instrcount.py` reads **88 ours against 153 the blob's, 218 bytes
+against 534**.  A -65 is exactly the shape 7480 says to treat as a missing call
+until proven otherwise, so it was checked against the one control that can
+settle it: **`getBitVector`, written since finding 229, already differentially
+green and untouched by this batch, reads 90 against 154 and 223 against 537 --
+the same -64.**
+
+Two functions that are one body in the object come out short by the same
+amount on our side, and one of them predates this work entirely.  So the gap is
+the class's existing factoring and not something `packData` introduced: the
+blob promotes the sixteen-entry CRC register to stack slots and unrolls
+against them where our source keeps the array.  Closing it would move
+`getBitVector` too and is a pass of its own, recorded rather than attempted.
+
+23 mutations: **21 caught, 0 NOT caught, 0 unusable, 2 equivalent.**  `v90jd`
+was re-run rather than re-recorded and is unchanged at 39/39 caught.  Its one
+anchor that needed deepening was repaired against `getBitVector`'s preceding
+comment line and the repair proved by re-deriving the mutant.
+
+
+### 7703. `V90Phase3Modulator::generateDIL` claimed as a method, and both symbol generators came out byte-for-byte unchanged
+
+.text+0x2b070, **426 bytes**, three relocations and no others: `linear2alaw`,
+`linear2ulaw`, and `V90Phase3Modulator::codeSegmentsBoundriesLookupTable`.
+`updateCodeSegmentPointer` is inlined into it, so the batch is link-closed.
+
+**The body was already written and already differentially tested**, as the
+file-static `dilSymbol`, because the blob inlines `generateDIL` into
+`generateV90Symbol` and `generateV92Symbol` rather than calling it.  The work
+was to claim the standalone symbol, and the faithful shape is the blob's own:
+the object has `generateDIL` as a `T` symbol AND carries its body inline at
+both generators.  The static was promoted to the method and the four call
+sites that already read `dilSymbol(this)` now read `generateDIL()`.
+
+**THE CHECK THAT MATTERED, AND IT IS STRONGER THAN EQUAL COUNTS.**  Promoting a
+static to an external method can stop GCC inlining it, which would silently
+reshape two already-committed, already-tested functions of 1,790 and 2,044
+bytes.  Both generators' byte ranges were extracted from the before and the
+after objects and are **byte-for-byte identical**, 2,130 and 2,542 bytes:
+
+| symbol | before | after | blob |
+|---|---|---|---|
+| `generateDIL` | absent | 98 insns / 2 calls / 362 B | 117 / 2 / 426 |
+| `generateV90Symbol` | 560 / 11 / 2130 | **560 / 11 / 2130** | 432 / 15 / 1790 |
+| `generateV92Symbol` | 696 / 12 / 2542 | **696 / 12 / 2542** | 506 / 18 / 2044 |
+
+The -19 on `generateDIL` is not a missing call -- both sides have exactly 2
+calls and 3 relocations.  Thirteen of the nineteen are alignment padding
+counted inside `st_size` (17 filler instructions in the blob against 4 in
+ours); real instructions are 100 against 94.  The remaining six are one shape
+seen three times: **the blob re-reads what ours keeps.**  It evaluates
+`seq2[seq2Index] == 0` twice, and re-reads `seq1Index`/`seq2Index` from the
+object AFTER the companding call where ours holds them in locals.  Those
+re-reads are FORCED -- a read cannot cross an opaque call in either direction --
+so the original's source reads those members after the call rather than caching
+them.  The body was left alone: it is the one already differentially proved,
+and rewriting it would move the two generators and destroy the evidence above.
+Recorded in the source as worth a pass of its own.
+
+**The return type is `int`, settled by the re-extension and not by the loads.**
+`neg %ecx ; movswl %cx,%edi` then `mov %edi,%eax` at both returns: truncating
+the negated value to sixteen bits is demanded by a `short` local however the
+function returns, but widening it back to 32 is demanded only by a 32-bit
+consumer, and the only consumer is the return.  A `short` return leaves the
+upper half of `%eax` dead and the extension would not be emitted.  The two
+`movswl` loads are NOT evidence -- finding 614, upper half discarded.
+
+**The table is the LINEAR one and the two must not be conflated.**
+`generateDIL` indexes `codeSegmentsBoundriesLookupTable` at `8 * pcmType +
+segment` with a four-byte scale, comparing with a SIGNED branch (`jle`) against
+a value loaded with `movzwl`; `src/pump/v90/V90Dil.cpp` records that
+`calculateDilLength` does NOT use that table and reads sixteen CODE boundaries
+from an anonymous `.rodata:0xb80` pool instead.
+
+64 mutations: **62 caught, 0 NOT caught, 0 unusable, 2 equivalent**, over
+4,840 calls and **29,087 checks**.  Both equivalents are arguments about the
+code: `short level` against `int level` is equivalent because every assignment
+to `level` is already a `short` and the wrap lives in the cast rather than the
+declaration, and *the boundary compare is unsigned* is equivalent over the
+whole domain because `level` is a 16-bit ZERO extension and every table entry
+is positive -- which is why the object's `jle` is a codegen fact and not a
+behavioural one, the 613 class.  In both cases the row that DOES bite the real
+asymmetry is present and caught.
+
+Ranges, and they are the digital arm's: 576 matrix calls over both laws x
+`segmentIndex` 0..8 x restart x both sequence arms x four length regimes, with
+**288 restart and 288 not**, 64 entering at `segmentIndex == 8`, 288 with both
+sequence lengths zero so nothing wraps, and 144 with the cursors past the
+128-byte arrays, which the object reads on into itself and which is reproduced
+rather than corrected.  A 64-call boundary sweep hits every G.711 endpoint of
+both rows exactly ON the boundary and asserts the search produced 0, 7 **and**
+8.  A 3,840-call sequence group runs **480 consecutive symbols without
+reseeding** -- six 80-symbol blocks of the digital arm at 8 kHz (7621), against
+a longest segment of 54, so every run crosses many restarts.  A 360-call edge
+group was added **because mutation found the gaps**, sweeping `pcmType` over
+{2, 3, 0xff, 0x4000, -1} against sixteen levels, which is what distinguishes
+`!= PCM_TYPE_MU_LAW` from `== PCM_TYPE_A_LAW`; a single fixed level was not
+enough, because the two companding functions agree on plenty of individual
+values.
+
+
+### 7704. The three phase 4 message sources are one body and two field pairs, and they came out byte-exact
+
+.text+0x2dbd0, +0x2e540 and +0x2e5f0, **167 bytes each**, `nm -S` confirmed.
+
+**`generateCPd` and `generateSUVd` are BYTE-IDENTICAL, all 167 bytes.
+`generateMP` differs from them in exactly THREE BYTES**, at body offsets
++0x44, +0x58 and +0x6a -- the low bytes of two field displacements, 0x2f5c and
+0x2f58 against 0x2f90 and 0x2f8c.  `include/dsplib/V90Phase4Modulator.h`
+already names those: the first pair is what `V90MP::getBitVector` returned and
+the length it reported, the second the `V90CP` pair.  So **`generateMP`
+transmits the MP message and BOTH `generateCPd` and `generateSUVd` transmit the
+CP one.**
+
+All three are **byte-exact against the blob: 49/49 instructions, 167/167
+bytes, 5/5 calls, zero differing bytes**, with the five relocation targets
+matching by name, in order, at identical body offsets.  They are written out
+three times rather than factored, because the blob emits three full bodies and
+a helper that is called rather than inlined would be a missing call.
+
+**THE TRAP HERE IS THAT A TEST CAN PASS WITH TWO OF THE THREE BODIES SWAPPED**,
+which is 7521's near-identical-sibling problem in its worst form.  The suite
+therefore asserts pairwise discrimination with its denominator: over 8
+scrambling-arm trials, **`generateMP` against `generateCPd` differs on 8 of 8,
+`generateMP` against `generateSUVd` 8 of 8, and `generateCPd` against
+`generateSUVd` 0 of 8.**  That zero is CORRECT and is not a hole -- they are
+the same 167 bytes -- and it is asserted as an equality rather than left to
+look like a gap.  All six comparisons are hard assertions.  Each of the three
+was derived from `dis.py` independently and the three derivations diffed
+against each other only afterwards, which is the order that keeps a
+copy-paste from becoming the reconstruction.
+
+24 mutations: **22 caught, 0 NOT caught, 0 unusable, 2 equivalent.**  Three
+injections turned 186, 181 and 542 checks red, and **a defect in ONE of the
+three turns only that one's trials red** -- direct evidence the fixture is
+testing three functions rather than one function three times.
+
+A new deviation, **D940**, records what all three do with an uninitialised
+`short`: each hands a bare stack slot to `V90BitsToSymbol::process(unsigned
+int &, short *)` and returns it sign-extended, and that callee writes through
+the pointer only when it drains a whole block -- so on the SIZE_NOT_SET arm and
+on the BUFFER_UNDERFLOW arm the returned symbol is whatever was on the stack.
+It is D661's shape on the OTHER parameter, in three different members, and
+D661 does not cover it.  Reproduced rather than guarded, and `unmeasured`:
+all three are callerless, so no caller exists whose behaviour it could affect.
+
+
+### 7705. Five of the six are callerless because their callers were INLINED, and only one is a true orphan
+
+This is the batch's main result and it corrects the premise it was given.
+"The vendor wired none of them to anything" is true at the relocation level and
+**misleading as a cause**, and the difference is measurable.
+
+`tools/dis.py` over the whole `.text` gives 183,382 lines; every line was
+attributed to its enclosing symbol from `nm` (165,525 attributed, 1,766 of
+1,773 symbols).  For each function, its discriminators were derived **from its
+own text** and ranked by rarity across the object, and the question asked was
+which OTHER symbols form all of them.  Only object-relative displacements
+count: a stack slot is exactly what an inlined copy does not reproduce.
+
+**Denominator: 1,766 symbols, 1,504 distinct object-relative displacements.
+Two CONTROLS whose answer is known independently, and both fire:**
+
+    generateDIL  ->  generateV90Symbol, generateV92Symbol     (its inliners)
+    packData     ->  getBitVector, V92Jd::packJdData          (its twin)
+
+| symbol | other symbols carrying its body |
+|---|---|
+| `generateDIL` | `generateV90Symbol`, `generateV92Symbol` |
+| `packData` | `getBitVector` (149 against 150 instructions) |
+| `generateMP` | `generateV90Symbol` |
+| `generateCPd` | `generateSUVd`, `generateV92Symbol` |
+| `generateSUVd` | `generateCPd`, `generateV92Symbol` |
+| **`setParamsInfoFromV92CPUnPck`** | **NONE** |
+
+**So it is 5 + 1, not 6.**  Five are callerless because an optimising compiler
+inlined their only callers: the behaviour is present, reachable, and was
+already reconstructed and differentially tested in this tree inside the
+functions that inlined it.  One -- the V.92 unpacker -- is a genuine orphan
+with no caller and no inlined copy anywhere, exactly like its V.90 twin
+(7570).
+
+**TWO EARLIER VERSIONS OF THIS DETECTOR WERE WRONG AND BOTH WERE CAUGHT BY THE
+CONTROL RATHER THAN BY INSPECTION.**  The first hand-picked displacements and
+its `packData` control came back with `packData` itself absent -- a query whose
+own subject does not match it.  The second ranked by rarity but counted
+`0x22(%esp)` and `0x78(%esp)`, and since a stack slot cannot survive inlining,
+`generateMP` reported zero inliners when one is known.  A detector whose
+control does not fire is a dead detector, and the only reason either was
+noticed is that the control was run.  Finding 134's argument, twice in one
+afternoon.
+
+#### What this does and does not overturn
+
+It does **not** overturn 7621 or 7623, and the distinction matters because the
+brief attributes the stalled phase machine to these six.  7621 measured that a
+digital modulator runs 32,000 symbols without leaving state 1, and 7623 that
+neither V.PCM driver can be entered on a digital instance because
+`V90Modem::demodulator` is NULL there.  **Those remain the cause.**  These six
+are not it and never were: five of them are ordinary compiler residue, and the
+sixth is a writer for a block whose absence 7622 already showed is a missing
+CALL rather than a missing body.
+
+What changes is the description.  A reader of 7000, 7520 and 7625 could
+reasonably conclude that a scatter of callerless sequence sources is evidence
+of a half-finished branch.  For five of these six it is evidence of `-O3`.
+
+
+### 7706. The inventory: after this batch the digital side has no unwritten BODY left on its own path, and 31 unclaimed symbols whose behaviour is already in the tree
+
+The question this batch was for.
+
+**The transmit chain's closure was already zero before it.**  7622 measured
+`closure.py --missing V90Modulator` at 0 symbols / 0 bytes, against 7520's
+13 / 1,706 and 7000's 27 / 11,628.  Every one of this batch's six is OUTSIDE
+any closure, because nothing reaches them; that is what being callerless
+means, and it is why coverage gained exactly their own 2,062 bytes.
+
+**The residue, measured with a denominator and a control.**  Over the whole
+V.90/V.92 modem name-space -- 321 blob symbols examined, 18,479 relocation
+lines searched, and `V90BitsToSymbol::nofBitsForNextTime` at 29 references as
+the control that the sweep fires -- **38 symbols / 4,544 bytes were unwritten
+before this batch and 37 of them were callerless.**  The single exception is
+`VPcmFloModem::vPcmResetPhase3Modem`, at exactly 1 reference, which a sibling
+branch is writing.
+
+This batch takes 2,062 of those bytes.  **32 symbols / 2,482 bytes remain, and
+31 of the 32 are callerless.**  For every one of the 31, **the body is already
+present in `src/`** inside a function this tree has reconstructed and
+differentially tested -- that part is measured, from source CONTENT and not
+from comments, and it is what the inventory rests on.  The description of WHY
+each is callerless ("the original inlined it into its caller") is 7702's
+inference carried across and is not separately measured per symbol; the
+alternative in each case is that the original repeated the body, and the
+object cannot tell the two apart.  **Nothing in the answer below depends on
+which it was**, because either way the behaviour exists and is tested and only
+the standalone symbol is unclaimed:
+
+| symbols | where the body already is |
+|---|---|
+| `V90MP::{calcSequenceLength,PrintBase2,resetCRC,resetDetector}` | open-coded in `reset`, the constructor, `infoToBits`, `bitsToInfo` (finding 1237) |
+| `V90Phase3Modulator::{generateSd,generateSdNot,generateJd,generateJdNot,generateV92Jd,generateJdPhase,generateTRN1d,updateCodeSegmentPointer}` | the file-statics `sdSymbol`, `sdNotSymbol`, `scrambledSymbol`, `updateCodeSegment` |
+| `V90Phase4Modulator::{generateTRN2d,generateEd,generateB1d}` | the TRN2d / B1d arms of the two symbol generators |
+| `V92Phase3Modulator::{generateRu,generateRuNot,genereteSu,genereteSuNot,generateJa,generateTRN1u}` | the arms of that class's own generator |
+| `V90Jd::{setRatesMask,resetCrc,setMaxLookahead,setConstelSize}` and the four `V92Jd` twins | each class's constructor |
+| `V92Jd::setJdPhase(float)` | the `V92Jd` constructor, `65536.0f * V92_JD_PHASE` then sixteen bytes into `phaseBits[18..33]` |
+
+**So the answer is: no unwritten BODY remains on the digital side's own path.
+What remains is 31 unclaimed SYMBOLS whose behaviour is already present and
+tested, plus one function with a real caller that another branch is writing.**
+
+**A MISTAKE IN THIS TABLE IS KEPT BECAUSE OF ITS SHAPE.**  An earlier reading
+of it said `V92Jd::setJdPhase` was "the one whose body I can find nowhere in
+`src/`".  That was derived from a grep for the METHOD NAME, and the body is
+there under no name at all.  What settled it was disassembling .text+0x11b90
+and matching its `fmuls`/`fistpll`/`setne` against the constructor's source.
+A negative claim about a whole tree derived from a name search is 7520's
+population bound and 7570's hole in it, for the third time: **the thing you are
+looking for may have no name to grep for.**
+
+#### What is still missing, and it is not a body
+
+Unchanged from 7625, and this batch supplies no part of it: a caller for the
+V.90 unpacker, and a driver whose dispatch is not the analogue demodulator's
+event word.  Both are in `VPcmFloModem`; 7581 measured that the first needs a
+new table entry rather than an arm, and 7623 that the second needs a driver the
+object does not contain.  **The emulation plan turns on writing those two, not
+on reconstructing anything further.**
+
+This is measured on THIS branch alone.  `V90Modem::reset` and
+`vPcmResetPhase3Modem` are a sibling's current work and are not assumed to have
+landed.
+
+
+### 7707. Four agents briefed into four worktrees all ran in ONE, and the shared tree cost more than the reconstruction did
+
+Recorded because the failure is invisible from inside and because every symptom
+looked like a defect in somebody's own work.
+
+Four `git worktree add` trees were created and each agent was told, by absolute
+path, to work in its own.  **All four ran in the same tree**, sharing one HEAD,
+one working tree, one `build/` and one scratchpad.  Two agents reported the
+same cause independently: the Bash guard stayed pinned to the parent's worktree
+and refused every git command aimed elsewhere, including a bare `pwd`, while
+filesystem writes went through.
+
+What it produced:
+
+- one agent's `git checkout -b` moved every agent's branch, and the parent's
+  HEAD ended up on a sibling's branch
+- `git add -A` swept siblings' files into commits: `9e8146d3` carries the V.92
+  unpacker's files under the DIL batch's subject line
+- an amend silently dropped a finished test file from the commit it was in; it
+  survived only as untracked on disk
+- `make one` failed at the `refs` target on a SIBLING's registered-but-
+  unrecorded suite, which reads exactly like your own defect
+- three agents' `make` runs shared one `build/`, so no agent's own green could
+  be trusted about object files it did not build
+
+**Nothing was lost, and what saved it was that each agent built a clean commit
+as a direct child of the base with `git commit-tree`**, touching neither HEAD
+nor the working tree, and quoted its SHA.  The fourth could not run git at all
+and reported the sha256 of each of its seven files instead; all seven verified
+at the destination.
+
+**THE REGISTRIES ARE WHERE THIS NEARLY LANDED A WRONG RESULT.**  Three agents
+each rebuilt `suites.json` and `snapshot.json` as "the base plus my own row",
+deliberately excluding the siblings they could see.  Any one of those files
+taken whole would silently drop three suites, and **git merged all three
+cleanly**, because the rows are textually disjoint.  A clean merge of JSON is
+not evidence that the result is the union.  They were rebuilt explicitly from
+the base plus all four rows, with the union asserted, and `v90jd`'s row taken
+from the Jd agent's file specifically because that suite had been RE-RUN and
+re-keyed -- taking it from the base would have discarded a verified re-run and a
+proved anchor repair.  This is finding 700's `--ours` lesson in a file format
+where the conflict never appears.
+
+The lesson for the next batch is 7573's, one level further out: **the SHA in
+the report is the only artefact that says what an agent stands behind** -- and
+here the branch it was told to use was not even the branch it was on.  A
+parent that reads a sibling's branch tip, or trusts a worktree path it did not
+verify from inside, is reading something nobody claimed.
