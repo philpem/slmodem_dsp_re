@@ -140,6 +140,17 @@ typedef char v90p4_size[(sizeof(V90Phase4Modulator) == 0x2fac) ? 1 : -1];
  */
 #define V90P4M_RI_PERIOD	6	/* the same six as rdRtSymbols */
 
+/* The companding expansion `setRdRtSymbols` and `setRfSymbols` are eighteen
+ * copies of; the block comment above those two says why it is a macro and why
+ * that is the point.  Up here for the reason above -- it used to sit beside
+ * them and travelled with them when the file was reordered. */
+#define P4M_LEVEL(m, k) \
+	(pcmType != PCM_TYPE_MU_LAW \
+	    ? (short)alaw2linear((unsigned char) \
+		  (((m)->constellation[k][0] & 0x7f) ^ 0xd5)) \
+	    : (short)ulaw2linear((unsigned char) \
+		  (((m)->constellation[k][0] & 0x7f) ^ 0xff)))
+
 /*
  * ===========================================================================
  * V90Phase4Modulator::V90Phase4Modulator -- .text+0x2d830 (C1) and +0x2d910
@@ -943,13 +954,6 @@ V90Phase4Modulator::setMappingParams(V90MappingParams *mp)
  * rather than a coincidence of length.
  * ===========================================================================
  */
-#define P4M_LEVEL(m, k) \
-	(pcmType != PCM_TYPE_MU_LAW \
-	    ? (short)alaw2linear((unsigned char) \
-		  (((m)->constellation[k][0] & 0x7f) ^ 0xd5)) \
-	    : (short)ulaw2linear((unsigned char) \
-		  (((m)->constellation[k][0] & 0x7f) ^ 0xff)))
-
 void
 V90Phase4Modulator::setRdRtSymbols(V90MappingParams *m)
 {

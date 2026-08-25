@@ -84400,7 +84400,8 @@ stopped this pass before it started.
                               bytes SWAPPED between the two clones
 
 So of the three shapes the task asked to be told apart -- clone pair,
-identical-body twin, plain function -- the yield is: plain 15, twin 1, clone 0.
+identical-body twin, plain function -- the yield over the seventeen is:
+**plain 16, twin 1, clone 0.**
 
 **THE TWIN IS 7772'S OWN PAIR AND IT CLOSED.**  `V92Phase4Modulator::recivedSUV`
 and `recivedPartTwoSilenceRrnSUV` are the same body spelled twice; 7772 left
@@ -84428,6 +84429,31 @@ what makes reordering worth doing at all: a file's whole leaf block has to be
 right, not the one symbol being chased.  The fourth, `generateSymbol`, is in
 the cgraph tail rather than the leaf block, where the predecessors did not
 change either.
+
+**AND THAT RULES OUT EVERY GLOBAL COUNTER, MEASURED RATHER THAN ARGUED.**
+7772 established that the positional effect is not `-frename-registers` and
+left the cause open.  The obvious remaining class is a counter that runs
+across a translation unit rather than being reset per function -- `label_num`
+is the visible one, and `DECL_UID` and the insn UIDs advance beside it.  The
+same file was compiled with `-S` from master and from this branch and
+`generateDataSymbolBeforeFPE` compared on its own:
+
+    master   29 lines, labels ['212']    leal 22(%esp),%edx ; movl %edx,8(%esp)
+    branch   29 lines, labels ['212']    leal 22(%esp),%eax ; movl %eax,8(%esp)
+
+**Identical label number, identical instruction count, different registers**,
+and the same for `generateDataSymbolBeforeRRN` at `.L215`.  The label number is
+where `label_num` stood when this function was expanded, so the counter is at
+the SAME VALUE in both compiles -- which it must be, because the same set of
+functions was emitted ahead of it and only their order changed.  The count of
+declarations parsed ahead of it is unchanged for the same reason.
+
+So: same source text, same emission index, same global counters, different
+register allocation.  What is left is state that depends on the IDENTITY of
+what was compiled before rather than on how much -- allocation addresses and
+therefore the iteration order of GCC's pointer-keyed hash tables, which
+`ggc_collect` between functions is enough to perturb.  **That is where the next
+attempt at the cause should start, and the counters should not be re-tried.**
 
 **THE EMISSION-ORDER MODEL, DERIVED FROM OUR OWN OBJECT AND THEN USED TO
 PREDICT.**  GCC 3.4.2's `cgraph_expand_all_functions` walks `cgraph_postorder`
@@ -84514,12 +84540,21 @@ carry a head comment saying the order is load-bearing.  The cheap check that
 it still holds is in the files already: the `.text+0x...` addresses in the
 per-function comments now run in increasing order down the file.
 
-**WHAT IS LEFT, AND WHAT THIS SAYS ABOUT IT.**  95 translation units still
-emit in a different order from the blob, holding 25 of the tree's remaining 32
+**WHAT IS LEFT, AND WHAT THIS SAYS ABOUT IT.**  94 translation units still
+emit in a different order from the blob, holding 24 of the tree's remaining 32
 REGALLOC symbols and 88 of its 108 BYTES.  That is still an upper bound and
-this pass is the estimate to scale it by: over seven files, 17 of 24 candidate
-REGALLOC symbols closed and 0 of the 12 BYTES-bucket symbols aimed at did.
-**Aim a reorder at a REGALLOC file.  A BYTES-only file did not pay once.**
+this pass is the estimate to scale it by.  Counted over all NINE files touched,
+the two reverted included:
+
+    REGALLOC candidates        25      closed to EXACT   16   (64%)
+    BYTES-bucket candidates     9      closed             0
+    and one closure came from SIZE, not from either bucket:
+    V90Phase4Modulator::setRfSymbols, 1,005 bytes
+
+**Aim a reorder at a REGALLOC file.  A BYTES-only file did not pay once**, and
+the one file aimed squarely at a BYTES bucket -- `ModulusCoder.cpp`, four
+constructor clones at 25 differing bytes -- moved none of them and lost a
+symbol elsewhere.
 
 **GATES.**  `make phase J=4` green, period differential 251 passed / 0 failed.
 `anchorcheck.py` 198 suites, 8,959 mutations, 0 anchors matching other than
