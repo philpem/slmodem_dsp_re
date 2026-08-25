@@ -451,8 +451,8 @@ V90Parameters::setToDefault()
 	AGC_K = 0.6f;
 	AGC_BLOCK_LEN = 150;
 	AGC_ADAPTATION_DURATION = 1000;
-	unnamed_06c = 0x3f800000;	/* the object stores 1.0f here -- finding F878 */
-	unnamed_070 = 0x3f19999a;	/* the object stores 0.6f here -- finding F878 */
+	unnamed_06c = 1.0f;		/* float, forced by the object's `fsts` -- F878, F7960 */
+	unnamed_070 = 0.6f;		/* float; shares AGC_K's materialisation -- F878, F7960 */
 	maxUcode = 92;			/* +0x074, named by finding F3527 */
 	nofUcodesInTrn2 = 8;		/* +0x078, named by finding F3527 */
 	unnamed_07c = 4;
@@ -485,7 +485,7 @@ V90Parameters::setToDefault()
 	BLL_TRN1_QC_MEDIUM_K1 = 0.0003f;
 	BLL_TRN1_QC_MEDIUM_K2 = 5e-12f;
 	BLL_TRN1_QC_SLOW_K2 = 0.0001f;
-	unnamed_0f4 = 0x2c0cbccc;	/* the object stores 2e-12f here -- finding F878 */
+	unnamed_0f4 = 2e-12f;		/* float; shares +0x12c and +0x19c's materialisation -- F878, F7960 */
 	BLL_TRN1D_INITIAL_TO_FAST_DURATION = 2000;
 	BLL_TRN1D_FAST_TO_SLOW_DURATION = 7200;
 	unnamed_100 = 6000;
@@ -532,9 +532,9 @@ V90Parameters::setToDefault()
 	LINEAR_EQU_ALT_DIL_BETA = 1.25e-11f;
 	LINEAR_EQU_ALT_DIL_MED_UCODE_BETA = 8.25e-12f;
 	LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA = 3.75e-12f;
-	unnamed_1b0 = 0x2ebaeabf;	/* the object stores 8.5e-11f here -- finding F878 */
-	unnamed_1b4 = 0x2e83f0ff;	/* the object stores 6e-11f here -- finding F878 */
-	unnamed_1b8 = 0x2d83f0ff;	/* the object stores 1.5e-11f here -- finding F878 */
+	unnamed_1b0 = 8.5e-11f;		/* float; shares +0x1e4's materialisation -- F878, F7960 */
+	unnamed_1b4 = 6e-11f;		/* float; shares +0x1f8's materialisation -- F878, F7960 */
+	unnamed_1b8 = 1.5e-11f;		/* float, forced by the object's `fsts` -- F878, F7960 */
 	LINEAR_EQU_DIL_ERROR_RELAX_BETA = 7.5e-11f;
 	LINEAR_EQU_TRN2D_INITIAL_BETA = 1e-10f;
 	LINEAR_EQU_TRN2D_BETA = 7e-11f;

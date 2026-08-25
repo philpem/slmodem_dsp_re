@@ -167,8 +167,8 @@ public:
 	float	AGC_K;	/* +0x060 */
 	int  	AGC_BLOCK_LEN;	/* +0x064 */
 	int  	AGC_ADAPTATION_DURATION;	/* +0x068 */
-	int	unnamed_06c;		/* +0x06c  setToDefault only; the object stores 1.0f (fsts) -- 878 */
-	int	unnamed_070;		/* +0x070  setToDefault only; the object stores 0.6f (0x3f19999a) -- 878 */
+	float	unnamed_06c;		/* +0x06c  setToDefault only; 1.0f.  FLOAT, forced: the object's store is `fsts`, and an int lvalue never reaches the x87 stack -- 878, F7960 */
+	float	unnamed_070;		/* +0x070  setToDefault only; 0.6f.  FLOAT: the object shares ONE `mov $0x3f19999a,%edi` between this and +0x060 `AGC_K`, which a const_int cannot do -- 878, F7960 */
 	/*
 	 * +0x074 and +0x078 ARE NAMED BY `V90TRN2Design`'s OWN DIAGNOSTICS,
 	 * which is evidence rule 1 -- a format string that prints the thing --
@@ -230,7 +230,7 @@ public:
 	float	BLL_TRN1_QC_MEDIUM_K1;	/* +0x0e8 */
 	float	BLL_TRN1_QC_MEDIUM_K2;	/* +0x0ec */
 	float	BLL_TRN1_QC_SLOW_K2;	/* +0x0f0  alias BLL_TRN1_QC_SLOW_K1 -- D901 */
-	int	unnamed_0f4;		/* +0x0f4  setToDefault only; the object stores 2e-12f (0x2c0cbccc) -- 878, and D901 argues this is the real SLOW_K2 */
+	float	unnamed_0f4;		/* +0x0f4  setToDefault only; 2e-12f.  FLOAT: shares one materialisation with +0x12c and +0x19c, both float -- 878, F7960, and D901 argues this is the real SLOW_K2 */
 	int  	BLL_TRN1D_INITIAL_TO_FAST_DURATION;	/* +0x0f8 */
 	int  	BLL_TRN1D_FAST_TO_SLOW_DURATION;	/* +0x0fc */
 	int	unnamed_100;		/* +0x100  setToDefault only */
@@ -277,9 +277,9 @@ public:
 	float	LINEAR_EQU_ALT_DIL_BETA;	/* +0x1a4 */
 	float	LINEAR_EQU_ALT_DIL_MED_UCODE_BETA;	/* +0x1a8 */
 	float	LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA;	/* +0x1ac */
-	int	unnamed_1b0;		/* +0x1b0  setToDefault only; the object stores 8.5e-11f (0x2ebaeabf) -- 878 */
-	int	unnamed_1b4;		/* +0x1b4  setToDefault only; the object stores 6e-11f (0x2e83f0ff) -- 878 */
-	int	unnamed_1b8;		/* +0x1b8  setToDefault only; the object stores 1.5e-11f (fsts) -- 878 */
+	float	unnamed_1b0;		/* +0x1b0  setToDefault only; 8.5e-11f.  FLOAT: shares one materialisation with +0x1e4, a float -- 878, F7960 */
+	float	unnamed_1b4;		/* +0x1b4  setToDefault only; 6e-11f.  FLOAT: shares one materialisation with +0x1f8, a float -- 878, F7960 */
+	float	unnamed_1b8;		/* +0x1b8  setToDefault only; 1.5e-11f.  FLOAT, forced: the object's store is `fsts` -- 878, F7960 */
 	float	LINEAR_EQU_DIL_ERROR_RELAX_BETA;	/* +0x1bc */
 	float	LINEAR_EQU_TRN2D_INITIAL_BETA;	/* +0x1c0 */
 	float	LINEAR_EQU_TRN2D_BETA;	/* +0x1c4 */
@@ -371,7 +371,7 @@ public:
 	int	unnamed_31c;		/* +0x31c  setToDefault only */
 	int	unnamed_320;		/* +0x320  setToDefault only */
 	int	unnamed_324;		/* +0x324  setToDefault only */
-	int	unnamed_328;		/* +0x328  setToDefault only; the object stores 0.96f (0x3f75c28f) -- 878 */
+	int	unnamed_328;		/* +0x328  setToDefault only; the object stores 0.96f (0x3f75c28f) -- 878.  LEFT `int` DELIBERATELY: its six siblings were retyped on forced evidence and this one has none -- the object stores it from an integer register with no sharing partner, and all 128 cells of F7960's enumeration are pairwise identical across this field's type, so the object cannot distinguish the two.  F7960 */
 	int	unnamed_32c;		/* +0x32c  setToDefault only */
 	int	unnamed_330;		/* +0x330  setToDefault only */
 	int	unnamed_334;		/* +0x334  setToDefault only */
