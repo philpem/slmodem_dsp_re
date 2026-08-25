@@ -89,11 +89,14 @@ typedef char vr_size[(sizeof(V90Resampler) == 0xb4) ? 1 : -1];
  * GCC 3.4.2 emits a translation unit's functions in REVERSE definition order,
  * so the blob's layout (`C1(f), C2(f), C1(Pf), C2(Pf)`) says the original
  * defined this one first.  It matters because the compiler clones a
- * constructor body into `C1` and `C2` and schedules the two copies
- * differently: in BOTH objects the first-emitted pair's clones disagree with
- * each other and the second-emitted pair's agree, so which constructor sits
- * in which position changes the bytes.  Swap these two definitions and four
- * exact functions become none.  Finding 7770.
+ * constructor body into `C1` and `C2` and can schedule the two copies
+ * differently: in BOTH objects, one of these two pairs has clones that
+ * disagree with each other and the other's agree, and it is the
+ * first-emitted pair either way.  Swap these two definitions and four exact
+ * functions become none.  **The trigger is narrower than "first in the
+ * file"** -- `V90Equalizer.cpp`'s destructor pair has the same signature and
+ * moving it changed nothing -- so measure before and after rather than
+ * reordering a file on the strength of this comment.  Finding 7770.
  *
  * `timingHistoryIndex = 0` IS IN THIS CONSTRUCTOR AND NOT IN THE OTHER, which
  * is the object's own asymmetry and not an oversight: this one is 69

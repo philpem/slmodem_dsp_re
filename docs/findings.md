@@ -83441,13 +83441,30 @@ field -- which is why no differential test could ever have found it, and why
 the instruction count could: this is 7480's shape, an ABSENCE, and 7630 is
 explicit that absence is the one thing a count does detect.
 
-**THE CONTROL, BECAUSE "REORDER THE FILE" WOULD OTHERWISE BE A LICENCE TO
-PERMUTE ANYTHING.**  Moving `spectralDesign` to the blob's relative position
-inside `V90ConstellationDesigner.cpp` changed **nothing**: 74 differing bytes
-before the move and 74 after.  Definition order does not move a plain
-function's code generation.  What it moves is the C1/C2 (and D1/D2) CLONE
-PAIR, where the compiler emits one body twice and schedules the two copies
-differently.  Reorder a file for that reason and for no other.
+**TWO CONTROLS, BECAUSE "REORDER THE FILE" WOULD OTHERWISE BE A LICENCE TO
+PERMUTE ANYTHING, AND THE SECOND ONE BOUNDS THE CLAIM.**
+
+*Plain functions do not move.*  Moving `spectralDesign` to the blob's relative
+position inside `V90ConstellationDesigner.cpp` changed **nothing**: 74
+differing bytes before the move and 74 after.
+
+*And neither does every clone pair.*  `V90Equalizer.cpp` has the same
+signature on its DESTRUCTOR -- blob `D1` vs `D2` differ by 2 bytes, ours by 0
+-- and it has two clone pairs, so the emission slot is steerable there.
+Measured rather than assumed: **our `C1`/`C2` are internally identical AND
+emitted first**, which already refutes "the first-emitted pair always
+diverges"; and moving the destructor's definition above the constructor's put
+`D2, D1` into the blob's slot (ahead of the constructor pair) and changed
+**nothing at all** -- 52 and 50 differing bytes before and after, our `D1` and
+`D2` still identical to each other.
+
+So the mechanism is real where it was measured and is NOT a general law about
+clone pairs.  What is established is that these two constructors' bytes depend
+on which of them is emitted first, and that matching the blob's order made
+four functions exact.  Why the compiler schedules one clone differently from
+the other is not settled here, and the destructor case says the trigger is
+narrower than "first in the file".  **Reorder a file only for a clone pair,
+only with the before/after measured, and expect it to do nothing.**
 
 ---
 
@@ -83497,12 +83514,18 @@ differing bytes to 329.  It also takes it from 862 bytes to 878 -- out of
 The 862 was two wrongs cancelling, and that was measured rather than assumed:
 with the change reverted the tail is equally divergent, because the blob loads
 BOTH fade ratios (`flds 0x17c`, `flds 0x180`) before the first `fcom` and we
-load one, clamp it and load the other.  Sixteen bytes of that tail happen to
-be missing on our side, which is what made the total match.  **Recorded and
-not applied**: an unrelated defect's error term is not a reason to keep a
-spelling the twins have just shown to be wrong, but neither is it a reason to
-leave the function looking worse to the next pass's worklist.  Whoever closes
-the `clamp_fade_ratio` tail should apply the loop edit in the same commit.
+load one, clamp it and load the other.
+
+**THE EDIT IS CORRECT AND IT IS WITHHELD BECAUSE IT IS COUPLED TO AN OPEN
+DEFECT, WHICH IS THE ONLY REASON THAT COUNTS.**  The two are not independent:
+removing the temporaries changes the register pressure the x87 tail is
+allocated under, and the tail then needs an extra `fld %st(0)` and its
+consequences -- sixteen bytes that were previously missing.  So this is not
+"leave it, the number looks worse"; it is that applying half of a coupled pair
+puts the function in a state neither the blob nor our own analysis endorses.
+Whoever closes the `clamp_fade_ratio` divergence must apply the loop edit in
+the same commit, and the loop edit alone is 36 instructions of proof that it
+is waiting there.
 
 ---
 
@@ -83589,9 +83612,22 @@ after.  This is the CONTROL that keeps 7770's file reorder from becoming a
 general licence, and it is the reason 7770 is a finding about clone pairs
 rather than about file layout.
 
+**5. Pointing 7770's clone-pair lever at `V90Equalizer`'s destructor, which is
+the entry most worth reading.**  `D1` and `D2` are 52 and 50 differing bytes
+and they carry 7770's signature exactly -- blob `D1` vs `D2` differ by 2
+bytes, ours by 0 -- and the file has two clone pairs, so the emission slot IS
+steerable.  Moving the destructor's definition above the constructor's put
+`D2, D1` ahead of the constructor pair, matching the blob's relative order,
+and changed **nothing**: 52 and 50 before, 52 and 50 after, our two clones
+still identical to each other.  Measured beside it: our `C1`/`C2` were already
+emitted FIRST and are internally identical, which refutes "the first-emitted
+pair diverges" on its own.  7770's claim is narrowed in 7770 itself as a
+result, and this is why: a finding that had been allowed to state the
+mechanism generally would have sent the next agent to reorder files.
+
 ---
 
-### 7774. THE ELEVEN THAT ARE LEFT, EACH WITH THE ROW THE COMPARISON REJECTED ON
+### 7774. THE ELEVEN THAT ARE LEFT, EACH WITH THE ROW `alpha_equal` REJECTED ON -- MEASURED, NOT THE FIRST ROW THAT DIFFERS
 
 Eighteen symbols in three files, 6,882 bytes, all in `byteident`'s BYTES
 bucket at the start.  Four became EXACT (7770), three were promoted to grade 1
@@ -83602,29 +83638,46 @@ shrugged at, which is 2900's warning.
 - **`findMinValueIndex`** and **`findConstelMaxValueIndex`** (7 of 86 each).
   Position for position identical, every immediate, displacement and operand
   width the same; a clean `%ebx`/`%esi` swap at rows 6, 7, 13, 15, 16, 28 and
-  30.  **`alpha_equal` rejects on the PROLOGUE, not on the swap**: rows 3 and 4
-  are `push %esi` and `push %ebx`, identical on both sides, and they bind
-  `esi->esi` and `ebx->ebx` before either register carries a value -- so when
-  row 6 defines blob `%ebx` as our `%esi`, two blob registers want one of ours
-  and the walk stops.  It is 7768's `_iir_filter_create` artefact in a
-  different spelling, and it is **NOT fixed here**: 7762's ruling that a pass
-  must not widen the tool that grades it applies to this pass exactly as it
-  did to that one.  Free.
+  30.  **`alpha_equal` rejects at row 28, and the cause is that its walk has
+  no control flow.**  Rows 21 and 23 are the epilogue's `pop %ebx` and
+  `pop %esi` -- identical on both sides, and `pop` is a definition, so they
+  rebind both registers to THEMSELVES.  Rows 26 to 31 are an out-of-line block
+  reached by the `jbe` at row 20 and never entered by falling through the
+  epilogue; the linear walk carries the pops' identity bindings into it, and
+  row 28's `cmp %ebx,%eax` against `cmp %esi,%eax` contradicts them.  Free.
+
+  **THE FIRST VERSION OF THIS ENTRY BLAMED THE PROLOGUE AND WAS WRONG**, and
+  it was wrong in 7769's exact shape: a plausible mechanism reasoned out from
+  a disassembly instead of measured.  The rows quoted throughout this finding
+  are now `alpha_equal`'s OWN rejection index, taken by re-execing its source
+  with the loop enumerated; the instrumented copy is checked against the real
+  function on all 18 `--self-test` cases before any row is quoted.  Note the
+  indices are over the FULL instruction list, padding included, so they do not
+  line up with a padding-stripped diff.
+
+  **NOT FIXED HERE.**  7762's ruling that a pass must not widen the tool that
+  grades it applies to this pass exactly as it did to that one, and giving
+  `alpha_equal` control flow is a much larger change than 7769's padding
+  guard was.
 - **`V90ConstellationDesigner` C1 and C2** (34 of 54).  Statement order, and
-  7773's entry 1 for the two spellings that were tried.  Rejected at row 2.
+  7773's entry 1 for the two spellings that were tried.  Rejected at row 2 --
+  blob `mov 0x10(%esp),%edx` against our `movb $0x16,0x38(%eax)`, which is the
+  reordering itself.
 - **`V90Equalizer::enterChannelVerification`** (12 of 116).  28 instructions
   against 28.  The blob materialises the `V90_BLL_PRE_ANSPCM` argument as
   `mov $0xb,%ebx` BEFORE the `setDfeBeta` call, reusing the callee-saved
   register that was holding the two zero float arguments; we materialise it
   after the call, in `%edx`.  Every instruction is otherwise the same and the
   two calls' displacements differ only because of the shift.  Rejected at row
-  13.  Free -- scheduling across a call plus the allocation that follows it.
+  13, on that instruction: blob `mov $0xb,%ebx` against our `mov %esi,(%esp)`.
+  Free -- scheduling across a call plus the allocation that follows it.
 - **`V90Equalizer::~V90Equalizer`**, D1 (52 of 541) and D2 (50).  **113 blob
   instructions against our 112**, at 541 bytes both.  We TAIL-CALL the last
-  `sysdep_free` -- row 54 is `jmp .+215 @sysdep_free` -- and the blob calls it
-  and returns through the common epilogue.  Every `jne` above it differs by
-  exactly 16 in its displacement as a consequence, which is why the rejection
-  row is 5 and the cause is at 50.  A source shape that suppresses the tail
+  `sysdep_free` -- row 54 of the padding-stripped listing is
+  `jmp .+215 @sysdep_free` -- and the blob calls it and returns through the
+  common epilogue.  Every `jne` above it differs by exactly 16 in its
+  displacement as a consequence, which is why `alpha_equal` rejects at row 5
+  (`jne .+304` against `jne .+320`) while the cause is 45 rows further down.  A source shape that suppresses the tail
   call is the thing to look for; nothing obvious does, and `array_12c` being
   last inside the `mmxArraysPresent` block is the object's own order (the
   file comment records that the free order is not the allocation order).
@@ -83633,7 +83686,9 @@ shrugged at, which is 2900's warning.
   `clamp_fade_ratio` pair: the blob keeps the 0.0f loaded at the top of the
   function live on the x87 stack, loads both fade ratios before the first
   `fcom %st(2)`, and branches `jae` where we branch `jb`, so the two clamps'
-  blocks are laid out in the other order.  Rejected at row 12.
+  blocks are laid out in the other order.  `alpha_equal` does not reach a row
+  at all: it compares the FULL instruction lists, our padding runs to 244
+  instructions against the blob's 242, and it rejects on the length.
 - **`spectralDesign`** (74 of 188).  44 instructions against 44, and the only
   structural difference is that the blob loads `mappingParams` (`this+0x4`)
   BEFORE the `id > rate` compare and we load it after -- in both arms.
@@ -83641,14 +83696,17 @@ shrugged at, which is 2900's warning.
   because a matching multiset does not prove it (7760): six stores, `0x624`
   from the clamped id, `0x628` from `+0x3a8`, `0x620` from `+0x3b8`, `0x62c`
   from `+0x3ac`, `0x630` from `+0x3b0`, `0x634` from `+0x3b4`, the same pairs
-  on both sides with only the registers differing.  Rejected at row 1.
-  7773's entry 3 for the spelling that was tried.
+  on both sides with only the registers differing.  Rejected at row 6 -- blob
+  `mov 0x4(%eax),%ecx` against our `mov 0x3bc(%ecx),%eax`, which is the
+  displaced load itself and not a consequence of it.  7773's entry 3 for the
+  spelling that was tried.
 - **`calcMtoMatchKtarget`** (129 of 215).  **67 blob instructions against our
   72**, at 215 bytes both.  Five instructions we emit that the blob does not,
-  so this is a structural difference and no permutation reaches it.  Not
-  attempted.
+  so this is a structural difference and no permutation reaches it.
+  `alpha_equal` rejects on the length.  Not attempted.
 - **`adjustConstellationsPower`** (1671 of 2132).  636 against 632.  Different
-  code, and the brief said not to start here.  Not attempted.
+  code, `alpha_equal` rejects on the length, and the brief said not to start
+  here.  Not attempted.
 
 **THE SLICE'S SCORE, BASELINE FIRST.**  Measured on rebuilt `build/tc_out`
 (7769's staleness guard now refuses otherwise), GCC 3.4.2 exact, from
@@ -83661,10 +83719,16 @@ shrugged at, which is 2900's warning.
 7768): **four lines added, none removed**, and the four are the four
 `V90Resampler` constructors.
 
-**AND NOT ONE OF THE SEVEN WAS A WIDTH OR A SIGNEDNESS**, which is now the
-second slice in a row to report that (7768).  7630 sells the BYTES bucket as
-where 613's family hides; over 38 functions across two waves it has held none.
-The closures were a definition order, a missing statement, a loop bound and a
+**`compare.py --ratchet` WAS RUN AND IT GAINED**, because the grade-0 set
+diff cannot see a function that loses MNEMONIC agreement while staying
+non-exact: `compared 986->1251, identical 350->510, same_size 71->88`.
+
+**AND NOT ONE OF THIS SLICE'S SEVEN CHANGES WAS A WIDTH OR A SIGNEDNESS.**
+Seven source edits -- one definition-order swap, one added statement, two loop
+bounds, one helper removed, and two mutation re-anchorings -- and 7768 reported
+the same of its three.  7630 sells the BYTES bucket as where 613's family
+hides; over the 38 functions of these two waves it has held none.  What it has
+held instead is a definition order, a missing statement, a loop bound and a
 helper function.
 
 **THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7769 when this was
