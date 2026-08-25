@@ -38,6 +38,29 @@ normal (7769).
 
 ## The levers, in the order they have paid off
 
+### 0. What an enumeration proves depends on how many cells hit zero
+
+Running the domain to completion is necessary; it is not the whole story. Say
+which of these you have, per function (7789 does it per closure):
+
+- **A unique preimage** — exactly one cell maps onto the object. You have
+  decoded the author's ORDER. `V90MP`: 4! = 24 cells, one zero, nearest
+  near-miss at 2.
+- **Several preimages** — more than one cell reaches zero. You have decoded a
+  specific FACT, not an order, and the finding must say which fact.
+  `enterPhase4` decodes only that the clear follows the deadline, because the
+  `inPhase3` slot collides; `V90Modem` decodes a zero-test and "`dil` stored
+  last"; `resetLinearMapping` decodes only the NEGATIVE, that a signed 16-bit
+  local is excluded.
+- **No preimage** — the map is constant or simply misses. The difference is
+  not what you thought it was. Four measured this way in one pass alone
+  (7795), and `SpectralShaper::reset` at 10 cells with none reaching zero is
+  the cleanest: by lever 1's own rule it is therefore not statement order.
+
+**Enumerate before reading any cell.** Two passes have recorded doing that
+explicitly, because stopping at a tempting near-miss is how an exhausted
+enumeration turns back into a search.
+
 ### 1. Statement order — enumerate, do not search
 
 The single most productive lever: ten of the closures across four passes.
@@ -84,6 +107,30 @@ Cheap, and it finds things no test can:
 
 A dead store is invisible to every differential test by construction. This is
 the only lever that finds one. Check it on every function in a batch.
+
+**THE PRECONDITION: STRIP ALIGNMENT PADDING FIRST, WHEREVER IT OCCURS.**
+`instrcount.py` counted intra-function padding as code and **inverted the
+triage of five functions** (7793). `printErrorHistogramAndReset` read +12 and
+is EQUAL; `getAT_UD` read +10 and the blob has one instruction MORE than us;
+`process` read -1 and is -3. Two of the five read as "structural, decline it"
+and were actually this lever's absence shape. It now imports `byteident.py`'s
+own `_padding` predicate, so there is one definition of what padding is.
+
+A trailing-only filter is not enough -- it invented one absence and hid a
+real one. And counts quoted in older findings will not reproduce: 7778's three
+declines were re-measured, two survive exactly and `calcMtoMatchKtarget` loses
+one of its five to padding, so its verdict stands with the number read as
+four.
+
+**A SECOND OBSERVABLE, INDEPENDENT OF THE BYTE GRADE:** the order of `.rodata`
+strings a function references. It agrees or disagrees without reference to any
+instruction, so it corroborates a statement-order decoding that the byte grade
+alone cannot distinguish (7792).
+
+**AND A TABLE THAT SEPARATES.** Where a function has two candidate differences,
+compile the CROSS PRODUCT rather than one at a time: a cell that changes one
+difference and not the other proves the two are independent, which no single
+comparison can (7792).
 
 ### 3. Definition order in the translation unit
 
