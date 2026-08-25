@@ -66,12 +66,39 @@ V90MP_OFF(nofRecievedMpNot,	0x120, nofmpnot);
 typedef char v90mp_size[(sizeof(V90MP) == 0x124) ? 1 : -1];
 #endif
 
+/*
+ * THE ORDER OF THE FIRST FOUR STORES IS DECODED, NOT TRANSCRIBED, and the
+ * distinction is the whole of finding 7770: the object emits
+ *
+ *     movb $0x12,0x1b ; movl $0x0,0x14 ; movb $0x0,0x19 ; movb $0x0,0x1a
+ *
+ * and writing that order does NOT produce it -- GCC 3.4.2 sinks the `0x1b`
+ * store to the end of the run.  All 4! = 24 orders of these four statements
+ * were compiled before any cell was read, holding the two four-byte counter
+ * stores fixed (they are position-matched on both sides, before and after,
+ * which is what licenses holding them), differing bytes of forty:
+ *
+ *     14 19 1a 1b  12     19 14 1a 1b   5     1a 14 19 1b   4     1b 14 19 1a   0  <--
+ *     14 19 1b 1a  11     19 14 1b 1a   4     1a 14 1b 19   5     1b 14 1a 19   2
+ *     14 1a 19 1b  11     19 1a 14 1b  12     1a 19 14 1b  12     1b 19 14 1a   8
+ *     14 1a 1b 19  12     19 1a 1b 14  14     1a 19 1b 14  14     1b 19 1a 14  12
+ *     14 1b 19 1a  10     19 1b 14 1a  11     1a 1b 14 19  12     1b 1a 14 19   9
+ *     14 1b 1a 19  12     19 1b 1a 14  15     1a 1b 19 14  15     1b 1a 19 14  12
+ *
+ * Exactly one cell reaches zero, so the object's emission has a unique
+ * preimage inside the family and the author's order is recovered rather than
+ * fitted.  Note the near miss at 2 -- had the search stopped at "much
+ * closer" it would have taken the wrong cell, which is 7779's warning.
+ *
+ * The claim is bounded exactly as 7770 requires: within the family of source
+ * texts differing from this one only in the order of these four statements.
+ */
 V90MP::V90MP()
 {
+	byte_1b = 18;
 	word_14 = 0;
 	byte_19 = 0;
 	byte_1a = 0;
-	byte_1b = 18;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;
@@ -91,7 +118,11 @@ V90MP::~V90MP()
  *
  * 0x1f3e0 and 0x1f410 differ in nothing but their address: the same six
  * stores in the same order, with the same two scratch registers zeroed ahead
- * of the pair of four-byte ones.  Finding 1237 is why the assignments are
+ * of the pair of four-byte ones.  **That is now MEASURED and not read off the
+ * listing** -- in the blob `V90MP()`, `V90MP()` (the C2 clone) and `reset` are
+ * byte-identical to each other, 0 of 40, and so are ours.  So the store order
+ * decoded above the constructor is this function's too, and the one edit
+ * closed three symbols.  Finding 1237 is why the assignments are
  * repeated here rather than written as a call to `resetDetector` plus two
  * counters -- `resetDetector` is a separate GLOBAL symbol at 0x1f3c0 and GCC
  * 3.4 at -O2 does not inline one of those, so an original that called it
@@ -100,10 +131,10 @@ V90MP::~V90MP()
 void
 V90MP::reset()
 {
+	byte_1b = 18;
 	word_14 = 0;
 	byte_19 = 0;
 	byte_1a = 0;
-	byte_1b = 18;
 
 	nofRecievedMp = 0;
 	nofRecievedMpNot = 0;

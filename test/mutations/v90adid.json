@@ -131,7 +131,7 @@
  },
  {
   "label": "leave the alternate table unseeded",
-  "find": "\t\tlinMappAlt[phase][at] = level;",
+  "find": "\t\tlinMappAlt[phase][at] = ucodeLevel;",
   "replace": "\t\t/* deliberately removed */"
  },
  {
@@ -146,13 +146,14 @@
  },
  {
   "label": "seed the mapping tables before clearing them",
-  "find": "\t\t\tlinMapp[phase][ci] = 0;\n\t\t\tlinMappAlt[phase][ci] = 0;\n\t\t}\n\n\t\tlinMapp[phase][at] = level;\n\t\tlinMappAlt[phase][at] = level;",
-  "replace": "\t\t\tlinMapp[phase][at] = level;\n\t\t\tlinMappAlt[phase][at] = level;\n\t\t\tlinMapp[phase][ci] = 0;\n\t\t\tlinMappAlt[phase][ci] = 0;\n\t\t}"
+  "find": "\t\t\tlinMapp[phase][ci] = 0;\n\t\t\tlinMappAlt[phase][ci] = 0;\n\t\t}\n\n\t\tlinMapp[phase][at] = ucodeLevel;\n\t\tlinMappAlt[phase][at] = ucodeLevel;",
+  "replace": "\t\t\tlinMapp[phase][at] = ucodeLevel;\n\t\t\tlinMappAlt[phase][at] = ucodeLevel;\n\t\t\tlinMapp[phase][ci] = 0;\n\t\t\tlinMappAlt[phase][ci] = 0;\n\t\t}"
  },
  {
   "label": "seed the tables with the level negated",
-  "find": "\tshort level = (short)ucodeLevel;",
-  "replace": "\tshort level = (short)-ucodeLevel;"
+  "why": "The anchor used to be the `short level` local, which finding 7801 removed -- the object reads +0xa96c straight into both stores and a signed 16-bit local is what made GCC 3.4.2 emit `movswl` where the object has `movzwl`.  It now negates at the two stores, which is the same claim about the same value.",
+  "find": "\t\tlinMapp[phase][at] = ucodeLevel;\n\t\tlinMappAlt[phase][at] = ucodeLevel;",
+  "replace": "\t\tlinMapp[phase][at] = -ucodeLevel;\n\t\tlinMappAlt[phase][at] = -ucodeLevel;"
  },
  {
   "label": "NOTE: the sixteen processing methods below.  Every anchor here has to survive the fact that this file holds pairs of near-identical methods -- reset and setConnectionType share four stores verbatim, and the Alt half of each pair shares its shape with the plain half.  Finding 1264: an anchor that matches twice reads UNUSABLE and UNUSABLE does not fail a run."

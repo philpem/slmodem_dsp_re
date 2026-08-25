@@ -640,6 +640,37 @@ V90Demodulator::enterFPE()
  * THE ORDER OF THE +0x38 READ AND THE +0x44 ADD IS NOT FREE.  The object
  * reads +0x38 at 0x1b2ce, adds at 0x1b2d4 and stores zero at 0x1b2da; writing
  * the clear first would change what is added.
+ *
+ * AND THE CLEAR IS WRITTEN AFTER THE DEADLINE, WHICH IS DECODED (7770's
+ * argument) RATHER THAN TRANSCRIBED.  The object emits the zero store BETWEEN
+ * the `rtd` load and the deadline's `lea`, and it emits the deadline's own
+ * store one slot later than we did -- fifteen bytes that read like two
+ * independent scheduling differences and are one statement.  Fifteen cells
+ * were compiled before any was read: all twelve orders of `inPhase3 = 2`,
+ * `word_44 += word_38`, `word_38 = 0` and the deadline that keep the
+ * accumulate ahead of the clear, plus three that sink the clear past the two
+ * parameter copies or swap them.  Differing bytes of 110:
+ *
+ *     inPhase3 acc clr w48  15     acc clr inPhase3 w48  15     w48 ... 38, 38, 38
+ *     inPhase3 acc w48 clr   0 <-- acc clr w48 inPhase3  10     clr after +0x288  23
+ *     inPhase3 w48 acc clr  26     acc w48 inPhase3 clr  18     clr last          32
+ *     acc inPhase3 clr w48  15     acc w48 clr inPhase3  20     +288/+290 swapped  4
+ *     acc inPhase3 w48 clr   0 <--
+ *
+ * **TWO CELLS REACH ZERO, so the preimage is NOT unique and this is a
+ * decoding of ONE fact and not of the whole order.**  What both hits agree on
+ * -- and what every other cell in the family contradicts -- is that
+ * `word_38 = 0;` stands IMMEDIATELY AFTER the deadline: moving it one slot
+ * earlier costs 15 bytes and sinking it past either parameter copy costs 23
+ * or 32.  What they disagree on is where `inPhase3 = 2;` goes, first or
+ * second, and GCC 3.4.2 emits both identically, so the object cannot say.
+ * It is left where it was, which is the smaller claim.  7771's rule is the
+ * reason this is written as one recovered statement position rather than as
+ * a recovered statement order.
+ *
+ * (Note the near miss at 4, the parameter copies swapped.  The enumeration
+ * was run to all fifteen before any cell was read -- 7779 declined a 2-of-387
+ * for exactly this reason, and 4 is more tempting than 27.)
  */
 void
 V90Demodulator::enterPhase4()
@@ -652,8 +683,8 @@ V90Demodulator::enterPhase4()
 
 	inPhase3 = 2;
 	word_44 += word_38;
-	word_38 = 0;
 	word_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;
+	word_38 = 0;
 
 	word_288 = V90PW(params)[PARAMS_WORD_268];
 	word_290 = V90PW(params)[PARAMS_WORD_27C];

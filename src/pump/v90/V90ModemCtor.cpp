@@ -192,6 +192,43 @@ typedef char v90m_mod_size[(sizeof(V90Modulator) == 0x70) ? 1 : -1];
  * source reads `this->side` back.  V92Modem's constructor does the same
  * (V92Modem.h), and it is the kind of thing that survives only if it is
  * written the way the object has it.
+ *
+ * ELEVEN BYTES CAME OFF THIS FUNCTION AS TWO INDEPENDENT DECODINGS, and the
+ * enumeration was run jointly over both because nothing before the compile
+ * said they were independent.  Twenty-four cells: four spellings of the
+ * diagnostic's ternary crossed with all 3! orders of `side`, `sessionFlag`
+ * and `dil`.  Differing bytes of 597:
+ *
+ *                        side dil flag  side flag dil  dil side flag
+ *     side ? A : D            11             1              11
+ *     side == 0 ? D : A       10             0  <--         10
+ *     !side ? D : A           10             0  <--         10
+ *     side != 0 ? A : D       11             1              11
+ *
+ *                        dil flag side  flag side dil  flag dil side
+ *     side ? A : D            11             1              1
+ *     side == 0 ? D : A       10             0  <--         0  <--
+ *     !side ? D : A           10             0  <--         0  <--
+ *     side != 0 ? A : D       11             1              1
+ *
+ * The table SEPARATES, which is itself the finding: the ternary axis moves
+ * every cell by exactly one byte and the store axis by ten, so the two
+ * differences are independent and neither is a consequence of the other.
+ *
+ * **SIX CELLS REACH ZERO, so neither axis has a unique preimage** and 7771's
+ * rule applies to both.  What each axis DOES decode is sharp, and it is the
+ * negative half that carries it:
+ *
+ *   - the condition tests for ZERO, with "Digital" as the true arm.  Every
+ *     cell testing for non-zero is off by that byte.  `== 0` and `!` are the
+ *     same expression to GCC 3.4.2 and the object cannot separate them.
+ *   - `dil = dilDescriptor;` is stored LAST.  Every cell with `dil` ahead of
+ *     `sessionFlag` costs ten bytes; the relative order of `side` and
+ *     `sessionFlag` is not observable and all three cells that put `dil`
+ *     last are exact.
+ *
+ * `side` is left first and `== 0` chosen over `!` because those are the
+ * smaller edits, not because the object prefers them.
  */
 V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 		   tagV90DILdescriptor *dilDescriptor, unsigned int nofSymbols,
@@ -204,16 +241,28 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	 * the test is on the ARGUMENT here, before anything is stored, where
 	 * the switch below is on the member.  0x19514 tests `%ebx`, which is
 	 * still `0x54(%esp)`.
+	 *
+	 * THE CONDITION IS WRITTEN AS A TEST FOR ZERO, WITH "Digital" AS THE
+	 * TRUE ARM, and that is decoded rather than transcribed -- see the
+	 * table above the constructor.  Written `modemSide ? "Analog" :
+	 * "Digital"` the object's `je` comes out as `jne`, one byte.
+	 *
+	 * AND THE .rodata LAYOUT IS AN INDEPENDENT WITNESS, from a different
+	 * observable than the branch byte: the blob's two strings are at
+	 * `.rodata.str1.1+0x1089` and `+0x1091`, eight bytes apart, so
+	 * "Digital" is the EARLIER of the two -- and GCC 3.4.2 emits string
+	 * literals in the order the source mentions them.  The spelling that
+	 * fixes the branch is the same one that puts "Digital" first.
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V90Modem Construction (as %s Modem)\r\n",
-				     modemSide ? "Analog" : "Digital");
+				     modemSide == 0 ? "Digital" : "Analog");
 
 	printTitle();
 
 	side = modemSide;
-	dil = dilDescriptor;
 	sessionFlag = flag;
+	dil = dilDescriptor;
 
 	p = sysdep_malloc(sizeof(V90Parameters));
 	v90m_parm_ctor(p, modemParams);
