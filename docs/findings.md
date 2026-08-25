@@ -88404,7 +88404,28 @@ to the subscript, so the operand order is NOT respellable and only the DECL
 change reaches it -- exactly 9's "rewriting the source comparison the other way
 round changes nothing, because both spellings fold to one RTL".
 
-CLOSED, recovery side of 7782. Grade 0 527 -> 528.
+**AND THE MIRROR SPELLING WAS RUN, BECAUSE OTHERWISE THE UNIQUENESS CLAIM IS
+ABOUT THE FAMILY AND NOT ABOUT THE SOURCE.** The 24 cells only ever made the
+POINTER a local; the other way to hand `tree_swap_operands_p` a `DECL_P` is to
+localise the INDEX. Seven more cells at the winning declaration order --
+`nbuf = bitsBuffered` with the subscript and with `*(bitBuffer + nbuf)`, both
+locals together, `bitBuffer + bitsBuffered` folded into the pointer, and the
+two controls -- give **four distinct emissions and again exactly one at
+identity**. Localising the index reaches **1 differing byte**, which is what
+leaving BOTH as members reaches, and localising both reaches the same 1: so the
+index is not the free variable and `buf = bitBuffer` is forced.
+
+That is the mechanism confirmed in both directions rather than by precedent.
+`tree_swap_operands_p` swaps when operand 0 is a `DECL_P` and operand 1 is not,
+so `buf + bitsBuffered` is canonicalised to `bitsBuffered + buf` and
+`bitsBuffered` becomes the ModRM base -- the blob's `(%ecx,%edi,1)`. With
+`bitBuffer + nbuf` the test is false, no swap happens, and the base stays
+`bitBuffer`. With both locals the first test is false as well. Every cell's
+emission is predicted by that one rule, which is why the local is a recovery
+and not a shim.
+
+CLOSED, recovery side of 7782, 31 cells over the two domains. Grade 0
+527 -> 528.
 
 ### 7848. `unitePhasesInfoOfUref`: `--why`'s PADDING-STRIPPED COUNT IS WRONG WHEN A FUNCTION CONTAINS `mov %reg,%reg`, AND THE +1 IS A SECOND `flds` OF THE NaN
 
@@ -88424,9 +88445,27 @@ own `_SELFMOV` regex and returns True, and its docstring says why.
 
 So **instrcount is right and `--why`'s parenthesis is wrong**: the blob has two
 self-moves here and we have one, the error does not cancel, and a real
-**+1 EXTRA in ours** is reported as EQUAL. Any refinement pass that triages off
-`--why`'s padding-stripped counts will skip lever 2 on every function with an
-aligned loop head in it. `refinement.md`'s lever 2 now carries the warning.
+**+1 EXTRA in ours** is reported as EQUAL.
+
+**AND THE DENOMINATOR, because "will mislead a future pass" is not a
+measurement.** Over the **67** symbols in the BYTES bucket today, **13 carry a
+`mov %reg,%reg` on one side or the other, and 7 carry DIFFERENT numbers of
+them** -- so `--why`'s padding-stripped delta is wrong for 7 of 67, one in ten
+of exactly the population a refinement pass triages:
+
+    blob 3 ours 1   V90Equalizer::reset
+    blob 2 ours 1   V90AutoDigitalImpDetector::unitePhasesInfoOfUref
+    blob 1 ours 0   V92BitsToSymbol::setSymbolsBlockSize
+    blob 1 ours 0   VPcmV34SetDelays
+    blob 1 ours 0   V90Demapper::printErrorHistogramAndReset
+    blob 0 ours 1   V90ConstellationDesigner::calcMtoMatchKtarget
+    blob 0 ours 1   V90SpectralShaper::process
+
+The last two are the ones to notice: both are named in `refinement.md`'s own
+lever 2, and both of those numbers came from `instrcount.py`, which strips
+self-moves -- re-measured here at 86/86 and 71/67 respectively, so the doc's
+figures stand and it is only `--why` that is unsafe. `refinement.md`'s lever 2
+now carries the warning.
 The predicate was NOT fixed here: `_padding` also feeds `insns()` and therefore
 grade 1, so changing it moves the gate's own numbers and wants its own change
 with the SET diffed, not a side effect of a refinement pass.
@@ -88454,6 +88493,7 @@ as for the constructors.** 7808 measured six orderings of the file's bottom
 blocks against C1/C2; the four blocks `getDecision`, `getV90Decision`,
 `getV92Decision` and `reset` were re-run here at the full **4! = 24 cells**.
 `reset` gives **two** distinct emissions, 136 and 137 differing bytes, and
-neither is zero; C1 gives **one** emission over all 24, so the map is constant
-for it and 7808's index-0 corollary is confirmed from the other direction;
+neither is zero; C1 and C2 were each scored over all 24 and each gives **one**
+emission at 53 differing bytes, so the map is constant for the pair and 7808's
+index-0 corollary is confirmed from the other direction;
 `getDecision` is EXACT in all 24. Lever 3 is closed on this file.
