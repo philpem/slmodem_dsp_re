@@ -36,6 +36,28 @@ normal (7769).
 
 ---
 
+## Before any lever: OUR SOURCE ORDER IS THE ANSWER SHEET, NOT A CANDIDATE
+
+A reconstruction transcribes the object's stores in the order they come out of
+the disassembly. **So our source order already IS the blob's EMISSION order**,
+and comparing the two tells you nothing -- in all four of one wave's closures
+our source was already the emitted order (7805). What an enumeration is looking
+for is the PREIMAGE under GCC 3.4.2's scheduling, which is a different object
+and is usually not an order anyone can read off the listing.
+
+This is why "the compiler reorders our source" (617) is the normal case rather
+than the obstacle it first looked like, and why rule 0 below is stated in terms
+of preimages instead of matches.
+
+**AFFORDING AN EXHAUSTIVE DOMAIN.** Rule 0 says exhaust the candidate space;
+the way to afford it is a harness that compiles the real translation unit --
+about 0.25 s per cell -- and scores each result with `byteident.py`'s own
+`verdict()`. Import it; do not write a second comparison, because a second copy
+of a comparison is a second answer to the same question and it goes stale (the
+`--why` explainer did exactly that within an hour). At that rate 8! = 40,320
+orders is affordable and was run: 6,624 distinct emissions, thirteen preimages
+(7807).
+
 ## The levers, in the order they have paid off
 
 Levers 0 to 9 came out of the refinement waves, in that order. **10, 11 and 12
@@ -309,6 +331,17 @@ DEAD.** Compare the SORTED MULTISET of preprocessed non-blank lines against
   shape.
 
 Shown firing on both injections and clean on everything committed. Finding 7799.
+
+**A COROLLARY THE MECHANISM MAKES OBVIOUS AND WHICH WAS MEASURED SEPARATELY:
+the lever cannot reach a symbol at emission index 0** (7808). The cursor is
+threaded through the TU in emission order, so a symbol emitted FIRST has
+nothing ahead of it to have moved the cursor. `V90Phase4Demodulator`'s C1/C2
+sit at index 0 with nothing above them but `typedef char` assertions; all six
+orderings of the file's bottom blocks were compiled, **two of them achieve the
+blob's `nm -n` order exactly, 15 for 15, reorder-only**, and the pair stays at
+53 differing bytes in every one. Check the target's emission index before
+spending a reorder on it -- and prefer the `-fno-peephole2` certificate below,
+which is stronger because it answers for the symbol rather than its position.
 
 ### 3b. The mechanism, settled: a round-robin cursor in `peephole2` (7812)
 
