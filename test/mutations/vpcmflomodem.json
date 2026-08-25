@@ -14,7 +14,7 @@
  },
  {
   "label": "Ja: terminating does not reset the pointer",
-  "find": "\tif (terminateJa != 0) {\n\t\tbitPointer = 0;\n\t\tdone = 1;\n\t}",
+  "find": "\tif (terminateJa != 0) {\n\t\tdone = 1;\n\t\tbitPointer = 0;\n\t}",
   "replace": "\tif (terminateJa != 0)\n\t\tdone = 1;"
  },
  {

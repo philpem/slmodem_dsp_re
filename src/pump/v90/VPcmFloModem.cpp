@@ -221,6 +221,15 @@ x86_abs(int v)
  * the vector wraps to 0 and returns 0; `terminateJa` wraps to 0 and returns 1;
  * and a call can do both, because the wrap test falls through into the
  * terminate test rather than returning.
+ *
+ * `done = 1` COMES BEFORE `bitPointer = 0` AND THE OBJECT EMITS THEM THE OTHER
+ * WAY ROUND -- 7770's two-element decoding again.  The blob's terminate arm is
+ * `xor %eax,%eax; mov $0x1,%esi; mov %ax,0x1738(%ecx)`: a SECOND zero register,
+ * because `%esi` is already carrying the 1 by the time the store issues.  With
+ * the two statements written the object's way round we emit
+ * `xor %esi,%esi; mov %si,0x1738(%ecx); mov $0x1,%esi` -- 11 bytes wrong, and
+ * the register difference is a consequence of the order rather than a second
+ * defect.  Both members of the family were compiled; the other is EXACT.
  */
 int
 VPcmFloModem::getV90JaBits(short *bits)
@@ -236,8 +245,8 @@ VPcmFloModem::getV90JaBits(short *bits)
 	}
 
 	if (terminateJa != 0) {
-		bitPointer = 0;
 		done = 1;
+		bitPointer = 0;
 	}
 
 	return done;
@@ -676,9 +685,22 @@ VPcmFloModem::getUinfoValue(short skipProbe)
  *
  * ORDER.  0xf277's `mov $0x0,%eax` is a second zero register, not a store,
  * and 0xf271 and 0xf282 write `word_7f60` and `sineWave.phase` from two
- * different registers holding the same zero.  Written below in the order the
- * object performs them; nothing here reads anything else here, so the order
- * is not observable and is not claimed to be forced.
+ * different registers holding the same zero.
+ *
+ * AND THE ORDER OF THE TWO `word_7f6x` STORES IS DECODED, NOT TRANSCRIBED --
+ * 7770's argument, with the map measured in this function.  The object emits
+ * `0x7f64` then `0x7f60`, and writing that order in the source does NOT
+ * reproduce it: GCC transposes the pair.  Both members of the two-element
+ * family were compiled and the map is a bijection, so the object's emission
+ * has a unique preimage:
+ *
+ *     source (7f64, 7f60)  ->  emitted (7f60, 7f64)   -- 2 bytes wrong
+ *     source (7f60, 7f64)  ->  emitted (7f64, 7f60)   -- EXACT
+ *
+ * The order below is therefore the author's, within the family of texts that
+ * differ from this one only in that transposition.  Nothing here reads
+ * anything else here, so it is not forced by semantics; it is forced by the
+ * bytes.
  */
 void
 VPcmFloModem::vPcmResetPhase3Modem()
@@ -691,8 +713,8 @@ VPcmFloModem::vPcmResetPhase3Modem()
 	v92modem.reset();
 	echoCanceller.reset();
 
-	word_7f64 = 0;
 	word_7f60 = 0;
+	word_7f64 = 0;
 	modem.ptr_49b4->modemParams->unnamed_0003 &=
 	    (unsigned char)~CFG_FLAG3_RETRAIN;
 	sineWave.phase = 0.0f;
@@ -758,6 +780,25 @@ VPcmFloModem::enterPhase3()
  * THE LAST DIAGNOSTIC IS A TAIL CALL and the first is not, which is why they
  * are in this order: "reinitializing parameters" is printed at the TOP of the
  * flag work and "external reset called" at the very end.
+ *
+ * THE ORDER OF THE THREE SHORT STORES IS DECODED AND IS NOT THE OBJECT'S
+ * EMITTED ORDER.  7770's argument, over a three-element family rather than a
+ * two-element one.  The object emits `0x1738, 0x1736, 0x7dcc`, and writing
+ * THAT in the source emits `0x7dcc, 0x1738, 0x1736` -- GCC rotates it.  All
+ * six orders were compiled, holding the surrounding `movb`s fixed (which is
+ * what licenses the family bound: those already match position for position
+ * on both sides).  Differing bytes of 387:
+ *
+ *     bitPointer, nofBits,    cpNofBits    5      <- the object's own order
+ *     bitPointer, cpNofBits,  nofBits      2
+ *     nofBits,    bitPointer, cpNofBits    4
+ *     nofBits,    cpNofBits,  bitPointer   0      <- written below
+ *     cpNofBits,  bitPointer, nofBits      5
+ *     cpNofBits,  nofBits,    bitPointer   4
+ *
+ * The six emissions are SIX DISTINCT texts, so the map is injective and the
+ * preimage is unique -- 7771 found a pair of cells that collided and warns
+ * that injectivity is checked, not assumed.
  */
 void
 VPcmFloModem::externalReset()
@@ -778,9 +819,9 @@ VPcmFloModem::externalReset()
 		    "V90_V34_Main: reinitializing parameters.\r\n");
 
 	flags_173a[0] = 0;		/* +0x173a */
-	bitPointer = 0;			/* +0x1738 */
 	nofBits = 0;			/* +0x1736 */
 	cpNofBits = 0;			/* +0x7dcc */
+	bitPointer = 0;			/* +0x1738 */
 	flags_173a[1] = 0;		/* +0x173b */
 	flags_173a[2] = 0;		/* +0x173c */
 	flag_173d = 0;			/* +0x173d */

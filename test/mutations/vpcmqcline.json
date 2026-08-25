@@ -267,12 +267,12 @@
  },
  {
   "label": "word_7f64 is not cleared",
-  "find": "\tword_7f64 = 0;\n\tword_7f60 = 0;",
+  "find": "\tword_7f60 = 0;\n\tword_7f64 = 0;",
   "replace": "\tword_7f60 = 0;"
  },
  {
   "label": "word_7f60 is not cleared",
-  "find": "\tword_7f64 = 0;\n\tword_7f60 = 0;",
+  "find": "\tword_7f60 = 0;\n\tword_7f64 = 0;",
   "replace": "\tword_7f64 = 0;"
  },
  {
