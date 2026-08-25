@@ -86684,6 +86684,16 @@ default and 1520k at `ggc-min-expand=1 ggc-min-heapsize=1`, and the compile
 goes from 0.131 s to 0.234 s collecting.  Do not re-try the counters and do not
 re-try the addresses.
 
+**CLEARED MEANS "NOT REACHABLE BY LEVER 3", NOT "UNREACHABLE", AND THE NEXT
+WAVE DEMONSTRATED IT BY ACCIDENT.**  These counts were re-measured after 7805's
+cluster merged -- BYTES 91 -> 87, REGALLOC unchanged at 25 -- and **three of the
+four symbols that wave closed were in this CLEARED column**:
+`V90ConstellationDesigner`'s C1 and C2, and `spectralDesign`, all closed on
+LEVER 1.  That is the right relationship and worth stating: a symbol peephole2
+never touches is precisely a symbol whose difference lies somewhere else, so a
+clear redirects a pass rather than retiring a symbol.  The fourth,
+`VPCMXF_Create`, was in the undecided column.
+
 ### 7813. `docs/method/refinement.md`: the levers folded in from the whole record, and what was rejected
 
 7784 assembled that file from the last six refinement waves.  `docs/findings.md`

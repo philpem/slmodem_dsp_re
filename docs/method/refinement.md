@@ -36,28 +36,6 @@ normal (7769).
 
 ---
 
-## Before any lever: OUR SOURCE ORDER IS THE ANSWER SHEET, NOT A CANDIDATE
-
-A reconstruction transcribes the object's stores in the order they come out of
-the disassembly. **So our source order already IS the blob's EMISSION order**,
-and comparing the two tells you nothing -- in all four of one wave's closures
-our source was already the emitted order (7805). What an enumeration is looking
-for is the PREIMAGE under GCC 3.4.2's scheduling, which is a different object
-and is usually not an order anyone can read off the listing.
-
-This is why "the compiler reorders our source" (617) is the normal case rather
-than the obstacle it first looked like, and why rule 0 below is stated in terms
-of preimages instead of matches.
-
-**AFFORDING AN EXHAUSTIVE DOMAIN.** Rule 0 says exhaust the candidate space;
-the way to afford it is a harness that compiles the real translation unit --
-about 0.25 s per cell -- and scores each result with `byteident.py`'s own
-`verdict()`. Import it; do not write a second comparison, because a second copy
-of a comparison is a second answer to the same question and it goes stale (the
-`--why` explainer did exactly that within an hour). At that rate 8! = 40,320
-orders is affordable and was run: 6,624 distinct emissions, thirteen preimages
-(7807).
-
 ## The levers, in the order they have paid off
 
 Levers 0 to 9 came out of the refinement waves, in that order. **10, 11 and 12
@@ -107,6 +85,56 @@ This holds **even when the compiler reorders your source**. An earlier rule
 object's emission is the author's; that rule is sound and too strong. In all
 three of 7770's closures GCC reordered our source and the order was still
 recoverable, because the domain was exhausted rather than trusted.
+
+**The branch that would kill it, and it must be excluded by measurement:** if
+the compiler emits the same order for *every* source spelling, the map is
+constant, no source produces the object's bytes, and the difference is not a
+store-order difference at all. Nothing before the compile distinguishes that
+case from a bijection.
+
+**Where it stops.** Hill-climbing on byte count is not evidence:
+
+    V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
+                                order; best was 27 of 290 -> DECLINED (7771)
+
+Closer bytes are not a grade. Finding 7782 is the ruling on this: take the
+bytes when the space is exhausted and one element maps; decline when you are
+searching. Record which side you are on and what the domain was — a finding
+that says "closed by reordering" without saying how many spellings were
+compiled is not reviewable.
+
+
+**OUR SOURCE ORDER IS THE ANSWER SHEET, NOT A CANDIDATE, and this is the
+sentence to read first.** A reconstruction writes the statements down in the
+order the object's stores come out of the disassembly, so **our source order
+already IS the blob's EMISSION order** — it is the first thing anybody
+transcribes. Comparing the two therefore tells you nothing, and a cell that
+reproduces it is not a hit. What an enumeration is searching for is the
+PREIMAGE of that order under GCC 3.4.2's scheduling, which is a different
+object and is usually not an order you can read anywhere. In all four of
+7805's closures our source was already the emitted order and the compiler had
+permuted it. So before enumerating: if our source reads like the disassembly,
+that is the ANSWER and not a guess, and the domain to enumerate is everything
+else.
+
+**AND THE HARNESS IS WHAT MAKES AN EXHAUSTED DOMAIN AFFORDABLE**, which is
+what turns rule 0 from advice into something a pass can budget for. Compile the
+REAL translation unit rather than a model of it, one container pass over every
+variant, and score each object with **`byteident.py`'s own `body` and
+`verdict`** — never a second implementation of the comparison, or the number
+printed per cell can disagree with the number the tree-wide tool prints (7773's
+rule). Measured: **0.03 s a cell for a 500-line file and 0.25 s for a
+1,500-line one** (7805). Domains that bought at those rates: 720 cells for a
+unique preimage (7806) and 5,151 for a measured NO preimage (7809) — which
+file was which size is in those findings, not multiplied out here.
+
+For a large class a stand-alone MODEL is faster still — 40,320 cells in twelve
+minutes for an 8! constructor domain, 6,624 distinct emissions and thirteen
+preimages (7807) — **and a model must be validated before it is believed.**
+That one was checked to reproduce our committed object's thirteen instructions
+exactly, from our committed source order, before a single cell of it was read.
+A model nobody has seen agree with the real compiler is `gates.md`'s dead
+detector with 40,320 rows of output.
 
 **The branch that would kill it, and it must be excluded by measurement:** if
 the compiler emits the same order for *every* source spelling, the map is
