@@ -134,11 +134,46 @@ All three at once on `RcFixed_Check_Combination` (7767). `nm` showed ours as
 same way, and adding `static` moved the relocations but **not the register
 choice**, so neither reached grade 0 by it (7768).
 
-### 6. Width and signedness
+### 6. Unrolled and partially-unrolled code
+
+The object is frequently more unrolled than the natural source. When you write
+source in an unrolled or partially-unrolled shape to match it, **put the
+rolled version in a comment above it.** The unrolled form is what the compiler
+needs; the loop is what a reader needs, and without it the next person cannot
+tell an intentional expansion from a transcription accident.
+
+    /*
+     * The object writes these out; the source it came from may not have.
+     * Rolled, this is:
+     *     for (i = 0; i <= 16; i++)
+     *             bits[i] = 1;
+     */
+    bits[0] = 1;
+    bits[1] = 1;
+    ...
+
+**Watch for Duff's Device and its relatives.** They produce a signature that
+is easy to misread: partial unrolling with loop control still present, which
+looks like "the compiler unrolled it" and is actually the source's own shape.
+The tell is an indirect jump whose case labels land INSIDE a loop body and
+fall through, rather than a plain switch whose cases do not. 79 blob functions
+carry an indirect jump, all `jmp *@.rodata(,%eax,4)`; none has been checked
+for this (7785).
+
+Two negatives already recorded, so nobody repeats them:
+
+- **`-funroll-loops` is not a missing period flag.** Whole tree rebuilt with
+  it: 0 gained, 39 lost, grade 0 433 -> 394 (7783).
+- **`packData`'s difference is not loop shape.** All 16 combinations of which
+  of its four loops are written out were compiled; the maximum is 516 against
+  the object's 534, so the domain is exhausted with no match (7785). That is
+  lever 1's constant-map branch appearing for real.
+
+### 7. Width and signedness
 
 7630's `movzwl` copied as 32 bits. Equal instruction count hides it completely.
 
-### 7. Operand order in commutative expressions
+### 8. Operand order in commutative expressions
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
 identity.

@@ -84520,8 +84520,32 @@ as 7774's dead store, where the blob had one more instruction at the same
 size.  The store widths are the other lead: the blob stores through a register
 102 times where we emit byte and long immediates 37 times between us.
 
+**NOT DUFF'S DEVICE EITHER, and that was worth checking** -- it produces
+exactly this signature, partial unrolling WITH loop control still present.
+`packData` has no indirect jump at all.  Its control flow is five ordinary
+loops:
+
+     11  jle .+16          25  jle .+64          146  jle .+512
+    100  dec %esi / 106 jns .+224                        <- inner
+    107  incl 0x4(%esp) / 108 addl $0x11,0x8(%esp) / 109 cmpl $0x1 / 110 jle
+
+The outer pair at 107-110 is our `for (g = 0; g <= 1; g++)` with the group
+stride 0x11 = 17 in the open, and `v90jd_crc_bits` is INLINED inside it --
+there is no `call` in the function.  So the object is PARTIALLY unrolled: some
+of these loops are written out and some are not, which is why the sixteen-way
+enumeration climbs steadily and still falls short.
+
+**Where Duff's Device could hide, for whoever looks.**  79 blob functions
+carry an indirect jump, every one of the form `jmp *@.rodata(,%eax,4)` -- a
+plain switch jump table.  The largest are `v34handshak` (61,541 B),
+`V90Equalizer::process` (9,364), and the two `V90Phase3Demodulator` decision
+functions.  What separates Duff's Device from an ordinary switch is that its
+case labels land INSIDE a loop body and fall through, so the test is whether
+the jump table's targets sit within the span of a backward branch. None of
+those 79 has been checked that way.
+
 **What this closes.**  The unrolling explanation for this function is finished
--- flag (7783) and source shape (here) both measured and both negative.  The
-next pass should look for a missing statement and for what makes the object's
-stores register-sourced, and should not re-open loop shape without new
-evidence.
+-- flag (7783), source shape (here) and Duff's Device all measured and all
+negative.  The next pass should look for a missing statement and for what
+makes the object's stores register-sourced, and should not re-open loop shape
+without new evidence.
