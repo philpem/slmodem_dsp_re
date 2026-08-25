@@ -71,12 +71,12 @@
  },
  {
   "label": "TRN1_QC_SLOW reads +0x0f0 for both gains",
-  "find": "\t\tbllK2 = asFloat(params->unnamed_0f4);",
+  "find": "\t\t__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);",
   "replace": "\t\tbllK2 = params->BLL_TRN1_QC_SLOW_K2;"
  },
  {
   "label": "TRN1_QC_SLOW converts +0x0f4 rather than copying its bits",
-  "find": "\t\tbllK2 = asFloat(params->unnamed_0f4);",
+  "find": "\t\t__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);",
   "replace": "\t\tbllK2 = (float)params->unnamed_0f4;"
  },
  {
@@ -96,8 +96,8 @@
  },
  {
   "label": "the ring length comes from the evaluation PERIOD",
-  "find": "\ttimingHistoryLen = params->TIMING_HISTORY_EVALUATION_BUFFER_LENGTH;\n\n\treset();\n\tsetTimingOffset(ppm);\n}\n\nV90Resampler::V90Resampler(unsigned int nPhases, float scale,\n\t\t\t   unsigned int nTaps, float *bank,",
-  "replace": "\ttimingHistoryLen = params->TIMING_HISTORY_EVALUATION_PERIOD;\n\n\treset();\n\tsetTimingOffset(ppm);\n}\n\nV90Resampler::V90Resampler(unsigned int nPhases, float scale,\n\t\t\t   unsigned int nTaps, float *bank,"
+  "find": "\ttimingHistoryLen = params->TIMING_HISTORY_EVALUATION_BUFFER_LENGTH;\n\n\treset();",
+  "replace": "\ttimingHistoryLen = params->TIMING_HISTORY_EVALUATION_PERIOD;\n\n\treset();"
  },
  {
   "label": "the destructor does not free the timing history",

@@ -35,9 +35,16 @@
  * 32-bit `mov`s and no conversion, exactly as its thirteen sibling arms copy
  * the (K1, K2) pair at +0x088, +0x090, +0x098 and so on.  So +0x0f0 is the
  * K1 of the pair and +0x0f4 is the K2, and +0x0f4 holds a FLOAT.  The frozen
- * header is not edited here -- `asFloat` below reinterprets the four bytes,
- * which is what the object's `mov` does and what an `int`-typed read would
- * NOT do, since that would convert rather than copy.
+ * header is not edited here -- the arm copies the four bytes with
+ * `__builtin_memcpy`, which is what the object's `mov` does and what an
+ * `int`-typed read would NOT do, since that would convert rather than copy.
+ *
+ * IT IS A `memcpy` AT THE SITE AND NOT A HELPER, AND THE OBJECT SAYS SO.
+ * This used to go through a `static float asFloat(int)`, and the extra
+ * function boundary was the only difference between this function and the
+ * object's: GCC hoisted the +0x0f4 load ABOVE the +0x0f0 store, where the
+ * object -- and every one of the thirteen sibling arms, on both sides --
+ * stores each gain before loading the next.  Finding 7772.
  */
 
 #include <stddef.h>
@@ -69,16 +76,6 @@ VR_OFF(periodSamples,		0xb0, periodsamples);
 typedef char vr_size[(sizeof(V90Resampler) == 0xb4) ? 1 : -1];
 #endif
 
-/* See the file comment.  A copy of the bits, not a conversion. */
-static float
-asFloat(int bits)
-{
-	float f;
-
-	__builtin_memcpy(&f, &bits, sizeof f);
-	return f;
-}
-
 /*
  * `params` and `timingHistory` are initialised in the member-initialiser list
  * and `timingHistory` is then assigned in the body, which is why the object
@@ -86,27 +83,45 @@ asFloat(int bits)
  * overwrites: the compiler cannot prove the first store dead across an opaque
  * call.  The order of the two initialiser-list stores -- +0xa0 then +0xa4 --
  * is declaration order and matches.
+ *
+ * THE `float *bank` CONSTRUCTOR IS DEFINED FIRST AND THAT IS NOT A STYLE
+ * CHOICE -- ALL FOUR SYMBOLS ARE BYTE-IDENTICAL TO THE OBJECT BECAUSE OF IT.
+ * GCC 3.4.2 emits a translation unit's functions in REVERSE definition order,
+ * so the blob's layout (`C1(f), C2(f), C1(Pf), C2(Pf)`) says the original
+ * defined this one first.  It matters because the compiler clones a
+ * constructor body into `C1` and `C2` and schedules the two copies
+ * differently: in BOTH objects the first-emitted pair's clones disagree with
+ * each other and the second-emitted pair's agree, so which constructor sits
+ * in which position changes the bytes.  Swap these two definitions and four
+ * exact functions become none.  Finding 7770.
+ *
+ * `timingHistoryIndex = 0` IS IN THIS CONSTRUCTOR AND NOT IN THE OTHER, which
+ * is the object's own asymmetry and not an oversight: this one is 69
+ * instructions and the `float cutoff` one is 68, at 271 bytes each.  It is
+ * dead -- `reset()` two statements below zeroes the same field -- so no
+ * differential test can see it and only the byte comparison can.
  */
 V90Resampler::V90Resampler(unsigned int nPhases, float scale,
-			   unsigned int nTaps, float cutoff,
+			   unsigned int nTaps, float *bank,
 			   V90Parameters *p, float ppm,
 			   unsigned int minHistory)
-	: ResamplerTiming(nPhases, scale, nTaps, cutoff, ppm, minHistory),
+	: ResamplerTiming(nPhases, scale, nTaps, bank, ppm, minHistory),
 	  params(p), timingHistory(0)
 {
 	timingHistory = (float *)sysdep_malloc(
 	    p->TIMING_HISTORY_EVALUATION_BUFFER_LENGTH * sizeof(float));
 	timingHistoryLen = params->TIMING_HISTORY_EVALUATION_BUFFER_LENGTH;
+	timingHistoryIndex = 0;
 
 	reset();
 	setTimingOffset(ppm);
 }
 
 V90Resampler::V90Resampler(unsigned int nPhases, float scale,
-			   unsigned int nTaps, float *bank,
+			   unsigned int nTaps, float cutoff,
 			   V90Parameters *p, float ppm,
 			   unsigned int minHistory)
-	: ResamplerTiming(nPhases, scale, nTaps, bank, ppm, minHistory),
+	: ResamplerTiming(nPhases, scale, nTaps, cutoff, ppm, minHistory),
 	  params(p), timingHistory(0)
 {
 	timingHistory = (float *)sysdep_malloc(
@@ -251,7 +266,7 @@ V90Resampler::setBllState(V90BllState state, unsigned int countSamples)
 	case V90_BLL_TRN1_QC_SLOW:
 		/* See the file comment for +0x0f0 and +0x0f4. */
 		bllK1 = params->BLL_TRN1_QC_SLOW_K2;
-		bllK2 = asFloat(params->unnamed_0f4);
+		__builtin_memcpy(&bllK2, &params->unnamed_0f4, sizeof bllK2);
 		edprintf("V90Resampler: state = TRN1_QC_SLOW\r\n");
 		break;
 	}
