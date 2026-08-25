@@ -83308,3 +83308,86 @@ none removed.**  A count would not have shown that.
 **THE NUMBERS 7764-7768 WERE TAKEN WITH A GAP** -- master held 7707 and a
 sibling refinement branch held 7762 when this was written, and that agent is
 still writing.  Expect to renumber at merge.
+
+### 7769. `build/tc_out` had been stale for the whole measurement, and the padding guard written for 7768 never fired on 7768's own case
+
+Three defects in `byteident.py`, found in one sitting, all of the same family:
+a check that renders a clean number while measuring the wrong thing.
+
+**1. THE OBJECTS WERE STALE, AND NOTHING ANYWHERE WOULD HAVE SAID SO.**
+`build/tc_out` is written only by `tools/toolchain/build.sh`.  `make phase`
+does not build it and no Makefile rule depends on it, so the refinement merge
+changed `src/v8/v8v21.c`, `src/core/fixedrc.c` and `src/pump/v34/v34hshak.c`
+and left the period objects untouched:
+
+    newest source  05:15      newest object  04:19      200 objects
+
+Every grade measured between those two times described a tree that no longer
+existed, and none of them looked wrong.  It is what made 7763's attribution
+puzzle unsolvable: the remembered 419/1251 and the observed 415/1245 were
+both correct measurements OF DIFFERENT TREES, and the sibling agent
+"independently confirming" 415/1245 confirmed only that it had read the same
+stale directory.  Two agents agreeing is not a second measurement when both
+read one artefact.
+
+Rebuilt, the real figure is **422 of 1251**, and the 1245 denominator was
+itself the tell -- six symbols we now define that the stale set had not been
+compiled with.  `byteident.py` now REFUSES to print when the newest file under
+`src/` or `include/` is newer than the newest object, naming both files and
+the command to run.  Findings 2400 and 2401 are this shape and this is the
+third instance.
+
+**2. THE PADDING GUARD DID NOT MATCH ANY PADDING.**  7768 reported
+`_iir_filter_create` rejected on an alignment NOP, and I doubted it, having
+disassembled the function and found no `nop` in it.  The doubt was wrong and
+the report was exactly right.  The guard I wrote tested `mx.startswith("nop")`
+and could never have fired, because the padding is spelt
+
+    lea 0x0(%esi,%eiz,1),%esi        925 occurrences
+    lea 0x0(%esi),%esi               827
+    lea 0x0(%edi,%eiz,1),%edi        538
+    lea 0x0(%edi),%edi                82
+
+-- mnemonic `lea`, not `nop`.  Measured over the blob those four spellings and
+the bare `nop` are the whole family.  All are zero displacement, base equal to
+destination, index absent or `%eiz` (GAS printing an SIB whose index field
+says "none").  With the guard corrected, `_iir_filter_create` promotes to
+grade 1: its 58 rows are a clean `%ebx`/`%esi` swap and row 39's padding
+register was the only thing rejecting it.
+
+**The pattern has to be exactly that tight.**  A first survey matched any
+self-based `lea` and swept up `lea (%edx,%edx,2),%edx` -- 63 of them, real
+code computing `edx * 3`.  Skipping those would have thrown away an arithmetic
+operand as whitespace, turning a fix for a false REJECT into a false ACCEPT,
+which is the direction that actually costs something.
+
+**3. `REG32` MADE EVERY PARTIAL WRITE LOOK LIKE A FULL ONE.**  `REG32` folds
+`%al` and `%ax` onto `eax` so the two sides can be compared at all; the cost
+is that `sete %al`, `movb $0x1,%al` and `xor %ax,%ax` all read as
+redefinitions of the whole register, freeing the 16 or 24 bits they leave
+untouched -- still live, still carrying the old value -- to rebind.  A
+definition now ends a live range only if it writes a full 32-bit register
+(`_full_write`).  This tightens the tool; measured over the tree it demotes
+NOTHING, so no result ever rested on it.  It is a guard against a false accept
+that had not yet been exercised, not a correction to a number.
+
+**Fire and quiet, against rebuilt objects:**
+
+    GAINED grade 1:  1   (+195 B  _iir_filter_create)      LOST: 0
+
+Tree after all three:
+
+    grade 0  EXACT   422  (33.7%)   + 5 UNRESOLVED     grade 0 or 1  471 (37.6%)
+    RELOC 3     BYTES 124     SIZE 653
+
+**THE SELF-TEST CAUGHT TWO BAD TESTS OF MINE, BOTH THE SAME BAD TEST.**  Twice
+I wrote a must-reject case using registers bound to nothing else -- once for
+`xor %ebx,%eax`, once for `lea (%edx,%edx,2),%edx` -- and twice the answer was
+True because with the register free, ANY renaming is legal and True is
+correct.  Such a case looks like it tests the operand and tests nothing.  The
+rule, now in the file: a rejection case must bind the register in an earlier
+row so the row under test has something to contradict.  Both times the
+temptation on seeing red immediately after a fix was to widen the fix until
+the light went green, which would have installed exactly the false accept the
+case was meant to prevent.
+

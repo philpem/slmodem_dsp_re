@@ -108,8 +108,37 @@ REG32 = {"al": "eax", "ah": "eax", "ax": "eax", "eax": "eax",
          "bp": "ebp", "ebp": "ebp", "sp": "esp", "esp": "esp"}
 REGTOK = re.compile(r"%(\w+)")
 BARE_REG = re.compile(r"%\w+")
+#
+# A DEFINITION ENDS A LIVE RANGE ONLY IF IT WRITES THE WHOLE REGISTER.
+# `REG32` above folds `%al` and `%ax` onto `eax` so the two sides can be
+# compared at all, and that folding is what makes this necessary: without it
+# `sete %al`, `movb $0,%al` and `xor %ax,%ax` all read as redefinitions of the
+# full `%eax`, and the 16 or 24 bits they leave untouched -- still carrying the
+# old value, still live -- would be free to rebind.  That is a FALSE ACCEPT,
+# the direction a loosening tool must never fail in.
+#
+WIDE_REG = frozenset(("eax", "ebx", "ecx", "edx", "esi", "edi", "ebp", "esp"))
+
+
+def _full_write(tok):
+    """Is `%tok` a write of an entire 32-bit register?"""
+    m = REGTOK.fullmatch(tok.strip())
+    return bool(m) and m.group(1) in WIDE_REG
 DEFS = {"mov", "movl", "movw", "movb", "movzbl", "movzwl", "movsbl",
         "movswl", "movzbw", "movsbw", "lea", "pop", "movd", "movq"}
+
+
+PAD_LEA = re.compile(r"0x0\((%\w+)(?:,%eiz,1)?\),(%\w+)")
+
+
+def _padding(mn, ops):
+    """Is this row alignment padding rather than code?"""
+    if mn.startswith("nop"):
+        return True
+    if mn != "lea":
+        return False
+    m = PAD_LEA.fullmatch(ops.strip())
+    return bool(m) and m.group(1) == m.group(2)
 
 
 def _fields(ops):
@@ -250,6 +279,29 @@ def alpha_equal(x, y):
     for (mx, ox), (my, oy) in zip(x, y):
         if mx != my:
             return False
+        #
+        # ALIGNMENT PADDING IS NOT A READ, AND IT IS NOT SPELT `nop`.  The
+        # first version of this guard tested `mx.startswith("nop")` and never
+        # fired once, because the form that actually appears is
+        # `lea 0x0(%esi,%eiz,1),%esi` -- mnemonic `lea`.  Measured over the
+        # blob the family is exactly four spellings and no others --
+        # `lea 0x0(%esi,%eiz,1),%esi` 925, `lea 0x0(%esi),%esi` 827, and the
+        # two `%edi` twins 538 and 82 -- plus the bare `nop`.  All four are
+        # ZERO displacement, base equal to destination, and either no index or
+        # `%eiz`, which is GAS printing an SIB whose index field says "none".
+        #
+        # THE PATTERN HAS TO BE EXACTLY THAT TIGHT.  A first survey matched any
+        # self-based `lea` and swept up `lea (%edx,%edx,2),%edx` -- 63 of them,
+        # real code computing `edx * 3`.  Skipping those would have discarded
+        # an arithmetic operand as though it were whitespace.
+        #
+        # Binding those register fields rejected `_iir_filter_create`, whose
+        # 58 rows are otherwise a clean `%ebx`/`%esi` swap (finding 7768).
+        # BOTH sides must look like padding before the row is skipped -- a
+        # real `lea` opposite a padding `lea` is a genuine difference.
+        #
+        if _padding(mx, ox) and _padding(my, oy):
+            continue
         fx, fy = _fields(ox), _fields(oy)
         if len(fx) != len(fy):
             return False
@@ -266,8 +318,8 @@ def alpha_equal(x, y):
         #
         idiom = (mx in ("xor", "sub", "sbb") and len(fx) == 2
                  and fx[0].strip() == dx and fy[0].strip() == dy
-                 and bool(BARE_REG.fullmatch(dx)) and bool(BARE_REG.fullmatch(dy)))
-        isdef = bool(fx) and bool(BARE_REG.fullmatch(dx)) and bool(BARE_REG.fullmatch(dy)) and (
+                 and _full_write(dx) and _full_write(dy))
+        isdef = bool(fx) and _full_write(dx) and _full_write(dy) and (
             mx in DEFS or mx.startswith("set") or mx.startswith("cmov") or idiom)
         ux = ([] if idiom else fx[:-1]) if isdef else fx
         uy = ([] if idiom else fy[:-1]) if isdef else fy
@@ -373,6 +425,41 @@ SELF_TESTS = [
     ("xor of DIFFERENT registers reads its source, which must bind", False,
      ["mov (%esi),%ebx", "xor %ebx,%eax", "mov %eax,(%edi)"],
      ["mov (%esi),%ecx", "xor %edx,%eax", "mov %eax,(%edi)"]),
+    #
+    # PARTIAL WRITES DO NOT END A LIVE RANGE.  REG32 folds %al and %ax onto
+    # eax so the two sides can be compared; the cost is that an 8- or 16-bit
+    # write looks like a redefinition of all 32.  These three would each be a
+    # FALSE ACCEPT -- the dangerous direction for a loosening tool.
+    #
+    ("xor %ax,%ax leaves the top half of %eax live", False,
+     ["mov (%esi),%eax", "xor %ax,%ax", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "xor %bx,%bx", "mov %ebx,(%edi)"]),
+    ("sete %al does not redefine %eax", False,
+     ["mov (%esi),%eax", "sete %al", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "sete %bl", "mov %ebx,(%edi)"]),
+    ("movb into %al does not redefine %eax", False,
+     ["mov (%esi),%eax", "movb $0x1,%al", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "movb $0x1,%bl", "mov %ebx,(%edi)"]),
+    ("the padding `lea` is padding, not a use (7768)", True,
+     ["mov (%ebx),%eax", "lea 0x0(%esi,%eiz,1),%esi", "mov %ebx,(%eax)"],
+     ["mov (%esi),%eax", "lea 0x0(%edi,%eiz,1),%edi", "mov %esi,(%eax)"]),
+    #
+    # A MUST-REJECT CASE MUST BIND THE REGISTER FIRST.  Twice now the first
+    # draft of a rejection case used registers bound to nothing else, where
+    # any renaming is legal and True is the RIGHT answer -- the self-test
+    # caught both.  The trap is that such a case looks like it tests the
+    # operand and actually tests nothing.  Here row 0 pins the blob's `%edx`
+    # to our `%ecx`, so row 1's index operand has something to contradict.
+    #
+    ("a self-based lea with an index is arithmetic, not padding", False,
+     ["mov (%esi),%edx", "lea (%edx,%edx,2),%edx", "mov %edx,(%eax)"],
+     ["mov (%esi),%ecx", "lea (%eax,%eax,2),%edx", "mov %edx,(%eax)"]),
+    ("the 3-byte `lea 0x0(%R),%R` padding counts too", True,
+     ["mov (%ebx),%eax", "lea 0x0(%esi),%esi", "mov %ebx,(%eax)"],
+     ["mov (%esi),%eax", "lea 0x0(%edi),%edi", "mov %esi,(%eax)"]),
+    ("a REAL lea opposite a padding lea is still a difference", False,
+     ["mov (%ebx),%eax", "lea 0x0(%esi,%eiz,1),%esi", "mov %esi,(%eax)"],
+     ["mov (%ebx),%eax", "lea 0x4(%esi),%edi",        "mov %edi,(%eax)"]),
     ("indexed memory is one operand, not a definition of the scale", False,
      ["movswl 0x56(%ebp,%ebx,2),%eax"], ["movswl 0x56(%ebp,%ebx,4),%eax"]),
 ]
@@ -393,6 +480,42 @@ def self_test():
           % (len(SELF_TESTS), sum(1 for c in SELF_TESTS if c[1]),
              sum(1 for c in SELF_TESTS if not c[1]), bad))
     return 1 if bad else 0
+
+
+def _staleness():
+    """Newest source and newest period object, when the source is newer.
+
+    A SILENT STALE MEASUREMENT IS THE FAILURE MODE THIS TOOL IS MOST PRONE TO.
+    `build/tc_out` is written only by `tools/toolchain/build.sh`; the gate does
+    not build it and no Makefile rule depends on it, so any change to `src/`
+    leaves it behind while every count here keeps rendering as a clean,
+    plausible, WRONG number.  That happened: a merge's grades were read off
+    objects compiled before the merge, and the figures looked entirely normal.
+    Findings 2400 and 2401 are the same shape -- a detector reporting on
+    nothing and rendering as a pass.
+    """
+    newest_obj = newest_src = None
+    for o in glob.glob(os.path.join(OURS, "*.o")):
+        m = os.path.getmtime(o)
+        if newest_obj is None or m > newest_obj[0]:
+            newest_obj = (m, o)
+    if newest_obj is None:
+        return None, None
+    for root in ("src", "include"):
+        for dp, _, fns in os.walk(root):
+            for fn in fns:
+                if not fn.endswith((".c", ".cpp", ".h", ".hpp", ".inc")):
+                    continue
+                f = os.path.join(dp, fn)
+                m = os.path.getmtime(f)
+                if newest_src is None or m > newest_src[0]:
+                    newest_src = (m, f)
+    if newest_src is None or newest_src[0] <= newest_obj[0]:
+        return None, None
+    fmt = lambda p: "%s  (%s)" % (
+        p[1], __import__("time").strftime("%Y-%m-%d %H:%M:%S",
+                                         __import__("time").localtime(p[0])))
+    return fmt(newest_src), fmt(newest_obj)
 
 
 def main():
@@ -420,6 +543,19 @@ def main():
     if not ours:
         sys.exit("byteident.py: no objects in %s -- run "
                  "tools/toolchain/build.sh first." % OURS)
+    stale_src, stale_obj = _staleness()
+    if stale_src:
+        sys.exit(
+            "byteident.py: %s IS STALE and every number below would be a\n"
+            "  measurement of a tree that no longer exists.\n\n"
+            "    newest source : %s\n"
+            "    newest object : %s\n\n"
+            "  `make phase` does NOT build %s -- it is written only by\n"
+            "  tools/toolchain/build.sh, so a merge that changes src/ leaves\n"
+            "  these objects behind without touching anything the gate reads.\n"
+            "  This reported pre-merge grades as current once already.\n\n"
+            "  Run:  sh tools/toolchain/build.sh"
+            % (OURS, stale_src, stale_obj, OURS))
 
     common = sorted(k for k in ours if k in blob)
     if not common:
