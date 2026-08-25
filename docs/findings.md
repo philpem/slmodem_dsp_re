@@ -81477,10 +81477,14 @@ byte-identically.  The numbers above are from the clean tree.
 against master's 1 current of 192.  Nine were re-run because this batch either
 created them, changed their driver, or changed an anchor in them:
 `vpcmqcline`, `v90modemreset`, `v90dil`, `v90adid`, `v90modemctor`, `vpcmep3`,
-`vpcmguard`, `vpcmweak` and `v90rundemod`.  **Six of the nine came back
-identical to their stored verdict at `9ddfc5bc`, row by row** -- which is what
-says the three fixtures this batch extended and the one driver it rewrote took
-nothing away.
+`vpcmguard`, `vpcmweak` and `v90rundemod`.
+
+Of the nine, three had no prior verdict to compare against -- `vpcmqcline` and
+`v90modemreset` are new, and `v90dil` changed by design from 15 rows to 47.
+**The other six came back IDENTICAL to their stored verdict at `9ddfc5bc`, row
+by row**, which is what says the three fixtures this batch extended and the one
+driver it rewrote took nothing away.  Six of six, not six of nine: there is no
+seventh that regressed.
 
 #### Mutation suites
 
