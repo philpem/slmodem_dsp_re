@@ -111,6 +111,29 @@ What works:
 - **After adding to a shared file, re-run every suite over it and read the
   UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
   that does not fail (finding 347).
+- **RENUMBER FINDINGS ON THE BRANCH, BEFORE THE MERGE, WITH
+  `tools/renumber.py` -- never with a regex over the merged tree.** A finding
+  number and a filter coefficient are the same four digits: a sweep of
+  `\b782[0-5]\b` over `src/**/*.c*` rewrote two elliptic coefficients in a
+  file the branch had never touched, and `refcheck.py` passed, because a
+  reference that still RESOLVES is what it cannot see (findings 7833, 212/213).
+
+  The tool takes the branch's own changed files from git, rewrites only
+  CITATIONS -- in a `.c` a number counts only where `finding` precedes it --
+  prints every hit, and dry-runs by default.
+
+  **The ordering is the other half and it is not optional.** After a merge,
+  `docs/findings.md` holds the branch's `### 7823.` and master's side by side
+  and no rule can attribute a citation to one of them; that is how two of
+  master's citations were repointed even once the scope was fixed. On the
+  branch the question has an answer, because master's numbers are not there
+  yet. The tool refuses a post-merge run for exactly this reason.
+
+  Better still, **hand each parallel agent a far-ahead block** (7840+, 7860+)
+  so the common case needs no renumbering at all. That is mitigation and not a
+  fix -- master moves, and a pre-assigned range can still collide -- so the
+  tool stays the answer when it does.
+
 - **A HARNESS THAT BUILDS VARIANTS MUST NOT BE ABLE TO REACH THE REAL TREE, and
   `cp -al` can.** An enumeration harness built its variant directories with
   `cp -al` and the container's `cp` then wrote THROUGH the hardlinks into the

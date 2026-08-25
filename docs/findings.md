@@ -88144,3 +88144,20 @@ entry is the one thing the checker cannot see.
 Caught here by reading the diff rather than by any check, which is the third
 time today a green gate sat on top of something wrong: 7799's dead detectors,
 7822's harness writing through a hardlink, and this.
+
+**FIXED IN `tools/renumber.py`, NOT ONLY WRITTEN DOWN.** It takes the branch's
+changed files from git rather than a glob; it rewrites only CITATIONS, and in
+a code file a number counts only where the word `finding` precedes it, so
+`8192, -14430, 7822,` cannot match; it prints every hit with both spellings;
+and it dry-runs by default. `--self-test` carries seven cases and **three of
+them are refusals** -- the two real coefficient lines and a bare
+`if (x == 7820)` -- because a tool that only demonstrates rewriting has not
+been shown to protect anything.
+
+**AND THE ORDERING TURNED OUT TO BE HALF THE FIX.** Replaying this merge with
+the scope corrected still repointed master's citations, because after a merge
+`docs/findings.md` holds the branch's `### 7823.` and master's `### 7823.` in
+one file and nothing in the text says which is which. On the branch the
+question has an answer. The tool therefore REFUSES when the tree already holds
+a heading for a number the mapping wants to create, which is the signature of
+a post-merge run, and says to renumber on the branch and then merge.
