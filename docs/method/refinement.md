@@ -44,6 +44,14 @@ finding and never generalised**, and were swept up afterwards (7813). Their
 measurements are as real as the rest and their yield in a refinement pass is
 unknown, which is the one thing to hold in mind when a brief quotes them.
 
+**13 has the same caveat as 10 to 12, and it is stated here rather than
+discovered later.** It closed 74 instructions in ONE function (F7940) and has
+never been swept across the tree, so its yield in a refinement pass is
+unknown -- exactly the thing the paragraph above says to hold in mind. The
+MECHANISM is measured and the four-compile ladder is real; the GENERALITY is
+not established. It is also what corrected lever 6's recorded negative, so
+read the two together.
+
 ### F0. What an enumeration proves depends on how many cells hit zero
 
 Running the domain to completion is necessary; it is not the whole story. Say
@@ -656,10 +664,18 @@ Two negatives already recorded, so nobody repeats them:
 
 - **`-funroll-loops` is not a missing period flag.** Whole tree rebuilt with
   it: 0 gained, 39 lost, grade 0 433 -> 394 (7783).
-- **`packData`'s difference is not loop shape.** All 16 combinations of which
+- **`packData`'s difference is not loop shape** -- all 16 combinations of which
   of its four loops are written out were compiled; the maximum is 516 against
-  the object's 534, so the domain is exhausted with no match (7785). That is
-  lever 1's constant-map branch appearing for real.
+  the object's 534 (7785). **AND THAT EXHAUSTED DOMAIN WAS DRAWN AROUND THE
+  WRONG FUNCTION.** The CRC lived in a static helper, and the helper's own two
+  loops were never among the sixteen. Writing ONE of them out -- the
+  fifteen-element shift -- took it from 75 instructions to 141 of the object's
+  149, and lever 13 took it the rest of the way (F7940). So the reading "the
+  domain is exhausted, this is lever 1's constant map" was wrong, and the
+  lesson is the one lever 1 already states: **enumerate over the whole callee
+  set, not over the function that carries the symbol.** A `static` helper that
+  gets inlined has no symbol of its own and is invisible to a per-function
+  enumeration.
 
 **AND CHECK THE CONVERSE BEFORE YOU WRITE THE EXPANDED SHAPE AT ALL: the
 duplication may be the compiler's.** Thirteen hand-written convolutions were
@@ -1085,6 +1101,50 @@ it. A scratch-consuming `peephole2` (lever 3b) makes allocation steerable, and
 a spill slot narrower than the value it holds makes a spill forced.
 
 ---
+
+### F13. What the compiler can hoist out of memory depends on the SYNTACTIC FORM of the reference, not on the alias set
+
+`V90Jd::packData` keeps `int crc[16]` -- a member -- out of memory for the
+whole of its group loop: sixteen loads into stack slots before it, both groups
+run on the slots, sixteen stores after, not one store to `0x4c(%edi)` between.
+That is 74 of its 149 instructions and the whole of its `sub $0x48,%esp` frame.
+Reproducing it needs two things in the source, and the second is the one nobody
+expects.
+
+**1. Every subscript must be a constant.** Rolled as `for (i = 0; i <= 14;
+i++) crc[i] = crc[i + 1];` no element has a loop-invariant address and nothing
+can be promoted at all. Written out, they all do. This is lever 6.
+
+**2. Both sides must be MEMBER SUBSCRIPTS of the same object, not pointers.**
+Through a helper's `int *crc` and `const unsigned char *in` -- the obvious
+factoring -- the two arrive as indirect references that GCC 3.4.2 cannot tell
+apart, so the stores have to stay in the loop in case the byte read aliases
+them, and the promotion collapses to a per-group reload. Written `crc[i]` and
+`bits[...]`, they are component references to different fields of one record,
+GCC proves they cannot overlap, and the stores sink. The four-compile ladder,
+instruction count against the object's 149:
+
+    75   helper with pointers, shift rolled
+    141  shift written out, helper unchanged
+    137  helper given the object but still doing `int *crc = jd->crc;`
+    149  shift written out AND both sides member subscripts
+
+**IT IS NOT AN ALIASING PROBLEM IN THE C SENSE, and that is worth knowing
+because the C answer is the intuitive one and it is wrong here.** Casting the
+input read to `const int *` and then to `const float *` -- the latter genuinely
+cannot alias `int` under `-fstrict-aliasing` -- moved nothing while the
+pointers stayed pointers. An alias-set argument is not a substitute for the
+syntactic form. Finding F7940.
+
+**AND DO NOT HAND-WRITE THE INDUCTION VARIABLE THE OBJECT SHOWS.** The same
+loop's object code is `movzbl (%ebx),%eax; inc %ebx` with a `dec %esi; jns`
+countdown, which reads like a source-level pointer walk. It is not: spelling it
+`*in++` costs condition 2 on the input side and lands at 136 instructions,
+thirteen short. The walking pointer and the countdown are what strength
+reduction MAKES of the subscript, so writing them by hand removes the
+information the compiler needed and then hands back what it would have derived.
+Finding F7941, and it is lever 9's rule -- act on what the compiler was forced
+to encode -- applied to an induction variable.
 
 ## What does not work
 

@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90Jd.cpp is the constructor, the destructor and the two packing leaves.  The constructor is where this set is aimed: it is fourteen stores and two loops, and the whole of what it can get wrong is WHICH bit of the parameter reaches WHICH byte of the message.  So most of the mutations below transpose a pair or move a loop bound by one -- the failures a comparison of the two objects can see and a reading of the disassembly can miss.  Two entries cover the CRC in getBitVector so the file's older half is not left unmeasured now that it has a suite. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error.  ANCHOR REPAIR, and it is a UNIQUENESS repair rather than a re-pointing one (findings F7521, F7580): `packData` landed in this file with getBitVector's body written out a second time, so `group 0 is one bit short`'s two-line anchor came to match twice and read UNUSABLE.  It was deepened by getBitVector's OWN preceding comment -- not by a tab, which is how 432's seven anchors were silently re-pointed -- and that comment appears once in the file, so the row still mutates getBitVector's group-0 loop and nothing else.  The label was not touched and the suite was RE-RUN, not re-recorded.  packData's own copy is measured by the `v90packdata` suite against `t_v90packdata`."
+  "note": "V90Jd.cpp is the constructor, the destructor and the two packing leaves.  The constructor is where this set is aimed: it is fourteen stores and two loops, and the whole of what it can get wrong is WHICH bit of the parameter reaches WHICH byte of the message.  So most of the mutations below transpose a pair or move a loop bound by one -- the failures a comparison of the two objects can see and a reading of the disassembly can miss.  Two entries cover the CRC in getBitVector so the file's older half is not left unmeasured now that it has a suite. A destructor-store mutation in this file WAS recorded `equivalent` on the grounds that GCC deletes a store to `*this` in a destructor. That was measured and true; `-fno-lifetime-dse` in CXXFLAGS then restored GCC 3.4.2's semantics and the store survives, so the mutation is caught and the verdict is retired. If that flag is ever dropped, this entry goes back to being uncatchable -- and the symptom will be a NOT CAUGHT, not a compile error.  TWO ROWS WERE RETIRED FROM HERE AND THE REASON IS THE SOURCE, NOT THE SUITE (finding F7944).  This file used to carry getBitVector's body written out a second time, and two rows here -- `group 0 is one bit short` and `the CRC's two feedback taps are transposed` -- mutated that second copy so the file's older half was not left unmeasured.  getBitVector is now `{ packData(); return bits; }`, which is what the object has and what compiling it proved GCC 3.4.2 takes, so that copy is gone and neither row has anything of its own to change.  `group 0 is one bit short` was DELETED rather than moved: `v90packdata` already carries it verbatim against packData's loop, and duplicating a claim across two binaries scores it twice.  The tap pair was MOVED to `v90packdata` instead of deleted, because that suite deliberately had no tap row of its own while this one owned the claim.  Nothing is now unmeasured.  The earlier repair this paragraph replaced was a UNIQUENESS one (findings F7521, F7580, and 432 for why a tab is the wrong repair); the division of labour it recorded still stands -- this suite answers for the rest of the class through t_v90jd, `v90packdata` answers for packData through t_v90packdata."
  },
  {
   "label": "the two lookahead bits are transposed",
@@ -46,16 +46,6 @@
   "label": "the unpacker's second byte is left as it was",
   "find": "\tunpack[0] = 0;\n\tunpack[1] = 0;\n\tunpackWord = 0;",
   "replace": "\tunpack[0] = 0;\n\tunpackWord = 0;"
- },
- {
-  "label": "group 0 is one bit short",
-  "find": "\t/* Group 0 is seventeen 1 bits; the later three each open with a 0. */\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
-  "replace": "\t/* Group 0 is seventeen 1 bits; the later three each open with a 0. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
- },
- {
-  "label": "the CRC's two feedback taps are transposed",
-  "find": "\n\t\tcrc[3] = tap3;\n\t\tcrc[10] = tap10;",
-  "replace": "\n\t\tcrc[3] = tap10;\n\t\tcrc[10] = tap3;"
  },
  {
   "label": "the destructor is not empty",
@@ -169,8 +159,8 @@
  },
  {
   "label": "the unpacker's CRC taps are transposed",
-  "find": "\t\t\tcrc[3] = tap3;\n\t\t\tcrc[10] = tap10;",
-  "replace": "\t\t\tcrc[3] = tap10;\n\t\t\tcrc[10] = tap3;"
+  "find": "\t\t\tcrc[3] = tap3;\n\t\t\tcrc[10] = tap10;\n\t\t\tcrc[15] = t & 1;\n\t\t}\n\n\t\tsum = 0;",
+  "replace": "\t\t\tcrc[3] = tap10;\n\t\t\tcrc[10] = tap3;\n\t\t\tcrc[15] = t & 1;\n\t\t}\n\n\t\tsum = 0;"
  },
  {
   "label": "the received CRC is compared as a low bit, not a magnitude",

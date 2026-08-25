@@ -89536,3 +89536,194 @@ unique preimage. Here the enumeration -- 96 cells, 54 distinct emissions --
 has NO preimage, which is rule 0's third case: the difference is not what it
 was thought to be. Nothing was decoded. An edit landed on a positional match
 and a control, and the honest label for that is a judgement.
+### F7940. `V90Jd::packData`'s missing 74 instructions: the CRC register is not in memory, and TWO source conditions are needed to get it out
+
+`packData` (534 bytes, 149 instructions) and `getBitVector` (537, 150) were
+graded SIZE against a reconstruction of 218 bytes / 75 instructions and
+223 / 77 -- barely two fifths. Three explanations were already dead:
+`-funroll-loops` (F7783, 0 gained and 39 lost), loop shape (F7785, all sixteen
+spellings of `packData`'s four loops compiled, maximum 516), and Duff's Device
+(F7785, no indirect jump). **The residual was not in `packData`'s four loops at
+all. F7785's sixteen-element domain was drawn around the wrong function** --
+the CRC lived in a static helper, `v90jd_crc_bits`, and the helper's own two
+loops were never in it. That is the load-bearing correction and it is why an
+exhausted domain still had an answer in it.
+
+**WHAT THE OBJECT DOES.** Between the CRC reset at 0x1e9a0 and the write-back
+loop at 0x1eb60, `this->crc[0..15]` is NOT IN MEMORY. GCC 3.4.2 loads all
+sixteen into stack slots before the group loop (0x1e9af..0x1ea2d, 16 loads and
+16 stores plus `mov %edi,0x8(%esp)`), runs BOTH groups entirely on the slots,
+and writes all sixteen back after it (0x1eaec..0x1eb5a, 30 instructions).
+There is not one store to `0x4c(%edi)` between. The slot map is
+c0->0x30, c1->0x24, c2->0x18, c3->0xc, c4->0x00, c5->0x34, c6->0x28, c7->0x1c,
+c8->0x10, c9->0x40, c10->0x38, c11->0x2c, c12->0x20, c13->0x14, c14->0x44,
+c15->0x3c, and the fifteen-element shift is spelled as slot-to-slot copies.
+That promotion is 62 of the 74 missing instructions, and it is why the frame is
+`sub $0x48,%esp` -- sixteen ints plus the two loop variables -- against the
+`sub $0xc,%esp` the reconstruction had.
+
+**IT NEEDS BOTH CONDITIONS, AND EACH WAS MEASURED BY REMOVING IT.** Four
+compiles, `packData` instruction count against the blob's 149:
+
+    75   master: helper `v90jd_crc_bits(int *crc, const unsigned char *in)`,
+         shift ROLLED as `for (i = 0; i <= 14; i++) crc[i] = crc[i + 1];`
+    141  shift WRITTEN OUT, helper unchanged
+    137  helper given `V90Jd *` but still doing `int *crc = jd->crc;`
+    149  shift written out AND both sides member subscripts of `this`
+
+Condition 1 is the shift. Rolled, every element sits at a VARIABLE address, no
+address is loop-invariant, and nothing can be promoted at all. Condition 2 is
+that the CRC and the input must reach the loop as COMPONENT REFERENCES --
+`crc[i]` and `bits[...]`, two different fields of one record -- and not as
+pointers. Through a helper's `int *crc` and `const unsigned char *in` they are
+two INDIRECT_REFs that GCC 3.4.2 cannot tell apart, so the sixteen stores have
+to stay inside the loop in case the byte read aliases them, and the promotion
+collapses to a per-group reload: the loads hoist but the stores never sink.
+
+**IT IS NOT A C ALIASING PROBLEM, and that was tested twice rather than
+argued.** Casting the input read to `const int *` moved nothing; casting it to
+`const float *`, which genuinely cannot alias `int` under `-fstrict-aliasing`,
+moved nothing either (it cost 24 instructions to the conversion and left the
+promotion exactly where it was, inside the group loop). What GCC 3.4.2 needs is
+the component reference, not a compatible alias set. **A negative worth having
+on its own: an alias-set argument is not a substitute for the syntactic form.**
+
+The helper is therefore GONE and the CRC is written out inline in both bodies.
+That is not a factoring preference; the factoring is what cost the 74
+instructions. Rolled forms are kept in comments above each unrolled site,
+`refinement.md` lever 6.
+
+### F7941. The input is SUBSCRIPTED, not walked: `*in++` costs the same disambiguation and buys nothing
+
+The object's inner loop is `movzbl (%ebx),%eax; inc %ebx` over a walking
+pointer with a countdown, `mov $0xf,%esi` and `dec %esi; jns` -- so the obvious
+reading is that the author wrote a pointer. **He did not, and writing one is a
+measured loss.** With `const unsigned char *in` and `*in++`:
+
+    136 instructions, `sub $0x48,%esp`, and the promotion still inside the
+    group loop -- 13 short of 149, all thirteen being the missing write-back
+    block, with 16 in-loop stores standing in its place
+
+With `bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP + k]`:
+
+    149 instructions, `sub $0x48,%esp`, promotion outside the group loop,
+    and the mnemonic census IDENTICAL to the blob's, mnemonic for mnemonic
+
+The pointer is a local, so its deref is an INDIRECT_REF and condition 2 of
+F7940 fails on the input side even when the CRC side is right. The walking
+pointer and the countdown in the object are produced BY strength reduction FROM
+the subscript -- `dec %esi; jns` only appears once `k` has no remaining use as
+an index -- so writing them by hand removes the information GCC needed and then
+hands back what GCC would have derived anyway. Both halves are visible in one
+compile: the `dec`/`decl` census flips with it, because the in-loop stores keep
+`this` live and spill the counter.
+
+### F7942. Both bodies now grade BYTES, and the residual is the promotion's SLOT ASSIGNMENT
+
+    packData      SIZE 316 of 534 differing  ->  BYTES 230 of 534
+    getBitVector  SIZE 314 of 537 differing  ->  BYTES 248 of 537
+
+Same size, same instruction count, identical mnemonic census; `byteident
+--why` rejects both at row 26 on `mov 0x50(%edi),%ebx | mov 0x5c(%edi),%eax`,
+which is the ORDER of the sixteen promotion loads and which crc element lands
+in which stack slot. That is the register allocator's choice and CLAUDE.md's
+free column. The sequence diff is four `add`/`and`/`dec` positions inside the
+loop body and nothing else.
+
+**THE ONE-INSTRUCTION OFFSET SURVIVES.** 149 against 150, the extra being
+`getBitVector`'s `lea 0x2(%edi),%eax`, exactly as F7702 records -- so the two
+bodies moved together, which is the check that they are one body written twice.
+
+**PRICE PAID, AND IT IS IN THE SAME FILE.** `V90Jd::unPackReset` fell out of
+grade 0: `xor %ecx,%ecx` in the blob against our `xor %edx,%edx`, 2 bytes of
+20, grade 1 ACCEPT. Nothing in that six-instruction function was touched and
+its register choice is not reachable from its own source -- re-adding an unused
+static function to the translation unit does not restore it, so it is not the
+helper's removal but the changed bodies, cross-function allocation noise. Tree
+totals: grade 0 535 -> 534, grade 1 34 -> 35, **grade 0-or-1 574 both sides**,
+SIZE 609 -> 607, BYTES 65 -> 67. The EXACT-set diff is that one symbol in and
+nothing else out, and F7880's blind spot is covered by hand: `unPackData`, the
+third SIZE body in the file, is unmoved at 354 of 879 differing bytes and
+159 instructions against 238 either side of the edit.
+
+### F7943. The call spelling is still gated, and the gate is now much closer
+
+**OVERTURNED BY F7944 IN THE SAME SESSION, and left standing as the reasoning
+rather than the answer.** What follows raised the brief's gate from SIZE to
+byte-identity on its own authority and declined a one-compile test on the
+strength of a confound that does not exist. The compile was run; read F7944.
+
+F7702 asked for `getBitVector() { packData(); return bits; }` -- the cleaner
+source, and probably the original's -- and the project owner wants it tried,
+but only once the sizes match, because the bet on GCC inlining a 534-byte
+callee cannot be evaluated against a body of half the right length. **It is not
+reachable yet.** Both bodies are the right SIZE now, which was the stated
+precondition, but neither is byte-identical, and the residual in F7942 is a
+slot-assignment permutation that the inline-versus-call question would sit on
+top of rather than settle. Writing the call now would confound two changes in
+one compile: whether GCC takes the inline, and whether the permutation moved.
+The near control is unchanged -- `V92Jd::packJdData` is NOT inlined into its
+own `getJdBitVector` and carries 1 relocation -- so the compiler does not always
+take it, and the test is still worth one compile once F7942's row 26 is closed
+or ruled free.
+
+### F7944. `getBitVector() { packData(); return bits; }` COMPILES TO THE OBJECT, and F7702's bet is settled
+
+F7702 read `packData` and `getBitVector` -- 534 and 537 bytes, 149 and 150
+instructions, differing by `lea 0x2(%edi),%eax` and nothing else -- as one body
+written once and inlined, and declined to write the call: if GCC 3.4.2 refused
+a 534-byte callee we would emit a relocation the object has none for. **It does
+not refuse.** With the two bodies the right size at last (F7940, F7941), the
+test cost one compile:
+
+    getBitVector   150 instructions, `sub $0x48,%esp`, and NO `call` in them
+
+and the relocation ledger comes out the object's way on both counts. In the
+blob, `nm`/`objdump -r` over the whole 1.2 MB give **0 relocations naming
+`_ZN5V90Jd8packDataEv`** and **1 naming `_ZN5V90Jd12getBitVectorEv`** -- which
+is exactly what a sole caller that was inlined away leaves behind. Our object
+has no relocation naming either symbol from inside `V90Jd.cpp`, `getBitVector`
+being referenced from another translation unit as it is in the blob.
+
+**THE NEAR CONTROL IS REAL AND STILL HOLDS.** `V92Jd::packJdData` is NOT
+inlined into its own `getJdBitVector` and carries its 1 relocation, so GCC 3.4.2
+does not always take this and the V.90 case had to be compiled rather than
+argued from the V.92 one.
+
+    getBitVector   BYTES 248 of 537 differing  ->  BYTES 247 of 537
+
+-- so the source lost thirty-three lines of duplicated body and the object got
+one byte closer. Tree totals are unmoved: grade 0 534, grade 1 35, grade 0-or-1
+574, BYTES 67, SIZE 607, and `unPackData` still 354 of 879 at 159 instructions
+against 238, checked either side because `--list-exact` cannot see a SIZE
+symbol move (F7880).
+
+**IT COST TWO MUTATION ROWS AND NEITHER CLAIM WAS LOST.** `v90jd` carried two
+rows against getBitVector's own copy of the body, which no longer exists.
+`group 0 is one bit short` was DELETED: `v90packdata` already carries it
+verbatim against packData's loop, and a claim scored in two binaries is scored
+twice. `the CRC's two feedback taps are transposed` was MOVED to `v90packdata`,
+which deliberately had no tap row precisely because `v90jd` owned that claim --
+it is caught there. `v90jd` 39 -> 37 rows, all caught; `v90packdata` 23 -> 24,
+22 caught and the same 2 equivalent. Both notes say why.
+
+**AND THE CLAIM THAT MADE THE DELETION SAFE WAS CHECKED, NOT ASSUMED.**
+Retiring `group 0 is one bit short` from `v90jd` rests on `t_v90jd` still
+reaching packData's body THROUGH the call -- and `make phase` cannot show
+that, because it only proves the unmutated source is right, which it is either
+way. `mutate.py --suite v90packdata` scores against `t_v90packdata`, not
+`t_v90jd`, so nothing that was run tested it. Transposing the taps in packData
+by hand and running `t_v90jd` directly:
+
+    FAIL V90Jd::getBitVector      24/74 checks failed
+    FAIL V90Jd::unPackData        50/36469 checks failed
+
+-- so it does reach it, through `getBitVector` and again through the unpacker's
+round trip against the packer. Nothing thinned when the two rows went.
+
+**`make one` CANNOT BE USED FOR THIS CHECK**, and the way it fails is
+misleading. A hand-edit that mutates a site destroys that site's own anchor, so
+the `refs` prerequisite reports `NOT UNIQUE ... matches 0 time(s)` and `make
+one` exits 2 having never built the test. That is a red from the wrong place
+and reads exactly like a passing suite if you only check the exit code. Build
+the binary as its own target and run it.
