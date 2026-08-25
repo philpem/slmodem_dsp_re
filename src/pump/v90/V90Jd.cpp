@@ -213,6 +213,103 @@ v90jd_crc_bits(int *crc, const unsigned char *in)
 	}
 }
 
+/*
+ * ===========================================================================
+ * packData, 0x1e960, 534 bytes -- AND NOTHING IN THE OBJECT CALLS IT.
+ *
+ * `nm -S` gives `0001e960 00000216 T _ZN5V90Jd8packDataEv`, and no relocation
+ * of any kind names that symbol anywhere in the 1.2 MB object.  It is not a
+ * stub either: it is the whole packer, and it is reproduced here because the
+ * vendor shipped it, not because anything reaches it.
+ *
+ * IT CALLS NOTHING, so this batch is link-closed.  There is no `call` in the
+ * 534 bytes and no relocation inside them.  In particular `resetCrc` --
+ * declared in the header and still deliberately undefined -- is INLINED: the
+ * loop at 0x1e9a0 is byte for byte the body of `_ZN5V90Jd8resetCrcEv` at
+ * 0x1e940, with `%edi` where the standalone copy uses `%edx`.  So the loop is
+ * written out below rather than turned into a call, which is what the object
+ * has and is also the only thing that links.
+ *
+ * EVERY COUNTER IS SIGNED, checked the way the constructor's two were.  `jle`
+ * at 0x1e979 (group 0), 0x1e9ad (the CRC reset), 0x1eae6 (the group loop) and
+ * 0x1eb6c (the CRC write-back); the innermost loop is strength-reduced to a
+ * countdown, `mov $0xf,%esi` at 0x1ea35 and `dec %esi; jns` at 0x1eabd, and
+ * `jns` is a signed test as well.  Five loops, five signed branches, so five
+ * `int` induction variables.  There is no `jbe` in the function.
+ *
+ * BOTH GROUPS ARE SIXTEEN BITS HERE, AND THAT IS NOT THE 16/12 SPLIT.  The
+ * inner bound `mov $0xf,%esi` sits at 0x1ea35, INSIDE the outer loop whose
+ * back edge is `cmpl $0x1,0x4(%esp); jle 1ea31`, so both passes run sixteen
+ * times.  16/12 is the CONSTRUCTOR's split of the 28-bit RATE MASK; group 2's
+ * PAYLOAD is sixteen bits because it is those twelve rate bits plus the two
+ * constellation-size bits at bits[47..48] and the two lookahead bits at
+ * bits[49..50].  The CRC therefore covers all thirty-two payload bits, and a
+ * reconstruction that carried the constructor's 12 across would checksum
+ * twenty-eight.
+ *
+ * THE FEEDBACK IS `add` FOLLOWED BY `and $0x1`, never `xor`: 0x1ea50, 0x1ea74,
+ * 0x1eaa9 and the three masks at 0x1ea7e, 0x1eaaf, 0x1eab2.  The bit is loaded
+ * `movzbl` and goes in unmasked, so only its low bit can reach the answer --
+ * the same shape `v90jd_crc_bits` already carries for `getBitVector`.
+ *
+ * THE INPUT POINTER is `0x8(%esp)`, which starts at `this` and takes
+ * `addl $0x11` once per group while `%ebx` is set to it plus `0x14`; `this`
+ * plus 0x14 is `&bits[18]` and plus 0x25 is `&bits[35]`, which is the two
+ * groups' payloads with each leading 0 skipped.
+ *
+ * WHAT IT DOES NOT TOUCH is as measured as what it does.  The last store in
+ * the function is `mov %eax,0x88(%edi)`, which is crc[15]; +0x00, +0x01 and
+ * +0x8c are never written, so packData leaves the UNPACKER's three state
+ * fields exactly as it found them.  t_v90packdata seeds all three non-zero for
+ * that reason, and seeds the CRC register non-zero so that the reset at
+ * 0x1e9a0 is distinguishable from its absence.
+ *
+ * THE BODY IS `getBitVector`'s, INSTRUCTION FOR INSTRUCTION.  149 instructions
+ * and 515 bytes here against 150 and 518 at 0x1ef10; the one extra instruction
+ * is `lea 0x2(%edi),%eax`, the `return bits`, and every other difference is a
+ * branch label at the same function-relative offset (+0x10, +0x40, +0xe0,
+ * +0x200) or an %edx/%ebx swap the allocator was free to make.  The economical
+ * reading is that the original wrote `getBitVector() { packData(); return
+ * bits; }` -- which is exactly the shape V92Jd.cpp already has for
+ * `getJdBitVector`/`packJdData`, whose 665-byte callee was NOT inlined -- and
+ * that GCC inlined this 534-byte one, which would also explain why no
+ * relocation names packData: its only caller was inlined away.  THAT IS
+ * RECORDED AND NOT ACTED ON.  Writing the call would put a relocation on a
+ * symbol the object has none for, and this batch owns packData alone, so the
+ * body appears twice in this file exactly as it appears twice in the object.
+ * ===========================================================================
+ */
+void
+V90Jd::packData()
+{
+	int i, g;
+
+	/* Group 0, seventeen 1 bits, and the object writes them first. */
+	for (i = 0; i <= 16; i++)
+		bits[i] = 1;
+
+	/* Each later group opens with a 0, and four 0 bits close the message. */
+	bits[V90JD_GROUP1] = 0;
+	bits[V90JD_GROUP2] = 0;
+	bits[V90JD_GROUP3] = 0;
+	bits[68] = 0;
+	bits[69] = 0;
+	bits[70] = 0;
+	bits[71] = 0;
+
+	/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */
+	for (i = 0; i <= 15; i++)
+		crc[i] = 1;
+
+	/* Sixteen payload bits from each group, the leading 0 of each skipped. */
+	for (g = 0; g <= 1; g++)
+		v90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);
+
+	/* Group 3 carries the CRC, low bit first. */
+	for (i = 0; i <= 15; i++)
+		bits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];
+}
+
 unsigned char *
 V90Jd::getBitVector()
 {

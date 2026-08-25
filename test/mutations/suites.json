@@ -524,6 +524,10 @@
   "src/pump/v90/V90Phase4Modulator.cpp",
   "build/test/t_v90p4mtab"
  ],
+ "v90packdata": [
+  "src/pump/v90/V90Jd.cpp",
+  "build/test/t_v90packdata"
+ ],
  "v90params": [
   "src/pump/v90/V90Parameters.cpp",
   "build/test/t_v90params"

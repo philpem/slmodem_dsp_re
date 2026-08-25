@@ -1,0 +1,124 @@
+[
+ {
+  "note": "V90Jd::packData, 0x1e960, 534 bytes.  EVERY ANCHOR HERE CARRIES packData's OWN COMMENT LINE, and that is load-bearing rather than decorative: packData's body is `getBitVector`'s body, statement for statement, because the object has the same body twice (149 instructions here against getBitVector's 150, the extra one being `lea 0x2(%edi),%eax`).  A bare statement anchor would therefore match twice and read UNUSABLE, which is exactly what happened to the `v90jd` suite's `group 0 is one bit short` when packData landed -- that row was repaired the same way, by deepening it with getBitVector's own comment rather than by a tab (findings 7521, 7580, and 432 for why a tab is the wrong repair).  The two suites are deliberately separate binaries: `v90jd` answers for the rest of the class through t_v90jd, this one answers for packData through t_v90packdata.  WHAT IS NOT MUTATED HERE is the shared helper `v90jd_crc_bits` -- its taps already have a row in `v90jd`, and a row here would be scored twice for one claim.  The 16/16 group question the helper cannot express is settled DIRECTLY instead: t_v90packdata's `run_reach` flips each of the thirty-two payload positions and requires the BLOB's CRC to move, so bits[47..50] carrying the constellation size and the lookahead are proved to reach the checksum, which is what separates this function's 16/16 from the constructor's 16/12 rate-mask split."
+ },
+ {
+  "label": "group 0 is one bit short",
+  "find": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "group 0 is seventeen 0 bits",
+  "find": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 0;"
+ },
+ {
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and it is an argument about the ORDER of two statements rather than about the suite.  Writing bits[17] = 1 here cannot be observed because the very next statement in packData is `bits[V90JD_GROUP1] = 0;`, and V90JD_GROUP1 is 17: the group-0 loop runs first and the marker store overwrites it unconditionally before anything reads it.  The object has the same order -- `movb $0x1,0x2(%edi,%eax,1)` up to eax = 16 at 0x1e970, then `movb $0x0,0x13(%edi)` at 0x1e97b, where +0x13 is bits[17] -- so the two spellings differ in one store that is dead in both.  The row is kept because the ORDER is the thing that makes it dead: reverse the two statements and this mutation becomes catchable, so a future reader can see the dependency was measured rather than assumed.",
+  "label": "group 0 runs one bit long, into group 1's marker",
+  "find": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 16; i++)\n\t\tbits[i] = 1;",
+  "replace": "\t/* Group 0, seventeen 1 bits, and the object writes them first. */\n\tfor (i = 0; i <= 17; i++)\n\t\tbits[i] = 1;"
+ },
+ {
+  "label": "group 1's leading 0 is left as it was",
+  "find": "\t/* Each later group opens with a 0, and four 0 bits close the message. */\n\tbits[V90JD_GROUP1] = 0;\n\tbits[V90JD_GROUP2] = 0;",
+  "replace": "\t/* Each later group opens with a 0, and four 0 bits close the message. */\n\tbits[V90JD_GROUP2] = 0;"
+ },
+ {
+  "label": "group 2's leading 0 is left as it was",
+  "find": "\t/* Each later group opens with a 0, and four 0 bits close the message. */\n\tbits[V90JD_GROUP1] = 0;\n\tbits[V90JD_GROUP2] = 0;\n\tbits[V90JD_GROUP3] = 0;",
+  "replace": "\t/* Each later group opens with a 0, and four 0 bits close the message. */\n\tbits[V90JD_GROUP1] = 0;\n\tbits[V90JD_GROUP3] = 0;"
+ },
+ {
+  "label": "group 3's leading 0 is left as it was",
+  "find": "\t/* Each later group opens with a 0, and four 0 bits close the message. */\n\tbits[V90JD_GROUP1] = 0;\n\tbits[V90JD_GROUP2] = 0;\n\tbits[V90JD_GROUP3] = 0;\n\tbits[68] = 0;",
+  "replace": "\t/* Each later group opens with a 0, and four 0 bits close the message. */\n\tbits[V90JD_GROUP1] = 0;\n\tbits[V90JD_GROUP2] = 0;\n\tbits[68] = 0;"
+ },
+ {
+  "label": "only three of the four trailing bits are cleared",
+  "find": "\tbits[69] = 0;\n\tbits[70] = 0;\n\tbits[71] = 0;\n\n\t/* resetCrc() inlined",
+  "replace": "\tbits[69] = 0;\n\tbits[70] = 0;\n\n\t/* resetCrc() inlined"
+ },
+ {
+  "label": "the four trailing bits are set rather than cleared",
+  "find": "\tbits[68] = 0;\n\tbits[69] = 0;\n\tbits[70] = 0;\n\tbits[71] = 0;\n\n\t/* resetCrc() inlined",
+  "replace": "\tbits[68] = 1;\n\tbits[69] = 1;\n\tbits[70] = 1;\n\tbits[71] = 1;\n\n\t/* resetCrc() inlined"
+ },
+ {
+  "label": "the CRC register starts at zero, not all ones",
+  "find": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 0;"
+ },
+ {
+  "label": "the CRC register reset is one int short",
+  "find": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 14; i++)\n\t\tcrc[i] = 1;"
+ },
+ {
+  "label": "the CRC register reset skips crc[0]",
+  "find": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;",
+  "replace": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 1; i <= 15; i++)\n\t\tcrc[i] = 1;"
+ },
+ {
+  "label": "the CRC register is not reset at all",
+  "find": "\t/* resetCrc() inlined, 0x1e9a0: the register starts all ones. */\n\tfor (i = 0; i <= 15; i++)\n\t\tcrc[i] = 1;\n\n",
+  "replace": ""
+ },
+ {
+  "label": "the CRC covers one group, not two",
+  "find": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)",
+  "replace": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 0; g++)"
+ },
+ {
+  "label": "the CRC covers three groups, not two",
+  "find": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)",
+  "replace": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 2; g++)"
+ },
+ {
+  "label": "the second group is taken one byte further on",
+  "find": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)\n\t\tv90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)\n\t\tv90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * (V90JD_GROUP + 1)]);"
+ },
+ {
+  "label": "the CRC includes each group's leading 0",
+  "find": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)\n\t\tv90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)\n\t\tv90jd_crc_bits(crc, &bits[V90JD_GROUP1 + g * V90JD_GROUP]);"
+ },
+ {
+  "label": "both passes read group 1",
+  "find": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)\n\t\tv90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + g * V90JD_GROUP]);",
+  "replace": "\t/* Sixteen payload bits from each group, the leading 0 of each skipped. */\n\tfor (g = 0; g <= 1; g++)\n\t\tv90jd_crc_bits(crc, &bits[V90JD_GROUP1 + 1 + 0 * V90JD_GROUP]);"
+ },
+ {
+  "label": "the CRC is written back one byte short",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 14; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];"
+ },
+ {
+  "label": "the CRC is written over group 2, not group 3",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP2 + 1 + i] = (unsigned char)crc[i];"
+ },
+ {
+  "label": "the CRC is written from the group marker, not past it",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + i] = (unsigned char)crc[i];"
+ },
+ {
+  "label": "the CRC is written back high bit first",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[15 - i];"
+ },
+ {
+  "equivalent": true,
+  "why": "EXPECTED UNCAUGHT, and it is an argument about the RANGE of crc[] rather than about the suite.  Every value the register can hold at this point is 0 or 1: the reset three statements earlier writes 1 into all sixteen, and the only other writes are inside v90jd_crc_bits, which are either a copy of another element (crc[i] = crc[i + 1]) or the result of an expression ending in `& 1` (crc[3], crc[10] and crc[15]).  By induction over the thirty-two iterations, no element can leave {0, 1}, so masking the byte on the way out is a no-op for every reachable state -- including the states this fixture drives, where the register is SEEDED with 0x51ed0000-scale values before the call and the reset throws them away.  The object stores the whole low byte, `mov %al,0x36(%edx,%edi,1)` at 0x1eb64 with no `and` in front of it, and that is why it is written without the mask; the row records that the difference was looked for and is unobservable rather than never asked.",
+  "label": "the CRC bytes are masked to one bit on the way out",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)(crc[i] & 1);"
+ },
+ {
+  "label": "packData clears the unpacker's state as the constructor does",
+  "find": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];\n}",
+  "replace": "\t/* Group 3 carries the CRC, low bit first. */\n\tfor (i = 0; i <= 15; i++)\n\t\tbits[V90JD_GROUP3 + 1 + i] = (unsigned char)crc[i];\n\n\tunpack[0] = 0;\n\tunpack[1] = 0;\n\tunpackWord = 0;\n}"
+ }
+]

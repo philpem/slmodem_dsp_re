@@ -7336,6 +7336,35 @@
     "setRfSymbols: the second half repeats the first half's signs": "caught"
    }
   },
+  "v90packdata": {
+   "key": "f7a6952862e9d9d8c4cd24b7b1b9b6c27f4a843295f590c7df867f03405d1b59",
+   "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
+   "verdicts": {
+    "both passes read group 1": "caught",
+    "group 0 is one bit short": "caught",
+    "group 0 is seventeen 0 bits": "caught",
+    "group 0 runs one bit long, into group 1's marker": "equivalent",
+    "group 1's leading 0 is left as it was": "caught",
+    "group 2's leading 0 is left as it was": "caught",
+    "group 3's leading 0 is left as it was": "caught",
+    "only three of the four trailing bits are cleared": "caught",
+    "packData clears the unpacker's state as the constructor does": "caught",
+    "the CRC bytes are masked to one bit on the way out": "equivalent",
+    "the CRC covers one group, not two": "caught",
+    "the CRC covers three groups, not two": "caught",
+    "the CRC includes each group's leading 0": "caught",
+    "the CRC is written back high bit first": "caught",
+    "the CRC is written back one byte short": "caught",
+    "the CRC is written from the group marker, not past it": "caught",
+    "the CRC is written over group 2, not group 3": "caught",
+    "the CRC register is not reset at all": "caught",
+    "the CRC register reset is one int short": "caught",
+    "the CRC register reset skips crc[0]": "caught",
+    "the CRC register starts at zero, not all ones": "caught",
+    "the four trailing bits are set rather than cleared": "caught",
+    "the second group is taken one byte further on": "caught"
+   }
+  },
   "v90params": {
    "key": "f6a2be7400fd691e66f33d0479fa69957128af13972f5ce776438914b2ea5167",
    "summary": "37 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",

@@ -39,11 +39,16 @@
  * 16..31 and 52+(p-32) for 32..47.  D270 recorded the two as an unexplained
  * inconsistency; they are the two directions.
  *
- * Eight of the class's thirteen methods are written; the five that set the
- * message's fields and `packData` are declared for
- * the record and deliberately left undefined, because defining a method whose
- * callees are not yet written breaks the link for the whole test suite
- * (docs/v90cpp.md).  Nothing calls the undefined ones.
+ * Nine of the class's thirteen methods are written.  `packData` joined them:
+ * it calls nothing at all -- `resetCrc` is inlined into it in the object -- so
+ * defining it costs the link nothing, which is the test docs/v90cpp.md sets.
+ * The four that SET the message's fields (`setRatesMask`, `resetCrc`,
+ * `setMaxLookahead`, `setConstelSize`) are still declared for the record and
+ * deliberately left undefined, because defining a method whose callees are not
+ * yet written breaks the link for the whole test suite.  Nothing calls the
+ * undefined ones, and NOTHING CALLS `packData` EITHER: no relocation in the
+ * object names it, and none is added here.  V90Jd.cpp says why that is not an
+ * accident.
  */
 
 #ifndef DSPLIB_V90JD_H
@@ -107,11 +112,20 @@ public:
 	int unPackData(int);
 
 	/*
+	 * DEFINED, and callerless in the object by construction: it is the
+	 * whole packer, byte for byte the body `getBitVector` carries inlined,
+	 * and it writes the TRANSMIT layout mapped above.  It leaves the three
+	 * unpacker fields alone.  Its `void` return is measured -- the object
+	 * sets %eax to nothing on the way out, where `getBitVector` ends
+	 * `lea 0x2(%edi),%eax`.
+	 */
+	void packData();
+
+	/*
 	 * Declared, not defined -- see the file comment.  Their signatures are
 	 * the mangling's, so this list is a specification rather than a guess;
 	 * a return type is not mangled and is therefore unknown for all of them.
 	 */
-	void packData();
 	void setRatesMask(int);
 	void resetCrc();
 	void setMaxLookahead(unsigned char);
