@@ -87781,3 +87781,324 @@ symbols with 6 already exact, so a whole-file permutation risks those six and
 was not attempted here; but that, and not another spelling, is where this
 symbol's remaining chance lies.
 ======================================================================
+
+### 7827. THE peephole2 CURSOR CAN BE STEERED FROM INSIDE A FUNCTION, NOT ONLY BY PERMUTING THE TU -- `reset_dtmf` DECODED, `create_cid_dtmf` CLOSED AS A BYSTANDER
+
+**Reserved block: 7827-7832.**
+
+`refinement.md` lever 3b frames `peep2_find_free_register`'s `search_ofs` as a
+certificate for a REORDERING: run the two compiles, and a symbol whose bytes
+are identical with and without `-fno-peephole2` cannot be moved by permuting
+its translation unit.  That is right and it is not the whole of the mechanism.
+The cursor is threaded through a TU in emission order and advances past
+whichever register each split found free, so **changing what scratch a
+function consumes changes the state that arrives at its SUCCESSOR** -- with no
+definition moving anywhere.
+
+Measured on `src/service/dtmf_rx.c`, which has four symbols and was already
+4 of 4 in the blob's `nm -n` order, so lever 3 had nothing positional to
+offer:
+
+    reset_dtmf        emission index 0   3b: EXPOSED (ecx, edx)   35 of 275
+    create_cid_dtmf   emission index 1   3b: EXPOSED (ecx, edi)   35 of 370
+
+7808's corollary says the lever cannot reach a symbol at emission index 0,
+because nothing ahead of it can have moved the cursor.  `reset_dtmf` IS at
+index 0.  Its statement order was decoded (7828) and it went exact -- and
+`create_cid_dtmf`, which was not edited at all, went exact with it.  Both are
+scratch-takers; the first one's splits now consume the registers the object's
+did, and the second inherits the cursor where the object left it.
+
+**So EXPOSED has a second reading.** As a certificate it says "a reorder may
+move this".  It also says "this symbol's own scratch consumption is part of
+the state its successors see", which is a reason to fix an EXPOSED symbol
+EARLY in a file and re-measure the whole file before touching anything below
+it.  `dtmf_rx.c` went 2 of 4 exact to 4 of 4 on one function's statement
+order.
+
+**The other side of the same mechanism, measured on eight files.**  Lever 3 is
+a NULL over the small `fpm_*.c` family, and the null is proved rather than
+assumed.  Eight files that were NOT in the blob's emission order were permuted
+exhaustively -- `fpm_sre.c`, `fpm_fse.c`, `fpm_fsm.c`, `fpm_sdm.c`,
+`fpm_pps.c`, `fpm_mrf.c`, `fpm_fsd.c` at 3! = 6 cells each and `fpm_agc.c` at
+4! = 24, each maximal run of `static` definitions glued to the block below it
+so a static never lands under its first user:
+
+    seven of the eight     ONE distinct emission over the whole domain
+    fpm_fse.c              two, and neither closes anything
+
+The detector was shown to FIRE before the null was believed, which is finding
+134's argument: compiling the block-reversed file and comparing `nm -n` gives
+`FPM_SRE_init, free, recover` against `recover, free, init` and
+`FPM_SDM_init, scrambler, descrambler` against its reverse -- **the order
+moves and not one byte does.**  That is 7797's ruling exactly: record that the
+order is achievable and pays nothing, and do not keep the diff.  Nothing was
+committed for any of the eight.
+
+It also retrodicts the 3b certificate run over this pass's 33 symbols --
+7 CLEARED, 7 EXPOSED, 19 UNDECIDED -- in the direction a certificate is
+supposed to work: `FPM_SDM_init` and `FPM_FSM_init` are both CLEARED, and both
+are byte-identical under every permutation of their file.
+
+
+### 7828. `reset_dtmf`: A UNIQUE PREIMAGE IN 40,320 CELLS, AND THE FACT IS "INDEX 1 BEFORE INDEX 0" THREE TIMES OVER
+
+`reset_dtmf` was 35 differing bytes of 275, and every one of them was a store
+whose OFFSET differed while its value did not: adjacent 16-bit fields written
+in the other order.  Our source was ascending by offset, which is what a
+transcriber writes and is not what the compiler was given.
+
+Two enumerations on the REAL translation unit, every cell scored with
+`byteident.py`'s own `body`/`verdict`:
+
+    A x C   6! orders of the six scalar assignments crossed with the 2
+            orders of the resonator loop body -- 1,440 cells, 458 distinct
+            emissions, best cell 8 differing bytes, next 10
+    B       all 8! orders of the biquad-state block, A and C held at A x C's
+            winner -- 40,320 cells, 249 distinct emissions, exactly ONE at
+            ZERO, nearest near-miss at 2
+
+Rule 0's cleanest case: **a unique preimage**, so the author's ORDER is
+decoded and not fitted.  And the three knobs say one thing:
+
+    scalars   stable, last_digit, level, quiet, ndigits, bufp
+    biquads   f354[1], f354[0], bp_state[1], bp_state[0],
+              f35c[1], f35c[0], pre_high[1], pre_high[0]
+    loop      tone_state[i][1] then tone_state[i][0]
+
+**within every two-element pair the author wrote index 1 before index 0.**
+The scalar order is the same shape read through the offsets: `stable` (+0x32c)
+before `last_digit` (+0x32a), `level` (+0x336) before `quiet` (+0x334) before
+`ndigits` (+0x32e).
+
+`create_cid_dtmf` closed as a bystander; 7827 is why.
+
+The harness that made 40,320 real compiles affordable is 7805's, chunked:
+generate, compile one container pass, score, delete, 600 cells at a time.  It
+validates itself on the PRISTINE cell against `build/tc_out` before it reads
+any row.
+
+
+### 7829. TWO FLOAT-FILTER FILES HAD THE SAME WRONG DEFINITION ORDER, AND THE SHAPE IS `process(const T *, T *, unsigned)` FIRST
+
+`FloatARMA.cpp` was **0 of 7** against the blob's `nm -n` and is now 7 of 7.
+The blob emits
+
+    process(const float *, float *, unsigned), reset, C2, C1, D2, D1,
+    process(float)
+
+which is what a source file whose FIRST out-of-line definition is the block
+`process` emits: `reset` is hoisted above the constructor that calls it and
+everything else follows the source.  We had the "natural" order -- ctor, dtor,
+reset, process(float), process(block) -- and emitted `reset` at index 0.
+
+All 5! = 120 orderings compiled: **three distinct emissions, 30 close
+`FloatARMA::reset`** (9 differing bytes of 114 -> exact) and the two
+destructors are exact in all 120.  Several preimages, so what is decoded is
+the FACT that `process(Pf)` precedes `reset`'s emission slot; the blob's own
+`nm -n`, which only one of the 30 reproduces, picks the member.
+
+**`FloatIIR.cpp` has the identical shape and it is the corroboration.**  Its
+FloatIIR half was in the same wrong order; the same permutation of the same
+five member kinds takes the file 5 of 12 to 7 of 12 and closes
+`GenericIIR<float,double>::reset` (9 of 122).  120 cells, three distinct
+emissions, **20 of them close the target AND keep the four symbols that were
+already exact** -- and 80 of the 120 LOSE `FloatIIR::reset`, so scoring the
+whole file's symbol set rather than the target is what kept this from being a
+net zero dressed up as a gain.
+
+Two things worth carrying:
+
+- **The gained symbol did not move.**  `GenericIIR<float,double>::reset` sits
+  ABOVE `FloatIIR.cpp`'s mid-file `#include "dsplib/FloatIIR.h"`, which a bare
+  `#include` forbids moving across, so only the five definitions BELOW it were
+  permuted.  It closed as a bystander of a permutation aimed under it.  That is
+  lever 3's "the carrier is upstream of the function, not its own index" seen
+  from the other end, and it is why a file with a mid-file `#include` is still
+  worth permuting below the line.
+- **The cast was free and the order was not.**  `FloatARMA::reset` and
+  `GenericIIR::reset` hold the identical last two statements with the shapes
+  the other way round -- blob sequential in one, hoisted in the other -- and
+  the one textual difference between our two sources was an explicit `(int)`.
+  Nine cells (cast on each statement x the two orders): the cast changes
+  NOTHING, the order changes the emission and reaches no zero.  It is the
+  definition order, not the statement order, and not the cast.
+
+
+### 7830. `V8Create`: THE MALLOC GUARD IS SINGLE-EXIT, THE TERNARY'S ARMS ARE THE OTHER WAY ROUND, AND THE LAST 25 BYTES HAVE NO PREIMAGE
+
+167 differing bytes of 1,124 -> 25, two decoded properties and one decline.
+
+**The guard.**  The blob's `je` lands on `add $0x34,%esp` with the shared
+`mov %esi,%eax` BELOW it: the failure path falls through the same return the
+success path uses.  Written as an early return, GCC 3.4.2 has a second value
+to materialise, spends `xor %eax,%eax` on it before the first `cfg` copy --
+which costs `%eax` as a store base for two of them -- and has to jump PAST the
+shared move, which drags the tail's two stores out of order.  The domain is
+two elements and it is exhausted: **all three early-return spellings
+(`return 0`, `return v`, `if (!v) return v`) compile to ONE emission**,
+because the compiler knows `v` is null on that arm and the returned expression
+is free, and both single-exit spellings compile to another.  Only the latter
+has the object's control flow.  167 -> 25.
+
+That is worth stating on its own: **an early return and a single-exit `if` are
+not a style choice here, and the returned EXPRESSION is not the lever.**  A
+diagnosis that named `return 0` as the defect would have been refuted by the
+compile.
+
+**The ternary.**  `v->side == 0 ? "Caller" : "Answer"`, corroborated twice and
+by two independent observables: the branch opcode byte (blob `0x74` je, ours
+`0x75` jne, identical displacement and identical target -- the whole of the
+remaining one-byte run), and `.rodata.str1.1`, which holds "Caller" before
+"Answer" in the blob and held them the other way round in ours.  GCC interns
+literals in source-text order, so the pool order is lever 2's second
+observable agreeing without reference to any instruction.  Four spellings
+compiled; the two that put "Caller" first both reach it, so the decoded thing
+is the ARM ORDER and not `== 0` against `!v->side`.  Both strings are 7 bytes
+with their NUL, so the swap moves no other pool offset.
+
+**The residual 25 are NOT statement order, and that is measured.**  Our source
+order for the six configuration copies IS the blob's emission order (0xa44,
+0xa48, 0xa4c, 0xa50, 0xa54, 0xa58) and OUR compiler permutes it, hoisting the
+`cfg->cm` load.  All 720 orderings compiled: **76 distinct emissions, none at
+zero, best 12.**  Rule 0's third case.  Declined rather than hill-climbed --
+7782 -- and the finding is the null, not the 12.
+
+Five mutation anchors in `test/mutations/v8hs.json` moved with the
+re-indentation and are re-anchored; the suite re-runs 7 of 7 caught.
+
+
+### 7831. LEVERS 10, 11 AND 12 IN A REFINEMENT PASS: A MEASURED NO ON A FLOAT-HEAVY SET, WITH THE DENOMINATORS
+
+7813 swept 10, 11 and 12 out of the older record and noted their yield in a
+refinement pass was UNKNOWN.  This pass was briefed that its set was
+float-heavy and that **lever 11 was the one most likely to pay**.  It did not,
+and the measurement is worth more than the guess was.
+
+**Lever 11 -- the constant pool as a typed per-function observable.  NO, and
+the premise was wrong in two different ways.**
+
+- Over this pass's 33 candidate symbols, an x87 mnemonic census restricted to
+  constant-pool operands (a memory operand with no register in it) found **no
+  multiset difference anywhere**.
+- `v34filters.c` has **zero x87 instructions across all 26 of its symbols in
+  both objects**, and `readelf -S` shows the translation unit has no
+  `.rodata.cst4`, `.cst8` or `.cst16` section at all.  It is fixed-point
+  `short`/`int` arithmetic.  So do not infer "float-heavy" from a file's job;
+  census it.
+- `v34pcmif.c` and `v34pcmmain.cpp`'s seven candidates: **zero x87 on both
+  sides**, no `.cst*` relocation from any of them.
+- **The playbook's own named example is spent.**  refinement.md cites
+  `hamming<float>` for `fldt` where the blob has `fldl`, three constants,
+  2903.  Today the pool TYPES agree exactly -- `fldl` 3 against 3, `fildll` 2
+  against 2 -- so an earlier pass fixed it and only lever 11's FIRST bullet
+  was ever live there.  What remains in that symbol is lever 11's FOURTH
+  bullet, the x87 ARRANGEMENT, and it is a constant map: the blob spends
+  `fxch %st(3)` and divides at stack depth 3 where we divide at depth 1, and
+  **18 spellings -- where the three loop constants are declared (inline, after
+  `d`, before `d`) x how the reciprocal is written (`1.0/`, `1.0L/`,
+  `(long double)1.0/`) x the multiply's operand order -- give ONE distinct
+  emission.**  Not one byte moves.  44 of 104 before and after.
+  (Read the divide's BYTES, not objdump's mnemonic: finding 245.  The blob's
+  `de f2` prints `fdivp` and IS FDIVRP; our `de f9` prints `fdivrp` and IS
+  FDIVP.  The two really are opposite directions, and no source spelling in
+  the domain reaches the blob's.)
+
+**Lever 10 -- an in-class member body is implicitly `inline`.  NO, and mostly
+N/A.**  The tell is an EXCESS of instructions with a MISSING call.  Counted as
+`R_386_PC32` call sites, blob against ours: `V8Create` 0/0 on the x87 side and
+every call present; `indicateJaTransmission` 2/2; `_Z16VPcmV34SetDelays...`
+4/4; the four `v34pcmif.c` getters 0/0.  No call is missing on our side
+anywhere in the set, and where an instruction count differed it ran the wrong
+way for this lever.  `v34filters.c`, `dtmf_rx.c` and the `fpm_*.c` family are
+`.c` files with no classes, so the lever is N/A by construction.
+
+**Lever 12 -- spill width is forced.  NO.**  `fstps` count over the whole set:
+blob 0, ours 0, except inside `hamming`, where both sides have exactly one and
+it is the `float` result store rather than an intermediate.  The only spills
+in the set are integer -- `V34EchoPreFilter`'s three 4-byte slots at `(%esp)`,
+`+0x4` and `+0x8` -- and its `movzbl (%esp),%ecx` reload is GCC's shift-count
+idiom, not a width finding.
+
+**What DID pay on this set, for the record:** lever 1 (statement order, four
+symbols), lever 3 (definition order, two files and three symbols), lever 2
+(instruction count at equal size, which found `V34EchoPreFilter`'s extra mask
+and `indicateJaTransmission`'s missing anchor), lever 9 (operand order via the
+TYPE, `V34Filter2`) and lever 3b's cursor read the new way (7827).  The set is
+33 symbols and 13 closed.
+
+
+### 7832. `V34EchoPreFilter`: 7787's MASK DECLINE IS WITHDRAWN ON EVIDENCE, AND THE OBJECT CONTAINS NO LOOP THIS FUNCTION WROTE
+
+7787 declined dropping `(shift & 31)` on the ground that "a bare shift by a
+value the object can put above 31 is undefined in C", and noted it did not
+close the function anyway.  Both halves are now answered.
+
+**The object cannot put any value there.**  `VPcmV34Create+0x5c` memsets the
+whole 0xac4c-byte v34 object, which contains the prefilter at +0x2078 and so
+its `shift` at +0x20dc; `txinit` memsets only the prefilter's first 0x54 bytes
+-- the `state[42]` array -- and stops short of the field; and **nothing in the
+blob's 1,859 functions writes it.**  Every write whose destination is
+`0x64(%reg)` was scanned for every register but `%esp`: 38 functions have one
+and not one is a v34 function or takes a prefilter.  `V34EchoPreFilter` is its
+only reader.  So `shift` is 0 for the object's lifetime and the two spellings
+cannot differ behaviourally -- which is also why **`make phase` passing is not
+evidence for this change** and must not be quoted as if it were.  The evidence
+is the write scan plus the instruction count.  The residual the scan cannot
+reach is a write from OUTSIDE `dsplibs.o`; all three referencers of the
+prefilter at +0x2078 (`txinit`, `txmit`, `V34EchoHistoryBackwardClean`) are
+internal.
+
+**And the mask was OURS.**  Padding-stripped, ours read 49 instructions to the
+blob's 48, and the one extra is the `and $0x1f,%edx` at +0x27.  7787's table
+records "49 against 49"; that count predates `instrcount.py` importing
+`byteident.py`'s own `_padding` predicate (7793), and it is another instance
+of 6100/6103 -- a number in a comment with no gate behind it.
+
+**The other half is structural and it is the interesting one.**  The blob
+contains no inner loop that `V34EchoPreFilter` wrote.  At `-O3` GCC 3.4.2
+inlines `V34Filter2` at this call site AND still emits the out-of-line copy
+the blob carries at 0x72c80, and the inlined body reproduces the blob's loop
+at +0x40..+0x58 instruction for instruction and register for register --
+`cmp $0x2a,%ebx; jb` included.  That guard is an UNSIGNED compare and comes
+from `V34Filter2`'s `unsigned taps` after constant propagation: a
+hand-written loop cannot produce it whatever its counter is declared, and
+**96 cells say so, with `int k` and `unsigned k` byte-identical in all 48
+pairs.**  Four domains were exhausted on the hand-written form (96, 32, 24 and
+16 cells) before the call was written; only the call reaches zero.
+
+**`V34Filter2` closed on lever 9, and it is the TYPE and not the order.**
+`i386.md` ties the `imul` destination to operand 1 of the `MULT_EXPR`, and
+`tree_swap_operands_p` swaps when operand 0 is a DECL and operand 1 is not --
+which `carry * coeff[k]` is.  Reading the tap into an `int` local makes both
+operands DECLs, no swap fires, and the product lands in the carry register the
+blob's `imul %eax,%ecx` names.  **All 24 in-place spellings were compiled,
+including `coeff[k] * carry`, and every one of the four in-place forms emits
+identical bytes**: writing the multiplication the other way round is not the
+lever, exactly as 1991 and 5823 say.  Two of 48 cells in the second domain
+reach zero and they differ only in `acc = (int)((unsigned)acc + ...)` against
+`acc += ...`, which the object cannot distinguish -- several preimages, and
+the cast form is kept on the signed-overflow ground rather than the byte
+ground.
+
+**`V34InitializeImplementationSpecific`: a unique preimage in 2,520 cells.**
+Row 1 `mov` against `lea` says the first statement is `echo0.dlen =
+V34_ECHO_DLEN`: `movl $0x678,0x80d0(%eax)` is ten bytes, past `large_insn`, so
+peephole2 splits it and the blob's first instruction IS that statement's first
+half.  The domain is 7!/2 -- the two echo blocks share one order, `p_2074`
+first, `cursor` before `dline` so D30's read-before-overwrite is preserved --
+and it gives **1,100 distinct emissions with exactly ONE at zero, nearest
+near-miss 12 bytes.**  The author's order is
+
+    dlen, cursor, hist, coeff, dline, coeff_frac, taps
+
+and the corroboration is that the two echo blocks are a copy-paste of each
+other yet emit in DIFFERENT orders from each other in BOTH objects -- so
+emission order is nobody's source order, here or in the blob.
+
+The symbol is at emission index 0 of its TU in both objects (`nm -n` agrees
+26 for 26 over the file, no gaps, no alien symbols in the blob's
+0x71d70..0x73390 span), so `search_ofs` is 0 when either compile enters it and
+nothing upstream could have moved it.  That is what licensed working from
+inside the function on a file the brief had fenced against another
+permutation.

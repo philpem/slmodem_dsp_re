@@ -480,6 +480,20 @@ the certificate BROKEN on the first run of the check:
     spectralDesign
     V90Equalizer::process   classified undecided, 0 of 28
 
+**AND EXPOSED HAS A SECOND READING THE CERTIFICATE FRAMING HIDES (7827).** The
+cursor is threaded in emission order and advances past whichever register each
+split found free, so **changing what scratch a function consumes changes the
+state that arrives at its SUCCESSOR** -- with no definition moving anywhere.
+`dtmf_rx.c` was already 4 of 4 in the blob's `nm -n` order, so lever 3 had
+nothing positional to offer; `reset_dtmf` (index 0, EXPOSED on `ecx`/`edx`)
+was closed on its statement order alone and `create_cid_dtmf` (index 1,
+EXPOSED on `ecx`/`edi`), which was not edited at all, went exact with it. The
+file went 2 of 4 to 4 of 4 on one function's statement order. **7808's
+corollary still holds -- a reorder cannot reach index 0 -- and it is about
+POSITION, not about the symbol being outside the mechanism.** So: fix an
+EXPOSED symbol EARLY in a file and re-measure the whole file before touching
+anything below it, because its successors may have moved for free.
+
 **EXPOSED IS NECESSARY AND NOT SUFFICIENT, and that is the part to hold on to.**
 `V90CP`'s C1 takes three scratch registers and held over 21 comparable
 permutations; `generateSymbol` held over 28. The cursor is a state machine and
@@ -895,6 +909,28 @@ wants the narrow memory operand SECOND. The order was never the free variable.
 spellings are refused by a test and CLAUDE.md's rule is that the differential
 tier decides.
 
+### 9a. And a NULL over a whole file family is a result — prove the harness fires first
+
+Lever 3 was run to exhaustion over eight small `fpm_*.c` files that were NOT
+in the blob's emission order — seven at 3! and one at 4!, each maximal run of
+`static` definitions glued to the block below it so a static never lands under
+its first user. **Seven of the eight give ONE distinct emission over their
+whole domain**; the eighth gives two and neither closes anything.
+
+The null was only believed after the detector was shown to FIRE, which is
+finding 134's argument applied to an enumeration: compile the
+block-REVERSED file and print `nm -n` beside the byte comparison.
+
+    fpm_sre.c   order  init,free,recover -> recover,free,init   MOVED
+                bytes  every symbol IDENTICAL
+    fpm_sdm.c   order  init,scram,descram -> descram,scram,init MOVED
+                bytes  every symbol IDENTICAL
+
+That is 7797's ruling with the measurement in hand: the order is achievable
+and pays nothing, so record it and **do not keep the diff**. An enumeration
+that reports "0 of 6 cells" without showing that any cell differed from any
+other is indistinguishable from a broken generator.
+
 ### 10. Where a member's body is written — in-class is implicitly `inline`
 
 A member defined inside the class body is implicitly `inline`, which moves it
@@ -944,6 +980,22 @@ type, and the load instruction says it again:
   `fildll; fdivr %st(2),%st; fmuls` is `1.0/count * sum`, not `sum/count`, and
   the extra operation exists only because there is a constant 1.0 to divide
   (4340).
+
+**FIRST MEASUREMENT IN A REFINEMENT PASS, AND IT IS A NO (7831).** A pass
+briefed that its set was float-heavy and that this lever was the one most
+likely to pay found nothing, in two different ways worth separating. **The
+job of a file does not predict its arithmetic**: `v34filters.c` has ZERO x87
+instructions over all 26 of its symbols in both objects and the TU has no
+`.rodata.cst4`, `.cst8` or `.cst16` section at all -- it is fixed-point
+`short`/`int`. Census the file; do not infer. **And `hamming<float>` above is
+SPENT**: the pool types agree today, `fldl` 3 against 3, so an earlier pass
+took it and only the first bullet was ever live there. What remains in that
+symbol is the fourth bullet, the x87 ARRANGEMENT -- the blob spends
+`fxch %st(3)` and divides at stack depth 3 where we divide at depth 1 -- and
+it is a CONSTANT MAP: 18 spellings (where the loop's three constants are
+declared x how the reciprocal is written x the multiply's operand order) give
+ONE distinct emission and not one byte moves. Read the divide's BYTES, not
+objdump's mnemonic (245): the blob's `de f2` prints `fdivp` and IS FDIVRP.
 
 **Where it stops: the pool is emitted PER FUNCTION.** `output_constant_pool`
 runs at the end of each function and `-fmerge-constants` leaves the folding to

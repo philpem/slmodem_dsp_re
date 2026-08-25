@@ -443,70 +443,80 @@ VPcmV34GetQuickConnectIndication(void *objp)
  *
  * 8000 is the PCM sample rate answered as a symbol rate, and 0 is "there is
  * no carrier" -- a PCM receiver has none.
+ *
+ * TWO MORE THINGS ARE THE AUTHOR'S AND BOTH ARE MEASURED, which is why these
+ * do not read like the `int n;` version anybody would write first.  All four
+ * went byte-exact together on the pair of them, +5 symbols over this file:
+ *
+ *   - THE ROLE TEST IS DUPLICATED PER ARM.  Reducing it to one `n` and a
+ *     single range test costs each of these two bytes: the object tests and
+ *     returns inside each arm and joins only at the final return.  Eight
+ *     return shapes were compiled -- two returns via `n`, single-exit
+ *     if/else, single-exit pre-seeded, ternary, inverted test, a `short`
+ *     result -- and exactly ONE reaches zero.  A unique preimage.
+ *   - NO `ratecfg` POINTER IS LIVE ACROSS THE TEST.  Held in a local, GCC
+ *     3.4.2 materialises the address with a `lea` before the branch; written
+ *     at the point of use it folds into the load's own displacement, which is
+ *     what the object does.  Nine access spellings compiled; five reach it,
+ *     so what is decoded is that FACT and not this particular cast.
+ *
+ * The two are independent and the cross product says so: giving the other
+ * three the shape while keeping their `cfg` local moved nothing, and
+ * `VPcmV34GetCurrentTxCarrier` had the shape already and still needed its
+ * local inlined.  Do not "tidy" either back.
  */
 int
 VPcmV34GetCurrentRxBaudRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
-	int n;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER)
-		n = obj->status - 1;
-	else
-		n = obj->status - 2;
-
-	if ((unsigned int)n <= 1u)
+	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 1) <= 1u)
+			return PCMIF_PCM_BAUD;
+	} else if ((unsigned int)(obj->status - 2) <= 1u) {
 		return PCMIF_PCM_BAUD;
+	}
 
-	return cfg->rx_baud;
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->rx_baud;
 }
 
 int
 VPcmV34GetCurrentTxBaudRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
-	int n;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER)
-		n = obj->status - 2;
-	else
-		n = obj->status - 1;
-
-	if ((unsigned int)n <= 1u)
+	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 2) <= 1u)
+			return PCMIF_PCM_BAUD;
+	} else if ((unsigned int)(obj->status - 1) <= 1u) {
 		return PCMIF_PCM_BAUD;
+	}
 
-	return cfg->baud;
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->baud;
 }
 
 int
 VPcmV34GetCurrentRxCarrier(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
-	int n;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER)
-		n = obj->status - 1;
-	else
-		n = obj->status - 2;
-
-	if ((unsigned int)n <= 1u)
+	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+		if ((unsigned int)(obj->status - 1) <= 1u)
+			return 0;
+	} else if ((unsigned int)(obj->status - 2) <= 1u) {
 		return 0;
+	}
 
-	return cfg->rx_carrier;
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->rx_carrier;
 }
 
 int
 VPcmV34GetCurrentTxCarrier(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
-	const struct v34_ratecfg *cfg =
-	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
 
 	if (obj->f359c == PCMIF_ROLE_ANSWER) {
 		if ((unsigned int)(obj->status - 2) <= 1u)
@@ -515,7 +525,8 @@ VPcmV34GetCurrentTxCarrier(void *objp)
 		return 0;
 	}
 
-	return cfg->carrier;
+	return ((const struct v34_ratecfg *)
+	    ((unsigned char *)obj + V34_RATECFG))->carrier;
 }
 
 /*
@@ -743,8 +754,21 @@ VPcmV34RequestDPNotification(void *objp, int *flag, int *count, int *done)
 	*count = obj->clr_count;
 	*done = obj->clr_done;
 
-	obj->clr_done = 0;
+	/*
+	 * `clr_flag` FIRST, and that is DECODED, not transcribed.  The blob
+	 * EMITS these as clr_done, clr_flag, clr_count, and this file used to
+	 * say exactly that -- which is the trap: a reconstruction writes the
+	 * stores down in the order they come out, so our source order was
+	 * already the object's emission order and was therefore the answer
+	 * sheet rather than a candidate.  What has to be found is its PREIMAGE
+	 * under GCC 3.4.2's scheduling, and the compiler swaps the first two.
+	 * All 4! orderings of this tail (these three plus the
+	 * `&= ~CFG_FLAG51_CLEAR` below) were compiled on the period toolchain:
+	 * 24 cells, 12 distinct emissions, exactly ONE at zero differing
+	 * bytes, nearest other cell at two.  A unique preimage.
+	 */
 	obj->clr_flag = -1;
+	obj->clr_done = 0;
 	obj->clr_count = 0;
 
 	*((unsigned char *)obj->pac3c + CFG_FLAGS51) &=
