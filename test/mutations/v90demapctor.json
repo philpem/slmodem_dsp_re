@@ -14,13 +14,15 @@
  },
  {
   "label": "the parameter block is never stored",
-  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
-  "replace": "\terrorHistogramCount = 0;\n\t(void)params;"
+  "find": "\tthis->params = params;\n\terrorHistogramCount = 0;",
+  "replace": "\t(void)params;\n\terrorHistogramCount = 0;",
+  "why": "Re-anchored by finding 7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  },
  {
   "label": "the histogram counter keeps whatever it found",
-  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
-  "replace": "\tthis->params = params;"
+  "find": "\tthis->params = params;\n\terrorHistogramCount = 0;",
+  "replace": "\tthis->params = params;",
+  "why": "Re-anchored by finding 7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  },
  {
   "label": "the four-byte array is sized in elements rather than bytes",
@@ -69,22 +71,26 @@
  },
  {
   "label": "bitsPerFrame keeps its seed",
-  "find": "\tbitsPerFrame = 0;\n\tword_08 = 0;",
-  "replace": "\tword_08 = 0;"
+  "find": "\tword_08 = 0;\n\tbitsPerFrame = 0;",
+  "replace": "\tword_08 = 0;",
+  "why": "Re-anchored by finding 7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  },
  {
   "label": "sampleCount keeps its seed",
-  "find": "\tframeStart = 0;\n\tsampleCount = 0;",
-  "replace": "\tframeStart = 0;"
+  "find": "\tsampleCapacity = levels;\n\n\tsampleCount = 0;\n",
+  "replace": "\tsampleCapacity = levels;\n\n",
+  "why": "Re-anchored by finding 7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  },
  {
   "label": "the constructor also empties the two histograms",
-  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
-  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS * V90DEMAPPER_LEVELS; i++) {\n\t\terrorSum[0][i] = 0;\n\t\terrorCount[0][i] = 0;\n\t}\n\terrorHistogramCount = 0;\n\tthis->params = params;"
+  "find": "\tthis->params = params;\n\terrorHistogramCount = 0;",
+  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS * V90DEMAPPER_LEVELS; i++) {\n\t\terrorSum[0][i] = 0;\n\t\terrorCount[0][i] = 0;\n\t}\n\tthis->params = params;\n\terrorHistogramCount = 0;",
+  "why": "Re-anchored by finding 7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  },
  {
   "label": "the constructor also empties the constellation table",
-  "find": "\terrorHistogramCount = 0;\n\tthis->params = params;",
-  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS * V90DEMAPPER_LEVELS; i++)\n\t\tconstellation[0][i] = 0;\n\terrorHistogramCount = 0;\n\tthis->params = params;"
+  "find": "\tthis->params = params;\n\terrorHistogramCount = 0;",
+  "replace": "\tfor (i = 0; i < V90DEMAPPER_CONSTELLATIONS * V90DEMAPPER_LEVELS; i++)\n\t\tconstellation[0][i] = 0;\n\tthis->params = params;\n\terrorHistogramCount = 0;",
+  "why": "Re-anchored by finding 7793: the constructor's eight zero stores are written high-to-low, which is the object's own emission order, and the two trailing stores are `params` then `errorHistogramCount`.  The mutation is unchanged."
  }
 ]

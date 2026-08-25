@@ -84868,3 +84868,421 @@ code.  A first run of this table with a trailing-only filter reported
 bytes each, `sub vs mov` at row 30 and `mov vs sub` at row 33 -- and they are
 sibling classes in two files.  A decoding on one is a hypothesis for the other
 and must be measured on it, not transferred.
+---
+
+======================================================================
+### 7789. EIGHT V.90 FILES, 22 SYMBOLS AT BYTES: SEVEN CLOSED, TWO PROMOTED, AND THE TOOL THAT TRIAGED THEM WAS WRONG
+
+Reserved block for this batch: **7789-7795**.  Every ref this repository knows
+about was swept for its highest `### <n>.` heading -- `refs/heads`,
+`refs/remotes` and `refs/tags` together.  `master` and `origin/master` stood at
+**7785** and a sibling worktree at **7792**, so the block starts above the
+highest anywhere and not above master's.  The provisional numbers 7784, 7785,
+7787 and 7788 were used in five mutation files while the work was in progress
+and every one was renumbered into this block before the commit; they never
+reached a ref.
+
+Twenty-two symbols in eight `V90*.cpp` files no refinement pass had touched,
+~7,700 bytes, all in `byteident`'s BYTES bucket at the start.  **Seven are now
+EXACT and two more are grade 1.**
+
+    _ZN5V90MPC1Ev / C2Ev / _ZN5V90MP5resetEv     12 of  40 each -> EXACT
+    _ZN25V90AutoDigitalImpDetector18resetLinearMappingEv
+                                                  1 of 111      -> EXACT
+    _ZN14V90Demodulator11enterPhase4Ev           15 of 110      -> EXACT
+    _ZN8V90ModemC1E... / C2E...                  11 of 597 each -> EXACT
+    _ZN11V90DemapperC1Ej... / C2Ej...            13 of 193 each -> grade 1
+
+**THE SCORE, BASELINE FIRST.**  Taken on a full `tools/toolchain/build.sh`
+before any edit and again after, GCC 3.4.2 exact, from `db8f88de`:
+
+    before   grade 0  433 of 1251 (34.6%)   grade 0 or 1  486   BYTES 109
+    after    grade 0  440 of 1251 (35.2%)   grade 0 or 1  495   BYTES 100
+
+`--list-exact` was taken on both sides and diffed as a SET, not as a count
+(2900, 7768): **seven lines added, none removed**, and the seven are the seven
+above.
+
+**`compare.py --ratchet` WAS RUN ON BOTH SIDES, which 7779 had to record as an
+inference across commits because it only had the after.**  Both runs are from
+this pass, on the same tree:
+
+    before   compared 986 -> 1251, identical 350 -> 514, same_size 71 -> 84
+    after    compared 986 -> 1251, identical 350 -> 521, same_size 71 -> 77
+
+so **+7 identical and -7 same_size**, and the two numbers account for each
+other exactly.  Nothing lost mnemonic agreement while staying non-exact, which
+is the only thing the grade-0 set diff cannot see.
+
+**FOURTEEN MUTATION ANCHORS MOVED IN v90mp, THREE IN v90adid, TWO IN
+v90dataph, TWO IN v90modemctor, SIX IN v90demapctor AND ONE IN v90demap** --
+28 in all, every one caught by `tools/anchorcheck.py`, every one re-anchored
+on the new text, and `tools/mutate.py` re-run over each.  **All 28 are still
+CAUGHT, none unusable and none equivalent**, and the four suites' totals are
+character-for-character the ones `mutsnap.py --check` already holds:
+`v90mp` 107/106, `v90adid` 482/462 with 3 NOT caught and 17 equivalent,
+`v90demapctor` 17/17, `v90demap` 105/102 with 3 equivalent.
+
+The `v90demap` one is worth its own line because it moved for the opposite
+reason to the other 27: it did not stop matching, it started matching
+**twice**.  7793 gave the CONSTRUCTOR the same three stores in the same order
+as `reset`, so a bare three-line anchor became ambiguous -- and an anchor
+matching twice reads UNUSABLE, which does not fail a run (1264).  It now
+carries the preceding `signBits.reset` call.
+
+**NONE OF THIS BATCH'S SEVEN CHANGES WAS A WIDTH OR A SIGNEDNESS EITHER.**
+7778 reported that of its 38, 7779 of its 6, 7768 of its 3.  Over 22 more the
+tally is unchanged: four statement orders, one removed local, one branch
+sense, one store swap.  7630 sells the BYTES bucket as where 613's family
+hides and **across four waves and sixty-odd functions it has now produced
+exactly zero**.  The bucket is worth working; the reason given for working it
+is still not the reason it pays.
+
+#### V90MP: 4! compiled, one preimage, three symbols for one edit
+
+The object emits `movb $0x12,0x1b ; movl $0x0,0x14 ; movb $0x0,0x19 ;
+movb $0x0,0x1a` and writing that order does NOT produce it -- GCC 3.4.2 sinks
+the `0x1b` store to the end of the run.  All twenty-four orders were compiled
+before any cell was read, holding the two four-byte counter stores fixed
+(position-matched on both sides, before and after, which is what licenses
+holding them).  The table is in `src/pump/v90/V90MP.cpp` above the
+constructor.  **Exactly one cell reaches zero**, so the preimage is unique and
+this is a decoding in 7770's full sense.  Note the near miss at 2.
+
+**THE CLONE CLAIM WAS MEASURED BEFORE IT WAS USED, which is 6402.**  The
+file's own comment said the constructor and `reset` were "the same forty
+bytes, instruction for instruction".  Checked with 7774's method -- comparing
+the symbols WITHIN each object rather than across them -- `C1`, `C2` and
+`reset` are 0 of 40 from each other in the blob AND in ours.  So one edit was
+known to cover three symbols before it was made, and it did.
+
+**AND THE TABLE WAS RE-MEASURED AFTER THE MEASURING TOOL WAS FOUND WRONG.**
+The first run used a hand-rolled byte comparison that disagreed with
+`byteident.py` on a function with relocations (308 against 279).  The cell
+runner now imports `byteident.body` and `byteident.verdict` instead of
+re-implementing them, and the whole 24-cell enumeration was run again through
+it: **the same twenty-four numbers, including the 0 and the 2**.  Quoting the
+first run's table would probably have been fine, and "probably" is how 6100
+and 6103 got written.
+
+======================================================================
+
+======================================================================
+### 7790. `resetLinearMapping`: ONE BYTE, TWO PREIMAGES, AND THE EVIDENCE IS THE NEGATIVE HALF
+
+One byte of 111, 34 instructions against 34, and `alpha_equal` rejected at
+**row 6 MNEMONIC `movzwl` vs `movswl`** -- which reads like 613's family and
+is not.
+
+Seven spellings of the `ucodeLevel` read were compiled; the table is in
+`src/pump/v90/V90AutoDigitalImpDetector.cpp`.  **TWO reach zero** -- no local
+at all, and `unsigned short level` -- so the map is not injective and 7771's
+rule binds: **this is not a decoding.**  What it establishes is the negative,
+and the negative is sharp: every cell carrying a SIGNED 16-bit local is off by
+that byte, so the `short level = (short)ucodeLevel;` the file used to declare
+is excluded.  The no-local spelling was taken as the smaller claim and the
+comment says in terms that `unsigned short` would be equally exact and equally
+unevidenced.
+
+**THE FIELD IS STILL `short`, AND RETYPING IT WOULD HAVE BEEN 613 READ
+BACKWARDS.**  The `movzwl` here is 614's free case -- the 32-bit result is
+discarded by a 16-bit store -- so it says nothing about +0xa96c's signedness.
+The rest of the object settles that the other way and was checked before
+anything was edited: one `filds 0xa96c(%ebx)`, a SIGNED integer load, and five
+`movswl` of the same field elsewhere, against this single `movzwl`.  A pass
+that had trusted `--why`'s row and retyped the member would have introduced a
+defect at five sites to close one byte at a sixth.
+
+======================================================================
+
+======================================================================
+### 7791. `enterPhase4`: FIFTEEN BYTES THAT LOOK LIKE TWO SCHEDULING DIFFERENCES AND ARE ONE STATEMENT
+
+15 of 110, 28 instructions against 28.  The object emits the `word_38 = 0`
+store between the `rtd` load and the deadline's `lea`, and emits the
+deadline's own store one slot later than we did.
+
+Fifteen cells were compiled before any was read: all twelve orders of
+`inPhase3 = 2`, `word_44 += word_38`, `word_38 = 0` and the deadline that keep
+the accumulate ahead of the clear -- the one constraint that is semantics and
+not taste -- plus three that sink the clear past the two parameter copies or
+swap them.  The table is in `src/pump/v90/V90Demodulator.cpp`.
+
+**TWO CELLS REACH ZERO, so this is a decoding of ONE FACT and not of the whole
+order**, and saying which is the point.  Both hits agree that `word_38 = 0;`
+stands IMMEDIATELY AFTER the deadline: one slot earlier costs 15 bytes, past
+either parameter copy costs 23 or 32.  They disagree about where
+`inPhase3 = 2;` goes, first or second, and GCC 3.4.2 emits both identically,
+so the object cannot say.  It was left where it was.
+
+**Note the near miss at 4** -- the two parameter copies swapped.  7779
+declined a 2-of-387 on the ground that the enumeration must finish before any
+cell is read; 4 of 110 is a larger fraction and a more tempting one, and the
+only thing that made it safe was that all fifteen ran first.
+
+======================================================================
+
+======================================================================
+### 7792. `V90Modem`'s CONSTRUCTOR: A TABLE THAT SEPARATES, AND A SECOND OBSERVABLE THAT AGREES
+
+11 of 597 on both clones, `alpha_equal` rejecting at **row 17 MNEMONIC `je` vs
+`jne`**.  Twenty-four cells: four spellings of the opening diagnostic's
+ternary crossed with all 3! orders of `side`, `sessionFlag` and `dil`.  The
+table is in `src/pump/v90/V90ModemCtor.cpp`.
+
+**THE TABLE SEPARATES, AND THAT IS ITSELF THE RESULT.**  The ternary axis
+moves every cell by exactly one byte and the store axis by ten, in every row
+and every column.  So the two differences are independent and neither is a
+consequence of the other -- which is not what 7779 found in `getV90JaBits`,
+where an eleven-byte difference that read as an order AND an allocation was
+one thing.  Both readings are available a priori and only the cross product
+tells them apart.
+
+Six cells reach zero, so neither axis has a unique preimage.  What each
+decodes:
+
+  - **the condition tests for ZERO, with "Digital" as the true arm.**  Every
+    cell testing for non-zero is off by that byte.  `== 0` and `!` are the
+    same expression to GCC 3.4.2.
+  - **`dil = dilDescriptor;` is stored LAST.**  Every cell with `dil` ahead of
+    `sessionFlag` costs ten bytes; `side` and `sessionFlag` are free to swap.
+
+**AND THERE IS AN INDEPENDENT WITNESS, FROM A DIFFERENT OBSERVABLE THAN THE
+BYTE COMPARISON.**  GCC 3.4.2 emits string literals in the order the source
+mentions them, and the blob's two are eight bytes apart at
+`.rodata.str1.1+0x1089` and `+0x1091` -- "Digital" first.  Our object used to
+put "Analog" first.  After the edit our `.rodata.str1.1` opens
+`Digital\0Analog\0V90Modem Destruct...` against the blob's
+`Digital\0Analog\0V90Modem...`, the same sequence including the string that
+follows.  The spelling that fixes the branch byte is the one that fixes the
+section layout, and nothing in the byte comparison forced them to agree --
+`byteident` masks the relocated addend, so the string order is invisible to
+the grade this pass is measured on.
+
+======================================================================
+
+======================================================================
+### 7793. `V90Demapper`'s CONSTRUCTOR: 7766's LICENCE IS AVAILABLE, AND A COMMENT SAID IT WASN'T
+
+13 of 193 on both clones, and the file asserted the question closed:
+
+> the eight zeroed words and the two trailing stores are plain stores with no
+> call between them, so their order in the object is the scheduler's and is
+> not evidence.
+
+**Never measured, and false.**  This is 6100's defect and 7779's -- a comment
+declaring a question settled that nobody had opened -- and it is the worst
+kind, because it tells the next reader not to look.
+
+8! is far too large to enumerate and none was attempted.  What was available
+is 7766's inversion, and the licence was checked IN THIS FUNCTION before it
+was used: written low-to-high, GCC 3.4.2 emits the eight low-to-high, so on
+this run the map from source order to emitted order is the IDENTITY and the
+object's emission is its own preimage.  The object emits them high to low.
+617's full-text test decides it:
+
+    ascending, errorHistogramCount then params (as written)   13
+    DESCENDING, errorHistogramCount then params                5
+    DESCENDING, params then errorHistogramCount                1
+
+The two trailing stores WERE enumerated properly, over all eight positions
+they can take relative to the constellation loop: the six that lift either
+above the loop change the function's SIZE and are excluded outright.
+
+**ONE BYTE IS LEFT AND IT IS NAMED RATHER THAN SHRUGGED AT (2900).**  The
+epilogue discards the `sub $0x4` slot with a `pop` into a dead register --
+blob `%eax`, ours `%ebx`, one modrm byte, both values dead.  No source text
+chooses that.  **`byteident` now grades both constructors grade 1 ACCEPT where
+they were REJECT.**
+
+**AND 7779's RULE IS CONFIRMED IN A SECOND FUNCTION.**  A register difference
+at 0xaf -- blob `mov 0x18(%esp),%ecx` against our `%edx` -- disappeared when
+the store order was fixed, without being touched.  It was downstream of the
+order and never independent evidence.
+
+**A WITNESS THAT WAS CHECKED AND FOUND TOO WEAK TO USE.**  `V90Demapper::
+reset` in the same file already writes `sampleCount`, `frameStart` and
+`rbsFramePosition` in the decoded descending order, which looks like 7770's
+"restores the block the file already claimed".  It is not: `reset` is 776
+bytes against the blob's 723 and sits in the SIZE bucket, so its order is our
+own unverified reconstruction and corroborates nothing.  Recorded because the
+temptation to quote it was real.
+
+======================================================================
+
+======================================================================
+### 7794. `instrcount.py` COUNTED ALIGNMENT PADDING AS CODE, AND IT INVERTED THE TRIAGE OF FIVE FUNCTIONS
+
+**This is the most useful thing in the batch and it is a defect in the
+measuring instrument, not in `src/`.**
+
+7774's lever is "same byte count, different instruction count means a missing
+or extra statement", and it was careful to say **padding stripped**.
+`tools/instrcount.py` is the tool everyone reaches for to get that number, and
+its docstring says:
+
+> Alignment padding between symbols is outside every symbol's `st_size` and is
+> therefore not counted on either side.
+
+True, and read as the whole story.  It is not.  GCC aligns a LOOP HEAD by
+emitting `nop`, `lea 0x0(%esi,%eiz,1),%esi` or `mov %esi,%esi` **inside** the
+function, where `st_size` covers them, and how many it emits depends on where
+the loop lands.  Two functions with identical code can differ by ten.
+
+The five rows this pass triaged on that number, raw against padding-stripped:
+
+    V90Demapper::printErrorHistogramAndReset   +12  ->    0   EQUAL
+    V90Demodulator::getAT_UD                   +10  ->   -1   blob has one MORE
+    V90SpectralShaper::process                  -1  ->   -3   blob has three MORE
+    V90MP::evaluateInfo                          0  ->   -1   blob has one MORE
+    V90AutoDigitalImpDetector::updateUref       +1  ->   +2
+
+**Every one of the five is wrong in a way that changes what you do next**, and
+two of them are wrong in the direction that matters most: `getAT_UD` and
+`evaluateInfo` read as "we emit MORE, so it is structural, decline it" and are
+in fact 7774's ABSENCE shape -- the blob has code we do not.  `process` read
+as a one-instruction absence and is a three-instruction one.
+`printErrorHistogramAndReset` read as +12, which 7778's precedent
+(`calcMtoMatchKtarget`, "five instructions we emit that the blob does not, so
+no permutation reaches it") would have declined outright, and it is EQUAL.
+
+Both this session's own triage and the advice it was given ranked these
+functions off the raw number, and both rankings were wrong.
+
+**FIXED, IN THE TOOL.**  `instrcount.py` now excludes padding, using
+`byteident.py`'s `_padding` predicate IMPORTED rather than copied -- two
+spellings of "is this padding" is the drift CLAUDE.md's one-home rule exists
+to stop.  `mov %r,%r` is not in byteident's version; it is added in
+`instrcount` alone and documented there so it can never be folded in silently.
+
+**THIS IS NOT 7762's PROHIBITION.**  That rule forbids a pass from widening
+the tool that GRADES it, and `byteident.py` was not touched -- its `_padding`
+is imported, not changed, and the grade-0 and grade-1 numbers in 7789 are the
+unmodified tool's.  `instrcount.py` is a triage aid and has never been a gate.
+The fix was verified against an independent implementation written before it
+(the padding classifier used for the table above), which reproduces all five
+rows exactly.
+
+**EVERY INSTRUCTION COUNT RECORDED IN THIS FILE BEFORE THIS COMMIT WAS TAKEN
+WITH PADDING INCLUDED AND WILL NOT REPRODUCE.**  Saying so is the whole of
+7793's complaint applied to this finding: a tool whose output changed under
+the record, with nothing in the record explaining why, is 6100 and 6103 again.
+**7774's 69-against-68 is the EXCEPTION and is still right** -- it says
+"padding stripped" in terms, and it is the number a reader is most likely to
+go and check.
+
+**AND 7778's THREE DECLINES WERE RE-MEASURED, because this finding cites one
+of them as its own precedent and a precedent taken from a broken tool is not
+one.**  All three are in files this pass was forbidden to edit, so this is a
+measurement and not a visit:
+
+    V90Equalizer::~V90Equalizer  D1/D2   113 vs 112   ->  113 vs 112   unchanged
+    adjustConstellationsPower            636 vs 632   ->  636 vs 632   unchanged
+    calcMtoMatchKtarget                   67 vs  72   ->   67 vs  71   ONE was padding
+
+**Two of the three survive exactly and the third loses one instruction of its
+five.**  7778's verdict on `calcMtoMatchKtarget` stands -- four instructions
+we emit that the blob does not is structural just as five was, and no
+permutation reaches it -- but its sentence "five instructions we emit that the
+blob does not" should be read as four.  The destructor's 113-against-112 at
+541 bytes, which is 7778's cleanest instance of 7774's shape, is untouched by
+this defect and remains the strongest lead in that finding.
+
+======================================================================
+
+======================================================================
+### 7795. THE FIFTEEN SYMBOLS (THIRTEEN ENTRIES) THAT ARE LEFT, WITH `alpha_equal`'s OWN REJECTION ROW, AND FOUR HYPOTHESES THAT FAILED
+
+Fifteen SYMBOLS, 22 less 7789's seven, in thirteen entries -- the two clone
+pairs take one line each.  7789 counts symbols and so does this; the two
+findings do not disagree.
+
+Rows re-taken on the tree as committed, not from the baseline sweep -- the
+Demapper pair moved to ACCEPT during the pass and a stale row would have
+misreported it.
+
+**THE FOUR NEGATIVES, because two passes found their best material this way.**
+Each is an enumeration that was completed and contained no hit; none is a
+shrug.
+
+- **`V90SpectralShaper::process` (279 of 362), the arm order.**  The blob puts
+  the ODD arm of `if (i & 1)` inline and the even arm above the loop head; we
+  do the opposite.  Four spellings compiled -- `i & 1`, `(i & 1) == 0`,
+  `!(i & 1)`, `i % 2`, with the arms swapped to match.  **All four give
+  IDENTICAL 279.**  The map is CONSTANT, so no member of the family reaches
+  the object and the difference is not the arm order -- which is exactly the
+  branch 7770 says has to be excluded by measurement and cannot be excluded
+  before the compile.
+- **`V90SpectralShaper::reset` (15 of 200), the store position.**  Ten cells:
+  every slot `ssf.blockLength = blockLength;` can occupy from just after the
+  encoder clear to the end of the function.  **No cell reaches zero**; the
+  minimum is 15, the position it already had.  By 7770's own rule that settles
+  it the other way -- "either exactly one reproduces the object, or neither
+  does and the difference is not statement order at all".  What is left is a
+  load schedule and an addressing base: the blob spells the store
+  `mov %edx,0x20(%ebx)` reusing the `lea 0x48(%esi),%ebx` set up for the two
+  `ssf` calls, we spell it `mov %edx,0x68(%esi)`, and both are three bytes.
+  Free.  Rejects at row 36, `0x8(%esi),%edx` against `(%esi),%ecx`.
+- **`V90Demodulator::getAT_UD` (168 of 418), the rounding's operand order.**
+  105 code instructions against the blob's 106 (7794's corrected number), and
+  the extra one is real: the blob emits `flds C; ... ; faddp` where we emit
+  `fadds C` for the `+ 0.5f` in the inlined `getBitRate`.  That is the classic
+  `c + x*k` against `x*k + c`, so five spellings were compiled --
+  `x*(1/6) + 0.5f`, `0.5f + x*(1/6)`, parenthesised, `(1/6)*x + 0.5f`,
+  `0.5f + (1/6)*x`.  **All five give IDENTICAL 168**, and identical 2-of-87 on
+  `getBitRate` itself.  GCC 3.4.2 canonicalises the commutative float add
+  whatever the source says, so the operand order is not recoverable here and
+  is not the cause.  The absence is real and its source is still open.
+- **`V90BitsToSymbol::process(unsigned int&, short*)` (11 of 375) is FREE and
+  is the whole of it.**  103 code instructions against 103, and every one of
+  the eleven bytes is the reg field of a modrm: `%eax`/`%ecx` at two sites,
+  `%esi`/`%ebx`, `%edi`/`%esi` and `%ebx`/`%edi`.  It is a register
+  PERMUTATION rather than a renaming, which is why `alpha_equal` cannot follow
+  it -- it rejects at **row 98 USE CONFLICT edi wants edi, already bound to
+  esi**, printing the same text on both sides, which is the signature of a
+  cycle.  Not fixed: 7762's ruling that a pass must not widen the tool that
+  grades it, and giving `alpha_equal` a permutation-aware binding is a real
+  change to it.
+
+**THE OTHER NINE, each with the row and the corrected instruction count.**
+
+    _ZN25V90AutoDigitalImpDetector21unitePhasesInfoOfUrefEs   280 of 748
+        code 203 vs 202 -- we emit one MORE.  alpha_equal rejects on LENGTH.
+    _ZN25V90AutoDigitalImpDetector10updateUrefEv               81 of 240
+        code  66 vs  64 -- we emit two MORE.  Rejects on LENGTH.  Same file
+        as the above and both in the same direction; worth treating as one
+        cause before two.
+    _ZN20V90Phase4Demodulator5resetEh22Phase4DemodulatorStatejj
+                                                             136 of 504
+        code 130 vs 130.  row 8 MNEMONIC movl vs mov.
+    _ZN20V90Phase4DemodulatorC1E... and C2E...             53 of 225 each
+        code  58 vs  58, and NO padding on either side.  row 34 NON-REGISTER
+        OPERAND 0x4c(%esp),%edx | 0x50(%esp),%eax -- a stack slot four bytes
+        apart at equal byte count, so the frames differ in what they hold.
+        THE ONE CLONE PAIR LEFT IN THE SET, and 7774's lever was NOT applied
+        for want of turns rather than for a reason: `V90Phase4Demodulator` is
+        the tree's single carried `onedef.py` duplicate, so the file needs
+        both definitions read before it is reordered.  That is where the next
+        pass should start.
+    _ZN11V90Demapper27printErrorHistogramAndResetEv           136 of 362
+        code  86 vs  86 -- EQUAL, and 7794 is why that is news.  Rejects on
+        LENGTH because the padding differs (blob 1 pad + 1 self-move, ours
+        14).  The differences are the scheduling of two `edprintf` argument
+        setups and the loop's index arithmetic.
+    _ZN11V90DemapperC1Ej... and C2Ej...                        1 of 193 each
+        grade 1 ACCEPT.  7793.
+    _ZN11V90Demapper20resetLinearMappStudyEj                   36 of 139
+        code  37 vs  37.  row 23 MNEMONIC xor vs mov.
+    _ZN15V90BitsToSymbol7processEPhRjPs                        55 of 484
+        code 133 vs 133.  row 1 MNEMONIC xor vs mov.
+    _ZN5V90MP12evaluateInfoEv                                  46 of 482
+        code 130 vs 131 -- the blob emits one MORE, 7774's shape, and the raw
+        count said zero.  row 22 MNEMONIC movw vs movzbl.
+
+**`DSPLIB_REPRODUCE_BUGS` DOES NOT APPEAR IN ANY OF THE EIGHT FILES**, checked
+rather than assumed, so 6810's pair of checks has nothing to bind to here.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7785 and a sibling
+worktree 7792 when this was written; expect to renumber at merge.
+
+======================================================================

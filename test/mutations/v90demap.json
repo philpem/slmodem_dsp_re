@@ -478,8 +478,9 @@
  },
  {
   "label": "the RBS frame position survives the reset",
-  "find": "\tsampleCount = 0;\n\tframeStart = 0;\n\trbsFramePosition = 0;\n",
-  "replace": "\tsampleCount = 0;\n\tframeStart = 0;\n"
+  "find": "\tsignBits.reset(mapp->shaperSR, 0);\n\n\tsampleCount = 0;\n\tframeStart = 0;\n\trbsFramePosition = 0;\n",
+  "replace": "\tsignBits.reset(mapp->shaperSR, 0);\n\n\tsampleCount = 0;\n\tframeStart = 0;\n",
+  "why": "Carries `signBits.reset` because finding 7793 gave the CONSTRUCTOR the same three stores in the same order -- the object's -- so the bare block now matches twice, and an anchor matching twice reads UNUSABLE without failing the run (finding 1264)."
  },
  {
   "label": "the histogram is cleared to the row length rather than to 128",

@@ -83,14 +83,16 @@
  {
   "label": "enterPhase4: the total is assigned, not accumulated",
   "fn": "enterPhase4",
-  "find": "\tword_44 += word_38;\n\tword_38 = 0;",
-  "replace": "\tword_44 = word_38;\n\tword_38 = 0;"
+  "why": "Re-anchored by finding 7791: the clear no longer follows the accumulate directly -- the object puts `word_38 = 0;` after the deadline and that is decoded, not transcribed -- so the anchor carries the deadline line instead.",
+  "find": "\tword_44 += word_38;\n\tword_48 = 0x28230",
+  "replace": "\tword_44 = word_38;\n\tword_48 = 0x28230"
  },
  {
   "label": "enterPhase4: the counter is cleared before it is added",
   "fn": "enterPhase4",
-  "find": "\tword_44 += word_38;\n\tword_38 = 0;",
-  "replace": "\tword_38 = 0;\n\tword_44 += word_38;"
+  "why": "Re-anchored by finding 7791, same reason as the entry above.",
+  "find": "\tword_44 += word_38;\n\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;\n\tword_38 = 0;",
+  "replace": "\tword_38 = 0;\n\tword_44 += word_38;\n\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;"
  },
  {
   "label": "enterDataPhase: the two study lengths are swapped",

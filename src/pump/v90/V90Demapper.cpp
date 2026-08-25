@@ -155,12 +155,46 @@ typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 : -1];
  * blocks to callees whose manglings type them -- so the casts below are what
  * `sysdep_malloc` returning `void *` costs and nothing more.
  *
- * THE ORDER OF THE STORES IS NOT THE OBJECT'S ORDER, and only one part of it
- * was forced.  `adiDetector` is stored BEFORE the two allocations and the
- * compiler could not have moved it there: a store to `*this` cannot cross a
- * call to `sysdep_malloc`, which may alias anything.  The eight zeroed words
- * and the two trailing stores are plain stores with no call between them, so
- * their order in the object is the scheduler's and is not evidence.
+ * THE ORDER OF THE STORES IS THE OBJECT'S ORDER, and the paragraph that used
+ * to stand here said the opposite.  It read: "the eight zeroed words and the
+ * two trailing stores are plain stores with no call between them, so their
+ * order in the object is the scheduler's and is not evidence."  **That was
+ * never measured and it is false**, which is 6100's defect and 7779's -- a
+ * comment asserting a question is closed when nobody had opened it.
+ *
+ * `adiDetector` is stored BEFORE the two allocations and the compiler could
+ * not have moved it there: a store to `*this` cannot cross a call to
+ * `sysdep_malloc`, which may alias anything.  That much was right.
+ *
+ * The eight zeroed words are 7766's case, and the licence is available here
+ * because it was checked in this function first: written low-to-high, GCC
+ * 3.4.2 emits them low-to-high, so on this run the map from source order to
+ * emitted order is the IDENTITY and the object's emission is therefore its
+ * own preimage.  The object emits them HIGH TO LOW -- +0x2c, +0x28, +0x18,
+ * +0x14, +0x10, +0x0c, +0x08, +0x04 -- and writing that order is what the
+ * source now does.  8! is far too large to enumerate and no enumeration is
+ * claimed; what is claimed is 7766's inversion of a measured identity map,
+ * and 617's acceptance test decides it: differing bytes of 193 went
+ *
+ *     ascending, errorHistogramCount then params (as written)   13
+ *     DESCENDING, errorHistogramCount then params                5
+ *     DESCENDING, params then errorHistogramCount                1
+ *
+ * and the two trailing stores were enumerated properly, over all eight
+ * positions they can take relative to the constellation loop: the six that
+ * move either of them ABOVE the loop change the function's SIZE and are
+ * excluded outright, and of the two that do not, `params` first is the one
+ * that reaches 1.
+ *
+ * ONE BYTE IS LEFT AND IT IS THE FREE COLUMN, named rather than shrugged at
+ * (2900).  The epilogue discards the `sub $0x4` slot with a `pop` into a dead
+ * register: the blob picks `%eax` and we pick `%ebx`, one byte of modrm, both
+ * values dead.  No source text chooses that, `byteident.py` grades both
+ * constructors **grade 1 ACCEPT** where they were REJECT before, and the
+ * register difference that USED to sit at 0xaf -- `mov 0x18(%esp),%ecx`
+ * against `%edx` -- disappeared when the store order was fixed.  That is
+ * 7779's rule confirmed in a second function: a register difference
+ * downstream of a store-order difference is not independent evidence.
  *
  * THE SIX COUNTS ARE A ROLLED LOOP, not six stores.  `mov %ebx,0x630(%esi,
  * %eax,4); inc %eax; cmp $0x5,%eax; jbe` -- one store and a back edge, where
@@ -177,20 +211,20 @@ V90Demapper::V90Demapper(unsigned int levels, V90Parameters *params,
 	signs = (unsigned char *)sysdep_malloc(levels);
 	sampleCapacity = levels;
 
-	bitsPerFrame = 0;
-	word_08 = 0;
-	signBitsPerFrame = 0;
-	signBitGroups = 0;
-	signBitGroupSize = 0;
-	rbsFramePosition = 0;
-	frameStart = 0;
 	sampleCount = 0;
+	frameStart = 0;
+	rbsFramePosition = 0;
+	signBitGroupSize = 0;
+	signBitGroups = 0;
+	signBitsPerFrame = 0;
+	word_08 = 0;
+	bitsPerFrame = 0;
 
 	for (i = 0; i < V90DEMAPPER_CONSTELLATIONS; i++)
 		constellationSize[i] = 0;
 
-	errorHistogramCount = 0;
 	this->params = params;
+	errorHistogramCount = 0;
 }
 
 /*

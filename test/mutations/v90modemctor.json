@@ -120,13 +120,15 @@
   },
   {
     "label": "ctor: the announcement reads the member and not the argument",
-    "find": "\t\t\t\t     modemSide ? \"Analog\" : \"Digital\");",
-    "replace": "\t\t\t\t     side ? \"Analog\" : \"Digital\");"
+    "why": "Re-anchored by finding 7792: the ternary is spelled as a test for ZERO with \"Digital\" as the true arm, which is what the object's `je` and its .rodata order both say.  The mutation is unchanged -- it still reads the member in place of the argument.",
+    "find": "\t\t\t\t     modemSide == 0 ? \"Digital\" : \"Analog\");",
+    "replace": "\t\t\t\t     side == 0 ? \"Digital\" : \"Analog\");"
   },
   {
     "label": "ctor: the announcement's two sides are swapped",
-    "find": "modemSide ? \"Analog\" : \"Digital\");",
-    "replace": "modemSide ? \"Digital\" : \"Analog\");"
+    "why": "Re-anchored by finding 7792, same reason as the entry above.",
+    "find": "modemSide == 0 ? \"Digital\" : \"Analog\");",
+    "replace": "modemSide == 0 ? \"Analog\" : \"Digital\");"
   },
   {
     "label": "dtor: the illegal-side test is `> 2` and not `> 1`",

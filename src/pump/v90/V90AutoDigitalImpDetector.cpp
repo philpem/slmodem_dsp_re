@@ -334,11 +334,38 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
  * or more would write past the end of a row.  The object does not mask it
  * here, and neither does this: `reset` is what puts a value there and it
  * stores its argument unmasked.
+ *
+ * `ucodeLevel` IS READ STRAIGHT INTO THE STORES, WITH NO LOCAL, and that is
+ * the whole of the one byte this function used to differ by.  The object
+ * hoists the load out of the phase loop itself and spells it `movzwl
+ * 0xa96c(%ebx),%edi`; a `short level = ucodeLevel;` local makes GCC 3.4.2
+ * emit `movswl` for the same load.  Seven spellings were compiled --
+ * `(short)` cast, plain `short`, `unsigned short`, `int`, `unsigned int`, no
+ * local, and no local for `at` either -- differing bytes of 111:
+ *
+ *     (short) cast  1     unsigned short  0 <--     no local       0 <--
+ *     short         1     int             1         `at` inlined   1
+ *                         unsigned int    1
+ *
+ * **THE PREIMAGE IS NOT UNIQUE and this is therefore NOT a decoding.**  Two
+ * cells reach zero and the object cannot tell them apart, so 7771's rule
+ * binds: a hit against a non-injective map is not an inference about the
+ * author's text.  What IS established is negative and is the useful half --
+ * the signed 16-bit local this file used to declare is excluded, because
+ * every cell carrying one is off by that byte.  The no-local spelling is
+ * taken as the smaller claim; `unsigned short level` would be equally exact
+ * and equally unevidenced.
+ *
+ * AND THE FIELD ITSELF IS STILL `short`.  The `movzwl` here is finding 614's
+ * free case -- the 32-bit result is discarded by a 16-bit store -- so it says
+ * nothing about +0xa96c's signedness, and the rest of the object settles that
+ * the other way: one `filds 0xa96c(%ebx)`, which is a SIGNED integer load,
+ * and five `movswl` of the same field elsewhere.  Retyping the member would
+ * have been 613's family read backwards.
  */
 void
 V90AutoDigitalImpDetector::resetLinearMapping()
 {
-	short level = (short)ucodeLevel;
 	unsigned char at = ucode;
 	short phase;
 
@@ -350,8 +377,8 @@ V90AutoDigitalImpDetector::resetLinearMapping()
 			linMappAlt[phase][ci] = 0;
 		}
 
-		linMapp[phase][at] = level;
-		linMappAlt[phase][at] = level;
+		linMapp[phase][at] = ucodeLevel;
+		linMappAlt[phase][at] = ucodeLevel;
 	}
 }
 

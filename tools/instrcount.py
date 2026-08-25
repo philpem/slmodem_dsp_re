@@ -119,9 +119,48 @@ def count(obj, name, section, value, size):
     txt = subprocess.check_output(cmd, stderr=subprocess.DEVNULL).decode()
     n = 0
     for ln in txt.split('\n'):
-        if INSN.match(ln):
+        m = INSN.match(ln)
+        if m and not _padding(ln, m.group(1)):
             n += 1
     return n
+
+
+#
+# ALIGNMENT PADDING IS NOT CODE, AND THIS TOOL USED TO COUNT IT.  The
+# docstring above says padding between symbols is outside `st_size` and so is
+# not counted, which is true and was read as the whole story.  It is not:
+# GCC aligns a LOOP HEAD by emitting `nop`, `lea 0x0(%esi,%eiz,1),%esi` or
+# `mov %esi,%esi` INSIDE the function, where `st_size` covers them.  How many
+# it emits depends on where the loop happens to land, so two functions with
+# identical code can differ by ten in this count for no reason at all.
+#
+# That is not a cosmetic imprecision -- it is the tool reporting the opposite
+# of the truth.  `V90Demapper::printErrorHistogramAndReset` read +12 and is
+# EQUAL on code; `V90SpectralShaper::process` read -1 and the blob has THREE
+# code instructions we do not; `V90Demodulator::getAT_UD` read +10 and the
+# blob has one MORE than us.  Finding 7774's whole lever is "same bytes,
+# different instruction count means a missing statement", and it was careful
+# to say "padding stripped" -- a reader who took that count from HERE would
+# have chased three phantoms and missed three real absences.  Finding 7794.
+#
+# The predicate is byteident.py's, imported rather than copied, because two
+# spellings of "is this padding" is exactly the drift CLAUDE.md's one-home
+# rule exists to stop.  `mov %r,%r` is NOT in byteident's version -- it is
+# added here and only here, and it is listed in `--pad` so it can never be
+# folded in silently.
+#
+sys.path.insert(0, os.path.join(HERE, 'toolchain'))
+import byteident as _bi                                  # noqa: E402
+
+_SELFMOV = re.compile(r'\bmov\s+(%\w+),\1\s*$')
+
+
+def _padding(line, mnemonic):
+    """Is this disassembly line alignment padding rather than code?"""
+    ops = line.split(mnemonic, 1)[1].split('#')[0].strip() if mnemonic else ''
+    if _bi._padding(mnemonic, ops):
+        return True
+    return bool(_SELFMOV.search(line.split('\t')[-1]))
 
 
 def main():
