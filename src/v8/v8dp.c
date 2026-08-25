@@ -124,10 +124,25 @@ static struct dp_operations v8_op = {
 	.hangup = 0
 };
 
-void
+/*
+ * RETURNS int, AND THE VALUE IS A LITERAL ZERO RATHER THAN THE CALLEE'S.
+ * The object closes this function `call modem_dp_register; xor %eax,%eax;
+ * add $0xc,%esp; ret` -- one instruction more than a `void` body can emit,
+ * and it is the whole of our -1 instruction gap.  `modem_dp_register` itself
+ * returns `int` (slmodemd/modem.c:211), so `return modem_dp_register(...)`
+ * -- which is what the host's own `dp_dummy_init` and `dp_sinus_init` write
+ * -- would leave the callee's result in %eax and emit no `xor` at all.  The
+ * zeroing is therefore forced evidence for a separate `return 0`.
+ *
+ * It is an asymmetry in the original and not a convention: `dp_v23_init`
+ * (+0x4f88) zeroes the same way and `dp_call_init` (+0x31c0) does not, so
+ * that one is `void`.  Finding 7860.
+ */
+int
 dp_v8_init(void)
 {
 	modem_dp_register(DP_V8, &v8_op);
+	return 0;
 }
 
 void

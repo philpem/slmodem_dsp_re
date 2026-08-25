@@ -949,6 +949,24 @@ symbol** — so the symbol table looks right and every call site is wrong.
 Count `R_386_PC32` sites against the blob's for the template member; ours had
 zero against nineteen.
 
+**IT IS LIVE, AND THE SCREENING TEST IS A RELOCATION COUNT (7867).** 7831's
+measured NO above is real and is about how the lever was REACHED: that pass
+chose it from a brief and went looking for somewhere it might apply. Read the
+other way it paid for almost a whole pass -- `Scrambler`'s
+`resetHistoryIndexes` (7862) and `copyHistoryTail` (7866) are both in-class
+bodies the OBJECT calls, and finding the call is one command over both
+objects:
+
+    grep -c 'R_386_PC32.*<mangled member>'    ours 0, blob 9
+
+Zero against nine is what `copyHistoryTail` looked like while `nm` showed all
+five of its symbols present, which is 5805's warning exactly. **Do not judge
+which members "look inlineable"; count the call sites for every member defined
+inside a class body.** And 7866 is the trap on the way out: fixing ONE of two
+helpers called from the same conditional made four `process` bodies worse and
+**no bucket moved, because SIZE to SIZE is invisible to a set diff** -- read
+the byte counts beside it.
+
 **IT RUNS BOTH WAYS, AND THAT IS WHAT MAKES IT A LEVER.** `Descrambler`'s bulk
 `process` STAYS in the class body, because the blob carries no
 `Descrambler<...>::process` symbol at all and moving it out would make us emit

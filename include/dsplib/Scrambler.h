@@ -173,30 +173,44 @@ public:
 	/*
 	 * Put the three running pointers back to their initial values.  This
 	 * is 23 bytes in the blob and does exactly three word copies.
+	 *
+	 * THE BODY IS OUT OF LINE BECAUSE THE OBJECT CALLS IT.  Written
+	 * inside the class body it is implicitly `inline`, which moves it
+	 * from `--param max-inline-insns-auto` to `max-inline-insns-single`
+	 * and GCC 3.4.2 then expands it into every caller while still
+	 * emitting the weak symbol -- so the symbol table looks right and
+	 * `reset` is wrong.  The object refutes that directly: its
+	 * `Descrambler<h,i>::reset` spends `mov %esi,(%esp)` and
+	 * `call _ZN11DescramblerIhiE19resetHistoryIndexesEv`, where ours had
+	 * the three stores expanded in place.  That is lever 10's tell --
+	 * an EXCESS of instructions with a MISSING call -- read off the
+	 * object rather than inferred.  Finding 7862.
 	 */
-	void resetHistoryIndexes()
-	{
-		pOut = pInitOut;
-		pTap1 = pInitTap1;
-		pTap2 = pInitTap2;
-	}
+	void resetHistoryIndexes();
 
 	/*
 	 * Carry the wrapped history back up to the restart point.  The count
 	 * is `tailLength`; the blob spells the loop as a decrement that stops
 	 * when the counter reaches -1, which is `tailLength` iterations for
 	 * any value including zero.
+	 *
+	 * THE POINTERS WALK; THE INDEX FORM IS WRONG AND COSTS A REGISTER.
+	 * An indexed `for (i = 0; i < n; i++) dst[i] = src[i]` keeps FOUR
+	 * values live across the loop -- both bases, `i` and the bound `n` --
+	 * so it needs a second callee-saved register and emits `push %esi`
+	 * beside `push %ebx`.  The object pushes `%ebx` alone and holds three:
+	 * `src`, `dst` and a counter it compares against the CONSTANT -1
+	 * (`dec %edx; cmp $0xffffffff,%edx; jne`), which is `while (n--)`
+	 * with the loop rotated so entry lands on the test.
+	 *
+	 * Six spellings compiled, five distinct emissions; the two that reach
+	 * the object's instruction sequence are `unsigned int n` and
+	 * `int n` with the same `while (n--)`, and those two emit the SAME
+	 * bytes.  So the decoded fact is the loop's SHAPE and not the
+	 * counter's signedness, which the object cannot distinguish.  All
+	 * five instantiations go SIZE to REGALLOC on it.  Finding 7861.
 	 */
-	void copyHistoryTail()
-	{
-		T *dst = pInitOut + 1;
-		const T *src = pLimit;
-		unsigned int n = tailLength;
-		unsigned int i;
-
-		for (i = 0; i < n; i++)
-			dst[i] = src[i];
-	}
+	void copyHistoryTail();
 
 	/*
 	 * Seed the history with one bit, repeated.  `value & 1` is masked in
@@ -357,25 +371,11 @@ public:
 		delete[] pLimit;
 	}
 
-	/* Three word copies, as in `Scrambler`. */
-	void resetHistoryIndexes()
-	{
-		pOut = pInitOut;
-		pTap1 = pInitTap1;
-		pTap2 = pInitTap2;
-	}
+	/* Three word copies, as in `Scrambler`; out of line for its reason. */
+	void resetHistoryIndexes();
 
 	/* The count is `tailLength`, as in `Scrambler`. */
-	void copyHistoryTail()
-	{
-		T *dst = pInitOut + 1;
-		const T *src = pLimit;
-		unsigned int n = tailLength;
-		unsigned int i;
-
-		for (i = 0; i < n; i++)
-			dst[i] = src[i];
-	}
+	void copyHistoryTail();
 
 	/*
 	 * Seed the history with one bit, repeated.  `value & 1` is masked
@@ -507,13 +507,35 @@ void Scrambler<T, I>::process(const T *in, I *out, unsigned int n)
 	}
 }
 
+/*
+ * THE MASK IS COMPUTED AFTER THE CALL, AND THAT IS THE WHOLE OF THE
+ * DIFFERENCE -- five symbols closed on it.  With `bit` initialised in its
+ * declaration it is live ACROSS `resetHistoryIndexes()`, so GCC 3.4.2 must
+ * park it in a callee-saved register and pays a `push`/`pop` pair for it;
+ * ours spent `%esi` (and for `<h,i>` spilled the byte to `0x7(%esp)`).  The
+ * object reads `value` back off its incoming stack slot AFTER the call and
+ * masks into a caller-saved register -- `mov 0x14(%esp),%ecx ... and
+ * $0x1,%ecx` for `<i,i>` -- so nothing of it crosses the call.
+ *
+ * Eight spellings compiled, THREE distinct emissions.  Four reach the
+ * object: `bit` declared mid-block after the call, `bit` declared then
+ * assigned after it, the cast dropped, and masking `value` in place.  They
+ * emit the SAME BYTES, so what is decoded is the POSITION of the mask
+ * relative to the call and not which of those four the author typed; the
+ * two that mask inside the loop body do NOT match, which is what makes the
+ * hoist part of the decoded fact rather than an assumption.  The form below
+ * is chosen for this file's declarations-at-the-top style only.
+ *
+ * Finding 7863.
+ */
 template <class T, class I>
 void Scrambler<T, I>::reset(T value)
 {
-	T bit = (T)(value & 1);
+	T bit;
 	T *p;
 
 	resetHistoryIndexes();
+	bit = (T)(value & 1);
 	for (p = pInitOut + 1; p <= pInitTap2; p++)
 		*p = bit;
 }
@@ -521,12 +543,71 @@ void Scrambler<T, I>::reset(T value)
 template <class T, class I>
 void Descrambler<T, I>::reset(T value)
 {
-	T bit = (T)(value & 1);
+	T bit;
 	T *p;
 
 	resetHistoryIndexes();
+	bit = (T)(value & 1);
 	for (p = pInitOut + 1; p <= pInitTap2; p++)
 		*p = bit;
+}
+
+/*
+ * THE POSITION OF THESE TWO IS PART OF THE MEASUREMENT, NOT A TIDYING
+ * CHOICE.  Finding 7815 measured that moving ONE inline function within the
+ * headers this group reaches cost eight destructors their byte identity
+ * while touching no destructor and no free, because an inline definition's
+ * place in the translation unit is itself a lever-3 carrier.  The cell that
+ * was scored put both definitions here, after `reset`, at the end of the
+ * header; anything that moves them has to re-run the tree-wide SET diff.
+ */
+template <class T, class I>
+void Scrambler<T, I>::resetHistoryIndexes()
+{
+	pOut = pInitOut;
+	pTap1 = pInitTap1;
+	pTap2 = pInitTap2;
+}
+
+template <class T, class I>
+void Descrambler<T, I>::resetHistoryIndexes()
+{
+	pOut = pInitOut;
+	pTap1 = pInitTap1;
+	pTap2 = pInitTap2;
+}
+
+/*
+ * OUT OF LINE FOR THE SAME REASON, AND THE OBJECT SAYS SO NINE TIMES.
+ * `objdump -dr` over the blob finds NINE `R_386_PC32` call sites against
+ * `..._15copyHistoryTailEv` and our object had ZERO -- every one of them
+ * expanded in place, because an in-class body is implicitly `inline`.  It is
+ * the same defect 7862 fixed for `resetHistoryIndexes` and it survived that
+ * fix, which is why it is worth naming separately: moving one member out
+ * makes the other's inlining VISIBLE in the `process` bodies' byte counts
+ * and invisible to the bucket diff, since SIZE to SIZE moves no bucket.
+ * Finding 7866.
+ */
+template <class T, class I>
+void Scrambler<T, I>::copyHistoryTail()
+{
+	T *dst = pInitOut + 1;
+	const T *src = pLimit;
+	unsigned int n = tailLength;
+
+	while (n--)
+		*dst++ = *src++;
+}
+
+template <class T, class I>
+void Descrambler<T, I>::copyHistoryTail()
+{
+	T *dst = pInitOut + 1;
+	const T *src = pLimit;
+	unsigned int n = tailLength;
+
+	while (n--)
+		*dst++ = *src++;
 }
 
 #endif /* DSPLIB_SCRAMBLER_H */

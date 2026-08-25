@@ -88161,3 +88161,424 @@ one file and nothing in the text says which is which. On the branch the
 question has an answer. The tool therefore REFUSES when the tree already holds
 a heading for a number the mapping wants to create, which is the signature of
 a post-merge run, and says to renumber on the branch and then merge.
+### 7860. `dp_v8_init` RETURNS `int`, AND THE VALUE IS A LITERAL ZERO RATHER THAN THE CALLEE'S
+
+**Block claimed: 7860-7865.** Checked against every branch in the repository
+before writing, not only `master` -- `### 78[3-9][0-9].` over each ref's
+`docs/findings.md` returns 7830 to 7833 and nothing above.
+
+`byteident.py` had `dp_v8_init` in SIZE at blob 30 / ours 28, and
+`instrcount.py` reads it padding-stripped as ours 7, blob 8, **delta -1**:
+lever 2's ABSENCE shape, which is the rarer of the two directions (7823).
+
+The missing instruction is the return value:
+
+    blob  39c0  sub $0xc,%esp / mov $.data+0x18,%eax / mov %eax,0x4(%esp)
+                movl $0x8,(%esp) / call modem_dp_register
+                xor %eax,%eax          <-- ours has nothing here
+                add $0xc,%esp / ret
+
+A `void` body cannot emit that `xor`. **And it is a literal zero, not the
+callee's result**: `modem_dp_register` returns `int`
+(`slmodemd/modem.c:211`), so the `return modem_dp_register(...)` that the
+host's own `dp_dummy_init` and `dp_sinus_init` write would leave the call's
+value in `%eax` and emit no `xor` at all. So the source is
+
+    int dp_v8_init(void) { modem_dp_register(DP_V8, &v8_op); return 0; }
+
+**IT IS AN ASYMMETRY IN THE ORIGINAL AND NOT A CONVENTION**, which is the
+part worth keeping, because the convention reading would have propagated it
+to the wrong three files. The object's four datapump registrars split:
+
+    dp_v8_init    +0x39d8   xor %eax,%eax    -> int
+    dp_v23_init   +0x4f88   xor %eax,%eax    -> int
+    dp_call_init  +0x31c0   no xor           -> void
+
+`prop_dp_init` (+0x0) calls all of them and discards every result, so nothing
+in the program observes the difference and no differential test can. This is
+the same shape as finding 201's `"V8"` against `"v8"` in this very file.
+
+**Result: SIZE (-2 bytes) -> REGALLOC.** Byte count now 30 for 30 and the
+residual is the scratch register alone (we take `%edx`, the object `%eax`).
+Grade 0 did not move.
+
+`dp_v23_init` carries the identical shape and is behind this pass's standing
+V.23 fence, so it is recorded here and NOT edited -- whoever owns that tree
+has a one-line closure waiting.
+
+### 7861. `Scrambler::copyHistoryTail`: THE POINTERS WALK, AND AN INDEX COSTS A CALLEE-SAVED REGISTER -- FIVE INSTANTIATIONS SIZE TO REGALLOC
+
+The cross-instantiation table is what made this legible, and it is a signal
+the alignment-padding trap (7793) cannot manufacture: **padding cannot
+conspire to track a template argument.** Blob against ours, before:
+
+    copyHistoryTail   <h,h>  <h,i>  <i,h>   D<h,i>  D<i,i>
+      blob              31     31     36      31      36
+      ours              34     34     35      34      35
+
+The blob's size follows `T` and ours does not. `instrcount.py` reads all four
+as **ours 17, blob 16, delta +1** -- an EXTRA instruction in ours, in every
+instantiation.
+
+The extra instruction is a second `push`. Our source was
+
+    for (i = 0; i < n; i++) dst[i] = src[i];
+
+which keeps FOUR values live across the loop -- both bases, `i`, and the
+bound `n` -- so GCC takes `%esi` as well as `%ebx`. The object holds THREE:
+
+    blob   push %ebx ... mov (%ebx),%eax / add $0x4,%ebx
+                         mov %eax,(%ecx) / add $0x4,%ecx
+                         dec %edx / cmp $0xffffffff,%edx / jne
+    ours   push %esi / push %ebx ... mov (%ebx,%edx,4),%eax
+                         mov %eax,(%esi,%edx,4) / inc %edx
+                         cmp %ecx,%edx / jb
+
+`cmp $0xffffffff` against a CONSTANT is the tell: the bound is folded into a
+counter that runs down, so `n` need not stay live. That is `while (n--)` with
+the loop rotated so entry lands on the test.
+
+**THE DOMAIN, AND IT HAS TWO PREIMAGES, SO WHAT IS DECODED IS A FACT AND NOT
+A SPELLING** (rule 0's middle case). Six spellings compiled in one container
+pass over a scratch overlay, **five distinct emissions**:
+
+    A  for (i = 0; i < n; i++) dst[i] = src[i];     committed; no change
+    B  unsigned int n;  while (n--)   *dst++ = *src++;   REGALLOC x5
+    C  for (i = 0; i < n; i++)        *dst++ = *src++;   no change
+    D  int n;  while (n-- > 0)        *dst++ = *src++;   no change
+    E  for (; n; n--)                 *dst++ = *src++;   no change
+    F  int n;  while (n--)            *dst++ = *src++;   REGALLOC x5
+
+B and F emit the SAME BYTES, so the counter's signedness is not observable
+and the decoded fact is the loop's shape only. Cell A reproduces our
+committed object to the byte, which is what licenses reading any other cell
+(the harness reproduces the real object before a cell is read), and the five
+distinct emissions are the detector shown to FIRE -- 9a's rule, since an
+enumeration whose cells never differ is indistinguishable from a broken
+generator.
+
+**All five instantiations go SIZE -> REGALLOC.** Grade 0 does not move: the
+residual is register allocation, which is now the whole difference.
+
+**Read "all five" as all five MEASURED copies.** These are COMDAT weaks and
+`byteident.py` attributes each to the first object defining it
+(`ours.setdefault` over a sorted glob), so exactly one copy of each is scored
+even where several of our objects emit one -- `instrcount.py`, which
+attributes independently, named `V92Phase4Modulator.cpp` and
+`V92Modulator.cpp` for two of these resets where `byteident` names
+`Scrambler.cpp`. Since the peephole2 cursor state differs per translation
+unit, two copies of one weak symbol need not agree, and no tool in the tree
+compares them.
+
+**THE HARNESS MOUNTED THE TREE READ-ONLY.** 7822's `cp -al` harness had the
+container's `cp` write THROUGH the hardlinks into `src/`, and nothing failed.
+Here the variant header sits in a scratch overlay reached by a `-I` ahead of
+`-Iinclude` and `/src` is bound `:ro`, so a write-through is impossible
+rather than merely absent; `git status` was clean after the run.
+
+### 7862. `resetHistoryIndexes` IS OUT OF LINE BECAUSE THE OBJECT CALLS IT -- LEVER 10 READ OFF THE OBJECT RATHER THAN INFERRED
+
+7831 measured lever 10 a NO on a float-heavy set and the doc now warns that
+its yield in a refinement pass is unknown. **This is not that.** The lever was
+not chosen and then looked for; the object names the call:
+
+    blob  _ZN11DescramblerIhiE5resetEh
+            mov %esi,(%esp)
+            call _ZN11DescramblerIhiE19resetHistoryIndexesEv
+    ours    mov 0x8(%ecx),%edx / mov %edx,0x14(%ecx)
+            mov 0xc(%ecx),%edx / mov %eax,0x10(%ecx) / mov %edx,0x18(%ecx)
+
+That is 7480's shape exactly -- an EXCESS of instructions with a MISSING call
+-- and it was invisible to `instrcount.py`, which reads these as 19 against 19
+and 18 against 18, because the inlined body is about as long as the call
+sequence it replaces. **A lever-2 delta of zero does not mean the bodies
+agree**; here it hid a whole call.
+
+The cause is lever 10's: the body was written INSIDE the class, which is
+implicitly `inline` and moves the member from `max-inline-insns-auto` (100) to
+`max-inline-insns-single` (500). The five `resetHistoryIndexes` symbols were
+already EXACT at 23 bytes each, so the symbol table looked right while every
+caller was wrong -- 5805's warning, with the weak symbol emitted either way.
+
+Moving both bodies out of the class body, measured on its own axis:
+
+    reset  Scrambler<i,h>    SIZE (blob 48, ours 46)  ->  BYTES
+           Descrambler<i,i>  SIZE (blob 48, ours 46)  ->  BYTES
+
+and the `<h,*>` resets stay SIZE, so the call is necessary and not sufficient
+there. **The definitions' POSITION is part of the measurement**: 7815 cost
+eight destructors their byte identity by moving one inline function within
+this same family of headers, so both definitions sit where the scored cell put
+them -- after `reset`, at the end of `Scrambler.h` -- and moving them requires
+re-running the tree-wide SET diff.
+
+**THE TREE-WIDE SET DIFF, BOTH DIRECTIONS, FOR 7861 AND 7862 TOGETHER**, which
+is the only honest way to read a header change that reaches 137 files:
+
+    EXACT        523 -> 524   + V90Phase4Modulator::generateSymbol
+    REGALLOC      27 ->  31   + five copyHistoryTail, - generateSymbol
+    BYTES         72 ->  74   + Scrambler<i,h>::reset, Descrambler<i,i>::reset
+    SIZE         621 -> 614   - the seven above
+    grade 0-or-1 555 -> 560
+
+**Nothing was lost in either bucket.** `generateSymbol` is a BYSTANDER and it
+is in `src/pump/v90/`, a tree this pass was fenced out of and did not touch --
+the header reached it. That is 7796's bystander effect again, and it is the
+reason the count must be diffed as a SET: a ledger counting only the targets
+reads 7 where the truth is 8.
+
+Five mutation anchors in `test/mutations/scrambler.json` moved with the edit
+and were re-anchored -- three in `copyHistoryTail`, two in
+`resetHistoryIndexes`, the latter now disambiguated by
+`void Scrambler<T, I>::` against `void Descrambler<T, I>::` instead of by a
+trailing comment, which is sturdier than what they replaced. All five are
+CAUGHT; the suite is 36 mutations, 33 caught, 0 not caught, 3 equivalent.
+The "one element short" mutation is spelt `while (n-- > 1)` and not `--n`,
+because a bare pre-decrement on an unsigned counter wraps at `tailLength == 0`
+and would hang the runner rather than fail it.
+
+### 7863. `Scrambler::reset`: THE MASK IS COMPUTED AFTER THE CALL, NOT IN THE DECLARATION -- FIVE SYMBOLS EXACT, AND THE DOMAIN HAS FOUR PREIMAGES
+
+This is 7862's residual and it only became legible once the call was there,
+which is the argument for taking a lever's partial result and re-measuring
+rather than filing it as a decline: with `resetHistoryIndexes` inlined, the
+whole prologue was rescheduled and there was nothing to read.
+
+    ours   mov this / mov 0x14(%esp),%esi / mov %ebx,(%esp)
+           and $0x1,%esi / call ..._19resetHistoryIndexesEv
+    blob   mov this / mov %ebx,(%esp) / call ..._19resetHistoryIndexesEv
+           mov 0x14(%esp),%ecx / mov 0x4(%ebx),%eax / mov 0xc(%ebx),%edx
+           and $0x1,%ecx
+
+`T bit = (T)(value & 1);` in the DECLARATION makes `bit` live across the
+call, so GCC 3.4.2 has to hold it in a callee-saved register and buys a
+`push`/`pop` pair to do it -- and in `Descrambler<h,i>` it did worse, spilling
+the byte to `0x7(%esp)` and reloading it in the loop. The object reads `value`
+back off its own incoming argument slot AFTER the call, so nothing crosses it
+and a caller-saved register does.
+
+**EIGHT SPELLINGS COMPILED, THREE DISTINCT EMISSIONS**, run to completion
+before any cell was read:
+
+    A  T bit = (T)(value & 1);  before the call        committed; no change
+    H  value = (T)(value & 1);  before the call        same emission as A
+    C  *p = (T)(value & 1)      masked in the loop     no change
+    G  *p = value & 1           masked in the loop     no change
+    B  T bit declared after the call                   MATCHES
+    D  T bit; ... bit = (T)(value & 1); after          MATCHES
+    E  value = (T)(value & 1); after the call          MATCHES
+    F  T bit; ... bit = value & 1; after (no cast)     MATCHES
+
+**Four preimages, so rule 0's middle case: what is decoded is a FACT and not
+a spelling.** The fact is the mask's POSITION -- after the call and hoisted
+out of the loop. C and G, which mask inside the loop body, do not match, so
+the hoist is measured rather than assumed; and B/D/E/F emit the same bytes,
+so the cast and whether the author reused the parameter are not observable.
+`D` is committed for this file's declarations-at-the-top style, and that
+choice carries no evidence.
+
+**Tree-wide SET diff, both directions:**
+
+    EXACT     524 -> 529  + Descrambler<h,i>::reset, Descrambler<i,i>::reset,
+                            Scrambler<h,i>::reset, Scrambler<i,h>::reset,
+                            Scrambler<h,i>::C1
+    REGALLOC   31 ->  33  + Scrambler<h,h>::reset, Scrambler<h,h>::C1
+    BYTES      74 ->  70
+    SIZE      614 -> 611
+    grade 0-or-1  560 -> 567
+
+Nothing lost. The two constructors moved as BYSTANDERS -- they tail-call
+`reset(0)` and neither was edited. `Scrambler<h,h>` is the one instantiation
+that stops at REGALLOC; its residual is a register choice, not a statement.
+
+Four more mutation anchors moved and were re-anchored; all four CAUGHT, suite
+36 / 33 caught / 0 not caught / 3 equivalent.
+
+### 7864. 7827's INSIDE-THE-FUNCTION ROUTE, TESTED ON THE REGALLOC BUCKET OUTSIDE V.90: A MEASURED NO, AND TWO OF THE FOUR ARE STRUCTURALLY BOUNDED
+
+The brief for this pass asked specifically whether 7827 -- fix an EXPOSED
+symbol EARLY in a file and its successors may go exact for free -- works on
+the REGALLOC symbols outside V.90. **It does not, and three separate reasons
+came out of it, only one of which was anticipated.**
+
+The eight REGALLOC symbols in that span, all in files ALREADY at the blob's
+`nm -n` order, so lever 3 had nothing positional to offer any of them:
+
+    toneiir.c        _iir_filter_create        idx 5 of 8
+    DiffCoder.cpp    ParallelDiffDecoder<h>::reset   idx 3 of 15
+                     ParallelDiffEncoder<h>::reset   idx 9
+                     ParallelDiffEncoder<h>::C1      idx 11
+    FloatFIR.cpp     FloatFIR::reset           idx 1 of 8
+    fpm_ecc.c        FPM_ECC_free              idx 2 of 3
+    v34filters.c     V34EqualizerCleanUp       idx 16 of 26
+    v8dp.c           dp_v8_exit                idx 3 of 4
+
+**The `-fno-peephole2` certificate clears NONE of them** -- two EXPOSED
+(`dp_v8_exit` on `ecx`, `V34EqualizerCleanUp` on `eax`/`ecx`/`edx`), six
+UNDECIDED, zero CLEARED -- so the route is live in principle for all eight and
+the negative below is not the certificate's.
+
+**1. A SIZE FIX THAT DOES NOT CHANGE THE SCRATCH IS A NO-OP FOR THE
+SUCCESSOR, and this is the general lesson.** `dp_v8_init` (idx 2) was closed
+from SIZE to REGALLOC by 7860 -- one real instruction added -- and
+`dp_v8_exit` (idx 3) did not move by a byte, because `dp_v8_init` went on
+taking the same scratch (`%edx`) it took before. 3b's cursor advances as
+`search_ofs' = f(search_ofs, live set)`, so **7827 fires only when the
+upstream fix changes WHICH REGISTER the split consumes**, never merely
+because the upstream symbol got better. Screen on the scratch register, not
+on the bucket.
+
+**2. `v8dp.c` IS BOUNDED BY A TRANSLATION-UNIT BOUNDARY WE CHOSE.** The blob's
+emission ranks over that span are 120, 121, **122**, 123, 124 and rank 122 is
+`v8_process` -- which the original emitted between `v8_delete` and
+`dp_v8_init`, and which THIS RECONSTRUCTION put in `src/v8/v8proc.c`. 590
+bytes of the original's cursor history are in another file of ours, so the
+state arriving at `dp_v8_init` cannot be reproduced by any edit inside
+`v8dp.c`. Both of that file's REGALLOC residuals are bounded, not open.
+It is lever 3a's question 2 -- "is the blob's span YOURS?" -- answering NO
+for a reason that is ours rather than the original's.
+
+**3. `DiffCoder.cpp` CANNOT BE EVALUATED POSITIONALLY AT ALL, AND WE EMIT
+FOUR BODIES THE ORIGINAL DID NOT.** Every one of its fifteen symbols is a
+COMDAT weak in its own `.gnu.linkonce.t.*` at address 0, so `nm -n` gives a
+tie-break and not an emission order -- refinement.md's "two regions are not
+reachable by definition order at all". And the blob defines EIGHT
+`ParallelDifferential*` symbols where we define TWELVE: it has no `C2Ej` and
+no `D2Ev` for either class. **The blob is not short of clones in general** --
+64 `C2E` and 52 `D2Ev` over the whole object -- it is short of them for the
+TEMPLATE classes, which is what implicit instantiation from use produces and
+what `template class X<T>;` does not. `DiffCoder.cpp` uses the whole-class
+form, which is exactly what `Scrambler.h`'s own comment warns against, and
+`Scrambler.cpp`'s member-by-member form does not avoid it either (10 such
+symbols). So four extra bodies sit in our TU consuming cursor state the
+original's never spent.
+
+    idx 3   upstream is indices 0, 1, 2 and all three are EXACT, so the
+            cursor arriving at it is provably the blob's -- and it is STILL
+            REGALLOC.  7827 answered in the negative from data alone, with
+            no compile: the difference there is not the cursor.
+    idx 9, 11  downstream of the extra C2/D2 bodies; not reproducible.
+
+**Not attempted, and why:** the upstream candidates in the other three files
+are large -- `FloatFIR::process` at 244 differing bytes of 287, `FPM_ECC_cancel`
+at -178, `toneiir_progress` at -449 -- so each is a reconstruction task rather
+than a refinement one, and none of them is the cheap test 7827 promises.
+`toneiir_create` (idx 0, +4 instructions padding-stripped) is the one
+remaining honest test of the route in this span and this pass did not reach
+it; it is the next thing to try, not a decline.
+
+### 7865. THE BRIEF'S "SIZE NEAR MISSES" WERE SORTED BY SIZE, NOT BY DELTA, AND THE LIST IS UNUSABLE AS A WORKLIST
+
+Recorded so the next pass does not re-derive it. This pass was handed seven
+SIZE symbols as "the closest", quoted as `398 B GenericIIR<f,d>::process`,
+`392 B FloatARMA::process`, `393 B V92Modem C1/C2`, `392 B V8SetMessage`,
+`392 B txmit`, `389 B chkForceBaudRate`, `387 B V90SpectralShaper::applyAction`.
+Those figures are the symbols' BLOB SIZES and the list is the top of a
+descending sort under a 400-byte cut. Their actual deltas are
+
+    GenericIIR<f,d>::process(f)   -99      V92Modem C1/C2   -40
+    FloatARMA::process(f)         +16      V8SetMessage     +20
+    txmit                         -32      chkForceBaudRate  -5
+    V90SpectralShaper::applyAction +1
+
+-- so six of the seven are the FARTHEST from closing among small symbols, and
+`GenericIIR<f,d>::process(const float *, float *, unsigned)` at blob 584
+against ours 96 is not a refinement target at all. **SIZE has no "differing
+byte" column**, which is what `--why` and the bucket listings sort on
+elsewhere, so a size-ordered listing reads as a closeness-ordered one and
+nothing in the tooling says otherwise. Sort SIZE by `abs(ours - blob)` after
+`instrcount.py`'s padding strip, and quote the delta beside the size.
+
+The real near misses in that span are ±1 to ±3 bytes and none of them was in
+the brief: `FPM_rms` +1, `V34EchoEstimateDelayLineEnergy` +1,
+`V34TimingFiltersInit` -1, `Descrambler<i,i>::copyHistoryTail` -1 (closed
+here by 7861), `v8_crc` -1, `Dual_TONE_create` +2, `notch` -2,
+`linear2ulaw` +2.
+
+### 7866. `copyHistoryTail` HAD THE SAME INLINING DEFECT AND SURVIVED 7862's FIX, BECAUSE SIZE TO SIZE MOVES NO BUCKET
+
+7862 moved `resetHistoryIndexes` out of the class body and five symbols closed
+on it. **It also made four `process` bodies WORSE and the SET diff could not
+say so**, because all of them were SIZE before and SIZE after:
+
+    processAllOnes            blob 120   ours 118 -> 131
+    processAllZeros           blob 120   ours 118 -> 128
+    <h,h>::process(h)         blob 107   ours 109 -> 123
+    <h,h>::process(bulk)      blob 120   ours 126 -> 131
+
+**A bucket diff is blind along the SIZE-to-SIZE diagonal**, which is the one
+direction a refinement pass never watches, and this is the case that shows why
+the byte counts have to be read beside it.
+
+The cause was not the move; it was the HALF-move. The blob calls BOTH helpers
+from `process`:
+
+    blob  .gnu.linkonce.t._ZN9ScramblerIhhE7processEh
+            +0x54  R_386_PC32  _ZN9ScramblerIhhE19resetHistoryIndexesEv
+            +0x5c  R_386_PC32  _ZN9ScramblerIhhE15copyHistoryTailEv
+
+Over the whole object there are **NINE `R_386_PC32` call sites against
+`..._15copyHistoryTailEv` and our object had ZERO** -- it was still an
+in-class body, so still implicitly `inline`, so still expanded at every site.
+The `process` bodies grew because they now paid a real call for one helper
+while inlining the other into the same conditional, which forces callee-saved
+registers around the call and buys nothing back.
+
+Moving `copyHistoryTail` out as well:
+
+    EXACT     529 -> 530   + Scrambler<h,h>::process(h)
+    REGALLOC   33 ->  34   + Descrambler<i,i>::process(i)
+    SIZE      611 -> 609
+    grade 0-or-1  567 -> 569
+
+and the residual `process` bodies all crossed to the same side of the blob and
+much closer -- `processAllZeros` +8 to -14, `<h,i>::process(h)` +5 to -11,
+`processAllOnes` and both bulk `process` to -5. Nothing was lost.
+
+**The rule this leaves: count the CALL SITES, not the symbol.** `nm` showed
+all five `copyHistoryTail` symbols present and EXACT-adjacent the whole time,
+which is exactly 5805's warning -- the symbol table looks right while every
+caller is wrong -- and the only detector that fires is
+`grep -c R_386_PC32.*<mangled>` over both objects. Ours 0 against the blob's
+9 is not a subtle signal; nobody had counted.
+
+### 7867. LEVER 10 IS LIVE WHEN THE OBJECT NAMES THE CALL, AND `refinement.md` SAID THE OPPOSITE
+
+7831 measured levers 10, 11 and 12 a NO on a float-heavy set and the playbook
+now carries "their yield in a refinement pass is unknown" plus a brief-level
+"do not spend the pass on them". **This pass spent almost all of its yield on
+lever 10**: 7862 and 7866 are both it, and 7863's five closures exist only
+because the call being there made the residual legible at all.
+
+The difference is the direction of travel, and it is worth stating as a rule
+rather than as two more data points:
+
+- 7831 CHOSE the lever from a brief and went looking for somewhere it might
+  apply. That is the search that came back empty.
+- 7862 and 7866 READ the call off the object -- a `R_386_PC32` against a
+  mangled member name that our object does not have -- and the lever was the
+  explanation, not the hypothesis.
+
+So the screening test is a relocation count and not a judgement about which
+members "look inlineable": for every member defined inside a class body,
+compare `grep -c R_386_PC32.*<mangled>` between the blob and ours. Zero
+against nine is what `copyHistoryTail` looked like. `refinement.md`'s lever 10
+now points here, because CLAUDE.md's own rule is that a paragraph stating a
+live defect has a comment's shelf-life and no gate behind it -- and a brief
+quoting the stale sentence would have skipped this pass's whole result.
+
+**RUN TREE-WIDE IT IS NOISY, AND THE NOISE HAS ONE CAUSE WORTH NAMING.** Over
+the 1,251 shared symbols, 56 have two or more `R_386_PC32` sites in the blob
+and ZERO in ours -- but most are functions whose CALLERS THIS TREE HAS NOT
+WRITTEN, not functions we inline: `DescrambleDataV22` at 17, `ModDataV17` at
+7, `ModDataV32` and `V32StateName`, all in modules that do not exist here.
+The screen cannot tell "we expand it" from "we have not written anybody who
+would call it", and a pass reading the raw list as a defect list would chase
+unwritten code. **Intersect it with the symbols whose callers we HAVE
+written** before believing a row. The residue after that intersection is the
+real slice, and this pass did not triage it -- what it did find in the
+already-written half is that `Scrambler`/`Descrambler`'s `process` members are
+themselves still in-class with 9, 10, 7 and 5 blob call sites against our 0.
+7543 records moving `Scrambler::process` out as SET-neutral (488 before, 488
+after), and that was measured BEFORE either helper came out of line, so it is
+worth re-measuring now rather than inheriting.
