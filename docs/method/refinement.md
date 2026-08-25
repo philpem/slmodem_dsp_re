@@ -148,14 +148,49 @@ pair before its `(Pf)` pair and we emitted them the other way round, and in
 *both* objects it was the first-emitted clone pair that diverged from itself.
 Swapping made all four constructors byte-exact, 12 symbols for 12 (7774).
 
-**Counterexample, and it is load-bearing:** moving a *plain* (non-clone)
-function's definition changed nothing at all, and pointing the clone-pair lever
-at `V90Equalizer`'s destructor did nothing (7777, controls 4 and 5). Proven on
-clone pairs; disproved on at least one plain function.
+**THIS ENTRY SAID THE OPPOSITE UNTIL 7796 MEASURED IT, AND THE CORRECTION IS
+THE MOST USEFUL THING IN IT.** 7777's control 4 moved ONE plain function,
+measured no change, and 7774 was narrowed to clone pairs on that basis. The
+control's observation is right and the conclusion drawn from it was wrong: a
+single move usually does nothing. Reordering nine whole files to the blob's
+emission order gained **17 symbols and lost none**, and **16 of the 17 are
+plain non-clone functions**. Per-shape yield: plain 16, twin 1, **clone 0**.
 
-Tree-wide sizing: **96 translation units emit in a different order from the
-blob**, holding 40 of the 48 REGALLOC and 89 of the 109 BYTES symbols. That is
-an upper bound on opportunity, not a yield estimate.
+**The clone pairs are the part that did not move** -- exactly reversed from
+7774. `ModulusCoder`'s four constructor clones were already in the blob's
+order, 6 of 6, and all four stayed at 25 differing bytes; `V90CP`'s C2 went
+EXACT to REGALLOC; `V90Phase4Modulator`'s C1/C2 merely swapped their 21 and 27
+differing bytes. Both those files were REVERTED for a net loss.
+
+**The carrier is upstream of the function, not its own index.** Four REGALLOC
+symbols already sat at the blob's emission index, so only their PREDECESSORS
+could change -- and three of the four closed without moving. That is 7772's
+"something ahead of both in the TU", now named. 7772's own twin
+`recivedSUV` closed with neither twin moving relative to the other.
+
+**The mechanism is not a global counter.** `-S` from both trees:
+`generateDataSymbolBeforeFPE` has the identical label number (`.L212`), the
+identical instruction count, and different registers -- same at `.L215` for
+its twin. The label number is where `label_num` stood at expansion, so every
+cross-TU counter is at the same value in both compiles. Same text, same index,
+same counters, different allocation. What is left depends on the IDENTITY of
+what was compiled before rather than the amount: allocation addresses and
+pointer-keyed hash iteration. Do not re-try the counters.
+
+**Aim at REGALLOC files, not BYTES files.** Rate over the nine files touched:
+**16 of 25 REGALLOC candidates closed, 0 of 9 BYTES.** The one file aimed at a
+BYTES bucket paid nothing and lost a symbol. 94 files remain disordered,
+holding 24 of the 32 remaining REGALLOC and 88 of the 94 BYTES. Two regions
+are not reachable by definition order at all: the head, where templates and
+clones interleave, and the cgraph tail.
+
+**Two traps, both hit while doing it.** An `#endif` travelled with a moved
+chunk twice and STILL COMPILED, silently enlarging an
+`#if __SIZEOF_POINTER__ == 4` region over live code -- `compilers.md`'s V3,
+which fails open. And a macro placed beside its first user ends up below it
+after a move. Rule now in the files: macros and file-scope statics live ABOVE
+the definitions. Any tool doing this must refuse to write unless the line
+multiset is unchanged, which is what proves a permutation is a permutation.
 
 ### 4. File-scope declaration order
 
