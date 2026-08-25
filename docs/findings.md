@@ -87211,3 +87211,169 @@ whoever is next in it: say *"instruction counts differ, N against M"* rather
 than `False`.  **So this lever is finished on the C++ side of the tree**, and what
 would reopen it is a decision about `V92ParamsInfo`'s TU, not another
 spelling.
+
+======================================================================
+### 7824. LEVER 2 ON `adjustConstellationsPower`: THE ABSENCE IS AN INLINED CALLEE'S OPERAND ORDER, AND THE REST OF THE FUNCTION IS A MEASURED NULL
+
+**ISSUED AS 7819, RENUMBERED TO 7824 AFTER A COLLISION** with the V.90 BYTES
+cluster wave, which had taken 7819-7823 on a sibling worktree off the same
+418831c8.  Recorded here because `refcheck.py` cannot catch a reference that
+still RESOLVES but now points at the wrong finding -- 212 and 213 are the
+worked example, and a renumber has to record itself.  Nothing outside this
+heading cited the old number: no source comment, no other finding, only the
+commit subject, which was amended with it.
+
+**Number re-taken after sweeping `refs/heads`, `refs/remotes` and `refs/tags`
+for the highest `### <n>.` heading anywhere: 7823, on the sibling worktree.
+Expect to renumber again at merge.**
+
+`_ZN24V90ConstellationDesigner25adjustConstellationsPowerEv`, 2132 bytes both
+sides, 1671 differing.  **The instruction counts differ padding-stripped: 632
+ours against 636**, and that measurement is `instrcount.py`'s, which imports
+`byteident.py`'s `_padding` predicate.  **DO NOT READ IT OFF `--why`'s BARE
+`False`, which is what an earlier draft of this finding did.**  7823 measures
+why: `alpha_why` opens with `len(x) != len(y)` over `insns()` rows and
+`insns()` does not strip padding, so `False` can mean nothing more than a
+differing count of alignment nops -- `printErrorHistogramAndReset` prints it
+and is EQUAL on code at 86 against 86, with 2 nops against 14.  The reading
+here is unaffected because it came from the tool that strips; the inference
+from `False` alone would not have been.  An earlier wave's 632/636 reproduces
+exactly, which is worth one line because 7793 inverted five functions' triage
+on this number.
+
+**THE -4 IS NOT ONE ABSENCE, IT IS SIX WINDOWS THAT NEARLY CANCEL**, and a
+single net figure would have hidden every one of them.  Aligning the two
+streams through `byteident.py`'s own `insns()` (never a second parser -- 7773)
+and grouping hunks separated by six or more identical instructions:
+
+    ours[ 58: 88]  blob[ 58: 87]   -1   maxK inlined, before the loop
+    ours[152:179]  blob[151:182]   +4   the first dBm0 `%c%d.%01d` print
+    ours[213:270]  blob[216:268]   -5   OUR loop-invariant hoist
+    ours[343:363]  blob[341:363]   +2   maxK inlined, in the loop
+    ours[430:484]  blob[430:486]   +2   the second dBm0 print
+    ours[603:620]  blob[605:624]   +2   maxK inlined, on the break path
+
+Four of the six are one cause and it is a CALLEE: `maxK`, inlined three times.
+
+#### The closure: which logarithm is evaluated first, and at what width
+
+`maxK` standalone showed the same shape at +1 instruction, 206 bytes against
+204, so it was decodable without the 2,132-byte function at all.  Three
+observations from the object, all independent of any score:
+
+- the first `fyl2x` after the `prod == 0.0f` early return is **log10(prod)**,
+  not log10(2);
+- there is **exactly one** `fstps`/`flds` round trip through a four-byte slot
+  and it is on **log10(2)**, so the denominator is a `float` and the numerator
+  stays in an x87 register at extended precision;
+- it divides with `fdivrp` where we emitted `fdivp` -- which follows from the
+  first, and read the bytes and not the mnemonic (245).
+
+We had `l2` assigned first and the numerator inline, which cost an `fxch` to
+bring `prod` back to the top of the stack and -- at the two sites inside
+`adjustConstellationsPower`'s loop -- let GCC hoist the denominator out as a
+`long double` loop invariant: **five instructions and a twelve-byte `fstpt`
+slot the object does not have.**  That is why our frame read `sub $0x7c,%esp`
+against the object's `$0x5c`.
+
+**TWENTY SPELLINGS COMPILED, THREE PREIMAGES, ONE EMISSION.**  Each logarithm
+independently as an inline call, an inline call with a `(float)` cast, a
+`float` local or a `long double` local, plus both declaration orders where
+both are locals.  Admissibility was pre-registered from the two bullets above
+before any cell was read: a cell that rounds the numerator, or that does not
+round the denominator, has changed the ARITHMETIC and not the compilation, and
+a win among those would be a red flag and not a closure (1352, 1354).  **FIVE
+of the twenty were admissible on that rule -- four operand pairs, one of which
+spawns two declaration orders -- and the pre-registration was PREDICTIVE: 3 of
+the 5 admissible cells reach the object and 0 of the 15 inadmissible ones do.**
+The three emit a byte-identical object as each other:
+
+    log10(prod) / (float)log10(2.0f)          straight into the `return`
+    long double lp;   ... / (float)log10(2.0f)
+    long double lp; float l2;  lp first       <- taken
+
+So by rule 0 this is **SEVERAL preimages over a domain of 20**, and what is
+decoded is a FACT and not a source form: *the numerator is evaluated first and
+kept extended, the denominator second and single.*  The third was taken
+because it parallels `realK` in the same file, which is EXACT and binds both
+logarithms to locals -- and the difference between the two functions is now
+legible in the source rather than hidden in a cast.
+
+    tree grade 0  508 -> 509 of 1251,  BYTES 85 -> 84,  SIZE 625 -> 625
+    SET diff      + maxK,  MINUS NOTHING
+    make phase J=3 green
+
+**AND THE PRICE, STATED BECAUSE A BUCKET IS NOT A GRADE.**  The target itself
+left the BYTES bucket: 2138 bytes now against 2132, so it reads `SIZE 6` where
+it read `BYTES 1671`.  Nothing was lost -- no symbol changed grade downwards
+anywhere in the tree -- and `adjustConstellationsToNewK` moved 544 -> 576
+differing bytes without leaving SIZE.  The count that decides is grade 0
+(playbook's opening line), and it went up by one.
+
+#### The residual, and both halves of it are measured negatives
+
+**THE HOIST IS NOT THE REST OF IT.**  Our `x87_log10` is a non-volatile
+`__asm__`, which GCC may move; the object's construct evidently was not moved.
+Marking it `__volatile__` is the shim the playbook forbids, so it was run as a
+PROBE and never as a candidate -- and it is refuted on its own terms: the
+target goes `SIZE 6` to `SIZE 4`, gains nothing, and reaches the object's
+bytes nowhere.  So the hoist is worth about two bytes and the difference is
+elsewhere.  **What the original's construct WAS is not settled here**, and the
+one piece of evidence that bears on it points the other way from the reflex
+answer: 4401 has `log10` needing `-ffast-math` to inline at all, and this
+tree's flag set is derived from the object and contains no such flag -- so the
+object's own `fldlg2`/`fyl2x` argues toward a hand-written construct rather
+than away from one.  Whatever it was, it was not MOVABLE, and neither of the
+two obvious models of that reaches these bytes.
+
+**THE dBm0 PRINT IS A CONSTANT MAP OVER 20 CELLS, WHICH IS LEVER 1'S OWN
+KILL BRANCH.**  Both `%c%d.%01d` blocks differ in one thing: we fold the
+multiplier into `fmuls`, the object loads it with `flds` and multiplies with
+`fmulp`, leaving its x87 stack one deeper and costing it three `fxch` we do
+not emit.  **The x1000.0f print in the same function folds `fmuls` on BOTH
+sides**, so the property separates the XF-typed sqrt subtraction from the
+float-typed dBm0 one and is site-local, not a flag.
+
+Lever 11 first, because it settles what is NOT wrong: every constant-pool slot
+agrees.  Six `.rodata.cst4` entries, same values, same order, same four-byte
+spacing, ours at +0xb8 and the object's at +0x488 --
+
+    0.0   2.0   1e-06   1000.0   -0.5   10.0
+
+-- and the divergence is one operand of the last of them, not its type, its
+width or its position.
+
+Twenty spellings compiled over the two prints together: the `fabs` argument as
+`__builtin_fabsf(dBm0)` or `__builtin_fabsl((long double)dBm0)`; the
+fractional part five ways (`(float)(int)` truncation, both operands
+`long double`, no cast on the truncation, the multiply written the other way
+round, and a mixed `long double`/`int` form); and `dBm0` itself declared
+`float` or `long double`.  **THE TWENTY CELLS EMIT THREE DISTINCT OBJECTS, AND
+`md5sum` IS HOW THAT IS KNOWN** -- a shared verdict and a shared
+`(fmuls, flds, fmulp)` census is not byte identity, and this was checked the
+way 7770's closures were:
+
+    float dBm0,       either fabs, all five fracs   10 cells  -> OUR OWN BYTES
+    long double dBm0, fabsl,      all five fracs     5 cells  -> SIZE 6, other bytes
+    long double dBm0, fabsf,      all five fracs     5 cells  -> SIZE 32
+
+**The fractional part's spelling is a CONSTANT MAP: five spellings, ONE
+emission, in every one of the four contexts.**  Ten cells reproduce our
+committed object to the byte.  Not one of the three objects reaches the
+object's `(4, 11, 17)` census, let alone its bytes.
+
+By rule 0 that is **NO PREIMAGE over a domain of 20 with only three distinct
+images**, and by lever 1's own stopping rule it therefore is not the
+spelling of that expression at all.  Whatever puts a float constant in an x87
+register there is upstream of the statement -- which is where the corrected
+"free, so ignore it" bullet in CLAUDE.md now points for register allocation
+and dead extensions too.
+
+**What would reopen it**, for whoever is next in this function: the object's
+`flds` is scheduled EARLY, before the `fildl` that converts the truncation
+back, which is what a separate pseudo looks like rather than a folded memory
+operand.  The question to answer is what makes GCC 3.4.2 give an SFmode
+constant its own register in one printf argument and fold it in another, in
+one function, at one optimisation level.  It is not the argument's type, the
+truncation's spelling, the multiply's operand order or the local's declared
+type -- those twenty cells are spent.
