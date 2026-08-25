@@ -82118,9 +82118,12 @@ promotion.  Re-measured at `d2065b03` on GCC 3.4.2 exact:
       of those, alpha_equal rejects (the real list)     38
 
 **And the 40 is byteident's WHOLE grade-1 count.**  Every REGALLOC promotion in
-the tree comes out of this bucket and nothing else reaches it, so the printed
-grade-1 number and "same size, same mnemonics, different bytes" are two views
-of one set.
+the tree comes out of this bucket and nothing else reaches it, so on this tree
+the printed grade-1 number and "same size, same mnemonics, different bytes" are
+two views of one set.  **That is an OBSERVATION at `d2065b03`, not a theorem**:
+`alpha_equal` does not require equal byte length, so a SIZE-bucket pair
+differing only in, say, a short against a long jump encoding could reach grade
+1 from outside this bucket.  None does today; re-measure before quoting it.
 
 So the pass 7630 asked for is 38 functions, not 78, and **the half that
 vanished is not lost work -- it is the tree's own allocator certifier saying
@@ -82176,7 +82179,9 @@ arms) and defining the eight tables in the object's order closed **ten of the
 thirteen bytes** -- the four argument-slot stores, the two `xor` that zero the
 remaining pair, and the two `mov $table,%reg` whose registers had swapped --
 and every one of the ten `.rodata` addends then matched the blob's relative
-layout exactly, which is a confirmation the byte count could not give.
+layout exactly, which is a confirmation the byte count could not give.  Nine of
+the ten are independent -- the tenth is the one the two layouts were anchored
+on -- and the content match above is the real witness in any case.
 
 **This is not 617 overturned and it is not fitting the compiler.**  617's
 warning is against searching over spellings until the output matches.  Here the
@@ -82320,6 +82325,22 @@ rejected on something that is NOT the difference the bytes are.
 7802, 7803), ten were already grade 1 and needed no work (7800), and these
 seven are the free column.  `byteident.py` grade 0 went from **415 of 1245 to
 418**, with BYTES 132 -> 129 and no other bucket moving.
+
+**AND NOT ONE OF THE THREE WAS A WIDTH OR A SIGNEDNESS.**  7630 sells this
+bucket as where 613's family hides, and on this slice it held none: all three
+closures were ORDER -- definition and assignment order, statement order,
+statement order plus a storage class.  That is measured and not
+absent-by-omission; `FPM_SDM_init`'s `movzwl`/`movswl` pair is in the list
+above precisely because it was checked and agreed on both sides.
+
+**THE NO-REGRESSION CHECK IS A SET DIFFERENCE, NOT A COUNT.**  2900's warning
+-- a count can gain four and lose four and not move -- bites harder here than
+usual, because 7803 changes a data table's STORAGE CLASS and so changes the
+relocation form in three functions this pass never disassembled
+(`RcFixed_UpFactor`, `RcFixed_DownFactor` and `RcFixed_Create`'s
+`fixedRc_UpFact[mode]` load).  `byteident.py --list-exact` was taken on both
+sides of the commit and diffed: **431 lines before, 434 after, three added and
+none removed.**  A count would not have shown that.
 
 **THE NUMBERS 7800-7804 WERE TAKEN WITH A GAP** -- master held 7707 and a
 sibling refinement branch held 7762 when this was written, and that agent is
