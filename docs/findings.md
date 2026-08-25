@@ -88550,3 +88550,19 @@ against nine is what `copyHistoryTail` looked like. `refinement.md`'s lever 10
 now points here, because CLAUDE.md's own rule is that a paragraph stating a
 live defect has a comment's shelf-life and no gate behind it -- and a brief
 quoting the stale sentence would have skipped this pass's whole result.
+
+**RUN TREE-WIDE IT IS NOISY, AND THE NOISE HAS ONE CAUSE WORTH NAMING.** Over
+the 1,251 shared symbols, 56 have two or more `R_386_PC32` sites in the blob
+and ZERO in ours -- but most are functions whose CALLERS THIS TREE HAS NOT
+WRITTEN, not functions we inline: `DescrambleDataV22` at 17, `ModDataV17` at
+7, `ModDataV32` and `V32StateName`, all in modules that do not exist here.
+The screen cannot tell "we expand it" from "we have not written anybody who
+would call it", and a pass reading the raw list as a defect list would chase
+unwritten code. **Intersect it with the symbols whose callers we HAVE
+written** before believing a row. The residue after that intersection is the
+real slice, and this pass did not triage it -- what it did find in the
+already-written half is that `Scrambler`/`Descrambler`'s `process` members are
+themselves still in-class with 9, 10, 7 and 5 blob call sites against our 0.
+7543 records moving `Scrambler::process` out as SET-neutral (488 before, 488
+after), and that was measured BEFORE either helper came out of line, so it is
+worth re-measuring now rather than inheriting.
