@@ -484,8 +484,8 @@ static const short p2400[160] = {
 	 10196,  -6142,   2777,  -1798,   1207,  -1540,    925,  -1061,
 	 -1135,   1035,  -1696,   1260,  -1846,   3110,  -6977,  10135,
 	 10135,  -6977,   3110,  -1846,   1260,  -1696,   1035,  -1135,
-	 -1209,   1147,  -1851,   1301,  -1891,   3459,  -7790,  10050,
-	 10050,  -7790,   3459,  -1891,   1301,  -1851,   1147,  -1209,
+	 -1209,   1147,  -1851,   1301,  -1891,   3459,  -7786,  10050,
+	 10050,  -7786,   3459,  -1891,   1301,  -1851,   1147,  -1209,
 };
 
 static const short p2800[160] = {
@@ -1530,8 +1530,19 @@ V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re, short im)
 	q->dly_re[c] = re;
 	q->dly_im[c] = im;
 
+	/*
+	 * AN `if`/`else`, NOT A TERNARY, and the object says which.  The blob
+	 * forms the wrapped cursor in a register the increment did not
+	 * clobber -- `lea 0x1(%edx),%eax` with `%edx` still live for the
+	 * second store -- where the ternary makes GCC 3.4.2 `inc %edx` and
+	 * copy it back out, one instruction more at the same 59 bytes.  Six
+	 * spellings were compiled and this is the only one that maps.
+	 */
 	c++;
-	q->cursor = (c == V34_EQ_TAPS) ? 0 : c;
+	if (c == V34_EQ_TAPS)
+		q->cursor = 0;
+	else
+		q->cursor = c;
 }
 
 void
@@ -1888,7 +1899,7 @@ V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p)
 
 	for (i = 0; i < count; i++) {
 		const short *coeff = p->coeff;
-		unsigned shift = (unsigned char)p->shift;
+		unsigned shift = p->shift;
 		int carry = buf[i];
 		int acc = 0;
 		int k;
@@ -1909,10 +1920,27 @@ V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p)
 
 		/*
 		 * In place: the input array is the output array.  `shift` is
-		 * read as a byte and masked to five bits for the same reason
-		 * as dftenergy's -- the object's `sar %cl` does the masking
-		 * and C would otherwise be undefined.  Re-read every sample,
-		 * as the original does, rather than hoisted.
+		 * masked to five bits for the same reason as dftenergy's --
+		 * the object's `sar %cl` does the masking and C would
+		 * otherwise be undefined.  Re-read every sample, as the
+		 * original does, rather than hoisted.
+		 *
+		 * THE FIELD IS READ AS AN `int`, WHICH THE OBJECT SAYS AND
+		 * WHICH COSTS NOTHING.  `p->shift` is an `int` at +0x64 and
+		 * the blob loads all 32 bits of it -- `mov 0x64(%edi),%edx`
+		 * -- where the `(unsigned char)` cast this line used to carry
+		 * made GCC 3.4.2 emit `movzbl` and a separate `and $0x1f`,
+		 * two instructions more at the same 139 bytes.  The cast was
+		 * redundant under the mask: `(unsigned char)x & 31` and
+		 * `x & 31` are equal for every `int` x, because the mask
+		 * discards bits 5..7 either way.  63 differing bytes -> 55.
+		 *
+		 * DROPPING THE MASK AS WELL reaches 43 and matches the blob's
+		 * INSTRUCTION COUNT exactly (49 against 49), so the original
+		 * very likely wrote a bare `>> shift`.  It is NOT taken here:
+		 * a bare shift by a value the object can put above 31 is
+		 * undefined in C, it does not close the function either, and
+		 * `nothing wrong-but-plausible` outranks eight bytes.
 		 */
 		buf[i] = (short)((acc + 0x4000) >> (shift & 31));
 	}

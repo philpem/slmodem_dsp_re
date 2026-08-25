@@ -32,6 +32,17 @@
  * `-nostdinc++` leaves no <new>, a replacement global `operator new` is
  * ill-formed, and a user-declared placement form makes GCC emit a null test
  * the blob does not have.  The instruction sequence is the blob's either way.
+ *
+ * THAT LAST CLAUSE IS WHY THIS RULING SURVIVES FINDING 7786 AND THE
+ * DESTRUCTORS' DOES NOT.  7786 shows the object DOES replace global
+ * `operator delete` -- its compiler-generated `D0Ev` destructors tail-call
+ * `sysdep_free` instead of `_ZdlPv` -- and `src/dsp/` now writes `delete[]`
+ * where the free is the last statement, because there the two spellings emit
+ * DIFFERENTLY: an explicit guarded `sysdep_free` in tail position becomes a
+ * sibling `jmp` and the object makes an ordinary `call`.  Here the two
+ * spellings emit the SAME instructions, so the well-formed one costs nothing
+ * and is kept.  Ill-formedness is the tie-breaker only when the object does
+ * not break the tie first.
  */
 
 #include <stddef.h>

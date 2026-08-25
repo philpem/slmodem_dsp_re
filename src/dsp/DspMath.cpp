@@ -241,19 +241,19 @@ DSPMATH_STEP void hamming(T *w, unsigned n)
 		 * window from this routine is garbage, and that is the
 		 * original's behaviour rather than an artefact here.
 		 */
-		long double d = 1.0L / (long double)(unsigned long long)(n - 1);
+		long double d = 1.0 / (long double)(unsigned long long)(n - 1);
 		unsigned i;
 
 		for (i = 0; i < n; i++) {
 			long double x = (long double)(unsigned long long)i;
 			long double c;
 
-			x = x * 6.283185307179586L;	/* .rodata.cst8+0x40 */
+			x = x * 6.283185307179586;	/* .rodata.cst8+0x40 */
 			x = x * d;			/* a reciprocal MULTIPLY */
 			__asm__ ("fcos" : "=t" (c) : "0" (x));
 
 			/* 0.54 and 0.46, .rodata.cst8+0x50 and +0x48. */
-			w[i] = (T)(0.54L - c * 0.46L);
+			w[i] = (T)(0.54 - c * 0.46);
 		}
 	}
 }

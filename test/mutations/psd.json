@@ -35,12 +35,12 @@
   "replace": "Psd::setWindowType(WindowType window)\n{\n\tdesignWindow(window, m_fft, m_length);"},
 
  {"label": "the destructor forgets the spectrum buffer",
-  "find": "\tif (m_fft != 0)\n\t\tsysdep_free(m_fft);",
+  "find": "\tdelete[] m_fft;",
   "replace": ""},
 
  {"label": "the destructor frees the window twice",
-  "find": "\tif (m_fft != 0)\n\t\tsysdep_free(m_fft);",
-  "replace": "\tif (m_fft != 0)\n\t\tsysdep_free(m_window);"},
+  "find": "\tdelete[] m_fft;",
+  "replace": "\tdelete[] m_window;"},
 
  {"label": "getFrequencies fills every bin, not half of them",
   "find": "\tunsigned int i;\n\tunsigned int bins = m_length >> 1;",

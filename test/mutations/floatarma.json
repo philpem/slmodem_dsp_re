@@ -121,10 +121,10 @@
   "replace": "\tif (count == 0) {\n\t\tm_xpos = 0;\n\t\treturn;\n\t}"},
 
  {"label": "the destructor forgets the output history",
-  "find": "\tif (m_yhist != 0)\n\t\tsysdep_free(m_yhist);",
+  "find": "\tdelete[] m_yhist;",
   "replace": ""},
 
  {"label": "the destructor frees the denominator twice and never the numerator",
-  "find": "\tif (m_b != 0)\n\t\tsysdep_free(m_b);",
-  "replace": "\tif (m_b != 0)\n\t\tsysdep_free(m_a);"}
+  "find": "\tdelete[] m_b;",
+  "replace": "\tdelete[] m_a;"}
 ]

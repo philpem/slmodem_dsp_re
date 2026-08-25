@@ -30,6 +30,18 @@ void sysdep_free(void *ptr);
 }
 
 /*
+ * THE REPLACEMENT `operator delete[]`, AND IT IS READ OFF THE OBJECT.  The
+ * blob makes an ordinary `call sysdep_free` at a destructor's LAST free where
+ * an explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one instruction
+ * fewer at the same byte count.  Eight spellings were compiled and only
+ * `delete[]` over an inline replacement reproduces the object's shape; see the
+ * finding for the enumeration.  Behaviourally it is exactly the guard it
+ * replaces: `float` has no destructor, so `delete[] p` is `if (p)
+ * operator delete[](p)` with no array cookie.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
+/*
  * Hold the compiler to the map in the header.  tools/offcheck.py parses
  * `struct name {` out of include/dsplib and compiles it as C, so a class has
  * to assert its own (finding 230).
@@ -118,8 +130,7 @@ FloatFIR::FloatFIR(unsigned int nTaps, float *coef, unsigned int blockSize)
 
 FloatFIR::~FloatFIR()
 {
-	if (history != 0)
-		sysdep_free(history);
+	delete[] history;
 }
 
 void

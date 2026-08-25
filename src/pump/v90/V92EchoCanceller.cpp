@@ -300,8 +300,20 @@ V92EchoCanceller::reset()
  *
  * THE ARMA IS DESTROYED AND THEN FREED SEPARATELY, which is what an explicit
  * destructor call followed by `sysdep_free` compiles to and is NOT what
- * `delete` compiles to: `delete` would call `operator delete`, and the object
- * calls `sysdep_free`.  Two calls, the same pointer in `%ebx` for both.
+ * `delete` compiles to.  Two calls, the same pointer in `%ebx` for both.
+ *
+ * THE REASON USED TO BE "`delete` WOULD CALL `operator delete` AND THE OBJECT
+ * CALLS `sysdep_free`", AND THAT INFERENCE IS WITHDRAWN -- finding 7786.  This
+ * codebase REPLACES global `operator delete`, and the replacement inlines to
+ * `sysdep_free`, so a `delete` here would also have reached `sysdep_free` and
+ * the callee's name settles nothing.  The blob's own compiler-generated `D0Ev`
+ * destructors prove it: they tail-call `sysdep_free` where a library
+ * `operator delete` would have made them call `_ZdlPv`, and the object defines
+ * and references no `_Znwj`, `_Znaj`, `_ZdlPv` or `_ZdaPv` anywhere.
+ *
+ * WHAT STILL CARRIES THE READING IS THE SHAPE, not the name: `delete p` emits
+ * ONE call after a front-end null test, and the object emits TWO -- the
+ * destructor and then the free -- which no spelling of `delete` produces.
  */
 V92EchoCanceller::~V92EchoCanceller()
 {
