@@ -190,8 +190,24 @@ OBJ_REPRO  := $(patsubst src/%.c,$(BUILD)/repro/%.o,$(SRC)) \
 # have (finding 1272).  The flag is off by construction in every build this
 # tree compares against, so turning it off here narrows the gap rather than
 # widening it.
+# -fno-sized-deallocation IS -fno-lifetime-dse's ARGUMENT A SECOND TIME:
+# withdraw from GCC 13 a feature GCC 3.4.2 never had, so a construct in `src/`
+# resolves the way the deciding compiler resolves it.  C++14 added SIZED
+# DEALLOCATION, so by default GCC 13 calls `operator delete(void *, size_t)`
+# for `delete p` on a class with a destructor -- an undefined `_ZdlPvj` in a
+# tree that links no libstdc++, which is the link failure `dsplib/Resampler.h`
+# documents and which finding F7816 hit across every test binary at once.
+#
+# It was patched then with a C++14 `#if` block in each of six `src/pump/v90/`
+# files.  Every copy was correct and inert under 3.4.2 -- and it was still
+# apparatus sitting inside the reconstruction, which is the one thing the
+# period_compat.h rule exists to forbid.  The flag deletes the need instead of
+# relocating it: with no sized deallocation to prefer, `delete p` reaches the
+# UNSIZED `operator delete` each of those files already defines, and `src/`
+# carries no C++14 text at all.  Finding F7900, which measured the move at all
+# 200 period objects byte-identical.
 CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++ \
-              -Wno-invalid-offsetof -fno-lifetime-dse
+              -Wno-invalid-offsetof -fno-lifetime-dse -fno-sized-deallocation
 
 # v34hsstep.c is the per-dispatch-case fixture for `v34handshak`.  It lives
 # here rather than inside one test file because #56-#58 are sixteen tests over

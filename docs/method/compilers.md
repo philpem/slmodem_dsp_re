@@ -63,6 +63,37 @@ than in the source being reconstructed.
 | apparatus (assertions, harness) | `period_compat.h` | never in the object; may use what it likes |
 | tests (`test/`) | in the test | never in the object |
 
+### And the same rule pointed the other way
+
+This table had no row for a construct the **modern** compiler DEMANDS, and one
+had accumulated inside the reconstruction: six identical copies of a C++14
+sized `operator delete` under `src/pump/v90/` (finding F7816). Each was
+correct — `#if`'d out under 3.4.2, carrying no claim about the object — and
+each was still apparatus sitting in the source being reconstructed. The rule
+is now symmetric.
+
+| | shim goes |
+|---|---|
+| a construct GCC 3.4.2 lacks | `tools/toolchain/period_compat.h`, `-include`d by the period build |
+| a construct GCC 13 demands | **a flag that withdraws the demand**, in `CXXFLAGS`; failing that, a `-include`d sibling of `period_compat.h` |
+| either one, inside `src/` | nowhere — it is not the author's |
+
+**Prefer the flag, and this is not a new idea — it is V8's.** `-fno-lifetime-dse`
+is already in that list for exactly this reason: the feature postdates 3.4.2,
+its absence is the period semantic, and the modern build asks for the absence.
+`-fno-sized-deallocation` is the second instance, and finding F7900 is where
+the pattern got written down. A flag deletes the need for a shim instead of
+relocating it, which is what "the shims are gone" below is about.
+
+**And the move was MEASURED, which is the transferable part.** Position in a
+translation unit is a lever-3 carrier: consolidating the tree's *unsized*
+`operator delete[]` into `sysdep.h` cost eight destructors their byte identity
+(finding F7815), so "it is only plumbing" is not a licence to move plumbing.
+The sized form was exempt *by construction* — the period compiler never
+received its tokens — and that prediction was checked object by object rather
+than assumed: all 200 period objects byte-identical across the move, `md5sum`
+against `md5sum`, with `make phase` green either side.
+
 ---
 
 ## The variances
@@ -250,8 +281,15 @@ be passed to the period compiler:
 | flag | why |
 |---|---|
 | `-fno-lifetime-dse` | postdates 3.4.2. Its **absence** is the period semantic, which is exactly why the modern build has to ask for it (finding F1272). |
+| `-fno-sized-deallocation` | the same argument, C++14 rather than a GCC pass. Sized deallocation is what makes GCC 13 call `_ZdlPvj` for `delete p` on a class with a destructor; 3.4.2 has none to prefer, so asking GCC 13 not to prefer one makes both compilers resolve the delete-expression identically (finding F7900). |
 | `-fno-pie` | no PIE to disable |
 | `-fno-stack-protector` | the Gentoo `ssp`/`pie` patches were off in the object |
+
+**Two of those four are one pattern and it is worth naming**, because it is
+where a modern-side shim goes instead of into `src/`: *where GCC 13 has a
+feature the period compiler never had, turn the feature off rather than write
+source that appeases it.* Both of these were found the same way — a defect the
+modern build could see and the period build could not.
 
 ### V9 — two tests that failed against the blob · **CLOSED, and it was NEITHER compiler**
 
@@ -362,6 +400,22 @@ remaining `(double)` is an integer conversion, a `sizeof`, a libm argument or
 words. `four1`'s butterfly narrowing is not expressible in standard C under
 `-fexcess-precision=fast` — not by assignment, not by `(float)` cast, not by
 a named `double` temporary. Only `volatile`, which speaks to GCC 13 alone.
+
+**ONE CAME BACK, AND IT WAS NOT A `volatile`.** Finding F7816 needed a C++14
+sized `operator delete` for the modern build and put it in six `.cpp` files.
+Nobody read it as a shim, because it is `#if`'d out under 3.4.2 and therefore
+cost the object nothing — and that is exactly what makes this class hard to
+see. **A shim for the compiler that does NOT decide is invisible to every
+measurement in this document**: the period differential cannot fail on it, the
+codegen tier cannot see it, and `byteident` reads the same number either way.
+Only reading the file finds it.
+
+Removed by `-fno-sized-deallocation` rather than relocated, which is this
+section's own rule applied to it: with the feature off, `delete p` reaches the
+unsized `operator delete` those files already define. `src/` and `include/`
+now contain no C++14 construct and no `__cplusplus` version test at all — one
+grep, and it is a stronger invariant than "no `volatile`" because it is what
+the shim was wearing. Finding F7900.
 
 **The rule that made the difference**, and it fired on the very first removal:
 *a shim the period compiler also needs is a fact about the object, not a thing
