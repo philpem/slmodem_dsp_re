@@ -86170,7 +86170,10 @@ call targets absolutely, so its text differs for a reason that is not a register
 choice.  That is CLAUDE.md's `dis.py` discipline and `byteident.py`'s own reason
 for making branch targets function-relative, met again from a third direction.
 `FPM_ECC_free` is also not the CLEARED symbol -- it is `undecided`, and naming
-it was an inference from a count of one.
+it was an inference from a count of one.  The right name, `V92Mapper::reset`,
+came from making the tool print the SET rather than the count, which is
+`byteident.py --list-exact`'s own argument arriving in a third place: a count
+of one is not a name, and the guess was wrong at the first opportunity.
 
 **EXPOSED IS NECESSARY AND NOT SUFFICIENT.**  `V90CP`'s C1 takes three scratch
 registers and held over 21 comparable permutations; `generateSymbol` held over
