@@ -44,9 +44,13 @@ finding and never generalised**, and were swept up afterwards (7813). Their
 measurements are as real as the rest and their yield in a refinement pass is
 unknown, which is the one thing to hold in mind when a brief quotes them.
 
-**13 is a refinement-wave lever again**, and it closed 74 instructions in one
-function on its first use (F7940). It is also the one that corrected lever 6's
-recorded negative, so read the two together.
+**13 has the same caveat as 10 to 12, and it is stated here rather than
+discovered later.** It closed 74 instructions in ONE function (F7940) and has
+never been swept across the tree, so its yield in a refinement pass is
+unknown -- exactly the thing the paragraph above says to hold in mind. The
+MECHANISM is measured and the four-compile ladder is real; the GENERALITY is
+not established. It is also what corrected lever 6's recorded negative, so
+read the two together.
 
 ### F0. What an enumeration proves depends on how many cells hit zero
 

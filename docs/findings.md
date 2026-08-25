@@ -89250,3 +89250,24 @@ twice. `the CRC's two feedback taps are transposed` was MOVED to `v90packdata`,
 which deliberately had no tap row precisely because `v90jd` owned that claim --
 it is caught there. `v90jd` 39 -> 37 rows, all caught; `v90packdata` 23 -> 24,
 22 caught and the same 2 equivalent. Both notes say why.
+
+**AND THE CLAIM THAT MADE THE DELETION SAFE WAS CHECKED, NOT ASSUMED.**
+Retiring `group 0 is one bit short` from `v90jd` rests on `t_v90jd` still
+reaching packData's body THROUGH the call -- and `make phase` cannot show
+that, because it only proves the unmutated source is right, which it is either
+way. `mutate.py --suite v90packdata` scores against `t_v90packdata`, not
+`t_v90jd`, so nothing that was run tested it. Transposing the taps in packData
+by hand and running `t_v90jd` directly:
+
+    FAIL V90Jd::getBitVector      24/74 checks failed
+    FAIL V90Jd::unPackData        50/36469 checks failed
+
+-- so it does reach it, through `getBitVector` and again through the unpacker's
+round trip against the packer. Nothing thinned when the two rows went.
+
+**`make one` CANNOT BE USED FOR THIS CHECK**, and the way it fails is
+misleading. A hand-edit that mutates a site destroys that site's own anchor, so
+the `refs` prerequisite reports `NOT UNIQUE ... matches 0 time(s)` and `make
+one` exits 2 having never built the test. That is a red from the wrong place
+and reads exactly like a passing suite if you only check the exit code. Build
+the binary as its own target and run it.
