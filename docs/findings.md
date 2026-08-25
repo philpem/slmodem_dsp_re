@@ -88244,6 +88244,16 @@ generator.
 **All five instantiations go SIZE -> REGALLOC.** Grade 0 does not move: the
 residual is register allocation, which is now the whole difference.
 
+**Read "all five" as all five MEASURED copies.** These are COMDAT weaks and
+`byteident.py` attributes each to the first object defining it
+(`ours.setdefault` over a sorted glob), so exactly one copy of each is scored
+even where several of our objects emit one -- `instrcount.py`, which
+attributes independently, named `V92Phase4Modulator.cpp` and
+`V92Modulator.cpp` for two of these resets where `byteident` names
+`Scrambler.cpp`. Since the peephole2 cursor state differs per translation
+unit, two copies of one weak symbol need not agree, and no tool in the tree
+compares them.
+
 **THE HARNESS MOUNTED THE TREE READ-ONLY.** 7822's `cp -al` harness had the
 container's `cp` write THROUGH the hardlinks into `src/`, and nothing failed.
 Here the variant header sits in a scratch overlay reached by a `-I` ahead of
@@ -88468,3 +88478,75 @@ the brief: `FPM_rms` +1, `V34EchoEstimateDelayLineEnergy` +1,
 `V34TimingFiltersInit` -1, `Descrambler<i,i>::copyHistoryTail` -1 (closed
 here by 7861), `v8_crc` -1, `Dual_TONE_create` +2, `notch` -2,
 `linear2ulaw` +2.
+
+### 7866. `copyHistoryTail` HAD THE SAME INLINING DEFECT AND SURVIVED 7862's FIX, BECAUSE SIZE TO SIZE MOVES NO BUCKET
+
+7862 moved `resetHistoryIndexes` out of the class body and five symbols closed
+on it. **It also made four `process` bodies WORSE and the SET diff could not
+say so**, because all of them were SIZE before and SIZE after:
+
+    processAllOnes            blob 120   ours 118 -> 131
+    processAllZeros           blob 120   ours 118 -> 128
+    <h,h>::process(h)         blob 107   ours 109 -> 123
+    <h,h>::process(bulk)      blob 120   ours 126 -> 131
+
+**A bucket diff is blind along the SIZE-to-SIZE diagonal**, which is the one
+direction a refinement pass never watches, and this is the case that shows why
+the byte counts have to be read beside it.
+
+The cause was not the move; it was the HALF-move. The blob calls BOTH helpers
+from `process`:
+
+    blob  .gnu.linkonce.t._ZN9ScramblerIhhE7processEh
+            +0x54  R_386_PC32  _ZN9ScramblerIhhE19resetHistoryIndexesEv
+            +0x5c  R_386_PC32  _ZN9ScramblerIhhE15copyHistoryTailEv
+
+Over the whole object there are **NINE `R_386_PC32` call sites against
+`..._15copyHistoryTailEv` and our object had ZERO** -- it was still an
+in-class body, so still implicitly `inline`, so still expanded at every site.
+The `process` bodies grew because they now paid a real call for one helper
+while inlining the other into the same conditional, which forces callee-saved
+registers around the call and buys nothing back.
+
+Moving `copyHistoryTail` out as well:
+
+    EXACT     529 -> 530   + Scrambler<h,h>::process(h)
+    REGALLOC   33 ->  34   + Descrambler<i,i>::process(i)
+    SIZE      611 -> 609
+    grade 0-or-1  567 -> 569
+
+and the residual `process` bodies all crossed to the same side of the blob and
+much closer -- `processAllZeros` +8 to -14, `<h,i>::process(h)` +5 to -11,
+`processAllOnes` and both bulk `process` to -5. Nothing was lost.
+
+**The rule this leaves: count the CALL SITES, not the symbol.** `nm` showed
+all five `copyHistoryTail` symbols present and EXACT-adjacent the whole time,
+which is exactly 5805's warning -- the symbol table looks right while every
+caller is wrong -- and the only detector that fires is
+`grep -c R_386_PC32.*<mangled>` over both objects. Ours 0 against the blob's
+9 is not a subtle signal; nobody had counted.
+
+### 7867. LEVER 10 IS LIVE WHEN THE OBJECT NAMES THE CALL, AND `refinement.md` SAID THE OPPOSITE
+
+7831 measured levers 10, 11 and 12 a NO on a float-heavy set and the playbook
+now carries "their yield in a refinement pass is unknown" plus a brief-level
+"do not spend the pass on them". **This pass spent almost all of its yield on
+lever 10**: 7862 and 7866 are both it, and 7863's five closures exist only
+because the call being there made the residual legible at all.
+
+The difference is the direction of travel, and it is worth stating as a rule
+rather than as two more data points:
+
+- 7831 CHOSE the lever from a brief and went looking for somewhere it might
+  apply. That is the search that came back empty.
+- 7862 and 7866 READ the call off the object -- a `R_386_PC32` against a
+  mangled member name that our object does not have -- and the lever was the
+  explanation, not the hypothesis.
+
+So the screening test is a relocation count and not a judgement about which
+members "look inlineable": for every member defined inside a class body,
+compare `grep -c R_386_PC32.*<mangled>` between the blob and ours. Zero
+against nine is what `copyHistoryTail` looked like. `refinement.md`'s lever 10
+now points here, because CLAUDE.md's own rule is that a paragraph stating a
+live defect has a comment's shelf-life and no gate behind it -- and a brief
+quoting the stale sentence would have skipped this pass's whole result.

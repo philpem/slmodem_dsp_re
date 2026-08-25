@@ -210,15 +210,7 @@ public:
 	 * counter's signedness, which the object cannot distinguish.  All
 	 * five instantiations go SIZE to REGALLOC on it.  Finding 7861.
 	 */
-	void copyHistoryTail()
-	{
-		T *dst = pInitOut + 1;
-		const T *src = pLimit;
-		unsigned int n = tailLength;
-
-		while (n--)
-			*dst++ = *src++;
-	}
+	void copyHistoryTail();
 
 	/*
 	 * Seed the history with one bit, repeated.  `value & 1` is masked in
@@ -383,15 +375,7 @@ public:
 	void resetHistoryIndexes();
 
 	/* The count is `tailLength`, as in `Scrambler`. */
-	void copyHistoryTail()
-	{
-		T *dst = pInitOut + 1;
-		const T *src = pLimit;
-		unsigned int n = tailLength;
-
-		while (n--)
-			*dst++ = *src++;
-	}
+	void copyHistoryTail();
 
 	/*
 	 * Seed the history with one bit, repeated.  `value & 1` is masked
@@ -591,6 +575,39 @@ void Descrambler<T, I>::resetHistoryIndexes()
 	pOut = pInitOut;
 	pTap1 = pInitTap1;
 	pTap2 = pInitTap2;
+}
+
+/*
+ * OUT OF LINE FOR THE SAME REASON, AND THE OBJECT SAYS SO NINE TIMES.
+ * `objdump -dr` over the blob finds NINE `R_386_PC32` call sites against
+ * `..._15copyHistoryTailEv` and our object had ZERO -- every one of them
+ * expanded in place, because an in-class body is implicitly `inline`.  It is
+ * the same defect 7862 fixed for `resetHistoryIndexes` and it survived that
+ * fix, which is why it is worth naming separately: moving one member out
+ * makes the other's inlining VISIBLE in the `process` bodies' byte counts
+ * and invisible to the bucket diff, since SIZE to SIZE moves no bucket.
+ * Finding 7866.
+ */
+template <class T, class I>
+void Scrambler<T, I>::copyHistoryTail()
+{
+	T *dst = pInitOut + 1;
+	const T *src = pLimit;
+	unsigned int n = tailLength;
+
+	while (n--)
+		*dst++ = *src++;
+}
+
+template <class T, class I>
+void Descrambler<T, I>::copyHistoryTail()
+{
+	T *dst = pInitOut + 1;
+	const T *src = pLimit;
+	unsigned int n = tailLength;
+
+	while (n--)
+		*dst++ = *src++;
 }
 
 #endif /* DSPLIB_SCRAMBLER_H */
