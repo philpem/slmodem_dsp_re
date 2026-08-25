@@ -43,15 +43,31 @@
  * The trailing {0, 0} is a terminator, and its index doubles as the
  * "unsupported" return value from RcFixed_Check_Combination().
  */
-const int fixedRc_DownFact[RCFIXED_NMODES + 1] = {
-	1, 4, 5, 6, 1, 6, 1, 5, 1, 4,
-	5, 24, 4, 5, 2, 3, 3, 10, 9, 10,
+/*
+ * `static int`, NOT `const int`, AND UP BEFORE DOWN -- all three read off the
+ * relocations in `RcFixed_Check_Combination`, which reach both tables:
+ *
+ *   blob:  mov 0x9540(,%eax,4),%edx     R_386_32  .data     (up)
+ *          cmp %ebx,0x94e0(,%eax,4)     R_386_32  .data     (down)
+ *
+ * A reference resolved against the SECTION symbol with the offset as an inline
+ * addend is a reference to a file-local object: had these been `extern`, the
+ * relocation would name them (CLAUDE.md's rule about what a relocation's
+ * ABSENCE proves, in its data form).  The section is `.data` and not
+ * `.rodata`, so they were not `const` either.  And `down` sits 0x60 BELOW `up`
+ * in the blob while GCC 3.4 emits file-scope objects in reverse definition
+ * order -- verified on this object -- so `up` was defined first.  Nothing
+ * outside this file names either table and no header declares them.
+ */
+static int fixedRc_UpFact[RCFIXED_NMODES + 1] = {
+	4, 1, 6, 5, 6, 1, 5, 1, 4, 1,
+	24, 5, 5, 4, 3, 2, 10, 3, 10, 9,
 	0,
 };
 
-const int fixedRc_UpFact[RCFIXED_NMODES + 1] = {
-	4, 1, 6, 5, 6, 1, 5, 1, 4, 1,
-	24, 5, 5, 4, 3, 2, 10, 3, 10, 9,
+static int fixedRc_DownFact[RCFIXED_NMODES + 1] = {
+	1, 4, 5, 6, 1, 6, 1, 5, 1, 4,
+	5, 24, 4, 5, 2, 3, 3, 10, 9, 10,
 	0,
 };
 
@@ -93,8 +109,8 @@ RcFixed_Check_Combination(int in_rate, int out_rate)
 
 	g = gcd(in_rate, out_rate);
 
-	down = in_rate / g;
 	up = out_rate / g;
+	down = in_rate / g;
 
 	/*
 	 * Start at 2, skipping the explicit-only x4 and /4 entries, and stop

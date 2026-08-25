@@ -82103,3 +82103,224 @@ Not "instruction count is a completeness check". Say: **an instruction-count
 GAP is a missing call until proven otherwise; an instruction-count MATCH proves
 nothing about operand width, and the byte comparison is the only thing that
 does.**
+
+### 7800. THE REFINEMENT WORKLIST IS 38 AND NOT 78, BECAUSE HALF OF IT IS ALREADY GRADE 1
+
+7630 sized its own worklist as "over the BYTES bucket, the subset whose
+mnemonic sequences also match -- 78 of 132 today", and that count was taken
+from `verdict()` alone.  **`byteident.py` does not print `verdict()`'s BYTES.**
+It offers every non-EXACT, non-RELOC pair to `alpha_equal` first and promotes
+what passes into REGALLOC, so the 132 it prints is what is left AFTER the
+promotion.  Re-measured at `d2065b03` on GCC 3.4.2 exact:
+
+    raw verdict()==BYTES with matching mnemonics        78
+      of those, alpha_equal accepts (grade 1)           40
+      of those, alpha_equal rejects (the real list)     38
+
+**And the 40 is byteident's WHOLE grade-1 count.**  Every REGALLOC promotion in
+the tree comes out of this bucket and nothing else reaches it, so the printed
+grade-1 number and "same size, same mnemonics, different bytes" are two views
+of one set.
+
+So the pass 7630 asked for is 38 functions, not 78, and **the half that
+vanished is not lost work -- it is the tree's own allocator certifier saying
+those functions differ in nothing but register names, per live range.**  That
+is a stronger statement than any eyeball reading of a diff, and it is the
+difference between "free, because it looks like allocation" and "free, because
+the check that carries six must-reject self-tests says so".
+
+**READ IT AS A METHOD NOTE, not just a count.**  A brief that hands an agent
+this bucket should hand it the promoted list beside it: on the twenty
+functions of this batch's slice, exactly half were already grade 1 and needed
+no disassembly at all.
+
+### 7801. `v8_V21_Init`: THE `.rodata` LAYOUT RECOVERS A DECLARATION ORDER, AND IT WAS TEN OF THIRTEEN BYTES
+
+492 bytes, 105 instructions against 105, the same size, the same mnemonics, and
+**13 bytes wrong** -- the largest entry in this batch's slice and the third
+largest in 7630's whole list.
+
+`src/v8/v8v21.c` defines ten `static const short` tables and passes four of
+them to `V8_setFilters` per branch.  Ten instructions carry an `R_386_32`
+against `.rodata`, and their ADDENDS are masked by `byteident` (finding 604 --
+the blob's addend rides inline against a section symbol and ours does not), so
+they contribute nothing to the byte count and `alpha_equal` cannot see them
+either.  **They are still readable, and they are the evidence.**
+
+**GCC 3.4.2 EMITS FILE-SCOPE OBJECTS IN REVERSE DEFINITION ORDER, AND THAT WAS
+VERIFIED ON OUR OWN OBJECT BEFORE IT WAS USED ON THE BLOB'S.**  Our ten tables
+come out at 0x0, 0x60 ... 0x300, 0x380 in exactly the reverse of the order they
+are written in the file -- ten for ten.  So an address ordering in the blob IS
+a definition ordering in the blob's source.
+
+Matching the two objects' `.rodata` **by content**, 96 bytes at a time, pairs
+all eight 48-tap tables and both 61-tap ones one-to-one with no array differing
+anywhere, and it says our parameter assignment was already right: the blob
+passes our `v21_ans_a` as `a`, our `v21_ans_b` as `b`, and so on, in both
+branches.  What differs is only WHERE each table sits, and therefore the order
+the original defined them in:
+
+    original:  ..., ans_c, ans_d, ans_a, ans_b, call_c, call_d, call_a, call_b
+    ours:      ..., ans_a, ans_b, ans_c, ans_d, call_a, call_b, call_c, call_d
+
+**A SECOND, INDEPENDENT WITNESS SAYS THE SAME THING**, and it is the one that
+costs bytes.  In the `answerer == 0` arm the blob loads the four pointers in
+the order c, d, a, b -- `%edi` gets `call_c`, `%ecx` gets `call_d`, `%esi` gets
+`call_a`, `%edx` gets `call_b` -- and spills them to the outgoing argument
+slots accordingly.  Ours loaded a, b, c, d.  So the object's INSTRUCTION order
+and the object's DATA layout agree on a source order that neither of them alone
+would establish.
+
+Writing the assignments in the object's order (`c`, `d`, `a`, `b`, in both
+arms) and defining the eight tables in the object's order closed **ten of the
+thirteen bytes** -- the four argument-slot stores, the two `xor` that zero the
+remaining pair, and the two `mov $table,%reg` whose registers had swapped --
+and every one of the ten `.rodata` addends then matched the blob's relative
+layout exactly, which is a confirmation the byte count could not give.
+
+**This is not 617 overturned and it is not fitting the compiler.**  617's
+warning is against searching over spellings until the output matches.  Here the
+spelling was DECODED from the object's own data section first and the byte
+comparison confirmed it afterwards, which is the order CLAUDE.md requires.
+
+The last three bytes are 7802.
+
+### 7802. `dftfreqinit` AND `v8_V21_Init`'s TAIL: 617's FULL-TEXT TEST, WITH THE PREMISE MEASURED IN THE FUNCTION ITSELF
+
+617 refuted the premise that GCC 3.4 preserves the order of independent stores,
+and `toneiir_reset` is its counter-example: source already in the object's
+order, compiler reorders ours.  What 617 kept is that a store-order difference
+is a HINT whose acceptance test is full-text identity, operands included --
+nineteen tried, two passed.
+
+Two more pass here, and both had something 617's nineteen did not: **a
+measurement of whether the compiler reorders THIS function at all.**
+
+**`dftfreqinit`** -- 102 bytes, 21 instructions, seven differing.  The loop body
+zeroes seven fields of `struct v34_dftbin`; the blob stores
+`0x4, 0x10, 0x14, 0x18, 0x1c, 0x20, 0x24, 0x8` and we stored them in ascending
+order.  **Our emitted order was our source order exactly, field for field**, so
+in this function the compiler is demonstrably NOT reordering, and the blob's
+emitted order is therefore its source order.  Moving `bins->acc_im = 0;` from
+second to last -- one whole statement, no other change -- makes the function
+byte-identical.
+
+**`v8_V21_Init`'s five trailing stores** -- the same shape and the same
+argument.  Our source order was `f22, f1e, f20, f24, f26`, which is the BLOB's
+EMITTED order, written that way by someone applying 615's since-refuted
+premise; GCC emits it as `f20, f22, f1e`.  Writing the five in struct field
+order -- `f1e, f20, f22, f24, f26`, the natural spelling -- gives the blob's
+emitted order and closes the last three bytes of 7801.
+
+**THE RULE THAT COMES OUT OF THE PAIR.**  Before permuting anything for a
+store-order difference, check what the compiler did to OUR order first.  Where
+our emission is our source (`dftfreqinit`), the object's emission is the
+author's source and the permutation is a decoding.  Where it is not
+(`toneiir_reset`), no permutation is derivable and 617's answer stands.  That
+test costs one disassembly and it separates the two cases before any source is
+touched.
+
+### 7803. `RcFixed_Check_Combination`: A RELOCATION'S SECTION SAYS `static`, `.data` SAYS NOT `const`, AND THE SPACING SAYS WHICH CAME FIRST
+
+104 bytes, 45 instructions against 45, five bytes wrong, and three separate
+facts in one function -- all of them read off relocations rather than out of
+instructions.
+
+**The five bytes were a statement order.**  The blob divides `out_rate` by the
+GCD first and `in_rate` second; `src/core/fixedrc.c` did the reverse, so the
+two quotients landed in each other's registers from the first `idiv` onward.
+Swapping the two lines closed all five.  The corroboration inside the same
+function is the loop below them, which tests `fixedRc_UpFact[mode]` before
+`fixedRc_DownFact[mode]` on both sides -- `up` is the one the original reached
+for first in both places.
+
+**And it still was not grade 0, because of the relocations.**  Three
+instructions reach the two tables.  The blob resolves all three against the
+SECTION symbol `.data` with the offset as an inline addend; we named
+`fixedRc_UpFact` and `fixedRc_DownFact`.  Two readings follow and neither is an
+inference from style:
+
+- **A reference resolved against a section symbol is a reference to a
+  file-local object.**  Had the original's tables been `extern`, the assembler
+  would have had a symbol to name and the relocation would name it.  This is
+  CLAUDE.md's own rule about what a relocation's ABSENCE proves, in its data
+  form rather than its call form.
+- **The section is `.data` and not `.rodata`, so they were not `const`.**  GCC
+  3.4 puts `const int x[]` in `.rodata`; `nm -S` on our object showed both
+  tables as `R` before the change and `d` after.
+
+Nothing outside `fixedrc.c` names either table and no header declares them, so
+`static int` costs nothing.  With it, both sides' relocations target `.data`,
+`verdict()` compares them by name and they agree, and the function is
+**EXACT**.
+
+**The third fact is the definition order**, by 7801's rule: the blob has `down`
+0x60 BELOW `up`, GCC emits in reverse definition order, so `up` was defined
+first.  Ours was the other way round.  Reordering the two definitions changed
+no compared byte -- the addends are masked -- and it makes our `.data` layout
+the blob's, which is the only check available on it.
+
+**WHAT THIS DOES NOT LICENSE.**  `static` is not a free move to make wherever a
+section relocation appears; see 7804 for the two functions in this batch where
+the same evidence is just as good and the change was still declined.
+
+### 7804. THE SEVEN THAT WERE LEFT, EACH WITH THE ROW `alpha_equal` REJECTED ON
+
+Seven of this batch's twenty are still BYTES.  The tool's rejection point is
+quoted for each, because "free, the register allocator" asserted without one is
+exactly the reading 2900 warns against, and because two of the seven are
+rejected on something that is NOT the difference the bytes are.
+
+- **`_iir_filter_create`** (6 of 195).  Two incoming arguments live in swapped
+  callee-saved registers -- blob `0x24(%esp)`->`%ebx`, ours ->`%esi` -- and
+  every later use follows consistently, so both compare the same values and
+  store the same value at `+0xd4`.  `alpha_equal` rejects at row 13, which is
+  an ALIGNMENT NOP, `lea 0x0(%esi,%eiz,1),%esi`: the tool reads its register
+  operand as a use, and by then the swap has `%esi` bound to `%ebx`.  **A tool
+  artefact on a padding instruction, not a difference in the code.**  Free.
+- **`Scrambler<unsigned char,int>::Scrambler`** (15 of 102).  Register naming
+  at three sites plus the order in which four callee-saved registers are
+  reloaded from their spill slots, interleaved with the two outgoing-argument
+  stores of the sibling call.  Both pass `this` and a literal zero.  Rejected
+  at row 21 on the SPILL SLOT -- `0x14(%esp)` against `0x10(%esp)` -- which is
+  the allocator's choice of where each register was saved.  Free.
+- **`SineWave<float,float>::SineWave`** (24 of 32).  The highest byte ratio in
+  the slice and the least in it: ten instructions, the same four loads and five
+  stores to `+0x0/4/8/c` in the same order, the blob running one load ahead of
+  ours.  Under GCC 3.4 `dsplib_assign` reduces to `*dst = *src`, so the source
+  is four assignments already in member order and **there is no statement order
+  left to permute**.  Rejected at row 0.  Free, scheduling.
+- **`FPM_SDM_init`** (18 of 86).  `%ebx` and `%esi` swapped throughout,
+  including which is spilled to `(%esp)` and which to `0x4(%esp)`; rejected at
+  row 3 on that displacement.  Free.  Recorded explicitly because the function
+  contains a `movzwl` of `cfg.nbits` followed by a `movswl` of the same value
+  -- and both sides agree on both, so there is no signedness question in it.
+- **`ScrambleDataV22`** (10 of 28).  The blob stores the `count` argument to
+  its outgoing slot between the datapump load and the sub-object load; we do
+  both loads first.  Rejected at row 2.  Free, scheduling.
+- **`dp_b103_exit`** (4 of 49) and **`dp_v23_exit`** (2 of 28) -- **TWO
+  differences, and only one of them is free.**  The bytes are register choice.
+  The relocation is not: the blob reaches `b103_ops` and `v23_ops` as `.data`
+  plus an inline addend and we name the symbols, so by 7803's rule **the
+  original's were file-local**.  Our own tree carries the counterexample --
+  `src/v8/v8dp.c` already writes `static struct dp_operations v8_op`, and
+  `dp_v8_exit`'s relocation is `.data` on both sides -- so this is an
+  inconsistency in our source, not a property of the compiler.
+
+  **It was measured rather than assumed, and it is not the cause of the
+  bytes.**  Both were compiled with `static` added: our relocations moved to
+  `.data` and **the register choice did not move at all**, so neither function
+  can reach grade 0 by it and the promotion would only be to grade 1.
+  Reverted, because `t_b103_reg`, `t_v23dp` and `t_v23direct` all name the
+  symbols directly and making them static needs an accessor in `src/` -- new
+  code, in modulations this batch is fenced out of.  Recorded for whoever
+  lifts that fence.
+
+**THE SLICE'S SCORE.**  Twenty functions: three became byte-identical (7801,
+7802, 7803), ten were already grade 1 and needed no work (7800), and these
+seven are the free column.  `byteident.py` grade 0 went from **415 of 1245 to
+418**, with BYTES 132 -> 129 and no other bucket moving.
+
+**THE NUMBERS 7800-7804 WERE TAKEN WITH A GAP** -- master held 7707 and a
+sibling refinement branch held 7762 when this was written, and that agent is
+still writing.  Expect to renumber at merge.

@@ -980,10 +980,10 @@ dftfreqinit(struct v34_dftbin *bins)
 		bins->phase = 0;
 		bins->inc = DFT_BIN(i);
 		bins->acc_re = 0;
-		bins->acc_im = 0;
 		bins->sum_re = 0.0;
 		bins->sum_im = 0.0;
 		bins->denergy = 0.0;
+		bins->acc_im = 0;
 	}
 }
 
