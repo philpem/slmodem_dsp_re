@@ -22,7 +22,7 @@ one.** Nothing here is about modems.
 it came from.** A rule without its evidence gets negotiated away by the next
 session under time pressure: *"delegate large functions"* is ignorable,
 *"sessions that finished took 10–25 turns; the five that ran out took 400–600
-(finding 220)"* is not.
+(finding F220)"* is not.
 
 Where this tree learned something by getting it wrong, these files say so. That
 is what makes them worth trusting.
@@ -33,7 +33,7 @@ project — they are the provenance of each rule, not links, and they should be
 kept for that reason. The other six stay here and their references are checked
 by `tools/refcheck.py` like everything else — which only works because they are
 tracked files: the checker walks the index, so a new document that has not been
-`git add`ed is invisible to it (finding 670). `recording.md` is where the rest
+`git add`ed is invisible to it (finding F670). `recording.md` is where the rest
 of that discipline lives.
 
 ## What is deliberately not here

@@ -12,13 +12,13 @@
  *   FSE_decision_16Tpt .text 0x080330   432
  *   FSE_decision_16pt  .text 0x080e90   490
  *
- * `_16pt` was left out for a long time -- finding 1603 and D302, because its
+ * `_16pt` was left out for a long time -- finding F1603 and D302, because its
  * magnitude lookup reads thousands of entries past a three-entry table and
  * what it returns is a property of the LINK.  It is here now: everything
  * except that one store is ordinary and differentially testable, the store
  * itself is fixed behind `DSPLIB_REPRODUCE_BUGS`, and the one ring whose
  * out-of-bounds read stays inside the blob's own `.data` IS compared.
- * Findings 3800 and 3801.
+ * Findings F3800 and F3801.
  *
  * THE SEQUENCE THE FIRST FOUR IMPLEMENT.  Each installs its own successor in
  * `state->cfg.decision`, so the chain is the receiver's handshake:
@@ -191,7 +191,7 @@ FSE_decision_trn(struct fpm_fse *state, short *angle, short *mag)
 			/*
 			 * Hand over.  The empty loop the object runs over
 			 * `cfg.taps` here has no effect and is not
-			 * reproduced -- see finding 1604.
+			 * reproduced -- see finding F1604.
 			 */
 			m->count = 0;
 			c = 0;
@@ -392,7 +392,7 @@ fse_differential_16(struct v32_dec *m, short ib, short qb)
  * nothing can beat it, and the function decides POINT 0 for every one of the
  * sixteen symbols it could be shown.  Over the whole (I, Q) plane only eight
  * of the sixteen points are reachable at all -- 0, 1, 2, 3, 4, 5, 8 and 10 --
- * and only one of those, point 3, is on the inner ring.  Finding 3801.
+ * and only one of those, point 3, is on the inner ring.  Finding F3801.
  */
 unsigned short
 FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
@@ -493,7 +493,7 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
 	 * -- .data+0x94f6, 158 bytes short of the end -- stays inside the
 	 * blob's own section and travels with it into any link.  That byte is
 	 * 0.  The other two leave the section and read whatever the LINKER
-	 * put there, which is the argument finding 1603 made about all three.
+	 * put there, which is the argument finding F1603 made about all three.
 	 * `t_v32fse.c` compares `*mag` on the inner ring only and asserts
 	 * that it excluded the other two.
 	 */
@@ -559,7 +559,7 @@ fse_rotate(int i, int q, short *ri, short *rq)
  *
  * `*mag` is `MAG9600[(|I| + |Q|)/8192 - 1]`.  The sixteen points have
  * |I| + |Q| in {8192, 16384, 24576}, so the index is 0, 1 or 2 and the
- * three-entry table is exactly covered -- which is finding 1603's
+ * three-entry table is exactly covered -- which is finding F1603's
  * cross-check: `_16pt` computes the same quantity with `>> 1` instead of
  * `>> 13` and reads 8190 bytes past the table.  That is D302, and `_16pt` is
  * now written with it fixed behind `DSPLIB_REPRODUCE_BUGS`.

@@ -5,7 +5,7 @@
  * thing is the whole point of keeping the two apart: V.29's shaper is
  * configured with `cfg.mapped` CLEAR, so the ring carries I and Q directly
  * and this function zeroes both rails where V.17 writes a constellation
- * index into `sym`.  Finding 3641 is the pair of independent statements that
+ * index into `sym`.  Finding F3641 is the pair of independent statements that
  * settle which is which.
  *
  * `tools/service.py` puts it on the FAX side.

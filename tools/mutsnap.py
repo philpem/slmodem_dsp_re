@@ -6,7 +6,7 @@ WHY THIS EXISTS
 
 Every batch here runs its suites twice -- once for a baseline, once after --
 because `make phase` cannot see a lost mutation: an UNUSABLE mutation does not
-fail a run (finding 347) and four batches have silently lost mutations that
+fail a run (finding F347) and four batches have silently lost mutations that
 way.  The baseline half is pure repetition of what the previous batch already
 measured, and it is half the mutation cost of every batch.
 
@@ -58,7 +58,7 @@ DETERMINISM
 
 Verdicts have to be reproducible or none of this holds.  `v34hshak`'s 209
 were identical across a serial run and two eight-way parallel runs (finding
-541), which is the evidence for it.  The one classification that is NOT
+F541), which is the evidence for it.  The one classification that is NOT
 reproducible in principle is `hang` -- a mutation caught by the 120-second
 timeout rather than by a check -- because a loaded machine can move it.  No
 suite in this tree has ever produced one; if one appears, it is recorded as
@@ -140,7 +140,7 @@ def suite_key(name, entry):
     # key not at all.  Their recorded verdicts then stayed CURRENT however the
     # test changed -- a C++ test could be rewritten or gutted and every
     # `caught` would still read as valid by construction, which is the one
-    # thing this file exists to prevent.  Finding 1451; it is finding 1383's
+    # thing this file exists to prevent.  Finding F1451; it is finding F1383's
     # third instance of a check that was silently not checking.
     #
     # Both extensions are tried and the first that exists is hashed.  A suite
@@ -246,7 +246,7 @@ def cmd_update(args):
             # first suite that would not run, which threw away every suite
             # already measured and never reached the rest -- one unrunnable
             # suite cost the whole tier.  `psd` is the live example: `t_psd`
-            # is exempted from the modern build (finding 1453) so its baseline
+            # is exempted from the modern build (finding F1453) so its baseline
             # is not green, mutate.py rightly refuses to judge mutations
             # against a test that already fails, and 122 healthy suites went
             # unrecorded with it.

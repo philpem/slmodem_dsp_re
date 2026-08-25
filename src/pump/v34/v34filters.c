@@ -41,7 +41,7 @@
  *
  * Global in the object, at .rodata 0x3440 and 0x34c0, immediately before
  * v34filters.c's own static block -- which is what attributes them here,
- * since a translation unit's globals precede its locals (findings 78).
+ * since a translation unit's globals precede its locals (findings F78).
  *
  * Neither is symmetric and neither is the other reversed: they are a filter
  * and its quadrature partner, which is the point.  Emitted as data; a
@@ -88,7 +88,7 @@ const short V34TimingHPFilterCoeff[V34_TIMING_HP_TAPS] = {
 /*
  * The timing prefilter, 40 taps.  Installed by V34TimingFiltersInit and read
  * by V34TimingFilter, which is not reconstructed yet -- so its Q format is
- * not yet established.  See finding 94 on why that cannot be read off the
+ * not yet established.  See finding F94 on why that cannot be read off the
  * table.
  */
 const short V34TimingPrefilterCoeff[40] = {
@@ -885,7 +885,7 @@ eq_adapt_tap(short *hi, short *lo, int dre, int dim, int ere, int eim,
  *
  * Everything here is a fixed offset into the enclosing object: the storage is
  * part of the object rather than separately allocated, so this is layout
- * rather than construction.  Finding 98 has the block diagram; the short
+ * rather than construction.  Finding F98 has the block diagram; the short
  * version is that each canceller's four arrays are contiguous with the
  * descriptor, and the second canceller repeats the first 0x1080 later.
  *
@@ -958,8 +958,8 @@ V34EchoCleanUp(struct v34_echo *e)
 	 * used the clean-up to announce which of two echo-canceller builds is
 	 * live, floating point or integer.  An invented "V34EchoCleanUp\n"
 	 * stood here until the handshake's transcript comparison ran over
-	 * this call tree for the first time; finding 172 is the same defect
-	 * in `V34SetupModulator`, and finding 134 is why it survived.
+	 * this call tree for the first time; finding F172 is the same defect
+	 * in `V34SetupModulator`, and finding F134 is why it survived.
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -1109,7 +1109,7 @@ V34EchoHistoryBackwardClean(void *objp, unsigned n)
 	 * function's name literal.  Walked backwards from the transmit
 	 * queue's write cursor, clearing only the low short of each; the
 	 * wrap is spelled as a second cursor running down from a base four
-	 * bytes below the object.  See findings 109.
+	 * bytes below the object.  See findings F109.
 	 */
 	{
 		int *p = obj->txq.wr - 1;
@@ -1170,7 +1170,7 @@ V34EchoReportCoeff(struct v34_echo *e)
 	 *      .rodata.str1.4+0xf8a0  "?======= Coefficients[1..%ld]========="
 	 *
 	 * Invented paraphrases stood here until the whole tree's format strings
-	 * were checked against .rodata; see finding 180.  The header takes an
+	 * were checked against .rodata; see finding F180.  The header takes an
 	 * argument, which the paraphrase did not: `%edx` at 0x72298 is still
 	 * `n`, the tap count rounded down to a multiple of six.
 	 */
@@ -1266,7 +1266,7 @@ V34TimingHPFilter(struct v34_timing *t, short sample)
 
 /*
  * Symbol timing recovery: two half-baud band-passes, a cross product, and a
- * high-pass.  See findings 99, 101, 102 and 103; the traps are noted inline.
+ * high-pass.  See findings F99, F101, F102 and F103; the traps are noted inline.
  */
 int
 V34TimingFilter(struct v34_timing *t, int sample)
@@ -1369,7 +1369,7 @@ V34TimingFilter(struct v34_timing *t, int sample)
 	 * push one past a short, and then it is wrong by 65536 times a
 	 * coefficient.  Found by `receiver`, whose inputs reach that state
 	 * and whose timing loop then corrects the wrong way -- see finding
-	 * 139.
+	 * F139.
 	 */
 	acc = pi * nr - pr * ni;
 	acc = (short)((acc + 0x2000) >> 14);
@@ -1377,7 +1377,7 @@ V34TimingFilter(struct v34_timing *t, int sample)
 	/*
 	 * The high-pass, written out rather than delegated: this rounds with
 	 * 0x4000 and shifts 15 where V34TimingHPFilter uses 0x8000 and 16 --
-	 * twice the gain, same table, same history.  Finding 102.
+	 * twice the gain, same table, same history.  Finding F102.
 	 */
 	hp = 0x4000;
 	for (k = 0; k < V34_TIMING_HP_TAPS; k++) {
@@ -1716,7 +1716,7 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 	 * picks the V.90 shaping filter and pre-filter.  It was recorded here
 	 * as printed and never read, and in D31 as selecting an arm that
 	 * could not be reached, and both were the same misreading of one
-	 * branch.  Finding 216.
+	 * branch.  Finding F216.
 	 */
 
 	if (DSPLIB_DEBUG_ON())
@@ -1801,7 +1801,7 @@ V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		 * so the `je` inherits ZF from the `cmp $0xc80` that chose
 		 * this case and is always taken -- was right about the two
 		 * `movl`s and missed the `test` in front of them.  See
-		 * finding 216; `v90` was recorded as read by nothing on the
+		 * finding F216; `v90` was recorded as read by nothing on the
 		 * same evidence and is not.
 		 *
 		 * The carrier is consulted only on the V.34 arm.  The V.90

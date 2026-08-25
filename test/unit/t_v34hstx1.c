@@ -23,7 +23,7 @@
  *     side A   our arm         + the blob's tail
  *     side B   the blob's arm  + the blob's tail
  *
- * on two congruent arenas (finding 319).  A difference is our arm's, because
+ * on two congruent arenas (finding F319).  A difference is our arm's, because
  * the tail is the same code on both sides reading the same object -- if our
  * arm left the object right.
  *
@@ -44,7 +44,7 @@
  *
  * ---------------------------------------------------------------------------
  * WHAT IS HELD FIXED, and it has to be stated because the separation results
- * in finding 323 are properties of the fill as much as of the object:
+ * in finding F323 are properties of the fill as much as of the object:
  *
  *   - one object fill, `v34hs_setup(0)`, the fixture's default seed;
  *   - route TXSAMPLE with a budget of ONE sample;
@@ -52,7 +52,7 @@
  *     machines contributes to the tail;
  *   - THE DIAGNOSTICS ARE ON, which is a REVERSAL and the reason the
  *     transcript is worth comparing at all.  They were off because the
- *     suite could not be run any other way: finding 570 measured 161 of
+ *     suite could not be run any other way: finding F570 measured 161 of
  *     the 272 step cases failing on transcript, 760 lines the BLOB prints
  *     and we did not, and zero in the other direction.  Tasks #34 and #37
  *     closed all 760 -- 204 by calling `hs_setstate` and `v34FreezeEcho`,
@@ -63,7 +63,7 @@
  *     The transcript comparison is a LIVE check rather than a vacuous one,
  *     and the 27 `dsplibs_debug_printf` sites in `v34hstx1.cpp` are driven
  *     rather than dead code nothing can distinguish from a clean tree
- *     (finding 134).
+ *     (finding F134).
  *
  *     `V34TX1_TRACE=1` no longer turns anything on.  It only DUMPS both
  *     transcripts for a case whose two differ, which is now no case at all;
@@ -137,7 +137,7 @@
  * A companion field to set before the arm runs.  `kind` is 0 for a halfword,
  * 1 for a 32-bit one and 2 for a POINTER, which has to be aimed per side --
  * the two objects are at two addresses, so one address written into both is
- * exactly the asymmetry findings 319-322 are about.
+ * exactly the asymmetry findings F319-322 are about.
  */
 struct tx1_poke {
 	unsigned	off;
@@ -151,7 +151,7 @@ struct tx1_poke {
 #define P8(o, v)	{ (o), (v), 3 }
 
 static int dump;
-static int trace;			/* V34TX1_TRACE -- see finding 570 */
+static int trace;			/* V34TX1_TRACE -- see finding F570 */
 static unsigned char before[sizeof(struct v34_object)];
 
 /*
@@ -191,7 +191,7 @@ apply(short txst, const struct tx1_poke *p, int np)
  * dropped because the check is still a check: an arm that returned anything
  * else would be claiming a transfer out of the dispatch, and there is no
  * longer any such transfer to claim.  Two cases used to pass something else
- * -- 81's wrap and 86's segment end, finding 343's gap -- and both of those
+ * -- 81's wrap and 86's segment end, finding F343's gap -- and both of those
  * blocks are written now, so both run the differential half as well.
  *
  * `guard` IS THE SECOND ANTI-VACUITY GUARD, AND IT HAS THREE FORMS BECAUSE
@@ -256,7 +256,7 @@ run_case_ex(short txst, int (*arm)(void *), int want, const char *what,
 	 * AND THIS BRANCH IS UNREACHABLE NOW, ON PURPOSE.  It skipped the
 	 * differential half for a case that had left the dispatch for a block
 	 * this file did not model, and there is no such block left: every arm
-	 * returns `V34TX1_LOOP` on every path (finding 748).  It stays as an
+	 * returns `V34TX1_LOOP` on every path (finding F748).  It stays as an
 	 * ASSERTION -- if an arm ever reports something else the run says so
 	 * and does not silently compare -- and it is safe to have it stay
 	 * because the `exit code` check above has already failed by then.
@@ -427,7 +427,7 @@ case_ja(short txst, int (*arm)(void *), const char *name, long tag)
 
 /*
  * The wrap at 0xc0 runs 0x66d85, which is written now, so the wrap runs are
- * differential like every other case here.  Finding 343's gap is closed.
+ * differential like every other case here.  Finding F343's gap is closed.
  *
  * THE THREE COMPANION RUNS ARE THE POINT, not the wrap itself.  0x66d85
  * chooses MOH_FRR over MOH_ON_HOLD when EITHER +0xabec or `moh_message` is 1,
@@ -439,7 +439,7 @@ case_ja(short txst, int (*arm)(void *), const char *name, long tag)
  * BEING TESTED.  The object reads it `cmpl $0x1`, 32 bits wide; a 16-bit
  * read agrees with a 32-bit one over every value whose upper half is zero,
  * so a seed of 1 cannot separate the two declarations and 0x10001 can.  This
- * is the case rxstate 72's 0x6881e was NOT (finding 613) -- here a trial
+ * is the case rxstate 72's 0x6881e was NOT (finding F613) -- here a trial
  * exists, so one is offered.
  *
  * AND 82, 83 AND 84 SHARE THE ENTRY AND NOT THE WRAP.  0x66d85 re-reads
@@ -540,7 +540,7 @@ static const struct tx1_poke txmd_b[] = {
 /*
  * THE ECHO-ADAPTATION BLOCK'S FOUR STORES ARE INVISIBLE AGAINST A COLD
  * OBJECT unless the fields already hold something else, which is finding
- * 345's list in this file's own currency: `f25c2` is seeded with bit 2 SET,
+ * F345's list in this file's own currency: `f25c2` is seeded with bit 2 SET,
  * so the `& ~4` has something to clear, and the other three non-zero.
  */
 static const struct tx1_poke txmd_done[] = {
@@ -577,7 +577,7 @@ static const struct tx1_poke txmd_both[] = {
  * `tx3200c1_for_v90` against 0x20 from `tx3200c1_for_v34` -- so it is the
  * only rate at which the two PCM-receiver runs below differ by anything.
  * With 2400 baud they are the same call twice and the argument is untested;
- * finding 216 and v34filters.c's 3200 case.
+ * finding F216 and v34filters.c's 3200 case.
  *
  * `f25c0` and `f25c2` are seeded for the same reason as 65's counters: the
  * reconfiguration clears one and raises 0x8004 in the other, and both are
@@ -740,7 +740,7 @@ case_sseg(void)
  * THE MODULATOR NEEDS NO RATE POKED.  All six arguments are literals in the
  * object -- 4800 baud, 2400 carrier, no pre-emphasis, `v90` zero -- so unlike
  * 86 there is no configuration to drive and no `v90` argument to compute
- * either way.  Finding 216's 3200-baud rule is about a rate this arm never
+ * either way.  Finding F216's 3200-baud rule is about a rate this arm never
  * asks for.
  */
 #define SBARSEG_SEED							\
@@ -1000,7 +1000,7 @@ case_ppseg(void)
 /*
  * The twelve fields of the record at +0xa94c that 54's completion writes
  * directly, plus the three `V34SetINFO0aBits` fills.  Every one is seeded to
- * something the arm does not store, which is finding 345's rule: eleven of
+ * something the arm does not store, which is finding F345's rule: eleven of
  * task #16's mutations were uncatchable until the fixture stopped agreeing
  * with the arm by accident.
  */
@@ -1030,7 +1030,7 @@ case_ppseg(void)
  * and the run would FAULT rather than fail, on both sides.  The two runs that
  * drive `v90_receiver` non-zero therefore aim both at one shared static.
  *
- * THAT KEEPS THE TWO SIDES CONGRUENT, which is the property findings 319-322
+ * THAT KEEPS THE TWO SIDES CONGRUENT, which is the property findings F319-322
  * are about: a pointer into each side's own arena would make the session
  * blocks differ and the arena sweep would fail.  One address in both sessions
  * is the same four bytes in both, and the callee reads the same byte on each
@@ -1383,7 +1383,7 @@ case_probe_table(void)
  * a pseudorandom halfword there, so without this poke the sixteen-point
  * continuation at 0x67031 -- 447 bytes, the `vect16` half, two scrambler
  * calls -- is never entered on any run, and `run_case`'s two guards cannot
- * see it because the four-point half writes plenty.  That is finding 422's
+ * see it because the four-point half writes plenty.  That is finding F422's
  * failure mode exactly, and the mutation suite is what would say so.
  *
  * Everything the arm writes is seeded away from what it stores:
@@ -1493,7 +1493,7 @@ case_exmit(void)
  * own.  Both are here and each is labelled with which it is.
  *
  * THE FOUR THINGS EVERY RUN VARIES ARE AT LITERAL INDICES AT THE HEAD, which
- * is finding 422's rule: addressing a poke as `NP(a) - k` breaks silently the
+ * is finding F422's rule: addressing a poke as `NP(a) - k` breaks silently the
  * moment one is inserted, and `run_case`'s guards do not notice because the
  * body still writes.
  *
@@ -1828,7 +1828,7 @@ case_vect16_table(void)
  * something" and "the cursor reached the limit" -- hold on EVERY run whatever
  * else did or did not happen.  Neither of them can see whether the bit loop
  * ran twice or four times, whether a checkpoint fired, whether the reader
- * refilled, or whether `initdigital` was reached.  That is finding 422's
+ * refilled, or whether `initdigital` was reached.  That is finding F422's
  * per-arm/per-path gap at its widest in this file, and the only thing that
  * says a run went where its name says is `tools/mutate.py`.  So every field
  * that decides a path is poked, and every poke a run varies is at a LITERAL
@@ -2223,17 +2223,17 @@ case_xmitmp(void)
 	 * +0x0e48, +0x2608 and +0x2a28 were SKIPPED and not agreed: `initV34`
 	 * aims those at library tables, so side A holds ours and side B the
 	 * blob's, and neither the ordinary run nor `V34HS_REFINIT` can settle
-	 * two addresses of two copies (findings 324 and 359).  That hazard is
+	 * two addresses of two copies (findings F324 and F359).  That hazard is
 	 * real here and is named rather than measured; it is just not what
 	 * made the run fail.  The run is recorded rather than committed
 	 * because closing it means adding two entries to a list three other
 	 * tests assert every entry of is exercised, and they do not reach
 	 * `initdigital`.
 	 *
-	 * WHAT IS THEREFORE UNTESTED IS TWO LINES, and finding 424 names
+	 * WHAT IS THEREFORE UNTESTED IS TWO LINES, and finding F424 names
 	 * them: the call itself and the store of one into +0x3598.  Both are
 	 * in the suite as mutations and both go uncaught, which is finding
-	 * 343's way of making a gap concrete rather than leaving it silent.
+	 * F343's way of making a gap concrete rather than leaving it silent.
 	 * 6724 still covers the guard, because it is the path where +0x3598
 	 * is already set.
 	 */
@@ -2372,13 +2372,13 @@ case_xmitmp_entry(void)
  * WHERE THE READER LIVES IS A POKE, as it is for 67.  The fixture aims
  * +0xaa6c at a block OUTSIDE the object, so left alone the reader's own
  * advance would be invisible to the "wrote something" guard and to finding
- * 323's byte count -- which is half of why 24 and 60 agree cold.  These runs
+ * F323's byte count -- which is half of why 24 and 60 agree cold.  These runs
  * put the record INSIDE the object, at +0xaa0c, which is one whole 0x30-byte
  * slot of the five-record array (v34hshak.c's mode 2/3 blanks the same one)
  * and does not overlap +0xaa78, +0xaa7e or the pointer itself.
  *
  * Every field the arm writes is seeded away from what it stores (finding
- * 345): `vect_idx` non-zero against the hold's clear, +0xaa78 non-zero
+ * F345): `vect_idx` non-zero against the hold's clear, +0xaa78 non-zero
  * against it too, +0x25d0 to a word that is no `vect4` entry, +0xabe2,
  * +0xabe4 and +0xabe6 away from one, +0xabf8 non-zero against the one-shot's
  * clear, the reader's own fields away from what a refill leaves, and the
@@ -2547,7 +2547,7 @@ run_dpsk_1s(const char *what, long tag)
 }
 
 /*
- * FINDING 323'S ONE COLLISION, MEASURED HERE RATHER THAN QUOTED, and it is
+ * FINDING F323'S ONE COLLISION, MEASURED HERE RATHER THAN QUOTED, and it is
  * AGREEMENT ON ONE PATH and not identity.
  *
  * Cold, 24 and 60 write the same 69 bytes with the same signature.  The
@@ -2775,7 +2775,7 @@ case_tx_dpsk(void)
 	/*
 	 * The third way out of the tail: neither +0xabf9 nor a message in
 	 * 2..3, so the handshake is restarted.  `v34handshakinit(obj, 1)`
-	 * runs INSIDE the step, which is finding 359's case -- and it also
+	 * runs INSIDE the step, which is finding F359's case -- and it also
 	 * re-arms the loop that is dispatching this arm, setting +0x2aa0 to
 	 * six and clearing `vect_idx`.
 	 */
@@ -3015,7 +3015,7 @@ enum {
 };
 
 /*
- * LITERAL INDICES AND NO COMPUTED ONES, which is finding 420's rule: a poke
+ * LITERAL INDICES AND NO COMPUTED ONES, which is finding F420's rule: a poke
  * array addressed as `NP(a) - k` moves every entry when one is inserted, and
  * three families of runs once tested nothing while the test said PASS.
  */
@@ -3059,7 +3059,7 @@ static struct tx1_poke trn[T4_N_POKE] = {
 	 * store and the whole rate arm is invisible -- the first version of
 	 * this case measured four bytes of difference between a recognised
 	 * rate and an unrecognised one, all four of them the carrier POINTER,
-	 * which is finding 345 exactly.
+	 * which is finding F345 exactly.
 	 */
 	P16(TX1_RXF1AC, 0x0111), P16(TX1_RXF1AE, 0x0222),
 	P16(TX1_RXF1B0, 0x0333), P16(TX1_RXF1BE, 0x0444)
@@ -3129,7 +3129,7 @@ aim_demod(void)
  * THE +0xaa0c RECORD, SEEDED.  `v34handshakinit` blanks the same twelve
  * fields on its Modem-on-Hold path, so against a cold object the arm's twelve
  * stores would write the values already there and every one of them would be
- * invisible -- finding 345's failure exactly.  Fourteen halfwords cover the
+ * invisible -- finding F345's failure exactly.  Fourteen halfwords cover the
  * twelve stores, two of which are 32-bit.
  */
 static void
@@ -3151,7 +3151,7 @@ run_trn(const char *what, long tag)
 
 /*
  * 21's entry, read out of the blob's own `.rodata`.  Here the claim is
- * EXCLUSIVITY and not sharing -- finding 354a says a shared entry is never
+ * EXCLUSIVITY and not sharing -- finding F354a says a shared entry is never
  * evidence of one behaviour, and the same argument run backwards says an
  * entry believed to be one txstate's alone has to be measured too.  All
  * eighty-two entries are swept.
@@ -3384,7 +3384,7 @@ case_trnseg4(void)
 /*
  * 66's entry is its own, read out of the blob's `.rodata` the way
  * `case_jtxmit_entry` reads 64 and 68's -- and here the claim is the opposite
- * one, that NOTHING else reaches 0x62e28.  Finding 354a is why it is asserted
+ * one, that NOTHING else reaches 0x62e28.  Finding F354a is why it is asserted
  * rather than assumed: a shared entry says nothing about how many behaviours
  * are behind it, so an exclusive one has to be measured too.  The whole table
  * is swept rather than the two neighbours, because a later blob giving 21 or
@@ -3409,7 +3409,7 @@ case_trnseg4a_entry(void)
 
 /*
  * EVERY FIELD THAT DECIDES A PATH IS POKED, at a LITERAL index, which is
- * finding 420's rule: a poke array addressed as `NP(a) - k` moved four pokes
+ * finding F420's rule: a poke array addressed as `NP(a) - k` moved four pokes
  * by one when an entry was inserted, and `run_case`'s two guards could not
  * see it.
  *
@@ -3533,7 +3533,7 @@ static int ts_upstream;
 
 /*
  * AND THE DIVISOR TABLE THE LADDER WALKS, for the reason `probe` and `vectpp`
- * had to be extracted (finding 421): the fixture aims `cfg->rx_divtab` at its
+ * had to be extracted (finding F421): the fixture aims `cfg->rx_divtab` at its
  * shared dummy block, whose entries are 0x4b00 + i -- so `entry >> 5` is 600
  * for EVERY index the ladder can reach and every rate produces the same term.
  * Nine claims about the index and about which term feeds which field are

@@ -11,10 +11,10 @@
  * than shared, which is the call both of those files already made.
  *
  * NOTHING IN THE OBJECT CALLS ANY OF THE FOUR, `process` included -- the sweep
- * of every `R_386_PC32` in `.text` that findings 2140 and 2141 record covers
+ * of every `R_386_PC32` in `.text` that findings F2140 and F2141 record covers
  * them too -- so each is driven directly by symbol on both sides, ours by its
  * mangled name and the blob's by the `ref_` alias, through an `asm()` label.
- * Plain cdecl with `this` as the first STACK argument (finding 215), and a
+ * Plain cdecl with `this` as the first STACK argument (finding F215), and a
  * `float` occupies one stack slot.
  *
  * WHAT IS COMPARED, and why each is compared the way it is:
@@ -391,7 +391,7 @@ same_inputs(long input, int topMayMove)
  * The fixture
  * ===========================================================================
  *
- * THE 16-BIT TABLES ARE RAMPS AND NOT NOISE, for finding 2164's reason, which
+ * THE 16-BIT TABLES ARE RAMPS AND NOT NOISE, for finding F2164's reason, which
  * `t_v90cdnoise.cpp`'s header states in full: over uniform noise the inner
  * counts are RECORD counts and barely move with the seed, so every claim about
  * a threshold goes untested.  A ramp makes them smooth and tunable.
@@ -527,7 +527,7 @@ adj_fixture(int trial, int composed)
 	 * AND THE BIT BUDGET INCLUDES `shaperSR`.  `forceRate` forms its
 	 * exponent as `(short)(RATE_FORCE * 0.00075 + 0.5f) + shaperSR - 6`,
 	 * so one of the four out-of-band shaper values the sweep needs for the
-	 * eight-bit `kMax` reading (finding 3403) makes 2^n an infinity and the
+	 * eight-bit `kMax` reading (finding F3403) makes 2^n an infinity and the
 	 * refinement loop never terminates -- D337 again, reached through a
 	 * term the first draft of this fixture did not know was in it, and
 	 * cored to find out.
@@ -816,7 +816,7 @@ run_acp(void)
 	 * classifying the inputs and calling it the arms.  The mutation set is
 	 * what carries the claim: it swaps the 1 and the 10, and moves the
 	 * `byte_08` threshold.  `t_v90cdnoise.cpp` makes the same call for the
-	 * same reason (finding 2186).
+	 * same reason (finding F2186).
 	 */
 
 	return diff_end();
@@ -1059,7 +1059,7 @@ run_process(void)
 		 * diagnostic can tell them apart.  The mutation set carries
 		 * the 32-bit spelling as an EXPECTED SURVIVOR with that proof
 		 * rather than as a claim this test can settle, and the source
-		 * comment says the same.  Finding 3403.
+		 * comment says the same.  Finding F3403.
 		 */
 		(void)sr;
 		(void)byteKMax;

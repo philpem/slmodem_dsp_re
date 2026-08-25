@@ -203,7 +203,7 @@ main(void)
 	/*
 	 * Both of these would go quiet if the drive levels above were ever
 	 * softened, and with them the only coverage of the two places where
-	 * this filter differs from a saturating one.  Finding 134's argument:
+	 * this filter differs from a saturating one.  Finding F134's argument:
 	 * a detector that has never been shown to fire is not a detector.
 	 */
 	diff_begin("v22 iir overflow paths reached");

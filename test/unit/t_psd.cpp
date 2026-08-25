@@ -3,7 +3,7 @@
  *
  * ALL SIX, now that `Psd::process` is written.  Its case is at run_process();
  * the two blockers it used to have, and what became of them, are in
- * include/dsplib/Psd.h and in finding 876.
+ * include/dsplib/Psd.h and in finding F876.
  *
  * THE OBJECT CANNOT LIVE IN A UNION and the constructor and destructor are
  * called through asm() labels on both sides, for t_floatfir.cpp's reasons.

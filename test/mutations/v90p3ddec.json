@@ -3,7 +3,7 @@
   "label": "the sample counter counts down",
   "find": "\ts = (short)sample;\n\tword_2c++;\n",
   "replace": "\ts = (short)sample;\n\tword_2c--;\n",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the sample is rounded rather than truncated",
@@ -36,7 +36,7 @@
   "label": "the SdDemod timeout is one sample late",
   "find": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 2;\n\t\t} else if (word_2c == 0x180) {",
   "replace": "\t\t\tstate = (Phase3DemodulatorState)0x02;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 2;\n\t\t} else if (word_2c == 0x181) {",
-  "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the TRN1dKnownData handover is one sample late",
@@ -52,13 +52,13 @@
   "label": "the JdNot frame position is 13 rather than 12",
   "find": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 12) {",
   "replace": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 13) {",
-  "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the JdNot run length is 12 rather than 11",
   "find": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xb && word_2c % 72 == 12) {\n",
   "replace": "\t\t\tword_04 = 0;\n\t\tif (bit != 0)\n\t\t\tword_404 = 0;\n\t\telse\n\t\t\tword_404++;\n\t\tif (word_404 > 0xc && word_2c % 72 == 12) {\n",
-  "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 5 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the two probing-mode states are swapped",
@@ -75,7 +75,7 @@
   "label": "the error-relaxation counter runs on the wrong flag",
   "find": "\t\t\tword_04 = 0;\n\t\tif (byte_3f9 != 0) {",
   "replace": "\t\t\tword_04 = 0;\n\t\tif (byte_3f9 == 0) {",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the ANSpcm demod state does not raise the verification status",
@@ -86,7 +86,7 @@
   "label": "the QTS-detected event code is the QTSNot one",
   "find": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 0x37;",
   "replace": "\t\t\t\t word_2c);\n\t\t\tstate = (Phase3DemodulatorState)0x1b;\n\t\t\tword_2c = 0;\n\t\t\tword_30 = 0x38;",
-  "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 3 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
   "label": "the recovery watch uses > where the object uses >=",
@@ -107,10 +107,10 @@
   "label": "the probing DIL ends one sample late",
   "find": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength) {",
   "replace": "\t\t       params->DFE_LENGTH)\n\t\t\tword_408 = 1;\n\t\telse\n\t\t\tword_408 = 0;\n\t\tif (word_2c == dilLength + 1) {",
-  "note": "Anchor carries 4 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347."
+  "note": "Anchor carries 4 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347."
  },
  {
-  "note": "THE TEN SMALL PHASE 3 RECEIVE MEMBERS, against t_v90p3ddec's seven new suites.  Two claims below have no mutation and the reason is recorded rather than left silent: `exitDIL`'s `||` ORDER is behaviourally free -- every permutation of the seven states answers the same for every state -- so it is a `make similarity` claim (finding 4977) and nothing here can adjudicate it; and the detector pointer being re-read from the object before each of `setDigitalImairmentsInfo`'s three calls cannot be mutated into anything observable, because no path changes it between them."
+  "note": "THE TEN SMALL PHASE 3 RECEIVE MEMBERS, against t_v90p3ddec's seven new suites.  Two claims below have no mutation and the reason is recorded rather than left silent: `exitDIL`'s `||` ORDER is behaviourally free -- every permutation of the seven states answers the same for every state -- so it is a `make similarity` claim (finding F4977) and nothing here can adjudicate it; and the detector pointer being re-read from the object before each of `setDigitalImairmentsInfo`'s three calls cannot be mutated into anything observable, because no path changes it between them."
  },
  {
   "label": "the JdNot counter is set rather than cleared",

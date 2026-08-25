@@ -340,7 +340,7 @@
   "find": "\tfskdemodulate(obj, fskin, &obj->fsk);\n\n\tframe.mst = hs_get(obj, HS_MICROSTATE);",
   "replace": "\tframe.mst = hs_get(obj, HS_MICROSTATE);\n\tfskdemodulate(obj, fskin, &obj->fsk);",
   "equivalent": true,
-  "why": "finding 285 swept the whole of .text: neither `V34agc` nor `fskdemodulate` writes +0x3592, +0x3594 or +0x3596, which is the property that makes this per-arm harness possible at all.  So the read can be moved across the call and no byte changes.  It becomes catchable again the day either function is found to write a state word.",
+  "why": "finding F285 swept the whole of .text: neither `V34agc` nor `fskdemodulate` writes +0x3592, +0x3594 or +0x3596, which is the property that makes this per-arm harness possible at all.  So the read can be moved across the call and no byte changes.  It becomes catchable again the day either function is found to write a state word.",
   "fn": "v34handshak"
  },
  {
@@ -2690,7 +2690,7 @@
   "label": "sep"
  },
  {
-  "label": "-- 51's record, which seven `shared reset' labels were silently mutating (finding 432) --"
+  "label": "-- 51's record, which seven `shared reset' labels were silently mutating (finding F432) --"
  },
  {
   "label": "51's info1a body clears the counter before it announces the two states",

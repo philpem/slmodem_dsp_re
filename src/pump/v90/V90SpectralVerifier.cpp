@@ -5,7 +5,7 @@
  * `reset()`, which is the one `v34handshak` reaches.
  * `include/dsplib/V90SpectralVerifier.h` carries the object map.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * THE DIAGNOSTIC IS NOT GATED.  Unlike `V90ConstellationDesigner`'s two, this
  * one is a bare `call edprintf` with no `dsplibs_debug_level` test in front
@@ -34,7 +34,7 @@
  * sysdep_free(p); }` -- `delete p` over an inline wrapper -- and the two float
  * buffers with a plain guarded free.  At the destructor's LAST free the
  * delete-expression emits an ordinary `call sysdep_free` where the open-coded
- * form emits a sibling `jmp`.  refinement.md lever 7, findings 7786 and 7816.
+ * form emits a sibling `jmp`.  refinement.md lever 7, findings F7786 and F7816.
  */
 inline void operator delete(void *p) { sysdep_free(p); }
 
@@ -60,14 +60,14 @@ inline void operator delete[](void *p) { sysdep_free(p); }
  * then runs its constructor over that storage, and C++ has no syntax for
  * that without `<new>`, which this tree builds `-nostdinc++` without.  The
  * symbols are the ones the object calls, `C1` and `D1`, and both take `this`
- * as their first stack argument like everything else here (finding 215).
+ * as their first stack argument like everything else here (finding F215).
  */
 extern void psd_construct(void *self, unsigned int length, WindowType window,
 			  unsigned int overlap)
 	asm("_ZN3PsdC1Ej10WindowTypej");
 /*
  * `psd_destruct` IS GONE: `delete psd` calls `Psd::~Psd` (D1) itself, which
- * is the same symbol this asm() label named.  Finding 7816.
+ * is the same symbol this asm() label named.  Finding F7816.
  */
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
@@ -90,7 +90,7 @@ V90SV_OFF(accumulating, 0x24, accumulating);
 V90SV_OFF(word_28,      0x28, word28);
 typedef char v90sv_size[(sizeof(V90SpectralVerifier) == 0x2c) ? 1 : -1];
 
-/* The parameter slots the constructor reads, held to the map (finding 230). */
+/* The parameter slots the constructor reads, held to the map (finding F230). */
 #define V90SV_POFF(field, off, tag) \
 	typedef char v90sv_poff_##tag[ \
 	    ((int)__builtin_offsetof(V90Parameters, field) == (off)) ? 1 : -1]
@@ -297,7 +297,7 @@ V90SpectralVerifier::startAccumulation()
  * for the reason `adid_abs` gives -- GCC 3.4.2 does not inline a plain
  * `static` here, and a call between the computation and the print would
  * spill an x87 value through a four-byte slot and change what is printed
- * (finding 1448).
+ * (finding F1448).
  */
 static inline int
 sv_abs(int v)
@@ -352,7 +352,7 @@ sv_abs(int v)
  *
  * THE SCALE IS A `double` AND THAT IS NOT FREE.  0x4633f and 0x463ce load it
  * with `fldl` out of `.rodata.cst8+0x100`, and an eight-byte pool entry
- * cannot have been a `float` (finding 1384 makes the converse argument about
+ * cannot have been a `float` (finding F1384 makes the converse argument about
  * a four-byte one).  0x46425 materialises the same 0x4059000000000000 as two
  * integer stores rather than a load at all.  The two ISDN sites load `flds`
  * out of `.rodata.cst4+0x3c0` and then SPILL the register with `fstpl`,
@@ -448,7 +448,7 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
 	 * cannot see any of this -- GCC 13 honours IEEE for `>` whichever
 	 * operand order it picks -- so the period tier is what holds it, and
 	 * the mutation that inlines them back is pre-registered as
-	 * uncatchable-here for exactly that reason.  Findings 3529, 2300, 1990.
+	 * uncatchable-here for exactly that reason.  Findings F3529, F2300, F1990.
 	 */
 	leftThr = params->SPECTRAL_VERIFIER_ISDN_LEFT_PEAK_DELTA;
 	rightThr = params->SPECTRAL_VERIFIER_ISDN_RIGHT_PEAK_DELTA;
@@ -564,13 +564,13 @@ V90SpectralVerifier::checkSpecialSpectralConditions()
  * is `fmuls .rodata.cst4+0x3b0`, a FOUR-byte pool entry, where the five sites
  * in `checkSpecialSpectralConditions` load eight bytes out of `.rodata.cst8`.
  * A four-byte entry does not distinguish `100`, `100.0f` and `100.0` on its
- * own (finding 1384), but an eight-byte one rules a `float` out -- so the two
+ * own (finding F1384), but an eight-byte one rules a `float` out -- so the two
  * really are different expressions in the original, and folding this into
  * `SV_FRAC2` would move the multiply's width at the site that has it narrow.
  *
  * The subtraction runs `v - (float)(int)v`: 0x45e23 is `d8 e9`, FSUBR
  * ST(0),ST(i), which is a D8 REGISTER form and therefore not one of the
- * encodings finding 245 warns about -- the swap is in the DE pop forms only.
+ * encodings finding F245 warns about -- the swap is in the DE pop forms only.
  */
 #define SV_FRAC2F(v)	sv_abs((int)(((v) - (float)(int)(v)) * 100.0f))
 
@@ -622,7 +622,7 @@ V90SpectralVerifier::printSpectrum() const
  * THE TWO LOOP CONDITIONS ARE IF-CONVERTED AND THAT IS THE COMPILER'S.
  * 0x465fb..0x46607 is `setb`/`setb`/`test`/`je` -- two compares with no
  * branch between them -- which is what GCC 3.4.2 does to a `&&` whose arms
- * are both cheap (finding 2411's class).  The source is an ordinary `&&`.
+ * are both cheap (finding F2411's class).  The source is an ordinary `&&`.
  *
  * THE PROGRESS COUNTER IS STORED ONLY ON THE PATH THAT LEAVES THE LOOP FROM
  * INSIDE IT (0x46647).  Entering with the buffer already full skips the

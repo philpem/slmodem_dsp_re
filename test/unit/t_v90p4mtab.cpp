@@ -49,16 +49,16 @@
  * SHARED: the `V90MappingParams` block both symbol setters read.  Nothing
  * under test writes through it, so one address keeps `mappingParams`,
  * `mappingParams2` and the argument IN the comparison rather than blanked out
- * of it -- finding 1105.
+ * of it -- finding F1105.
  *
- * THE OBJECTS ARE NEVER ZEROED -- finding 230.  Every slot gets varied
+ * THE OBJECTS ARE NEVER ZEROED -- finding F230.  Every slot gets varied
  * pseudorandom bytes before every trial, so a store that fails to happen is
  * visible and a store of zero into memory that was already zero cannot be
  * mistaken for one.  The fields each arm reads are planted on top of that,
  * identically on both sides.
  *
  * ---------------------------------------------------------------------------
- * ANTI-VACUITY, per finding 3509
+ * ANTI-VACUITY, per finding F3509
  *
  * Every counter here names an OBSERVABLE difference -- a returned symbol, a
  * byte of the modulator, a byte of the CP record -- and never "a branch
@@ -139,7 +139,7 @@ static unsigned char mapp_s[sizeof(V90MappingParams) + 64]
 #define CPR(s)		(*(V90CP *)cp_s[s])
 #define MAPP		((V90MappingParams *)mapp_s)
 
-/* Varied, never zero, never the same twice: findings 223, 224, 230. */
+/* Varied, never zero, never the same twice: findings F223, F224, F230. */
 static unsigned
 fill(unsigned char *p, unsigned n, unsigned lfsr)
 {

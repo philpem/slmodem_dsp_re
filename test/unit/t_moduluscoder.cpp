@@ -12,7 +12,7 @@
  * these thirteen words" and "it left those six alone" are both statements
  * about bytes that were something else beforehand.  A zero fill would make a
  * clear loop that stops a word short, or one that runs a word too far, pass
- * (findings 223, 224).
+ * (findings F223, F224).
  *
  * V92ModulusEncoder IS THE ONE WITH A HOLE IN IT.  It zeroes +0x18 through
  * +0x48 and leaves +0x00..+0x14 and +0x4c, +0x50 as it found them, so the

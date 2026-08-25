@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90BitsToSymbol's three arithmetic members, against t_v90btsproc.  The placement mutations move a loop bound, a store or a status; the DIAGNOSTIC ones swap the two error messages, which writes the same bytes into the object and is only catchable through the transcript.  NOT here: turning `wanted * bitsPerFrame / 6` into `(wanted / 6) * bitsPerFrame` on the exact arm.  The two agree for every value that arm can be given -- the arm is chosen by `wanted % 6 == 0` -- so it is equivalent by construction, and what holds the object's spelling there is finding 617's full-text identity, not a test."
+  "note": "V90BitsToSymbol's three arithmetic members, against t_v90btsproc.  The placement mutations move a loop bound, a store or a status; the DIAGNOSTIC ones swap the two error messages, which writes the same bytes into the object and is only catchable through the transcript.  NOT here: turning `wanted * bitsPerFrame / 6` into `(wanted / 6) * bitsPerFrame` on the exact arm.  The two agree for every value that arm can be given -- the arm is chosen by `wanted % 6 == 0` -- so it is equivalent by construction, and what holds the object's spelling there is finding F617's full-text identity, not a test."
  },
  {
   "label": "nofBitsForNextTime answers for an already-full block",

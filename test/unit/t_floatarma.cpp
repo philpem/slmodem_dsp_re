@@ -6,7 +6,7 @@
  * THE OBJECT CANNOT LIVE IN A UNION.  FloatARMA declares a constructor and a
  * destructor -- two of the five symbols under test -- which makes it
  * non-trivial and deletes the default members of any union holding one
- * (finding 232).  So the slot is a plain aligned byte array reached through a
+ * (finding F232).  So the slot is a plain aligned byte array reached through a
  * cast.
  *
  * THE CONSTRUCTOR AND DESTRUCTOR ARE CALLED THROUGH asm() LABELS on both
@@ -20,7 +20,7 @@
  * sysdep_malloc returns and the two sides allocate separately.  They are not
  * skipped: the snapshot replaces each with whether THAT side's pointer is
  * null, which is the only property of a heap address the two runs can share
- * (finding 224), and all four buffers are compared in full separately.
+ * (finding F224), and all four buffers are compared in full separately.
  *
  * AND COMPARING TWO DESTROYED OBJECTS COMPARES THE ALLOCATORS.  The
  * destructor does not null what it frees, so after it runs the two objects
@@ -95,7 +95,7 @@ T(void)
 /*
  * Seeds.  Never zero: a zero fill would let a clear loop stop a word short
  * and still compare equal, and would leave both dot products summing zeros
- * where a mispaired accumulator is invisible (findings 223, 224).
+ * where a mispaired accumulator is invisible (findings F223, F224).
  */
 static unsigned lfsr_state;
 
@@ -409,7 +409,7 @@ run_ctor(void)
 			/*
 			 * The constructor ends by resetting: both histories
 			 * cleared, both positions rewound, and m_idx left on
-			 * the SECOND clear loop's count (finding 874).
+			 * the SECOND clear loop's count (finding F874).
 			 */
 			diff_eq_int("the constructor rewound m_xpos"
 				    " (shape %ld)", O()->m_xpos,
@@ -518,7 +518,7 @@ run_ctor(void)
 
 	/*
 	 * nDen == 0.  The constructor still writes 0.0f over m_a[0], through
-	 * a zero-length allocation -- see finding 875.  Construct and destroy
+	 * a zero-length allocation -- see finding F875.  Construct and destroy
 	 * only: with m_nA == 0 the carry-tail loop's count underflows and
 	 * `process` would not return.
 	 */
@@ -598,7 +598,7 @@ run_reset(void)
 			/*
 			 * m_idx is a member and the fill loops leave it
 			 * behind; the value it ends on is m_ylen, and it is
-			 * the SECOND loop's, not the first's (finding 874).
+			 * the SECOND loop's, not the first's (finding F874).
 			 */
 			diff_eq_int("reset left m_idx at m_ylen (shape %ld)",
 				    O()->m_idx, O()->m_ylen, shape);

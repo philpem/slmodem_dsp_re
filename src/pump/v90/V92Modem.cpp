@@ -36,7 +36,7 @@
  * blob does not have.
  *
  * THE FIVE `sysdep_malloc(sizeof(X))` IMMEDIATES ARE THE ORIGINAL COMPILER'S
- * OWN `sizeof`s (finding 1246), and this is the richest single source of them
+ * OWN `sizeof`s (finding F1246), and this is the richest single source of them
  * in the V.92 chain: 0xdc, 0x2c, 0x918, 0xb4 and 0x90.  Every one was already
  * pinned by its own class's allocation site and every one agrees, so this
  * file confirms five sizes and invents none.  The assertions below are what
@@ -46,14 +46,14 @@
  * THE ILLEGAL-SIDE ARM STORES NOTHING.  Both functions have a third arm for a
  * `modemSide` that is neither 0 nor 1, and in the constructor that arm prints
  * and returns -- it does NOT null the modulator pointer, which therefore
- * keeps whatever the storage held.  Finding 1323, and the test drives it.
+ * keeps whatever the storage held.  Finding F1323, and the test drives it.
  *
  * ONE GUARD IN THE DESTRUCTOR IS UNREACHABLE.  `if (mappingParams)` at
  * .text+0x139da is preceded, two calls earlier, by
  * `V92deleteConstellations(mappingParams)`, which dereferences the same
  * pointer with no null test of its own.  So a null +0xaa0 faults before the
  * guard is read and the guard's false branch cannot be driven by any fixture
- * that does not also fault the blob.  Reproduced as found; finding 1322.
+ * that does not also fault the blob.  Reproduced as found; finding F1322.
  *
  * WHAT DIFFERS FROM `V90Modem::printTitle`, and both are easy to lose:
  *
@@ -159,7 +159,7 @@ typedef char v92modem_szmod[(sizeof(V92Modulator) == 0x90) ? 1 : -1];
  * the five has its pointer written back.  `movl $0x0,0x8(%esi)` at
  * .text+0x13a08 is the destructor's only store, and with -fno-lifetime-dse in
  * CXXFLAGS it survives into our object as it does into the blob's (finding
- * 1272 for why the flag is there).  A reconstruction that nulled all five, or
+ * F1272 for why the flag is there).  A reconstruction that nulled all five, or
  * none, disagrees here.
  *
  * THE PHASE 2 INFO IS FREED WITHOUT A DESTRUCTOR CALL, and that is the blob's
@@ -187,7 +187,7 @@ V92Modem::~V92Modem()
 
 	/*
 	 * UNGUARDED, both of them, and the guard on the free below is
-	 * therefore unreachable -- see the file comment and finding 1322.
+	 * therefore unreachable -- see the file comment and finding F1322.
 	 */
 	V92deleteConstellations((struct V92ParamsInfo *)mappingParams);
 	V92deleteFilterCoefficients((struct V92ParamsInfo *)mappingParams);
@@ -407,7 +407,7 @@ V92Modem::V92Modem(V92ModemSide side, _tagModemParameters *modemParams,
 	 * assignment and not a local handed on twice.
 	 *
 	 * The cast is the `V92MappingParams` / `struct V92ParamsInfo`
-	 * identification of finding 1321: one 180-byte block reached from two
+	 * identification of finding F1321: one 180-byte block reached from two
 	 * directions, the mangling's sixth parameter type and the four C
 	 * functions' own.
 	 */

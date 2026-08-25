@@ -12,7 +12,7 @@
  * mixes with a 395 Hz local oscillator, bringing 1070/1270 down to 675/875 Hz
  * -- either side of the demodulator's 775 Hz discriminator null.  That is why
  * it works, and it is worth stating because feeding a station its own
- * transmitter instead measures BER 0.485 (finding 32).
+ * transmitter instead measures BER 0.485 (finding F32).
  *
  * Three combinations are run, and all three must be error-free:
  *

@@ -120,7 +120,7 @@ struct v22fp_cfg {
  * +0x02, +0x04, +0x14, +0x16 and +0x18, a 32-bit one at +0x08, and a
  * read-modify-write of the byte at +0x11.  Nothing here forces a SIGNEDNESS:
  * every load of a 16-bit field in this function discards its upper half, so
- * `movzwl` and `movswl` are interchangeable at every site (finding 614's
+ * `movzwl` and `movswl` are interchangeable at every site (finding F614's
  * free column).
  */
 struct v22fp_params {

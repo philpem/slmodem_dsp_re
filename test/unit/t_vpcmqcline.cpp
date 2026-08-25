@@ -44,7 +44,7 @@
  * `V90Demodulator::progress` never runs.  `t_vpcmrunpcm.cpp`'s header carries
  * the argument at length and the first reason decides: `V90Equalizer::process`
  * is a `tools/gccdiverge.json` entry, a declared binary cannot carry a
- * mutation suite (findings 2157 and 3002), and driving the real demodulator
+ * mutation suite (findings F2157 and F3002), and driving the real demodulator
  * would drag that divergence into this binary -- which is required to carry
  * `vpcmqcline`.
  *
@@ -67,7 +67,7 @@
  * really clears its filter.  Side 2 is swept as well, for the illegal arm.
  *
  * `txbits` IS DEAD.  There is no reference to `0x48(%esp)` anywhere in
- * `qcLineVerification`'s 779 bytes (finding 7604), so no mutation can ever be
+ * `qcLineVerification`'s 779 bytes (finding F7604), so no mutation can ever be
  * caught on it.  The buffer is seeded and asserted untouched, and this is
  * said here rather than left as a fixture that looks incomplete.
  *
@@ -89,14 +89,14 @@
  *   5. `verificationStatus` IS TAKEN WITH A `movzwl`, AND THE HIGH HALF IS
  *      DRIVEN.  Every trial's status has one, and `run_status_width` sweeps
  *      four more.  This axis FOUND A DEFECT and the defect is fixed; see the
- *      `QC_STATUS` block below and finding 7607.
+ *      `QC_STATUS` block below and finding F7607.
  *   6. `enterWaitForANSpcmDrop` IS IDEMPOTENT.  It returns at once when the
  *      state already holds `P3D_STATE_WAIT_FOR_ANS_PCM_DROP`, so both the
  *      latched and the unlatched entry are driven and each is asserted to
  *      leave a DIFFERENT phase 3 demodulator.
  *   7. `vPcmResetPhase3Modem`'s `pcmSessionType` IS NON-ZERO IN HALF THE
  *      TRIALS.  With it zero, "passes the session type to `setSessionFlag`"
- *      and "passes 0" are the same program (findings 7458 and 7105) -- and
+ *      and "passes 0" are the same program (findings F7458 and F7105) -- and
  *      the same seeding rule puts `sweepCounter`, `sineWave.phase`,
  *      `word_7f60`, `word_7f64`, `byte_6118` and the retrain bit away from
  *      the values the function writes.
@@ -346,7 +346,7 @@ static const char *cur_what = "";
  * only two of them: nothing either function reaches installs a static table
  * into the compared graph, so a differing word that neither side can resolve
  * AND that either side wrote is a failure with no exemption at all.  If a
- * third case ever appears here it must be NAMED, for finding 7521's reason --
+ * third case ever appears here it must be NAMED, for finding F7521's reason --
  * a general rule silently swallowed seven real mutations in t_vpcmrunpcm.cpp,
  * because a pair of wrong small integers is indistinguishable from a pair of
  * addresses and no property of a WORD separates them.
@@ -496,7 +496,7 @@ seed_buffers(long trial)
 		 * makes the silence half's clear loop visible: a zero-filled
 		 * buffer cannot tell "written with zeros" from "not written",
 		 * and the tone half's `generate` from a clear that stopped
-		 * one sample short.  Finding 7105's rule.
+		 * one sample short.  Finding F7105's rule.
 		 */
 		sig_out[0][i] = sig_out[1][i] = b != 0.0f ? b : 0.5f;
 		rxbits[0][i] = rxbits[1][i] = (int)nextb();
@@ -538,13 +538,13 @@ struct qc_trial {
  * ONLY sixteen-bit accesses at that displacement anywhere in `.text` -- so no
  * in-object path can put a value with a non-zero HIGH half there, and the two
  * readings agree over every value the field actually holds.  That is finding
- * 613's shape exactly: a difference no differential test can see unless the
+ * F613's shape exactly: a difference no differential test can see unless the
  * fixture puts a value there that the object's own writers cannot.
  *
  * So this fixture does.  `QC_STATUS` is 0x1234abcd and `run_status_width`
  * sweeps four more seeds that all have a high half; ours stored 0x1234abcd
  * and the blob 0x0000abcd, on eight trials and in the level-2 transcript
- * beside them, which is what named the defect.  Finding 7607.
+ * beside them, which is what named the defect.  Finding F7607.
  *
  * ===========================================================================
  *
@@ -781,7 +781,7 @@ run_qcline(void)
 		for (i = 0; i < NSAMP; i++)
 			diff_eq_int("rxbits[%ld]", rxbits[0][i], rxbits[1][i],
 				    (long)i);
-		/* Dead, and asserted rather than assumed; finding 7604. */
+		/* Dead, and asserted rather than assumed; finding F7604. */
 		for (i = 0; i < NSAMP; i++)
 			diff_eq_int("txbits[%ld] is untouched", txbits[0][i],
 				    txbits[1][i], (long)i);
@@ -968,7 +968,7 @@ static const struct rp3_trial rp3_v[] = {
 	 * `pcmSessionType` NON-ZERO IN HALF OF THEM.  With it zero, "passes
 	 * the session type to setSessionFlag" and "passes 0" are the same
 	 * program, and `V90Modem::reset`'s own argument is 0 either way --
-	 * which is what findings 7458 and 7105 are about.
+	 * which is what findings F7458 and F7105 are about.
 	 */
 	{ "V.90 session, analog",	0, 0, 1, 0x8b, 0,  3,  0.75f },
 	{ "V.92 session, analog",	0, 1, 1, 0x8b, 0,  3,  0.75f },
@@ -1004,7 +1004,7 @@ rp3_poke(int s, const struct rp3_trial *t)
 	/*
 	 * EVERY DESTINATION AWAY FROM THE VALUE THE FUNCTION WRITES.  A store
 	 * whose value is already there cannot fail its own mutation, which is
-	 * finding 7105 and what made three of t_v90rundemod's rows uncatchable
+	 * finding F7105 and what made three of t_v90rundemod's rows uncatchable
 	 * until its poke() moved them.
 	 */
 	m->sweepCounter = t->sweepCounter;

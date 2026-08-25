@@ -114,7 +114,7 @@ def main():
     if not scanned:
         sys.exit('REFUSING A CLEAN REPORT ON ZERO SERIES. No JBSTAT ticks '
                  'found -- wrong directory, or an archive predating that '
-                 'instrumentation (findings 134, 2400, 3100).')
+                 'instrumentation (findings F134, F2400, F3100).')
 
     print(f'  {"elapsed":>12} {"sec obs":>9} {"empty/s":>9} {"lost/s":>8} '
           f'{"mean size":>10}')

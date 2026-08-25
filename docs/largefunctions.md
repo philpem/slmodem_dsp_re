@@ -58,7 +58,7 @@ bytes.
 Everything here is judged by **turns saved**, because turns are what the
 window is spent on.
 
-### 1. Give the work to a subagent — the only structural fix
+### F1. Give the work to a subagent — the only structural fix
 
 A subagent's turns do not accumulate in the parent's window. The parent pays
 for the prompt and the final report; the two hundred round trips in between
@@ -71,11 +71,11 @@ must be able to run `make phase` and see its own work pass. That is true for
 every function in #59 and #60 today, and true for the state machines only
 after item 2.
 
-### 2. Per-dispatch-case testing, for the state machines
+### F2. Per-dispatch-case testing, for the state machines
 
 **Feasible**: the state words are plain fields at known offsets in an object
 the test allocates (`obj+0x3592` microstate, `+0x3594` rxstate, `+0x3596`
-txstate, finding 213), so a test can write one and call the function once.
+txstate, finding F213), so a test can write one and call the function once.
 
 That turns #57's 27.6 KB / 16 real cases into 16 independently verifiable
 units of ~1.7 KB — each committable on its own instead of the whole machine
@@ -85,7 +85,7 @@ The unknown is per case: a case entered cold needs whatever companion fields
 it reads set up first, and finding that out is the work. Bounded per case,
 which is the point.
 
-### 3. Fewer, larger tool calls
+### F3. Fewer, larger tool calls
 
 One session made **760 Bash calls averaging 1,458 characters of output**.
 Many were single greps whose answers were needed together. Ten greps is ten
@@ -93,7 +93,7 @@ turns and ten lots of reasoning; one script that prints all ten answers is
 one. This is worth more than it sounds: at ~1,400 output tokens per turn,
 saving 100 turns saves 140 K of window.
 
-### 4. Make failures say where they are
+### F4. Make failures say where they are
 
 These do not change the mechanism, they reduce the number of investigative
 turns each failure costs — which is worth having, and is what the rest of
@@ -129,14 +129,14 @@ after process [input 137]: struct v34_receiver+680..+683
 already carry. Where it lands in a `pad_*` region, that is the answer: the
 divergence is somewhere not modelled as fields yet.
 
-### 5. Checkpoint so that running out is cheap
+### F5. Checkpoint so that running out is cheap
 
 The limit is per session, so the cost of hitting it is the cost of *resuming*.
 A running decode file — field offsets settled, cases done, what was tried and
 failed — written as the work proceeds turns a hard wall into a boundary. The
 task descriptions in #56–#61 were written this way deliberately.
 
-### 6. Ghidra, as scaffolding only — `tools/decompile.sh`
+### F6. Ghidra, as scaffolding only — `tools/decompile.sh`
 
 Available and now wired up. Measured against `chkForceBaudRate`, which this
 tree had already reconstructed and differentially verified by hand, Ghidra

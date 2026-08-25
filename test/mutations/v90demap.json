@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90Demapper's three processing members, against t_v90demap.  Anchors are taken from text that appears ONCE in V90Demapper.cpp -- the file also carries the constructor, the destructor and printErrorHistogramAndReset, and two of the suites over it (v90demapctor, v90demapper) take their anchors from those.  A block that matched twice would be UNUSABLE, and UNUSABLE does not fail a run (finding 1264)."
+  "note": "V90Demapper's three processing members, against t_v90demap.  Anchors are taken from text that appears ONCE in V90Demapper.cpp -- the file also carries the constructor, the destructor and printErrorHistogramAndReset, and two of the suites over it (v90demapctor, v90demapper) take their anchors from those.  A block that matched twice would be UNUSABLE, and UNUSABLE does not fail a run (finding F1264)."
  },
  {
   "label": "the phase loop clears five constellations, not six",
@@ -304,7 +304,7 @@
   "find": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
   "replace": "\t\t\tfor (j = 0; j < constellationSize[i]; j++) {\n\t\t\t\tunsigned char c = mapp->constellation[i][j];\n\n\t\t\t\tif (adiDetector->linMapp[i][c] >=\n\t\t\t\t    adiDetector->linMappAlt[i][c]) {",
   "equivalent": true,
-  "why": "The two arms differ ONLY in which of `linMapp[i][c]` and `linMappAlt[i][c]` is written first, so on the input this mutation moves -- the two being EQUAL -- both orders store the same pair of values into the same two slots.  The mutation is behaviourally the identity and no seeding can change that; `t_v90demap.cpp` plants one cell in six with the two equal, reaches the case, and proves it makes no difference.  What decides `>` against `>=` is the object alone: `cmp %cx,%bx; jle` at 0x30dab puts the EQUAL case on the arm that writes `linMappAlt` first, and finding 4343 records that this half is a codegen claim and not a differential one."
+  "why": "The two arms differ ONLY in which of `linMapp[i][c]` and `linMappAlt[i][c]` is written first, so on the input this mutation moves -- the two being EQUAL -- both orders store the same pair of values into the same two slots.  The mutation is behaviourally the identity and no seeding can change that; `t_v90demap.cpp` plants one cell in six with the two equal, reaches the case, and proves it makes no difference.  What decides `>` against `>=` is the object alone: `cmp %cx,%bx; jle` at 0x30dab puts the EQUAL case on the arm that writes `linMappAlt` first, and finding F4343 records that this half is a codegen claim and not a differential one."
  },
  {
   "label": "the doubled arm advances its cursor once per code, not twice",
@@ -427,7 +427,7 @@
   "replace": "\t} else {\n\t\t;\n\t}"
  },
  {
-  "note": "V90Demapper::reset, added with the member.  Its body repeats resetNoSpectral's two constellation loops and resetLinearMappStudy's clearCamulativeVal pair almost word for word, which cost fourteen of the anchors above the uniqueness they had when they were written (finding 4708's shape, arriving from the other direction).  Every anchor below is taken from something only `reset` has: the mapping block's spacing, the extractor call, the three cursors, the histogram clear or the study words."
+  "note": "V90Demapper::reset, added with the member.  Its body repeats resetNoSpectral's two constellation loops and resetLinearMappStudy's clearCamulativeVal pair almost word for word, which cost fourteen of the anchors above the uniqueness they had when they were written (finding F4708's shape, arriving from the other direction).  Every anchor below is taken from something only `reset` has: the mapping block's spacing, the extractor call, the three cursors, the histogram clear or the study words."
  },
  {
   "label": "the spacing lands in signBitsPerFrame rather than signBitGroups",
@@ -480,7 +480,7 @@
   "label": "the RBS frame position survives the reset",
   "find": "\tsignBits.reset(mapp->shaperSR, 0);\n\n\tsampleCount = 0;\n\tframeStart = 0;\n\trbsFramePosition = 0;\n",
   "replace": "\tsignBits.reset(mapp->shaperSR, 0);\n\n\tsampleCount = 0;\n\tframeStart = 0;\n",
-  "why": "Carries `signBits.reset` because finding 7793 gave the CONSTRUCTOR the same three stores in the same order -- the object's -- so the bare block now matches twice, and an anchor matching twice reads UNUSABLE without failing the run (finding 1264)."
+  "why": "Carries `signBits.reset` because finding F7793 gave the CONSTRUCTOR the same three stores in the same order -- the object's -- so the bare block now matches twice, and an anchor matching twice reads UNUSABLE without failing the run (finding F1264)."
  },
  {
   "label": "the histogram is cleared to the row length rather than to 128",

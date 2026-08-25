@@ -7,9 +7,9 @@
  * and none to take argument types from.  Each is called directly by symbol on
  * both sides -- ours by its mangled name, the blob's by the `ref_` alias --
  * through an `asm()` label, which is also how the ctor/dtor test reaches a
- * member with no spellable C++ form and how finding 225's double mangling is
+ * member with no spellable C++ form and how finding F225's double mangling is
  * sidestepped.  The convention is plain cdecl with `this` as the first stack
- * argument (finding 215).
+ * argument (finding F215).
  *
  * ONE `V90MappingParams`, SHARED.  Every other V.90 test here gives each side
  * its own copy and compares the two afterwards.  That cannot work for this
@@ -25,7 +25,7 @@
  *
  *   THE SIXTH MODULUS.  `calcModulusParameters` computes five of its six
  *   digits as `remaining[i] % constellationSize[i]` and the sixth as a plain
- *   truncation of `remaining[5]` to 32 bits (finding 3052).  The two readings
+ *   truncation of `remaining[5]` to 32 bits (finding F3052).  The two readings
  *   AGREE for every `remaining[5]` below `constellationSize[5]`, which is what
  *   an ordinary rate and an ordinary set of constellation sizes produce -- so
  *   a sweep that only drives realistic values passes with the modulo that
@@ -244,7 +244,7 @@ run_calcmod(void)
 			    cpA, cpB, trial);
 
 		/*
-		 * The discriminating case for finding 3052: only where
+		 * The discriminating case for finding F3052: only where
 		 * `remaining[5]` is at least the sixth size does a truncation
 		 * differ from a remainder.
 		 */

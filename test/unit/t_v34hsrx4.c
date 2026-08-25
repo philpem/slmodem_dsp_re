@@ -27,7 +27,7 @@
  *   baud_rate at 20,000, where `7 * baud_rate` is 140,000 and its low halfword is
  *   8,928, so the object takes the BODY and a truncating reading retrains;
  *   and at -20,000, where the object retrains and both a truncating and an
- *   unsigned reading decline.  Finding 724's shape in a second arm.
+ *   unsigned reading decline.  Finding F724's shape in a second arm.
  *
  *   0x6cafd COMPARES with 0x7fff and STORES without it.  A reconstruction
  *   that stored the masked value agrees on every word whose bit 15 is clear,
@@ -41,7 +41,7 @@
  * 0x73869, so the value 0x67b56 reads back is not the one this file poked.
  * The fifth is +0x35a2, which 0x6a4c1 writes and 0x6a097 reads on a LATER
  * step.  The detector is steered through its own state at +0x3564 instead,
- * with its coefficients aimed at object +0x8000 -- finding 357's address,
+ * with its coefficients aimed at object +0x8000 -- finding F357's address,
  * because +0x500 is inside the receiver and produces a false alarm.
  *
  * WHICH FILLS THIS FILE IS GREEN AT, MEASURED RATHER THAN ASSUMED.  The
@@ -53,7 +53,7 @@
  * itself; it survives V34HS_REFINIT, V34HS_EQPTR, V34HS_SKEW, V34HS_NOSCRUB
  * and V34HS_PADVARY, and `V34HS_PROBE` reports the two objects identical
  * after setup and side B deterministic at its own address.  This is the
- * first test to call `receiver` through this fixture at all.  Finding 736.
+ * first test to call `receiver` through this fixture at all.  Finding F736.
  */
 
 #include <stdio.h>
@@ -132,7 +132,7 @@
 #define RX4_DET_THI	(RX4_DET + 0x0e)
 #define RX4_DET_TLO	(RX4_DET + 0x10)
 
-/* Outside anything the step writes -- finding 357. */
+/* Outside anything the step writes -- finding F357. */
 #define RX4_DET_COEFF	0x8000
 
 /*
@@ -155,7 +155,7 @@ static int default_fill;
  * Open a case: the route, the three state words, table 2's five inputs, and
  * every field this arm writes seeded to something it does NOT write.
  *
- * That last part is finding 345's failure mode turned on this arm.  Eleven
+ * That last part is finding F345's failure mode turned on this arm.  Eleven
  * of the arm's stores are of a constant -- 0x1e, 3, 0, 1, 0x4000 -- and a
  * field the fill happened to leave holding that value makes the store
  * invisible and its mutation equivalent.  All of them are seeded here rather
@@ -310,7 +310,7 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 
 	/*
 	 * `changed` and `lines` count against the fill, so both are asserted
-	 * at the default fixture only -- finding 359 measured them moving by
+	 * at the default fixture only -- finding F359 measured them moving by
 	 * a byte or two across seeds.  The transcript itself is compared line
 	 * for line at EVERY seed by `v34hs_compare` above; what is gated here
 	 * is only the count.
@@ -355,7 +355,7 @@ after32(unsigned off)
 
 /*
  * The distinct behaviours this file claims, so that a change collapsing two
- * of them is a failure rather than a silence (finding 290).
+ * of them is a failure rather than a silence (finding F290).
  */
 #define NSIG	64
 static unsigned sig[NSIG];
@@ -384,7 +384,7 @@ record(const char *name)
  * BODY.  0x6542f then declines the retrain anyway if bit 7 is up.
  *
  * `v34handshakinit` RUNS INSIDE THE STEP on the retrain path, so those cases
- * are what finding 359 says `V34HS_REFINIT=1` cannot be used against -- and
+ * are what finding F359 says `V34HS_REFINIT=1` cannot be used against -- and
  * it is ONE of the fifteen exits, so the prohibition scopes to it and to
  * nothing else in this file.
  */
@@ -1114,7 +1114,7 @@ suite_packer(void)
 	 * NOT RECORDED: the packer does exactly what it does with 0x10 alone,
 	 * so the two signatures are identical and must be -- the flags that
 	 * separate the cases are in the object BEFORE the step, which finding
-	 * 290 says must never go into a signature.  What is claimed is the
+	 * F290 says must never go into a signature.  What is claimed is the
 	 * store above, which a reading that tested 0x90 would never make.
 	 */
 
@@ -1654,7 +1654,7 @@ main(void)
 
 	/*
 	 * The behaviours claimed distinct, pairwise.  A change collapsing two
-	 * of them is a failure rather than a silence (finding 290), and the
+	 * of them is a failure rather than a silence (finding F290), and the
 	 * count is pinned because a `record()` deleted in an edit would
 	 * shrink the check in silence.
 	 */

@@ -6,7 +6,7 @@
  * All four symbols of the pair are driven, both sides through asm() labels.
  * C++ has no syntax for running a constructor over storage that already
  * exists, and `OBJ = V90Modem(...)` would build a temporary over uninitialised
- * stack and copy it in, throwing the seed away (findings 223, 224).  The blob
+ * stack and copy it in, throwing the seed away (findings F223, F224).  The blob
  * holds C1 and C2 as two copies at two addresses and our compiler emits one
  * body under both names, so calling only one leaves half the pair untested.
  *
@@ -65,7 +65,7 @@
  * THE CONSTRUCTOR HANDS `&this->mappingParams` (+0x18) AND
  * `&this->mappingParamsAlt` (+0x668) TO BOTH `V90Modulator` AND
  * `V90Demodulator` AS ARGUMENTS 6 AND 7 -- two pointers of one type in
- * adjacent slots, which is exactly the shape findings 1301 and 1307 are about,
+ * adjacent slots, which is exactly the shape findings F1301 and F1307 are about,
  * and NEITHER IS STORED IN THIS OBJECT.  They are stored inside the 0x70 or
  * 0x298 block the constructor just allocated, so a swap of the two is visible
  * ONLY if the comparison reads the CONTENTS of that block.  It does: every one
@@ -283,7 +283,7 @@ static unsigned char dilb[DIL_BYTES] __attribute__((aligned(8)));
  * The six slots, in the DESTRUCTOR's order, which is also the order the
  * constructor allocates them in except that the modulator and the demodulator
  * come last there.  `size` is the constructor's own `movl $N,(%esp)`
- * immediately before the sub-constructor -- finding 1246, the allocation in
+ * immediately before the sub-constructor -- finding F1246, the allocation in
  * front of a constructor call IS the original compiler's `sizeof`.
  */
 struct slot {
@@ -315,7 +315,7 @@ static unsigned char
 nextb(void)
 {
 	lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
-	/* `| 1` so no seeded byte is ever zero; finding 230. */
+	/* `| 1` so no seeded byte is ever zero; finding F230. */
 	return (unsigned char)((lfsr >> 3) | 1u);
 }
 
@@ -1287,10 +1287,10 @@ run_transcripts(const char *name, ctorfn our_ctor, ctorfn ref_ctor,
  * ===========================================================================
  *
  * Both sides were constructed against the SAME `dilb`, which is what makes
- * `V90Modem::dil` compare equal (finding 1105).  `setDilDescriptor` WRITES
+ * `V90Modem::dil` compare equal (finding F1105).  `setDilDescriptor` WRITES
  * through it, so without restoring the block between the two calls the second
  * writer would hide the first and a reconstruction that wrote nothing at all
- * would pass.  Finding 805's shape, and `run_ctor` above already uses it for
+ * would pass.  Finding F805's shape, and `run_ctor` above already uses it for
  * the modem parameter block.
  *
  * `dilb` HAD TO GROW.  It was 96 bytes, which was "comfortably more than the
@@ -1416,7 +1416,7 @@ run_reset(ctorfn our_ctor, ctorfn ref_ctor, dtorfn our_dtor, dtorfn ref_dtor)
 		 * THE DESCRIPTOR IS RESEEDED AFTER CONSTRUCTION and never
 		 * zeroed: `setDilDescriptor` writes only as far as each count
 		 * says, and over a zeroed block "not written" and "written
-		 * zero" are the same bytes (finding 7602).
+		 * zero" are the same bytes (finding F7602).
 		 */
 		{
 			int i;

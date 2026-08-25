@@ -73,7 +73,7 @@ struct tagV90AdditionalCPinfo {
 	 * bytes go to `V92CP::flt_10`, which `V92CP::infoToBits` sends as
 	 * sixteen magnitude entries weighted 4 down to 2^-13 off `fltTable_2`.
 	 * The copy itself is a `movl` -- GCC 3.4.2 copies a float that way at
-	 * `-O3`, which was probed rather than assumed (finding 5820) -- so the
+	 * `-O3`, which was probed rather than assumed (finding F5820) -- so the
 	 * width is forced and the type comes from the other end.
 	 */
 	float float_08;				/* +0x08                  */
@@ -98,7 +98,7 @@ struct tagV90AdditionalCPinfo {
 	 * `infoToBits` sends as `bits[32]` -- its low byte, whole.  So a flag
 	 * raised when a renegotiation is detected reaches the V.92 CP message
 	 * as one bit.  That is still not enough to NAME either end: `suv` is
-	 * named for its writer and not for its meaning, and finding 4342's
+	 * named for its writer and not for its meaning, and finding F4342's
 	 * rule is why the retraction is spelled out rather than the sentence
 	 * simply deleted.
 	 */

@@ -1,7 +1,7 @@
 [
  {
   "label": "NOTE: what this set reaches, and what only the transcript run can",
-  "why": "V92setParamsInfoFromCPUnPck and t_v92unpck.c were written by one hand from one reading of .text+0x12f00, so a green run says the two agree and not that either is right. Every entry below is a claim the disassembly makes: which source offset feeds which destination offset, which of the three flags gates which half, both clamp ceilings and the UNSIGNEDNESS of both clamps, the two filter scale factors and which arrays get which, and the single rounding of the gain. THE LAST ONE IS ONLY KILLABLE AT LEVEL 0 BY AN ARITHMETIC DIFFERENCE OF ONE ULP -- it was a live defect for one build and the block comparison caught it, which is why the fixture compares the block byte for byte rather than field by field. Entries that only change a format string are killable only by the level-2 transcript run; that is deliberate, since half this function is unreachable without it (finding 3604)."
+  "why": "V92setParamsInfoFromCPUnPck and t_v92unpck.c were written by one hand from one reading of .text+0x12f00, so a green run says the two agree and not that either is right. Every entry below is a claim the disassembly makes: which source offset feeds which destination offset, which of the three flags gates which half, both clamp ceilings and the UNSIGNEDNESS of both clamps, the two filter scale factors and which arrays get which, and the single rounding of the gain. THE LAST ONE IS ONLY KILLABLE AT LEVEL 0 BY AN ARITHMETIC DIFFERENCE OF ONE ULP -- it was a live defect for one build and the block comparison caught it, which is why the fixture compares the block byte for byte rather than field by field. Entries that only change a format string are killable only by the level-2 transcript run; that is deliberate, since half this function is unreachable without it (finding F3604)."
  },
  {
   "label": "K is the drn without the offset",
@@ -32,7 +32,7 @@
   "label": "the gain's narrowing is left to the compiler",
   "find": "\tp->gain = (float)((double)cp->prefilterGain\n\t\t\t  * (double)V92PI_GAIN_SCALE);",
   "replace": "\tp->gain = cp->prefilterGain * V92PI_GAIN_SCALE;",
-  "why": "This is the defect finding 3603 is about, spelled the way it actually occurred: the plain assignment lets the product stay in an 80-bit x87 register across the debug branch, so the multiplication by 4000 sees more than 24 bits of it. It cost six of 1,530 checks before the narrowing was stated. It is caught by the block comparison and not by any named check, which is why that comparison is byte for byte over the whole block."
+  "why": "This is the defect finding F3603 is about, spelled the way it actually occurred: the plain assignment lets the product stay in an 80-bit x87 register across the debug branch, so the multiplication by 4000 sees more than 24 bits of it. It cost six of 1,530 checks before the narrowing was stated. It is caught by the block comparison and not by any named check, which is why that comparison is byte for byte over the whole block."
  },
  {
   "label": "the moduli are gated on the wrong flag",

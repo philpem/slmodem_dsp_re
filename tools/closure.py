@@ -142,7 +142,7 @@ def owner(by_sec, ndx, addr):
 # `_ZZN5V92CP10bitsToInfoEhE5gamma` for `.bss` and `prop_dsp_version` for
 # `.rodata`, which is why those three used to appear in every closure the
 # tool computed.  All 4,794 are R_386_32, so the stored value IS the target
-# offset within the section; no PC-relative correction arises.  Finding 330.
+# offset within the section; no PC-relative correction arises.  Finding F330.
 #
 def section_file_offsets(obj):
     """{section index: (file offset, size)} straight out of the ELF header."""
@@ -265,7 +265,7 @@ def build_graph():
 # "sanity checks passed" underneath, because its own MUST_BE_FAX check tests
 # reachability and reachability does not care whether anything is written.
 # tools/objtree.py for which directories are read and why an empty one is a
-# refusal.  Finding 3110.
+# refusal.  Finding F3110.
 #
 def ours():
     _d, objs = objtree.read("what is already written")
@@ -304,7 +304,7 @@ def kind_of(syms, sec, name):
 # is how one call to the tree's own `edprintf` used to drag `call_op` and the
 # `dp_*_init` family into every closure computed here.  Roots are always
 # expanded, so asking about a function that is already written still works.
-# Finding 330.
+# Finding F330.
 #
 def expand(roots, syms, edges, have=()):
     seen, stack = set(), list(roots)
@@ -361,14 +361,14 @@ def main():
     # empty and everything this tree has already written is reported missing.
     # One agent read 21 symbols and 9,187 bytes for a function whose real
     # closure is itself.  The answer is not wrong so much as answering a
-    # different question, which is the worst kind.  Finding 271.
+    # different question, which is the worst kind.  Finding F271.
     #
     # THE WARNING THAT USED TO BE HERE SAID "Run `make` first" AND WAS WRONG
     # AFTER #164, which is worse than saying nothing: an agent ran `make`, got
     # the identical warning and the identical wrong closure, and only found out
     # by re-running `make coverage` on a hunch.  `ours()` now refuses in
     # objtree.read() before this point is reached, with advice that works.
-    # Findings 3055 and 3110.
+    # Findings F3055 and F3110.
     #
     roots = []
     for spec in args.names:

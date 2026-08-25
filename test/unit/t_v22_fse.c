@@ -7,7 +7,7 @@
  * the configuration's arrays -- `icoeff[48 - i] = icoff[i] >> 2` -- and the
  * object's own prototype is symmetric about its centre, so every entry of it
  * satisfies `coff[i] == coff[48 - i]` and a reconstruction that copied in
- * order would agree with the blob on every single tap.  That is finding 3052's
+ * order would agree with the blob on every single tap.  That is finding F3052's
  * shape exactly: a plausible reading that agrees with the true one over every
  * realistic input.  So the driving arrays here are deliberately asymmetric,
  * deliberately different from each other, and deliberately full of negative

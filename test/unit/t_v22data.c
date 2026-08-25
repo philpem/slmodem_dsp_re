@@ -11,7 +11,7 @@
  *
  * So every check here is built around a NAMED WRONG READING, and the count of
  * trials that SEPARATE it from ours is asserted non-zero at the end.  Finding
- * 3052 is what that is for.  The wrong readings, in order:
+ * F3052 is what that is for.  The wrong readings, in order:
  *
  *   ScrambleDataV22 / DescrambleDataV22
  *       - the wrong FP offset (0x30 against 0x1cc)
@@ -902,7 +902,7 @@ run_detect_one(const int *pat0, const int *pat1, unsigned s, int debug_on,
 		 * On CONTENT, not on the line count: FPM_AGC_init and
 		 * FPM_AGC_Freeze/Release have diagnostic sites of their own,
 		 * so a non-empty buffer does not mean THIS function's arm
-		 * fired.  Finding 149's trap, and harness.h names it.
+		 * fired.  Finding F149's trap, and harness.h names it.
 		 */
 		if (strstr(dsplib_debug_capture_text(1), "Detect_V22 OK")
 		    != NULL)

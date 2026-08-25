@@ -28,12 +28,12 @@
  *               0x6f438 (0x4d bits, INFO1c), 0x6ed17 (0x26, INFO1a) and
  *               0x6ea38 (0x08, Modem-on-Hold)
  *
- * THE TXSTATE IS PART OF THE FIXTURE (finding 288).  Every arm of table 3
+ * THE TXSTATE IS PART OF THE FIXTURE (finding F288).  Every arm of table 3
  * leaves through the once-per-block transmit dispatch, so a microstate case
  * is a microstate arm AND a transmit arm.  MOH_SILENCE (81) throughout, which
  * is above table 2's window and selects the dispatch's own default at 0x62a40
  * -- except that the restart FORCES TX_DPSK on its way out, which is table
- * 2's arm at 0x644c9.  That arm exists (finding 354 put it there for
+ * 2's arm at 0x644c9.  That arm exists (finding F354 put it there for
  * microstate 79) and this is why the restart can be driven at all.
  *
  * THE FSK RECEIVER IS HELD STILL.  `obj->fsk_inhibit` non-zero makes
@@ -136,7 +136,7 @@ static int dump;
  * DIFFER from what the fill left, so a write of the value already there is
  * not counted; that one measurement is asserted at the default fill and
  * everything else at every fill.  The differential comparison itself is never
- * relaxed at any knob.  Finding 359 made the same distinction.
+ * relaxed at any knob.  Finding F359 made the same distinction.
  */
 static int default_fill;
 
@@ -146,7 +146,7 @@ static int default_fill;
  * FSK receiver switched off, and every field this arm can write seeded to
  * something OTHER than what the arm will store.
  *
- * That last part is finding 345's warning: a claim about a value written is
+ * That last part is finding F345's warning: a claim about a value written is
  * untestable against a field that already holds it.
  */
 static void
@@ -324,7 +324,7 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 
 	/*
 	 * No conversion in these: `diff_eq_int` appends the input when the
-	 * format has none (finding 220), and a `%s` would be handed a long.
+	 * format has none (finding F220), and a `%s` would be handed a long.
 	 */
 	if (default_fill)
 		diff_eq_int("object bytes the step wrote", o->changed, changed,
@@ -957,7 +957,7 @@ main(void)
 	 *
 	 * REPRODUCED AND NOT REPAIRED.  The comparison is byte for byte
 	 * against the blob and it passes, which is the whole claim; the loop
-	 * is the default arm's and belongs to findings 400-406's commit, so
+	 * is the default arm's and belongs to findings F400-406's commit, so
 	 * this case adds the measurement without touching the code.
 	 */
 	begin(V34HS_MOH_SILENCE);
@@ -1026,7 +1026,7 @@ main(void)
 	 * and there by taking the default where a body belongs.  Two cases
 	 * per constant and neither can be dropped.
 	 *
-	 * (This used to rest on `t3c_unwritten` aborting -- finding 358's
+	 * (This used to rest on `t3c_unwritten` aborting -- finding F358's
 	 * abort-as-a-catch.  With the bodies written it rests on the bodies
 	 * disagreeing with the default instead, which is a byte difference
 	 * rather than a dead run.)
@@ -1372,7 +1372,7 @@ main(void)
 	 * anything and the long path runs.
 	 *
 	 * THE COUNTER IS RESET AT THE TOP, so the byte clock this returns
-	 * into finds zero and stores nothing -- finding 406's shape, and the
+	 * into finds zero and stores nothing -- finding F406's shape, and the
 	 * seed at slot 3 is what shows it.
 	 */
 	begin(V34HS_MOH_SILENCE);
@@ -1559,7 +1559,7 @@ main(void)
 	/*
 	 * MOH_CLEARDOWN as the transmit state.  84 is above table 2's window
 	 * like MOH_SILENCE, but the tail compares against it by name and
-	 * writes a progress code of its own (finding 358), so this is a
+	 * writes a progress code of its own (finding F358), so this is a
 	 * different tail from every case above with the same arm in front of
 	 * it.
 	 */
@@ -1574,7 +1574,7 @@ main(void)
 	 * THE POINTER HOLES.  `v34hs_compare` skips thirty-five pointer
 	 * fields and compares each by offset from its own base; this asserts
 	 * every one of them was reached, so the skip list cannot go stale
-	 * while these cases run.  Finding 290.
+	 * while these cases run.  Finding F290.
 	 */
 	v34hs_holes_check();
 

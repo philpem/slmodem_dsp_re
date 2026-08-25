@@ -17,7 +17,7 @@
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x4(%esp),%edx` with the parameter block at `0x8(%esp)` --
  * not %ecx, so this is not thiscall and nothing here needs an attribute
- * (finding 215).
+ * (finding F215).
  *
  * Built -fno-exceptions -fno-rtti -nostdinc++ like the rest of the C++ here;
  * see the Makefile.  No virtuals, no allocation, no static data members.

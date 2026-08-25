@@ -8,7 +8,7 @@
  * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the two
  * ordinary variants and not the deleting `D0`, and GCC emits a deleting
  * destructor only for a virtual one, so offset 0 is a real member and there
- * is no vptr (the argument at include/dsplib/FloatFIR.h, finding 228).
+ * is no vptr (the argument at include/dsplib/FloatFIR.h, finding F228).
  *
  * THE DIFFERENCE EQUATION, and which array is which.  The object settles it
  * and the mangling does not: the constructor divides BOTH coefficient arrays
@@ -42,7 +42,7 @@
  *
  * `m_idx` IS A MEMBER, NOT A LOCAL.  Every fill loop in the constructor and
  * in `reset` uses it as its index and leaves it behind: after `reset` it
- * holds `m_ylen`, or 0 when `m_ylen` is 0.  See finding 874 for why the
+ * holds `m_ylen`, or 0 when `m_ylen` is 0.  See finding F874 for why the
  * constructor's earlier loops appear to leave `n - 1` and do not.
  */
 

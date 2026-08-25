@@ -89,7 +89,7 @@
   "_": [
    "V90BitsToSymbol::reset and ::resetNoSpectral, written in this batch.",
    "Both are driven by t_v90modchain over a CONSTRUCTED object whose three",
-   "constructor-written fields carry sentinels -- finding 7105 -- and the",
+   "constructor-written fields carry sentinels -- finding F7105 -- and the",
    "unsigned divide needs the negative-shaperSR group, which no case in",
    "`reset_cases` reaches."
   ]
@@ -162,7 +162,7 @@
    "NOT HERE: turning `if (extraSymbolsPending) extraSymbolsPending = 0;`",
    "into an unconditional store.  It writes the same byte on every input the",
    "flag can hold and no test can separate the two; what holds the object's",
-   "spelling is the `cmpb $0x0,0x20(%ebx) ; je` at 0x2fcb6.  Finding 7430."
+   "spelling is the `cmpb $0x0,0x20(%ebx) ; je` at 0x2fcb6.  Finding F7430."
   ]
  },
  {

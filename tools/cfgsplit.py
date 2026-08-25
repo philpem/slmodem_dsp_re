@@ -66,7 +66,7 @@ INSN = re.compile(r"^\s*([0-9a-f]+):\t((?:[0-9a-f]{2} )+)\s*(\S+)\s*(.*)$")
 #
 # Every walk-derived byte count in this tree was therefore a LOWER BOUND,
 # which is the likeliest source of two corrections made by hand against
-# address arithmetic (findings 719 and 727).  See `--selftest`.
+# address arithmetic (findings F719 and F727).  See `--selftest`.
 CONT = re.compile(r"^\s*([0-9a-f]+):\t((?:[0-9a-f]{2}\s*)+)$")
 RELOC = re.compile(r"^\s+([0-9a-f]+):\s+(R_386_\S+)\s+(\S+)")
 TARGET = re.compile(r"^([0-9a-f]+)\s")
@@ -242,7 +242,7 @@ def selftest(obj):
        -- the pre-fix behaviour -- `v34handshak` loses 131 bytes and the
        check reports it.  Without this half, a clean run proves nothing:
        `extcheck` printed "(none)" through four broken versions and there was
-       no way to tell a clean tree from a dead detector (finding 134).
+       no way to tell a clean tree from a dead detector (finding F134).
     """
     ok = True
     for func in ("v34handshak", "receiver", "v34handshakinit"):

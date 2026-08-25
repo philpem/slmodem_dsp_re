@@ -18,7 +18,7 @@
  * WHAT THE LOOP DOES NOT DO IS TERMINATE.  Fifty-seven of the eighty-two
  * table entries are the loop bottom itself, so a txstate with no arm of its
  * own leaves the cursor where it was and the test that entered the loop is
- * still true (finding 287, D59).  Every txstate driven below is one of the
+ * still true (finding F287, D59).  Every txstate driven below is one of the
  * twenty-five the nineteen arms cover; the spin is demonstrated on purpose by
  * `V34HS_HANG=1 ./build/test/t_v34hsstep` and is not repeated here.
  *
@@ -29,7 +29,7 @@
  * pass and a `while` degraded to an `if` compares equal.  That is not a
  * supposition: it was measured by making exactly that mutation, and the test
  * passed 4,653 checks with the loop running once.  Sixteen is four passes and
- * the mutation then fails.  Finding 713.
+ * the mutation then fails.  Finding F713.
  */
 
 #include <stdio.h>
@@ -261,13 +261,13 @@ suite_range(void)
  * `T3M_UNWRITTEN_TBL1` and RETURNED", checked at two budgets: `t3m_notwritten`
  * records and, under `v34handshak_unwritten_reset`, returns, so a loop that
  * recorded the code and went round again recorded the SAME code and passed,
- * and only the budget separated the two (finding 715).
+ * and only the budget separated the two (finding F715).
  *
  * NEITHER BLOCK IS A TRANSFER OUT OF THE LOOP.  0x66d85 ends at 0x63941 or
  * 0x63948, which are both the loop test, and 0x66fe9 at 0x63e7f, which is the
  * fall-through of the block that jumped to it.  So there is nothing to stop,
  * nothing to neutralise, and each seed below is an ordinary differential run
- * of our whole function against the blob's.  Finding 748.
+ * of our whole function against the blob's.  Finding F748.
  *
  * BOTH BUDGETS ARE KEPT, for the opposite reason to the one that put them
  * here: a budget of sixteen runs the loop PAST the wrap, so it is the only
@@ -278,7 +278,7 @@ suite_range(void)
  * BEING ONE BEHAVIOUR.  They share 81's entry at 0x63d58, and 0x66d85 re-reads
  * +0x3596 and returns to the loop test for anything that is not 0x51 -- so
  * these three reach the hundred-and-ninety-second sample and decide nothing.
- * Under the old guard every one of them aborted.  Finding 750.
+ * Under the old guard every one of them aborted.  Finding F750.
  *
  * The pokes are `t_v34hstx1.c`'s, which is deliberate: they are the seeds
  * that file already proves reach these two blocks, so a change that stopped
@@ -392,7 +392,7 @@ suite_exits(void)
  * Several arms move the transmit machine, so a state read once before the
  * loop dispatches the second pass to the arm the first pass left behind.
  * Nothing above catches that, which is the mutation tier's finding and not a
- * supposition (finding 715).
+ * supposition (finding F715).
  *
  * 18 SSEG IS THE LEVER, AND 65 XMIT0 IS NOT, which is worth writing down
  * because 65 was tried first: 65 moves the machine to 18 when bit 3 of the
@@ -409,7 +409,7 @@ suite_exits(void)
  * from 8 to 48 and watching the cursor go 32, 32, 32, 32, 64, 64.  So a
  * budget anywhere in 8..32 is ONE pass, there is no second dispatch, and a
  * state hoisted out of the loop cannot be seen to be wrong.  Seventy-two is
- * three passes: one of SSEG and two of SBARSEG.  Finding 715.
+ * three passes: one of SSEG and two of SBARSEG.  Finding F715.
  */
 static void
 suite_restate(void)

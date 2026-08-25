@@ -65,7 +65,7 @@ struct v8_dp {
  *
  * All three are file-static in the object, and `v8_process` has always been
  * declared here; the other two are declared now for the same reason.  Since
- * finding 221 the object's copies carry `ref_` aliases, so a test can call
+ * finding F221 the object's copies carry `ref_` aliases, so a test can call
  * both sides by name rather than taking `create` and `destroy` out of what
  * `dp_v8_init` registers.  Nothing in `make phase` asserts that our linkage
  * matches the original's, and three of this tree's four datapumps already
@@ -86,7 +86,7 @@ int v8_process(struct dp *dp, void *in, void *out, int count);
  * Register the datapump.  Called from prop_dp_init, which discards the
  * result -- the object's `prop_dp_init` (+0x1c) calls this and then zeroes
  * %eax for its own return.  The `int` is the object's: `dp_v8_init` ends
- * `xor %eax,%eax` and a `void` body cannot emit that.  Finding 7860.
+ * `xor %eax,%eax` and a `void` body cannot emit that.  Finding F7860.
  */
 int dp_v8_init(void);
 

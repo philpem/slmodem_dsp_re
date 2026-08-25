@@ -96,7 +96,7 @@ v34hs_side_a(void (*fn)(void *obj))
  * they differ only in what side A runs instead of it.  `datapumpv34` is not
  * `v34handshak`: it is the function that CALLS it, in the same translation
  * unit and against the same object, and the fixture is worth reusing for it
- * for exactly the reason findings 319-322 give -- what an object step depends
+ * for exactly the reason findings F319-322 give -- what an object step depends
  * on is the geometry of the five blocks the object points at, and building a
  * second fixture would be building that geometry a second time.
  *
@@ -162,7 +162,7 @@ v34hs_entry(void (*a)(void *obj), void (*b)(void *obj), int log_a)
  *     lands on identical bytes rather than on whatever the linker happened to
  *     put next to that side's static.
  *
- * That is findings 319 and 321.  Before it, `obj_a` was a `struct v34_object`
+ * That is findings F319 and F321.  Before it, `obj_a` was a `struct v34_object`
  * and `obj_b` an `unsigned char[]` at two addresses the linker chose, with two
  * unrelated sets of neighbours, and the per-sample transmit loop gave two
  * different answers from two identical objects -- which D60 recorded as a
@@ -172,7 +172,7 @@ v34hs_entry(void (*a)(void *obj), void (*b)(void *obj), int log_a)
  * outside the object.  V34HS_PADVARY makes each padding region differ between
  * the sides and the sweep still agrees, and the step writes no padding byte at
  * all, so whatever the old layout fed it is not within 32 KB of any block.
- * Finding 322 has the bounds.
+ * Finding F322 has the bounds.
  *
  * The arena is also why `v34hs_compare` can now check WHICH block a pointer
  * out of the object selects: an offset within one's own arena is comparable
@@ -205,7 +205,7 @@ struct v34hs_arena {
  * n bytes, which is how the claim "the step does not depend on where the
  * object is" is demonstrated instead of asserted: the sweep is run again at a
  * skew that destroys the alignment agreement and has to give the same answer.
- * Finding 322 is what that measured.
+ * Finding F322 is what that measured.
  */
 static unsigned char arena_mem[2 * ARENA_STRIDE + 0x10000]
 	__attribute__((aligned(0x10000)));
@@ -231,7 +231,7 @@ static unsigned objskew, obj_seed;
  * points at.  That is the one asymmetry of the pre-arena fixture that
  * V34HS_SKEW, V34HS_OBJSKEW and V34HS_PADVARY between them cannot express, and
  * a claim that the arena's congruence is what fixed table 1 is worth nothing
- * without it.  Finding 319 reports what it did.
+ * without it.  Finding F319 reports what it did.
  */
 static struct v34_object loose_obj;
 static int looseobj;
@@ -445,7 +445,7 @@ v34hs_poke_byte(unsigned off, unsigned char v)
  *
  * `v34hs_poke_int` cannot do this and must not be used to try: the two
  * objects are at different addresses, so writing one address into both is
- * precisely the asymmetry findings 319-322 are about, and the failure it
+ * precisely the asymmetry findings F319-322 are about, and the failure it
  * produces looks like a defect in whatever ran next.
  */
 void
@@ -492,7 +492,7 @@ peek_ptr(int side, unsigned off)
  * indistinguishable, and zero additionally makes "nothing wrote this" look
  * like a deliberate value.  The generator is an LCG rather than `rand` so the
  * fill is the same on every host and in every build: a differential test that
- * drifts between runs cannot be bisected.  Finding 230.
+ * drifts between runs cannot be bisected.  Finding F230.
  */
 static void
 fill(unsigned char *p, unsigned n, unsigned seed)
@@ -572,7 +572,7 @@ v34hs_setup(int mode)
 		 * arena's seven padding regions on side B only, so the two
 		 * sides differ in nothing except what lies OUTSIDE the blocks
 		 * the object points at.  A step that then disagrees is a step
-		 * that read past the end of one of them.  Finding 321.
+		 * that read past the end of one of them.  Finding F321.
 		 */
 		static struct { void *p; unsigned n; const char *name; } pad[7];
 		int which = atoi(getenv("V34HS_PADVARY"));
@@ -802,7 +802,7 @@ v34hs_state(short mst, short rxst, short txst)
  * table and no address comparison can say anything, but with the blob on both
  * they must select the IDENTICAL address.  `t_v34hsstep.c` runs the whole
  * sweep a second time this way so that check is in `make phase` rather than
- * behind an environment variable nothing sets.  Finding 324.
+ * behind an environment variable nothing sets.  Finding F324.
  */
 void
 v34hs_refinit(int on)
@@ -841,7 +841,7 @@ static char text[2][4096];
  * Table 1's default arm is the loop bottom itself: an unhandled txstate
  * re-tests the cursor against the limit, finds it unchanged, and jumps back to
  * the dispatch.  Without this the failure is a test run that never returns,
- * which `make phase` reports as nothing at all.  Finding 287.
+ * which `make phase` reports as nothing at all.  Finding F287.
  */
 static volatile int step_side;
 static short step_mst, step_rxst, step_txst;
@@ -855,7 +855,7 @@ step_alarm(int sig)
 	(void)sig;
 	n = snprintf(msg, sizeof(msg),
 		     "\nv34hs_step: side %d did not return with "
-		     "mst=%d rxstate=%d txstate=%d -- see finding 287\n",
+		     "mst=%d rxstate=%d txstate=%d -- see finding F287\n",
 		     step_side, step_mst, step_rxst, step_txst);
 	/* Nothing useful to do about a failed write from a signal handler;
 	 * the exit status carries the failure either way. */
@@ -869,7 +869,7 @@ step_alarm(int sig)
  *
  * This was added because the per-sample transmit route disagreed and the
  * reasoning was that side A runs first and leaves residue side B then reads.
- * THAT REASONING WAS WRONG -- finding 320's probe runs side B a second time
+ * THAT REASONING WAS WRONG -- finding F320's probe runs side B a second time
  * at the same address, one place further along the sequence, with everything
  * the first two calls left in the machine still there, and gets a
  * byte-identical answer on all forty-three cases.  Nothing is carried.
@@ -885,7 +885,7 @@ static volatile unsigned scrub_sink;
  * V34HS_PROBE -- the experiment that separates "address" from "carried state".
  *
  * D60 said the per-sample loop's result was not a function of the object, and
- * finding 289's five exclusions all sat in the address/memory family.  What
+ * finding F289's five exclusions all sat in the address/memory family.  What
  * none of them touched is that side A ALWAYS runs before side B, so anything
  * the first call leaves in the machine is read by the second.
  *
@@ -894,11 +894,11 @@ static volatile unsigned scrub_sink;
  * restored from the snapshot in between.  If the two B runs differ, the
  * address is irrelevant and the cause is state carried across calls.  They do
  * not differ, and the FPU status word is zero before all three calls, so it
- * is neither the x87 nor a blob global.  Finding 320.
+ * is neither the x87 nor a blob global.  Finding F320.
  *
  * It also reports whether the two sides were equal after `v34hs_setup` -- the
  * fixture never used to check its own starting state -- and whether the step
- * wrote any byte outside the blocks it models, which is how finding 322
+ * wrote any byte outside the blocks it models, which is how finding F322
  * excludes an out-of-bounds write.
  */
 static unsigned char probe_b2[sizeof(struct v34_object)];
@@ -1017,9 +1017,9 @@ observe(int side, const unsigned char *now, const unsigned char *was,
  * That matters beyond tidiness.  Ten of `v34hstx1`'s eleven uncaught
  * mutations were print-only functions -- `V34EchoReportCoeff`,
  * `VPcmV34ReportStartOfEchoAdapt` -- invisible because a test using this
- * mechanism had to run with the diagnostics OFF.  Finding 341 asked three
+ * mechanism had to run with the diagnostics OFF.  Finding F341 asked three
  * batches to close that and none could, because it was never theirs to close.
- * Finding 358a.
+ * Finding F358a.
  */
 static int (*step_arm)(void *);
 static int step_arm_rc;
@@ -1197,7 +1197,7 @@ v34hs_step(void)
  * fixture writes itself.  Everything else -- the five blocks and all seven
  * filler regions -- is in, because a step that writes one element off the end
  * of a block is exactly what the padding was put there to catch (finding
- * 322).
+ * F322).
  */
 unsigned
 v34hs_arena_hash(int side)
@@ -1237,7 +1237,7 @@ v34hs_arena_hash(int side)
 /*
  * The seven filler regions on their own, because they cost six times what
  * everything else does and are the half a caller wants ONCE rather than per
- * step: 224 KB of the arena's 316, and finding 322 measured that no step
+ * step: 224 KB of the arena's 316, and finding F322 measured that no step
  * writes any of it.  Splitting the two took `t_v34call.c` from 4.9 s to 2.0
  * s, which matters because `make phase` runs every binary twice -- once more
  * under `debugcov`'s instrumented tree.
@@ -1274,7 +1274,7 @@ v34hs_holes_check(void)
 	 * same address on both sides rather than ours and the blob's copy --
 	 * so eleven of the skips legitimately never differ and this assertion
 	 * does not apply to that run.  That agreement is itself a measurement:
-	 * finding 324.
+	 * finding F324.
 	 */
 	if (!ref_both)
 		for (k = 0; k < NHOLES; k++) {

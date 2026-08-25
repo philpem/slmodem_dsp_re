@@ -9,7 +9,7 @@
 # consumes 9600 samples a second against a live RTP stream, on schedule.
 # Compilers competing for the cores add scheduling jitter, and jitter in a
 # sample stream is exactly what stopped a pjsua conference bridge from
-# carrying a V.34 handshake at all (finding 1468).  A call taken on a loaded
+# carrying a V.34 handshake at all (finding F1468).  A call taken on a loaded
 # box either fails for a reason that has nothing to do with the code, or --
 # worse -- connects at a degraded rate and quietly poisons a measurement that
 # looks fine.

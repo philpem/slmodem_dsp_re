@@ -4,8 +4,8 @@
  * BOTH BUFFERS ARE SEEDED WITH VARIED BYTES, NEVER ZEROED, and compared
  * whole -- 4,096 shorts against a stream that never exceeds 2,654 -- so a
  * position one side writes and the other does not is a failure whichever
- * side it is, and the tail past the stream catches an overrun (findings 223,
- * 224, 230).  The pattern is deliberately not 0 and not 1, because those are
+ * side it is, and the tail past the stream catches an overrun (findings F223,
+ * F224, F230).  The pattern is deliberately not 0 and not 1, because those are
  * the only two values the packer itself writes outside the sequence fields.
  *
  * THE DESCRIPTOR IS FILLED WITH VARIED BYTES TOO, and the three fields that
@@ -210,7 +210,7 @@ run_cases(void)
 	 * is the packer's own arithmetic and would assert it against itself.
 	 * So the branch is proved the other way, by mutation:
 	 * `test/mutations/dilpack.json` forces each tail unconditionally and
-	 * the differential test catches both.  Finding 262.
+	 * the differential test catches both.  Finding F262.
 	 */
 
 	return diff_end();

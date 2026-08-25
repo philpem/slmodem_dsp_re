@@ -39,7 +39,7 @@
  *
  * THE RECURRENCE IS THE SAME IN BOTH `progress` AND `getMetric`, and that is
  * how the popping-form reading was checked rather than assumed (finding
- * 1400).  Per input sample x:
+ * F1400).  Per input sample x:
  *
  *     a = (x - state[0] * coeff[2]) + state[1] * coeff[0]
  *     y = (a - state[1] * coeff[3]) + state[2] * coeff[1]
@@ -102,7 +102,7 @@ public:
 	 * hypothetical: with a zeroed filter state the search's candidates come
 	 * in exactly-negating pairs whose metrics are bit-identical, and the
 	 * tie is broken by whether the stored `float` rounded up or down.
-	 * Finding 5854.
+	 * Finding F5854.
 	 */
 	long double getMetric(const short *in, unsigned int blocks) const;
 

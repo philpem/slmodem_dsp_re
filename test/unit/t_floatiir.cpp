@@ -8,7 +8,7 @@
  * no thiscall -- so each member is declared here as a free function taking
  * `void *self`, with an asm() label binding it to the mangled `ref_` symbol.
  * The extern "C" is what stops the compiler mangling the declaration a second
- * time (finding 225); the asm label is what lets it have a readable name.
+ * time (finding F225); the asm label is what lets it have a readable name.
  *
  * WHY THE OBJECT IS NOT COMPARED WHOLE.  m_hist holds a heap pointer, and the
  * two sides get two different addresses from the allocator, so a byte compare
@@ -66,7 +66,7 @@ static float coef_b[16] = {
 /*
  * Fields, and the history buffer through the two pointers.  `tag` identifies
  * the call site; every check carries it, because a differential failure that
- * cannot say which case produced it costs a re-derivation (finding 220).
+ * cannot say which case produced it costs a re-derivation (finding F220).
  */
 static void
 compare(const char *what, FloatIIR *a, const ref_layout *b, long tag)

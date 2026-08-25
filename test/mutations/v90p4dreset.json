@@ -10,7 +10,7 @@
    "converter are given; WHICH parameter `quickConnect` selects; and WHICH",
    "decision member the loop runs.",
    "",
-   "ANCHORS ARE EXTENDED BACKWARDS UNTIL THEY MATCH ONCE (findings 7432 and",
+   "ANCHORS ARE EXTENDED BACKWARDS UNTIL THEY MATCH ONCE (findings F7432 and",
    "7459).  Six of the eleven stores are spelled identically in",
    "`resetBeforRRN`, `detectRRN`, `detectFPE` and the three `enterWaitFor*`,",
    "and both `state = ...; countInState = 0;` pairs appear a dozen times in",

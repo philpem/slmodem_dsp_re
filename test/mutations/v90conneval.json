@@ -28,7 +28,7 @@
   "replace": "\tparams = p;"},
 
  {"label": "the destructor clears the parameter pointer",
-  "why": "Catchable only because t_v90conneval.cpp runs the destructor a second time over storage no constructor has touched: on a constructed object a store of a value the constructor already left there is invisible.  `-fno-lifetime-dse` is what keeps the store from being deleted outright (finding 1224).",
+  "why": "Catchable only because t_v90conneval.cpp runs the destructor a second time over storage no constructor has touched: on a constructed object a store of a value the constructor already left there is invisible.  `-fno-lifetime-dse` is what keeps the store from being deleted outright (finding F1224).",
   "find": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n}",
   "replace": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n\tparams = 0;\n}"},
 
@@ -37,7 +37,7 @@
   "replace": "V90ConnectionEvaluator::~V90ConnectionEvaluator()\n{\n\t*(volatile unsigned int *)&word_90 = 0;\n}\n"},
 
  {"label": "the average PDSNR is the reciprocal of the object's",
-  "why": "THE ONE THAT MATTERS MOST in this set.  objdump prints the object's `de f9` as `fdivrp` and it IS `FDIVP` (finding 245), so a reconstruction that believed the mnemonic would divide the other way round -- and a side-against-side comparison would not care, because both sides would be wrong together.  It is catchable only because t_v90conneval.cpp asserts what the FIRST call leaves behind and drives two hundred accumulating calls after it.",
+  "why": "THE ONE THAT MATTERS MOST in this set.  objdump prints the object's `de f9` as `fdivrp` and it IS `FDIVP` (finding F245), so a reconstruction that believed the mnemonic would divide the other way round -- and a side-against-side comparison would not care, because both sides would be wrong together.  It is catchable only because t_v90conneval.cpp asserts what the FIRST call leaves behind and drives two hundred accumulating calls after it.",
   "find": "\tword_70 = (nofOldSymbols * word_70 + pdsnr * nofSymbols)\n\t\t  / (nofOldSymbols + nofSymbols);",
   "replace": "\tword_70 = (nofOldSymbols + nofSymbols)\n\t\t  / (nofOldSymbols * word_70 + pdsnr * nofSymbols);"},
 
@@ -180,7 +180,7 @@
 
  {"label": "the scale is spelt as an int, or as a double",
   "equivalent": true,
-  "why": "PROVEN, not assumed.  `1000.0f`, `1000` and `1000.0` were each compiled into V90ConnectionEvaluator.cpp with this tree's own CXXFLAGS and the `objdump -d` instruction text diffed: all three are IDENTICAL, and none of them emits a `.rodata.cst8` -- the constant stays four bytes in `.rodata.cst4` in every spelling, because 1000 is exactly representable and GCC narrows it back.  So the section the relocation names bounds the constant's WIDTH and says nothing about how it was written; finding 1384 again, one function along.",
+  "why": "PROVEN, not assumed.  `1000.0f`, `1000` and `1000.0` were each compiled into V90ConnectionEvaluator.cpp with this tree's own CXXFLAGS and the `objdump -d` instruction text diffed: all three are IDENTICAL, and none of them emits a `.rodata.cst8` -- the constant stays four bytes in `.rodata.cst4` in every spelling, because 1000 is exactly representable and GCC narrows it back.  So the section the relocation names bounds the constant's WIDTH and says nothing about how it was written; finding F1384 again, one function along.",
   "find": "\tint frac = (int)((v - (float)(int)v) * 1000.0f);",
   "replace": "\tint frac = (int)((v - (float)(int)v) * 1000);"},
 
@@ -400,7 +400,7 @@
   "replace": "\t\t\tword_1c = 0;\n\t\t\tword_90 = 0;\n\t\t}\n\t}\n\n\tword_74 = 0;\n\treturn verdict;\n}"},
 
  {"label": "NOTE: the missing `%d` argument at 0x3ffcf has NO mutation, and could not be given one",
-  "why": "The object calls `edprintf` with the string at 0xab34 -- \"initiating fall back to V34 due to %d V90 retrains (last one delayed)\" -- and stores NOTHING to 0x4(%esp), while its sibling at 0x3fffb stores `nofV90Retrains` there for a string with the same conversion.  So `vsnprintf` formats the outgoing-argument slot as an int and the printed number is whatever the frame held.  The reconstruction reproduces the call faithfully, but a mutation that ADDED the argument cannot be caught: the two sides' frames hold different rubbish, so the transcript already differs on that line for both the correct and the mutated source, and the test compares state, verdict and line count there instead of text.  IT WAS TRIED: the fixture arranges a call in which the phase-4 retrain fires first and leaves `nofV90Retrains` in exactly that slot, which would have made the value deterministic; measured, the transcripts still differ and differ ONLY in that line, because GCC 13 does not leave our frame's slot holding what GCC 3.4 leaves in the object's.  Recorded rather than silently dropped -- finding 1388."},
+  "why": "The object calls `edprintf` with the string at 0xab34 -- \"initiating fall back to V34 due to %d V90 retrains (last one delayed)\" -- and stores NOTHING to 0x4(%esp), while its sibling at 0x3fffb stores `nofV90Retrains` there for a string with the same conversion.  So `vsnprintf` formats the outgoing-argument slot as an int and the printed number is whatever the frame held.  The reconstruction reproduces the call faithfully, but a mutation that ADDED the argument cannot be caught: the two sides' frames hold different rubbish, so the transcript already differs on that line for both the correct and the mutated source, and the test compares state, verdict and line count there instead of text.  IT WAS TRIED: the fixture arranges a call in which the phase-4 retrain fires first and leaves `nofV90Retrains` in exactly that slot, which would have made the value deterministic; measured, the transcripts still differ and differ ONLY in that line, because GCC 13 does not leave our frame's slot holding what GCC 3.4 leaves in the object's.  Recorded rather than silently dropped -- finding F1388."},
 
  {"label": "phase3's retrain duration is compared SIGNED",
   "why": "`ja`/`jb` and `jg`/`jl` agree on every ordinary pair of numbers, so this is invisible until a limit goes negative: unsigned it becomes a value no counter reaches, signed one every counter is already past.  The fixture drives exactly that, in its own small trial rather than inside an accumulating run.  `cmp 0x60(%ebx),%eax; jb` at 0x3f797.",
@@ -625,7 +625,7 @@
   "find": "\t\t\tscale = 1.52f;",
   "replace": "\t\t\tscale = 1.39f;"},
 
- {"note": "THE ENTRY THAT USED TO BE HERE CLAIMED `(unsigned)(float)minDur` WOULD ROUND AT 2^24 AND BE CAUGHT.  It was not caught, and the record was what was wrong: driven at 16777217, the first integer a `float` cannot hold, the two spellings agree, because FLT_EVAL_METHOD is 2 on an x87 target and the cast is evaluated at 80 bits.  The mutant emits a different instruction sequence -- `fildll` and `fistpll` where the source has an integer compare -- and computes the same number, so it is neither a defect nor an equivalence the object settles.  The comment in the source was corrected rather than the test widened.  Finding 1389."},
+ {"note": "THE ENTRY THAT USED TO BE HERE CLAIMED `(unsigned)(float)minDur` WOULD ROUND AT 2^24 AND BE CAUGHT.  It was not caught, and the record was what was wrong: driven at 16777217, the first integer a `float` cannot hold, the two spellings agree, because FLT_EVAL_METHOD is 2 on an x87 target and the cast is evaluated at 80 bits.  The mutant emits a different instruction sequence -- `fildll` and `fistpll` where the source has an integer compare -- and computes the same number, so it is neither a defect nor an equivalence the object settles.  The comment in the source was corrected rather than the test widened.  Finding F1389."},
 
  {"label": "the second echo guard wants state 2",
   "find": "\t\telse if (word_1c < minDur && short_b4 == 1)",
@@ -772,7 +772,7 @@
   "replace": "\t\t    !(0.0f >= ce->word_70 * ce->word_b8) ? '-' : '+',"},
 
  {"label": "the printed decimals leave out the multiplier",
-  "why": "0x3f03e is `flds 0x70(%edi); fmuls 0xb8(%edi)` and the decimals come off that product, not off the average.  Caught by the trial that plants 2.3f in +0xb8 and 10.0f in +0x70, where the product's decimals are 999 and the average's are 0.  A SECOND ENTRY HERE USED TO CLAIM the product must not be rounded to `float` and was NOT caught; the measurement is in the source comment and in finding 1389 -- FLT_EVAL_METHOD is 2, so neither the cast nor the parameter narrows it.",
+  "why": "0x3f03e is `flds 0x70(%edi); fmuls 0xb8(%edi)` and the decimals come off that product, not off the average.  Caught by the trial that plants 2.3f in +0xb8 and 10.0f in +0x70, where the product's decimals are 999 and the average's are 0.  A SECOND ENTRY HERE USED TO CLAIM the product must not be rounded to `float` and was NOT caught; the measurement is in the source comment and in finding F1389 -- FLT_EVAL_METHOD is 2, so neither the cast nor the parameter narrows it.",
   "find": "\t\t    ce_frac3_of(ce->word_70, ce->word_b8));",
   "replace": "\t\t    ce_frac3_of(ce->word_70, 1.0f));"},
 
@@ -952,7 +952,7 @@
   "replace": "\t\t\tword_90 = params->RRN_SILENCE_REQUESTED;\n\t\t}\n\t}\n\n\tword_70 = 0;\n\treturn verdict;\n}"},
 
  {"label": "phase4: the replacement threshold's sign is the ordered test",
-  "why": "0x3fdb7 is `sbb %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` after `fldz`/`fcom`, so the character is 0x2d - 2*CF with the ZERO in %st(0) and an UNORDERED compare sets CF -- the object prints '+' for a NaN threshold.  Eighteen of this file's nineteen sign selects are not driven -- nine of them provably, being inside `if (word_70 > thresh)` whose `ja` is false for an unordered compare, and nine untraced.  This is the one a NaN demonstrably reaches, through `params->unnamed_434`, and the block at tag 7500 is what drives it.  Finding 2410.",
+  "why": "0x3fdb7 is `sbb %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` after `fldz`/`fcom`, so the character is 0x2d - 2*CF with the ZERO in %st(0) and an UNORDERED compare sets CF -- the object prints '+' for a NaN threshold.  Eighteen of this file's nineteen sign selects are not driven -- nine of them provably, being inside `if (word_70 > thresh)` whose `ja` is false for an unordered compare, and nine untraced.  This is the one a NaN demonstrably reaches, through `params->unnamed_434`, and the block at tag 7500 is what drives it.  Finding F2410.",
   "find": "\t\t\t\t\t\t    !(0.0f >= t) ? '+' : '-',",
   "replace": "\t\t\t\t\t\t    (0.0f < t) ? '+' : '-',"}
 ]

@@ -18,7 +18,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x20(%esp),%ebx` after four pushes and a 12-byte frame --
- * not %ecx, so nothing here needs an attribute (finding 215).
+ * not %ecx, so nothing here needs an attribute (finding F215).
  *
  * THE TWO ACCUMULATORS ARE THE ORIGINAL'S, NOT A CONVENIENCE, and the
  * argument is FloatFIR.cpp's: both dot products run with two independent x87
@@ -39,7 +39,7 @@
  * WHAT THE POPPING DIVIDES REALLY ARE.  The constructor's normalisation uses
  * `d8 f9` and `d8 37`, which are the D8 *register* and *memory* forms and are
  * printed correctly by objdump; there is no DE-form popping divide or
- * subtract anywhere in this file, so finding 245's swap does not bite here.
+ * subtract anywhere in this file, so finding F245's swap does not bite here.
  * The one popping subtract, `d8 6d 2c` in the block form, is likewise a D8
  * memory form: `fsubrs m32` is st(0) = m32 - st(0), which is why `m_fwd`
  * comes out as forward minus feedback and not the other way round.
@@ -67,7 +67,7 @@ inline void operator delete[](void *p) { sysdep_free(p); }
 /*
  * Hold the compiler to the map in the header.  tools/offcheck.py parses
  * `struct name {` out of include/dsplib and compiles it as C, so a class has
- * to assert its own (finding 230).
+ * to assert its own (finding F230).
  */
 #define FLOATARMA_OFF(field, off, tag) \
 	typedef char floatarma_off_##tag[ \
@@ -290,7 +290,7 @@ FloatARMA::~FloatARMA()
  *
  * `m_idx` is left holding `m_ylen`, or 0 when `m_ylen` is 0.  The first
  * loop's exit value is never visible: the statement after it writes `m_idx`
- * again, which is why the object omits that loop's final store (finding 874).
+ * again, which is why the object omits that loop's final store (finding F874).
  */
 void
 FloatARMA::reset()

@@ -1,6 +1,6 @@
 [
  {
-  "note": "VPcmV34GetDiagnostics against t_v34diag.  The function has four arms that store the same six offsets from different sources, so most anchors are widened with a neighbouring statement to stay unique -- finding 347's remedy.  The two `status` tests and the two `info0Layout` tests are mutated as CONTROL-FLOW changes because the record alone cannot see the difference between a V.90 digital call and a V.92 digital one: only the transcript group separates those, which is finding 3403's point about diagnostics that land in no object."
+  "note": "VPcmV34GetDiagnostics against t_v34diag.  The function has four arms that store the same six offsets from different sources, so most anchors are widened with a neighbouring statement to stay unique -- finding F347's remedy.  The two `status` tests and the two `info0Layout` tests are mutated as CONTROL-FLOW changes because the record alone cannot see the difference between a V.90 digital call and a V.92 digital one: only the transcript group separates those, which is finding F3403's point about diagnostics that land in no object."
  },
  {
   "label": "the V.90 test is a range, not an equality",

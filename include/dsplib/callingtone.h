@@ -12,7 +12,7 @@
  * WHAT THIS ONE ACTUALLY PRODUCES
  *
  * Not 1300 Hz, and not a sine.  The constants are right for 1300 Hz at a
- * 9600 Hz sample rate, but call progress runs at a fixed 8000 (finding 41),
+ * 9600 Hz sample rate, but call progress runs at a fixed 8000 (finding F41),
  * and the phase-to-table scaling is out by a factor of eight, so only the
  * first eighth of the cosine is ever swept.  The result is a mostly-DC
  * sawtooth with a repetition rate of 1084 Hz.

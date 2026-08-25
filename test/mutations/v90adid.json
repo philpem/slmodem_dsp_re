@@ -151,12 +151,12 @@
  },
  {
   "label": "seed the tables with the level negated",
-  "why": "The anchor used to be the `short level` local, which finding 7790 removed -- the object reads +0xa96c straight into both stores and a signed 16-bit local is what made GCC 3.4.2 emit `movswl` where the object has `movzwl`.  It now negates at the two stores, which is the same claim about the same value.",
+  "why": "The anchor used to be the `short level` local, which finding F7790 removed -- the object reads +0xa96c straight into both stores and a signed 16-bit local is what made GCC 3.4.2 emit `movswl` where the object has `movzwl`.  It now negates at the two stores, which is the same claim about the same value.",
   "find": "\t\tlinMapp[phase][at] = ucodeLevel;\n\t\tlinMappAlt[phase][at] = ucodeLevel;",
   "replace": "\t\tlinMapp[phase][at] = -ucodeLevel;\n\t\tlinMappAlt[phase][at] = -ucodeLevel;"
  },
  {
-  "label": "NOTE: the sixteen processing methods below.  Every anchor here has to survive the fact that this file holds pairs of near-identical methods -- reset and setConnectionType share four stores verbatim, and the Alt half of each pair shares its shape with the plain half.  Finding 1264: an anchor that matches twice reads UNUSABLE and UNUSABLE does not fail a run."
+  "label": "NOTE: the sixteen processing methods below.  Every anchor here has to survive the fact that this file holds pairs of near-identical methods -- reset and setConnectionType share four stores verbatim, and the Alt half of each pair shares its shape with the plain half.  Finding F1264: an anchor that matches twice reads UNUSABLE and UNUSABLE does not fail a run."
  },
  {
   "label": "leave the count in clearCamulativeVal",
@@ -249,7 +249,7 @@
   "replace": "\tif (uint_1c00[phase][code] != 0)\n\t\treturn;"
  },
  {
-  "label": "reverse the variance's subtraction (finding 245)",
+  "label": "reverse the variance's subtraction (finding F245)",
   "find": "\tfloat_9d48[phase][code] = float_9118[phase][code] * inv - mean * mean;",
   "replace": "\tfloat_9d48[phase][code] = mean * mean - float_9118[phase][code] * inv;"
  },
@@ -577,7 +577,7 @@
   "replace": "\t\t\t    mean * mean - float_9118[phase][ucode] * inv;"
  },
  {
-  "label": "NOTE: the four study methods.  Several anchors below have to reach past the line they change: unitePhasesInfoOfUref and uniteLinMappInfoOfUnsuspectedPhases share whole statements, and so do the two clearing runs inside porcessFirstStudy.  Finding 1264 again -- an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
+  "label": "NOTE: the four study methods.  Several anchors below have to reach past the line they change: unitePhasesInfoOfUref and uniteLinMappInfoOfUnsuspectedPhases share whole statements, and so do the two clearing runs inside porcessFirstStudy.  Finding F1264 again -- an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
  },
  {
   "label": "print the sign with the ternary the other way up, which GCC commutes",
@@ -1180,7 +1180,7 @@
   "replace": "\tedprintf(\"--------------------------------------------------------\"\n\t\t \"------\\r\\n\");\n\n\tint_a984 = 0;"
  },
  {
-  "label": "NOTE: the DIL batch.  porcessSecondStudy and setQcLinearMapping share their whole tail -- the same scan for the unsuspected phase, the same call, and the same three format strings -- and differ inside it by one token: the report runs to 0x7f in the first and to 0x74 in the second.  Every anchor below in that region therefore spans something only one of the two has.  Finding 1264: an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
+  "label": "NOTE: the DIL batch.  porcessSecondStudy and setQcLinearMapping share their whole tail -- the same scan for the unsuspected phase, the same call, and the same three format strings -- and differ inside it by one token: the report runs to 0x7f in the first and to 0x74 in the second.  Every anchor below in that region therefore spans something only one of the two has.  Finding F1264: an ambiguous anchor reads UNUSABLE and UNUSABLE does not fail a run."
  },
  {
   "label": "start the DIL scan order at 62 instead of 63",
@@ -1351,7 +1351,7 @@
   "find": "\t\t\t\t       > linMapp[unSuspectedPhase][at]\n\t\t\t\t    ? (short)at",
   "replace": "\t\t\t\t       >= linMapp[unSuspectedPhase][at]\n\t\t\t\t    ? (short)at",
   "equivalent": true,
-  "why": "The two spellings differ only when the phase's entry EQUALS the reference's, and then both windows -- [at, at+2] and [at-2, at] -- contain `at`, whose distance is zero.  So both take the exact-match arm, both leave `bestAt` at an index whose entry equals the value, and both stores write that value back over itself.  Both also leave the second-nearest at 32,256 or below, because the demotion at the final (zero-distance) improvement writes the nearest, which is at most the sentinel; and the second-nearest never rises again, since the demotion writes a value at most the sentinel and the else-if writes a strictly smaller one.  The only reader is the ratio, and it can only differ between the two while the nearest is still its sentinel -- any iteration that improves rewrites the second-nearest to 32,256 at its first improvement and then evolves identically over an identical window -- which needs a second-nearest above 64,512.  Unreachable after the equality that caused the difference.  Finding 1433."
+  "why": "The two spellings differ only when the phase's entry EQUALS the reference's, and then both windows -- [at, at+2] and [at-2, at] -- contain `at`, whose distance is zero.  So both take the exact-match arm, both leave `bestAt` at an index whose entry equals the value, and both stores write that value back over itself.  Both also leave the second-nearest at 32,256 or below, because the demotion at the final (zero-distance) improvement writes the nearest, which is at most the sentinel; and the second-nearest never rises again, since the demotion writes a value at most the sentinel and the else-if writes a strictly smaller one.  The only reader is the ratio, and it can only differ between the two while the nearest is still its sentinel -- any iteration that improves rewrites the second-nearest to 32,256 at its first improvement and then evolves identically over an identical window -- which needs a second-nearest above 64,512.  Unreachable after the equality that caused the difference.  Finding F1433."
  },
  {
   "label": "demand a wider margin before repairing an entry",
@@ -1373,14 +1373,14 @@
   "find": "\t\t\t\t    || (1.0f / nearest) * second > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =\n",
   "replace": "\t\t\t\t    || second / nearest > 2.0f)\n\t\t\t\t\tlinMapp[phase][at] =\n",
   "equivalent": true,
-  "why": "Both operands are `(float)` of the magnitude of a difference of two shorts, so both are exact integers in 0..65535.  |second/nearest - 2| is either 0 -- when second == 2 * nearest -- or at least 1/nearest >= 1/65535 = 1.5e-5, which is ten orders of magnitude above the difference between the two spellings, so only second == 2 * nearest can separate them.  Confirmed once by exhausting all 32,767 such pairs in a throwaway program built -m32 -O2 -mfpmath=387, so that the intermediates stay in x87 registers as they do here: no separator.  fl(1/n) is within 2^-64 relative of 1/n and the spacing of extended-precision values at 2 is 2^-62, so 2*fl(1/n)*n rounds to exactly 2.0 for every n.  Finding 1433."
+  "why": "Both operands are `(float)` of the magnitude of a difference of two shorts, so both are exact integers in 0..65535.  |second/nearest - 2| is either 0 -- when second == 2 * nearest -- or at least 1/nearest >= 1/65535 = 1.5e-5, which is ten orders of magnitude above the difference between the two spellings, so only second == 2 * nearest can separate them.  Confirmed once by exhausting all 32,767 such pairs in a throwaway program built -m32 -O2 -mfpmath=387, so that the intermediates stay in x87 registers as they do here: no separator.  fl(1/n) is within 2^-64 relative of 1/n and the spacing of extended-precision values at 2 is 2^-62, so 2*fl(1/n)*n rounds to exactly 2.0 for every n.  Finding F1433."
  },
  {
   "label": "second study: drop the guard on an exact match",
   "find": "\t\t\t\tif (nearest == 0.0f\n\t\t\t\t    || (1.0f / nearest) * second > 2.0f)",
   "replace": "\t\t\t\tif ((1.0f / nearest) * second > 2.0f)",
   "equivalent": true,
-  "why": "A nearest distance of zero means some k gave |v - linMapp[unSuspectedPhase][from + k]| == 0 and set `bestAt` to that k -- no later k can improve on zero, and nothing writes `linMapp` inside the (code, phase) iteration -- so `linMapp[unSuspectedPhase][bestAt]` still equals `linMapp[phase][at]` at the store and the repair writes the value back over itself.  Without the guard the ratio is (1/0) * second: +inf when second > 0, which repairs, and a NaN when second is 0 or a NaN, which does not.  Both outcomes are the same self-store, and neither `second` nor `bestAt` depends on the decision.  Finding 1433."
+  "why": "A nearest distance of zero means some k gave |v - linMapp[unSuspectedPhase][from + k]| == 0 and set `bestAt` to that k -- no later k can improve on zero, and nothing writes `linMapp` inside the (code, phase) iteration -- so `linMapp[unSuspectedPhase][bestAt]` still equals `linMapp[phase][at]` at the store and the repair writes the value back over itself.  Without the guard the ratio is (1/0) * second: +inf when second > 0, which repairs, and a NaN when second is 0 or a NaN, which does not.  Both outcomes are the same self-store, and neither `second` nor `bestAt` depends on the decision.  Finding F1433."
  },
  {
   "label": "report the scan's starting point rather than where it stopped",
@@ -1468,7 +1468,7 @@
   "replace": "\t\t\t\t\t     linMapp[1][ci], linMapp[0][ci],"
  },
  {
-  "label": "NOTE: the pad-gain batch.  determineMaxUcode and findPadGain share the class's `ADID_PRINT_*` idiom with the four study methods and share `+ 0.5f`, `1.0f /` and `V90ADID_PHASES; phase++` with most of the file, so several anchors below reach past the line they change.  Finding 1264."
+  "label": "NOTE: the pad-gain batch.  determineMaxUcode and findPadGain share the class's `ADID_PRINT_*` idiom with the four study methods and share `+ 0.5f`, `1.0f /` and `V90ADID_PHASES; phase++` with most of the file, so several anchors below reach past the line they change.  Finding F1264."
  },
  {
   "label": "dmu: sum window starts at 41",
@@ -1921,7 +1921,7 @@
   "find": "\t\t\t\tif (!(err >= errHigh)) {",
   "replace": "\t\t\t\tif (err < errHigh) {",
   "equivalent": true,
-  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding F1436."
  },
  {
   "label": "fpg: the low bucket belongs to the other law",
@@ -1938,14 +1938,14 @@
   "find": "if (!(err >= errLow))\n\t\t\t\t\terrLow = err;",
   "replace": "if (err < errLow)\n\t\t\t\t\terrLow = err;",
   "equivalent": true,
-  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding F1436."
  },
  {
   "label": "fpg: the middle bucket's keeper takes an unordered compare as a loss",
   "find": "\t\t\t\tif (!(err >= errMid)) {",
   "replace": "\t\t\t\tif (err < errMid) {",
   "equivalent": true,
-  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding 1436."
+  "why": "AN ERROR IS NEVER A NaN HERE, so the negated ordered test and the plain `<` cannot be separated.  `err` is `gain * gain * errSum`.  `gain` is `(float)linMapp[phase][base] / (float)level`: the numerator is a `short` and the denominator is a companding-law level for a code in 0x28..0x5f, which is never zero -- mu-law's zero is code 0xff and A-law's is 0xd5, and `(cur & 0x7f) ^ 0xff` and `(cur & 0x7f) ^ 0xd5` reach neither over that range -- so `gain` is finite and |gain| <= 32767.  `errSum` is at most 93 terms of `(proj - back)^2` with both operands `short`, so it is at most 93 * 65535^2 = 4.0e11 and is never negative or infinite.  The product is therefore at most 4.3e20, finite, and never 0 * inf -- the only way an ordered `fcom` and a C `<` can disagree.  The negation is kept because it is what `jae` encodes; finding F1436."
  },
  {
   "label": "fpg: the best-of-three's margin",
@@ -2045,7 +2045,7 @@
   "replace": "\t\t\t\t\t     \"%d\\r\\n\", minU, base);"
  },
  {
-  "label": "NOTE: studyUrefHandler, the state machine.  Its seven arms repeat each other almost exactly -- four of them are `updateUref(); updateUrefAlt();` followed by two reports and a store into +0xa984, and states 3 and 5 differ only in a format string -- so almost every anchor below has to reach into the one report that separates its arm from the others.  Finding 1264, and the generator .scratch/addmut-suh.py refuses to write the file unless every anchor in it matches exactly once."
+  "label": "NOTE: studyUrefHandler, the state machine.  Its seven arms repeat each other almost exactly -- four of them are `updateUref(); updateUrefAlt();` followed by two reports and a store into +0xa984, and states 3 and 5 differ only in a format string -- so almost every anchor below has to reach into the one report that separates its arm from the others.  Finding F1264, and the generator .scratch/addmut-suh.py refuses to write the file unless every anchor in it matches exactly once."
  },
  {
   "label": "suh: the re-test skips one phase",
@@ -2118,7 +2118,7 @@
   "replace": "\to->trn1Sigma = -sum;"
  },
  {
-  "label": "suh: the trn1Sigma report is rounded to a float first (finding 1443)",
+  "label": "suh: the trn1Sigma report is rounded to a float first (finding F1443)",
   "find": "\t\tdsplibs_debug_printf(fmt, sum);",
   "replace": "\t\t{\n\t\t\tvolatile float r = sum;\n\t\t\tdsplibs_debug_printf(fmt, r);\n\t\t}"
  },

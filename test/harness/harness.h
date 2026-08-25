@@ -111,7 +111,7 @@ struct reg_log {
  * that makes an uninitialised field look deliberate.
  *
  * It found two constructor defects in the reconstruction the moment it was
- * turned on (findings 69), and one in the original: D17, the half-duplex
+ * turned on (findings F69), and one in the original: D17, the half-duplex
  * receive handler that loopback never installs.  t_b103hdx uses this
  * constant directly, to tell "nothing has written it" apart from "something
  * wrote a state this test does not know".
@@ -218,7 +218,7 @@ void harness_alloc_reset(void);
  * free(a); free(b) the next two mallocs return b's chunk and then a's, and
  * `a < b` inverts on alternate trials -- 20 non-monotonic pairs in 40 on
  * 2005 static glibc and 20 in 40 on a modern one.  A check written that way
- * is reading the allocator, not the code under test.  See finding 1353.
+ * is reading the allocator, not the code under test.  See finding F1353.
  */
 unsigned long harness_alloc_ordinal(const void *p);
 
@@ -229,7 +229,7 @@ unsigned long harness_alloc_ordinal(const void *p);
  * reference's.  Usable size reports the CHUNK the allocator served the
  * request from, and glibc hands over a remainder too small to split rather
  * than wasting it -- so two identical requests differ whenever one was carved
- * from the top and the other recycled something larger.  Finding 1353.
+ * from the top and the other recycled something larger.  Finding F1353.
  */
 unsigned harness_alloc_reqsize(const void *p);
 
@@ -237,10 +237,10 @@ unsigned harness_alloc_reqsize(const void *p);
  * THE LIVE SET ITSELF, not just its size.
  *
  * A test that wants to snapshot and restore a whole allocated GRAPH -- 125
- * regions for a V.34 construction (finding 802) -- needs the pointers, and
+ * regions for a V.34 construction (finding F802) -- needs the pointers, and
  * the allocator already holds them.  Exposing them is what lets four
  * sequential runs use literally the same memory at the same addresses, which
- * is the congruence findings 780 and 783 get from a static arena and a
+ * is the congruence findings F780 and F783 get from a static arena and a
  * constructed object cannot get any other way.
  *
  * Writes at most `max` pointers and returns HOW MANY THERE ARE, so a caller
@@ -265,7 +265,7 @@ int diff_end(void);
  * own -mno-ieee-fp, which `make period` builds this apparatus with, so the
  * idiom detects nothing there and does so silently.  Use these instead of a
  * self-comparison anywhere a test has to know whether a value is unordered.
- * Finding 2303.
+ * Finding F2303.
  */
 int diff_isnan_f(float x);
 int diff_isnan_ld(long double x);
@@ -361,7 +361,7 @@ const char *dsplib_debug_capture_text(int side);
  * How many lines that side PRINTED, not counting the callback markers the
  * harness itself writes.  Anti-vacuity checks want this, not the text: a
  * function that only touches modem_set_param fills the buffer without any
- * call site firing (finding 149).
+ * call site firing (finding F149).
  */
 unsigned dsplib_debug_capture_lines(int side);
 

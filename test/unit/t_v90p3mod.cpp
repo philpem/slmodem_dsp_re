@@ -6,7 +6,7 @@
  * THE OBJECT IS SEEDED WITH VARIED BYTES, NEVER ZEROED.  Both sides get the
  * same pseudorandom fill before every call, reseeded each trial, so a clear
  * loop that stops one element short is visible and a field neither side
- * writes cannot pass by accident (findings 223, 224).
+ * writes cannot pass by accident (findings F223, F224).
  *
  * BUT `pcmType` IS ALWAYS FORCED TO 0 OR 1.  `resetDILGenerator` indexes
  * `codeSegmentsBoundriesLookupTable` at `8 * pcmType`, and the table is
@@ -21,16 +21,16 @@
  * there to the end of an over-large slot are compared separately, so a store
  * that overruns the object fails rather than passing in silence.  920 is the
  * largest displacement, +0x394, plus the width of the byte stored there,
- * rounded up for the four-byte members -- finding 229's rule.
+ * rounded up for the four-byte members -- finding F229's rule.
  *
  * `resetDILGenerator` touches no pointer field, which is why the whole-object
  * comparison works here without the skip-and-compare-offsets form that
  * `reset` needs.
  *
  * The `ref_` aliases are reached through asm() labels rather than by spelling
- * the alias as an identifier, which sidesteps finding 225 entirely.  The
+ * the alias as an identifier, which sidesteps finding F225 entirely.  The
  * convention is plain cdecl with `this` as the first stack argument (finding
- * 215); both symbols are `T` in the blob, so no regparm is involved.
+ * F215); both symbols are `T` in the blob, so no regparm is involved.
  */
 
 #include <string.h>
@@ -95,7 +95,7 @@ extern unsigned int ref_dsplibs_debug_level;
 
 /*
  * THE TWO EMPTY SPECIAL MEMBERS ARE LOAD-BEARING.  `Scrambler` declares a
- * constructor and a destructor (see dsplib/Scrambler.h and finding 871), which
+ * constructor and a destructor (see dsplib/Scrambler.h and finding F871), which
  * leaves `V90Phase3Modulator` with no default constructor and a non-trivial
  * destructor, which DELETES both of a union holding one.  A user-provided pair
  * that constructs and destroys no variant member restores them and changes
@@ -495,7 +495,7 @@ scr_place(ScramblerHI *s, unsigned char *buf, unsigned int out)
  * Every field of both objects, as each side's own offset into its own buffer,
  * plus the buffers themselves.  The raw pointers are never compared and never
  * merely checked non-null: two heap-free static arrays at two addresses would
- * pass that and prove nothing (finding 224).
+ * pass that and prove nothing (finding F224).
  */
 static void
 scr_compare(const ScramblerHI *a, const ScramblerHI *b, long input)
@@ -1086,7 +1086,7 @@ run_generate(int v92)
 		 * that happens from a ZERO `segmentPos` -- the only route to
 		 * event code 6 that never passes through a non-zero position,
 		 * and one `prepare`'s own lengths (12..54) cannot reach, which
-		 * is why every DIL case above enters mid-segment.  Finding 2107
+		 * is why every DIL case above enters mid-segment.  Finding F2107
 		 * named this case; 2152 says what was actually there.
 		 *
 		 * A length of 2 from the same zero position is the control: the
@@ -1421,7 +1421,7 @@ run_diagnostics(int v92)
 	 * 0 and 1 must produce nothing and 2 and 3 must produce the message;
 	 * a site with the gate dropped, or set at the wrong threshold, is
 	 * identical to the object at one level and differs at another.  That
-	 * is finding 150's point and it is what a single level misses --
+	 * is finding F150's point and it is what a single level misses --
 	 * mutation showed it, with "the illegal arm's gate dropped" surviving
 	 * a level-2-only sweep.
 	 */
@@ -1498,7 +1498,7 @@ run_diagnostics(int v92)
 
 	/*
 	 * Anti-vacuity: two empty captures agree about nothing at all, which
-	 * is the shape finding 149 warns about.
+	 * is the shape finding F149 warns about.
 	 */
 	diff_eq_int("our gated sites printed something", ours_printed > 0, 1,
 		    0);
@@ -1530,7 +1530,7 @@ run_diagnostics(int v92)
  *     Setting them to a fixed offset into each side's own object means an
  *     untouched pointer compares as that offset on both sides and a written
  *     one compares as the offset the accessor returned -- never a raw
- *     address, and never merely "non-null" (finding 224).
+ *     address, and never merely "non-null" (finding F224).
  *
  *   - `sessionFlag` FORCED, because it chooses the Jd path AND the generator
  *     in the warm-up loop, and `pcmType` forced for the reason the file

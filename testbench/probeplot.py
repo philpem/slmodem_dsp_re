@@ -7,7 +7,7 @@ object's tilt meter made of it.
 
 WHY THIS EXISTS.  Everything this project has said about the channel's tilt is
 inferred from the INDEX `probe_preemp` reports -- a two-point slope, one
-band-edge bin against bin 4, quantised to 4.06 dB steps (finding 1475).  The
+band-edge bin against bin 4, quantised to 4.06 dB steps (finding F1475).  The
 probe measures TWENTY-FIVE bins and the search reads two of them.  Nobody has
 ever looked at the other twenty-three.
 
@@ -104,7 +104,7 @@ def emit_csv(logs):
     """One row per bin per probe, and the denominators on stderr.
 
     Denominators, because a detector that does not report them cannot be
-    told from a broken one (findings 2400, 2401, 3100): logs read, logs that
+    told from a broken one (findings F2400, F2401, F3100): logs read, logs that
     carried a probe, and probes emitted.  A run over a glob that matched
     nothing must not look like a run over a clean channel.
     """

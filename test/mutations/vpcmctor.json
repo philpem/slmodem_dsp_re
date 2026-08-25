@@ -16,7 +16,7 @@
    "arrays, so the entrance filter holds two pointers to static tables: ours",
    "into our .data and the blob's into its own.  A comparison that merely",
    "excluded them would let a swap of `entFiltDen` and `entFiltNum` through,",
-   "which is exactly findings 1301 and 1307's shape.  t_vpcmctor.cpp instead",
+   "which is exactly findings F1301 and F1307's shape.  t_vpcmctor.cpp instead",
    "pins each word to a NAMED symbol on each side AND checks that the two",
    "targets are byte-identical over the filter's own declared order, so the",
    "swap fails twice over.  Verified by making the swap and watching both",

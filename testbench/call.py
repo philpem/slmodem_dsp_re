@@ -254,7 +254,7 @@ def main():
         # burned by -- and there have been four -- is held constant by
         # construction.
         #
-        # Finding 1209: eighteen single-pass calls never exceeded 14400, and
+        # Finding F1209: eighteen single-pass calls never exceeded 14400, and
         # both calls that did ran Phase 3 twice.  If that is causal, the rate
         # after ATO1 should beat the rate before it.  If it is not, this
         # measures nothing and says so.

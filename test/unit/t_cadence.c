@@ -67,7 +67,7 @@ static int code_seen[8];
  * Debug level for both sides during a run; 0 leaves the diagnostics alone.
  * The transcript sweep at the end of main() uses 1..3: four of
  * cadence_progress's gates are `> 1` and three -- the match verdicts -- are
- * `> 2`, the only second-tier gates outside cadence_create (finding 155).
+ * `> 2`, the only second-tier gates outside cadence_create (finding F155).
  */
 static unsigned opt_level;
 static unsigned create_lines;   /* anti-vacuity for the create sweep */
@@ -519,7 +519,7 @@ run_create(const char *label, int tone, int extra, int index, int sub,
 	 * else in this function runs at 0, where the announcements compile to
 	 * a branch nobody takes -- so the RINGBACK and CONGESTION arms were
 	 * exercised for their arithmetic and never for what they print, and
-	 * five of their sites had never executed in any test.  Finding 192.
+	 * five of their sites had never executed in any test.  Finding F192.
 	 */
 	if (opt_level) {
 		dsplibs_debug_level = ref_dsplibs_debug_level = opt_level;
@@ -542,7 +542,7 @@ run_create(const char *label, int tone, int extra, int index, int sub,
 		 * disagrees somewhere in that block.  Compared for the four
 		 * real tones, which is where the five dead sites were, and
 		 * skipped past RING rather than the whole check being
-		 * dropped or the failure being papered over.  Finding 201.
+		 * dropped or the failure being papered over.  Finding F201.
 		 */
 		if (tone > CADENCE_TONE_RING)
 			goto counted;
@@ -783,7 +783,7 @@ main(void)
 	diff_eq_int("CADENCE_RESTART reached (%ld)",
 		    code_seen[CADENCE_RESTART] > 0, 1,
 		    code_seen[CADENCE_RESTART]);
-	/* Empty transcripts also compare equal (finding 149). */
+	/* Empty transcripts also compare equal (finding F149). */
 	diff_eq_int("diagnostics were captured (%ld lines)",
 		    transcript_lines > 20, 1, transcript_lines);
 	rc |= diff_end();

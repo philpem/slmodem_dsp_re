@@ -5,7 +5,7 @@ Hold the tree to its own cross-references.
 WHY THIS EXISTS
 
 Every claim in this reconstruction is argued somewhere and cited everywhere
-else: `finding 171`, `see D48`.  Nothing checked those numbers.  `offcheck.py`
+else: `finding F171`, `see D48`.  Nothing checked those numbers.  `offcheck.py`
 holds the compiler to the `/* +0xNNN */` annotations and the differential
 tests hold the code to the blob, but a reference into `docs/findings.md` is
 prose pointing at prose, and prose is renumbered by hand.
@@ -17,7 +17,7 @@ D35-D38, rewriting nearly every reference correctly -- and missing six.
 MISDIRECTION IS WORSE THAN DANGLING.  A dangling reference is loud: the
 number is not there.  A missed renumber still RESOLVES, to an entry about
 something else, and reads exactly like a correct citation.  All six survivors
-of that merge were of the second kind: `finding 155` had meant the
+of that merge were of the second kind: `finding F155` had meant the
 register-relative offsets and now meant cadence's gates, and the sentence
 around it still parsed.
 
@@ -40,8 +40,8 @@ letter suffix -- 116a, 116b, 121k are all real entries.
 
 LINES ARE JOINED BEFORE MATCHING, which is the whole trick.  References wrap:
 
-        * be swept from one variable.  That is the fixture defect of findings 116b,
-        * 123 and 171, and it turned up three times ...
+        * be swept from one variable.  That is the fixture defect of findings F116b,
+        * F123 and F171, and it turned up three times ...
 
 A line-based scan sees `116b` and silently drops `123 and 171` -- and reports
 clean, which is the one output a checker must never give wrongly.  Comment
@@ -50,7 +50,7 @@ end up inside the list.
 
 WHAT IT DOES NOT CATCH
 
-A reference by bare number with no keyword.  "finding 162, which corrects
+A reference by bare number with no keyword.  "finding F162, which corrects
 158" cites 158 and this sees only 162, and the 120a-121k narrative refers to
 its own sub-findings that way throughout -- "the four fixes from 121c", "as
 121g predicted".  About twenty of those.
@@ -60,7 +60,7 @@ with the tree.  A bare `\\d+[a-z]` matches `1u`, `0f`, `02x`, `400s` and every
 printf width in the test suite -- 111 hits on `0x` alone -- and this runs in
 `make test`, where a false positive is worse than a miss.  Even restricted to
 three digits and a letter it takes `837k` out of `P(k) = -21k^2 + 837k - 354`
-in v34rx.c.  So: write "finding 158" and it is covered; write "158" and it is
+in v34rx.c.  So: write "finding F158" and it is covered; write "158" and it is
 not.
 
 THE `--since` WINDOW IS 48 CHARACTERS EITHER SIDE, with numbers blanked.  Two
@@ -73,8 +73,8 @@ from opposite parents -- and the one from the OTHER parent gets judged
 against this parent's numbering.
 
 Without blanking the numbers INSIDE the window, one sentence citing two
-findings loses both the moment either is renumbered.  "Finding 149's trap,
-and finding 152's" became "Finding 173's trap, and finding 152's": the 149
+findings loses both the moment either is renumbered.  "Finding F149's trap,
+and finding F152's" became "Finding F173's trap, and finding F152's": the 149
 was corrected, and correcting it hid the 152 next to it, which was not.
 """
 
@@ -96,7 +96,16 @@ PENDINGREFS = "tools/pendingrefs.json"
 # `###` -- and matching only one silently halves the target set, which turns
 # every reference into the other half into a false dangling report.
 #
-FINDING_HEAD = re.compile(r"^#{2,4} (\d+[a-z]?)\.\s*(.*)$", re.M)
+#
+# THE `F` IS OPTIONAL, DELIBERATELY.  Findings gained an `F` prefix so that a
+# citation cannot be confused with a filter coefficient -- the same reason
+# deviations have always been `D250` -- but roughly a hundred informal bare
+# citations were left bare on purpose, because a bare number in parentheses is
+# not reliably a citation (`fcomp %st(1)`).  Accepting both keeps those
+# resolving; the prefix is what makes a future sweep safe, not what makes this
+# checker work.  Findings F7833, F543.
+#
+FINDING_HEAD = re.compile(r"^#{2,4} F?(\d+[a-z]?)\.\s*(.*)$", re.M)
 #
 # THE PERIOD IS LOAD-BEARING, and a heading that lacks it is INVISIBLE rather
 # than wrong-looking: `### 7410 Title` defines nothing, so the number stays
@@ -109,7 +118,7 @@ FINDING_HEAD = re.compile(r"^#{2,4} (\d+[a-z]?)\.\s*(.*)$", re.M)
 # -- and there are eleven of those today against zero real finding headings at
 # that level.  Widening this to `#{2,4}` makes every one of them a failure.
 #
-FINDING_HEAD_BAD = re.compile(r"^#{2,3} (\d+[a-z]?)[ \t]", re.M)
+FINDING_HEAD_BAD = re.compile(r"^#{2,3} F?(\d+[a-z]?)[ \t]", re.M)
 DEV_HEAD = re.compile(r"^## D(\d+[a-z]?)\b\s*(.*)$", re.M)
 #
 # NOT EVERY DEVIATION ID IS A NUMBER.  `docs/deviations.md` also carries
@@ -117,7 +126,7 @@ DEV_HEAD = re.compile(r"^## D(\d+[a-z]?)\b\s*(.*)$", re.M)
 # cannot match either -- so both their definitions AND the five references to
 # them, one of which is in `src/`, were invisible to this tool while it
 # reported "0 resolve to nothing".  That is a detector excluding part of its
-# own denominator, which is finding 2401 in a new place.
+# own denominator, which is finding F2401 in a new place.
 #
 # The tag must START with an upper-case letter, and that is the whole reason
 # this pattern is not simply `D-\w+`: this project is called D-modem and the
@@ -128,8 +137,8 @@ DEV_HEAD_TAG = re.compile(r"^## (D-[A-Z][A-Z0-9]*-\d+)\b\s*(.*)$", re.M)
 #
 # MARKDOWN EMPHASIS MADE A CITATION INVISIBLE.
 #
-# `\s+` cannot cross `**` or a backtick, so `finding **651**` and
-# `` finding `651` `` were as unreferenced as a bare `(651)` -- the word was
+# `\s+` cannot cross `**` or a backtick, so `finding **F651**` and
+# `` finding `F651` `` were as unreferenced as a bare `(651)` -- the word was
 # right there and the checker never saw it.  Measured by probe: a file
 # containing all three forms of a number that does not exist reported ONE
 # dangling reference, not three.
@@ -141,13 +150,13 @@ DEV_HEAD_TAG = re.compile(r"^## (D-[A-Z][A-Z0-9]*-\d+)\b\s*(.*)$", re.M)
 # The separator now allows the markup that can legally sit between the word
 # and the number.  A bare `(651)` is still invisible and still deliberate:
 # three digits in parentheses are a byte count or a table value far more
-# often than a citation (finding 543 lists the coefficient rows that would
+# often than a citation (finding F543 lists the coefficient rows that would
 # be corrupted by treating them as one).
 #
 _EM = r"[\s*_`]*"
 FINDING_REF = re.compile(
     r"\bfindings?" + _EM + r"\s" + _EM +
-    r"(\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM + r"\d+[a-z]?)*)", re.I)
+    r"(F?\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM + r"F?\d+[a-z]?)*)", re.I)
 DEV_REF = re.compile(r"\bD(\d+[a-z]?)\b")
 DEV_REF_TAG = re.compile(r"\b(D-[A-Z][A-Z0-9]*-\d+)\b")
 
@@ -252,8 +261,8 @@ def refs_in(path, text):
     # NUMBERS INSIDE THE WINDOW ARE BLANKED, the cited one included -- it is
     # carried in the key beside the context, so nothing is lost.  Without
     # this, one sentence citing two findings loses the match for BOTH the
-    # moment the merge renumbers either: "Finding 149's trap, and finding
-    # 152's" became "Finding 173's trap, and finding 152's", and the 152 --
+    # moment the merge renumbers either: "Finding F149's trap, and finding
+    # 152's" became "Finding F173's trap, and finding F152's", and the 152 --
     # which is the one that was WRONG -- went unreported because the 173
     # next to it had been fixed correctly.
     #
@@ -352,8 +361,8 @@ def check_duplicates():
             n = int(re.match(r"\d+", num).group(0))
             #
             # NUMBERED LISTS INSIDE A FINDING USE THE SAME MARKUP.  "### 1.
-            # What six LSB actually costs" sits inside finding 20-odd and is
-            # not finding 1; the heading level does not distinguish them,
+            # What six LSB actually costs" sits inside finding F20-odd and is
+            # not finding F1; the heading level does not distinguish them,
             # because real entries use both ## and ###.
             #
             # THE WINDOW USED TO BE `n < high - 20` ALONE AND IT WENT BLIND.
@@ -364,13 +373,13 @@ def check_duplicates():
             # 826-836 -- and once `high` reaches 959 every one of the 826s is
             # "far below" it.  Measured on this file, the bare window
             # discarded 267 headings of which **263 were real findings**, and
-            # it duly missed a live 837/837 collision (finding 819) while
+            # it duly missed a live 837/837 collision (finding F819) while
             # reporting the tree clean.
             #
             # A list RESTARTS AT 1 and stays short, so the size of the number
             # is the discriminator that survives reordering.  Both conditions
             # now have to hold: far below the mark AND small enough to be a
-            # list item.  Findings 1-4 exist and are unaffected -- they are at
+            # list item.  Findings F1-4 exist and are unaffected -- they are at
             # the top, where `high` has not climbed past them.
             #
             if n < high - 20 and n <= LIST_ITEM_MAX:
@@ -396,7 +405,7 @@ CONFLICT = re.compile(r"(?m)^(<{7} |={7}$|>{7} )")
 def renumber(old, new, nth=None):
     """Move one entry and every citation of it, in one pass.
 
-    Doing this by hand is what the six missed references in finding 196 were.
+    Doing this by hand is what the six missed references in finding F196 were.
     The heading and the citations have to move together or the tree is left in
     the state that reads correct and is not.
 
@@ -408,7 +417,7 @@ def renumber(old, new, nth=None):
     that kept the number.  Exit status 0.  Measured, not supposed.
 
     The ambiguity is real and not the tool's to guess: with two entries
-    answering to one number, a bare `finding 195` in some third file names
+    answering to one number, a bare `finding F195` in some third file names
     both.  What it can do is move ONE of them by position -- `nth`, where -1
     is the last, which is where a merge appends -- and rewrite only the
     citations INSIDE that entry's own section, then list every other citation
@@ -578,11 +587,11 @@ def check_conflict_markers():
 # comma about one time in three, and a malformed registry makes EVERY suite
 # unrunnable -- while `make phase` stays green, because nothing in the phase
 # boundary opens the file.  A test suite that cannot be run reports no
-# failures, which is finding 134's argument in its purest form.
+# failures, which is finding F134's argument in its purest form.
 #
 # Checked here because this is the gate that already walks the tree, and
 # because the same merge that breaks it is the one that breaks references.
-# Finding 346.
+# Finding F346.
 #
 def check_suites():
     path = os.path.join("test", "mutations", "suites.json")
@@ -628,7 +637,7 @@ def check_suites():
 #
 # Detection is exact rather than heuristic: for a correctly restored source
 # every mutation's `find` string is present.  If `find` is ABSENT and
-# `replace` is PRESENT, that mutation is live in the tree.  Finding 349.
+# `replace` is PRESENT, that mutation is live in the tree.  Finding F349.
 #
 def check_finding_headings():
     """A finding heading whose number has lost its period defines nothing."""
@@ -740,7 +749,7 @@ def check_dangling():
     live = check_live_mutants()
     badhead, nheads = check_finding_headings()
     #
-    # EVERY COUNT CARRIES ITS DENOMINATOR (finding 2401), including the held
+    # EVERY COUNT CARRIES ITS DENOMINATOR (finding F2401), including the held
     # one: "0 resolve to nothing" over a silently exempted set is the same
     # lie as a coverage tier reporting 0.0% (0/0) and calling it OK.
     #

@@ -31,7 +31,7 @@
  * `V90Demodulator::progress` never runs.  t_vpcmrunpcm.cpp's header carries
  * the argument at length and the first reason is the one that decides:
  * `V90Equalizer::process` is a `tools/gccdiverge.json` entry, a declared
- * binary cannot carry a mutation suite (findings 2157 and 3002), and driving
+ * binary cannot carry a mutation suite (findings F2157 and F3002), and driving
  * the real demodulator would drag that divergence into this binary.
  *
  * WHAT THAT COSTS, stated rather than hidden: the four arguments this
@@ -58,7 +58,7 @@
  *   3. WHICH MAPPING BLOCK EACH `V90CPPacker` CALL READS.  `mappingParams`
  *      and `mappingParamsAlt` are seeded with different values in every
  *      field the packer reads, so a swap changes the bit vector it writes.
- *      V90Modem.h records findings 1301 and 1307 as two batches that shipped
+ *      V90Modem.h records findings F1301 and F1307 as two batches that shipped
  *      that pair the wrong way round.
  *   4. `copyMpInfoForInterface`'s THIRTEEN FIELDS.  Every source field in
  *      `modem.mp` is seeded to a DISTINCT value, so copying the wrong one is
@@ -375,7 +375,7 @@ static long words_unresolved;
  * static pointer" -- silently swallowed seven real mutations there, because a
  * pair of wrong small integers is indistinguishable from a pair of addresses.
  * There is no property of a WORD that separates the two cases; only knowing
- * which field it is does.  Finding 7521's shape.
+ * which field it is does.  Finding F7521's shape.
  */
 #define V34_SHELL_CONV		0x0a28
 #define V34_SHELL_SCRAMBLE	0x0e48
@@ -839,7 +839,7 @@ seed_cpinfo(unsigned char *blk)
  * the mutation set answered that no seeding can: the store is sixteen bits,
  * so only the low sixteen bits of the source can reach it and the extension
  * is discarded.  The value is kept because a negative one is still a
- * different value from the other two tags', and finding 7585 carries the
+ * different value from the other two tags', and finding F7585 carries the
  * retraction.
  */
 static void

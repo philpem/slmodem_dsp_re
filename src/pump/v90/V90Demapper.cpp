@@ -11,7 +11,7 @@
  * `reset` (0x30870, 723 bytes) IS NOW WRITTEN, and what unblocked it was
  * `V90SignBitsExtractor::reset` -- the one callee nothing in this tree had, so
  * a batch carrying it would not have been CLOSED and would have failed every
- * differential binary at `t_encode` rather than only its own (finding 215).
+ * differential binary at `t_encode` rather than only its own (finding F215).
  *
  * WHAT THE CLASS IS FOR, now that its middle is read.  `hardDecision` takes
  * one PCM sample, finds the nearest level of the constellation belonging to
@@ -21,7 +21,7 @@
  * signs through either `V90SignBitsExtractor` or the serial differential
  * decoder at +0x664, both writing into one bit buffer the caller supplies.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215):
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215):
  * `mov 0x10(%esp),%ebx` after one push and an eight-byte frame in the
  * destructor, `mov 0x30(%esp),%ebx` after four saves and 0x2c in
  * `printErrorHistogramAndReset`.
@@ -69,7 +69,7 @@
  * The NAMED 0x558 `V90Parameters` map, not `V90PreFilter.h`'s 0x504 word
  * block.  The destructor branches on one slot of it and that slot has the
  * original author's own name; a numeric index would throw that away.  No
- * translation unit may include both definitions; finding 1112.
+ * translation unit may include both definitions; finding F1112.
  */
 #include "dsplib/V90Parameters.h"
 /*
@@ -82,7 +82,7 @@
 /*
  * `resetNoSpectral` takes one of these and reads three of its members, so the
  * argument has to be a complete type here.  It is a DIFFERENT class from the
- * `V90Parameters` above and the two are not interchangeable; finding 1112 is
+ * `V90Parameters` above and the two are not interchangeable; finding F1112 is
  * about the two `V90Parameters` maps and does not reach this one.
  */
 #include "dsplib/V90MappingParams.h"
@@ -131,7 +131,7 @@ DEM_OFF(uint_1eb0,		0x1eb0, uint1eb0);
 DEM_OFF(linearMappStudyEnabled,	0x1eb4, lmstudyenabled);
 
 /*
- * The allocation, and finding 1107's whole point: this number comes from
+ * The allocation, and finding F1107's whole point: this number comes from
  * `movl $0x1eb8,(%esp); call sysdep_malloc` at 0x1c4d9 rather than from the
  * highest displacement any V90Demapper symbol uses, which would have said
  * 0x1e94.
@@ -363,7 +363,7 @@ V90Demapper::~V90Demapper()
  * than measuring it, and lever 1 is explicit that nothing before the compile
  * separates a constant map from a bijection.
  *
- * ENUMERATED, ALL 6! = 720 ORDERINGS (finding 7820).  The map is a perfect
+ * ENUMERATED, ALL 6! = 720 ORDERINGS (finding F7820).  The map is a perfect
  * BIJECTION -- 720 orderings, 720 DISTINCT emissions, so the scheduler
  * reorders nothing here at all -- and exactly ONE cell reaches positional byte
  * identity.  The preimage is unique, so this is a decoded ORDER and not a
@@ -440,7 +440,7 @@ V90Demapper::resetLinearMappStudy(unsigned int n)
  * (`cmp $0x0,%ecx; jbe` -- unsigned, so only zero exits).  Nothing calls this
  * before `updateConstelation` has filled the counts.
  *
- * `__builtin_abs` AND NOT `x < 0 ? -x : x`, three times.  Finding 2117
+ * `__builtin_abs` AND NOT `x < 0 ? -x : x`, three times.  Finding F2117
  * measured both spellings on the period compiler over a composed translation
  * unit: GCC 3.4.2 renders the conditional as a conditional NEGATION and only
  * the builtin gives the `cltd; xor; sub` triple the object has at 0x3109d,
@@ -678,13 +678,13 @@ V90Demapper::incrementRBSFramePosition()
  * levels per code.  The zero arm loads `constellationSize[i]` with `movzwl`
  * off a 32-bit field (0x313ec) and the non-zero arm loads it 32-bit, doubles
  * it and truncates (0x31336 .. 0x3133f) -- so BOTH arms discard the upper
- * half, which is what makes the narrow load finding 614's free case rather
+ * half, which is what makes the narrow load finding F614's free case rather
  * than evidence about the field.  `constellationSize` stays `unsigned int`;
  * `hardDecision` and `printErrorHistogramAndReset` both depend on that.
  *
  * `linearMappingStudy` READS THE SAME QUANTITY AS A `short` AND THAT ONE IS
  * FORCED -- see its comment below.  The two functions genuinely differ in the
- * type of the local, and finding 4341 is why the difference is not a defect in
+ * type of the local, and finding F4341 is why the difference is not a defect in
  * either.
  *
  * THE CELL INDEX IS `i * 128 + j` AND j IS NOT BOUNDED BY 128.  The object
@@ -698,7 +698,7 @@ V90Demapper::incrementRBSFramePosition()
  * The object computes `1.0 / count` with `fdivr %st(2),%st` and then
  * `fmuls` -- three x87 operations where a plain divide is two, and the extra
  * one only exists because the constant 1.0 is there to divide.  `d8 fa` is a
- * D8 register form, which finding 245's swap does not touch, and `dis.py`
+ * D8 register form, which finding F245's swap does not touch, and `dis.py`
  * prints no Intel note against it.
  *
  * BOTH CONSTANTS ARE HOISTED OUT OF BOTH LOOPS.  `fld1` and
@@ -780,7 +780,7 @@ V90Demapper::updateConstelation()
  * and nobody has reconstructed it -- so spelling it here would add a symbol
  * outside this batch's closure.  The object inlines whatever the original
  * wrote: seven plain `mov`s in the scheduler's order, 0, 3, 4, 1, 2, 5, 6,
- * which is not a source order and is not chased (finding 617).
+ * which is not a source order and is not chased (finding F617).
  *
  * `histogramIntegration` BEFORE `histogramDelay` is the object's order and
  * costs nothing to adopt; both are plain stores after the call, so it is a
@@ -919,7 +919,7 @@ V90Demapper::resetNoSpectral(V90MappingParams *mapp)
  * store block at 0x30b04..0x30b34 covers +0x1eb0, +0x1eae, +0x1ea4, +0x1ea6,
  * +0x1e9c, +0x1ea8 and +0x1eb4 and skips the one between the first two;
  * `resetLinearMappStudy` leaves it alone in the same way.  Their order is the
- * scheduler's -- seven plain stores with no call between them, finding 617 --
+ * scheduler's -- seven plain stores with no call between them, finding F617 --
  * and what is in the object is their WIDTHS, which the header declares.
  */
 void
@@ -1045,7 +1045,7 @@ V90Demapper::reset(V90MappingParams *mapp)
  * and in both cases the 32-bit result feeds the SIGNED `jge` at 0x31545 -- the
  * forced column of CLAUDE.md's rule.  `updateConstelation`'s `movzwl` feeds a
  * 16-bit `jb` and discards its upper half, which is the free column.  Finding
- * 4341.
+ * F4341.
  *
  * AND THE PAIR IS READ WITHOUT A LOWER BOUND.  With `decisionCode` zero and
  * the row length one, `decisionCode + 1 >= n` holds and the object reads
@@ -1057,12 +1057,12 @@ V90Demapper::reset(V90MappingParams *mapp)
  * `fmuls .rodata.cst4+0x1c0` = 0.4f; a `double` 0.4 would be `fmull` against
  * `.rodata.cst8`.  The comparison is `fcompp` with the product in ST(0) and
  * `jbe` to skip, so the product must be strictly greater -- and `de d9` is
- * FCOMPP, which has no reversed twin and is not finding 245's trap.  Nothing
+ * FCOMPP, which has no reversed twin and is not finding F245's trap.  Nothing
  * in the differential tier can separate `0.4f` from `0.4`: the two straddle no
  * integer for any gap a `short` row can hold, so that half is a codegen claim.
  *
  * THE ABSOLUTE VALUE OF THE SAMPLE IS TAKEN TWICE, once into `diff` at 0x31434
- * and again at 0x314bd, and both are the `cltd; xor; sub` triple finding 2117
+ * and again at 0x314bd, and both are the `cltd; xor; sub` triple finding F2117
  * pins to `__builtin_abs` rather than to `x < 0 ? -x : x`.
  *
  * THE END-OF-RUN PASS INLINES `updateConstelation` -- the same 0.5f rounding

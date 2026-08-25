@@ -44,7 +44,7 @@ dp_param_get(void *modem)
  *
  * TWO STATEMENTS SIT WHERE THE PERIOD COMPILER PUT THEM, not where they read
  * most naturally, and both were MOVED and re-measured rather than guessed
- * (finding 617's rule -- statement order is a hint, and the acceptance test is
+ * (finding F617's rule -- statement order is a hint, and the acceptance test is
  * what GCC 3.4.2 emits).  `unnamed_0003 &= ~7` is after the `qcIndex` branch
  * because the object's `andb $0xf8,0x3(%ebx)` is at the branch's MERGE POINT
  * (0x596e) and not before it; putting the statement first put the instruction

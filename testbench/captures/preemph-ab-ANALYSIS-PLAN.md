@@ -8,7 +8,7 @@ is how a null becomes a positive.
 ## The hypothesis
 
 D53's off-by-one makes pre-emphasis index 0 unreachable, so the modem cannot
-ask for a flat line (finding 1471). Finding 1473 proposes a mechanism by which
+ask for a flat line (finding F1471). Finding F1473 proposes a mechanism by which
 that could cost rate: the equaliser converges, the far end begins applying the
 pre-emphasis we asked for, the equaliser is knocked off convergence, and the
 rate is decided before it recovers.
@@ -24,7 +24,7 @@ the decision, and a higher receive rate.
 `equerr` at the decision -- the `V34DATARATE, equerr = N` line, NOT the ~57
 per-call `V34EQU` samples -- compared between arms by permutation on the
 rank-sum. Rank-sum rather than the median, because the receive rate is a
-discrete ladder and finding 1351 showed the median missing a real shift that
+discrete ladder and finding F1351 showed the median missing a real shift that
 the rank-sum caught at p = 0.0127.
 
 Receive rate is the secondary statistic and connect rate the third.

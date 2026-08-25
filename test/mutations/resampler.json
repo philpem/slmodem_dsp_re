@@ -1,7 +1,7 @@
 [
  {
   "label": "NOTE",
-  "why": "Anchors are whole statements including their leading tab, so a later edit that re-indents them makes the mutation UNUSABLE rather than silently re-pointing it (finding 432)."
+  "why": "Anchors are whole statements including their leading tab, so a later edit that re-indents them makes the mutation UNUSABLE rather than silently re-pointing it (finding F432)."
  },
  {
   "label": "taps is not rounded down to a multiple of four",

@@ -10,7 +10,7 @@
  * `VPCMXF_Create`'s first argument selects the modem's SIDE, `vpcm_create`
  * passes a literal 0 on the only call site in 1.2 MB, and the other branch --
  * the DIGITAL side of a V.90 call, the modem that sends PCM downstream -- is
- * real code the vendor's object never constructs (findings 701, 702).  This
+ * real code the vendor's object never constructs (findings F701, F702).  This
  * file calls `VPCMXF_Create(1, ...)` instead of `(0, ...)` and reports what
  * happens.
  *
@@ -18,7 +18,7 @@
  * about the VENDOR rather than about us.  `VPCMXF_Create` is `extern "C"` in
  * the object, so `ref_VPCMXF_Create(1, ...)` is the vendor's own digital
  * constructor, callable through the ordinary `ref_` alias whatever the
- * shipped modem reached (finding 7000 overturning 702).  Where a probe runs
+ * shipped modem reached (finding F7000 overturning 702).  Where a probe runs
  * both, a symptom that appears on OUR side alone is a defect in the
  * reconstruction and a symptom that appears on BOTH is a property of the
  * vendor's branch.
@@ -40,7 +40,7 @@
  * `constellationSize` is `unsigned int` read out of a block nothing on this
  * side writes -- so the loop bound is whatever the allocation held.  A run
  * that died at the first such arm would report three of its arms as silence,
- * and finding 7573's rule is that an aborted check prints exactly what a
+ * and finding F7573's rule is that an aborted check prints exactly what a
  * passing one prints.
  *
  * So each arm runs in a child, writes its measurements into a shared page,
@@ -48,7 +48,7 @@
  * leaves `done = 0` and the stage it reached, which is a positive reading and
  * not an absence.  `probe_fire_check` runs one child that returns cleanly and
  * one that faults deliberately, and refuses to go on unless the runner tells
- * them apart -- finding 134's ritual, applied to the instrument this file is
+ * them apart -- finding F134's ritual, applied to the instrument this file is
  * about to trust for every number it prints.
  */
 
@@ -97,7 +97,7 @@ void ref_VPCMXF_Delete(void *self);
 /*
  * The blob's own copies of everything this file drives.  `setParamsInfoFrom-
  * CPUnPck` is `extern "C"` in the object -- which is exactly why finding
- * 7520's `nm | grep 16V90MappingParams` sweep could not see it -- so its
+ * F7520's `nm | grep 16V90MappingParams` sweep could not see it -- so its
  * alias carries no mangling.
  */
 void ref_setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp);
@@ -139,7 +139,7 @@ typedef char x_flo_is_0x7f68[(sizeof(VPcmFloModem) == FLO_SIZE) ? 1 : -1];
  * gives the two sides different buffers -- and `maxDataBuffer` is what
  * becomes `V90Modulator::nofSymbols`, the block size every `progress` call is
  * driven at.  10 ms is 80 symbols at V.90's 8 kHz downstream rate, which is
- * the block finding 7520's fixture drives, and 96 on the analogue side.
+ * the block finding F7520's fixture drives, and 96 on the analogue side.
  */
 #define DURATION_MS	10u
 #define DIGITAL_SYMS	80		/* 10 * 8.0 + 0.5   */
@@ -327,7 +327,7 @@ static float out_f[NOUT];
  * writes them out mixed-radix, so the six sizes must multiply past
  * 2**(bpf - 3) or the last digit indexes off the end of its row.  `shaperSR`
  * is 3, which divides six, so `V90BitsToSymbol::reset`'s `6 / shaperSR` is
- * exact.  This is finding 7520's fixture and the reasoning is its.
+ * exact.  This is finding F7520's fixture and the reasoning is its.
  */
 static void
 plausible_mapping(V90MappingParams *m, unsigned int bpf)
@@ -361,7 +361,7 @@ plausible_mapping(V90MappingParams *m, unsigned int bpf)
 /*
  * A `V90CPUnPck` -- the received CP message, in the shape the ONE reader of
  * that layout expects.  All-ones bitmaps: 128 possible entries into a
- * 128-byte table, which finding 7570 measured as exactly filling one
+ * 128-byte table, which finding F7570 measured as exactly filling one
  * constellation and unable to overrun it.  `info->word_04` non-zero picks the
  * `+ 0x14` arm of `setDataBitRate`, so `word_0` comes out at rate + 20.
  */
@@ -434,7 +434,7 @@ destroy(const struct probe_in *in, VPcmFloModem *flo)
 /*
  * MILESTONE 1 -- does a digital-side modem CONSTRUCT?
  *
- * Finding 701 says the plumbing that selects the modulator arm is "present
+ * Finding F701 says the plumbing that selects the modulator arm is "present
  * and correct" and that the value is inverted on the way in: `sete %al` puts
  * `(digitalSide == 0)` into the `V90ModemSide` slot, so a NON-zero first
  * argument is the DIGITAL side and gives `V90ModemSide` 0, which
@@ -470,7 +470,7 @@ probe_construct(const struct probe_in *in, struct probe_out *o)
 	o->v[9] = m->ptr_49b4 != 0;
 
 	/*
-	 * The mapping block AS THE CONSTRUCTOR LEFT IT.  Finding 7520's claim
+	 * The mapping block AS THE CONSTRUCTOR LEFT IT.  Finding F7520's claim
 	 * is that `V90Modem::V90Modem` does not construct it, so it holds
 	 * whatever the allocation held -- which the harness's `sysdep_malloc`
 	 * makes a fixed 0xa5 pattern deliberately, so that a field nobody
@@ -515,7 +515,7 @@ prepare_block(const struct probe_in *in, V90Modem *m)
 		/*
 		 * THE HARNESS SUPPLIES THE CALL THE OBJECT DOES NOT HAVE.
 		 * `setParamsInfoFromCPUnPck` writes essentially the whole of
-		 * `V90MappingParams` (finding 7570) and has ZERO relocations
+		 * `V90MappingParams` (finding F7570) and has ZERO relocations
 		 * naming it in 1.2 MB.  Calling it from here is the question
 		 * "would a caller have been enough", asked without adding one
 		 * to `src/`.
@@ -742,7 +742,7 @@ probe_run(const struct probe_in *in, struct probe_out *o)
  * THE DRIVER PROBE.  `VPcmFloModem::runPcmModem` and `v90RunDemodulator` are
  * the two entry points a V.PCM session runs through, and both dispatch on
  * `this->modem.demodulator->word_3c` -- a field of an object that exists only
- * on the ANALOGUE side.  Finding 7581 argued from the two `.rodata` jump
+ * on the ANALOGUE side.  Finding F7581 argued from the two `.rodata` jump
  * tables that no arm of the V.90 driver could hold the missing unpacker's
  * call; this asks the blunter question one level up, which is whether either
  * driver can be entered at all on a digital instance.
@@ -805,7 +805,7 @@ probe_driver(const struct probe_in *in, struct probe_out *o)
  * `V90Modulator::progress` closes with `out[i] = symbolBuf[i]`, so the float
  * buffer it fills holds PCM CODEWORD INDICES and not line samples: the
  * digital modem chooses codewords and the network is assumed to deliver them
- * unaltered (finding 7000's transport note).  The analogue side's
+ * unaltered (finding F7000's transport note).  The analogue side's
  * `V90Demodulator` expects the client's internal rate, which `VPCMXF_Create`
  * itself says is 9600 against the digital side's 8000 -- 96 symbols a block
  * against 80.  So this feed is not a channel and is not claimed to be one;
@@ -933,7 +933,7 @@ probe_loopback(const struct probe_in *in, struct probe_out *o)
 }
 
 /*
- * The event-code vocabulary.  Finding 7581 measured the two drivers' jump
+ * The event-code vocabulary.  Finding F7581 measured the two drivers' jump
  * tables off `.rodata`: `v90RunDemodulator` covers 0x00..0x2b and
  * `runPcmModem` covers 0x00..0x35, on the SAME field, with two different
  * vocabularies.  What that finding could not do is say which codes the

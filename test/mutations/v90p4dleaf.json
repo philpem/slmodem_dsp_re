@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90Phase4Demodulator's seven leaf members, against t_v90p4dleaf.  Two shapes of mutation, and the second is the reason the test captures transcripts at all: the placement ones move a store to a neighbouring field or change a state constant, which the whole-object comparison sees, and the DIAGNOSTIC ones swap a format string or the detector whose polarity is printed, which writes the same bytes into the object and can only be caught by comparing what was printed.  Reordering the five stores of `resetBeforRRN` is deliberately NOT here: it is behaviourally equivalent and would report NOT CAUGHT for ever.  What holds that order is finding 617's full-text identity against the blob, not a mutation."
+  "note": "V90Phase4Demodulator's seven leaf members, against t_v90p4dleaf.  Two shapes of mutation, and the second is the reason the test captures transcripts at all: the placement ones move a store to a neighbouring field or change a state constant, which the whole-object comparison sees, and the DIAGNOSTIC ones swap a format string or the detector whose polarity is printed, which writes the same bytes into the object and can only be caught by comparing what was printed.  Reordering the five stores of `resetBeforRRN` is deliberately NOT here: it is behaviourally equivalent and would report NOT CAUGHT for ever.  What holds that order is finding F617's full-text identity against the blob, not a mutation."
  },
  {
   "label": "enterWaitForCP leaves the WaitForMP state behind",

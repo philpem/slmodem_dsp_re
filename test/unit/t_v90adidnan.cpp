@@ -17,14 +17,14 @@
  * NaN entry is skipped along with a zero one.  Two small entries beside three
  * NaNs therefore give a count of 2, the window does NOT qualify, and the
  * answer falls through to the floor; a reading that counted the NaNs would
- * make it 5, qualify, and move the answer.  Finding 1436 for the window, 2300
+ * make it 5, qualify, and move the answer.  Finding F1436 for the window, 2300
  * for the site.
  *
  * WHY IT IS NOT IN `t_v90adid`, and this is the whole reason the file exists.
  * IEEE C's `==` is false for a NaN and GCC 13 emits the parity test whatever
  * it is told -- `-mno-ieee-fp` is accepted and does nothing, and
  * `-ffinite-math-only` withdraws NaN semantics from the whole translation unit
- * and breaks eleven sites that depend on them (finding 2304).  So the modern
+ * and breaks eleven sites that depend on them (finding F2304).  So the modern
  * build keeps the three entries the object drops and the answer moves.
  *
  * In `t_v90adid` that was 4 of `determineMaxUcode`'s 380 checks -- three from
@@ -34,7 +34,7 @@
  * cannot score a mutation set against a baseline that is already red, and it
  * refuses.  `t_v90adid` carries the `v90adid` and `v90dil` suites, 497
  * mutations and the largest suite in the tree, and both were unscoreable for
- * this one arm.  Findings 2157 and 3002.
+ * this one arm.  Findings F2157 and F3002.
  *
  * Splitting the divergent check into its own binary is what that refusal asks
  * for; `t_v90p4dnan` is the worked precedent.  The accidental half went with
@@ -44,7 +44,7 @@
  * own writer cannot put a NaN there.  The deliberate half is this file.
  *
  * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings 6001, 2300 and 2304.
+ * compiler, which is the tier that decides.  Findings F6001, F2300 and F2304.
  *
  * THE FIXTURE IS THE WINDOW GRID AND NOTHING ELSE.  Everything outside the
  * planted window is 1.0e9f, so only the planted window can ever qualify and
@@ -104,7 +104,7 @@ next_byte(void)
 	return (unsigned char)(lfsr_state >> 3);
 }
 
-/* `t_v90adid`'s seed, mode 0.  Never zero -- findings 223, 224, 230. */
+/* `t_v90adid`'s seed, mode 0.  Never zero -- findings F223, F224, F230. */
 static void
 seed(int trial)
 {
@@ -138,7 +138,7 @@ seed(int trial)
  * the failing check set depend on the seed rather than on the plant.  Only
  * words whose exponent field is all ones are touched, and through the BITS
  * rather than `v != v` -- the period build's `-mno-ieee-fp` folds a
- * self-comparison to zero (finding 2303).
+ * self-comparison to zero (finding F2303).
  */
 static void
 finite_variances(void)

@@ -420,7 +420,7 @@ main(void)
 	 * A default object has dsp->bpf NULL and bpf_taps zero, so running the
 	 * channel filter on one would dereference NULL in both
 	 * implementations -- B103_CFG does not reach the branch of
-	 * B103FP_create that installs it (finding 32).  The caller-side
+	 * B103FP_create that installs it (finding F32).  The caller-side
 	 * bandpass is therefore installed by hand, which is the state that
 	 * branch would have produced.
 	 */

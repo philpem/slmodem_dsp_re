@@ -13,7 +13,7 @@
  * `state`, so every field this file's `process` reads is seeded there and by
  * nothing else.  One class, one owner.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215):
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215):
  * `mov 0x10(%esp),%ebx` after one push and an eight-byte frame.
  *
  * WHY THE CONSTRUCTOR IS HERE AT ALL, since the batch that wrote this file was
@@ -35,7 +35,7 @@
  * -- +0x18 before the member's constructor and +0x10 after it, which is what
  * a mem-initialiser for `oddDecoder` and a body assignment to `state`
  * produce, in that order, from the declaration order in the header.  It is a WEAK signal and
- * recorded as one: GCC does not preserve statement order (finding 617), so a
+ * recorded as one: GCC does not preserve statement order (finding F617), so a
  * matching order confirms this spelling and does not prove it is the only one.
  */
 
@@ -64,7 +64,7 @@ SBE_OFF(oddDecoder,	0x18, odddec);
 SBE_OFF(decoder,	0x1c, decoder);
 
 /*
- * The size is the claim finding 1107 says to make loudly, because here it is
+ * The size is the claim finding F1107 says to make loudly, because here it is
  * the containment argument and not an allocation: 0x690 - 0x668 inside
  * `V90Demapper`, and 0x1c + sizeof(ParallelDifferentialDecoder<unsigned
  * char>) from this side.
@@ -142,7 +142,7 @@ V90SignBitsExtractor::reset(unsigned int spacing_, unsigned int state_)
  * AND IT COMES OUT AT 197 BYTES ON THE PERIOD COMPILER, with the mnemonic
  * sequence identical to the blob's -- `compare.py` counts it in the identical
  * set and `nm -S` gives 0xc5 on both sides.  That is a stronger result than
- * this function needed and it is the second half of finding 3532's argument:
+ * this function needed and it is the second half of finding F3532's argument:
  * the switch-inside-the-loop reading is not merely consistent with the
  * object, it reproduces it.
  *

@@ -4,7 +4,7 @@
  * Four functions, 783 bytes, and `preinitdigital` installs one scrambler and
  * one descrambler by ADDRESS according to which end of the call this is --
  * `f359c == 0x65` picks GPC to send and GPA to receive, anything else the
- * other way round (finding 177).  The two ends of a V.34 call must use
+ * other way round (finding F177).  The two ends of a V.34 call must use
  * opposite polynomials, which is what identifies that field.
  *
  * WHERE THEY LIVE.  Between `FloatIIR.cpp`'s methods, which end at 0x5785a,

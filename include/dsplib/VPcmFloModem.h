@@ -15,7 +15,7 @@
  *
  * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the `D1` and
  * `D2` variants and no `D0`, and GCC emits a deleting destructor only for a
- * virtual one, so +0x00 is a real member and there is no vptr (finding 228 is
+ * virtual one, so +0x00 is a real member and there is no vptr (finding F228 is
  * the four classes where that is not true).
  *
  * ===========================================================================
@@ -24,8 +24,8 @@
  *
  * docs/v90cpp.md used to say that VPcmFloModem "reaches +32,612, which almost
  * certainly means it indexes *through* `this` into an enclosing session object
- * rather than being that large".  That is finding 268's warning applied in
- * good faith, and for this class it is WRONG.  Run finding 268's own check --
+ * rather than being that large".  That is finding F268's warning applied in
+ * good faith, and for this class it is WRONG.  Run finding F268's own check --
  * trace the base register of every large displacement back to the prologue --
  * and every one of them comes off the `this` stack slot:
  *
@@ -52,7 +52,7 @@
  *
  *   1. `setPcmSessionType` ends `lea 0x1758(%esi),%edi ... jmp
  *      V90Modem::setSessionFlag` -- an ADD before the call, not a load, which
- *      is the same signature finding 268 used for the two demodulators.
+ *      is the same signature finding F268 used for the two demodulators.
  *   2. `getV90CpBits` reads +0x175c as a V90Demodulator*, and V90Modem's
  *      `demodulator` is at +0x04.  0x1758 + 4 = 0x175c.
  *   3. `setPhaseIIinfo` reads +0x1760 as a V90Phase2Info*, and V90Modem's
@@ -73,7 +73,7 @@
  * NAMES
  * ===========================================================================
  *
- * The mangling never carries a data member's name (finding 226).  Where the
+ * The mangling never carries a data member's name (finding F226).  Where the
  * blob names a field some other way the name below is the object's own:
  *
  *   +0x7dce, +0x7dcf, +0x7dd0   `setTerminateJaFlag`, `setTerminateCpFlag`
@@ -467,7 +467,7 @@ public:
 	 * which is the quotient fix-up a negative dividend needs.  An unsigned
 	 * divide by 15 or by 5 is `mul` then `shr` with no fix-up at all.  So
 	 * the declared type is `int` -- CLAUDE.md's forced column, finding
-	 * 613's case with a division rather than a table index behind it.
+	 * F613's case with a division rather than a table index behind it.
 	 * The field WILL go negative: it is incremented once per point
 	 * forever and never reset.
 	 *
@@ -565,7 +565,7 @@ public:
 	 * `_ZN8V92ModemD1Ev` on the same address.  `sizeof(V92Modem)` is
 	 * 0xaac (src/pump/v90/V92Modem.cpp), and 0x6bd0 - 0x6124 is 0xaac, so
 	 * the two agree and the object stops exactly where the next member
-	 * begins.  This is finding 1320's technique and V92Modem.h's own
+	 * begins.  This is finding F1320's technique and V92Modem.h's own
 	 * upper bound, seen from the other side.
 	 *
 	 * THIS SPAN USED TO BE `pad_6124[4]`, `v92Params`, `v92Phase2Info`
@@ -625,7 +625,7 @@ public:
 	 * whole state of the quick-connect line-verification period and of
 	 * nothing else.  Its seven `dsplibs_debug_printf` messages, all
 	 * prefixed `"VPcmFloModem (QC LineVerify): "`, are what name them.
-	 * Finding 7603.
+	 * Finding F7603.
 	 *
 	 * `qcVerifyState` -- +0x6f98, three values and no more:
 	 *
@@ -669,7 +669,7 @@ public:
 	 * `Tparam`s, and `Tparam` is `float` here.  The constructor builds it
 	 * with (4800.0f, 980.0f, 0.0f, 9600.0f) and both destructors run
 	 * `_ZN8SineWaveIffED1Ev` on `this + 0x6f9c`.  0x6f9c + 0x10 is
-	 * 0x6fac, the next field, which is finding 1320's bound again and
+	 * 0x6fac, the next field, which is finding F1320's bound again and
 	 * agrees with SineWave.h's own four-field map.
 	 */
 	SineWave<float, float> sineWave;

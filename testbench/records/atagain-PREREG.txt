@@ -7,9 +7,9 @@ THE CHANGE UNDER TEST
   untouched and serve as controls.  No code change, no rebuild.
 
 WHY, in one line
-  Finding 1965: the far ends can only ask us to go QUIETER -- V.34's power
+  Finding F1965: the far ends can only ask us to go QUIETER -- V.34's power
   fields are unsigned reduction-only -- and all three ask on 328 of 330
-  handshakes.  Finding 1966: we comply by dropping our DIGITAL level away from
+  handshakes.  Finding F1966: we comply by dropping our DIGITAL level away from
   the centre of G.711's ~24 dB companding plateau.  Attenuating the ATA's
   ANALOG output instead should make the far end stop asking, letting our
   digital level stay centred.
@@ -45,7 +45,7 @@ PRIMARY OUTCOME
 
 SECONDARY
   Our transmit RMS in dBFS, from `g711level.py request`.  Expected to RISE by
-  about 0.42x whatever the request falls by (the measured slope, finding 1967)
+  about 0.42x whatever the request falls by (the measured slope, finding F1967)
   -- so a 3 dB fall predicts roughly +1.3 dB.  NOT expected to reach +3.
 
 CONTROL
@@ -55,7 +55,7 @@ CONTROL
   1902 result cannot be attributed.
 
 WHAT IS **NOT** AN OUTCOME
-  The connect rate.  Finding 1966 measured the whole prize at a few tenths of a
+  The connect rate.  Finding F1966 measured the whole prize at a few tenths of a
   dB of SNR, and this bench's call-to-call rate spread is thousands of bits per
   second.  A rate difference here is noise whichever way it points, and quoting
   one would repeat the mistake of 1955.
@@ -95,13 +95,13 @@ SECONDARY -- only meaningful if the primary moves
   below 3.  Nine dB quieter should remove the reason to ask.
     PREDICT: falls to 0-1.
   Our transmit RMS should RISE as we stop applying the reduction.
-    PREDICT: from ~-24.3 dBFS toward ~-23 dBFS.  Not more: finding 1967
+    PREDICT: from ~-24.3 dBFS toward ~-23 dBFS.  Not more: finding F1967
     measured only 0.42 dB of level per dB of request.
 
 WATCH FOR OVER-ATTENUATION, which is a real risk and not a nuisance
   The Courier currently RECEIVES us at 28800 -- the healthy direction.  Nine dB
   quieter may cost it.  If its receive rate falls below 28800, we have
-  over-attenuated, and per finding 1965 V.34 gives it NO way to ask for more.
+  over-attenuated, and per finding F1965 V.34 gives it NO way to ask for more.
   Record it as a result, not as a failed run: it would bound how much headroom
   the us->Courier direction actually had.
 

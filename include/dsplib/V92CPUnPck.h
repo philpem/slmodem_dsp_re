@@ -17,7 +17,7 @@
  * FIELDS are not invented: the unpacker prints eighteen of them, and every
  * one of those names below is the author's own text from
  * `.rodata.str1.1` / `.rodata.str1.4`, resolved with `tools/relocscan.py
- * --at` (finding 604).  Every name carries the string that proves it.
+ * --at` (finding F604).  Every name carries the string that proves it.
  *
  * WHAT IS NOT ESTABLISHED IS THE TAIL.  The block runs to at least +0xca0,
  * which is the end of `const6`.  Nothing bounds it above: no method of

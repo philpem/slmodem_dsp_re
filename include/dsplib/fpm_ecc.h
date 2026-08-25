@@ -130,7 +130,7 @@ extern struct fpm_ecc_cfg ECC_CFG;
  * POINTERS each, not six coefficients: the index is the rate code, and 0 and
  * 1 are the same table because 4800 and 9600 share the sixteen-point
  * constellation.  Both are resolved from the object's relocations -- the
- * bytes are zero -- and finding 1614 has the derivation.
+ * bytes are zero -- and finding F1614 has the derivation.
  */
 extern const short *const ECCv32_IMAP[6];
 extern const short *const ECCv32_QMAP[6];

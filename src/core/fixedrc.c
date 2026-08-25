@@ -170,7 +170,7 @@ rc_reset_state(struct rc_state *s)
 	 * -- which is the sign of the value after truncation to `phase`, and a
 	 * 32-bit remainder in a local would give `test %edx,%edx`.  It is also
 	 * a branch the compiler deletes outright if `phase` is unsigned, so its
-	 * presence is a second proof of the declaration.  Finding 2700.
+	 * presence is a second proof of the declaration.  Finding F2700.
 	 */
 	s->phase = (short)(s->down % s->up);
 	if (s->phase < 0)
@@ -316,7 +316,7 @@ rc_output(struct rc_state *s)
  * `cltd; idiv` and with it a 32-bit sign extension of both `down` and `up`,
  * and `extcheck` reported exactly that at mem 0x196 and mem 0x198 once the
  * declarations were corrected.  The two forms agree over every reachable
- * value (0 <= phase < up <= 24, 1 <= down <= 24).  Finding 2700.
+ * value (0 <= phase < up <= 24, 1 <= down <= 24).  Finding F2700.
  */
 static void
 rc_advance(struct rc_state *s)

@@ -85,7 +85,7 @@ mantissa in `[0x8000, 0xffff]`, so the index reaches 128. What follows
 `FPM_div_table` in `.rodata` is `FPM_xor_table`, whose first word is **0**,
 where the generator gives 16384. So 255 of the 65535 denominators — including
 511, 1023 and 2047 — get a reciprocal of zero, and the AGC block that asked
-for one multiplies itself to silence (finding 40).
+for one multiplies itself to silence (finding F40).
 
 The difference that matters for the rules: **fixing D4 genuinely changes
 behaviour.** `src/dsp/fpm_div.c` reproduces the zero deliberately and must go
@@ -306,7 +306,7 @@ it is deliberately left undone. Both fixes remain opt-in on this side too:
 ## Next candidate: D70, `selectFilter`'s unclamped row — ASSESSED, NOT DONE
 
 `selectFilter`'s ISDN and PBX arms take the row out of the registry and index
-a coefficient bank with no bound applied (D70, finding 234). Measured here:
+a coefficient bank with no bound applied (D70, finding F234). Measured here:
 
     _ZN12V90PreFilter18preFilterCoefType1E   0x0c00   2480 bytes  GLOBAL
     _ZN12V90PreFilter18preFilterCoefType2E   0x15c0   2480 bytes  GLOBAL
@@ -324,7 +324,7 @@ known to the author and one path omits it.
 symbols are `GLOBAL`, so it would reach them; that is the trap. The defect is
 a missing decision, not a missing value — there are no correct coefficients
 for row 100, so a longer bank could only be filled with invention. Worse, the
-banks are *adjacent by design of the link*, and finding 235 records that the
+banks are *adjacent by design of the link*, and finding F235 records that the
 reconstruction's own tests had to enumerate `(bank, row)` candidates precisely
 because one bank's high rows and the next bank's low rows resolve to the same
 addresses in the blob. Replacing one bank symbol with a standalone array

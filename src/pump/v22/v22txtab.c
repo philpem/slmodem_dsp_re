@@ -44,7 +44,7 @@
  * and `qmap` name the 1200 pair and no relocation anywhere points the config
  * at the 2400 pair; the rate switch happens at run time in SetTxRate, which
  * writes the map pointers into the PULSE SHAPING FILTER's object and not into
- * the symbol coder's.  Finding 1522 has the offsets.
+ * the symbol coder's.  Finding F1522 has the offsets.
  *
  * SDMv22_CFG likewise carries `nbits` for 2400 bit/s (4) and no second copy
  * for 1200: V22FP_create copies this struct onto the stack and patches

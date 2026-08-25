@@ -127,7 +127,7 @@ AnalyseDialString(struct dialer *d, const char *s, int store)
 			 * The shipped data agrees with the behaviour rather
 			 * than the name -- 49 of slmodemd's 50 countries leave
 			 * it at zero, so ABCD dialling works almost
-			 * everywhere.  See finding 52.
+			 * everywhere.  See finding F52.
 			 */
 			if (d->cfg.abcd_permitted != 0)
 				illegal = 1;
@@ -333,7 +333,7 @@ DialerAbort(struct dialer *d)
  * thing to do is; the second does it, producing audio as it goes.
  *
  * The first is a file static in the original and takes its argument in a
- * register (finding 51), so it has no `ref_` symbol and can only be tested
+ * register (finding F51), so it has no `ref_` symbol and can only be tested
  * through the second.  That is why they are written together.
  */
 
@@ -565,7 +565,7 @@ pulse_count(const struct dialer *d)
 		/*
 		 * No pattern.  The original leaves the count at -1 and dials
 		 * that, which never terminates.  No shipped country table
-		 * reaches here -- see finding 56.
+		 * reaches here -- see finding F56.
 		 */
 		return -1;
 	}
@@ -967,7 +967,7 @@ DialerProgress(struct dialer *d, short *buf, int *pos, int limit)
 		 * first if pulse dialling still holds it -- but `pulse_active`
 		 * is left set, unlike the release in tone_burst.  The two
 		 * bodies are genuinely separate in the object, each with its
-		 * own release sequence and announcement -- see finding 162,
+		 * own release sequence and announcement -- see finding F162,
 		 * which corrects 158 on this point.
 		 */
 		case DIALER_END_PARTIALLY_STATE:

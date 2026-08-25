@@ -37,7 +37,7 @@
  * per-side blocks would agree whatever was read.  `paramFile` is forced NULL
  * in the modem block: the blob's `V92Parameters::init` tail-calls
  * `loadParams` when it is set and this tree does not reconstruct that
- * (finding 879), so a non-null there would compare our omission rather than
+ * (finding F879), so a non-null there would compare our omission rather than
  * this constructor.
  *
  * THE THREE ARMS OF THE SWITCH ARE ALL DRIVEN, and the third one is the
@@ -61,14 +61,14 @@
  * dereferences the same pointer unguarded.  A null +0xaa0 therefore faults
  * before the guard is reached, on the blob exactly as on ours, so the
  * subset sweep is over the FOUR pointers that can be nulled and the fifth is
- * covered only by `live == 0` and a differential free count.  Finding 1322.
+ * covered only by `live == 0` and a differential free count.  Finding F1322.
  *
  * THE DESTRUCTOR DOES STORE, once.  `movl $0x0,0x8(%esi)` nulls +0x008 and
  * nothing else, on the path where it was non-null.  The check below is not
  * t_v92mod's "the destructor stored nothing" -- it is that exact statement:
  * +0x008 is zero afterwards iff it was non-null before, and every other byte
  * of the 2,796-byte slot is unchanged.  With -fno-lifetime-dse in CXXFLAGS
- * that store is real in our object too (finding 1272), so a reconstruction
+ * that store is real in our object too (finding F1272), so a reconstruction
  * that nulled all five or none of them fails here.
  */
 
@@ -777,7 +777,7 @@ run_dtor(const char *name, ctor_fn our_ctor, ctor_fn ref_ctor,
  * written `> 2` would be invisible to every check above.  So the pair is
  * driven again at level 2 with the harness's capture on, and the transcripts
  * are compared as text AND counted as lines: text alone can be filled by the
- * harness without a call site firing (finding 149).
+ * harness without a call site firing (finding F149).
  *
  * SIDE 0xffffffff IS THE ONE THAT MATTERS MOST HERE.  The destructor's range
  * test is unsigned, so 0xffffffff is illegal and prints; a reconstruction

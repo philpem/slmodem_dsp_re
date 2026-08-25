@@ -22,7 +22,7 @@
  * of writing every V.34 claim rests on tier-1 differential testing alone --
  * which proves the reconstruction matches `dsplibs.o` and says nothing about
  * whether `dsplibs.o` is right.  Where that distinction has bitten before it
- * took an independent peer to find it (D4, and finding 87).  So read every
+ * took an independent peer to find it (D4, and finding F87).  So read every
  * "confirmed" in this subtree as "confirmed identical to the original", never
  * as "confirmed correct", until docs/interop.md says otherwise.
  *
@@ -182,7 +182,7 @@ int tone_detect(struct v34_receiver *rx, struct v34_detector *d, const short *st
  * them, which is the point: they belong to whoever owns the bank, and the
  * only owner reconstructed so far is the retrain detector, which writes 80
  * into one and 3000 into the other and then compares `energy` against them
- * on two different arms.  Finding 212.
+ * on two different arms.  Finding F212.
  *
  * They are read back the way the object reads them, which is not the same
  * way on both sides of the comparison: `energy` is widened UNSIGNED and the

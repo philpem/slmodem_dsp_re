@@ -19,7 +19,7 @@ Legend used throughout:
 
 ---
 
-## 1. Placing calls
+## F1. Placing calls
 
 ### Hardware, through the PBX — **DIALS**
 
@@ -34,7 +34,7 @@ Legend used throughout:
 | `holdlong.sh` | Hold a call open and watch whether the rate keeps climbing. **HW** |
 | `retrain-test.sh` | Paired test: rate at first CONNECT vs rate after a retrain (task #109). |
 | `hw2hw.sh` | Control experiment — one physical modem dials the other across the same PBX, with no software of ours in the path. |
-| `relaycall.sh` | The control for finding 1466: two hardware modems over the SIP path. |
+| `relaycall.sh` | The control for finding F1466: two hardware modems over the SIP path. |
 | `asymmetry.sh` | Is the 33600/14400 split an asymmetric line, or a fault in our receiver? |
 | `echo-compare.sh` | Does the echo — and the receive deficit it explains — depend on which modem answers? |
 | `iodelay-sweep.sh` | Sweep `MDMPRM_IODELAY` against a fixed modulation to find the operating point. |
@@ -69,14 +69,14 @@ self-paced over blocking sockets.
 
 ---
 
-## 2. Safety, devices and pre-flight
+## F2. Safety, devices and pre-flight
 
 **These are the guards. Do not weaken them to make something run.**
 
 | tool | what it does |
 |---|---|
 | `dmodem-guard.sh`, `dmodem-guard-fork.sh` | slmodemd's `-e` target. Checks the dial string arriving in `argv`, exact match after stripping dial modifiers. The `-fork` variant is the one the current harness uses. |
-| `waitquiet.sh` | Block until the machine is quiet enough to measure on. Finding 1951: a call at load 4.28 returned CONNECT 4800 against 31200 quiet. **Call it in front of a batch — the tools do not gate themselves.** |
+| `waitquiet.sh` | Block until the machine is quiet enough to measure on. Finding F1951: a call at load 4.28 returned CONNECT 4800 against 31200 quiet. **Call it in front of a batch — the tools do not gate themselves.** |
 | `modems.sh` | Resolve a modem ROLE (`supra`/`courier`/`olinet`) to a stable device path, and refuse to dial without one. `ttyUSBn` is not a stable name. **HW** |
 | `atprobe.py` | Is there a modem behind this device node, and which one? Pre-flight; exit 3 is distinct from the allow-list's exit 2. **HW** |
 | `modemid.py` | Ask a modem what it is, and derive its AT dialect from that. **HW** |
@@ -84,7 +84,7 @@ self-paced over blocking sockets.
 
 ---
 
-## 3. Reducing one call
+## F3. Reducing one call
 
 | tool | what it does |
 |---|---|
@@ -98,22 +98,22 @@ self-paced over blocking sockets.
 
 ---
 
-## 4. Comparing batches
+## F4. Comparing batches
 
 | tool | what it does |
 |---|---|
 | `batchcompare.py` | Did the rate distribution actually move between two batches? |
 | `batchanalyse.py` | Test covariates against a sample that can reject one. |
-| `handshakeorder.py` | The rate decision, broken out by **which** handshake it is (findings 3203/3204). |
+| `handshakeorder.py` | The rate decision, broken out by **which** handshake it is (findings F3203/3204). |
 | `snrblocks.py` | The receiver's own SNR at the moment it chooses a rate. |
 | `hsfmpcompare.py` | Compare completed SmartLink↔HSF MP/MP′ exchanges from a blob and reconstruction log; reports optional local diagnostics without mistaking them for a wire-level difference. |
-| `ratepenalty.py` | Did the −2 rate penalty fire, and on which handshakes? (finding 6900) **BRANCH** |
-| `jbtiming.py` | Is the jitter buffer's insertion rate lower during training? (finding 6903) Reads archived `JBSTAT`; that instrumentation no longer exists in `d-modem.c`, so the archive is all there is. |
+| `ratepenalty.py` | Did the −2 rate penalty fire, and on which handshakes? (finding F6900) **BRANCH** |
+| `jbtiming.py` | Is the jitter buffer's insertion rate lower during training? (finding F6903) Reads archived `JBSTAT`; that instrumentation no longer exists in `d-modem.c`, so the archive is all there is. |
 | `freezescan.py` | Did a frozen equaliser manufacture the retrain? **BRANCH** |
 
 ---
 
-## 5. Characterising the channel
+## F5. Characterising the channel
 
 | tool | what it does |
 |---|---|
@@ -126,22 +126,22 @@ self-paced over blocking sockets.
 
 ---
 
-## 6. Echo
+## F6. Echo
 
 | tool | what it does |
 |---|---|
 | `echoscan.py` | Is our own transmit present in our own receive, and at what lag? `--selftest` plants a known ladder and checks it comes back. **This is the one to use.** |
 | `linesweep.py` | Also measures echo, per impedance arm, via `echoscan` — see §5. Terminating impedance IS the hybrid balance network, so echo is the mechanism and bandwidth is the side effect. |
-| `echoratio.py` | How much of what we receive is our own transmit coming back? **Its lag search caps at 120 ms**, and the echo on this path is at 171.5 ms — it produced finding 1971's null because it could not see that far. Kept because archived numbers reproduce; it warns on stderr. |
+| `echoratio.py` | How much of what we receive is our own transmit coming back? **Its lag search caps at 120 ms**, and the echo on this path is at 171.5 ms — it produced finding F1971's null because it could not see that far. Kept because archived numbers reproduce; it warns on stderr. |
 | `echofit.py` | One line of echo numbers for a call, for tabulating. |
 
 ---
 
-## 7. Pre-emphasis
+## F7. Pre-emphasis
 
 | tool | what it does |
 |---|---|
-| `preemphshape.py` | Pick a V.34 pre-emphasis index by **shape**, not by tilt. The shape matcher (findings 1960/1961). **BRANCH** |
+| `preemphshape.py` | Pick a V.34 pre-emphasis index by **shape**, not by tilt. The shape matcher (findings F1960/1961). **BRANCH** |
 | `test_preempshape.py` | Regression test for the selector — identity, noise robustness, interferer rejection. |
 | `preemph_ab.sh` | Does making pre-emphasis index 0 reachable change the link? **DIALS** |
 | `preemph_ab2.sh` | The pre-emphasis A/B, run 2. **DIALS HW** |
@@ -201,7 +201,7 @@ The response measured is far-end-to-us (the direction our receiver equalises),
 and the echo is our own transmit returning to our own receiver off that hybrid.
 Both are the end that matters; what is not measured is how our transmit lands
 at the far end's receiver, which governs the rate *it* asks for. Digital
-termination (#110) removes the hybrid altogether, and finding 6901 measured
+termination (#110) removes the hybrid altogether, and finding F6901 measured
 that case at 33600 with no retrains.
 
 Each arm carries its **echo** as well as its response — median lag and level

@@ -34,8 +34,8 @@
 #include "dsplib/V92ModulusEncoder.h"
 
 /*
- * Finding 1321: the block `reset` is handed is the one this tree already
- * models as `struct V92ParamsInfo`, and finding 1325 is why a translation
+ * Finding F1321: the block `reset` is handed is the one this tree already
+ * models as `struct V92ParamsInfo`, and finding F1325 is why a translation
  * unit that dereferences it includes the header rather than reaching through
  * a local declaration.  The thirteen words `reset` reads used to fall inside
  * the region that header left as `pad_00` and were addressed by offset
@@ -144,7 +144,7 @@ V92ModulusEncoder::V92ModulusEncoder()
  * `a * (b >> n) > 0` is the object's `((x >> 63) - x) < 0` read off the sign
  * bit, which is that comparison and not an approximation of it: for x > 0 the
  * difference is -x and negative, for x <= 0 it is ~x or 0 and is not
- * (finding 1378).
+ * (finding F1378).
  */
 void
 V92ModulusEncoder::reset(V92MappingParams *params)
@@ -254,7 +254,7 @@ V92ModulusEncoder::reset(V92MappingParams *params)
  * the original: its `n == 8` arm RE-ISSUES `__divdi3` and `__moddi3` for
  * values a function would have had in hand, and GCC cannot rematerialise a
  * call -- so the text really was repeated, and it is repeated here (finding
- * 1379).  The last modulus, +0x44, is never read by case 0 at all: `out[11]`
+ * F1379).  The last modulus, +0x44, is never read by case 0 at all: `out[11]`
  * is the bare quotient left over.  docs/deviations.md D264.
  */
 void

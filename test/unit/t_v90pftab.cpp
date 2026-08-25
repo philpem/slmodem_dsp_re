@@ -12,7 +12,7 @@
  * hold a pointer into one of the six loop tables, and our tables and the
  * blob's are at different addresses and always will be.  It is not skipped.
  * Each pointer is resolved against THAT side's own six bases and compared as
- * (which table, what offset into it), which is finding 224's rule applied to
+ * (which table, what offset into it), which is finding F224's rule applied to
  * data rather than to a return value.
  *
  * The counted lengths are checked too, because they are what the object

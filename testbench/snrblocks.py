@@ -56,7 +56,7 @@ EQUERR_SAT = 32767
 
 RE_EQUPOW = re.compile(r"V34EQUPOW, sigpow = (-?\d+), equerr = (-?\d+)")
 # THE PRE-INSTRUMENT ARCHIVE, readable because `sigpow` turned out to be a
-# constant (finding 3200).  A capture with no `V34EQUPOW` at all still carries
+# constant (finding F3200).  A capture with no `V34EQUPOW` at all still carries
 # the object's own `V34EQU`, and 163820 is the value `sigpow` takes on every
 # settled block ever logged -- so the same SNR comes out with a fixed 52.14 dB
 # offset.  Used ONLY when the log has no V34EQUPOW anywhere: never mixed with

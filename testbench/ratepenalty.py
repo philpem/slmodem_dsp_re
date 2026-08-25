@@ -42,7 +42,7 @@ the mode mapping; agreement makes the branch's reach a measured quantity
 instead of an argument.
 
 CAVEAT KEPT IN THE OUTPUT, not buried here: `v34handshakinit` has fourteen call
-sites (finding 1928) and only `datapumpv34`'s four set `DP_MODE`.  The `from =`
+sites (finding F1928) and only `datapumpv34`'s four set `DP_MODE`.  The `from =`
 address in the HSINIT line distinguishes them, so the report groups by it and
 prints how many distinct call sites appear.  A mode seen from an unexpected
 site is not evidence about DP_MODE.
@@ -116,7 +116,7 @@ def main():
                  'No `V34DATARATE, txmp bits` line was found. Either the '
                  'archive predates that instrumentation or the path is wrong; '
                  'a detector with no denominator is indistinguishable from a '
-                 'broken one (findings 134, 2400, 3100).')
+                 'broken one (findings F134, F2400, F3100).')
 
     # Does the witness actually take both values?  If not, say so loudly --
     # a flag that is constant is not a measurement.
@@ -128,14 +128,14 @@ def main():
         print('  ** THE WITNESS IS CONSTANT ACROSS THE WHOLE ARCHIVE. **')
         print('  That is a result, but check it is not a dead detector: the '
               'bit is only\n  meaningful if some run flips it. Treat with the '
-              'suspicion findings 2400/2401\n  earned.\n')
+              'suspicion findings F2400/2401\n  earned.\n')
 
     # GROUP BY THE LOW 12 BITS, NOT THE WHOLE ADDRESS.  `from` is
     # __builtin_return_address(0) and the library is loaded at a different
     # base every run, so the raw addresses are per-process noise: a first cut
     # reported 258 "call sites" from 162 files, which is ASLR and not code.
     # ASLR shifts by whole pages, so the page offset is invariant and IS the
-    # call site.  (finding 1928: v34handshakinit has fourteen of them.)
+    # call site.  (finding F1928: v34handshakinit has fourteen of them.)
     sites = Counter(int(r[2], 16) & 0xfff for r in rows if r[2])
     print(f'  v34handshakinit call sites seen: {len(sites)} '
           f'(by page offset -- the full address is ASLR noise)')

@@ -54,7 +54,7 @@
  * of the ones V90Modem.h's forward-declaration note has in mind: it needs both
  * complete types and includes them itself rather than putting them in the
  * header, which is included by VPcmFloModem.h and would decide the question
- * for every user of that (findings 1112 and 1325).
+ * for every user of that (findings F1112 and F1325).
  */
 #include "dsplib/V90Demodulator.h"
 #include "dsplib/V90Modulator.h"
@@ -231,7 +231,7 @@ V90Modem::reset(unsigned int qcFlag)
  * -- is whatever the last `reset` and the last phase edge left.  The caller
  * of `V90Modulator::reset` is `V90Modem::reset`, in this same translation
  * unit and not written; the member that first sets `state` to 1 is
- * `V90Modulator::enterPhase3`, also not written.  Finding 7520.
+ * `V90Modulator::enterPhase3`, also not written.  Finding F7520.
  * ===========================================================================
  */
 void

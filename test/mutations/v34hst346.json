@@ -101,7 +101,7 @@
   "label": "the hand-over goes to RX_PHASE2_ANS",
   "find": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 1));\n\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);",
   "replace": "\t\t\t       (short)(hs_get(obj, T46_F358C) ^ 1));\n\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_ANS);",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t46_micro_tx_phase1_ans"
  },
  {
@@ -302,14 +302,14 @@
   "label": "the reset leaves +0xabcc alone",
   "find": "\tint i;\n\n\tobj->is_short = 0;\n\tobj->local_short = 0;",
   "replace": "\tint i;\n\n\tobj->local_short = 0;",
-  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t46_reset_core"
  },
  {
   "label": "the reset leaves +0xabca alone",
   "find": "\tint i;\n\n\tobj->is_short = 0;\n\tobj->local_short = 0;",
   "replace": "\tint i;\n\n\tobj->is_short = 0;",
-  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 2 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t46_reset_core"
  },
  {
@@ -322,21 +322,21 @@
   "label": "the reset moves the transmit state to TX_L1",
   "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding F325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
   "fn": "t46_reset_core"
  },
  {
   "label": "the reset moves the microstate to DET_CJ",
   "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_CJ);",
-  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding F325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
   "fn": "t46_reset_core"
  },
  {
   "label": "the reset moves the microstate before the transmit state",
   "find": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\ths_put(obj, T46_MSG_LAST, 0);\n\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);",
-  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding F325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
   "fn": "t46_reset_core"
  },
  {

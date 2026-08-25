@@ -29,7 +29,7 @@
  * differs for ever.  That would silently convert four compared words into
  * four ignored ones in `t_v90demod.cpp` and `t_vpcmep3.cpp`, which are green
  * today and whose claims nobody asked to weaken.  Duplicating apparatus is
- * cheap; a comparison that quietly stops comparing is finding 2400's shape.
+ * cheap; a comparison that quietly stops comparing is finding F2400's shape.
  *
  * So the fixture below is this file's own, and the blocks the shared one does
  * not have -- the demapper, the phase 4 demodulator, the constellation
@@ -37,7 +37,7 @@
  * -- are wired here and neutralised here.
  *
  * ---------------------------------------------------------------------------
- * THE OBJECTS ARE NEVER ZEROED -- finding 230
+ * THE OBJECTS ARE NEVER ZEROED -- finding F230
  *
  * Every slot gets varied pseudorandom bytes before every trial, so a store
  * that fails to happen is visible and a store of zero into memory that was
@@ -54,7 +54,7 @@
  * deliberately, and `run_atud` says below why they are not in it.
  *
  * ---------------------------------------------------------------------------
- * ANTI-VACUITY, per finding 3509 rather than per path
+ * ANTI-VACUITY, per finding F3509 rather than per path
  *
  * Every counter here names an OBSERVABLE difference -- a byte of some object,
  * a word of the diagnostics record, a line of transcript.  None of them says
@@ -494,7 +494,7 @@ call_entry(int which, int side)
  *
  * Each of the five entries returns immediately when `inPhase3` already equals
  * the state it sets.  The claim this run makes is not "both arms ran" -- that
- * is a path counter and finding 3509 rules it worthless -- but "the two arms
+ * is a path counter and finding F3509 rules it worthless -- but "the two arms
  * leave DIFFERENT objects behind", which a seeded slot cannot fake and which
  * a mutation that deletes the guard kills.
  */
@@ -591,7 +591,7 @@ run_latch(void)
  * THE CONJUNCTION IS THE ONE THING A SWEEP CAN GET WRONG.  The store is 1 on
  * exactly one of four paths, so a grid that never produces a 1 -- or never
  * produces a 0 -- proves nothing about the `&&` chain, and a counter that
- * says "the true path ran" is the vacuity finding 3509 names.  The three
+ * says "the true path ran" is the vacuity finding F3509 names.  The three
  * terms are therefore driven independently and the claim is on the STORED
  * VALUE: both values must have been observed, and observed with each of the
  * three terms as the one that was false.

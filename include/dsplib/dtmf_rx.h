@@ -13,7 +13,7 @@
  *   Dtmf_Detector.c  DTMF_MTD_detect
  *
  * `band_pass` is put in Dtmf_Rx.c by the link order, not by its name: see
- * finding 1410 for the derivation, which also disposes of
+ * finding F1410 for the derivation, which also disposes of
  * docs/attribution.md's `Data.c|Dtmf.c` guess.
  *
  * HOW IT FITS TOGETHER.  `dtmf_modem` is the state machine.  It splits each

@@ -13,14 +13,14 @@
  * `modem_put_bits` for V.34, and it is not reconstructed, so no mixed run is
  * possible through it.  What this file establishes is the ORACLE: a
  * configuration in which the original connects and carries data, which is
- * what `t_v34conn.c`'s four-way comparison has never had.  Finding 963.
+ * what `t_v34conn.c`'s four-way comparison has never had.  Finding F963.
  *
  * WHY IT CONNECTS AND `t_v34conn` DOES NOT, in one word: `MDMPRM_IODELAY`.
  * `CFG_IODELAY` below is derived from `slmodemd`'s own drivers rather than
  * chosen, and the mechanism it feeds is written out at that constant.  It is
  * NOT a knob turned until something happened: the guard, the formula and the
  * threshold were read out of the code first and the boundary is sharp and
- * predicted.  Findings 960-962.
+ * predicted.  Findings F960-962.
  *
  * THE LINK FROM V.8 TO V.34 IS ONE BLOCK OF MEMORY.  `v8_create` takes
  * `MDMPRM_DPRUNTIME` as its call menu -- the `struct v8_cm` the handshake
@@ -29,7 +29,7 @@
  * the pointer at root+0x28.  It writes +0x30, +0x34, +0x38, +0x3c, +0x64,
  * +0x68, +0x6c and +0x78 of that block and touches only bits 4 and 5 of `b2`;
  * it never clears `b0`, `b1`, `offered` or `menu`.  So the negotiated menu
- * survives into V.34 -- and finding 961 records the measurement that says the
+ * survives into V.34 -- and finding F961 records the measurement that says the
  * V.34 handshake does not read it: with the block zeroed instead, the
  * trajectory is identical, block for block.  V.8 running is proved here and
  * is NOT what makes the call connect.
@@ -96,7 +96,7 @@ extern unsigned int dsplibs_debug_level;
 #define FRAG		48	/* `cmpl $0x30,...` / `jg` -- and its cap       */
 
 /*
- * THE WIRE IS 30 ms EACH WAY (finding 903): `t_v34call`'s one-sample wire
+ * THE WIRE IS 30 ms EACH WAY (finding F903): `t_v34call`'s one-sample wire
  * draws "RTD (1) lower than min (30), masking Far EC..." out of the object
  * itself, and 288 samples at 9,600 Hz is 30 ms.
  */
@@ -134,7 +134,7 @@ extern unsigned int dsplibs_debug_level;
  * Two independent measuring drivers land at 216 and 232 and the third is a
  * stub.  216 is used because it is the one derived from a driver that asks
  * the hardware.  Every value from 88 up to the object's own cap of 240
- * connects identically at 33,600 (finding 962), so this does not sit on a
+ * connects identically at 33,600 (finding F962), so this does not sit on a
  * point: it sits in the middle of a half-open interval whose lower end the
  * mechanism predicts.
  */
@@ -605,8 +605,8 @@ main(void)
 	/*
 	 * THE THREE DIAGNOSTIC KNOBS, and none of them changes what is
 	 * asserted: every claim below is written against the compile-time
-	 * constants.  They exist so that finding 960's mechanism and finding
-	 * 962's threshold can be re-measured without editing the file.
+	 * constants.  They exist so that finding F960's mechanism and finding
+	 * F962's threshold can be re-measured without editing the file.
 	 */
 	e = getenv("V34LINK_IODELAY");
 	if (e != 0)
@@ -773,7 +773,7 @@ main(void)
 		diff_eq_int(msg, r->txst, TXSTATE_DATAXMIT, ep);
 		/*
 		 * THE STARTUP DID NOT ERROR-RECOVER ONCE.  `t_v34conn`'s call,
-		 * and every configuration below finding 962's threshold, reach
+		 * and every configuration below finding F962's threshold, reach
 		 * arm 47 `TX_PHASE2_ANS`, take its "Repeated info0" branch and
 		 * cycle 41/44 for ever.  Zero of them here is the whole
 		 * difference between the two runs, and it is claimed exactly
@@ -786,7 +786,7 @@ main(void)
 		 * `filtdelay` is `((iodelay + 6) >> 2) + 34` and is what arm 47 enters
 		 * with; the wait it must then sit out is `0x5f - filtdelay`.
 		 * Asserted because it is the quantity the whole configuration
-		 * turns on -- finding 960.
+		 * turns on -- finding F960.
 		 */
 		snprintf(msg, sizeof(msg),
 			 "%s: ...at filtdelay ((iodelay + 6) >> 2) + 34",
@@ -795,7 +795,7 @@ main(void)
 		 * The object's arithmetic, not the fitted `35 + iodelay/4`
 		 * this asserted -- which passed only because CFG_IODELAY is
 		 * 216, a value where both agree, and is one too small when
-		 * `IODELAY mod 4` is 2 or 3.  Finding 1021.
+		 * `IODELAY mod 4` is 2 or 3.  Finding F1021.
 		 */
 		diff_eq_int(msg, r->filtdelay,
 			    ((CFG_IODELAY + 6) >> 2) + 34, ep);

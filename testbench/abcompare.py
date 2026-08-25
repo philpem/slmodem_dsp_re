@@ -17,7 +17,7 @@ subset or swap a statistic, that is the moment to reread the plan.
              less often is worse whatever it does to the rate.
 
   Rank-sum by permutation, not the median: the rate is a discrete ladder and
-  finding 1351 caught the median missing a real shift the rank-sum found at
+  finding F1351 caught the median missing a real shift the rank-sum found at
   p = 0.0127.
 
   BOTH SUBSETS ARE ALWAYS REPORTED -- all calls, and load-clean calls only

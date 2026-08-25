@@ -59,7 +59,7 @@ struct tagV90AdditionalCPinfo;
  *
  * THEY ARE NOT `V92CP.cpp`'s `fltTable_2` AND `fltTable_1`.  Those are a
  * SEPARATE pair at .data+0x69e0 and +0x6a20 with different names, and finding
- * 826 measured them as distinct symbols rather than aliases.  The four
+ * F826 measured them as distinct symbols rather than aliases.  The four
  * contents are byte-identical, missing 2^-8 and doubled 2^-9 included, which
  * is why the two pairs are so easy to confuse -- and why the reading has to
  * come from the relocation.  Every reference in `float2Bits` is against the

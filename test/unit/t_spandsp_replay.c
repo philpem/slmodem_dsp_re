@@ -1,7 +1,7 @@
 /*
  * t_spandsp_replay.c -- does the BLOB lose lock on SpanDSP's signal too?
  *
- * Finding 40: the receiver demodulates a SpanDSP Bell 103 signal correctly
+ * Finding F40: the receiver demodulates a SpanDSP Bell 103 signal correctly
  * for about 229 bits and then loses bit-clock lock, at some input levels and
  * not others.  Every module on that path is bit-exact with the blob, so the
  * blob should behave identically -- but "should" is an inference, and this is

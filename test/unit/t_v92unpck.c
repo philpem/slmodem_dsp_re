@@ -4,7 +4,7 @@
  * ONE SYMBOL, AND HALF OF IT IS UNREACHABLE AT LEVEL 0.  Twenty-six of the
  * function's branches are `dsplibs_debug_level > 1` gates, so a run at the
  * shipping level exercises every copy, every clamp and every loop bound and
- * NOT ONE format string.  That is the case finding 126 is about -- a wrong
+ * NOT ONE format string.  That is the case finding F126 is about -- a wrong
  * conversion or a wrong argument in a diagnostic survives for ever if no test
  * raises the level -- so this fixture runs the same cases twice: once at
  * level 0 over lengths chosen to hit the clamps, and once at level 2 over
@@ -28,7 +28,7 @@
  *
  * NOTHING IS ZERO-FILLED.  Both parameter blocks and all twenty arrays are
  * seeded with the same varied pseudorandom bytes before every trial, so a
- * store of zero that never happened cannot pass (findings 223, 224), and a
+ * store of zero that never happened cannot pass (findings F223, F224), and a
  * 64-byte guard past the block is compared against the seed so that a store
  * one byte past the end fails.
  *

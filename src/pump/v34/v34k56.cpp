@@ -69,7 +69,7 @@
  * measured them.  So the completion arms cannot be entered from either side
  * of a differential test, by construction and not by omission.  They are
  * transcribed from the disassembly and are NOT covered by the test; finding
- * 281 gives the measurement and lists the mutations that go uncaught as a
+ * F281 gives the measurement and lists the mutations that go uncaught as a
  * result.
  */
 

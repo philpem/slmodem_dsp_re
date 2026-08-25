@@ -26,7 +26,7 @@
  *      signatures.  Asserted as NAMED PAIRS rather than over all pairs,
  *      because the tables alias by design -- twenty-four microstates share
  *      one three-instruction arm -- so an all-pairs claim would be red from
- *      its first run, which is the shape finding 134 says nobody keeps.
+ *      its first run, which is the shape finding F134 says nobody keeps.
  *      The pairs that are equal are asserted equal, for the same reason: a
  *      collision that is the object's own structure is evidence too, and it
  *      is what tells the next agent its case needs companion fields.
@@ -134,7 +134,7 @@ agree(const char *what, const struct rec *x, const struct rec *y)
  * difference between two runs is the microstate's and nothing else's.
  *
  * SSEG is not arbitrary: most of table 3's arms end by jumping to the
- * once-per-block txstate dispatch at 0x62af1 (finding 288), so the txstate a
+ * once-per-block txstate dispatch at 0x62af1 (finding F288), so the txstate a
  * microstate case is driven with is part of the fixture and has to be stated.
  */
 #define MICRO_TXSTATE	V34HS_SSEG
@@ -171,11 +171,11 @@ run_txblock(struct rec *r, short txst, long tag)
  * A table-1 case: one pass of the per-sample loop.
  *
  * `samples` is an explicit budget rather than a step count because the loop
- * bottom at 0x629e0 IS the dispatch's default arm (finding 287): a txstate
+ * bottom at 0x629e0 IS the dispatch's default arm (finding F287): a txstate
  * with no case of its own never advances the cursor and spins forever, so
  * only a state with a real target may be driven here.
  *
- * THIS ROUTE USED NOT TO COMPARE EQUAL, and finding 289 and D60 recorded it
+ * THIS ROUTE USED NOT TO COMPARE EQUAL, and finding F289 and D60 recorded it
  * as a property of the object: three of its nineteen targets left the two
  * sides differing in the modulator at +0x2078..+0x25d1, and WHICH three moved
  * when unrelated code in the fixture changed.
@@ -183,9 +183,9 @@ run_txblock(struct rec *r, short txst, long tag)
  * It was the fixture.  The two sides' memory images were not congruent -- two
  * objects at unrelated addresses with unrelated neighbours -- and this loop is
  * the one route that can tell.  One arena per side, laid out identically and
- * copied byte for byte (finding 319), closes it: all nineteen compare, over
+ * copied byte for byte (finding F319), closes it: all nineteen compare, over
  * twenty-four object fills, ten placements and eight neighbourhoods
- * (finding 322).  The route is in the default sweep now.
+ * (finding F322).  The route is in the default sweep now.
  */
 static void
 run_txsample(struct rec *r, short txst, short samples, long tag)
@@ -202,7 +202,7 @@ run_txsample(struct rec *r, short txst, short samples, long tag)
 
 /*
  * One representative per distinct target of the table at .rodata+0x3000, read
- * with its relocations attached (finding 286), plus one state outside the
+ * with its relocations attached (finding F286), plus one state outside the
  * table's 41..80 window for the default arm.
  *
  * 42 stands for the twenty-four states that share the three-instruction arm
@@ -244,7 +244,7 @@ static const short block_reps[] = {
 
 /*
  * Table 1, one representative per distinct target -- WITHOUT the default,
- * which does not terminate (finding 287).
+ * which does not terminate (finding F287).
  */
 static const short samp_reps[] = {
 	5, 18, 19, 20, 21, 24, 51, 60, 64, 65,
@@ -310,8 +310,8 @@ main(void)
 	diff_begin("v34handshak per-dispatch-case harness");
 
 	/*
-	 * THE ALARM, PROVED TO FIRE.  Finding 287 says table 1's default arm
-	 * is the loop bottom and so does not terminate, and finding 249's
+	 * THE ALARM, PROVED TO FIRE.  Finding F287 says table 1's default arm
+	 * is the loop bottom and so does not terminate, and finding F249's
 	 * standard is that a guard is demonstrated before it is committed.
 	 * This cannot run inside the sweep -- it never returns -- so it is a
 	 * mode of its own:
@@ -329,7 +329,7 @@ main(void)
 		v34hs_route(V34HS_ROUTE_TXSAMPLE, 1);
 		v34hs_state(V34HS_PHASE1, V34HS_SILENCE, V34HS_ANSAM);
 		v34hs_step();
-		printf("IT RETURNED -- finding 287 is wrong\n");
+		printf("IT RETURNED -- finding F287 is wrong\n");
 		return 1;
 	}
 
@@ -442,7 +442,7 @@ main(void)
 	/*
 	 * TABLE 1'S NAMED PAIRS.  Each of these is a pair of the twenty
 	 * targets at .rodata+0x2da0 that the step tells apart by what it wrote
-	 * into the object -- which is the standard finding 290 held the
+	 * into the object -- which is the standard finding F290 held the
 	 * microstate targets to, and the thing #56 needs before a per-case
 	 * reconstruction of any of them can be believed.  `S(24)` and `S(60)`
 	 * are the one pair that agrees cold, and they are asserted equal so
@@ -485,7 +485,7 @@ main(void)
 	 * the same code, they must select the identical address, and this is
 	 * the pass in which `check_self_ptr` says so.  It is here rather than
 	 * behind `V34HS_REFINIT=1` because a check `make phase` never runs is
-	 * finding 249's shape.
+	 * finding F249's shape.
 	 *
 	 * The separation assertions are not repeated: they are about the
 	 * object, not the bring-up, and `v34hs_holes_check` does not apply

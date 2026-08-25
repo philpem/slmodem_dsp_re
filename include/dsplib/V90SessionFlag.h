@@ -23,13 +23,13 @@
  * NO SIZE IS ASSERTED FOR THE THREE THAT REMAIN, AND THAT IS THE POINT.
  *
  * Every other class in this task was sized from the largest `this`-relative
- * displacement across all its members (finding 215).  Run that scan here and
+ * displacement across all its members (finding F215).  Run that scan here and
  * the answers are 0xa948 for V90Phase3Demodulator, 0xa95c for
  * V90Phase4Demodulator, 0x3ba8 for V90Modulator and 0x28230 for
  * V90Demodulator -- and NOT ONE of them is off `this`:
  *
  *     cmpw $0x0,0xa948(%ecx)              %ecx is a V90AutoDigitalImpDetector*,
- *     mov  0xa95c(%eax),%ecx              which is 0xa9b0 bytes (finding 251)
+ *     mov  0xa95c(%eax),%ecx              which is 0xa9b0 bytes (finding F251)
  *     lea  0x28230(%edx,%edx,4),%eax      a scaled index: a table address
  *     lea  0x1388(%esi,%ebp,1),%eax       likewise
  *
@@ -42,7 +42,7 @@
  *
  * WHAT DOES SETTLE A SIZE HERE IS THE ALLOCATION, not any scan: every one of
  * these classes is built on the heap, and the `sysdep_malloc` immediately
- * before the constructor call is the size (finding 291).  That is how
+ * before the constructor call is the size (finding F291).  That is how
  * V90Phase3Demodulator's 0x42c and V90Demodulator's 0x298 were obtained, and
  * it is why those two now assert their sizes and the three below still do
  * not -- nobody has yet found the allocation for V90Modulator, V90Modem or
@@ -51,7 +51,7 @@
  * demodulator.
  *
  * Data member names are invented; the mangling never carries one (finding
- * 226).  `sessionFlag` is named for the method that writes it, as in
+ * F226).  `sessionFlag` is named for the method that writes it, as in
  * V90Phase3Modulator.h and V90Phase4Modulator.h.
  */
 
@@ -107,7 +107,7 @@ public:
 	 * THIS IS THE DUPLICATE `tools/onedef.py` CARRIES, AND CARVING A PAD
 	 * IN ONE HALF OF IT MAKES THE TWO AGREE ON MORE, NOT LESS.  The right
 	 * repair is still to delete this class and include the fuller header;
-	 * finding 7584 says what that costs and why this batch did not take
+	 * finding F7584 says what that costs and why this batch did not take
 	 * it.
 	 */
 	int int_0038;

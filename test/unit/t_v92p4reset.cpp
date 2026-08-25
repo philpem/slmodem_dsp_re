@@ -544,7 +544,7 @@ struct args {
 /*
  * ANTI-VACUITY, EVERY ONE ADDRESSED BY NAME OR BY STATE VALUE.
  *
- * Finding 4756's first fixture fault was a counter addressed by INDEX into a
+ * Finding F4756's first fixture fault was a counter addressed by INDEX into a
  * table that was later reordered: it went on passing while watching a
  * different member.  `saw_state[]` below is indexed by the STATE CODE itself
  * and not by its position in `states[]`, and the three codes outside 0..29 get
@@ -684,7 +684,7 @@ setup(long trial, const struct args *a, int runb)
 	 * CONDITIONAL, LIKE ITS TWO NEIGHBOURS, and not a restatement of the
 	 * line that seeded it.  A counter assigned unconditionally is a
 	 * self-test that cannot fail, which is the dead detector in its purest
-	 * form (finding 3110); written this way it witnesses the SEED, so a
+	 * form (finding F3110); written this way it witnesses the SEED, so a
 	 * later edit that let `byte_00` reach zero fails here rather than
 	 * quietly making the `cp->byte_00 = 0` mutation unobservable.
 	 */
@@ -1197,7 +1197,7 @@ run_antivacuity(void)
 	/*
 	 * THE THREE CONJUNCTIONS, and each is a conjunction because the loose
 	 * axis alone is satisfied by trials that cannot distinguish anything
-	 * -- finding 4756's shape, and `saw_bps_zero_folding`'s in
+	 * -- finding F4756's shape, and `saw_bps_zero_folding`'s in
 	 * t_v92p4sym.cpp.
 	 */
 	diff_eq_int("a trial could see cp->bitsPerSymbol being forced to one"
@@ -1258,7 +1258,7 @@ main(void)
 	rc |= run_with_symbols();
 	rc |= run_antivacuity();
 
-	/* THE DENOMINATOR, printed whatever the verdict: findings 134, 2400
+	/* THE DENOMINATOR, printed whatever the verdict: findings F134, F2400
 	 * and 2401.  A suite that says PASS without saying over how much is
 	 * indistinguishable from a suite that measured nothing. */
 	printf("t_v92p4reset: %ld trials with no symbols, %ld with 1..4"

@@ -207,7 +207,7 @@ v8_fskmodulate(struct v8 *v, short which)
  *   instructions fewer.
  *
  * None of it changes behaviour: every value here already ranged over a short.
- * Finding 2952.
+ * Finding F2952.
  */
 int
 v8_agcadapt(struct v8 *v)

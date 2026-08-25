@@ -3,7 +3,7 @@
   "note": "`v34handshak`'s rxstate 53 DET_AB arm at 0x65473, caught by build/test/t_v34hsrx53.  The arm is two entry guards, a tone detector, a threshold on the round-trip delay and two bodies chosen by +0x359c.  What the set has to prove is that each guard is driven from BOTH sides with the object's own constant and the object's own WIDTH -- 0x6845e is sixteen bits and 0x6af24 is thirty-two, which no small value can tell apart -- and that each body's stores are the object's.  Several are caught only through the transcript: six of the nine debug sites are `hs_setstate`'s, whose whole observable effect on a word already at its target is one missing line."
  },
  {
-  "note": "THE ANCHORS IN THE INFO1c BODY AND THE TAIL CARRY ADDRESSES because the source lines do.  Nine of the record's statements are character for character microstate 41's at 0x6d387 and six of the tail's are one line long, so every one of them was ambiguous until the arm's own addresses were written beside them -- finding 432's hazard answered with information rather than with indentation, which is the repair that moved seven anchors the last time it was tried."
+  "note": "THE ANCHORS IN THE INFO1c BODY AND THE TAIL CARRY ADDRESSES because the source lines do.  Nine of the record's statements are character for character microstate 41's at 0x6d387 and six of the tail's are one line long, so every one of them was ambiguous until the arm's own addresses were written beside them -- finding F432's hazard answered with information rather than with indentation, which is the repair that moved seven anchors the last time it was tried."
  },
  {
   "label": "the chain does not send 53 to its own arm",

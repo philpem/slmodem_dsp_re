@@ -128,7 +128,7 @@ FPM_AGC_init(struct fpm_agc *agc, const struct fpm_agc_cfg *cfg, int reset)
 	 * __DATE__ and __TIME__ as the original compiled them, NOT as this
 	 * file compiles.  Reproducing the macro would stamp the
 	 * reconstruction's build date and diverge from the blob every time;
-	 * the blob's own values are the reference.  See finding 135 -- these
+	 * the blob's own values are the reference.  See finding F135 -- these
 	 * two strings are what dated it.
 	 */
 	if (DSPLIB_DEBUG_ON())

@@ -79,7 +79,7 @@ static unsigned long alloc_next_ord;
  * other recycled a larger freed chunk -- glibc hands over a remainder it
  * cannot split rather than wasting it.  A test comparing our block's size
  * against the blob's was reading that, and got 132 against 140 for two
- * allocations that had asked for the same thing.  Finding 1353.
+ * allocations that had asked for the same thing.  Finding F1353.
  */
 static unsigned alloc_size[HARNESS_ALLOC_SLOTS];
 static unsigned alloc_insert_size;
@@ -317,7 +317,7 @@ unsigned int dsplibs_debug_level = 0;
  * no test could reach: `dsplibs_debug_level` ships at zero, so every gated
  * call site is dead in both the blob and the reconstruction, and a wrong
  * format string or a wrong argument list there survives indefinitely.  That
- * is not hypothetical -- `updateAlpha` had all three wrong (finding 126).
+ * is not hypothetical -- `updateAlpha` had all three wrong (finding F126).
  *
  * Both sides already have their own printf (symmap prefixes it, because it
  * is a stateful callback), so each can be captured separately and the two
@@ -382,7 +382,7 @@ dbgcap_add(int side, const char *fmt, va_list ap)
  * argument, but NOT where a call site sits relative to anything that does not
  * print.  That gap is not theoretical: `IsPulseDialerReady` prints "hook on"
  * BEFORE its modem_set_param and "hook off" AFTER, and moving either one past
- * the call left every test passing (finding 147).  The order is not decoration
+ * the call left every test passing (finding F147).  The order is not decoration
  * -- it is what a host tracing the line sees.
  *
  * So each side's modem_* callback drops a marker into its own transcript.  The

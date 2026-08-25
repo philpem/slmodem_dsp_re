@@ -4,7 +4,7 @@
  * alone can see.
  *
  * WHY THIS IS ITS OWN FILE and not another suite inside t_v90leaves.cpp:
- * finding 1264.  A mutation suite is a (source file, test binary) pair, and
+ * finding F1264.  A mutation suite is a (source file, test binary) pair, and
  * two suites may share a source file -- `v90cd` and `v90cdctor` already do,
  * both naming V90ConstellationDesigner.cpp against different binaries.  What
  * must NOT be shared is anchor text: a block repeated between two functions
@@ -22,7 +22,7 @@
  * names; calling only one leaves half the pair untested.  Writing
  * `OURS = V90Demapper(...)` instead would build a temporary over
  * uninitialised stack and copy it in, throwing away the seed the whole test
- * rests on (findings 223, 224).
+ * rests on (findings F223, F224).
  *
  * TWO WORDS CANNOT BE COMPARED AND ARE NOT.  `codes` and `signs` are
  * separate `sysdep_malloc`s on the two sides and hold different addresses for
@@ -50,7 +50,7 @@
 /*
  * The NAMED 0x558 `V90Parameters` map, the one V90Demapper.cpp compiles
  * against.  Two incompatible definitions exist and no translation unit may
- * include both; finding 1112.
+ * include both; finding F1112.
  */
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V90Demapper.h"
@@ -89,7 +89,7 @@ static unsigned char theirs[SLOT] __attribute__((aligned(8)));
 
 /*
  * ONE parameter block and ONE detector, shared by the two sides.  Finding
- * 1105's rule: identical argument pointers give identical stored pointers, so
+ * F1105's rule: identical argument pointers give identical stored pointers, so
  * the two words the constructor copies compare equal and stay IN the object
  * comparison instead of being blanked out of it.  A per-side block would have
  * cost two more excluded words for nothing.
@@ -112,7 +112,7 @@ seed(long trial)
 		/*
 		 * `| 1` so no seeded byte is ever zero.  A zero in the seed is
 		 * indistinguishable from a zero the constructor wrote, which
-		 * is finding 230's whole point.
+		 * is finding F230's whole point.
 		 */
 		v = (unsigned char)((lfsr >> 3) | 1u);
 		ours[i] = v;
@@ -175,7 +175,7 @@ cmp_dem(const char *what, long trial)
  * A cheap digest of one side's object, so the sweep can assert that the
  * constructor did not write the SAME thing every trial.  Two constructors
  * that both ignore their arguments agree with each other perfectly, which is
- * finding 224's failure: the comparison passes and proves nothing.
+ * finding F224's failure: the comparison passes and proves nothing.
  */
 static unsigned
 digest(const unsigned char *o)
@@ -243,7 +243,7 @@ run_ctor(void)
 			/*
 			 * THE FILL IS GONE, so the values the object must hold
 			 * are asserted and not only compared: two constructors
-			 * that both did nothing would agree (finding 1105).
+			 * that both did nothing would agree (finding F1105).
 			 */
 			diff_eq_int("sampleCapacity (%ld)", (long)THEIRS.sampleCapacity,
 				    (long)levels, trial);
@@ -388,7 +388,7 @@ run_ctor(void)
 	dsplib_debug_capture_on = 0;
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
-	/* Anti-vacuity: findings 223 and 224. */
+	/* Anti-vacuity: findings F223 and F224. */
 	diff_eq_int("the constructor changed the object", changed, 1, 0);
 	diff_eq_int("and not to the same thing every trial", nseen >= 8, 1,
 		    nseen);

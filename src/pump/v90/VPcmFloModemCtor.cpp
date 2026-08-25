@@ -6,7 +6,7 @@
  * constant stores and three `sysdep_memset`s.  The object map is in
  * include/dsplib/VPcmFloModem.h; what this file adds to the record is the
  * ARGUMENT WIRING, which is the part no field map can show and the part two
- * batches in this chain have already got wrong (findings 1301 and 1307).
+ * batches in this chain have already got wrong (findings F1301 and F1307).
  *
  * ===========================================================================
  * THE DESTRUCTOR IS NOT HERE AND IS NOT WRITTEN ANYWHERE
@@ -97,7 +97,7 @@
  *       `entFiltDen` (.data+0x120, the relocation at .text+0xfb7e) with the
  *       third slot and `entFiltNum` (.data+0xe0, .text+0xfbaa) with the
  *       fourth.  Two pointers of one type in adjacent slots is precisely the
- *       shape findings 1301 and 1307 are about, and the tie was already
+ *       shape findings F1301 and F1307 are about, and the tie was already
  *       broken by another file, so it is cited and not re-argued.
  *
  * ===========================================================================
@@ -150,7 +150,7 @@
  * `sizeof(VPcmFloModem) == 0x7f68` IS THE ONE ASSERTION THIS BATCH ADDS THAT
  * IS A SIZE.  `VPCMXF_Create` allocates 0x7f68 and constructs into it with
  * nothing in between (src/pump/v90/VPcmXfCreate.cpp), so the immediate is the
- * ORIGINAL COMPILER'S OWN `sizeof` -- finding 1246 -- and the header's map
+ * ORIGINAL COMPILER'S OWN `sizeof` -- finding F1246 -- and the header's map
  * has to add up to it or one of the two is wrong.  VPcmFloModem.h used to say
  * "a floor is still not a size, so no size is asserted here"; the floor was
  * 0x7f28 and the allocation is 0x7f68, and the 64 bytes between them are the

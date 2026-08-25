@@ -12,7 +12,7 @@
  *   compared whole -- 4,096 bytes against a stream that never exceeds 2,688 --
  *   so a position one side writes and the other does not is a failure
  *   whichever side it is, and the tail past the stream catches an overrun
- *   (findings 223, 224, 230).
+ *   (findings F223, F224, F230).
  *
  *   THE COUNT IS AN `int`.  `*nbits` is a 32-bit store in the object.  The
  *   sentinel is 0x5bad7bcd rather than a 16-bit one, and the comparison is on
@@ -360,7 +360,7 @@ run_shape(void)
 	 * do what t_dilpack could not.  `*nbits` is `crcAt + 19` for an odd
 	 * `crcAt` and `crcAt + 18` for an even one, and BOTH ARE EVEN -- so
 	 * the length alone carries the branch's consequence and not the
-	 * branch, exactly as finding 262 says.  What separates them is that
+	 * branch, exactly as finding F262 says.  What separates them is that
 	 * `crcAt` is hand-computed here from the case's field values, so the
 	 * expected length differs between the two arms by more than parity:
 	 * the case above has an odd `crcAt` and the case below an even one,

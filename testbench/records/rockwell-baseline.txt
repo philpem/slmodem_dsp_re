@@ -16,7 +16,7 @@ BASELINE for the Rockwell-lineage arm.  VG204 at the 3 dB default on ALL ports
 Three calls each; one 1901 diagnostic did not parse (see below), so Rx LEVEL is
 n=2 there.
 
-WHY THIS ARM EXISTS: finding 1972 concluded the far end's power request is a
+WHY THIS ARM EXISTS: finding F1972 concluded the far end's power request is a
 fixed policy rather than a servo on received level -- from ONE far end.  If the
 Rockwell modems' requests DO track level, 1972 is a Courier quirk and #165's
 value changes.  The attenuation step also calibrates whether `Rx LEVEL` is a
@@ -37,7 +37,7 @@ parse guard caught it and marked the file, which is the guard working; the
 cause is not established and should not be assumed benign.
 
 ===========================================================================
-RESULT -- 12 dB arm, five calls each, interleaved, quiet machine.  Finding 1973.
+RESULT -- 12 dB arm, five calls each, interleaved, quiet machine.  Finding F1973.
 
                   requests                    zeros    Rx LEVEL med   txRMS med
   1901   3 dB     n=12  mean 1.50 dB          0/12          32        -22.55
@@ -50,7 +50,7 @@ independent:  0 of 6 baseline calls contain a zero request, 9 of 10 at 12 dB.
 Fisher exact p ~ 0.0005.
 
 BOTH QUESTIONS ANSWERED, and they went opposite ways to the Courier:
-  * The Rockwell pair's request DOES track received level.  Finding 1972's
+  * The Rockwell pair's request DOES track received level.  Finding F1972's
     "policy, not servo" is a USR Courier property, not a general one, and was
     generalised from a single far end.
   * Rx LEVEL moved 32->43 and 19->46, so it IS a level indicator -- but +11 and

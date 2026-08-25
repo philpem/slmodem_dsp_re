@@ -5,7 +5,7 @@
  * address: `f359c == 0x65` scrambles with GPC and descrambles with GPA,
  * anything else the other way about.  The two ends of a call must use
  * opposite polynomials, which is what makes that field the originate/answer
- * flag.  See src/pump/v34/v34scram.c and finding 177.
+ * flag.  See src/pump/v34/v34scram.c and finding F177.
  */
 
 #ifndef DSPLIB_V34SCRAM_H

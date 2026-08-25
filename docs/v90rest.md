@@ -5,7 +5,7 @@ the batch-0-to-3 record and is still right about everything it describes; this
 file is batches 4 and 5 and the six C functions behind them, re-planned against
 closure numbers that can be trusted.
 
-## Every closure below was computed after finding 330
+## Every closure below was computed after finding F330
 
 `tools/closure.py` used to read the addend of a section-relative relocation as
 zero, because ELF32 REL has no `r_addend` and `readelf -r` prints no column for
@@ -103,7 +103,7 @@ costs one 270-byte method rather than the batch.
 
 TEN WIDE, NOT SIX, and all ten belong to the batch. 346 was taken out of the
 middle of a ten-block whose owner was still running and had used all ten;
-finding 346 records that, and it was made by the same person who wrote 330.
+finding F346 records that, and it was made by the same person who wrote 330.
     291-296    V90Phase3Demodulator::reset               all used
     297-300    VPcmFloModem::enterPhase3                 all used
     301-320    #59's remaining five
@@ -112,7 +112,7 @@ finding 346 records that, and it was made by the same person who wrote 330.
 
 **245 AND 246 WERE CLAIMED TWICE AND THIS BRANCH'S TWO MOVED.** `master`
 used 238 through 246 while this branch was out -- straight through the gap
-this file told the session to leave, and two past it. Finding 330 has the
+this file told the session to leave, and two past it. Finding F330 has the
 detail. So:
 
 VERIFY AGAINST `origin/master`, NOT AGAINST THIS TABLE AND NOT AGAINST A
@@ -172,11 +172,11 @@ and wave 3 (`VPcmFloModem`, 6 symbols, 2,420 B), both unblocked now.
 
 Five of `VPcmFloModem`'s six landed: `getUinfoValue` 773, `setPhaseIIinfo` 704,
 `getV90CpBits` 417, `getV90JaBits` 158, `setPcmSessionType` 98 -- 2,150 bytes,
-findings 273-278, mutation suite `vpcmflomodem` (48 of 49 caught, 1 recorded
+findings F273-278, mutation suite `vpcmflomodem` (48 of 49 caught, 1 recorded
 equivalent and measured over 123 million values).
 
 `VPcmFloModem::enterPhase3` (270 B) was the sixth and **has now landed**;
-findings 297-300, mutation suite `vpcmep3` (22 mutations, 21 caught, 1
+findings F297-300, mutation suite `vpcmep3` (22 mutations, 21 caught, 1
 recorded equivalent and shown dead in the object as well as in the source).
 **That closes #60: 30 of 30 symbols, 6,310 bytes of C++.** What the batch
 settled beyond the method itself:
@@ -184,15 +184,15 @@ settled beyond the method itself:
 - `pad_0004` is a `tagV90DILdescriptor` EMBEDDED at +0x004, from three `lea`s
   off `this` before the packer call, and the type from
   `sizeof(tagV90DILdescriptor) == 0x213` landing exactly on +0x217. Finding
-  297, and it also notes that `bitVector`'s 2,700 entries are exactly enough
+  F297, and it also notes that `bitVector`'s 2,700 entries are exactly enough
   for the packer's 2,654-bit worst case.
 - `pad_173a[3]` and the first byte of `pad_173e` are now `flags_173a[3]` and
   `flag_173e`, and `flags_0217` is known to be six bytes rather than five
-  because the two writers disagree about the sixth. Finding 298.
-- `test/harness/v90demfix.h` is the shared demodulator fixture finding 296
+  because the two writers disagree about the sixth. Finding F298.
+- `test/harness/v90demfix.h` is the shared demodulator fixture finding F296
   asked for; `t_v90demod.cpp` was converted to it and its mutation suite
   re-run unchanged (30, 28 caught, same two by name). `t_v90p3dreset.cpp` was
-  deliberately left alone. Finding 300.
+  deliberately left alone. Finding F300.
 
 **It does call `DILdescriptorPacker`, exactly as this file said** -- that is
 in the object's own relocations and is not in doubt:
@@ -222,16 +222,16 @@ would have been contradicted on no evidence.
 
 So: it is sequenced behind **wave 2's two remaining symbols**, not behind the
 C prerequisite, and behind the two `Descrambler<int,int>` members that
-finding 231 and the note at the top of this file both warn `callgraph.py`
+finding F231 and the note at the top of this file both warn `callgraph.py`
 cannot see and that nothing in `include/` defines yet. It is one 270-byte
 method behind 1,320 bytes of somebody else's class, so it goes with them
 rather than on its own.
 
-Whoever writes it should read finding 273 (the object
+Whoever writes it should read finding F273 (the object
 is genuinely 32 KB, and the old "indexes through `this`" sentence in
-docs/v90cpp.md is corrected), finding 274 (a `V90Modem` is EMBEDDED at
+docs/v90cpp.md is corrected), finding F274 (a `V90Modem` is EMBEDDED at
 +0x1758, and `sizeof(V90Modem) == 0x49c0` is asserted in VPcmFloModem.cpp for
-exactly that reason), and finding 275 (+0x1760 is a `V90Phase2Info` and
+exactly that reason), and finding F275 (+0x1760 is a `V90Phase2Info` and
 +0x612c a `V92Phase2Info`). `include/dsplib/VPcmFloModem.h` already carries the
 class; add fields to it rather than starting a new map, and put anything new
 in the mutation suite that is already registered.
@@ -242,7 +242,7 @@ too. `VPcmV34InitiateRetrain` still wants `V34DisconnectThreshTable`.
 
 ## `v90Phase34` has landed
 
-1,358 bytes, findings 301-306, mutation suite `v90p34` -- 70 mutations, 64
+1,358 bytes, findings F301-306, mutation suite `v90p34` -- 70 mutations, 64
 caught, 6 recorded equivalent and **no gaps**, which is what separates it from
 its twin: `k56FlexPhase34` left eight uncaught in two arms nothing could
 enter, and every arm of this one is reachable because its two bit sources are
@@ -257,44 +257,44 @@ C++ half. Test `test/unit/t_v90p34.cpp`; declaration beside
 Its two diagnostics named four fields the tree did not have -- `period` at
 `V34_RATECFG + 2`, bit 2 of `pac3c + 0x50`, the byte at +0xabfe, and
 `tx->symcnt` for `f25c0` -- and confirmed `v90_receiver` as the object's own
-name for +0x24c. All four are now in `v34fsk.h`; finding 302 is the record.
+name for +0x24c. All four are now in `v34fsk.h`; finding F302 is the record.
 
 #59's remaining four: `V34SetINFO1aBits` (1,401), `VPcmV34InitiateRetrain`
 (1,406, still wanting `V34DisconnectThreshTable`), `V34GiveINFO1dBits` (436)
 and `indicateJaTransmission` (57). Findings from 307.
 ## Where wave 2 got to
 
-All seven symbols. The `setSessionFlag` chain landed first (findings 267-269);
+All seven symbols. The `setSessionFlag` chain landed first (findings F267-269);
 `V90Phase3Demodulator::reset` (801) and `V90Demodulator::enterPhase3` (448)
 followed, with `Descrambler<int,int>` -- the one thing `closure.py` reported
 missing that really was -- added to `include/dsplib/Scrambler.h` beside the
-scrambler it inverts. Findings 291-296.
+scrambler it inverts. Findings F291-296.
 
 `V90SessionFlag.h`'s five classes are now three: `V90Phase3Demodulator.h` and
 `V90Demodulator.h` carry the two the batch gave real weight to, which is the
 split that file asked for. **Both assert their size**, which it said could not
-be done -- the displacement scan finding 268 warned about is still wrong, and
+be done -- the displacement scan finding F268 warned about is still wrong, and
 the `sysdep_malloc` before the constructor call is exact. 0x42c and 0x298.
 
 Mutation suites `v90p3dreset` (29, 28 caught) and `v90demod` (30, 28 caught);
 the three uncaught are all named with what is held fixed, and one of them
 corrected a wrong sentence in the source rather than exposing a test gap
-(finding 293).
+(finding F293).
 
 **`tools/closure.py _ZN12VPcmFloModem11enterPhase3Ev --missing` is now one
-symbol: itself.** Wave 3 is unblocked with nothing in front of it; finding 296
+symbol: itself.** Wave 3 is unblocked with nothing in front of it; finding F296
 is the hand-over.
 
 Three things wave 1 cost that the next batch should not pay again:
 
 - a fresh worktree has no `third_party/spandsp`, and the failure names
-  spandsp rather than the worktree (finding 257);
+  spandsp rather than the worktree (finding F257);
 - a new C++ class header must go in `SKIP_HEADERS` in `tools/offcheck.py`, or
   the offsets gate reports every annotation in the tree as wrong; and its
   `offsetof` assertions must be guarded on
   `__SIZEOF_POINTER__ == 4` or `check64` fails;
 - an anti-vacuity check derived from the wrong quantity fails loudly and looks
-  like a broken reconstruction. Two of them did (findings 247, 262). Both were
+  like a broken reconstruction. Two of them did (findings F247, F262). Both were
   the test's arithmetic, not the function's.
 
 ## Done: the stub `V90Phase2Info` is gone
@@ -306,7 +306,7 @@ union; `V90Phase2Info.h` has dropped its `#error`; `autoSelection` reads
 `sizeof(V90Phase2Info)`. The stub `class V90Parameters` stays -- that one is
 still unmodelled.
 
-It bought hygiene, not coverage, and finding 264 says so: the comparison grew
+It bought hygiene, not coverage, and finding F264 says so: the comparison grew
 from 0x1c to 0x24 but the eight new bytes are memory neither side touches.
 What it did surface is a wrong sentence that two declarations of one class had
 kept alive -- `autoSelection` reads entry 14 and entries 15..20 of `L2`, not
@@ -320,16 +320,16 @@ time; all four of its mutations are caught.
 #56-#58 (`v34handshak`, 61,541 bytes). #63 came first and is **done**: the
 per-dispatch-case harness writes the state word directly (`obj+0x3592`
 microstate, `+0x3594` rxstate, `+0x3596` txstate) and steps once.
-`docs/v34handshak.md` is its manual and findings 285-290 are the record.
+`docs/v34handshak.md` is its manual and findings F285-290 are the record.
 
 It unblocks #57, which is the 27.6 KB and the sixteen units. **It unblocks
 #56 too, since `w3_tbl1`.** The per-sample transmit route did not compare and
-finding 289 and D60 read that as a property of the object; it was the
+finding F289 and D60 read that as a property of the object; it was the
 fixture's memory layout, and one arena per side closes it. All nineteen of
 table 1's reachable targets compare and eighteen of them separate cold.
-Findings 319-324, D60 retracted, D61 for the residual.
+Findings F319-324, D60 retracted, D61 for the residual.
 
-**Findings 285-290 were taken out of the 279-300 block this file used to
+**Findings F285-290 were taken out of the 279-300 block this file used to
 reserve for #59's six.** The block table above has been rewritten to match
 what is actually in `docs/findings.md`: 291-296 went to
 `V90Phase3Demodulator::reset`, so **#59's remaining five start at 297**, not
@@ -339,7 +339,7 @@ at 291.
 
 Landed. 1,401 bytes, and the batch really was one symbol: after a build,
 `tools/closure.py V34SetINFO1aBits --missing` is itself and nothing else.
-Findings 307-312, mutation suite `v34info1a` (44 mutations, 40 caught and 4
+Findings F307-312, mutation suite `v34info1a` (44 mutations, 40 caught and 4
 proved equivalent, two of which had to be replaced by neighbouring mutations
 that can fail). Coverage 20.6% -> 20.7%.
 
@@ -351,55 +351,55 @@ with the pointer cycle wired both ways.
 
 Two things it settles for everyone else in #59:
 
-- **`obj->p3548` is a `VPcmFloModem *`** (finding 307). `v34info.c`'s
+- **`obj->p3548` is a `VPcmFloModem *`** (finding F307). `v34info.c`'s
   `SESSION_VARIANT` and `SESSION_UINFO6` are `info0Layout` and
   `pcmSessionType`; +0x611c is one field meaning "PCM upstream / V.92
   session", written by three functions in three translation units.
 - **`struct v34_ratecfg` gained `carrier` at +0x10** and `f06` at +0x06, and
-  `struct v34_object` gained `f35a4` at +0x35a4 (finding 311 says why that
+  `struct v34_object` gained `f35a4` at +0x35a4 (finding F311 says why that
   one stays offset-named, and what `VPcmV34InitiateRetrain` should do about
   it).
 
-`V34GiveINFO1dBits` is the next one in this corner; finding 312 is its
+`V34GiveINFO1dBits` is the next one in this corner; finding F312 is its
 hand-over.
 
 ## `V34GiveINFO1dBits` has landed
 
-436 bytes, findings 332-337, mutation suite `v34info1d` -- 42 mutations, 41
+436 bytes, findings F332-337, mutation suite `v34info1d` -- 42 mutations, 41
 caught, 1 proved equivalent from the object rather than from the sweep, and no
 gaps. Test `test/unit/t_v34info1d.c`, 84,738 checks. Coverage 21.2%, 154,556
 bytes, 369 symbols. `make phase` green.
 
-**It is in `src/pump/v34/v34pcmmain.cpp`, and finding 312's rule is why that
+**It is in `src/pump/v34/v34pcmmain.cpp`, and finding F312's rule is why that
 took two tries.** It names no mangled symbol, so C compiles it -- but it calls
 `VPcmV34InitiateRetrain`, which lives in the `.cpp`, and the Makefile's
 `$(SRC)` is every `.c` under `src/`, linked 64-bit with no C++ in it by the six
 interop binaries. A `v34info.c` version passed every 32-bit test and failed
 `make phase` at `t_spandsp_v23` with an undefined reference. **The rule has a
-second half: a `.c` may not call anything defined in a `.cpp`.** Finding 333.
+second half: a `.c` may not call anything defined in a `.cpp`.** Finding F333.
 
 The declaration is in `include/dsplib/v34info.h` beside its three siblings all
 the same, which is what `V34SetINFO1aBits` already does.
 
 Two things it settles for the rest of #59:
 
-- **Finding 311's destination question is closed.** Both writers of
+- **Finding F311's destination question is closed.** Both writers of
   `10000 + 336 * f35a4` store to `obj + 0x254`; 311's "`esi + 0x250`" was a
   `lea 0x254(%ebx),%esi` read as if `esi` were the object. `f35a4` is STILL
   not named, because the remaining objection moved to the readers: only
   `v34handshak` and `datapumpv34` read +0x254 and neither is reconstructed.
-  Finding 336.
+  Finding F336.
 - **A relocation on a call proves nothing about the translation unit.** Its
-  ABSENCE does (finding 306's `getMPrecvdBits` is `LOCAL`); its presence is
-  just `GLOBAL` binding. Finding 333.
+  ABSENCE does (finding F306's `getMPrecvdBits` is `LOCAL`); its presence is
+  just `GLOBAL` binding. Finding F333.
 
 `indicateJaTransmission` (57 bytes) is what is left of #59 besides
-`v34handshak`, and finding 332 is its hand-over: its closure is everything
+`v34handshak`, and finding F332 is its hand-over: its closure is everything
 above plus `DILdescriptorPacker`, all of which is now written.
 
 ## `indicateJaTransmission` has landed, and #59 is done
 
-57 bytes, findings 380-381, mutation suite `v34ja` -- 13 mutations, 12 caught,
+57 bytes, findings F380-381, mutation suite `v34ja` -- 13 mutations, 12 caught,
 1 recorded equivalent and no gaps. Test `test/unit/t_v34ja.cpp`, 6,601 checks.
 Coverage 21.2%, 154,613 bytes, 370 symbols. `make phase` green.
 
@@ -413,13 +413,13 @@ Pure dispatch: `VPcmFloModem::enterPhase3` when `obj->v90_receiver > 1`,
 otherwise `K56FlexFloModem::enterPhase3FullDuplex` when
 `obj->k56flex_receiver > 1`, otherwise nothing. Both tests are signed `> 1`,
 it stores nothing anywhere, and it returns nothing. In
-`src/pump/v34/v34pcmmain.cpp` by finding 333's rule -- two C++ callees, so the
+`src/pump/v34/v34pcmmain.cpp` by finding F333's rule -- two C++ callees, so the
 TU must be C++ -- with the declaration in `v34hshak.h` beside `v90Phase34` and
 `k56FlexPhase34`, because its only two callers are inside `v34handshak`.
 
 Two things it settles for whoever writes `v34handshak`:
 
-- **The second arm's INTERIOR is untestable and finding 381 says why**:
+- **The second arm's INTERIOR is untestable and finding F381 says why**:
   `K56FlexFloModem::enterPhase3FullDuplex` is one byte of code, so its
   condition, its operand, its object and its exclusivity with the first arm
   are one equivalence class. Held fixed: that the callee stays empty. Its
@@ -446,29 +446,29 @@ not planned.
 `v90rest` is fully contained in `master` as of `d019957` — `git log
 master..v90rest` is empty. Work on `master`.
 
-### 1. Named gaps, each with the measurement that says why it is a gap
+### F1. Named gaps, each with the measurement that says why it is a gap
 
-  - **Three uncaught mutations in `v34hstx1`**, down from eleven (finding 651).
-    `81: the wrap is tested before the counter is stored` is finding 343's
+  - **Three uncaught mutations in `v34hstx1`**, down from eleven (finding F651).
+    `81: the wrap is tested before the counter is stored` is finding F343's
     transfer with no oracle; `67: initdigital is not called` and
     `67: +0x3598 is not set` print nothing at all, so they are unobservable
     rather than merely untested.
   - **The `0x62b5f` txstate reload is right by disassembly and tested by
-    nothing** (finding 592). Removing it is NOT CAUGHT by all eight suites,
+    nothing** (finding F592). Removing it is NOT CAUGHT by all eight suites,
     because of the 27 direct calls only two force a value and both store it
     first. Filed as `equivalent` carrying that enumeration, so it fails the day
     an arm lands that passes a forced txstate without storing it.
   - **`v34k56` is 15 caught against 10 NOT caught** — 40% of what that suite
     claims to check is unchecked, and the tree-wide census that surfaced it is
-    finding 545. That census predates finding 651 and no finding records a
+    finding F545. That census predates finding F651 and no finding records a
     tree-wide total since.
   - **Twelve C++ translation units still fail under the period compiler**
-    (finding 650), so the codegen tier cannot see them at all.
+    (finding F650), so the codegen tier cannot see them at all.
 
-### 2. The field map, continued
+### F2. The field map, continued
 
-Twelve spans became named fields (findings 630-639) and the rest are still
-offsets. **The "N of 79 remaining" ratio is not quotable** and finding 639 says
+Twelve spans became named fields (findings F630-639) and the rest are still
+offsets. **The "N of 79 remaining" ratio is not quotable** and finding F639 says
 why: the denominator was scraped from macro blocks and at least five of its
 values are not object offsets. Take the next spans by measurement, the same
 way, and quote the numerator alone.
@@ -477,9 +477,9 @@ The busiest remaining case is the one the field map deliberately did not
 touch: `hs_get`, `hs_put` and `hs_setstate` take the offset as a **runtime
 argument**, so 59 of the busiest accesses have no field to name without
 changing a signature that exists precisely to serve all three machines
-(finding 632).
+(finding F632).
 
-### 3. The object, which is where the real work is
+### F3. The object, which is where the real work is
 
 ```
   .text            734,605 bytes   1,861 symbols
@@ -492,7 +492,7 @@ By translation-unit span, largest first: `VPcmV34Main.cpp` 290,315 bytes over
 `v34handshak` itself, still landing one dispatch arm at a time, with an arm
 nobody has written calling `abort`; `V32mod.c` 55,694 over 119.
 
-### 4. Housekeeping, if it has not been done
+### F4. Housekeeping, if it has not been done
 
 `symmap-scaffold-spike` is unmerged and old (its findings stop at 213). Decide
 whether it is wanted before it diverges further.

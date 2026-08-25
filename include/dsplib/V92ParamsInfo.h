@@ -20,7 +20,7 @@
  * that refreshes the scalars of a block whose storage is allocated once, and
  * would be a coincidence otherwise.  With the unpacker written, everything
  * below +0xb4 is now accounted for; the earlier revision of this header said
- * +0x9c..+0xb3 was reached by nothing, and finding 3600 is what it turned out
+ * +0x9c..+0xb3 was reached by nothing, and finding F3600 is what it turned out
  * to be.
  *
  * IT IS THE SAME BLOCK AS `V92MappingParams`, WHICH IS THE AUTHOR'S OWN NAME
@@ -44,7 +44,7 @@
  * WHERE THE NAMES BELOW COME FROM.  Almost all of them are the author's own
  * words, taken from the format strings the two functions print at
  * `dsplibs_debug_level > 1` and resolved with `tools/relocscan.py --at
- * .rodata.str1.1:0xNNNN` (finding 604).  Which string proves which field is
+ * .rodata.str1.1:0xNNNN` (finding F604).  Which string proves which field is
  * recorded field by field.  Four fields -- `K`, `modulosEncoderPresent`,
  * `prefilterPrecoderPresent` and `constellationPresent` -- are named at ONE
  * REMOVE: the string names the field of the *source* block the unpacker

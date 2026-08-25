@@ -7,7 +7,7 @@
  * said "eight members and 1,532 bytes", where both halves were wrong, and it
  * then said eight of nine were written with `process(unsigned char *,
  * unsigned int &, short *)` -- 484 bytes at 0x2faa0 -- outstanding.  That one
- * is finding 7520's; `nm -S -C` is where the figures come from.
+ * is finding F7520's; `nm -S -C` is where the figures come from.
  *
  * NOT POLYMORPHIC: `~V90BitsToSymbol` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -16,7 +16,7 @@
  * independent call sites allocate this class and both spell it the same way:
  * `V90Phase4Modulator`'s constructor does `movl $0x24,(%esp) ; call
  * sysdep_malloc ; ... ; call V90BitsToSymbol::C1`, and `V90Modulator`'s does
- * the same (finding 1246).  The last field the constructor writes is the byte
+ * the same (finding F1246).  The last field the constructor writes is the byte
  * at +0x20, so the class ends at 0x21 and pads to 0x24.
  *
  * THE MAPPER IS OWNED, THE PARAMETERS ARE BORROWED.  `mapper` at +0x00 is
@@ -48,7 +48,7 @@
  * differential test over never-zeroed storage checks.
  *
  * Data member names are invented; the mangling never carries one (finding
- * 226).
+ * F226).
  */
 
 #ifndef DSPLIB_V90BITSTOSYMBOL_H
@@ -96,7 +96,7 @@ public:
 	 * status alphabet, 1 SIZE_NOT_SET / 2 BUFFER_OVERFLOW / 3
 	 * BUFFER_UNDERFLOW, and each overload can reach the two its own
 	 * direction can hit.  (That third address read +0x8624 here and in the
-	 * .cpp until finding 7520 checked it: 0x8624 is the "\r\n" INSIDE the
+	 * .cpp until finding F7520 checked it: 0x8624 is the "\r\n" INSIDE the
 	 * BUFFER_OVERFLOW string, which ends at 0x8626 and pads to 0x8628.)
 	 *
 	 * THE THIRD OVERLOAD, `(unsigned char *, unsigned int &, short *)` at

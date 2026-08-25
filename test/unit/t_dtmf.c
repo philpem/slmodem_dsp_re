@@ -105,7 +105,7 @@ rnd_float(void)
  * to come back round to the block boundary and the whole second half of
  * dtmf_detect is never entered.  The first version of this file did exactly
  * that, and its own anti-vacuity assertion is what caught it: 4,800 calls
- * per mode returned -2 every time (findings 223 and 224, working).
+ * per mode returned -2 every time (findings F223 and F224, working).
  *
  * Everything the object treats as data -- the notch states, the energies,
  * the sixteen unmodelled bytes at +0x80 -- stays fully random.

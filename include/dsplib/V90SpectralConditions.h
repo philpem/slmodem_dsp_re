@@ -40,7 +40,7 @@
  * reached by testing the field for zero at 0x4651a.  The earlier note here
  * declined 0, 1 and 3 because `spectralDesign` cannot distinguish them; that
  * was a statement about ONE function's reach and not about the object, and
- * the detector settles all four.  Finding 5801.
+ * the detector settles all four.  Finding F5801.
  *
  * TWO INDEPENDENT DERIVATIONS AGREE ON THE 2, which is why it was the one
  * that could be named first: the paragraph above reaches it from the shaper

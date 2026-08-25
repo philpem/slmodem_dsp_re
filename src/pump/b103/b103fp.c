@@ -10,7 +10,7 @@
  * decisions were made in B103FP_create, which sized the FSK modulator at 24
  * samples per symbol -- 300 baud at 7200 Hz -- and configured the rate
  * converter 10:9 to lift that to the 8000 the datapump interface speaks.
- * See findings 17 and 24.
+ * See findings F17 and F24.
  */
 
 #include <string.h>
@@ -89,7 +89,7 @@ TxNoCarrierB103(struct b103fp *fp, const unsigned short *bits, short *out,
  * can separate them -- but the object loads +0x8 before +0x4, and only one of
  * the two spellings makes GCC 3.4.2 do that.  Written the other way round
  * this function was `same size, bytes differ`; written this way it is
- * BYTE-IDENTICAL to the object.  That is finding 617's acceptance test --
+ * BYTE-IDENTICAL to the object.  That is finding F617's acceptance test --
  * full identity, operands included -- and it passes, so this is the source
  * the author wrote rather than a permutation that happened to fit.
  */
@@ -176,7 +176,7 @@ typedef char b103_cfg_size[(sizeof(struct b103_cfg) == 28) ? 1 : -1];
  * hdx->tone_lo.  Everything downstream -- the 3:10 rate converter, the AGC,
  * the demodulator's discriminator -- therefore works on a *baseband* signal,
  * which is why measuring their response and reading it as a radio-frequency
- * passband gives an answer that fits no Bell 103 tone pair (finding 32).  The
+ * passband gives an answer that fits no Bell 103 tone pair (finding F32).  The
  * oscillator frequency is what selects the received channel.
  *
  * ---------------------------------------------------------------------------
@@ -199,7 +199,7 @@ typedef char b103_cfg_size[(sizeof(struct b103_cfg) == 28) ? 1 : -1];
  * What it is waiting for is the **2100 Hz answer tone**.  The detector at
  * hdx->tone_detect is built from FPM_TONE_CFG, which is the ITU-T V.25 ANSam
  * configuration, and measuring its response confirms it: a 2100 Hz input
- * reports FPM_TONE_PRESENT and 2000 or 2200 Hz do not (finding 33).  So this
+ * reports FPM_TONE_PRESENT and 2000 or 2200 Hz do not (finding F33).  So this
  * is a calling modem listening for the answering modem to reply.
  *
  *      <= 14   listening.  Each block in which the 2100 Hz tone dominates
@@ -675,7 +675,7 @@ void (*const B103NextState[3])(struct b103fp *fp) = {
  * The filter B103FP_create selects between B103_BPF_CALLER and
  * B103_BPF_ANSWER and parks at dsp[+0xf4] is applied HERE, before anything
  * else sees the signal -- which is why nothing reconstructed before this
- * touched it (finding 32).  It is a plain circular FIR, in place:
+ * touched it (finding F32).  It is a plain circular FIR, in place:
  *
  *     rx_in[i] = ((sum(h[j] * (rx_in[i-j] >> 2))) >>> 15) << 2
  *
@@ -804,10 +804,10 @@ B103FP_modem(struct b103fp *fp, const int *tx_bits, short *tx_out,
 
 	/*
 	 * The switch is debug-only -- every arm returns the same thing -- and
-	 * it was elided here until finding 2953.  `debug.h`'s policy is to
+	 * it was elided here until finding F2953.  `debug.h`'s policy is to
 	 * carry the call sites: the gate is real control flow and the strings
 	 * are the author's own words, and with the level at zero nothing else
-	 * can tell the two versions apart (finding 134).
+	 * can tell the two versions apart (finding F134).
 	 *
 	 * The eight-entry jump table at `.rodata+0x8e14` sends 0..4, 6 and 7
 	 * straight to the epilogue and 5 to the error message; anything above

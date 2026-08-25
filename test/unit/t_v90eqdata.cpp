@@ -4,7 +4,7 @@
  * IT IS ITS OWN BINARY AND THAT IS THE WHOLE REASON THIS FILE EXISTS.
  * `t_v90equ` is in `tools/gccdiverge.json` -- six of its checks are the
  * object's one-ordered-compare equality, which GCC 13 cannot emit (findings
- * 2300, 2304) -- so that binary exits non-zero on the modern build.
+ * F2300, F2304) -- so that binary exits non-zero on the modern build.
  * `tools/mutate.py` judges a mutant CAUGHT by a non-zero exit, so it refuses
  * to score a set against an already-red binary: caught and already-red are
  * indistinguishable.  `t_v90p4dnan.cpp` was split out of `t_v90p4ddec.cpp`
@@ -15,10 +15,10 @@
  *
  * THE FIXTURE IS `t_v90equ.cpp`'S, copied rather than shared: the object lives
  * in a byte array carried by a union for its alignment, both sides are seeded
- * with the SAME varied pseudorandom bytes and never with zeros (finding 230),
+ * with the SAME varied pseudorandom bytes and never with zeros (finding F230),
  * the whole object is compared with `diff_eq_obj`, and the bytes from `sizeof`
  * to the end of an over-large slot are compared separately so a store past the
- * object's end is a failure rather than silence (findings 223, 224).  One
+ * object's end is a failure rather than silence (findings F223, F224).  One
  * arena carries every array both sides walk; it is snapshotted before our side
  * runs, restored before the reference does, and the two results compared.
  */
@@ -109,7 +109,7 @@ static struct equ_arena arena, arena_save, arena_ours;
 #define ARENA_PARAMS ((V90Parameters *)arena.parm)
 #define ARENA_RSAMP  ((V90Resampler *)arena.rsamp)
 
-/* Varied bytes, never zeros (finding 230). */
+/* Varied bytes, never zeros (finding F230). */
 static void
 fill_arena(long trial)
 {
@@ -294,7 +294,7 @@ mmx_setup(long tag, unsigned int le, unsigned int dfe, unsigned int w1c,
  * and compared; `phase4Demod` cannot, because our side calls our
  * `resetRRNDetector` and the reference side calls the blob's, and the two must
  * be able to disagree.  So each side gets its own 0x351c-byte block seeded
- * from the same bytes -- never zeros, finding 230 -- and the two blocks are
+ * from the same bytes -- never zeros, finding F230 -- and the two blocks are
  * compared afterwards.  `params` is the one pointer re-installed in both, and
  * it is the same address on both sides so the field itself compares equal.
  *
@@ -314,7 +314,7 @@ mmx_setup(long tag, unsigned int le, unsigned int dfe, unsigned int w1c,
  *     compared exactly, as `run_enterphase4` does.
  *
  * THE COUNTERS BELOW COUNT OBSERVABLE DIFFERENCES AND NOT BELIEFS (finding
- * 3509): `sep_ret` counts trials whose RETURN VALUE differs from the previous
+ * F3509): `sep_ret` counts trials whose RETURN VALUE differs from the previous
  * trial's, and `sep_lines` trials whose printed LINE COUNT differs from the
  * previous one's -- both read off the reference side, both quantities a
  * failing reconstruction would move.

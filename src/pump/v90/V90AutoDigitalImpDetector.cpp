@@ -11,7 +11,7 @@
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x20(%esp),%ebx` after four pushes and a twelve-byte frame
  * -- not %ecx, so these are not thiscall and nothing here needs an attribute
- * (finding 215).
+ * (finding F215).
  *
  * Built -fno-exceptions -fno-rtti -nostdinc++ like the rest of the C++ here;
  * see the Makefile.  No virtuals, no allocation, no static data members, so
@@ -141,7 +141,7 @@ ADID_OFF(neighborUcodeMinDistance, 0xa9ac, neighborucodemin);
 ADID_OFF(neighborUcodeMaxDistance, 0xa9ae, neighborucodemax);
 
 /*
- * THE ONE THE DIL BATCH ADDS -- one of the three gaps finding 1424 left, and
+ * THE ONE THE DIL BATCH ADDS -- one of the three gaps finding F1424 left, and
  * the only one of them any member of the class reads.
  *
  * +0xa968  `mov %ax,0xa968(%esi)` at 0x41cd0 and `mov %bx,0xa968(%esi)` at
@@ -158,7 +158,7 @@ ADID_OFF(unSuspectedPhase, 0xa968, unsuspectedphase);
  * THE TWO THE PAD-GAIN BATCH ADDS, and they are the last two gaps outside the
  * sample store.  No test in this tree can see either -- the first is a byte in
  * a two-byte `pad_` region and the second is four bytes nothing else reads --
- * so the disassembly is the whole of the evidence, which is finding 1360's
+ * so the disassembly is the whole of the evidence, which is finding F1360's
  * situation exactly.
  *
  * +0xa954  `movzbl 0xa954(%esi)` at 0x4363e and `cmpb $0x3f,0xa954(%esi)` at
@@ -224,7 +224,7 @@ typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
  * The two spellings are the SAME under IEEE rules -- `0.0f >= NaN` is false
  * either way -- so this is an operand-order fix and not a change of meaning;
  * the modern build is unaffected.  The old comment argued the `-mieee-fp`
- * case, which no longer applies.  Findings 1990 and 2300.
+ * case, which no longer applies.  Findings F1990 and F2300.
  */
 #define ADID_PRINT_SIGN(v)	(!(0.0f >= (v)) ? '+' : '-')
 
@@ -260,7 +260,7 @@ typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
  * `fstps 0x24(%esp)`, the reciprocal came back four bits short, and
  * `(short)(inv * 50.0f + 0.5f)` fell from 1 to 0 at +0xa9a6.  `make phase` was
  * green throughout, because the modern build had no call to spill across.
- * Finding 1448, and it is the first defect the period tier caught that the
+ * Finding F1448, and it is the first defect the period tier caught that the
  * modern tier could not see.
  */
 static inline short
@@ -287,7 +287,7 @@ paramWord(const V90Parameters *p, unsigned int off)
  * no such call anywhere; the one in `findPadGain`'s report sits between the
  * computation of `err` and the `(int)err` that prints it, so the call spilled
  * `err` from an x87 register to a four-byte slot and the printed error came
- * back one too high.  Finding 1448.
+ * back one too high.  Finding F1448.
  */
 static inline int
 adid_abs(int v)
@@ -309,8 +309,8 @@ adid_abs(int v)
  * mantissa bits and the true value does not, so the two differ in exactly the
  * half `%d` goes on to read.  Keeping the value in one C variable across both
  * uses is what reproduces it; a `float` return or a `float` parameter would
- * force a 32-bit slot and rounds it once for both.  Finding 1437's situation
- * and finding 1443.
+ * force a 32-bit slot and rounds it once for both.  Finding F1437's situation
+ * and finding F1443.
  *
  * NOTHING BOUNDS THE COUNT.  Six flagged phases give 0.0f/0, a NaN, which is
  * then stored and printed -- the same shape as D282 and reachable the same way.
@@ -411,7 +411,7 @@ V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()
  * boundary for one ulp in the mean to survive `+ 0.5f` and a truncating
  * `fistp`.  `t_v90adid` seeds a constructed witness instead -- count 41, sum
  * 143.5, where the division is exactly 3.5 and the reciprocal is a hair under
- * -- and with it all three mutations are caught.  Finding 1366, which is also
+ * -- and with it all three mutations are caught.  Finding F1366, which is also
  * why the search for that witness had to mirror this whole function body and
  * not just the expression.
  * ==========================================================================
@@ -560,7 +560,7 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
  * taken as the smaller claim; `unsigned short level` would be equally exact
  * and equally unevidenced.
  *
- * AND THE FIELD ITSELF IS STILL `short`.  The `movzwl` here is finding 614's
+ * AND THE FIELD ITSELF IS STILL `short`.  The `movzwl` here is finding F614's
  * free case -- the 32-bit result is discarded by a 16-bit store -- so it says
  * nothing about +0xa96c's signedness, and the rest of the object settles that
  * the other way: one `filds 0xa96c(%ebx)`, which is a SIGNED integer load,
@@ -849,7 +849,7 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 	 * the loop; we keep it on the x87 stack and pay a second
 	 * materialisation of the constant for it.  That is x87 stack
 	 * allocation, and no spelling of this declaration reaches it.
-	 * Finding 7848.
+	 * Finding F7848.
 	 */
 	float bestVar = __builtin_nanf("");
 	float bestValue;
@@ -959,7 +959,7 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
  * Turn one cell's accumulators into a mean and a variance.
  *
  * The variance is E[x^2] - E[x]^2, and reading that out of the object needs
- * finding 245: the `de e9` here prints as `fsubrp` and IS `FSUBP`, so the
+ * finding F245: the `de e9` here prints as `fsubrp` and IS `FSUBP`, so the
  * subtraction is (mean of squares) - (square of mean) and not the other way
  * round.  A negative variance would be the tell if it were reversed.
  *
@@ -1030,7 +1030,7 @@ V90AutoDigitalImpDetector::updateUref()
 			 * stores in the opposite order to the object's.
 			 * `nm -n` puts this file 34 of 34 in the blob's own
 			 * emission order already, so lever 3 has nothing
-			 * positional to offer either.  Finding 7846.
+			 * positional to offer either.  Finding F7846.
 			 */
 			float inv = 1.0f / uint_1c00[phase][ucode];
 			float mean = float_1000[phase][ucode] * inv;
@@ -1259,7 +1259,7 @@ V90AutoDigitalImpDetector::porcessFirstStudy()
  * in %st(0); the resulting thirteen instructions are the object's, register
  * allocation included.  The `>=` itself is unchanged and so is its meaning
  * under IEEE rules, so this is an evaluation-order fix and the modern build
- * does not see it.  Finding 1990 for why the flag exposes it at all.
+ * does not see it.  Finding F1990 for why the flag exposes it at all.
  *
  * THERE IS NO CONVERGENCE LOOP.  One pass, not `unitePhasesInfoOfUref`'s
  * do/while.
@@ -2286,7 +2286,7 @@ V90AutoDigitalImpDetector::findPadGain()
 		do {
 			float v = float_9d48[unSuspectedPhase][d];
 
-			/* `jb` takes an unordered compare -- finding 1436. */
+			/* `jb` takes an unordered compare -- finding F1436. */
 			if (!(v >= bestVar)) {
 				bestVar = v;
 				bestAt = d;
@@ -2572,7 +2572,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  *
  * SO +0x0d00 IS DECIDABLE HERE and nowhere else: `determineMaxUcode` is the
  * only member besides `reset` that touches it, and it both fills it and reads
- * it back in the same call.  Finding 1435.
+ * it back in the same call.  Finding F1435.
  *
  * THE UNORDERED COMPARE IS THE WHOLE OF THE CARE THESE TWO NEED.  Every
  * floating-point branch in both methods is an `fcom`, and an unordered
@@ -2584,7 +2584,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  * no parity test, so the NaN takes it exactly as the object's `fcomp`/`je`
  * does.  The two-compare "not less and not greater" spelling that used to
  * stand here was a workaround for the flag `make period` was missing, not the
- * object's code (findings 1447, 1990 and 2300).
+ * object's code (findings F1447, F1990 and F2300).
  *
  * AND A RIGHT SPELLING IS NOT YET A RIGHT COMPARE.  `fcom` sets CF on an
  * unordered compare whichever way round its operands are, so which one is in
@@ -2600,7 +2600,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  * reads the x87 status word, so no test can see it -- docs/deviations.md
  * D295.
  * A seeded `float_9d48` reaches all three: one 32-bit pattern in 128 is a
- * NaN.  Finding 1436.
+ * NaN.  Finding F1436.
  *
  * THREE OF THE LOCALS HERE ARE `volatile`, AND IT IS NOT A HINT.  The object
  * is `-mfpmath=387` and this tree is deliberately not `-ffloat-store`, so a
@@ -2612,7 +2612,7 @@ V90AutoDigitalImpDetector::applyPadGainToLinMapp()
  * 1000000014.9 unrounded and 1000000000 rounded, and it prints the number.
  * Measured, not assumed -- `volatile` was added to exactly the three locals
  * whose transcripts disagreed and to no others, and each names the object's
- * store below.  Finding 1437.
+ * store below.  Finding F1437.
  * ==========================================================================
  */
 
@@ -2692,7 +2692,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 		 * threshold of 1000000014.9 that is "1000000014.00" against
 		 * "1000000000.00", so the split is printed and has to be
 		 * written.  Everything from the clamp onwards uses the rounded
-		 * value alone.  Finding 1437.
+		 * value alone.  Finding F1437.
 		 */
 		product = sum * float_a980 * 0.05f;
 		origWhole = ADID_PRINT_WHOLE(product);
@@ -2770,7 +2770,7 @@ V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
 			 * a parity test and a NaN then falls through.  That
 			 * was a workaround for `make period`'s flag set, and
 			 * with the object's own flag it is neither needed nor
-			 * the object's code.  Findings 1436, 1447 and 2300.
+			 * the object's code.  Findings F1436, F1447 and F2300.
 			 */
 			if (v == 0.0f)
 				continue;
@@ -2927,7 +2927,7 @@ V90AutoDigitalImpDetector::setMaxUcodeArray(unsigned char *from)
  * `isAltRbs`, `updateUref` and `updateUrefAlt` -- and the object inlines all
  * five, which is most of why 5,335 bytes decode into this much source.  They
  * are called here; the shapes match instruction for instruction and calling
- * them is a factoring difference (finding 1440).  The two it really does call
+ * them is a factoring difference (finding F1440).  The two it really does call
  * are `getAltVarThresh` and, through `updateUref`, `unitePhasesInfoOfUref`.
  *
  * NO LOCAL IS EVER READ BEFORE IT IS WRITTEN.  Unlike D281, D284 and D290,
@@ -2969,7 +2969,7 @@ V90AutoDigitalImpDetector::setPrevSessionLinearMapping(short *from)
  * `prevLinMapp` IS ONE ROW FOR ALL SIX PHASES.  The copy loop reads
  * `prevLinMapp[code]` with no phase term at all, so every unstudied phase gets
  * the same 128 entries -- which is what makes +0x0c00 128 shorts rather than
- * 6 * 128 (finding 1361).
+ * 6 * 128 (finding F1361).
  */
 void
 V90AutoDigitalImpDetector::setQcLinearMapping()

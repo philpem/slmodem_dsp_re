@@ -8,7 +8,7 @@
  * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the two
  * ordinary variants and not the deleting `D0`, and GCC emits a deleting
  * destructor only for a virtual one, so offset 0 is a real member and there
- * is no vptr (finding 228).
+ * is no vptr (finding F228).
  *
  * THE HISTORY BUFFER FILLS DOWNWARD.  `index` is where the next input goes
  * and it *decreases*, so history[index] is the newest sample and

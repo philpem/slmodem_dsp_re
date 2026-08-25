@@ -3,7 +3,7 @@
   "note": "The echo canceller and the modulator, both driven by t_v34ec.  The equaliser lives in this same source and is driven by t_v34eq, which is the v34filters_eq set -- point a mutation at the wrong one of the two and it reads NOT CAUGHT."
  },
  {
-  "note": "The three '?'-prefixed strings were invented paraphrases until the format sweep; the first three mutations below restore the paraphrases, so this set is also a regression test on finding 180."
+  "note": "The three '?'-prefixed strings were invented paraphrases until the format sweep; the first three mutations below restore the paraphrases, so this set is also a regression test on finding F180."
  },
  {
   "label": "the invented CleanUp string, back again",
@@ -111,7 +111,7 @@
   "replace": "\"preemp %ld, V90=%ld. fullReset=%d\\n\""
  },
  {
-  "note": "V34SetupModulator's 3200-baud V.90 arm, which D31 had as dead and finding 216 retracts.  Every entry here would have survived before t_v34ec's state sweep took `v90` as a dimension."
+  "note": "V34SetupModulator's 3200-baud V.90 arm, which D31 had as dead and finding F216 retracts.  Every entry here would have survived before t_v34ec's state sweep took `v90` as a dimension."
  },
  {
   "label": "modulator: the V.90 arm is ignored, as D31 had it",

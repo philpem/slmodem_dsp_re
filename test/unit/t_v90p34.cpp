@@ -49,9 +49,9 @@
  * the one-check-per-object count that a hand-written byte loop throws away.
  * `ptr_seen` asserts every entry really did hold two different addresses, so
  * the list cannot quietly go stale into a set of blanked-out fields that were
- * never pointers at all.  Finding 283 is why that check exists.
+ * never pointers at all.  Finding F283 is why that check exists.
  *
- * THE FILL IS VARIED, NOT ZERO (finding 230).  Both sides get the same
+ * THE FILL IS VARIED, NOT ZERO (finding F230).  Both sides get the same
  * pseudo-random bytes; only the pointer slots and the bulk-delay cursors are
  * seeded afterwards, because `txmit` indexes the ring with those cursors
  * unchecked and a random int there is a crash rather than a test.
@@ -478,7 +478,7 @@ compare(long t)
 	 * test rather than by the fixture, so a scan that ran before the call
 	 * could never see them.  A skip list is the one part of a
 	 * differential test that silently gets weaker as it grows (finding
-	 * 283), and this is the check that keeps every entry load-bearing.
+	 * F283), and this is the check that keeps every entry load-bearing.
 	 */
 	for (i = 0; i < NPTR; i++) {
 		if (memcmp((char *)&oa + PTR[i].lo, (char *)&ob + PTR[i].lo,
@@ -976,7 +976,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			 * level 2 `getV90CpBits` prints as well, so
 			 * `lines > 0` is satisfied whether or not this arm's
 			 * own site fired -- which is the counter that proves
-			 * nothing that findings 3509 and 3403 are about.  This
+			 * nothing that findings F3509 and F3403 are about.  This
 			 * message goes out through `dsplibs_debug_printf` and
 			 * not `edprintf`, so it is in the capture in plain
 			 * text and can be looked for.
@@ -1194,7 +1194,7 @@ main(void)
 	 * pointer to land exactly on `cpNofBits` with `terminateCpNot` set --
 	 * satisfiable by construction and counted at run time all the same,
 	 * because a case table that stopped reaching a path reads exactly
-	 * like a passing test (findings 247, 262).
+	 * like a passing test (findings F247, F262).
 	 *
 	 * `CFG_LD` is the other end of the same call: the sequence ends,
 	 * `terminateCp` is set and the CPnot vector is loaded instead, so the
@@ -1247,7 +1247,7 @@ main(void)
 				 * `n_s3_adv > 0` here would be a tautology --
 				 * a witness that cannot fail, which reads
 				 * exactly like a covered path and is the shape
-				 * findings 247, 262 and 295 record.  The
+				 * findings F247, F262 and F295 record.  The
 				 * advance is the diagnostic's own gate (`n`
 				 * above 0x7f) and the level is 2, so an
 				 * advance ACROSS THIS CALL is a witness that
@@ -1570,7 +1570,7 @@ main(void)
 	 * one of them entered; the four that advance on a count and the three
 	 * that advance on a CP have their advance counted separately, because
 	 * an arm that runs and never advances is the shape a case table stops
-	 * reaching without anything failing (findings 247, 262, 295).
+	 * reaching without anything failing (findings F247, F262, F295).
 	 */
 	diff_begin("rate renegotiation coverage");
 	{

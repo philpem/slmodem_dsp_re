@@ -10,7 +10,7 @@
  * naming any of the three, against 43 naming
  * `V90BitsToSymbol::nofBitsForNextTime` -- so nothing in the shipped modem can
  * drive them and nothing here adds a caller.  They are reached through the
- * `ref_` aliases exactly as any other member is; finding 7000's correction of
+ * `ref_` aliases exactly as any other member is; finding F7000's correction of
  * 702 is that a path the vendor never executed still has a tier-1 oracle.
  *
  * ===========================================================================
@@ -114,7 +114,7 @@
  * `scrambledBits` at +0x78 is embedded too and is 12,000 bytes of the 12,204
  * compared, which is where most of the signal is.
  *
- * THE OBJECTS ARE NEVER ZEROED -- finding 230 -- and every trial rebuilds
+ * THE OBJECTS ARE NEVER ZEROED -- finding F230 -- and every trial rebuilds
  * both sides from a fresh pseudorandom fill and runs each side's OWN
  * constructor over it, so the scrambler's malloc'd history and the mapper are
  * in their real post-construction state and not a poke.
@@ -123,7 +123,7 @@
  * three functions never dereference either field, and the constructor only
  * stores it.
  *
- * FINDING 7105's CHECK.  `V90BitsToSymbol::reset` writes `symbolsDone`,
+ * FINDING F7105's CHECK.  `V90BitsToSymbol::reset` writes `symbolsDone`,
  * `symbolsBlockSize` and `extraSymbolsPending`, so a seed alone cannot hold
  * them; every one of the three is poked AFTER the reset, and `bitsPerFrame`
  * and `extraSymbols` are the two the constructor leaves alone and `reset`
@@ -150,7 +150,7 @@ extern unsigned int ref_dsplibs_debug_level;
 /*
  * The lifecycle, both sides.  C++ has no syntax for running a constructor over
  * storage that already exists, so both sides go through asm() labels; findings
- * 223 and 224, and t_v90modprog does the same for `V90Modem`.
+ * F223 and F224, and t_v90modprog does the same for `V90Modem`.
  */
 void p4m_ctor1(void *self, void *params, unsigned int flag, void *bts,
 	       void *mp, void *mpsA, void *mpsB, void *cp, unsigned int arg8)
@@ -203,7 +203,7 @@ short ref_p4m_generateSUVd(void *self)
 /* One byte per bit, and long enough for the largest count in `cases`. */
 #define NBITS		512
 
-/* 42 bits to a six-symbol frame at 8 kHz is 56,000 bit/s; finding 7622. */
+/* 42 bits to a six-symbol frame at 8 kHz is 56,000 bit/s; finding F7622. */
 #define BPF		42u
 
 static unsigned char p4m_s[2][P4M_SLOT] __attribute__((aligned(8)));
@@ -241,7 +241,7 @@ static unsigned char
 nextb(void)
 {
 	lfsr = (lfsr >> 1) ^ (unsigned)(-(int)(lfsr & 1u) & 0xb400u);
-	/* `| 1` so no seeded byte is ever zero; finding 230. */
+	/* `| 1` so no seeded byte is ever zero; finding F230. */
 	return (unsigned char)((lfsr >> 3) | 1u);
 }
 
@@ -938,7 +938,7 @@ run_discriminate(void)
 
 	/*
 	 * The denominators, so a run that stopped reaching one of the two arms
-	 * cannot read as a clean sweep (findings 134, 2400).
+	 * cannot read as a clean sweep (findings F134, F2400).
 	 */
 	diff_eq_int("scrambling-arm configurations (%ld)", nzTrials,
 		    NCASES * 2, 0);

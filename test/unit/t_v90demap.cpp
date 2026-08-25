@@ -15,7 +15,7 @@
  *     V90Demapper::reset(V90MappingParams *)
  *
  * WHY THIS IS ITS OWN BINARY and not another suite inside t_v90demapctor.cpp:
- * finding 1264's rule, that a mutation suite is a (source file, test binary)
+ * finding F1264's rule, that a mutation suite is a (source file, test binary)
  * pair and what must not be shared is ANCHOR TEXT.  These five and the
  * constructor live in two source files between them and both files already
  * carry a suite; a third suite over the same two files needs anchors that
@@ -26,7 +26,7 @@
  * ---------------------------------------------------------------------------
  * WHAT IS COMPARED, AND WHAT CANNOT BE
  *
- * THE OBJECTS ARE NEVER ZEROED (finding 230).  Every slot gets varied
+ * THE OBJECTS ARE NEVER ZEROED (finding F230).  Every slot gets varied
  * pseudorandom bytes before every trial and is reseeded every trial, so a
  * store that fails to happen is visible and a store of zero into memory that
  * was already zero is not mistaken for one.  Then the fields each function
@@ -36,7 +36,7 @@
  * COMPARISON: `codes` (+0x1c), `signs` (+0x20) and the embedded extractor's
  * decoder buffer (+0x684).  What is compared instead is what they point AT,
  * over their full length, plus the object either side of them.  The parameter
- * block is shared between the two sides on purpose (finding 1105): identical
+ * block is shared between the two sides on purpose (finding F1105): identical
  * argument pointers give identical stored pointers, so +0x00 stays IN the
  * comparison rather than being blanked out of it.
  *
@@ -56,9 +56,9 @@
  * `hardDecision` has one diagnostic of its own -- the over-capacity refusal --
  * and reaches four more through `printErrorHistogramAndReset`.  `edprintf`
  * ENCODES its output, so a transcript that matches is a format string, an
- * argument list and a character count that all match (finding 180).
+ * argument list and a character count that all match (finding F180).
  *
- * ANTI-VACUITY, and it is per finding 3509 rather than per path.  Every
+ * ANTI-VACUITY, and it is per finding F3509 rather than per path.  Every
  * counter below names an OBSERVABLE difference -- a return value, a byte of
  * the object, a line of transcript -- and not a branch believed to have been
  * taken.  "The refusal arm was reached" is counted as `sampleCount did not
@@ -88,7 +88,7 @@ extern "C" {
 /*
  * Both sides through asm() labels, so the two calls are the same declared
  * signature and the convention is stated once.  Plain cdecl with `this` as the
- * first STACK argument, finding 215, so no attribute is involved.
+ * first STACK argument, finding F215, so no attribute is involved.
  */
 short our_harddec(void *self, short in) asm("_ZN11V90Demapper12hardDecisionEs");
 short ref_harddec(void *self, short in)
@@ -184,7 +184,7 @@ static unsigned char adi_before[sizeof(V90AutoDigitalImpDetector)];
  * detector.  `adi_before` above is written at other points in the file and
  * `fill` reseeds every trial, so comparing a fresh seed against a stale
  * snapshot is non-zero whatever the function did -- a counter that cannot
- * fail, which is finding 134's shape.
+ * fail, which is finding F134's shape.
  */
 static unsigned char adi_pre[sizeof(V90AutoDigitalImpDetector)];
 static unsigned char scratch[2][DEM_SLOT];
@@ -194,7 +194,7 @@ static unsigned char scratch[2][DEM_SLOT];
 #define ADI(s)	(*(V90AutoDigitalImpDetector *)adi_s[s])
 #define PARAMS	((V90Parameters *)parm_s)
 
-/* Varied, never zero, never the same twice: findings 223, 224, 230. */
+/* Varied, never zero, never the same twice: findings F223, F224, F230. */
 static unsigned
 fill(unsigned char *p, int n, unsigned lfsr)
 {
@@ -550,7 +550,7 @@ run_rlms(void)
 		/*
 		 * THE ARGUMENT LANDS AT +0x1ea8 AND NOWHERE ELSE, asserted
 		 * rather than only compared: two reconstructions that both
-		 * dropped it would agree (finding 224).
+		 * dropped it would agree (finding F224).
 		 */
 		diff_eq_int("uint_1ea8 (%ld)", (long)DEM(1).uint_1ea8,
 			    (long)n_v[ni], trial);
@@ -1027,7 +1027,7 @@ run_incrbs(void)
  *
  *   a count of ZERO on one cell in seven, which is the `test %eax,%eax; je`
  *   skip -- the cell keeps whatever the seed put there, and the seed is never
- *   zero (finding 230), so "skipped" and "written zero" are distinguishable.
+ *   zero (finding F230), so "skipped" and "written zero" are distinguishable.
  *
  *   a count of TWO against an ODD sum, which puts the quotient exactly half
  *   way between two integers.  That is the only input that separates
@@ -1120,7 +1120,7 @@ run_updconst(void)
 
 		/*
 		 * OBSERVABLE SEPARATION, off the BLOB's object rather than
-		 * restated from our own source (finding 3509).
+		 * restated from our own source (finding F3509).
 		 */
 		if (dbg) {
 			if (dsplib_debug_capture_text(1)[0] != '\0')
@@ -1297,7 +1297,7 @@ run_resetns(void)
 				 * zero because every other member here wants
 				 * it there, and zero is what this function
 				 * WRITES -- so a seed of zero cannot tell a
-				 * store from an omission.  Finding 230, at
+				 * store from an omission.  Finding F230, at
 				 * the one byte the general seeding misses.
 				 */
 				DEM(s).signDecoder.prev_ = 0xa7;
@@ -1332,7 +1332,7 @@ run_resetns(void)
 				 * THE FOUR SCALARS, ASSERTED AND NOT ONLY
 				 * COMPARED: two reconstructions that both
 				 * dropped the argument would agree with each
-				 * other (finding 224).
+				 * other (finding F224).
 				 */
 				diff_eq_int("bitsPerFrame (%ld)",
 					    (long)d->bitsPerFrame,
@@ -1452,7 +1452,7 @@ run_resetns(void)
  *
  *   0   the guarded arm.  The object skips `divl` and LEAVES
  *       `signBitGroupSize` unwritten, which is only visible because nothing
- *       here is ever zeroed (finding 230): the seed is varied and non-zero,
+ *       here is ever zeroed (finding F230): the seed is varied and non-zero,
  *       so a reconstruction that stored a zero -- or that divided and trapped
  *       -- differs.  It is a runnable input on both sides because
  *       `V90SignBitsExtractor::reset` guards its own divide too.
@@ -1607,7 +1607,7 @@ run_reset(void)
 				 * ASSERTED AND NOT ONLY COMPARED: two
 				 * reconstructions that both dropped the
 				 * argument would agree with each other
-				 * (finding 224).
+				 * (finding F224).
 				 */
 				diff_eq_int("bitsPerFrame (%ld)",
 					    (long)d->bitsPerFrame,

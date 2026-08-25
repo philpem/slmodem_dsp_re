@@ -5,7 +5,7 @@
  * the datapump change, the V.34 startup, 33,600 each way and BER 0 both
  * directions -- all of it the blob's own code, because `vpcm_run` was not
  * reconstructed and it is the only route to `modem_get_bits`/`modem_put_bits`
- * for V.34 (finding 963).  This file is the same call with OUR `vpcm_run` at
+ * for V.34 (finding F963).  This file is the same call with OUR `vpcm_run` at
  * one endpoint, at the other, and at both, compared block by block against
  * the blob-blob run.
  *
@@ -29,7 +29,7 @@
  * three mixed runs are IDENTICAL to the blob-blob one at every one of the
  * 8,000 -- with the first differing block named when they are not.
  *
- * AND THE BIT COUNTS ARE PER ENDPOINT.  Finding 965: two endpoints sharing
+ * AND THE BIT COUNTS ARE PER ENDPOINT.  Finding F965: two endpoints sharing
  * one shim give a BER that reads zero whether or not a single bit crossed the
  * wire, so each endpoint has its own route, its own pattern and its own sink,
  * and every claim below is made twice rather than once for the pair.  An
@@ -94,13 +94,13 @@ extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
  * on the blob's five callees" and it is no longer "four of the five are
  * ours": on a 33,600 V.34 call every instruction the OURS side executes
  * BETWEEN THE TWO SAMPLE CONVERSIONS is this tree's, and every block still
- * has to agree with the blob-blob run.  Finding 1454 is what says the claim
+ * has to agree with the blob-blob run.  Finding F1454 is what says the claim
  * is that strong -- traced under callgrind, the call entered exactly one
  * unwritten symbol and it was `VPcmV34Progress`.
  *
  * CONSTRUCTION IS STILL BORROWED, AND DELIBERATELY.  Both endpoints are built
  * by `ref_dp_vpcm_init` and so by the blob's `ref_vpcm_create`, which is
- * findings 800-806's golden-object oracle rather than an omission: a
+ * findings F800-806's golden-object oracle rather than an omission: a
  * blob-constructed V.34 object is a valid differential fixture, and using it
  * is what lets the run path be compared at all.  `t_vpcmctor` and
  * `t_vpcmxfcreate` are where OUR construction is tested.  So the honest claim
@@ -124,10 +124,10 @@ extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
 #define O_RXRATE	0xaa98
 #define O_FILTDELAY	0xaa7c
 /*
- * The one pointer finding 968's segfault turned out to be about: the
+ * The one pointer finding F968's segfault turned out to be about: the
  * transmit shell context is at object +0x25e0 and `modulatevector` reads a
  * `short *` from its +0x24 at 0x5a286, indexes it at 0x5a37a and dies if it
- * is null.  Finding 986.
+ * is null.  Finding F986.
  */
 #define O_TXSHAPE	0x2604
 
@@ -149,7 +149,7 @@ extern int ref_VPcmV34Progress(void *obj, float *in, float *out, int nin,
 #define CFG_MAX_RATE	33600
 #define CFG_BUFWORDS	512
 
-/* Finding 962: recovered from `slmodemd`'s own drivers, not chosen. */
+/* Finding F962: recovered from `slmodemd`'s own drivers, not chosen. */
 #define CFG_IODELAY	216
 
 #define V8_MAX_BLOCKS	3000
@@ -269,7 +269,7 @@ routes_reset(void)
  * The shim an endpoint's bits actually went through.  An endpoint driven by
  * our code lands on side 0 and one driven by the blob's on side 1, so reading
  * the wrong table would report zero gets and zero puts for a working link --
- * which is precisely the vacuous measurement finding 965 exists to prevent,
+ * which is precisely the vacuous measurement finding F965 exists to prevent,
  * arriving from the other direction.
  */
 static struct modem_shim *
@@ -381,7 +381,7 @@ struct v34res {
 	int	dp_id;			/* what the connect arm left in dp.id */
 	/*
 	 * The pointer `modulatevector` dereferences at 0x5a37a, V.34 object
-	 * +0x2604 -- the transmit shell context's +0x24.  Finding 986.
+	 * +0x2604 -- the transmit shell context's +0x24.  Finding F986.
 	 */
 	int	txshape;
 	int	txshape_blk;
@@ -395,7 +395,7 @@ struct v34res {
 	 */
 	unsigned codemask;
 	unsigned codeseq;
-	/* Root +0xd254 and the runtime block's +0x6c -- finding 983's pair. */
+	/* Root +0xd254 and the runtime block's +0x6c -- finding F983's pair. */
 	int	extradelay;
 	int	addeddelay;
 };
@@ -639,7 +639,7 @@ main(void)
 	/*
 	 * AND THE BLOB ARM REALLY IS THE DATAPUMP'S `.process`.  The runs
 	 * below call `ref_vpcm_run` by name rather than through the table, so
-	 * this is what keeps that honest -- and it is finding 963's
+	 * this is what keeps that honest -- and it is finding F963's
 	 * identification of which entry carries the payload, checked rather
 	 * than quoted.
 	 */
@@ -730,7 +730,7 @@ main(void)
 		 * computes `((hwDelay + 2) >> 2) + 0x22`, i.e.
 		 * `((IODELAY + 6) >> 2) + 34`, and the fitted form is one too
 		 * small whenever `IODELAY mod 4` is 2 or 3 -- at 150 the object
-		 * gives 73 and the fit gives 72.  Finding 1021.
+		 * gives 73 and the fit gives 72.  Finding F1021.
 		 *
 		 * It matters beyond tidiness: at IODELAY 86 the object gives
 		 * 57, which IS the threshold, and the fit gives 56.  That is
@@ -795,13 +795,13 @@ main(void)
 			 ep_name[ep]);
 		diff_eq_int(msg, r->dp_id, VPCM_DP_V34, ep);
 		/*
-		 * THE POINTER FINDING 968's SEGFAULT WAS ABOUT, asserted here
+		 * THE POINTER FINDING F968's SEGFAULT WAS ABOUT, asserted here
 		 * because it is the state a driver has to reach and the
 		 * direct-drive fixture does not.  `modulatevector` loads a
 		 * `short *` out of the transmit shell context's +0x24 at
 		 * 0x5a286 and indexes it at 0x5a37a; with it null the
 		 * process dies the moment the object takes the DATA branch,
-		 * which is finding 968's block 21,707 exactly.  In a call
+		 * which is finding F968's block 21,707 exactly.  In a call
 		 * that connects it is installed 30 and 28 blocks BEFORE the
 		 * mode word turns 1, i.e. inside the handshake's last phase
 		 * and not on the data branch.
@@ -958,7 +958,7 @@ main(void)
 
 			/*
 			 * THE BIT PIPE, PER ENDPOINT AND WITH ITS COUNT.
-			 * Finding 965's trap in one line: a BER of zero over
+			 * Finding F965's trap in one line: a BER of zero over
 			 * zero bits is zero, so the number of bits is asserted
 			 * beside the number of errors, and never for the pair
 			 * jointly.

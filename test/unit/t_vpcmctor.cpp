@@ -69,7 +69,7 @@
  *
  * A swap of `entFiltDen` and `entFiltNum` in the constructor would therefore
  * be INVISIBLE to any comparison that simply excludes them, which is the exact
- * shape findings 1301 and 1307 are about.  So they are not merely excluded:
+ * shape findings F1301 and F1307 are about.  So they are not merely excluded:
  * each is pinned to a NAMED symbol pair -- ours must be `&entFiltDen` where
  * the blob's is `&ref_entFiltDen`, and likewise for the numerator -- which is
  * t_vpcmcreate.c's `check_alias_words` device applied to a data table rather
@@ -677,7 +677,7 @@ alias_check(void)
 
 /*
  * ===========================================================================
- * THE `GenericIIR`s, FOUND STRUCTURALLY, AND FINDING 1250 ASSERTED
+ * THE `GenericIIR`s, FOUND STRUCTURALLY, AND FINDING F1250 ASSERTED
  * ===========================================================================
  *
  * A `VPcmFloModem` graph contains several `GenericIIR<float, double>`s -- the
@@ -688,7 +688,7 @@ alias_check(void)
  *   +0x00 `m_den`, +0x04 `m_num`   BORROWED coefficient arrays (GenericIIR.h),
  *                                  so each side points at its own copy of a
  *                                  static table.
- *   +0x28 `m_i`, +0x2c `m_acc`     FINDING 1250, REPAIRED.  `reset()` counts
+ *   +0x28 `m_i`, +0x2c `m_acc`     FINDING F1250, REPAIRED.  `reset()` counts
  *                                  in `m_i` and neither constructor writes
  *                                  either member, so both sides leave `m_i`
  *                                  holding `m_outLen` and both leave `m_acc`
@@ -697,7 +697,7 @@ alias_check(void)
  *                                  why the two words stay excluded.
  *
  * THE STATE IS ASSERTED, NOT SKIPPED, which is t_gtonedet.cpp's rule and
- * finding 1250's own instruction.  All four halves are checked on every filter
+ * finding F1250's own instruction.  All four halves are checked on every filter
  * found: each side's `m_i` equal to its own `m_outLen`, and each side's
  * `m_acc` not zero.  Undo the repair in `src/dsp/FloatIIR.cpp` and these
  * checks fail, which is the notification that the exclusion has gone obsolete;
@@ -850,7 +850,7 @@ iir_scan(const struct region *r)
 			bad++;
 		}
 		/*
-		 * Finding 1250, all four halves, in its REPAIRED state: both
+		 * Finding F1250, all four halves, in its REPAIRED state: both
 		 * sides now leave `m_outLen` in `m_i` and neither writes
 		 * `m_acc`.  The two words stay excluded from the byte
 		 * comparison because `m_acc` holds whatever each side's
@@ -868,7 +868,7 @@ iir_scan(const struct region *r)
 		    || memcmp(r->b + o + 0x2c, zero8, 8) == 0) {
 			printf("    a filter at region %d +0x%04x: the BLOB's"
 			       " m_i is not m_outLen or its m_acc is zero --"
-			       " finding 1250 no longer describes it\n", r->k,
+			       " finding F1250 no longer describes it\n", r->k,
 			       o);
 			bad++;
 		}
@@ -1123,7 +1123,7 @@ run_ctor(const char *name, ctorfn our_ctor, ctorfn ref_ctor, int discover)
 		b_bytes = harness_alloc.bytes - a_bytes;
 
 		mismatch = ptrmap_take();
-		diff_eq_int("every GenericIIR is what finding 1250 describes"
+		diff_eq_int("every GenericIIR is what finding F1250 describes"
 			    " (trial %ld)", regions_take(), 0, trial);
 		diff_eq_int("and some filter was found at all (trial %ld)",
 			    n_iir > 0, 1, trial);
@@ -1311,7 +1311,7 @@ run_create(const char *name)
 			    malloc_usable_size(pa) >= FLO_SIZE, 1, trial);
 
 		mismatch = ptrmap_take();
-		diff_eq_int("every GenericIIR is what finding 1250 describes"
+		diff_eq_int("every GenericIIR is what finding F1250 describes"
 			    " (trial %ld)", regions_take(), 0, trial);
 		diff_eq_int("and some filter was found at all (trial %ld)",
 			    n_iir > 0, 1, trial);

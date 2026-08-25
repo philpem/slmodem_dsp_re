@@ -15,7 +15,7 @@
  * the loop index passed as the input feeds an integer to %s and segfaults --
  * at the moment the test has something to report, and never before.  Nine
  * call sites here were written that way and are now "... (%ld)".  Finding
- * 134's argument applied to a test rather than to a detector: a check that
+ * F134's argument applied to a test rather than to a detector: a check that
  * cannot report a failure is not a check.
  *
  * What is asserted here is the ORIGINAL's behaviour, measured.  That includes

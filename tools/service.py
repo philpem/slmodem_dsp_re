@@ -40,7 +40,7 @@ WHAT IT DOES NOT KNOW
 Run-time reachability, same as `closure.py`.  And it walks the BLOB's graph
 with an empty have-set on purpose -- the question is what the ORIGINAL needs
 behind an entry point, not what our tree still lacks, so a written function
-is walked through rather than stopped at (contrast finding 330, which is
+is walked through rather than stopped at (contrast finding F330, which is
 right for the link question and wrong for this one).
 """
 import argparse
@@ -84,7 +84,7 @@ OTHER = ["VOICE_create", "VOICE_delete", "VOICE_process", "VOICE_command",
 
 # The guard against the mis-seeding above, and it is SHOWN TO FIRE: with the
 # indirect targets bulk-seeded as data roots, all four of MUST_BE_FAX land in
-# `data` and this exits non-zero.  Finding 134: a check that cannot fail is
+# `data` and this exits non-zero.  Finding F134: a check that cannot fail is
 # not a check.
 MUST_BE_FAX = ["V17RX_create", "V27RX_create", "V29RX_create",
                "faxvmi_hdlc_unframe", "TxNextStateV17"]

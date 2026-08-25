@@ -27,7 +27,7 @@ That splits the work in two, and the split is not obvious:
 Measure before and after **from your own runs**, and diff the identical-symbol
 *lists*, not the counts: a count can gain four and lose four and look untouched.
 
-## 1. Magic numbers — 10,119 distinct values, 30,678 occurrences
+## F1. Magic numbers — 10,119 distinct values, 30,678 occurrences
 
 Against 1,760 constants already named. The ten most frequent are not noise:
 
@@ -43,7 +43,7 @@ that should be using a field.
 
 **The rule: name a constant when the NAME carries a derivation the number does
 not.** `V32_SYMBOL_NOCARRIER` earned its name because 0x10 is "seventeen map
-entries, minus one" (finding 3647) — the name records why. A `#define EIGHT 8`
+entries, minus one" (finding F3647) — the name records why. A `#define EIGHT 8`
 records nothing. Where the derivation is genuinely interesting, it belongs in a
 finding and the constant cites it.
 
@@ -54,7 +54,7 @@ reader would otherwise have to derive.
 
 **A number that names ANOTHER MODULE'S state is that module's constant, and
 this sub-rule is exempt from "inside the batch that closes the TU".** Finding
-6100 is the worked example: `v34diag.cpp` tested a V.92 modulator phase against
+F6100 is the worked example: `v34diag.cpp` tested a V.92 modulator phase against
 its own `V34DIAG_V92_UPSTREAM_ACTIVE 3` while `V92Modulator.h` defined
 `V92MOD_PHASE_DATA 3` for that same state, the two unconnected. A rename trips
 the compiler; **a re-encoding does not**, so the duplicate is a silent failure
@@ -62,9 +62,9 @@ waiting on an unrelated edit. That is a live correctness hazard rather than a
 readability one, which is why it was fixed when found rather than deferred to
 `v34diag.cpp`'s own batch. Anything else in §1 waits its turn.
 
-## 2. Shifts — 862 right, 203 left. LEAVE THEM ALONE.
+## F2. Shifts — 862 right, 203 left. LEAVE THEM ALONE.
 
-**This one is settled already and the answer is no.** Finding 1044 measured it:
+**This one is settled already and the answer is no.** Finding F1044 measured it:
 a signed `/ 2^k` must round toward zero, so GCC emits a fixup before the shift,
 where `>> k` on the same value is a bare `sar`:
 
@@ -79,14 +79,14 @@ Verified by building both shapes with this project's own flags. **In the whole
 So the object's choice between `>>` and `/` is **forced, detectable, and
 already recorded**. Rewriting one of our shifts as a divide would move codegen
 and destroy the evidence; rewriting a divide as a shift would silently change
-rounding for negative values. Findings 1184 and 1312 are two more sites where
+rounding for negative values. Findings F1184 and F1312 are two more sites where
 the distinction turned out to be the whole point.
 
 **What IS allowed:** say what the shift means in a comment, or introduce a
 named constant for the shift COUNT where it encodes a scale (`Q15_SHIFT`,
 `>> LOG2_SYMBOLS_PER_FRAME`). The expression stays; the intent gets stated.
 
-## 3. Comments — 4,154 address-citing lines across 260 files
+## F3. Comments — 4,154 address-citing lines across 260 files
 
 **Provenance has a lifespan, and this is the section that has to change twice.**
 
@@ -164,7 +164,7 @@ were byte-perfect. So where the SIZE is right the bytes usually are too, and the
 410 − 238 gap is functions whose instruction sequence is exactly right and whose
 register allocation is not.
 
-That gap is where the ideal meets finding 614, which classes register allocation
+That gap is where the ideal meets finding F614, which classes register allocation
 as FREE and warns that chasing it "means permuting source until the output
 matches, which is fitting the compiler, not recovering the source". Both stand,
 because they are about different things:
@@ -186,7 +186,7 @@ at some point the reconstruction stops being a reconstruction and becomes the
 source, and that is when the remaining address citations are worth a final
 sweep. Recording it here so it is not forgotten, not proposing it now.
 
-## 3a. Casts — 1,157 pointer, 4,804 width, and only 24 are the bad kind
+## F3a. Casts — 1,157 pointer, 4,804 width, and only 24 are the bad kind
 
 **A cast is a claim, and in this tree it is usually a claim that a DECLARATION
 is wrong.** Used sparingly it states something the type system cannot; used
@@ -208,7 +208,7 @@ Measured in `src/`:
 **FORCED — keep, and say why.** The object truncates, sign-extends or widens,
 and the cast is how C spells that. A `(short)` reproducing a `cwtl`, a
 `(unsigned short)` reproducing a `movzwl`, `(int)a * b >> 15` reproducing a
-Q15 multiply — these are EVIDENCE, and findings 613, 614 and 2702 are the tree
+Q15 multiply — these are EVIDENCE, and findings F613, F614 and F2702 are the tree
 arguing about exactly this class. Removing one changes behaviour. **The 4,804
 width casts are mostly this, and are NOT a cleanup target** — sweeping them
 would be actively harmful.
@@ -233,7 +233,7 @@ punning. The rest are `void *` from allocators and dispatch-table casts, most of
 which are legitimate. **Do not sweep by count.** The 24 are a task; the 1,157
 are a category to be careful in.
 
-## 4. Naming — 304 offset-named fields, 189 bare `fNNNN`, 148 unnamed flags, 90 `pad_*`
+## F4. Naming — 304 offset-named fields, 189 bare `fNNNN`, 148 unnamed flags, 90 `pad_*`
 
 Governed by `docs/plan.md` §3, which stands unchanged: **name inside the batch
 that owns the struct**, evidence order is a format string that prints the field,
@@ -241,10 +241,10 @@ then a callee or caller that types it, then usage inference — and **a wrong na
 is worse than a pad**, because no test can fail on it.
 
 Two live examples of the restraint that rule asks for: `V90CP` keeps eighteen
-offset names because no string names them (finding 3540), and `V92CP::+0x910`
+offset names because no string names them (finding F3540), and `V92CP::+0x910`
 stayed unnamed for a whole batch until `infoToBits` settled it as `msgLen`.
 
-## 5. Everything else worth doing
+## F5. Everything else worth doing
 
 - **Parameter names.** Unmeasured. A function whose parameters are `a1, a2, a3`
   is as opaque as a field called `f25d0`, and the same evidence order applies —
@@ -269,11 +269,11 @@ reasons and one more:
 
 1. **The evidence is freshest in the batch.** A format string that names a field
    is in hand while the function using it is being written, and expensive to
-   recover later. Finding 3303 is the negative proof: `v34_shell::pad_000`
+   recover later. Finding F3303 is the negative proof: `v34_shell::pad_000`
    looked like 2,560 bytes of opportunity and was a double count of a region
    `v34_object` already models — only the batch that knew the struct could tell.
 2. **A file still being written will churn.** Cleaning it twice is waste.
-3. **It avoids finding 3511.** A cleanup pass over a file another agent is
+3. **It avoids finding F3511.** A cleanup pass over a file another agent is
    writing is precisely the shape that merged with no git conflict and did not
    compile. A closed unit has no owner, so it is safe.
 

@@ -14,7 +14,7 @@
  * where a wrong feedback tap is invisible.  Each trial reseeds, so the low
  * bit of every byte that reaches the CRC varies across trials, and the run
  * asserts that the sixteen CRC bits it produces are not the same on every
- * trial (findings 223, 224: a passing comparison of memory neither side wrote
+ * trial (findings F223, F224: a passing comparison of memory neither side wrote
  * proves nothing).
  *
  * THE OBJECT IS COMPARED WHOLE, AND SO IS A GUARD PAST ITS END.  `diff_eq_obj`
@@ -27,9 +27,9 @@
  *
  * The `ref_` aliases are reached through asm() labels rather than by spelling
  * `ref__ZN5V90Jd12getBitVectorEv` as an identifier.  Both work; the label form
- * sidesteps finding 225 entirely, because the compiler never sees a name it
+ * sidesteps finding F225 entirely, because the compiler never sees a name it
  * could mangle a second time.  The convention is plain cdecl with `this` as
- * the first stack argument (finding 215), and both symbols are `T` in the
+ * the first stack argument (finding F215), and both symbols are `T` in the
  * blob, so no regparm attribute is involved -- unlike t_v34mp's.
  */
 
@@ -181,7 +181,7 @@ run_getbitvector(void)
 		/*
 		 * The returned pointer, checked against THIS side's own object
 		 * rather than merely for being non-null: both are `this + 2`,
-		 * and the two objects are at different addresses (finding 224).
+		 * and the two objects are at different addresses (finding F224).
 		 */
 		diff_eq_int("getBitVector() return offset (trial %ld)",
 			    pa - ours.raw, pb - theirs.raw, trial);
@@ -220,7 +220,7 @@ run_unpackreset(void)
 		/*
 		 * The three fields it clears are forced non-zero on both sides
 		 * first, so this is a real comparison rather than the seed
-		 * agreeing with itself at zero (findings 223, 224).
+		 * agreeing with itself at zero (findings F223, F224).
 		 */
 		OURS.unpack[0] = THEIRS.unpack[0] = (unsigned char)(trial | 1);
 		OURS.unpack[1] = THEIRS.unpack[1] = (unsigned char)(trial | 2);
@@ -338,7 +338,7 @@ run_ctor(void)
 /*
  * The destructor is one byte of `ret`, so the whole of its content is that it
  * does NOTHING.  Comparing two objects it did not touch would be the vacuous
- * check finding 223 warns about, so the assertion here is against the
+ * check finding F223 warns about, so the assertion here is against the
  * snapshot taken before the call -- if a future edit gives it a body, this
  * fails on our side alone rather than agreeing with a blob that also changed.
  */

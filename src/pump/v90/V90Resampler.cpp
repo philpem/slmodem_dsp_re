@@ -5,7 +5,7 @@
  * map, the sixteen BLL states and where their names came from;
  * dsplib/Resampler.h carries the chain and the four vtables.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * WHAT THIS CLASS ADDS to `ResamplerTiming` is the band-limited-loop STATE
  * MACHINE and a ring of timing measurements:
@@ -44,7 +44,7 @@
  * function boundary was the only difference between this function and the
  * object's: GCC hoisted the +0x0f4 load ABOVE the +0x0f0 store, where the
  * object -- and every one of the thirteen sibling arms, on both sides --
- * stores each gain before loading the next.  Finding 7776.
+ * stores each gain before loading the next.  Finding F7776.
  */
 
 #include <stddef.h>
@@ -96,7 +96,7 @@ typedef char vr_size[(sizeof(V90Resampler) == 0xb4) ? 1 : -1];
  * functions become none.  **The trigger is narrower than "first in the
  * file"** -- `V90Equalizer.cpp`'s destructor pair has the same signature and
  * moving it changed nothing -- so measure before and after rather than
- * reordering a file on the strength of this comment.  Finding 7774.
+ * reordering a file on the strength of this comment.  Finding F7774.
  *
  * `timingHistoryIndex = 0` IS IN THIS CONSTRUCTOR AND NOT IN THE OTHER, which
  * is the object's own asymmetry and not an oversight: this one is 69

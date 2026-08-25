@@ -15,7 +15,7 @@
  * arithmetic over 40 KB of tables.  A random 32-bit pattern is a signalling
  * NaN about one time in 250 and a random counter is an unbounded loop, so:
  *
- *   1. every block is seeded pairwise and varied, as finding 230 requires;
+ *   1. every block is seeded pairwise and varied, as finding F230 requires;
  *   2. then `reset` is called on BOTH sides, which legalises the modulator,
  *      the descrambler, the two Jd records and the impairment detector;
  *   3. then, and only then, the fields this method reads are written to
@@ -180,7 +180,7 @@ next_byte(void)
 	return (unsigned char)(lfsr_state >> 3);
 }
 
-/* VARIED BYTES, NEVER ZEROS (finding 230). */
+/* VARIED BYTES, NEVER ZEROS (finding F230). */
 static void
 fill_pair(void *a, void *b, size_t n)
 {
@@ -302,7 +302,7 @@ fill_params(int side, int trial)
 
 /*
  * The detector's three mapping tables, filled with varied SHORTS.  A short can
- * never be a NaN, so this is finding 230's varied fill without finding 230's
+ * never be a NaN, so this is finding F230's varied fill without finding F230's
  * hazard.  Everything else in the detector was zeroed and then reset.
  */
 static void
@@ -430,7 +430,7 @@ setup(int trial, const struct trial_args *t)
 		 * +0x3cc used to be declared `unsigned int` and this line
 		 * seeded it as one.  It is a `SerialDifferentialDecoder<int>`
 		 * now -- both reconstructions concluded that independently,
-		 * findings 2102 and 2110 -- so the seed names the member.  It
+		 * findings F2102 and F2110 -- so the seed names the member.  It
 		 * is the SAME four bytes set to the same 1, so the fixture is
 		 * unchanged in what it does: it puts a non-zero previous bit
 		 * into the differential decoder so that an arm which fails to
@@ -459,7 +459,7 @@ setup(int trial, const struct trial_args *t)
 		if (t->forceDilEnd) {
 			/*
 			 * `segmentIndex` AND `segmentLength` ARE SET HERE, AND
-			 * THAT IS THE WHOLE OF FINDING 2107.
+			 * THAT IS THE WHOLE OF FINDING F2107.
 			 *
 			 * This trial runs with `dilCount` zero, so
 			 * `resetDILGenerator` returns without touching the DIL
@@ -593,7 +593,7 @@ compare_ansam(const char *what, long tag)
 	 * has nothing to do with this method: the blob leaves `m_i` at the
 	 * loop bound and `m_acc` at whatever the allocator filled, and our
 	 * reconstruction leaves both zero.  That is a GenericIIR question and
-	 * it is recorded as finding 2103; excluding it here keeps this suite
+	 * it is recorded as finding F2103; excluding it here keeps this suite
 	 * measuring getV92Decision.  Everything else about the filter,
 	 * including both histories, IS compared.
 	 */
@@ -698,8 +698,8 @@ returns_a_value(int st)
  * with the blob proves nothing unless the interesting branches were entered,
  * and most of them are only visible through the state and event code the blob
  * writes.  These tallies are read off the BLOB's side after every call, and
- * `run_states` requires every one of them to be non-zero -- findings 247 and
- * 262 are why a coverage claim in this tree has to be satisfiable and checked.
+ * `run_states` requires every one of them to be non-zero -- findings F247 and
+ * F262 are why a coverage claim in this tree has to be satisfiable and checked.
  */
 struct tally {
 	int firstStudy;		/* case 10  -> state 0x0b            */
@@ -1071,7 +1071,7 @@ run_states(void)
 	 * when `segmentPos` is zero after `dilSymbol`.  This assertion read
 	 * `== 0` and the flag that reaches the tail was off, because forcing
 	 * it made the two sides disagree and that was recorded as a divergence
-	 * in `generateSymbol` (finding 2107).  It was not one: the fixture left
+	 * in `generateSymbol` (finding F2107).  It was not one: the fixture left
 	 * `segmentIndex` a random byte and `segmentLength[segmentIndex]` read
 	 * off the end of the slot, so the two sides were reading different
 	 * memory rather than running different code -- 2152, and `setup` now

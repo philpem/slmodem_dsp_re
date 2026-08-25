@@ -14,7 +14,7 @@
  *
  *   THE OBJECT DECIDES SOMETHING, so agreeing with the blob is not enough --
  *   an evaluator that always answers the same thing agrees with anything
- *   (findings 149 and 223).  `indicateLocalRetrain` and
+ *   (findings F149 and F223).  `indicateLocalRetrain` and
  *   `indicateRemoteRetrain` each have two verdicts, and the run below asserts
  *   that BOTH were observed for BOTH functions, and that the two really are
  *   different numbers rather than the same number twice.
@@ -55,7 +55,7 @@
 #include "dsplib/encode.h"
 /*
  * The NAMED 0x558 parameter map, not `V90PreFilter.h`'s 0x504 word block.  No
- * translation unit may include both (finding 1112), and the names are the
+ * translation unit may include both (finding F1112), and the names are the
  * point here: the retrain limits are read by name.
  */
 #include "dsplib/V90Parameters.h"
@@ -430,7 +430,7 @@ run_ce_lifecycle(void)
 		 * constructor already zeroed would be invisible; over a seeded
 		 * one it is a four-byte difference.  `-fno-lifetime-dse` is in
 		 * CXXFLAGS, so the store is not deleted and the difference is
-		 * real (finding 1224).  Both sides compare against the seed,
+		 * real (finding F1224).  Both sides compare against the seed,
 		 * because a mutation lands on OURS and `ce_b` would not move.
 		 */
 		{
@@ -1025,7 +1025,7 @@ run_ce_meanerr4(void)
  *   the harness's.  0x3ffcf calls `edprintf` with a format that has a `%d` and
  *   stores nothing to 0x4(%esp), so `vsnprintf` formats whatever the outgoing
  *   argument slot held -- a different frame on each side.  That one path
- *   compares state, verdict and LINE COUNT and not the text.  Finding 1388.
+ *   compares state, verdict and LINE COUNT and not the text.  Finding F1388.
  *
  *   NO NaN IS FED AS `evaluatePhase4`'s ARGUMENT.  Its comparison is the one
  *   place in either function where the parameter is the LEFT operand
@@ -1064,7 +1064,7 @@ static int p3_altrbs, p3_trn1d, p3_large, p3_retrain, p3_none, p3_empty;
 static int p3_five_then_four, p3_cleared_10, p3_cleared_18;
 static int p4_mean_arm, p4_mean_skipped, p4_large, p4_retrain, p4_none;
 static int p4_empty, p4_delayed, p4_delayed_over, p4_thresh_replaced;
-/* The retrain fired with an unordered `unnamed_434`.  Finding 2410. */
+/* The retrain fired with an unordered `unnamed_434`.  Finding F2410. */
 static int p4_nan_thresh;
 static int p4_cleared_10, p4_cleared_18, p4_guard_b0, p4_guard_ratio;
 static int p4_guard_count, p4_delayed_half, p4_missing_arg;
@@ -2029,7 +2029,7 @@ run_ce_phase4(void)
 		 *
 		 * `!(0.0f >= t)` prints '+' for it, which is what `sbb
 		 * %esi,%esi; and $0xfffffffe,%esi; add $0x2d,%esi` at 0x3fdb7
-		 * computes; `(0.0f < t)` prints '-'.  Findings 2300 and 2410.
+		 * computes; `(0.0f < t)` prints '-'.  Findings F2300 and F2410.
 		 *
 		 * ITS OWN BLOCK, NOT A DIMENSION OF THE ONE ABOVE: +0xac keeps
 		 * what the retrain stored, and that block's later iterations
@@ -2186,7 +2186,7 @@ run_ce_phase4(void)
 		 * does not leave our frame's slot holding what GCC 3.4's leaves
 		 * in the object's.  So the text is not compared here either, and
 		 * the claim is a note in the mutation set rather than a mutation.
-		 * Finding 1388.
+		 * Finding F1388.
 		 */
 		{
 			long tag = (long)lvl * 100000 + 700;
@@ -2412,7 +2412,7 @@ run_ce_phase4(void)
  *
  *   IT ANSWERS SIX THINGS, not three.  0, 1, 2, 3, 4 and 5 all reach %eax,
  *   from twenty-four immediates across two epilogues, and the block at the
- *   bottom of `main` asserts every one was OBSERVED -- findings 149 and 223
+ *   bottom of `main` asserts every one was OBSERVED -- findings F149 and F223
  *   are twice over the same failure, a decider that always decides the same
  *   way agreeing with anything.  VERDICT 3 IS THE FRAGILE ONE: it is raised
  *   only by the external-demand arm for +0x8c in {1, 4} and then survives
@@ -2465,7 +2465,7 @@ run_ce_phase4(void)
  *   comparisons are `ja`/`jbe`, which agree on both compilers.  It is also
  *   kept away from any path that PRINTS the average, because the sign
  *   character is `sbb` off the carry and reads unordered as '+'.  Finding
- *   1389.
+ *   F1389.
  */
 
 extern "C" {
@@ -3528,7 +3528,7 @@ main(void)
 	/*
 	 * THE DECISION WAS MADE BOTH WAYS.  An evaluator that always returns
 	 * the same verdict agrees with the blob on every trial and proves
-	 * nothing (findings 149, 223), so the two outcomes of each of the two
+	 * nothing (findings F149, F223), so the two outcomes of each of the two
 	 * deciding members are asserted here to have been OBSERVED -- and
 	 * asserted to be different numbers, since "both seen" is satisfied
 	 * trivially if 4 and 5 are the same constant.
@@ -3587,7 +3587,7 @@ main(void)
 		    p4_thresh_replaced, 1, 0);
 	/*
 	 * The one site in this file a NaN can reach: the replacement
-	 * threshold's own sign report.  Finding 2410.
+	 * threshold's own sign report.  Finding F2410.
 	 */
 	diff_eq_int("phase4: an unordered unnamed_434 reached the sign printer",
 		    p4_nan_thresh, 1, 0);
@@ -3626,7 +3626,7 @@ main(void)
 	 * one of the six is asserted to have been observed, and so is every
 	 * arm the verdict alone cannot separate -- an evaluator that always
 	 * answered the same thing would agree with the blob on all of it
-	 * (findings 149 and 223), and an assertion that fails here means the
+	 * (findings F149 and F223), and an assertion that fails here means the
 	 * fixture stopped reaching an arm and the checks that looked green
 	 * were vacuous.
 	 */

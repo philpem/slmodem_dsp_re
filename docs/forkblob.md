@@ -10,13 +10,13 @@ this reconstruction targets. Its `slmodemd/` ships **three** copies of the blob:
 | `dsplibs.o` | 1,232,028 | `56745e1162d138b9a4c7d2025c9b69f2` | the one their Makefile links |
 
 Everything below is measured, not inferred from the fork's prose. Findings
-1140-1146 carry the evidence.
+F1140-1146 carry the evidence.
 
 ## None of the three is a different build
 
 All three carry the same `.comment` — `GCC: (GNU) 3.4.2 (Gentoo Linux
 3.4.2-r2, ssp-3.4.1-1, pie-8.7.6.5)`, repeated 279 times, which is finding
-606's fingerprint exactly. All three have `.text` at file offset 0x40, size
+F606's fingerprint exactly. All three have `.text` at file offset 0x40, size
 0x0b1cf0, and the same 152 sections with the same names and the same sizes.
 The 283 `FILE` symbols are identical, and the relocation count is 18,317 in
 every case.
@@ -45,7 +45,7 @@ blob's, and the original stays callable as `__blob_VPCMXF_Create`. **The
 shipped blob's code is unmodified; only its linkage was changed.**
 
 `VPCMXF_Create` is exactly the function whose first argument decides which
-side of a V.90 call the object is (finding 701), so that is the knob the fork
+side of a V.90 call the object is (finding F701), so that is the knob the fork
 made reachable from C without touching the binary. Their own
 `slmodemd/dp_vpcm_shim.c` records the recipe in a comment —
 `objcopy --weaken-symbol=VPCMXF_Create --add-symbol
@@ -105,13 +105,13 @@ the analogue arm — 8000 Hz against 9600 Hz, the network PCM rate against the
 client's internal rate.
 
 So `.mod` turns the object into the **digital (server) side of a V.90 call**:
-the modulator branch findings 701 and 702 costed at 26 KB. Three further sites
+the modulator branch findings F701 and F702 costed at 26 KB. Three further sites
 (`ctor+0x25c`, `externalReset+0x111`, and the `V92ModemSide` compensation at
 `ctor+0x60`) are consistent housekeeping for that switch.
 
 **What it does NOT do is make the branch work.** It selects code the vendor
 never shipped as reachable; nothing here says that code is finished. Finding
-702's caution stands unchanged, and `.mod` is not evidence that anyone ever
+F702's caution stands unchanged, and `.mod` is not evidence that anyone ever
 got a call up in this mode — it is an inert file beside the one that ships.
 
 **The author says the same thing.** `.mod` entered their history as *"dodgy
@@ -136,7 +136,7 @@ blob-related commit is from March 2026 and by someone else. The 2025 change it
 describes is host-side: a resampler bridging 8 kHz RTP to the 9600 Hz the
 object actually wants (`RcFixed_Resample` in `slmodemd/modem_main.c`, absent
 upstream), plus a change to what `MDMCTL_IODELAY` reports. Neither touches the
-object's code, and the rate this tree pinned down in findings 17 and 23 is
+object's code, and the rate this tree pinned down in findings F17 and F23 is
 exactly the one that resampler exists to serve.
 
 Their HEAD is also no longer the configuration that bullet was measured on:

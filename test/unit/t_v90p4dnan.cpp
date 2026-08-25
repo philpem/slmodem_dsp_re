@@ -16,7 +16,7 @@
  *
  * WHY IT IS NOT IN `t_v90p4ddec`, and this is the whole reason the file
  * exists.  IEEE C requires a relational compare against a NaN to be false and
- * GCC 13 emits the parity test whatever it is told (finding 2304), so the
+ * GCC 13 emits the parity test whatever it is told (finding F2304), so the
  * modern build stores 0 here and `tools/gccdiverge.json` has to excuse the
  * check.  An excused binary EXITS NON-ZERO, and `tools/mutate.py` judges a
  * mutant caught by a non-zero exit -- so a binary that is already red cannot
@@ -26,7 +26,7 @@
  * and mutation-testable.
  *
  * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings 4812 and 2301.
+ * compiler, which is the tier that decides.  Findings F4812 and F2301.
  *
  * THE FIXTURE IS TINY BECAUSE THE ARM IS.  State
  * `CALC_ENERGY_AFTER_EC` reads `params`, calls
@@ -68,7 +68,7 @@ static unsigned char parm_s[sizeof(V90Parameters) + 64]
 #define DEM	((V90Demapper *)dem_s)
 #define PARAMS	((V90Parameters *)parm_s)
 
-/* Varied, never zero: findings 223, 224, 230. */
+/* Varied, never zero: findings F223, F224, F230. */
 static void
 fill(unsigned char *p, unsigned n, unsigned lfsr)
 {

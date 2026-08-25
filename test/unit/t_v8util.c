@@ -928,7 +928,7 @@ t_v8create(void)
 				lines += dsplib_debug_capture_lines(1);
 		}
 
-		/* Two empty captures also compare equal (finding 149). */
+		/* Two empty captures also compare equal (finding F149). */
 		diff_eq_int("diagnostics were captured (%ld lines)",
 			    lines > 100, 1, lines);
 	}

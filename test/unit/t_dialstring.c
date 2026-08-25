@@ -2,14 +2,14 @@
  * t_dialstring.c -- AnalyseDialString, called directly at last.
  *
  * t_dialer opens by saying this function "CANNOT BE CALLED DIRECTLY", and
- * finding 51 says the same and draws a rule from it.  Half of that was true.
+ * finding F51 says the same and draws a rule from it.  Half of that was true.
  * The symbol is file-local and had no `ref_` alias, so t_dialer reaches it
  * through `IsDialStringInvalid`, which pays twice: the caller collapses the
  * four grades into `grade <= DIALER_INVALID`, and it never passes `store`.
- * Finding 221 removed the first half -- --globalize-symbols promotes the
+ * Finding F221 removed the first half -- --globalize-symbols promotes the
  * symbol and the rename map then applies -- so `ref_AnalyseDialString` links.
  *
- * THE SECOND HALF OF FINDING 51 IS STILL TRUE, AND IS THE POINT
+ * THE SECOND HALF OF FINDING F51 IS STILL TRUE, AND IS THE POINT
  *
  * "A `t` symbol is not a testing inconvenience, it is a signal that the
  * calling convention may not be the C one.  Check before writing the
@@ -145,7 +145,7 @@ main(void)
 	 * The named strings, at every flag combination and both `store`
 	 * values.  Sixteen combinations because the three flags that reach
 	 * the parser test with the opposite polarity to their names
-	 * (finding 51's "three flags test inverted"), so both sides of each
+	 * (finding F51's "three flags test inverted"), so both sides of each
 	 * have to be walked rather than assumed inert.
 	 */
 	diff_begin("AnalyseDialString: strings and flags");

@@ -5,7 +5,7 @@ THE CHANGE UNDER TEST
   probe_preemp_shape() in v34hshak.c, gated DSPLIB_V34_SHAPE_PREEMP.
   Scores all eleven V.34 transmit-spectrum templates against the measured probe
   bins and returns the best fit, instead of reducing the channel to a two-point
-  tilt and indexing a counter that can only reach 6-10.  Findings 1956, 1957.
+  tilt and indexing a counter that can only reach 6-10.  Findings F1956, F1957.
   Committed 10dbf7c, make phase green, never executed.
 
 THE OUTCOME, and why it is not the connect rate
@@ -42,7 +42,7 @@ DESIGN       6 per arm per far end, 1901 and 1902, interleaved, quiet machine
 
 *** THE EXPECTED RESULT IS A NULL, AND THAT IS NOT A FAILURE ***
 
-  Finding 1956 measured the whole prize on this path at 0.13 dB RMS residual
+  Finding F1956 measured the whole prize on this path at 0.13 dB RMS residual
   (object index 7 at 1.37 dB, best available index 9 at 1.24 dB).  The reason is
   measured, not guessed: this channel is flat to +/-0.4 dB from 450 to 3150 Hz,
   so there is almost no tilt for any template to correct, and its one real

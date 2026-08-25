@@ -7,7 +7,7 @@
  * t_v23dp reaches all three indirectly: `create` and `destroy` come out of
  * what `dp_v23_init` registers, and `process` -- which is not in the ops table
  * at all, because the core calls `dp_wrapper_run` -- is read back out of the
- * wrapper at `((struct dp_wrapper *)dp->dp_data)->process`.  Finding 221
+ * wrapper at `((struct dp_wrapper *)dp->dp_data)->process`.  Finding F221
  * removed the need for any of that: the object's file-local symbols are
  * globalized before they are renamed, so `ref_v23_process` links.
  *
@@ -31,7 +31,7 @@
 #include "harness.h"
 #include "dsplib/v23.h"
 
-/* By name.  File-static in the object; see finding 221. */
+/* By name.  File-static in the object; see finding F221. */
 extern struct dp *ref_v23_create(void *modem, int id, int caller, int srate,
 				 int max_frag, struct dp_operations *op);
 extern int ref_v23_delete(struct dp *dp);

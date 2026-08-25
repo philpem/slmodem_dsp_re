@@ -15,7 +15,7 @@
  *
  * -- the allocation is `sizeof(V90Mapper)` written by the compiler that laid
  * the class out, which is better evidence than any displacement (finding
- * 1246).  The "one member of unknown width at 0x700 -- either reading is
+ * F1246).  The "one member of unknown width at 0x700 -- either reading is
  * consistent" sentence that used to stand here IS RETRACTED: +0x700 is a
  * four-byte member and both resets store zero into it with a `movl`, so the
  * class ends exactly at 0x704 with no tail padding at all.  See `word_700`.
@@ -80,8 +80,8 @@
  * +0x020..+0x055 IS 54 BYTES, AND IT IS NOW FOUR NAMED ARRAYS
  *
  * It was `pad_020[0x36]` while `process` was unwritten, deliberately: finding
- * 7103 had already tiled it, and a field no differential test can fail on is
- * finding 3120's hazard rather than progress.  `process` is written now, it is
+ * F7103 had already tiled it, and a field no differential test can fail on is
+ * finding F3120's hazard rather than progress.  `process` is written now, it is
  * the only member that touches any of the four, and `t_v90modchain`'s
  * `V90Mapper::process` group compares all 54 bytes against the blob's after
  * every frame -- so the tiling has a test behind it and the names go in.
@@ -96,7 +96,7 @@
  * for its own four parallel arrays.
  *
  * THREE OF THE FOUR ARE TYPED BY A MANGLING and one is not, which is the
- * difference worth carrying (CLAUDE.md's evidence order; finding 7420):
+ * difference worth carrying (CLAUDE.md's evidence order; finding F7420):
  *
  *   - `codes` and `signs` are `V90Demapper`'s own two names, for the same two
  *     quantities, reached the same way.  `codes` is handed to
@@ -134,7 +134,7 @@
  *
  * ---------------------------------------------------------------------------
  * Data member names are invented unless said otherwise; the mangling never
- * carries one (finding 226).
+ * carries one (finding F226).
  */
 
 #ifndef DSPLIB_V90MAPPER_H
@@ -237,7 +237,7 @@ public:
 	 * `bitsPerFrame`, and takes `bitsPerFrame` back off it afterwards
 	 * (`mov 0x1c(%ebx),%eax ; sub 0x4(%ebx),%eax ; mov %eax,0x1c(%ebx)`)
 	 * rather than clearing it, which is what carries a part-filled frame
-	 * across calls.  That is mechanism and not inference.  Finding 7421.
+	 * across calls.  That is mechanism and not inference.  Finding F7421.
 	 */
 	unsigned int bitsBuffered;
 
@@ -245,7 +245,7 @@ public:
 	 * +0x020 .. +0x055  ONE ENTRY PER SAMPLE OF THE SIX-SAMPLE FRAME, in
 	 * four parallel arrays, and `process` is the only member that touches
 	 * any of them.  See the file comment for which three are typed by a
-	 * mangling and which one is not, and finding 7103 for the tiling.
+	 * mangling and which one is not, and finding F7103 for the tiling.
 	 */
 	unsigned int  codes[V90MAPPER_FRAME];	/* +0x020 modulus digits */
 	short	      levels[V90MAPPER_FRAME];	/* +0x038 the PCM levels */
@@ -265,7 +265,7 @@ public:
 	 * `short` AND NOT `unsigned short`, and the encodings do not decide
 	 * it.  The only load in the object is `movzwl 0x56(%ebx,%edi,2),%esi`
 	 * in `process`, whose upper half is immediately discarded by
-	 * `mov %si,0x38(%ebx,%edx,2)` -- finding 614's FREE case, so the
+	 * `mov %si,0x38(%ebx,%edx,2)` -- finding F614's FREE case, so the
 	 * compiler could have used either instruction.  What does decide it
 	 * is the VALUES: every entry is an `alaw2linear`/`ulaw2linear` result,
 	 * which is a signed 16-bit PCM level and is negative for half the
@@ -332,9 +332,9 @@ public:
 	 * those two stores plus three `movswl 0x700(%ebx,%esi,2)` inside
 	 * `V90AutoDigitalImpDetector::studyUrefHandler`, which is a different
 	 * class -- so "nothing reads it" is a measurement over the whole
-	 * object and not an impression (finding 4342's rule).  A write-only
+	 * object and not an impression (finding F4342's rule).  A write-only
 	 * slot has no meaning to take a name from; `V90MappingParams::word_61c`
-	 * is the same case and the precedent for the spelling.  Finding 7102.
+	 * is the same case and the precedent for the spelling.  Finding F7102.
 	 */
 	unsigned int word_700;
 };

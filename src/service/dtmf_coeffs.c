@@ -8,14 +8,14 @@
  *   eur_coef  .data 0x008320  128 bytes
  *
  * Held in their own translation unit so the mutation set for the detector's
- * logic is not competing with 68 float literals for anchors (finding 1264).
+ * logic is not competing with 68 float literals for anchors (finding F1264).
  *
  * SHAPE.  Four floats per section, eight sections, indexed by tone in the
  * order 697 770 852 941 1209 1336 1477 1633 Hz -- the same order as
  * `dtmf_test`'s energy array, low group then high.  `notch()` reads the four
  * as (c0, c1, c2, c3); notch.h has the transfer function.
  *
- * DESIGN, recovered rather than guessed (finding 1411).  Each section is
+ * DESIGN, recovered rather than guessed (finding F1411).  Each section is
  *
  *     c0 = -2 cos(w0)   c1 = 2 r cos(w0)   c2 = -r*r   c3 = r
  *

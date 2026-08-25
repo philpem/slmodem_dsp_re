@@ -13,7 +13,7 @@
  *
  * NOT POLYMORPHIC.  Two destructors, `D1` at 0x192b0 and `D2` at 0x19160,
  * and no `D0`; a deleting destructor is what GCC emits for a virtual one
- * (finding 228), so there is no vptr and +0x00 is a real member.
+ * (finding F228), so there is no vptr and +0x00 is a real member.
  *
  * ===========================================================================
  * WHERE THE LAYOUT COMES FROM
@@ -52,7 +52,7 @@
  *            unmodelled span left anywhere in this object.
  *
  * THE ONE SIZE THAT RESTS ON ADJACENCY ALONE is `tagV90AdditionalCPinfo`'s
- * 0x18, which is 0xcd0 - 0xcb8 and nothing else -- finding 1320's bound with
+ * 0x18, which is 0xcd0 - 0xcb8 and nothing else -- finding F1320's bound with
  * no independent measurement beside it.  Every other size in this file has a
  * `sysdep_malloc` or an existing assertion behind it.  That is why no
  * `sizeof` is asserted for that struct and why its one member is a `pad_`.
@@ -69,7 +69,7 @@
  * seeded fixture means it frees garbage.  That is the object's behaviour and
  * it is reproduced; see test/unit/t_v90modemctor.cpp, which asserts our
  * allocator counters EQUAL the blob's rather than asserting they are zero.
- * V92Modem.h records the same shape for the same reason (finding 1323).
+ * V92Modem.h records the same shape for the same reason (finding F1323).
  */
 
 #ifndef DSPLIB_V90MODEM_H
@@ -83,11 +83,11 @@
 /*
  * POINTERS ONLY, SO FORWARD DECLARATIONS ONLY, and that is load-bearing
  * rather than tidy.  `V90Demodulator.h` drags in `V90PreFilter.h` and with it
- * the OTHER definition of `V90Parameters` (finding 1112), which cannot sit
+ * the OTHER definition of `V90Parameters` (finding F1112), which cannot sit
  * in a translation unit beside the named one in `V90Parameters.h`.  This
  * header is included by `VPcmFloModem.h`, so pulling either in here would
  * decide that question for every one of its users.  A translation unit that
- * needs to DEREFERENCE one of these includes it itself (finding 1325).
+ * needs to DEREFERENCE one of these includes it itself (finding F1325).
  */
 class V90Demodulator;
 class V90Jd;
@@ -101,7 +101,7 @@ struct tagV90DILdescriptor;
 /*
  * The mangling of the constructor spells both of these
  * (`12V90ModemSide`, `20V90ComputationalMode`) and says nothing about their
- * enumerators, so they are declared and not defined -- finding 226, and the
+ * enumerators, so they are declared and not defined -- finding F226, and the
  * spelling V90Equalizer.h and V92Modem.h already use.
  *
  * `V90ModemSide`'s underlying type is `unsigned int` because the DESTRUCTOR's
@@ -139,7 +139,7 @@ typedef char v90modem_side_is_unsigned[
  * builds the modulator and prints "Digital"; 1 builds the demodulator and
  * prints "Analog".  Which of these `vpcm_create` reaches is settled
  * elsewhere -- it passes a literal 0 to `VPCMXF_Create`, which inverts it, so
- * the shipped side is always ANALOG (findings 701, 702).
+ * the shipped side is always ANALOG (findings F701, F702).
  */
 #define V90_MODEM_SIDE_DIGITAL	0
 #define V90_MODEM_SIDE_ANALOG	1
@@ -176,7 +176,7 @@ public:
 	 * differ in ONE BYTE, the epilogue's scratch pop -- D1 has `pop %edx`
 	 * where D2 has `pop %eax` -- which is register allocation and is the
 	 * compiler's free choice.  V92Modem's pair differs the same way and
-	 * for the same reason (finding 1324).
+	 * for the same reason (finding F1324).
 	 */
 	~V90Modem();
 
@@ -244,7 +244,7 @@ public:
 
 	void setSessionFlag(unsigned int flag);
 
-	/* --- data members; the mangling never carries one (finding 226) --- */
+	/* --- data members; the mangling never carries one (finding F226) --- */
 
 	V90Modulator *modulator;		/* +0x0000 side == 0      */
 	V90Demodulator *demodulator;		/* +0x0004 side == 1      */
@@ -274,7 +274,7 @@ public:
 	 * +0x0018 and +0x0668.  Arguments 6 and 7 of both halves, in that
 	 * order -- the constructor loads `this + 0x18` into the sixth slot
 	 * and `this + 0x668` into the seventh, and the two are the SAME TYPE,
-	 * so nothing but the slot distinguishes them.  Findings 1301 and 1307
+	 * so nothing but the slot distinguishes them.  Findings F1301 and F1307
 	 * are two batches that shipped exactly this pair in the wrong order;
 	 * the test drives them through the callee, which is the only place a
 	 * swap becomes visible.

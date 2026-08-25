@@ -77,7 +77,7 @@ static int bufs_b[V90CP_BUFS][V90CP_BUFENTS];
 
 /*
  * The same varied bytes into both sides, into the objects and into the
- * buffers.  Never zeros -- finding 230 -- and the pointers are re-installed
+ * buffers.  Never zeros -- finding F230 -- and the pointers are re-installed
  * afterwards because the seed has just walked over them.
  */
 static void

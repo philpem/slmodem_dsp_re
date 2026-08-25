@@ -26,13 +26,13 @@ came back. There is no blob to be differentially identical to, so the rule
 cannot apply to it and must not be read as forbidding a commit there. What
 DOES apply is the discipline those tools were built under and which cost more
 to learn: a detector must report its denominator, and a tool that prints
-nothing is indistinguishable from a tool that is broken (findings 134, 2400,
-2401). Show a new analysis firing on a known input before trusting a clean
+nothing is indistinguishable from a tool that is broken (findings F134, F2400,
+F2401). Show a new analysis firing on a known input before trusting a clean
 run from it.
 
 ## Budget your turns, not your reading
 
-Finding 220 measured this, so it is not a guess. **Context growth is
+Finding F220 measured this, so it is not a guess. **Context growth is
 cumulative output, converging to 1:1** — every token you generate stays in the
 window for the rest of the session. Output runs 1,100–1,800 tokens per turn,
 which puts the wall near 500–900 turns *whatever the turns are about*.
@@ -84,7 +84,7 @@ A loop is still right where some region must be skipped — two heap pointers
 hold two different addresses and always will. Those keep working: `diff_eq_int`
 now appends the input when the format string has no conversion for it, which
 repaired 819 call sites that were silently discarding the offset they computed
-(finding 220).
+(finding F220).
 
 ## Naming: fields, and flags
 
@@ -124,7 +124,7 @@ single-bit uses and 235 multi-bit ones, so check which you have before naming.
 
 1. **A format string that prints the thing.** `.rodata` labels are the original
    author's own words. `tools/relocscan.py --at .rodata.str1.1:0xNNNN` finds
-   who references one (finding 604). This is not the Ghidra prohibition — that
+   who references one (finding F604). This is not the Ghidra prohibition — that
    rule forbids names from DECOMPILER OUTPUT, not from the binary's own text.
 2. **A callee or caller that types it.** A mangled C++ name carries argument
    types; a field passed to `Scrambler<h,h>::process` has that element type
@@ -165,9 +165,9 @@ only forward-declare it. Keep the example — the failure mode is exactly as
 described and cost real time — but do not send anyone hunting for it.
 
 That correction came from an agent briefed to expect the trap, which measured
-the tree instead of believing the brief (finding 6402). **A rules file has the
-same shelf-life problem as a comment and no gate behind it**: findings 6100 and
-6103 are the same defect in a source comment and in this file's own gccdiverge
+the tree instead of believing the brief (finding F6402). **A rules file has the
+same shelf-life problem as a comment and no gate behind it**: findings F6100 and
+F6103 are the same defect in a source comment and in this file's own gccdiverge
 tally. When a paragraph here states a COUNT or a live defect, check it against
 the tool before repeating it.
 
@@ -183,7 +183,7 @@ runs the suite. Our source and the object, compiled by the same compiler,
 compared at runtime -- so a difference is a difference in the code and not in
 the toolchain.
 
-**IT IS GCC 3.4.2 ITSELF SINCE FINDING 2200**, bootstrapped from the GNU
+**IT IS GCC 3.4.2 ITSELF SINCE FINDING F2200**, bootstrapped from the GNU
 tarball by `tools/toolchain/Dockerfile.exact`, and until then it was Debian
 sarge's `3.4.4` prerelease while every comment in the tree said 3.4.2. Build
 the image once:
@@ -216,7 +216,7 @@ goes in a binary of its own.** `tools/mutate.py` judges a mutant caught by a
 non-zero exit, and a declared binary exits non-zero on the UNMUTATED source --
 so it cannot score a mutation set against that baseline and it refuses, for
 the SUITE and not the row. That silently removed nine suites and 647 verdicts
-before anyone counted them (findings 2157 and 3002). Three binaries now carry
+before anyone counted them (findings F2157 and F3002). Three binaries now carry
 one declared check each for this reason -- `t_v90p4dnan`, `t_v92ecnan`,
 `t_v90adidnan` -- and **none of them has a mutation suite**, because a
 registered suite that can never be recorded reads MISSING to
@@ -224,7 +224,7 @@ registered suite that can never be recorded reads MISSING to
 other way round: three GREEN members lifted out of a declared parent, so it
 keeps its suite. Split the VALUE where you can rather than the group -- the
 blob treats a NaN and 177.0f as one input, so `t_v90leaves` lost one check of
-4,570 and kept every shape. Findings 6000, 6001 and 6002.
+4,570 and kept every shape. Findings F6000, F6001 and F6002.
 
 `t_v90equproc` is declared without being a split -- it is `V90Equalizer::
 process`'s own binary and its divergence is the whole test's, not one check
@@ -238,7 +238,7 @@ will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
 translation unit, which breaks eleven other sites that depend on them. So the
 source is the object's, `make period` proves it, and the modern build
 declares. `t_agc`, `t_v90equ`, `t_v92ecnan`, `t_v90adidnan` and `t_v90p4dnan`.
-Findings 2300 and 2304.
+Findings F2300 and F2304.
 
 The other two are **x87 excess precision**, where the object narrows an
 intermediate the modern compiler keeps at 80 bits: `t_psd` in the FFT
@@ -265,7 +265,7 @@ including the one that was silent: 78 files guard their offset assertions on
 ## The second tier: comparing code generation
 
 `.comment` names the original's compiler 279 times over — **GCC 3.4.2**, built
-22 September 2005 (finding 606). `tools/toolchain/` has a container with it,
+22 September 2005 (finding F606). `tools/toolchain/` has a container with it,
 and `make similarity` builds every translation unit with it and compares the
 result against the blob, function by function.
 
@@ -282,7 +282,7 @@ moves against.
 same tree matches 324, and the exact 3.4.2 gains six and loses none. So a
 number quoted from this tool is only meaningful with the compiler beside it,
 which is why `compare.py` now prints the blob's `.comment` and ours on every
-run. Finding 2200, and 2201 for what the blob's Gentoo patch stack means:
+run. Finding F2200, and 2201 for what the blob's Gentoo patch stack means:
 stock 3.4.2 is the exact POINT RELEASE, never the exact compiler.
 
 **AND THE GENTOO COMPILER ITSELF IS NOW BUILT.** `dsplibs-tc342-gentoo` is
@@ -305,7 +305,7 @@ gained and none lost, and the single difference is a schedule permutation in
 rather than bounded, and the default stays `dsplibs-tc342` -- which anyone can
 build from the network alone. `-O3` (2155) and `-mno-ieee-fp` (1990) were
 re-measured on the real compiler and both survive symbol for symbol. Findings
-2320, 2500 and 2501.
+F2320, F2500 and F2501.
 
 The flags were derived from the object, not guessed, and are in
 `tools/toolchain/build.sh` with the evidence beside each:
@@ -317,13 +317,13 @@ The flags were derived from the object, not guessed, and are in
 `-mtune=i686` is worth knowing about: `-march` and `-mtune` are separate
 questions and only the first leaves a trace, so "no cmov in 1.2 MB" bounds the
 instruction set and says nothing about scheduling. Finding it took the match
-from 30 to 82 (finding 612). `-frename-registers` took it to 92 (616).
+from 30 to 82 (finding F612). `-frename-registers` took it to 92 (616).
 
 **The level is `-O3`, and 616's ruling against it is overturned** -- on a tree
 three times the size, `-O2` matches 313 and `-O3` matches 324, and the `-O3`
 set gains 15 while losing 4 rather than swapping. 616 measured at 92 of 365,
 where `-finline-functions` had almost nothing to inline across. `make period`
-is green at both, and there is no divergence to declare. Finding 2155.
+is green at both, and there is no divergence to declare. Finding F2155.
 
 `-mno-ieee-fp` is the newest and its worth is not in its +2 (302 -> 304): the object's float
 compares are ordered, 406 `fcom`-family against four `fucom` that are all
@@ -331,7 +331,7 @@ inside libm's `pow`, and the default `-mieee-fp` emits `fucom` for every
 comparison whatever the source says. Until it was set, **every float
 comparison in every function read as a codegen mismatch** -- so a numeric
 function's per-symbol diff was measuring our flags, not our source. Finding
-1990.
+F1990.
 
 **IT IS NOW IN `period_inner.sh` TOO, and the two flag sets no longer
 diverge.** Setting it there used to cost five suites, and 1990 refused to
@@ -432,7 +432,7 @@ maintained; this section is the summary.
   pairs `movswl` against `movzwl` on the same field and reports only where the
   32-bit result is USED, which is the forced case above. **18 candidates over
   938 symbols, and one report in five is real** — 14 traced, 3 true, 4 left
-  unverified and named (finding 2402). Every hit must be traced against
+  unverified and named (finding F2402). Every hit must be traced against
   `dis.py` before anything is
   retyped; the twelve failures are a 16-bit compare, a signed branch on a
   16-bit test, a sum truncated by a cast, and a value masked to two bits, and
@@ -446,7 +446,7 @@ maintained; this section is the summary.
   than the general rule** — `compare.py` drops operands, so pure register
   allocation already scores as identical and cannot reach this list; what is
   still free in it is scheduling, 614's discarded upper half, and 2411's
-  integer if-conversion. 69 rows classified in finding 2900, of which three
+  integer if-conversion. 69 rows classified in finding F2900, of which three
   were real (2901), three were 614 and declined (2902), and ten are forced
   and named for the next pass (2903).
 - `storeorder.py` — store order, and a HINT, not a defect list. 617's
@@ -464,12 +464,12 @@ over 365 symbols and did not survive re-measurement (2402).
 **Any tool here must be shown to fire.** `extcheck` printed "(none)" through
 four broken versions and there was no way to tell a clean tree from a dead
 detector; both aids are now validated by reintroducing a known defect and
-watching it appear, then restoring and watching it go. Finding 134's argument.
+watching it appear, then restoring and watching it go. Finding F134's argument.
 
 **And it happened again, to both of them at once.** They kept defaulting to
 `TC_OUT=/tmp/tc_out` after `build.sh` moved its output to `build/tc_out`, so
 with no environment set they compared **zero** symbols and reported a clean
-tree, exit 0 (finding 2400). Both now refuse to run on an empty `TC_OUT` and
+tree, exit 0 (finding F2400). Both now refuse to run on an empty `TC_OUT` and
 print the number of symbols compared on every line that carries a verdict. **A
 detector must report its denominator** — re-running the injection ritual on the
 current toolchain is what found that, and two more bugs under it (2401).
@@ -484,7 +484,7 @@ aggregated into "differential, 64-bit, interop, coverage and debug sites all
 OK", exit 0. Two of five tiers had measured nothing and the gate could not
 tell. It now probes both layouts, **exits non-zero on a zero denominator**, and
 prints the count on every line carrying a verdict; `make phase`'s closing line
-quotes those denominators and refuses to be printed without them. Finding 3100,
+quotes those denominators and refuses to be printed without them. Finding F3100,
 and it is the same defect as 2400 with the gate rather than an aid behind it.
 
 **AND A THIRD TIME, TO SEVEN TOOLS AT ONCE — SAME COMMIT, OTHER HALF OF THE
@@ -506,7 +506,7 @@ and the object count on stderr, and warns without refusing when the tree is
 PARTIAL (fewer objects than sources -- silently 52.2% against a true 54.8%) or
 STALE (a source newer than every object). The probe order is licensed by
 measurement, not assumption: both object trees define the same 1457
-`(name, kind)` pairs. Findings 3055, 3110 and 3111.
+`(name, kind)` pairs. Findings F3055, F3110 and F3111.
 
 ## Ghidra is scaffolding, never evidence
 
@@ -567,12 +567,12 @@ Task numbers are not safe across sessions either: two task stores exist whose
   (`v34hstx1.cpp`: `nm -g` shows nineteen `T v34tx1_*` and zero `_Z`) is
   callable, and a `.cpp` of real classes (`VPcmFloModem`, `K56FlexFloModem`)
   is not, whatever the Makefile does. Check with `nm -g`, not by reading.
-  Findings 333 and 344 for why `v34hstx1.cpp` is a `.cpp` at all; 711 for the
+  Findings F333 and F344 for why `v34hstx1.cpp` is a `.cpp` at all; 711 for the
   expiry and the three conditions.
 - **A relocation on a call proves nothing about the translation unit; its
   ABSENCE does.** A resolved PC-relative displacement with no relocation means
   the target is `LOCAL` and in the same TU. A relocation being present only
-  means the symbol is `GLOBAL`. Findings 306 and 333.
+  means the symbol is `GLOBAL`. Findings F306 and F333.
 - `tools/dis.py` shadows the standard library's `dis`, which `inspect`
   imports. A tool in `tools/` that reaches for pyelftools dies with
   `AttributeError: module 'dis' has no attribute 'COMPILER_FLAG_NAMES'`,
@@ -581,7 +581,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
 - **objdump swaps FDIVP/FDIVRP and FSUBP/FSUBRP.** The `DE` pop encodings
   print as their own opposite: `de f1` reads `fdivp` and IS `FDIVRP`
   (`ST(1) = ST(0)/ST(1)`). The `D8` register forms are fine. For any popping
-  divide or subtract, read the bytes, not the mnemonic — finding 245.
+  divide or subtract, read the bytes, not the mnemonic — finding F245.
 
   **Upgrading objdump does not help and `tools/dis.py` now tells you anyway.**
   Binutils 2.15 in the container and 2.42 on the host print these identically
@@ -589,19 +589,19 @@ Task numbers are not safe across sessions either: two task stores exist whose
   `objdump -M intel` renders the same bytes the architecture's way, and
   `dis.py` runs that second pass for you and appends `<== Intel: fdivp` to any
   line where the two disagree — 4 lines of 763 on a real function, silent
-  elsewhere. Finding 2156, which also records how the measurement nearly went
+  elsewhere. Finding F2156, which also records how the measurement nearly went
   wrong: comparing two objdumps under different `-M` settings made them look
   exactly opposite and almost retired 245.
 - A string reference is an `R_386_32` against the SECTION symbol with the
   offset as an inline addend, so searching the disassembly for a string's
   address finds nothing and proves nothing. `tools/relocscan.py --at
   .rodata.str1.1:0xNNNN` is what answers "who references this string" —
-  finding 604, where not knowing that had a defect misdiagnosed for weeks.
+  finding F604, where not knowing that had a defect misdiagnosed for weeks.
 - A per-FUNCTION count across an inlining boundary measures our factoring, not
   our completeness: where we split one of the original's functions into static
   helpers, the helpers have no blob symbol and their bytes count against
   neither side. Read `debugaudit.py --missing`'s per-file rollup first
-  (finding 605), and `compare.py`'s per-object one (610).
+  (finding F605), and `compare.py`'s per-object one (610).
 - Use `tools/dis.py`, not raw `objdump`, for anything that might touch a
   table: objdump prints relocations on their own lines and every convenient
   way of trimming its output drops them, turning a table of pointers into a
@@ -612,7 +612,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
   where one side's file is wanted entire (a generated artefact); otherwise edit
   the markers by hand, and afterwards grep for a distinctive string from each
   side's contribution. A merge that compiles is not a merge that kept
-  everything -- finding 700.
+  everything -- finding F700.
 - Other sessions work in sibling worktrees. Check `git worktree list` and
   `git status` before touching one, and never `git stash` in a tree you do
   not own.
@@ -634,7 +634,7 @@ Task numbers are not safe across sessions either: two task stores exist whose
     it and the interop tier cannot link. That failed at the top of a 1,573-line
     log everybody read the tail of, so `make phase` gained a `prereq` target
     that runs FIRST, refuses if the library is absent, and symlinks the main
-    tree's copy when it can find one (finding 1563).
+    tree's copy when it can find one (finding F1563).
   - `BLOB ?= ref/slmodemd/dsplibs.o` pointed at `.claude/worktrees/slmodemd` and
     every run died at `No rule to make target`. Loud, so not the same class of
     bug, but it blocked every worktree run until someone passed `BLOB=/abs/…`.
@@ -644,6 +644,6 @@ Task numbers are not safe across sessions either: two task stores exist whose
     explicit `BLOB=` still wins.
 
   What neither of them was is a reason to distrust a worktree's gate. That was
-  finding 3100, and it was a branch difference and not a worktree one: the
+  finding F3100, and it was a branch difference and not a worktree one: the
   coverage tiers had stopped measuring on `master` and would have measured
   nothing in the main tree too, the moment it checked `master` out.

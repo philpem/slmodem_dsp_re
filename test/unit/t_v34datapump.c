@@ -9,7 +9,7 @@
  *
  * SIDE A RUNS `datapumpv34` AND SIDE B `ref_datapumpv34`, through
  * `v34hs_entry`.  That is a new door into test/harness/v34hsstep.c and the
- * reason it is worth cutting is findings 319-322: what an object step depends
+ * reason it is worth cutting is findings F319-322: what an object step depends
  * on is the geometry of the five blocks the object points at, and this
  * function steps the same object `v34handshak` does.  A second fixture would
  * be that geometry built a second time.
@@ -33,7 +33,7 @@
  * false, which is a real case -- the object reaches it whenever a block
  * completes -- and it is driven below with the tail's triggers armed, so a
  * reconstruction that took the wrong branch would retrain and be caught.
- * Finding 452 records the rest.
+ * Finding F452 records the rest.
  *
  * THE OTHER TWO LOOPS DO RUN.  `modulatevector` advances the transmit cursor
  * four samples a call through `txmit`, and `receiver` drains the receive
@@ -157,7 +157,7 @@ peek_int(int side, unsigned off)
  * could produce, so that "this arm did not run" is a claim the object can
  * carry rather than an absence.
  *
- * NOT ZEROES (finding 230): 0x5a5a in +0x25e and 0x3c3c in +0x260 are
+ * NOT ZEROES (finding F230): 0x5a5a in +0x25e and 0x3c3c in +0x260 are
  * distinguishable from every value the four blocks write, which are 1, 2, 3
  * and whatever +0xaa98 holds.
  */
@@ -987,7 +987,7 @@ main(void)
 	 *
 	 * First: every trial's record was filled.  An array written and never
 	 * read, under a comment promising it cannot go stale, is what finding
-	 * 290 records this fixture doing to `saw_hole`.
+	 * F290 records this fixture doing to `saw_hole`.
 	 */
 	for (i = 0; i < NTRIALS; i++) {
 		char msg[192];
@@ -1037,7 +1037,7 @@ main(void)
 
 	/*
 	 * And at least one trial must have printed, or the whole diagnostics
-	 * pass is a comparison of two empty transcripts (finding 362 is that
+	 * pass is a comparison of two empty transcripts (finding F362 is that
 	 * failure mode, named there rather than caught).
 	 */
 	{

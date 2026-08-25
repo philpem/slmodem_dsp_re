@@ -24,7 +24,7 @@
  * reading of it moves the threshold by 65,536.
  *
  * AND `v34handshakinit` RUNS INSIDE THE STEP on the retrain path, so those
- * cases are what finding 359 says `V34HS_REFINIT=1` cannot be used against:
+ * cases are what finding F359 says `V34HS_REFINIT=1` cannot be used against:
  * side A installs our library tables and side B the blob's, and no address
  * comparison can settle two copies of one table.  `t_v34hst3m41.c` drives
  * microstate 41's retrain the same way.
@@ -92,7 +92,7 @@
  * Both are interior pointers, which the harness compares by offset from each
  * side's own base; `v34hs_poke_self_ptr` aims each side at its OWN object
  * because one address written into both is precisely the asymmetry findings
- * 319-322 are about.
+ * F319-322 are about.
  */
 #define RX53_REC_AA70	0x8100
 #define RX53_REC_AA6C	0x8200
@@ -116,7 +116,7 @@ static int default_fill;
  * Open a case: the route, the three state words, table 2's five inputs, and
  * every field this arm writes seeded to something it does NOT write.
  *
- * That last part is finding 345's failure mode turned on this arm.  The tail
+ * That last part is finding F345's failure mode turned on this arm.  The tail
  * stores zero to six halfwords and SIX to +0xaade, and a field already
  * holding what a store writes makes the store invisible and its mutation
  * equivalent.  `+0xaade == 6` is the collision the fill could plausibly hand
@@ -264,7 +264,7 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 	/*
 	 * BOTH OF THESE ARE PROPERTIES OF THE FILL AS WELL AS OF THE ARM, so
 	 * both are asserted at the default fixture only.  `changed` counts
-	 * bytes differing from what the fill left, which finding 359 measured
+	 * bytes differing from what the fill left, which finding F359 measured
 	 * moving by a byte or two across seeds; and `lines` moves because
 	 * `probeselect` -- which the INFO1c body calls -- prints a number of
 	 * diagnostics that depends on the probe results.
@@ -307,7 +307,7 @@ control(const char *what, long tag)
 
 /*
  * The distinct behaviours this file claims, so that a change collapsing two
- * of them is a failure rather than a silence (finding 290).
+ * of them is a failure rather than a silence (finding F290).
  */
 #define NSIG	16
 static unsigned sig[NSIG];
@@ -886,7 +886,7 @@ main(void)
 
 	/*
 	 * The behaviours claimed distinct, pairwise.  A change collapsing two
-	 * of them is a failure rather than a silence (finding 290), and the
+	 * of them is a failure rather than a silence (finding F290), and the
 	 * count is pinned because a `record()` deleted in an edit would
 	 * shrink the check in silence.
 	 */

@@ -23,7 +23,7 @@
  * `ext[FPM_PHASOR_SIGN_BELOW + quad]`.  The neighbourhood block below compares
  * all sixteen of them against `dsplibs_ref.o`'s own `.data`, which is the
  * BLOB's bytes and nothing we compile, so no instrumentation of ours can move
- * it.  D392, findings 3588, 3620-3624 and 3700-3703.
+ * it.  D392, findings F3588, F3620-3624 and 3700-3703.
  *
  * Also checks the recovered table derivation against all 257 extracted
  * entries, so a future regeneration at another scale cannot silently drift.
@@ -199,14 +199,14 @@ main(void)
 	 * word of the window, so it can only tell that word apart from zero
 	 * when the reference's own output is non-zero.  Counting those is
 	 * therefore a count of trials whose OBSERVED VALUE separates the two
-	 * readings, not a count of trials that took a path (finding 3509).
+	 * readings, not a count of trials that took a path (finding F3509).
 	 *
 	 * The sine's fourth window word IS zero -- it is the two bytes of
 	 * padding at .data 0x081da, not a coefficient -- so quadrant -1
 	 * (phases 0xE000 .. 0xFFFF) returns zero on both sides for every
 	 * phase and separates NOTHING.  It agreed before any of this work,
 	 * when our `static const` layout put `fpm_cos_table[256]` there and
-	 * that is zero too, and finding 3623 records that as two layouts
+	 * that is zero too, and finding F3623 records that as two layouts
 	 * coinciding rather than as coverage.  It is asserted at 0 here so
 	 * that nobody reads the sweep as covering it: the check that this
 	 * word is the object's is the neighbourhood block above, which

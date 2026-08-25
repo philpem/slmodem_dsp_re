@@ -110,7 +110,7 @@ static unsigned char cp_s[CP_SLOT];		/* the seed, for the guard  */
 #define CPB	((V90CP *)cp_b)
 
 /*
- * The same varied bytes into both sides.  Never zeros -- finding 230 -- and
+ * The same varied bytes into both sides.  Never zeros -- finding F230 -- and
  * no pointer is re-installed afterwards, because nothing under test reads one.
  */
 static void

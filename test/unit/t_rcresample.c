@@ -17,7 +17,7 @@
  * been pushed, so the streams are long enough to cross it several times.
  *
  * WHAT THIS FILE CANNOT CHECK, AND WHY THERE IS NO TEST FOR IT.  `phase`,
- * `down` and `up` are signed 16-bit fields, and finding 2700 corrected all
+ * `down` and `up` are signed 16-bit fields, and finding F2700 corrected all
  * three from `unsigned short`.  Nothing below can tell the two readings apart
  * and nothing added below could: the factors come from `fixedRc_DownFact[]`
  * and `fixedRc_UpFact[]`, whose largest entry is 24, `phase` is a remainder

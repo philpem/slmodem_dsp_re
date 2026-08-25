@@ -14,7 +14,7 @@
  * If the coefficients leave every candidate scoring alike, candidate 0 always
  * wins, the committed action is always the same, and a reconstruction that had
  * the digit order backwards or the metric comparison reversed would still
- * agree with the blob on every trial.  That is findings 3509 and 3403 exactly.
+ * agree with the blob on every trial.  That is findings F3509 and F3403 exactly.
  * So the suite does not merely count trials: `run_trellis` recovers WHICH
  * ACTION was committed on each trial by comparing the delay line's head
  * against the four polarity patterns computed here, and asserts that across
@@ -141,7 +141,7 @@ fill_pair(void *a, void *b, unsigned n, int trial)
 
 /*
  * Asymmetric and large, so the winning margin is wide and the argmax is not
- * decided by a last-bit difference in `getMetric`.  Never zero -- finding 230
+ * decided by a last-bit difference in `getMetric`.  Never zero -- finding F230
  * -- and bounded well inside `short`, so that every sample's negation is a
  * DIFFERENT short: 0 and -32768 are each their own negation and either one
  * would make two of the four polarity patterns coincide, which is exactly
@@ -290,7 +290,7 @@ static const struct ss_case ss_cases[] = {
  * back from the delay line.  -1 if it matches none of them, which is itself a
  * result worth failing on.  This is the OBSERVABLE the separation counters
  * below are built on: not a path, not a constant, but which arm the search
- * actually chose (findings 3509, 3403).
+ * actually chose (findings F3509, F3403).
  */
 /*
  * AT `blockLength` 1 THIS CANNOT WORK AND MUST NOT PRETEND TO.  A one-sample
@@ -372,7 +372,7 @@ run_trellis(void)
 
 				/*
 				 * ABSOLUTE.  Two sides that both failed to
-				 * store compare equal (findings 223, 224), so
+				 * store compare equal (findings F223, F224), so
 				 * the blob's own delay line is checked against
 				 * the four patterns computed here, and its
 				 * state word against the committed action's
@@ -463,7 +463,7 @@ run_process(void)
 		/*
 		 * `reset` leaves the delay line zeroed, which is the object's
 		 * own starting state and is the one place a zero seed is
-		 * correct rather than finding 230's mistake.
+		 * correct rather than finding F230's mistake.
 		 */
 		for (f = 0; f < NFRAMES; f++) {
 			short in[8];

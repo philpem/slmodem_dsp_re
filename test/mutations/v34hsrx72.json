@@ -3,7 +3,7 @@
   "note": "`v34handshak`'s rxstate 72 RX_L1 arm at 0x650c6, caught by build/test/t_v34hsrx72.  The arm is a counter, a six-rung ladder over it, two DFT measurements, two ways out of the line probe and an FSK gate with a three-threshold timeout behind it.  What the set has to prove is that every rung's constant and every rung's BOUNDARY is the object's, that the two measurements write their own three offsets and not each other's, and that the two banks -- which OVERLAP, the signal bank being probe_bins[0..3] -- are never crossed.  Several claims are caught only through the transcript: eight of the thirteen debug sites are `hs_setstate`'s, whose whole observable effect on a word already at its target is one missing line."
  },
  {
-  "note": "THE ANCHORS CARRY ADDRESSES because the source lines repeat.  `t72_update_both(obj, rx, n);` is four separate rungs' statement, `dftnlinitSignalBins(obj->probe_bins);` is two, and `hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);` is three -- so the object address in the trailing comment, or the line above, is what makes each anchor sit inside the thing it is about.  Finding 432's hazard, answered with information rather than with indentation."
+  "note": "THE ANCHORS CARRY ADDRESSES because the source lines repeat.  `t72_update_both(obj, rx, n);` is four separate rungs' statement, `dftnlinitSignalBins(obj->probe_bins);` is two, and `hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);` is three -- so the object address in the trailing comment, or the line above, is what makes each anchor sit inside the thing it is about.  Finding F432's hazard, answered with information rather than with indentation."
  },
 
  {

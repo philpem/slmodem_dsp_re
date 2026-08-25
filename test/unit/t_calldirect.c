@@ -4,7 +4,7 @@
  *
  * All four are file statics in the object, and t_call opens by saying there is
  * "no way to call them by name" -- so it calls `dp_call_init` and takes the
- * three operations out of the registration log.  Finding 221 made that untrue:
+ * three operations out of the registration log.  Finding F221 made that untrue:
  * the file-local symbols are globalized before they are renamed, so
  * `ref_call_run` and the rest link.  `call_GetSRegister` is not in the
  * operations table at all and had no route in whatsoever; it is tested here
@@ -64,7 +64,7 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/pulse.h"
 
-/* By name.  File-static in the object; see finding 221. */
+/* By name.  File-static in the object; see finding F221. */
 extern struct dp *ref_call_create(void *modem, int id, int caller, int srate,
 				  int max_frag, struct dp_operations *op);
 extern int ref_call_delete(struct dp *dp);

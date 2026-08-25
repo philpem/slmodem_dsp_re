@@ -31,7 +31,7 @@
  *
  * TWO TUs got alpha = 32768 - beta right; the other three kept the 0x77b8
  * TU's alpha while changing beta.  This list said 0x7664 carried 32604 and
- * was a fourth broken pair until finding 1621 read the bytes: it is 30491,
+ * was a fourth broken pair until finding F1621 read the bytes: it is 30491,
  * and V.32's is correct.  A smoother with DC gain 1.045 would make the level estimate
  * climb until it wrapped, and a wrapped (negative) estimate is exactly the
  * case that makes FPM_AGC_agc's shift go negative.  It is unreachable only

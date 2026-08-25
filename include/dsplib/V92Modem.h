@@ -17,11 +17,11 @@
  * at `lea 0x6bd0(%ebx),%edx`.  0x6bd0 - 0x6124 = 0xaac, so `sizeof` is at
  * most 0xaac.  The two bounds meet.  (Alignment corroborates rather than
  * contradicts: +0x6124 is 4-aligned and not 8-aligned, so `alignof` is at
- * most 4 and 0xaac needs no tail padding.)  Finding 1320.
+ * most 4 and 0xaac needs no tail padding.)  Finding F1320.
  *
  * WHAT THE ALLOCATION ORACLE GAVE.  Four of the members are built with
  * `sysdep_malloc(sizeof(X))` immediately before their constructor, so the
- * immediate IS the original compiler's own `sizeof` (finding 1246).  All
+ * immediate IS the original compiler's own `sizeof` (finding F1246).  All
  * five of the sizes it hands over were already pinned here by their own
  * classes' allocation sites, and all five agree: 0xdc `V92Parameters`,
  * 0x2c `V92Phase2Info`, 0x918 `V92CP`, 0xb4 `struct V92ParamsInfo`, and 0x90
@@ -123,7 +123,7 @@ public:
 	 * .text+0x13a80 (D1) and +0x13990 (D2), 0xe5 = 229 bytes each.  The
 	 * two differ in TWO BYTES, both the epilogue's scratch pop -- D1 has
 	 * `pop %edx` where D2 has `pop %eax` -- which is register allocation
-	 * and is the compiler's free choice.  Finding 1324.
+	 * and is the compiler's free choice.  Finding F1324.
 	 */
 	~V92Modem();
 
@@ -167,7 +167,7 @@ public:
 	 * analog side; set to NULL on the digital side; and on any other
 	 * value of `modemSide` LEFT ALONE -- the constructor's default arm
 	 * prints and stores nothing, so this word keeps whatever the storage
-	 * held.  Finding 1323.
+	 * held.  Finding F1323.
 	 */
 	V92Modulator *modulator;
 
@@ -213,7 +213,7 @@ public:
 	 * sixth parameter the mangling spells `V92MappingParams *`, and the
 	 * two C functions that fill it take `struct V92ParamsInfo *`.  One
 	 * 180-byte block, two names, and include/dsplib/V92ParamsInfo.h had
-	 * already reached it from the other end.  Finding 1321.
+	 * already reached it from the other end.  Finding F1321.
 	 *
 	 * The type here is the MANGLING'S, so that the argument the modulator
 	 * receives needs no explanation; the .cpp casts at the four C call

@@ -9,7 +9,7 @@
  * symbol is external.  That does NOT put it out of reach of a differential
  * test: the harness links the blob with every symbol renamed `ref_*` and
  * calls the alias directly, rather than driving the shipped modem down to it
- * (finding 7000, which corrected 702 on exactly this point).  So this file
+ * (finding F7000, which corrected 702 on exactly this point).  So this file
  * calls `ref__ZN18V90Phase3Modulator11generateDILEv` and nothing anywhere
  * calls the reconstruction's `generateDIL` except this test and the two
  * generators that inline it.
@@ -23,10 +23,10 @@
  *
  * THE FIXTURE IS SEEDED WITH VARIED BYTES AND RESEEDED EVERY TRIAL.  Both
  * sides get the same pseudorandom fill, so a field neither side writes cannot
- * pass by accident (findings 223, 224) -- and the reseed is not optional
+ * pass by accident (findings F223, F224) -- and the reseed is not optional
  * here: the segment-restart arm ZEROES `segmentPos`, `seq1Index` and
  * `seq2Index`, so a fixture that seeded once and looped would be testing the
- * post-restart state from the second trial onwards (finding 7105).  The two
+ * post-restart state from the second trial onwards (finding F7105).  The two
  * fields the function always writes, `usingSegmentLevel` and `dilPcmCode`,
  * are pre-set to sentinels that no correct result can equal by accident, so a
  * dropped store is a difference rather than a coincidence.
@@ -48,8 +48,8 @@
  * shorts, so nothing here depends on byte order.
  *
  * The `ref_` alias is reached through an asm() label rather than by spelling
- * the alias as an identifier, which sidesteps finding 225.  The convention is
- * plain cdecl with `this` as the first stack argument (finding 215).
+ * the alias as an identifier, which sidesteps finding F225.  The convention is
+ * plain cdecl with `this` as the first stack argument (finding F215).
  */
 
 #include <string.h>
@@ -564,7 +564,7 @@ run_boundaries(void)
  * segment index recomputed from a level the previous step chose -- is to let
  * one state feed the next.
  *
- * The grounded rate is finding 7621's: the digital arm emits 80 symbols a
+ * The grounded rate is finding F7621's: the digital arm emits 80 symbols a
  * block at 8 kHz, so 480 consecutive symbols is six blocks of a real session
  * and comfortably longer than any segment (`6 * size + 6` tops out at 54).
  */

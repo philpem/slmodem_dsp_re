@@ -7,7 +7,7 @@
  * each.  C++ has no syntax for running a constructor over storage that already
  * exists, and `OBJ = V90Demodulator(...)` would build a temporary over
  * uninitialised stack and copy it in, throwing away the seed the whole fixture
- * rests on (findings 223, 224).  The blob holds C1 and C2 as two identical
+ * rests on (findings F223, F224).  The blob holds C1 and C2 as two identical
  * copies at different addresses and our compiler emits one function under both
  * names, so calling only one leaves half the pair untested.
  *
@@ -17,7 +17,7 @@
  * Fourteen arguments, ten of them pointers, and the whole body is twelve
  * stores and thirteen allocations.  So every pointed-to object is a SEPARATE
  * block with its own seeded contents and the two sides are pointed at the SAME
- * ten -- finding 1105's rule, which makes every stored pointer compare equal
+ * ten -- finding F1105's rule, which makes every stored pointer compare equal
  * and keeps all ten words IN the comparison instead of excluded from it.  Ten
  * identical pointers would make nine of the ten placement claims vacuous.
  *
@@ -114,7 +114,7 @@
 
 /*
  * The class under test.  It brings the BLOCK form of `V90Parameters` with it
- * (finding 1112), so every parameter this file names is spelled as an index
+ * (finding F1112), so every parameter this file names is spelled as an index
  * and the names in the comments are the author's, out of
  * include/dsplib/V90Parameters.h, which no translation unit may hold as well.
  */
@@ -268,7 +268,7 @@ static unsigned char
 nextb(void)
 {
 	lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
-	/* `| 1` so no seeded byte is ever zero; finding 230. */
+	/* `| 1` so no seeded byte is ever zero; finding F230. */
 	return (unsigned char)((lfsr >> 3) | 1u);
 }
 
@@ -600,7 +600,7 @@ translation_invented(const unsigned char *ta, const unsigned char *tb,
 
 /*
  * THE GUARD IS SHOWN TO FIRE, because a detector that has never fired is
- * indistinguishable from a broken one -- finding 134, and this file is where
+ * indistinguishable from a broken one -- finding F134, and this file is where
  * that mattered.  The scenario below is the observed failure exactly: ONE
  * value, the SAME on both sides, that lies inside a block side 0 knows as a
  * numbered slot and side 1 knows only as some live allocation.  The old
@@ -1087,7 +1087,7 @@ run_ctor(void)
 			 * argument is a distinct block, so a store landing at
 			 * the wrong offset holds a value no other argument
 			 * could have supplied; two constructors that both
-			 * stored nothing would compare equal (finding 1105).
+			 * stored nothing would compare equal (finding F1105).
 			 */
 			for (k = 0; k < NPLACE; k++) {
 				const void *want;

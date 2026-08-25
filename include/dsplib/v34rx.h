@@ -165,12 +165,12 @@ void V34agc(struct v34_receiver *rx);
  * One half-baud: gain a sample pair, adapt, mix it down to baseband.
  *
  * File-static in the object and called only by `rxtiming`, and static here
- * too until finding 221 gave the object's copy a `ref_` alias.  Declared so
+ * too until finding F221 gave the object's copy a `ref_` alias.  Declared so
  * both sides can be driven directly rather than through the interpolator,
  * which is what made an AGC defect here present as a loop-shape failure.
  *
  * The object's copy takes its argument in %eax -- see t_v34demod.c, which has
- * the prologue and the rule from finding 51 that says to check.
+ * the prologue and the rule from finding F51 that says to check.
  */
 void V34demodulate(struct v34_receiver *rx);
 

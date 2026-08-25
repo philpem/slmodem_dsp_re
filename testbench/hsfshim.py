@@ -101,7 +101,7 @@ def summarise(path):
     """Turn the stamped log into `KEY=value` lines for hsfcall.sh to eval.
 
     EVERY NUMBER HERE HAS A DENOMINATOR AND THE DENOMINATOR IS PRINTED, which
-    is finding 2400's rule: a tool that reports nothing is indistinguishable
+    is finding F2400's rule: a tool that reports nothing is indistinguishable
     from a broken one.  `SUMMARY_LINES` is how many stamped lines were parsed,
     so a zero says "the log was empty" and not "the call did nothing".
 

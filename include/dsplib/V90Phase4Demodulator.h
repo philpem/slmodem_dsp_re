@@ -9,7 +9,7 @@
  * one -- the same evidence `V90Demapper.h` cites for its own.
  *
  * THE OBJECT IS 0x351c = 13,596 BYTES, AND THAT IS AN ALLOCATION, not a
- * displacement scan -- finding 1107's rule.  `V90Demodulator::V90Demodulator`
+ * displacement scan -- finding F1107's rule.  `V90Demodulator::V90Demodulator`
  * has
  *
  *     1c8fe:  c7 04 24 1c 35 00 00   movl  $0x351c,(%esp)
@@ -25,7 +25,7 @@
  *
  * NOT POLYMORPHIC.  `nm` gives `D1` at 0x25b50 and `D2` at 0x25b10 and no
  * `D0`; GCC emits a deleting destructor only for a virtual class, so offset 0
- * is a real member and there is no vptr (finding 228).
+ * is a real member and there is no vptr (finding F228).
  *
  * ---------------------------------------------------------------------------
  * THREE EXACT MEETINGS FIX THE THREE EMBEDDED SUBOBJECTS
@@ -102,7 +102,7 @@
 /*
  * POINTERS ONLY, so forward declarations are what belong here.  Two
  * incompatible definitions of `V90Parameters` exist in this tree and no
- * translation unit may include both -- finding 1112 -- so the class is
+ * translation unit may include both -- finding F1112 -- so the class is
  * declared and never defined here.
  */
 class V90Parameters;
@@ -167,7 +167,7 @@ class V90AutoDigitalImpDetector;
  * different message -- `detectR`/"Ri detected", `detectRNot`/"RiNot detected",
  * `detectRNot`/"RtNot detected" -- so `WAIT_FOR_RI`, `WAIT_FOR_RI_NOT` and
  * `WAIT_FOR_RT_NOT` name what the arm waits for, in the author's own scheme.
- * Finding 4810.
+ * Finding F4810.
  *
  * 0x11 IS DELIBERATELY UNNAMED.  Both functions send it to the same body as
  * state 8 -- return zero, touch nothing -- and no message anywhere in the
@@ -325,7 +325,7 @@ public:
 	/*
 	 * +0x0008  THE G.711 CODE THE PHASE 4 MODULATOR IS TO SEND, and it
 	 * was `pad_0008[4]` until `reset` was written -- which is finding
-	 * 7453's shape in the other class: the constructor does not touch it,
+	 * F7453's shape in the other class: the constructor does not touch it,
 	 * so the construction path could say nothing about it at all.
 	 *
 	 * ONE BYTE, not four: `mov %cl,0x8(%esi)` at 0x277ec, `reset`'s FIRST
@@ -399,7 +399,7 @@ public:
 	 *     three more: the zero high word is the unsigned-to-float
 	 *     widening.  A signed `int` converts with a plain `fildl`.
 	 *
-	 * Finding 4800.
+	 * Finding F4800.
 	 */
 	unsigned int countInState;
 

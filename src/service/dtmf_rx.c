@@ -9,9 +9,9 @@
  * The first two are not in `dtmf_modem`'s closure -- `cid_reset` and
  * `cid_create` reach them, nothing here does -- and they are what pins the
  * object's size at 0x38c and what include/dsplib/dtmf_rx.h's field comments
- * are checked against.  Findings 1700, 1701 and 1702.
+ * are checked against.  Findings F1700, F1701 and F1702.
  *
- * See finding 1410 for why these are Dtmf_Rx.c and not, as
+ * See finding F1410 for why these are Dtmf_Rx.c and not, as
  * docs/attribution.md guessed, `Data.c` or `Dtmf.c`.
  */
 

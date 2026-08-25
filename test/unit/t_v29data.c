@@ -28,7 +28,7 @@
  *   - the second argument used rather than ignored.
  *
  * `cfg.mapped` IS CLEAR HERE and set in t_v17data.c, which is the fixture
- * half of finding 3641: the two functions are tested against the two
+ * half of finding F3641: the two functions are tested against the two
  * configurations their own constructors build, not against one shared one.
  */
 
@@ -84,7 +84,7 @@ rng_next(void)
 }
 
 /*
- * Distinct everywhere, and no two banks agreeing anywhere: finding 3574 is
+ * Distinct everywhere, and no two banks agreeing anywhere: finding F3574 is
  * three mutations that survived a degenerate table.
  */
 static void

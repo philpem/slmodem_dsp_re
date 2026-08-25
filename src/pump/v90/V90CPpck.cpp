@@ -18,14 +18,14 @@
  *
  * V.90 clause 9.4.2.3 obliges the ANALOGUE modem to send a CP sequence
  * describing the constellations it wants the digital modem to use.  Finding
- * 7000 mapped every caller of `V90CP`, `V90MP` and `V92CP` and could not find
+ * F7000 mapped every caller of `V90CP`, `V90MP` and `V92CP` and could not find
  * an encoder for it: `V90CP::infoToBits` builds the DIGITAL side's message
  * out of the class's own fields, and nothing in the class assembles one from
  * a `V90MappingParams`.
  *
  * It is this FREE FUNCTION, outside the class, called by
  * `VPcmFloModem::v90RunDemodulator` (unwritten).  A caller map over the class
- * could not see it because it is not a member of anything.  Finding 7001.
+ * could not see it because it is not a member of anything.  Finding F7001.
  *
  * Its V.92 twin is `setV92CPpckFromParamsInfo` in `V90MappingParamsInt.cpp`,
  * which takes the same two sources and fills a `V92CP` object; this one
@@ -139,7 +139,7 @@
  *
  * These are NOT `V92CP.cpp`'s `fltTable_2` and `fltTable_1`: different names,
  * different addresses (+0x69e0 and +0x6a20), separate symbols measured as
- * such in finding 826.  Byte-identical contents, which is the whole hazard.
+ * such in finding F826.  Byte-identical contents, which is the whole hazard.
  * ===========================================================================
  */
 float fltTable2[16] = {
@@ -175,13 +175,13 @@ float fltTable1[7] = {
  * The comparison order in the loop is `table[i] > x`, not `x >= table[i]`:
  * `flds table[i]` puts the weight in %st(0) and `fcom %st(1)` compares it
  * against the remainder, so the table entry is the LEFT operand.  Finding
- * 1990's flag makes that an ordered `fcom`; the two spellings differ only on
+ * F1990's flag makes that an ordered `fcom`; the two spellings differ only on
  * a NaN, which is out of the grid on purpose (the same exclusion
  * `test/mutations/v92info.json` states for the twin).
  *
  * The subtraction is `de e9`, which objdump prints as `fsubrp` and which IS
  * `FSUBP`: %st(1) = %st(1) - %st(0), so the REMAINDER loses the weight.
- * Finding 245.
+ * Finding F245.
  *
  * The sign in mode 1 is `setb` on the compare against 0.0f, taken BEFORE the
  * `fabs`, and it is stored at bits[7] -- past the seven magnitude entries,

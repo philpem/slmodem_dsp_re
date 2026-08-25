@@ -12,14 +12,14 @@
  *
  * NOT POLYMORPHIC.  tools/cppstruct.py lists no destructor at all, let alone
  * the deleting `D0` variant GCC emits only for a virtual one, so offset 0 is
- * a real member and there is no vptr (finding 228 is the four classes where
+ * a real member and there is no vptr (finding F228 is the four classes where
  * that is not true).
  *
  * THIRTY-SIX BYTES.  The largest `this`-relative displacement across all
  * three members is +0x20, and both the constructor and `setToDefault` reach
  * it with a four-byte access, so the object is 0x24 -- not the 0x20 the
  * displacement alone suggests and not the 0x1c `printInfo` alone reaches
- * (finding 215, and the V90Jd 0x8c -> 144 worked example in docs/v90cpp.md).
+ * (finding F215, and the V90Jd 0x8c -> 144 worked example in docs/v90cpp.md).
  * +0x10..0x17 and +0x1c..0x1f are reached by nothing and stay `pad_*`.
  *
  * THE FIELD NAMES ARE THE AUTHOR'S OWN, out of the format strings
@@ -44,7 +44,7 @@
  * V90Parameters, which nothing here did.
  *
  * Both halves have expired.  V90Parameters IS modelled -- 342 slots with the
- * author's own names, findings 860-862 -- so the five copies below can be
+ * author's own names, findings F860-862 -- so the five copies below can be
  * written by name instead of by offset.  And the fixture cost is now a cost
  * worth paying: `vpcm_create` cannot link without this symbol, so a class
  * that cannot be constructed is a class that keeps the whole construction
@@ -53,7 +53,7 @@
  *
  * `setToDefault` is still not written.  It repeats the constructor's five
  * copies without storing `params`, nothing in the construction closure needs
- * it, and finding 255 records it.
+ * it, and finding F255 records it.
  *
  * ------------------------------------------------------------------------
  * THE COLLISION IS RESOLVED.  include/dsplib/V90PreFilter.h used to carry its
@@ -61,7 +61,7 @@
  * something "a later batch that models either should replace".  It now
  * includes this file instead, and the `#error` that stood here to make the
  * first translation unit needing both say so in one sentence is gone with it.
- * Finding 264.
+ * Finding F264.
  * ------------------------------------------------------------------------
  */
 
@@ -144,11 +144,11 @@ public:
 	 *
 	 * THE TYPE IS LEFT AS `int` DELIBERATELY AND THE CAST IS AT THE USE
 	 * SITE.  This header is included by four live branches, and finding
-	 * 3511 is what a type change reaching one of them costs when the
+	 * F3511 is what a type change reaching one of them costs when the
 	 * other half asserts against the old shape.  `getAT_UD` therefore
 	 * spells the conversion itself and reproduces the object's
 	 * instructions today; the retype belongs to a pass that owns this
-	 * header and can move every user at once.  Finding 4903.
+	 * header and can move every user at once.  Finding F4903.
 	 */
 	int rtd;
 

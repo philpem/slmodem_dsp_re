@@ -6,7 +6,7 @@ WHY THIS EXISTS
 
 `debug.h` states the policy: carry the `dsplibs_debug_printf` call sites,
 because the gate is real control flow and the format strings are the original
-author's own words.  Finding 134 counted them and found the policy had not
+author's own words.  Finding F134 counted them and found the policy had not
 been followed -- 1670 calls in the blob across 399 functions, 22 in the
 tree, and 242 missing from functions that ARE reconstructed.
 
@@ -26,19 +26,19 @@ WHAT IT REPORTS
               when we re-factor, so this is what separates a real gap from a
               factoring artefact.  Read it before restoring anything: two of
               the three largest rows in `--missing` are artefacts (findings
-              2600 and 2950).  Necessary and not sufficient, exactly as
+              F2600 and F2950).  Necessary and not sufficient, exactly as
               `--invented` is -- see the note at its implementation.
   --strings   the format strings themselves, per function.  Useful BEFORE
               restoring anything: the strings are the annotation, and they
               routinely name fields and conditions the reconstruction is
-              otherwise guessing at (finding 136 is an example).
+              otherwise guessing at (finding F136 is an example).
   --invented  the opposite direction, and the one --missing cannot see: every
               string literal THIS TREE carries that does not appear anywhere
               in the object's .rodata or .data.  Such a string was written
               rather than read -- usually from the function's own name -- and
               no test catches it unless something compares that function's
               transcript.  Four were found this way after `V34EchoCleanUp`
-              turned up printing its own name (finding 180).
+              turned up printing its own name (finding F180).
 
               EVERY literal, not just the ones at a printf call site.  A
               format reached through a variable has no literal at the call:
@@ -56,7 +56,7 @@ WHAT IT REPORTS
               only a transcript comparison covers those.
   --stamps    the __DATE__/__TIME__ pairs.  Six translation units baked their
               build time into .rodata; the seconds are an independent check
-              on TU boundaries that symbol ordering cannot give (finding 135).
+              on TU boundaries that symbol ordering cannot give (finding F135).
 
 CAVEATS
 
@@ -239,7 +239,7 @@ def show_sites(obj, tabs, func, window):
         print("   %s" % g.rstrip())
     print("\n  A gate is `cmpl $0x1` + `ja`/`jbe` where the site fires at 2 "
           "and above.\n  Anything else is a threshold we do not reproduce -- "
-          "see finding 150.")
+          "see finding F150.")
 COMMENT = re.compile(r"/\*.*?\*/|//[^\n]*", re.S)
 RUN = re.compile(r'(?:"(?:[^"\\\n]|\\.)*"\s*)+')
 LIT = re.compile(r'"((?:[^"\\\n]|\\.)*)"')
@@ -265,7 +265,7 @@ def unescape(raw):
 # `__asm__ ("fldlg2\n\tfxch %%st(1)\n\tfyl2x" : "=t" (r) : "0" (x))` carries
 # two string literals -- the instruction template and the constraint -- and
 # neither is in the blob's .rodata, because neither is data.  This gate exists
-# to catch INVENTED DIAGNOSTICS (findings 180, 201): a format string that
+# to catch INVENTED DIAGNOSTICS (findings F180, F201): a format string that
 # behaves identically to the right one because `dsplibs_debug_level` ships at
 # zero.  An instruction template has no such failure mode; it is checked by
 # the differential test like any other code.  So asm statements are blanked
@@ -337,7 +337,7 @@ def our_strings(paths):
         # given them.  Scanned line by line, a message split across source
         # lines came back as its fragments, and each fragment is a substring
         # of the whole, so a TRUNCATED format string matched and passed.
-        # That is how the K56Flex mutation of finding 195 got past this
+        # That is how the K56Flex mutation of finding F195 got past this
         # sweep.  142 of 592 strings were fragments.
         #
         for m in RUN.finditer(src):
@@ -381,7 +381,7 @@ def main():
         # one mangled entry point in v34pcmmain.cpp -- and this check globbed
         # only "*.c" from the day it was written.  FloatIIR.cpp prints
         # nothing, so the gap was invisible until a C++ file arrived carrying
-        # seven format strings, which is finding 134's own argument about a
+        # seven format strings, which is finding F134's own argument about a
         # check that reports clean because it cannot fail.
         #
         args.src = (glob.glob("src/**/*.c", recursive=True)
@@ -391,7 +391,7 @@ def main():
     if args.stamps:
         print("Build stamps baked into .rodata -- one per TU that printed "
               "__DATE__/__TIME__.\nThe seconds distinguish translation units "
-              "(finding 135).\n")
+              "(finding F135).\n")
         for sec, (base, blob) in tabs.items():
             for m in re.finditer(
                     rb"(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) "
@@ -419,7 +419,7 @@ def main():
         # a WHOLE string of the object's rather than any run of bytes inside
         # one.  A substring test accepts a TRUNCATION -- which is exactly what
         # a mis-transcribed format string looks like -- and that is how the
-        # K56Flex mutation of finding 195 passed this sweep.
+        # K56Flex mutation of finding F195 passed this sweep.
         #
         # It only became possible once `our_strings` glued literals across
         # source lines: before that, every multi-line message arrived here as
@@ -450,7 +450,7 @@ def main():
         bad = [(p, n, t) for p, n, t in bad if t not in declared]
         print("String literals in this tree that are not WHOLE strings of "
               "the object's\n.rodata or .data -- so they were invented, or "
-              "truncated.  Findings 180, 201.\n")
+              "truncated.  Findings F180, F201.\n")
         for p, n, t in bad:
             print("  INVENTED  %s:%d\n            %r" % (p, n, t))
         for p, n, t in ok:
@@ -474,7 +474,7 @@ def main():
         # put them.  `v8handshak.c` read as `-8 (blob 10, ours 2)` with all
         # ten of the object's strings present, eight of them in `v8hsrx.c`,
         # whose `+8 (blob 0, ours 8)` is the other half of the same number.
-        # Finding 2950.
+        # Finding F2950.
         #
         # A string is content and does not move when we re-factor, so this
         # asks the question the counts were standing in for.
@@ -489,7 +489,7 @@ def main():
         #
         # AND IT COUNTS DISTINCT STRINGS, NOT SITES.  Where the object prints
         # one message from several places -- `probe_preemph`'s three strings
-        # over ten inlined copies (finding 2600) -- carrying it once satisfies
+        # over ten inlined copies (finding F2600) -- carrying it once satisfies
         # this check.  That is deliberate, because the number of copies is
         # precisely what inlining decides and what we are trying not to
         # measure, but it means a row of `0 absent` bounds the gap at "no
@@ -500,7 +500,7 @@ def main():
         print("Format strings the object has and this tree does not carry "
               "ANYWHERE.\nString presence is necessary, not sufficient: it "
               "says a site was not\ndropped, never that it is in the right "
-              "place.  Finding 2950.\n")
+              "place.  Finding F2950.\n")
         rows, unres = [], 0
         for fn in sorted(sites):
             if which and fn != which:
@@ -552,7 +552,7 @@ def main():
     rows.sort(reverse=True)
     print("MISSING diagnostic call sites, in functions already reconstructed."
           "\nNo test can see these: the level ships at zero, so a missing "
-          "call and a\npresent one behave identically.  Finding 134.\n")
+          "call and a\npresent one behave identically.  Finding F134.\n")
     for gap, n, g, fn, p in rows:
         print("  %3d missing  (blob %2d, ours %2d)  %-30s %s"
               % (gap, n, g, fn, p))
@@ -583,7 +583,7 @@ def main():
     # split across files debits one file and credits the other.  `v8handshak.c`
     # read as `-8 (blob 10, ours 2)` with every one of the object's ten
     # strings present -- eight of them in `v8hsrx.c`, whose `+8 (blob 0,
-    # ours 8)` is the same eight sites counted the other way.  Finding 2950.
+    # ours 8)` is the same eight sites counted the other way.  Finding F2950.
     #
     # `--absent` is the check with no such boundary, because it compares
     # content rather than counts.  Read it before restoring anything.

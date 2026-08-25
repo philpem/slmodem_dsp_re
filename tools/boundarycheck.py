@@ -4,7 +4,7 @@ Instruction boundaries, decoded twice and compared.
 
 WHY THIS EXISTS
 
-Finding 737: `cfgsplit.py` dropped 131 bytes of every walk of `v34handshak`
+Finding F737: `cfgsplit.py` dropped 131 bytes of every walk of `v34handshak`
 for as long as the tool had existed, because objdump wraps its hex column at
 seven bytes and the continuation line carries no mnemonic for the regex to
 match.  The tool printed the shortfall on every run -- "61410 bytes accounted
@@ -109,7 +109,7 @@ def objdump_bounds(obj, lo, hi):
             continue
         # A continuation line is address + bytes and nothing else; it is not
         # a boundary.  Distinguish it by there being no mnemonic after the
-        # hex, which is exactly what finding 737's regex got wrong -- but
+        # hex, which is exactly what finding F737's regex got wrong -- but
         # here getting it wrong is SAFE, because a spurious extra boundary
         # shows up as a disagreement rather than as silence.
         rest = head[1].split()
@@ -173,7 +173,7 @@ def main():
         #
         # THE NEGATIVE CONTROL.  Decode one function at a deliberately wrong
         # offset and require the comparison to notice.  Without this a clean
-        # run proves only that the tool ran -- finding 134, and `extcheck`
+        # run proves only that the tool ran -- finding F134, and `extcheck`
         # printing "(none)" through four broken versions.
         #
         lo, size = syms["v34handshak"]

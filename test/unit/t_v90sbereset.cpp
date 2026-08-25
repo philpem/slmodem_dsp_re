@@ -25,7 +25,7 @@
  *   0 takes the arm that stores a width of zero without dividing, and
  *   "divide unconditionally" is caught by that trial raising #DE on our side
  *   and not on the blob's.  `saw_guard` records only that the trial ran; it
- *   proves nothing on its own (findings 3509, 3403).
+ *   proves nothing on its own (findings F3509, F3403).
  *
  *   WHAT THIS FILE CANNOT SEPARATE, and an earlier version of this comment
  *   wrongly claimed it could: whether the guard is `spacing != 0` or
@@ -37,7 +37,7 @@
  *   deleted, because a reader needs to know the claim was tested and found
  *   untestable here.  The codegen tier is what rules the range test out: the
  *   object has one `test %edx,%edx` / `je` where a second condition would be
- *   a second compare.  Finding 4304.
+ *   a second compare.  Finding F4304.
  *
  *   THE WIDTH IS `6 / spacing` AND NOT `spacing`.  Spacings of 1, 2, 3 and 4
  *   give four DIFFERENT widths (6, 3, 2, 1), so a body that stored the
@@ -74,7 +74,7 @@ static unsigned char dstate_seed[V90SBE_DECODER_SIZE];
 
 #define SBE(s)	(*(V90SignBitsExtractor *)sbe_s[s])
 
-/* Varied, never zero, never the same twice: findings 223, 224, 230. */
+/* Varied, never zero, never the same twice: findings F223, F224, F230. */
 static unsigned
 fill(unsigned char *p, int n, unsigned lfsr)
 {

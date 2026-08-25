@@ -92,7 +92,7 @@ struct call_dp {
  * The three dp_operations entry points, and the S-register adaptor.
  *
  * File-static in the object -- the ops table is the only thing in call.c with
- * external linkage there -- and static here too until finding 221 gave the
+ * external linkage there -- and static here too until finding F221 gave the
  * object's copies `ref_` aliases.  Declared so a test can call both sides by
  * name instead of reaching them through what `dp_call_init` registers.
  * `call_run` is `.process`, with no dp_wrapper in between: this datapump does

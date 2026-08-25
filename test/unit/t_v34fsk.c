@@ -96,7 +96,7 @@ setup(const struct v34_fsk *cfg)
 	 * Point each side's canceller at its own scratch array rather than at
 	 * its own `echo0_frac`, so the two sides cannot share storage and the
 	 * delay line stays comparable on its own.  The object does point it
-	 * at echo0_frac (finding 100); that aliasing is asserted separately
+	 * at echo0_frac (finding F100); that aliasing is asserted separately
 	 * once V34InitializeImplementationSpecific is driven.
 	 */
 	obj_a.echo0.coeff_frac = (short *)&dly_a;
@@ -381,7 +381,7 @@ main(void)
 			    (long)(unsigned)(unsigned long)ib.echo0.cursor,
 			    (long)(unsigned)0xa5a5a5a5u, 0);
 
-		/* Finding 100, asserted: the FSK delay line IS echo0_frac. */
+		/* Finding F100, asserted: the FSK delay line IS echo0_frac. */
 		diff_eq_int("the FSK delay line is echo0's fractional array",
 			    OFF(ia, ia.echo0.coeff_frac),
 			    OFF(ia, ia.echo0_frac), 0);

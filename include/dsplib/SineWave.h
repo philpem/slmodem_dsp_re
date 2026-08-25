@@ -4,7 +4,7 @@
  * Three weak symbols in their own `.gnu.linkonce.t.*` sections, instantiated
  * at `<float, float>` and nothing else, so this file's name is a description
  * rather than a translation unit's -- the same situation as DspMath.h, and for
- * the same reason (finding 243).
+ * the same reason (finding F243).
  *
  * The only caller is the V.90 line-verification tone: both `VPcmFloModem`
  * constructors build one with (4800, 980, 0, 9600) and `qcLineVerification`

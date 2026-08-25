@@ -6,7 +6,7 @@
  *
  * PLAIN CDECL with `this` as the first STACK argument -- `mov 0x4(%esp),%eax`
  * with no frame -- so nothing here needs a calling-convention attribute
- * (finding 215).
+ * (finding F215).
  */
 
 #include <stddef.h>
@@ -100,7 +100,7 @@ V90RDetector::reset(unsigned int rSamples, unsigned int rNotSamples)
  * four in full rather than sharing anything: 164, 113, 164 and 117 bytes with
  * no call between them.  They are written out here for the same reason, and
  * the local names are deliberately different in each so that no mutation
- * anchor over one of them can match another (finding 1264).
+ * anchor over one of them can match another (finding F1264).
  *
  * WHAT THEY SHARE.  Each takes one sample, shifts its SIGN into the register
  * at +0x20 -- `bits = bits + bits` then `|= 1` when the sample is strictly

@@ -6,7 +6,7 @@
  * THE OBJECT CANNOT LIVE IN A UNION.  FloatFIR declares a constructor and a
  * destructor -- they are two of the six symbols under test -- which makes it
  * non-trivial and deletes the default members of any union holding one
- * (finding 232).  So the slot is a plain aligned byte array and the object is
+ * (finding F232).  So the slot is a plain aligned byte array and the object is
  * reached through a cast.
  *
  * THE CONSTRUCTOR AND DESTRUCTOR ARE CALLED THROUGH asm() LABELS, on our side
@@ -21,7 +21,7 @@
  * sysdep_malloc return and the two sides allocate separately.  It is not
  * skipped: the snapshot below replaces it on each side with whether THAT
  * side's pointer is null, which is the only property of a heap address the
- * two runs can share (finding 224), and the buffer it points at is compared
+ * two runs can share (finding F224), and the buffer it points at is compared
  * in full separately.
  */
 
@@ -79,8 +79,8 @@ T(void)
 /*
  * Seeds.  Never zero: a zero fill would let the constructor's clear loop stop
  * a word short and still compare equal, and would leave the convolution
- * summing zeros where a mispaired accumulator is invisible (findings 223,
- * 224).  `mode` varies what reaches the exponent field of the coefficients.
+ * summing zeros where a mispaired accumulator is invisible (findings F223,
+ * F224).  `mode` varies what reaches the exponent field of the coefficients.
  */
 static unsigned lfsr_state;
 

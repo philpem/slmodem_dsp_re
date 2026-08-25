@@ -15,7 +15,7 @@
  * answering end finishes and hands over to phase 2's DPSK, the originating
  * end takes one more block and then watches the FSK demodulator for tone A.
  *
- * THE COUNTER IS POKEABLE IN SPITE OF FINDING 429, and the reason is worth
+ * THE COUNTER IS POKEABLE IN SPITE OF FINDING F429, and the reason is worth
  * stating because it is the opposite of 66's case: the arm READS it, stores
  * `read + 1`, and only then branches on the value it stored.  So a poke of n
  * drives every branch below as n + 1, and it is the arm's master selector --
@@ -30,14 +30,14 @@
  * setting it leaves the two fields exactly as poked and the gate at 0x65145
  * becomes an ordinary two-way choice.  That is what lets 0x6881e, 0x6afd7,
  * 0x6b120, 0x6c9f1, 0x7086b and 0x69723 -- 530 bytes -- be tested at all,
- * and it is why no part of this arm is guarded.  Finding 741.
+ * and it is why no part of this arm is guarded.  Finding F741.
  *
  * WHAT NO TRIAL CAN SEPARATE, and why that is not a gap.  0x6881e compares
  * the counter against `0xf10 + rtd/4`, `0xf14 + rtd/4` and `0xf2c + rtd/4`
  * in THIRTY-TWO-BIT registers.  `rtd` is a short, so `rtd >> 2` is bounded
  * by +-8192 and the three sums span -4304..12048 -- inside a short at every
  * value the field can hold, so a 16-bit spelling agrees with the object
- * everywhere.  Unlike rxstate 53's `rtd + 0x2418` (finding 724) there is no
+ * everywhere.  Unlike rxstate 53's `rtd + 0x2418` (finding F724) there is no
  * value that overflows.  `suite_fsk` therefore tests what IS forced and IS
  * separable: the SIGNEDNESS of the `rtd` load, at rtd = -4000, where a
  * `movzwl` reading moves the threshold by 15,384 and the modem stops
@@ -123,7 +123,7 @@
  * somewhere else is what makes the re-aiming observable -- and it must be
  * `v34hs_poke_self_ptr` and not `v34hs_poke_int`, because the two objects
  * are at two addresses and one address written into both is the asymmetry
- * findings 319-322 are about.  The harness excludes +0xaa70 from the byte
+ * findings F319-322 are about.  The harness excludes +0xaa70 from the byte
  * comparison and checks it as an OFFSET FROM ITS OWN BASE instead, which is
  * what makes this visible at all.
  */
@@ -151,7 +151,7 @@ static int default_fill;
  * Open a case: the route, the three state words, table 2's five inputs, and
  * every field the arm writes seeded to something it does NOT write.
  *
- * That last part is finding 345's failure mode turned on this arm.  The two
+ * That last part is finding F345's failure mode turned on this arm.  The two
  * end paths store 4 into the receiver's +0x128 and 0x3e80 into three more of
  * its halfwords; `dpskDetectInfo1Init` stores 0 into six FSK scalars and 6
  * into two; the ladder's 0x40 rung ORs 0x200 into flags.  A field already
@@ -236,7 +236,7 @@ begin(short count)
 	 *
 	 * AND EVERY ONE OF THEM PLAUSIBLE, which the first version was not.
 	 * A sweep of `0x7100 + offset` over the struct is different from what
-	 * the initialiser stores -- which is all finding 345 asks for -- but
+	 * the initialiser stores -- which is all finding F345 asks for -- but
 	 * it puts 28,928 in `delay`, and `delay` is the discriminator's lag
 	 * IN TAPS into a 49-short line.  The one case here that lets
 	 * `fskdemodulate` actually run then read tens of thousands of shorts
@@ -244,7 +244,7 @@ begin(short count)
 	 * two sides' padding is made to differ: `V34HS_OBJSKEW=32` and
 	 * `V34HS_PADVARY=0` failed at +0xaae4 and +0xab80..+0xab85 while the
 	 * blob-on-both-sides control passed, and the fixture was right both
-	 * times.  Finding 746.
+	 * times.  Finding F746.
 	 */
 	v34hs_poke_short(RX72_FSK_DELAY + 0x00, 0x20);	/* delay,  not 0x30 */
 	v34hs_poke_short(RX72_FSK_DELAY + 0x02, 1);	/* offset, not 0    */
@@ -402,7 +402,7 @@ control(const char *what, long tag)
 
 /*
  * The distinct behaviours this file claims, so that a change collapsing two
- * of them is a failure rather than a silence (finding 290).
+ * of them is a failure rather than a silence (finding F290).
  */
 /*
  * THE CAP FAILS RATHER THAN TRUNCATES.  `t_v34hsrx53.c`'s version silently
@@ -465,7 +465,7 @@ suite_entry(void)
 	 * NOT RECORDED, and deliberately: this case and `suite_ends`' second
 	 * are the SAME case -- 0x441 is exactly what the originating end's
 	 * exit is selected by -- so recording both would claim a distinction
-	 * that does not exist and finding 290's check would fail on it.
+	 * that does not exist and finding F290's check would fail on it.
 	 */
 
 	/*
@@ -1070,7 +1070,7 @@ suite_quiet(void)
  * A green ours-versus-blob run says nothing unless the same seed is green
  * blob-versus-blob, because then the disagreement could be the fixture's --
  * docs/v34handshak.md's rule for a per-case test.  It matters more here than
- * usual: finding 736 records a fixture fault confined to the receiver's
+ * usual: finding F736 records a fixture fault confined to the receiver's
  * +0x1ae and +0x1cc..+0x1e3 at seeds 7 and 20, and +0x1ae is one of the five
  * halfwords `V34SetupDemodulator` writes on both of the end paths.
  */
@@ -1144,7 +1144,7 @@ main(void)
 
 	/*
 	 * The behaviours claimed distinct, pairwise.  A change collapsing two
-	 * of them is a failure rather than a silence (finding 290), and the
+	 * of them is a failure rather than a silence (finding F290), and the
 	 * count is pinned because a `record()` deleted in an edit would
 	 * shrink the check in silence.
 	 */

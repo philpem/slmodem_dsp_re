@@ -48,7 +48,7 @@
  *     So the tables drive bit 15 in every message index, a capability byte
  *     above 0x7f, a negative `remote_v92`, and both 0 and 0x20 in index 7.
  *
- * WHAT "DRIVE HIGH BYTES" MEANS HERE, AND WHAT IT DOES NOT.  Finding 312 warns
+ * WHAT "DRIVE HIGH BYTES" MEANS HERE, AND WHAT IT DOES NOT.  Finding F312 warns
  * that `V34SetINFO1aBits` CLEARS index 7 with `and $0xdf` on a zero-extended
  * short, so its high byte is not inert.  This function only READS index 7, and
  * only through `testb $0x20` on the low byte -- so the high byte is inert for
@@ -239,7 +239,7 @@ poke_int(unsigned off, int v)
 
 /*
  * Everything a case chooses.  ONE FIELD PER INPUT, so no two can be driven
- * from one variable -- the fixture defect of findings 116b, 123 and 171.  The
+ * from one variable -- the fixture defect of findings F116b, F123 and F171.  The
  * first five are this function's own; the rest exist so that the retraining
  * tail is a real call rather than a fault, and are held at one value except
  * where a comment says otherwise.
@@ -511,7 +511,7 @@ note_case(const struct gi_case *c)
 	 * The four width columns are only claims about the TRANSCRIPT, and
 	 * nothing is printed without a V.90 receiver -- so they are counted
 	 * only on cases that reach the prints.  Counting them everywhere would
-	 * be finding 247's defect: an assertion that holds for a reason other
+	 * be finding F247's defect: an assertion that holds for a reason other
 	 * than the one it names.
 	 */
 	if (c->v90rx == 0)

@@ -12,7 +12,7 @@
  * author's own words, which is CLAUDE.md's first tier of evidence.  Where
  * every other diagnostic in this area names a class and a member
  * ("V90Modem Reset: ..."), these name the FILE, because there is no class to
- * name.  Finding 7600.
+ * name.  Finding F7600.
  *
  * ===========================================================================
  * THE TRANSLATION UNIT IS FOUR FREE FUNCTIONS AND EIGHT TABLES
@@ -56,7 +56,7 @@
 /*
  * `DilType`, spelled `7DilType` in both manglings that carry it, so it is a
  * plain enum at namespace scope with that exact tag.  The object names no
- * enumerator -- a mangling never does (finding 226) -- but the two
+ * enumerator -- a mangling never does (finding F226) -- but the two
  * `edprintf` messages at the end of `setDilDescriptor` do:
  *
  *     0 -> "DIL descriptor set to option ADI."
@@ -87,12 +87,12 @@ enum DilType {
  * `seq2` past `seq2Length` and `dilCode` past `dilCount` are LEFT ALONE, so
  * a descriptor handed to this function twice with different `DilType`s keeps
  * the longer one's tail.  That is the object's behaviour and a fixture that
- * zeroes the descriptor first cannot see it (finding 7602).
+ * zeroes the descriptor first cannot see it (finding F7602).
  *
  * `void`, because the two exits do not agree on `%eax`: the `DIL_TYPE_ADI`
  * arm tail-JUMPS to `edprintf` and the `DIL_TYPE_ADI_QC` arm CALLS it and
  * then returns whatever the epilogue leaves.  The same argument that made
- * `V90Phase4Modulator::setMappingParams` `void` (finding 7431).
+ * `V90Phase4Modulator::setMappingParams` `void` (finding F7431).
  *
  * The descriptor pointer is `P19tagV90DILdescriptor`, non-`const`, and here
  * that is not a curiosity: the function writes through it.
@@ -107,7 +107,7 @@ void setDilDescriptor(tagV90DILdescriptor *d, DilType type);
  *
  * THAT SUM IS RECOMMENDATION V.90's OWN `Lc = (Hc + 1) * 6`, §8.4.1, over the
  * `N` DIL-segments of §8.3.1 -- `segmentSize` IS the spec's `Hc` and
- * `dilCount` its `N`.  Finding 7601 has the whole correspondence.
+ * `dilCount` its `N`.  Finding F7601 has the whole correspondence.
  *
  * THE RETURN TYPE IS NOT MANGLED.  The object leaves the sum in %eax and
  * nothing in the function distinguishes signed from unsigned -- the

@@ -13,7 +13,7 @@
  * `sym`.  Zeroing the two rails is therefore how this modulation says "no
  * symbol"; writing a zero into `sym` would be read by nothing.  V.17's
  * `mapped` is set and its no-carrier path writes `sym` alone.  Neither
- * reading is derived from the other -- see finding 3641.
+ * reading is derived from the other -- see finding F3641.
  *
  * Both rail pointers are loaded once, above the loop, and that is FREE: the
  * loop stores `short`s, which cannot alias a `short *` object, so a compiler

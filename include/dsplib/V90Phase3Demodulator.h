@@ -10,7 +10,7 @@
  *
  * THE SIZE IS SETTLED, WHICH THE SKETCH SAID IT WAS NOT.
  *
- * Finding 268 is right that a `this`-relative displacement scan lies about
+ * Finding F268 is right that a `this`-relative displacement scan lies about
  * this class: its largest hits, 0xa948 and 0xa95c, are off a
  * V90AutoDigitalImpDetector* and not off `this`.  But the object is
  * heap-allocated, and the allocation is the oracle -- `V90Demodulator`'s
@@ -22,7 +22,7 @@
  * so the object is 0x42c bytes.  Two independent facts agree with that and
  * neither was used to derive it: the last field the constructor writes is the
  * pointer at +0x428, which ends at 0x42c, and the largest displacement
- * `reset` uses is the byte at +0x424.  Finding 291.
+ * `reset` uses is the byte at +0x424.  Finding F291.
  *
  * THREE INTERIOR BOUNDARIES FALL OUT EXACTLY, which is the check that the
  * subobjects below are subobjects and not coincidence:
@@ -31,7 +31,7 @@
  *     +0x3d0 Descrambler<int,int> 0x020   ends 0x3f0, and +0x3f0 is a field
  *
  * Data member names are invented; the mangling never carries one (finding
- * 226).  `sessionFlag` is the exception and is the author's own: `reset`
+ * F226).  `sessionFlag` is the exception and is the author's own: `reset`
  * prints +0x08 as "V90Phase3Demodulator: Reset called, sessionFlag = %d".
  * Where nothing names a field it is `word_`/`short_`/`byte_` plus its offset,
  * as in V90SpectralVerifier.h and V90AutoDigitalImpDetector.h -- a guessed
@@ -345,7 +345,7 @@ public:
 	 * that is how the error was found.  See test/mutations/v90p3dctor.json
 	 * for why it is not in the suite.
 	 *
-	 * IT IS A MEM-INITIALIZER, by finding 1302's argument and this is the
+	 * IT IS A MEM-INITIALIZER, by finding F1302's argument and this is the
 	 * second instance of it.  `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits
 	 * BETWEEN the call to `V90Phase3Modulator`'s constructor and the call
 	 * to `Descrambler<int,int>`'s, and a store to `this + 0x3cc` can be
@@ -358,7 +358,7 @@ public:
 	 * DISCRIMINATES.  This paragraph used to say `make similarity` could
 	 * not reach the argument because this translation unit "is one of the
 	 * fifteen the period toolchain cannot compile at all".  That reason
-	 * was already untrue when it was written (finding 2119), and the
+	 * was already untrue when it was written (finding F2119), and the
 	 * corroboration it was standing in for has now been taken (2151).
 	 *
 	 * Built with `tools/toolchain/build.sh`'s exact flag set, the period
@@ -395,7 +395,7 @@ public:
 	 *
 	 * IT IS A `SerialDifferentialDecoder<int>`, WHICH THE SKETCH ABOVE
 	 * COULD NOT SEE, AND TWO INDEPENDENT RECONSTRUCTIONS SAY SO.  Neither
-	 * could see the other's work; findings 2102 and 2110 are the same
+	 * could see the other's work; findings F2102 and F2110 are the same
 	 * conclusion reached twice from opposite ends of the class.
 	 *
 	 *   `getV90Decision` calls `_ZN25SerialDifferentialDecoderIiE7processEi`
@@ -464,7 +464,7 @@ public:
 	 * `getV90Decision`) and `params->unnamed_344` when it is not (0x25749),
 	 * always in the same breath as +0x420 below.  Nothing in either
 	 * function -- 17 KB between them -- READS it, so its width and its
-	 * source are settled and what it is FOR is not.  Finding 2118.
+	 * source are settled and what it is FOR is not.  Finding F2118.
 	 */
 	unsigned int word_3f4;		/* +0x3f4                        */
 
@@ -541,7 +541,7 @@ public:
 	 * reconstructions disagree only on the UNIT, one saying samples and the
 	 * other symbols; nothing here settles which, and at 8 kHz on a
 	 * one-sample-in one-decision-out function they are the same count.
-	 * Finding 2118.
+	 * Finding F2118.
 	 */
 	unsigned int word_420;		/* +0x420                        */
 

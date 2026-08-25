@@ -4,7 +4,7 @@
  * `v34handshak` is 61,541 bytes, the largest function in the object, and it
  * is a dispatch over three concurrent state machines rather than one body.
  * Reconstructing it as a unit has never been attempted here because the
- * measurement in finding 220 says it cannot be: context growth is cumulative
+ * measurement in finding F220 says it cannot be: context growth is cumulative
  * output converging to 1:1, so the wall is a TURN count, and a function this
  * size is hundreds of turns however carefully it is read.
  *
@@ -36,7 +36,7 @@ extern "C" {
 
 /*
  * ---------------------------------------------------------------------------
- * The three state halfwords (finding 213), and the guards that decide which
+ * The three state halfwords (finding F213), and the guards that decide which
  * of the three dispatches sees them.
  *
  * Read off the prologue at 0x628f0 rather than assumed:
@@ -64,7 +64,7 @@ extern "C" {
  * The one rxstate that reaches the microstate table.  0x64a64 runs V34agc and
  * `fskdemodulate` and only then reads +0x3592, so this is the route to all
  * sixteen of table 3's cases.  Neither of those two functions writes any of
- * the three state words -- swept over the whole of .text, finding 285 -- so a
+ * the three state words -- swept over the whole of .text, finding F285 -- so a
  * microstate written before the call is still there when the dispatch reads
  * it.
  */
@@ -76,9 +76,9 @@ enum v34hs_route {
 	/*
 	 * Table 1, .rodata+0x2da0: txstate INSIDE the per-sample loop.  This
 	 * is #56, it compares, and eighteen of its nineteen reachable targets
-	 * have their own behaviour cold (finding 323).
+	 * have their own behaviour cold (finding F323).
 	 *
-	 * DANGEROUS AND DELIBERATELY SO -- see finding 287.  The loop bottom
+	 * DANGEROUS AND DELIBERATELY SO -- see finding F287.  The loop bottom
 	 * at 0x629e0 re-tests the cursor against the limit and jumps back to
 	 * the dispatch, and the default arm IS that bottom, so a txstate with
 	 * no case of its own spins forever.  `v34hs_route` takes the sample
@@ -112,7 +112,7 @@ struct v34hs_obs {
  * Modem-on-Hold.
  *
  * The objects are filled with VARIED pseudorandom bytes from a fixed LCG and
- * never zeroed, both sides identically (finding 230): zero is the one value
+ * never zeroed, both sides identically (finding F230): zero is the one value
  * that makes a field nothing has written look deliberate.
  */
 void v34hs_setup(int mode);
@@ -142,7 +142,7 @@ void v34hs_side_a(void (*fn)(void *obj));
  * `v34handshak`, and differ only in what side A runs instead of it.
  * `datapumpv34` is the function that CALLS `v34handshak`, in the same
  * translation unit and against the same object, and what it needs from this
- * fixture is the arena: findings 319-322 say an object step depends on the
+ * fixture is the arena: findings F319-322 say an object step depends on the
  * geometry of the five blocks the object points at, so a second fixture would
  * mean building that geometry a second time and being wrong about it once.
  *
@@ -209,7 +209,7 @@ void v34hs_compare(const char *what, long tag);
  * How many pointer fields the comparison skips, and the assertion that every
  * one of them was reached.  Call it ONCE, after the whole sweep.
  *
- * WHICH TABLE A POINTER SELECTS IS CHECKED (finding 324).  Each of the
+ * WHICH TABLE A POINTER SELECTS IS CHECKED (finding F324).  Each of the
  * thirty-seven is classified three ways: into its own object, into its own
  * arena -- where the offset says which block and where in it, and offsets are
  * comparable where addresses are not -- or outside both, which is a library
@@ -245,7 +245,7 @@ short v34hs_peek_short(int side, unsigned off);
  * Bring side A up with the blob's initialisers too, so both sides install the
  * same library tables.  That is the run in which "which table does this
  * pointer select" is a comparison rather than a shrug; `v34hs_holes_check`
- * does not apply to it.  Finding 324.
+ * does not apply to it.  Finding F324.
  */
 void v34hs_refinit(int on);
 
@@ -294,7 +294,7 @@ unsigned v34hs_arena_hash(int side);
 
 /*
  * The seven filler regions on their own.  They are 224 KB of the arena's 316
- * and no step writes any of them (finding 322), so they are a claim worth
+ * and no step writes any of them (finding F322), so they are a claim worth
  * making ONCE per run rather than once per step, and keeping them out of
  * `v34hs_arena_hash` is what makes that hash cheap enough to take every
  * block.

@@ -6,7 +6,7 @@
  * waiting on, and it took four scramblers and a table to become writable at
  * all -- `callgraph --ready` had it available from the start because it
  * models calls, and every one of those five is installed by ADDRESS.  See
- * finding 177.
+ * finding F177.
  *
  * WHICH TRANSLATION UNIT, NOT SETTLED.  It sits at 0x59760 between `initV34`
  * (0x583f0) and the V.34 handshake's own file, and no local symbol anchors
@@ -16,13 +16,13 @@
  * THE TWO HALVES ARE ONE STRUCT TWICE.  Everything it touches below 0xe50 is
  * a `struct v34_shell` field, once at the receive context's base and once
  * 0x1be0 further on -- which is `V34_SHELL_TX`, already established by
- * finding 137 from `getFrame`'s offsets.  Two functions arriving at the same
+ * finding F137 from `getFrame`'s offsets.  Two functions arriving at the same
  * spacing from opposite directions is the strongest evidence either has.
  *
  * AND IT NAMES THE SHELL'S BIT CALLBACKS.  The pointer at +0xe48 that
  * `getFrame` pulls bits through and `putFrame` pushes them into is filled
  * here with a SCRAMBLER in the transmit context and a DESCRAMBLER in the
- * receive one.  Finding 178.
+ * receive one.  Finding F178.
  */
 
 #include "dsplib/sysdep.h"
@@ -79,7 +79,7 @@ preinitdigital(void *objp)
 	 * must scramble with opposite polynomials, so this is the
 	 * originate/answer flag -- and `setTimingStateParameters` already
 	 * reads the same field to pick between two timing ramps, which is
-	 * the second use that makes the first one legible.  Finding 177.
+	 * the second use that makes the first one legible.  Finding F177.
 	 */
 	if (obj->f359c == 0x65) {
 		tx->scramble = scrambleGPC;
@@ -117,7 +117,7 @@ V34DIG_ASSERT(sidx,  struct v34_shell,  state_idx,  0x144c);
 
 /*
  * The transmit context is exactly V34_SHELL_TX past the receive one, which
- * `getFrame` established (finding 137) and this function arrives at
+ * `getFrame` established (finding F137) and this function arrives at
  * independently: its second block is at obj+0x25e0 and its first at
  * obj+0xa00.
  */

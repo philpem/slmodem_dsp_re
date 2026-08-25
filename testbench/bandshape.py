@@ -6,7 +6,7 @@ V.34 line probe, scored against the curve the emulator hardcodes.
     bandshape.py --label 600r  a/*.log  --label complex2  b/*.log
 
 WHY NOT THE CHIRP, which is what the brief asked for.  The chirp probe
-(`chirpdelay.py`, finding 1215) is injected by d-modem at the RTP boundary
+(`chirpdelay.py`, finding F1215) is injected by d-modem at the RTP boundary
 under `DMODEM_CHIRP`.  That code is GONE: it was an uncommitted working-tree
 change to `d-modem.c`, and commit df93682d ("the vendored fork is cryan209's
 again") restored the fork to its committed state and took it with it.  It is
@@ -23,7 +23,7 @@ THE LINE PROBE DOES.  V.34 11.2 / Table 17: tones 150 Hz apart from 150 Hz to
 floor.  `dftfreqinit` gives bin n = n * 150 Hz at the datapump's 9600 Hz rate,
 so the 25 bins span the whole band and FOUR of them -- 3300, 3450, 3600,
 3750 -- sit in the roll-off the fit describes.  It is emitted at the probe,
-before the far end applies any pre-emphasis, which is the window finding 1907
+before the far end applies any pre-emphasis, which is the window finding F1907
 says is the only safe one for a channel measurement.  1956 measured the
 band-edge cliff this way and probeplot.py already reads it.
 
@@ -42,7 +42,7 @@ WHAT IS REPORTED, and why each column is here:
     interpolated ONTO THE BIN GRID, never the other way round: the bins are
     the measurement and the fit is the thing being scored.
   * **In-band tilt over TWO bands, and they disagree on purpose.**  450-3150
-    is finding 1956's band and is the honest "is there tilt" number, because
+    is finding F1956's band and is the honest "is there tilt" number, because
     it stops short of the codec corner.  300-3400 is what the brief asks for
     and it includes the corner, so most of its slope is band limit wearing
     tilt's clothes.  Both are printed; read the verdict off the first.
@@ -63,7 +63,7 @@ from probeplot import HZ_PER_BIN, NOISE_BINS, REF_BIN, parse, to_db
 
 #
 # THE LEGACY CURVE EVERY HISTORICAL EMULATOR RESULT RIDES ON, attributed to
-# finding 1907.  Reproduced here verbatim so the comparison is against the
+# finding F1907.  Reproduced here verbatim so the comparison is against the
 # literal the emulator uses, not against a paraphrase of it.
 #
 FIT_F = np.array([0, 300, 3000, 3300, 3400, 3700, 3900, 4000], float)
@@ -146,7 +146,7 @@ def report(label, logs):
                  fitv[i], resid if i not in NOISE_BINS else float("nan"),
                  note))
     print()
-    for lo, hi, why in ((450, 3150, "finding 1956's band -- stops short of the "
+    for lo, hi, why in ((450, 3150, "finding F1956's band -- stops short of the "
                                     "codec corner, so this IS the tilt"),
                         (300, 3400, "the brief's band -- includes the corner, "
                                     "so it is tilt PLUS band limit")):

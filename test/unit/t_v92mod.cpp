@@ -38,7 +38,7 @@
  * tidiness.  `MODULATOR_QUEUE_LENGTH` is a SIGNED `int` in V92Parameters.h;
  * `reset` shifts it right arithmetically and then uses the result as the
  * UNSIGNED bound of the loop that primes the queue.  A negative value would
- * ask for about two billion iterations (finding 1284).  The queue's own
+ * ask for about two billion iterations (finding F1284).  The queue's own
  * length is also an allocation size.
  *
  * TWO WORDS ARE NEVER WRITTEN.  +0x24 and +0x3c are in the compared region
@@ -677,7 +677,7 @@ run_dtor(const char *name, ctor_fn our_ctor, ctor_fn ref_ctor,
  * `> 2` would then be invisible to every check in this file.  So the pair is
  * driven again at level 2 with the harness's debug capture on, and the two
  * transcripts are compared as text and counted as lines: text alone can be
- * filled by the harness without a call site firing (finding 149).
+ * filled by the harness without a call site firing (finding F149).
  *
  * The object comparison is not repeated -- the runs above cover it, and this
  * run's subject is the two lines.
@@ -717,7 +717,7 @@ run_debug(const char *name, ctor_fn our_ctor, ctor_fn ref_ctor,
 		 * THREE lines, and each one is placed: "V92Modulator
 		 * constraction" at the head, "V92Modulator reset" from the
 		 * `reset` this constructor inlines -- which is the running
-		 * evidence for finding 1283 -- and the phase 3 modulator's
+		 * evidence for finding F1283 -- and the phase 3 modulator's
 		 * own "TRN1u state length set to ..." from the `reset` ITS
 		 * constructor calls.  Two of the three come out of this file
 		 * and the third proves the sub-object was really built.

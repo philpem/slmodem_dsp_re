@@ -23,7 +23,7 @@
  *     1522d:  e8 ..                  call sysdep_malloc
  *     15247:  e8 ..                  call V92BitsToSymbol::V92BitsToSymbol
  *
- * so 0x20 is the original compiler's own `sizeof` (finding 1249's oracle).
+ * so 0x20 is the original compiler's own `sizeof` (finding F1249's oracle).
  * The furthest field anything here touches is the byte at +0x1c, and three
  * bytes of alignment carry the object to 0x20.
  *
@@ -61,16 +61,16 @@
  * register that held the quotient, so the quotient is dead there and cannot
  * be what the multiply uses.  Over 32-bit arithmetic the two agree on every
  * input where `d * bitsPerFrame` fits, and separate the moment it wraps --
- * finding 3052's shape exactly, and the reason this is spelt out here rather
+ * finding F3052's shape exactly, and the reason this is spelt out here rather
  * than tidied into the shorter form that "obviously" means the same thing.
  *
  * **+0x14 IS THE ONE THE CONSTRUCTOR LEAVES ALONE**, and the hole is the
  * claim: the constructor writes +0x10, +0x18 and +0x1c and not +0x14, so a
  * freshly constructed object's bit count is whatever the allocation held
- * until `reset` copies it out of the mapping parameters.  Finding 1248's
+ * until `reset` copies it out of the mapping parameters.  Finding F1248's
  * shape, in a second class.
  *
- * Data member names are invented and descriptive (finding 226).
+ * Data member names are invented and descriptive (finding F226).
  */
 
 #ifndef DSPLIB_V92BITSTOSYMBOL_H
@@ -211,7 +211,7 @@ public:
 	 * reset, cleared by the first `process` after either.  NOTHING
 	 * WRITTEN HERE EVER BRANCHES ON IT, which is why naming it "first
 	 * call" or anything else would be a guess about a reader that has not
-	 * been found.  Finding 3120's ruling, in a second class.
+	 * been found.  Finding F3120's ruling, in a second class.
 	 */
 	unsigned char flag_1c;
 

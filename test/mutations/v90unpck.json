@@ -1,7 +1,7 @@
 [
  {
   "label": "NOTE: this set covers setParamsInfoFromCPUnPck and the two static helpers it inlines, and NOTHING ELSE in src/pump/v90/V90MappingParamsInt.cpp.  The file's other six members are the v90mapint suite's, against t_v90cmask; the two suites share a source and have different binaries, which is the shape v90modprog and v90modulator already have over V90Modulator.cpp.",
-  "note": "The two helpers are near-identical bodies and every anchor below therefore quotes the line that separates them -- `params->constellation[c]` against `params->codecConstellation[c]` -- rather than the loop text, which appears twice.  tools/anchorcheck.py is what proves that; finding 7521 is why it is not taken on trust."
+  "note": "The two helpers are near-identical bodies and every anchor below therefore quotes the line that separates them -- `params->constellation[c]` against `params->codecConstellation[c]` -- rather than the loop text, which appears twice.  tools/anchorcheck.py is what proves that; finding F7521 is why it is not taken on trust."
  },
 
  {
@@ -130,7 +130,7 @@
   "find": "\tunsigned int c = (unsigned int)(which < 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
   "replace": "\tunsigned int c = (unsigned int)(which <= 6 ? which : 0);\n\tunsigned char *table = params->constellation[c];",
   "equivalent": true,
-  "why": "THE CLAMP IS DEAD IN THE ONLY CALLER THIS TREE HAS.  setParamsInfoFromCPUnPck passes (int)i from three loops that run 0..5, so `which < 6` and `which <= 6` select the same arm for every argument the helper can receive, and so does every other predicate true over 0..5.  The clamp is reachable only through the object's own setConstellationMask (.text+0x33570) and setCodecConstellationMask (+0x335f0), which are the two GLOBALS this batch deliberately did not claim -- see the .cpp.  The row that moves the boundary DOWN, to 3, is NOT equivalent and is the one above: it changes the answer for i = 3, 4 and 5.  The object's own evidence for the clamp is the SIGNED `cmp $0x6 ; setl` against the caller's UNSIGNED `jbe`, which is a codegen fact and not one this tier can see (finding 5821)."
+  "why": "THE CLAMP IS DEAD IN THE ONLY CALLER THIS TREE HAS.  setParamsInfoFromCPUnPck passes (int)i from three loops that run 0..5, so `which < 6` and `which <= 6` select the same arm for every argument the helper can receive, and so does every other predicate true over 0..5.  The clamp is reachable only through the object's own setConstellationMask (.text+0x33570) and setCodecConstellationMask (+0x335f0), which are the two GLOBALS this batch deliberately did not claim -- see the .cpp.  The row that moves the boundary DOWN, to 3, is NOT equivalent and is the one above: it changes the answer for i = 3, 4 and 5.  The object's own evidence for the clamp is the SIGNED `cmp $0x6 ; setl` against the caller's UNSIGNED `jbe`, which is a codegen fact and not one this tier can see (finding F5821)."
  },
  {
   "label": "the codec helper's clamp admits 6 as well",

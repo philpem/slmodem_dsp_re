@@ -14,7 +14,7 @@
    "would otherwise pass every eye.",
    "",
    "WHAT HAS NO POSSIBLE WITNESS HERE, and is therefore NOT written as a",
-   "mutation that could never fail (finding 6000's principle applied before",
+   "mutation that could never fail (finding F6000's principle applied before",
    "the fact, as 7474 did for the phase 4 reset's two guards):",
    "",
    "  * the inlined `enterPhase4()`'s own `inPhase3 == 2` early return.  The",
@@ -169,7 +169,7 @@
   "find": "\t    (short)autoDigitalImpDetector->isThereAnyAltRbsPhase());",
   "replace": "\t    autoDigitalImpDetector->isThereAnyAltRbsPhase());",
   "equivalent": true,
-  "why": "The blob narrows with `cwtl` at 0x1bc70 and the argument is declared `short`, so the cast is the object's and belongs in the source.  It cannot change a value: `V90AutoDigitalImpDetector::isThereAnyAltRbsPhase` answers 0 or 1 out of a register zeroed on entry (V90AutoDigitalImpDetector.h says so and t_v90adid drives it), so its high half-word is always zero and `(short)` is the identity over the WHOLE of its range.  No input to THIS function can separate the two spellings -- the separation would have to come from the callee returning something it cannot return.  Finding 293 recorded the same shape for `(short)preFilter.isV90WithEia6()` in `enterPhase3`, and the reason it is written here rather than left out is that reason: a reader who deletes the cast has to be able to find out why it is there."
+  "why": "The blob narrows with `cwtl` at 0x1bc70 and the argument is declared `short`, so the cast is the object's and belongs in the source.  It cannot change a value: `V90AutoDigitalImpDetector::isThereAnyAltRbsPhase` answers 0 or 1 out of a register zeroed on entry (V90AutoDigitalImpDetector.h says so and t_v90adid drives it), so its high half-word is always zero and `(short)` is the identity over the WHOLE of its range.  No input to THIS function can separate the two spellings -- the separation would have to come from the callee returning something it cannot return.  Finding F293 recorded the same shape for `(short)preFilter.isV90WithEia6()` in `enterPhase3`, and the reason it is written here rather than left out is that reason: a reader who deletes the cast has to be able to find out why it is there."
  },
  {
   "label": "the TRN2 ucode count is set from a constant rather than from the detector",

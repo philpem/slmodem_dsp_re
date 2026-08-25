@@ -1,7 +1,7 @@
 /*
  * t_v34hst346.c -- `v34handshak`'s microstate 46, `TX_PHASE1_ANS`, 0x65d6d.
  *
- * 3,198 bytes exclusive to one dispatch entry (finding 288's table), driven
+ * 3,198 bytes exclusive to one dispatch entry (finding F288's table), driven
  * through test/harness/v34hsstep.c with `v34hs_ours(1)`, so every case below
  * is this tree's `v34handshak` against the blob's over the whole 44,096-byte
  * object, the five blocks it points at, the padding around them and both
@@ -27,13 +27,13 @@
  * four preludes (`+0x3588 = 4` against `|= 4`, `+0xaa7a = 0`, the two pointer
  * installs, the INFO0 build) and the four distinct message strings.
  *
- * SEEDED, NOT INHERITED (finding 345).  Almost everything the reset writes is
+ * SEEDED, NOT INHERITED (finding F345).  Almost everything the reset writes is
  * a zero, so on a fill that happened to leave one of them zero a mutation
  * deleting that store would be equivalent rather than uncaught.  `begin`
  * therefore puts a distinct non-zero value in every field the arm writes,
  * including all eleven message shorts and all twelve fields of the record.
  *
- * THE TXSTATE IS PART OF THE FIXTURE (finding 288), and here it is more than
+ * THE TXSTATE IS PART OF THE FIXTURE (finding F288), and here it is more than
  * that: two of its values ARE two of the cases.  MOH_SILENCE (81) is the
  * neutral one -- above table 2's window, so it takes the once-per-block
  * dispatch's own default -- and TX_DPSK (24) and TONE_AB (60) are driven
@@ -92,7 +92,7 @@ static int default_fill;
  * INFO0 body would fault before it could fail.  Aiming it at each side's own
  * session block instead would put two different addresses in two blocks the
  * comparison reads byte for byte, which is precisely the asymmetry findings
- * 319-322 are about.  A single buffer keeps the two blocks identical AND is
+ * F319-322 are about.  A single buffer keeps the two blocks identical AND is
  * safe, because everything downstream only READS through the pointer:
  * `V34SetINFO0aBits` takes one byte at +0x11 of it and writes nothing.
  */

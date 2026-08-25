@@ -77,11 +77,11 @@ extern const struct rc_bank rc_banks[RCFIXED_NMODES];
  *   +0x19a taps   b0e51 / b13e7 `movswl`, used at 32 bits by `imul` and `sub`.
  *
  * `movzwl 0x194(%ebx),%ecx` at b1448 is not a contradiction: every use there is
- * 16 bits wide (a 16-bit store and `cmp %ax,%cx`), which finding 614 puts in
+ * 16 bits wide (a 16-bit store and `cmp %ax,%cx`), which finding F614 puts in
  * the compiler's free column.  It is also why `extcheck` cannot see +0x194 --
  * 618's "loaded both ways proves nothing" filter suppresses the operand.
  *
- * Findings 2403 and 2700.  Field order follows the original's 420-byte layout
+ * Findings F2403 and F2700.  Field order follows the original's 420-byte layout
  * so the two can be compared field by field during differential testing.
  */
 struct rc_state {

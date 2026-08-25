@@ -5,7 +5,7 @@
  * the behaviour.  Six of the class's seven members are here.
  *
  * THE SEVENTH, `loadParams(char *)`, IS DELIBERATELY ABSENT, and the two call
- * sites that would reach it are marked below.  The argument is finding 879's
+ * sites that would reach it are marked below.  The argument is finding F879's
  * and it is not "it is only diagnostics": `Vparser_read_int` and
  * `Vparser_read_float` are three bytes each in the shipped object -- `xor
  * %eax,%eax; ret` -- and the two `loadParams` members are the only callers of
@@ -16,11 +16,11 @@
  * WHERE EVERY DEFAULT COMES FROM.  `setToDefault` is 3,589 bytes of stores
  * and it was not read by eye.  `tools/dis.py`'s output was abstract-
  * interpreted -- integer registers and the whole x87 stack -- under finding
- * 860's rule that any unmodelled instruction clobbers what it writes, so a
+ * F860's rule that any unmodelled instruction clobbers what it writes, so a
  * form the interpreter did not know became an explicit unknown rather than a
  * stale value that reads as a success.  338 of the 340 stores resolved; the
  * two that did not are the two that are genuinely computed, and both are
- * written out by hand below.  The offsets agree with finding 861's separate
+ * written out by hand below.  The offsets agree with finding F861's separate
  * walk, store for store.
  *
  * WHY NINE FIELDS TAKE A HEXADECIMAL BIT PATTERN.  Nine of the fifty-one
@@ -29,12 +29,12 @@
  * float neighbours.  The header is frozen and a field's type is part of its
  * layout, so this file writes the bit pattern through the declared type,
  * which leaves the identical four bytes and reports the discovery instead of
- * acting on it.  Finding 878.
+ * acting on it.  Finding F878.
  *
  * `setToDefault` IS NOT A PURE WRITER.  It dereferences `modemParams` for the
  * two rate limits and for one flag bit, and it reads its own
  * `SENSITIVE_ISP_DETECTED` and `MAX_TX_RATE_INDEX_FOR_SENSITIVE_ISP` -- the
- * two fields finding 861 records as read-but-never-defaulted, which is
+ * two fields finding F861 records as read-but-never-defaulted, which is
  * exactly why the constructor sets them before calling it.
  *
  * THE RATE MASK IS BUILT WITH THE INDEX RUNNING DOWN.  `for (i = 14; i >= 2;
@@ -90,7 +90,7 @@ V90Parameters::~V90Parameters()
  * holding an abstract value per register and per outgoing stack slot, because
  * GCC 3.4 shuffles the three arguments through whatever registers are free
  * and stores them in whatever order it likes.  295 of 295 calls resolve; the
- * one instruction that once made "0 unresolved" a lie is finding 860.
+ * one instruction that once made "0 unresolved" a lie is finding F860.
  *
  *     arg 0  (%esp)      `paramFile`, this member's own argument, passed on
  *     arg 1  0x4(%esp)   an `R_386_32` against .rodata.str1.1 or .str1.4
@@ -103,7 +103,7 @@ V90Parameters::~V90Parameters()
  * the header to the same map from the other end.
  *
  * FOUR OFFSETS ARE READ TWICE UNDER TWO NAMES, so 295 calls cover 291 fields:
- * +0x0f0, +0x18c, +0x190 and +0x194 (finding 861).  Both calls are emitted,
+ * +0x0f0, +0x18c, +0x190 and +0x194 (finding F861).  Both calls are emitted,
  * in the object's order, and the field is named for the LATER one -- three of
  * the four are a `GERMAN_PBX_` override of the name beside it.  A generator
  * driven by the header's field list rather than by the call list would emit
@@ -113,8 +113,8 @@ V90Parameters::~V90Parameters()
  * WHAT IT DOES AT RUN TIME IS NOTHING.  Both callees are `xor %eax,%eax; ret`
  * in the shipped object, so all 295 reads write nothing and the return values
  * are discarded.  The call SEQUENCE is still the object's own field map and
- * the only place in it that knows these names.  Finding 6400 for the oracle
- * that tests this -- and for why finding 879's `ld --wrap` recommendation
+ * the only place in it that knows these names.  Finding F6400 for the oracle
+ * that tests this -- and for why finding F879's `ld --wrap` recommendation
  * does not work.
  */
 void
@@ -451,10 +451,10 @@ V90Parameters::setToDefault()
 	AGC_K = 0.6f;
 	AGC_BLOCK_LEN = 150;
 	AGC_ADAPTATION_DURATION = 1000;
-	unnamed_06c = 0x3f800000;	/* the object stores 1.0f here -- finding 878 */
-	unnamed_070 = 0x3f19999a;	/* the object stores 0.6f here -- finding 878 */
-	maxUcode = 92;			/* +0x074, named by finding 3527 */
-	nofUcodesInTrn2 = 8;		/* +0x078, named by finding 3527 */
+	unnamed_06c = 0x3f800000;	/* the object stores 1.0f here -- finding F878 */
+	unnamed_070 = 0x3f19999a;	/* the object stores 0.6f here -- finding F878 */
+	maxUcode = 92;			/* +0x074, named by finding F3527 */
+	nofUcodesInTrn2 = 8;		/* +0x078, named by finding F3527 */
 	unnamed_07c = 4;
 	unnamed_080 = 4;
 	INITIAL_BAUD_OFFSET = 0.0f;
@@ -485,7 +485,7 @@ V90Parameters::setToDefault()
 	BLL_TRN1_QC_MEDIUM_K1 = 0.0003f;
 	BLL_TRN1_QC_MEDIUM_K2 = 5e-12f;
 	BLL_TRN1_QC_SLOW_K2 = 0.0001f;
-	unnamed_0f4 = 0x2c0cbccc;	/* the object stores 2e-12f here -- finding 878 */
+	unnamed_0f4 = 0x2c0cbccc;	/* the object stores 2e-12f here -- finding F878 */
 	BLL_TRN1D_INITIAL_TO_FAST_DURATION = 2000;
 	BLL_TRN1D_FAST_TO_SLOW_DURATION = 7200;
 	unnamed_100 = 6000;
@@ -532,9 +532,9 @@ V90Parameters::setToDefault()
 	LINEAR_EQU_ALT_DIL_BETA = 1.25e-11f;
 	LINEAR_EQU_ALT_DIL_MED_UCODE_BETA = 8.25e-12f;
 	LINEAR_EQU_ALT_DIL_HIGH_UCODE_BETA = 3.75e-12f;
-	unnamed_1b0 = 0x2ebaeabf;	/* the object stores 8.5e-11f here -- finding 878 */
-	unnamed_1b4 = 0x2e83f0ff;	/* the object stores 6e-11f here -- finding 878 */
-	unnamed_1b8 = 0x2d83f0ff;	/* the object stores 1.5e-11f here -- finding 878 */
+	unnamed_1b0 = 0x2ebaeabf;	/* the object stores 8.5e-11f here -- finding F878 */
+	unnamed_1b4 = 0x2e83f0ff;	/* the object stores 6e-11f here -- finding F878 */
+	unnamed_1b8 = 0x2d83f0ff;	/* the object stores 1.5e-11f here -- finding F878 */
 	LINEAR_EQU_DIL_ERROR_RELAX_BETA = 7.5e-11f;
 	LINEAR_EQU_TRN2D_INITIAL_BETA = 1e-10f;
 	LINEAR_EQU_TRN2D_BETA = 7e-11f;
@@ -626,7 +626,7 @@ V90Parameters::setToDefault()
 	unnamed_31c = 240;
 	unnamed_320 = 720;
 	unnamed_324 = 40000;
-	unnamed_328 = 0x3f75c28f;	/* the object stores 0.96f here -- finding 878 */
+	unnamed_328 = 0x3f75c28f;	/* the object stores 0.96f here -- finding F878 */
 	unnamed_32c = 1920;
 	unnamed_330 = 6120;
 	unnamed_334 = 3901;
@@ -693,10 +693,10 @@ V90Parameters::setToDefault()
 	TRN2D_MAX_MEAN_ERROR_ENERGY_IN_PHASE4 = 35.0f;
 	PHASE3_ERROR_FOR_V34_FALLBACK = 200.0f;
 	PHASE4_ERROR_FOR_V34_FALLBACK = 5000.0f;
-	unnamed_434 = 0x437a0000;	/* the object stores 250.0f here -- finding 878 */
+	unnamed_434 = 0x437a0000;	/* the object stores 250.0f here -- finding F878 */
 	PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.5f;
 	QC_PHASE4_MEAN_ERROR_BEF_TO_AFT_UPDATE_RATIO_THRESH = 1.75f;
-	unnamed_440 = 10.0f;		/* 0x41200000 -- finding 878 */
+	unnamed_440 = 10.0f;		/* 0x41200000 -- finding F878 */
 	ENABLE_RRN_UP = 1;
 	ENABLE_RRN_DOWN = 1;
 	RATE_UP_DETECT_DURATION = 2400;
@@ -920,7 +920,7 @@ V90Parameters::init()
 	 *
 	 * Both arms leave the object identical, because every read `loadParams`
 	 * makes goes to a three-byte stub; the test still drives both, so that
-	 * is measured rather than asserted.  Finding 879, and 6400 for the
+	 * is measured rather than asserted.  Finding F879, and 6400 for the
 	 * oracle that finally tested the callee.
 	 */
 	if (modemParams->paramFile)

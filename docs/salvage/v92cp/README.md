@@ -11,7 +11,7 @@ taking it through the differential tier like everything else.
 Three files, verbatim and unmodified, from `re/` -- an earlier
 reverse-engineering effort against this same blob, which is being deleted. They
 are the one thing in it that this tree does not already have, equally well or
-better. Findings 4300 (the full disposition, 100 claims bucketed) and 4301 (why
+better. Findings F4300 (the full disposition, 100 claims bucketed) and 4301 (why
 these three files and nothing else) are the record.
 
 | file | lines | what |
@@ -25,7 +25,7 @@ these three files and nothing else) are the record.
 `src/pump/v90/V92CP.cpp` is 68 lines -- the constructor and the destructor, two
 of the class's twelve symbols. `V92CP::infoToBits` is called from **fifteen
 sites** in the object's `.text` and is unwritten here with no recorded reason;
-finding 3520, which looks like it rules on this, is about `bitsToInfo` and is
+finding F3520, which looks like it rules on this, is about `bitsToInfo` and is
 correct about that symbol only. See 4301 for the relocation counts with their
 controls.
 

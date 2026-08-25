@@ -10,7 +10,7 @@
  * transcripts.  t_v34hsstep.c keeps proving the FIXTURE, blob against blob,
  * and this proves the arms.
  *
- * WHAT IS COVERED, from .rodata+0x3000 (finding 286):
+ * WHAT IS COVERED, from .rodata+0x3000 (finding F286):
  *
  *     0x6590b   the arm twenty-four of the forty microstates share
  *     0x65329   the default, which is the same three instructions
@@ -18,7 +18,7 @@
  *     0x657ca   79 MOH_TONE
  *     0x656e0   80 MOH_TONE_DROP
  *
- * THE TXSTATE IS PART OF THE FIXTURE, NOT A DON'T-CARE (finding 288).  Every
+ * THE TXSTATE IS PART OF THE FIXTURE, NOT A DON'T-CARE (finding F288).  Every
  * one of these arms leaves through the once-per-block transmit dispatch at
  * 0x62af1, so a microstate case is a microstate arm AND a transmit arm.  The
  * cases below are driven at MOH_SILENCE unless they say otherwise: 81 is
@@ -39,7 +39,7 @@
  * arena placements, eight neighbourhoods, and side B's object outside its
  * arena: no differential failure at any of them, and the only measurement
  * that moves is the absolute byte count, which `step` therefore asserts at
- * the default fill alone and says why.  That sweep is findings 319-322's
+ * the default fill alone and says why.  That sweep is findings F319-322's
  * standard of evidence, applied here to a reconstruction rather than to the
  * fixture.
  */
@@ -105,7 +105,7 @@ static int dump;
  * So that one assertion is made at the default fixture and the rest always.
  * The differential comparison itself is made at every seed and is never
  * relaxed: this is about what a signature MEANS, not about a tolerance.
- * Finding 290 made the same distinction for the same reason.
+ * Finding F290 made the same distinction for the same reason.
  */
 static int default_fill;
 
@@ -194,7 +194,7 @@ detector(int assert_it)
  * NOT `v34hs_peek_short`: the field is a pointer and half of one is not an
  * identity.  And not a COMPARISON BETWEEN THE SIDES either -- side A holds
  * ours and side B the blob's copy of the same table, which is exactly the
- * case finding 324 says no address comparison can settle.  What is checked
+ * case finding F324 says no address comparison can settle.  What is checked
  * with this is which of OUR OWN two descriptors the arm chose, which is an
  * absolute answer and not a difference: two runs that merely differ would
  * pass with the select inverted.
@@ -233,7 +233,7 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 
 	/*
 	 * No conversion in these: `diff_eq_int` appends the input when the
-	 * format has none (finding 220), and a `%s` in one would be handed a
+	 * format has none (finding F220), and a `%s` in one would be handed a
 	 * long -- which segfaults rather than reporting.
 	 */
 	if (default_fill)
@@ -362,7 +362,7 @@ main(void)
 	 * 0x62a40 and come back with the SAME SIGNATURE.  That is asserted
 	 * rather than glossed: a collision the object's own structure
 	 * produces is evidence, and asserting it makes a later change that
-	 * separates them a failure rather than a silence (finding 290).
+	 * separates them a failure rather than a silence (finding F290).
 	 *
 	 * So these six are one behavioural check repeated six times, exactly
 	 * as the twenty-four above are.  The txstate that IS independent is
@@ -602,7 +602,7 @@ main(void)
 	 * AND THE CARRIER SELECT IS CHECKED BY DIFFERENCE, not by address.
 	 * `coeff` points at a library table, so side A holds ours and side B
 	 * the blob's and no address comparison can tell two copies from two
-	 * tables (finding 324).  What CAN be checked on one side is that
+	 * tables (finding F324).  What CAN be checked on one side is that
 	 * f359c 0x64 and f359c 0x65 select different tables at all -- which a
 	 * reconstruction that always picked one would fail.
 	 */
@@ -745,7 +745,7 @@ main(void)
 	 * and `hs_setstate` does nothing when the word already holds the
 	 * value, so entering at MOH_CLEARDOWN or WAIT would make the stores
 	 * invisible and cost the diagnostic line as well; +0xabe4 and +0xabe2
-	 * are seeded non-one for finding 345's reason.
+	 * are seeded non-one for finding F345's reason.
 	 *
 	 * AND THE BYTE IS SEEDED WITH ITS NEIGHBOUR CLEAR.  +0xabf9 is set to
 	 * 1 and +0xabfa -- a declared field, so a real neighbour and not a pad
@@ -846,7 +846,7 @@ main(void)
 	 * THE POINTER HOLES.  `v34hs_compare` skips thirty-five pointer
 	 * fields and compares each by offset from its own base; this asserts
 	 * every one of them was reached, so the skip list cannot go stale
-	 * while these cases run.  Finding 290.
+	 * while these cases run.  Finding F290.
 	 */
 	v34hs_holes_check();
 

@@ -5,7 +5,7 @@
  * THE ORIGINAL'S SOURCE SAID `*dst = *src;`.  THIS FILE EXISTS SO THAT OURS CAN
  * TOO, AND STILL BE CORRECT UNDER A MODERN COMPILER.
  *
- * The object was built by GCC 3.4.2 (finding 606), which lowers a `float`
+ * The object was built by GCC 3.4.2 (finding F606), which lowers a `float`
  * assignment to a pair of integer `mov`s.  Modern GCC under `-mfpmath=387`
  * lowers the same statement to `flds`/`fstps`, and an x87 load-store QUIETENS A
  * SIGNALLING NaN: 0x7f800001 goes in and 0x7fc00001 comes out.  Every ordinary

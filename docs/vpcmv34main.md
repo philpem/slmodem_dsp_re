@@ -10,7 +10,7 @@ have already cost this project time.
 
 ## Two INDEPENDENT tracks, and only one of them is this document
 
-Findings 800-806 established that the blob's own constructor works as a
+Findings F800-806 established that the blob's own constructor works as a
 differential fixture, so **V.34 does not need this span written**. That splits
 the remaining work in two, and they do not block each other:
 
@@ -42,7 +42,7 @@ and the closure of those four is 588 symbols / 349,182 bytes, of which
 ### CORRECTION — a V.34 connection does NOT need this span written
 
 **The first version of this document said "a properly constructed V.34 modem
-and a V.90 modem are the same work". That is wrong, and findings 800-806
+and a V.90 modem are the same work". That is wrong, and findings F800-806
 disproved it within the hour.** It is left recorded rather than quietly edited
 because the reasoning was plausible and someone will re-derive it.
 
@@ -83,7 +83,7 @@ against, not a free pass.
 
 Sizes are UNWRITTEN bytes from
 `tools/closure.py dp_vpcm_init vpcm_create VPCMXF_Create VPcmV34Create --missing`,
-grouped by class. **Recompute before quoting** — finding 330 invalidated every
+grouped by class. **Recompute before quoting** — finding F330 invalidated every
 closure number written before it, in both directions.
 
 ### Wave 0 — SERIAL, before anything fans out
@@ -92,7 +92,7 @@ closure number written before it, in both directions.
 The right-hand columns are what `tools/closure.py` reports after a full build;
 the `already` column is what it CANNOT see, because `Scrambler.h` defines six
 members as inline template functions and GCC inlines them, so `build/src/**/*.o`
-contains no symbol for them at all (finding 64, `nm` over every built object).
+contains no symbol for them at all (finding F64, `nm` over every built object).
 
 | group | planned | recomputed | already | owner |
 |---|--:|--:|--:|---|
@@ -134,7 +134,7 @@ span works. Whether that holds is being measured; see the caveat below.
 **The split above is by CLOSURE, not by WRITABILITY, and for this wave those
 are very different things.** Every wave-1 symbol was re-run through
 `closure.py <name> --missing` and asked whether its own closure is size 1
-(finding 838):
+(finding F838):
 
     dp_vpcm_init   needs 394 more     vpcm_create     needs 124
     VPCMXF_Create  needs  66          VPcmV34Create   needs  11
@@ -145,18 +145,18 @@ are very different things.** Every wave-1 symbol was re-run through
 `enterChannelVerification` members of WAVE-2 classes — taking them would break
 one-class-one-owner for eight future batches. So the construction path is the
 LAST thing in this span that can be written, not the first, and the ordering
-argument above survives only as the oracle argument, which findings 800-806
+argument above survives only as the oracle argument, which findings F800-806
 delivered without needing the span written at all.
 
 About **14 KB of wave 1 is writable today** and it is all leaves: the FFT pair
-`realfft`/`four1` (which is also finding 876's block on `Psd::process`), the
+`realfft`/`four1` (which is also finding F876's block on `Psd::process`), the
 V.92 CP/DIL packers, the rate-renegotiation pair, the diagnostic printers, and
 about 2 KB of coefficient tables.
 
 ### Wave 2 — the receive chain, and it is NOT a free-for-all
 
 **ORDER BY WRITABILITY, NOT BY SIZE.** Wave 1 was planned by byte count and
-none of its four entry points could be compiled at all (finding 838). The same
+none of its four entry points could be compiled at all (finding F838). The same
 question was then asked of wave 2 — take each class's largest unwritten method
 and run `closure.py <symbol> --missing`, which says how many symbols must exist
 before that one can build:
@@ -193,16 +193,16 @@ symbols and 0 bytes.**  The last nine symbols were 3,348 bytes:
 
 Four suites, 178 mutations, 0 NOT caught: `v90modemctor` (26: 24/0/2),
 `vpcmctor` (32: 31/0/1), `vpcmxfcreate` (24: 21/0/3), `vpcmdp` (96: 88/0/8).
-Findings 1330-1344; deviations D235, D236, D237.
+Findings F1330-1344; deviations D235, D236, D237.
 
 Three things the next reader of this file should have:
 
-- **Finding 806's question is answered and its premise was wrong.**  Nothing
+- **Finding F806's question is answered and its premise was wrong.**  Nothing
   in the construction path writes the V.34 object's `+0x2218`; it is a
   run-time handshake state and `datapumpv34` at .text+0x71bfa is what writes
-  2.  Finding 1331 has the enumeration of all eleven writers.
+  2.  Finding F1331 has the enumeration of all eleven writers.
 - **`sizeof(VPcmFloModem)` is 0x7f68 and `V90Modem` has no `pad_` left.**
-  Findings 1332 and 1333; the header floors both files used to carry are gone.
+  Findings F1332 and F1333; the header floors both files used to carry are gone.
 - **D237 is the only difference left and it is a symbol-table one.**  The
   blob's `~VPcmFloModem` `D1`/`D2` are called by nothing in the blob; ours are
   inlined into `VPCMXF_Delete` and emitted nowhere.
@@ -213,7 +213,7 @@ argument it makes is the one that turned out to be right.
 ### Wave 5 — the construction path, LAST
 
 What this document originally called wave 1. Moved here, unchanged in content,
-because finding 838 measured that none of it can be compiled until the classes
+because finding F838 measured that none of it can be compiled until the classes
 below it exist:
 
     dp_vpcm_init  needs 394 more    vpcm_create    needs 124
@@ -238,7 +238,7 @@ remains is the construction path proper and it is genuinely last.
 
 This is the **digital-side sender**, and the blob never enters it: `vpcm_create`
 passes a literal 0 to `VPCMXF_Create`, so the side is always 1, the analogue
-client (findings 701, 702). A path the blob never enters cannot be driven
+client (findings F701, F702). A path the blob never enters cannot be driven
 differentially, so only the codegen tier applies and the first evidence it
 *works* is interop against live hardware. Doing it last keeps the differential
 rule intact for everything above it.
@@ -255,18 +255,18 @@ rule intact for everything above it.
   `docs/findings.md` conflicts on every merge and numbering has collided nine
   times. Taken so far: 1-756 and 780-788.
 - **Never `git add -A`.** A mutation run patches `src/` in place while it runs,
-  and agent worktrees live under `.claude/`. Name the paths. Finding 705.
+  and agent worktrees live under `.claude/`. Name the paths. Finding F705.
 - **`make phase` is the gate, not `make test`.** `export BLOB` (merged
   2026-08-09) is what lets it run in a worktree at all; without it `strings`
   fails on the blob path.
 - **One class, one owner.** Never split a class across batches, and never let
   two batches own the same header.
 - Merge one batch at a time and grep for a distinctive string from each side
-  afterwards — `git checkout --ours` takes the whole file (finding 700).
+  afterwards — `git checkout --ours` takes the whole file (finding F700).
 
 ## The golden-object oracle — MEASURED, and it holds
 
-The caveat this section used to carry has been resolved. Findings 800-806: two
+The caveat this section used to carry has been resolved. Findings F800-806: two
 blob-code pointers in 265,520 bytes, no vtable in the root arena, no
 function-pointer table, and our `datapumpv34` leaves a blob-constructed object
 byte-identical to what the blob's leaves. **Every later batch can diff its
@@ -289,7 +289,7 @@ recovered.** Deriving it properly is wave 1's job.
 
 ### THE CONFIGURATION IS NOW DERIVED — and the call still does not connect
 
-Done, findings 820-825, and `docs/configuration.md` has the field-by-field
+Done, findings F820-825, and `docs/configuration.md` has the field-by-field
 result. The route was not the object: **`slmodemd`'s own source survives**, and
 it is the other half of the ABI this object was partially linked against.
 `MDMPRM_DPRUNTIME` is `m->dp_runtime`, which is `dp_runtime_create(m)`, which
@@ -305,11 +305,11 @@ MIN_RATE and MAX_RATE are `MODEM_MIN_RATE` 300 and `MODEM_MAX_RATE` 56000; and
 of the six are INERT.** The host's rate window lands at runtime +0x30/+0x34
 and the rate machinery reads +0x38/+0x3c, which `vpcm_create` writes as
 literals. `t_v34conn.c` now uses the derived configuration and **every recorded
-literal is unchanged from finding 902** — same trajectory, same stop, same
+literal is unchanged from finding F902** — same trajectory, same stop, same
 zero rates.
 
-So the configuration is retired as the suspect for finding 902, and finding
-908's second item is what is left: **there is no V.8**, and phase 2 is where
+So the configuration is retired as the suspect for finding F902, and finding
+F908's second item is what is left: **there is no V.8**, and phase 2 is where
 V.34 uses what V.8 negotiated.
 
 ## Where wave 0 got to
@@ -317,7 +317,7 @@ V.34 uses what V.8 negotiated.
 **The two parameter blocks landed first and alone, and their layout is now
 frozen.** `include/dsplib/V90Parameters.h` (0x558, 342 slots) and
 `include/dsplib/V92Parameters.h` (0xdc, 55 slots) carry the ORIGINAL AUTHOR'S
-OWN NAMES for 291 and 54 of them. Findings 860-862.
+OWN NAMES for 291 and 54 of them. Findings F860-862.
 
 They came out of a shape nobody had looked at: `loadParams(char *)` is 7,894
 bytes of nothing but 295 straight-line calls to `Vparser_read_int` and
@@ -376,10 +376,10 @@ Three things they settled that are not in any of their own files:
   unblock it: it calls `realfft` and `four1`, which are unwritten wave-1 free
   functions whose only definitions in the reference object are `ref_`-renamed;
   and two of its arms compute log10 with `fldlg2`/`fyl2x`, which GCC emits only
-  under `-funsafe-math-optimizations`. Finding 876.
+  under `-funsafe-math-optimizations`. Finding F876.
 - **Nine of `V90Parameters`'s fifty-one `unnamed_*` slots are floats** and are
   still declared `int`, annotated in the header with the value the object
-  stores. Finding 878, and the header says why the retype was deferred and who
+  stores. Finding F878, and the header says why the retype was deferred and who
   should do it.
 
 ### And what the merges themselves cost
@@ -393,7 +393,7 @@ produced by a parse error. `test/mutations/suites.json` is the same shape and
 worse in one way: one batch reformatted the whole file, so the conflict covered
 every line and taking its side would have silently dropped the batch that
 merged before it. `docs/coverage.md` is the one file where taking a side entire
-is right, because it is regenerated. Finding 700 in four instances in one
+is right, because it is regenerated. Finding F700 in four instances in one
 afternoon.
 
 **Record each batch's own mutation suites by name at merge time** —

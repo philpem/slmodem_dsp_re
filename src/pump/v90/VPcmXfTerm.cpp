@@ -32,7 +32,7 @@
  * WHY THIS IS ITS OWN TRANSLATION UNIT.  In the object it is not: 0xf730 sits
  * between `VPCMXF_Delete` (0xf6c0) and `VPcmFloModem::qcLineVerification`
  * (0xf750), so the original compiled it beside the class.  The split here is
- * finding 1264's rule -- one source file is one mutation suite's namespace --
+ * finding F1264's rule -- one source file is one mutation suite's namespace --
  * applied ahead of the collision rather than after it: `VPcmFloModem.cpp`
  * already carries two suites (`vpcmflomodem`, `vpcmep3`), and the rest of the
  * `VPCMXF_` family is unwritten and will want its own anchors.  The reason is
@@ -41,7 +41,7 @@
  * `sessionTermination` IS NAMED BY ITS MANGLED SYMBOL rather than called as a
  * member, for `V90Demodulator.cpp`'s reason at its own `v90resampler_reset`:
  * `V90Demodulator.h` drags in `V90PreFilter.h` and with it the OTHER
- * definition of `V90Parameters` (finding 1112), which this file cannot have
+ * definition of `V90Parameters` (finding F1112), which this file cannot have
  * beside `VPcmFloModem.h`.  A forward-declared pointer type and the symbol
  * are enough, and the call is direct in the object too -- there is no vptr in
  * either class.
@@ -61,7 +61,7 @@ typedef char vpcmxfterm_off_dem[
 /*
  * `V90Demodulator::sessionTermination`, by the name the ABI gives it.  It
  * takes `this` as its first stack argument like every other member here
- * (finding 215), so no attribute is involved.
+ * (finding F215), so no attribute is involved.
  */
 extern int v90dem_sessionTermination(V90Demodulator *self)
 	asm("_ZN14V90Demodulator18sessionTerminationEv");

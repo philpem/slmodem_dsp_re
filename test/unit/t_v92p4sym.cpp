@@ -55,7 +55,7 @@
  * `V92Phase4Modulator+123 got 00, reference 01`.  A trial whose verdict is
  * the compiler's rather than the source's proves nothing either way, so the
  * grid started at one and four store-order mutations were withdrawn.  Finding
- * 4705, and it was the right call about the TRIAL and not about the source.
+ * F4705, and it was the right call about the TRIAL and not about the source.
  *
  * `V92Phase4Modulator.h` now holds `prevBit` and the block in ONE array
  * object, so `bitsExt[V92P4M_BITS_BELOW - 1]` is an ordinary element, the
@@ -524,7 +524,7 @@ setup(int trial)
 	 * THE CONJUNCTION AND NOT THE AXIS.  generateCPu, generateSUVu and
 	 * generateE2u only fold on the `flag_3c == 0` arm, so a counter on
 	 * `bps[bi] == 0` alone would be satisfied by trials that never reach
-	 * the statement this input exists for -- finding 4756's shape exactly.
+	 * the statement this input exists for -- finding F4756's shape exactly.
 	 * generateTRN2u has no such test and folds either way, which is why
 	 * this is the tighter of the two conditions and not the looser.
 	 */
@@ -576,7 +576,7 @@ compare_obj(long trial)
  * The scrambler as each side's own OFFSETS into each side's own buffer, plus
  * the buffers themselves.  The raw pointers are never compared and never
  * merely checked non-null: two arrays at two addresses would pass that and
- * prove nothing (finding 224).
+ * prove nothing (finding F224).
  */
 static void
 compare_scrambler(long trial)
@@ -657,7 +657,7 @@ compare_text(long trial)
  * The object dispatches through a dense thirty-entry jump table and reaches
  * twenty-six distinct arms; `states[]` above holds seventeen values and would
  * have left eleven arms -- 8, 10, 16, 17, 18, 20, 24, 25, 27, 28 and 29 --
- * unreachable while every check passed.  That is finding 4756's third fixture
+ * unreachable while every check passed.  That is finding F4756's third fixture
  * fault exactly, so this grid runs EVERY value 0..29 plus three the switch
  * cannot have: -1, INT_MIN and 30.  `saw_arm[]` below asserts that each of
  * them was entered and `saw_trans[]` that each arm that CAN change the state
@@ -733,7 +733,7 @@ static const unsigned int gs_counts[] = {
 #define NGSTRIAL	(NGSSTATE * NGSCOUNT * NGSSHAPE * NGSBIT)
 
 /* What the grid must have reached, indexed BY STATE VALUE and not by any
- * position in a table -- finding 4756's first fixture fault was an
+ * position in a table -- finding F4756's first fixture fault was an
  * anti-vacuity check addressed by index that silently changed what it
  * watched. */
 static int gs_saw_arm[30];
@@ -760,7 +760,7 @@ gs_setup(int trial)
 	int nullcp;
 	int s;
 	/*
-	 * NOT `trial`, AND THAT IS FINDING 4756 AGAIN.  `trial` decomposes as
+	 * NOT `trial`, AND THAT IS FINDING F4756 AGAIN.  `trial` decomposes as
 	 * `si + NGSSTATE * (...)` and NGSSTATE is 33, so `trial % 3` and
 	 * `trial % 6` and `trial % 9` are CONSTANT for a given state -- every
 	 * trial of state 18 got `symbolsDone` of 3 and every trial of state 25

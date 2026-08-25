@@ -39,7 +39,7 @@
  *
  * Every one of those has a counter at the bottom of the run asserting that
  * the case really occurred, so a table edited into vacuity fails loudly
- * rather than passing on a smaller cross-product (findings 247, 262, 295).
+ * rather than passing on a smaller cross-product (findings F247, F262, F295).
  */
 
 #include <string.h>
@@ -99,7 +99,7 @@ next_byte(void)
 	return (unsigned char)(lfsr_state >> 3);
 }
 
-/* VARIED BYTES, NEVER ZEROS (finding 230). */
+/* VARIED BYTES, NEVER ZEROS (finding F230). */
 static void
 fill_pair(void *a, void *b, size_t n)
 {
@@ -499,7 +499,7 @@ main(void)
 			 * value being offered.  A counter that increments on
 			 * every trial stays non-zero after the arm it names
 			 * stops running, which is the shape of a check that
-			 * cannot fail (findings 247, 262, 295) -- and these
+			 * cannot fail (findings F247, F262, F295) -- and these
 			 * two exist precisely to say that an interesting
 			 * value class REACHED an arm.
 			 */

@@ -13,7 +13,7 @@ has not passed a differential test**, and that `re/` does not exist to you.
 `python3 tools/debugaudit.py --missing` lists diagnostic call sites that the
 blob has and our reconstruction does not, **in functions that are already
 reconstructed**. The level ships at zero, so a missing call and a present one
-behave identically and no test can see the difference (finding 134). That is
+behave identically and no test can see the difference (finding F134). That is
 exactly why they have been skipped, and why 731 of them have accumulated.
 
 Restore them, highest count first:
@@ -28,7 +28,7 @@ Restore them, highest count first:
 ## Do `probeselect` FIRST, out of count order
 
 It is 28 of 43 rather than 261 of 262, so it is the tractable one — and two
-open investigations are blocked on it specifically (findings 1974, 1976; tasks
+open investigations are blocked on it specifically (findings F1974, F1976; tasks
 #169 and #170).
 
 `probeselect` builds the message this modem SENDS: the header says *"Writes the
@@ -49,7 +49,7 @@ over any others in that function.
 - `tools/relocscan.py --at .rodata.str1.1:0xNNNN` answers "who references this
   string". Searching the disassembly for a string's address finds nothing and
   proves nothing — the reference is an `R_386_32` against the SECTION symbol
-  with the offset as an inline addend. Finding 604, where not knowing this had
+  with the offset as an inline addend. Finding F604, where not knowing this had
   a defect misdiagnosed for weeks.
 - The format string and its arguments must be the blob's, in the blob's order.
   A site that prints the right words with the wrong values is worse than a

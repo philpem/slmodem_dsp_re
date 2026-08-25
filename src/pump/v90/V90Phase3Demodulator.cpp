@@ -22,7 +22,7 @@
  * so WaitForSd and IRREGULAR differ ONLY in the text they print, and are
  * distinguishable only with `dsplibs_debug_level > 1` and a transcript
  * comparison.  A test that runs at level 0 cannot tell them apart, and a
- * mutation that folds one into the other survives it.  Finding 292.
+ * mutation that folds one into the other survives it.  Finding F292.
  *
  * The modulator's STATE argument is 2 -- P3M_STATE_TRN1D -- from all four,
  * and its Jd, V92Jd and DIL pointers are null from all four, even though the
@@ -92,7 +92,7 @@ P3D_OFF(ansamToneDetector,	0x428, ansam);
 /*
  * THE SIZE IS ASSERTED, unlike the three classes still in V90SessionFlag.h,
  * because `V90Demodulator`'s constructor allocates exactly this many bytes
- * before calling this class's constructor.  Finding 291.
+ * before calling this class's constructor.  Finding F291.
  */
 typedef char v90p3d_size[(sizeof(V90Phase3Demodulator) == 0x42c) ? 1 : -1];
 
@@ -236,7 +236,7 @@ V90Phase3Demodulator::reset(PcmType pcmTypeArg, unsigned char ucodeArg,
  * The BLOCK form of `V90Parameters`, because the constructor reads four
  * unnamed slots out of it and this file's `reset` already compiles against a
  * forward declaration.  No translation unit may hold both definitions;
- * finding 1112.
+ * finding F1112.
  */
 #include "dsplib/V90PreFilter.h"
 #include "dsplib/ANSamToneDetector.h"
@@ -304,7 +304,7 @@ void v90p3d_ansam_ctor(void *self, unsigned int s1, unsigned int s2, float t,
  * embedded verifier, which is what makes the argument look load-bearing from
  * the caller's side.
  *
- * `word_3cc` IS IN THE INITIALIZER LIST AND NOT THE BODY, by finding 1302's
+ * `word_3cc` IS IN THE INITIALIZER LIST AND NOT THE BODY, by finding F1302's
  * argument: `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two
  * member constructor calls and could not have been moved across either.
  *
@@ -393,7 +393,7 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
  * THREE NAMES WERE SPELLED DIFFERENTLY BY THE TWO RECONSTRUCTIONS and all
  * three are settled here in favour of the spelling that was MEASURED against
  * the object rather than asserted.  They agree over every value either
- * function can hand them -- see finding 2116 -- so this is a codegen question
+ * function can hand them -- see finding F2116 -- so this is a codegen question
  * and never a behavioural one:
  *
  *   P3D_CODE   `getV92Decision` wrote `(int)(unsigned char)`, which is the
@@ -410,7 +410,7 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
  *              builtin, and the two comments made DIRECTLY CONTRADICTORY
  *              claims about what GCC 3.4.2 does with the conditional.  That
  *              disagreement was settled by measurement, not by preference --
- *              finding 2117.
+ *              finding F2117.
  * ===========================================================================
  */
 
@@ -501,7 +501,7 @@ V90Phase3Demodulator::~V90Phase3Demodulator()
  * `params->unnamed_438 = params->unnamed_440` is `mov 0x440(%c),%eax;
  * mov %eax,0x438(%c)` -- a raw 32-bit copy.  This comment used to add "between
  * a slot this tree types `float` and one it types `int`", which was the reason
- * for the word view; finding 2112 has since retyped +0x440 to `float` on the
+ * for the word view; finding F2112 has since retyped +0x440 to `float` on the
  * strength of exactly this instruction pair, so BOTH slots are `float` now and
  * `getV90Decision` spells the same copy as a plain float assignment.  The word
  * view is kept here because it is what the object encodes and because it is
@@ -2355,7 +2355,7 @@ V90Phase3Demodulator::clearVerificationStatus()
  *
  * The order is behaviourally free -- every permutation answers the same for
  * every state -- so no differential test can see this, and it is recorded as
- * a similarity result.  Finding 4977.
+ * a similarity result.  Finding F4977.
  *
  * The tail is `P3D_CHECK_TERMINATED`, which both decision functions carry --
  * the modulator's `exitDIL` may set `eventCode` to 6, and this is one of the

@@ -23,7 +23,7 @@
  *     13e71:  e8 ..                  call sysdep_malloc
  *     13eb0:  e8 ..                  call V92Modulator::V92Modulator
  *
- * the original compiler's own `sizeof` (finding 1249's oracle).  The furthest
+ * the original compiler's own `sizeof` (finding F1249's oracle).  The furthest
  * field is the four bytes at +0x8c and 0x8c + 4 == 0x90 exactly.
  *
  * ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@
  *
  * +0x24 and +0x3c are written by neither the constructor nor `reset`, so a
  * freshly built V92Modulator carries whatever `sysdep_malloc` left in them.
- * Finding 1240's shape in a third class, and t_v92mod.cpp holds it: both sides
+ * Finding F1240's shape in a third class, and t_v92mod.cpp holds it: both sides
  * are seeded with the same bytes and never zeroed, so the two words compare
  * equal BECAUSE nobody wrote them, and a reconstruction that helpfully cleared
  * either would fail.
@@ -88,7 +88,7 @@
  * were taken in, and the six OBJECTS do not**: the constructor builds them
  * +0x4c, +0x50, +0x44, +0x48, +0x74, +0x78 and the destructor releases them
  * +0x44, +0x48, +0x4c, +0x50, +0x74, +0x78.  The transmitter has the same
- * asymmetry one level down (finding 1281), and both are reproduced as found.
+ * asymmetry one level down (finding F1281), and both are reproduced as found.
  *
  * THE RESAMPLER IS RELEASED THROUGH ITS VTABLE and the other five objects are
  * not.  `mov (%edx),%eax; call *0x4(%eax)` with no `sysdep_free` after it is
@@ -97,7 +97,7 @@
  * the same expression over a class that has neither.  Both spellings are in
  * the .cpp for that reason and the difference is the object's.
  *
- * Data member names are invented and descriptive (finding 226).
+ * Data member names are invented and descriptive (finding F226).
  */
 
 #ifndef DSPLIB_V92MODULATOR_H
@@ -288,7 +288,7 @@ public:
 	 * +0x04  `params->MODULATOR_QUEUE_LENGTH >> 1`, and the bound of the
 	 * loop that primes the queue.  The SHIFT is arithmetic (`sar $1`) and
 	 * the loop's comparison is unsigned (`ja`) -- the field is unsigned
-	 * and the parameter it comes from is signed, which is finding 1284.
+	 * and the parameter it comes from is signed, which is finding F1284.
 	 */
 	unsigned int queuePrime;
 

@@ -1,20 +1,20 @@
 # Moving from GCC 13 to GCC 3.4.2: every variance, and which way it points
 
 The object was built by **GCC 3.4.2** (`.comment`, 279 times over, finding
-606). This tree's differential tier — *the only thing that decides* — was
+F606). This tree's differential tier — *the only thing that decides* — was
 built by GCC 13. That is backwards, and this document is the record of
 closing it: `make period` builds `src/`, `test/harness/` and `test/unit/` with
 the period compiler, links them against the blob with binutils 2.15, and runs
 the suite.
 
-**And until finding 2200 the period compiler was not 3.4.2 either.** It was
+**And until finding F2200 the period compiler was not 3.4.2 either.** It was
 Debian sarge's `gcc 3.4.4 20050314 (prerelease)`, near enough to be used and
 wrong enough to matter: 18 of 183 translation units come out different, and
 the exact 3.4.2 — now bootstrapped from the GNU tarball by
 `tools/toolchain/Dockerfile.exact` — matches the blob on six more functions
 and no fewer. This tier did not see it: 183 passed / 0 failed on both, so
 every variance recorded below stands as written. The codegen tier did.
-Finding 2201 for the part that remains out of reach, which is Gentoo's patch
+Finding F2201 for the part that remains out of reach, which is Gentoo's patch
 stack rather than the version.
 
 ## Why it was backwards, in one example
@@ -35,7 +35,7 @@ round32(float v)
 The object rounds an x87 accumulator to `float` because GCC 3.4.2 ran out of
 registers and spilled it. GCC 13 keeps 80 bits, the difference reaches the
 output, and the `volatile` was added to force the store. Every gate then went
-green — with the source drifted away from what the author wrote. Finding 1352
+green — with the source drifted away from what the author wrote. Finding F1352
 measured it: compiled by GCC 3.4.2 the *plain* source spills anyway, and
 matches the object's `faddp %st,%st(2)` stack discipline **better** than the
 shim does.
@@ -133,7 +133,7 @@ type and claims nothing else.
 opaque *declaration* permits and a *definition* does not. Each now has one
 home; `tools/onedef.py` is the gate that keeps it that way.
 `include/dsplib/V90CodecType.h` exists because `V90ModemCtor.cpp` needs
-`__tHardwareCodecTypes__` and must not have `V90PreFilter.h` (finding 1112).
+`__tHardwareCodecTypes__` and must not have `V90PreFilter.h` (finding F1112).
 
 ### V3 — `__SIZEOF_POINTER__` is GCC 4.6+ · 81 guards, 78 files · **SILENT**
 
@@ -244,12 +244,12 @@ anywhere else.
 ### V8 — flags that must NOT cross over
 
 `tools/toolchain/build.sh`'s flag set is derived from the object (findings
-606, 607, 612, 616); the Makefile's is not. Three of the Makefile's must not
+F606, F607, F612, F616); the Makefile's is not. Three of the Makefile's must not
 be passed to the period compiler:
 
 | flag | why |
 |---|---|
-| `-fno-lifetime-dse` | postdates 3.4.2. Its **absence** is the period semantic, which is exactly why the modern build has to ask for it (finding 1272). |
+| `-fno-lifetime-dse` | postdates 3.4.2. Its **absence** is the period semantic, which is exactly why the modern build has to ask for it (finding F1272). |
 | `-fno-pie` | no PIE to disable |
 | `-fno-stack-protector` | the Gentoo `ssp`/`pie` patches were off in the object |
 
@@ -295,7 +295,7 @@ unsigned      harness_alloc_reqsize(const void *p);   /* bytes asked for */
 **The durable lesson: a differential check must compare something both sides
 COMPUTE, not something the environment hands them.** Of the three properties
 of an allocation a test can see — address, usable size, ordinal — only the
-last is a fact about the code under test. Finding 1353.
+last is a fact about the code under test. Finding F1353.
 
 ---
 
@@ -327,7 +327,7 @@ compiler that can answer it costs nothing and breaks nothing.
 
 `make period` passes the witness -- 65536.0f plus nineteen taps of 0.0005f,
 which is `+65536.0000` in `float` and `+65536.0078` in extended -- and that is
-what says the source is right. Finding 2153, and finding 2139 for the rule it
+what says the source is right. Finding F2153, and finding F2139 for the rule it
 applies.
 
 ## Where it stands
@@ -344,7 +344,7 @@ It is no longer the thing that decides.
 
 ## The shims are gone
 
-Stage 2 of task #113, all of it gated on the period differential. Finding 1354.
+Stage 2 of task #113, all of it gated on the period differential. Finding F1354.
 
 | site | outcome |
 |---|---|

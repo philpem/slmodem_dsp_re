@@ -201,7 +201,7 @@ main(void)
 				/*
 				 * 2225 Hz -- the answer channel's MARK, which
 				 * is what an originating station's detector is
-				 * tuned to (finding 35).  2100 Hz, the ANSam
+				 * tuned to (finding F35).  2100 Hz, the ANSam
 				 * tone, is what the loopback-configured
 				 * detector listens for and produces no
 				 * acquisition here at all; the first version

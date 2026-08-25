@@ -10,7 +10,7 @@
  * about making sure the run actually SEPARATES this reading from the plausible
  * wrong ones.
  *
- * FINDING 3052 IS THE TRAP, and this function has more places to fall into it
+ * FINDING F3052 IS THE TRAP, and this function has more places to fall into it
  * than most: it is 1,885 bytes of fixed-point arithmetic in which most wrong
  * readings differ from the right one by one bit on some inputs and by nothing
  * at all on the rest.  Two have already bitten this file -- `V22_FSE_init`
@@ -366,7 +366,7 @@ fir_of(const short *coeff, const short *win, int *overflowed)
  *
  * The right reading shifts each term down fifteen and adds; the wrong one adds
  * and shifts once.  They differ by at most one and agree on most inputs, which
- * is finding 3052's shape exactly.  The input the reference smoothed is not
+ * is finding F3052's shape exactly.  The input the reference smoothed is not
  * observable, so this asks whether any input at all could have produced `got`
  * under the wrong reading: where none could, that reading is dead on this
  * symbol whatever the input was.
@@ -751,7 +751,7 @@ main(void)
 	/*
 	 * The guards.  Each names the reading it kills; a zero here means the
 	 * run never separated that reading from this one, and a pass would be
-	 * finding 3052 rather than a result.
+	 * finding F3052 rather than a result.
 	 */
 	diff_begin("v22 receive separation");
 	diff_eq_int("window clamp exercised (%ld)", sep_window_clamp > 0, 1,

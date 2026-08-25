@@ -4,7 +4,7 @@
 #
 #   holdlong.sh [calls] [hold_seconds]        # default 6 calls, 90 s each
 #
-# WHY.  Finding 1900: a second `V34DATARATE ... finally` block lands about
+# WHY.  Finding F1900: a second `V34DATARATE ... finally` block lands about
 # ELEVEN SECONDS after CONNECT and roughly doubles the receive rate -- 14400
 # to 26400, 12000 to 21600 -- and the DTE is never told, because `pty CONNECT
 # nnn` is emitted once and never revised.  The far end's `ATI11 Speed` confirms
@@ -15,7 +15,7 @@
 # DISTINGUISHES "did not renegotiate" FROM "was hung up before it could".  So
 # every rate this bench has recorded is a lower bound of unknown tightness.
 #
-# V.34 rate renegotiation is not one-shot.  Finding 1474 measured `equerr`
+# V.34 rate renegotiation is not one-shot.  Finding F1474 measured `equerr`
 # reaching 74-208 well after CONNECT, far under the object's own
 # `renegUpthresh` of 2571, with the rate sitting still.  If the equaliser keeps
 # improving there may be further steps nobody has stayed on the line to see.

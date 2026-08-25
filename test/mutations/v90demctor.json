@@ -61,7 +61,7 @@
    "`(taps < minHistory) ? minHistory : 10 * taps`, and with the object's",
    "sixteen taps every minimum below seventeen gives the same 160.  A",
    "mutation to 4 IS the unmutated program and would have been an uncaught",
-   "claim that says nothing (finding 572's shape)."
+   "claim that says nothing (finding F572's shape)."
   ],
   "label": "ctor: the resampler asks for a minimum history of 1000, not 0",
   "find": "#define V90DEM_RESAMPLER_MIN_HISTORY\t0u",

@@ -7,7 +7,7 @@ Every field meaning here was established by **sweeping the configuration and
 observing the resulting object**, not by reading the create function. That
 distinction earned its place: the one field meaning derived by reading
 `B103FP_create` rather than measuring it was wrong, and stayed wrong through
-two findings before a sweep caught it (finding 35).
+two findings before a sweep caught it (finding F35).
 
 The reconstructed configurations live beside their datapumps —
 `src/pump/b103/b103_cfg.c` — and the header declares the struct with the field
@@ -28,7 +28,7 @@ here, because getting it wrong silently mis-times every tone:
 > and that expression only means "intervals" if the input is centiseconds.
 
 The interval itself is per tone. Busy, congestion and ringback hard-code 160
-samples — 20 ms at the fixed 8000 Hz call-progress rate (finding 41) — and
+samples — 20 ms at the fixed 8000 Hz call-progress rate (finding F41) — and
 only dial tone takes it from `GetCallProgressSamplesBufferLength`, defaulting
 to 666 when the table says zero, which is 83.25 ms.
 
@@ -101,7 +101,7 @@ when to stop transmitting mark:
 
 So the caller holds mark until it hears the answerer. Setting `+0x04` without
 also setting `call_type` changes nothing else — it does **not** select the
-bandpass, the tones or the oscillator, which is the error finding 32 made.
+bandpass, the tones or the oscillator, which is the error finding F32 made.
 
 ### Enforced, not just written down
 
@@ -123,7 +123,7 @@ That matters more than it sounds, because the host is `slmodemd` and
 **slmodemd's source survives** — `modem_get_param` is undefined in the blob and
 defined in `slmodemd/modem_param.c`. So this configuration is not inferred from
 what makes the object behave; it is read off the caller, and then checked
-against where each value lands in the constructed object. Findings 820–825.
+against where each value lands in the constructed object. Findings F820–825.
 
 | index | parameter | slmodemd answers | value | lands at |
 |--:|---|---|--:|---|
@@ -167,7 +167,7 @@ call learns about the line survives the datapump being rebuilt.
 > whatever the host asked for.
 >
 > **This used to say `+0x30`/`+0x34` are printed and "nothing else reads"
-> them, and that was wrong** — finding 1020. `VPcmV34InitiateRetrain` reads
+> them, and that was wrong** — finding F1020. `VPcmV34InitiateRetrain` reads
 > that pair at three sites (0x66b5/0x66c5, 0x6870/0x6877, 0x6acc/0x6acf) and
 > divides *it* by 2400 for the V.34 rate indices, so 300 and 56000 become 0
 > and 14 after the clamp. Index 14 is the 33,600 a V.34 call converges to.
@@ -177,7 +177,7 @@ So an AT+MS that narrows the modem's rate window does not narrow V.PCM's.
 ### What the configuration actually changes, measured
 
 Every parameter above was swept and a whole 1,600-block V.34 call re-run
-against it (finding 824). **Five of the six are inert**: the rate window, the
+against it (finding F824). **Five of the six are inert**: the rate window, the
 codec type and all four `dsp_info` words leave the call's trajectory identical
 to the last count, while the assertions that read them off the constructed
 object do fire — so the sweep is live and the call genuinely does not care.
@@ -216,7 +216,7 @@ backhaul inherits `slmodemd`'s **socket driver, which is a stub returning 0**
 
 Everything in this section is marked **DERIVED** — read off the object or off
 `slmodemd` — or **JUDGEMENT**, which is engineering opinion about a transport
-neither ever saw. Findings 1020-1026.
+neither ever saw. Findings F1020-1026.
 
 ### The unit is SAMPLES at 9,600 Hz — DERIVED, twice
 
@@ -247,11 +247,11 @@ object's ceiling of 240 is **25 ms**.
 `VPcmV34InitiateRetrain` 0x674a and `VPcmV34SetDelays` 0x6405, a function the
 object names itself — and all three read the delays out of the *same*
 `_tagModemParameters` block the host supplied, which reaches the V.34 object
-as its `pac3c` (finding 1020).
+as its `pac3c` (finding F1020).
 
-> **Do not use `35 + iodelay/4`.** It appears in findings 960 and 962 and in
+> **Do not use `35 + iodelay/4`.** It appears in findings F960 and F962 and in
 > two test assertions, it was fitted to a sweep, and it is **one too small
-> whenever `IODELAY mod 4` is 2 or 3** — finding 1021. The tests that assert it
+> whenever `IODELAY mod 4` is 2 or 3** — finding F1021. The tests that assert it
 > run at 216, where the two agree.
 
 The same two fields also set the echo canceller, which is why `dmaDelay` is
@@ -265,7 +265,7 @@ not merely decorative:
 ### What `filtdelay` IS — DERIVED
 
 It is a total **pipeline latency**, in units of one microstate step, and a
-microstate step is four samples at 9600 Hz (finding 1040):
+microstate step is four samples at 9600 Hz (finding F1040):
 
 ```
     filtdelay  =  the HOST's I/O latency in steps  +  34 steps
@@ -279,7 +279,7 @@ be 40 ± 1 ms **measured at the line terminals**. The state machine sees an
 incoming reversal one pipeline-latency late and its own reversal appears one
 pipeline-latency after it emits it, so it preloads its counter with
 `filtdelay` and counts to a fixed **96 steps = 384 samples = 40.000 ms**.
-Findings 1041 and 1042; `0x5f` is that 96 minus one, because the compare is on
+Findings F1041 and F1042; `0x5f` is that 96 minus one, because the compare is on
 `counter + 1`.
 
 ### The working range — DERIVED, measured to the sample
@@ -289,14 +289,14 @@ A V.34 answerer entering microstate 47 `TX_PHASE2_ANS` must count from
 the caller has correctly gone silent on. **The wait is `96 - filtdelay` steps,
 so a LARGER I/O delay is a SHORTER wait** — a larger I/O delay is already part
 of the 40 ms. That is the whole mechanism, and it is why the knob works in the
-direction it does (findings 960, 1022, 1041).
+direction it does (findings F960, F1022, F1041).
 
-> Findings 960 and 1022 say the wait is `0x5f - filtdelay`, which is the same
+> Findings F960 and F1022 say the wait is `0x5f - filtdelay`, which is the same
 > thing counted the other way: the compare is `n = counter + 1;
 > if (n <= 0x5f) stay`, so the state is left on the step at which `n` would be
 > 96 and `counter` is never seen holding 96. Whether that exiting step is
 > "sat out" is a convention. What is *not* a convention is the total from the
-> reference event, which is 96 steps whatever `filtdelay` is — finding 1041.
+> reference event, which is 96 steps whatever `filtdelay` is — finding F1041.
 
 | `MDMPRM_IODELAY` | `filtdelay` | V.34 |
 |---|--:|---|
@@ -313,7 +313,7 @@ moment it connects.
 ### Above 240 the pump negotiates rather than failing — DERIVED
 
 `vpcm_create` guards `IODELAY + 4 <= 0xf4`, but the failing branch is not an
-error path (finding 1024 corrects finding 962 on this):
+error path (finding F1024 corrects finding F962 on this):
 
 ```
     modem_set_param(modem, MDMPRM_UPDATE_DELAY, 244 - (IODELAY + 4))  ; negative
@@ -353,7 +353,7 @@ which asks the host to throw away several hundred buffered samples, and ends
 at the same pinned `hwDelay` of 244 that 240 gives anyway.
 
 **216 is the conservative alternative** — a real driver's measurement, and the
-only value with an end-to-end proof in this tree (`t_v34link`, finding 963).
+only value with an end-to-end proof in this tree (`t_v34link`, finding F963).
 Prefer it if a tested constant matters more than margin.
 
 **The cost of a high value is not quite zero.** Every value in 86..240
@@ -395,7 +395,7 @@ caller that does not read it each block loses the event.
 
 ### Resolved
 
-`b103fp.flags` is settled — finding 38. Only `0x01` is ever tested, and `0x02`
+`b103fp.flags` is settled — finding F38. Only `0x01` is ever tested, and `0x02`
 is consumed as a one-shot without being tested. **The other six are written
 and never read**, by anything: `b103_process` masks the return with `0xff`, so
 the flags byte does not leave the library. They are reproduced but left as

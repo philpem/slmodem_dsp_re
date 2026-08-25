@@ -15,7 +15,7 @@
  * seeded here is a write-only observable rather than a driver, and is seeded
  * anyway because a byte that must not move is as much a claim as one that must.
  *
- * THE OBJECT IS NEVER ZEROED (finding 230's pattern, and 7105's trap).  Both
+ * THE OBJECT IS NEVER ZEROED (finding F230's pattern, and 7105's trap).  Both
  * sides get the SAME varied pseudorandom bytes before every trial, so a
  * clear-loop one byte short cannot hide behind a zero that was already there,
  * and the CRC's input varies from trial to trial.  Nothing in packData's path
@@ -116,7 +116,7 @@ seed(int trial, int mode)
  * The state packData must NOT touch, and the state it must throw away.  Both
  * sides get the same values and both are non-zero, so "unchanged" and "reset"
  * are each distinguishable from "the seed happened to agree at zero"
- * (findings 223, 224).
+ * (findings F223, F224).
  */
 static void
 dirty(int trial)
@@ -130,7 +130,7 @@ dirty(int trial)
 	/*
 	 * THE LOW BIT OF EVERY CRC WORD HAS TO VARY WITH THE TRIAL, and the
 	 * first version of this line got it wrong in a way only the mutation
-	 * suite could see (the same shape as finding 7458).  It seeded
+	 * suite could see (the same shape as finding F7458).  It seeded
 	 * `0x51ed0000 + trial * 16 + i`, whose low bit is `i & 1` and is
 	 * therefore CONSTANT for a given element across every trial -- so
 	 * crc[15] was odd in all of them, which is exactly what the correct

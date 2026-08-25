@@ -10,7 +10,7 @@
  * WHY THIS IS NOT IN V90Modem.cpp
  * ===========================================================================
  *
- * Finding 1264: one source file is one mutation suite's namespace, and a
+ * Finding F1264: one source file is one mutation suite's namespace, and a
  * shared verbatim block makes an anchor match twice, which `tools/mutate.py`
  * calls UNUSABLE -- and unusable does not fail a run.  `V90Modem.cpp` is nine
  * `edprintf`/`dsplibs_debug_printf` calls and nothing else; this file is six
@@ -24,7 +24,7 @@
  * WHICH DEFINITION OF V90Parameters THIS FILE HAS, AND WHY IT MATTERS
  * ===========================================================================
  *
- * There are two (finding 1112): the NAMED map in `V90Parameters.h`, 0x558
+ * There are two (finding F1112): the NAMED map in `V90Parameters.h`, 0x558
  * bytes, and the BLOCK form `V90PreFilter.h` carries, bounded at 0x504.  They
  * cannot both be in one translation unit, and this constructor allocates the
  * thing -- `movl $0x558,(%esp); call sysdep_malloc` at 0x19551 -- so it has to
@@ -86,7 +86,7 @@
  *
  * The measurement is unchanged and still worth recording: the constructor's
  * own `movl $0x298,(%esp)` at 0x196a6 is the original compiler's `sizeof`
- * (findings 291 and 1246 -- the allocation immediately before a constructor
+ * (findings F291 and F1246 -- the allocation immediately before a constructor
  * IS the sizeof), and it is asserted here rather than in another file.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -290,7 +290,7 @@ V90Modem::V90Modem(V90ModemSide modemSide, _tagModemParameters *modemParams,
 	 * NEITHER ARM IS THE DEFAULT AND THE DEFAULT WRITES NOTHING.  On any
 	 * value but 0 and 1 this returns with `modulator` and `demodulator`
 	 * holding whatever the storage held -- see V90Modem.h, and finding
-	 * 1323 for V92Modem's identical shape.
+	 * F1323 for V92Modem's identical shape.
 	 *
 	 * THE TWO ARMS WRITE THEIR NULL AT OPPOSITE ENDS, and that is the
 	 * object's order rather than a tidy-up: on the modulator arm

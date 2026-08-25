@@ -2,7 +2,7 @@
 # Driven by tools/decompile.sh -- see that for why this exists and what the
 # output is and is not good for.
 #
-# THREE WAYS TO NAME A FUNCTION, because one is not enough (finding 704).
+# THREE WAYS TO NAME A FUNCTION, because one is not enough (finding F704).
 #
 #   bare        chkForceBaudRate          getName()
 #   qualified   Resampler::resample       getName(True)

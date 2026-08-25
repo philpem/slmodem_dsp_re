@@ -16,8 +16,8 @@
  * TWO COUNTS, AND THE SWEEP BELOW ASSERTS THE SECOND.  82 of the eighty-seven
  * reach a written exit through one of the two DEFAULT doors -- all but 4 and
  * 72, which are guarded, and all but 43, 35 and 53, which have arms of their
- * own.  85 are written altogether, those 82 plus 43, 35 and 53.  Finding 717,
- * and finding 725 for 53's move from the guarded column to the written one.
+ * own.  85 are written altogether, those 82 plus 43, 35 and 53.  Finding F717,
+ * and finding F725 for 53's move from the guarded column to the written one.
  *
  * THE `jg` IS WHY THIS IS A SWEEP AND NOT FIVE TRIALS.  0x62a12 branches to
  * the second chain before the compares against 4 and 35 are reached, so a
@@ -46,7 +46,7 @@
  * AND TABLE 1 CANNOT RUN ON ANY TRIAL IN THIS FILE, which is worth saying
  * because 24 is also table 1's `TX_DPSK` and `suite_wait_txsweep` below drives
  * all eighty-seven txstates -- fifty-seven of which are table 1's
- * non-terminating default (finding 287).  `V34HS_ROUTE_RXCHAIN` pins the
+ * non-terminating default (finding F287).  `V34HS_ROUTE_RXCHAIN` pins the
  * cursor AND the limit at zero, so the entry test at 0x62933 is `0 >= 0` and
  * the per-sample loop is skipped before any txstate is read.  Every txstate
  * here is therefore a table-2 index and never a table-1 one; nothing in this
@@ -269,7 +269,7 @@ suite_wait(void)
  * receiver's own shorts.  Whether swapping the two is observable therefore
  * depends entirely on which table-2 arm runs, so the honest test is all
  * eighty-seven rather than the one txstate the rest of this file uses.
- * Finding 718.
+ * Finding F718.
  */
 static void
 suite_wait_txsweep(void)

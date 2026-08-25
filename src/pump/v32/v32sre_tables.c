@@ -7,7 +7,7 @@
  * SREv32_CFG, which points at all six, is NOT here: it is 14 dwords whose
  * field boundaries cannot be settled until FPM_SRE_recover is read, and a
  * byte comparison would pass for every wrong reading of them alike.  See
- * finding 1615.
+ * finding F1615.
  *
  * WIDTHS.  `SREv32_COFFS` is proven `short`: FPM_SRE_init copies it with
  * `movzwl (%ecx,%edx,2)`, and its 0x16a bytes are therefore 181 entries.  The
@@ -21,7 +21,7 @@
  * xCLOCK and yCLOCK are cos and sin of 0, 120 and 240 degrees at a scale of
  * 16384 -- the three-phase clock phasor of a 2400-baud signal sampled at
  * 7200 Hz, the same three-samples-a-symbol structure the echo canceller's
- * three coefficient sets carry (finding 1612).
+ * three coefficient sets carry (finding F1612).
  */
 
 #include "dsplib/fpm_sre.h"

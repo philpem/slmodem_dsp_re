@@ -6,7 +6,7 @@
 #   replaycmp.sh captures/base-cx2-3.modem_rx.wav
 #   replaycmp.sh captures/base-cx2-3.modem_rx.wav /path/to/other-slmodemd
 #
-# WHY THIS EXISTS.  See finding 1904: the two blob-versus-ours comparisons this
+# WHY THIS EXISTS.  See finding F1904: the two blob-versus-ours comparisons this
 # project can make from bench captures point in OPPOSITE directions, because
 # they come from different batches taken on different days and #129's
 # between-batch floor has never been measured.  Feeding both binaries the same

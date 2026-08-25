@@ -8,7 +8,7 @@
  * members `nm -S ref/slmodemd/dsplibs.o | grep _ZN18V90Phase4Modulator`
  * leaves once C1/C2 and D1/D2 are folded.  Re-measure both rather than
  * believing this sentence; the last two revisions of it were stale before
- * they were read (findings 6100, 6103).
+ * they were read (findings F6100, F6103).
  *
  * THE FOUR THAT ARE NOT HERE are `generateB1d`, `generateTRN2d` and
  * `generateEd` -- 149 bytes each, and the obvious next batch, since the three
@@ -21,7 +21,7 @@
  * `include/dsplib/V90Phase4Modulator.h` carries the object map, the 0x2fac
  * size, the ownership argument and `Phase4ModulatorState`.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * `V90Phase3Modulator::setSessionFlag` is the same eleven bytes against the
  * same offset in a different class, and src/pump/v90/V90Phase3Modulator.cpp
@@ -33,7 +33,7 @@
  * ill-formed, and a user-declared placement form makes GCC emit a null test
  * the blob does not have.  The instruction sequence is the blob's either way.
  *
- * THAT LAST CLAUSE IS WHY THIS RULING SURVIVES FINDING 7786 AND THE
+ * THAT LAST CLAUSE IS WHY THIS RULING SURVIVES FINDING F7786 AND THE
  * DESTRUCTORS' DOES NOT.  7786 shows the object DOES replace global
  * `operator delete` -- its compiler-generated `D0Ev` destructors tail-call
  * `sysdep_free` instead of `_ZdlPv` -- and `src/dsp/` now writes `delete[]`
@@ -140,7 +140,7 @@ typedef char v90p4_size[(sizeof(V90Phase4Modulator) == 0x2fac) ? 1 : -1];
  * the authority; the `.text+0x...` addresses in the per-function comments run
  * in increasing order down the file and are the cheap check that they still
  * do.  Tidying two related handlers back together will silently un-match
- * whatever sits between them.  Finding 7782.
+ * whatever sits between them.  Finding F7782.
  *
  * A macro or a file-scope `static` must therefore live ABOVE the definitions,
  * not beside its first user -- which is why `V90P4M_RI_PERIOD` is here and not
@@ -283,7 +283,7 @@ V90Phase4Modulator::setSessionFlag(unsigned int flag)
  * `nextStateAfterTRN2d` IS SEEDED FROM `sessionFlag`, branchlessly:
  * `cmp $0x1,%edx ; sbb %eax,%eax ; add $0x5,%eax` is 4 when the flag is zero
  * and 5 when it is not -- MP under V.90 and SUVd under V.92, which are
- * exactly the two states TRN2d hands on to (finding 7452's second item).
+ * exactly the two states TRN2d hands on to (finding F7452's second item).
  *
  * THE LOOP RELOADS `sessionFlag` EVERY ITERATION.  `mov (%esi),%edx` at
  * +0x2f6fd is inside the back edge, not above it: either pump may store

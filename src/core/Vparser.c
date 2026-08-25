@@ -18,7 +18,7 @@
  * `V90Parameters::loadParams` and `V92Parameters::loadParams` are the ONLY
  * callers of either, anywhere.  So the released library reads no parameter
  * file: every one of the 349 calls writes nothing and returns 0, and both
- * `loadParams` members are behaviourally no-ops.  Finding 860.
+ * `loadParams` members are behaviourally no-ops.  Finding F860.
  *
  * WHAT WAS REMOVED IS NOT RECOVERABLE AND IS NOT INVENTED HERE.  A build of
  * this library with a real parser would open `paramFile`, find `name` and

@@ -17,7 +17,7 @@
  *
  *     `mutate.py` matches a mutation's `find` as a substring OF THE WHOLE
  *     SOURCE FILE and reports an anchor matching twice as UNUSABLE -- and
- *     UNUSABLE DOES NOT FAIL A RUN (finding 347).  Putting the two functions in
+ *     UNUSABLE DOES NOT FAIL A RUN (finding F347).  Putting the two functions in
  *     one file made 44 of `v34retrain`'s anchors match twice, which would have
  *     silently disabled two thirds of that suite while it went on printing
  *     `0 NOT caught`.  `tools/anchorcheck.py` is what caught it, and it scopes
@@ -35,7 +35,7 @@
  * `V90Demodulator::enterChannelVerification`, `V92EchoCanceller::setEchoDelay`
  * and `GenericIIR<float,double>::reset`.  A member takes a `this` and has no
  * unmangled form to name, so a C translation unit cannot reach one whatever
- * the link line says: CLAUDE.md's trap, and the third of finding 711's
+ * the link line says: CLAUDE.md's trap, and the third of finding F711's
  * conditions.  The stem differs from `v34pcmif`'s and `v34pcmmain`'s because
  * the Makefile turns `%.c` and `%.cpp` into the same `$(BUILD)/%.o`.
  *
@@ -180,13 +180,13 @@
  * `V90Demodulator::enterChannelVerification`, `V92EchoCanceller::setEchoDelay`
  * and `GenericIIR<float,double>::reset` -- and a member has a `this` and no
  * unmangled form to name, so a C translation unit cannot reach one whatever
- * the link line says (CLAUDE.md's trap, and finding 711's three conditions).
+ * the link line says (CLAUDE.md's trap, and finding F711's three conditions).
  * `VPcmV34InitiateRetrain` above is here for the weaker version of the same
  * reason and this is the strong one.  `tools/tuattrib.py` has nothing to say
  * about this symbol; the placement rests on that constraint plus the
  * interleaving v34pcmif.c already records, not on an attribution.
  *
- * FIVE ARGUMENTS (finding 1119, correcting 1117's prologue read).  `0x50(%esp)`
+ * FIVE ARGUMENTS (finding F1119, correcting 1117's prologue read).  `0x50(%esp)`
  * is read at five sites and `vpcm_create` pushes five slots; the fifth is the
  * session type and it is the function's primary dispatch.
  *
@@ -214,7 +214,7 @@
  * bytes that happens to start there.
  *
  * ARMS 3 AND 4 ARE UNREACHABLE FROM WITHIN THIS OBJECT -- deviation D149, and
- * finding 1119 reaches it a third way: `objdump -r` finds exactly one
+ * finding F1119 reaches it a third way: `objdump -r` finds exactly one
  * relocation against this symbol, and `vpcm_create` computes its session type
  * as `(x == 0x5c) ? 2 : (x == 0x5a) ? 1 : 0`.  They are written out because a
  * reconstruction has to agree on them, and `t_vpcmcreate.c` sweeps them.
@@ -224,7 +224,7 @@
  * and 0 has to share the default's body.
  *
  * +0x2218 IS LEFT AT 0.  `v34handshakinit` clears it and nothing here puts it
- * back; `VPcmV34InitiateRetrain` is what writes 2.  Finding 806 names that as
+ * back; `VPcmV34InitiateRetrain` is what writes 2.  Finding F806 names that as
  * a cost for a downstream handshake fixture, not a defect here.
  */
 extern "C" int

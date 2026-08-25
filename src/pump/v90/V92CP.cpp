@@ -12,10 +12,10 @@
  * as well.  Both are ordinary GLOBAL symbols in `.text` rather than linkonce,
  * so `reset` is not an in-class inline the compiler folded in (GCC 3.4 at -O2
  * does not inline an ordinary global function): the original repeated the
- * assignments.  Finding 1237.
+ * assignments.  Finding F1237.
  *
  * The calling convention is plain cdecl -- `mov 0x4(%esp),%eax` -- not
- * thiscall (finding 215).
+ * thiscall (finding F215).
  */
 
 #include <math.h>
@@ -207,7 +207,7 @@ V92CP::reset()
  * where `bits[i]` addresses `crc`, under GCC 3.4.2 and GCC 13 alike.  So
  * loop-invariant motion hoists the loads and sinks the stores and the sixteen
  * slots are the compiler's.  WHY it is allowed to is NOT established here and
- * finding 4510 says so rather than naming a rule it has not checked.
+ * finding F4510 says so rather than naming a rule it has not checked.
  *
  * The two forms are not the same FUNCTION -- `bits` is 2,000 entries and `crc`
  * follows it, so a `msgLen` above 2,017 makes the loop read the register it
@@ -219,7 +219,7 @@ V92CP::reset()
  *
  * EVERY SEVENTEENTH POSITION IS SKIPPED.  `i % 17 == 0` costs the 0xf0f0f0f1
  * reciprocal and a `cmp $0x1; adc $0x0` -- the object's if-conversion of an
- * increment, which is free (finding 2411).  The message therefore carries a
+ * increment, which is free (finding F2411).  The message therefore carries a
  * fill bit in every seventeenth slot and the CRC does not see it.
  *
  * THE LOOP STARTS AT 18 and ends 17 short of `msgLen`, both literals the
@@ -308,7 +308,7 @@ V92CP::evaluateCRC()
  * here: a namespace-scope `const` array has INTERNAL linkage in C++ and the
  * symbol would disappear.  The object holds a second, identical pair --
  * `fltTable2` at .data+0xb00 and `fltTable1` at .data+0xb40 -- and finding
- * 826 measured that the two pairs are separate symbols and not aliases.
+ * F826 measured that the two pairs are separate symbols and not aliases.
  *
  * "WHICH NOTHING WRITTEN REFERENCES" USED TO END THAT SENTENCE AND IS
  * RETRACTED.  `src/pump/v90/V90CPpck.cpp` defines the unsuffixed pair now and
@@ -993,7 +993,7 @@ V92CP::evaluateInfo()
 					 * getConstellationMask fixes the STORAGE,
 					 * `mask[v >> 4] |= 1 << (v & 15)`.  Both
 					 * make bit j of word k Ucode 16k + j and
-					 * both convict the reader.  Finding 6800.
+					 * both convict the reader.  Finding F6800.
 					 */
 #ifdef DSPLIB_REPRODUCE_BUGS
 					acc += bits[word_124] *
@@ -1023,7 +1023,7 @@ V92CP::evaluateInfo()
 				short_a2[k][j] = 0;
 
 				for (i = 0; i <= 15; i++) {
-					/* The second mask block, D920 again.  Finding 6800. */
+					/* The second mask block, D920 again.  Finding F6800. */
 #ifdef DSPLIB_REPRODUCE_BUGS
 					acc += bits[word_124] *
 					       binaryTable[15 - i];
@@ -1081,14 +1081,14 @@ V92CP::evaluateInfo()
  *      byte_00 != 1, byte_04 == 0 -> 1     byte_00 != 1, byte_04 != 0 -> 2
  *      byte_00 == 1, byte_04 == 0 -> 3     byte_00 == 1, byte_04 != 0 -> 4
  *
- * -- which is the shape `V90CP::bitsToInfo` has and which finding 4360
+ * -- which is the shape `V90CP::bitsToInfo` has and which finding F4360
  * declined to name there.  Declined here for the same reason: nothing in the
  * object, the one string it carries included, names any of them.
  *
  * THE TWO STATICS ARE FUNCTION-LOCAL AND IN .bss, mangled
  * `_ZZN5V92CP10bitsToInfoEhE5gamma` at +0x0 and `...E5delta` at +0x4, so
  * their C++ names are the author's.  THEIR ADDRESSES DO NOT FIX A
- * DECLARATION ORDER and finding 6610 measured that: GCC 3.4.2 lays them out
+ * DECLARATION ORDER and finding F6610 measured that: GCC 3.4.2 lays them out
  * the same way whichever order they are declared in, and the way it lays them
  * out is not the blob's.  Each holds the bit length of one mask
  * block, computed once `evaluateInfo` has decoded the group count and
@@ -1107,7 +1107,7 @@ V92CP::evaluateInfo()
  *
  * `resetDetector`, `resetCRC`, `calcCRC` and `evaluateCRC` are all INLINED by
  * the object -- five, one, one and one site, and no relocation against any of
- * them anywhere in the range -- which is finding 4600's shape, and is what
+ * them anywhere in the range -- which is finding F4600's shape, and is what
  * makes the CRC arm four hundred bytes of shift register in the middle of a
  * state machine.  Called here; GCC 3.4.2 at -O3 folds them back in.
  * ===========================================================================
@@ -1132,9 +1132,9 @@ V92CP::evaluateInfo()
  * they are simply absent from the V.92 class.  That string is already in the
  * blob, pooled in .rodata, so it is not an invention.
  *
- * EVIDENCE: finding 6800 (the recommendations, and the translation verified
+ * EVIDENCE: finding F6800 (the recommendations, and the translation verified
  * faithful at .text+0x4f2f3 and +0x4f7f4 before anything was attributed), D923,
- * and D520 / finding 4361 for the sibling's guard.
+ * and D520 / finding F4361 for the sibling's guard.
  *
  * Under DSPLIB_REPRODUCE_BUGS the macro is the object's bare store, so the
  * reproduce build is unchanged instruction for instruction.
@@ -1170,7 +1170,7 @@ V92CP::bitsToInfo(unsigned char bit)
 	 * 3.4.2 emits `delta` at +0x0 and `gamma` at +0x4 whichever order the
 	 * declarations are in, so the blob's order is not recoverable from
 	 * this and the source is written to document it rather than to
-	 * reproduce it.  Nothing observes either offset.  Finding 6610.
+	 * reproduce it.  Nothing observes either offset.  Finding F6610.
 	 */
 	static unsigned int gamma;
 	static unsigned int delta;
@@ -1326,7 +1326,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * tell.  Redundant AND wrong -- the object's arm is 660 bytes
 		 * against `evaluateCRC`'s 668, which is ONE inline of it and
 		 * not two of `calcCRC` plus one of the comparison.  Finding
-		 * 6609.
+		 * F6609.
 		 *
 		 * A BAD CRC RESTARTS THE DETECTOR, and says so.
 		 */

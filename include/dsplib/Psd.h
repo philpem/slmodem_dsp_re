@@ -8,7 +8,7 @@
  *
  * ALL SIX ARE NOW HERE.  `Psd::process` was blocked twice and both blockers
  * are gone; the record of what they were is worth keeping, because the second
- * of them is a shape this tree meets repeatedly (finding 876):
+ * of them is a shape this tree meets repeatedly (finding F876):
  *
  *   1. it calls `realfft`, which calls `four1`.  Neither was written, and the
  *      Makefile renames every symbol the blob defines to `ref_*`, so a

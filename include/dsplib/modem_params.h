@@ -135,9 +135,9 @@ extern long modem_set_param(void *modem, unsigned param, int value);
  *
  * So the size is **0x88 = 136**, by wave 0's own argument (the `sysdep_malloc`
  * immediately before the initialiser), and the writer of every field is
- * `dp_runtime_create` or `vpcm_create`.  Findings 820-823.
+ * `dp_runtime_create` or `vpcm_create`.  Findings F820-823.
  *
- * THE FIELD NAMES ARE DESCRIPTIONS OF USE, NOT RECOVERED NAMES.  Finding 226:
+ * THE FIELD NAMES ARE DESCRIPTIONS OF USE, NOT RECOVERED NAMES.  Finding F226:
  * the mangling preserves the type name and never a data member's.  What IS
  * measured is the offset, the width and the signedness of every access.  Four
  * names below are stronger than that and say so where they sit: two come from
@@ -145,7 +145,7 @@ extern long modem_set_param(void *modem, unsigned param, int value);
  * `modem_get_param` index whose answer it stores, and one from the parameter
  * whose value `vpcm_delete` copies back out.  A field this object only ever
  * writes a constant into is `unnamed_*`, with the constant recorded -- the
- * convention `V90Parameters.h` set for the same situation (finding 878).
+ * convention `V90Parameters.h` set for the same situation (finding F878).
  *
  *   +0x000  `movzbl (%esi),%edx; and $0x1,%dl` in `V90Parameters::
  *           setToDefault` at .text+0x2a536 -- one byte, bit 0 only.
@@ -196,7 +196,7 @@ extern long modem_set_param(void *modem, unsigned param, int value);
  *           happened -- so it is "how much extra delay is currently taken",
  *           and `> 0` (0x432b, signed) is the test.  `vpcm_create` and
  *           `dp_runtime_create` only ever zero it, which is why it was
- *           `unnamed_006c` until finding 983.
+ *           `unnamed_006c` until finding F983.
  *   +0x078  loaded and, when non-zero, passed as `loadParams(char *)`'s only
  *           argument -- a parameter-file name.  `vpcm_create` NULLs it at
  *           0x3ad2, which is the store that made a bogus DPRUNTIME fault.

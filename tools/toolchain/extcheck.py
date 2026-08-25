@@ -5,11 +5,11 @@ A `movswl`/`movzwl` (or `movsbl`/`movzbl`) is the compiler stating the declared
 type of what it loaded.  Where the object sign-extends and we zero-extend, or
 the reverse, one of the two declarations is wrong -- and a differential test
 usually cannot tell, because the two agree over every value the field actually
-holds.  Finding 613 is the worked example: `struct b103_hdx.mode` was `short`
+holds.  Finding F613 is the worked example: `struct b103_hdx.mode` was `short`
 here and `unsigned short` in the original, it indexes a table of function
 pointers, and 1,104 tests never saw it.
 
-THE RULE THIS TOOL EXISTS TO APPLY (finding 614).  An extension difference is
+THE RULE THIS TOOL EXISTS TO APPLY (finding F614).  An extension difference is
 evidence ONLY IF THE 32-BIT RESULT IS USED.  Where the loaded value is stored
 straight back as 16 bits -- a field copy, a filter history shifting along --
 the upper half is discarded and the compiler was free to pick either
@@ -32,7 +32,7 @@ towards reporting.  Read the disassembly before changing a declaration.
 
 `--dead` also lists the discarded ones, to show what is being filtered.
 
-PRECISION, MEASURED, AND IT IS POOR (finding 2402).  On the current toolchain
+PRECISION, MEASURED, AND IT IS POOR (finding F2402).  On the current toolchain
 -- GCC 3.4.2 exact, -O3, -mno-ieee-fp -- this reports 18 live memory-operand
 candidates over 938 shared symbols.  Fourteen are traced (eleven by hand
 against tools/dis.py, three by 619): THREE are real, so roughly ONE REPORT IN
@@ -44,7 +44,7 @@ signed branch on a 16-bit test, a 32-bit sum immediately narrowed by a cast, a
 value masked with `and $0x3` before use -- in each the extension is real but
 unobservable, and lookahead cannot see truncation.  619 already ruled that
 fixing this needs real dataflow rather than another lookahead rule, and that
-ruling stands; the two corrections since are BUGS removed (finding 2401), not
+ruling stands; the two corrections since are BUGS removed (finding F2401), not
 heuristics added.
 
 One more class the displacement key cannot avoid: at displacement 0x0 it pairs
@@ -94,7 +94,7 @@ def sizes(path):
 # move.  In the decisive cases the padding is in the BLOB, whose codegen no
 # flag of ours changes.  The bug was latent from the start and survived 618's
 # five corrections; re-running the validation ritual is what found it.
-# Finding 2401.
+# Finding F2401.
 #
 PAD = re.compile(r"nop|lea 0x0\(.*\),%e[a-z][a-z]$|mov %e(si|di),%e(si|di)$")
 
@@ -132,7 +132,7 @@ def extensions(insns):
         # something else and re-extended a copy the way the type actually
         # requires.  Reading the first instruction as the type gets it exactly
         # backwards, which is how `fskdemodulate`'s four "hits" arose.
-        # Finding 618.
+        # Finding F618.
         #
         # A REDEFINITION ENDS THE WINDOW.  The filter's premise is that the SAME
         # loaded value is extended again; once the register has been written the
@@ -140,7 +140,7 @@ def extensions(insns):
         # is unrelated.  Scanning past it retracted a real hit: `initdigital`
         # loads +0x0 into %edi and passes it 32-bit to a call, then reloads
         # %edi from +0x14 and re-extends THAT -- ten instructions later, which
-        # the window reached once padding stopped filling it.  Finding 2401.
+        # the window reached once padding stopped filling it.  Finding F2401.
         low16 = LOW16.get(reg)
         if low16:
             reextended = False
@@ -171,12 +171,12 @@ def extensions(insns):
         #
         # KEY ON THE DISPLACEMENT, NOT THE OPERAND TEXT.  The base register is
         # whatever the allocator picked, and it differs between the two builds
-        # far more often than not -- the defect in finding 613 reads
+        # far more often than not -- the defect in finding F613 reads
         # `movzwl (%ecx)` in the object and `movswl (%edx)` here.  Matching on
         # the full text never pairs those, which is why the first version of
         # this tool could not find the one defect it was written for.
         # Stack slots are excluded: those are locals, not fields.
-        # Finding 618.
+        # Finding F618.
         #
         m2 = re.match(r"(0x[0-9a-f]+)?\((%e[a-z][a-z])\)$", src)
         if m2 and m2.group(2) != "%esp":
@@ -192,8 +192,8 @@ def load_ours():
     This tool defaulted to `/tmp/tc_out` while `build.sh` and `compare.py`
     moved to `build/tc_out`, so with no environment set it globbed an absent
     directory, compared zero symbols, printed "(none)" and exited 0 -- the
-    dead detector of finding 618 back in the tree, and no way to see it from
-    the output.  Finding 2400.  Never let this fail quietly again.
+    dead detector of finding F618 back in the tree, and no way to see it from
+    the output.  Finding F2400.  Never let this fail quietly again.
     """
     objs = sorted(glob.glob(os.path.join(OURS, "*.o")))
     if not objs:
@@ -229,7 +229,7 @@ def main():
         # and comparing the two sides as SETS then manufactures a pair in each
         # direction.  `demapFrame`'s 0x144c and `receiver`'s 0x210..0x216 each
         # appeared twice, in opposite directions, which is self-contradictory
-        # and was the tell.  Finding 618.
+        # and was the tell.  Finding F618.
         #
         # Per SIDE.  Unioning the two sides' mnemonics would make every genuine
         # disagreement filter itself out, which it did.

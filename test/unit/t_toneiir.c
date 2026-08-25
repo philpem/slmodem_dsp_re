@@ -459,7 +459,7 @@ run_toneiir_config(void)
 	/*
 	 * The arrays the template points at are all zeros in both.  Asserted
 	 * rather than assumed: this is what makes the default unusable as a
-	 * filter, and finding 46 turns on it.
+	 * filter, and finding F46 turns on it.
 	 */
 	for (i = 0; i < IIR_FILTER_COEFF; i++) {
 		diff_eq_int("default a[%ld] is zero", b.a[i], 0, i);

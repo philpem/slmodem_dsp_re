@@ -20,7 +20,7 @@
  * dtmf_coeffs.c -- zeros on the unit circle at the tone, poles just inside
  * it -- so what comes out is the signal MINUS that tone.
  *
- * CLOSED FORM, and what it is worth (finding 1413).  Solving a1 or b1 back
+ * CLOSED FORM, and what it is worth (finding F1413).  Solving a1 or b1 back
  * for w0 gives the eight DTMF frequencies at the table's own rate, to within
  * 0.05 Hz, for fifteen of the sixteen tables.  The generator reproduces those
  * fifteen to within +-1 LSB but NOT bit-exactly, so these stay literal bytes
@@ -38,7 +38,7 @@
  * speculates about how it happened.  It is NOT cosmetic: at 9600 Hz eleven
  * of the sixteen DTMF pairs come back with the wrong high-group tone, and
  * all eleven are 1477 Hz being chosen when absent or missed when present
- * (finding 1416).  At 8000 Hz all sixteen decode.
+ * (finding F1416).  At 8000 Hz all sixteen decode.
  */
 
 #include "dsplib/dtmf_rx.h"
@@ -64,12 +64,12 @@ const short MTD6_COEF_9600[5] = { -13271, 16384, 18917, -21019, 16384 };
  * `b1 = -21143` puts this notch's ZEROS at 1328.45 Hz while its `a1 = 16751`
  * keeps its POLES at 1477.04, and a biquad whose zeros and poles are 150 Hz
  * apart is not a notch at either frequency.  Every other table in the bank
- * matches its own `a1` to within 0.1 Hz (finding 1413).
+ * matches its own `a1` to within 0.1 Hz (finding F1413).
  *
  * IT FIRES, AND THE CONSEQUENCE IS MEASURED, not argued: at 9600 Hz eleven of
  * the sixteen DTMF pairs come back with the wrong high-group tone, and all
  * eleven are 1477 Hz chosen when absent or missed when present (finding
- * 1416).  At 8000 Hz all sixteen decode.
+ * F1416).  At 8000 Hz all sixteen decode.
  *
  * -18613 IS DERIVED, NOT GUESSED, which is the test this fix had to pass
  * before it was worth making.  The bank's own design rule is

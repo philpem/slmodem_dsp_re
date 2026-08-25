@@ -35,7 +35,7 @@ THE ENERGY DECODE IS AN ASSUMPTION AND IS VALIDATED, NOT ASSERTED.  Each bin
 is reported as `energy/shift`; the true power is taken as energy * 2^-shift.
 Run this on an EMULATED capture, where `vbt-chanshim` imposed a known response
 (flat to 3300 Hz, -6.2 dB at 3400, -15.5 at 3700, -33.6 at 3900, finding
-1907's measurement of the VG204), and the recovered curve is printed beside
+F1907's measurement of the VG204), and the recovered curve is printed beside
 that truth.  If they disagree, the decode is wrong and nothing below means
 anything.
 """

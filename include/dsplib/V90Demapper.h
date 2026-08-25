@@ -7,7 +7,7 @@
  * FILE entry, so the original had a translation unit of its own.
  *
  * THE OBJECT IS 0x1eb8 = 7,864 BYTES, AND THAT IS AN ALLOCATION.  Finding
- * 1107's rule -- prefer the `sysdep_malloc` immediately before the
+ * F1107's rule -- prefer the `sysdep_malloc` immediately before the
  * constructor's call site, because a displacement scan is bounded by the
  * symbol set it covered and cost `V90Equalizer` eight bytes.  Both call
  * sites agree:
@@ -28,7 +28,7 @@
  *
  * NOT POLYMORPHIC.  `nm` gives `D1` at 0x30f50 and `D2` at 0x30fd0 and no
  * `D0`; GCC emits a deleting destructor only for a virtual class, so offset 0
- * is a real member and there is no vptr (finding 228).  The two destructors
+ * is a real member and there is no vptr (finding F228).  The two destructors
  * are byte-for-byte the same 123 bytes.
  *
  * THE FOUR PARALLEL ARRAYS ARE [6][128] AND THE SHAPE IS READ, NOT ASSUMED.
@@ -47,7 +47,7 @@
  *
  *   - `0f bf 54 7b 30   movswl 0x30(%ebx,%edi,2),%edx` at 0x30c69 SIGN-extends
  *     and hands the 32-bit result to a varargs slot, so the constellation
- *     array is `short` and not `unsigned short`.  This is finding 613's class
+ *     array is `short` and not `unsigned short`.  This is finding F613's class
  *     of defect -- invisible to every differential test whose values stay
  *     positive, visible in one instruction.
  *   - `f7 f1   div %ecx` at 0x30c57, not `idiv`, and no signed-division
@@ -64,7 +64,7 @@
 /*
  * POINTERS ONLY, so forward declarations are what belong here.  Two
  * incompatible definitions of `V90Parameters` exist in this tree and no
- * translation unit may include both -- finding 1112 -- so the header declares
+ * translation unit may include both -- finding F1112 -- so the header declares
  * and `V90Demapper.cpp` picks the NAMED 0x558 map, because
  * `DEBUG_DEMAPPER_ERROR_HISTOGRAM` is the author's own name for the field the
  * destructor branches on.
@@ -99,7 +99,7 @@ public:
 
 	/*
 	 * THE CONSTRUCTOR IS NOW DEFINED, and what unblocked it was
-	 * `ModulusDecoder` being written (finding 1247).  The comment this
+	 * `ModulusDecoder` being written (finding F1247).  The comment this
 	 * replaces said the class "has no header, no .cpp and no other symbol
 	 * in this tree", which was true and is not any more:
 	 * `include/dsplib/ModulusCoder.h` declares it, its default constructor
@@ -145,7 +145,7 @@ public:
 	 * reading but because its closure contained
 	 * `V90SignBitsExtractor::reset`, which nothing in this tree had, and
 	 * one unwritten callee fails EVERY differential binary at `t_encode`
-	 * rather than only its own (finding 215).  That member is written and
+	 * rather than only its own (finding F215).  That member is written and
 	 * so is this one.  The signature is still the mangling's.
 	 */
 	void reset(V90MappingParams *);
@@ -206,7 +206,7 @@ public:
 	 * sign bits" certain; calling it the MODULUS bit count additionally
 	 * assumes what `ModulusDecoder` does with its seventh word, and that
 	 * class's seven members are all `field_NN` because nothing in the
-	 * object names them either.  Finding 3120's rule -- a wrong name is
+	 * object names them either.  Finding F3120's rule -- a wrong name is
 	 * believed by every future reader and no test can fail on it -- so
 	 * the derivation goes here and the name waits for
 	 * `ModulusDecoder::progress`.
@@ -498,8 +498,8 @@ public:
 	 *
 	 * so +0x3054 of the equaliser's argument is this demapper, each flag
 	 * is tested against zero, and each gates a second `cmpw $0x0` on a
-	 * flag at +0x144 / +0x146 of another object.  Finding 3531's rule is
-	 * why this matters and finding 4342 records it: a claim that NOTHING
+	 * flag at +0x144 / +0x146 of another object.  Finding F3531's rule is
+	 * why this matters and finding F4342 records it: a claim that NOTHING
 	 * reads a field is a claim about every function in the object, and
 	 * the way to test it is a displacement grep -- which works here only
 	 * because `1ea4` is a rare displacement and would prove nothing for,
@@ -559,7 +559,7 @@ public:
 	 * study's error into -- `shl $0x7` on the frame position, add the
 	 * code, index +0x1000 and +0x1c00 of the detector.  So this pair is
 	 * the hand-off from the decision to the study, and a batch that
-	 * changed either would change what the study measures.  Finding 3531
+	 * changed either would change what the study measures.  Finding F3531
 	 * is the same mistake in the neighbouring header and this is why its
 	 * rule is worth having: a claim that NOTHING reads a field is a claim
 	 * about every function in the object, not about the ones in hand.
@@ -568,7 +568,7 @@ public:
 	 * immediately by a `movswl` of the same register's low half
 	 * (0x31459/0x31460 and 0x31470/0x3147b), so the value in use is
 	 * sign-extended and the zero-extending load is the free half of
-	 * finding 614 -- an extension whose upper bits are discarded by the
+	 * finding F614 -- an extension whose upper bits are discarded by the
 	 * next instruction.
 	 *
 	 * AND `decisionCode`'S SIGNEDNESS IS NOW FORCED BY MORE THAN THAT,

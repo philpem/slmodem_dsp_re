@@ -38,14 +38,14 @@
  * 0x30 whatever it is.  A reconstruction sizing either from the argument
  * would pass every trial where the argument happened to be 12.
  *
- * NOTHING IS EVER ZEROED (finding 230): both sides get the same varied
+ * NOTHING IS EVER ZEROED (finding F230): both sides get the same varied
  * pseudorandom bytes before every call and are reseeded every trial, so a
  * store that fails to happen is visible.  Every object is followed by a
  * guard region that is compared separately, so a store past the end shows up
  * as a failure rather than as silence.  Where a constructor's whole write set
  * is CONSTANT, side-against-side is not enough on its own -- so each value is
  * also asserted at its ABSOLUTE OFFSET, against the seed it replaced, with no
- * reference to a field name (findings 223 and 224).
+ * reference to a field name (findings F223 and F224).
  *
  * TWO POINTERS ARE NEVER EQUAL -- every `sysdep_malloc` return is a different
  * address on the two sides -- so the snapshot replaces each with that side's
@@ -96,7 +96,7 @@ void ref_ssf_progress(void *self, const short *in)
  * this suite used to declare a `float` return -- which made both sides round
  * before it looked, so a difference in the low 40 significand bits compared
  * equal and the whole question was invisible here.  It was invisible because
- * of the DECLARATION and not because of the values.  Finding 5854; the float
+ * of the DECLARATION and not because of the values.  Finding F5854; the float
  * checks below are kept beside the exact one because that is what a caller
  * storing the result would see.
  */
@@ -727,7 +727,7 @@ static unsigned char sd_b[SD_SLOT] __attribute__((aligned(8)));
  * ours is three `flds`/`fstps` pairs -- the modern toolchain's SFmode move
  * under `-mfpmath=387` -- and quietens it to 0x7fe00000.  The source is not
  * what differs; a bit-copy spelling that forced `mov` would be fitting the
- * compiler, which this tree does not do.  Finding 1242 has the evidence and
+ * compiler, which this tree does not do.  Finding F1242 has the evidence and
  * the bound: no other pattern separates the two, so nothing an audio path
  * can carry does.
  */
@@ -948,7 +948,7 @@ run_sd_reset(void)
 /*
  * `process(float)` -- five exits, three results, and a test that has to
  * produce all five.  A detector that always says "no" passes a weak test
- * perfectly (findings 149 and 223), so this one classifies every call from
+ * perfectly (findings F149 and F223), so this one classifies every call from
  * the BLOB's own history and asserts at the end that each exit was taken.
  *
  * THE SIGNALS ARE PERIOD-SIX, which is what makes the classification
@@ -1108,7 +1108,7 @@ run_sd_process(void)
 				 * `!(a >= b)` and not `a < b`: a silent
 				 * history makes the quotient 0/0, and the
 				 * two spellings part company there --
-				 * which is the whole of finding 1401 and
+				 * which is the whole of finding F1401 and
 				 * would be classified away if this line
 				 * were the natural one.
 				 */
@@ -1125,7 +1125,7 @@ run_sd_process(void)
 				 * object's own -mno-ieee-fp, which is what
 				 * `make period` builds this file with, and
 				 * the counter below would then read zero for
-				 * the wrong reason.  Finding 2303.
+				 * the wrong reason.  Finding F2303.
 				 */
 				if (diff_isnan_ld(r))
 					seen[5]++;
@@ -1188,7 +1188,7 @@ run_sd_process(void)
 	/*
 	 * And the unordered quotient really was reached.  Without this the
 	 * sweep could stop dividing zero by zero -- by a threshold changing,
-	 * not by anyone deciding to -- and finding 1401 would go untested
+	 * not by anyone deciding to -- and finding F1401 would go untested
 	 * while every other line here still passed.
 	 */
 	diff_eq_int("the quotient was 0/0 on %ld calls", seen[5] > 0, 1,
@@ -1324,7 +1324,7 @@ run_sv(void)
 		/*
 		 * The quotient, against a value this file computes itself:
 		 * side-against-side cannot tell a divide from its reciprocal
-		 * and the object's `de f9` is the one place finding 245's
+		 * and the object's `de f9` is the one place finding F245's
 		 * mnemonic trap bites.
 		 */
 		q = fromhex(freq) / (float)fftLen;

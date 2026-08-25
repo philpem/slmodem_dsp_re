@@ -21,8 +21,8 @@ own preamble is that a defect recorded there is not quietly corrected here.
 
 ## The denominator, before anything else
 
-A detector must report its denominator (`CLAUDE.md`, findings 134, 2400,
-3100), and so must a triage.
+A detector must report its denominator (`CLAUDE.md`, findings F134, F2400,
+F3100), and so must a triage.
 
 | | count |
 |---|---|
@@ -75,7 +75,7 @@ because the new file was untracked. `git add` alone took it to 6,571. Nothing
 warned. A new document full of `D<n>` and `finding <n>` citations can
 therefore be written, checked, and reported clean while the checker has not
 read a line of it: the dead-detector shape this tree has hit four times
-(findings 134, 2400, 3100, 3055). The habit that defends against it is the one
+(findings F134, F2400, F3100, F3055). The habit that defends against it is the one
 `CLAUDE.md` already states — **read the denominator, not the exit code**. It
 moved, so the tool was working.
 
@@ -269,7 +269,7 @@ do.
   source, two other agents were building concurrently, and the check that
   matters for a documentation change is `python3 tools/refcheck.py`.
 - It edited no entry in `docs/deviations.md` except where a verdict line is
-  provably wrong. Appendix A's own header records why (finding 622): the file
+  provably wrong. Appendix A's own header records why (finding F622): the file
   is shared, and a sweep of in-place edits conflicts where an append does not.
 - It did not re-derive D1–D64. Those are the oldest and best-argued entries in
   the file, most are driven by a named test, and Appendix A already audits
@@ -323,7 +323,7 @@ record.**
 - **Test.** Fold the two loads into one in the reconstruction and run the
   differential tier: it will pass, because no input can separate them. That is
   the mutation-survivor shape, and it is the same instrument D195 already has.
-- **Citation:** finding 1260. AGREES — 1260 records the reload from the
+- **Citation:** finding F1260. AGREES — 1260 records the reload from the
   disassembly and does not itself claim a hazard.
 
 ### D195 — the second `sysdep_memset` clears what the first already cleared
@@ -342,11 +342,11 @@ without it, because there is nothing to distinguish.
 - **Test.** Already run and recorded; re-run `tools/mutate.py` over
   `vpcmcreate` and the survivor must still survive. If it were ever *caught*,
   that would mean the two memsets are not redundant and this verdict is wrong.
-- **Citation:** finding 1260. AGREES.
+- **Citation:** finding F1260. AGREES.
 
 ### D190 — `V90Phase3Modulator`'s constructor stores a pointer nothing reads
 
-**Mechanism.** Finding 1257 disassembled all nineteen `V90Phase3Modulator`
+**Mechanism.** Finding F1257 disassembled all nineteen `V90Phase3Modulator`
 text symbols and searched every `0x50` displacement: three hit, and only the
 two constructor copies are the object at all — `reset`'s `mov 0x50(%esp),%ebp`
 is a stack slot. So the field is written and never read *within the class*.
@@ -364,7 +364,7 @@ is a stack slot. So the field is written and never read *within the class*.
 - **Note on the record:** this entry was renumbered from the 162 slot on the
   coordinator's assignment and says so, which is exactly what `CLAUDE.md`
   requires of a renumber. Good practice; leave it.
-- **Citation:** finding 1257. AGREES.
+- **Citation:** finding F1257. AGREES.
 
 ### D294 — the study's states are numbered out of the order it runs them in
 
@@ -382,7 +382,7 @@ members.
 - **Test.** Renumber the states in the reconstruction to run order and the
   differential tier must stay green; if it does not, the numbers are load
   bearing and this verdict is wrong.
-- **Citation:** finding 1441. AGREES.
+- **Citation:** finding F1441. AGREES.
 
 ### D296 — the retrain detector stores three accumulators it is about to clear
 
@@ -405,7 +405,7 @@ they are member stores through a live pointer."
   differential tier plus `make similarity`: the first must stay green (nothing
   observes them) and the second must move (the object contains them). That
   pair of outcomes is what distinguishes "dead" from "wrong".
-- **Citation:** finding 1464. AGREES.
+- **Citation:** finding F1464. AGREES.
 
 ### What this family costs the register
 
@@ -504,7 +504,7 @@ The entry establishes the literal at `.rodata.str1.4+0xd6b0` is byte for byte
 - **Test.** Run the transcript comparison at a debug level of 2 or more and
   confirm both sides emit the `V90MP:` prefix from the CP class. That is
   already how the class's other diagnostics are compared.
-- **Citation:** finding 1239. AGREES.
+- **Citation:** finding F1239. AGREES.
 
 ### D267 — `evaluatePhase4` prints a `%d` with no argument behind it
 
@@ -529,7 +529,7 @@ is what makes the entry sound.
 - **Test.** Already built: `t_v90conneval` compares everything except the one
   line. If a future change makes that line comparable, the verdict is wrong
   and the frame was deterministic after all.
-- **Citation:** finding 1388. AGREES.
+- **Citation:** finding F1388. AGREES.
 
 ### D291 — `studyUrefHandler` prints a float through `%d`, twice
 
@@ -546,7 +546,7 @@ different roundings of one value, and the report's is then read as an integer.
   completion and compare the two lines: they must be byte-identical between
   the blob and the reconstruction, because unlike D267 the argument IS pushed
   and the value IS deterministic.
-- **Citation:** finding 1443. AGREES.
+- **Citation:** finding F1443. AGREES.
 
 ## What this family changes about the register
 
@@ -637,7 +637,7 @@ cosmetic defect in a diagnostic, gated behind `dsplibs_debug_level`, which
   sides keep it rather than resetting it to 0, and that the transcript emits
   `"HardwareCodecType: Squeezer_545A_ITE"` rather than the "exceeds table
   length" line. If the object resets it, this verdict is wrong.
-- **Citation: finding 1233 — AGREES, AND THE FINDING IS WRONG TOO.** This is
+- **Citation: finding F1233 — AGREES, AND THE FINDING IS WRONG TOO.** This is
   the outcome that matters and it is not the one that was expected. The
   finding's own heading is *"V90PREFILTER'S CONSTRUCTOR: THE REGISTRY DECIDES,
   THE ARGUMENT IS ONLY THE FALLBACK, AND THE RANGE CHECK IS ONE SHORT"*, and
@@ -691,7 +691,7 @@ subscript below the base of the table.
   test that WOULD decide it is a caller census: enumerate every construction
   of `V90PreFilter` in the object and in the host and show whether any can
   pass a negative. That is the missing evidence and it is cheap.
-- **Citation:** finding 1233. AGREES.
+- **Citation:** finding F1233. AGREES.
 
 ## D179 — `V90Equalizer` with fewer than four taps allocates nothing and writes to it
 
@@ -714,7 +714,7 @@ zero-length block.
   `V90Parameters` lesson in `CLAUDE.md` is that an under-allocation passes
   every test not run under one. That converts a reasoned claim into a measured
   one and is the single cheapest confirmation in this document.
-- **Citation:** finding 1233. AGREES.
+- **Citation:** finding F1233. AGREES.
 
 ## D710 — `VPcmV34GetVisualDiagnostics` selectors 3 and 4 ignore `maxCount`
 
@@ -743,7 +743,7 @@ array the caller has said holds none, and returns 1.
 **DEFECT, UNREACHABLE IN THIS BUILD, and one of the best-argued entries in the
 register.** Four independent lines converge — three complete `K1`/`K2` pairs
 precede it, `setToDefault` continues the `K2` series 7e-12, 5e-12, 2e-12
-across FAST/MEDIUM/SLOW, `+0x0f4` is one of the nine slots finding 878
+across FAST/MEDIUM/SLOW, `+0x0f4` is one of the nine slots finding F878
 measured as a float declared `int`, and `+0x0f0` being read twice is otherwise
 unexplained — and the entry states plainly that nothing dissents.
 
@@ -751,7 +751,7 @@ unexplained — and the entry states plainly that nothing dissents.
   the field, on the ground that a usage inference must not sit among 291
   rule-1 measurements, and names what would settle it: a reader of `+0x0f4`
   printing it in a diagnostic. That is `CLAUDE.md`'s evidence rule 1 and it is
-  precisely how finding 3527 retired `+0x074` and `+0x078` in the same class.
+  precisely how finding F3527 retired `+0x074` and `+0x078` in the same class.
   **This is the correct handling of a strong inference and should be the model
   for the rest of the register.**
 - **Verdict: no change.** Unreachable in this build because, per D900, no
@@ -759,7 +759,7 @@ unexplained — and the entry states plainly that nothing dissents.
   real parser.
 - **Test.** `t_v90loadparams` already compares the two logs entry for entry
   and fails if both calls do not go to `+0x0f0`.
-- **Citation:** findings 861, 878 and 3527. AGREE.
+- **Citation:** findings F861, F878 and F3527. AGREE.
 
 ## D306 — `CID_MTD_detect`'s energy accumulators wrap after 257 full-scale samples
 
@@ -820,7 +820,7 @@ comparison is the same instrument that made D920 convincing.
 - **Test.** Already correctly guarded: `t_v92jd.cpp` seeds the slot with
   varied bytes and compares the whole object, so a reconstruction that
   helpfully cleared `bits[48]` fails rather than passes. Leave it.
-- **Citation:** finding 1223. AGREES.
+- **Citation:** finding F1223. AGREES.
 
 ## D275 — `V92Jd`'s two receive directions share one pair of state bytes
 
@@ -837,7 +837,7 @@ run both at once is a one-line inference from them, and the entry says so.
 - **Test.** Drive both unpackers alternately over one object and compare
   against the blob; if the two sides agree, the sharing is faithful and the
   question is only whether a caller does it.
-- **Citation:** finding 1397. AGREES — the finding is this entry's text.
+- **Citation:** finding F1397. AGREES — the finding is this entry's text.
 
 ---
 
@@ -904,7 +904,7 @@ throughout: the callers type the lifetime.
 
 - **D101 / D170** are the same claim about the same two functions
   (`V92deleteConstellations` 0x12de0 and `V92deleteFilterCoefficients`
-  0x12e90), citing findings 831 and 1226 respectively. Confirmed: not one
+  0x12e90), citing findings F831 and F1226 respectively. Confirmed: not one
   store in either. The ten slots live in the 180-byte block at
   `V92Modem+0xaa0`, and `~V92Modem` frees that block at **0x13b4a** with
   nothing reading the slots in between. **D170 is the better-argued of the
@@ -916,7 +916,7 @@ throughout: the callers type the lifetime.
 - **D102** — `CALLPROG_Delete` 0x79440 nulls `+0x70` and `+0x64` and leaves
   three. But CALLPROG is **embedded at `+0x444`** of the block `call_delete`
   frees at **0x2e1a**, and nothing reads `+0x6c`, `+0x78` or `+0x84` in
-  between. The entry inherits finding 55's "the object itself is never freed",
+  between. The entry inherits finding F55's "the object itself is never freed",
   which is true of the FUNCTION and false of the PATH. Its second worry —
   "`CALLPROG_Delete` is a global symbol and the asymmetry is invisible from
   outside" — is true and harmless: **there is no outside.** `nm -u` shows the
@@ -987,17 +987,17 @@ caller supplies such storage.
   header is what a future reader acts on. What FIRES is an omitted store, and
   an omitted store is not an event.
 - **Three citations that do not support what they are cited for:**
-  - **D181 — DRIFTED.** Finding 1245 establishes `+0x68`/`+0x6c` and the
+  - **D181 — DRIFTED.** Finding F1245 establishes `+0x68`/`+0x6c` and the
     `reset` skip for `V92Precoder` exactly as cited, but D181's headline also
     names `~V92PreFilter` and attributes the same two offsets to it. The
     pre-filter's owned words are `+0x04` and `+0x08`, and its map is finding
-    **1246**, which D181 does not cite.
-  - **D231 — DRIFTED.** Finding 1322 is titled "A NULL GUARD CAN BE
+    **F1246**, which D181 does not cite.
+  - **D231 — DRIFTED.** Finding F1322 is titled "A NULL GUARD CAN BE
     UNREACHABLE IN THE OBJECT ITSELF", is entirely about a dead null guard on
     `+0xaa0`, and concludes "**It is not a deviation either.**" The claim D231
-    needs — the embedding at `VPcmFloModem+0x6124` — is finding **1333**, and
-    it is uncited. (D231's other citation, finding 1272, AGREES.)
-  - **D211 — PARTIAL.** Finding 1288 is a METHOD finding about how a
+    needs — the embedding at `VPcmFloModem+0x6124` — is finding **F1333**, and
+    it is uncited. (D231's other citation, finding F1272, AGREES.)
+  - **D211 — PARTIAL.** Finding F1288 is a METHOD finding about how a
     null-guard sweep covers a graph it cannot poison. It confirms the eleven
     guarded pointers and "twenty guards over four destructors", but it does not
     state "null nothing at all"; that comes from 1281's contrast.
@@ -1096,7 +1096,7 @@ Constructor: Il…"* on the illegal-`side` arm.
   pointer consumed later, not an allocation. Its verdict is unchanged —
   DEFECT, UNREACHABLE, bounded exactly as the entry says by `VPCMXF_Create`'s
   `test %ebx,%ebx; sete %al` at 0xfd05, which yields 0 or 1 and nothing else.
-- **D175 cites finding 1230 for "reproduced as written", and 1230 does not say
+- **D175 cites finding F1230 for "reproduced as written", and 1230 does not say
   that.** 1230 says the signed divide makes the length negative and the
   allocation enormous; its only *driven* claim is that `sysdep_malloc(0)`
   succeeds and `reset` writes into a zero-length block. **Nobody in this tree
@@ -1148,7 +1148,7 @@ residue. **Four bytes of frame then decide which phases get pooled**, and the
 mean written into every unsuspected phase becomes a function of the frame.
 
 The producer is named, and it is the ordinary case rather than a corner:
-finding 1427 records that `porcessFirstStudy` marks a phase suspected unless
+finding F1427 records that `porcessFirstStudy` marks a phase suspected unless
 it collects more than nine rough neighbours out of fifteen, and that "a smooth
 mapping, which is what a **clean line** produces, collects none: the counter
 starts at 1, ends at 1, and every phase comes out suspected."
@@ -1161,12 +1161,12 @@ starts at 1, ends at 1, and every phase comes out suspected."
   handling (declare it, leave it uninitialised, exclude the path from the
   differential test because two builds have two stack frames) is correct
   reconstruction behaviour. **What warrants changing is the entry's
-  reachability field**, which reads `unmeasured` where finding 1427 already
+  reachability field**, which reads `unmeasured` where finding F1427 already
   establishes the trigger.
 - **Test:** run `porcessFirstStudy` on a smooth mapping, let it set `+0x280c`
   itself rather than forcing it, and confirm all six come out suspected and the
   next call reads the unwritten slot.
-- Citation: finding 1427 AGREES, emphatically — **the finding is more definite
+- Citation: finding F1427 AGREES, emphatically — **the finding is more definite
   than the entry citing it.**
 
 **D290 — `findPadGain` hangs outright for five values of `byte_a954`, and the
@@ -1198,7 +1198,7 @@ the family. The producer the entry lacked: **`byte_a954` is written by
   **UNDECIDABLE**; the entry's note that an unordered compare *takes*, so one
   NaN writes the slot and it is five *ordered* non-improvements that reach the
   bug, is correct for `jb`.
-- Citation: finding 1439 AGREES.
+- Citation: finding F1439 AGREES.
 
 ## UNDECIDABLE FROM HERE — the rest, each with the evidence that would decide it
 
@@ -1241,12 +1241,12 @@ the family. The producer the entry lacked: **`byte_a954` is written by
 - **D262** — **the entry's caller survey is the most rigorous in the register
   and could not be improved on.** It is relocation-exhaustive, correctly notes
   that a relocation's *absence* is what would hide a same-TU caller (findings
-  306, 333), records that an earlier draft said CANNOT FIRE on "three arms are
+  F306, F333), records that an earlier draft said CANNOT FIRE on "three arms are
   a plausible complete set" reasoning and was corrected, and names its own gap.
   **Deciding evidence:** every writer of `V92MappingParams+0x10`, read at
   0x53da6 — a fourth value there makes this REACHABLE.
 - **D281** — DEFECT, UNREACHABLE from inside the object, and the bound is
-  positive rather than merely absent: **finding 1427 states explicitly that
+  positive rather than merely absent: **finding F1427 states explicitly that
   D281 has no producer where D284 does** — it needs a caller to flag every
   phase at `+0x2800`, and `updateUref` passes the flags through untouched.
   **Deciding evidence:** any writer that can set all five
@@ -1289,7 +1289,7 @@ be decided at all, and the register does not currently distinguish them.
 
 **Not verified, stated for the record.** D261's and D281's functions were not
 disassembled in full — D261 only for the slot writes, reads and post-loop
-consumption; D281 rests on the entry plus finding 1420. `isAltRbs`'s
+consumption; D281 rests on the entry plus finding F1420. `isAltRbs`'s
 zero-initialisation is inferred from its tail. The two `V92Jd` return-path
 surveys are incomplete. D293's "no reads" is proven against indexed and direct
 references, not against a `lea` of the slot.
@@ -1365,7 +1365,7 @@ between two syncs**, and the recommendation permits hundreds.
   16th to 20th equal the bytes at +0x1e..+0x26 of the sequence struct, and
   watch `fdbc` climb past 15 while the match counter at +0xdb6 rises. Refuted
   if `fdbc` is clamped anywhere upstream of `v8handshak`.
-- **Citation:** finding 73. AGREES — its body restates the claim verbatim and
+- **Citation:** finding F73. AGREES — its body restates the claim verbatim and
   records the fifteen-word message and the 0x00f marker.
 
 ### D256 — `addReceivedSampleToStorage` overruns on a DIL the recommendation explicitly permits
@@ -1414,7 +1414,7 @@ until we stop it.**
   leaves the 43,440-byte object. Refuted if some state above `getV90Decision`
   stops offering samples before 2,110 per phase; **that is the one thing this
   trace does not cover**, since neither method's callers are reconstructed.
-- **Citation:** finding 1363. AGREES.
+- **Citation:** finding F1363. AGREES.
 
 ## D107 — a conformant ZERO-LENGTH DIL request reads an uninitialised slot
 
@@ -1454,7 +1454,7 @@ RECEIVED message on the side that faults.
 - **Test.** Reset the modulator with a descriptor whose byte +0 is zero and
   whose `dilLevel[0]` slot has been seeded with 0x8000..0xFFFF, and read
   `+0x390` — it will be 8.
-- **Citation:** finding 232. AGREES.
+- **Citation:** finding F232. AGREES.
 
 ## D135 — REFUTED. "The A-law boundary row's last entry can never be reached"
 
@@ -1480,9 +1480,9 @@ RECEIVED message on the side that faults.
   that observation, which belongs to D107.**
 - **Test.** Feed level 32000 with `pcmType` A-law and observe index 7; feed
   0x9000 and observe index 8.
-- **Citation:** finding 231. AGREES with the entry's own caveat — **and the
+- **Citation:** finding F231. AGREES with the entry's own caveat — **and the
   finding is where the claim originates and does not account for the
-  `movzwl`.** Like D176/finding 1233, the correction belongs upstream.
+  `movzwl`.** Like D176/finding F1233, the correction belongs upstream.
 
 ## Settled against the recommendation — unreachable from a conformant peer
 
@@ -1500,9 +1500,9 @@ of `resetDILGenerator`'s `(byte & 0x7f) ^ 0xd5` at 0x2af40. **DEFECT,
 UNREACHABLE from a conformant peer**; what would reach it is not a malformed
 peer but a *caller* passing the raw eight-bit PCM codeword instead of its
 Ucode, which would fire on roughly half of all samples. No such caller exists
-today. **Citation: finding 1366 — DRIFTED, harmlessly.** 1366 is headed *"THE
+today. **Citation: finding F1366 — DRIFTED, harmlessly.** 1366 is headed *"THE
 OBJECT DIVIDES IN ONE METHOD AND MULTIPLIES BY A RECIPROCAL IN TWO"* and is
-about mean/variance arithmetic; the histogram material is in **finding 1363**.
+about mean/variance arithmetic; the histogram material is in **finding F1363**.
 The claim is true and the number is one off.
 
 **D276 — a preamble longer than seventeen 1 bits desynchronises Jd.** ITU-T
@@ -1517,7 +1517,7 @@ the bit-17 start bit to 1**, and that is worth recording because it costs
 almost nothing: the receiver needs a fresh seventeen and the next repetition
 supplies them, 72 bits at 8000 sign bits/s ≈ 9 ms against §9.3.2.7's 4,500 ms
 Jd-detection window. A resynchronisation delay, not a memory hazard.
-**Citation: finding 1397. AGREES.**
+**Citation: finding F1397. AGREES.**
 
 **D471 — `setTrn2DummyConstel` has no bound against the 128-byte row.** The
 only bound is a signed compare against `nofUcodesInTrn2` at 0x3cb24/0x3cb40.
@@ -1615,7 +1615,7 @@ take — the maximum sum-of-four is 68 — so **the recorded segfault is an
 artefact of driving the function directly rather than a wire path**; and
 `movswl 0x4(%ebp),%edx` at 0x5875b loads one sub-index SIGNED, so a negative
 index is representable, which is a `demapFrame` question.
-**Citation: finding 129. AGREES** — it says three tables where the entry
+**Citation: finding F129. AGREES** — it says three tables where the entry
 heading says four, which is consistent: the fourth is the 529-entry grid in
 `decodeDepth`.
 
@@ -1625,11 +1625,11 @@ family's question. `getbit` (0x5eaf0) reads a bit cursor over `word[10]` at
 +0xaa3c with `crc` at +0xaa50, fed by `getMPrecvdBits`, so the underlying wire
 object is a **V.34 MP sequence** and `v34handshak` hands the record to `getbit`
 thirty-six times. **What would decide it: the identity of the message `getbit`
-actually parses out of +0xaa3c.** Finding 227 describes +0xaa3c/+0xaa3e as
+actually parses out of +0xaa3c.** Finding F227 describes +0xaa3c/+0xaa3e as
 `info_caps`, a *rebuilt capability word*, not the raw received MP. If `getbit`
 is ever pointed at a raw MP, MP is longer than 160 bits and this is reachable;
 if it only ever reads the rebuilt word, ten words is a real bound.
-**Citation: finding 227. AGREES.**
+**Citation: finding F227. AGREES.**
 
 **D333 — `setConstellationToNoise`'s 128-byte staging array.** The span is
 `arg5[k] − params->unnamed_360` with `arg5` an `unsigned char *`, so up to 256
@@ -1749,7 +1749,7 @@ sibling loops all test; float, so a NaN rather than a trap. D282:
 `getAltVarThresh` at 0x406cc divides by a 16-bit count (`push %cx; filds
 (%esp)`) that the selection loop increments only on the accumulate arm — so
 six equal entries select nothing, the count is 0, and 0.0/0 is the real
-indefinite. Finding 1442 traces the first NaN into `var[phase]`, into
+indefinite. Finding F1442 traces the first NaN into `var[phase]`, into
 `getAltVarThresh`, and out as **the threshold every phase is compared
 against**, after which the ordered `>` flags nothing.
 **Fix, host-side and shared:** reject a threshold that is not ordered against
@@ -1788,9 +1788,9 @@ would refute the correction.
   ABOVE (`cmpl $0x30,0x40(%esp); jg 3c7f` — arg5 ≤ 48) **and not below**, then
   computes `blk = (int)trunc(((arg5 * 1000) / 9600) * 8.0 + 0.5)`. **Any
   `arg5 ≤ 9` gives `blk = 0` and the `div %edi` at 0x11278 faults with
-  SIGFPE.** So "CANNOT FIRE — finding 1188 reads it as 40" reads as an object
+  SIGFPE.** So "CANNOT FIRE — finding F1188 reads it as 40" reads as an object
   bound and is not one; a host passing a block count of nine or fewer takes
-  SIGFPE during construction. Finding 1188 says this explicitly and **the
+  SIGFPE during construction. Finding F1188 says this explicitly and **the
   entry understates its own citation.**
 - **D228, D229** — the shared bound above: `V92_ECHO_FILTER_LENGTH` is 180 in
   `setToDefault` and no run-time path can change it.
@@ -1857,7 +1857,7 @@ values), so a queue count that went negative would also exit.
    `updateAlpha`, both `R_386_PC32`, **both inside `modem_serrint`**
    (`.text+0x5d200` and `+0x5d560`). `adaptecho` calls the energy *producer*
    at 0x5db99, which is probably how it got in. The error is the entry's, not
-   the finding's — finding 127 agrees on mechanism, range and producer, and
+   the finding's — finding F127 agrees on mechanism, range and producer, and
    makes no caller claim.
 2. **D331's "each of the two doubling loops runs about 2^31 times" must be
    struck** — both are guarded, as shown above.
@@ -1869,10 +1869,10 @@ values), so a queue count that went negative would also exit.
    it is the same shape as D330's mis-citation of D345 in Family 6. **D345 is
    being cited as a general licence for "uncalled" when it is a specific list
    of eleven.**
-4. **D226, D228 and D229 cite finding 879 for "slmodemd never supplies a
+4. **D226, D228 and D229 cite finding F879 for "slmodemd never supplies a
    parameter file", and 879 says nothing of the sort** — it contains no
    occurrence of `paramFile`, `slmodemd` or `null`. The real support is the
-   `Vparser_read_*` stubs (finding 860), which is a *better* bound. Re-point
+   `Vparser_read_*` stubs (finding F860), which is a *better* bound. Re-point
    the citation.
 5. **Four defects found in passing that are NOT in the register**, recorded
    here so they are not lost:
@@ -1942,9 +1942,9 @@ from the other fifteen tables (the closed form fits all of them to within
   fixed arm must take the 9600 Hz count from eleven to zero while the
   reproduce-bugs arm keeps eleven.
 - **Register hygiene:** the entry contradicts itself. Its batch line says
-  "**it is MEASURED** … Finding 1416" and the `Status:` field on the same line
+  "**it is MEASURED** … Finding F1416" and the `Status:` field on the same line
   says `unmeasured`. The measurement exists; the field is stale.
-- **Citations:** findings 1413 and 1416. Both AGREE.
+- **Citations:** findings F1413 and F1416. Both AGREE.
 
 ## Two more NOT A DEFECT
 
@@ -1972,7 +1972,7 @@ argument covers the `_64pt` half, whose cut at 8192 is the exact midpoint of
 - **Test.** For every `ri` in 11586..32767 at `rq = 5792`, compute the true
   squared distance to the point the object names and to the point base 0x18
   names; assert equality or object-nearer at every one.
-- **Citation:** finding 3217. AGREES — its headline is "the boundaries that
+- **Citation:** finding F3217. AGREES — its headline is "the boundaries that
   are one apart", which is the inconsistency and not a distance claim.
 
 **D363 — `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not
@@ -1994,7 +1994,7 @@ the slot, and the return value is discarded at this site.
 `convertEqualizerToMmx` computes `1.0/(beta·2²⁴)` and multiplies;
 `setLinearEquBeta` divides directly. *(Read from the bytes: `de fc` at
 0x373e2 is **FDIVP**, which objdump prints as `fdivrp` — `CLAUDE.md`'s trap
-and `dis.py`'s Intel annotation both apply, and finding 2148 notes it too.)*
+and `dis.py`'s Intel annotation both apply, and finding F2148 notes it too.)*
 Both run at x87 extended precision — the `fldcw`s touch only the rounding
 control — so **the two quotients differ by at most one 64-bit-mantissa ulp,
 relative 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰**, and often by zero. That reaches
@@ -2056,7 +2056,7 @@ than `spectralDesign`, or a reconstructed caller whose parameter block bounds
 `shaperSR + word_0` into [6, 69]. Until then `unmeasured` is the correct
 status and holding the differential count in 0..62 is the correct handling — a
 shift outside that is undefined in the source language and the two compilers
-may legitimately differ. **Citation: finding 3050 AGREES**, and states "The
+may legitimately differ. **Citation: finding F3050 AGREES**, and states "The
 shift count has no guard of any kind; D349" explicitly.
 
 ## Already dispositioned — D302
@@ -2065,7 +2065,7 @@ shift count has no guard of any kind; D349" explicitly.
 entries**) at indices 4095/8191/12287 because `sar $1` stands where the sibling
 `_16Tpt` has `sar $0xd`. **Fixed at `src/pump/v32/v32fse.c:500`** — `>> 13`
 restored in the default arm, flat `*mag = 0` under `DSPLIB_REPRODUCE_BUGS`. Not
-re-argued. **Citation note: finding 1603 is DRIFTED for its verdict and AGREES
+re-argued. **Citation note: finding F1603 is DRIFTED for its verdict and AGREES
 for its analysis**, by the register's own words — so anything elsewhere citing
 1603 for "cannot be differentially tested" is now wrong.
 
@@ -2101,7 +2101,7 @@ Each was quantified rather than asserted; the magnitudes are the point.
   `FPM_xor_table[0]` = 0 where 16384 belongs. Citing the unlucky entry as the
   precedent for luck is precisely the drift `refcheck.py` cannot catch: both
   resolve.
-- **D360 cites finding 3500 and the material is in 3501.** 3500 is "THE V.22
+- **D360 cites finding F3500 and the material is in 3501.** 3500 is "THE V.22
   EQUALISER IS ITS OWN BLOCK … AND ITS `fresh` FLAG MEANS THE OPPOSITE" and
   has no account of the two clears. *(Neighbouring, outside this family: D362
   also cites 3501, whose headline is about `V22_FSE_init`'s coefficient
@@ -2112,7 +2112,7 @@ Each was quantified rather than asserted; the magnitudes are the point.
   FARTHER wins on a tie". **The code at `:844` is correct**
   (`e26 >= e14 ? 26 : 14`); the comment understates a wholesale inversion over
   99.996% of the cell. Comment-only drift in `src/`, and the register and
-  finding 3218 are both right — **this document changes no source, so it is
+  finding F3218 are both right — **this document changes no source, so it is
   recorded here for whoever next edits that file.**
 - **D370's own "at every one of them" needs a qualifier**: true of the
   object's own metric, true of Euclidean distance at 81.8%, because the metric
@@ -2196,7 +2196,7 @@ status must drop from FIXED**, see below.
 and the host answers zero: `modem_homolog.h:94` carries
 `//u8 DialToneFilterSubindex;` **commented out**, and `modem_param.c:172-173`
 is a literal `return 0;`. `cadence_create`'s dispatch then takes each bank's
-own fallback, and finding 49 measured bank 3 falling back to `CP_276_504` —
+own fallback, and finding F49 measured bank 3 falling back to `CP_276_504` —
 *its own nearest equivalent* — which it calls "deliberate and sensible, not an
 oversight". **The entry convicts itself**: *"host-side — restore the field.
 Nothing in the object needs to change."*
@@ -2215,21 +2215,21 @@ not in either host tree.**
 - `slmodemd/modem_main.c:682` still returns **0**.
 - `d-modem`'s `main()` installs `socket_modem_driver` by default (line 1847);
   ALSA only under `--alsa`.
-- **120 appears nowhere in `docs/findings.md`.** Finding 1026 — the tree's own
+- **120 appears nowhere in `docs/findings.md`.** Finding F1026 — the tree's own
   recommendation — says **240**, with 216 as the conservative alternative.
 
 That leaves three claims that cannot all be true:
 
 1. the live socket driver reports IODELAY 48, so
    `filtdelay = ((48+6)>>2)+34 = 47`;
-2. finding 1022 measures `filtdelay >= 57` (IODELAY 86) as the V.34 connect
+2. finding F1022 measures `filtdelay >= 57` (IODELAY 86) as the V.34 connect
    threshold;
 3. Appendix C records live bench data — *"Five IDENTICAL V.34 calls at one
    setting: 4 of 5 connected, at 14400, 14400, 4800, none, 14400"* — and this
    repository's recent history is dozens of live V.34 calls.
 
 **The most likely casualty is (2).** `t_v34link` is blob-against-blob over a
-simulated wire, and finding 960 itself notes the mechanism depends on a
+simulated wire, and finding F960 itself notes the mechanism depends on a
 carrierless slicer producing all-ones against a peer that is **exactly**
 silent, which a real far end is not.
 
@@ -2274,14 +2274,14 @@ for 31 200 and 33 600"*, and Table 9's *"bit 36:4800; …; bit 48:33 600"*.
   What survives is only the weaker claim that a narrowed window has no
   observable effect — a *different* claim from the one filed. Two honest
   caveats: `K56FlexFloModem::setMinMaxRates` is **one byte at 0x101f0, a bare
-  `ret`**, so that arm really does discard them; and finding 824's sweep saw no
+  `ret`**, so that arm really does discard them; and finding F824's sweep saw no
   movement, which is *probably* because its baseline runs at IODELAY 0 — a
   configuration D77 says never completes phase 2 — but that reconciliation is
   inference, not measurement.
-- **Test.** Re-run finding 824's MAX_RATE sweep at IODELAY 216 instead of 0 and
+- **Test.** Re-run finding F824's MAX_RATE sweep at IODELAY 216 instead of 0 and
   watch `+0x220`. If it moves, the window is live.
 - **CITATION: DRIFTED, and it was drifted on the day it was filed.** Findings
-  823 and 824 say what D78 quotes, but **finding 1020** (commit `2c98999f`,
+  F823 and F824 say what D78 quotes, but **finding F1020** (commit `2c98999f`,
   **2026-08-10**) explicitly corrects them — *"`configuration.md`'s note that
   the +0x30/+0x34 rate pair 'is what `vpcm: VPCM rate limits` prints and
   nothing else reads' is wrong"* — and **D78 was written in commit `7db93c88`
@@ -2299,7 +2299,7 @@ fetches parameter 0x27 at 0x7d492–0x7d4ad and hands it to
 function. `ThresholdsTable` is `.rodata:0x6900` with **`st_size` 32, sixteen
 entries**: 90, 92, 96, 97, 99, 102, 185, 188, 190, 250, 280, 285, 370, 390,
 470, 560. Index 16+ walks into the neighbouring table; a negative index reads
-backwards. Every number in finding 60's table reproduces exactly from this, and
+backwards. Every number in finding F60's table reproduces exactly from this, and
 `cadence_create` is the **only** caller.
 
 **And the host's own data bounds it.** Parameter 0x27 = 39 =
@@ -2313,7 +2313,7 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
   shipped country table does.** The grade belongs in *NEEDS A CALLER OR
   CONFIGURATION NOTHING VALIDATES*, and the fix class "validate the parameter
   to 30..50" should read **30…45**, since 46 and above index backwards.
-- **CITATION:** finding 60's numbers AGREE; its and the entry's *description*
+- **CITATION:** finding F60's numbers AGREE; its and the entry's *description*
   of the mechanism — "converts it to a linear threshold exponentially",
   "wraps" — is **DRIFTED**. It is a table index, not arithmetic.
 
@@ -2322,7 +2322,7 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
 - **D76** — `FPM_div` reads `FPM_div_table` (`.rodata:0xc6a0`, `st_size` 256 =
   128 entries) at index 128 when `m = 0xff80`, landing on the **0** at 0xc7a0,
   so the reciprocal is zero and the AGC gain collapses. Sound, tier 2.
-  **Two corrections:** finding 40 says it is **already fixed by default** with
+  **Two corrections:** finding F40 says it is **already fixed by default** with
   `-DDSPLIB_REPRODUCE_BUGS` restoring the zero — that is the preamble's
   *deliberate-fix* form, not the *opt-in extension* the entry's fix class
   claims. And reachability is **legacy pumps only** (nothing in V.34/V.90/V.92
@@ -2356,7 +2356,7 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
   exactly. **D85 says the copies of `AGC_DEF_ALPHA` carry "16384, 1638" — in
   the object 1638 lives in BETA**, and ALPHA is 32604 in all three copies
   including the correct one. **Two self-consistent repairs exist and the entry
-  names one as if settled**: `alpha → 31130` (finding 30's, because
+  names one as if settled**: `alpha → 31130` (finding F30's, because
   `FPM_TONE_detect` writes `31130*x + 1638*y` longhand) or `beta → 164` (the
   object's own v21 sibling — though `relocscan` shows that pair is
   **unreferenced**). Someone acting on "opt-in extension" would write a number.
@@ -2368,7 +2368,7 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
   takes in the stop bit at word bit 0** — set in every V.21 character — so it
   is never zero and the `andb $0xdf,0x1(%edi)` at 0x74beb is dead. `& 3` where
   `& 2` was meant. Tier 2, and the framing is corroborated the strongest way
-  available: finding 75 decodes the object's own sequence words back to the
+  available: finding F75 decodes the object's own sequence words back to the
   V.8 octets `0xE0 0xC1 0x05 …`. **The FIRES TODAY grade overstates it**: the
   dead `and` executes on every call, but an *observable* difference needs a far
   end that omits V.21 from its CM, which is unusual — and D16, the authority,
@@ -2412,7 +2412,7 @@ shipped country is inside the sixteen-entry table**; only index 15 goes unused.
   in the object names the flag.** "Wrong way round" rests entirely on
   slmodemd's field name `DialModifierValidation` — a host word from a
   reimplemented header, **not the original author's**, and therefore outside
-  the register's own evidence order. Finding 52 applies exactly the right
+  the register's own evidence order. Finding F52 applies exactly the right
   discipline to the other two flags ("the names are what mislead, not the
   code") and then declines to apply it to this one. Per `CLAUDE.md` — *naming
   something wrongly is worse than leaving it padded* — **this should be a ⚠
@@ -2519,7 +2519,7 @@ The rest are not equally unattended either:
    not new entries.
 5. **Correct the four findings this pass convicted**, because a register
    correction that leaves the finding standing fixes the smaller half:
-   finding 1233's step 4 (D176), finding 231's `movzwl` (D135), finding 1020's
+   finding F1233's step 4 (D176), finding F231's `movzwl` (D135), finding F1020's
    correction being absorbed (D78), and D65's citation of D4 where D1 is meant.
 6. **Adopt "DEFECT, REACHABLE — NO FIX WARRANTED" as a register grade.**
    Fourteen entries currently carry a 🐛 and an implied to-do that nobody

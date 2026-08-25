@@ -238,7 +238,7 @@ main(void)
 
 			/*
 			 * This used to lose lock after 229 bits, and finding
-			 * 40 traced it to D4 -- FPM_div's out-of-range table
+			 * F40 traced it to D4 -- FPM_div's out-of-range table
 			 * read handing the AGC a zero gain, which silenced a
 			 * block and cost the demodulator its bit clock.
 			 *

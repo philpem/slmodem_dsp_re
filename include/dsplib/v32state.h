@@ -12,11 +12,11 @@
  * index into the standard, which is worth more than a set of invented
  * names would be.
  *
- * V.32 is not reconstructed -- one of the six build stamps in finding 135
+ * V.32 is not reconstructed -- one of the six build stamps in finding F135
  * belongs to its translation unit (V32FP_recreate, 15:48:07), so it exists
  * in the object and has simply not been reached yet.  Written down now
  * because the table costs nothing to read and would otherwise be
- * rediscovered.  See finding 145.
+ * rediscovered.  See finding F145.
  */
 
 #ifndef DSPLIB_V32STATE_H

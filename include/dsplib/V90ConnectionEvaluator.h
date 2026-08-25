@@ -14,7 +14,7 @@
  *
  * NOT POLYMORPHIC.  `nm` gives `D1` at 0x3e390 and `D2` at 0x3e380 and no
  * `D0`; GCC emits a deleting destructor only for a virtual class, so offset 0
- * is a real member and there is no vptr (finding 228).
+ * is a real member and there is no vptr (finding F228).
  *
  * THE OBJECT IS 0xbc = 188 BYTES, and that is an allocation and not a
  * displacement: `movl $0xbc,(%esp); call sysdep_malloc` at 0x1c47e inside
@@ -25,7 +25,7 @@
  *
  * WHAT `reset` SAYS ABOUT THE OBJECT.  Nineteen of its forty-eight stores are
  * copies out of the parameter block, and every one of those nineteen slots
- * has the ORIGINAL AUTHOR'S OWN NAME (findings 860-862, `tools/vparse.py`).
+ * has the ORIGINAL AUTHOR'S OWN NAME (findings F860-862, `tools/vparse.py`).
  * The field names below are taken from the parameter each field receives --
  * `retrainDetectDuration` holds `params->RETRAIN_DETECT_DURATION` and nothing
  * else assigns to it in anything reconstructed so far -- which is a
@@ -53,7 +53,7 @@
  * word block in `V90PreFilter.h` and the 0x558 named map in
  * `V90Parameters.h` -- and no translation unit may include both.  This header
  * is included by `V90Demodulator.h`, which pulls in the first; the .cpp picks
- * the second, because the names are the point.  Finding 1112.
+ * the second, because the names are the point.  Finding F1112.
  */
 class V90Parameters;
 
@@ -233,7 +233,7 @@ public:
 	 *
 	 * IT KEEPS ITS OFFSET NAME.  "How long the error has been large" is a
 	 * reading of what the arithmetic does, not the author's word for it,
-	 * and finding 226's rule is that a reading does not earn a name.
+	 * and finding F226's rule is that a reading does not earn a name.
 	 */
 	unsigned int word_10;
 	unsigned int word_14;
@@ -267,7 +267,7 @@ public:
 	 * and 0.6x of the same slot on the echo-RRN path -- and all three
 	 * BLOCK a rate change that has otherwise been earned.  It keeps its
 	 * offset name; "how long since the last decision" is a reading of the
-	 * arithmetic and finding 226's rule is that a reading does not earn a
+	 * arithmetic and finding F226's rule is that a reading does not earn a
 	 * name.
 	 *
 	 * +0x20 IS THE FADE CLOCK, read only at 0x3e706..0x3e754: the three
@@ -382,7 +382,7 @@ public:
 	 * to this one by its offset name and belong to other work.  A rename
 	 * here would be a nine-file edit whose only checkable part is that
 	 * nothing broke.  The evidence is recorded so that the pass which
-	 * owns those files can make it in one move; finding 7485.
+	 * owns those files can make it in one move; finding F7485.
 	 */
 	unsigned int word_78;		/* +0x78 copied to word_7c           */
 	unsigned int word_7c;		/* +0x7c                             */
@@ -500,7 +500,7 @@ public:
 	 * other work; renaming here would edit a file this batch does not own.
 	 * The two names are consistent -- `reset` initialises the threshold
 	 * from `PHASE4_ERROR_FOR_V34_FALLBACK` and `evaluatePhase4` replaces it
-	 * with `params->unnamed_434` (250.0f by default, finding 878) the first
+	 * with `params->unnamed_434` (250.0f by default, finding F878) the first
 	 * time it asks for a retrain, so the slot is the CURRENT threshold and
 	 * the parameter is only where it starts.
 	 *

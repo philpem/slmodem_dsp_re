@@ -3,7 +3,7 @@
  *
  * Eleven weak symbols in their own `.gnu.linkonce.t.*` sections, so as with
  * DspMath.h and SineWave.h the file name is a description and not a
- * translation unit's (finding 243).
+ * translation unit's (finding F243).
  *
  * ---------------------------------------------------------------------------
  * What they are for: V.90 sign-bit differential coding

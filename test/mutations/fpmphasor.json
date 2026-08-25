@@ -1,12 +1,12 @@
 [
  {
-  "note": "FPM_phasor's OUT-OF-DOMAIN behaviour: the quadrant is not masked, so it runs -4 .. 3 and the object reads four entries BELOW each of its two sign tables.  Deviation D392, findings 3588, 3620-3624 and 3700-3703."
+  "note": "FPM_phasor's OUT-OF-DOMAIN behaviour: the quadrant is not masked, so it runs -4 .. 3 and the object reads four entries BELOW each of its two sign tables.  Deviation D392, findings F3588, F3620-3624 and 3700-3703."
  },
  {
   "note": "WHAT THIS SET ADJUDICATES NOW, AND WHAT IT USED TO.  It used to adjudicate the WIDENING of `t_fpm_phasor`'s sweep from 0x8000 to 0x10000, against a source whose out-of-range reads landed wherever the linker put the neighbouring object: four entries were dead against the narrow sweep and all four were caught by the wide one.  The layout dependence is gone -- the eight out-of-range words are leading entries of `FPM_cos_sign_ext` and `FPM_sin_sign_ext` and the phasor indexes `ext[FPM_PHASOR_SIGN_BELOW + quad]` -- so the set now adjudicates the two claims that replaced it: that the widened sweep still catches a wrong INDEX, and that it catches a wrong WINDOW VALUE."
  },
  {
-  "note": "THE ENTRY THAT WAS RETIRED WITH THE LAYOUT.  `the sign tables are laid out cosine first` swapped the two definitions' declaration order, which used to swap their addresses and so swap what each read below itself.  Under the fix it changes nothing any caller can see, and a mutation that cannot be caught because the claim it attacks no longer exists is not a survivor worth recording -- it is a stale entry.  It is replaced by the two window-value mutations below, which attack the claim that DID replace it.  Finding 3703."
+  "note": "THE ENTRY THAT WAS RETIRED WITH THE LAYOUT.  `the sign tables are laid out cosine first` swapped the two definitions' declaration order, which used to swap their addresses and so swap what each read below itself.  Under the fix it changes nothing any caller can see, and a mutation that cannot be caught because the claim it attacks no longer exists is not a survivor worth recording -- it is a stale entry.  It is replaced by the two window-value mutations below, which attack the claim that DID replace it.  Finding F3703."
  },
  {
   "note": "AND WHAT IS STILL NOT HERE.  Putting the two tables back to `static const` was named in the old set as the strongest single mutation that could not be written, because `fpm_phasor.h` declares them `extern short` and the mutation would not compile -- a build failure is not a kill.  That is now moot rather than pending: nothing depends on their section, their binding or their addresses, so there is no claim left for such a mutation to attack.  They are `.data` globals because the object's are `D` and not `R`, which is symbol-table fidelity and not behaviour."

@@ -52,7 +52,7 @@
  * mangled names -- `V90CP::bitsToInfo(unsigned char)::alpha` and `::beta` --
  * so `bitsToInfo` carries state across calls.  Nothing here depends on that.
  * They hold the two counted blocks' bit lengths, seventeen to the entry:
- * `alpha` for `short_58` and `beta` for `buf`.  Finding 4363.
+ * `alpha` for `short_58` and `beta` for `buf`.  Finding F4363.
  *
  * THE MESSAGE IS SEVENTEEN-BIT FRAMES, and that is measured rather than
  * assumed.  `infoToBits` opens with seventeen ones at bits[0x00..0x10], and
@@ -113,7 +113,7 @@
  * exceptions are the ones the code itself settles: `nof_58[k]` is the bound
  * of the loop over `short_58[k]` and `nof_buf[k]` the bound of the loop over
  * `buf[k]`, in BOTH directions, which makes "how many entries" a measured
- * fact and not a reading.  Finding 3540.
+ * fact and not a reading.  Finding F3540.
  *
  * `bitsToInfo` HAS NOW BEEN READ AND IT NAMES NOTHING EITHER.  Its two
  * strings are a bounds check on `bits` and a bad-CRC line that names the
@@ -124,7 +124,7 @@
  * zeros -- and roles are what the comments below now carry.  The sibling
  * `V90MP` reached the same four roles from its own driver and kept
  * `byte_19`, `byte_1a`, `byte_1b` and `word_14`, so this is the precedent and
- * not a new caution.  Finding 4360.
+ * not a new caution.  Finding F4360.
  */
 
 #ifndef DSPLIB_V90CP_H
@@ -137,7 +137,7 @@
  * refuse to store when the cursor is above 0x2edf and print "not enouch
  * memory in the buffer" instead, so 0x2edf is the last index that fits and
  * 0xcb8 + 0x2ee0 is 0x3b98, which is exactly where `crc` begins.  Lower bound
- * meets upper bound, as for the class itself.  Finding 4361; this used to
+ * meets upper bound, as for the class itself.  Finding F4361; this used to
  * read "the modelling choice, not a measurement", which it was until
  * `bitsToInfo` was read.
  *
@@ -171,7 +171,7 @@
  * loops run to it.  See docs/deviations.md D390 -- which used to say that
  * `bitsToInfo`'s "not enouch memory in the buffer" was the guard that caught
  * it, and that is wrong.  That guard is on the BIT VECTOR's index, one layer
- * further out, and nothing guards this.  Finding 4361.
+ * further out, and nothing guards this.  Finding F4361.
  */
 #define V90CP_BUFENTS	(V90CP_BUFSIZE / 4)
 
@@ -200,8 +200,8 @@ public:
 	 * off the symbol.
 	 *
 	 * `reset` calls `resetDetector` and the compiler inlines it; the
-	 * constructor repeats the five stores instead.  Findings 1237 and
-	 * 4600 for why those two are spelled differently.
+	 * constructor repeats the five stores instead.  Findings F1237 and
+	 * F4600 for why those two are spelled differently.
 	 */
 	unsigned char *getBitVector(unsigned int &length);
 	void reset();
@@ -217,7 +217,7 @@ public:
 	 * is not mangled.  %edi is zeroed at entry and moved into %eax at both
 	 * `ret`s, and 0, 1, 2, 3, 4 and 5 all reach it.  Same mistake as
 	 * `evaluateCRC` above and as the sibling `V90MP::bitsToInfo`, in the
-	 * same class and for the same reason.  Finding 4360.
+	 * same class and for the same reason.  Finding F4360.
 	 *
 	 * It is the receive-side driver: one arriving bit per call, storing
 	 * into `bits` at `word_cac`, counting within the block in `word_cb0`,
@@ -307,7 +307,7 @@ public:
 	 * raises when the demodulator reports a CP and lowers when the second
 	 * section of a rate renegotiation begins.  The name stays the
 	 * offset's: what bits[0x21] means on the wire is not something this
-	 * object states.  Finding 4936.
+	 * object states.  Finding F4936.
 	 */
 	unsigned char byte_13;
 
@@ -409,7 +409,7 @@ public:
 	 *
 	 * so the seven values `evaluateInfo` decodes are a subset of the
 	 * fourteen the receiver walks, and 0, 1, 2, 4, 12 and 13 exist only
-	 * on this side.  Finding 4360.
+	 * on this side.  Finding F4360.
 	 */
 	unsigned int word_ca4;
 
@@ -456,7 +456,7 @@ public:
 	 * plain `shr`, which is the unsigned magic; a signed `% 6` needs the
 	 * sign correction the object does not encode.  Nothing anywhere in
 	 * the class forces signed, so `unsigned int` is the simpler source.
-	 * Finding 4362.
+	 * Finding F4362.
 	 */
 	unsigned int word_cac;
 
@@ -475,7 +475,7 @@ public:
 	 * `jl` plus a second test against zero.  Every other use is an
 	 * equality compare and says nothing, and no test can hold this --
 	 * the two readings agree over every value the field takes.  Finding
-	 * 4365.
+	 * F4365.
 	 */
 	unsigned int word_cb0;
 
@@ -521,7 +521,7 @@ public:
 	 * (1, 3 and 5 are not).  `js` on the idle test, so signed.
 	 *
 	 * WHAT IT IS A HOLD-OFF FOR is not stated anywhere in the object, so
-	 * the field keeps its offset for a name.  Finding 4360.
+	 * the field keeps its offset for a name.  Finding F4360.
 	 */
 	int word_3bbc;
 };

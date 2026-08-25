@@ -14,7 +14,7 @@
  *   qshift 12, high words        the data word is loaded zero-extended and
  *                                shifted arithmetically.  With V.22's shift
  *                                of 0 or 2 the two readings agree over every
- *                                input; at 12 they do not.  Finding 613's
+ *                                input; at 12 they do not.  Finding F613's
  *                                pattern.
  *   quad seeded negative,        the quadrant is masked as a 32-bit value and
  *   pmask 0xffff                 truncated to a short only for the NEXT
@@ -133,7 +133,7 @@ compare_ring(const struct fpm_smc_ring *a, const struct fpm_smc_ring *b,
 	/*
 	 * +0x0e was written down as padding when only the encoder had been
 	 * traced.  It is the CONSUMER's read cursor -- V22_PPS_filter drives
-	 * it (finding 1569) -- so this assertion is stronger than it was:
+	 * it (finding F1569) -- so this assertion is stronger than it was:
 	 * the producer must not disturb the consumer's position in the ring.
 	 */
 	diff_eq_int("ring ridx untouched by the encoder (%ld)", a->ridx,

@@ -9,7 +9,7 @@
  * reading `B103FP_create`'s 2151 bytes: build an object for each value of
  * each word and print what came out.  That is worth saying because the one
  * conclusion drawn from reading rather than measuring -- that `+0x04`
- * selected caller versus answer -- was wrong (finding 35).
+ * selected caller versus answer -- was wrong (finding F35).
  *
  * ---------------------------------------------------------------------------
  * `call_type` is the field that matters
@@ -29,7 +29,7 @@
  * The two oscillators are the whole frequency plan: each side mixes the pair
  * it *receives* down to 675/875 Hz, either side of the demodulator's 775 Hz
  * discriminator null.  One demodulator design serves both directions and only
- * the oscillator differs.  See findings 32 and 35.
+ * the oscillator differs.  See findings F32 and F35.
  */
 
 #include "dsplib/b103fp.h"

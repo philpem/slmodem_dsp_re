@@ -8,8 +8,8 @@
  * pseudorandom bytes and never with zeros, the whole object is compared with
  * `diff_eq_obj`, and the bytes from `sizeof` to the end of an over-large slot
  * are compared separately so a store past the object's end is a failure
- * rather than silence (findings 223, 224, 230).  The lifecycle pair needs
- * more than that and finding 1234 is what it needs; see the comment above
+ * rather than silence (findings F223, F224, F230).  The lifecycle pair needs
+ * more than that and finding F1234 is what it needs; see the comment above
  * `run_ctor`.
  *
  * WHAT THIS TEST HAS TO SEE THAT AN ORDINARY ONE WOULD NOT
@@ -30,7 +30,7 @@
  *
  * The rest of each setter is a diagnostic, and a diagnostic is invisible at
  * the shipped debug level.  So the sweep runs again with capture on and both
- * sides' levels raised, and the two transcripts are compared (finding 134's
+ * sides' levels raised, and the two transcripts are compared (finding F134's
  * problem, and the harness's answer to it).  That is what tests the format
  * string, the sign character, the integer part and the five fractional digits
  * -- none of which the object state can show.
@@ -486,12 +486,12 @@ run_enterphase3(void)
  * twelve arrays, a parameter block and a resampler.
  *
  * ONE ARENA, SHARED BY BOTH SIDES, AND A SNAPSHOT ROUND EACH CALL.  Finding
- * 1105's rule is that identical argument pointers give identical stored
+ * F1105's rule is that identical argument pointers give identical stored
  * pointers, and that is what makes `diff_eq_obj` usable on the object with no
  * field excluded.  But the arrays are OUTPUTS, and two writers into one buffer
  * would leave only the second one's work: so the arena is snapshotted, ours
  * runs, the result is copied away, the arena is restored, and the blob's runs
- * against the same starting bytes.  That is finding 805's shape applied to a
+ * against the same starting bytes.  That is finding F805's shape applied to a
  * single member instead of to a whole datapump block.
  *
  * WHAT THE ARENA HAS TO BE BIG ENOUGH FOR.  `reset` clears
@@ -546,7 +546,7 @@ static struct equ_arena arena, arena_save, arena_ours;
 #define ARENA_PARAMS ((V90Parameters *)arena.parm)
 #define ARENA_RSAMP  ((V90Resampler *)arena.rsamp)
 
-/* Varied bytes, never zeros (finding 230). */
+/* Varied bytes, never zeros (finding F230). */
 static void
 fill_arena(long trial)
 {
@@ -663,7 +663,7 @@ run_reset(void)
 
 				/*
 				 * The fill is GONE.  Two never-reset objects
-				 * compare equal (finding 1105), so the values
+				 * compare equal (finding F1105), so the values
 				 * the object must hold are asserted and not
 				 * only compared.
 				 */
@@ -911,7 +911,7 @@ run_enterchannelverification(void)
  * variant of each: C++ has no syntax for running a constructor over storage
  * that already exists, and `OURS = V90Equalizer(...)` would build a temporary
  * over uninitialised stack and copy it in, throwing away the seed the whole
- * fixture rests on (findings 223, 224).  The blob holds C1 and C2 as two
+ * fixture rests on (findings F223, F224).  The blob holds C1 and C2 as two
  * identical copies at different addresses and our compiler emits one function
  * under both names, so both names are called or half the pair is untested.
  *
@@ -1345,7 +1345,7 @@ run_ctor(void)
 						 * other recycled something
 						 * larger.  It read 132
 						 * against 140 for two equal
-						 * allocations.  Finding 1353.
+						 * allocations.  Finding F1353.
 						 */
 						diff_eq_int("block size (%ld)",
 							    (long)
@@ -2812,7 +2812,7 @@ run_enterphase4(void)
  * transcript comparison is the test and the object comparison is the backstop.
  *
  * WHAT THE TRANSCRIPT CANNOT SAY OUT LOUD.  The capture is ciphertext (finding
- * 2136), so `strstr` finds nothing in it.  The empty-filter case -- where the
+ * F2136), so `strstr` finds nothing in it.  The empty-filter case -- where the
  * minimum is printed as the 0x10000 it was initialised to -- is checked in one
  * extra trial with `dsplib_encode_plain` set, which turns OUR side's output
  * readable and leaves the reference's encoded.  That trial compares everything
@@ -3177,7 +3177,7 @@ run_converttommx(void)
  * spellings that force the narrowing elsewhere were tried and neither moved
  * GCC 13; `tools/gccdiverge.json` was the other candidate and is worse here,
  * because `tools/mutate.py` does not consult it and a binary with a failing
- * check takes the whole mutation suite down with it.  Finding 2150.
+ * check takes the whole mutation suite down with it.  Finding F2150.
  */
 #if defined(__GNUC__) && __GNUC__ < 4
 #define V90EQU_SUM_PRECISION_TESTABLE 1

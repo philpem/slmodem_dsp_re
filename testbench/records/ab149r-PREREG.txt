@@ -1,10 +1,10 @@
 PRE-REGISTRATION -- #149 bad-block-run threshold, REPLICATION
 Written 2026-08-14 before any call of this batch was placed.
 
-WHY A REPLICATION.  The first batch (records/ab149-PREREG.txt, finding 1953)
+WHY A REPLICATION.  The first batch (records/ab149-PREREG.txt, finding F1953)
 gave p=0.036 on its pre-registered outcome and the change looked settled.
 Re-scoring it with outcomes that exclude fewer calls -- chosen to maximise
-RETENTION, not effect -- gave p=0.090 and p=0.085 (finding 1955).  The smallest
+RETENTION, not effect -- gave p=0.090 and p=0.085 (finding F1955).  The smallest
 p came from the outcome that discarded the most data, which is the signature of
 a fragile result.  The effect SIZE was consistent across all three scorings (the
 median handshake count roughly halves), but that is equally what a lenient

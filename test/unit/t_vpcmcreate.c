@@ -11,7 +11,7 @@
  * all of that up by hand is `test/harness/v90demfix.h` again with the V.92 and
  * K56flex halves added, and that was recorded as the blocker.
  *
- * IT DOES NOT HAVE TO BE STOOD UP.  Findings 800-806 measured that the blob's
+ * IT DOES NOT HAVE TO BE STOOD UP.  Findings F800-806 measured that the blob's
  * own constructor is aliasable and that a blob-constructed object is a VALID
  * differential fixture -- two blob-code pointers in 265,520 bytes, both of them
  * `struct v34_object` scrambler hooks this tree has already reconstructed.  So
@@ -22,11 +22,11 @@
  *
  * and `VPcmV34Create` is then driven on it.
  *
- * AND FINDING 803'S CONGRUENCE PROBLEM DOES NOT ARISE, because there is only
+ * AND FINDING F803'S CONGRUENCE PROBLEM DOES NOT ARISE, because there is only
  * ONE graph.  Two constructions come back at 125 different addresses and every
  * pointer field then differs for a reason that is not a defect; this file
  * builds one and runs both sides on the SAME memory at the SAME addresses,
- * finding 805's three-pass shape applied to a constructor:
+ * finding F805's three-pass shape applied to a constructor:
  *
  *     snapshot every live region
  *     run OURS      -> copy every region away
@@ -43,7 +43,7 @@
  * THE COMPARISON IS THE WHOLE HEAP GRAPH, not a hand-listed set of
  * sub-objects.  `harness_alloc_live_set` enumerates every live allocation with
  * its size, so a store into a region this file could not have named is a
- * failure rather than a silence.  That is the one thing finding 806's
+ * failure rather than a silence.  That is the one thing finding F806's
  * uncommitted probe needed a malloc interposer for and this harness already
  * has.
  *
@@ -91,7 +91,7 @@ extern int ref_VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
  * test of a constructor needs before its verdict can mean anything: that the
  * whole 125-region heap graph can be snapshotted and RESTORED with the restore
  * checked rather than assumed; that the call CHANGES the graph, so an agreeing
- * comparison is not two untouched images (finding 805's vacuous passes 0 and
+ * comparison is not two untouched images (finding F805's vacuous passes 0 and
  * 1); and that the comparison REPORTS a single flipped byte and goes quiet
  * when it is put back.
  *
@@ -102,10 +102,10 @@ extern int ref_VPcmV34Create(void *obj, int side, int arg3, void *dpRuntime,
  * different implementations on its two sides.
  *
  * FIVE ARGUMENTS, not the four the fixture's own instructions said to declare:
- * that sentence predated finding 1119, which found the fifth by reading the
+ * that sentence predated finding F1119, which found the fifth by reading the
  * five sites that touch `0x50(%esp)` and the five slots `vpcm_create` pushes.
  *
- * FINDING 803'S CONGRUENCE PROBLEM DOES NOT ARISE and no HEAP pointer is
+ * FINDING F803'S CONGRUENCE PROBLEM DOES NOT ARISE and no HEAP pointer is
  * excluded.  125 heap regions coming back at 125 different addresses, so that
  * every pointer-valued field differs for a reason that is not a defect, is
  * what happens when TWO constructions are compared.  This file builds ONE and
@@ -195,7 +195,7 @@ static int root_idx = -1;
  * into the graph.  Ours point at our copies and the blob's at the blob's
  * `ref_` aliases, because both copies are linked into the same test binary and
  * they are at different addresses.  Nothing about that is a defect: it is
- * finding 802's measurement arriving from the other direction, where two
+ * finding F802's measurement arriving from the other direction, where two
  * blob-code pointers were counted in a blob-constructed graph and these are
  * the same kind of word counted in an our-code one.
  *
@@ -750,7 +750,7 @@ one_case(int side, int sessionType, int arg3, int variant, int seed, long tag,
 	graph_save_ours();
 
 	/*
-	 * ANTI-VACUITY.  Finding 805's passes 0 and 1 changed zero bytes and
+	 * ANTI-VACUITY.  Finding F805's passes 0 and 1 changed zero bytes and
 	 * the probe correctly called them vacuous: "it ran and did not fault"
 	 * on a constructed object is not a result.  The call has to have
 	 * written something before two after-images agreeing means anything.
@@ -926,7 +926,7 @@ run_transcripts(void)
 }
 
 /*
- * THE COMPARISON MADE TO FAIL.  Finding 805's pass 3 is the model: run ours,
+ * THE COMPARISON MADE TO FAIL.  Finding F805's pass 3 is the model: run ours,
  * poke one byte of the graph, and require the comparison to say so.  Without
  * this the whole file could be comparing an image against itself.
  */
@@ -980,7 +980,7 @@ run_virgin_vs_reinit(void)
 
 	/*
 	 * THE SIDE HAS TO MATCH THE ONE `create` USED, or this measures
-	 * finding 803's fourteen caller-configured bytes instead of the
+	 * finding F803's fourteen caller-configured bytes instead of the
 	 * re-initialisation.  `vpcm_create` does `test %edx,%edx / sete` on
 	 * `caller`, so a caller of 1 gives a side of 0.
 	 */

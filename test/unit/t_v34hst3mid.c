@@ -17,11 +17,11 @@
  *   1  RUN THE SAME CASE WITH THE BLOB ON BOTH SIDES.  `v34hs_ours(0)`
  *      puts it back.  A green ours-versus-blob run means nothing if the same
  *      seed is green blob-versus-blob for a reason of the fixture's, and this
- *      is finding 290's whole point about what the harness proves.
+ *      is finding F290's whole point about what the harness proves.
  *
  *   2  REACH THE PATH IT CLAIMS TO.  Six of table 3's arms bump one counter
  *      at +0xaa78 and test it against one or two exact thresholds, and the
- *      fixture's own fill sends all six down the same branch -- finding 290
+ *      fixture's own fill sends all six down the same branch -- finding F290
  *      measured them as one behaviour with one signature.  A sweep that never
  *      seeds the counter tests the increment and NONE of the thresholds, and
  *      swapping one arm's constants for another's could not fail.  So each
@@ -32,7 +32,7 @@
  *      unwritten path it takes and returns; `check` fails if any trial hit
  *      one, so a case that quietly did nothing is a failure and not a pass.
  *
- * THE TXSTATE IS PART OF THE FIXTURE, not a don't-care (finding 288): most of
+ * THE TXSTATE IS PART OF THE FIXTURE, not a don't-care (finding F288): most of
  * these arms end by jumping to the once-per-block transmit dispatch, so a
  * case driven with a txstate whose table-2 arm does nothing is a case tested
  * against silence.  SSEG is the choice here, as in `t_v34hsstep.c`, and it is
@@ -61,7 +61,7 @@
 /*
  * The txstate every case below is driven with, and the counter the six timer
  * arms share.  Prefixed, because four batches are writing `v34handshak` at
- * once and finding 325 is what one shared macro name cost.
+ * once and finding F325 is what one shared macro name cost.
  */
 #define T3MT_TXSTATE	V34HS_SSEG	/* 18 */
 #define T3MT_COUNTER	0xaa78		/* short */
@@ -162,7 +162,7 @@ static int saw_below, saw_toggle, saw_force, saw_trace, saw_fsk;
  * What one trial seeds beyond the state words.  A struct rather than eight
  * arguments because the tail's branches want five of them set at once, and
  * because a trial that leaves a field alone has to be visibly different from
- * one that sets it to zero -- finding 230's rule: zero is the value that
+ * one that sets it to zero -- finding F230's rule: zero is the value that
  * makes an unwritten field look deliberate.
  */
 struct seed {
@@ -188,7 +188,7 @@ struct seed {
 	 * Arm 47's two entry guards and the two fields its record depends on,
 	 * and arm 63's three.  Each is a separate `set_` so that "left as the
 	 * fixture filled it" and "set to zero" are different trials --
-	 * finding 230 again, and arm 47's second guard is satisfied by ZERO,
+	 * finding F230 again, and arm 47's second guard is satisfied by ZERO,
 	 * so a trial that cannot tell the two apart proves nothing.
 	 */
 	int	set_sr;		short	sr;
@@ -209,7 +209,7 @@ struct seed {
 	 * WITHOUT THIS THE SET-UP PATH TESTS THE ERROR ARMS: the fixture's
 	 * pseudorandom halfwords are not a V.34 rate, `V34SetupModulator`
 	 * prints "invalid baudrate" and returns, and "63 sets the transmitter
-	 * up" degrades to "63 reached a diagnostic".  Finding 277's question,
+	 * up" degrades to "63 reached a diagnostic".  Finding F277's question,
 	 * asked of the modulator rather than of a comparison.
 	 */
 	int	set_rate;	short	baudrate, carrier, preemp;
@@ -217,7 +217,7 @@ struct seed {
 	 * Arms 49's, 50's and 51's.  `filt` is the field three of the four
 	 * thresholds in 49 and 50 are measured from, so a suite that leaves
 	 * it as the fixture filled it is a suite whose thresholds are one
-	 * unknown constant each -- which is exactly the vacuity finding 288
+	 * unknown constant each -- which is exactly the vacuity finding F288
 	 * warns about, in the form it takes for these two arms.
 	 *
 	 * `isshort` is applied AFTER `errrec`, because `errrec` fills +0xabcc
@@ -238,7 +238,7 @@ struct seed {
 	 * `det` seeds the detector itself: without it `tone_detect` returns
 	 * whatever the fill happens to make it return, and "59 retrains when
 	 * the detector asserts" is a claim about an unknown.  Both answers are
-	 * driven -- finding 277's question, asked of a called function.
+	 * driven -- finding F277's question, asked of a called function.
 	 */
 	int	set_f358a;	short	f358a;
 	int	set_f19e;	short	f19e;
@@ -259,7 +259,7 @@ struct seed {
 	 * land somewhere a comparison can read has to aim it into the object
 	 * itself -- `v34hs_poke_self_ptr` and never `v34hs_poke_int`, because
 	 * the two objects are at two addresses and one address written into
-	 * both is exactly the asymmetry findings 319-322 are about.
+	 * both is exactly the asymmetry findings F319-322 are about.
 	 *
 	 * The record at +0xa94c is seeded with sentinels FIRST and the aimed
 	 * one second, so `rec_at` may name either and a trial that aims
@@ -423,8 +423,8 @@ apply(const struct seed *s)
 		 * chain lands on the same object.  Nine varied shorts across
 		 * +0x108..+0x118 is what makes the pointer a claim: they
 		 * differ from each other, so a window shifted by one short is
-		 * a different window.  Finding 230's rule, in the form
-		 * finding 277 gives it -- values can be varied and still all
+		 * a different window.  Finding F230's rule, in the form
+		 * finding F277 gives it -- values can be varied and still all
 		 * lie in the set where the operation is the identity.
 		 */
 		v34hs_poke_short(T3MT_FSKINHIBIT, 0);
@@ -458,7 +458,7 @@ blob_said(const char *what)
  * A pointer at one of the thirty-five skipped offsets that points OUTSIDE
  * both arenas is a library table, and side A holds ours while side B holds
  * the blob's -- two addresses of two copies, which no address comparison can
- * tell from two different tables (finding 324).  `v34hs_compare` therefore
+ * tell from two different tables (finding F324).  `v34hs_compare` therefore
  * cannot see an arm that picks `scale2800` where the object picks
  * `scale2400`, and six such mutations survived until this existed.
  *
@@ -539,7 +539,7 @@ trial_seeded(short mst, const struct seed *s, int ours, long tag)
  * THE MOTION GUARD IS NOT OPTIONAL.  Every one of these arms writes at least
  * the counter, so a step that wrote nothing is a step that never reached the
  * arm; without this an entry that returned early would pass every byte
- * comparison in the file.  Finding 223 records the same shape from the other
+ * comparison in the file.  Finding F223 records the same shape from the other
  * direction: two objects agree when neither has moved.
  */
 static void
@@ -901,7 +901,7 @@ micro47(void)
  * +0x3592 IS EXCLUDED FROM THE BYTE COMPARISON and nothing else is.  It holds
  * the value the case was entered with on any path that does not overwrite it,
  * so including it would call the two cases different for the one reason that
- * cannot be evidence -- finding 290, which is also why `observe` hashes only
+ * cannot be evidence -- finding F290, which is also why `observe` hashes only
  * bytes that CHANGED and hashes the byte's NEW value: 47 -> 41 and 56 -> 41
  * contribute the same pair, so the signature is comparable as it stands.
  *
@@ -1639,7 +1639,7 @@ micro59(void)
 		 * AND THE CARRIER TABLE IT SELECTED, by what it points at:
 		 * side A holds ours and side B the blob's, so the addresses
 		 * differ for ever and only the contents are comparable
-		 * (finding 324).  `f1ba` shorts twice over is the whole table.
+		 * (finding F324).  `f1ba` shorts twice over is the whole table.
 		 */
 		same_table("59 selects the 1800-Hz carrier table",
 			   T3MT_RX_CARRIER, 2 * 0x10, tag);
@@ -1750,7 +1750,7 @@ micro59(void)
  * FIRST threshold -- 0x28 in 49 and 0x32 in 50 -- is a literal.  A suite that
  * leaves +0xaa7c as the fixture filled it therefore tests one arbitrary number
  * per arm and cannot fail if the two arms' constants are exchanged, which is
- * finding 288's group-D vacuity in the form these two take.  So every trial
+ * finding F288's group-D vacuity in the form these two take.  So every trial
  * below sets it, and the two families are driven at two different values so
  * that "threshold" and "constant" are separable.
  *
@@ -1796,7 +1796,7 @@ reset_family(short mst, const struct resetcase *c, int n, const char *msg,
 		 * The thirteen words the reset clears, filled with varied
 		 * non-zero values: `v34handshakinit` already leaves several of
 		 * them zero, and a clear of a word that is already zero is a
-		 * claim no comparison can fail (finding 230).
+		 * claim no comparison can fail (finding F230).
 		 */
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		s.set_fsk = 0;		/* the demodulator must not move sr */
@@ -2764,7 +2764,7 @@ micro55(void)
 			    v34hs_peek_short(1, T3MT_F3588) & 1,
 			    ar[i].armed ? 1 : (ar[i].f3588 & 1), tag);
 		/*
-		 * `v34handshakinit` CLEARS THE COUNTER ITSELF (finding 375),
+		 * `v34handshakinit` CLEARS THE COUNTER ITSELF (finding F375),
 		 * so a step whose second reset ran comes back with 0 where an
 		 * ordinary one comes back with the incremented value.
 		 */
@@ -2844,7 +2844,7 @@ micro55(void)
  * whole halfword zero.
  *
  * AND THE COUNTER IS READ THREE TIMES.  The third read is the one that can be
- * seen: `v34handshakinit` zeroes +0xaa78 itself (finding 375), so a step whose
+ * seen: `v34handshakinit` zeroes +0xaa78 itself (finding F375), so a step whose
  * block 2 takes the branch that calls it comes back with 0 and cannot reach
  * block 3, while the branch that does not call it comes back with the value it
  * went in with.
@@ -3102,7 +3102,7 @@ micro58(void)
 		/*
 		 * THE COUNTER IS READ A THIRD TIME AFTER THE RESET.  On the
 		 * branch that calls `v34handshakinit` the counter comes back
-		 * zero, because that function clears it (finding 375), and
+		 * zero, because that function clears it (finding F375), and
 		 * every threshold below is then out of reach; on the branch
 		 * that does not, it still holds the value it went in with.
 		 */
@@ -3149,7 +3149,7 @@ micro58(void)
 					: V34HS_RX_PHASE1_CALL, tag);
 		/*
 		 * AND IT STORES THE CONSTANT 4, which is the other half of
-		 * finding 375's split: +0x3588 is seeded ZERO on every row
+		 * finding F375's split: +0x3588 is seeded ZERO on every row
 		 * that fires, so `|= 1` would leave 1 and this leaves 4.
 		 */
 		diff_eq_int("58's first reset stores 4 into +0x3588, not bit 0",
@@ -3311,7 +3311,7 @@ txblock_paths(void)
  * ends of the range test and the receiver-idle route.  So five of these
  * trials now expect `T3M_WRITTEN` and are held by a full object comparison
  * instead, and a range constant off by one moves the step to a different arm
- * rather than to a different code.  Finding 551.
+ * rather than to a different code.  Finding F551.
  *
  * Table 2's last arm landed the same way (591) and took the sixth trial with
  * it: `T3M_UNWRITTEN_TBL2_ARM` is now unreachable, joining the three codes
@@ -3398,7 +3398,7 @@ guards(void)
 	 * 0x653e4 is `t_v34hsrx4.c`'s arm now.  Both stay rather than being
 	 * deleted, because "this rxstate does not reach table 3" is the claim
 	 * the lines were making and that claim is still true; what changed is
-	 * only where each goes instead.  Findings 717, 549 and 731.
+	 * only where each goes instead.  Findings F717, F549 and F731.
 	 */
 	s = plain;
 	guard(V34HS_TX_PHASE3_ANS, &s, V34HS_RX_RECEIVE, T3M_WRITTEN, tag++);
@@ -3408,7 +3408,7 @@ guards(void)
 	 * The receiver's first halfword.  `v34hs_route` leaves it at 6; at 5
 	 * the once-per-block dispatch runs instead -- 0x629f1 is `jle 62ae3`
 	 * and 0x62ae3 reads the transmit state for 0x62af1, so this is the
-	 * BLOCK route and not an idle return (finding 549).  `<= 5` and `< 5`
+	 * BLOCK route and not an idle return (finding F549).  `<= 5` and `< 5`
 	 * are the two readings and this is the trial that separates them: at
 	 * 5 the step must do what the block dispatch does, and the object
 	 * comparison is what says it did.
@@ -3457,7 +3457,7 @@ guards(void)
 	 * makes that a differential comparison rather than a claim about a
 	 * guard.  It terminates because `T3MT_TXSTATE` is 18 SSEG, one of the
 	 * nineteen, and an arm that transmits advances the cursor the loop
-	 * test reads.  Finding 712.
+	 * test reads.  Finding F712.
 	 */
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
@@ -3481,7 +3481,7 @@ guards(void)
 	 * detector and then runs exactly the code the cleared gate runs.  So
 	 * what this checks is no longer which guard fired but that the whole
 	 * step still agrees with the blob's, and `t_v34hsfsk.c` drives the arm
-	 * itself.  Finding 721.
+	 * itself.  Finding F721.
 	 */
 	v34hs_setup(0);
 	v34hs_route(V34HS_ROUTE_RXCHAIN, 0);
@@ -3530,7 +3530,7 @@ main(void)
 	/*
 	 * WHAT THE TRIALS REACHED.  Each of these is a branch of an arm, and
 	 * a suite that never took one is a suite in which that branch's
-	 * constants are free.  Findings 247 and 262 are two checks in this
+	 * constants are free.  Findings F247 and F262 are two checks in this
 	 * tree that could not be satisfied by any input and failed loudly;
 	 * these can be, and the trials above are chosen so that they are.
 	 */

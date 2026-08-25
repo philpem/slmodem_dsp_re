@@ -8,7 +8,7 @@
  * batch with real weight to make, and the two facts it recorded -- the flag at
  * +0x30, the two phase pointers at +0x1dc and +0x1e0 -- are unchanged below.
  *
- * THE SIZE IS SETTLED AT 0x298, AND NOT BY A DISPLACEMENT SCAN.  Finding 268
+ * THE SIZE IS SETTLED AT 0x298, AND NOT BY A DISPLACEMENT SCAN.  Finding F268
  * measured the scan's answer for this class as 0x28230 and showed it was a
  * scaled index into a table rather than an offset off `this`.  The oracle is
  * the allocation: `V90Modem`'s constructor reads
@@ -19,7 +19,7 @@
  * -- 0x298 bytes, handed to the constructor, and stored at V90Modem+0x04,
  * which is the `demodulator` V90SessionFlag.h already had.  `enterPhase3`'s
  * largest displacement is the four-byte read at +0x294, ending at 0x298, and
- * that was not used to derive it.  Finding 291.
+ * that was not used to derive it.  Finding F291.
  *
  * THE FIELD MAP BELOW IS THE CONSTRUCTOR'S, NOT `enterPhase3`'s.  A 448-byte
  * method touches a dozen offsets; the 1002-byte constructor builds or stores
@@ -40,7 +40,7 @@
  *     +0x1e8 Descrambler<unsigned char,int>  0x20  ends 0x208, a field
  *     +0x210 V90SpectralVerifier             0x2c  ends 0x23c, a field
  *
- * Data member names are invented (finding 226) except where a diagnostic or a
+ * Data member names are invented (finding F226) except where a diagnostic or a
  * mangling supplies one.  Offsets nothing in wave 2 explains keep `word_`,
  * `byte_` and `pad_` names rather than being guessed into meaning.
  */
@@ -87,7 +87,7 @@
  * describes cost real time; read it for that and not for a restriction to
  * work around.  CLAUDE.md's own rule about a paragraph that states a live
  * defect -- check it against the tool before repeating it -- and finding
- * 6402's shape a second time.
+ * F6402's shape a second time.
  *
  * THE RESAMPLER AT +0x094 IS A `V90Resampler` AND HAS TO BE DECLARED AS ONE.
  *
@@ -104,7 +104,7 @@
  *
  * `V90Resampler.h` reaches for the NAMED `V90Parameters` map and this header
  * already carries the BLOCK form, which V90PreFilter.h above defines -- finding
- * 1112, the duplication that is a wart and not a design.  The guard is
+ * F1112, the duplication that is a wart and not a design.  The guard is
  * therefore CLAIMED here so that the second definition never arrives.  That is
  * safe and it is not a new restriction: every translation unit that includes
  * this header already had the block form and already could not include
@@ -193,7 +193,7 @@ public:
 	 * D1/D2 at 0x1ad70 and 0x1b010 (669 B each).  The whole of both is in
 	 * src/pump/v90/V90Demodulator.cpp; the argument names here are the
 	 * mangling's types with invented spellings, since a parameter's name is
-	 * no more recoverable than a data member's (finding 226).
+	 * no more recoverable than a data member's (finding F226).
 	 *
 	 * THE BLOCK THIS COMMENT USED TO CARRY IS GONE AND WAS RIGHT WHEN IT
 	 * WAS WRITTEN.  It said the pair was blocked on `V90Phase4Modulator`
@@ -333,9 +333,9 @@ public:
 	 * prints as `isDataState`.  So 1 is phase 3, 3 is the data state, 5 is
 	 * channel verification, and testing for 1 rather than for non-zero is
 	 * the blob's and matters -- any other value does NOT suppress
-	 * `enterPhase3`'s work.  The name is invented either way (finding 226)
+	 * `enterPhase3`'s work.  The name is invented either way (finding F226)
 	 * and is left as it is rather than renamed under eight parallel
-	 * worktrees; finding 1273.
+	 * worktrees; finding F1273.
 	 */
 	unsigned int inPhase3;
 
@@ -399,7 +399,7 @@ public:
 	 * `ResamplerTimingOffset` base plus 0x68 bytes of `pad_e0` until the
 	 * lifecycle pair was written; see the guard claim at the top of this
 	 * file for why that stopped working and what it costs to fix.  Finding
-	 * 228 is why a base at offset 0 is what a call on the derived object's
+	 * F228 is why a base at offset 0 is what a call on the derived object's
 	 * address looks like, which is still how `enterPhase3` reaches
 	 * `setTimingOffset` here.
 	 */
@@ -568,7 +568,7 @@ public:
 	 * breath -- a field this tree already names -- and `exitPhase3`
 	 * hands it to `V90Phase4Demodulator::reset` as that member's fourth
 	 * argument, which lands in `V90Phase4Demodulator::quickConnect`,
-	 * named in finding 7472 from the format string that prints it.
+	 * named in finding F7472 from the format string that prints it.
 	 * Neither reading knew about the other, which is what took this off
 	 * usage inference and onto CLAUDE.md's rule 2.
 	 *

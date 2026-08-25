@@ -12,7 +12,7 @@ keep a far better record than that and nobody has ever read it:
            and the line statistics it trained on.  On a USR Courier: the link
            diagnostics block, which lists RECEIVE and TRANSMIT rates
            SEPARATELY -- and an asymmetric V.34 link is exactly what this
-           bench is trying to measure (finding 1466).
+           bench is trying to measure (finding F1466).
     ATI4   the active configuration on a Rockwell; the stored profile on a USR
     ATS86? Rockwell only: why the last call ended.  0 normal, 4 loss of
            carrier, 5 V.42 negotiation failed, 9 no common protocol, 12 the
@@ -47,7 +47,7 @@ QUERIES = ["ATI6", "ATI4", "ATI3", "ATS86?", "ATS91?", "ATI11", "AT&V1"]
 # a modem with no diagnostics rather than a query we never sent.  &V1 gives
 # TERMINATION REASON, LAST/HIGHEST TX and RX rate, which caught a link
 # reaching 19200 and collapsing to 4800 on a retrain failure while the
-# CONNECT string said 14400 (finding 1916).
+# CONNECT string said 14400 (finding F1916).
 
 
 

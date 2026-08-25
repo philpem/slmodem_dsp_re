@@ -82,7 +82,7 @@ static const unsigned short FPM_div_table[FPM_DIV_TABLE_REAL + 1] = {
 	 * The original reads FPM_xor_table[0] here, which is 0, so every
 	 * denominator that normalises to a mantissa of 0xff80 or above gets a
 	 * reciprocal of ZERO.  That is not theoretical: it silences an AGC
-	 * block and drops a Bell 103 connection (finding 40).
+	 * block and drops a Bell 103 connection (finding F40).
 	 *
 	 * 16384 is the value the table's own generator produces:
 	 *     trunc(2^30 / ((128 + 0x80) * 0x100)) = 2^30 / 65536 = 16384

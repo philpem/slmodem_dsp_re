@@ -55,7 +55,7 @@ Chasing it found a table index that runs one past the end for 0.39% of
 denominators and returns a zero reciprocal, which collapses the AGC gain. The
 blob does it too, so every differential test agreed with it perfectly.
 
-**Finding 87 — the transmitter's `consumed` is not a cursor increment.**
+**Finding F87 — the transmitter's `consumed` is not a cursor increment.**
 `v23FP_tx_progress` reports bits *finished*; a bit still in flight has already
 been taken from the caller's buffer and is not counted. A caller that advances
 a cursor by `consumed` re-supplies the held bit and sends it twice. V.23

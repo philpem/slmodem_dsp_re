@@ -5,16 +5,16 @@
  * `v34handshak` is 61,541 bytes and is not one unit.  Table 1, the jump table
  * at `.rodata+0x2da0`, is read INSIDE the per-sample loop at 0x62950 and
  * indexed by `txstate - 5`; nineteen of its eighty-two entries have a target
- * of their own and fifty-seven are the loop bottom (finding 287).  Each arm
+ * of their own and fifty-seven are the loop bottom (finding F287).  Each arm
  * is one dispatch case, and each is reconstructed and tested on its own --
  * see docs/v34handshak.md for why the function is taken this way and
  * test/unit/t_v34hstx1.c for how one arm is compared against the blob.
  *
  * Six of them -- 65, 71, 78, 81, 85 and 86 -- are the ones that write nothing
- * below +0x234 (finding 323).  Then 60, 70, 18 and 51, the smallest of what
+ * below +0x234 (finding F323).  Then 60, 70, 18 and 51, the smallest of what
  * was left, at 34, 137, 152 and 285 bytes of level-0 body; those four DO write
  * below +0x234 -- 70 writes `rate_now` and `rate_want` at +0x228 -- so finding
- * 323's "six" is a statement about the first six and not about this file.  And
+ * F323's "six" is a statement about the first six and not about this file.  And
  * then 19, 20 and the entry 5, 54 and 74 share, at 568, 602 and 719 bytes.
  * And then 69 `EXMIT` and the entry 64 `JTXMIT` and 68 `J1TXMIT` share, at
  * 823 and 892 bytes.  And then 67 `XMITMP` at 2,024, which is the largest
@@ -55,7 +55,7 @@
  * 0x6821d, 0x68271, 0x68282, 0x6824f, 0x68260 and 0x684c6.  None of those
  * prints is reconstructed, so these functions are faithful at debug level 0
  * -- which is what the library ships (`dsplibs_debug_level` is zero) and what
- * `t_v34hstx1.c` tests at.  Finding 341.
+ * `t_v34hstx1.c` tests at.  Finding F341.
  */
 
 #ifndef DSPLIB_V34HSTX1_H
@@ -97,7 +97,7 @@ enum v34tx1_exit {
  * commit it was.  0x66eff's block, the last of 66's exclusive set, ends in an
  * unconditional `jmp 66f3d` at 0x66fe4 -- it does NOT fall through into
  * 0x66fe9, which is 86's echo-adaptation block, so landing 66 reconstructed
- * nothing of 86's and retired none of finding 343's cost.  66's own
+ * nothing of 86's and retired none of finding F343's cost.  66's own
  * completion at 0x62f22 rejoins the loop like every other arm here.
  */
 
@@ -120,7 +120,7 @@ enum v34tx1_exit {
  *
  * 0x6430c IS PART OF 20 AND NOT OF ITS REJOIN.  20's two counting paths pass
  * through it and bump f25c0; the path that ends the segment leaves through
- * 0x63da2, which does not.  86 rejoins through 0x6430c as well (finding 340).
+ * 0x63da2, which does not.  86 rejoins through 0x6430c as well (finding F340).
  */
 
 /*

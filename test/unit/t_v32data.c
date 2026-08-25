@@ -27,7 +27,7 @@
  * `PPSv32_CFG` is copied into this fixture's configuration rather than
  * invented: phases 10, step 3, mapped 1, scale 131072, coeffs 120.  The
  * COEFFICIENTS and MAPS are ours and are deliberately non-degenerate --
- * finding 3574 is three mutations that survived because a real V.32 bank
+ * finding F3574 is three mutations that survived because a real V.32 bank
  * repeats two entries and zeroes a third.
  */
 
@@ -177,7 +177,7 @@ enc_common(int slot, struct v32_smc *smc, struct v32_symout *out, short *data,
 	elog.data = data;
 	elog.count = count;
 
-	/* A slot mark in a COMPARED byte; see t_v17data.c and finding 3509. */
+	/* A slot mark in a COMPARED byte; see t_v17data.c and finding F3509. */
 	out->buf[0] = (short)(0x0700 + (slot & 0xf));
 
 	for (k = 0; k < count; k++) {

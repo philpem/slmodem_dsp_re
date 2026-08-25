@@ -21,7 +21,7 @@
  *                      neither side wrote is the archetypal vacuous pass.
  *                      `-fno-lifetime-dse` is in CXXFLAGS, so a store to
  *                      *this in a destructor really does survive and really
- *                      is caught here (finding 1224).
+ *                      is caught here (finding F1224).
  *
  *   run_mp_reset       the same six stores as the constructor, at 0x1f3e0
  *                      rather than 0x1f410.  Both are driven, so the second
@@ -53,7 +53,7 @@
  *                      on a group and not, that reach 253 (where the padding
  *                      overwrites the length field it was reading) and that
  *                      pass 0xe6 (where it overwrites the CRC register).  It
- *                      asserts finding 1386's defect: the type-zero arm pads
+ *                      asserts finding F1386's defect: the type-zero arm pads
  *                      from 0x45 and destroys the CRC it has just written.
  *
  *   run_mp_roundtrip   pack then unpack, and require the message to come back.
@@ -96,7 +96,7 @@
  * varied pseudorandom bytes and are NEVER zeroed; the slot is 64 bytes longer
  * than the object and the tail is compared against the seed on both sides; and
  * every block asserts that the call changed something and that it did not
- * change it to the same thing on every trial (findings 223, 224, 230).
+ * change it to the same thing on every trial (findings F223, F224, F230).
  */
 
 #include <string.h>
@@ -165,7 +165,7 @@ next_byte(int mode, unsigned i)
 	}
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial, int mode)
 {
@@ -280,7 +280,7 @@ run_mp_lifecycle(void)
 		 * NOT THE SAME OBJECT EVERY TRIAL.  Six of 292 bytes are
 		 * written and the other 286 are the seed, so two trials that
 		 * came out equal would mean the seed had stopped varying --
-		 * finding 224's check, and the only thing that makes the
+		 * finding F224's check, and the only thing that makes the
 		 * comparisons above worth anything.
 		 */
 		if (trial == 0)
@@ -307,7 +307,7 @@ run_mp_lifecycle(void)
 		 * `-fno-lifetime-dse` is in CXXFLAGS -- without it the store
 		 * would be deleted and the mutation would be uncatchable for
 		 * a reason that has nothing to do with the test (finding
-		 * 1224).  BOTH SIDES are compared against the seed, since the
+		 * F1224).  BOTH SIDES are compared against the seed, since the
 		 * mutation lands on OURS.
 		 */
 		{
@@ -370,7 +370,7 @@ run_mp_reset(void)
 		 * AND IT IS THE CONSTRUCTOR'S OWN SIX STORES.  Keep the image
 		 * `reset` produced, put the SAME seed back and run the blob's
 		 * constructor over it, then require the two to agree byte for
-		 * byte: that is finding 1237's claim stated as a test rather
+		 * byte: that is finding F1237's claim stated as a test rather
 		 * than as a comment.
 		 */
 		{
@@ -856,7 +856,7 @@ run_mp_infotobits(void)
 			/*
 			 * THE LONG ARM KEEPS ITS CRC: the bit after it is
 			 * zeroed and the padding starts beyond that.  This is
-			 * the half of finding 1386 that is NOT a defect, and
+			 * the half of finding F1386 that is NOT a defect, and
 			 * it is here so that the short arm's failure below is
 			 * a difference and not an assumption.
 			 */
@@ -872,7 +872,7 @@ run_mp_infotobits(void)
 		} else {
 			short_msg = 1;
 			/*
-			 * THE SHORT ARM DESTROYS ITS OWN CRC -- finding 1386.
+			 * THE SHORT ARM DESTROYS ITS OWN CRC -- finding F1386.
 			 * +0x118 is at least 0x56 for any group size, so the
 			 * pad loop always runs and always starts at 0x45.
 			 */
@@ -1174,7 +1174,7 @@ run_mp_bitstoinfo_crc(void)
 			if (type == 0) {
 				/*
 				 * Put back the CRC the short arm destroyed
-				 * (finding 1386), from the register it left
+				 * (finding F1386), from the register it left
 				 * it in, so that this block tests the CHECK
 				 * and not the defect.
 				 */
@@ -1653,7 +1653,7 @@ run_mp_calccrc(void)
  * `evaluateCRC` is asked about a vector our source never touched.  Returns
  * the length byte the message wants at +0x119.
  *
- * `infoToBits` cannot be used for the short form: finding 1386's reproduced
+ * `infoToBits` cannot be used for the short form: finding F1386's reproduced
  * defect pads from 0x45, which is where the type-zero CRC has just gone, so
  * a type-zero message always fails its own CRC.  This builds both forms the
  * other way round -- seed the register the way `resetCRC` does, let the
@@ -1907,7 +1907,7 @@ run_mp_evaluatecrc(void)
  * asserted against that number before it is used to judge anything, so the
  * reference implementation is pinned to something outside this tree.
  *
- * AND IT HAS BEEN SHOWN TO FIRE, which finding 134 requires of anything that
+ * AND IT HAS BEEN SHOWN TO FIRE, which finding F134 requires of anything that
  * can report a clean tree.  Changing clause 1's preload from 0xffff to 0
  * inside `spec_crc16` failed 337 of this block's 1,084 checks while every
  * differential block above stayed green -- so the block really is comparing
@@ -1984,7 +1984,7 @@ spec_info_bits(const unsigned char *b, int type1, unsigned char *out)
 }
 
 /* A Table 16 sequence, laid out from the table.  NOT `infoToBits`, whose
- * reproduced defects (finding 1386) are exactly what a spec test must not
+ * reproduced defects (finding F1386) are exactly what a spec test must not
  * inherit. */
 static void
 spec_layout(unsigned char *b, int type1, unsigned seed)

@@ -4,12 +4,12 @@
  * Reconstructed from dsplibs.o V90PreFilter.cpp.  Eight of the class's
  * twenty-four members -- `selectFilter`, `setParamEia6`, `autoSelection`,
  * `isV90WithEia6` and `displayParamEia6` from batch 3, `reset`, and the
- * constructor and destructor from the lifecycle batch (finding 1233).
+ * constructor and destructor from the lifecycle batch (finding F1233).
  * `include/dsplib/V90PreFilter.h` carries the object map and the two table
  * shapes.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, `this` first on the stack
- * (finding 215).  `isV90WithEia6` is `const` and the mangling records it:
+ * (finding F215).  `isV90WithEia6` is `const` and the mangling records it:
  * dropping the qualifier emits `_ZN...` where the blob has `_ZNK...`, which
  * links against nothing.
  *
@@ -562,7 +562,7 @@ V90PreFilter::selectFilter()
  * the last of those being `(int)(10000.0f * (x - (int)x))` computed WITHOUT
  * rounding x to float first.  The float rounding happens once, for the value
  * that is stored and tested against zero, and the sign test uses the extended
- * value rather than the rounded one.  Finding 233 is the precedent for taking
+ * value rather than the rounded one.  Finding F233 is the precedent for taking
  * that literally.
  */
 void
@@ -625,7 +625,7 @@ V90PreFilter::setParamEia6()
 	 * tests because C's `!=` acquires a parity test under `-mieee-fp`;
 	 * `period_inner.sh` now carries `-mno-ieee-fp`, where `!=` IS the
 	 * object's single `fcompp`/`jne` and this pair is one compare too many
-	 * (finding 2300, which corrected nine such sites).  This is the tenth.
+	 * (finding F2300, which corrected nine such sites).  This is the tenth.
 	 * It is not one of the nine because its suite is green either way --
 	 * `x` is an int times 0.001f and cannot be a NaN, so the two tests
 	 * agree over every value that reaches them -- so there was no

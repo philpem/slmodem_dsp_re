@@ -25,7 +25,7 @@
  * `_ZdlPv` at all, so the codebase replaced the global operator.
  *
  * WRITING IT OUT BY HAND IS NOT EQUIVALENT, and that is the whole of finding
- * 7816's correction to this file's own older comment.  At the destructor's
+ * F7816's correction to this file's own older comment.  At the destructor's
  * LAST free the delete-expression emits an ordinary `call sysdep_free`; the
  * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
  * frame with it.  refinement.md lever 7.

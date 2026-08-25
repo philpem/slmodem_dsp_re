@@ -1,6 +1,6 @@
 [
  {
-  "note": "VPcmV34GetVisualDiagnostics against t_v34diag.  Nine selectors that store the same output array from four different sources each, so every anchor is widened with the neighbouring statement that names the arm -- finding 347's remedy.  The two `maxCount` mutations on selectors 3 and 4 are the ones that adjudicate D710: they make the function HONOUR the bound, which is the fix the object does not have, and the suite has to catch that as a difference."
+  "note": "VPcmV34GetVisualDiagnostics against t_v34diag.  Nine selectors that store the same output array from four different sources each, so every anchor is widened with the neighbouring statement that names the arm -- finding F347's remedy.  The two `maxCount` mutations on selectors 3 and 4 are the ones that adjudicate D710: they make the function HONOUR the bound, which is the fix the object does not have, and the suite has to catch that as a difference."
  },
  {
   "label": "selector 0: the V.34 ring is not drained",

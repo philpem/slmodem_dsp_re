@@ -212,7 +212,7 @@ t_rebuild_cases(void)
 	 * The same cases with both sides' diagnostics raised.  Levels 1 to 3:
 	 * every gate here is `> 1`, so level 1 must be silent and 2 and 3 must
 	 * be identical -- which is what would catch a site placed behind the
-	 * wrong threshold (finding 150).
+	 * wrong threshold (finding F150).
 	 */
 	for (lvl = 1; lvl <= 3; lvl++) {
 		dsplib_debug_capture_reset();

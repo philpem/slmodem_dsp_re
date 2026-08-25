@@ -22,7 +22,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x10(%esp),%ebx` after a push and an 8-byte frame -- not
- * %ecx, so nothing here needs an attribute (finding 215).
+ * %ecx, so nothing here needs an attribute (finding F215).
  *
  * Built -fno-exceptions -fno-rtti -nostdinc++ like the rest of the C++ here.
  * No virtuals, no static data members, no new/delete: the allocation goes
@@ -42,7 +42,7 @@
  * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
  * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
  * were compiled and only `delete[]` reproduces the object's shape; finding
- * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ * F7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
  *
  * Behaviourally it is exactly the guard it replaces: the element type is a POD
  * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
@@ -58,7 +58,7 @@
  * reaches transitively -- moved it earlier in the translation unit and cost
  * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
  * them.  That is refinement.md lever 3 with an inline function as the carrier,
- * and finding 7815 is the measurement.
+ * and finding F7815 is the measurement.
  */
 inline void operator delete[](void *p) { sysdep_free(p); }
 
@@ -117,8 +117,8 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  *
  * The five detector stores are `resetDetector`'s whole body -- but the
  * constructor holds no relocation against that symbol, and a call to a GLOBAL
- * in `.text` would carry one (findings 306, 333), so the original repeated
- * the assignments here rather than calling it.  Finding 1237, and it stands.
+ * in `.text` would carry one (findings F306, F333), so the original repeated
+ * the assignments here rather than calling it.  Finding F1237, and it stands.
  *
  * WHAT 1237 DID NOT SETTLE WAS THE ORDER, and this batch did.  It used to
  * read +0xca4, +0xca9, +0xcaa, +0xcac, +0xcb0, which is the order the object
@@ -128,7 +128,7 @@ typedef char v90cp_size[(sizeof(V90CP) == 0x3bc0) ? 1 : -1];
  * `resetDetector` and `reset` byte-for-byte identical to the object, operands
  * included, which is 617's acceptance test and not a store-order hint.  Three
  * symbols moved on one reordering, so it is the source order and not a
- * coincidence of scheduling.  Finding 4600.
+ * coincidence of scheduling.  Finding F4600.
  */
 V90CP::V90CP()
 {
@@ -190,7 +190,7 @@ V90CP::getBitVector(unsigned int &length)
  * resetDetector -- 0x51510, 46 bytes, and its whole body is five stores.
  * OURS IS BYTE-FOR-BYTE THE OBJECT'S, operands included, which is what
  * settles the order: +0xcac, +0xcb0, +0xca4, +0xca9, +0xcaa.  See the
- * constructor above for what that order also repaired, and finding 4600.
+ * constructor above for what that order also repaired, and finding F4600.
  *
  * 18 is the write cursor's home: one preamble frame of seventeen bits, then
  * the next frame's framing bit at 17 and its first data bit at 18.
@@ -216,7 +216,7 @@ V90CP::resetDetector()
  * folds it in and the 73 bytes it emits are the object's, instruction for
  * instruction and operand for operand.  The constructor above does NOT get
  * the same treatment from us, because that is 1237's ruling and this measures
- * nothing about it either way.  Finding 4600.
+ * nothing about it either way.  Finding F4600.
  *
  * WHAT SEPARATES IT FROM THE CONSTRUCTOR is `byte_13`, which the constructor
  * clears and this does not.  That is the only field of the two the object
@@ -247,7 +247,7 @@ V90CP::reset()
  *
  * `infoToBits` carries this same computation inlined; that copy is left
  * exactly where it is.  The object holds both too -- this symbol and the
- * inlined arithmetic at 0x52230 -- which is finding 3532's shape.
+ * inlined arithmetic at 0x52230 -- which is finding F3532's shape.
  *
  * Everything is unsigned: `div`, not `idiv`.
  */
@@ -940,7 +940,7 @@ V90CP::evaluateCRC()
  *
  * -- and nothing in the object names any of them.  `V90MP::bitsToInfo`'s
  * corresponding 1, 2 and 3 ARE named, by its own diagnostics, and this member
- * has no such line, so the numbers stay numbers.  Finding 4360.
+ * has no such line, so the numbers stay numbers.  Finding F4360.
  *
  * THE TWO STATICS ARE THE BATCH.  `alpha` and `beta` are function-local
  * statics -- .bss, mangled `_ZZN5V90CP10bitsToInfoEhE5alpha` and `...E4beta`,
@@ -954,7 +954,7 @@ V90CP::evaluateCRC()
  *
  * Their signedness is NOT established -- every use is an equality compare and
  * the `shl $4` / `add` that makes the product is the same either way -- so
- * they are spelled to match the counts they sum.  Finding 4363.
+ * they are spelled to match the counts they sum.  Finding F4363.
  *
  * THE ONE STRING THAT BOUNDS AN ARRAY.  Five of the arms guard the store into
  * `bits` with `cmp $0x2edf` / `ja` and print "not enouch memory in the
@@ -962,17 +962,17 @@ V90CP::evaluateCRC()
  * 0x2edf is the last one that fits.  0xcb8 + 0x2ee0 is 0x3b98, which is where
  * `crc` starts, so the two ends meet and V90CP_BITS is measured rather than
  * modelled.  FIVE OF THE TEN STORE SITES ARE GUARDED AND FIVE ARE NOT --
- * docs/deviations.md D520.  Finding 4361.
+ * docs/deviations.md D520.  Finding F4361.
  *
  * THE RECEIVER HARDCODES SIX WHERE THE TRANSMITTER USES `word_3ba8`.
  * `infoToBits` pads the sequence out to a whole number of +0x3ba8; `case 13`
  * here waits for `word_cac % 6 == 0`, with the six as an immediate.  Finding
- * 4364.
+ * F4364.
  *
  * `evaluateInfo` is CALLED -- eight relocations against it -- and
  * `resetDetector` and `evaluateCRC` are not: those two are global symbols with
  * no relocation at their sites, so GCC 3.4.2 at -O3 folded them in, which is
- * finding 4600's shape in the constructor and `reset`.
+ * finding F4600's shape in the constructor and `reset`.
  */
 
 /*

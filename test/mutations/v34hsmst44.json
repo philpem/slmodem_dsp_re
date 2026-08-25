@@ -292,14 +292,14 @@
   "label": "is_short survives the restart",
   "find": "\ths_put(obj, T44_F3588, (short)(hs_get(obj, T44_F3588) | 4));\n\tobj->is_short = 0;\n\tobj->local_short = 0;",
   "replace": "\ths_put(obj, T44_F3588, (short)(hs_get(obj, T44_F3588) | 4));\n\tobj->local_short = 0;",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "local_short survives the restart",
   "find": "\ths_put(obj, T44_F3588, (short)(hs_get(obj, T44_F3588) | 4));\n\tobj->is_short = 0;\n\tobj->local_short = 0;",
   "replace": "\ths_put(obj, T44_F3588, (short)(hs_get(obj, T44_F3588) | 4));\n\tobj->is_short = 0;",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_restart"
  },
  {
@@ -324,7 +324,7 @@
   "label": "the restart leaves the transmit state at TX_L1",
   "find": "\t */\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\t */\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_restart"
  },
  {
@@ -379,7 +379,7 @@
   "label": "the installed record's +0x16 is cleared",
   "find": "\tt44_recput(blk, T44_R_F16, 1);\n\tt44_recputi(blk, T44_R_F24, 0xf72);",
   "replace": "\tt44_recput(blk, T44_R_F16, 0);\n\tt44_recputi(blk, T44_R_F24, 0xf72);",
-  "note": "RE-ANCHORED, finding 347: the 0x4d arm writes the same 1 to the same field of its own record.  The restart's copy is the one followed by the 0xf72 preamble.",
+  "note": "RE-ANCHORED, finding F347: the 0x4d arm writes the same 1 to the same field of its own record.  The restart's copy is the one followed by the 0xf72 preamble.",
   "fn": "t44_det_info_restart"
  },
  {
@@ -422,28 +422,28 @@
   "label": "the installed record's +0x1a is not cleared",
   "find": "\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
   "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
+  "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x1e is not cleared",
   "find": "\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
   "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
+  "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's +0x22 is not cleared",
   "find": "\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
   "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
+  "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
   "label": "the installed record's register is not reset",
   "find": "\tt44_recput(blk, T44_R_CRC, -1);\n\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
   "replace": "\t(void)0;\n\tt44_recput(blk, T44_R_F1A, 0);\n\tt44_recput(blk, T44_R_F1E, 0);\n\tt44_recput(blk, T44_R_F22, 0);\n\tt44_recput(blk, T44_R_NBITS, nbits);",
-  "note": "RE-ANCHORED, finding 347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
+  "note": "RE-ANCHORED, finding F347.  This line was unique in the file until microstate 44's 0x4d arm landed and built a record of the same shape at +0xa9ac; the restart's copy is the one whose length is the variable `nbits` and the 0x4d arm's is the one whose length is 0x26, so the length line is the context that tells them apart.",
   "fn": "t44_det_info_restart"
  },
  {
@@ -667,7 +667,7 @@
   "label": "the originating side goes to RX_PHASE2_CALL",
   "find": "\t */\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
   "replace": "\t */\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_CALL);",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_accept"
  },
  {
@@ -692,7 +692,7 @@
   "label": "short phase 2 goes to RX_PHASE2_ANS",
   "find": "\t\tif (obj->is_short != 0) {\n\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_ANS);",
   "replace": "\t\tif (obj->is_short != 0) {\n\t\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE2_ANS);",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_accept"
  },
  {
@@ -717,14 +717,14 @@
   "label": "the detector's pending flag is raised rather than cleared",
   "find": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);",
   "replace": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_accept"
  },
  {
   "label": "the detector is left armed",
   "find": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\trx->flags = (unsigned short)(rx->flags & ~V34_RX_FLAG_DET_PENDING);",
   "replace": "\t/* 0x6e8c1: the detector this INFO0 was waiting on is disarmed. */\n\t(void)rx;",
-  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding 347.",
+  "note": "Anchor carries 1 line(s) above it: another arm of this function spells the same statements, and a doubly-matching anchor reads as UNUSABLE rather than as a failure. Finding F347.",
   "fn": "t44_det_info_accept"
  },
  {
@@ -922,7 +922,7 @@
   "find": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE_DROP);",
   "replace": "\n\ths_setstate(obj, HS_MICROSTATE, V34HS_MOH_TONE);",
   "fn": "t44_accept_len08",
-  "note": "A LEADING NEWLINE, and finding 432 is why.  Microstate 79 sets MOH_TONE_DROP too, at 0x6d5e2, and its copy is one tab deeper inside an `if` -- so the bare one-tab line is a SUBSTRING of it and the anchor matched twice.  The newline pins the indent."
+  "note": "A LEADING NEWLINE, and finding F432 is why.  Microstate 79 sets MOH_TONE_DROP too, at 0x6d5e2, and its copy is one tab deeper inside an `if` -- so the bare one-tab line is a SUBSTRING of it and the anchor matched twice.  The newline pins the indent."
  },
  {
   "label": "the INFO1a decoder's answer is inverted",
@@ -1313,7 +1313,7 @@
  {
   "label": "the INFO1a decoder is given the cached record pointer",
   "equivalent": true,
-  "why": "EQUIVALENT.  0x6ed3e re-reads +0xaa70 after `V34GiveProbeResults` and `rec` is the pointer 0x668e1 read in the same call; nothing between them writes +0xaa70 -- `V34GiveProbeResults` copies doubles into +0xac?? and touches no pointer field (src/pump/v34/v34info.c) -- so the two are the same address on every path that exists.  Written as the object writes it anyway, for finding 406's reason: a local that shadows a memory read across a call is the shape that was wrong once here already.  HELD FIXED: that nothing this arm calls before the decoder moves +0xaa70; an arm that did would make this testable, exactly as finding 401's third equivalence says of the restart.",
+  "why": "EQUIVALENT.  0x6ed3e re-reads +0xaa70 after `V34GiveProbeResults` and `rec` is the pointer 0x668e1 read in the same call; nothing between them writes +0xaa70 -- `V34GiveProbeResults` copies doubles into +0xac?? and touches no pointer field (src/pump/v34/v34info.c) -- so the two are the same address on every path that exists.  Written as the object writes it anyway, for finding F406's reason: a local that shadows a memory read across a call is the shape that was wrong once here already.  HELD FIXED: that nothing this arm calls before the decoder moves +0xaa70; an arm that did would make this testable, exactly as finding F401's third equivalence says of the restart.",
   "find": "\tif ((short)V34GiveINFO1aBits(obj, t44_record(obj, T44_PTR_AA70)) != 0) {",
   "replace": "\tif ((short)V34GiveINFO1aBits(obj, rec) != 0) {",
   "fn": "t44_accept_len26"

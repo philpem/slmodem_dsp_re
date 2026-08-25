@@ -47,7 +47,7 @@ build-recipe/
                                     (amd64 + multilib ONLY -- ebuild:174)
                             (mips n32/n64 and ppc64 patches are conditional.)
 
-                            CORRECTED BY THE REBUILD (finding 2500): this list
+                            CORRECTED BY THE REBUILD (finding F2500): this list
                             used to name pro-police-docs.patch as "applied by
                             the eclass".  It is NOT.  eclass:405 guards it on
                             sspdocs="no", and PP_VER=3_4_1 takes the branch at
@@ -191,7 +191,7 @@ IT IS BUILT.  tools/toolchain/build-gentoo-image.sh and Dockerfile.gentoo do
 all of the below inside Gentoo's own stage3-x86-2005.0, and the by-hand
 reimplementation of the ebuild is build-gentoo-gcc.sh in this directory, with
 the eclass line number beside each step and its deviations listed at the foot.
-Finding 2500 for what the result measures; 2501 for the two flag findings it
+Finding F2500 for what the result measures; 2501 for the two flag findings it
 was needed to re-test.
 
 Patch order, per gcc_src_unpack() in toolchain.eclass (authoritative):

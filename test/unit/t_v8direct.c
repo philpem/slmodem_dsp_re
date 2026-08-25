@@ -8,7 +8,7 @@
  * front end, a detector, a tone generator, two deadline counters and an AGC
  * line.  Two of those fields being equal says very little about the rest.
  *
- * Since finding 221 both sides can be called by name, and this file compares
+ * Since finding F221 both sides can be called by name, and this file compares
  * the objects rather than a shortlist.
  *
  * POINTERS, AND WHY THEY ARE NOT SIMPLY ZEROED
@@ -56,7 +56,7 @@
 #include "dsplib/dp_param.h"
 #include "dsplib/modem_params.h"
 
-/* By name.  File-static in the object; see finding 221. */
+/* By name.  File-static in the object; see finding F221. */
 extern struct dp *ref_v8_create(void *modem, int id, int caller, int srate,
 				int max_frag, struct dp_operations *op);
 extern int ref_v8_delete(struct dp *dp);

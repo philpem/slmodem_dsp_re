@@ -42,7 +42,7 @@
  * site below reads the field.  `0x13(%esp)` is GCC's own spill of it, not a
  * variable.  This is a codegen-tier claim, held by `compare.py` and by nothing
  * in `t_dcr.c`; the note at the end of `test/mutations/dcr.json` says why no
- * differential test can hold it.  Finding 4202.
+ * differential test can hold it.  Finding F4202.
  */
 
 #include "dsplib/dcr.h"

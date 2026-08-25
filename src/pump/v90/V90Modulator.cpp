@@ -6,14 +6,14 @@
  * the two functions and the assertions that hold the compiler to that map.
  * `setSessionFlag` stays where it was, in src/pump/v90/V90SessionFlag.cpp.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * THREE SUB-OBJECTS ARE OWNED AND FIVE ALLOCATIONS ARE MADE, IN THIS ORDER:
  * a symbol buffer of 2 bytes per symbol, a frame buffer of 8, a
  * `V90BitsToSymbol` of 0x24 built with `3 * nofSymbols + 0x1388` symbols, a
  * `V90Phase3Modulator` of 0x398, and a `V90Phase4Modulator` of 0x2fac.  Each
  * of the last three is `sysdep_malloc(sizeof)` immediately followed by the
- * class's `C1`, which is where those three sizes come from -- finding 1246.
+ * class's `C1`, which is where those three sizes come from -- finding F1246.
  *
  * THE THREE NESTED CONSTRUCTORS READ THEIR ARGUMENTS BACK OUT OF THE MEMBERS,
  * not out of the registers the arguments arrived in: `mov 0x24(%ebx),%edx`
@@ -249,7 +249,7 @@ V90Modulator::reset()
  *
  * NOTHING IN THIS CLASS CALLS ANY OF THEM, checked over all SEVENTEEN members
  * and not over the five that happened to be written first -- which is the
- * mistake finding 7520 recorded against itself.  `progress` open-codes the
+ * mistake finding F7520 recorded against itself.  `progress` open-codes the
  * phase-3-to-4 move rather than calling `enterPhase4`; none of the eleven
  * calls a sibling; and `setSessionFlag`, the one member a range disassembly of
  * this span misses because it lives in V90SessionFlag.cpp, relocates only
@@ -640,7 +640,7 @@ V90Modulator::exitDIL()
  * for it was a jump-table slot.  The name is NOT taken here: promoting it is
  * a change to a 1,829-line file this batch does not own, and the message
  * belongs to `V90Modulator` rather than to the state's own class.  Recorded
- * in finding 7520 as evidence available to whoever does own it.
+ * in finding F7520 as evidence available to whoever does own it.
  *
  * THE TWO MESSAGES ARE `edprintf` AND ARE NOT GATED.  0x1a321 is a bare
  * `call` with no `cmpl $0x1,dsplibs_debug_level` in front of it, unlike the
@@ -721,7 +721,7 @@ V90Modulator::initiateRRN()
  *     and calls `V90CP::infoToBits` on every path, so a V.90 session's MP is
  *     never touched by an FPE.  0x1a4a7 has no test in front of it.
  *
- * V.92's own pair is the same shape one modulation up (finding 7541), and it
+ * V.92's own pair is the same shape one modulation up (finding F7541), and it
  * has a fifth difference this one does not: no store into the modulus
  * encoder.
  *
@@ -730,7 +730,7 @@ V90Modulator::initiateRRN()
  * 0x1d, which is already `P4M_STATE_RF`; ZERO enters "DataToRfModulation",
  * which is 0x1c and which `V90Phase4Modulator.h` calls
  * `P4M_STATE_UNNAMED_1C`.  That enumerator is NOT promoted here, on the same
- * two grounds finding 7520 gave for 0x14: the message belongs to this class
+ * two grounds finding F7520 gave for 0x14: the message belongs to this class
  * rather than to the state's own, and the rename is a change to an
  * 1,829-line file this batch does not own.  The evidence is recorded so it
  * does not have to be re-derived.
@@ -957,7 +957,7 @@ V90Modulator::progress(int *bits, unsigned int &nofBits, float *out,
 		 * spelled because `-Wsign-compare` is on and a warning here
 		 * would read as a defect rather than as the object's own
 		 * shape; the cast is the conversion the language already
-		 * performs and moves no instruction.  Finding 4903's rule.
+		 * performs and moves no instruction.  Finding F4903's rule.
 		 */
 		if (params->DEBUG_DIGITAL_MODEM_INITIATE_RRN &&
 		    symbolCount > (unsigned int)

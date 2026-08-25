@@ -15,16 +15,16 @@ Six instances, each found the hard way:
 
 | the defect | what it printed |
 |---|---|
-| an anchor matches twice (finding 347) | `UNUSABLE` — and the suite still says `0 NOT caught` |
-| an anchor stays unique and silently re-points (finding 432) | `CAUGHT`, at a claim nobody made |
-| a registered suite is skipped, four silent `continue`s (finding 540) | `0 anchors wrong`, exit 0, having checked nothing |
-| a mutation whose `replace` equals its `find` (finding 542) | `survived, equivalent` — same as a real equivalent |
-| a signedness detector that cannot find its own defect (finding 618) | `(none)`, through four consecutive versions |
-| 242 diagnostic call sites dropped (finding 134) | nothing — the debug level ships at 0, every gate is `> 1` |
+| an anchor matches twice (finding F347) | `UNUSABLE` — and the suite still says `0 NOT caught` |
+| an anchor stays unique and silently re-points (finding F432) | `CAUGHT`, at a claim nobody made |
+| a registered suite is skipped, four silent `continue`s (finding F540) | `0 anchors wrong`, exit 0, having checked nothing |
+| a mutation whose `replace` equals its `find` (finding F542) | `survived, equivalent` — same as a real equivalent |
+| a signedness detector that cannot find its own defect (finding F618) | `(none)`, through four consecutive versions |
+| 242 diagnostic call sites dropped (finding F134) | nothing — the debug level ships at 0, every gate is `> 1` |
 
 Two more of the same shape, from adjacent tools: a malformed mutation registry
 makes every suite unrunnable while the phase gate stays green, because nothing
-in the phase boundary opens the file (finding 346); and a suite pointed at the
+in the phase boundary opens the file (finding F346); and a suite pointed at the
 wrong binary reports NOT CAUGHT for everything, which is what an untested claim
 looks like — six sets were misread that way before a manifest existed
 (`tools/mutate.py`).
@@ -33,16 +33,16 @@ looks like — six sets were misread that way before a manifest existed
 
 ## The five rules
 
-### 1. Make the tool COUNT what it examined, and FAIL on the difference
+### F1. Make the tool COUNT what it examined, and FAIL on the difference
 
 "A count of what was checked is the difference between a clean tree and a dead
-detector" (finding 540). Neither the anchor checker nor the reference checker
+detector" (finding F540). Neither the anchor checker nor the reference checker
 said how many suites it had actually looked at, and four `continue`s in one
 `main` were silent: a registry entry of the wrong shape, a source path that no
 longer exists, a registered suite with no mutation file, and a mutation file
 that will not parse.
 
-### 2. Reporting is not gating
+### F2. Reporting is not gating
 
 When the vacuous-mutation problem was first fixed, the runner learned to print
 
@@ -50,7 +50,7 @@ When the vacuous-mutation problem was first fixed, the runner learned to print
   ????  INJECTED: replace equals find     VACUOUS -- REPLACE == FIND
 ```
 
-and count it UNUSABLE. **That was not enough**, and the reason is finding 347:
+and count it UNUSABLE. **That was not enough**, and the reason is finding F347:
 an unusable mutation does not fail a run. The repair converted a mutation that
 was invisible into one that was visible in a log nobody re-reads — most of the
 distance, and not the part that holds.
@@ -58,13 +58,13 @@ distance, and not the part that holds.
 The static half is free — no build, no suite, a string compare over JSON the
 anchor checker already parses — and **it exits 1**. It costs milliseconds
 against 2,874 mutations, and a vacuous entry now cannot be committed at all
-(finding 542).
+(finding F542).
 
 > **If the run still exits 0, the report is a comment.**
 
 The converse also holds, and it is why the staleness half of the snapshot check
 only *reports*: a gate that is red by default is worse than none, because it
-gets ignored or switched off (finding 545). Fail on MISSING, ORPHANED and
+gets ignored or switched off (finding F545). Fail on MISSING, ORPHANED and
 INCONSISTENT — the things that are unambiguously wrong. Report the thing that
 is merely out of date.
 
@@ -80,7 +80,7 @@ and that was quoted as the session's codegen verdict, which it is. **But
 `--ratchet` does not write `ratchet.json`; `--update` does.** The floor stayed
 at the pre-merge 92, so for the next batch the tier could no longer detect a
 regression from 105 down to 93 — a twelve-symbol loss would have printed
-`ratchet OK -- gained` (finding 556). It was found from the other end: the
+`ratchet OK -- gained` (finding F556). It was found from the other end: the
 next branch ran the ratchet expecting to see its own contribution, saw the
 same numbers its fork point already had, and said so instead of blessing a
 gain that was not its work.
@@ -88,12 +88,12 @@ gain that was not its work.
 > **Reporting a measurement is not recording it.**
 
 Three tiers in this tree hold a recorded baseline — `ratchet.json`, the
-mutation snapshot (finding 545), and the deviation register — and each has
+mutation snapshot (finding F545), and the deviation register — and each has
 that failure mode: the measurement gets taken, quoted in a commit message, and
 never written back, so the floor silently describes an older tree. Only the
 snapshot has a key that makes staleness visible without re-measuring; the
 ratchet's `gained:` line is the sole hint that its floor is behind
-(finding 556).
+(finding F556).
 
 #### A subset result must not be able to masquerade as a full one
 
@@ -104,7 +104,7 @@ print the string the snapshot recorder scans for**, so the recorder cannot
 record it even if asked; it prints `SUBSET: n of N mutations ... This is an
 iteration aid. It is NOT a suite result and cannot be a baseline` instead.
 Verified by grepping the subset output for what the parser looks for and
-getting zero matches (finding 555).
+getting zero matches (finding F555).
 
 #### Two checks passing is not evidence a third is unnecessary
 
@@ -120,20 +120,20 @@ They are also jointly insufficient, which only injection revealed: putting
 inert is invisible to a comparison that only asks whether the macro does
 anything at all. So a third check was added -- the count must not DECREASE,
 floored in `tools/assertlive.json` in the same shape as `compare.py --ratchet`
--- and the injection now exits 1. Finding 7804.
+-- and the injection now exits 1. Finding F7804.
 
 The rule that generalises: **when a check has more than one way to fail, inject
 each way separately.** A detector shown firing on one defect has been shown to
 detect that defect, not the class.
 
-### 3. A detector nobody has seen fire is not a detector
+### F3. A detector nobody has seen fire is not a detector
 
-Finding 134's argument, and it has been quoted against four separate tools.
+Finding F134's argument, and it has been quoted against four separate tools.
 
 The signedness detector took **five corrections, and the fifth was found only
 by testing the tool against the one defect already known. The first four
 versions all reported confidently and none of them could find it** (finding
-618). Validation, in both directions, on a known answer:
+F618). Validation, in both directions, on a known answer:
 
 ```
   reintroduce  struct b103_hdx.mode as `short`   -> reports TxHdxStartB103
@@ -144,7 +144,7 @@ Before that test it printed `(none)` and there was no way to tell a clean tree
 from a broken detector.
 
 The anchor checker was validated the same way, by reintroducing five distinct
-defects and watching each appear with a non-zero exit (finding 540):
+defects and watching each appear with a non-zero exit (finding F540):
 
 ```
   stale source path                       exit=1  SKIPPED     source ... does not exist
@@ -154,11 +154,11 @@ defects and watching each appear with a non-zero exit (finding 540):
   nothing wrong                           exit=0  (nothing)
 ```
 
-### 4. Measure the same thing two ways and compare
+### F4. Measure the same thing two ways and compare
 
 The snapshot records per-mutation verdicts **and** the summary line, from
 different code paths, and cross-checks them. Both times the check fired, the
-tool was wrong and not the record (finding 545):
+tool was wrong and not the record (finding F545):
 
 1. `%-52s` **pads but does not truncate.** The label regexes capped at 52
    characters, so all 21 of one suite's longer labels matched nothing: 188
@@ -171,14 +171,14 @@ tool was wrong and not the record (finding 545):
 
 Twenty lines. Neither bug was reachable any other way.
 
-### 5. Prefer a structural test to a lexical one
+### F5. Prefer a structural test to a lexical one
 
 The anchor checker's definition-finder was `^([A-Za-z_][A-Za-z_0-9]*)\(`. That
 character class excludes `:`, so **every qualified C++ method was invisible** —
 and a bare `^NAME(` also matches a macro invocation at column 0, so what the
 index filled with instead was noise. One file reported **45 definitions, all 45
 of them the same macro, and not one a function**; the structural version
-reports 8, which is how many it has (finding 540).
+reports 8, which is how many it has (finding F540).
 
 Two consequences, the second worse than the first: the enclosing-function
 lookup returned a macro name for every anchor in every C++ file, and the exact
@@ -202,7 +202,7 @@ landed after it. Seven labelled `the shared reset (47, 49, 50)` were mutating
 arm 51's record fill: the two bodies share six lines exactly, the shared reset's
 copy sits at one tab and arm 51's at two, the runner matches a substring, and at
 some earlier repair they had been made unique by **deepening** them — which
-moved all seven. The repair is a **leading newline** (finding 432).
+moved all seven. The repair is a **leading newline** (finding F432).
 
 > "The last X in the file" and "the X before the next section comment" are
 > anchors about the file's *layout*, and the file's layout is exactly what the
@@ -214,13 +214,13 @@ They were noticed only because the NOT-CAUGHT count went 0 → 4 and two of the
 four were separable. **Had the arm's exit been unseparable they would have gone
 on passing, at a claim nobody made.** Finding the first two by accident is not
 a method; the sweep that found the other seven is four lines on top of the
-function ranges the repair script already computed (finding 432).
+function ranges the repair script already computed (finding F432).
 
 **A defect the gate cannot see is still a defect, and the tool is the test.**
 The 242 dropped diagnostic call sites could not have been caught by anything —
 the debug level ships at zero and every gate is `> 1`, so a missing call and a
 present one behave identically under every test in the tree. That is why it
-needs a *tool* rather than a test (finding 134). And the first version of that
+needs a *tool* rather than a test (finding F134). And the first version of that
 count was itself wrong — it reported 399 calls, which was the count of
 functions containing a call — an error found by writing the tool to make the
 count repeatable. **That is a fair argument for making one-off measurements
@@ -229,13 +229,13 @@ into tools.**
 **A baseline read once, from a cold cache, is a floor nobody can trust.** The
 period-toolchain container reports a *partial* object set on its first
 invocation — `identical was 92, now 48` — and 105 on every run after
-(finding 651). Blessing the ratchet from that single cold reading would have
+(finding F651). Blessing the ratchet from that single cold reading would have
 set the floor sixty symbols too low, and a floor set too low is a **permanent**
 false pass rather than a temporary one, because nothing ever reports that a
 ratchet is under-set: every subsequent run says `gained`. It was blessed only
 after two consecutive runs agreed, and then shown to fire per rule 3 — with the
 floor at 105, injecting a three-symbol regression exits 1 and says why fewer
-functions match (finding 556).
+functions match (finding F556).
 
 > **Read a baseline twice before recording it.** What makes a recorded floor
 > worth having — that nothing re-derives it later — is exactly what makes a
@@ -250,6 +250,6 @@ found a **live defect on the mainline the moment they touched**: a diagnostic
 message that one commit had put in two switch cases without re-anchoring the
 mutation pinned to it. It had matched twice ever since — reported UNUSABLE, and
 unusable does not fail a run. The mainline's own checker had no uniqueness
-check, so **the merge was the first moment anything looked** (finding 544).
+check, so **the merge was the first moment anything looked** (finding F544).
 Second live instance that check found in a day; both had been silently untested
 for months.

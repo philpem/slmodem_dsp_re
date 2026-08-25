@@ -12,7 +12,7 @@ set -e
 OUT=/out
 mkdir -p "$OUT"
 
-# The object's flags (findings 606, 607, 612, 616), plus three of ours:
+# The object's flags (findings F606, F607, F612, F616), plus three of ours:
 #   -Itest/harness            the tests' own headers
 #   -D__SIZEOF_POINTER__=4    a GCC 4.6+ predefine.  Without it the 81 offset
 #                             assertions guarded on it read `#if 0` and VANISH

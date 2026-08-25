@@ -19,7 +19,7 @@
  * exactly this exclusion and no more.
  *
  * THE OBJECT IS NEVER ZEROED, and both sides get the same varied
- * pseudorandom fill before every call, reseeded per trial (findings 223, 224).
+ * pseudorandom fill before every call, reseeded per trial (findings F223, F224).
  * That matters more here than usual, because the constructor leaves nothing
  * uninitialised -- every one of the fifteen fields is written -- so a fill of
  * zeros would make a MISSING store invisible.  A guard region past +0x3b is
@@ -33,7 +33,7 @@
  * not, the two infinities) proves that the copy is BIT-EXACT, and it is
  * deliberately not evidence about floating-point arithmetic: there is none
  * here to be evidence about.  A signalling NaN is excluded on purpose and
- * finding 1252 says why.
+ * finding F1252 says why.
  *
  * THE DIVISOR IS SWEPT AND ZERO IS EXCLUDED ON PURPOSE.  Both `div %edi` sites
  * take `blockLen` straight from the argument with no guard, so zero traps in
@@ -47,7 +47,7 @@
  * exists, so BOTH sides are called by symbol through asm() labels -- ours by
  * its mangled name, the blob's by the `ref_` alias.  Both ABI variants (`C1`
  * and `C2`, `D1` and `D2`) are driven, because the blob has all four at four
- * different addresses.  Plain cdecl, `this` first on the stack (finding 215);
+ * different addresses.  Plain cdecl, `this` first on the stack (finding F215);
  * the two floats occupy one four-byte slot each because the call is
  * prototyped.
  */
@@ -141,7 +141,7 @@ static unsigned char trial0[SLOT];
  * `GenericToneDetector` does -- the constructor here passes five arguments
  * through and calls `reset()`, and every field either class's constructor is
  * responsible for agrees exactly.  `t_genericiir` cannot see it because it
- * compares output samples and never the object.  Finding 1250 records it;
+ * compares output samples and never the object.  Finding F1250 records it;
  * fixing it is that class's batch, not this one's.
  *
  * Twelve bytes: the four of `m_i` and the eight of the `double` `m_acc`.
@@ -285,7 +285,7 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 	 * Three allocations a side, and SIX DISTINCT ADDRESSES.  Asserted
 	 * first, because every comparison below dereferences them and because
 	 * two sides sharing one buffer would make the rest agree for the wrong
-	 * reason (finding 224).
+	 * reason (finding F224).
 	 */
 	memcpy(&ina, fa + IIR_INHIST, sizeof(ina));
 	memcpy(&inb, fb + IIR_INHIST, sizeof(inb));
@@ -305,7 +305,7 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 	/*
 	 * THE EXCLUDED TWELVE BYTES ARE ASSERTED, NOT SKIPPED.  The two history
 	 * pointers can never agree -- two allocations are two addresses -- but
-	 * `m_i` and `m_acc` CAN, and finding 1250 recorded that they did not:
+	 * `m_i` and `m_acc` CAN, and finding F1250 recorded that they did not:
 	 * ours zeroed both, the blob left `m_i` holding `m_outLen` and never
 	 * touched `m_acc`.  The four checks below asserted THAT, so that
 	 * repairing `src/dsp/FloatIIR.cpp` would fail them rather than pass
@@ -330,7 +330,7 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
 		memcpy(&mi_a, fa + IIR_SCRATCH, sizeof(mi_a));
 		memcpy(&mi_b, fb + IIR_SCRATCH, sizeof(mi_b));
 
-		diff_eq_int("ours leaves m_i holding m_outLen -- finding 1250 "
+		diff_eq_int("ours leaves m_i holding m_outLen -- finding F1250 "
 			    "repaired (%ld)", mi_a == outLen, 1, tag);
 		diff_eq_int("the blob leaves m_i holding m_outLen (%ld)",
 			    mi_b == outLen, 1, tag);
@@ -402,7 +402,7 @@ compare_filters_(unsigned int nden, unsigned int nnum, unsigned int blockSize,
  * TWO THINGS ARE DELIBERATELY LEFT ALONE.  `filter` at +0x00 is the pointer
  * each side owns and must keep, and the filter's `m_i`/`m_acc` at +0x28 are
  * left in their post-construction state so that `compare_filters_`'s
- * exclusion -- which is an ASSERTION about finding 1250's divergence, not a
+ * exclusion -- which is an ASSERTION about finding F1250's divergence, not a
  * blind skip -- goes on saying what it says.  Neither our `GenericIIR::reset`
  * nor the blob's writes `m_acc`, and the blob's leaves `m_i` holding
  * `m_outLen` exactly as its constructor does, so the four checks in there hold

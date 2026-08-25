@@ -17,7 +17,7 @@ of ten per second makes "a freeze preceded the retrain" true by accident.  So
 the window rate is compared against the call's own overall rate, not against
 zero.
 
-TWO EARLIER HYPOTHESES DIED FOR WANT OF EXACTLY THAT (finding 1918) -- tap
+TWO EARLIER HYPOTHESES DIED FOR WANT OF EXACTLY THAT (finding F1918) -- tap
 drift and rate overshoot both looked plausible and neither beat chance.  This
 one gets the same treatment.
 """
@@ -110,7 +110,7 @@ def main():
               % ratio)
         print("\n  A ratio near 1 means freezes are simply common and the")
         print("  clustering is an artefact of that -- which is how the tap")
-        print("  drift and overshoot hypotheses died (finding 1918).")
+        print("  drift and overshoot hypotheses died (finding F1918).")
 
     if trig:
         t = np.array(trig)

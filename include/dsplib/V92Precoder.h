@@ -25,7 +25,7 @@
  * -- so 0x80 is the size the original's `sizeof` produced, not the largest
  * displacement anybody happened to use.  The two agree: the furthest any of
  * the six members reaches is +0x7c, a four-byte store in `setCoefficients`.
- * 0x140 is also the only tap count the object ever asks for (finding 1245).
+ * 0x140 is also the only tap count the object ever asks for (finding F1245).
  *
  * WHAT PROVES WHICH POINTER IS OWNED.  `reset(V92MappingParams *)` refills the
  * object from the parameter block a word at a time, and it writes +0x04
@@ -96,7 +96,7 @@ public:
 	 * the constructor.  It is a member rather than a vptr for the reason
 	 * in the header comment; what it holds is not recoverable from this
 	 * class alone.  V92PreFilter has the same unreferenced word at +0x00
-	 * (finding 1246).
+	 * (finding F1246).
 	 */
 	unsigned int word_00;
 

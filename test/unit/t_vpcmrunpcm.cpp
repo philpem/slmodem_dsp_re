@@ -49,7 +49,7 @@
  * than a list of excluded offsets.  `compare_regions` carries the three cases
  * and their counts; the counts are printed on every run, because a comparison
  * whose exempt class quietly grew to the whole object would pass while
- * measuring nothing (findings 2400 and 3100).
+ * measuring nothing (findings F2400 and F3100).
  *
  * ===========================================================================
  * WHAT IS DELIBERATELY NOT DRIVEN, AND WHY
@@ -65,11 +65,11 @@
  *      compiler and 731 checks red on GCC 13.  Driving the real demodulator
  *      would drag that divergence into THIS binary, which would have to be
  *      declared, and a declared binary cannot carry a mutation suite
- *      (findings 2157 and 3002).  The cost of driving it is the whole
+ *      (findings F2157 and F3002).  The cost of driving it is the whole
  *      mutation surface of this file.
  *   2. `V92Modulator::progress` WRITES `word_34`, which is dispatch 3's
  *      selector.  With the real transmitter running, that axis could not be
- *      swept at all -- finding 7458's failure mode exactly.
+ *      swept at all -- finding F7458's failure mode exactly.
  *   3. The fan-out itself is t_v90modprog's and t_v92modem's claim, already
  *      made; t_vpcmflomodem.cpp holds the same side outside {0, 1} for the
  *      same reason.
@@ -436,7 +436,7 @@ static int nregion_last;
  * returns before resetting anything, so `pattern installs` reads 0.  It is
  * kept rather than deleted because it was reached by an earlier trial set and
  * will be again; the printed count is what stops it becoming a silent
- * exemption (finding 134's argument).
+ * exemption (finding F134's argument).
  *
  * IT IS NAMED RATHER THAN INFERRED, AND THE MUTATION SET IS WHY.  A general
  * rule -- "a differing word neither side can resolve is a static pointer" --
@@ -447,7 +447,7 @@ static int nregion_last;
  * pair of addresses.  Tightening the rule to "both values look like
  * addresses" did not help for the same reason.  There is no property of a
  * WORD that separates the two cases; only knowing which field it is does.
- * Finding 7521's shape: the suite measured the comparator, not the code.
+ * Finding F7521's shape: the suite measured the comparator, not the code.
  */
 #define P4M_PATTERN	0x1a8
 
@@ -547,7 +547,7 @@ struct trial {
 	 * `word_1c4`, `word_38` and `symbolCount % word_1b0` are right, so a
 	 * sweep that left them at what the constructor produced would call
 	 * twelve different members and observe nothing from any of them --
-	 * finding 7458's failure mode, and the mutation set is what showed it
+	 * finding F7458's failure mode, and the mutation set is what showed it
 	 * happening (eight member-swap mutations uncaught).
 	 */
 	int		p4state;
@@ -739,8 +739,8 @@ sweep_trial(struct trial *t, int k)
  *
  * Arms 0x14 and 0x19 differ in exactly one thing: the first packs the CP
  * message out of `V90Modem::mappingParams` (+0x1770) and the second out of
- * `mappingParamsAlt` (+0x1dc0).  V90Modem.h records that findings 1301 and
- * 1307 are two batches that shipped that pair the wrong way round, and that
+ * `mappingParamsAlt` (+0x1dc0).  V90Modem.h records that findings F1301 and
+ * F1307 are two batches that shipped that pair the wrong way round, and that
  * the only way a swap becomes visible is to drive it through the callee.  So
  * every field `setV92CPpckFromParamsInfo` reads is given a different value in
  * the two blocks, and the V92CP the packer fills is inside the compared
@@ -934,7 +934,7 @@ poke(int s, const struct trial *t)
  * one of the 48 positions rather than only where a transmitter happened to
  * put a non-zero.
  *
- * NOT DYADIC, for finding 230's reason at one remove: a block of values that
+ * NOT DYADIC, for finding F230's reason at one remove: a block of values that
  * are all exact multiples of a power of two survives the 0.4f multiply with
  * the same relative error everywhere, and a mutation that used 0.5f would
  * still be caught but one that reassociated would not.

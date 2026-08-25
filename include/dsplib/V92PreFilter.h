@@ -10,7 +10,7 @@
  * the offsets and the second class name changed: allocate 0x14, construct,
  * store; allocate 0x14, construct, store; then `if (p) { p->~T(); free(p); }`
  * twice.  They are almost certainly one piece of source written twice
- * (finding 1246).  NOT POLYMORPHIC, and +0x00 unreferenced, for the reasons
+ * (finding F1246).  NOT POLYMORPHIC, and +0x00 unreferenced, for the reasons
  * V92Precoder.h gives.
  *
  * THE OBJECT IS 0x14 BYTES -- the same size as one of the filters it holds,

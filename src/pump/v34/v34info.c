@@ -25,7 +25,7 @@
  * So a caller that sized the buffer from the ten-value print would be
  * written past by the encoder.  There is no bound in the object; the number
  * is stated here because a differential test with a buffer that is too small
- * reads adjacent state on both sides and can agree by accident (finding 129).
+ * reads adjacent state on both sides and can agree by accident (finding F129).
  */
 
 #include "dsplib/debug.h"
@@ -184,7 +184,7 @@ V34SetINFO0dBits(void *objp, short *bits)
  * The two V.PCM strings were transcribed the wrong way round on the first
  * attempt and the transcript comparison caught it.  Nothing else could have:
  * they are on branches whose stores are identical, so every byte of state
- * agreed.  Finding 171.
+ * agreed.  Finding F171.
  *
  * THE TWO NON-TRIVIAL CASES ARE NEAR-DUPLICATES AND ARE NOT THE SAME.  Both
  * set the same two leading shorts and both then test two flags and set two
@@ -200,7 +200,7 @@ V34SetINFO0dBits(void *objp, short *bits)
  *
  * Two swapped bits and two different sources between two blocks that print
  * the same two strings.  Transcribed separately rather than factored for
- * exactly that reason -- finding 130 is about the helper that looked shared
+ * exactly that reason -- finding F130 is about the helper that looked shared
  * and was not.  Only the non-zero-variant case sets `prev_bulk_delay`, and
  * only the zero-variant case fills indices 2 and 3 with rate information.
  */
@@ -497,7 +497,7 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 	 * one below is the one it prints as "Uinfo".  The names read more
 	 * naturally the other way round -- a seven-bit baud index and a
 	 * three-bit Uinfo -- and the first transcription had them that way.
-	 * The object's own words win.  Finding 171.
+	 * The object's own words win.  Finding F171.
 	 */
 	baud_index = (((unsigned short)bits[2] & 2) >> 1)
 		     + ((unsigned short)bits[2] & 1) * 2

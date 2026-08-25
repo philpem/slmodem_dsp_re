@@ -6,7 +6,7 @@
  * the two members and the three things about them that are not visible from
  * the field list.
  *
- * PLAIN CDECL with `this` as the first STACK argument (finding 215).  The
+ * PLAIN CDECL with `this` as the first STACK argument (finding F215).  The
  * constructor's prologue is `sub $0x2c,%esp` after no push, then four
  * callee-saved registers written to the frame by hand -- `-fomit-frame-pointer`
  * and `-maccumulate-outgoing-args`, which is the toolchain the object was built
@@ -184,7 +184,7 @@ void GenericToneDetector::reset()
  * `float` in `.rodata.cst4` holding 1.0f: ST(0) = 1.0f / ST(0).  So the object
  * forms 1/blockLen once and MULTIPLIES by it twice; `in / sampleCount` would
  * be a different answer in the last place and is not what is written here.
- * (Read from the ModR/M byte and not from the mnemonic -- finding 245 is about
+ * (Read from the ModR/M byte and not from the mnemonic -- finding F245 is about
  * the popping forms, and this is the memory form, but the rule is the rule.)
  *
  * The count is converted with `push $0; push %ecx; fildll`, a 64-bit load of a

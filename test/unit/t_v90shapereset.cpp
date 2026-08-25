@@ -28,7 +28,7 @@
  * calls the member.  Handing both sides the same poison rather than zeros is
  * what turns "does not read them" from a claim in the header into something
  * this file would notice being wrong -- a member that followed one would
- * fault on both sides rather than quietly reading a zero (finding 230).
+ * fault on both sides rather than quietly reading a zero (finding F230).
  *
  * THE ARGUMENT SWEEP IS BUILT AROUND `6 / shaperSR`.  Zero is in it because
  * the object guards the divide and stores 0 instead (0x3286c); 1, 2, 3 and 6
@@ -62,7 +62,7 @@
 extern "C" {
 extern unsigned int ref_dsplibs_debug_level;
 
-/* Both sides by asm() label: cdecl, `this` first on the stack (finding 215). */
+/* Both sides by asm() label: cdecl, `this` first on the stack (finding F215). */
 void our_ss_ctor(void *self) asm("_ZN17V90SpectralShaperC1Ev");
 void ref_ss_ctor(void *self) asm("ref__ZN17V90SpectralShaperC1Ev");
 void our_ss_dtor(void *self) asm("_ZN17V90SpectralShaperD1Ev");
@@ -120,7 +120,7 @@ next_byte(void)
 	return (unsigned char)(lfsr >> 3);
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial)
 {
@@ -245,7 +245,7 @@ run_ss_reset(void)
 			/*
 			 * THE ABSOLUTE CHECKS, because side-against-side
 			 * cannot see two sides that both failed to store
-			 * (findings 223, 224).  The width is the object's own
+			 * (findings F223, F224).  The width is the object's own
 			 * arithmetic and the buffer must be all zero and
 			 * +0x2c must be untouched -- still the allocator's
 			 * fill.
@@ -305,7 +305,7 @@ run_ss_reset(void)
 
 	/*
 	 * THE SEPARATING TRIALS, and each is a pair whose OBSERVABLE state
-	 * differs (findings 3509, 3403).  `6 / sr` against `6 - sr` is the
+	 * differs (findings F3509, F3403).  `6 / sr` against `6 - sr` is the
 	 * one that matters: they agree at sr == 3 and at nowhere else in the
 	 * sweep, so a reconstruction that took the subtraction passes every
 	 * trial at 3 and fails the rest -- which is only a separating trial

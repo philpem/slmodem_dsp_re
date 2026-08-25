@@ -1,6 +1,6 @@
 [
  {
-  "note": "The other half of `vpcm_run`'s set, and the same source against a different binary.  `t_vpcmguard` supplies NONE of the five `VPcmV34*` entry points, so every one of them is null in it and the unwritten-path guard is on the only path there is; it forks, calls `vpcm_run`, and requires the child to have died of SIGABRT (findings 985, 987).  A guard that returned quietly would leave a `.process` running and carrying nothing, and its output -- a buffer of silence -- is what a modem that correctly transmitted nothing produces, so it has to be WATCHED stopping rather than argued about.  These two mutations are the two ends of that: the stop removed, and the guard never reached at all."
+  "note": "The other half of `vpcm_run`'s set, and the same source against a different binary.  `t_vpcmguard` supplies NONE of the five `VPcmV34*` entry points, so every one of them is null in it and the unwritten-path guard is on the only path there is; it forks, calls `vpcm_run`, and requires the child to have died of SIGABRT (findings F985, F987).  A guard that returned quietly would leave a `.process` running and carrying nothing, and its output -- a buffer of silence -- is what a modem that correctly transmitted nothing produces, so it has to be WATCHED stopping rather than argued about.  These two mutations are the two ends of that: the stop removed, and the guard never reached at all."
  },
  {
   "label": "the guard returns quietly instead of stopping",

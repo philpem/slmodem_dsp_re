@@ -1003,7 +1003,7 @@ run_unpackers_states(void)
 				 * is never reached from seeded state at all
 				 * -- which is how the first spelling of this
 				 * run failed its own anti-vacuity check
-				 * (findings 223, 224).  Alternating leaves
+				 * (findings F223, F224).  Alternating leaves
 				 * the other half refusing on the tag.
 				 */
 				if ((sample & 1) == 0) {

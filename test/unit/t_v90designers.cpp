@@ -13,7 +13,7 @@
  * pseudorandom bytes before every call and the fill is reseeded per trial, so
  * "the object is unchanged" is a statement about sixty to forty-three-thousand
  * bytes of DIFFERENT content each time rather than about a field of zeros
- * agreeing with itself (findings 223, 224).  The run asserts that the seed
+ * agreeing with itself (findings F223, F224).  The run asserts that the seed
  * really did vary: `seed_varied` compares trial 0's fill against trial 1's.
  *
  * THE COLLABORATORS ARE SHARED AND THEY MOVE.  Every one of these
@@ -33,9 +33,9 @@
  * C++ HAS NO SYNTAX for running a constructor over storage that already
  * exists, so BOTH sides are called by symbol through asm() labels -- ours by
  * its mangled name, the blob's by the `ref_` alias the harness builds.  That
- * also sidesteps finding 225 entirely: the compiler never sees a name it
+ * also sidesteps finding F225 entirely: the compiler never sees a name it
  * could mangle a second time.  The convention is plain cdecl with `this` as
- * the first stack argument (finding 215).
+ * the first stack argument (finding F215).
  */
 
 #include <string.h>
@@ -275,7 +275,7 @@ run_cd(void)
 			 * that has to VARY across trials is the collaborator
 			 * pointer the constructor stores.  Trial 0's is kept
 			 * and every later one compared against it, which is
-			 * the check finding 224 asks for -- not merely "it
+			 * the check finding F224 asks for -- not merely "it
 			 * stored something" but "it did not store the same
 			 * thing every time".
 			 */
@@ -827,7 +827,7 @@ run_rd_detect(void)
 
 	/*
 	 * Every outcome, or the sweep proves only that two objects agree
-	 * about saying no (findings 149 and 223).
+	 * about saying no (findings F149 and F223).
 	 */
 	diff_eq_int("a group answered 0 on %ld samples", seen0 > 0, 1, seen0);
 	diff_eq_int("a run reached its limit positive %ld times",

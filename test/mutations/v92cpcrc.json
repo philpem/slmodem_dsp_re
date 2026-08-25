@@ -137,13 +137,13 @@
   "label": "evaluateCRC does not reset the register first",
   "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
   "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();",
-  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding 4708's shape a second time."
+  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding F4708's shape a second time."
  },
  {
   "label": "evaluateCRC resets after calculating",
   "find": "\tunsigned char acc = 0;\n\tint j;\n\n\tresetCRC();\n\tcalcCRC();",
   "replace": "\tunsigned char acc = 0;\n\tint j;\n\n\tcalcCRC();\n\tresetCRC();",
-  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding 4708's shape a second time."
+  "why": "ANCHORED ON evaluateCRC's DECLARATIONS.  The two calls alone stopped being unique when V92CP::infoToBits landed in the same file and inlined the same pair; make phase caught it at the refs gate, which is finding F4708's shape a second time."
  },
  {
   "label": "the received CRC is read from the front of the message",

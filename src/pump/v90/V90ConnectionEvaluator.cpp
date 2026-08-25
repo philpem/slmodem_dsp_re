@@ -21,7 +21,7 @@
  * Three of them also return something, which the header's earlier reading of
  * "a return type is not mangled and is therefore unknown" left as `void`.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215):
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215):
  * `mov 0x10(%esp),%ebx` after one push and an eight-byte frame.
  *
  * `reset` HAS TWO DIAGNOSTICS AND ONLY ONE OF THEM IS GATED, which is not a
@@ -42,7 +42,7 @@
  * block.  Nineteen of this file's stores are copies out of that block and all
  * nineteen slots have the original author's own names, which a numeric index
  * would throw away.  No translation unit may include both definitions;
- * finding 1112.
+ * finding F1112.
  */
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V90ConnectionEvaluator.h"
@@ -148,7 +148,7 @@ V90ConnectionEvaluator::~V90ConnectionEvaluator()
  * residual is INSIDE this function.  The stores above are ten independent
  * assignments, so the source-order domain is 10! and out of reach of an
  * exhaustive compile; nothing smaller than that has been shown to contain the
- * preimage.  Finding 7844.
+ * preimage.  Finding F7844.
  */
 void
 V90ConnectionEvaluator::reset()
@@ -248,7 +248,7 @@ V90ConnectionEvaluator::V90ConnectionEvaluator(V90Parameters *p)
  * of symbol counts and nothing resets it but `reset` and `enterPhase3`.
  *
  * `de f9` AT 0x3e5ca IS `FDIVP`, NOT THE `fdivrp` objdump prints (finding
- * 245 and CLAUDE.md).  So the quotient is sum/count and not count/sum, and
+ * F245 and CLAUDE.md).  So the quotient is sum/count and not count/sum, and
  * getting it backwards would have produced a plausible float that no
  * side-against-side comparison could distinguish -- both sides would have
  * been wrong together.
@@ -441,7 +441,7 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)
  * arm is the CF one, so the negation is on the outside and the zero is on the
  * left; `0.0f < v` compiles to `flds`/`fcomps`/`ja` instead, and `ja` is
  * false for an unordered compare, which prints '-' where the object prints
- * '+'.  Findings 2300 and 2410.
+ * '+'.  Findings F2300 and F2410.
  *
  * EIGHTEEN OF THE NINETEEN SITES ARE NOT DRIVEN, and for nine of them that is
  * provable from the control flow rather than a gap in the fixture: the four in
@@ -487,7 +487,7 @@ V90ConnectionEvaluator::evaluateMeanErrorStdPhase4(float, float)
  * 1000 IS A `.rodata.cst4` CONSTANT, four bytes, so it cannot have been a
  * `double` that is not exactly representable -- and 1000 is exactly
  * representable, so the section does not distinguish `1000`, `1000.0f` and
- * `1000.0` (finding 1384).  The mutation set records that as `equivalent`.
+ * `1000.0` (finding F1384).  The mutation set records that as `equivalent`.
  */
 static int
 ce_frac3(float v)
@@ -520,7 +520,7 @@ ce_frac2(float v)
  * `params->unnamed_434` IS A FLOAT AND `V90Parameters.h` TYPES IT `int`.
  * `evaluatePhase4` loads it with `flds 0x434(%ecx)` and stores it straight to
  * +0xac with `fsts`, and 0x437a0000 -- the value `setToDefault` plants there
- * (finding 878) -- is 250.0f.  Both measurements say float.
+ * (finding F878) -- is 250.0f.  Both measurements say float.
  *
  * The header is a SHARED, FROZEN type that this batch does not own, so the
  * slot is read through the type the object uses rather than retyped.  A union
@@ -761,7 +761,7 @@ V90ConnectionEvaluator::evaluatePhase3()
  * slot as an `int` and prints whatever the frame happened to hold.  This is
  * reproduced rather than repaired -- it is what the object does -- and it is
  * why the test compares state and verdict but not the transcript on that one
- * path.  Finding 1388.
+ * path.  Finding F1388.
  */
 int
 V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
@@ -996,7 +996,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
  * is `fcomps 0xa0(%edi); jae`, the complement of `avePdsnr < threshUp` taken
  * without consulting the parity flag -- so the blob RUNS the rate-up arm for
  * a NaN average, where C says it must not.  GCC 13 complements the same
- * source correctly.  Finding 1389; the test keeps NaN away from that one
+ * source correctly.  Finding F1389; the test keeps NaN away from that one
  * comparison and feeds it to the other four, which are `ja`/`jbe` and agree.
  */
 
@@ -1018,7 +1018,7 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
  * FLT_EVAL_METHOD is 2 on an x87 target and neither the cast nor the
  * parameter narrows the value.  The multiply is kept inside anyway, because
  * that is the one spelling no compiler can round, and the object's own
- * factoring is not recoverable either way.  Finding 1389.
+ * factoring is not recoverable either way.  Finding F1389.
  *
  * THE THOUSAND IS A DOUBLE HERE.  0x3f08b is `fldl .rodata.cst8+0xd8`, eight
  * bytes, where `ce_frac3`'s sites in the two phase evaluators load four -- but
@@ -1346,7 +1346,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		 * instruction sequence and computes the same thing.  The plain
 		 * compare is written because it is what the object's
 		 * arithmetic reduces to, not because the other one is unsafe.
-		 * Finding 1389.
+		 * Finding F1389.
 		 */
 		unsigned int minDur =
 		    (unsigned int)minDurationInDataBeforeRrnDown;

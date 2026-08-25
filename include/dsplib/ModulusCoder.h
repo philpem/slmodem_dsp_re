@@ -15,7 +15,7 @@
  * destroys its `V90SignBitsExtractor` member and runs no destructor at all
  * over the ModulusDecoder embedded at +0x648.
  *
- * THE OBJECT IS 0x1c BYTES, from two independent bounds (finding 1247):
+ * THE OBJECT IS 0x1c BYTES, from two independent bounds (finding F1247):
  *
  *   below   the seven-argument constructor stores its seven `unsigned int`
  *           parameters at +0x00, +0x04 ... +0x18 and the default constructor

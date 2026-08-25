@@ -72,7 +72,7 @@
  },
 
  {"label": "NOTE: generateSymbol and exitDIL",
-  "why": "Two small members added to a file that already carries the two large ones they lead to.  generateSymbol is a single branch, so what can be mutated is the branch and the width of the field it tests; the test checks the dispatcher against the generator it should have chosen, on the BLOB's side alone, because a cross-side comparison of an inverted branch would agree with itself.  exitDIL is three guards and two arms, and its terminating arm is TEXTUALLY DISTINCT from the identical block inside generateV90Symbol -- different indentation and a different line split -- which is what keeps every anchor here matching once (finding 1264).  Nothing here mutates the message: the string is checked by the debug-site audit, not by this set."},
+  "why": "Two small members added to a file that already carries the two large ones they lead to.  generateSymbol is a single branch, so what can be mutated is the branch and the width of the field it tests; the test checks the dispatcher against the generator it should have chosen, on the BLOB's side alone, because a cross-side comparison of an inverted branch would agree with itself.  exitDIL is three guards and two arms, and its terminating arm is TEXTUALLY DISTINCT from the identical block inside generateV90Symbol -- different indentation and a different line split -- which is what keeps every anchor here matching once (finding F1264).  Nothing here mutates the message: the string is checked by the debug-site audit, not by this set."},
 
  {"label": "generateSymbol dispatches the other way round",
   "find": "\tif (sessionFlag != 0)\n\t\treturn generateV92Symbol();\n\n\treturn generateV90Symbol();",

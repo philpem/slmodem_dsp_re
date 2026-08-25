@@ -1,6 +1,6 @@
 [
  {
-  "note": "Recovered from the session that wrote these three functions; finding 189's tally is this set.  The two survivors are recorded as equivalent, not removed."
+  "note": "Recovered from the session that wrote these three functions; finding F189's tally is this set.  The two survivors are recorded as equivalent, not removed."
  },
  {
   "label": "hangup: status fork <=1 becomes <=2",
@@ -324,21 +324,21 @@
  },
  {
   "label": "reneg: rrn counter not bumped",
-  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding 347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding 455.",
+  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
   "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);\n",
   "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: rrn counter is the remote one",
-  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding 347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding 455.",
+  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
   "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
   "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_remote = (short)(obj->rrn_remote + 1);",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "reneg: rrn counter saturates rather than wrapping",
-  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding 347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding 455.",
+  "note": "Anchor carries the two lines above it.  `VPcmV34IndicateLocalRRN`, further down this file, is nothing BUT this statement, so the bare line matches twice and reads as UNUSABLE rather than as a failure (finding F347).  Anchored by hand and not by `tools/reanchor.py`, which picked the other occurrence -- see finding F455.",
   "find": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local + 1);",
   "replace": "\t*(int *)(m + 0x2218) = 5;\n\n\t/* The same event `VPcmV34IndicateLocalRRN` exists to count. */\n\tobj->rrn_local = (short)(obj->rrn_local == 32767 ? 32767\n\t\t\t\t\t\t   : obj->rrn_local + 1);",
   "fn": "VPcmV34InitiateRateRenegotiation"

@@ -33,7 +33,7 @@
  *     mov %ebp,(%esp) ; call _ZN12VPcmFloModem13getUinfoValueEs
  *
  * with no load in between, and `this` is the first STACK argument in this
- * object (finding 215).  So the same pointer is the `this` of a
+ * object (finding F215).  So the same pointer is the `this` of a
  * `VPcmFloModem` member AND the base of both session offsets, and
  * `include/dsplib/VPcmFloModem.h` already calls +0x611c `pcmSessionType` and
  * +0x6120 `info0Layout` from a third translation unit.  They are the same two
@@ -231,7 +231,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * writes, byte for byte.  Written through the same helper because it
 	 * is the same three instructions; what is NOT shared is the law test,
 	 * which is `== 1` here and `!= 0` on the answer side.  That asymmetry
-	 * is in the object -- `cmpl $0x1` against `test` -- and finding 130 is
+	 * is in the object -- `cmpl $0x1` against `test` -- and finding F130 is
 	 * the standing warning about factoring two blocks that look alike.
 	 */
 	if (obj->k56flex_receiver != 0) {

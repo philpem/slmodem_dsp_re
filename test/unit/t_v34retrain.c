@@ -22,8 +22,8 @@
  * `v34modeminit` and rewrites a large part of the object with the SAME code
  * on both sides.  Any store this function makes before that which the
  * handshake later overwrites is invisible here whatever the sweep looks like
- * -- finding 253's trap with a bigger blast radius.  test/mutations/
- * v34retrain.json breaks each pre-handshake store in turn and finding 318
+ * -- finding F253's trap with a bigger blast radius.  test/mutations/
+ * v34retrain.json breaks each pre-handshake store in turn and finding F318
  * records which ones the differential tier can actually see.
  *
  * THE INPUTS ARE CROSSED WHERE THE OBJECT CROSSES THEM.  Which of three arms
@@ -39,7 +39,7 @@
  * three of this function's eight call sites -- "Initiating retrain",
  * "minLevel given is" and "V34 filtdelay set to" -- write NOTHING but the
  * message, so deleting any of them is invisible to a state comparison
- * (finding 134).  Every case therefore runs twice, once with both levels at 0
+ * (finding F134).  Every case therefore runs twice, once with both levels at 0
  * and once with both at 2, and the two transcripts are diffed.
  *
  * AND TWO OF THE STORES ARE PRINTED BACK AS SHORTS.  "V34 filtdelay set to
@@ -262,7 +262,7 @@ get_short_a(unsigned off)
 
 /*
  * Everything a case chooses.  ONE FIELD PER INPUT, so that no two can be
- * driven from one variable: that is the fixture defect of findings 116b, 123
+ * driven from one variable: that is the fixture defect of findings F116b, F123
  * and 171, and this function has four gating inputs whose conjunction is the
  * whole point.
  */
@@ -636,7 +636,7 @@ main(void)
 		}
 
 		/*
-		 * ANTI-VACUITY, and it is the check finding 247 says to make:
+		 * ANTI-VACUITY, and it is the check finding F247 says to make:
 		 * that this fixture can tell the eight entries apart at all.
 		 * Two in-range levels whose table entries differ must leave
 		 * different floors behind, or every case above proved nothing.

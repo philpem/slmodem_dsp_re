@@ -43,7 +43,7 @@
  * data flag was never set" and "the receiver state never became 3 or 2 on
  * those arms".  A "this arm ran at least once" check for them would be
  * unsatisfiable arithmetic dressed as coverage, which is the shape that
- * failed loudly twice already in this tree.  Finding 281 measures the gap and
+ * failed loudly twice already in this tree.  Finding F281 measures the gap and
  * names the four mutations that go uncaught because of it.
  */
 
@@ -550,7 +550,7 @@ main(void)
 	 * unreachable ones are asserted NOT to have run, because that is the
 	 * only form of the statement that is satisfiable: their gate is a
 	 * three-byte stub returning 0 on both sides.  See the header comment
-	 * and finding 281.
+	 * and finding F281.
 	 */
 	diff_begin("k56FlexPhase34 coverage");
 	{

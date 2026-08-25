@@ -56,7 +56,7 @@ CONTROL -- 1901 Supra, port 0/0, untouched, same binary, same session
 
   So this run does not distinguish "the mechanism is wrong" from "the config
   did not take effect".  Both remain live.  Do not read the null as a
-  refutation of finding 1966's model; read it as a test with too little power.
+  refutation of finding F1966's model; read it as a test with too little power.
 
 *** AND THE WHOLE LINE IS AIMED AT THE DIRECTION THAT ALREADY WORKS ***
 
@@ -67,7 +67,7 @@ CONTROL -- 1901 Supra, port 0/0, untouched, same binary, same session
 
   `output attenuation` on port 0/1 changes only what the FAR END hears.  That
   is the 28800 direction.  It cannot touch the 12000 direction at all.  So even
-  if the knob works perfectly and finding 1966's model is exactly right, the
+  if the knob works perfectly and finding F1966's model is exactly right, the
   best available outcome is a fraction of a dB of margin on the direction that
   is not the problem.
 
@@ -118,7 +118,7 @@ gateway.  Recorded because the numbers are in the captures:
                 stored report.  Plain settle restored it (call 5: 1920, 3200,
                 150, and Recv 27).
 
-SECONDARY, and it does NOT go the way finding 1966 predicted
+SECONDARY, and it does NOT go the way finding F1966 predicted
   The Courier's requested reduction, arm 2:  3 6 8 / 3 8 / 3 6 3 3 / 3 6 6
   **8 dB appears, and 8 has never been seen** -- not in 121 archived
   handshakes nor in arm 1's nine.  Nine dB quieter, and it asks for MORE.

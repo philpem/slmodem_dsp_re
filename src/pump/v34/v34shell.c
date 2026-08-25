@@ -386,7 +386,7 @@ putFrame(void *shellp)
  *
  * The two halves are the same computation on different parameters, which is
  * why they are one function here; the object emits them twice with different
- * stack slots throughout.  See finding 132.  The one asymmetry worth naming:
+ * stack slots throughout.  See finding F132.  The one asymmetry worth naming:
  * the second accumulator's mask variable is AND-ed in place rather than
  * copied, in both halves -- harmless because neither reuses it, but it is
  * why the two look less alike than they are.
@@ -807,7 +807,7 @@ const unsigned short lsbMask[17] = {
  *
  * Unpacks one frame from a bit stream into the TRANSMIT shell context, which
  * lives at `obj + V34_SHELL_TX` and is the same structure as the receive one
- * (finding 137).  The field layout is putFrame's exactly:
+ * (finding F137).  The field layout is putFrame's exactly:
  *
  *     wide                  the shell index, into frame[0..1] as ONE 32-bit
  *                           store -- the pair putFrame splits above sixteen
@@ -872,7 +872,7 @@ getFrame(void *objp)
 		 * negative count masked to 16 and reads a different field.
 		 *
 		 * Found by modulatevector, whose fixture is the first thing in
-		 * this tree to drive `nb` above 16.  Finding 185.
+		 * this tree to drive `nb` above 16.  Finding F185.
 		 */
 		s->frame[0] = (short)((unsigned)s->bitbuf >> (pos & 31));
 		(void)s->scramble(objp, 0);
@@ -915,7 +915,7 @@ getFrame(void *objp)
 		 * makes it negative and the object reads `.rodata` BEFORE
 		 * lsbMask -- deterministic in that build, not reproducible
 		 * here, and outside anything a real caller produces since a
-		 * field width is never negative.  Same shape as finding 129;
+		 * field width is never negative.  Same shape as finding F129;
 		 * the fixture stays inside and says so.
 		 */
 		p[0] = (short)(v & 1);
@@ -1165,7 +1165,7 @@ shell_of(void *fields)
  * NOTHING IN THE OBJECT CALLS THIS.  All four sites that set the callback --
  * two in preinitV34's inlined copies and two in preinitdigital -- store it
  * directly, so this survives only as the out-of-line copy the compiler had to
- * emit for an extern function.  Same shape as finding 89; reconstructed
+ * emit for an extern function.  Same shape as finding F89; reconstructed
  * because it is there, not because anything needs it.
  */
 void
@@ -1536,12 +1536,12 @@ const short quarter[416] = {
  * the rate config at +0xaa84, reconciles the two directions against what the
  * line can actually carry, and then calls `initV34` TWICE -- once for the
  * transmit shell context at +0x25e0 and once for the receive one at +0xa00.
- * That pairing is finding 181 seen from the caller's side.
+ * That pairing is finding F181 seen from the caller's side.
  *
  * FIVE DIAGNOSTIC CALL SITES, carried per debug.h's policy, and they are the
  * reason most of the fields below have names rather than numbers: the author
  * printed "txbitrate", "rxbitrate", "PTC" and "nofTxBits" himself.  See
- * finding 186.
+ * finding F186.
  *
  * THE ROLE SWAPS TWO NIBBLES.  `info_rates` carries one four-bit rate per
  * direction, at bits 2..5 and 6..9, and which one is "ours" depends on
@@ -1551,7 +1551,7 @@ const short quarter[416] = {
  * RATES ARE COUNTS OF 2400 bps throughout, and only become bits per second
  * where they are handed to `initV34` or published at the end.  That is why
  * `initV34` divides by 25: 2400/25 is 96, so its quotient is bits per symbol
- * group directly (finding 183).
+ * group directly (finding F183).
  */
 void
 initdigital(void *obj)
@@ -1709,7 +1709,7 @@ initdigital(void *obj)
 		 * fourteen rates per mode, and READ BEFORE the zero-rate test
 		 * -- so a zero rate reads `divtab[14 * use_max - 1]`, which
 		 * for mode 0 is one entry BEFORE the table.  Unclamped, like
-		 * the three tables of finding 129, and reproduced.
+		 * the three tables of finding F129, and reproduced.
 		 */
 		div = cfg->divtab[(short)bits + 14 * (short)umax - 1];
 
@@ -1804,7 +1804,7 @@ initdigital(void *obj)
  *      left in `frame[0]`.  The comparison is UNSIGNED, which is what makes
  *      preinitV34's fill of -1 a sentinel rather than debris -- 0xffffffff is
  *      above any frame value, so the -1s stop the search entering the part of
- *      `t3` initG248 did not fill.  See D44 and findings 182 and 184.
+ *      `t3` initG248 did not fill.  See D44 and findings F182 and F184.
  *
  *   2. Three passes of "peel off table steps until it goes negative", once
  *      against `t2` and twice against `t1`, each followed by a divide and a

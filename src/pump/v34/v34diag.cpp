@@ -55,7 +55,7 @@
  * the record ends up holding, and `compare.py` will read this function as
  * shorter by the inlined body for as long as the split lasts.  Writing the
  * loops out a second time would be a second copy to keep in step for a codegen
- * score, which finding 605 is the standing argument against.
+ * score, which finding F605 is the standing argument against.
  *
  * ===========================================================================
  * WHAT IS FORCED IN HERE
@@ -69,7 +69,7 @@
  *    converts the other way.  So both conversions are unsigned, and the
  *    arithmetic between them is x87 at 80 bits: `fmuls` against the float
  *    1/12 and `fadd` of the float 0.5.  Written as integer arithmetic it
- *    would not reproduce -- see finding 5503.
+ *    would not reproduce -- see finding F5503.
  *
  * 2. BOTH `fistp`s ROUND TOWARD ZERO.  `fnstcw`, `or $0xc00`, `fldcw`,
  *    `fistp`, `fldcw` is what a C cast to an integer type compiles to, and
@@ -79,7 +79,7 @@
  * 3. `-12.0f - f25dc` IS A REVERSED SUBTRACT AND THE OPERAND ORDER IS THE
  *    OBJECT'S.  `filds` puts the power reduction on the stack and `fsubrs`
  *    against the constant computes `constant - st(0)`.  (The FSUBR trap of
- *    finding 245 is the `DE` POP encodings; this is `d8 /5`, which objdump
+ *    finding F245 is the `DE` POP encodings; this is `d8 /5`, which objdump
  *    renders correctly.)
  *
  * 4. THE V.92 ARM STORES ITS -12.0f WITH AN INTEGER `mov`.  A float constant
@@ -88,7 +88,7 @@
  *
  * 5. +0x228's ZERO TEST IS ON THE SHORT AND THE STORE IS SIGN-EXTENDED.  The
  *    load is `movzwl` and the widening is `cwtl`, so the upper half of the
- *    load never survives -- finding 614's case, and the value stored is
+ *    load never survives -- finding F614's case, and the value stored is
  *    `(int)(short)fac0c`.
  */
 
@@ -243,7 +243,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 		/*
 		 * The round-trip delay goes in unscaled, into both offsets.
 		 * `getAT_UD` divides its own by 9.6 before storing it at
-		 * +0x084; this writer does not.  Finding 5502.
+		 * +0x084; this writer does not.  Finding F5502.
 		 */
 		results->word_080 = results->roundTripDelay =
 		    (unsigned int)obj->rtd;
@@ -322,9 +322,9 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
  *
  * 5. `v34_object::pac18` IS A `K56FlexFloModem *`.  Five call sites pass it
  *    as the first stack argument of a member of that class, which is `this`
- *    in this object (finding 215).  The FIELD is not retyped -- the class has
+ *    in this object (finding F215).  The FIELD is not retyped -- the class has
  *    no data members, so the type carries no layout, and `V34GiveINFO1aBits`
- *    reads an int at +0xc through the same pointer.  Finding 5510.
+ *    reads an int at +0xc through the same pointer.  Finding F5510.
  */
 
 /* `v34_object::status` for a K56flex session; 1 and 2 are the two PCM ones. */

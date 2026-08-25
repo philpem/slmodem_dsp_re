@@ -19,7 +19,7 @@
  * wrap.
  *
  * THE DEBUG TRANSCRIPTS ARE COMPARED TOO.  Four of these six functions print,
- * and finding 134 is the reason that matters: a dropped call site is
+ * and finding F134 is the reason that matters: a dropped call site is
  * invisible to every test in this tree unless the transcript itself is the
  * thing being compared.  So each sweep runs a second time with both debug
  * levels raised and the two transcripts diffed.
@@ -59,7 +59,7 @@
  * For the two `vpcm_run` callees `v34pcmif.c` defines.  Included WITHOUT
  * `DSPLIB_VPCM_UNWRITTEN`, so the declarations here are plain: this file
  * calls them and never compares their addresses, which is the one thing
- * finding 985 says a plain declaration must not be used for.
+ * finding F985 says a plain declaration must not be used for.
  */
 #include "dsplib/vpcm.h"
 
@@ -947,7 +947,7 @@ run_force(unsigned char cfgbyte, int v90, int k56, const unsigned char *allow,
 /*
  * Every input either of them reads, one field per member.  The three arm
  * selectors are separate from each other because that is the only way to tell
- * an `&&` from an `||` -- findings 116b, 123 and 171 -- and `sens` is separate
+ * an `&&` from an `||` -- findings F116b, F123 and F171 -- and `sens` is separate
  * from `v90` for the same reason: the object consults `+0x4f8` only after
  * `v90_receiver`, and a reconstruction that or-ed them agrees on every case
  * where both are set.
@@ -1099,7 +1099,7 @@ check_shell_ptrs(short f359c, long tag)
 
 /*
  * Every input the three functions read, one field per member.  Two inputs
- * driven from one variable cannot be told apart -- findings 116b, 123 and 171
+ * driven from one variable cannot be told apart -- findings F116b, F123 and F171
  * -- so `rate_now`, `rate_min` and `rate_max` are separate even though the
  * interesting cases are relations between them, and the three state words are
  * separate from each other and from the two trace counters.
@@ -2544,7 +2544,7 @@ main(void)
 	 * `movswl`, so 0x8000 gives -32768 * 2400 and not 32768 * 2400.  The
 	 * two readings agree over every rate index a session can hold -- 0 to
 	 * 14 -- so this is the only place the declared type is observable,
-	 * finding 1102's three-check case again.  The extremes overflow the
+	 * finding F1102's three-check case again.  The extremes overflow the
 	 * multiply; both sides overflow identically and the value is compared
 	 * for agreement rather than against a hand figure.
 	 */
@@ -3462,7 +3462,7 @@ main(void)
 
 	/*
 	 * AND ALL OF THEM WITH THE DIAGNOSTICS LIVE.  Four of the thirteen
-	 * print, and finding 134 is why that needs its own pass: a dropped
+	 * print, and finding F134 is why that needs its own pass: a dropped
 	 * call site is invisible to every state comparison in this file.
 	 */
 	diff_begin("v34 pcm interface: the accessor surface, transcripts too");

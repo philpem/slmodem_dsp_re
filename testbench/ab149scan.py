@@ -195,7 +195,7 @@ def main():
               % (o / n if n else float("nan")))
         print("\n   A ratio near 1 means underruns are simply common and any")
         print("   clustering is an artefact of that -- which is exactly how the")
-        print("   tap-drift and rate-overshoot hypotheses died (finding 1918).")
+        print("   tap-drift and rate-overshoot hypotheses died (finding F1918).")
     else:
         print("   not enough anchored calls with both retrains and underruns.")
     return 0

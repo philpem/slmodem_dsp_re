@@ -26,7 +26,7 @@ V.34/V.90/V.92 run at the host rate directly.
 
 **Retarget:** set the host to 8000 and `dp_wrapper` short-circuits to a
 pass-through — the equal-rate branch is already there and tested. V.34 and
-above keep needing 9600. See findings 5 and 6.
+above keep needing 9600. See findings F5 and F6.
 
 ## 🔴 R-2 — `d-modem.c` resamples 8000 → 9600 for a pump that wants 8000
 
@@ -80,14 +80,14 @@ keeps the durations the module was tuned for. Nothing else in `dcr.c` mentions
 a rate — the estimator is a mean and a leaky blend, and neither has a
 frequency in it — so unlike the filter banks there is no coefficient set to
 regenerate. These are fields rather than constants, so a host could also poke
-them after `dcr_create` without touching the library. Findings 11 and 4200.
+them after `dcr_create` without touching the library. Findings F11 and F4200.
 
 ## 🔴 R-8 — Bell 103's FSK core is clocked at 7200 Hz
 
 `FPM_FSM_CFG` carries `24` samples per symbol, which at 300 baud is 7200 Hz
 (8000 would give 26.667). Independently, `FPM_FSM_init`'s 10/9 pre-scale
 composed with `FPM_TONE_create`'s 32768/8000 yields phase increments for
-exactly 7200. See finding 17.
+exactly 7200. See finding F17.
 
 So B103 converts twice: `dp_wrapper` brings the host 9600 down to 8000, and
 B103 converts 8000 to 7200 internally. `RcFixed` modes 18 and 19 are 9:10 and
@@ -143,7 +143,7 @@ V.25 figure in milliseconds precisely because the scaling assumes 8 kHz.
 
 **Retarget:** at another rate the divisor must change with it, or the reversal
 period drifts. At 7200 Hz (where the B103 FSK core runs, R-8) the same config
-would give 500 ms instead of 450. Finding 19.
+would give 500 ms instead of 450. Finding F19.
 
 ## 🔴 R-11 — V.34's handshake counts in FOUR-SAMPLE TICKS, which are 2400-baud symbol periods only at 9600 Hz
 
@@ -151,7 +151,7 @@ The V.34 microstate machine steps once per four received samples, and four
 samples at 9600 Hz **is** one symbol period at 2400 baud, V.34's reference
 symbol rate. The object never distinguishes the two readings, because at the
 only rate it runs at they are the same quantity — `vpcm_create` guards
-`srate == 9600` exactly at 0x3a1c. Findings 1040–1045.
+`srate == 9600` exactly at 0x3a1c. Findings F1040–1045.
 
 Three constants ride on that tick and they do **not** move together:
 
@@ -191,7 +191,7 @@ block-versus-symbol relationship, not a rescale of the delay constants.
 
 **Latent, and to be reproduced rather than fixed:** `v34tx1_ppseg` at 0x68154
 adds `filtdelay` (ticks) to a count of symbols at the *negotiated* baud. The
-sum is dimensionally right only at 2400. Finding 1043.
+sum is dimensionally right only at 2400. Finding F1043.
 
 ## 🟡 R-7 — `dp_wrapper`'s rate table is a fixed list of six pairs
 
@@ -210,7 +210,7 @@ produce no conversion. Noted in `src/core/dp_wrapper.c`.
 call `modem_get_param`).  It computes `phys = IODELAY + 48`, pins it at 216,
 and hands the V.32 core `phys * 5 / 6` — and 5/6 is exactly 8000/9600.  The
 host's delay is in host samples; the echo canceller behind `dp_wrapper` wants
-its own 8 kHz ones.  Finding 1197.
+its own 8 kHz ones.  Finding F1197.
 
 **Retarget:** if R-1 makes the host 8000, **three** constants move together,
 not one.  The ×5/6 has to go to 1; the `+48` is one host fragment

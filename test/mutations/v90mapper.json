@@ -13,7 +13,7 @@
    "signBitGroupSize, constellationSize, uint_6f8 and signEncoder.prev_;",
    "the anchors below were rewritten with them.  A find string that no",
    "longer matches is an UNUSABLE mutation and does NOT fail a run",
-   "(finding 347), so `make phase`'s anchor check is what caught this.",
+   "(finding F347), so `make phase`'s anchor check is what caught this.",
    "",
    "ANCHORING IN THE RESETS NEEDS EXTRA CONTEXT.  The two functions share a",
    "long identical run -- the six-constellation fill and the seven-word",
@@ -224,7 +224,7 @@
    "be caught by t_v90modchain's two `V90Mapper::process` groups, which",
    "compare the whole 0x704 object, the symbol buffer and its guard, and the",
    "`nofSymbols` answer after every call.  The first row is the one that",
-   "needs the poked arm rather than any reachable state -- finding 7423."
+   "needs the poked arm rather than any reachable state -- finding F7423."
   ]
  },
  {

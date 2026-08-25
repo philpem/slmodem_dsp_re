@@ -88,7 +88,7 @@
  * `_ZTV`, and eight is the two leading ABI words.
  *
  * The data member NAMES are invented and descriptive -- the mangling
- * preserves method and type names but never a data member's (finding 226).
+ * preserves method and type names but never a data member's (finding F226).
  */
 
 #ifndef DSPLIB_RESAMPLER_H

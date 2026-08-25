@@ -22,7 +22,7 @@
  *                    1 - c1 z^-1 - c2 z^-2
  *
  * The callers' coefficient banks all have the same shape, and it is what
- * makes the reading above checkable rather than asserted (finding 1411):
+ * makes the reading above checkable rather than asserted (finding F1411):
  *
  *     c0 = -2 cos(w0)        zeros ON the unit circle, at +-w0
  *     c1 =  2 r cos(w0)      poles at r e^{+-j w0}

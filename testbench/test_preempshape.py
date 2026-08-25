@@ -19,7 +19,7 @@ WHAT IT PINS, and why each case is here rather than being a nice idea.
    apart.
 
 3. BROADBAND NOISE.  Per-bin Gaussian error.  The measured probe is not clean:
-   finding 1911 found one dud bin moving the object's answer a whole bucket.
+   finding F1911 found one dud bin moving the object's answer a whole bucket.
    The thresholds here are the measured behaviour of the current code, so a
    change that makes it more fragile shows up as a failure rather than as a
    number nobody compares.
@@ -43,7 +43,7 @@ WHAT IT PINS, and why each case is here rather than being a nice idea.
 
 THIS TESTS THE PYTHON MODEL, NOT THE C.  `preemphshape.py` and
 `probe_preemp_shape()` in v34hshak.c were written from the same figures but not
-from each other, and finding 1960 cross-checked them on a real capture: same
+from each other, and finding F1960 cross-checked them on a real capture: same
 index, same bin count, residuals agreeing to 0.04 dB^2.  So this pins the
 model the C implements.  A C-level test that drives `probeselect()` and reads
 the index back out is the stronger thing and is task #164.

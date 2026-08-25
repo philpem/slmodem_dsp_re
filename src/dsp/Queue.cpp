@@ -22,7 +22,7 @@ extern "C" void sysdep_free(void *p);
  * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
  * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
  * were compiled and only `delete[]` reproduces the object's shape; finding
- * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ * F7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
  *
  * Behaviourally it is exactly the guard it replaces: the element type is a POD
  * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
@@ -38,14 +38,14 @@ extern "C" void sysdep_free(void *p);
  * reaches transitively -- moved it earlier in the translation unit and cost
  * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
  * them.  That is refinement.md lever 3 with an inline function as the carrier,
- * and finding 7815 is the measurement.
+ * and finding F7815 is the measurement.
  */
 inline void operator delete[](void *p) { sysdep_free(p); }
 
 /*
  * The element copy.  `dsplib_assign` is the plain assignment the original's
  * source said, plus the one thing a modern compiler needs to be held to it --
- * see dsplib/x87copy.h, and finding 600 for what a signalling NaN does to the
+ * see dsplib/x87copy.h, and finding F600 for what a signalling NaN does to the
  * x87 form.  t_queue's third block is the case that tells them apart.
  */
 template <class T>
@@ -66,7 +66,7 @@ __attribute__((noinline)) void Queue<T>::reset()
 	 * `rd = wr = buf`, not `wr = rd = buf`: the object stores `wr` first,
 	 * and written this way the function comes out full-text identical to
 	 * it, operands and all.  The two spellings are equivalent -- both set
-	 * both -- so this is the author's, recovered.  Finding 617.
+	 * both -- so this is the author's, recovered.  Finding F617.
 	 */
 	rd = wr = buf;
 }

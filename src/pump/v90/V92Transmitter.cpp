@@ -26,7 +26,7 @@
  * needs no header.
  *
  * THAT LAST SENTENCE USED TO READ "the instruction sequence is the blob's
- * either way", AND IT IS WITHDRAWN FOR THE DESTRUCTOR (finding 7816).  It
+ * either way", AND IT IS WITHDRAWN FOR THE DESTRUCTOR (finding F7816).  It
  * holds for `new`, where both spellings emit identically -- which is why the
  * constructor still goes through the asm() label and loses nothing.  It is
  * FALSE for a free in TAIL POSITION: the delete-expression emits an ordinary
@@ -37,7 +37,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, `this` as the first stack argument
  * (`mov 0x20(%esp),%esi` after two pushes and a 0x14-byte frame), so nothing
- * here needs an attribute -- finding 215.
+ * here needs an attribute -- finding F215.
  */
 
 #include <stddef.h>
@@ -52,7 +52,7 @@
  * `_ZdlPv` at all, so the codebase replaced the global operator.
  *
  * WRITING IT OUT BY HAND IS NOT EQUIVALENT, and that is the whole of finding
- * 7816's correction to this file's own older comment.  At the destructor's
+ * F7816's correction to this file's own older comment.  At the destructor's
  * LAST free the delete-expression emits an ordinary `call sysdep_free`; the
  * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
  * frame with it.  refinement.md lever 7.
@@ -105,7 +105,7 @@ void v92tx_prefilter_ctor(void *self, unsigned int nTaps)
 /*
  * Hold the compiler to the map in the header.  `tools/offcheck.py` parses
  * `struct name {` out of include/dsplib and cannot see a C++ class, so the
- * class asserts its own (finding 230).  Guarded on a 32-bit pointer because
+ * class asserts its own (finding F230).  Guarded on a 32-bit pointer because
  * every field from +0x08 on is a pointer or comes after one; `make check64`
  * compiles this file for the host to prove the CODE does not depend on 32-bit.
  */
@@ -225,7 +225,7 @@ V92Transmitter::V92Transmitter()
  * head's.  The blob's C1-before-C2 clone order is not reachable from here at
  * all: GCC 3.4.2 emits this class's constructor clones C2-first whatever the
  * source says, so the file cannot hold both.  Reverted, and the measurement
- * kept -- 7797's ruling.  Finding 7842.
+ * kept -- 7797's ruling.  Finding F7842.
  * ===========================================================================
  */
 V92Transmitter::~V92Transmitter()
@@ -254,7 +254,7 @@ V92Transmitter::~V92Transmitter()
 	 * open-coded `~V92Precoder(); sysdep_free()` form, and the guard with
 	 * the zero left outside -- giving three distinct emissions, of which
 	 * exactly one reaches positional byte identity.  D2 goes EXACT and D1
-	 * from 46 differing bytes to 2.  Finding 7841.
+	 * from 46 differing bytes to 2.  Finding F7841.
 	 */
 	if (precoder != 0) {
 		delete precoder;
@@ -273,7 +273,7 @@ V92Transmitter::~V92Transmitter()
  * say %07d.  `frac_of`'s subtraction is `v - (int)v`, which is what `de e1`
  * at .text+0x53e3d does: objdump prints it `fsubp %st,%st(1)` and it IS
  * FSUBRP, so st(1) becomes st(0) - st(1) and st(0) holds the value (finding
- * 245).  The abs() makes the order unobservable (finding 256).
+ * F245).  The abs() makes the order unobservable (finding F256).
  */
 static char
 sign_of(float v)
@@ -553,7 +553,7 @@ V92Transmitter::process(unsigned char *bits, unsigned int nbits, short *out,
 			 * emissions, exactly ONE at positional byte identity.
 			 * The table separates the two facts: the declaration
 			 * order alone takes 110 differing bytes of 355 to ONE,
-			 * and the local closes that one.  Finding 7847.
+			 * and the local closes that one.  Finding F7847.
 			 */
 			float points[V92TX_FRAME_SYMBOLS];
 			float shaped[V92TX_FRAME_SYMBOLS];

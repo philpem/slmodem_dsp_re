@@ -198,7 +198,7 @@ run_create(const char *label, int band_wanted)
 	diff_eq_int("after delete: f70", b.f70, a.f70, 0);
 	/*
 	 * And the three that are NOT cleared, which is the point of finding
-	 * 55 -- asserted so a tidier reconstruction would fail here.
+	 * F55 -- asserted so a tidier reconstruction would fail here.
 	 */
 	diff_eq_int("busy left dangling", b.busy != 0, a.busy != 0, 0);
 	diff_eq_int("dtmf left dangling", b.dtmf != 0, a.dtmf != 0, 0);
@@ -513,7 +513,7 @@ printed_only(int side, char *buf, size_t n)
  * that was never restored at all are the same program, and none of the checks
  * above can tell them apart.  Fourteen sites in `CALLPROG_Create`,
  * `CALLPROG_Delete` and `CALLPROG_Dial` were in exactly that position --
- * placed, and never once executed by anything (finding 192).
+ * placed, and never once executed by anything (finding F192).
  *
  * Level 1 must be silent: the gates are `> 1`.  The sweep to 3 is what says
  * so rather than the reading.

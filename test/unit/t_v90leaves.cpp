@@ -21,11 +21,11 @@
  * BLOB's object did, against the seed it started from: which four-byte words
  * moved, by absolute offset, with no reference to a field name.  A word that
  * moves outside the declared set is a failure, and a declared word that never
- * moves across the whole run is a failure too -- that is findings 223 and
- * 224's rule, that a field the function never writes proves nothing, turned
+ * moves across the whole run is a failure too -- that is findings F223 and
+ * F224's rule, that a field the function never writes proves nothing, turned
  * into a check rather than a hope.
  *
- * THE OBJECTS ARE NEVER ZEROED (finding 230).  Both sides get the same varied
+ * THE OBJECTS ARE NEVER ZEROED (finding F230).  Both sides get the same varied
  * pseudorandom bytes before every call and are reseeded every trial, so a
  * store that fails to happen is visible and a store of zero into memory that
  * was already zero is not mistaken for one.  Four seed modes, because a fill
@@ -42,7 +42,7 @@
  *
  * THE DIAGNOSTICS ARE COMPARED AS TEXT.  Three of the six print, and
  * `dsplibs_debug_level` ships at zero, so a wrong format string behaves
- * exactly like a right one in every other check (finding 180).  Both sides'
+ * exactly like a right one in every other check (finding F180).  Both sides'
  * levels are swept 0..2 together and the two transcripts compared; at level 2
  * they must be non-empty, and below the gate both must be silent.  `edprintf`
  * encodes its output, so a transcript that matches is a format string, an
@@ -51,7 +51,7 @@
  * The `ref_` aliases are reached through asm() labels rather than by spelling
  * the ref_-prefixed mangled name as an identifier -- see t_v90jd.cpp.  The
  * convention is plain cdecl with `this` as the first stack argument (finding
- * 215), so no attribute is involved.
+ * F215), so no attribute is involved.
  */
 
 #include <string.h>
@@ -72,14 +72,14 @@
  * The NAMED V90Parameters map: `V90ConstellationDesigner::reset` and
  * `V90ConnectionEvaluator::reset` read twenty slots out of the parameter
  * block between them, and this test seeds those slots by name.  Finding
- * 1112 is why only one of the two definitions may be included.
+ * F1112 is why only one of the two definitions may be included.
  */
 #include "dsplib/V90Parameters.h"
 /*
  * The demapper's destructor path.  `V90Demapper.h` and
  * `V90SignBitsExtractor.h` forward-declare `V90Parameters` rather than
  * defining it, so both are safe to include after the named map -- finding
- * 1112 again.
+ * F1112 again.
  */
 #include "dsplib/sysdep.h"
 #include "dsplib/V90Demapper.h"
@@ -128,7 +128,7 @@ void ref_arma_dtor(void *self) asm("ref__ZN9FloatARMAD1Ev");
  * our side and as a symbol on the blob's is not the same call, and the two
  * must be exactly symmetric.  `D1` and `D2` are 195 bytes each in the blob and
  * byte-identical to each other; both are driven, so the second copy is
- * measured rather than assumed to be a copy of its twin (finding 1270).
+ * measured rather than assumed to be a copy of its twin (finding F1270).
  */
 void our_ec_dtor(void *self) asm("_ZN16V92EchoCancellerD1Ev");
 void ref_ec_dtor(void *self) asm("ref__ZN16V92EchoCancellerD1Ev");
@@ -214,7 +214,7 @@ next_byte(int mode, unsigned i)
 	}
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial, int mode)
 {
@@ -276,7 +276,7 @@ static int transcripts_seen;		/* asserted once, at the end of main */
 
 /*
  * The transcript checks every printing member repeats.  `lines` is what
- * finding 149 says to count: text alone can be filled by the harness.
+ * finding F149 says to count: text alone can be filled by the harness.
  */
 static void
 check_transcript(unsigned lvl, long tag, int *printed)
@@ -441,7 +441,7 @@ run_sd(void)
 		 * buffer is its own (CLAUDE.md's "two heap pointers hold two
 		 * different addresses and always will").  Both are asserted
 		 * untouched afterwards and then blanked, so nothing is
-		 * skipped silently -- finding 224.
+		 * skipped silently -- finding F224.
 		 */
 		SD_A.history = sd_ha;
 		SD_B.history = sd_hb;
@@ -740,7 +740,7 @@ run_ec(void)
  * lengths, two tap counts -- is enough for that, and it lets both sides share
  * one seeded 0x34-byte image rather than two constructor runs.
  *
- * NOTHING IS ZEROED (finding 230).  Both buffers and both ARMA histories are
+ * NOTHING IS ZEROED (finding F230).  Both buffers and both ARMA histories are
  * seeded with varied bytes every trial, so "the loop wrote zeros" is visible;
  * against a zero-filled buffer a loop one entry short passes.
  */
@@ -755,7 +755,7 @@ run_ec(void)
  * The one field of the parameter block `reset` reads:
  * `V92Parameters::V92_ECHO_DELAY_OFFSET`, +0x074.  Reached by offset rather
  * than by name so that this file need not carry the V.92 map beside the V.90
- * one it already has (finding 1112's neighbourhood).
+ * one it already has (finding F1112's neighbourhood).
  */
 #define ECR_DELAY_OFFSET	0x74
 
@@ -986,7 +986,7 @@ run_ec_reset(void)
 			 * The history loop is checked the same way, and
 			 * `sawHist` needs an entry that CHANGED -- a seeded
 			 * zero overwritten with zero is not evidence the loop
-			 * ran (findings 223, 224).
+			 * ran (findings F223, F224).
 			 */
 			for (i = 0; i < ECR_HIST; i++) {
 				int ok;
@@ -1213,7 +1213,7 @@ run_ec_dtor(void)
  *   - every trial asserts `echoLength <= historyAlloc` BEFORE it believes any
  *     of that.  Driving the overrun would corrupt this process's heap, which
  *     is not the same thing as testing D72; D72 is CONFIRMED and CANNOT FIRE
- *     (finding 1188) and this is not the place to re-open it.
+ *     (finding F1188) and this is not the place to re-open it.
  *
  * TWO ARMS ARE NOT DRIVEN AND THE REASON IS THE SAME BOTH TIMES: the object
  * faults before anything could be compared.
@@ -1221,10 +1221,10 @@ run_ec_dtor(void)
  *   - A NEGATIVE `V92_ECHO_FILTER_LENGTH` takes the `js; add $0x3` arm at
  *     +0x131.  The result is a huge unsigned `filterLength`, and the next
  *     instruction but four asks `sysdep_malloc` for four times it.  So the
- *     signed `x / 4 * 4` and the `& ~3` that D72 and finding 1188 write are
+ *     signed `x / 4 * 4` and the `& ~3` that D72 and finding F1188 write are
  *     indistinguishable to any test that survives, and the correction is
- *     recorded rather than measured (finding 1312).
- *   - `blockLen == 0` divides by zero at +0x98.  Finding 1188 already calls
+ *     recorded rather than measured (finding F1312).
+ *   - `blockLen == 0` divides by zero at +0x98.  Finding F1188 already calls
  *     that a different defect; every trial below uses a nonzero divisor and
  *     says so rather than avoiding it quietly.
  *
@@ -1281,7 +1281,7 @@ struct ecc_case {
 
 /*
  * The shipped configuration is the last row, scaled down: 180, 840 and -14 are
- * the real defaults (finding 1188) and are used as they stand, because the
+ * the real defaults (finding F1188) and are used as they stand, because the
  * allocation they imply is 2,298 floats, which is nothing.
  */
 static const struct ecc_case ecc_cases[] = {
@@ -1657,7 +1657,7 @@ run_rt(void)
 		 * had left offset 0 out, `ppmScale` and `timingOffset` would
 		 * both sit four bytes low and the blob's +0x48 would land in
 		 * a word this test declares as padding.  That is finding
-		 * 228's trap, and `only_wrote` below is what catches it.
+		 * F228's trap, and `only_wrote` below is what catches it.
 		 *
 		 * It is reached through `raw` rather than as a member, because
 		 * the vptr is now what `virtual` puts at +0x00 and not a field
@@ -1852,7 +1852,7 @@ run_cd_reset(void)
 			/*
 			 * The fill is GONE from every one of them, and the
 			 * copy came from the slot the header names.  Two
-			 * never-reset objects compare equal (finding 1105),
+			 * never-reset objects compare equal (finding F1105),
 			 * so the values are asserted and not only compared.
 			 */
 			diff_eq_int("blob's word_48 (%ld)",
@@ -2071,7 +2071,7 @@ run_ce(void)
  * The constructor is "store the parameter block, then reset", so the check is
  * that a constructed object is byte-for-byte a reset one with +0x00 filled
  * in.  The destructor is a bare `ret`, and comparing two objects AFTER a
- * destructor would compare the allocator (finding 1105) -- so what is checked
+ * destructor would compare the allocator (finding F1105) -- so what is checked
  * is that it wrote NOTHING, against the object's own image taken immediately
  * before the call.  Two empty things compare equal, and this is the shape
  * that says so.
@@ -2180,7 +2180,7 @@ run_k56(void)
  *
  * THE ONE WORD THE COMPARISON EXCLUDES IS +0x1c, `decoder.state_`, and it is
  * excluded because each side's constructor calls `sysdep_malloc` for itself
- * and two allocations are never the same address.  Finding 1113's shared
+ * and two allocations are never the same address.  Finding F1113's shared
  * arena is not available here -- the pointer is produced by the code under
  * test rather than seeded into it -- so instead the two allocations are
  * checked to be DISTINCT, both live, and to hold the same six zeroed bytes.
@@ -2277,7 +2277,7 @@ run_sbe_lifecycle(void)
 			    0, tag);
 
 		/*
-		 * The destructor.  Finding 1113: compare what it WROTE, taken
+		 * The destructor.  Finding F1113: compare what it WROTE, taken
 		 * immediately before the call -- two objects compared after a
 		 * free compare the allocator.  It must write nothing, and
 		 * free exactly what the constructor took.
@@ -2340,13 +2340,13 @@ run_sbe_lifecycle(void)
 /*
  * 7,864 bytes, and the size is the `movl $0x1eb8,(%esp)` in
  * `V90Demodulator`'s constructor rather than a displacement bound -- finding
- * 1107, which is what cost `V90Equalizer` eight bytes.
+ * F1107, which is what cost `V90Equalizer` eight bytes.
  *
  * EVERY REGION CHECK BELOW IS BY ABSOLUTE OFFSET, deliberately.  The seeding
  * goes through the header's field names, so if the header had an array at the
  * wrong offset both sides would be seeded at the wrong offset and agree; what
  * cannot agree is the set of bytes the BLOB's object actually moved, and that
- * is compared against a partition written as numbers.  Findings 223 and 224.
+ * is compared against a partition written as numbers.  Findings F223 and F224.
  */
 #define DEM_SZ		0x1eb8
 #define DEM_SLOT_L	(DEM_SZ + 64)
@@ -2545,7 +2545,7 @@ run_dem_histogram(void)
 			/*
 			 * No pointer is produced or freed here, so the two
 			 * objects compare RAW over the whole slot -- finding
-			 * 1113's point about not weakening the comparison.
+			 * F1113's point about not weakening the comparison.
 			 */
 			diff_eq_int("the two objects are identical (%ld)",
 				    memcmp(dem_a, dem_b, DEM_SLOT_L) == 0, 1,
@@ -2723,10 +2723,10 @@ run_dem_lifecycle(void)
  * canceller is about to look at -- so the LMS update has something to
  * converge to and the coefficients really move.  `ecx_moved` asserts they
  * did, and `ecx_varied` that consecutive blocks did not produce one repeated
- * answer (findings 223, 224): a `process` that never touched a coefficient
+ * answer (findings F223, F224): a `process` that never touched a coefficient
  * would otherwise pass as two identical do-nothings.
  *
- * NOTHING IS ZEROED (finding 230), and the parts the methods must not touch
+ * NOTHING IS ZEROED (finding F230), and the parts the methods must not touch
  * keep their seed: `echoCoeff` past `filterLength`, `echoHistory` past
  * `historyAlloc`, `out` past `count`, and a compared GUARD past every buffer.
  * D72's overrun would land in one of those and fail rather than pass quietly.
@@ -2741,7 +2741,7 @@ run_dem_lifecycle(void)
 #define ECX_BLK		128		/* longest block driven             */
 #define ECX_ECHO	6		/* taps in the test's echo path     */
 
-/* The six V92Parameters fields `setState` reads, by offset (finding 1112). */
+/* The six V92Parameters fields `setState` reads, by offset (finding F1112). */
 #define ECX_FAST_BETA	0x78
 #define ECX_FAST_DECAY	0x7c
 #define ECX_SLOW_BETA	0x80
@@ -3461,7 +3461,7 @@ run_ec_process(void)
 					s = 0.5f;
 				ECX_H(0)[i] = ECX_H(1)[i] = s;
 			}
-			/* Small, varied, and never zero -- finding 230. */
+			/* Small, varied, and never zero -- finding F230. */
 			for (i = 0; i < (int)fl; i++) {
 				float c = (float)((i % 5) - 2) * 0.03125f
 					  + 0.015625f;
@@ -3512,7 +3512,7 @@ run_ec_process(void)
 				 * treats as EQUAL and so filters -- an
 				 * unordered code sets ZF exactly as an equal
 				 * one does.  GCC 13 emits the parity test
-				 * whatever it is told (finding 2304), so the
+				 * whatever it is told (finding F2304), so the
 				 * modern build runs the filter on that block
 				 * instead, and from there every later block
 				 * of the trial diverges: 273 of this group's
@@ -3521,7 +3521,7 @@ run_ec_process(void)
 				 * the modern build, and a red binary cannot
 				 * score a mutation set at all -- five suites
 				 * pinned here went unscoreable for one arm
-				 * (findings 2157 and 3002).
+				 * (findings F2157 and F3002).
 				 *
 				 * So the unordered arm now lives in
 				 * `t_v92ecnan`, its own binary, where it is
@@ -3530,7 +3530,7 @@ run_ec_process(void)
 				 * path for 177.0f as for a NaN, so every
 				 * block here evolves exactly as it did and
 				 * the group keeps all fifteen shapes, three
-				 * levels and both cursors.  Finding 6000.
+				 * levels and both cursors.  Finding F6000.
 				 */
 				int sentinel = (blk % 7) == 6 ? 1 : 0;
 

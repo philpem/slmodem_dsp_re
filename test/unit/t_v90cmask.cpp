@@ -902,7 +902,7 @@ run_display(void)
  *   below the last  1e-7 is under 2^-13, so every entry stays clear.
  *
  * NO NaN AND NO INFINITY, deliberately: the range tests are ordered `fcom`
- * compares under `-mno-ieee-fp` (finding 1990), which reads an unordered
+ * compares under `-mno-ieee-fp` (finding F1990), which reads an unordered
  * result as "below", and `test/mutations/v92info.json` states the same
  * exclusion for the twin expansion in `V92CP`.  Every value below converts
  * and compares without reaching that.

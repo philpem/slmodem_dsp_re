@@ -4,13 +4,13 @@
  * Reconstructed from dsplibs.o.  `V90Phase3Modulator` is NOT polymorphic --
  * tools/cppstruct.py lists its destructor with the `D1` and `D2` variants and
  * no `D0`, and GCC emits a deleting destructor only for a virtual one -- so
- * offset 0 is a real member and there is no vptr.  Finding 228 is the four
+ * offset 0 is a real member and there is no vptr.  Finding F228 is the four
  * classes where that is not true.
  *
  * THE OBJECT IS 920 BYTES.  The largest `this`-relative displacement any
  * method uses is +0x394 and the store there is one byte, so the object ends
  * at 0x395 and rounds up to 0x398 for the four-byte members before it.  A
- * displacement is not a size (finding 229's last section); the .cpp asserts
+ * displacement is not a size (finding F229's last section); the .cpp asserts
  * both the size and every offset below.
  *
  * Twenty-three members are declared and TWELVE are defined -- count them in
@@ -38,7 +38,7 @@
  * `Scrambler<unsigned char, int>::Scrambler`.
  *
  * THE CONSTRUCTOR AND THE DESTRUCTOR ARE NOW DECLARED, and this file used to
- * say the opposite.  The reason it gave was finding 871's, and finding 871
+ * say the opposite.  The reason it gave was finding F871's, and finding F871
  * split it in two: the UNION half was real -- a union holding a class with no
  * default constructor and a non-trivial destructor loses both of its own, and
  * the fixtures for this class are exactly such unions -- and it is already
@@ -52,11 +52,11 @@
  * by scanning the blob's .text relocations rather than assumed --
  * `V90Modulator::V90Modulator` and, less obviously,
  * `V90Phase3Demodulator::V90Phase3Demodulator`, which builds and destroys one
- * of these as well (finding 1258).
+ * of these as well (finding F1258).
  *
  * Data member names below are invented and descriptive: the mangling
  * preserves method names and type names but never a data member's name
- * (finding 226).  Where a field's purpose is not established by a function
+ * (finding F226).  Where a field's purpose is not established by a function
  * this batch reconstructed, it carries an offset-derived name or is `pad_`.
  */
 
@@ -340,7 +340,7 @@ public:
 	 * were disassembled and searched for a `0x50` displacement, and the
 	 * only hits are the two constructor copies' stores and `reset`'s `mov
 	 * 0x50(%esp),%ebp`, which is a stack slot.  What reads it from
-	 * outside, if anything, was not looked for -- D190, finding 1257.
+	 * outside, if anything, was not looked for -- D190, finding F1257.
 	 */
 	V90Parameters *params;		/* +0x050                          */
 

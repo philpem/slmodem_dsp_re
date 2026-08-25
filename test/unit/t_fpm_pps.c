@@ -143,7 +143,7 @@ main(void)
 	 * A prototype with no repeats anywhere: every coefficient distinct in
 	 * magnitude, so a wrong stride, a wrong phase or a transposed rail
 	 * lands on a different number rather than the same one.  V.32's SRE
-	 * tables taught this the hard way -- see finding 3574.
+	 * tables taught this the hard way -- see finding F3574.
 	 */
 	for (i = 0; i < PPS_COEFF_MAX; i++) {
 		coeff_i[i] = (short)((i * 271 + 13) % 4001 - 2000);

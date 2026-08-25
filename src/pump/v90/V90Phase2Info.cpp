@@ -8,7 +8,7 @@
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- after `push %esi; push %ebx; sub $0x24,%esp` the function reads
  * it from `0x30(%esp)` -- not %ecx, so this is not thiscall and nothing here
- * needs an attribute (finding 215).
+ * needs an attribute (finding F215).
  *
  * SIX CALL SITES, GATED TWO DIFFERENT WAYS, and the difference is the whole
  * shape of the function.
@@ -131,7 +131,7 @@ V90Phase2Info::V90Phase2Info(V90Parameters *p)
  * `-mfpmath=387` with GCC's default excess precision keeps a `float` product
  * in an 80-bit register until the `fistpl` as well, and the two spellings
  * agree on every one of 2,390,535,529 floats sampled across the representable
- * range, at both scales this function is called with.  Finding 256.
+ * range, at both scales this function is called with.  Finding F256.
  *
  * `long double` stays because it is the spelling that does not depend on the
  * excess precision being there, and because src/pump/v90/V90PreFilter.cpp
@@ -171,7 +171,7 @@ whole_of(float v)
  * Measured over the same 2,390,535,529 floats, at both scales -- zero
  * disagreements.  The order below is the object's, taken from the
  * disassembly, and it is written that way to match rather than because a test
- * requires it.  What is held fixed is the abs() on the result.  Finding 256.
+ * requires it.  What is held fixed is the abs() on the result.  Finding F256.
  */
 static int
 frac_of(float v, float scale)

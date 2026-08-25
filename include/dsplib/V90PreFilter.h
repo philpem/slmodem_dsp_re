@@ -11,7 +11,7 @@
  *
  * NOT POLYMORPHIC.  tools/cppstruct.py lists the destructor with the two
  * ordinary variants and not the deleting `D0`, so there is no vptr and offset
- * 0 is a real member (finding 228).
+ * 0 is a real member (finding F228).
  *
  * THE OBJECT IS FORTY BYTES, NOT 1,280.  docs/v90cpp.md carried 1,280 as a
  * bound taken from the largest displacement any of these methods uses.  That
@@ -20,7 +20,7 @@
  * that lives there, where it reaches +0x490; `isV90WithEia6` reads +0x500 of
  * the same block.  Across all twenty-four members the largest `this`
  * displacement is +0x24, and the store there is four bytes, so the object is
- * 0x28.  (Finding 234.)
+ * 0x28.  (Finding F234.)
  *
  * FloatFIR IS AT OFFSET ZERO AND MIGHT BE A BASE CLASS.  Every call the
  * object makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which
@@ -69,12 +69,12 @@ struct V90CodecEntry {
 /*
  * V90Phase2Info WAS STUBBED HERE TOO, as an opaque 0x1c-byte block whose own
  * comment asked the batch that modelled it to replace the declaration rather
- * than add a second one.  Finding 255 modelled it; this is that replacement.
+ * than add a second one.  Finding F255 modelled it; this is that replacement.
  *
  * The 0x1c was the furthest `autoSelection` reaches.  The real object is 0x24:
  * the constructor and `setToDefault` reach +0x20, and neither is a member of
  * this class.  A bound taken from the members you happen to be writing is
- * finding 215's mistake, and it is short here by eight bytes.
+ * finding F215's mistake, and it is short here by eight bytes.
  */
 #include "dsplib/V90Phase2Info.h"
 
@@ -86,7 +86,7 @@ struct V90CodecEntry {
  * V90ModemCtor.cpp's long comment about which header it may not include is
  * about.  One definition now; the raw word and float views the block form
  * provided live in V90Parameters.h as V90PW()/V90PF()/V90PB().  Task #116,
- * finding 1112.
+ * finding F1112.
  */
 #include "dsplib/V90Parameters.h"
 
@@ -144,7 +144,7 @@ public:
 	void displayParamEia6();
 
 	/*
-	 * Written -- the lifecycle batch, finding 1233.  The constructor's
+	 * Written -- the lifecycle batch, finding F1233.  The constructor's
 	 * signature is the mangling's, so it is a specification and not a
 	 * guess; a return type is never mangled, and both of these have none
 	 * to recover.
@@ -218,7 +218,7 @@ public:
 	 * `VPcmV34InitiateRetrain`, which is the only function that names them
 	 * in .text, because `dataBase` points at them: its definition carries
 	 * sixteen relocations into these six, so the batch that defines
-	 * `dataBase` defines them too (finding 234).  There is no
+	 * `dataBase` defines them too (finding F234).  There is no
 	 * refLoopsType3.
 	 */
 	static float preFilterCoefType1[31][20];

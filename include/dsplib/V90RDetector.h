@@ -12,7 +12,7 @@
  * largest `this`-relative displacement any of them uses is +0x28 and it is a
  * four-byte store -- `mov %edx,0x28(%eax)`, the constructor's only
  * instruction that touches the object -- so the object ends at 0x2c.  A
- * displacement is not a size (finding 215); the width of what sits at the
+ * displacement is not a size (finding F215); the width of what sits at the
  * bound is what turns one into the other.  Nothing reaches past +0x28: the
  * four detectors and `reset` stop at +0x24.
  *
@@ -46,7 +46,7 @@
  *                             detector loads it with `movzwl 0x20(%ecx),%eax`
  *                             and uses the 32-bit result, which is the
  *                             signedness the compiler was FORCED to encode
- *                             (CLAUDE.md's rule; finding 613 is the case that
+ *                             (CLAUDE.md's rule; finding F613 is the case that
  *                             found a real defect).
  *   +0x24                     `movl $0x1` and `movl $0xffffffff` -- four
  *                             bytes and SIGNED, because -1 is one of the two
@@ -85,7 +85,7 @@
 /*
  * A POINTER ONLY, so a forward declaration is what belongs here.  Two
  * different definitions of `V90Parameters` exist in this tree and no
- * translation unit may include both (finding 1112); declaring the class keeps
+ * translation unit may include both (finding F1112); declaring the class keeps
  * this header compatible with either.
  */
 class V90Parameters;

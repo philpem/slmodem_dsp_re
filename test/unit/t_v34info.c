@@ -16,7 +16,7 @@
  * which turns "the blob wrote past our map" from silent corruption of the
  * next static into a failed check.  The message buffer gets the same
  * treatment, because `V34SetINFO0dBits` writes index 12 and nothing in the
- * object bounds it (finding 129).
+ * object bounds it (finding F129).
  *
  * POINTERS are skipped in the byte compare and checked by what they select,
  * as in t_v34hshak -- and here the session object has pointers inside it
@@ -99,7 +99,7 @@ static struct { short o[V34_INFO_MSG_SHORTS]; unsigned char g[GUARD]; }
  * The probe source.  Read-only and therefore SHARED: one buffer means the
  * two sides cannot be handed different inputs, and it is sized to exactly
  * the last byte the copy reads so an over-run faults instead of quietly
- * agreeing on whatever follows (finding 129).
+ * agreeing on whatever follows (finding F129).
  */
 #define PROBE_SRC_LEN \
 	(V34_PROBE_OFFSET + (V34_PROBE_RESULTS - 1) * V34_PROBE_STRIDE \

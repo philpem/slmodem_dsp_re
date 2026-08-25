@@ -29,7 +29,7 @@ and more normalised than what the tree already compares.** The faithful rung
 *harder* to compare than the instructions `byteident.py` compares today. The
 comparable rung (high P-Code, and the C above it) silently discarded an entire
 arithmetic operation and collapsed an 80-bit intermediate to 32 bits in a
-seven-instruction function — the exact distinction findings 1453 and 6203 turn
+seven-instruction function — the exact distinction findings F1453 and F6203 turn
 on.
 
 Instead, do these two things, which need no new dependency and no new trust:
@@ -48,7 +48,7 @@ reason to decline anyway is in §5.
 
 ---
 
-## 1. Before any of that: the grade split is wrong today
+## F1. Before any of that: the grade split is wrong today
 
 `byteident.py` grades in two passes. `body()`/`verdict()` decides EXACT,
 UNRESOLVED, RELOC, BYTES and SIZE at the byte level; anything that fails is
@@ -57,7 +57,7 @@ normalise relocations separately, and **the second one does not work.**
 
 `insns()` intends to rewrite a relocated operand to its relocation *target*,
 so that two instructions relocated against the same thing compare equal — its
-comment says so at length, citing finding 604. The patch loop is:
+comment says so at length, citing finding F604. The patch loop is:
 
 ```python
 for line in out.splitlines():
@@ -77,7 +77,7 @@ zero of them.** On `dp_v23_exit` — two relocations, `R_386_32 .data` on
 `mov $0x60,%eax` and `R_386_PC32 modem_dp_deregister` on the call — it emits
 none. `tools/eqtriage.py --selftest` prints that comparison on every run.
 
-This is finding 134's defect inside the tool that defines grades 0 and 1, and
+This is finding F134's defect inside the tool that defines grades 0 and 1, and
 it is the fourth normalisation artefact in that tool's history after absolute
 branch targets, section-vs-symbol relocations and relocated displacements.
 Like all three of those, it inflates the difference count.
@@ -129,7 +129,7 @@ exactly that and can be lifted across.
 
 ---
 
-## 2. The ceiling, re-measured
+## F2. The ceiling, re-measured
 
 The brief this began from said a better comparator "can only ever reclassify
 the 163" same-size functions. That is true of a comparator that aligns bytes
@@ -150,7 +150,7 @@ sides align instruction-for-instruction. It reports the *shape* of the
 different-size bucket and classifies nothing there, because no alignment
 exists.
 
-### 2a. The same-size bucket: 170 by `verdict()`, and what it is made of
+### F2a. The same-size bucket: 170 by `verdict()`, and what it is made of
 
 The A/B is the point. `--raw` classifies `byteident.insns`' rows unmodified;
 the default classifies correctly-normalised rows. **Only the classification
@@ -203,7 +203,7 @@ holds over the rest. A per-live-range bijection is a bounded change to a tool
 that exists, and it is the entire mechanically-decidable population of this
 bucket.
 
-That leaves **58 that need reading** (SCHED, SHAPE) — the class finding 2900
+That leaves **58 that need reading** (SCHED, SHAPE) — the class finding F2900
 hand-classified 69 of at a smaller denominator, with 2901/2902/2903 as the
 verdicts — and **65 that are real differences a checker could only be wrong
 about.** No oracle changes those numbers; they are what the bucket contains.
@@ -211,7 +211,7 @@ about.** No oracle changes those numbers; they are what the bucket contains.
 x87 appears in 19 of 170 (11.2%); 73 of 170 (42.9%) have neither x87 nor a
 loop.
 
-### 2b. The different-size bucket: 629, and it is not "the same thing spelled
+### F2b. The different-size bucket: 629, and it is not "the same thing spelled
 differently"
 
 This is the half the brief's re-framing is about, and the half nothing
@@ -251,7 +251,7 @@ the time to reason about x87, where §3 shows the available tool is wrong.
 
 ---
 
-## 3. x87, measured
+## F3. x87, measured
 
 `CLAUDE.md` records Ghidra's floating-point modelling as weak and explicitly
 **unmeasured here**; `tools/decompile.sh`'s header says the same and records
@@ -261,7 +261,7 @@ version, installed and working.
 
 ### The probe, with ground truth measured rather than asserted
 
-Finding 6203's narrowing, minimised: a product rounded to 32 bits and read
+Finding F6203's narrowing, minimised: a product rounded to 32 bits and read
 back, against the same product left on the x87 stack. Compiled by the period
 compiler with the tree's own flags. One is 6203's `fstps`/`flds` pair
 exactly:
@@ -362,7 +362,7 @@ different things look the same. That is the opposite of what grade 2 needs.
 
 ---
 
-## 4. Is a lifter-as-oracle even allowed here?
+## F4. Is a lifter-as-oracle even allowed here?
 
 `CLAUDE.md` says **"Ghidra is scaffolding, never evidence"**, and the rule as
 written forbids something specific: *"No name, comment or finding is ever
@@ -380,7 +380,7 @@ makes it harder to audit than a sentence would have been, not easier.
 The tree already has the right precedent and the right words for it.
 `extcheck.py` is **"the signedness detector, and a triage aid, never a gate"**,
 and every hit "must be traced against `dis.py` before anything is retyped" —
-one report in five is real (finding 2402). The same settlement applies:
+one report in five is real (finding F2402). The same settlement applies:
 
 > **An equivalence oracle may narrow a list a human then reads in `dis.py`. It
 > may never close a function, and no finding may cite it as a derivation.**
@@ -390,7 +390,7 @@ worth building.
 
 ---
 
-## 5. What it would cost, and why I still decline
+## F5. What it would cost, and why I still decline
 
 ### What is installed — the brief was wrong about this
 
@@ -420,7 +420,7 @@ is also why the Ghidra arm is the one that got measured and the others did not.
   about that. **It must be a separate image, not the compiler image.**
   `dsplibs-tc342`'s entire value is that its output is byte-comparable to the
   blob's and that it prints the blob's `.comment` back; adding a package to it
-  invalidates every A/B in findings 2200, 2320 and 2500. A `Dockerfile.analysis`
+  invalidates every A/B in findings F2200, F2320 and F2500. A `Dockerfile.analysis`
   beside the others, driven the way `build.sh` drives the compiler, costs
   nothing and keeps the pin intact.
 
@@ -458,7 +458,7 @@ remembering; not worth building now.
 
 ---
 
-## 6. Why BinDiff and Diaphora are the wrong tool, specifically
+## F6. Why BinDiff and Diaphora are the wrong tool, specifically
 
 They answer **"how similar"**, and produce a similarity score with a matching
 as the real output. Two reasons that is the wrong question here:
@@ -473,11 +473,11 @@ as the real output. Two reasons that is the wrong question here:
 
 ---
 
-## 7. If someone builds one anyway: the validation it must pass
+## F7. If someone builds one anyway: the validation it must pass
 
-An equivalence oracle is a detector, and finding 134's rule binds it: **it must
-be shown to fire, and it must report its denominator** (findings 2400, 2401,
-3100). But an *equivalence* detector needs its controls in both directions,
+An equivalence oracle is a detector, and finding F134's rule binds it: **it must
+be shown to fire, and it must report its denominator** (findings F2400, F2401,
+F3100). But an *equivalence* detector needs its controls in both directions,
 because both under- and over-normalisation are live failure modes here —
 `byteident.py`'s history is three under-normalisations, and §1 is a fourth,
 while §3 is an over-normalisation in the same function as an outright loss.
@@ -510,7 +510,7 @@ available when it matters.
 
 ---
 
-## 8. `tools/eqtriage.py`
+## F8. `tools/eqtriage.py`
 
 The one artefact. A triage aid, never a gate; it decides nothing and grades
 nothing.
@@ -529,11 +529,11 @@ only because of §1. About 30 s over the tree.
 
 ---
 
-## 9. What was tried and did not work, and what remains unmeasured
+## F9. What was tried and did not work, and what remains unmeasured
 
 - **A plain `float` local as an x87 probe.** GCC 3.4.2 at `-O3` compiles
   `float t = a*b; return t-c;` and `return a*b-c;` to **identical bytes** — no
-  narrowing. The probe had to use finding 6203's own `volatile float` round
+  narrowing. The probe had to use finding F6203's own `volatile float` round
   trip to produce a binary containing `fstps`/`flds`. Consistent with 6203;
   it cost a build to learn.
 - **I made the over-normalisation mistake myself, in the tool written to
@@ -551,7 +551,7 @@ only because of §1. About 30 s over the tree.
   substitution discarded. The eleventh control — a relocated load against a
   relocated store, which must be a difference — fails on the old code and
   passes on the new. **A control that cannot fail is not a control**, which is
-  the same lesson as `service.py`'s self-check in finding 3111.
+  the same lesson as `service.py`'s self-check in finding F3111.
 - **`byteident.RELOC.search(out)` on multi-line output.** My first attempt to
   count relocations reported 0 of 400 symbols, because `^` without
   `re.MULTILINE` only matches at position 0. It looked like a confirmation of
@@ -564,6 +564,6 @@ only because of §1. About 30 s over the tree.
   between is both" is a Ghidra measurement generalised by reasoning. If anyone
   revisits this, controls 4 and 5 in §7 cost minutes and settle it per tool.
 - **Not measured: whether the 58 SCHED/SHAPE rows contain a reorder our
-  source's data dependencies would forbid**, which finding 614 calls the sharp
+  source's data dependencies would forbid**, which finding F614 calls the sharp
   version and the only real defect in that class. `--class SCHED` lists them;
-  none of finding 2900's 22 showed one.
+  none of finding F2900's 22 showed one.

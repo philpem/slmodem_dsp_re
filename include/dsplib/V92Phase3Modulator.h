@@ -16,7 +16,7 @@
  * a SUBOBJECT and not a pointer.
  *
  * THE OBJECT IS 80 BYTES (0x50), AND THAT IS AN ALLOCATION, NOT A SCAN.
- * Finding 1107's rule: take the `sysdep_malloc` immediately before the
+ * Finding F1107's rule: take the `sysdep_malloc` immediately before the
  * constructor's call site, never the largest displacement.  In
  * `V92Modulator::V92Modulator` at .text+0x15299:
  *
@@ -48,7 +48,7 @@
  * here calls an undefined one.
  *
  * Data member names are invented and descriptive -- the mangling preserves
- * method and type names and never a data member's (finding 226).  Fields whose
+ * method and type names and never a data member's (finding F226).  Fields whose
  * purpose this batch did not establish carry an offset-derived name.
  */
 
@@ -188,7 +188,7 @@ public:
 	 * This block used to say the constructor and destructor were left
 	 * undeclared on purpose, because declaring either makes the class
 	 * non-trivial and a union holding one loses its own default members.
-	 * The union half was true and finding 871 already paid for it:
+	 * The union half was true and finding F871 already paid for it:
 	 * `Scrambler` gained a constructor and a destructor first, so this
 	 * class was non-trivial before this batch touched it and every fixture
 	 * union already carries the two empty special members that restore
@@ -284,7 +284,7 @@ public:
 	 * NOT TOUCHED BY ANY OF THIS CLASS'S THIRTEEN SYMBOLS.  See the file
 	 * comment: the allocation says the object is 80 bytes, so these eight
 	 * exist; what wrote them, if anything, is `V92Modulator`'s business
-	 * and finding 1107 is the reason not to call them absent.
+	 * and finding F1107 is the reason not to call them absent.
 	 */
 	unsigned char pad_44[8];	/* +0x044                          */
 

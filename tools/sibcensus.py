@@ -6,7 +6,7 @@ WHY THIS EXISTS
 `docs/method/refinement.md` lever 7 turns on one instruction.  At a
 destructor's LAST free the blob makes an ordinary `call sysdep_free`; an
 explicit `if (p != 0) sysdep_free(p)` makes a sibling `jmp`.  `delete[]` is
-the only spelling of eight that reproduces the object (finding 7786), so
+the only spelling of eight that reproduces the object (finding F7786), so
 knowing WHICH functions disagree is what tells you where the lever can pay.
 
 A RAW POPULATION RATIO IS THE WRONG MEASUREMENT.  The two objects define
@@ -15,7 +15,7 @@ different symbol sets, so "the blob sibcalls out of 4 functions and we out of
 function".  The comparison has to be PAIRWISE over the symbols both objects
 define -- which is `byteident.py`'s own denominator -- and it has to report
 that denominator, because a detector that cannot be seen to fire is
-indistinguishable from a broken one (findings 134, 2400, 2401).
+indistinguishable from a broken one (findings F134, F2400, F2401).
 
 TWO THINGS THIS GETS RIGHT THAT ARE EASY TO GET WRONG
 
@@ -158,7 +158,7 @@ def ours_scan():
 def self_test(blob, ours):
     """Prove the detector both FIRES and STAYS QUIET, on named symbols.
 
-    Finding 134's argument: `extcheck` printed "(none)" through four broken
+    Finding F134's argument: `extcheck` printed "(none)" through four broken
     versions and nobody could tell a clean tree from a dead detector.  Two of
     these three cases are things this must NOT report.
     """
@@ -200,7 +200,7 @@ def main():
     if not blob:
         sys.exit("sibcensus.py: NO SYMBOLS read from the blob at %s.  Every\n"
                  "  count below would be computed against NOTHING.  From a\n"
-                 "  worktree, BLOB must be explicit.  Findings 2400, 2401."
+                 "  worktree, BLOB must be explicit.  Findings F2400, F2401."
                  % BLOB)
     ours = ours_scan()
     if not ours:

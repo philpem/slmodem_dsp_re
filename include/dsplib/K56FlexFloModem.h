@@ -15,7 +15,7 @@
  *
  * SO THE OBJECT SIZE IS NOT DERIVABLE, and this header does not claim one.
  * Every other class in task #60 is bounded by the largest `this`-relative
- * displacement its members use (finding 215); here that set is empty, so
+ * displacement its members use (finding F215); here that set is empty, so
  * there is no measurement to bound anything with and no data member is
  * declared.  `sizeof(K56FlexFloModem)` is therefore 1, which is C++'s rule
  * for a class with no members and NOT a claim about the blob.  What the

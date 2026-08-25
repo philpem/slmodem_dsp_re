@@ -76,7 +76,7 @@ int modem_debug_log_data(void *m, unsigned id, const void *buf, int len);
  * three "CADENCE %s: CONDITION ... SATISFIED" messages, which fire once per
  * matched cycle and would drown the rest.
  *
- * This is exactly what finding 150 warned could not be seen: a site at the
+ * This is exactly what finding F150 warned could not be seen: a site at the
  * wrong threshold produces a byte-identical transcript at level 2, and one
  * macro for every gate quietly flattens the distinction.  Sweeping the level
  * is what makes the two distinguishable, so any test that compares

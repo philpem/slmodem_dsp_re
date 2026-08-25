@@ -18,7 +18,7 @@
  *
  * in `V92Transmitter::V92Transmitter`, which stores the result at its own
  * +0x48.  The furthest any of the three members reaches is +0x50, a four-byte
- * access, so the two agree (finding 1248).
+ * access, so the two agree (finding F1248).
  *
  * THE CONSTRUCTOR STARTS AT +0x18, WHICH IS THE INTERESTING PART.  It zeroes
  * thirteen consecutive words from +0x18 to +0x48 and leaves +0x00..+0x14 and
@@ -42,7 +42,7 @@
  *
  * +0x50 IS SIGNED and that is forced, not chosen: `progress` opens with
  * `cmp $1 / je / jle / cmp $2 / je`, and GCC emits `jle`/`jg` for a switch
- * over a signed index and `jbe`/`ja` over an unsigned one (finding 1378).
+ * over a signed index and `jbe`/`ja` over an unsigned one (finding F1378).
  * +0x48 goes the other way -- `cmp $0x3f / jbe` -- so it is unsigned.
  */
 

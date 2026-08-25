@@ -157,8 +157,8 @@ def reconstructed(paths=None):
     exit 0 -- so `--ready` listed all 73 classes' methods as writable-now and
     `--of v34handshak` counted every written function as missing, which is
     the answer this docstring's second paragraph was written to end.  A
-    warning nobody has to act on is the same as no warning: findings 134,
-    3055 and 3110, and tools/objtree.py for the directories probed.
+    warning nobody has to act on is the same as no warning: findings F134,
+    F3055 and F3110, and tools/objtree.py for the directories probed.
     """
     have = set()
     if paths:

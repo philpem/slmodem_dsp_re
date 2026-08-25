@@ -50,7 +50,7 @@ WHAT THIS CHECKS -- THREE THINGS, BECAUSE THEY FAIL DIFFERENTLY
    `tools/assertlive.json`, in the same shape as `compare.py --ratchet`: it
    fails on a decrease only, and rises when the tree gains assertions.
 
-Findings 134, 2400, 2401 and 3110 are the same shape -- a detector reporting on
+Findings F134, F2400, F2401 and F3110 are the same shape -- a detector reporting on
 nothing and rendering as a pass -- so this one prints its denominator on every
 line that carries a verdict.
 """
@@ -146,7 +146,7 @@ def main():
     if not paths:
         sys.exit("assertlive.py: no sources under src/ -- every count below "
                  "would be computed against NOTHING and render as a clean "
-                 "zero.  Findings 2400, 2401.")
+                 "zero.  Findings F2400, F2401.")
 
     on, on_files, broken = sweep(paths, 4)
     off, off_files, _ = sweep(paths, None)
@@ -169,7 +169,7 @@ def main():
             "  Check that -D__SIZEOF_POINTER__=4 is still in BOTH\n"
             "  tools/toolchain/build.sh and tools/toolchain/period_inner.sh,\n"
             "  and that no `#endif` has been moved so as to swallow a guarded\n"
-            "  region (finding 7799)." % (on, off))
+            "  region (finding F7799)." % (on, off))
 
     floor = load_floor()
     if floor is not None and on < floor:
@@ -178,7 +178,7 @@ def main():
             "  Checks 1 and 2 above both pass while one header's guard goes\n"
             "  inert, so a drop is the only signal that remains.  Either a\n"
             "  guard stopped covering its assertions -- a moved `#endif`,\n"
-            "  finding 7799 -- or assertions were deleted.  If the removal was\n"
+            "  finding F7799 -- or assertions were deleted.  If the removal was\n"
             "  deliberate, lower the floor in tools/assertlive.json in the same\n"
             "  commit and say why." % (floor, on))
 

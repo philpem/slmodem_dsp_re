@@ -10,10 +10,10 @@
  * below are copied rather than shared, which is the same call `t_v90cdesign`
  * made about the ctor/dtor test's helpers.
  *
- * NOTHING IN THE OBJECT CALLS IT (finding 2141's sweep covers this member
+ * NOTHING IN THE OBJECT CALLS IT (finding F2141's sweep covers this member
  * too), so it is driven directly by symbol on both sides -- ours by the
  * mangled name, the blob's by the `ref_` alias -- through an `asm()` label.
- * Plain cdecl, `this` as the first STACK argument (finding 215), and the
+ * Plain cdecl, `this` as the first STACK argument (finding F215), and the
  * `float` occupies one stack slot.
  *
  * WHAT THIS MEMBER WRITES, and therefore what is compared:
@@ -229,7 +229,7 @@ fill_mp(unsigned s)
  * The fixture
  * ===========================================================================
  *
- * THE 16-BIT TABLES ARE RAMPS AND NOT NOISE, for finding 2164's reason.  Both
+ * THE 16-BIT TABLES ARE RAMPS AND NOT NOISE, for finding F2164's reason.  Both
  * inner loops count an entry only when it clears a threshold that jumps to
  * `seed + value` after every hit, so over uniformly random 16-bit values the
  * count is a RECORD count -- about ln(span), and essentially independent of
@@ -367,7 +367,7 @@ ctn_fixture(int trial)
 	 * $0x2d,%eax` off a `fldz`/`fcom`.  That is '+' for an unordered value
 	 * where `(0.0f < v)` is '-', and they agree on every ordered one, so
 	 * without this seed the two spellings are indistinguishable here.
-	 * Findings 2300 and 2410.
+	 * Findings F2300 and F2410.
 	 *
 	 * Planted on the arms that KEEP the thresholds and on no others: a
 	 * seed the method overwrites is a seed that proves nothing, and the
@@ -578,7 +578,7 @@ run_ctn_quiet(void)
  * 1 and 3 are swept anyway, because debug.h's note about `cadence_progress`
  * is that a site at the wrong threshold produces a byte-identical transcript
  * at one level and not at another, and a test that fixes the level cannot see
- * it (finding 150).
+ * it (finding F150).
  */
 static const char *const ctn_sites[12] = {
 	": noiseEnergy = ",
@@ -1055,7 +1055,7 @@ run_ctn_edges(void)
 
 /*
  * ===========================================================================
- * Every outcome, not every comparison (findings 149, 223, 224)
+ * Every outcome, not every comparison (findings F149, F223, F224)
  * ===========================================================================
  */
 static int
@@ -1088,7 +1088,7 @@ run_ctn_outcomes(void)
 	/*
 	 * And it chose one for an UNORDERED threshold, which is the only
 	 * input that separates `!(0.0f >= v)` from `(0.0f < v)`.  Finding
-	 * 2410.
+	 * F2410.
 	 */
 	diff_eq_int("an unordered threshold reached the sign printer",
 		    seenNanThresh, 1, 0);
@@ -1192,7 +1192,7 @@ run_ctn_outcomes(void)
  * (`constellationSize`, `constellation[k][0]`, `topUcode`); the feedback
  * loop's `dir`, its 0.9f step shrink, the refinement loop and the `size` seed
  * are invisible from outside, and the mutation set is what shows they are
- * under test.  Finding 2186 says so rather than pretending to a counter.
+ * under test.  Finding F2186 says so rather than pretending to a counter.
  */
 static unsigned char topA[6];
 static unsigned char topB[6];

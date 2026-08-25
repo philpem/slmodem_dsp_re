@@ -18,7 +18,7 @@
  * The whole thing runs at 4000 Hz.  `dtmf_detect` is called at 8000 and
  * processes every second sample (`phase`); every coefficient bank in the TU
  * -- eur_coef, us_coef and biascoef -- solves to a DTMF frequency, or to
- * 50 Hz for the bias notch, only at fs = 4000.  Finding 1412.
+ * 50 Hz for the bias notch, only at fs = 4000.  Finding F1412.
  */
 
 #ifndef DSPLIB_DTMF_H

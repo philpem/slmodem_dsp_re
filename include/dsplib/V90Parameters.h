@@ -7,7 +7,7 @@
  * `V90Parameters *`, so a later batch that changes a field's offset here
  * changes it for every one of them.  Add methods freely; move nothing.
  *
- * THE FIELD NAMES ARE THE ORIGINAL AUTHOR'S, NOT INVENTED.  Finding 226 says
+ * THE FIELD NAMES ARE THE ORIGINAL AUTHOR'S, NOT INVENTED.  Finding F226 says
  * the mangling preserves method and type names but never a data member's, and
  * that is still true -- these come from somewhere else.  `loadParams(char *)`
  * is 7,894 bytes of nothing but
@@ -18,7 +18,7 @@
  * 295 calls in a straight line, each carrying the parameter's name as an
  * `R_386_32` against `.rodata.str1.1` or `.rodata.str1.4` and its offset as
  * the displacement of a `lea` off `this`.  `tools/vparse.py` reads all 295 --
- * see finding 860 for why that tool needed a clobber rule before its "0
+ * see finding F860 for why that tool needed a clobber rule before its "0
  * unresolved" meant anything.
  *
  * TWO INDEPENDENT MEASUREMENTS AGREE ON THE LAYOUT, which is gates.md's rule
@@ -47,7 +47,7 @@
  * put a guess where every other line here is a measurement.  Twenty-five of
  * them run consecutively from +0x300 to +0x360 and are very likely one array.
  *
- * NINE OF THE FIFTY-ONE ARE FLOATS AND ARE STILL DECLARED `int`.  Finding 878
+ * NINE OF THE FIFTY-ONE ARE FLOATS AND ARE STILL DECLARED `int`.  Finding F878
  * measured them, and each is annotated below with the value the object stores.
  * Two are FORCED -- an `fsts` writes a `float` and there is no other reading
  * of that instruction -- and the other seven are settled by the bit pattern
@@ -61,7 +61,7 @@
  * mutation in `test/mutations/v90params.json` anchored on the literal
  * `unnamed_1b8 = 0x2d83f0ff;`, and re-anchoring a mutation is how nine of them
  * in another suite came to be measuring a different arm from the one their
- * label named, all nine reported CAUGHT (finding 432).  **A LATER BATCH THAT
+ * label named, all nine reported CAUGHT (finding F432).  **A LATER BATCH THAT
  * READS ANY OF THESE NINE MUST READ IT AS A FLOAT**, and the batch that does
  * is the one that should retype it, because it will have a reader to test the
  * change against.
@@ -89,7 +89,7 @@
  * `loadParams` members are the ONLY callers of either stub anywhere.
  *
  * Data members are public because the original's access specifiers are not
- * recoverable (finding 226) and because one access section is what keeps
+ * recoverable (finding F226) and because one access section is what keeps
  * `__builtin_offsetof` well defined.
  */
 
@@ -123,7 +123,7 @@ public:
 	 * `&this->FIELD` resolved by the COMPILER through this header, so the
 	 * offset reaches the log by a path the static walk is not on, and the
 	 * ORDER and the PAIRING of the 295 calls are established by nothing
-	 * else in the tree.  Findings 879 (which this supersedes) and 6400.
+	 * else in the tree.  Findings F879 (which this supersedes) and 6400.
 	 */
 	V90Parameters(_tagModemParameters *mp);
 	~V90Parameters();
@@ -172,7 +172,7 @@ public:
 	/*
 	 * +0x074 and +0x078 ARE NAMED BY `V90TRN2Design`'s OWN DIAGNOSTICS,
 	 * which is evidence rule 1 -- a format string that prints the thing --
-	 * and not usage inference.  Finding 3527 derived both and could not
+	 * and not usage inference.  Finding F3527 derived both and could not
 	 * rename them because another branch held this header; this batch owns
 	 * it and applies them.  `loadParams` still does not read either, so the
 	 * "setToDefault only" note stands: they are parameters the file cannot
@@ -524,7 +524,7 @@ public:
 /*
  * THE RAW VIEW, which is what V90PreFilter.h used to provide by DEFINING A
  * SECOND V90Parameters -- a different class, of a different size, under the
- * same name (finding 1112).  That is undefined behaviour the moment both
+ * same name (finding F1112).  That is undefined behaviour the moment both
  * reach one translation unit, and it was doing real damage: the two sizes
  * were 0x504 and 0x558, so a translation unit holding the smaller one and
  * allocating from `sizeof` under-allocated by 84 bytes, and
@@ -542,7 +542,7 @@ public:
  * spelling -- and for the forty-odd field-to-field copies in
  * `V90PreFilter::setParamEia6` it is arguably the CORRECT one: those copy
  * `float` parameters, and the int view forces the integer `mov` that finding
- * 1242 says is a spelling to avoid reaching for, because it fits the compiler
+ * F1242 says is a spelling to avoid reaching for, because it fits the compiler
  * rather than recording the source.  `make period` can now adjudicate that,
  * which it could not when 1242 was written.  Task #116.
  */

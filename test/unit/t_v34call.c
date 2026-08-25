@@ -30,14 +30,14 @@
  * on the two ends of ONE call, so each side's output has to be acceptable to
  * the other's input as well as merely equal to it.
  *
- * WHY THIS FIXTURE.  Findings 319-322: what an object step depends on is the
+ * WHY THIS FIXTURE.  Findings F319-322: what an object step depends on is the
  * geometry of the five blocks the object points at, and building a second
  * fixture is building that geometry a second time and being wrong about it
  * once.  `test/harness/v34hsstep.c` already has it -- two congruent arenas at
  * a stride this tree chooses -- so the two endpoints are arena A and arena B,
  * and the four runs reuse the same two arenas one after another.  That makes
  * the run-to-run comparison exact rather than approximate: it is literally
- * the same memory at the same addresses.  Finding 320 already established
+ * the same memory at the same addresses.  Finding F320 already established
  * that nothing is carried between calls, which is what makes four sequential
  * runs sound.
  *
@@ -70,7 +70,7 @@
  * object's value for "handshaking" and not this test's invention.
  *
  * THIS IS THE FIRST THING IN THE TREE THAT DRIVES `datapumpv34`'s HANDSHAKE
- * LOOP.  Finding 452 recorded that the loop could not be entered because no
+ * LOOP.  Finding F452 recorded that the loop could not be entered because no
  * written arm advanced the transmit cursor or drained the receive queue.  The
  * table-1 arms are wired into `v34handshak` now, so it can be, and it is.
  *
@@ -123,7 +123,7 @@ extern void ref_V34InitializeImplementationSpecific(void *obj);
  *
  * `v34hs_setup` fills the block at +0x3548 with pseudorandom bytes, which is
  * right for the differential tests it was built for: an unwritten field must
- * not look deliberate (finding 230).  Two of that block's own fields are
+ * not look deliberate (finding F230).  Two of that block's own fields are
  * POINTERS the object dereferences -- `V34SetINFO0aBits` reads `caps + 0x11`
  * and `V34GiveINFO0aBits` reads through both -- and a pseudorandom pointer is
  * a fault rather than a value.  The first run of this test faulted inside
@@ -133,7 +133,7 @@ extern void ref_V34InitializeImplementationSpecific(void *obj);
  * Zero is deliberate here rather than a default: it is a plain V.34 call with
  * no V.92 capability offered, which is also why `v90_receiver` and
  * `k56flex_receiver` are cleared below.  The two addresses are each side's
- * OWN session block, never one address written into both -- findings 319-322.
+ * OWN session block, never one address written into both -- findings F319-322.
  * The offsets are v34info.c's, cited there.
  */
 #define SESSION_UPSTREAM 0x1760	/* pointer */
@@ -358,7 +358,7 @@ ep_slot(int ep)
 /*
  * `datapumpv34`'s handshake loop is `while (txq.count < f2aa0 || rxq.count >
  * 5) v34handshak(obj)`, and `v34handshak`'s own default arm inside the
- * per-sample loop is the loop bottom (finding 287, D59), so neither is
+ * per-sample loop is the loop bottom (finding F287, D59), so neither is
  * guaranteed to terminate.  Outside `v34hs_step` this file has to arm its own
  * alarm or a divergence becomes a `make phase` that hangs and reports
  * nothing.
@@ -377,7 +377,7 @@ call_alarm(int sig)
 		     "\nt_v34call: %s block %d endpoint %s did not return.\n"
 		     "  originate mst=%d rxstate=%d txstate=%d\n"
 		     "  answer    mst=%d rxstate=%d txstate=%d\n"
-		     "  see finding 287 for why the loop need not terminate\n",
+		     "  see finding F287 for why the loop need not terminate\n",
 		     run_name[cur_run], cur_block, ep_name[cur_ep],
 		     cur_state[0][0], cur_state[0][1], cur_state[0][2],
 		     cur_state[1][0], cur_state[1][1], cur_state[1][2]);
@@ -804,14 +804,14 @@ check_totals(int r)
 		diff_eq_int(msg, t->nonzero, expect[ep].nonzero, r);
 		/*
 		 * AND THE PADDING, once per run rather than once per block.
-		 * Finding 322 measured that a step writes no filler byte at
+		 * Finding F322 measured that a step writes no filler byte at
 		 * all; this is that claim over a whole call, and it is the one
 		 * check here that compares a run against the oracle rather
 		 * than against a literal, because the fill is the fixture's
 		 * and not the modem's.
 		 */
 		/*
-		 * THE PADDING, BEFORE AGAINST AFTER.  Finding 322 measured
+		 * THE PADDING, BEFORE AGAINST AFTER.  Finding F322 measured
 		 * that a single step writes no filler byte; this is the same
 		 * claim over a whole call, and it is stated as before-versus-
 		 * after rather than against the oracle run so that it is a

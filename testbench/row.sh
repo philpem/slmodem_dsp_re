@@ -31,13 +31,13 @@ ROOT=${ROOT:-/home/philpem/dev/sip-D-modem/d-modem}
 SLMODEMD=${SLMODEMD:-$ROOT/slmodemd/slmodemd}
 # HOLD DEFAULTS TO SIXTY SECONDS, and it is not politeness to the modem.
 #
-# Finding 1902: four of six ninety-second calls ended at roughly DOUBLE the
+# Finding F1902: four of six ninety-second calls ended at roughly DOUBLE the
 # rate they reported at CONNECT -- 16800, 19200, 21600, 24000 against 12000 --
 # with the far end's ATI11 confirming the final figure every time.  The first
 # renegotiation lands anywhere from +23 s to +91 s.  This bench used to tear
 # calls down about 17.5 s after CONNECT, so it saw almost none of that, and
 # every rate it has ever recorded is a lower bound of unknown tightness
-# (which limits findings 1466 and 1476).
+# (which limits findings F1466 and F1476).
 #
 # `HOLD=0` restores the old behaviour for a test that genuinely wants a short
 # call -- but a rate measurement is not one of those.
@@ -208,7 +208,7 @@ rm -f "$PIDF"
 #
 # slmodemd stamps `<NNN.NNN>`; pjmedia and d-modem stamp wall clock, and both
 # land in this one file.  This line was added believing the two could not be
-# converted.  They can: finding 1952 established that slmodemd's stamp is
+# converted.  They can: finding F1952 established that slmodemd's stamp is
 # **Unix epoch seconds modulo 1000** -- `epoch % 1000` equals a log's first
 # `<t>` in 24 of 24 logs checked -- so the clocks were always the same clock.
 #
@@ -264,7 +264,7 @@ CALLRC=$?
 #     Preemphasis (-dB)        0/2
 #     Roundtrip Delay (msec)   152
 #
-# That is the instrument finding 1969 needed and did not have: it settles which
+# That is the instrument finding F1969 needed and did not have: it settles which
 # DIRECTION a rate deficit is in without arguing from our own logs, and the
 # pre-emphasis field is the only external witness to the shape matcher's choice.
 #

@@ -4,7 +4,7 @@
     callstats.py captures/batch-7 [--header]
 
 WHY A CSV.  Four covariates have been proposed for the receive-rate deficit and
-all four were refuted once the sample grew (findings 1206, 1207): the jitter
+all four were refuted once the sample grew (findings F1206, F1207): the jitter
 buffer, per-call ERL, between-modem ERL, and the equaliser error.  Every one
 looked strong at n=5-9.  The problem is not that the hypotheses were unusually
 bad, it is that nine calls cannot distinguish a covariate from an outlier -- in

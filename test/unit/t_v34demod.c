@@ -1,14 +1,14 @@
 /*
  * t_v34demod.c -- V34demodulate, driven directly instead of through rxtiming.
  *
- * The last of finding 221's fifteen.  t_v34rx says why it matters, in the
+ * The last of finding F221's fifteen.  t_v34rx says why it matters, in the
  * comment above its V34agc block: "V34demodulate is a local symbol and can
  * only be reached through the interpolator, so every AGC defect it had
  * presented as a loop-shape failure."  That was true of the symbol table and
  * is not true any more -- --globalize-symbols promotes it and the rename map
  * then applies, so `ref_V34demodulate` links.
  *
- * THE CONVENTION, BECAUSE FINDING 51 SAYS TO CHECK
+ * THE CONVENTION, BECAUSE FINDING F51 SAYS TO CHECK
  *
  * "A `t` symbol is not a testing inconvenience, it is a signal that the
  * calling convention may not be the C one."  So:

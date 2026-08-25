@@ -6,7 +6,7 @@ over the path our calls actually take.
     relay.py --dial 1902 --hold 90      # give the handshake 90 s
 
 WHY THIS EXISTS.  `hw2hw.sh` was supposed to be the control experiment -- two
-real modems, no slmodemd, no blob -- and finding 1467 showed it never left the
+real modems, no slmodemd, no blob -- and finding F1467 showed it never left the
 VG204.  Both modems hang off the same gateway and 1902 matches `dial-peer
 voice 2 pots` (port 0/1), far more specific than the `.T` voip peer that
 reaches Asterisk, so the Cisco bridges port 0/0 to port 0/1 internally.  No
@@ -25,7 +25,7 @@ plus this process's own jitter buffer and conference bridge.  So:
     two modems reach their ceiling here  ->  the path is clean, conclusive
     two modems show the same deficit     ->  ambiguous; could be the extra hop
 
-Only the first outcome settles finding 1466.  Say so in whatever it produces.
+Only the first outcome settles finding F1466.  Say so in whatever it produces.
 
 THE MEDIA SETTINGS ARE NOT OPTIONAL.  A relay with VAD or an echo canceller in
 it would destroy the very signals it is carrying, and would do so silently --

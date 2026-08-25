@@ -6,7 +6,7 @@
  * the same way, because an x87 load-store quietens a signalling NaN and this
  * test drives signalling NaNs on purpose -- into `alpha`, whose comparison
  * against 1.0 is the branch that decides whether the AGC adapts at all
- * (finding 600).  None of the four entry points takes a float by value, so the
+ * (finding F600).  None of the four entry points takes a float by value, so the
  * bits-taking declarations t_sinewave needs are not required here.
  *
  * The object is placement-built into a POISONED oversized slot and all 32
@@ -160,7 +160,7 @@ main(void)
 			/*
 			 * `reset` after the block length has been changed is
 			 * where `count` and `blockLen` can disagree -- the
-			 * caller defect in finding 608 is exactly this.
+			 * caller defect in finding F608 is exactly this.
 			 */
 			poke(oa, 0x18, blens[i % 7]);
 			poke(ob, 0x18, blens[i % 7]);
@@ -293,7 +293,7 @@ main(void)
 
 	/*
 	 * THE TWO CASES THAT SEPARATE A RECIPROCAL FROM A DIVIDE.  Both were at
-	 * zero kills until built for deliberately (finding 608): the `>` guard
+	 * zero kills until built for deliberately (finding F608): the `>` guard
 	 * needs `lvl` to land exactly on 1e-10f, and `acc/blockLen` needs a
 	 * denormal `acc` whose quotient sits on a float rounding midpoint, so
 	 * that a difference of about 2^-64 decides the tie.

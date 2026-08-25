@@ -6,7 +6,7 @@
  * THE OBJECTS CANNOT LIVE IN A UNION and cannot be assigned into.  Both
  * classes declare a constructor and a destructor -- which are the four
  * symbols under test -- so both are non-trivial and a union holding one has
- * its default members deleted (finding 232).  The slots are plain aligned
+ * its default members deleted (finding F232).  The slots are plain aligned
  * byte arrays reached through a cast, and both sides' constructors are called
  * through asm() labels, because C++ has no syntax for running a constructor
  * over storage that already exists and this build has no <new> to spell
@@ -18,7 +18,7 @@
  * bytes before every trial and the fill is reseeded each time.  Neither
  * constructor writes more than eight bytes of its object, so a zero fill
  * would make "the other 120 bytes are untouched" true by accident; here it is
- * checked against the seed the trial actually used (findings 223, 224).
+ * checked against the seed the trial actually used (findings F223, F224).
  *
  * TWO WORDS OF EACH OBJECT CAN NEVER COMPARE EQUAL.  The filters are separate
  * sysdep_malloc returns on the two sides.  They are not skipped: the snapshot
@@ -33,7 +33,7 @@
  *     swapping the two stores produces a byte-identical object.  The only
  *     observable is which allocation each pointer holds, so the relation
  *     which allocation each field holds is compared against the REFERENCE's
- *     own answer, BY ORDINAL rather than by address (finding 1353) -- a
+ *     own answer, BY ORDINAL rather than by address (finding F1353) -- a
  *     differential comparison, not an assumption about the allocator.
  *   - V92PreFilter's second sub-object is a FloatIIR, and FloatIIR and
  *     FloatFIR have the same layout and the same constructor behaviour.  A
@@ -90,7 +90,7 @@ void ref_iir_dtor(void *self) asm("ref__ZN8FloatIIRD1Ev");
 
 /*
  * The three V92PreFilter members that do the work.  `this` is the first
- * STACK argument -- plain cdecl, finding 215 -- so a free function of the
+ * STACK argument -- plain cdecl, finding F215 -- so a free function of the
  * right shape reaches them, and none of the three returns anything the
  * object leaves in %eax.
  */
@@ -367,7 +367,7 @@ run_precoder_ctor(void)
 		 * makes the NEXT construction hand fir2's chunk out first and
 		 * the comparison inverts on alternate trials.  It agreed with
 		 * the reference under one libc and not under another, for
-		 * reasons that had nothing to do with either.  Finding 1353.
+		 * reasons that had nothing to do with either.  Finding F1353.
 		 */
 		diff_eq_int("stored in the reference's allocation order"
 			    " (taps %ld)",
@@ -922,7 +922,7 @@ run_prefilter_methods(void)
 	}
 
 	/* The sweep really did run filters with taps, and really did produce
-	 * varying output -- findings 223 and 224. */
+	 * varying output -- findings F223 and F224. */
 	diff_eq_int("some case ran a filter with taps (%ld)", moved, 1, 0);
 	diff_eq_int("process produced varying samples (%ld)", differed, 1, 0);
 
@@ -932,7 +932,7 @@ run_prefilter_methods(void)
 /*
  * V92Precoder::reset(V92MappingParams *), ::setCoefficients and ::process.
  *
- * THE PARAMETER BLOCK IS A `struct V92ParamsInfo`, which is finding 1321's
+ * THE PARAMETER BLOCK IS A `struct V92ParamsInfo`, which is finding F1321's
  * identification and not this file's guess -- one 180-byte block, the sixth
  * argument of V92Modulator's constructor by the mangling and the argument of
  * the four C functions that fill it.  `reset` copies twenty-five of its words
@@ -1515,7 +1515,7 @@ run_precoder_process(void)
 	}
 
 	/* The search really ran, and did not choose the same point every
-	 * time -- findings 223 and 224. */
+	 * time -- findings F223 and F224. */
 	diff_eq_int("process produced sums (%ld)", wrote, 1, 0);
 	diff_eq_int("and not one fixed index (%ld)", varied, 1, 0);
 	/* And D261 was actually driven, rather than merely provided for. */

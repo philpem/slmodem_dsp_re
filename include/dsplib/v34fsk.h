@@ -246,7 +246,7 @@ struct v34_object {
 	 * `datapumpv34` reads +0x238 and +0x248 at their TRUE offsets and
 	 * puts 5 in `f0004` when the difference passes 287,488; `v34handshak`
 	 * copies +0x238 into +0x248 to restart the span.  Between them those
-	 * are the second and third readings that settle finding 179's
+	 * are the second and third readings that settle finding F179's
 	 * register-relative offsets as four low.
 	 *
 	 * TWO OF THE FOUR ARE NAMED NOW, by `VPcmV34SetTimeOut`, which is the
@@ -420,7 +420,7 @@ struct v34_object {
 	 * A 4-byte STRUCT ASSIGNMENT would emit the same single `movl` and
 	 * is an equally consistent reading of the original; nothing in the
 	 * object separates the two, so this does not claim to have settled
-	 * which the author wrote.  See finding 5303.
+	 * which the author wrote.  See finding F5303.
 	 */
 	union {
 		int word;				/* +0x25d0 both at once */
@@ -462,7 +462,7 @@ struct v34_object {
 	 * so the transmit one has no sub-indices, costs, trellis or states,
 	 * and the object reuses the space.  `preinitdigital` clearing those
 	 * three arrays on the receive side and on neither other says the same
-	 * thing from the other direction.  See finding 181.
+	 * thing from the other direction.  See finding F181.
 	 *
 	 * THE POINTS ARE ALSO ADDRESSED AS EIGHT INTS, and `modulatevector`
 	 * is what pins both readings at once: it writes single shorts here
@@ -551,10 +551,10 @@ struct v34_object {
 	 * tested.
 	 *
 	 * IT IS NOT EMBEDDED HERE, and that is a deliberate under-claim.
-	 * Two things meeting is adjacency, not a bound -- finding 215's
+	 * Two things meeting is adjacency, not a bound -- finding F215's
 	 * rule -- and the 0x24 is OUR declaration's size rather than
 	 * anything the object states.  So the tiling is recorded as the
-	 * measurement it is and the span stays a pad.  Finding 630.
+	 * measurement it is and the span stays a pad.  Finding F630.
 	 */
 	unsigned char unmapped_3564[0x3588 - 0x3564];
 	/*
@@ -569,20 +569,20 @@ struct v34_object {
 	 * not its compiler's -- GCC 3.4.4, which is what `tools/toolchain`
 	 * runs as the period compiler, compiles `s->a == 2 && s->b == 2` on
 	 * two adjacent shorts into two separate `cmpw` with this object's own
-	 * flags and never fuses them (measured; finding 631).  The blob's own
+	 * flags and never fuses them (measured; finding F631).  The blob's own
 	 * `.comment` says 3.4.2; the container is a stand-in for it.
 	 * v34hshak.c reads exactly those two sites through `T3M_I32` and
 	 * every other site through `T3M_I16`, which is why both readings
 	 * survive.
 	 *
-	 * So this span is finding 553's shape -- one region, two widths,
+	 * So this span is finding F553's shape -- one region, two widths,
 	 * both the object's -- and the OFFSET SPELLING STAYS at every use
 	 * site.  The declaration here is the 16-bit reading because that is
 	 * what 68 of the 70 accesses say.
 	 *
 	 * SIGNEDNESS IS NOT SETTLED for either.  No access to either offset
 	 * sign-extends, and a `movzwl` whose upper half is discarded is a
-	 * free choice for the compiler (finding 614), so `short` here
+	 * free choice for the compiler (finding F614), so `short` here
 	 * matches the rest of this struct and is not a measurement.
 	 *
 	 * `fNNNN` and not a description: what they are FOR was not measured.
@@ -605,10 +605,10 @@ struct v34_object {
 	/*
 	 * THE THREE STATE WORDS.  `v34handshak` is not one state machine but
 	 * three concurrent ones, and these are their state variables:
-	 * finding 171 read each of `v34handshakinit`'s thirteen format
+	 * finding F171 read each of `v34handshakinit`'s thirteen format
 	 * strings against its arguments and settled which offset is which.
 	 * v34hshak.h holds the eighty-seven state names they take, and
-	 * finding 213 the three dispatch tables they drive.
+	 * finding F213 the three dispatch tables they drive.
 	 *
 	 * 728 ACCESSES BETWEEN THEM -- 201, 187 and 340 -- AND EVERY ONE IS
 	 * SIXTEEN BITS WIDE.  There is no byte reader and no 32-bit reader
@@ -639,7 +639,7 @@ struct v34_object {
 	 * extension on the value that is USED 32 bits wide, and both of the
 	 * two table indexes in this object are `movswl`.  The remaining
 	 * zero-extending loads feed 16-bit compares and 16-bit stores, where
-	 * the extension is the compiler's free choice (finding 614).
+	 * the extension is the compiler's free choice (finding F614).
 	 *
 	 * THE USE SITES KEEP THE OFFSET SPELLING, deliberately, and this is
 	 * not a half-done rename.  `hs_get`, `hs_put` and `hs_setstate` take
@@ -651,7 +651,7 @@ struct v34_object {
 	 * So v34hshak.h's `V34HS_MICROSTATE_OFF`, `_RXSTATE_OFF` and
 	 * `_TXSTATE_OFF` remain what every one of the 59 callers passes, and
 	 * v34hshak.c holds them against these three fields at compile time.
-	 * Finding 632.
+	 * Finding F632.
 	 */
 	short microstate;				/* +0x3592 */
 	short rxstate;					/* +0x3594 */
@@ -683,7 +683,7 @@ struct v34_object {
 	/*
 	 * The bulk-delay ring feeding the second echo canceller.  Its wrap is
 	 * BRANCHLESS -- idx &= -(len > idx), resetting to zero rather than
-	 * subtracting -- unlike every other ring here.  Finding 116.
+	 * subtracting -- unlike every other ring here.  Finding F116.
 	 */
 	int bulk_head;					/* +0x35a8 */
 	int bulk_tail;					/* +0x35ac */
@@ -692,14 +692,14 @@ struct v34_object {
 	unsigned char unmapped_35b8[0x80b8 - 0x35b8];
 	/*
 	 * The two echo cancellers and the arrays they point at, one
-	 * contiguous block each (finding 98).  Declared here rather than in
+	 * contiguous block each (finding F98).  Declared here rather than in
 	 * v34filt.h because this is the struct that owns the storage; the
 	 * descriptors are `struct v34_echo` and the arrays are named
 	 * separately because the object's own pointers are what tie them
 	 * together, not adjacency.
 	 *
 	 * `echo0.coeff_frac` points at `echo0_frac`, and that array is ALSO
-	 * DPSK.c's FSK delay line -- see finding 100 and the note on
+	 * DPSK.c's FSK delay line -- see finding F100 and the note on
 	 * `struct v34_fskdelay` above.  One region, two readings; there is
 	 * deliberately no separate member for the second.
 	 */
@@ -796,7 +796,7 @@ struct v34_object {
 	 * 4 * 0x2c = 0xa81c exactly, so the region this replaces held four
 	 * bins and nothing else -- it was `unmapped_a76c` until this arm gave
 	 * it a reader.  v34hshak.h's note that "neither initialiser has a
-	 * caller" was true when it was written; findings 738-745.
+	 * caller" was true when it was written; findings F738-745.
 	 *
 	 * The same arm reads both banks' `energy` across, at +0xa32c and
 	 * +0xa778, which is what makes 0xa320 the numerator of the ratio and
@@ -860,7 +860,7 @@ struct v34_object {
 	 * `struct v34_bitsource` in v34hshak.h) -- and v34hshak.c's use
 	 * sites cast to `unsigned short *`, `unsigned char *` and `short *`
 	 * at different arms.  A pointer type here would pick a winner the
-	 * object does not.  Finding 634.
+	 * object does not.  Finding F634.
 	 */
 	void *paa6c;					/* +0xaa6c */
 	void *paa70;					/* +0xaa70 */
@@ -882,7 +882,7 @@ struct v34_object {
 	 * `faa78` and not `counter`: what it COUNTS differs per arm -- ticks
 	 * in one, symbols in another -- and a name that says "counter" would
 	 * read as measured when only the width and the sign are.
-	 * v34hshak.c knows it as `T3M_COUNTER` / `T3C_COUNT`.  Finding 633.
+	 * v34hshak.c knows it as `T3M_COUNTER` / `T3C_COUNT`.  Finding F633.
 	 */
 	short faa78;					/* +0xaa78 */
 	unsigned char unmapped_aa7a[0xaa7c - 0xaa7a];
@@ -897,7 +897,7 @@ struct v34_object {
 	 * and `cmpw`; nothing reads it wider or narrower.  Three of
 	 * microstate 49's four thresholds and all of 50's are this plus a
 	 * constant, and `VPcmV34SetDelays`, `VPcmV34InitiateRetrain` and
-	 * `VPcmV34Create` are its other writers.  Finding 633.
+	 * `VPcmV34Create` are its other writers.  Finding F633.
 	 */
 	short filtdelay;				/* +0xaa7c */
 	/*
@@ -930,7 +930,7 @@ struct v34_object {
 	 * Reading them as times is what shows the ladder is inverted: half
 	 * a second of trouble buys a ten-second retrain, while the two-to-
 	 * three-second renegotiation waits four times as long and never
-	 * arrives.  Finding 1933.
+	 * arrives.  Finding F1933.
 	 */
 	short baud_rate;				/* +0xaa96 */
 	unsigned char unmapped_aa98[0xaad0 - 0xaa98];
@@ -956,7 +956,7 @@ struct v34_object {
 	 * Both are sixteen bits wide at every access and neither is ever
 	 * sign-extended, so the signedness is not settled -- `short` here is
 	 * the struct's convention, not a measurement.  v34hshak.c knows them
-	 * as `T3M_FABAE` and `T3M_FABC2`.  Finding 635.
+	 * as `T3M_FABAE` and `T3M_FABC2`.  Finding F635.
 	 */
 	short fabae[10];				/* +0xabae */
 	short fabc2;					/* +0xabc2 */
@@ -1119,7 +1119,7 @@ struct v34_object {
 	 * other two accesses agree on the width -- `VPcmV34Create` clears
 	 * both with `mov %reg16`, and `v34handshakinit` reads each back with
 	 * `movzwl` and stores a halfword, where the upper half never
-	 * survives (CLAUDE.md's free column, finding 614).
+	 * survives (CLAUDE.md's free column, finding F614).
 	 *
 	 * OFFSET-NAMED.  No format string in the object prints either, no
 	 * reconstructed function does arithmetic on them, and the one
@@ -1219,7 +1219,7 @@ struct v34_object {
  * `bits` counts units of 2400 bps, so the bit rate is 2400 times it.
  *
  * `rx_baud` IS `baud_rate` above -- one store, two readings, the same situation
- * as the echo array that is also the FSK delay line (finding 100).  It is
+ * as the echo array that is also the FSK delay line (finding F100).  It is
  * declared in both places on purpose; there is no third field.
  *
  * THE FOUR "CURRENT" GETTERS NAME FOUR OF THESE, and they name them in

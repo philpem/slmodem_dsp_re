@@ -6,7 +6,7 @@
  * `edprintf` messages `setDilDescriptor` ends with, which begin
  * `"V90DilDescriptorSettings: "` where every neighbouring diagnostic names a
  * class and a member.  See the header for the whole argument, and finding
- * 7600.
+ * F7600.
  *
  * Free functions with mangled names, which the linker treats exactly like
  * members: `_Z18calculateDilLengthP19tagV90DILdescriptor7PcmType` and
@@ -50,7 +50,7 @@
  * them again in prose.  `TO` is NOT the spec's -- §8.3.1 spells that field
  * out as "The Ucode of the training symbol used for the 1st DIL segment" and
  * §8.4.1 as "A set of N Ucodes", with no symbol at all -- so `TO` is the
- * author's own name for the ucode set.  Finding 7601.
+ * author's own name for the ucode set.  Finding F7601.
  *
  * WHAT IS IN THEM IS NOT THE SPEC'S.  The Recommendation gives the ranges and
  * the semantics and no values: 0 <= N <= 255, 1 <= LSP <= 128, 1 <= LTP <=
@@ -205,7 +205,7 @@ static unsigned char TO[DIL_TYPES][256] = {
  * loop at 0x31cad, `Ltp` at 0x31ce0 and `N` at 0x31d10.  The store
  * `d->seq1[i] = ...` may alias the table -- both are `unsigned char` -- so
  * GCC cannot hoist the bound, and hoisting it into a local here would emit a
- * different loop.  Finding 2302 is the same shape the other way round.
+ * different loop.  Finding F2302 is the same shape the other way round.
  *
  * THE THREE ZERO-TRIP GUARDS ARE THE COMPILER'S, not an `if` in the source.
  * `cmpb $0x0,0x8c2(%ecx); je` before the `seq1` loop is what GCC 3.4.2 emits

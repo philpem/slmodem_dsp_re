@@ -4,7 +4,7 @@
  *   CID_FSD_demodulate  .text 0x092280  1049 bytes
  *
  * The whole translation unit: one function and the three coefficient tables
- * it reads.  All three are GLOBAL in the object, and finding 6 records that
+ * it reads.  All three are GLOBAL in the object, and finding F6 records that
  * the AUTOCOR_COEF_* pair is referenced from here and nowhere else -- so the
  * 7200/9600 choice is this function's own, not a shared configuration.
  *
@@ -45,7 +45,7 @@
  * SIX SAMPLES PER BIT, OR EIGHT.  `cid->rate` says 8000 or 9600, but the bit
  * length here is 6 or 8 and the baud rate is 1200 either way, so the "8000"
  * path is really 7200 -- exactly what its coefficient table is called.  The
- * caller resamples; this function never sees 8000 Hz.  Finding 1509.
+ * caller resamples; this function never sees 8000 Hz.  Finding F1509.
  *
  * The three tables live in `.data`, not `.rodata`, so they were not `const`
  * in the original; `const` here is intent, as it is in dtmf_mtd_coeffs.c.
@@ -118,7 +118,7 @@ CID_FSD_demodulate(const short *samples, short *bits, short count,
 		/*
 		 * The newest sample again, times the correlation.  The wrap
 		 * below cannot fire -- `ac_idx` is 0..4 by construction --
-		 * and is reproduced because the object has it (finding 1508).
+		 * and is reproduced because the object has it (finding F1508).
 		 */
 		j = idx;
 		if (j < 0)

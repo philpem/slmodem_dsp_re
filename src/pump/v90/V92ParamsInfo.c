@@ -61,8 +61,8 @@
  * subtraction inside `frac_of` is `v - (int)v` here, which is the order the
  * object uses -- `dc e1`, which objdump prints as `fsub %st,%st(1)` and which
  * IS `FSUBR st(1),st(0)`, so st(1) becomes st(0) - st(1) and st(0) is the
- * value (finding 245, and tools/dis.py flags the line).  The abs() on the
- * result makes the order unobservable either way (finding 256).
+ * value (finding F245, and tools/dis.py flags the line).  The abs() on the
+ * result makes the order unobservable either way (finding F256).
  *
  * `sign_of` is `0.0f < v` because the object is `fldz; fcompp` and selects on
  * CF alone: zero prints as '-'.

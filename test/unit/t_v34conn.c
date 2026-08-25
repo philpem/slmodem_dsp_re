@@ -5,14 +5,14 @@
  * WHAT CHANGES FROM `t_v34call.c`, AND IT IS ONLY ONE THING: where the two
  * objects come from.  That file brings two raw arenas up by calling
  * `v34handshakinit` on them, so every field the handshake initialiser does
- * not write is pseudorandom and the call cannot converge (finding 786 records
+ * not write is pseudorandom and the call cannot converge (finding F786 records
  * that honestly).  This file calls the operations table `dp_vpcm_init`
  * registers -- `ops->create(modem, 34, caller, 9600, 48, ops)` -- and drives
  * the V.34 object at +0x2c of what it returns.  The wire, the four runs, the
  * per-block comparison, the alarm and the recorded literals are the same
  * shape.
  *
- * WHY THAT IS A DIFFERENTIAL TEST AND NOT A HYBRID.  Findings 800-806
+ * WHY THAT IS A DIFFERENTIAL TEST AND NOT A HYBRID.  Findings F800-806
  * measured it rather than assuming it: of the 265,520 bytes and 125 heap
  * regions one construction produces, exactly TWO words point at blob CODE,
  * both are `struct v34_shell` scrambler callbacks, both name functions this
@@ -25,12 +25,12 @@
  *
  * WHAT THE FIXTURE THEREFORE CANNOT TEST is the constructor, and the
  * configuration is the blob's.  Five parameters had to be chosen to construct
- * at all (finding 801) and two of them are ADDRESSES rather than numbers:
+ * at all (finding F801) and two of them are ADDRESSES rather than numbers:
  * `MDMPRM_DPRUNTIME` is dereferenced at once and `MDMPRM_DSPINFO` is written
  * through by `vpcm_delete`.
  *
  * THOSE FIVE ARE NOW DERIVED RATHER THAN CHOSEN, which is the one thing about
- * this file that has changed since finding 902 (findings 820-825).  Both
+ * this file that has changed since finding F902 (findings F820-825).  Both
  * addresses have types and both types have sizes: DPRUNTIME is a
  * `struct _tagModemParameters` built by `dp_runtime_create`, which is in this
  * object at 0x58e0 and is now reconstructed and differentially tested
@@ -43,7 +43,7 @@
  * `CFG_MAX_FRAG` 48 is `MODEM_FRAG`, which is `MODEM_RATE/200` -- so the two
  * the constructor guards were never free either.
  *
- * IT STILL DOES NOT CONNECT, and the trajectory did not move (finding 825).
+ * IT STILL DOES NOT CONNECT, and the trajectory did not move (finding F825).
  * That is the point of deriving them: the negative result now costs the
  * configuration as a suspect instead of leaving it as one.
  *
@@ -53,7 +53,7 @@
  * different addresses, and 19 pointer words in each root would then differ
  * run to run for a reason that has nothing to do with the modem.  So the two
  * endpoints are constructed ONCE and the whole live allocation set is
- * snapshotted; every run restores it first.  That is finding 805's
+ * snapshotted; every run restores it first.  That is finding F805's
  * snapshot-restore trick at graph scope, and it makes the four runs literally
  * the same memory at the same addresses again.  `graph_congruent` asserts the
  * restore is exact rather than trusting it.
@@ -137,12 +137,12 @@ extern unsigned int dsplibs_debug_level;
 /* --- the configuration, DERIVED -------------------------------------------- */
 
 /*
- * Finding 801's five, each traced to what actually answers it.  Two are
+ * Finding F801's five, each traced to what actually answers it.  Two are
  * addresses: +0x28 holds `MDMPRM_DPRUNTIME` and `movl $0x0,0x78(%eax)` writes
  * through it at once, and `vpcm_delete` writes two words through
  * `MDMPRM_DSPINFO` at 0x3ded.  Each endpoint gets its OWN pair -- one block
  * written into both constructions is exactly the shared state findings
- * 319-322 exist to avoid.
+ * F319-322 exist to avoid.
  *
  * The three numbers are `slmodemd`'s, which is the host this object was
  * compiled against and whose source survives:
@@ -190,14 +190,14 @@ extern unsigned int dsplibs_debug_level;
  *
  * So a REAL sound card reports a few hundred, not zero, and 424 + 4 trips the
  * 0x3d6f clamp: HW pins to 244 and the DMA correction at root +0xd254 becomes
- * 384.  Finding 824 measures that this takes the handshake THREE MICROSTATES
+ * 384.  Finding F824 measures that this takes the handshake THREE MICROSTATES
  * FURTHER -- the originator ends in 59 RX_PHASE2_CALL instead of error-
  * recovering to 44 DET_INFO.
  *
  * 0 is committed anyway, for a reason that is not "it is what this project's
  * host says", though it is: **the I/O delay and this file's wire are the same
  * physical quantity modelled twice.** The wire below is 288 samples each way
- * because finding 903 asked the object and it said 1 was out of spec; with
+ * because finding F903 asked the object and it said 1 was out of spec; with
  * that wire the object measures `bulkDelay=500, count2=509`, which is the
  * round trip it actually has. Setting the I/O delay to a real card's 424 while
  * leaving the wire at 288 would describe a line this test does not simulate,
@@ -205,12 +205,12 @@ extern unsigned int dsplibs_debug_level;
  *
  * The two move together or not at all. Whoever raises one raises the other.
  *
- * WHICH WAS THEN DONE, ten ways, and finding 839 has the table. A longer line
+ * WHICH WAS THEN DONE, ten ways, and finding F839 has the table. A longer line
  * takes BOTH endpoints three microstates further -- the answerer reaches
  * 52/53/51 and the originator 59 RX_PHASE2_CALL -- and **not one of the ten
  * connects**: mode 2 and four zero rate words every time. So the delay pairing
  * is not what stops the call, and this file keeps the short line because
- * finding 902's recorded numbers are the ones fourteen hand mutations are
+ * finding F902's recorded numbers are the ones fourteen hand mutations are
  * pinned to. Change both together or neither.
  */
 #define CFG_SRATE	9600	/* `cmp $0x2580,%esi`, and MODEM_RATE          */
@@ -409,7 +409,7 @@ vpcm_ops(void)
 	ref_dp_vpcm_init();
 	/*
 	 * ONE table under THREE ids -- 34, 90 and 92, all named "VPCM"
-	 * (finding 800).  34 is asked for by name rather than taken as the
+	 * (finding F800).  34 is asked for by name rather than taken as the
 	 * first, so a registry that stopped offering V.34 fails here.
 	 */
 	for (i = 0; i < harness_reg_ref.count; i++)
@@ -530,7 +530,7 @@ graph_hash(void)
 /*
  * THE PAIRING IS `src/pump/v34/v34digital.c`'s, ON `src/pump/v34/v34digital.c`'s
  * CONDITION, and the blob's constructor was measured to install exactly it
- * (finding 802) -- the two were derived independently and agree, which is
+ * (finding F802) -- the two were derived independently and agree, which is
  * what makes replacing them a substitution rather than a patch.
  */
 static void
@@ -660,7 +660,7 @@ call_alarm(int sig)
 		     "\nt_v34conn: %s block %d endpoint %s did not return.\n"
 		     "  originate mst=%d rxstate=%d txstate=%d\n"
 		     "  answer    mst=%d rxstate=%d txstate=%d\n"
-		     "  see finding 287 for why the loop need not terminate\n",
+		     "  see finding F287 for why the loop need not terminate\n",
 		     run_name[cur_run], cur_block, ep_name[cur_ep],
 		     cur_state[0][0], cur_state[0][1], cur_state[0][2],
 		     cur_state[1][0], cur_state[1][1], cur_state[1][2]);
@@ -721,7 +721,7 @@ run_call(int r, int nblock)
 	/*
 	 * THE RESTORE IS THE BRING-UP.  There is no `v34handshakinit` call
 	 * here and no `V34InitializeImplementationSpecific`: the constructor
-	 * did both, and finding 801 shows it logging all three transitions
+	 * did both, and finding F801 shows it logging all three transitions
 	 * (txstate NOSTATE0 => SILENCEINFO, rxstate => RX_DPSK, microstate =>
 	 * DET_SYNC).  What each run needs is that state back, byte for byte,
 	 * at the same addresses.
@@ -810,7 +810,7 @@ run_call(int r, int nblock)
 			snprintf(b->head, sizeof(b->head), "%s", text[ep]);
 
 			/*
-			 * DID THE HANDSHAKE LOOP ACTUALLY RUN?  Finding 805's
+			 * DID THE HANDSHAKE LOOP ACTUALLY RUN?  Finding F805's
 			 * passes 0 and 1 were vacuous for exactly this reason:
 			 * `txinit` leaves the transmit queue at 32 against a
 			 * limit of 16, so `datapumpv34` returns having done
@@ -1044,7 +1044,7 @@ static const struct claim expect[NEP] = {
 	/*
 	 * originate.  Construction leaves microstate 41 DET_SYNC, rxstate 43
 	 * RX_DPSK, txstate 54 SILENCEINFO -- exactly the three transitions
-	 * the blob narrates at the end of `VPcmV34Create` (finding 801).
+	 * the blob narrates at the end of `VPcmV34Create` (finding F801).
 	 * From there, and every block number here is a measurement:
 	 *
 	 *     13   txstate    24 TX_DPSK
@@ -1061,7 +1061,7 @@ static const struct claim expect[NEP] = {
 	 *
 	 * and from there it cycles 41 DET_SYNC / 44 DET_INFO for ever.  Eight
 	 * distinct triples and thirteen blocks in which one of the three
-	 * moved.  Finding 902 for what that says and what it does not.
+	 * moved.  Finding F902 for what that says and what it does not.
 	 */
 	{ 25, 8, 13, 4072, 574, 0, TRIPLE(41, 43, 54), TRIPLE(44, 43, 24),
 	  MODE_HANDSHAKE, 0, 0 },
@@ -1105,7 +1105,7 @@ check_totals(int r)
 		diff_eq_int(msg, t->nonzero, expect[ep].nonzero, r);
 
 		/*
-		 * THE HANDSHAKE LOOP RAN.  Finding 805's vacuous passes are
+		 * THE HANDSHAKE LOOP RAN.  Finding F805's vacuous passes are
 		 * what this is for: a constructed object comes out with the
 		 * transmit queue above the block's limit, so the first blocks
 		 * drain it and `datapumpv34` does nothing at all.  A count of
@@ -1250,7 +1250,7 @@ main(void)
 	/*
 	 * The allocation accounting, as exact literals -- 127 allocations per
 	 * endpoint of which 2 are freed inside `create`, 279,600 bytes asked
-	 * for, 125 regions left live (finding 800).  A constructor that
+	 * for, 125 regions left live (finding F800).  A constructor that
 	 * silently took a different branch would move these before it moved
 	 * anything else.
 	 */
@@ -1284,7 +1284,7 @@ main(void)
 	 * 2400 to get a rate index is +0x38 and +0x3c, and `vpcm_create`
 	 * writes those as the LITERALS 4800 and 33600 on both arms.  So the
 	 * host's rate window does not reach the rate machinery at all, which
-	 * is why sweeping it changes nothing (finding 824).
+	 * is why sweeping it changes nothing (finding F824).
 	 */
 	for (ep = 0; ep < NEP; ep++) {
 		char msg[128];
@@ -1380,7 +1380,7 @@ main(void)
 		diff_eq_int(msg, peek16(ep, O_TXLIMIT), 16, ep);
 		/*
 		 * BOTH SCRAMBLER CALLBACKS POINT AT THE BLOB, before anything
-		 * repoints them.  This is the measurement finding 802 made,
+		 * repoints them.  This is the measurement finding F802 made,
 		 * asserted rather than quoted: if the constructor stopped
 		 * installing them the substitution below would be replacing
 		 * nothing and the fixture would prove nothing.
@@ -1403,7 +1403,7 @@ main(void)
 	diff_begin("the heap graph, snapshotted so four runs are congruent");
 	graph_take();
 	/*
-	 * 252, not the 250 finding 900 recorded: the two `dp_runtime_create`
+	 * 252, not the 250 finding F900 recorded: the two `dp_runtime_create`
 	 * blocks are now IN the graph, which is the point of allocating them
 	 * rather than declaring them static.
 	 */
@@ -1493,7 +1493,7 @@ main(void)
 	 * with it -- so calling it would test the destructor, which is a
 	 * different test with a different fixture, while adding a window in
 	 * which this one's snapshot machinery points at freed memory.  Finding
-	 * 800 measured that `->destroy` balances to `live=0, bad_free=0`; that
+	 * F800 measured that `->destroy` balances to `live=0, bad_free=0`; that
 	 * is where the claim belongs.
 	 */
 	diff_begin("the host's own blocks are freed by the host's own free");

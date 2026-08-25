@@ -7,7 +7,7 @@
  * shipping build reads no parameter file at all; what survived the build is
  * the CALL SEQUENCE, which is a complete self-describing field map of both
  * classes and the only thing in the object that knows the author's names for
- * those fields (findings 860 and 861).
+ * those fields (findings F860 and F861).
  *
  * THE RETURN TYPE IS `int` AND IT IS NOT A GUESS.  A `void` function returning
  * nothing compiles to a bare `ret`; both of these zero `%eax` first, which is

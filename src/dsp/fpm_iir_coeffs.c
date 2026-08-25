@@ -3,7 +3,7 @@
  *
  * DELIBERATELY EMPTY.  This file held `COEF_DC`, which has moved to
  * `src/dsp/fpm_mtd.c`; the derivation is in the comment beside the definition
- * there and in finding 3621.  In short: the object's `.data` order is the
+ * there and in finding F3621.  In short: the object's `.data` order is the
  * link order, `COEF_DC` at 0x081d0 sits immediately after `DEF_COEFS` at
  * 0x081bc (a `fpm_mtd.c` local, so its translation unit is known and not
  * guessed), and `fpm_iir.c` is STT_FILE #619 against `fpm_mtd.c`'s #623 --
@@ -16,7 +16,7 @@
  * `.data`, so it cannot come between `fpm_mtd.c` and `fpm_phasor.c` in the
  * link, which is what `FPM_phasor`'s out-of-domain SINE sign lookup reads
  * across.  That adjacency is reproduced and deliberately not asserted --
- * finding 3624 and D392 for what displaces it.
+ * finding F3624 and D392 for what displaces it.
  *
  * `docs/coefficients.md` remains the register of recovered designs.
  */

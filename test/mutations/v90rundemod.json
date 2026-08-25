@@ -4,11 +4,11 @@
  },
  {
   "label": "NOTE: the source is shared with the vpcmrunpcm, vpcmflomodem, vpcmep3 and v34diagflo sets.",
-  "why": "Five sets over one file, one binary each; suites.json maps one name to one source and one binary, and none of the other four drives v90RunDemodulator at all.  Every anchor below is checked unique against the WHOLE file, which includes runPcmModem's near-identical arms -- that is what broke thirteen of vpcmrunpcm's when this function landed (finding 7580)."
+  "why": "Five sets over one file, one binary each; suites.json maps one name to one source and one binary, and none of the other four drives v90RunDemodulator at all.  Every anchor below is checked unique against the WHOLE file, which includes runPcmModem's near-identical arms -- that is what broke thirteen of vpcmrunpcm's when this function landed (finding F7580)."
  },
  {
   "label": "NOTE: THE POLARITY ROW IS THE ONE THAT MATTERS.",
-  "why": "`dispatch 1 case 3 takes runPcmModem's polarity` is finding 7580's first trap written as a mutation: it turns this function into its sibling at the one site where the two differ, and it must come back caught.  The four MP/MPnot rows are the second trap the same way."
+  "why": "`dispatch 1 case 3 takes runPcmModem's polarity` is finding F7580's first trap written as a mutation: it turns this function into its sibling at the one site where the two differ, and it must come back caught.  The four MP/MPnot rows are the second trap the same way."
  },
  {
   "label": "dispatch 1 case 3 takes runPcmModem's polarity",
@@ -382,7 +382,7 @@
   "find": "\tmpRateMask = (short)(modem.mp.rateMask * 2);\n",
   "replace": "\tmpRateMask = (short)((unsigned short)modem.mp.rateMask * 2);\n",
   "equivalent": true,
-  "why": "EQUIVALENT, and the argument is the reason finding 7585 was corrected. `(short)(x * 2)` keeps only the low sixteen bits of `x * 2`, and those depend only on the low sixteen bits of `x` -- so the extension the load uses is discarded and `movswl` against `movzwl` at 0xd5ec is finding 614's free column after all.  The row is kept rather than deleted because the claim it makes is the one 7585 first got wrong."
+  "why": "EQUIVALENT, and the argument is the reason finding F7585 was corrected. `(short)(x * 2)` keeps only the low sixteen bits of `x * 2`, and those depend only on the low sixteen bits of `x` -- so the extension the load uses is discarded and `movswl` against `movzwl` at 0xd5ec is finding F614's free column after all.  The row is kept rather than deleted because the claim it makes is the one 7585 first got wrong."
  },
  {
   "label": "copyMpInfoForInterface swaps the two h1 halves",
@@ -401,6 +401,6 @@
  },
  {
   "label": "NOTE: ONE ROW IS UNCAUGHT AND IT IS NAMED HERE WITH ITS REASON RATHER THAN LEFT AS A COUNT.",
-  "why": "77 mutations, 74 caught, 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted.  The one is `the demodulator is run with the wrong sample count`, and it is STRUCTURALLY uncatchable in this binary rather than a gap more trials would close: t_v90rundemod holds `V90Modem::side` at 2 so that `V90Demodulator::progress` never runs, which is what keeps `V90Equalizer::process`'s gccdiverge entry out of this binary and lets it carry a mutation suite at all (findings 2157 and 3002).  With the fan-out off, `V90Modem::progress` reads none of its four arguments and any corruption of them is invisible.  Closing it means driving the real demodulator, which costs this whole suite; the file's own header states that trade and this row is what makes the cost visible in the numbers."
+  "why": "77 mutations, 74 caught, 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted.  The one is `the demodulator is run with the wrong sample count`, and it is STRUCTURALLY uncatchable in this binary rather than a gap more trials would close: t_v90rundemod holds `V90Modem::side` at 2 so that `V90Demodulator::progress` never runs, which is what keeps `V90Equalizer::process`'s gccdiverge entry out of this binary and lets it carry a mutation suite at all (findings F2157 and F3002).  With the fan-out off, `V90Modem::progress` reads none of its four arguments and any corruption of them is invisible.  Closing it means driving the real demodulator, which costs this whole suite; the file's own header states that trade and this row is what makes the cost visible in the numbers."
  }
 ]

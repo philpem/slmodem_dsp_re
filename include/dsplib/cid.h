@@ -10,14 +10,14 @@
  *   Cidfsd.c   CID_FSD_demodulate   .text 0x092280   1049 bytes
  *   Cidmtd.c   CID_MTD_detect       .text 0x0926a0    259 bytes
  *
- * one translation unit each (finding 1410).
+ * one translation unit each (finding F1410).
  *
  * THE TWO RATES ARE NOT THE TWO RATES.  `rate` holds 8000 or 9600 and is the
  * rate the LINE runs at, which is what CID_MTD_detect's coefficients are
  * designed for.  The demodulator does not run at either: 8000 selects
  * AUTOCOR_COEF_7200 and six samples per bit, which is 7200 Hz at 1200 baud,
  * and 9600 selects eight, which is 9600 Hz.  The 8000 path is fed resampled
- * (finding 1509).
+ * (finding F1509).
  *
  * WHAT THE OBJECT IS.  `create_cid` allocates 0x160 bytes and sets `rate` to
  * 8000, +0x28 to 2 and +0x2c to 9.  Only the span this batch reads is named
@@ -35,8 +35,8 @@ struct cid {
 	/*
 	 * +0x00c is a `struct fpm_mrf`, the 9:10 resampler that makes the
 	 * 8000 Hz line into the 7200 Hz the demodulator wants -- so this pad
-	 * ends at a real boundary, not a convenient one.  Findings 1509,
-	 * 1510; a later batch writing `reset_cid` will name the rest.
+	 * ends at a real boundary, not a convenient one.  Findings F1509,
+	 * F1510; a later batch writing `reset_cid` will name the rest.
 	 */
 	unsigned char pad_000[40];	/* +0x000 reset_cid's territory     */
 	short f028;			/* +0x028 create_cid puts 2 here    */

@@ -1,7 +1,7 @@
 The pab-bug-* / pab-fix-* captures are DISCARDED.  Do not analyse them and do
 not cite them.
 
-They are the pre-emphasis A/B (finding 1471 / D53), and they were taken while
+They are the pre-emphasis A/B (finding F1471 / D53), and they were taken while
 three reconstruction agents were compiling.  /proc/loadavg read 10.3 and 11.7
 on the two calls that completed, on a 12-core box, and the run was stopped
 when it reached 42.
@@ -9,7 +9,7 @@ when it reached 42.
 slmodemd is real-time DSP: it must produce and consume 9600 samples a second
 on schedule, and scheduling jitter from competing compilers shows up as sample
 slips.  That is the exact mechanism that stopped a pjsua conference bridge
-carrying a V.34 handshake at all (finding 1468).  A connect failure under that
+carrying a V.34 handshake at all (finding F1468).  A connect failure under that
 load says nothing about the branch under test.
 
 The design was right -- interleaved arms, load recorded per call -- and

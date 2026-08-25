@@ -5,8 +5,8 @@
  * (0x3fea) or `modem_put_bits` (0x4153) for V.34: the other four datapumps'
  * data entries are `v32_process`, `v23_process`, `v22_process` and
  * `b103_process`, and `dp_wrapper_run` is `.process` for four other tables
- * and not for this one.  Finding 963.  So nothing in this tree carries a byte
- * of V.34 payload without it, and finding 968 measured the stronger claim:
+ * and not for this one.  Finding F963.  So nothing in this tree carries a byte
+ * of V.34 payload without it, and finding F968 measured the stronger claim:
  * the object does not SURVIVE data mode without it either, because this is
  * where the sample buffers are moved and where the payload the data branch
  * expects is fetched.
@@ -115,7 +115,7 @@ extern int VPcmV34Create(void *obj, int side, int max_frag, void *dpRuntime,
  * The code is a code and not a string because `tools/debugaudit.py
  * --invented` holds every literal in `src/` against the object's `.rodata`,
  * so a diagnostic phrase this tree made up cannot live here at all (findings
- * 180 and 201).  The names are in the test.
+ * F180 and F201).  The names are in the test.
  */
 static int vpcm_unwritten_code;
 static int vpcm_unwritten_soft;
@@ -191,7 +191,7 @@ vpcm_run(struct dp *dp, void *in_v, void *out_v, int count)
 		 * runs out.
 		 *
 		 * EXERCISED ON EVERY CALL, and this comment said the opposite
-		 * until finding 1002 measured it.  `vpcm_create` seeds it at
+		 * until finding F1002 measured it.  `vpcm_create` seeds it at
 		 * 528 -- exactly eleven 48-sample blocks -- so blocks 0 to 10
 		 * of every call take this arm and `VPcmV34Progress` is not
 		 * called at all in them.  Bisected with aborting probes:

@@ -65,7 +65,7 @@ struct v32_symout {
  * The absolute phase map, four entries: index by the two selected bits.
  * UNSIGNED, and that IS forced: `SMCv32_encoder_abs` is its only consumer and
  * loads it with `movzwl` into a 32-bit result that is used.  That every value
- * is positive -- so no test can see the difference -- is finding 613's point
+ * is positive -- so no test can see the difference -- is finding F613's point
  * and the reason the codegen evidence is worth having, not a reason to
  * discount it.
  *

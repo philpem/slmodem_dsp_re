@@ -9,7 +9,7 @@
  *
  * IT IS ITS OWN BINARY AND THAT IS NOT A STYLE CHOICE.  `process` calls
  * `Psd::process`, which carries a DECLARED divergence on the modern compiler
- * -- `tools/gccdiverge.json`, finding 1453: x87 excess precision in
+ * -- `tools/gccdiverge.json`, finding F1453: x87 excess precision in
  * `four1`/`realfft` reaching the decibel scaling, up to 0.043 dB and not
  * closable with a tolerance.  Every call that completes an accumulation
  * therefore inherits it, so this binary is excused on GCC 13 and green on the
@@ -21,7 +21,7 @@
  * the same answer: split the excused check into a binary of its own.  Which
  * is why the other seven members of this class are in `t_v90specacc.cpp`,
  * green under BOTH compilers and mutation-testable, and only `process` is
- * here.  Finding 5804.
+ * here.  Finding F5804.
  *
  * WHAT IS STILL EXACT ON BOTH TIERS is everything `process` itself owns: the
  * state machine, the return value, the copy loop and its counter, the
@@ -36,7 +36,7 @@
  * have suites of their own (t_psd.cpp, t_v90specialcond.cpp), so a green
  * there and a red here points at `process` itself.
  *
- * NOTHING IS EVER ZEROED (finding 230) and every object is followed by a
+ * NOTHING IS EVER ZEROED (finding F230) and every object is followed by a
  * guard region compared separately.
  */
 
@@ -55,7 +55,7 @@ extern unsigned int ref_dsplibs_debug_level;
 
 /*
  * The blob's `process`, by asm() label: plain cdecl with `this` as the first
- * stack argument (finding 215).
+ * stack argument (finding F215).
  */
 int ref_sv_process(void *self, float *in, unsigned int count)
 	asm("ref__ZN19V90SpectralVerifier7processEPfj");
@@ -106,7 +106,7 @@ next_byte(void)
 	return (unsigned char)(lfsr >> 3);
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial)
 {
@@ -374,7 +374,7 @@ run_process(void)
 	 * which is what says the parameter is read and the call is made.  A
 	 * counter that watched the return value or the spectrum would count
 	 * nothing here -- both are identical between the two runs -- and that
-	 * is the distinction findings 3509 and 3403 are about.
+	 * is the distinction findings F3509 and F3403 are about.
 	 */
 	{
 		static char t0[TEXT_MAX];

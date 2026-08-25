@@ -2,7 +2,7 @@
  * t_v92p3mod.cpp -- differential test of V92Phase3Modulator::generateSymbol
  * and ::reset against the blob.
  *
- * Finding 1113's shape, with the parts this class forces:
+ * Finding F1113's shape, with the parts this class forces:
  *
  * THE OBJECT IS SEEDED WITH VARIED BYTES, NEVER ZEROED, and both sides get
  * the same fill before every call.  One of the four modes is 0xa5 throughout
@@ -31,7 +31,7 @@
  *     sixteen-value enum is not something C++ defines.
  *
  * TWO SWEEP INPUTS EXIST ONLY TO MAKE A SIGNEDNESS OBSERVABLE, and without
- * them the differential tier is blind to it in exactly finding 613's way:
+ * them the differential tier is blind to it in exactly finding F613's way:
  *
  *   - `symbolCount` is driven at and past 0x80000000.  Every residue in
  *     `generateSymbol` is an unsigned reciprocal multiply with no sign fixup;
@@ -52,8 +52,8 @@
  * case 2 into the silent group would pass every check here.
  *
  * The `ref_` aliases are reached through asm() labels rather than by spelling
- * the alias as an identifier, which sidesteps finding 225.  The convention is
- * plain cdecl with `this` as the first stack argument (finding 215).
+ * the alias as an identifier, which sidesteps finding F225.  The convention is
+ * plain cdecl with `this` as the first stack argument (finding F215).
  */
 
 #include <string.h>
@@ -177,7 +177,7 @@ scr_place(ScramblerHI *s, unsigned char *buf, unsigned int out)
  * Every pointer as each side's own offset into each side's own buffer, plus
  * the buffers themselves.  The raw pointers are never compared and never
  * merely checked non-null: two static arrays at two addresses would pass that
- * and prove nothing (finding 224).
+ * and prove nothing (finding F224).
  */
 static void
 scr_compare(long input)

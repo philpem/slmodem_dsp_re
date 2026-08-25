@@ -5,7 +5,7 @@
  * are written here -- the constructor, which the object emits as the
  * byte-identical pair `C1` and `C2`, `setEchoDelay`, which is the one
  * `v34handshak` reaches, `reset`, the destructor, which it emits as the
- * byte-identical pair `D1` and `D2` (finding 1270), and the three that carry
+ * byte-identical pair `D1` and `D2` (finding F1270), and the three that carry
  * the signal: `setState`, `updateEchoHistory` and `process`.
  *
  * THE FIVE THAT ARE NOT WRITTEN are `setEchoParams`, `setEchoBeta`,
@@ -82,14 +82,14 @@
  *
  * THE OBJECT IS NOW FULLY MAPPED: fifteen fields, no `pad_*` left.
  *
- * A CORRECTION TO D72's DERIVATION, not to its verdict.  D72 and finding 1188
+ * A CORRECTION TO D72's DERIVATION, not to its verdict.  D72 and finding F1188
  * both spell the filter length `V92_ECHO_FILTER_LENGTH & ~3`.  The object
  * does a SIGNED divide-and-multiply -- `test %eax,%eax; js; add $0x3; and
  * $0xfffffffc` -- which is `x / 4 * 4` on an `int`, and the two readings
  * differ for every negative value: -6 gives -8 under the mask and -4 under
  * the object's rounding-toward-zero.  At the shipped 180 they agree, so
  * nothing about D72's CANNOT FIRE verdict moves; the arithmetic is corrected
- * where it is stated.  Finding 1312.
+ * where it is stated.  Finding F1312.
  */
 
 #ifndef DSPLIB_V92ECHOCANCELLER_H
@@ -141,7 +141,7 @@ public:
 	 * THREE ARGUMENTS, and only the first is a thing.  The second and
 	 * third appear nowhere but in the history length: the second is the
 	 * `div` divisor and the multiplier of the `2 *` term, the third the
-	 * final addend.  Finding 1188 traced both to `VPcmFloModem`'s
+	 * final addend.  Finding F1188 traced both to `VPcmFloModem`'s
 	 * constructors and read them as 40 and 199 for the shipped
 	 * configuration; the names here describe what THIS constructor does
 	 * with them, which is all it can say.  A zero `blockLen` traps at the
@@ -219,7 +219,7 @@ public:
 	 * `process` adds its block length to it and, when the sum reaches
 	 * +0x0c, asks `setState` for the next state; `setState` clears it on
 	 * every state CHANGE and only on a change.  So its role is forced and
-	 * its name is not recoverable -- finding 226, and `word_10` is the
+	 * its name is not recoverable -- finding F226, and `word_10` is the
 	 * honest spelling.
 	 *
 	 * BOTH ARE UNSIGNED BECAUSE THE COMPARISON IS.  `cmp 0xc(%edi),%esi;
@@ -238,7 +238,7 @@ public:
 	 * it is the first term of the history length.  So the field is real
 	 * and its VALUE is measured; what it was called is not, and inventing
 	 * a name for a quantity no method name and no diagnostic mentions is
-	 * what finding 226 warns against.  `word_18` it stays.
+	 * what finding F226 warns against.  `word_18` it stays.
 	 */
 	unsigned int word_18;		/* +0x18 == filterLength - 1         */
 	/*

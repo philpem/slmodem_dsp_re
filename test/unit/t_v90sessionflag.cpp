@@ -23,7 +23,7 @@
  *
  * TWO OF THE FIVE DO HAVE A SETTLED SIZE NOW.  `V90Phase3Demodulator` is
  * 0x42c and `V90Demodulator` 0x298, from the allocation that precedes each
- * constructor (finding 291), and both assert it in their own .cpp.  Their
+ * constructor (finding F291), and both assert it in their own .cpp.  Their
  * slots below are those sizes plus the slack, which they were not when this
  * file was written: the old P3D_SLOT was 0x34 + 0x398 and the old DEM_SLOT
  * 0x1e4, and both were SMALLER than the object they cast to.  Nothing
@@ -89,7 +89,7 @@ next_byte(void)
 }
 
 /*
- * VARIED BYTES, NEVER ZEROS (finding 230).  A zero fill makes a field the
+ * VARIED BYTES, NEVER ZEROS (finding F230).  A zero fill makes a field the
  * function never writes compare equal for the wrong reason, and every one of
  * these objects is mostly fields these methods never write.
  */

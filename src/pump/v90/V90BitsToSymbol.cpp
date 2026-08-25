@@ -7,7 +7,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x20(%esp),%ebx` after a 0x1c-byte frame -- not %ecx, so
- * these are not thiscall and nothing here needs an attribute (finding 215).
+ * these are not thiscall and nothing here needs an attribute (finding F215).
  *
  * THE DEFINITION ORDER BELOW IS THE BLOB'S, AND IT IS EVIDENCE RATHER THAN
  * TASTE.  GCC 3.4.2 emits this file's members in source order, so `nm -n` on
@@ -22,7 +22,7 @@
  * 11 of 11 and closes BOTH of its remaining byte differences,
  * `process(unsigned char *, unsigned &, short *)` at 55 differing bytes of
  * 484 and `process(unsigned &, short *)` at 11 of 375, with nothing lost
- * anywhere in the tree.  Neither function was edited.  Finding 7843.
+ * anywhere in the tree.  Neither function was edited.  Finding F7843.
  *
  * WHY THE MAPPER IS BUILT THROUGH AN asm() LABEL RATHER THAN `new`.  The
  * blob's constructor is
@@ -69,7 +69,7 @@
  * `_ZdlPv` at all, so the codebase replaced the global operator.
  *
  * WRITING IT OUT BY HAND IS NOT EQUIVALENT, and that is the whole of finding
- * 7816's correction to this file's own older comment.  At the destructor's
+ * F7816's correction to this file's own older comment.  At the destructor's
  * LAST free the delete-expression emits an ordinary `call sysdep_free`; the
  * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
  * frame with it.  refinement.md lever 7.
@@ -94,7 +94,7 @@ inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
 /*
  * NO LOCAL `operator delete[]` HERE.  This file reaches `dsplib/Scrambler.h`,
  * which carries the one definition, and a second is a redefinition error --
- * finding 7815, where that loud failure is the point.
+ * finding F7815, where that loud failure is the point.
  */
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90Mapper.h"
@@ -192,12 +192,12 @@ V90BitsToSymbol::~V90BitsToSymbol()
  * all, and `6 * shaperId / shaperSR` is that number FOR EVERY `shaperSR` THAT
  * DIVIDES SIX -- which is every value V.90 uses, and is where the shaper's own
  * block length comes from.  Two classes, two spellings, one quantity; finding
- * 7422 has the algebra and the case that separates them.
+ * F7422 has the algebra and the case that separates them.
  *
  * `bitsPerFrame` AND `extraSymbols` ARE THE TWO FIELDS THE CONSTRUCTOR LEAVES
  * ALONE, so a fixture that never zeroes its storage sees both stores directly.
  * The other three are the constructor's as well as `reset`'s and need the
- * sentinel treatment finding 7105 describes.
+ * sentinel treatment finding F7105 describes.
  * ===========================================================================
  */
 void
@@ -409,7 +409,7 @@ V90BitsToSymbol::process(unsigned char *bits, unsigned int &nofBits,
  * a report and not a guard, and no sequence of `reset` and `process` over a
  * properly constructed object can raise it without the mapper having already
  * written past the `2 * nofSymbols` allocation.  That is what makes it a
- * poked state in the fixture rather than a driven one -- finding 7430, the
+ * poked state in the fixture rather than a driven one -- finding F7430, the
  * same shape as 7422 and 7423.
  *
  * `if (extraSymbolsPending) extraSymbolsPending = 0;` IS THE OBJECT'S HERE

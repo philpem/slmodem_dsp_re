@@ -117,7 +117,7 @@ fskdetect(struct v34_object *obj, const short *in, short *out,
 	 * The delay line is the first echo canceller's fractional coefficient
 	 * array, reached through the canceller's own pointer exactly as the
 	 * original does -- `mov 0x80c4(%edx),%esi`, which is echo0.coeff_frac.
-	 * See finding 100 for why one array serves both.
+	 * See finding F100 for why one array serves both.
 	 */
 	struct v34_fskdelay *d = (struct v34_fskdelay *)obj->echo0.coeff_frac;
 	short *hist = obj->fsk_interp;
@@ -320,7 +320,7 @@ V34FSK_ASSERT(hilb,    struct v34_object, hilbert,       0xa1b8);
 /*
  * The pointer field DPSK.c dereferences is echo0's coeff_frac, at +0x80c4.
  * Asserted as a sum so that a change to either struct breaks here rather
- * than silently moving the FSK delay line -- finding 100.
+ * than silently moving the FSK delay line -- finding F100.
  */
 typedef char v34fsk_off_dline[
 	((int)(__builtin_offsetof(struct v34_object, echo0)

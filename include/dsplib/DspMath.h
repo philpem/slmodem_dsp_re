@@ -5,12 +5,12 @@
  * else.  They are emitted weak, one per section, so they carry no `.text`
  * address and the translation-unit map cannot place them -- which is why this
  * file's name is a description rather than the original's, and why
- * docs/modules.md has no entry to match.  See finding 243.
+ * docs/modules.md has no entry to match.  See finding F243.
  *
  * The signatures are exact and were not guessed: a FUNCTION TEMPLATE encodes
  * its return type in the mangling, unlike an ordinary function, so
  * `_Z3StdIfET_PS0_j` says `float Std<float>(float*, unsigned)` outright.
- * Finding 226 has the general point; this is the case where it pays twice.
+ * Finding F226 has the general point; this is the case where it pays twice.
  *
  * ---------------------------------------------------------------------------
  * The statistics are a chain, and `sqrSum` is misnamed

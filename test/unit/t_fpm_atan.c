@@ -190,7 +190,7 @@ main(void)
 	 * shortcut without ever reading the table.  98304 checks that compared
 	 * nothing while reporting PASS.  511, 1023, 2047, 32766 and 32767 in
 	 * `fixed` above are all this same denominator class; they are useful
-	 * for covering D4 itself and are not table coverage.  Finding 1502.
+	 * for covering D4 itself and are not table coverage.  Finding F1502.
 	 *
 	 * 16384 is the value that works.  It normalises to 0x8000 with a shift
 	 * of one, so `recip` is exactly 32768 and the ratio is exactly twice
@@ -202,7 +202,7 @@ main(void)
 	 * and magnitudes cap at 32768 -- so it needs an argument of exactly
 	 * -32768, where the ratio is the smaller magnitude itself.  That is
 	 * the second loop, and it is the only way to reach the ratio of 127
-	 * that finding 1501 is about.
+	 * that finding F1501 is about.
 	 */
 	diff_begin("FPM_atan table index sweep");
 	for (i = 0; i <= 16384; i++) {

@@ -6,7 +6,7 @@
  *
  * NOT POLYMORPHIC: the destructor appears with the `D1` and `D2` variants and
  * no `D0`, and GCC emits a deleting destructor only for a virtual one, so
- * offset 0 is a real member and there is no vptr.  Finding 228 is the four
+ * offset 0 is a real member and there is no vptr.  Finding F228 is the four
  * classes where that is not true.
  *
  * THE CONSTRUCTOR IS THE WHOLE OBJECT MAP THIS FILE CLAIMS.  Eighteen bytes,
@@ -55,7 +55,7 @@
  * definitions of `V90Parameters` exist in this tree -- the 0x504 word block in
  * `V90PreFilter.h` and the 0x558 named map in `V90Parameters.h` -- and no
  * translation unit may include both, so declaring rather than including keeps
- * this header compatible with either (finding 1112).
+ * this header compatible with either (finding F1112).
  */
 class V90Parameters;
 class V90ConstellationPower;

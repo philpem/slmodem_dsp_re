@@ -12,7 +12,7 @@ the one every bench change actually poses: a new modem, a different country
 profile, another impedance, a jitter setting.
 
 THE STATISTIC MATTERS MORE THAN THE SAMPLE SIZE, and this bench learned it the
-hard way (finding 1351).  A permutation test on the MEDIAN of the ATA playout
+hard way (finding F1351).  A permutation test on the MEDIAN of the ATA playout
 comparison gave p = 0.28 and the change was nearly reported as "not
 significant".  The median is the wrong statistic for adjacent categories in a
 discrete distribution: V.34 rates come in 2400 bit/s steps, so a real shift of
@@ -40,7 +40,7 @@ labels are exchangeable, and honest about small n in a way a t-test is not.
 WHAT IT WILL NOT DO.  Rescue an underpowered comparison.  n = 3 per arm cannot
 distinguish a configuration effect from this bench's own variance -- the
 receive rate ranges over 4800..33600 on a channel whose level and echo
-statistics are identical call to call (finding 1460d).  Twenty per arm is the
+statistics are identical call to call (finding F1460d).  Twenty per arm is the
 working minimum and the tool says so when it has less.
 """
 
@@ -147,7 +147,7 @@ def main():
         print("\n  UNDERPOWERED: %d and %d connected calls.  This bench's receive"
               % (len(a), len(b)))
         print("  rate ranges 4800..33600 on a channel whose level and echo are")
-        print("  identical call to call (finding 1460d).  Twenty per arm is the")
+        print("  identical call to call (finding F1460d).  Twenty per arm is the")
         print("  working minimum; below that a null result means nothing and a")
         print("  positive one is probably one call.")
     return 0

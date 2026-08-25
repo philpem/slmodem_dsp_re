@@ -242,7 +242,7 @@ main(void)
 	 * This is the test that was missing: updateAlpha's message had the
 	 * wrong format string, the wrong argument count and the wrong types,
 	 * and no differential run could see it because dsplibs_debug_level is
-	 * zero everywhere.  See finding 126.
+	 * zero everywhere.  See finding F126.
 	 */
 	diff_begin("v34 updateAlpha debug transcript");
 	{
@@ -250,7 +250,7 @@ main(void)
 		 * No small negative energies here: they divide by zero in
 		 * the original as well as in the reconstruction, and the
 		 * quantity is a sum of squares, so reaching one means the
-		 * estimate has already overflowed.  Finding 127.
+		 * estimate has already overflowed.  Finding F127.
 		 */
 		static const int energies[] = { 0, 1, 0x4000, 0x1000000,
 						0x40000000, 0x7fffffff,
@@ -458,7 +458,7 @@ main(void)
 				 * It is compared like everything else: the
 				 * blob zeroes it.  A skip plus an assertion
 				 * of one's own reading is not a differential
-				 * test -- see finding 122.
+				 * test -- see finding F122.
 				 */
 				if (b >= rs && b < rs + 4)
 					continue;
@@ -479,7 +479,7 @@ main(void)
 		 * live OUTSIDE the object.  Pointing any of them into it
 		 * collides with the arrays
 		 * V34InitializeImplementationSpecific set up -- identically
-		 * on both sides, so a comparison cannot see it.  Finding 116b
+		 * on both sides, so a comparison cannot see it.  Finding F116b
 		 * is what that cost.
 		 */
 		static short shp_a[512], shp_b[512];
@@ -539,7 +539,7 @@ main(void)
 					/*
 					 * Stride larger than the object, so
 					 * (iteration, offset) is unambiguous
-					 * -- finding 116a.
+					 * -- finding F116a.
 					 */
 					diff_eq_int("txmit at %ld",
 						    ((unsigned char *)&oa)[b],
@@ -737,7 +737,7 @@ main(void)
 			 * +0x128, f12a at +0x12a, the energy sum at +0x12c
 			 * and rx_samples itself at +0x130.  So there are
 			 * fourteen shorts of headroom, and the fifteenth pull
-			 * overwrites THIS LOOP'S OWN BOUND -- see finding 123.
+			 * overwrites THIS LOOP'S OWN BOUND -- see finding F123.
 			 *
 			 * Six outputs at up to two pulls each is twelve,
 			 * which stays inside.  This is a bound on the caller,
@@ -1057,7 +1057,7 @@ main(void)
 	 *
 	 * Run with the debug transcript captured too, since adaptecho reaches
 	 * three separate messages (updateAlpha's, the echo-energy report and
-	 * the negative-lag error) and finding 126 is what those cost when
+	 * the negative-lag error) and finding F126 is what those cost when
 	 * nothing compares them.
 	 */
 	diff_begin("v34 adaptecho");
@@ -1186,7 +1186,7 @@ main(void)
 	 * as its delay line -- the finding-100 overlay, third reader.  The
 	 * coefficient block must live OUTSIDE the object: pointing it inside
 	 * collides with what V34InitializeImplementationSpecific set up, and
-	 * does so identically on both sides, which is finding 116b.
+	 * does so identically on both sides, which is finding F116b.
 	 */
 	diff_begin("v34 modem_serrint");
 	{
@@ -1260,7 +1260,7 @@ main(void)
 			};
 			/*
 			 * THE LAST TWO ARE THE FAR CANCELLER'S, and they are
-			 * what found finding 200: nothing in this tree had
+			 * what found finding F200: nothing in this tree had
 			 * ever driven `echo1`'s adaptation, because it starts
 			 * at count 0x2bc and this section started the counter
 			 * at 0 and ran 300 calls.  0x2bb puts the next call
@@ -1887,13 +1887,13 @@ main(void)
 	 * the step becomes garbage, every output wraps twice, and twelve
 	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
 	 * f124 and best_index, which are the fields `receiver` then reads.
-	 * That is finding 123's overrun, and it makes both sides agree on
+	 * That is finding F123's overrun, and it makes both sides agree on
 	 * nonsense.  The real rates keep f1ae below f1b0, which is what
 	 * bounds the pulls at one per output.
 	 *
 	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
 	 * entries before the predictor's coefficients begin at +0x288, and
-	 * finding 123 measured fourteen shorts of receive-burst headroom.
+	 * finding F123 measured fourteen shorts of receive-burst headroom.
 	 * Seven outputs at up to two pulls each is fourteen samples, so one
 	 * bound implies the other; both are asserted below.
 	 */
@@ -1916,7 +1916,7 @@ main(void)
 	 *
 	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
 	 * entries before the predictor's coefficients begin at +0x288, and
-	 * finding 123 measured fourteen shorts of receive-burst headroom.
+	 * finding F123 measured fourteen shorts of receive-burst headroom.
 	 * Seven outputs at up to two pulls each is fourteen samples, so one
 	 * bound implies the other; both are asserted below.
 	 *
@@ -1944,7 +1944,7 @@ main(void)
 	 *
 	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
 	 * entries before the predictor's coefficients begin at +0x288, and
-	 * finding 123 measured fourteen shorts of receive-burst headroom.
+	 * finding F123 measured fourteen shorts of receive-burst headroom.
 	 * Seven outputs at up to two pulls each is fourteen samples, so one
 	 * bound implies the other; both are asserted below.
 	 *
@@ -2230,9 +2230,9 @@ main(void)
 
 	/*
 	 * And the seven diagnostic paths, which are seven of this function's
-	 * own annotations and are dead code at level 1.  Finding 134: a
+	 * own annotations and are dead code at level 1.  Finding F134: a
 	 * dropped call site is a dropped annotation, and an untested one is
-	 * finding 126 -- the only reconstruction so far whose debug string
+	 * finding F126 -- the only reconstruction so far whose debug string
 	 * was wrong was the one nothing drove.
 	 */
 	diff_begin("v34 receiver debug transcript");
@@ -2437,7 +2437,7 @@ main(void)
 			 * checked across the whole case, not on whatever the
 			 * last symbol happened to print.  An empty transcript
 			 * compares equal to an empty transcript, which is
-			 * finding 122's failure mode in another costume.
+			 * finding F122's failure mode in another costume.
 			 */
 			diff_eq_int(lvl < 2 ? "silent below the threshold"
 					    : "receiver transcript non-empty",
@@ -2525,7 +2525,7 @@ main(void)
 			 * follows them before it prints anything, so an
 			 * unseeded cursor faults rather than reporting.
 			 * Third time that shape has come up -- see finding
-			 * 189's note on the same defect in t_v34pcmif.
+			 * F189's note on the same defect in t_v34pcmif.
 			 */
 			((struct v34_queue *)&ra2)->rd =
 			    ((struct v34_queue *)&ra2)->ring;

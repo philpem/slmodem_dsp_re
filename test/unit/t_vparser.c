@@ -25,7 +25,7 @@
  * call SEQUENCE and never executes either stub.  This one links them
  * untouched and executes both.  Neither test subsumes the other.
  *
- * Finding 6400.
+ * Finding F6400.
  */
 
 #include <string.h>

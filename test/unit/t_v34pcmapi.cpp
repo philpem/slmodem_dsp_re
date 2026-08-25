@@ -23,7 +23,7 @@
  *     obj +0xac3c -> configuration
  *
  * Each side gets its own copy of all of them, prefilled with the same varied
- * per-offset pattern rather than a constant (finding 230), and every block is
+ * per-offset pattern rather than a constant (finding F230), and every block is
  * compared to its opposite number afterwards.  A test that compared only the
  * V.34 object would pass with `V90ConstellationDesigner::setMinMaxRates`,
  * `K56FlexFloModem::setMinMaxRates`, `V92EchoCanceller::setEchoDelay` and
@@ -498,7 +498,7 @@ compare_moh(const char *what, long tag)
 
 /*
  * ONE FIELD PER INPUT.  Two inputs driven from one variable cannot be told
- * apart -- findings 116b, 123 and 171 -- and `VPcmV34SetMinMaxBitRates` has
+ * apart -- findings F116b, F123 and F171 -- and `VPcmV34SetMinMaxBitRates` has
  * four gating inputs whose conjunction is the whole point of it, so all four
  * are separate members here even where a case only varies one.
  */
@@ -1286,7 +1286,7 @@ main(void)
 	 * was given, `VPcmV34SetDelays` prints each stored short back
 	 * SIGN-EXTENDED beside the configured int, and `VPcmV34InitMOH`'s
 	 * bypass line is the only difference between `message == 1` and any
-	 * other code at the level of the transcript.  Finding 134.
+	 * other code at the level of the transcript.  Finding F134.
 	 */
 	diff_begin("v34 pcm api: the accessor surface, transcripts too");
 	{

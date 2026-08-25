@@ -98,7 +98,7 @@ FIXES = {
         gen=lambda i: int(math.floor(32768 * math.sqrt((i + 64) / 256.0))),
         behaviour="none -- the blob reads FPM_div_table[0], which is already "
                   "32768, the value the formula gives",
-        deviation="D1, finding 13",
+        deviation="D1, finding F13",
     ),
     "D4": dict(
         symbol="FPM_div_table",
@@ -121,7 +121,7 @@ FIXES = {
         behaviour="CHANGES BEHAVIOUR -- the blob reads FPM_xor_table[0], "
                   "which is 0, where the formula gives 16384.  A reciprocal "
                   "of zero silences the AGC block that asked for it",
-        deviation="D4, finding 40",
+        deviation="D4, finding F40",
     ),
 }
 
@@ -522,7 +522,7 @@ def cmd_checklink(args):
 #
 # A checker nobody has seen fail is a checker that might be reporting "clean"
 # because it is broken; `extcheck.py` printed "(none)" through four dead
-# versions before anyone noticed (CLAUDE.md, finding 134's argument).  So the
+# versions before anyone noticed (CLAUDE.md, finding F134's argument).  So the
 # acceptance test damages a copy of the fixed binary in each of the two ways
 # `checklink` claims to catch, and requires it to catch them.
 #

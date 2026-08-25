@@ -2,7 +2,7 @@
 """Where does our STATEMENT ORDER differ from the original's?
 
 A DIFFERENCE HERE IS A HINT, NOT A CONCLUSION, and the distinction cost a
-false premise once already (finding 617).  GCC does NOT simply preserve source
+false premise once already (finding F617).  GCC does NOT simply preserve source
 order: `toneiir_reset`'s source is already in the object's order and the
 compiler emits ours in a different one, hoisting a short store and sinking an
 int store.  So you cannot read the author's statement order off the object.
@@ -16,7 +16,7 @@ it only shuffles this list, it is noise and must be left alone.
 That is recoverable source, and worth recovering: ours are frequently sorted by
 struct offset, which is a tidiness we imposed, and it erases whatever grouping
 the author had.  A comment pass that writes "initialise the filter state" over
-a list we sorted is describing our sorting.  Findings 615 and 617.
+a list we sorted is describing our sorting.  Findings F615 and F617.
 
 Only stores through a register holding a pointer argument are considered, and
 only functions where the two SETS agree -- a different set is a different
@@ -26,7 +26,7 @@ question (missing or extra work), not a different order.
 
 Without --all, only functions whose order differs are listed.
 
-WHAT IT SURFACES, AND HOW MUCH OF IT IS WORTH TOUCHING (finding 2402).  On the
+WHAT IT SURFACES, AND HOW MUCH OF IT IS WORTH TOUCHING (finding F2402).  On the
 current toolchain it reports 57 differing functions out of 194 eligible and 938
 shared symbols.  MOST OF THAT IS NOT ACTIONABLE, and the tool now says which
 part is: only 14 of the 57 have bodies whose MNEMONICS already match, which is
@@ -79,7 +79,7 @@ def body(path, sym):
     Multi-byte NOPs are spelled as `lea 0x0(%esi,%eiz,1),%esi` and
     `mov %esi,%esi`, which read as ordinary instructions.  Under -O3 the
     scheduler emits far more of them, and leaving them in makes two identical
-    bodies compare unequal.  Finding 2401.
+    bodies compare unequal.  Finding F2401.
     """
     out = subprocess.run(
         ["objdump", "-d", "--disassemble=" + sym, "--no-show-raw-insn", path],
@@ -104,7 +104,7 @@ def eligibility(blob_path, our_path, sym):
     order stand in the way and permuting statements can close it.  Where the
     mnemonics differ too, something bigger differs upstream and the store order
     is a symptom -- permuting there is fitting the compiler, which 617 forbids.
-    Finding 2402.
+    Finding F2402.
     """
     a, b = body(blob_path, sym), body(our_path, sym)
     if a == b:
@@ -175,7 +175,7 @@ def main():
     # -O3 -frename-registers the allocator uses the extra registers freely, so
     # a function can be "eligible" on a partial view of its stores.  Widening
     # this changes what the tool surfaces and needs the fire/quiet validation
-    # run again; it has not been done.  Finding 2402.
+    # run again; it has not been done.  Finding F2402.
     #
     print("  NOTE: sees stores through %eax/%ebx/%ecx/%edx at a non-zero\n"
           "        displacement only; other bases and offset 0 are invisible.")

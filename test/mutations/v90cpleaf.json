@@ -43,7 +43,7 @@
   "label": "reset does not reset the detector",
   "find": "V90CP::reset()\n{\n\tresetDetector();\n\n\tnofRecievedMp = 0;",
   "replace": "V90CP::reset()\n{\n\n\tnofRecievedMp = 0;",
-  "why": "Five sites now spell `resetDetector();` in V90CP.cpp -- `reset` and four inside `bitsToInfo` -- so the bare statement is no longer a unique anchor and carries the function header with it.  Finding 1264's trap at five times over: mutate.py calls a repeated anchor UNUSABLE and UNUSABLE does not fail a run."
+  "why": "Five sites now spell `resetDetector();` in V90CP.cpp -- `reset` and four inside `bitsToInfo` -- so the bare statement is no longer a unique anchor and carries the function header with it.  Finding F1264's trap at five times over: mutate.py calls a repeated anchor UNUSABLE and UNUSABLE does not fail a run."
  },
  {
   "label": "reset also clears +0x13, as the ctor does",

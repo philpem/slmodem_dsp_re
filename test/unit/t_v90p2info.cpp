@@ -4,7 +4,7 @@
  * THE FUNCTION IS NOTHING BUT DIAGNOSTICS, so the transcript IS the result.
  * There is no return value, no output parameter, and -- being `const` -- not
  * even a store to the object.  Comparing the two objects afterwards is still
- * worth doing, but on its own it is exactly the vacuous check findings 223
+ * worth doing, but on its own it is exactly the vacuous check findings F223
  * and 224 warn about: two identically seeded objects that neither side writes
  * agree no matter what the code does.  What decides this test is
  * `dsplib_debug_capture_text`, character for character, on all six call
@@ -21,13 +21,13 @@
  * identical encoded line however many calls preceded it.  t_encode compares
  * the two the same way.
  *
- * THE LEVEL IS SWEPT 0 TO 3, not just raised, which is finding 150's rule.
+ * THE LEVEL IS SWEPT 0 TO 3, not just raised, which is finding F150's rule.
  * Every gate in this function is `> 1`, so 0 and 1 must print NOTHING and 2
  * and 3 must print all twenty-six lines; a site whose gate was dropped, or
  * set at `> 2` instead, is identical to the object at one level and differs
  * at another.  The line counts are asserted against the literal 26 and 0 as
  * well as against the blob's, because two silent sides agree about nothing
- * (finding 149) -- and 26 is 4 gated header lines + 1 `edprintf` line + 21
+ * (finding F149) -- and 26 is 4 gated header lines + 1 `edprintf` line + 21
  * for L2, so a dropped site moves it.
  *
  * THE OBJECT IS NEVER ZEROED.  Both sides are seeded with the same varied
@@ -258,7 +258,7 @@ run_sweep(void)
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
 	/*
-	 * Anti-vacuity, finding 149: half of the sweep is at a level where
+	 * Anti-vacuity, finding F149: half of the sweep is at a level where
 	 * nothing prints, and two empty transcripts agree about nothing.
 	 */
 	diff_eq_int("our sites printed something", printed > 0, 1, 0);

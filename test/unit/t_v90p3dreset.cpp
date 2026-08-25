@@ -28,7 +28,7 @@
  *      two would compare equal for the wrong reason.  `run_states` therefore
  *      runs the same trial twice, once as state 0 and once as state 26, and
  *      asserts the two detectors DIFFER.  That check is satisfiable and is
- *      verified to fire, which findings 247 and 262 are the reason for.
+ *      verified to fire, which findings F247 and F262 are the reason for.
  *
  *   3. `TRN1dKnownData` (state 3) differs from the rest only in passing
  *      `reset`'s fourth argument, rather than 0, as the modulator's symbol
@@ -82,7 +82,7 @@ extern unsigned int ref_dsplibs_debug_level;
 
 /*
  * THE TWO EMPTY SPECIAL MEMBERS ARE LOAD-BEARING.  `Descrambler` declares a
- * constructor and a destructor (see dsplib/Scrambler.h and finding 871), which
+ * constructor and a destructor (see dsplib/Scrambler.h and finding F871), which
  * leaves `V90Phase3Demodulator` with no default constructor and a non-trivial
  * destructor, which DELETES both of a union holding one.  A user-provided pair
  * that constructs and destroys no variant member restores them and changes
@@ -171,7 +171,7 @@ next_byte(void)
 	return (unsigned char)(lfsr_state >> 3);
 }
 
-/* VARIED BYTES, NEVER ZEROS (finding 230). */
+/* VARIED BYTES, NEVER ZEROS (finding F230). */
 static void
 fill_pair(void *a, void *b, size_t n)
 {
@@ -640,7 +640,7 @@ run_states(void)
  * leave behind, so that the whole-object comparisons above are testing a
  * difference rather than agreeing about nothing.  Every one of them is run
  * and required to fire; a check that cannot be satisfied is the failure
- * findings 247 and 262 record.
+ * findings F247 and F262 record.
  */
 static int
 run_openings_differ(void)
@@ -720,7 +720,7 @@ run_openings_differ(void)
 	/*
 	 * 5.  The two companding arms give different levels for the same
 	 *     code, or the mu-law/A-law selection could not be seen at all --
-	 *     finding 253 is that exact trap one class down.
+	 *     finding F253 is that exact trap one class down.
 	 */
 	run_pair(9, PCM_TYPE_MU_LAW, 0x40, P3D_STATE_WAIT_FOR_SD, 0,
 		 1, 1, 1, 1, 1, 0.0f, 0);
@@ -745,7 +745,7 @@ run_openings_differ(void)
  * here, so a store into any of the eight sub-objects would show.  The value
  * is asserted to be zero rather than only compared, because the fill puts
  * something else there and two never-cleared objects agree with each other
- * (finding 1105).
+ * (finding F1105).
  *
  * The store is also asserted to have MOVED the field, per trial: the fill is
  * pseudorandom and 0 comes up once in 2^32, so a member that did nothing

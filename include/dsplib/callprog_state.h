@@ -80,7 +80,7 @@ extern unsigned char toneiir_busy_table[CALLPROG_STATES];
 /*
  * The supervisor's configuration: four words the caller builds on its stack.
  * `call_create` fills `get_sreg` with `call_GetSRegister`, which is how the
- * calling tone's level reaches S221 (finding 55).
+ * calling tone's level reaches S221 (finding F55).
  */
 struct callprog_cfg {
 	int	w0;					/* -> cp->f1c    */
@@ -180,7 +180,7 @@ void CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg);
 
 /*
  * Tear down what Create built.  Does NOT free the supervisor itself, and
- * clears only two of the five pointers it releases -- see finding 55.
+ * clears only two of the five pointers it releases -- see finding F55.
  */
 void CALLPROG_Delete(struct callprog *cp);
 

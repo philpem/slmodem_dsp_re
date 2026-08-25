@@ -1,6 +1,6 @@
 /*
  * t_v90prefilter.cpp -- differential test of V90PreFilter's five members,
- * plus `reset` and the constructor and destructor (finding 1233).
+ * plus `reset` and the constructor and destructor (finding F1233).
  *
  * FOUR BLOCKS OF MEMORY PER SIDE, not one.  The object holds pointers to a
  * V90Parameters and a V90Phase2Info, the Phase 2 block points at the
@@ -11,7 +11,7 @@
  * every one of its forty-eight stores inside V90Parameters.
  *
  * FOUR WORDS CAN NEVER COMPARE EQUAL AS ADDRESSES, and none of them is
- * skipped (finding 224):
+ * skipped (finding F224):
  *
  *   fir.history       a sysdep_malloc return; compared as null / not null,
  *                     with the buffer it points at compared in full
@@ -122,7 +122,7 @@ P(int side)
 /*
  * The Phase 2 block, as the class it now is.  It used to be an opaque union
  * declared in V90PreFilter.h, so this test reached into it as `b[0x18]` and
- * `w[0x18 / 4]`; the real V90Phase2Info landed with finding 255 and the stub
+ * `w[0x18 / 4]`; the real V90Phase2Info landed with finding F255 and the stub
  * is gone.
  */
 static V90Phase2Info *
@@ -170,7 +170,7 @@ fill(unsigned char *a, unsigned char *b, int n, int mode)
 /*
  * Build both objects from the same bytes.  Never zeroed: a zero fill lets a
  * store that never happened compare equal to one that did, which is the
- * failure findings 223 and 224 record.
+ * failure findings F223 and F224 record.
  */
 static void
 setup(int trial, int mode)
@@ -963,7 +963,7 @@ run_setparam(void)
  * other's.
  *
  * The gain and the reference loop are asserted by value rather than only
- * compared: two never-reset objects agree with each other (finding 1105), and
+ * compared: two never-reset objects agree with each other (finding F1105), and
  * -1 is the one value in `refLoop` that a random fill will not produce twice
  * in a row by accident.
  */
@@ -1031,7 +1031,7 @@ run_reset(void)
  * uninitialised stack and copy it in, which destroys the one property the
  * fixture depends on -- that the object is SEEDED and never zeroed, so a slot
  * the constructor does not write is visibly the seed rather than a plausible
- * zero (findings 223, 224).  So both sides are called through asm() labels,
+ * zero (findings F223, F224).  So both sides are called through asm() labels,
  * and BOTH the C1 and the C2 variant are driven: the blob has them as two
  * identical copies at different addresses and our compiler emits one function
  * under both names, so a test that drove only one would leave half the pair
@@ -1502,7 +1502,7 @@ run_getnofrefloops(void)
 
 	/*
 	 * Anti-vacuity, and every counter below counts trials whose RETURNED
-	 * VALUE differed -- never a branch believed taken (finding 3509).
+	 * VALUE differed -- never a branch believed taken (finding F3509).
 	 */
 	diff_eq_int("more than one distinct count was returned (%ld)",
 		    distinct > 1, 1, 0);
@@ -1621,7 +1621,7 @@ run_filteraccessors(void)
 	/*
 	 * Anti-vacuity.  Every one of these counts trials whose RETURNED
 	 * VALUE or PRINTED OUTPUT differed from another trial's, which is what
-	 * finding 3509 asks for; none of them counts a branch believed taken.
+	 * finding F3509 asks for; none of them counts a branch believed taken.
 	 */
 	diff_eq_int("both tap counts were returned (%ld)",
 		    saw20 > 0 && saw40 > 0, 1, 0);

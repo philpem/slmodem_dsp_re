@@ -11,7 +11,7 @@
  * proved which offset.
  *
  * THIS PARAGRAPH USED TO SAY "TWO", and had said it since the file held two.
- * It is findings 6100 and 6103's class exactly -- a count in a comment with
+ * It is findings F6100 and F6103's class exactly -- a count in a comment with
  * no gate behind it -- and it is the first thing a reader of any member here
  * sees, so it is worth the edit every time one lands.
  *
@@ -21,10 +21,10 @@
  * rather than in a linkonce section, so `reset` is not an in-class inline the
  * compiler folded into the constructor (GCC 3.4 at -O2 does not inline an
  * ordinary global function).  The original repeated the assignments, which is
- * why they are repeated here rather than written as `reset()`.  Finding 1237.
+ * why they are repeated here rather than written as `reset()`.  Finding F1237.
  *
  * The calling convention is plain cdecl -- `mov 0x4(%esp),%eax` -- not
- * thiscall (finding 215).
+ * thiscall (finding F215).
  */
 
 #include <stddef.h>
@@ -68,7 +68,7 @@ typedef char v90mp_size[(sizeof(V90MP) == 0x124) ? 1 : -1];
 
 /*
  * THE ORDER OF THE FIRST FOUR STORES IS DECODED, NOT TRANSCRIBED, and the
- * distinction is the whole of finding 7770: the object emits
+ * distinction is the whole of finding F7770: the object emits
  *
  *     movb $0x12,0x1b ; movl $0x0,0x14 ; movb $0x0,0x19 ; movb $0x0,0x1a
  *
@@ -122,7 +122,7 @@ V90MP::~V90MP()
  * listing** -- in the blob `V90MP()`, `V90MP()` (the C2 clone) and `reset` are
  * byte-identical to each other, 0 of 40, and so are ours.  So the store order
  * decoded above the constructor is this function's too, and the one edit
- * closed three symbols.  Finding 1237 is why the assignments are
+ * closed three symbols.  Finding F1237 is why the assignments are
  * repeated here rather than written as a call to `resetDetector` plus two
  * counters -- `resetDetector` is a separate GLOBAL symbol at 0x1f3c0 and GCC
  * 3.4 at -O2 does not inline one of those, so an original that called it
@@ -233,7 +233,7 @@ V90MP::evaluateInfo()
 	 * ever see it, because `x & 1` is 0 or 1 under either reading.
 	 *
 	 * ENUMERATED, 35 cells: seven spellings of this statement crossed with
-	 * all five positions of the `rateMask = 0` below it (finding 7819).
+	 * all five positions of the `rateMask = 0` below it (finding F7819).
 	 * Four distinct emissions.  TWENTY cells reach this one -- a char
 	 * local, a signed-char local, this two-step accumulate, and the
 	 * three-step accumulate with an explicit `Trellis = 0` -- so what is
@@ -279,7 +279,7 @@ V90MP::evaluateInfo()
 	 * for every one of the seven Trellis spellings enumerated above.  The
 	 * map is constant, so by lever 1's own rule the difference is not a
 	 * store-order difference at all; GCC schedules this store where it
-	 * likes.  Do not re-run that domain.  Finding 7819.
+	 * likes.  Do not re-run that domain.  Finding F7819.
 	 */
 	rateMask = 0;
 	for (i = 0x24; i <= 0x31; i++)
@@ -320,7 +320,7 @@ V90MP::evaluateInfo()
  * THE CRC IS WRITTEN OUT HERE RATHER THAN CALLED.  `resetCRC` (0x1f150) and
  * `calcCRC` (0x1f170) are plain GLOBAL symbols in `.text`, and GCC 3.4 at -O2
  * does not inline one of those, so an original that had called them would have
- * left two calls behind and there are none.  It is finding 1237's argument
+ * left two calls behind and there are none.  It is finding F1237's argument
  * again -- the same argument that says `reset` repeats the constructor -- and
  * it applies three times over, since `bitsToInfo` carries two more copies.
  *
@@ -329,7 +329,7 @@ V90MP::evaluateInfo()
  * turn any of them into a call to the others: that would remove instructions
  * the object has.
  *
- * TWO DEFECTS OF THE ORIGINAL ARE REPRODUCED HERE ON PURPOSE.  Finding 1386.
+ * TWO DEFECTS OF THE ORIGINAL ARE REPRODUCED HERE ON PURPOSE.  Finding F1386.
  *
  *   - The type-zero arm pads from 0x45, which is where it has just put the
  *     CRC, so it destroys it: `movb $0x0,0x61(%ebx)` and a loop from 0x45,
@@ -559,7 +559,7 @@ V90MP::infoToBits()
  * things, all in CLAUDE.md's "free" column: a seven-byte `lea` NOP aligning
  * the loop head, `lea 0x1(%ecx),%esi` where the object reuses %esi with
  * `inc`, and one `movzbl` widening the feedback byte whose upper half is then
- * discarded (finding 614).  Nothing forced is outstanding.
+ * discarded (finding F614).  Nothing forced is outstanding.
  *
  * CONFORMANT WITH 10.1.2.3.2/V.34, which is what 8.6.3/V.90 cites for MP.
  * See the note above `evaluateCRC` for the derivation and for the extent
@@ -626,10 +626,10 @@ V90MP::calcCRC()
  * cannot leave the object -- the widest address the byte can name is
  * `this + 0x11a`, and `sizeof(V90MP)` is 0x124 -- so this is not D923's
  * family (an unbounded store running off an allocation) and it is not
- * recorded in docs/deviations.md.  Finding 7411.
+ * recorded in docs/deviations.md.  Finding F7411.
  *
  * THE SEED IS THE SAME SIXTEEN ONES `resetCRC` (0x1f150) writes, inlined
- * rather than called for finding 1237's reason, and it runs BEFORE the guard
+ * rather than called for finding F1237's reason, and it runs BEFORE the guard
  * so it happens whatever the extent.  It is a SIGNED bound -- `cmp $0xf` /
  * `jle` at 0x1f48a -- where the comparison loop below is UNSIGNED
  * (`cmp $0xf` / `jbe` at 0x1f6e7), which is why the two counters here have
@@ -743,7 +743,7 @@ V90MP::evaluateCRC()
  * THE DIAGNOSTICS ARE NOT AT THE SAME LEVEL IN THE TWO ARMS.  Both announce
  * the message at level 2, but the MP arm's four follow-ups need level 3
  * (`cmpl $0x2`) and the MPnot arm's need only level 2 (`cmpl $0x1`).  That is
- * finding 150's trap exactly, and it is why the test sweeps 0..3.
+ * finding F150's trap exactly, and it is why the test sweeps 0..3.
  *
  * `PrintBase2` (0x20130) is a plain global symbol, so as with the CRC the two
  * copies of its body here are the original's own repetition, not an inlining.

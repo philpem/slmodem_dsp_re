@@ -14,7 +14,7 @@
  *      alone -- there are two such pairs here (0xf0 twice, 0x62 twice), so
  *      the ordinals are not a formality.
  *   3. WHICH ARGUMENTS ACTUALLY CHANGE THE OBJECT.  A constructor is exactly
- *      the shape finding 3052 warns about: a template copied into the wrong
+ *      the shape finding F3052 warns about: a template copied into the wrong
  *      sub-object leaves the object the right length with the right
  *      allocation count, and a test driven by one configuration cannot see
  *      it.  So the sweep below counts, per axis, how many of its trials moved

@@ -15,7 +15,7 @@ thought to write a claim about, which it demonstrably does: over v8jm.c,
 where all 29 hand-written entries were caught, it found fourteen more --
 eight of them `initTxSequence`'s field clears, which delete cleanly because
 the fixture hands in a buffer that is already zero, and the rest output bits
-nothing asserts on.  Finding 193.
+nothing asserts on.  Finding F193.
 
 HIGH AND MEDIUM ONLY, by default.  Low severity came back 65.9% caught on
 v8jm.c, which is 299 survivors to triage for one file, most of them noise of
@@ -98,7 +98,7 @@ def mapping():
     """source -> test binary, and the sources we have no pairing for.
 
     suites.json is authoritative because it was written after six sets were
-    misread by guessing (finding 190).  The t_<basename> guess is a fallback
+    misread by guessing (finding F190).  The t_<basename> guess is a fallback
     and is reported as a guess, not silently trusted.
     """
     suites = {v[0]: v[1] for k, v in

@@ -6,7 +6,7 @@
  * Both sides call the SAME `sysdep_malloc` -- it is in symmap.py's
  * SHARED_IMPORTS and sharing an allocator between the two sides is safe -- so
  * the two runs get different addresses and every pointer field differs for a
- * reason that is not a defect.  The answer is finding 224's, applied to
+ * reason that is not a defect.  The answer is finding F224's, applied to
  * pointers: compare what the pointer MEANS, not what it is.
  *
  *   - the creators are compared with each stored pointer CANONICALISED to its
@@ -69,11 +69,11 @@ extern void ref_K56FLEX_Delete(void *obj);
  * They are tested here rather than beside the class's other five stubs in
  * t_v90leaves.cpp for one reason: test/mutations/suites.json pairs
  * `K56FlexFloModem.cpp` with THIS binary, so a mutation of the constant below
- * is only caught if this binary is what reads it (finding 1264 is the same
+ * is only caught if this binary is what reads it (finding F1264 is the same
  * hazard from the other end).
  *
  * The convention is plain cdecl with `this` as the first stack argument
- * (finding 215).  Calling a member this way is safe here BECAUSE not one
+ * (finding F215).  Calling a member this way is safe here BECAUSE not one
  * instruction in any of the three touches `this` -- which is the claim under
  * test, so the fixture hands both sides a seeded buffer as `this` and compares
  * it afterwards.
@@ -275,7 +275,7 @@ check_create(const char *what, void (*ours)(struct V92ParamsInfo *),
 	}
 
 	/*
-	 * Anti-vacuity, findings 223 and 224.  The call must CHANGE the block,
+	 * Anti-vacuity, findings F223 and F224.  The call must CHANGE the block,
 	 * and the block must not come out the same whatever went in -- either
 	 * would make every comparison above a comparison of memory nobody
 	 * wrote.

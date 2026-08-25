@@ -6,7 +6,7 @@
  * mostly used with; `V90ModemCtor.cpp` names the type in the mangled
  * declaration of `V90Demodulator::V90Demodulator` -- and that file must NOT
  * have `V90PreFilter.h`, because there are two definitions of `V90Parameters`
- * (finding 1112) and V90PreFilter.h carries the 0x504 block form while this
+ * (finding F1112) and V90PreFilter.h carries the 0x504 block form while this
  * constructor allocates the 0x558 named one.  See V90ModemCtor.cpp's own
  * header comment, which lays the trade out in full.
  *

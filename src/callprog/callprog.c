@@ -286,7 +286,7 @@ CALLPROG_Create(struct callprog *cp, struct callprog_cfg *cfg)
 	 * at 0x795e6 -- but GCC moves these blocks out of line, so the order
 	 * of the GATES is not the order they run in, and the transcript says
 	 * the object prints this immediately before `CALLPROG Dialing`.
-	 * Finding 194.
+	 * Finding F194.
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("CALLPROG Create <<\n");
@@ -302,7 +302,7 @@ CALLPROG_Delete(struct callprog *cp)
 	 * "is entered" suggests -- the transcript shows the object printing
 	 * "Dialer was aborted." first.  A store cannot cross a call, but a
 	 * gated print can sit either side of one and nothing but the trace can
-	 * say which.  Finding 194.
+	 * say which.  Finding F194.
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("CALLPROG_Delete is entered\n");
@@ -333,7 +333,7 @@ CALLPROG_Delete(struct callprog *cp)
 	/*
 	 * Two of the five pointers are cleared and three are not, so a second
 	 * Delete on the same object would free `busy`, `band` and `dtmf`
-	 * again.  call_delete calls this once.  See finding 55.
+	 * again.  call_delete calls this once.  See finding F55.
 	 */
 	cp->f70 = 0;
 	cp->dial = 0;
@@ -371,7 +371,7 @@ CALLPROG_Dial(struct callprog *cp, const char *s)
 	 *
 	 * This was the other way round here until the refusal path was
 	 * driven with the level raised, and the transcripts disagreed by
-	 * exactly this line.  Finding 240.  It is finding 194's warning
+	 * exactly this line.  Finding F240.  It is finding F194's warning
 	 * again: the cold block sits 0x2b0 bytes past the gate, so gate
 	 * ADDRESS order is not execution order and reading the two in
 	 * address order puts this print second.
@@ -549,7 +549,7 @@ request_state(struct callprog *cp, int next)
 	 * Eleven call sites in the object, all inlined here, all after both
 	 * guards and before the store -- so a refused transition is silent.
 	 * Eight of them had `next` folded to a constant and the table load
-	 * folded with it; three did not.  Same shape either way (finding 152).
+	 * folded with it; three did not.  Same shape either way (finding F152).
 	 */
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("STATE:  %s --> %s\n",
@@ -758,7 +758,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 		/*
 		 * The two messages callprog.h could not name.  These strings
 		 * name them: verdict 3 is 2100 Hz and verdict 5 is 2250 Hz.
-		 * Finding 153.
+		 * Finding F153.
 		 */
 		if (r == 3) {
 			if (DSPLIB_DEBUG_ON())
@@ -830,7 +830,7 @@ CALLPROG_Progress(struct callprog *cp, const short *in, short *out, int count)
 			 * (0x7a31d precedes the branch at 0x7a324), "Enabling"
 			 * before it (0x7a283 follows the block at 0x7a52f).
 			 * Same asymmetry as the pulse dialler's hook messages,
-			 * finding 148.
+			 * finding F148.
 			 */
 			switch (cp->calling_tone_mode) {
 			case 0:

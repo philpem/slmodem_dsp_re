@@ -38,7 +38,7 @@
  * and `VPcmV34GetDiagnostics` (src/pump/v34/v34diag.cpp) -- so the eleven that
  * were listed here "for the record" while only one writer existed are typed
  * from the instruction that touches them, like the other eleven.  Finding
- * 5501.
+ * F5501.
  *
  * Everything between them is still `pad_`, which is CLAUDE.md's "we do not
  * know how many fields are in it" and not a claim that the space is unused:
@@ -58,7 +58,7 @@
  *           polarity -- V.90's is a mean error energy (bigger is worse),
  *           V.34's is a signal-to-noise ratio (bigger is better).
  *
- * See the comments on each, and finding 5502.
+ * See the comments on each, and finding F5502.
  */
 
 #ifndef DSPLIB_TAG_DIAGNOSTICRESULTS_H
@@ -97,7 +97,7 @@ struct TAG_DiagnosticResults {
 
 	/*
 	 * +0x070  A dB FIGURE UNDER BOTH WRITERS AND NOT THE SAME QUANTITY,
-	 * which is why it keeps an offset name (finding 5502).
+	 * which is why it keeps an offset name (finding F5502).
 	 *
 	 * V.90: `10.0f * log10f(V90Equalizer::meanErrorEnergyCurrent)` -- a
 	 * mean ERROR energy, so larger means a worse line.
@@ -162,7 +162,7 @@ struct TAG_DiagnosticResults {
 	 * stores its own `v34_object::rtd` here with NO scaling at all, so
 	 * the two writers disagree about the unit by a factor of 9.6.  The
 	 * quantity is the same under both; the unit was never one thing.
-	 * Finding 5502.
+	 * Finding F5502.
 	 */
 	unsigned int roundTripDelay;
 
@@ -199,7 +199,7 @@ struct TAG_DiagnosticResults {
 	 *     +0x0b0 = 8000, which is the V.92 UPSTREAM symbol rate -- the
 	 *     transmit direction seen from the same analog modem.
 	 *
-	 * Finding 5500.  `PCMIF_PCM_BAUD` in src/pump/v34/v34pcmif.c is the
+	 * Finding F5500.  `PCMIF_PCM_BAUD` in src/pump/v34/v34pcmif.c is the
 	 * same 8000 under the same reading.
 	 */
 	unsigned int txBaudRate;		/* +0x0b0 */

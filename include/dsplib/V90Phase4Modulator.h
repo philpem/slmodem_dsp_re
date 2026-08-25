@@ -5,7 +5,7 @@
  * code, of which THIRTY-NINE are written in
  * src/pump/v90/V90Phase4Modulator.cpp -- `grep -c '^V90Phase4Modulator::'`
  * is where that number comes from, so it can be re-measured rather than
- * believed.  Both symbol pumps, `reset`, `generateSymbol` (finding 7520) and
+ * believed.  Both symbol pumps, `reset`, `generateSymbol` (finding F7520) and
  * the three callerless message sources `generateMP`, `generateCPd` and
  * `generateSUVd` (the newest) are among them; the four that are not are
  * `generateB1d`, `generateTRN2d`, `generateEd` and
@@ -17,7 +17,7 @@
  * both `generateDataSymbolBefore*` are defined in the .cpp today.  It is
  * removed rather than re-derived: 7520 owns `generateSymbol` and not the
  * exception list, and a count with a command beside it is worth more than a
- * list with nothing behind it (findings 6100, 6103).
+ * list with nothing behind it (findings F6100, F6103).
  *
  * NOT POLYMORPHIC: `~V90Phase4Modulator` is listed with `D1` and `D2` and no
  * `D0`, so offset 0 is a real member and there is no vptr.
@@ -35,14 +35,14 @@
  * the modulator maps into.
  *
  * That was a BOUND on the object, arrived at the same way as every other size
- * in that task (finding 215): the maximum displacement plus the width of what
+ * in that task (finding F215): the maximum displacement plus the width of what
  * sits at it.  It was not a claim that +0x5c..+0x2f63 contains no larger
  * member -- nothing reaches past +0x2fab, which is all a displacement scan
  * can say.
  *
  * THE BOUND IS NOW THE SIZE.  `V90Modulator`'s constructor does `movl
  * $0x2fac,(%esp) ; call sysdep_malloc` and then calls this class's `C1` on
- * what came back: finding 1246's oracle, which is the original compiler's own
+ * what came back: finding F1246's oracle, which is the original compiler's own
  * `sizeof` and not a scan of anything.  It agrees with the displacement bound
  * to the byte, which is the first independent confirmation the number has had.
  *
@@ -472,7 +472,7 @@ public:
 	 * phase 4 terminated, so enter the data phase.  The name stays here
 	 * because `V90Modulator` is where the value is INTERPRETED, and one
 	 * caller reading one value does not establish what the other three
-	 * stores mean.  Finding 7520.
+	 * stores mean.  Finding F7520.
 	 */
 	unsigned int word_000c;
 
@@ -616,7 +616,7 @@ public:
 	 * `alaw2linear`/`ulaw2linear`, negating the last three, and
 	 * `generateRdRt`/`generateRdRtNot` return one.  `short` is forced:
 	 * the loads are `movswl` whose 32-bit result is the return value
-	 * (finding 613's case), and the `neg %eax` before the stores to
+	 * (finding F613's case), and the `neg %eax` before the stores to
 	 * +0x2f6e, +0x2f70 and +0x2f72 puts negative values in them.
 	 */
 	short rdRtSymbols[V90P4M_RDRT_SYMBOLS];

@@ -5,7 +5,7 @@
  * why the object really is 32 KB, and the three measurements that put a
  * V90Modem inside it at +0x1758.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * WHAT THE FIVE ARE, in the order they were written:
  *
@@ -164,7 +164,7 @@ typedef char vpcm_dil_size[(sizeof(tagV90DILdescriptor) == 0x213) ? 1 : -1];
  * that the constructor earned: the three fields at +0x14..+0x16 that this
  * header used to call `pad_14[3]`, and `params` at +0x28, which makes the
  * object 0x2c and not the 0x28 the four array pointers alone suggested.
- * Finding 1222.
+ * Finding F1222.
  */
 #endif /* 32-bit host */
 
@@ -1135,7 +1135,7 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
  * times.
  *
  * THEY ARE `inline` HERE AND THEIR SYMBOLS ARE NOT CLAIMED, which is finding
- * 7570's move for `setConstellationMask` and `setCodecConstellationMask`
+ * F7570's move for `setConstellationMask` and `setCodecConstellationMask`
  * carried over to members: writing the symbols is 451 further bytes with
  * seven differential tests of their own, and this batch is scoped to one.
  * `include/dsplib/VPcmFloModem.h` says what dropping the `inline` costs.
@@ -1242,7 +1242,7 @@ VPcmFloModem::resetBitPointer()
  * bytes are read `movzbl`, the six halves `movzwl` and the rate mask
  * `movswl`, but every store is 8 or 16 bits wide, so only the low 8 or 16
  * bits of each load can reach memory: the extension is CLAUDE.md's free
- * column (finding 614) at all thirteen sites.
+ * column (finding F614) at all thirteen sites.
  *
  * THIS COMMENT SAID THE OPPOSITE AND THE MUTATION SET CORRECTED IT.  It read
  * "`mpRateMask` is the exception and it is the one field whose load IS
@@ -1252,7 +1252,7 @@ VPcmFloModem::resetBitPointer()
  * `copyMpInfoForInterface reads the rate mask UNSIGNED before doubling` came
  * back NOT CAUGHT against a fixture that seeds a negative rate mask ON
  * PURPOSE, which is what a wrong claim looks like from the outside rather
- * than a weak trial.  Findings 7585 and 6103.
+ * than a weak trial.  Findings F7585 and F6103.
  */
 inline void
 VPcmFloModem::copyMpInfoForInterface()
@@ -1327,7 +1327,7 @@ VPcmFloModem::copyMpInfoForInterface()
  *   2. `modem.demodulator->word_3c`, 0..0x2b, the jump table at .rodata+0x3fc
  *      -- 44 entries of which 21 are the shared default at 0xda10, which is
  *      the epilogue itself.  This is the demodulator reporting what it just
- *      saw on the line; finding 7571 is where that field's role was
+ *      saw on the line; finding F7571 is where that field's role was
  *      established, from `runPcmModem`'s 54-arm dispatch on the same word.
  *
  * THE RETURN VALUE LIVES IN A REGISTER, %esi, cleared by the `xor` at 0xd861
@@ -1340,7 +1340,7 @@ VPcmFloModem::copyMpInfoForInterface()
  * ===========================================================================
  *
  * This is the analogue side's CP encoder -- V.90 section 9.4.2.3 -- and
- * finding 7000 records that it is a FREE function outside the `V90CP` class,
+ * finding F7000 records that it is a FREE function outside the `V90CP` class,
  * which is why a caller map over that class never found it.  Every call takes
  * (`V90MappingParams *`, `tagV90AdditionalCPinfo *`, `short *`, `int`) and
  * returns the length in symbols, and the five sites differ in all four:
@@ -1359,12 +1359,12 @@ VPcmFloModem::copyMpInfoForInterface()
  * together and a swap of either is visible.
  *
  * THE V.90 MAPPING BLOCK'S UNPACKER IS NOT CALLED FROM HERE AND THAT IS
- * MEASURED, NOT OBSERVED.  `setParamsInfoFromCPUnPck` is finding 7570's
+ * MEASURED, NOT OBSERVED.  `setParamsInfoFromCPUnPck` is finding F7570's
  * orphan; its V.92 twin has exactly two callers and both are arms 0x2d and
  * 0x2e of `runPcmModem`'s table, which is 0x2b + 2 and 0x2b + 3 -- PAST THE
  * END of this function's 44-entry table.  There is no arm here that could
  * hold the call without the table growing, so the absence is a property of
- * the dispatch and not of what this function happens to do.  Finding 7581.
+ * the dispatch and not of what this function happens to do.  Finding F7581.
  *
  * ===========================================================================
  * DEBUG GATES ARE PER SITE
@@ -1493,7 +1493,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * is compared with `ja` (0xdcfe) -- UNSIGNED, where two `int`s give
 	 * `jg`.  V90Phase2Info.h's +0x04 says the field really is unsigned and
 	 * that the tree keeps the `int` spelling with the cast at the use
-	 * site (finding 4903); this is a use site.
+	 * site (finding F4903); this is a use site.
 	 */
 	case 0x06:
 		modem.jd->getConstelationSize(&flags_173a[0], &flags_173a[1]);
@@ -1727,7 +1727,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * `setV34BaudForV34`'s, byte for byte (.text+0xd4c0).  The comment on
 	 * `runPcmModem`'s case 0x1f says its identical six "are not either of
 	 * `setV34BaudForV90`'s or `setV34BaudForV34`'s"; that is wrong and
-	 * finding 7582 retracts it.  1,0,1,1,1,1 IS the V.34 setter, and it
+	 * finding F7582 retracts it.  1,0,1,1,1,1 IS the V.34 setter, and it
 	 * is the V.90 one that ends in a zero.
 	 */
 	case 0x1f:
@@ -1761,7 +1761,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 *     (0xdac7), which 0x22 jumps past.
 	 *
 	 * `flags_173a[2]` KEEPS ITS OFFSET NAME.  What is established is the
-	 * latch's behaviour, which is recorded in finding 7583; the array is
+	 * latch's behaviour, which is recorded in finding F7583; the array is
 	 * cleared as a run of three by `enterPhase3`, `externalReset` and
 	 * `VPcmXfCreate`, and splitting it is not this batch's change.
 	 *
@@ -2359,7 +2359,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
  * `0x48(%esp)` anywhere in the 779 bytes.  That is not a hazard and not a
  * defect -- it is what an entry point with a fixed argument list looks like
  * when one of the entries has nothing to say -- but it does mean no mutation
- * can ever be caught on it, and finding 7604 records that rather than leaving
+ * can ever be caught on it, and finding F7604 records that rather than leaving
  * a fixture looking incomplete.
  *
  * `nrx` IS PASSED TO `V90Modem::progress` AS ITS `unsigned int &` and then
@@ -2373,7 +2373,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
  * THE TWO EVENT CODES, AND THE COMMON TAIL THEY BOTH FALL INTO
  * ===========================================================================
  *
- * The dispatch is `modem.demodulator->word_3c` again -- finding 7571's field,
+ * The dispatch is `modem.demodulator->word_3c` again -- finding F7571's field,
  * `v90RunDemodulator`'s 44-arm table and `runPcmModem`'s 54-arm one -- but
  * here it is TWO `cmp`s and no table, and both codes are past the end of
  * either of those tables: 0x3a and 0x3b against 0x2b and 0x35.  They are this

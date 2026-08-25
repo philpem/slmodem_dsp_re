@@ -238,7 +238,7 @@ getCodecConstellationMask(V90MappingParams *params, int which, short *mask)
  * clamps that same variable with a SIGNED test, `cmp $0x6,%ebp ; setl` at
  * .text+0x3373c, +0x337e0 and +0x33872.  One variable cannot be compared both
  * ways; a CALL whose argument is `(int)i` can, because the bound is the
- * caller's and the clamp is the callee's.  That is finding 5821's measurement,
+ * caller's and the clamp is the callee's.  That is finding F5821's measurement,
  * made on `setV92CPpckFromParamsInfo` in this same file, and it is what says
  * the author wrote a call here rather than three open-coded loops.
  *
@@ -424,7 +424,7 @@ setDataBitRateInline(V90MappingParams *params, int islong, int rate)
  * code with no blob behaviour to compare against, which is not
  * reconstruction.  The differential test drives it directly.
  *
- * WHY IT MATTERS ANYWAY.  Finding 7520 established that the V.90 DIGITAL side
+ * WHY IT MATTERS ANYWAY.  Finding F7520 established that the V.90 DIGITAL side
  * has no reachable writer for the `V90MappingParams` block
  * `V90Modulator::progress` reads, bounded over the thirty symbols whose
  * MANGLING names a `V90MappingParams *`.  This function writes essentially
@@ -432,7 +432,7 @@ setDataBitRateInline(V90MappingParams *params, int islong, int rate)
  * `word_61c`, the six shaper words and `distinctIndex` -- and it was outside
  * 7520's population by construction, because it is `extern "C"` and has no
  * mangled name to be found by.  So the writer exists; what it does not have
- * is a caller.  See finding 7570.
+ * is a caller.  See finding F7570.
  * ---------------------------------------------------------------------------
  *
  * FOUR STEPS, AND ONLY THE THIRD IS CONDITIONAL.
@@ -558,7 +558,7 @@ setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp)
  * against `cp->word_10c` with `ja` -- unsigned -- and then clamp it with
  * `cmp $0x5,%eax; jle` -- SIGNED.  One variable cannot be both; a call whose
  * argument is `(int)i` can, because the bound is the caller's and the clamp
- * is the callee's.  Finding 5821.
+ * is the callee's.  Finding F5821.
  *
  * NOTHING BOUNDS `cp->word_10c` HERE EITHER.  It is whatever
  * `getConstellationsIndex` returned, which is 1..6, so in practice the two
@@ -588,7 +588,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
 	 * than assumed -- a float copy under `-mfpmath=387` could as easily
 	 * have been `flds`/`fstps`, and if it had been, the object's `movl`
 	 * would have meant the author copied the words rather than the
-	 * values.  It is not; finding 5820.
+	 * values.  It is not; finding F5820.
 	 */
 	cp->byte_04 = (unsigned char)info->word_00;
 	cp->char_01 = (signed char)info->word_04;
@@ -642,7 +642,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  * so the range holds no call and no data reference either.  The two
  * relocations in the object whose name looks like this one's are
  * `V92setParamsInfoFromCPUnPck`'s -- a DIFFERENT symbol at .text+0x12f00,
- * 2,695 bytes, called twice from `VPcmFloModem::runPcmModem` (finding 7571).
+ * 2,695 bytes, called twice from `VPcmFloModem::runPcmModem` (finding F7571).
  * **No call is added here and none should be.**  The differential test reaches
  * it directly.
  * ---------------------------------------------------------------------------
@@ -671,7 +671,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  * `runPcmModem` pass `*(V92CP **)(this + 0x6bc8)`, which is `V92Modem::cp` --
  * and the two agree on every field, every width and both constants.
  *
- * **AND THAT IS NOT FINDING 7572's TRAP IN A NEW COSTUME**, which was checked
+ * **AND THAT IS NOT FINDING F7572's TRAP IN A NEW COSTUME**, which was checked
  * rather than waved away.  7572 records that `V90CP` and `V92CPUnPck` are two
  * NAMES FOR ONE STRUCTURE -- the 0xca0-byte message block inline at
  * `VPcmFloModem+0x254c`, which is `V90Modem::cp`.  `V92CP` is a different
@@ -690,7 +690,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  *      exact 0 or 1 in `word_61c` (`cmpb $0x0,0x24(%edx) ; setne`).  The six
  *      are `setV92CPpckFromParamsInfo`'s six read the other way round, and the
  *      four `float` copies are `movl` at both ends, which is what GCC emits
- *      for a float assignment (finding 5820) rather than evidence that the
+ *      for a float assignment (finding F5820) rather than evidence that the
  *      author copied words.
  *   2. `distinctIndex[0..5]`, and it is a FOUR-BYTE COPY here where the V.90
  *      twin widens a byte: `mov 0x28(%edi,%edx,4),%esi ; mov
@@ -731,7 +731,7 @@ setV92CPpckFromParamsInfo(V90MappingParams *params,
  * THE TWO BITMAP ARRAYS ABUT, WHERE THE V.90 TWIN'S DO NOT.  0xa2 - 0x42 =
  * 0x60 = 6 * 16 exactly, so `V92CP`'s two blocks are adjacent and
  * `V92CP.h` declares them so; the V.90 message has 0x9c - 0x3a = 0x62 and two
- * bytes between them that nothing reads (`pad_9a[2]`, finding 7570).
+ * bytes between them that nothing reads (`pad_9a[2]`, finding F7570).
  *
  * THE BITMAP ORDERING IS THE V.90 TWIN'S, INSTRUCTION FOR INSTRUCTION.  Eight
  * `short` scanned from `mask[7]` down to `mask[0]` (`mov $0x7` then `decl ;
@@ -838,8 +838,8 @@ setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
  * The three helpers below are that file's, and the derivations there stand:
  * the subtraction inside `frac_of` is `v - (int)v` because the object is
  * `dc e1`, which objdump prints as `fsub %st,%st(1)` and which IS
- * `FSUBR st(1),st(0)` (finding 245); the `abs()` on the result makes the
- * order unobservable either way (finding 256); and `sign_of` selects on CF
+ * `FSUBR st(1),st(0)` (finding F245); the `abs()` on the result makes the
+ * order unobservable either way (finding F256); and `sign_of` selects on CF
  * alone, so zero prints as '-'.
  *
  * WHAT DIFFERS IS THE SCALE'S TYPE, and it is forced.  `V92ParamsInfo.c`'s
@@ -850,7 +850,7 @@ setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
  * is a `float`.  Nothing observable turns on it -- both are exactly 1e6 and
  * the multiply happens in the x87's extended registers either way -- and it
  * is written as the object holds it because that is what the object holds.
- * Finding 5822.
+ * Finding F5822.
  *
  * `sign_of` TAKES A `long double` AND THAT IS MEASURED, NOT COPIED.  The
  * object's comparison is `fldz; fcompp` -- the zero materialised in a
@@ -860,7 +860,7 @@ setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp)
  * `0.0L < v` with a `long double` parameter is what emits the object's form.
  * The rule: at a comparison whose shape will not reproduce, vary the TYPE
  * before the operand order, and compile the candidates rather than reasoning
- * about them.  Finding 5823 records all seven spellings and what each emitted,
+ * about them.  Finding F5823 records all seven spellings and what each emitted,
  * and names the second site that reached the same conclusion.
  */
 

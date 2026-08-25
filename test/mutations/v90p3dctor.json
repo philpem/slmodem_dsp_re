@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90Phase3Demodulator's constructor and destructor, against t_v90rxctor.  The file's other suite is `v90p3dreset`, which drives `reset` from t_v90p3dreset; two suites may share a source file (the v90cd/v90cdctor precedent) but NOT anchor text, so every `find` below is taken from the lifecycle pair and appears once in the file (finding 1264)."
+  "note": "V90Phase3Demodulator's constructor and destructor, against t_v90rxctor.  The file's other suite is `v90p3dreset`, which drives `reset` from t_v90p3dreset; two suites may share a source file (the v90cd/v90cdctor precedent) but NOT anchor text, so every `find` below is taken from the lifecycle pair and appears once in the file (finding F1264)."
  },
  {
   "label": "the parameter block is never stored",
@@ -23,7 +23,7 @@
   "replace": "\tautoDigitalImpDetector = (V90AutoDigitalImpDetector *)unused;"
  },
  {
-  "note": "THE CONSTRUCTOR'S `word_3cc(0)` HAS NO MUTATION AND CANNOT HAVE ONE.  Deleting it was tried and read NOT CAUGHT, and the reason is not a gap in the test: the constructor's last act is to call `reset`, and `reset` writes the same zero to the same word.  So the store is behaviourally invisible whatever the fixture does.  Its PRESENCE and its POSITION -- between the two member constructor calls, which is what makes it a mem-initializer -- are `make similarity` claims, finding 1302's class, and the header records them as such.  Finding the mutation uncatchable is also what corrected V90Phase3Demodulator.h, which used to claim `reset` did not touch this field."
+  "note": "THE CONSTRUCTOR'S `word_3cc(0)` HAS NO MUTATION AND CANNOT HAVE ONE.  Deleting it was tried and read NOT CAUGHT, and the reason is not a gap in the test: the constructor's last act is to call `reset`, and `reset` writes the same zero to the same word.  So the store is behaviourally invisible whatever the fixture does.  Its PRESENCE and its POSITION -- between the two member constructor calls, which is what makes it a mem-initializer -- are `make similarity` claims, finding F1302's class, and the header records them as such.  Finding the mutation uncatchable is also what corrected V90Phase3Demodulator.h, which used to claim `reset` did not touch this field."
  },
  {
   "label": "the modulator is built with the parameter block and no flag",

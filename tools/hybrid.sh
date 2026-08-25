@@ -7,7 +7,7 @@
 #
 # `make coverage` is what fills build/src; a plain `make` fills build/repro
 # instead (the -DDSPLIB_REPRODUCE_BUGS tree, whose paths have no `src/` in
-# them) and has done since 75dcc19.  Findings 3055 and 3110.
+# them) and has done since 75dcc19.  Findings F3055 and F3110.
 #
 # WHY WEAK SYMBOLS AND NOT RENAMING.  The obvious instrument is
 # `objcopy --redefine-syms`, and it cannot work: renaming moves a symbol's

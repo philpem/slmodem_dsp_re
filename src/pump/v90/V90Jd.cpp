@@ -7,7 +7,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x4(%esp),%eax` -- not %ecx, so these are not thiscall and
- * nothing here needs an attribute (finding 215).
+ * nothing here needs an attribute (finding F215).
  *
  * Built -fno-exceptions -fno-rtti -nostdinc++ like the rest of the C++ here;
  * see the Makefile.  No virtuals, no allocation, no static data members, so
@@ -41,7 +41,7 @@ typedef char v90jd_size[(sizeof(V90Jd) == 0x90) ? 1 : -1];
  * The constructor, 0x1e790, and it is where the header's bit map comes from.
  *
  * Five fields of V90Parameters, and the author's own names for all five
- * (finding 860's extraction of `loadParams`):
+ * (finding F860's extraction of `loadParams`):
  *
  *     DIGITAL_RATE_MASK             +0x2c  28 bits, spread over two groups
  *     MAX_SPECTRAL_SHAPER_LOOKAHEAD +0x30  two bits

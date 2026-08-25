@@ -124,7 +124,7 @@ V92Mapper::reset(short scaleArg, unsigned char modeArg)
  * THE DIVIDE IS `de f1`, WHICH objdump PRINTS AS ITS OWN OPPOSITE.  It reads
  * `fdivp %st,%st(1)` and IS FDIVRP -- `st(1) = st(0)/st(1)` -- so the table
  * entry is the numerator and the square root the denominator, not the other
- * way round (finding 245, and the same reading the header gives).
+ * way round (finding F245, and the same reading the header gives).
  *
  * The square root is `v92mapper_fsqrt` above rather than a builtin, for the
  * reason given there.

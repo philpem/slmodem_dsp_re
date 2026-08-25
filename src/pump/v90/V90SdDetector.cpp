@@ -5,7 +5,7 @@
  * which is the one `v34handshak` reaches.
  * `include/dsplib/V90SdDetector.h` carries the object map and the evidence.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * THE LOOP BOUND IS UNSIGNED and the guard is separate from it.  The object
  * tests `cmp $0x0,%ecx` / `jbe` before loading the buffer pointer at all, and
@@ -32,7 +32,7 @@
  * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
  * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
  * were compiled and only `delete[]` reproduces the object's shape; finding
- * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ * F7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
  *
  * Behaviourally it is exactly the guard it replaces: the element type is a POD
  * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
@@ -48,7 +48,7 @@
  * reaches transitively -- moved it earlier in the translation unit and cost
  * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
  * them.  That is refinement.md lever 3 with an inline function as the carrier,
- * and finding 7815 is the measurement.
+ * and finding F7815 is the measurement.
  */
 inline void operator delete[](void *p) { sysdep_free(p); }
 
@@ -77,7 +77,7 @@ typedef char v90sd_size[(sizeof(V90SdDetector) == 0x1c) ? 1 : -1];
  * OUR BUILD DOES NOT, AND THAT IS A TOOLCHAIN DIFFERENCE, NOT A DEFECT HERE.
  * The modern compiler renders the same assignment as `flds`/`fstps` under
  * `-mfpmath=387`, which is bit-exact for every float value including
- * denormals and quiet NaNs and quietens a SIGNALLING NaN.  Finding 1242
+ * denormals and quiet NaNs and quietens a SIGNALLING NaN.  Finding F1242
  * measures it and bounds it; the alternative is a bit-copy spelling chosen to
  * make the instruction match, which is fitting the compiler and is what the
  * codegen rule in CLAUDE.md forbids.
@@ -148,7 +148,7 @@ V90SdDetector::reset()
  * never rounded to float; only the two threshold loads are float-wide.
  *
  * THE QUOTIENT IS NaN WHENEVER THE ENERGY IS ZERO, and that is why the
- * middle comparison is spelt `!(a >= b)` and not `a < b` (finding 1401).
+ * middle comparison is spelt `!(a >= b)` and not `a < b` (finding F1401).
  * A silent history divides zero by zero; `fcom` then reports UNORDERED, which
  * sets CF as well as ZF, and the object's `jae` is not taken -- so the
  * unordered case goes down the COUNTING arm.  `thresh_0c < ratio` in C is
@@ -183,7 +183,7 @@ V90SdDetector::process(float sample)
 	 * cosmetic -- the middle compare with its operands the other way round
 	 * and `jbe` for the object's `jae`.  Swapping these two lines makes
 	 * every x87 instruction and every branch in the function the object's.
-	 * Finding 2301.
+	 * Finding F2301.
 	 */
 	unsigned int i = historyLength - 1;
 	long double correlation = 0.0L;
@@ -223,7 +223,7 @@ V90SdDetector::process(float sample)
 	 * from the stack slots, which came from the declarations above.  The
 	 * negated form is kept because it is ALSO right for the modern build,
 	 * where the compiler will not drop the parity test and `<` is false on
-	 * a NaN: one text, both tiers.  Finding 2301, and 2300 for the sites
+	 * a NaN: one text, both tiers.  Finding F2301, and 2300 for the sites
 	 * where the spelling IS the lever and no single text serves both.
 	 */
 	if (!(thresh_0c >= ratio)) {

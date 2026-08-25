@@ -136,7 +136,7 @@ Note the reconstruction keeps `FPM_sqrt_dp` clamping at **191**, not at the
 implementation detail, and raising it would diverge from the blob.
 
 **Now also fixed IN THE BLOB, opt-in** (task #99, `docs/blobfix.md`, finding
-1200). `make blobfix BLOBFIX="--fix D1"` weakens `FPM_sqrt_table` and links a
+F1200). `make blobfix BLOBFIX="--fix D1"` weakens `FPM_sqrt_table` and links a
 193-entry replacement over it; `slmodemd/dsplibs.o` is untouched. All 32768
 Q15 results are bit-identical to the unpatched object, and a hardware read
 watchpoint on `FPM_div_table[0]` takes 85 hits before the fix and **zero**
@@ -265,7 +265,7 @@ the first place to look: `FPM_div` sits under both `FPM_AGC` and the V.22
 demodulator.
 
 **HOW WIDE IS IT? Every datapump below V.34, not just Bell 103.** The 46-of-700
-figure in finding 40 was measured on a Bell 103 capture, and that made it easy
+figure in finding F40 was measured on a Bell 103 capture, and that made it easy
 to read this as a Bell 103 defect. It is not. Counted from the blob's own
 relocations rather than from the reconstruction, so unreconstructed callers are
 included:
@@ -297,7 +297,7 @@ statistics each caller presents, and only the Bell 103 AGC path has been
 driven. `FPM_atan` and `V32FP_status` pass denominators from different
 quantities entirely and neither has been swept. So: eight datapumps are
 exposed, one has a measured failure rate, and the other seven are unquantified
-rather than safe. Finding 40 and the caller counts above are the evidence;
+rather than safe. Finding F40 and the caller counts above are the evidence;
 `tools/relocscan.py`-style reasoning applied to `readelf -rW` is how they were
 obtained.
 
@@ -306,7 +306,7 @@ obtained.
 tables; rounding differs on 58 of them.
 
 **Now fixable IN THE BLOB, opt-in** (task #99, `docs/blobfix.md`, finding
-1201). "Reproduce, do not fix" above governs `src/` and is unchanged — the
+F1201). "Reproduce, do not fix" above governs `src/` and is unchanged — the
 differential tier still proves we return zero exactly where the blob does, and
 `t_fpm_div`'s assertion that exactly 255 denominators yield a zero reciprocal
 still stands. What has changed is that the *shipping* object no longer has to.
@@ -446,7 +446,7 @@ the C.
 
 **Dormant: nothing selects the affected element.** Recorded because it is one
 config field away from being live, and because it is the only thing that could
-make `FPM_AGC_agc`'s shift go negative (finding 29).
+make `FPM_AGC_agc`'s shift go negative (finding F29).
 
 `FPM_AGC_agc` smooths its level estimate with
 
@@ -475,7 +475,7 @@ Element `[1]` is not:
 | `.data:0x7794` / `0x7790` (V.23) | 32604 | 1638 | 34242 | **1.045** ✗ |
 | `.data:0x7664` / `0x7660` (global, V.32's TU) | 30491 | 2277 | 32768 | 1.000 ✓ |
 
-**That last row said 32604 / 34881 / 1.064 ✗ until finding 1621 read the
+**That last row said 32604 / 34881 / 1.064 ✗ until finding F1621 read the
 object for it.** It is 30491, three readings agreeing (`readelf -x .data` at
 0x7660 gives `0040e508 00401b77`), so the pair sums to exactly 32768 and is
 correct. The count is **three** broken pairs, not four. The row mattered more
@@ -531,7 +531,7 @@ happen, and uninitialised memory really was the cause.
 
 The test built **loopback** objects and installed a bandpass into them by
 hand, because at the time `B103_CFG`'s `call_type` was not understood
-(finding 35). `B103FP_create` clears that buffer in the branch that installs
+(finding F35). `B103FP_create` clears that buffer in the branch that installs
 the filter — and loopback does not install one, so the memset never ran.
 
 Reading the branch settles it. The caller path:
@@ -684,7 +684,7 @@ mistake.
   toneiir_configuration_allpass    <- cadence_create
 ```
 
-This also explains what the parameters recovered in finding 44 select.
+This also explains what the parameters recovered in finding F44 select.
 `GetDialToneCallProgressFilterIndex`, `GetBusyToneCallProgressFilterIndex`,
 `GetRingbackToneCallProgressFilterIndex` and
 `GetCongestionToneCallProgressFilterIndex` choose *which* design a given tone
@@ -696,7 +696,7 @@ per-country filter bank, and the homologation data picks from it.
 
 Twice in this phase a negative result from a hand-written `readelf`/`objdump`
 query has been believed: once for relocations inside the toneiir configuration
-(finding 46), once here. **A query that returns nothing must be shown to
+(finding F46), once here. **A query that returns nothing must be shown to
 return something for a case known to have results before its silence is
 evidence of anything.** Both mistakes would have been caught by one control
 input.
@@ -733,7 +733,7 @@ Both round to nearest — 4 is half of 8, 32 is half of 64 — so the rounding w
 adjusted to match the shift, which makes the calling tone's version look
 considered rather than mistyped. But 3 is the shift that maps a 14-bit
 accumulator onto `TONE_read`'s 2048-point cycle and 6 is not: the DTMF tones
-land within 0.06% of nominal (finding 58) and the calling tone emits a
+land within 0.06% of nominal (finding F58) and the calling tone emits a
 sawtooth.
 
 That removes the last charitable reading of this entry. It is not a limit of
@@ -822,7 +822,7 @@ follows that is clipped.
     amplitude = FP_Pow((level * 154791) >> 14)
 ```
 
-`FP_Pow` is exp() in Q14 (finding 9), so turning decibels into a linear ratio
+`FP_Pow` is exp() in Q14 (finding F9), so turning decibels into a linear ratio
 wants a multiply by ln(10)/20, which is 1886 in Q14 — `FP_Pow(level * 1886)`
 would have been right. What is there is `level * 9.45`, about 200 times too
 small.
@@ -1320,7 +1320,7 @@ not.
 
 **What the original does:** divides section 1's output by 16 by shifting the
 32-bit accumulator and then truncating to 16 bits, and divides section 2's
-output by 16 by truncating to 16 bits and then shifting. Finding 90 has the
+output by 16 by truncating to 16 bits and then shifting. Finding F90 has the
 two instruction sequences.
 
 **What we do:** the same, both of them, in the same order.
@@ -1588,7 +1588,7 @@ and `test` is the flag-setter. Everything after it here followed from the
 missing line: the reasoning about `movl` and inherited flags is correct and
 was applied to the wrong instruction. `72d57: mov 0x50(%esp),%edi` is what
 makes `%edi` the fifth argument; the prologue's frame layout is in finding
-216.
+F216.
 
 Fixed in `v34filters.c`: `v90` now selects 0x40 taps, `tx3200c1_for_v90`,
 `V90EchoPrefilterCoeff` and 14 in `fc8c`. `t_v34ec.c`'s state sweep takes
@@ -1695,7 +1695,7 @@ Found by the `rxtiming` differential test, which drives `rxinit` from a
 different starting state and disagreed by exactly this field.  The `rxinit`
 test had not caught it because it *skipped* the byte and asserted the
 Hilbert-address theory instead of comparing against the blob -- see finding
-122.  This is the second retracted deviation after D28, and both were filed
+F122.  This is the second retracted deviation after D28, and both were filed
 on a reading rather than a measurement.
 
 ---
@@ -1877,7 +1877,7 @@ is reconstructed.
 **Where:** `src/core/encode.c`, `edprintf`.
 
 **What it is:** an added global, zero by default, that makes `edprintf`
-print the readable message instead of the encoded one.  Finding 175 is why
+print the readable message instead of the encoded one.  Finding F175 is why
 it exists: 145 functions report through this channel and none of what they
 say is legible, which makes the least-understood half of the object also the
 half whose diagnostics are useless.
@@ -1964,7 +1964,7 @@ does not have, which would change the control flow the debug level gates.
 this function is a literal in 0..86, and the sites are all gated on
 `dsplibs_debug_level > 1`, which ships at zero. Reaching a bad index needs
 `v34handshak` to have written one first, and that is 61 KB not yet
-reconstructed. Compare finding 129, which is the same shape in
+reconstructed. Compare finding F129, which is the same shape in
 `demapFrame`. `unmeasured` — task #47, or #39–#45 when the writer lands.
 
 **What it costs the test.** The transcript sweep in `t_v34hshak.c` stops at
@@ -2023,14 +2023,14 @@ brief for `v34handshakinit` asked.
 **What the original does:** copies `xyz`'s block for the ring size into `t3`
 and stops.  For sizes 15, 17 and 18 the block is SHORTER than the
 8(n-1)+1 entries the sequence needs, because `xyz` stops where the
-cumulative count would pass `INT_MAX` (finding 182) -- 69, 58 and 56
+cumulative count would pass `INT_MAX` (finding F182) -- 69, 58 and 56
 entries.  Everything above that keeps `preinitV34`'s fill of -1.
 
 **What we do:** the same.
 
 **Reachable?** The sizes are, and often: `MMaxTable` produces all three.
 Whether `shellDemapper` then INDEXES into the -1 region is **unmeasured** --
-it reads `t3[d1 + d2]` with nothing bounding the sum, which is finding 129.
+it reads `t3[d1 + d2]` with nothing bounding the sum, which is finding F129.
 On the TRANSMIT side this is settled and not a deviation at all:
 `modulatevector` is now reconstructed and passing, its search over `t3`
 compares unsigned, and `0xffffffff` is what stops it -- so the fill is a
@@ -2320,7 +2320,7 @@ is wrong, that assertion fails.
     19587: 1686:		if (x > ref) {
      6938: 1687:			if (i == 5) {
 
-**THE CONSEQUENCE, and it took the hardware bench to see it (finding 1471).**
+**THE CONSEQUENCE, and it took the hardware bench to see it (finding F1471).**
 This entry treated the dead branch as a curiosity about an unprintable string.
 It is not. In V.34 the RECEIVER chooses the FAR TRANSMITTER's pre-emphasis
 filter, and index 0 means flat. **A modem whose search cannot return anything
@@ -2345,7 +2345,7 @@ without measuring, and that was right. What has since been measured:
 
   * given a channel that is the exact inverse of template i, the selector
     answers i — 11/11 at all five symbol rates. The counter manages 2–3 of 11
-    (finding 1961).
+    (finding F1961).
   * on the bench's OWN ATA, the correct answer is index 0 at every symbol rate
     below 3429, because the conformance band stops short of the 3450 Hz cliff
     and the line is flat. The counter asks for 6 or 7 and so ADDS 1.5–3 dB of
@@ -2421,7 +2421,7 @@ number above 32767. Every bin is subsequently reduced by that, which with
 **Why that is worth an entry:** the normalisation is supposed to leave each
 bin's level relative to the quietest, and one negative shift inverts it — the
 whole ladder below then reads a band that looks nothing like the one measured.
-`dftenergy` writes `shift`, and finding 212 established that the neighbouring
+`dftenergy` writes `shift`, and finding F212 established that the neighbouring
 `energy` genuinely does go negative from a seeded accumulator, so "a negative
 shift cannot happen" is not something this reconstruction can assert.
 
@@ -2434,7 +2434,7 @@ negative `shift` is not measured — that is a question about `dftenergy`'s
 inputs. `unmeasured` — task #47.
 
 **How it was found:** by the two different widening instructions on the two
-sides of one comparison, which is the same thing finding 212 records for the
+sides of one comparison, which is the same thing finding F212 records for the
 DFT bin's thresholds.
 
 ## D55 `FloatIIR` reports nothing when its history allocation fails
@@ -2500,7 +2500,7 @@ Fifty-seven of the table's eighty-two entries are that default. Nothing in
 the object appears to put the transmit machine into one of them with the
 cursor low, so this is not believed to be reachable in service; it is
 trivially reachable from a test that writes the state word, which is why
-`test/harness/v34hsstep.c` arms a `SIGALRM` around every step. Finding 287.
+`test/harness/v34hsstep.c` arms a `SIGALRM` around every step. Finding F287.
 
 ## D60 ~~⚠ The per-sample transmit loop's result is not a function of the object~~ RETRACTED
 
@@ -2513,7 +2513,7 @@ and WHICH three changes when code that runs after the step is edited.
 
 Ruled out by experiment: our bring-up versus the blob's, 64 KB of scrubbed
 stack, a shared shaping buffer, past-the-end reads of the fixture's seed
-tables, and a short `preemp0`. Finding 289 has the detail. Whatever is left
+tables, and a short `preemp0`. Finding F289 has the detail. Whatever is left
 is read by the object and is not in the object, so the loop's output is not
 reproducible from its input alone.
 
@@ -2531,7 +2531,7 @@ arena -- and all nineteen of table 1's reachable targets compare, over
 twenty-four object fills, ten placements, five object skews and eight
 neighbourhoods, against 23 of those 24 fills failing on the old fixture.
 Bisected: it is the placement of the five BLOCKS, not of the object.
-Findings 319 and 322.
+Findings F319 and F322.
 
 The two facts this entry rested on were both correct. "Which txstates
 diverge moves when code that runs after the step is edited" is exactly what a
@@ -2548,8 +2548,8 @@ What is left of it is D61, which is much smaller.
 `unmeasured` -- the sensitivity is gone, the datum is not identified.
 
 D60 is retracted: table 1 compares once the two sides have congruent memory
-images (finding 319). What that does not do is say what the old layout was
-feeding the loop. The bounds measured while closing it (finding 322):
+images (finding F319). What that does not do is say what the old layout was
+feeding the loop. The bounds measured while closing it (finding F322):
 
 - not within 32 KB of any block in either direction -- `V34HS_PADVARY` makes
   each padding region differ between the sides and the sweep still agrees;
@@ -2729,7 +2729,7 @@ Appendix B, on reachability rather than on measurement.*
 
 *Task #87. Appended rather than written into the 64 entries above, because
 this file is shared with other sessions and an append does not conflict where
-64 in-place edits would — finding 622's "Owed" paragraph. The mechanical half
+64 in-place edits would — finding F622's "Owed" paragraph. The mechanical half
 regenerates with `tools/debugcov.py --deviations --no-build`; the judgement
 below is not mechanical and does not.*
 
@@ -2798,7 +2798,7 @@ and no test should be written for it. Four distinct reasons:
 - *A comparison of a hang.* D9, D46, D57, D59 — driving these makes one or
   both sides loop 2^32 times or spin for ever. `test/harness/v34hsstep.c`
   already arms `SIGALRM` for D59's sake.
-- *Ambiguous alias or internal table* — finding 622's two blind spots. D6:
+- *Ambiguous alias or internal table* — finding F622's two blind spots. D6:
   `ref_AGC_DEF_ALPHA` exists at six addresses because the name is file-static
   in six translation units, so a test declaring it binds to whichever the
   linker picks; measured by hand out of the object instead, and the absence of
@@ -2832,7 +2832,7 @@ and not as measured: `t_encode` drove its general claim on the ACCEPTED path,
 and the one arm nothing drove is the interaction -- the too-long path WITH the
 switch on. That arm is not a corner of the claim, it is the only place the
 claim could have been false, and D40's own safety argument does not reach it
-(finding 1066). An entry is measured when its own claim is driven, not when
+(finding F1066). An entry is measured when its own claim is driven, not when
 its function is.
 
 ## One entry whose own expiry condition has now fired
@@ -2841,7 +2841,7 @@ its function is.
 not been measured", and names its own trigger: "`unmeasured` — task #47, or
 whenever `probeselect` lands". `probeselect` has landed. All three writers of
 `+0xaa96` now exist in `src/pump/v34/v34hshak.c`, and none can write 2743 —
-see finding 1063. The entry is no longer resting on the absence of a writer.
+see finding F1063. The entry is no longer resting on the absence of a writer.
 
 
 ---
@@ -2853,7 +2853,7 @@ given register numbers.
 
 **What was swept.** Every line of `docs/findings.md`: 37,637 lines, 721
 numbered finding headings over 717 distinct numbers — only 1, 2, 3 and 4
-collide, and those four are sub-headings inside finding 39, so any citation of
+collide, and those four are sub-headings inside finding F39, so any citation of
 5 or above is unambiguous. The three defects that had reached the fix list
 before this were found by grepping for "past the end", "overrun", "out of
 bounds" and "no bounds check"; most of what follows uses none of those words.
@@ -2885,7 +2885,7 @@ and the fix class, not a second account of the bug.
 
 *Task #98 sweep, from fix list §0.2. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED.*
 
-**Finding 234** (`docs/findings.md:13472`). Both arms take the row straight
+**Finding F234** (`docs/findings.md:13472`). Both arms take the row straight
 out of the registry and hand it to a bank with no bound applied, so a registry
 value of 100 **reads 80 bytes past the end of a 2,480-byte bank**. Reproduced
 literally in the reconstruction's tests.
@@ -2900,12 +2900,12 @@ path may become live when that function is reconstructed.
 registry value before it reaches the object. Nothing does that today.
 
 **Assessed as a blob-side fix and DELIBERATELY NOT DONE** (task #99,
-`docs/blobfix.md`, finding 1203). The three banks are `GLOBAL`, so the
+`docs/blobfix.md`, finding F1203). The three banks are `GLOBAL`, so the
 override mechanism that repaired D1 and D4 would *reach* them — and that is
 the trap, not the opportunity. This defect is a missing DECISION, not a
 missing VALUE: there are no correct coefficients for row 100, so a longer bank
 could only be filled with invention, and replacing one bank symbol also
-destroys the adjacency finding 235 records the reconstruction's own tests
+destroys the adjacency finding F235 records the reconstruction's own tests
 having to reason around (`preFilterCoefType1` ends at 0x15b0, `Type2` begins
 at 0x15c0). An override here would change behaviour on exactly the input in
 question, to a value we made up. Mechanism B — a clamp, patched into the two
@@ -2919,7 +2919,7 @@ named above is still better than either, because it also covers the
 
 *Task #98 sweep, from fix list §0.3. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED.*
 
-**Finding 123** (`docs/findings.md:7157`). The receive buffer holds fourteen
+**Finding F123** (`docs/findings.md:7157`). The receive buffer holds fourteen
 shorts. The fifteenth pull overwrites `f128` while `rxtiming` is looping on it,
 which lets the loop run longer, which pulls more, which reaches `rx_samples` at
 the nineteenth and corrupts the cursor's low half; the twentieth dereferences
@@ -2941,7 +2941,7 @@ it silently.
 
 *Task #98 sweep, from fix list §1. **Reachability: CANNOT FIRE.** Status:
 CONFIRMED. Fix class: documentation only. Settled by task #97; the five numbers
-and the bound are finding 1188.*
+and the bound are finding F1188.*
 
 **Where** `V92EchoCanceller`, blob 0x111e0 (ctor), 0x10f90 (`resetEchoHistory`),
 0x10af0 (`setEchoDelay`).
@@ -2957,7 +2957,7 @@ allocated **once, in the constructor**, with a length `N` at `+0x1c`:
 ```
 
 with the constructor's 3rd/4th arguments `blk = 40` and `extra = 199`, read at
-the two `VPcmFloModem` call sites (finding 1188).  `setEchoDelay` later changes
+the two `VPcmFloModem` call sites (finding F1188).  `setEchoDelay` later changes
 the delay and tap count **without reallocating**, and `resetEchoHistory`
 (verified) zeroes `echoLength` floats of `+0x24` with the loop bound compared
 only to the index, never to `N`:
@@ -2995,7 +2995,7 @@ delay range is a hybrid's echo, ~11-31 ms) -- but that is a capability
 addition, not a bug fix: nothing on the faithful path triggers the overrun.
 
 **The SIP echo has since been measured, and it is out of reach of BOTH
-cancellers.** Finding 1205: over the bench's SIP path the reflection arrives at
+cancellers.** Finding F1205: over the bench's SIP path the reflection arrives at
 205.62 ms, while `V34EchoFilter`'s delay line holds 172.5 ms (D27) -- so no
 `lag` reaches it, and the sizing question above is a structure change rather
 than a setting. Note the arithmetic on THIS page is `V92EchoCanceller`'s and
@@ -3040,7 +3040,7 @@ the disassembly with no calls.
 parent repository returns NOTHING; `d-modem/slmodemd/modem_main.c:941-953`
 returns a hard-coded 48 in a file dated six days AFTER this entry was written,
 and `slmodemd/modem_main.c:682` still returns 0. The default of 120 appears
-nowhere in `docs/findings.md` -- finding 1026 recommends 240. This entry is
+nowhere in `docs/findings.md` -- finding F1026 recommends 240. This entry is
 also MISFILED (its own *Where* field names a host file, not the object) and
 should merge into D77, as D77 instructs.
 
@@ -3072,7 +3072,7 @@ them gives:
 - if the band is right, the fork is running outside it and the calls that
   succeeded did so despite the setting, not because of it;
 - if the calls are right, the band was measured on something this path does
-  not reproduce, and finding 1022's threshold of 86 is measuring something
+  not reproduce, and finding F1022's threshold of 86 is measuring something
   else again.
 
 **One `--log` line settles it** — the derived `ext_delay`, `filtdelay`,
@@ -3107,10 +3107,10 @@ validated 0..240, traced with all three derived quantities, default 120.
 that does nothing: at `rebuildJMSequence+0x136` the patch overwrites the `xor`
 PRECEDING the `setne`, which then overwrites it two instructions later. The
 same intent at `+0x7e8` replaces the `sete` itself and works. Recorded in
-`docs/forkblob.md` and findings 1140-1146. We do not ship that blob and there
+`docs/forkblob.md` and findings F1140-1146. We do not ship that blob and there
 is nothing for us to fix; it is here so nobody re-derives it.
 
-The authority is **finding 1145** (`docs/findings.md:37495`), which traces all
+The authority is **finding F1145** (`docs/findings.md:37495`), which traces all
 three predecessors of `0x75d80` by hand and names the address the edit should
 have used: `0x75d8e`, not `0x75d86`. Nothing in the fork's link line includes
 `.mod` today, so it affects nobody.
@@ -3121,7 +3121,7 @@ have used: `0x75d8e`, not `0x75d86`. Nothing in the fork's link line includes
 
 *Task #98 sweep, from fix list §5.1. **Reachability: FIRES TODAY.** Status: CONFIRMED. Already in this register as D4 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: opt-in extension.*
 
-**Finding 40.** A level estimate of 4088 normalises to mantissa `0xff80`,
+**Finding F40.** A level estimate of 4088 normalises to mantissa `0xff80`,
 which indexes one past `FPM_div`'s table; the reciprocal comes back zero, the
 AGC gain becomes zero, and the block is multiplied to silence. **It fires on 46
 of the 700 blocks in one capture**, and the Bell 103 receiver loses lock and
@@ -3139,7 +3139,7 @@ was added for `FPM_sqrt` (D1). This is the most severe defect in the object.
 
 *Task #98 sweep, from fix list §5.2. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: host-side.*
 
-**Findings 960, 1022, 1026** (and 962). Arm 47 `TX_PHASE2_ANS` reads an
+**Findings F960, F1022, F1026** (and 962). Arm 47 `TX_PHASE2_ANS` reads an
 all-ones `fsk.sr` from a carrierless slicer as "repeated INFO0" during the
 window in which the far end is *correctly* silent, and loses the race by one
 block — about 22 samples out of 200. The wait it must sit out is
@@ -3170,12 +3170,12 @@ setMinMaxRates` -- mangled names that TYPE the field. The `+0x38`/`+0x3c`
 literals 4800 and 33600 are a different quantity, read by
 `V90Parameters::setToDefault`, and are exactly ITU-T V.90 Table 9's upstream
 rate window. **The citation drifted the day before this entry was filed:**
-finding 1020 (commit `2c98999f`, 2026-08-10) corrects 823/824 in these words,
+finding F1020 (commit `2c98999f`, 2026-08-10) corrects 823/824 in these words,
 and this entry is commit `7db93c88`, 2026-08-11.
 
 *Task #98 sweep, from fix list §5.3. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Findings 823, 824.** The host's rate window lands at runtime `+0x30`/`+0x34`,
+**Findings F823, F824.** The host's rate window lands at runtime `+0x30`/`+0x34`,
 which one debug `printf` reads and nothing else. The pair the rate machinery
 divides by 2400 is `+0x38`/`+0x3c`, and `vpcm_create` writes those as the
 **literals 4800 and 33600** on both arms at 0x3b90. Measured by re-running the
@@ -3196,12 +3196,12 @@ knob that does nothing.
 integration gap.** `modem_homolog.h:94` carries `//u8
 DialToneFilterSubindex;` commented out and `modem_param.c:172-173` is a literal
 `return 0;`. The object does the right thing with the answer it is given, and
-finding 49 measured bank 3's fallback landing on its own nearest equivalent.
+finding F49 measured bank 3's fallback landing on its own nearest equivalent.
 The entry's own fix line says it: "Nothing in the object needs to change."
 
 *Task #98 sweep, from fix list §5.4. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: host-side.*
 
-**Findings 49, 50.** The field is commented out of `slmodemd`'s
+**Findings F49, F50.** The field is commented out of `slmodemd`'s
 `struct homolog_params` and the parameter is answered with a literal
 `return 0`, so every bank selection falls back. Three banks of seven
 progressively wider bandpasses are fully designed, fully shipped and never
@@ -3217,7 +3217,7 @@ change.
 
 *Task #98 sweep, from fix list §5.5. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 60.** `cadence_create` converts `GetDialToneDetectionThreshold` from
+**Finding F60.** `cadence_create` converts `GetDialToneDetectionThreshold` from
 dB to a linear threshold with no clamp and no monotonicity. Measured through a
 detector built by `CALLPROG_Create`:
 
@@ -3242,7 +3242,7 @@ the object.
 
 *Task #98 sweep, from fix list §5.6. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: **documentation.*
 
-**Finding 47.** The cadence detector's IIR cascade has about 42 dB of passband
+**Finding F47.** The cadence detector's IIR cascade has about 42 dB of passband
 gain and only takes it back out at the end, so above roughly 8,000 amplitude it
 wraps internally, the envelope stops being steady, the stability test fails and
 the tone is reported absent. Measured by driving `CP_450_630` with a 550 Hz
@@ -3259,8 +3259,8 @@ outside this module and is not identified.
 
 *Task #98 sweep, from fix list §5.7. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: **opt-in.*
 
-**Finding 45.** All three of `CallingTone.c`'s constants encode 9600 Hz while
-call progress runs at a fixed 8000 (finding 41): the phase step of 2219/16384
+**Finding F45.** All three of `CallingTone.c`'s constants encode 9600 Hz while
+call progress runs at a fixed 8000 (finding F41): the phase step of 2219/16384
 is 1300.2 Hz at 9600 and **1083.7 Hz at 8000**; the on time is 0.72 s against
 V.25's 0.5–0.7; the off time is 2.10 s against 1.5–2.0. All three are outside
 spec as shipped.
@@ -3277,7 +3277,7 @@ of the same tone.
 
 *Task #98 sweep, from fix list §5.8. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 52.** `AnalyseDialString` makes an unknown dial-string character
+**Finding F52.** `AnalyseDialString` makes an unknown dial-string character
 INVALID when `modifier_validation` is zero and TOLERABLE when it is set —
 turning validation *on* makes the parser more forgiving. **Twenty of the fifty
 shipped countries set it**, so those twenty accept dial strings they were
@@ -3292,7 +3292,7 @@ withhold the flag.
 
 *Task #98 sweep, from fix list §5.9. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 140.** The imaginary accumulator starts at `+0x2000` and the real one
+**Finding F140.** The imaginary accumulator starts at `+0x2000` and the real one
 is formed as `b.hist_i - (0x2000 + a.hist_q)`, so the rounding constant is
 applied with the wrong sign on the real axis and it rounds half an LSB the
 wrong way — on every symbol, at both call sites (precoding at 0x5c100 and the
@@ -3309,10 +3309,10 @@ measurement nobody has made.
 
 *Task #98 sweep, from fix list §5.10. **Reachability: FIRES TODAY.** Status: CONFIRMED. Already in this register as D6 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: **opt-in.*
 
-**Finding 622**, corroborated by **finding 30**. The Bell 103 and V.23 copies
+**Finding F622**, corroborated by **finding F30**. The Bell 103 and V.23 copies
 of `AGC_DEF_ALPHA` carry `16384, 1638` where the alpha should be 31130, so the
 slow pair sums to **34242 rather than 32768** — a DC gain of 1.045. The v21
-copy has the correct shape. Finding 30 adds independent evidence that it is a
+copy has the correct shape. Finding F30 adds independent evidence that it is a
 copy-paste slip: `FPM_TONE_detect` writes `31130 * x + 1638 * y` longhand for
 the same smoother, and 31130 + 1638 is 32768 exactly. That heading names D6.
 
@@ -3327,7 +3327,7 @@ translation units, so a test naming it binds to whichever the linker picks.
 
 *Task #98 sweep, from fix list §5.11. **Reachability: FIRES TODAY.** Status: CONFIRMED. Already in this register as D16 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**Finding 75.** The test that should clear the V.21 bit reads the framing stop
+**Finding F75.** The test that should clear the V.21 bit reads the framing stop
 bit as well, so it is never true and the JM carries V.21 whatever the far end
 offered. Found by running a real negotiation against SpanDSP with a
 deliberately narrowed offer.
@@ -3341,7 +3341,7 @@ handshake bit-exact, and no interop failure has been traced to it.
 
 *Task #98 sweep, from fix list §5.12. **Reachability: FIRES TODAY.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 402.** Microstate 44's restart path contains a hand-inlined copy of
+**Finding F402.** Microstate 44's restart path contains a hand-inlined copy of
 `V34SetINFO0dBits` at 0x718fc that has **no `v90_receiver` test** — the
 `movw $0x1e,0x18(%eax)` at 0x71903 sits before the diagnostic check at 0x71909
 and is reached unconditionally — and its string is `"SetINFO0dBits  \n"`, not
@@ -3362,7 +3362,7 @@ wrong-but-plausible tidy the tree's rule forbids.
 
 *Task #98 sweep, from fix list §6.1. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 129.** `t1` (+0xa48), `t2` (+0xb48) and `t3` (+0xc48) are 128 entries
+**Finding F129.** `t1` (+0xa48), `t2` (+0xb48) and `t3` (+0xc48) are 128 entries
 each and are read at `t1[c]`, `t2[d1]`, `t3[d1 + d2]`, where the two clamps the
 function applies are to the *addends*, not to the index; both correlation loops
 also walk down from `t[d]`, so an over-large `d` reads below the table as well.
@@ -3381,7 +3381,7 @@ doubt. *Fix class:* **documentation only** until `demapFrame` lands.
 
 *Task #98 sweep, from fix list §6.2. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Findings 186, 306 and 736.** Two separate unclamped indexes in one function,
+**Findings F186, F306 and F736.** Two separate unclamped indexes in one function,
 found three times from three directions.
 
 `divtab[bits + 14*use_max - 1]` is evaluated **before** the zero-rate test, so a
@@ -3396,7 +3396,7 @@ On the receive side, `movswl -0x2(%edx,%ebp,2)` at 0x59c0f takes `%ebp` as
 no clamp, into a table of 8,192 shorts. **It segfaults inside the blob, on both
 sides**, when those fields are left at a pseudorandom fill.
 
-Finding 306 is the third witness and the one that names the cost: "a varied
+Finding F306 is the third witness and the one that names the cost: "a varied
 fill is a random address indexed by a random 16-bit number", under a heading
 that says both of the things the fixture had to seed "were crashes before they
 were tests". Two separate fixtures — `t_v34shell.c` and this one — bound the
@@ -3412,7 +3412,7 @@ does. *Fix class:* **host-side** — the rate fields cross the host boundary.
 
 *Task #98 sweep, from fix list §6.2a. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Already in this register as D42 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**Finding 290.** With the diagnostics on, `v34handshakinit` announces each
+**Finding F290.** With the diagnostics on, `v34handshakinit` announces each
 transition by printing the state it is LEAVING; `StateName` is indexed with
 nothing bounding the index, so a state word outside 0..86 produces **a wild
 `char *` handed to `vsnprintf`**. Observed, not reasoned: "the fixture faulted
@@ -3430,7 +3430,7 @@ sides read different memory.
 
 *Task #98 sweep, from fix list §6.2b. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 313.** The function has two switches on the same `requestedDp`
+**Finding F313.** The function has two switches on the same `requestedDp`
 argument:
 
 ```
@@ -3458,7 +3458,7 @@ produce, `D48` — is left where it is rather than pulled up to 1.
 
 *Task #98 sweep, from fix list §6.3. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 444.** The default accept arm copies `nbytes = ceil(bits/8)` shorts
+**Finding F444.** The default accept arm copies `nbytes = ceil(bits/8)` shorts
 into the ten-short array at +0xabae with no bound. Index 10 lands on `nbytes`
 itself, index 12 on the record's length, index 14 on `local_short` and **index
 15 on `is_short` at +0xabcc — which the arm then reads at 0x6e824 to choose the
@@ -3479,7 +3479,7 @@ in the debug build.
 
 *Task #98 sweep, from fix list §6.4. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED (compare) / SUSPECTED (reach). Fix class: documentation only.*
 
-**Finding 227.** Two in one finding.
+**Finding F227.** Two in one finding.
 
 `ApplyBulkDelay` compares the delay against `bulk_len` with `jb`, not `jl`. A
 negative `bulk_len` is huge unsigned, so it accepts every delay and the clear
@@ -3517,7 +3517,7 @@ operation, because every fifteen-word message begins with the marker and the
 marker resets `fdbc` to 1. The defect needs a stream that stops sending the
 marker, which §5.2 and §6.6 between them permit.*
 
-**Finding 73.** At 0x78070 the collector reads `word[fdbc]` and only *then*
+**Finding F73.** At 0x78070 the collector reads `word[fdbc]` and only *then*
 tests `fdbc <= 14`. `word[]` has fifteen entries, so `fdbc == 15` reads the CRC
 field beyond it, and the matching path raises `fdbc` with no cap at all.
 Measured rather than assumed: it does not fire in normal operation because
@@ -3535,7 +3535,7 @@ the object's own storage.
 
 *Task #98 sweep, from fix list §6.6. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: opt-in extension.*
 
-**Finding 602.** The four-argument `design(nTaps, cutoff, type, gain)` allocates
+**Finding F602.** The four-argument `design(nTaps, cutoff, type, gain)` allocates
 a window buffer, passes `adopt = 1` so the primitive takes ownership, and
 **leaks that buffer whenever the primitive rejects the arguments** — a bad
 cutoff or fewer than two taps — including `nTaps == 0`, where it calls
@@ -3555,7 +3555,7 @@ leak; the rest is **documentation only**.
 
 *Task #98 sweep, from fix list §6.7. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 801.** `MDMPRM_DPRUNTIME` is stored at +0x28 and **dereferenced
+**Finding F801.** `MDMPRM_DPRUNTIME` is stored at +0x28 and **dereferenced
 immediately** (`movl $0x0,0x78(%eax)` at 0x3ad2); `MDMPRM_DSPINFO` is stored at
 +0x24 and `vpcm_delete` writes two words through it at 0x3ded — **SIGSEGV in
 `ref_vpcm_delete+29`**. Both faults were found by running, not by reading.
@@ -3571,7 +3571,7 @@ not documented anywhere.
 
 *Task #98 sweep, from fix list §6.8. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 54.** The dial string is copied into a 100-byte field with an
+**Finding F54.** The dial string is copied into a 100-byte field with an
 unbounded `sysdep_strcpy`. What keeps it inside is a length check *inside
 `AnalyseDialString`*, a hundred lines away in another function that does not
 say so — and that holds only because `FATAL` is 0 and therefore satisfies the
@@ -3587,14 +3587,14 @@ whoever edits the grade enum, and nothing states it.
 
 *Task #98 sweep, from fix list §6.9. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 53.** With `break` zero, `elapsed < break` is never true, the line is
+**Finding F53.** With `break` zero, `elapsed < break` is never true, the line is
 never interrupted, and the digit still counts down to completion on the make
 timer alone — so the dialler reports success and dials nothing. Nothing in the
 code guards against it, and `t_pulse` asserts it in that direction rather than
 avoiding the case.
 
 *Trigger:* a country table with break = 0. *Fix class:* **host-side** — validate
-the country table. See also findings 56 and 59 in D118 for two more of the
+the country table. See also findings F56 and F59 in D118 for two more of the
 same shape.
 
 ---
@@ -3603,7 +3603,7 @@ same shape.
 
 *Task #98 sweep, from fix list §6.10. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 829.** The shift is `mov %dl,%al; shr $0x4,%al` — 8-bit, with no
+**Finding F829.** The shift is `mov %dl,%al; shr $0x4,%al` — 8-bit, with no
 subsequent masking — so **a table byte of 0x80 or more addresses `mask[8]` to
 `mask[15]`, eight entries the function never cleared and the caller may not
 have sized for**. Both halves are the object's: it clears eight and can write
@@ -3623,7 +3623,7 @@ only** otherwise; the caller is not reconstructed.
 
 *Task #98 sweep, from fix list §6.11. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 828.** `getConstellationsIndex` uses the loop cursor as its equality
+**Finding F828.** `getConstellationsIndex` uses the loop cursor as its equality
 verdict, so a length of zero leaves `n = 0`, the test compares 0 against 0, and
 the two constellations are declared duplicate without a byte being read.
 `t_v90cmask`'s shape 2 asserts the blob returns 1 for exactly that.
@@ -3637,14 +3637,14 @@ the two constellations are declared duplicate without a byte being read.
 
 *Task #98 sweep, from fix list §6.12. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 831.** "**Neither delete writes anything.** There is not one store in
+**Finding F831.** "**Neither delete writes anything.** There is not one store in
 either function; the freed slots keep their stale pointers." Each free is
 guarded by `if (p != 0)`, which the omission defeats: a second delete
 double-frees and any later read is a use-after-free.
 
 *Fix class:* **documentation only** — a helpful `= NULL` is exactly the
 wrong-but-plausible change the rule forbids. Same shape as D56 (`~FloatIIR`)
-and finding 55 below.
+and finding F55 below.
 
 ---
 
@@ -3652,7 +3652,7 @@ and finding 55 below.
 
 *Task #98 sweep, from fix list §6.13. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 55.** Of the four sub-objects it frees, only `busy` and `f70` have
+**Finding F55.** Of the four sub-objects it frees, only `busy` and `f70` have
 their pointers cleared; `dial`, `band` and `dtmf` are left dangling, so a
 second `CALLPROG_Delete` on the same object frees them again. `call_delete`
 calls it once — but `CALLPROG_Delete` is a global symbol and the asymmetry is
@@ -3666,7 +3666,7 @@ invisible from outside.
 
 *Task #98 sweep, from fix list §6.14. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Already in this register as D5 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**Finding 1067.** Measured on both sides: `create` with supplied state does
+**Finding F1067.** Measured on both sides: `create` with supplied state does
 `allocs=0 frees=0`, and `delete` then does `bad_free=5`. The finding sharpens
 the register entry in a way worth carrying: it is **as much a create-side
 precondition as a delete-side double free**. The caller-supplied path is
@@ -3683,7 +3683,7 @@ gets its chance.
 
 *Task #98 sweep, from fix list §6.15. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 1108.** `cursor = min(cursor, linearEquLength - 1)` is compiled with
+**Finding F1108.** `cursor = min(cursor, linearEquLength - 1)` is compiled with
 `jae`, so a zero-length equaliser computes 0xffffffff and the clamp is a no-op:
 the 1.0f tap lands at whatever cursor was asked for. Spelling the comparison
 signed breaks **648 checks**, so the unsigned form is the object's beyond doubt;
@@ -3697,7 +3697,7 @@ the length-zero consequence is reasoned.
 
 *Task #98 sweep, from fix list §6.16. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED (store) / SUSPECTED (loop). Fix class: documentation only.*
 
-**Finding 873.** With `nDen == 0` the constructor still executes
+**Finding F873.** With `nDen == 0` the constructor still executes
 `m_a[0] = 0.0f` — 0x4731e and 0x47379 are both unconditional — writing four
 bytes through a `sysdep_malloc(0)`. `t_floatarma` constructs that shape and
 does not drive `process` on it, where the carry-tail loop's `dec %edx; jne`
@@ -3711,13 +3711,13 @@ count underflows: `FloatFIR`'s zero-tap hazard in a second class.
 
 *Task #98 sweep, from fix list §6.17. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: already handled.*
 
-**Finding 234.** Five of the six loop arrays end with an all-zero record inside
+**Finding F234.** Five of the six loop arrays end with an all-zero record inside
 the symbol. `refLoopsType2` is 2,244 bytes — exactly 33 records — and **not one
 of them has the zero first byte the counting loops stop on**. What stops them
 is the 28 bytes of `.data` alignment padding between the end of the symbol at
 0x6124 and `refLoopsType1` at 0x6140, which happen to be zero.
 
-This is finding 13's pattern in a second place: correct only because of what
+This is finding F13's pattern in a second place: correct only because of what
 the linker put next, and it breaks the moment the tables are regenerated or
 reordered. Our copy carries a 34th all-zero record, and `t_v90pftab.cpp`
 asserts the counted length is 33 on both sides.
@@ -3731,7 +3731,7 @@ for the original.
 
 *Task #98 sweep, from fix list §6.18. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 232.** `resetDILGenerator` finds which G.711 segment `dilLevel[0]`
+**Finding F232.** `resetDILGenerator` finds which G.711 segment `dilLevel[0]`
 falls in and reads the level back with `movzwl`. After any non-empty expansion
 the level is in 0..0x7fff and inside the first seven boundaries, so the row's
 last entry and the index one past the end of the row are both unreachable —
@@ -3749,7 +3749,7 @@ to hold. *Fix class:* **documentation only.**
 
 *Task #98 sweep, from fix list §6.19. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 82.** `*nbits` is written only on the paths that return 0, so a
+**Finding F82.** `*nbits` is written only on the paths that return 0, so a
 caller must initialise it — its twin `BwChDem_Progress` clears it in the
 prologue, which is how the asymmetry shows. And neither give-up path stores the
 status 2 into the object; the 2 goes straight into `%eax`, so **the object's
@@ -3766,7 +3766,7 @@ by poisoning `*nbits` before every call.
 
 *Task #98 sweep, from fix list §6.20. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 81.** `v23FP_rx_progress` omits the `rx_state = 0` reset its Bell 103
+**Finding F81.** `v23FP_rx_progress` omits the `rx_state = 0` reset its Bell 103
 twin performs on a failed detect, so the gate accumulates non-consecutive
 detections however far apart they fall, and once the counter reaches 10 it
 never returns. What compensates is the detector's 0.885 energy ratio — its
@@ -3781,7 +3781,7 @@ configuration, not the gate.
 
 *Task #98 sweep, from fix list §6.21. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 832.** No power-of-two check, no null check and no length check in
+**Finding F832.** No power-of-two check, no null check and no length check in
 either body; the first loop runs on the raw argument. The compiler's
 `-freciprocal-math` rewrite of `A/len` to `A*(1.0/len)` is exact **only**
 because every length a caller passes is a power of two; on any other length the
@@ -3796,7 +3796,7 @@ caller found is `Psd::process` with `m_length`, which nothing validates either.
 
 *Task #98 sweep, from fix list §6.22. **Reachability: NEEDS A CALLER OR CONFIGURATION NOTHING VALIDATES.** Status: CONFIRMED. Fix class: host-side.*
 
-**Finding 428.** The five-way at 0x62f9c is the only writer of the rate and its
+**Finding F428.** The five-way at 0x62f9c is the only writer of the rate and its
 floor, and it has **no default**: on any `rx_baud` outside 0x960, 0xaf0, 0xbb8,
 0xc80 and 0xd65 the object falls into 0x62fce reading two never-initialised
 stack slots, and `v34handshak`'s prologue at 0x628f0 writes 0x74, 0x4c and 0x78
@@ -3820,12 +3820,12 @@ baud the two defects compound.
 
 *Task #98 sweep, from fix list §7.2. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`PPSEG` adds two different units together (finding 1043).** At 0x68154 a
+**`PPSEG` adds two different units together (finding F1043).** At 0x68154 a
 count of symbols at the *negotiated* baud is summed with `filtdelay`, a count
 of 4-sample ticks. The sum is dimensionally correct **only at 2400 baud**; at
 3429 the term should be `filtdelay * 3429 / 2400`, which at `IODELAY` 216 is
 127 where the object uses 89 — an error of 38 symbols in an echo-adaptation
-start delay. Finding 1046 states the position: latent at every rate but 2400,
+start delay. Finding F1046 states the position: latent at every rate but 2400,
 no fixture reaches `PPSEG` at another rate, must be reproduced and not
 repaired. **Unobserved, not unreachable** — essentially every real connection
 negotiates something other than 2400.
@@ -3836,7 +3836,7 @@ negotiates something other than 2400.
 
 *Task #98 sweep, from fix list §7.3. **Reachability: LATENT.** Status: SUSPECTED. Already in this register as D33 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**`updateAlpha` divides by zero (finding 127, `D33`).** `(1 << (shift+21)) /
+**`updateAlpha` divides by zero (finding F127, `D33`).** `(1 << (shift+21)) /
 ((energy + 0x8000) >> 16)` traps for `energy` in [-0x8000, -1]: the
 normalisation loop stops immediately because bit 30 is already set in a
 negative value, so no shift rescues it. The entry condition is that
@@ -3849,7 +3849,7 @@ negative — a second defect upstream.
 
 *Task #98 sweep, from fix list §7.4. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**The slicer's distance metric wraps at 16 bits (findings 110 and 119).**
+**The slicer's distance metric wraps at 16 bits (findings F110 and F119).**
 The squared distance is shifted logically and then truncated, so a
 constellation point far enough from the target wraps to a small distance and
 can win. Whether it fires with a real V.34 constellation is unmeasured. **The
@@ -3863,7 +3863,7 @@ fix to one would not reach the other.
 *Task #98 sweep, from fix list §7.5. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **`detectRetrainReq` widens the two sides of its compare differently
-(finding 212).** All four sites are `movzwl` on the energy and `movswl` on the
+(finding F212).** All four sites are `movzwl` on the energy and `movswl` on the
 threshold, so an energy short that has wrapped negative reads as ≥ 32768 and
 clears any threshold, and a negative threshold rejects every energy. Reachable
 in the object's own arithmetic — `0x04000000` in both accumulators is the
@@ -3877,7 +3877,7 @@ negative energy at all". The function also has no caller inside the object.
 *Task #98 sweep, from fix list §7.6. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **The low-level block counter is unsaturated and compared signed (finding
-360).** The counter at +0x0234 advances on every block below the level floor,
+F360).** The counter at +0x0234 advances on every block below the level floor,
 is cleared only by a block at or above it, and its test against 0x257f is
 signed — so after 2^31 sub-floor blocks it wraps negative and the condition
 stops being reported. 2^31 *calls*, not loop iterations.
@@ -3889,7 +3889,7 @@ stops being reported. 2^31 *calls*, not loop iterations.
 *Task #98 sweep, from fix list §7.7. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **`B103FP_create`'s 700-tick floor is an unsigned compare on a signed
-quotient (finding 36).** A negative `tone_timeout_ticks` divides to a negative
+quotient (finding F36).** A negative `tone_timeout_ticks` divides to a negative
 `t`, which as unsigned is enormous, passes the `jae`, and is stored as a
 negative short — the clamp is meant to enforce a floor and does not. Not
 reachable from `B103_CFG`, where 14000/20 is exactly 700 and the clamp is a
@@ -3901,7 +3901,7 @@ no-op.
 
 *Task #98 sweep, from fix list §7.8. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**Two country parameters hang the dialler (findings 56 and 59).**
+**Two country parameters hang the dialler (findings F56 and F59).**
 `GetPulseDialDigitPattern` is validated against 1, 2 and 3 only; any other
 value — including the zero a table that never considered it would hold — leaves
 the pulse count at the -1 the state initialised it to, and
@@ -3917,7 +3917,7 @@ D98's host-side validation should cover all three.
 
 *Task #98 sweep, from fix list §7.9. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**Three leaf defects in V.8 (finding 62).** `v8_absfn(-32768)` returns
+**Three leaf defects in V.8 (finding F62).** `v8_absfn(-32768)` returns
 -32768, because negating it overflows and the result is narrowed back to a
 short. `v8_copycoeff` counts with a short, so a count above 32767 never
 terminates. `v8_crc` compares its bit argument sixteen bits at a time, so a
@@ -3930,7 +3930,7 @@ None is reachable from the signal path.
 
 *Task #98 sweep, from fix list §7.10. **Reachability: LATENT.** Status: SUSPECTED. Already in this register as D9 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**`Dual_TONE_detect` (finding 42, `D9`).** The energy floor
+**`Dual_TONE_detect` (finding F42, `D9`).** The energy floor
 `Dual_TONE_create` installs is **1** — not 1000, not a fraction of full scale —
 so the "no signal" branch is very nearly unreachable and a detector fed
 anything at all reports 1 rather than 0. Separately, the sample index is
@@ -3944,7 +3944,7 @@ and nothing validates it either.
 
 *Task #98 sweep, from fix list §7.11. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`vpcm_run`'s training timeout never clears its counter (finding 982).**
+**`vpcm_run`'s training timeout never clears its counter (finding F982).**
 An unchanged progress code 0 counts towards a 3,000-block deadline at 0x4274
 (`cmp $0xbb8`) and on expiry sets mode -1, "vpcm: train timeout!", **without
 resetting the counter — so every block after the deadline fails again**. The
@@ -3959,7 +3959,7 @@ accumulates 3,000 unchanged blocks.
 *Task #98 sweep, from fix list §7.12. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **A renegotiation at the end of the range carries the previous request
-(finding 189).** A step that would leave the bounds writes **nothing** rather
+(finding F189).** A step that would leave the bounds writes **nothing** rather
 than clamping, so `rate_want` keeps what it held; the handshake is still torn
 down and the attempt still counts, with the stale value as its target. A
 negative `rate_want` is the "no target" encoding, so a stale value is read as a
@@ -3972,7 +3972,7 @@ real rate index.
 *Task #98 sweep, from fix list §7.13. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **The FSK delay line is aliased onto the echo canceller's coefficients
-(finding 100).** `fskdetect`'s 49-entry delay line and `echo0 + 0x0c` are the
+(finding F100).** `fskdetect`'s 49-entry delay line and `echo0 + 0x0c` are the
 same memory, proved from two independent address readings. `V34EchoCleanUp`
 zeroes all 144 entries of `coeff_frac` and `V34EchoAdapt` writes every one of
 them, so they cannot both be live. The reading that fits is deliberate reuse —
@@ -3986,7 +3986,7 @@ canceller live is the case to check.
 
 *Task #98 sweep, from fix list §7.14. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**The V.23 answer tone is in spec by frame quantisation (finding 84).**
+**The V.23 answer tone is in spec by frame quantisation (finding F84).**
 The silence is `rate/20` = 400 samples = 50 ms, against V.25's 75 ± 20. It
 lands in spec only because the silence state uses `<=` where the tone state
 uses `<`, and because `dp_wrapper` delivers 160-sample frames, so 400 samples
@@ -4000,7 +4000,7 @@ it back out of spec.**
 *Task #98 sweep, from fix list §7.15. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **`V90Demodulator::reset` sizes the first block from the previous
-configuration (finding 608).** `reset` at 0x1c038-0x1c04c calls `agc.reset()`
+configuration (finding F608).** `reset` at 0x1c038-0x1c04c calls `agc.reset()`
 and only *then* writes `blockLen` from `params+0x64`; `reset` has already
 copied the OLD `blockLen` into `count`, so the first block after the first
 reset runs for the constructor's 500 samples rather than the configured length.
@@ -4012,7 +4012,7 @@ It self-corrects on later resets.
 
 *Task #98 sweep, from fix list §7.16. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`hamming` and `blackman` divide by zero at one tap (finding 246).** Both
+**`hamming` and `blackman` divide by zero at one tap (finding F246).** Both
 compute `1 / (n - 1)`, which for `n == 1` is +infinity, and `0 * infinity` is
 the x87 indefinite: both write **0xffc00000** into `w[0]`. There is no guard,
 adding one breaks the match, and the test drives `n == 1` deliberately and
@@ -4024,7 +4024,7 @@ compares as bits. Any caller asking for a one-tap window gets a NaN.
 
 *Task #98 sweep, from fix list §7.17. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`autoSelection` lets a NaN win the search (finding 236).** The running
+**`autoSelection` lets a NaN win the search (finding F236).** The running
 best is updated on `fcom %st(2); fnstsw; sahf; jae`, and `fcom` sets C0 for an
 unordered result as well as for a less-than one, so a NaN distance takes the
 update arm where C's `<` does not. **A NaN is reachable because the measurement
@@ -4038,7 +4038,7 @@ measurement was left as seeded pseudorandom bytes.
 
 *Task #98 sweep, from fix list §7.18. **Reachability: LATENT.** Status: SUSPECTED. Already in this register as D25 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**`tone_detect`'s second section folds instead of scaling (finding 90,
+**`tone_detect`'s second section folds instead of scaling (finding F90,
 `D25`).** Section 2 truncates the accumulator to 16 bits and *then* shifts by
 4, where section 1 shifts first; on loud input it wraps. "There is no reading
 under which both are intended. One is a slip." Both orders behave identically
@@ -4051,7 +4051,7 @@ over the levels a correctly-AGC'd detector sees.
 *Task #98 sweep, from fix list §7.19. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **`modem_serrint`'s 60-tap FIR path feeds the adaptation at full width
-(finding 128).** The accumulator is used at 32 bits for the products and only
+(finding F128).** The accumulator is used at 32 bits for the products and only
 the queue store narrows it, so a loud enough sample drives both echo
 cancellers' error terms and the leaky energy estimate with a value outside a
 short. Reproduced. Requires receiver flag bit 11; the Hilbert branch is the one
@@ -4064,7 +4064,7 @@ the receiver normally takes.
 *Task #98 sweep, from fix list §7.20. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **Nothing initialises the history-ring index, and the store precedes the
-range test (finding 781).** At 0x5d051 `hist_2f58[idx]` is written, and only at
+range test (finding F781).** At 0x5d051 `hist_2f58[idx]` is written, and only at
 0x5d04c/0x5d059 is `idx + 1` tested against 0x257 — unsigned. Nothing in the
 object initialises `f2aa6`, and a whole call from a fixture that fills the
 object with pseudorandom bytes drives it negative on the first sample.
@@ -4075,7 +4075,7 @@ object with pseudorandom bytes drives it negative on the first sample.
 
 *Task #98 sweep, from fix list §7.21. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`FPM_FSD_demodulate` discards input past its bit cap (finding 32).** The
+**`FPM_FSD_demodulate` discards input past its bit cap (finding F32).** The
 loop stops once `max_bits + 1` bits have been written and throws the remaining
 samples away rather than holding them over. Bell 103's ceiling is 8 bits from
 64 samples and `DemodDataB103` feeds 48 at a time, so it never bites in normal
@@ -4087,7 +4087,7 @@ use — safe by the fragment size the one in-library caller happens to use.
 
 *Task #98 sweep, from fix list §7.22. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`FPM_sqrt_dp`'s mantissa can be 17 bits (finding 21).** After
+**`FPM_sqrt_dp`'s mantissa can be 17 bits (finding F21).** After
 normalisation `x >> 15` reaches 0x1ffff, which does not fit the
 `unsigned short` it is stored in and wraps for `x >= 0x80000000`. The same
 shape as `FPM_sqrt`'s one-past-the-end read. `FPM_rms` is the only caller found
@@ -4100,7 +4100,7 @@ and its accumulator is bounded by the /36 scaling, so it may be unreachable.
 *Task #98 sweep, from fix list §7.23. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **The AGC's block partition can exceed what `FPM_rms` is dimensioned for
-(findings 28 and 29).** The folded block reaches `block_len + block_len/2 - 1`
+(findings F28 and F29).** The folded block reaches `block_len + block_len/2 - 1`
 = 53 samples where `FPM_rms`'s 1/36 headroom is sized for 36, so at 53 samples
 a block above about 82% of full scale sticks at 32703 and the AGC applies less
 gain reduction than it should — wrong in the safe direction. Separately, a
@@ -4113,7 +4113,7 @@ not scaled, and for Bell 103 that is any call of 1..17 samples.
 
 *Task #98 sweep, from fix list §7.24. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`initTxSequence` reads a fourth byte it does not own (finding 66).** The
+**`initTxSequence` reads a fourth byte it does not own (finding F66).** The
 original tests `*(int *)cm & 0x80008` — a single 32-bit read across a
 three-byte flag structure, correct only by accident of layout. The
 reconstruction writes it as the two byte tests it plainly is.
@@ -4133,11 +4133,11 @@ across five functions: `updateCodeSegmentPointer`, `resetDILGenerator`,
 `generateDIL`, `generateV90Symbol` (twice) and `generateV92Symbol` (twice).
 The residual true fact — that an unsigned load lets a slot content of 32,769
 or more fall out at index 8 — belongs to D107. **The claim originates in
-finding 231, which does not account for the `movzwl`, so the correction is
+finding F231, which does not account for the `movzwl`, so the correction is
 owed there too.** Status here was already SUSPECTED rather than CONFIRMED,
 which is what a suspected claim is for.
 
-**The A-law boundary row's last entry can never be reached (finding 231,
+**The A-law boundary row's last entry can never be reached (finding F231,
 `docs/findings.md:13235` — the material is in that finding's body, not in its
 heading, which is about `callgraph.py`).**
 `codeSegmentsBoundriesLookupTable`'s A-law row ends at 32768, which
@@ -4152,7 +4152,7 @@ table at `8 * pcmType + segment` and the A-law arm is live.
 *Task #98 sweep, from fix list §7.26. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **`evaluateRxJMSequence`'s second matching loop never clears its flag
-(finding 73).** Two extension-matching loops that look identical: the first
+(finding F73).** Two extension-matching loops that look identical: the first
 keeps its "something has matched" flag in the field `febc` and clears it before
 every marker word; the second keeps it in a stack local set up once before the
 loop and **never cleared**. Once anything has matched, a later marker whose
@@ -4165,8 +4165,8 @@ from the wire; the finding does not claim the author thought it wrong.
 
 *Task #98 sweep, from fix list §7.27. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**The blob disagrees with itself on the receive path (findings 736 and
-754).** At two fixture fills, byte-identical inputs give different results on
+**The blob disagrees with itself on the receive path (findings F736 and
+F754).** At two fixture fills, byte-identical inputs give different results on
 **both sides** — the control cases fail too, so it is not the reconstruction.
 `V34HS_PROBE` reports 0 object bytes and 0 padding bytes differing after setup
 and side B re-run at its own address differs in 0 bytes, so each side is
@@ -4176,8 +4176,8 @@ its arena halves it), and lands in four modelled receiver fields. **The cause
 is not established; what is left is a read of memory outside the object.** Any
 arm that calls `receiver` inherits it.
 
-This is the same shape as `D61` and probably the same defect. **Findings 319,
-322 and 324** measured it on the transmit side: byte-identical objects placed
+This is the same shape as `D61` and probably the same defect. **Findings F319,
+F322 and F324** measured it on the transmit side: byte-identical objects placed
 differently in memory give different answers, and `v34handshakinit` left
 +0x0a28 and +0x2608 holding `ref_Convolve32` on one side and
 `ref_Convolve32 + 0x40` on the other — the same table, sixty-four bytes in,
@@ -4186,8 +4186,8 @@ pointed-to blocks take it from 23 of 24 fills failing to 0 of 24. Ruled out:
 our bring-up against the blob's, stack residue, x87 residue, absolute address,
 alignment, object placement, object-to-block distance, and block neighbourhood
 contents within 32 KB. **What is NOT established is which byte it reads**, and
-finding 322 says so in terms — do not quote this as if the mechanism were
-known. Finding 319 retracts `D60`, which had read the same evidence as a
+finding F322 says so in terms — do not quote this as if the mechanism were
+known. Finding F319 retracts `D60`, which had read the same evidence as a
 fixture artefact.
 
 ---
@@ -4196,8 +4196,8 @@ fixture artefact.
 
 *Task #98 sweep, from fix list §7.29. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**Two idle-symbol emitters hardcode the scrambler polarity (findings 280
-and 303).** `k56FlexPhase34` case 4 hardcodes the generator as the literal 1
+**Two idle-symbol emitters hardcode the scrambler polarity (findings F280
+and F303).** `k56FlexPhase34` case 4 hardcodes the generator as the literal 1
 and `v90Phase34` case 5 hardcodes it as the literal 0, where `txmitdibit`
 passes `tx_scrambler_mode(o)` — bit 0 of `f25c2`, the calling/answering
 polarity. The argument is an absence and it is checked in both: "nothing in
@@ -4216,12 +4216,12 @@ calling it one.
 
 *Task #98 sweep, from fix list §7.30. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
-**`bits[7] &= 0xdf` takes the whole high byte with it (finding 312).**
+**`bits[7] &= 0xdf` takes the whole high byte with it (finding F312).**
 `V34SetINFO1aBits`'s INFO1d arm sets the bit with `bits[7] |= 0x20` and clears
 it with `bits[7] &= 0xdf` — and the clear is `and $0xdf` on a zero-extended
 short, so it is not the set's inverse: it destroys bits 8..15. A test whose
 message shorts never carry a high byte cannot tell the difference, and none
-does. Finding 335 narrows it — the reader side takes the bit only through
+does. Finding F335 narrows it — the reader side takes the bit only through
 `testb $0x20` on the low byte — but does not close the writer-side clobber.
 Whether the protocol ever puts anything in that high byte is not established.
 
@@ -4232,7 +4232,7 @@ Whether the protocol ever puts anything in that high byte is not established.
 *Task #98 sweep, from fix list §7.31. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **`SineWave::generate` advances the phase once more than it emits (finding
-601).** The advance sits between the `cmp` and the `jb` and the wrap happens
+F601).** The advance sits between the `cmp` and the `jb` and the wrap happens
 only at the end, so a long call accumulates angle: measured **1.86 rad over
 96,000 samples in one call against 0.03 rad over 2,000 calls of 48**.
 `generate(out, 0)` is not a no-op — it still rewrites `phase`. **No caller is
@@ -4251,7 +4251,7 @@ beyond it stale.
 *Task #98 sweep, from fix list §7.28. **Reachability: LATENT.** Status: SUSPECTED. Fix class: documentation only.*
 
 **Two producers on the transmit queue account differently (finding
-116).** `txwritequeue` adds four to `count` per call; `txmit` open-codes the
+F116).** `txwritequeue` adds four to `count` per call; `txmit` open-codes the
 same enqueue and adds **one per sample**. The two agree only while the
 modulator returns exactly four samples per call, which is measured at 2400 baud
 and not fixed for the other six rates `V34SetupModulator` handles.
@@ -4264,7 +4264,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.1. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Findings 218, 219 (`D53`).** Measured twice: a sweep asserting 6..10 returned and 0..5 never, and gcov marking the body NOT EXECUTABLE after 6,938 executions of the test.
+**Findings F218, F219 (`D53`).** Measured twice: a sweep asserting 6..10 returned and 0..5 never, and gcov marking the body NOT EXECUTABLE after 6,938 executions of the test.
 
 ---
 
@@ -4272,7 +4272,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.2. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Findings 197, 620 (`D36`).** Confirmed by construction in finding 1061: the guard is unreachable at 5 and reachable at 6.
+**Findings F197, F620 (`D36`).** Confirmed by construction in finding F1061: the guard is unreachable at 5 and reachable at 6.
 
 ---
 
@@ -4280,7 +4280,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.3. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 242.** Computed exhaustively; dead in the original too.
+**Finding F242.** Computed exhaustively; dead in the original too.
 
 ---
 
@@ -4288,7 +4288,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.4. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 431.** Reasoned from what the second block writes; recorded as an equivalence so it expires loudly.
+**Finding F431.** Reasoned from what the second block writes; recorded as an equivalence so it expires loudly.
 
 ---
 
@@ -4296,7 +4296,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.5. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 448.** Reasoned from what selects the arm.
+**Finding F448.** Reasoned from what selects the arm.
 
 ---
 
@@ -4304,7 +4304,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.6. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 428.** Two addresses, nothing in between; the suite records it equivalent.
+**Finding F428.** Two addresses, nothing in between; the suite records it equivalent.
 
 ---
 
@@ -4312,7 +4312,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.7. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 879.** Proved over the whole domain; both mutations recorded equivalent.
+**Finding F879.** Proved over the whole domain; both mutations recorded equivalent.
 
 ---
 
@@ -4320,7 +4320,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.8. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 1119.** Read from the disassembly plus a relocation count.
+**Finding F1119.** Read from the disassembly plus a relocation count.
 
 ---
 
@@ -4328,7 +4328,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.9. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 442.** Reasoned from the callee writing nine fields and reading none.
+**Finding F442.** Reasoned from the callee writing nine fields and reading none.
 
 ---
 
@@ -4336,7 +4336,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.10. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 442.** Read from the disassembly and the original's comment.
+**Finding F442.** Read from the disassembly and the original's comment.
 
 ---
 
@@ -4344,7 +4344,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.11. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 60.** Read from the tail's message filter.
+**Finding F60.** Read from the tail's message filter.
 
 ---
 
@@ -4352,7 +4352,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.12. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 46.** From relocations at 0x61a0, 0x61a4, 0x61c8 and 0x6244.
+**Finding F46.** From relocations at 0x61a0, 0x61a4, 0x61c8 and 0x6244.
 
 ---
 
@@ -4360,7 +4360,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.13. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Findings 1090, 381, 318.** All 24 symbols disassembled with sizes.
+**Findings F1090, F381, F318.** All 24 symbols disassembled with sizes.
 
 ---
 
@@ -4368,7 +4368,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.14. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 281.** Measured twice — the byte-level stub, and 55 lines added to coverage of which 48 are covered, the seven uncovered all in these two arms.
+**Finding F281.** Measured twice — the byte-level stub, and 55 lines added to coverage of which 48 are covered, the seven uncovered all in these two arms.
 
 ---
 
@@ -4376,7 +4376,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.15. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 169.** Observed never to fire in any test.
+**Finding F169.** Observed never to fire in any test.
 
 ---
 
@@ -4384,7 +4384,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.16. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 234.** Reasoned from the writers; corroborated by a surviving mutation.
+**Finding F234.** Reasoned from the writers; corroborated by a surviving mutation.
 
 ---
 
@@ -4392,7 +4392,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.17. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 340.** Read from the two addressing modes; the arm is differentially tested.
+**Finding F340.** Read from the two addressing modes; the arm is differentially tested.
 
 ---
 
@@ -4400,7 +4400,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.18. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Already in this register as D59 — that entry is the authority for the mechanism; this one adds reachability and the fix class. Fix class: documentation only.*
 
-**Findings 287, 420.** Demonstrated, not argued: `V34HS_HANG=1 ./build/test/t_v34hsstep` drives txstate 6 `ANSAM` with the cursor below the limit and the run exits 3. The harness arms `SIGALRM` around every step because of it.
+**Findings F287, F420.** Demonstrated, not argued: `V34HS_HANG=1 ./build/test/t_v34hsstep` drives txstate 6 `ANSAM` with the cursor below the limit and the run exits 3. The harness arms `SIGALRM` around every step because of it.
 
 ---
 
@@ -4408,7 +4408,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.19. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Finding 218.** Two independent readings; `D35` is the same gap from the other side.
+**Finding F218.** Two independent readings; `D35` is the same gap from the other side.
 
 ---
 
@@ -4416,7 +4416,7 @@ and not fixed for the other six rates `V34SetupModulator` handles.
 
 *Task #98 sweep, from fix list §8.20. **Reachability: CANNOT FIRE.** Status: CONFIRMED. Fix class: documentation only.*
 
-**Findings 823, 824.** Driven: raising the host ceiling to 64000 makes the clamp fire.
+**Findings F823, F824.** Driven: raising the host ceiling to 64000 makes the clamp fire.
 
 ---
 
@@ -4442,12 +4442,12 @@ and it stays that way until that member is read.
 
 **Not fixed.** `t_v92jd.cpp` seeds the slot with varied bytes and compares the
 whole object, so a reconstruction that helpfully cleared `bits[48]` fails
-rather than passes.  Finding 1223.
+rather than passes.  Finding F1223.
 ## D163 🐛 💤 `V90CP::printNofRecievedMpMpNot` prints `"V90MP: received %d MP, %d MPNot"` — the CP class's debug line names the other class
 
 *V.90/V.92 message-parameter batch. **Reachability: unmeasured** — diagnostic only, and only above `dsplibs_debug_level > 1`. Status: CONFIRMED — the literal at `.rodata.str1.4+0xd6b0` is byte for byte `V90MP`'s at `+0x5a34`. Fix class: documentation only; reproduced, not corrected.*
 
-**Finding 1239.**
+**Finding F1239.**
 
 **RENUMBERED.  This entry was committed as `D162` on its own branch** and so
 was the `V92Jd` entry above it: three of the nine parallel construction-path
@@ -4461,7 +4461,7 @@ points at the wrong entry is the one thing `tools/refcheck.py` cannot catch.
 
 *Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: one store.*
 
-**Finding 1240.** Asserted in test/unit/t_v90spectral.cpp against the seeded
+**Finding F1240.** Asserted in test/unit/t_v90spectral.cpp against the seeded
 bytes, so the omission is measured; whether any caller reaches an accumulation
 without a `reset()` first is not.
 
@@ -4477,7 +4477,7 @@ thing `tools/refcheck.py` cannot catch.
 
 *Spectral-group lifecycle batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: none until a reader turns up.*
 
-**Finding 1241.** All six members were scanned for a load at +0x10 and none
+**Finding F1241.** All six members were scanned for a load at +0x10 and none
 has one; a seventh reader outside the class would have to reach it through a
 `V90SdDetector *`, which has not been swept.
 
@@ -4498,7 +4498,7 @@ number is spelled out rather than written in its usual form because
 `tools/refcheck.py` reads any `D` followed by digits as a live reference and
 would report it dangling.)
 
-**Finding 1257.** Measured, not inferred: every one of the nineteen
+**Finding F1257.** Measured, not inferred: every one of the nineteen
 `V90Phase3Modulator` text symbols was disassembled and searched for a `0x50`
 displacement. Three hit, and only three — the two constructor copies, both
 `mov %reg,0x50(%ebx)` with `%ebx` as `this`, and `reset`, whose `mov
@@ -4507,7 +4507,7 @@ displacement. Three hit, and only three — the two constructor copies, both
 
 *V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED from the disassembly — there is no store to any of +0x5c..+0x68 or +0x84..+0x98 in either function. Fix class: documentation only until a caller is found that deletes without freeing the block.*
 
-**Finding 1226.** The one caller in the object, `V92Modem`'s destructor, frees the block itself immediately afterwards, so the dangling values are never read there. Reproduced, and `t_v92alloc.c`'s `run_delete_live` asserts they survive.
+**Finding F1226.** The one caller in the object, `V92Modem`'s destructor, frees the block itself immediately afterwards, so the dangling values are never read there. Reproduced, and `t_v92alloc.c`'s `run_delete_live` asserts they survive.
 
 **This entry and D171 were drafted under two higher numbers and renumbered before the branch left its worktree**, so no citation to the old pair exists anywhere and CLAUDE.md's renumbering rule has nothing to protect. The old-to-new mapping is in the commit message and deliberately not here: `refcheck.py` reads a bare `D` and digits as a citation, a retired number would be reported dangling, and writing it without the `D` is worse — a bare number is read as a FINDING reference and both of these resolve to real and unrelated findings, which is the silent failure CLAUDE.md warns about.
 
@@ -4517,14 +4517,14 @@ displacement. Three hit, and only three — the two constructor copies, both
 
 *V.92 leaf allocators. **Reachability: `unmeasured`.** Status: CONFIRMED — six and four consecutive `movl $size` / `call` / `mov %eax,off(%ebx)` with no `test` between. Fix class: documentation only.*
 
-**Finding 1226.** The contrast is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create` returns, at .text+0x3b31, and branches into a failure unwind.
+**Finding F1226.** The contrast is inside the same object: `vpcm_create` DOES test what `K56FLEX_Create` returns, at .text+0x3b31, and branches into a failure unwind.
 
 *Numbering: D170 and D171 are the block this batch was assigned, and the gap below them is not this batch's to fill. Three sessions independently picked the number after D161 as "the next free one", which is exactly why blocks are now handed out rather than taken; the numbers between D161 and D170 are reserved for resolving those collisions. Bare `D` and digits read as a citation to `refcheck.py`, so they are not spelled out here — the same trap the D64 gap note records.*
 ## D180 🐛 `V92Precoder` and `V92PreFilter` run a filter constructor over `sysdep_malloc`'s return without checking it, so a failed allocation constructs a `FloatFIR` through a null pointer
 
 *Constructor batch, task "V.92 coder and pre-filter constructors". **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: needs a decision — the allocator never fails in the harness.*
 
-**Finding 1245.** `movl $0x14,(%esp); call sysdep_malloc; call FloatFIR::FloatFIR` with nothing between the two, four times across the pair. `FloatFIR`'s constructor stores five fields, so the fault is at the first store and not deferred. The same shape as D5's family and the same as `FloatFIR`'s own unchecked history allocation.
+**Finding F1245.** `movl $0x14,(%esp); call sysdep_malloc; call FloatFIR::FloatFIR` with nothing between the two, four times across the pair. `FloatFIR`'s constructor stores five fields, so the fault is at the first store and not deferred. The same shape as D5's family and the same as `FloatFIR`'s own unchecked history allocation.
 
 ---
 
@@ -4532,13 +4532,13 @@ displacement. Three hit, and only three — the two constructor copies, both
 
 *Constructor batch, task "V.92 coder and pre-filter constructors". **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only unless a caller is found that resets after destroying.*
 
-**Finding 1245.** The destructor leaves +0x68 and +0x6c holding freed addresses; `reset` rewrites +0x04..+0x64 and +0x70, +0x74 and deliberately leaves those two alone, which is right for a live object and would use a dangling pointer on a destroyed one. `V92Transmitter::~V92Transmitter` frees the precoder immediately after destroying it, so no path in the object reaches it — hence 💤.
+**Finding F1245.** The destructor leaves +0x68 and +0x6c holding freed addresses; `reset` rewrites +0x04..+0x64 and +0x70, +0x74 and deliberately leaves those two alone, which is right for a live object and would use a dangling pointer on a destroyed one. `V92Transmitter::~V92Transmitter` frees the precoder immediately after destroying it, so no path in the object reaches it — hence 💤.
 
 ---
 
 ## D175 ⚠ `V90Equalizer`'s constructor stores fifteen `sysdep_malloc` returns and checks none of them, then hands them to `reset` to write through
 
-`FloatFIR`'s constructor tests its one allocation; this one tests none of its fifteen, and its last act is a tail call to `reset`, which writes through six of them. A negative `LINEAR_EQU_HISTORY_LENGTH` reaches the same place by another route: the length is a SIGNED divide by two, so the allocation size is enormous, the return is null, and `reset` writes through it. Reproduced as written (finding 1230). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+`FloatFIR`'s constructor tests its one allocation; this one tests none of its fifteen, and its last act is a tail call to `reset`, which writes through six of them. A negative `LINEAR_EQU_HISTORY_LENGTH` reaches the same place by another route: the length is a SIGNED divide by two, so the allocation size is enormous, the return is null, and `reset` writes through it. Reproduced as written (finding F1230). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
 
 ---
 
@@ -4558,13 +4558,13 @@ the empty terminator — so the loop leaves 16, `dec` gives 15, and
 No named entry is unreachable. What IS off by one is the diagnostic, which
 prints the maximum index under the label "table length"; that is a real
 tier-1 defect and it belongs with the other diagnostics. **The error
-originates in finding 1233's step 4, which states the same thing, so the
+originates in finding F1233's step 4, which states the same thing, so the
 correction is owed there too.** The rest of 1233 stands.
 
 The text below is the original claim, kept because a wrong route is worth as
 much as a right one:
 
-The table is walked to its first empty name and the count is decremented before `codecType` is compared against it, so the highest index the constructor will accept is `count - 2`, and an index of `count - 1` -- a real, named entry -- is rejected with "External Hardware Codec Index exceeds table length" and replaced by 0. The message prints the decremented number as "table length", which is where the off-by-one shows. Reproduced (finding 1233). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
+The table is walked to its first empty name and the count is decremented before `codecType` is compared against it, so the highest index the constructor will accept is `count - 2`, and an index of `count - 1` -- a real, named entry -- is rejected with "External Hardware Codec Index exceeds table length" and replaced by 0. The message prints the decremented number as "table length", which is where the off-by-one shows. Reproduced (finding F1233). `unmeasured`. *(Drafted under one of the three numbers immediately after D161 -- the obvious next-free ones, which three parallel batches all picked at once -- and renumbered into this batch's assigned block before it was committed. Nothing cites the draft numbers; the numbers between D161 and D175 are reserved for resolving collisions already committed.)*
 
 ---
 
@@ -4579,7 +4579,7 @@ The table is walked to its first empty name and the count is decremented before 
 
 The range check is `if (codecType > count - 1)`, and there is no other. When `HW_CODEC_TYPE` is negative the constructor stores its own `__tHardwareCodecTypes__` argument straight into `codecType` with no floor, so a negative argument reaches the field intact -- and `isV90WithEia6`, `autoSelection` and `selectFilter`, all three already written in `src/pump/v90/V90PreFilter.cpp`, index `dataBase[codecType]` with no gate of any kind. The constructor is therefore where a wild table index is STORED, and the reads that follow it are at the shipped debug level, not behind `dsplibs_debug_level > 1` like the constructor's own `dataBase[codecType].name`.
 
-Reproduced (finding 1233). `t_v90prefilter.cpp`'s constructor sweep deliberately stops at zero: a negative index has each side reading below the base of its OWN table, so the object comparison and the transcript would both fail for a reason belonging to the harness rather than to the function, and the test would be reporting the fixture. `unmeasured`.
+Reproduced (finding F1233). `t_v90prefilter.cpp`'s constructor sweep deliberately stops at zero: a negative index has each side reading below the base of its OWN table, so the object comparison and the transcript would both fail for a reason belonging to the harness rather than to the function, and the test would be reporting the fixture. `unmeasured`.
 
 ---
 
@@ -4594,12 +4594,12 @@ Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 an
 
 *The constructor/destructor batch. **Reachability: unmeasured.** Status: CONFIRMED from the disassembly. Fix class: documentation only — reproduced, not repaired.*
 
-**Finding 1253.** Both sites are `div %edi` at 0x10704 and 0x1071b with `%edi` loaded straight from the argument slot at `0x58(%esp)`, and there is no test of it anywhere in the 267 bytes. `test/unit/t_gtonedet.cpp` sweeps seven nonzero divisors and says in its file comment that zero is excluded on purpose rather than avoiding it quietly. Nothing in this tree constructs a `GenericToneDetector`, so which callers exist and what they pass is unmeasured — that is what the marker means here, and it is why the entry claims a trap rather than a live defect.
+**Finding F1253.** Both sites are `div %edi` at 0x10704 and 0x1071b with `%edi` loaded straight from the argument slot at `0x58(%esp)`, and there is no test of it anywhere in the 267 bytes. `test/unit/t_gtonedet.cpp` sweeps seven nonzero divisors and says in its file comment that zero is excluded on purpose rather than avoiding it quietly. Nothing in this tree constructs a `GenericToneDetector`, so which callers exist and what they pass is unmeasured — that is what the marker means here, and it is why the entry claims a trap rather than a live defect.
 ## D195 🐛 `VPcmV34Create`'s second `sysdep_memset` clears 0x79c bytes at +0x264 that the first one, 0xac4c bytes at +0, has already cleared — the receiver is zeroed twice and no path reaches the second without the first
 
 *Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
 
-**Finding 1260.** Transcribed and kept; `test/mutations/vpcmcreate.json`'s "the redundant second memset is dropped" is the recorded survivor that says it is unobservable.
+**Finding F1260.** Transcribed and kept; `test/mutations/vpcmcreate.json`'s "the redundant second memset is dropped" is the recorded survivor that says it is unobservable.
 
 ---
 
@@ -4607,7 +4607,7 @@ Reproduced, and DRIVEN: `t_v90equ.cpp`'s constructor sweep includes lengths 0 an
 
 *Batch: `VPcmV34Create`. **Reachability: unmeasured.** Status: unmeasured. Fix class: documentation only.*
 
-**Finding 1260.** Read from the disassembly; the reconstruction keeps both loads rather than folding them.
+**Finding F1260.** Read from the disassembly; the reconstruction keeps both loads rather than folding them.
 
 ---
 
@@ -4628,7 +4628,7 @@ directions are separately switched and jointly stated.
 is not established.  The offsets are measured; that a receiver cannot run both
 at once is the one-line inference from them.
 
-**Not fixed.**  Finding 1397, which is this entry's text; allocated here from
+**Not fixed.**  Finding F1397, which is this entry's text; allocated here from
 the leaf-sweep batch's unused block.
 
 ---
@@ -4650,7 +4650,7 @@ would have resynchronised on the next.
 is not established here.  Driven in both test files, so the behaviour is
 reproduced deliberately rather than by accident.
 
-**Not fixed.**  Finding 1397.
+**Not fixed.**  Finding F1397.
 
 ---
 
@@ -4669,7 +4669,7 @@ the byte counter wraps back to 0x34.
 **Unmeasured** -- whether the object's callers do is not established.  The
 tests' `late_complete` counter asserts exactly this behaviour.
 
-**Not fixed.**  Finding 1397.
+**Not fixed.**  Finding F1397.
 
 **And one hazard that is deliberately NOT an entry:** `vec[unpack[1]] = bit`
 is bounds-checked nowhere in any of the three unpackers, and it is
@@ -4691,10 +4691,10 @@ been filed as defects somewhere before being read properly.
 
 ## A retraction that is still cited as live (D28)
 
-**7.1 `D28` is RETRACTED and finding 180 still cites it as live.** Finding 180
+**7.1 `D28` is RETRACTED and finding F180 still cites it as live.** Finding F180
 says `V34EchoReportCoeff` "dumps a hardcoded 144 coefficients whatever `taps`
 says (D28), which out of the shared 32-entry array runs 48 shorts past the end
-of the struct". **Finding 98 retracted that**, and so does the register:
+of the struct". **Finding F98 retracted that**, and so does the register:
 `V34InitializeImplementationSpecific` sets both cancellers' tap counts to 0x90
 — 144 — at 0x71dc6 and 0x71e1e, so the dump is sized to the array exactly and
 there is no over-read. `(144 / 6) * 6` is 144, so the scan's rounding-down is a
@@ -4708,43 +4708,43 @@ Two kinds, and they carry different information.
 
 ### It looked like a defect in the object and is not
 
-* **Finding 297** — "Had `nofBits` been anywhere earlier the object would
+* **Finding F297** — "Had `nofBits` been anywhere earlier the object would
   overrun its own buffer on a descriptor it can represent". It is not
   anywhere earlier: `bitVector` holds 2,700 entries and the largest descriptor
   the fields can describe is 2,654 bits. A counterfactual, and in fact the
   finding's point is that two independently derived offsets agree.
-* **Finding 180 / `D28`** — see the retraction note above. Retracted by finding 98 and by the
+* **Finding F180 / `D28`** — see the retraction note above. Retracted by finding F98 and by the
   register; `taps` **is** 144, so there is no over-read.
-* **Finding 230** — "the object is compared whole, and so is a guard past its
+* **Finding F230** — "the object is compared whole, and so is a guard past its
   end". Test methodology: the guard exists so that a store overrunning the
   object fails rather than passing silently.
-* **Finding 394** — "the staged clear runs to eleven words rather than ten".
+* **Finding F394** — "the staged clear runs to eleven words rather than ten".
   A surviving *mutation* of the reconstruction, not the object; the eleventh
   word is +0xabc2, which the statement after the loop zeroes anyway.
-* **Finding 423** — "the run at +0x25da wrong has +0x25d8 PAST the end". A
+* **Finding F423** — "the run at +0x25da wrong has +0x25d8 PAST the end". A
   deliberately chosen test seed to separate two guards in series.
-* **Finding 139** — its own heading says `receiver` "found a bug in
+* **Finding F139** — its own heading says `receiver` "found a bug in
   `V34TimingFilter`". Read in full, the bug is the **reconstruction's**: the
   object multiplies the register the store came out of, which still holds the
   full 32-bit value, and we read the truncated short back from `iir[][0]`. The
   object is self-consistent; the state words overflowing a short is a fact
   about the object with no wrong behaviour attached to it.
-* **Finding 227** — `getMPrecvdBits` calls `txrxdmainit` twice inside the V.90
+* **Finding F227** — `getMPrecvdBits` calls `txrxdmainit` twice inside the V.90
   branch. The finding rules it out itself: it is idempotent, so this is wasted
   work rather than a defect, recorded so a reconstruction that tidied it would
   still be caught.
-* **Finding 425** — `moh_recvd` compared signed. Proved equivalent over every
+* **Finding F425** — `moh_recvd` compared signed. Proved equivalent over every
   input; both readings reach the same block.
-* **Finding 1119** — `V34DisconnectThreshTable`'s unsigned `cmp $0x7 / jbe`
+* **Finding F1119** — `V34DisconnectThreshTable`'s unsigned `cmp $0x7 / jbe`
   looks like a signed/unsigned slip and is the **correct** bound: it rejects
   negative and above-7 alike and defaults to index 3.
-* **Finding 819** — the V.92 `FRNDINT` ceiling has no guard on the sign, and
+* **Finding F819** — the V.92 `FRNDINT` ceiling has no guard on the sign, and
   both forms agree on all 256 reachable values.
-* **Finding 216** — `V34SetupModulator`'s V.90 arm. This is the *retraction* of
+* **Finding F216** — `V34SetupModulator`'s V.90 arm. This is the *retraction* of
   a dead-branch claim (`D31`), not a defect: the arm is live.
-* **Finding 122** — the AGC integrator seeded from a stale return register.
+* **Finding F122** — the AGC integrator seeded from a stale return register.
   Retracted as `D34`; refuted by `xor %eax,%eax` at 0x5ac13.
-* **Findings 92, 95, 229, 650, 631, 874, 821, 865, 875, 837, 1110, 1101** —
+* **Findings F92, F95, F229, F650, F631, F874, F821, F865, F875, F837, F1110, F1101** —
   each is an inconsistency, an asymmetry or a redundancy in the original with
   no wrong behaviour shown: a zero sample treated as positive by one test and
   negative by another with no consequence measured; an equaliser precision
@@ -4754,71 +4754,71 @@ Two kinds, and they carry different information.
   store; a block memset twice; a field nothing reads; the Numerical-Recipes
   one-based array convention; a banner asymmetry invisible at debug level 0; a
   dead first write of six flags; a deliberate drain.
-* **Finding 620** — `c1959`'s poles are written high-then-low where the other
+* **Finding F620** — `c1959`'s poles are written high-then-low where the other
   seven go low-then-high. An original transcription slip and harmless: the pair
   is summed, not ordered, and the midpoint is still exactly 1959.
-* **Finding 1108, item 5** — both window lengths scaled by the linear
+* **Finding F1108, item 5** — both window lengths scaled by the linear
   equaliser's length. Measured to be what the blob does (using `dfeLength`
   breaks 2,064 checks); that it is *wrong* rather than intended is not
   established.
-* **Findings 722, 730, 750, 418, 352** — branches the object emits that nothing
+* **Findings F722, F730, F750, F418, F352** — branches the object emits that nothing
   can reach, all inlined "already there" guards the optimiser could not see
   through. Compiler-emitted dead edges, not authored defects.
-* **Finding 428's `(cap * 7) >> 14`** — looks like a divide by 2340 where 2400
+* **Finding F428's `(cap * 7) >> 14`** — looks like a divide by 2340 where 2400
   was meant. It is a strength-reduced divide that agrees with `/2400` over
   every rate index the object uses.
-* **Finding 80** — 60000 in a signed 16-bit timeout field. Works reliably
+* **Finding F80** — 60000 in a signed 16-bit timeout field. Works reliably
   because both comparisons are unsigned.
-* **Finding 61** — the initial message value 18 is a never-matches sentinel,
+* **Finding F61** — the initial message value 18 is a never-matches sentinel,
   only compared and never used as an index.
-* **Finding 289** — "the per-sample transmit route is not a function of the
-  object" was retracted by finding 319 as `D60`. The sensitivity is real but it
+* **Finding F289** — "the per-sample transmit route is not a function of the
+  object" was retracted by finding F319 as `D60`. The sensitivity is real but it
   is the *placement* of the five pointed-to blocks, not the route; D137 has it
   under `D61`. Do not file 289 as a separate defect.
-* **Findings 299, 263, 318** — stores nothing can observe: `nofBits = 0` before
+* **Findings F299, F263, F318** — stores nothing can observe: `nofBits = 0` before
   the packer writes it, `bits[crcAt] = 0` re-written by the preceding section's
   framing zero, `is_short = 0` masked by `v34modeminit`'s unconditional clear.
   All carried as equivalences, and the third measured to flip to caught when
   that clear is deleted.
-* **Finding 282** — the unmasked `sar %cl` on a sign-extended `vect_idx`. The
+* **Finding F282** — the unmasked `sar %cl` on a sign-extended `vect_idx`. The
   blob and the reconstruction agree at every swept value including -1 (shift
   30) and 100, and nothing shows a caller producing an out-of-range index.
-* **Finding 305** — cases 4 and 7 gate on `!= 0x10` where the counter advances
+* **Finding F305** — cases 4 and 7 gate on `!= 0x10` where the counter advances
   by 2, which would step over the constant from an odd start. Every writer in
   range advances by two and nothing produces an odd value, so no defect is
   shown — but this is the thread to pull if a `+= 1` writer of +0x3a4 appears.
-* **Finding 317** — "a configuration large enough to overflow prints the
+* **Finding F317** — "a configuration large enough to overflow prints the
   truncated number". The field is 16-bit and the object prints what it stored,
   so the `cwtl` is consistent rather than wrong.
-* **Findings 270 and 314** — `V34DisconnectThreshTable`'s out-of-range fallback
+* **Findings F270 and F314** — `V34DisconnectThreshTable`'s out-of-range fallback
   to entry 3 and the unsigned `jbe` that also rejects negatives are deliberate
   and consistent across two independent call sites.
 
 ### It is a defect but it is not the object's
 
-* **The reconstruction's own, since fixed** — findings 69, 73, 130, 151, 168,
-  170, 183, 185, 203, 204, 219, 546, 549, 573, 591, 593, 613, 748, 750, 721,
-  781's headline, 879's divide, 1021, 1107, 1112, 356a. Each was caught by the
+* **The reconstruction's own, since fixed** — findings F69, F73, F130, F151, F168,
+  F170, F183, F185, F203, F204, F219, F546, F549, F573, F591, F593, F613, F748, F750, F721,
+  F781's headline, 879's divide, 1021, 1107, 1112, 356a. Each was caught by the
   differential test or by codegen comparison; the object was right.
 * **Tooling** — `dis.py`, `refcheck.py`, `offcheck`, `extcheck`, `compare.py`,
   `closure.py`, `mutate.py`, `reanchor.py`, `coverage.py`, `debugaudit.py`,
   `vparse.py`, `cppstruct.py`, `decompile.sh`, and objdump's FDIVP/FDIVRP swap.
-  Findings 39, 43, 46, 49, 134, 245, 355, 370, 432, 541–545, 555–557, 570–572,
+  Findings F39, F43, F46, F49, F134, F245, F355, F370, F432, F541–545, 555–557, 570–572,
   618, 619, 637–639, 670, 690, 700, 705, 818, 860, 862, 872, 907, 940, 941,
   985, 1004, 1065, 1103, 1114 among others.
-* **Test fixtures and mutation bookkeeping** — findings 241, 242's seeding,
+* **Test fixtures and mutation bookkeeping** — findings F241, F242's seeding,
   341, 343, 349, 362, 364, 366, 374, 404, 416, 427, 429, 434, 445, 592, 713,
   714, 715, 718, 723, 724, 729, 735, 743, 744, 746, 753, 788, 920, 987, 1000,
   1064. A surviving mutation is a statement about the suite.
-* **Third-party** — finding 40's note that SpanDSP 0.0.6 ships the Bell 103
+* **Third-party** — finding F40's note that SpanDSP 0.0.6 ships the Bell 103
   presets swapped.
 * **Two sweeper inferences that the record does not make, and one it
-  contradicts** — a reading of finding 19 in which the ANSam phase reversal is
+  contradicts** — a reading of finding F19 in which the ANSam phase reversal is
   a no-op half the time (the record states the hop is 180° and this depends on
   whether a full phasor cycle spans 0x8000 or 0x10000; the record's reading is
-  not overturned by an inference); a join of finding 1146's fork `IODELAY` 48
-  with finding 1022's threshold of 86, which finding 1146 does not draw; and a
-  reading of finding 424's XMITMP self-pointer as an object bug, where the
+  not overturned by an inference); a join of finding F1146's fork `IODELAY` 48
+  with finding F1022's threshold of 86, which finding F1146 does not draw; and a
+  reading of finding F424's XMITMP self-pointer as an object bug, where the
   finding presents it as a reconstruction ambiguity. All three are recorded as
   *not established* rather than filed.
 
@@ -4929,7 +4929,7 @@ matter not at all today. Roughly 100 entries.
 
 ## Ranked: could it touch CONNECT SUCCESS or RATE?
 
-### 1. D77 — V.34 does not connect below `IODELAY` 86. CONNECT. Measured.
+### F1. D77 — V.34 does not connect below `IODELAY` 86. CONNECT. Measured.
 
 The only entry with a **measured** connect failure in V.34. Arm 47
 `TX_PHASE2_ANS` reads an all-ones `fsk.sr` from a carrierless slicer as
@@ -4945,7 +4945,7 @@ produces**, and this is the only such race in the record.
 *Fix:* already host-side (`SLMODEMD_IODELAY`). The action is to measure, not to
 code — see the experiment below.
 
-### 2. D72 — the echo canceller may overrun its history at HIGH `IODELAY`. SUSPECTED.
+### F2. D72 — the echo canceller may overrun its history at HIGH `IODELAY`. SUSPECTED.
 
 The buffer is sized in the constructor from the delay at that moment;
 `setEchoDelay` then raises the delay at runtime from `MDMPRM_IODELAY` **without
@@ -4957,7 +4957,7 @@ above by a suspected heap overrun.** If the transport pushes you up to escape
 D77 you may walk into D72. That pincer, not either entry alone, is the most
 actionable thing in this appendix.
 
-### 3. D137 / D61 — the object's answer depends on where its memory is. UNPROVEN CAUSE.
+### F3. D137 / D61 — the object's answer depends on where its memory is. UNPROVEN CAUSE.
 
 **The only recorded mechanism in the object that can give different results
 from identical inputs.** Byte-identical objects placed differently produced
@@ -4971,11 +4971,11 @@ object placement, object-to-block distance, neighbourhood contents within
 If it holds outside the fixture, then which filter block the receiver selects
 depends on where `malloc` put things, and that varies between processes. **That
 is "five identical calls, three different outcomes" exactly.** It is also the
-weakest-evidenced item here, and finding 324 records that once both sides are
+weakest-evidenced item here, and finding F324 records that once both sides are
 brought up congruently the two pointers agree — so this may be a fixture
 artefact and not a live nondeterminism. Do not quote it as established.
 
-### 4. D112 — `PPSEG` adds symbols-at-baud to a count of 4-sample ticks. RATE, and worse the faster you go.
+### F4. D112 — `PPSEG` adds symbols-at-baud to a count of 4-sample ticks. RATE, and worse the faster you go.
 
 `0x68154` sums `q`, a count of symbols at the **negotiated** baud, with
 `filtdelay`, a count of 4-sample ticks. **Dimensionally correct only at 2400
@@ -4993,7 +4993,7 @@ and vanishes at 2400.
 **It predicts a discriminating experiment** (below), which is why it is ranked
 above entries with better evidence.
 
-### 5. D29, D30, D32 — a family that starts from uninitialised memory. VARIANCE.
+### F5. D29, D30, D32 — a family that starts from uninitialised memory. VARIANCE.
 
 * **D29** — `V34TimingFiltersInit` zeroes eighty *shorts* over a region holding
   a 40-short history followed by 40 *ints*, so **the upper twenty entries of
@@ -5015,7 +5015,7 @@ precisely what decides whether you connect and at what rate.
 
 **This is the cheapest hypothesis to test and I would test it first.**
 
-### 6. D84 — the predictor rounds the real axis the wrong way, every symbol. RATE.
+### F6. D84 — the predictor rounds the real axis the wrong way, every symbol. RATE.
 
 `receiver`'s complex predictor forms the real accumulator as
 `b.hist_i - (0x2000 + a.hist_q)`, applying the rounding constant with the wrong
@@ -5026,7 +5026,7 @@ margin is what buys the top rate. Receive-only, so it fits the asymmetry.
 Reproduced; the consequence is not separable from the rest of the chain without
 a full-path measurement nobody has made.
 
-### 7. D114 — the slicer's squared distance truncates to 16 bits. RATE, speculative.
+### F7. D114 — the slicer's squared distance truncates to 16 bits. RATE, speculative.
 
 A constellation point far enough from the target wraps to a small distance and
 can win, producing a symbol error. Most likely during acquisition, before the
@@ -5034,7 +5034,7 @@ equaliser converges, which is when errors are most expensive. The metric exists
 **twice** — inlined in `decoderv34` as well as in `decision` — so a fix to one
 would not reach the other. Unmeasured against a real V.34 constellation.
 
-### 8. The rest of group 3, and why they are lower
+### F8. The rest of group 3, and why they are lower
 
 * **D26, D27** — echo canceller delay-line handling. Both argued dormant with
   numbers: D26's window is `taps` samples of provably zero output, D27's single
@@ -5102,49 +5102,49 @@ new hardware.
 
 *Batch of 2026-08-11, from `V90Demodulator::sessionTermination` (blob 0x1ab30). **Reachability: FIRES** whenever `TIMING_HISTORY_EVALUATION_ENABLED` is zero and the call reached the data state. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1274.** The other four strings this function passes to `edprintf` -- .rodata.str1.4 +0x4754, +0x47c0, +0x4814, +0x4868 and +0x48a0 -- all end `\r\n`; the one at +0x48ec ends `\n`. `edprintf` encodes its argument byte for byte, so the two produce a different character count on the diagnostic channel, and whether the manufacturer's decoder cares is not something this tree can measure. Reproduced rather than tidied.
+**Finding F1274.** The other four strings this function passes to `edprintf` -- .rodata.str1.4 +0x4754, +0x47c0, +0x4814, +0x4868 and +0x48a0 -- all end `\r\n`; the one at +0x48ec ends `\n`. `edprintf` encodes its argument byte for byte, so the two produce a different character count on the diagnostic channel, and whether the manufacturer's decoder cares is not something this tree can measure. Reproduced rather than tidied.
 
 ## D220 ⚠ `V90Demapper::V90Demapper` stores both `sysdep_malloc` results without checking either, and its own destructor is the only code that ever tests them
 
 *Batch of 2026-08-11, from `V90Demapper::V90Demapper` (blob 0x30640/0x30710). **Reachability: FIRES** on allocation failure only. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1303.** `mov %eax,0x1c(%esi)` and `mov %eax,0x20(%esi)` follow their calls with no `test`, so a failed allocation leaves the object holding NULL where `count_24` says there are `levels` elements; `~V90Demapper`'s two null tests then read as guards against a state the constructor is not supposed to be able to produce, and they are the only ones anywhere. With `levels == 0` the same two calls ask for `levels * 4` and `levels` bytes -- two zero-byte blocks taken and freed for nothing, which `t_v90demapctor.cpp` sweeps and both sides do identically. Reproduced rather than repaired.
+**Finding F1303.** `mov %eax,0x1c(%esi)` and `mov %eax,0x20(%esi)` follow their calls with no `test`, so a failed allocation leaves the object holding NULL where `count_24` says there are `levels` elements; `~V90Demapper`'s two null tests then read as guards against a state the constructor is not supposed to be able to produce, and they are the only ones anywhere. With `levels == 0` the same two calls ask for `levels * 4` and `levels` bytes -- two zero-byte blocks taken and freed for nothing, which `t_v90demapctor.cpp` sweeps and both sides do identically. Reproduced rather than repaired.
 ## D225 ⚠ `V92EchoCanceller`'s constructor reads `echoDelay` and `echoLength` before anything has written them, and folds the difference into a value it then discards
 
 *Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1314.** The constructor's third instruction group is `setEchoDelay(params->V92_ECHO_INITIAL_DELAY)` inlined -- `mov 0x38(%esi),%ecx` at +0x35 loads `echoDelay` out of storage `sysdep_malloc` has just returned, and `add %edx,0x2c(%esi)` folds `delay0 - garbage` into `echoLength`, which is equally uninitialised. The result is DEAD: the tail call to `reset()` rebuilds `echoLength` from `filterLength`, `echoDelay` and the parameter block, and the history's allocated length at +0x1c is built from +0x18 and +0x38 and never from +0x2c. Reproduced rather than tidied, and reproducing it depends on `-fno-lifetime-dse` (finding 1224). Not D72: that entry is about the buffer this constructor sizes, not about what it reads before sizing it.
+**Finding F1314.** The constructor's third instruction group is `setEchoDelay(params->V92_ECHO_INITIAL_DELAY)` inlined -- `mov 0x38(%esi),%ecx` at +0x35 loads `echoDelay` out of storage `sysdep_malloc` has just returned, and `add %edx,0x2c(%esi)` folds `delay0 - garbage` into `echoLength`, which is equally uninitialised. The result is DEAD: the tail call to `reset()` rebuilds `echoLength` from `filterLength`, `echoDelay` and the parameter block, and the history's allocated length at +0x1c is built from +0x18 and +0x38 and never from +0x2c. Reproduced rather than tidied, and reproducing it depends on `-fno-lifetime-dse` (finding F1224). Not D72: that entry is about the buffer this constructor sizes, not about what it reads before sizing it.
 
 ## D226 🐛 `V92EchoCanceller`'s constructor divides by its second argument and does not guard it
 
-*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0), +0x98. **Reachability: CANNOT FIRE** on the shipped path -- finding 1188 threads the argument back to `VPCMXF_Create`'s `(int)trunc(arg4 * 8.0 + 0.5)` and reads it as 40. Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0 / 0x111e0), +0x98. **Reachability: CANNOT FIRE** on the shipped path -- finding F1188 threads the argument back to `VPCMXF_Create`'s `(int)trunc(arg4 * 8.0 + 0.5)` and reads it as 40. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1188 already names this** as "a divide-by-zero, a different defect, not an overrun"; it is registered here so that the constructor's own entry exists. `div %edi` takes the block length straight from the argument, so a caller passing zero traps before the second allocation. Reproduced: the reconstruction divides in the same place and adds no check.
+**Finding F1188 already names this** as "a divide-by-zero, a different defect, not an overrun"; it is registered here so that the constructor's own entry exists. `div %edi` takes the block length straight from the argument, so a caller passing zero traps before the second allocation. Reproduced: the reconstruction divides in the same place and adds no check.
 
 ## D227 ⚠ the echo canceller's construction notice says "constraction"
 
 *Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), .rodata.str1.4+0x30ac. **Reachability: FIRES** whenever `dsplibs_debug_level` is above 1. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1310.** The string is `"V92EchoCanceller: constraction\r\n"`. It is the original's typo, it goes through `dsplibs_debug_printf` unencoded, and it is reproduced character for character -- `v92ec`'s "the construction notice's typo is corrected" mutation exists to make sure a later reader cannot quietly fix it.
+**Finding F1310.** The string is `"V92EchoCanceller: constraction\r\n"`. It is the original's typo, it goes through `dsplibs_debug_printf` unencoded, and it is reproduced character for character -- `v92ec`'s "the construction notice's typo is corrected" mutation exists to make sure a later reader cannot quietly fix it.
 
 ## D228 🐛 a zero `V92_ECHO_FILTER_LENGTH` makes the constructor's `filterLength - 1` wrap, and at a zero initial delay the history allocation wraps with it
 
-*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x62 and +0x8f. **Reachability: CANNOT FIRE** at the shipped `V92_ECHO_FILTER_LENGTH` of 180 (finding 1188); it needs a parameter file, which slmodemd never supplies (finding 879). Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x62 and +0x8f. **Reachability: CANNOT FIRE** at the shipped `V92_ECHO_FILTER_LENGTH` of 180 (finding F1188); it needs a parameter file, which slmodemd never supplies (finding F879). Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1312.** `lea -0x1(%eax),%ecx` stores `filterLength - 1` at +0x18 as an unsigned word, and the history length adds `echoDelay` to it. At `filterLength == 0` that term is 0xffffffff; an initial delay of 1 or more brings the sum back into range and the object allocates a small buffer, which the differential test drives on both sides. An initial delay of 0 leaves 0xffffffff, and the `sysdep_malloc` four instructions later is asked for 16 GB with no check on the result. Reproduced, unguarded, and not driven.
+**Finding F1312.** `lea -0x1(%eax),%ecx` stores `filterLength - 1` at +0x18 as an unsigned word, and the history length adds `echoDelay` to it. At `filterLength == 0` that term is 0xffffffff; an initial delay of 1 or more brings the sum back into range and the object allocates a small buffer, which the differential test drives on both sides. An initial delay of 0 leaves 0xffffffff, and the `sysdep_malloc` four instructions later is asked for 16 GB with no check on the result. Reproduced, unguarded, and not driven.
 
 ## D229 🐛 a negative `V92_ECHO_FILTER_LENGTH` becomes a four-billion tap count and an unchecked allocation
 
 *Batch of 2026-08-11, from `V92EchoCanceller::V92EchoCanceller` (blob 0x110a0), +0x49..+0x85. **Reachability: CANNOT FIRE** at the shipped 180, for D228's reason. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1312.** The field is signed -- the object rounds it with `test/js/add $0x3/and $0xfffffffc`, which is `x / 4 * 4` on an `int` -- and the rounded value is then stored into an UNSIGNED `filterLength` and shifted left by two to size `echoCoeff`. Any negative parameter therefore asks `sysdep_malloc` for about 16 GB, and the result is used without a null test by the `reset()` this constructor tail-calls. Reproduced; the arm is the reason the signed rounding cannot be told apart from the `& ~3` that D72 and finding 1188 write, since no test that reaches it survives.
+**Finding F1312.** The field is signed -- the object rounds it with `test/js/add $0x3/and $0xfffffffc`, which is `x / 4 * 4` on an `int` -- and the rounded value is then stored into an UNSIGNED `filterLength` and shifted left by two to size `echoCoeff`. Any negative parameter therefore asks `sysdep_malloc` for about 16 GB, and the result is used without a null test by the `reset()` this constructor tail-calls. Reproduced; the arm is the reason the signed rounding cannot be told apart from the `& ~3` that D72 and finding F1188 write, since no test that reaches it survives.
 ---
 
 ## D210 🐛 💤 `~V92Transmitter` nulls one of the six pointers it releases and leaves the other five dangling
 
 *V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only unless a caller is found that destroys twice.*
 
-**Finding 1281.** `movl $0x0,0x4c(%esi)` at .text+0x53aa6 follows the precoder's release and nothing follows the other five, so a second destruction frees +0x08, +0x48, +0x58, +0x50 and +0x54 again and skips +0x4c. The asymmetry is the object's; both halves are reproduced. D181 is the same shape one level down, and no path in the object reaches either -- hence 💤.
+**Finding F1281.** `movl $0x0,0x4c(%esi)` at .text+0x53aa6 follows the precoder's release and nothing follows the other five, so a second destruction frees +0x08, +0x48, +0x58, +0x50 and +0x54 again and skips +0x4c. The asymmetry is the object's; both halves are reproduced. D181 is the same shape one level down, and no path in the object reaches either -- hence 💤.
 
 ---
 
@@ -5152,7 +5152,7 @@ new hardware.
 
 *V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: documentation only.*
 
-**Findings 1281, 1288.** Two pointers in the bit-to-symbol stage, one in the phase 4 modulator and eleven in the modulator, every one left holding a freed address; the modulator's own member scrambler is the fifteenth, through `Scrambler`'s destructor, which its header already records. The three fixtures drive every null combination of those pointers and assert `harness_alloc.free_null` at zero, which is what says the guards exist; nothing drives a second destruction, because a double free is what it would be measuring.
+**Findings F1281, F1288.** Two pointers in the bit-to-symbol stage, one in the phase 4 modulator and eleven in the modulator, every one left holding a freed address; the modulator's own member scrambler is the fifteenth, through `Scrambler`'s destructor, which its header already records. The three fixtures drive every null combination of those pointers and assert `harness_alloc.free_null` at zero, which is what says the guards exist; nothing drives a second destruction, because a double free is what it would be measuring.
 
 ---
 
@@ -5160,7 +5160,7 @@ new hardware.
 
 *V.92 modulator batch. **Reachability: UNMEASURED.** Status: OBSERVED, not driven. Fix class: needs a decision -- the allocator never fails in the harness.*
 
-**Findings 1280, 1285.** Six, two, one and eleven `sysdep_malloc` calls, and in twelve of the twenty the very next instruction is a constructor call on the returned pointer -- `movl $0x60; call sysdep_malloc; call V92Transmitter::V92Transmitter` at .text+0x4deee is the shape. The same family as D171, D175 and D180, and the same reasoning: a null return faults at the sub-object's first store rather than being deferred. The five raw buffers are worse only in that nothing writes through them until a member this tree has not written runs.
+**Findings F1280, F1285.** Six, two, one and eleven `sysdep_malloc` calls, and in twelve of the twenty the very next instruction is a constructor call on the returned pointer -- `movl $0x60; call sysdep_malloc; call V92Transmitter::V92Transmitter` at .text+0x4deee is the shape. The same family as D171, D175 and D180, and the same reasoning: a null return faults at the sub-object's first store rather than being deferred. The five raw buffers are worse only in that nothing writes through them until a member this tree has not written runs.
 
 ---
 
@@ -5168,7 +5168,7 @@ new hardware.
 
 *V.92 modulator batch. **Reachability: UNMEASURED** -- it needs a call to `nofBitsForNextTime` or `setSymbolsBlockSize` before `reset`, and no caller has been read. Status: OBSERVED, not driven. Fix class: none proposed.*
 
-**Finding 1287.** `reset(V92MappingParams *)` at .text+0x4e070 fills +0x14 from the mapping parameters' first word and the constructor at +0x4ded0 does not, so between construction and the first `reset` the field holds whatever `sysdep_malloc` left. `nofBitsForNextTime` (+0x4e0c0) and `setSymbolsBlockSize` (+0x4e130) both `imul` by it and return the product. The same shape as D164 and as finding 1248's hole in `V92ModulusEncoder`.
+**Finding F1287.** `reset(V92MappingParams *)` at .text+0x4e070 fills +0x14 from the mapping parameters' first word and the constructor at +0x4ded0 does not, so between construction and the first `reset` the field holds whatever `sysdep_malloc` left. `nofBitsForNextTime` (+0x4e0c0) and `setSymbolsBlockSize` (+0x4e130) both `imul` by it and return the product. The same shape as D164 and as finding F1248's hole in `V92ModulusEncoder`.
 
 ---
 
@@ -5176,67 +5176,67 @@ new hardware.
 
 *V.92 modulator batch. **Reachability: UNMEASURED** -- no member that reads either word has been written. Status: OBSERVED, not driven. Fix class: none proposed.*
 
-**Findings 1283, 1287.** Twenty-eight of the object's thirty-one declared fields are written between the constructor and the inlined `reset`; the other three are these two words and the two bytes of alignment at +0x0e, which no constructor would write. +0x24 and +0x3c sit between named fields on both sides rather than at the end where an alignment hole would be. Whether anything reads them before some other member fills them is a question the sixteen unwritten members hold the answer to -- hence 💤 rather than 🐛.
+**Findings F1283, F1287.** Twenty-eight of the object's thirty-one declared fields are written between the constructor and the inlined `reset`; the other three are these two words and the two bytes of alignment at +0x0e, which no constructor would write. +0x24 and +0x3c sit between named fields on both sides rather than at the end where an alignment hole would be. Whether anything reads them before some other member fills them is a question the sixteen unwritten members hold the answer to -- hence 💤 rather than 🐛.
 
 ## D230 🐛 the constructor's illegal-`modemSide` arm leaves the modulator pointer uninitialised, and the destructor then destroys it
 
 *Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0xf4 and +0x13a. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `VPcmFloModem`'s constructor at .text+0xfac0, computes the argument as `dec %ebp; sete %dl; movzbl %dl,%esi`, which is 0 or 1 and nothing else. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1323.** The digital arm writes `movl $0x0,(%esi)` and the analog arm writes the allocation; the third arm prints "V92Modem Constructor: Illegal modemSide" and returns, storing nothing. `~V92Modem` then reads +0x000, finds whatever the enclosing storage held, and calls `_ZN12V92ModulatorD1Ev` on it followed by `sysdep_free`. Reproduced exactly, and `t_v92modem.cpp` asserts the word is still the fixture's seed before nulling it to make the destructor safe.
+**Finding F1323.** The digital arm writes `movl $0x0,(%esi)` and the analog arm writes the allocation; the third arm prints "V92Modem Constructor: Illegal modemSide" and returns, storing nothing. `~V92Modem` then reads +0x000, finds whatever the enclosing storage held, and calls `_ZN12V92ModulatorD1Ev` on it followed by `sysdep_free`. Reproduced exactly, and `t_v92modem.cpp` asserts the word is still the fixture's seed before nulling it to make the destructor safe.
 
 ## D231 🐛 `~V92Modem` nulls one of the five pointers it releases and leaves the other four dangling
 
 *Batch of 2026-08-11, from `V92Modem::~V92Modem` (blob 0x13a80 / 0x13990), +0x44..+0x7f. **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1322**, and the same family as D210 for `~V92Transmitter`. `movl $0x0,0x8(%esi)` writes back over `phase2Info` and there is no store anywhere near the other four -- `mappingParams`, `modulator`, `cp` and `parameters` all keep the addresses they were freed at. Harmless as shipped, because the object is an embedded member of `VPcmFloModem` that is destroyed once and never reused, but a second destruction would double-free four blocks and destroy three freed objects. Reproduced; `-fno-lifetime-dse` is what keeps our single store from being optimised away (finding 1272).
+**Finding F1322**, and the same family as D210 for `~V92Transmitter`. `movl $0x0,0x8(%esi)` writes back over `phase2Info` and there is no store anywhere near the other four -- `mappingParams`, `modulator`, `cp` and `parameters` all keep the addresses they were freed at. Harmless as shipped, because the object is an embedded member of `VPcmFloModem` that is destroyed once and never reused, but a second destruction would double-free four blocks and destroy three freed objects. Reproduced; `-fno-lifetime-dse` is what keeps our single store from being optimised away (finding F1272).
 
 ## D232 🐛 `V92Modem`'s constructor uses five `sysdep_malloc` results with no null test
 
 *Batch of 2026-08-11, from `V92Modem::V92Modem` (blob 0x13d30 / 0x13ec0), +0x67, +0x8a, +0xb4, +0xc6 and +0x141. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
 
-Each allocation is followed immediately by a constructor call or, for the 0xb4 parameter block, by `V92createConstellations` -- and in every case by a store into `*this` -- with no `test` between them, so a failed allocation is dereferenced at once. The same shape as D177's family and as finding 1303's reading of `~V90Demapper`'s guards. Reproduced; the null tests that would have to precede these five are not there.
+Each allocation is followed immediately by a constructor call or, for the 0xb4 parameter block, by `V92createConstellations` -- and in every case by a store into `*this` -- with no `test` between them, so a failed allocation is dereferenced at once. The same shape as D177's family and as finding F1303's reading of `~V90Demapper`'s guards. Reproduced; the null tests that would have to precede these five are not there.
 
 ## D221 ⚠ `V90Phase3Demodulator`'s constructor zeroes +0x3cc and then calls `reset`, which zeroes it again
 
 *Batch of 2026-08-11, from `V90Phase3Demodulator::V90Phase3Demodulator` (blob 0x212c0/0x21430). **Reachability: FIRES** on every construction. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1305.** `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two member constructor calls, and the constructor's last act is `reset(...)`, which has `movl $0x0,0x3cc(%ebx)` of its own. The first store is dead in every execution. It is reproduced because the instruction is in the object and because its POSITION -- between two member constructions, which is what makes it a mem-initializer rather than a body statement -- is the evidence for where the field is declared. The cost of the redundancy is one store per construction and there is one construction per call.
+**Finding F1305.** `mov %ecx,0x3cc(%ebx)` with `%ecx` zero sits between the two member constructor calls, and the constructor's last act is `reset(...)`, which has `movl $0x0,0x3cc(%ebx)` of its own. The first store is dead in every execution. It is reproduced because the instruction is in the object and because its POSITION -- between two member constructions, which is what makes it a mem-initializer rather than a body statement -- is the evidence for where the field is declared. The cost of the redundancy is one store per construction and there is one construction per call.
 
 ## D222 ⚠ `~V90Phase3Demodulator` frees two pointers and nulls neither, so a second destruction double-frees
 
 *Batch of 2026-08-11, from `V90Phase3Demodulator::~V90Phase3Demodulator` (blob 0x20cb0/0x20c00). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1306.** Both arms are `test`/`jne` then destroy-and-free, with no store back to +0x3f0 or +0x428 afterwards, so the guards protect against a pointer the constructor never wrote rather than against re-entry. `~V90Demodulator` has the same shape across thirteen slots and `V90Modulator`'s destructor across five, so it is the object's house style and not a local slip. Reproduced rather than repaired; `t_v90rxctor.cpp` asserts the object is byte-identical after the destructor runs, which is what pins the absence of the stores.
+**Finding F1306.** Both arms are `test`/`jne` then destroy-and-free, with no store back to +0x3f0 or +0x428 afterwards, so the guards protect against a pointer the constructor never wrote rather than against re-entry. `~V90Demodulator` has the same shape across thirteen slots and `V90Modulator`'s destructor across five, so it is the object's house style and not a local slip. Reproduced rather than repaired; `t_v90rxctor.cpp` asserts the object is byte-identical after the destructor runs, which is what pins the absence of the stores.
 
 ## D223 ⚠ `~V90Demodulator` releases thirteen slots and nulls none of them, so a second destruction double-frees all thirteen
 
 *Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010). **Reachability: latent** -- nothing in the reconstructed graph destroys one twice. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1309.** Each of the eight destroy-and-free arms and each of the five bare frees is followed by no store back to the slot, so the thirteen pointers are still there when the function returns and every one of them is stale. `V90Modulator`'s destructor, `V90BitsToSymbol`'s and `~V90Phase3Demodulator` (D222) all have the same shape, so it is the object's house style rather than a local slip. `t_v90demctor.cpp` asserts the object is byte-identical after the destructor except at +0x094, which is what pins the absence of the stores.
+**Finding F1309.** Each of the eight destroy-and-free arms and each of the five bare frees is followed by no store back to the slot, so the thirteen pointers are still there when the function returns and every one of them is stale. `V90Modulator`'s destructor, `V90BitsToSymbol`'s and `~V90Phase3Demodulator` (D222) all have the same shape, so it is the object's house style rather than a local slip. `t_v90demctor.cpp` asserts the object is byte-identical after the destructor except at +0x094, which is what pins the absence of the stores.
 
 ## D224 ⚠ Destroying a `V90Demodulator` prints four diagnostics and writes back a persisted modem parameter
 
 *Batch of 2026-08-11, from `V90Demodulator::~V90Demodulator` (blob 0x1ad70/0x1b010) via `sessionTermination` (0x1ab30). **Reachability: FIRES** on every destruction. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1309.** The destructor's first act is an unconditional `sessionTermination()`, which is not a teardown helper: it emits four `edprintf` diagnostics and stores into `params->modemParams->clockDeviation`. So tearing a session down has a side effect on state that outlives the object, and it happens whether or not the caller wanted a session terminated -- a `delete` issued during error recovery writes the same parameter a clean shutdown does. Reproduced rather than repaired; D200 records a separate defect in one of the four strings.
+**Finding F1309.** The destructor's first act is an unconditional `sessionTermination()`, which is not a teardown helper: it emits four `edprintf` diagnostics and stores into `params->modemParams->clockDeviation`. So tearing a session down has a side effect on state that outlives the object, and it happens whether or not the caller wanted a session terminated -- a `delete` issued during error recovery writes the same parameter a clean shutdown does. Reproduced rather than repaired; D200 records a separate defect in one of the four strings.
 
 ## D235 🐛 `V90Modem`'s constructor leaves BOTH the modulator and the demodulator pointers uninitialised on an illegal `side`, and the destructor then destroys and frees whatever it finds
 
 *Batch of 2026-08-11, from `V90Modem::V90Modem` (blob 0x194e0 / 0x19740), +0xfe onwards. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `VPcmFloModem`'s constructor, passes its own `side` argument through unchanged, and `VPCMXF_Create` computes that as `sete %al`, which is 0 or 1 and nothing else. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1332.** The same shape as D230 for `V92Modem`, one class up and twice as bad: `V92Modem`'s third arm leaves ONE word uninitialised, and this one leaves TWO. The switch is `test`/`je` for 0, `dec`/`je` for 1, then a fall-through that prints "V90Modem Constructor: Illegal modemSide" and returns; +0x00 and +0x04 keep whatever the storage held. `~V90Modem` then tests each, calls `_ZN12V90ModulatorD1Ev` or `_ZN14V90DemodulatorD1Ev` on it, and frees it. Reproduced exactly. `test/unit/t_v90modemctor.cpp` drives `side = 2` and asserts our allocator counters EQUAL the blob's rather than asserting they are zero, which is the only assertion that is true of the object.
+**Finding F1332.** The same shape as D230 for `V92Modem`, one class up and twice as bad: `V92Modem`'s third arm leaves ONE word uninitialised, and this one leaves TWO. The switch is `test`/`je` for 0, `dec`/`je` for 1, then a fall-through that prints "V90Modem Constructor: Illegal modemSide" and returns; +0x00 and +0x04 keep whatever the storage held. `~V90Modem` then tests each, calls `_ZN12V90ModulatorD1Ev` or `_ZN14V90DemodulatorD1Ev` on it, and frees it. Reproduced exactly. `test/unit/t_v90modemctor.cpp` drives `side = 2` and asserts our allocator counters EQUAL the blob's rather than asserting they are zero, which is the only assertion that is true of the object.
 
 ## D236 🐛 `VPCMXF_Create` constructs into its allocation before it tests it for NULL
 
 *Batch of 2026-08-11, from `VPCMXF_Create` (blob 0xfcf0), +0xaf and +0xe2. **Reachability: CANNOT FIRE** unless `sysdep_malloc` returns NULL, which slmodemd's wrapper does only on a failed `malloc`. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1333.** `call sysdep_malloc` at 0xfd9f, `call _ZN12VPcmFloModemC1E...` at 0xfdcd with nothing between them, and `test %ebx,%ebx` at 0xfdd2 -- so on a failed allocation the 651-byte constructor runs over a null pointer and the process is gone before the "new VPcmFloModem() failed." message it would have printed. The guard is real code and it is unreachable in the only circumstance it was written for. Reproduced where it is rather than moved to where it would work: moving it is a different function, and the same family as D232 for `V92Modem`'s five allocations.
+**Finding F1333.** `call sysdep_malloc` at 0xfd9f, `call _ZN12VPcmFloModemC1E...` at 0xfdcd with nothing between them, and `test %ebx,%ebx` at 0xfdd2 -- so on a failed allocation the 651-byte constructor runs over a null pointer and the process is gone before the "new VPcmFloModem() failed." message it would have printed. The guard is real code and it is unreachable in the only circumstance it was written for. Reproduced where it is rather than moved to where it would work: moving it is a different function, and the same family as D232 for `V92Modem`'s five allocations.
 
 ## D237 ⚠ `~VPcmFloModem` exists in the blob as two global symbols and in our object as none
 
 *Batch of 2026-08-11, from `VPcmFloModem::~VPcmFloModem` (blob 0xd0a0 D1, 0xd030 D2, 0x61 = 97 bytes each). **Reachability: n/a** -- this is a symbol-table difference, not a behavioural one. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1334.** The destructor is IMPLICITLY DECLARED on both sides -- it is six member destructor calls in reverse declaration order and nothing else, which is exactly what GCC generates and exactly what 0xd0a0 contains. An implicit destructor is implicitly inline, and our build has one call site for it, `VPCMXF_Delete`, into which GCC inlines it and then emits no out-of-line copy. The blob has both `D1` and `D2` as ordinary global `T` symbols.
+**Finding F1334.** The destructor is IMPLICITLY DECLARED on both sides -- it is six member destructor calls in reverse declaration order and nothing else, which is exactly what GCC generates and exactly what 0xd0a0 contains. An implicit destructor is implicitly inline, and our build has one call site for it, `VPCMXF_Delete`, into which GCC inlines it and then emits no out-of-line copy. The blob has both `D1` and `D2` as ordinary global `T` symbols.
 
 **AND NOTHING IN THE BLOB CALLS EITHER OF THEM.** `objdump -dr` over the whole 1.2 MB finds ZERO `R_386_PC32` relocations against `_ZN12VPcmFloModemD1Ev` or `D2Ev`; the blob's own `VPCMXF_Delete` at 0xf6c0 inlines the six calls exactly as ours does. So the blob's two symbols are DEAD CODE -- GCC 3.4.2 emitted an out-of-line copy of an inline function nothing referenced, and modern GCC does not -- and `tools/closure.py dp_vpcm_init --missing` reporting 0 symbols and 0 bytes is CORRECT rather than a measurement artefact, because the pair is in no call graph to be missing from. Neither `debugaudit.py --missing` nor `coverage.py` lists them either. It is filed as a deviation because the SYMBOL TABLES differ and a count taken symbol-by-symbol will see it; the behavioural consequence is nil, and 194 of the blob's own bytes are unreachable in the blob. `test/unit/t_vpcmctor.cpp` drives the blob's `D1` directly by symbol, so the code at 0xd0a0 is differentially tested against ours even though ours lives inside `VPCMXF_Delete`.
 
@@ -5246,7 +5246,7 @@ Neither way of forcing the symbols out is right: an out-of-line definition canno
 
 *Batch of 2026-08-11, from `V90AutoDigitalImpDetector::setConnectionType` (blob 0x40290, 97 bytes), +0x0f onwards. **Reachability: unmeasured** -- no caller of this method is written yet. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1362.** `reset` and `setConnectionType` install the same two sets of four values on the same test, and they do not agree about the fourth. `reset` writes +0xa978 on both arms -- 1 when the connection type is 2 and 0 otherwise. `setConnectionType` writes it only on the first arm: its else path is three stores, `0xa97c`, `0xa97a`, `0xa980`, and there is no fourth store anywhere in the ninety-seven bytes. So calling it with a type other than 2 leaves +0xa978 at whatever the last type-2 call put there, and the object's state after `setConnectionType(0)` depends on its history where after `reset(_, _, 0)` it does not. Reproduced exactly; the mutation that ADDS the missing store is caught by `t_v90adid`, which is what makes the asymmetry a measurement rather than a reading.
+**Finding F1362.** `reset` and `setConnectionType` install the same two sets of four values on the same test, and they do not agree about the fourth. `reset` writes +0xa978 on both arms -- 1 when the connection type is 2 and 0 otherwise. `setConnectionType` writes it only on the first arm: its else path is three stores, `0xa97c`, `0xa97a`, `0xa980`, and there is no fourth store anywhere in the ninety-seven bytes. So calling it with a type other than 2 leaves +0xa978 at whatever the last type-2 call put there, and the object's state after `setConnectionType(0)` depends on its history where after `reset(_, _, 0)` it does not. Reproduced exactly; the mutation that ADDS the missing store is caught by `t_v90adid`, which is what makes the asymmetry a measurement rather than a reading.
 
 ## D256 🐛 `addReceivedSampleToStorage` has no bound on the store index
 
@@ -5264,28 +5264,28 @@ a malformed one.
 **The 2,111th sample writes into the next phase's row**, and a phase offered
 enough of them walks off the end of the 43,440-byte object.*
 
-**Finding 1363.** The method stores at `sampleStore[phase][int_9100[phase]]` and then increments `int_9100[phase]`, and there is no comparison against 0x83e -- or against anything else -- in the whole method. The row is 2,110 shorts; the 2,111th sample offered to a phase writes into the next phase's row, and a phase offered enough of them walks off the end of the 43,440-byte object entirely. Reproduced without a check, because adding one would be a different function. `t_v90adid` keeps the index inside the row deliberately and says so at the call site: a test that let it run away would be scribbling over its own memory rather than measuring the object's.
+**Finding F1363.** The method stores at `sampleStore[phase][int_9100[phase]]` and then increments `int_9100[phase]`, and there is no comparison against 0x83e -- or against anything else -- in the whole method. The row is 2,110 shorts; the 2,111th sample offered to a phase writes into the next phase's row, and a phase offered enough of them walks off the end of the 43,440-byte object entirely. Reproduced without a check, because adding one would be a different function. `t_v90adid` keeps the index inside the row deliberately and says so at the call site: a test that let it run away would be scribbling over its own memory rather than measuring the object's.
 
 ## D257 ⚠ `clearCamulativeAltVal` takes two arguments and reads one
 
 *Batch of 2026-08-11, from `V90AutoDigitalImpDetector::clearCamulativeAltVal` (blob 0x40270, 31 bytes). **Reachability: unmeasured.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1364.** The mangling is `Ess` -- two shorts -- and the second is never loaded: the thirty-one bytes touch `0x8(%esp)` and `0x4(%esp)` and nothing else. Its pair `clearCamulativeVal` uses both, as a (phase, code) index, so the shape of the alternate half is what explains it: the alternate accumulators are per phase and have no code dimension for a second argument to select. The parameter is declared and left unnamed in the reconstruction, and the mutation that starts using it is caught -- which is only possible because the test sweeps the second argument independently of the first.
+**Finding F1364.** The mangling is `Ess` -- two shorts -- and the second is never loaded: the thirty-one bytes touch `0x8(%esp)` and `0x4(%esp)` and nothing else. Its pair `clearCamulativeVal` uses both, as a (phase, code) index, so the shape of the alternate half is what explains it: the alternate accumulators are per phase and have no code dimension for a second argument to select. The parameter is declared and left unnamed in the reconstruction, and the mutation that starts using it is caught -- which is only possible because the test sweeps the second argument independently of the first.
 
 ## D258 ⚠ `adjustUinfoToPhaseOffset` wraps by testing for 6, not by a modulus
 
 *Batch of 2026-08-11, from `V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset` (blob 0x44940, 162 bytes), +0x54. **Reachability: unmeasured.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1365.** The walk is `cmp $0x6,%dx; setne %bl; neg %ebx; and %edx,%ebx` -- next = (phase + 1 == 6) ? 0 : phase + 1 -- so it folds back only from exactly 5. An offset of 6 reads `linMapp[6..11][ucode]`, which is inside the object but is `linMappAlt` and `prevLinMapp` rather than the mapping table, and a negative offset reads in front of the object. The write-back loop is unconditionally 0..5, so the damage is one-way. Reproduced as the object has it; `t_v90adid` sweeps the offset over 0..6 and asserts both the wrapping and the non-wrapping case were reached, and stops there because an offset of -1 would have the test reading memory it does not own.
+**Finding F1365.** The walk is `cmp $0x6,%dx; setne %bl; neg %ebx; and %edx,%ebx` -- next = (phase + 1 == 6) ? 0 : phase + 1 -- so it folds back only from exactly 5. An offset of 6 reads `linMapp[6..11][ucode]`, which is inside the object but is `linMappAlt` and `prevLinMapp` rather than the mapping table, and a negative offset reads in front of the object. The write-back loop is unconditionally 0..5, so the damage is one-way. Reproduced as the object has it; `t_v90adid` sweeps the offset over 0..6 and asserts both the wrapping and the non-wrapping case were reached, and stops there because an offset of -1 would have the test reading memory it does not own.
 
 ## D259 🐛 The code histogram's index is unmasked, and `short_8b00[5][128]` IS `int_9100[0]`
 
 *Batch of 2026-08-11, from `V90AutoDigitalImpDetector::addReceivedSampleToStorage` (blob 0x41ff0), +0x74. **Reachability: unmeasured** -- it needs a phase of 5 and a received code of 128 or more, and what codes reach this method is the caller's business. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1366.** The histogram increment is `movzwl 0x8b00(%edi,%ecx,2)` with `ecx = phase * 128 + code`, and `code` is the full `unsigned char` argument. The array is 6 x 128 shorts ending at +0x9100, which is `int_9100[0]` -- the sample-store index of phase 0. So a phase of 5 with a code of 128 increments the low half of phase 0's store index instead of a histogram bin, and codes 128..139 reach all six of those indices. The effect compounds: the corrupted index is what the NEXT sample stores at, and D256 says nothing bounds it. Both sides do it identically and `t_v90adid` compares them doing it, in `run_accumulate`, where the whole byte is swept one call at a time. The forty-block sequence masks the code to seven bits instead, and says why at the line that does it -- an index of 65,777 leaves the object, and a test that follows it there measures nothing.
+**Finding F1366.** The histogram increment is `movzwl 0x8b00(%edi,%ecx,2)` with `ecx = phase * 128 + code`, and `code` is the full `unsigned char` argument. The array is 6 x 128 shorts ending at +0x9100, which is `int_9100[0]` -- the sample-store index of phase 0. So a phase of 5 with a code of 128 increments the low half of phase 0's store index instead of a histogram bin, and codes 128..139 reach all six of those indices. The effect compounds: the corrupted index is what the NEXT sample stores at, and D256 says nothing bounds it. Both sides do it identically and `t_v90adid` compares them doing it, in `run_accumulate`, where the whole byte is swept one call at a time. The forty-block sequence masks the code to seven bits instead, and says why at the line that does it -- an index of 65,777 leaves the object, and a test that follows it there measures nothing.
 ## D250 🐛 `MTD7_COEF_9600`'s numerator puts the notch's zeros at 1328 Hz while its poles stay at 1477
 
-*Batch of 2026-08-11, from `MTD7_COEF_9600` (blob .data 0x0078da, 10 bytes), element 3. **Reachability: FIRES, and it is MEASURED** -- at 9600 Hz eleven of the sixteen DTMF pairs come back with the wrong high-group tone, and every one of the eleven is 1477 Hz being chosen when absent or missed when present. At 8000 Hz all sixteen decode. Finding 1416. Status: **FIXED behind `DSPLIB_REPRODUCE_BUGS`, 2026-08-24**. Fix class: a corrected constant.*
+*Batch of 2026-08-11, from `MTD7_COEF_9600` (blob .data 0x0078da, 10 bytes), element 3. **Reachability: FIRES, and it is MEASURED** -- at 9600 Hz eleven of the sixteen DTMF pairs come back with the wrong high-group tone, and every one of the eleven is 1477 Hz being chosen when absent or missed when present. At 8000 Hz all sixteen decode. Finding F1416. Status: **FIXED behind `DSPLIB_REPRODUCE_BUGS`, 2026-08-24**. Fix class: a corrected constant.*
 
 **THE FIX, AND WHY THIS ENTRY EARNED ONE WHERE THE OTHER THIRTEEN OF ITS FAMILY
 DID NOT.** `docs/deviation-triage.md`'s discriminator for the *defect,
@@ -5299,7 +5299,7 @@ this one passes it four times, which is why it is the single fix the triage
 recommended out of 232 bug-marked entries.
 
 `src/service/dtmf_mtd_coeffs.c` carries the constant behind the define, in the
-`src/dsp/fpm_div.c` shape. Both of finding 6810's checks hold: the reproduce
+`src/dsp/fpm_div.c` shape. Both of finding F6810's checks hold: the reproduce
 build's object is unchanged, and the default build's DIFFERS -- which is the
 half that catches a fix that is not actually live. `make phase` exit 0, 241
 passed / 0 failed.
@@ -5307,52 +5307,52 @@ passed / 0 failed.
 **What is NOT claimed.** Nothing drives the fixed build, so no test asserts
 that the corrected coefficient decodes all sixteen pairs at 9600 Hz; what is
 asserted is the object's behaviour with the object's value, exactly as before.
-The fix's benefit rests on finding 1413's derivation and 1416's measurement of
+The fix's benefit rests on finding F1413's derivation and 1416's measurement of
 the defect, not on an experiment with the fix in place. Say so before quoting
 it as a repair.*
 
-**Finding 1413.** Every one of the sixteen tables is a notch with `b1 = -round(2 cos(w0) * 2^14)` matching its own `a1 = round(1.8 cos(w0) * 2^14)` to within 0.1 Hz. This one does not: `a1 = 16751` is 1477.04 Hz and `b1 = -21143` is 1328.45 Hz, where the design gives -18613. A biquad whose zeros and poles are 150 Hz apart is not a notch at either frequency, so the 1477 Hz section of the 9600 Hz bank has a materially different response from its 8000 Hz twin. Reproduced byte for byte; `test/unit/t_dtmfrx.c` compares the table against the object's own `ref_MTD7_COEF_9600` AND asserts the count of mis-decoded pairs at each rate, so the consequence is held to as well as the bytes. No mechanism is proposed -- the value is not a bit flip of -18613, not a digit transposition of it, and and not the right coefficient for 1477 Hz at any rate this library uses (7200 gives -9114, 8000 gives -13085, 9600 gives -18613).
+**Finding F1413.** Every one of the sixteen tables is a notch with `b1 = -round(2 cos(w0) * 2^14)` matching its own `a1 = round(1.8 cos(w0) * 2^14)` to within 0.1 Hz. This one does not: `a1 = 16751` is 1477.04 Hz and `b1 = -21143` is 1328.45 Hz, where the design gives -18613. A biquad whose zeros and poles are 150 Hz apart is not a notch at either frequency, so the 1477 Hz section of the 9600 Hz bank has a materially different response from its 8000 Hz twin. Reproduced byte for byte; `test/unit/t_dtmfrx.c` compares the table against the object's own `ref_MTD7_COEF_9600` AND asserts the count of mis-decoded pairs at each rate, so the consequence is held to as well as the bytes. No mechanism is proposed -- the value is not a bit flip of -18613, not a digit transposition of it, and and not the right coefficient for 1477 Hz at any rate this library uses (7200 gives -9114, 8000 gives -13085, 9600 gives -18613).
 
 ## D251 ⚠ `reset_dtmf` clears seven of the receiver's eight filter states and leaves the low group's pre-notch alone
 
 *Batch of 2026-08-11, from `reset_dtmf` (blob 0x090a90), +0x67..+0x9c against `DTMF_MTD_detect` (0x0927b0) +0x140. **Reachability: FIRES** on every reset, but its effect is bounded -- the section is a 0.9-radius biquad, so whatever is left decays by 40 dB in about 40 samples. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1414.** `reset_dtmf` zeroes eight shorts at +0x354, +0x358, +0x35c and +0x360 -- four biquad states -- and then the eight tone states at +0x368..+0x387. `DTMF_MTD_detect` uses +0x360 as the HIGH group's pre-notch and **+0x364 as the LOW group's**, and +0x364 is in neither range. So a receiver that is reset while the low pre-notch is ringing carries that ringing into the next detection. The four cleared states are also one more than the two the code uses, which is the other half of the same off-by-one: the loop looks written for a bank that has since moved. Not reconstructed here -- `reset_dtmf` is outside this closure -- and recorded so that whoever writes it reproduces the range rather than "fixing" it.
+**Finding F1414.** `reset_dtmf` zeroes eight shorts at +0x354, +0x358, +0x35c and +0x360 -- four biquad states -- and then the eight tone states at +0x368..+0x387. `DTMF_MTD_detect` uses +0x360 as the HIGH group's pre-notch and **+0x364 as the LOW group's**, and +0x364 is in neither range. So a receiver that is reset while the low pre-notch is ringing carries that ringing into the next detection. The four cleared states are also one more than the two the code uses, which is the other half of the same off-by-one: the loop looks written for a bank that has since moved. Not reconstructed here -- `reset_dtmf` is outside this closure -- and recorded so that whoever writes it reproduces the range rather than "fixing" it.
 
 ## D252 🐛 `dtmf_modem` copies its caller's whole block into a 198-entry stack array with no bound check
 
 *Batch of 2026-08-11, from `dtmf_modem` (blob 0x0911e0), +0x26. **Reachability: CANNOT FIRE** on the shipped path -- the only caller, `cid_progress`, hands it a block whose length is set by the datapump's frame size. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1410.** The copy loop's bound is the `count` argument and nothing else; the destination is 0x18c bytes of frame. A caller passing more than 198 samples writes over the return address. The object's own `hold` buffer at +0x262 is 100 shorts, so a block above 200 would also overrun that on the realignment path, one field short of `last_digit`. Reproduced as it is, with the limit stated in `include/dsplib/dtmf_rx.h` rather than enforced, because enforcing it would change what the function does for inputs the object accepts.
+**Finding F1410.** The copy loop's bound is the `count` argument and nothing else; the destination is 0x18c bytes of frame. A caller passing more than 198 samples writes over the return address. The object's own `hold` buffer at +0x262 is 100 shorts, so a block above 200 would also overrun that on the realignment path, one field short of `last_digit`. Reproduced as it is, with the limit stated in `include/dsplib/dtmf_rx.h` rather than enforced, because enforcing it would change what the function does for inputs the object accepts.
 
 ## D253 ⚠ `band_pass` builds two five-coefficient filter sections on every call and reads neither
 
 *Batch of 2026-08-11, from `band_pass` (blob 0x090d30), +0x64..+0xa9. **Reachability: FIRES** on every call -- ten stores, no reads. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1410.** Four sections are initialised into the frame: a 244 Hz high-pass at each of the two rates (+0x30, +0x40) and the 870 Hz band-pass at each (+0x50, +0x60). Only the band-pass pair is ever loaded -- the rate test selects between +0x50 and +0x60 and nothing else takes the address of, or reads, +0x30 or +0x40. GCC 3.4.2 emitted the stores anyway. The reconstruction declares all four, so the source says what the original said; a modern compiler deletes the two dead ones again, which changes nothing observable and is why this is `⚠` and not `🐛`. What it suggests is that the high-pass was once in the chain and was removed without removing its table, which would make the DC blocker three statements further down its replacement.
+**Finding F1410.** Four sections are initialised into the frame: a 244 Hz high-pass at each of the two rates (+0x30, +0x40) and the 870 Hz band-pass at each (+0x50, +0x60). Only the band-pass pair is ever loaded -- the rate test selects between +0x50 and +0x60 and nothing else takes the address of, or reads, +0x30 or +0x40. GCC 3.4.2 emitted the stores anyway. The reconstruction declares all four, so the source says what the original said; a modern compiler deletes the two dead ones again, which changes nothing observable and is why this is `⚠` and not `🐛`. What it suggests is that the high-pass was once in the chain and was removed without removing its table, which would make the DC blocker three statements further down its replacement.
 
 ## D254 🐛 `dtmf_modem`'s sensitivity-1 path reports a block counter where a keypad code belongs
 
 *Batch of 2026-08-11, from `dtmf_modem` (blob 0x0911e0), +0x4c6. **Reachability: FIRES** when `sens == 1` and no digit string has been started (`ndigits == -1`). Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1410.** With `sens == 1` and `ndigits == -1`, any tone-bank result other than 13 is DISCARDED and replaced by `stable + 20`, where `stable` is how many consecutive blocks agreed -- so the value that goes on to be compared against `last_digit`, and to be written into the digit string if it is 9 or less, is a count and not a code. 20 and up is outside the keypad range, so the immediate effect is that nothing is ever accepted while this holds; the path only leaves itself when the bank returns exactly 13 ('D'), which then resets the machine. It reads like a diagnostic or a bring-up hook left in. Reproduced exactly, and `test/unit/t_dtmfrx.c` drives `sens == 1` from `ndigits == -1` so the arm is compared rather than merely written.
+**Finding F1410.** With `sens == 1` and `ndigits == -1`, any tone-bank result other than 13 is DISCARDED and replaced by `stable + 20`, where `stable` is how many consecutive blocks agreed -- so the value that goes on to be compared against `last_digit`, and to be written into the digit string if it is 9 or less, is a count and not a code. 20 and up is outside the keypad range, so the immediate effect is that nothing is ever accepted while this holds; the path only leaves itself when the bank returns exactly 13 ('D'), which then resets the machine. It reads like a diagnostic or a bring-up hook left in. Reproduced exactly, and `test/unit/t_dtmfrx.c` drives `sens == 1` from `ndigits == -1` so the arm is compared rather than merely written.
 ## D260 🐛 `V92PreFilter::process` runs a filter whose tap count rounded to zero, and the filter then walks off its history
 
 *Batch of 2026-08-11, from `V92PreFilter::process` (blob 0x574b0) and `V92PreFilter::setCoefficients` (blob 0x57450). **Reachability: unmeasured** -- it needs `setCoefficients` called with a count of 1, 2 or 3, and nothing this tree has reconstructed does. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1371.** `setCoefficients` stores the CALLER's counts at +0x0c and +0x10 and hands the same counts to the two filters, which round them DOWN to a multiple of four -- so a count of three leaves +0x0c non-zero and the filter behind it with no taps at all. `process` gates on +0x0c and +0x10 and not on the filters' own counts, so it calls a filter that has none, and `FloatFIR::process`'s carry-tail loop (blob 0x46c20: `dec %edx; jne`, entered with the tap count already decremented) then decrements from zero and copies backwards without a bound. The blob's loop and ours are the same loop, so this is the object's behaviour and not the reconstruction's; `test/unit/t_v92precoder.cpp` says in as many words why its sweep contains no count of 1, 2 or 3, because driving one is a segmentation fault on both sides rather than a comparison.
+**Finding F1371.** `setCoefficients` stores the CALLER's counts at +0x0c and +0x10 and hands the same counts to the two filters, which round them DOWN to a multiple of four -- so a count of three leaves +0x0c non-zero and the filter behind it with no taps at all. `process` gates on +0x0c and +0x10 and not on the filters' own counts, so it calls a filter that has none, and `FloatFIR::process`'s carry-tail loop (blob 0x46c20: `dec %edx; jne`, entered with the tap count already decremented) then decrements from zero and copies backwards without a bound. The blob's loop and ours are the same loop, so this is the object's behaviour and not the reconstruction's; `test/unit/t_v92precoder.cpp` says in as many words why its sweep contains no count of 1, 2 or 3, because driving one is a segmentation fault on both sides rather than a comparison.
 
 ## D261 🐛 `V92Precoder::process` reads two locals the search may never have written, and feeds them to both filters
 
 *Batch of 2026-08-11, from `V92Precoder::process` (blob 0x56f50), frame slots +0x18 and +0x1c. **Reachability: unmeasured** -- it needs a symbol whose candidate interval is empty or whose every candidate squares above 1e12, and what the parameter block actually holds is not modelled. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1374.** The search writes `0x18(%esp)` and `0x1c(%esp)` only from inside its accept arm, and the code after the loop reads both unconditionally: `flds 0x18(%esp)` into `FloatFIR::process` for +0x70, `flds 0x1c(%esp)` into the other for +0x74, and again for `outf[i]`. Two ways to reach that with neither written: `lo > hi`, which a negative modulus produces, and every candidate's square exceeding the initial 1e12. On the first of the four symbols the values are whatever the frame held; on a later one they are the previous symbol's, and `out[i]` is left holding whatever the caller put there. Reproduced exactly, with the `-Wmaybe-uninitialized` the honest spelling produces suppressed at the function and explained there. `t_v92precoder.cpp` drives the case where symbol 0 has run first, which is the only one where the two sides hold the same values and the comparison means anything; the first-symbol case is undrivable by construction, since it would compare two fixtures' stacks.
+**Finding F1374.** The search writes `0x18(%esp)` and `0x1c(%esp)` only from inside its accept arm, and the code after the loop reads both unconditionally: `flds 0x18(%esp)` into `FloatFIR::process` for +0x70, `flds 0x1c(%esp)` into the other for +0x74, and again for `outf[i]`. Two ways to reach that with neither written: `lo > hi`, which a negative modulus produces, and every candidate's square exceeding the initial 1e12. On the first of the four symbols the values are whatever the frame held; on a later one they are the previous symbol's, and `out[i]` is left holding whatever the caller put there. Reproduced exactly, with the `-Wmaybe-uninitialized` the honest spelling produces suppressed at the function and explained there. `t_v92precoder.cpp` drives the case where symbol 0 has run first, which is the only one where the two sides hold the same values and the comparison means anything; the first-symbol case is undrivable by construction, since it would compare two fixtures' stacks.
 
 ## D262 🐛 `V92ConvolutionEncoder::process` stores and returns two registers nothing on that path wrote
 
 *Batch of 2026-08-11, from `V92ConvolutionEncoder::process` (blob 0x54f40), +0x35. **Reachability: unmeasured** -- it needs `mode` outside 0, 1 and 2, and what supplies `mode` is a runtime value nothing here has modelled; see the caller survey below. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1375.** `process` switches on `mode` against 0, 1 and 2 to narrow `inverseMap`'s coset label to an index, and the two table lookups, the store to `state` and the `return` all sit AFTER the switch. There is no `default:` arm, so a fourth mode reaches them with the index never written -- and the object is explicit about what that costs:
+**Finding F1375.** `process` switches on `mode` against 0, 1 and 2 to narrow `inverseMap`'s coset label to an index, and the two table lookups, the store to `state` and the `return` all sit AFTER the switch. There is no `default:` arm, so a fourth mode reaches them with the index never written -- and the object is explicit about what that costs:
 
     54f75:  89 7b 04    mov %edi,0x4(%ebx)
     54f78:  89 f0       mov %esi,%eax
@@ -5361,7 +5361,7 @@ two callee-saved registers that nothing on that path assigned, stored into `stat
 
 Reproduced exactly, by leaving the index uninitialised; the `-Wmaybe-uninitialized` that produces is suppressed at the function and explained there, the same trade as D261 one class over. Initialising it, or adding a `default:`, would be a different function.
 
-**THE CALLER SURVEY IS THE BLOB'S, NOT THE RECONSTRUCTION'S, AND IT IS COMPLETE.** Within the class only `reset` writes +0x00 -- `makeStateTtransitionTable` and `process` read it and nothing else touches it -- so `mode` can only be whatever `reset` is passed. `objdump -dr` over the whole 1.2 MB finds EXACTLY ONE `R_386_PC32` against `_ZN21V92ConvolutionEncoder5resetEi`, at 0x53db3 inside `V92Transmitter::reset(V92MappingParams *)`, and no resolved same-TU call to 0x54d60 either -- which is the half that matters, because a relocation's presence only says the symbol is global while its ABSENCE is what would have hidden a caller in the same translation unit (findings 306 and 333). `process` is the same shape: one relocation, from `V92Transmitter::process` at 0x5464c, and no other call site. `makeStateTtransitionTable` likewise has exactly one, from `reset`.
+**THE CALLER SURVEY IS THE BLOB'S, NOT THE RECONSTRUCTION'S, AND IT IS COMPLETE.** Within the class only `reset` writes +0x00 -- `makeStateTtransitionTable` and `process` read it and nothing else touches it -- so `mode` can only be whatever `reset` is passed. `objdump -dr` over the whole 1.2 MB finds EXACTLY ONE `R_386_PC32` against `_ZN21V92ConvolutionEncoder5resetEi`, at 0x53db3 inside `V92Transmitter::reset(V92MappingParams *)`, and no resolved same-TU call to 0x54d60 either -- which is the half that matters, because a relocation's presence only says the symbol is global while its ABSENCE is what would have hidden a caller in the same translation unit (findings F306 and F333). `process` is the same shape: one relocation, from `V92Transmitter::process` at 0x5464c, and no other call site. `makeStateTtransitionTable` likewise has exactly one, from `reset`.
 
 And what that one caller passes is NOT a constant:
 
@@ -5377,24 +5377,24 @@ And what that one caller passes is NOT a constant:
 
 *Batch of 2026-08-11, from `V92ModulusEncoder::reset` (blob 0x550f0, 0x8a5 = 2,213 bytes), +0x3d8 and +0x401. **Reachability: FIRES** on every call -- the store is unconditional -- but is unobservable, because both arms of the `if` that follows write the same two words before anything can read them. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1376.** `reset` computes the product of the first six moduli, stores it to +0x08 as a 64-bit pair at 0x55418/0x55445, and then stores over it at 0x5567a (the `n == 8` arm, with zero) or at 0x5593c (the other arm, with `u >> (62 - n)`). It is a dead store, and it is in the object because GCC 3.4.2 does not eliminate a dead store through a pointer -- `this` may alias anything, so the store is live as far as the compiler can prove. It is reproduced rather than dropped, for the usual reason: the goal is an object that behaves identically, and "identically" includes the write a debugger or a concurrent reader would see. No test can distinguish the two, so no mutation is offered for it either; a mutation that deletes the store would be `equivalent` and unprovable by instruction text, since the blob's own text contains it.
+**Finding F1376.** `reset` computes the product of the first six moduli, stores it to +0x08 as a 64-bit pair at 0x55418/0x55445, and then stores over it at 0x5567a (the `n == 8` arm, with zero) or at 0x5593c (the other arm, with `u >> (62 - n)`). It is a dead store, and it is in the object because GCC 3.4.2 does not eliminate a dead store through a pointer -- `this` may alias anything, so the store is live as far as the compiler can prove. It is reproduced rather than dropped, for the usual reason: the goal is an object that behaves identically, and "identically" includes the write a debugger or a concurrent reader would see. No test can distinguish the two, so no mutation is offered for it either; a mutation that deletes the store would be `equivalent` and unprovable by instruction text, since the blob's own text contains it.
 
 ## D264 ⚠ `progress`'s twelfth digit is a bare quotient, bounded by nothing, while the same function advertises `m11 - 1` as its range
 
 *Batch of 2026-08-11, from `V92ModulusEncoder::progress` (blob 0x559a0, 0x11f9 = 4,601 bytes), 0x565b3 against 0x55aa1. **Reachability: FIRES** whenever the bit count admits a value at or above the product -- the parameter block carries the count and the twelve moduli as independent fields, so nothing in the object ties them together. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1379.** Case 0 extracts eleven digits with `out[k] = v % m[k]` and then stores the leftover quotient: `out[11] = (v - out[10]) / m10`, with no reduction modulo the twelfth modulus and no reference to +0x44 anywhere in the case -- it is the ONE field of the object that case 0 never reads. Cases 1 and 2 of the same function, which exist to report each digit's range, do read it: case 2 writes `out[11] = m11 - 1`. So a caller that trusts case 2's answer and feeds case 0 more bits than the product holds gets a twelfth digit past the range it was told to expect, and the eleven below it are all correctly reduced. Reproduced exactly; `test/unit/t_moduluscoder.cpp` drives bit counts both under and over the product, and the mutation that reduces `out[11]` modulo the twelfth modulus is caught, so the difference is measured rather than assumed.
+**Finding F1379.** Case 0 extracts eleven digits with `out[k] = v % m[k]` and then stores the leftover quotient: `out[11] = (v - out[10]) / m10`, with no reduction modulo the twelfth modulus and no reference to +0x44 anywhere in the case -- it is the ONE field of the object that case 0 never reads. Cases 1 and 2 of the same function, which exist to report each digit's range, do read it: case 2 writes `out[11] = m11 - 1`. So a caller that trusts case 2's answer and feeds case 0 more bits than the product holds gets a twelfth digit past the range it was told to expect, and the eleven below it are all correctly reduced. Reproduced exactly; `test/unit/t_moduluscoder.cpp` drives bit counts both under and over the product, and the mutation that reduces `out[11]` modulo the twelfth modulus is caught, so the difference is measured rather than assumed.
 ## D270 ❌ RETRACTED -- the Jd accessors read a payload-contiguous bit layout and the packers write a framed one, and that is the two DIRECTIONS rather than a defect
 
-*Message and echo batch of 2026-08-11, from `V90Jd::getRatesMask` (blob 0x1e8b0), `getConstelationSize` (0x1e900), `getMaxLookahead` (0x1e920) and their `V92Jd` counterparts at 0x11eb0, 0x11f00, 0x11f20, plus `V92Jd::getJdPhase` (0x11e60). **RETRACTED the same day it was opened**, by the unpackers landing: `unPackData` and both V.92 unpackers strip the framing and fill `bits[0..47]` flat, which is precisely the layout the accessors read (finding 1395). The entry is kept because a reference in `V90Jd.cpp` and both headers points at it, and because the reasoning is worth keeping: the accessors were written before anything was known to WRITE what they read, and the honest entry at that moment was this one. Status: EXPLAINED, both layouts driven against the blob. Fix class: none; there is nothing wrong.*
+*Message and echo batch of 2026-08-11, from `V90Jd::getRatesMask` (blob 0x1e8b0), `getConstelationSize` (0x1e900), `getMaxLookahead` (0x1e920) and their `V92Jd` counterparts at 0x11eb0, 0x11f00, 0x11f20, plus `V92Jd::getJdPhase` (0x11e60). **RETRACTED the same day it was opened**, by the unpackers landing: `unPackData` and both V.92 unpackers strip the framing and fill `bits[0..47]` flat, which is precisely the layout the accessors read (finding F1395). The entry is kept because a reference in `V90Jd.cpp` and both headers points at it, and because the reasoning is worth keeping: the accessors were written before anything was known to WRITE what they read, and the honest entry at that moment was this one. Status: EXPLAINED, both layouts driven against the blob. Fix class: none; there is nothing wrong.*
 
-**Findings 1390 and 1395.** The constructors and the packers put the rate mask at `bits[18..33]` and `bits[35..46]`, the constellation pair at `bits[47..48]` and the lookahead pair at `bits[49..50]`, around a 17-byte group frame; the accessors read `bits[0..27]`, `bits[28..29]` and `bits[30..31]`, with no frame at all, and `getJdPhase` reads `phaseBits[0..15]` where the constructor writes the Q16 phase at `phaseBits[18..33]`.  The two layouts differ by the framing and by 18 or 19 positions, so a Jd object cannot decode the message it just packed -- **and it never has to.** `unPackData` fills the flat one from the wire and the accessors read it; the packs fill the framed one and `getBitVector` hands it out.  The mapping is framed `18 + p` for payload 0..15, `35 + (p - 16)` for 16..31 and `52 + (p - 32)` for 32..47, identical in all three unpackers.  Both halves are reproduced exactly as the object has them, each is driven against the blob, and the ROUND TRIP -- pack, feed back one bit at a time, read out through the accessors -- is driven end to end in `t_v90jd.cpp` and `t_v92jd.cpp`.
+**Findings F1390 and F1395.** The constructors and the packers put the rate mask at `bits[18..33]` and `bits[35..46]`, the constellation pair at `bits[47..48]` and the lookahead pair at `bits[49..50]`, around a 17-byte group frame; the accessors read `bits[0..27]`, `bits[28..29]` and `bits[30..31]`, with no frame at all, and `getJdPhase` reads `phaseBits[0..15]` where the constructor writes the Q16 phase at `phaseBits[18..33]`.  The two layouts differ by the framing and by 18 or 19 positions, so a Jd object cannot decode the message it just packed -- **and it never has to.** `unPackData` fills the flat one from the wire and the accessors read it; the packs fill the framed one and `getBitVector` hands it out.  The mapping is framed `18 + p` for payload 0..15, `35 + (p - 16)` for 16..31 and `52 + (p - 32)` for 32..47, identical in all three unpackers.  Both halves are reproduced exactly as the object has them, each is driven against the blob, and the ROUND TRIP -- pack, feed back one bit at a time, read out through the accessors -- is driven end to end in `t_v90jd.cpp` and `t_v92jd.cpp`.
 
 ## D271 ⚠ 💤 `V92Jd::getConstelationSize` reads `phaseBits[29..30]` where `V90Jd`'s otherwise identical accessor reads `bits[28..29]`
 
 *Message and echo batch of 2026-08-11, from `V92Jd::getConstelationSize` (blob 0x11f00), +0x08 and +0x12. **Reachability: unmeasured** -- no caller has been read. Status: CONFIRMED. Fix class: none proposed.*
 
-**Findings 1391, 1395 and 1396.** Three of `V92Jd`'s four accessors are `V90Jd`'s instruction for instruction and read `bits`; this one reads +0x67 and +0x68, which in `V92Jd`'s map is the SECOND vector, and at one index higher than `V90Jd`'s reads in the first.  +0x67 is +0x1f plus the 0x48 that `phaseBits` displaces everything after it by.
+**Findings F1391, F1395 and F1396.** Three of `V92Jd`'s four accessors are `V90Jd`'s instruction for instruction and read `bits`; this one reads +0x67 and +0x68, which in `V92Jd`'s map is the SECOND vector, and at one index higher than `V90Jd`'s reads in the first.  +0x67 is +0x1f plus the 0x48 that `phaseBits` displaces everything after it by.
 
 **THE INDEX IS NOW EXPLAINED AND THE VECTOR IS NOT, so this entry narrows rather than closing.**  All four accessors read the layout the unpackers fill, and in the PHASE message payload 28 is the constant tag byte `unPackJdPhaseData` checks (`cmpb $0x1,0x66(%ebx)` at 0x128bc), so the constellation pair sits one position later there -- 29..30 -- than in the data message.  What no reading accounts for is the vector: this accessor takes the pair out of `phaseBits` while `getRatesMask` and `getMaxLookahead` take theirs out of `bits`, so a `V92Jd` that has received a DATA message answers `getConstelationSize` from the phase vector.  Reproduced; the fixture paints the two vectors with different values so that reading the right index in the wrong vector diverges.
 
@@ -5402,36 +5402,36 @@ And what that one caller passes is NOT a constant:
 
 *Message and echo batch, from `V92EchoCanceller::process` (blob 0x11870), +0x00. **Reachability: unmeasured** -- it depends on what the caller leaves in the output buffer, and no caller has been read. Status: CONFIRMED. Fix class: none proposed; reproduced as measured.*
 
-**Finding 1398.** `flds (%edx); fcomps <.rodata.cst4+0x8c = 177.0f>` is the FIRST thing the function does, before it looks at `count`, so a call with `count == 0` still dereferences the second buffer. When the comparison holds, the block is copied through unfiltered, the read cursor is stepped one per sample as though it had been filtered, and none of the state machine runs -- no counter, no `setState`. The constant is referenced from that one instruction and from nowhere else in the 1.2 MB object (`relocscan.py --at .rodata.cst4:0x8c`), so nothing in the blob says what it means. The comparison is spelled `out[0] == 177.0f` because the object branches on ZF alone and FCOM sets C3 for equal AND for unordered: a NaN in `out[0]` takes the copy path, and under the object's own `-mno-ieee-fp` that is exactly what C's `==` compiles to. It read `!(out[0] < 177.0f || out[0] > 177.0f)` until finding 2300 -- two compares where the object has one, and correct only for the `-mieee-fp` the period tier used to be built with. `t_v90leaves.cpp` drives both the exact match and the NaN; the NaN case is the modern build's one declared divergence here, `tools/gccdiverge.json` and finding 2304.
+**Finding F1398.** `flds (%edx); fcomps <.rodata.cst4+0x8c = 177.0f>` is the FIRST thing the function does, before it looks at `count`, so a call with `count == 0` still dereferences the second buffer. When the comparison holds, the block is copied through unfiltered, the read cursor is stepped one per sample as though it had been filtered, and none of the state machine runs -- no counter, no `setState`. The constant is referenced from that one instruction and from nowhere else in the 1.2 MB object (`relocscan.py --at .rodata.cst4:0x8c`), so nothing in the blob says what it means. The comparison is spelled `out[0] == 177.0f` because the object branches on ZF alone and FCOM sets C3 for equal AND for unordered: a NaN in `out[0]` takes the copy path, and under the object's own `-mno-ieee-fp` that is exactly what C's `==` compiles to. It read `!(out[0] < 177.0f || out[0] > 177.0f)` until finding F2300 -- two compares where the object has one, and correct only for the `-mieee-fp` the period tier used to be built with. `t_v90leaves.cpp` drives both the exact match and the NaN; the NaN case is the modern build's one declared divergence here, `tools/gccdiverge.json` and finding F2304.
 
 ## D273 🐛 `updateEchoHistory`'s compaction loop is bottom-tested with a count that underflows below two taps
 
 *Message and echo batch, from `V92EchoCanceller::updateEchoHistory` (blob 0x11770). **Reachability: CANNOT FIRE** at the shipped `V92_ECHO_FILTER_LENGTH` of 180. Status: CONFIRMED. Fix class: none proposed.*
 
-**Finding 1398.** `lea -0x1(%esi),%edx` then `dec %edx; jne` with no guard, so the loop always runs at least once and a `filterLength` below 2 makes the count 2**32 - 1, copying four billion words downward over everything below the buffer. The same shape as D72 one field along, and the same verdict for the same reason: the length is a parameter-block constant.
+**Finding F1398.** `lea -0x1(%esi),%edx` then `dec %edx; jne` with no guard, so the loop always runs at least once and a `filterLength` below 2 makes the count 2**32 - 1, copying four billion words downward over everything below the buffer. The same shape as D72 one field along, and the same verdict for the same reason: the length is a parameter-block constant.
 
 ## D274 🐛 the COUNT_DELAY cursor advance is one conditional subtraction, not a modulo
 
 *Message and echo batch, from `V92EchoCanceller::process` (blob 0x11870), the state-1 arm. **Reachability: CANNOT FIRE** at any block length the modem uses. Status: CONFIRMED. Fix class: none proposed.*
 
-**Finding 1398.** `cmp %eax,%edx; jae; sub %eax,%edx` subtracts the wrap length ONCE, so a block longer than `historyAlloc - word_18` leaves the read cursor past the end of the buffer and the object does not loop back. Reproduced; a modulo would be a different function.
+**Finding F1398.** `cmp %eax,%edx; jae; sub %eax,%edx` subtracts the wrap length ONCE, so a block longer than `historyAlloc - word_18` leaves the read cursor past the end of the buffer and the object does not loop back. Reproduced; a modulo would be a different function.
 ## D265 🐛 `V90MP::infoToBits` pads over the CRC it has just written, for every type-zero message
 
 *Batch of 2026-08-11, from `V90MP::infoToBits` (blob 0x1f990), +0x4c0 arm, 0x200ce and 0x200d7. **Reachability: EVERY type-zero message with a non-zero group size**, which is all of them -- the sequence length is 0x56 rounded up, so it always exceeds 0x45 and the loop always runs. Status: `unmeasured` -- no caller of `infoToBits` is reconstructed yet, so what a peer does with a zeroed CRC is not known. Fix class: none proposed; reproduced exactly.*
 
-**Finding 1386.** The two arms end alike -- copy the sixteen CRC bits into `bits`, zero the bit after them, pad to the sequence length -- and the type-one arm's constants are right (CRC at 0xab..0xba, `movb $0x0,0xd7(%ebx)` is bits[0xbb], the loop starts at 0xbc). The type-zero arm puts the CRC at 0x45..0x54 and then writes `movb $0x0,0x61(%ebx)`, which is bits[0x45], and starts its pad loop at 0x45 as well: both constants name the FIRST CRC bit instead of the one after the last, so the CRC goes out zeroed from the front. One slip explains both -- an index advanced through the copy and then not advanced past it. `t_v90mp.cpp` asserts the destruction rather than working around it, and `test/mutations/v90mp.json` carries the CORRECTED form (0x55/0x56) as a mutation that must be caught, so the day the test stops driving a type-zero message the suite says so.
+**Finding F1386.** The two arms end alike -- copy the sixteen CRC bits into `bits`, zero the bit after them, pad to the sequence length -- and the type-one arm's constants are right (CRC at 0xab..0xba, `movb $0x0,0xd7(%ebx)` is bits[0xbb], the loop starts at 0xbc). The type-zero arm puts the CRC at 0x45..0x54 and then writes `movb $0x0,0x61(%ebx)`, which is bits[0x45], and starts its pad loop at 0x45 as well: both constants name the FIRST CRC bit instead of the one after the last, so the CRC goes out zeroed from the front. One slip explains both -- an index advanced through the copy and then not advanced past it. `t_v90mp.cpp` asserts the destruction rather than working around it, and `test/mutations/v90mp.json` carries the CORRECTED form (0x55/0x56) as a mutation that must be caught, so the day the test stops driving a type-zero message the suite says so.
 
 ## D266 🐛 `V90MP::bitsToInfo` inverts bits[0x70] on a CRC failure and leaves it inverted
 
 *Batch of 2026-08-11, from `V90MP::bitsToInfo` (blob 0x20190), +0x5be, `cmpb $0x0,0x8c(%ebx); sete 0x8c(%ebx)`. **Reachability: any long message (+0x119 above 0x6f) whose CRC does not check.** Status: `unmeasured` -- how often the far end gets that one bit wrong is a property of the line, not of the object. Fix class: none proposed; reproduced exactly.*
 
-**Finding 1386.** On a mismatch the object inverts one fixed bit of the received message, recomputes the whole CRC and compares again, reporting `recieved MP with modified good CRC` if that rescued it and `recieved MP with bad CRC` if it did not. bits[0x70] is inside `h2Imag`. Two things follow and both are reproduced: the repair is a GUESS, so a message that passes the second check is not necessarily the message that arrived; and the flip is unconditional on failure, so even when it does not help the bit stays inverted and the next thing to read `bits` sees the altered vector. A short message never gets the repair, because 0x55 is not above 0x6f -- `t_v90mp.cpp` drives that arm too.
+**Finding F1386.** On a mismatch the object inverts one fixed bit of the received message, recomputes the whole CRC and compares again, reporting `recieved MP with modified good CRC` if that rescued it and `recieved MP with bad CRC` if it did not. bits[0x70] is inside `h2Imag`. Two things follow and both are reproduced: the repair is a GUESS, so a message that passes the second check is not necessarily the message that arrived; and the flip is unconditional on failure, so even when it does not help the bit stays inverted and the next thing to read `bits` sees the altered vector. A short message never gets the repair, because 0x55 is not above 0x6f -- `t_v90mp.cpp` drives that arm too.
 
 ## D267 🐛 `V90ConnectionEvaluator::evaluatePhase4`'s delayed-retrain give-up prints a `%d` with no argument behind it
 
 *Batch of 2026-08-12, from `V90ConnectionEvaluator::evaluatePhase4` (blob 0x3fad0), 0x3ffcf. **Reachability: every delayed retrain that takes the counter past `MAX_NOF_V90_RETRAINS`** -- both +0x78 and +0x7c non-zero and the count already at the limit. Status: `unmeasured` -- the number printed is an uninitialised stack slot, so what it says cannot be predicted and is not the same on our build as on the blob's. Fix class: none proposed; reproduced exactly.*
 
-**Finding 1388.** The string at `.rodata.str1.4+0xab34` is "V90ConnectionEvaluator (phase4): initiating fall back to V34 due to %d V90 retrains (last one delayed)", and the call site pushes only the format pointer: nothing is stored to `0x4(%esp)`. Its sibling forty-four bytes later at 0x3fffb stores `nofV90Retrains` there for a string carrying the same conversion, so this is one line written without its argument and not a different convention. `edprintf` formats with `vsnprintf`, which reads the outgoing-argument slot as an `int` and prints it.
+**Finding F1388.** The string at `.rodata.str1.4+0xab34` is "V90ConnectionEvaluator (phase4): initiating fall back to V34 due to %d V90 retrains (last one delayed)", and the call site pushes only the format pointer: nothing is stored to `0x4(%esp)`. Its sibling forty-four bytes later at 0x3fffb stores `nofV90Retrains` there for a string carrying the same conversion, so this is one line written without its argument and not a different convention. `edprintf` formats with `vsnprintf`, which reads the outgoing-argument slot as an `int` and prints it.
 
 **THE RECONSTRUCTION MATCHES THE OBJECT AND THE DIAGNOSTIC STILL DIFFERS**, which is why this is here rather than only in the findings. `src/pump/v90/V90ConnectionEvaluator.cpp` calls `edprintf` with the format alone, exactly as the object does, so the two sides run the same code -- but each reads its own frame, and the frames are not the same because the compilers are not. `test/unit/t_v90conneval.cpp` therefore compares object state, verdict and line count on that one path and not the transcript text; every other diagnostic in both evaluators is compared in full. The attempt to make the slot deterministic (drive phase 4's retrain arm first in the same call, since it passes `nofV90Retrains` in that very slot) was made and measured: the transcripts still differ, and differ only in that line.
 
@@ -5441,7 +5441,7 @@ Repairing it would mean passing `nofV90Retrains`, which is what the sibling line
 
 *Batch of 2026-08-12, from `V90ConnectionEvaluator::evaluateConnection` (blob 0x3e6d0), 0x3e933, and `::evaluatePhase4` (blob 0x3fad0), 0x3fae5. **Reachability: a NaN in `word_70` (the running average PDSNR) or in `evaluatePhase4`'s ratio argument, and nothing else.** Status: `unmeasured` -- see below for exactly what was and was not measured. Fix class: none proposed.*
 
-**Findings 1388 and 1389.** Both sites are a float compare whose complement the object takes WITHOUT consulting the parity flag. 0x3e933 is `fcomps 0xa0(%edi); jae`, the complement of `avePdsnr < threshUp`; 0x3fae5 is `flds 0x438(%ecx); fcomp %st(1); jae`, with the PARAMETER as the left operand -- forced, because the argument was already on the stack and `fcoms 0x438(%ecx)` would have been one instruction shorter. `jae` is FALSE when the compare is unordered, so the object runs the arm for a NaN where C says it must not.
+**Findings F1388 and F1389.** Both sites are a float compare whose complement the object takes WITHOUT consulting the parity flag. 0x3e933 is `fcomps 0xa0(%edi); jae`, the complement of `avePdsnr < threshUp`; 0x3fae5 is `flds 0x438(%ecx); fcomp %st(1); jae`, with the PARAMETER as the left operand -- forced, because the argument was already on the stack and `fcoms 0x438(%ecx)` would have been one instruction shorter. `jae` is FALSE when the compare is unordered, so the object runs the arm for a NaN where C says it must not.
 
 **WHAT IS RECORDED HERE IS AN UNTESTED INPUT, NOT A KNOWN DISAGREEMENT.** Under `make phase` -- GCC 13 -- our source took a different branch from the blob's for a NaN at these two sites, so `test/unit/t_v90conneval.cpp` keeps NaN away from them and feeds it to the other four float comparisons in the two functions, which are `ja`/`jbe` and agree. That is a fixture avoiding an input because the two sides disagreed on it, which is one step from widening a tolerance, and it belongs in this file rather than only in a source comment.
 
@@ -5453,7 +5453,7 @@ Repairing it would mean passing `nofV90Retrains`, which is what the sibling line
 
 *Batch of 2026-08-11, from `V90AutoDigitalImpDetector::unitePhasesInfoOfUref` (blob 0x40cb0, 748 bytes), +0x260. **Reachability: FIRES ON EVERY CALL** -- it is the loop test, not an error path. What it cannot do is make the loop wrong: the checksum is only ever compared against its own previous value. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1421.** The method repeats its grouping until `linMapp` stops changing, and the "has it changed" test is a six-iteration sum. The sum's addend does not vary:
+**Finding F1421.** The method repeats its grouping until `linMapp` stops changing, and the "has it changed" test is a six-iteration sum. The sum's addend does not vary:
 
     40f14: shl    $0x7,%esi              ; esi = 5, the outer loop's terminal value
     40f1b: lea    (%esi,%ecx,1),%edi     ; edi = 5*128 + at
@@ -5470,7 +5470,7 @@ It does not make the method loop for ever or terminate early in any way that has
 
 *Batch of 2026-08-11, same function, +0x2a1 (`flds 0xc(%esp)`) and the NaN at `.rodata.cst4+0x328`. **Reachability: needs `short_2800[0..4]` ALL nonzero**, which no written caller produces today -- `updateUref` passes the flags through untouched from whatever the study path set. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1420.** The method picks the largest group of unflagged phases and hands that group's mapping entry and variance to every flagged phase. Both are held in locals: the variance in an x87 register seeded with the constant at `.rodata.cst4+0x328`, which is 0x7fc00000 -- a quiet NaN -- and the entry in a stack slot at `0xc(%esp)` **seeded with nothing at all**.
+**Finding F1420.** The method picks the largest group of unflagged phases and hands that group's mapping entry and variance to every flagged phase. Both are held in locals: the variance in an x87 register seeded with the constant at `.rodata.cst4+0x328`, which is 0x7fc00000 -- a quiet NaN -- and the entry in a stack slot at `0xc(%esp)` **seeded with nothing at all**.
 
 The grouping loop runs `i` over 0..4 and skips any phase that is flagged, so if all five are flagged it never executes, the two locals are never written, and the final loop stores a NaN and four bytes of stack residue into `linMapp` and `float_9d48` for all six phases. Reproduced as it is -- `bestValue` is declared and deliberately not initialised, because giving it a value would be inventing behaviour rather than reproducing it, and the blob's behaviour on that path is not a function of its inputs.
 
@@ -5478,9 +5478,9 @@ The grouping loop runs `i` over 0..4 and skips any phase that is flagged, so if 
 
 ## D282 🐛 `getAltVarThresh` divides by a count that can be zero
 
-*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::getAltVarThresh` (blob 0x40650, 581 bytes), +0x7c (`de fa`, which prints `fdivrp` and IS `FDIVP` -- finding 245). **Reachability: needs no entry strictly below the average of the six**, which SIX EQUAL VALUES give -- and six equal zeros is what `reset` leaves at +0x9d48 until a study has run. Status: `unmeasured`. Fix class: none proposed.*
+*Batch of 2026-08-12, from `V90AutoDigitalImpDetector::getAltVarThresh` (blob 0x40650, 581 bytes), +0x7c (`de fa`, which prints `fdivrp` and IS `FDIVP` -- finding F245). **Reachability: needs no entry strictly below the average of the six**, which SIX EQUAL VALUES give -- and six equal zeros is what `reset` leaves at +0x9d48 until a study has run. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1424.** The method averages the six per-phase variances, averages again over only the entries strictly below that average, and scales the second average by its caller's factor. The second average is `below / count` with `count` a `short` counted in the same loop that selects the entries, and there is nothing between the loop and the division -- no test, no default. If every entry equals the average, nothing is selected, `count` is zero, `below` is zero, and the division is 0.0f/0, which the x87 answers with the real indefinite 0xffc00000. That NaN survives the multiplication by the factor, survives the floor at `altMinVarThresh` -- an ordered `>` is false against a NaN -- and is what the method returns.
+**Finding F1424.** The method averages the six per-phase variances, averages again over only the entries strictly below that average, and scales the second average by its caller's factor. The second average is `below / count` with `count` a `short` counted in the same loop that selects the entries, and there is nothing between the loop and the division -- no test, no default. If every entry equals the average, nothing is selected, `count` is zero, `below` is zero, and the division is 0.0f/0, which the x87 answers with the real indefinite 0xffc00000. That NaN survives the multiplication by the factor, survives the floor at `altMinVarThresh` -- an ordered `>` is false against a NaN -- and is what the method returns.
 
 The floor is what makes it look defended and is not: `if (altMinVarThresh > thresh)` fires only when the comparison is ordered, so the one value the floor exists to prevent is the one value it lets through.
 
@@ -5490,7 +5490,7 @@ Reproduced as it is, and `t_v90adid` carries a row of six equal entries and a ro
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases` (blob 0x41550, 601 bytes), +0x4a. **Reachability: FIRES whenever more than one group forms**, which needs three unsuspected phases with two of them out of each other's tolerance. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1426.** The method groups the unsuspected phases, keeps the largest group, and pools that group's accumulators. The size counter is set to 1 exactly once, at 0x4159a, BEFORE the scan that uses it:
+**Finding F1426.** The method groups the unsuspected phases, keeps the largest group, and pools that group's accumulators. The size counter is set to 1 exactly once, at 0x4159a, BEFORE the scan that uses it:
 
     41586: mov    $0x1,%ebp
     4159a: mov    %ebp,0x24(%esp)        ; count = 1, outside the loop
@@ -5501,13 +5501,13 @@ Reproduced as it is, and `t_v90adid` carries a row of six equal entries and a ro
 
 `t_v90adid` separates the two spellings with a directed block -- two groups of two, phases 0-1 and 2-3, with different means. Reset-per-group makes both size 2 and keeps the first; the object's running counter makes the second size 3 and keeps IT, and the two write different means into every unsuspected phase.
 
-It also makes one of the method's other bounds untestable, which is recorded as a proven-equivalent mutation rather than as an uncaught one: because `count` never decreases, `best` always equals `count` by the end of an iteration, so letting the sixth phase lead a group can never beat the running best and the change cannot be observed. That argument is finding 1426's, above.
+It also makes one of the method's other bounds untestable, which is recorded as a proven-equivalent mutation rather than as an uncaught one: because `count` never decreases, `best` always equals `count` by the end of an iteration, so letting the sixth phase lead a group can never beat the running best and the change cannot be observed. That argument is finding F1426's, above.
 
 ## D284 🐛 `uniteLinMappInfoOfUnsuspectedPhases` reads an uninitialised group number
 
 *Batch of 2026-08-12, same function, +0xad (`mov 0x1c(%esp),%ebp`). **Reachability: needs `byte_280c[0..4]` ALL nonzero**, and unlike D281's condition this one has a producer -- `porcessFirstStudy` sets all six on a mapping smooth enough that no phase collects nine rough neighbours. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1427.** The scan writes `bestGroup` at 0x4178c and nothing else does; the pooling loop at 0x415fd reads it. The scan skips a phase that is suspected or already grouped, so if all five of phases 0..4 are suspected it never executes and the stack slot at `0x1c(%esp)` is read having never been written. The pooling then keeps whatever phases happen to match four bytes of stack residue, and the mean it writes into every unsuspected phase is a function of the frame rather than of the object.
+**Finding F1427.** The scan writes `bestGroup` at 0x4178c and nothing else does; the pooling loop at 0x415fd reads it. The scan skips a phase that is suspected or already grouped, so if all five of phases 0..4 are suspected it never executes and the stack slot at `0x1c(%esp)` is read having never been written. The pooling then keeps whatever phases happen to match four bytes of stack residue, and the mean it writes into every unsuspected phase is a function of the frame rather than of the object.
 
 It is the same shape as D281 and reproduced the same way -- `bestGroup` is declared and deliberately left uninitialised, because giving it a value would invent behaviour the blob does not have. **The test cannot compare that path**, for D281's reason: two builds have two stack frames. `t_v90adid` always leaves phase `trial % 5` unsuspected in the sweep, and the forty-block sequence forces `byte_280c` explicitly before every call rather than letting `porcessFirstStudy`'s output arrange it -- which is exactly the state that would reach this.
 
@@ -5517,7 +5517,7 @@ The difference from D281 is that this one is reachable from inside the class. D2
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::porcessSecondStudy` (blob 0x41cb0, 831 bytes), +0x45 (`cmp $0x4,%bx ; jle 41cd9`), and from the character-identical loop in `setQcLinearMapping` (blob 0x44700) at +0x10c. **Reachability: the arm at +0x247 can never be entered** -- proved by the loop's own bound, not sampled. Status: `measured`. Fix class: none proposed.*
 
-**Finding 1429.** Both callers of `updateAltRbsPhaseInDil` open by finding the first RBS phase with a clear `byte_280c`, and both spell it the same way: store zero, test `byte_280c[0]`, then increment-store-test-bound until either the byte is zero or the index is above 4.
+**Finding F1429.** Both callers of `updateAltRbsPhaseInDil` open by finding the first RBS phase with a clear `byte_280c`, and both spell it the same way: store zero, test `byte_280c[0]`, then increment-store-test-bound until either the byte is zero or the index is above 4.
 
     41cd9: movzwl 0xa968(%esi),%ebx
     41ce0: inc    %ebx
@@ -5541,7 +5541,7 @@ Both spellings are reproduced: the scan with its `<= 4`, and the guard with its 
 
 *Batch of 2026-08-12, same function, +0x00 (`flds 0x358` -- the FIRST instruction, before the register saves) against +0xc4 (`fld %st(3)`, once per (code, phase)). **Reachability: FIRES on the second repair decision of every call** -- the carried value is what all 701 remaining (code, phase) pairs are judged against. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1431.** For each of 117 codes and each of the six phases, the method measures the distance from the phase's own mapping entry to three neighbouring entries of the reference phase's, keeps the nearest and the second nearest, and repairs the entry only if the nearest is unambiguous: exact, or beaten by a factor of more than two.
+**Finding F1431.** For each of 117 codes and each of the six phases, the method measures the distance from the phase's own mapping entry to three neighbouring entries of the reference phase's, keeps the nearest and the second nearest, and repairs the entry only if the nearest is unambiguous: exact, or beaten by a factor of more than two.
 
 The nearest distance is initialised per (code, phase) -- `fld %st(3)` copies the constant 32,256 into a fresh slot at the head of the phase loop. The second-nearest is not. It is loaded once, from `.rodata.cst4+0x358`, before the function has even pushed its registers, and the reg-stack allocator then REUSES that slot for the running value -- `fstp %st(6)` at 0x41e00 writes over it on the first update. An x87 slot can only be overwritten like that if the value in it is dead, so the load is a one-time initialisation and not a per-iteration one; there is no second `flds` anywhere in the 831 bytes.
 
@@ -5555,7 +5555,7 @@ The sentinel makes the first decision work at all. `.rodata.cst4+0x358` is 0x7fc
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::updateAltRbsPhaseInDil` (blob 0x41840, 1124 bytes), +0x363 (`add %edx,0x60(%esp)`), and from `porcessSecondStudy` (blob 0x41cb0) +0x106 (`movswl 0x3c(%esp),%ebp`). **Reachability: the first needs a histogram that disagrees with what was stored, the second FIRES at codes 0 and 1 on every call.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1430.** Two unbounded indices in the same cluster, and neither is D256's.
+**Finding F1430.** Two unbounded indices in the same cluster, and neither is D256's.
 
 THE SAMPLE CURSOR. `updateAltRbsPhaseInDil` treats each phase's sample store as "the samples for the codes in scan order, end to end": it starts a cursor at zero and, for each of the 115 codes it visits, quantises `short_8b00[phase][code]` samples starting at the cursor and then advances the cursor by that count. Nothing compares the cursor against the row's 0x83e entries, and nothing compares it against `int_9100[phase]`, which is what `addReceivedSampleToStorage` actually filled. The two agree only because both are driven by the same call: one increments the histogram bin, the other appends to the row. Anything that puts a count in `short_8b00` without a matching sample -- and the class has no other writer, so this is a claim about callers -- walks the cursor past the row, into the next phase's samples and eventually out of the object. The test clamps the seeded histogram to sixteen per code for that reason, which is 1,840 against 2,110; the forty-block sequence needs no clamp at all, because six samples a phase for forty blocks is 240.
 
@@ -5567,7 +5567,7 @@ THE NEIGHBOUR WINDOW. `porcessSecondStudy` chooses between the window [code, cod
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0, 1189 bytes), +0x1aa (`movzbl %bl,%ecx ; cmp %edi,%ecx ; jle`) and +0x25b (`lea 0x9d48(%ebp,%eax,4),%eax` followed by `subl $0x4,0x14(%esp)`). **Reachability: the first needs an argument of 255 or more, the second FIRES on every call whose scan reaches the bottom of the reference phase's row.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1438.** Two indices the method forms out of a `short` argument and never bounds.
+**Finding F1438.** Two indices the method forms out of a `short` argument and never bounds.
 
 THE REPORT LOOP CANNOT END. It prints `linearMappingVar[unSuspectedPhase][k]` for `k` from `short_a97a + 1` up to the argument, and `k` is an `unsigned char` zero-extended for a SIGNED compare against the argument as an `int`. At an argument of 255 the counter reaches 255, wraps to 0, and 0 is still at or under the bound -- so the loop runs for ever, printing about thirty characters a pass through `edprintf`. The object has no other terminating condition and neither does this. The reconstruction reproduces it; `t_v90adid` keeps every argument it offers at 254 or below and says so at the table.
 
@@ -5581,7 +5581,7 @@ Neither is a write, so nothing inside the object is corrupted by either; the sec
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0), +0x3d1 (`dec %dl ; movzbl %dl,%eax ; cmpb $0x0,0xd00(%ecx,%eax,1) ; je`) and +0x374 (`mov %bl,0xd00(%ecx,%edx,1)` with %bl = 1). **Reachability: the walk FIRES whenever an unflagged phase's own maximum code is marked unusable; the non-termination needs all 256 bytes of the window clear.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1438.** The last loop gives each unflagged phase the highest usable code at or below `byte_a954`, and it finds it by decrementing a BYTE until `byte_0d00[phase][d]` is nonzero. There is no floor and no counter: the index wraps from 0 to 255 and keeps going, so the walk covers all 256 values and then repeats them for ever if none of them is set.
+**Finding F1438.** The last loop gives each unflagged phase the highest usable code at or below `byte_a954`, and it finds it by decrementing a BYTE until `byte_0d00[phase][d]` is nonzero. There is no floor and no counter: the index wraps from 0 to 255 and keeps going, so the walk covers all 256 values and then repeats them for ever if none of them is set.
 
 WHAT STOPS IT IS A STORE THE FILL MAKES ON PURPOSE. Immediately before, the fill sets `byte_0d00[phase][ucode]` to 1 for EVERY phase and whatever the variance test said about that code -- including for the flagged phases, whose 128 codes the fill skips entirely. That byte is one of the 256 the walk visits, so the walk always terminates in practice. It is the only guarantee there is, and it is a coincidence of the two loops being adjacent rather than a bound: change the reference code between them and the method hangs.
 
@@ -5593,7 +5593,7 @@ THE WINDOW STAYS INSIDE THE OBJECT. `byte_0d00[phase][d]` with `d` up to 255 is 
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::findPadGain` (blob 0x43620, 2879 bytes), +0x44 (`mov %dl,0xa1(%esp)`, the only write to that slot) and +0x38 (`sub $0x5,%eax ; mov %eax,%ebx` against `movzbl %dl,%eax ; cmp %ebx,%eax ; jg`). **Reachability: the uninitialised read needs five variances of 1e8 or more with no NaN among them; the hang needs `byte_a954` in 3..7.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1439.** Both come out of the same five-entry scan at the top of the method.
+**Finding F1439.** Both come out of the same five-entry scan at the top of the method.
 
 THE CHOSEN CODE IS A STACK SLOT NOTHING NECESSARILY WRITES. The running minimum starts at the constant 1e8 and the slot at 0xa1(%esp) is written only when an entry beats it. Five entries of 1e8 or more leave the slot holding whatever the frame held, and that value is then clamped into [0x50, 0x5f] and used as the base code for the entire search -- so the pad gain the method reports is a function of the caller's stack and not of the object. An unordered compare TAKES, so a single NaN among the five is enough to write the slot; it is five ordered non-improvements that reach it. The local is left uninitialised here for D281's reason, and `t_v90adid` plants one small entry in every window it offers so that no trial can read it: two static objects have two different frames, and a trial that read the slot would be comparing the linker's layout rather than the reconstruction.
 
@@ -5605,7 +5605,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140, 5335 bytes), +0xb1f (`fsts 0xa964(%ebx)`) with +0x12fe (`fstpl 0x4(%esp)` under "first update : trn1Sigma = %d"), and +0xdaf with +0x12e9 for the second copy. **Reachability: FIRES on every call that completes state 3 or state 5 with the debug level above 1.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1443.** The report is the object's own and so is the mismatch.
+**Finding F1443.** The report is the object's own and so is the mismatch.
 
 ======================================================================
 
@@ -5613,7 +5613,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x120 (`mov 0x1c00(%ebx,%ecx,4),%ebp` straight into `push`/`fildll` with no `test`), against +0x320 in the same function (`mov 0x1c00(%ebx,%ecx,4),%edi ; test %edi,%edi ; je`). **Reachability: FIRES whenever a phase has no samples for the reference code at the end of state 0.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1442.** One loop out of five in this method omits the guard the other four have.
+**Finding F1442.** One loop out of five in this method omits the guard the other four have.
 
 ======================================================================
 
@@ -5621,7 +5621,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140), +0x40c, +0x43c, +0x6dc, +0x70c, +0x9ec and +0xa1c -- six `mov %rX,0x50(%esp,%ecx,2)` stores into one twelve-byte slot, and not one read of it anywhere in the 5,335 bytes. **Reachability: FIRES at the end of states 1, 2 and 3; state 5's otherwise identical tail does not have it.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1444.** Dead stores the compiler kept because the locals are arrays.
+**Finding F1444.** Dead stores the compiler kept because the locals are arrays.
 
 ======================================================================
 
@@ -5629,7 +5629,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 *Batch of 2026-08-12, from the jump table at `.rodata+0xd70` and `V90AutoDigitalImpDetector::studyUrefHandler` (blob 0x42140) +0x7cc (`mov $0x4,%esi ; mov %esi,0xa984(%ebx)` in the arm the table's entry 2 points at) with +0x1243 (`mov $0x3,%eax` in the arm entry 4 points at); and `int_a9a0` at +0xa9a0, copied in by `resetStudyUrefHandler` at 0x40913 and 0x40a94 and named in no displacement of any of the class's thirty-two members. **Reachability: the ordering FIRES on every study; the dead duration is never read at all.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1441.** The chain is measured from the arms and not from the numbers.
+**Finding F1441.** The chain is measured from the arms and not from the numbers.
 
 ======================================================================
 
@@ -5637,7 +5637,7 @@ THE LOOP BOUND CAN BE NEGATIVE. The scan starts at `(unsigned char)(byte_a954 - 
 
 *Batch of 2026-08-12, from `V90AutoDigitalImpDetector::determineMaxUcode` (blob 0x441f0) and `findPadGain` (blob 0x43620); `fcomp %st(1)` at 0x4446a and 0x44657, `fcomps` at 0x442a4, 0x442c0, 0x44347, 0x444eb. **Reachability: FIRES ON EVERY NaN** -- and NaNs are routine here, not exotic: `float_9d48` is a seeded variance and one 32-bit pattern in 128 is a NaN, and `findPadGain` forms gains from `ulaw2linear(0xff)`, which is 0. **Observability: NONE** -- nothing in the object, the library or the tests reads the x87 status word or unmasks the exception. Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1447.** The object compares with the `fcom` family, which raises the invalid-operation exception on a QUIET NaN. Every comparison this tree emits for the same source is `fucom`/`fucomp`/`fucompp`, which raises it only for a SIGNALLING NaN. The two agree on every branch taken -- that is what the differential tier checks and it passes over seeded NaNs at all three of `determineMaxUcode`'s float tests -- and they disagree on the exception flags left behind.
+**Finding F1447.** The object compares with the `fcom` family, which raises the invalid-operation exception on a QUIET NaN. Every comparison this tree emits for the same source is `fucom`/`fucomp`/`fucompp`, which raises it only for a SIGNALLING NaN. The two agree on every branch taken -- that is what the differential tier checks and it passes over seeded NaNs at all three of `determineMaxUcode`'s float tests -- and they disagree on the exception flags left behind.
 
 It is not a spelling that can be chosen away. It was first supposed that a relational operator would give `fcom` where `==` gives `fucom`, which would have made the D281-era respelling of the NaN test a fix for this as well; disassembling our own period-built object shows `fucomp` for `<` and `>` too, under **both** GCC 3.4.2 and GCC 13. GCC simply does not emit `fcom` from C comparisons. Reproducing it would take inline assembly at six sites for a difference no caller can observe, which is a worse trade than recording it.
 
@@ -5647,7 +5647,7 @@ It is not a spelling that can be chosen away. It was first supposed that a relat
 
 *Batch of 2026-08-12, from `VPcmV34Progress` (blob 0xb3c0) +0x30b, +0x311 and +0x314 -- `mov %eax,0x14(%ebp)`, `mov %edx,0x18(%ebp)` and `movl $0x40,0x1c(%ebp)` into the object's +0xac30, +0xac34 and +0xac38 -- against +0x349, +0x350 and +0x357, which write zero into all three unconditionally eight instructions later on every path out of the block. **Reachability: FIRES once every 64 samples of every call whose progress code is 3 to 6, on the arm where the input/output energy ratio counts a block.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1464.** The block that decides a notch has been detected saves the two energies and the block counter, increments the signal count, prints them, and then falls into the same three-word clear the *undetected* path uses. Nothing reads any of the three between the store and the clear, and the compiler kept them because they are member stores through a live pointer.
+**Finding F1464.** The block that decides a notch has been detected saves the two energies and the block counter, increments the signal count, prints them, and then falls into the same three-word clear the *undetected* path uses. Nothing reads any of the three between the store and the clear, and the compiler kept them because they are member stores through a live pointer.
 
 The reconstruction writes them, because the object does and because a differential test cannot tell a dead store from a live one -- only the same three writes in the same order keeps `make similarity` honest about what the source contained.
 
@@ -5657,7 +5657,7 @@ The reconstruction writes them, because the object does and because a differenti
 
 *Batch of 2026-08-12, from `VPcmV34Progress` (blob 0xb3c0) +0x7bc-+0x7fd (the K56flex arm) and +0x2b4-+0x8e7 (the V.90 arm) -- `cmp %si,(%edx) ; jge` around calls to `modulatevector`, `v34handshak`, `v90RateReneg` and `v90RateRenegSilence`, with the loop's only exit the transmit queue reaching `f2aa0` and nothing counting the turns. **Reachability: hangs only if a callee returns without enqueueing, which no test in this tree has produced.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1465.** The V.34 arm beside them is bounded -- it runs exactly `nin & ~3` times and calls the same two functions once each -- so the shape is not the file's habit; it is these two arms. `f2aa0` is set to the block length immediately above the loop, so the ordinary case terminates in one or two turns.
+**Finding F1465.** The V.34 arm beside them is bounded -- it runs exactly `nin & ~3` times and calls the same two functions once each -- so the shape is not the file's habit; it is these two arms. `f2aa0` is set to the block length immediately above the loop, so the ordinary case terminates in one or two turns.
 
 Written as the object has it. A bound here would be a behavioural difference on an input the differential tier cannot produce, and the arms are the V.90 and K56flex ones, which no test in this tree drives at all.
 
@@ -5667,7 +5667,7 @@ Written as the object has it. A bound here would be a behavioural difference on 
 
 *Batch of 2026-08-12, from `V22_MRF_filter` (blob 0x8d160) +0xf2 — the branch taken when `widx < history_len`, which convolves `history[0 .. 29]` against `coeff[phase * 30 .. +29]`, where the branch at +0xab convolves `history[widx - 30 .. widx - 1]` against the same coefficients. **Reachability: FIRES on the first thirteen outputs of every stream, because `widx` climbs by two or three per output and the branch is taken until it reaches 30.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1543.** The buffer is 60 entries and only the first 30 are zeroed, so the clamped branch is reading exactly the zeroed startup region — it cannot read uninitialised memory. What it gets wrong is *where in the window the new samples sit*. With `widx` at 2, the sliding form would want `history[-28 .. 1]`; the object gives `history[0 .. 29]`, so the two newest samples are weighted by the OLDEST two taps of the phase rather than the newest two. The transient is thirteen outputs long and then the branch is never taken again for the life of the state.
+**Finding F1543.** The buffer is 60 entries and only the first 30 are zeroed, so the clamped branch is reading exactly the zeroed startup region — it cannot read uninitialised memory. What it gets wrong is *where in the window the new samples sit*. With `widx` at 2, the sliding form would want `history[-28 .. 1]`; the object gives `history[0 .. 29]`, so the two newest samples are weighted by the OLDEST two taps of the phase rather than the newest two. The transient is thirteen outputs long and then the branch is never taken again for the life of the state.
 
 `FPM_MRF_filter` does NOT do this — its buffer is genuinely circular, hlen entries with a two-part walk that wraps, so its startup window is the correct one with zeros in the tail. The clamp is specific to the V.22 copy, and is a consequence of its buffer being a 60-entry sliding one rather than a 30-entry ring. Reproduced exactly; a differential test that fed a stream and compared only the steady state would not see it, which is why `t_v22_mrf.c` compares from the first sample.
 
@@ -5675,7 +5675,7 @@ Written as the object has it. A bound here would be a behavioural difference on 
 
 *Batch of 2026-08-12, from `V22_PPS_filter` (blob 0x8d3c0) +0x23e — `add %edi,%edi ; lea (%edi,%ecx,1),%esi` with `edi` holding `phase`, so the base is `coeff + phase` — against +0x138, where the same base is `imul %esi,%eax ; add %eax,%eax ; lea (%eax,%ebx,1),%esi` with `esi` holding `history_len`, so `coeff + phase * 3`. Both then read three consecutive entries. **Reachability: FIRES on roughly the first forty outputs of every stream. `widx` advances once per SYMBOL, not once per output, so it takes three symbols — about 40 samples at 13.33 per symbol — to reach 3 and leave the branch.** Status: `unmeasured`. Fix class: none proposed.*
 
-**Finding 1545.** The two branches differ in the history base for a good reason — the window has not filled — but the coefficient base is not part of that. Init lays the array out as `[p * 3 + t]`, so phase `p`'s three taps are at `coeff[3p]`, `coeff[3p + 1]` and `coeff[3p + 2]`. Reading them at `coeff[p .. p + 2]` lands on phase `p / 3` and, whenever `p` is not a multiple of 3, straddles into the next phase — three coefficients that do not belong to one phase and, except at `p = 0`, do not belong to the phase being emitted either.
+**Finding F1545.** The two branches differ in the history base for a good reason — the window has not filled — but the coefficient base is not part of that. Init lays the array out as `[p * 3 + t]`, so phase `p`'s three taps are at `coeff[3p]`, `coeff[3p + 1]` and `coeff[3p + 2]`. Reading them at `coeff[p .. p + 2]` lands on phase `p / 3` and, whenever `p` is not a multiple of 3, straddles into the next phase — three coefficients that do not belong to one phase and, except at `p = 0`, do not belong to the phase being emitted either.
 
 `v22_mrf`, whose startup branch is otherwise the same shape, uses `phase * history_len` in BOTH branches — see D298, which is the other half of this pair. So the two files disagree, and this one is the odd one out.
 
@@ -5685,11 +5685,11 @@ How much of that transient it actually changes is measured rather than reasoned:
 
 **Renumbered twice: D298 -> D300 -> D302.** It was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the V.32 side moved to D300 at that merge. A later batch of V.22 work had meanwhile allocated D300 to `FPM_atan`, so it moved again. The V.22 entry stayed put both times because its own number is the product of a careful by-line renumber that its findings describe, and moving it would have falsified that account. Citations written before either merge may still say D298 or D300 -- it was allocated D298 on the `v32-datapump` branch while `v22-datapump` independently allocated the same number to `V22_MRF_filter`; the collision surfaced at the merge and the V.32 side moved. Citations written before that merge may still say D298 -- `refcheck.py` cannot catch those, because they still resolve, just to the wrong entry.
 
-*Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call** — `FSEv32_decision` (`.data` 0x74cc) is three function pointers and `_16pt` is slot 1; `SetRxModeV32` installs it on one arm of its seven-way jump table (0x819d0). **Observability: `*mag`, and through it the equaliser's whole error term.** Status: CONFIRMED, and the shift that belongs there is established four ways. **Fix class: DELIBERATE FIX, behind `DSPLIB_REPRODUCE_BUGS`** — updated 2026-08-17, findings 3800 and 3801.*
+*Batch of 2026-08-12, from `FSE_decision_16pt` (blob 0x80e90, 490 bytes) +0x13b (`sar $1,%edi`) feeding +0x13d (`movzwl DECv32_MAG9600-0x2(%edi,%edi,1),%eax`). **Reachability: FIRES on every call** — `FSEv32_decision` (`.data` 0x74cc) is three function pointers and `_16pt` is slot 1; `SetRxModeV32` installs it on one arm of its seven-way jump table (0x819d0). **Observability: `*mag`, and through it the equaliser's whole error term.** Status: CONFIRMED, and the shift that belongs there is established four ways. **Fix class: DELIBERATE FIX, behind `DSPLIB_REPRODUCE_BUGS`** — updated 2026-08-17, findings F3800 and F3801.*
 
 **Taxonomy: deliberate fix, with two rings that no setting can reproduce.** The entry is a *deliberate fix* under the register's own list: the original is wrong, the reconstruction corrects it, and `DSPLIB_REPRODUCE_BUGS` restores the object so bit-exactness stays provable. **The tension worth stating is the outer and mid rings.** `Added hardening`'s MECHANISM applies to them — "a differential test cannot compare against a fault" — but its PRECONDITION, "an input no caller produces", applies to neither: both rings are ordinary constellation points that any 9600 bit/s symbol reaches. That is exactly what makes this a live defect rather than a curiosity, and it is why the reproduce-bugs arm returns a stated value for them rather than a measured one.
 
-**Finding 1603.** `DECv32_MAG9600` has three entries and is indexed `[n - 1]` off `(short)(|I| + |Q|)` for the decided point, whose only three values are 8192, 16384 and 24576. `FSE_decision_16Tpt` divides that by 8192 first (`sar $0xd`) and lands on 0, 1 and 2. `_16pt` divides by 2 and lands on 4095, 8191 and 12287 — 8190, 16382 and 24574 bytes past a six-byte table. `.data` is 0x9594 bytes, so only the first of the three is even inside the section; `.data+0x94f6` holds 0 and the other two are past the end of it.
+**Finding F1603.** `DECv32_MAG9600` has three entries and is indexed `[n - 1]` off `(short)(|I| + |Q|)` for the decided point, whose only three values are 8192, 16384 and 24576. `FSE_decision_16Tpt` divides that by 8192 first (`sar $0xd`) and lands on 0, 1 and 2. `_16pt` divides by 2 and lands on 4095, 8191 and 12287 — 8190, 16382 and 24574 bytes past a six-byte table. `.data` is 0x9594 bytes, so only the first of the three is even inside the section; `.data+0x94f6` holds 0 and the other two are past the end of it.
 
 The two functions are otherwise the same shape over the same table, which is what makes this a slip in `_16pt` rather than a misreading of either.
 
@@ -5707,7 +5707,7 @@ The two functions are otherwise the same shape over the same table, which is wha
 
 **THE REPRODUCE-BUGS ARM IS A FLAT ZERO, and one third of that is measured.** Zero is what the daemon returns for the inner and mid rings. It is a stated CHOICE for the outer one, where there is nothing to reproduce. No out-of-range subscript is written at any setting: it would be undefined behaviour in a tree that has to stay 64-bit clean, and it would read OUR bytes rather than the object's.
 
-**AND ONLY THE INNER RING IS DIFFERENTIALLY COMPARABLE — narrower than the table above.** The differential tier links the blob as `dsplibs_ref.o`, so the reads are at `ref_DECv32_MAG9600 + 8190/16382/24574`, i.e. blob `.data+0x94f6`, `+0xb4f6` and `+0xd4f6`. Only the first is inside the blob's own section, 158 bytes short of its end, and only that byte travels with the blob into any link. The other two leave the section, which is 1603's argument bounded to two rings instead of three. `t_v32fse.c` compares `*mag` on the inner ring — 89 of 1,466 symbols — excludes the other two, asserts both exclusions non-zero, and POISONS the pages it has to provide so that widening the gate fails loudly rather than passing against an anonymous zero page. Finding 3800 has the measurement and the four mutations, of which M1 fails exactly 89 checks.
+**AND ONLY THE INNER RING IS DIFFERENTIALLY COMPARABLE — narrower than the table above.** The differential tier links the blob as `dsplibs_ref.o`, so the reads are at `ref_DECv32_MAG9600 + 8190/16382/24574`, i.e. blob `.data+0x94f6`, `+0xb4f6` and `+0xd4f6`. Only the first is inside the blob's own section, 158 bytes short of its end, and only that byte travels with the blob into any link. The other two leave the section, which is 1603's argument bounded to two rings instead of three. `t_v32fse.c` compares `*mag` on the inner ring — 89 of 1,466 symbols — excludes the other two, asserts both exclusions non-zero, and POISONS the pages it has to provide so that widening the gate fails loudly rather than passing against an anonymous zero page. Finding F3800 has the measurement and the four mutations, of which M1 fails exactly 89 checks.
 
 **1603's verdict is superseded and its analysis is not.** Every number in it was re-derived and confirmed; what changed is the conclusion that the whole function had to stay out, when only one store did.
 
@@ -5719,7 +5719,7 @@ The two functions are otherwise the same shape over the same table, which is wha
 
 *Batch of 2026-08-12, from `FSE_decision_4pt` (blob 0x81080, 468 bytes) +0xf4 and +0xf7 — `sar $0xf,%edx` on the in-phase squared error against `sar $0x10,%eax` on the quadrature one, summed and compared. **Reachability: FIRES on every call.** Status: `measured`. Fix class: none proposed.*
 
-**Finding 1607.** The two squared terms are scaled one place apart, so the metric is `(i-I)**2 / 2 + (q-Q)**2 / 4` and the decision regions are ellipses rather than circles. Every other slicer in the family shifts both terms alike — `_16Tpt` uses 16 and 16, `_64pt` 13 and 13 — which is what makes this one the odd one out rather than a family convention.
+**Finding F1607.** The two squared terms are scaled one place apart, so the metric is `(i-I)**2 / 2 + (q-Q)**2 / 4` and the decision regions are ellipses rather than circles. Every other slicer in the family shifts both terms alike — `_16Tpt` uses 16 and 16, `_64pt` 13 and 13 — which is what makes this one the odd one out rather than a family convention.
 
 It changes answers, not just margins. Evaluating the object's own expression at a received `(2000, 2000)` gives 2749, 6797, 3249, 3297 and picks point 0, where the symmetric metric gives 2182, 3682, 3182, 1682 and picks point 3. At the origin it gives 2816, 4864, 2816, 4864 where a symmetric metric ties all four, because the four points are equidistant from the origin.
 
@@ -5814,7 +5814,7 @@ Reproduced exactly.
 
 *V.22 SRE batch, from `FPM_atan` (blob 0x0a6a50) +0x0fa. **Reachability: FIRES**, on any vector with `y < 0`, `x > 0` and `|x| > |y|` -- a full 45-degree wedge, and `t_fpm_atan` visits it hundreds of thousands of times. Status: CONFIRMED. Fix class: none proposed; reproduced as measured.*
 
-**Finding 1586.** A full turn is 0x8000, so the reflection of an angle `t` about the positive x axis is `0x8000 - t`. The object computes `mov $0x7fff,%ebx; sub %ecx,%ebx` and uses that. The other three reflections in the same function -- `0x4000 - t`, `0x2000 - t` and `0x6000 - t` -- are all exact, which is what makes this one an error rather than a convention: a vector just below the positive x axis reports 0x7fff where the correct answer is 0 (or 0x8000, the same angle). The size of the error is one count everywhere in the wedge, so it is a constant bias of about 0.011 degrees and not a discontinuity. `V22_SRE_recover`, the only caller in the object, folds the result at 0x4000 immediately afterwards, so the bias reaches its timing loop as a one-count offset in `err_avg` and is swamped by the smoother's own truncation.
+**Finding F1586.** A full turn is 0x8000, so the reflection of an angle `t` about the positive x axis is `0x8000 - t`. The object computes `mov $0x7fff,%ebx; sub %ecx,%ebx` and uses that. The other three reflections in the same function -- `0x4000 - t`, `0x2000 - t` and `0x6000 - t` -- are all exact, which is what makes this one an error rather than a convention: a vector just below the positive x axis reports 0x7fff where the correct answer is 0 (or 0x8000, the same angle). The size of the error is one count everywhere in the wedge, so it is a constant bias of about 0.011 degrees and not a discontinuity. `V22_SRE_recover`, the only caller in the object, folds the result at 0x4000 immediately afterwards, so the bias reaches its timing loop as a one-count offset in `err_avg` and is swamped by the smoother's own truncation.
 
 ## D307 🐛 `reset_dtmf` clears sixteen of the twenty bytes of the digit string
 
@@ -5831,7 +5831,7 @@ terminating zero when the string ends with 'C', so `digits[16..19]` is stale
 until a seventeenth digit overwrites it. Status: `unmeasured`. Fix class:
 none proposed.*
 
-**Finding 1701.** The array is twenty bytes and the object knows it: the next
+**Finding F1701.** The array is twenty bytes and the object knows it: the next
 field starts at +0x354, `dtmf_modem` stores at `digits[ndigits]` without a
 bound and gives up when `ndigits` reaches 20, so all twenty are writable and
 the last four are reachable. Only the clearing loop stops at sixteen.
@@ -5863,7 +5863,7 @@ immediate -- a write to offset 0x33c of a null pointer.** Status:
 `unmeasured`; the harness has no allocation-failure injection, so the path
 cannot be driven differentially at all. Fix class: none proposed.*
 
-**Finding 1702.** The same shape as D5's family, D171, D175, D180 and D220,
+**Finding F1702.** The same shape as D5's family, D171, D175, D180 and D220,
 and the same reasoning: there is nothing to reproduce, because the original's
 behaviour on a failed allocation is a fault and a differential test cannot
 compare against one. Unlike the three constructors in D62, ours does not add
@@ -6008,7 +6008,7 @@ and `compare.py` is where it will show.
 `SMCv32_PMAP_ABS16` is NOT this case and is `unsigned short`: one consumer,
 `movzwl`, nothing contradicting it.  An earlier revision of this branch
 flipped it to `short` for symmetry with its neighbour, which had finding
-613's rule backwards -- that a difference is unobservable is why the codegen
+F613's rule backwards -- that a difference is unobservable is why the codegen
 evidence is worth having, not a reason to set it aside.
 
 ======================================================================
@@ -6047,7 +6047,7 @@ epilogue, as does the `ja` for anything above 0x21, and the epilogue is
 register value is returned as the PCM decision. Reproduced rather than
 repaired -- a chosen value would be behaviour the object does not have -- and
 `t_v92dec.cpp` compares object state but not the return value on those three.
-Finding 2101. Whether any caller can reach a phase 3 state of 6, 18 or above
+Finding F2101. Whether any caller can reach a phase 3 state of 6, 18 or above
 33 is not measured here.
 
 **AND THE SIBLING HAS IT TOO — see D321.** `getV90Decision` returns an
@@ -6112,13 +6112,13 @@ loads the same pointer and calls straight through it. `t_v90p3ddec.cpp` drives
 the guarded arm with a null Jd; the unguarded one is left alone because
 exercising it is a crash and not a comparison.
 
-## Read against findings 1204-1209: the register and the bench are the same investigation
+## Read against findings F1204-1209: the register and the bench are the same investigation
 
 *Salvaged from `review/nextsteps-2026-08-11`, which was deleted as a stray;
 this was the only part of it not superseded. Written 2026-08-11 -- the counts
 below are that sitting's and have not been re-measured.*
 
-Everything above was written **before** findings 1204-1209, and ranks the
+Everything above was written **before** findings F1204-1209, and ranks the
 register against exactly the bench problem those findings have been chasing.
 Nobody had read the two together. Doing so changes what the next bench sitting
 should do.
@@ -6325,7 +6325,7 @@ and through them every fixed-point coefficient update.** Status: `unmeasured`
 -- `convertEqualizerToMmx` computes `(1.0/(beta*2**24)) * maxLeCoefValue` and
 the setter computes `maxLeCoefValue / (beta*2**24)`; the two differ in the last
 bit, the quotient is fed to a truncated base-2 logarithm, and one ulp there is
-one step in the exponent and a factor of two in the step size. Finding 2148.
+one step in the exponent and a factor of two in the step size. Finding F2148.
 Fix class: none proposed; both are reproduced as the object has them.*
 
 ## D328 🐛 The magnitude of -32768 is -32768, so a printed minimum magnitude can be negative
@@ -6476,7 +6476,7 @@ relative error of a few times 1e-8. The `fadds` correction that follows is
 1e-6f, an absolute quantity, and truncation is toward zero — so the correction
 covers the error up to K = 21 and stops covering it at 22. `realK` returns a
 float and truncates nothing, so its own 1e-9f never matters (D346). Finding
-2194.
+F2194.
 
 ## D330 🐛 `determineDminForRrn` reads `prevNofUcodes` and `prevDmin` uninitialised when its rate-down search does not run once
 
@@ -6493,7 +6493,7 @@ reconstruction. Fix class: none proposed; reproduced as found.*
 
 The loop is entered only when the byte-wide `nofUcodes` is at least `maxM`, and
 its body is what writes `prevNofUcodes` and `prevDmin`; the three arms after it
-read both unconditionally. Finding 2160.
+read both unconditionally. Finding F2160.
 
 ## D331 🐛 `determineDminForRrn` divides one by a constellation count that nothing stops being zero
 
@@ -6515,7 +6515,7 @@ test plants a zero in one of the six every trial. Fix class: none proposed.*
 
 The same shape as D343 and reached twice per call, because the 2^((kTarget -
 log2 m)/6) computation is spelled out in each half rather than called. Finding
-2160.
+F2160.
 
 ## D332 ⚠ `determineDminForRrn` truncates a 32-bit constellation size to a byte and then compares it against the untruncated one
 
@@ -6528,7 +6528,7 @@ reachable.*
 
 `nofUcodes` is a byte because `constelBuild` returns one, and the object seeds
 it with a straight `mov %al,%bl` off a `V90MappingParams::constellationSize`
-that is four bytes wide everywhere else. Finding 2160.
+that is four bytes wide everywhere else. Finding F2160.
 
 ## D333 🐛 `setConstellationToNoise` stages accepted indices into a 128-byte frame local with nothing bounding the count
 
@@ -6574,7 +6574,7 @@ reproduced as found, and it is a diagnostic only.*
 
 The carry after `fldz; fcomps v` is set when `0.0 < v`, so the sign character
 is '+' only for a strictly positive value and '-' for zero as well as for
-negative. Four sites, one shape. Finding 2175 records why the codegen tier
+negative. Four sites, one shape. Finding F2175 records why the codegen tier
 cannot reproduce the branchless select at either setting of `-mieee-fp`.
 
 ## D336 🐛 `setConstellationToNoise_forceRate` doubles about 2^32 times when its bit count goes negative
@@ -6635,7 +6635,7 @@ saying not to "fix" it.*
 
 The store takes the shift loop's exhausted counter, which is zero on every
 path into it including the `count == 0` one that jumps straight there. Finding
-2182.
+F2182.
 
 ## D340 🐛 `setConstellationToNoise_forceRate` compares its walk's lower bound UNSIGNED
 
@@ -6662,7 +6662,7 @@ then prints and indexes the ucode table with.** Status: verified over the
 sweep. Fix class: none proposed; reproduced as found.*
 
 The whole build loop is skipped, count stays at its initial 1, and the trim
-and extend arms both see `nof == count` and do nothing. Finding 2186 records
+and extend arms both see `nof == count` and do nothing. Finding F2186 records
 why reaching this at all took the sweep to be re-parameterised.
 
 ## D349 🐛 `calcModulusParameters` shifts a 64-bit one by an unbounded count
@@ -6684,7 +6684,7 @@ reconstruction's.  Fix class: none proposed; reproduced as found.*
 `V90MappingParams::shaperSR` is written by
 `V90ConstellationDesigner::spectralDesign` out of the parameter block and is
 `int`; `word_0` is unsigned.  Nothing between the two writes and this read
-bounds either.  Finding 3050.
+bounds either.  Finding F3050.
 
 ## D350 ⚠ `getPowerIndexForPower` walks its whole ladder for a NaN
 
@@ -6695,13 +6695,13 @@ C0 set, so `jae` is not taken and `setb` yields 1 at every step -- the walk
 runs all 34 turns and returns 0, the same answer an enormous power gives.**
 Status: unmeasured; the compare is a bare ordered `fcom` with no parity test,
 which is what `-mno-ieee-fp` emits for every comparison in the object (finding
-1990), so a NaN case would be measuring the two builds' float-compare flags
+F1990), so a NaN case would be measuring the two builds' float-compare flags
 rather than the reconstruction.  The differential test drives both infinities
 and stops there.  Fix class: none proposed; reproduced as found.*
 
 Recorded rather than driven because the return is a saturating index and not a
 failure code -- 0 is a legal answer, so nothing downstream can tell the NaN
-apart.  Finding 3051.
+apart.  Finding F3051.
 
 ## D351 🐛 `adjustConstellationsToNewK` writes one past a constellation row when it has exactly 128 points
 
@@ -6883,7 +6883,7 @@ The second ambiguous cell, twenty-five instructions further on at 0x807d1, is
 the same shape with `setle` and picks the NEARER of ITS two candidates.  So
 this is not one tie-breaking convention applied twice: the two arms of the
 same construct disagree about which direction the comparison runs, which is
-what makes the first one a slip rather than a choice.  Finding 3218.
+what makes the first one a slip rather than a choice.  Finding F3218.
 
 ## D371 🐛 `FSE_decision_128pt` carries point 26's I coordinate as a literal one greater than the table's
 
@@ -6902,7 +6902,7 @@ AND NOT A COMPILER ARTEFACT.**  The two tie-breaks name four I coordinates as
 immediates -- 0x2799 twice, 0x32e9 and 0x3e3a -- and the first three equal
 `DECv32_ANA_IMAP128[14]`, `[15]` and `[24]` exactly.  A constant fold out of
 the const table would have produced 15929 here too; a hand-written constant
-would not have to.  Finding 3218.
+would not have to.  Finding F3218.
 
 ## D372 🐛 `FSE_decision_128pt`'s region tree puts the same rq boundary in two different places
 
@@ -6940,7 +6940,7 @@ while the Q bands are `q > 0x1fff` and `q >= 0xe000`, so a symbol at exactly
 (8192, 8192) is inner in I and outer in Q.  Recorded here rather than as a
 fourth entry because it is one construct read twice, and because `_64pt` runs
 on the symbol as received, where a test can put a value on the line directly.
-Finding 3217.
+Finding F3217.
 ## D380 ⚠ Object +0x08 has two of the author's own names, `ptc` and "Max Block Length"
 
 
@@ -6964,7 +6964,7 @@ behind it rather than on which string was read most recently.
 
 Recorded rather than silently resolved because a future reader who finds the
 "Max Block Length" string and greps for a field of that name will conclude the
-tree missed it.  Finding 3304.
+tree missed it.  Finding F3304.
 ## D360 🐛 `V22_FSE_init` zeroes the first 49 history entries twice
 
 *Batch of 2026-08-16, from `V22_FSE_init` (blob 0x08cd00) at 0x8cdd9 and
@@ -6979,7 +6979,7 @@ walking the 49 taps, and the loop after it clears `hist[i]` for i in 0..97.
 The first clear is entirely redundant -- `hist` is 98 shorts and the second
 loop covers all of it.  Recorded because the redundancy is the kind of thing a
 reader corrects without noticing, and correcting it would be a source change
-with no test able to see it.  Finding 3500.
+with no test able to see it.  Finding F3500.
 
 ## D361 ⚠ `FSEv22_decision24` falls back on index 0, which is outside its own search window
 
@@ -6998,7 +6998,7 @@ that count to be non-zero.  Fix class: none proposed; reproduced as found.*
 
 The initial best distance is `thresh[0] << 12`, the same 8192 the amplitude
 test uses, rather than 0x7fff.  `FSEv22_decision12` uses 0x7fff and has no
-equivalent.  Finding 3503.
+equivalent.  Finding F3503.
 
 ## D362 ⚠ `FSEv22_decision12` accumulates its squared distance in sixteen bits
 
@@ -7014,7 +7014,7 @@ non-zero.  Fix class: none proposed; reproduced as found.*
 
 Each axis error is truncated to a short before squaring, the 32-bit square is
 shifted down sixteen, and only then are the two added -- and the sum is
-truncated to a short again before the comparison.  Finding 3501.
+truncated to a short again before the comparison.  Finding F3501.
 
 ## D363 🐛 `Detect_v22` passes `FPM_AGC_agc` a fourth argument it does not have
 
@@ -7035,7 +7035,7 @@ same callee.  Fix class: none proposed.*
 
 The object pushes a constant 1 as a fourth argument.  `FPM_AGC_agc` takes
 three.  Unlike `bwchdem.c`'s site this caller also discards the return value,
-so no `agc.signal` read-back is needed to stay faithful.  Finding 3507 for what
+so no `agc.signal` read-back is needed to stay faithful.  Finding F3507 for what
 this function does.
 
 ## D364 ✅ `ModDataV22` narrows `V22_PPS_filter`'s `short` to `unsigned short`
@@ -7061,7 +7061,7 @@ cross-referenced until `V22FP_create` lands and the object gets a real type,
 at which point both become one struct member.*
 
 Recorded here rather than silently unified because a reader meeting the two
-constants would otherwise have to rediscover that they collide.  Finding 3505.
+constants would otherwise have to rediscover that they collide.  Finding F3505.
 
 ## D366 ✅ `V22FP_delete` drops a second argument that no callee reads
 
@@ -7108,7 +7108,7 @@ NOT.**  This used to say that `bitsToInfo`'s
 caught the second one, one layer out.  `bitsToInfo` has now been read and it
 is not: all five of that string's referrers guard `word_cac`, the index into
 `bits`, against 0x2edf, and NOTHING anywhere guards either count against the
-array it indexes.  See finding 4361, and D520 for the five arms that carry
+array it indexes.  See finding F4361, and D520 for the five arms that carry
 that check and the five that do not.
 
 Recorded rather than clamped because clamping would be a behaviour change that
@@ -7192,7 +7192,7 @@ record zero frees and zero allocations. An SRE-shaped guard reallocates on that
 input, and the mutation that rewrites `FPM_PPS_init`'s test into that shape is
 in `test/mutations/fpmpps.json` and is caught by that pass alone. So the
 sentence "this is a slip rather than a convention" is now something a test
-fails on. Finding 3661.
+fails on. Finding F3661.
 
 The SRE half of this entry is UNCHANGED and still unmeasured: `FPM_SRE_free`
 was written in the same batch, which adds a release path but no caller, and
@@ -7219,7 +7219,7 @@ maximum.  A modem whose equaliser has just diverged therefore records the
 largest possible error rather than a negative one, which is arguably what was
 wanted; but the same test also means `state->mse` is non-negative for ever, and
 the `mse > 0` gate below it can only fail on an exact zero.  Reproduced rather
-than corrected, and the consequence for the LMS gate is finding 3586.
+than corrected, and the consequence for the LMS gate is finding F3586.
 
 ## D392 ✅ `FPM_phasor` reads its quadrant sign tables four entries early for a phase of 0x8000 or more
 
@@ -7291,7 +7291,7 @@ not read as larger than it is:
   zero, so both sides return zero for all 8192 of those phases and no input
   can tell "the word is right" from "the word is zero".  It agreed before any
   of this work for an unrelated reason -- `fpm_cos_table[256]` was there under
-  the old `static const` layout and is also zero (finding 3623) -- and that
+  the old `static const` layout and is also zero (finding F3623) -- and that
   was two layouts coinciding rather than coverage.  `t_fpm_phasor` counts the
   separating trials per quadrant, prints them, and asserts that one at 0 with
   the derivation.  What DOES check that word is the neighbourhood block, which
@@ -7301,7 +7301,7 @@ not read as larger than it is:
   both tables (0x0a944b, 0x0a9472) and must index the EXTENDED arrays with the
   same bias when it is written, not the four-entry exported ones.
 
-**THE `--coverage` OBJECTION IS GONE.**  Finding 3624 recorded that
+**THE `--coverage` OBJECTION IS GONE.**  Finding F3624 recorded that
 `--coverage` appends `__gcov_.FPM_MTD_create/delete/detect` to `fpm_mtd.c`'s
 `.data` at offsets 0x0c, 0x24 and 0x3c, immediately after `COEF_DC` at 0, so
 in the instrumented tree `tools/debugcov.py` builds, the sine's window read
@@ -7315,7 +7315,7 @@ ACROSS one.**  The right response to it is to stop making the claim.
 independent of the phasor entirely: its one reference in 1.2 MB is at .text
 0x0a921a inside `FPM_MTD_detect`, `nm` marks it `D` and not `R`, and the
 two-byte pad at 0x081da is itself proof of a translation-unit boundary
-(findings 3620-3622).  Only the DEPENDENCE was removed, not the attribution.
+(findings F3620-3622).  Only the DEPENDENCE was removed, not the attribution.
 
 **The mutation sets.**  `test/mutations/fpmphasor.json` is 7 of 7 caught: the
 quadrant masked, the phase read unsigned in each of the two functions, a wrong
@@ -7331,7 +7331,7 @@ phasor had re-acquired a dependence on another translation unit's layout.
 `test/mutations/fpmmtd.json` is new and keeps `COEF_DC`'s VALUE adjudicated
 where it belongs, against `t_fpm_mtd`.
 
-Findings 3588 for the original derivation, 3620-3622 for the translation-unit
+Findings F3588 for the original derivation, 3620-3622 for the translation-unit
 attribution and the emission order, 3623 for what each compiler showed before
 any fix, 3624 for the instrumented build, and 3700-3703 for this one.
 
@@ -7428,7 +7428,7 @@ the reconstruction to it.
 
 `ModDataV32` and `TxNoCarrierV32` hand `fp + 0xb0` to an `SMCv32_encoder_*` as
 `struct v32_symout *` and to `FPM_PPS_filter` as `struct fpm_smc_ring *`. The
-two are the same layout under two tags -- finding 3646 has the field-by-field
+two are the same layout under two tags -- finding F3646 has the field-by-field
 table -- so `src/pump/v32/v32data.c` carries a cast at each of the three sites.
 Not repaired here: unifying them is a TYPE change, `docs/plan.md` §3 forbids
 one from inside a batch with other work in flight, and phase 6 collects the 27
@@ -7446,7 +7446,7 @@ the decided point, and so `*angle` into the carrier loop and the four
 differentially encoded bits into the data path — not only the equaliser's
 error term.** Status: CONFIRMED, and the reachable set is a proof over the
 whole input domain rather than a sample. Fix class: none proposed; reproduced
-as written. Finding 3801.*
+as written. Finding F3801.*
 
 Every sibling scales both squared terms before summing them — `_16Tpt` `>> 16`
 on each, `_4pt` 15 and 16 (which is D301, its own defect), `_64pt` and
@@ -7629,7 +7629,7 @@ answer: everything downstream is consistent with the smaller count.
 The fix would be `1.0f / (float)log10(2)`'s error running the other way, or
 simply `fyl2x` against `fld1`, and either changes the designed constellation
 for real calls -- so this is a defect in the original that the reconstruction
-is required to keep.  Finding 4400 has the measurement and the table.
+is required to keep.  Finding F4400 has the measurement and the table.
 
 ## D471 🐛 `V90TRN2Designer::setTrn2DummyConstel` has no bound against the 128-byte row
 
@@ -7683,7 +7683,7 @@ whatever the register the symbol lives in happened to hold: `ja 16ffb` at
 Reproduced as `short sym; switch (...) {...} return sym;`, which is what
 produces that code. A `default:` arm would add an instruction the blob does not
 have. Not reachable by any trial, so `t_v92p4gen.cpp` cannot drive it and does
-not try; finding 4704.
+not try; finding F4704.
 
 ## D561 ✅ `bits[-1]` at `bitsPerSymbol == 0` writes into `prevBit`
 
@@ -7699,7 +7699,7 @@ thirty-six symbols, `reset`'s `add $0x2,%dl; mov %dl,0x43(%esi)` at
 .text+0x19065, and the add is EIGHT BITS WIDE -- a second argument of 254
 gives zero.  The constructor never writes the field at all.**
 **Observability: `prevBit`, the block, and every symbol the mapper derives
-from them.**  Findings 5400, 5401, 5402.*
+from them.**  Findings F5400, F5401, F5402.*
 
 `generateCPu`, `generateSUVu`, `generateE2u` and `generateTRN2u` fold the
 carried differential bit into `bits[bitsPerSymbol - 1]`. With `bitsPerSymbol`
@@ -7736,7 +7736,7 @@ mutation in `src/`, it emits the mutation's, and `make period` goes 221 passed
 / 1 failed against 222 / 0. `compare.py` does not
 move -- 410 identical (the same SET), 78 same size, 606 different size, 401355
 bytes, before and after, on GCC 3.4.2 exact -- because a constant bias on an
-index into a member array rides in the addressing mode. Finding 3701's
+index into a member array rides in the addressing mode. Finding F3701's
 argument, one class along.
 
 **WHAT IT REPLACED.** The entry used to read *reproduced, and NOT DRIVEN*:
@@ -7744,7 +7744,7 @@ argument, one class along.
 subscript was out of bounds the two stores' ORDER belonged to the compiler --
 GCC 13 kept our order, GCC 3.4.2 did not, and `make period` failed 240 checks
 on unmutated source. Four store-order mutations were withdrawn with it. That
-was right about the TRIAL (finding 4705) and it was not the fix; the owner's
+was right about the TRIAL (finding F4705) and it was not the fix; the owner's
 ruling is that an implementation must not depend on the ordering of objects in
 memory, and this was the same ruling with two members of one class rather than
 two objects in one section. **A trial withdrawn because our code was undefined
@@ -7819,7 +7819,7 @@ Reproduced as the object has it, and NOT DRIVEN.  `t_v92info.cpp` clamps its
 grid to 0..6 and says so at the top: past six the subscript is out of bounds in
 OUR source, and a trial there would be the compiler adjudicating our undefined
 behaviour rather than the object adjudicating our reading -- D561's argument,
-one class up.  Finding 4750.
+one class up.  Finding F4750.
 
 **AND D561 HAS SINCE BEEN CLOSED THE OTHER WAY, WHICH IS THE STANDING WORK
 HERE.**  The clamp is a statement about OUR source and not about the object, so
@@ -7828,7 +7828,7 @@ one array object spanning `prevBit` and the block, and its withdrawn trial and
 mutations came straight back.  The same move is available here -- the walk runs
 off `short_a2` into `word_104`, `suv` and `word_10c`, all members of the same
 class -- and until someone makes it, this grid stops at six for the reason
-above rather than because the object does.  Findings 5400 and 5402.
+above rather than because the object does.  Findings F5400 and F5402.
 
 ## D571 ✅ `byte_128 == 0` divides by zero in the padded-length round-up
 
@@ -7841,7 +7841,7 @@ does not initialise it.
 
 Reproduced, and kept out of the grid: `t_v92info.cpp` uses 1..6.  A trial at
 zero would trap identically on both sides, which measures the CPU rather than
-the reading.  Finding 4750.
+the reading.  Finding F4750.
 
 ## D700 ✅ `generateSymbol` divides by four different fields and guards none of them, and that is how D571 is reached
 
@@ -7874,7 +7874,7 @@ Reproduced with no guard added, and NOT DRIVEN at zero: `t_v92p4sym.cpp`'s
 `gs_setup` keeps `word_1b0` non-zero, `patternLength` in 1..7 and both
 `bitsPerSymbol` fields in 1..16.  A trial at zero raises #DE identically on
 both sides, which measures the CPU rather than the reading -- D571's argument.
-Finding 4820.
+Finding F4820.
 
 ## D701 ✅ Five `generateSymbol` arms return an uninitialised local when nothing is staged
 
@@ -7898,7 +7898,7 @@ is not the same residue.  `t_v92p4sym.cpp` now stages symbols so the copy
 always happens.  This is why the per-member tests of `generateRm` and
 `generateB1u` never showed it: ours and the blob's are separate functions with
 the same frame, so both read the same residue and agreed for the wrong reason.
-Finding 4821.
+Finding F4821.
 ## D660 ⚠ `generateRi` and `generateRiNot` read an uninitialised `short` on an unreachable path
 
 **Where:** `src/pump/v90/V90Phase4Modulator.cpp`, `generateRi` and
@@ -8128,7 +8128,7 @@ Reproduced with no initialisation added, and DRIVEN: `t_v92modstate.cpp` seeds
 the word identically on both sides, never zeroes it, and sweeps the `OFFSET` arm
 over five values including a negative one and one past 1.0.  The two sides agree
 BECAUSE nobody wrote it, and a reconstruction that helpfully cleared it fails.
-Finding 5900.
+Finding F5900.
 
 ## D801 ⚠ `mkResampledSignal` subtracts the split point from the block length without testing it
 
@@ -8152,12 +8152,12 @@ Nothing in `mkResampledSignal`'s own 662 bytes bounds it, and nothing has to as
 long as the pair is only ever set from there -- but `blockRemaining` is
 RECOMPUTED by every call of `progress`, so a change staged in one block and
 applied against a shorter later one is still not excluded by anything either
-function does.  Finding 7540.
+function does.  Finding F7540.
 
 Reproduced with no guard added, and NOT DRIVEN: `t_v92modstate.cpp` keeps the
 split point in `0 .. blockRemaining`.  A trial past it walks off both sides'
 buffers at once and would measure the allocator rather than the reading, which
-is D571's argument.  Finding 5900.
+is D571's argument.  Finding F5900.
 
 ## D802 ⚠ `mkResampledSignal`'s wrapped join computes its trip count as `n2 - 1` unsigned, and does not test for zero
 
@@ -8185,7 +8185,7 @@ an `unsigned int`, which is the object -- and NOT DRIVEN: `t_v92modstate.cpp`
 gives the second segment at least eight input samples on every split trial and
 asserts that it produced at least one output.  A trial at zero walks off both
 sides' buffers at once, which measures the allocator rather than the reading
-(D571's argument).  Finding 5900.
+(D571's argument).  Finding F5900.
 ## D850 ⚠ The float DFE history shift is unguarded, and runs away at `dfeLength` 0 or 1
 
 *`V90Equalizer::process`, blob 0x39830. Reproduced as a bounded input
@@ -8273,7 +8273,7 @@ So the released library accepts a parameter-file pointer, walks the entire
 parameter list against it, and applies nothing. Whatever read the file was
 removed before this object was linked -- the call sites, the names and the
 target addresses all survived, which is why the field map is recoverable at
-all (finding 860).
+all (finding F860).
 
 Not proposed as a fix and not fixable from the object: what the parser did
 with the file is not in the object in any form, so writing one would be
@@ -8289,7 +8289,7 @@ in this object, for D900's reason; in a build with a real parser it is a wrong
 coefficient in the timing recovery's slow arm.**  Status: verified bit-exact;
 reproduced exactly as the object has it, both calls to the same address.*
 
-Finding 861 records four offsets that `loadParams` reads twice under two
+Finding F861 records four offsets that `loadParams` reads twice under two
 names, and reads three of them as what they plainly are: a `GERMAN_PBX_`
 override written after the name it overrides. **The fourth is not that shape
 and is a defect in the original.**
@@ -8313,7 +8313,7 @@ Four things converge and nothing dissents:
   `K1` is 2e-4 rather than the largest, so the `K1` column is not monotone
   either. **The argument is the FAST/MEDIUM/SLOW triple and not a four-term
   progression**, and it is stated that way rather than made to look tidier;
-- +0x0f4 is one of the nine `unnamed_*` slots finding 878 measured as a FLOAT
+- +0x0f4 is one of the nine `unnamed_*` slots finding F878 measured as a FLOAT
   declared `int` -- so it is a coefficient, not a count or a duration;
 - +0x0f0 being read twice is otherwise unexplained, where the other three
   aliases explain themselves.
@@ -8334,7 +8334,7 @@ does; `t_v90loadparams` compares the two logs entry for entry and would fail
 if it did not. What would settle the name outright is a reader of +0x0f4 --
 `V90Jd` or whatever consumes the TRN1 quality-control betas -- naming it in a
 diagnostic. That is CLAUDE.md's evidence rule 1, a format string that prints
-the thing, and it is exactly how finding 3527 retired +0x074 and +0x078 in
+the thing, and it is exactly how finding F3527 retired +0x074 and +0x078 in
 this same class: `V90TRN2Design`'s own `%d` line named `maxUcode` and
 `nofUcodesInTrn2`, and the slot beside them at +0x080 kept its offset name
 because no string reached it. Nothing weaker should retire this one either.
@@ -8363,7 +8363,7 @@ and on the direction:
     flt_14..20   bits[69 + i] weight fltTable_1[6 - i], both       agree
     masks        bits[pos + 1 + i] weight 2^i out, 2^(15-i) back   DISAGREE
 
-**SETTLED: `evaluateInfo` IS THE WRONG SIDE.** Finding 6800 closed this against
+**SETTLED: `evaluateInfo` IS THE WRONG SIDE.** Finding F6800 closed this against
 ITU-T V.90 Table 14 and V.92 Table 23, which are identical here: "bit 137
 corresponds to Ucode 0", with "Bit 0 is transmitted first" -- so the
 first-transmitted bit of each sixteen-bit block is the LOWEST Ucode. That fixes
@@ -8383,7 +8383,7 @@ either way.
 
 **Reachability unmeasured.** Whether a live V.92 session ever puts a non-zero
 mask word on the wire depends on `setV92CPpckFromParamsInfo`, which fills the
-two blocks and is not written yet. Finding 6603.
+two blocks and is not written yet. Finding F6603.
 
 ## D921 ⚠ The seven-position skip is an empty loop in the object
 
@@ -8408,7 +8408,7 @@ as a defect to every future reader. The cost is two instructions' worth of
 **What would overturn this** is evidence that the body was not empty in the
 source: something the loop read and discarded. Nothing in the range suggests
 one -- there is no load between the `dec` and the `jns` -- so it is recorded
-as the compiler's and not as ours. Finding 6605.
+as the compiler's and not as ours. Finding F6605.
 
 ## D922 ⚠ `evaluateInfo`'s mask arms keep the read cursor in a register; the object reloads it
 
@@ -8469,7 +8469,7 @@ allocation.
 **THE SIBLING CLASS GUARDS AND SAYS SO.** `V90CP::bitsToInfo` carries
 `cmp $0x2edf; ja` at five of its ten store sites and prints the author's own
 `"\n *** error CP bit , not enouch memory in the buffer *** \n"` instead --
-findings 4361 and D520, which record that five of ten are guarded and five are
+findings F4361 and D520, which record that five of ten are guarded and five are
 not. So the author knew the failure mode, wrote a diagnostic for it, and
 **none of it is in the V.92 class**: `V92CP` has no bound, no string, and no
 arm to reach one from. The two classes were read from addresses 0x2180 apart
@@ -8477,7 +8477,7 @@ and this is the sharpest difference between them.
 
 **Reachability: NOT from a conformant peer. This paragraph replaces an earlier
 one that said the opposite** -- it claimed the bound was "reachable from the
-wire and not only from a fault", which finding 6800 disproved.
+wire and not only from a fault", which finding F6800 disproved.
 
 ITU-T V.90 Table 14 and V.92 Table 23 both bound each of the six four-bit
 constellation indices at bits 103:127 to **"an integer between 0 and 5"**.
@@ -8498,7 +8498,7 @@ original wording made.
 difference on exactly the inputs that matter, and CLAUDE.md's rule is that a
 defect recorded here is not quietly corrected in `src/`. `t_v92cpb2i` stays
 inside the array on purpose -- its longest message is six groups in both
-blocks, 1,785 of 2,000 -- and says so in its header. Finding 6600's batch.
+blocks, 1,785 of 2,000 -- and says so in its header. Finding F6600's batch.
 ## D780 ✅ `getSpectrumOfBin` indexes the spectrum with no bound at all
 
 `V90SpectralVerifier::getSpectrumOfBin(unsigned long)` is fifteen bytes and
@@ -8632,7 +8632,7 @@ values and the two sides would disagree the moment either was used.
 deviation high-water when it was cut; `v92-modulator-tail` took D800 for
 `V92Modulator::resamplerPhaseOffset` while that branch ran.  Both measurements
 were right when made -- a number cannot be reserved across a branch's lifetime,
-only claimed at merge.  See finding 6100.
+only claimed at merge.  See finding F6100.
 
 Two undefined-behaviour sites in one class, both reproduced and neither driven.
 
@@ -8648,7 +8648,7 @@ object has four separate constant stores, so the switch is the source's, and
 a `default:` arm would be code the object does not contain.  Reproduced by
 writing no default and no initialiser.
 
-It is unreachable through the object's own data: finding 5853 regenerates all
+It is unreachable through the object's own data: finding F5853 regenerates all
 128 entries of `actionLookupTable` from the digit rule and every digit in every
 live entry is in 1..4, while the dead entries are zero and are never selected
 because the candidate loop runs to 2^(shaperId+1).  It becomes reachable only
@@ -8697,7 +8697,7 @@ address to `V90BitsToSymbol::process(unsigned int &nofBits, short
 Nothing writes `0x22(%esp)` before the call in any of the three, and `process`
 writes through that pointer only when it drains a whole block: with
 `symbolsBlockSize` zero it reports SIZE_NOT_SET, and on the BUFFER_UNDERFLOW
-arm it returns without touching `*outSymbols` (finding 7520 has the arm order,
+arm it returns without touching `*outSymbols` (finding F7520 has the arm order,
 and it is the object's own: `symbolsDone < symbolsBlockSize` is tested first).
 So there are two reachable configurations in which the returned symbol is
 whatever was on the stack.

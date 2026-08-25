@@ -12,11 +12,11 @@ for eight merges, and on the ninth it did this:
 
 -- two elliptic filter COEFFICIENTS, in a file the branch had never touched,
 because a finding number and a filter coefficient are the same four digits.
-The same sweep repointed `finding 7820` in a sibling wave's source comment and
+The same sweep repointed `finding F7820` in a sibling wave's source comment and
 two citations in `refinement.md` that pointed at the finding those sentences
 were about. **`refcheck.py` passed throughout**, because all four still
-RESOLVED -- findings 212/213's failure mode, and the one thing that checker
-structurally cannot see. Finding 7833.
+RESOLVED -- findings F212/213's failure mode, and the one thing that checker
+structurally cannot see. Finding F7833.
 
 WHAT THIS DOES INSTEAD, AND WHAT IT REFUSES
 
@@ -43,7 +43,7 @@ import sys
 
 #
 # A CITATION IN PROSE.  `### 7820.` is a heading, `(7820)` a parenthetical,
-# `finding 7820` / `findings 7820-7825` explicit, `7820's` possessive.
+# `finding F7820` / `findings F7820-7825` explicit, `7820's` possessive.
 #
 PROSE = [
     (re.compile(r"(?<=^### )(\d{3,5})(?=\.)", re.M), "heading"),
@@ -105,10 +105,10 @@ def self_test():
          "### 7827. A HEADING"),
         ("docs/method/x.md", "were extra code (7823) -- see", {"7823": "7830"},
          "were extra code (7830) -- see"),
-        ("docs/method/x.md", "as finding 7820 measured", {"7820": "7827"},
-         "as finding 7827 measured"),
-        ("src/a.cpp", " * ENUMERATED (finding 7820).  The map", {"7820": "7827"},
-         " * ENUMERATED (finding 7827).  The map"),
+        ("docs/method/x.md", "as finding F7820 measured", {"7820": "7827"},
+         "as finding F7827 measured"),
+        ("src/a.cpp", " * ENUMERATED (finding F7820).  The map", {"7820": "7827"},
+         " * ENUMERATED (finding F7827).  The map"),
         #
         # THE CASE THIS TOOL EXISTS FOR.  A coefficient, in a code file, whose
         # value happens to be a live finding number.

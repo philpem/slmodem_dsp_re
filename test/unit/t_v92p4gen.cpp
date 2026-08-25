@@ -27,7 +27,7 @@
  * `recivedPartOneSilenceRrnSUV`, `resetBeforRRN`, `resetRRNSecondSection`).
  * With one shared block our side failing to write would be covered up by the
  * reference writing a moment later -- the final state is identical either way,
- * which is finding 224's shape.  Two blocks seeded identically and compared
+ * which is finding F224's shape.  Two blocks seeded identically and compared
  * against each other is what witnesses OUR store.
  *
  * The same argument applies to `bitsToSymbol`, which
@@ -239,7 +239,7 @@ static const int states[] = {
  * 2400 and 2412 are `recivedRt`'s gate -- `cmp $0x95f; jbe` and then a
  * reciprocal divide by twelve -- and 2399 is the value just under it.  Without
  * the three, six mutations of that member's guard read NOT CAUGHT while every
- * differential check passed, which is finding 134's shape.
+ * differential check passed, which is finding F134's shape.
  */
 static const unsigned int counts[] = {
 	0u, 1u, 2u, 12u, 23u, 24u, 25u, 36u, 48u, 1200u, 2399u, 2400u,
@@ -653,7 +653,7 @@ run_member(int m, unsigned int lvl)
 			 * happened to line up, and on this grid they never
 			 * did: the mutation that deletes `state = 29` read
 			 * NOT CAUGHT.  A trial that cannot reach the code it
-			 * names is finding 134's shape.
+			 * names is finding F134's shape.
 			 */
 			for (t = 0; t < 2; t++) {
 				M(t)->cp = 0;

@@ -60,7 +60,7 @@ typedef short (*v34_scramble_fn)(void *obj, short nbits);
 /*
  * The transmit shell context sits this far past the receive one.  Every
  * offset getFrame uses lands on a field of this struct once the difference
- * is subtracted -- see finding 137.
+ * is subtracted -- see finding F137.
  */
 #define V34_SHELL_TX	0x1be0
 
@@ -182,7 +182,7 @@ struct v34_shell {
 		/*
 		 * AND WHAT `preinitdigital` ACTUALLY INSTALLS HERE is a
 		 * scrambler in the transmit context and a descrambler in the
-		 * receive one -- see finding 178.  That is the same pairing
+		 * receive one -- see finding F178.  That is the same pairing
 		 * the two names above describe, which is the point: the
 		 * shell's bit source IS the scrambler and its sink IS the
 		 * descrambler.

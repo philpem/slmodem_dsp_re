@@ -6,7 +6,7 @@
  * bound, what the class is FOR and how `actionLookupTable` is built; this file
  * is the code and the per-function evidence.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * THE ORDER OF THE THREE SUBOBJECT ACTIONS IS THE ABI'S, NOT THIS FILE'S.
  * `movb $0x0,0x38(%ebx)` comes before the call to the encoder's constructor,
@@ -123,7 +123,7 @@ V90SpectralShaper::~V90SpectralShaper()
  * exactly ONE of the two operands to be unsigned and does not say which.  The
  * other reading is an `unsigned` local in `advanceTrellis` dividing by an
  * `int` table; it emits the same instruction and nothing else in the object
- * touches either.  Recorded rather than guessed at, per finding 3120's rule.
+ * touches either.  Recorded rather than guessed at, per finding F3120's rule.
  * ===========================================================================
  */
 unsigned int pow10Table[5] = { 1, 10, 100, 1000, 10000 };
@@ -141,7 +141,7 @@ unsigned int pow10Table[5] = { 1, 10, 100, 1000, 10000 };
  * The blob's C1-before-C2 clone order is not reachable from source: GCC 3.4.2
  * emits this class's constructor clones C2-first whatever the file says.
  * Kept because it is reorder-only and costs nothing, as 7796's neutral files
- * were.  Finding 7846.
+ * were.  Finding F7846.
  */
 
 V90SpectralShaper::V90SpectralShaper()
@@ -220,7 +220,7 @@ V90SpectralShaper::reset(unsigned int id, unsigned int sr,
 
 	/*
 	 * THE FIFTEEN DIFFERING BYTES ARE HERE, AND THEY ARE A BASE REGISTER --
-	 * DECLINED, do not "fix" it (finding 7826).  They are one contiguous
+	 * DECLINED, do not "fix" it (finding F7826).  They are one contiguous
 	 * run, +0x7c..+0x8a:
 	 *
 	 *     blob   mov 0x8(%esi),%edx ;  mov %edx,0x20(%ebx)
@@ -277,7 +277,7 @@ V90SpectralShaper::reset(unsigned int id, unsigned int sr,
  * it is a `float` spill, four bytes each way, so it is the identity.  It is
  * the register allocator keeping the value live across `reset()`, not an
  * arithmetic step: a `double` or `long double` spill would be `fstpl`/`fstpt`
- * and would round, which is the distinction finding 1448 turns on.
+ * and would round, which is the distinction finding F1448 turns on.
  * ===========================================================================
  */
 void
@@ -409,16 +409,16 @@ V90SpectralShaper::applyAction(int action, short *dst)
  *
  * THE COMPARISON IS `metric < best` WITH `metric` IN `%st(0)`.  `fcoms
  * 0x30(%esp)` at 0x32cdd, then `fnstsw`/`sahf`/`jae` to skip -- an ORDERED
- * compare with no parity test, which is `-mno-ieee-fp` (finding 1990) and not
+ * compare with no parity test, which is `-mno-ieee-fp` (finding F1990) and not
  * a source choice.  The operand order is the natural one here and needed no
  * correction: the value being tested is a call's return in `%st(0)` and the
  * threshold is the memory operand, which is what `x < local` compiles to when
- * `x` is a temporary.  Finding 3529's swap does not apply, because
+ * `x` is a temporary.  Finding F3529's swap does not apply, because
  * `tree_swap_operands_p` only swaps when operand 0 is a bare DECL and a
  * function result is not one.
  *
  * THE TWO OPERANDS ARE AT DIFFERENT PRECISIONS ON PURPOSE, and this is the
- * whole of finding 5854.  `best` is a `float` and lives in memory, so storing
+ * whole of finding F5854.  `best` is a `float` and lives in memory, so storing
  * it ROUNDS; `metric` is a `long double` and never leaves `%st(0)`, so the
  * comparison sees all 64 significand bits of the value `getMetric` just
  * returned.  Declaring `metric` a `float` puts an `fstps`/`flds` pair between
@@ -559,7 +559,7 @@ V90SpectralShaper::advanceTrellis()
  *
  * A ZERO SIGN BIT NEGATES.  `cmpb $0x0,0x18(%ecx,%edi,1)` then `jne` past the
  * `neg` at 0x3306a, so 1 is positive.  The 32-bit `movzwl`/`neg` has its upper
- * half discarded by the 16-bit store, which is finding 614's free case and not
+ * half discarded by the 16-bit store, which is finding F614's free case and not
  * evidence about `in`'s signedness.
  *
  * `writeIndex` IS INVARIANT ACROSS EVERY PATH.  The write loop advances a
@@ -594,7 +594,7 @@ V90SpectralShaper::advanceTrellis()
  * 279; the other five change the SIZE.  None is closer.  So the missing
  * statement is elsewhere, and the residual here is block layout -- the blob
  * puts the odd-index encoder call inline after the loop and jumps back, where
- * we send it out of line.  Finding 7846.
+ * we send it out of line.  Finding F7846.
  * ===========================================================================
  */
 void

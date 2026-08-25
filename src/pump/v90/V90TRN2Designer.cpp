@@ -6,7 +6,7 @@
  *
  * PLAIN CDECL with `this` as the first STACK argument -- `mov 0x4(%esp),%eax`
  * with no frame at all -- so nothing here needs a calling-convention
- * attribute (finding 215).
+ * attribute (finding F215).
  */
 
 #include <stddef.h>
@@ -92,7 +92,7 @@ V90TRN2Designer::~V90TRN2Designer()
  *
  * So the argument is a FLAG and not a length: nothing here stores it, and the
  * value that lands in `nofUcodesInTrn2` comes from +0x080.  That asymmetry is
- * what finding 3527 used to call +0x080 the configured value and +0x078 the
+ * what finding F3527 used to call +0x080 the configured value and +0x078 the
  * working one, and it is why this member is named for what it selects rather
  * than for what it is passed.
  */
@@ -150,7 +150,7 @@ V90TRN2Designer::setTrn2DummyConstel(V90MappingParams *mappingParams)
  * st(1) * log2(st(0)) and pops, so the pair takes one value and leaves one.
  *
  * GCC DOES NOT EMIT THAT SEQUENCE FOR `log10()` AT THIS TREE'S FLAGS, and the
- * flag that would is not the one finding 876 names.  Measured on the period
+ * flag that would is not the one finding F876 names.  Measured on the period
  * compiler in `tools/toolchain/`, at `build.sh`'s exact flag list plus one:
  *
  *     (nothing)                                       call log10
@@ -171,7 +171,7 @@ V90TRN2Designer::setTrn2DummyConstel(V90MappingParams *mappingParams)
  * and `VPcmFloModem.cpp` each carry the same eight lines, and Psd.cpp says why
  * a shared header is a separate concern: a new C++ header has to be added to
  * `offcheck.py`'s SKIP_HEADERS or the `offsets` gate breaks files nobody
- * touched.  Finding 876.
+ * touched.  Finding F876.
  */
 static inline long double
 trn2_x87_log10(long double x)
@@ -259,7 +259,7 @@ trn2_x87_fsqrt(long double x)
  * The companding, and it is a macro for the reason
  * `V90ConstellationDesigner.cpp`'s `FORCERATE_ENCODE` is one: the object has
  * SIX pairs of `linear2alaw`/`linear2ulaw` call sites in this function alone,
- * and a `static` helper would not inline at these flags (finding 2163).
+ * and a `static` helper would not inline at these flags (finding F2163).
  *
  * `linear2alaw`'s result is XORed with 0xd5 and `linear2ulaw`'s is
  * complemented, which is the pair this object always uses and which
@@ -306,7 +306,7 @@ trn2_x87_fsqrt(long double x)
  * `-funsafe-math-optimizations` licenses and it is not set).  The two spell
  * different NUMBERS -- the results go straight through a `(short)`
  * truncation, so a last-bit difference is a different constellation.
- * Finding 4403.
+ * Finding F4403.
  */
 short
 V90TRN2Designer::V90TRN2Design(V90MappingParams *mappingParams,
@@ -419,7 +419,7 @@ V90TRN2Designer::V90TRN2Design(V90MappingParams *mappingParams,
 	 * and 127 for full scale, both laws -- so `params->maxUcode` acts as a
 	 * FLOOR under the ceiling: it stops the power ladder from setting a
 	 * limit quieter than the parameter allows.  The name is the object's
-	 * (finding 3527) and this comment says only what the instructions say.
+	 * (finding F3527) and this comment says only what the instructions say.
 	 *
 	 * The field is `int` and the comparison is one byte, so the cast is at
 	 * the use -- `V90Parameters.h`'s layout is frozen and its punned sites

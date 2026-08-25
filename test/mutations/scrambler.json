@@ -134,7 +134,7 @@
     "replace": "\t\tr = (T)(in ^ *pTap1 ^ *pTap2);\n\t\tpTap1--;\n\t\tpTap2--;\n\t\t*out = r;\n\t\tif (--pOut <= pLimit) {"
   },
   {
-    "label": "process(bulk): the intermediate is T, not I -- finding 870, <i,h>",
+    "label": "process(bulk): the intermediate is T, not I -- finding F870, <i,h>",
     "find": "\t\tI r = (I)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;",
     "replace": "\t\tT r = (T)(in[i] ^ *pTap1 ^ *pTap2);\n\n\t\tpTap1--;\n\t\tpTap2--;\n\t\tout[i] = r;\n\t\t*p = (T)r;"
   },
@@ -170,7 +170,7 @@
     "find": "\t\t*pOut = in;\n\t\tr = (I)(*pOut ^ *pTap1 ^ *pTap2);",
     "replace": "\t\t*pOut = in;\n\t\tr = (I)(in ^ *pTap1 ^ *pTap2);",
     "equivalent": true,
-    "why": "`*pOut = in` is a plain `T` store to a `T` object and the read is the next access to that same object, so `*pOut` is `in` for every value and every aliasing of `pOut` with a tap or with the source. The two spellings compute the same number in every case -- including with `pTap1 == pOut`, where both give `*pTap2`, which is why the aliased pass does not separate them either.  The source is known to say `*pOut` because the blob RELOADS `this->pOut` after the store (a store through `unsigned char *` may alias the pointer field), and a `r = in ^ ...` source would not have that reload. That is codegen evidence for a behaviourally invisible detail -- finding 870's second half is the same shape."
+    "why": "`*pOut = in` is a plain `T` store to a `T` object and the read is the next access to that same object, so `*pOut` is `in` for every value and every aliasing of `pOut` with a tap or with the source. The two spellings compute the same number in every case -- including with `pTap1 == pOut`, where both give `*pTap2`, which is why the aliased pass does not separate them either.  The source is known to say `*pOut` because the blob RELOADS `this->pOut` after the store (a store through `unsigned char *` may alias the pointer field), and a `r = in ^ ...` source would not have that reload. That is codegen evidence for a behaviourally invisible detail -- finding F870's second half is the same shape."
   },
   {
     "label": "D process(T): computes before it stores",

@@ -7,7 +7,7 @@
 > 2,516 bytes in all -- are written and differentially green, and
 > `tools/service.py` no longer lists that span under DATA at all.  With them
 > the four `VPcmV34Progress` entry points are complete and the unwritten
-> boundary below it is closed (finding 7606).  Findings **7600-7608**; 7607 is
+> boundary below it is closed (finding F7606).  Findings **F7600-7608**; 7607 is
 > the one to read first, a `movzwl` this tree's own header had recorded and
 > whose `src/` shipped without it.  What remains under that bracket label is
 > 24 symbols that **no entry point reaches**, among them
@@ -68,7 +68,7 @@ GREEN**: both `V90BitsToSymbol` resets, `V90Mapper::process`,
 differentially green, and the V.90 receive path closes with
 `V90Demodulator::progress` -- 7,276 bytes, 1,708 instructions, 129 calls, four
 dispatch tables, and NO `*_notwritten()` stub anywhere in it.  Findings
-7450-7460 for the pumps -- 7450 has the two jump tables and 7452 the seven
+F7450-7460 for the pumps -- 7450 has the two jump tables and 7452 the seven
 places the V.92 pump genuinely differs from the V.90 one -- 7470-7477 for the
 two resets, 7480-7485 for `exitPhase3`, and 7510-7513 for `progress`.
 
@@ -88,7 +88,7 @@ short cut to that.
 **BOTH `reset`s COME OUT OF GCC 3.4.2 AT THE BLOB'S OWN SIZE**, 255 and 504
 bytes, the modulator's byte for byte and the demodulator's instruction for
 instruction with two free scheduling permutations.  That is the structural
-check the pumps could not make (7460), and it is finding 7470.
+check the pumps could not make (7460), and it is finding F7470.
 
 `V90Phase4Modulator::reset` is 255 bytes of sixteen stores, one G.711
 expansion with NO cast (7471 -- the class's own `P4M_LEVEL` macro has one and
@@ -134,7 +134,7 @@ delayed retrain its failure raises, `displaySpectralParams`, and
 TAKEN edge lands on `equalizer->enterPhase4()` -- so the source is
 `{ enterPhase4(); equalizer->enterPhase4(); }` and not one call.  The first
 draft missed it with every branch, store and other call agreeing; what said
-otherwise was 174 instructions against the blob's 186.  Finding 7480, and the
+otherwise was 174 instructions against the blob's 186.  Finding F7480, and the
 lesson is to count instructions before building the fixture, because until the
 fixture exists the count is the only witness.
 
@@ -146,7 +146,7 @@ tables reached as `adid + 0`, `+0x600`, `+0xd00` and `+0x2800`, plus
 `getMaxUcode()` returning `&adid->maxUcode[0]` through phase 3 -- three more
 scalars out of the same object's tail, and one EMBEDDED field,
 `spectralVerifier.word_28` at +0x238, read early and stashed across two calls.
-Finding 7482.
+Finding F7482.
 
 **Three header corrections fell out**: `V90Demodulator` +0x240 is
 `float trn1dRmsRatio` (the format string names it), `tagV90AdditionalCPinfo`
@@ -154,7 +154,7 @@ Finding 7482.
 two independent derivations.  A fourth is a retraction: `V90Demodulator.h`'s
 paragraph about CLAIMING `DSPLIB_V90PARAMETERS_H` has been history since task
 #116 and a translation unit may hold this header and the NAMED `V90Parameters`
-map together -- which `t_v90p4ddec.cpp` now does.  Finding 7481.
+map together -- which `t_v90p4ddec.cpp` now does.  Finding F7481.
 
 ### Its test is in `t_v90p4ddec` and the reason is the LAST statement
 
@@ -166,7 +166,7 @@ for the previous batch.  Sixty lines of shallow wiring there against about two
 hundred and fifty of deep wiring anywhere else.  What the member WRITES decides
 per-side against shared: four peers it writes (the parameter block, the mapping
 block, the detector and the connection evaluator) are snapshotted, restored and
-compared rather than duplicated.  Finding 7483.
+compared rather than duplicated.  Finding F7483.
 
 Counts: **`v90exit3` is 55 mutations, 53 caught, 0 NOT caught, 0 unusable, 2
 equivalent.**  The binary's own two suites did not move -- `v90p4ddec` 61 of 74,
@@ -192,7 +192,7 @@ redundant `cmpl $0xe,0x4(%esi)` at +0x2e0a4 is the evidence for (7451).
 **Two header corrections fell out and both are made**: `pad_000c` is a live
 `unsigned int` written by three members and read by none of the forty-five, and
 the enumeration gains 0x14 and 0x1c, which the header had said were absent
-because nothing stored or compared them. Both keep offset names. Finding 7453.
+because nothing stored or compared them. Both keep offset names. Finding F7453.
 
 **WHAT THE TWO RESETS RETIRED FROM THE PUMP GRID'S PLANTING IS ONE THING AND
 IT IS THE HEADLINE ONE.**  7454 says no member of `V90Phase4Modulator` can put
@@ -201,7 +201,7 @@ the object into state 0x0f, 0x14 or 0x1c; `reset`'s third argument is a
 reachable through a public member and `run_p4m_reset` drives them that way.
 Nothing else in 7454's list can be retired -- `reset` forces zero where the
 grid needs a range -- and `setup_pump` was left alone rather than rewired, so
-the pump grid re-ran unchanged at 169 caught of 171.  Finding 7475.
+the pump grid re-ran unchanged at 169 caught of 171.  Finding F7475.
 
 Three things the fixture had to be given beyond a seed, each of which read as a
 defect in `src/` first: the drain writes whole symbols into a ONE-`short` slot,
@@ -227,12 +227,12 @@ one was too cautious; the paragraph below is what it now says.**
   alignment before `constellationSize`. The element type is `short` for the
   VALUES and not for the encodings: the object's only load of it, in `process`,
   is a `movzwl` whose upper half is discarded by the next instruction, which is
-  finding 614's free case.
+  finding F614's free case.
 - **`+0x700` is a live field, not tail padding** -- CONFIRMED, and settled
   further. It is four bytes, both resets store the constant zero into it with a
   `movl`, the CONSTRUCTOR does not write it, and a sweep of every `0x700(%`
   displacement in `.text` finds no reader anywhere in the object. So the class
-  is 0x704 with NO tail padding, and the member is `word_700`. Finding 7102.
+  is 0x704 with NO tail padding, and the member is `word_700`. Finding F7102.
 - **`+0x020..+0x055` is NOT "genuinely unmodelled"** -- this document's claim,
   and it did not survive. `V90Mapper::process` tiles all 54 bytes as four
   six-entry arrays -- `uint[6]` at `+0x20`, `short[6]` at `+0x38`,
@@ -240,29 +240,29 @@ one was too cautious; the paragraph below is what it now says.**
   meet exactly at `constellation`'s `+0x56`. **THEY ARE NOW NAMED**, `process`
   being written: `codes`, `levels`, `signs` and `samples`, of which the first
   three are typed by a mangling and `samples` is inference and labelled as
-  such. Findings 7103 and 7420.
+  such. Findings F7103 and F7420.
 - **`+0x01c` is `bitsBuffered`**, on the header's own terms -- `process` is the
   member that settles it, and it is the index at which the next input bit goes
   into `buf`. `uint_6f8` was deliberately NOT renamed in the same pass.
-  Finding 7421.
+  Finding F7421.
 - **Five members at `+0x04`..`+0x14` are now named, from `V90Demapper`.** That
   class computes the same five quantities out of the same block by the same
   arithmetic and this tree already names all five, so `cleared_004` and its
   four neighbours are `bitsPerFrame`, `word_08`, `signBitsPerFrame`,
   `signBitGroups` and `signBitGroupSize`. `+0x6fc` is a
   `SerialDifferentialEncoder<unsigned char>` on a mangled `this` in `process`.
-  Findings 7100 and 7104.
+  Findings F7100 and F7104.
 
 ## Both `V90Mapper` resets are WRITTEN, and the decode below was 152 bytes short
 
 **THE PARAGRAPH THAT USED TO HEAD THIS SECTION CALLED `resetNoSpectral` "fully
 decoded" AND ITS READING STOPPED AT THE TAIL-FILL.** The function runs on for
 another 152 bytes, 0x30346..0x303de, and every store in that stretch is in
-`reset` too. Finding 7101; the corrected split is below and both functions are
+`reset` too. Finding F7101; the corrected split is below and both functions are
 now in `src/pump/v90/V90Mapper.cpp`, differentially green.
 
 `.text+0x30280`, 404 bytes, 102 instructions. `this` at `0x30(%esp)`,
-`mp` at `0x34`, `pcm` at `0x38`; plain cdecl as everywhere here (finding 215).
+`mp` at `0x34`, `pcm` at `0x38`; plain cdecl as everywhere here (finding F215).
 
     +0x004 = mp[0]
     +0x008 = mp[0] - +0x00c                 (+0x00c is read, never written)
@@ -293,7 +293,7 @@ complements the seven low bits, A-law toggles them against `0xd5`.
 
 The tail-fill runs to 127 unconditionally, so a short constellation leaves the
 rest of its row zeroed rather than stale -- which is what a differential test
-over never-zeroed storage has to check (findings 223 and 224).
+over never-zeroed storage has to check (findings F223 and F224).
 
 `reset` is that whole shape with FIVE MORE STORES AND ONE SUBSTITUTION, and the
 store list that used to stand here was wrong in both directions -- it credited
@@ -340,7 +340,7 @@ Two things it did not say, and both are now in the header:
   eleven that does, and it also drives `6 * shaperId` wrapping 32 bits.
 - **`extraSymbols` is the mapper's priming loss**, `shaperId *
   signBitGroupSize`, which `V90Mapper::process` swallows one frame at a time.
-  Two classes, one quantity, computed independently -- finding 7422, and the
+  Two classes, one quantity, computed independently -- finding F7422, and the
   fixture asserts the mapper's count against this class's formula. The identity
   needs `shaperSR` to divide six, which every value V.90 uses does; 7422 has
   the counter-example and why it is not pedantry.
@@ -360,7 +360,7 @@ is what carries a part-filled frame between calls.
 
 **Two of its statements are untestable over any object a `reset` can produce**,
 and both are poked by hand rather than left unclaimed: the unconditional
-`nofOut += 6 - start` on the partial-copy arm (finding 7423) and the
+`nofOut += 6 - start` on the partial-copy arm (finding F7423) and the
 `bitsBuffered -= bitsPerFrame` that only differs from `= 0` when the buffer
 arrives over-full. A third, the strictness of the `<` between the second and
 third countdown arms, needs a `shaperSR` that does not divide six.
@@ -378,7 +378,7 @@ exceeds `nofSymbols`.
 
 **Status 2 is a report and not a guard**: the mapper has already written by the
 time the capacity is looked at, so no `reset`/`process` sequence can raise it
-without the write having gone outside the allocation. Finding 7430; the
+without the write having gone outside the allocation. Finding F7430; the
 fixture pokes `nofSymbols` down and drives the exact-fit boundary as well as
 the failure.
 
@@ -389,7 +389,7 @@ with the companding law taken from +0x38 and not from the argument, then
 `setSymbolsBlockSize(1)` as a sibling call whose answer is dropped. It stores
 NOTHING in the modulator -- `mappingParams` and `mappingParams2` are left as the
 constructor set them -- and is `void` because the two exits do not agree on
-`%eax`. Finding 7431.
+`%eax`. Finding F7431.
 
 ## The fixture
 

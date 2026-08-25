@@ -2,7 +2,7 @@
 """
 instrcount.py -- instructions per symbol, ours against the blob's.
 
-WHY THIS EXISTS, and finding 7480 is the whole argument.  `exitPhase3`'s first
+WHY THIS EXISTS, and finding F7480 is the whole argument.  `exitPhase3`'s first
 version had every branch, every store and all thirteen other calls matching
 the object, and it was still missing a call: `enterPhase4`'s idempotence test
 took its taken edge into `equalizer->enterPhase4()`, so the source made TWO
@@ -22,7 +22,7 @@ READ A GAP AS A MISSING CALL UNTIL PROVEN OTHERWISE.  7480's residual, once
 the call was added, was nine instructions and every one was accounted: seven
 for the callee-saved registers (the blob spills four to stack slots where ours
 pushes two) and two for an x87 schedule.  A gap of tens is a statement; a gap
-of hundreds is an inlining boundary (finding 605) and means one of the callees
+of hundreds is an inlining boundary (finding F605) and means one of the callees
 we CALL is being inlined into us, or the reverse.
 
     tools/instrcount.py                       # every symbol we have built
@@ -138,10 +138,10 @@ def count(obj, name, section, value, size):
 # of the truth.  `V90Demapper::printErrorHistogramAndReset` read +12 and is
 # EQUAL on code; `V90SpectralShaper::process` read -1 and the blob has THREE
 # code instructions we do not; `V90Demodulator::getAT_UD` read +10 and the
-# blob has one MORE than us.  Finding 7774's whole lever is "same bytes,
+# blob has one MORE than us.  Finding F7774's whole lever is "same bytes,
 # different instruction count means a missing statement", and it was careful
 # to say "padding stripped" -- a reader who took that count from HERE would
-# have chased three phantoms and missed three real absences.  Finding 7794.
+# have chased three phantoms and missed three real absences.  Finding F7794.
 #
 # The predicate is byteident.py's, imported rather than copied, because two
 # spellings of "is this padding" is exactly the drift CLAUDE.md's one-home
@@ -186,7 +186,7 @@ def main():
     if not objs:
         sys.exit('instrcount.py: TC_OUT (%s) holds no objects.  Run\n'
                  '  tools/toolchain/build.sh\n'
-                 'first; a zero denominator is finding 2400.' % args.tcout)
+                 'first; a zero denominator is finding F2400.' % args.tcout)
 
     bsyms = symbols(blob)
     rows = []

@@ -7,7 +7,7 @@ therefore not satisfiable from it.  `dataBase` is what forces the whole set:
 it is read by three of batch 3's five methods, and its own 16 relocations
 point at `refLoopsType1,2,4,5,6,7`, which nothing in .text reaches from this
 batch at all.  A scan of `.rel.text` says those six belong to #59; a scan of
-`.rel.data` says they cannot be left out.  See finding 234.
+`.rel.data` says they cannot be left out.  See finding F234.
 
 Floats are emitted as %.17g and the round trip is checked against the original
 four bytes before anything is written, so the output is bit-exact by
@@ -200,7 +200,7 @@ LOOP_TMPL = """\
  * which belongs to task #59 and not to this batch.  That scan is looking in
  * the wrong section: `dataBase` is read by three of batch 3's five methods,
  * and `dataBase`'s OWN sixteen relocations point at these six.  Leaving them
- * out fails the link for the whole test suite.  Finding 234.
+ * out fails the link for the whole test suite.  Finding F234.
  *
  * The 68-byte record is out of the code that indexes it: `autoSelection`
  * walks it 0x44 at a time and compares its first byte against zero to find

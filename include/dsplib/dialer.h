@@ -65,7 +65,7 @@ struct dialer {
 	/*
 	 * +0xb8.  The dialler's own state machine, named by the AUTHOR --
 	 * recovered from DialerProgress's debug strings, which this
-	 * reconstruction had dropped (findings 134, 138).  Four are pinned to
+	 * reconstruction had dropped (findings F134, F138).  Four are pinned to
 	 * their case exactly; the rest are named but not yet placed.
 	 *
 	 * Note DIALER_WAIT_FOR_SILENCE_STATE: it returns DIALER_WAIT_ANSWER,
@@ -108,7 +108,7 @@ struct dialer {
  * `edx`, with `store` on the stack -- GCC's regparm(2), used for calls that
  * never leave Dialer.c.  Anything declaring this for the differential test
  * must say `__attribute__((regparm(2)))` or it will pass arguments the callee
- * never reads.  See finding 51.
+ * never reads.  See finding F51.
  *
  * `store` asks for `d->last_digit` to be updated; the grade is returned
  * either way.
@@ -160,9 +160,9 @@ void DialerAbort(struct dialer *d);
 
 /*
  * `progress_state` values, in the author's own names.  Confirmed by which
- * debug string each switch case prints (finding 138), and the last two --
+ * debug string each switch case prints (finding F138), and the last two --
  * INITIAL and END -- by the jump table at .rodata+0x614c once their
- * announcements were found inside cases 0 and 10 after all (finding 162).
+ * announcements were found inside cases 0 and 10 after all (finding F162).
  * States 1-4 (digit, gap, flash, pause) never announce and have no
  * recovered names.
  */

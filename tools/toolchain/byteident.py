@@ -13,7 +13,7 @@ Its other number is worse for this purpose.  The "total code: blob N bytes,
 ours M (P%)" line is a SIZE RATIO over the whole tree, and a size ratio moves
 when we emit more code, not when we emit more of the right code -- `-O3` took
 it from 77.3% to 89.0% while the count of matching functions did not move at
-all (finding 616).  It is a rough gauge of completion and nothing else, and it
+all (finding F616).  It is a rough gauge of completion and nothing else, and it
 has already misled once: the MP CRC work found a source form whose BYTE COUNT
 was closer while its instruction sequence was further away.
 
@@ -195,7 +195,7 @@ def insns(path, sym):
             # function's LAST instruction every time -- usually a `ret` with
             # no operands -- and the normaliser silently did nothing at all
             # for 210 relocated instructions across the tree while reporting
-            # a clean run.  Findings 134 and 2401: a detector that cannot be
+            # a clean run.  Findings F134 and F2401: a detector that cannot be
             # seen to fire has not been shown to work.
             #
             r = RELOC.match(line)
@@ -239,7 +239,7 @@ def insns(path, sym):
     # objects do not use the same one: the blob prints
     # `movswl 0x5740(%eax,%eax,1)` where ours prints `0x0(...)`, because the
     # blob's addend rides inline against a SECTION symbol and ours is a named
-    # symbol with a zero addend (finding 604).  Comparing the printed
+    # symbol with a zero addend (finding F604).  Comparing the printed
     # displacement scores that as a difference in code where there is none.
     # Replace every numeric literal in a relocated instruction's operands with
     # the relocation's TARGET, so two instructions relocated against the same
@@ -340,7 +340,7 @@ def alpha_why(x, y):
         # an arithmetic operand as though it were whitespace.
         #
         # Binding those register fields rejected `_iir_filter_create`, whose
-        # 58 rows are otherwise a clean `%ebx`/`%esi` swap (finding 7768).
+        # 58 rows are otherwise a clean `%ebx`/`%esi` swap (finding F7768).
         # BOTH sides must look like padding before the row is skipped -- a
         # real `lea` opposite a padding `lea` is a genuine difference.
         #
@@ -353,7 +353,7 @@ def alpha_why(x, y):
         dy = fy[-1].strip() if fy else ""
         #
         # A ZEROING IDIOM READS NOTHING, and treating its source as a use was
-        # a real defect (finding 7762).  `xor %eax,%eax` does not depend on
+        # a real defect (finding F7762).  `xor %eax,%eax` does not depend on
         # %eax; nor does `sub r,r`; nor does `sbb r,r`, which materialises the
         # carry as 0 or -1 and was missing from the set entirely.  Stripping
         # only the DESTINATION left the identical source operand to be bound
@@ -425,7 +425,7 @@ def verdict(a, ra, b, rb):
         # A SECTION-RELATIVE RELOCATION AND A NAMED-SYMBOL ONE CAN NAME THE
         # SAME THING.  `objdump` prints the blob's string and table references
         # as `R_386_32 .rodata` with the offset as an inline addend, and ours
-        # as `R_386_32 v8_costab` -- finding 604.  Comparing the printed names
+        # as `R_386_32 v8_costab` -- finding F604.  Comparing the printed names
         # scores that as a differing target when nothing differs, so a pair
         # where one side names a section is reported as UNRESOLVED and NOT as
         # a difference.  Resolving it properly needs the addend, which
@@ -556,7 +556,7 @@ def _staleness():
     leaves it behind while every count here keeps rendering as a clean,
     plausible, WRONG number.  That happened: a merge's grades were read off
     objects compiled before the merge, and the figures looked entirely normal.
-    Findings 2400 and 2401 are the same shape -- a detector reporting on
+    Findings F2400 and F2401 are the same shape -- a detector reporting on
     nothing and rendering as a pass.
     """
     newest_obj = newest_src = None
@@ -661,7 +661,7 @@ def main():
         sys.exit("byteident.py: NO SYMBOLS read from the blob at %s.\n"
                  "  Every count below would be computed against NOTHING and\n"
                  "  would render as a clean zero.  From a worktree, BLOB must\n"
-                 "  be explicit.  Findings 2400, 2401." % BLOB)
+                 "  be explicit.  Findings F2400, F2401." % BLOB)
     ours = {}
     for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
         for k, v in sizes(o).items():

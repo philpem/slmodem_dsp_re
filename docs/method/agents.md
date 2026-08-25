@@ -4,7 +4,7 @@ Every number cites `docs/findings.md` in this tree.
 
 Parallelism here means **a worktree and a branch per batch**, each batch owning
 a disjoint set of source files, each running the phase gate and seeing its own
-work pass. It is the only structural remedy for the token wall (finding 220,
+work pass. It is the only structural remedy for the token wall (finding F220,
 and `efficiency.md`), and it costs three things: hand-overs go wrong, shared
 data structures collide, and the merge is where both bills arrive.
 
@@ -14,7 +14,7 @@ was measured in this tree, so none of it is here.**
 
 ---
 
-## 1. Scope a batch by what it owns, not by what it is about
+## F1. Scope a batch by what it owns, not by what it is about
 
 Two batches editing the same file is a merge conflict you chose. Two batches
 editing *different* files that share a data structure is a merge conflict you
@@ -22,31 +22,31 @@ did not.
 
 - No `src/` file was touched by both lines of the biggest merge here, so **the
   substance merged itself** — all seven conflicts were in shared tooling and
-  docs (finding 544).
+  docs (finding F544).
 - The shared things that collided: the Makefile, one tool's exclusion list, the
   deviation register, and the findings file. Plan for those; the source is
   fine.
 
-## 2. A brief must mark MEASURED and INHERITED separately
+## F2. A brief must mark MEASURED and INHERITED separately
 
 In one session a relayed premise was wrong **five times**, and in each case the
 receiving batch disproved it rather than working around it:
 
 | what was relayed | what was true |
 |---|---|
-| the accept path's byte copy has no bound and meets it at length 0x4d | the dispatch sits *ahead* of the copy; no sized arm reaches it (finding 352a) |
-| landing txstate 66 would retire an uncaught mutation | 66's block ends in an unconditional jump, **and** the named mutation was a different transfer entirely — wrong in both halves (finding 359a) |
-| microstate 58 is on the `= 4` side of the reset split | it has one of each (finding 359a) |
-| "keep `w4_hs_t2`'s copy of table 2" | there were **three** copies, not two, and the most complete reading was a third file's (finding 550) |
-| the reload is at `0x62b45` | `0x62b45` is where the `mode == 1` branch lands; **the reload is `0x62b5f`** (finding 591) |
+| the accept path's byte copy has no bound and meets it at length 0x4d | the dispatch sits *ahead* of the copy; no sized arm reaches it (finding F352a) |
+| landing txstate 66 would retire an uncaught mutation | 66's block ends in an unconditional jump, **and** the named mutation was a different transfer entirely — wrong in both halves (finding F359a) |
+| microstate 58 is on the `= 4` side of the reset split | it has one of each (finding F359a) |
+| "keep `w4_hs_t2`'s copy of table 2" | there were **three** copies, not two, and the most complete reading was a third file's (finding F550) |
+| the reload is at `0x62b45` | `0x62b45` is where the `mode == 1` branch lands; **the reload is `0x62b5f`** (finding F591) |
 
 The common shape: **a hand-over paragraph is written by an agent that has not
 driven the thing it is describing.** Passed on as established fact, it gives
 the next agent a premise it will either trust or spend time disproving
-(finding 352a).
+(finding F352a).
 
 > **"The previous batch reports X" is a lead. "I measured X" is a fact. A brief
-> must say which it is passing on** (findings 352a and 359a), **and the
+> must say which it is passing on** (findings F352a and F359a), **and the
 > receiver must check an inherited claim before acting.** Four words.
 
 Two corollaries the same sessions produced:
@@ -54,14 +54,14 @@ Two corollaries the same sessions produced:
 - **An instruction can be un-obeyable by the time it is read.** "Keep this
   one's" was right about which of the two files *then in the merge* had the
   better arms; it did not survive a third copy existing and a caller being
-  measured that did not exist when it was written (finding 550). Record the
+  measured that did not exist when it was written (finding F550). Record the
   *cost of each direction* so the next batch does not have to re-derive it.
 - **A status column is written from one tree.** One document ended a merge
   saying, in two different places, that two *different* items were the last one
   open. Both batches wrote their line from their own tree and each was right
   about what it could see. The count in the test's own header was wrong on both
   sides too — one said seventeen, the other eighteen, and the answer was
-  nineteen (finding 359a). Saying "write this column from the tree" in the
+  nineteen (finding F359a). Saying "write this column from the tree" in the
   legend was not enough.
 
 ### The relay does not get more reliable when the relayer assigns the work
@@ -76,24 +76,24 @@ the brief itself rather than something the brief had inherited from a source.**
   address correction to the finding that carried the wrong address rather than
   to the one that measured the right one. Both fell out of the receiving
   batch's first pass against the record, a pass it made only because the brief
-  told it to check (finding 670). That was the sixth occurrence of the shape in
+  told it to check (finding F670). That was the sixth occurrence of the shape in
   the table above, **in the brief for the document set whose central rule is
   "mark inherited claims as inherited".**
 - The brief for the update to these documents named the codegen comparator
   `tools/compare.py`. There is no such file and there never has been; it is
   `tools/toolchain/compare.py`. **The wrong path is in the record too** — one
   finding spells it that way twice, and that finding's substance is right, so
-  nothing around it looks wrong (finding 554; the spelling is corrected in
-  finding 651, "NOT `tools/`"). Same brief, same day: a citation relayed as
+  nothing around it looks wrong (finding F554; the spelling is corrected in
+  finding F651, "NOT `tools/`"). Same brief, same day: a citation relayed as
   measured turned out to be the record's own miscitation, repeated
-  (finding 690).
+  (finding F690).
 
 > **The author of a brief is not a more reliable source than the record, and
 > the record is not a more reliable source than the filesystem.** Check an
 > inherited claim even when it comes from whoever assigned the work. A path is
 > checkable in one second against the tree, and nobody had done it.
 
-## 3. Shared data structures break across batch boundaries silently
+## F3. Shared data structures break across batch boundaries silently
 
 Mutation anchors are the worked example, and this happened **five times**
 before it was tooled and repeatedly after.
@@ -102,21 +102,21 @@ The runner matches an anchor as a substring of the whole file. When a second
 near-identical arm of a big dispatch lands, an anchor written against the first
 matches twice — **and a doubly-matching anchor reports UNUSABLE, which does not
 fail a run.** The suite still prints `0 NOT caught`. Three suites quietly lost
-mutations that way (finding 347); landing two more arms broke eighteen anchors
-at once (finding 432); and merging two batches broke two neighbouring suites'
-anchors for the third time in one file (finding 446).
+mutations that way (finding F347); landing two more arms broke eighteen anchors
+at once (finding F432); and merging two batches broke two neighbouring suites'
+anchors for the third time in one file (finding F446).
 
 What works:
 
 - **After adding to a shared file, re-run every suite over it and read the
   UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
-  that does not fail (finding 347).
+  that does not fail (finding F347).
 - **RENUMBER FINDINGS ON THE BRANCH, BEFORE THE MERGE, WITH
   `tools/renumber.py` -- never with a regex over the merged tree.** A finding
   number and a filter coefficient are the same four digits: a sweep of
   `\b782[0-5]\b` over `src/**/*.c*` rewrote two elliptic coefficients in a
   file the branch had never touched, and `refcheck.py` passed, because a
-  reference that still RESOLVES is what it cannot see (findings 7833, 212/213).
+  reference that still RESOLVES is what it cannot see (findings F7833, F212/213).
 
   The tool takes the branch's own changed files from git, rewrites only
   CITATIONS -- in a `.c` a number counts only where `finding` precedes it --
@@ -140,7 +140,7 @@ What works:
   working tree. **Nothing failed** -- every variant is valid C++ that compiles
   and passes -- so a randomly permuted source would have been committed as the
   recovered one, with a finding attached saying it was decoded. It was caught by
-  `git status` and repaired with `git checkout --` (finding 7822).
+  `git status` and repaired with `git checkout --` (finding F7822).
 
   The shape is worth naming because it defeats the usual defences: no error, no
   failing test, and the corrupted file is *plausible*. Copy variants with a real
@@ -162,23 +162,23 @@ What works:
 - **Give each batch a macro-name prefix of its own.** `T41_`, `T44_`, `T46_`
   were introduced against `#define` collisions and turned out to be just as
   useful as the thing that makes an anchor unique: a shared call line is what
-  every arm has, and a prefixed offset name is what only one has (finding 347).
+  every arm has, and a prefixed offset name is what only one has (finding F347).
   The repair tool picks the occurrence whose surrounding lines mention the
   batch's own prefix most, **and prints the line number it chose for every
   one**, so the choice is auditable rather than trusted.
 - **Watch for a mutation whose validity depends on what else is absent.** One
   rewrote its own `case` label; that compiled while its arm was the only one in
   the tree and became a duplicate case label the moment a neighbour landed
-  (finding 347).
+  (finding F347).
 - **A killed run leaves its mutant in the source, and one was committed that
-  way** (finding 349). Check `git diff` before committing after a run that did
+  way** (finding F349). Check `git diff` before committing after a run that did
   not finish.
 
-## 4. Numbering collides. Plan the collision, do not hope
+## F4. Numbering collides. Plan the collision, do not hope
 
 Nine collisions here. The ninth was **twenty-three numbers**, allocated by both
 lines to entirely different findings and quoted freely on both sides all
-session (finding 543).
+session (finding F543).
 
 - **Leave a gap, and check every branch — not just the mainline — before
   claiming a block.**
@@ -186,41 +186,41 @@ session (finding 543).
   re-pointed reference still *resolves*; there IS a finding by that number
   after the merge, it just belongs to somebody else. A clean run after a merge
   proves nothing about it, which is why the count of dangling references is the
-  wrong instrument and **nobody noticed for 158 commits** (finding 543).
+  wrong instrument and **nobody noticed for 158 commits** (finding F543).
   Misdirection is worse than dangling: dangling is loud (`tools/refcheck.py`).
 - **Renumber first, merge second.** The other way round, the merge has to
   resolve twenty-three heading collisions inside an append-only file, which is
   a hunk resolution — and hunk-resolving the record is how content gets
   silently dropped. Renumbered first, the two sides no longer overlap and the
-  merge is two appends (finding 543).
+  merge is two appends (finding F543).
 - **Move the side with fewer REFERENCES, not fewer findings.** Renumbering is a
   text substitution over references, so its risk scales with how many
   references there are, not with which line "owns" the numbers or which is the
-  mainline. Here it was 113 against 25 (finding 543).
+  mainline. Here it was 113 against 25 (finding F543).
 - **A bare-number rewrite is not available.** In exactly the colliding range,
   this tree had filter coefficients `340`, `348` and `361` in one source file,
   `619`, `355` in another, and byte counts in two docs — indistinguishable from
   a citation on digits alone. The rewrite matched explicit forms only (86
   references across 16 files), and then **every remaining occurrence in prose
   was listed and read by hand**, which is what caught a bare `(350)`
-  parenthetical the automated pass had missed (finding 543).
+  parenthetical the automated pass had missed (finding F543).
 - **Write citations in the forms your checker parses.** A comma-separated list
-  — `Findings 354, 356 and this one` — matched on its first number and not its
+  — `Findings F354, F356 and this one` — matched on its first number and not its
   second, leaving the second dangling. That was caught only because the target
   number no longer existed at all; **had the collision run the other way, the
   same miss would have left a reference that still resolved, at the wrong
   finding, with nothing able to detect it.** The dangling check worked there
-  purely by luck of direction (finding 543).
+  purely by luck of direction (finding F543).
 - **Every moved finding says what it used to be called.** That note is the only
-  signal a branch cut before the merge will ever get (finding 543).
+  signal a branch cut before the merge will ever get (finding F543).
 - Task numbers are not safe either: two task stores existed here whose
   `#11`–`#22` were different work. Say which store you mean.
 
-## 5. Most merge conflicts are COMBINATIONS, not choices
+## F5. Most merge conflicts are COMBINATIONS, not choices
 
 158 commits met 44. Of seven conflicted files, **four could not be resolved by
 choosing a side — and in each case picking one would have compiled, passed, and
-quietly dropped the other line's work** (finding 544):
+quietly dropped the other line's work** (finding F544):
 
 ```
   Makefile        one line added -no-pie, the other added the C++ object list,
@@ -242,11 +242,11 @@ a Python name error in a script that runs. **The same shape in C, or in a
 branch not exercised by the phase gate, is a silent merge defect.**
 
 > **A conflict hunk is a window, and the variable it renames may be read
-> outside the window** (finding 544).
+> outside the window** (finding F544).
 
-## 6. What the merge is worth
+## F6. What the merge is worth
 
-Numbers neither side could produce alone (finding 544):
+Numbers neither side could produce alone (finding F544):
 
 ```
   diagnostic sites never executed    30 of 431  ->   6 of 432
@@ -257,7 +257,7 @@ One line's call-progress and dialler work closed twenty-four of the sites the
 other could not reach, and the other's handshake work is what the remaining 432
 measure against.
 
-## 7. What is deliberately absent from this file
+## F7. What is deliberately absent from this file
 
 No evidence exists in this tree for: how many batches to run concurrently,
 which model or reasoning effort to give a batch, how to phrase a brief beyond

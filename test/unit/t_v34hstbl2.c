@@ -14,14 +14,14 @@
  * SIDE A USED TO BE A SECOND RECONSTRUCTION and is now the same dispatch
  * every microstate arm calls.  `src/pump/v34/v34hstxblock.c` held a third
  * reading of table 2 with all seven arms and a tail missing the reload at
- * 0x62b5f; finding 591 collapsed it onto `t3m_txblock`/`t3m_tail`, which is
+ * 0x62b5f; finding F591 collapsed it onto `t3m_txblock`/`t3m_tail`, which is
  * the reading whose signature can hold both readings of the tail's `%cx`.
  * Every case below is unchanged by that, which is the point: this file's
  * claims are about the object and not about which file answers them.
  *
  * WHAT IS BEING SEPARATED, AND WHAT IS NOT.
  *
- * Finding 290 measured four distinct behaviours from table 2's seven targets
+ * Finding F290 measured four distinct behaviours from table 2's seven targets
  * and asserted the three collisions as `agree` pairs.  That is reproduced
  * here -- COLD, on this fixture's fill, all seven driven with no companion
  * field touched -- and then taken apart: each of the three collisions is a
@@ -29,12 +29,12 @@
  * answer alike, and each is broken by one poke.  So the answer to "how many
  * of the seven are distinct" is BOTH four and seven, and this file asserts
  * both halves, because a collision that stops being a collision when a field
- * moves is evidence about the fill and not about the object.  Finding 364.
+ * moves is evidence about the fill and not about the object.  Finding F364.
  *
  * WHAT THE TRANSCRIPT AXIS CONTRIBUTES HERE: nothing.  The whole closure
  * holds no `call` and no diagnostic site, so every case prints zero lines on
  * both sides and `v34hs_compare`'s transcript check passes by construction.
- * It is named as a gap rather than counted as evidence (finding 362); the
+ * It is named as a gap rather than counted as evidence (finding F362); the
  * evidence here is bytes written, and it is every byte of a 44,096-byte
  * object plus the five blocks it points at plus the padding around them.
  */
@@ -80,7 +80,7 @@ call_ours(void *obj)
  * not a statement about our code but about the BLOB's: a case that gives the
  * same answer through all three says the blob's three approaches really do
  * converge, and it says it by the same byte-for-byte comparison as everything
- * else.  Finding 361.
+ * else.  Finding F361.
  */
 enum { R_BLOCK, R_CHAIN_LOW, R_CHAIN_HIGH };
 
@@ -138,7 +138,7 @@ peek_int(int side, unsigned off)
  *
  * So every case below pins the tail's five inputs first, and a case that is
  * ABOUT the tail overrides them afterwards.  That makes each arm's answer a
- * property of the object rather than of the seed, and finding 290's
+ * property of the object rather than of the seed, and finding F290's
  * four-from-seven becomes a claim that holds at every fill instead of at this
  * one.  +0x0004 itself is pinned to -1 for the same reason: an arm writing
  * the value that happened to be there already would write no bytes at all,
@@ -258,7 +258,7 @@ agree(const char *what, const struct rec *x, const struct rec *y)
 
 /*
  * The seven targets and all sixteen of their aliases, with the tail pinned
- * and no arm's own companion field touched.  This is finding 290's
+ * and no arm's own companion field touched.  This is finding F290's
  * measurement -- four behaviours from seven targets -- reproduced against a
  * reconstruction rather than against the blob twice, and made a property of
  * the object rather than of the seed by the pin.
@@ -347,7 +347,7 @@ main(void)
 	diff_eq_int("cold cases that wrote something", moved, NCOLD, NCOLD);
 
 	/*
-	 * FOUR BEHAVIOURS FROM SEVEN TARGETS, COLD -- finding 290's number,
+	 * FOUR BEHAVIOURS FROM SEVEN TARGETS, COLD -- finding F290's number,
 	 * reproduced.  The seventeen states above are the seven targets and
 	 * their aliases; the count is over the seven representatives.
 	 */
@@ -736,7 +736,7 @@ main(void)
 	 * reads as a passing check.  `used` is what stops that, and it is
 	 * asserted rather than only written: an array filled and never read,
 	 * under a comment promising it cannot go stale, is exactly what
-	 * finding 290 records this fixture doing to `saw_hole`.
+	 * finding F290 records this fixture doing to `saw_hole`.
 	 */
 	for (i = 0; i < NCOLD; i++) {
 		snprintf(msg, sizeof(msg), "record for txstate %d was filled",

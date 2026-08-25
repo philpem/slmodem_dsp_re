@@ -152,7 +152,7 @@ v8_process(struct dp *dp, void *in, void *out, int count)
 		 * call asked for; otherwise it is whichever modulation
 		 * survived the negotiation, most capable first -- the same
 		 * three bits of `b0` that V8Create prints as V90, V34 and V32
-		 * (finding 164), and the datapump ids are the standard
+		 * (finding F164), and the datapump ids are the standard
 		 * numbers.  Nothing left means nothing to change to.
 		 */
 		if (st->cm->b2 & 0x10) {

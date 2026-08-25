@@ -52,7 +52,7 @@
  * neither neighbour settles it; `src/dsp/` is where its one collaborator,
  * `GenericIIR`, lives, so that is where the .cpp went.  `compare.py`'s
  * per-object rollup will attribute it to whatever file holds it (finding
- * 610), so read that number knowing the placement is a choice and not a
+ * F610), so read that number knowing the placement is a choice and not a
  * measurement.
  *
  * ---------------------------------------------------------------------------
@@ -60,7 +60,7 @@
  * `this`-relative displacement any of them uses is +0x38 and every access
  * there is four bytes wide -- `movl $0x0,0x38(%ebx)` and `movl $0x1,...` in
  * both `process`es, `mov 0x38(%ebx),%eax` where the result is returned -- so
- * the object ends at 0x3c.  A displacement is not a size (finding 215); the
+ * the object ends at 0x3c.  A displacement is not a size (finding F215); the
  * width of what sits at the bound is what turns one into the other.
  *
  * The FIELD TYPES below are read off the instructions that touch them, not
@@ -100,7 +100,7 @@ public:
 	 * the object as they stand, and two are divided by a fifth before
 	 * being stored.  Argument names are descriptive of what the object
 	 * DOES with each, which for a store-only slot is all that is
-	 * recoverable (finding 226: the mangling preserves method and type
+	 * recoverable (finding F226: the mangling preserves method and type
 	 * names, never a data member's or a parameter's).
 	 *
 	 *   nden, nnum, den, num   the filter's denominator and numerator

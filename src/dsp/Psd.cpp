@@ -1,7 +1,7 @@
 /*
  * Psd.cpp -- reconstructed from dsplibs.o.  All six members;
  * `include/dsplib/Psd.h` carries the object map, the `OutputOption` values
- * and the two reasons `Psd::process` used to be missing (finding 876).
+ * and the two reasons `Psd::process` used to be missing (finding F876).
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, as everywhere else in this tree:
  * `this` is the first stack argument.
@@ -13,7 +13,7 @@
  */
 
 #include "dsplib/Psd.h"
-#include "dsplib/fft.h"		/* process() calls realfft (finding 1325) */
+#include "dsplib/fft.h"		/* process() calls realfft (finding F1325) */
 
 extern "C" {
 void *sysdep_malloc(unsigned size);
@@ -23,7 +23,7 @@ void sysdep_free(void *ptr);
 inline void operator delete[](void *p) { sysdep_free(p); }
 
 /*
- * Hold the compiler to the map in the header (finding 230); tools/offcheck.py
+ * Hold the compiler to the map in the header (finding F230); tools/offcheck.py
  * cannot read a class.
  */
 #define PSD_OFF(field, off, tag) \
@@ -93,7 +93,7 @@ Psd::setWindowType(WindowType window)
  * The reciprocal is computed once, in an x87 register: `fld1`, `fildll` of
  * the length as a 64-bit integer, then a popping divide.  That divide is
  * `de f9`, which objdump prints as `fdivrp` and which IS `FDIVP` -- st(1) /
- * st(0), so 1.0 / length and not length / 1.0 (finding 245, in the direction
+ * st(0), so 1.0 / length and not length / 1.0 (finding F245, in the direction
  * the trap is usually met from).  `i` reaches the multiply through `fildll`
  * too, and the product is formed as (i * sampleRate) * (1 / length): three
  * extended-precision steps and one rounding, at the store.
@@ -115,7 +115,7 @@ Psd::getFrequencies(float *freq, float sampleRate) const
  * st(1) * log2(st(0)) and pops, so the pair takes one value and leaves one.
  *
  * GCC EMITS THAT SEQUENCE FOR `log10()` ONLY UNDER
- * `-funsafe-math-optimizations` (finding 876), which this tree does not build
+ * `-funsafe-math-optimizations` (finding F876), which this tree does not build
  * with and must not: the flag changes every other floating-point expression
  * in the translation unit as well.  A call to libm's `log10` is not the same
  * function -- it is correctly rounded where `fyl2x` is not -- and the

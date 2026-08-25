@@ -12,7 +12,7 @@
 #            OUR datapump                                          CONEXANT HSF
 #
 # WHY, and it is the whole point.  `chancall.sh` puts our datapump against
-# ANOTHER COPY OF ITSELF; finding 1948 recorded what that cannot do -- it does
+# ANOTHER COPY OF ITSELF; finding F1948 recorded what that cannot do -- it does
 # not reproduce the retrain thrashing the bench shows, so it cannot say whether
 # our receiver is worse than a good receiver.  Every other peer we can test
 # against is a hardware modem down the real SIP path: slow, opaque, and

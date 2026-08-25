@@ -5,7 +5,7 @@
  * object is 32 KB and these five touch about thirty of its fields, spread
  * from +0x00 to +0x7f27 with a whole embedded V90Modem in the middle.  So
  * every block is allocated separately on each side, seeded identically with
- * varied bytes (finding 230), and COMPARED WHOLE -- a store to the wrong
+ * varied bytes (finding F230), and COMPARED WHOLE -- a store to the wrong
  * offset lands in a region both sides would otherwise still agree on, and
  * only a whole-slot comparison sees it.  No size is asserted anywhere here,
  * because none is settled; see include/dsplib/VPcmFloModem.h.
@@ -82,7 +82,7 @@ next_byte(void)
 }
 
 /*
- * VARIED BYTES, NEVER ZEROS (finding 230).  A zero fill makes a field the
+ * VARIED BYTES, NEVER ZEROS (finding F230).  A zero fill makes a field the
  * function never writes compare equal for the wrong reason, and most of this
  * object is fields these five never write.
  */
@@ -399,7 +399,7 @@ run_jabits(void)
  * cpNofBits` exactly, so the cases below carry the pointer and let the
  * sequence length follow from it -- that arithmetic is satisfiable by
  * construction and is checked at run time all the same, by counting how many
- * times the blob actually took the tail (findings 247, 262).
+ * times the blob actually took the tail (findings F247, F262).
  *
  * The three flags then select between: report termination, load the CPnot
  * vector, or neither.  The load has FOUR preconditions at once

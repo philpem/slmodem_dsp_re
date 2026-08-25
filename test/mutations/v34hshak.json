@@ -67,7 +67,7 @@
   "label": "mode 0 tests 0x65 rather than 0x66",
   "find": "\t\tif (obj->f359c == 0x66)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
   "replace": "\t\tif (obj->f359c == 0x65)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
-  "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding F325.",
   "fn": "v34handshakinit"
  },
  {
@@ -154,7 +154,7 @@
   "label": "mode 4 record 0xa94c: +0x24 constant off by one",
   "find": "\n\t\t\t*(int *)(r + 0x24) = 0xf72;",
   "replace": "\n\t\t\t*(int *)(r + 0x24) = 0xf73;",
-  "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding F325.",
   "fn": "v34handshakinit"
  },
  {

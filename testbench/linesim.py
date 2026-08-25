@@ -6,7 +6,7 @@
 
 WHY A SIMULATION.  The bench cannot answer this question. Its "line" is two
 metres of desk lead into a VG204, so what the probe measures is a FIXED
-digital filter (`bearer-cap 3100Hz`) plus a very quiet path -- finding 1907's
+digital filter (`bearer-cap 3100Hz`) plus a very quiet path -- finding F1907's
 tilt baseline held to 0.07 dB across five calls. A channel that never varies
 cannot show which estimator survives variation, and the difference between a
 two-point reading and a least-squares fit is precisely a claim about

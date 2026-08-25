@@ -546,7 +546,7 @@ rxinit(void *objp)
 	 * so agc_accum, agc_level and f1f4 all get zero.  Four stores, two
 	 * values, and the pairing is not the one the instruction order
 	 * suggests at a glance -- which is exactly how this was read wrong
-	 * the first time.  See finding 122.
+	 * the first time.  See finding F122.
 	 */
 	rx->f218 = 0x4000;
 	rx->f1f2 = 0x4000;
@@ -572,7 +572,7 @@ rxinit(void *objp)
 	rx->f248 = 0;   rx->f24c = 0;
 }
 
-/* The bulk ring's wrap: reset to zero, not subtract.  See finding 116. */
+/* The bulk ring's wrap: reset to zero, not subtract.  See finding F116. */
 static int
 bulk_next(int idx, int len)
 {
@@ -995,7 +995,7 @@ v34FreezeEcho(void *objp)
  * giving 1 + x^-5 + x^-23 for the caller and 1 + x^-18 + x^-23 for the
  * answerer, exactly as V.34 4.2 specifies.  V34descrambler reaches the same
  * two polynomials with taps at 5/18 and 23 because it shifts the other way;
- * see finding 110, which is the same offset trap from the other side.
+ * see finding F110, which is the same offset trap from the other side.
  *
  * The three-way XOR is spelled as a running increment and a parity test,
  * not as `^`, so a tap that fires twice cancels the same way.
@@ -1151,7 +1151,7 @@ V34SetupDemodulator(void *objp, short baud, short carrier)
  * the object inlines here; this calls it, because it is the same function
  * and the AGC lesson applies -- a second hand-transcribed copy of a
  * fixed-point chain is indistinguishable from a correct one until something
- * disagrees.  Reconstructing this is what exposed finding 126.
+ * disagrees.  Reconstructing this is what exposed finding F126.
  */
 int
 adaptecho(void *objp)
@@ -1287,7 +1287,7 @@ adaptecho(void *objp)
  *   bit 15 set    store the residual as-is, imaginary part zero
  *   bit 11 set    a 60-tap FIR from `f2a4`, whose delay line is ECHO1's
  *                 fractional coefficient array -- the same overlay finding
- *                 100 found DPSK.c using, now with a third reader
+ *                 F100 found DPSK.c using, now with a third reader
  *   otherwise     V34HilbertFilter, giving a genuine analytic pair
  *
  * TWO ADAPTATION SCHEDULES, one per canceller, and they are not the same:
@@ -1363,7 +1363,7 @@ modem_serrint(void *objp)
 	 *
 	 * The `f2aa4` ring below has always been `(unsigned short)`, from the
 	 * same instruction pair one branch along, so the two sites now agree
-	 * with each other as well as with the object.  Finding 781.
+	 * with each other as well as with the object.  Finding F781.
 	 */
 	idx = obj->f2aa6;
 	obj->hist_2f58[idx] = sample;
@@ -1467,7 +1467,7 @@ modem_serrint(void *objp)
 		 * NOT written as `count - 0x2bc`.  That is the same number
 		 * and it hides which counter it came from, which is the only
 		 * interesting thing about it.  Taking it from `count` cost a
-		 * real divergence -- finding 200.
+		 * real divergence -- finding F200.
 		 */
 		int far_count = (short)(prev - 0x2bb);
 		int every45 = (count % 45) == 0;
@@ -1780,7 +1780,7 @@ setInitialPhase(void *objp)
  *
  * The state is compared UNSIGNED against 8, so a negative `f1c0` misses the
  * table entirely rather than indexing behind it.  That is the bounds check
- * the other three tables in this reconstruction do not have (finding 129).
+ * the other three tables in this reconstruction do not have (finding F129).
  */
 void
 setTimingStateParameters(void *objp)
@@ -2201,7 +2201,7 @@ rx_train_point(struct v34_receiver *rx, struct v34_equalizer *eq, short n,
  *
  * THE OPENING LOOP IS NOT rxtiming'S.  It has the same interpolation and the
  * same one-or-two-pull wrap, but two differences that make adapting rxtiming
- * a mistake (finding 133):
+ * a mistake (finding F133):
  *
  *   - there is no resonator.  rxtiming runs a two-tap IIR after each pull
  *     and feeds its output back as the interpolation endpoint; this does
@@ -2686,7 +2686,7 @@ carrier_loop:
  * clean.  `pred_a` is the load-bearing one: the pre-TRN reset zeroes twelve
  * bytes from `pred_b` and relies on `pred_a` abutting it, and `timing_out`
  * being seven entries rather than twenty-one is the only thing keeping the
- * metric array out of the coefficients (finding 141).  So its SIZE is
+ * metric array out of the coefficients (finding F141).  So its SIZE is
  * asserted too -- the offsets either side would still line up if it were
  * declared [7] and the pad after it shrank to match, which is exactly the
  * mistake worth catching.

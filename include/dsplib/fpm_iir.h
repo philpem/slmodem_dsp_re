@@ -57,7 +57,7 @@ void FPM_iir_filt_II(short *samples, const short *coeff, short *state,
  * longer does, because `fpm_phasor.c` carries those four words as values of
  * its own rather than reading whatever the linker put below its table.  The
  * attribution above is unaffected -- it rests on the address, on the single
- * reference at .text 0x0a921a and on the `D` binding.  Findings 3621, 3624
+ * reference at .text 0x0a921a and on the `D` binding.  Findings F3621, F3624
  * and 3700, deviation D392.
  */
 extern short COEF_DC[FPM_IIR_COEFF_PER_SECTION];

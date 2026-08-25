@@ -2,7 +2,7 @@
  * v34hstx1.cpp -- seventeen arms of `v34handshak`'s per-sample transmit
  * dispatch.
  *
- * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding 217's rule rather
+ * IT IS A `.cpp` WHERE `v34handshak` IS C, which is finding F217's rule rather
  * than a choice.  78 `JaTXMIT` tail-calls `v90Phase34` and 85 `K56JaTXMIT`
  * tail-calls `k56FlexPhase34`; both live in the V.90/V.92 C++ half, and the
  * five SpanDSP interop binaries link `$(SRC)` -- every `.c` under src/ and no
@@ -10,7 +10,7 @@
  * takes those five down with it, which is what v34info1a.cpp, v34k56.cpp and
  * v34pcmmain.cpp are `.cpp` for.  Measured here rather than assumed: as a
  * `.c` this file broke all five, and `make phase` was how it said so.
- * Finding 344.
+ * Finding F344.
  *
  * The table is `.rodata+0x2da0`, indexed `txstate - 5`, read at 0x62966
  * inside the loop that runs while the transmit queue's count at +0x221c is
@@ -36,7 +36,7 @@
  * -- the same counter and the same `v34FreezeEcho` -- up to the tail call,
  * which is `v90Phase34` for one and
  * `k56FlexPhase34` for the other.  They are two arms and the object gives
- * them two table entries; finding 340 measures them apart.
+ * them two table entries; finding F340 measures them apart.
  *
  * 71 `TXLEVEL` and 86 `TXMD` share the scrambler step and differ in what they
  * transmit: 71 always sends `vect4[0]` and 86 sends `vect4[q]`, the point the
@@ -46,7 +46,7 @@
  * ---------------------------------------------------------------------------
  * AND ONE PAIR THAT AGREES COLD AND IS STILL NOT ONE ARM.
  *
- * Finding 323 measured 24 `TX_DPSK` and 60 `TONE_AB` writing the same 69
+ * Finding F323 measured 24 `TX_DPSK` and 60 `TONE_AB` writing the same 69
  * bytes with the same progress code, the table's one collision.  They are two
  * entries at two addresses -- 24's is 0x62b96 and 60's is 0x62d3d, and 60's
  * whole body is thirty-four bytes where 24's is 2,220 -- so the agreement is
@@ -58,7 +58,7 @@
  *
  * WHICH PATH 323 MEASURED, since 60 has two.  The default fill leaves
  * +0x358c at 0xb7eb, which is ODD, so the cold run sent `vect4[2]`; and
- * finding 323's 69 bytes for 60 is what `t_v34hstx1.c`'s odd case still
+ * finding F323's 69 bytes for 60 is what `t_v34hstx1.c`'s odd case still
  * writes, where its even case writes 65.  The collision was measured on one
  * of the two paths and the fill decides which -- seed 1 leaves 0xb06e and
  * would have measured the other.  So the agreement is narrower than the
@@ -70,7 +70,7 @@
 
 /*
  * `V34EchoReportCoeff` is no longer CALLED here -- `v34FreezeEcho` makes both
- * of its calls (finding 572) -- but nine mutations in `v34hstx1.json` inline
+ * of its calls (finding F572) -- but nine mutations in `v34hstx1.json` inline
  * the freeze back out to ask whether the factoring is right, and a mutant
  * that fails to compile is reported CAUGHT for the wrong reason.  The
  * declaration stays for them.
@@ -91,7 +91,7 @@
 /* The receiver sub-object; `0x74(%esp)` above. */
 #define TX1_RECEIVER	0x264
 
-/* The transmit state machine's own word (finding 213). */
+/* The transmit state machine's own word (finding F213). */
 #define TX1_TXSTATE	0x3596
 
 /*
@@ -119,11 +119,11 @@
  */
 #define TX1_F358C	0x358c
 
-/* +0x3594, the RXSTATE (finding 213).  74's retrain is its only writer here. */
+/* +0x3594, the RXSTATE (finding F213).  74's retrain is its only writer here. */
 #define TX1_RXSTATE	0x3594
 
 /*
- * +0x3592, the MICROSTATE (finding 213).  51 is the one arm here that reads
+ * +0x3592, the MICROSTATE (finding F213).  51 is the one arm here that reads
  * a state word belonging to another machine: it selects between two copies of
  * its own loop on `microstate == TX_L1`, having been dispatched on
  * `txstate == TX_L1`.  The two 51s are the same number in two machines and
@@ -260,7 +260,7 @@
  * `v34handshakinit` aims the same pair on its mode-4 path (v34hshak.c:1451),
  * and 54's completion aims it again before handing the record to
  * `V34SetINFO0aBits`.  The harness excludes +0xaa6c from the byte comparison
- * and checks it by offset instead (finding 324).
+ * and checks it by offset instead (finding F324).
  */
 #define TX1_PTR_AA6C	0xaa6c
 #define TX1_BLK_A94C	0xa94c
@@ -345,7 +345,7 @@ tx1_put_int(void *objp, unsigned off, int v)
  * through table 1 at `txstate == 65`, `txmit` does not write +0x3596, so the
  * guard is always true and the object's branch at 0x62de3 is not reachable
  * from this entry.  It is written as the object writes it; deleting it is an
- * equivalent mutation and is recorded as one (finding 342).
+ * equivalent mutation and is recorded as one (finding F342).
  */
 int
 v34tx1_xmit0(void *objp)
@@ -426,7 +426,7 @@ v34tx1_txlevel(void *objp)
  *
  * The two differ in that call and in nothing else.  They are written as one
  * body and two entry points so that the identity is a property of the file
- * rather than a claim in a comment; finding 340 is the measurement that they
+ * rather than a claim in a comment; finding F340 is the measurement that they
  * are still two behaviours, because the two callees are.
  *
  * AND IN THE MESSAGE, which is a third caller's evidence rather than a
@@ -506,7 +506,7 @@ v34tx1_k56jatxmit(void *objp)
  * four indices; 0x66d85 re-reads +0x3596 and returns to the loop test at
  * 0x63941 for anything that is not 0x51, so 82, 83 and 84 reach the
  * hundred-and-ninety-second sample and simply carry on, and only 81 decides
- * anything.  That is finding 423's shape at 0x635cc -- most passes are one
+ * anything.  That is finding F423's shape at 0x635cc -- most passes are one
  * body under several indices and the wrap is two behaviours -- and it is why
  * docs/v34handshak.md's "0x63d58 ... really is one behaviour" was wrong.
  *
@@ -520,7 +520,7 @@ v34tx1_k56jatxmit(void *objp)
  * The compares against 0x52 at 0x66dc6 and 0x53 at 0x68ae3 are
  * `hs_setstate`'s own "already there" early return inlined, not a fifth
  * state test: `jne 63941` has established that the halfword holds 0x51, so
- * neither can be true.  Findings 722 and 730's shape.
+ * neither can be true.  Findings F722 and F730's shape.
  *
  * Both of the block's ways out are the loop test -- 0x63941 loads the object
  * first and 0x63948 does not, and both fall into 0x629e7 -- so the wrap is
@@ -703,8 +703,8 @@ v34tx1_tone_ab(void *objp)
  * the stored value.
  *
  * THE `txstate != SBARSEG` COMPARE AT 0x66d1f CANNOT BE FALSE, for finding
- * 342's reason at 65: this arm is reached only through table 1 at
- * `txstate == 18`, and `txmit` does not write +0x3596 (finding 285's sweep).
+ * F342's reason at 65: this arm is reached only through table 1 at
+ * `txstate == 18`, and `txmit` does not write +0x3596 (finding F285's sweep).
  * It is written as the object writes it and deleting it is an equivalent
  * mutation.
  *
@@ -765,7 +765,7 @@ v34tx1_sseg(void *objp)
  *
  * The int at +0x2218 is read at 0x63d01 as well as written, but only to skip
  * the diagnostic at 0x63d1a: at `dsplibs_debug_level` 0 the whole block is
- * dead and the store of 1 happens either way.  Finding 341's gap, again.
+ * dead and the store of 1 happens either way.  Finding F341's gap, again.
  */
 int
 v34tx1_dataxmit(void *objp)
@@ -897,7 +897,7 @@ v34tx1_tx_l1(void *objp)
  *
  * THE MODULATOR'S SIX ARGUMENTS ARE ALL LITERALS -- 4800 baud, 2400 carrier,
  * no pre-emphasis, `v90` zero, no reset (0x67890..0x678be).  There is no rate
- * configuration to seed and finding 216's 3200-baud discipline has nothing to
+ * configuration to seed and finding F216's 3200-baud discipline has nothing to
  * bite on here: `v90` is a constant zero, so the one rate that reads it is not
  * the rate this arm asks for.  4800 is a real case in `V34SetupModulator` --
  * `txAllPass` at 0x20 taps -- and it is the one case that leaves `prem` NULL,
@@ -1010,7 +1010,7 @@ v34tx1_sbarseg(void *objp)
  *                        the segment, and NOT on the one that does
  *
  * That last asymmetry is the arm's shape.  0x6430c is the shared block 86
- * also rejoins through (finding 340), and the segment's end leaves through
+ * also rejoins through (finding F340), and the segment's end leaves through
  * 0x63da2 instead, which writes nothing -- so a reconstruction that bumped
  * f25c0 on every path is wrong on exactly one of the three.
  *
@@ -1258,7 +1258,7 @@ v34tx1_silence(void *objp)
 	 * what says so: the blob's `SILENCEINFO=>TX_DPSK` line prints `[1]10`,
 	 * and `[1]` is `vect_idx` read at the moment of the print.  Zeroing
 	 * before the state change -- which is how this was written until
-	 * finding 573 -- prints `[1]0` instead.  Both orders leave the same
+	 * finding F573 -- prints `[1]0` instead.  Both orders leave the same
 	 * bytes behind, so no byte comparison can separate them and none did
 	 * for six batches; only turning the diagnostics on does.  74 stores
 	 * its count before its own comparison in exactly this shape, and
@@ -1348,7 +1348,7 @@ tx1_dpsk4(struct v34_object *o, short q)
  * the same shape: scramble, add to the quadrant last sent, transmit, count.
  *
  * THE GENERATOR SELECT IS `f25c2 & 1` AND NOT `f359c == 0x65`.  71 and 86
- * choose their scrambler polynomial on the state word (finding 340); this arm
+ * choose their scrambler polynomial on the state word (finding F340); this arm
  * chooses on bit 0 of the transmitter's flags, and the sense is inverted --
  * the bit SET takes the 0x04000000 tap, which is `V34scrambler`'s `mode` 0.
  * The object reads the flags word once (0x67048) and tests it twice on the
@@ -1371,7 +1371,7 @@ tx1_dpsk4(struct v34_object *o, short q)
  * advance and reached from either half -- ten passes of the four-point one or
  * five of the sixteen-point one, both from zero.  0x66e01 then reloads
  * `vect_idx` with 8 and moves the transmit machine to DATAXMIT.  Its compare
- * against DATAXMIT cannot be false, for finding 342's reason at 65: the arm
+ * against DATAXMIT cannot be false, for finding F342's reason at 65: the arm
  * is reached only through table 1 at `txstate == 69` and `txmit` does not
  * write +0x3596.
  */
@@ -1478,7 +1478,7 @@ v34tx1_exmit(void *objp)
  * on a different condition.  The two are mutually exclusive on one pass:
  * reaching zero at the top leaves nothing for this to do.  That flag-then-
  * report-both triple IS `v34FreezeEcho`, and it is now called rather than
- * spelled out; finding 572 is the transcript that proves the call, since the
+ * spelled out; finding F572 is the transcript that proves the call, since the
  * blob prints `V34HSHAK: Freeze EC` and both report headers here and this
  * file emitted none of the three while it inlined the pair.
  *
@@ -1641,7 +1641,7 @@ v34tx1_jtxmit(void *objp)
  * neither ends the sequence nor reaches +0x3590.
  *
  * ---------------------------------------------------------------------------
- * WHAT IS NOT RECONSTRUCTED, and it is finding 341's gap again.  Three blocks
+ * WHAT IS NOT RECONSTRUCTED, and it is finding F341's gap again.  Three blocks
  * here are entered only when `dsplibs_debug_level > 1` -- 0x646b5, 0x67254 and
  * 0x6b410 -- and none is written.  Every one is a diagnostic on the path where
  * the reader is reloaded or the transmit machine moves.
@@ -1921,7 +1921,7 @@ v34tx1_xmitmp(void *objp)
  * 24 `TX_DPSK`, 0x62b96 -- one bit of a message as one tone, and the whole of
  * Modem-on-Hold's clear-down when the message runs out.
  *
- * THE 2,220 BYTES ARE `getbit` INLINED TWICE, which is finding 424's result
+ * THE 2,220 BYTES ARE `getbit` INLINED TWICE, which is finding F424's result
  * at 67 for a second time and is why this arm is short.  0x62bb5..0x62c64
  * with 0x649f1, 0x654a7, 0x67b95, 0x68480 and 0x6876a is the reader
  * v34hshak.c:2513 carries, arm for arm and field for field: the "still have
@@ -1936,7 +1936,7 @@ v34tx1_xmitmp(void *objp)
  *
  * So the arm is two calls, the way 78 and 85 are written over
  * `tx1_ja_common` and 67 over `getbit`.  What it costs, named rather than
- * implied, is finding 424's cost unchanged: `tools/mutate.py` anchors on
+ * implied, is finding F424's cost unchanged: `tools/mutate.py` anchors on
  * source text and the reader's text is in `v34hshak.c`, which is
  * `t_v34hshak.c`'s suite.  What the runs here test is that each call is the
  * right one on the right record and every branch the arm takes around them.
@@ -1959,12 +1959,12 @@ v34tx1_xmitmp(void *objp)
  * alternates on a one and holds on a zero.  That is differential phase-shift
  * keying at one bit a symbol, which is the state's name.
  *
- * FINDING 323'S ONE COLLISION IS THIS, AND IT IS NOT IDENTITY.  Entered cold
+ * FINDING F323'S ONE COLLISION IS THIS, AND IT IS NOT IDENTITY.  Entered cold
  * 24 and 60 write the same 69 bytes with the same signature, and the reason
  * is narrow: the fixture's fill leaves +0xabe8 clear, so no `vect_idx` tick;
  * the reader hands back a ZERO bit, so the store into +0x358c writes the
  * value already there and the tone selected is the one 60 selects; and the
- * reader's own advance lands OUTSIDE the object, where finding 323's byte
+ * reader's own advance lands OUTSIDE the object, where finding F323's byte
  * count does not look.  Any one of those three moving separates them, and
  * `t_v34hstx1.c` moves all three.  They are two entries at two addresses --
  * 0x62b96 against 0x62d3d, 2,220 bytes against thirty-four -- and the file
@@ -1977,7 +1977,7 @@ v34tx1_xmitmp(void *objp)
  * arithmetic.  Below it the arm simply leaves; at or above it the hold is
  * over and one of three things happens.
  *
- * WHAT IS NOT RECONSTRUCTED, and it is finding 341's gap again.  Fourteen
+ * WHAT IS NOT RECONSTRUCTED, and it is finding F341's gap again.  Fourteen
  * blocks here are entered only when `dsplibs_debug_level > 1` -- 0x68704,
  * 0x68b12, 0x6c771, 0x6c7db, 0x6a87e, 0x6b06c, 0x6c760 and the seven
  * `cmpl $0x1` sites that guard them -- and none is written.  Every one is a
@@ -2038,7 +2038,7 @@ tx1_dpsk_tone(struct v34_object *o, short bit)
  * object and once here.  All three are the same three compare-and-store
  * pairs in the same order, and the third adds one store of its own.
  *
- * THE txstate COMPARE AT 0x64eb6 CANNOT BE FALSE, for finding 342's reason at
+ * THE txstate COMPARE AT 0x64eb6 CANNOT BE FALSE, for finding F342's reason at
  * 65: that site is reached only from the dispatch at `txstate == 24` and
  * nothing between them writes +0x3596.  The OTHER TWO CAN, because the hold
  * tail runs after the dispatch has already moved the machine -- which is why
@@ -2230,7 +2230,7 @@ v34tx1_tx_dpsk(void *objp)
 	if (*((unsigned char *)o + TX1_FABE8) == 0) {
 		/*
 		 * 0x654dd.  The compare against TONE_AB cannot be false, for
-		 * finding 342's reason at 65: the arm is reached only through
+		 * finding F342's reason at 65: the arm is reached only through
 		 * table 1 at `txstate == 24` and nothing between the dispatch
 		 * and here writes +0x3596 -- `getbit` does not.  It is
 		 * written as the object writes it.
@@ -2309,7 +2309,7 @@ v34tx1_tx_dpsk(void *objp)
  * `f359c == 0x65` -- the object carries the scrambler loop twice, at 0x62e70
  * with the 0x04000000 tap and at 0x6358c with 0x00002000, and picks between
  * the copies exactly as 71 and 86 do -- so `tx1_scramble2` is the same call
- * here.  69 chooses on bit 0 of `f25c2` instead (finding 340 against 423);
+ * here.  69 chooses on bit 0 of `f25c2` instead (finding F340 against 423);
  * one halfword apart and it is the whole difference between the two shapes.
  *
  * THE CONSTELLATION IS 69's.  The receiver's +0x11e against 0x89b0 is the
@@ -2414,7 +2414,7 @@ v34tx1_tx_dpsk(void *objp)
  * address to `initV34` as the RECEIVE context's coefficient array
  * (v34shell.c:1767), and the snapshot below fills it from the receiver's
  * predictor -- six taps as a conjugate pair and then straight, which is the
- * complex product `(b + ja)` written out.  Finding 424 is the other reader:
+ * complex product `(b + ja)` written out.  Finding F424 is the other reader:
  * `initV34` stores an interior self-pointer to it at +0x0a24.
  */
 #define TX1_RXCOEFF	0xe84
@@ -2569,7 +2569,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
  * transmit rate at bit 10, and any other value the other way round.  The
  * object open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a chain of
  * shifts and adds; the two forms agree over all 65,536 inputs and the call is
- * written here, which is finding 424's treatment of `getbit` at 67.
+ * written here, which is finding F424's treatment of `getbit` at 67.
  *
  * AND THE UPSTREAM CAP IS APPLIED LAST.  If the nibble just written asks for
  * more than `VPcmV34GetMaxUpstreamRateIndex` allows, the four bits are
@@ -2580,7 +2580,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
  * `rec[k]` IS THE OBJECT'S OWN ADDRESSING: one base register at +0xaa3c and a
  * byte displacement, so `rec[8]` is +0xaa4c and `rec[21]` is +0xaa66.
  *
- * THE TXSTATE COMPARE AT 0x634b3 CANNOT BE FALSE, for finding 342's reason at
+ * THE TXSTATE COMPARE AT 0x634b3 CANNOT BE FALSE, for finding F342's reason at
  * 65: the arm is reached only through table 1 at `txstate == 66`, and neither
  * `txmit` nor anything else between the dispatch and here writes +0x3596.  It
  * is written as the object writes it.
@@ -2950,7 +2950,7 @@ v34tx1_trnseg4a(void *objp)
  * and does nothing when it gets there.  Reproduced, not smoothed over.
  *
  * ---------------------------------------------------------------------------
- * FIVE COMPARES HERE CANNOT BE FALSE, for finding 342's reason at 65.  The
+ * FIVE COMPARES HERE CANNOT BE FALSE, for finding F342's reason at 65.  The
  * arm is reached only through table 1 at `txstate == 21` and nothing between
  * the dispatch and 0x64b32 writes +0x3596, so `txstate != 0x40` holds; and
  * 0x64de7's `!= 0x4e`, 0x67f98's `!= 0x55` and 0x64e1b's `!= 0x23` test a
@@ -2960,12 +2960,12 @@ v34tx1_trnseg4a(void *objp)
  * five are written as the object writes them and each is an equivalent
  * mutation.
  *
- * WHAT IS NOT MODELLED, and it is finding 341's gap and not a new one: the
+ * WHAT IS NOT MODELLED, and it is finding F341's gap and not a new one: the
  * thirteen trace blocks at 0x68d07, 0x68d6f, 0x687f4, 0x68754, 0x68ca4,
  * 0x691b9, 0x691a8, 0x6916d, 0x6917e, 0x69dfa, 0x69b6f, 0x6a998 and 0x6a8e1,
  * and the two `VPcmV34Report*OfEchoAdapt` calls that only print.  The boundary
  * arm's own pair of echo reports IS modelled now: it is `v34FreezeEcho`, and
- * finding 572 is the transcript that proves the call.
+ * finding F572 is the transcript that proves the call.
  */
 int
 v34tx1_trnseg4(void *objp)

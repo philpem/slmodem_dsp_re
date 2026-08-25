@@ -14,7 +14,7 @@
  * wrong arm in one of sixteen candidates changes the chosen action only if it
  * changes which candidate wins the metric.  Called directly, four ACTIONS
  * against four digit values with `start` at zero and away from zero separate
- * in one comparison each.  Findings 3509 and 3403 are the reason to insist on
+ * in one comparison each.  Findings F3509 and F3403 are the reason to insist on
  * that.
  *
  * THE TWO TABLES ARE COMPARED BYTE FOR BYTE against the blob's own objects,
@@ -26,7 +26,7 @@
  * only meaningful if both sides' delay lines hold the same 24 shorts.  The
  * fixture builds a real shaper on each side, resets it -- `reset` is verified
  * by t_v90shapereset.cpp -- and then writes the SAME varied pattern into both
- * heap buffers.  Never zeros, finding 230: a zero delay line makes every
+ * heap buffers.  Never zeros, finding F230: a zero delay line makes every
  * negating arm agree with every non-negating one.
  *
  * EVERY TRIAL STAYS IN RANGE, which is D561's rule.  `applyAction` writes
@@ -54,7 +54,7 @@
 #include "dsplib/V90SpectralShapingFilter.h"
 
 extern "C" {
-/* Both sides by asm() label: cdecl, `this` first on the stack (finding 215). */
+/* Both sides by asm() label: cdecl, `this` first on the stack (finding F215). */
 void our_ss_ctor(void *self) asm("_ZN17V90SpectralShaperC1Ev");
 void ref_ss_ctor(void *self) asm("ref__ZN17V90SpectralShaperC1Ev");
 void our_ss_dtor(void *self) asm("_ZN17V90SpectralShaperD1Ev");
@@ -126,7 +126,7 @@ next_byte(void)
 	return (unsigned char)(lfsr >> 3);
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial)
 {
@@ -415,7 +415,7 @@ run_frameact(void)
 
 				/*
 				 * ABSOLUTE, because two sides that both wrote
-				 * nothing compare equal (findings 223, 224).
+				 * nothing compare equal (findings F223, F224).
 				 * Inside the frame the value is the arm's;
 				 * outside it, and past entry 24, the fill.
 				 */
@@ -601,7 +601,7 @@ run_action(void)
 	 * 16 cases, 20 comparisons against the first candidate each; the
 	 * count is only meaningful as "the candidate changes the output most
 	 * of the time", so the bound is deliberately loose and the MUTATION
-	 * is what adjudicates (finding 3509).
+	 * is what adjudicates (finding F3509).
 	 */
 	diff_eq_int("the candidate moves the output (%ld)", sep_cand > 200, 1,
 		    (long)sep_cand);

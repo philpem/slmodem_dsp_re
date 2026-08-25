@@ -324,7 +324,7 @@ formula gives -16384.
 
 This is the only table recovered so far that its own generator does not
 reproduce, so it is the only one emitted as literal data for a reason other
-than convenience. See findings 88 for why the exception is a hand-applied
+than convenience. See findings F88 for why the exception is a hand-applied
 floor rather than rounding, and why regenerating the table would be wrong at
 an index that is reached on every half turn of the phase accumulator.
 
@@ -366,7 +366,7 @@ sum = 49120 = 2.9980 x 16384          -3 dB at about 280 Hz
 
 **The name is a bit rate, not a cutoff** — V.34's INFO messages are sent at
 600 bit/s and 280 Hz is a sensible matched cutoff for 600 baud. See
-findings 91 before concluding that a table named for a frequency has been
+findings F91 before concluding that a table named for a frequency has been
 transcribed wrongly.
 
 ## V.34 timing recovery: the half-baud pair
@@ -460,7 +460,7 @@ claim about intent, the bytes are the reference.
 ## DTMF: two detectors, two coefficient families, one design
 
 The object has **two DTMF receivers** that share no code and no data
-(finding 1410).  `Dtmf.c`'s is float and runs at 4 kHz off a bank of eight
+(finding F1410).  `Dtmf.c`'s is float and runs at 4 kHz off a bank of eight
 notches; `Dtmf_Rx.c`/`Dtmf_Detector.c`'s is Q14 fixed point, runs at the line
 rate, and is what Caller ID uses.  Their coefficient tables are laid out
 differently and are derived here separately, but they are the same filter
@@ -487,7 +487,7 @@ Four floats per section, read by `notch()` (see `include/dsplib/notch.h`):
 1336.000 1477.000 1633.000 at fs = 4000, and 49.999 for `biascoef`** -- three
 decimal places, no residual worth reporting.  At 8000 the same numbers read
 as 1394, 1540, ... 3266 and 100, which is how the sample rate was settled
-(finding 1412): `dtmf_detect` is called at 8000 and processes every second
+(finding F1412): `dtmf_detect` is called at 8000 and processes every second
 sample.
 
 `c0` is BIT-IDENTICAL between the two plans in all eight sections, so the two
@@ -531,7 +531,7 @@ stood between the frequency and the table.  So the bytes stay literal.
 **MTD7_COEF_9600 does not fit.**  `a1 = 16751` is 1477.04 Hz like every other
 table; `b1 = -21143` is 1328.45 Hz where the design gives -18613.  Its zeros
 and its poles are 150 Hz apart, which is not a notch at either frequency.
-D250 and finding 1413; reproduced as found, with no mechanism proposed.
+D250 and finding F1413; reproduced as found, with no mechanism proposed.
 
 ### Where the two extra fixed-point sections come from
 
@@ -539,4 +539,4 @@ D250 and finding 1413; reproduced as found, with no mechanism proposed.
 group-splitting pre-notches and they have no tables of their own: the low
 group is fed through `MTD5_COEF` (1209 Hz) and the high group through
 `MTD4_COEF` (941 Hz).  Anyone regenerating this bank at a new rate gets those
-two for free and must not generate a ninth and tenth table.  Finding 1414.
+two for free and must not generate a ninth and tenth table.  Finding F1414.

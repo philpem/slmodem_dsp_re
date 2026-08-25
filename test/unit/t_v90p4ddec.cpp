@@ -19,7 +19,7 @@
  *   - the return value, on the arms where there IS one (see below);
  *   - the diagnostic transcript, as text, at levels 0, 2 and 3.
  *
- * THE OBJECTS ARE NEVER ZEROED -- finding 230.  Every slot gets varied
+ * THE OBJECTS ARE NEVER ZEROED -- finding F230.  Every slot gets varied
  * pseudorandom bytes before every trial, so a store that fails to happen is
  * visible and a store of zero into memory that was already zero is not
  * mistaken for one.  The fields each arm reads are then planted on top,
@@ -43,7 +43,7 @@
  *
  * Shared, because nothing under test writes through them, so an identical
  * pointer keeps the field IN the comparison rather than blanked out of it
- * (finding 1105): `params`, the two `V90MappingParams` blocks, the connection
+ * (finding F1105): `params`, the two `V90MappingParams` blocks, the connection
  * evaluator and the auto-digital-impairment detector.
  *
  * Split, one per side, because they are written: the demapper, the CP record,
@@ -58,7 +58,7 @@
  * displacements are the whole of its state.
  *
  * ---------------------------------------------------------------------------
- * ANTI-VACUITY, per finding 3509 rather than per path
+ * ANTI-VACUITY, per finding F3509 rather than per path
  *
  * Every counter below names an OBSERVABLE difference -- a returned decision, a
  * byte of some object, a line of transcript -- and never "a branch believed to
@@ -198,7 +198,7 @@ static unsigned char adi_s[sizeof(V90AutoDigitalImpDetector)]
 #define CEV		((V90ConnectionEvaluator *)ce_s)
 #define ADI		((V90AutoDigitalImpDetector *)adi_s)
 
-/* Varied, never zero, never the same twice: findings 223, 224, 230. */
+/* Varied, never zero, never the same twice: findings F223, F224, F230. */
 static unsigned
 fill(unsigned char *p, unsigned n, unsigned lfsr)
 {
@@ -347,7 +347,7 @@ setup(int trial, int mode)
 		 * mutations reading NOT CAUGHT.  A constant buffer makes the
 		 * two taps cancel and the demapper's own bits reach `V90MP`
 		 * and `V90CP`; the varied half keeps the descrambler's own
-		 * state in the comparison.  Finding 4811.
+		 * state in the comparison.  Finding F4811.
 		 */
 		if (mode & 1)
 			fill(dscbuf_s[s], DSC_N, lf ^ 0x13u);
@@ -388,7 +388,7 @@ setup(int trial, int mode)
 		 * phase count" produce the same line and the mutation that
 		 * swaps them survives.  `resetNoSpectral` also computes
 		 * `word_08` as `word_0 - signBitsPerFrame`, which is 1 or 3,
-		 * so 5 is clear of both.  Finding 4811.
+		 * so 5 is clear of both.  Finding F4811.
 		 */
 		m->word_08 = 5u;
 		m->linearMappStudyEnabled = (short)((mode & 1) ? 1 : 0);
@@ -572,7 +572,7 @@ arm_r(V90RDetector *d, int want, int limit)
 	 * this suite got wrong: it counts down +0x08 and matches 0x07 rather
 	 * than counting +0x04 and matching 0x38, so a fixture armed for
 	 * `detectR` leaves every RNot arm in both functions unreached and
-	 * eleven mutations reading NOT CAUGHT.  Finding 4811.
+	 * eleven mutations reading NOT CAUGHT.  Finding F4811.
 	 */
 	case 2:
 		d->int_00 = 5;
@@ -692,7 +692,7 @@ run_one(int v92, int state, int arm, int phase, int trial, int mode,
 		 * below and its own entry in `tools/gccdiverge.json`, so that
 		 * the 32,000 checks in this sweep stay green under both
 		 * compilers and only the one check that provably cannot be is
-		 * excused.  Finding 4812.
+		 * excused.  Finding F4812.
 		 */
 		d->errorEnergyBeforeEC = 4.0f;
 		d->errorEnergyAfterEC = 1.0f;
@@ -713,7 +713,7 @@ run_one(int v92, int state, int arm, int phase, int trial, int mode,
 		 * past it cannot tell `+ 0x17` from `+ 0x18`.  So each list
 		 * below straddles: one value below the real threshold, one
 		 * between it and the nearest wrong one, and one above both.
-		 * Finding 4811.
+		 * Finding F4811.
 		 */
 		switch (state) {
 		case 2:
@@ -815,7 +815,7 @@ run_sweep(int v92)
 					 * that made `mode` constant per phase
 					 * across every state, arm and level --
 					 * half the seeds never met half the
-					 * thresholds.  Finding 4811.
+					 * thresholds.  Finding F4811.
 					 */
 					mode = (phase + arm + 1 + state) & 3;
 					/*
@@ -946,7 +946,7 @@ run_sweep(int v92)
 
 	/*
 	 * The anti-vacuity floor.  Every one of these is an OBSERVABLE thing
-	 * the blob did, counted over the sweep above (finding 3509).
+	 * the blob did, counted over the sweep above (finding F3509).
 	 */
 	diff_eq_int("some trial printed", spoke > 0, 1, 0);
 	diff_eq_int("some trial changed the object", moved > 0, 1, 0);
@@ -1101,17 +1101,17 @@ run_getdecision(void)
  * which are already differentially green in t_v90modchain -- so the converter
  * and the embedded modulator are CONSTRUCTED, per side, over the seeded
  * block, with the arguments V90Phase4Demodulator's own constructor uses and
- * the two mapping blocks in the order it crosses them (finding 1301).  The
+ * the two mapping blocks in the order it crosses them (finding F1301).  The
  * one deliberate difference is that the converter is SUPPLIED rather than
  * left for the modulator to allocate: the ownership flag is not this
  * function's claim and a supplied converter is one allocation fewer to mask.
  *
  * THE HISTORY IS DIRTIED AFTER CONSTRUCTION AND BEFORE THE CALL, which is
- * finding 7457: the allocator hands back zeroed memory and `reset(0)` writes
+ * finding F7457: the allocator hands back zeroed memory and `reset(0)` writes
  * zeros, so without a non-zero pattern the call moves nothing any comparison
  * can see, and both "drop the call" and "seed with one" survive.
  *
- * FOUR AXES, INDEPENDENT BY CONSTRUCTION, per finding 7458:
+ * FOUR AXES, INDEPENDENT BY CONSTRUCTION, per finding F7458:
  *
  *   - `sessionFlag`, which picks the CP arm over the MP arm AND the decision
  *     member the loop runs;

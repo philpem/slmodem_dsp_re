@@ -23,7 +23,7 @@
  * the same size with the same relative layout, so `pOut - buf` is comparable
  * even though `pOut` never is.  The raw pointers are never compared and never
  * merely checked non-null: two arrays at two addresses would pass that and
- * prove nothing (finding 224).
+ * prove nothing (finding F224).
  *
  * The layout is 64 elements with the output cursor 40 above the limit and taps
  * 5 and 23 above the cursor, so 41 symbols reach the restart and a run of 100
@@ -40,7 +40,7 @@
  *     intermediate is `I` = `unsigned char` there and the history is `int`, so
  *     the object stores a TRUNCATED, zero-extended byte; a `T` intermediate
  *     would store the full 32-bit XOR.  `cov_wide_tap` asserts the sweep
- *     actually produced an operand that big (finding 870).
+ *     actually produced an operand that big (finding F870).
  *   - every restart-crossing block counts its crossings and asserts the count
  *     is non-zero.
  *   - the constructor sweep asserts it contained a case with `a`, `b` and `c`
@@ -58,9 +58,9 @@
  * instantiations carry.
  *
  * The `ref_` aliases are reached through asm() labels rather than by spelling
- * the alias as an identifier, which sidesteps finding 225 entirely.  The
+ * the alias as an identifier, which sidesteps finding F225 entirely.  The
  * convention is plain cdecl with `this` as the first stack argument
- * (finding 215).
+ * (finding F215).
  */
 
 #include <string.h>
@@ -238,7 +238,7 @@ cmp(const S *a, const S *b, const T *ba, const T *bb, unsigned int n, long tag)
 /*
  * A slot big enough for the object, holding STORAGE and ALIGNMENT only.  It is
  * what lets the destructor be called on an object this file laid out by hand
- * -- see dsplib/Scrambler.h and finding 871.
+ * -- see dsplib/Scrambler.h and finding F871.
  *
  * `o` IS A REFERENCE, and that is the whole trick.  This was a union with an
  * `S o` member and a user-provided empty constructor and destructor, which is
@@ -511,7 +511,7 @@ drive_proc1(int (*rref)(void *, T), T *ba, T *bb, int *restarts, int *differed,
  *
  * `wide` records that an operand above 0xff reached the XOR.  At
  * `Scrambler<int, unsigned char>` that is the case which tells a `T`
- * intermediate from the `I` one the object has (finding 870); at the other
+ * intermediate from the `I` one the object has (finding F870); at the other
  * instantiations `T` is a byte and it never fires, which is why the assertion
  * is made by the caller and not here.
  */
@@ -806,7 +806,7 @@ run_ih(void)
 	 * `unsigned char` and `T` is `int`, so the XOR is computed in eight
 	 * bits and the history gets it zero-extended.  If the sweep never put
 	 * a value above 0xff under a tap, a `T` intermediate would pass every
-	 * comparison above and finding 870 would be untested.
+	 * comparison above and finding F870 would be untested.
 	 */
 	diff_eq_int("an operand above 0xff reached the XOR", wide, 1, 0);
 

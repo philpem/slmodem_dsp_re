@@ -13,7 +13,7 @@ and `refcheck.py` passed, because the reference still RESOLVED (7833).
 Deviations never had this problem: `D250` cannot be a coefficient.
 
 **THE TREE ALREADY KNEW.** `refcheck.py`'s `FINDING_REF` requires the word
-`finding` before a number, and the comment above it cites finding 543 --
+`finding` before a number, and the comment above it cites finding F543 --
 "the coefficient rows that would be corrupted by treating them as one". The
 rule existed and was encoded in the checker; the merge procedure simply did
 not follow it. A prefix makes the rule structural instead of a convention
@@ -34,6 +34,24 @@ nothing outside that set is ever touched. On top of that:
 - **In code** (`.c`, `.cpp`, `.h`, `.py`, `.json`): ONLY the anchored
   `finding N` forms. A bare number in a code file is a coefficient here --
   708 of them are -- and this tool cannot and must not judge otherwise.
+
+A JSON ANCHOR EMBEDS SOURCE TEXT WITH ESCAPED NEWLINES, AND THAT HID FOUR
+CITATIONS
+
+`test/mutations/*.json` anchors quote source verbatim, but with `\n` as two
+literal characters. A citation split across a line --
+
+    * ... on either side.  Finding
+    * 722.
+
+-- matches in the `.c`, where the separator is a real newline the pattern's
+emphasis class can span, and does NOT match in the JSON, where it is a
+backslash. So four anchors had their source rewritten underneath them and
+stopped matching, while `refcheck` stayed green because the citations still
+resolved. Repaired by decoding each JSON string, migrating it, and putting it
+back re-escaped, which is the only level at which the two agree.
+
+**Any text-level migration over this tree has to do the JSON separately.**
 
 VERIFICATION, WHICH IS THE POINT
 
@@ -96,7 +114,7 @@ def migrate_text(text, known, prose):
 
     #
     # 2. THE ANCHORED FORMS, using refcheck's regex so the two agree.  The
-    #    match may carry a list -- `findings 134, 2400 and 2401` -- and every
+    #    match may carry a list -- `findings F134, F2400 and F2401` -- and every
     #    member of it is a citation.
     #
     def anchored(m):
@@ -149,8 +167,8 @@ def self_test():
     known = {"7822", "7833", "543", "134", "2400", "2401", "7820", "5701", "1"}
     cases = [
         ("prose", "### 7833. A HEADING", "### F7833. A HEADING"),
-        ("prose", "see finding 7833 for why", "see finding F7833 for why"),
-        ("prose", "findings 134, 2400 and 2401 are the same shape",
+        ("prose", "see finding F7833 for why", "see finding F7833 for why"),
+        ("prose", "findings F134, F2400 and F2401 are the same shape",
          "findings F134, F2400 and F2401 are the same shape"),
         # A BARE PARENTHETICAL IS LEFT ALONE EVEN WHEN IT IS A KNOWN NUMBER.
         ("prose", "a bare (7833) citation", "a bare (7833) citation"),
@@ -166,7 +184,7 @@ def self_test():
         #
         ("code", "\t  8192, -14430,   7822,   8192,", "\t  8192, -14430,   7822,   8192,"),
         ("code", "\t8192, -14686, 7832,", "\t8192, -14686, 7832,"),
-        ("code", " * ENUMERATED (finding 7820).  The map",
+        ("code", " * ENUMERATED (finding F7820).  The map",
          " * ENUMERATED (finding F7820).  The map"),
         ("code", "\tif (x == 7822) return;", "\tif (x == 7822) return;"),
         ("code", " * see 7822's note", " * see 7822's note"),

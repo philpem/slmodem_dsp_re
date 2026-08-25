@@ -104,7 +104,7 @@ That symbol is GLOBAL and in `.text`, not weak and not in a
 `.gnu.linkonce.t` section, so it was not declared `inline` — and GCC 3.4.2 at
 `-O2` inlines nothing that is not.  **So the duplication is in the author's
 source**, and the reconstruction writes the block out at each of the four
-sites rather than defining the member and hoping.  Finding 2114.  **Whoever
+sites rather than defining the member and hoping.  Finding F2114.  **Whoever
 writes `twoLevelDemod` should read this section first**; the four copies here
 are its body.
 

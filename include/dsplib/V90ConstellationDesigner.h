@@ -6,7 +6,7 @@
  * (docs/v90cpp.md's table of the fifty) -- was the first one written here;
  * the eleven leaves, `determineDminForRrn`, `setConstellationToNoise` and
  * `setConstellationToNoise_forceRate` followed -- the fourteen-member batch
- * finding 2140 measured, and TWENTY of the class's twenty-four defined
+ * finding F2140 measured, and TWENTY of the class's twenty-four defined
  * symbols.
  *
  * AND THE CLASS IS NOW CLOSED.  The last four -- `adjustConstellationsPower`,
@@ -21,13 +21,13 @@
  * NOT POLYMORPHIC.  `tools/cppstruct.py` lists the destructor with the `D1`
  * and `D2` variants and no `D0`, and GCC emits a deleting destructor only for
  * a virtual one, so offset 0 is a real member and there is no vptr.  Finding
- * 228 is the four classes where that is not true, and
+ * F228 is the four classes where that is not true, and
  * `ResamplerTimingOffset` -- also in this batch -- is one of them.
  *
  * THE OBJECT IS 84 BYTES.  The largest `this`-relative displacement any of
  * the twenty-four defined members uses is +0x50 and the access there is four
  * bytes wide, so the object ends at 0x54.  A displacement is not a size
- * (finding 215); the width of what sits at the bound is what turns one into
+ * (finding F215); the width of what sits at the bound is what turns one into
  * the other.  The .cpp asserts both the size and the two offsets below.
  *
  * WHAT +0x4c AND +0x50 HOLD, measured and not inferred from the method name
@@ -87,7 +87,7 @@
  * word block in `V90PreFilter.h` and the 0x558 named map in
  * `V90Parameters.h` -- and no translation unit may include both.  Declaring
  * the class here keeps this header compatible with either; the .cpp picks
- * one.  Finding 1112.
+ * one.  Finding F1112.
  */
 class V90Parameters;
 
@@ -229,7 +229,7 @@ public:
 	 * under the ladder entry `byte_08` selects, then put one point back if
 	 * that took `mappingParams->word_0` below 21.  `void`: the single
 	 * epilogue is reached with `dsplibs_debug_printf`'s return in %eax on
-	 * one path and `edprintf`'s on another, which is finding 2140's
+	 * one path and `edprintf`'s on another, which is finding F2140's
 	 * two-`ret` argument at one `ret`.
 	 */
 	void adjustConstellationsPower();
@@ -333,7 +333,7 @@ public:
 	 * adds each to a sign-extended `short` from a caller's table before a
 	 * signed comparison.  That is the "forced" kind of extension --
 	 * the 32-bit result is what the comparison uses -- and not the free
-	 * kind of finding 614.
+	 * kind of finding F614.
 	 *
 	 * AND THREE OF THE FOUR NOW HAVE THE AUTHOR'S OWN WORD FOR WHAT THEY
 	 * HOLD, out of `determineDminForRrn`'s seventeen format strings --
@@ -435,7 +435,7 @@ public:
 	 * +0x24  Seeded by `reset` from the parameter block's +0x39c, which
 	 * `tools/vparse.py` reports as `unnamed_39c`: `setToDefault` writes it
 	 * and `loadParams` never reads it, so the original has no name for it
-	 * either (finding 878).
+	 * either (finding F878).
 	 */
 	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
 

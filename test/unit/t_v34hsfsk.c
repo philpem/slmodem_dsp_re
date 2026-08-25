@@ -8,7 +8,7 @@
  * the retrain detector to the same route rather than choosing a different
  * one, and `fskdemodulate` and the microstate dispatch run either way.  The
  * stub this file replaces returned instead, which was wrong for every gated
- * step of the function and not only for this arm.  Finding 721.
+ * step of the function and not only for this arm.  Finding F721.
  *
  * WHAT THAT MAKES THIS TEST.  Two axes, and both are needed:
  *
@@ -146,10 +146,10 @@ struct trial {
 	 * `v34handshakinit` sets `vect_idx` and `fsk.nbits` to zero on the
 	 * way in, so a trial that left them there would compare a store of
 	 * zero against a field that was already zero -- eleven of table 1's
-	 * claims were untestable for exactly this reason (finding 345), and
+	 * claims were untestable for exactly this reason (finding F345), and
 	 * four of this file's five first-run survivors were.  None of the
 	 * four is read between `v34hs_setup` and the gate, so seeding them
-	 * is a poke and not finding 429's write-then-read.
+	 * is a poke and not finding F429's write-then-read.
 	 */
 	short	vect_idx;	/* +0x2aa2                              */
 	short	counter;	/* +0xaa78                              */
@@ -459,7 +459,7 @@ suite_state_other(void)
  * Reached the same way every time -- state 2, tone present, one run short of
  * `tone_runs` -- and then the fields it writes are moved one at a time so
  * that each store is a store the object had to make rather than one the fill
- * had already made for it.  Finding 345's lesson from table 1.
+ * had already made for it.  Finding F345's lesson from table 1.
  */
 static void
 fired_case(const struct trial *t, const char *what, long tag)
@@ -557,7 +557,7 @@ suite_fired(void)
 	 * it compares, prints only on a change, and stores.  Both sides of
 	 * both are driven.  The RXSTATE setter has only one reachable branch
 	 * ever -- the gate is reached only with rxstate 43 -- which is
-	 * finding 722 and is why there is no trial for its other side.
+	 * finding F722 and is why there is no trial for its other side.
 	 */
 	tr.f3588 = 0;
 	tr.mst = FSK_NEXT_MST;

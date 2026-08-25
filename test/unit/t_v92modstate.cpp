@@ -43,7 +43,7 @@
  *   1. `MODULATOR_QUEUE_LENGTH` IS SMALL AND POSITIVE.  `reset` shifts it
  *      right arithmetically and uses the result as the UNSIGNED bound of the
  *      priming loop, so a negative parameter asks for about two billion
- *      iterations (finding 1284).  t_v92mod.cpp's fixture says the same.
+ *      iterations (finding F1284).  t_v92mod.cpp's fixture says the same.
  *   2. THE PHASE 4 MODULATOR'S `word_1b0` IS NON-ZERO.  `exitCPt` reaches
  *      `V92Phase4Modulator::exitCPt`, whose guard is
  *      `(symbolCount - 24) % word_1b0`, and that division is unguarded --
@@ -64,12 +64,12 @@
  * ---------------------------------------------------------------------------
  * THE DIAGNOSTICS ARE DRIVEN AT FOUR LEVELS, NOT JUST RAISED
  *
- * Finding 150's rule.  Nine of the ten members gate on `dsplibs_debug_level >
+ * Finding F150's rule.  Nine of the ten members gate on `dsplibs_debug_level >
  * 1`, so 0 and 1 must print NOTHING from them and 2 and 3 must print
  * everything; a site whose gate was dropped, or written `> 2`, is identical to
  * the object at one level and differs at another.  Line counts are asserted
  * against literals as well as against the blob's, because two silent sides
- * agree about nothing (finding 149).
+ * agree about nothing (finding F149).
  *
  * THE STARTING PHASE IS SET THROUGH OUR OWN `setNormalizedPhase` ON BOTH
  * SIDES.  It is a fixture operation and not the subject: the two resamplers
@@ -763,7 +763,7 @@ run_enter(void)
 		 * THE TWO FLAG BYTES ARE GIVEN DIFFERENT VALUES, which is what
 		 * makes "enterPhase4 handed on byte_0c" a check that can fail.
 		 * `reset` clears both, so out of the constructor they are equal
-		 * and the two readings agree on every trial.  Finding 7105.
+		 * and the two readings agree on every trial.  Finding F7105.
 		 */
 		M(0)->byte_0c = M(1)->byte_0c = (unsigned char)(0x11 + trial);
 		M(0)->byte_0d = M(1)->byte_0d = (unsigned char)(0x40 + trial);
@@ -1183,8 +1183,8 @@ run_mkres(void)
 		 * The wrap: the resampler's phase after the call is below
 		 * where it would have been had nothing wrapped.  Counted from
 		 * the SIDE UNDER TEST and asserted equal on both, so this is a
-		 * separating trial and not a path counter (findings 3403,
-		 * 3509).
+		 * separating trial and not a path counter (findings F3403,
+		 * F3509).
 		 */
 		if (M(0)->phase == V92MOD_PHASE_3
 		    && (mkres_codes[ci] == V92MOD_PHASECHG_HALF
@@ -1260,9 +1260,9 @@ static const float diag_offsets[] = { -0.375f, 0.0f, 0.5f, -1.75f, 1.75f };
 /*
  * Nine of the ten gate on `> 1`; `enterDataPhase` gates one level down, inside
  * `edprintf`, and the file comment says what that does and does not change.  The
- * level is swept 0..3 rather than raised, which is finding 150's rule, and the
+ * level is swept 0..3 rather than raised, which is finding F150's rule, and the
  * line counts are asserted against literals as well as against the blob's
- * (finding 149).
+ * (finding F149).
  */
 static int
 run_debug(void)
@@ -1614,7 +1614,7 @@ run_initiate(void)
 	 for (pi = 0; pi < NPHASE; pi++) {
 	  /*
 	   * THE BIT-COUNT AXIS, and it is keyed on something the FUNCTION
-	   * changes rather than on a constant (finding 7458).  Both members
+	   * changes rather than on a constant (finding F7458).  Both members
 	   * call `setSymbolsBlockSize(1)` first, so what `nofBitsForNextTime`
 	   * returns is decided by `symbolsDone`: at three the one-symbol block
 	   * is already banked, the count is ZERO and the modulator enters the
@@ -1783,8 +1783,8 @@ run_initiate(void)
  * exactly `queuePrime`, so the subtraction is zero and the two expressions are
  * the SAME NUMBER.  A fixture that called `progress` once on a fresh modulator
  * could not fail on the difference.  Every case is therefore driven twice, and
- * the second call runs against a queue the first one moved.  Findings 7105 and
- * 7458.
+ * the second call runs against a queue the first one moved.  Findings F7105 and
+ * F7458.
  *
  * THE THREE PHASE 3 EVENT CODES ARE REACHED BY SEEDING THE SUB-MODULATOR, not
  * by running it for two thousand symbols.  `V92Phase3Modulator::generateSymbol`
@@ -1958,7 +1958,7 @@ run_progress(void)
 		 * parameter block makes every symbol the chain produces zero
 		 * WHATEVER the bits were -- and the data arm then compares
 		 * equal however it is mutated.  That is the vacuity of finding
-		 * 7105 arriving four objects down.
+		 * F7105 arriving four objects down.
 		 */
 		mp->gain = 4096.0f;
 		/*

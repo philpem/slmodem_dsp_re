@@ -163,7 +163,7 @@ short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };
  * window are now values in `src/`, so `t_fpm_phasor` compares them against
  * `dsplibs_ref.o`'s own `.data` -- the blob's bytes, which our `--coverage`
  * build cannot displace because we do not compile the blob -- and sweeps BOTH
- * sine and cosine over all 65536 phases.  Finding 3624's objection was that
+ * sine and cosine over all 65536 phases.  Finding F3624's objection was that
  * `--coverage` appends `__gcov_.FPM_MTD_*` to fpm_mtd.c's `.data` at exactly
  * those offsets; with no adjacency left to assert, it no longer applies.
  *
@@ -181,7 +181,7 @@ short FPM_sin_sign[4] = { 16384,  16384, -16384, -16384 };
  * `FPM_MTD_detect`, `nm` marks it `D` and not `R`, and the two-byte pad at
  * 0x081da is itself proof of a translation-unit boundary.  Only the
  * DEPENDENCE on where it lands has been removed, not the attribution.
- * Findings 3588, 3620-3624 and 3700-3703, deviation D392.
+ * Findings F3588, F3620-3624 and 3700-3703, deviation D392.
  */
 short FPM_cos_sign_ext[FPM_PHASOR_SIGN_BELOW + 4] = {
 	/* [-4 .. -1]: what the object reads below FPM_cos_sign, which is

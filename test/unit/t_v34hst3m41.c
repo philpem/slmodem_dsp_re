@@ -2,7 +2,7 @@
  * t_v34hst3m41.c -- `v34handshak`'s microstate 41 `DET_SYNC`, 0x669a4.
  *
  * The third largest arm of .rodata+0x3000 (3,945 exclusive bytes, finding
- * 286) driven case by case against the blob through
+ * F286) driven case by case against the blob through
  * test/harness/v34hsstep.c, with `v34hs_ours(1)` putting this tree's
  * `v34handshak` on side A -- so every case here is an ordinary tier-1
  * differential comparison of the whole 44,096-byte object, the five blocks
@@ -15,13 +15,13 @@
  * bodies runs -- +0xaae2, +0xabe8 and +0x358a -- and every one of them is
  * written by the cases below rather than inherited from the fill.
  *
- * THE TXSTATE IS PART OF THE FIXTURE (finding 288).  Every path leaves
+ * THE TXSTATE IS PART OF THE FIXTURE (finding F288).  Every path leaves
  * through the once-per-block transmit dispatch.  The cases run at
  * MOH_SILENCE (81), which is above table 2's window and selects the
  * dispatch's own default at 0x62a40, except where the arm forces its own:
  * three paths set TX_DPSK (24), one SILENCERETRAIN (74) and one TONE_AB
  * (60), and all three of those select table 2's arm at 0x644c9, which
- * finding 354 put in the tree.
+ * finding F354 put in the tree.
  *
  * WHAT IS NOT DRIVEN, and so is not claimed: nothing.  Every leaf of the arm
  * has a case below; the arm contains no `t3c_unwritten` and no path that
@@ -97,8 +97,8 @@
  * Both are interior pointers, so the harness compares them by offset from
  * each side's own base and `v34hs_poke_self_ptr` aims each side at its OWN
  * object -- one address written into both is precisely the asymmetry
- * findings 319-322 are about.  The offsets are away from anything this route
- * writes, which is finding 357's caution: a pointer aimed into a region the
+ * findings F319-322 are about.  The offsets are away from anything this route
+ * writes, which is finding F357's caution: a pointer aimed into a region the
  * step itself modifies is a fixture fault presenting as a reconstruction
  * fault.
  */
@@ -110,7 +110,7 @@ static int dump;
 
 /*
  * `changed` counts bytes DIFFERING from what the fill left, so it is a
- * property of the fill as well as of the arm; finding 359 measured that it
+ * property of the fill as well as of the arm; finding F359 measured that it
  * moves by one or two bytes across seeds while nothing else moves at all.
  * Asserted at the default fixture only, everything else always.
  */
@@ -120,14 +120,14 @@ static int default_fill;
  * Open a case.
  *
  * The tail at 0x62a40 overwrites +0x0004 on four conditions no arm reads,
- * and at two of twenty-four fills it does so on every case (finding 364).
+ * and at two of twenty-four fills it does so on every case (finding F364).
  * Pinning its five inputs is what makes each body's answer a property of the
  * object rather than of the seed.
  *
  * +0xaa7a is seeded NON-ZERO on every case because the arm's one
  * unconditional store puts a zero there: a field that already holds what the
  * store writes makes the store invisible and its mutation equivalent, which
- * is finding 345's failure mode.
+ * is finding F345's failure mode.
  */
 static void
 begin(short tx)
@@ -165,7 +165,7 @@ begin(short tx)
  *
  * Refusing is done through the warm-up counter, which returns before the
  * level is consulted, so neither answer depends on what the filter made of
- * the input.  The histories and coefficients are seeded for finding 357's
+ * the input.  The histories and coefficients are seeded for finding F357's
  * reason: left as the fill leaves them the filter settles to zero within two
  * samples and the number of samples read stops being observable.
  */
@@ -240,7 +240,7 @@ step(const char *what, long tag, unsigned changed, unsigned lines,
 
 /*
  * The distinct behaviours this file claims, so that a change collapsing two
- * of them is a failure rather than a silence (finding 290).
+ * of them is a failure rather than a silence (finding F290).
  */
 #define NSIG	40
 static unsigned sig[NSIG];
@@ -460,7 +460,7 @@ main(void)
 	/*
 	 * ASSERTED AS A COLLISION, not recorded as a behaviour.  0x6ab35 and
 	 * 0x669fa are two exits that do the same nothing, and so is the cold
-	 * path -- three routes, one answer.  Finding 351's distinction: what
+	 * path -- three routes, one answer.  Finding F351's distinction: what
 	 * is independent here is WHICH route was taken, which the object
 	 * cannot show and the mutation suite has to.
 	 */
@@ -773,7 +773,7 @@ main(void)
 
 	/*
 	 * The retrain.  `v34handshakinit(obj, 1)` runs INSIDE the step, so
-	 * this is the case finding 359 says `V34HS_REFINIT=1` cannot be used
+	 * this is the case finding F359 says `V34HS_REFINIT=1` cannot be used
 	 * against: side A installs our library tables and side B the blob's,
 	 * and no address comparison can settle two copies of one table.
 	 */
@@ -895,7 +895,7 @@ main(void)
 
 	/*
 	 * Every signature recorded above is asserted DIFFERENT from every
-	 * other.  Finding 290's rule applies: the signature holds what the
+	 * other.  Finding F290's rule applies: the signature holds what the
 	 * step wrote and not the state it was entered with, so this is a
 	 * claim about the bodies and not about the seeds.  A change that
 	 * collapsed two of these into one would otherwise pass in silence.
@@ -922,7 +922,7 @@ main(void)
 	 * asserted to write the SAME BYTES and print none.  The byte counts
 	 * are the debug-on ones because no out-of-line debug block in this
 	 * arm stores to the object; a count that moved would be a finding and
-	 * not a fixture wobble.  Finding 358 is the model.
+	 * not a fixture wobble.  Finding F358 is the model.
 	 */
 	v34hs_debug(0);
 
@@ -1035,7 +1035,7 @@ main(void)
 	/*
 	 * The pairwise loop above is only as strong as the number of
 	 * signatures fed to it, and a `record()` deleted in an edit would
-	 * shrink it in silence -- which is finding 395's hazard turned on
+	 * shrink it in silence -- which is finding F395's hazard turned on
 	 * this file.  Pinned.
 	 */
 	diff_eq_int("behaviours recorded", nsig, 24, 0);

@@ -10,7 +10,7 @@
  * In practice the designs are never reached: slmodemd answers
  * `GetDialToneFilterSubindex` with a literal zero, which is out of range, so
  * every bank selection falls back to the family's nearest single design in
- * cpfiltrs.h.  See finding 49.  They are reconstructed because they are what
+ * cpfiltrs.h.  See finding F49.  They are reconstructed because they are what
  * the object contains, and because being global they can be compared against
  * the blob word for word.
  */

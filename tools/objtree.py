@@ -23,12 +23,12 @@ tree has written nothing, and reported that with no denominator and exit 0:
                     have been in src/service/pcm.c throughout
     service.py      913 unwritten symbols in data mode, "sanity checks passed"
 
-That is finding 2400 for the third time (a build moved its output and a
-detector kept reading the old path) and finding 3100 for the second, and the
+That is finding F2400 for the third time (a build moved its output and a
+detector kept reading the old path) and finding F3100 for the second, and the
 answer is the one 2401 ruled and 0d30911 landed: PROBE both layouts, take
 whichever HAS the objects, REFUSE on a zero denominator, and make every tool
-say how many objects it read and where from.  Finding 3055 recorded it;
-finding 3110 is the fix.
+say how many objects it read and where from.  Finding F3055 recorded it;
+finding F3110 is the fix.
 
 WHY PROBING IS SOUND HERE, AND WHY IT IS NOT A GUESS
 
@@ -48,7 +48,7 @@ provenance line printed on every run is what shows which was read.
 
 WHY THIS IS A WHITELIST OF TWO NAMED DIRECTORIES AND NOT A WALK OF build/
 
-Finding 222: the walk used to be all of `build/` less `dsplibs_ref.o` by
+Finding F222: the walk used to be all of `build/` less `dsplibs_ref.o` by
 name, and then the two-pass rename left `build/dsplibs_glob.o` -- the BLOB,
 with all 1782 of its symbols promoted to global -- beside it.  The walk took
 the blob for our own output and reported 98.0% translated for a tree that had
@@ -120,7 +120,7 @@ def _newest(paths):
 # `make` builds $(TESTBIN), whose prerequisites are $(OBJ_REPRO); it has not
 # built $(OBJ) since #164.  Two of these tools printed "Run `make` first" and
 # an agent that did exactly that got the same empty answer twice with no
-# warning that anything had changed -- which is how finding 3055 was found.
+# warning that anything had changed -- which is how finding F3055 was found.
 # `coverage:` lists $(OBJ) as a prerequisite and `phase:` depends on
 # `coverage`, so either target populates build/src.
 #
@@ -137,7 +137,7 @@ def _tool(name=None):
 def refuse(what, build=BUILD, tool=None):
     """The message for a zero denominator.  Pass it straight to sys.exit().
 
-    A DETECTOR MUST REPORT ITS DENOMINATOR (finding 2401), and zero is not a
+    A DETECTOR MUST REPORT ITS DENOMINATOR (finding F2401), and zero is not a
     score.  "Nothing is written yet" and "this tool read no objects" are the
     same report in every one of these seven, and only the second is a bug, so
     the tool must not be allowed to print either.
@@ -151,7 +151,7 @@ def refuse(what, build=BUILD, tool=None):
             "  Looked for **/*.o in: %s\n"
             "  %d source file(s) under src/ are waiting to be compiled.\n"
             "  %s\n"
-            "  Findings 134, 2401, 3055, 3110."
+            "  Findings F134, F2401, F3055, F3110."
             % (_tool(tool), what, ", ".join(objdirs(build)), len(src), ADVICE))
 
 

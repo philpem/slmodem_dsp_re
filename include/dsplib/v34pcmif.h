@@ -162,7 +162,7 @@ void VPcmV34ReportMiddleOfEchoAdapt(void *obj);
  * ---------------------------------------------------------------------------
  * `VPcmV34Progress`, 0xb3c0 and 7,278 bytes: one block of samples through
  * whichever of V.34, V.90, V.92 and K56flex owns the line.  It is the whole
- * of `vpcm_run`'s work between the two sample conversions, and finding 1454
+ * of `vpcm_run`'s work between the two sample conversions, and finding F1454
  * measured that a real 33,600 V.34 connect executes no other unwritten
  * symbol.  Defined in `src/pump/v34/v34pcmmain.cpp` because seven of its
  * callees are C++ members; the head of that block is the map.

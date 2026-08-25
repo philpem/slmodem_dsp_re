@@ -6,12 +6,12 @@
  * `setDfeBeta(float)` and `enterPhase3()` (which calls the other two);
  * `reset(unsigned)` and `enterChannelVerification()`; and the constructor and
  * destructor, which are one unit with `reset` because the constructor's last
- * act is a tail call to it (findings 1230-1232).
+ * act is a tail call to it (findings F1230-1232).
  * `include/dsplib/V90Equalizer.h` carries the object map.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x40(%esp),%ebx` with 0x40 the frame's argument slot --
- * not %ecx, so nothing here needs an attribute (finding 215).
+ * not %ecx, so nothing here needs an attribute (finding F215).
  *
  *
  * A 350-BYTE FLOAT SETTER IS NOT STORING A FLOAT
@@ -54,14 +54,14 @@
  * coprocessor's is one step in `shift` and a factor of two in `scaledBeta` --
  * and it is worst exactly where the input is a power of two, which is where
  * a renormalisation lands most often.  So the three instructions are
- * transcribed.  Finding 233's conclusion, one class further on: where the
+ * transcribed.  Finding F233's conclusion, one class further on: where the
  * object uses the coprocessor, transcribing the coprocessor is both
  * necessary and sufficient.
  *
  * Everything else stays ordinary C++.  The intermediates are `long double`
  * because the object keeps them in x87 registers and never rounds them to
  * 32 bits: it stores the argument to a 4-byte stack slot only to survive the
- * `edprintf` call, and reloads the same bits.  Finding 256 measured that a
+ * `edprintf` call, and reloads the same bits.  Finding F256 measured that a
  * `float` spelling would have agreed here anyway under -mfpmath=387; the
  * explicit `long double` does not depend on that measurement holding.
  *
@@ -85,9 +85,9 @@
 /*
  * `V90Resampler.h` brings in the NAMED `V90Parameters` map, which is the one
  * this file wants -- `reset` copies four slots out of the parameter block and
- * all four have the original author's own names (finding 861).  The other
+ * all four have the original author's own names (finding F861).  The other
  * definition, `V90PreFilter.h`'s 0x504 word block, must not be included in
- * the same translation unit; finding 1112.
+ * the same translation unit; finding F1112.
  */
 #include "dsplib/V90Resampler.h"
 
@@ -108,7 +108,7 @@
  * INCLUDING `V90PreFilter.h` HERE IS NO LONGER A CONFLICT.  It used to carry
  * a second, smaller `V90Parameters` -- the 0x504 word block this file's
  * comment above warns about -- and task #116 reconciled the two (finding
- * 1112), so the header now includes the same `V90Parameters.h` this file
+ * F1112), so the header now includes the same `V90Parameters.h` this file
  * does.  `tools/onedef.py` is the gate that keeps it that way.
  */
 #include "dsplib/V90SpectralVerifier.h"
@@ -135,7 +135,7 @@
  * `struct name {` out of include/dsplib, so a C++ class has to assert its own
  * -- and this is exactly the check that catches an object right in size and
  * wrong by four in every offset, which is what a missed vptr produces
- * (finding 228).  Skipped on the 64-bit syntax pass, where nothing about a
+ * (finding F228).  Skipped on the 64-bit syntax pass, where nothing about a
  * 32-bit layout is being claimed.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -235,7 +235,7 @@ typedef char v90equ_size[(sizeof(V90Equalizer) == 0x150) ? 1 : -1];
  * One high-error diagnostic value, as the three printf arguments the object
  * builds by hand.  The scale here is a FLOAT `1000.0f`, loaded once with
  * `flds` and reused for both values -- not `edprint_stat`'s `long double`.
- * The magnitude is the `long double` finding 5701 identified: the same value
+ * The magnitude is the `long double` finding F5701 identified: the same value
  * the comparison above the print tests, computed once.
  */
 #define V90EQU_ERRSIGN(v)	(!((v) <= 0.0f) ? '+' : '-')
@@ -286,7 +286,7 @@ one_shifted_by(int n)
  *         control word set to truncate.
  *   %06d  six fractional digits.  `fistl` leaves `(int)v` in memory WITHOUT
  *         popping, `fildl` reads it back, and `de e2` -- FSUBRP, which
- *         objdump prints as its own opposite (finding 245) -- computes
+ *         objdump prints as its own opposite (finding F245) -- computes
  *         `v - (float)(int)v`, the ordinary fractional part, which is then
  *         scaled by 1e6 as a DOUBLE (`fldl`, not `flds`) and made positive
  *         with `cltd; xor; sub`.
@@ -406,7 +406,7 @@ edprint_scaled_stat(const char *fmt, float v, long double scaled,
  * %esi,%esi` and the object carries no 1e3 constant at all.  THE MISSING
  * CONSTANT IS THE EVIDENCE -- .rodata.cst4 holds every other scale this
  * function uses (1e5, 1e4, 2**30, 2**24, 2**20, 2**-16, 2.0) and nothing near
- * a thousand -- so the argument was an int and not a float.  Finding 2146.
+ * a thousand -- so the argument was an int and not a float.  Finding F2146.
  *
  * The sign still costs a comparison on the coprocessor, because it is against
  * a float zero and the usual arithmetic conversions promote:
@@ -489,7 +489,7 @@ summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
  * Factored out because both filters use it and the object has it inlined at
  * both sites.  It must stay `inline`: a helper with no blob symbol has its
  * bytes counted against neither side, so `compare.py`'s per-symbol view of
- * `process` would lose them (finding 605).
+ * `process` would lose them (finding F605).
  */
 static inline float
 fdot(const float *x, const float *h, unsigned int n)
@@ -573,7 +573,7 @@ sar_by(int v, int n)
  * has no other setting, and an 80-bit value that never leaves the register
  * stack makes the DFE coefficients drift by a few ulps within three symbols.
  * Measured: 2,459 of 110,894 differential checks on GCC 13 and 701 on GCC
- * 3.4.2, all of them `outFloat` and `dfeCoefs`.  Finding 6203.
+ * 3.4.2, all of them `outFloat` and `dfeCoefs`.  Finding F6203.
  */
 static inline float
 v90equ_narrow(float x)
@@ -661,8 +661,8 @@ V90Equalizer::setLinearEquBeta(float beta)
 	 * `flds 0x10(%ebx); fcomp %st(1); fnstsw; sahf; je` -- ONE compare,
 	 * and the jump over the diagnostic is taken on ZF.  FCOM sets C3 for
 	 * equal AND for unordered, so a NaN on either side skips the print,
-	 * and under -mno-ieee-fp that is exactly what `!=` emits.  Finding 236
-	 * is the same shape in `setParamEia6`; finding 2300 for why this used
+	 * and under -mno-ieee-fp that is exactly what `!=` emits.  Finding F236
+	 * is the same shape in `setParamEia6`; finding F2300 for why this used
 	 * to be spelled as two relational tests.
 	 */
 	if (linearEquBeta != beta) {
@@ -701,7 +701,7 @@ V90Equalizer::setLinearEquBeta(float beta)
 	/*
 	 * `fcoms <0.0f>; fnstsw; sahf; je` -- ZF again, so the ELSE arm is
 	 * taken for zero and for unordered both, which under -mno-ieee-fp is
-	 * what `!= 0.0f` gives.  Finding 2300.
+	 * what `!= 0.0f` gives.  Finding F2300.
 	 */
 	if (beta != 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
@@ -826,7 +826,7 @@ V90Equalizer::getDfeBeta()
  * emits from a plain member bound, on our side and the blob's.  That first
  * loop is the in-function control 617 and 7766 require before a spelling is
  * changed for a codegen difference.  `reset` still writes the temporary --
- * see finding 7775 for why it was left there.
+ * see finding F7775 for why it was left there.
  */
 void
 V90Equalizer::zeroLinearEquCoefs()
@@ -1116,13 +1116,13 @@ V90Equalizer::enterPhase4()
  *
  * A reciprocal rounds, so the two routes can differ in the last bit and the
  * TRUNCATED logarithm downstream can differ by a whole step; docs/deviations.md
- * D327.  (objdump prints both `DE` forms as their own opposite -- finding 245.)
+ * D327.  (objdump prints both `DE` forms as their own opposite -- finding F245.)
  *
  * THE FOUR SUMS ARE `float` AND NOT `long double`.  Each accumulator is stored
  * back to a four-byte stack slot every iteration (`fstps 0x4c(%esp)` and
  * `fstps 0x48(%esp)`, and 0x28/0x24 in the DFE half), so the object rounds to
  * single precision at every step and the printed digits depend on it.  Finding
- * 2139's rule, applied where it fires.
+ * F2139's rule, applied where it fires.
  *
  * THE HISTORY LOOP IS NOT A COEFFICIENT LOOP.  It converts `array_18` to 16
  * bits with no scale at all -- `fistps`, a two-byte store -- which is the same
@@ -1163,7 +1163,7 @@ V90Equalizer::convertEqualizerToMmx()
 	 * zero and for unordered both.  ONE compare, and under -mno-ieee-fp
 	 * that is what `!= 0.0f` emits: FCOM sets C3 for unordered as well as
 	 * for equal.  Two relational tests were the -mieee-fp workaround.
-	 * Finding 2300.
+	 * Finding F2300.
 	 */
 	if (linearEquBeta != 0.0f) {
 		int shift = (int)(x87_log10(__builtin_fabsl(
@@ -1401,7 +1401,7 @@ V90Equalizer::convertEqualizerToMmx()
  * function has just proved the field was zero on the way in, so this tests
  * whether the conversion took, and the callee has three arms that leave it
  * zero.  `enterRRN` and `enterFPE` return 1 for the opposite transition;
- * finding 2134 for the family.
+ * finding F2134 for the family.
  *
  * `summarise_coefs` AND `edprint_stat` ARE `enterPhase4`'S AND ARE NOT
  * REPEATED.  The object inlines the summary four times across the two
@@ -1571,7 +1571,7 @@ V90Equalizer::enterFPE()
  * THEY RETURN AN int AND THE OTHER `enter*` MEMBERS DO NOT.  `%edi` is zeroed
  * at entry, made 1 on exactly one path, and moved to `%eax` at both returns;
  * the 1 means "the equaliser was taken out of fixed-point mode", which a
- * caller cannot see from the state word.  Finding 2134.
+ * caller cannot see from the state word.  Finding F2134.
  *
  * NEITHER TOUCHES `stateCount`.  `enterPhase3` and `enterChannelVerification`
  * zero +0x64 in the instruction after they write +0x60; these two write +0x60
@@ -1698,18 +1698,18 @@ V90Equalizer::enterChannelVerification()
  *     UNCONDITIONAL.  The path that skips the coefficient update rejoins the
  *     history shift inside it, not before it, so a reading that made the
  *     second decrement part of the update is wrong on exactly that path.
- *     Finding 5700 §1.
+ *     Finding F5700 §1.
  *   - `updateCoefs` is ONE variable, not two disjoint live ranges sharing a
  *     slot.  It starts at 1, the PHASE3 arm loads it from
  *     `phase3Demod->word_408`, a high-error symbol zeroes it, and four clean
  *     symbols in a row close the burst.  When a burst ends with
  *     `word_94 <= 2` the closing arm never fires, so `updateCoefs` stays 0
  *     and the equaliser stops adapting for the rest of the call.  That
- *     asymmetry is the object's and is reproduced.  Finding 5700 §3.
+ *     asymmetry is the object's and is reproduced.  Finding F5700 §3.
  *   - `state` is WIDER than the seven `V90EQU_STATE_*` values.  The dispatch
  *     is `cmp $6; ja default`, and the error tail then tests the live value
  *     against 10..16, so those comparisons are reachable rather than dead.
- *     Finding 5700 §2.
+ *     Finding F5700 §2.
  *   - the 10, 11, 12, 16, 13, 14, 15 order in that tail is the source's `&&`
  *     order and not a reassociation GCC was free to choose: only the
  *     ADJACENT 10, 11, 12 fold into one range test, which is what the object
@@ -1721,11 +1721,11 @@ V90Equalizer::enterChannelVerification()
  *     the object's `fld %st(0); fabs; flds; fcomp %st(1); jae`.  Every
  *     `float` spelling emits `fcoms mem; jbe` whatever the operand order and
  *     sends a NaN error down the other arm.  Six spellings were compiled
- *     through the period compiler to settle that -- finding 5701, which
+ *     through the period compiler to settle that -- finding F5701, which
  *     supersedes 5700's paragraph calling it an operand-order trap.
  *
  * blob 0x38d80.  docs/v90equprocess.md is the arm-by-arm decode; findings
- * 5700, 5701 and 6200 are the argument, and D850 the deviations.
+ * F5700, F5701 and F6200 are the argument, and D850 the deviations.
  * ===========================================================================
  */
 
@@ -1870,7 +1870,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 	j = 0;
 	/*
 	 * LOGICAL, on an unsigned, so it stays a shift: docs/cleanup.md §2 and
-	 * finding 1044.  `nOut` is the reference parameter and the loop below
+	 * finding F1044.  `nOut` is the reference parameter and the loop below
 	 * re-reads it through the reference on every iteration.
 	 */
 	nOut = n >> 1;
@@ -1897,7 +1897,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * Two signed divides by fields the header types
 			 * `int`.  They stay divides: the whole object holds
 			 * six signed power-of-two divides and none of them is
-			 * here (finding 1044).
+			 * here (finding F1044).
 			 */
 			dfeSum = mmxDot(dfeMmxCoefsAligned, array_12cAligned,
 					(int)dfeLength);
@@ -1936,7 +1936,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		 * The arms, written in the order the object lays them out.
 		 * Each one falls out to the join below, which is also the
 		 * `default` -- and the default is reachable, because `state`
-		 * holds values above 6 (finding 5700 §2).
+		 * holds values above 6 (finding F5700 §2).
 		 */
 		switch (state) {
 
@@ -2273,7 +2273,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				 * stage, which is class-1 evidence -- but
 				 * naming them is that class's batch to do,
 				 * so they are left numeric with the strings
-				 * beside them (finding 3511's shape).
+				 * beside them (finding F3511's shape).
 				 */
 				switch (st) {
 
@@ -2575,7 +2575,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * `float` carries and the two spellings part company
 			 * there.  `err` is squared into `word_78` and both
 			 * feed an LMS step, so half an ulp here is hundreds
-			 * of counts there.  Finding 6203.
+			 * of counts there.  Finding F6203.
 			 */
 			err = soft - fdec;
 			lerr = (long double)y - (long double)fdec;
@@ -2583,7 +2583,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * The magnitude in `long double`, computed once,
 			 * tested and then printed -- and the TYPE is what
 			 * emits the object's `fld %st(0); fabs; flds;
-			 * fcomp %st(1); jae`.  Finding 5701.
+			 * fcomp %st(1); jae`.  Finding F5701.
 			 */
 			aerr = __builtin_fabsl((long double)err);
 			if (aerr > 300.0 && state > 1) {
@@ -2667,7 +2667,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		 * which the architecture calls FSUB, and the divide is
 		 * `de f1`, FDIVRP.  Read the `<== Intel:` annotation
 		 * `tools/dis.py` appends, never the AT&T mnemonic (findings
-		 * 245, 2156).
+		 * F245, F2156).
 		 */
 		/*
 		 * `fsts 0x7c(%ebp)` at 0x39a03 stores the root WITHOUT

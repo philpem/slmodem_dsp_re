@@ -8,7 +8,7 @@
  * and it is LIVE: `v34handshakinit` and `v34handshak` index it 533 times
  * between them, to print state transitions.  An earlier note here said
  * nothing indexed it, which was a relocation search missing an addend
- * against a section symbol -- see findings 144 and 176.
+ * against a section symbol -- see findings F144 and F176.
  *
  * The transitions name THREE concurrent machines, not one: a receive state,
  * a transmit state and a "microstate", each trace printing its own change
@@ -19,8 +19,8 @@
  * microstate, and the receive state has no table at all -- it is dispatched
  * by compare-and-branch chains.  So a state NUMBER means different things to
  * different machines: 51 is `TX_L1` to both the transmit machine and the
- * microstate machine and they run different code for it.  Finding 213, which
- * retracts the part of finding 77 that read the three tables as one machine.
+ * microstate machine and they run different code for it.  Finding F213, which
+ * retracts the part of finding F77 that read the three tables as one machine.
  *
  * `v34handshak` itself is not reconstructed; the split above is what its
  * task list is organised around, because "the signal generator" and "the
@@ -188,8 +188,8 @@ void hs_setstate(struct v34_object *obj, unsigned off, short next);
  * code afterwards" and turns the abort into a return.  `t_v34hst3mid.c` is
  * that test and checks the code after every step.  The codes are numbers
  * rather than strings because the strings firewall rejects any literal in
- * src/ that is not the object's own (findings 180 and 201);
- * `t_v34hst3mid.c` names them.  See src/pump/v34/v34hshak.c, and finding 547
+ * src/ that is not the object's own (findings F180 and F201);
+ * `t_v34hst3mid.c` names them.  See src/pump/v34/v34hshak.c, and finding F547
  * for why one mechanism had to serve both of the reconstructions that were
  * merged into it.
  */
@@ -245,10 +245,10 @@ void v34handshak(void *obj);
  * FOR ONE TEST, AND SAID SO RATHER THAN IMPLIED.  `t_v34hstbl2.c` drives this
  * against the whole blob function on an object the fixture has steered into
  * this dispatch and no other; over that domain the two are the same function
- * (finding 361).  It is not a second reconstruction -- it calls the same
+ * (finding F361).  It is not a second reconstruction -- it calls the same
  * static dispatch every microstate arm calls.  Nothing in `src/` calls it.
  * The txstate halfword at +0x3596 selects the arm, exactly as the object's
- * own three routes in leave it.  Finding 591.
+ * own three routes in leave it.  Finding F591.
  */
 struct v34_object;
 void v34handshak_txblock(struct v34_object *obj);
@@ -389,7 +389,7 @@ void dftfreqinit(struct v34_dftbin *bins);
  * `probe_bins[0..3]`, the NOISE bank is the four bins immediately after the
  * probe's twenty-five, and the averaging loops at 0x69d28 and 0x6a70f read
  * `energy` out of both and compute `round(256 * signal / noise)` -- which
- * makes 0xa320 the numerator and 0xa76c the denominator.  Finding 739.
+ * makes 0xa320 the numerator and 0xa76c the denominator.  Finding F739.
  *
  * Both clear only the integer accumulators, not the double pair
  * `dftfreqinit` also clears.  That difference is the object's.
@@ -559,7 +559,7 @@ void v34setuptxmit(void *obj);
  * walks.  Both are reachable only from `v34handshak` in the object; our
  * copies have external linkage and the ordinary calling convention, and the
  * blob's are reached as `ref_getbit` and `ref_ApplyBulkDelay` -- which needs
- * `objcopy --globalize-symbols` first (finding 221).  Both take their
+ * `objcopy --globalize-symbols` first (finding F221).  Both take their
  * arguments in registers there, so a declaration of the *reference* has to
  * say `regparm`; see the tests.
  */

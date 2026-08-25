@@ -64,11 +64,11 @@
 #         $G/Ghidra/Features/PyGhidra/support/pyghidra_launcher.py $G -H ...
 #
 # so pointing $GHIDRA at a 12.x tree makes this script fail, by design, with
-# the reason printed.  Finding 703.
+# the reason printed.  Finding F703.
 #
 # USAGE.  Three ways to name a function, and the mangled one is the point:
 # Ghidra demangles, so it holds no symbol called `_ZN9Resampler8resample...`,
-# and every C++ name in this project's records is exactly that.  Finding 704.
+# and every C++ name in this project's records is exactly that.  Finding F704.
 #
 #     tools/decompile.sh v34handshak                      plain
 #     tools/decompile.sh _ZN9Resampler8resampleEPKfjPfRj  mangled -- via nm
@@ -105,7 +105,7 @@ trap 'rm -rf "$PROJ" "$LOG"' EXIT
 # plain names by the same route, exactly, with no demangler API to track
 # across Ghidra versions.  Anything nm does not know is passed through as a
 # name, which is what makes `Resampler::resample` and a bare `resample` work.
-# Finding 704.
+# Finding F704.
 #
 WANT=
 WANT_ADDR=
@@ -131,7 +131,7 @@ export WANT WANT_ADDR
 # Jython there, PyGhidra was not installed, and the run produced zero bytes
 # with status 0.  The message that explained it -- `Ghidra was not started
 # with PyGhidra. Python is not available` -- went to the `2>/dev/null` this
-# replaces.  Finding 703.
+# replaces.  Finding F703.
 #
 # So the log is CAPTURED rather than discarded, the extraction is checked,
 # and a failure prints the ERROR lines that name the cause.  Same argument as

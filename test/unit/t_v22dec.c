@@ -1,7 +1,7 @@
 /*
  * t_v22dec.c -- differential test of the two V.22 receive slicers.
  *
- * These are the shape finding 3052 warns about: a nearest-point search whose
+ * These are the shape finding F3052 warns about: a nearest-point search whose
  * obvious wrong readings agree with the true one over every point that is
  * actually near a constellation point, which is every point a working receiver
  * ever hands them.  Four readings in particular:

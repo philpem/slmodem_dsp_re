@@ -94,7 +94,7 @@ build). It is the right instrument for this and the chirp is not: the chirp
 injector was an uncommitted change to `d-modem.c` that commit df93682d
 reverted, and its sweep stopped at ~3000 Hz, which is below every point in
 dispute. The probe is emitted before the far end applies pre-emphasis, which
-finding 1907 says is the only safe window for a channel measurement.
+finding F1907 says is the only safe window for a channel measurement.
 
 Measured (dB relative to the 750 Hz reference bin), 600r = 112 calls /
 354 probes, complex2 = 10 calls / 23 probes:
@@ -110,7 +110,7 @@ Measured (dB relative to the 750 Hz reference bin), 600r = 112 calls /
 | 3750 | −13.71 | −17.06 | −3.35 |
 
 **THIS BENCH NOW HAS TILT, AND IT DID NOT BEFORE.** In-band slope over
-450–3150 Hz (finding 1956's band) goes **−0.60 dB → −3.72 dB**, monotonic bin
+450–3150 Hz (finding F1956's band) goes **−0.60 dB → −3.72 dB**, monotonic bin
 by bin, interquartile range under 0.05 dB. Task #162 recorded that this bench
 "physically cannot show a pre-emphasis benefit" because the path measured
 flat. That is no longer true and **#163 is runnable for the first time**.
@@ -135,8 +135,8 @@ archived emulator result was taken with it.
 **`echoscan.py` could not run at all between its last edit and task #168** —
 `from capture_io import load` then `def load(path): a = load(path)[0]` shadowed
 the import with its own wrapper and recursed until the stack went (finding
-1971). It is repaired, it reports its denominators, and `--selftest` plants
-finding 1971's ladder and checks it comes back: null −39.3 dB, and −10/−20/−30
+F1971). It is repaired, it reports its denominators, and `--selftest` plants
+finding F1971's ladder and checks it comes back: null −39.3 dB, and −10/−20/−30
 dB echoes recovered at −10.31/−19.72/−29.05 dB, all at the planted 30.00 ms
 lag.
 

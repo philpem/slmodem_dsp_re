@@ -3,7 +3,7 @@
  *
  * Four weak symbols in their own `.gnu.linkonce.t.*` sections, so as with
  * DspMath.h, SineWave.h and DiffCoder.h the file name is a description rather
- * than a translation unit's (finding 243).
+ * than a translation unit's (finding F243).
  *
  * GLOBAL NAMESPACE, deliberately.  The object's symbols are `_ZN3AgcIfE...`;
  * putting the class in a namespace would mangle them as `_ZN6dsplib3AgcIfE...`

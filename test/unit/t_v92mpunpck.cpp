@@ -21,13 +21,13 @@
  * IT IS CALLERLESS AND THE TEST IS HOW IT IS REACHED.  Zero relocations of any
  * kind name the symbol anywhere in the object, so there is no live entry point
  * to drive it through; the harness calls it and the blob's `ref_` alias
- * directly, which is finding 7000's correction to 702.
+ * directly, which is finding F7000's correction to 702.
  *
  * WHAT IS SHARED AND WHAT IS NOT.  The `V92CP` is INPUT: one copy, pointed at
  * by both sides, because two separately seeded inputs would agree whatever was
  * read out of them.  The parameter block is OUTPUT and there are two of it,
  * seeded identically with varied bytes so that a store of zero that never
- * happened cannot pass (findings 223, 224), with a 64-byte guard past each
+ * happened cannot pass (findings F223, F224), with a 64-byte guard past each
  * compared against the seed.
  *
  * ===========================================================================
@@ -96,7 +96,7 @@
  *                             driven at 0, 1 and a value that is neither, so a
  *                             gate written `== 1` would fail.
  *
- *   the destination's FILL    finding 7622: an unwritten `V90MappingParams`
+ *   the destination's FILL    finding F7622: an unwritten `V90MappingParams`
  *                             block is 0xa5a5a5a5 under the harness allocator
  *                             and a zero-filled one runs but asks for zero
  *                             bits for ever.  The block is seeded from the
@@ -123,7 +123,7 @@
  * recorded in the .cpp, not exercised here.
  *
  * THE FOUR `float` FIELDS ARE LEFT AS RANDOM BIT PATTERNS ON PURPOSE.  They
- * are copied with `movl` at both ends (finding 5820), so NaNs -- signalling
+ * are copied with `movl` at both ends (finding F5820), so NaNs -- signalling
  * ones included -- pass through untouched; a spelling that went through the
  * x87 (`flds`/`fstps`) would quieten a signalling NaN and change the bits.
  * Sanitising them would delete that axis, so they are not sanitised.
@@ -182,7 +182,7 @@ enum maskMode {
 			 * ordinary blocks in the same trial                */
 };
 
-/* How the destination block is seeded before the call.  Finding 7622. */
+/* How the destination block is seeded before the call.  Finding F7622. */
 enum fillMode {
 	FM_VARIED = 0,	/* LFSR bytes: a store of zero cannot pass          */
 	FM_A5,		/* 0xa5a5a5a5, the harness allocator's own fill     */
@@ -589,7 +589,7 @@ run_trials(void)
 	 * The denominators of the shapes the file comment says this fixture
 	 * exists to reach.  A run that stopped reaching one of them would
 	 * still be green on every comparison above, which is exactly the
-	 * failure findings 134 and 2400 are about.
+	 * failure findings F134 and F2400 are about.
 	 */
 	diff_eq_int("some trial ended with an EMPTY constellation",
 		    sawEmpty, 1, 0);

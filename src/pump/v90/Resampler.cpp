@@ -5,7 +5,7 @@
  * the inheritance chain, the four vtables and the argument for the member
  * `operator delete`; this file is the code.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * THE DEFINITION ORDER IS THE OBJECT'S EMISSION ORDER AND IT IS LOAD-BEARING.
  * `nm -n` on the blob emits the destructor triple first, then
@@ -23,7 +23,7 @@
  * byte identity and nothing else was changed.  Nine of the thirteen emitted
  * symbols now sit at the blob's own index; the four that do not are the
  * C1/C2 clone order inside each constructor pair, which no source permutation
- * reaches (finding 7796).  `DOT` is hoisted above every definition because a
+ * reaches (finding F7796).  `DOT` is hoisted above every definition because a
  * macro parked beside its first user ends up below it the next time the order
  * is corrected.  See docs/method/refinement.md lever 3.
  *
@@ -149,7 +149,7 @@ typedef char rs_size[(sizeof(Resampler) == 0x48) ? 1 : -1];
  * on the x87 stack across it (34ece-34eda above), which is four slots gone
  * before the first product; ours keeps phase in memory.  So the narrowing
  * stays stated -- accumulate wide, convert once -- which is what the object
- * does and now depends on no compiler's allocator.  Findings 1352, 1354, 1356.
+ * does and now depends on no compiler's allocator.  Findings F1352, F1354, F1356.
  *
  * A macro and not an inline function, deliberately: GCC 3.4 at -O2 does not
  * inline a function not declared `inline`, and an out-of-line call here would
@@ -354,7 +354,7 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 		 * exactly once, `fstps 0x34(%esp)` at .text+0x34f76.  That
 		 * store is a spill of a variable the author declared `float`;
 		 * the narrowing was a side effect of GCC running out of x87
-		 * registers, not of anything written down (finding 1352).
+		 * registers, not of anything written down (finding F1352).
 		 *
 		 * WRITING `float y0` AND HOPING FOR THE SAME SPILL DOES NOT
 		 * WORK, and it is worth knowing why before anyone tidies this
@@ -368,7 +368,7 @@ Resampler::resample(const float *in, unsigned int n, float *out,
 		 *
 		 * So the accumulation stays wide and the narrowing is stated,
 		 * which is exactly the object's behaviour and depends on no
-		 * compiler's register pressure.  Finding 1354.
+		 * compiler's register pressure.  Finding F1354.
 		 */
 		ph = (int)phase;
 

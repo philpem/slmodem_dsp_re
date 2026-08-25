@@ -541,7 +541,7 @@ main(void)
 			    total_nonzero > 10000, 1, total_nonzero);
 		/*
 		 * The transcript sweep must have captured real output --
-		 * two empty captures also compare equal (finding 149).
+		 * two empty captures also compare equal (finding F149).
 		 */
 		diff_eq_int("diagnostics were captured (%ld lines)",
 			    transcript_lines > 100, 1, transcript_lines);

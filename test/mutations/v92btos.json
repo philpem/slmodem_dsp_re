@@ -1,7 +1,7 @@
 [
  {
   "label": "NOTE: what this set reaches, and the hole it deliberately probes",
-  "why": "V92BitsToSymbol's constructor and destructor and t_v92tx.cpp were written by one hand at one sitting from one reading of .text+0x4ded0-0x4e064. Every entry below is a claim the disassembly makes: the transmitter's allocation size, the symbol buffer's element width, which of the five scalars are written and which is NOT, and the two null tests. The entry that adds a clear of +0x14 is the important one -- the constructor really does skip that field (finding 1287, D213), and it is only catchable because both sides are seeded with the same non-zero bytes and never zeroed. WHAT NO ENTRY HERE CAN REACH: the order of the stores. The fixture compares the object after the call and nothing in it sequences the writes, so any permutation of the five is invisible."
+  "why": "V92BitsToSymbol's constructor and destructor and t_v92tx.cpp were written by one hand at one sitting from one reading of .text+0x4ded0-0x4e064. Every entry below is a claim the disassembly makes: the transmitter's allocation size, the symbol buffer's element width, which of the five scalars are written and which is NOT, and the two null tests. The entry that adds a clear of +0x14 is the important one -- the constructor really does skip that field (finding F1287, D213), and it is only catchable because both sides are seeded with the same non-zero bytes and never zeroed. WHAT NO ENTRY HERE CAN REACH: the order of the stores. The fixture compares the object after the call and nothing in it sequences the writes, so any permutation of the five is invisible."
  },
  {
   "label": "the transmitter's allocation is four bytes larger",

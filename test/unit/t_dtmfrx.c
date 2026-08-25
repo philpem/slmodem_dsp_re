@@ -762,7 +762,7 @@ main(void)
 				 * At 8000 Hz all sixteen pairs decode, both
 				 * halves.  At 9600 the LOW half still does and
 				 * the HIGH half is wrong for eleven of them --
-				 * finding 1416, and D250 is why.
+				 * finding F1416, and D250 is why.
 				 */
 				for (k = 0; k < 16; k++)
 					if (keycode[k] == r)

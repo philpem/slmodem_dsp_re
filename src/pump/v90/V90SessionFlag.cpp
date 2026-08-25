@@ -4,7 +4,7 @@
  * `include/dsplib/V90SessionFlag.h` carries the object maps and the argument
  * for why none of the five classes has a size asserted.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).  Three of
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).  Three of
  * the five end in a tail call -- `jmp`, not `call`, with the arguments
  * rewritten into the caller's own outgoing slots -- which is what a call in
  * final position of a `void` function compiles to and needs nothing said in

@@ -20,7 +20,7 @@ THE THREE CATEGORIES, AND WHY THE THIRD IS NOT OPTIONAL
                      -- `build/src`, or `build/repro` when a plain `make` is
                      all that has been run -- do not.  A set difference;
                      exact.  An EMPTY object tree is refused rather than
-                     reported as "nothing written": findings 3055 and 3110.
+                     reported as "nothing written": findings F3055 and F3110.
 
   written            a function of that name exists on our side.  Note what
                      this does NOT claim: `coverage.py`'s own docstring says
@@ -30,7 +30,7 @@ THE THREE CATEGORIES, AND WHY THE THIRD IS NOT OPTIONAL
   written, with      a function that exists, links, passes its differential
   unreconstructed    test, and still routes some of its arms into a
   regions            `*_notwritten()` stub.  `v34handshak` is the reason the
-                     convention exists (finding 547): it is one symbol, so
+                     convention exists (finding F547): it is one symbol, so
                      the set difference calls it DONE, and the arms behind
                      the stub are invisible to every count taken per symbol.
 
@@ -44,7 +44,7 @@ Whether the blob's version of a symbol we HAVE written is fully covered.  A
 count per symbol cannot see inside one; `debugaudit.py --missing` is the
 per-function view, with the caveat that a missing diagnostic call is not by
 itself an unreconstructed region -- the level ships at zero, so the original's
-`edprintf` sites were often simply not reproduced (finding 134).
+`edprintf` sites were often simply not reproduced (finding F134).
 """
 import argparse
 import os
@@ -138,7 +138,7 @@ def main():
     # was "Build first", and the directory it meant -- build/src -- stopped
     # being filled by a plain `make` at #164, so following it changed nothing
     # and the report stayed wrong.  objtree.read() now names `make coverage`
-    # and prints the object count.  Findings 3055 and 3110.
+    # and prints the object count.  Findings F3055 and F3110.
     if not tus:
         sys.exit("worklist.py: no TU map at %s, so nothing can be attributed\n"
                  "to a translation unit.  `make %s` builds it."
@@ -180,7 +180,7 @@ def main():
     # BOTH DIRECTORIES, AND STATICALLY.  Naming the one this run happened to
     # read would make the committed file depend on which build the regenerator
     # had done -- the same churn the note above avoids.  Which was read is on
-    # stderr, every run.  Findings 3055 and 3110.
+    # stderr, every run.  Findings F3055 and F3110.
     add("  %s/src or %s/repro, whichever a build has filled (the run's"
         % (os.path.relpath(args.build), os.path.relpath(args.build)))
     add("  own stderr says which); the stub sites are read from the SOURCE")

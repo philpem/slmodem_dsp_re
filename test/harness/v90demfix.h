@@ -31,7 +31,7 @@
  *
  * `setup` leaves `lfsr_state` running, so a caller with storage of its own
  * fills it with `fill_pair` immediately afterwards and gets bytes that are
- * pairwise identical and varied, which is finding 230's rule.
+ * pairwise identical and varied, which is finding F230's rule.
  *
  * THE FLOAT-BEARING FIELDS ARE SET, NOT SEEDED.  `setTimingOffset` and
  * `V90Equalizer::enterPhase3` do x87 arithmetic on fields this fixture owns;

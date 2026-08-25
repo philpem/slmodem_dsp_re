@@ -32,7 +32,7 @@
  *     4def5:  e8 ..                  call sysdep_malloc
  *     4deff:  e8 ..                  call V92Transmitter::V92Transmitter()
  *
- * That is the ORIGINAL COMPILER'S OWN `sizeof` (finding 1249's oracle), not a
+ * That is the ORIGINAL COMPILER'S OWN `sizeof` (finding F1249's oracle), not a
  * displacement: the furthest field the constructor writes is the four bytes
  * at +0x58, which end at 0x5c, and the last four bytes are never touched by
  * anything written here.
@@ -69,7 +69,7 @@
  * other five, so a second destruction double-frees five buffers and not the
  * sixth.  Reproduced; see docs/deviations.md D210.
  *
- * Data member names are invented and descriptive (finding 226); the mangling
+ * Data member names are invented and descriptive (finding F226); the mangling
  * never carries a data member's name.  Where a field's ROLE is not
  * established, the name says so rather than guessing.
  */

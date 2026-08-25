@@ -11,7 +11,7 @@ the same sitting, from the same reading.  A green run says the two agree.  It
 does not say either is right.
 
 Twice now the only thing that caught an error was deliberately introducing one
-(findings 146, 149).  The second time it found something better than a bug: it
+(findings F146, F149).  The second time it found something better than a bug: it
 found that the test could not see call-site ORDER at all, because the callback
 it was ordered against printed nothing.  Five mutations were caught and the
 sixth was not, and the sixth was the interesting one.
@@ -123,7 +123,7 @@ os.chdir(REAL_TREE)
 #
 # The bound is per test binary and generous: the slowest in this tree is a
 # little over two seconds, and `t_v34hshak`'s constellation sweep alone is
-# fourteen million checks.  Finding 200 is the same lesson from the other
+# fourteen million checks.  Finding F200 is the same lesson from the other
 # side -- 88% of a sweep spent inside one timeout nobody had noticed.
 #
 RUN_TIMEOUT = 120
@@ -369,7 +369,7 @@ def enter_workdir():
     # at a path that does not exist, and from a worktree -- which is where every
     # agent works -- that meant NO mutation suite could be run at all.  Loud,
     # but total.  An explicit `BLOB=` in the environment still wins, because
-    # make's `?=` gives it precedence and this asks make.  Finding 6403.
+    # make's `?=` gives it precedence and this asks make.  Finding F6403.
     #
     os.environ["BLOB"] = os.path.abspath(
         subprocess.run(["make", "-s", "print-BLOB"], capture_output=True,
@@ -416,7 +416,7 @@ def enter_workdir():
 # RUNNING A SUITE IN PARALLEL
 #
 # A mutation is inherently serial IN ONE TREE -- two workers would be writing
-# the same file, which is finding 349's accident on purpose -- and it is why a
+# the same file, which is finding F349's accident on purpose -- and it is why a
 # 749-mutation suite takes a quarter of an hour on a twelve-core machine that
 # is idle for all of it.  Measured: 0.67 s to rebuild and relink one
 # translation unit, 0.73 s to run the test.
@@ -532,7 +532,7 @@ def run_parallel(args, jobs):
             #
             # A shard that dies is NOT a shard with nothing to report.
             # Losing one silently would drop an eighth of the suite and
-            # still print a total, which is the failure mode findings 347
+            # still print a total, which is the failure mode findings F347
             # and 540 are both about.
             #
             failed.append((i, out[-2000:]))
@@ -807,7 +807,7 @@ def main():
     #
     # THE SUBSET RUN IS MARKED, and that matters more than the speed.  Its
     # summary would otherwise be indistinguishable from a full run's -- the
-    # exact shape of findings 347, 432, 540 and 542 -- so it does not print
+    # exact shape of findings F347, F432, F540 and F542 -- so it does not print
     # the string `mutations:` at all, which is what `mutsnap.py` looks for.
     # A subset can never be recorded as a baseline by accident.
     #
@@ -866,7 +866,7 @@ def main():
             # and keeps the totals steady while checking nothing.
             #
             # Not hypothetical: re-anchoring a suite after a refactor made
-            # five of these in one pass (finding 572).  The old `replace`
+            # five of these in one pass (finding F572).  The old `replace`
             # was the bare store that the new factoring had turned into the
             # unmutated text, so `find` and `replace` came out equal.  All
             # five were `equivalent: true`, so the totals did not move and

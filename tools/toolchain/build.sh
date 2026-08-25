@@ -20,8 +20,8 @@ OUT=${TC_OUT:-$PWD/build/tc_out}
 # again.  It used to be here only: the object's float compares are ordered --
 # 406 against four, and those four are inside libm -- and with the flag the
 # period tier went 181 passed to 176, failing five suites on NaN and near-NaN
-# inputs.  Finding 1990 refused to say whether that meant five defects or a
-# wrong flag; findings 2300 to 2303 say it was five defects, and the tier is
+# inputs.  Finding F1990 refused to say whether that meant five defects or a
+# wrong flag; findings F2300 to 2303 say it was five defects, and the tier is
 # green with the flag.
 #
 # THE SAME FLAGS `make period` USES, and they must stay the same.  The two
@@ -41,7 +41,7 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp 
 #
 #   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4; the
 #                            default is now `dsplibs-tc342`, GCC 3.4.2 itself
-#                            (Dockerfile.exact).  Finding 2200
+#                            (Dockerfile.exact).  Finding F2200
 #   TC_IMAGE=dsplibs-tc342-gentoo
 #                            the THIRD arm and the only exact one: Gentoo's
 #                            gcc-3.4.2-r2, built from the ebuild inside
@@ -51,16 +51,16 @@ FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp 
 #                            28 MB of distfiles that are not in git -- and it
 #                            costs nothing to skip: 182 of 183 objects come
 #                            out byte-identical to the default's, and the
-#                            symbol match is 334 either way.  Finding 2500
+#                            symbol match is 334 either way.  Finding F2500
 #   TC_EXTRA="-O2"           APPENDED after $FLAGS, so a repeat of an option
 #                            overrides the one above -- `-O2` beats the `-O3`,
 #                            `-mieee-fp` beats the `-mno-ieee-fp`.  That is how
-#                            finding 2200's arms were taken without editing
+#                            finding F2200's arms were taken without editing
 #                            this line, which is what a flag conclusion has to
 #                            be measured against.
 #
 # Set TC_OUT as well when you set either, or you will compare one arm against
-# another arm's leftovers.  Findings 2155 and 1990 are the flag record; this
+# another arm's leftovers.  Findings F2155 and F1990 are the flag record; this
 # is not a supported way to build the tree differently from what they say.
 IMAGE=${TC_IMAGE:-dsplibs-tc342}
 FLAGS="$FLAGS $TC_EXTRA"
@@ -69,7 +69,7 @@ if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
     echo "tools/toolchain: no docker image '$IMAGE'.  Build it with" >&2
     echo "  docker build --platform linux/386 \\" >&2
     echo "    -f tools/toolchain/Dockerfile.exact -t dsplibs-tc342 tools/toolchain" >&2
-    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding 2200.)" >&2
+    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding F2200.)" >&2
     exit 1
 fi
 

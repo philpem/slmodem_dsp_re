@@ -48,7 +48,7 @@ struct b103fp;
  *
  * Field meanings were established by sweeping each word and observing the
  * resulting object, not by reading B103FP_create.  See src/pump/b103/b103_cfg.c
- * for the evidence and findings 32 and 35 for why that distinction matters.
+ * for the evidence and findings F32 and F35 for why that distinction matters.
  */
 struct b103_cfg {
 	int call_type;		/* +0x00 B103_CALL_*; see below.  THE field --
@@ -180,7 +180,7 @@ struct b103_hdx {
 	 * turns on it while the value stays in 0..0x7fff -- which is why 1,104
 	 * differential tests never saw it -- but it is the type the original
 	 * declared, and the instruction-level comparison found it.
-	 * Finding 613.
+	 * Finding F613.
 	 */
 	unsigned short mode;	/* +0x00 index into B103NextState:
 				 *       0 loopback, 1 originate, 2 answer */
@@ -223,7 +223,7 @@ struct b103fp {
 };
 
 /*
- * Bits in `flags`.  RESOLVED -- see finding 38.
+ * Bits in `flags`.  RESOLVED -- see finding F38.
  *
  * Every set and clear site was enumerated, and so was every *read*.  Within
  * dsplibs.o only TWO of the eight bits are ever tested:

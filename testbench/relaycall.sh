@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# THE CONTROL EXPERIMENT FOR FINDING 1466: two hardware modems, over the path
+# THE CONTROL EXPERIMENT FOR FINDING F1466: two hardware modems, over the path
 # our calls actually take, with no slmodemd and no blob anywhere in the call.
 #
 #   relaycall.sh [logprefix] [originator-role] [answer-role]
@@ -9,7 +9,7 @@
 # WHY NOT hw2hw.sh.  It dials 1902 from 1901 and both modems hang off the same
 # VG204, so the Cisco matches `dial-peer voice 2 pots` and bridges port 0/0 to
 # port 0/1 inside itself.  No RTP, no jitter buffer, no codec round trip
-# (finding 1467).  Here the originating modem dials 4242 instead, which matches
+# (finding F1467).  Here the originating modem dials 4242 instead, which matches
 # only the `.T` voip peer, so it goes out to Asterisk and comes back to
 # `relay.py` -- and the relay then places the second leg to the other modem.
 # The audio traverses Asterisk twice and RTP four times, which is a superset of
@@ -71,7 +71,7 @@ echo "=== starting the relay (registers 4242, bridges inbound -> $TO_EXT)"
 # call.py dies early nothing ever unblocks the loop.
 # rtprelay.py by default: it FORWARDS RTP packets untouched, where relay.py
 # decodes and mixes them through pjsua's conference and so cannot carry a V.34
-# handshake (finding 1468).  RELAY=pjsua selects the old one for comparison.
+# handshake (finding F1468).  RELAY=pjsua selects the old one for comparison.
 case "${RELAY:-rtp}" in
 pjsua)	timeout $((HOLD + 120)) python3 "$BENCH/relay.py" --dial "$TO_EXT" \
 		--hold "$HOLD" --rec "$LOG.conf.wav" \

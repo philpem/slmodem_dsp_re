@@ -438,8 +438,8 @@ sweep_derot_edge(const char *label, short carrier, int count_them)
 		 * `FPM_cos_sign_ext` and `FPM_sin_sign_ext`, so neither half
 		 * depends on a link any more.  16384 of these 65536 positions
 		 * are outside the phasor's designed domain and every one of
-		 * them is checked, on both observables.  D392, findings 3623,
-		 * 3624 and 3700.
+		 * them is checked, on both observables.  D392, findings F3623,
+		 * F3624 and F3700.
 		 */
 		diff_eq_int("swept tilt_out=%ld: out_i",
 			    ours.out_i[0], theirs.out_i[0], t);
@@ -507,7 +507,7 @@ sweep_derot_edge(const char *label, short carrier, int count_them)
 	 * depends on the final position any more.  They stay because they are
 	 * measurements of the sweep that other claims in this file are read
 	 * against: exactly a quarter of it is driven out of domain, and it
-	 * comes back in.  Findings 3588, 3623, 3624 and 3700.
+	 * comes back in.  Findings F3588, F3623, F3624 and F3700.
 	 */
 	diff_eq_int("the sweep ends in the phasor's domain (%ld)",
 		    out_b[0] < 0x8000, 1, 0);
@@ -887,11 +887,11 @@ trial_tilt(void)
 		 * is `compare_state` and `compare_buffers`, both of which read
 		 * `out_q` and the scatter log's `.q` -- SINE-derived, and the
 		 * half D392 then left open.  THAT OBSTACLE IS GONE (finding
-		 * 3700) and such an arm would be admissible now; it has not
+		 * F3700) and such an arm would be admissible now; it has not
 		 * been re-added, because the sweep above already drives both
 		 * observables out of domain at 16384 positions and this trial
-		 * is about the recursion through `tilt_out`.  Findings 3623,
-		 * 3624 and 3700.
+		 * is about the recursion through `tilt_out`.  Findings F3623,
+		 * F3624 and F3700.
 		 */
 		ours.tilt_coeff[0] = theirs.tilt_coeff[0] = 2;
 		ours.tilt_coeff[1] = theirs.tilt_coeff[1] = -1;
@@ -919,12 +919,12 @@ trial_tilt(void)
 			 * translation unit's tail, which the instrumented
 			 * build displaces, so `compare_buffers`' `out_q` was
 			 * not comparable there.  It is comparable everywhere
-			 * now (finding 3700).  The check stays as a statement
+			 * now (finding F3700).  The check stays as a statement
 			 * about THIS trial: the coefficients above are chosen
 			 * to keep the bias small enough that the angle stays
 			 * in domain, which is what makes the recursion settle
-			 * rather than run away.  D392, findings 3588, 3623,
-			 * 3624 and 3700.
+			 * rather than run away.  D392, findings F3588, F3623,
+			 * F3624 and F3700.
 			 */
 			diff_eq_int("derotation angle in phasor domain (%ld)",
 				    out_b[0] < 0x8000, 1,

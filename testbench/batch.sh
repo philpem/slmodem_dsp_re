@@ -12,7 +12,7 @@
 # equaliser error -- and each looked convincing at n=5-9 before the sample
 # grew.  In the equerr case one call moved r from -0.787 to -0.263.
 #
-# What makes this worth ~50 minutes of bench time: finding 1207 showed ONE call
+# What makes this worth ~50 minutes of bench time: finding F1207 showed ONE call
 # reached 28800 on this path, with the same echo at the same lag as every other
 # call.  So the transport is capable and something intermittent costs the rest
 # two to three rate steps.  At n=30 the high-rate outcome should recur several

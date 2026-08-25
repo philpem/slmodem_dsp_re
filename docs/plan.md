@@ -27,7 +27,7 @@ The blob is **818,104 bytes**. Reconstructed: **487,288 — 59.6%.**
 `docs/coverage.md` reports the same tree as 57.9% on a code-only basis. Both
 numbers are correct; quote which one you mean.
 
-## 1. The three facts that decide the order
+## F1. The three facts that decide the order
 
 ### Most of what is left cannot be started yet
 
@@ -42,7 +42,7 @@ A batch has to be **closed** before it can be committed: every dependency of
 every member is in the set or already written. This is not a style preference.
 `symmap.py` renames every symbol the blob defines to `ref_*`, so one unwritten
 callee fails *all* the differential binaries at `t_encode`, not just its own.
-Finding 215 declined the escape hatch and that ruling stands.
+Finding F215 declined the escape hatch and that ruling stands.
 
 ### A few hundred bytes gate tens of thousands
 
@@ -82,10 +82,10 @@ land on a `.text` symbol, naming 125 distinct indirect entry points, mostly the
 **But the three examples named above are not among them**, and none of the
 three is the target of any relocation anywhere in the object: `VOICE_process`
 and `FAX_process` are undefined in `slmodemd/modem.o`, so they are the
-library's external API and their callers are outside it. Read finding 3520
+library's external API and their callers are outside it. Read finding F3520
 before planning this bucket — the sentence above is not what the object says.)
 
-## 2. The trap in "leave fax until last"
+## F2. The trap in "leave fax until last"
 
 Fax and data mode are not separate translation-unit spans. Thirteen symbols
 inside what looks like the fax span are shared DSP that data mode reaches —
@@ -106,12 +106,12 @@ whatever file it lives in.
 | Voice / Caller ID / ring detect | 70 | 24,467 |
 | No direct caller (vtable / dispatch) | 265 | 41,143 |
 
-## 3. Naming: do it INSIDE the batch that owns the struct
+## F3. Naming: do it INSIDE the batch that owns the struct
 
 This is a decision, not a preference, and it comes from two measurements that
 point in opposite directions.
 
-**Renaming concurrently with reconstruction is dangerous.** Finding 3511: three
+**Renaming concurrently with reconstruction is dangerous.** Finding F3511: three
 branches off one commit, **no shared source file and no git conflict**, merged
 cleanly and did not compile. One had renamed `struct v22_fse`'s fields on the
 evidence of the receive loop; another had written compile-time assertions
@@ -125,14 +125,14 @@ reconstructing the function that does the printing. The V.34 accessor batch
 produced `f06`→`preemp`, `f25c`→`dmadelay` and `flags_0217`→`v34BaudAllow` as a
 by-product — `v34BaudAllow` named by `chkForceBaudRate` *indexing* it 0..5, not
 by its five writers. None of that was available to a later pass without redoing
-the work. Finding 3303 makes the same point negatively: `v34_shell::pad_000`
+the work. Finding F3303 makes the same point negatively: `v34_shell::pad_000`
 looked like 2,560 bytes of opportunity and was a double count of a region
 `v34_object` already models — only the batch that knows the struct could tell.
 
 **So: the batch that reconstructs a struct's users names that struct's fields
 and flags, in the same branch and the same compile. A standalone naming pass is
 run ONLY against a struct no live batch touches** — which is what made
-`V90Phase4Modulator` (12,064 bytes, finding 3120) safe: nobody else was writing
+`V90Phase4Modulator` (12,064 bytes, finding F3120) safe: nobody else was writing
 against it. Never schedule a naming agent and a reconstruction agent over the
 same header.
 
@@ -185,14 +185,14 @@ chain. Second-best ratio in the object.
 **Written 2026-08-16 on `v90-demapper`, not yet merged.** All four, plus
 `V90SignBitsExtractor::applyFrameAction` (197 B), which is not in the batch and
 is what `process` calls: the object holds its four arms twice, once as its own
-symbol and once inlined (finding 3532), and the period compiler reproduces both
+symbol and once inlined (finding F3532), and the period compiler reproduces both
 — our `applyFrameAction` is the same 197 bytes with the same mnemonic sequence,
 and our `process` is 418 against the blob's 417 with no out-of-line call.
 `make phase` green, `compare.py --ratchet` 986→991 compared and 350→351
 identical. 1,771 bytes; coverage 57.9% → 58.1%.
 
-Four type corrections came with it and are the reason to read findings 3530 and
-3533 before touching this class: two one-byte "flags" are
+Four type corrections came with it and are the reason to read findings F3530 and
+F3533 before touching this class: two one-byte "flags" are
 `SerialDifferentialDecoder<unsigned char>` members and the two heap blocks stop
 being `void *`. The naming was carried inside the batch per §3.
 
@@ -248,7 +248,7 @@ looks smaller than it is.
 ## Phase 6 — the type-punned sites  ✅ 25 of 27, on `v34-type-punning`
 
 27 sites turned out to be **six shapes**, and the instruction width at each
-writer decided every one (finding 5300). Five files, not six —
+writer decided every one (finding F5300). Five files, not six —
 `v34hstx1.cpp` contributed no warning because its instance had already been
 worked around with a `memcpy`, which is not a fixed declaration and was in
 the batch anyway.
@@ -260,7 +260,7 @@ the batch anyway.
 | C `*(int *)&s->state[i].a` | 2 | one `movl` per pair, 0x59673 / 0x59193 | `short par[4]` / `int pair[2]` |
 | D `*(int *)&s->frame[0]` | 5 | `movl` at 0x57a68 AND `movw` at 0x57cac | union with `int frame_wide` |
 | E `((short *)&hist_2aa8[k])[0]` | 2 | **two `movw`**, 0x5d0f7 / 0x5d0fe | `short hist_2aa8[0x12c][2]` |
-| F `(v34_receiver *)&obj->rxq` | 2 | not a width at all | **left**, finding 5305 |
+| F `(v34_receiver *)&obj->rxq` | 2 | not a width at all | **left**, finding F5305 |
 
 E is the one that mattered most: the tree had declared it the other way
 round, so five of six confirmed what the comments already asserted and the
@@ -274,7 +274,7 @@ F is the documented exception. The correct model is to EMBED `struct
 v34_receiver` in `v34_object` at +0x264 — the base is established, not
 guessed — but that means merging two independent pad maps and belongs in a
 `v34_receiver` batch. It must not be respelled through a `char *` to silence
-the warning. Finding 5305.
+the warning. Finding F5305.
 
 `compare.py` did not move at any step: 1094 compared, 410 identical, 78 same
 size, and the identical SET diffed empty against the pre-batch list every
@@ -282,7 +282,7 @@ time — GCC 3.4.2 exact at `-O3`.
 
 **The row above counts WARNED sites, and the warning count is not the defect
 count.** Six more of the same class were found while fixing these and are in
-findings 5300 and 5305: four went with their partners (E's `[1]` halves and
+findings F5300 and F5305: four went with their partners (E's `[1]` halves and
 `demapFrame`'s three `(&state[st].a)[i]` walks), and two are recorded and
 outstanding — `T3C_RX`, and `demapFrame`'s `*(int *)ap`, which is the
 receiver's `target_re`/`target_im` pair read as one word through `char *`
@@ -370,10 +370,10 @@ Magic numbers, comments that cite an address instead of stating an intent,
 parameter names, file headers. **Not a phase and not an end-stage sweep**: it
 runs inside the batch that closes a translation unit, for the same reasons §3
 gives for naming, plus one more -- a cleanup pass over a file another agent is
-writing is exactly finding 3511's shape.
+writing is exactly finding F3511's shape.
 
 The one item that is settled and CLOSED: **shifts are not to be rewritten as
-divides.** Finding 1044 measured that the object's choice is forced and
+divides.** Finding F1044 measured that the object's choice is forced and
 detectable -- six signed divides by a power of two in 1.2 MB, all `/ 2`, at six
 named addresses -- so a rewrite would move codegen and destroy evidence.
 `docs/cleanup.md` §2.
@@ -386,8 +386,8 @@ named addresses -- so a rewrite would move codegen and destroy evidence.
   with 13 call sites unresolvable either way. `debugaudit.py --absent` is the
   measure; the per-file "missing" rollup is NOT, and reads ~15× worse than the
   truth because it debits one file and credits another whenever a factored
-  helper lands elsewhere (findings 2600, 2950).
-- **Finding 3215**: `make phase`'s `prereq` is a prerequisite rather than a
+  helper lands elsewhere (findings F2600, F2950).
+- **Finding F3215**: `make phase`'s `prereq` is a prerequisite rather than a
   barrier, so under `-j` it races the interop link. Fails loud. Unfixed only
   because the Makefile was contended.
 
@@ -397,7 +397,7 @@ named addresses -- so a rewrite would move codegen and destroy evidence.
 - Its own differential suite, and mutations that are shown to fire. A
   separating-trial counter must count trials that differ in an **observable**
   result; four of five such counters in one batch were measuring a path or a
-  constant and proved nothing (findings 3509, 3403). **The mutation
+  constant and proved nothing (findings F3509, F3403). **The mutation
   adjudicates, not the counter.**
 - Findings and deviations numbered from a survey across **all branches** at
   commit time — and the merger re-checks, because two agents surveying in the
@@ -415,5 +415,5 @@ named addresses -- so a rewrite would move codegen and destroy evidence.
     python3 tools/worklist.py      # the per-symbol list
     BLOB=<abs> tools/toolchain/compare.py --ratchet
 
-Every one of those refuses on a zero denominator now (findings 3110, 3122).
+Every one of those refuses on a zero denominator now (findings F3110, F3122).
 If one refuses, it is telling you the truth: run `make coverage`.

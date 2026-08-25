@@ -59,7 +59,7 @@
   "label": "62 raises the wrong receiver flag",
   "find": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_DET_PENDING);\n\tt3c_txblock(obj);",
   "replace": "\trx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_TRAINED);\n\tt3c_txblock(obj);",
-  "note": "Anchored on the statement that follows it as well: this line was unique when this suite was written and microstate 44's 0x26 arm (0x6ed17) now spells it twice more. Finding 347, and the third time it has happened in this file.",
+  "note": "Anchored on the statement that follows it as well: this line was unique when this suite was written and microstate 44's 0x26 arm (0x6ed17) now spells it twice more. Finding F347, and the third time it has happened in this file.",
   "fn": "t3c_micro_rx_phase3_call"
  },
  {
@@ -84,7 +84,7 @@
   "label": "79 sets the transmit state to SSEG",
   "find": "\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\n\t/*\n\t * 0x6d57c.",
   "replace": "\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\t/*\n\t * 0x6d57c.",
-  "note": "The anchor carries the comment that follows it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding 325.",
+  "note": "The anchor carries the comment that follows it because microstate 46's reset at 0x65df4 also sets TX_DPSK through `hs_setstate`, which made the one-line anchor match twice and read as `unusable` rather than as a failure.  Finding F325.",
   "fn": "t3c_micro_moh_tone"
  },
  {
@@ -361,7 +361,7 @@
   "label": "80's disconnect does not move the receive machine",
   "find": "\t\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\t\ths_put(obj, T3C_FABE4, 1);",
   "replace": "\t\ths_put(obj, T3C_FABE4, 1);",
-  "note": "Two tabs and the store after it: `hs_setstate(obj, HS_RXSTATE, V34HS_WAIT)` appears at one tab elsewhere in this file and the shallower text is a substring of the deeper one.  Finding 432."
+  "note": "Two tabs and the store after it: `hs_setstate(obj, HS_RXSTATE, V34HS_WAIT)` appears at one tab elsewhere in this file and the shallower text is a substring of the deeper one.  Finding F432."
  },
  {
   "label": "80's disconnect moves the receive machine to RX_DPSK",

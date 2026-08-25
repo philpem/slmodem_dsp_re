@@ -6,7 +6,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x4(%esp),%eax` -- not %ecx, so these are not thiscall and
- * nothing here needs an attribute (finding 215).
+ * nothing here needs an attribute (finding F215).
  *
  * Built -fno-exceptions -fno-rtti -nostdinc++ like the rest of the C++ here;
  * see the Makefile.  No virtuals and no allocation, so the test binaries
@@ -26,7 +26,7 @@ extern "C" {
 /*
  * Hold the compiler to the map in the header.  `tools/offcheck.py` does this
  * for the C structs but only parses `struct name {` out of include/dsplib and
- * compiles the result as C, so a C++ class asserts its own (finding 230).
+ * compiles the result as C, so a C++ class asserts its own (finding F230).
  * This is the check that catches an object right in size and wrong by four in
  * every offset.
  *
@@ -389,7 +389,7 @@ updateCodeSegment(V90Phase3Modulator *m)
  * settles nothing.  The two loads that build the value are `movswl` --
  * 0x188(%ebx,%esi,2) for `dilLevel[dilIndex]` and 0x178(%ebx,%edx,2) for
  * `segmentLevel[segmentIndex]` -- and those are NOT evidence: the upper half
- * of a load feeding a `short` is free either way, and finding 614 is the
+ * of a load feeding a `short` is free either way, and finding F614 is the
  * standing ruling against reading anything into it.  What IS forced is the
  * re-extension after the negation, `neg %ecx ; movswl %cx,%edi` at 0x2b10f.
  * Truncating the negated value to sixteen bits is demanded by `short level`

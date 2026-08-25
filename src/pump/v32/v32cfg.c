@@ -51,7 +51,7 @@
  * next paragraph derives the *intended* values from it -- "31130 for beta =
  * 1638, 30491 for beta = 2277" -- and 30491 is what this object already
  * holds.  The author did fix this one; the register recorded the fix as
- * another instance of the bug.  Finding 1621.
+ * another instance of the bug.  Finding F1621.
  */
 
 #include "dsplib/fpm_agc.h"

@@ -8,7 +8,7 @@
  * THE OBJECT IS 43,440 BYTES AND IS SEEDED WITH VARIED BYTES, NEVER ZEROED.
  * Both sides get the same pseudorandom fill before every call, reseeded each
  * trial, so a clear loop that stops one element short is visible and a field
- * neither side writes cannot pass by accident (findings 223, 224, 230).  Most
+ * neither side writes cannot pass by accident (findings F223, F224, F230).  Most
  * of this object is exactly such a field -- 25,320 bytes of it are `pad_2818`
  * -- and a zero fill would have made the whole of it agree for free.
  *
@@ -31,12 +31,12 @@
  * so a store that overruns the object fails rather than passing in silence.
  * 0xa9b0 is the largest `this`-relative displacement any of the class's
  * thirty-two members uses, +0xa9ae, plus the width of the two-byte access
- * there -- finding 215's rule, and finding 251 for the measurement.
+ * there -- finding F215's rule, and finding F251 for the measurement.
  *
  * The `ref_` aliases are reached through asm() labels rather than by spelling
- * the alias as an identifier, which sidesteps finding 225 entirely.  The
+ * the alias as an identifier, which sidesteps finding F225 entirely.  The
  * convention is plain cdecl with `this` as the first stack argument (finding
- * 215); all three symbols are `T` in the blob, so no regparm is involved.
+ * F215); all three symbols are `T` in the blob, so no regparm is involved.
  * The scalar parameters are declared `int` on the alias because an `extern
  * "C"` prototype only has to describe the ABI, and the object reads the
  * `unsigned char` as `mov %al` and the `short` as `movswl`, which is what a
@@ -350,7 +350,7 @@ guard_equal(void)
  * the schedule offered was 0x80 itself, and `ulaw2linear(0xff)` and
  * `ulaw2linear(0x7f)` are both 0, so the masked and unmasked forms agreed.
  * Rotating each sweep by a different multiple of the block number fixes it.
- * Finding 253.
+ * Finding F253.
  */
 #define NTRIAL 64
 #define NBLOCK 8
@@ -572,7 +572,7 @@ run_calculatedillength(void)
  * that is not the usual finding-230 hygiene but the only way the central
  * claim is observable at all.  `seq1` is filled to `seq1Length`, `seq2` to
  * `seq2Length` and `dilCode` to `dilCount`; the rest of all three arrays
- * keeps whatever it held (finding 7602).  Under `DIL_TYPE_ADI_QC` that is 68
+ * keeps whatever it held (finding F7602).  Under `DIL_TYPE_ADI_QC` that is 68
  * bytes of each pattern array and 112 ucode slots -- and every table entry at
  * those indices is a ZERO, so over a zeroed descriptor "not written" and
  * "written zero" are the same bytes and the claim cannot fail.  The seed
@@ -743,7 +743,7 @@ run_setdildescriptor(void)
 						    (long)i);
 				}
 
-				/* THE THREE TAILS.  Finding 7602. */
+				/* THE THREE TAILS.  Finding F7602. */
 				diff_eq_obj_(__FILE__, __LINE__,
 					     "seq1 past seq1Length is left "
 					     "alone", "seq1 tail",
@@ -1225,7 +1225,7 @@ run_accumulate(void)
  * `*MeanAndVar*` methods, an unflagged or empty phase for `updateUrefAlt` --
  * and a seeded count is nonzero with probability one, so the zero is forced
  * on every fourth trial and the run asserts that both arms were reached.
- * Finding 149: a method that always takes the same branch passes a whole
+ * Finding F149: a method that always takes the same branch passes a whole
  * sweep of that branch perfectly.
  */
 static int
@@ -1271,7 +1271,7 @@ run_means(void)
 			 * not, because the variance line either side changes
 			 * which x87 register the mean lives in and therefore
 			 * whether it is rounded.  n = 3 and n = 25 both agree
-			 * here; 41 is the first that does not.  Finding 1366.
+			 * here; 41 is the first that does not.  Finding F1366.
 			 *
 			 * `updateLinMappMeanAndVar` and `updateUrefAlt` take
 			 * the reciprocal and `updateLinMappMeanAndVarAlt`
@@ -1434,7 +1434,7 @@ run_maptransforms(void)
  * is compared is the RETURN VALUE, every trial; the object comparison is kept
  * as the other half of the claim, which is that they store nothing.
  *
- * `isAltRbs` is a detector and this is where finding 149 applies.  It has
+ * `isAltRbs` is a detector and this is where finding F149 applies.  It has
  * three outcomes -- the early return on an unflagged phase, a distance inside
  * the threshold, and a distance outside it -- and a seeded object reaches the
  * first almost never and the third almost always.  So the flag, the
@@ -2401,7 +2401,7 @@ run_updateuref(void)
  *
  * Between them they make twelve `edprintf` calls and one
  * `dsplibs_debug_printf`, and a format string or an argument list is exactly
- * the kind of claim a whole-object comparison is blind to -- finding 126 is
+ * the kind of claim a whole-object comparison is blind to -- finding F126 is
  * `updateAlpha`, which had all three wrong and passed everything.  So these
  * sweeps raise BOTH debug levels, turn the harness's capture on, and compare
  * the two transcripts as well as the two objects.
@@ -2894,7 +2894,7 @@ run_uniteunsuspected(void)
 	}
 
 	/*
-	 * A DIRECTED BLOCK FOR THE RECIPROCAL, which is finding 1366's witness
+	 * A DIRECTED BLOCK FOR THE RECIPROCAL, which is finding F1366's witness
 	 * again: this method forms `1.0f / total` and multiplies, and a
 	 * straight `fsum / total` agrees over every table above.  Count 41
 	 * against a sum of 143.5 divides to exactly 3.5, so the `+ 0.5f` lands
@@ -3210,7 +3210,7 @@ run_firststudy(void)
 	 *
 	 * Two claims that the sweep above cannot separate, in one state:
 	 *
-	 * Count 41 against a sum of 143.5 is finding 1366's witness again --
+	 * Count 41 against a sum of 143.5 is finding F1366's witness again --
 	 * the division is exactly 3.5 and rounds to 4, the reciprocal is a hair
 	 * under and truncates to 3.  It pins the `1.0f / count` spelling AND
 	 * the `+ 0.5f`, both of which survived the sweep.
@@ -3816,7 +3816,7 @@ run_secondstudy(void)
  * because `prevLinMapp` has no phase dimension.
  *
  * The rebuild is `updateLinMappMeanAndVar`, which the object inlines and this
- * calls; its own arithmetic is pinned by `run_means` and by finding 1366's
+ * calls; its own arithmetic is pinned by `run_means` and by finding F1366's
  * witness there, so what this suite has to establish is which cells it is
  * applied to.  The zero-count arm is swept here too, because a cell with no
  * samples keeps whatever it had and that is only visible against a seeded
@@ -3923,7 +3923,7 @@ run_qcmapping(void)
 	 * out as `prevLinMapp` from end to end -- all 128 of them, which is
 	 * what makes the copy's bound a tested claim.
 	 *
-	 * Count 41 against a sum of 143.5 is finding 1366's witness: the
+	 * Count 41 against a sum of 143.5 is finding F1366's witness: the
 	 * division is exactly 3.5 and rounds to 4, the reciprocal is a hair
 	 * under and truncates to 3.  It is here as well as in `run_means`
 	 * because this is where the call site is.
@@ -4036,7 +4036,7 @@ run_qcmapping(void)
  * `determineMaxUcode`'s scan skips an entry with `if (v == 0.0f) continue;`,
  * which the object compiles to ONE ordered `fcom` and a `je` with no parity
  * test -- so an UNORDERED entry sets C3 and is skipped along with a zero one.
- * GCC 13 emits the parity test whatever it is told (finding 2304), keeps the
+ * GCC 13 emits the parity test whatever it is told (finding F2304), keeps the
  * entry, and the count comes out different.
  *
  * `float_9d48` holds VARIANCES, and the object's own writer --
@@ -4046,7 +4046,7 @@ run_qcmapping(void)
  * and that trial alone made this group RED on the modern build and the whole
  * BINARY with it: `t_v90adid` carries the `v90adid` and `v90dil` mutation
  * suites, 497 mutations, and `tools/mutate.py` refuses a red baseline
- * (findings 2157 and 3002).
+ * (findings F2157 and F3002).
  *
  * So the accidental case is removed and the DELIBERATE one is kept, in its own
  * binary: `t_v90adidnan` drives a window of planted NaNs and is declared in
@@ -4054,7 +4054,7 @@ run_qcmapping(void)
  * whose exponent field is all ones are touched, and they are turned into the
  * largest finite exponent rather than into a constant, so the entry keeps its
  * sign and its significand and stays as varied as the seed made it.
- * Findings 6001 and 1436.
+ * Findings F6001 and F1436.
  */
 static long mu_finite_words;		/* rewritten */
 static long mu_finite_seen;		/* examined  */
@@ -4069,7 +4069,7 @@ mu_finite_variances(void)
 	/*
 	 * Through the BITS and not through `v != v`: the period build sets
 	 * `-mno-ieee-fp`, which folds a self-comparison to zero and deleted a
-	 * NaN detector in the harness once already (finding 2303).
+	 * NaN detector in the harness once already (finding F2303).
 	 */
 	for (i = 0; i <= ADID_VAR_LAST; i++) {
 		unsigned int u;
@@ -4104,7 +4104,7 @@ mu_finite_variances(void)
  * the threshold AND is not zero, so a grid plants exactly three zeros in a
  * five-entry window with two small entries beside them: the count is 2 and the
  * window does NOT qualify, where a reading that counted them would make it 5,
- * qualify, and move the answer.  Finding 1436.
+ * qualify, and move the answer.  Finding F1436.
  *
  * THE OTHER HALF OF THAT SKIP IS `t_v90adidnan`'s.  The object's zero test is
  * one `fcomp`/`je` with no parity test, so an UNORDERED entry is skipped too --
@@ -4237,7 +4237,7 @@ run_maxucode(void)
 		 * between each clamp's test and the value one above it, and
 		 * 6666.6 is the only row with a fractional part for the two
 		 * reports to print.  A table of round numbers cannot see a
-		 * constant moved by one -- finding 1423's lesson, met again.
+		 * constant moved by one -- finding F1423's lesson, met again.
 		 */
 		static const float fill[] = {
 			0.0f, 1.0e9f, 2000.0f, 40000.0f, 6666.6f, 500.5f,
@@ -4306,7 +4306,7 @@ run_maxucode(void)
 			 * zero row one instruction further on -- the object's
 			 * `fcomp`/`je` skips an unordered entry exactly as it
 			 * skips a zero -- and it is the half GCC 13 cannot
-			 * reproduce.  Findings 6001, 2304 and 1436.
+			 * reproduce.  Findings F6001, F2304 and F1436.
 			 */
 		};
 		int w;
@@ -4509,7 +4509,7 @@ run_maxucode(void)
 	 * whose non-finite word is at flat index 424 --
 	 * `float_9d48[3][40]`, the first of the twenty entries the threshold
 	 * averages, which is why the divergence showed in the REPORT and not
-	 * in the object.  Finding 6001.
+	 * in the object.  Finding F6001.
 	 */
 	diff_eq_int("the variance sanitiser examined %ld words",
 		    mu_finite_seen, 67490L, 0);
@@ -4533,7 +4533,7 @@ run_maxucode(void)
  * THAT LAST POINT IS WHY THE GRID EXISTS.  A seeded window puts the smallest
  * variance somewhere arbitrary, the clamp swallows the difference, and a
  * mutation on the window's width, on the `-3`, or on the sense of the
- * comparison survives a perfect sweep -- finding 1366's shape.  The grid
+ * comparison survives a perfect sweep -- finding F1366's shape.  The grid
  * plants the minimum at each of the five offsets in turn with the base code
  * inside the clamp window, and asserts the gain that comes out is not the
  * same for all five.
@@ -4716,7 +4716,7 @@ run_padgain(void)
 	 * `jb` is taken by an unordered compare, so a NaN in the window
 	 * becomes the running best and then loses to nothing -- every entry
 	 * after it wins -- which puts the answer at the BOTTOM of the window
-	 * where a C `<` would have left it above.  Finding 1436.
+	 * where a C `<` would have left it above.  Finding F1436.
 	 */
 	{
 		static const unsigned int probe[2][5] = {
@@ -5364,7 +5364,7 @@ run_studyuref(void)
 	 * which is 1234 truncated and 1235 rounded.  Neither difference is
 	 * reachable by sweeping: a random variance never lands on the answer a
 	 * function of the other five produced, and a random threshold is under a
-	 * half as often as not.  Finding 1366's method.
+	 * half as often as not.  Finding F1366's method.
 	 */
 	{
 		unsigned char at = 0x2a;
@@ -5408,7 +5408,7 @@ run_studyuref(void)
 	/*
 	 * A SIGMA THAT IS NOT A FLOAT.  `trn1Sigma` reaches its field through
 	 * `fsts` and its report through `fstpl`, two roundings of one extended
-	 * register (finding 1443, D291) -- and the two agree for every quotient
+	 * register (finding F1443, D291) -- and the two agree for every quotient
 	 * that happens to BE a float, which most seeded ones are.  Three
 	 * unflagged phases with variances 1, 1 and 0 make the quotient 2/3,
 	 * which is not, so the reported mantissa and the stored one differ.
@@ -5467,7 +5467,7 @@ run_studyuref(void)
 	 * two `edprintf` sites in states 0 and 1, and the three `getAltVarThresh`
 	 * makes on their behalf -- is not.  At level 2 both halves print and a
 	 * gate written the wrong way round is invisible; at level 0 only the
-	 * ungated half does, and the transcript separates them.  Finding 1428,
+	 * ungated half does, and the transcript separates them.  Finding F1428,
 	 * which is why the level has to be driven at 0 AND at 2 rather than
 	 * merely turned off at the end.
 	 */
@@ -5570,7 +5570,7 @@ run_studyuref(void)
 		 * report correctly at level 2 and both transcripts and both objects
 		 * agree at both levels.  An assertion nobody can explain is worse
 		 * than none, so state 0's report is left with its wording and its
-		 * arguments tested and its ungatedness not.  Finding 1445.
+		 * arguments tested and its ungatedness not.  Finding F1445.
 		 */
 		/*
 		 * Then state 1, whose report is the arm's only `edprintf` and

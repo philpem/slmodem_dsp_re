@@ -99,7 +99,7 @@ GenericIIR<Sample, Coeff>::GenericIIR(unsigned nden, unsigned nnum,
 	 * are never stored, and `m_acc` comes out of the constructor holding
 	 * whatever the allocator left.  `m_i` gets its value from `reset`.
 	 *
-	 * This is the second half of finding 1250, which recorded both stores
+	 * This is the second half of finding F1250, which recorded both stores
 	 * as a known divergence because repairing them belonged to this class
 	 * rather than to `GenericToneDetector`.
 	 */

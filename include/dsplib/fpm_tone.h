@@ -87,7 +87,7 @@ struct fpm_tone {
 	short e_tone;			/* +0x48 smoothed tone energy.  The
 					 *       original's own naming would
 					 *       call this out-of-band; it is
-					 *       not.  See finding 33.        */
+					 *       not.  See finding F33.        */
 	short e_total;			/* +0x4a smoothed total energy        */
 
 	/* --- unattributed --------------------------------------------- */
@@ -171,7 +171,7 @@ short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
  * calls "out of band" is what is left after the tone is removed, and the
  * quantity compared against `ratio` is the tone's own share of the energy.
  * Measured directly: a 2100 Hz input yields 0, 2000 and 2200 Hz yield 1,
- * silence yields 2.  See findings 30 and 33.
+ * silence yields 2.  See findings F30 and F33.
  *
  * FPM_MTD_detect uses the OPPOSITE convention, and correctly so -- it has been
  * swept and checked.  Its filters are per-tone bandpasses rather than a notch,

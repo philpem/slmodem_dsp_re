@@ -180,7 +180,7 @@ shell_bytes_eq(const char *tag, const void *a, const void *b, long ctx)
  * The reachable range of `count`.  initV34 indexes MMaxTable or MMinTable
  * with a value the loop above it forces into 0..31, and neither table holds
  * anything outside 1..18 -- so every t3 block initG248 can be asked for is
- * one xyz actually has.  Asserted rather than assumed: finding 129 is about
+ * one xyz actually has.  Asserted rather than assumed: finding F129 is about
  * these three tables having no bounds check of their own, and this is the
  * caller-side invariant it left open.
  */
@@ -441,7 +441,7 @@ main(void)
 		static struct v34_shell a, b;
 		/*
 		 * Small, because `grid` is indexed by (rotate + 0x408) >> 2
-		 * into 529 entries with nothing clamping it -- finding 129's
+		 * into 529 entries with nothing clamping it -- finding F129's
 		 * shape again.  Large coefficients push the residues, and
 		 * hence the rotate, straight off the end of the table, where
 		 * each side reads its own adjacent .rodata and the two
@@ -477,7 +477,7 @@ main(void)
 			 * minus a residue.  A parameter of 200 gives an
 			 * index near 1200 into a 529-entry table, and each
 			 * side then reads its own adjacent .rodata.  See
-			 * finding 129 -- this is the third table in this
+			 * finding F129 -- this is the third table in this
 			 * file with the same property.
 			 */
 			for (k = 0; k < 32; k++) {
@@ -700,7 +700,7 @@ main(void)
 		 * nb from -1, not lower: below that `small + nb` goes
 		 * negative and the object indexes lsbMask before the table.
 		 * A field width is never negative in operation, so this is
-		 * the same bound finding 129 describes, asserted rather than
+		 * the same bound finding F129 describes, asserted rather than
 		 * discovered.
 		 */
 		for (nb = -1; nb <= 20; nb++)
@@ -776,7 +776,7 @@ main(void)
 		 * differential test above drives the split path too, but with
 		 * a source that returns exactly what the refill loop stored,
 		 * so the two readings of the position are indistinguishable
-		 * there.  Neither covered both conditions until finding 185.
+		 * there.  Neither covered both conditions until finding F185.
 		 */
 		for (nb = 1; nb <= 20; nb++)
 		for (a04 = 6; a04 <= 10; a04 += 2) {
@@ -971,7 +971,7 @@ main(void)
 	 * sweep is what makes counts up to 18 -- and so xyz's truncated
 	 * blocks, and its empty one -- reachable at all.  check_count_bound()
 	 * above proves the sweep cannot walk any of the three tables off its
-	 * end, which is the thing finding 129 warns about.
+	 * end, which is the thing finding F129 warns about.
 	 */
 	diff_begin("v34 initV34");
 	{
@@ -1201,7 +1201,7 @@ main(void)
 	 * modulatevector -- the forward mapper, driven end to end.
 	 *
 	 * It tail-calls `txmit`, so the fixture is t_v34rx.c's txmit setup
-	 * (including the three arrays kept outside the object, finding 116b)
+	 * (including the three arrays kept outside the object, finding F116b)
 	 * with the shell contexts initialised on top: preinitdigital for the
 	 * scrambler callbacks, then initV34 on the TRANSMIT context so the
 	 * three count tables exist.
@@ -1300,7 +1300,7 @@ main(void)
 			 * identical across the two sides by construction, so
 			 * a divergence under it is unambiguously getFrame's
 			 * or the mapper's rather than the scrambler's.  That
-			 * separation is what localised finding 185.
+			 * separation is what localised finding F185.
 			 */
 			if (synth) {
 				for (it = 0; it < 64; it++)
@@ -1374,7 +1374,7 @@ mv_next:		;
 	 * purpose.  The lookup is `divtab[bits + 14*use_max - 1]` and it
 	 * happens before the zero-rate test, so a zero rate with mode 0 reads
 	 * one entry BEFORE the table -- unclamped, like the three tables of
-	 * finding 129.  Giving it real storage on both sides makes that read
+	 * finding F129.  Giving it real storage on both sides makes that read
 	 * defined and identical rather than leaving it to whatever follows.
 	 */
 	diff_begin("v34 initdigital");

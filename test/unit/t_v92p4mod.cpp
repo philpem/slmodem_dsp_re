@@ -11,7 +11,7 @@
  *   - Both sides are seeded with the SAME varied pseudorandom bytes before
  *     every call and are NEVER zeroed.  Four of this constructor's ten
  *     stores are zeroes; against a zero-filled object none of them would be
- *     visible (findings 223, 224).
+ *     visible (findings F223, F224).
  *   - The slot is 64 bytes longer than the object, and the tail is compared
  *     on both sides against the seed.  The last field is at +0x1c8 and the
  *     object is 0x1cc, so a store four bytes past the end is exactly the

@@ -67,11 +67,11 @@ public:
 	 * -- "DATA ONLY ... declaring one and defining it would re-open the
 	 * link closure for V92Parameters" -- is superseded.  V92Parameters is
 	 * modelled (55 slots, the author's own names for 54 of them, findings
-	 * 860-862), so there is no closure to re-open; and `vpcm_create`
+	 * F860-862), so there is no closure to re-open; and `vpcm_create`
 	 * cannot link without this symbol.
 	 *
 	 * IT ALSO SETTLED TWO THINGS THE HEADER HAD WRONG, both recorded in
-	 * finding 1222: the object is 0x2c bytes and not 0x28, because the
+	 * finding F1222: the object is 0x2c bytes and not 0x28, because the
 	 * constructor stores its argument at +0x28; and +0x14..+0x16, called
 	 * `pad_14[3]` here on the grounds that neither reader reached them,
 	 * are three real fields the constructor fills from the V.92 filter
@@ -145,7 +145,7 @@ public:
 	 * THE NAMES ARE THE PARAMETERS', NOT THE CLASS'S.  Neither
 	 * `printInfo` nor `setPhaseIIinfo` touches these three, so no format
 	 * string names them; what is recoverable is which parameter fills
-	 * each, and that is what they are named after.  Finding 1222.
+	 * each, and that is what they are named after.  Finding F1222.
 	 */
 	unsigned char nofFilterSections;
 	unsigned char maxTotalNofCoeffs;

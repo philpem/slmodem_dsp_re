@@ -28,7 +28,7 @@
  * nothing in the object says which translation unit it belonged to -- the
  * class sits between `GenericToneDetector` and `K56FlexFloModem`'s stubs in
  * the text, which settles nothing.  `compare.py`'s per-object rollup will
- * attribute it to this file (finding 610), so read that number knowing the
+ * attribute it to this file (finding F610), so read that number knowing the
  * placement is a choice.
  */
 

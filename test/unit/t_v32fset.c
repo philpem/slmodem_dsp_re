@@ -18,7 +18,7 @@
  *   - the Viterbi state field by field instead: the eight path metrics, the
  *     ring index, the differential state, the four scalars `VTBv32_init` set,
  *     and all 128 survivor nodes BY CONTENT.  That is what pins the pointers,
- *     which is finding 1614's rule and `t_v32vtb`'s;
+ *     which is finding F1614's rule and `t_v32vtb`'s;
  *   - that neither side installed a successor.  All four slicers are
  *     terminal; a `cfg.decision` that moved would be a wrong reading of the
  *     one branch that could have written it.
@@ -39,7 +39,7 @@
  * picked (I, Q) reaches by inspection.  So this file scans a coarse grid of
  * the plane once per slicer, keeps one input per leaf, and then ASSERTS THAT
  * EVERY LEAF COUNT IS NON-ZERO.  A region tree tested only near the origin is
- * a test that cannot see a wrong threshold -- finding 134's rule applied to
+ * a test that cannot see a wrong threshold -- finding F134's rule applied to
  * the input set.
  *
  * And the exact-value inputs are constructed, not sampled.  `_64pt`'s two

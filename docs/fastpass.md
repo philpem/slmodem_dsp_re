@@ -66,13 +66,13 @@ sourced; nothing is inferred from adjacency of the numbers.
 
 | | what it is | where that comes from |
 |---|---|---|
-| #23 | removing the limit finding 70 puts on `t_v8create`'s comparison | finding 70 |
+| #23 | removing the limit finding F70 puts on `t_v8create`'s comparison | finding F70 |
 | #33, #35–#45 | the V.34 fast pass | the line at the top of this file |
-| #36 | `V34RX.c`'s remaining functions | finding 117 lists what was left in it |
-| #38 | `V34hshak.c`'s support functions — that TU except `v34handshak` | this session's brief; findings 170–149 |
-| **#39–#45** | **`v34handshak` itself**, 61,541 bytes over 87 states, split seven ways | findings 117 and 144, `include/dsplib/v34hshak.h` |
+| #36 | `V34RX.c`'s remaining functions | finding F117 lists what was left in it |
+| #38 | `V34hshak.c`'s support functions — that TU except `v34handshak` | this session's brief; findings F170–149 |
+| **#39–#45** | **`v34handshak` itself**, 61,541 bytes over 87 states, split seven ways | findings F117 and F144, `include/dsplib/v34hshak.h` |
 | #47 | the deferred work listed above | this file |
-| #49 | check whether `demapFrame` can produce an out-of-range group | finding 129 |
+| #49 | check whether `demapFrame` can produce an out-of-range group | finding F129 |
 
 `#34`, `#37`, `#40`–`#44`, `#46` and `#48` are named nowhere. `#34` is
 outside the fast pass's stated range; the rest fall inside a range and have
@@ -89,13 +89,13 @@ from the control-flow graph — that is the whole argument in
 
 **What is now settled, and was not when this section was written.** The
 three state words are named — +0x3592 microstate, +0x3594 rxstate, +0x3596
-txstate (finding 180) — and `StateName` is emitted, so `cfgsplit`'s
+txstate (finding F180) — and `StateName` is emitted, so `cfgsplit`'s
 per-state byte counts can be read against the author's names rather than
 against indices. The three machines are concurrent, so a per-state split has
 to say which machine a state belongs to before it can say which task.
 
 `cfgsplit` has not been run on `v34handshak`. The recorded runs are
-`rxtiming` (finding 121k), `decodeDepth` (finding 131) and one that reported
+`rxtiming` (finding F121k), `decodeDepth` (finding F131) and one that reported
 a whole function unreached. Pointing it at `v34handshak` needs its three jump
 tables located first, and `--entries` was needed for both of the functions it
 has been run on — so **locating the dispatch and running `cfgsplit` is the
@@ -105,7 +105,7 @@ first job of #39, not a prerequisite for starting it.** Until that is done,
 ### And now it has been run, and the split is by machine
 
 `cfgsplit --func v34handshak` finds the three tables by itself, and finding
-213 says which machine feeds each: two of them are the transmit state and
+F213 says which machine feeds each: two of them are the transmit state and
 one is the microstate, while the receive state has no table at all. So the
 split is **by machine, not by state number** — a state *value* means
 different things to different machines, and 51 is `TX_L1` to two of them.
@@ -130,7 +130,7 @@ three pieces can be committed until all of it exists** — the same answer
 this tree gives for `CALLPROG_Progress`, `b103_process` and
 `FPM_iir_filt_block`, at sixty times the size.
 
-**That does not follow, and finding 214 is why.** The link constraint is
+**That does not follow, and finding F214 is why.** The link constraint is
 real, but it comes from `symmap.py` renaming *every* defined blob symbol to
 `ref_*`, which is a choice made when the harness was built for leaf
 functions. Rename only what we define and an unwritten callee resolves to
@@ -140,13 +140,13 @@ unwritten `probeselect` links and runs. The closure of all 64 unwritten
 callees is 111 functions with no store to `.bss` or `.data`, so sharing one
 physical copy carries nothing between the sides.
 
-Not landed, and finding 215 declines it: the prerequisite set is 33,406 bytes
+Not landed, and finding F215 declines it: the prerequisite set is 33,406 bytes
 and bounded, every one of it individually testable, and all of it written in
 the end whichever order is chosen. The branch stays as a documented escape
 hatch, not as a plan.
 
 **The line that used to be here — that the 16 KB of V.90/V.92 C++ is "a
-scheduling question and not a precondition" — is wrong, and finding 217
+scheduling question and not a precondition" — is wrong, and finding F217
 disproves it.** Six of #59's seventeen functions tail-call into
 `VPcmV34Main.cpp`'s C++ half, so a C file defining any of them leaves
 undefined symbols and *all 62 test binaries fail to link*. #60 is a hard
@@ -157,12 +157,12 @@ comes after #56–#58.
 
 ### The decision, and what it does to #59's ordering
 
-Finding 215 settles it: the scaffold is **not** landed, because V.90/V.92 is
+Finding F215 settles it: the scaffold is **not** landed, because V.90/V.92 is
 the project's end goal and the prerequisite set is bounded, so the ordering
 costs nothing that the invariant does not buy back.
 
 **With that decided, the C++ is a precondition again — for six of #59.**
-Finding 217 names them: `indicateJaTransmission`, `V34SetINFO1aBits`,
+Finding F217 names them: `indicateJaTransmission`, `V34SetINFO1aBits`,
 `V34GiveINFO1dBits`, `VPcmV34InitiateRetrain`, `v90Phase34` and
 `k56FlexPhase34` each reach a `VPcmV34Main.cpp` method, and a caller whose
 callee has been renamed to `ref_*` leaves an undefined symbol that breaks all
@@ -171,22 +171,22 @@ callee has been renamed to `ref_*` leaves an undefined symbol that breaks all
 `getMPrecvdBits` are file-local, have no `ref_` alias, and are blocked on a
 harness change rather than on code.
 
-**That harness change happened, and those three are done** — finding 221's
-two-pass `objcopy` gave all three a `ref_` alias and finding 227 records the
+**That harness change happened, and those three are done** — finding F221's
+two-pass `objcopy` gave all three a `ref_` alias and finding F227 records the
 result. `getMPrecvdBits` still needed a `.cpp`, because its name is mangled,
 so it is also the tree's first C++ *source* outside `FloatIIR.cpp`.
 
 **#59 is therefore not one sitting.** About 8.7 KB of it is available and
 8.2 KB is not, and the hand-over that said "nothing here is blocked" was
-reading the same list finding 215's blanket claim was.
+reading the same list finding F215's blanket claim was.
 
 **The available 8.7 KB is done** — all seven functions, with differential
-tests and mutation sets (findings 216 to 219). What is left of #59 is the
+tests and mutation sets (findings F216 to 219). What is left of #59 is the
 8.2 KB that needs #60, #56–#58, or a harness change first.
 
 ### The renumbering, and the two task stores
 
-`#39`–`#45` named a seven-way split by state that finding 213 shows does not
+`#39`–`#45` named a seven-way split by state that finding F213 shows does not
 exist. They are superseded by a three-way split by machine plus the
 prerequisites:
 
@@ -208,6 +208,6 @@ inside #57. Nothing is lost, but a hand-over quoting "#45" should be read as
 `#11`–`#22`, and those are different tasks from `#11`–`#22` here — this
 store's `#11` is the Bell 103 rate conversion. Any hand-over quoting a task
 number must say which store it means. This is the same collision that took
-`204` and `205` twice (finding 214's neighbours, 212 and 213, are the
+`204` and `205` twice (finding F214's neighbours, 212 and 213, are the
 survivors), and the same fix applies: write the mapping down where three
 sessions can read it, which is here.

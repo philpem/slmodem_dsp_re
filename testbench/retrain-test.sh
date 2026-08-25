@@ -4,7 +4,7 @@
 #
 # Each call is its own control -- same path, same modem, seconds apart -- so
 # every between-call confounder this bench has been burned by is held constant.
-# Finding 1209 predicts the post-retrain rate should beat the pre-retrain one
+# Finding F1209 predicts the post-retrain rate should beat the pre-retrain one
 # if a second Phase 3 pass is what the good calls had.
 set -u
 BENCH=/home/philpem/dev/sip-D-modem/claude_re/testbench

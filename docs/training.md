@@ -24,7 +24,7 @@ Each section is marked:
 
 ---
 
-## 1. The shape of the whole thing
+## F1. The shape of the whole thing
 
 Four phases. The microstate names are the object's own, recovered from its
 debug strings (`v34hshak.c`) **[CODE]**:
@@ -49,7 +49,7 @@ over-corrects — is left for the equaliser to undo with finite taps.
 
 ---
 
-## 2. The line probe and how it is measured
+## F2. The line probe and how it is measured
 
 **[SPEC]** V.34 §11.2 and Table 17: the probing signal is tones 150 Hz apart
 from 150 Hz to 3750 Hz, and the tones at **900, 1200, 1800 and 2400 Hz are
@@ -79,14 +79,14 @@ lost, but any consumer reading `energy` alone throws it away **[CODE]**.
 
 `energy` is a **power** quantity. Converting it to dB is `10*log10`, not
 `20*log10`. Getting that wrong doubles every tilt figure, is invisible on a
-fixed channel, and cost this project a full experiment to catch — finding 1909
+fixed channel, and cost this project a full experiment to catch — finding F1909
 **[MEASURED]**.
 
 ---
 
-## 3. Choosing the pre-emphasis filter
+## F3. Choosing the pre-emphasis filter
 
-### 3.1 What the filters are
+### F3.1 What the filters are
 
 **[SPEC]** V.34 §5.4.1 defines eleven pre-emphasis filters in **two families**,
 not one ladder of eleven strengths:
@@ -100,7 +100,7 @@ Figures 1 and 2 plot magnitude against **normalised frequency f/S from 0 to
 the band**: tilt correctors for a subscriber loop's high-frequency roll-off,
 not notch correctors for one frequency.
 
-### 3.2 What the object does
+### F3.2 What the object does
 
 **[CODE]** `probe_preemp` in `v34hshak.c`. It is a **two-point tilt meter**:
 
@@ -119,11 +119,11 @@ arm is dead. That is deviation **D53**.
 
 The counter's range — 6 to 10 — is exactly Table 4, which is deliberate rather
 than accidental: five tilt buckets onto five filters, complete and exact
-(finding 1477).
+(finding F1477).
 
-### 3.3 What is wrong with it
+### F3.3 What is wrong with it
 
-**[MEASURED]**, findings 1904–1912:
+**[MEASURED]**, findings F1904–1912:
 
 | weakness | evidence |
 |---|---|
@@ -135,7 +135,7 @@ than accidental: five tilt buckets onto five filters, complete and exact
 | reads `energy` only, discarding `shift`, so sub-floor bins are lost | §2 above |
 | chosen once and never revisited within a connection | 1912 |
 
-### 3.4 The fitted alternative (branch `improve/v34-training`)
+### F3.4 The fitted alternative (branch `improve/v34-training`)
 
 **[CODE]** `probe_preemp_fit`, reachable only through
 `dsplib_v34_fit_preemp` (default 0, set from the environment by
@@ -150,16 +150,16 @@ maps the slope to a Table 3 index. Two design choices worth keeping:
   slopes. Plain OLS gives a wrecked bin its full leverage and, simulated at 8%
   duds, leaves *more* tilt uncorrected than the object's crude counter does
   (1.36 dB against 0.85) — it would have been a regression on exactly the
-  channels it was meant to help. Finding 1911.
+  channels it was meant to help. Finding F1911.
 * **Integer log2 with linear mantissa interpolation**, not libm and not
   `shift` alone. `shift` alone quantises to 6.02 dB, which is *coarser* than
   the counter it replaces.
 
 ---
 
-## 4. The equaliser
+## F4. The equaliser
 
-### 4.1 Geometry **[CODE]**
+### F4.1 Geometry **[CODE]**
 
 `struct v34_equalizer`, `v34filt.h:282`, at object offset `+0x3cc`:
 
@@ -173,7 +173,7 @@ maps the slope to a Table 3 index. Two design choices worth keeping:
 `V34EqualizerCleanUp` zeroes everything and sets tap 40 to unity — a flat
 initial response, a centre spike.
 
-### 4.2 The update rule **[CODE]**
+### F4.2 The update rule **[CODE]**
 
 Full complex LMS, at 32-bit width. `eq_adapt_tap` in `v34filters.c`:
 
@@ -190,7 +190,7 @@ The error fed in is scaled first, in `v34rx.c:2635`:
 
 where `dr`, `di` are the difference between the received point and the target.
 
-### 4.3 The step size is scheduled, not adaptive **[CODE]**
+### F4.3 The step size is scheduled, not adaptive **[CODE]**
 
 `f218` takes four values and the schedule is driven by **symbol counts**, not
 by how converged the equaliser actually is:
@@ -206,7 +206,7 @@ by how converged the equaliser actually is:
 (`v34rx.c:1639-1641`) — a progress signal for whoever is counting symbols, not
 a convergence measure.
 
-### 4.4 The centre taps are updated twice, by two different arithmetics **[CODE]**
+### F4.4 The centre taps are updated twice, by two different arithmetics **[CODE]**
 
 `V34EqualizerCenterAdapt` applies the same gradient to the 8 centre taps, at
 **twice the error** (`v34rx.c:2675`), but:
@@ -222,7 +222,7 @@ fight over the same eight taps and nothing arbitrates**, and those eight carry
 most of the energy (tap 40 is the unity spike). **[INFERRED]** that this puts
 a floor under misadjustment; not yet measured.
 
-### 4.5 There is no tap leakage **[CODE]**
+### F4.5 There is no tap leakage **[CODE]**
 
 `eq_adapt_tap` is `tap = tap − gradient`, with no term pulling an
 un-excited tap toward zero. **[INFERRED]**: 80 taps driven by a signal with
@@ -232,7 +232,7 @@ drift on a long hold. Not yet measured.
 
 ---
 
-## 5. The error metric, and what the rate is decided from
+## F5. The error metric, and what the rate is decided from
 
 **[CODE]** `v34rx.c:2630-2660`. `equerr` is **not** an instantaneous reading:
 
@@ -245,7 +245,7 @@ drift on a long hold. Not yet measured.
         accumulators cleared
 
 So it is a **block mean over 1024 symbols** — 0.30 s at 3429 baud, which is
-exactly the spacing of `V34EQU` lines in every log **[MEASURED]**, finding 1904.
+exactly the spacing of `V34EQU` lines in every log **[MEASURED]**, finding F1904.
 
 The rate ladder, `v34hstx1.cpp:2624` **[CODE]**:
 
@@ -267,7 +267,7 @@ this is the strongest candidate for the rate decision returning wrong answers.
 
 ---
 
-## 6. Retrain: what is kept and what is thrown away
+## F6. Retrain: what is kept and what is thrown away
 
 Three different things get called "retraining" and they are not the same
 **[CODE]**:
@@ -280,7 +280,7 @@ Three different things get called "retraining" and they are not the same
 2. **Partial re-acquire** — `V34EqualizerClearCenterTaps` (`v34rx.c:2493`)
    clears only the centre taps and drops the `TRAINED` flag.
 3. **Rate renegotiation** — touches no taps at all; it re-runs the rate
-   decision. Finding 1900's ~+11 s rate climb, which the DTE is never told
+   decision. Finding F1900's ~+11 s rate climb, which the DTE is never told
    about because `pty CONNECT nnn` is emitted once and never revised.
 
 There is also a shortcut: `is_short` (a retry requesting "short phase 2") skips
@@ -293,7 +293,7 @@ Small, systematic, and unexplained. Too small to change the index.
 
 ---
 
-## 7. Outputs
+## F7. Outputs
 
 **Sent to the far end** — these change *its* transmitter:
 
@@ -310,11 +310,11 @@ gain, timing and carrier phase.
 **The negotiated link parameters**: data rate each way (`cfg->txbits`,
 `cfg->rxbits`), trellis code, constellation size, nonlinear encoding on/off.
 This last group is what the far end's `ATI11` reports, which is why it has
-been the only trustworthy rate measurement on this bench (finding 1900).
+been the only trustworthy rate measurement on this bench (finding F1900).
 
 ---
 
-## 8. THE FIRST-ORDER PROBLEM: the link spends most of its time retraining
+## F8. THE FIRST-ORDER PROBLEM: the link spends most of its time retraining
 
 Everything in sections 3-5 is about choosing well. Measured on this bench,
 choosing well is a second-order concern:
@@ -324,7 +324,7 @@ choosing well is a second-order concern:
 
 A negotiated 26400 that is in data mode a third of the time is an effective
 ~8000, and that is the speed the bench sees. Two things compound (finding
-1921):
+F1921):
 
 * **Every retrain restarts the rate ladder near the bottom.** Within one call:
   14400 -> 24000 -> 26400 -> 26400 -> 4800 -> 28800 -> 4800. The climb begins
@@ -339,7 +339,7 @@ A negotiated 26400 that is in data mode a third of the time is an effective
   session. A call forced to V.34 with `AT+MS=34,1` cannot reach it.
 
 **FIVE RECEIVER-SIDE MECHANISMS WERE TESTED AND KILLED BEFORE THIS** (findings
-1918, 1920): tap drift, rate overshoot, equaliser freeze -> retrain, buffer
+F1918, F1920): tap drift, rate overshoot, equaliser freeze -> retrain, buffer
 underflow, renegotiation mishandling. All assumed a defect in the receiver's
 signal processing. The receiver reaches 33600 -- our transmit reaches it to
 every far end on every call (1917) -- it simply never gets to keep it.
@@ -347,7 +347,7 @@ every far end on every call (1917) -- it simply never gets to keep it.
 So read section 9 in that light: the pre-emphasis and equaliser items are real
 but small, and the retrain duty cycle is the thing that decides the speed.
 
-### 8.1 The cost, measured independently and quantified (1946, 1947)
+### F8.1 The cost, measured independently and quantified (1946, 1947)
 
 The 66% above came from this project's own instrumentation on twelve calls.
 It has since been reproduced from a string the **blob** prints -- `"V34 bulk
@@ -379,7 +379,7 @@ Neither the far end nor the call length carries it: handshake counts by
 destination are 3.11 / 3.37 / 2.94, indistinguishable, and every band contains
 a mix of all three modems.
 
-### 8.2 A real receive-path impairment exists, and it is ours (1941-1943)
+### F8.2 A real receive-path impairment exists, and it is ours (1941-1943)
 
 With zero packet loss on the wire (`rtp: loss=0 discard=0 jitter=0.3ms`),
 d-modem's RTP jitter buffer underruns **0.3-0.5 times a second**, each time
@@ -402,7 +402,7 @@ relative seconds and pjmedia stamps wall clock and nothing converted between
 them. `row.sh` now writes a `BENCHANCHOR` line, so every future capture can be
 aligned; historical ones cannot.
 
-## 9. Known weaknesses, and what would test each
+## F9. Known weaknesses, and what would test each
 
 Ranked by expected value. Items 1–2 can be evaluated on data already recorded,
 without placing a call.
@@ -415,9 +415,9 @@ without placing a call.
 | 4 | `CenterAdapt` discards the fractional half of the 8 dominant taps | §4.4 | fix and run the differential tier; it must not change anything else |
 | 5 | no tap leakage over 80 taps on a band-limited signal | §4.5 | long-hold call, watch for drift (#143) |
 | 6 | step size scheduled by symbol count, cannot gear back up | §4.3 | error-driven gearing; simply retaining 0x4000 through the Phase-4 decision window was tested on the seeded 18 dB model and increased error at both ends, so it is not retained as a knob |
-| 7 | two-point estimator: 5× biased, 4 dB quantised, samples the codec corner | §3.3 | done — findings 1910, 1912 |
+| 7 | two-point estimator: 5× biased, 4 dB quantised, samples the codec corner | §3.3 | done — findings F1910, F1912 |
 
-**THE TRADE THAT THE ARCHITECTURE CANNOT EXPRESS.** Finding 1912 measured
+**THE TRADE THAT THE ARCHITECTURE CANNOT EXPRESS.** Finding F1912 measured
 index 0 giving a higher carried rate (12000 → 21600 median) and **twice the
 handshakes** (1.5 → 3.0). Flat transmit means the top of the band arrives
 weakest, and the handshake must survive there *before* the equaliser has
@@ -425,4 +425,4 @@ converged. More pre-emphasis errs toward connecting at all; less errs toward a
 better-conditioned channel once up. The design has no way to say "connect
 conservative, then reduce shaping once trained" — which is item 3, and is why
 the object's over-request is probably a deliberate trade rather than the bug
-finding 1908's arithmetic made it look like.
+finding F1908's arithmetic made it look like.

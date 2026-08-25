@@ -411,11 +411,11 @@ main(void)
 	       seen_clamp_hi, seen_clamp_lo, seen_one_block);
 
 	/*
-	 * The DIAGNOSTIC paths, restored by finding 134 and comparable only
+	 * The DIAGNOSTIC paths, restored by finding F134 and comparable only
 	 * because they exist again.  Freeze and Release emit one message
 	 * each; init emits two, and the second carries the ORIGINAL's build
 	 * stamp rather than this file's -- reproducing __DATE__ here would
-	 * diverge on every rebuild.  Finding 135 is what those two strings
+	 * diverge on every rebuild.  Finding F135 is what those two strings
 	 * turned out to be worth.
 	 */
 	diff_begin("fpm agc debug transcript");

@@ -9,7 +9,7 @@
  * `setConstellationToNoise`.  `include/dsplib/V90ConstellationDesigner.h`
  * carries the object map and the evidence for it.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215):
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215):
  * `mov 0x10(%esp),%ebx` after one push and an eight-byte frame.  Nothing here
  * needs a calling-convention attribute.
  *
@@ -45,7 +45,7 @@ extern "C" {
 /*
  * For `V90Parameters` -- the NAMED 0x558 map, not `V90PreFilter.h`'s 0x504
  * word block.  Two definitions of that class exist in this tree and no
- * translation unit may include both (finding 1112); this one takes the named
+ * translation unit may include both (finding F1112); this one takes the named
  * map, because the slot `reset` copies has a name in it and a numeric index
  * would throw that away.
  */
@@ -57,7 +57,7 @@ extern "C" {
  * declaration.  It pulls in `V90Phase3Modulator.h` for `PcmType`, which is the
  * type `getPower`'s mangling names; neither reaches `V90PreFilter.h`, so the
  * 0x504 word-block definition of `V90Parameters` stays out of this translation
- * unit and finding 1112's rule holds.
+ * unit and finding F1112's rule holds.
  */
 #include "dsplib/V90ConstellationPower.h"
 /*
@@ -415,7 +415,7 @@ V90ConstellationDesigner::spectralDesign(unsigned int rate,
  * FACT above -- numerator first, extended; denominator second, single -- and
  * not a unique source form.  The other two spellings are
  * `log10(prod) / (float)log10(2.0f)` written straight into the `return`, and
- * the same with only the numerator bound to a local.  Findings 7774 and 7782.
+ * the same with only the numerator bound to a local.  Findings F7774 and F7782.
  */
 int
 V90ConstellationDesigner::maxK(V90MappingParams *p)
@@ -488,8 +488,8 @@ V90ConstellationDesigner::constelBuild(short step, short which)
 	     i++) {
 		/*
 		 * THE OBJECT LOADS THIS WITH `movzwl` AND WE EMIT `movswl`,
-		 * and that is the FREE kind of extension (finding 614), not
-		 * finding 613's forced kind: the 32-bit result never survives.
+		 * and that is the FREE kind of extension (finding F614), not
+		 * finding F613's forced kind: the 32-bit result never survives.
 		 * It feeds a 16-bit compare (`cmp %bp,%bx`) and then an add
 		 * whose result is immediately truncated by `movswl %dx,%ebp`,
 		 * so the upper half is dead both times.  `short` is also what
@@ -586,7 +586,7 @@ V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
  * the CSEd 1.0) while the RRN-UP half divides directly (0x48302 is `de fa`,
  * FDIVP ST(2),ST(0) with ST(2) the logarithm).  Those are not the same value
  * in the last place, the differential tier cannot tell them apart (finding
- * 2150's shape), and factoring the two into one helper would be wrong in a
+ * F2150's shape), and factoring the two into one helper would be wrong in a
  * way no test could catch.  So they stay apart.
  *
  * THE PRODUCT OF THE SIX SCALED SIZES IS A `double`.  0x47d9b spills it with
@@ -935,9 +935,9 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	 * strictly positive value AND for an unordered one, and '-' at zero.
 	 * The unordered half is what `(0.0f < v)` got wrong; the seed on the
 	 * threshold-keeping arms of t_v90cdnoise.cpp's `ctn_fixture` is what
-	 * proves it.  Findings 2300 and 2410.  The magnitude is
+	 * proves it.  Findings F2300 and F2410.  The magnitude is
 	 * `(int)fabs`, and the hundredths come off the SIGNED remainder and
-	 * are made positive with `__builtin_abs` (findings 2116-2117) rather
+	 * are made positive with `__builtin_abs` (findings F2116-2117) rather
 	 * than with a ternary.
 	 *
 	 * AND THE SCALE IS A FLOAT HERE AND A DOUBLE IN THE OTHER THREE:
@@ -974,7 +974,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	 *
 	 * The three threshold stores are written out three times rather than
 	 * factored, because the object has three copies and GCC 3.4.2 at
-	 * these flags does not inline an extern member (finding 2163) -- a
+	 * these flags does not inline an extern member (finding F2163) -- a
 	 * helper would leave three calls and a symbol the blob has no
 	 * counterpart for.
 	 */
@@ -1445,7 +1445,7 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 	 * The starting minimum distance for each phase: the ucode the caller
 	 * named, spread over the count it has to reach.  THE RECIPROCAL IS THE
 	 * OBJECT'S -- `d8 fc`, FDIVR ST(0),ST(4) with ST(4) the CSEd 1.0 --
-	 * which is `calcK`'s spelling and not `maxK`'s (finding 2144), and the
+	 * which is `calcK`'s spelling and not `maxK`'s (finding F2144), and the
 	 * two are not the same in the last place.
 	 */
 	for (k = 0; k <= 5; k++)
@@ -1754,7 +1754,7 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
  *
  * The compare is `fcom`/`fnstsw`/`sahf` against a literal 0.0f, which is an
  * ORDERED compare and therefore what -mno-ieee-fp emits for `==` (finding
- * 1990).  Both logarithms reach memory as floats before the divide.
+ * F1990).  Both logarithms reach memory as floats before the divide.
  */
 float
 V90ConstellationDesigner::realK(V90MappingParams *p)
@@ -2085,7 +2085,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
  * rate the configuration file names, rather than for a measured noise level.
  * ===========================================================================
  *
- * 4,434 bytes and the last of the fourteen -- the batch finding 2140
+ * 4,434 bytes and the last of the fourteen -- the batch finding F2140
  * measured, not the whole class: `constellationDesign`,
  * `adjustConstellationsPower`, `adjustConstellationsToNewK` and `process`
  * remain, and all four reach `V90ConstellationPower`.  IT SHARES ALMOST NOTHING WITH ITS
@@ -2122,7 +2122,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
  * 0x49adc are both the member's body -- one `filds`, a duplicate, five
  * `fmul`s and a `short` counter compared with `cwtl` -- and the member is a
  * `FUNC GLOBAL` the blob also emits out of line.  Calling it would put a
- * `call` in the object where the blob has none, for finding 2163's reason.
+ * `call` in the object where the blob has none, for finding F2163's reason.
  *
  * THE TWO INNER WALKS ARE NOT THE SIBLING'S TWO.  Both go DOWNWARD from
  * `topUcode[k]` to `params->unnamed_360`, and:
@@ -2143,7 +2143,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
  * `dir` is clamped to [-1, +1] and the shrink fires only when it passes
  * through zero.
  *
- * THE SIGN PRINTER AND THE DOUBLE 100.0 OF finding 2175 DO NOT APPEAR HERE:
+ * THE SIGN PRINTER AND THE DOUBLE 100.0 OF finding F2175 DO NOT APPEAR HERE:
  * this function's three threshold diagnostics print plain `%d`, not
  * `%c%d.%02d`.
  */
@@ -2168,7 +2168,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
  *
  * `__builtin_abs`, NOT the ternary.  The object's `cltd; xor %edx,%eax; sub
  * %edx,%eax` is what GCC 3.4.2 emits for the builtin; `x < 0 ? -x : x`
- * compiles to a branch (findings 2116-2117).
+ * compiles to a branch (findings F2116-2117).
  *
  * THE SIXTH ARGUMENT IS UNUSED.  Nothing in the body touches 0x48(%esp).  It
  * is in the mangling, so it is in the signature.
@@ -2673,7 +2673,7 @@ V90ConstellationDesigner::constellationDesign(float noiseEnergy,
  * otherwise: `42 - (unsigned char)word_0` is computed after `word_0` has been
  * clamped into 0..42 and so never wraps, and the `kMax` pair differs from its
  * 32-bit spelling only where the `d > 42` clamp below takes both readings to
- * the same `word_0` and the same `k` -- proved in finding 3403 and recorded in
+ * the same `word_0` and the same `k` -- proved in finding F3403 and recorded in
  * the mutation set as an expected survivor.  They are written as the object
  * encodes them because the encoding is the evidence.
  *

@@ -17,7 +17,7 @@
  * pair is named after it.
  *
  * THE OBJECT IS 0x28 = 40 BYTES, and the derivation is CONTAINMENT rather
- * than a displacement scan (finding 1107's rule, applied the other way up).
+ * than a displacement scan (finding F1107's rule, applied the other way up).
  * There is no `sysdep_malloc` to read: every instance is embedded.  The one
  * this tree can see is `V90Demapper`'s at +0x668, and the demapper's next
  * field is the error-sum array at +0x690 -- an offset that is not a bound
@@ -30,7 +30,7 @@
  *
  * NOT POLYMORPHIC.  `nm` gives `D1` at 0x318e0 and `D2` at 0x318c0 and no
  * `D0`; GCC emits a deleting destructor only for a virtual class, so offset 0
- * is a real member and there is no vptr (finding 228).
+ * is a real member and there is no vptr (finding F228).
  *
  * WHAT THE DESTRUCTOR IS.  Twenty-two bytes, and every one of them is the
  * compiler's:
@@ -122,7 +122,7 @@ public:
 	 * read "`process` reads a byte at +0x00 and addresses +0x03, +0x04 and
 	 * +0x08", which came from reading `0x0(%ebp)` -- the caller's `in`
 	 * pointer -- and `lea 0x3(%ebx),%edi` -- an action number -- as object
-	 * displacements.  Finding 3531.
+	 * displacements.  Finding F3531.
 	 */
 	unsigned int spacing;
 
@@ -172,7 +172,7 @@ public:
 	/*
 	 * +0x14  NOT MODELLED.  Nothing in the five members touches it.  The
 	 * old comment claimed `applyFrameAction` read it; that was
-	 * `0x14(%esp)`, the action argument on the stack.  Finding 3531.
+	 * `0x14(%esp)`, the action argument on the stack.  Finding F3531.
 	 */
 	unsigned char pad_14[4];
 

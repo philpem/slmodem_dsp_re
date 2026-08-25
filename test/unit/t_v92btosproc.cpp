@@ -38,7 +38,7 @@
  * separate the moment it wraps: with left = 12 and bitsPerFrame = 0x20000000
  * the first gives 0x20000000 and the second 0x0aaaaaaa.  A trial grid that
  * stops at plausible values cannot tell the two readings apart, so the grid
- * below deliberately leaves the plausible range -- finding 3052's trap, and
+ * below deliberately leaves the plausible range -- finding F3052's trap, and
  * the mutation "the two arms are one expression" in
  * test/mutations/v92btosproc.json is what proves the trial bites.
  *

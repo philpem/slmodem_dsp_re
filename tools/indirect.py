@@ -29,7 +29,7 @@ from collections import defaultdict
 # tool had existed.  Drop our own directory from the search path before the
 # import rather than renaming dis.py, whose name is right and which is
 # referenced from several findings.  Same fix as whichfield.py and
-# boundarycheck.py; finding 3520.
+# boundarycheck.py; finding F3520.
 #
 _here = os.path.abspath(os.path.dirname(__file__))
 sys.path[:] = [p for p in sys.path if os.path.abspath(p or ".") != _here]

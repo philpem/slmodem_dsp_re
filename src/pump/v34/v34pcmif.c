@@ -75,7 +75,7 @@
  * halves of `VPcmV34Main.cpp` and each carries the constants it uses, since
  * splitting one translation unit by language leaves no shared private header
  * to put them in.  56 is not one of `v8dp.h`'s ids and there is no V.8 code
- * for it; finding 1090 has why.
+ * for it; finding F1090 has why.
  */
 #define DP_V34			34
 #define DP_K56FLEX		56
@@ -347,7 +347,7 @@ VPcmV34InitiateHangUp(void *objp)
  * willingness is not enough.  2 answers V.92 outright, without consulting
  * either, which is what makes it a different status and not a shorthand.
  *
- * 3 IS K56FLEX AND IT IS 56, not one of `v8dp.h`'s ids.  Finding 1090
+ * 3 IS K56FLEX AND IT IS 56, not one of `v8dp.h`'s ids.  Finding F1090
  * measured that the class behind it is `ret` throughout in this build, so
  * this is the only place a K56flex session can be *named*; nothing downstream
  * of the name does anything.  Everything else -- including every value the
@@ -569,7 +569,7 @@ VPcmV34GetCurrentTxCarrier(void *objp)
  * product and compiles the coarse loop into one that never terminates.
  * `(int)((unsigned)v * 0x1013u) >> 14` is the same two instructions with the
  * wrap made legal -- the same reason `VPcmV34InitiateRateRenegotiation`'s
- * step is spelled unsigned, and the same class of defect as findings 2300 to
+ * step is spelled unsigned, and the same class of defect as findings F2300 to
  * 2302.
  *
  * THIS BODY IS INLINED VERBATIM INTO `VPcmV34GetDiagnostics` at 0x7691, so
@@ -1241,7 +1241,7 @@ V34XF_IndicateTrn2dReceived(void *objp)
  * `allow[0]` and `allow[1]` are written and never read: the two lowest rates
  * have no bin to spoil, because nothing about them is out at the edge.  The
  * rate-to-bin assignment is the object's; the frequencies are this
- * reconstruction's arithmetic on the 150 Hz spacing finding 212 establishes,
+ * reconstruction's arithmetic on the 150 Hz spacing finding F212 establishes,
  * and the pairing of two bins with 3000 and 2800 is not explained by it.
  *
  * WHERE THE LIMIT COMES FROM, AND WHERE IT IS APPLIED, ARE DIFFERENT PLACES.

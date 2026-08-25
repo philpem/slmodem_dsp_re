@@ -12,7 +12,7 @@ WHY THE SECOND COLUMN MATTERS.  `tools/mutate.py` locates each mutation by an
 exact substring of the source, and `test/mutations/v34hsrx72.json`'s own note
 says the anchors carry addresses *because the source lines repeat*.  So 168 of
 this file's thin comments are inside some suite's `find` string, and rewriting
-one there makes the mutation UNUSABLE -- finding 347, where an unusable
+one there makes the mutation UNUSABLE -- finding F347, where an unusable
 mutation does not fail its own run and the suite silently stops testing what
 it claims to.  (The 168 was measured when the file had 270 thin comments and
 task #65 has since taken it to 256; run the tool rather than quoting either.)

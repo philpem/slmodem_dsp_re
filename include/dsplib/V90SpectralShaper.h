@@ -91,7 +91,7 @@
  * THE TWO HEAP BUFFERS ARE `short *`, AND THAT IS A CALLEE'S WORD
  *
  * They used to be `unsigned short *`, inferred from `movzwl (%reg,%edx,2)` at
- * every access.  That inference was finding 614's FREE case in its purest
+ * every access.  That inference was finding F614's FREE case in its purest
  * form: every one of those loads has its upper half discarded by a 16-bit
  * store or by a `neg` feeding one, so the compiler could have used either
  * instruction and the reading was never forced.
@@ -103,7 +103,7 @@
  * A mangled parameter type is evidence class 2 and beats an inference from a
  * free encoding, so both are `short *`.  `applyAction`'s and
  * `applyFrameAction`'s own `short *` parameters -- also the mangling's -- are
- * the same evidence a third and fourth time.  Finding 5850.
+ * the same evidence a third and fourth time.  Finding F5850.
  */
 
 #ifndef DSPLIB_V90SPECTRALSHAPER_H
@@ -248,7 +248,7 @@ public:
 	 * the search needs.  It is NOT a second copy of `shaperId`: nothing
 	 * ever reads it as one, and `advanceTrellis` reads `shaperId` itself
 	 * at +0x00 three times over and never touches this word.  Usage
-	 * inference; finding 5851.
+	 * inference; finding F5851.
 	 */
 	unsigned int	 primeFrames;
 

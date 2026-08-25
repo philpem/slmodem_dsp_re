@@ -101,7 +101,7 @@ int ref_cp_bitstoinfo(void *, unsigned char) asm("ref__ZN5V92CP10bitsToInfoEh");
 
 /*
  * The blob's two function-local statics, globalised by `symmap.py`'s second
- * pass (finding 221).  Ours are file-local and cannot be named from here; the
+ * pass (finding F221).  Ours are file-local and cannot be named from here; the
  * header comment says what is done about that.
  */
 extern unsigned int ref_b2i_gamma asm("ref__ZZN5V92CP10bitsToInfoEhE5gamma");

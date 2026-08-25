@@ -61,14 +61,14 @@
  *     0x9a..0xa9 zero               0xab..0xba the CRC
  *
  * so the sequence is 0xbb bits long, or 0x55 when `Type` is zero and the
- * message stops after frame 4 with the CRC at 0x45..0x54.  Findings 1385,
- * 1386.
+ * message stops after frame 4 with the CRC at 0x45..0x54.  Findings F1385,
+ * F1386.
  *
  * THE CONSTRUCTOR AND `reset` ARE THE SAME FORTY BYTES, instruction for
  * instruction, and both are plain GLOBAL symbols in `.text` rather than in a
  * linkonce section -- so `reset` is not an in-class inline that the compiler
  * folded into the constructor (GCC 3.4 at -O2 does not inline an ordinary
- * global function).  The original repeated the assignments.  Finding 1237.
+ * global function).  The original repeated the assignments.  Finding F1237.
  */
 
 #ifndef DSPLIB_V90MP_H

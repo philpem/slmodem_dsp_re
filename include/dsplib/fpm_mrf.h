@@ -7,7 +7,7 @@
  *
  * Bell 103 runs two: 10:9 to lift the 7200 Hz FSK modulator output to the
  * 8000 the datapump interface uses, and 3:10 to bring received 8000 down to
- * 2400 for demodulation (8 samples per symbol at 300 baud).  See finding 24.
+ * 2400 for demodulation (8 samples per symbol at 300 baud).  See finding F24.
  */
 
 #ifndef DSPLIB_FPM_MRF_H

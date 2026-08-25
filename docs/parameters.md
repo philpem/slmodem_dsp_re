@@ -179,7 +179,7 @@ So the calling tone's transmit level is **S221**, settable from the AT command
 line like any other S-register, and the library reads it through a callback
 precisely so that call.c can decide where S-registers come from.
 
-This resolves a question carried since finding 44. It is *not* a defect: the
+This resolves a question carried since finding F44. It is *not* a defect: the
 index is valid, the namespace is real, and nothing is out of range. D13 -- the
 level control that spans 1.4 dB across its whole argument -- stands on its own
 and is unaffected.

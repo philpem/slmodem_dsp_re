@@ -162,7 +162,7 @@ next_byte(void)
 	return (unsigned char)(lfsr_state >> 3);
 }
 
-/* VARIED BYTES, NEVER ZEROS (finding 230). */
+/* VARIED BYTES, NEVER ZEROS (finding F230). */
 static void
 fill_pair(void *a, void *b, size_t n)
 {
@@ -467,7 +467,7 @@ compare_ansam(const char *what, long tag)
 	memset(fb, 0, 4 * sizeof(double *));
 	/*
 	 * `m_i` AT +0x28 IS EXCLUDED, AND THE EXCLUSION IS AN ASSERTION.
-	 * Finding 1250: the blob's `GenericIIR::reset` keeps its loop counter
+	 * Finding F1250: the blob's `GenericIIR::reset` keeps its loop counter
 	 * in the member and leaves it holding `m_outLen`, where our
 	 * reconstruction uses a local and leaves the member alone.  That is a
 	 * divergence in `_ZN10GenericIIRIfdE5resetEv`, not in the method under
@@ -852,7 +852,7 @@ run_jdnot(void)
  * THE TEN SMALL MEMBERS.  They share this file's rig because they share its
  * object: `build` gives each side its own detector, Sd detector, tone
  * detector, Jd, DIL descriptor and parameter block, all seeded from varied
- * bytes and never zeroed (finding 230), and `compare_all` compares every one
+ * bytes and never zeroed (finding F230), and `compare_all` compares every one
  * of them plus the transcript after every call.
  *
  * WHAT THE OBJECT COMPARISON CANNOT SEE IS THE RETURN, and four of the ten
@@ -958,7 +958,7 @@ run_p3d_leaves(void)
 
 	/*
 	 * Anti-vacuity, and each counts trials whose OBJECT differed from
-	 * another trial's rather than a branch believed taken (finding 3509).
+	 * another trial's rather than a branch believed taken (finding F3509).
 	 */
 	diff_eq_int("the frame position wrapped, and stepped (%ld)",
 		    sawwrap > 0 && sawstep > 0, 1, 0);
@@ -1246,7 +1246,7 @@ run_p3d_setdigimp(void)
 	 * (69 lines against 43 on one trial, 195 against 106 on another) while
 	 * the 43 KB detector they leave behind is identical byte for byte;
 	 * that is a difference in those two functions' diagnostic paths at
-	 * inputs t_v90adid does not reach, it is recorded in finding 4980 for
+	 * inputs t_v90adid does not reach, it is recorded in finding F4980 for
 	 * whoever owns them, and it is not this method's to fix or to excuse.
 	 * What IS this method's -- which three, in which order, with which
 	 * argument -- is entirely in the object, which is compared whole.
@@ -1287,7 +1287,7 @@ run_p3d_setdigimp(void)
 				 * and `findPadGain` both reach a
 				 * `v == 0.0f` test that the object compiles as
 				 * ONE ordered `fcom` and GCC 13 cannot (finding
-				 * 2304), so a NaN here makes the two builds
+				 * F2304), so a NaN here makes the two builds
 				 * keep different entries and print different
 				 * reports.  Measured: 131 lines against 105
 				 * before this was planted, objects identical,

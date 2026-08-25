@@ -10,14 +10,14 @@
  * returns the decoded bits.
  *
  * ALL NINE ARE HERE NOW.  `FSE_decision_16pt` was the last one out: it
- * indexes `DECv32_MAG9600` thousands of entries past the end (finding 1603,
+ * indexes `DECv32_MAG9600` thousands of entries past the end (finding F1603,
  * D302) and only ONE of its three reachable indices reads a byte the blob
  * carries with it into a link, so that store is fixed behind
  * `DSPLIB_REPRODUCE_BUGS` and only that ring's `*mag` is compared.
  * Everything else about the function is ordinary and is compared on every
- * trial -- findings 3800 and 3801.  The four trellis ones -- `_16Tpt`,
+ * trial -- findings F3800 and F3801.  The four trellis ones -- `_16Tpt`,
  * `_32pt`, `_64pt` and `_128pt` -- were blocked on `VTB_decoder` (finding
- * 1602) until finding 3210's Viterbi batch landed it.
+ * F1602) until finding F3210's Viterbi batch landed it.
  */
 
 #ifndef DSPLIB_V32DEC_H
@@ -36,7 +36,7 @@
  *
  * `vtb` is not a guess about the Viterbi decoder's size: `FSE_decision_16Tpt`
  * passes `owner + 0x18` to `VTB_decoder`, and `owner + 0x50` is in use here,
- * so whatever the decoder keeps there is at most 56 bytes.  Finding 3210
+ * so whatever the decoder keeps there is at most 56 bytes.  Finding F3210
  * measured `sizeof(struct vtb)` at exactly 0x38, so the bound is now met
  * exactly -- but the field stays a byte array and the four trellis slicers
  * cast it, because `struct vtb` holds four POINTERS: declaring it as the

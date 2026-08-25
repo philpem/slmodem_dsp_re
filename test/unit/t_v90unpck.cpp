@@ -13,7 +13,7 @@
  * separately seeded inputs would agree whatever was read out of them.  The
  * parameter block is OUTPUT and there are two of it, seeded identically with
  * varied bytes so that a store of zero that never happened cannot pass
- * (findings 223, 224), with a 64-byte guard past each compared against the
+ * (findings F223, F224), with a 64-byte guard past each compared against the
  * seed.
  *
  * ===========================================================================
@@ -480,7 +480,7 @@ run_trials(void)
 	 * The denominators of the three shapes the file comment says this
 	 * fixture exists to reach.  A run that stopped reaching one of them
 	 * would still be green on every comparison above, which is exactly the
-	 * failure findings 134 and 2400 are about.
+	 * failure findings F134 and F2400 are about.
 	 */
 	diff_eq_int("some trial ended with an EMPTY constellation",
 		    sawEmpty, 1, 0);

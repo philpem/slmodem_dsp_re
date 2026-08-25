@@ -4,7 +4,7 @@
  * `AnalyseDialString` CANNOT BE CALLED DIRECTLY.  It is a file static -- `t`
  * rather than `T` in the symbol table -- so `objcopy --redefine-syms` cannot
  * give it a `ref_` name, and there is nothing to link against.  That is also
- * why it uses a register calling convention (finding 51): GCC is free to pick
+ * why it uses a register calling convention (finding F51): GCC is free to pick
  * one for a function whose callers it can all see.
  *
  * So it is reached through `IsDialStringInvalid`, its only caller outside
@@ -343,7 +343,7 @@ run_abort(void)
 	 * level 0, where the two announcements compile to a branch nobody
 	 * takes: the error return above state 10, and the one that says
 	 * LastPulseDigitDialed has been called.  Both were dead in every test
-	 * this tree has (finding 192).  The level moves with the sweep so each
+	 * this tree has (finding F192).  The level moves with the sweep so each
 	 * combination is compared with the diagnostics on as well as off.
 	 */
 	for (lvl = 0; lvl <= 3; lvl++)
@@ -473,7 +473,7 @@ run_debug(void)
 			lines += dsplib_debug_capture_lines(1);
 	}
 
-	/* Anti-vacuity: empty transcripts also compare equal (finding 149). */
+	/* Anti-vacuity: empty transcripts also compare equal (finding F149). */
 	diff_eq_int("diagnostics were captured (%ld lines)", lines > 20, 1,
 		    lines);
 

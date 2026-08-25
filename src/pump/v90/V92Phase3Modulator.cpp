@@ -13,7 +13,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x20(%esp),%esi` in `reset` after three pushes and a
- * 16-byte frame -- not %ecx, so these are not thiscall (finding 215).
+ * 16-byte frame -- not %ecx, so these are not thiscall (finding F215).
  *
  * THE SIX GENERATORS ARE FILE-STATIC HELPERS, NOT THE METHODS THEY MIRROR.
  * The object has `generateRu`, `generateRuNot`, `genereteSu`, `genereteSuNot`,
@@ -53,7 +53,7 @@ extern "C" {
 /*
  * Hold the compiler to the map in the header.  `tools/offcheck.py` does this
  * for the C structs but only parses `struct name {` out of include/dsplib, so
- * a C++ class asserts its own (finding 230).  This is the check that catches
+ * a C++ class asserts its own (finding F230).  This is the check that catches
  * an object right in size and wrong by four in every offset -- and here it is
  * also the only place the 80 bytes the allocation gives are written down as a
  * compile-time claim.

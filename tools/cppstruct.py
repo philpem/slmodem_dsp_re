@@ -31,7 +31,7 @@ NOT given, and this matters:
       function templates encode one.  Every `?` in the output below is a
       return type that has to come from the disassembly.
     MEMBER VARIABLES.  Nothing about layout or size.  Bound those the way
-      finding 215 did, from the largest `this`-relative displacement the
+      finding F215 did, from the largest `this`-relative displacement the
       methods use.
     BASE CLASSES, access specifiers, and anything `private`.
     Members the compiler inlined everywhere, which have no symbol at all.
@@ -99,8 +99,8 @@ def ours():
 
     REFUSES on an empty object tree rather than returning an empty set: with
     one, every `--missing` column equalled its `members` column and the report
-    read as 73 classes with not one method written, at exit 0.  Findings 3055
-    and 3110; tools/objtree.py.
+    read as 73 classes with not one method written, at exit 0.  Findings F3055
+    and F3110; tools/objtree.py.
     """
     _d, objs = objtree.read("which members src/ already defines")
     found = set()

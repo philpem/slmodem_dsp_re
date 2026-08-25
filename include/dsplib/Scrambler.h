@@ -37,7 +37,7 @@
  * and copyHistoryTail, and `<i,i>`'s reset and resetHistoryIndexes, 287 bytes
  * -- were written and tested earlier, through `V90Phase3Modulator` and
  * `V90Phase3Demodulator`.  THEIR BODIES ARE UNCHANGED HERE.  The other 1,955
- * bytes over 28 symbols are findings 869-872.
+ * bytes over 28 symbols are findings F869-872.
  *
  * `tools/closure.py --missing` used to report all thirty-four missing whatever
  * was written, because a header-inlined template member leaves no reference in
@@ -62,7 +62,7 @@
  * which is the same one-element-per-bit convention V90Jd uses for its message.
  *
  * ---------------------------------------------------------------------------
- * THE INTERMEDIATE IS `I`, NOT `T`, AND THAT IS FORCED (finding 870)
+ * THE INTERMEDIATE IS `I`, NOT `T`, AND THAT IS FORCED (finding F870)
  *
  * `Scrambler<int, unsigned char>::process(const int *, unsigned char *,
  * unsigned)` computes the whole XOR in EIGHT BITS -- `mov (%edx),%ecx` loads
@@ -89,7 +89,7 @@
  *
  * ---------------------------------------------------------------------------
  * THE CONSTRUCTOR AND DESTRUCTOR ARE DECLARED, and the reason this file used
- * to give for not declaring them was half right (finding 871).
+ * to give for not declaring them was half right (finding F871).
  *
  *   - The UNION half is real.  Declaring either makes the class non-trivial
  *     and leaves it with no default constructor, which DELETES the default
@@ -124,7 +124,7 @@
  * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
  * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
  * were compiled and only `delete[]` reproduces the object's shape; finding
- * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ * F7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
  *
  * Behaviourally it is exactly the guard it replaces: the element type is a POD
  * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
@@ -184,7 +184,7 @@ public:
 	 * `call _ZN11DescramblerIhiE19resetHistoryIndexesEv`, where ours had
 	 * the three stores expanded in place.  That is lever 10's tell --
 	 * an EXCESS of instructions with a MISSING call -- read off the
-	 * object rather than inferred.  Finding 7862.
+	 * object rather than inferred.  Finding F7862.
 	 */
 	void resetHistoryIndexes();
 
@@ -208,7 +208,7 @@ public:
 	 * `int n` with the same `while (n--)`, and those two emit the SAME
 	 * bytes.  So the decoded fact is the loop's SHAPE and not the
 	 * counter's signedness, which the object cannot distinguish.  All
-	 * five instantiations go SIZE to REGALLOC on it.  Finding 7861.
+	 * five instantiations go SIZE to REGALLOC on it.  Finding F7861.
 	 */
 	void copyHistoryTail();
 
@@ -307,7 +307,7 @@ public:
 
 	/*
 	 * Data members are public because the original's access specifiers are
-	 * not recoverable (finding 226) and because one access section is what
+	 * not recoverable (finding F226) and because one access section is what
 	 * keeps `__builtin_offsetof` well defined -- the .cpp asserts every
 	 * offset below.
 	 */
@@ -452,7 +452,7 @@ public:
  * identical-mnemonic set 452 -> 455 with **nothing lost** and three gained --
  * `V90Modulator::reset`, `Scrambler<unsigned char,int>::Scrambler` and
  * `Descrambler<unsigned char,int>::Scrambler`, the last two because they
- * called `reset` too.  Finding 5805.
+ * called `reset` too.  Finding F5805.
  *
  * `Descrambler::reset` moves with it because the two bodies are the same text
  * and the same argument applies; the sibling template in `DiffCoder.h` has
@@ -476,7 +476,7 @@ public:
  * `V92Modulator::progress` is where that was found.  Its data-phase arm is one
  * `scrambler.process(bits, buf_88, nbits)`, and the function came out 355
  * instructions against the object's 298 with the CALL COUNT one SHORT -- 18
- * against 19 -- which is finding 7480's rule reading exactly right: an excess
+ * against 19 -- which is finding F7480's rule reading exactly right: an excess
  * of instructions with a missing call is an inlining difference and not a
  * missing statement.
  *
@@ -526,7 +526,7 @@ void Scrambler<T, I>::process(const T *in, I *out, unsigned int n)
  * hoist part of the decoded fact rather than an assumption.  The form below
  * is chosen for this file's declarations-at-the-top style only.
  *
- * Finding 7863.
+ * Finding F7863.
  */
 template <class T, class I>
 void Scrambler<T, I>::reset(T value)
@@ -554,7 +554,7 @@ void Descrambler<T, I>::reset(T value)
 
 /*
  * THE POSITION OF THESE TWO IS PART OF THE MEASUREMENT, NOT A TIDYING
- * CHOICE.  Finding 7815 measured that moving ONE inline function within the
+ * CHOICE.  Finding F7815 measured that moving ONE inline function within the
  * headers this group reaches cost eight destructors their byte identity
  * while touching no destructor and no free, because an inline definition's
  * place in the translation unit is itself a lever-3 carrier.  The cell that
@@ -586,7 +586,7 @@ void Descrambler<T, I>::resetHistoryIndexes()
  * fix, which is why it is worth naming separately: moving one member out
  * makes the other's inlining VISIBLE in the `process` bodies' byte counts
  * and invisible to the bucket diff, since SIZE to SIZE moves no bucket.
- * Finding 7866.
+ * Finding F7866.
  */
 template <class T, class I>
 void Scrambler<T, I>::copyHistoryTail()

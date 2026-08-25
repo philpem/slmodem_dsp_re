@@ -27,21 +27,21 @@ in it:
 
   - scheduling -- the same multiset of mnemonics in a different order (tag
     SCHED)
-  - the extension on a load whose upper half is discarded (finding 614)
+  - the extension on a load whose upper half is discarded (finding F614)
   - if-conversion of an INTEGER two-constant select: an integer compare has no
     unordered case, so the branch form and the branchless form compute the
     same function over every input and no differential test can ever separate
-    them.  Unpinnable by construction -- finding 2411
+    them.  Unpinnable by construction -- finding F2411
 
 and what is forced:
 
-  - the signedness of a load whose 32-bit result is USED (finding 613)
+  - the signedness of a load whose 32-bit result is USED (finding F613)
   - a branchless select over a FLOAT compare, where the unordered case routes
-    the two spellings to different arms (findings 2300, 2410)
+    the two spellings to different arms (findings F2300, F2410)
 
 A DETECTOR MUST REPORT ITS DENOMINATOR.  Both of the other aids here spent a
 period defaulting to an absent `TC_OUT`, comparing zero symbols and printing a
-clean tree at exit 0 (finding 2400).  This one refuses an empty `TC_OUT` and
+clean tree at exit 0 (finding F2400).  This one refuses an empty `TC_OUT` and
 prints how many symbols it compared on every run.
 
 Usage:
@@ -51,7 +51,7 @@ Usage:
     ... --names         just the symbol names, one per line
     ... --identical     the IDENTICAL set's names, for diffing a before
                         against an after -- a count can gain four and lose
-                        four and not move (finding 2155)
+                        four and not move (finding F2155)
 """
 
 import argparse
@@ -87,7 +87,7 @@ OWNED_SYMS = {
     "bitsToInfo": "agent-mirror",
 }
 
-# The x87 compare family.  `-mno-ieee-fp` (finding 1990) makes these ORDERED,
+# The x87 compare family.  `-mno-ieee-fp` (finding F1990) makes these ORDERED,
 # so a difference in one is about the source's comparison and not the flag.
 FCOM = ("fcom", "fcoms", "fcomp", "fcomps", "fcompp", "fcoml", "fcompl",
         "fucom", "fucomp", "fucompp")
@@ -198,7 +198,7 @@ def collect():
     if not OURS or not os.path.isdir(OURS):
         sys.exit("samesize: TC_OUT is empty or absent (%r).  Run\n"
                  "  TC_OUT=$PWD/build/tc_out tools/toolchain/build.sh\n"
-                 "first -- finding 2400 is what happens when this is skipped."
+                 "first -- finding F2400 is what happens when this is skipped."
                  % OURS)
     blob = sizes(BLOB)
     ours, objs = {}, sorted(glob.glob(os.path.join(OURS, "*.o")))

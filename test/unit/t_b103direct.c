@@ -10,7 +10,7 @@
  * datapump built -- `((struct dp_wrapper *)dp->dp_data)->process`.  That
  * works, and it rests on the wrapper's layout: if `process` ever moved, the
  * test would happily call whatever now sits at +0x04 and compare it against
- * our `b103_process`.  Since finding 221 the object's file-local symbols are
+ * our `b103_process`.  Since finding F221 the object's file-local symbols are
  * globalized before they are renamed, so `ref_b103_process` links and the
  * indirection is simply gone.
  *
@@ -52,7 +52,7 @@
 
 /*
  * By name.  These three are file-static in the object; --globalize-symbols
- * promotes them and --redefine-syms then aliases them.  See finding 221.
+ * promotes them and --redefine-syms then aliases them.  See finding F221.
  */
 extern struct dp *ref_b103_create(void *modem, int id, int caller, int srate,
 				  int max_frag, struct dp_operations *op);
@@ -184,7 +184,7 @@ main(void)
 	 * compared after each one.
 	 *
 	 * 2225 Hz -- the answer channel's MARK, which is what an originating
-	 * station's detector is tuned to (finding 35).  t_b103dp records why
+	 * station's detector is tuned to (finding F35).  t_b103dp records why
 	 * 2100 Hz is the wrong choice here: it produces no acquisition at all
 	 * and the run measures two datapumps agreeing on doing nothing.
 	 */

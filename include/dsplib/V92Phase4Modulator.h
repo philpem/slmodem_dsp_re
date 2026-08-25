@@ -25,7 +25,7 @@
  *     152c0:  e8 ..                  call sysdep_malloc
  *     152e6:  e8 ..                  call V92Phase4Modulator::V92Phase4Modulator
  *
- * which is the original compiler's own `sizeof` (finding 1249's oracle).  The
+ * which is the original compiler's own `sizeof` (finding F1249's oracle).  The
  * furthest field the constructor writes is the four bytes at +0x1c8, and
  * 0x1c8 + 4 == 0x1cc exactly.
  *
@@ -41,7 +41,7 @@
  *
  * These are V.92's UPSTREAM taps and they are the same (5, 23, 99) that
  * `V92Phase3Modulator` builds its own `Scrambler<unsigned char, int>` with
- * (finding 1255).  The INTERMEDIATE type differs -- `<h,h>` here against
+ * (finding F1255).  The INTERMEDIATE type differs -- `<h,h>` here against
  * `<h,i>` there -- and that is the mangling's, not a choice.
  *
  * ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@
  * in this batch establishes how much of the 300 bytes is ever used; the number
  * of bits actually written is `+0x43` or `V92BitsToSymbol::nofBitsForNextTime`.
  *
- * Data member names are invented and descriptive (finding 226).
+ * Data member names are invented and descriptive (finding F226).
  */
 
 #ifndef DSPLIB_V92PHASE4MODULATOR_H
@@ -478,7 +478,7 @@ public:
 	 * object -- `reset` is one of the eight still outstanding, so nothing
 	 * had read it.  The offset name STAYS: what the field is FOR is
 	 * `reset`'s business and nothing written here touches it.  Finding
-	 * 5401.
+	 * F5401.
 	 */
 	unsigned char byte_42;
 
@@ -494,7 +494,7 @@ public:
 	 * mov %dl,0x43(%esi)` at .text+0x19065 -- so a second argument of 254
 	 * gives ZERO, the constructor does not initialise the field at all,
 	 * and `bits[bitsPerSymbol - 1]` at zero is the fold D561 records.
-	 * Finding 5401.
+	 * Finding F5401.
 	 */
 	unsigned char bitsPerSymbol;
 
@@ -565,7 +565,7 @@ public:
 	 * same statement assigns.  Declared as two separate members, `bits[-1]`
 	 * is out of bounds, the two stores may be emitted in either order, and
 	 * they were: GCC 13 kept our order and GCC 3.4.2 did not, which cost
-	 * 240 checks on unmutated source (finding 4705).  One array object
+	 * 240 checks on unmutated source (finding F4705).  One array object
 	 * spanning both makes the access defined C, states the aliasing where
 	 * a reader will find it, and returns the store order to the source.
 	 * D561, and it is D392's fix in the same shape -- an out-of-range

@@ -204,9 +204,9 @@ static const unsigned char u2a_table[128] = {
  *     ours:  and    $0x7f,%eax      the mask, and nothing else
  *
  * both three bytes, so the function stayed the right size while carrying an
- * operation the original does not have.  This is finding 613's shape -- a
+ * operation the original does not have.  This is finding F613's shape -- a
  * difference the differential tier is structurally unable to reach -- and it
- * is recorded as finding 2901.  Removing it leaves the indices unchanged and
+ * is recorded as finding F2901.  Removing it leaves the indices unchanged and
  * both tables are 128 entries, so nothing here goes out of bounds.
  */
 unsigned char

@@ -55,7 +55,7 @@
  * 2.9999998 they give 2, 3 and 3.  A sweep of round quotients would let all
  * three be spelled `(unsigned)(f / binWidth)` plus a constant and pass.
  *
- * NOTHING IS EVER ZEROED (finding 230) and every object is followed by a
+ * NOTHING IS EVER ZEROED (finding F230) and every object is followed by a
  * guard region compared separately.
  */
 
@@ -74,7 +74,7 @@ extern unsigned int ref_dsplibs_debug_level;
 
 /*
  * The blob's eight, by asm() label.  Plain cdecl with `this` as the first
- * stack argument (finding 215).  Every `float` PARAMETER is declared
+ * stack argument (finding F215).  Every `float` PARAMETER is declared
  * `unsigned` so the caller hands over the bit pattern; every `float` RESULT
  * is declared `float` because there is no other way to collect %st(0).
  */
@@ -151,7 +151,7 @@ next_byte(void)
 	return (unsigned char)(lfsr >> 3);
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial)
 {
@@ -414,8 +414,8 @@ run_accessors(void)
 
 	/*
 	 * THE SEPARATING TRIALS, and each counts a pair whose RESULTS differ
-	 * rather than a pair that took a different path (findings 3509,
-	 * 3403).  Three rounding modes over one operand: 3.4999998 and
+	 * rather than a pair that took a different path (findings F3509,
+	 * F3403).  Three rounding modes over one operand: 3.4999998 and
 	 * 3.5000002 differ in `freqToNearestBin` and agree in the other two,
 	 * which is what says the `+ 0.5f` is real and is in exactly one of
 	 * the three.
@@ -651,7 +651,7 @@ run_print(void)
 	 * the sign, the whole part, the hundredths and the printed frequency.
 	 * A counter that only recorded a different code path would be
 	 * satisfied by a `printSpectrum` that printed a constant, which is
-	 * finding 3509's failure exactly.
+	 * finding F3509's failure exactly.
 	 */
 	{
 		struct {
@@ -714,7 +714,7 @@ run_print(void)
 			 * sign, 2 the whole part, 4 the hundredths, 6 the
 			 * printed frequency.  It is a number and not the
 			 * name because `diff_eq_int`'s format takes the
-			 * INPUT as its only conversion (finding 220); a `%s`
+			 * INPUT as its only conversion (finding F220); a `%s`
 			 * here reads the tag as a pointer.
 			 */
 			diff_eq_int("printed quantity %ld changes the "

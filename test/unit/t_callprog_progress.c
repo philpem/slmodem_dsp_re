@@ -74,7 +74,7 @@ extern void ref_CALLPROG_Delete(struct callprog *cp);
  * The two tones the dual-tone detector answers 3 and 5 for, which are the
  * only way to reach "Found 2100" and "Found 2250" -- neither is reachable
  * from a state or a dial string, so the state sweep above cannot get there
- * however long it runs.  Finding 153 named them; this drives them.
+ * however long it runs.  Finding F153 named them; this drives them.
  */
 #define SIG_2100	4
 #define SIG_2250	5
@@ -578,7 +578,7 @@ main(void)
 	 * environment to see where a transcript first parts company.
 	 *
 	 * Level 1 is below every gate in this object -- all 29 are `cmpl $0x1`
-	 * -- so the reference must print nothing there (finding 150).
+	 * -- so the reference must print nothing there (finding F150).
 	 */
 	for (opt_level = 1; opt_level <= 3; opt_level++) {
 		/*
@@ -587,7 +587,7 @@ main(void)
 		 * "Found 2100" and "Found 2250" stayed dead while the
 		 * messages they announce were produced 147 times between
 		 * them: the detector was reached and the announcement was
-		 * gated off.  Finding 209.
+		 * gated off.  Finding F209.
 		 *
 		 * automode_table is 1 for states 3, 4 and 5 only, so these
 		 * are seeded rather than run down the default path.
@@ -624,7 +624,7 @@ main(void)
 			 * Every case above feeds SIG_SILENCE, so the two
 			 * cadence detectors ran in every state and never
 			 * asserted -- and their three verdict announcements
-			 * stayed dead while the level was up.  Finding 61
+			 * stayed dead while the level was up.  Finding F61
 			 * established that 550 Hz at the threshold of 40 does
 			 * make the machine come alive; this is that signal,
 			 * inside the level sweep, for long enough to validate
@@ -913,7 +913,7 @@ main(void)
 			int		tone_mode;
 		} arm[] = {
 			/*
-			 * THE FOUR `^` CASES ARE BACK, and finding 239's
+			 * THE FOUR `^` CASES ARE BACK, and finding F239's
 			 * placement error is resolved.
 			 *
 			 * The bare "CALLPROG: ^ encountered." is not a

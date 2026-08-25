@@ -11,7 +11,7 @@
  * It shares this state object and this output ring, reads three more fields
  * of the first (+0x0e, +0x10, +0x14) and indexes `TrellisEncodeDifTable`;
  * those fields are declared in v32smc.h so that the struct is not reshaped
- * when it lands.  See finding 1625.
+ * when it lands.  See finding F1625.
  *
  * ---------------------------------------------------------------------------
  * What both encoders do
@@ -48,7 +48,7 @@
  *  - `mode` is loaded with `movsbl` in `abs` and `movswl` in `dif`. That one
  *    IS free: the value is only ever shifted left by 8 into a 16-bit store,
  *    so nothing above bit 7 of it can survive, and the two loads agree over
- *    every input. Finding 614's rule, and it is why this file does not
+ *    every input. Finding F614's rule, and it is why this file does not
  *    contort the field's type to match one of them.
  *  - the wrap compares SIGNED (`setl` after `movswl`), so a `limit` of zero
  *    or a negative one leaves `widx` at 0 rather than running away.
@@ -65,7 +65,7 @@
  *
  * UNSIGNED, and that IS settled: `SMCv32_encoder_abs` is its only consumer
  * and loads it with `movzwl` into a 32-bit result that is used.  That every
- * value is positive -- so no test can see the difference -- is finding 613's
+ * value is positive -- so no test can see the difference -- is finding F613's
  * point and the reason the codegen evidence is worth having, not a reason to
  * discount it.  Contrast `SMCv32_PMAP16`, where five load sites disagree three to two
  * and the majority reading wins -- see D308.

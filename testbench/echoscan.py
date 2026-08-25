@@ -27,7 +27,7 @@ the G.711 path returns energy that is not a scaled copy of what we sent, and no
 correlation will find it.  A null result here bounds the linear echo only.
 
 --------------------------------------------------------------------------
-IT WAS BROKEN FOR THE WHOLE OF ITS RECORDED LIFE, AND FINDING 1971 CAUGHT IT.
+IT WAS BROKEN FOR THE WHOLE OF ITS RECORDED LIFE, AND FINDING F1971 CAUGHT IT.
 
     from capture_io import load
     def load(path):
@@ -36,7 +36,7 @@ IT WAS BROKEN FOR THE WHOLE OF ITS RECORDED LIFE, AND FINDING 1971 CAUGHT IT.
 The wrapper shadowed the import it was wrapping, so every invocation recursed
 until the stack went.  It cannot have run since that edit, and nothing noticed,
 because a tool nobody could run looks exactly like a tool with nothing to
-report -- findings 134, 2400, 2401.  Task #168.
+report -- findings F134, F2400, F2401.  Task #168.
 
 So two things changed with the repair, and neither is cosmetic:
 
@@ -45,7 +45,7 @@ So two things changed with the repair, and neither is cosmetic:
     A correlation over 300 ms of a 90-second call is not the same measurement
     as one over the whole call and must not print the same way.
   * **`--selftest` PLANTS A KNOWN ECHO AND WATCHES IT APPEAR.**  The ladder is
-    finding 1971's -- null, then -10, -20 and -30 dB at a 30 ms lag -- so this
+    finding F1971's -- null, then -10, -20 and -30 dB at a 30 ms lag -- so this
     tool and `echoratio.py` are calibrated against the same reference and their
     numbers can be read side by side.  Run it before trusting a clean scan.
 
@@ -152,8 +152,8 @@ def selftest(rate=8000, seconds=20.0, lag_ms=30.0, max_ms=400.0):
     """Plant an echo of known size at a known lag and watch it appear.
 
     A tool that prints nothing is indistinguishable from a tool that is broken
-    (findings 134, 2400, 2401), and this one printed nothing at all for months
-    because it recursed on its own name.  The ladder is finding 1971's, so the
+    (findings F134, F2400, F2401), and this one printed nothing at all for months
+    because it recursed on its own name.  The ladder is finding F1971's, so the
     two echo tools are calibrated against the same reference:
 
         null (two uncorrelated signals)

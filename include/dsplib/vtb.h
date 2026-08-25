@@ -49,12 +49,12 @@ struct vtb_path {
 
 /*
  * The decoder's state.  0x38 bytes, which is exactly the room V.32's
- * datapump object leaves for it between +0x18 and +0x50 (finding 1602).
+ * datapump object leaves for it between +0x18 and +0x50 (finding F1602).
  *
  * `bound` and `region` are proven `const short *`: both are loaded `movswl`
  * and both results are used as 32-bit indices.  `imap` and `qmap` are
  * `const short *` from `FPM_ECC_cancel`, which indexes the same tables
- * `movswl (%ecx,%eax,2)` through `ECCv32_IMAP` (finding 1614); here their
+ * `movswl (%ecx,%eax,2)` through `ECCv32_IMAP` (finding F1614); here their
  * difference against the received point is re-narrowed to `short`, so the
  * load's extension carries nothing.
  */

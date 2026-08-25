@@ -19,7 +19,7 @@ becomes a table of zeros or, worse, of plausible small integers.
 That mistake has been made three times in this reconstruction:
 
   - the toneiir configuration's three coefficient pointers read as integers
-    near 25000 (finding 46)
+    near 25000 (finding F46)
   - the CP_* tables read as unreferenced (retracted at D10)
   - `cadence_create`'s bank-3 fallback read as installing NULL pointers,
     which would have been a serious defect report about a crash that does
@@ -97,7 +97,7 @@ def main():
     #
     # THE REVERSIBLE x87 FAMILY IS ANNOTATED WITH ITS INTEL MNEMONIC, because
     # the AT&T one is its own opposite and reading it straight has cost this
-    # project real time (finding 245).  `de f1` prints `fdivp` and IS FDIVRP:
+    # project real time (finding F245).  `de f1` prints `fdivp` and IS FDIVRP:
     # ST(1) = ST(0)/ST(1).
     #
     # MEASURED, not assumed, and the measurement is the point: binutils 2.15

@@ -13,7 +13,7 @@
  * pseudorandom bytes before every trial and are NEVER zeroed: a zero-filled
  * object would let a store that never happened pass, because the field was
  * already zero, and would make "did anything happen" unanswerable (findings
- * 223 and 224).  Every block carries 64 bytes of guard past the object, and
+ * F223 and F224).  Every block carries 64 bytes of guard past the object, and
  * both sides' guards are compared against the seed as well as against each
  * other.
  *
@@ -861,7 +861,7 @@ canon_one(unsigned char *o)
 
 /*
  * WHAT THE TAIL-FILL DETECTOR COUNTS, and it reports its denominator for
- * finding 134's reason.  A row shorter than 128 must come back ZEROED to index
+ * finding F134's reason.  A row shorter than 128 must come back ZEROED to index
  * 127 and not left holding the seed, which is only observable where the seed
  * put a nonzero byte there in the first place.  `saw` counts the bytes for
  * which that was true and which did come back zero; `had` counts the ones the
@@ -1282,7 +1282,7 @@ fill_bits(unsigned int n, int wide)
  * `6 * shaperId / shaperSR`, computed by a different function in a different
  * class out of the same two mapping parameters.  Asserting the mapper's three
  * countdown arms against it is what makes the decode of that tail a
- * measurement rather than a reading -- finding 7422.
+ * measurement rather than a reading -- finding F7422.
  */
 static unsigned int
 proc_expected_suppressed(const struct proc_case *c)
@@ -1360,7 +1360,7 @@ run_mapper_process(void)
 			 * `process` already at or above a frame, which no
 			 * reachable sequence of `reset` and `process` produces
 			 * -- so it is poked, on both sides, exactly as finding
-			 * 7423's copy arm is.  `frame + 4` stays inside the
+			 * F7423's copy arm is.  `frame + 4` stays inside the
 			 * 0x50-byte buffer for every case in the table.
 			 */
 			if (call == 4) {
@@ -1491,7 +1491,7 @@ run_mapper_process(void)
 }
 
 /*
- * THE ARM NO `reset` CAN REACH, and finding 7423 is why it is driven by hand.
+ * THE ARM NO `reset` CAN REACH, and finding F7423 is why it is driven by hand.
  *
  * The object's partial-copy arm computes `start = uint_6f8 * signBitGroupSize`
  * and guards the copy with `cmp $0x5,%edx ; ja` -- but the block it jumps to
@@ -1897,7 +1897,7 @@ typedef void (*bts_reset)(void *, V90MappingParams *, int);
  *
  * `symbolsDone`, `symbolsBlockSize` and `extraSymbolsPending` are written by
  * the constructor with exactly the values `reset` writes -- 0, 0 and 1 -- so
- * finding 7105's masking applies to all three and each needs a value the
+ * finding F7105's masking applies to all three and each needs a value the
  * function could not have produced.  0x01 is what seed mode 1 puts everywhere,
  * so the flag byte's sentinel has to be neither 0 nor 1.
  *
@@ -2994,7 +2994,7 @@ run_bts_fill(void)
 }
 
 /*
- * THE OVERFLOW ARM NO CONSTRUCTED OBJECT CAN REACH, and finding 7430 is why
+ * THE OVERFLOW ARM NO CONSTRUCTED OBJECT CAN REACH, and finding F7430 is why
  * it is poked rather than driven -- the same shape as 7422 and 7423 in
  * `V90Mapper::process`.
  *
@@ -3215,7 +3215,7 @@ run_bts_fill_overflow(void)
  * duration of this group, so passing either of them instead of the argument
  * is caught by the resulting `bitsPerFrame` rather than by a fault.
  *
- * THE SENTINELS ARE FINDING 7105's, twice over: the converter's constructor
+ * THE SENTINELS ARE FINDING F7105's, twice over: the converter's constructor
  * writes `symbolsDone`, `symbolsBlockSize` and `extraSymbolsPending` with
  * exactly the values `reset` writes, and the mapper's does the same for nine
  * of its own words.  Both are poked between construction and the call.
@@ -3430,7 +3430,7 @@ run_p4m_setmp(void)
  * that no constructor writes: `symbolCount`, `mpBits`/`mpBitCount`,
  * `cpBits`/`cpBitCount`, the two sequence lengths, `word_2f64`, `byte_0014`,
  * `word_0018`, `byte_001c`, `word_0024`..`word_0034`, `word_0040`, `codeLevel`
- * and the two symbol tables.  Findings 7422, 7423 and 7430 are the same shape
+ * and the two symbol tables.  Findings F7422, F7423 and F7430 are the same shape
  * with two statements; this is the same shape with a whole function.
  *
  * WHAT IS DRIVEN RATHER THAN POKED IS EVERYTHING THE ARMS CALL.  The
@@ -3675,7 +3675,7 @@ setup_pump(int trial, int ci, int st, int cnt_i, int variant)
 		   RST_MP, PUMP_MP2, CP2, 0x11u);
 
 	/*
-	 * DIRTY THE SCRAMBLER'S HISTORY, and this is finding 7105's shape once
+	 * DIRTY THE SCRAMBLER'S HISTORY, and this is finding F7105's shape once
 	 * more: a seeded fixture is not enough where a CONSTRUCTOR runs after
 	 * the seed.  The history is a heap allocation the constructor makes,
 	 * the allocator hands it back zeroed, and `Scrambler::reset(0)` writes
@@ -4150,7 +4150,7 @@ run_pump_null(const char *name, pump ours, pump theirs, long base)
  * not.  And the fields `reset` must NOT touch are planted too, which is what
  * the unchanged-region check below rests on.
  *
- * THREE AXES ARE INDEPENDENT BY CONSTRUCTION, per finding 7458:
+ * THREE AXES ARE INDEPENDENT BY CONSTRUCTION, per finding F7458:
  *
  *   - `flag` is `sessionFlag`, which selects the pump and seeds
  *     `nextStateAfterTRN2d`;
@@ -4263,7 +4263,7 @@ run_p4m_reset(const char *name, p4m_reset ours, p4m_reset theirs, long base)
 			m->sessionFlag = (unsigned int)flag;
 			/*
 			 * THREE SENTINELS `setup_pump` DOES NOT PLANT, and
-			 * they are finding 7105's shape a third time: it
+			 * they are finding F7105's shape a third time: it
 			 * leaves +0x20, +0x2f9c and +0x2fa0 at ZERO, which is
 			 * what `reset` stores, so dropping any of those three
 			 * stores moved nothing and all three mutations

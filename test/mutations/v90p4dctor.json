@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90Phase4Demodulator's constructor and destructor, against t_v90rxctor.  The constructor's body is eleven stores and its initializer list is three member constructions, so the mutations are placement mutations: each moves one argument to a field another argument owns, which the test catches only because every argument is a DISTINCT block (finding 1301).  The destructor is empty and its fifty-two bytes are all the compiler's; the two entries at the end are what `-fno-lifetime-dse` makes catchable (finding 1224 -- do not mark them equivalent)."
+  "note": "V90Phase4Demodulator's constructor and destructor, against t_v90rxctor.  The constructor's body is eleven stores and its initializer list is three member constructions, so the mutations are placement mutations: each moves one argument to a field another argument owns, which the test catches only because every argument is a DISTINCT block (finding F1301).  The destructor is empty and its fifty-two bytes are all the compiler's; the two entries at the end are what `-fno-lifetime-dse` makes catchable (finding F1224 -- do not mark them equivalent)."
  },
  {
   "label": "the modulator gets the two mapping-parameter blocks unswapped",

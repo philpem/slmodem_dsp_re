@@ -8,7 +8,7 @@ statistical, taken over calls placed on different days, and the two that exist
 disagree about which way round the difference goes: "best equerr before the
 rate decision" says the blob is better (44 against 58), while "minimum over the
 eight blocks after it" says we are (254 against 1698).  Neither can be trusted,
-because #129's between-batch floor has never been measured (finding 1904).
+because #129's between-batch floor has never been measured (finding F1904).
 
 Fidelity is not really a statistical question.  Identical samples in should
 give identical `equerr` out.  This puts both datapumps on byte-identical input,

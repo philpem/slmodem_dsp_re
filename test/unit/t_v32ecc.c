@@ -3,7 +3,7 @@
  *
  * BY CONTENT, NEVER BY ADDRESS.  `ECCv32_IMAP` and `ECCv32_QMAP` are arrays
  * of pointers, and ours point into our `.rodata` while the blob's point into
- * its own, so the addresses can never agree.  Finding 1614 sets the rule:
+ * its own, so the addresses can never agree.  Finding F1614 sets the rule:
  * compare each pointee's CONTENT, over its whole length.  That still pins the
  * ordering, because the six pointees have distinct contents -- except indices
  * 0 and 1, which are the same table, and that is settled by the object's

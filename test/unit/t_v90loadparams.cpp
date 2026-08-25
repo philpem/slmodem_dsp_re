@@ -10,7 +10,7 @@
  * EMPTY function, on a function with the 295 calls in the wrong order, and on
  * one that named every field wrongly.  That is the "result indistinguishable
  * from success" this tree keeps finding in its own checks, and it is why the
- * member was left unwritten until now (finding 879).
+ * member was left unwritten until now (finding F879).
  *
  * HOW BOTH SIDES ARE OBSERVED, AND WHY THE TWO MECHANISMS DIFFER.  The two
  * halves of this are not symmetric and the asymmetry is a measurement:
@@ -26,10 +26,10 @@
  *     two-function object linked `--wrap=foo` calls the real `foo`, and the
  *     same object with `foo` weakened takes a strong definition from
  *     elsewhere.  The `$(REF)` recipe therefore weakens both `ref_Vparser_*`
- *     stubs and the strong definitions below win.  Finding 6400, which is
+ *     stubs and the strong definitions below win.  Finding F6400, which is
  *     also where 879's recommendation of `--wrap` for BOTH sides is retired.
  *
- * WHY THIS IS NOT `vparse.py` COMPARED WITH A COPY OF ITSELF.  Finding 879
+ * WHY THIS IS NOT `vparse.py` COMPARED WITH A COPY OF ITSELF.  Finding F879
  * declined this oracle on that ground and it was too strong a reading.  Our
  * third argument is `&this->FIELD` -- a member name that the COMPILER turns
  * into a displacement through `include/dsplib/V90Parameters.h` -- so the
@@ -53,7 +53,7 @@
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V92Parameters.h"
 
-/* The object's own counts.  Finding 861, and `tools/vparse.py` re-derives
+/* The object's own counts.  Finding F861, and `tools/vparse.py` re-derives
  * them from the blob at every `make params`. */
 #define V90_CALLS	295
 #define V92_CALLS	54

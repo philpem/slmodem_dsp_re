@@ -60,7 +60,7 @@
  * `normBPFhBaudB0coef` at +0x90 is THE AUTHOR'S OWN NAME, out of the third of
  * `adjustHalfBaudBpfGain`'s three diagnostic strings.  So is "normFactor",
  * and so is the "baud/2 dft bin" that named `dftMag`.  Everything else here
- * is invented and descriptive (finding 226).
+ * is invented and descriptive (finding F226).
  */
 
 #ifndef DSPLIB_RESAMPLERTIMING_H

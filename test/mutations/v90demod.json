@@ -156,7 +156,7 @@
   "find": "\t\tequalizer->reset(equalizer->linearEquLength >> 1);",
   "replace": "\t\tequalizer->reset((unsigned int)\n\t\t    ((int)equalizer->linearEquLength >> 1));",
   "equivalent": true,
-  "why": "0x1c1c2 is `d1 e9` -- `shr $1,%ecx`, a LOGICAL shift, and this makes it `sar`. The two differ only when bit 31 of `linearEquLength` is set, and that is a tap count: the coefficient array it bounds is `linearEquLength` floats inside a 0x150-byte object, so a length with bit 31 set is already out of every reachable range and both readings are wrong there together. This is finding 613's class of difference -- invisible to the differential tier for ever, visible in one instruction -- so the guard it needs is the codegen tier, not a test. Registered here so that if a future edit makes the length signed, the mutation stops being equivalent and is reported MIScounted."
+  "why": "0x1c1c2 is `d1 e9` -- `shr $1,%ecx`, a LOGICAL shift, and this makes it `sar`. The two differ only when bit 31 of `linearEquLength` is set, and that is a tap count: the coefficient array it bounds is `linearEquLength` floats inside a 0x150-byte object, so a length with bit 31 set is already out of every reachable range and both readings are wrong there together. This is finding F613's class of difference -- invisible to the differential tier for ever, visible in one instruction -- so the guard it needs is the codegen tier, not a test. Registered here so that if a future edit makes the length signed, the mutation stops being equivalent and is reported MIScounted."
  },
  {
   "label": "sessionTermination: the data state is any state but 3",
@@ -285,7 +285,7 @@
  },
  {
   "label": "sessionTermination: the mean's sign is the ordered test, so a NaN prints '-'",
-  "why": "0x1ac3a is `sbb %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax` after `fldz; fcomps mean`, which is 0x2d - 2*CF with the ZERO in %st(0); FCOM sets CF for less-than AND for unordered, so the object prints '+' for an unordered mean.  This is the spelling the tree carried until finding 2410 and it agrees on every ordered value, so pattern 9 of `st_value` is the only thing that kills it.",
+  "why": "0x1ac3a is `sbb %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax` after `fldz; fcomps mean`, which is 0x2d - 2*CF with the ZERO in %st(0); FCOM sets CF for less-than AND for unordered, so the object prints '+' for an unordered mean.  This is the spelling the tree carried until finding F2410 and it agrees on every ordered value, so pattern 9 of `st_value` is the only thing that kills it.",
   "find": "\t\t\t\t !(0.0f >= mean) ? '+' : '-',",
   "replace": "\t\t\t\t (0.0f < mean) ? '+' : '-',"
  },

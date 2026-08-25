@@ -7,7 +7,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, with `this` as the first stack
  * argument (`mov 0x20(%esp),%edi` after a 0x1c-byte frame), so nothing here
- * needs an attribute -- finding 215.
+ * needs an attribute -- finding F215.
  *
  * WHY THE SUB-OBJECTS ARE BUILT THROUGH AN asm() LABEL RATHER THAN `new`.
  * The blob's constructor is
@@ -29,7 +29,7 @@
  * calls FloatFIR's by its mangled name.
  *
  * THIS USED TO END "the instruction sequence is the blob's either way; only
- * the spelling differs", AND THAT HALF IS WITHDRAWN (finding 7816).  It is
+ * the spelling differs", AND THAT HALF IS WITHDRAWN (finding F7816).  It is
  * true of the CONSTRUCTOR, which is why that still goes through the asm()
  * label and loses nothing.  It is false of the DESTRUCTOR: see the
  * replacement `operator delete` below for the instruction it costs.
@@ -47,7 +47,7 @@
  * emits an ordinary `call sysdep_free`, and the open-coded
  * `p->~FloatFIR(); sysdep_free(p)` emits a sibling `jmp` and drops the frame
  * with it -- 25 instructions and 77 bytes against the blob's 29 and 108.
- * With `delete` it is byte-identical.  Findings 7786 and 7816,
+ * With `delete` it is byte-identical.  Findings F7786 and F7816,
  * refinement.md lever 7.
  */
 extern "C" void sysdep_free(void *p);
@@ -70,8 +70,8 @@ inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
 /*
  * Both of these declare their own `extern "C"`.  V92ParamsInfo.h is here
  * because `reset(V92MappingParams *)` DEREFERENCES the parameter block, and a
- * translation unit that dereferences a type must include it (finding 1325);
- * finding 1321 is what says the two names are one 180-byte block.
+ * translation unit that dereferences a type must include it (finding F1325);
+ * finding F1321 is what says the two names are one 180-byte block.
  */
 #include "dsplib/debug.h"
 #include "dsplib/V92ParamsInfo.h"

@@ -3,7 +3,7 @@
 Smart Link's naming is terse and mostly undocumented. This records what each
 prefix means, **with the evidence**, because a wrong expansion is not harmless:
 reading `MRF` as "matched root filter" is what hid the 8000↔7200 rate converter
-for several passes (finding 24).
+for several passes (finding F24).
 
 **Confidence:** ✅ confirmed by behaviour · 🟢 strongly implied by position or
 naming · 🟡 plausible, unverified
@@ -42,10 +42,10 @@ Contrast the float side, which uses no prefix at all: `FloatFIR`, `FloatIIR`,
 
 | | expansion | evidence |
 |---|---|---|
-| ✅ `MRF` | **Multi-Rate Filter** | `FPM_MRF_init` takes up/down factors and computes taps-per-phase; Bell 103 runs 10:9 and 3:10 (finding 24). *Not* "matched root filter". |
+| ✅ `MRF` | **Multi-Rate Filter** | `FPM_MRF_init` takes up/down factors and computes taps-per-phase; Bell 103 runs 10:9 and 3:10 (finding F24). *Not* "matched root filter". |
 | ✅ `FSM` | **Frequency Shift Modulator** | `FPM_FSM_modulate` switches a tone generator between two frequencies per bit. |
-| ✅ `FSD` | **Frequency Shift Demodulator** | the counterpart; delay-line discriminator plus lowpass (finding 27). |
-| ✅ `MTD` | **Multi-Tone Detector** | a bank of resonators, one per tone, with an energy-ratio verdict (finding 28). |
+| ✅ `FSD` | **Frequency Shift Demodulator** | the counterpart; delay-line discriminator plus lowpass (finding F27). |
+| ✅ `MTD` | **Multi-Tone Detector** | a bank of resonators, one per tone, with an energy-ratio verdict (finding F28). |
 | ✅ `ECC` | **Echo CanCeller** | the entry point is `FPM_ECC_cancel`. Not "error correcting code" — this is the DSP layer. |
 | ✅ `SDM` | **Scrambler/Descrambler** | exports exactly `FPM_SDM_scrambler` and `FPM_SDM_descrambler`. |
 | ✅ `VTB` | **Viterbi** | `VTB_decoder`, `VTB_DIFF_TBL`, `TrellisTransitionTable`, `VTB_BOUND_7200/9600/12000/14400` — the trellis decoder for V.32bis/V.17 rates. |
@@ -90,7 +90,7 @@ Two concrete costs already paid for guessing an expansion:
 
 - **`MRF`** read as "matched root filter" put the rate converter out of scope
   for several passes, and led to a written conclusion that Bell 103 might run
-  10/9 fast with no conversion at all (finding 23, since retracted).
+  10/9 fast with no conversion at all (finding F23, since retracted).
 - **`FP_Pow`** reads as a general power function. It is `exp()`. Anything built
   against the name rather than the coefficients would be wrong.
 
@@ -106,7 +106,7 @@ any more.
 
 **Grep for `preemp`, never `preemph`.** Searching the long form finds nothing
 and invites the conclusion that the subsystem is absent -- which is exactly what
-happened in finding 1959, where four searches missed the entire transmit-side
+happened in finding F1959, where four searches missed the entire transmit-side
 implementation and a "we never comply with the far end's request" finding was
 one step from being written. Findings numbered 1956-1959 still contain the old
 spelling because the record is append-only and is not rewritten.

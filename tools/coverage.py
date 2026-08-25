@@ -59,7 +59,7 @@ Only build/src and build/repro are walked, in that order, and only ever one
 of them: they are the two directories our own compiler writes to from src/,
 they hold the same 1457 (name, kind) pairs when both are built, and a plain
 `make` has filled only the second since 75dcc19 (#164).  An empty pair of
-them is a REFUSAL and not a 0.0%.  See tools/objtree.py, findings 3055/3110.
+them is a REFUSAL and not a 0.0%.  See tools/objtree.py, findings F3055/3110.
 
 This used to be all of build/ less `dsplibs_ref.o`
 by name -- and then the two-pass rename put a SECOND copy of the blob beside
@@ -68,7 +68,7 @@ The walk took that for our own output and the report claimed 98.0% translated
 for a tree that has reconstructed 290 symbols.  Adding a second name to the
 blacklist would break again the next time the Makefile leaves an intermediate
 in build/; naming the one directory our compiler writes to cannot.  See
-finding 222.
+finding F222.
 
 Usage:
     coverage.py [--obj ref/slmodemd/dsplibs.o] [--build build] [--md FILE]
@@ -110,7 +110,7 @@ import objtree                                            # noqa: E402
 # label is unreachable by construction: the fifteen written arms and the
 # twenty-four shared ones are forty labels over 41..80, which is every value
 # the range test at 0x64ac6 admits, and it stays because the range test and
-# the label set are two statements of one fact.  Findings 748 and 750, and
+# the label set are two statements of one fact.  Findings F748 and F750, and
 # `docs/v34handshak.md` for the arm-by-arm record.
 #
 # Keep the machinery: it is how the next function of this size gets taken, and
@@ -132,7 +132,7 @@ BENIGN = (
     # here emits all four.  Nothing calls them -- there is no virtual base
     # anywhere in the object -- so they are dead weight rather than drift, and
     # listing them every run would bury the strays that matter.  Settled once
-    # for the whole weak-symbol batch; see finding 601.
+    # for the whole weak-symbol batch; see finding F601.
     (re.compile(r"^_Z.*[CD]2E"), "base-object ctor/dtor, no virtual bases"),
 )
 
@@ -189,7 +189,7 @@ def our_symbols(build):
     tree: this function returning an empty set made the headline number of
     the whole project read `translated 0.0%, 0 bytes, 0 symbols` at exit 0
     after a plain `make`, which is indistinguishable from a reconstruction
-    that has not started.  Findings 3055 and 3110; tools/objtree.py.
+    that has not started.  Findings F3055 and F3110; tools/objtree.py.
     """
     _d, objs = objtree.read("the translated share of the blob", build)
     syms = set()

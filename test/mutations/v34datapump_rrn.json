@@ -1,6 +1,6 @@
 [
  {
-  "note": "The two rate-renegotiation counters in v34pcmif.c.  Twenty bytes each and a wrapping 16-bit increment apiece, so the only claims are WHICH field, WHICH direction, and that the arithmetic is sixteen bits wide.  The anchors carry each function's whole body because `VPcmV34InitiateRateRenegotiation` above bumps the same field with the same line, and an anchor that matched both would be reported UNUSABLE rather than failing (finding 347)."
+  "note": "The two rate-renegotiation counters in v34pcmif.c.  Twenty bytes each and a wrapping 16-bit increment apiece, so the only claims are WHICH field, WHICH direction, and that the arithmetic is sixteen bits wide.  The anchors carry each function's whole body because `VPcmV34InitiateRateRenegotiation` above bumps the same field with the same line, and an anchor that matched both would be reported UNUSABLE rather than failing (finding F347)."
  },
  {
   "label": "IndicateLocalRRN bumps the remote counter",

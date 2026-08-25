@@ -27,7 +27,7 @@
  * verdict while still producing plausible-looking numbers.
  *
  * Three notches, at 0.2625, 0.225 and 0.28125 of the sample rate: 2100, 1800
- * and 2250 Hz at the fixed 8000 Hz this module runs at (finding 41).  Notch A
+ * and 2250 Hz at the fixed 8000 Hz this module runs at (finding F41).  Notch A
  * alone gives tone A; notches B and C are cascaded and give tone B together,
  * so "tone B" means "somewhere in the FSK answer band", not one frequency.
  *

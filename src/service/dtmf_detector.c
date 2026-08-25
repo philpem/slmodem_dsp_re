@@ -21,7 +21,7 @@
  * tilt -- the pre-notch is only 90% radius, so the tone nearest the other
  * group is the one it attenuates least -- is a reading and not a derivation,
  * and it is not what makes this bank get things wrong.  What does is the
- * 1477 Hz table at 9600 Hz: see finding 1416 and D250, where the bias was
+ * 1477 Hz table at 9600 Hz: see finding F1416 and D250, where the bias was
  * first blamed and then measured out of it.
  */
 

@@ -6,7 +6,7 @@ ladder.py -- the impairment ladder, two peers, one channel model.
     ladder.py loss           the packet-SUBSTITUTION ladder      (#181)
     ladder.py slip --n 4     a short shakedown
 
-WHY TWO IMPAIRMENTS AND WHY SLIP IS FIRST.  Finding 6701, as corrected, splits
+WHY TWO IMPAIRMENTS AND WHY SLIP IS FIRST.  Finding F6701, as corrected, splits
 what d-modem's jitter buffer does into two mechanisms that look identical in
 `stream.c` and are not:
 

@@ -721,7 +721,7 @@ run_probe_preemph_edge(unsigned bin, int k, short ref, int delta, long tag)
  * THE PRE-EMPHASIS SEARCH IS A TILT METER.  Drive it with a channel whose
  * band edge sits a KNOWN number of steps below the reference bin, and check
  * the index that comes back is the number of steps -- which is what finding
- * 1475 derived from the constants and this asserts against the object.
+ * F1475 derived from the constants and this asserts against the object.
  *
  * `k` is a GAIN: 0x6626 is 26150, so `x * k >> 14` multiplies by 1.5961 and
  * the loop steps the band edge UP until it passes mid-band.  One step is
@@ -972,7 +972,7 @@ run_setupreceiver(short baud, short carrier, short gain, long tag)
  * Its argument is an object nothing in the blob constructs, so the fixture
  * builds one: a block large enough for the highest offset it reads plus the
  * short there, and no larger, so an index past the end faults rather than
- * reading something that happens to agree on both sides.  Finding 129.
+ * reading something that happens to agree on both sides.  Finding F129.
  */
 #define PREEMP_HIGH	0x3d4
 #define PREEMP_SIZE	(PREEMP_HIGH + (int)sizeof(short))
@@ -1036,8 +1036,8 @@ run_preempindex_traced(short limit, short meas, short baud, long tag)
 
 /*
  * Every input the five bodies read, one field per member, so that no two can
- * be swept from one variable.  That is the fixture defect of findings 116b,
- * 123 and 171, and it turned up three times in the previous session alone --
+ * be swept from one variable.  That is the fixture defect of findings F116b,
+ * F123 and F171, and it turned up three times in the previous session alone --
  * two inputs driven together cannot be told apart, however thorough the
  * sweep looks.
  *
@@ -1264,11 +1264,11 @@ extern void ref_V34SetupModulator(void *m, short baud, short carrier,
 /* --- the two the object keeps file-local --------------------------------- */
 
 /*
- * THE CONVENTION, WHICH FINDING 51 SAYS TO CHECK BEFORE CALLING ANY `t`
+ * THE CONVENTION, WHICH FINDING F51 SAYS TO CHECK BEFORE CALLING ANY `t`
  * SYMBOL.  Both of these are local in the object, so GCC gave them the local
  * calling convention -- arguments in registers -- and the blob's copies still
  * want it even though `--globalize-symbols` has made them linkable
- * (finding 221).  The disassembly says which:
+ * (finding F221).  The disassembly says which:
  *
  *     5eaf0:  sub    $0x2c,%esp
  *     5eaf7:  mov    %eax,%esi          <- getbit's only argument, in eax
@@ -1662,7 +1662,7 @@ main(void)
 	 * absence is not evidence of anything: "index is 0" is D36's dead
 	 * branch, GCC folds the `i == 5` body away, and gcov marks an
 	 * eliminated body NOT EXECUTABLE rather than executed-zero-times.
-	 * Finding 219, which nearly published the opposite.
+	 * Finding F219, which nearly published the opposite.
 	 *
 	 * WHAT SEPARATES THE TWO LIVE SITES IS ONE SPACE.  The object
 	 * prints `baudrate= %d\n` where the multiply passed the limit and
@@ -2572,7 +2572,7 @@ main(void)
 	/*
 	 * THE TILT SWEEP.  One step of the meter per row, over the range a real
 	 * channel can present, at the baud rate this bench actually uses.  It
-	 * pins the mapping finding 1475 derived, so a change to `probe_preemph`
+	 * pins the mapping finding F1475 derived, so a change to `probe_preemph`
 	 * that alters which channel gets which filter cannot land quietly.
 	 */
 	diff_begin("v34 handshake: the pre-emphasis search is a tilt meter");
@@ -2611,7 +2611,7 @@ main(void)
 		 * object has no site with a literal 9 -- GCC cross-jumped it
 		 * onto the tail the ordinary arm's variable request uses, so
 		 * the blob has two "asking" sites where our source has three
-		 * expansions.  That reconciles 43 against 44 (finding 2601),
+		 * expansions.  That reconciles 43 against 44 (finding F2601),
 		 * and it is only true if the arm is REACHED.  If it ever stops
 		 * being reached this check fails rather than the count quietly
 		 * becoming an assumption again.
@@ -2640,8 +2640,8 @@ main(void)
 		 * It is asserted rather than dropped because the interesting
 		 * failure is in the other direction: a reconstruction that
 		 * "fixed" the counter would start printing it, and every
-		 * pre-emphasis index would shift down one.  Findings 1477 and
-		 * 1901 measured that variant and rejected it.
+		 * pre-emphasis index would shift down one.  Findings F1477 and
+		 * F1901 measured that variant and rejected it.
 		 */
 		static const char dead[] = "index is 0, baudrate=";
 		unsigned seen = 0;
@@ -3173,7 +3173,7 @@ main(void)
 		/*
 		 * `(rx->flags & 0x40) || obj[0xac17]` picks between two
 		 * counters, so the two inputs are swept INDEPENDENTLY -- they
-		 * are exactly the shape finding 171 warns about, and driving
+		 * are exactly the shape finding F171 warns about, and driving
 		 * them together would make `||` and `&&` indistinguishable.
 		 * The arms write different fields, so all four are visible.
 		 */
@@ -3293,8 +3293,8 @@ main(void)
 		 * symbol, so `objcopy --redefine-syms` cannot make a
 		 * `ref_StateName` for the fifteen-table comparison at the top
 		 * of this file to copy; the strings are reachable only through
-		 * what the traces print.  Finding 173's trap, and finding
-		 * 176's -- delete this section and nothing checks the eighty-
+		 * what the traces print.  Finding F173's trap, and finding
+		 * F176's -- delete this section and nothing checks the eighty-
 		 * seven names at all.
 		 *
 		 * MODE 2 IS THE ONE THAT CAN SEE `[1]` AND `[2]`.  Modes 0, 1
@@ -3331,7 +3331,7 @@ main(void)
 		 * all three words equal every `%s` carries the same string, so
 		 * a reconstruction that fed the `mst` slot from rxstate would
 		 * produce a byte-identical transcript.  That is the defect of
-		 * finding 171 applied to the one thing the brief for this work
+		 * finding F171 applied to the one thing the brief for this work
 		 * said not to guess at, so the three are driven on three
 		 * offset cycles here and are never equal.
 		 *
@@ -3639,7 +3639,7 @@ main(void)
 					/*
 					 * Stride larger than the object, so
 					 * (case, iteration, offset) stays
-					 * unambiguous -- finding 116a.
+					 * unambiguous -- finding F116a.
 					 */
 					diff_eq_int("txmit* at %ld",
 						    ((unsigned char *)&oa)[k],
@@ -3797,7 +3797,7 @@ main(void)
 		 * And the transcripts, because the two rejections share one
 		 * format string: nothing in the byte comparison can tell a
 		 * reconstruction that printed the wrong one, or printed once
-		 * where the object printed twice.  Finding 134.
+		 * where the object printed twice.  Finding F134.
 		 */
 		dsplibs_debug_level = 2;
 		ref_dsplibs_debug_level = 2;

@@ -4,7 +4,7 @@
  * Reconstructed from dsplibs.o:
  *   FPM_lmsupd  .text 0x0abbc0  150
  *
- * NOT PART OF THE EQUALISER BATCH: it is finding 1600's "leaf math" group,
+ * NOT PART OF THE EQUALISER BATCH: it is finding F1600's "leaf math" group,
  * written here because `FPM_FSE_receive` cannot be linked without it.  It is
  * not one of the two symbols that group shares with V.22.
  *

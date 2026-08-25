@@ -8,7 +8,7 @@ standard and all three go green.
 
 The tier has exactly ONE instance today — `V90MP`'s CRC pair against
 10.1.2.3.2/V.34 and Table 16/V.90, in `test/unit/t_v90mp.cpp`'s
-`run_mp_crc_spec`, 1,084 checks (finding 7413). Grepping all 242 files of
+`run_mp_crc_spec`, 1,084 checks (finding F7413). Grepping all 242 files of
 `test/unit/` for a Recommendation reference returns that file and nothing else.
 
 **Headline numbers.** One *pairing* is one clause-to-site row, and every count
@@ -35,7 +35,7 @@ nobody has written.
 
 ---
 
-## 1. The discriminator, and it is not "is it in the spec"
+## F1. The discriminator, and it is not "is it in the spec"
 
 Almost everything in these nine documents is *in* the spec. That is not the
 question. The question is whether a conformance test could tell us something
@@ -52,7 +52,7 @@ are the right fields to skip.
 **SHAPE 2 — DIRECTION.** Bit order, which end is transmitted first, which bit
 is the LSB, which arm of a branch goes with which type. A symmetric round trip
 through one class cannot see a reversal — which is exactly how D920 survived
-until finding 6800 read V.90 Table 14 and V.92 Table 23. Every field of
+until finding F6800 read V.90 Table 14 and V.92 Table 23. Every field of
 `V92CP` round-trips correctly except the mask words, and *nothing in this tree
 could have said so* without the Recommendation.
 
@@ -72,11 +72,11 @@ reason to reject a shape-3 candidate. The differential tier pins our table
 against the blob's; that agreement is what this tier exists to look past. D250
 is the proof: `MTD7_COEF_9600` is reproduced byte for byte, passes every tier,
 and is wrong — and what convicted it was a derivation the object did not supply
-(findings 1413, 1416). A published table is a derivation the object did not
+(findings F1413, F1416). A published table is a derivation the object did not
 supply. Reject a shape-3 candidate only when the correct value cannot be
 obtained except from the object.
 
-## 2. Method, and what it could not measure
+## F2. Method, and what it could not measure
 
 - The Recommendations were read as text: `pdftotext -layout` over all nine PDFs
   in `../itu-specs/`, 13,494 lines. Every quotation below is from that text.
@@ -99,9 +99,9 @@ obtained except from the object.
 
 ---
 
-## 3. Do any of the Recommendations carry usable known-answers?
+## F3. Do any of the Recommendations carry usable known-answers?
 
-**YES — four, of which two judge code that exists today.** Finding 7413 recorded
+**YES — four, of which two judge code that exists today.** Finding F7413 recorded
 that V.34 and V.90 carry no test vector *for the CRC*, and that is still true of
 the CRC. It is not true of the corpus.
 
@@ -111,7 +111,7 @@ does not. **The fourth is the weaker but equally decisive form**: a table the
 spec *both derives and tabulates*, so the table checks itself against its own
 algorithm (§3.4, and nothing implements it).
 
-### 3.1 Table 17/V.34 — the probing tones. USABLE NOW.
+### F3.1 Table 17/V.34 — the probing tones. USABLE NOW.
 
 > Table 17/V.34 – Probing tones. `cos(2πft + ϕ)`
 > 150/0, 300/180, 450/0, 600/0, 750/0, 1050/0, 1350/0, 1500/0, 1650/180,
@@ -147,7 +147,7 @@ Table 17 makes it a derivation. It also retires two facts the same comment
 records as unexplained regularities — `probe` is even about index 32 and
 `probe[32] == -probe[0]` — both of which fall out of Table 17's sign pattern.
 
-### 3.2 Table 1/V.90 — "The universal set of PCM codewords". USABLE NOW.
+### F3.2 Table 1/V.90 — "The universal set of PCM codewords". USABLE NOW.
 
 128 rows, four published columns each: Ucode, µ-law PCM codeword, µ-law linear
 value, A-law PCM codeword, A-law linear value. *"All modifications defined in
@@ -164,7 +164,7 @@ they judge is landed and used at three separate sites:
 
 **Checked during this survey: 0 mismatches in 512.**
 
-### 3.3 Tables 7–10/V.92 — the ANSpcm codeword sequences. NOT USABLE YET.
+### F3.3 Tables 7–10/V.92 — the ANSpcm codeword sequences. NOT USABLE YET.
 
 The strongest known-answer in the corpus and there is nothing to run it
 against. 8.3.1/V.92 gives the generating equation —
@@ -184,7 +184,7 @@ and no reference sequence to correlate against. **A note for later, not a plan
 item** — but the highest-value one in the file, because the day a reference
 sequence is reconstructed its oracle already exists and is ITU's.
 
-### 3.4 Table 8 and Table 9/V.34 — self-checking, and nothing implements them.
+### F3.4 Table 8 and Table 9/V.34 — self-checking, and nothing implements them.
 
 8.2/V.34 gives the SWP derivation as an algorithm (*"the counter is set to
 zero. The counter is incremented by r at the beginning of each mapping frame.
@@ -196,7 +196,7 @@ same for AMP. A table the spec both derives and tabulates checks itself.
 Neither is in `src/`: the V.34 primary-channel mapping chain is not
 reconstructed, only the handshake. Note for later.
 
-### 3.5 V.8, V.25 and both corrigenda carry no known-answer at all
+### F3.5 V.8, V.25 and both corrigenda carry no known-answer at all
 
 Searched case-insensitively across all nine documents for `test vector`,
 `check value`, `worked example`, `for example`, `test pattern`, `test
@@ -226,13 +226,13 @@ off, 2100 ± 15 Hz, 3.3 ± 0.7 s, 425–475 ms, 180 ± 10° within 1 ms, and
 
 ---
 
-## 4. Inventory
+## F4. Inventory
 
 Grouped by mechanism rather than by document, because the clauses cross
 documents: V.90 and V.92 both defer their CRC to V.34, and V.92's Tables 23 and
 24 restate V.90's Table 14.
 
-### 4.1 The CRC family — nine implementations, one tested
+### F4.1 The CRC family — nine implementations, one tested
 
 *"The CRC generator used is described in 10.1.2.3.2/V.34"* appears **five times
 in V.90** (INFO, DIL descriptor, Jd, CP, MP) and **ten times in V.92**. The
@@ -285,7 +285,7 @@ and `crc_enable` is 0 on both the CM path (`src/v8/v8seq.c:165`) and the JM path
 to test, and it is excluded from §9's count rather than carried as work that can
 never be done.
 
-### 4.2 The message layout tables — extent and direction
+### F4.2 The message layout tables — extent and direction
 
 Every wire message in the corpus has a table fixing its field boundaries, and
 each says *"Bit 0 is transmitted first in time"*:
@@ -322,7 +322,7 @@ hides a reversal.
 positions and therefore moves the CRC extent. Any spec block for INFO1a, SUVd
 or MH must be written against the amendment, not against V.92 (11/2000).
 
-### 4.3 Independently derivable constants
+### F4.3 Independently derivable constants
 
 | clause | what it fixes | site in `src/` | exists |
 |---|---|---|---|
@@ -350,14 +350,14 @@ or MH must be written against the amendment, not against V.92 (11/2000).
 
 ---
 
-## 5. The ranking
+## F5. The ranking
 
 Ranked by *what a conformance test could say that no existing tier can*, with
 the specific wrong-together failure named. **The four items that would convict
 something already identified are ranked above the ones that would only record a
 pass**, and each is marked with the candidate non-conformance it settles.
 
-### 5.1 Do first — ten
+### F5.1 Do first — ten
 
 | # | clause | site | shape | fixture | checks | settles |
 |--:|---|---|:-:|---|--:|---|
@@ -372,7 +372,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 9 | eq. 7-1, 7-2 and clause 7/V.34 | `scrambleGPC`/`GPA`, `descrambleGPC`/`GPA`, the pairing | 3,2 | `t_v34scram.c` (extend) | ~200 | — |
 | 10 | Table 15/V.90 and the formula under Table 14 | `averagePowerLimits`, `getPower` | 3 | `t_v90cpower.cpp` (extend) | ~40 | — |
 
-### 5.2 Do next — eleven
+### F5.2 Do next — eleven
 
 | # | clause | site | shape | fixture |
 |--:|---|---|:-:|---|
@@ -388,7 +388,7 @@ pass**, and each is marked with the candidate non-conformance it settles.
 | 20 | clause 5/V.8 | the HDLC-flag invariant over the whole CM/JM stream | 1 | `t_v8util.c` (extend) |
 | 21 | 7.2/V.8, 2.3/V.25 | ANSam out-of-band power ≥ 24 dB; the ≤ 3 dB / 400 µs reversal transient | 3 | **new**, borrowing `t_psd.cpp`/`t_fft.cpp` |
 
-### 5.3 The top three, and why each earns its place
+### F5.3 The top three, and why each earns its place
 
 **#1 — 7.2/V.8's ANSam parameters.** It earns the top slot on yield: it is the
 only block in the plan that has already convicted the object twice, and one of
@@ -430,7 +430,7 @@ about the method transfers from `run_mp_crc_spec`.
 
 ---
 
-## 6. Cost
+## F6. Cost
 
 **The benchmark is the one that exists.** `run_mp_crc_spec` and its six helpers
 are **about 300 lines of `test/unit/t_v90mp.cpp`** — 117 lines of spec-derived
@@ -470,7 +470,7 @@ getting the state machine into the right state.
 
 Two costs the line count hides:
 
-- **A spec block must be shown to fire** (finding 134). `run_mp_crc_spec` was
+- **A spec block must be shown to fire** (finding F134). `run_mp_crc_spec` was
   validated by changing `spec_crc16`'s preload from 0xffff to 0 and watching 337
   of its 1,084 checks fail while every differential block stayed green. Budget
   that ritual per block, not per plan.
@@ -486,7 +486,7 @@ the new fixture. **Call it two working weeks for the first ten.**
 
 ---
 
-## 7. What would NOT be tested, and why
+## F7. What would NOT be tested, and why
 
 A plan that proposes testing everything is not a plan. **Twenty-four pairings
 were reached and rejected (R1–R24), and sixteen more are clauses about code
@@ -500,7 +500,7 @@ it.
   sites. §4.1: the two spellings are one register under `u_i = r_(15-i)` and
   both emit matching wire bits. Algebra, not a test.
 - **R2** — 10.1.2.3.2's *"output the contents … starting with bit 0"* at each
-  `infoToBits`. Finding 7413 settled it for MP against Table 16 and the same
+  `infoToBits`. Finding F7413 settled it for MP against Table 16 and the same
   algebra transfers; only the POSITION the CRC is written to varies, and that
   is covered by each site's extent.
 - **R3** — 2.2/V.25's *"1300 Hz ± 15 Hz"* against `CALLING_TONE_STEP`. Already
@@ -563,7 +563,7 @@ it.
 - **R20** — `ModulusCoder`'s signed 64-bit accumulator. Divergence needs
   K ≥ 64; V.90's K tops out at 39.
 - **R21** — `evaluateCRC` reading outside `bits[]` for +0x119 values the class
-  never writes. Finding 7411 disposed of this: bounded read, cannot leave the
+  never writes. Finding F7411 disposed of this: bounded read, cannot leave the
   object.
 - **R22** — `initTxSequence`'s one-past-the-end write at `src/v8/v8seq.c:143`,
   reachable only with both extension fields plus PCM, which `v8dp.c` never asks
@@ -616,7 +616,7 @@ the modem-on-hold path is absent.
 
 ---
 
-## 8. Candidate non-conformances noticed while surveying
+## F8. Candidate non-conformances noticed while surveying
 
 **None of these is a licence to change `src/`.** The reconstruction must match
 the object; a conformance failure is a DEVIATION, recorded in
@@ -754,11 +754,11 @@ have caught it and it is the cheapest thing in this section to fix.
 
 The only *established* non-conformance in scope remains D920,
 `V92CP::evaluateInfo` reading the constellation mask words bit-reversed, settled
-by finding 6800 against Table 14/V.90 and Table 23/V.92.
+by finding F6800 against Table 14/V.90 and Table 23/V.92.
 
 ---
 
-## 9. The retrofit question, answered with a number
+## F9. The retrofit question, answered with a number
 
 By this tier's standard, everything landed before it existed is untested against
 the spec. The count below is of **landed symbols that a numbered clause or table
@@ -799,7 +799,7 @@ should be re-derived with it rather than the total carried forward.
 
 ---
 
-## 10. Order of work
+## F10. Order of work
 
 1. **Item 5 first** (Table 1/V.90 into `t_pcm.c`). Smallest, already verified,
    and it establishes the second worked example in the tree — a spec block for a
@@ -817,7 +817,7 @@ should be re-derived with it rather than the total carried forward.
    tier's yield is closer to "one D920 per ten blocks" or to "everything
    conforms", and the answer should decide whether §5.2 is written at all.**
 
-**Before any of it, read `docs/method/tiers.md` §5 and finding 7413.** The two
+**Before any of it, read `docs/method/tiers.md` §5 and finding F7413.** The two
 rules a spec block gets wrong if it is written from the code rather than from
 the Recommendation are both there: write the helper from the clause and not the
 way the code is written, and say in the test that no official vector exists

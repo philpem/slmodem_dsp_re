@@ -26,7 +26,7 @@
  * six doubles from +0x60, and `getPower` indexes the same three regions at
  * `0x48(%esi,%edi,4)`, `0x18(%esi,%edi,8)` and `0x60(%esi,%edi,8)`.  The last
  * double is eight bytes wide at +0x88, so the object ends at 0x90 -- a
- * displacement is not a size (finding 215); the width of what sits at the
+ * displacement is not a size (finding F215); the width of what sits at the
  * bound is what turns one into the other.
  *
  * WHAT THE OBJECT IS FOR.  `getPower` is the whole story and the field names
@@ -186,7 +186,7 @@ public:
 	 * %esi,0x5c(%edi)`, with no division at all.  The two readings agree
 	 * whenever `remaining[5] < constellationSize[5]`, which is the ordinary
 	 * case, so the test drives shift counts large enough to separate them.
-	 * Finding 3052.
+	 * Finding F3052.
 	 */
 	unsigned int modulus[V90CP_CONSTELLATIONS];	/* +0x48 */
 

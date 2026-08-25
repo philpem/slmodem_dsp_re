@@ -133,7 +133,7 @@ void SineWave<Tout, Tparam>::generate(Tout *out, unsigned long n)
 	 * The last operation is FSUBRP: `de e1` prints as `fsubp` and computes
 	 * ST(1) = ST(0) - ST(1), so it is `x - 2pi*t` and not the negation of
 	 * it.  Reading objdump literally here costs 75,297 mismatches -- the
-	 * same trap as the `de f1` divide, finding 245.
+	 * same trap as the `de f1` divide, finding F245.
 	 */
 	{
 		int t = (int)(x * ik);

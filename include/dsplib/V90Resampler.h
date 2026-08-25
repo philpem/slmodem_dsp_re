@@ -54,7 +54,7 @@
  * print with spaces.  The type name `V90BllState` is the mangling's, out of
  * `_ZN12V90Resampler11setBllStateE11V90BllStatej`.
  *
- * Data member names are invented and descriptive (finding 226).
+ * Data member names are invented and descriptive (finding F226).
  */
 
 #ifndef DSPLIB_V90RESAMPLER_H

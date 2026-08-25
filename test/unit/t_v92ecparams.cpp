@@ -14,7 +14,7 @@
  * fixture for it, so three more rows is where these belong -- and they cannot
  * go there.  `t_v90leaves` is in `tools/gccdiverge.json` for
  * `V92EchoCanceller::process`, whose frozen-compare site GCC 13 provably
- * cannot reproduce (finding 2304), so under the modern compiler that binary
+ * cannot reproduce (finding F2304), so under the modern compiler that binary
  * exits NON-ZERO on the unmutated source.  `tools/mutate.py` judges a mutant
  * caught by a non-zero exit, so it refuses a red baseline rather than score
  * every mutation as caught -- and it refuses the whole suite, not the row.
@@ -36,7 +36,7 @@
  *      spellings by VALUE; what separates them is WHICH FIELD is read.  So
  *      `echoBeta` and `echoBetaDecay` are seeded to DIFFERENT values and
  *      neither is ever seeded to the other's argument.  Two fields seeded
- *      equal is finding 4756's second fixture fault.
+ *      equal is finding F4756's second fixture fault.
  *   2. BOTH SIGNS, AND ZERO.  `sign_of` is `0.0f < v`, so zero prints '-'.
  *      A grid of positive values alone cannot tell that from `0.0f <= v`,
  *      and `-0.0f` is in the table because it compares equal to `0.0f` and

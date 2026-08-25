@@ -109,7 +109,7 @@ vpcm_setup(int trial, const struct vpcm_args *a)
 	/*
 	 * The graph first, so that `lfsr_state` is left running and the modem
 	 * slot below is filled from the same stream -- pairwise identical and
-	 * varied, which is finding 230's rule.
+	 * varied, which is finding F230's rule.
 	 */
 	setup(trial, &a->dem);
 	fill_pair(vpcm[0], vpcm[1], VPCM_SLOT);
@@ -557,8 +557,8 @@ run_descriptor(void)
  * and `V92Parameters::init` WRITE, so per-side blocks would need the two
  * pointers neutralised and would still compare only what each side wrote into
  * its own copy.  One block, given to both sides, keeps every stored pointer
- * identical (finding 1105) -- and the snapshot-run-restore-run shape (finding
- * 805) is what stops the second writer from hiding the first.
+ * identical (finding F1105) -- and the snapshot-run-restore-run shape (finding
+ * F805) is what stops the second writer from hiding the first.
  */
 
 #include "dsplib/V92Parameters.h"

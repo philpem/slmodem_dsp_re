@@ -502,7 +502,7 @@ getMPrecvdBits(struct tagV34Object *objp)
  * THIS FUNCTION.  The K56flex twin's case 3 shifts that word out two bits at
  * a time and its Ja completion arm reloads it; the V.90 sequence carries its
  * bits in the `VPcmFloModem` instead and counts symbols in `f25c0`.  So none
- * of finding 282's shift-count masking applies here and no `& 31` is
+ * of finding F282's shift-count masking applies here and no `& 31` is
  * written: there is no variable shift.
  */
 
@@ -530,7 +530,7 @@ getMPrecvdBits(struct tagV34Object *objp)
  * `pac3c + 0x00`, the word whose bits 3 and 4 are the V.90 and K56flex
  * permissions.  This one is `pac3c + 0x50`, which that block calls `CFG_ISP`.
  * Two batches wrote into this file in parallel and picked the same name for
- * two things; finding 325 is what that cost.
+ * two things; finding F325 is what that cost.
  */
 #define P34_CFG_FLAGS		0x50
 #define P34_CFG_BACKWARD_CLEAR	0x04
@@ -1213,7 +1213,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 
 	/*
 	 * The disconnect threshold, indexed EXACTLY as
-	 * `VPcmV34SetMinimumSigLevel` indexes the same table (finding 270):
+	 * `VPcmV34SetMinimumSigLevel` indexes the same table (finding F270):
 	 * bias by 0x30, reject the result unsigned so a negative level is out
 	 * of range too, and fall back on ENTRY 3 rather than on either end.
 	 * A `min`/`max` clamp would give entry 0 or entry 7 and be wrong at
@@ -1484,7 +1484,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
  * alone would not show -- the ten message shorts `movzwl`, the capability byte
  * `movzbl`, `remote_v92` `movswl`, and the message bit printed as the MASKED
  * value, 32 and not 1.  None of the four changes a byte of state, so the
- * transcript comparison is the only tier that can see any of them; finding 335
+ * transcript comparison is the only tier that can see any of them; finding F335
  * is what test/unit/t_v34info1d.c does about that.
  */
 extern "C" int
@@ -1605,11 +1605,11 @@ V34GiveINFO1dBits(void *objp, const short *bits)
  * against two independent `if`s are one equivalence class for as long as that
  * stays true.  Its POSITION is not in that class and is tested: putting the
  * K56flex test first changes what happens when both receivers are above 1.
- * Finding 381 is the record and test/mutations/v34ja.json carries both.
+ * Finding F381 is the record and test/mutations/v34ja.json carries both.
  *
  * WHY IT IS HERE.  It is inside VPcmV34Main.cpp's run in the object -- between
  * `V34XF_IndicateTrn2dReceived` at 0xa390 and `chkForceBaudRate` at 0xa450 --
- * and it calls two C++ members, so finding 333's rule puts it in this file
+ * and it calls two C++ members, so finding F333's rule puts it in this file
  * rather than in `v34pcmif.c`: a `.c` may not call anything defined in a
  * `.cpp`, because the six interop binaries link every `.c` under `src/` with
  * no C++ object among them.  Its two callers are both inside `v34handshak`,
@@ -1711,7 +1711,7 @@ indicateJaTransmission(void *objp)
 
 /*
  * 0x7530.  The K56flex transmit rate is a CONSTANT in this object -- there is
- * no chain, no gate and nothing to read -- and finding 1090 is why naming the
+ * no chain, no gate and nothing to read -- and finding F1090 is why naming the
  * modulation is the whole of what a K56flex session does in this build.
  */
 #define K56FLEX_TX_BITRATE	30000
@@ -1850,7 +1850,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
  * IT IS THE WHOLE V.PCM RUN PATH.  `vpcm_run` (src/pump/v90/vpcm.c) converts
  * the host's shorts to floats, fetches the transmit bits, calls this once per
  * block and converts back; everything a connecting call does between those
- * two conversions is here.  Finding 1454 measured what that means: traced
+ * two conversions is here.  Finding F1454 measured what that means: traced
  * under callgrind, a real 33,600 V.34 connect executes exactly ONE symbol
  * this tree had not written, and it was this one.
  *
@@ -1887,14 +1887,14 @@ VPcmV34GetCurrentTxBitRate(void *objp)
  * moved, it did not go away.  `t_vpcmguard.c` is the binary that watches it
  * stop.
  *
- * NONE OF THE SEVEN IS ON A V.34 CALL.  Finding 1454's trace is what says so
+ * NONE OF THE SEVEN IS ON A V.34 CALL.  Finding F1454's trace is what says so
  * and it is the reason this function could be written at all; a V.90 or V.92
  * connect enters arms no test in this tree can yet drive.
  */
 
 /*
  * ---------------------------------------------------------------------------
- * FIVE ALIASES THAT EXIST ONLY TO BE COMPARED WITH ZERO, and finding 1460 is
+ * FIVE ALIASES THAT EXIST ONLY TO BE COMPARED WITH ZERO, and finding F1460 is
  * why they have to.
  *
  * The five C++ members below are declared WEAK, `nm` shows all five as `w`,
@@ -1905,7 +1905,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
  *
  *     warning: the address 'VPcmFloModem::runPcmModem' will never be NULL
  *
- * which is finding 985's trap in a form the `weak` attribute does not fix:
+ * which is finding F985's trap in a form the `weak` attribute does not fix:
  * the guard would compile away and the call would go to address zero.  A
  * pointer-to-member is not an address as far as that optimisation is
  * concerned, and no spelling of the member reference avoids it.

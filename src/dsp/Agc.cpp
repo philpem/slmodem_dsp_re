@@ -4,7 +4,7 @@
  * Verified against the object over 6,466,255 comparison points and a
  * 24-mutation kill table; re-verified in this tree by t_agc.  Three of those
  * mutations were at zero kills until a case was built specifically to separate
- * them, which is recorded in finding 608 because "0 kills, presumably
+ * them, which is recorded in finding F608 because "0 kills, presumably
  * equivalent" would have shipped three unproven readings looking verified.
  */
 
@@ -27,7 +27,7 @@ Agc<T>::Agc()
 /*
  * Leaves `alpha` at 1.0 -- FROZEN AT UNITY GAIN, not adapting.  `count` is
  * reloaded from whatever `blockLen` currently holds, which is what makes the
- * caller defect in finding 608 possible.
+ * caller defect in finding F608 possible.
  */
 template <class T>
 void Agc<T>::reset()
@@ -38,7 +38,7 @@ void Agc<T>::reset()
 	 * so the sequence in the object is the sequence in the author's source:
 	 * the two live values together, then the backup that `freeze` writes.
 	 * Ours was sorted by offset, which is a tidiness we imposed.
-	 * Finding 615.
+	 * Finding F615.
 	 */
 	alpha = T(1);
 	gain = T(1);
@@ -93,7 +93,7 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 	 * -mno-ieee-fp `jb` is taken for an unordered compare -- a NaN level
 	 * then adapts the gain where the object's `jbe` freezes it.  A local
 	 * initialised here puts `lvl` back in `%st(0)`, `fcom %st(4)`, and the
-	 * object's NaN routing.  Finding 2302.
+	 * object's NaN routing.  Finding F2302.
 	 */
 	long double minLevel = 1e-10f;
 
@@ -138,10 +138,10 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 			 * fmuls`, so the source did too.
 			 *
 			 * Both `de` forms read as their own opposite: `de f9`
-			 * is 1.0/blockLen and `de f2` is 1.0/lvl (finding 245).
+			 * is 1.0/blockLen and `de f2` is 1.0/lvl (finding F245).
 			 * Dividing the other way costs 24 and 20 mismatches
 			 * respectively -- tiny, and only reachable by the cases
-			 * built for them, which is the point of finding 608.
+			 * built for them, which is the point of finding F608.
 			 */
 			long double lvl = (1.0L / blockLen) * acc;
 
@@ -162,7 +162,7 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 			 * `make period` being built -mieee-fp: there `!=` gets
 			 * a parity test and a NaN adapts.  With the flag the
 			 * object was built with, the naive form is both the
-			 * correct one and the object's.  Finding 2300.
+			 * correct one and the object's.  Finding F2300.
 			 */
 			if (alpha != T(1)) {
 				if (lvl > minLevel) {
@@ -185,7 +185,7 @@ void Agc<T>::process(const T *in, T *out, unsigned nSamples)
 /*
  * MEMBER BY MEMBER, not `template class Agc<float>;` -- the object contains
  * these four symbols and no destructor at all, and an explicit class
- * instantiation would emit one (finding 603).  Its absence is itself evidence:
+ * instantiation would emit one (finding F603).  Its absence is itself evidence:
  * an implicit destructor is only omitted when it is trivial, so nothing here is
  * owned and nothing is virtual.
  */

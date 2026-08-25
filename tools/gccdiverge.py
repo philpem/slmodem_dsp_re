@@ -11,7 +11,7 @@ The reconstruction is compared against an object built by GCC 3.4.2.  At a few
 sites the modern compiler CANNOT reproduce that object from correct source --
 not because our source is wrong, but because the two compilers keep different
 intermediate precision.  `four1` in src/dsp/fft.cpp is the worked example
-(finding 1354): the object narrows its butterfly temporaries to `float`
+(finding F1354): the object narrows its butterfly temporaries to `float`
 mid-loop because GCC 3.4.2 runs out of x87 registers, GCC 13 does not run out
 and keeps 80 bits, and NOTHING in standard C moves it -- not a plain
 assignment, not an explicit `(float)` cast, not a named `double` temporary.

@@ -8,7 +8,7 @@
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x10(%esp),%ebx` after one push and a 8-byte frame -- not
  * %ecx, so these are not thiscall and nothing here needs an attribute
- * (finding 215).
+ * (finding F215).
  *
  * THE TWO SUBOBJECTS ARE BUILT BY THE MEM-INITIALIZER LIST AND NOT BY HAND.
  * `ModulusEncoder` and `V90SpectralShaper` both have a user-declared default
@@ -45,7 +45,7 @@
  * alone, and the two call different members of the spectral shaper.  That
  * "+0x0c is read and never written here" is exactly the split
  * `V90Demapper::resetNoSpectral` has against `V90Demapper::reset`, and it is
- * only visible over storage that was never zeroed -- findings 223 and 224, and
+ * only visible over storage that was never zeroed -- findings F223 and F224, and
  * `t_v90modchain.cpp` pokes a value that is not any `6 - shaperSR` into it
  * before the call for that reason.
  *
@@ -53,7 +53,7 @@
  * this block heavily -- in `reset` the `word_700` store lands between two
  * halves of the modulusEncoder fill -- so what is reproduced is the set of
  * stores and their values, which is what the differential test compares.
- * Finding 617's full-text acceptance test is not claimed for either function.
+ * Finding F617's full-text acceptance test is not claimed for either function.
  */
 
 #include <stddef.h>
@@ -169,7 +169,7 @@ V90Mapper::~V90Mapper()
  * It is written out TWICE below rather than factored into a helper, because
  * the blob has no helper: both functions carry their own copy of these loops
  * and of the seven stores, and a static helper here would put bytes against
- * neither side of `compare.py`'s per-function count (finding 605).
+ * neither side of `compare.py`'s per-function count (finding F605).
  * ===========================================================================
  */
 
@@ -178,7 +178,7 @@ V90Mapper::~V90Mapper()
  * V90Mapper::resetNoSpectral -- .text+0x30280, 404 bytes.
  *
  * `this` at 0x30(%esp), `mp` at 0x34, `pcm` at 0x38; plain cdecl as
- * everywhere here (finding 215).
+ * everywhere here (finding F215).
  *
  * THE TWO CODE CONVERSIONS ARE G.711 WRITTEN OUT LONGHAND, and both are in
  * the object as arithmetic rather than as a table:
@@ -394,7 +394,7 @@ V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
  * `6 * shaperId / shaperSR`, computed by a different function in a different
  * class out of the same two parameters -- so the three arms are confirmed from
  * outside themselves.  The two part company for a `shaperSR` that does not
- * divide six, and finding 7422 carries the algebra.
+ * divide six, and finding F7422 carries the algebra.
  *
  * `nofOut += V90MAPPER_FRAME - start` IS OUTSIDE THE LOOP AND UNCONDITIONAL,
  * and the object is what says so: the guard at 0x305e7 skips the copy when
@@ -402,7 +402,7 @@ V90Mapper::reset(V90MappingParams *mp, PcmType pcm)
  * `start` counted up inside the loop instead, a skipped loop would leave
  * `nofOut` alone.  No state `reset` can produce reaches that -- `start` is at
  * most `6 - signBitGroupSize` on this arm -- so the fixture pokes the three
- * fields by hand to drive it.  Findings 7423 and 3120.
+ * fields by hand to drive it.  Findings F7423 and F3120.
  * ===========================================================================
  */
 void

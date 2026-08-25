@@ -24,7 +24,7 @@
   "find": "\tif (spacing_ != 0)\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n\telse\n\t\twidth = 0;\n",
   "replace": "\tif (spacing_ != 0 && spacing_ <= V90SBE_DECODER_SIZE)\n\t\twidth = V90SBE_DECODER_SIZE / spacing_;\n\telse\n\t\twidth = 0;\n",
   "equivalent": true,
-  "why": "behaviourally identical over all 2^32 spacings, and that is arithmetic rather than a gap in the trials: the guard's else arm and the divide both yield zero, and 6/spacing is zero for every spacing above six, so the extra `<= 6` can never change a stored value.  What rules it out is the CODEGEN tier -- the object has one `test`/`je` where two compares would be two.  Finding 4304."
+  "why": "behaviourally identical over all 2^32 spacings, and that is arithmetic rather than a gap in the trials: the guard's else arm and the divide both yield zero, and 6/spacing is zero for every spacing above six, so the extra `<= 6` can never change a stored value.  What rules it out is the CODEGEN tier -- the object has one `test`/`je` where two compares would be two.  Finding F4304."
  },
  {
   "label": "the guard is inverted",

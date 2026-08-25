@@ -20,7 +20,7 @@
  * exists.  IEEE C requires `==` to be false for a NaN and GCC 13 emits the
  * parity test whatever it is told -- `-mno-ieee-fp` is accepted and does
  * nothing, and `-ffinite-math-only` withdraws NaN semantics from the whole
- * translation unit and breaks eleven sites that depend on them (finding 2304).
+ * translation unit and breaks eleven sites that depend on them (finding F2304).
  * So the modern build runs the FILTER on a NaN block, which moves `echoCoeff`,
  * `state` and `historyIndex`, and every later block of that trial diverges
  * with it.
@@ -31,7 +31,7 @@
  * exit, so it cannot score a mutation set against a baseline that is already
  * red, and it refuses.  FIVE mutation suites are pinned to `t_v90leaves` --
  * `v90cd`, `v90demapper`, `v90rto`, `v90sbe` and `v92ec`, 122 mutations -- and
- * all five were unscoreable for this one arm.  Findings 2157 and 3002.
+ * all five were unscoreable for this one arm.  Findings F2157 and F3002.
  *
  * Splitting the divergent check into its own binary is what that refusal asks
  * for; `t_v90p4dnan` is the worked precedent and `t_v92ecparams` the second.
@@ -42,7 +42,7 @@
  * this file.
  *
  * `make period` has no allow-list and passes this file with the object's own
- * compiler, which is the tier that decides.  Findings 6000, 2300 and 2304.
+ * compiler, which is the tier that decides.  Findings F6000, F2300 and F2304.
  *
  * THE FIXTURE IS SMALL BECAUSE THE ARM IS.  The sentinel arm reads `params`
  * not at all, calls nothing, and touches four fields: it copies `count`
@@ -50,7 +50,7 @@
  * and leaves `state`, `echoCoeff` and `echoHistory` alone.  So one object per
  * side, one coefficient array, one history and one output block is the whole
  * of it -- but every buffer still carries a compared GUARD past its end
- * (finding 230's argument: the arm that must write nothing is proved by
+ * (finding F230's argument: the arm that must write nothing is proved by
  * comparing what it did not write).
  *
  * ANTI-VACUITY IS AN OBSERVABLE, NOT A PATH.  A NaN block that came out
@@ -113,7 +113,7 @@ static unsigned char ecn_parm[2][ECN_PARM];
 
 static unsigned int lfsr;
 
-/* Varied, and never zero -- findings 223, 224, 230. */
+/* Varied, and never zero -- findings F223, F224, F230. */
 static void
 fill_pair(void *a, void *b, unsigned int n, int trial)
 {

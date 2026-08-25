@@ -14,7 +14,7 @@
  *     tail between the two sides AND against the seed, so a store one byte
  *     past the end fails, and so does a store 60 bytes past it.
  *   - Each run asserts the call changed the object, and that the object is
- *     not the same on every trial (findings 223, 224: a passing comparison of
+ *     not the same on every trial (findings F223, F224: a passing comparison of
  *     memory neither side wrote proves nothing).
  *
  * RAW STORAGE, NOT A UNION.  t_v90jd's `union { V90Jd o; unsigned char raw[]; }`

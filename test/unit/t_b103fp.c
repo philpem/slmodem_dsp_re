@@ -393,7 +393,7 @@ main(void)
 	/*
 	 * B103_CFG leaves hdx->tone_detect NULL -- the branch of
 	 * B103FP_create that fills it is not reached with this config, the
-	 * same way dsp[+0xf4]'s bandpass is not (finding 32).  Calling the
+	 * same way dsp[+0xf4]'s bandpass is not (finding F32).  Calling the
 	 * acquisition path on such an object would dereference NULL in both
 	 * implementations, so a real tone object is installed first.  That is
 	 * a state the original supports; it is only the default config that

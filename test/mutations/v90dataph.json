@@ -1,6 +1,6 @@
 [
  {
-  "note": "V90Demodulator's five phase entries and three diagnostics accessors, against t_v90dataph.  Three of the entries are near-copies of each other -- enterRRN and enterFPE share the deadline line verbatim -- so those anchors are widened with the preceding statement, which differs.  Finding 347's remedy applied to a smaller case.  THE THREE CONST MEMBERS CARRY NO \"fn\" FIELD, and that is tools/anchorcheck.py's limitation rather than a choice: its definition index requires the closing parenthesis to be followed by `{`, and a const member has ` const` between them, so `getAT_UD`, `getRbsPattern` and `indicateRemoteRateReneg` are invisible to it and an `fn` naming any of them reads as `names no function`.  The field is opt-in, so dropping it costs only rule 2's cross-check on those eleven anchors; rule 1's uniqueness check still applies to all of them and every one of the eleven is verified unique.  No const member anywhere in the tree can use `fn` today."
+  "note": "V90Demodulator's five phase entries and three diagnostics accessors, against t_v90dataph.  Three of the entries are near-copies of each other -- enterRRN and enterFPE share the deadline line verbatim -- so those anchors are widened with the preceding statement, which differs.  Finding F347's remedy applied to a smaller case.  THE THREE CONST MEMBERS CARRY NO \"fn\" FIELD, and that is tools/anchorcheck.py's limitation rather than a choice: its definition index requires the closing parenthesis to be followed by `{`, and a const member has ` const` between them, so `getAT_UD`, `getRbsPattern` and `indicateRemoteRateReneg` are invisible to it and an `fn` naming any of them reads as `names no function`.  The field is opt-in, so dropping it costs only rule 2's cross-check on those eleven anchors; rule 1's uniqueness check still applies to all of them and every one of the eleven is verified unique.  No const member anywhere in the tree can use `fn` today."
  },
  {
   "label": "enterRRN: the deadline base moves",
@@ -83,14 +83,14 @@
  {
   "label": "enterPhase4: the total is assigned, not accumulated",
   "fn": "enterPhase4",
-  "why": "Re-anchored by finding 7791: the clear no longer follows the accumulate directly -- the object puts `word_38 = 0;` after the deadline and that is decoded, not transcribed -- so the anchor carries the deadline line instead.",
+  "why": "Re-anchored by finding F7791: the clear no longer follows the accumulate directly -- the object puts `word_38 = 0;` after the deadline and that is decoded, not transcribed -- so the anchor carries the deadline line instead.",
   "find": "\tword_44 += word_38;\n\tword_48 = 0x28230",
   "replace": "\tword_44 = word_38;\n\tword_48 = 0x28230"
  },
  {
   "label": "enterPhase4: the counter is cleared before it is added",
   "fn": "enterPhase4",
-  "why": "Re-anchored by finding 7791, same reason as the entry above.",
+  "why": "Re-anchored by finding F7791, same reason as the entry above.",
   "find": "\tword_44 += word_38;\n\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;\n\tword_38 = 0;",
   "replace": "\tword_38 = 0;\n\tword_44 += word_38;\n\tword_48 = 0x28230 + 5 * (unsigned int)phase2Info->rtd;"
  },

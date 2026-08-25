@@ -8,7 +8,7 @@
  * `VPcmFloModem` and the whole `V90Demodulator` graph `getAT_UD` reaches --
  * and the TRANSCRIPT, which is the only thing that can see the six
  * `dsplibs_debug_printf` sites at all.  Six of the eight strings in this
- * function land in no object any comparison can reach; finding 3403's batch
+ * function land in no object any comparison can reach; finding F3403's batch
  * measured 23 of 31 diagnostics in that state and then caught a real defect
  * with the transcript group, so it is not decoration here either.
  *
@@ -21,7 +21,7 @@
  * THE GRID, AND WHY EACH AXIS IS IN IT
  * ===========================================================================
  *
- * Finding 4756 is the standing warning: a suite green over 100,000 checks per
+ * Finding F4756 is the standing warning: a suite green over 100,000 checks per
  * member had nine of 26 mutations survive, because grid axes made whole states
  * unreachable.  Every axis below is here because a REGION OF CODE is
  * unreachable without it.
@@ -64,7 +64,7 @@
  *
  * Counters here count trials that differ in an OBSERVABLE result -- a byte of
  * the record, a byte of transcript -- never "a branch was taken", which
- * finding 3509 rules worthless.  `run_separation` holds every axis fixed but
+ * finding F3509 rules worthless.  `run_separation` holds every axis fixed but
  * one, runs the BLOB twice, and requires the two records to differ; that is a
  * claim about the object and a seeded slot cannot fake it.  The mutations in
  * test/mutations/v34diag.json are what adjudicate.
@@ -488,7 +488,7 @@ run_sweep(void)
 			/*
 			 * Observable-result counters.  Each names a value in
 			 * the record that only one arm can produce, so none of
-			 * them is the "a branch ran" claim finding 3509 rules
+			 * them is the "a branch ran" claim finding F3509 rules
 			 * worthless.
 			 */
 			if ((status == 1 || status == 2) && analog != 0) {
@@ -639,7 +639,7 @@ run_separation(void)
  * WHAT ORDER -- the arm dispatch and the level gate -- and nothing else can
  * see them at all.  The level is swept because the gate is `> 1`: a site
  * written at the wrong threshold produces a byte-identical transcript at
- * level 2 and differs at level 1 (debug.h's note, finding 150).
+ * level 2 and differs at level 1 (debug.h's note, finding F150).
  */
 static int
 run_transcript(void)

@@ -7,7 +7,7 @@ hard enough yet.
 **The target is grade 0 — positional byte identity, per function.** Not byte
 count, which moves when we emit more code rather than more of the *right*
 code. Not instruction count: `qcLineVerification` measured 159 instructions
-against 159 and was still wrong, a `movzwl` copied as 32 bits (finding 7630).
+against 159 and was still wrong, a `movzwl` copied as 32 bits (finding F7630).
 
 Measure with `tools/toolchain/byteident.py`:
 
@@ -44,7 +44,7 @@ finding and never generalised**, and were swept up afterwards (7813). Their
 measurements are as real as the rest and their yield in a refinement pass is
 unknown, which is the one thing to hold in mind when a brief quotes them.
 
-### 0. What an enumeration proves depends on how many cells hit zero
+### F0. What an enumeration proves depends on how many cells hit zero
 
 Running the domain to completion is necessary; it is not the whole story. Say
 which of these you have, per function (7789 does it per closure):
@@ -67,7 +67,7 @@ which of these you have, per function (7789 does it per closure):
 explicitly, because stopping at a tempting near-miss is how an exhausted
 enumeration turns back into a search.
 
-### 1. Statement order — enumerate, do not search
+### F1. Statement order — enumerate, do not search
 
 The single most productive lever: ten of the closures across four passes.
 
@@ -97,7 +97,7 @@ case from a bijection.
     V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
                                 order; best was 27 of 290 -> DECLINED (7771)
 
-Closer bytes are not a grade. Finding 7782 is the ruling on this: take the
+Closer bytes are not a grade. Finding F7782 is the ruling on this: take the
 bytes when the space is exhausted and one element maps; decline when you are
 searching. Record which side you are on and what the domain was — a finding
 that says "closed by reordering" without saying how many spellings were
@@ -147,13 +147,13 @@ case from a bijection.
     V92Phase4Modulator::reset   14 spellings, NONE emits the object's store
                                 order; best was 27 of 290 -> DECLINED (7771)
 
-Closer bytes are not a grade. Finding 7782 is the ruling on this: take the
+Closer bytes are not a grade. Finding F7782 is the ruling on this: take the
 bytes when the space is exhausted and one element maps; decline when you are
 searching. Record which side you are on and what the domain was — a finding
 that says "closed by reordering" without saying how many spellings were
 compiled is not reviewable.
 
-### 2. Instruction count at EQUAL byte size means a missing or extra statement
+### F2. Instruction count at EQUAL byte size means a missing or extra statement
 
 Cheap, and it finds things no test can:
 
@@ -222,7 +222,7 @@ compile the CROSS PRODUCT rather than one at a time: a cell that changes one
 difference and not the other proves the two are independent, which no single
 comparison can (7792).
 
-### 3. Definition order in the translation unit
+### F3. Definition order in the translation unit
 
 Two character-identical bodies in one TU compile to **different bytes**, and it
 follows the position, not the text:
@@ -282,7 +282,7 @@ is outside this ordering entirely: 3 grade 1 and 6 BYTES live there. Two
 regions are not reachable by definition order at all: that head, where
 templates and clones interleave, and the cgraph tail.
 
-### 3a. The pre-check, before you permute anything (7801)
+### F3a. The pre-check, before you permute anything (7801)
 
 Three questions, all answered from the objects, and one of them stops a file
 being permuted into a null nobody can read.
@@ -365,7 +365,7 @@ kept-neutral precedent. What follows is the case where the price was real.
 had taken twelve macro blocks hoisted on top of the permutation. 7796's kept
 neutral files were reorder-only. The measurement is the deliverable: record
 that the order is achievable and pays nothing, and do not keep the diff.
-Findings 7797 and 7798.
+Findings F7797 and F7798.
 
 **A FILE-SCOPE `static` THAT CALLS A MEMBER FUNCTION SETS THAT MEMBER'S
 EMISSION SLOT, so it is the exception to "statics live above".** Wave 6's
@@ -375,7 +375,7 @@ THIS RECONSTRUCTION introduced, sitting at the top of the file with
 `o->isAltRbs(...)` in its body. Moving that one helper below its own first user
 took the file to 34 of 34. The object inlines the call, so the original had no
 such edge -- our factoring was setting the order. Check for it whenever a
-reorder lands short by a single symbol sitting at index 0. Finding 7798.
+reorder lands short by a single symbol sitting at index 0. Finding F7798.
 
 **Two traps, both hit while doing it.** An `#endif` travelled with a moved
 chunk twice and STILL COMPILED, silently enlarging an
@@ -401,7 +401,7 @@ DEAD.** Compare the SORTED MULTISET of preprocessed non-blank lines against
   that is not always a compile error, so wave 5's loud case is not the general
   shape.
 
-Shown firing on both injections and clean on everything committed. Finding 7799.
+Shown firing on both injections and clean on everything committed. Finding F7799.
 
 **A COROLLARY THE MECHANISM MAKES OBVIOUS AND WHICH WAS MEASURED SEPARATELY:
 the lever cannot reach a symbol at emission index 0** (7808). The cursor is
@@ -414,7 +414,7 @@ blob's `nm -n` order exactly, 15 for 15, reorder-only**, and the pair stays at
 spending a reorder on it -- and prefer the `-fno-peephole2` certificate below,
 which is stronger because it answers for the symbol rather than its position.
 
-### 3b. The mechanism, settled: a round-robin cursor in `peephole2` (7812)
+### F3b. The mechanism, settled: a round-robin cursor in `peephole2` (7812)
 
 **It is not the register allocator, and it is not a counter.** Swap two
 definitions in `V90Phase4Modulator.cpp` and dump every RTL pass with `-da`:
@@ -454,7 +454,7 @@ objects, so nothing that moved is counted):
     -mtune=i386        0                        -Os              0
 
 `-mtune` is the one to read twice: `x86_split_long_moves = m_PPRO` (`i386.c:492`)
-masked by the tune setting (`i386.h:263`), so **`-mtune=i686` — finding 612's
+masked by the tune setting (`i386.h:263`), so **`-mtune=i686` — finding F612's
 flag, the one that took the codegen match from 30 to 82 — is exactly and only
 what enables this.**
 
@@ -578,7 +578,7 @@ shown to fire first — `-fmem-report` reads 6040k of arena at the default
 against 1520k at the aggressive setting, and the compile goes 0.131 s to
 0.234 s collecting.
 
-### 4. File-scope declaration order
+### F4. File-scope declaration order
 
 GCC 3.4.2 emits file-scope objects in **reverse definition order**. Verify that
 on our own object before leaning on it — it was checked ten-for-ten first.
@@ -612,7 +612,7 @@ lever 4 at all**, and 3622's own closing paragraph is the model for how far a
 headline of this shape is entitled to go: it is one scratch file plus one real
 one, so nothing should be built on it that a test does not check.
 
-### 5. Storage class, read off relocations
+### F5. Storage class, read off relocations
 
 - A relocation against a **section** symbol (`.data`/`.rodata`) rather than a
   named one says the object was file-local: `static`.
@@ -626,7 +626,7 @@ All three at once on `RcFixed_Check_Combination` (7767). `nm` showed ours as
 same way, and adding `static` moved the relocations but **not the register
 choice**, so neither reached grade 0 by it (7768).
 
-### 6. Unrolled and partially-unrolled code
+### F6. Unrolled and partially-unrolled code
 
 The object is frequently more unrolled than the natural source. When you write
 source in an unrolled or partially-unrolled shape to match it, **put the
@@ -678,7 +678,7 @@ a state struct leaves nothing to fold, and `-O3` then takes our function from
 loop"; it is that the original's hand optimisation was expressed as literals at
 the call site, and the expansion is downstream of that.
 
-### 7. `delete[]` versus an explicit guarded free
+### F7. `delete[]` versus an explicit guarded free
 
 **The blob's global `operator delete` IS `sysdep_free`** -- it contains no
 `_Znwj`, `_ZdlPv` or `_ZdaPv` at all, and its compiler-generated `D0Ev`
@@ -804,7 +804,7 @@ are no unrelocated calls out of those five functions and no local text symbols
 in their span to be the target of one. Declined; do not rename the file to buy
 the spelling (7818).
 
-### 8. Width and signedness — and the DESTINATION's declared type
+### F8. Width and signedness — and the DESTINATION's declared type
 
 7630's `movzwl` copied as 32 bits. Equal instruction count hides it completely.
 
@@ -812,10 +812,10 @@ the spelling (7818).
 question you are answering** (CLAUDE.md's forced-versus-free rule):
 
 - **Used** — the extension is live and the difference is evidence about the
-  loaded object's TYPE. Finding 613 is the precedent: a real defect no test
+  loaded object's TYPE. Finding F613 is the precedent: a real defect no test
   could see, because both readings agree over every value the field holds.
 - **Discarded** — a 16-bit value going straight back into a 16-bit slot. This
-  is finding 614's free case, and it is NOT evidence about the field. Read on.
+  is finding F614's free case, and it is NOT evidence about the field. Read on.
 
 **WHERE THE EXTENSION IS DEAD, IT FOLLOWS THE DECLARED TYPE OF THE LOCAL BEING
 LOADED INTO — not the field, not the store destination, and not a cast.**
@@ -876,7 +876,7 @@ would not convert silently in C++ at all — it needs a cast the object gives no
 reason for. Evidence class 2 beats class 3, and `compare.py` did not move by
 one symbol on the retype (5850).
 
-### 9. Operand order — which is decided by the TREE, not by how you spell it
+### F9. Operand order — which is decided by the TREE, not by how you spell it
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
 identity. That much has always been in this file. What was missing is that the
@@ -943,7 +943,7 @@ wants the narrow memory operand SECOND. The order was never the free variable.
 spellings are refused by a test and CLAUDE.md's rule is that the differential
 tier decides.
 
-### 9a. And a NULL over a whole file family is a result — prove the harness fires first
+### F9a. And a NULL over a whole file family is a result — prove the harness fires first
 
 Lever 3 was run to exhaustion over eight small `fpm_*.c` files that were NOT
 in the blob's emission order — seven at 3! and one at 4!, each maximal run of
@@ -952,7 +952,7 @@ its first user. **Seven of the eight give ONE distinct emission over their
 whole domain**; the eighth gives two and neither closes anything.
 
 The null was only believed after the detector was shown to FIRE, which is
-finding 134's argument applied to an enumeration: compile the
+finding F134's argument applied to an enumeration: compile the
 block-REVERSED file and print `nm -n` beside the byte comparison.
 
     fpm_sre.c   order  init,free,recover -> recover,free,init   MOVED
@@ -965,7 +965,7 @@ and pays nothing, so record it and **do not keep the diff**. An enumeration
 that reports "0 of 6 cells" without showing that any cell differed from any
 other is indistinguishable from a broken generator.
 
-### 10. Where a member's body is written — in-class is implicitly `inline`
+### F10. Where a member's body is written — in-class is implicitly `inline`
 
 A member defined inside the class body is implicitly `inline`, which moves it
 from `--param max-inline-insns-auto` (100) to `max-inline-insns-single` (500),
@@ -1014,7 +1014,7 @@ still 419 bytes, to the byte). Cause not found, recorded rather than chased
 (5802). **Do not reach for `__attribute__((noinline))`** — that is fitting the
 compiler, and it puts a construct in `src/` the original cannot have had.
 
-### 11. The constant pool is a typed, per-function observable
+### F11. The constant pool is a typed, per-function observable
 
 `.rodata.cst4` against `.rodata.cst8` against `.rodata.cst16` names the literal's
 type, and the load instruction says it again:
@@ -1057,7 +1057,7 @@ the linker, so in a `.o` the duplicates are all still there — `0.5f` appears a
 and a reader who treats slot identity as expression identity will mis-read
 every inlined float constant in this object (4340).
 
-### 12. Spill width is forced; a value that never spills is not
+### F12. Spill width is forced; a value that never spills is not
 
 The tree's standing rule is "the object keeps intermediates in registers and
 never rounds them, so spell them `long double`" — `V90Equalizer.cpp`'s file

@@ -12,7 +12,7 @@
  * all fourteen defined members is +0x28, four bytes wide, so the object ends
  * at 0x2c.  `process(float *, unsigned int)` reaches +0x2c0 and +0x2a4, but
  * not through `this`: both are inside the block whose address `this + 0x00`
- * holds, which is the trap finding 234 recorded for `V90PreFilter`.
+ * holds, which is the trap finding F234 recorded for `V90PreFilter`.
  *
  * WHAT `reset()` WRITES.  Three consecutive words, all set to zero, and
  * nothing else -- the whole body is one `edprintf` and three stores.  Two of
@@ -70,7 +70,7 @@
  *     `test/mutations/v90specver.json` carries `word_28 = 0;` and
  *     `accumCount = 0;\n\taccumulating = 0;\n\tword_28 = 0;` inside `find`
  *     strings that `make phase` does not execute -- so a rename would rot
- *     the mutation register silently, which is finding 3511's failure mode
+ *     the mutation register silently, which is finding F3511's failure mode
  *     with the register in place of a header.  The rename belongs in one
  *     commit of its own that moves all five files together.
  *
@@ -87,7 +87,7 @@
  *            zero-extending idiom, and halved with `shr $1`.
  *     +0x10  `SPECTRAL_VERIFIER_PSD_LEN` (PARAMS+0x2b8).
  *     +0x14  +0x08 divided by +0x0c.  The bytes are `de f9`, which objdump
- *            prints as `fdivrp` and which IS `FDIVP` -- finding 245 -- so the
+ *            prints as `fdivrp` and which IS `FDIVP` -- finding F245 -- so the
  *            quotient is sampleFreq/fftLength and not its reciprocal.  A
  *            sample rate over a transform length is a bin width, which is
  *            what `freqToNearestBin` divides by.

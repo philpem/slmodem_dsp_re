@@ -43,9 +43,9 @@
  * SHARED: the `V90MP`.  `V90MP::getBitVector` is `length = byte_118; return
  * bits;` and writes nothing, so one record keeps `mp` at +0x48 and `mpBits`
  * at +0x2f58 IN the comparison rather than blanked out of it -- and +0x2f58
- * is exactly where `exitMP`'s work lands.  Finding 1105 the useful way round.
+ * is exactly where `exitMP`'s work lands.  Finding F1105 the useful way round.
  *
- * THE OBJECTS ARE NEVER ZEROED -- finding 230.
+ * THE OBJECTS ARE NEVER ZEROED -- finding F230.
  *
  * ---------------------------------------------------------------------------
  * THE TWO DATA PUMPS' GRID EXCLUDES ONE CONFIGURATION, AND SAYS SO
@@ -68,7 +68,7 @@
  * for coverage" would smash the caller's frame.
  *
  * ---------------------------------------------------------------------------
- * ANTI-VACUITY, per finding 3509
+ * ANTI-VACUITY, per finding F3509
  *
  * Every counter names an OBSERVABLE difference and never a branch believed
  * taken.  `printed` counts trials whose transcript is non-empty, `moved`

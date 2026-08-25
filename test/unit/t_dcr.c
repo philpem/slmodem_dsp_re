@@ -16,7 +16,7 @@
  *     right answer by the wrong route still fails;
  *   - the diagnostic transcript, swept over debug levels 0..3 because there
  *     is exactly one gated site in the file and a run at level 2 alone
- *     cannot separate `> 1` from `> 0` (debug.h, finding 150).
+ *     cannot separate `> 1` from `> 0` (debug.h, finding F150).
  *
  * HOW THE PHASES ARE REACHED.  `dcr_create` sets the three interval fields to
  * 5760, 9600 and 19200 samples, so walking the state machine honestly would

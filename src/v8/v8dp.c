@@ -114,7 +114,7 @@ static struct dp_operations v8_op = {
 	 * lower case -- `b103`, `call`, `v23` are all standalone strings
 	 * in the blob -- and this one does not: the object carries `V8\0`
 	 * and no bare `v8\0` at all.  An asymmetry in the original, and
-	 * the reconstruction had quietly regularised it.  See finding 201.
+	 * the reconstruction had quietly regularised it.  See finding F201.
 	 */
 	.name = "V8",
 	.use_count = 0,
@@ -136,7 +136,7 @@ static struct dp_operations v8_op = {
  *
  * It is an asymmetry in the original and not a convention: `dp_v23_init`
  * (+0x4f88) zeroes the same way and `dp_call_init` (+0x31c0) does not, so
- * that one is `void`.  Finding 7860.
+ * that one is `void`.  Finding F7860.
  */
 int
 dp_v8_init(void)

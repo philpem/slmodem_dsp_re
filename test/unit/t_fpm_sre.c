@@ -6,7 +6,7 @@
  * The tables: a byte comparison proves the CONTENTS and says nothing about the
  * SHAPE -- short[6] and int[3] compare identically.  SREv32_COFFS had its
  * width measured by the `movzwl (%ecx,%edx,2)` FPM_SRE_init copies it with,
- * and finding 1615 recorded that the other five were unverified.  Reading
+ * and finding F1615 recorded that the other five were unverified.  Reading
  * FPM_SRE_recover settles them: the discriminant indexes XB_COFFS at eleven
  * distinct 16-bit offsets, and the loop filter indexes PLL_K1 / PLL_K2 with
  * `movswl (%edi,%ebx,2)`.  So all six are 16-bit now, and the shape claim is
@@ -417,7 +417,7 @@ main(void)
 		 * -- an output sample the two sides both produced, or a state
 		 * word the byte comparison above walked over.  None of them
 		 * counts a path taken or a constant reached, which is the
-		 * failure findings 3509 and 3403 record: four of five such
+		 * failure findings F3509 and F3403 record: four of five such
 		 * counters in one batch measured an intermediate and proved
 		 * nothing.
 		 *

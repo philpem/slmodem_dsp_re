@@ -35,12 +35,12 @@
  * removed: the two objects then differ in no pointer and `diff_eq_obj` can
  * compare all 44 bytes with no snapshot step.
  *
- * NOTHING IS EVER ZEROED (finding 230): both sides get the same varied
+ * NOTHING IS EVER ZEROED (finding F230): both sides get the same varied
  * pseudorandom bytes before every trial, so the clear of +0x28 is visible
  * and a store that fails to happen is too.  Every object is followed by a
  * guard region compared separately, and the BLOB's object is checked word by
  * absolute offset against the seed it replaced, so a header offset that is
- * wrong on both sides at once still fails (findings 223 and 224).
+ * wrong on both sides at once still fails (findings F223 and F224).
  *
  * THE LEVEL IS SWEPT 0..2 TOGETHER on both sides.  Nine of the ten prints
  * are `edprintf`, which is NOT gated -- it encodes first and tests the level
@@ -64,7 +64,7 @@ extern unsigned int ref_dsplibs_debug_level;
 /*
  * Reached through an asm() label rather than by spelling the ref_-prefixed
  * mangled name as an identifier; the convention is plain cdecl with `this`
- * as the first stack argument (finding 215), so no attribute is involved.
+ * as the first stack argument (finding F215), so no attribute is involved.
  */
 void ref_sv_check(void *self)
 	asm("ref__ZN19V90SpectralVerifier30checkSpecialSpectralConditionsEv");
@@ -90,7 +90,7 @@ next_byte(int mode, unsigned i)
 	}
 }
 
-/* The same varied bytes into both sides.  Never zeros -- finding 230. */
+/* The same varied bytes into both sides.  Never zeros -- finding F230. */
 static void
 fill_pair(void *a, void *b, unsigned n, int trial, int mode)
 {
@@ -179,7 +179,7 @@ struct sv_case {
  * marker rather than a second field so that every case below can leave it
  * out; a NaN cannot be a static initialiser here anyway, because the period
  * build is `-mno-ieee-fp` and folds `0.0f / 0.0f` at compile time -- finding
- * 2303's mechanism, where the same flag deleted the harness's own NaN
+ * F2303's mechanism, where the same flag deleted the harness's own NaN
  * detector.
  */
 #define SV_NAN_MARK	1.0e30f

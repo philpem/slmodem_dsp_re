@@ -12,7 +12,7 @@
  *    the 128-point branch.  The two sides cannot be compared as objects --
  *    each points at its own tables and its own survivor ring -- so the
  *    pointers are compared by the CONTENT of what they point at, which is
- *    finding 1614's rule and is what pins the SELECTION rather than the
+ *    finding F1614's rule and is what pins the SELECTION rather than the
  *    address.
  *
  * 3. `VTB_decoder` driven one symbol at a time from a state our `VTBv32_init`
@@ -30,7 +30,7 @@
  *    most of the plane.  So the test counts the trials whose region index
  *    actually DIFFERS between the two frames and asserts that count is not
  *    zero; a pass with a zero count would be a test that cannot see the
- *    difference (finding 3052's rule, and finding 134's).
+ *    difference (finding F3052's rule, and finding F134's).
  */
 
 #include <string.h>

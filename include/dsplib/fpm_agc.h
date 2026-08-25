@@ -54,7 +54,7 @@ struct fpm_agc_cfg {
 	short f16;		/* +0x16 not read by any fpm_agc function; NOT padding --
 				 *       V.32's two configs both carry 6553 (0.2 in Q15)
 				 *       here.  Bell 103's and V.23's carry zero, which is
-				 *       why it read as padding.  Finding 1621.       */
+				 *       why it read as padding.  Finding F1621.       */
 };
 
 struct fpm_agc {

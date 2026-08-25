@@ -37,7 +37,7 @@
  * The two sides are called by symbol through `asm()` labels, ours by the
  * mangled name and the blob's by the `ref_` alias the harness builds, which is
  * the convention `t_v90designers.cpp` explains.  Plain cdecl with `this` as the
- * first stack argument (finding 215).
+ * first stack argument (finding F215).
  */
 
 #include <string.h>
@@ -100,7 +100,7 @@ next_byte(void)
 /*
  * Neither side is ever zeroed: both blocks get the same varied fill and the
  * seed moves with the trial, so "equal afterwards" is a statement about varied
- * content rather than about zeros agreeing with themselves (findings 223, 224).
+ * content rather than about zeros agreeing with themselves (findings F223, F224).
  */
 static void
 fill_pair(unsigned char *a, unsigned char *b, int n, int trial)
@@ -193,7 +193,7 @@ run_setnof(void)
 
 	/*
 	 * Both outcomes, or the sweep proves only that two objects agree about
-	 * doing nothing (findings 149, 223).
+	 * doing nothing (findings F149, F223).
 	 */
 	diff_eq_int("the copy happened on %ld trials", moved > 0, 1, moved);
 	diff_eq_int("the copy was skipped on %ld trials", unmoved > 0, 1,
@@ -311,7 +311,7 @@ static const struct maxk_case maxk_cases[] = {
 	 * back short by k * 4.757e-8 and the guard covers that only while
 	 * k <= 21.020.  2^21 clears it by 9.6e-10 and 2^22 misses by 4.7e-8,
 	 * which is why both are here: they are one apart and they bracket the
-	 * whole behaviour.  See finding 4400.
+	 * whole behaviour.  See finding F4400.
 	 */
 	{ { 2, 1, 1, 1, 1, 1 },  1, "2^1 exactly" },
 	{ { 2, 2, 2, 2, 2, 2 },  6, "2^6 exactly" },
@@ -975,7 +975,7 @@ run_design(void)
 
 	/*
 	 * Every outcome, or the sweep proves only that two objects agree about
-	 * one path (findings 149, 223, 3509).
+	 * one path (findings F149, F223, F3509).
 	 */
 	diff_eq_int("designed on %ld trials", sawOk > 0, 1, sawOk);
 	diff_eq_int("failed on %ld trials", sawFail > 0, 1, sawFail);

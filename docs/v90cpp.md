@@ -55,10 +55,10 @@ Closures below are from `callgraph.py --order --of`, with `have` entries
 
 | # | batch | members | closed? |
 |---|-------|---------|---------|
-| 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding 227; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
-| 1 | `V90Jd` / `V92Jd` | ~~`V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20~~ **DONE** — findings 229 and 230; all eight, and the C++ class fixture the later batches copy | all leaves |
-| 2 | `V90Phase3Modulator` | ~~`generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table~~ **DONE** — findings 231 and 232; all six, **plus four weak `Scrambler<unsigned char,int>` members nothing counted** | it was not — see below |
-| 3 | `V90PreFilter` | ~~`selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, all of `FloatFIR` 723~~ **DONE** — findings 234, 235 and 236; **23,860 B of tables, not 10,532** | it was not — see below |
+| 0 | warm-up (#59) | ~~`getbit` 433, `ApplyBulkDelay` 467 — both leaves; `getMPrecvdBits` 895, callees all `have`~~ **DONE** — finding F227; `getMPrecvdBits` needed a `.cpp` after all, and it is the precedent for a `ref_` alias that is `extern "C"` *and* `regparm` | yes |
+| 1 | `V90Jd` / `V92Jd` | ~~`V90Jd::getBitVector` 537, `unPackReset` 20; `V92Jd::packJdData` 665, `packJdPhaseData` 681, `getJdBitVector` 22, `getJdPhaseBitVector` 22, `unPackJdReset` 20, `unPackJdPhaseReset` 20~~ **DONE** — findings F229 and F230; all eight, and the C++ class fixture the later batches copy | all leaves |
+| 2 | `V90Phase3Modulator` | ~~`generateV92Symbol` 2044, `generateV90Symbol` 1790, `reset` 479, `resetDILGenerator` 410, `setSessionFlag` 11, + 64 B table~~ **DONE** — findings F231 and F232; all six, **plus four weak `Scrambler<unsigned char,int>` members nothing counted** | it was not — see below |
+| 3 | `V90PreFilter` | ~~`selectFilter` 800, `setParamEia6` 790, `autoSelection` 359, `isV90WithEia6` 69, `displayParamEia6` 1, all of `FloatFIR` 723~~ **DONE** — findings F234, F235 and F236; **23,860 B of tables, not 10,532** | it was not — see below |
 | 4 | the leaf remainder | the stubs and setters — see the table below | mostly leaves |
 | 5 | `VPcmFloModem`, `V90Phase3Demodulator` | the two whose objects reach through into an enclosing session | last |
 
@@ -80,7 +80,7 @@ emits automatically from one definition.
 
 ## The THIRD closure: weak template members, which `callgraph.py` also cannot see
 
-Finding 231.  `callgraph.py` enumerates `T` symbols.  An implicitly
+Finding F231.  `callgraph.py` enumerates `T` symbols.  An implicitly
 instantiated C++ template member is `W`, in its own `.gnu.linkonce.t.*`
 section, and the blob has **thirty-one** of them across `Scrambler<h,h>`,
 `Scrambler<h,i>`, `Scrambler<i,h>`, `Descrambler<h,i>` and
@@ -162,14 +162,14 @@ WRONG:
 `dataBase` is read by three of batch 3's five methods and its own definition
 points at `refLoopsType1, 2, 4, 5, 6` and `7`.  Data referencing data is a
 FOURTH closure, invisible to `callgraph.py`, to a `.rel.text` sweep and to the
-weak-symbol check of finding 231.  All ten static members are batch 3's, and
-#60's static data is **23,924 B**, not 10,596.  Finding 234.
+weak-symbol check of finding F231.  All ten static members are batch 3's, and
+#60's static data is **23,924 B**, not 10,596.  Finding F234.
 
 ## Virtual classes: the vptr shifts every field by four
 
 The object has four vtables — `Resampler`, `V90Resampler`, `ResamplerTiming`,
 `ResamplerTimingOffset` — and `ResamplerTimingOffset::setTimingOffset` is one
-of the fifty.  Finding 228 has the detail.  What matters when sizing an object
+of the fifty.  Finding F228 has the detail.  What matters when sizing an object
 here: **the largest-displacement bound stays right, but the field map derived
 from it is shifted four bytes** for those four classes, and a struct correct in
 size and wrong by four in every offset passes a size check and fails
@@ -186,10 +186,10 @@ re-opening the link closure for what may be a twenty-one-byte setter.
 ## Object sizes
 
 Bounded by the largest `this`-relative displacement each class uses
-(finding 215).  `V90Phase3Modulator` is **920** measured (below) and
+(finding F215).  `V90Phase3Modulator` is **920** measured (below) and
 `V90PreFilter` 1,280 is still a bound.  Both are the tractable shape: allocate a buffer, call `reset` on both sides, compare with
 `diff_eq_obj` — but seed the buffer with varied bytes rather than zeroing it,
-which is finding 230's first rule and the reason batch 1's clear loops could
+which is finding F230's first rule and the reason batch 1's clear loops could
 be checked at all.
 
 **A DISPLACEMENT IS NOT A SIZE.**  Batch 1 measured this: `V90Jd`'s largest is
@@ -198,21 +198,21 @@ be checked at all.
 the width of whatever sits at the bound before allocating anything; 916 and
 1,280 above were bounds and had not had that addition made.
 `V90Phase3Modulator`'s +0x394 is a one-byte store, so the object is
-**0x398 = 920**; finding 231 has the full field map, which batches 3 and 5
+**0x398 = 920**; finding F231 has the full field map, which batches 3 and 5
 should read rather than re-derive.  1,280 is still a bound.
 
 `V90Phase3Demodulator` reaches 43,336 and `VPcmFloModem` 32,612.  This file
 used to say that both "almost certainly" indexed *through* `this` into an
 enclosing session object rather than being that large.  **That was a
 hypothesis, and for `VPcmFloModem` it is now measured and it is wrong**
-(finding 273): all five members of the wave 3 batch load `this` from their own
+(finding F273): all five members of the wave 3 batch load `this` from their own
 stack slot and address +0x612c, +0x7dce, +0x7dd6 and +0x7ed4 straight off it,
 with no intervening load, so the object is at least 0x7f28 = 32,552 bytes.
 `V90Phase3Demodulator`'s 43,336 has NOT been checked and is still a
-hypothesis.  Either way the check is finding 268's -- trace the base register
+hypothesis.  Either way the check is finding F268's -- trace the base register
 of every candidate back to the prologue -- and it is three lines of reading.
 
-`VPcmFloModem` also embeds a whole `V90Modem` at +0x1758 (finding 274), which
+`VPcmFloModem` also embeds a whole `V90Modem` at +0x1758 (finding F274), which
 is why it is that size.  Both classes may still need the real lifecycle
 (`reset` -> `enterPhase3` -> use) before the REST of their members can be
 driven; the five in wave 3 did not.
@@ -221,11 +221,11 @@ driven; the five in wave 3 did not.
 `setParamEia6` touches `this` at exactly one offset, +0x1c, and reaches +0x490
 inside the `V90Parameters` block that lives there, while `isV90WithEia6` reads
 that block's +0x500.  The largest `this` displacement across all twenty-four
-members is +0x24.  Finding 234 has the field map.
+members is +0x24.  Finding F234 has the field map.
 
 **A layout is not settled by a passing test alone.**  The harness fill makes
 untouched memory compare equal on both sides, so a field the function never
-writes proves nothing about where it lives (findings 223, 224).  Each class's
+writes proves nothing about where it lives (findings F223, F224).  Each class's
 *size* comes from the measured maximum displacement, not from the field list,
 and unmodelled regions stay `pad_*` rather than being guessed into fields.
 
@@ -247,11 +247,11 @@ All five are written, with the 64-byte static member and the four weak
 were left undeclared for a while, on the argument that declaring a constructor
 or destructor makes the class non-trivial and deletes the default members of
 the union the test fixture uses — **that is no longer the position** (finding
-1255).  `Scrambler` acquired both first (finding 871), so the class was
+F1255).  `Scrambler` acquired both first (finding F871), so the class was
 non-trivial before either of these was declared and every fixture union already
 carries the empty pair that restores its own; and the constructor has two
 callers — `V90Modulator::V90Modulator` and `V90Phase3Demodulator::V90Phase3Demodulator`,
-measured off the blob's .text relocations, finding 1258 — so the symbol has to
+measured off the blob's .text relocations, finding F1258 — so the symbol has to
 exist.  Both are written and tested:
 
     V90Phase3Modulator(V90Parameters *, unsigned int)   C1,C2   123 B
@@ -261,19 +261,19 @@ exist.  Both are written and tested:
 
 ### VPcmFloModem — 6 symbol(s), 2420 bytes
 
-**All six are written** — 2,420 bytes.  Five in findings 273-278 with
-mutation suite `vpcmflomodem`; `enterPhase3` in findings 297-300 with
+**All six are written** — 2,420 bytes.  Five in findings F273-278 with
+mutation suite `vpcmflomodem`; `enterPhase3` in findings F297-300 with
 mutation suite `vpcmep3`.
 
 The class is 32,552 bytes at least and that is measured, not bounded away:
-see finding 273 and the correction above.  A whole `V90Modem` is embedded in
-it at +0x1758 (finding 274), and +0x1760 and +0x612c are a `V90Phase2Info` and
-a `V92Phase2Info` (finding 275).  `V92Phase2Info` is a class this tree had
+see finding F273 and the correction above.  A whole `V90Modem` is embedded in
+it at +0x1758 (finding F274), and +0x1760 and +0x612c are a `V90Phase2Info` and
+a `V92Phase2Info` (finding F275).  `V92Phase2Info` is a class this tree had
 never declared and now has, data-only, in `include/dsplib/V92Phase2Info.h`.
 
 A `tagV90DILdescriptor` is embedded at +0x004 as well, and it fills the whole
 of what used to be `pad_0004`: 0x004 + 0x213 = 0x217, which is where
-`flags_0217` begins.  Finding 297.
+`flags_0217` begins.  Finding F297.
 
 | 773 | `getUinfoValue(short)` | `_ZN12VPcmFloModem13getUinfoValueEs` |
 | 704 | `setPhaseIIinfo(int*, int)` | `_ZN12VPcmFloModem14setPhaseIIinfoEPii` |
@@ -340,7 +340,7 @@ not define, because their callees are not written:
 
 Both are written.  The object is **0x298** and the class has its own header,
 whose field map comes from the 1,002-byte constructor rather than from either
-member; findings 291, 293 and 296.
+member; findings F291, F293 and F296.
 
 ### V90Phase2Info — 1 symbol(s), 508 bytes
 

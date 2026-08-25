@@ -34,13 +34,13 @@ base V.90 builds on, not for its own sake.
 | 2 | Bell 103 / V.21 — *first real connection* | **done** — connects and carries data at BER 0 |
 | 3 | call progress / dialler — *originate as well as answer* | **done** — `src/callprog/`, `src/dialer/`, `src/call/`; one caveat below |
 | 4 | V.23 | **done** — all six modules at 1200/75 bps, interop against SpanDSP's `fsk.c` |
-| 5 | V.8 negotiation | **done** — negotiates against SpanDSP over a socket; `MEMORYC.c` identified here (finding 37) |
-| 6 | V.22 / V.22bis / Bell 212 | **not started.** The `fpm_*` fixed-point framework this row also covered was pulled forward into phase 2 and *is* done (finding 16) |
+| 5 | V.8 negotiation | **done** — negotiates against SpanDSP over a socket; `MEMORYC.c` identified here (finding F37) |
+| 6 | V.22 / V.22bis / Bell 212 | **not started.** The `fpm_*` fixed-point framework this row also covered was pulled forward into phase 2 and *is* done (finding F16) |
 | 7 | V.32 / V.32bis | **not started** |
 | 8 | remaining services (CID, DTMF, ring detect, voice, beep) | **not started** |
 | 9 | fax Class 1 (V.17 / V.27ter / V.29) | **not started** |
 | 10 | V.34 | **in progress** — the fast pass; see [docs/fastpass.md](docs/fastpass.md). Training, pre-emphasis and equalisation are written up in **[docs/training.md](docs/training.md)** — what is measured, what is decided, what is sent to the far end, and the seven known weaknesses with a test for each. Why a V.34 call over SIP negotiates a good rate and then loses it, and what was changed about it, is in **[docs/v34-rate-collapse.md](docs/v34-rate-collapse.md)** |
-| 11 | V.90 / V.92 — *the end goal* | **in progress.** Unwritten: V.90 **198,158 B / 425 sym**, V.92 **52,911 / 184**; V.92's classes sit on V.90's engine, so the order is forced. **K56flex is NOT a third phase** — it is 42 bytes of `ret` and returns a constant; the object ships the class and not the modulation (finding 1090) |
+| 11 | V.90 / V.92 — *the end goal* | **in progress.** Unwritten: V.90 **198,158 B / 425 sym**, V.92 **52,911 / 184**; V.92's classes sit on V.90's engine, so the order is forced. **K56flex is NOT a third phase** — it is 42 bytes of `ret` and returns a constant; the object ships the class and not the modulation (finding F1090) |
 | 12 | 8 kHz retarget | **not started** — and it may not be a rescaling job: `vpcm_create` hard-guards `srate == 9600`, and 9,600 = 4 × 2,400, V.34's reference symbol rate. If `datapumpv34`'s four-sample block IS one symbol period, 8,000/2,400 is not an integer and the relationship breaks. Task #86 settles it before any work starts |
 
 Run `make coverage` for the live figure rather than trusting a number written
@@ -56,7 +56,7 @@ settled deliberately in August 2026 and should be changed the same way.
 | | step | phase | why here |
 |--:|---|---|---|
 | 1 | finish V.34 | 10 | the base V.90 builds on |
-| 2 | **two instances, one originating and one answering, against the blob** | 10 | **DONE** — ours at both ends connects and carries data at BER 0 both ways, four-way compared over 8,000 blocks (`t_vpcmrun.c`, findings 980-988) |
+| 2 | **two instances, one originating and one answering, against the blob** | 10 | **DONE** — ours at both ends connects and carries data at BER 0 both ways, four-way compared over 8,000 blocks (`t_vpcmrun.c`, findings F980-988) |
 | 3 | 56k / V.90 | 11 | needs the 290 KB `VPcmV34Main.cpp` commitment |
 | 4 | V.92 | 11 | shares that span |
 | 5 | whatever is still missing | 6–9 | V.22, V.32, services, fax Class 1 |
@@ -74,10 +74,10 @@ ways — ours on both ends, the blob on both, and each mixed pair — and compar
 every block against the blob-blob run. It found a defect at **block 0**:
 `modem_serrint`'s history-ring wrap is `jbe` and this tree had it signed, so a
 negative index walked the write 1,385 elements below the ring. Every existing
-test seeds that index to zero. Findings 780-788.
+test seeds that index to zero. Findings F780-788.
 
 **But step 2 IS NOT FINISHED, and the bar is data in both directions.**
-`test/unit/t_v34conn.c` (findings 900-908) then re-ran that call on two
+`test/unit/t_v34conn.c` (findings F900-908) then re-ran that call on two
 endpoints built by the blob's own constructor, which produced a real V.34
 startup — DET_SYNC → DET_INFO → TONE_AB → phase 1 in the correct `_CALL`/`_ANS`
 split → phase 2. It still **does not connect**: `+0x2218` never leaves 2, out
@@ -106,13 +106,13 @@ starts its countdown from, and below a `filtdelay` of 57 that countdown loses
 a race against the receiver declaring all-ones on the silent line phase 2
 requires — which the object reports as *"Repeated info0 is detected"*.
 `t_v34conn`'s 40 was chosen only to satisfy the object's `+4 <= 0xf4`;
-slmodemd's own drivers measure 216 and 232. Findings 960-963; `t_v34conn.c` is
+slmodemd's own drivers measure 216 and 232. Findings F960-963; `t_v34conn.c` is
 left as the recorded control for the below-threshold case.
 
 **Step 6 is last because it is the one part with no tier-1 oracle.** The blob
 is the *analogue client*: `VPCMXF_Create` derives its side from whether its
 first argument is null, its one caller passes null, and the answer is always
-side 1 (findings 701, 702). So the digital-side sender — `V90Modulator` and its
+side 1 (findings F701, F702). So the digital-side sender — `V90Modulator` and its
 26 KB of unwritten closure — is code the blob never enters, and a path the blob
 never enters cannot be driven differentially. Only the codegen tier applies,
 and the first real evidence it *works* is interop against live hardware.

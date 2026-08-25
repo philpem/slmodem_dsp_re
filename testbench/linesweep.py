@@ -47,7 +47,7 @@ That governs the rate the FAR END asks for, and we cannot change the hardware
 modems anyway; only the ATA is ours to configure.  Worth knowing, second-order.
 
 AND THE WHOLE ANALOGUE HOP IS A PROPERTY OF THE BENCH, NOT OF THE TARGET.
-Digital termination (task #110) removes the hybrid entirely, and finding 6901
+Digital termination (task #110) removes the hybrid entirely, and finding F6901
 already measured that configuration: our datapump against the Conexant HSF over
 SIP with no analogue anywhere trained 33600 both ways with zero retrains, 8 of
 9 runs.  So these impedance arms characterise a hop the eventual system does
@@ -58,7 +58,7 @@ exists to test and is a real requirement, not a detour.
 WHAT IT MEASURES
 ----------------
 The V.34 line probe (V.34 sec 11.2 / Table 17): 25 tones 150 Hz apart from 150
-to 3750 Hz, emitted BEFORE the far end applies pre-emphasis, which finding 1907
+to 3750 Hz, emitted BEFORE the far end applies pre-emphasis, which finding F1907
 records as the only safe window for a channel measurement.  Reduction is
 `bandshape.py` -- this tool does not re-implement it, it imports it, so an arm
 measured today and an arm measured next month go through identical code.  A
@@ -89,7 +89,7 @@ THE HONESTY RULES THIS TOOL ENFORCES
    beyond the measured points, no filling in the ends.
 
 5. IT REFUSES TO REPORT ON ZERO.  A tool that prints a clean empty table is
-   indistinguishable from a broken one (findings 134, 2400, 3100).
+   indistinguishable from a broken one (findings F134, F2400, F3100).
 
 STORAGE
 -------
@@ -104,7 +104,7 @@ The shared C channel model carries selectable curves under `VBT_PROFILE` (with
 `CHAN_LINE_MODEL` retained as a harness alias).  This tool prints a
 ready-to-paste stanza (`compare --emit-chanshim`) so a measured arm can become
 an emulator model without anybody retyping numbers.  It does NOT edit the
-shared model -- the default is byte-identical to finding 1907's fit
+shared model -- the default is byte-identical to finding F1907's fit
 and every archived emulator result depends on it staying that way.
 """
 
@@ -128,7 +128,7 @@ BENCH = os.path.dirname(os.path.abspath(__file__))
 STORE = os.path.join(BENCH, "linemodels")
 SCHEMA = 1
 FLOOR_MAX = 0.5          # a bin floored in more than half the probes is null
-TILT_BAND = (450.0, 3150.0)   # finding 1956's band; see compare() for why
+TILT_BAND = (450.0, 3150.0)   # finding F1956's band; see compare() for why
 
 
 # ----------------------------------------------------------------- provenance
@@ -168,7 +168,7 @@ def build_model(impedance, modem, logs, ata_config=None, note=None,
     logs = [p for pat in logs for p in sorted(glob.glob(pat))] or []
     if not logs:
         sys.exit("linesweep: no logs matched -- refusing to build a model "
-                 "from nothing (findings 134, 2400).")
+                 "from nothing (findings F134, F2400).")
     r = bandshape.report(f"{impedance}/{modem}", logs)
     if not r or not r.get("n_probe"):
         sys.exit(f"linesweep: {len(logs)} logs matched but they carry 0 line "
@@ -281,7 +281,7 @@ def measure_echo(logs, max_ms=400.0, min_ratio=4.0):
     Uses echoscan.report -- the repaired one (task #168) -- so an arm measured
     here and a call examined by hand go through identical code.  NOT
     echoratio.py: its lag search caps at 120 ms and the echo on this path sits
-    at 160-175 ms, which is how finding 1971 came to report "no linear echo"
+    at 160-175 ms, which is how finding F1971 came to report "no linear echo"
     from a null it could not have avoided producing.
 
     A PEAK IS NOT A DETECTION.  echoscan returns the estimator's own noise
@@ -461,7 +461,7 @@ def cmd_measure(a):
     #
     #     testbench/waitquiet.sh && linesweep.py measure ...
     #
-    # Finding 1951 is why it matters -- a call at load 4.28 returned CONNECT
+    # Finding F1951 is why it matters -- a call at load 4.28 returned CONNECT
     # 4800 against 31200 quiet.  The load is recorded with every arm so a
     # result taken on a busy box can at least be identified later.
     print(f'measuring {a.modem} (ext {ext}) at impedance '
@@ -742,7 +742,7 @@ def cmd_plot(a):
         # the curve the emulator hardcodes, for reference only
         fr = np.linspace(150, 3750, 200)
         ax.plot(fr, [bandshape.fit_db(x) for x in fr], color="0.55", lw=1.0,
-                ls=(0, (6, 3)), label="chanshim fit (finding 1907)")
+                ls=(0, (6, 3)), label="chanshim fit (finding F1907)")
         ax.set_title(title, fontsize=10)
         ax.set_xlabel("Hz"); ax.set_ylabel("dB rel. passband")
         ax.grid(alpha=.3); ax.legend(fontsize=7, loc="lower left")

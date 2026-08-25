@@ -11,7 +11,7 @@
 # every place the two compilers disagree, the disagreement had to be absorbed
 # SOMEWHERE, and the only place available was the reconstruction's own source:
 # `round32`'s `volatile` in Resampler.cpp forces GCC 13 to emit a store the
-# object has and modern GCC otherwise optimises away (finding 1352).  The
+# object has and modern GCC otherwise optimises away (finding F1352).  The
 # tests then pass and the source has drifted away from what the author wrote,
 # with every gate green.  That is the failure mode this target closes.
 #
@@ -43,26 +43,26 @@
 # segments for.  Static linking sidesteps the program-header table entirely.
 #
 # FLAGS COME FROM build.sh, NOT FROM THE MAKEFILE, because build.sh's set was
-# derived from the object (findings 606, 607, 612, 616) and the Makefile's was
+# derived from the object (findings F606, F607, F612, F616) and the Makefile's was
 # not.  Three of the Makefile's must NOT appear here:
 #
 #   -fno-lifetime-dse    postdates 3.4.2 (finding 32634's date argument); its
 #                        ABSENCE is the period semantic, which is exactly why
-#                        the modern build has to ask for it (finding 1272).
+#                        the modern build has to ask for it (finding F1272).
 #   -fno-pie             no PIE to disable; the Dockerfile establishes the
 #   -fno-stack-protector Gentoo ssp/pie patches were off in the object anyway.
 #
 set -e
 cd "$(dirname "$0")/../.."
 
-# THE IMAGE IS GCC 3.4.2 ITSELF SINCE FINDING 2200 -- this used to default to
+# THE IMAGE IS GCC 3.4.2 ITSELF SINCE FINDING F2200 -- this used to default to
 # `dsplibs-tc`, which is Debian sarge's 3.4.4 prerelease and not the compiler
 # every comment in this directory claims.  `PERIOD_IMG=dsplibs-tc` still
 # selects the old one, which is how the two were compared; both are green here
 # at 183 passed / 0 failed, so this tier does not decide between them.
 #
 # `PERIOD_IMG=dsplibs-tc342-gentoo` selects the third and exact arm, Gentoo's
-# gcc-3.4.2-r2 (Dockerfile.gentoo, finding 2500).  It is green here too --
+# gcc-3.4.2-r2 (Dockerfile.gentoo, finding F2500).  It is green here too --
 # 185 passed / 0 failed -- so this tier decides between none of the three.
 # Set PERIOD_OUT with it: build/period is incremental on SOURCE mtime and
 # does not notice that the compiler changed.
@@ -72,7 +72,7 @@ if ! docker image inspect "$IMG" >/dev/null 2>&1; then
     echo "tools/toolchain: no docker image '$IMG'.  Build it with" >&2
     echo "  docker build --platform linux/386 \\" >&2
     echo "    -f tools/toolchain/Dockerfile.exact -t dsplibs-tc342 tools/toolchain" >&2
-    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding 2200.)" >&2
+    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding F2200.)" >&2
     exit 1
 fi
 REF=${REF:-build/dsplibs_ref.o}

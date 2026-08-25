@@ -23,7 +23,7 @@ Three checks already look at the call sites, and none of them answers this.
 which `dsplibs_debug_printf` lines have a hit count of zero?
 
 It agrees with the hand analysis where the two overlap, which is the reason to
-trust it: finding 154 worked out by hand that 3 of `CALLPROG_Progress`'s sites
+trust it: finding F154 worked out by hand that 3 of `CALLPROG_Progress`'s sites
 were verified and the rest were not, and this reports 3 live sites in
 callprog.c and 30 dead, having been told nothing.
 
@@ -45,7 +45,7 @@ optimisation, and with `-mfpmath=387` that can move x87 spill points and
 change the rounding of intermediate values -- the exact class of difference
 the differential tier exists to detect.  It does not happen here: all 62
 binaries pass instrumented, the float-heavy ones (t_v34ec, t_v34rx) included.
-See finding 192.  Worth re-checking if the flags ever change.
+See finding F192.  Worth re-checking if the flags ever change.
 
     tools/debugcov.py                 build, run, report
     tools/debugcov.py --no-build      reuse an existing build-cov tree
@@ -183,11 +183,11 @@ def run(targets):
         # behaves identically to the blob, so ANY test disagreeing with the
         # blob is a hard failure whatever build it came from.  A dead site is
         # work still to do; a disagreement is the thing this project exists to
-        # not have.  Finding 192 records that instrumentation costs nothing
+        # not have.  Finding F192 records that instrumentation costs nothing
         # under these flags, and this is where that stops being true.
         #
         sys.exit("  %d instrumented test(s) disagree with the blob: %s\n"
-                 "  See finding 192."
+                 "  See finding F192."
                  % (len(bad), " ".join(os.path.basename(b) for b in bad)))
 
 
@@ -203,7 +203,7 @@ def run(targets):
 # location and every lookup returned None, so the whole tool measured NOTHING
 # and reported 0.0% (0/0) and "0 of 0" at exit 0.
 #
-# That is finding 2400 exactly over again -- a build moved its output and a
+# That is finding F2400 exactly over again -- a build moved its output and a
 # detector kept reading the old path -- so the answer is both halves of 2401's
 # ruling: probe both layouts and take whichever HAS the data, and make a zero
 # denominator fatal below so the next move cannot be silent either.
@@ -232,7 +232,7 @@ def stem_of(src):
 
 
 #
-# A DETECTOR MUST REPORT ITS DENOMINATOR (finding 2401), and a denominator of
+# A DETECTOR MUST REPORT ITS DENOMINATOR (finding F2401), and a denominator of
 # zero is not a pass.  Every number this tool prints is a ratio over what gcov
 # gave it, and "everything is covered" and "nothing was measured" render
 # IDENTICALLY -- 0 of 0, 0 dead, 0.0% -- while the second is the tool being
@@ -250,7 +250,7 @@ def zero_denominator(what):
             "  Looked for %s.gcda in: %s\n"
             "  %d .gcda file(s) exist anywhere under %s/.\n"
             "  If the build tree moved again, teach objdirs() where it went;\n"
-            "  if it was never built, drop --no-build.  Findings 134, 2400, 2401."
+            "  if it was never built, drop --no-build.  Findings F134, F2400, F2401."
             % (what, stem_of(sample), ", ".join(objdirs(sample)),
                len(found), BUILD))
 

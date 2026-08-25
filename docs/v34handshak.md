@@ -15,10 +15,10 @@ As of the session that landed rxstate 53's arm:
 
 | guard | still covers | bytes |
 |---|---|--:|
-| `T3M_UNWRITTEN_TBL1` | **RETIRED.** 81's wrap at 0x66d85 and 86's segment end at 0x66fe9 are written, in the arms, and NEITHER turned out to be a transfer out of the loop -- so the loop's dispatch on an arm's return value has gone too, and with it two of `enum v34tx1_exit`'s three values. Finding 748 | -- |
+| `T3M_UNWRITTEN_TBL1` | **RETIRED.** 81's wrap at 0x66d85 and 86's segment end at 0x66fe9 are written, in the arms, and NEITHER turned out to be a transfer out of the loop -- so the loop's dispatch on an arm's return value has gone too, and with it two of `enum v34tx1_exit`'s three values. Finding F748 | -- |
 | `T3M_UNWRITTEN_RXSTATE` | **RETIRED.** rxstate 72 RX_L1 (0x650c6) is written and the guard has no call site left. All five arms of the chain and both transmit-dispatch doors are written; the constant is still in `v34hshak.h` beside the other four that no path reaches | -- |
 | `T3M_UNWRITTEN_FSKGATE` | **RETIRED.** The arm at 0x6754b is written and the guard has no call site left. The code is still in `v34hshak.h` beside the other four that no path reaches | -- |
-| `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at ONE site: the table-3 `default:`, which is unreachable. 0x6d57c and 0x6c8f8 are written, and they were never microstate 44's -- finding 748 | -- |
+| `T3M_UNWRITTEN_OTHER` | `t3c_unwritten()` at ONE site: the table-3 `default:`, which is unreachable. 0x6d57c and 0x6c8f8 are written, and they were never microstate 44's -- finding F748 | -- |
 
 **THE TABLE-3 `default:` IS NOT WORK AND NEVER GOES AWAY.** Its own comment
 says so: the fifteen written arms and the twenty-four shared ones are forty
@@ -31,9 +31,9 @@ criterion is **when no REACHABLE arm is unwritten**.
 **THAT CRITERION IS MET AND `tools/coverage.py`'s `PARTIAL` ENTRY HAS COME
 OUT.** `v34handshak`'s 61,541 bytes now count as translated and `make
 coverage` reads **30.1%** where it read 21.7%. The number of guarded reachable
-bytes went 11,398 -> 10,310 (finding 725, 53 DET_AB) -> 8,678 (731, 4 RECEIVE)
+bytes went 11,398 -> 10,310 (finding F725, F53 DET_AB) -> 8,678 (731, 4 RECEIVE)
 -> 3,811 -> zero for the rxstate chain (738, 72 RX_L1), and then table 1's two
-and the two Modem-on-Hold sites went with findings 748-753. Read the guard
+and the two Modem-on-Hold sites went with findings F748-753. Read the guard
 table above from the tree before quoting any of this; the grep at the top of
 this section is the check, and one call site is the pass.
 
@@ -61,13 +61,13 @@ read off the prologue at 0x628f0:
 ```
 
 So table 2 has three entrances and not two; all three converge exactly, and
-that is measured over seventeen states rather than assumed (finding 361).
+that is measured over seventeen states rather than assumed (finding F361).
 
 **THE rxstate CHAIN IS 11,537 BYTES OVER FIVE ARMS, AND ALL FIVE ARE
 WRITTEN** -- not the inherited "~12.3 KB", which counts the shared tail at
-0x62a40 and the 0x64a8f preamble against the arms (finding 716). The number
+0x62a40 and the 0x64a8f preamble against the arms (finding F716). The number
 moved from 11,433 when `cfgsplit.py` stopped dropping 131 bytes of every walk
-(finding 737), so **every count in this section is a re-measurement and not a
+(finding F737), so **every count in this section is a re-measurement and not a
 copy**, taken with barriers at 0x62af1, 0x62a40, 0x629ed, 0x62a02 and 0x62b71.
 The last three are not optional and the inherited note did not have them: a
 table-1 arm falls out of the per-sample loop at 0x629ed and reaches the whole
@@ -83,17 +83,17 @@ exclusive = 0 for all of them.
     0x64a87   the FSK gate's TEST      already written
 ```
 
-**THE FSK GATE'S BODY DOES NOT AGREE WITH FINDING 719, AND IT IS NOT FINDING
-737.** 719 says 1,089 bytes over 38 blocks; this walk says 1,182 over 39, and
+**THE FSK GATE'S BODY DOES NOT AGREE WITH FINDING F719, AND IT IS NOT FINDING
+F737.** 719 says 1,089 bytes over 38 blocks; this walk says 1,182 over 39, and
 so does the walk done with `cfgsplit.py`'s OLD instruction sizing, which gives
 1,181. The old sizing reproduces every other inherited number exactly --
-3,806 for rxstate 72, 1,629 for 53 (finding 716's figure, corrected to 1,632
+3,806 for rxstate 72, 1,629 for 53 (finding F716's figure, corrected to 1,632
 by hand in 727) and 4,875 for 4 RECEIVE -- so the tool is not the difference
 here and 737's 131 bytes are not either. The block COUNT is 39 both ways,
 which no byte-accounting change can move. 719's figure is not reproducible by
 any barrier set or dispatch-target set tried, and nobody has re-derived its
 method. Recorded rather than reconciled: that arm is landed and tested, so
-the disagreement is about accounting. Finding 747.
+the disagreement is about accounting. Finding F747.
 
 **AND 3,811 HAS TWO INDEPENDENT DERIVATIONS**, which is the strongest thing
 about it: the handed analysis reached it with two barriers and a restricted
@@ -105,7 +105,7 @@ Every callee all five need is already defined in this tree, so unlike table 1
 -- where `probe` and `vectpp` had to be recovered before an arm could be
 written at all (421, 422) -- nothing here is blocked on a missing function.
 
-The three state words are plain halfwords in the object (finding 213):
+The three state words are plain halfwords in the object (finding F213):
 
 ```
     obj + 0x3592    microstate      table 3, index = microstate - 41, 41..80
@@ -114,7 +114,7 @@ The three state words are plain halfwords in the object (finding 213):
 ```
 
 Neither `V34agc` nor `fskdemodulate` writes any of the three -- swept over the
-whole of `.text`, finding 285 -- so a microstate written before the step is
+whole of `.text`, finding F285 -- so a microstate written before the step is
 still there when the dispatch reads it. That is what makes this harness
 possible, and it did not have to be true.
 
@@ -137,7 +137,7 @@ has the eighty-seven names.
 ```
 
 `v34hs_setup` fills both objects with varied pseudorandom bytes from a fixed
-LCG -- never zeroed, both sides identical (finding 230) -- aims every pointer
+LCG -- never zeroed, both sides identical (finding F230) -- aims every pointer
 field, and then runs `V34InitializeImplementationSpecific` and
 `v34handshakinit`. **Side A runs ours and side B the blob's**, which is what
 makes the comparison a check rather than a tautology on a case where both
@@ -151,7 +151,7 @@ of filler between and around them, side B's arena a byte copy of side A's.
 That is not tidiness. With the two sides as ten separate statics at ten
 addresses the linker chose, the per-sample transmit route failed at 23 of 24
 object fills, and the harness spent a session concluding that the object was
-at fault (findings 319 and 320, D60 retracted). Bisected against the old
+at fault (findings F319 and F320, D60 retracted). Bisected against the old
 fixture: it is the placement of the five BLOCKS that matters, not of the
 object -- wrapping the object alone changes nothing, and `V34HS_LOOSEOBJ=1`
 puts side B's object back outside its arena and the sweep still passes.
@@ -166,7 +166,7 @@ regions and the space around them -- and both transcripts.
 thirty-seven skips was exercised, so the list cannot go stale unnoticed. The
 list was thirty-five until the first case ran `initdigital` inside a step and
 the two shell contexts' `coeff` pointers came back as differing object bytes;
-finding 734.
+finding F734.
 
 **Which block a pointer selects is checked now.** A pointer out of the object
 is classified three ways, not two: into its own object (offset compared), into
@@ -176,7 +176,7 @@ side B the blob's -- two addresses of two copies, which no address comparison
 can tell from two different tables. For that last class `t_v34hsstep.c` runs
 the whole sweep a SECOND time with the blob's bring-up on both sides, and then
 the two must select the identical address. All twelve that qualify do, and
-that pass is in `make phase`. Finding 324. This is the gap earlier versions of
+that pass is in `make phase`. Finding F324. This is the gap earlier versions of
 this file told you to close with `t_v34hshak.c`'s `compare_table`; it is
 closed.
 
@@ -189,7 +189,7 @@ function for one test: `t_v34hsstep.c` leaves it NULL and goes on proving the
 fixture, and `t_v34hstbl2.c` installs `v34handshak_txblock` and drives only
 the states table 2 owns. It moves side A's debug capture slot with the
 function, which matters: our code writes slot 0 and the blob slot 1, and
-leaving it at 1 compares the blob's transcript against itself. Finding 365.
+leaving it at 1 compares the blob's transcript against itself. Finding F365.
 
 Name the reconstruction after the dispatch, not `v34handshak`.
 `tools/coverage.py` files a symbol the blob does not have under "a helper
@@ -210,7 +210,7 @@ address independent and fully seeded before its own failures mean anything.
 style.** One `v34hsstep.o` is linked into every test binary, so the macro
 would move side A for `t_v34hsstep.c` too, whose whole claim is a
 blob-against-blob property over forty-three cases most of which have no
-reconstruction. Finding 356. `V34HS_OURS` still compiles and now sets the
+reconstruction. Finding F356. `V34HS_OURS` still compiles and now sets the
 default.
 
 **`v34handshak` IS NO LONGER PARTIAL, and the list below is now a record of
@@ -228,15 +228,15 @@ written:
                at 0x6bda0, and all four arms of the accept path: the
                default at 0x6e552, and 0x6f438 (INFO1c), 0x6ed17 (INFO1a)
                and 0x6ea38 (Modem-on-Hold), which are selected by a message
-               length of 0x4d, 0x26 and 0x08 (findings 400-406, 440-448)
+               length of 0x4d, 0x26 and 0x08 (findings F400-406, 440-448)
   table 2   ALL SEVEN targets -- 0x64480, 0x644c9, 0x644d8, 0x644fa,
             0x64509, 0x64518 and the default at 0x62a40, which is also the
             tail every arm of that dispatch falls into. `t_v34hstbl2.c`
             drives every one; the "0x644c9 only" this line used to say was
             the FOURTH stale status line found in this file
   the chain EVERY rxstate: 43 to table 3, 4 RECEIVE (0x653e4, findings
-            731-735), 35 WAIT, 53 DET_AB (0x65473, findings 724-729),
-            72 RX_L1 (0x650c6, findings 738-745) and the two default
+            F731-735), 35 WAIT, 53 DET_AB (0x65473, findings F724-729),
+            72 RX_L1 (0x650c6, findings F738-745) and the two default
             doors into table 2.  `t_v34hsrxch.c` drives all eighty-seven
   the rest  NOTHING.  Every reachable arm of every dispatch is written,
             and the only `t3c_unwritten()` left is table 3's `default:`,
@@ -251,13 +251,13 @@ its default, which is written; anything in 5..74 needs that arm to exist.
 
 **Aim a pointer with `v34hs_poke_self_ptr`, never `v34hs_poke_int`.** The two
 objects are at different addresses, so one address written into both is
-precisely the asymmetry findings 319-322 are about.
+precisely the asymmetry findings F319-322 are about.
 
 **And `V34HS_REFINIT=1` does not apply to a case whose arm installs a library
 table.** 80's retrain calls `v34handshakinit` from inside the step, so side A
 installs ours and side B the blob's, and ten pointers then hold two addresses
-of two copies -- the case finding 324 says no address comparison can settle.
-Same caveat, same reason, as `v34hs_holes_check`. Finding 359.
+of two copies -- the case finding F324 says no address comparison can settle.
+Same caveat, same reason, as `v34hs_holes_check`. Finding F359.
 **`v34hs_side_a(fn)`, at run time, and NOT `V34HS_OURS`.** This section used
 to say "define `V34HS_OURS` and side A becomes `v34handshak`". That cannot be
 done: `V34HS_OURS` replaces side A in *every* binary that links this fixture,
@@ -296,7 +296,7 @@ Per sample it writes +0x260, calls `modem_serrint` and reads +0x25e; per block
 it calls `datapumpv34`. The whole call runs four times over the same two
 arenas -- ours on both ends, the blob on both, and each mixed pair -- and
 every block of every run is compared against the same block of the blob-blob
-run. Findings 780-788; 781 is the defect it found at block 0, and 784 is the
+run. Findings F780-788; 781 is the defect it found at block 0, and 784 is the
 one thing about the fixture a whole call needs and a single step does not: the
 session block at +0x3548 holds pointers the object dereferences, and the
 pseudorandom fill makes them faults.
@@ -314,15 +314,15 @@ on A, the blob's on B -- for a function that is not `v34handshak` but shares
 its object. `datapumpv34` is the only user: it is the function that *calls*
 `v34handshak`, in the same translation unit, and what it needs from here is
 the arena rather than the dispatch. Reusing this fixture instead of building
-a second one is findings 319-322; `test/unit/t_v34datapump.c` is the example
-and finding 453 is why `log_a` is a parameter.
+a second one is findings F319-322; `test/unit/t_v34datapump.c` is the example
+and finding F453 is why `log_a` is a parameter.
 
 It does not compose with the two per-case forms. A test uses it alone, and
 runs each case a second time with the blob on both sides as its control.
 
 `t_v34hst3mid.c` is the worked example: every path not written records a code
 and returns rather than doing something plausible, and the test fails if a
-trial reached one. Findings 370-373. Its arms were in a file of their own
+trial reached one. Findings F370-373. Its arms were in a file of their own
 until the unify (546-551); the codes are now `v34handshak`'s own and the
 return-instead-of-abort is what `v34handshak_unwritten_reset` asks for.
 
@@ -337,12 +337,12 @@ return-instead-of-abort is what `v34handshak_unwritten_reset` asks for.
 - **Never put the state word you entered with into a signature.** It sits in
   the object, so a comparison including it calls every case distinct from every
   other -- seventeen microstate targets "separated" perfectly while six were
-  doing the same thing. Finding 290.
+  doing the same thing. Finding F290.
 - **The two sides must be congruent in memory, not merely equal in it.**
   Identical bytes at two addresses with two different sets of neighbours is
   not enough, and the route that finds out is table 1. It is the blocks the
-  object points at that have to be congruent, not the object. Findings 319
-  and 322.
+  object points at that have to be congruent, not the object. Findings F319
+  and F322.
 
 ## Table 3, the microstate machine -- this is #57
 
@@ -356,7 +356,7 @@ added to the other, so the table carried a column saying which file each arm
 lived in. Three separate batches wrote that column from their own tree and
 each got it wrong in its own way -- 46 was marked `open` because it was not in
 the file that batch happened to be editing. Task #25 unified the two
-(findings 546-551) and `src/pump/v34/v34hshak_t3mid.c` no longer exists, so
+(findings F546-551) and `src/pump/v34/v34hshak_t3mid.c` no longer exists, so
 there is one file, one `v34handshak`, and nothing left for the column to say.
 Check a row with `grep -n 'case V34HS_' src/pump/v34/v34hshak.c`, or with
 `tools/anchorcheck.py`'s `arm_map`, which prints all forty microstates and the
@@ -392,7 +392,7 @@ one more or one fewer. The groups:
 
 ```
   A  41, 44                    two real cases that agree cold; 41 has landed
-                               (findings 390-396) and its three companion
+                               (findings F390-396) and its three companion
                                fields are +0xaae2, +0xabe8 and +0x358a
   B  42, 46, 63, and any state outside 41..80 (the default at 0x65329)
   C  47                        }
@@ -405,17 +405,17 @@ one more or one fewer. The groups:
 **Group D is six DIFFERENT arms, not one.** 48, 49, 50, 51, 55 and 58 have
 six distinct entries in `.rodata+0x3000` -- 0x65d30, 0x66a0d, 0x664b8,
 0x65c47, 0x65b72, 0x66003 -- and none of them is 0x6590b. All six are now
-reconstructed, and what separates them is `filtdelay` at +0xaa7c (finding 372)
+reconstructed, and what separates them is `filtdelay` at +0xaa7c (finding F372)
 for 49 and 50, and for 55 something that is not in the object at all: whether
 `fskdemodulate` moved `fsk.nbits`, read into `%ebx` at 0x64a9e before the call
-and compared at 0x65b79 (finding 430). Their agreeing cold
-is the fill's doing. Finding 351.
+and compared at 0x65b79 (finding F430). Their agreeing cold
+is the fill's doing. Finding F351.
 
 **Group B and group D are the shape of the machine, not a harness defect.**
 The arm twenty-four states share is three instructions -- read txstate, jump to
 the once-per-block dispatch at 0x62af1 -- and so is the default. Group D's six
 increment one counter, test it against one or two thresholds, and jump to the
-same place. Finding 288.
+same place. Finding F288.
 
 Two things follow, and they are how #57 should be planned:
 
@@ -449,7 +449,7 @@ case.
 ## Table 2, the transmit supervisor -- DONE
 
 `src/pump/v34/v34hshak.c` and `test/unit/t_v34hstbl2.c`, 11,009 checks. The
-first tier-1 differential test of any part of `v34handshak`. Findings 360-366,
+first tier-1 differential test of any part of `v34handshak`. Findings F360-366,
 and 591 for the collapse of the last of its three reconstructions onto
 `t3m_txblock`/`t3m_tail` -- the dispatch now lives in `v34handshak`'s own file
 and `v34handshak_txblock` is a named entry to it for this test alone.
@@ -468,16 +468,16 @@ Seven targets over txstates 5..74, about 0.3 KB:
 ```
 
 **Four behaviours cold and all seven distinct once three companion fields
-move**, so finding 290's count is about the fill and not about the object.
-Fifty-FOUR of the seventy entries are the default; finding 286 says
-fifty-three. Finding 364.
+move**, so finding F290's count is about the fill and not about the object.
+Fifty-FOUR of the seventy entries are the default; finding F286 says
+fifty-three. Finding F364.
 
 Reach it with `v34hs_route(V34HS_ROUTE_TXBLOCK, 0)`, which sets the cursor at
 the limit and the receiver count to 5 -- or with `V34HS_ROUTE_RXCHAIN` and an
 rxstate that is neither 43, 4, 35, 53 nor 72. **There are three doors, not
 two**: rxstate above 43 leaves the chain at 0x62a12 for a second chain at
 0x62b71 which reaches the same dispatch. All three converge exactly, measured
-over seventeen states (finding 361).
+over seventeen states (finding F361).
 
 Two things a per-case agent on table 1 or table 3 should take from it:
 
@@ -487,7 +487,7 @@ Two things a per-case agent on table 1 or table 3 should take from it:
   +0x134 and +0x230 -- and the arms' answers stop depending on the seed.
 - **The transcript axis is worth nothing here**: the whole closure holds no
   `call` and no debug site, so both sides print zero lines and the transcript
-  comparison passes by construction (finding 362).
+  comparison passes by construction (finding F362).
 
 ## Table 1, the per-sample transmit loop -- DONE, arms AND loop
 
@@ -501,7 +501,7 @@ them was written later**, in `v34handshak` itself, and is tested by
 `test/unit/t_v34hstb1.c` -- our whole function against the blob's, so no arm
 can be compared against the blob's copy of itself. Reading "table 1 is
 complete" off the arms retires a guard that is still doing its job; finding
-712.
+F712.
 
 **`T3M_UNWRITTEN_TBL1` IS RETIRED.** What was left of it -- 81's wrap at
 0xc0 -> 0x66d85 and 86's segment end -> 0x66fe9 -- is written, inside
@@ -509,8 +509,8 @@ complete" off the arms retires a guard that is still doing its job; finding
 out of its arm: 0x66d85 ends at the loop test and 0x66fe9 at the fall-through
 of the block that jumped to it. `V34TX1_MOH_WRAP` and `V34TX1_TXMD_DONE` are
 gone, the loop no longer tests what an arm returned, and `enum v34tx1_exit`
-has one value. Findings 748 and 750. **It compares,
-and it is in the default sweep.** It used not to; findings 319-322 are what
+has one value. Findings F748 and F750. **It compares,
+and it is in the default sweep.** It used not to; findings F319-322 are what
 that took and D60 is the retraction. Nothing about the route is special any
 more except that it is the one the harness's geometry could break, so if a
 case here starts disagreeing, read D61 before reading your own code.
@@ -520,7 +520,7 @@ sample, **eighteen of the nineteen reachable targets have their own
 behaviour** -- better than table 3's seven-from-seventeen or table 2's
 four-from-seven, because these arms run a modulator rather than setting a flag
 and leaving. The only pair that agrees cold is 24 `TX_DPSK` and 60 `TONE_AB`.
-Finding 323 has the per-target table of bytes written and progress code; read
+Finding F323 has the per-target table of bytes written and progress code; read
 it before choosing what to take first, because the six that write nothing
 below +0x234 -- 65, 71, 78, 81, 85, 86 -- are the small ones.
 
@@ -531,7 +531,7 @@ txstates 65, 71, 78, 81, 85 and 86 -- the six that write nothing below +0x234
 and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, then
 67 and 24, the two largest at the time, and then 21 `TRNSEG4`, are in
 `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
-`test/unit/t_v34hstx1.c`. Findings 340-345, 421-425 and 426-427.
+`test/unit/t_v34hstx1.c`. Findings F340-345, 421-425 and 426-427.
 
 **TABLE 1 IS COMPLETE.** All nineteen targets are written and differentially
 tested. The two sentences that used to sit here and below each said the OTHER
@@ -542,8 +542,8 @@ happened in this file (microstate 46 was the first). Write it from the tree.
 **Two of the eighteen needed a table
 before they could be written at all**: `probe`, 64 signed shorts at
 `.rodata+0x2c00`, which 51 reads and which this tree did not have (finding
-421); and `vectpp`, 96 shorts at `.rodata+0x2c80`, which 20 reads as forty-eight
-FOUR-byte points and which was `static` in v34rx.c (finding 422). 21 needed
+F421); and `vectpp`, 96 shorts at `.rodata+0x2c80`, which 20 reads as forty-eight
+FOUR-byte points and which was `static` in v34rx.c (finding F422). 21 needed
 neither, because the eight `hsine*` tables it reaches are reached through
 `setupreceiver` and are already global in `v34filters.c`. Read both
 before estimating what is left -- an arm that reads a table this tree does
@@ -555,21 +555,21 @@ block ranges -- is `setupreceiver` inlined, checked store for store against the
 standalone function at 0x5f040. All three came out as calls, so the rule is
 three for three: **read a long arm against the functions the tree already
 has.** 66's four `bitreverse` calls and its `sysdep_memset` are the same
-signal (findings 424, 425 and 426).
+signal (findings F424, F425 and F426).
 and the entry 5, 54 and 74 share, then 69 and the entry 64 and 68 share, and
 then 67 and 24, the two largest, and then 66, the largest of all, are in
 `src/pump/v34/v34hstx1.cpp` and compare byte for byte through
-`test/unit/t_v34hstx1.c`. Findings 340-345, 421-425 and 428-429.
+`test/unit/t_v34hstx1.c`. Findings F340-345, 421-425 and 428-429.
 
 **Three of the nineteen needed a
 table before they could be written at all, and the third needed its VALUES**:
 `probe`, 64 signed shorts at `.rodata+0x2c00`, which 51 reads and which this
-tree did not have (finding 421); `vectpp`, 96 shorts at `.rodata+0x2c80`,
+tree did not have (finding F421); `vectpp`, 96 shorts at `.rodata+0x2c80`,
 which 20 reads as forty-eight FOUR-byte points and which was `static` in
-v34rx.c (finding 422); and `cfg->rx_divtab` at +0xaaac, which 66's rate ladder
+v34rx.c (finding F422); and `cfg->rx_divtab` at +0xaaac, which 66's rate ladder
 walks and which the fixture aims at its shared `dummy` block -- whose entries
 are so nearly equal that `entry >> 5` is 600 at every index the ladder
-reaches, and nine of 66's claims could not fail against it (finding 429). Read
+reaches, and nine of 66's claims could not fail against it (finding F429). Read
 all three before estimating an arm -- one that reads a table this tree does
 not have, has under the wrong element width, or has under values too flat to
 separate its own arithmetic, is not the size its byte count says.
@@ -578,35 +578,35 @@ separate its own arithmetic, is not the size its byte count says.
 stores +0x250 in its first half and the rate ladder in its second half reads
 it, so two runs that poked it drove the ladder with a value the arm had
 already thrown away -- both anti-vacuity guards holding, the comparison green,
-and only `tools/mutate.py` saying so (finding 429). **And read the body for an INLINED LIBRARY FUNCTION before estimating it
+and only `tools/mutate.py` saying so (finding F429). **And read the body for an INLINED LIBRARY FUNCTION before estimating it
 at all**: 67's 2 KB was mostly `getbit` open-coded and 24's 2.2 KB was `getbit`
-open-coded twice, so both came out as calls (findings 424 and 425).
+open-coded twice, so both came out as calls (findings F424 and F425).
 
 **An arm whose paths do not all reach `txmit` needs a DIFFERENT anti-vacuity
 guard and not a weaker one.** `run_case`'s "the arm advanced the queue to the
 limit" is what makes the blob skip the per-sample loop on side A; 24 has two
 paths that move the transmit state instead and one that writes a single byte,
-and `t_v34hstx1.c` guards those on the state and on that byte. Finding 425.
+and `t_v34hstx1.c` guards those on the state and on that byte. Finding F425.
 
 **AND ONE PAIR OF ENTRIES IS NOT ONE ARM EITHER.** 24 `TX_DPSK` and 60
-`TONE_AB` are finding 323's only collision, and it is agreement on one path
+`TONE_AB` are finding F323's only collision, and it is agreement on one path
 rather than identity: it holds on three conditions of the object's and one of
-the fixture's, and finding 425 asserts each of the four rather than the
+the fixture's, and finding F425 asserts each of the four rather than the
 agreement.
 
 **AND ONE TABLE ENTRY IS NOT ONE ARM, in three different ways.** 0x640b4 is
 the target for txstates 5, 54 and 74, and the shared prologue re-reads
 `txstate` at 0x640f4 and gives each of the three a different tail (finding
-422). 0x635cc, shared by 64 and 68, re-reads it too -- but at 0x636ff, seven
+F422). 0x635cc, shared by 64 and 68, re-reads it too -- but at 0x636ff, seven
 eighths of the way down and only on the pass where `vect_idx` wraps, so most
 passes are one body under two indices and the wrap is two behaviours (finding
-423). 0x63d58, shared by 81, 82, 83 and 84, IS ALSO TWO BEHAVIOURS AND THIS FILE
+F423). 0x63d58, shared by 81, 82, 83 and 84, IS ALSO TWO BEHAVIOURS AND THIS FILE
 SAID OTHERWISE. Above the wrap it is one body under four indices; at
 `vect_idx == 0xc0` it reaches 0x66d85, which re-reads +0x3596 and returns to
 the loop test for anything that is not 0x51 -- so 82, 83 and 84 decide nothing
 there and only 81 moves the transmit machine. That is 0x635cc's shape exactly
-(finding 423), and finding 750 is the correction. Measure it; do not assume
-either way because finding 323 lists one representative.
+(finding F423), and finding F750 is the correction. Measure it; do not assume
+either way because finding F323 lists one representative.
 
 **`V34HS_OURS` is not how a case lands and cannot be.** It is one `#ifdef` in
 one shared harness object, so it demands all forty-three cases at once, and no
@@ -625,25 +625,25 @@ contributes exactly the tail.
 
 `v34hs_step_case` installs the arm inside the snapshot, the alarm and the
 observation; calling it from the test before `v34hs_step` does not work, and
-finding 342 says why. **Run the case twice** -- once with the arm alone, to
+finding F342 says why. **Run the case twice** -- once with the arm alone, to
 see the count reach the limit and the arm write something, and once through
 the fixture -- because an arm that did nothing leaves side A's step to run the
 blob's copy of it and the comparison passes for free.
 
 **The diagnostics must be off** on such a test: our code logs to capture
 channel 0 and the blob's to channel 1, and a side running both reaches only
-one of them. That is finding 341's gap and it also costs two mutations.
+one of them. That is finding F341's gap and it also costs two mutations.
 
 **Seed what the arm writes.** Eleven claims were untestable against a cold
 object simply because the field already held the value the arm stores --
-finding 345 lists them, and it is the first thing to check when a mutation
+finding F345 lists them, and it is the first thing to check when a mutation
 goes uncaught.
 
 The txstate a table-1 case is driven with IS the case, so unlike #57 there is
 no companion-field problem to solve first. What there is instead:
 
 - **The loop does not always terminate.** Its default arm is the loop bottom
-  itself, so a txstate with no case of its own spins forever (finding 287,
+  itself, so a txstate with no case of its own spins forever (finding F287,
   D59). Fifty-seven of the table's eighty-two entries are that default.
   `v34hs_step` arms a `SIGALRM` so this is a named case rather than a run that
   never returns, and `v34hs_route(V34HS_ROUTE_TXSAMPLE, n)` takes the sample
@@ -687,7 +687,7 @@ problem, and a case that fails at all of them is yours.
                      (1..7, or 0 for all seven)
   V34HS_NOSCRUB=1    do not scrub 64 KB of stack before each call
   V34HS_LOOSEOBJ=1   put side B's object OUTSIDE its arena, which is the
-                     positive control finding 319's bisect rests on
+                     positive control finding F319's bisect rests on
   V34HS_PROBE=1      print the FPU status before each call, whether the two
                      sides were equal after setup, whether the step wrote
                      outside the blocks, and whether a second run of side B
@@ -707,4 +707,4 @@ integers. That mistake has been made three times here.
 `tools/cfgsplit.py --func v34handshak` gives the per-case byte counts, but it
 merges the three machines' state values into one numbering -- `51` appears
 twice and neither entry says which machine it belongs to. Read it against
-finding 286's table, not on its own.
+finding F286's table, not on its own.

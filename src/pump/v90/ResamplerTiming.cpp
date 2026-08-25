@@ -5,7 +5,7 @@
  * map, the corrected field groupings and why `SdHalfBaudDft` returns void;
  * dsplib/Resampler.h carries the chain and the four vtables.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * WHAT THE LOOP IS.  `timingCorrection` runs a two-pole resonator
  *
@@ -20,7 +20,7 @@
  *
  * THE `DE`/`DC` PRINTING TRAP WAS SETTLED BY EXECUTION, NOT BY READING.  This
  * function group is full of popping subtracts, and objdump prints them as
- * their own opposite (finding 245).  The bytes were run with known operands:
+ * their own opposite (finding F245).  The bytes were run with known operands:
  *
  *     DE E0+i  objdump `fsubp  %st,%st(i)`  ->  ST(i) = ST(0) - ST(i)
  *     DC E0+i  objdump `fsub   %st,%st(i)`  ->  ST(i) = ST(0) - ST(i)
@@ -77,7 +77,7 @@ typedef char rt_size[(sizeof(ResamplerTiming) == 0x94) ? 1 : -1];
 
 /*
  * The float-as-%c%d.%03d idiom, duplicated verbatim from
- * src/pump/v90/V90Phase2Info.cpp, where finding 256 measured that the ORDER
+ * src/pump/v90/V90Phase2Info.cpp, where finding F256 measured that the ORDER
  * of the subtraction inside `frac_of` is unobservable through the abs() on
  * the result.  The three copies in `adjustHalfBaudBpfGain` do `(int)v - v`,
  * which is the order written there and the order the object uses here.

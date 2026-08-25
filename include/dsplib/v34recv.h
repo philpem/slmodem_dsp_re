@@ -4,7 +4,7 @@
  * ONE MAP, NOT FOUR.  This object was reconstructed piecemeal -- the detector
  * needed its flags word, `decision` its target and result, `agcadapt` its
  * gain state, `V34descrambler` its shift register -- and each got its own
- * partial struct.  Four maps of one object is exactly what finding 100 said
+ * partial struct.  Four maps of one object is exactly what finding F100 said
  * not to do, and doing it hid the fact below.
  *
  * THE AGC FREEZE AND THE DETECTOR-PENDING FLAG ARE THE SAME BIT.  `agcadapt`
@@ -241,7 +241,7 @@ struct v34_receiver {
 	 * array; `receiver` shows it does not -- the predictor's coefficients
 	 * start at +0x288, which is entry seven.
 	 *
-	 * Two unrelated constraints land on the same number.  Finding 123
+	 * Two unrelated constraints land on the same number.  Finding F123
 	 * measured fourteen shorts of headroom in the receive burst before
 	 * it eats rxtiming's own loop bound, and seven outputs at up to two
 	 * pulls each is exactly fourteen.  So f128 <= 7 is both what fits

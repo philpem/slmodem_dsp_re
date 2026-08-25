@@ -6,7 +6,7 @@
  * of the fourteen fields came from, the three exact meetings that fix the
  * embedded subobjects, and the mapping-parameter swap the modulator sees.
  *
- * PLAIN CDECL, `this` AS THE FIRST STACK ARGUMENT (finding 215).  After
+ * PLAIN CDECL, `this` AS THE FIRST STACK ARGUMENT (finding F215).  After
  * `sub $0x3c,%esp` and four register saves into the frame, the constructor's
  * twelve incoming words are this 0x40, mappingParams1 0x44, mappingParams2
  * 0x48, demapper 0x4c, cp 0x50, mp 0x54, descrambler 0x58,
@@ -109,7 +109,7 @@ P4D_OFF(linearMappStudyStart,	0x3518, lmsstart);
 typedef char v90p4d_statesize[(sizeof(Phase4DemodulatorState) == 4) ? 1 : -1];
 
 /*
- * The allocation, and finding 1107's point again: this number is
+ * The allocation, and finding F1107's point again: this number is
  * `movl $0x351c,(%esp); call sysdep_malloc` at 0x1c8fe inside
  * `V90Demodulator::V90Demodulator`, not the highest displacement any
  * V90Phase4Demodulator symbol uses -- which would have said 0x3518.
@@ -143,7 +143,7 @@ typedef char v90p4d_rdetsize[(sizeof(V90RDetector) == 0x2c) ? 1 : -1];
  * outgoing slot 0x14, which is the modulator's fifth parameter, and
  * `mov 0x44(%esp),%ebp` -- the FIRST -- reaches slot 0x18, its sixth.  This
  * object stores them the other way round at +0x0c and +0x10, so it really is
- * a crossing.  Finding 1301; the V.90 modulator batch derived the same swap
+ * a crossing.  Finding F1301; the V.90 modulator batch derived the same swap
  * independently from the far side of the call.
  *
  * THREE OF THE MODULATOR'S EIGHT ARGUMENTS ARE NULL AND ONE IS THE LITERAL
@@ -219,7 +219,7 @@ V90Phase4Demodulator::~V90Phase4Demodulator()
  * in that run and is deliberately absent: it calls `V90Phase4Modulator` and
  * `V90SpectralShaper` members that nothing in this tree has written, and one
  * unwritten callee fails every differential binary rather than only its own
- * (finding 215).
+ * (finding F215).
  * ===========================================================================
  */
 
@@ -319,10 +319,10 @@ V90Phase4Demodulator::resetRRNDetector()
  * This is NOT register allocation being chased (CLAUDE.md's free column):
  * the two spellings put a different expression tree in front of the
  * compiler, the difference is twenty bytes and a whole extra callee-save,
- * and the acceptance test is finding 617's full-text identity.  `detectFPE`
+ * and the acceptance test is finding F617's full-text identity.  `detectFPE`
  * below is the control -- its two detector references are to DIFFERENT
  * objects, so no single pointer could serve both, and it is byte-identical
- * written the obvious way.  Finding 4321.
+ * written the obvious way.  Finding F4321.
  */
 int
 V90Phase4Demodulator::detectRRN(short sample)
@@ -350,7 +350,7 @@ V90Phase4Demodulator::detectRRN(short sample)
  * FIVE STORES AND NOTHING ELSE, AND THE ORDER IS THE OBJECT'S: +0x38, +0x3c,
  * +0x44, +0x48 and the byte at +0x30 LAST, not ascending by offset.  For a
  * body that is nothing but stores the object's order is a testable
- * hypothesis about the source's, and the acceptance test is finding 617's --
+ * hypothesis about the source's, and the acceptance test is finding F617's --
  * full-text identity of the disassembly, operands included -- not "the same
  * mnemonics".  Writing it ascending gives the same five instructions in a
  * different order and fails that test.
@@ -378,7 +378,7 @@ V90Phase4Demodulator::resetBeforRRN()
  * +0x3020, which is `rDetector1.int_24`.  `rDetector2.int_24` would be
  * +0x304c.  Both are `lea`/`mov` off the same base in the same 22
  * instructions, so this is not a misread of which object is which; it is a
- * copy of `detectRRN` whose second reference was not updated.  Finding 4320.
+ * copy of `detectRRN` whose second reference was not updated.  Finding F4320.
  * A test that seeded the two detectors alike could not see it, so
  * `t_v90p4dleaf` gives them different polarities.
  *
@@ -440,7 +440,7 @@ V90Phase4Demodulator::detectFPE(short sample)
 
 /*
  * `fsqrt` and log10 on the coprocessor.  Both are copies rather than a shared
- * header, for the reason `V90TRN2Designer.cpp` gives at length (finding 876):
+ * header, for the reason `V90TRN2Designer.cpp` gives at length (finding F876):
  * a new C++ header has to be added to `offcheck.py`'s SKIP_HEADERS or the
  * `offsets` gate breaks files nobody touched.  This is the fifth copy of the
  * log10 pair and the third of `fsqrt`.
@@ -481,7 +481,7 @@ p4d_x87_log10(long double x)
  *   whole   `fabs` then a TRUNCATING `fistpl` -- magnitude toward zero.
  *   frac    the value less its truncation, scaled, truncated, then integer
  *           `abs`.  The `abs` is what makes the order of the two conversions
- *           unobservable (finding 256).
+ *           unobservable (finding F256).
  */
 static char
 p4d_sign_of(float v)
@@ -544,7 +544,7 @@ V90Phase4Demodulator::getDecision(short sample)
  * two entries point at the same block as the out-of-range `ja`.
  *
  * THE TWO ARMS THAT NAME A DETECTOR'S POLARITY HOLD A LOCAL POINTER, and
- * that is finding 4321 again rather than register allocation being chased.
+ * that is finding F4321 again rather than register allocation being chased.
  * `detectR` and then `rDetector1.int_24` written as two independent member
  * accesses makes GCC re-derive the field address off `this`; the object keeps
  * `&rDetector1` live across the call and reads `0x24(%ebx)`, which is one
@@ -556,7 +556,7 @@ V90Phase4Demodulator::getDecision(short sample)
  * FROM ITS SQUARE ROOT.  `fldz ; fcomps 0x350c(%esi)` compares the FIELD,
  * while the `%d.%04d` pair comes from `fsqrt` of it -- at both sites here and
  * at both in `getV92Decision`, so it is a property of the original's own
- * print idiom and not an accident of one line.  Finding 4803.
+ * print idiom and not an accident of one line.  Finding F4803.
  */
 short
 V90Phase4Demodulator::getV90Decision(short sample)
@@ -676,7 +676,7 @@ V90Phase4Demodulator::getV90Decision(short sample)
 					 * LEVEL 3.  `cmpl $0x2` and not
 					 * `cmpl $0x1`, so it needs one more
 					 * than every other gate here --
-					 * exactly the distinction finding 150
+					 * exactly the distinction finding F150
 					 * says a single macro would flatten.
 					 */
 					if (DSPLIB_DEBUG_VERBOSE())
@@ -902,8 +902,8 @@ V90Phase4Demodulator::getV90Decision(short sample)
 			 * the two energies have opposite signs, because then
 			 * the ratio is negative and `fyl2x` answers a NaN.
 			 * `t_v90p4ddec` seeds a negative accumulator on a
-			 * third of its trials and caught it; findings 2300,
-			 * 2301 and 4812.
+			 * third of its trials and caught it; findings F2300,
+			 * F2301 and F4812.
 			 */
 			int_3510 =
 			    (params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
@@ -1327,8 +1327,8 @@ V90Phase4Demodulator::getV92Decision(short sample)
 			 * the two energies have opposite signs, because then
 			 * the ratio is negative and `fyl2x` answers a NaN.
 			 * `t_v90p4ddec` seeds a negative accumulator on a
-			 * third of its trials and caught it; findings 2300,
-			 * 2301 and 4812.
+			 * third of its trials and caught it; findings F2300,
+			 * F2301 and F4812.
 			 */
 			int_3510 =
 			    (params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE

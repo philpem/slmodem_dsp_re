@@ -10,7 +10,7 @@
  * fixture makes the two objects behave differently.
  *
  * So every check is built around a NAMED WRONG READING and the count of
- * trials that SEPARATE it is asserted non-zero at the end (finding 3052's
+ * trials that SEPARATE it is asserted non-zero at the end (finding F3052's
  * rule).  The wrong readings, in order:
  *
  *   ModDataV17
@@ -123,7 +123,7 @@ rng_next(void)
 
 /*
  * The coefficient banks are built here rather than taken from the object's,
- * and deliberately: finding 3574 is three mutations that survived because a
+ * and deliberately: finding F3574 is three mutations that survived because a
  * real V.32 bank repeats two entries and zeroes a third, so transposing them
  * was invisible.  Every entry below is distinct and no two of the four banks
  * agree anywhere.
@@ -203,7 +203,7 @@ enc_common(int slot, void *smc, struct fpm_smc_ring *ring,
 	/*
 	 * A slot-specific mark, written whatever the count.  It puts WHICH
 	 * SLOT WAS CALLED into a compared byte of the ring rather than only
-	 * into this log, which is what finding 3509 asks of a separating
+	 * into this log, which is what finding F3509 asks of a separating
 	 * trial -- and it is the only observable the zero-count trials have.
 	 */
 	ring->sym[0] = (short)(0x0700 + (slot & 0xf));

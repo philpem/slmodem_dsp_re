@@ -29,7 +29,7 @@
  * `v34pcmmain.cpp` keeps the machinery -- four `v34pcm_notwritten` call sites,
  * the recorder and the abort -- and it is now dead code.  Retiring it is a
  * separate change to a file this batch had no other reason to touch, and it
- * would take the recorder with it; finding 7606.
+ * would take the recorder with it; finding F7606.
  *
  * ===========================================================================
  * THE SESSION HAS TO SURVIVE A REAL CALL NOW
@@ -73,7 +73,7 @@
  * reference left at all, because the file that called them defines them, so
  * their guards are gone rather than satisfied.
  *
- * NONE OF THEM IS ON A V.34 CALL, which is finding 1454's measurement and the
+ * NONE OF THEM IS ON A V.34 CALL, which is finding F1454's measurement and the
  * reason `t_vpcmrun`'s four-way comparison of a real 33,600 connect passed
  * with all seven absent -- and still passes now that one of them is present.
  * The guard is what stands between "a path this tree cannot take" and a call
@@ -87,7 +87,7 @@
  * be: fork, call it, and require the child to have died of SIGABRT.  That is
  * the argument the surviving `V34PCM_WRITTEN` assertion inherits.
  *
- * The soft half is `v34hshak.c`'s rule, and finding 547's argument: a test
+ * The soft half is `v34hshak.c`'s rule, and finding F547's argument: a test
  * that dies cannot then be asked WHICH path it took, so the stop is what a
  * test opts out of BY NAME -- `v34pcm_unwritten_reset` -- and the code is
  * always recorded either way.
@@ -108,7 +108,7 @@
  * at compile time -- so the first version of this file reported all five
  * entry points PRESENT in a binary that had just aborted on their absence.
  * The attribute is what makes the comparison a comparison; `vpcm.c` carries
- * it for the same reason and finding 985 records the trap.
+ * it for the same reason and finding F985 records the trap.
  */
 #define DSPLIB_VPCM_UNWRITTEN	__attribute__((weak))
 #include "dsplib/vpcm.h"
@@ -256,7 +256,7 @@ main(void)
 	 * AND `v90RunDemodulator` IS DEFINED TOO, so the three are two.  It
 	 * is `VPcmFloModem`'s other entry point (.text+0xd860, 3,013 bytes),
 	 * reconstructed in src/pump/v90/VPcmFloModem.cpp with
-	 * test/unit/t_v90rundemod.cpp against the blob; finding 7580.  The
+	 * test/unit/t_v90rundemod.cpp against the blob; finding F7580.  The
 	 * assertion is INVERTED rather than deleted, for the same reason the
 	 * five above are asserted at all: the guard surface is the claim, and
 	 * a symbol silently dropping out of it is exactly what this file
@@ -267,8 +267,8 @@ main(void)
 	/*
 	 * AND THESE TWO CLOSE THE SET.  `qcLineVerification` (.text+0xf750,
 	 * 779 bytes) and `vPcmResetPhase3Modem` (.text+0xf200, 149 bytes) are
-	 * reconstructed in src/pump/v90/VPcmFloModem.cpp; findings 7603 and
-	 * 7604.  Both assertions are INVERTED rather than deleted, exactly as
+	 * reconstructed in src/pump/v90/VPcmFloModem.cpp; findings F7603 and
+	 * F7604.  Both assertions are INVERTED rather than deleted, exactly as
 	 * `v90RunDemodulator`'s was: the guard surface is the claim, and a
 	 * symbol silently dropping out of it is what this file notices.  With
 	 * these two the boundary below `VPcmV34Progress` is EMPTY, which is
@@ -324,7 +324,7 @@ main(void)
 	 * SIGABRT; there is no unresolved callee left below `VPcmV34Progress`
 	 * for either to reach, and a test whose premise has ceased to hold
 	 * does not improve by being made to pass.  The head of this file has
-	 * the argument and finding 7606 the disposition.
+	 * the argument and finding F7606 the disposition.
 	 */
 
 	/* --- and the whole path still runs ----------------------------- */
@@ -359,7 +359,7 @@ main(void)
 	 *
 	 * `v34pcm_unwritten_reset` above is what puts the recorder in SOFT
 	 * mode, so a guard that did fire would be recorded rather than
-	 * aborting; that is finding 547's rule and is why this assertion can
+	 * aborting; that is finding F547's rule and is why this assertion can
 	 * exist at all.
 	 */
 	diff_eq_int("...and no guard fired: nothing was recorded",

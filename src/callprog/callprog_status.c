@@ -23,7 +23,7 @@
  * Two things worth noticing.  State 2 is spelled `CALLPROG_DIALING`, exactly
  * the same string as MESSAGE 3 in the table below, which is why callprog.h
  * calls the state `CALLPROG_DIALING_STATE` -- the collision is the original's,
- * not ours.  And the table stops at ten: finding 142 recorded it as running on
+ * not ours.  And the table stops at ten: finding F142 recorded it as running on
  * into the sixteen message names, and that was wrong.  Only ten relocations
  * apply to it, and what follows is unrelated data that merely disassembles as
  * plausible pointers.

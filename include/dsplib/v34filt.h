@@ -38,7 +38,7 @@ extern "C" {
 
 /*
  * The sizes V34InitializeImplementationSpecific installs, for both cancellers
- * (finding 98).  Named here because three other things are derived from
+ * (finding F98).  Named here because three other things are derived from
  * them: the report dump length, D27's wrap bound, and the storage layout in
  * struct v34_object.
  */
@@ -369,7 +369,7 @@ extern const short hsine2400[16];
  *
  * `v90` is read by nothing -- only printed.  Both it and `preemp_index` are
  * named by the entry diagnostic, which prints all five: "baudrate %ld,
- * carrier %ld, preemp %ld, V90=%ld. fullReset=%1d".  See finding 172.
+ * carrier %ld, preemp %ld, V90=%ld. fullReset=%1d".  See finding F172.
  */
 void V34SetupModulator(struct v34_modulator *m, short baud, short carrier,
 		       short preemp_index, int v90, int reset);

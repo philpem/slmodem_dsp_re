@@ -2,7 +2,7 @@
  * t_v90demprog.cpp -- V90Demodulator::progress, differentially.
  *
  * WHY THIS IS ITS OWN BINARY AND NOT AN EXTENSION OF t_v90p4ddec.  Finding
- * 7483 chose `t_v90p4ddec` for `exitPhase3` by asking what its LAST statement
+ * F7483 chose `t_v90p4ddec` for `exitPhase3` by asking what its LAST statement
  * needed constructed, and that is the right question here too -- but
  * `progress` opens with FOUR calls into objects `exitPhase3` never touches:
  * `FloatFIR::process` on the prefilter, `Agc<float>::process`,
@@ -15,12 +15,12 @@
  *
  * THE FIRST THING THIS FILE MEASURED WAS WHETHER IT COULD EXIST AT ALL.
  * `V90Equalizer::process` is called unconditionally in the prologue, and
- * `t_v90equproc` is declared in `tools/gccdiverge.json` for finding 6203's
+ * `t_v90equproc` is declared in `tools/gccdiverge.json` for finding F6203's
  * x87 excess precision -- one subtraction the object narrows to 32 bits and
  * GCC 13 keeps at 80.  A `progress` test that drove that site with arbitrary
  * floats would have to be declared too, and CLAUDE.md's rule is that a
  * declared binary can score NO mutations, for the suite and not the row
- * (findings 6000, 6001, 6002).  The measurement is in the trial data below.
+ * (findings F6000, F6001, F6002).  The measurement is in the trial data below.
  */
 
 #include "v90demfix.h"
@@ -344,7 +344,7 @@ prog_wire(int side, int trial)
 	 * divergence in an already-written callee, reached from here, and not
 	 * this member's to chase.  With them seeded the equaliser takes its
 	 * cheap arms, both sides agree, and what `progress` does with the
-	 * answer is still compared.  Finding 7513.
+	 * answer is still compared.  Finding F7513.
 	 */
 
 	memset(&eqa[side], 0, sizeof eqa[side]);
@@ -462,7 +462,7 @@ prog_deep(int side, int trial)
  *
  * THREE ARE OUT AND THE REASON IS THE CALLEE, NOT THE ARM.  0x12 is
  * `exitPhase3()`, whose last statement is `phase4Demodulator->reset(...)` and
- * needs the whole 0x351c receiver constructed (finding 7483); 0x19 and 0x2a
+ * needs the whole 0x351c receiver constructed (finding F7483); 0x19 and 0x2a
  * end in the fourteen-argument `V90ConstellationDesigner::process` over a
  * detector whose per-code tables have to be walkable.  Both are driven by
  * their own binaries -- `t_v90p4ddec` and `t_v90trn2design` -- and what is

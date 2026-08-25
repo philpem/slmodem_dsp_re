@@ -62,7 +62,7 @@
  * its offset: 8000/6 is the V.90 downstream rate granularity, which makes
  * this a bit count per six-sample frame, but that is an interpretation of the
  * arithmetic rather than something the object states, and it belongs in
- * finding 1160 and not in a member name in another batch's header.
+ * finding F1160 and not in a member name in another batch's header.
  *
  * THE LENGTH'S SIGNEDNESS IS MEASURED, the index's is not.  Every use of the
  * length is an unsigned comparison -- `cmp %ebp,%esi; jb` in both mask
@@ -116,9 +116,9 @@ public:
 	 * into `signBitGroups` unchanged, as `6 - it`, as `6 / it`, and as
 	 * `V90SignBitsExtractor::reset`'s spacing -- and `spectralDesign`'s own
 	 * caller forms `6 - shaperSR` too (`mov $0x6,%cl; sub 0x620(%ebx),%cl`,
-	 * quoted in V90ConstellationDesigner.cpp).  Finding 4342's rule is why
+	 * quoted in V90ConstellationDesigner.cpp).  Finding F4342's rule is why
 	 * this matters: a claim that nothing reads a field is a claim about
-	 * every function in the object.  Finding 5004.
+	 * every function in the object.  Finding F5004.
 	 *
 	 * The widths are the store encodings -- six `movl` -- and the types
 	 * below are the SOURCES' types, which is what a four-byte copy carries
@@ -208,7 +208,7 @@ int getDataBitRate(V90MappingParams *params, int islong);
  * relocations of any kind name the symbol in the whole of dsplibs.o, so a
  * call added by this reconstruction would be new behaviour with nothing to
  * compare it against.  It is declared so that its differential test can reach
- * it and for no other reason.  See the .cpp and finding 7570.
+ * it and for no other reason.  See the .cpp and finding F7570.
  */
 void setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp);
 
@@ -222,7 +222,7 @@ void setParamsInfoFromCPUnPck(V90MappingParams *params, V90CPUnPck *cp);
  * name the symbol in the whole of dsplibs.o.  The two relocations that DO name
  * something spelled like it belong to `V92setParamsInfoFromCPUnPck`, a
  * different symbol at .text+0x12f00 with two call sites in `runPcmModem`
- * (finding 7571).  Declared so that its differential test can reach it and for
+ * (finding F7571).  Declared so that its differential test can reach it and for
  * no other reason.  See the .cpp.
  */
 void setParamsInfoFromV92CPUnPck(V90MappingParams *params, V92CP *cp);

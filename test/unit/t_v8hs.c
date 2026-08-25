@@ -272,7 +272,7 @@ trace_setup(const struct trace_case *c, unsigned seed)
  * right arguments, is only ever this transcript.  So whichever of the ten the
  * sweep reaches is asserted by name at the bottom of `t_hs_trace`, and a
  * refactor that drops one -- or a "restoration" that moves one back and makes
- * it print twice -- fails here rather than silently.  Finding 2950.
+ * it print twice -- fails here rather than silently.  Finding F2950.
  */
 static const char *const hs_lines[] = {
 	"V8: Timeout waiting for ",
@@ -387,7 +387,7 @@ t_hs_trace(void)
 	 * evidence rather than a coverage claim.  Two transcripts agreeing say
 	 * nothing whatever about a site neither side reached, and this is the
 	 * check that would notice if the sweep stopped reaching one.  The
-	 * pattern, and the reason for it, are finding 2601's.
+	 * pattern, and the reason for it, are finding F2601's.
 	 *
 	 * Asserted on both sides separately: the reference arm is the claim
 	 * about the OBJECT (this line is really printed here, with these

@@ -25,8 +25,8 @@ WHAT IT DOES NOT KNOW
 
 The same things `closure.py` does not know, because it uses its graph: this
 is the LINK closure, deliberately pessimistic about run-time reachability,
-and it cannot see a member GCC inlined out of existence (finding 64).  It
-also inherits the walk's stop-at-written rule (finding 330), which is correct
+and it cannot see a member GCC inlined out of existence (finding F64).  It
+also inherits the walk's stop-at-written rule (finding F330), which is correct
 here: a dependency we have written is a dependency that is satisfied.
 """
 import argparse
@@ -79,7 +79,7 @@ def main():
     # refuses on an empty object tree for all three of its callers and names
     # the target that actually fills it.  It said "build first" and the tree
     # it was reading, build/src, stopped being built by a plain `make` at
-    # #164 -- so the advice was right in 2018 and wrong since.  Findings 3055
+    # #164 -- so the advice was right in 2018 and wrong since.  Findings F3055
     # and 3110; tools/objtree.py.
     have = closure.ours()
 

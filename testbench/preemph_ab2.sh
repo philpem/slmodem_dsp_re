@@ -6,7 +6,7 @@
 #
 # THE PLAN IS captures/preemph-ab2-ANALYSIS-PLAN.md AND IT WAS COMMITTED
 # BEFORE THE FIRST CALL.  Read it before reading any result; in particular it
-# records that the "fix" arm is NOT a corrected version -- finding 1477 -- and
+# records that the "fix" arm is NOT a corrected version -- finding F1477 -- and
 # that what is under test is whether one step less pre-emphasis suits a
 # codec-limited path, not whether a bug fix helps.
 #

@@ -1,11 +1,11 @@
 # Pre-registered analysis plan — pre-emphasis A/B, run 2
 
 Written and committed BEFORE any call of run 2 is placed. Run 1's plan and
-result are `preemph-ab-ANALYSIS-PLAN.md` and finding 1476.
+result are `preemph-ab-ANALYSIS-PLAN.md` and finding F1476.
 
 ## What this is actually testing, which is NOT what run 1 thought
 
-Run 1 was framed as "does fixing D53 help". Finding 1477 established that
+Run 1 was framed as "does fixing D53 help". Finding F1477 established that
 framing was wrong, and the correction matters more than the result did:
 
 V.34 specifies pre-emphasis in **two families** (5.4.1). Table 3 covers
@@ -43,7 +43,7 @@ different consequences.
   TERTIARY   connect rate, over ALL attempted calls.
 
 Rank-sum by permutation, not the median: the rate is a discrete ladder and
-finding 1351 caught the median missing a real shift the rank-sum found at
+finding F1351 caught the median missing a real shift the rank-sum found at
 p = 0.0127.
 
 ## Sample size

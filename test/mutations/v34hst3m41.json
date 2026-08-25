@@ -207,7 +207,7 @@
   "label": "the tone search drops the transmit machine into TX_L1",
   "find": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
   "replace": "\ths_put(obj, T41_FABC2, 0);\n\n\ths_setstate(obj, HS_TXSTATE, V34HS_TX_L1);\n\ths_setstate(obj, HS_MICROSTATE, V34HS_DET_SYNC);",
-  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding 325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
+  "note": "The anchor carries the line above it because the other arm of this function now spells these same two `hs_setstate` calls: 41's tone search at 0x6d2xx and 46's reset at 0x65df4.  With the bare two-line anchor `mutate.py` matched twice and reported UNUSABLE, which does not fail a run and reads as a pass -- finding F325's shape.  `T41_FABC2` and `T46_MSG_LAST` are each unique to their own arm.",
   "fn": "t41_tone_search"
  },
  {
@@ -486,7 +486,7 @@
   "label": "Info1c leaves the microstate at TX_PHASE1_ANS",
   "find": "\t\ths_put(obj, T41_F358C, 0);\n\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_INFODONE);",
   "replace": "\t\ths_put(obj, T41_F358C, 0);\n\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);",
-  "note": "Anchored on the +0x358c store above it as well: microstate 44's 0x26 arm (0x6ed17) reaches INFODONE too, and its 0x4d arm clears the same +0x358c one line before its own transition -- so both the statement and its neighbour had to come in.  Finding 347.",
+  "note": "Anchored on the +0x358c store above it as well: microstate 44's 0x26 arm (0x6ed17) reaches INFODONE too, and its 0x4d arm clears the same +0x358c one line before its own transition -- so both the statement and its neighbour had to come in.  Finding F347.",
   "fn": "t41_info_marks"
  },
  {

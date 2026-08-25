@@ -186,7 +186,7 @@ diff_eq_int_(const char *file, int line, const char *fmt,
  * NaN BY ITS BITS, NOT BY `x != x`, AND THE REASON IS A COMPILER FLAG.
  *
  * `make period` builds this apparatus with the object's own flags, which
- * include -mno-ieee-fp (finding 1990).  That flag tells GCC it may assume
+ * include -mno-ieee-fp (finding F1990).  That flag tells GCC it may assume
  * every comparison is ordered, and the first thing it does with the licence
  * is fold `x != x` to zero -- so the self-comparison idiom does not detect a
  * NaN there, it detects nothing at all, silently, in a build that is
@@ -194,7 +194,7 @@ diff_eq_int_(const char *file, int line, const char *fmt,
  * the ULP path, where the distance between two different payloads is
  * enormous and the verdict is noise.
  *
- * The bit test cannot be folded away and is exact.  Finding 2303.
+ * The bit test cannot be folded away and is exact.  Finding F2303.
  */
 int
 diff_isnan_f(float x)

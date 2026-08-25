@@ -26,7 +26,7 @@
  * chosen fallback level rather than a saturation.
  *
  * THE VALUES ARE REFERENCE BYTES AND NOT A GENERATOR, and that is a failure
- * rather than a choice; finding 270 records what was tried.
+ * rather than a choice; finding F270 records what was tried.
  */
 const int V34DisconnectThreshTable[V34_DISCONNECT_THRESH_ENTRIES] = {
 	71, 80, 90, 101, 113, 127, 142, 160,

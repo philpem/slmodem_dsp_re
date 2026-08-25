@@ -331,7 +331,7 @@ cadence_progress(struct cadence *c, short sample)
 		/*
 		 * "NO ANSWER" is the caller's word for it: CALLPROG_Progress
 		 * turns this verdict into CPTD_BUSY_GIVE_UP and prints "no
-		 * answer detected by cadence" (finding 154).  Two names for
+		 * answer detected by cadence" (finding F154).  Two names for
 		 * one event, both the original author's.
 		 */
 		if (DSPLIB_DEBUG_ON())
@@ -468,7 +468,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	/*
 	 * Zero unless dial tone supplies one, and zero is out of range -- so
 	 * every bank selection for busy, congestion and ringback falls back to
-	 * that bank's own single design.  See finding 49.
+	 * that bank's own single design.  See finding F49.
 	 */
 	int subindex = 0;
 	int silence_mult = 4;
@@ -725,7 +725,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	 * printed two lines where the object printed eleven, because we
 	 * returned before the report and it returns after.  Invisible to
 	 * every other check, since both sides return NULL either way.
-	 * Finding 201.
+	 * Finding F201.
 	 */
 	if (!usable) {
 		if (c->filter != 0)
@@ -746,7 +746,7 @@ cadence_create(struct cadence *c, struct cadence_setup *s, int extra,
 	 * only then takes the interval off.  Nothing else can see the
 	 * difference -- the value that reaches `cfg` is the same either way,
 	 * so the whole-object comparison agrees with the subtraction in either
-	 * position.  Finding 194.
+	 * position.  Finding F194.
 	 */
 	if (c->validation > 100)
 		c->validation -= 100;

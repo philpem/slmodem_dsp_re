@@ -8,7 +8,7 @@ WHY THIS EXISTS
 that is what a byte comparison knows.  An offset is not a diagnosis: it has
 to be turned into a field before it says anything about the code, and doing
 that by hand means counting shorts down a struct declaration -- which is
-exactly the arithmetic that produced findings 46 and 122's misreadings.
+exactly the arithmetic that produced findings F46 and F122's misreadings.
 
 Our own objects are built `-g`, so the answer is already in the tree.  This
 reads it out.  It resolves through nested structs and arrays, so an offset

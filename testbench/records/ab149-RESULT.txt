@@ -29,4 +29,4 @@
 
    A ratio near 1 means underruns are simply common and any
    clustering is an artefact of that -- which is exactly how the
-   tap-drift and rate-overshoot hypotheses died (finding 1918).
+   tap-drift and rate-overshoot hypotheses died (finding F1918).

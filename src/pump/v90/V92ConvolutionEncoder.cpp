@@ -20,8 +20,8 @@
  * the widths differ: four state bits and two input bits for mode 0, five and
  * three for mode 1, six and four for mode 2.  Sixteen entries per state row
  * in all three, so the largest index written is 15*16+3 = 243, 31*16+7 = 503
- * and 63*16+15 = 1023 -- which is where the 1,024 of finding 1249 comes from
- * a second time, and independently.  Finding 1375.
+ * and 63*16+15 = 1023 -- which is where the 1,024 of finding F1249 comes from
+ * a second time, and independently.  Finding F1375.
  *
  * NOTHING HERE CLEARS EITHER ARRAY, and modes 0 and 1 leave most of each row
  * untouched.  That is the object's behaviour: there is no `memset`, no

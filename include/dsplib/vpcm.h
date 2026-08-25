@@ -265,7 +265,7 @@ void vpcm_unwritten_reset(void);
  * File-static in the object and reached only through `vpcm_op` at .data+0x30;
  * it loses the `static` here for the same reason `v8_create` and `v8_delete`
  * do -- a test calls it by name.  `count` is `m->frag`, which for this
- * datapump the host contract fixes at 48 (finding 964).
+ * datapump the host contract fixes at 48 (finding F964).
  */
 int vpcm_run(struct dp *dp, void *in, void *out, int count);
 

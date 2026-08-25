@@ -15,14 +15,14 @@
  * writer to bound the fields it does not touch, and no `sizeof` anywhere.
  *
  * "ONE READER" IS MEASURED AND NOT ASSUMED, because a negative claim about a
- * whole object is exactly the shape finding 7520 got wrong.  Over the 196,503
+ * whole object is exactly the shape finding F7520 got wrong.  Over the 196,503
  * disassembled lines of dsplibs.o, the symbols that form an address at each of
  * this layout's four distinctive displacements were listed and intersected:
  * **`setParamsInfoFromCPUnPck` is the only symbol that touches all four of
  * +0x31, +0x3a, +0x9c and +0xfc**, and one of only six that touch both bitmap
  * bases at all -- the other five being `B103FP_create`, `FPM_FSE_receive`,
  * `_iir_filter_progress`, `modulatevector` and `V27RX_create`, none of which
- * is anywhere near this data.  Finding 7570.
+ * is anywhere near this data.  Finding F7570.
  * Everything below says which of the three ranks of evidence in CLAUDE.md it
  * came from, and the unmodelled spans are `pad_*` rather than guesses.
  * ===========================================================================

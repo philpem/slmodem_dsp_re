@@ -117,7 +117,7 @@ K56FlexFloModem::enterPhase3FullDuplex()
  * externalReset -- one byte, `c3`, and `VPcmV34Create` calls it.
  *
  * It is the K56flex half of the pair `VPcmFloModem::externalReset` completes,
- * and the contrast between the two is the whole of finding 1090's point about
+ * and the contrast between the two is the whole of finding F1090's point about
  * this build: the V.90 side reinitialises three parameter blocks, twenty-odd
  * flags and a demodulator, and the K56flex side does nothing whatever.
  */

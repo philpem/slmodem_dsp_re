@@ -18,7 +18,7 @@
  *                modem: `sete %al` at 0xfd07 puts `(digitalSide == 0)` into
  *                the V90ModemSide slot.  So a zero here is the ANALOG side,
  *                which is the one `vpcm_create` always asks for -- it passes
- *                a literal 0 (findings 701, 702).
+ *                a literal 0 (findings F701, F702).
  *   v34Object    Passed straight through to the modem's first argument.
  *   dpRuntime    Likewise, to its third.
  *   durationMs   A DURATION IN MILLISECONDS, converted to a sample count
@@ -79,7 +79,7 @@
  * the same five cleared bytes, the same three CP fields (VPcmFloModem.h).  It
  * is NOT a call to it: `externalReset` also re-initialises both parameter
  * blocks and prints, and does neither here.  The duplication is the
- * original's.  This file exists partly because of it: finding 1264, one
+ * original's.  This file exists partly because of it: finding F1264, one
  * source file is one mutation suite's namespace, and putting a near-copy of
  * `externalReset`'s tail into `VPcmFloModem.cpp` would make anchors in both
  * match twice -- which `tools/mutate.py` calls UNUSABLE, and unusable does

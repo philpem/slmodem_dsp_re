@@ -91,7 +91,7 @@ FPM_FSD_free(struct fpm_fsd *state)
  * 4. SLICER.  A Schmitt trigger, not a comparator: the bit changes only when
  *    the lowpass output passes +/- `slice_level`, and holds its previous value
  *    in between.  This is what makes the frequency plan work despite finding
- *    31 -- the two tones do not straddle zero, they straddle whatever the
+ *    F31 -- the two tones do not straddle zero, they straddle whatever the
  *    lowpass leaves, and hysteresis around a dead zone is what keeps a noisy
  *    signal near the boundary from chattering.
  *

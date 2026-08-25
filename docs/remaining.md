@@ -11,7 +11,7 @@ document is the shape of the work, that one is the list, and `docs/plan.md`
 is the order to take it in -- which is NOT this document's sec 7 order, because
 sec 7 ranks by value and 477 of the 969 cannot be started yet.*
 
-## 1. Where it stands
+## F1. Where it stands
 
     make coverage
     make worklist
@@ -39,7 +39,7 @@ anyone will actually open.
 The previous revision of this document reported 38.8% and 749 symbols,
 measured at `f0112ff`, 168 commits back. Every table below has moved.
 
-## 2. The three categories, and why the third is not optional
+## F2. The three categories, and why the third is not optional
 
 A symbol-by-symbol count sorts the object into two buckets and there are
 three.
@@ -57,7 +57,7 @@ a function that exists, links, and passes its differential test still counts
 as done while routing some of its arms into a `*_notwritten()` stub.
 
 Three functions do this today. The convention and its rule — always record
-the code, and abort unless a test opted out by name — are finding 547.
+the code, and abort unless a test opted out by name — are finding F547.
 
 | function | blob bytes | live stub sites | where |
 |---|--:|--:|---|
@@ -83,13 +83,13 @@ the list.
 
     python3 tools/worklist.py            # the stub sites, from the source
 
-## 3. What is left, by translation-unit span
+## F3. What is left, by translation-unit span
 
     make worklist
 
 The span is from `tumap.json`, measured from the object. It is better
 grouping than a call graph for deciding what to take next: a TU is the unit
-the original was written in, and finding 330 is what happens when a graph walk
+the original was written in, and finding F330 is what happens when a graph walk
 crosses one — a single call to `edprintf` used to drag `call_op` and the whole
 `dp_*_init` family into every closure computed.
 
@@ -132,7 +132,7 @@ seventh.
 
 Anything over about 6 KB needs `docs/largefunctions.md` before it is started.
 
-## 4. Two corrections to how this was measured before
+## F4. Two corrections to how this was measured before
 
 Both concern `closure.py`, and neither is a defect in it — it answers the
 question it was built for, which is "what must this batch define before it
@@ -143,7 +143,7 @@ will link". Neither reading survives being used to measure *remaining work*.
 `closure.py:299` is `if n in have and n not in roots: continue`, and the
 comment above it argues the case: a symbol `src/` already defines cannot leave
 anything undefined, and walking through it would import the BLOB's callees
-rather than ours. Finding 330.
+rather than ours. Finding F330.
 
 The consequence for a *coverage* question is that every written function is a
 wall. An unwritten symbol reachable only through a written one is reported as
@@ -170,7 +170,7 @@ graph at all.
 The `.rel.data` pass adds D and R symbols, so a pointer to a *function* parked
 in a dispatch table or a C++ vtable is not walked. Those pointers are
 `R_386_32` against a section symbol with the addend inline, so `objdump`
-prints `.text` and names nothing — the same trap as finding 604's strings.
+prints `.text` and names nothing — the same trap as finding F604's strings.
 
     python3 tools/indirect.py ../slmodemd/dsplibs.o
 
@@ -196,7 +196,7 @@ The host-facing API is derivable and is 22 symbols — what the rest of
     RD_{create,delete,process}    RD_ring_details
     VOICE_{create,delete,process} VOICE_command
 
-## 5. Work that is written but not on `master`
+## F5. Work that is written but not on `master`
 
 `make worklist` measures against `master`, so anything sitting on an
 unmerged branch is counted as still to do. Two branches hold real work, and
@@ -216,7 +216,7 @@ on `master` and their symbols are in the unwritten list.
 **`v32-ecc` overlaps work in flight.** The `agent-v32` worktree has all six of
 its files staged as additions on `v32-datapump` right now, so the two are
 being landed twice. Whoever merges first should check the other rather than
-resolve a conflict blind — finding 700 is what a merge that compiles but
+resolve a conflict blind — finding F700 is what a merge that compiles but
 drops half a side costs.
 
 Two further branches are ahead of `master` and are **superseded, not
@@ -241,7 +241,7 @@ Everything else is merged: all three V.90/V.92 method branches
         git merge-base --is-ancestor $b master || echo "$b is ahead"
     done
 
-## 6. What these numbers do not cover
+## F6. What these numbers do not cover
 
 - **Byte counts are the blob's, not ours.** They size the reading, not the
   writing.
@@ -252,13 +252,13 @@ Everything else is merged: all three V.90/V.92 method branches
   its own caveat applies — the blob has 262 diagnostic call sites in
   `v34handshak` and we have 1, but a missing `edprintf` is not by itself an
   unreconstructed region, because the level ships at zero and the two behave
-  identically (finding 134).
+  identically (finding F134).
 - **A C++ header's `/* +0xNNN */` comments are checked by nothing.** What
   pins a C++ layout is the `__builtin_offsetof` typedefs in the `.cpp`.
 - **The codegen tier is no evidence for five classes** — ten of fifteen
   period-toolchain failures are one C++11 construct in three headers, which
   excludes `V90Equalizer`, `V90PreFilter`, `VPcmFloModem`, `V90Demodulator`
-  and `V90Phase3Demodulator`. Finding 1308.
+  and `V90Phase3Demodulator`. Finding F1308.
 - **The mutation snapshot is stale tree-wide** (roughly 1 current of 117) by
   the owner's decision. Stale is not missing and fails no gate, but no entry
   should be quoted as a baseline until it is re-run.
@@ -267,7 +267,7 @@ Everything else is merged: all three V.90/V.92 method branches
   worktree could change is which functions `src/` defines, so re-run
   `make worklist` rather than quoting a stale list.
 
-## 7. The order this suggests
+## F7. The order this suggests
 
 Unchanged in shape from the previous revision, because the exclusive-cost
 argument still holds and V.PCM is still the end goal — but the starting
@@ -301,6 +301,6 @@ position inside it has moved a long way.
    the tree-wide mutation re-record once reconstruction stops moving.
 
 `V90Parameters::loadParams` (7,894 bytes) is the one genuinely-inert item on
-the list: findings 860–862 show both its callees are three-byte stubs, so it
+the list: findings F860–862 show both its callees are three-byte stubs, so it
 has no observable behaviour, and `tools/vparse.py` already extracts everything
 it encodes. It is fourth-largest by bytes and should not be fourth by order.

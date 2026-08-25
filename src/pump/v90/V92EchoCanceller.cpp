@@ -18,9 +18,9 @@
  * three conditional frees.  What IS duplicated is `D1` and `D2`, which are
  * byte-identical to each other 0xd0 apart -- and that pair is what a single
  * C++ destructor body produces for a class with no virtual bases, so one
- * definition here is right and no second spelling is needed.  Finding 1270.
+ * definition here is right and no second spelling is needed.  Finding F1270.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).  This one
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).  This one
  * has no frame at all: `mov 0x4(%esp),%eax` is the whole prologue.
  *
  * THE OLD DELAY IS READ BEFORE IT IS OVERWRITTEN, which is the only ordering
@@ -113,7 +113,7 @@ typedef char v92ec_off_slowdur[
  * parameters are `float *`, so a `const` here would be neither the object's
  * type nor a thing that compiles.  Twelve entries each, and the relocations
  * are against the .data SECTION symbol with the offset as an inline addend,
- * which is what makes them file-local (finding 604).
+ * which is what makes them file-local (finding F604).
  *
  * `den[0]` IS EXACTLY 1.0f, which decides an arm inside `FloatARMA`:
  * its constructor rescales both arrays by `1.0f / den[0]` only when
@@ -145,7 +145,7 @@ static float v92EchoArmaDen[12] = {
  * produces: placement new emits the null check that the object does not have,
  * and a real `new` would call `operator new`.  So the constructor is named
  * directly, `this` first on the stack like every other member here (finding
- * 215), and the destructor's existing `arma->~FloatARMA(); sysdep_free(arma)`
+ * F215), and the destructor's existing `arma->~FloatARMA(); sysdep_free(arma)`
  * is the other half of the same asymmetry.
  */
 extern void floatarma_ctor(FloatARMA *self, unsigned int nDen,
@@ -161,7 +161,7 @@ extern void floatarma_ctor(FloatARMA *self, unsigned int nDen,
  * `historyAlloc` is computed here, stored at +0x1c, and multiplied by four to
  * size `echoHistory`; NOTHING reallocates it afterwards, and `setEchoDelay`
  * moves `echoLength` -- the bound every consumer clears and reads to --
- * without reference to it.  D72 is the entry, finding 1188 the numbers and
+ * without reference to it.  D72 is the entry, finding F1188 the numbers and
  * the CANNOT FIRE verdict; this file neither clamps nor re-argues it.
  *
  * `setEchoDelay` IS CALLED, NOT INLINED, and the object inlined it.  The
@@ -170,7 +170,7 @@ extern void floatarma_ctor(FloatARMA *self, unsigned int nDen,
  * function -- so the original's source and ours differ in factoring here and
  * agree in behaviour, which is CLAUDE.md's sanctioned case.  Writing it as a
  * call rather than a copy is also what keeps `v92ec`'s anchors unique
- * (finding 1264): the same three statements twice in one file would put half
+ * (finding F1264): the same three statements twice in one file would put half
  * the suite's `find` strings on two occurrences each.
  *
  * IT READS TWO MEMBERS BEFORE ANYTHING HAS WRITTEN THEM.  `echoLength +=
@@ -182,15 +182,15 @@ extern void floatarma_ctor(FloatARMA *self, unsigned int nDen,
  * from +0x2c.  It is reproduced because it is in the object, and recorded
  * here because it is the kind of thing a later reader "cleans up".  D225.
  * Reproducing it also depends on `-fno-lifetime-dse`, which is in CXXFLAGS
- * for finding 1224's reason: without it the compiler is entitled to treat the
+ * for finding F1224's reason: without it the compiler is entitled to treat the
  * pre-constructor contents of `*this` as unreachable.
  *
  * THE FILTER LENGTH IS A SIGNED DIVIDE, not a mask.  `test %eax,%eax; js;
  * add $0x3; and $0xfffffffc` is `x / 4 * 4` on an `int`, which rounds toward
- * zero; the mask D72 and finding 1188 write rounds toward minus infinity.
+ * zero; the mask D72 and finding F1188 write rounds toward minus infinity.
  * They agree at the shipped 180 and differ for every negative value, and the
  * test cannot tell them apart because a negative length makes the very next
- * `sysdep_malloc` a request for 16 GB.  Recorded, not driven -- finding 1312.
+ * `sysdep_malloc` a request for 16 GB.  Recorded, not driven -- finding F1312.
  */
 V92EchoCanceller::V92EchoCanceller(V92Parameters *parameters,
 				   unsigned int blockLen, unsigned int extra)
@@ -254,7 +254,7 @@ V92EchoCanceller::setEchoDelay(unsigned int delay)
  * in the original too, so the emitted code is the same either way, and
  * CLAUDE.md's rule that a different factoring may differ for ever while
  * behaving identically is what makes that a choice rather than a compromise.
- * Finding 1271.
+ * Finding F1271.
  *
  * THE SECOND LOOP IS D72's, AND THIS FILE DOES NOT CLAMP IT.  `echoLength` is
  * rebuilt from `filterLength`, `echoDelay` and the parameter block and used
@@ -303,7 +303,7 @@ V92EchoCanceller::reset()
  * `delete` compiles to.  Two calls, the same pointer in `%ebx` for both.
  *
  * THE REASON USED TO BE "`delete` WOULD CALL `operator delete` AND THE OBJECT
- * CALLS `sysdep_free`", AND THAT INFERENCE IS WITHDRAWN -- finding 7786.  This
+ * CALLS `sysdep_free`", AND THAT INFERENCE IS WITHDRAWN -- finding F7786.  This
  * codebase REPLACES global `operator delete`, and the replacement inlines to
  * `sysdep_free`, so a `delete` here would also have reached `sysdep_free` and
  * the callee's name settles nothing.  The blob's own compiler-generated `D0Ev`
@@ -346,7 +346,7 @@ V92EchoCanceller::~V92EchoCanceller()
  *
  * The object formats its own fixed-point decimal and hands `edprintf` a
  * character and two ints; the same shape as `V90Phase2Info`'s, and written
- * the same way for the reason finding 256 gives -- the products are computed
+ * the same way for the reason finding F256 gives -- the products are computed
  * on the x87 stack at 64 significand bits and `long double` is the spelling
  * that does not depend on the excess precision being there.
  *
@@ -375,7 +375,7 @@ whole_of(float v)
  * `fildl` the truncation back, subtract it from the value, scale by 1e6,
  * truncate again, and `cltd; xor %edx,%eax; sub %edx,%eax` -- which is abs().
  * The subtraction is `v - (int)v` here, the way round that keeps the value's
- * sign; the abs() makes the order untestable either way (finding 256).
+ * sign; the abs() makes the order untestable either way (finding F256).
  */
 static int
 frac_of(float v)
@@ -387,7 +387,7 @@ frac_of(float v)
 /*
  * `V92EchoCanceller::setEchoBeta(float)` and
  * `V92EchoCanceller::setDecayFactor(float)`, INLINED -- the same two bodies
- * `reset` carries with their argument constant-folded (finding 1271).
+ * `reset` carries with their argument constant-folded (finding F1271).
  *
  * `setState` reaches them three times over, at 0x113ab, 0x1145b and 0x11598,
  * and the object has the whole body at each site: store the field, then print
@@ -401,7 +401,7 @@ frac_of(float v)
  * GCC inlines them back exactly as before.  So the factoring note above still
  * describes the object and the source now names what the object names.
  * Writing the body out three times is still wrong for the other reason it
- * always was: an anchor must be unique (finding 1264).
+ * always was: an anchor must be unique (finding F1264).
  *
  * The sign comes from the FIELD and the two integers from the ARGUMENT, which
  * is what the object does -- `fsts 0x30(%ebx)` leaves the value live in the
@@ -417,7 +417,7 @@ frac_of(float v)
  * store and folds the compare.  The reload's answer is `'-'`, which is what
  * the fold produces, so no input can tell them apart and there is nothing for
  * a test to pin.  `setState` is therefore 5 of the object's 7 selects and
- * stays that way; finding 2411.
+ * stays that way; finding F2411.
  */
 void
 V92EchoCanceller::setEchoBeta(float beta)
@@ -581,7 +581,7 @@ V92EchoCanceller::setState(V92EchoCancellerState newState)
  * again and the writer runs `count` words off the end with nothing to stop
  * it.  That is a D72 DATAPOINT and not a second deviation: the disagreement
  * is still the one D72 records, CONFIRMED and CANNOT FIRE at any real
- * `V92_ECHO_INITIAL_DELAY` (finding 1188).  Nothing here clamps anything, the
+ * `V92_ECHO_INITIAL_DELAY` (finding F1188).  Nothing here clamps anything, the
  * test never asks the object to cross the line, and it carries a compared
  * guard at BOTH ends of the buffer so a spelling that overran would fail
  * rather than pass.
@@ -661,7 +661,7 @@ V92EchoCanceller::updateEchoHistory(float *in, unsigned int count)
  * product and the running sum at 64 significand bits and never rounds to
  * float.  A `float` accumulator says the same thing only for as long as the
  * compiler's excess precision is `fast`; this spelling does not depend on it
- * (V90Phase2Info.cpp's finding 256 is the same argument).
+ * (V90Phase2Info.cpp's finding F256 is the same argument).
  *
  * Written once and called from both loops: GCC inlines it, and a `long
  * double` return is passed in st(0) with no rounding even when it does not.
@@ -704,7 +704,7 @@ ec_filter_sum(const float *h, const float *c, unsigned int n)
  * `V90Equalizer::setLinearEquBeta`'s is: the object branches on ZF alone and
  * FCOM sets C3 for EQUAL and for UNORDERED both, so a NaN in `out[0]` takes
  * the copy path where C's `!=` would take the filter path.  The negated
- * `<`/`>` pair is the predicate the object has (finding 236's shape).
+ * `<`/`>` pair is the predicate the object has (finding F236's shape).
  *
  * FOUR PATHS, AND ONLY TWO OF THEM ADAPT.  State 0 filters and returns
  * without touching `word_10`, so a canceller that has finished training never
@@ -737,7 +737,7 @@ V92EchoCanceller::process(float *in, float *out, unsigned int count)
 	 * for equal and for unordered both, which under -mno-ieee-fp is what
 	 * `out[0] == 177.0f` emits.  The negated pair of relational tests this
 	 * used to carry was the -mieee-fp workaround and is two compares.
-	 * Finding 2300.
+	 * Finding F2300.
 	 */
 	if (out[0] == 177.0f) {
 		mod = historyAlloc - word_18;

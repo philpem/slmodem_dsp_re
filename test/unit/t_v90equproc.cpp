@@ -5,7 +5,7 @@
  * refuses to score a mutant set against an already-red binary, because caught
  * and already-red are indistinguishable -- and this binary IS red on the
  * modern tier, declared in `tools/gccdiverge.json` for the x87
- * excess-precision divergence finding 6203 measures.  So the defence against
+ * excess-precision divergence finding F6203 measures.  So the defence against
  * a vacuous grid here is the anti-vacuity counters at the bottom of this
  * file and nothing else, and every one of them has to count an OBSERVABLE
  * the reference produced rather than something the fixture planted.
@@ -19,10 +19,10 @@
  *
  * THE FIXTURE IS `t_v90eqdata.cpp`'S, extended: the object in a byte array
  * carried by a union for its alignment, both sides seeded with the SAME
- * varied pseudorandom bytes and never with zeros (finding 230), the whole
+ * varied pseudorandom bytes and never with zeros (finding F230), the whole
  * object compared with `diff_eq_obj`, and the bytes from `sizeof` to the end
  * of an over-large slot compared separately so a store past the object's end
- * is a failure rather than silence (findings 223, 224).
+ * is a failure rather than silence (findings F223, F224).
  *
  * WHAT ONLY THIS TEST CAN SEE, and every one of them has a grid axis and an
  * anti-vacuity counter of its own:
@@ -50,7 +50,7 @@
  *     all, so `outSym[j]` is whatever the caller left in a register; the two
  *     sides are different code and cannot agree.  The tail's tests against
  *     10..16 are reachable only from there, so their FALSE side is not
- *     differentially drivable.  Finding 6201.
+ *     differentially drivable.  Finding F6201.
  *   - `mmxMode` WITH `state` 0, 1, 2 OR 6.  Those four arms consume `soft`,
  *     which the fixed-point arm never writes -- the fixed-point
  *     representation is only entered from the data phase, and states 3, 4
@@ -149,7 +149,7 @@ static struct equ_arena arena, arena_save, arena_ours;
 #define ARENA_PARAMS ((V90Parameters *)arena.parm)
 #define ARENA_RSAMP  ((V90Resampler *)arena.rsamp)
 
-/* Varied bytes, never zeros (finding 230). */
+/* Varied bytes, never zeros (finding F230). */
 static void
 fill_arena(long trial)
 {
@@ -556,7 +556,7 @@ run_reset_arm(void)
 					 * satisfied by a trial that started
 					 * high and never wrapped, which is a
 					 * counter that cannot fail (finding
-					 * 3509).
+					 * F3509).
 					 */
 					if (le > 0 && w1c > le
 					    && THEIRS.word_20
@@ -605,7 +605,7 @@ run_reset_arm(void)
 							 * ran" would have been
 							 * a counter that
 							 * cannot fail
-							 * (finding 3509).
+							 * (finding F3509).
 							 */
 							if ((double)e * (double)e
 							    >= 4294967296.0)
@@ -680,7 +680,7 @@ run_reset_arm(void)
  * split/shared split (the demapper, the CP and MP records and the descrambler
  * are written and get one copy per side; the mapping blocks, the
  * impairment detector and the parameters are read-only and are SHARED so the
- * pointer word stays IN the comparison, finding 1105), the same
+ * pointer word stays IN the comparison, finding F1105), the same
  * `resetNoSpectral`-safe mapping blocks, and the same "one bit from an
  * answer" plant of the two message decoders.  Its `arm_r` puts a detector one
  * sample from a decision, which is what makes 0x28 and 0x2c reachable inside
@@ -771,7 +771,7 @@ static unsigned char pf_s[sizeof(V90PreFilter) + 64]
 #define SPECVER		((V90SpectralVerifier *)sv_s)
 #define PREFILT		((V90PreFilter *)pf_s)
 
-/* Varied, never zero: findings 223, 224, 230. */
+/* Varied, never zero: findings F223, F224, F230. */
 static unsigned
 fill_bytes(unsigned char *p, unsigned n, unsigned lfsr)
 {
@@ -812,7 +812,7 @@ scrub(unsigned char *dst, const unsigned char *src, unsigned n,
  * EVERY PARAMETER THESE ARMS READ IS PLANTED FINITE, and that is a
  * correctness requirement rather than tidiness.  `setLinearEquBeta` and
  * `setDfeBeta` decide with ONE ORDERED COMPARE and no parity test
- * (`linearEquBeta != beta`, findings 2300 and 2304) -- so a pseudorandom word
+ * (`linearEquBeta != beta`, findings F2300 and F2304) -- so a pseudorandom word
  * that happens to be a NaN takes a different arm on the two compilers and
  * turns this binary's declared divergence into two.  The fill gives varied
  * bytes; these fifteen words are planted on top of it.
@@ -1025,7 +1025,7 @@ p4_setup(long tag, int dly)
 		/*
 		 * A CONSTANT DESCRAMBLER BUFFER, so the two taps cancel and
 		 * the demapper's own bits reach the message decoders -- which
-		 * is what makes 0x1c and 0x35 reachable at all.  Finding 4811
+		 * is what makes 0x1c and 0x35 reachable at all.  Finding F4811
 		 * measured the other half of this.
 		 */
 		memset(dscbuf_s[s], 0x55, DSC_N);
@@ -1187,7 +1187,7 @@ p4_compare(long tag)
  * The equaliser's own state for a phase 4 trial.  Everything is planted
  * POSITIVE and inside a short: the demodulator's detectors test `sample > 0`,
  * and keeping `|soft|` under 32767 keeps the RESET slicer's wrap -- and with
- * it finding 6203's excess-precision divergence -- out of these groups.  The
+ * it finding F6203's excess-precision divergence -- out of these groups.  The
  * float step sizes are FROZEN here for the same reason: `(0.0f * err) * x` is
  * exactly zero in both precisions, so the float LMS cannot carry an 80-bit
  * intermediate into `dfeCoefs`.  The RESET group is what drives the float LMS
@@ -1242,7 +1242,7 @@ p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
 	 * the intermediate at 80 bits.  Measured: with these left to the fill,
 	 * one DATA trial of 48 disagreed with the blob on GCC 13 in
 	 * `linearEquCoefs[0..3]` and `word_94`, and the SAME trial was green on
-	 * the period compiler -- a fixture defect wearing finding 6203's
+	 * the period compiler -- a fixture defect wearing finding F6203's
 	 * clothes.  A power of two makes the reciprocal exact.
 	 */
 	OURS.linearEquMmxConversionFactor =
@@ -1725,7 +1725,7 @@ run_data_arm(void)
 				 * pair, and a symbol demodulated after that
 				 * runs the whole float tail on values three
 				 * orders of magnitude larger than this
-				 * fixture's own -- which is finding 6203's
+				 * fixture's own -- which is finding F6203's
 				 * subtraction, in the one group that is
 				 * otherwise clear of it.  Measured: three
 				 * trials of 48 disagreed on `word_78` and
@@ -1922,7 +1922,7 @@ run_data_arm(void)
 				 * trials; the equaliser state takes three
 				 * values in three blocks and changes twice in
 				 * forty-eight.  Neither could ever reach its
-				 * threshold, which is finding 3509's shape --
+				 * threshold, which is finding F3509's shape --
 				 * so the observable is the sum of every symbol,
 				 * every float and the count, all off the
 				 * reference.
@@ -1973,7 +1973,7 @@ run_data_arm(void)
  * which lands in `array_d8` and is compared.
  *
  * ONE SYMBOL PER CALL, and it is what keeps this group clear of finding
- * 6203.  With `nOut` at 1 the only symbol is the one the re-convert runs on,
+ * F6203.  With `nOut` at 1 the only symbol is the one the re-convert runs on,
  * and `mmxMode` is set before its tail -- so the FLOAT tail, where
  * `err = soft - fdec` on a `soft` of 10**5 needs a twenty-fifth mantissa bit,
  * never executes.  Everything downstream of the wide `y` is integer.

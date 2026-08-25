@@ -37,7 +37,7 @@
  * this+0x54, 0)`, the same five clears, the same `Queue<float>::reset`, the
  * same `params->MODULATOR_QUEUE_LENGTH >> 1` and priming loop, and the same
  * closing `FloatFIR::reset` -- down to the "V92Modulator reset" the two both
- * print.  Finding 1283.  `V92Phase3Modulator`'s constructor calls its own
+ * print.  Finding F1283.  `V92Phase3Modulator`'s constructor calls its own
  * `reset` the same way, and is the precedent this file now follows.
  *
  * THE PHASE MACHINE, which the fourteen members below are the whole of.
@@ -83,7 +83,7 @@
  * global form and break every test binary's link.
  *
  * Plain cdecl, `this` first on the stack -- `mov 0x50(%esp),%esi` after four
- * pushes and a 0x3c-byte frame -- finding 215.
+ * pushes and a 0x3c-byte frame -- finding F215.
  */
 
 #include <stddef.h>
@@ -209,7 +209,7 @@ typedef char v92mod_scram_size[
  * V92Parameters.h, from a block of 54 four-byte slots.  The loop that follows
  * closes with `cmp %ebx,0x4(%esi); ja`, which is UNSIGNED, so the field it
  * lands in is unsigned and a negative parameter would prime the queue about
- * two billion times.  Finding 1284; the fixture keeps the parameter small and
+ * two billion times.  Finding F1284; the fixture keeps the parameter small and
  * positive for exactly that reason.
  *
  * The bound and the queue pointer are both re-read from the object on every
@@ -222,7 +222,7 @@ typedef char v92mod_scram_size[
  *
  * THE CONSTRUCTOR CALLS THIS and GCC 3.4.2 at -O3 inlines it, which is what
  * the object holds: the standalone symbol at +0x15060 and the constructor's
- * closing 152 bytes are the same statements in the same order (finding 1283).
+ * closing 152 bytes are the same statements in the same order (finding F1283).
  * ===========================================================================
  */
 void
@@ -344,7 +344,7 @@ V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
  *
  * Eleven null-guarded releases and then the scrambler, which is the
  * compiler's implicit member destruction and not a statement -- finding
- * 1256's reading, and the same one V92Phase4Modulator's destructor gets.
+ * F1256's reading, and the same one V92Phase4Modulator's destructor gets.
  *
  * THE SIX OBJECTS COME BACK IN A DIFFERENT ORDER FROM THE ONE THEY WERE BUILT
  * IN, AND THE FIVE RAW BUFFERS DO NOT.  The constructor allocates the buffers
@@ -474,7 +474,7 @@ V92Modulator::enterPhase3()
  * FOUR SEPARATE BODIES AND NOT A HELPER.  Each is its own blob symbol at its
  * own address; factoring them into one static would leave four symbols with no
  * bytes of their own and make every per-function count meaningless (findings
- * 605, 610).  The duplication is the object's.
+ * F605, F610).  The duplication is the object's.
  * ===========================================================================
  */
 void
@@ -802,8 +802,8 @@ V92Modulator::enterDataPhase()
  *
  * `frac_of`'s subtraction is `v - (int)v`, which is what `de e1` at
  * .text+0x14bb6 does -- objdump prints it `fsubp %st,%st(1)` and it IS FSUBRP,
- * so st(1) becomes st(0) - st(1) and st(0) holds the value (finding 245).  The
- * abs() makes the operand order unobservable either way (finding 256).
+ * so st(1) becomes st(0) - st(1) and st(0) holds the value (finding F245).  The
+ * abs() makes the operand order unobservable either way (finding F256).
  *
  * The `long double` casts are the x87's: the object loads the field once and
  * never stores the intermediate, so the subtraction and the multiply both
@@ -918,7 +918,7 @@ frac_of(float v)
  * `fld1; fcom %st(1); fnstsw; sahf; ja` takes the branch when 1.0 is above the
  * phase, so the arm that subtracts is the `else`.  Written as `>=` on the
  * phase, which is the same predicate; `-mno-ieee-fp` is what makes a single
- * `fcom` with no parity test reachable at all (finding 1990).
+ * `fcom` with no parity test reachable at all (finding F1990).
  *
  * ---------------------------------------------------------------------------
  * THE DIAGNOSTIC, which is a fixed-point print of a float and 80 of the 662

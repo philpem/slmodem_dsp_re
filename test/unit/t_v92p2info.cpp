@@ -25,7 +25,7 @@
  * reconstruction that copied the word agrees whenever the parameter happens
  * to be 0 or 1 and differs otherwise.  `seed_params` forces both arms of both
  * of them across the run, and the run asserts that each value was actually
- * observed -- two silent sides agree about nothing (finding 149).
+ * observed -- two silent sides agree about nothing (finding F149).
  *
  * Three more copies are a whole-word load with a byte store, so only the low
  * byte of each survives; the seed puts values above 255 into all three so

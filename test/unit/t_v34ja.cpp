@@ -71,7 +71,7 @@
  * FIRST is observable, because a trial with both receivers above 1 must still
  * enter phase 3 -- so `bothIn` below is not decoration, it is what makes that
  * mutation catchable.  The dead part is the arm's interior, not its place in
- * the chain; finding 381 draws the line.
+ * the chain; finding F381 draws the line.
  */
 
 #include "v90demfix.h"
@@ -156,7 +156,7 @@ ja_setup(int trial, const struct ja_args *a)
 	/*
 	 * The graph first, so that `lfsr_state` is left running and the three
 	 * blocks below are filled from the same stream -- pairwise identical
-	 * and varied, which is finding 230's rule.
+	 * and varied, which is finding F230's rule.
 	 */
 	setup(trial, &a->dem);
 	fill_pair(objb[0], objb[1], OBJ_SLOT);
@@ -403,7 +403,7 @@ run_dispatch(void)
 	/*
 	 * ANTI-VACUITY.  Each of these is a case the checks above depend on
 	 * having occurred; a table edited down to nothing would otherwise pass
-	 * on a smaller cross-product (findings 247, 262, 295).  Every counter
+	 * on a smaller cross-product (findings F247, F262, F295).  Every counter
 	 * below is derived from the sweep tables rather than from the
 	 * function's behaviour, so none of them can be satisfied by the code
 	 * under test agreeing with itself.

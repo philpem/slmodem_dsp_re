@@ -18,7 +18,7 @@
 #
 # with TWO spaces after 3.4.2 -- gcc_version_patch (eclass:604) is called with
 # an empty BRANCH_UPDATE, so its argument carries a leading space, and the sed
-# at eclass:607 emits `\1 @GENTOO@\2`, contributing another.  Finding 2320.
+# at eclass:607 emits `\1 @GENTOO@\2`, contributing another.  Finding F2320.
 #
 # EVERY PATCH IS FATAL IF IT DOES NOT APPLY, and the count is printed.  That
 # matters more than it looks: gcc_version_patch is the LAST step and is only
@@ -280,7 +280,7 @@ esac
 #  * `make`, not `profiledbootstrap` (eclass:1011, x86's default target).  The
 #    C compiler that builds cc1 does not change what cc1 emits, so three
 #    profiled stages would cost several times the wall clock to re-verify a
-#    property nothing here depends on.  Finding 2200 made the same call for the
+#    property nothing here depends on.  Finding F2200 made the same call for the
 #    stock build and this keeps the two images comparable.
 #
 #  * --build and --target are spelled out; the eclass passes only --host and

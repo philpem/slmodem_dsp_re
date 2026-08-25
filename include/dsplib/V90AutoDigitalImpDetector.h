@@ -6,7 +6,7 @@
  * polymorphic -- tools/cppstruct.py lists its destructor with the `D1` and
  * `D2` variants and no `D0`, and GCC emits a deleting destructor only for a
  * virtual one -- so offset 0 is a real member and there is no vptr.  Finding
- * 228 is the four classes where that is not true.
+ * F228 is the four classes where that is not true.
  *
  * THE OBJECT IS 43,440 BYTES (0xa9b0).  The largest `this`-relative
  * displacement any of the class's thirty-two members uses is +0xa9ae, and it
@@ -14,14 +14,14 @@
  * and `filds 0xa9ae(%esi)` in `porcessFirstStudy`, whose prologues load
  * `this` into those registers from the first stack argument -- so the object
  * ends at 0xa9b0, which is already four-byte aligned.  A displacement is not
- * a size (finding 215); the .cpp asserts both the size and every offset
+ * a size (finding F215); the .cpp asserts both the size and every offset
  * below.
  *
  * The bound is the maximum over ALL thirty-two members, not just the two
  * written here: the two written here reach only +0xa980 and +0xa96c.  It was
  * measured by disassembling every `_ZN25V90AutoDigitalImpDetector*` symbol
  * and taking the largest displacement in each, then checking by hand that the
- * base register of the winner is `this`.  Finding 251.
+ * base register of the winner is `this`.  Finding F251.
  *
  * ALL THIRTY-TWO ARE DEFINED, AND THE CLASS IS COMPLETE.  The lifecycle batch
  * wrote `reset` and `resetLinearMapping`; the first processing batch added the
@@ -34,7 +34,7 @@
  * last batch added `studyUrefHandler`, which is the per-sample entry point
  * the other thirty-one exist to serve.  Every one is differentially tested
  * against the blob by test/unit/t_v90adid.cpp; the intra-class call graph is
- * written down in finding 1367 and closed in finding 1446.
+ * written down in finding F1367 and closed in finding F1446.
  *
  * THE OBJECT IS MOSTLY SIX-BY-ONE-HUNDRED-AND-TWENTY-EIGHT ARRAYS.  Six is
  * the number of RBS phases -- every loop in the class runs a `short` index
@@ -68,7 +68,7 @@
  *
  * The evidence is the disassembly and nothing else; `make offsets` checks
  * offsets and the differential tests check behaviour, and a field only ever
- * written with zero is invisible to both.  Finding 1360.
+ * written with zero is invisible to both.  Finding F1360.
  *
  * WHAT THIS BATCH NAMED.  +0x0c00 is `prevLinMapp`, 128 shorts, because
  * `setPrevSessionLinearMapping` fills exactly that many and
@@ -77,11 +77,11 @@
  * `imul $0x83e,%phase`, and 6 * 0x83e * 2 = 0x62e8, which is the region's
  * whole extent to +0x8b00.  +0xa956 is `maxUcode[6]`, the six bytes
  * `setMaxUcodeArray` copies in.  +0xa9a6 is the `short` threshold `isAltRbs`
- * compares a distance against.  Finding 1361.
+ * compares a distance against.  Finding F1361.
  *
  * Data member names below are invented and mostly offset-derived: the
  * mangling preserves method names and type names but never a data member's
- * name (finding 226).  `linMapp` and `linMappAlt` are named for the method
+ * name (finding F226).  `linMapp` and `linMappAlt` are named for the method
  * whose entire body is clearing them, and `params`, `pcmType`, `ucode` and
  * `ucodeLevel` for what `reset` puts in them.  Everything else keeps an
  * offset-derived name or is `pad_`, and every `pad_` region is memory this
@@ -276,7 +276,7 @@ public:
 	 * seeds with 1.  Three values are reachable: 2 means the study is over,
 	 * 0 means "do not use this sample" -- state 1 on an already-flagged
 	 * phase, state 2 when the alternate-RBS test fires -- and 1 is
-	 * everything else.  Finding 1440.
+	 * everything else.  Finding F1440.
 	 *
 	 * It calls five of the class's own members and the object inlines all
 	 * five: `calculateLinearMeanAndVar`, `calculateLinearMeanAndVarAlt`,
@@ -332,7 +332,7 @@ public:
 	 * and then walks the row DOWNWARDS from `byte_a954` looking for the
 	 * first 1, which becomes that phase's `maxUcode`.  So a 1 is "usable"
 	 * and the array is the per-code mask the per-phase maximum is read out
-	 * of.  Finding 1435.
+	 * of.  Finding F1435.
 	 *
 	 * The reference code's entry is forced back to 1 for every phase at the
 	 * end of that fill, whatever the variance said -- see D289.
@@ -414,7 +414,7 @@ public:
 	 * `unSuspectedPhase` and the loop counter as the two indices.  The
 	 * identifier is left offset-derived because it is spelled in five files
 	 * and a rename buys nothing the comment does not, which is the same
-	 * decision finding 1425 records for +0xa9a4 and +0xa9a6.
+	 * decision finding F1425 records for +0xa9a4 and +0xa9a6.
 	 */
 	float float_9d48[V90ADID_PHASES][V90ADID_CODES];	/* +0x9d48 */
 
@@ -455,7 +455,7 @@ public:
 	 * `movzbl 0xa954(%esi)` at 0x4363e, `cmpb $0x3f,0xa954(%esi)` at
 	 * 0x43801 and `cmp %bl,0xa954(%esi)` at 0x438c9 and 0x43986 -- and
 	 * every one of the seven accesses is eight bits wide and unsigned.  It
-	 * is the top of both of that method's scans.  Finding 1434.
+	 * is the top of both of that method's scans.  Finding F1434.
 	 *
 	 * +0xa955 stays `pad_`: no member of the class names it in any
 	 * displacement, so it is memory this batch did not model rather than
@@ -484,7 +484,7 @@ public:
 	 * `mov %edi,0xa960(%esi)` with %edi = 1 at 0x440c4, beside "Final codec
 	 * identified is ALaw".  Both stores are 32 bits, which is what makes
 	 * this an `int` and not a byte, and they retire the whole of what was
-	 * `pad_a960[4]`.  Nothing in the class reads it.  Finding 1434.
+	 * `pad_a960[4]`.  Nothing in the class reads it.  Finding F1434.
 	 */
 	int int_a960;						/* +0xa960 */
 
@@ -505,7 +505,7 @@ public:
 	 * than a flag.  `porcessSecondStudy` saves it into a stack slot at
 	 * 0x41d06 and prints exactly that slot through
 	 * "V90AutoDigitalImpDetector: unSuspectedPhase = %d\r\n", so the name
-	 * is the original author's; finding 1425 is the same situation for
+	 * is the original author's; finding F1425 is the same situation for
 	 * two fields the study batch met, and this one is spelled with the
 	 * object's own name because a field nothing else refers to yet costs
 	 * nothing to name properly.
@@ -601,7 +601,7 @@ public:
 	 * "uniteUrefDistanceThresh = %d\r\n" and passes exactly
 	 * `movswl 0xa9a4(%ebx)` as the argument.  The identifier is left
 	 * offset-derived because it is spelled in three files and a rename
-	 * buys nothing the comment does not; finding 1425.
+	 * buys nothing the comment does not; finding F1425.
 	 */
 	short short_a9a4;					/* +0xa9a4 */
 
@@ -627,7 +627,7 @@ public:
 	 * is the floor that method raises its answer to.  The other two are
 	 * shorts: `filds 0xa9ac`/`filds 0xa9ae` in `porcessFirstStudy`, which
 	 * clamps 2.5 * `trn1Sigma` between them.  +0xa9ae is the displacement
-	 * the object's 0xa9b0 size is measured from (finding 251).
+	 * the object's 0xa9b0 size is measured from (finding F251).
 	 */
 	float altMinVarThresh;					/* +0xa9a8 */
 	short neighborUcodeMinDistance;				/* +0xa9ac */

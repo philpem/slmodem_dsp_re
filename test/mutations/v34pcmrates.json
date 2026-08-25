@@ -1,6 +1,6 @@
 [
  {
-  "label": "VPcmV34GetCurrentRxBitRate and VPcmV34GetCurrentTxBitRate.  Run it with: tools/mutate.py --suite v34pcmrates.  EVERY MUTATION BELOW MUST LIE INSIDE ONE OF THOSE TWO: v34pcmmain.cpp also holds getMPrecvdBits, v90Phase34, VPcmV34InitiateRetrain, V34GiveINFO1dBits and indicateJaTransmission, and the v90p34, v34retrain, v34info1d and v34ja suites map the same file to four other binaries.  `obj->status == 2` in particular appears verbatim inside VPcmV34InitiateRetrain and carries a two-tab indent there, so every anchor here carries its own function's surrounding text.  Finding 1103 is the failure this avoids and finding 432 is what it costs when it is not avoided."
+  "label": "VPcmV34GetCurrentRxBitRate and VPcmV34GetCurrentTxBitRate.  Run it with: tools/mutate.py --suite v34pcmrates.  EVERY MUTATION BELOW MUST LIE INSIDE ONE OF THOSE TWO: v34pcmmain.cpp also holds getMPrecvdBits, v90Phase34, VPcmV34InitiateRetrain, V34GiveINFO1dBits and indicateJaTransmission, and the v90p34, v34retrain, v34info1d and v34ja suites map the same file to four other binaries.  `obj->status == 2` in particular appears verbatim inside VPcmV34InitiateRetrain and carries a two-tab indent there, so every anchor here carries its own function's surrounding text.  Finding F1103 is the failure this avoids and finding F432 is what it costs when it is not avoided."
  },
  {
   "label": "the receiver takes its PCM arm when the role is NOT 0x66 -- the fork read backwards",

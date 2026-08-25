@@ -30,7 +30,7 @@
  *   outer ring, |I|+|Q| = 24576 -> 16226 bytes past the end of it
  *
  * The last two read whatever the LINKER put after the blob's `.data`, which
- * is a property of this binary and not of the code -- exactly finding 1603's
+ * is a property of this binary and not of the code -- exactly finding F1603's
  * argument, now bounded to two rings instead of three.  So `*mag` is compared
  * on the inner ring ONLY, and the suite asserts both that it compared some
  * and that it excluded some of each other ring.  A run that quietly stopped

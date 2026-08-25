@@ -64,7 +64,7 @@ struct fpm_pps_cfg {
 	/*
 	 * Added to `step` on every output.  This is V.22's `cfg.step` -- the
 	 * field its `TxClockSync` writes a timing correction into (finding
-	 * 3505) -- with the nominal part split out into `step` above.  Zero in
+	 * F3505) -- with the nominal part split out into `step` above.  Zero in
 	 * the built-in configuration.
 	 *
 	 * Read `movzwl`, but the sum is truncated back to 16 bits, so the

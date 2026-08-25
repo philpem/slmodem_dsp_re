@@ -19,7 +19,7 @@
  * against one symbol.  The index is the V.32 rate code, so 4800 and 9600
  * share the sixteen-point map and the four trellis rates take one each.
  *
- * THIS FILE COULD NOT EXIST UNTIL THE VITERBI BATCH DID.  Finding 1614
+ * THIS FILE COULD NOT EXIST UNTIL THE VITERBI BATCH DID.  Finding F1614
  * records why: four of the ten pointees are `VTBv32_*`, the harness renames
  * every symbol the blob defines, and an `extern` against a renamed symbol
  * resolves to nothing -- so there was no way to declare the pointer arrays
@@ -32,7 +32,7 @@
  * therefore 17 entries and not 16.
  *
  * `ECCv32_CFG`'s field boundaries are not a reading of the bytes either --
- * they are what `FPM_ECC_init`'s disassembly does with them (finding 1611),
+ * they are what `FPM_ECC_init`'s disassembly does with them (finding F1611),
  * and the two pointer fields are the only two relocations in the object.
  * const because it is `.rodata`, where `ECC_CFG` is `.data` and is not.
  */

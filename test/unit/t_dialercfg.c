@@ -196,7 +196,7 @@ main(void)
 	rc |= diff_end();
 
 	/*
-	 * The sixteen restored diagnostic call sites (findings 134, 143, 146).
+	 * The sixteen restored diagnostic call sites (findings F134, F143, F146).
 	 * This is the only thing that actually checks them: with the level at
 	 * zero, a wrong string, a wrong field or a missing call all behave
 	 * identically.  Two of the sixteen were wrong when written by hand and

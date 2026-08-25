@@ -12,10 +12,10 @@
  * the full 64-bit significand.  The question was left open in this comment on
  * the ground that no caller existed yet.  A caller exists now, it compares
  * before it stores, and the rounding changed which trellis candidate it chose;
- * see the header, and finding 5854 for how the tie arises and why the suite
+ * see the header, and finding F5854 for how the tie arises and why the suite
  * that passed over this could not have caught it.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * IT DOES NOT CALL `reset()` OR `setFilterCoeff()`.  Both are ordinary global
  * members and the object contains no call at all here, so the nine stores are
@@ -64,7 +64,7 @@ V90SpectralShapingFilter::V90SpectralShapingFilter()
  * argument copied to a float member needs no arithmetic; ours converts
  * through the coprocessor, and the two differ for exactly one input class --
  * a signalling NaN, which x87 quietens and `mov` does not.  That is the same
- * boundary V90SdDetector's constructor sits on (finding 1242), so it is
+ * boundary V90SdDetector's constructor sits on (finding F1242), so it is
  * measured the same way: the test sweeps bit patterns and leaves signalling
  * NaNs out.
  */
@@ -87,7 +87,7 @@ V90SpectralShapingFilter::setFilterCoeff(float c0, float c1, float c2,
  * statements, and deliberately: the two would otherwise be the same four
  * lines in one file, every `find` string over either would match twice, and
  * `mutate.py` would report the suite UNUSABLE -- which does not fail a run
- * (finding 1264).  The chain evaluates right to left where the object stores
+ * (finding F1264).  The chain evaluates right to left where the object stores
  * +0x10 first, and that is a distinction no observer can make: four zeroes
  * into four distinct words with no call and no aliasing between them.
  */
@@ -167,9 +167,9 @@ V90SpectralShapingFilter::progress(const short *in)
  * SO THE ARITHMETIC IS `progress`'s AND THE ENCODING IS NOT, which is what
  * makes the pair worth reading together.  `progress` forms `x - prevIn * b2`
  * with a POPPING `de e2`, whose printed mnemonic is its own opposite (finding
- * 245); `getMetric` forms the same difference with `d8 ef`, a register form
+ * F245); `getMetric` forms the same difference with `d8 ef`, a register form
  * objdump prints correctly.  The two agree, so the popping forms in
- * `progress` are read right -- finding 1400.
+ * `progress` are read right -- finding F1400.
  *
  * `blocks == 0` returns state[3] unchanged, having done nothing; a zero
  * `blockLength` makes each of the `blocks` iterations a no-op, which the

@@ -8,13 +8,13 @@
  * -- 0x5376a and 0x5378c in four1, 0x5388c and 0x53890 in realfft.  GCC
  * expands `sin()` inline to `fsin` only when `flag_unsafe_math_optimizations`
  * is set; without it the call goes to libm.  The same flag is what finding
- * 876 records `Psd::process` needing for its `fldlg2`/`fyl2x` log10 arms,
+ * F876 records `Psd::process` needing for its `fldlg2`/`fyl2x` log10 arms,
  * which is consistent: the original's build of this part of the library had
  * it on.
  *
  * THE DIFFERENTIAL TIER CANNOT SEE THAT, and saying so is the point.  Built
  * without the pragma the file contains zero `fsin`, calls libm, and STILL
- * passes all 489,322 checks (finding 833).  It is not that the two agree --
+ * passes all 489,322 checks (finding F833).  It is not that the two agree --
  * `fsin` returns an 80-bit result and glibc's `sin` a correctly-rounded
  * 64-bit one, so they differ around the 54th bit -- it is that the difference
  * is 2^-53 relative in a quantity whose effect is finally rounded to a
@@ -23,7 +23,7 @@
  * authority and not the test's, which is what tier 3 is for
  * (docs/method/tiers.md); do not remove it on the grounds that the suite
  * stays green, and do not record the suite staying green as evidence the two
- * are equivalent.  It is a sample, on finding 248's argument.
+ * are equivalent.  It is a sample, on finding F248's argument.
  *
  * It is a `#pragma` rather than a Makefile flag so the blast radius is this
  * translation unit.  Nothing else in this tree is built with it and nothing
@@ -73,10 +73,10 @@
  *
  * WHERE THE OBJECT ROUNDS, AND WHERE IT DOES NOT, IS THE HARD PART OF THIS
  * FILE.  Two deviations from the obvious spelling are here for it, and each
- * was ABLATED -- removed, rebuilt, watched fail, put back (finding 833).
+ * was ABLATED -- removed, rebuilt, watched fail, put back (finding F833).
  * Neither is decoration and neither may be tidied away.
  *
- * BOTH ARE GONE NOW, AND THE PERIOD COMPILER IS WHY (finding 1354).  They
+ * BOTH ARE GONE NOW, AND THE PERIOD COMPILER IS WHY (finding F1354).  They
  * were ablated under GCC 13 only, which could show that GCC 13 needs them
  * and could not show that the author wrote them.  `make period` can, and it
  * passes 155 of 155 with the plain source:

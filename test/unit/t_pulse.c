@@ -233,7 +233,7 @@ run_digit(const char *label, int digit, int make, int brk, int ticks)
  * ships at zero, so everything above passes whether they are present, absent,
  * or present with the wrong text and the wrong arguments.  Raising the level
  * on both sides at once and comparing the two transcripts is the only thing
- * that reads them (findings 134, 147).
+ * that reads them (findings F134, F147).
  *
  * A digit is used rather than a single tick because the two hook messages sit
  * on opposite sides of `modem_set_param` -- "hook on" before it, "hook off"
@@ -295,7 +295,7 @@ run_transcript(const char *label, int digit, int make, int brk, int ticks,
 		 * Anti-vacuity.  Two empty transcripts compare equal, and now
 		 * that the harness marks its own callbacks the buffer is never
 		 * empty anyway -- so this counts printed lines, not bytes
-		 * (finding 149).  The reference side is the one measured, so
+		 * (finding F149).  The reference side is the one measured, so
 		 * it asserts what the original says, not what we say it says.
 		 */
 		diff_eq_int("reference printed something",

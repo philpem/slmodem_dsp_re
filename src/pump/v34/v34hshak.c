@@ -37,8 +37,8 @@
  * PROMOTED first -- `--globalize-symbols` in one pass, `--redefine-syms` in a
  * second -- and then it renames like any other global, so `ref_getbit` and
  * `ref_ApplyBulkDelay` link and both are tested directly rather than through
- * a caller.  Finding 221 is the general result and finding 227 is these two.
- * Finding 117, which drew the original conclusion, stands as the reading of
+ * a caller.  Finding F221 is the general result and finding F227 is these two.
+ * Finding F117, which drew the original conclusion, stands as the reading of
  * the call graph and is superseded only in what it says can be tested.
  *
  * NINE OF THE TWELVE ARE CALLED BY NOTHING IN THE OBJECT.  Nothing reaches
@@ -48,11 +48,11 @@
  * Only `setfinalrate` has a caller, in `v34handshak`.  The `jmp` and the
  * data scans are not belt and braces: this object tail-calls constantly, and
  * a section-symbol relocation with an addend does not answer to a grep for a
- * name.  Finding 212 gives the controls each scan was checked against.
+ * name.  Finding F212 gives the controls each scan was checked against.
  *
  * They are global, so they are testable regardless, but it means their
  * arguments and their bank sizes have to be read out of the code rather than
- * off a call site.  Finding 89 recorded the same shape twice already.
+ * off a call site.  Finding F89 recorded the same shape twice already.
  *
  * `v34handshakinit` is the exception and has six callers, which is where its
  * mode numbers come from; see the declaration in `v34hshak.h`.
@@ -90,7 +90,7 @@
  * retarget, where the tables have to be REGENERATED rather than copied, and
  * a table nobody can regenerate is a table that pins the sample rate.
  *
- * Finding 620 did two of this file's three, and both are folded in below
+ * Finding F620 did two of this file's three, and both are folded in below
  * rather than left in the findings file: the ten carrier descriptors are
  * solved exactly, the 2800 baud timing constants are solved exactly, and the
  * five transmit power scales are still open -- but open with the two obvious
@@ -108,7 +108,7 @@
  *
  * WHAT INDEXES THEM IS NOT KNOWN.  This note used to answer "the ten
  * pre-emphasis characteristics V.34 defines plus the flat one, truncated
- * where the rate cannot use them all".  Finding 620 is task #47's attempt on
+ * where the rate cannot use them all".  Finding F620 is task #47's attempt on
  * these tables, and it disproves that reading and one other:
  *
  *   NOT the pre-emphasis index.  V.34 defines eleven, in two template
@@ -189,7 +189,7 @@ const short scale3429[V34_SCALE_ENTRIES] = {
  * and `probeselect` store the address and nothing else.
  *
  * EACH ONE IS A PAIR OF TWO-POLE RESONATORS, TWO HERTZ EITHER SIDE OF THE
- * CARRIER.  That was task #47's, and finding 620 settled it exactly rather
+ * CARRIER.  That was task #47's, and finding F620 settled it exactly rather
  * than suggestively.  Read each pair as Q14 denominator coefficients
  *
  *      { -2*r*cos(2*pi*f/9600), r^2 }
@@ -227,7 +227,7 @@ const short c1600[V34_CARRIER_DESC]  = { 0, 0, 0, 0, -16093, 15735, -16020, 1573
 /*
  * And two more of the same shape for the phase-2 signalling carriers, which
  * `v34modeminit` hands to the tone detector rather than storing.  Same form,
- * two differences, and finding 620 has both exactly.
+ * two differences, and finding F620 has both exactly.
  *
  * 15993/16384 is 0.97614, so r is 0.988 here against 0.98 above -- a pole
  * nearer the unit circle, so a narrower and longer-ringing resonance, which
@@ -285,7 +285,7 @@ short bpv22low[V34_BPV22_TAPS] = {
  * `dpskDetectInfo1Init` and `dpskinit` emit these eleven stores and this
  * clearing loop IDENTICALLY -- same values, same fields, differing only in
  * the order the compiler interleaved them, which is not a difference.  So
- * they are one helper here and not two transcriptions; finding 130 is the
+ * they are one helper here and not two transcriptions; finding F130 is the
  * standing warning about what a shared helper can get wrong, and the answer
  * is that both callers' tests compare the whole object, so a helper that was
  * wrong for one of them could not pass for the other.
@@ -393,7 +393,7 @@ dpskinit(void *objp, short mode, short high)
 
 	/*
 	 * Bits 9 and 11 of the receiver's flag word, set together.  Bit 9 is
-	 * V34_RX_FLAG_DET_PENDING (finding 114) -- the AGC freeze -- so this
+	 * V34_RX_FLAG_DET_PENDING (finding F114) -- the AGC freeze -- so this
 	 * arms a detector and holds the gain still while it settles.
 	 */
 	rx->flags = (unsigned short)(rx->flags | 0xa00);
@@ -428,7 +428,7 @@ dpskinit(void *objp, short mode, short high)
  * Long and almost entirely straight-line: three probe records, thirty-odd
  * scalars, two calls into the modulator, and then the SAME BODY TWICE with
  * four values changed.  `f359c == 0x65` -- the originate/answer flag
- * `preinitdigital` also reads (finding 177) -- picks between them:
+ * `preinitdigital` also reads (finding F177) -- picks between them:
  *
  *                        originate (0x65)      answer
  *      +0x25c2                   4                 5
@@ -724,7 +724,7 @@ setfinalrate(void *objp)
  * left over.  It is reproduced and recorded (D35).
  *
  * WHY 2800 USES 0x3e82 AND 0x1f41 WHERE EVERY OTHER RATE USES 0x3e80 AND
- * 0x1f40.  This is the second of task #47's derivations (finding 620), and
+ * 0x1f40.  This is the second of task #47's derivations (finding F620), and
  * the rule is that `step/wrap` is EXACTLY `2400/baud` at every rate:
  *
  *      baud   step    wrap    step/wrap   2400/baud
@@ -1094,7 +1094,7 @@ dftRetrainDetInit(void *objp)
  * its correlation on one axis -- but a seeded accumulator does: 0x04000000
  * in both halves gives exactly -32768, which read unsigned is 32768, and the
  * two spellings then disagree about every threshold between them.  Finding
- * 212, which records the sweep that missed this and why it missed it.
+ * F212, which records the sweep that missed this and why it missed it.
  */
 int
 detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
@@ -1198,7 +1198,7 @@ detectRetrainReq(void *objp, short nbins, const short *samples, short nsamples)
  * what makes it untestable the ordinary way: `objcopy --redefine-syms`
  * renames a local symbol but cannot make it linkable, so there is no
  * `ref_StateName` to compare against the way the fifteen rate tables at the
- * top of this file are compared.  That is finding 173's trap a third time.
+ * top of this file are compared.  That is finding F173's trap a third time.
  *
  * SO THE TRANSCRIPT COMPARISON IS NOT A SUPPLEMENTARY CHECK ON THESE EIGHTY-
  * SEVEN STRINGS -- IT IS THE ONLY ONE.  `t_v34hshak.c` sweeps the three state
@@ -1240,7 +1240,7 @@ static const char *StateName[V34HS_STATE_COUNT] = {
  *
  * +0x3592, +0x3594 and +0x3596 are three concurrent machines, not one, and
  * the assignment below is read off the format strings against their
- * arguments rather than guessed -- finding 171 is what guessing costs.  At
+ * arguments rather than guessed -- finding F171 is what guessing costs.  At
  * every one of the thirteen sites the slot holding a FIXED `StateName[k]`
  * carries the same k the site then assigns, which pins the word that is
  * changing; the two variable slots are then named by the format:
@@ -1256,7 +1256,7 @@ static const char *StateName[V34HS_STATE_COUNT] = {
  * "tx %s" reads +0x3596, the txstate trace's "rx %s" reads +0x3594, and both
  * "mst %s" read +0x3592.
  *
- * A FOURTH, INDEPENDENT SIGN, which is the same argument finding 171 used to
+ * A FOURTH, INDEPENDENT SIGN, which is the same argument finding F171 used to
  * settle `Uinfo`: +0x3596 only ever receives SSEG, SILENCEINFO and
  * SILENCERETRAIN, and +0x3594 only ever receives RECEIVE, WAIT and RX_DPSK.
  * Transposed, the RECEIVE machine would be the one entering SSEG.  The
@@ -1303,7 +1303,7 @@ hs_put(struct v34_object *obj, unsigned off, short v)
  * arm at a time in files beside this one (v34hshak_t3mid.c is the first),
  * and its arms emit the same three transitions from the same three format
  * strings.  A second copy of this function next door is a second place for
- * the argument order above to be got wrong.  Finding 223's six functions
+ * the argument order above to be got wrong.  Finding F223's six functions
  * lost their `static` for the weaker reason that a test wanted to call them.
  */
 void
@@ -1358,7 +1358,7 @@ hs_setstate(struct v34_object *obj, unsigned off, short next)
  *
  * THE OPENING BLOCK IS A TIMER, and its three fields are reached through
  * `obj + 4`: the object's code generation here is `lea 0x4(obj); mov
- * 0x234(that)`, which is +0x238 of the object and not +0x234.  Finding 179
+ * 0x234(that)`, which is +0x238 of the object and not +0x234.  Finding F179
  * quoted the register-relative offsets and is wrong by four; the fields are
  *
  *      +0x238   a running sample count
@@ -1846,7 +1846,7 @@ int dsplib_v34_blob_preemp =
  *
  * WHAT IS WRONG WITH THE COUNTER BELOW.  The object reduces the channel to a
  * two-point tilt.  A tilt is one number, and only one of the two filter
- * families IS a tilt.  Findings 1956 and 1957:
+ * families IS a tilt.  Findings F1956 and F1957:
  *
  *   Figure 1/V.34, indices 0-5:  a straight line, 0 dB at f/S = 0 rising to
  *                                alpha at f/S = 1.0.  A BROADBAND tilt.
@@ -2072,7 +2072,7 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 	 * DELIBERATE FIX, AND IT IS THE DEFAULT.  D53: the object's counter
 	 * starts at 5 and is advanced before its test, so indices 0-5 are
 	 * unreachable and it cannot ask for a flat line on a flat channel --
-	 * it asks for 6 or 7 and ADDS 1.5-3 dB of tilt (finding 1961 measures
+	 * it asks for 6 or 7 and ADDS 1.5-3 dB of tilt (finding F1961 measures
 	 * this as the right answer at every symbol rate below 3429 on the
 	 * bench's own ATA).  Rejecting five of the eleven filters is a defect,
 	 * not a behaviour to preserve, so it follows this tree's rule for
@@ -2160,10 +2160,10 @@ probe_preemp(const struct v34_dftbin *bins, unsigned n, int k, short baud)
 		 * A variant that advanced here instead -- making index 0
 		 * reachable -- was written, measured over forty calls across two
 		 * A/B runs, and REMOVED from master.  It shifts every other
-		 * bucket down one, which finding 1477 shows is wrong on the
+		 * bucket down one, which finding F1477 shows is wrong on the
 		 * Recommendation's own terms (V.34 5.4.1 puts indices 6-10 in
 		 * Table 4 and this counter addresses that range deliberately),
-		 * and finding 1901 measured it as no better and probably worse.
+		 * and finding F1901 measured it as no better and probably worse.
 		 * It lives on `improve/v34-training`.
 		 */
 		if (i > 9) {
@@ -3151,7 +3151,7 @@ ApplyBulkDelay(void *objp, short delay)
 /*
  * Offsets this batch reads or writes.  Prefixed because four batches are
  * writing arms of this function into this one translation unit at the same
- * time and finding 325 is what one collided macro cost.
+ * time and finding F325 is what one collided macro cost.
  *
  * They are offsets rather than struct members because most of them land in
  * an `unmapped_*` pad today (tools/whichfield.py says which), and the two
@@ -3179,7 +3179,7 @@ ApplyBulkDelay(void *objp, short delay)
  * little-endian machine, so no differential test can tell them apart; a
  * load's width is something the compiler was FORCED to encode, so widening
  * it would be a codegen regression that nothing in this tree could catch.
- * The offset stays for that one read.  Finding 553.
+ * The offset stays for that one read.  Finding F553.
  */
 /*
  * +0x356a IS THE DETECTOR'S OWN `armed`, AND THE OBJECT SAYS SO RATHER THAN
@@ -3191,9 +3191,9 @@ ApplyBulkDelay(void *objp, short delay)
  *
  * IT IS STILL AN OFFSET AND NOT A FIELD ACCESS.  v34fsk.h declines to embed
  * the detector at +0x3564 on purpose -- two things meeting is adjacency, not
- * a bound (findings 215 and 630) -- and reaching through a cast here would
+ * a bound (findings F215 and F630) -- and reaching through a cast here would
  * override that decision from the far side.  The name records what it is;
- * the access stays as the tree writes every other offset.  Finding 751.
+ * the access stays as the tree writes every other offset.  Finding F751.
  */
 #define T3C_F356A	0x356a	/* short: the detector at +0x3564's `armed` */
 #define T3C_FAAE2	0xaae2	/* THE LOW BYTE of `fsk.sr`; see above     */
@@ -3206,7 +3206,7 @@ ApplyBulkDelay(void *objp, short delay)
 
 /*
  * THE LAST TWO STRICT-ALIASING WARNINGS IN THE TREE ARE THIS LINE, AND IT IS
- * A DOCUMENTED EXCEPTION RATHER THAN A SITE THAT WAS MISSED.  Findings 5300
+ * A DOCUMENTED EXCEPTION RATHER THAN A SITE THAT WAS MISSED.  Findings F5300
  * and 5305.
  *
  * It is not one of the three shapes the other 25 were.  Those were a field
@@ -3222,7 +3222,7 @@ ApplyBulkDelay(void *objp, short delay)
  * 0x120 bytes twice and disagree about them: `v34_receiver::pad_000[0x120]`
  * against `v34_object`'s `rxq`, `rxq_ring_tail[63]`, `unmapped_0370` and
  * `f382`.  Merging those is a batch with its own differential test and its
- * own offset assertions on both sides, and finding 3303 is the worked example
+ * own offset assertions on both sides, and finding F3303 is the worked example
  * of getting a double-counted region wrong.
  *
  * WHAT MUST NOT HAPPEN IS RESPELLING IT AS `(char *)(obj) + 0x264` to match
@@ -3241,7 +3241,7 @@ ApplyBulkDelay(void *objp, short delay)
  * `w4_hs_t3mid` branched before the skeleton landed and built a second,
  * self-contained reconstruction of this same 61,541-byte function -- its own
  * prologue, guards, rxstate chain, table-3 dispatch, tail and three of table
- * 2's arms (finding 348).  Both were differentially tested, by different
+ * 2's arms (finding F348).  Both were differentially tested, by different
  * routes, so neither was dead code and neither could simply be deleted.
  * This is the merge: ONE `v34handshak`, forty of table 3's forty arms.
  *
@@ -3249,7 +3249,7 @@ ApplyBulkDelay(void *objp, short delay)
  * folded into this file's `T3C_*`.  They are not tidy, and that is the
  * point: 443 mutation anchors are written against this text character for
  * character, and a cosmetic rename here is 443 anchors to repair for no
- * measured gain.  Finding 548 records what the merge did change, and why
+ * measured gain.  Finding F548 records what the merge did change, and why
  * each change was forced.
  * ===========================================================================
  */
@@ -3347,7 +3347,7 @@ ApplyBulkDelay(void *objp, short delay)
 /*
  * Table 2's own companion field, and the only field it reads that nothing
  * else in this file does.  +0xe4c lands in `struct v34_object`'s
- * `unmapped_0404`, so an offset is the honest spelling -- finding 552's rule
+ * `unmapped_0404`, so an offset is the honest spelling -- finding F552's rule
  * for the seventy-nine it left alone.
  */
 #define T3M_F0E4C		0x0e4c	/* unsigned short, txstate 70's       */
@@ -3358,11 +3358,11 @@ ApplyBulkDelay(void *objp, short delay)
  * TWO SPELLINGS TOGETHER.
  *
  * Task #33 measured `struct v34_object` where these macros land and turned
- * twelve spans into fields -- findings 630 to 636.  Not one use site changed,
+ * twelve spans into fields -- findings F630 to 636.  Not one use site changed,
  * and that was the point: `hs_get`, `hs_put` and `hs_setstate` take the
  * offset as a RUNTIME argument, because one function serving all three state
  * machines is what keeps the three format strings' argument orders in one
- * place (finding 632), so for the busiest fifty-nine of these there is no
+ * place (finding F632), so for the busiest fifty-nine of these there is no
  * field for a field access to name.  The offsets stay.
  *
  * Two spellings of one fact is two places to drift, and NOTHING ELSE IN THE
@@ -3396,13 +3396,13 @@ ApplyBulkDelay(void *objp, short delay)
  * here turned that mutant into one that does not COMPILE, and the snapshot
  * caught the change as `caught -> unusable`.
  *
- * An unusable mutation does not fail a run (finding 347) and is the silent
+ * An unusable mutation does not fail a run (finding F347) and is the silent
  * loss `tools/mutsnap.py` exists to make visible, so trading a measured
  * guarantee for a tautological one is a bad trade even when the tautology is
  * checked earlier.  The split is therefore by who already covers what:
  * v34hshak.c's own three macros are covered by that mutation, and
  * v34hshak.h's three -- which every one of the fifty-nine call sites passes
- * and which no mutation touches -- are covered here.  Finding 637.
+ * and which no mutation touches -- are covered here.  Finding F637.
  */
 HS_OFF_ASSERT(hdr_micro,   microstate, V34HS_MICROSTATE_OFF);
 HS_OFF_ASSERT(hdr_rxstate, rxstate,    V34HS_RXSTATE_OFF);
@@ -3426,12 +3426,12 @@ HS_OFF_ASSERT(count_src,   filtdelay,  T3C_COUNT_SRC);
  * `struct v34_dftbin`'s size or to anything between them silently moves the
  * noise bank onto the probe's last bins and the arm goes on compiling.
  * 0xa76c + 4 * 0x2c = 0xa81c, which is `retrain_bins`, so the region holds
- * exactly four and there is no slack to absorb a mistake.  Finding 739.
+ * exactly four and there is no slack to absorb a mistake.  Finding F739.
  */
 HS_OFF_ASSERT(probe_bins,  probe_bins,    0xa320);
 HS_OFF_ASSERT(nl_noise,    nl_noise_bins, 0xa76c);
 
-/* The pair at +0x3588 that two sites read 32 bits wide (finding 631). */
+/* The pair at +0x3588 that two sites read 32 bits wide (finding F631). */
 HS_OFF_ASSERT(f3588,       f3588,      T3M_F3588);
 HS_OFF_ASSERT(f358a,       f358a,      T3M_F358A);
 
@@ -3474,7 +3474,7 @@ HS_OFF_ASSERT(fabec,       fabec,      0xabec);
  * A CODE AND NOT A STRING, and that is the strings firewall's doing rather
  * than a preference: `tools/debugaudit.py --invented` holds every literal in
  * src/ against the object's .rodata and .data, so a diagnostic phrase this
- * tree made up cannot live here at all (findings 180 and 201).  The names are
+ * tree made up cannot live here at all (findings F180 and F201).  The names are
  * in the test, which is where an invented string belongs.
  *
  * AND IT BOTH RECORDS AND STOPS.  The two reconstructions this file was
@@ -3487,7 +3487,7 @@ HS_OFF_ASSERT(fabec,       fabec,      0xabec);
  * every step.  Both arguments hold.  So the code is ALWAYS recorded and the
  * stop is what a test opts out of, by name: `v34handshak_unwritten_reset`
  * says "I am going to read the code afterwards", and only a test that has
- * said so gets a return instead of an abort.  Finding 547.
+ * said so gets a return instead of an abort.  Finding F547.
  */
 static int t3m_unwritten;
 static int t3m_unwritten_soft;
@@ -3525,7 +3525,7 @@ t3m_notwritten(int what)
  * `0x78(%esp)` matters more than it looks.  Every "progress code" store in
  * the tail is `movl $n,(%esi)` through it, and every timer field the tail
  * reads is an offset from it -- so `0x234(%esi)` is the object's +0x238 and
- * not its +0x234.  Finding 179 quoted the register-relative offsets and was
+ * not its +0x234.  Finding F179 quoted the register-relative offsets and was
  * wrong by four for exactly this reason; v34hshak.c's `v34handshakinit`
  * comment records it.
  */
@@ -3650,7 +3650,7 @@ t3m_tail(struct t3m_frame *f, short tx)
  * .rodata+0x2ee8 -- the once-per-block transmit dispatch at 0x62af1.
  *
  * SEVEN TARGETS OVER SEVENTY ENTRIES, and all seven are here.  Read out of
- * the object with their relocations attached (finding 360), the table's own
+ * the object with their relocations attached (finding F360), the table's own
  * partition of txstates 5..74 is:
  *
  *        0x64480   5                       SILENCE
@@ -3679,8 +3679,8 @@ t3m_tail(struct t3m_frame *f, short tx)
  * returns to the table's arms or to the shared tail.  Nothing in the whole
  * closure calls anything and nothing in it traces, which is why every
  * table-2 case prints zero lines on both sides and why the transcript axis of
- * the harness's comparison contributes nothing here.  Finding 362 records
- * that as a gap in the evidence rather than as a passing check; finding 360
+ * the harness's comparison contributes nothing here.  Finding F362 records
+ * that as a gap in the evidence rather than as a passing check; finding F360
  * is the closure.
  *
  * THREE ROUTES REACH IT and all three are the caller's business:
@@ -3690,7 +3690,7 @@ t3m_tail(struct t3m_frame *f, short tx)
  *      ... and rxstate > 43 and not 53 or 72                    0x62b83
  *
  * All three arrive at 0x62af1 with the same two registers holding the same
- * two values, so the three are one entry point; finding 361 measures that
+ * two values, so the three are one entry point; finding F361 measures that
  * rather than assuming it.
  *
  * THE BOUND IS NOT SEPARATELY OBSERVABLE ABOVE ITS TOP.  The object tests
@@ -3698,7 +3698,7 @@ t3m_tail(struct t3m_frame *f, short tx)
  * arm, which is the same block the table's own fifty-four default entries
  * name -- so both sides of the bound reach 0x62a40 with the same txstate and
  * only the two EDGES, txstate 5 and txstate 74, can be told apart by their
- * arms.  The range test is kept because the object encodes it; finding 591
+ * arms.  The range test is kept because the object encodes it; finding F591
  * measures what that costs the mutation set.
  */
 static void
@@ -3900,7 +3900,7 @@ t3m_errrec_arm(struct t3m_frame *f)
  * 0x65d30 -- microstate 48 `TX_PHASE3_ANS`.
  *
  * A counter with two thresholds and nothing else, which is the shape finding
- * 288 gives to six of table 3's arms.  The counter at +0xaa78 is incremented
+ * F288 gives to six of table 3's arms.  The counter at +0xaa78 is incremented
  * as an UNSIGNED halfword (`movzwl`/`inc`/`cmp %ax`), stored back before
  * either threshold is tested, and the two thresholds are exact equalities --
  * not "at least", so a counter that steps past 0x78 without landing on it
@@ -3955,7 +3955,7 @@ t3m_micro48(struct t3m_frame *f)
  * code and the arm never looks at which of the two it was entered with.  The
  * test asserts that rather than assuming it.
  *
- * The body is the counter shape of finding 288 with a reset in front of it:
+ * The body is the counter shape of finding F288 with a reset in front of it:
  *
  *      the FSK shift register's low four bits are all ones AND +0x3588 is
  *      still zero  ->  re-arm the error recovery, then fall into the counter
@@ -4550,7 +4550,7 @@ t3m_micro51(struct t3m_frame *f)
  * the shift register's low THREE bits, which the fixture's fill satisfies.  So
  * a cold step re-arms the error recovery, writes 77 bytes and prints four
  * lines, and the "group D" the sweep put the other two in is not where this
- * one lives.  Finding 286's table.
+ * one lives.  Finding F286's table.
  *
  * FIVE BLOCKS IN SEQUENCE, and they are not exclusive -- a single step can run
  * the reset, the retrain check, the bulk-delay block and the second reset one
@@ -4787,7 +4787,7 @@ t3m_micro59(struct t3m_frame *f)
  * the two arms are separated instead by the `nbits` compare, which 59 does not
  * make at all.
  *
- * BOTH OF THIS ARM'S RESETS ARE ON THE `|= 1` SIDE of finding 375's split.
+ * BOTH OF THIS ARM'S RESETS ARE ON THE `|= 1` SIDE of finding F375's split.
  */
 static void
 t3m_micro55(struct t3m_frame *f)
@@ -4919,7 +4919,7 @@ t3m_micro55(struct t3m_frame *f)
  * structural rather than a property of any seed: block 2 needs bit 1 of
  * +0x3588 set and leaves bit 0 set as well, and block 3 needs the whole
  * halfword to be zero.  So D never enables C, and C is unreachable in any step
- * D ran.  Finding 372's disjoint windows, in the form this arm takes.
+ * D ran.  Finding F372's disjoint windows, in the form this arm takes.
  *
  * `+0x3588` IS READ TWICE IN BLOCK 2 and the second read is what decides
  * whether `v34handshakinit` runs.  The object holds the first read in `%dx`
@@ -4927,7 +4927,7 @@ t3m_micro55(struct t3m_frame *f)
  * makes it, which is the same care 59's second reset takes -- and it is why
  * `t3m_errrec_arm` reading the field fresh is exact on both branches.
  *
- * FINDING 376 SAYS THIS ARM IS ON THE `= 4` SIDE OF FINDING 375'S SPLIT.  It
+ * FINDING F376 SAYS THIS ARM IS ON THE `= 4` SIDE OF FINDING F375'S SPLIT.  It
  * has ONE OF EACH: 0x660b9 stores the constant 4 and 0x6d709 sets bit 0.  The
  * nine-copy list above already had it right; the summary in 376 is the thing
  * that is short.
@@ -5099,13 +5099,13 @@ t3c_putp(struct v34_object *obj, unsigned off, void *p)
  *
  * Every microstate arm below leaves through here: the microstate machine is
  * a set of guards in front of the transmit machine rather than sixteen
- * independent bodies (finding 288), so a microstate case cannot be landed
+ * independent bodies (finding F288), so a microstate case cannot be landed
  * without whichever transmit arm its own txstate selects.
  *
  * THIS IS NOW A SHIM ROUND `t3m_txblock`, and the reason is measured rather
  * than tidy.  THREE readings of table 2 and its tail existed; the two that
- * came into this file were collapsed by finding 550 and the third, which had
- * been `src/pump/v34/v34hstxblock.c`, by finding 591.  `t3m_txblock`/
+ * came into this file were collapsed by finding F550 and the third, which had
+ * been `src/pump/v34/v34hstxblock.c`, by finding F591.  `t3m_txblock`/
  * `t3m_tail` is the survivor because it is the only one whose SIGNATURE can
  * hold the object's behaviour: the tail's `tx` is the value in `%cx` that
  * whichever arm jumped here left, and 0x62b5f re-reads +0x3596 over it, so a
@@ -5131,7 +5131,7 @@ t3c_txblock(struct v34_object *obj)
  * The harness in test/harness/v34hsstep.h can steer the object into this one
  * dispatch and no other, and over that domain the dispatch IS the whole of
  * `v34handshak` -- the guards read three halfwords and branch, and nothing
- * else in the 61,541 bytes runs (finding 361).  That is what makes table 2
+ * else in the 61,541 bytes runs (finding F361).  That is what makes table 2
  * comparable against the blob without the other three dispatches existing,
  * and it is the only reason this name is external.
  *
@@ -5147,7 +5147,7 @@ t3c_txblock(struct v34_object *obj)
  * literal at 0x6c939 that follows the transition storing it at 0x6c932.  What that costs is recorded rather
  * than hidden: the reload at 0x62b5f cannot be reached with a `tx` that
  * differs from +0x3596 through this entry, so the one thing `t3m_tail` models
- * that its predecessors did not is not tested from here.  Finding 591.
+ * that its predecessors did not is not tested from here.  Finding F591.
  */
 void
 v34handshak_txblock(struct v34_object *obj)
@@ -5260,7 +5260,7 @@ t3c_micro_moh_tone(struct v34_object *obj)
 	 * warm-up, same thresholds, and the same +0x356a store and
 	 * MOH_TONE_DROP after it.  The one difference is `limit`, 0xf0 here
 	 * against 0x64 there, so this end waits about two and a half times as
-	 * long before asserting.  Finding 749.
+	 * long before asserting.  Finding F749.
 	 */
 	if (obj->moh_message == 1) {
 		detectorinit(T3C_DET(obj),
@@ -5324,7 +5324,7 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
 	 * MOH_CLEARDOWN and the receive machine to WAIT, +0xabe4 and +0xabe2
 	 * are both raised, and the arm leaves through the once-per-block
 	 * dispatch like every other path here -- no `v34handshakinit`, so
-	 * findings 359 and 324 do not apply to it and the library tables stay
+	 * findings F359 and F324 do not apply to it and the library tables stay
 	 * where the bring-up put them.  Both state compares are LIVE, unlike
 	 * 81's: nothing on the way in constrains either word.
 	 */
@@ -5382,14 +5382,14 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
  *     +0xaae0   short, blocks spent in the state, against three thresholds
  *
  * and every path leaves through the once-per-block transmit dispatch, which
- * is finding 288: a microstate arm is a microstate arm AND a transmit arm.
+ * is finding F288: a microstate arm is a microstate arm AND a transmit arm.
  * The five transmit states this one can leave behind -- 24 `TX_DPSK`, 60
  * `TONE_AB` and 74 `SILENCERETRAIN`, plus whatever it was entered with --
  * all select table 2's arm at 0x644c9 or its default, both of which exist.
  *
  * THE MACRO PREFIX IS `T41_` and it is not decoration: three agents are
  * writing arms of this function into this one translation unit at the same
- * time, and finding 325 is what one collided `#define` cost.  Where an offset
+ * time, and finding F325 is what one collided `#define` cost.  Where an offset
  * already has a `T3C_` name it gets a `T41_` one as well rather than a
  * reference to somebody else's block.
  *
@@ -5397,7 +5397,7 @@ t3c_micro_moh_tone_drop(struct v34_object *obj)
  * in this arm test the microstate the DISPATCH read, cached in `%si`, rather
  * than re-reading +0x3592: 0x6c862 against 44, 0x6d3f4's neighbour at
  * 0x6e044 against 58.  The arm is reachable only with +0x3592 == 41 and
- * nothing on the way in writes it (finding 285), so the cached value and the
+ * nothing on the way in writes it (finding F285), so the cached value and the
  * field are the same value, and `hs_setstate`'s own "already there" guard
  * reproduces each of them exactly.  They are written as transitions, not as
  * branches that could never be taken.
@@ -5436,7 +5436,7 @@ t41_getp(const struct v34_object *obj, unsigned off)
  * Two paths of this arm call it and neither steps a counter first, which is
  * what distinguishes them from 79 and 80's `t3c_moh_step_detector`.  The
  * range is not this code's choice: `V34agc` ends by setting `rx_samples`, so
- * the end pointer is already the queue's, and finding 357 is what depending
+ * the end pointer is already the queue's, and finding F357 is what depending
  * on that costs a test that wants to move it.
  */
 static short
@@ -5840,7 +5840,7 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 	/*
 	 * 0x6ceca.  The reset is BEFORE the sentinel step at 0x6cef0, so
 	 * below the second threshold +0x35a0 never climbs: it is zero or
-	 * one whatever the sentinel does (finding 391).
+	 * one whatever the sentinel does (finding F391).
 	 */
 	if ((int)aae0 <= base + 400)
 		hs_put(obj, T41_F35A0, 0);		/* 0x6ceca */
@@ -5863,7 +5863,7 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 	/*
 	 * 0x6cf39.  The base is rebuilt here from the delay spilled at
 	 * 0x6cead -- `movswl 0x42(%esp)` then `sar $0x4` at 0x6cf27 -- and
-	 * `jl 62af1` is the once-per-block transmit dispatch (finding 390).
+	 * `jl 62af1` is the once-per-block transmit dispatch (finding F390).
 	 */
 	if ((int)aae0 < base + 400) {
 		t3c_txblock(obj);			/* 0x6cf39 */
@@ -5884,7 +5884,7 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 		/*
 		 * 0x6d2f8.  The record at +0xa9ac is configured and +0xaa6c
 		 * aimed at it -- an INTERIOR pointer, which the fixture
-		 * compares by offset from each side's own base (finding 359).
+		 * compares by offset from each side's own base (finding F359).
 		 */
 		hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
 
@@ -5911,7 +5911,7 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 
 	if (aae2 != 0) {
 		/*
-		 * 0x6cf61.  Finding 391's third answer: -1 took 0x6d2f8 at
+		 * 0x6cf61.  Finding F391's third answer: -1 took 0x6d2f8 at
 		 * 0x6cf58 and zero falls through to 0x6cf67, so every other
 		 * +0xaae2 lands in the late half.
 		 */
@@ -5919,7 +5919,7 @@ t41_info_marks(struct v34_object *obj, unsigned short aae2, unsigned char abe8)
 		return;
 	}
 
-	/* 0x6cf67, +0xaae2 exactly zero -- finding 391's second answer. */
+	/* 0x6cf67, +0xaae2 exactly zero -- finding F391's second answer. */
 	hs_put(obj, T41_F3588, (short)(hs_get(obj, T41_F3588) | 2));
 	hs_setstate(obj, HS_TXSTATE, V34HS_SILENCERETRAIN);
 	hs_setstate(obj, HS_RXSTATE, V34HS_WAIT);
@@ -5958,7 +5958,7 @@ t41_micro_det_sync(struct v34_object *obj)
 		/*
 		 * 0x6c862 opens with `cmp $0x2c,%si` -- `hs_setstate`'s
 		 * folded guard on DET_INFO, and one the dispatch that read
-		 * 41 can never satisfy (finding 392).
+		 * 41 can never satisfy (finding F392).
 		 */
 		t41_to_det_info(obj);			/* 0x6c862 */
 		return;
@@ -5973,7 +5973,7 @@ t41_micro_det_sync(struct v34_object *obj)
 			 * 0x709e1 clears bit 9 of the receiver's
 			 * +0x122 unconditionally (`and $0xfffffdff`
 			 * at 0x709f2), where the DET_INFO body only
-			 * does it when +0x358a is clear (finding 390).
+			 * does it when +0x358a is clear (finding F390).
 			 */
 			t41_tone_search(obj);		/* 0x709e1 */
 			return;
@@ -6035,7 +6035,7 @@ t41_micro_det_sync(struct v34_object *obj)
  * THE FIVE READS OF +0xaae2 HERE ARE SIXTEEN BITS WIDE, one of them a compare
  * of the whole halfword against zero, and they are now `obj->fsk.sr` -- which
  * is what +0xaae2 is.  `T3C_FAAE2` survives for the ONE reader that is a byte
- * wide, microstate 62's guard at 0x65c8a, and finding 553 is why that one
+ * wide, microstate 62's guard at 0x65c8a, and finding F553 is why that one
  * cannot be widened to match.
  */
 
@@ -6071,7 +6071,7 @@ static void t46_past_the_counter(struct v34_object *obj);
  * `+0x1c` store, so the variant is one field and not one body.
  *
  * The `v90_receiver` read is through the object's `obj + 4` base -- 0x248 of
- * it, which is +0x24c of the object.  Finding 354's 0x644c9 writes the
+ * it, which is +0x24c of the object.  Finding F354's 0x644c9 writes the
  * progress code through the same base, which is what pins it.
  */
 static void
@@ -6156,7 +6156,7 @@ t46_body_repeated(struct v34_object *obj)
 	/*
 	 * 0x6adbd re-reads +0x3588 at 0x6adb6 before `cmp $0x2,%ax`, so
 	 * the 4 this body has just stored is what the chain sees and the
-	 * only way out is 0x6add0 (finding 418).
+	 * only way out is 0x6add0 (finding F418).
 	 */
 	t46_chain_full(obj);			/* 0x6adbd */
 }
@@ -6177,7 +6177,7 @@ t46_body_detected(struct v34_object *obj)
 	/*
 	 * 0x6adc7 enters the chain one compare in, past the `== 2` test.
 	 * Its `test %ax,%ax` cannot fire from here -- this body stored 4
-	 * into +0x3588 -- which is finding 418's unreachable arm.
+	 * into +0x3588 -- which is finding F418's unreachable arm.
 	 */
 	t46_chain_tail(obj, hs_get(obj, T46_F3588));	/* 0x6adc7 */
 }
@@ -6250,7 +6250,7 @@ t46_info0_counting(struct v34_object *obj)
 	/*
 	 * 0x70c7f stores the stepped count and re-enters the chain at
 	 * 0x6adc7 with +0x3588 re-read at 0x70c8d -- still the 2 that
-	 * got here, so its zero arm cannot fire (finding 418).
+	 * got here, so its zero arm cannot fire (finding F418).
 	 */
 	if (n <= T46_COUNT3_LIM) {			/* 0x70c7f */
 		hs_put(obj, T46_COUNT3, n);
@@ -6286,7 +6286,7 @@ t46_past_the_counter(struct v34_object *obj)
 	}
 	/*
 	 * 0x65de6 is `cmpw $0x0,0xaae2(%edi)` -- sixteen bits wide, not
-	 * the byte spelling microstate 62 keeps (findings 417 and 553) --
+	 * the byte spelling microstate 62 keeps (findings F417 and F553) --
 	 * and 0x6bd7a is one more copy of the transmit tail.
 	 */
 	if (obj->fsk.sr == 0) {
@@ -6297,7 +6297,7 @@ t46_past_the_counter(struct v34_object *obj)
 	/*
 	 * 0x65df4 opens with the 1 for +0x358a in %eax and a 4 staged in
 	 * %ebp: this body STORES +0x3588, where 0x6f90c ORs into it
-	 * (finding 410).
+	 * (finding F410).
 	 */
 	t46_body_repeated_late(obj);			/* 0x65df4 */
 }
@@ -6341,7 +6341,7 @@ t46_chain_tail(struct v34_object *obj, short sub)
 		return;
 	}
 	/*
-	 * 0x6add0.  With +0x3588 at 4 or 2 on every entry (finding 418),
+	 * 0x6add0.  With +0x3588 at 4 or 2 on every entry (finding F418),
 	 * this is where the two bodies that tail-call the chain really
 	 * end up, and it is two instructions and `jmp 62af1` -- `mov
 	 * 0xc0(%esp),%ebp` then `movzwl 0x3596(%ebp),%ecx`.
@@ -6412,7 +6412,7 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 		 * 0x6b4ee is the one path of the four that does NOT keep
 		 * the step: `xor %eax,%eax` and `mov %ax,0xaa78(%esi)`
 		 * restart the counter, and +0x358c is `xor $0x1` at
-		 * 0x6b50e, stored back sixteen bits wide (finding 413).
+		 * 0x6b50e, stored back sixteen bits wide (finding F413).
 		 */
 		} else {				/* 0x6b4ee */
 			hs_put(obj, T3C_COUNT, 0);
@@ -6438,7 +6438,7 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 		/*
 		 * 0x6abc1 opens by clearing +0xabca and storing 4 into
 		 * +0x3588 at 0x6abd8 -- a store, like the other two, and
-		 * not 0x6f90c's OR (finding 410).
+		 * not 0x6f90c's OR (finding F410).
 		 */
 		t46_body_repeated(obj);			/* 0x6abc1 */
 		return;
@@ -6447,7 +6447,7 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 	/*
 	 * 0x65dcd, and the head is the only thing that reaches it: the
 	 * chain's own `test %ax,%ax` at 0x6adc7 never sees zero
-	 * (finding 418).
+	 * (finding F418).
 	 */
 	t46_past_the_counter(obj);			/* 0x65dcd */
 }
@@ -6491,7 +6491,7 @@ t46_micro_tx_phase1_ans(struct v34_object *obj)
 /*
  * Offsets microstate 44 reads or writes.  `T44_` because three batches are
  * writing arms of this one function into this one translation unit at the
- * same time, and finding 325 is what one collided macro cost.  Fields the
+ * same time, and finding F325 is what one collided macro cost.  Fields the
  * struct already names -- `fsk`, `f359c`, `v90_receiver`, `local_short`,
  * `is_short` -- are used by name instead.
  */
@@ -6638,7 +6638,7 @@ t44_det_info_restart(struct v34_object *obj)
 
 	/*
 	 * TX_DPSK is table 2's arm at 0x644c9, which is written -- so this
-	 * path can be driven at all.  Finding 354 is the same constraint on
+	 * path can be driven at all.  Finding F354 is the same constraint on
 	 * microstate 79, and for the same reason.
 	 */
 	hs_setstate(obj, HS_TXSTATE, V34HS_TX_DPSK);
@@ -6659,7 +6659,7 @@ t44_det_info_restart(struct v34_object *obj)
 	 * is 0x6c0e2.  The 0x1e arm repeats all four at 0x71932.
 	 *
 	 * 0x71920 reads `0x248(%edx)` with %edx the obj+4 base -- +0x24c,
-	 * `v90_receiver`, the same base finding 412 resolved for
+	 * `v90_receiver`, the same base finding F412 resolved for
 	 * microstate 46 -- and a zero receiver takes `je 6c0ca` at
 	 * 0x7192c straight back into the 0x11 arm.
 	 */
@@ -6754,7 +6754,7 @@ t44_mdlength(struct v34_object *obj)
  *
  * `count2` is the STEPPED counter, still in `%ebx` from 0x6693a and not the
  * value the tail will re-read.  This arm never touches +0xaa78, so here the
- * two agree -- which is the exception finding 406 names rather than a
+ * two agree -- which is the exception finding F406 names rather than a
  * contradiction of it.
  */
 static int
@@ -6790,7 +6790,7 @@ t44_accept_len08(struct v34_object *obj, short *rec, short count2)
 		obj->fsk.sr = -1;
 		/*
 		 * 0x6ebda is `jmp 66956`: the arm rejoins the byte
-		 * clock rather than returning (finding 401).
+		 * clock rather than returning (finding F401).
 		 */
 		return 0;				/* 0x6ebda */
 	}
@@ -7045,7 +7045,7 @@ t44_accept_len26(struct v34_object *obj, short *rec)
  *
  * THE COUNTER AND ITS COMPANION ARE ZEROED BEFORE ANYTHING ELSE, at 0x6f443
  * and 0x6f44a -- so the byte clock this returns into runs on a count of zero
- * and stores nothing, which is finding 406's shape again and the reason the
+ * and stores nothing, which is finding F406's shape again and the reason the
  * two stores are the first thing in the arm rather than the last.
  */
 static int
@@ -7092,7 +7092,7 @@ t44_accept_len4d(struct v34_object *obj)
 	 * 0x26 arm above answers to -- the two arms are the two ends of one
 	 * exchange, and that is what makes the constant checkable twice.
 	 *
-	 * 0xff72 and not the restart's 0xf72 (finding 401): the same twelve
+	 * 0xff72 and not the restart's 0xf72 (finding F401): the same twelve
 	 * bits of preamble with a thirteenth set above them, written as a
 	 * full int at +0x24 and at +0x2c.
 	 */
@@ -7187,7 +7187,7 @@ t44_det_info_accept(struct v34_object *obj, short *rec, short count2)
 		nbytes = count / 8 + ((count & 7) != 0 ? 1 : 0);
 		hs_put(obj, T44_FABC2, (short)nbytes);
 
-		/* Into the array the restart clears -- finding 401. */
+		/* Into the array the restart clears -- finding F401. */
 		for (i = 0; i < nbytes; i++)
 			hs_put(obj, T44_FABAE + 2u * (unsigned)i,
 			       t44_recget(rec, 2u * (unsigned)i));
@@ -7435,14 +7435,14 @@ t44_micro_det_info(struct v34_object *obj)
  * `rtd + 9240` does not fit a short.  Spelling that comparison sixteen bits
  * wide is a defect no small-value test can see, so `t_v34hsrx53.c` drives it
  * at rtd 30000, where the two readings disagree about whether the modem
- * retrains at all.  Finding 724.
+ * retrains at all.  Finding F724.
  *
  * THE DETECTOR IS `t41_detect`'s, argument for argument -- the receiver, the
  * detector at +0x3564, the samples at receiver + 0x10c and `rx_samples` as
  * the end pointer.  All seven `tone_detect` sites in the object test `%ax`
  * and not `%eax` though the function is declared `int`, which is why that
  * helper narrows to `short`; the header is not changed on that evidence
- * (finding 727).
+ * (finding F727).
  */
 static void
 t53_rx_det_ab(struct v34_object *obj)
@@ -7456,7 +7456,7 @@ t53_rx_det_ab(struct v34_object *obj)
 	 * THE ADDRESS IS ON THE LINE because rxstate 72's arm calls the same
 	 * function with the same argument, and `\tV34agc(rx);` is a PREFIX of
 	 * that line -- so the mutation anchored here matched twice the moment
-	 * 0x650ee landed.  Finding 432's repair: information, not indentation.
+	 * 0x650ee landed.  Finding F432's repair: information, not indentation.
 	 */
 	V34agc(rx);					/* 0x65473 */
 
@@ -7489,7 +7489,7 @@ t53_rx_det_ab(struct v34_object *obj)
 
 		/*
 		 * 0x6b0f4.  This runs INSIDE the step, so a test driving it
-		 * is the case finding 359 says `V34HS_REFINIT=1` cannot be
+		 * is the case finding F359 says `V34HS_REFINIT=1` cannot be
 		 * used against: side A installs our library tables and side B
 		 * the blob's, and no address comparison can settle two copies
 		 * of one table.
@@ -7548,7 +7548,7 @@ t53_rx_det_ab(struct v34_object *obj)
 		 * `V34SetINFO1aBits` does not touch +0xaa6c.  So the
 		 * differential tier cannot see the difference and these are
 		 * microstate 41's own statements verbatim rather than a
-		 * second reading of the same record.  Finding 726.
+		 * second reading of the same record.  Finding F726.
 		 */
 		t3c_putp(obj, T41_PTR_AA6C,		/* 0x6b1e3 */
 			 (char *)obj + T41_BLK_A9AC);
@@ -7560,7 +7560,7 @@ t53_rx_det_ab(struct v34_object *obj)
 		 * these nine statements are character for character
 		 * microstate 41's at 0x6d387, so without the addresses no
 		 * mutation anchored on one of them could tell the two apart.
-		 * Finding 432's hazard, answered with information rather than
+		 * Finding F432's hazard, answered with information rather than
 		 * with indentation.
 		 */
 		/*
@@ -7569,7 +7569,7 @@ t53_rx_det_ab(struct v34_object *obj)
 		 * at 0x6b1f5.  The six that follow are in the object's order,
 		 * +0x1c, +0x16, +0x28, +0x2a, +0x20 -- and 0x6f669..0x6f6b3
 		 * writes the same twelve offsets in the same order with 0x26
-		 * at +0x18 (finding 443).
+		 * at +0x18 (finding F443).
 		 */
 		t41_record_head(obj, T41_BLK_A9AC, 0x4d);   /* 0x6b1fb */
 		hs_put(obj, T41_BLK_A9AC + 0x1c, 8);	    /* 0x6b219 */
@@ -7642,7 +7642,7 @@ t53_rx_det_ab(struct v34_object *obj)
 							+ T3M_RX_F264);
 
 	/*
-	 * +0xaae2 `sr` (finding 553), +0xaae0 `nbits`, +0xaadc `phase`,
+	 * +0xaae2 `sr` (finding F553), +0xaae0 `nbits`, +0xaadc `phase`,
 	 * +0xaade `next`: the object stores them in THAT order, which is
 	 * not the order they lie in, and all four values were already in
 	 * registers -- 0x69928, 0x6992a, 0x6992c and `mov $0x6,%ebx` at
@@ -7656,7 +7656,7 @@ t53_rx_det_ab(struct v34_object *obj)
 	 * 0x6997b and 0x69982 store registers the block above cleared -- `xor
 	 * %eax,%eax` at 0x6994d, `xor %edi,%edi` at 0x6995d -- and both fields
 	 * are ones the state-transition trace reports: 0x6ff94 pushes +0x2aa2
-	 * and +0xaa78, finding 633's busiest counter, as two of its arguments.
+	 * and +0xaa78, finding F633's busiest counter, as two of its arguments.
 	 * The whole run of six goes through the object pointer reloaded at
 	 * 0x69956.
 	 */
@@ -7682,7 +7682,7 @@ t53_rx_det_ab(struct v34_object *obj)
  * to 0x6e477, 0x7142b..0x71657 and its two debug bodies at 0x71648 and
  * 0x716f4 -- and so is `v34setuptxmit`, 0x68e50..0x68f73, the same six steps
  * microstate 63's arm inlines at 0x6597d (v34hshak.c's own comment there).
- * Both come out as calls, which is finding 426's rule for the third and
+ * Both come out as calls, which is finding F426's rule for the third and
  * fourth time.  What is left is ten diagnostics, the MP bit packer, and the
  * four transfers below.
  *
@@ -7702,7 +7702,7 @@ t53_rx_det_ab(struct v34_object *obj)
 
 /*
  * The offsets this arm needs that `struct v34_object` and `struct
- * v34_receiver` do not yet name.  Finding 552's rule: an offset is the
+ * v34_receiver` do not yet name.  Finding F552's rule: an offset is the
  * honest spelling for a span `tools/whichfield.py` reports as `unmapped_*`.
  */
 #define T4_RXF11C	0x011c	/* receiver: the shift register TRN2 fills */
@@ -7711,7 +7711,7 @@ t53_rx_det_ab(struct v34_object *obj)
 #define T4_PLLCNT	0x25da	/* short: obj+0x221c+0x3be, the arm's own
 				   counter -- 0x4c(%esp) plus 0x3be        */
 #define T4_MPCOEF	0x2a68	/* twelve shorts, `getMPrecvdBits`' other
-				   half (docs/v90cpp.md, finding 227)      */
+				   half (docs/v90cpp.md, finding F227)      */
 #define T4_F356C	0x356c	/* short: 0x1e once S has been detected    */
 #define T4_F3570	0x3570	/* short: 3 once S has been detected       */
 #define T4_F3576	0x3576	/* short: cleared with it                  */
@@ -7724,7 +7724,7 @@ t53_rx_det_ab(struct v34_object *obj)
 #define T4_MPBITS	0xaa34	/* short: how many bits are in it          */
 #define T4_MPCAPS	0xaa3c	/* THE LOW BYTE of `info_caps`; the three
 				   readers are all `testb $1`, which is
-				   finding 553's case again                */
+				   finding F553's case again                */
 #define T4_FAA80	0xaa80	/* short: cleared when the MD is over      */
 #define T4_RXCARRDESC	0xaab0	/* the detector coefficients for the rate  */
 #define T4_RTSCALE	0xaacc	/* int, SIGNED: scaled per baud at 0x6d111 */
@@ -7764,10 +7764,10 @@ t4_mp_print(const char *fmt, const unsigned short *tbl)
  * sequence become twelve shorts at +0x2a68: each lands twice, once as itself
  * and once negated or displaced by six, which is the shape of a complex
  * conjugate pair.  `getMPrecvdBits` is the reader and is already
- * reconstructed (finding 227).
+ * reconstructed (finding F227).
  *
  * Written in the object's store order.  GCC does not simply preserve
- * statement order (finding 617), so the order here is a record of what is
+ * statement order (finding F617), so the order here is a record of what is
  * there and not a claim about the source.
  */
 static void
@@ -7801,7 +7801,7 @@ t4_mp_coeffs(struct v34_object *obj, const unsigned short *tbl)
  * THE TRANSITION'S "ALREADY THERE" BRANCH AT 0x6ff81 CAN NEVER FIRE.  This
  * arm is entered with rxstate 4 and the packer at 0x68c2b sends microstate
  * 41 to the run-length path instead, so every path that reaches here has a
- * microstate that is not 41.  `hs_setstate` handles it anyway; finding 722's
+ * microstate that is not 41.  `hs_setstate` handles it anyway; finding F722's
  * case for the third time in this file.
  */
 static unsigned short
@@ -7881,7 +7881,7 @@ t4_mp_word(struct v34_object *obj, unsigned acc)
 
 	if ((tbl[(short)idx] & 0x7fff) == (w & 0x7fff))
 		/*
-		 * 0x6ff1e steps +0xaa78, finding 633's busiest counter, and
+		 * 0x6ff1e steps +0xaa78, finding F633's busiest counter, and
 		 * comes back by way of a reload: 0x6ff34 re-reads the index
 		 * from +0xaa2a because the increment used %ecx.  The 0x7fff
 		 * mask above drops bit 15, which in word 0 is the acknowledge
@@ -8175,7 +8175,7 @@ t4_mp_packer(struct v34_object *obj)
 	 * goes back to counting ones for the seventeen-bit frame sync.  There
 	 * is no "already there" compare in front of this transition: 0x68c2b
 	 * has already proved the microstate is not 0x29 on this path and the
-	 * compiler kept that, which is finding 392's case.  The two clears
+	 * compiler kept that, which is finding F392's case.  The two clears
 	 * below are 0x68c6e and 0x68c78, the pair 0x6ff81 also jumps into.
 	 */
 	T4_U32(obj, T4_MPACC) = acc;				/* 0x68c52 */
@@ -8334,7 +8334,7 @@ t4_md_over(struct v34_object *obj, unsigned short flags)
 	 * runs inline to 0x6a225 -- the ladder on +0xaa96, +0x128 = 4, the
 	 * +0xaaa8 ladder, +0x13a = 0x2000, +0x136 out of +0x262, flags &=
 	 * 0xf0ff, its own `detectorinit(det, *(+0xaab0), 0, 8, 10, 0x600, 0)`
-	 * at 0x6a200 and flags |= 0x200.  Finding 426 read that inline store
+	 * at 0x6a200 and flags |= 0x200.  Finding F426 read that inline store
 	 * for store in another arm.
 	 */
 	setupreceiver(obj);					/* 0x6a0c8 */
@@ -8524,7 +8524,7 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
 	 *
 	 * IT WRITES `rx->flags`.  0x73869 clears 0x200 on the asserting path,
 	 * so the value 0x67b56 reads back is not the one stored above.
-	 * Finding 429's trap in a new place.
+	 * Finding F429's trap in a new place.
 	 */
 	/*
 	 * 0x67acd `je 69b3c`, and 0x69b3c is three instructions: reload obj,
@@ -8630,7 +8630,7 @@ t4_receive_body(struct v34_object *obj, unsigned short flags)
  * sign-extended baud counter.  Spelling it sixteen bits wide is a defect no
  * legal baud can expose -- 7 * 3429 is 23,853, inside a short -- so
  * `t_v34hsrx4.c` drives it at a baud of 20,000, where the two readings
- * disagree about whether the modem retrains at all.  Finding 724's shape in
+ * disagree about whether the modem retrains at all.  Finding F724's shape in
  * a second arm.
  *
  * AND THE DIRECTION IS `jle`: less-or-equal goes to the BODY.
@@ -8710,7 +8710,7 @@ t4_rx_receive(struct v34_object *obj)
  * demodulator for tone A; the answering end leaves immediately.
  *
  * NEARLY A QUARTER OF IT IS FIVE FUNCTIONS THIS TREE ALREADY HAS, INLINED --
- * finding 426's rule for the fifth, sixth and seventh time:
+ * finding F426's rule for the fifth, sixth and seventh time:
  *
  *     dftnlinitSignalBins  0x6a54c and 0x6a760, both on obj + 0xa320
  *     dftnlinitNoiseBins   0x6a5a1 and 0x6a7aa, both on obj + 0xa76c
@@ -8732,7 +8732,7 @@ t4_rx_receive(struct v34_object *obj)
  * bank's first four bins and the noise bank is `nl_noise_bins`, which was
  * `unmapped_a76c` until this arm gave it a reader.  v34hshak.h's "neither
  * initialiser has a caller -- so nothing here reads across" was true when it
- * was written and is not any more.  Finding 739.
+ * was written and is not any more.  Finding F739.
  *
  * ELEVEN HUNDRED BYTES ARE DIAGNOSTICS and 894 of that is `hs_setstate`'s
  * own transition trace at eight sites, three of which can never fire: the
@@ -8749,7 +8749,7 @@ t4_rx_receive(struct v34_object *obj)
  * `rtd` is a short, so `rtd >> 2` is bounded by +-8192 and `0xf10 + rtd/4`
  * spans -4304..12048, which fits a short at every value the field can hold.
  * Unlike rxstate 53's `rtd + 0x2418`, the sum cannot overflow.  So this is
- * finding 613's case: the `movswl` is FORCED ENCODING and settles the
+ * finding F613's case: the `movswl` is FORCED ENCODING and settles the
  * declared type even though the two readings agree everywhere.  What IS
  * testable, and is tested, is the SIGNEDNESS of the two loads -- a `movzwl`
  * reading of either moves the thresholds by tens of thousands.
@@ -8807,7 +8807,7 @@ t72_update_both(struct v34_object *obj, struct v34_receiver *rx, short n)
 	/*
 	 * 0x68e23.  obj+0xa76c, and the burst pointer in %ebx is the one the
 	 * call above already used -- one `add $0x10c` serves both.  Finding
-	 * 739 is what says +0xa76c is exactly four bins.
+	 * F739 is what says +0xa76c is exactly four bins.
 	 */
 	dftupdate(obj->nl_noise_bins, V34_NL_BINS, in, n);	/* 0x68e23 */
 }
@@ -8822,7 +8822,7 @@ t72_update_both(struct v34_object *obj, struct v34_receiver *rx, short n)
  *
  * `energy` IS WIDENED UNSIGNED -- `movzwl 0xa778` and `movzwl 0xa32c` with
  * the 32-bit result used -- which is forced encoding and is already this
- * tree's reading of that field (v34det.h, finding 212).  The divide is
+ * tree's reading of that field (v34det.h, finding F212).  The divide is
  * unsigned too: `shr $1` and `div`, not `sar` and `idiv`.  The halved
  * denominator is a rounding term, so the result is round(256 * signal /
  * noise).
@@ -9021,7 +9021,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * over `probe_bins[0..3]` -- the four-bin clear at stride
 		 * 0x2c, then `inc` written at +0x2, +0x2e, +0x5a and +0x86.
 		 * Re-arming the signal bank destroys the probe bank's first
-		 * four bins, and finding 739 reads the 0x40 and 0x180 rungs
+		 * four bins, and finding F739 reads the 0x40 and 0x180 rungs
 		 * as doing that on purpose.
 		 */
 		dftnlinitSignalBins(obj->probe_bins);	/* 0x6a760 */
@@ -9030,7 +9030,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * 2400 Hz, each one 150 Hz step below the signal bin above
 		 * it, which is what makes the pair a distortion measurement
 		 * and 0xa76c the denominator of the ratio just stored.
-		 * Finding 739.
+		 * Finding F739.
 		 */
 		dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a7aa */
 	} else if (count >= 0x41 && count <= 0x17f) {
@@ -9110,7 +9110,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * FIRST: it arms both nl banks, 0x41..0x17f accumulates into
 		 * them, 0x180 reduces them and arms them again, 0x300 does
 		 * the same for the probe bank, and everything above 0x300 is
-		 * the probe itself.  Finding 739.
+		 * the probe itself.  Finding F739.
 		 */
 		dftnlinitSignalBins(obj->probe_bins);	/* 0x6a54c */
 		/*
@@ -9118,7 +9118,7 @@ t72_ladder(struct v34_object *obj, struct v34_receiver *rx)
 		 * are told apart by their phase steps --
 		 * 0x700/0x900/0xd00/0x1100 for the signal bank and
 		 * 0x600/0x800/0xc00/0x1000 for this one, each 0x100 step
-		 * being 150 Hz.  Finding 739.
+		 * being 150 Hz.  Finding F739.
 		 */
 		dftnlinitNoiseBins(obj->nl_noise_bins);	/* 0x6a5a1 */
 	}
@@ -9136,7 +9136,7 @@ t72_rx_l1(struct v34_object *obj)
 	 * 0x650c6, and THE STORE PRECEDES THE BRANCH: `movzwl`, `inc`,
 	 * `cmp $0x440,%di`, `mov %di,0xaa78`, `jle`.  So everything below
 	 * sees the incremented value, which is what makes the counter
-	 * pokeable in spite of finding 429 -- a poke of n drives the whole
+	 * pokeable in spite of finding F429 -- a poke of n drives the whole
 	 * arm as n + 1.  The compare is signed and sixteen bits.
 	 */
 	obj->faa78 = (short)(obj->faa78 + 1);
@@ -9219,7 +9219,7 @@ t72_rx_l1(struct v34_object *obj)
 		 * is the gate 0x64a87 tests, so from the next block on the
 		 * RX_DPSK path polls the retrain detector as well -- and
 		 * falls through to the FSK demodulator either way, which is
-		 * finding 721.
+		 * finding F721.
 		 */
 		t3c_puti(obj, T72_FSKGATE, 1);			 /* 0x67f68 */
 		t3c_putp(obj, T72_PTR_AA70,			 /* 0x67f6e */
@@ -9405,7 +9405,7 @@ v34handshak(void *vobj)
 	 * caller-saved and every arm that calls anything would lose it, so
 	 * each rejoin block reloads it first: 0x629cf, 0x62d70, 0x640a1 and
 	 * 0x63948 are all `movzwl 0x2aa0(reg),%edx` immediately before the
-	 * compare.  Measured over all four; finding 710.
+	 * compare.  Measured over all four; finding F710.
 	 *
 	 * The dispatch is `.rodata+0x2da0` read at 0x62966, indexed
 	 * `(short)txstate - 5` and range-checked `cmp $0x51,%eax; ja 629e0`,
@@ -9417,15 +9417,15 @@ v34handshak(void *vobj)
 	 * THE DEFAULT DOES NOT TERMINATE, and that is the object's and not
 	 * ours: an entry that is the loop bottom leaves the cursor where it
 	 * was, so the test that sent us here is still true.  Fifty-seven of
-	 * the eighty-two spin (finding 287, D59), and `v34hs_step` arms a
+	 * the eighty-two spin (finding F287, D59), and `v34hs_step` arms a
 	 * SIGALRM so that is a named case rather than a run that never
 	 * returns.
 	 *
 	 * The arms are `src/pump/v34/v34hstx1.cpp`, which is a `.cpp` because
-	 * 78 and 85 tail-call into the V.90/V.92 C++ half (finding 344).
+	 * 78 and 85 tail-call into the V.90/V.92 C++ half (finding F344).
 	 * Calling them from this `.c` is sound: the interop link carries
 	 * `$(CXXOBJ64)` and this file already calls `V34SetINFO1aBits`.
-	 * Finding 711.
+	 * Finding F711.
 	 */
 	while (obj->txq.count < obj->f2aa0) {
 		switch ((int)hs_get(obj, HS_TXSTATE)) {
@@ -9512,7 +9512,7 @@ v34handshak(void *vobj)
 		 * 0x63941 or 0x63948 and 0x66fe9 at 0x63e7f, which are the
 		 * loop test and a fall-through inside 86's own body.  So the
 		 * dispatch is gone, `enum v34tx1_exit` has one value left,
-		 * and the guard has no call site.  Findings 748 and 750.
+		 * and the guard has no call site.  Findings F748 and F750.
 		 */
 	}
 
@@ -9520,7 +9520,7 @@ v34handshak(void *vobj)
 	 * 0x629f1.  The receiver's first halfword, signed: `cmpw $0x5,(%ebx)`
 	 * then `jle 62ae3`, and 0x62ae3 reads +0x3596 into %cx for the
 	 * once-per-block dispatch at 0x62af1.  So five or fewer is the BLOCK
-	 * route and not an idle return.  Finding 549.
+	 * route and not an idle return.  Finding F549.
 	 */
 	if (*(short *)frame.rx <= 5) {
 		t3c_txblock(obj);
@@ -9555,7 +9555,7 @@ v34handshak(void *vobj)
 	 * `t3c_txblock` and has been written since table 2 landed -- so every
 	 * rxstate below 43 except 4, and every rxstate above 43 except 53 and
 	 * 72, is complete here rather than guarded.  That is most of the
-	 * eighty-seven.  Finding 717.
+	 * eighty-seven.  Finding F717.
 	 */
 	rxst = hs_get(obj, HS_RXSTATE);
 
@@ -9592,7 +9592,7 @@ v34handshak(void *vobj)
 			 * 0x62b83.  `mov 0xc0(%esp),%esi; movzwl
 			 * 0x3596(%esi),%ecx; jmp 62af1` -- the second
 			 * chain's fall-through, reached by every rxstate
-			 * above 43 that is not 53 or 72.  Finding 717.
+			 * above 43 that is not 53 or 72.  Finding F717.
 			 */
 			t3c_txblock(obj);		/* 0x62b83 */
 			return;
@@ -9633,7 +9633,7 @@ v34handshak(void *vobj)
 	/*
 	 * 0x64a64.  `V34agc` and `fskdemodulate` first, and only now is
 	 * +0x3592 read: nothing on the way here writes any of the three state
-	 * words, which is finding 285 and is what makes a poke-and-step
+	 * words, which is finding F285 and is what makes a poke-and-step
 	 * fixture possible at all.
 	 */
 	V34agc(frame.rx);
@@ -9648,7 +9648,7 @@ v34handshak(void *vobj)
 	 * IT IS `V34agc`'s OUTPUT, not the receive queue.  The call above
 	 * writes the four samples at receiver + 0x10c (v34rx.h), so no
 	 * fixture can choose them by poking -- they are produced by the
-	 * neighbouring call on every step.  That is not finding 429's
+	 * neighbouring call on every step.  That is not finding F429's
 	 * write-then-read case; the field is written by a NEIGHBOUR.
 	 */
 	fskin = (const short *)((unsigned char *)frame.rx + T3M_RX_FSKIN);
@@ -9662,7 +9662,7 @@ v34handshak(void *vobj)
 	 * are both `T` globals with out-of-line copies at 0x5e8f0 and
 	 * 0x5ea60 and NO RELOCATION anywhere in the object, so every use is
 	 * inlined; both are reconstructed above and both come out as calls
-	 * here rather than a second copy of swept code.  Findings 719, 720.
+	 * here rather than a second copy of swept code.  Findings F719, F720.
 	 *
 	 * AND IT FALLS THROUGH.  Every one of the arm's six exits is `jmp
 	 * 0x64a8f` -- 0x67599, 0x69327, 0x69368, 0x6960c, 0x6aace and
@@ -9671,7 +9671,7 @@ v34handshak(void *vobj)
 	 * gate is "poll the retrain detector as well", not "instead of":
 	 * `fskdemodulate` and the microstate dispatch run either way, and on
 	 * the fired path they run against the fields the action block has
-	 * just reset.  Finding 721.
+	 * just reset.  Finding F721.
 	 *
 	 * The counter is `retrain_phase`, +0xa24c: `add $0x4` then `cmp
 	 * $0x80` and `je`, EQUALITY and not `>=`, so its signedness is moot
@@ -9683,7 +9683,7 @@ v34handshak(void *vobj)
 	 * 0x695f0..0x69605, all through one base: +0x2aa2, +0xaa78,
 	 * +0xaae2 and +0xaae0 -- the vector index, the counter six
 	 * arms share, the FSK shift register and its bit count.
-	 * 0x6960c is the `jmp 64a8f` finding 721 describes, so this
+	 * 0x6960c is the `jmp 64a8f` finding F721 describes, so this
 	 * is a reset and not an exit.
 	 */
 	if (T3M_I32(&frame, T3M_FSKGATE) != 0
@@ -9706,7 +9706,7 @@ v34handshak(void *vobj)
 		 * +0x28/+0x2a/+0x00/+0x04/+0x08 over three bins at stride
 		 * 0x2c, the three phase steps 0x600/0x800/0xa00, and the
 		 * five scalars at +0xa24a.  +0xa24c is the only 32-bit store
-		 * on either side.  Finding 720.
+		 * on either side.  Finding F720.
 		 */
 		dftRetrainDetInit(obj);
 
@@ -9726,7 +9726,7 @@ v34handshak(void *vobj)
 		 * that gets here -- the object's `je 69536` at 0x694ba
 		 * always takes and 0x694bc-0x69535 is dead in the blob too.
 		 * It is written because it is what the object has.  Finding
-		 * 722.
+		 * F722.
 		 */
 		hs_setstate(obj, HS_MICROSTATE, V34HS_TX_PHASE1_ANS);	/* 46 */
 		hs_setstate(obj, HS_RXSTATE, V34HS_RX_DPSK);		/* 43 */
@@ -9877,7 +9877,7 @@ v34handshak(void *vobj)
  * at 0x71955, and `V34InitializeImplementationSpecific` at 0x71d70, which
  * belongs to v34filters.c because it initialises that file's own object;
  * this one calls `v34handshak`, `v34handshakinit`, `modulatevector` and
- * `receiver` and none of those is v34filters.c's.  Finding 98 drew that
+ * `receiver` and none of those is v34filters.c's.  Finding F98 drew that
  * conclusion before either function was written and this is where it lands.
  *
  * THREE THINGS HAPPEN HERE, and which of them happens is decided by the int

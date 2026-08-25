@@ -13,7 +13,7 @@
  *
  * But this tree also carries VERIFICATION APPARATUS the author never had:
  * compile-time offset assertions pinning every struct to the object's map
- * (finding 230, tools/offcheck.py).  Those are ours.  They may use whatever
+ * (finding F230, tools/offcheck.py).  Those are ours.  They may use whatever
  * the modern compiler offers, and where the period compiler lacks it, the
  * shim belongs HERE -- outside the reconstruction -- rather than in the
  * source being reconstructed.

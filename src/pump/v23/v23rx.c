@@ -17,7 +17,7 @@
  * 6000 / 5 is 1200 exactly.  Bell 103 had to resample to 7200 to get a whole
  * number of samples per symbol and still only landed on 24 for 300 baud;
  * V.23's 3:4 lands on an integer with nothing left over, which is why this
- * file has no equivalent of finding 24's arithmetic.
+ * file has no equivalent of finding F24's arithmetic.
  *
  * ---------------------------------------------------------------------------
  * Two gain controls, and why they cannot be shared

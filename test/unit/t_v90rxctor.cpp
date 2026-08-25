@@ -7,7 +7,7 @@
  * each: C++ has no syntax for running a constructor over storage that already
  * exists, and `OBJ = V90Phase4Demodulator(...)` would build a temporary over
  * uninitialised stack and copy it in, throwing away the seed the whole
- * fixture rests on (findings 223, 224).  The blob holds C1 and C2 as two
+ * fixture rests on (findings F223, F224).  The blob holds C1 and C2 as two
  * identical copies at different addresses and our compiler emits one function
  * under both names; calling only one leaves half the pair untested.
  *
@@ -17,11 +17,11 @@
  * Eleven arguments, ten of them pointers, and the constructor's entire body is
  * eleven stores.  So every pointed-to object is a SEPARATE block, seeded
  * per trial, and the two sides are pointed at the SAME eleven -- finding
- * 1105's rule, which makes every stored pointer compare equal and keeps all
+ * F1105's rule, which makes every stored pointer compare equal and keeps all
  * eleven words IN the comparison instead of excluded from it.
  *
  * The two `V90MappingParams *` matter more than the rest.  The embedded
- * modulator receives them SWAPPED (finding 1301, derived twice from opposite
+ * modulator receives them SWAPPED (finding F1301, derived twice from opposite
  * sides of the call), and a fixture that passed one pointer twice could not
  * see that at all -- the wrong order and the right order would store the same
  * bytes.  They are distinct blocks here for exactly that reason, and so is
@@ -61,7 +61,7 @@
 #include "dsplib/ANSamToneDetector.h"
 #include "dsplib/V90Phase3Demodulator.h"
 #include "dsplib/V90Phase4Demodulator.h"
-/* The BLOCK form of V90Parameters; no TU may hold both (finding 1112). */
+/* The BLOCK form of V90Parameters; no TU may hold both (finding F1112). */
 #include "dsplib/V90PreFilter.h"
 
 extern "C" {
@@ -166,7 +166,7 @@ static unsigned char
 nextb(void)
 {
 	lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
-	/* `| 1` so no seeded byte is ever zero; finding 230. */
+	/* `| 1` so no seeded byte is ever zero; finding F230. */
 	return (unsigned char)((lfsr >> 3) | 1u);
 }
 
@@ -216,7 +216,7 @@ seed_all(long trial, int idx)
  * The words that hold two different addresses.  The two the constructor
  * allocates itself, plus whatever its embedded subobjects allocate -- the
  * `Descrambler<int,int>` at +0x3d0 and the `V90Phase3Modulator` at +0x34 both
- * take buffers in THEIR constructors, which is finding 1303's lesson applied
+ * take buffers in THEIR constructors, which is finding F1303's lesson applied
  * before the fact rather than after it: the excluded list is the pointers the
  * constructed OBJECT holds, not the ones this function stores.
  */
@@ -425,7 +425,7 @@ run_p3d_ctor(void)
 			 * The three the constructor stores and `reset` does
 			 * not overwrite, asserted by VALUE.  Two constructors
 			 * that both stored nothing would compare equal
-			 * (finding 1105).
+			 * (finding F1105).
 			 */
 			diff_eq_int("params (%ld)",
 				    (void *)((V90Phase3Demodulator *)p3b)->params
@@ -441,7 +441,7 @@ run_p3d_ctor(void)
 			 * Asserted on OUR side as well as theirs.  The seed is
 			 * pairwise identical, so a reconstruction that dropped
 			 * the store leaves both sides holding the same seed
-			 * byte and the comparison agrees -- finding 1105 in
+			 * byte and the comparison agrees -- finding F1105 in
 			 * its sharpest form, and the only thing that catches
 			 * it is reading the value.
 			 */

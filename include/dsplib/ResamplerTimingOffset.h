@@ -44,7 +44,7 @@
  * suffixes below are load-bearing.  `+0x2c` is whatever factor converts one
  * to the other, which is what `ppmScale` says and all it says.
  *
- * Data member names are invented and descriptive (finding 226).
+ * Data member names are invented and descriptive (finding F226).
  */
 
 #ifndef DSPLIB_RESAMPLERTIMINGOFFSET_H

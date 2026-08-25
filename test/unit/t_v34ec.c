@@ -340,7 +340,7 @@ main(void)
 		int ph, rst, v9;
 
 		/*
-		 * `v90` IS SWEPT HERE, and until finding 216 it was not: this
+		 * `v90` IS SWEPT HERE, and until finding F216 it was not: this
 		 * loop drove it at 0 for every case and the only block that
 		 * varied it compared transcripts alone.  It selects a whole
 		 * configuration at 3200 baud -- 0x40 taps, a different
@@ -429,7 +429,7 @@ main(void)
 	 * INVENTED STRING -- "V34SetupModulator: carrier?" appears nowhere in
 	 * the blob -- with the three real ones missing.  Nothing could see
 	 * that: the level ships at zero, so a wrong string and a right one
-	 * behave identically under every other check here.  Finding 172.
+	 * behave identically under every other check here.  Finding F172.
 	 *
 	 * The sweep has to include an unrecognised baud rate AND an
 	 * unrecognised carrier, because two of the three sites are on those
@@ -805,10 +805,10 @@ main(void)
 	 * changes nothing and returns.  THE SECTION BELOW DRIVES THE OTHER
 	 * HALF.  An earlier note here said raising the level "would still
 	 * compare nothing, because neither logger records anything" -- that
-	 * stopped being true when finding 126 built the capture facility,
+	 * stopped being true when finding F126 built the capture facility,
 	 * which this same file already uses for `V34SetupModulator`.  Three
 	 * invented format strings survived in `V34EchoCleanUp` and
-	 * `V34EchoReportCoeff` behind that stale comment; see finding 180.
+	 * `V34EchoReportCoeff` behind that stale comment; see finding F180.
 	 */
 	setup(TAPS, DLEN);
 	V34EchoCleanUp(&a.e);

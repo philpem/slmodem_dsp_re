@@ -4,7 +4,7 @@
 # that is not a whole string of the object's .rodata/.data, because four
 # invented format strings once survived full differential tests -- at
 # `dsplibs_debug_level` 0 a wrong string and a right one behave identically
-# (findings 180, 201).  That gate must not be weakened.
+# (findings F180, F201).  That gate must not be weakened.
 #
 # But a BRANCH may legitimately add instrumentation the blob never had.  Such a
 # string is declared here, with the branch and the reason, and the audit then
@@ -16,19 +16,19 @@
 # one in, either the instrumentation or the entry is a mistake.
 #
 # format: <branch> <TAB> <python repr of the string> <TAB> reason
-improve/v34-training	'V34PROBEBINS, n=%d:'	dumps all 25 probe DFT bins; the object reads only 2 of them, so nothing in the blob prints this (#144, finding 1475)
+improve/v34-training	'V34PROBEBINS, n=%d:'	dumps all 25 probe DFT bins; the object reads only 2 of them, so nothing in the blob prints this (#144, finding F1475)
 improve/v34-training	' %d/%d'	the energy/shift pair per bin, emitted in a loop by the line above
 improve/v34-training	'V34PREEMPHASIS, - FIT tilt %d.%02d dB over %d bins -> index %d, baudrate= %d\n'	the least-squares tilt estimator's own readout; the object has no counterpart because it has no fit
-improve/v34-training	'V34EQUPOW, sigpow = %d, equerr = %d\n'	the signal power computed in the same block as equerr and never logged by the object; without it no capture can be used to ask what the rate decision would be on an SNR (findings 1913, 1914)
-improve/v34-training	'V34NLBINS, sig:'	dumps the nl_noise_bins bank, the only place the object measures noise; probe_bins' own noise slots are a constant (finding 1914)
+improve/v34-training	'V34EQUPOW, sigpow = %d, equerr = %d\n'	the signal power computed in the same block as equerr and never logged by the object; without it no capture can be used to ask what the rate decision would be on an SNR (findings F1913, F1914)
+improve/v34-training	'V34NLBINS, sig:'	dumps the nl_noise_bins bank, the only place the object measures noise; probe_bins' own noise slots are a constant (finding F1914)
 improve/v34-training	' noise:'	part of the V34NLBINS line above
 improve/v34-training	' sum_sig=%u sum_noise=%u\n'	the two accumulators t72_measure divides, emitted so the published ratio can be checked against its inputs
 improve/v34-training	'V34EQFREEZE, f798 = %d\n'	counts EVERY equaliser-adaptation freeze; the object's own message prints only in the band -70<f798<-64 while the flag is set for all f798<-64, so the log undercounts by an unknown factor
 improve/v34-training	'V34RTNCOUNT, triggered at %d, equerr = %d\n'	the stillness counter that triggered a retrain, read BEFORE f798 is cleared; the object's rtncount always prints 0 because it reads the field after the reset
-improve/v34-training	'V34RTNWHY, %s, f124 = %d, 7*frame = %d, flag80 = %d, equerr = %d\n'	says WHICH of the two arms sent us into a full handshake -- the far end asking, or our own f124>7*baud_rate timeout that nobody requested. The object cannot distinguish them and finding 1921's 66% duty cycle depends on which it is (1926, 1927)
+improve/v34-training	'V34RTNWHY, %s, f124 = %d, 7*frame = %d, flag80 = %d, equerr = %d\n'	says WHICH of the two arms sent us into a full handshake -- the far end asking, or our own f124>7*baud_rate timeout that nobody requested. The object cannot distinguish them and finding F1921's 66% duty cycle depends on which it is (1926, 1927)
 improve/v34-training	'ASKED'	the ternary arm in V34RTNWHY above; 'TIMEOUT' happens to exist in the object's .rodata and this does not, which is why one shows here and the other does not
-improve/v34-training	'V34HSINIT, mode = %d, from = %p, f124 = %d, equerr = %d, rxflags = 0x%x\n'	logs EVERY entry to v34handshakinit with its mode argument; there are fourteen call sites and instrumenting one of them measured nothing across six calls (findings 1926, 1928)
-improve/v34-training	'V34PREEMPHASIS, - SHAPE index %d over %d bins, var %d.%02d dB2, baudrate= %d\n'	the shape-matched pre-emphasis selector; the object has no counterpart and never prints this (findings 1956, 1957)
-improve/v34-training	'V34PREEMPHASIS, - TEST index %d, baudrate= %d\n'	compile-time-only actuator for measuring the realised far-transmitter pre-emphasis response; it is absent unless DSPLIB_V34_TEST_PREEMP_INDEX is defined (finding 6109)
-improve/v34-training	'V34EQTAPS, centre = %lu, off = %lu, equerr = %d\n'	equaliser workload split centre-run vs off-centre; the object never reports its tap energy (findings 1956, 1958)
-improve/v34-training	'V34RTNWHO, remote = %d, local = %d, remote_rrn = %d\n'	the object's own retrain attribution counters (+0xac14/+0xac12/+0xac10); the object increments them but never prints them (finding 1964)
+improve/v34-training	'V34HSINIT, mode = %d, from = %p, f124 = %d, equerr = %d, rxflags = 0x%x\n'	logs EVERY entry to v34handshakinit with its mode argument; there are fourteen call sites and instrumenting one of them measured nothing across six calls (findings F1926, F1928)
+improve/v34-training	'V34PREEMPHASIS, - SHAPE index %d over %d bins, var %d.%02d dB2, baudrate= %d\n'	the shape-matched pre-emphasis selector; the object has no counterpart and never prints this (findings F1956, F1957)
+improve/v34-training	'V34PREEMPHASIS, - TEST index %d, baudrate= %d\n'	compile-time-only actuator for measuring the realised far-transmitter pre-emphasis response; it is absent unless DSPLIB_V34_TEST_PREEMP_INDEX is defined (finding F6109)
+improve/v34-training	'V34EQTAPS, centre = %lu, off = %lu, equerr = %d\n'	equaliser workload split centre-run vs off-centre; the object never reports its tap energy (findings F1956, F1958)
+improve/v34-training	'V34RTNWHO, remote = %d, local = %d, remote_rrn = %d\n'	the object's own retrain attribution counters (+0xac14/+0xac12/+0xac10); the object increments them but never prints them (finding F1964)

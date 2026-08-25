@@ -9,7 +9,7 @@ expression shape, the operand order and the control flow were recovered, not
 merely something equivalent to them.
 
 Build the objects first, with the period toolchain (see Dockerfile.exact here
-and findings 606 and 2200):
+and findings F606 and F2200):
 
     docker build --platform linux/386 -f tools/toolchain/Dockerfile.exact \
                  -t dsplibs-tc342 tools/toolchain
@@ -17,7 +17,7 @@ and findings 606 and 2200):
     tools/toolchain/compare.py
 
 THE COMPILER IS GCC 3.4.2 ITSELF, bootstrapped from the GNU tarball.  Until
-finding 2200 it was Debian sarge's `3.4.4 20050314 (prerelease)`, two point
+finding F2200 it was Debian sarge's `3.4.4 20050314 (prerelease)`, two point
 releases and one vendor's patch stack away from the `3.4.2` the blob names,
 and every number below had been measured with it.  The point release reaches
 codegen: 18 of 183 translation units differ between the two, and the exact
@@ -33,7 +33,7 @@ matches the blob's byte for byte.  It changes NOTHING measurable: 182 of the
 with none gained and none lost, and the one difference is a schedule
 permutation in `DTMF_MTD_detect`.  So the two `.comment` lines below being
 equal is a property of the IMAGE and not of the numbers -- which is why the
-default stays the stock one, buildable from the network alone.  Finding 2500.
+default stays the stock one, buildable from the network alone.  Finding F2500.
 
 THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
 
@@ -60,7 +60,7 @@ THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
                             flag.  Worth +2 identical on its own, but the
                             effect that matters is that EVERY float comparison
                             in EVERY function used to read as a mismatch.
-                            Finding 1990
+                            Finding F1990
     -fomit-frame-pointer    no push %ebp / mov %esp,%ebp in the object's
                             prologues.  GCC 3.4 does NOT imply this at -O2
     -maccumulate-outgoing-args
@@ -75,7 +75,7 @@ THE FLAGS ARE NOT GUESSES.  Each was read out of the object:
                             byte-identical; tree-wide it accounts for ALL of
                             -O3's advantage, 83 identical -> 92.  The rest of
                             -O3 adds 17 KB of our code and no matches at all,
-                            so -O3 itself is disfavoured.  Finding 616.
+                            so -O3 itself is disfavoured.  Finding F616.
 
 `-O3` IS THE LEVEL, and this paragraph used to say the opposite.  It used to
 read that `-O2` was the level and that the only open question was whether the
@@ -84,10 +84,10 @@ the rest of -O3 happened not to bite.  Measured on the whole tree with the
 level as the only variable: `-O2` 313 identical, `-O2 -finline-functions` 314,
 `-O3` 324 -- and the `-O3` set GAINS 15 and loses 4 rather than swapping, with
 byte coverage 72.2% -> 80.0% and no new overshoot.  `make period` is green at
-all three.  Finding 616 measured the opposite when this tree matched 92 of
+all three.  Finding F616 measured the opposite when this tree matched 92 of
 365, where `-finline-functions` had almost nothing to inline across.
 `-frename-registers` stays spelled out although `-O3` implies it, because
-616's evidence for it is independent.  Finding 2155.
+616's evidence for it is independent.  Finding F2155.
 
 RE-MEASURED ON GCC 3.4.2 ITSELF, because 2155 and 1990 were both taken on the
 wrong point release, and 2155 says of itself that it is a match-rate argument
@@ -108,7 +108,7 @@ reading was gains 15 loses 4 -- and the four lost are the SAME four 2155 named.
 mechanism argument, the half that does not depend on match rate, reproduces
 unchanged: 3.4.2 under the default `-mieee-fp` emits `fucompp` for `a>=b`,
 `a>b`, `!(a<b)`, `a==b` and the `double` form alike, and `fcomps`/`fcompl` for
-every one of them with the flag.  Finding 2200.
+every one of them with the flag.  Finding F2200.
 
 WHAT THE NUMBERS MEAN, and do not mean.  A size mismatch is not a defect: our
 source is not the original's source, and a function we wrote as one loop that
@@ -121,7 +121,7 @@ code, not only when we emit more of the RIGHT code -- we currently undershoot,
 so anything that inlines harder closes the gap arithmetically, and a build that
 inlined wildly could pass 100% while matching nothing.  The byte-identical
 count cannot be gamed that way.  Quote that; quote the percentage only
-alongside it.  Finding 612.
+alongside it.  Finding F612.
 """
 
 import argparse
@@ -154,14 +154,14 @@ RATCHET = os.path.join(os.path.dirname(os.path.abspath(__file__)),
 #
 # A per-symbol size comparison across an inlining boundary measures the
 # reconstruction's FACTORING, not its completeness -- the same trap
-# debugaudit.py fell into (finding 605).  Where we broke one of the original's
+# debugaudit.py fell into (finding F605).  Where we broke one of the original's
 # functions into static helpers, the helpers have no blob symbol, so their
 # bytes are counted against neither side and the blob's function shows the
 # whole difference as missing.  The per-object rollup below fixes that case on
 # its own.
 #
 # It cannot fix a split across FILES, because there is nothing in either object
-# to say the two belong together.  Those are declared here.  Finding 610.
+# to say the two belong together.  Those are declared here.  Finding F610.
 #
 TU_GROUPS = (
     ("src/v8/v8handshak.c", "src/v8/v8hsrx.c"),
@@ -174,7 +174,7 @@ def _default_blob():
     `.claude/worktrees/`, where there is no blob -- and `nm` on a missing file
     exits non-zero with empty stdout, which `sizes()` cannot tell from a file
     with no symbols.  Every count is then computed against nothing.  Finding
-    3121.  `git rev-parse --git-common-dir` is how the `Makefile` already
+    F3121.  `git rev-parse --git-common-dir` is how the `Makefile` already
     resolves this, so it is the tree's existing answer rather than a new one.
     """
     literal = "ref/slmodemd/dsplibs.o"
@@ -215,7 +215,7 @@ def comment(path):
     (Debian sarge) while every flag conclusion in this file was written up as
     3.4.2, the version the blob names.  It cost +6 identical, and nobody could
     have seen it from the output.  Both strings now print on every run, so the
-    reference and the measurement are side by side.  Finding 2200.
+    reference and the measurement are side by side.  Finding F2200.
     """
     out = subprocess.run(["readelf", "-p", ".comment", path],
                          capture_output=True, text=True).stdout
@@ -262,7 +262,7 @@ def main():
             "  worktree it must be given explicitly:\n"
             "      BLOB=/abs/path/to/dsplibs.o %s\n"
             "  A detector must report its denominator, and zero is not a score:\n"
-            "  findings 2400, 2401, 3110 and 3121."
+            "  findings F2400, F2401, F3110 and F3121."
             % (BLOB, "yes" if os.path.exists(BLOB) else "no", RATCHET,
                " ".join(sys.argv)))
     ours = {}
@@ -284,7 +284,7 @@ def main():
             "  they share NONE.  The comparison denominator is zero, which is\n"
             "  not a score -- it renders identically to a tree that matches\n"
             "  nothing.  Most likely BLOB and TC_OUT point at unrelated trees,\n"
-            "  or the two were built for different targets.  Findings 2401\n"
+            "  or the two were built for different targets.  Findings F2401\n"
             "  and 3121."
             % (len(blob), OURS, len(ours)))
     identical, samesize, rows = [], [], []
@@ -313,7 +313,7 @@ def main():
         print("\nIDENTICAL MNEMONIC SEQUENCES.  Operands are NOT compared -- two"
               "\nfunctions storing the same constants to different offsets in a"
               "\ndifferent order both read as `mov mov mov` and count here."
-              "\nStrong evidence, but not byte equality.  Finding 615:")
+              "\nStrong evidence, but not byte equality.  Finding F615:")
         for b, k in sorted(identical, reverse=True):
             print("  %5d  %s" % (b, k))
 

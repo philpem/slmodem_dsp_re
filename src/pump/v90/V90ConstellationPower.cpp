@@ -6,7 +6,7 @@
  * 144-byte measurement and the argument for declaring two empty bodies.
  *
  * PLAIN CDECL with `this` as the first STACK argument, like the rest of the
- * C++ here (finding 215): `mov 0x30(%esp),%edi` in `calcModulusParameters`
+ * C++ here (finding F215): `mov 0x30(%esp),%edi` in `calcModulusParameters`
  * after four pushes and a 0x1c frame, and `mov 0x60(%esp),%esi` in `getPower`,
  * which then hands that same %esi straight on as `calcModulusParameters`'
  * first stack argument.
@@ -19,7 +19,7 @@
  *
  * WHAT IS NOT SPELLED THE OBVIOUS WAY, and why:
  *
- *   `modulus[5]` is a TRUNCATION, not a remainder.  See finding 3052 and the
+ *   `modulus[5]` is a TRUNCATION, not a remainder.  See finding F3052 and the
  *   comment at the tail of `calcModulusParameters`.
  *
  *   `getPower` reads `constellation`, `constellationSize` and `power` back out
@@ -76,7 +76,7 @@ typedef char v90cp_size[(sizeof(V90ConstellationPower) == 0x90) ? 1 : -1];
  * shape of them is measured rather than derived: every one of the 35 is a
  * PERFECT SQUARE, of 15124 down to 2133, and consecutive roots stand
  * 0.5006 +/- 0.005 dB apart -- so the table is an amplitude ladder in 0.5 dB
- * steps, stored squared, spanning 17 dB.  Finding 3054.  What the amplitudes
+ * steps, stored squared, spanning 17 dB.  Finding F3054.  What the amplitudes
  * are referred TO is a derivation and is deferred with the rest of them
  * (docs/fastpass.md); a byte-exact copy is byte-exact and the differential
  * test proves it with no derivation at all.
@@ -145,7 +145,7 @@ V90ConstellationPower::calcModulusParameters(V90MappingParams *mappingParams)
 	 * call, this one is `mov 0x38(%edi),%esi ; mov %esi,0x5c(%edi)` -- the
 	 * low half of `remaining[5]`, copied.  The two readings agree for every
 	 * `remaining[5]` below `constellationSize[5]`, which is the ordinary
-	 * case and is why the test has to force the other one.  Finding 3052.
+	 * case and is why the test has to force the other one.  Finding F3052.
 	 */
 	modulus[V90CP_CONSTELLATIONS - 1] =
 	    (unsigned int)remaining[V90CP_CONSTELLATIONS - 1];
@@ -245,7 +245,7 @@ V90ConstellationPower::getConstellationInfo(V90MappingParams *mappingParams,
  * because the object computes the reciprocal FIRST: `fildll` the count,
  * `fld1`, then `de f1`, which is FDIVRP and leaves `1.0 / count` -- objdump
  * prints that mnemonic as its own opposite and `tools/dis.py` says so on the
- * line (finding 245).  The outer arms divide the other way round, `fdivrl`
+ * line (finding F245).  The outer arms divide the other way round, `fdivrl`
  * against the place value, and are spelled to match.
  */
 float

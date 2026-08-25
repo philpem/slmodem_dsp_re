@@ -8,9 +8,9 @@
  * from.  Each is therefore called directly by symbol on both sides -- ours by
  * its mangled name, the blob's by the `ref_` alias -- through an `asm()`
  * label, which is also how the ctor/dtor test reaches a member with no
- * spellable C++ form and how finding 225's double mangling is sidestepped.
+ * spellable C++ form and how finding F225's double mangling is sidestepped.
  * The convention is plain cdecl with `this` as the first stack argument
- * (finding 215), and a `short` parameter occupies a whole slot, so the
+ * (finding F215), and a `short` parameter occupies a whole slot, so the
  * declarations below widen those to `int` deliberately.
  *
  * WHAT A RANDOM FILL WOULD NOT REACH, and what is forced here instead:
@@ -440,7 +440,7 @@ run_arith(void)
 
 	/*
 	 * Both arms of the zero test were reached, or the sweep proves only
-	 * that two sides agree about one of them (findings 149, 223).
+	 * that two sides agree about one of them (findings F149, F223).
 	 */
 	diff_eq_int("the zero-product arm was reached %ld times",
 		    seenZeroK > 0, 1, seenZeroK);
@@ -541,7 +541,7 @@ run_findindex(void)
 	/*
 	 * EVERY ROW WON AT LEAST ONCE, in each direction.  Without this the
 	 * sweep would prove only that two sides agree, and two transposed arms
-	 * agree with each other perfectly well (findings 149, 223).
+	 * agree with each other perfectly well (findings F149, F223).
 	 */
 	for (i = 0; i < 6; i++) {
 		diff_eq_int("row %ld won the minimum", seenMin[i] > 0, 1, i);

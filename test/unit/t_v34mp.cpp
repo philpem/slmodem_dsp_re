@@ -15,13 +15,13 @@
  *     mangles the whole already-mangled string a second time and emits
  *     `_Z36ref__Z14getMPrecvdBitsP12tagV34ObjectPv`, whose link error
  *     contains the name you wanted sitting inside the name you did not.
- *     That is finding 225, and harness.h says so at the bottom of its own
+ *     That is finding F225, and harness.h says so at the bottom of its own
  *     `extern "C"` block.
  *
  *   - `regparm(1)`, because the object keeps this function LOCAL, so GCC gave
  *     it the local calling convention and `--globalize-symbols` does not
  *     change that.  0x9250 is `push %ebp; lea 0x4(%eax),%edx` -- the object
- *     arrives in `%eax` and nothing is read off the stack.  Finding 51's
+ *     arrives in `%eax` and nothing is read off the stack.  Finding F51's
  *     rule: a `t` symbol is a signal that the convention may not be the C
  *     one.
  *
@@ -38,7 +38,7 @@
  *     +0xaa6c            written BY the function, and it is a self-pointer:
  *                        each side is given `m + 0xaa3c` of ITS OWN object,
  *                        so the check is against this side's own base and not
- *                        merely against non-null (finding 224)
+ *                        merely against non-null (finding F224)
  *
  * The memory behind the two fixture pointers is compared as well, which is
  * what justifies their holes: the function only reads it, so "the two sides
@@ -476,7 +476,7 @@ main(void)
 	 * The transcripts.  Seven of this function's nine diagnostics are
 	 * inside the V.90 branch and each carries a field name that nothing
 	 * else in the object states, so a dropped site loses the annotation
-	 * and no byte comparison can see it -- finding 134.  The two
+	 * and no byte comparison can see it -- finding F134.  The two
 	 * `edprintf` messages are the pair that names which ISP arm ran,
 	 * which is the only external evidence of that branch.
 	 */

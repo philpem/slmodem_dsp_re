@@ -16,7 +16,7 @@
  * `displayParamEia6`, which is one `ret`.  Neither touches `refLoop` or
  * `codecType`, which is where `cap` comes from.  So caching the first result
  * would be equivalent, the mutation that does it is uncaught, and the suite
- * says so with the reason rather than pretending otherwise.  Finding 293.
+ * says so with the reason rather than pretending otherwise.  Finding F293.
  *
  * THE SECOND RESULT IS NARROWED TO `short` BEFORE IT BECOMES AN ARGUMENT.
  * `cwtl` in the blob, `(short)` here, and it looks redundant only until
@@ -40,7 +40,7 @@ extern "C" {
  * member; `reset` CALLS a member of it, so this file needs the definition.
  * V90ConstellationDesigner.h forward-declares `V90Parameters` and includes
  * nothing, so it cannot collide with the definition V90PreFilter.h supplies
- * below (finding 1112).
+ * below (finding F1112).
  */
 #include "dsplib/V90ConstellationDesigner.h"
 #include "dsplib/V90Demodulator.h"
@@ -49,7 +49,7 @@ extern "C" {
  * calls explicitly, and which the header only forward-declares.  Each of the
  * four headers either includes nothing or includes only classes that forward-
  * declare `V90Parameters`, so none of them collides with the block definition
- * V90PreFilter.h supplies through the header above (finding 1112).  The other
+ * V90PreFilter.h supplies through the header above (finding F1112).  The other
  * four -- V90Equalizer, V90Phase3Demodulator, V90AutoDigitalImpDetector and
  * V90ConnectionEvaluator -- arrive with V90Demodulator.h already.
  */
@@ -61,7 +61,7 @@ extern "C" {
  * `getAT_UD`'s argument record, and the block `enterRRN` writes +0x10 of.
  * Both headers define one struct and include nothing, so neither can collide
  * with the block definition of `V90Parameters` that V90PreFilter.h supplies
- * through V90Demodulator.h (finding 1112).
+ * through V90Demodulator.h (finding F1112).
  */
 #include "dsplib/TAG_DiagnosticResults.h"
 #include "dsplib/tagV90AdditionalCPinfo.h"
@@ -143,7 +143,7 @@ DEM_OFF(quickConnect,		0x294, quickconnect);
 typedef char v90dem_mpar_word0[
     (__builtin_offsetof(V90MappingParams, word_0) == 0) ? 1 : -1];
 
-/* Settled by the allocation that precedes the constructor; finding 291. */
+/* Settled by the allocation that precedes the constructor; finding F291. */
 typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
 
 /*
@@ -178,7 +178,7 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * -- three consecutive words in each of two runs, indexed by phase.  That is
  * the shape of the block and not a name for either quantity, so these keep
  * offset names: the author's own names are in V90Parameters.h, which this
- * file cannot include (finding 1112), and inventing two here would be worse
+ * file cannot include (finding F1112), and inventing two here would be worse
  * than an offset.
  */
 #define PARAMS_WORD_268		(0x268 / 4)
@@ -202,7 +202,7 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * at, as a signed count of thousandths.  The same word is what
  * `V90PreFilter::setParamEia6` READS as "prev params ClockDeviation", by the
  * same two-step dereference and with the reciprocal scale (`* 0.001f`).
- * Finding 1274; the pairing is why "saved in Registry" is not a figure of
+ * Finding F1274; the pairing is why "saved in Registry" is not a figure of
  * speech.
  */
 #define MODEM_CLOCK_DEVIATION	(0x04c / 4)
@@ -211,7 +211,7 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * The three `reset` adds.  The names in the comments are the ORIGINAL
  * AUTHOR'S, out of `include/dsplib/V90Parameters.h` -- that header cannot be
  * included here, because this file already has the other definition of the
- * class (finding 1112), but the map it carries is still what these indices
+ * class (finding F1112), but the map it carries is still what these indices
  * mean and writing them down without it would be throwing information away.
  */
 #define PARAMS_AGC_NOMINAL_ENERGY	(0x05c / 4)	/* float */
@@ -222,7 +222,7 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * `V90Resampler::reset()` BY ITS MANGLED NAME, and it is not a shortcut.
  *
  * The object at +0x94 is a V90Resampler -- the constructor builds one there
- * and finding 804 finds `V90Resampler`'s vtable pointer at that offset -- and
+ * and finding F804 finds `V90Resampler`'s vtable pointer at that offset -- and
  * `reset` calls `_ZN12V90Resampler5resetEv` on it DIRECTLY, not through the
  * vptr.  ONE thing rules out the obvious spelling, and it is enough:
  * `resampler.reset()` dispatches through the vptr, which no test fixture here
@@ -230,7 +230,7 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  *
  * TWO FURTHER REASONS USED TO BE GIVEN HERE AND ARE NOW FALSE.  Both said the
  * class could not be named at all -- that `V90Resampler.h` brings the OTHER
- * definition of `V90Parameters` (finding 1112) and that declaring the member's
+ * definition of `V90Parameters` (finding F1112) and that declaring the member's
  * type as `V90Resampler` had the same problem one level up.  Writing the
  * lifecycle pair forced that to be solved rather than worked around, because a
  * member typed as the base gets the BASE's constructor and destructor emitted
@@ -241,7 +241,7 @@ typedef char v90dem_size[(sizeof(V90Demodulator) == 0x298) ? 1 : -1];
  * qualified-call spelling is the less obvious of the two.
  *
  * The symbol takes `this` as its first stack argument like every other member
- * here (finding 215), and `ResamplerTimingOffset` is `V90Resampler`'s base at
+ * here (finding F215), and `ResamplerTimingOffset` is `V90Resampler`'s base at
  * offset zero, so the address is the same one `setTimingOffset` is already
  * called on.
  */
@@ -364,21 +364,21 @@ V90Demodulator::enterPhase3()
  * into the parameter block.  `V90PreFilter::setParamEia6` reads that same
  * word back as "prev params ClockDeviation" and multiplies it by 0.001f, so
  * the two functions are the write and the read of one persisted number and
- * the scale factors are reciprocal.  Finding 1274.
+ * the scale factors are reciprocal.  Finding F1274.
  *
  * `+0x34` IS A STATE, NOT A LATCH, and this function is what says so.  The
  * diagnostic below prints `isDataState = %d` for `+0x34 == 3`, and
  * `enterChannelVerification` sets the same field to 5; the name `inPhase3` in
  * the header dates from `enterPhase3`, which returns early when it is exactly
- * 1.  The name is left alone -- it is invented either way (finding 226) and
+ * 1.  The name is left alone -- it is invented either way (finding F226) and
  * eight parallel worktrees share the header -- and corrected here.  Finding
- * 1273.
+ * F1273.
  *
  * `isV90WithEia6()` IS CALLED TWICE, and the second call is kept because the
  * blob makes it.  The `if` tests it and the `else` prints it, and between the
  * two nothing runs at all -- so caching it would be equivalent and the
  * mutation that does so is uncaught.  Same shape and same reason as
- * `enterPhase3`'s double call, finding 293.  `+0x34 == 3` is likewise
+ * `enterPhase3`'s double call, finding F293.  `+0x34 == 3` is likewise
  * recomputed for the printed argument.
  *
  * THE RETURN TYPE IS NOT `void`, AND IT IS NOT DECIDABLE FURTHER.  The single
@@ -423,8 +423,8 @@ V90Demodulator::enterPhase3()
  * is what fixes the negation on the outside and the zero on the left.  This
  * used to read "so a NaN prints '-'", which was the branch form's answer and
  * not this one's; `st_value` pattern 9 in t_v90demod.cpp is the input that
- * tells them apart, and the two mutations there die on it.  Findings 2300 and
- * 2410, and `ADID_PRINT_SIGN` in V90AutoDigitalImpDetector.cpp is the same
+ * tells them apart, and the two mutations there die on it.  Findings F2300 and
+ * F2410, and `ADID_PRINT_SIGN` in V90AutoDigitalImpDetector.cpp is the same
  * reading.
  */
 int
@@ -837,7 +837,7 @@ V90Demodulator::exitPhase3()
  *     1bec9  ba 38 31 00 00   mov $0x3138,%edx
  *     1bf70  b8 30 75 00 00   mov $0x7530,%eax
  *
- * and NEITHER line carries a relocation, which is the whole of finding 245's
+ * and NEITHER line carries a relocation, which is the whole of finding F245's
  * point: they are the integers 12600 and 30000 and not offsets into
  * `.rodata`.  12600 when `quickConnect` is set and 30000 when it is not, and
  * `quickConnect` is the field `reset` stores its argument into -- so a quick
@@ -889,7 +889,7 @@ V90Demodulator::enterDataPhase()
  * `MODEM_CLOCK_DEVIATION`.  Everything that comment says about the sign
  * character applies here unchanged and is not repeated: `fldz` puts the ZERO
  * in %st(0), the character is `0x2d - 2*CF` with no branch, and an unordered
- * value therefore prints '+'.  Findings 2300 and 2410.
+ * value therefore prints '+'.  Findings F2300 and F2410.
  *
  * WHAT IS DIFFERENT IS THE GUARD, AND IT IS NOT A PURE TEST.  This member
  * COPIES the evaluation flag into `word_278` and then branches on it:
@@ -1059,7 +1059,7 @@ V90Demodulator::indicateRemoteRateReneg() const
  *
  *    THE CAST IS HERE RATHER THAN IN THE FIELD, and that is a decision and
  *    not an oversight.  Retyping `rtd` would reach a header three other
- *    live branches include, which is exactly finding 3511's shape; the cast
+ *    live branches include, which is exactly finding F3511's shape; the cast
  *    reproduces the object's instructions today and the evidence for the
  *    retype is recorded in the finding for a pass that owns that header.
  *
@@ -1104,7 +1104,7 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
 	 * exactly what `VPcmV34GetCurrentRxCarrier` and
 	 * `...GetCurrentRxBaudRate` answer for the same condition.  These two
 	 * offsets were `word_0bc` and `word_0b4` when this was written and
-	 * are named now; finding 5500 settled the direction.
+	 * are named now; finding F5500 settled the direction.
 	 */
 	results->rxCarrier = 0;
 	results->rxBaudRate = 8000;
@@ -1168,7 +1168,7 @@ V90Demodulator::getAT_UD(TAG_DiagnosticResults *results) const
  * out-of-line calls in the blob; `enterPhase4` (0x1dc76) and `enterFPE`
  * (0x1d418) appear inlined instruction for instruction, idempotence test and
  * gated string included.  Both spellings are the same source -- a call --
- * and finding 7480 is why that is worth stating: at this size the instruction
+ * and finding F7480 is why that is worth stating: at this size the instruction
  * COUNT is the only completeness check there is, and a member that inlines on
  * one side and not the other moves it without moving any behaviour.
  *
@@ -2049,7 +2049,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
  *    %eax,%eax; and $0xfffffffe,%eax; add $0x2d,%eax`, the same branchless
  *    `0x2d - 2*CF` the method above uses, so an unordered offset prints '+'.
  *    Being UNGATED is what makes this the cheapest site in the tree to drive
- *    one through -- `off_bits[2]` in `run_reset`.  Findings 2300 and 2410.
+ *    one through -- `off_bits[2]` in `run_reset`.  Findings F2300 and F2410.
  *
  * 3. THE EQUALISER'S CURSOR IS EITHER CONFIGURED OR DERIVED.  A negative
  *    `LINEAR_EQU_CURSOR_PLACE` means "the middle of the linear equaliser",
@@ -2060,7 +2060,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
  * 4. THE LAST STORE IS INTO ANOTHER OBJECT.  The argument goes to this
  *    object's +0x294 and then to the EQUALISER's +0x148, which is the only
  *    write anywhere in the blob to that offset of that class and the reason
- *    `sizeof(V90Equalizer)` is 0x150 (finding 1107).
+ *    `sizeof(V90Equalizer)` is 0x150 (finding F1107).
  */
 void
 V90Demodulator::reset(unsigned int quickConnectArg)
@@ -2210,7 +2210,7 @@ V90Demodulator::enterChannelVerification(short, short short414)
  *
  * The difference is not academic.  `word_0 * 8000` passes 2^31 at word_0 =
  * 268435, and above that the two readings disagree by 2^32/6 -- so the sweep
- * carries values on both sides of it, on finding 613's argument that a
+ * carries values on both sides of it, on finding F613's argument that a
  * signedness the reachable domain never exercises is a defect no test can
  * see.
  */
@@ -2231,7 +2231,7 @@ V90Demodulator::getBitRate() const
  *
  * `V90Demodulator::V90Demodulator` -- 1002 bytes at 0x1c2b0 (C1) and again at
  * 0x1c6a0 (C2).  `~V90Demodulator` -- 669 bytes at 0x1ad70 (D1) and 0x1b010
- * (D2).  Plain cdecl, `this` as the first STACK argument (finding 215): after
+ * (D2).  Plain cdecl, `this` as the first STACK argument (finding F215): after
  * `push ebp; push edi; push esi; push ebx; sub $0x4c,%esp` the constructor's
  * fourteen incoming words are at 0x60 through 0x98.
  *
@@ -2394,7 +2394,7 @@ void v90dem_cd_ctor(void *self, V90Parameters *params, V90PreFilter *preFilter,
  * The equaliser's two lengths, which are the only arguments this constructor
  * reads out of the parameter block.  The names are the ORIGINAL AUTHOR'S, out
  * of include/dsplib/V90Parameters.h, which this file cannot include (finding
- * 1112) -- the same convention the three `reset` indices above follow.
+ * F1112) -- the same convention the three `reset` indices above follow.
  */
 #define PARAMS_LINEAR_EQU_LENGTH	(0x170 / 4)	/* int */
 #define PARAMS_DFE_LENGTH		(0x1fc / 4)	/* int */

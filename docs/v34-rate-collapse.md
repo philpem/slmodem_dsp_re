@@ -13,7 +13,7 @@ the other three.
 
 ---
 
-## 1. Summary
+## F1. Summary
 
 A V.34 call between `slmodemd` and a hardware modem across the SIP path
 negotiates a reasonable rate and then fails to keep it. The cause is not the
@@ -34,7 +34,7 @@ from a median of 3.0 to 1.0 on the bench `[MEASURED]`.
 
 ---
 
-## 2. The symptom
+## F2. The symptom
 
 A negotiated 26400 delivers something closer to 8000. The far end reports a
 healthy link throughout; our own transmit reaches 33600 to every far end
@@ -46,9 +46,9 @@ The receiver reaches high rates repeatedly and never holds one.
 
 ---
 
-## 3. Root cause: the recovery ladder is inverted
+## F3. Root cause: the recovery ladder is inverted
 
-### 3.1 The three thresholds
+### F3.1 The three thresholds
 
 `datapumpv34` maintains three counters and acts on each at a fixed threshold
 `[CODE]`:
@@ -62,7 +62,7 @@ The receiver reaches high rates repeatedly and never holds one.
 The retrain fires at `v34hshak.c:10017`, on either the far end's explicit
 request (flag `0x40`) or our own bad-block run.
 
-### 3.2 Why that ordering is wrong
+### F3.2 Why that ordering is wrong
 
 The counters do **not** tick per symbol. `f128 = 4` samples per `receiver()`
 call on a 9600 Hz stream means a fixed **2400 ticks per second** regardless of
@@ -85,7 +85,7 @@ case — it *"can also be used to resynchronize the receiver without going
 through a complete retrain"* `[SPEC]`, at a cost of S 128T, S̄ 16T, TRN ≤ 2000 ms
 plus round-trip delay, then MP: two to three seconds against roughly ten.
 
-### 3.3 Why the cheap path cannot be replaced by a shorter retrain
+### F3.3 Why the cheap path cannot be replaced by a shorter retrain
 
 V.34 has **no short Phase 2** `[SPEC]`. Table 14 allocates all INFO0 bits
 0:48, leaving nothing to negotiate an abbreviated probe. The object's own
@@ -99,7 +99,7 @@ So the ~10 s retrain is genuinely the expensive option, the 2–3 s
 renegotiation is genuinely the cheap one, and the thresholds have them the
 wrong way round.
 
-### 3.4 It is not the line, the far end, or the path
+### F3.4 It is not the line, the far end, or the path
 
 * Six hardware-to-hardware pairs cross the same ATA and SIP leg at
   28800–33600 with normal terminations `[MEASURED]`.
@@ -111,7 +111,7 @@ wrong way round.
 
 ---
 
-## 4. What it costs
+## F4. What it costs
 
 Measured from a string the **blob itself** prints — `"V34 bulk delay
 estimation %d (FAR=%d)"`, emitted once per handshake — so the measurement
@@ -143,9 +143,9 @@ again.
 
 ---
 
-## 5. What was changed
+## F5. What was changed
 
-### 5.1 The fix
+### F5.1 The fix
 
 `src/pump/v34/v34hshak.c`, immediately ahead of the retrain arm:
 
@@ -170,7 +170,7 @@ layering instead of correcting it, skipped the `DP_MODE` / `DP_RX_WHY` /
 connect in four** with rates ratcheting 14400 → 7200. Suppressing a counter
 lets every existing mechanism run exactly as it already does.
 
-### 5.2 Supporting changes
+### F5.2 Supporting changes
 
 | Change | Why |
 |---|---|
@@ -186,7 +186,7 @@ than *invented*.
 
 ---
 
-## 6. Evidence that the change works
+## F6. Evidence that the change works
 
 24 bench calls, overnight, per `testbench/records/ab149-PREREG.txt` — written
 before any call of the batch existed. 6 per arm per far end, 1901
@@ -220,7 +220,7 @@ restart should look like.
 
 ---
 
-### 6.1 The significance depends on the exclusion, and that is a problem
+### F6.1 The significance depends on the exclusion, and that is a problem
 
 The pre-registered outcome excluded 13 of 23 calls for carrying less than 45 s
 of carrier. Re-scoring the same batch with outcomes that exclude less — chosen
@@ -243,7 +243,7 @@ measurement of a real effect looks like, and it is also what a null looks like
 when a lenient metric is applied to a small sample. **This batch cannot
 distinguish those two, and neither can any re-analysis of it.**
 
-### 6.2 The replication: null
+### F6.2 The replication: null
 
 48 calls per `testbench/records/ab149r-PREREG.txt`, 24 per arm, both far ends,
 interleaved, with the primary outcome changed to one that excludes nothing.
@@ -262,7 +262,7 @@ do nothing for bad ones** — consistent with its mechanism, since suppressing o
 own bad-block counter cannot help when the far end is the one demanding the
 retrain (flag 0x40 is exempt by design).
 
-## 7. What this does not settle
+## F7. What this does not settle
 
 * **n = 5 per arm on the primary outcome.** Only 10 of 24 calls carried 45 s
   of carrier; the rest died early, which is this bench's normal behaviour.

@@ -8,7 +8,7 @@ WHY THIS EXISTS, AND WHY IT IS NOT `reanchor.py`
 arm of `v34handshak` lands an anchor written against the first can start
 matching twice.  That is reported UNUSABLE and `tools/reanchor.py` repairs it.
 
-Finding 432 is the other half, and it is worse.  An anchor can stay UNIQUE and
+Finding F432 is the other half, and it is worse.  An anchor can stay UNIQUE and
 silently come to point somewhere else:
 
   * two anchors here were "the last `t3m_txblock` before the 0x64ad2 comment",
@@ -65,7 +65,7 @@ CASE_NAME = re.compile(r"case\s+(V34HS_\w+):")
 #
 # THE SECOND RULE IS OPT-IN, BECAUSE THE PROSE VERSION DID NOT WORK.
 #
-# Finding 455: `reanchor.py` repaired three anchors in the `v34pcmif` set,
+# Finding F455: `reanchor.py` repaired three anchors in the `v34pcmif` set,
 # reported "0 left for a human", and pointed all three at the WRONG FUNCTION.
 # They would still have read CAUGHT.  Rule 1 cannot see it -- `v34pcmif.c` has
 # no `case V34HS_*` dispatch, so the arm map is empty and the suite is skipped.
@@ -235,12 +235,12 @@ def main():
             #
             # A MUTATION THAT DOES NOT CHANGE THE FILE IS NOT A MUTATION.
             #
-            # `mutate.py` now reports these (finding 572: re-anchoring a
+            # `mutate.py` now reports these (finding F572: re-anchoring a
             # suite after a refactor made five of them in one pass, all
             # carrying `equivalent: true`, so they printed `survived,
             # equivalent` and the totals did not move).  But it reports them
             # as UNUSABLE, and unusable DOES NOT FAIL A RUN -- which is the
-            # property that cost four batches their mutations (finding 347).
+            # property that cost four batches their mutations (finding F347).
             #
             # This is the static half, and it is free: no build, no suite,
             # just a string compare.  It fails.
@@ -255,7 +255,7 @@ def main():
                 # `reanchor.py` repairs these, but nothing FAILED on them:
                 # `mutate.py` prints ANCHOR MATCHES n TIMES and carries on,
                 # and an unusable mutation still leaves the suite reporting
-                # `0 NOT caught` (finding 347, four batches lost mutations
+                # `0 NOT caught` (finding F347, four batches lost mutations
                 # that way).  Counting them here is what makes a lost anchor
                 # visible without running a suite that takes an hour.
                 #

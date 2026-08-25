@@ -22,7 +22,7 @@
  * both from one definition.
  *
  * Plain cdecl, `this` first on the stack -- `mov 0x20(%esp),%ebx` after a
- * 0x1c-byte frame with three saves in it -- finding 215.
+ * 0x1c-byte frame with three saves in it -- finding F215.
  */
 
 #include <stddef.h>
@@ -154,7 +154,7 @@ typedef char v92p4m_cp_word110[
  * the authority; the `.text+0x...` addresses in the per-function comments run
  * in increasing order down the file and are the cheap check that they still
  * do.  Tidying two related handlers back together will silently un-match
- * whatever sits between them.  Finding 7782.
+ * whatever sits between them.  Finding F7782.
  *
  * A macro or a file-scope `static` must therefore live ABOVE the definitions,
  * not beside its first user: a later re-ordering will move a user above it.
@@ -218,7 +218,7 @@ V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
  * The body is the mapper's release and nothing else; the unconditional
  * `Scrambler<unsigned char,unsigned char>::~Scrambler(this + 0x4c)` that
  * follows it on both paths is the COMPILER'S implicit member destruction, not
- * a statement -- the same reading finding 1256 makes of V92Phase3Modulator's
+ * a statement -- the same reading finding F1256 makes of V92Phase3Modulator's
  * 22-byte destructor, and the same reason its source is an empty body.
  *
  * The mapper pointer is NOT nulled after the free, so a second destruction
@@ -306,11 +306,11 @@ int V92Phase4Modulator::generateE1u()
  * the four instruction pairs that say so and D561 carries the ruling.  Written
  * as two members the subscript was out of bounds, the two overlapping stores
  * were the compiler's to order, and GCC 3.4.2 and GCC 13 ordered them
- * differently (finding 4705).
+ * differently (finding F4705).
  *
  * Spelling every block access through the wider array rather than through a
  * local pointer is DELIBERATE and was measured: the bias rides in the
- * addressing mode exactly as finding 3701 predicted, and `compare.py` comes
+ * addressing mode exactly as finding F3701 predicted, and `compare.py` comes
  * out at 410 identical / 78 same size / 606 different size / 401355 bytes,
  * unchanged in every figure.  A local `unsigned char *bits = &bitsExt[...]`
  * reads better and does not: it hoists the address, moves six functions by 27
@@ -323,7 +323,7 @@ int V92Phase4Modulator::generateE1u()
  *
  * THE TWO BODIES ARE THE SAME INSTRUCTIONS IN THE SAME ORDER, differing only
  * in which of %esi and %edi holds the loop counter -- the register allocator's
- * choice, which finding 614 puts in the free column.  So the two source
+ * choice, which finding F614 puts in the free column.  So the two source
  * bodies are identical and what makes CPu a CP and SUVu an SUV is what
  * `pattern` holds, not what these do with it.  Written out twice rather than
  * factored: a shared helper would be one symbol where the object has two.
@@ -491,7 +491,7 @@ int V92Phase4Modulator::generateB1u()
  * source order gives descending emission.  Both orders were compiled: the
  * source below is EXACT and the other spelling misses by exactly those two
  * bytes, which makes the map on this pair a bijection and the object's order
- * decodable.  Finding 7770.
+ * decodable.  Finding F7770.
  */
 void V92Phase4Modulator::resetBeforRRN()
 {
@@ -661,14 +661,14 @@ void V92Phase4Modulator::exitTRN2u()
  * length into a count in SYMBOLS.  The blob holds that block once per
  * function, with no call and no helper symbol anywhere in .text+0x16f20 ..
  * +0x1783a, so it is written out at each site rather than factored into a
- * helper the object does not have.  Finding 4754.
+ * helper the object does not have.  Finding F4754.
  *
  * `recivedSUV` and `recivedPartTwoSilenceRrnSUV` are 177 bytes each and the
  * same 177 bytes -- MEASURED, not asserted: the blob's two bodies compare
  * byte for byte equal.  Same guard, same modulus test, same
  * `.rodata.str1.4:0x3c40` string, same tail.  Two ordinary GLOBAL symbols, not
  * linkonce and not an alias, so the original spelled the body twice --
- * finding 1237's ruling for `reset` against the constructor, one class over.
+ * finding F1237's ruling for `reset` against the constructor, one class over.
  *
  * **THE FOUR-STATEMENT BLOCK IS CONTIGUOUS AND NOTHING BELONGS INSIDE IT.**
  * `word_1c4 = 1` in the two SUV handlers and `symbolCount = 0` in
@@ -676,7 +676,7 @@ void V92Phase4Modulator::exitTRN2u()
  * because the object EMITS their stores there; GCC 3.4.2 at these flags sinks
  * an independent store into the division's schedule, so writing them after the
  * block is what produces the object's emission.  Three functions became
- * byte-identical when they were moved out.  Finding 7770 -- do not "tidy" them
+ * byte-identical when they were moved out.  Finding F7770 -- do not "tidy" them
  * back in.
  * ===========================================================================
  */
@@ -1138,7 +1138,7 @@ int V92Phase4Modulator::generateDataSymbolBeforeRRN()
  * differential tier nor the codegen tier can see the difference, and no
  * message fires on it.  The choice below follows the state each arm serves --
  * `generateB1u` where the state is B1u or its neighbours, `generateRm` where
- * it is Rm's -- and it is a CHOICE, not a reading.  Finding 4820.
+ * it is Rm's -- and it is a CHOICE, not a reading.  Finding F4820.
  *
  * ---------------------------------------------------------------------------
  * WHAT THE MESSAGES ESTABLISH
@@ -1576,7 +1576,7 @@ int V92Phase4Modulator::generateSymbol()
  * remaining 46 bytes are not a permutation of these statements at all and no
  * spelling in the family can close them.  Closest was 27 of 290, in a spelling
  * that separates `byte_42` from `bitsPerSymbol`, and it was declined: closer
- * bytes are not a grade.  Finding 7771 -- do not re-run the search.
+ * bytes are not a grade.  Finding F7771 -- do not re-run the search.
  *
  * THE AMPLITUDE HANDED TO THE MAPPER IS RE-READ FROM THE FIELD, not passed
  * through from the argument: `movswl 0x40(%esi),%eax` at .text+0x1907b, where

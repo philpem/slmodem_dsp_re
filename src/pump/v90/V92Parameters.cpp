@@ -16,11 +16,11 @@
  *     third step after it.
  *
  * The 54 stores were extracted by the same abstract interpretation as the
- * V.90 block's (finding 860's clobber rule; see V90Parameters.cpp), which
+ * V.90 block's (finding F860's clobber rule; see V90Parameters.cpp), which
  * resolved 54 of 54 with nothing computed and nothing unknown.  Every one of
  * the 54 offsets is also read by `loadParams` under a name, so unlike the
  * V.90 block there is not one `unnamed_*` field here and not one type to
- * argue about -- the two readings cover the identical set (finding 861).
+ * argue about -- the two readings cover the identical set (finding F861).
  */
 
 #include "dsplib/V92Parameters.h"
@@ -80,7 +80,7 @@ V92Parameters::setToDefault()
 	 * so the harness demonstrably fires -- and exactly ONE reaches
 	 * positional byte identity.  Nearest near-miss is 6 differing bytes.
 	 * A unique preimage, so the order is decoded rather than fitted
-	 * (7782's ruling).  Finding 7840.
+	 * (7782's ruling).  Finding F7840.
 	 */
 	V92_ECHO_FAST_DECAY_FACTOR = 1.0f;
 	V92_ECHO_SLOW_DECAY_FACTOR = 0.9987f;
@@ -114,7 +114,7 @@ V92Parameters::setToDefault()
  * alias and no hole.  Same shape and same provenance as the V.90 member; see
  * the long comment on that one in V90Parameters.cpp.  `this` arrives at
  * `0x20(%esp)` here against `0x4(%esp)` in `setToDefault`, which is the trap
- * finding 861 records: reading the second as the first shifts every offset
+ * finding F861 records: reading the second as the first shifts every offset
  * down by four and yields a map that is wrong in all 54 lines and looks fine.
  */
 void
@@ -184,7 +184,7 @@ V92Parameters::init()
 	/*
 	 * `mov (%ebx),%eax; mov 0x78(%eax),%eax; test %eax,%eax` at 0x15e60,
 	 * then a call to `loadParams` and `ret` -- so unlike the V.90 `init()`
-	 * there is nothing after it and this member ends here.  Finding 879 for
+	 * there is nothing after it and this member ends here.  Finding F879 for
 	 * why the callee used to be left out, 6400 for the oracle that tested
 	 * it.  The test runs this with the pointer null and non-null.
 	 */

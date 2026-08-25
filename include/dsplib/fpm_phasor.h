@@ -59,7 +59,7 @@ extern short FPM_sin_sign[4];
  * `ext[FPM_PHASOR_SIGN_BELOW + quad]`.  Every index it can form then lands
  * inside a single array object and the behaviour is defined C rather than a
  * bet on what the linker puts where.  D4 is the same fix one word forward.
- * D392 and finding 3700 for the whole derivation.
+ * D392 and finding F3700 for the whole derivation.
  */
 #define FPM_PHASOR_SIGN_BELOW 4
 

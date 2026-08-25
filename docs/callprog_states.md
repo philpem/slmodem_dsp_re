@@ -30,7 +30,7 @@ detector's verdict.
 And the last two name what phase 3 has already built: `toneiir_dialtone_table`
 and `toneiir_busy_table` say, per state, which of the two cadence detectors
 `CALLPROG_Create` made is the one being listened to. That is why only two are
-created (finding 55) -- the machine only ever asks about dial tone and busy.
+created (finding F55) -- the machine only ever asks about dial tone and busy.
 
 Both are cleared, then every state gets the same three "from anywhere"
 transitions, then eleven individual entries are patched in. This document is

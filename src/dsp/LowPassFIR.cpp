@@ -72,7 +72,7 @@ void sysdep_free(void *ptr);
  * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
  * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
  * were compiled and only `delete[]` reproduces the object's shape; finding
- * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ * F7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
  *
  * Behaviourally it is exactly the guard it replaces: the element type is a POD
  * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
@@ -88,7 +88,7 @@ void sysdep_free(void *ptr);
  * reaches transitively -- moved it earlier in the translation unit and cost
  * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
  * them.  That is refinement.md lever 3 with an inline function as the carrier,
- * and finding 7815 is the measurement.
+ * and finding F7815 is the measurement.
  */
 inline void operator delete[](void *p) { sysdep_free(p); }
 

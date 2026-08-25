@@ -8,7 +8,7 @@
  * modulator runs at 7200 Hz; FPM_MRF then lifts its output to the 8000 the
  * datapump interface uses.  The stored frequencies are pre-scaled by 10/9 so
  * that FPM_TONE, which assumes 8 kHz, produces phase increments correct for
- * 7200.  See findings 17 and 24.
+ * 7200.  See findings F17 and F24.
  */
 
 #ifndef DSPLIB_FPM_FSM_H

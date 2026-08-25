@@ -19,7 +19,7 @@
 # emulated calls can be run in bulk, in parallel, while the world compiles.
 #
 # WHAT IT CANNOT TELL YOU: Smart Link against Smart Link is not Smart Link
-# against a Rockwell or a USR.  If the retrain thrashing of finding 1922 is an
+# against a Rockwell or a USR.  If the retrain thrashing of finding F1922 is an
 # interop behaviour, this may reproduce none of it -- which localises the
 # cause to the real path and is worth knowing.  Never quote an emulated rate
 # as a bench rate.

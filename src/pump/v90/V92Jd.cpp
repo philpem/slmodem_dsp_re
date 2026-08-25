@@ -6,7 +6,7 @@
  * unpack resets.  `include/dsplib/V92Jd.h` carries the object map and says
  * where it does and does not follow V90Jd's.
  *
- * Plain cdecl, `this` as the first stack argument (finding 215).  The CRC
+ * Plain cdecl, `this` as the first stack argument (finding F215).  The CRC
  * helper is a duplicate of V90Jd.cpp's rather than shared: the original keeps
  * these in two translation units and each carries its own copy, and a shared
  * header would be a claim about the original that nothing here supports.
@@ -346,7 +346,7 @@ V92Jd::unPackJdPhaseReset()
  *      and advancing unconditionally.  That is the extra jump-table entry:
  *      `cmp $0x9,%eax` over a ten-entry table at .rodata+0x5bc against
  *      V90Jd's `cmp $0x8` over nine.  It is the same eleven the constructor's
- *      `cmp $0xa,%edx; jle` writes (finding 1223), so the bit the twelfth
+ *      `cmp $0xa,%edx; jle` writes (finding F1223), so the bit the twelfth
  *      state reads -- payload 27, framed 46 -- is the one V.92 does not use
  *      as a rate bit and `packJdData` forces to zero.  The BYTE RANGE written
  *      is unchanged: still bits[16..27] over the two states together.

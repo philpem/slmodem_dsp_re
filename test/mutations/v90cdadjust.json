@@ -28,7 +28,7 @@
   "find": "\t\ts = (unsigned char)(6 - mappingParams->shaperSR);\n\t\tkMax = (unsigned char)(42 - s);",
   "replace": "\t\ts = (unsigned char)(6 - mappingParams->shaperSR);\n\t\tkMax = (unsigned int)(36 + mappingParams->shaperSR) + (s - s);",
   "equivalent": true,
-  "note": "The two readings differ only for a shaperSR above 219 or below -36, and there the `d > 42` clamp two statements later takes both to word_0 = 42 and k = shaperSR + 36: d is `k - shaperSR + 6` unsigned, k is at most maxK which is at most 42 over six constellations of at most 128 points, so a shaperSR above 219 needs k >= 213 to keep d under 43 and one below -36 makes d at least k + 43.  Provably unobservable through this member, and the source comment and finding 3403 say so."
+  "note": "The two readings differ only for a shaperSR above 219 or below -36, and there the `d > 42` clamp two statements later takes both to word_0 = 42 and k = shaperSR + 36: d is `k - shaperSR + 6` unsigned, k is at most maxK which is at most 42 over six constellations of at most 128 points, so a shaperSR above 219 needs k >= 213 to keep d under 43 and one below -36 makes d at least k + 43.  Provably unobservable through this member, and the source comment and finding F3403 say so."
  },
  {
   "label": "process clamps the constellation table's d at 41 rather than 42",

@@ -233,7 +233,7 @@ V8Create(const struct v8_cfg *cfg)
 		 * names what the fields mean -- `side` and `op_mode` were called
 		 * operation mode, `offered` the ansPcmLevel, `menu` the ucodeForQts,
 		 * and the two CM extension fields are raw call-function and protocol
-		 * octets.  See finding 164.
+		 * octets.  See finding F164.
 		 *
 		 * Every message ends \r\n -- all of V8's diagnostics do.
 		 */

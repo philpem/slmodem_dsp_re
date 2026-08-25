@@ -36,7 +36,7 @@
  *
  * THE POLARITY THE TWO DETECTORS PRINT IS NOT THE SAME FIELD, and that is
  * the blob's, not a slip here.  `detectFPE` detects on `rDetector2` at
- * +0x3028 and prints `rDetector1.int_24` at +0x3020 (finding 4320).  A
+ * +0x3028 and prints `rDetector1.int_24` at +0x3020 (finding F4320).  A
  * fixture that seeded the two detectors alike could not tell that from the
  * obvious reading, so every trial gives them different polarities and every
  * `detectFPE` trial checks the transcript.
@@ -128,7 +128,7 @@ static unsigned char par_blk[sizeof(V90Parameters)] __attribute__((aligned(8)));
 #define PAR	((V90Parameters *)par_blk)
 
 /*
- * The same varied bytes into both sides.  Never zeros -- finding 230 -- and
+ * The same varied bytes into both sides.  Never zeros -- finding F230 -- and
  * the only pointer re-installed afterwards is `params`, because it is the
  * only one anything here dereferences.
  */

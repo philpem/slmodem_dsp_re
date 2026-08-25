@@ -2,11 +2,11 @@
  * t_dspmath -- the seven float statistics templates against the blob.
  *
  * These are weak symbols, one per `.gnu.linkonce.t.*` section, and until
- * finding 243 they were invisible to `make coverage` on both sides.  They
+ * finding F243 they were invisible to `make coverage` on both sides.  They
  * have `ref_` aliases like anything else, so nothing about testing them is
  * special -- only the `extern "C"` and the asm label, because the alias is
  * `ref_` prepended to the raw mangled string and a plain C++ declaration
- * would mangle it a second time (finding 225).
+ * would mangle it a second time (finding F225).
  *
  * EVERYTHING IS COMPARED AS BITS.  These return floats through st(0), and a
  * NaN compares unequal to itself, so `==` would report a difference that is

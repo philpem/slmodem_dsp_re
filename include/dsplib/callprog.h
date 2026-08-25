@@ -58,14 +58,14 @@
  * "STATE:  %s --> %s", and both arguments index a table of string pointers
  * at .rodata+0x5d40 with the state itself -- so the table index IS the enum
  * value.  The order guessed from emission order was right; this confirms it
- * rather than assuming it.  See finding 142.
+ * rather than assuming it.  See finding F142.
  *
- * Finding 142 also said the table runs on past these ten into the sixteen
+ * Finding F142 also said the table runs on past these ten into the sixteen
  * MESSAGE names, making it an independent check on that enum.  It does not.
  * Exactly ten relocations apply to it; what follows is unrelated data that
  * happens to disassemble as plausible pointers.  The message names are their
  * own table at .rodata+0x5dc0, in a different shape ({code, name} pairs,
- * searched rather than indexed).  See finding 151.
+ * searched rather than indexed).  See finding F151.
  */
 #define CALLPROG_NO_LEGAL_STATE		0
 #define CALLPROG_WAIT_DIAL		1

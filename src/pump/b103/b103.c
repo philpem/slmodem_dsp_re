@@ -193,7 +193,7 @@ b103_delete(struct dp *dp)
  * The status translation
  *
  * B103FP_modem returns the word at fp+0x1c; its low byte is B103's own status
- * (findings 34 and 36).  This is where it becomes a DPSTAT_*:
+ * (findings F34 and F36).  This is where it becomes a DPSTAT_*:
  *
  *     B103 0      -> DPSTAT_OK,      and start asking for data
  *     B103 1..4   -> DPSTAT_OK,      still setting up

@@ -12,7 +12,7 @@
  * differential tier does not care: it calls the BLOB's symbols through their
  * `ref_` aliases and never drives the shipped modem, so "unreachable in
  * production" and "unreachable in this binary" are different questions
- * (findings 701, 702, 7000).
+ * (findings F701, F702, F7000).
  *
  * ===========================================================================
  * A WHOLE V90Modem ON EACH SIDE, BECAUSE THAT IS THE CHEAPEST REAL CHAIN
@@ -98,7 +98,7 @@
  * phase 3 modulator's DIL cursors and the phase 4 modulator's terminal
  * counts.  (This comment first said "never set to 1 by any member of the
  * class", which was true of the five written members and false of the class;
- * finding 7520.)
+ * finding F7520.)
  *
  * EACH SIDE PREPARES ITSELF WITH ITS OWN CODE.  Every setup member --
  * `V90Modulator::reset`, `V90BitsToSymbol::reset`, `setSymbolsBlockSize`,
@@ -136,7 +136,7 @@ extern unsigned int ref_dsplibs_debug_level;
 /*
  * The lifecycle, both sides.  C++ has no syntax for running a constructor
  * over storage that already exists, so both sides go through asm() labels;
- * findings 223 and 224.
+ * findings F223 and F224.
  */
 void modem_ctor1(void *self, unsigned int side, void *modemParams, void *dil,
 		 unsigned int nofSymbols, int compMode, unsigned int flag)
@@ -286,7 +286,7 @@ static unsigned char
 nextb(void)
 {
 	lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xb400u);
-	/* `| 1` so no seeded byte is ever zero; finding 230. */
+	/* `| 1` so no seeded byte is ever zero; finding F230. */
 	return (unsigned char)((lfsr >> 3) | 1u);
 }
 
@@ -399,7 +399,7 @@ plausible_cp(V90CP *cp, int trial)
 	/*
 	 * NOT ZERO, because `initiateRRN`'s V.92 arm stores a zero here and a
 	 * field that already held the value the store writes cannot fail
-	 * (finding 7105).
+	 * (finding F7105).
 	 */
 	cp->byte_13 = 1;
 }
@@ -1554,7 +1554,7 @@ run_initiaterrn(void)
  * The FOUR outcomes, counted from what the BLOB answered rather than
  * predicted: status 1 (`symbolsBlockSize` zero), status 3 (fewer symbols
  * ready than a block, which also EMPTIES the buffer), status 2 (`symbolsDone`
- * past the buffer's capacity -- a POKED state, finding 7430, because nothing
+ * past the buffer's capacity -- a POKED state, finding F7430, because nothing
  * in a properly constructed object can raise it without the mapper having
  * already written past the allocation), status 0 with nothing left over and
  * status 0 with a leftover run the shift loop actually moves.
@@ -2100,7 +2100,7 @@ run_analog_arm(void)
  * edge on each side, and compares everything.
  *
  * WHAT IS REACHED RATHER THAN POKED, now that the eleven exist.  Finding
- * 7520 had to poke `V90Modulator::state` to 1, 2 and 3 because no written
+ * F7520 had to poke `V90Modulator::state` to 1, 2 and 3 because no written
  * member of the class wrote it; `enterPhase3`, `enterPhase4`/`exitDIL`/
  * `initiateFPE` and `enterDataPhase` respectively are those members, and the
  * trials below reach all four values by CALLING them.  What is still poked is

@@ -10,7 +10,7 @@
  * from `detector_create` rather than from this closure; `check_for_valid`
  * and `check_for_valid_easy` are global but nothing in the object calls
  * them -- dtmf_detect carries both inline, and the two out-of-line copies
- * are dead.  Both readings are recorded in finding 1410.
+ * are dead.  Both readings are recorded in finding F1410.
  *
  * See include/dsplib/dtmf.h for the object and for why this is a bank of
  * notches rather than a bank of bandpasses.
@@ -57,7 +57,7 @@ typedef char dtmf_size_check[sizeof(struct dtmf) == 0x98 ? 1 : -1];
  * European plan before this was forced.  Not a tolerance to widen.
  *
  * THIS ONE IS MEASURED AGAINST THE PERIOD COMPILER, not argued from the
- * modern one (finding 1415).  Both forms of this file were built in
+ * modern one (finding F1415).  Both forms of this file were built in
  * tools/toolchain's GCC 3.4.2 container:
  *
  *   plain    `x = notch(...)`   call, then straight to the next block --
@@ -336,7 +336,7 @@ dtmf_progress(struct dtmf *d, const float *samples, short count, short mode)
 	 *                                  no re-extension and gets none
 	 *
 	 * The 0x66 prefix on the narrow compare pays for the byte the narrow
-	 * load saves, which is how this stayed the right size.  Finding 2901.
+	 * load saves, which is how this stayed the right size.  Finding F2901.
 	 */
 	int result = DTMF_NO_DIGIT;
 	int i;

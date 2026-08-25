@@ -159,7 +159,7 @@ struct cadence {
 	 * Always zero.  cadence_create clears it at entry and never sets it,
 	 * so the branch that would build the filter from
 	 * `toneiir_configuration_allpass` -- whose scales pointer is NULL --
-	 * cannot be taken.  See finding 46.
+	 * cannot be taken.  See finding F46.
 	 */
 	int	use_allpass;				/* +0x2a8 */
 

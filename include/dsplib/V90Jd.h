@@ -5,7 +5,7 @@
  * tools/cppstruct.py lists its destructor with the two ordinary variants and
  * not the deleting one, and GCC emits a deleting destructor only for a
  * virtual one -- so offset 0 is a real member and there is no vptr.  Finding
- * 228 is the four classes where that is not true.
+ * F228 is the four classes where that is not true.
  *
  * THE OBJECT IS MOSTLY A BIT VECTOR.  `getBitVector()` returns `this + 2`,
  * and everything from there to +0x49 is 72 bytes each holding 0 or 1.  Its

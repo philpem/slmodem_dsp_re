@@ -45,7 +45,7 @@ void FPM_MTD_delete(struct fpm_mtd *state);
  * tone is present.  The difference is real, not a mistake in either: this
  * module's coefficients are per-tone bandpasses, so `out_of_band` is genuinely
  * the leftover; FPM_TONE's are a notch, so its equivalent quantity is the
- * tone's own share.  See finding 33.
+ * tone's own share.  See finding F33.
  */
 #define FPM_MTD_ABSENT   0	/* signal present, but not in band       */
 #define FPM_MTD_PRESENT  1	/* tone detected                         */

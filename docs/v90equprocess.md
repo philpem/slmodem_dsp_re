@@ -1,7 +1,7 @@
 # `V90Equalizer::process` — the complete decode
 
 *The 9,364-byte hub at `0x38d80`..`0x3b213`,
-`_ZN12V90Equalizer7processEPfjPsS0_Rj`. Finding 5700 is the argument; this is
+`_ZN12V90Equalizer7processEPfjPsS0_Rj`. Finding F5700 is the argument; this is
 the transcription. Every line below was read from `tools/dis.py` on
 `slmodemd/dsplibs.o`; nothing here came from a decompiler.*
 
@@ -10,13 +10,13 @@ The whole function is in `src/pump/v90/V90Equalizer.cpp` and
 `test/unit/t_v90equproc.cpp` drives it in three groups at 140,205 differential
 checks with `make period` at zero failures. **Six of the seven state arms, the
 state 4 jump table, all five re-convert blocks and the whole fixed-point half
-are now driven** -- findings 6500-6503, and 6502 is the region-by-region
+are now driven** -- findings F6500-6503, and 6502 is the region-by-region
 register of what is left.
 
 What remains undriven is **state 1 PHASE3, its eighteen-entry jump table,
 `<TAIL-P3>` and state 6 CHANNEL_VERIFY** -- about 180 lines, all of them
 waiting on a `V90Phase3Demodulator` fixture rather than on anything the object
-forbids. Findings 6200-6203 are the first batch; 6201 records what the object
+forbids. Findings F6200-6203 are the first batch; 6201 records what the object
 makes undrivable (`state` outside 0..6, `mmxMode` with states 0, 1, 2 and 6,
 and three of the eighteen phase 3 sub-cases), 6500 adds a fourth -- the
 `dfeSum` cast at the three forward re-convert blocks, which is driven sixteen
@@ -28,18 +28,18 @@ blocks narrow the DFE output at exactly one of the three, and that is the
 object's: `fistpl 0xbc` at RECONVERT-A (0x39c5c) and RECONVERT-C (0x3a914)
 against `fistps 0x9a` plus `movzwl`/`cwtl` at RECONVERT-B (0x3a70a). It is
 also DEAD -- inverting the cast at all three sites moves zero of 19,231
-checks while a change to the statement above it moves 177. Finding 6500.
+checks while a change to the statement above it moves 177. Finding F6500.
 
 **Two places below were re-read from `dis.py` and did not survive.** §3.4's
 fixed-point LMS is prose here and prose cannot be written from; the arithmetic
-is in finding 6202. And §5's "plus 4 more when `((short *)block_b4)[0] != 0`"
+is in finding F6202. And §5's "plus 4 more when `((short *)block_b4)[0] != 0`"
 is wrong: RECONVERT-D steps `in` by `2*j + 2` floats normally and `2*j + 1`
 when the held sample is present. Treat every summary below as a pointer to an
 address, not as a transcription.
 
 ---
 
-## 0. Signature and frame
+## F0. Signature and frame
 
     void V90Equalizer::process(float *in, unsigned n, short *outSym,
                                float *outFloat, unsigned &nOut)
@@ -66,7 +66,7 @@ Locals that matter (the rest are outgoing-argument slots `0x04`..`0x1c`):
 | `0x74` | `cur`, the `short` read cursor over `block_b4` (fixed-point arm only) |
 | `0x7c` | `e`, the fixed-point error |
 | `0x80` | `softInt`, the soft output as an `int` holding a `short` |
-| `0x84` | `updateCoefs` — see finding 5700 §3 |
+| `0x84` | `updateCoefs` — see finding F5700 §3 |
 | `0x88` | `decision`, `cwtl`-widened from the `short` each slicer returns |
 | `0x8c` | `soft`, the float soft output |
 | `0x9a`/`0x9c`/`0xa0` | `fists`/`fistpl`/`fistpll` scratch |
@@ -76,7 +76,7 @@ Locals that matter (the rest are outgoing-argument slots `0x04`..`0x1c`):
 | `0xb8` | `leSum`, the fixed-point `y` |
 | `0xbc` | `dfeSum`, the fixed-point `d` |
 
-## 1. Two struct changes this batch owns
+## F1. Two struct changes this batch owns
 
 `+0x14c` is **not** padding. `0x3b1b7` reads it and hands it to
 `ResamplerTimingOffset::setTimingOffset(float)`:
@@ -101,7 +101,7 @@ Nothing else in any peer class needs modelling. `V90Parameters` (0x558),
 `V90SpectralVerifier` and `V90PreFilter` already carry every offset this
 function reaches.
 
-## 2. Prologue
+## F2. Prologue
 
     stateCount = 0;                                   /* +0x64 */
     cur = (short *)block_b4 + 1;
@@ -132,7 +132,7 @@ float arm consumes `in` inside the symbol loop instead.
 use, and the finding says so: the flag is set in the epilogue exactly when
 `n` is odd, and the value is the sample the loop could not pair.
 
-## 3. The symbol loop
+## F3. The symbol loop
 
     for (; j < nOut; j++) {
         if (mmxMode) { ...§3.1... } else { ...§3.2... }
@@ -145,7 +145,7 @@ use, and the finding says so: the flag is set in the epilogue exactly when
 `0xb0(this)` into the `0x54(%esp)` spill slot after its calls — so it is a
 field reference in the source and not a cached local.
 
-### 3.1 The fixed-point arm, `0x38fcc`
+### F3.1 The fixed-point arm, `0x38fcc`
 
     s0 = (unsigned short)cur[0];
     s1 = (unsigned short)cur[1];
@@ -170,9 +170,9 @@ and bound are `int`:
 
 The two `idivl`s are signed divides by fields the header already types `int`;
 they stay divides (six signed power-of-two divides exist in the whole object
-and none of them is here — finding 1044).
+and none of them is here — finding F1044).
 
-### 3.2 The float arm, `0x390d0`
+### F3.2 The float arm, `0x390d0`
 
     if (word_68) {                                       /* 0x394b0 */
         array_18[word_20] = word_6c;  word_68 = 0;
@@ -206,7 +206,7 @@ scalar tail** into `%st(1)`, one `faddp %st,%st(1)` at `0x39177` to combine.
 GCC 3.4.2 at `-O3` neither unrolls nor reassociates a float sum, so both the
 unroll and the second accumulator are in the source.
 
-### 3.3 `switch (state)`, `0x390bd`
+### F3.3 `switch (state)`, `0x390bd`
 
     cmp $0x6,%ecx ; ja 39250 ; jmp *0xc00(,%ecx,4)
 
@@ -221,10 +221,10 @@ unroll and the second accumulator are in the source.
 | 6 | `CHANNEL_VERIFY` | `0x39b21` |
 
 Every arm ends by reloading `mmxMode` and `state` and joining `0x39250`,
-which is also the `default`. See finding 5700 §2 for why the tail's
+which is also the `default`. See finding F5700 §2 for why the tail's
 comparisons against 10..16 are live.
 
-### 3.4 The fixed-point error tail, `0x39272`
+### F3.4 The fixed-point error tail, `0x39272`
 
     e = (short)(softInt - decision);
     if (abs(e) > 300 && state > 1) {
@@ -258,12 +258,12 @@ Then, at `0x392d0`:
     word_78 += (unsigned)(e * e);
     block_b8[j] = (short)softInt;
 
-### 3.5 The float error tail, `0x394e1`
+### F3.5 The float error tail, `0x394e1`
 
     fdec = (float)(short)decision;         /* filds -- a 16-bit load */
     err  = soft - fdec;
     /* long double, and that is what selects the object's encoding: see
-       finding 5701.  Every `float` spelling emits `fcoms mem; jbe` and sends
+       finding F5701.  Every `float` spelling emits `fcoms mem; jbe` and sends
        a NaN error down the NOT-high arm; this one emits
        `fld %st(0); fabs; flds; fcomp %st(1); jae` and sends it down the high
        arm, which is what the object does.  Both operand orders work. */
@@ -325,7 +325,7 @@ The wrap at `0x3a2d4`:
 which is the same expression `reset` plants at construction. The fixed-point
 twin is `0x398f5` over `array_ecAligned`/`word_20Saved`.
 
-## 4. The arms
+## F4. The arms
 
 ### state 6 — `CHANNEL_VERIFY`, `0x39b21`
 
@@ -599,7 +599,7 @@ Indices 1..4 and 14..16 fall to `<TAIL-P3>`.
 that spells its own stage, which is class-1 evidence under CLAUDE.md's
 ordering. They are NOT recorded as an enum here because they belong to
 `V90Phase3Demodulator`, and `agent-v90pf3d` is live on that class — finding
-3511's exact shape. Whoever writes this function should either take the
+F3511's exact shape. Whoever writes this function should either take the
 p3d rename in the same branch or leave the labels numeric with these strings
 beside them.
 
@@ -649,14 +649,14 @@ beside them.
 the same odd ordering, with 10..12 folded into one range test both times. That
 is the strongest available hint that the two fields share one enum type, and
 it is why `V90Equalizer::state` can hold values the `enter*` family never
-writes (finding 5700 §2). Recorded as an observation and not acted on: no
+writes (finding F5700 §2). Recorded as an observation and not acted on: no
 string names any of 10..16, and a wrong name is worse than a pad.
 
 ### state 0 — `RESET`, `0x3a0cb`
 
     decision = (short)soft;        /* no slicer at all */
 
-## 5. The four re-convert blocks
+## F5. The four re-convert blocks
 
 `enterDataPhase`, `enterRRN` and `enterFPE` can flip `mmxMode` *inside* the
 symbol loop, and each caller then re-expresses the in-flight state in the
@@ -677,7 +677,7 @@ convert the remaining `n - 2*j` input floats into `block_b4` from index 0
 one differs, so it is three source sites and not one helper — and writing them
 as one helper would be wrong at exactly one of the three.
 
-## 6. Epilogue, `0x38ea7`
+## F6. Epilogue, `0x38ea7`
 
     if (mmxMode)
         for (i = 0; i < nOut; i++) outFloat[i] = (float)block_b8[i];
@@ -709,14 +709,14 @@ read **unsigned**. `1.0f - errorEnergyMeanK` is `dc eb`, which objdump prints
 as `fsubr` and which the architecture calls `FSUB` — `ST(3) = ST(3) - ST(0)`
 — and the divide is `de f1`, `FDIVRP`, `ST(1) = ST(0)/ST(1)`. Read the
 `<== Intel:` annotation `tools/dis.py` appends, never the AT&T mnemonic
-(findings 245, 2156).
+(findings F245, F2156).
 
 **`n == 0` with `word_68` set reads `in[0]`** at `0x39a79`. That is the
 object's behaviour and any harness must pass a buffer with at least one
 element so the reconstruction does not reach undefined behaviour on a trial
 the blob survives (D561).
 
-## 7. What a suite has to drive
+## F7. What a suite has to drive
 
 Seven state arms times two `mmxMode` paths, plus 18 `word_30` cases, plus 5
 distinguished `int_0028` cases, plus both `dsplibs_debug_level` settings —

@@ -1,6 +1,6 @@
 [
  {
-  "label": "NOTE: THE GUARDED STORE IS WRITTEN OUT FIVE TIMES, so every anchor into one of them carries its arm's comment or its following statement with it.  The object repeats the block at all five sites (D500) and factoring it into a helper would move the source away from the object, so finding 1264's trap applies here at five times over: a bare `if (word_cac <= V90CP_BITS - 1) {` matches five times, mutate.py calls that UNUSABLE, and UNUSABLE DOES NOT FAIL A RUN.",
+  "label": "NOTE: THE GUARDED STORE IS WRITTEN OUT FIVE TIMES, so every anchor into one of them carries its arm's comment or its following statement with it.  The object repeats the block at all five sites (D500) and factoring it into a helper would move the source away from the object, so finding F1264's trap applies here at five times over: a bare `if (word_cac <= V90CP_BITS - 1) {` matches five times, mutate.py calls that UNUSABLE, and UNUSABLE DOES NOT FAIL A RUN.",
   "why": "Recorded here because the same shape defeated three anchors in v90mp.json and two in this tree's own suites."
  },
  {
@@ -160,7 +160,7 @@
  },
  {
   "label": "the tail waits on the group size rather than on six",
-  "why": "Finding 4364: the transmitter pads to a whole number of +0x3ba8 and the receiver hardcodes six.  The suite sweeps the group size over 1..6, 12 and 17.",
+  "why": "Finding F4364: the transmitter pads to a whole number of +0x3ba8 and the receiver hardcodes six.  The suite sweeps the group size over 1..6, 12 and 17.",
   "find": "\t\tif (word_cac % 6 == 0) {",
   "replace": "\t\tif (word_ca4 != 0 && word_3ba8 != 0 && word_cac % word_3ba8 == 0) {"
  },

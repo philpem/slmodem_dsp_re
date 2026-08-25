@@ -23,7 +23,7 @@
  * `process` and `makeStateTtransitionTable` index two arrays, at +0x08 and at
  * +0x1008, both with a scale of four; the first is therefore 0x1000 bytes
  * because the second begins there, and the second is 0x1000 bytes because the
- * object ends at 0x2008.  1,024 ints each (finding 1249).
+ * object ends at 0x2008.  1,024 ints each (finding F1249).
  */
 
 #ifndef DSPLIB_V92CONVOLUTIONENCODER_H

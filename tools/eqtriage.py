@@ -44,7 +44,7 @@ in what those instructions name.
          needs no lifter -- this tool sees it, and so would a byteident whose
          bijection were per-live-range rather than per-function.
   RELSEC only a relocation TARGET differs, and one side names a SECTION.
-         Finding 604: the blob's addend rides inline against a section symbol
+         Finding F604: the blob's addend rides inline against a section symbol
          and ours is a named symbol with a zero addend, so the two can name
          the same thing and the printed names cannot say.  Not a difference;
          not resolvable by name either.  byteident calls this UNRESOLVED at
@@ -58,11 +58,11 @@ in what those instructions name.
   MIXED  more than one of the above.
   SCHED  the mnemonic MULTISET is the same and the ORDER differs.  617's
          class; scheduling is free, but a reorder our source's data
-         dependencies would FORBID is a real defect (finding 614), so this
+         dependencies would FORBID is a real defect (finding F614), so this
          needs reading and not a verdict.
   SHAPE  the mnemonic multiset differs -- an inverted branch pair, a sibling
          call against call+ret, a loop idiom, if-conversion (2411).  Finding
-         2900 classified 69 of these by hand.
+         F2900 classified 69 of these by hand.
   LEN    the same byte count decodes to a different NUMBER of instructions.
          Reported apart from SHAPE because it cannot be a permutation.
 
@@ -71,7 +71,7 @@ mechanical oracle could be trusted on a row:
 
   x87    the function contains an x87 instruction.  The object is
          `-mfpmath=387`, and x87 is where every lifter is weakest (CLAUDE.md;
-         findings 1453 and 6203 are cases where the difference between two
+         findings F1453 and F6203 are cases where the difference between two
          "equivalent" sequences is exactly a rounding).  A checker that
          mis-models x87 gives CONFIDENT WRONG verdicts on the functions this
          project cares most about.
@@ -90,7 +90,7 @@ instruction -- and the last row is usually `ret`, whose operand is empty, so
 relocation, 210 relocations in all, and `insns()` emitted the `@` marker for
 **zero** of them.  The normaliser has never fired.
 
-That is finding 134's defect in byteident's own grade-1 test, and it is why
+That is finding F134's defect in byteident's own grade-1 test, and it is why
 this tool disassembles for itself.  `--raw` selects byteident's rows
 unmodified so the size of the artefact can be measured rather than asserted.
 Scope: `insns()` feeds only `alpha_equal`, i.e. grade 1.  Grades 0, RELOC,
@@ -109,7 +109,7 @@ USAGE
     BLOB=/abs/path/dsplibs.o TC_OUT=build/tc_out tools/eqtriage.py
 
 DENOMINATOR.  Printed on every line that carries a verdict, per findings
-2400, 2401 and 3100.
+F2400, F2401 and F3100.
 """
 
 import argparse
@@ -129,7 +129,7 @@ SECTIONS = (".text", ".rodata", ".data", ".bss", ".gnu.linkonce")
 
 # x87 mnemonics are exactly the ones beginning with `f` on this instruction
 # set.  No integer i386 mnemonic does, and the object has no SSE and no
-# 3DNow -- finding 612 bounds the instruction set at `-march=i386`, no `cmov`
+# 3DNow -- finding F612 bounds the instruction set at `-march=i386`, no `cmov`
 # in 1.2 MB.  `fwait` and `fnstsw` count: they are x87 control, and a lifter
 # that drops them drops the status word.
 def is_x87(mnem):
@@ -235,7 +235,7 @@ def diff_kind(ox, oy):
                 x != y and (x[1:].startswith(SECTIONS)
                             or y[1:].startswith(SECTIONS))
                 for x, y in zip(rx, ry)):
-            return "RELSEC"      # finding 604: cannot be compared by name
+            return "RELSEC"      # finding F604: cannot be compared by name
         return "RELOC"
     ox, oy = bx, by
     imm_diff = IMMTOK.findall(ox) != IMMTOK.findall(oy)
@@ -296,7 +296,7 @@ REAL = {"IMM", "DISP", "RELOC", "MIXED", "LEN"}
 
 
 def selftest():
-    """Show the classifier firing, in both directions.  Finding 134.
+    """Show the classifier firing, in both directions.  Finding F134.
 
     The classifier is the only new logic -- the disassembly is objdump's.  So
     the controls are synthetic row lists, which is what lets them be exact: a
@@ -377,7 +377,7 @@ def load():
     if not blob:
         sys.exit("eqtriage.py: NO SYMBOLS read from the blob at %s -- every\n"
                  "  count below would be computed against nothing.  From a\n"
-                 "  worktree, BLOB must be explicit.  Findings 2400, 2401."
+                 "  worktree, BLOB must be explicit.  Findings F2400, F2401."
                  % bi.BLOB)
     ours = {}
     for o in sorted(glob.glob(os.path.join(bi.OURS, "*.o"))):
@@ -407,7 +407,7 @@ def collect(raw=False):
         # under --raw.  x87 and loops are properties of the FUNCTION, not of
         # a normalisation, and taking them from the raw rows made the loop
         # column read a silent zero for every row -- a dead column in a table
-        # printed to be believed, which is findings 2400 and 3100 exactly.
+        # printed to be believed, which is findings F2400 and F3100 exactly.
         # --raw changes what is CLASSIFIED and nothing else, which is what
         # makes the A/B isolate the normaliser.
         #

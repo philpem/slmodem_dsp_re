@@ -68,7 +68,7 @@ struct fpm_smc_cfg {
 	 * are carried here for the consumer of the symbol indices, and for
 	 * V.22 that consumer keeps its own copy of the pointers, so the pair
 	 * below stays on 1200 bit/s for the life of the object however the
-	 * rate changes.  Finding 1522.
+	 * rate changes.  Finding F1522.
 	 */
 	const short *imap;	/* +0x18                                     */
 	const short *qmap;	/* +0x1c                                     */

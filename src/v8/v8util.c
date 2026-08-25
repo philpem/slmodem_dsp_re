@@ -226,7 +226,7 @@ V8_setFilters(struct v8 *v, const short *a, const short *b, const short *c,
  * the function byte for byte.  It cannot change behaviour -- the counter runs
  * 0..39 and the two readings agree over every value it holds -- so no
  * differential test can see it, which is why it is settled against the
- * instruction and not against a test.  Finding 2952.
+ * instruction and not against a test.  Finding F2952.
  */
 void
 V8_V21_reset(struct v8 *v)

@@ -39,8 +39,8 @@
  * can reach the phasor, and `t_fpm_phasor` compares both outputs over all
  * 65536 phases.  Only the DEPENDENCE was removed -- the attribution above
  * rests on the address, the single reference and the binding, and stands
- * without it.  Not `const`: the object's symbol is `D`.  Findings 3620, 3621,
- * 3623, 3624 and 3700-3703, deviation D392.
+ * without it.  Not `const`: the object's symbol is `D`.  Findings F3620, F3621,
+ * F3623, F3624 and F3700-3703, deviation D392.
  */
 short COEF_DC[FPM_IIR_COEFF_PER_SECTION] = {
 	-12971, 12917, 28620, -25834, 12917,

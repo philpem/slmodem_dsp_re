@@ -20,7 +20,7 @@
  * disassembly.  So after each call the test also counts the words that no
  * longer hold their poison and requires that number to be exactly 339, or 338
  * on the arm where `SILENCE_SCR` is not written.  That number is the store
- * map's own claim (finding 861: 340 stores over 339 distinct offsets), and it
+ * map's own claim (finding F861: 340 stores over 339 distinct offsets), and it
  * is checked against a literal, not against the blob.  gates.md rule 1.
  *
  * THE MATRIX EXISTS BECAUSE `setToDefault` READS FOUR THINGS.  It is not a
@@ -38,7 +38,7 @@
  *   - `sessionFlags` bit 0 both ways for the 2400/7740 select, and with
  *     other bits set, so "reads the byte" and "reads bit 0" are distinguished.
  *
- * THE DEBUG LEVEL IS SWEPT 0 TO 3, finding 150's rule.  `setToDefault`'s two
+ * THE DEBUG LEVEL IS SWEPT 0 TO 3, finding F150's rule.  `setToDefault`'s two
  * sites are gated `> 1` and `loadModemParamsData`'s four `edprintf` calls are
  * not gated at all -- `edprintf` formats and encodes unconditionally and only
  * its handoff to `dsplibs_debug_printf` is behind the level (src/core/
@@ -61,7 +61,7 @@
  * does not, on the argument that its 295 reads all go to `xor %eax,%eax;
  * ret`.  Running both sides with the pointer null AND with it pointing at a
  * real string turns that argument into a comparison: if `loadParams` changed
- * anything the blob would move and we would not.  Finding 879.
+ * anything the blob would move and we would not.  Finding F879.
  */
 
 #include <string.h>
@@ -117,7 +117,7 @@ void our_v92_dtor2(void *self) asm("_ZN13V92ParametersD2Ev");
 }
 
 /*
- * The sizes, asserted rather than assumed.  Finding 861 measures both three
+ * The sizes, asserted rather than assumed.  Finding F861 measures both three
  * ways -- the field span, `setToDefault`'s largest displacement and the
  * `sysdep_malloc` immediately before each constructor -- and this is where
  * that stops being prose.  32-bit only: the class holds a pointer, so a
@@ -343,7 +343,7 @@ run_v90_setToDefault(void)
 	dsplib_debug_capture_on = 0;
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
-	/* Finding 149: two silent sides agree about nothing. */
+	/* Finding F149: two silent sides agree about nothing. */
 	diff_eq_int("our gated sites printed something", printed > 0, 1, 0);
 	diff_eq_int("the blob's gated sites printed something",
 		    ref_printed > 0, 1, 0);
@@ -459,7 +459,7 @@ run_v90_loadModemParamsData(void)
 		 * is inside `if (tempPR)`.  So the count is 4 or 5 at levels
 		 * 2 and 3 and 0 below, and it is asserted against those
 		 * literals as well as against the blob's, because two silent
-		 * sides agree about nothing (finding 149).
+		 * sides agree about nothing (finding F149).
 		 */
 		diff_eq_int("transcript line count (case %ld)",
 			    (long)dsplib_debug_capture_lines(0),

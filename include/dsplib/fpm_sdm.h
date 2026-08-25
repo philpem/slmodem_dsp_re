@@ -85,7 +85,7 @@ struct fpm_sdm {
 /*
  * Load a config and clear the register.  There is no separate reset entry
  * point: re-running init over a live object is how the register is cleared,
- * which is what a rate change does (see SetTxRate, finding 1522).
+ * which is what a rate change does (see SetTxRate, finding F1522).
  */
 void FPM_SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg);
 

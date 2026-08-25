@@ -47,7 +47,7 @@ public:
 	 *     ~V92Parameters()               1 B   (a bare `ret`)
 	 *
 	 * `loadParams` used to be left out for the reason given at the same
-	 * place in V90Parameters.h and in finding 879; finding 6400 supersedes
+	 * place in V90Parameters.h and in finding F879; finding F6400 supersedes
 	 * it and records the oracle.
 	 */
 	V92Parameters(_tagModemParameters *mp);

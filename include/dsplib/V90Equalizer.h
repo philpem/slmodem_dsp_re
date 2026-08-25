@@ -6,7 +6,7 @@
  * tools/cppstruct.py lists its destructor with the `D1` and `D2` variants and
  * not the deleting `D0`, and GCC emits a deleting destructor only for a
  * virtual class -- so offset 0 is a real member and there is no vptr to shift every
- * field by four (finding 228).
+ * field by four (finding F228).
  *
  * THE OBJECT IS 336 BYTES, AND THE 328 THIS HEADER USED TO CLAIM WAS A
  * DISPLACEMENT SCAN THAT COULD NOT SEE ITS OWN BLIND SPOT.  The largest
@@ -26,17 +26,17 @@
  *     1c590:  89 c6                   mov    %eax,%esi     <- the equaliser
  *
  * so sizeof is 0x150 = 336.  `test/harness/v90demfix.h` had already been
- * allocating 0x150 for its slot.  A displacement is not a size (finding 215,
+ * allocating 0x150 for its slot.  A displacement is not a size (finding F215,
  * and the V90Jd 0x8c -> 144 worked example in docs/v90cpp.md); a
- * displacement scan over one class is not a bound either.  Finding 1107.
+ * displacement scan over one class is not a bound either.  Finding F1107.
  *
  * ONLY THE FIELDS THE WRITTEN METHODS TOUCH ARE NAMED.  Everything else is
  * `pad_*`, because a field this batch cannot see written is a field this
- * batch cannot claim (findings 223, 224 -- the harness fill makes untouched
+ * batch cannot claim (findings F223, F224 -- the harness fill makes untouched
  * memory compare equal on both sides, so a passing test says nothing about
  * where an untouched field lives).
  *
- * THE CONSTRUCTOR NAMED TWENTY-ONE MORE OF THEM (finding 1230).  It is the
+ * THE CONSTRUCTOR NAMED TWENTY-ONE MORE OF THEM (finding F1230).  It is the
  * one member that touches every allocation the object owns, so six argument
  * pointers, three fixed-size blocks and the twelve words of the six
  * raw/aligned/skew triples came out of it -- `pad_48`, `pad_98`, `pad_b4`,
@@ -58,7 +58,7 @@
 /*
  * BOTH ARE POINTERS HERE, so both are forward-declared and neither header is
  * included.  `V90Parameters` has two incompatible definitions in this tree
- * and no translation unit may include both (finding 1112); `V90Resampler.h`
+ * and no translation unit may include both (finding F1112); `V90Resampler.h`
  * pulls one of them in, and this header is included by `V90Demodulator.h`,
  * which pulls in the other.  The .cpp picks.
  */
@@ -181,14 +181,14 @@ public:
 	 * The other two state entries.  These two return an `int` where every
 	 * other `enter*` in the class returns void: %edi is zeroed at entry,
 	 * set to 1 on the one path that takes the equaliser out of
-	 * fixed-point mode, and moved to %eax at both returns.  Finding 2134.
+	 * fixed-point mode, and moved to %eax at both returns.  Finding F2134.
 	 */
 	int enterRRN();
 	int enterFPE();
 
 	/*
 	 * `_ZN12V90Equalizer14enterDataPhaseEv`, and an `int` for the same
-	 * reason those two are (finding 2134): %esi is zeroed at entry, set to
+	 * reason those two are (finding F2134): %esi is zeroed at entry, set to
 	 * 1 on the one path where `convertEqualizerToMmx` leaves the equaliser
 	 * in fixed-point mode, and moved to %eax at the single return.
 	 */
@@ -282,7 +282,7 @@ public:
 
 	/*
 	 * Data members are public for the reason V90Jd.h gives: the original's
-	 * access specifiers are not recoverable (finding 226), and a single
+	 * access specifiers are not recoverable (finding F226), and a single
 	 * access section is what keeps the class POD, so the .cpp can assert
 	 * every offset below with __builtin_offsetof and the test can put the
 	 * object in a union with a byte array.
@@ -374,7 +374,7 @@ public:
 	 * cast at the test; a cast is a claim that the declaration is wrong
 	 * (docs/cleanup.md §3a) and the declaration is what this batch owns.
 	 * `reset`'s `word_1c - linearEquLength - 1` still computes in unsigned
-	 * and converts, which is why nothing else moved.  Finding 6200.
+	 * and converts, which is why nothing else moved.  Finding F6200.
 	 */
 	int word_20;			/* +0x20 */
 
@@ -578,7 +578,7 @@ public:
 	 * "maxLeCoefValue  = %c%d.%06d" and "minLeCoefValue  = %c%d.%010d".
 	 * They were `linearEquMmxRefLevel` and `word_c0`, which said what
 	 * `setLinearEquBeta` does with +0xbc and nothing at all about +0xc0.
-	 * Finding 2137.  BOTH ARE FLOATS; `reset` writes zero to each, which
+	 * Finding F2137.  BOTH ARE FLOATS; `reset` writes zero to each, which
 	 * is the same word either way.
 	 */
 	float maxLeCoefValue;		/* +0xbc */
@@ -592,7 +592,7 @@ public:
 	 * "linearEquMmxOutputConversionFactor = %c%d.%03d" reads +0xc8.
 	 * +0xc4 was `linearEquMmxBetaScale`, which said what
 	 * `setLinearEquBeta` does with the slot and nothing about what it is;
-	 * +0xc8 was `pad_c8`, and it is a real field.  Finding 2145.
+	 * +0xc8 was `pad_c8`, and it is a real field.  Finding F2145.
 	 *
 	 * The pair is one scaling and its inverse: +0xc4 is
 	 * `2**30 / maxLeCoefValue`, which takes a float coefficient into the
@@ -665,7 +665,7 @@ public:
 	 * "dfeMmxConversionFactor = %c%d.%05de8" and
 	 * "dfeMmxOutputConversionFactor = %c%d.%03d" -- and built from
 	 * `maxDfeCoefValue` the way the linear half's are built from
-	 * `maxLeCoefValue`.  +0x108 was `pad_108`.  Finding 2145.
+	 * `maxLeCoefValue`.  +0x108 was `pad_108`.  Finding F2145.
 	 */
 	float dfeMmxConversionFactor;			/* +0x104 */
 	int dfeMmxOutputConversionFactor;		/* +0x108 */

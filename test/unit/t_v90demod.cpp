@@ -51,7 +51,7 @@
  * forward declaration; the lifecycle block below sets its `params` and reads
  * its +0x48, so it needs the definition.  That header forward-declares
  * `V90Parameters` and includes nothing, so it cannot collide with the
- * definition V90PreFilter.h has already supplied (finding 1112).
+ * definition V90PreFilter.h has already supplied (finding F1112).
  */
 #include "dsplib/V90ConstellationDesigner.h"
 /*
@@ -323,19 +323,19 @@ run_observable(void)
  * `reset`, `reInit` and `enterChannelVerification` reach five sub-objects the
  * `enterPhase3` fixture does not have to wire, and every one of them is
  * reached through a POINTER the two sides would otherwise hold different
- * values of.  The answer is finding 1105's: give both sides THE SAME arena,
+ * values of.  The answer is finding F1105's: give both sides THE SAME arena,
  * so every stored pointer agrees and `compare_all`'s raw comparison of
  * `equ[0]` against `equ[1]` and of the two demodulator slots keeps working
  * with nothing excluded -- and then snapshot the arena, run ours, copy the
  * result away, restore, and run the blob's, so that two writers into one
- * buffer do not hide each other (finding 805's shape).
+ * buffer do not hide each other (finding F805's shape).
  *
  * THE EMBEDDED RESAMPLER IS WIRED BY OFFSET, and that is not laziness.
  * `V90Demodulator::reset` calls `V90Resampler::reset` on the object at +0x94,
  * whose V90Resampler-only fields start at ITS +0x94; but this file cannot
  * include `V90Resampler.h`, because that header carries the OTHER definition
  * of `V90Parameters` and `V90Demodulator.h` has already supplied the union
- * one (finding 1112).  So the four fields are poked by displacement, with the
+ * one (finding F1112).  So the four fields are poked by displacement, with the
  * offsets named against `include/dsplib/V90Resampler.h`'s map.
  */
 
@@ -603,7 +603,7 @@ run_reset(void)
 	 * so a finite-only sweep cannot tell them apart.  The shared fixture's
 	 * `ppm_v` is deliberately all finite (t_vpcmep3.cpp shares it), so the
 	 * NaN is planted HERE, per trial, after `life_setup` -- the same way
-	 * the cursor parameter is.  Findings 2300 and 2410.
+	 * the cursor parameter is.  Findings F2300 and F2410.
 	 */
 	static const unsigned int off_bits[] = {
 		0x3f800000u,	/*   1.0f          */
@@ -683,7 +683,7 @@ run_reset(void)
 					/*
 					 * The store into ANOTHER object, and
 					 * the reason V90Equalizer is 0x150
-					 * bytes (finding 1107).
+					 * bytes (finding F1107).
 					 */
 					diff_eq_int("the equaliser's +0x148 "
 						    "(%ld)",
@@ -843,7 +843,7 @@ run_enterchannelverification(void)
  *      word_0 = 268435, and only above that do `fildll`-with-zero-high and
  *      `fildl` disagree -- by 2^32/6, which is not subtle.  268434, 268435
  *      and 268436 are in the sweep for that, plus 0x80000000 and 0xffffffff.
- *      This is finding 613's case: below the crossing the two readings agree
+ *      This is finding F613's case: below the crossing the two readings agree
  *      over every value, so a sweep that stops at plausible rates tests
  *      nothing about the type.
  *   3. THE `+ 0.5f` IS A ROUNDING AND NOT DECORATION.  8000 mod 6 is 2, so
@@ -1042,7 +1042,7 @@ run_getbitrate(void)
  * '-' for it and agrees on every other value there is, so without this
  * pattern the two spellings are indistinguishable and the sweep proves
  * nothing about the site.  `sawNan` below requires it to have been printed.
- * Findings 2300 and 2410.
+ * Findings F2300 and F2410.
  *
  * NOTHING ELSE IN THE FUNCTION FORKS ON IT.  The saving arm is
  * `V90PF(params)[MIN_STD_FOR_SAVE] >= std`, the object's `flds thresh;
@@ -1151,7 +1151,7 @@ run_sessterm(void)
 		 * the printer.  `(0.0f < mean)` and `(0.0f <= mean)` then
 		 * agreed on every value the sweep produced and the mutation
 		 * that swaps them survived.  Two correlated knobs are one
-		 * knob; findings 223 and 224 are about exactly this.
+		 * knob; findings F223 and F224 are about exactly this.
 		 */
 		for (ii = 0; ii < ST_PATTERNS * 4 * 4 * 4 * 2 * 2; ii++) {
 			static unsigned char ba[BLK_SLOT], bb[BLK_SLOT];
@@ -1335,7 +1335,7 @@ run_sessterm(void)
 	 * The NaN pattern reached the printer.  Without this the whole point
 	 * of pattern 9 is unverified -- the arm is gated on `inPhase3` and
 	 * EIA-6 and a schedule that correlated either with the pattern index
-	 * would silently never print one.  Finding 2410.
+	 * would silently never print one.  Finding F2410.
 	 */
 	diff_eq_int("an unordered mean reached the sign printer", sawNan, 1, 0);
 
@@ -1390,7 +1390,7 @@ extern "C" {
  * Both sides by symbol, ours as well as the blob's: the entry point is
  * `extern "C"`, so its name is its own, and naming it here keeps this file
  * free of `VPcmFloModem.h` -- which it cannot have beside the V90Parameters
- * definition the fixture already carries (finding 1112).
+ * definition the fixture already carries (finding F1112).
  */
 void our_xf_sessterm(void *self) asm("VPCMXF_SessionTermination");
 void ref_xf_sessterm(void *self) asm("ref_VPCMXF_SessionTermination");

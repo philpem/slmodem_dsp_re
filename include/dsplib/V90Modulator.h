@@ -24,7 +24,7 @@
  *
  *     movl $0x70,(%esp) ; call sysdep_malloc ; ... ; call V90Modulator::C1
  *
- * at .text+0x19604, which is finding 1246's oracle: the allocation is
+ * at .text+0x19604, which is finding F1246's oracle: the allocation is
  * `sizeof(V90Modulator)` written by the compiler that laid the class out.  The
  * highest field the constructor writes is the pointer at +0x6c, which ends at
  * 0x70 exactly, so nothing is unaccounted for.
@@ -52,7 +52,7 @@
  * used to say the names stayed offset-derived because "the roles below are
  * read out of `progress`, which is not written yet, and a role that has not
  * been reproduced is not a name".  `progress` and `initiateRRN` are written
- * (finding 7520), so the condition that clause set is discharged:
+ * (finding F7520), so the condition that clause set is discharged:
  *
  *   - +0x2c `state`.  The object's own word: the `default` arm of `progress`'s
  *     switch prints "V90Modulator progress: Illegal state".  1 is phase 3, 2
@@ -82,7 +82,7 @@
  * clears them, and `progress` is undefined before the first `reset`.
  *
  * Data member names are invented; the mangling never carries one (finding
- * 226).  `sessionFlag`, `phase3Modulator` and `phase4Modulator` keep the names
+ * F226).  `sessionFlag`, `phase3Modulator` and `phase4Modulator` keep the names
  * V90SessionFlag.h gave them.
  */
 

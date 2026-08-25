@@ -6,7 +6,7 @@
  * `double` really live; `dsplib/Resampler.h` carries the chain and the
  * vtables.
  *
- * PLAIN CDECL, `this` as the first STACK argument (finding 215).
+ * PLAIN CDECL, `this` as the first STACK argument (finding F215).
  *
  * THE CLASS ADDS ONE FIELD AND ONE BEHAVIOUR.  The field is `timingOffset`;
  * the behaviour is the `timingCorrection` override, which is what turns the

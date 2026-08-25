@@ -11,7 +11,7 @@
  *   - Both sides are seeded with the SAME varied pseudorandom bytes before
  *     every call and are NEVER zeroed.  A zero-filled object would let a
  *     store of 0 that never happened pass, and would make "did anything
- *     happen at all" unanswerable (findings 223, 224).
+ *     happen at all" unanswerable (findings F223, F224).
  *   - The slot is 64 bytes longer than the object and the tail is compared on
  *     both sides against the seed, so a store one byte past the end fails.
  *   - Every call is by SYMBOL through an asm() label.  C++ has no syntax for

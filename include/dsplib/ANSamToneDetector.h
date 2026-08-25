@@ -43,7 +43,7 @@
  *
  * The four tables are 11 and 13 `double`s, they are file-local (the
  * relocations are against the .data SECTION symbol with the offset as an
- * inline addend -- finding 604), and they are transcribed in
+ * inline addend -- finding F604), and they are transcribed in
  * src/dsp/ANSamToneDetector.cpp in the order the object lays them out.  The
  * other seven arguments go straight through in order.
  *
@@ -87,7 +87,7 @@ public:
 	 * `_ZN17ANSamToneDetectorC1Ejjfjfjjj`, so the shape is a
 	 * specification; the names below are the base's names for the
 	 * arguments it receives them as, which is all that is recoverable
-	 * (finding 226).
+	 * (finding F226).
 	 *
 	 *   samples1, samples2   the base divides these by `blockLen`
 	 *   threshold, ratio     the two floats, copied

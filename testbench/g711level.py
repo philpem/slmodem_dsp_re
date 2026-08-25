@@ -31,7 +31,7 @@ before the A-law encoder; `*.modem_rx_8k.wav` is what comes back out of the
 decoder.  Those are the two points either side of the codec, which is why the
 census uses them and not the 9600 Hz pair.  Nothing in d-modem scales the
 network path between the dump and the encoder -- the `conf_adjust_tx_level`
-calls there are all on the splitcomb's loudspeaker ports (finding 1940).  The
+calls there are all on the splitcomb's loudspeaker ports (finding F1940).  The
 receive side proves itself: decoded peaks land on exactly 32256, which is
 A-law's top codeword, so nothing has scaled them.
 

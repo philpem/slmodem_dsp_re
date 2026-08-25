@@ -37,11 +37,11 @@
  * 1200 Hz is Bell 202's mark and 1300 Hz is V.23's, so one detector covers
  * both regions' Caller ID.  MTD_COEF_1_8000 is the odd one of the four -- a
  * tighter pole radius and a gain that matches it -- and nothing here explains
- * why; finding 1507 records it without a reading.
+ * why; finding F1507 records it without a reading.
  *
  * The four are reproduced as bytes.  The closed form above is exact to within
  * 0.05 Hz but does not regenerate them bit-for-bit, which is the same
- * position dtmf_mtd_coeffs.c is in (finding 1413).
+ * position dtmf_mtd_coeffs.c is in (finding F1413).
  */
 
 #include "dsplib/cid.h"
@@ -56,7 +56,7 @@
  *
  * 32-bit only, following `dtmf_rx.c`'s reasoning: 0x160 is a claim about the
  * ABI the blob was built for, and the object really does hold a pointer --
- * the `fpm_mrf` at +0x0c has one at +0x24 (finding 1510).  This header hides
+ * the `fpm_mrf` at +0x0c has one at +0x24 (finding F1510).  This header hides
  * it inside `pad_000`, so the assertion would happen to hold at 64 bits today
  * and would stop holding the moment a later batch names that field.
  * `make check64` is where that would surface, and the guard is what keeps it

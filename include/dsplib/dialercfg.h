@@ -44,13 +44,13 @@
 
 /*
  * The author's own field names are given alongside ours, recovered from
- * GetDialerConfig's dropped debug output (findings 134, 143, 146).  Ours
+ * GetDialerConfig's dropped debug output (findings F134, F143, F146).  Ours
  * were inferred from the modem_get_param name that fills each field.
  *
  * That inference was right for fourteen of the sixteen and WRONG for the
  * make/break pair, which is why every one of these is now tied to a
  * parameter ID read out of the disassembly rather than to a plausible
- * reading of a getter's name.  See finding 146.
+ * reading of a getter's name.  See finding F146.
  */
 struct dialer_cfg {
 	/*
@@ -81,7 +81,7 @@ struct dialer_cfg {
 	 * "TONE_OR_PULSE_FLAG became TONE_DIALING" when it stores 1 and
 	 * "... became PULSE_DIALING" when it stores 0.  An earlier draft
 	 * called this field `pulse_dialing`, under which 1 meant tone --
-	 * see finding 161.
+	 * see finding F161.
 	 */
 	int	tone_or_pulse;		/* +0x20  author: toneOrPulseFlag   */
 

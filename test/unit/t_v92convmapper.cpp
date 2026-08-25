@@ -31,7 +31,7 @@
  * nothing at all, over the whole object and a guard past its end, on both
  * sides.
  *
- * FINDINGS 223 AND 224 STILL APPLY, and they are why the seeds matter more
+ * FINDINGS F223 AND F224 STILL APPLY, and they are why the seeds matter more
  * here rather than less.  A comparison of memory neither side wrote proves
  * nothing, so the slots are filled with varied non-zero bytes that differ on
  * every trial, and the test asserts that the fill did vary -- a fixture that
@@ -71,7 +71,7 @@ void ref_map_dtor2(void *self) asm("ref__ZN9V92MapperD2Ev");
 
 /*
  * `this` is the first STACK argument -- these are plain cdecl and not
- * thiscall (finding 215) -- so a free function of the right shape reaches
+ * thiscall (finding F215) -- so a free function of the right shape reaches
  * them, and the return type `process` actually has is what the fixture
  * declares: the object ends `fistps` into a 16-bit slot and sign-extends
  * with `cwtl`, so the whole of %eax is meaningful and is compared.
@@ -325,7 +325,7 @@ run_mapper_reset(void)
 		}
 	}
 
-	/* Not the same object every time -- findings 223 and 224. */
+	/* Not the same object every time -- findings F223 and F224. */
 	diff_eq_int("reset does not produce one fixed object (%ld)", varied, 1,
 		    0);
 
@@ -496,7 +496,7 @@ run_mapper_process(void)
 		prev = ra;
 	}
 
-	/* Neither always zero nor always the same -- findings 223 and 224. */
+	/* Neither always zero nor always the same -- findings F223 and F224. */
 	diff_eq_int("process returns something (%ld)", nonzero, 1, 0);
 	diff_eq_int("process does not return one fixed value (%ld)", varied, 1,
 		    0);
@@ -557,7 +557,7 @@ run_conv_tables(void)
 			    ref_conv_subset[i], i);
 
 	/* Neither is a constant fill, so the loops above are looking at
-	 * something -- findings 223 and 224 applied to a table. */
+	 * something -- findings F223 and F224 applied to a table. */
 	diff_eq_int("cosetMapping4D is not uniform (%ld)",
 		    V92ConvolutionEncoder::cosetMapping4D[2]
 		    != V92ConvolutionEncoder::cosetMapping4D[4], 1, 0);
@@ -961,7 +961,7 @@ run_conv_process(void)
 		}
 	}
 
-	/* Neither always zero nor always the same -- findings 223 and 224.
+	/* Neither always zero nor always the same -- findings F223 and F224.
 	 * `process` returns one bit out of `output`, so this is the whole of
 	 * its range. */
 	diff_eq_int("process returns something (%ld)", nonzero, 1, 0);

@@ -27,7 +27,7 @@
  * updated bytes back through the shift, and the object's reading feeds the
  * values it started with.  `msgLen` above 2,017 is what gets there, and
  * three cases below do.  Nothing a modem sends is that long; this is finding
- * 3052's shape and the trials leave the plausible range on purpose.
+ * F3052's shape and the trials leave the plausible range on purpose.
  *
  * THE OBJECT IS GIVEN A TAIL, and that is not slack.  At `msgLen = 2200`
  * the loop reads `bits[2182]`, which is `this + 2479` -- 151 bytes past the

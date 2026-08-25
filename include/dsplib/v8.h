@@ -211,7 +211,7 @@ struct v8_cm {
 	 * the JM builder reads.
 	 *
 	 * V8Create's configuration trace prints this field of the LOCAL menu
-	 * as "ansPcmLevel" and `menu` as "ucodeForQts" (finding 164) -- the
+	 * as "ansPcmLevel" and `menu` as "ucodeForQts" (finding F164) -- the
 	 * same offsets carry different meanings depending on whose menu the
 	 * struct holds, so neither name can claim the field outright.
 	 */
@@ -417,7 +417,7 @@ struct v8 {
 	 * first thing looked at; anything but 0 or 1 makes the function
 	 * return having done only the common preamble.
 	 *
-	 * V8Create's configuration trace names four of these (finding 164):
+	 * V8Create's configuration trace names four of these (finding F164):
 	 * `side` ("Caller"/"Answer" -- 0 originates) and `op_mode` (the
 	 * "Operation Mode") were `mode` and `fa48` before it named them, and
 	 * the two timeouts are the signal-detect and message-detect timeouts,

@@ -6,7 +6,7 @@
  *
  * THE CALLING CONVENTION IS PLAIN CDECL.  `this` is the first *stack*
  * argument -- `mov 0x8(%esp),%ebx` after one push -- not %ecx, so nothing
- * here needs an attribute (finding 215).
+ * here needs an attribute (finding F215).
  *
  * THE DEFINITION ORDER IS THE OBJECT'S EMISSION ORDER, which is why the block
  * `process` comes first and the scalar one last: `nm -n` on the blob gives
@@ -58,7 +58,7 @@ inline void operator delete[](void *p) { sysdep_free(p); }
 /*
  * Hold the compiler to the map in the header.  tools/offcheck.py parses
  * `struct name {` out of include/dsplib and compiles it as C, so a class has
- * to assert its own (finding 230).
+ * to assert its own (finding F230).
  */
 #define FLOATFIR_OFF(field, off, tag) \
 	typedef char floatfir_off_##tag[ \

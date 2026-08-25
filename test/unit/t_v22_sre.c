@@ -629,7 +629,7 @@ main(void)
 	/* --- the guards ------------------------------------------------ */
 
 	/*
-	 * Finding 134's argument.  Both of these would go quiet if the tests
+	 * Finding F134's argument.  Both of these would go quiet if the tests
 	 * above were weakened, and with them the only coverage of the two
 	 * properties of init that are not obvious from its name.
 	 */

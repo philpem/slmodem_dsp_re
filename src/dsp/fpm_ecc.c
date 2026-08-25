@@ -173,7 +173,7 @@ FPM_ECC_cancel(struct fpm_ecc *state, short *buf, unsigned short count)
 			 * pointer array, and no test can tell them apart while
 			 * the line holds anything under 0x8000.  Writing the
 			 * two the same way would be a defect of exactly the
-			 * kind finding 613 records.
+			 * kind finding F613 records.
 			 */
 			usym = (unsigned short)line[near_rd];
 			si = imap[(usym >> 8) & 0xff][usym & 0xff];

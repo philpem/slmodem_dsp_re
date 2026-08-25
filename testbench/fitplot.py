@@ -4,7 +4,7 @@
     fitplot.py                       # -> fitplot.png
     fitplot.py --out compare.png
 
-Finding 1911 says Theil-Sen is best or joint-best in every simulated cell with
+Finding F1911 says Theil-Sen is best or joint-best in every simulated cell with
 dud bins, and that plain least squares can fall BELOW the object's crude
 two-point counter there. That is a table of numbers. This is the same claim as
 a picture, because the failure mode is geometric: one wrecked bin drags a
@@ -22,7 +22,7 @@ Five panels, left to right:
      panel showed least squares doing BETTER, contradicting its own caption.
      Leverage lives at the ends.
   4. THE DISTRIBUTION over 2000 trials with random duds, which is what finding
-     1911 actually claims. A single draw cannot show a statistical property,
+     F1911 actually claims. A single draw cannot show a statistical property,
      and showing one as if it could is how a figure lies without any number
      in it being wrong.
   5. REAL -- an actual probe from this bench, with both fits over it, so the
@@ -152,7 +152,7 @@ def main():
     axes[0].set_ylabel("bin level (dB, 10log10 of published energy)")
     axes[0].legend(fontsize=8, loc="lower left")
     fig.suptitle("Tilt estimators on the same probe bins — least squares is "
-                 "dragged by a dud bin, Theil-Sen is not  (finding 1911)",
+                 "dragged by a dud bin, Theil-Sen is not  (finding F1911)",
                  fontsize=11)
     fig.tight_layout(rect=(0, 0, 1, 0.93))
     fig.savefig(args.out, dpi=130)

@@ -1,9 +1,9 @@
 [
  {
-  "note": "COEF_DC's VALUE, against the test that drives the function which reads it.  This set exists because `fpmmtdlayout` -- the same source, paired with `build/test/t_fpm_phasor` -- had been carrying the coefficient's only mutation, and that pairing stopped adjudicating it the moment the phasor stopped reading another translation unit's `.data`.  Without this set the one-word change would have gone from NOT CAUGHT (recorded, with a derivation) to not measured at all, which is worse.  Findings 3621, 3700 and 3703."
+  "note": "COEF_DC's VALUE, against the test that drives the function which reads it.  This set exists because `fpmmtdlayout` -- the same source, paired with `build/test/t_fpm_phasor` -- had been carrying the coefficient's only mutation, and that pairing stopped adjudicating it the moment the phasor stopped reading another translation unit's `.data`.  Without this set the one-word change would have gone from NOT CAUGHT (recorded, with a derivation) to not measured at all, which is worse.  Findings F3621, F3700 and F3703."
  },
  {
-  "note": "COEF_DC is the wideband reference filter, .data 0x081d0, five words in `FPM_iir_filt` layout: two recursive coefficients, two feedforward and an output scale.  Its ONE reference in the whole 1.2 MB object is at .text 0x0a921a, inside `FPM_MTD_detect`.  Finding 3621."
+  "note": "COEF_DC is the wideband reference filter, .data 0x081d0, five words in `FPM_iir_filt` layout: two recursive coefficients, two feedforward and an output scale.  Its ONE reference in the whole 1.2 MB object is at .text 0x0a921a, inside `FPM_MTD_detect`.  Finding F3621."
  },
  {
   "label": "COEF_DC's third coefficient is one out",

@@ -12,7 +12,7 @@ anchor written against the first matches twice.
 
 A doubly-matching anchor is reported UNUSABLE, and UNUSABLE DOES NOT FAIL A
 RUN.  The suite still prints `0 NOT caught`.  Four batches have now silently
-lost mutations that way (finding 347), and the repair each time was the same
+lost mutations that way (finding F347), and the repair each time was the same
 mechanical edit: extend the anchor by whole lines until it is unique again.
 
 WHICH OCCURRENCE
@@ -24,7 +24,7 @@ is made and REPORTED, never guessed silently:
   * the preferred occurrence is the one whose surrounding lines mention the
     suite's own macro prefix most often -- `T44_` for a suite whose source
     region is microstate 44's arm, and so on, which is exactly what the
-    per-arm prefixes introduced by finding 325 are good for; and
+    per-arm prefixes introduced by finding F325 are good for; and
   * every choice is printed with its line number, so a reader can check it.
 
 If no prefix distinguishes them, the mutation is left alone and named.  A
@@ -40,7 +40,7 @@ time.  Run against `v90p3ddec`, that re-anchored nine mutations out of
 `getV90Decision` and into `getV92Decision` and called it "9 re-anchored, 0
 left for a human".  A relocated mutation is worse than a lost one: the
 suite stays green while nine of its claims have changed which code they
-test (finding 2120, and 455 is the same picked-the-wrong-occurrence one
+test (finding F2120, and 455 is the same picked-the-wrong-occurrence one
 occurrence at a time).
 
 So: the sort is keyed on the SCORE ALONE -- the offset is no longer a
@@ -145,7 +145,7 @@ def main():
         m["note"] = (m["note"] + " " if m["note"] else "") + (
             "Anchor carries %d line(s) above it: another arm of this function "
             "spells the same statements, and a doubly-matching anchor reads as "
-            "UNUSABLE rather than as a failure. Finding 347."
+            "UNUSABLE rather than as a failure. Finding F347."
             % lead.count("\n"))
         fixed += 1
 
