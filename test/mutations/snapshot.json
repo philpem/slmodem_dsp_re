@@ -4353,7 +4353,7 @@
    }
   },
   "v90adid": {
-   "key": "f993456a87f599490d6bb3239a7be32a9984ed4ac9bc355724b91e11127fca8e",
+   "key": "daa99ab2da698e1da7b7c21baf960eaba6abc2985ad6ea3e61833fe8ead8103a",
    "summary": "482 mutations: 462 caught (458 by test, 0 by strings), 3 NOT caught, 0 unusable, 17 equivalent, 0 MIScounted",
    "verdicts": {
     "DIL: drop the redundant marked test inside the run": "equivalent",
@@ -6198,7 +6198,7 @@
    }
   },
   "v90modemctor": {
-   "key": "722d668f2b9a2c783a3827dd88603ec12a8a80606aa78c3eef58f7c6ff7c55fa",
+   "key": "fd86499ecd9578ebd6395d701f71b552099c9fb6beceb527c77c3e8f584437ce",
    "summary": "26 mutations: 24 caught (24 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "ctor: the DIL descriptor is not stored": "caught",
@@ -7556,7 +7556,7 @@
    }
   },
   "v90rundemod": {
-   "key": "d9b5d281722406a79a6ebf2a5e016e608cfe6d101c53c1a37e45470181c9370a",
+   "key": "d631e7addfbb3ca6404124ac35b386fe5c2c36b6c7b127bdfe291cc4954edb7e",
    "summary": "77 mutations: 74 caught (74 by test, 0 by strings), 1 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "MP: the gate is inverted": "caught",
@@ -9590,7 +9590,7 @@
    }
   },
   "vpcmep3": {
-   "key": "ae227c820c58b821cb96e78b4a34cf56ba28cf5d5b096fba8fa0c6acac9001d4",
+   "key": "96802a1c23a7f7e7253858a24750f4155f2714c7df3f3ca76ba7a7a6ed921bdd",
    "summary": "23 mutations: 21 caught (21 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
    "verdicts": {
     "externalReset writes the six flags only once": "equivalent",
@@ -9674,7 +9674,7 @@
    }
   },
   "vpcmguard": {
-   "key": "4345844e6e7f029ff2e50ea43a98d52ab39f7acd497218a54fcbca362852d44c",
+   "key": "9237e37a9f838a7b8f377450fc2082d57c92b86f673f64b665d94fbad0bdfe01",
    "summary": "2 mutations: 1 caught (1 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the guard returns quietly instead of stopping": "uncaught",
@@ -9900,7 +9900,7 @@
    }
   },
   "vpcmweak": {
-   "key": "a0bbd051a8238a5210dbd33c794f2c91a195636dc7b8d447fc37a237a060e872",
+   "key": "dcf2c4325a651f0659d584642a1f044631e4a8515170cb5659abacb668066232",
    "summary": "1 mutations: 0 caught (0 by test, 0 by strings), 1 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the comparing translation unit declares the five plain, not weak": "uncaught"

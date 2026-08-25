@@ -81248,6 +81248,21 @@ The last line matters on its own: uniqueness at HEAD would be satisfied just
 as well by an anchor that had drifted onto the `qcLineVerification`
 occurrence, and that is the wrong-repair 7521 warns `anchorcheck` cannot see.
 
+**AND THE SUITE WAS RE-RUN, which is the half the static proof cannot give.**
+`v90rundemod` comes back **77 mutations: 74 caught, 1 NOT caught, 0 unusable,
+2 equivalent** -- identical to its stored verdict at `9ddfc5bc` -- and a
+row-by-row comparison of all 77 verdicts against master's snapshot shows
+**NONE changed**.  The repaired row's own verdict is `uncaught` before and
+`uncaught` after.
+
+That it is UNCAUGHT is not the repair's doing and is worth stating plainly:
+`t_v90rundemod` holds `V90Modem::side` at 2 so that `V90Equalizer::process`'s
+`gccdiverge` entry cannot reach the binary, and `V90Modem::progress` then
+reads none of its four arguments -- so `n` against `n - 1` changes nothing
+that can be observed.  It was the suite's one NOT caught before this batch and
+it still is.  A repair that had drifted onto the other occurrence would have
+shown up here as a verdict that moved, and none did.
+
 ### 7606. The unwritten boundary below `VPcmV34Progress` is now EMPTY, and `t_vpcmguard` loses the two groups whose premise that was
 
 `t_vpcmguard` existed to watch a guard **stop**.  `VPcmV34Progress` called
@@ -81310,6 +81325,24 @@ none can fire.  Retiring them would bring `v34pcmmain.cpp` closer to the object
 batch had no other reason to open, it would take the recorder that the
 surviving assertion reads with it, and mutation anchors in four suites sit in
 that file.  Named here as the next pass's work rather than done half way.
+
+**AND DELETING THE TWO GROUPS COST NOTHING MEASURABLE, which was NOT assumed.**
+Two suites are bound to this binary and both were re-run after the rewrite:
+
+	vpcmguard   2 mutations: 1 caught, 1 NOT caught, 0 unusable, 0 equivalent
+	vpcmweak    1 mutations: 0 caught, 1 NOT caught, 0 unusable, 0 equivalent
+
+Both are **identical to their stored verdicts at `9ddfc5bc`**.  `vpcmguard`'s
+caught row is "the mute path is always taken, so the guard is never reached",
+and the surviving third group still catches it -- with the mute path forced,
+`VPcmV34Progress` is never entered, so `f0004`, both queue counts and the echo
+history all move.  Its NOT-caught row is "the guard returns quietly instead of
+stopping", which was already uncatchable at master because all five
+`VPcmV34*` entry points are defined and `vpcm_notwritten` is unreachable;
+`vpcmweak`'s single row is uncatchable for the same reason one level down.
+So the two rows this rewrite might have cost were the two the tree had already
+lost to its own progress, and it did not cost a third.  Measured because
+`mutsnap.py --check` tolerates STALE and the gate would not have said.
 
 ### 7607. The `movzwl` this batch's own header recorded, and its `src/` shipped without: two casts, two bytes, and a defect no in-object value can expose
 
@@ -81423,6 +81456,31 @@ in, and the instruction column was exact and wrong the whole time.
 
 **+1,454 bytes and +4 symbols, exactly the four functions and nothing else.**
 The 1,062 bytes of tables do not appear because `coverage.py` counts `.text`.
+`tested` moves 1,224 of 1,240 to 1,228 of 1,244 and stays at 99.9%, and the
+`VPcmV34Main.cpp +72` row of the unwritten rollup drops 9,321 bytes / 77
+symbols to 7,867 / 73 -- the same 1,454 and the same 4 seen from the other
+side.
+
+**THE FILE WAS REGENERATED TWICE AND THE SECOND RUN CHANGED NOTHING.**  The
+first green `make phase` ran on a tree where `objtree` read **201 objects for
+200 sources** -- four stale `V90Dil.o` left behind by 7600's rename, in
+`build/repro`, `build/src`, `build/64` and `build-cov/repro`.  The link lines
+are `patsubst` over `$(CXXSRC)` so none of the four was ever linked and the
+differential result was never at risk, but finding 7586 is precisely about
+`coverage.md` regenerated from a tree that was not what it looked like.  So
+the four were deleted and the whole gate re-run at 200/200: **247 passed, 0
+failed, and `git diff docs/coverage.md` empty** -- the file regenerates
+byte-identically.  The numbers above are from the clean tree.
+
+	mutation snapshot: 9 current, 185 stale, 0 never recorded, of 194 registered
+
+against master's 1 current of 192.  Nine were re-run because this batch either
+created them, changed their driver, or changed an anchor in them:
+`vpcmqcline`, `v90modemreset`, `v90dil`, `v90adid`, `v90modemctor`, `vpcmep3`,
+`vpcmguard`, `vpcmweak` and `v90rundemod`.  **Six of the nine came back
+identical to their stored verdict at `9ddfc5bc`, row by row** -- which is what
+says the three fixtures this batch extended and the one driver it rewrote took
+nothing away.
 
 #### Mutation suites
 
