@@ -164,6 +164,15 @@ Cheap, and it finds things no test can:
 A dead store is invisible to every differential test by construction. This is
 the only lever that finds one. Check it on every function in a batch.
 
+**AND THE DELTA RUNS BOTH WAYS -- MOST OF THIS TREE'S ARE EXTRAS, NOT
+ABSENCES.** Lever 2's worked example is a MISSING statement, and that shape has
+been over-read since. Measured over one cluster: three of its four real deltas
+were **extra code in ours**, not absences (7823) -- `calcMtoMatchKtarget` ours
+71 against blob 67, `updateUref` 66 against 64, `unitePhasesInfoOfUref` 203
+against 202. Only `SpectralShaper::process` was an absence. Read the sign
+before reaching for "what statement is missing", and note that
+`instrcount.py`'s columns are `ours, blob, delta`.
+
 **THE PRECONDITION: STRIP ALIGNMENT PADDING FIRST, WHEREVER IT OCCURS.**
 `instrcount.py` counted intra-function padding as code and **inverted the
 triage of five functions** (7793). `printErrorHistogramAndReset` read +12 and

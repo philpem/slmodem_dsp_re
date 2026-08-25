@@ -111,6 +111,19 @@ What works:
 - **After adding to a shared file, re-run every suite over it and read the
   UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
   that does not fail (finding 347).
+- **A HARNESS THAT BUILDS VARIANTS MUST NOT BE ABLE TO REACH THE REAL TREE, and
+  `cp -al` can.** An enumeration harness built its variant directories with
+  `cp -al` and the container's `cp` then wrote THROUGH the hardlinks into the
+  working tree. **Nothing failed** -- every variant is valid C++ that compiles
+  and passes -- so a randomly permuted source would have been committed as the
+  recovered one, with a finding attached saying it was decoded. It was caught by
+  `git status` and repaired with `git checkout --` (finding 7822).
+
+  The shape is worth naming because it defeats the usual defences: no error, no
+  failing test, and the corrupted file is *plausible*. Copy variants with a real
+  copy, or build them under a path the harness cannot resolve back to `src/`,
+  and **`git status` the tree before believing any enumeration result**.
+
 - **THE SESSION SCRATCHPAD IS SHARED BETWEEN AGENTS, so a generic filename is a
   collision waiting to happen.** Every agent under one session gets the same
   scratch directory. A refinement pass wrote its own `order.py` there over the
