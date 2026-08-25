@@ -47,15 +47,15 @@
   "replace": "SPECTRAL_VERIFIER_PSD_OVERLAP_LEN);\n\n\taccumCount = 0;\n\tword_28 = 0;\n}"},
 
  {"label": "the destructor forgets the spectrum",
-  "find": "\tif (spectrum != 0)\n\t\tsysdep_free(spectrum);\n",
+  "find": "\tdelete[] spectrum;\n",
   "replace": ""},
 
  {"label": "the destructor releases the Psd's storage without destroying it",
-  "find": "\t\tpsd_destruct(psd);\n\t\tsysdep_free(psd);",
-  "replace": "\t\tsysdep_free(psd);"},
+  "find": "\tdelete psd;",
+  "replace": "\tsysdep_free(psd);"},
 
  {"label": "the destructor frees the first buffer without testing it",
-  "find": "\tif (buf_18 != 0)\n\t\tsysdep_free(buf_18);",
+  "find": "\tdelete[] buf_18;",
   "replace": "\tsysdep_free(buf_18);"},
 
  {"label": "reset leaves the running flag alone",

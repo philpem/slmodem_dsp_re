@@ -66,27 +66,27 @@
  },
  {
   "label": "the first free is not guarded",
-  "find": "\tif (buf[0] != 0)\n\t\tsysdep_free(buf[0]);",
+  "find": "\tdelete[] buf[0];",
   "replace": "\tsysdep_free(buf[0]);"
  },
  {
   "label": "the last free is not guarded",
-  "find": "\tif (buf[5] != 0)\n\t\tsysdep_free(buf[5]);",
+  "find": "\tdelete[] buf[5];",
   "replace": "\tsysdep_free(buf[5]);"
  },
  {
   "label": "the guard is inverted",
-  "find": "\tif (buf[2] != 0)\n\t\tsysdep_free(buf[2]);",
+  "find": "\tdelete[] buf[2];",
   "replace": "\tif (buf[2] == 0)\n\t\tsysdep_free(buf[2]);"
  },
  {
   "label": "one buffer is never released",
-  "find": "\tif (buf[3] != 0)\n\t\tsysdep_free(buf[3]);\n",
+  "find": "\tdelete[] buf[3];\n",
   "replace": ""
  },
  {
   "label": "the released pointer is cleared afterwards",
-  "find": "\tif (buf[1] != 0)\n\t\tsysdep_free(buf[1]);",
-  "replace": "\tif (buf[1] != 0) {\n\t\tsysdep_free(buf[1]);\n\t\tbuf[1] = 0;\n\t}"
+  "find": "\tdelete[] buf[1];",
+  "replace": "\tdelete[] buf[1];\n\tbuf[1] = 0;"
  }
 ]

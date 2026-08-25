@@ -33,6 +33,41 @@
 
 #include "dsplib/V92BitsToSymbol.h"
 #include "dsplib/V92Transmitter.h"
+
+/*
+ * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
+ * frees each owned sub-object with `if (p) { T::~T(p); sysdep_free(p); }`,
+ * which is what GCC emits for `delete p` when `operator delete` is an inline
+ * wrapper over `sysdep_free` -- and the blob defines and references no
+ * `_ZdlPv` at all, so the codebase replaced the global operator.
+ *
+ * WRITING IT OUT BY HAND IS NOT EQUIVALENT, and that is the whole of finding
+ * 7816's correction to this file's own older comment.  At the destructor's
+ * LAST free the delete-expression emits an ordinary `call sysdep_free`; the
+ * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
+ * frame with it.  refinement.md lever 7.
+ */
+extern "C" void sysdep_free(void *p);
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
+ * AND THE SIZED FORM, FOR THE MODERN BUILD ONLY.  C++14 added
+ * `operator delete(void *, size_t)`, and GCC 13 calls it for `delete p` on a
+ * class with a destructor -- an undefined `_ZdlPvj` in a tree that links no
+ * libstdc++, which is the link failure `dsplib/Resampler.h` documents.
+ *
+ * `__cplusplus >= 201402L` is FALSE under GCC 3.4.2 (199711L), so the compiler
+ * that decides byte identity never sees this.  It is portability plumbing and
+ * carries no claim about the object.
+ */
+#if defined(__cplusplus) && __cplusplus >= 201402L
+inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
+#endif
+
+/*
+ * And the array form, for the POD buffers.  Same evidence, same finding.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
 #include "dsplib/V92ParamsInfo.h"
 #include "dsplib/debug.h"
 
@@ -119,13 +154,9 @@ V92BitsToSymbol::V92BitsToSymbol(unsigned int n, V92Parameters *p)
  */
 V92BitsToSymbol::~V92BitsToSymbol()
 {
-	if (transmitter != 0) {
-		transmitter->~V92Transmitter();
-		sysdep_free(transmitter);
-	}
+	delete transmitter;
 
-	if (symbols != 0)
-		sysdep_free(symbols);
+	delete[] symbols;
 }
 
 /*

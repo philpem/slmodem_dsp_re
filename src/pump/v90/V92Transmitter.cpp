@@ -23,7 +23,17 @@
  * no <new>, and a user-declared placement form makes GCC emit the null test
  * the blob does not have.  So each constructor is called by its mangled name
  * and each destructor through the explicit destructor-call syntax, which
- * needs no header.  The instruction sequence is the blob's either way.
+ * needs no header.
+ *
+ * THAT LAST SENTENCE USED TO READ "the instruction sequence is the blob's
+ * either way", AND IT IS WITHDRAWN FOR THE DESTRUCTOR (finding 7816).  It
+ * holds for `new`, where both spellings emit identically -- which is why the
+ * constructor still goes through the asm() label and loses nothing.  It is
+ * FALSE for a free in TAIL POSITION: the delete-expression emits an ordinary
+ * `call sysdep_free` and the open-coded `p->~T(); sysdep_free(p)` emits a
+ * sibling `jmp`, dropping the frame with it.  So the destructors below use
+ * `delete` over an inline replacement `operator delete`, and that is what
+ * makes them byte-identical.  refinement.md lever 7.
  *
  * THE CALLING CONVENTION IS PLAIN CDECL, `this` as the first stack argument
  * (`mov 0x20(%esp),%esi` after two pushes and a 0x14-byte frame), so nothing
@@ -33,6 +43,41 @@
 #include <stddef.h>
 
 #include "dsplib/V92Transmitter.h"
+
+/*
+ * THE REPLACEMENT `operator delete`, AND IT IS READ OFF THE OBJECT.  The blob
+ * frees each owned sub-object with `if (p) { T::~T(p); sysdep_free(p); }`,
+ * which is what GCC emits for `delete p` when `operator delete` is an inline
+ * wrapper over `sysdep_free` -- and the blob defines and references no
+ * `_ZdlPv` at all, so the codebase replaced the global operator.
+ *
+ * WRITING IT OUT BY HAND IS NOT EQUIVALENT, and that is the whole of finding
+ * 7816's correction to this file's own older comment.  At the destructor's
+ * LAST free the delete-expression emits an ordinary `call sysdep_free`; the
+ * open-coded `p->~T(); sysdep_free(p);` emits a sibling `jmp` and drops the
+ * frame with it.  refinement.md lever 7.
+ */
+extern "C" void sysdep_free(void *p);
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
+ * AND THE SIZED FORM, FOR THE MODERN BUILD ONLY.  C++14 added
+ * `operator delete(void *, size_t)`, and GCC 13 calls it for `delete p` on a
+ * class with a destructor -- an undefined `_ZdlPvj` in a tree that links no
+ * libstdc++, which is the link failure `dsplib/Resampler.h` documents.
+ *
+ * `__cplusplus >= 201402L` is FALSE under GCC 3.4.2 (199711L), so the compiler
+ * that decides byte identity never sees this.  It is portability plumbing and
+ * carries no claim about the object.
+ */
+#if defined(__cplusplus) && __cplusplus >= 201402L
+inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
+#endif
+
+/*
+ * And the array form, for the POD buffers.  Same evidence, same finding.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
 #include "dsplib/V92ModulusEncoder.h"
 #include "dsplib/V92ConvolutionEncoder.h"
 #include "dsplib/V92Precoder.h"
@@ -171,30 +216,25 @@ V92Transmitter::V92Transmitter()
  */
 V92Transmitter::~V92Transmitter()
 {
-	if (bitBuffer != 0)
-		sysdep_free(bitBuffer);
+	delete[] bitBuffer;
 
+	/*
+	 * `modulusEncoder` KEEPS THE EXPLICIT FREE.  The blob makes no
+	 * destructor call on it, and `delete` would invent one if
+	 * `V92ModulusEncoder` ever gains a non-trivial destructor.  Nothing
+	 * may add a call the object does not make.
+	 */
 	if (modulusEncoder != 0)
 		sysdep_free(modulusEncoder);
 
-	if (byte_58 != 0)
-		sysdep_free(byte_58);
+	delete[] byte_58;
 
-	if (precoder != 0) {
-		precoder->~V92Precoder();
-		sysdep_free(precoder);
-		precoder = 0;
-	}
+	delete precoder;
+	precoder = 0;
 
-	if (preFilter != 0) {
-		preFilter->~V92PreFilter();
-		sysdep_free(preFilter);
-	}
+	delete preFilter;
 
-	if (convolutionEncoder != 0) {
-		convolutionEncoder->~V92ConvolutionEncoder();
-		sysdep_free(convolutionEncoder);
-	}
+	delete convolutionEncoder;
 }
 
 /*

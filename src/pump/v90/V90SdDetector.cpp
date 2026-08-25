@@ -26,6 +26,32 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/V90SdDetector.h"
 
+/*
+ * THE REPLACEMENT `operator delete[]`, AND IT IS READ OFF THE OBJECT.  At a
+ * destructor's LAST free the blob makes an ordinary `call sysdep_free` where
+ * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
+ * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
+ * were compiled and only `delete[]` reproduces the object's shape; finding
+ * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ *
+ * Behaviourally it is exactly the guard it replaces: the element type is a POD
+ * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
+ * there is no array cookie to read.
+ *
+ * ONLY THE LAST FREE IN A DESTRUCTOR IS BYTE-EVIDENCE for this.  Away from
+ * tail position the two spellings emit identically, so the others carry the
+ * same spelling because a destructor written with `delete[]` uses it for every
+ * member, not because the object distinguishes them.
+ *
+ * IT IS A LOCAL COPY AND NOT AN INCLUDE ON PURPOSE.  Hoisting this one
+ * definition into `dsplib/sysdep.h` -- which every one of these files already
+ * reaches transitively -- moved it earlier in the translation unit and cost
+ * EIGHT destructors their byte identity, `FloatFIR` and `FloatARMA` among
+ * them.  That is refinement.md lever 3 with an inline function as the carrier,
+ * and finding 7815 is the measurement.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V90SD_OFF(field, off, tag) \
@@ -89,8 +115,7 @@ V90SdDetector::V90SdDetector(float thresh08, float thresh0c, float value10,
  */
 V90SdDetector::~V90SdDetector()
 {
-	if (history != 0)
-		sysdep_free(history);
+	delete[] history;
 }
 
 void

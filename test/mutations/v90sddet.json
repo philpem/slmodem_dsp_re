@@ -31,16 +31,16 @@
   "replace": "\tfor (i = 0; i < historyLength; i++)\n\t\thistory[i] = 0.0f;\n}\n\n/*\n * THE POINTER IS TESTED"},
 
  {"label": "the destructor frees nothing",
-  "find": "\tif (history != 0)\n\t\tsysdep_free(history);",
+  "find": "\tdelete[] history;",
   "replace": ""},
 
  {"label": "the destructor frees without testing the pointer",
-  "find": "\tif (history != 0)\n\t\tsysdep_free(history);",
+  "find": "\tdelete[] history;",
   "replace": "\tsysdep_free(history);"},
 
  {"label": "the destructor nulls what it freed",
-  "find": "\tif (history != 0)\n\t\tsysdep_free(history);",
-  "replace": "\tif (history != 0) {\n\t\tsysdep_free(history);\n\t\thistory = 0;\n\t}",
+  "find": "\tdelete[] history;",
+  "replace": "\tdelete[] history;\n\thistory = 0;",
   "equivalent": true,
   "why": "NO TEST CAN CATCH THIS ONE, and not because the test is weak: the store is not in the binary.  A store to a member in a DESTRUCTOR is dead by definition -- the object's lifetime is ending -- and `-flifetime-dse`, on by default at -O2, deletes it.  Measured, not argued: compiling this file with and without the store under the tree's exact flags gives BYTE-IDENTICAL text for the whole object, and adding `-fno-lifetime-dse` makes `movl $0x0,0x14(%ebx)` appear in `~V90SdDetector` in the second one and not the first.  The blob does not null either, so the reconstruction is right whichever way the compiler went; what this entry records is that the claim in the source comment is unfalsifiable under this build and must not be asserted in the test as though it were checked."},
 

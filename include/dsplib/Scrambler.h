@@ -118,6 +118,32 @@
 
 #include "dsplib/sysdep.h"
 
+/*
+ * THE REPLACEMENT `operator delete[]`, AND IT IS READ OFF THE OBJECT.  At a
+ * destructor's LAST free the blob makes an ordinary `call sysdep_free` where
+ * our explicit `if (p) sysdep_free(p)` makes a sibling `jmp` -- one
+ * instruction fewer, and the sibcall drops the frame with it.  Eight spellings
+ * were compiled and only `delete[]` reproduces the object's shape; finding
+ * 7786 and `docs/method/refinement.md` lever 7 carry the enumeration.
+ *
+ * Behaviourally it is exactly the guard it replaces: the element type is a POD
+ * with no destructor, so `delete[] p` is `if (p) operator delete[](p)` and
+ * there is no array cookie to read.
+ *
+ * ONLY THE LAST FREE IN A DESTRUCTOR IS BYTE-EVIDENCE for this.  Away from
+ * tail position the two spellings emit identically, so the others carry the
+ * same spelling because a destructor written with `delete[]` uses it for every
+ * member, not because the object distinguishes them.
+ *
+ * IT IS IN THE HEADER BECAUSE THE DESTRUCTOR IS.  `~Scrambler` is defined
+ * inline here, so a replacement seen only by `Scrambler.cpp` would leave any
+ * other TU that instantiates it referencing the library's `_ZdaPv`, which
+ * this tree does not link.  Every file that reaches this header therefore
+ * must NOT define its own -- `V90Equalizer.cpp`, which gets here through
+ * `V90Phase4Demodulator.h`, is the one that found that out.
+ */
+inline void operator delete[](void *p) { sysdep_free(p); }
+
 template <class T, class I>
 class Scrambler {
 public:
@@ -141,8 +167,7 @@ public:
 	/* `pLimit` is NOT nulled, so a second destruction double-frees. */
 	~Scrambler()
 	{
-		if (pLimit)
-			sysdep_free(pLimit);
+		delete[] pLimit;
 	}
 
 	/*
@@ -329,8 +354,7 @@ public:
 
 	~Descrambler()
 	{
-		if (pLimit)
-			sysdep_free(pLimit);
+		delete[] pLimit;
 	}
 
 	/* Three word copies, as in `Scrambler`. */

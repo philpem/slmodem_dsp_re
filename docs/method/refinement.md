@@ -595,20 +595,117 @@ were compiled -- guard, braces, implicit `!= 0`, trailing `return`, ternary,
 short-circuit `&&`, if/else, an inlined helper carrying the guard, and scalar
 `delete` -- and **all of them sibcall. Only `delete[]` does not** (7786).
 
-Nine destructors closed on it, four of which were in the SIZE bucket and
-nobody was looking at.
+Nine destructors closed on it in wave 4b, four of which were in the SIZE
+bucket and nobody was looking at; **fifteen more in wave 7** (7814), taking
+grade 0 from 479 to 494.
 
-**Sizing, and it must be done pairwise.** Over the 1251 symbols both objects
-define: 1188 agree, **50 where we sibcall and the object does not**, 13 the
-other way. A raw population ratio would have mixed "the blob does not sibcall
-here" with "the blob has no such function". Two hypotheses died before any
-edit -- the blob tail-calls `sysdep_free` 67 times elsewhere, so it is not a
-declaration property, and the disagreement runs both ways, so it is not a
-flag.
+**+1 INSTRUCTION AT THE SAME BYTE COUNT IS THE SPECIAL CASE, NOT THE RULE, and
+screening on it would have missed nine of wave 7's fifteen.** The sibcall does
+not only swap `call`+`ret` for `jmp` -- **it deletes the frame**. Where the
+destructor's only work is the free, the `sub`/`add` pair and the second `ret`
+go with it:
 
-**Bounded:** nine of the 50 are C symbols and `delete[]` does not exist in a
-`.c`. `V92deleteConstellations` and `V92deleteFilterCoefficients` are 3 bytes
-each with identical signatures.
+    Scrambler<h,h>::~Scrambler   ours 7 insns / 25 bytes
+                                 blob 11 insns / 29 bytes    -> EXACT
+
+So a site is a candidate at **either** delta: +4/+4 where the free is the whole
+body, +1/+0 where the destructor needs the frame anyway (`V90Equalizer` 112 vs
+113 at 541 bytes both, `V90CP` 43 vs 44 at 173 both).
+
+**THE ARITHMETIC IS ALSO THE STOPPING RULE.** Compute what the lever costs at a
+site where it is confirmed, and decline anything that does not reconcile. Six
+C++ destructors were declined that way in wave 7: a 4-instruction delta with a
+**31-byte** gap is not this lever (`V92Precoder`, `V92PreFilter`), and
+`V90SpectralVerifier` at EQUAL instruction count while the sibcall flag
+disagrees is internally impossible for it. `delete[]` there would be a fit and
+7782 draws that line.
+
+**THE ENUMERATION IS NINE SPELLINGS, AND THE TWO THAT DO NOT SIBCALL ARE BOTH
+DELETE-EXPRESSIONS (7816).** 7786's spelling C was `delete p` on a **POD**,
+which sibcalls. On a pointer to a class **with a destructor** the same syntax
+is a different construct --
+
+    delete p    ==>    if (p) { p->~T(); operator delete(p); }
+
+-- and GCC 3.4.2 does not sibcall that call either. So scalar `delete` sits in
+BOTH columns depending on what it deletes, and **what suppresses the tail call
+is the EXPRESSION, not the type**.
+
+That closed ten more symbols over five files. **Anywhere this tree open-codes
+`p->~T(); sysdep_free(p);` is a candidate, and the search is one grep** --
+`V92Precoder` went from 25 instructions in 77 bytes to the blob's 29 in 108 in
+a single compile, and the 31-byte gap that had been read as "register pressure"
+was the expansion missing entirely.
+
+**AND IT WILL BREAK THE MODERN BUILD'S LINK UNTIL YOU ADD THE SIZED FORM.**
+C++14 sized deallocation makes GCC 13 call `operator delete(void *, size_t)`
+for `delete p` on a class with a destructor, which is an undefined `_ZdlPvj`
+in a tree that links no libstdc++ -- every test binary, while the period
+differential is 251 passed / 0 failed. `Resampler.h` documents it and solves it
+with a MEMBER operator; a global sized form guarded on
+`__cplusplus >= 201402L` is inert under 3.4.2 (199711L) and does the same job.
+Either way, prove the guard is inert by re-reading `byteident` across it.
+
+**BUT A DELETE-EXPRESSION RUNS A DESTRUCTOR AND AN EXPLICIT FREE DOES NOT**, so
+take it only where the OBJECT ITSELF makes the destructor call.
+`V92Transmitter::modulusEncoder` is freed by the blob with no such call and was
+declined for exactly that: `delete` would invent one, and nothing may add a
+call the object does not make.
+
+**MEASURE IT PAIRWISE, WITH `tools/sibcensus.py`.** A raw population ratio
+mixes "the blob does not sibcall here" with "the blob has no such function".
+Over the 1251 symbols both objects define, wave 7 re-derived **1207 agree, 36
+where we sibcall and the object does not (32 to `sysdep_free`), 8 the other
+way** -- against 7786's 1188 / 50 / 13, which is wave 4b's nine closures plus a
+tool artefact: **an indirect `jmp *TABLE(,%eax,4)` is a switch and carries an
+`R_386_32` relocation against `.rodata` exactly as a relocated tail call
+carries one against its callee.** Seven switches were being counted as sibling
+calls. Bound each function by its `nm -S` size too, or the `jmp <next symbol>`
+GCC pads with reads as one -- lever 3a's artefact in another costume.
+
+Three hypotheses are dead and should not be re-tried: the blob tail-calls
+`sysdep_free` 67 times elsewhere, so it is not a declaration property; the
+disagreement runs both ways, so it is not a flag; and **all eight of the other
+direction are ABSENCES** -- 7 to 97 instructions of missing body, and in six of
+them the blob's tail-callee is not our last statement at all (7817).
+
+**`delete[]` IS NOT AUTOMATICALLY RIGHT, and the array test must not be our own
+allocation.** Deriving "it is an array" from our `sysdep_malloc(n * sizeof(T))`
+is the reconstruction arguing for itself. The non-circular witness is that the
+class INDEXES the member -- `state_[i]`, `buf + size - 1`, `pLimit + c` -- which
+the differential tier has already validated against the blob. And confirm the
+pointee is a **POD**: on a pointer to a class with a destructor, `delete[]`
+emits a destructor loop and reads an array cookie a malloc'd block does not
+have, which is wrong behaviour and not merely wrong bytes. A `void *` member
+cannot take a delete-expression at all.
+
+**Only the LAST free is byte-evidence.** Away from tail position the two
+spellings emit identically, so the other frees in a destructor carry `delete[]`
+for uniformity, not because the object distinguishes them. Say so in the file.
+
+**AND THE DEFINITION'S POSITION IN THE TU IS ITSELF A LEVER-3 CARRIER (7815).**
+Hoisting the one inline `operator delete[]` into `dsplib/sysdep.h` -- which
+every one of these files already reaches transitively -- **cost eight
+destructors their byte identity, four of them wave 4b's**, while touching no
+destructor and no free. The TU's declaration set was constant across the
+experiment (`FloatIIR.cpp` reached `sysdep.h` under both arrangements and kept
+its symbols); only the inline function's position moved. So each `.cpp` keeps
+its own copy, `Scrambler.h` carries the one case that cannot (its destructor is
+inline in the header), and every file reaching that header is forbidden its
+own. "One type, one home" is about TYPES and undefined behaviour; this is an
+inline function, the duplication is deliberate, and consolidating it needs the
+SET diff re-run.
+
+**Bounded, and the bound is now named to the byte.** `V92deleteConstellations`
+(3 of 173) and `V92deleteFilterCoefficients` (3 of 106) are the purest
+instances of the signature in the object -- byte-identical over 93 of 106
+bytes, residual one 13-byte block -- and `delete[]` does not exist in a `.c`.
+Buying them means asserting `V92ParamsInfo` was a `.cpp` of `extern "C"`
+functions, which this codebase does elsewhere (`v34hstx1.cpp`). **The test is
+a null**: a relocation's PRESENCE proves nothing about a TU (306, 333), there
+are no unrelocated calls out of those five functions and no local text symbols
+in their span to be the target of one. Declined; do not rename the file to buy
+the spelling (7818).
 
 ### 8. Width and signedness — and the DESTINATION's declared type
 

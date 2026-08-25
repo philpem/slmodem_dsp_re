@@ -50,13 +50,13 @@
   },
   {
     "label": "dtor: frees nothing",
-    "find": "\t~Scrambler()\n\t{\n\t\tif (pLimit)\n\t\t\tsysdep_free(pLimit);\n\t}",
+    "find": "\t~Scrambler()\n\t{\n\t\tdelete[] pLimit;\n\t}",
     "replace": "\t~Scrambler()\n\t{\n\t}"
   },
   {
     "label": "dtor: frees unconditionally, so a null pLimit reaches the allocator",
-    "find": "\t~Scrambler()\n\t{\n\t\tif (pLimit)\n\t\t\tsysdep_free(pLimit);\n\t}",
-    "replace": "\t~Scrambler()\n\t{\n\t\tif (1)\n\t\t\tsysdep_free(pLimit);\n\t}"
+    "find": "\t~Scrambler()\n\t{\n\t\tdelete[] pLimit;\n\t}",
+    "replace": "\t~Scrambler()\n\t{\n\t\tsysdep_free(pLimit);\n\t}"
   },
   {
     "label": "D ctor: pInitTap2 takes the near distance",
@@ -70,7 +70,7 @@
   },
   {
     "label": "D dtor: frees nothing",
-    "find": "\t~Descrambler()\n\t{\n\t\tif (pLimit)\n\t\t\tsysdep_free(pLimit);\n\t}",
+    "find": "\t~Descrambler()\n\t{\n\t\tdelete[] pLimit;\n\t}",
     "replace": "\t~Descrambler()\n\t{\n\t}"
   },
   {

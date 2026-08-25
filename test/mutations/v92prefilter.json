@@ -35,18 +35,18 @@
  },
  {
   "label": "the FIR free's null test is dropped",
-  "find": "\tif (fir != 0) {\n\t\tfir->~FloatFIR();\n\t\tsysdep_free(fir);\n\t}",
-  "replace": "\tif (fir != 0)\n\t\tfir->~FloatFIR();\n\tsysdep_free(fir);"
+  "find": "\tdelete fir;",
+  "replace": "\tfir->~FloatFIR();\n\tsysdep_free(fir);"
  },
  {
   "label": "the IIR free's null test is dropped",
-  "find": "\tif (iir != 0) {\n\t\tiir->~FloatIIR();\n\t\tsysdep_free(iir);\n\t}",
-  "replace": "\tif (iir != 0)\n\t\tiir->~FloatIIR();\n\tsysdep_free(iir);"
+  "find": "\tdelete iir;",
+  "replace": "\tiir->~FloatIIR();\n\tsysdep_free(iir);"
  },
  {
   "label": "the destructor frees the FIR twice and the IIR never",
-  "find": "\t\tiir->~FloatIIR();\n\t\tsysdep_free(iir);",
-  "replace": "\t\tiir->~FloatIIR();\n\t\tsysdep_free(fir);"
+  "find": "\tdelete iir;",
+  "replace": "\tdelete fir;"
  },
  {
   "label": "the second sub-object is a FloatFIR, not a FloatIIR",

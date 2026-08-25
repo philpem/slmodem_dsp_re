@@ -29,6 +29,31 @@
 #include "dsplib/V90SpectralVerifier.h"
 
 /*
+ * THE REPLACEMENT `operator delete` / `operator delete[]`, READ OFF THE
+ * OBJECT.  The blob frees the owned `Psd` with `if (p) { Psd::~Psd(p);
+ * sysdep_free(p); }` -- `delete p` over an inline wrapper -- and the two float
+ * buffers with a plain guarded free.  At the destructor's LAST free the
+ * delete-expression emits an ordinary `call sysdep_free` where the open-coded
+ * form emits a sibling `jmp`.  refinement.md lever 7, findings 7786 and 7816.
+ */
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
+ * AND THE SIZED FORM, FOR THE MODERN BUILD ONLY.  C++14 added
+ * `operator delete(void *, size_t)`, and GCC 13 calls it for `delete p` on a
+ * class with a destructor -- an undefined `_ZdlPvj` in a tree that links no
+ * libstdc++, which is the link failure `dsplib/Resampler.h` documents.
+ *
+ * `__cplusplus >= 201402L` is FALSE under GCC 3.4.2 (199711L), so the compiler
+ * that decides byte identity never sees this.  It is portability plumbing and
+ * carries no claim about the object.
+ */
+#if defined(__cplusplus) && __cplusplus >= 201402L
+inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
+#endif
+inline void operator delete[](void *p) { sysdep_free(p); }
+
+/*
  * `Psd::Psd` AND `Psd::~Psd` BY THEIR MANGLED NAMES, for the reason
  * V90Demodulator.cpp gives for `V90Resampler::reset`, plus one this class
  * has on its own: the object allocates the `Psd` with `sysdep_malloc` and
@@ -40,7 +65,10 @@
 extern void psd_construct(void *self, unsigned int length, WindowType window,
 			  unsigned int overlap)
 	asm("_ZN3PsdC1Ej10WindowTypej");
-extern void psd_destruct(void *self) asm("_ZN3PsdD1Ev");
+/*
+ * `psd_destruct` IS GONE: `delete psd` calls `Psd::~Psd` (D1) itself, which
+ * is the same symbol this asm() label named.  Finding 7816.
+ */
 
 /* See V90ConstellationDesigner.cpp for why these are here and why guarded. */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
@@ -116,16 +144,11 @@ V90SpectralVerifier::V90SpectralVerifier(V90Parameters *p)
  */
 V90SpectralVerifier::~V90SpectralVerifier()
 {
-	if (buf_18 != 0)
-		sysdep_free(buf_18);
+	delete[] buf_18;
 
-	if (spectrum != 0)
-		sysdep_free(spectrum);
+	delete[] spectrum;
 
-	if (psd != 0) {
-		psd_destruct(psd);
-		sysdep_free(psd);
-	}
+	delete psd;
 }
 
 void
