@@ -82963,3 +82963,107 @@ least two symbols; the `REGALLOC` bucket is the promotion that decides which of
 the 132 printed `BYTES` entries are already explained, so the printed `BYTES`
 count is correspondingly overstated.  Neither affects grade 0, which is the
 acceptance test and is measured directly.
+
+### 7763. The 7762 fix promotes four functions and demotes none, and the case it was hardest to get right was the self-test, not the fix
+
+Finding 7762 reported that `alpha_equal` stripped only the DESTINATION of a
+zeroing idiom, leaving the identical SOURCE operand to be bound against the
+map that the idiom's own definition was about to replace.  Confirmed by
+reading the code, and now fixed:
+
+    idiom = (mx in ("xor", "sub", "sbb") and len(fx) == 2
+             and fx[0].strip() == dx and fy[0].strip() == dy
+             and bool(BARE_REG.fullmatch(dx)) and bool(BARE_REG.fullmatch(dy)))
+    ux = ([] if idiom else fx[:-1]) if isdef else fx
+
+`sbb r,r` was missing from the set entirely.  It reads the carry flag and
+materialises 0 or -1; it does not read the register, so it ends a live range
+exactly as `xor r,r` does.
+
+**FIRE AND QUIET, measured rather than argued.**  Running the committed
+`alpha_equal` and the fixed one over the same 822 non-grade-0 candidates:
+
+    GAINED grade 1:  4      LOST: 0
+
+    +251 B  _ZN18V92Phase4Modulator9recivedRtEv
+    +193 B  _ZN5V90CPC1Ev
+    +141 B  _ZN18V92Phase4Modulator9recivedEdEv
+    + 98 B  _ZN18V90Phase4Modulator18recivedFirstRrnE2uEv
+
+Zero demotions is the load-bearing half.  A change that loosens a checker can
+only be validated by showing it does not also tighten somewhere, because a
+tightening hidden inside a loosening is invisible in the headline count.
+
+The smallest promotion was checked by hand, and it is a genuine renaming:
+
+    insn  3   blob  mov 0x20(%ebx),%edx   |  ours  mov 0x20(%ebx),%eax
+    insn  4   blob  test %edx,%edx        |  ours  test %eax,%eax
+    insn  7   blob  xor %edx,%edx         |  ours  xor %edx,%edx     <-- identical
+
+All 27 instructions otherwise agree.  Blob `%edx` is bound to our `%eax` at
+insn 3, so when insn 7's identical `xor %edx,%edx` was read as a USE of
+`%edx`, the old code demanded blob `%edx` map to our `%edx` -- already spoken
+for -- and rejected.  The idiom failed precisely when a register had been
+renamed, which is the only situation it exists to handle.  7762's diagnosis
+was exactly right.
+
+**THE SELF-TEST REJECTED MY TEST, NOT MY FIX, AND WAS RIGHT TO.**  The
+guard case I first wrote to prove a non-idiom `xor` still reads its source was
+
+    blob  mov (%esi),%eax ; xor %ebx,%eax     ours  mov (%esi),%eax ; xor %ecx,%eax
+
+expecting rejection.  It returned True and the failure was mine: with `%ebx`
+and `%ecx` bound to nothing else, that IS a valid renaming.  The case only
+tests anything once the source carries a live binding:
+
+    blob  mov (%esi),%ebx ; xor %ebx,%eax     ours  mov (%esi),%ecx ; xor %edx,%eax
+
+which rejects.  Worth recording because the failure mode is not "the test was
+weak" -- a weak test passes quietly.  This one FAILED, and the temptation on
+seeing red immediately after a fix is to assume the fix is wrong and widen it
+until the light goes green, which would have made `alpha_equal` accept any
+`xor` whose operands differ.  The self-test's value here was catching a bad
+test at the moment a bad test was most expensive.
+
+**WHAT THIS FIX DID NOT CHANGE, stated because the first draft of this
+finding got it wrong.**  `alpha_equal` is consulted ONLY where grade 0 has
+already failed, so it cannot move the EXACT count or the denominator.  The
+first draft printed
+
+    grade 0  EXACT   415  (33.3%)
+
+under the heading "corrected tree-wide numbers, superseding 7630", against a
+remembered 419 of 1251 -- inviting the reading that the fix cost four exact
+functions.  It did not and structurally could not.  415 of 1245 was ALREADY
+the baseline: the sibling refinement agent measured it independently from a
+tree that did not contain this fix and reported the same two numbers.  The
+419/1251 figure was a stale tree state, and the drift belongs to whatever
+changed the object set between then and now, not to this commit.  Both blobs
+were also checked to be the same file (`make print-BLOB` resolves to the same
+path as `_default_blob()`), so findings 2400/2401 are not in play.
+
+The fix's entire effect on the tree is:
+
+    grade 1  REGALLOC   40 -> 44        BYTES  132 -> 128
+
+Tree-wide, for reference rather than as a result of this commit:
+
+    grade 0  EXACT           415   (33.3%)     + 5 UNRESOLVED (604)
+    grade 1  REGALLOC         44
+             grade 0 or 1    464   (37.3%)
+             RELOC             3
+             BYTES           128
+             SIZE            650
+
+The general rule this cost twice now (v29data, then here): a number measured
+after a change is not evidence about the change unless the same number was
+measured before it.  Attribution needs a baseline, not a memory.
+
+7630's worklist partition was measured with the defective `alpha_equal`, so
+four of its BYTES entries were never candidates for refinement: they are
+already grade 1 and the only thing between them and grade 0 is the register
+allocator, which no source edit reliably steers.  Three of the four
+(`recivedRt`, `recivedEd`, `recivedFirstRrnE2u`) sit in the
+`V90Phase4Modulator`/`V92Phase4Modulator` cluster that refinement wave 2 was
+about to be pointed at.
+

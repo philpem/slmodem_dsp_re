@@ -255,12 +255,22 @@ def alpha_equal(x, y):
             return False
         dx = fx[-1].strip() if fx else ""
         dy = fy[-1].strip() if fy else ""
+        #
+        # A ZEROING IDIOM READS NOTHING, and treating its source as a use was
+        # a real defect (finding 7762).  `xor %eax,%eax` does not depend on
+        # %eax; nor does `sub r,r`; nor does `sbb r,r`, which materialises the
+        # carry as 0 or -1 and was missing from the set entirely.  Stripping
+        # only the DESTINATION left the identical source operand to be bound
+        # against the stale map -- so the idiom failed precisely when a
+        # register had been renamed, which is the only case it exists for.
+        #
+        idiom = (mx in ("xor", "sub", "sbb") and len(fx) == 2
+                 and fx[0].strip() == dx and fy[0].strip() == dy
+                 and bool(BARE_REG.fullmatch(dx)) and bool(BARE_REG.fullmatch(dy)))
         isdef = bool(fx) and bool(BARE_REG.fullmatch(dx)) and bool(BARE_REG.fullmatch(dy)) and (
-            mx in DEFS or mx.startswith("set") or mx.startswith("cmov")
-            or (mx in ("xor", "sub") and len(fx) == 2
-                and fx[0].strip() == dx and fy[0].strip() == dy))
-        ux = fx[:-1] if isdef else fx
-        uy = fy[:-1] if isdef else fy
+            mx in DEFS or mx.startswith("set") or mx.startswith("cmov") or idiom)
+        ux = ([] if idiom else fx[:-1]) if isdef else fx
+        uy = ([] if idiom else fy[:-1]) if isdef else fy
         rx = REGTOK.findall(" ".join(ux))
         ry = REGTOK.findall(" ".join(uy))
         if len(rx) != len(ry):
@@ -347,6 +357,22 @@ SELF_TESTS = [
      ["mov (%esi),%eax", "mov 0x4(%esi),%ecx", "add %eax,%ecx"],
      ["mov (%esi),%eax", "mov 0x4(%esi),%ecx", "add %ecx,%eax"]),
     ("%esp is pinned", False, ["mov %esp,%eax"], ["mov %ebx,%eax"]),
+    ("xor r,r kills, so it survives a rename (7762)", True,
+     ["mov (%esi),%eax", "xor %eax,%eax", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "xor %ecx,%ecx", "mov %ecx,(%edi)"]),
+    ("sbb r,r kills too, and was missing entirely (7762)", True,
+     ["mov (%esi),%eax", "sbb %eax,%eax", "mov %eax,(%edi)"],
+     ["mov (%esi),%eax", "sbb %ecx,%ecx", "mov %ecx,(%edi)"]),
+    #
+    # THE SOURCE OF A NON-IDIOM `xor` IS READ, so it must bind.  The first
+    # spelling of this case was wrong and the self-test said so: with the
+    # source register bound to nothing else, `xor %ebx,%eax` against
+    # `xor %ecx,%eax` IS a valid renaming and returning True was right.  The
+    # case only tests anything once the source carries a live binding.
+    #
+    ("xor of DIFFERENT registers reads its source, which must bind", False,
+     ["mov (%esi),%ebx", "xor %ebx,%eax", "mov %eax,(%edi)"],
+     ["mov (%esi),%ecx", "xor %edx,%eax", "mov %eax,(%edi)"]),
     ("indexed memory is one operand, not a definition of the scale", False,
      ["movswl 0x56(%ebp,%ebx,2),%eax"], ["movswl 0x56(%ebp,%ebx,4),%eax"]),
 ]
