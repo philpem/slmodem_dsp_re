@@ -203,51 +203,37 @@ V90SpectralShaper::reset(unsigned int id, unsigned int sr,
 	pde.reset(blockLength, 0);
 
 	/*
-	 * THE FILTER IS REACHED THROUGH A HELD POINTER, AND THE OBJECT SAYS SO
-	 * IN ITS CHOICE OF BASE REGISTER.  All fifteen of this function's
-	 * differing bytes were one run, +0x7c..+0x8a, and the whole of it is
-	 * this:
+	 * THE FIFTEEN DIFFERING BYTES ARE HERE, AND THEY ARE A BASE REGISTER --
+	 * DECLINED, do not "fix" it (finding 7825).  They are one contiguous
+	 * run, +0x7c..+0x8a:
 	 *
 	 *     blob   mov 0x8(%esi),%edx ;  mov %edx,0x20(%ebx)
 	 *     ours   mov 0x8(%esi),%edx ;  ... ;  mov %edx,0x68(%esi)
 	 *
-	 * `ssf` is at +0x48 and 0x48 + 0x20 = 0x68, so the two store the SAME
-	 * ADDRESS.  The blob reaches it through `%ebx`, which is still holding
-	 * `&ssf` from the `setFilterCoeff` call above; we recomputed it off
-	 * `this`.  So the difference is not the field, and it is not the
-	 * statement order either -- our source was ALREADY in the object's
-	 * emission order for this store, and lever 1's 10-cell order domain on
-	 * this function had measured no preimage.  It is how the source NAMES
-	 * the sub-object.
+	 * `ssf` is at +0x48 and 0x48 + 0x20 = 0x68, so BOTH STORE THE SAME
+	 * ADDRESS.  The blob reaches it through the pointer still live from the
+	 * `setFilterCoeff` call; we recompute it off `this`.  So `--why`'s
+	 * "NON-REGISTER OPERAND 0x8(%esi),%edx | (%esi),%ecx" is not a
+	 * different field, and it is not statement order either -- this store
+	 * is already where the object emits it, and lever 1's 10-cell order
+	 * domain reached no preimage.
 	 *
-	 * ENUMERATED, 6 spellings, only TWO distinct emissions (finding 7825):
-	 *
-	 *     ssf. on all three                        BYTES 15
-	 *     resetSSFilter() then ssf.blockLength     BYTES 15
-	 *     (&ssf)->blockLength, ssf. elsewhere      BYTES 15
-	 *     a local POINTER held across all three    EXACT     <-- this
-	 *     a local REFERENCE held across all three  EXACT
-	 *     resetSSFilter() then a local pointer     EXACT
-	 *
-	 * THREE PREIMAGES, so what is decoded is a FACT and not a source form
-	 * (rule 0): the sub-object is named ONCE and the name is held across
-	 * all three uses.  The pointer and the reference are indistinguishable
-	 * to the compiler, so this file cannot say which the author typed.
-	 *
-	 * AND THE NEGATIVE IS THE SHARP ONE.  Spelling only the STORE through a
-	 * pointer changes nothing -- it is still BYTES 15.  What matters is
-	 * that the name is live ACROSS the two calls, which is what keeps the
-	 * register allocated; a pointer materialised at the store alone is
-	 * folded straight back into `this`.  This is lever 9's "read it into a
-	 * local first" in its other costume, and it is not a shim: the local is
-	 * an ordinary source construct, not a `volatile` or a cast added to
-	 * move the output.
+	 * Six spellings were compiled and only two emissions exist.  The three
+	 * that reach byte identity ALL introduce a local pointer or reference
+	 * held live across the two calls; the three spelled through `ssf.` --
+	 * including `resetSSFilter()` and including `(&ssf)->blockLength` --
+	 * all stay at fifteen.  **The non-shim domain is exhausted with no
+	 * preimage**, and nothing in the object proves the author wrote a
+	 * local: a base-register choice is `tiers.md`'s FREE column, and the
+	 * one mechanism that makes allocation steerable here is lever 3b's
+	 * scratch-consuming peephole2, which is emission order and not source
+	 * aliasing.  A local added only to lengthen a register's live range is
+	 * fitting the compiler, so 7782 declines it and the measurement is the
+	 * deliverable.
 	 */
-	V90SpectralShapingFilter *f = &ssf;
-
-	f->reset();
-	f->setFilterCoeff(a1, a2, b1, b2);
-	f->blockLength = blockLength;
+	ssf.reset();
+	ssf.setFilterCoeff(a1, a2, b1, b2);
+	ssf.blockLength = blockLength;
 
 	windowLength = (shaperId + 1) * blockLength;
 	writeIndex = shaperId * blockLength;

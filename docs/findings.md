@@ -87496,14 +87496,13 @@ reported a real one-instruction extra as "padding only".  `instrcount.py`
 counts over the symbol's `nm` extent rather than over `objdump
 --disassemble=`, and that is the difference.  **Use `instrcount.py` for this
 question; do not re-derive it beside it.**
-
 ======================================================================
-### 7825. `V90SpectralShaper::reset`: A SUB-OBJECT NAMED ONCE, AND THE BASE REGISTER THAT SAYS SO
+### 7825. `V90SpectralShaper::reset`: THE FIFTEEN BYTES ARE A BASE REGISTER, AND THE ONLY SPELLINGS THAT REACH THEM ARE SHIMS -- DECLINED
 
-`_ZN17V90SpectralShaper5resetEjjffff`, 200 bytes, was **BYTES 15** and is now
-**EXACT**.  Tree-wide grade 0 **509 -> 510**.
+`_ZN17V90SpectralShaper5resetEjjffff`, 200 bytes, **BYTES 15, and it stays
+there.**  The difference is now located exactly and the source is unchanged.
 
-**FIFTEEN DIFFERING BYTES IN ONE CONTIGUOUS RUN, +0x7c..+0x8a**, over six
+**THE FIFTEEN DIFFERING BYTES ARE ONE CONTIGUOUS RUN, +0x7c..+0x8a**, over six
 instructions, and the whole of it is one thing:
 
     blob   mov 0x8(%esi),%edx ;  mov %edx,0x20(%ebx)
@@ -87511,23 +87510,19 @@ instructions, and the whole of it is one thing:
 
 `ssf` -- the embedded `V90SpectralShapingFilter` -- is at **+0x48**, and
 0x48 + 0x20 = 0x68.  **The two instructions store the same address.**  The blob
-reaches it through `%ebx`, which is still holding `&ssf` from the
-`setFilterCoeff` call two instructions earlier; we recomputed the address off
-`this`.
+reaches it through `%ebx`, still holding `&ssf` from the `setFilterCoeff` call
+two instructions earlier; we recompute it off `this`.
 
-**THIS IS THE CASE `--why` DESCRIBES ACCURATELY AND MISLEADINGLY AT ONCE.**  It
-reported `row 36 NON-REGISTER OPERAND  0x8(%esi),%edx | (%esi),%ecx`, which
-reads as a different FIELD being loaded.  No field differs; the run is a base
-register and the schedule that follows from it.  A differing displacement is
-only evidence about a field once you have checked what the base holds.
+**TWO DIAGNOSES THIS KILLS, AND THEY ARE BOTH THE OBVIOUS ONE.**
 
-**IT IS ALSO NOT STATEMENT ORDER, AND THAT WAS ALREADY MEASURED.**  Our source
-had `ssf.blockLength = blockLength;` immediately after the two `ssf` calls,
-which is exactly where the blob emits it -- our source was ALREADY in the
-object's emission order for this store -- and lever 1's 10-cell order domain on
-this function had reached no preimage (recorded in the playbook's rule 0).
-Both of those are consistent and both are true; the free variable was somewhere
-neither looked.
+- `--why` reports `row 36 NON-REGISTER OPERAND  0x8(%esi),%edx | (%esi),%ecx`,
+  which reads as a different FIELD being loaded.  **No field differs.**  A
+  differing displacement is evidence about a field only once you have checked
+  what the base register holds -- here the two displacements name one address.
+- It is **not statement order**, and two independent measurements agree.  Our
+  `ssf.blockLength = blockLength;` already sits where the object emits it, and
+  lever 1's 10-cell order domain on this function had reached no preimage.
+  Both were right; the free variable was somewhere neither looked.
 
 **ENUMERATED, 6 SPELLINGS OF HOW THE SOURCE NAMES THE SUB-OBJECT, and the
 domain collapses to TWO distinct emissions:**
@@ -87539,30 +87534,47 @@ domain collapses to TWO distinct emissions:**
     a local REFERENCE held across all three     EXACT
     resetSSFilter() then a local pointer        EXACT
 
-**THREE PREIMAGES, so a FACT and not a source form** (rule 0): the sub-object
-is named ONCE and the name is held live across all three uses.  The pointer and
-the reference are indistinguishable to GCC 3.4.2, so the file records the fact
-and does not claim to know which the author typed.
+**AND THAT SPLIT IS EXACTLY WHY IT IS DECLINED.**  Every cell that reaches byte
+identity introduces a local the current source does not have, and every cell
+that does not introduce one stays at fifteen.  **The domain of spellings that
+add nothing is exhausted, with no preimage** -- which is 7782's stopping rule,
+and the same shape as `V92Phase4Modulator::reset` (7771) and `VPcmFloModem.cpp`
+(7797/7798): the measurement is the deliverable and the diff is not kept.
 
-**THE NEGATIVE IS THE SHARP HALF, AND IT IS WHAT MAKES THIS A FACT RATHER THAN
-A SHIM.**  Spelling only the STORE through a pointer -- `(&ssf)->blockLength` --
-changes NOTHING; it is still BYTES 15.  What earns the register is the name
-being live ACROSS the two calls.  A pointer materialised at the store alone is
-folded straight back into `this`, so this cannot be described as "adding a
-pointer until the bytes matched": all six cells were compiled, three are the
-shape that works, and the one that isolates the store is the control that says
-why.
+**THE TEST THAT SETTLED IT, and it is the one to reuse: NAME THE INSTRUCTION A
+PLAIN SPELLING COULD NOT HAVE EMITTED.**  For 7819 that instruction exists --
+`movsbl` cannot come from an `int` expression, so the source property is
+FORCED.  Here there is none.  `mov %edx,0x20(%ebx)` against
+`mov %edx,0x68(%esi)` is a base-register choice, which is `tiers.md`'s FREE
+column; this tree has exactly two named exceptions to that column, a
+scratch-consuming `peephole2` (lever 3b) and a spill slot narrower than its
+value (lever 12), and **neither is what fired here**.  A local variable whose
+only effect is to lengthen a register's live range is fitting the compiler as
+surely as a `volatile` is, and CLAUDE.md's rule does not turn on how ordinary
+the construct looks.
 
-**AND IT IS LEVER 9 IN ANOTHER COSTUME.**  Lever 9's fix for an operand order
-is "read the member into a local first", because `tree_swap_operands_p` asks
-whether each operand is a `DECL_P`.  The construct here is the same one and the
-mechanism is a different pass -- naming the sub-object once gives the allocator
-a single value to keep in a register across two calls.  A local variable is an
-ordinary source construct, so this is not the `volatile`/cast class CLAUDE.md
-forbids; the test is that the enumeration contains a matching cell AND a
-non-matching one that differs only in how long the name lives.
+**LEVER 9 IS NOT THE PRECEDENT IT LOOKS LIKE, and the difference is worth
+stating because the two are one keystroke apart.**  Lever 9's "read the member
+into a local first" changes which TREE GCC folds -- `tree_swap_operands_p`
+tests `DECL_P`, so the local changes the emitted comparison AND its NaN
+behaviour, which `make period` can see and which 3529 measured against a real
+NaN.  There is a semantic difference there and a differential test behind it.
+Here the local changes nothing a test could ever observe.  **A local that
+changes what the compiler is asked is a lever; a local that changes only what
+the allocator does with the answer is a shim.**
 
-**Worth trying elsewhere.**  Any function that touches an embedded sub-object
-three or more times around a call to one of its members is a candidate, and the
-tell in the object is a store whose base register is neither `this` nor freshly
-computed.
+**THE CONTROL IS THE PART THAT MAKES THE READING SOUND**, and it is kept
+because it says WHERE the effect lives.  Spelling only the STORE through a
+pointer -- `(&ssf)->blockLength` -- changes nothing at all.  What moves the
+register is the name being live ACROSS the two calls, so the effect is a live
+range and not an addressing mode.  That is also the reason no smaller,
+better-motivated edit exists to be argued for.
+
+**WHAT WOULD ACTUALLY REOPEN IT.**  This is the ONE symbol of the sixteen in
+the V.90 BYTES cluster that lever 3b's certificate reports **EXPOSED**
+(`-fno-peephole2` changes it, scratch `edi`) -- see 7821.  So its allocation IS
+steerable by the established mechanism, which is the translation unit's
+EMISSION ORDER, not source aliasing.  `V90SpectralShaper.cpp` has 10 comparable
+symbols with 6 already exact, so a whole-file permutation risks those six and
+was not attempted here; but that, and not another spelling, is where this
+symbol's remaining chance lies.
