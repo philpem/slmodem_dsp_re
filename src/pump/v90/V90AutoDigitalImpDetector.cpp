@@ -988,6 +988,34 @@ V90AutoDigitalImpDetector::updateUref()
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
 		if (uint_1c00[phase][ucode] != 0) {
+			/*
+			 * THE TWO EXTRA INSTRUCTIONS HERE ARE `fxch`, NOT A
+			 * STATEMENT, so lever 2's reading of this symbol's
+			 * +2 is wrong and the loop body is not short of
+			 * anything.  Instructions 25 and 26 -- `fld %st(1)`
+			 * and `fmul %st(2),%st` -- are the blob's exactly;
+			 * from there the blob subtracts, stores the variance
+			 * and only then forms `mean + 0.5f`, while ours
+			 * computes the rounding first and pays two `fxch` to
+			 * the x87 stack shuffler for it.  The formula itself
+			 * is confirmed by the object (`fmuls 0x9118` then
+			 * `fld mean; fmul` then the subtract), so it is the
+			 * SCHEDULE that differs.  Twelve spellings were
+			 * compiled on the period compiler -- the two
+			 * statements in both orders, a variance temp, a
+			 * rounded temp, both, `mean * mean` in a temp,
+			 * `0.5f + mean`, a named `half`, both multiply
+			 * operand orders and the negated form -- giving THREE
+			 * distinct emissions and NO cell at byte identity.
+			 * Swapping the two statements alone takes the
+			 * instruction count to the blob's exactly and the
+			 * bytes only from 81 to 56, which is hill-climbing
+			 * and is declined under 7782; it also emits the two
+			 * stores in the opposite order to the object's.
+			 * `nm -n` puts this file 34 of 34 in the blob's own
+			 * emission order already, so lever 3 has nothing
+			 * positional to offer either.  Finding 7846.
+			 */
 			float inv = 1.0f / uint_1c00[phase][ucode];
 			float mean = float_1000[phase][ucode] * inv;
 

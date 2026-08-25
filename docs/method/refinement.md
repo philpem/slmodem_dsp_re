@@ -466,6 +466,18 @@ all. It also explains 7796 and 7801 after the fact: nearly every REGALLOC symbol
 is peephole2-touched, which is why aiming whole files at that bucket paid and
 aiming at BYTES did not.
 
+**DO NOT RUN THE TWO COMPARES INSIDE THE PERIOD CONTAINER (7845).** The
+obvious implementation is a shell loop next to the two `g++` calls, and
+**binutils 2.15 has no `objdump --disassemble=SYM`**: both sides come out
+empty, `cmp` calls them equal, and every symbol in every file reads CLEARED --
+the direction that licenses skipping work, so nothing downstream questions it.
+One run reported **24 of 24 CLEARED over two files**; the same script over
+`V92Transmitter.cpp`, whose D1 residual IS a peephole2-allocated `pop`
+register, called that CLEARED too, which is what exposed it. Disassemble on the
+HOST, score through `byteident.py`'s own `body()`, and have the tool print how
+many symbols it found EXPOSED -- a run with zero is a run to distrust, not a
+clean file. Rebuilt that way the same four files read 25 of 45 exposed.
+
 **AND IT HAS BEEN WATCHED FIRE IN BOTH DIRECTIONS, because a certificate that
 licenses SKIPPING work is exactly the shape `gates.md` rule 3 exists for.**
 Permuting the file every way and comparing only where the symbol did not itself

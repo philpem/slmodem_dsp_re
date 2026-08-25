@@ -88144,3 +88144,226 @@ entry is the one thing the checker cannot see.
 Caught here by reading the diff rather than by any check, which is the third
 time today a green gate sat on top of something wrong: 7799's dead detectors,
 7822's harness writing through a hardlink, and this.
+
+### 7840. `V92Parameters::setToDefault`: A BYTE-EXACT SIBLING IS AN ANSWER SHEET FOR ONE HUNK, AND 720 CELLS DECODE THE OTHER
+
+477 bytes, 240 differing, 81 instructions against 81. Two hunks, and they are
+two different kinds of evidence.
+
+**The first came from outside the byte grade entirely.** `loadParams` in the
+same file is **byte-exact** at 1,384 bytes and its body is 54 calls to an
+external `Vparser_read_int`. GCC 3.4.2 may not reorder calls to an unknown
+function, so its emitted call order **is** its source order, and byte-exactness
+makes that the author's. It reads `V92_RRN_SIMULATION_SWITCH` (+0x28) before
+`V92_RRN_START_DELAY` (+0x24) -- and the blob's `setToDefault` emits
+`movl $0x0,0x28(%eax)` ahead of `movl $0xfa0,0x24(%eax)` where ours had them
+the struct's way round. Two independent observables agreeing, so the swap is
+read off the object rather than fitted; it is lever 2's "second observable"
+argument with a sibling function in place of a `.rodata` string order.
+
+**The second is a unique preimage in an exhausted domain.** Every store from
++0x78 up is register-mediated in BOTH objects and every store at or below
++0x74 is direct, so the split set is not a variable and only ORDER is. The six
+ECHO statements at +0x78..+0x8c hold identical values at identical offsets on
+both sides. All **6! = 720** orderings were compiled on the period compiler:
+**720 distinct emissions** -- the map is a bijection, so the harness
+demonstrably fires -- and **exactly one** reaches positional byte identity,
+nearest near-miss at 6 differing bytes. The author's order is
+
+    FAST_DECAY, SLOW_DECAY, FAST_UPDATE_DURATION, SLOW_UPDATE_DURATION,
+    FAST_BETA, SLOW_BETA
+
+which is neither the struct's offset order nor `loadParams`' order. **So the
+two hunks disagree about whether one field list was reused**, and the finding
+says so rather than generalising the first result over the second.
+
+**Rule 0's own note, and it is why the enumeration was licensed.** Our source
+was in ascending struct-offset order -- a transcription from the field map, not
+from the disassembly -- so for this symbol our order was demonstrably *not* the
+answer sheet and the preimage was a real unknown. Where a reconstruction has
+transcribed the emission, the enumeration must be aimed somewhere else.
+
+CLOSED, recovery side of 7782. Grade 0 523 -> 524, nothing lost.
+
+### 7841. `V92Transmitter::~V92Transmitter`: THE NULL ASSIGNMENT IS INSIDE THE GUARD, AND THE OUTER TEST COSTS NOTHING
+
+D1 and D2 were 46 differing bytes of 173 at EQUAL instruction count (54
+against 54 with padding stripped, so `--why`'s bare instruction-count route was
+lever 2's false positive -- 7823's rule fired again).
+
+The whole difference is the basic block one store lives in. The blob's
+`movl $0x0,0x4c(%esi)` sits in the TAKEN arm, after `call sysdep_free`; ours
+was on the fall-through path, because `delete precoder; precoder = 0;` puts the
+delete-expression's own null test around the free and leaves the assignment
+outside it. Five spellings were compiled -- the bare pair, the guarded pair
+with `!= 0` and with the implicit test, the open-coded
+`precoder->~V92Precoder(); sysdep_free(precoder);` form, and the guard with the
+zero left outside -- giving **three distinct emissions, one at byte identity**:
+
+    if (precoder != 0) {
+            delete precoder;
+            precoder = 0;
+    }
+
+GCC 3.4.2 folds the redundant outer test, so this costs no instruction. **D2
+goes EXACT and D1 falls from 46 differing bytes to 2.** The two mutation
+anchors that quoted the old text were re-anchored onto the guard and both are
+still caught (18 of 18 in `v92tx`).
+
+This is lever 7 in a costume it has not worn before: the delete-expression is
+right, and what was wrong was the STATEMENT it was paired with.
+
+### 7842. THE SAME FILE'S DEFINITION ORDER IS A NET LOSS OF ONE, AND `C1`-BEFORE-`C2` IS NOT REACHABLE FROM SOURCE
+
+D1's two residual bytes are `pop %edx` where we emit `pop %eax` -- i386.md's
+esp-adjust-to-pop peephole2, whose `match_scratch` comes off the round-robin
+cursor, so D1 is EXPOSED in lever 3b's sense and lever 3 is exactly the lever
+for it.
+
+The blob emits `V92Transmitter.cpp` as **D2, D1, C1, C2, reset, process**; we
+emit **C2, C1, D2, D1, reset, process**. Moving the destructor block above the
+constructor (a checked line-multiset permutation) reaches **D2, D1, C2, C1** and
+is a **net loss of one**: D1 gains byte identity and **C1 and C2 both lose
+theirs**, because the cursor state now arriving at them is the destructors' and
+not the file head's. `process` did not move at either arrangement.
+
+**The blob's constructor clone order is not reachable.** GCC 3.4.2 emits this
+class's constructor clones C2-first whatever the source says, and the blob has
+C1 first, so the file cannot hold both. Reverted; the guard fix of 7841 is
+kept and the measurement is written into the destructor's own comment. 7797's
+ruling -- the measurement is the deliverable, the diff is not.
+
+### 7843. `V90BitsToSymbol`: THE BLOB'S `nm -n` IS THE ORIGINAL'S SOURCE ORDER HERE, AND READING IT OFF CLOSED TWO FUNCTIONS NOBODY EDITED
+
+GCC 3.4.2 emits this file's members in source order -- our own object proves it,
+symbol for symbol, against our own file. So the blob's `nm -n` reads the
+original's definition order straight off the object:
+
+    constructor, destructor, reset, resetNoSpectral, nofBitsForNextTime,
+    setSymbolsBlockSize,
+    process(unsigned char *, unsigned &, short *),
+    process(unsigned char *, unsigned),
+    process(unsigned &, short *)
+
+We had the two reset members at the BOTTOM of the file and the three `process`
+overloads in the reverse order -- **4 of 11 symbols in place**. Permuting the
+six blocks to the object's order takes the file to **11 of 11** and closes
+**both** of its remaining byte differences: `process(Ph, Rj, Ps)` at 55
+differing bytes of 484 and `process(Rj, Ps)` at 11 of 375. **Neither function
+was touched**, and nothing anywhere in the tree was lost (the EXACT set was
+diffed, not the count).
+
+Grade 0 525 -> 527. This is 7796's lever aimed at a BYTES bucket and paying,
+which 7796's own tally said it would not (0 of 9 there); the difference is that
+this file's order was read OFF the object rather than guessed, so the target was
+the whole file's order and not a candidate symbol.
+
+### 7844. `V90ConnectionEvaluator::reset` SITS AT THE BLOB'S OWN EMISSION INDEX, WITH THE BLOB'S OWN PREDECESSORS, AND DID NOT MOVE ONE BYTE
+
+433 bytes, 120 differing, 87 instructions against 87, rejecting at row 9 on
+`mov` against `xor` -- which is not `alpha_equal`'s zeroing-idiom artefact
+(7762) but the post-reload scheduler filling a slot differently.
+
+The function is EXPOSED (the file compiles differently under
+`-fno-peephole2`), and it sat at **emission index 0**, where 7808 says a
+reorder cannot reach it at all. The destructor was moved above it so the file
+now emits **D2, D1, reset** -- the blob's own first three, in the blob's own
+order. **Not one of the 120 bytes moved.** C1 and C2 are CLEARED by the lever
+3b certificate and duly stayed byte-exact across the move.
+
+That is 3a's "index-for-index agreement is not sufficient" with a second
+instance, and it localises the residual: it is INSIDE the function. The
+opening block is ten independent stores whose emission order in the blob is
+`0x10, 0xb4, 0xb0, 0x80, 0xac, 0xb2, 0x84, 0x9c, 0x90, 0x8c` and in ours
+`0x10, 0x80, 0xb4, 0xb0, 0xac, 0x84, 0xb2, 0x90, 0x9c, 0x8c` -- **our source is
+already the blob's emission order**, so rule 0 applies in full and the preimage
+is a real unknown over a 10! domain that no compile budget here reaches. The
+observed transform on OUR source is "each 32-bit store hops over the 16-bit
+store(s) immediately before it", and no source that transform maps onto the
+blob's emission has been found; that is a lead, not a result. The reorder is
+kept because it is reorder-only, costs nothing, and takes the symbol out of
+index 0 where the lever provably cannot reach it.
+
+### 7845. THE LEVER 3b CERTIFICATE WAS A DEAD DETECTOR ON ITS FIRST RUN, AND IT REPORTED 24 OF 24 SYMBOLS CLEARED
+
+Lever 3b's advance test is two compiles, with and without `-fno-peephole2`,
+compared per symbol. The obvious way to write it is a shell loop **inside the
+period container**:
+
+    objdump -d --disassemble=$s /tmp/a.o | tail -n +7 > /tmp/a.txt
+    objdump -d --disassemble=$s /tmp/b.o | tail -n +7 > /tmp/b.txt
+    cmp -s /tmp/a.txt /tmp/b.txt && echo CLEARED
+
+**Binutils 2.15 has no `--disassemble=SYM`.** Both files come out EMPTY, `cmp`
+reports them equal, and every symbol in every file reads CLEARED -- which is
+the direction that licenses SKIPPING work, so nothing downstream would have
+questioned it. Two whole files, 24 of 24 symbols, came back "no reorder can
+move any of these" and the result was believed for one turn.
+
+What caught it was running the same script over a file with a symbol KNOWN to
+take a scratch (`V92Transmitter`'s D1, whose two residual bytes are a
+peephole2-allocated `pop` register) and watching it come back CLEARED as well.
+Finding 134's argument: **a detector must be shown to fire.**
+
+Rebuilt on the HOST, scoring through `byteident.py`'s own `body()`, it reports
+per file and prints the denominator and a fired/did-not-fire verdict:
+
+    V92Transmitter.cpp             6 of 6   exposed
+    V90ConnectionEvaluator.cpp    10 of 14  exposed (2 CLEARED, 2 one-byte NODATA)
+    V90SpectralShaper.cpp          6 of 10  exposed
+    V90Phase4Demodulator.cpp       9 of 15  exposed
+
+25 of 45, against 24 of 24 CLEARED from the broken arm -- so the two runs
+disagree about every symbol they both name. Any future implementation of this
+test must either run objdump on the host or check that the disassembly it is
+comparing is non-empty; `docs/method/refinement.md` now says so.
+
+### 7846. THE V.90 BYTES REMAINDER'S MEASURED NEGATIVES, WITH THEIR DOMAINS
+
+Four, and each closes a route rather than leaving it open.
+
+**`updateUref`'s +2 is two `fxch`, not a missing statement.** Lever 2 reads
+this symbol at 66 instructions against 64 and routes it to "an extra in ours".
+The extra two are x87 stack shuffles inserted by `reg-stack`: instructions 25
+and 26 are the blob's exactly (`fld %st(1)`, `fmul %st(2),%st`), and from there
+the blob subtracts, stores the variance and only then forms `mean + 0.5f`,
+while ours computes the rounding first and pays two `fxch` for it. The formula
+is confirmed by the object and is not in question. **Twelve spellings, three
+distinct emissions, no cell at byte identity.** Swapping the two statements
+alone reaches the blob's instruction count exactly and takes the bytes only
+from 81 to 56 -- hill-climbing, declined under 7782, and it emits the two
+stores in the OPPOSITE order to the object's. The file is already 34 of 34 in
+the blob's emission order, so lever 3 has nothing positional to offer either.
+
+**`V90SpectralShaper::process`'s -3 is not the delay-line cursor.** This is the
+one ABSENCE in its cluster (122 against 125, padding stripped). The `pos`
+cursor was the candidate, because the blob's frame is 0x1c against our 0xc and
+it defers loading `in`, both of which read as more spilling. **Seven spellings,
+six distinct emissions**: two keep the blob's 362 bytes and both still differ
+in 279, five change the SIZE, none is closer. The residual is block layout --
+the blob puts the odd-index encoder call inline after the loop and jumps back
+where we send it out of line.
+
+**`V90SpectralShaper.cpp`'s definition order is completely inert.** The same
+destructor-above-constructor swap that traded two symbols for two in
+`V92Transmitter.cpp` (7842) moves this file's emission to D2, D1 -- the blob's
+own first two -- and changes **not one byte anywhere in the tree**. Same
+compiler, same lever, same shape, opposite outcome, which is why lever 3's
+entry says the bucket predicts the yield and the shape does not.
+
+**`VPcmFloModem::v90RunDemodulator` is declined at 131 bytes of 3,013.** Run as
+a delegated pass. Every argument lands in the SAME stack slot on both sides, so
+argument order is not the variable and only two stores' emission order differs,
+at three sites with one signature: our `0x8(%esp)` store is early and the
+blob's is late. **2,218 cells over three domains** -- local declaration order
+(3!, ONE distinct emission), the two reachable sites' cross product (256 cells,
+18 emissions), and the rejecting site crossed with declaration order (1,956
+cells, 2 emissions) -- **and none reaches zero**. The rejecting site's four
+arguments are all bare parameters, so no subexpression exists to reorder and
+the map is constant there: by lever 1's own rule that hunk is therefore not
+statement order. Reading the `short` into a local closes the other two
+schedules exactly and takes the bytes to 74, but nine of 256 cells produce that
+emission, the preimage is not unique, and applying it moved the tree's EXACT
+set by nothing at all -- 9a's null, recorded without the diff. The harness's
+cell 0 reproduced `build/tc_out`'s object md5 exactly and two of its three
+controls moved, so the domain is unconfounded.
