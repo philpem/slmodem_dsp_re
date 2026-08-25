@@ -414,8 +414,9 @@ maintained; this section is the summary.
   It refuses to run when `build/tc_out` is older than `src/`, because `make
   phase` does not build that directory and nothing else does either, so a
   merge leaves it stale while every count keeps rendering as a clean, plausible
-  and wrong number (7769). `docs/method/refinement.md` is the playbook: eight
-  levers, each with the counterexample that bounds it.
+  and wrong number (7769). `docs/method/refinement.md` is the playbook: every
+  lever with the measurement that established it and the counterexample that
+  bounds it. Read the count from its own headings, not from here.
   Relocated fields are compared by TARGET and branch targets are made
   function-relative; without both, a text comparison reports its own
   artefacts rather than the code's.
