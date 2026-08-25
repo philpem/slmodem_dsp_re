@@ -257,6 +257,38 @@ plumbing; fix it freely. And where our own APPARATUS needs something the old
 compiler lacks, the shim goes in `tools/toolchain/period_compat.h`, outside
 the reconstruction -- never in the source being reconstructed.
 
+**AND THE RULE HAS A SECOND HALF NOW, FOR THE OTHER COMPILER.** A construct
+the MODERN build DEMANDS is apparatus by the same argument, and it does not go
+in `src/` either. **Prefer a FLAG that withdraws the demand** -- the Makefile
+has been doing this unstated since `-fno-lifetime-dse`, which exists to give
+GCC 13 back a semantic 3.4.2 had. Where no flag can express it, the shim goes
+beside `period_compat.h` in `tools/toolchain/`, force-included by `CXXFLAGS`
+and never named from `src/`. That sibling does not exist yet and should not be
+created empty; the one case so far was a flag.
+
+    a construct GCC 3.4.2 lacks     tools/toolchain/period_compat.h
+    a construct GCC 13 demands      a flag if one exists, else that sibling
+    either one, inside src/         nowhere -- it is not the author's
+
+**THE CASE THAT ESTABLISHED IT.** C++14 sized deallocation makes GCC 13 emit
+`_ZdlPvj` for `delete p` on a class with a destructor, undefined in a tree
+that links no libstdc++, and finding F7816 answered it with a
+`#if __cplusplus >= 201402L` block in each of six `src/pump/v90/` files. Every
+copy was CORRECT -- inert under 3.4.2, carrying no claim about the object --
+and still apparatus inside the reconstruction. `-fno-sized-deallocation`
+deletes the need rather than relocating it, and `src/` now contains no C++14
+text at all. Finding F7900.
+
+**AND NOTHING ELSE MAY BE MOVED ON THE ANALOGY.** The UNSIZED
+`operator delete` / `operator delete[]` keep one copy per `.cpp` because an
+inline definition's POSITION in the translation unit is a lever-3 carrier --
+consolidating the unsized array form into `sysdep.h` cost eight destructors
+their byte identity (finding F7815). The sized form was exempt only because
+the period compiler never received its tokens, and even that was measured
+rather than argued: all 200 period objects byte-identical, `md5sum` against
+`md5sum`. Anything the period compiler CAN see gets the same measurement or
+stays where it is.
+
 `docs/method/compilers.md` is the register of every variance found so far,
 including the one that was silent: 78 files guard their offset assertions on
 `__SIZEOF_POINTER__`, a GCC 4.6+ predefine, so under 3.4.2 the guard read

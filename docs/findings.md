@@ -89079,3 +89079,148 @@ separately.
 `refcheck.py` accepts the prefix as OPTIONAL, deliberately, so the bare
 remainder keeps resolving. The prefix is what makes a future sweep safe; it is
 not what makes the checker work.
+
+
+### F7900. THE SHIM FOR THE COMPILER THAT DOES NOT DECIDE — SIX COPIES OF C++14 OUT OF `src/`, AND NOT ONE BYTE MOVED
+
+F7816 left six identical blocks under `src/pump/v90/`:
+
+    #if defined(__cplusplus) && __cplusplus >= 201402L
+    inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
+    #endif
+
+`V90BitsToSymbol`, `V92BitsToSymbol`, `V90SpectralVerifier`, `V92Precoder`,
+`V92PreFilter`, `V92Transmitter`. **Every one was correct and every one was
+apparatus.** `__cplusplus` is 199711L under GCC 3.4.2, so the compiler that
+decides byte identity never saw the declaration; the period objects carry no
+`operator delete` symbol of either arity. C++14 postdates the object by
+sixteen years and the original cannot have needed sized deallocation. It
+existed solely because GCC 13 emits `_ZdlPvj` for `delete p` on a class with a
+destructor, in a tree that links no libstdc++.
+
+**AND THAT IS THE HARDEST KIND OF SHIM TO SEE.** CLAUDE.md's rule sends a
+shim the OLD compiler needs to `tools/toolchain/period_compat.h`, outside the
+reconstruction. There was no stated equivalent for one the MODERN compiler
+needs, and there is a reason the gap went unnoticed for a whole finding: **a
+shim for the compiler that does not decide is invisible to every measurement
+this tree runs.** The period differential cannot fail on it. `compare.py`
+cannot see it. `byteident` reads the same number either way — which is exactly
+the argument F7816 used to justify leaving it, and the argument is sound about
+the OBJECT and silent about the SOURCE. Only reading the file finds it.
+
+**WHAT IT COST TO REMOVE: NOTHING, AND THAT WAS MEASURED, NOT ASSUMED.**
+
+    sh tools/toolchain/build.sh; md5sum build/tc_out/*.o | sort > before.md5
+    ...the change...
+    sh tools/toolchain/build.sh; md5sum build/tc_out/*.o | sort > after.md5
+    diff before.md5 after.md5          ->  empty, 200 of 200 objects
+
+The OBJECTS were diffed and not the grade counts, because F7815 is the case
+where a count nets a gain against a loss and reads as no change. `make phase
+J=3` green, `MAKE_PHASE_EXIT=0` read out of the log.
+
+**AND THE MODERN SIDE WAS SHOWN, NOT ASSUMED**, because the failure mode being
+guarded against is a link failure and a link failure is what a stale object
+hides. `nm -u` over every binary the gate builds: **0 of 258 carry an
+undefined `operator delete` of either arity.** The six objects emit no `_Zdl*`
+or `_Zda*` symbol at all — the operator is `inline` and two instructions, so
+GCC 13 expands it at the site and the symbol never materialises, which is why
+"is `_ZdlPvj` still referenced" is the wrong question and "does anything still
+want an operator delete it has not got" is the right one. A denominator, per
+F2400.
+
+**THE PREDICTION THAT LICENSED THE MOVE, STATED BEFORE IT WAS TAKEN.** The
+sized form is `#if`'d out under 3.4.2, so the period compiler never receives
+its tokens and their position in its translation unit cannot carry anything.
+That is a claim about the preprocessor, and it is the ONLY reason this block
+was eligible. **The UNSIZED `operator delete` and `operator delete[]` are not
+eligible and were not touched**: the period compiler does see those, an inline
+definition's POSITION IN THE TU is a lever-3 carrier, and consolidating the
+unsized array form into `sysdep.h` cost eight destructors their byte identity,
+four of them a previous wave's (F7815). One copy per `.cpp`, where wave 4b put
+them. The comment now left in each of the six files says which case is which,
+because the two blocks sat four lines apart and looked like the same thing.
+
+**THE FIRST ARRANGEMENT WAS WRONG AND THE BUILD SAID SO IN 785 LINES.** The
+obvious symmetry is a `tools/toolchain/modern_compat.h` force-included by
+`CXXFLAGS`, mirroring `period_compat.h` exactly. It was written, and it works:
+period objects byte-identical, `make phase` green, `MAKE_PHASE_EXIT=0`. It is
+still the wrong answer, because a global sized `operator delete` without a
+matching global unsized one is what `-Wsized-deallocation` exists to report,
+and `-Wextra` turns it on:
+
+    modern_compat.h:83: warning: the program should also define
+                                 'void operator delete(void*)'
+
+Once per C++ translation unit per configuration, and the tree compiles each of
+them several times over. **785 of them with the run still going, against 1,003
+warning lines in total at that same moment — 78% of everything the gate had
+said so far.** The flag arrangement emits **0 of 48 warning lines** in the
+final gate run. The two runs have different denominators and the ratio between
+them means nothing; what means something is 785 against nought.
+
+Defining the unsized form in the header as well is not available: it would
+collide with the six per-file definitions F7815 requires be kept. So the
+header's only exit was
+`-Wno-sized-deallocation` — a suppression bought to keep a shim, which is two
+concessions to avoid one deletion.
+
+**`-fno-sized-deallocation` DELETES THE NEED INSTEAD OF RELOCATING IT**, and
+it is not a new idea in this tree — it is `-fno-lifetime-dse`'s argument with
+C++14 in place of a GCC pass. That flag is in `CXXFLAGS` because modern GCC
+ends an object's lifetime at its destructor's closing brace and 3.4.2 has no
+such pass, so the modern build asks for the ABSENCE and both compilers then
+agree (F1272, and V8 in `compilers.md`). Sized deallocation is the same shape:
+3.4.2 has none to prefer, so GCC 13 is told not to prefer one, `delete p`
+reaches the unsized operator each file already defines, and no warning fires.
+
+    src/ and include/ now contain no C++14 construct and no __cplusplus
+    version test at all.  One grep, and it is a better invariant than
+    "no volatile" (F1354) because it is what this shim was wearing.
+
+**THE RULE, and it is CLAUDE.md's period rule pointed the other way.**
+
+    a construct GCC 3.4.2 lacks    tools/toolchain/period_compat.h
+    a construct GCC 13 demands     a flag that withdraws the demand;
+                                   failing that, a -include'd sibling of
+                                   period_compat.h
+    either one, inside src/        nowhere -- it is not the author's
+
+The sibling is named as a provision and **deliberately not created**. An empty
+shim home is a claim nothing checks, and every case so far has been a flag.
+
+**TWO THINGS THE FLAG DOES NOT REACH, said plainly so nobody reads it as
+having superseded them.** `dsplib/Resampler.h` and `dsplib/GenericIIR.h`
+declare `operator delete` as a class MEMBER, argued from the blob's own
+deleting destructors and from an `nm` measurement taken in both directions.
+Class-scope lookup finds a member before any global, so those classes never
+reached the sized global and nothing here changes what they emit. They are
+reconstruction, not apparatus, and they stay.
+
+**AND THE GATE HAD TO BE CLEANED BEFORE IT MEANT ANYTHING.** The change is to
+`CXXFLAGS`, and `make` does not rebuild an object because a flag moved. An
+incremental run would have linked objects compiled under the abandoned
+arrangement, each carrying its own comdat `_ZdlPvj`, so a missing definition
+could not have failed — the link is the whole point of this gate. `make clean`
+first, then `make phase J=3` with make's own status appended INTO the log,
+which is F7816's postmortem and F134's argument in its usual costume.
+
+**AND THAT PRECAUTION EARNED ITS KEEP TWICE IN ONE PASS.** The cleaned run
+came back `MAKE_PHASE_EXIT=2`, and **the harness reported the same run as
+"exit code 0"** — the wrapper script's status, not make's, which is F7816's
+defect exactly, one layer further out than where F7816 found it. Nothing but
+the line in the log distinguished a red gate from a green one.
+
+What it was red ABOUT is worth keeping too: `refs` reported four DANGLING
+`finding 7900` references, because `findings.md` was appended WHILE the gate
+ran and `refcheck` read the tree between the citations landing and the finding
+landing. The gate was right and the run was worthless. **Do not edit the tree
+during the run that judges it** — `refs` reads `docs/`, so "it is only prose"
+is not a reason to think a tier cannot see it. Re-run clean: `MAKE_PHASE_EXIT=
+0`, 0 undefined references, 0 `-Wsized-deallocation`.
+
+**One more dead detector, in this pass's own scratch script.** It counted
+warnings with `grep -c sized-deallocation` and reported **361** where the true
+count was **0**: the string it was hunting is also the FLAG NAME, echoed in
+every compile command in the log. A count that matches its own instrument
+reads high and looks like evidence. `grep -c 'warning:.*sized-deallocation'`.

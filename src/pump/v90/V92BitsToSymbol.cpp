@@ -51,18 +51,26 @@ extern "C" void sysdep_free(void *p);
 inline void operator delete(void *p) { sysdep_free(p); }
 
 /*
- * AND THE SIZED FORM, FOR THE MODERN BUILD ONLY.  C++14 added
- * `operator delete(void *, size_t)`, and GCC 13 calls it for `delete p` on a
- * class with a destructor -- an undefined `_ZdlPvj` in a tree that links no
- * libstdc++, which is the link failure `dsplib/Resampler.h` documents.
+ * NO SIZED `operator delete` HERE, AND NOWHERE ELSE EITHER.  C++14 made GCC
+ * 13 prefer `operator delete(void *, size_t)` for the delete-expressions
+ * below -- an undefined `_ZdlPvj` in a tree that links no libstdc++ -- and
+ * this file used to carry a `#if __cplusplus >= 201402L` block answering it.
+ * The Makefile passes `-fno-sized-deallocation` instead, so the modern build
+ * resolves `delete p` the way GCC 3.4.2 resolves it: to the UNSIZED operator
+ * just above.  C++14 postdates the object by sixteen years and cannot be the
+ * author's, so the shim was apparatus inside the reconstruction; the flag is
+ * apparatus where apparatus belongs.  Finding F7900.
  *
- * `__cplusplus >= 201402L` is FALSE under GCC 3.4.2 (199711L), so the compiler
- * that decides byte identity never sees this.  It is portability plumbing and
- * carries no claim about the object.
+ * THE UNSIZED OPERATORS ARE A DIFFERENT CASE AND STAY HERE, one copy per
+ * file -- the one above, and any `operator delete[]` this file defines.  The
+ * period compiler DOES see those, and an inline definition's POSITION in the
+ * translation unit is a lever-3 carrier: consolidating the unsized array form
+ * into `sysdep.h` cost eight destructors their byte identity, four of them a
+ * previous wave's.  So a local copy is what PRESERVES those symbols, not what
+ * costs them, and it is deliberate duplication rather than a tidy-up waiting
+ * to happen.  Finding F7815, which says not to consolidate them without
+ * re-running the SET diff.
  */
-#if defined(__cplusplus) && __cplusplus >= 201402L
-inline void operator delete(void *p, __SIZE_TYPE__) { sysdep_free(p); }
-#endif
 
 /*
  * And the array form, for the POD buffers.  Same evidence, same finding.
