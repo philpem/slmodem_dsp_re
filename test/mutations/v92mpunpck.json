@@ -1,0 +1,188 @@
+[
+ {
+  "label": "NOTE: this set covers setParamsInfoFromV92CPUnPck and NOTHING ELSE in src/pump/v90/V90MappingParamsInt.cpp.  The two mask helpers and the rate helper it inlines are covered by the v90unpck set against t_v90unpck -- they are shared bodies, and a second copy of those rows here would be two suites scoring the same edit.  The file's other six members are the v90mapint set's, against t_v90cmask.  Three suites over one source with three binaries, which is the shape v90modprog and v90modulator already have over V90Modulator.cpp.",
+  "note": "Every anchor below quotes a line carrying a V92CP field name -- `cp->byte_24`, `cp->short_42`, `cp->short_a2`, `cp->word_28`, `cp->char_01`, `cp->char_02` -- or the `V90_CONSTELLATIONS` bound.  That is what separates them from the near-identical V.90 twin thirty lines above, which spells the same shapes `cp->codecConstellationPresent`, `cp->constellationMask`, `cp->codecConstellationMask`, `cp->distinctIndex` and `V90_CPUNPCK_CONSTELS`.  A bare `setConstellationMaskInline(params, (int)i,` matches BOTH functions, so no anchor here stops at that line.  tools/anchorcheck.py is what proves that; finding 7521 is why it is not taken on trust."
+ },
+
+ {
+  "label": "shaperSR takes word_0c rather than word_08",
+  "find": "\tparams->shaperSR = (int)cp->word_08;\n\tparams->shaperId = cp->word_0c;",
+  "replace": "\tparams->shaperSR = (int)cp->word_0c;\n\tparams->shaperId = cp->word_0c;"
+ },
+ {
+  "label": "shaperId takes word_08 rather than word_0c",
+  "find": "\tparams->shaperId = cp->word_0c;\n\tparams->shaperA1 = cp->flt_14;",
+  "replace": "\tparams->shaperId = cp->word_08;\n\tparams->shaperA1 = cp->flt_14;"
+ },
+ {
+  "label": "shaperA1 takes flt_18",
+  "find": "\tparams->shaperA1 = cp->flt_14;",
+  "replace": "\tparams->shaperA1 = cp->flt_18;"
+ },
+ {
+  "label": "shaperA2 takes flt_1c",
+  "find": "\tparams->shaperA2 = cp->flt_18;",
+  "replace": "\tparams->shaperA2 = cp->flt_1c;"
+ },
+ {
+  "label": "shaperB1 takes flt_20",
+  "find": "\tparams->shaperB1 = cp->flt_1c;",
+  "replace": "\tparams->shaperB1 = cp->flt_20;"
+ },
+ {
+  "label": "shaperB2 takes flt_1c",
+  "find": "\tparams->shaperB2 = cp->flt_20;",
+  "replace": "\tparams->shaperB2 = cp->flt_1c;"
+ },
+
+ {
+  "label": "word_61c gets the gate byte whole rather than an exact 0 or 1",
+  "find": "\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->word_61c = cp->byte_24;"
+ },
+ {
+  "label": "word_61c is the gate INVERTED",
+  "find": "\tparams->word_61c = (cp->byte_24 != 0);",
+  "replace": "\tparams->word_61c = (cp->byte_24 == 0);"
+ },
+
+ {
+  "label": "distinctIndex is copied for five constellations rather than six",
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS - 1; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];"
+ },
+ {
+  "label": "distinctIndex is filled with the loop counter rather than from word_28",
+  "find": "\t\tparams->distinctIndex[i] = cp->word_28[i];",
+  "replace": "\t\tparams->distinctIndex[i] = (int)i;"
+ },
+ {
+  "label": "distinctIndex is narrowed to a byte on the way across",
+  "find": "\t\tparams->distinctIndex[i] = cp->word_28[i];",
+  "replace": "\t\tparams->distinctIndex[i] = (int)(unsigned char)cp->word_28[i];",
+  "equivalent": true,
+  "why": "THE STORE IS THIRTY-TWO BITS AND THE FIXTURE CANNOT SEE IT, BY ITS OWN CHOICE.  The object copies a whole word -- `mov 0x28(%edi,%edx,4),%esi ; mov %esi,0x638(%ecx,%edx,4)` at .text+0x33cbe -- so the width is settled from the instructions and not from this tier.  It cannot be settled here because the same field also SCALES THE MASK BASE by sixteen (`shl $0x4` then `lea 0x42(...)`), so any trial whose `word_28[i]` did not fit in a byte would read outside both mask blocks; the blob does that too, but it is undefined in the reconstruction and a trial that reaches undefined behaviour is not a trial (D561).  Every trial therefore keeps `word_28` in 0..5, where the narrowed and the wide spelling agree byte for byte.  The row is kept rather than deleted because it names exactly which claim rests on the disassembly alone."
+ },
+ {
+  "label": "the loop bound is spelled with the SOURCE's macro rather than the destination's",
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];",
+  "replace": "\tfor (i = 0; i < V92CP_GROUPS; i++)\n\t\tparams->distinctIndex[i] = cp->word_28[i];",
+  "equivalent": true,
+  "why": "V90_CONSTELLATIONS AND V92CP_GROUPS ARE BOTH 6, AND THE OBJECT CANNOT SEPARATE THEM.  The loop reads `cp->word_28[i]`, which has V92CP_GROUPS entries, and writes `params->distinctIndex[i]`, which has V90_CONSTELLATIONS -- so either macro is defensible and the object emits one immediate, `cmp $0x5 ; jbe` at .text+0x33cca, for both.  V90_CONSTELLATIONS is chosen because the loop's purpose is to fill the destination block, and V90MappingParams.h derives its 6 from the three getters' own `cmpl $0x5` while V92CP.h derives its 6 from the packer's `add $0x10` and the two blocks' spacing.  A mutation that changes the VALUE -- the row above -- is not equivalent and is caught."
+ },
+
+ {
+  "label": "the ordinary loop selects its mask block by i rather than through word_28",
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[i]);"
+ },
+ {
+  "label": "the ordinary loop reads the CODEC mask block",
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_a2[cp->word_28[i]]);"
+ },
+ {
+  "label": "the ordinary loop writes the CODEC destination",
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);"
+ },
+ {
+  "label": "the ordinary loop writes constellation 0 on every iteration",
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, 0,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);"
+ },
+ {
+  "label": "the ordinary loop writes the destination indexed by the GROUP rather than by the constellation",
+  "find": "\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\tsetConstellationMaskInline(params, (int)cp->word_28[i],\n\t\t\t\t\t   cp->short_42[cp->word_28[i]]);"
+ },
+ {
+  "label": "the ordinary loop runs five times rather than six",
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++)\n\t\tsetConstellationMaskInline(params, (int)i,",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS - 1; i++)\n\t\tsetConstellationMaskInline(params, (int)i,"
+ },
+
+ {
+  "label": "the codec loop's else arm reads the codec mask block rather than the ordinary one",
+  "find": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\telse\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);"
+ },
+ {
+  "label": "the codec loop's set arm reads the ordinary mask block",
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
+  "replace": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);"
+ },
+ {
+  "label": "the codec loop's set arm writes the ORDINARY destination",
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
+  "replace": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);"
+ },
+ {
+  "label": "the gate is tested the other way round",
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,",
+  "replace": "\t\tif (cp->byte_24 == 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,"
+ },
+ {
+  "label": "the gate is tested against 1 rather than against zero",
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,",
+  "replace": "\t\tif (cp->byte_24 == 1)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,"
+ },
+ {
+  "label": "the gate is read back from the DESTINATION's copy rather than from the source",
+  "find": "\t\tif (cp->byte_24 != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,",
+  "replace": "\t\tif (params->word_61c != 0)\n\t\t\tsetCodecConstellationMaskInline(params, (int)i,",
+  "equivalent": true,
+  "why": "WHICH END THE GATE IS READ FROM IS A CODEGEN FACT AND NO TEST CAN SEE IT FROM ONE CALL.  Step 1 writes `params->word_61c = (cp->byte_24 != 0)` and nothing between there and this loop touches +0x61c -- `constellation` ends at +0x304, `codecConstellation` at +0x604 and `constellationSize` at +0x61c exactly, and no table store can pass its own 128-byte extent -- so the destination's copy is a faithful 0/1 image of the source byte on every trial and both spellings choose the same arm.  What separates them is a CALLER that scribbles on `params->word_61c` between two calls, and this function has no caller in the object to do that (zero relocations name it).  The object settles it anyway: .text+0x33d71 reloads the CP pointer from the stack and +0x33d75 is `cmpb $0x0,0x24(%ecx)`, both INSIDE the loop the back edge at +0x33e82 closes, so the SOURCE is re-read on every iteration.  That is the V.90 twin's behaviour (finding 7570) and the opposite of V92setParamsInfoFromCPUnPck's three gates, which read back the destination's copies."
+ },
+ {
+  "label": "the codec loop's set arm selects its mask block by i rather than through word_28",
+  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
+  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[i]);"
+ },
+ {
+  "label": "the codec loop's set arm writes the destination indexed by the GROUP",
+  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_a2[cp->word_28[i]]);",
+  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)cp->word_28[i],\n\t\t\t    cp->short_a2[cp->word_28[i]]);"
+ },
+ {
+  "label": "the codec loop's else arm selects its mask block by i rather than through word_28",
+  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[i]);"
+ },
+ {
+  "label": "the codec loop's else arm writes the ORDINARY destination",
+  "find": "\t\t\tsetCodecConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);",
+  "replace": "\t\t\tsetConstellationMaskInline(params, (int)i,\n\t\t\t    cp->short_42[cp->word_28[i]]);"
+ },
+ {
+  "label": "the codec loop runs five times rather than six",
+  "find": "\tfor (i = 0; i < V90_CONSTELLATIONS; i++) {\n\t\tif (cp->byte_24 != 0)",
+  "replace": "\tfor (i = 0; i < V90_CONSTELLATIONS - 1; i++) {\n\t\tif (cp->byte_24 != 0)"
+ },
+
+ {
+  "label": "the rate gate is char_02 rather than char_01",
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_02, (int)cp->char_02);"
+ },
+ {
+  "label": "the rate is char_01 rather than char_02",
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_01);"
+ },
+ {
+  "label": "the rate always takes the short arm",
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
+  "replace": "\tsetDataBitRateInline(params, 0, (int)cp->char_02);"
+ },
+ {
+  "label": "the rate always takes the long arm",
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
+  "replace": "\tsetDataBitRateInline(params, 1, (int)cp->char_02);"
+ },
+ {
+  "label": "the rate byte is widened UNSIGNED rather than signed",
+  "find": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)cp->char_02);",
+  "replace": "\tsetDataBitRateInline(params, (int)cp->char_01, (int)(unsigned char)cp->char_02);"
+ }
+]
