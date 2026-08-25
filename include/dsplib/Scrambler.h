@@ -173,29 +173,51 @@ public:
 	/*
 	 * Put the three running pointers back to their initial values.  This
 	 * is 23 bytes in the blob and does exactly three word copies.
+	 *
+	 * THE BODY IS OUT OF LINE BECAUSE THE OBJECT CALLS IT.  Written
+	 * inside the class body it is implicitly `inline`, which moves it
+	 * from `--param max-inline-insns-auto` to `max-inline-insns-single`
+	 * and GCC 3.4.2 then expands it into every caller while still
+	 * emitting the weak symbol -- so the symbol table looks right and
+	 * `reset` is wrong.  The object refutes that directly: its
+	 * `Descrambler<h,i>::reset` spends `mov %esi,(%esp)` and
+	 * `call _ZN11DescramblerIhiE19resetHistoryIndexesEv`, where ours had
+	 * the three stores expanded in place.  That is lever 10's tell --
+	 * an EXCESS of instructions with a MISSING call -- read off the
+	 * object rather than inferred.  Finding 7862.
 	 */
-	void resetHistoryIndexes()
-	{
-		pOut = pInitOut;
-		pTap1 = pInitTap1;
-		pTap2 = pInitTap2;
-	}
+	void resetHistoryIndexes();
 
 	/*
 	 * Carry the wrapped history back up to the restart point.  The count
 	 * is `tailLength`; the blob spells the loop as a decrement that stops
 	 * when the counter reaches -1, which is `tailLength` iterations for
 	 * any value including zero.
+	 *
+	 * THE POINTERS WALK; THE INDEX FORM IS WRONG AND COSTS A REGISTER.
+	 * An indexed `for (i = 0; i < n; i++) dst[i] = src[i]` keeps FOUR
+	 * values live across the loop -- both bases, `i` and the bound `n` --
+	 * so it needs a second callee-saved register and emits `push %esi`
+	 * beside `push %ebx`.  The object pushes `%ebx` alone and holds three:
+	 * `src`, `dst` and a counter it compares against the CONSTANT -1
+	 * (`dec %edx; cmp $0xffffffff,%edx; jne`), which is `while (n--)`
+	 * with the loop rotated so entry lands on the test.
+	 *
+	 * Six spellings compiled, five distinct emissions; the two that reach
+	 * the object's instruction sequence are `unsigned int n` and
+	 * `int n` with the same `while (n--)`, and those two emit the SAME
+	 * bytes.  So the decoded fact is the loop's SHAPE and not the
+	 * counter's signedness, which the object cannot distinguish.  All
+	 * five instantiations go SIZE to REGALLOC on it.  Finding 7861.
 	 */
 	void copyHistoryTail()
 	{
 		T *dst = pInitOut + 1;
 		const T *src = pLimit;
 		unsigned int n = tailLength;
-		unsigned int i;
 
-		for (i = 0; i < n; i++)
-			dst[i] = src[i];
+		while (n--)
+			*dst++ = *src++;
 	}
 
 	/*
@@ -357,13 +379,8 @@ public:
 		delete[] pLimit;
 	}
 
-	/* Three word copies, as in `Scrambler`. */
-	void resetHistoryIndexes()
-	{
-		pOut = pInitOut;
-		pTap1 = pInitTap1;
-		pTap2 = pInitTap2;
-	}
+	/* Three word copies, as in `Scrambler`; out of line for its reason. */
+	void resetHistoryIndexes();
 
 	/* The count is `tailLength`, as in `Scrambler`. */
 	void copyHistoryTail()
@@ -371,10 +388,9 @@ public:
 		T *dst = pInitOut + 1;
 		const T *src = pLimit;
 		unsigned int n = tailLength;
-		unsigned int i;
 
-		for (i = 0; i < n; i++)
-			dst[i] = src[i];
+		while (n--)
+			*dst++ = *src++;
 	}
 
 	/*
@@ -527,6 +543,31 @@ void Descrambler<T, I>::reset(T value)
 	resetHistoryIndexes();
 	for (p = pInitOut + 1; p <= pInitTap2; p++)
 		*p = bit;
+}
+
+/*
+ * THE POSITION OF THESE TWO IS PART OF THE MEASUREMENT, NOT A TIDYING
+ * CHOICE.  Finding 7815 measured that moving ONE inline function within the
+ * headers this group reaches cost eight destructors their byte identity
+ * while touching no destructor and no free, because an inline definition's
+ * place in the translation unit is itself a lever-3 carrier.  The cell that
+ * was scored put both definitions here, after `reset`, at the end of the
+ * header; anything that moves them has to re-run the tree-wide SET diff.
+ */
+template <class T, class I>
+void Scrambler<T, I>::resetHistoryIndexes()
+{
+	pOut = pInitOut;
+	pTap1 = pInitTap1;
+	pTap2 = pInitTap2;
+}
+
+template <class T, class I>
+void Descrambler<T, I>::resetHistoryIndexes()
+{
+	pOut = pInitOut;
+	pTap1 = pInitTap1;
+	pTap2 = pInitTap2;
 }
 
 #endif /* DSPLIB_SCRAMBLER_H */

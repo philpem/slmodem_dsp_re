@@ -75,28 +75,28 @@
   },
   {
     "label": "resetHistoryIndexes: pTap1 goes to pInitOut",
-    "find": "\t\tpOut = pInitOut;\n\t\tpTap1 = pInitTap1;\n\t\tpTap2 = pInitTap2;\n\t}\n\n\t/*\n\t * Carry the wrapped history",
-    "replace": "\t\tpOut = pInitOut;\n\t\tpTap1 = pInitOut;\n\t\tpTap2 = pInitTap2;\n\t}\n\n\t/*\n\t * Carry the wrapped history"
+    "find": "void Scrambler<T, I>::resetHistoryIndexes()\n{\n\tpOut = pInitOut;\n\tpTap1 = pInitTap1;\n\tpTap2 = pInitTap2;\n}\n",
+    "replace": "void Scrambler<T, I>::resetHistoryIndexes()\n{\n\tpOut = pInitOut;\n\tpTap1 = pInitOut;\n\tpTap2 = pInitTap2;\n}\n"
   },
   {
     "label": "D resetHistoryIndexes: pTap2 goes to pInitTap1",
-    "find": "\t\tpOut = pInitOut;\n\t\tpTap1 = pInitTap1;\n\t\tpTap2 = pInitTap2;\n\t}\n\n\t/* The count is `tailLength`, as in `Scrambler`. */",
-    "replace": "\t\tpOut = pInitOut;\n\t\tpTap1 = pInitTap1;\n\t\tpTap2 = pInitTap1;\n\t}\n\n\t/* The count is `tailLength`, as in `Scrambler`. */"
+    "find": "void Descrambler<T, I>::resetHistoryIndexes()\n{\n\tpOut = pInitOut;\n\tpTap1 = pInitTap1;\n\tpTap2 = pInitTap2;\n}\n",
+    "replace": "void Descrambler<T, I>::resetHistoryIndexes()\n{\n\tpOut = pInitOut;\n\tpTap1 = pInitTap1;\n\tpTap2 = pInitTap1;\n}\n"
   },
   {
     "label": "copyHistoryTail: the destination is pInitOut, not pInitOut + 1",
-    "find": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\t\tunsigned int i;\n\n\t\tfor (i = 0; i < n; i++)\n\t\t\tdst[i] = src[i];\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in",
-    "replace": "\t\tT *dst = pInitOut;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\t\tunsigned int i;\n\n\t\tfor (i = 0; i < n; i++)\n\t\t\tdst[i] = src[i];\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in"
+    "find": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\n\t\twhile (n--)\n\t\t\t*dst++ = *src++;\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in\n",
+    "replace": "\t\tT *dst = pInitOut;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\n\t\twhile (n--)\n\t\t\t*dst++ = *src++;\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in\n"
   },
   {
     "label": "copyHistoryTail: the source starts one element in",
-    "find": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\t\tunsigned int i;\n\n\t\tfor (i = 0; i < n; i++)\n\t\t\tdst[i] = src[i];\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in",
-    "replace": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\t\tunsigned int i;\n\n\t\tfor (i = 0; i < n; i++)\n\t\t\tdst[i] = src[i + 1];\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in"
+    "find": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\n\t\twhile (n--)\n\t\t\t*dst++ = *src++;\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in\n",
+    "replace": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit + 1;\n\t\tunsigned int n = tailLength;\n\n\t\twhile (n--)\n\t\t\t*dst++ = *src++;\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in\n"
   },
   {
     "label": "copyHistoryTail: one element short of tailLength",
-    "find": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\t\tunsigned int i;\n\n\t\tfor (i = 0; i < n; i++)\n\t\t\tdst[i] = src[i];\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in",
-    "replace": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\t\tunsigned int i;\n\n\t\tfor (i = 0; i + 1 < n; i++)\n\t\t\tdst[i] = src[i];\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in"
+    "find": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\n\t\twhile (n--)\n\t\t\t*dst++ = *src++;\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in\n",
+    "replace": "\t\tT *dst = pInitOut + 1;\n\t\tconst T *src = pLimit;\n\t\tunsigned int n = tailLength;\n\n\t\twhile (n-- > 1)\n\t\t\t*dst++ = *src++;\n\t}\n\n\t/*\n\t * Seed the history with one bit, repeated.  `value & 1` is masked in\n"
   },
   {
     "label": "reset: two bits of the argument reach the buffer",

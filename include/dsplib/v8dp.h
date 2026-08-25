@@ -82,8 +82,13 @@ int v8_delete(struct dp *dp);
  */
 int v8_process(struct dp *dp, void *in, void *out, int count);
 
-/* Register the datapump.  Called from prop_dp_init. */
-void dp_v8_init(void);
+/*
+ * Register the datapump.  Called from prop_dp_init, which discards the
+ * result -- the object's `prop_dp_init` (+0x1c) calls this and then zeroes
+ * %eax for its own return.  The `int` is the object's: `dp_v8_init` ends
+ * `xor %eax,%eax` and a `void` body cannot emit that.  Finding 7860.
+ */
+int dp_v8_init(void);
 
 /* And deregister it. */
 void dp_v8_exit(void);
