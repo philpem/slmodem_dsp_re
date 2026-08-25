@@ -84404,3 +84404,76 @@ and nothing here does that.
 falls on, and what the enumeration's domain was.  A finding that says "closed
 by reordering" without saying how many spellings were compiled is not
 reviewable and does not carry the licence.
+
+### 7783. `-funroll-loops` is NOT a missing period flag: zero gained, 39 lost, and it does not explain `V90Jd` either
+
+`V90Jd::packData` and `getBitVector` are grade SIZE at 218 and 223 bytes
+against the blob's 534 and 537, and the blob's versions are plainly UNROLLED
+where ours loop:
+
+    mov    blob 102   ours 21
+    jle    blob   4   ours  6
+    nop    blob   0   ours 13
+
+The obvious hypothesis is that the vendor built with `-funroll-loops` and our
+flag set is missing it -- which would be a systematic defect affecting the
+whole reconstruction, not one function.  **It was tested rather than argued,
+and it is false.**
+
+Whole tree rebuilt with `TC_EXTRA=-funroll-loops` into a separate `TC_OUT` so
+nothing was clobbered, and the exact SETS compared:
+
+                          grade 0    grade 0-or-1   BYTES   SIZE
+    baseline                 433          486        109     653
+    -funroll-loops           394          441         84     723
+
+    GAINED: 0        LOST: 39
+
+Zero gained is the load-bearing half.  If the vendor had used the flag
+anywhere we already match, turning it on would have closed something; nothing
+closed.  The 39 lost include `V34HilbertFilter`, `V8_V21_reset`,
+`V34EqualizerClearCenterTaps`, `CALLPROG_Status_string` and `dtmf_progress` --
+functions already byte-identical whose loops the flag then unrolled.  The
+period flag set stands as it is.
+
+**AND IT DOES NOT EXPLAIN `V90Jd`.**  With the flag, `packData` goes 218 ->
+490 against 534 and `getBitVector` 223 -> 493 against 537 -- the same 44-byte
+residual on both, which is consistent since the two are one body, but still
+SIZE and still not closed.  So the flag gets most of the way and stops.
+
+**What is left is the reading that the ORIGINAL SOURCE WAS STRAIGHT-LINE** --
+the author wrote the seventeen 1-bits and the rest as individual stores rather
+than a loop, and the object's shape is its source's shape rather than an
+optimisation of it.  That is the reconstruction to attempt, and it is a
+statement-level recovery of exactly the kind this project exists to do, not a
+flag hunt.  Testing it costs one compile: write the stores out and compare the
+size.
+
+**Why this was worth the rebuild even though the answer was no.**  A missing
+optimisation flag is the kind of hypothesis that recurs -- it explains a whole
+class of size differences at once, it is cheap to believe, and nothing in the
+tree contradicts it until someone measures.  `SIZE` is 653 symbols, over half
+the tree, and any flag hypothesis that could dent that number deserves one
+rebuild.  This one is now closed with a number attached instead of remaining
+permanently plausible.
+
+### 7784. `docs/method/refinement.md`: the levers collected, each with the counterexample that bounds it
+
+Four refinement passes produced their techniques as individual findings --
+7765, 7766, 7767, 7770, 7772, 7774, 7779, 7782 -- and each new agent brief has
+been hand-assembled from them by the parent.  That is duplicated work and it
+loses things: the briefs for waves 2 and 3a each omitted a lever the other
+carried, and the wave 3a brief asserted C1/C2 were one body, which the agent
+measured and found FALSE.
+
+`docs/method/refinement.md` now collects them: seven levers in the order they
+have paid off, each with the measurement that established it AND the case
+where it failed.  A lever without a known failure is one nobody has pushed
+hard enough, and the counterexamples are the half that stops a brief becoming
+a licence -- 7777's control 4 in particular, which is the only thing standing
+between the definition-order lever and an agent reordering ninety-six files.
+
+It also carries the three habits that have each cost real time when skipped:
+diff the SET not the count, baseline BEFORE changing anything, and use `--why`
+rather than eyeballing the diff, because the first row that differs is usually
+not the row the comparison rejects on.
