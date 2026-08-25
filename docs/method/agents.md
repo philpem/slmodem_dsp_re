@@ -111,6 +111,29 @@ What works:
 - **After adding to a shared file, re-run every suite over it and read the
   UNUSABLE count, not the NOT-CAUGHT count.** The one that matters is the one
   that does not fail (finding F347).
+- **THE HARNESS'S REPORTED EXIT CODE BELONGS TO THE WRAPPER, NOT TO THE
+  COMMAND YOU CARE ABOUT.** A pass ran the gate, got `MAKE_PHASE_EXIT=2` in
+  its own log, and the background-task notification for the same run said
+  **"exit code 0"** -- because the status reported is the shell invocation's,
+  and an invocation that ends in `echo`, `tail`, or an `if` that handles both
+  branches always succeeds. Only the line in the log distinguished a red gate
+  from a green one (finding F7900).
+
+  This is finding F7816's defect one layer further out: there it was `$?`
+  after a pipeline, here it is the harness's own summary. **Print the verdict
+  yourself from the command's own status** --
+
+      if make phase J=3 > log 2>&1; then echo GREEN; else echo RED; fi
+
+  -- and read that line, never the notification's. A wrapper's exit code is
+  not evidence about what it wrapped.
+
+- **DO NOT EDIT `docs/` WHILE THE GATE IS RUNNING.** The same pass appended
+  `findings.md` mid-run and `refs` reported four dangling citations that did
+  not exist a second earlier. "It is only prose" is not a reason to think no
+  tier can see it: `refs` reads `docs/`, and so do `debugcov`'s deviation
+  sites.
+
 - **RENUMBER FINDINGS ON THE BRANCH, BEFORE THE MERGE, WITH
   `tools/renumber.py` -- never with a regex over the merged tree.** A finding
   number and a filter coefficient are the same four digits: a sweep of
