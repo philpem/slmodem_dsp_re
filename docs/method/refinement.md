@@ -178,6 +178,18 @@ declines were re-measured, two survive exactly and `calcMtoMatchKtarget` loses
 one of its five to padding, so its verdict stands with the number read as
 four.
 
+**AND `--why`'s BARE `False` DOES NOT ROUTE HERE RELIABLY, because it is the
+one place the padding filter is missing (7823).** `alpha_why` opens with
+`len(x) != len(y)` over `insns()` rows and `insns()` does not strip padding, so
+a bare `False` conflates "a statement is missing" with "the two carry different
+numbers of alignment nops". `printErrorHistogramAndReset` prints `False` and is
+**EQUAL on code**, 86 against 86, with 2 nops against 14. **Confirm every bare
+`False` against `instrcount.py` before spending lever 2 on it** -- and read its
+columns as `ours, blob, delta` with the delta OURS MINUS BLOB, because reading
+it the other way inverts the diagnosis. Three of this cluster's four real
+deltas are EXTRAS in our code, not absences, which is the opposite of the
+lever's worked example and wants a different search.
+
 **A SECOND OBSERVABLE, INDEPENDENT OF THE BYTE GRADE:** the order of `.rodata`
 strings a function references. It agrees or disagrees without reference to any
 instruction, so it corroborates a statement-order decoding that the byte grade

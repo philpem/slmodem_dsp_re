@@ -202,6 +202,35 @@ V90SpectralShaper::reset(unsigned int id, unsigned int sr,
 
 	pde.reset(blockLength, 0);
 
+	/*
+	 * THE FIFTEEN DIFFERING BYTES ARE HERE, AND THEY ARE A BASE REGISTER --
+	 * DECLINED, do not "fix" it (finding 7826).  They are one contiguous
+	 * run, +0x7c..+0x8a:
+	 *
+	 *     blob   mov 0x8(%esi),%edx ;  mov %edx,0x20(%ebx)
+	 *     ours   mov 0x8(%esi),%edx ;  ... ;  mov %edx,0x68(%esi)
+	 *
+	 * `ssf` is at +0x48 and 0x48 + 0x20 = 0x68, so BOTH STORE THE SAME
+	 * ADDRESS.  The blob reaches it through the pointer still live from the
+	 * `setFilterCoeff` call; we recompute it off `this`.  So `--why`'s
+	 * "NON-REGISTER OPERAND 0x8(%esi),%edx | (%esi),%ecx" is not a
+	 * different field, and it is not statement order either -- this store
+	 * is already where the object emits it, and lever 1's 10-cell order
+	 * domain reached no preimage.
+	 *
+	 * Six spellings were compiled and only two emissions exist.  The three
+	 * that reach byte identity ALL introduce a local pointer or reference
+	 * held live across the two calls; the three spelled through `ssf.` --
+	 * including `resetSSFilter()` and including `(&ssf)->blockLength` --
+	 * all stay at fifteen.  **The non-shim domain is exhausted with no
+	 * preimage**, and nothing in the object proves the author wrote a
+	 * local: a base-register choice is `tiers.md`'s FREE column, and the
+	 * one mechanism that makes allocation steerable here is lever 3b's
+	 * scratch-consuming peephole2, which is emission order and not source
+	 * aliasing.  A local added only to lengthen a register's live range is
+	 * fitting the compiler, so 7782 declines it and the measurement is the
+	 * deliverable.
+	 */
 	ssf.reset();
 	ssf.setFilterCoeff(a1, a2, b1, b2);
 	ssf.blockLength = blockLength;

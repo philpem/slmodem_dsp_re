@@ -87212,6 +87212,290 @@ than `False`.  **So this lever is finished on the C++ side of the tree**, and wh
 would reopen it is a decision about `V92ParamsInfo`'s TU, not another
 spelling.
 
+### 7819. `evaluateInfo`: A `movsbl` NOBODY WAS EMITTING, AND THE `rateMask` STORE THAT IS NOT AN ORDER
+
+**Reserved block: 7819-7822.**  Swept over `refs/heads`, `refs/remotes` and
+`refs/tags` together by 7814's own rule -- the highest `### <n>.` heading
+ANYWHERE was **7818**, on `master`, `origin/master` and two sibling worktrees.
+Expect to renumber at merge.
+
+`_ZN5V90MP12evaluateInfoEv`, 482 bytes, was **BYTES 46** and is now **grade 1**.
+
+**THE ROW `--why` REJECTS ON IS NOT THE DIFFERENCE, and this is the worked
+example for reading one.**  It printed `row 22 MNEMONIC movw vs movzbl`, which
+reads like a width defect on a load.  It is not: row 22 is where the two
+sequences have DRIFTED APART, and the actual difference is two rows further on
+and is an INSTRUCTION WE DO NOT EMIT AT ALL.
+
+    blob                             ours
+    movzbl 0x3a(%ebx),%eax           movzbl 0x3a(%ebx),%edx
+    movw   $0x0,0x6(%ebx)            movzbl 0x3b(%ebx),%eax
+    and    $0x1,%al                  and    $0x1,%edx     <- 32-bit
+    movsbl %al,%edx      <-- ours has nothing here
+    add    %edx,%edx                 add    %edx,%edx
+
+`0x3a(%ebx)` is `bits[0x1e]` (`bits` is at +0x1c).  The blob masks the low bit
+in EIGHT bits and then SIGN-EXTENDS the byte before shifting it; a single
+expression of type `int` gives `and $0x1,%edx` and no extension at all.
+
+**BOTH FUNCTIONS COUNT 144 INSTRUCTIONS, AND THAT IS THE PADDING TRAP, NOT A
+COINCIDENCE.**  The blob has one more REAL instruction and we have one more
+`mov %esi,%esi`.  Lever 2's precondition -- strip alignment padding wherever it
+occurs, not only at the tail -- is what makes the absence visible; counting raw
+rows says the two are equal and there is nothing to find.
+
+**THE EXTENSION IS FORCED EVIDENCE AND NO TEST CAN EVER SEE IT.**  `x & 1` is 0
+or 1, so `movsbl` and a 32-bit `and` agree over every value the field can hold
+-- CLAUDE.md's forced-versus-free rule, and finding 613's class exactly.
+
+**ENUMERATED, 35 CELLS: seven spellings of the `Trellis` statement CROSSED WITH
+all five positions of the `rateMask = 0` below it.**  Four distinct emissions.
+Compiled as the real translation unit and scored with `byteident.py`'s own
+`body`/`verdict`, with the unmodified file first checked to reproduce
+`build/tc_out/src_pump_v90_V90MP.cpp.o` byte for byte.
+
+    T0  the single expression we had                        BYTES 46
+    T1  an inner `(char)` cast on the sub-expression        BYTES 47
+    T2  a `char` local            )
+    T3  a two-step accumulate     ) all four               BYTES 1  <- 20 cells
+    T4  a three-step accumulate   ) the SAME emission
+    T6  a `signed char` local     )
+    T5  the ROLLED loop                                     SIZE 16
+
+**SEVERAL PREIMAGES, SO WHAT IS DECODED IS A FACT AND NOT AN ORDER** (rule 0):
+the intermediate is narrowed to a signed `char` before it is shifted.  Twenty
+of the 35 cells reach it and the compiler cannot separate the four spellings,
+so the file says which fact it decoded and does not claim to know which the
+author typed.  T3 is written, T2/T4/T6 named beside it.
+
+**TWO EXCLUSIONS, AND THEY ARE THE USEFUL HALF.**  The inner `(char)` CAST is
+WORSE than what we had, 47 against 46, which is lever 8's rule (7803) firing
+again: the load happens first and the conversion after, so a cast does not
+change the load.  And the ROLLED loop -- the shape `Rate` and the six h-values
+use in the same function -- comes out a DIFFERENT SIZE, so the author did not
+write one here.  That negative is worth as much as the closure: it stops the
+next reader "tidying" this into the surrounding idiom.
+
+**THE `rateMask = 0` STORE IS A CONSTANT MAP, AND IT LOOKS EXACTLY LIKE AN
+ORDER.**  The blob emits `movw $0x0,0x6(%ebx)` in the MIDDLE of the Trellis
+computation, four statements earlier than we write it.  All five source
+positions -- before `Trellis`, and after each of `Trellis`, `NonLin`,
+`Shaping` and `CPack` -- emit the SAME BYTES, for every one of the seven
+Trellis spellings.  **This is lever 1's constant-map branch appearing for
+real**, and it is the reason the cross product had to be compiled rather than
+one axis at a time: run the `rateMask` axis alone and you measure nothing and
+cannot tell that from a null.  Do not re-run that domain.
+
+**RESIDUAL: ONE BYTE**, `pop %esi` against our `pop %ebx` in the epilogue.
+`alpha_equal` accepts it, so the symbol is REGALLOC and not EXACT.  Its file is
+a poor lever-3 target -- `V90MP.cpp` has 12 comparable symbols, 7 already
+exact, and would be permuted to chase one -- so it is left named rather than
+reordered.
+
+======================================================================
+### 7820. `resetLinearMappStudy`: 720 ORDERINGS, 720 EMISSIONS, ONE PREIMAGE -- AND THE COMMENT THAT SAID IT COULD NOT BE DONE
+
+`_ZN11V90Demapper20resetLinearMappStudyEj`, 139 bytes, was **BYTES 36** and is
+now **EXACT**.  Tree-wide grade 0 **508 -> 509**.
+
+**THE FILE ITSELF ARGUED AGAINST TRYING, AND THE ARGUMENT WAS PLAUSIBLE AND
+WRONG.**  `V90Demapper.cpp` carried a paragraph headed *"THE SIX STORES ARE NOT
+IN THE OBJECT'S ORDER AND THAT IS NOT EVIDENCE -- they are six plain stores
+with no call between them, so the scheduler was free to interleave them"*.
+That is reasoning about the compiler instead of measuring it, and lever 1 is
+explicit that **nothing before the compile separates a constant map from a
+bijection**.  The paragraph is now replaced by its own refutation.
+
+**THE DOMAIN IS 6! = 720 AND IT WAS RUN TO COMPLETION.**  All 720 orderings of
+the six trailing stores, generated into a hardlinked copy of the tree,
+compiled in ONE container pass, scored with `byteident.py`'s own
+`body`/`verdict`.  The unmodified file was compiled first and checked byte for
+byte against `build/tc_out/src_pump_v90_V90Demapper.cpp.o` before a single cell
+was read.
+
+    720 cells   720 DISTINCT emissions   1 reaching zero
+
+**720 orderings giving 720 distinct emissions means the map is INJECTIVE -- the
+scheduler reorders nothing here at all** -- so the preimage is unique by
+construction and this is a decoded ORDER, not a decoded fact.  7782's ruling
+takes the bytes.  The nearest misses are at 2 differing bytes, six of them.
+
+The recovered order is the object's own emission order read straight off the
+disassembly:
+
+    +0x1eb0, +0x1eae, +0x1ea4, +0x1ea6, +0x1e9c, +0x1ea8
+
+**WHAT HAD BEEN IN THE FILE WAS ASCENDING FIELD ORDER**, which is the
+transcriber's tidying and not the author's -- lever 1's named trap, where our
+source order looks like an answer and is only a restatement of the header.
+
+**AND THERE IS INDEPENDENT CORROBORATION IN THE SAME FILE, WHICH IS WHY THE
+GATE FAILED.**  `V90Demapper::reset` writes the SAME SIX FIELDS and was
+ALREADY in this order.  Nobody had noticed the two disagreed.  Once
+`resetLinearMappStudy` was corrected the two blocks became textually
+identical, and **three mutation anchors that had been unique started matching
+twice** -- `anchorcheck.py` caught it and `make phase` failed on `refs`, which
+is the gate doing exactly its job.  Two functions written by the same author in
+the same order is evidence of a kind the byte grade cannot supply, and it
+agrees.
+
+**SEVEN ANCHORS RE-ANCHORED, ALL SEVEN CAUGHT.**  Four moved because the
+statements moved; three collided with `reset`'s copy.  The disambiguator is the
+sixth line -- the study ends `uint_1ea8 = n;`, `reset` ends `uint_1ea8 = 0;`
+followed by `linearMappStudyEnabled = 0;`.  After the repair:
+
+    v90demap   105 mutations, 102 caught, 0 NOT caught, 0 unusable, 3 equivalent
+    v90mp      107 mutations, 106 caught, 0 NOT caught, 0 unusable, 1 equivalent
+
+the equivalents in both being the pre-existing documented ones.  `make phase`
+green, period differential **251 passed / 0 failed**, `0 anchor(s) match other
+than exactly once`.
+
+======================================================================
+### 7821. LEVER 3b OVER THE V.90 BYTES CLUSTER: NO CLEARS, AND THE SCORER THAT NEARLY REPORTED THREE FALSE ONES
+
+The `-fno-peephole2` certificate was run over all sixteen BYTES symbols in the
+V.90 cluster, one file compiled twice per candidate, seven files.  **Result: 0
+CLEARED, 1 EXPOSED, 15 UNDECIDED.**  So the lever licensed no skipping here and
+changed no plan -- which is a null, and it is recorded because the certificate's
+whole purpose is to be spent before a reorder is.
+
+    EXPOSED    V90SpectralShaper::reset          scratch: edi
+    UNDECIDED  the other fifteen
+    CLEARED    none
+
+**A 0 AGAINST A ~31% BASE RATE IS THE SHAPE OF A DEAD DETECTOR, so it was not
+believed until the detector was watched fire.**  The playbook's tree-wide run
+found 28 of 91 BYTES symbols CLEARED; getting 0 of 16 is p ~ 0.003.  Finding
+134's ritual: `spectralDesign` -- named CLEARED in that run and, usefully,
+defined in one of the seven objects already built, so the control cost zero
+compiles -- was put through this scorer and **came back CLEARED**.  The 0 is a
+measurement.
+
+**AND THE FIRST RUN OF THE SCORER REPORTED THREE FALSE `EXPOSED`s.**  It
+detected "a register the `-fno-peephole2` build never uses" by comparing raw
+`%name` tokens, so `bl` and `ebx` read as two registers and any function whose
+off-build already had `ebx` live scored EXPOSED on its 8-bit half.
+`adjustConstellationsPower`, `V90Phase4Demodulator::reset` and
+`resetLinearMappStudy` were all classified "scratch: bl" or "scratch: dx" and
+are all UNDECIDED once the tokens are folded through **`byteident.py`'s own
+`REG32`**, which exists for exactly this.  A second definition of a comparison
+is 7773's rule, and this is that rule costing three rows in the direction that
+LICENSES SKIPPING WORK -- the direction a certificate must never fail in.
+
+**Reading for the next pass.**  Lever 3b is necessary and not sufficient, and
+here it is not even discriminating: fifteen UNDECIDED is fifteen symbols the
+certificate cannot rule on either way.  Both of this wave's closures came from
+levers 1, 2 and 8, on symbols the certificate had left UNDECIDED.
+
+======================================================================
+### 7822. THE ENUMERATION HARNESS WROTE THROUGH A HARDLINK INTO THE REAL WORKING TREE
+
+A method finding, and the failure was silent until `git status` was read.
+
+Enumerating a domain needs a tree the driver can overwrite one file in without
+touching the real one, and `cp -al` is the obvious way to make it: near-instant,
+and only one file per cell is ever written.  **`cp -al` makes HARDLINKS, and a
+plain `cp` over a hardlink truncates the shared inode in place rather than
+replacing the link.**  The 720-cell driver's container loop did
+
+    cp variants/$v.cpp src/pump/v90/V90Demapper.cpp
+
+and every one of the 720 cells wrote through into the REAL worktree's
+`src/pump/v90/V90Demapper.cpp`.  The tree was left holding the LAST permutation
+compiled.
+
+**WHAT MAKES IT WORTH A NUMBER IS THAT NOTHING FAILED.**  The variant is valid
+C++ that compiles and passes every test -- it is a permutation of six
+independent stores -- so there is no error, no warning, and no failing suite.
+Had the wave ended there, a random permutation of `resetLinearMappStudy` would
+have been committed as if it were the recovered one, and the finding would have
+said 720 cells and one preimage while the file held cell 719.
+
+Three things contained it, and they are the general lesson:
+
+- **The Python driver for the OTHER enumeration did it correctly** -- `os.unlink`
+  before writing -- so only the container loop fired.  The two halves of one
+  harness disagreed about a rule neither stated.
+- **`git status` on the working tree, before committing anything.**  The damage
+  was exactly the six permuted lines and nothing else, so `git checkout --` was
+  the whole repair.
+- **The enumeration's own VALIDATION CELL still passed**, because it is compiled
+  FIRST, from a copy identical to the original.  A validation that runs only at
+  the start cannot see a harness that corrupts as it goes.
+
+The fix is `rm -f <target> && cp ...`, which breaks the link instead of writing
+through it, and it is now in the driver with the reason beside it.  Anything
+building a variant tree with `cp -al` needs the same, or a copy that is not
+hardlinked at all.
+
+======================================================================
+### 7823. `--why`'s BARE `False` IS NOT ALWAYS AN ABSENCE -- IT COUNTS ALIGNMENT NOPS
+
+**Reserved block: 7819-7822 above; this one takes 7823 from the same sweep.**
+
+`docs/method/refinement.md` and every brief written off it say the same thing
+about `byteident.py --why`: *a bare `False` means the two instruction sequences
+differ in LENGTH, that is itself a diagnosis -- an absence or an extra -- and
+lever 2 is what you want then.*  **That routing is wrong for at least one
+symbol in this cluster, and the reason is structural rather than incidental.**
+
+`alpha_why` opens with
+
+    if len(x) != len(y):
+        return False
+
+over the rows `insns()` returns, and **`insns()` does not strip padding**.
+`instrcount.py` does -- it imports `byteident.py`'s own `_padding` predicate
+for exactly that reason, after counting intra-function padding as code once
+inverted the triage of five functions (7793).  So the two tools answer
+different questions and can disagree, and `--why` is the one without the
+filter.
+
+**MEASURED, over the five bare-`False` symbols in the V.90 BYTES cluster.**
+`instrcount.py`'s own columns are `ours, blob, delta` and the delta is
+OURS MINUS BLOB, which is worth stating because reading it the other way round
+inverts every diagnosis in the table:
+
+    calcMtoMatchKtarget          ours 71  blob 67   +4   we emit FOUR MORE
+    updateUref                   ours 66  blob 64   +2   we emit TWO MORE
+    unitePhasesInfoOfUref        ours 203 blob 202  +1   we emit ONE MORE
+    SpectralShaper::process      ours 122 blob 125  -3   the blob has THREE MORE
+    printErrorHistogramAndReset  ours 86  blob 86    0   EQUAL
+
+**`printErrorHistogramAndReset` is EQUAL on code and still prints a bare
+`False`**, because the raw row counts are 88 against 100: the blob carries a
+couple of alignment nops and we carry fourteen.  Its 136 differing bytes of 362
+are therefore NOT a missing or extra statement, and lever 2 has nothing to say
+about it.  7793 had already recorded this symbol as "+12 and is EQUAL"; what is
+new is that `--why` still routes a reader to the wrong lever for it.
+
+**AND THREE OF THE OTHER FOUR ARE EXTRAS, NOT ABSENCES.**  Lever 2's worked
+example is an absence -- a dead store the object has and we do not -- and the
+lever reads naturally as "find the missing statement".  Here three of four
+deltas run the other way: OUR code is longer.  That is our factoring emitting
+more, not the author's statement missing, and it wants a different search.
+Only `SpectralShaper::process` has the absence shape, and the brief's own note
+already records its multiset as saying spill/induction rather than an absent
+statement.
+
+**THE PRESENTATION FIX 7818 ASKED FOR IS THE RIGHT ONE AND IS NOT ENOUGH.**
+7818 suggested `--why` say *"instruction counts differ, N against M"* rather
+than `False`.  It should say so over PADDING-STRIPPED counts, or it will
+report a difference of twelve nops as a difference of twelve instructions --
+which is the same defect in the message that 7793 fixed in the tool.
+
+**A SECOND IMPLEMENTATION GOT THIS WRONG WHILE CHECKING IT, which is 7773's
+rule collecting another instance.**  A scratch script written to separate
+padding from code here applied `byteident._padding` directly to `insns()` rows
+and disagreed with `instrcount.py` on four of the five symbols -- it read
+`calcMtoMatchKtarget` as blob 67 / ours 72 against the true 67 / 71, and
+`unitePhasesInfoOfUref` as 204 / 204 against 202 / 203, which would have
+reported a real one-instruction extra as "padding only".  `instrcount.py`
+counts over the symbol's `nm` extent rather than over `objdump
+--disassemble=`, and that is the difference.  **Use `instrcount.py` for this
+question; do not re-derive it beside it.**
+======================================================================
 ### 7825. `--why` printed a bare `False` for a length difference, which reads like a tool artefact and had already misled a reader
 
 `alpha_why` returns `None` when two instruction sequences are alpha-equal and a
@@ -87249,3 +87533,85 @@ type error the language will not catch and the caller will print.** Worth
 looking for elsewhere: `False` is falsy, `None` is falsy, and
 `alpha_equal`'s `is None` wrapper made both behave correctly at the only call
 site that mattered -- which is exactly why it survived.
+======================================================================
+### 7826. `V90SpectralShaper::reset`: THE FIFTEEN BYTES ARE A BASE REGISTER, AND THE ONLY SPELLINGS THAT REACH THEM ARE SHIMS -- DECLINED
+
+`_ZN17V90SpectralShaper5resetEjjffff`, 200 bytes, **BYTES 15, and it stays
+there.**  The difference is now located exactly and the source is unchanged.
+
+**THE FIFTEEN DIFFERING BYTES ARE ONE CONTIGUOUS RUN, +0x7c..+0x8a**, over six
+instructions, and the whole of it is one thing:
+
+    blob   mov 0x8(%esi),%edx ;  mov %edx,0x20(%ebx)
+    ours   mov 0x8(%esi),%edx ;  ... ;  mov %edx,0x68(%esi)
+
+`ssf` -- the embedded `V90SpectralShapingFilter` -- is at **+0x48**, and
+0x48 + 0x20 = 0x68.  **The two instructions store the same address.**  The blob
+reaches it through `%ebx`, still holding `&ssf` from the `setFilterCoeff` call
+two instructions earlier; we recompute it off `this`.
+
+**TWO DIAGNOSES THIS KILLS, AND THEY ARE BOTH THE OBVIOUS ONE.**
+
+- `--why` reports `row 36 NON-REGISTER OPERAND  0x8(%esi),%edx | (%esi),%ecx`,
+  which reads as a different FIELD being loaded.  **No field differs.**  A
+  differing displacement is evidence about a field only once you have checked
+  what the base register holds -- here the two displacements name one address.
+- It is **not statement order**, and two independent measurements agree.  Our
+  `ssf.blockLength = blockLength;` already sits where the object emits it, and
+  lever 1's 10-cell order domain on this function had reached no preimage.
+  Both were right; the free variable was somewhere neither looked.
+
+**ENUMERATED, 6 SPELLINGS OF HOW THE SOURCE NAMES THE SUB-OBJECT, and the
+domain collapses to TWO distinct emissions:**
+
+    ssf. on all three uses                      BYTES 15
+    resetSSFilter() then ssf.blockLength        BYTES 15
+    (&ssf)->blockLength, ssf. elsewhere         BYTES 15
+    a local POINTER held across all three       EXACT
+    a local REFERENCE held across all three     EXACT
+    resetSSFilter() then a local pointer        EXACT
+
+**AND THAT SPLIT IS EXACTLY WHY IT IS DECLINED.**  Every cell that reaches byte
+identity introduces a local the current source does not have, and every cell
+that does not introduce one stays at fifteen.  **The domain of spellings that
+add nothing is exhausted, with no preimage** -- which is 7782's stopping rule,
+and the same shape as `V92Phase4Modulator::reset` (7771) and `VPcmFloModem.cpp`
+(7797/7798): the measurement is the deliverable and the diff is not kept.
+
+**THE TEST THAT SETTLED IT, and it is the one to reuse: NAME THE INSTRUCTION A
+PLAIN SPELLING COULD NOT HAVE EMITTED.**  For 7819 that instruction exists --
+`movsbl` cannot come from an `int` expression, so the source property is
+FORCED.  Here there is none.  `mov %edx,0x20(%ebx)` against
+`mov %edx,0x68(%esi)` is a base-register choice, which is `tiers.md`'s FREE
+column; this tree has exactly two named exceptions to that column, a
+scratch-consuming `peephole2` (lever 3b) and a spill slot narrower than its
+value (lever 12), and **neither is what fired here**.  A local variable whose
+only effect is to lengthen a register's live range is fitting the compiler as
+surely as a `volatile` is, and CLAUDE.md's rule does not turn on how ordinary
+the construct looks.
+
+**LEVER 9 IS NOT THE PRECEDENT IT LOOKS LIKE, and the difference is worth
+stating because the two are one keystroke apart.**  Lever 9's "read the member
+into a local first" changes which TREE GCC folds -- `tree_swap_operands_p`
+tests `DECL_P`, so the local changes the emitted comparison AND its NaN
+behaviour, which `make period` can see and which 3529 measured against a real
+NaN.  There is a semantic difference there and a differential test behind it.
+Here the local changes nothing a test could ever observe.  **A local that
+changes what the compiler is asked is a lever; a local that changes only what
+the allocator does with the answer is a shim.**
+
+**THE CONTROL IS THE PART THAT MAKES THE READING SOUND**, and it is kept
+because it says WHERE the effect lives.  Spelling only the STORE through a
+pointer -- `(&ssf)->blockLength` -- changes nothing at all.  What moves the
+register is the name being live ACROSS the two calls, so the effect is a live
+range and not an addressing mode.  That is also the reason no smaller,
+better-motivated edit exists to be argued for.
+
+**WHAT WOULD ACTUALLY REOPEN IT.**  This is the ONE symbol of the sixteen in
+the V.90 BYTES cluster that lever 3b's certificate reports **EXPOSED**
+(`-fno-peephole2` changes it, scratch `edi`) -- see 7821.  So its allocation IS
+steerable by the established mechanism, which is the translation unit's
+EMISSION ORDER, not source aliasing.  `V90SpectralShaper.cpp` has 10 comparable
+symbols with 6 already exact, so a whole-file permutation risks those six and
+was not attempted here; but that, and not another spelling, is where this
+symbol's remaining chance lies.

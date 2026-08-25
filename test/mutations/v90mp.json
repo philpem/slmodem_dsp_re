@@ -55,7 +55,7 @@
 
  {"label": "Rate is three bits, not four", "find": "\tfor (i = 0x1b; i > 0x17; i--)\n", "replace": "\tfor (i = 0x1b; i > 0x18; i--)\n"},
 
- {"label": "the two Trellis bits the other way round", "find": "\tTrellis = (char)(((bits[0x1e] & 1) << 1) | (bits[0x1d] & 1));", "replace": "\tTrellis = (char)(((bits[0x1d] & 1) << 1) | (bits[0x1e] & 1));"},
+ {"label": "the two Trellis bits the other way round", "find": "\tTrellis = (char)(bits[0x1e] & 1);\n\tTrellis = (char)((Trellis << 1) | (bits[0x1d] & 1));", "replace": "\tTrellis = (char)(bits[0x1d] & 1);\n\tTrellis = (char)((Trellis << 1) | (bits[0x1e] & 1));"},
 
  {"label": "NonLin is one bit of bits[0x1f], not the whole byte", "why": "There is no `and $0x1` on the three whole-byte copies at 0x1f782..0x1f78d, and every value below 2 hides it -- so t_v90mp.cpp seeds the bit vector with arbitrary bytes as well as with real bits, and asserts that a value above 1 was actually decoded.", "find": "\tNonLin = (char)bits[0x1f];", "replace": "\tNonLin = (char)(bits[0x1f] & 1);"},
 

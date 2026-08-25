@@ -217,7 +217,48 @@ V90MP::evaluateInfo()
 	for (i = 0x1b; i > 0x17; i--)
 		Rate = (char)((Rate << 1) | (bits[i] & 1));
 
-	Trellis = (char)(((bits[0x1e] & 1) << 1) | (bits[0x1d] & 1));
+	/*
+	 * TRELLIS ACCUMULATES THROUGH A `char`, AND THE OBJECT SAYS SO IN ONE
+	 * INSTRUCTION.  The blob narrows the first bit to eight bits and then
+	 * SIGN-EXTENDS it before the shift --
+	 *
+	 *     and    $0x1,%al          bits[0x1e] & 1, in 8 bits
+	 *     movsbl %al,%edx          <-- we emitted nothing here
+	 *     add    %edx,%edx         << 1
+	 *
+	 * -- where a single expression of type `int` gives `and $0x1,%edx;
+	 * add %edx,%edx` and no `movsbl` at all.  The extension is FORCED
+	 * evidence in CLAUDE.md's sense: it exists only because something in
+	 * the source was a signed 8-bit value, and no differential test can
+	 * ever see it, because `x & 1` is 0 or 1 under either reading.
+	 *
+	 * ENUMERATED, 35 cells: seven spellings of this statement crossed with
+	 * all five positions of the `rateMask = 0` below it (finding 7819).
+	 * Four distinct emissions.  TWENTY cells reach this one -- a char
+	 * local, a signed-char local, this two-step accumulate, and the
+	 * three-step accumulate with an explicit `Trellis = 0` -- so what is
+	 * decoded is a FACT and not an order: the intermediate is narrowed to
+	 * a signed `char` before it is shifted.  The four are indistinguishable
+	 * to the compiler, so this file cannot say which the author typed.
+	 *
+	 * TWO CELLS ARE EXCLUDED, and they are the useful half.  The single
+	 * expression we had emits 46 differing bytes; an inner `(char)` cast
+	 * on it emits 47, because the load happens first and the conversion
+	 * after (lever 8's rule, 7803).  And the ROLLED loop -- the shape
+	 * `Rate` and the six h-values use -- comes out a different SIZE
+	 * entirely, so the author did not write one here.
+	 *
+	 * Rolled, and measured NOT to be what the object was built from:
+	 *     Trellis = 0;
+	 *     for (i = 0x1e; i > 0x1c; i--)
+	 *             Trellis = (char)((Trellis << 1) | (bits[i] & 1));
+	 *
+	 * Residual after this: ONE byte, `pop %esi` against our `pop %ebx` in
+	 * the epilogue, which `alpha_equal` accepts -- grade 1, a register
+	 * permutation, not a source property.
+	 */
+	Trellis = (char)(bits[0x1e] & 1);
+	Trellis = (char)((Trellis << 1) | (bits[0x1d] & 1));
 
 	/*
 	 * WHOLE BYTES, not masked bits.  `movzbl 0x3b(%ebx),%eax; mov
@@ -228,6 +269,18 @@ V90MP::evaluateInfo()
 	Shaping = (char)bits[0x20];
 	CPack = (char)bits[0x21];
 
+	/*
+	 * WHERE THIS LINE SITS IS NOT RECOVERABLE, and that is measured rather
+	 * than assumed.  The blob emits its `movw $0x0,0x6(%ebx)` in the MIDDLE
+	 * of the Trellis computation above, four statements earlier than we
+	 * write it, which reads exactly like a statement-order difference.  It
+	 * is not: all five source positions -- before `Trellis`, and after each
+	 * of `Trellis`, `NonLin`, `Shaping` and `CPack` -- emit the SAME bytes,
+	 * for every one of the seven Trellis spellings enumerated above.  The
+	 * map is constant, so by lever 1's own rule the difference is not a
+	 * store-order difference at all; GCC schedules this store where it
+	 * likes.  Do not re-run that domain.  Finding 7819.
+	 */
 	rateMask = 0;
 	for (i = 0x24; i <= 0x31; i++)
 		if (bits[i])
