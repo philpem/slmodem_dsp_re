@@ -747,8 +747,185 @@ const short hsine2400[16] = {
 	 16384,      0, -16384,      0,  16384,      0, -16384,      0,
 };
 
+/*
+ * How many coefficients V34EchoReportCoeff prints, regardless of `taps`.
+ * See the note in the function.
+ */
+#define V34_ECHO_REPORT_TAPS	144
+#define V34_ECHO_REPORT_COLS	6
 
-/* ------------------------------------------------------------ echo canceller */
+/*
+ * ---------------------------------------------------------------------------
+ * THE DEFINITION ORDER BELOW IS THE OBJECT'S EMISSION ORDER, AND IT IS NOT
+ * GROUPED BY ROLE.  It used to be -- echo canceller, modulator, Hilbert,
+ * timing, equaliser, each behind its own banner -- and those banners are gone
+ * because the object's order scatters every one of those groups.  `nm -n` on
+ * the blob puts `V34EchoPreFilterCopy` and `V34PremptxCopy` between
+ * `V34InitHilbertFilter` and `V34EchoReportCoeff`, and `V34TimingFiltersInit`
+ * between `V34TimingFilter` and `V34TimingPrefilter`; that is the author's own
+ * source order and grouping it by role is what we invented.
+ *
+ * It is load-bearing.  GCC 3.4.2's register allocation depends on the IDENTITY
+ * of what it compiled before a function rather than on the function's own text
+ * alone, so a definition moved here moves bytes in its successors --
+ * `V34EchoCleanUp` reached byte identity on this reorder and nothing else.
+ * All 26 emitted symbols now sit at the blob's own index, which is the gate on
+ * believing any future null result from this file.  The check is `nm -n
+ * --defined-only` on `build/tc_out/src_pump_v34_v34filters.c.o` and on the
+ * blob, compared over the symbols both define: 26 of 26 today.  There are no
+ * per-function `.text` comments here to read the order off.
+ *
+ * IT IS NOT SUFFICIENT, and `V34EqualizerCleanUp` is the proof: it sits at the
+ * blob's index 16 of 26 with the blob's own predecessor ahead of it, and it
+ * still lost byte identity on this reorder.  Something further upstream
+ * differs; this file's order is no longer the variable.  See
+ * docs/method/refinement.md lever 3.
+ *
+ * The four file-local helpers and the two macros above them are hoisted ABOVE
+ * every definition deliberately: a macro parked beside its first user ends up
+ * below it the next time the order is corrected, and a `static` there stops
+ * the file compiling.
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * Walk one echo canceller's delay line backwards from its cursor, zeroing
+ * `n` entries and wrapping at the start back to the end.
+ */
+static void
+echo_rewind(struct v34_echo *e, int n)
+{
+	short *p = e->cursor - 1;
+	int k;
+
+	if (e->cursor == e->dline)
+		p = e->dline + e->dlen - 1;
+
+	for (k = 0; k < n; k++) {
+		*p = 0;
+		if (p == e->dline)
+			p = e->dline + e->dlen - 1;
+		else
+			p--;
+	}
+}
+
+/*
+ * Load one polyphase bank: `rows` rows of `taps` shorts, each REVERSED and
+ * zero-padded out to 64.
+ */
+static void
+mod_load(struct v34_modulator *m, const short *src)
+{
+	short *dst = m->shaped;
+	int row, i;
+
+	for (row = 0; row < m->rows; row++) {
+		for (i = 0; i < m->taps; i++)
+			dst[i] = src[m->taps - 1 - i];
+		for (; i <= V34_MOD_ROW - 1; i++)
+			dst[i] = 0;
+		dst += V34_MOD_ROW;
+		src += m->taps;
+	}
+}
+
+/* The carrier table and its length, by frequency.  Falls back to 1200. */
+static void
+mod_carrier(struct v34_modulator *m, short carrier)
+{
+	switch (carrier) {
+	case 1200: m->sine = hsine1200; m->sine_len = 8;    break;
+	case 1600: m->sine = hsine1600; m->sine_len = 6;    break;
+	case 1680: m->sine = hsine1680; m->sine_len = 0x28; break;
+	case 1800: m->sine = hsine1800; m->sine_len = 0x10; break;
+	case 1829: m->sine = hsine1829; m->sine_len = 0x15; break;
+	case 1867: m->sine = hsine1867; m->sine_len = 0x24; break;
+	case 1920: m->sine = hsine1920; m->sine_len = 5;    break;
+	case 1959: m->sine = hsine1959; m->sine_len = 0x31; break;
+	case 2000: m->sine = hsine2000; m->sine_len = 0x18; break;
+	case 2400: m->sine = hsine2400; m->sine_len = 8;    break;
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"V34SetupModulator: invalid carrier %ld\n",
+				(long)carrier);
+		m->sine = hsine1200;
+		m->sine_len = 8;
+		break;
+	}
+}
+
+/*
+ * One tap of the complex LMS gradient, at full 32-bit width.
+ *
+ * The update is dc = -e * conj(d), spelled out: the real part loses
+ * dre*ere + dim*eim and the imaginary part loses dre*eim while gaining
+ * dim*ere.
+ */
+static void
+eq_adapt_tap(short *hi, short *lo, int dre, int dim, int ere, int eim,
+	     int conj)
+{
+	int tap = (int)((unsigned)*hi << 16) + (unsigned short)*lo;
+
+	if (conj)
+		tap = (int)((unsigned)tap - (unsigned)(dre * eim)
+			    + (unsigned)(dim * ere));
+	else
+		tap = (int)((unsigned)tap - (unsigned)(dre * ere)
+			    - (unsigned)(dim * eim));
+
+	*hi = (short)(tap >> 16);
+	*lo = (short)tap;
+}
+
+/*
+ * Wire the two echo cancellers to their arrays.
+ *
+ * Everything here is a fixed offset into the enclosing object: the storage is
+ * part of the object rather than separately allocated, so this is layout
+ * rather than construction.  Finding 98 has the block diagram; the short
+ * version is that each canceller's four arrays are contiguous with the
+ * descriptor, and the second canceller repeats the first 0x1080 later.
+ *
+ * `cursor` IS NOT SET TO THE START OF THE DELAY LINE.  Each canceller's
+ * cursor is loaded with the PREVIOUS contents of its own `dline` field, read
+ * a few instructions before that field is overwritten:
+ *
+ *     71d85:  mov 0x80bc(%eax),%edx     ; old dline
+ *     71da3:  mov %edx,0x80b8(%eax)     ; cursor = it
+ *     71daf:  mov %ecx,0x80bc(%eax)     ; dline = obj+0x81f8
+ *
+ * On a re-initialisation that is the old base, which is the same address, so
+ * it is harmless.  On a FIRST initialisation it is whatever the field held --
+ * uninitialised memory.  Nothing dereferences it before V34EchoCleanUp
+ * rewrites it with `dline`, which every setup path calls, so it is dormant;
+ * registered as D30 and reproduced rather than tidied.
+ */
+void
+V34InitializeImplementationSpecific(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	obj->p_2074 = (char *)obj + 0x146c;
+
+	obj->echo0.cursor = obj->echo0.dline;	/* the OLD dline; see above */
+	obj->echo0.dline = obj->echo0_dline;
+	obj->echo0.coeff = obj->echo0_coeff;
+	obj->echo0.coeff_frac = obj->echo0_frac;
+	obj->echo0.hist = obj->echo0_hist;
+	obj->echo0.dlen = V34_ECHO_DLEN;
+	obj->echo0.taps = V34_ECHO_TAPS;
+
+	obj->echo1.cursor = obj->echo1.dline;
+	obj->echo1.dline = obj->echo1_dline;
+	obj->echo1.coeff = obj->echo1_coeff;
+	obj->echo1.coeff_frac = obj->echo1_frac;
+	obj->echo1.hist = obj->echo1_hist;
+	obj->echo1.dlen = V34_ECHO_DLEN;
+	obj->echo1.taps = V34_ECHO_TAPS;
+}
 
 void
 V34EchoCleanUp(struct v34_echo *e)
@@ -882,143 +1059,6 @@ V34EchoEstimateDelayLineEnergy(struct v34_echo *e)
 	return acc;
 }
 
-/*
- * How many coefficients V34EchoReportCoeff prints, regardless of `taps`.
- * See the note in the function.
- */
-#define V34_ECHO_REPORT_TAPS	144
-#define V34_ECHO_REPORT_COLS	6
-
-void
-V34EchoReportCoeff(struct v34_echo *e)
-{
-	unsigned n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;
-	unsigned k;
-	int i;
-
-	/* Nothing to say if every tap the scan covers is still zero. */
-	for (k = 0; k < n; k++)
-		if (e->coeff[k] != 0)
-			break;
-
-	/*
-	 * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a
-	 * literal 0x3f on all three, and all three are referenced from this
-	 * function and nowhere else:
-	 *
-	 *      .rodata.str1.4+0xf878  "?======= Nothing to report ========="
-	 *      .rodata.str1.1+0x2c84  "?%d %d %d %d %d %d"
-	 *      .rodata.str1.4+0xf8a0  "?======= Coefficients[1..%ld]========="
-	 *
-	 * Invented paraphrases stood here until the whole tree's format strings
-	 * were checked against .rodata; see finding 180.  The header takes an
-	 * argument, which the paraphrase did not: `%edx` at 0x72298 is still
-	 * `n`, the tap count rounded down to a multiple of six.
-	 */
-	if (k == n) {
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"?======= Nothing to report =========\n");
-		return;
-	}
-
-	if (!DSPLIB_DEBUG_ON())
-		return;
-
-	dsplibs_debug_printf("?======= Coefficients[1..%ld]=========\n",
-			     (long)n);
-
-	/*
-	 * THE SCAN AND THE DUMP DISAGREE ABOUT HOW LONG THE ARRAY IS.  The
-	 * scan above stops at `taps` rounded down to a multiple of six; this
-	 * loop runs to a hardcoded 144 whatever `taps` says, so a canceller
-	 * with fewer than 144 taps has its coefficient array over-read here.
-	 *
-	 * Reproduced.  It is a logging path gated on a level slmodemd ships
-	 * at zero, so it cannot fire on a working modem, and the read is of
-	 * the reconstruction's own allocation rather than of anything the
-	 * caller owns.  D28.
-	 */
-	for (i = 0; i <= V34_ECHO_REPORT_TAPS - V34_ECHO_REPORT_COLS;
-	     i += V34_ECHO_REPORT_COLS) {
-		if (!DSPLIB_DEBUG_ON())
-			return;
-		dsplibs_debug_printf("?%d %d %d %d %d %d\n",
-				     e->coeff[i], e->coeff[i + 1],
-				     e->coeff[i + 2], e->coeff[i + 3],
-				     e->coeff[i + 4], e->coeff[i + 5]);
-	}
-}
-
-/*
- * Wire the two echo cancellers to their arrays.
- *
- * Everything here is a fixed offset into the enclosing object: the storage is
- * part of the object rather than separately allocated, so this is layout
- * rather than construction.  Finding 98 has the block diagram; the short
- * version is that each canceller's four arrays are contiguous with the
- * descriptor, and the second canceller repeats the first 0x1080 later.
- *
- * `cursor` IS NOT SET TO THE START OF THE DELAY LINE.  Each canceller's
- * cursor is loaded with the PREVIOUS contents of its own `dline` field, read
- * a few instructions before that field is overwritten:
- *
- *     71d85:  mov 0x80bc(%eax),%edx     ; old dline
- *     71da3:  mov %edx,0x80b8(%eax)     ; cursor = it
- *     71daf:  mov %ecx,0x80bc(%eax)     ; dline = obj+0x81f8
- *
- * On a re-initialisation that is the old base, which is the same address, so
- * it is harmless.  On a FIRST initialisation it is whatever the field held --
- * uninitialised memory.  Nothing dereferences it before V34EchoCleanUp
- * rewrites it with `dline`, which every setup path calls, so it is dormant;
- * registered as D30 and reproduced rather than tidied.
- */
-void
-V34InitializeImplementationSpecific(void *objp)
-{
-	struct v34_object *obj = (struct v34_object *)objp;
-
-	obj->p_2074 = (char *)obj + 0x146c;
-
-	obj->echo0.cursor = obj->echo0.dline;	/* the OLD dline; see above */
-	obj->echo0.dline = obj->echo0_dline;
-	obj->echo0.coeff = obj->echo0_coeff;
-	obj->echo0.coeff_frac = obj->echo0_frac;
-	obj->echo0.hist = obj->echo0_hist;
-	obj->echo0.dlen = V34_ECHO_DLEN;
-	obj->echo0.taps = V34_ECHO_TAPS;
-
-	obj->echo1.cursor = obj->echo1.dline;
-	obj->echo1.dline = obj->echo1_dline;
-	obj->echo1.coeff = obj->echo1_coeff;
-	obj->echo1.coeff_frac = obj->echo1_frac;
-	obj->echo1.hist = obj->echo1_hist;
-	obj->echo1.dlen = V34_ECHO_DLEN;
-	obj->echo1.taps = V34_ECHO_TAPS;
-}
-
-/*
- * Walk one echo canceller's delay line backwards from its cursor, zeroing
- * `n` entries and wrapping at the start back to the end.
- */
-static void
-echo_rewind(struct v34_echo *e, int n)
-{
-	short *p = e->cursor - 1;
-	int k;
-
-	if (e->cursor == e->dline)
-		p = e->dline + e->dlen - 1;
-
-	for (k = 0; k < n; k++) {
-		*p = 0;
-		if (p == e->dline)
-			p = e->dline + e->dlen - 1;
-		else
-			p--;
-	}
-}
-
 void
 V34EchoHistoryBackwardClean(void *objp, unsigned n)
 {
@@ -1090,12 +1130,83 @@ V34EchoHistoryBackwardClean(void *objp, unsigned n)
 	}
 }
 
-/* ------------------------------------------------------- Hilbert transformer */
-
 void *
 V34InitHilbertFilter(short *state)
 {
 	return sysdep_memset(state, 0, V34_HILBERT_TAPS * sizeof(short));
+}
+
+void
+V34EchoPreFilterCopy(void *dst, const short *coeff)
+{
+	*(const short **)((char *)dst + 0x54) = coeff;
+}
+
+void
+V34PremptxCopy(void *modulator, const short *coeff)
+{
+	*(const short **)((char *)modulator + 0xcb0) = coeff;
+}
+
+void
+V34EchoReportCoeff(struct v34_echo *e)
+{
+	unsigned n = (e->taps / V34_ECHO_REPORT_COLS) * V34_ECHO_REPORT_COLS;
+	unsigned k;
+	int i;
+
+	/* Nothing to say if every tap the scan covers is still zero. */
+	for (k = 0; k < n; k++)
+		if (e->coeff[k] != 0)
+			break;
+
+	/*
+	 * THE THREE STRINGS ARE THE OBJECT'S, leading '?' included -- it is a
+	 * literal 0x3f on all three, and all three are referenced from this
+	 * function and nowhere else:
+	 *
+	 *      .rodata.str1.4+0xf878  "?======= Nothing to report ========="
+	 *      .rodata.str1.1+0x2c84  "?%d %d %d %d %d %d"
+	 *      .rodata.str1.4+0xf8a0  "?======= Coefficients[1..%ld]========="
+	 *
+	 * Invented paraphrases stood here until the whole tree's format strings
+	 * were checked against .rodata; see finding 180.  The header takes an
+	 * argument, which the paraphrase did not: `%edx` at 0x72298 is still
+	 * `n`, the tap count rounded down to a multiple of six.
+	 */
+	if (k == n) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"?======= Nothing to report =========\n");
+		return;
+	}
+
+	if (!DSPLIB_DEBUG_ON())
+		return;
+
+	dsplibs_debug_printf("?======= Coefficients[1..%ld]=========\n",
+			     (long)n);
+
+	/*
+	 * THE SCAN AND THE DUMP DISAGREE ABOUT HOW LONG THE ARRAY IS.  The
+	 * scan above stops at `taps` rounded down to a multiple of six; this
+	 * loop runs to a hardcoded 144 whatever `taps` says, so a canceller
+	 * with fewer than 144 taps has its coefficient array over-read here.
+	 *
+	 * Reproduced.  It is a logging path gated on a level slmodemd ships
+	 * at zero, so it cannot fire on a working modem, and the read is of
+	 * the reconstruction's own allocation rather than of anything the
+	 * caller owns.  D28.
+	 */
+	for (i = 0; i <= V34_ECHO_REPORT_TAPS - V34_ECHO_REPORT_COLS;
+	     i += V34_ECHO_REPORT_COLS) {
+		if (!DSPLIB_DEBUG_ON())
+			return;
+		dsplibs_debug_printf("?%d %d %d %d %d %d\n",
+				     e->coeff[i], e->coeff[i + 1],
+				     e->coeff[i + 2], e->coeff[i + 3],
+				     e->coeff[i + 4], e->coeff[i + 5]);
+	}
 }
 
 void
@@ -1127,51 +1238,457 @@ V34HilbertFilter(short *state, short sample, int *re, int *im)
 	*im = acc_im;
 }
 
-/* -------------------------------------------------------------- modulator */
+int
+V34TimingHPFilter(struct v34_timing *t, short sample)
+{
+	short *hist = t->hist;
+	int carry = sample;
+	int acc = 0x8000;		/* Q16 round-to-nearest */
+	int k;
+
+	/*
+	 * Same read-then-overwrite shift as the Hilbert filter, with one
+	 * difference that matters: the product uses the value being WRITTEN,
+	 * not the one being read.  So tap k multiplies x[n-k] rather than
+	 * x[n-1-k], and the filter has no extra sample of delay in it.
+	 */
+	for (k = 0; k < V34_TIMING_HP_TAPS; k++) {
+		int old = hist[k];
+
+		hist[k] = (short)carry;
+		acc = (int)((unsigned)acc
+			    + (unsigned)(carry * V34TimingHPFilterCoeff[k]));
+		carry = old;
+	}
+
+	return acc >> 16;
+}
 
 /*
- * Load one polyphase bank: `rows` rows of `taps` shorts, each REVERSED and
- * zero-padded out to 64.
+ * Symbol timing recovery: two half-baud band-passes, a cross product, and a
+ * high-pass.  See findings 99, 101, 102 and 103; the traps are noted inline.
  */
-static void
-mod_load(struct v34_modulator *m, const short *src)
+int
+V34TimingFilter(struct v34_timing *t, int sample)
 {
-	short *dst = m->shaped;
-	int row, i;
+	int cr, ci, k;
+	int pr = 0, pi = 0, nr = 0, ni = 0;	/* numerator accumulators   */
+	int par = 0, pai = 0, nar = 0, nai = 0;	/* denominator accumulators */
+	int acc, hp;
 
-	for (row = 0; row < m->rows; row++) {
-		for (i = 0; i < m->taps; i++)
-			dst[i] = src[m->taps - 1 - i];
-		for (; i <= V34_MOD_ROW - 1; i++)
-			dst[i] = 0;
-		dst += V34_MOD_ROW;
-		src += m->taps;
+	t->in1 = t->in0;
+	t->in0 = sample;
+
+	/* 0x599a / 32768 = 0.70001, rounded. */
+	cr = (short)(((short)sample * 0x599a + 0x8000) >> 15);
+	ci = (short)(((sample >> 16) * 0x599a + 0x8000) >> 15);
+
+	/* Numerator, over the shared input history, for both filters. */
+	for (k = 0; k < 3; k++) {
+		int or_ = t->iir[0][k], oi = t->iir[1][k];
+
+		t->iir[0][k] = (short)cr;
+		t->iir[1][k] = (short)ci;
+
+		pr += cr * posHalfBaud_Bcoef_Real[k]
+		      - ci * posHalfBaud_Bcoef_Imag[k];
+		pi += ci * posHalfBaud_Bcoef_Real[k]
+		      + cr * posHalfBaud_Bcoef_Imag[k];
+		nr += cr * negHalfBaud_Bcoef_Real[k]
+		      - ci * negHalfBaud_Bcoef_Imag[k];
+		ni += cr * negHalfBaud_Bcoef_Imag[k]
+		      + ci * negHalfBaud_Bcoef_Real[k];
+
+		cr = or_;
+		ci = oi;
+	}
+
+	/*
+	 * Denominator, over each filter's OWN output history, from index 1:
+	 * Acoef_Real[0] is 16384, the implicit Q14 one, and skipping it is
+	 * deliberate.
+	 */
+	cr = t->iir[2][0];
+	ci = t->iir[3][0];
+	for (k = 1; k < 3; k++) {
+		int or_ = t->iir[2][k], oi = t->iir[3][k];
+
+		t->iir[2][k] = (short)cr;
+		t->iir[3][k] = (short)ci;
+		par += cr * posHalfBaud_Acoef_Real[k]
+		       - ci * posHalfBaud_Acoef_Imag[k];
+		pai += cr * posHalfBaud_Acoef_Imag[k]
+		       + ci * posHalfBaud_Acoef_Real[k];
+		cr = or_;
+		ci = oi;
+	}
+
+	cr = t->iir[4][0];
+	ci = t->iir[5][0];
+	for (k = 1; k < 3; k++) {
+		int or_ = t->iir[4][k], oi = t->iir[5][k];
+
+		t->iir[4][k] = (short)cr;
+		t->iir[5][k] = (short)ci;
+		nar += cr * negHalfBaud_Acoef_Real[k]
+		       - ci * negHalfBaud_Acoef_Imag[k];
+		nai += cr * negHalfBaud_Acoef_Imag[k]
+		       + ci * negHalfBaud_Acoef_Real[k];
+		cr = or_;
+		ci = oi;
+	}
+
+	/*
+	 * Feedback, then the outputs -- written to the [0] slots only AFTER
+	 * both loops have run, because those loops are still reading them.
+	 */
+	pr -= par; pi -= pai; nr -= nar; ni -= nai;
+	pr = (pr + 0x2000) >> 14;
+	pi = (pi + 0x2000) >> 14;
+	nr = (nr + 0x2000) >> 14;
+	ni = (ni + 0x2000) >> 14;
+	t->iir[2][0] = (short)pr;
+	t->iir[3][0] = (short)pi;
+	t->iir[4][0] = (short)nr;
+	t->iir[5][0] = (short)ni;
+
+	/* The discriminator: the cross product of the two complex outputs. */
+	/*
+	 * pos_im * neg_re - pos_re * neg_im, in that order.  The original is
+	 *   imul %eax,%ebp   (pos_im * neg_re)
+	 *   imul %edx,%edi   (pos_re * neg_im)
+	 *   sub  %edi,%ebp
+	 * so the opposite order gives the negated discriminator -- a timing
+	 * loop that corrects the wrong way.
+	 *
+	 * AND IT MULTIPLIES THE SHIFTED VALUES, NOT THE STORED SHORTS.  The
+	 * four `imul`s take the registers the stores came out of, which still
+	 * hold the full 32-bit `(x + 0x2000) >> 14`; the state gets the low
+	 * sixteen bits of that and the discriminator does not.  Reading them
+	 * back from `iir[][0]` is right until the loop rings hard enough to
+	 * push one past a short, and then it is wrong by 65536 times a
+	 * coefficient.  Found by `receiver`, whose inputs reach that state
+	 * and whose timing loop then corrects the wrong way -- see finding
+	 * 139.
+	 */
+	acc = pi * nr - pr * ni;
+	acc = (short)((acc + 0x2000) >> 14);
+
+	/*
+	 * The high-pass, written out rather than delegated: this rounds with
+	 * 0x4000 and shifts 15 where V34TimingHPFilter uses 0x8000 and 16 --
+	 * twice the gain, same table, same history.  Finding 102.
+	 */
+	hp = 0x4000;
+	for (k = 0; k < V34_TIMING_HP_TAPS; k++) {
+		int old = t->hist[k];
+
+		t->hist[k] = (short)acc;
+		hp = (int)((unsigned)hp
+			   + (unsigned)(acc * V34TimingHPFilterCoeff[k]));
+		acc = old;
+	}
+
+	return (short)(hp >> 15);
+}
+
+void
+V34TimingFiltersInit(struct v34_timing *t)
+{
+	int i, j;
+
+	/*
+	 * The original walks this as three outer steps of one short each,
+	 * writing six entries six shorts apart -- the transposed form of a
+	 * `short[6][3]`, which is why the type is two-dimensional here.
+	 */
+	for (i = 0; i < 6; i++)
+		for (j = 0; j < 3; j++)
+			t->iir[i][j] = 0;
+
+	/*
+	 * The object writes eighty SHORTS from +0x024.  That covers `hist`
+	 * and only the first twenty entries of the forty-int prefilter state.
+	 * The latter feeds timing recovery at the beginning of acquisition,
+	 * immediately upstream of the equaliser.
+	 *
+	 * It is a live initialisation defect, not a layout convenience.  Keep
+	 * the exact object extent in the reproduction tree; the normal build
+	 * clears the complete declared state.  This is the same polarity as
+	 * the other deliberate fixes: DSPLIB_REPRODUCE_BUGS is for binary
+	 * comparison, while the shipping build must not consume heap contents
+	 * as filter history.  See docs/deviations.md, D29.
+	 */
+	for (i = 0; i < V34_TIMING_HP_TAPS; i++)
+		t->hist[i] = 0;
+#ifdef DSPLIB_REPRODUCE_BUGS
+	for (i = 0; i < (V34_TIMING_INIT_SHORTS - V34_TIMING_HP_TAPS) / 2; i++)
+		t->pre_state[i] = 0;
+#else
+	for (i = 0; i < V34_TIMING_PRE_TAPS; i++)
+		t->pre_state[i] = 0;
+#endif
+
+	t->prefilter_coeff = V34TimingPrefilterCoeff;
+	t->hp_coeff = V34TimingHPFilterCoeff;
+}
+
+int
+V34TimingPrefilter(struct v34_timing *t)
+{
+	int carry0 = t->in0;
+	int carry1 = t->in1;
+	int acc_re = 0x2000;		/* Q14 round-to-nearest, both parts */
+	int acc_im = 0x2000;
+	int k;
+
+	/*
+	 * Two taps per iteration, because two complex inputs arrive per call
+	 * and each is pushed into its own slot of the state.  The real and
+	 * imaginary halves share a coefficient -- this is a real filter
+	 * applied to a complex signal, not a complex filter.
+	 */
+	for (k = 0; k < V34_TIMING_PRE_TAPS; k += 2) {
+		int old0 = t->pre_state[k];
+		int old1 = t->pre_state[k + 1];
+		int c0 = V34TimingPrefilterCoeff[k];
+		int c1 = V34TimingPrefilterCoeff[k + 1];
+
+		t->pre_state[k] = carry0;
+		t->pre_state[k + 1] = carry1;
+
+		acc_re = (int)((unsigned)acc_re
+			       + (unsigned)((short)carry0 * c0));
+		acc_im = (int)((unsigned)acc_im
+			       + (unsigned)((carry0 >> 16) * c0));
+		acc_re = (int)((unsigned)acc_re
+			       + (unsigned)((short)carry1 * c1));
+		acc_im = (int)((unsigned)acc_im
+			       + (unsigned)((carry1 >> 16) * c1));
+
+		carry0 = old0;
+		carry1 = old1;
+	}
+
+	/* Repacked the way it arrived. */
+	return (int)(((unsigned)(acc_im >> 14) << 16)
+		     | (unsigned short)(acc_re >> 14));
+}
+
+void
+V34EqualizerCleanUp(struct v34_equalizer *q)
+{
+	sysdep_memset(q, 0, sizeof(*q));
+
+	/*
+	 * A flat initial response: one unity tap in the middle and nothing
+	 * else.  0x1000 rather than 0x4000 or 0x7fff, so the coefficients are
+	 * Q12 here even though the delay line they multiply is a raw sample.
+	 */
+	q->re[V34_EQ_TAPS / 2] = V34_EQ_UNITY;
+}
+
+void
+V34EqualizerClearCenterTaps(struct v34_equalizer *q)
+{
+	int k;
+
+	/*
+	 * Taps 36..43, which includes the unity tap CleanUp installs at 40.
+	 * The fractional halves are NOT cleared, which matters because
+	 * V34EqualizerAdapt will read them back.
+	 */
+	for (k = V34_EQ_CENTRE_FIRST;
+	     k < V34_EQ_CENTRE_FIRST + V34_EQ_CENTRE_TAPS; k++) {
+		q->re[k] = 0;
+		q->im[k] = 0;
 	}
 }
 
-/* The carrier table and its length, by frequency.  Falls back to 1200. */
-static void
-mod_carrier(struct v34_modulator *m, short carrier)
+void
+V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re, short im)
 {
-	switch (carrier) {
-	case 1200: m->sine = hsine1200; m->sine_len = 8;    break;
-	case 1600: m->sine = hsine1600; m->sine_len = 6;    break;
-	case 1680: m->sine = hsine1680; m->sine_len = 0x28; break;
-	case 1800: m->sine = hsine1800; m->sine_len = 0x10; break;
-	case 1829: m->sine = hsine1829; m->sine_len = 0x15; break;
-	case 1867: m->sine = hsine1867; m->sine_len = 0x24; break;
-	case 1920: m->sine = hsine1920; m->sine_len = 5;    break;
-	case 1959: m->sine = hsine1959; m->sine_len = 0x31; break;
-	case 2000: m->sine = hsine2000; m->sine_len = 0x18; break;
-	case 2400: m->sine = hsine2400; m->sine_len = 8;    break;
-	default:
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf(
-				"V34SetupModulator: invalid carrier %ld\n",
-				(long)carrier);
-		m->sine = hsine1200;
-		m->sine_len = 8;
-		break;
+	int c = q->cursor;
+
+	q->dly_re[c] = re;
+	q->dly_im[c] = im;
+
+	/*
+	 * AN `if`/`else`, NOT A TERNARY, and the object says which.  The blob
+	 * forms the wrapped cursor in a register the increment did not
+	 * clobber -- `lea 0x1(%edx),%eax` with `%edx` still live for the
+	 * second store -- where the ternary makes GCC 3.4.2 `inc %edx` and
+	 * copy it back out, one instruction more at the same 59 bytes.  Six
+	 * spellings were compiled and this is the only one that maps.
+	 */
+	c++;
+	if (c == V34_EQ_TAPS)
+		q->cursor = 0;
+	else
+		q->cursor = c;
+}
+
+void
+V34EqualizerFilter(struct v34_equalizer *q, int *re, int *im)
+{
+	int acc_re = 0;
+	int acc_im = 0;
+	int k = 0;
+	int j;
+
+	/*
+	 * Two loops rather than one modulo: from the cursor to the end of the
+	 * line, then from the start back to the cursor.  The coefficient
+	 * index runs straight through both, so tap 0 always multiplies the
+	 * OLDEST sample.
+	 */
+	for (j = q->cursor; j < V34_EQ_TAPS; j++, k++) {
+		acc_re += q->dly_re[j] * q->re[k] - q->dly_im[j] * q->im[k];
+		acc_im += q->dly_im[j] * q->re[k] + q->dly_re[j] * q->im[k];
+	}
+	for (j = 0; j < q->cursor; j++, k++) {
+		acc_re += q->dly_re[j] * q->re[k] - q->dly_im[j] * q->im[k];
+		acc_im += q->dly_im[j] * q->re[k] + q->dly_re[j] * q->im[k];
+	}
+
+	*re = acc_re;
+	*im = acc_im;
+}
+
+void
+V34EqualizerAdapt(struct v34_equalizer *q, short err_re, short err_im)
+{
+	int k = 0;
+	int j;
+
+	for (j = q->cursor; j < V34_EQ_TAPS; j++, k++) {
+		eq_adapt_tap(&q->re[k], &q->re_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 0);
+		eq_adapt_tap(&q->im[k], &q->im_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 1);
+	}
+	for (j = 0; j < q->cursor; j++, k++) {
+		eq_adapt_tap(&q->re[k], &q->re_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 0);
+		eq_adapt_tap(&q->im[k], &q->im_frac[k], q->dly_re[j],
+			     q->dly_im[j], err_re, err_im, 1);
+	}
+}
+
+void
+V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
+{
+	int n;
+
+	/*
+	 * The same gradient as V34EqualizerAdapt over the 8 centre taps, and
+	 * NOT the same arithmetic:
+	 *
+	 *   - the tap is assembled from its high half alone, so whatever
+	 *     V34EqualizerAdapt accumulated in the fractional half is
+	 *     discarded on the way in and left stale on the way out;
+	 *   - the result is rounded with 0x8000 rather than truncated.
+	 *
+	 * Read as a design that is plausible -- a fast coarse pull on the
+	 * centre taps during acquisition, a fine 32-bit one everywhere
+	 * afterwards -- but the two do fight over the same eight taps if both
+	 * run, and nothing in this file arbitrates.  See docs/findings.md.
+	 */
+	for (n = 0; n < V34_EQ_CENTRE_TAPS; n++) {
+		int k = V34_EQ_CENTRE_FIRST + n;
+		int j = q->cursor + V34_EQ_CENTRE_FIRST + n;
+		int dre, dim, tap;
+
+		if (j >= V34_EQ_TAPS)
+			j -= V34_EQ_TAPS;
+		dre = q->dly_re[j];
+		dim = q->dly_im[j];
+
+		tap = (int)((unsigned)((unsigned)q->re[k] << 16)
+			    - (unsigned)(dre * err_re)
+			    - (unsigned)(dim * err_im) + 0x8000u);
+		q->re[k] = (short)(tap >> 16);
+
+		tap = (int)((unsigned)((unsigned)q->im[k] << 16)
+			    - (unsigned)(dre * err_im)
+			    + (unsigned)(dim * err_re) + 0x8000u);
+		q->im[k] = (short)(tap >> 16);
+	}
+}
+
+int
+V34Filter2(short sample, short *state, const short *coeff, unsigned taps)
+{
+	int carry = sample;
+	int acc = 0;
+	unsigned k;
+
+	/*
+	 * `taps` is unsigned -- the original's loop guard is `jb`, so a count
+	 * of zero does nothing rather than running four billion times.
+	 */
+	for (k = 0; k < taps; k++) {
+		int old = state[k];
+
+		state[k] = (short)carry;
+		acc = (int)((unsigned)acc + (unsigned)(carry * coeff[k]));
+		carry = old;
+	}
+
+	return acc;
+}
+
+void
+V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p)
+{
+	short i;
+
+	for (i = 0; i < count; i++) {
+		const short *coeff = p->coeff;
+		unsigned shift = p->shift;
+		int carry = buf[i];
+		int acc = 0;
+		int k;
+
+		/*
+		 * Same read-then-overwrite shift as V34TimingHPFilter and
+		 * V34Filter2, with the tap count fixed at 42 rather than
+		 * passed in.
+		 */
+		for (k = 0; k < V34_ECHO_PREFILTER_TAPS; k++) {
+			int old = p->state[k];
+
+			p->state[k] = (short)carry;
+			acc = (int)((unsigned)acc
+				    + (unsigned)(carry * coeff[k]));
+			carry = old;
+		}
+
+		/*
+		 * In place: the input array is the output array.  `shift` is
+		 * masked to five bits for the same reason as dftenergy's --
+		 * the object's `sar %cl` does the masking and C would
+		 * otherwise be undefined.  Re-read every sample, as the
+		 * original does, rather than hoisted.
+		 *
+		 * THE FIELD IS READ AS AN `int`, WHICH THE OBJECT SAYS AND
+		 * WHICH COSTS NOTHING.  `p->shift` is an `int` at +0x64 and
+		 * the blob loads all 32 bits of it -- `mov 0x64(%edi),%edx`
+		 * -- where the `(unsigned char)` cast this line used to carry
+		 * made GCC 3.4.2 emit `movzbl` and a separate `and $0x1f`,
+		 * two instructions more at the same 139 bytes.  The cast was
+		 * redundant under the mask: `(unsigned char)x & 31` and
+		 * `x & 31` are equal for every `int` x, because the mask
+		 * discards bits 5..7 either way.  63 differing bytes -> 55.
+		 *
+		 * DROPPING THE MASK AS WELL reaches 43 and matches the blob's
+		 * INSTRUCTION COUNT exactly (49 against 49), so the original
+		 * very likely wrote a bare `>> shift`.  It is NOT taken here:
+		 * a bare shift by a value the object can put above 31 is
+		 * undefined in C, it does not close the function either, and
+		 * `nothing wrong-but-plausible` outranks eight bytes.
+		 */
+		buf[i] = (short)((acc + 0x4000) >> (shift & 31));
 	}
 }
 
@@ -1460,503 +1977,6 @@ V34ModulatorProcess(struct v34_modulator *m, int symbol, short *out)
 	m->row = row - m->rows;
 
 	return nout;
-}
-
-/* ------------------------------------------------------------ timing recovery */
-
-int
-V34TimingHPFilter(struct v34_timing *t, short sample)
-{
-	short *hist = t->hist;
-	int carry = sample;
-	int acc = 0x8000;		/* Q16 round-to-nearest */
-	int k;
-
-	/*
-	 * Same read-then-overwrite shift as the Hilbert filter, with one
-	 * difference that matters: the product uses the value being WRITTEN,
-	 * not the one being read.  So tap k multiplies x[n-k] rather than
-	 * x[n-1-k], and the filter has no extra sample of delay in it.
-	 */
-	for (k = 0; k < V34_TIMING_HP_TAPS; k++) {
-		int old = hist[k];
-
-		hist[k] = (short)carry;
-		acc = (int)((unsigned)acc
-			    + (unsigned)(carry * V34TimingHPFilterCoeff[k]));
-		carry = old;
-	}
-
-	return acc >> 16;
-}
-
-/* --------------------------------------------------------------- equaliser */
-
-void
-V34EqualizerCleanUp(struct v34_equalizer *q)
-{
-	sysdep_memset(q, 0, sizeof(*q));
-
-	/*
-	 * A flat initial response: one unity tap in the middle and nothing
-	 * else.  0x1000 rather than 0x4000 or 0x7fff, so the coefficients are
-	 * Q12 here even though the delay line they multiply is a raw sample.
-	 */
-	q->re[V34_EQ_TAPS / 2] = V34_EQ_UNITY;
-}
-
-void
-V34EqualizerClearCenterTaps(struct v34_equalizer *q)
-{
-	int k;
-
-	/*
-	 * Taps 36..43, which includes the unity tap CleanUp installs at 40.
-	 * The fractional halves are NOT cleared, which matters because
-	 * V34EqualizerAdapt will read them back.
-	 */
-	for (k = V34_EQ_CENTRE_FIRST;
-	     k < V34_EQ_CENTRE_FIRST + V34_EQ_CENTRE_TAPS; k++) {
-		q->re[k] = 0;
-		q->im[k] = 0;
-	}
-}
-
-void
-V34EqualizerUpdateDelayLine(struct v34_equalizer *q, short re, short im)
-{
-	int c = q->cursor;
-
-	q->dly_re[c] = re;
-	q->dly_im[c] = im;
-
-	/*
-	 * AN `if`/`else`, NOT A TERNARY, and the object says which.  The blob
-	 * forms the wrapped cursor in a register the increment did not
-	 * clobber -- `lea 0x1(%edx),%eax` with `%edx` still live for the
-	 * second store -- where the ternary makes GCC 3.4.2 `inc %edx` and
-	 * copy it back out, one instruction more at the same 59 bytes.  Six
-	 * spellings were compiled and this is the only one that maps.
-	 */
-	c++;
-	if (c == V34_EQ_TAPS)
-		q->cursor = 0;
-	else
-		q->cursor = c;
-}
-
-void
-V34EqualizerFilter(struct v34_equalizer *q, int *re, int *im)
-{
-	int acc_re = 0;
-	int acc_im = 0;
-	int k = 0;
-	int j;
-
-	/*
-	 * Two loops rather than one modulo: from the cursor to the end of the
-	 * line, then from the start back to the cursor.  The coefficient
-	 * index runs straight through both, so tap 0 always multiplies the
-	 * OLDEST sample.
-	 */
-	for (j = q->cursor; j < V34_EQ_TAPS; j++, k++) {
-		acc_re += q->dly_re[j] * q->re[k] - q->dly_im[j] * q->im[k];
-		acc_im += q->dly_im[j] * q->re[k] + q->dly_re[j] * q->im[k];
-	}
-	for (j = 0; j < q->cursor; j++, k++) {
-		acc_re += q->dly_re[j] * q->re[k] - q->dly_im[j] * q->im[k];
-		acc_im += q->dly_im[j] * q->re[k] + q->dly_re[j] * q->im[k];
-	}
-
-	*re = acc_re;
-	*im = acc_im;
-}
-
-/*
- * One tap of the complex LMS gradient, at full 32-bit width.
- *
- * The update is dc = -e * conj(d), spelled out: the real part loses
- * dre*ere + dim*eim and the imaginary part loses dre*eim while gaining
- * dim*ere.
- */
-static void
-eq_adapt_tap(short *hi, short *lo, int dre, int dim, int ere, int eim,
-	     int conj)
-{
-	int tap = (int)((unsigned)*hi << 16) + (unsigned short)*lo;
-
-	if (conj)
-		tap = (int)((unsigned)tap - (unsigned)(dre * eim)
-			    + (unsigned)(dim * ere));
-	else
-		tap = (int)((unsigned)tap - (unsigned)(dre * ere)
-			    - (unsigned)(dim * eim));
-
-	*hi = (short)(tap >> 16);
-	*lo = (short)tap;
-}
-
-void
-V34EqualizerAdapt(struct v34_equalizer *q, short err_re, short err_im)
-{
-	int k = 0;
-	int j;
-
-	for (j = q->cursor; j < V34_EQ_TAPS; j++, k++) {
-		eq_adapt_tap(&q->re[k], &q->re_frac[k], q->dly_re[j],
-			     q->dly_im[j], err_re, err_im, 0);
-		eq_adapt_tap(&q->im[k], &q->im_frac[k], q->dly_re[j],
-			     q->dly_im[j], err_re, err_im, 1);
-	}
-	for (j = 0; j < q->cursor; j++, k++) {
-		eq_adapt_tap(&q->re[k], &q->re_frac[k], q->dly_re[j],
-			     q->dly_im[j], err_re, err_im, 0);
-		eq_adapt_tap(&q->im[k], &q->im_frac[k], q->dly_re[j],
-			     q->dly_im[j], err_re, err_im, 1);
-	}
-}
-
-void
-V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
-{
-	int n;
-
-	/*
-	 * The same gradient as V34EqualizerAdapt over the 8 centre taps, and
-	 * NOT the same arithmetic:
-	 *
-	 *   - the tap is assembled from its high half alone, so whatever
-	 *     V34EqualizerAdapt accumulated in the fractional half is
-	 *     discarded on the way in and left stale on the way out;
-	 *   - the result is rounded with 0x8000 rather than truncated.
-	 *
-	 * Read as a design that is plausible -- a fast coarse pull on the
-	 * centre taps during acquisition, a fine 32-bit one everywhere
-	 * afterwards -- but the two do fight over the same eight taps if both
-	 * run, and nothing in this file arbitrates.  See docs/findings.md.
-	 */
-	for (n = 0; n < V34_EQ_CENTRE_TAPS; n++) {
-		int k = V34_EQ_CENTRE_FIRST + n;
-		int j = q->cursor + V34_EQ_CENTRE_FIRST + n;
-		int dre, dim, tap;
-
-		if (j >= V34_EQ_TAPS)
-			j -= V34_EQ_TAPS;
-		dre = q->dly_re[j];
-		dim = q->dly_im[j];
-
-		tap = (int)((unsigned)((unsigned)q->re[k] << 16)
-			    - (unsigned)(dre * err_re)
-			    - (unsigned)(dim * err_im) + 0x8000u);
-		q->re[k] = (short)(tap >> 16);
-
-		tap = (int)((unsigned)((unsigned)q->im[k] << 16)
-			    - (unsigned)(dre * err_im)
-			    + (unsigned)(dim * err_re) + 0x8000u);
-		q->im[k] = (short)(tap >> 16);
-	}
-}
-
-/* ------------------------------------------------------------ odds and ends */
-
-void
-V34TimingFiltersInit(struct v34_timing *t)
-{
-	int i, j;
-
-	/*
-	 * The original walks this as three outer steps of one short each,
-	 * writing six entries six shorts apart -- the transposed form of a
-	 * `short[6][3]`, which is why the type is two-dimensional here.
-	 */
-	for (i = 0; i < 6; i++)
-		for (j = 0; j < 3; j++)
-			t->iir[i][j] = 0;
-
-	/*
-	 * The object writes eighty SHORTS from +0x024.  That covers `hist`
-	 * and only the first twenty entries of the forty-int prefilter state.
-	 * The latter feeds timing recovery at the beginning of acquisition,
-	 * immediately upstream of the equaliser.
-	 *
-	 * It is a live initialisation defect, not a layout convenience.  Keep
-	 * the exact object extent in the reproduction tree; the normal build
-	 * clears the complete declared state.  This is the same polarity as
-	 * the other deliberate fixes: DSPLIB_REPRODUCE_BUGS is for binary
-	 * comparison, while the shipping build must not consume heap contents
-	 * as filter history.  See docs/deviations.md, D29.
-	 */
-	for (i = 0; i < V34_TIMING_HP_TAPS; i++)
-		t->hist[i] = 0;
-#ifdef DSPLIB_REPRODUCE_BUGS
-	for (i = 0; i < (V34_TIMING_INIT_SHORTS - V34_TIMING_HP_TAPS) / 2; i++)
-		t->pre_state[i] = 0;
-#else
-	for (i = 0; i < V34_TIMING_PRE_TAPS; i++)
-		t->pre_state[i] = 0;
-#endif
-
-	t->prefilter_coeff = V34TimingPrefilterCoeff;
-	t->hp_coeff = V34TimingHPFilterCoeff;
-}
-
-/*
- * Symbol timing recovery: two half-baud band-passes, a cross product, and a
- * high-pass.  See findings 99, 101, 102 and 103; the traps are noted inline.
- */
-int
-V34TimingFilter(struct v34_timing *t, int sample)
-{
-	int cr, ci, k;
-	int pr = 0, pi = 0, nr = 0, ni = 0;	/* numerator accumulators   */
-	int par = 0, pai = 0, nar = 0, nai = 0;	/* denominator accumulators */
-	int acc, hp;
-
-	t->in1 = t->in0;
-	t->in0 = sample;
-
-	/* 0x599a / 32768 = 0.70001, rounded. */
-	cr = (short)(((short)sample * 0x599a + 0x8000) >> 15);
-	ci = (short)(((sample >> 16) * 0x599a + 0x8000) >> 15);
-
-	/* Numerator, over the shared input history, for both filters. */
-	for (k = 0; k < 3; k++) {
-		int or_ = t->iir[0][k], oi = t->iir[1][k];
-
-		t->iir[0][k] = (short)cr;
-		t->iir[1][k] = (short)ci;
-
-		pr += cr * posHalfBaud_Bcoef_Real[k]
-		      - ci * posHalfBaud_Bcoef_Imag[k];
-		pi += ci * posHalfBaud_Bcoef_Real[k]
-		      + cr * posHalfBaud_Bcoef_Imag[k];
-		nr += cr * negHalfBaud_Bcoef_Real[k]
-		      - ci * negHalfBaud_Bcoef_Imag[k];
-		ni += cr * negHalfBaud_Bcoef_Imag[k]
-		      + ci * negHalfBaud_Bcoef_Real[k];
-
-		cr = or_;
-		ci = oi;
-	}
-
-	/*
-	 * Denominator, over each filter's OWN output history, from index 1:
-	 * Acoef_Real[0] is 16384, the implicit Q14 one, and skipping it is
-	 * deliberate.
-	 */
-	cr = t->iir[2][0];
-	ci = t->iir[3][0];
-	for (k = 1; k < 3; k++) {
-		int or_ = t->iir[2][k], oi = t->iir[3][k];
-
-		t->iir[2][k] = (short)cr;
-		t->iir[3][k] = (short)ci;
-		par += cr * posHalfBaud_Acoef_Real[k]
-		       - ci * posHalfBaud_Acoef_Imag[k];
-		pai += cr * posHalfBaud_Acoef_Imag[k]
-		       + ci * posHalfBaud_Acoef_Real[k];
-		cr = or_;
-		ci = oi;
-	}
-
-	cr = t->iir[4][0];
-	ci = t->iir[5][0];
-	for (k = 1; k < 3; k++) {
-		int or_ = t->iir[4][k], oi = t->iir[5][k];
-
-		t->iir[4][k] = (short)cr;
-		t->iir[5][k] = (short)ci;
-		nar += cr * negHalfBaud_Acoef_Real[k]
-		       - ci * negHalfBaud_Acoef_Imag[k];
-		nai += cr * negHalfBaud_Acoef_Imag[k]
-		       + ci * negHalfBaud_Acoef_Real[k];
-		cr = or_;
-		ci = oi;
-	}
-
-	/*
-	 * Feedback, then the outputs -- written to the [0] slots only AFTER
-	 * both loops have run, because those loops are still reading them.
-	 */
-	pr -= par; pi -= pai; nr -= nar; ni -= nai;
-	pr = (pr + 0x2000) >> 14;
-	pi = (pi + 0x2000) >> 14;
-	nr = (nr + 0x2000) >> 14;
-	ni = (ni + 0x2000) >> 14;
-	t->iir[2][0] = (short)pr;
-	t->iir[3][0] = (short)pi;
-	t->iir[4][0] = (short)nr;
-	t->iir[5][0] = (short)ni;
-
-	/* The discriminator: the cross product of the two complex outputs. */
-	/*
-	 * pos_im * neg_re - pos_re * neg_im, in that order.  The original is
-	 *   imul %eax,%ebp   (pos_im * neg_re)
-	 *   imul %edx,%edi   (pos_re * neg_im)
-	 *   sub  %edi,%ebp
-	 * so the opposite order gives the negated discriminator -- a timing
-	 * loop that corrects the wrong way.
-	 *
-	 * AND IT MULTIPLIES THE SHIFTED VALUES, NOT THE STORED SHORTS.  The
-	 * four `imul`s take the registers the stores came out of, which still
-	 * hold the full 32-bit `(x + 0x2000) >> 14`; the state gets the low
-	 * sixteen bits of that and the discriminator does not.  Reading them
-	 * back from `iir[][0]` is right until the loop rings hard enough to
-	 * push one past a short, and then it is wrong by 65536 times a
-	 * coefficient.  Found by `receiver`, whose inputs reach that state
-	 * and whose timing loop then corrects the wrong way -- see finding
-	 * 139.
-	 */
-	acc = pi * nr - pr * ni;
-	acc = (short)((acc + 0x2000) >> 14);
-
-	/*
-	 * The high-pass, written out rather than delegated: this rounds with
-	 * 0x4000 and shifts 15 where V34TimingHPFilter uses 0x8000 and 16 --
-	 * twice the gain, same table, same history.  Finding 102.
-	 */
-	hp = 0x4000;
-	for (k = 0; k < V34_TIMING_HP_TAPS; k++) {
-		int old = t->hist[k];
-
-		t->hist[k] = (short)acc;
-		hp = (int)((unsigned)hp
-			   + (unsigned)(acc * V34TimingHPFilterCoeff[k]));
-		acc = old;
-	}
-
-	return (short)(hp >> 15);
-}
-
-int
-V34TimingPrefilter(struct v34_timing *t)
-{
-	int carry0 = t->in0;
-	int carry1 = t->in1;
-	int acc_re = 0x2000;		/* Q14 round-to-nearest, both parts */
-	int acc_im = 0x2000;
-	int k;
-
-	/*
-	 * Two taps per iteration, because two complex inputs arrive per call
-	 * and each is pushed into its own slot of the state.  The real and
-	 * imaginary halves share a coefficient -- this is a real filter
-	 * applied to a complex signal, not a complex filter.
-	 */
-	for (k = 0; k < V34_TIMING_PRE_TAPS; k += 2) {
-		int old0 = t->pre_state[k];
-		int old1 = t->pre_state[k + 1];
-		int c0 = V34TimingPrefilterCoeff[k];
-		int c1 = V34TimingPrefilterCoeff[k + 1];
-
-		t->pre_state[k] = carry0;
-		t->pre_state[k + 1] = carry1;
-
-		acc_re = (int)((unsigned)acc_re
-			       + (unsigned)((short)carry0 * c0));
-		acc_im = (int)((unsigned)acc_im
-			       + (unsigned)((carry0 >> 16) * c0));
-		acc_re = (int)((unsigned)acc_re
-			       + (unsigned)((short)carry1 * c1));
-		acc_im = (int)((unsigned)acc_im
-			       + (unsigned)((carry1 >> 16) * c1));
-
-		carry0 = old0;
-		carry1 = old1;
-	}
-
-	/* Repacked the way it arrived. */
-	return (int)(((unsigned)(acc_im >> 14) << 16)
-		     | (unsigned short)(acc_re >> 14));
-}
-
-int
-V34Filter2(short sample, short *state, const short *coeff, unsigned taps)
-{
-	int carry = sample;
-	int acc = 0;
-	unsigned k;
-
-	/*
-	 * `taps` is unsigned -- the original's loop guard is `jb`, so a count
-	 * of zero does nothing rather than running four billion times.
-	 */
-	for (k = 0; k < taps; k++) {
-		int old = state[k];
-
-		state[k] = (short)carry;
-		acc = (int)((unsigned)acc + (unsigned)(carry * coeff[k]));
-		carry = old;
-	}
-
-	return acc;
-}
-
-void
-V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p)
-{
-	short i;
-
-	for (i = 0; i < count; i++) {
-		const short *coeff = p->coeff;
-		unsigned shift = p->shift;
-		int carry = buf[i];
-		int acc = 0;
-		int k;
-
-		/*
-		 * Same read-then-overwrite shift as V34TimingHPFilter and
-		 * V34Filter2, with the tap count fixed at 42 rather than
-		 * passed in.
-		 */
-		for (k = 0; k < V34_ECHO_PREFILTER_TAPS; k++) {
-			int old = p->state[k];
-
-			p->state[k] = (short)carry;
-			acc = (int)((unsigned)acc
-				    + (unsigned)(carry * coeff[k]));
-			carry = old;
-		}
-
-		/*
-		 * In place: the input array is the output array.  `shift` is
-		 * masked to five bits for the same reason as dftenergy's --
-		 * the object's `sar %cl` does the masking and C would
-		 * otherwise be undefined.  Re-read every sample, as the
-		 * original does, rather than hoisted.
-		 *
-		 * THE FIELD IS READ AS AN `int`, WHICH THE OBJECT SAYS AND
-		 * WHICH COSTS NOTHING.  `p->shift` is an `int` at +0x64 and
-		 * the blob loads all 32 bits of it -- `mov 0x64(%edi),%edx`
-		 * -- where the `(unsigned char)` cast this line used to carry
-		 * made GCC 3.4.2 emit `movzbl` and a separate `and $0x1f`,
-		 * two instructions more at the same 139 bytes.  The cast was
-		 * redundant under the mask: `(unsigned char)x & 31` and
-		 * `x & 31` are equal for every `int` x, because the mask
-		 * discards bits 5..7 either way.  63 differing bytes -> 55.
-		 *
-		 * DROPPING THE MASK AS WELL reaches 43 and matches the blob's
-		 * INSTRUCTION COUNT exactly (49 against 49), so the original
-		 * very likely wrote a bare `>> shift`.  It is NOT taken here:
-		 * a bare shift by a value the object can put above 31 is
-		 * undefined in C, it does not close the function either, and
-		 * `nothing wrong-but-plausible` outranks eight bytes.
-		 */
-		buf[i] = (short)((acc + 0x4000) >> (shift & 31));
-	}
-}
-
-
-void
-V34EchoPreFilterCopy(void *dst, const short *coeff)
-{
-	*(const short **)((char *)dst + 0x54) = coeff;
-}
-
-void
-V34PremptxCopy(void *modulator, const short *coeff)
-{
-	*(const short **)((char *)modulator + 0xcb0) = coeff;
 }
 
 /*

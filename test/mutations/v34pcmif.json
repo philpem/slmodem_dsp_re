@@ -229,13 +229,13 @@
  },
  {
   "label": "hangup: rx f258 not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for",
-  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for"
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Which of the four",
+  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Which of the four"
  },
  {
   "label": "hangup: rx f25c not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Ask for",
-  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n}\n\n/*\n * Ask for"
+  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Which of the four",
+  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n}\n\n/*\n * Which of the four"
  },
  {
   "label": "reneg: rx f258 not cleared",

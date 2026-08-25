@@ -8,6 +8,20 @@
  * argument -- `mov 0x8(%esp),%ebx` after one push -- not %ecx, so nothing
  * here needs an attribute (finding 215).
  *
+ * THE DEFINITION ORDER IS THE OBJECT'S EMISSION ORDER, which is why the block
+ * `process` comes first and the scalar one last: `nm -n` on the blob gives
+ * process(const float*, float*, unsigned), reset, the constructor pair, the
+ * destructor pair, setCoefficients, process(float), and all 8 emitted symbols
+ * now sit at the blob's own index -- checked with `nm -n --defined-only` on
+ * `build/tc_out/src_dsp_FloatFIR.cpp.o` and on the blob, over the symbols both
+ * define.  It was worth trying and it PAID NOTHING --
+ * `FloatFIR::reset` is still grade 1, four differing bytes, a clean
+ * `%edx`/`%ecx` swap on `taps`, and every other symbol's differing-byte count
+ * is unchanged to the byte.  Recorded rather than reverted because an achieved
+ * order is the only thing that makes a null result evidence: this file is a
+ * measured negative for lever 3, not an untried one.  See
+ * docs/method/refinement.md lever 3.
+ *
  * THE TWO ACCUMULATORS ARE THE ORIGINAL'S, NOT A CONVENIENCE.  Both
  * `process` overloads run the multiply-accumulate with two independent x87
  * registers: `faddp %st,%st(1)` folds the even-indexed products into one and
@@ -112,6 +126,57 @@ floatfir_carry_tail(float *history, unsigned int taps, unsigned int bufferLength
 	} while (--rem != 0);
 }
 
+/*
+ * The block form.  `index` is written ONCE, after the last sample -- the
+ * running position lives in a register for the whole run -- and a count of
+ * zero returns before the object is read at all, so it does not even fault on
+ * a filter with no history buffer.
+ */
+void
+FloatFIR::process(const float *in, float *out, unsigned int count)
+{
+	float *h;
+	const float *c;
+	unsigned int n;
+	int i, next;
+
+	if (count == 0)
+		return;
+
+	h = history;
+	c = coefficients;
+	n = taps;
+	i = index;
+	next = i;
+
+	do {
+		h[i] = *in++;
+		next = i - 1;
+		*out++ = floatfir_convolve(h + i, c, n);
+
+		i = next;
+		if (i < 0) {
+			i = (int)(bufferLength - n);
+			next = i;
+			floatfir_carry_tail(h, n, bufferLength);
+		}
+	} while (--count != 0);
+
+	index = next;
+}
+
+void
+FloatFIR::reset()
+{
+	unsigned int i;
+
+	if (history != 0)
+		for (i = 0; i < bufferLength; i++)
+			history[i] = 0.0f;
+
+	index = (int)(bufferLength - taps);
+}
+
 FloatFIR::FloatFIR(unsigned int nTaps, float *coef, unsigned int blockSize)
 {
 	unsigned int i;
@@ -131,18 +196,6 @@ FloatFIR::FloatFIR(unsigned int nTaps, float *coef, unsigned int blockSize)
 FloatFIR::~FloatFIR()
 {
 	delete[] history;
-}
-
-void
-FloatFIR::reset()
-{
-	unsigned int i;
-
-	if (history != 0)
-		for (i = 0; i < bufferLength; i++)
-			history[i] = 0.0f;
-
-	index = (int)(bufferLength - taps);
 }
 
 /*
@@ -194,43 +247,4 @@ FloatFIR::process(float in)
 	floatfir_carry_tail(h, taps, bufferLength);
 
 	return out;
-}
-
-/*
- * The block form.  `index` is written ONCE, after the last sample -- the
- * running position lives in a register for the whole run -- and a count of
- * zero returns before the object is read at all, so it does not even fault on
- * a filter with no history buffer.
- */
-void
-FloatFIR::process(const float *in, float *out, unsigned int count)
-{
-	float *h;
-	const float *c;
-	unsigned int n;
-	int i, next;
-
-	if (count == 0)
-		return;
-
-	h = history;
-	c = coefficients;
-	n = taps;
-	i = index;
-	next = i;
-
-	do {
-		h[i] = *in++;
-		next = i - 1;
-		*out++ = floatfir_convolve(h + i, c, n);
-
-		i = next;
-		if (i < 0) {
-			i = (int)(bufferLength - n);
-			next = i;
-			floatfir_carry_tail(h, n, bufferLength);
-		}
-	} while (--count != 0);
-
-	index = next;
 }

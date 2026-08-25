@@ -85705,3 +85705,221 @@ kind, and one of them was 2,663 bytes.
 7780's content verification stands and was not wasted: it is what makes the
 byte-identity meaningful rather than accidental, and it ruled out 295 ways the
 function could have been wrong while still matching.
+---
+
+### 7801. FIVE MORE ON EMISSION ORDER, AND 7796'S PER-SHAPE YIELD IS THE PART THAT DOES NOT HOLD: THREE OF THE FIVE ARE THE TWO SHAPES IT SCORED AT ZERO AND ONE
+
+Five translation units, four permuted into the blob's `nm -n` emission order
+and one held back a step as a control.  Over the tree:
+
+    grade 0   467 -> 471  (37.3% -> 37.6%)      REGALLOC  34 -> 30
+    grade 0-or-1  506 -> 506                    BYTES 94 -> 94   SIZE 648 -> 648
+
+**Five gained, one lost, and it is the SET that was diffed** -- `--list-exact`
+before and after.  Every gain and the single loss is a REGALLOC/EXACT swap;
+neither BYTES nor SIZE moved by one symbol, which is 7796's "aim at REGALLOC"
+holding for a second pass.
+
+**7796 SAID PLAIN 16, TWIN 1, CLONE 0.  HERE IT IS PLAIN 2, TWIN 1, CLONE 2.**
+
+    _ZN9ResamplerD0Ev    85 B  REGALLOC -> EXACT     deleting destructor
+    _ZN9ResamplerD1Ev    63 B  REGALLOC -> EXACT     one of the D1/D2 clone pair
+    VPcmV34ReportMiddleOfEchoAdapt  30 B  -> EXACT   TWIN of ...ReportStartOf...
+    V34EchoCleanUp       83 B  REGALLOC -> EXACT     plain
+    VPcmV34SetTxScale    44 B  REGALLOC -> EXACT     plain
+
+All three `Resampler` destructors are now byte-identical to the blob's, the
+deleting one included.  (Written out rather than as a bare `D0`, which
+`refcheck.py` reads as a reference to deviation zero.)  7796's clone column
+read zero over four files and this pass reads
+two over one file, so **the shape is not what predicts the yield** -- 7774
+said clone-only, 7796 said plain-only, and between them they have now scored
+every shape at both zero and non-zero.  What both passes agree on is the
+BUCKET: REGALLOC responds and BYTES does not.  Quote the bucket, not the shape.
+
+(One clause of precision: the deleting destructor is not strictly a clone of
+the other two -- it is the complete-object one plus the `operator delete` --
+so the clone column here is "at least one", which is still not zero.)
+
+**THE TWIN IS 7796'S DISCRIMINATOR AGAIN, IN A `.c` THIS TIME.**
+`VPcmV34ReportStartOfEchoAdapt` and `VPcmV34ReportMiddleOfEchoAdapt` are the
+same three lines with one different string; the first was EXACT and the second
+was grade 1.  They are adjacent in our file and adjacent in the blob, in the
+same order, before and after -- so neither moved relative to the other and only
+their predecessors changed.  Same result as `recivedSUV`, and the second
+independent instance of it.
+
+**THE PRE-CHECK THAT SHOULD RUN BEFORE ANY PERMUTATION, because one of the five
+files would otherwise have been permuted into an uninterpretable null.**  Three
+questions, all answerable from the objects alone and all cheap:
+
+  * **Is the blob's order REACHABLE?**  The emission model forces a callee
+    ahead of its caller, so a definition permutation can realise the blob's
+    order only if no edge of ours runs caller-first in it.  Read the edges off
+    `objdump -dr`, and **bound each function by its `nm -S` size**: inter-
+    function alignment padding is spelt `jmp <next symbol>` followed by nops
+    and reads as a call edge.  It invented `_iir_filter_delete ->
+    _iir_filter_progress`, which would have declared `toneiir.c` unreachable.
+    Our own emission order is the check on the detector -- an edge that reads
+    caller-first in OUR object is an artefact, because the same rule made it.
+    Shown to fire on `V90Phase4Modulator.cpp`: 14 edges, all 14 callee-first in
+    our object.
+    **IT IS A FILTER FOR THE UNREACHABLE CASE AND NOT A CERTIFICATE OF
+    REACHABILITY**, because it reads the FINAL object and cannot see an
+    INLINED call -- GCC 3.4 keeps the cgraph edge after inlining, and it is
+    the cgraph that orders the emission.  `Resampler.cpp` scanned as zero
+    edges and still emits `reset` ahead of both constructor pairs, which is
+    the constructors calling it.  So a clean scan means "no known obstacle",
+    and the only proof is the achieved order re-checked after the rebuild.
+  * **Is the blob's span OURS?**  List the blob symbols whose address falls
+    between the file's first and last, and check they are all ours.
+    `v34pcmif.c` is **34 of 57** -- the other 23 are in `v34pcmmain.cpp`,
+    `v34info.c`, `v34diag.cpp` and `v34info1a.cpp`, or unwritten.  Our file
+    split is not the original's there, so only the RELATIVE order is
+    recoverable and a null result would have meant nothing.  It gained two
+    anyway, so a gap is not a reason to skip a file -- it is a reason to
+    discount its silence.
+  * **Is a datum or a macro in the way?**  A file-scope table between two
+    functions being swapped is lever 4's own effect and must not move in the
+    same commit.
+
+**THE `#if` RULE IS THE BALANCE, NOT THE PRESENCE.**  7796's tool refuses to
+move a chunk containing a `#` line, and that freezes `V34TimingFiltersInit` --
+whose `#ifdef DSPLIB_REPRODUCE_BUGS ... #else ... #endif` is entirely inside
+the body and travels with it safely.  The invariant that actually stops the
+wave 5 trap is that the directives BALANCE within the chunk: `#if` +1, `#endif`
+-1, never negative, zero at the end, and a bare `#define`/`#include` still
+refuses.  With that, all 26 of the file's emitted symbols reached the blob's
+index; with the older rule one of them could not have moved at all.
+
+**THE PER-FILE LEDGER.**  (a) closed, (b) bytes moved and did not close,
+(c) nothing at all, (d) net loss.  The achieved order is beside each, because a
+null is only evidence if the order was actually reached.
+
+    Resampler.cpp    9 of 13   (a) 2 of 2 -- the deleting destructor and one
+                               of the clone pair.  The four
+                               unreached slots are which of C1/C2 comes first
+                               inside each constructor pair, which no source
+                               permutation touches (7796)
+    v34pcmif.c      34 of 34   (a) 2 of 2 -- SetTxScale, ReportMiddleOfEcho-
+                               Adapt.  (b) V34XF_IndicateJdReceived 16 -> 4
+                               differing, VPcmV34NotifyDP 32 -> 16, and
+                               VPcmV34InitiateRateRenegotiation 7 -> 24, all
+                               still SIZE either way
+    v34filters.c    26 of 26   (a) V34EchoCleanUp.  Against it,
+                               V34EqualizerCleanUp EXACT -> REGALLOC.  NET
+                               ZERO -- see below
+    toneiir.c        8 of 8    (b) toneiir_reset 22 differing bytes -> ONE
+                               (7802).  _iir_filter_create stays grade 1
+    FloatFIR.cpp     8 of 8    (c) NOTHING, and not one differing-byte count
+                               moved anywhere in the file
+
+**`FloatFIR.cpp` IS THE CLEANEST NULL THIS LEVER HAS.**  Eight symbols, no
+gaps in the blob's span, no intra-TU edges, the whole file permuted from 0 of 8
+matching the blob's index to 8 of 8 -- and `FloatFIR::reset` is still grade 1
+at four differing bytes (a `%edx`/`%ecx` swap on `taps`, rows 13/14 and 20/21),
+while `process`, `setCoefficients` and the constructor pair sit at 244, 2 and 7
+differing bytes exactly as before.  A whole file's emission order changed and
+the emitted BYTES did not move anywhere in it.  That is a stronger negative
+than 7796's three "nothing" files, none of which reported a complete achieved
+order.
+
+**AND ONE SYMBOL WENT BACKWARDS AT A PERFECT INDEX MATCH, WHICH BOUNDS THE
+MODEL.**  `V34EqualizerCleanUp` is blob index 16 of 26 and ours is now index 16
+of 26, with all 26 in place and its immediate predecessor
+(`V34TimingPrefilter`) the blob's own -- and it went EXACT to grade 1, six
+differing bytes over three register pairs.  So index-for-index agreement with
+the blob is NOT sufficient for byte identity, even in a file with no gaps and
+no unwritten neighbours.  Something ahead of it still differs and the file's
+own order is no longer the variable.  Kept rather than reverted: net zero is
+not a net loss, and the achieved 26 of 26 is the gate on believing the next
+null from this file.  Wave 5 reverted on a net LOSS and that rule is unchanged.
+
+**THE DATA HOIST IS FREE, AND IT WAS MEASURED SEPARATELY SO THAT IT COULD NOT
+CONFOUND.**  `toneiir.c` needed its two `.rodata` blocks, two `#define`s and
+two file-local statics moved above the definitions before the functions could
+be permuted past them.  That hoist went in ALONE, was built and measured alone,
+and every one of the file's eight symbols came out with the identical verdict
+and the identical differing-byte count.  Data moved as a unit keeps its own
+relative order, so lever 4 does not fire; the permutation that followed is
+therefore attributable by itself.
+
+**THE PERMUTATIONS ARE PROVED TO BE PERMUTATIONS** -- the tool refuses to write
+unless the file's line multiset is unchanged, and the hoist tool refuses on the
+same test.
+
+**THE BANNERS WERE RE-SCOPED, NOT LEFT.**  `v34filters.c` had six role banners
+-- echo canceller, modulator, Hilbert, timing, equaliser, odds and ends -- and
+the blob's order scatters every one of those groups: it puts
+`V34EchoPreFilterCopy` and `V34PremptxCopy` between `V34InitHilbertFilter` and
+`V34EchoReportCoeff`, and `V34TimingFiltersInit` between `V34TimingFilter` and
+`V34TimingPrefilter`.  The grouping was ours; the order is the author's.  All
+six banners are gone and each of the five files carries a head comment saying
+the order is load-bearing, with the check named.
+
+**AND THE CHECK NAMED IN THEM IS `nm -n`, NOT THE ADDRESS COMMENTS.**  7796
+could tell a reader to look at the `.text+0x...` comments running upwards down
+the file because both Phase4Modulator files carry one per function.  **Four of
+these five carry none**, and `v34pcmif.c` has two addresses in a prose sentence
+at the top -- so repeating that instruction here would have put an unrunnable
+check in five headers.  What each header now says is: `nm -n --defined-only` on
+`build/tc_out/<file>.o` and on the blob, compared over the symbols both define,
+with today's score written in.  `toneiir.c` is the one that keeps an address
+list, and its list was re-ordered to match the definitions.
+
+**WHERE THE TREE STANDS ON THIS LEVER, RE-MEASURED RATHER THAN SUBTRACTED.**
+Over the 165 objects that share a `.text` symbol with the blob: **76 already
+emit in the blob's order and 89 do not**, and the disordered 89 hold **19 of
+the remaining grade 1 symbols and 63 of the BYTES**.  The denominators do not
+reach the tree's 30 and 94 because a COMDAT function lives in its own
+`.gnu.linkonce.t.*` section and is not in this ordering at all -- 3 grade 1
+and 6 BYTES sit there, which is 7796's unreachable head, counted for the first
+time.
+
+**GATES.**  `make phase J=4` green, period differential 251 passed / 0 failed.
+`anchorcheck.py`: 198 suites, 8,959 mutations, **two anchors detached in
+`v34pcmif`** and both are 7772's shape exactly -- their `find` ended with the
+NEXT function's comment (`}\n\n/*\n * Ask for`) as the disambiguator between
+two near-identical clear sequences.  Re-pointed at the function that now
+follows, with the mutation itself unchanged, and the suite re-run because
+reattached is not caught: **`v34pcmif`, 126 mutations, 120 caught, 0 NOT
+caught, 0 unusable, 6 equivalent**, with both re-pointed rows among the caught.
+The six equivalents are pre-existing and carry their own `why`.
+`refcheck.py` 7,591 references, 0 dangling -- and it flagged two, both a bare
+`D0` in this finding's own prose, which it reads as a reference to deviation
+zero.  Write the mangled name or the words.
+
+**THESE NUMBERS WERE TAKEN WITH A GAP.**  Master held 7796 and a sibling
+worktree already held 7812 while this was being written; expect to renumber at
+merge.
+
+---
+
+### 7802. `toneiir_reset`'s WHOLE REMAINING DIFFERENCE IS ONE LOAD'S SIGNEDNESS, AND IT ONLY BECAME READABLE ONCE THE FILE WAS IN THE OBJECT'S ORDER
+
+After 7801's permutation `toneiir_reset` is 60 bytes with **one** differing row
+out of thirteen:
+
+    row 2   blob  movzwl 0x96(%eax),%edx
+            ours  movswl 0x96(%eax),%edx
+
+That is 613's forced case -- the signedness of a 16-bit load whose 32-bit
+result is used -- and it says the field at `+0x96` of `struct toneiir` is
+declared unsigned in the original and signed by us.  It is not register
+allocation and no renaming reaches it: the tool grades the function BYTES, not
+REGALLOC.
+
+**WHAT MAKES IT WORTH RECORDING IS THE ORDER OF EVENTS.**  Before the reorder
+the same function differed at **22** bytes of 60, which is a diff nobody would
+have read as one wrong declaration; the register allocation ahead of it was
+carrying the other 21.  Emission order did not close this symbol, and it is
+what made the residual legible.  A file that "did not close" can still have
+moved a symbol from unreadable to a single named defect, so check the (b) rows
+for that and not only the (a) ones.
+
+**IT IS A LEAD AND NOT A CLOSURE, and 2402 is the reason to say so:** one
+`extcheck` report in five is real, and the twelve failures are a 16-bit
+compare, a signed branch, a truncating cast and a value masked to two bits.
+Nobody has traced `+0x96` against `dis.py` yet, and retyping a struct field
+reaches every function that touches it, so the next pass must trace it and
+re-run the tier rather than change the header on the strength of this one row.
