@@ -1537,11 +1537,23 @@ V34GiveINFO1dBits(void *objp, const short *bits)
  * claim: both loads are unconditional at the top because the tail jump needs
  * its argument already in hand, and neither pointer is dereferenced here.
  *
- * THE `+ 4` IS AN ADDRESSING ARTIFACT, exactly as v34fsk.h says of these two
- * fields and as `v90Phase34` in this file already shows: `add $0x4,%eax`
- * followed by `cmpl $0x1,0x248(%eax)` and `cmpl $0x1,0x24c(%eax)` is
- * `obj + 0x24c` and `obj + 0x250` -- `v90_receiver` and `k56flex_receiver`.
- * There is no sub-object at +4 and this is the third file to spell it out.
+ * THE `+ 4` IS IN THE SOURCE AND NOT AN ADDRESSING ARTIFACT, and this entry
+ * used to say the opposite.  `add $0x4,%eax` followed by
+ * `cmpl $0x1,0x248(%eax)` and `cmpl $0x1,0x24c(%eax)` is `obj + 0x24c` and
+ * `obj + 0x250` -- `v90_receiver` and `k56flex_receiver`, so the ARITHMETIC
+ * was read right.  What was wrong was calling the `add` free: written as
+ * plain member reads it does not appear at all, and its absence is the one
+ * instruction lever 2 reports (padding-stripped, ours 12 to the blob's 13).
+ *
+ * TWO CONDITIONS ARE NEEDED TOGETHER AND THE CROSS PRODUCT SEPARATES THEM.
+ * The anchor must be created AFTER both session pointers are in hand -- all
+ * six spellings declared ahead of them fold the `+4` into the two
+ * displacements and emit the pristine bytes exactly, 12 cells, none at zero
+ * -- and BOTH tests must go through it: a control with the anchor after the
+ * loads but only the first test through it folds back too.  With both, seven
+ * of ten cells reach zero, so what is decoded is that FACT and not this
+ * spelling.  Naming the two offsets was measured separately and costs
+ * nothing, 3 cells, 2 at zero.
  *
  * BOTH TESTS ARE SIGNED AND BOTH ARE `> 1`, not `!= 0` and not `>= 1`:
  * `cmpl $0x1,...; jg`.  So a receiver that has been noticed but has not got
@@ -1569,16 +1581,43 @@ V34GiveINFO1dBits(void *objp, const short *bits)
  * no C++ object among them.  Its two callers are both inside `v34handshak`,
  * which is why the declaration sits in `v34hshak.h` beside `v90Phase34`.
  */
+/*
+ * The two receiver counters as THIS function reaches them: the object anchors
+ * a pointer at `obj + 4` and reads them at +0x248 and +0x24c through it, so
+ * these are `v34fsk.h`'s `v90_receiver` (+0x24c) and `k56flex_receiver`
+ * (+0x250) less the anchor.  The `OB4_` prefix is what says the base is the
+ * anchor and not the object; nothing else in the tree may use these.
+ */
+#define OB4_ANCHOR		4
+#define OB4_V90_RECEIVER	0x248		/* v34fsk.h's v90_receiver     */
+#define OB4_K56_RECEIVER	0x24c		/* v34fsk.h's k56flex_receiver */
+
+/*
+ * And tie them to the header, because nothing else does: `make phase`'s
+ * offsets tier reads `__builtin_offsetof` annotations and these are raw
+ * numbers.  Without this pair, a future edit to `struct v34_object` moves the
+ * fields and leaves these two reading whatever is now there -- which is the
+ * failure mode CLAUDE.md's naming rules exist to prevent, and it would pass
+ * every test that does not happen to drive both arms.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+typedef char ob4_v90_check[(OB4_ANCHOR + OB4_V90_RECEIVER ==
+    (int)__builtin_offsetof(struct v34_object, v90_receiver)) ? 1 : -1];
+typedef char ob4_k56_check[(OB4_ANCHOR + OB4_K56_RECEIVER ==
+    (int)__builtin_offsetof(struct v34_object, k56flex_receiver)) ? 1 : -1];
+#endif
+
 extern "C" void
 indicateJaTransmission(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 	VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 	K56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;
+	const unsigned char *m = (const unsigned char *)objp + OB4_ANCHOR;
 
-	if (obj->v90_receiver > 1)
+	if (*(const int *)(m + OB4_V90_RECEIVER) > 1)
 		sess->enterPhase3();
-	else if (obj->k56flex_receiver > 1)
+	else if (*(const int *)(m + OB4_K56_RECEIVER) > 1)
 		k56->enterPhase3FullDuplex();
 }
 

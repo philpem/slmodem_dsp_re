@@ -1,71 +1,71 @@
 [
  {
-  "label": "indicateJaTransmission.  Run it with: tools/mutate.py --suite v34ja.  EVERY MUTATION BELOW MUST LIE INSIDE indicateJaTransmission: v34pcmmain.cpp also holds getMPrecvdBits, v90Phase34, VPcmV34InitiateRetrain and V34GiveINFO1dBits, three of which the v90p34, v34retrain and v34info1d suites already map to their own binaries -- and `obj->v90_receiver > 1` appears verbatim inside v90Phase34, while `VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;` appears verbatim inside V34GiveINFO1dBits.  A mutation that landed in a sibling would read NOT CAUGHT for the reason suites.json's header describes, so every anchor below carries enough of this function's own text to appear exactly once in the file."
+  "label": "indicateJaTransmission.  Run it with: tools/mutate.py --suite v34ja.  EVERY MUTATION BELOW MUST LIE INSIDE indicateJaTransmission: v34pcmmain.cpp also holds getMPrecvdBits, v90Phase34, VPcmV34InitiateRetrain and V34GiveINFO1dBits, three of which the v90p34, v34retrain and v34info1d suites already map to their own binaries -- and `VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;` appears verbatim inside V34GiveINFO1dBits.  RE-ANCHORED: the two receiver reads now go through the `m` anchor at `obj + 4` and the `OB4_` offsets, which is what the object does and which no sibling function in this file uses, so each anchor below appears exactly once for that reason as well as for the text around it.  `obj->v90_receiver > 1` still appears verbatim inside v90Phase34 and is no longer in this function at all."
  },
  {
   "label": "the function is fifty-seven bytes of decision and this is what happens without it",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();\n\telse if (obj->k56flex_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();",
-  "replace": "\t(void)sess;\n\t(void)k56;"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();\n\telse if (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();",
+  "replace": "\t(void)m;\n\t(void)sess;\n\t(void)k56;"
  },
  {
   "label": "the boundary is >= 1: a receiver that has merely been noticed enters phase 3",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif (obj->v90_receiver >= 1)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const int *)(m + OB4_V90_RECEIVER) >= 1)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the boundary is != 0, which is how the neighbouring functions test the same field",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif (obj->v90_receiver != 0)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const int *)(m + OB4_V90_RECEIVER) != 0)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the boundary is > 2, so the DIL and TRN2d states are the only ones that qualify",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif (obj->v90_receiver > 2)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 2)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the compare is unsigned, so a negative receiver is above the boundary rather than below it",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif ((unsigned)obj->v90_receiver > 1)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const unsigned *)(m + OB4_V90_RECEIVER) > 1u)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the receiver is read as a short",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif ((short)obj->v90_receiver > 1)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const short *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the V.90 arm is gated on the K56flex receiver instead",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif (obj->k56flex_receiver > 1)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tsess->enterPhase3();"
  },
  {
-  "label": "the `+ 4` is read as a sub-object, so both fields are taken four bytes low",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();\n\telse if (obj->k56flex_receiver > 1)",
-  "replace": "\tif (*(const int *)((const char *)obj + 0x248) > 1)\n\t\tsess->enterPhase3();\n\telse if (*(const int *)((const char *)obj + 0x24c) > 1)"
+  "label": "the `+ 4` anchor is dropped, so both fields are taken four bytes low",
+  "find": "\tconst unsigned char *m = (const unsigned char *)objp + OB4_ANCHOR;",
+  "replace": "\tconst unsigned char *m = (const unsigned char *)objp;"
  },
  {
   "label": "the two arms change places",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();\n\telse if (obj->k56flex_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();",
-  "replace": "\tif (obj->v90_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();\n\telse if (obj->k56flex_receiver > 1)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();\n\telse if (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();",
+  "replace": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();\n\telse if (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the two pointers change places: phase 3 is entered on the K56flex block",
-  "find": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;\n\n\tif (obj->v90_receiver > 1)",
-  "replace": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->pac18;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->p3548;\n\n\tif (obj->v90_receiver > 1)"
+  "find": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->p3548;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->pac18;\n\tconst unsigned char *m",
+  "replace": "\tVPcmFloModem *sess = (VPcmFloModem *)obj->pac18;\n\tK56FlexFloModem *k56 = (K56FlexFloModem *)obj->p3548;\n\tconst unsigned char *m"
  },
  {
   "label": "the demodulator is entered directly, skipping the modem's own twenty-one stores",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();",
-  "replace": "\tif (obj->v90_receiver > 1)\n\t\tsess->modem.demodulator->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();",
+  "replace": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->modem.demodulator->enterPhase3();"
  },
  {
   "label": "the K56flex arm goes FIRST, so it wins when both receivers are up",
-  "find": "\tif (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();\n\telse if (obj->k56flex_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();",
-  "replace": "\tif (obj->k56flex_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();\n\telse if (obj->v90_receiver > 1)\n\t\tsess->enterPhase3();"
+  "find": "\tif (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();\n\telse if (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();",
+  "replace": "\tif (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();\n\telse if (*(const int *)(m + OB4_V90_RECEIVER) > 1)\n\t\tsess->enterPhase3();"
  },
  {
   "label": "the second arm is not an `else`, so both can run in one call",
-  "find": "\telse if (obj->k56flex_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();",
-  "replace": "\tif (obj->k56flex_receiver > 1)\n\t\tk56->enterPhase3FullDuplex();",
+  "find": "\telse if (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();",
+  "replace": "\tif (*(const int *)(m + OB4_K56_RECEIVER) > 1)\n\t\tk56->enterPhase3FullDuplex();",
   "equivalent": true,
   "why": "K56FlexFloModem::enterPhase3FullDuplex is ONE BYTE OF CODE in the object -- a bare `ret` at 0x101d0, with no instruction touching `this` -- and is an empty body in src/pump/v90/K56FlexFloModem.cpp.  So nothing downstream of the `k56flex_receiver` test is observable to any caller: not the comparison, not the operand it reads, not the object it is handed, and not whether the arm is exclusive with the first.  This entry is the ONE representative of that whole equivalence class rather than five separate uncaught results.  WHAT IS HELD FIXED: that the callee stays empty.  The moment K56FlexFloModem gains a real enterPhase3FullDuplex, every claim in this arm becomes testable and this entry must fail.  The `> 1` in the source is written from `cmpl $0x1,0x24c(%eax); jg` in the object at .text+0xa42c and is not a measurement this suite made."
  }

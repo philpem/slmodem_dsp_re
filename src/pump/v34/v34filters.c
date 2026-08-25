@@ -910,20 +910,20 @@ V34InitializeImplementationSpecific(void *objp)
 
 	obj->p_2074 = (char *)obj + 0x146c;
 
-	obj->echo0.cursor = obj->echo0.dline;	/* the OLD dline; see above */
-	obj->echo0.dline = obj->echo0_dline;
-	obj->echo0.coeff = obj->echo0_coeff;
-	obj->echo0.coeff_frac = obj->echo0_frac;
-	obj->echo0.hist = obj->echo0_hist;
 	obj->echo0.dlen = V34_ECHO_DLEN;
+	obj->echo0.cursor = obj->echo0.dline;	/* the OLD dline; see above */
+	obj->echo0.hist = obj->echo0_hist;
+	obj->echo0.coeff = obj->echo0_coeff;
+	obj->echo0.dline = obj->echo0_dline;
+	obj->echo0.coeff_frac = obj->echo0_frac;
 	obj->echo0.taps = V34_ECHO_TAPS;
 
-	obj->echo1.cursor = obj->echo1.dline;
-	obj->echo1.dline = obj->echo1_dline;
-	obj->echo1.coeff = obj->echo1_coeff;
-	obj->echo1.coeff_frac = obj->echo1_frac;
-	obj->echo1.hist = obj->echo1_hist;
 	obj->echo1.dlen = V34_ECHO_DLEN;
+	obj->echo1.cursor = obj->echo1.dline;
+	obj->echo1.hist = obj->echo1_hist;
+	obj->echo1.coeff = obj->echo1_coeff;
+	obj->echo1.dline = obj->echo1_dline;
+	obj->echo1.coeff_frac = obj->echo1_frac;
 	obj->echo1.taps = V34_ECHO_TAPS;
 }
 
@@ -1619,19 +1619,37 @@ V34EqualizerCenterAdapt(struct v34_equalizer *q, short err_re, short err_im)
 int
 V34Filter2(short sample, short *state, const short *coeff, unsigned taps)
 {
-	int carry = sample;
 	int acc = 0;
+	int carry = sample;
+	int old;
+	int tap;
 	unsigned k;
 
 	/*
 	 * `taps` is unsigned -- the original's loop guard is `jb`, so a count
 	 * of zero does nothing rather than running four billion times.
+	 *
+	 * `tap` IS A NAMED LOCAL BECAUSE THE OBJECT SAYS SO, and the mechanism
+	 * is lever 9's.  i386.md ties the `imul` destination to operand 1 of
+	 * the MULT_EXPR, and GCC 3.4.2's `tree_swap_operands_p` swaps when
+	 * operand 0 is a DECL and operand 1 is not -- which `carry * coeff[k]`
+	 * is.  With the tap in a local both operands are DECLs, no swap fires,
+	 * and the product lands in the carry register the blob's
+	 * `imul %eax,%ecx` names.  All 24 spellings of the product IN PLACE
+	 * were compiled, including `coeff[k] * carry`; every one of the four
+	 * in-place forms emits identical bytes and none reaches zero.  Writing
+	 * the comparison the other way round is not the lever; the TYPE of the
+	 * operands is.
+	 *
+	 * `acc` BEFORE `carry` is not observable here -- this function is
+	 * byte-exact either way -- and it is forced by `V34EchoPreFilter`,
+	 * which inlines this body and is byte-exact in only one of the two.
 	 */
 	for (k = 0; k < taps; k++) {
-		int old = state[k];
-
+		old = state[k];
 		state[k] = (short)carry;
-		acc = (int)((unsigned)acc + (unsigned)(carry * coeff[k]));
+		tap = coeff[k];
+		acc = (int)((unsigned)acc + (unsigned)(carry * tap));
 		carry = old;
 	}
 
@@ -1643,52 +1661,42 @@ V34EchoPreFilter(short *buf, short count, struct v34_echo_prefilter *p)
 {
 	short i;
 
+	/*
+	 * THERE IS NO INNER LOOP HERE BECAUSE THE OBJECT DOES NOT CONTAIN ONE
+	 * THIS FUNCTION WROTE.  At -O3 GCC 3.4.2 inlines `V34Filter2` at this
+	 * call and still emits the out-of-line copy the blob carries at
+	 * 0x72c80, and the inlined body reproduces the blob's loop at +0x40 to
+	 * +0x58 instruction for instruction and register for register --
+	 * `cmp $0x2a,%ebx; jb` included.  That guard is an UNSIGNED compare
+	 * and it comes from `V34Filter2`'s `unsigned taps` after constant
+	 * propagation: hand-writing the loop cannot produce it, and 96 cells
+	 * of the hand-written form say so, with `int k` and `unsigned k`
+	 * byte-identical in all 48 pairs.
+	 *
+	 * THE SHIFT IS BARE, AND THE MASK THIS FILE USED TO CARRY IS WITHDRAWN
+	 * ON EVIDENCE.  The old comment declined `>> shift` because "the
+	 * object can put a value above 31 there".  It cannot: `VPcmV34Create`
+	 * memsets the whole 0xac4c-byte object, `txinit` memsets only the
+	 * prefilter's first 0x54 bytes -- the `state[42]` array -- and stopping
+	 * short of `shift` at +0x20dc, and NOTHING in the blob's 1,859
+	 * functions writes it.  Every write with a `0x64(%reg)` destination was
+	 * scanned for every register but %esp: 38 functions have one and not
+	 * one is a v34 function or takes a prefilter.  `V34EchoPreFilter` is
+	 * its only reader.  So `shift` is 0 for the object's lifetime, the two
+	 * spellings cannot differ behaviourally, and the mask was ours rather
+	 * than the author's -- our `and $0x1f,%edx` at +0x27 is the ONE extra
+	 * instruction lever 2 reports (padding-stripped, ours 49 to the blob's
+	 * 48; the old comment's "49 against 49" was stale).  The one thing the
+	 * scan cannot see is a write from outside dsplibs.o; all three
+	 * referencers of the prefilter at +0x2078 are internal.
+	 */
 	for (i = 0; i < count; i++) {
-		const short *coeff = p->coeff;
 		unsigned shift = p->shift;
-		int carry = buf[i];
-		int acc = 0;
-		int k;
+		int acc = V34Filter2(buf[i], p->state, p->coeff,
+				     V34_ECHO_PREFILTER_TAPS);
 
-		/*
-		 * Same read-then-overwrite shift as V34TimingHPFilter and
-		 * V34Filter2, with the tap count fixed at 42 rather than
-		 * passed in.
-		 */
-		for (k = 0; k < V34_ECHO_PREFILTER_TAPS; k++) {
-			int old = p->state[k];
-
-			p->state[k] = (short)carry;
-			acc = (int)((unsigned)acc
-				    + (unsigned)(carry * coeff[k]));
-			carry = old;
-		}
-
-		/*
-		 * In place: the input array is the output array.  `shift` is
-		 * masked to five bits for the same reason as dftenergy's --
-		 * the object's `sar %cl` does the masking and C would
-		 * otherwise be undefined.  Re-read every sample, as the
-		 * original does, rather than hoisted.
-		 *
-		 * THE FIELD IS READ AS AN `int`, WHICH THE OBJECT SAYS AND
-		 * WHICH COSTS NOTHING.  `p->shift` is an `int` at +0x64 and
-		 * the blob loads all 32 bits of it -- `mov 0x64(%edi),%edx`
-		 * -- where the `(unsigned char)` cast this line used to carry
-		 * made GCC 3.4.2 emit `movzbl` and a separate `and $0x1f`,
-		 * two instructions more at the same 139 bytes.  The cast was
-		 * redundant under the mask: `(unsigned char)x & 31` and
-		 * `x & 31` are equal for every `int` x, because the mask
-		 * discards bits 5..7 either way.  63 differing bytes -> 55.
-		 *
-		 * DROPPING THE MASK AS WELL reaches 43 and matches the blob's
-		 * INSTRUCTION COUNT exactly (49 against 49), so the original
-		 * very likely wrote a bare `>> shift`.  It is NOT taken here:
-		 * a bare shift by a value the object can put above 31 is
-		 * undefined in C, it does not close the function either, and
-		 * `nothing wrong-but-plausible` outranks eight bytes.
-		 */
-		buf[i] = (short)((acc + 0x4000) >> (shift & 31));
+		/* In place: the input array is the output array. */
+		buf[i] = (short)((acc + 0x4000) >> shift);
 	}
 }
 
