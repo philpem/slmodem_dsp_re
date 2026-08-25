@@ -11,7 +11,7 @@ one.** Nothing here is about modems.
 | `tiers.md` | the four oracles and what each is structurally blind to |
 | `efficiency.md` | token budget and wall-clock budget, which are unrelated problems |
 | `gates.md` | the pattern behind every tooling defect this tree has found |
-| `refinement.md` | what actually closes the last bytes: nine levers, each with its counterexample |
+| `refinement.md` | what actually closes the last bytes: every lever with its counterexample |
 | `agents.md` | parallel batches: briefs, shared data, numbering, merging |
 | `tools.md` | which tools are portable, and what each assumes about its host |
 | `recording.md` | how to write the record: naming, the scope of a quantity, correcting a pushed finding |

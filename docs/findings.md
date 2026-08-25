@@ -86034,3 +86034,216 @@ which is finding 134's argument, arrived at again from the other end.
 
 Both arms shown firing by injection: the dropped `-D` exits 1, and the inert
 header exits 1 against the floor.  0.4 s over the whole tree.
+
+### 7810. EMISSION ORDER CHANGES REGISTER CHOICE THROUGH `peep2_find_free_register`'s `search_ofs`, A ROUND-ROBIN CURSOR THAT NOTHING RESETS BETWEEN FUNCTIONS -- 7796'S QUESTION IS SETTLED
+
+7772 found that position in a translation unit changes register allocation and
+could not say why; 7796 measured it into a corner -- same source text, same
+emission index, same `label_num`, different registers -- and nominated
+"allocation addresses and pointer-keyed hash iteration" as where to look next.
+It is neither.  The carrier is a **file-scope `static` in a peephole pass that
+runs AFTER register allocation**, and it is reachable in four independent ways.
+
+**THE MINIMAL REPRODUCTION, WHICH RUNS IN A SECOND.**  Swap two function
+definitions in `src/pump/v90/V90Phase4Modulator.cpp` -- the destructor and
+`resetBeforRRN` -- and `resetRRNSecondSection`, which does not move and whose
+emission index does not change, comes out with two registers exchanged:
+
+    base      xor %edx,%edx ... mov %edx,0x2f9c(%eax) ; xor %ecx,%ecx ; mov %ecx,0x2fa0(%eax)
+    swapped   xor %ecx,%ecx ... mov %ecx,0x2f9c(%eax) ; xor %edx,%edx ; mov %edx,0x2fa0(%eax)
+
+Fifteen instructions either way, identical mnemonics, identical operands but
+for the two registers: 7772's phenomenon in a function small enough to dump.
+
+**THE PASS DUMPS NAME THE PASS.**  Both variants compiled with `-da` at the
+tree's own flags.  Extracting this one function from every RTL dump and
+comparing:
+
+    x.cpp.24.lreg        IDENTICAL      local register allocation
+    x.cpp.25.greg        IDENTICAL      global allocation and reload
+    x.cpp.26.postreload  IDENTICAL
+    x.cpp.27.flow2       IDENTICAL
+    x.cpp.28.peephole2   DIFFERS        <- the first divergence
+    x.cpp.30.rnreg       DIFFERS        -frename-registers, downstream of it
+
+**The register allocator agrees with itself.**  At `.27.flow2` the two stores
+are still `(set (mem:SI (plus (reg 0 ax) (const_int 12188))) (const_int 0))` --
+an immediate straight to memory, no register involved, byte-identical in both
+compiles.  `peephole2` is what puts a register there.
+
+**THE PATTERN, AND THE `static`.**  `gcc/config/i386/i386.md:17507`:
+
+    (define_peephole2
+      [(match_scratch:SI 2 "r")
+       (set (match_operand:SI 0 "memory_operand" "")
+            (match_operand:SI 1 "immediate_operand" ""))]
+      "! optimize_size
+       && get_attr_length (insn) >= ix86_cost->large_insn
+       && TARGET_SPLIT_LONG_MOVES"
+      [(set (match_dup 2) (match_dup 1))
+       (set (match_dup 0) (match_dup 2))]
+
+The `match_scratch` is satisfied by `peep2_find_free_register`
+(`gcc/recog.c:2931`), whose first line is
+
+    static int search_ofs;
+
+It is a **round-robin cursor over `reg_alloc_order`**: the search starts at
+`search_ofs`, and on success sets `search_ofs = found + 1` (line 3018) so that
+the next scratch anywhere in the compilation starts one further along.  The
+four references to it in 3.4.2's whole source are all inside that one function.
+**Nothing resets it per function, per file or per pass.**  It is threaded
+through every function of a translation unit in EMISSION order.
+
+**WHY A SWAP MOVES IT WHEN EVERY COUNTER STAYS PUT.**  Each call is
+`search_ofs' = f(search_ofs, the live set at that insn)`: the cursor advances
+past whichever register was actually free, not by a fixed step.  Composition of
+two such maps does not commute, so exchanging two functions ahead of a target
+changes the cursor's value at the target while leaving every *count* --
+`label_num`, `DECL_UID`, the insn UIDs, the number of declarations parsed --
+exactly where 7796 measured them.  That is the precise content of 7796's "what
+is left depends on the IDENTITY of what was compiled before rather than the
+amount", and it retires the counter hypothesis by mechanism instead of by
+elimination.
+
+There is also a **discontinuity**: line 3024 sets `search_ofs = 0` when no
+register can be found.  A function under enough pressure to fail an allocation
+resynchronises the cursor for everything emitted after it.
+
+**THREE ARMS THAT EACH DISABLE IT, AND EACH COLLAPSES THE EFFECT.**  Same two
+variants, symbols compared only where the address AND the name agree in both
+objects, so nothing that moved is counted:
+
+    the tree's flags                  1 bystander differs
+    -fno-peephole2                    0
+    -mtune=i386                       0
+    -Os                               0
+
+`-mtune` is the one worth reading twice.  `x86_split_long_moves = m_PPRO`
+(`i386.c:492`) and `TARGET_SPLIT_LONG_MOVES` is that masked by the tune
+setting (`i386.h:263`), so **`-mtune=i686` is exactly and only what turns this
+pattern on** -- the flag finding 612 derived from the object and which took the
+codegen match from 30 to 82.  `-Os` fails the `! optimize_size` guard.
+Reproduced identically on a second file, `V90Equalizer.cpp`.
+
+**THE ADVANCE PREDICTOR, WITH ITS BOUND.**  `large_insn` is 8 for
+`pentiumpro_cost` (`i386.c:251`), so the pattern fires on a store of an
+immediate whose ENCODING reaches eight bytes.  `movl $imm32,disp8(%reg)` is
+seven and is left alone; `movl $imm32,disp32(%reg)` is ten and is split.  The
+reproduction shows both in one function: `movl $0x1,0x30(%eax)`,
+`movl $0x0,0x20(%eax)` and `movl $0x0,0x18(%eax)` stay immediate stores, and
+only `+0x2f9c` and `+0x2fa0` are split.  **So the exposed functions are the
+ones that store constants into fields past +0x7f** -- which is most of this
+object's `reset` and constructor bodies.
+
+Counted over the blob by looking for the emitted shape (a register loaded with
+a constant whose only use is the immediately following store through it):
+**218 of 1,859 functions carry at least one, 406 splits in all**, led by
+`v34handshak` at 19 and `V92ConvolutionEncoder::makeStateTtransitionTable` at
+12.  Same compiler and same flags on both sides, so a split in the blob's copy
+of a function is good evidence that ours has one too, and the predictor costs
+nothing to run.
+
+**IT IS A FILTER FOR THE EXPOSED CASE, NOT A CERTIFICATE OF THE NULL.**
+i386.md has 144 `match_scratch` sites, and the read-modify-write group at
+17685-17740 is `! TARGET_READ_MODIFY` / `! TARGET_READ_MODIFY_WRITE`, also
+PPRO-tuned, drawing from the same cursor.  The detector above sees only the
+const-store shape, so a positive count says a function is exposed and a zero
+does not say it is safe.  This is 7801's pre-check rule in a second place.
+
+**HOW MUCH OF THE EFFECT IT IS: MEASURED, NOT ASSUMED.**  177 swaps over 45
+translation units in `src/pump/`, two arms each:
+
+    bystanders differing WITH peephole2      16
+    bystanders differing WITHOUT             8
+
+and **all eight survivors are the same instruction, `movl $imm,(%esp)`, with a
+different `.rodata.str1.1` addend** -- a diagnostic string whose pool offset
+moved with the function order.  That is CLAUDE.md's own trap (a string
+reference is an addend against the section symbol) and an artefact of comparing
+disassembly text, not a register choice.  Every one of the sixteen was
+inspected.  **So over this sweep peephole2's cursor accounts for all of the
+register drift**, in four files that had it and in none that did not.
+
+**AND IT RETRODICTS 7772.**  Two character-identical bodies each taking one
+scratch: the first gets the register the cursor is pointing at and the second
+gets the next one round the ring.  "Whichever body comes FIRST gets `%ecx`;
+the second gets `%eax`" is that sentence.
+
+**THE HYPOTHESIS 7796 NOMINATED IS DEAD, AND THIS IS THE MEASUREMENT.**  If
+allocation addresses carried the effect, changing when the garbage collector
+runs would change the output, because 3.4.2's `ggc-page` frees pages that later
+allocations reuse.  `V90Phase4Modulator.cpp` compiled five ways -- default,
+`--param ggc-min-expand=` 1 and 1000, `--param ggc-min-heapsize=` 1024 and
+1048576 -- gives **one md5 for all five objects**.  The knob was shown to fire
+before the null was believed: `-fmem-report` reads 6040k of arena at the
+default and 1520k at `ggc-min-expand=1 ggc-min-heapsize=1`, and the compile
+goes from 0.131 s to 0.234 s collecting.  Do not re-try the counters and do not
+re-try the addresses.
+
+### 7811. `docs/method/refinement.md`: six levers folded in from the whole record, and what was rejected
+
+7784 assembled that file from the last six refinement waves.  `docs/findings.md`
+holds 1,684 findings and most of the codegen record predates every lever in it,
+so a sweep was made over the whole file for levers that were learned once,
+written down once and never generalised.
+
+**WHAT WENT IN.**
+
+1. **Lever 3's mechanism paragraph, replaced** by 7810 above.  It said "the
+   cause is not established"; it now names the pass, the pattern, the `static`,
+   the enabling flag and the advance test, and records the two hypotheses that
+   are dead.
+2. **Lever 9 rewritten from two uncited lines into a bounded lever.**  It
+   carried an example with no finding number and no failure case -- the only
+   one in the file like that.  The mechanism is 3529's: GCC 3.4.2's
+   `tree_swap_operands_p` swaps a comparison whose operand 0 is a `DECL_P` and
+   whose operand 1 is not, so the emitted order follows what KIND of tree each
+   side is and not how the `if` is spelled.  Four measured failures now bound
+   it -- 1991, 5701, 5823, 5855 -- and 5823's rule (vary the TYPE first and the
+   operand order second) is the advance test.  2301 and 4812 are why it matters
+   at all: under `-mno-ieee-fp` the swap inverts the predicate, which agrees for
+   ordered operands and is opposite for a NaN, so this is behaviour.
+3. **A new lever: where a member's body is written.**  An in-class definition is
+   implicitly `inline` and moves under `max-inline-insns-single` rather than
+   `-auto`, so GCC 3.4.2 inlines it nearly everywhere while still emitting the
+   weak symbol (5805, 7543).  Both directions are evidence, which is what makes
+   it a lever rather than a preference.  5802 is the counterexample.
+4. **A new lever: the constant pool is a typed, per-function observable**
+   (2903, 4340, 2146), with 4340's own warning that the pool is emitted per
+   function so two identical slots prove nothing.
+5. **Lever 8 gains two more bounds** -- 3581 (the extension belongs to the
+   accumulator, not the element) and 5850 (a callee's mangled signature beats an
+   inference from a free encoding).
+6. **Lever 4 gains the counterexample it did not have** -- 6610, where a
+   function-local static's `.bss` offset does not follow declaration order and
+   was measured both ways -- plus 3622's confirmation of the file-scope rule on
+   both compilers.
+7. **A spill-width lever** (2139): the tree's "the object never rounds, so spell
+   it `long double`" rule has a measured counterexample, and a four-byte `fstps`
+   on an intermediate is a `float` in the source.
+8. **Lever 6 gains 611's converse**: thirteen duplicated convolutions in the
+   object are one helper plus literal call sites at `-O3`, so check that before
+   hand-writing an unrolled shape.
+
+**WHAT WAS REJECTED, WHICH IS THE OTHER HALF OF THE SWEEP.**
+
+- **Everything before finding 600.**  The early V.34, V.32, V.8 and DSP work is
+  reconstruction and test method, not codegen; the codegen tier does not exist
+  in the record until 606-619, and those are already in CLAUDE.md and
+  `tiers.md`.
+- **1225, 2802, 3620-3622's TU-attribution material.**  Real and general, and it
+  is about deciding which file a symbol belongs to rather than about closing
+  bytes in a file you already have.  It belongs with the attribution tooling,
+  not here.
+- **2411's integer if-conversion and 5823's `sbb`.**  Both are open, both are
+  named in the record, and neither has an action.  A lever nobody can act on is
+  worse than no lever.
+- **1448 (`static` not inlined at `-O2`), 2163 (the blob inlines and keeps the
+  out-of-line symbol), 4401 (`log10` needs `-ffast-math`).**  These are flag
+  evidence, and `compilers.md` and CLAUDE.md are where the flag register lives.
+- **2139's scope was deliberately narrowed.**  `tiers.md` says register
+  allocation and scheduling are FREE and that stands; what this pass adds is
+  that there are two named exceptions -- a scratch-consuming peephole2 and a
+  spill slot narrower than the value it holds -- and both are noted as pointers
+  rather than moved.

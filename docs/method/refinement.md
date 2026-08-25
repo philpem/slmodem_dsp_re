@@ -38,6 +38,12 @@ normal (7769).
 
 ## The levers, in the order they have paid off
 
+Levers 0 to 9 came out of the refinement waves, in that order. **10, 11 and 12
+did not: they were learned once somewhere in the older record, written into one
+finding and never generalised**, and were swept up afterwards (7811). Their
+measurements are as real as the rest and their yield in a refinement pass is
+unknown, which is the one thing to hold in mind when a brief quotes them.
+
 ### 0. What an enumeration proves depends on how many cells hit zero
 
 Running the domain to completion is necessary; it is not the whole story. Say
@@ -140,8 +146,8 @@ follows the position, not the text:
     whichever body comes FIRST gets %ecx; the second gets %eax   (7772)
 
 Swapping the definitions moves the difference with the slot. It is **not**
-`-frename-registers` — compiled with and without, same result. The cause is
-not established.
+`-frename-registers` — compiled with and without, same result (7772). The
+cause is now established and is at the end of this lever (7810).
 
 Cashed once: `nm -n` showed the blob emitted `V90Resampler`'s `(f)` constructor
 pair before its `(Pf)` pair and we emitted them the other way round, and in
@@ -176,15 +182,6 @@ symbols already sat at the blob's emission index, so only their PREDECESSORS
 could change -- and three of the four closed without moving. That is 7772's
 "something ahead of both in the TU", now named. 7772's own twin
 `recivedSUV` closed with neither twin moving relative to the other.
-
-**The mechanism is not a global counter.** `-S` from both trees:
-`generateDataSymbolBeforeFPE` has the identical label number (`.L212`), the
-identical instruction count, and different registers -- same at `.L215` for
-its twin. The label number is where `label_num` stood at expansion, so every
-cross-TU counter is at the same value in both compiles. Same text, same index,
-same counters, different allocation. What is left depends on the IDENTITY of
-what was compiled before rather than the amount: allocation addresses and
-pointer-keyed hash iteration. Do not re-try the counters.
 
 **Aim at REGALLOC files, not BYTES files, and this is now the twice-confirmed
 part.** Over 7796's nine files, **16 of 25 REGALLOC candidates closed, 0 of 9
@@ -313,6 +310,89 @@ DEAD.** Compare the SORTED MULTISET of preprocessed non-blank lines against
 
 Shown firing on both injections and clean on everything committed. Finding 7799.
 
+### 3b. The mechanism, settled: a round-robin cursor in `peephole2` (7810)
+
+**It is not the register allocator, and it is not a counter.** Swap two
+definitions in `V90Phase4Modulator.cpp` and dump every RTL pass with `-da`:
+the unmoved bystander `resetRRNSecondSection` is **identical through `.24.lreg`,
+`.25.greg`, `.26.postreload` and `.27.flow2`** and first differs at
+`.28.peephole2`. At `flow2` the two stores are still immediates straight to
+memory with no register in them. `peephole2` is what puts a register there.
+
+The pattern is `i386.md:17507` — a store of an immediate whose *encoding*
+reaches `ix86_cost->large_insn` is split into `reg = imm; mem = reg`, and its
+`match_scratch` is filled by `peep2_find_free_register` (`recog.c:2931`), whose
+first line is
+
+    static int search_ofs;
+
+a round-robin cursor over `reg_alloc_order`. On success it is set to the
+register after the one found (`recog.c:3018`); **nothing resets it per
+function, per file or per pass** — all four references in 3.4.2 are inside that
+one function. It is threaded through a translation unit in EMISSION order,
+which is why the leaf block matters and the file's source order does not.
+
+**Why a swap moves it while every counter stays put.** Each call is
+`search_ofs' = f(search_ofs, the live set)`, advancing past whichever register
+was free rather than by a fixed step, so composing two of them does not
+commute. That is exactly 7796's measurement — `generateDataSymbolBeforeFPE` had
+the identical label number (`.L212`), the identical instruction count and
+different registers, and the same at `.L215` for its twin — read as a
+mechanism instead of by elimination. **One discontinuity:** `recog.c:3024`
+resets the cursor to 0 when no register can be found, so a function under
+enough pressure to fail an allocation resynchronises everything after it.
+
+**Three arms, each of which turns the pattern off, and each collapses the
+effect to zero** (symbols compared only where address and name agree in both
+objects, so nothing that moved is counted):
+
+    the tree's flags   1 bystander differs      -fno-peephole2   0
+    -mtune=i386        0                        -Os              0
+
+`-mtune` is the one to read twice: `x86_split_long_moves = m_PPRO` (`i386.c:492`)
+masked by the tune setting (`i386.h:263`), so **`-mtune=i686` — finding 612's
+flag, the one that took the codegen match from 30 to 82 — is exactly and only
+what enables this.**
+
+**THE ADVANCE TEST, AND IT IS FREE.** `large_insn` is 8 for `pentiumpro_cost`
+(`i386.c:251`). `movl $imm32,disp8(%reg)` is seven bytes and is left alone;
+`movl $imm32,disp32(%reg)` is ten and is split. The reproduction shows both in
+one function — `+0x18`, `+0x20`, `+0x30` stay immediate stores and only
+`+0x2f9c` and `+0x2fa0` split. **So the exposed functions are the ones storing
+constants into fields past +0x7f**, which is most of this object's `reset` and
+constructor bodies. Read the emitted shape off either object — a register
+loaded with a constant whose only use is the store immediately after it:
+**218 of the blob's 1,859 functions carry at least one, 406 in all**, led by
+`v34handshak` at 19. Same compiler and flags on both sides, so a split in the
+blob's copy is good evidence ours has one.
+
+**IT IS A FILTER FOR THE EXPOSED CASE, NOT A CERTIFICATE OF THE NULL** — 3a's
+rule again. i386.md has 144 `match_scratch` sites and the read-modify-write
+group at 17685 is PPRO-tuned too, drawing on the same cursor; that shape is not
+detected above. A positive count says exposed; a zero does not say safe.
+
+**How much of the effect this is, measured.** 177 swaps over 45 units in
+`src/pump/`: **16 bystanders differ with peephole2 and 8 without** — and all
+eight survivors are one instruction, `movl $imm,(%esp)`, with a different
+`.rodata.str1.1` addend, which is a diagnostic string's pool offset moving with
+the function order and CLAUDE.md's own trap rather than a register choice. All
+sixteen were inspected. Over this sweep the cursor accounts for all of it.
+
+**IT RETRODICTS 7772.** Two character-identical bodies each taking one scratch:
+the first gets the register the cursor points at, the second the next one round
+the ring. "Whichever body comes FIRST gets `%ecx`; the second gets `%eax`" is
+that sentence.
+
+**TWO DEAD HYPOTHESES. Do not re-try either.** The counters — `label_num`,
+`DECL_UID`, insn UIDs — are at the same value in both compiles, and a swap
+preserves them by construction. And allocation addresses: if they carried it,
+changing when the collector runs would change the output, because `ggc-page`
+frees pages that later allocations reuse. Five arms of `--param ggc-min-expand`
+and `ggc-min-heapsize` give **one md5 for all five objects**, and the knob was
+shown to fire first — `-fmem-report` reads 6040k of arena at the default
+against 1520k at the aggressive setting, and the compile goes 0.131 s to
+0.234 s collecting.
+
 ### 4. File-scope declaration order
 
 GCC 3.4.2 emits file-scope objects in **reverse definition order**. Verify that
@@ -322,6 +402,30 @@ Matching the two `.rodata` blocks **by content** paired all ten of
 `v8_V21_Init`'s tables with no array differing, which proved the argument
 assignment was already right and the *definition order* was the defect. Ten of
 thirteen bytes (7765).
+
+**The rule holds on BOTH compilers, which is what makes it usable.** A
+three-variable scratch file gives `CCC, BBB, AAA` ascending under GCC 13 `-m32
+-O3` and under GCC 3.4.2 at the tree's flags, so one source order satisfies the
+period build and the modern one; had they disagreed, D392 would have closed as
+unachievable rather than as fixed. The corollary is worth knowing separately:
+`short[4]` gets 2-byte alignment from 3.4.2 and 4 from GCC 13 while the `.data`
+section is 4 in both, so **a two-byte pad between two arrays is a
+translation-unit boundary** under the object's own compiler — which is how
+`COEF_DC` and `FPM_sin_sign` were placed in different units from the bytes
+rather than the symbol table (3622).
+
+**WHERE IT STOPS, AND IT IS A DIFFERENT KIND OF SYMBOL. A function-local
+`static` does not record its declaration order.** `V92CP::bitsToInfo`'s two
+statics come out `delta` at `.bss+0x0` and `gamma` at `+0x4` **with the
+declarations in EITHER order** — both arrangements were built on the period
+compiler and the layout did not move, so the blob's own order is not evidence
+about the original's source and cannot be reproduced by reordering (6610).
+Nothing in the tree observes those offsets, so the temptation is to write the
+comment anyway; two files already carry that claim and one of them is now known
+to be unfounded. **Check which kind of symbol you have before leaning on
+lever 4 at all**, and 3622's own closing paragraph is the model for how far a
+headline of this shape is entitled to go: it is one scratch file plus one real
+one, so nothing should be built on it that a test does not check.
 
 ### 5. Storage class, read off relocations
 
@@ -371,6 +475,23 @@ Two negatives already recorded, so nobody repeats them:
   of its four loops are written out were compiled; the maximum is 516 against
   the object's 534, so the domain is exhausted with no match (7785). That is
   lever 1's constant-map branch appearing for real.
+
+**AND CHECK THE CONVERSE BEFORE YOU WRITE THE EXPANDED SHAPE AT ALL: the
+duplication may be the compiler's.** Thirteen hand-written convolutions were
+about to go in because the object has thirteen. One `static` helper taking the
+tap count and the shift as parameters, called from a switch with six constant
+pairs, on the period compiler:
+
+    static, -O2          1 copy, runtime shift, helper stays out of line
+    static inline, -O2   6 copies, shifts $0xd $0xe $0xf $0x10
+    static, -O3          6 copies, the same four shifts
+
+which are the object's own four shift amounts (611). **But the compiler can
+only do that if the source hands it constants** — reading the tap count out of
+a state struct leaves nothing to fold, and `-O3` then takes our function from
+454 bytes to 463 rather than towards 2,640. So the finding is not "write one
+loop"; it is that the original's hand optimisation was expressed as literals at
+the call site, and the expansion is downstream of that.
 
 ### 7. `delete[]` versus an explicit guarded free
 
@@ -443,19 +564,196 @@ what varies — look at each site's destination instead. And verify PER SITE
 when the enclosing functions are not byte-identical: `toneiir_progress` keeping
 its `movswl` is what proved the edit touched only the dead sites.
 
-### 9. Operand order in commutative expressions
+**TWO MORE PLACES THIS HAS BEEN GOT WRONG, both worth checking before any
+retype. The extension may belong to the ACCUMULATOR rather than to the
+element.** `FPM_FSE_receive` reads `tilt_coeff[4]` and `tilt_hist[4]` `movzwl`
+inside a 4-tap multiply-accumulate, and a `short` array feeding a 32-bit `imul`
+normally gives `movswl`, so the naive reading is `unsigned short`. It is wrong,
+and the experiment is cheap — the same `short` declaration with the
+accumulation written two ways:
+
+    int acc = 0; ... acc += c[j]*h[j]; out = (short)acc;
+        -> movswl on both operands, and the `out = 0` store is DELETED
+    out = 0; ... out = (short)(out + c[j]*h[j]);
+        -> movzwl on both operands, and the zero store is KEPT
+
+The kept store is `movw $0x0,0x76(%ecx)` in the object, so the accumulator is
+the `short` field itself, only its low 16 bits are ever stored back, and the
+extension is free (3581). **The presence or absence of a zeroing store beside
+the loop is the tell**, and no differential test can separate the two spellings.
+
+**And a CALLEE's mangled signature beats an inference from a free encoding.**
+`V90SpectralShaper`'s two heap buffers were typed `unsigned short *` on the
+strength of every access being `movzwl (%reg,%edx,2)`. The stride is real
+evidence; the extension is not — every one of those loads has its 32-bit result
+discarded by a 16-bit store. What is forced is that both pointers are handed
+straight to `progress(const short *)` and `getMetric(const short *, unsigned)`
+with no conversion instruction between the load and the push:
+`_ZN24V90SpectralShapingFilter8progressEPKs` is `PKs`. An `unsigned short *`
+would not convert silently in C++ at all — it needs a cast the object gives no
+reason for. Evidence class 2 beats class 3, and `compare.py` did not move by
+one symbol on the retype (5850).
+
+### 9. Operand order — which is decided by the TREE, not by how you spell it
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
-identity.
+identity. That much has always been in this file. What was missing is that the
+lever usually does not work, and why.
+
+**THE MECHANISM, AND IT IS THE ADVANCE TEST.** GCC 3.4.2's
+`tree_swap_operands_p` (`fold-const.c`) returns "swap" when operand 0 is a
+`DECL_P` and operand 1 is not. So `local > params->THRESHOLD` — a plain local
+against a `COMPONENT_REF` — is canonicalised to `params->THRESHOLD < local`,
+and **the threshold is what gets loaded into `%st(0)`**. Rewriting the source
+comparison the other way round changes nothing, because both spellings fold to
+one RTL. **Reading the member into a local first is the fix**: both operands
+are then `DECL_P`, the first test returns 0, no swap happens. All six sites in
+`checkSpecialSpectralConditions` took the object's own condition codes on that
+one change, and five spellings were compiled and RUN against a real NaN before
+it was believed — the plain form and a nested-`if` detect on a NaN; a local
+threshold, a local array and a local struct do not (3529).
+
+**AND UNDER `-mno-ieee-fp` THIS IS BEHAVIOUR, NOT CODEGEN.** The swap comes
+with an inverted predicate, which is identical for ordered operands and
+OPPOSITE for a NaN, so a comparison can be logically right, spelled every
+available way, and still send a NaN down the wrong arm. `V90SdDetector::process`
+was 304 failures of 32,262 and took `getV90Decision` down with it (2301);
+`CalcErrorEnergyAfterEchoCancellation`'s keep-rate flag answered 0 where the
+object answers 1 and was green over 24,509 checks until the accumulator was
+seeded negative (4812). Only `make period` sees any of it — GCC 13 honours
+IEEE for `>` whichever order it picks, so `make one`, `make test` and
+`mutate.py` all pass either spelling (3529).
+
+**WHERE IT STOPS, AND THIS IS THE HALF THAT WAS MISSING. Four measured
+failures, all of them the TYPE and not the order:**
+
+    GenericToneDetector::process   `a >= b` -> `b <= a`, and inverting the
+                                   condition with the arms swapped: NEITHER
+                                   moves the emitted branch.  GCC canonicalises
+                                   operand order (1991)
+    V90Equalizer high-error test   six probes; every `float` spelling gives
+                                   `fcoms`+`jbe` and BOTH `long double`
+                                   spellings give the object's
+                                   `fcomp %st(1)`+`jae` (5701)
+    displaySpectralParams sign     seven spellings; only the `long double`
+                                   parameter emits `fldz; fcompp` (5823)
+    advanceTrellis compare         six spellings; the two that give the
+                                   object's `fcoms` are the two a differential
+                                   test refuses (5855)
+
+**So: vary the TYPE first and the operand order second, and compile the
+candidates rather than reasoning about them** (5823, which is the second site
+to say so independently). 5855 is the sharpest case — our operand 1 was a
+`NOP_EXPR`, a `float` widened to `long double`, so it is not a DECL, GCC swaps,
+and the `float_extend`-of-memory compare no longer applies because that pattern
+wants the narrow memory operand SECOND. The order was never the free variable.
+
+**A decoded operand order is worth a paragraph even when you decline it.**
+5855's is recorded with all six cells and left alone, because the two matching
+spellings are refused by a test and CLAUDE.md's rule is that the differential
+tier decides.
+
+### 10. Where a member's body is written — in-class is implicitly `inline`
+
+A member defined inside the class body is implicitly `inline`, which moves it
+from `--param max-inline-insns-auto` (100) to `max-inline-insns-single` (500),
+and GCC 3.4.2 then inlines it nearly everywhere **while still emitting the weak
+symbol** — so the symbol table looks right and every call site is wrong.
+
+    Scrambler::reset      moved out of the class body   452 -> 455 identical,
+                          nothing lost; V90Modulator::reset plus the two
+                          constructors that call it                    (5805)
+    Scrambler::process    inlined at all 19 sites the blob calls;
+                          `V90Modulator::progress` +57 -> +3 instructions,
+                          identical SET 488 before and 488 after        (7543)
+
+**The tell is 7480's shape:** an EXCESS of instructions with a MISSING call.
+Count `R_386_PC32` sites against the blob's for the template member; ours had
+zero against nineteen.
+
+**IT RUNS BOTH WAYS, AND THAT IS WHAT MAKES IT A LEVER.** `Descrambler`'s bulk
+`process` STAYS in the class body, because the blob carries no
+`Descrambler<...>::process` symbol at all and moving it out would make us emit
+one the original does not have (7543). Read the object first.
+
+**Where it stops:** `V90SpectralVerifier::printSpectrum` is already out of
+line, and ours is inlined into `process` where the blob's is a real call.
+Definition order was probed (moved after `process`: no change) and so was
+translation-unit growth (padded with 400 unrelated functions: still inlined,
+still 419 bytes, to the byte). Cause not found, recorded rather than chased
+(5802). **Do not reach for `__attribute__((noinline))`** — that is fitting the
+compiler, and it puts a construct in `src/` the original cannot have had.
+
+### 11. The constant pool is a typed, per-function observable
+
+`.rodata.cst4` against `.rodata.cst8` against `.rodata.cst16` names the literal's
+type, and the load instruction says it again:
+
+- `fldt` where the blob has `fldl` means we wrote `0.54L` and the author wrote
+  `0.54` — three constants in `hamming<float>`, and `DspMath.cpp`'s own comment
+  already recorded the object's operands as eight-byte slots (2903).
+- `fmuls` and not `fmull` makes the multiplier single precision; a `double` 0.4
+  would have gone to `.rodata.cst8` (4340).
+- **A constant that is NOT there is evidence too.** The "OutputConversionFactor"
+  print uses 1e5, 1e4, 2^30, 2^24, 2^20, 2^-16 and 2.0 and nothing near a
+  thousand, though the format is `%03d`. The 1e3 multiply folded away, which
+  happens only if the value was an `int` (2146).
+- **A third x87 op where two would do puts a reciprocal in the source.**
+  `fildll; fdivr %st(2),%st; fmuls` is `1.0/count * sum`, not `sum/count`, and
+  the extra operation exists only because there is a constant 1.0 to divide
+  (4340).
+
+**Where it stops: the pool is emitted PER FUNCTION.** `output_constant_pool`
+runs at the end of each function and `-fmerge-constants` leaves the folding to
+the linker, so in a `.o` the duplicates are all still there — `0.5f` appears at
+`+0x1b8` and again at `+0x1c4`, and 24804.0f twice three slots earlier.
+**Two slots with the same bytes in one translation unit say nothing at all**,
+and a reader who treats slot identity as expression identity will mis-read
+every inlined float constant in this object (4340).
+
+### 12. Spill width is forced; a value that never spills is not
+
+The tree's standing rule is "the object keeps intermediates in registers and
+never rounds them, so spell them `long double`" — `V90Equalizer.cpp`'s file
+comment says so and 256 measured it holding for two step-size setters.
+`enterPhase4` is the counterexample and it sharpens the rule:
+
+    36b96:  fstps 0x38(%esp)      the getter's result
+    36bd0:  fstps 0x38(%esp)      the DIFFERENCE, rounded to 4 bytes
+
+Two `fstps` to a four-byte slot is two roundings to single precision. Written
+with `long double` intermediates the transcript failed on EVERY non-zero offset
+in the sweep and passed on zero — 48 of 1,092 checks — and two `float` locals
+fixed all of them (2139).
+
+**So the SPILL WIDTH is the evidence, not the presence of a spill.** A four-byte
+`fstps` on an intermediate says the source had a `float` variable there. A value
+that stays in a register between its producer and its consumer says nothing, and
+that is why `long double` was right for the two setters. The first spill in
+`enterPhase4` is forced by the following call clobbering the stack and carries
+no information; the second is not, and it is the one that decides.
+
+Note for `tiers.md`, not a change to it: that file's FREE column — register
+allocation, scheduling — stands, and this tree now has two named exceptions to
+it. A scratch-consuming `peephole2` (lever 3b) makes allocation steerable, and
+a spill slot narrower than the value it holds makes a spill forced.
 
 ---
 
 ## What does not work
 
 - **Renaming a variable.** Free for the compiler (7002). It changes nothing.
-- **Reordering files** on the strength of lever 3. Control 4 of 7777 exists
-  precisely to stop that.
+- **Reordering ONE function** on the strength of lever 3. That is what control
+  4 of 7777 measured and it is right; what 7796 overturned is the conclusion
+  drawn from it, so reorder a whole file's leaf block or nothing. Lever 3b says
+  which files can pay: a file whose functions never store a constant into a
+  field past +0x7f has no scratch to reallocate.
 - **Getting closer.** See lever 1's stopping rule.
+- **`__attribute__((noinline))`, `volatile`, or a cast added to make the output
+  match.** Fitting the compiler. Three such shims were found and removed once
+  the period build could adjudicate, one of which had changed `float`
+  arithmetic to `double` — an alteration of the program and not of its
+  compilation (1352, 1354, and lever 10's `printSpectrum`).
 
 ---
 
