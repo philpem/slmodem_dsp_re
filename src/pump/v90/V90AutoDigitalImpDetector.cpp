@@ -194,6 +194,53 @@ typedef char adid_size[(sizeof(V90AutoDigitalImpDetector) == 0xa9b0) ? 1 : -1];
 #define V90PARAMETERS_STUDY_QC		0x4a8
 #define V90PARAMETERS_STUDY_PLAIN	0x348
 
+/* Ungrouped.  The object writes and compares 0xffff as a `short`. */
+#define ADID_NO_GROUP	((short)-1)
+
+/*
+ * THE SIGN TEST IS BACKWARDS FROM THE OBVIOUS SPELLING, and a NaN is what
+ * separates them.  The object compares with `fcom` against a zero in %st(0)
+ * and takes '+' when CF is set -- and an UNORDERED compare sets CF, so a NaN
+ * prints '+' where `v > 0.0f ? '+' : '-'` would print '-'.  Written as the
+ * negation of the ordered test, which is what the branch encodes.  A seeded
+ * object reaches this: one 32-bit pattern in 128 is a NaN.
+ *
+ * THE ZERO IS ON THE LEFT AND THE NEGATION IS ON THE OUTSIDE, and both halves
+ * of that are forced.  The object's three sites in `getAltVarThresh` are
+ *
+ *	fldz / fcompp (or fcoms) / fnstsw %ax / sahf
+ *	sbb %eax,%eax / and $0xfffffffe,%eax / add $0x2d,%eax
+ *
+ * -- 0x4073c, 0x407c4 and 0x40859 -- so there is no branch at all: the
+ * character is 0x2d - 2*CF, which is '+' exactly when the compare set CF.
+ * That is only encodable when the TRUE arm is the CF one, and CF is "below or
+ * unordered" with the ZERO in %st(0).  Spelling it `(0.0f >= v) ? '-' : '+'`
+ * puts the true arm on the other side: GCC 3.4.2 then commutes the compare to
+ * `v <= 0.0f`, emits `flds v`/`fcomps 0.0f`/`ja`, and a NaN -- which sets CF
+ * and ZF both -- fails `ja` and prints '-' where the object prints '+'.
+ * Measured: of ten spellings compiled with the object's flags, this is the
+ * only one that reproduces the `sbb`/`and`/`add` triple.
+ *
+ * The two spellings are the SAME under IEEE rules -- `0.0f >= NaN` is false
+ * either way -- so this is an operand-order fix and not a change of meaning;
+ * the modern build is unaffected.  The old comment argued the `-mieee-fp`
+ * case, which no longer applies.  Findings 1990 and 2300.
+ */
+#define ADID_PRINT_SIGN(v)	(!(0.0f >= (v)) ? '+' : '-')
+
+/* `fabs` then a truncating `fistpl`. */
+#define ADID_PRINT_WHOLE(v)	((int)__builtin_fabsf(v))
+
+/*
+ * The hundredths: the fractional part scaled and truncated, then made
+ * positive with the integer `cltd; xor; sub` the class uses everywhere.  The
+ * scale is passed in because it is NOT the same constant at the two sites --
+ * `getAltVarThresh` multiplies by the double at `.rodata.cst8+0xe0` and
+ * `resetStudyUrefHandler` by the float at `.rodata.cst4+0x320`, both 100.
+ */
+#define ADID_PRINT_FRAC(v, scale) \
+	adid_abs((int)((scale) * ((v) - (float)(int)(v))))
+
 /*
  * BOTH ARE `inline`, AND IT IS NOT A STYLE PREFERENCE -- IT IS THE ONLY
  * SPELLING THAT SURVIVES THE PERIOD COMPILER.
@@ -226,6 +273,70 @@ static inline int
 paramWord(const V90Parameters *p, unsigned int off)
 {
 	return *(const int *)((const unsigned char *)p + off);
+}
+
+/*
+ * The magnitude of a signed 32-bit value.  The object spells it `cltd; xor
+ * %edx,%eax; sub %edx,%eax` in nine places; this is the same thing, and GCC
+ * emits that sequence (or `mov`/`sar`/`xor`/`sub`, which is the same
+ * arithmetic) for it.  Written here rather than calling `abs` because this
+ * translation unit is built `-nostdinc++`.
+ *
+ * `inline`, FOR THE SAME REASON `paramWord` IS -- see the note there.  GCC
+ * 3.4.2 does not inline a plain `static` function at -O2, and the object has
+ * no such call anywhere; the one in `findPadGain`'s report sits between the
+ * computation of `err` and the `(int)err` that prints it, so the call spilled
+ * `err` from an x87 register to a four-byte slot and the printed error came
+ * back one too high.  Finding 1448.
+ */
+static inline int
+adid_abs(int v)
+{
+	return v < 0 ? -v : v;
+}
+
+/*
+ * `trn1Sigma`: the mean of the unsuspected phases' variances for the reference
+ * code.  The object has this twice as well, at 0x42c10 and 0x42ea9, differing
+ * only in the format string -- which is why the string is the parameter.
+ *
+ * THE FIELD AND THE PRINT GET TWO DIFFERENT ROUNDINGS OF ONE VALUE, and that
+ * is the whole reason this is written as it is.  The sum is accumulated in
+ * %st(0) and never spilled, so it and the quotient are at the x87's 64-bit
+ * significand; `fsts 0xa964` rounds to a float on the way into the field, and
+ * the print's `fstpl 0x4(%esp)` rounds the SAME register to a double on the way
+ * into the argument slot.  A float widened to a double has twenty-nine zero
+ * mantissa bits and the true value does not, so the two differ in exactly the
+ * half `%d` goes on to read.  Keeping the value in one C variable across both
+ * uses is what reproduces it; a `float` return or a `float` parameter would
+ * force a 32-bit slot and rounds it once for both.  Finding 1437's situation
+ * and finding 1443.
+ *
+ * NOTHING BOUNDS THE COUNT.  Six flagged phases give 0.0f/0, a NaN, which is
+ * then stored and printed -- the same shape as D282 and reachable the same way.
+ *
+ * THE FORMAT HAS NO CONVERSION FOR WHAT IT IS HANDED.  `%d` against a `float`
+ * promoted to a `double` is four bytes of mantissa read as an integer.  That is
+ * the object's call and it is reproduced; docs/deviations.md D291.
+ */
+static void
+adid_updateTrn1Sigma(V90AutoDigitalImpDetector *o, const char *fmt)
+{
+	float sum = 0.0f;
+	short n = 0;
+	short phase;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++)
+		if (o->short_2800[phase] == 0) {
+			sum += o->float_9d48[phase][o->ucode];
+			n = (short)(n + 1);
+		}
+
+	sum = sum / n;
+	o->trn1Sigma = sum;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(fmt, sum);
 }
 
 /*
@@ -265,6 +376,99 @@ V90AutoDigitalImpDetector::V90AutoDigitalImpDetector(V90Parameters *p)
  */
 V90AutoDigitalImpDetector::~V90AutoDigitalImpDetector()
 {
+}
+
+/*
+ * ==========================================================================
+ * The processing methods.
+ *
+ * WHAT THE CLASS MEASURES.  Six RBS phases, and for each a running count and
+ * a running sum of |sample| and of |sample|^2, kept per PCM code in
+ * (+0x1c00, +0x1000, +0x9118) and per phase in (+0x9d30, +0x9d18).  A
+ * `*MeanAndVar` method divides the sums by the count to get a mean and a
+ * variance, and rounds the mean into `linMapp` -- so `linMapp[phase][code]`
+ * is "the linear level this phase actually delivers for this code", and
+ * `linMappAlt` is the same under the alternate-RBS hypothesis.  The `Alt`
+ * half is always per phase where the plain half is per phase per code, which
+ * is the difference to look for when reading a pair.
+ *
+ * ROUNDING IS AN EXPLICIT +0.5f EVERYWHERE.  Every `fistp` in the class is
+ * preceded by `fnstcw` / `or $0xc00` / `fldcw`, which is round-toward-zero --
+ * a C cast to an integer type, not a rounding one.  So where the object adds
+ * a constant 0.5f before the store, that addition IS the rounding and is part
+ * of the arithmetic; it is not the compiler's doing and it does not
+ * disappear.
+ *
+ * THE DIVISIONS ARE NOT INTERCHANGEABLE.  `updateLinMappMeanAndVar` and
+ * `updateUrefAlt` compute `1.0f / count` and multiply by it;
+ * `updateLinMappMeanAndVarAlt` divides directly.  All three are in the object
+ * and GCC will not turn one into the other without `-ffast-math`, so each is
+ * written the way the object has it.
+ *
+ * That they differ AT ALL had to be earned rather than asserted.  Swapping
+ * the two forms survives 64 seeded trials and 10,700 comparisons over forty
+ * blocks of samples: random floats do not land close enough to a rounding
+ * boundary for one ulp in the mean to survive `+ 0.5f` and a truncating
+ * `fistp`.  `t_v90adid` seeds a constructed witness instead -- count 41, sum
+ * 143.5, where the division is exactly 3.5 and the reciprocal is a hair under
+ * -- and with it all three mutations are caught.  Finding 1366, which is also
+ * why the search for that witness had to mirror this whole function body and
+ * not just the expression.
+ * ==========================================================================
+ */
+
+/*
+ * Clear one (phase, code) cell of the three cumulative registers.  The second
+ * argument is the code; there is no third register to clear per phase, so the
+ * variance at +0x9d48 is deliberately left alone -- it is an output, not an
+ * accumulator.
+ */
+void
+V90AutoDigitalImpDetector::clearCamulativeVal(short phase, short code)
+{
+	uint_1c00[phase][code] = 0;
+	float_1000[phase][code] = 0.0f;
+	float_9118[phase][code] = 0.0f;
+}
+
+/*
+ * The alternate-RBS pair of the above -- and it takes two arguments of which
+ * IT USES ONLY THE FIRST.  The second is loaded into no register and named in
+ * no displacement anywhere in the thirty-one bytes; the mangling says it is
+ * there, so it is declared, and it is left unnamed here to say that reading
+ * it is not an omission.  docs/deviations.md D257.
+ */
+void
+V90AutoDigitalImpDetector::clearCamulativeAltVal(short phase, short)
+{
+	uint_9d30[phase] = 0;
+	float_9d18[phase] = 0.0f;
+}
+
+/*
+ * Install the four thresholds that depend on the connection type, which is
+ * the same pair of value sets `reset` selects between on the parameter
+ * block's +0x0c.
+ *
+ * THE ELSE ARM WRITES THREE FIELDS WHERE THE IF ARM WRITES FOUR: +0xa978 is
+ * set to 1 when the type is 2 and is left at whatever it held otherwise,
+ * where `reset` clears it on the same test.  That asymmetry is the object's;
+ * there are three stores in the else arm and there is no fourth anywhere in
+ * the ninety-seven bytes.  docs/deviations.md D255.
+ */
+void
+V90AutoDigitalImpDetector::setConnectionType(short type)
+{
+	if (type == 2) {
+		short_a978 = 1;
+		short_a97a = 88;
+		float_a97c = 0.35f;
+		float_a980 = 1.75f;
+	} else {
+		short_a97a = 80;
+		float_a97c = 0.25f;
+		float_a980 = 1.5f;
+	}
 }
 
 void
@@ -383,156 +587,6 @@ V90AutoDigitalImpDetector::resetLinearMapping()
 }
 
 /*
- * ==========================================================================
- * The processing methods.
- *
- * WHAT THE CLASS MEASURES.  Six RBS phases, and for each a running count and
- * a running sum of |sample| and of |sample|^2, kept per PCM code in
- * (+0x1c00, +0x1000, +0x9118) and per phase in (+0x9d30, +0x9d18).  A
- * `*MeanAndVar` method divides the sums by the count to get a mean and a
- * variance, and rounds the mean into `linMapp` -- so `linMapp[phase][code]`
- * is "the linear level this phase actually delivers for this code", and
- * `linMappAlt` is the same under the alternate-RBS hypothesis.  The `Alt`
- * half is always per phase where the plain half is per phase per code, which
- * is the difference to look for when reading a pair.
- *
- * ROUNDING IS AN EXPLICIT +0.5f EVERYWHERE.  Every `fistp` in the class is
- * preceded by `fnstcw` / `or $0xc00` / `fldcw`, which is round-toward-zero --
- * a C cast to an integer type, not a rounding one.  So where the object adds
- * a constant 0.5f before the store, that addition IS the rounding and is part
- * of the arithmetic; it is not the compiler's doing and it does not
- * disappear.
- *
- * THE DIVISIONS ARE NOT INTERCHANGEABLE.  `updateLinMappMeanAndVar` and
- * `updateUrefAlt` compute `1.0f / count` and multiply by it;
- * `updateLinMappMeanAndVarAlt` divides directly.  All three are in the object
- * and GCC will not turn one into the other without `-ffast-math`, so each is
- * written the way the object has it.
- *
- * That they differ AT ALL had to be earned rather than asserted.  Swapping
- * the two forms survives 64 seeded trials and 10,700 comparisons over forty
- * blocks of samples: random floats do not land close enough to a rounding
- * boundary for one ulp in the mean to survive `+ 0.5f` and a truncating
- * `fistp`.  `t_v90adid` seeds a constructed witness instead -- count 41, sum
- * 143.5, where the division is exactly 3.5 and the reciprocal is a hair under
- * -- and with it all three mutations are caught.  Finding 1366, which is also
- * why the search for that witness had to mirror this whole function body and
- * not just the expression.
- * ==========================================================================
- */
-
-/*
- * The magnitude of a signed 32-bit value.  The object spells it `cltd; xor
- * %edx,%eax; sub %edx,%eax` in nine places; this is the same thing, and GCC
- * emits that sequence (or `mov`/`sar`/`xor`/`sub`, which is the same
- * arithmetic) for it.  Written here rather than calling `abs` because this
- * translation unit is built `-nostdinc++`.
- *
- * `inline`, FOR THE SAME REASON `paramWord` IS -- see the note there.  GCC
- * 3.4.2 does not inline a plain `static` function at -O2, and the object has
- * no such call anywhere; the one in `findPadGain`'s report sits between the
- * computation of `err` and the `(int)err` that prints it, so the call spilled
- * `err` from an x87 register to a four-byte slot and the printed error came
- * back one too high.  Finding 1448.
- */
-static inline int
-adid_abs(int v)
-{
-	return v < 0 ? -v : v;
-}
-
-/*
- * Clear one (phase, code) cell of the three cumulative registers.  The second
- * argument is the code; there is no third register to clear per phase, so the
- * variance at +0x9d48 is deliberately left alone -- it is an output, not an
- * accumulator.
- */
-void
-V90AutoDigitalImpDetector::clearCamulativeVal(short phase, short code)
-{
-	uint_1c00[phase][code] = 0;
-	float_1000[phase][code] = 0.0f;
-	float_9118[phase][code] = 0.0f;
-}
-
-/*
- * The alternate-RBS pair of the above -- and it takes two arguments of which
- * IT USES ONLY THE FIRST.  The second is loaded into no register and named in
- * no displacement anywhere in the thirty-one bytes; the mangling says it is
- * there, so it is declared, and it is left unnamed here to say that reading
- * it is not an omission.  docs/deviations.md D257.
- */
-void
-V90AutoDigitalImpDetector::clearCamulativeAltVal(short phase, short)
-{
-	uint_9d30[phase] = 0;
-	float_9d18[phase] = 0.0f;
-}
-
-/* Copy the caller's six per-phase maximum codes in. */
-void
-V90AutoDigitalImpDetector::setMaxUcodeArray(unsigned char *from)
-{
-	short phase;
-
-	for (phase = 0; phase < V90ADID_PHASES; phase++)
-		maxUcode[phase] = from[phase];
-}
-
-/*
- * Copy the previous session's 128-entry linear mapping in.  One entry per
- * code and none per phase: the loop index is compared against 0x7f, not
- * against 6 * 128.
- */
-void
-V90AutoDigitalImpDetector::setPrevSessionLinearMapping(short *from)
-{
-	short ci;
-
-	for (ci = 0; ci < V90ADID_CODES; ci++)
-		prevLinMapp[ci] = from[ci];
-}
-
-/*
- * Add one sample's magnitude to the phase's alternate-RBS accumulators.  The
- * count is incremented unconditionally, so a phase's mean is over every
- * sample offered to it and not over some accepted subset.
- */
-void
-V90AutoDigitalImpDetector::calculateLinearMeanAndVarAlt(short v,
-							unsigned int phase)
-{
-	float_9d18[phase] += adid_abs(v);
-	uint_9d30[phase]++;
-}
-
-/*
- * Install the four thresholds that depend on the connection type, which is
- * the same pair of value sets `reset` selects between on the parameter
- * block's +0x0c.
- *
- * THE ELSE ARM WRITES THREE FIELDS WHERE THE IF ARM WRITES FOUR: +0xa978 is
- * set to 1 when the type is 2 and is left at whatever it held otherwise,
- * where `reset` clears it on the same test.  That asymmetry is the object's;
- * there are three stores in the else arm and there is no fourth anywhere in
- * the ninety-seven bytes.  docs/deviations.md D255.
- */
-void
-V90AutoDigitalImpDetector::setConnectionType(short type)
-{
-	if (type == 2) {
-		short_a978 = 1;
-		short_a97a = 88;
-		float_a97c = 0.35f;
-		float_a980 = 1.75f;
-	} else {
-		short_a97a = 80;
-		float_a97c = 0.25f;
-		float_a980 = 1.5f;
-	}
-}
-
-/*
  * Is any phase flagged at +0x2800?
  *
  * THE ACCUMULATOR IS A SHORT, not an int, and that is visible: the object
@@ -551,48 +605,6 @@ V90AutoDigitalImpDetector::isThereAnyAltRbsPhase()
 		sum = (short)(sum + short_2800[phase]);
 
 	return sum > 0 ? 1 : 0;
-}
-
-/*
- * Turn one cell's accumulators into a mean and a variance.
- *
- * The variance is E[x^2] - E[x]^2, and reading that out of the object needs
- * finding 245: the `de e9` here prints as `fsubrp` and IS `FSUBP`, so the
- * subtraction is (mean of squares) - (square of mean) and not the other way
- * round.  A negative variance would be the tell if it were reversed.
- *
- * Nothing happens when the count is zero -- not even a store of zero -- so a
- * cell that never saw a sample keeps whatever `linMapp` entry
- * `resetLinearMapping` gave it.
- */
-void
-V90AutoDigitalImpDetector::updateLinMappMeanAndVar(short phase, short code)
-{
-	float inv, mean;
-
-	if (uint_1c00[phase][code] == 0)
-		return;
-
-	inv = 1.0f / uint_1c00[phase][code];
-	mean = float_1000[phase][code] * inv;
-
-	float_9d48[phase][code] = float_9118[phase][code] * inv - mean * mean;
-	linMapp[phase][code] = (short)(mean + 0.5f);
-}
-
-/*
- * The alternate-RBS pair: the phase's own sum over the phase's own count,
- * rounded into `linMappAlt`.  No variance -- the class keeps no per-phase
- * sum of squares to form one from.
- */
-void
-V90AutoDigitalImpDetector::updateLinMappMeanAndVarAlt(short phase, short code)
-{
-	if (uint_9d30[phase] == 0)
-		return;
-
-	linMappAlt[phase][code] =
-	    (short)(float_9d18[phase] / uint_9d30[phase] + 0.5f);
 }
 
 /*
@@ -621,219 +633,193 @@ V90AutoDigitalImpDetector::isAltRbs(short phase, short code, float v)
 }
 
 /*
- * File one received sample under its phase, and count its code.
+ * The variance threshold the alternate-RBS test runs against, from the six
+ * per-phase variances the caller hands in.
  *
- * THE STORE INDEX IS UNBOUNDED.  `int_9100[phase]` is incremented once per
- * call and nothing in these 149 bytes compares it against 0x83e, so a caller
- * that offers more than 2,110 samples for one phase writes past that phase's
- * row and eventually past the object.  That is the object's behaviour and it
- * is reproduced; docs/deviations.md D256 records it and the test keeps the
- * count inside the row rather than pretending the check exists.
+ * IT IS THE MEAN OF THE BELOW-AVERAGE HALF, not the mean.  The six are summed,
+ * the sum is multiplied by 1/6 to get the average, and only the entries
+ * strictly below the average are averaged again -- so a single wild phase is
+ * excluded from the threshold it would otherwise set.  That answer is scaled
+ * by the caller's factor and then floored at `altMinVarThresh`.
  *
- * The +0.5f is the rounding, as everywhere else here; the magnitude is taken
- * AFTER the conversion, so a sample of -0.4 stores 0 and one of -0.6 stores
- * 0 as well -- (short)(-0.6 + 0.5) truncates toward zero.
+ * THE TWO COMPARISONS ARE WRITTEN AS THE OBJECT'S BRANCHES AND NOT AS THEIR
+ * READABLE OPPOSITES.  `jae` over the accumulate means the entry joins the
+ * average when it is NOT ordered-greater-or-equal, so a NaN variance joins
+ * where `var[i] < lim` would exclude it.  The floor at the end is an ordered
+ * `>` and needs no such care.
+ *
+ * NOTHING BOUNDS THE COUNT.  If every entry equals the average -- six equal
+ * variances, which a cleared object has -- none is below it, the count stays
+ * zero and the mean is 0.0f/0, a NaN that propagates through the factor and
+ * past the floor into the return value.  docs/deviations.md D282.
  */
-void
-V90AutoDigitalImpDetector::addReceivedSampleToStorage(short phase,
-						      unsigned char code,
-						      float v)
+float
+V90AutoDigitalImpDetector::getAltVarThresh(float *var, float factor)
 {
-	int n = int_9100[phase];
-	short q = (short)(v + 0.5f);
-
-	int_9100[phase] = n + 1;
-	sampleStore[phase][n] = (short)adid_abs(q);
-	short_8b00[phase][code]++;
-}
-
-/*
- * Divide both mapping tables through by the pad gain.
- *
- * The reciprocal is formed once, outside both loops -- the object hoists
- * `fld1` and the 0.5f above the loop and issues a single `fdivs` -- so a pad
- * gain of zero produces an infinity that then multiplies every entry, rather
- * than 1,536 separate divisions.  `reset` seeds the gain with 1.0f, which
- * makes this method a no-op until `findPadGain` has run.
- */
-void
-V90AutoDigitalImpDetector::applyPadGainToLinMapp()
-{
-	float inv = 1.0f / padGain;
-	short phase;
-
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		short ci;
-
-		for (ci = 0; ci < V90ADID_CODES; ci++) {
-			linMapp[phase][ci] =
-			    (short)(linMapp[phase][ci] * inv + 0.5f);
-			linMappAlt[phase][ci] =
-			    (short)(linMappAlt[phase][ci] * inv + 0.5f);
-		}
-	}
-}
-
-/*
- * The entry of `linMapp[phase]` nearest in magnitude to the value offered.
- *
- * THE SEARCH IS OVER CODES 5 TO 116 INCLUSIVE, not over the whole row: the
- * counter starts at 5 and the loop test is an unsigned `cmp $0x74; jbe`.  The
- * ends of the row are excluded, which is what "unsuspected" is about -- the
- * smallest and largest codes are the ones a digital impairment reaches first.
- *
- * The initial best distance is 1,000,000, which no distance between two
- * shorts can reach, so the first iteration always wins and the returned entry
- * is never the value of an uninitialised index.
- */
-short
-V90AutoDigitalImpDetector::unSuspectedPhaseNearestLinMapp(short v, short phase)
-{
-	int mag = adid_abs(v);
-	int best = 1000000;
-	unsigned short at = 5;
-	unsigned short ci;
-
-	for (ci = 5; ci <= 0x74; ci++) {
-		int d = adid_abs(mag - linMapp[phase][ci]);
-
-		if (d < best) {
-			at = ci;
-			best = d;
-		}
-	}
-
-	return linMapp[phase][at];
-}
-
-/*
- * Rotate the reference code's column of `linMapp` so that it starts at the
- * given phase.
- *
- * Six entries are read into a local array walking phases from `offset` and
- * wrapping at 6, then written back to phases 0..5 in order.  The whole column
- * is copied out before any of it is written back, which is what makes this a
- * rotation rather than a shift that overwrites its own source.
- *
- * The wrap is `phase + 1 == 6 ? 0 : phase + 1` and not a modulus, so an
- * `offset` outside 0..5 walks straight out of the table rather than folding
- * back into it.  docs/deviations.md D258.
- */
-void
-V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset(short offset)
-{
-	short saved[V90ADID_PHASES];
-	short phase = offset;
+	float sum = 0.0f;
+	float below = 0.0f;
+	float lim, mean, thresh;
+	short count = 0;
 	short i;
 
+	for (i = 0; i < V90ADID_PHASES; i++)
+		sum += var[i];
+
+	lim = sum * 0.16666667f;
+
 	for (i = 0; i < V90ADID_PHASES; i++) {
-		saved[i] = linMapp[phase][ucode];
-		phase = (short)(phase + 1) == V90ADID_PHASES
-			    ? 0 : (short)(phase + 1);
+		if (var[i] >= lim)
+			continue;
+		below += var[i];
+		count = (short)(count + 1);
 	}
 
-	for (i = 0; i < V90ADID_PHASES; i++)
-		linMapp[i][ucode] = saved[i];
+	mean = below / count;
+	thresh = factor * mean;
+
+	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: meanVar = "
+		 "%c%d.%02d\r\n", ADID_PRINT_SIGN(mean), ADID_PRINT_WHOLE(mean),
+		 ADID_PRINT_FRAC(mean, 100.0));
+	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: factor = "
+		 "%c%d.%02d\r\n", ADID_PRINT_SIGN(factor),
+		 ADID_PRINT_WHOLE(factor), ADID_PRINT_FRAC(factor, 100.0));
+	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: initial varThresh "
+		 "= %c%d.%02d\r\n", ADID_PRINT_SIGN(thresh),
+		 ADID_PRINT_WHOLE(thresh), ADID_PRINT_FRAC(thresh, 100.0));
+
+	if (altMinVarThresh > thresh)
+		thresh = altMinVarThresh;
+
+	return thresh;
 }
 
 /*
- * Round each phase's alternate-RBS mean into the reference code's column of
- * `linMappAlt`, then clear the accumulators.
+ * Install the study's thresholds, either from the parameter block's QC set or
+ * from the fixed defaults, and report what was installed.
  *
- * THE CLEARING IS UNCONDITIONAL and the update is not: a phase that is not
- * flagged, or that has no samples, still has its sum and count reset.  So
- * this is a per-block boundary and not a per-block update, and a phase that
- * misses the flag loses its samples rather than carrying them forward.
+ * THE ARGUMENT IS A FLAG AND NOT A COUNT.  Zero takes the second branch
+ * entirely: six words out of the parameter block at +0x348, five constants,
+ * and a return -- no arithmetic, no scaling and NOT ONE `edprintf`.  Nonzero
+ * takes the first: a different six words at +0x4a8, and every threshold
+ * derived from `1.0f / float_a950` and then clamped at exactly the value the
+ * zero branch would have used.  So the two branches agree when the gain is 1
+ * for three of the five and differ for the other two, which is how the
+ * constants were read as a scale rather than as replacements.
  *
- * The mean here is `sum * (1.0f / count)` where `updateLinMappMeanAndVarAlt`
- * writes `sum / count`; both are in the object and they are not the same
- * arithmetic.
+ * THE SEEDING OF THE MAPPING IS GUARDED ON THE GAIN BEING NONZERO, and the
+ * DIVISION IS NOT.  `1.0f / float_a950` is formed at the top of the branch
+ * whatever the gain is, so a gain of zero still produces infinities and
+ * stores 0x8000 through every `fistp` on the way; only the write of
+ * `ucodeLevel / gain` into the two mapping tables is skipped.  That ordering
+ * is the object's -- the compare against 0.0f is at 0x409d2, five stores
+ * later -- and it is why a zero gain is a state this method leaves behind
+ * rather than one it refuses.
  */
 void
-V90AutoDigitalImpDetector::updateUrefAlt()
+V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
 {
+	float inv;
+	short v;
 	short phase;
 
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (short_2800[phase] != 0 && uint_9d30[phase] != 0)
-			linMappAlt[phase][ucode] =
-			    (short)(float_9d18[phase]
-				    * (1.0f / uint_9d30[phase]) + 0.5f);
+	if (qc == 0) {
+		int_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x00);
+		int_a990 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x04);
+		int_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x08);
+		int_a998 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x0c);
+		int_a99c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x10);
+		int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x14);
 
-		float_9d18[phase] = 0.0f;
-		uint_9d30[phase] = 0;
+		short_a9a4 = 25;
+		short_a9a6 = 50;
+		altMinVarThresh = 4000.0f;
+		neighborUcodeMinDistance = 2500;
+		neighborUcodeMaxDistance = 6000;
+
+		int_a984 = 0;
+		int_a988 = 0;
+		return;
 	}
+
+	inv = 1.0f / float_a950;
+
+	int_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);
+	int_a990 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x04);
+	int_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);
+	int_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);
+	int_a99c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x10);
+	int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x14);
+
+	short_a9a4 = (short)(inv * 25.0f + 0.5f);
+
+	/*
+	 * Clamped BEFORE the store, not after it: the object compares the
+	 * product while it is still in %st(0) at extended precision and stores
+	 * once.  A local keeps the comparison on the same value.
+	 */
+	{
+		float f = inv * 4444.4443f;
+
+		if (f > 4000.0f)
+			f = 4000.0f;
+		altMinVarThresh = f;
+	}
+
+	short_a9a6 = (short)(inv * 50.0f + 0.5f);
+
+	v = (short)(inv * 2777.7778f + 0.5f);
+	if (v > 2500)
+		v = 2500;
+	neighborUcodeMinDistance = v;
+
+	v = (short)(inv * 6666.667f + 0.5f);
+	if (v > 6000)
+		v = 6000;
+	neighborUcodeMaxDistance = v;
+
+	if (float_a950 != 0.0f) {
+		short seed = (short)(ucodeLevel * inv + 0.5f);
+
+		for (phase = 0; phase < V90ADID_PHASES; phase++) {
+			linMapp[phase][ucode] = seed;
+			linMappAlt[phase][ucode] = seed;
+		}
+	}
+
+	edprintf("--------------------------------------------------------"
+		 "-------\r\n");
+	edprintf("V90AutoDigitalImpDetector::resetStudyUrefHandler QC report "
+		 ":\r\n");
+	edprintf("prevSession uinfo : %d %d %d %d %d %d\r\n",
+		 linMapp[0][ucode], linMapp[1][ucode], linMapp[2][ucode],
+		 linMapp[3][ucode], linMapp[4][ucode], linMapp[5][ucode]);
+	edprintf("uniteUrefDistanceThresh = %d\r\n", short_a9a4);
+	edprintf("altRbsDistanceThresh = %d\r\n", short_a9a6);
+	edprintf("neighborUcodeMinDistance=%d neighborUcodeMaxDistance=%d\r\n",
+		 neighborUcodeMinDistance, neighborUcodeMaxDistance);
+	edprintf("altMinVarThresh = %c%d.%02d\r\n",
+		 ADID_PRINT_SIGN(altMinVarThresh),
+		 ADID_PRINT_WHOLE(altMinVarThresh),
+		 ADID_PRINT_FRAC(altMinVarThresh, 100.0f));
+	edprintf("--------------------------------------------------------"
+		 "-------\r\n");
+
+	int_a984 = 0;
+	int_a988 = 0;
 }
 
 /*
- * Add one sample to the cumulative registers of the cell its LINEAR level
- * companded to.
- *
- * The first argument is the magnitude accumulated; the second is the linear
- * level whose PCM code selects the cell.  They are separate arguments and the
- * object treats them separately -- the second goes through `linear2alaw` or
- * `linear2ulaw` and never reaches the accumulator.
- *
- * THE COMPANDED CODE IS INVERTED BACK TO A MAGNITUDE, with the same masks
- * `reset` uses in the other direction: `^ 0xd5` for A-law, and for mu-law
- * `0xff - code`, which is `^ 0xff` on a byte.  The result indexes a 128-wide
- * row and can be up to 255, so a code in the upper half indexes into the next
- * phase's row.  The object does not mask it; neither does this.
+ * Add one sample's magnitude to the phase's alternate-RBS accumulators.  The
+ * count is incremented unconditionally, so a phase's mean is over every
+ * sample offered to it and not over some accepted subset.
  */
 void
-V90AutoDigitalImpDetector::calculateLinearMeanAndVar(short v, short level,
-						     unsigned int phase)
+V90AutoDigitalImpDetector::calculateLinearMeanAndVarAlt(short v,
+							unsigned int phase)
 {
-	short at;
-	int mag;
-
-	if (pcmType != PCM_TYPE_MU_LAW)
-		at = (unsigned char)(linear2alaw(adid_abs(level)) ^ 0xd5);
-	else
-		at = (short)(0xff
-			     - (unsigned char)linear2ulaw(adid_abs(level)));
-
-	mag = adid_abs(v);
-
-	float_1000[phase][at] += mag;
-	float_9118[phase][at] += mag * mag;
-	uint_1c00[phase][at]++;
+	float_9d18[phase] += adid_abs(v);
+	uint_9d30[phase]++;
 }
-
-/*
- * ==========================================================================
- * `unitePhasesInfoOfUref`, and the `updateUref` that was waiting on it.
- *
- * WHAT IT IS FOR.  Six RBS phases each measure the same reference code, and
- * some of them are the same phase as far as the line is concerned -- the same
- * digital impairment, the same level.  This method finds those groups: it
- * takes the phases NOT flagged at +0x2800, merges any two whose `linMapp`
- * entries for the reference code differ by less than the threshold at
- * +0xa9a4, recomputes each group's mean and variance from the group's pooled
- * accumulators, and writes the pooled answer back to every member.  Then it
- * takes the LARGEST group's answer and gives it to every phase that IS
- * flagged -- the ones whose own measurement is not trusted.
- *
- * IT REPEATS UNTIL IT STOPS CHANGING.  The whole of the above sits inside a
- * do/while whose test is a checksum of `linMapp`, because merging rewrites
- * the entries the next round's merging decisions are made from.
- *
- * THE CHECKSUM IS NOT WHAT IT LOOKS LIKE -- see D280.  It adds up SIX COPIES
- * OF ONE ENTRY, `linMapp[5][at]`, because the index is the outer loop's
- * variable left at its terminal value rather than the inner loop's.  That is
- * visible in the object as a load hoisted clean out of the loop, which is
- * only possible if the address does not vary.  It is written that way here.
- *
- * THE SENTINEL IS A NaN.  The best-group variance starts as the constant at
- * `.rodata.cst4+0x328`, which is 0x7fc00000.  It is only observable if no
- * group is ever formed, which needs all five of phases 0..4 flagged -- and in
- * that case the paired `bestValue` is read uninitialised, so the object's
- * behaviour there is not a function of its inputs at all.  D281.
- * ==========================================================================
- */
-
-/* Ungrouped.  The object writes and compares 0xffff as a `short`. */
-#define ADID_NO_GROUP	((short)-1)
 
 void
 V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
@@ -954,6 +940,33 @@ V90AutoDigitalImpDetector::unitePhasesInfoOfUref(short at)
 }
 
 /*
+ * Turn one cell's accumulators into a mean and a variance.
+ *
+ * The variance is E[x^2] - E[x]^2, and reading that out of the object needs
+ * finding 245: the `de e9` here prints as `fsubrp` and IS `FSUBP`, so the
+ * subtraction is (mean of squares) - (square of mean) and not the other way
+ * round.  A negative variance would be the tell if it were reversed.
+ *
+ * Nothing happens when the count is zero -- not even a store of zero -- so a
+ * cell that never saw a sample keeps whatever `linMapp` entry
+ * `resetLinearMapping` gave it.
+ */
+void
+V90AutoDigitalImpDetector::updateLinMappMeanAndVar(short phase, short code)
+{
+	float inv, mean;
+
+	if (uint_1c00[phase][code] == 0)
+		return;
+
+	inv = 1.0f / uint_1c00[phase][code];
+	mean = float_1000[phase][code] * inv;
+
+	float_9d48[phase][code] = float_9118[phase][code] * inv - mean * mean;
+	linMapp[phase][code] = (short)(mean + 0.5f);
+}
+
+/*
  * Turn each phase's accumulators for the reference code into a mean and a
  * variance, unite the phases, and then clear the accumulators.
  *
@@ -994,130 +1007,170 @@ V90AutoDigitalImpDetector::updateUref()
 }
 
 /*
- * ==========================================================================
- * The study methods -- the four that set the thresholds up, run the first
- * study over them, and pool what it found.
- *
- * ALL FOUR TALK, AND THAT IS HALF OF WHY THEY ARE WORTH HAVING.  Between them
- * they make twelve `edprintf` calls and one `dsplibs_debug_printf`, and the
- * format strings are the original author's names for six fields this batch
- * would otherwise have had to call `short_a9ac` and `float_a9a8`.
- * `trn1Sigma`, `neighborUcodeMinDistance`, `neighborUcodeMaxDistance`,
- * `altMinVarThresh`, `uniteUrefDistanceThresh` and `altRbsDistanceThresh` are
- * all read straight off the wire this way.
- *
- * A FLOAT IS PRINTED AS `%c%d.%02d`, never with `%f`.  The object has no
- * floating-point formatting at all: every one of these sites takes the sign,
- * the truncated magnitude and a hundredths digit as three integers.  The
- * three macros below are that idiom, and each is written to the branch the
- * object actually encodes rather than to the one that reads naturally --
- * see ADID_PRINT_SIGN.
- * ==========================================================================
+ * The alternate-RBS pair: the phase's own sum over the phase's own count,
+ * rounded into `linMappAlt`.  No variance -- the class keeps no per-phase
+ * sum of squares to form one from.
  */
-
-/*
- * THE SIGN TEST IS BACKWARDS FROM THE OBVIOUS SPELLING, and a NaN is what
- * separates them.  The object compares with `fcom` against a zero in %st(0)
- * and takes '+' when CF is set -- and an UNORDERED compare sets CF, so a NaN
- * prints '+' where `v > 0.0f ? '+' : '-'` would print '-'.  Written as the
- * negation of the ordered test, which is what the branch encodes.  A seeded
- * object reaches this: one 32-bit pattern in 128 is a NaN.
- *
- * THE ZERO IS ON THE LEFT AND THE NEGATION IS ON THE OUTSIDE, and both halves
- * of that are forced.  The object's three sites in `getAltVarThresh` are
- *
- *	fldz / fcompp (or fcoms) / fnstsw %ax / sahf
- *	sbb %eax,%eax / and $0xfffffffe,%eax / add $0x2d,%eax
- *
- * -- 0x4073c, 0x407c4 and 0x40859 -- so there is no branch at all: the
- * character is 0x2d - 2*CF, which is '+' exactly when the compare set CF.
- * That is only encodable when the TRUE arm is the CF one, and CF is "below or
- * unordered" with the ZERO in %st(0).  Spelling it `(0.0f >= v) ? '-' : '+'`
- * puts the true arm on the other side: GCC 3.4.2 then commutes the compare to
- * `v <= 0.0f`, emits `flds v`/`fcomps 0.0f`/`ja`, and a NaN -- which sets CF
- * and ZF both -- fails `ja` and prints '-' where the object prints '+'.
- * Measured: of ten spellings compiled with the object's flags, this is the
- * only one that reproduces the `sbb`/`and`/`add` triple.
- *
- * The two spellings are the SAME under IEEE rules -- `0.0f >= NaN` is false
- * either way -- so this is an operand-order fix and not a change of meaning;
- * the modern build is unaffected.  The old comment argued the `-mieee-fp`
- * case, which no longer applies.  Findings 1990 and 2300.
- */
-#define ADID_PRINT_SIGN(v)	(!(0.0f >= (v)) ? '+' : '-')
-
-/* `fabs` then a truncating `fistpl`. */
-#define ADID_PRINT_WHOLE(v)	((int)__builtin_fabsf(v))
-
-/*
- * The hundredths: the fractional part scaled and truncated, then made
- * positive with the integer `cltd; xor; sub` the class uses everywhere.  The
- * scale is passed in because it is NOT the same constant at the two sites --
- * `getAltVarThresh` multiplies by the double at `.rodata.cst8+0xe0` and
- * `resetStudyUrefHandler` by the float at `.rodata.cst4+0x320`, both 100.
- */
-#define ADID_PRINT_FRAC(v, scale) \
-	adid_abs((int)((scale) * ((v) - (float)(int)(v))))
-
-/*
- * The variance threshold the alternate-RBS test runs against, from the six
- * per-phase variances the caller hands in.
- *
- * IT IS THE MEAN OF THE BELOW-AVERAGE HALF, not the mean.  The six are summed,
- * the sum is multiplied by 1/6 to get the average, and only the entries
- * strictly below the average are averaged again -- so a single wild phase is
- * excluded from the threshold it would otherwise set.  That answer is scaled
- * by the caller's factor and then floored at `altMinVarThresh`.
- *
- * THE TWO COMPARISONS ARE WRITTEN AS THE OBJECT'S BRANCHES AND NOT AS THEIR
- * READABLE OPPOSITES.  `jae` over the accumulate means the entry joins the
- * average when it is NOT ordered-greater-or-equal, so a NaN variance joins
- * where `var[i] < lim` would exclude it.  The floor at the end is an ordered
- * `>` and needs no such care.
- *
- * NOTHING BOUNDS THE COUNT.  If every entry equals the average -- six equal
- * variances, which a cleared object has -- none is below it, the count stays
- * zero and the mean is 0.0f/0, a NaN that propagates through the factor and
- * past the floor into the return value.  docs/deviations.md D282.
- */
-float
-V90AutoDigitalImpDetector::getAltVarThresh(float *var, float factor)
+void
+V90AutoDigitalImpDetector::updateLinMappMeanAndVarAlt(short phase, short code)
 {
-	float sum = 0.0f;
-	float below = 0.0f;
-	float lim, mean, thresh;
-	short count = 0;
-	short i;
+	if (uint_9d30[phase] == 0)
+		return;
 
-	for (i = 0; i < V90ADID_PHASES; i++)
-		sum += var[i];
+	linMappAlt[phase][code] =
+	    (short)(float_9d18[phase] / uint_9d30[phase] + 0.5f);
+}
 
-	lim = sum * 0.16666667f;
+/*
+ * Round each phase's alternate-RBS mean into the reference code's column of
+ * `linMappAlt`, then clear the accumulators.
+ *
+ * THE CLEARING IS UNCONDITIONAL and the update is not: a phase that is not
+ * flagged, or that has no samples, still has its sum and count reset.  So
+ * this is a per-block boundary and not a per-block update, and a phase that
+ * misses the flag loses its samples rather than carrying them forward.
+ *
+ * The mean here is `sum * (1.0f / count)` where `updateLinMappMeanAndVarAlt`
+ * writes `sum / count`; both are in the object and they are not the same
+ * arithmetic.
+ */
+void
+V90AutoDigitalImpDetector::updateUrefAlt()
+{
+	short phase;
 
-	for (i = 0; i < V90ADID_PHASES; i++) {
-		if (var[i] >= lim)
-			continue;
-		below += var[i];
-		count = (short)(count + 1);
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		if (short_2800[phase] != 0 && uint_9d30[phase] != 0)
+			linMappAlt[phase][ucode] =
+			    (short)(float_9d18[phase]
+				    * (1.0f / uint_9d30[phase]) + 0.5f);
+
+		float_9d18[phase] = 0.0f;
+		uint_9d30[phase] = 0;
+	}
+}
+
+/*
+ * The first study: turn the middle of each phase's accumulators into a
+ * mapping, decide which phases are too rough to trust, and empty everything.
+ *
+ * THE MEAN LOOP ONLY COVERS CODES 0x40..0x4f.  Sixteen codes out of the 128,
+ * and the reference code is skipped inside them -- so this is a study of the
+ * middle of the companding law and not of the whole of it.  The rough-phase
+ * test that follows runs over the fifteen adjacent differences inside the
+ * same window.
+ *
+ * A PHASE IS SUSPECTED UNLESS MORE THAN NINE OF ITS FIFTEEN NEIGHBOURING
+ * DIFFERENCES ARE LARGE.  The counter starts at 1 rather than 0, so "more
+ * than nine" needs nine differences over the threshold and not ten; a phase
+ * already flagged at +0x2800 skips the count entirely and is suspected on
+ * that alone.  Every suspected phase also bumps the tally at +0xa96a.
+ *
+ * THE CLEARING PASS SPARES ONE ENTRY.  `linMapp[phase][ucode]` is the only
+ * mapping entry not zeroed, because the loop is split around `ucode` and the
+ * middle step clears the three accumulators without touching the mapping --
+ * so the seed `resetLinearMapping` put there survives the study.  `ucode` is
+ * a byte and the row is 128 wide, and the object masks it nowhere: a
+ * reference code of 128 or more walks the split into the next phase's row.
+ */
+void
+V90AutoDigitalImpDetector::porcessFirstStudy()
+{
+	float sqrDiffThresh;
+	float t;
+	unsigned char phase;
+	unsigned char code;
+
+	/*
+	 * 2.5 sigma, clamped between the two neighbour distances.  Both
+	 * comparisons are the object's `fcom`/`jae` and keep the RIGHT operand
+	 * when the compare is unordered, which is what the ternaries spell.
+	 */
+	t = trn1Sigma * 2.5f;
+	t = (t >= (float)neighborUcodeMinDistance)
+		? t : (float)neighborUcodeMinDistance;
+	sqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)
+		? t : (float)neighborUcodeMaxDistance;
+
+	edprintf("V90AutoDigitalImpDetector::porcessFirstStudy()  "
+		 "2.5*trn1Sigma=%d , sqrDiffThresh=%d\n",
+		 (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		for (code = 0x40; code <= 0x4f; code++) {
+			float inv, mean;
+
+			if (ucode == code)
+				continue;
+			if (uint_1c00[phase][code] == 0)
+				continue;
+
+			inv = 1.0f / uint_1c00[phase][code];
+			mean = float_1000[phase][code] * inv;
+
+			float_9d48[phase][code] =
+			    inv * float_9118[phase][code] - mean * mean;
+			linMapp[phase][code] = (short)(mean + 0.5f);
+		}
 	}
 
-	mean = below / count;
-	thresh = factor * mean;
+	byte_a96a = 0;
 
-	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: meanVar = "
-		 "%c%d.%02d\r\n", ADID_PRINT_SIGN(mean), ADID_PRINT_WHOLE(mean),
-		 ADID_PRINT_FRAC(mean, 100.0));
-	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: factor = "
-		 "%c%d.%02d\r\n", ADID_PRINT_SIGN(factor),
-		 ADID_PRINT_WHOLE(factor), ADID_PRINT_FRAC(factor, 100.0));
-	edprintf("V90AutoDigitalImpDetector: getAltVarThresh: initial varThresh "
-		 "= %c%d.%02d\r\n", ADID_PRINT_SIGN(thresh),
-		 ADID_PRINT_WHOLE(thresh), ADID_PRINT_FRAC(thresh, 100.0));
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		short n = 1;
 
-	if (altMinVarThresh > thresh)
-		thresh = altMinVarThresh;
+		if (short_2800[phase] == 0) {
+			for (code = 0x40; code <= 0x4e; code++) {
+				float d = (float)(linMapp[phase][code + 1]
+						  - linMapp[phase][code]);
 
-	return thresh;
+				if (d * d > sqrDiffThresh)
+					n = (short)(n + 1);
+			}
+
+			if (n > 9) {
+				byte_280c[phase] = 0;
+				continue;
+			}
+		}
+
+		byte_a96a++;
+		byte_280c[phase] = 1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V90AutoDigitalImpDetector: suspected rbs "
+				     "patern  %d%d%d%d%d%d\r\n", byte_280c[0],
+				     byte_280c[1], byte_280c[2], byte_280c[3],
+				     byte_280c[4], byte_280c[5]);
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		unsigned char k;
+
+		for (k = 0; k < ucode; k++) {
+			float_1000[phase][k] = 0.0f;
+			uint_1c00[phase][k] = 0;
+			float_9118[phase][k] = 0.0f;
+			linMapp[phase][k] = 0;
+		}
+
+		uint_1c00[phase][ucode] = 0;
+		float_1000[phase][ucode] = 0.0f;
+		float_9118[phase][ucode] = 0.0f;
+
+		/*
+		 * The counter is a byte and the object tests its SIGN bit, so
+		 * this stops at 127 and a `ucode` of 0xff wraps the start to 0
+		 * and clears the whole row.  Both are what `unsigned char k =
+		 * ucode + 1; k < 128` does in C.
+		 */
+		for (k = (unsigned char)(ucode + 1); k < V90ADID_CODES; k++) {
+			uint_1c00[phase][k] = 0;
+			float_1000[phase][k] = 0.0f;
+			float_9118[phase][k] = 0.0f;
+			linMapp[phase][k] = 0;
+		}
+	}
 }
 
 /*
@@ -1293,267 +1346,69 @@ V90AutoDigitalImpDetector::uniteLinMappInfoOfUnsuspectedPhases(unsigned char at)
 }
 
 /*
- * The first study: turn the middle of each phase's accumulators into a
- * mapping, decide which phases are too rough to trust, and empty everything.
- *
- * THE MEAN LOOP ONLY COVERS CODES 0x40..0x4f.  Sixteen codes out of the 128,
- * and the reference code is skipped inside them -- so this is a study of the
- * middle of the companding law and not of the whole of it.  The rough-phase
- * test that follows runs over the fifteen adjacent differences inside the
- * same window.
- *
- * A PHASE IS SUSPECTED UNLESS MORE THAN NINE OF ITS FIFTEEN NEIGHBOURING
- * DIFFERENCES ARE LARGE.  The counter starts at 1 rather than 0, so "more
- * than nine" needs nine differences over the threshold and not ten; a phase
- * already flagged at +0x2800 skips the count entirely and is suspected on
- * that alone.  Every suspected phase also bumps the tally at +0xa96a.
- *
- * THE CLEARING PASS SPARES ONE ENTRY.  `linMapp[phase][ucode]` is the only
- * mapping entry not zeroed, because the loop is split around `ucode` and the
- * middle step clears the three accumulators without touching the mapping --
- * so the seed `resetLinearMapping` put there survives the study.  `ucode` is
- * a byte and the row is 128 wide, and the object masks it nowhere: a
- * reference code of 128 or more walks the split into the next phase's row.
- */
-void
-V90AutoDigitalImpDetector::porcessFirstStudy()
-{
-	float sqrDiffThresh;
-	float t;
-	unsigned char phase;
-	unsigned char code;
-
-	/*
-	 * 2.5 sigma, clamped between the two neighbour distances.  Both
-	 * comparisons are the object's `fcom`/`jae` and keep the RIGHT operand
-	 * when the compare is unordered, which is what the ternaries spell.
-	 */
-	t = trn1Sigma * 2.5f;
-	t = (t >= (float)neighborUcodeMinDistance)
-		? t : (float)neighborUcodeMinDistance;
-	sqrDiffThresh = ((float)neighborUcodeMaxDistance >= t)
-		? t : (float)neighborUcodeMaxDistance;
-
-	edprintf("V90AutoDigitalImpDetector::porcessFirstStudy()  "
-		 "2.5*trn1Sigma=%d , sqrDiffThresh=%d\n",
-		 (short)(trn1Sigma * 2.5f + 0.5), (short)(sqrDiffThresh + 0.5));
-
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		for (code = 0x40; code <= 0x4f; code++) {
-			float inv, mean;
-
-			if (ucode == code)
-				continue;
-			if (uint_1c00[phase][code] == 0)
-				continue;
-
-			inv = 1.0f / uint_1c00[phase][code];
-			mean = float_1000[phase][code] * inv;
-
-			float_9d48[phase][code] =
-			    inv * float_9118[phase][code] - mean * mean;
-			linMapp[phase][code] = (short)(mean + 0.5f);
-		}
-	}
-
-	byte_a96a = 0;
-
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		short n = 1;
-
-		if (short_2800[phase] == 0) {
-			for (code = 0x40; code <= 0x4e; code++) {
-				float d = (float)(linMapp[phase][code + 1]
-						  - linMapp[phase][code]);
-
-				if (d * d > sqrDiffThresh)
-					n = (short)(n + 1);
-			}
-
-			if (n > 9) {
-				byte_280c[phase] = 0;
-				continue;
-			}
-		}
-
-		byte_a96a++;
-		byte_280c[phase] = 1;
-	}
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("V90AutoDigitalImpDetector: suspected rbs "
-				     "patern  %d%d%d%d%d%d\r\n", byte_280c[0],
-				     byte_280c[1], byte_280c[2], byte_280c[3],
-				     byte_280c[4], byte_280c[5]);
-
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		unsigned char k;
-
-		for (k = 0; k < ucode; k++) {
-			float_1000[phase][k] = 0.0f;
-			uint_1c00[phase][k] = 0;
-			float_9118[phase][k] = 0.0f;
-			linMapp[phase][k] = 0;
-		}
-
-		uint_1c00[phase][ucode] = 0;
-		float_1000[phase][ucode] = 0.0f;
-		float_9118[phase][ucode] = 0.0f;
-
-		/*
-		 * The counter is a byte and the object tests its SIGN bit, so
-		 * this stops at 127 and a `ucode` of 0xff wraps the start to 0
-		 * and clears the whole row.  Both are what `unsigned char k =
-		 * ucode + 1; k < 128` does in C.
-		 */
-		for (k = (unsigned char)(ucode + 1); k < V90ADID_CODES; k++) {
-			uint_1c00[phase][k] = 0;
-			float_1000[phase][k] = 0.0f;
-			float_9118[phase][k] = 0.0f;
-			linMapp[phase][k] = 0;
-		}
-	}
-}
-
-/*
- * Install the study's thresholds, either from the parameter block's QC set or
- * from the fixed defaults, and report what was installed.
- *
- * THE ARGUMENT IS A FLAG AND NOT A COUNT.  Zero takes the second branch
- * entirely: six words out of the parameter block at +0x348, five constants,
- * and a return -- no arithmetic, no scaling and NOT ONE `edprintf`.  Nonzero
- * takes the first: a different six words at +0x4a8, and every threshold
- * derived from `1.0f / float_a950` and then clamped at exactly the value the
- * zero branch would have used.  So the two branches agree when the gain is 1
- * for three of the five and differ for the other two, which is how the
- * constants were read as a scale rather than as replacements.
- *
- * THE SEEDING OF THE MAPPING IS GUARDED ON THE GAIN BEING NONZERO, and the
- * DIVISION IS NOT.  `1.0f / float_a950` is formed at the top of the branch
- * whatever the gain is, so a gain of zero still produces infinities and
- * stores 0x8000 through every `fistp` on the way; only the write of
- * `ucodeLevel / gain` into the two mapping tables is skipped.  That ordering
- * is the object's -- the compare against 0.0f is at 0x409d2, five stores
- * later -- and it is why a zero gain is a state this method leaves behind
- * rather than one it refuses.
- */
-void
-V90AutoDigitalImpDetector::resetStudyUrefHandler(unsigned int qc)
-{
-	float inv;
-	short v;
-	short phase;
-
-	if (qc == 0) {
-		int_a98c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x00);
-		int_a990 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x04);
-		int_a994 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x08);
-		int_a998 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x0c);
-		int_a99c = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x10);
-		int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_PLAIN + 0x14);
-
-		short_a9a4 = 25;
-		short_a9a6 = 50;
-		altMinVarThresh = 4000.0f;
-		neighborUcodeMinDistance = 2500;
-		neighborUcodeMaxDistance = 6000;
-
-		int_a984 = 0;
-		int_a988 = 0;
-		return;
-	}
-
-	inv = 1.0f / float_a950;
-
-	int_a98c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x00);
-	int_a990 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x04);
-	int_a994 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x08);
-	int_a998 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x0c);
-	int_a99c = paramWord(params, V90PARAMETERS_STUDY_QC + 0x10);
-	int_a9a0 = paramWord(params, V90PARAMETERS_STUDY_QC + 0x14);
-
-	short_a9a4 = (short)(inv * 25.0f + 0.5f);
-
-	/*
-	 * Clamped BEFORE the store, not after it: the object compares the
-	 * product while it is still in %st(0) at extended precision and stores
-	 * once.  A local keeps the comparison on the same value.
-	 */
-	{
-		float f = inv * 4444.4443f;
-
-		if (f > 4000.0f)
-			f = 4000.0f;
-		altMinVarThresh = f;
-	}
-
-	short_a9a6 = (short)(inv * 50.0f + 0.5f);
-
-	v = (short)(inv * 2777.7778f + 0.5f);
-	if (v > 2500)
-		v = 2500;
-	neighborUcodeMinDistance = v;
-
-	v = (short)(inv * 6666.667f + 0.5f);
-	if (v > 6000)
-		v = 6000;
-	neighborUcodeMaxDistance = v;
-
-	if (float_a950 != 0.0f) {
-		short seed = (short)(ucodeLevel * inv + 0.5f);
-
-		for (phase = 0; phase < V90ADID_PHASES; phase++) {
-			linMapp[phase][ucode] = seed;
-			linMappAlt[phase][ucode] = seed;
-		}
-	}
-
-	edprintf("--------------------------------------------------------"
-		 "-------\r\n");
-	edprintf("V90AutoDigitalImpDetector::resetStudyUrefHandler QC report "
-		 ":\r\n");
-	edprintf("prevSession uinfo : %d %d %d %d %d %d\r\n",
-		 linMapp[0][ucode], linMapp[1][ucode], linMapp[2][ucode],
-		 linMapp[3][ucode], linMapp[4][ucode], linMapp[5][ucode]);
-	edprintf("uniteUrefDistanceThresh = %d\r\n", short_a9a4);
-	edprintf("altRbsDistanceThresh = %d\r\n", short_a9a6);
-	edprintf("neighborUcodeMinDistance=%d neighborUcodeMaxDistance=%d\r\n",
-		 neighborUcodeMinDistance, neighborUcodeMaxDistance);
-	edprintf("altMinVarThresh = %c%d.%02d\r\n",
-		 ADID_PRINT_SIGN(altMinVarThresh),
-		 ADID_PRINT_WHOLE(altMinVarThresh),
-		 ADID_PRINT_FRAC(altMinVarThresh, 100.0f));
-	edprintf("--------------------------------------------------------"
-		 "-------\r\n");
-
-	int_a984 = 0;
-	int_a988 = 0;
-}
-
-/*
  * ==========================================================================
- * THE DIL BATCH: `updateAltRbsPhaseInDil` and the two members that call it.
+ * `unitePhasesInfoOfUref`, and the `updateUref` that was waiting on it.
  *
- * WHAT THE THREE ARE FOR.  By the time these run, `porcessFirstStudy` has
- * decided which of the six RBS phases are too rough to trust and written that
- * verdict into `byte_280c`.  These three take the FIRST phase that is clear --
- * `unSuspectedPhase` at +0xa968, which both callers scan for with the same
- * loop -- and use its mapping as the reference every other phase is repaired
- * against.  `updateAltRbsPhaseInDil` does the repair; `setQcLinearMapping`
- * builds the mapping to repair from the accumulators (or, for a phase with no
- * verdict, from the previous session's), and `porcessSecondStudy` tries to
- * repair the suspected phases' entries one code at a time first.
+ * WHAT IT IS FOR.  Six RBS phases each measure the same reference code, and
+ * some of them are the same phase as far as the line is concerned -- the same
+ * digital impairment, the same level.  This method finds those groups: it
+ * takes the phases NOT flagged at +0x2800, merges any two whose `linMapp`
+ * entries for the reference code differ by less than the threshold at
+ * +0xa9a4, recomputes each group's mean and variance from the group's pooled
+ * accumulators, and writes the pooled answer back to every member.  Then it
+ * takes the LARGEST group's answer and gives it to every phase that IS
+ * flagged -- the ones whose own measurement is not trusted.
  *
- * THE TWO CALLERS SHARE A TAIL, AND IT IS NOT QUITE THE SAME TAIL.  Both scan
- * for `unSuspectedPhase`, call `updateAltRbsPhaseInDil`, and then print the
- * whole mapping table under the same three format strings -- but
- * `porcessSecondStudy` prints codes 0..0x7f and `setQcLinearMapping` prints
- * 0..0x74, and the counters are not even the same type: a byte whose sign bit
- * ends the loop in the first, a `short` compared against 0x74 in the second.
- * The two are written out rather than factored into a helper because that
- * difference is the only thing separating them and a helper would hide it.
+ * IT REPEATS UNTIL IT STOPS CHANGING.  The whole of the above sits inside a
+ * do/while whose test is a checksum of `linMapp`, because merging rewrites
+ * the entries the next round's merging decisions are made from.
+ *
+ * THE CHECKSUM IS NOT WHAT IT LOOKS LIKE -- see D280.  It adds up SIX COPIES
+ * OF ONE ENTRY, `linMapp[5][at]`, because the index is the outer loop's
+ * variable left at its terminal value rather than the inner loop's.  That is
+ * visible in the object as a load hoisted clean out of the loop, which is
+ * only possible if the address does not vary.  It is written that way here.
+ *
+ * THE SENTINEL IS A NaN.  The best-group variance starts as the constant at
+ * `.rodata.cst4+0x328`, which is 0x7fc00000.  It is only observable if no
+ * group is ever formed, which needs all five of phases 0..4 flagged -- and in
+ * that case the paired `bestValue` is read uninitialised, so the object's
+ * behaviour there is not a function of its inputs at all.  D281.
  * ==========================================================================
  */
+
+
+/*
+ * The entry of `linMapp[phase]` nearest in magnitude to the value offered.
+ *
+ * THE SEARCH IS OVER CODES 5 TO 116 INCLUSIVE, not over the whole row: the
+ * counter starts at 5 and the loop test is an unsigned `cmp $0x74; jbe`.  The
+ * ends of the row are excluded, which is what "unsuspected" is about -- the
+ * smallest and largest codes are the ones a digital impairment reaches first.
+ *
+ * The initial best distance is 1,000,000, which no distance between two
+ * shorts can reach, so the first iteration always wins and the returned entry
+ * is never the value of an uninitialised index.
+ */
+short
+V90AutoDigitalImpDetector::unSuspectedPhaseNearestLinMapp(short v, short phase)
+{
+	int mag = adid_abs(v);
+	int best = 1000000;
+	unsigned short at = 5;
+	unsigned short ci;
+
+	for (ci = 5; ci <= 0x74; ci++) {
+		int d = adid_abs(mag - linMapp[phase][ci]);
+
+		if (d < best) {
+			at = ci;
+			best = d;
+		}
+	}
+
+	return linMapp[phase][at];
+}
 
 /*
  * Rebuild the suspected phases' mapping from the samples they actually
@@ -1712,6 +1567,31 @@ V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
 }
 
 /*
+ * ==========================================================================
+ * The study methods -- the four that set the thresholds up, run the first
+ * study over them, and pool what it found.
+ *
+ * ALL FOUR TALK, AND THAT IS HALF OF WHY THEY ARE WORTH HAVING.  Between them
+ * they make twelve `edprintf` calls and one `dsplibs_debug_printf`, and the
+ * format strings are the original author's names for six fields this batch
+ * would otherwise have had to call `short_a9ac` and `float_a9a8`.
+ * `trn1Sigma`, `neighborUcodeMinDistance`, `neighborUcodeMaxDistance`,
+ * `altMinVarThresh`, `uniteUrefDistanceThresh` and `altRbsDistanceThresh` are
+ * all read straight off the wire this way.
+ *
+ * A FLOAT IS PRINTED AS `%c%d.%02d`, never with `%f`.  The object has no
+ * floating-point formatting at all: every one of these sites takes the sign,
+ * the truncated magnitude and a hundredths digit as three integers.  The
+ * three macros below are that idiom, and each is written to the branch the
+ * object actually encodes rather than to the one that reads naturally --
+ * see ADID_PRINT_SIGN.
+ * ==========================================================================
+ */
+
+
+
+
+/*
  * The second study: repair each suspected phase's mapping entry from the
  * unsuspected phase's, one code at a time, where the repair is unambiguous.
  *
@@ -1847,394 +1727,430 @@ V90AutoDigitalImpDetector::porcessSecondStudy()
 }
 
 /*
- * Build the mapping the QC session starts from.
+ * File one received sample under its phase, and count its code.
  *
- * EVERY PHASE THAT IS NOT FLAGGED AT +0x2800 GETS A MAPPING, from one of two
- * places: its own accumulators if it has a verdict at +0x280c, and the
- * PREVIOUS SESSION's mapping if it has not.  So +0x280c is read here as "this
- * phase was studied" rather than as "this phase is suspected", which is the
- * opposite of how `uniteLinMappInfoOfUnsuspectedPhases` reads it -- the object
- * uses the same byte both ways and the two methods are not a pair.
+ * THE STORE INDEX IS UNBOUNDED.  `int_9100[phase]` is incremented once per
+ * call and nothing in these 149 bytes compares it against 0x83e, so a caller
+ * that offers more than 2,110 samples for one phase writes past that phase's
+ * row and eventually past the object.  That is the object's behaviour and it
+ * is reproduced; docs/deviations.md D256 records it and the test keeps the
+ * count inside the row rather than pretending the check exists.
  *
- * The per-code work is `updateLinMappMeanAndVar` and the object inlines it:
- * the same `1.0f / count`, the same `E[x^2] - E[x]^2`, the same `+ 0.5f` and
- * the same truncating `fistp`.  Calling it is a factoring difference.
- *
- * `prevLinMapp` IS ONE ROW FOR ALL SIX PHASES.  The copy loop reads
- * `prevLinMapp[code]` with no phase term at all, so every unstudied phase gets
- * the same 128 entries -- which is what makes +0x0c00 128 shorts rather than
- * 6 * 128 (finding 1361).
+ * The +0.5f is the rounding, as everywhere else here; the magnitude is taken
+ * AFTER the conversion, so a sample of -0.4 stores 0 and one of -0.6 stores
+ * 0 as well -- (short)(-0.6 + 0.5) truncates toward zero.
  */
 void
-V90AutoDigitalImpDetector::setQcLinearMapping()
+V90AutoDigitalImpDetector::addReceivedSampleToStorage(short phase,
+						      unsigned char code,
+						      float v)
+{
+	int n = int_9100[phase];
+	short q = (short)(v + 0.5f);
+
+	int_9100[phase] = n + 1;
+	sampleStore[phase][n] = (short)adid_abs(q);
+	short_8b00[phase][code]++;
+}
+
+/*
+ * Add one sample to the cumulative registers of the cell its LINEAR level
+ * companded to.
+ *
+ * The first argument is the magnitude accumulated; the second is the linear
+ * level whose PCM code selects the cell.  They are separate arguments and the
+ * object treats them separately -- the second goes through `linear2alaw` or
+ * `linear2ulaw` and never reaches the accumulator.
+ *
+ * THE COMPANDED CODE IS INVERTED BACK TO A MAGNITUDE, with the same masks
+ * `reset` uses in the other direction: `^ 0xd5` for A-law, and for mu-law
+ * `0xff - code`, which is `^ 0xff` on a byte.  The result indexes a 128-wide
+ * row and can be up to 255, so a code in the upper half indexes into the next
+ * phase's row.  The object does not mask it; neither does this.
+ */
+void
+V90AutoDigitalImpDetector::calculateLinearMeanAndVar(short v, short level,
+						     unsigned int phase)
+{
+	short at;
+	int mag;
+
+	if (pcmType != PCM_TYPE_MU_LAW)
+		at = (unsigned char)(linear2alaw(adid_abs(level)) ^ 0xd5);
+	else
+		at = (short)(0xff
+			     - (unsigned char)linear2ulaw(adid_abs(level)));
+
+	mag = adid_abs(v);
+
+	float_1000[phase][at] += mag;
+	float_9118[phase][at] += mag * mag;
+	uint_1c00[phase][at]++;
+}
+
+/*
+ * The re-test that closes the second and third updates: a phase that was
+ * flagged as carrying alternate RBS keeps the flag only if its alternate level
+ * is STILL further from its plain level than `short_a9a6` allows.
+ *
+ * The object writes this block out twice, at 0x42867 and 0x42b79, with
+ * `isAltRbs` inlined and its leading "is the phase flagged" test dropped --
+ * the caller has just tested it.  Calling the method reinstates a test whose
+ * answer is already known, which is why this is one function here and two
+ * copies there.
+ */
+static void
+adid_recheckAltRbs(V90AutoDigitalImpDetector *o)
 {
 	short phase;
-	short ci;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (short_2800[phase] != 0)
+		if (o->short_2800[phase] == 0)
 			continue;
 
-		if (byte_280c[phase] != 0) {
-			for (ci = 0; ci < V90ADID_CODES; ci++)
-				updateLinMappMeanAndVar(phase, ci);
-		} else {
-			for (ci = 0; ci < V90ADID_CODES; ci++)
-				linMapp[phase][ci] = prevLinMapp[ci];
-		}
+		o->short_2800[phase] = (short)o->isAltRbs(phase, o->ucode,
+		    (float)o->linMappAlt[phase][o->ucode]);
+
+		if (o->short_2800[phase] == 0)
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("V90AutoDigitalImpDetector"
+						     ": alternate rbs false "
+						     "detection on phase %d "
+						     "!!!\n", phase);
 	}
-
-	for (unSuspectedPhase = 0;
-	     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;
-	     unSuspectedPhase++)
-		;
-
-	updateAltRbsPhaseInDil();
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("------------------------------------"
-				     "------------------\r\n");
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("-----------------  Linear Mapping "
-				     "report --------------\r\n");
-
-	/*
-	 * 0x74, not 0x7f: this loop stops seventeen codes short of the row
-	 * where `porcessSecondStudy`'s prints the whole of it.
-	 */
-	for (ci = 0; ci <= 0x74; ci++)
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("linearMapping[%d]  :  %d  %d  "
-					     "%d  %d  %d  %d\r\n", ci,
-					     linMapp[0][ci], linMapp[1][ci],
-					     linMapp[2][ci], linMapp[3][ci],
-					     linMapp[4][ci], linMapp[5][ci]);
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf("------------------------------------"
-				     "------------------\r\n");
 }
 
 /*
  * ==========================================================================
- * THE PAD-GAIN BATCH: `determineMaxUcode` and `findPadGain`.
+ * THE DIL BATCH: `updateAltRbsPhaseInDil` and the two members that call it.
  *
- * WHAT THE TWO ARE FOR, AND WHY THEY ARE ONE READING.  By this point the
- * class knows, for every RBS phase and every seven-bit code, how noisy that
- * cell's measured mapping is -- `float_9d48`, which the object's own format
- * string calls `linearMappingVar`.  `determineMaxUcode` turns that into two
- * answers: a per-cell "is this code usable" mask in `byte_0d00`, and the
- * highest usable code for each phase in `maxUcode[6]`, both hung off one
- * scalar at +0xa954 that it also leaves behind.  `findPadGain` then starts
- * from that scalar, assumes a pad in the line, and searches for the gain that
- * makes the reference phase's mapping come back through a companding law
- * unchanged -- storing the winner in `padGain`, which is the only thing that
- * ever makes `applyPadGainToLinMapp`'s division do anything, because `reset`
- * seeds the gain with 1.0f.
+ * WHAT THE THREE ARE FOR.  By the time these run, `porcessFirstStudy` has
+ * decided which of the six RBS phases are too rough to trust and written that
+ * verdict into `byte_280c`.  These three take the FIRST phase that is clear --
+ * `unSuspectedPhase` at +0xa968, which both callers scan for with the same
+ * loop -- and use its mapping as the reference every other phase is repaired
+ * against.  `updateAltRbsPhaseInDil` does the repair; `setQcLinearMapping`
+ * builds the mapping to repair from the accumulators (or, for a phase with no
+ * verdict, from the previous session's), and `porcessSecondStudy` tries to
+ * repair the suspected phases' entries one code at a time first.
  *
- * SO +0x0d00 IS DECIDABLE HERE and nowhere else: `determineMaxUcode` is the
- * only member besides `reset` that touches it, and it both fills it and reads
- * it back in the same call.  Finding 1435.
- *
- * THE UNORDERED COMPARE IS THE WHOLE OF THE CARE THESE TWO NEED.  Every
- * floating-point branch in both methods is an `fcom`, and an unordered
- * compare sets CF and ZF -- so wherever the object skips on `jae` a NaN does
- * NOT skip, wherever it takes on `jb` a NaN DOES take, and wherever it tests
- * with `je` a NaN compares EQUAL.  The first two are written as the negation
- * of an ordered test, which is what the branch encodes.  The THIRD is a plain
- * `v == 0.0f`: under the object's own `-mno-ieee-fp` that is one `fcom` with
- * no parity test, so the NaN takes it exactly as the object's `fcomp`/`je`
- * does.  The two-compare "not less and not greater" spelling that used to
- * stand here was a workaround for the flag `make period` was missing, not the
- * object's code (findings 1447, 1990 and 2300).
- *
- * AND A RIGHT SPELLING IS NOT YET A RIGHT COMPARE.  `fcom` sets CF on an
- * unordered compare whichever way round its operands are, so which one is in
- * %st(0) is what decides where a NaN goes -- and with the flag set GCC is
- * free to commute a compare and invert its predicate, which is identical for
- * ordered values and exactly opposite for a NaN.  `ADID_PRINT_SIGN` above is
- * spelled the way it is for that reason alone, and both of these methods
- * print through it.
- *
- * WHAT IS *NOT* REPRODUCED IS THE SIGNALLING.  The object compares with
- * `fcomp`, which raises #IA on a quiet NaN; both of this tree's compilers
- * emit `fucomp`, which does not, for every spelling tried.  Nothing here
- * reads the x87 status word, so no test can see it -- docs/deviations.md
- * D295.
- * A seeded `float_9d48` reaches all three: one 32-bit pattern in 128 is a
- * NaN.  Finding 1436.
- *
- * THREE OF THE LOCALS HERE ARE `volatile`, AND IT IS NOT A HINT.  The object
- * is `-mfpmath=387` and this tree is deliberately not `-ffloat-store`, so a
- * `float` local lives in an x87 register at 64 bits of significand until
- * something makes it spill -- and the value the ORIGINAL goes on to use is
- * whichever of the two its own compiler happened to leave in reach.  Where
- * the object stored a float and read it back, reproducing the ROUNDING is not
- * optional: `determineMaxUcode`'s threshold at twenty variances of 1e9 is
- * 1000000014.9 unrounded and 1000000000 rounded, and it prints the number.
- * Measured, not assumed -- `volatile` was added to exactly the three locals
- * whose transcripts disagreed and to no others, and each names the object's
- * store below.  Finding 1437.
+ * THE TWO CALLERS SHARE A TAIL, AND IT IS NOT QUITE THE SAME TAIL.  Both scan
+ * for `unSuspectedPhase`, call `updateAltRbsPhaseInDil`, and then print the
+ * whole mapping table under the same three format strings -- but
+ * `porcessSecondStudy` prints codes 0..0x7f and `setQcLinearMapping` prints
+ * 0..0x74, and the counters are not even the same type: a byte whose sign bit
+ * ends the loop in the first, a `short` compared against 0x74 in the second.
+ * The two are written out rather than factored into a helper because that
+ * difference is the only thing separating them and a helper would hide it.
  * ==========================================================================
  */
 
-/*
- * Decide how far up the companding law each phase may be driven.
- *
- * FIVE STEPS, and the third is the one the method is named for:
- *
- *   1. a variance threshold, from the sum of |`linearMappingVar`| over codes
- *      40..59 of the reference phase, scaled by `float_a980` and by 0.05f,
- *      which is the 1/20 of the twenty entries written out;
- *   2. two reports of that threshold, either side of a clamp into
- *      [500, 100000];
- *   3. a scan DOWNWARDS from the argument for the first window of five
- *      adjacent codes containing more than two "small but not zero"
- *      variances, whose top becomes `byte_a954`, floored at `short_a97a`;
- *   4. `byte_0d00[phase][code]` set to 1 exactly where the code is within the
- *      argument's reach and the variance is under twice the threshold;
- *   5. `maxUcode[phase]` read back out of that mask.
- *
- * THE SECOND REPORT'S SIGN TEST IS THE ORDERED ONE.  The first prints through
- * the class's usual `fldz`/`fcomps`/`sbb` idiom, where an unordered compare
- * yields '+' (ADID_PRINT_SIGN); the second is `flds`/`fcomps 0.0f`/`ja` at
- * 0x44347, which yields '-'.  The clamp between them leaves the threshold in
- * [500, 100000], so no reachable value separates the two spellings -- but
- * they are different instructions and this is written as the one the object
- * has.
- *
- * THE REPORT HEADER IS HANDED THREE ARGUMENTS IT HAS NO CONVERSIONS FOR.
- * "linearMappingVar report:" contains no `%`, and the object still stores
- * `unSuspectedPhase`, `short_a97a + 1` and the argument into the outgoing
- * argument slots at 0x44373, 0x4437f and 0x44391 before the call.  GCC does
- * not emit dead stores into an argument area, so they are the call's and they
- * are written; no transcript can see the difference, so the disassembly is
- * the whole of the evidence for this one.
- *
- * THREE OF THE INDICES ARE UNBOUNDED -- docs/deviations.md D288 for the two
- * loops the argument drives off the end of the row, D289 for the backwards
- * walk that can never terminate.
- */
-void
-V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
+int
+V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
 {
-	/* `fsts 0x1c(%esp)` at 0x4424b, reloaded with `flds` eight times. */
-	volatile float varThresh;
-	int origWhole;
-	unsigned char minU = (unsigned char)short_a97a;
-	unsigned char mu;
-	unsigned char at;
-	unsigned char phase;
-	unsigned char k;
-	unsigned char ci;
+	/*
+	 * Formed once, before the dispatch, and truncating: the object's
+	 * `fists 0x46(%esp)` at 0x4217f sits between the control-word switch it
+	 * sets up for the whole function and the switch on the state.  The
+	 * float itself stays live -- only `isAltRbs` uses it, and only in three
+	 * of the seven arms.
+	 */
+	short sample = (short)v;
+	int ret = 1;
 
-	{
+	switch (int_a984) {
+	case 0: {
 		/*
-		 * Twenty entries, codes 40..59 of the reference phase: the
-		 * object counts a byte down from 0x13 and walks a pointer up
-		 * from +0x9de8, which is entry 40 of the row.  The running
-		 * total stays in %st(1) for the whole loop, so it accumulates
-		 * at extended precision and rounds once -- which is why the
-		 * Makefile is deliberately not -ffloat-store.
+		 * The initial pattern.  Accumulate until +0xa98c samples have
+		 * arrived, then form each phase's variance for the reference
+		 * code, ask `getAltVarThresh` what counts as large, and flag
+		 * every phase over it as carrying alternate RBS.
 		 */
-		float sum = 0.0f;
-		float product;
-		short i;
+		float var[V90ADID_PHASES];
+		float thresh;
+		short n = 0;
+		short p;
 
-		for (i = 40; i <= 59; i++)
-			sum += __builtin_fabsf(
-			    float_9d48[unSuspectedPhase][i]);
+		int_a988++;
+		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
 
-		/*
-		 * AND THE FIRST REPORT PRINTS THE PRODUCT AT BOTH PRECISIONS
-		 * AT ONCE.  The object stores the float at 0x4424b and then
-		 * takes `fabs` of the value STILL IN %st(0) -- the unrounded
-		 * one -- while the sign, the truncation and the fractional
-		 * part all come from `flds 0x1c(%esp)`, the rounded one.  At a
-		 * threshold of 1000000014.9 that is "1000000014.00" against
-		 * "1000000000.00", so the split is printed and has to be
-		 * written.  Everything from the clamp onwards uses the rounded
-		 * value alone.  Finding 1437.
-		 */
-		product = sum * float_a980 * 0.05f;
-		origWhole = ADID_PRINT_WHOLE(product);
-		varThresh = product;
-	}
-
-	edprintf("V90AutoDigitalImpDetector: original varThresh = %c%d.%02d\r\n",
-		 ADID_PRINT_SIGN(varThresh), origWhole,
-		 ADID_PRINT_FRAC(varThresh, 100.0f));
-
-	/*
-	 * Both tests are the object's `jae` and `jbe`, so a NaN threshold
-	 * fails the first and comes out as 500 -- which is what leaves the
-	 * ordered sign test below unreachable on anything but a real number.
-	 */
-	if (!(varThresh >= 500.0f))
-		varThresh = 500.0f;
-	else if (!(varThresh <= 100000.0f))
-		varThresh = 100000.0f;
-
-	edprintf("V90AutoDigitalImpDetector: final varThresh = %c%d.%02d\r\n",
-		 varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),
-		 ADID_PRINT_FRAC(varThresh, 100.0f));
-
-	edprintf("--------------------------------------------------------\r\n");
-	edprintf("V90AutoDigitalImpDetector: linearMappingVar report:\r\n",
-		 unSuspectedPhase, short_a97a + 1, maxCode);
-
-	/*
-	 * A BYTE COUNTER AGAINST A SIGNED INT BOUND.  `k` is zero-extended for
-	 * the compare, so a `maxCode` of 255 or more never ends the loop --
-	 * the counter wraps to 0 and 0 is still under the bound -- and a
-	 * negative one skips it entirely.  D288.
-	 */
-	for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)
-		edprintf("linearMappingVar[%d][%d] = %d\r\n", unSuspectedPhase,
-			 k, adid_abs((int)float_9d48[unSuspectedPhase][k]));
-
-	edprintf("--------------------------------------------------------\r\n");
-
-	/*
-	 * The scan.  Five adjacent codes ending at `ci`, and the answer is the
-	 * top of the first window in which more than two of them have a
-	 * variance that is small and not zero.  What is stored is the top
-	 * MINUS the offset of the first qualifying entry, so it is the highest
-	 * code that actually qualified and not the window's top.
-	 *
-	 * `ci` and the window offsets are bytes and the row is 128 wide, so
-	 * the window reads outside the reference phase's row at both ends --
-	 * D288.
-	 */
-	at = minU;
-
-	for (ci = (unsigned char)maxCode; ci > minU; ci--) {
-		unsigned char first = 0;
-		unsigned char n = 0;
-		unsigned char d;
-
-		for (d = 0; d <= 4; d++) {
-			float v = float_9d48[unSuspectedPhase][ci - d];
-
-			if (v >= varThresh)
-				continue;
-			/*
-			 * THE OBJECT'S ZERO TEST TAKES A NaN.  `fcomp %st(1)`
-			 * against the zero it has kept on the stack since
-			 * 0x4443c, then `je` -- and an unordered compare sets
-			 * C3, so ZF is set and the entry is skipped.  ONE
-			 * compare, and under -mno-ieee-fp `v == 0.0f` is
-			 * exactly that: GCC emits `fcom`/`fnstsw`/`sahf`/`je`
-			 * with no parity test, so a NaN is skipped too.
-			 *
-			 * This used to be spelled "not less and not greater",
-			 * two compares, because under -mieee-fp `==` acquires
-			 * a parity test and a NaN then falls through.  That
-			 * was a workaround for `make period`'s flag set, and
-			 * with the object's own flag it is neither needed nor
-			 * the object's code.  Findings 1436, 1447 and 2300.
-			 */
-			if (v == 0.0f)
-				continue;
-
-			if (n == 0)
-				first = d;
-			n++;
-		}
-
-		if (n > 2) {
-			at = (unsigned char)(ci - first);
+		if (int_a988 != int_a98c)
 			break;
+
+		/*
+		 * NO ZERO-COUNT GUARD, where every other mean in the class has
+		 * one: a phase with no samples divides 1.0f by 0 here and its
+		 * variance comes out a NaN or an infinity, which then goes
+		 * straight into `getAltVarThresh`.  docs/deviations.md D292.
+		 */
+		for (p = 0; p < V90ADID_PHASES; p++) {
+			float inv = 1.0f / uint_1c00[p][ucode];
+			float mean = float_1000[p][ucode] * inv;
+
+			var[p] = inv * float_9118[p][ucode] - mean * mean;
 		}
-	}
 
-	byte_a954 = at;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
+					     "initail var (Trn1):  %d  %d  %d  "
+					     "%d  %d  %d\n", (int)var[0],
+					     (int)var[1], (int)var[2],
+					     (int)var[3], (int)var[4],
+					     (int)var[5]);
 
-	/*
-	 * The floor.  The compare is signed and against the whole `short`, so
-	 * a `short_a97a` above 255 forces the byte every time.
-	 */
-	mu = byte_a954;
+		thresh = getAltVarThresh(var, float_a970);
 
-	if ((int)mu < (int)short_a97a) {
-		edprintf("V90AutoDigitalImpDetector: original maxUcode = %d  "
-			 "forced minimum maxUcode = %d\n", mu, short_a97a);
-		byte_a954 = (unsigned char)short_a97a;
-		mu = (unsigned char)short_a97a;
-	}
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
+					     "initail AltRbsVarThresh (Trn1) = "
+					     "%d\n", (int)thresh);
 
-	/*
-	 * The usability mask.  The per-phase test is loop-invariant and GCC
-	 * unswitched it -- which is why a flagged phase still spends 128
-	 * iterations doing nothing at 0x44560, an empty `inc`/`jns` spin -- so
-	 * it is written where the object's source had it and not where the
-	 * object's code has it.
-	 *
-	 * THE REFERENCE CODE IS FORCED BACK TO 1 AFTERWARDS, for every phase
-	 * and whatever the variance said, and `ucode` is a byte the object
-	 * never masks: a reference code of 128 or more marks a cell in the
-	 * next phase's row.  docs/deviations.md D289.
-	 */
-	{
-		float lim = varThresh + varThresh;
-		unsigned char ref = ucode;
-
-		for (phase = 0; phase < V90ADID_PHASES; phase++) {
-			unsigned char code;
-
-			for (code = 0; code < V90ADID_CODES; code++) {
-				if (short_2800[phase] != 0)
-					continue;
-
-				if ((int)code > (int)maxCode)
-					byte_0d00[phase][code] = 0;
-				else if (__builtin_fabsf(float_9d48[phase][code])
-					 >= lim)
-					byte_0d00[phase][code] = 0;
-				else
-					byte_0d00[phase][code] = 1;
+		/*
+		 * An ORDERED `>`: the object's `fcomps`/`jbe` skips on an
+		 * unordered compare, so a NaN variance -- which the missing
+		 * guard above can produce -- does NOT flag its phase.
+		 */
+		for (p = 0; p < V90ADID_PHASES; p++)
+			if (var[p] > thresh) {
+				n = (short)(n + 1);
+				short_2800[p] = 1;
 			}
 
-			byte_0d00[phase][ref] = 1;
-		}
+		/*
+		 * And the accumulators are emptied only if something was
+		 * flagged.  A study that finds no alternate RBS at all carries
+		 * this pass's samples forward into the next state.
+		 */
+		if (n > 0)
+			for (p = 0; p < V90ADID_PHASES; p++) {
+				float_1000[p][ucode] = 0.0f;
+				uint_1c00[p][ucode] = 0;
+				float_9118[p][ucode] = 0.0f;
+			}
+
+		edprintf("V90AutoDigitalImpDetector: Trn1 alternate rbs initial "
+			 "patern  %d%d%d%d%d%d\n", short_2800[0], short_2800[1],
+			 short_2800[2], short_2800[3], short_2800[4],
+			 short_2800[5]);
+
+		int_a988 = 0;
+		int_a984 = 1;
+		break;
 	}
 
-	/*
-	 * And the read-back.  An unflagged phase takes the scan's answer and
-	 * then walks DOWNWARDS until it finds a usable code; a flagged one
-	 * takes the answer clamped to two below the argument, and never looks
-	 * at the mask at all.
-	 *
-	 * THE WALK HAS NO FLOOR.  It decrements a byte, so it wraps at 0 into
-	 * the previous 128 indices -- which for phases 0..4 is the next
-	 * phase's row and for phase 5 is the start of `float_1000`, both
-	 * inside the object -- and if all 256 of those bytes are zero it never
-	 * ends.  docs/deviations.md D289.
-	 */
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		unsigned char m = byte_a954;
+	case 1:
+		/*
+		 * The first update.  Same accumulation, and the answer to the
+		 * caller is now "was this phase already flagged" -- the index
+		 * is the RAW `unsigned int` argument here where every other arm
+		 * narrows it to a `short` first, because those arms reach the
+		 * flag through `isAltRbs` and this one does not.
+		 */
+		int_a988++;
+		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+		ret = short_2800[phase] == 0 ? 1 : 0;
 
-		if (short_2800[phase] == 0) {
-			maxUcode[phase] = m;
+		if (int_a988 != int_a990)
+			break;
 
-			if (byte_0d00[phase][m] == 0) {
-				unsigned char d = m;
+		updateUref();
 
-				do {
-					d--;
-				} while (byte_0d00[phase][d] == 0);
+		/*
+		 * TWO LOCAL ARRAYS ARE FILLED HERE AND NEVER READ.  The object
+		 * runs two six-iteration loops copying `linMapp[i][ucode]` and
+		 * then `linMappAlt[i][ucode]` into one twelve-byte stack slot
+		 * at 0x50(%esp) -- GCC gave both the same slot because the
+		 * first is dead before the second starts -- and the print below
+		 * reads the tables directly.  All six stores to that slot in
+		 * the whole function are writes and there is not one read, so
+		 * they are omitted; cases 2 and 3 have the same pair and case 5
+		 * does not.  docs/deviations.md D293.
+		 */
+		edprintf("V90AutoDigitalImpDetector trn1 first update  :  %d  "
+			 "%d  %d  %d  %d  %d\n", linMapp[0][ucode],
+			 linMapp[1][ucode], linMapp[2][ucode], linMapp[3][ucode],
+			 linMapp[4][ucode], linMapp[5][ucode]);
 
-				maxUcode[phase] = d;
-			}
-		} else if ((int)m <= (int)maxCode - 2) {
-			maxUcode[phase] = m;
+		int_a988 = 0;
+		int_a984 = 2;
+		break;
+
+	case 2:
+		/*
+		 * The second update, and the first that splits the sample two
+		 * ways: a sample too far from this phase's established level
+		 * goes to the ALTERNATE accumulators and the caller is told 0,
+		 * anything else goes to the plain ones.
+		 */
+		int_a988++;
+
+		if (isAltRbs((short)phase, ucode, v)) {
+			calculateLinearMeanAndVarAlt(sample, phase);
+			ret = 0;
 		} else {
-			maxUcode[phase] = (unsigned char)(maxCode - 2);
+			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+			ret = 1;
 		}
 
-		edprintf("V90AutoDigitalImpDetector: phase %d maxUcode is %d\r\n",
-			 phase, maxUcode[phase]);
+		if (int_a988 != int_a994)
+			break;
+
+		updateUref();
+		updateUrefAlt();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
+					     "second update  :  %d  %d  %d  %d "
+					     " %d  %d\n", linMapp[0][ucode],
+					     linMapp[1][ucode],
+					     linMapp[2][ucode],
+					     linMapp[3][ucode],
+					     linMapp[4][ucode],
+					     linMapp[5][ucode]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
+					     " first update  :  %d  %d  %d  %d "
+					     " %d  %d\n", linMappAlt[0][ucode],
+					     linMappAlt[1][ucode],
+					     linMappAlt[2][ucode],
+					     linMappAlt[3][ucode],
+					     linMappAlt[4][ucode],
+					     linMappAlt[5][ucode]);
+
+		adid_recheckAltRbs(this);
+
+		short_a948 = 1;
+		int_a988 = 0;
+		int_a984 = 4;
+		break;
+
+	case 3:
+		/*
+		 * The third update.  The same split as state 2 -- but the
+		 * caller is told 1 either way, so an alternate-RBS sample is
+		 * no longer withheld from whatever is upstream.
+		 */
+		int_a988++;
+
+		if (isAltRbs((short)phase, ucode, v))
+			calculateLinearMeanAndVarAlt(sample, phase);
+		else
+			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+
+		if (int_a988 != int_a998)
+			break;
+
+		updateUref();
+		updateUrefAlt();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
+					     "third update  :  %d  %d  %d  %d  "
+					     "%d  %d\n", linMapp[0][ucode],
+					     linMapp[1][ucode],
+					     linMapp[2][ucode],
+					     linMapp[3][ucode],
+					     linMapp[4][ucode],
+					     linMapp[5][ucode]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
+					     " second update  :  %d  %d  %d  %d"
+					     "  %d  %d\n", linMappAlt[0][ucode],
+					     linMappAlt[1][ucode],
+					     linMappAlt[2][ucode],
+					     linMappAlt[3][ucode],
+					     linMappAlt[4][ucode],
+					     linMappAlt[5][ucode]);
+
+		adid_recheckAltRbs(this);
+		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector first "
+					   "update : trn1Sigma = %d\n");
+
+		int_a988 = 0;
+		int_a984 = 5;
+		break;
+
+	case 4: {
+		/*
+		 * A pure delay, and the only arm that does not look at the
+		 * sample at all: +0xa99c calls apart, it hands the machine on
+		 * to state 3.  The count that fires it is the incremented one
+		 * and what is stored on the firing pass is zero, not it.
+		 */
+		int next = int_a988 + 1;
+
+		if (next == int_a99c) {
+			int_a988 = 0;
+			int_a984 = 3;
+		} else {
+			int_a988 = next;
+		}
+		break;
 	}
+
+	case 5:
+		/*
+		 * The final update.  State 3's arm again, against the same
+		 * duration at +0xa998 -- and the tail has no re-test of the
+		 * flags, because there is nothing left to correct them for.
+		 */
+		int_a988++;
+
+		if (isAltRbs((short)phase, ucode, v))
+			calculateLinearMeanAndVarAlt(sample, phase);
+		else
+			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
+
+		if (int_a988 != int_a998)
+			break;
+
+		updateUref();
+		updateUrefAlt();
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
+					     "final update  :  %d  %d  %d  %d  "
+					     "%d  %d\n", linMapp[0][ucode],
+					     linMapp[1][ucode],
+					     linMapp[2][ucode],
+					     linMapp[3][ucode],
+					     linMapp[4][ucode],
+					     linMapp[5][ucode]);
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
+					     " final update  :  %d  %d  %d  %d "
+					     " %d  %d\n", linMappAlt[0][ucode],
+					     linMappAlt[1][ucode],
+					     linMappAlt[2][ucode],
+					     linMappAlt[3][ucode],
+					     linMappAlt[4][ucode],
+					     linMappAlt[5][ucode]);
+
+		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector second "
+					   "update : trn1Sigma = %d\n");
+
+		int_a988 = 0;
+		int_a984 = 6;
+		ret = 2;
+		break;
+
+	case 6:
+		/* Terminal: the study is over and says so on every call. */
+		ret = 2;
+		break;
+
+	default:
+		/*
+		 * The dispatch is `cmp $0x6; ja`, an UNSIGNED compare, so a
+		 * negative state word lands here rather than below the table.
+		 */
+		break;
+	}
+
+	return ret;
 }
 
 /*
@@ -2567,6 +2483,365 @@ V90AutoDigitalImpDetector::findPadGain()
 }
 
 /*
+ * Divide both mapping tables through by the pad gain.
+ *
+ * The reciprocal is formed once, outside both loops -- the object hoists
+ * `fld1` and the 0.5f above the loop and issues a single `fdivs` -- so a pad
+ * gain of zero produces an infinity that then multiplies every entry, rather
+ * than 1,536 separate divisions.  `reset` seeds the gain with 1.0f, which
+ * makes this method a no-op until `findPadGain` has run.
+ */
+void
+V90AutoDigitalImpDetector::applyPadGainToLinMapp()
+{
+	float inv = 1.0f / padGain;
+	short phase;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		short ci;
+
+		for (ci = 0; ci < V90ADID_CODES; ci++) {
+			linMapp[phase][ci] =
+			    (short)(linMapp[phase][ci] * inv + 0.5f);
+			linMappAlt[phase][ci] =
+			    (short)(linMappAlt[phase][ci] * inv + 0.5f);
+		}
+	}
+}
+
+/*
+ * ==========================================================================
+ * THE PAD-GAIN BATCH: `determineMaxUcode` and `findPadGain`.
+ *
+ * WHAT THE TWO ARE FOR, AND WHY THEY ARE ONE READING.  By this point the
+ * class knows, for every RBS phase and every seven-bit code, how noisy that
+ * cell's measured mapping is -- `float_9d48`, which the object's own format
+ * string calls `linearMappingVar`.  `determineMaxUcode` turns that into two
+ * answers: a per-cell "is this code usable" mask in `byte_0d00`, and the
+ * highest usable code for each phase in `maxUcode[6]`, both hung off one
+ * scalar at +0xa954 that it also leaves behind.  `findPadGain` then starts
+ * from that scalar, assumes a pad in the line, and searches for the gain that
+ * makes the reference phase's mapping come back through a companding law
+ * unchanged -- storing the winner in `padGain`, which is the only thing that
+ * ever makes `applyPadGainToLinMapp`'s division do anything, because `reset`
+ * seeds the gain with 1.0f.
+ *
+ * SO +0x0d00 IS DECIDABLE HERE and nowhere else: `determineMaxUcode` is the
+ * only member besides `reset` that touches it, and it both fills it and reads
+ * it back in the same call.  Finding 1435.
+ *
+ * THE UNORDERED COMPARE IS THE WHOLE OF THE CARE THESE TWO NEED.  Every
+ * floating-point branch in both methods is an `fcom`, and an unordered
+ * compare sets CF and ZF -- so wherever the object skips on `jae` a NaN does
+ * NOT skip, wherever it takes on `jb` a NaN DOES take, and wherever it tests
+ * with `je` a NaN compares EQUAL.  The first two are written as the negation
+ * of an ordered test, which is what the branch encodes.  The THIRD is a plain
+ * `v == 0.0f`: under the object's own `-mno-ieee-fp` that is one `fcom` with
+ * no parity test, so the NaN takes it exactly as the object's `fcomp`/`je`
+ * does.  The two-compare "not less and not greater" spelling that used to
+ * stand here was a workaround for the flag `make period` was missing, not the
+ * object's code (findings 1447, 1990 and 2300).
+ *
+ * AND A RIGHT SPELLING IS NOT YET A RIGHT COMPARE.  `fcom` sets CF on an
+ * unordered compare whichever way round its operands are, so which one is in
+ * %st(0) is what decides where a NaN goes -- and with the flag set GCC is
+ * free to commute a compare and invert its predicate, which is identical for
+ * ordered values and exactly opposite for a NaN.  `ADID_PRINT_SIGN` above is
+ * spelled the way it is for that reason alone, and both of these methods
+ * print through it.
+ *
+ * WHAT IS *NOT* REPRODUCED IS THE SIGNALLING.  The object compares with
+ * `fcomp`, which raises #IA on a quiet NaN; both of this tree's compilers
+ * emit `fucomp`, which does not, for every spelling tried.  Nothing here
+ * reads the x87 status word, so no test can see it -- docs/deviations.md
+ * D295.
+ * A seeded `float_9d48` reaches all three: one 32-bit pattern in 128 is a
+ * NaN.  Finding 1436.
+ *
+ * THREE OF THE LOCALS HERE ARE `volatile`, AND IT IS NOT A HINT.  The object
+ * is `-mfpmath=387` and this tree is deliberately not `-ffloat-store`, so a
+ * `float` local lives in an x87 register at 64 bits of significand until
+ * something makes it spill -- and the value the ORIGINAL goes on to use is
+ * whichever of the two its own compiler happened to leave in reach.  Where
+ * the object stored a float and read it back, reproducing the ROUNDING is not
+ * optional: `determineMaxUcode`'s threshold at twenty variances of 1e9 is
+ * 1000000014.9 unrounded and 1000000000 rounded, and it prints the number.
+ * Measured, not assumed -- `volatile` was added to exactly the three locals
+ * whose transcripts disagreed and to no others, and each names the object's
+ * store below.  Finding 1437.
+ * ==========================================================================
+ */
+
+/*
+ * Decide how far up the companding law each phase may be driven.
+ *
+ * FIVE STEPS, and the third is the one the method is named for:
+ *
+ *   1. a variance threshold, from the sum of |`linearMappingVar`| over codes
+ *      40..59 of the reference phase, scaled by `float_a980` and by 0.05f,
+ *      which is the 1/20 of the twenty entries written out;
+ *   2. two reports of that threshold, either side of a clamp into
+ *      [500, 100000];
+ *   3. a scan DOWNWARDS from the argument for the first window of five
+ *      adjacent codes containing more than two "small but not zero"
+ *      variances, whose top becomes `byte_a954`, floored at `short_a97a`;
+ *   4. `byte_0d00[phase][code]` set to 1 exactly where the code is within the
+ *      argument's reach and the variance is under twice the threshold;
+ *   5. `maxUcode[phase]` read back out of that mask.
+ *
+ * THE SECOND REPORT'S SIGN TEST IS THE ORDERED ONE.  The first prints through
+ * the class's usual `fldz`/`fcomps`/`sbb` idiom, where an unordered compare
+ * yields '+' (ADID_PRINT_SIGN); the second is `flds`/`fcomps 0.0f`/`ja` at
+ * 0x44347, which yields '-'.  The clamp between them leaves the threshold in
+ * [500, 100000], so no reachable value separates the two spellings -- but
+ * they are different instructions and this is written as the one the object
+ * has.
+ *
+ * THE REPORT HEADER IS HANDED THREE ARGUMENTS IT HAS NO CONVERSIONS FOR.
+ * "linearMappingVar report:" contains no `%`, and the object still stores
+ * `unSuspectedPhase`, `short_a97a + 1` and the argument into the outgoing
+ * argument slots at 0x44373, 0x4437f and 0x44391 before the call.  GCC does
+ * not emit dead stores into an argument area, so they are the call's and they
+ * are written; no transcript can see the difference, so the disassembly is
+ * the whole of the evidence for this one.
+ *
+ * THREE OF THE INDICES ARE UNBOUNDED -- docs/deviations.md D288 for the two
+ * loops the argument drives off the end of the row, D289 for the backwards
+ * walk that can never terminate.
+ */
+void
+V90AutoDigitalImpDetector::determineMaxUcode(short maxCode)
+{
+	/* `fsts 0x1c(%esp)` at 0x4424b, reloaded with `flds` eight times. */
+	volatile float varThresh;
+	int origWhole;
+	unsigned char minU = (unsigned char)short_a97a;
+	unsigned char mu;
+	unsigned char at;
+	unsigned char phase;
+	unsigned char k;
+	unsigned char ci;
+
+	{
+		/*
+		 * Twenty entries, codes 40..59 of the reference phase: the
+		 * object counts a byte down from 0x13 and walks a pointer up
+		 * from +0x9de8, which is entry 40 of the row.  The running
+		 * total stays in %st(1) for the whole loop, so it accumulates
+		 * at extended precision and rounds once -- which is why the
+		 * Makefile is deliberately not -ffloat-store.
+		 */
+		float sum = 0.0f;
+		float product;
+		short i;
+
+		for (i = 40; i <= 59; i++)
+			sum += __builtin_fabsf(
+			    float_9d48[unSuspectedPhase][i]);
+
+		/*
+		 * AND THE FIRST REPORT PRINTS THE PRODUCT AT BOTH PRECISIONS
+		 * AT ONCE.  The object stores the float at 0x4424b and then
+		 * takes `fabs` of the value STILL IN %st(0) -- the unrounded
+		 * one -- while the sign, the truncation and the fractional
+		 * part all come from `flds 0x1c(%esp)`, the rounded one.  At a
+		 * threshold of 1000000014.9 that is "1000000014.00" against
+		 * "1000000000.00", so the split is printed and has to be
+		 * written.  Everything from the clamp onwards uses the rounded
+		 * value alone.  Finding 1437.
+		 */
+		product = sum * float_a980 * 0.05f;
+		origWhole = ADID_PRINT_WHOLE(product);
+		varThresh = product;
+	}
+
+	edprintf("V90AutoDigitalImpDetector: original varThresh = %c%d.%02d\r\n",
+		 ADID_PRINT_SIGN(varThresh), origWhole,
+		 ADID_PRINT_FRAC(varThresh, 100.0f));
+
+	/*
+	 * Both tests are the object's `jae` and `jbe`, so a NaN threshold
+	 * fails the first and comes out as 500 -- which is what leaves the
+	 * ordered sign test below unreachable on anything but a real number.
+	 */
+	if (!(varThresh >= 500.0f))
+		varThresh = 500.0f;
+	else if (!(varThresh <= 100000.0f))
+		varThresh = 100000.0f;
+
+	edprintf("V90AutoDigitalImpDetector: final varThresh = %c%d.%02d\r\n",
+		 varThresh > 0.0f ? '+' : '-', ADID_PRINT_WHOLE(varThresh),
+		 ADID_PRINT_FRAC(varThresh, 100.0f));
+
+	edprintf("--------------------------------------------------------\r\n");
+	edprintf("V90AutoDigitalImpDetector: linearMappingVar report:\r\n",
+		 unSuspectedPhase, short_a97a + 1, maxCode);
+
+	/*
+	 * A BYTE COUNTER AGAINST A SIGNED INT BOUND.  `k` is zero-extended for
+	 * the compare, so a `maxCode` of 255 or more never ends the loop --
+	 * the counter wraps to 0 and 0 is still under the bound -- and a
+	 * negative one skips it entirely.  D288.
+	 */
+	for (k = (unsigned char)(short_a97a + 1); (int)k <= maxCode; k++)
+		edprintf("linearMappingVar[%d][%d] = %d\r\n", unSuspectedPhase,
+			 k, adid_abs((int)float_9d48[unSuspectedPhase][k]));
+
+	edprintf("--------------------------------------------------------\r\n");
+
+	/*
+	 * The scan.  Five adjacent codes ending at `ci`, and the answer is the
+	 * top of the first window in which more than two of them have a
+	 * variance that is small and not zero.  What is stored is the top
+	 * MINUS the offset of the first qualifying entry, so it is the highest
+	 * code that actually qualified and not the window's top.
+	 *
+	 * `ci` and the window offsets are bytes and the row is 128 wide, so
+	 * the window reads outside the reference phase's row at both ends --
+	 * D288.
+	 */
+	at = minU;
+
+	for (ci = (unsigned char)maxCode; ci > minU; ci--) {
+		unsigned char first = 0;
+		unsigned char n = 0;
+		unsigned char d;
+
+		for (d = 0; d <= 4; d++) {
+			float v = float_9d48[unSuspectedPhase][ci - d];
+
+			if (v >= varThresh)
+				continue;
+			/*
+			 * THE OBJECT'S ZERO TEST TAKES A NaN.  `fcomp %st(1)`
+			 * against the zero it has kept on the stack since
+			 * 0x4443c, then `je` -- and an unordered compare sets
+			 * C3, so ZF is set and the entry is skipped.  ONE
+			 * compare, and under -mno-ieee-fp `v == 0.0f` is
+			 * exactly that: GCC emits `fcom`/`fnstsw`/`sahf`/`je`
+			 * with no parity test, so a NaN is skipped too.
+			 *
+			 * This used to be spelled "not less and not greater",
+			 * two compares, because under -mieee-fp `==` acquires
+			 * a parity test and a NaN then falls through.  That
+			 * was a workaround for `make period`'s flag set, and
+			 * with the object's own flag it is neither needed nor
+			 * the object's code.  Findings 1436, 1447 and 2300.
+			 */
+			if (v == 0.0f)
+				continue;
+
+			if (n == 0)
+				first = d;
+			n++;
+		}
+
+		if (n > 2) {
+			at = (unsigned char)(ci - first);
+			break;
+		}
+	}
+
+	byte_a954 = at;
+
+	/*
+	 * The floor.  The compare is signed and against the whole `short`, so
+	 * a `short_a97a` above 255 forces the byte every time.
+	 */
+	mu = byte_a954;
+
+	if ((int)mu < (int)short_a97a) {
+		edprintf("V90AutoDigitalImpDetector: original maxUcode = %d  "
+			 "forced minimum maxUcode = %d\n", mu, short_a97a);
+		byte_a954 = (unsigned char)short_a97a;
+		mu = (unsigned char)short_a97a;
+	}
+
+	/*
+	 * The usability mask.  The per-phase test is loop-invariant and GCC
+	 * unswitched it -- which is why a flagged phase still spends 128
+	 * iterations doing nothing at 0x44560, an empty `inc`/`jns` spin -- so
+	 * it is written where the object's source had it and not where the
+	 * object's code has it.
+	 *
+	 * THE REFERENCE CODE IS FORCED BACK TO 1 AFTERWARDS, for every phase
+	 * and whatever the variance said, and `ucode` is a byte the object
+	 * never masks: a reference code of 128 or more marks a cell in the
+	 * next phase's row.  docs/deviations.md D289.
+	 */
+	{
+		float lim = varThresh + varThresh;
+		unsigned char ref = ucode;
+
+		for (phase = 0; phase < V90ADID_PHASES; phase++) {
+			unsigned char code;
+
+			for (code = 0; code < V90ADID_CODES; code++) {
+				if (short_2800[phase] != 0)
+					continue;
+
+				if ((int)code > (int)maxCode)
+					byte_0d00[phase][code] = 0;
+				else if (__builtin_fabsf(float_9d48[phase][code])
+					 >= lim)
+					byte_0d00[phase][code] = 0;
+				else
+					byte_0d00[phase][code] = 1;
+			}
+
+			byte_0d00[phase][ref] = 1;
+		}
+	}
+
+	/*
+	 * And the read-back.  An unflagged phase takes the scan's answer and
+	 * then walks DOWNWARDS until it finds a usable code; a flagged one
+	 * takes the answer clamped to two below the argument, and never looks
+	 * at the mask at all.
+	 *
+	 * THE WALK HAS NO FLOOR.  It decrements a byte, so it wraps at 0 into
+	 * the previous 128 indices -- which for phases 0..4 is the next
+	 * phase's row and for phase 5 is the start of `float_1000`, both
+	 * inside the object -- and if all 256 of those bytes are zero it never
+	 * ends.  docs/deviations.md D289.
+	 */
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		unsigned char m = byte_a954;
+
+		if (short_2800[phase] == 0) {
+			maxUcode[phase] = m;
+
+			if (byte_0d00[phase][m] == 0) {
+				unsigned char d = m;
+
+				do {
+					d--;
+				} while (byte_0d00[phase][d] == 0);
+
+				maxUcode[phase] = d;
+			}
+		} else if ((int)m <= (int)maxCode - 2) {
+			maxUcode[phase] = m;
+		} else {
+			maxUcode[phase] = (unsigned char)(maxCode - 2);
+		}
+
+		edprintf("V90AutoDigitalImpDetector: phase %d maxUcode is %d\r\n",
+			 phase, maxUcode[phase]);
+	}
+}
+
+/* Copy the caller's six per-phase maximum codes in. */
+void
+V90AutoDigitalImpDetector::setMaxUcodeArray(unsigned char *from)
+{
+	short phase;
+
+	for (phase = 0; phase < V90ADID_PHASES; phase++)
+		maxUcode[phase] = from[phase];
+}
+
+/*
  * ==========================================================================
  * `studyUrefHandler` -- the per-sample entry point of the whole study, and the
  * last member of the class.
@@ -2620,385 +2895,114 @@ V90AutoDigitalImpDetector::findPadGain()
  */
 
 /*
- * The re-test that closes the second and third updates: a phase that was
- * flagged as carrying alternate RBS keeps the flag only if its alternate level
- * is STILL further from its plain level than `short_a9a6` allows.
- *
- * The object writes this block out twice, at 0x42867 and 0x42b79, with
- * `isAltRbs` inlined and its leading "is the phase flagged" test dropped --
- * the caller has just tested it.  Calling the method reinstates a test whose
- * answer is already known, which is why this is one function here and two
- * copies there.
+ * Copy the previous session's 128-entry linear mapping in.  One entry per
+ * code and none per phase: the loop index is compared against 0x7f, not
+ * against 6 * 128.
  */
-static void
-adid_recheckAltRbs(V90AutoDigitalImpDetector *o)
+void
+V90AutoDigitalImpDetector::setPrevSessionLinearMapping(short *from)
 {
-	short phase;
+	short ci;
 
-	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (o->short_2800[phase] == 0)
-			continue;
-
-		o->short_2800[phase] = (short)o->isAltRbs(phase, o->ucode,
-		    (float)o->linMappAlt[phase][o->ucode]);
-
-		if (o->short_2800[phase] == 0)
-			if (DSPLIB_DEBUG_ON())
-				dsplibs_debug_printf("V90AutoDigitalImpDetector"
-						     ": alternate rbs false "
-						     "detection on phase %d "
-						     "!!!\n", phase);
-	}
+	for (ci = 0; ci < V90ADID_CODES; ci++)
+		prevLinMapp[ci] = from[ci];
 }
 
 /*
- * `trn1Sigma`: the mean of the unsuspected phases' variances for the reference
- * code.  The object has this twice as well, at 0x42c10 and 0x42ea9, differing
- * only in the format string -- which is why the string is the parameter.
+ * Build the mapping the QC session starts from.
  *
- * THE FIELD AND THE PRINT GET TWO DIFFERENT ROUNDINGS OF ONE VALUE, and that
- * is the whole reason this is written as it is.  The sum is accumulated in
- * %st(0) and never spilled, so it and the quotient are at the x87's 64-bit
- * significand; `fsts 0xa964` rounds to a float on the way into the field, and
- * the print's `fstpl 0x4(%esp)` rounds the SAME register to a double on the way
- * into the argument slot.  A float widened to a double has twenty-nine zero
- * mantissa bits and the true value does not, so the two differ in exactly the
- * half `%d` goes on to read.  Keeping the value in one C variable across both
- * uses is what reproduces it; a `float` return or a `float` parameter would
- * force a 32-bit slot and rounds it once for both.  Finding 1437's situation
- * and finding 1443.
+ * EVERY PHASE THAT IS NOT FLAGGED AT +0x2800 GETS A MAPPING, from one of two
+ * places: its own accumulators if it has a verdict at +0x280c, and the
+ * PREVIOUS SESSION's mapping if it has not.  So +0x280c is read here as "this
+ * phase was studied" rather than as "this phase is suspected", which is the
+ * opposite of how `uniteLinMappInfoOfUnsuspectedPhases` reads it -- the object
+ * uses the same byte both ways and the two methods are not a pair.
  *
- * NOTHING BOUNDS THE COUNT.  Six flagged phases give 0.0f/0, a NaN, which is
- * then stored and printed -- the same shape as D282 and reachable the same way.
+ * The per-code work is `updateLinMappMeanAndVar` and the object inlines it:
+ * the same `1.0f / count`, the same `E[x^2] - E[x]^2`, the same `+ 0.5f` and
+ * the same truncating `fistp`.  Calling it is a factoring difference.
  *
- * THE FORMAT HAS NO CONVERSION FOR WHAT IT IS HANDED.  `%d` against a `float`
- * promoted to a `double` is four bytes of mantissa read as an integer.  That is
- * the object's call and it is reproduced; docs/deviations.md D291.
+ * `prevLinMapp` IS ONE ROW FOR ALL SIX PHASES.  The copy loop reads
+ * `prevLinMapp[code]` with no phase term at all, so every unstudied phase gets
+ * the same 128 entries -- which is what makes +0x0c00 128 shorts rather than
+ * 6 * 128 (finding 1361).
  */
-static void
-adid_updateTrn1Sigma(V90AutoDigitalImpDetector *o, const char *fmt)
+void
+V90AutoDigitalImpDetector::setQcLinearMapping()
 {
-	float sum = 0.0f;
-	short n = 0;
 	short phase;
+	short ci;
 
-	for (phase = 0; phase < V90ADID_PHASES; phase++)
-		if (o->short_2800[phase] == 0) {
-			sum += o->float_9d48[phase][o->ucode];
-			n = (short)(n + 1);
+	for (phase = 0; phase < V90ADID_PHASES; phase++) {
+		if (short_2800[phase] != 0)
+			continue;
+
+		if (byte_280c[phase] != 0) {
+			for (ci = 0; ci < V90ADID_CODES; ci++)
+				updateLinMappMeanAndVar(phase, ci);
+		} else {
+			for (ci = 0; ci < V90ADID_CODES; ci++)
+				linMapp[phase][ci] = prevLinMapp[ci];
 		}
+	}
 
-	sum = sum / n;
-	o->trn1Sigma = sum;
+	for (unSuspectedPhase = 0;
+	     byte_280c[unSuspectedPhase] != 0 && unSuspectedPhase <= 4;
+	     unSuspectedPhase++)
+		;
+
+	updateAltRbsPhaseInDil();
 
 	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(fmt, sum);
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------\r\n");
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("-----------------  Linear Mapping "
+				     "report --------------\r\n");
+
+	/*
+	 * 0x74, not 0x7f: this loop stops seventeen codes short of the row
+	 * where `porcessSecondStudy`'s prints the whole of it.
+	 */
+	for (ci = 0; ci <= 0x74; ci++)
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("linearMapping[%d]  :  %d  %d  "
+					     "%d  %d  %d  %d\r\n", ci,
+					     linMapp[0][ci], linMapp[1][ci],
+					     linMapp[2][ci], linMapp[3][ci],
+					     linMapp[4][ci], linMapp[5][ci]);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("------------------------------------"
+				     "------------------\r\n");
 }
 
-int
-V90AutoDigitalImpDetector::studyUrefHandler(float v, unsigned int phase)
+/*
+ * Rotate the reference code's column of `linMapp` so that it starts at the
+ * given phase.
+ *
+ * Six entries are read into a local array walking phases from `offset` and
+ * wrapping at 6, then written back to phases 0..5 in order.  The whole column
+ * is copied out before any of it is written back, which is what makes this a
+ * rotation rather than a shift that overwrites its own source.
+ *
+ * The wrap is `phase + 1 == 6 ? 0 : phase + 1` and not a modulus, so an
+ * `offset` outside 0..5 walks straight out of the table rather than folding
+ * back into it.  docs/deviations.md D258.
+ */
+void
+V90AutoDigitalImpDetector::adjustUinfoToPhaseOffset(short offset)
 {
-	/*
-	 * Formed once, before the dispatch, and truncating: the object's
-	 * `fists 0x46(%esp)` at 0x4217f sits between the control-word switch it
-	 * sets up for the whole function and the switch on the state.  The
-	 * float itself stays live -- only `isAltRbs` uses it, and only in three
-	 * of the seven arms.
-	 */
-	short sample = (short)v;
-	int ret = 1;
+	short saved[V90ADID_PHASES];
+	short phase = offset;
+	short i;
 
-	switch (int_a984) {
-	case 0: {
-		/*
-		 * The initial pattern.  Accumulate until +0xa98c samples have
-		 * arrived, then form each phase's variance for the reference
-		 * code, ask `getAltVarThresh` what counts as large, and flag
-		 * every phase over it as carrying alternate RBS.
-		 */
-		float var[V90ADID_PHASES];
-		float thresh;
-		short n = 0;
-		short p;
-
-		int_a988++;
-		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
-
-		if (int_a988 != int_a98c)
-			break;
-
-		/*
-		 * NO ZERO-COUNT GUARD, where every other mean in the class has
-		 * one: a phase with no samples divides 1.0f by 0 here and its
-		 * variance comes out a NaN or an infinity, which then goes
-		 * straight into `getAltVarThresh`.  docs/deviations.md D292.
-		 */
-		for (p = 0; p < V90ADID_PHASES; p++) {
-			float inv = 1.0f / uint_1c00[p][ucode];
-			float mean = float_1000[p][ucode] * inv;
-
-			var[p] = inv * float_9118[p][ucode] - mean * mean;
-		}
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
-					     "initail var (Trn1):  %d  %d  %d  "
-					     "%d  %d  %d\n", (int)var[0],
-					     (int)var[1], (int)var[2],
-					     (int)var[3], (int)var[4],
-					     (int)var[5]);
-
-		thresh = getAltVarThresh(var, float_a970);
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector:  "
-					     "initail AltRbsVarThresh (Trn1) = "
-					     "%d\n", (int)thresh);
-
-		/*
-		 * An ORDERED `>`: the object's `fcomps`/`jbe` skips on an
-		 * unordered compare, so a NaN variance -- which the missing
-		 * guard above can produce -- does NOT flag its phase.
-		 */
-		for (p = 0; p < V90ADID_PHASES; p++)
-			if (var[p] > thresh) {
-				n = (short)(n + 1);
-				short_2800[p] = 1;
-			}
-
-		/*
-		 * And the accumulators are emptied only if something was
-		 * flagged.  A study that finds no alternate RBS at all carries
-		 * this pass's samples forward into the next state.
-		 */
-		if (n > 0)
-			for (p = 0; p < V90ADID_PHASES; p++) {
-				float_1000[p][ucode] = 0.0f;
-				uint_1c00[p][ucode] = 0;
-				float_9118[p][ucode] = 0.0f;
-			}
-
-		edprintf("V90AutoDigitalImpDetector: Trn1 alternate rbs initial "
-			 "patern  %d%d%d%d%d%d\n", short_2800[0], short_2800[1],
-			 short_2800[2], short_2800[3], short_2800[4],
-			 short_2800[5]);
-
-		int_a988 = 0;
-		int_a984 = 1;
-		break;
+	for (i = 0; i < V90ADID_PHASES; i++) {
+		saved[i] = linMapp[phase][ucode];
+		phase = (short)(phase + 1) == V90ADID_PHASES
+			    ? 0 : (short)(phase + 1);
 	}
 
-	case 1:
-		/*
-		 * The first update.  Same accumulation, and the answer to the
-		 * caller is now "was this phase already flagged" -- the index
-		 * is the RAW `unsigned int` argument here where every other arm
-		 * narrows it to a `short` first, because those arms reach the
-		 * flag through `isAltRbs` and this one does not.
-		 */
-		int_a988++;
-		calculateLinearMeanAndVar(sample, ucodeLevel, phase);
-		ret = short_2800[phase] == 0 ? 1 : 0;
-
-		if (int_a988 != int_a990)
-			break;
-
-		updateUref();
-
-		/*
-		 * TWO LOCAL ARRAYS ARE FILLED HERE AND NEVER READ.  The object
-		 * runs two six-iteration loops copying `linMapp[i][ucode]` and
-		 * then `linMappAlt[i][ucode]` into one twelve-byte stack slot
-		 * at 0x50(%esp) -- GCC gave both the same slot because the
-		 * first is dead before the second starts -- and the print below
-		 * reads the tables directly.  All six stores to that slot in
-		 * the whole function are writes and there is not one read, so
-		 * they are omitted; cases 2 and 3 have the same pair and case 5
-		 * does not.  docs/deviations.md D293.
-		 */
-		edprintf("V90AutoDigitalImpDetector trn1 first update  :  %d  "
-			 "%d  %d  %d  %d  %d\n", linMapp[0][ucode],
-			 linMapp[1][ucode], linMapp[2][ucode], linMapp[3][ucode],
-			 linMapp[4][ucode], linMapp[5][ucode]);
-
-		int_a988 = 0;
-		int_a984 = 2;
-		break;
-
-	case 2:
-		/*
-		 * The second update, and the first that splits the sample two
-		 * ways: a sample too far from this phase's established level
-		 * goes to the ALTERNATE accumulators and the caller is told 0,
-		 * anything else goes to the plain ones.
-		 */
-		int_a988++;
-
-		if (isAltRbs((short)phase, ucode, v)) {
-			calculateLinearMeanAndVarAlt(sample, phase);
-			ret = 0;
-		} else {
-			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
-			ret = 1;
-		}
-
-		if (int_a988 != int_a994)
-			break;
-
-		updateUref();
-		updateUrefAlt();
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
-					     "second update  :  %d  %d  %d  %d "
-					     " %d  %d\n", linMapp[0][ucode],
-					     linMapp[1][ucode],
-					     linMapp[2][ucode],
-					     linMapp[3][ucode],
-					     linMapp[4][ucode],
-					     linMapp[5][ucode]);
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
-					     " first update  :  %d  %d  %d  %d "
-					     " %d  %d\n", linMappAlt[0][ucode],
-					     linMappAlt[1][ucode],
-					     linMappAlt[2][ucode],
-					     linMappAlt[3][ucode],
-					     linMappAlt[4][ucode],
-					     linMappAlt[5][ucode]);
-
-		adid_recheckAltRbs(this);
-
-		short_a948 = 1;
-		int_a988 = 0;
-		int_a984 = 4;
-		break;
-
-	case 3:
-		/*
-		 * The third update.  The same split as state 2 -- but the
-		 * caller is told 1 either way, so an alternate-RBS sample is
-		 * no longer withheld from whatever is upstream.
-		 */
-		int_a988++;
-
-		if (isAltRbs((short)phase, ucode, v))
-			calculateLinearMeanAndVarAlt(sample, phase);
-		else
-			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
-
-		if (int_a988 != int_a998)
-			break;
-
-		updateUref();
-		updateUrefAlt();
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
-					     "third update  :  %d  %d  %d  %d  "
-					     "%d  %d\n", linMapp[0][ucode],
-					     linMapp[1][ucode],
-					     linMapp[2][ucode],
-					     linMapp[3][ucode],
-					     linMapp[4][ucode],
-					     linMapp[5][ucode]);
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
-					     " second update  :  %d  %d  %d  %d"
-					     "  %d  %d\n", linMappAlt[0][ucode],
-					     linMappAlt[1][ucode],
-					     linMappAlt[2][ucode],
-					     linMappAlt[3][ucode],
-					     linMappAlt[4][ucode],
-					     linMappAlt[5][ucode]);
-
-		adid_recheckAltRbs(this);
-		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector first "
-					   "update : trn1Sigma = %d\n");
-
-		int_a988 = 0;
-		int_a984 = 5;
-		break;
-
-	case 4: {
-		/*
-		 * A pure delay, and the only arm that does not look at the
-		 * sample at all: +0xa99c calls apart, it hands the machine on
-		 * to state 3.  The count that fires it is the incremented one
-		 * and what is stored on the firing pass is zero, not it.
-		 */
-		int next = int_a988 + 1;
-
-		if (next == int_a99c) {
-			int_a988 = 0;
-			int_a984 = 3;
-		} else {
-			int_a988 = next;
-		}
-		break;
-	}
-
-	case 5:
-		/*
-		 * The final update.  State 3's arm again, against the same
-		 * duration at +0xa998 -- and the tail has no re-test of the
-		 * flags, because there is nothing left to correct them for.
-		 */
-		int_a988++;
-
-		if (isAltRbs((short)phase, ucode, v))
-			calculateLinearMeanAndVarAlt(sample, phase);
-		else
-			calculateLinearMeanAndVar(sample, ucodeLevel, phase);
-
-		if (int_a988 != int_a998)
-			break;
-
-		updateUref();
-		updateUrefAlt();
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 "
-					     "final update  :  %d  %d  %d  %d  "
-					     "%d  %d\n", linMapp[0][ucode],
-					     linMapp[1][ucode],
-					     linMapp[2][ucode],
-					     linMapp[3][ucode],
-					     linMapp[4][ucode],
-					     linMapp[5][ucode]);
-
-		if (DSPLIB_DEBUG_ON())
-			dsplibs_debug_printf("V90AutoDigitalImpDetector trn1 Alt"
-					     " final update  :  %d  %d  %d  %d "
-					     " %d  %d\n", linMappAlt[0][ucode],
-					     linMappAlt[1][ucode],
-					     linMappAlt[2][ucode],
-					     linMappAlt[3][ucode],
-					     linMappAlt[4][ucode],
-					     linMappAlt[5][ucode]);
-
-		adid_updateTrn1Sigma(this, "V90AutoDigitalImpDetector second "
-					   "update : trn1Sigma = %d\n");
-
-		int_a988 = 0;
-		int_a984 = 6;
-		ret = 2;
-		break;
-
-	case 6:
-		/* Terminal: the study is over and says so on every call. */
-		ret = 2;
-		break;
-
-	default:
-		/*
-		 * The dispatch is `cmp $0x6; ja`, an UNSIGNED compare, so a
-		 * negative state word lands here rather than below the table.
-		 */
-		break;
-	}
-
-	return ret;
+	for (i = 0; i < V90ADID_PHASES; i++)
+		linMapp[i][ucode] = saved[i];
 }

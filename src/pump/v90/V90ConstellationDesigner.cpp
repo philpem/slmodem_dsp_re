@@ -107,91 +107,52 @@ typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
 #endif
 
 /*
- * The constructor -- eight stores, no branch, no call, and it reads none of
- * the three pointers it is handed.  The statement order below is the object's
- * store order; only the two rate defaults are constants a reader could have
- * predicted, and the header says why 28000 lands at +0x50 and 56000 at +0x4c
- * rather than the other way round.
+ * The product of the six constellation sizes, as a float: six `fildll`s and
+ * five `fmulp`s, left to right, with every size converted as UNSIGNED.
  *
- * The 0x16 at +0x38 is written as `0x16` and not `22` because the object's
- * immediate is the measurement and its decimal reading is not: nothing here
- * knows what the field counts.
+ * IT IS A MACRO AND NOT A FUNCTION, and that is measured rather than a style
+ * choice.  `realK` and `maxK` each spell the product out in full in the
+ * object, and there is no helper symbol anywhere in the blob.  Written as a
+ * `static` function here it did NOT inline under GCC 3.4.2 -- the two members
+ * came out 82 and 106 bytes against the object's 178 and 204, with the
+ * missing ~96 sitting in a symbol the blob has no counterpart for, which is
+ * CLAUDE.md's inlining-boundary trap exactly.
  */
-V90ConstellationDesigner::V90ConstellationDesigner(V90Parameters *p,
-						   V90PreFilter *pf,
-						   V90ConstellationPower *cp)
-{
-	byte_08 = 0;
-	word_48 = 0;
-	byte_38 = 0x16;
-	power = cp;
-	params = p;
-	minRate = 28000;
-	maxRate = 56000;
-	preFilter = pf;
-}
+#define CONSTELLATION_PRODUCT(p) \
+	((float)(p)->constellationSize[0] * (p)->constellationSize[1] \
+	 * (p)->constellationSize[2] * (p)->constellationSize[3] \
+	 * (p)->constellationSize[4] * (p)->constellationSize[5])
 
 /*
- * The destructor -- one byte, `ret`.  See the header: the symbol exists only
- * because the original declared the destructor, so declaring and emptying it
- * here is the reconstruction, not a placeholder.
+ * The companding, five times over.  It is a macro for `CONSTELLATION_PRODUCT`'s
+ * reason and not for brevity: the object has FIVE pairs of
+ * `linear2alaw`/`linear2ulaw` call sites for five uses, so the original had it
+ * written out, and a `static` helper would not inline at these flags (2163).
+ * The member is re-read inside each arm because the object re-reads it there.
  */
-V90ConstellationDesigner::~V90ConstellationDesigner()
-{
-}
+#define FORCERATE_ENCODE(k, idx)					\
+	do {								\
+		if (word_2c != 0)					\
+			mappingParams->codecConstellation[k][idx] =	\
+			    (unsigned char)(linear2alaw(__builtin_abs(	\
+				(int)ucode[k][mappingParams		\
+				    ->constellation[k][idx]])) ^ 0xd5);	\
+		else							\
+			mappingParams->codecConstellation[k][idx] =	\
+			    (unsigned char)~linear2ulaw(__builtin_abs(	\
+				(int)ucode[k][mappingParams		\
+				    ->constellation[k][idx]]));		\
+	} while (0)
 
 /*
- * reset -- seven stores, no branch, no call, no diagnostic.
- *
- * The whole body is `movl $0x0,0x48(%eax)`, four `movw $0x0` and two copies,
- * so the only thing that is not obvious from the disassembly is the widths,
- * and those are the store encodings: 0x48 and 0x24 are `movl`, the four at
- * +0x0a..+0x10 are `movw` with a `66` prefix.
- *
- * The parameter read is the last thing the object does and the FIRST thing
- * the compiler scheduled -- `mov (%eax),%ecx` is the second instruction --
- * which is register pressure and not statement order (CLAUDE.md's "free, so
- * ignore it").  The order below is the store order.
+ * THE MASKED-RATE BANNER, SEVEN `edprintf`s OVER TWO STRINGS.  The rule is
+ * printed three times, then the banner, then three more -- seven calls and
+ * only two `.rodata.str1.4` addresses, 0xd34c six times and 0xd3b4 once, so
+ * the rule is one string and a macro is what keeps the six spellings
+ * identical.  Both are 98 characters plus CR LF, measured off the object.
  */
-void
-V90ConstellationDesigner::reset()
-{
-	word_48 = 0;
-	short_0a = 0;
-	short_0c = 0;
-	short_0e = 0;
-	short_10 = 0;
-	word_24 = params->unnamed_39c;
-}
-
-void
-V90ConstellationDesigner::setMinMaxRates(unsigned int min, unsigned int max)
-{
-	minRate = min;
-	maxRate = max;
-
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "V90ConstellationDesigner: set min rate to %d\r\n",
-		    minRate);
-	if (DSPLIB_DEBUG_ON())
-		dsplibs_debug_printf(
-		    "V90ConstellationDesigner: set max rate to %d\r\n",
-		    maxRate);
-}
-
-/*
- * ===========================================================================
- * The eleven small members
- * ===========================================================================
- *
- * NOTHING IN THE OBJECT CALLS ANY OF THEM.  A sweep of every `R_386_PC32`
- * relocation in `.text` finds no caller for any of the eleven, so each is
- * reached only through its own symbol and each is driven directly by
- * `test/unit/t_v90cdesign.cpp`.  That also means no call site types an
- * argument or a return for us: what is written below is what the bodies
- * force and nothing more.
- */
+#define RATE_MASK_BANNER_RULE						\
+	"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n"
 
 /*
  * log10() on the coprocessor, as the object computes it.
@@ -243,6 +204,53 @@ x87_fsqrt(long double x)
 }
 
 /*
+ * The constructor -- eight stores, no branch, no call, and it reads none of
+ * the three pointers it is handed.  The statement order below is the object's
+ * store order; only the two rate defaults are constants a reader could have
+ * predicted, and the header says why 28000 lands at +0x50 and 56000 at +0x4c
+ * rather than the other way round.
+ *
+ * The 0x16 at +0x38 is written as `0x16` and not `22` because the object's
+ * immediate is the measurement and its decimal reading is not: nothing here
+ * knows what the field counts.
+ */
+V90ConstellationDesigner::V90ConstellationDesigner(V90Parameters *p,
+						   V90PreFilter *pf,
+						   V90ConstellationPower *cp)
+{
+	byte_08 = 0;
+	word_48 = 0;
+	byte_38 = 0x16;
+	power = cp;
+	params = p;
+	minRate = 28000;
+	maxRate = 56000;
+	preFilter = pf;
+}
+
+/*
+ * The destructor -- one byte, `ret`.  See the header: the symbol exists only
+ * because the original declared the destructor, so declaring and emptying it
+ * here is the reconstruction, not a placeholder.
+ */
+V90ConstellationDesigner::~V90ConstellationDesigner()
+{
+}
+
+/*
+ * ===========================================================================
+ * The eleven small members
+ * ===========================================================================
+ *
+ * NOTHING IN THE OBJECT CALLS ANY OF THEM.  A sweep of every `R_386_PC32`
+ * relocation in `.text` finds no caller for any of the eleven, so each is
+ * reached only through its own symbol and each is driven directly by
+ * `test/unit/t_v90cdesign.cpp`.  That also means no call site types an
+ * argument or a return for us: what is written below is what the bodies
+ * force and nothing more.
+ */
+
+/*
  * pow6 -- the sixth power of a short, as a float.
  *
  * `filds` converts the argument ONCE and the value stays in a register, so
@@ -263,204 +271,6 @@ V90ConstellationDesigner::pow6(short x)
 	for (i = 1; i < 6; i++)
 		p *= x;
 	return p;
-}
-
-/*
- * calcK -- log2 of the product of six scaled constellation sizes.
- *
- * THE UNSIGNED ARGUMENT IS WHAT THE 64-BIT CONVERSION MEASURES: the object
- * pushes a zero high dword and uses `fildll`, which is the unsigned-to-float
- * idiom.  A signed `int` converts with a 32-bit `fildl` and no push at all.
- *
- * THE RECIPROCAL IS THE OBJECT'S, not a rewrite.  It divides ONE by
- * log10(2) and multiplies, where `maxK`, `realK` and `calcMtoMatchKtarget`
- * all divide directly -- and the two spellings are not the same in the last
- * place.  What shows it is the pair `fld1; fld %st(0)` at the top: the
- * compiler loaded the constant 1 once and duplicated it because the source
- * uses 1.0f twice, once to seed the accumulator and once as this numerator.
- */
-float
-V90ConstellationDesigner::calcK(unsigned int m, float *f)
-{
-	float k = 1.0f;
-	float l2;
-	short i;
-
-	for (i = 0; i < 6; i++)
-		k *= m * f[i];
-
-	l2 = (float)x87_log10((long double)2.0f);
-	return (float)x87_log10((long double)k) * (1.0f / l2);
-}
-
-/*
- * The product of the six constellation sizes, as a float: six `fildll`s and
- * five `fmulp`s, left to right, with every size converted as UNSIGNED.
- *
- * IT IS A MACRO AND NOT A FUNCTION, and that is measured rather than a style
- * choice.  `realK` and `maxK` each spell the product out in full in the
- * object, and there is no helper symbol anywhere in the blob.  Written as a
- * `static` function here it did NOT inline under GCC 3.4.2 -- the two members
- * came out 82 and 106 bytes against the object's 178 and 204, with the
- * missing ~96 sitting in a symbol the blob has no counterpart for, which is
- * CLAUDE.md's inlining-boundary trap exactly.
- */
-#define CONSTELLATION_PRODUCT(p) \
-	((float)(p)->constellationSize[0] * (p)->constellationSize[1] \
-	 * (p)->constellationSize[2] * (p)->constellationSize[3] \
-	 * (p)->constellationSize[4] * (p)->constellationSize[5])
-
-/*
- * realK -- the same K as a float, with a zero product answered by zero.
- *
- * The compare is `fcom`/`fnstsw`/`sahf` against a literal 0.0f, which is an
- * ORDERED compare and therefore what -mno-ieee-fp emits for `==` (finding
- * 1990).  Both logarithms reach memory as floats before the divide.
- */
-float
-V90ConstellationDesigner::realK(V90MappingParams *p)
-{
-	float prod = CONSTELLATION_PRODUCT(p);
-	float lp;
-	float l2;
-
-	if (prod == 0.0f)
-		return 0.0f;
-
-	lp = (float)x87_log10((long double)prod);
-	l2 = (float)x87_log10((long double)2.0f);
-	return lp / l2 + 1e-9f;
-}
-
-/*
- * maxK -- the same quantity truncated to an integer.
- *
- * THE 1e-6f IS THE OBJECT'S and it is not cosmetic: the truncation below
- * rounds toward zero (the control word is or'd with 0xc00 first), so a K that
- * lands a hair under an integer would truncate to the integer below without
- * it.
- *
- * THE CAST IS TO `unsigned int` AND THAT IS MEASURED.  The object converts
- * with `fistpll`, a 64-bit store, and then reads the low dword -- which is
- * how GCC converts a float to `unsigned int` on this target.  A cast to
- * `int` is a 32-bit `fistpl` and would have been one instruction shorter.
- */
-int
-V90ConstellationDesigner::maxK(V90MappingParams *p)
-{
-	float prod = CONSTELLATION_PRODUCT(p);
-	float l2;
-
-	if (prod == 0.0f)
-		return 0;
-
-	l2 = (float)x87_log10((long double)2.0f);
-	return (int)(unsigned int)(x87_log10((long double)prod) / l2 + 1e-6f);
-}
-
-/*
- * calcMtoMatchKtarget -- the constellation size that reaches a target K.
- *
- * 2^((kTarget - log2(m)) / 6), and every constant in it is measured:
- * 0.16666667f is 1/6 rounded to a float, 100.0f is the fractional part's
- * scale and 1.0069555f is 2^(1/100) -- so the power is split into an integer
- * part done by doubling and a hundredth part done by repeated multiplication.
- *
- * BOTH LOOPS ARE THE SOURCE'S, not the compiler's.  `1 << n` does not compile
- * to a doubling loop and neither does `powf`; the object counts down through
- * a guarded `do`/`while` in each case, which is what a `for` over an UNSIGNED
- * bound becomes.
- *
- * THE HAZARD, and it is recorded in docs/deviations.md rather than guarded
- * here: nothing bounds `n`.  A `kTarget` below log2(m) makes the truncation
- * negative, the doubling loop then runs about 2^32 times, and the conversion
- * back to a float reads the negative low dword as unsigned.  The object does
- * exactly that.
- */
-int
-V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
-{
-	float lm = (float)x87_log10((long double)m);
-	float l2 = (float)x87_log10((long double)2.0f);
-	long double x = ((long double)kTarget - lm / l2) * (1.0f / 6.0f);
-	unsigned int n = (unsigned int)x;
-	unsigned int frac = (unsigned int)((x - n) * 100.0f);
-	unsigned int shift = 1;
-	float p = 1.0f;
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-		shift += shift;
-	for (i = 0; i < frac; i++)
-		p *= 1.0069555f;
-
-	return (int)(unsigned int)((long double)p * shift);
-}
-
-/*
- * findMinValueIndex -- the constellation whose first byte is smallest.
- *
- * THE COMPARISONS ARE UNSIGNED AND THAT IS FORCED: `jae`/`jbe` throughout,
- * where an `int` holding a `movzbl`-loaded byte would have compared signed.
- * So the value and the length are both unsigned here.
- *
- * THE TIE-BREAK IS THE ASYMMETRY WORTH SEEING.  On an equal first byte the
- * function takes the constellation with the LARGER size, in the minimum and
- * the maximum alike -- the two bodies differ in exactly one condition code.
- */
-int
-V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
-{
-	unsigned int bestLen = p->constellationSize[0];
-	unsigned int bestVal = p->constellation[0][0];
-	int best = 0;
-	unsigned int i;
-
-	for (i = 1; i <= 5; i++) {
-		unsigned int v = p->constellation[i][0];
-
-		if (v < bestVal) {
-			bestLen = p->constellationSize[i];
-			bestVal = v;
-			best = i;
-		} else if (v == bestVal) {
-			unsigned int len = p->constellationSize[i];
-
-			if (len > bestLen) {
-				bestLen = len;
-				best = i;
-			}
-		}
-	}
-	return best;
-}
-
-/* The maximum, and see findMinValueIndex for the tie-break. */
-int
-V90ConstellationDesigner::findConstelMaxValueIndex(V90MappingParams *p)
-{
-	unsigned int bestLen = p->constellationSize[0];
-	unsigned int bestVal = p->constellation[0][0];
-	int best = 0;
-	unsigned int i;
-
-	for (i = 1; i <= 5; i++) {
-		unsigned int v = p->constellation[i][0];
-
-		if (v > bestVal) {
-			bestLen = p->constellationSize[i];
-			bestVal = v;
-			best = i;
-		} else if (v == bestVal) {
-			unsigned int len = p->constellationSize[i];
-
-			if (len > bestLen) {
-				bestLen = len;
-				best = i;
-			}
-		}
-	}
-	return best;
 }
 
 /*
@@ -506,49 +316,59 @@ V90ConstellationDesigner::spectralDesign(unsigned int rate,
 }
 
 /*
- * reconstructInitialConditions -- drop every entry of each constellation that
- * precedes the one the ucode names.
+ * maxK -- the same quantity truncated to an integer.
  *
- * THE SEARCH IS UNBOUNDED.  `while (constellation[k][d] != ucode[k]) d++;` is
- * a bare `jne` with nothing stopping it at the row's end or at the row's
- * length, so a ucode value that is not in the row walks off it.  The object
- * is written that way and it is reproduced; docs/deviations.md carries the
- * entry.
+ * THE 1e-6f IS THE OBJECT'S and it is not cosmetic: the truncation below
+ * rounds toward zero (the control word is or'd with 0xc00 first), so a K that
+ * lands a hair under an integer would truncate to the integer below without
+ * it.
  *
- * THE SHIFT IS DONE ONE PLACE AT A TIME, `d` times, rather than by `d`
- * places once -- so it is O(d * n) and it re-reads the length every round,
- * because the length is decremented between rounds.  The inner index is an
- * `unsigned char` (`movzbl %bl` every turn), which is why the length is
- * hoisted into an `unsigned int`: the compare is `jb`.
+ * THE CAST IS TO `unsigned int` AND THAT IS MEASURED.  The object converts
+ * with `fistpll`, a 64-bit store, and then reads the low dword -- which is
+ * how GCC converts a float to `unsigned int` on this target.  A cast to
+ * `int` is a 32-bit `fistpl` and would have been one instruction shorter.
  */
-void
-V90ConstellationDesigner::reconstructInitialConditions(V90MappingParams *p,
-						       unsigned char *ucode)
+int
+V90ConstellationDesigner::maxK(V90MappingParams *p)
 {
-	unsigned char k;
+	float prod = CONSTELLATION_PRODUCT(p);
+	float l2;
 
-	for (k = 0; k <= 5; k++) {
-		unsigned char target = ucode[k];
-		unsigned char drop = 0;
+	if (prod == 0.0f)
+		return 0;
 
-		while (p->constellation[k][drop] != target)
-			drop++;
-
-		while (drop != 0) {
-			unsigned int n = p->constellationSize[k];
-			unsigned char i;
-
-			for (i = 0; i < n; i++) {
-				p->constellation[k][i] =
-				    p->constellation[k][i + 1];
-				p->codecConstellation[k][i] =
-				    p->codecConstellation[k][i + 1];
-			}
-			p->constellationSize[k]--;
-			drop--;
-		}
-	}
+	l2 = (float)x87_log10((long double)2.0f);
+	return (int)(unsigned int)(x87_log10((long double)prod) / l2 + 1e-6f);
 }
+
+/*
+ * calcK -- log2 of the product of six scaled constellation sizes.
+ *
+ * THE UNSIGNED ARGUMENT IS WHAT THE 64-BIT CONVERSION MEASURES: the object
+ * pushes a zero high dword and uses `fildll`, which is the unsigned-to-float
+ * idiom.  A signed `int` converts with a 32-bit `fildl` and no push at all.
+ *
+ * THE RECIPROCAL IS THE OBJECT'S, not a rewrite.  It divides ONE by
+ * log10(2) and multiplies, where `maxK`, `realK` and `calcMtoMatchKtarget`
+ * all divide directly -- and the two spellings are not the same in the last
+ * place.  What shows it is the pair `fld1; fld %st(0)` at the top: the
+ * compiler loaded the constant 1 once and duplicated it because the source
+ * uses 1.0f twice, once to seed the accumulator and once as this numerator.
+ */
+float
+V90ConstellationDesigner::calcK(unsigned int m, float *f)
+{
+	float k = 1.0f;
+	float l2;
+	short i;
+
+	for (i = 0; i < 6; i++)
+		k *= m * f[i];
+
+	l2 = (float)x87_log10((long double)2.0f);
+	return (float)x87_log10((long double)k) * (1.0f / l2);
+}
+
 
 /*
  * constelBuild -- count the entries of one constellation row that clear a
@@ -596,74 +416,42 @@ V90ConstellationDesigner::constelBuild(short step, short which)
 }
 
 /*
- * findNextUcodeToAdd -- walk a constellation forward from its current length
- * until the spacing to the entry it started from is wide enough, and encode
- * the entry it stopped on.
+ * calcMtoMatchKtarget -- the constellation size that reaches a target K.
  *
- * TWO WALKS, AND THE BOUND IS DIFFERENT IN EACH.  Which one runs is decided
- * by `dmin[which] != 0`, and the difference is not only the test:
+ * 2^((kTarget - log2(m)) / 6), and every constant in it is measured:
+ * 0.16666667f is 1/6 rounded to a float, 100.0f is the fractional part's
+ * scale and 1.0069555f is 2^(1/100) -- so the power is split into an integer
+ * part done by doubling and a hundredth part done by repeated multiplication.
  *
- *   dmin non-zero   bound `i <= 0x71`, an UNSIGNED compare (`ja`/`jbe`), and
- *                   the entry must clear BOTH `ucode[start] + short_10` and
- *                   `alt[start] + short_10`
- *   dmin zero       bound `(signed char)i >= 0`, a SIGNED test (`js`/`jns`),
- *                   and one threshold, `ucode[start] + short_0a`
+ * BOTH LOOPS ARE THE SOURCE'S, not the compiler's.  `1 << n` does not compile
+ * to a doubling loop and neither does `powf`; the object counts down through
+ * a guarded `do`/`while` in each case, which is what a `for` over an UNSIGNED
+ * bound becomes.
  *
- * so the same byte is compared unsigned in one arm and signed in the other,
- * which is what the two spellings below say.
- *
- * `__builtin_abs`, NOT the ternary.  The object's `cltd; xor %edx,%eax; sub
- * %edx,%eax` is what GCC 3.4.2 emits for the builtin; `x < 0 ? -x : x`
- * compiles to a branch (findings 2116-2117).
- *
- * THE SIXTH ARGUMENT IS UNUSED.  Nothing in the body touches 0x48(%esp).  It
- * is in the mangling, so it is in the signature.
+ * THE HAZARD, and it is recorded in docs/deviations.md rather than guarded
+ * here: nothing bounds `n`.  A `kTarget` below log2(m) makes the truncation
+ * negative, the doubling loop then runs about 2^32 times, and the conversion
+ * back to a float reads the negative low dword as unsigned.  The object does
+ * exactly that.
  */
 int
-V90ConstellationDesigner::findNextUcodeToAdd(unsigned char *out,
-					     unsigned char which,
-					     short (*ucode)[128],
-					     short (*alt)[128],
-					     short *dmin,
-					     unsigned char (*unused)[128])
+V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
 {
-	V90MappingParams *mp = mappingParams;
-	unsigned char start = mp->constellation[which][0];
-	unsigned char i = start;
-	int sample;
+	float lm = (float)x87_log10((long double)m);
+	float l2 = (float)x87_log10((long double)2.0f);
+	long double x = ((long double)kTarget - lm / l2) * (1.0f / 6.0f);
+	unsigned int n = (unsigned int)x;
+	unsigned int frac = (unsigned int)((x - n) * 100.0f);
+	unsigned int shift = 1;
+	float p = 1.0f;
+	unsigned int i;
 
-	(void)unused;
+	for (i = 0; i < n; i++)
+		shift += shift;
+	for (i = 0; i < frac; i++)
+		p *= 1.0069555f;
 
-	if (dmin[which] != 0) {
-		int lo = ucode[which][start] + short_10;
-
-		while (i <= 0x71) {
-			short v = ucode[which][i];
-
-			if (v >= lo && v >= alt[which][start] + short_10)
-				break;
-			i++;
-		}
-	} else {
-		int lo = ucode[which][start] + short_0a;
-
-		while ((signed char)i >= 0) {
-			short v = ucode[which][i];
-
-			if (v >= lo)
-				break;
-			i++;
-		}
-	}
-
-	out[0] = i;
-	sample = __builtin_abs((int)ucode[which][i]);
-	if (word_2c != 0)
-		out[1] = (unsigned char)(linear2alaw(sample) ^ 0xd5);
-	else
-		out[1] = (unsigned char)~linear2ulaw(sample);
-
-	return (signed char)i >= 0;
+	return (int)(unsigned int)((long double)p * shift);
 }
 
 /*
@@ -1434,96 +1222,6 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		    "---------------------------------------------------------\r\n");
 }
 
-/*
- * ===========================================================================
- * setConstellationToNoise_forceRate -- build the six constellations for a
- * rate the configuration file names, rather than for a measured noise level.
- * ===========================================================================
- *
- * 4,434 bytes and the last of the fourteen -- the batch finding 2140
- * measured, not the whole class: `constellationDesign`,
- * `adjustConstellationsPower`, `adjustConstellationsToNewK` and `process`
- * remain, and all four reach `V90ConstellationPower`.  IT SHARES ALMOST NOTHING WITH ITS
- * SIBLING beyond the closing report, and that was read rather than assumed:
- * the only regions that are the same code are the maximum at 0x4a755..0x4a77d
- * against 0x492d0..0x492f2, the four banners and the eighteen-argument ucode
- * line at 0x4a7b2..0x4aaa2 against 0x4949b..0x49771, and the two `ret` paths.
- * Everything before that is its own function: there is no `word_48` switch, no
- * `dMin`, no `USE_RESTRICED_DMIN`, no 53k clamp, and the constellation build is
- * a downward walk with a feedback loop rather than a single forward pass.
- *
- * SEVEN ARGUMENTS AND THE SIXTH IS NEW.  `Ph` then `S3_` is the same
- * `unsigned char *` twice, and the second of them is an IN/OUT parameter:
- * 0x4a905 is `incb (%esi,%edx,1)` with %edx the phase number, so the object
- * WRITES the caller's array.  Nothing in the sibling does that.
- *
- * WHAT IT COMPUTES.  `params->RATE_FORCE` is turned into a bit count and then
- * into a required product of the six constellation sizes:
- *
- *     bits = (short)(RATE_FORCE * 0.00075 + 0.5)      the frame's bit count
- *     n    = bits + mappingParams->shaperSR - 6
- *     rateTarget = 2^n                                the required product
- *
- * and the six phases are not equal: `dmin[k]` non-zero means that phase
- * carries two more bits than the others and `halfPhase[k]` non-zero means one
- * more, so the search target is scaled by 4 or 2 per phase.  `size` is the
- * largest uniform constellation whose sixth power still fits, and each phase's
- * count comes back down by the same factor -- which is why the pow6 search
- * compares against `sizes * rateTarget` and the refinement that follows
- * compares against `rateTarget` alone.  Both stack positions were read twice;
- * 0x49b8e's `fcomp %st(3)` and 0x49bf7's are three deep on a five-entry stack.
- *
- * `pow6` IS INLINED TWICE AND IT IS SPELLED OUT TWICE HERE.  0x49a96 and
- * 0x49adc are both the member's body -- one `filds`, a duplicate, five
- * `fmul`s and a `short` counter compared with `cwtl` -- and the member is a
- * `FUNC GLOBAL` the blob also emits out of line.  Calling it would put a
- * `call` in the object where the blob has none, for finding 2163's reason.
- *
- * THE TWO INNER WALKS ARE NOT THE SIBLING'S TWO.  Both go DOWNWARD from
- * `topUcode[k]` to `params->unnamed_360`, and:
- *
- *   dmin[k] non-zero   tests BOTH tables against `phaseDmin[k] * 0.5f` and
- *                      both against the threshold, and does NOT look at the
- *                      flag table at all
- *   dmin[k] zero       tests the first table only, and DOES look at the flag
- *                      table
- *
- * The evidence for the asymmetry is a count: `0xfc(%esp)`, the seventh
- * argument, is referenced exactly ONCE in the whole 1,107-line disassembly, at
- * 0x4a3bd, which is inside the second walk.
- *
- * THE FEEDBACK LOOP.  Each phase re-walks until its count matches
- * `nofUcodeInPhase[k]` or 200 turns have gone by, moving `phaseDmin[k]` by
- * `(1 -/+ step)` and shrinking `step` by 0.9 each time the direction reverses.
- * `dir` is clamped to [-1, +1] and the shrink fires only when it passes
- * through zero.
- *
- * THE SIGN PRINTER AND THE DOUBLE 100.0 OF finding 2175 DO NOT APPEAR HERE:
- * this function's three threshold diagnostics print plain `%d`, not
- * `%c%d.%02d`.
- */
-
-/*
- * The companding, five times over.  It is a macro for `CONSTELLATION_PRODUCT`'s
- * reason and not for brevity: the object has FIVE pairs of
- * `linear2alaw`/`linear2ulaw` call sites for five uses, so the original had it
- * written out, and a `static` helper would not inline at these flags (2163).
- * The member is re-read inside each arm because the object re-reads it there.
- */
-#define FORCERATE_ENCODE(k, idx)					\
-	do {								\
-		if (word_2c != 0)					\
-			mappingParams->codecConstellation[k][idx] =	\
-			    (unsigned char)(linear2alaw(__builtin_abs(	\
-				(int)ucode[k][mappingParams		\
-				    ->constellation[k][idx]])) ^ 0xd5);	\
-		else							\
-			mappingParams->codecConstellation[k][idx] =	\
-			    (unsigned char)~linear2ulaw(__builtin_abs(	\
-				(int)ucode[k][mappingParams		\
-				    ->constellation[k][idx]]));		\
-	} while (0)
-
 void
 V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 						short (*ucode)[128],
@@ -1960,40 +1658,95 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 	}
 }
 
-#undef FORCERATE_ENCODE
+/*
+ * realK -- the same K as a float, with a zero product answered by zero.
+ *
+ * The compare is `fcom`/`fnstsw`/`sahf` against a literal 0.0f, which is an
+ * ORDERED compare and therefore what -mno-ieee-fp emits for `==` (finding
+ * 1990).  Both logarithms reach memory as floats before the divide.
+ */
+float
+V90ConstellationDesigner::realK(V90MappingParams *p)
+{
+	float prod = CONSTELLATION_PRODUCT(p);
+	float lp;
+	float l2;
+
+	if (prod == 0.0f)
+		return 0.0f;
+
+	lp = (float)x87_log10((long double)prod);
+	l2 = (float)x87_log10((long double)2.0f);
+	return lp / l2 + 1e-9f;
+}
 
 /*
- * ===========================================================================
- * The four that close the class
- * ===========================================================================
+ * reset -- seven stores, no branch, no call, no diagnostic.
  *
- * `adjustConstellationsPower`, `adjustConstellationsToNewK`,
- * `constellationDesign` and `process`, 8,869 bytes, all of which reach
- * `V90ConstellationPower` -- which is why they waited for it.
+ * The whole body is `movl $0x0,0x48(%eax)`, four `movw $0x0` and two copies,
+ * so the only thing that is not obvious from the disassembly is the widths,
+ * and those are the store encodings: 0x48 and 0x24 are `movl`, the four at
+ * +0x0a..+0x10 are `movw` with a `66` prefix.
  *
- * FIVE OF THE ELEVEN LEAVES ARE INLINED INTO THEM, and that is what most of
- * the bulk is: `maxK` appears nine times over the four, `realK` six,
- * `findMinValueIndex` and `findConstelMaxValueIndex` once each and
- * `reconstructInitialConditions` once.  Each is written below as the member
- * call it is; whether GCC inlines it is a codegen question and not a
- * behavioural one, and the differential test is over behaviour.  The evidence
- * that they ARE those members and not lookalikes is the constant each block
- * ends on -- `maxK` adds 1e-6f and truncates through `fistpll`, `realK` adds
- * 1e-9f and stays a float -- and, for the two index searches and the
- * reconstruction, an instruction-for-instruction match with the bodies above.
- *
- * THE FIXED-POINT PRINTER APPEARS SEVEN MORE TIMES.  Its shape and the
- * argument for `!(0.0f >= v)` rather than `(0.0f < v)` are in the comment
- * above `setConstellationToNoise`'s four; only the scale changes -- 1000.0f
- * for a sqrt, 10.0f for a dBm0 tenth, 100000.0f for a K.
- *
- * AND THE SIGN OF A SQRT IS TAKEN FROM ITS ARGUMENT.  All three "sqrt(power)"
- * diagnostics compare 0.0f against the POWER (`fcomps` of the stored float)
- * and take the magnitude and the fraction from its root.  That is what the
- * object does at 0x4ae74, 0x4b290 and 0x4c1b8, and it is reproduced rather
- * than tidied: the two agree for every non-negative power and the object's
- * choice is the measurement.
+ * The parameter read is the last thing the object does and the FIRST thing
+ * the compiler scheduled -- `mov (%eax),%ecx` is the second instruction --
+ * which is register pressure and not statement order (CLAUDE.md's "free, so
+ * ignore it").  The order below is the store order.
  */
+void
+V90ConstellationDesigner::reset()
+{
+	word_48 = 0;
+	short_0a = 0;
+	short_0c = 0;
+	short_0e = 0;
+	short_10 = 0;
+	word_24 = params->unnamed_39c;
+}
+
+void
+V90ConstellationDesigner::setMinMaxRates(unsigned int min, unsigned int max)
+{
+	minRate = min;
+	maxRate = max;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner: set min rate to %d\r\n",
+		    minRate);
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V90ConstellationDesigner: set max rate to %d\r\n",
+		    maxRate);
+}
+
+/* The maximum, and see findMinValueIndex for the tie-break. */
+int
+V90ConstellationDesigner::findConstelMaxValueIndex(V90MappingParams *p)
+{
+	unsigned int bestLen = p->constellationSize[0];
+	unsigned int bestVal = p->constellation[0][0];
+	int best = 0;
+	unsigned int i;
+
+	for (i = 1; i <= 5; i++) {
+		unsigned int v = p->constellation[i][0];
+
+		if (v > bestVal) {
+			bestLen = p->constellationSize[i];
+			bestVal = v;
+			best = i;
+		} else if (v == bestVal) {
+			unsigned int len = p->constellationSize[i];
+
+			if (len > bestLen) {
+				bestLen = len;
+				best = i;
+			}
+		}
+	}
+	return best;
+}
 
 /*
  * adjustConstellationsPower -- drop constellation points until the frame's
@@ -2195,6 +1948,265 @@ V90ConstellationDesigner::adjustConstellationsPower()
 		 __builtin_abs((int)((dBm0 - (float)(int)dBm0) * 10.0f)));
 
 	edprintf("--------------------------------------\r\n");
+}
+
+/*
+ * findMinValueIndex -- the constellation whose first byte is smallest.
+ *
+ * THE COMPARISONS ARE UNSIGNED AND THAT IS FORCED: `jae`/`jbe` throughout,
+ * where an `int` holding a `movzbl`-loaded byte would have compared signed.
+ * So the value and the length are both unsigned here.
+ *
+ * THE TIE-BREAK IS THE ASYMMETRY WORTH SEEING.  On an equal first byte the
+ * function takes the constellation with the LARGER size, in the minimum and
+ * the maximum alike -- the two bodies differ in exactly one condition code.
+ */
+int
+V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
+{
+	unsigned int bestLen = p->constellationSize[0];
+	unsigned int bestVal = p->constellation[0][0];
+	int best = 0;
+	unsigned int i;
+
+	for (i = 1; i <= 5; i++) {
+		unsigned int v = p->constellation[i][0];
+
+		if (v < bestVal) {
+			bestLen = p->constellationSize[i];
+			bestVal = v;
+			best = i;
+		} else if (v == bestVal) {
+			unsigned int len = p->constellationSize[i];
+
+			if (len > bestLen) {
+				bestLen = len;
+				best = i;
+			}
+		}
+	}
+	return best;
+}
+
+/*
+ * ===========================================================================
+ * setConstellationToNoise_forceRate -- build the six constellations for a
+ * rate the configuration file names, rather than for a measured noise level.
+ * ===========================================================================
+ *
+ * 4,434 bytes and the last of the fourteen -- the batch finding 2140
+ * measured, not the whole class: `constellationDesign`,
+ * `adjustConstellationsPower`, `adjustConstellationsToNewK` and `process`
+ * remain, and all four reach `V90ConstellationPower`.  IT SHARES ALMOST NOTHING WITH ITS
+ * SIBLING beyond the closing report, and that was read rather than assumed:
+ * the only regions that are the same code are the maximum at 0x4a755..0x4a77d
+ * against 0x492d0..0x492f2, the four banners and the eighteen-argument ucode
+ * line at 0x4a7b2..0x4aaa2 against 0x4949b..0x49771, and the two `ret` paths.
+ * Everything before that is its own function: there is no `word_48` switch, no
+ * `dMin`, no `USE_RESTRICED_DMIN`, no 53k clamp, and the constellation build is
+ * a downward walk with a feedback loop rather than a single forward pass.
+ *
+ * SEVEN ARGUMENTS AND THE SIXTH IS NEW.  `Ph` then `S3_` is the same
+ * `unsigned char *` twice, and the second of them is an IN/OUT parameter:
+ * 0x4a905 is `incb (%esi,%edx,1)` with %edx the phase number, so the object
+ * WRITES the caller's array.  Nothing in the sibling does that.
+ *
+ * WHAT IT COMPUTES.  `params->RATE_FORCE` is turned into a bit count and then
+ * into a required product of the six constellation sizes:
+ *
+ *     bits = (short)(RATE_FORCE * 0.00075 + 0.5)      the frame's bit count
+ *     n    = bits + mappingParams->shaperSR - 6
+ *     rateTarget = 2^n                                the required product
+ *
+ * and the six phases are not equal: `dmin[k]` non-zero means that phase
+ * carries two more bits than the others and `halfPhase[k]` non-zero means one
+ * more, so the search target is scaled by 4 or 2 per phase.  `size` is the
+ * largest uniform constellation whose sixth power still fits, and each phase's
+ * count comes back down by the same factor -- which is why the pow6 search
+ * compares against `sizes * rateTarget` and the refinement that follows
+ * compares against `rateTarget` alone.  Both stack positions were read twice;
+ * 0x49b8e's `fcomp %st(3)` and 0x49bf7's are three deep on a five-entry stack.
+ *
+ * `pow6` IS INLINED TWICE AND IT IS SPELLED OUT TWICE HERE.  0x49a96 and
+ * 0x49adc are both the member's body -- one `filds`, a duplicate, five
+ * `fmul`s and a `short` counter compared with `cwtl` -- and the member is a
+ * `FUNC GLOBAL` the blob also emits out of line.  Calling it would put a
+ * `call` in the object where the blob has none, for finding 2163's reason.
+ *
+ * THE TWO INNER WALKS ARE NOT THE SIBLING'S TWO.  Both go DOWNWARD from
+ * `topUcode[k]` to `params->unnamed_360`, and:
+ *
+ *   dmin[k] non-zero   tests BOTH tables against `phaseDmin[k] * 0.5f` and
+ *                      both against the threshold, and does NOT look at the
+ *                      flag table at all
+ *   dmin[k] zero       tests the first table only, and DOES look at the flag
+ *                      table
+ *
+ * The evidence for the asymmetry is a count: `0xfc(%esp)`, the seventh
+ * argument, is referenced exactly ONCE in the whole 1,107-line disassembly, at
+ * 0x4a3bd, which is inside the second walk.
+ *
+ * THE FEEDBACK LOOP.  Each phase re-walks until its count matches
+ * `nofUcodeInPhase[k]` or 200 turns have gone by, moving `phaseDmin[k]` by
+ * `(1 -/+ step)` and shrinking `step` by 0.9 each time the direction reverses.
+ * `dir` is clamped to [-1, +1] and the shrink fires only when it passes
+ * through zero.
+ *
+ * THE SIGN PRINTER AND THE DOUBLE 100.0 OF finding 2175 DO NOT APPEAR HERE:
+ * this function's three threshold diagnostics print plain `%d`, not
+ * `%c%d.%02d`.
+ */
+
+
+/*
+ * findNextUcodeToAdd -- walk a constellation forward from its current length
+ * until the spacing to the entry it started from is wide enough, and encode
+ * the entry it stopped on.
+ *
+ * TWO WALKS, AND THE BOUND IS DIFFERENT IN EACH.  Which one runs is decided
+ * by `dmin[which] != 0`, and the difference is not only the test:
+ *
+ *   dmin non-zero   bound `i <= 0x71`, an UNSIGNED compare (`ja`/`jbe`), and
+ *                   the entry must clear BOTH `ucode[start] + short_10` and
+ *                   `alt[start] + short_10`
+ *   dmin zero       bound `(signed char)i >= 0`, a SIGNED test (`js`/`jns`),
+ *                   and one threshold, `ucode[start] + short_0a`
+ *
+ * so the same byte is compared unsigned in one arm and signed in the other,
+ * which is what the two spellings below say.
+ *
+ * `__builtin_abs`, NOT the ternary.  The object's `cltd; xor %edx,%eax; sub
+ * %edx,%eax` is what GCC 3.4.2 emits for the builtin; `x < 0 ? -x : x`
+ * compiles to a branch (findings 2116-2117).
+ *
+ * THE SIXTH ARGUMENT IS UNUSED.  Nothing in the body touches 0x48(%esp).  It
+ * is in the mangling, so it is in the signature.
+ */
+int
+V90ConstellationDesigner::findNextUcodeToAdd(unsigned char *out,
+					     unsigned char which,
+					     short (*ucode)[128],
+					     short (*alt)[128],
+					     short *dmin,
+					     unsigned char (*unused)[128])
+{
+	V90MappingParams *mp = mappingParams;
+	unsigned char start = mp->constellation[which][0];
+	unsigned char i = start;
+	int sample;
+
+	(void)unused;
+
+	if (dmin[which] != 0) {
+		int lo = ucode[which][start] + short_10;
+
+		while (i <= 0x71) {
+			short v = ucode[which][i];
+
+			if (v >= lo && v >= alt[which][start] + short_10)
+				break;
+			i++;
+		}
+	} else {
+		int lo = ucode[which][start] + short_0a;
+
+		while ((signed char)i >= 0) {
+			short v = ucode[which][i];
+
+			if (v >= lo)
+				break;
+			i++;
+		}
+	}
+
+	out[0] = i;
+	sample = __builtin_abs((int)ucode[which][i]);
+	if (word_2c != 0)
+		out[1] = (unsigned char)(linear2alaw(sample) ^ 0xd5);
+	else
+		out[1] = (unsigned char)~linear2ulaw(sample);
+
+	return (signed char)i >= 0;
+}
+
+#undef FORCERATE_ENCODE
+
+/*
+ * ===========================================================================
+ * The four that close the class
+ * ===========================================================================
+ *
+ * `adjustConstellationsPower`, `adjustConstellationsToNewK`,
+ * `constellationDesign` and `process`, 8,869 bytes, all of which reach
+ * `V90ConstellationPower` -- which is why they waited for it.
+ *
+ * FIVE OF THE ELEVEN LEAVES ARE INLINED INTO THEM, and that is what most of
+ * the bulk is: `maxK` appears nine times over the four, `realK` six,
+ * `findMinValueIndex` and `findConstelMaxValueIndex` once each and
+ * `reconstructInitialConditions` once.  Each is written below as the member
+ * call it is; whether GCC inlines it is a codegen question and not a
+ * behavioural one, and the differential test is over behaviour.  The evidence
+ * that they ARE those members and not lookalikes is the constant each block
+ * ends on -- `maxK` adds 1e-6f and truncates through `fistpll`, `realK` adds
+ * 1e-9f and stays a float -- and, for the two index searches and the
+ * reconstruction, an instruction-for-instruction match with the bodies above.
+ *
+ * THE FIXED-POINT PRINTER APPEARS SEVEN MORE TIMES.  Its shape and the
+ * argument for `!(0.0f >= v)` rather than `(0.0f < v)` are in the comment
+ * above `setConstellationToNoise`'s four; only the scale changes -- 1000.0f
+ * for a sqrt, 10.0f for a dBm0 tenth, 100000.0f for a K.
+ *
+ * AND THE SIGN OF A SQRT IS TAKEN FROM ITS ARGUMENT.  All three "sqrt(power)"
+ * diagnostics compare 0.0f against the POWER (`fcomps` of the stored float)
+ * and take the magnitude and the fraction from its root.  That is what the
+ * object does at 0x4ae74, 0x4b290 and 0x4c1b8, and it is reproduced rather
+ * than tidied: the two agree for every non-negative power and the object's
+ * choice is the measurement.
+ */
+
+/*
+ * reconstructInitialConditions -- drop every entry of each constellation that
+ * precedes the one the ucode names.
+ *
+ * THE SEARCH IS UNBOUNDED.  `while (constellation[k][d] != ucode[k]) d++;` is
+ * a bare `jne` with nothing stopping it at the row's end or at the row's
+ * length, so a ucode value that is not in the row walks off it.  The object
+ * is written that way and it is reproduced; docs/deviations.md carries the
+ * entry.
+ *
+ * THE SHIFT IS DONE ONE PLACE AT A TIME, `d` times, rather than by `d`
+ * places once -- so it is O(d * n) and it re-reads the length every round,
+ * because the length is decremented between rounds.  The inner index is an
+ * `unsigned char` (`movzbl %bl` every turn), which is why the length is
+ * hoisted into an `unsigned int`: the compare is `jb`.
+ */
+void
+V90ConstellationDesigner::reconstructInitialConditions(V90MappingParams *p,
+						       unsigned char *ucode)
+{
+	unsigned char k;
+
+	for (k = 0; k <= 5; k++) {
+		unsigned char target = ucode[k];
+		unsigned char drop = 0;
+
+		while (p->constellation[k][drop] != target)
+			drop++;
+
+		while (drop != 0) {
+			unsigned int n = p->constellationSize[k];
+			unsigned char i;
+
+			for (i = 0; i < n; i++) {
+				p->constellation[k][i] =
+				    p->constellation[k][i + 1];
+				p->codecConstellation[k][i] =
+				    p->codecConstellation[k][i + 1];
+			}
+			p->constellationSize[k]--;
+			drop--;
+		}
+	}
 }
 
 /*
@@ -2545,15 +2557,6 @@ V90ConstellationDesigner::constellationDesign(float noiseEnergy,
 		adjustConstellationsToNewK(ucode, alt, dmin, mark);
 }
 
-/*
- * THE MASKED-RATE BANNER, SEVEN `edprintf`s OVER TWO STRINGS.  The rule is
- * printed three times, then the banner, then three more -- seven calls and
- * only two `.rodata.str1.4` addresses, 0xd34c six times and 0xd3b4 once, so
- * the rule is one string and a macro is what keeps the six spellings
- * identical.  Both are 98 characters plus CR LF, measured off the object.
- */
-#define RATE_MASK_BANNER_RULE						\
-	"!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\r\n"
 
 /*
  * process -- the class's entry point, and the only member of it with a caller

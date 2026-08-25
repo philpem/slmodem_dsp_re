@@ -232,6 +232,18 @@ typedef char v90equ_size[(sizeof(V90Equalizer) == 0x150) ? 1 : -1];
 
 
 /*
+ * One high-error diagnostic value, as the three printf arguments the object
+ * builds by hand.  The scale here is a FLOAT `1000.0f`, loaded once with
+ * `flds` and reused for both values -- not `edprint_stat`'s `long double`.
+ * The magnitude is the `long double` finding 5701 identified: the same value
+ * the comparison above the print tests, computed once.
+ */
+#define V90EQU_ERRSIGN(v)	(!((v) <= 0.0f) ? '+' : '-')
+#define V90EQU_ERRFRAC(v) \
+	__builtin_abs((int)(((long double)(v) - (long double)(int)(v)) \
+			    * 1000.0f))
+
+/*
  * log10() on the coprocessor, as the object computes it.
  *
  * `fldlg2` pushes log10(2) at the register's full 64-bit mantissa and
@@ -293,6 +305,356 @@ edprint_stat(const char *fmt, float v, long double scale)
 				      - (long double)(int)v) * scale)));
 }
 
+
+/*
+ * The object's clamp, written as the object's predicates and not as the two
+ * comparisons a reader would reach for.
+ *
+ * `fcom / fnstsw / sahf / jae` takes the NOT-LESS branch, and an unordered
+ * compare sets C0, C2 and C3 -- so a NaN is "less" for this jump and comes
+ * out of here as 0.0f, where `x < 0.0f ? 0.0f : ...` would have kept it.
+ * The parameter is read out of a configuration block, so a NaN is not
+ * obviously unreachable, and V90PreFilter.cpp's `setParamEia6` has the same
+ * note for the same reason.
+ */
+static inline float
+clamp_fade_ratio(float x)
+{
+	if (!(x >= 0.0f))
+		return 0.0f;
+	if (!(x <= 0.5f))
+		return 0.5f;
+	return x;
+}
+
+
+/*
+ * How many SHORTS have to be stepped over to reach an eight-byte boundary.
+ *
+ *      8d 51 07    lea 0x7(%ecx),%edx
+ *      83 e2 f8    and $0xfffffff8,%edx
+ *      29 ca       sub %ecx,%edx
+ *      d1 ea       shr $1,%edx
+ *
+ * -- transcribed rather than written as `(-(unsigned)p) & 7`, which is the
+ * same number by a different route.  The shift is LOGICAL and the difference
+ * is at most seven, so the divide is exact and the count is 0, 1, 2 or 3.
+ */
+static inline unsigned int
+mmx_skew(const short *p)
+{
+	unsigned long a = (unsigned long)p;
+
+	return (unsigned int)((((a + 7) & ~7ul) - a) >> 1);
+}
+
+
+/*
+ * THE FIXED-POINT COEFFICIENT IS THIRTY-TWO BITS SPLIT ACROSS TWO ARRAYS.
+ * Every conversion in this class reads it as
+ *
+ *      0f bf 04 4a     movswl (%edx,%ecx,2),%eax    ; the high half, SIGNED
+ *      0f b7 14 4f     movzwl (%edi,%ecx,2),%edx    ; the low half, UNSIGNED
+ *      c1 e0 10        shl    $0x10,%eax
+ *      09 d0           or     %edx,%eax
+ *
+ * -- the high sixteen bits in `*MmxCoefsAligned` and the low sixteen in the
+ * array beside it -- and writes it back with the halves in the same places
+ * (`mov %ax,(%edx); sar $0x10,%eax; mov %ax,(%ecx)`).  The two extensions
+ * differ and both are FORCED: the high half's sign is the value's sign and
+ * the low half must not sign-extend into it, so `movswl`/`movzwl` is the one
+ * pairing that reconstructs the word.  That is why the low half is read
+ * through an `unsigned short` cast below and the high half is not.
+ *
+ * The pair is always the ALIGNED pointers, never the raw ones -- which is the
+ * opposite of what `reset`, `zeroLinearEquCoefs` and `zeroDfeCoefs` clear.
+ */
+static inline int
+mmx_coef_get(const short *hi, const short *lo, unsigned int i)
+{
+	return ((int)hi[i] << 16) | (unsigned short)lo[i];
+}
+
+/*
+ * The conversion factor's diagnostic: `edprint_stat`'s hand-built decimal with
+ * the sign and the digits taken from DIFFERENT expressions.  The object
+ * reloads the member for the comparison --
+ *
+ *      3757f:  d9 ee           fldz
+ *      3758e:  d8 9d c4 ..     fcomps 0xc4(%ebp)
+ *
+ * -- while the three printed digits come from that member scaled by 1e-8,
+ * which is what the "e8" on the end of the format string means.  The scale is
+ * a DOUBLE (`fldl` out of .rodata.cst8) and the fractional multiplier is a
+ * float (`flds` out of .rodata.cst4); 1e-8 is not exactly representable in
+ * either, so the two are different numbers and the printed digits show it.
+ */
+static inline void
+edprint_scaled_stat(const char *fmt, float v, long double scaled,
+		    long double scale)
+{
+	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl(scaled),
+		 __builtin_abs((int)((scaled - (long double)(int)scaled)
+				     * scale)));
+}
+
+/*
+ * The same decimal applied to an INTEGER, which is why its fractional digits
+ * are a compile-time zero: `v - (int)v` is integer arithmetic and folds before
+ * it ever reaches the coprocessor, so the whole third argument becomes `xor
+ * %esi,%esi` and the object carries no 1e3 constant at all.  THE MISSING
+ * CONSTANT IS THE EVIDENCE -- .rodata.cst4 holds every other scale this
+ * function uses (1e5, 1e4, 2**30, 2**24, 2**20, 2**-16, 2.0) and nothing near
+ * a thousand -- so the argument was an int and not a float.  Finding 2146.
+ *
+ * The sign still costs a comparison on the coprocessor, because it is against
+ * a float zero and the usual arithmetic conversions promote:
+ *
+ *      375dc:  d9 ee           fldz
+ *      375de:  db 85 c8 ..     fildl 0xc8(%ebp)
+ *      375ed:  de d9           fcompp
+ */
+static inline void
+edprint_int_stat(const char *fmt, int v)
+{
+	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl((long double)v),
+		 __builtin_abs((int)((v - (int)v) * 1.0e3f)));
+}
+
+/*
+ * One filter's coefficients summarised: the largest and smallest magnitude,
+ * the signed sum and the sum of magnitudes.
+ *
+ * `enterPhase4` runs this twice, once over `linearEquCoefs` and once over
+ * `dfeCoefs`, and the two are instruction for instruction the same with the
+ * length, the array and the two destination slots moved -- the relationship
+ * the two step-size setters have.  Written once here; the object has it
+ * twice, inline.
+ *
+ * THE FIRST COEFFICIENT IS READ UNCONDITIONALLY AND IS NOT IN EITHER SUM.
+ * `flds (%edx)` happens before the `cmp $1,%eax; jbe` that guards the loop,
+ * so a zero-length filter reads `coefs[0]` anyway; and the loop runs from 1,
+ * so `coefs[0]` seeds the maximum and the minimum and contributes to neither
+ * total.  Both are the object's; docs/deviations.md D325.
+ *
+ * THE MAXIMUM AND MINIMUM ARE OF THE MAGNITUDE and the sums are not: `fabs`
+ * is applied before both comparisons and before the second accumulator, and
+ * the first accumulator takes the coefficient as it stands.
+ */
+static void
+summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
+		float *minOut, float *sumOut, float *absSumOut)
+{
+	float mx, mn, sum, absSum;
+	unsigned int i;
+
+	sum = 0;
+	absSum = 0;
+
+	mx = mn = __builtin_fabsf(coefs[0]);
+	*maxOut = mx;
+	*minOut = mn;
+
+	for (i = 1; i < len; i++) {
+		float a = __builtin_fabsf(coefs[i]);
+
+		if (a > mx) {
+			mx = a;
+			*maxOut = mx;
+		}
+		if (a < mn) {
+			mn = a;
+			*minOut = mn;
+		}
+		sum += coefs[i];
+		absSum += __builtin_fabsf(coefs[i]);
+	}
+
+	*sumOut = sum;
+	*absSumOut = absSum;
+}
+
+/* ================================================================ lifecycle */
+
+/*
+ * The float dot product, and its shape is forced.  Four taps per pass into
+ * TWO accumulators -- even indices into the one the object keeps on top of
+ * the x87 stack, odd indices AND the whole scalar tail into %st(1), combined
+ * by the single `faddp %st,%st(1)` at 0x39177.  The count runs DOWN and the
+ * test is `cmp $0x3,%ecx; ja`, which is UNSIGNED, where the fixed-point twin
+ * below counts up with a signed `jl`.
+ *
+ * Factored out because both filters use it and the object has it inlined at
+ * both sites.  It must stay `inline`: a helper with no blob symbol has its
+ * bytes counted against neither side, so `compare.py`'s per-symbol view of
+ * `process` would lose them (finding 605).
+ */
+static inline float
+fdot(const float *x, const float *h, unsigned int n)
+{
+	float a0 = 0.0f;
+	float a1 = 0.0f;
+
+	while (n > 3) {
+		a0 += x[0] * h[0];
+		a1 += x[1] * h[1];
+		a0 += x[2] * h[2];
+		a1 += x[3] * h[3];
+		x += 4;
+		h += 4;
+		n -= 4;
+	}
+	while (n != 0) {
+		a1 += *x++ * *h++;
+		n--;
+	}
+	return a1 + a0;
+}
+
+/*
+ * The fixed-point dot product.  One accumulator, counting UP against a
+ * SIGNED bound -- `jl` at 0x39035 and 0x39088 -- so the index and the limit
+ * are `int` whatever the length fields are declared as.
+ */
+static inline int
+mmxDot(const short *h, const short *x, int n)
+{
+	int s = 0;
+	int i;
+
+	for (i = 0; i < n; i++)
+		s += (int)h[i] * (int)x[i];
+	return s;
+}
+
+/*
+ * `sar %cl` masks its count to five bits; C leaves `>> n` undefined outside
+ * 0..31.  Both fixed-point step sizes are a truncated logarithm of two fields
+ * the caller controls and CAN come out negative, so the mask is written out
+ * rather than left to chance -- the same argument `one_shifted_by` above
+ * makes for the left shift.
+ *
+ * IT IS NOT FREE, AND THE COMMENT HERE USED TO CLAIM IT WAS.  The object
+ * loads the count with `movzbl 0x64(%esp),%ecx` and shifts; ours emits
+ * `and $0x1f,%ecx` first, at both LMS sites.  Two instructions the object
+ * does not have, in exchange for defined behaviour on a count the object
+ * itself only survives because the hardware masks -- D851, and D561's
+ * disposition.  Measured, not assumed: the assertion that GCC folds the mask
+ * away was wrong and `objdump` says so.
+ */
+static inline int
+sar_by(int v, int n)
+{
+	return v >> (n & 31);
+}
+
+/* ============================================================= coefficients */
+
+/*
+ * `fsqrt`, as the object computes it: the block's mean square arrives on the
+ * x87 stack from a `fildll`/`FDIVRP` pair and leaves it through a single
+ * `d9 fa`, with no round trip through memory and no library call.  GCC will
+ * not emit that from `sqrt()` at this tree's flags -- it emits a call
+ * returning a double, and the result is then rounded to float, so the
+ * intermediate loses the extended precision the object keeps.  The same
+ * argument, and the same remedy, as `p4d_x87_fsqrt` in
+ * src/pump/v90/V90Phase4Demodulator.cpp and `x87_log10` above.
+ */
+/*
+ * NARROW TO `float`, AND MAKE THE COMPILER DO IT.  The object rounds both
+ * filter outputs to `float` before it subtracts them -- `fstps 0xb0(%esp)` at
+ * 0x391f0 stores `y`, `fsubrs 0xb0(%esp)` at 0x391fc reads it straight back,
+ * and `d` comes out of its own slot at 0x391e7 -- and it rounds `soft` the
+ * same way at 0x39220 before the error tail reloads it at 0x394e8.  A plain
+ * assignment to a `float` local SAYS that and neither compiler is obliged to
+ * do it: x87 excess precision is `-fexcess-precision=fast` on both, GCC 3.4.2
+ * has no other setting, and an 80-bit value that never leaves the register
+ * stack makes the DFE coefficients drift by a few ulps within three symbols.
+ * Measured: 2,459 of 110,894 differential checks on GCC 13 and 701 on GCC
+ * 3.4.2, all of them `outFloat` and `dfeCoefs`.  Finding 6203.
+ */
+static inline float
+v90equ_narrow(float x)
+{
+	volatile float t = x;
+
+	return t;
+}
+
+static inline long double
+v90equ_x87_fsqrt(long double x)
+{
+	long double r;
+
+	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
+	return r;
+}
+
+/*
+ * The destructor frees the fifteen blocks the constructor took, each under
+ * its own null test, and does nothing else: it does not clear the pointers,
+ * so a second call frees every one of them again.  The eight fixed-point
+ * blocks are gated on `mmxArraysPresent` exactly as their allocation was --
+ * the one field that has to survive from the constructor for the object to be
+ * destroyed correctly.
+ *
+ * THE ORDER IS NOT THE ALLOCATION ORDER: +0x40 and +0x44 come before +0x24
+ * and +0x28, and +0x98 -- allocated last -- is freed seventh, before the
+ * fixed-point group.  It is transcribed rather than tidied.
+ *
+ * The six aligned pointers are NOT freed, and must not be: each points into
+ * the middle of a block whose raw pointer is freed beside it.
+ */
+V90Equalizer::~V90Equalizer()
+{
+	if (linearEquCoefs != 0)
+		sysdep_free(linearEquCoefs);
+	if (array_18 != 0)
+		sysdep_free(array_18);
+	if (dfeCoefs != 0)
+		sysdep_free(dfeCoefs);
+	if (array_44 != 0)
+		sysdep_free(array_44);
+	if (linearEquWindow != 0)
+		sysdep_free(linearEquWindow);
+	if (dfeWindow != 0)
+		sysdep_free(dfeWindow);
+	if (meanErrorEnergy != 0)
+		sysdep_free(meanErrorEnergy);
+
+	if (mmxArraysPresent != 0) {
+		if (block_b8 != 0)
+			sysdep_free(block_b8);
+		if (block_b4 != 0)
+			sysdep_free(block_b4);
+		if (linearEquMmxCoefs != 0)
+			sysdep_free(linearEquMmxCoefs);
+		if (array_d8 != 0)
+			sysdep_free(array_d8);
+		if (array_ec != 0)
+			sysdep_free(array_ec);
+		if (dfeMmxCoefs != 0)
+			sysdep_free(dfeMmxCoefs);
+		if (array_118 != 0)
+			sysdep_free(array_118);
+		if (array_12c != 0)
+			sysdep_free(array_12c);
+	}
+}
+
+/*
+ * The two diagnostic accumulators, and nothing else: `xor %edx,%edx; xor
+ * %ecx,%ecx; mov %edx,0x9c(%eax); mov %ecx,0xa0(%eax); ret`.  Two zeroed
+ * registers for two stores, so two assignments and not one wider one.
+ */
+void
+V90Equalizer::resetMeanErrorEnergyDiagnostics()
+{
+	meanErrorCount = 0;
+	meanErrorFull = 0;
+}
 
 /*
  * V90Equalizer::setLinearEquBeta(float)
@@ -364,7 +726,6 @@ V90Equalizer::setLinearEquBeta(float beta)
 	}
 }
 
-
 /*
  * V90Equalizer::setDfeBeta(float)
  *
@@ -408,6 +769,17 @@ V90Equalizer::setDfeBeta(float beta)
 	}
 }
 
+/*
+ * freeze -- both step sizes to zero and nothing else.  The two zeros go out
+ * the same way `enterPhase3` sends them, as an integer register holding the
+ * float's bit pattern.
+ */
+void
+V90Equalizer::freeze()
+{
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+}
 
 /*
  * V90Equalizer::enterPhase3()
@@ -434,404 +806,6 @@ V90Equalizer::enterPhase3()
 }
 
 /*
- * enterChannelVerification -- `enterPhase3`'s shape with a resampler call on
- * the end.
- *
- * The same early-out on the same field, the same two setters with zero, the
- * same state-and-count pair; then the one thing this one does that the other
- * does not, which is to put the resampler's band-limited loop into
- * V90_BLL_PRE_ANSPCM with a one-sample count.  `V90Demodulator::
- * enterChannelVerification` is the only caller.
- */
-void
-V90Equalizer::enterChannelVerification()
-{
-	if (state == V90EQU_STATE_CHANNEL_VERIFY)
-		return;
-
-	edprintf("V90Equalizer: enterChannelVerification\r\n");
-	setLinearEquBeta(0.0f);
-	setDfeBeta(0.0f);
-	state = V90EQU_STATE_CHANNEL_VERIFY;
-	stateCount = 0;
-
-	resampler->setBllState(V90_BLL_PRE_ANSPCM, 1);
-}
-
-/*
- * The object's clamp, written as the object's predicates and not as the two
- * comparisons a reader would reach for.
- *
- * `fcom / fnstsw / sahf / jae` takes the NOT-LESS branch, and an unordered
- * compare sets C0, C2 and C3 -- so a NaN is "less" for this jump and comes
- * out of here as 0.0f, where `x < 0.0f ? 0.0f : ...` would have kept it.
- * The parameter is read out of a configuration block, so a NaN is not
- * obviously unreachable, and V90PreFilter.cpp's `setParamEia6` has the same
- * note for the same reason.
- */
-static inline float
-clamp_fade_ratio(float x)
-{
-	if (!(x >= 0.0f))
-		return 0.0f;
-	if (!(x <= 0.5f))
-		return 0.5f;
-	return x;
-}
-
-/*
- * reset -- the whole equaliser back to its constructed state, and the only
- * member of the class that reads the parameter block.
- *
- * FIVE THINGS IN IT ARE NOT OBVIOUS FROM THE STORES.
- *
- * 1. THE TWO BETAS ARE SEEDED WITH A SENTINEL BEFORE THE SETTERS RUN.
- *    `1e-14f` is exactly 0x283424dc, the immediate the object plants in
- *    +0x10 and +0x3c; `setLinearEquBeta` and `setDfeBeta` compare their
- *    argument against the field and return early when it matches, so seeding
- *    a value nothing can legitimately hold is what forces both to do their
- *    work for an argument of zero.  The header says the same thing from the
- *    setter's side.
- *
- * 2. THE CURSOR IS CLAMPED WITH UNSIGNED ARITHMETIC AND THE EDGE CASE IS
- *    REACHABLE.  `linearEquLength - 1` is 0xffffffff when the equaliser has
- *    no taps, and `jae` is unsigned, so the clamp does nothing and the 1.0f
- *    lands at `linearEquCoefs[cursor]` for whatever cursor was passed.  That
- *    is what the object does; it is not defended against here.
- *
- * 3. THE TWO FLOAT ARRAYS ARE CLEARED IN ONE LOOP, IN OPPOSITE DIRECTIONS.
- *    One counter, `linearEquCoefs[i]` ascending and `array_18[word_1c - 1 -
- *    i]` descending.
- *
- * 4. THE FIXED-POINT ARRAYS ARE ALL `+ 8` LONGER than the filter they belong
- *    to, and the whole group is skipped when `mmxArraysPresent` is clear --
- *    which is a different field from `mmxMode`, zeroed a hundred
- *    instructions earlier in the same function.
- *
- * 5. THE TWO WINDOW LENGTHS ARE BOTH SCALED BY THE LINEAR EQUALISER'S
- *    LENGTH, not one each by its own.  `fildll` converts `linearEquLength`
- *    once and `fmul` / `fmulp` apply it to both ratios, so `dfeWindowHalf`
- *    is a fraction of the LINEAR length and `dfeLength` is not in it at all.
- *    Read twice; it is what the object does.
- */
-void
-V90Equalizer::reset(unsigned int cursor)
-{
-	unsigned int i, n;
-	float left, right, scale;
-
-	edprintf("V90Equalizer: reset\r\n");
-
-	short_08 = 0;
-	linearEquBeta = 1e-14f;
-	dfeBeta = 1e-14f;
-	mmxMode = 0;
-	maxLeCoefValue = 0;
-	minLeCoefValue = 0;
-	maxDfeCoefValue = 0;
-	minDfeCoefValue = 0;
-
-	setLinearEquBeta(0.0f);
-	setDfeBeta(0.0f);
-
-	state = V90EQU_STATE_RESET;
-	stateCount = 0;
-
-	word_20 = word_1c - linearEquLength - 1;
-
-	for (i = 0; i < linearEquLength; i++) {
-		linearEquCoefs[i] = 0;
-		array_18[word_1c - 1 - i] = 0;
-	}
-
-	if (linearEquLength - 1 < cursor)
-		cursor = linearEquLength - 1;
-	linearEquCoefs[cursor] = 1.0f;
-
-	for (i = 0; i < dfeLength; i++) {
-		array_44[i] = 0;
-		dfeCoefs[i] = 0;
-	}
-
-	if (mmxArraysPresent) {
-		n = linearEquLength + 8;
-		for (i = 0; i < n; i++) {
-			linearEquMmxCoefs[i] = 0;
-			array_d8[i] = 0;
-		}
-
-		n = word_1c + 8;
-		for (i = 0; i < n; i++)
-			array_ec[i] = 0;
-
-		n = dfeLength + 8;
-		for (i = 0; i < n; i++) {
-			dfeMmxCoefs[i] = 0;
-			array_118[i] = 0;
-			array_12c[i] = 0;
-		}
-	}
-
-	word_6c = 0;
-	word_7c = 0;
-	meanErrorEnergyCurrent = 0;
-	meanErrorEnergyMean = 0;
-	meanErrorEnergyMin = 0;
-	meanErrorEnergyMax = 0;
-	ph4MeanErrorEnergyBeforeUpdate = 0.0f;
-	ph4MeanErrorEnergyBeforeToAfterUpdateRatio = 0.0f;
-	errorEnergyMeanK = params->ERROR_ENERGY_MEAN_K;
-	word_68 = 0;
-	word_70 = 0;
-	errorEnergyMeanBlockLen = params->ERROR_ENERGY_MEAN_BLOCK_LEN;
-	meanErrorCount = 0;
-	word_78 = 0;
-	meanErrorFull = 0;
-	word_a4 = 0;
-	word_94 = 0;
-	flag_144 = 1;
-	flag_146 = 1;
-	word_34 = 0;
-
-	left = clamp_fade_ratio(params->LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
-	right = clamp_fade_ratio(params->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
-
-	scale = (float)linearEquLength;
-	linearEquWindowHalf = (unsigned int)(left * scale);
-	dfeWindowHalf = (unsigned int)(right * scale);
-
-	hamming(linearEquWindow, 2 * linearEquWindowHalf);
-	hamming(dfeWindow, 2 * dfeWindowHalf);
-}
-
-/* ================================================================ lifecycle */
-
-/*
- * How many SHORTS have to be stepped over to reach an eight-byte boundary.
- *
- *      8d 51 07    lea 0x7(%ecx),%edx
- *      83 e2 f8    and $0xfffffff8,%edx
- *      29 ca       sub %ecx,%edx
- *      d1 ea       shr $1,%edx
- *
- * -- transcribed rather than written as `(-(unsigned)p) & 7`, which is the
- * same number by a different route.  The shift is LOGICAL and the difference
- * is at most seven, so the divide is exact and the count is 0, 1, 2 or 3.
- */
-static inline unsigned int
-mmx_skew(const short *p)
-{
-	unsigned long a = (unsigned long)p;
-
-	return (unsigned int)((((a + 7) & ~7ul) - a) >> 1);
-}
-
-/*
- * THE CONSTRUCTOR IS AN ALLOCATOR AND NOTHING ELSE.  Eleven arguments in,
- * seven of them stored untouched, three lengths derived, fifteen
- * `sysdep_malloc`s, six alignment triples, one diagnostic, and a tail call to
- * `reset`.  It initialises no other field: everything the object holds when
- * it is handed back that is not a pointer or a length was written by `reset`.
- *
- * THE THREE LENGTHS ARE ROUNDED DOWN, TWO OF THEM TO A MULTIPLE OF FOUR.
- * `shr $2` then a scale by four is `& ~3u` written so the quotient can be
- * reused as the malloc's scale -- `shl $4` on the same register is
- * `length * sizeof(float)` -- and it is a LOGICAL shift, which is what makes
- * both arguments unsigned as the mangling already said.  `word_1c` is rounded
- * to a multiple of two instead, and from a SIGNED divide:
- *
- *      c1 ea 1f    shr $0x1f,%edx      ; sign bit
- *      01 d1       add %edx,%ecx       ; round toward zero
- *      d1 f9       sar $1,%ecx
- *
- * so `LINEAR_EQU_HISTORY_LENGTH` is an int and a negative one would make the
- * length negative and the allocation enormous.  See docs/deviations.md D175.
- *
- * WHAT DECIDES `mmxArraysPresent`.  Three things: the parameter block's
- * `ENABLE_EQUALIZER_MMX`, the computational mode, and one word of the host's
- * modem parameter block reached through `params->modemParams`.  The two arms
- * do not test that word the same way -- mode 1 accepts everything except 2,
- * every other mode accepts only 1 -- and the object writes it as two arms
- * that GCC then cross-jumps, the `je` at 3b774 landing in the middle of the
- * other arm's comparison.  Written here as the two arms it came from.
- *
- * THE FIXED-POINT ARRAYS ARE ALLOCATED RAW AND USED ALIGNED.  Each of the six
- * is followed by `skew = (align8(p) - p) / 2` and `aligned = p + 2 * skew`;
- * see the note in the header.  `reset` clears the RAW array, not the aligned
- * one, so the last `skew` shorts of each allocation are cleared and the eight
- * extra entries the length carries are what keeps that inside the block.
- */
-V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
-			   V90Phase3Demodulator *p3d, V90Phase4Demodulator *p4d,
-			   V90Demapper *dem, V90ConnectionEvaluator *ce,
-			   V90SpectralVerifier *sv, V90Parameters *parms,
-			   V90Resampler *rs, V90PreFilter *pf,
-			   V90ComputationalMode mode)
-{
-	params = parms;
-	resampler = rs;
-
-	phase3Demod = p3d;
-	phase4Demod = p4d;
-	demapper = dem;
-	connEval = ce;
-	spectralVerifier = sv;
-	preFilter = pf;
-
-	linearEquLength = linearEquLen & ~3u;
-	linearEquCoefs = (float *)sysdep_malloc(linearEquLength *
-						sizeof(float));
-
-	word_1c = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);
-	array_18 = (float *)sysdep_malloc(word_1c * sizeof(float));
-
-	linearEquWindow = (float *)sysdep_malloc(linearEquLength *
-						 sizeof(float));
-	dfeWindow = (float *)sysdep_malloc(linearEquLength * sizeof(float));
-
-	dfeLength = dfeLen & ~3u;
-	dfeCoefs = (float *)sysdep_malloc(dfeLength * sizeof(float));
-	array_44 = (float *)sysdep_malloc(dfeLength * sizeof(float));
-
-	mmxArraysPresent = 0;
-	if (params->ENABLE_EQUALIZER_MMX != 0) {
-		if ((int)mode == V90EQU_COMP_MODE_1) {
-			if (params->modemParams->unnamed_005c != 2)
-				mmxArraysPresent = 1;
-		} else {
-			if (params->modemParams->unnamed_005c == 1)
-				mmxArraysPresent = 1;
-		}
-	}
-
-	if (mmxArraysPresent != 0) {
-		block_b8 = sysdep_malloc(0x200);
-		block_b4 = sysdep_malloc(0x400);
-
-		linearEquMmxCoefs = (short *)sysdep_malloc(
-		    (linearEquLength + 8) * sizeof(short));
-		array_d8 = (short *)sysdep_malloc(
-		    (linearEquLength + 8) * sizeof(short));
-		array_ec = (short *)sysdep_malloc(
-		    (word_1c + 8) * sizeof(short));
-		dfeMmxCoefs = (short *)sysdep_malloc(
-		    (dfeLength + 8) * sizeof(short));
-		array_118 = (short *)sysdep_malloc(
-		    (dfeLength + 8) * sizeof(short));
-		array_12c = (short *)sysdep_malloc(
-		    (dfeLength + 8) * sizeof(short));
-
-		linearEquMmxCoefsSkew = mmx_skew(linearEquMmxCoefs);
-		linearEquMmxCoefsAligned = linearEquMmxCoefs +
-		    linearEquMmxCoefsSkew;
-
-		array_d8Skew = mmx_skew(array_d8);
-		array_d8Aligned = array_d8 + array_d8Skew;
-
-		array_ecSkew = mmx_skew(array_ec);
-		array_ecAligned = array_ec + array_ecSkew;
-
-		dfeMmxCoefsSkew = mmx_skew(dfeMmxCoefs);
-		dfeMmxCoefsAligned = dfeMmxCoefs + dfeMmxCoefsSkew;
-
-		array_118Skew = mmx_skew(array_118);
-		array_118Aligned = array_118 + array_118Skew;
-
-		array_12cSkew = mmx_skew(array_12c);
-		array_12cAligned = array_12c + array_12cSkew;
-
-		edprintf("V90Equalizer: Created - MMX mode is enabled.\r\n");
-	} else {
-		edprintf("V90Equalizer: Created - MMX mode is disabled.\r\n");
-	}
-
-	meanErrorEnergy = (float *)sysdep_malloc(V90EQU_MEAN_ERROR_LEN *
-						 sizeof(float));
-
-	reset(linearEquLength / 2);
-}
-
-/*
- * The destructor frees the fifteen blocks the constructor took, each under
- * its own null test, and does nothing else: it does not clear the pointers,
- * so a second call frees every one of them again.  The eight fixed-point
- * blocks are gated on `mmxArraysPresent` exactly as their allocation was --
- * the one field that has to survive from the constructor for the object to be
- * destroyed correctly.
- *
- * THE ORDER IS NOT THE ALLOCATION ORDER: +0x40 and +0x44 come before +0x24
- * and +0x28, and +0x98 -- allocated last -- is freed seventh, before the
- * fixed-point group.  It is transcribed rather than tidied.
- *
- * The six aligned pointers are NOT freed, and must not be: each points into
- * the middle of a block whose raw pointer is freed beside it.
- */
-V90Equalizer::~V90Equalizer()
-{
-	if (linearEquCoefs != 0)
-		sysdep_free(linearEquCoefs);
-	if (array_18 != 0)
-		sysdep_free(array_18);
-	if (dfeCoefs != 0)
-		sysdep_free(dfeCoefs);
-	if (array_44 != 0)
-		sysdep_free(array_44);
-	if (linearEquWindow != 0)
-		sysdep_free(linearEquWindow);
-	if (dfeWindow != 0)
-		sysdep_free(dfeWindow);
-	if (meanErrorEnergy != 0)
-		sysdep_free(meanErrorEnergy);
-
-	if (mmxArraysPresent != 0) {
-		if (block_b8 != 0)
-			sysdep_free(block_b8);
-		if (block_b4 != 0)
-			sysdep_free(block_b4);
-		if (linearEquMmxCoefs != 0)
-			sysdep_free(linearEquMmxCoefs);
-		if (array_d8 != 0)
-			sysdep_free(array_d8);
-		if (array_ec != 0)
-			sysdep_free(array_ec);
-		if (dfeMmxCoefs != 0)
-			sysdep_free(dfeMmxCoefs);
-		if (array_118 != 0)
-			sysdep_free(array_118);
-		if (array_12c != 0)
-			sysdep_free(array_12c);
-	}
-}
-
-/* ============================================================= coefficients */
-
-/*
- * THE FIXED-POINT COEFFICIENT IS THIRTY-TWO BITS SPLIT ACROSS TWO ARRAYS.
- * Every conversion in this class reads it as
- *
- *      0f bf 04 4a     movswl (%edx,%ecx,2),%eax    ; the high half, SIGNED
- *      0f b7 14 4f     movzwl (%edi,%ecx,2),%edx    ; the low half, UNSIGNED
- *      c1 e0 10        shl    $0x10,%eax
- *      09 d0           or     %edx,%eax
- *
- * -- the high sixteen bits in `*MmxCoefsAligned` and the low sixteen in the
- * array beside it -- and writes it back with the halves in the same places
- * (`mov %ax,(%edx); sar $0x10,%eax; mov %ax,(%ecx)`).  The two extensions
- * differ and both are FORCED: the high half's sign is the value's sign and
- * the low half must not sign-extend into it, so `movswl`/`movzwl` is the one
- * pairing that reconstructs the word.  That is why the low half is read
- * through an `unsigned short` cast below and the high half is not.
- *
- * The pair is always the ALIGNED pointers, never the raw ones -- which is the
- * opposite of what `reset`, `zeroLinearEquCoefs` and `zeroDfeCoefs` clear.
- */
-static inline int
-mmx_coef_get(const short *hi, const short *lo, unsigned int i)
-{
-	return ((int)hi[i] << 16) | (unsigned short)lo[i];
-}
-
-/*
  * `getDfeBeta` -- `mov 0x4(%esp),%eax; flds 0x3c(%eax); ret`, and that is the
  * whole function.  The value comes back in st(0), so the return type is float.
  */
@@ -839,43 +813,6 @@ float
 V90Equalizer::getDfeBeta()
 {
 	return dfeBeta;
-}
-
-/*
- * The two diagnostic accumulators, and nothing else: `xor %edx,%edx; xor
- * %ecx,%ecx; mov %edx,0x9c(%eax); mov %ecx,0xa0(%eax); ret`.  Two zeroed
- * registers for two stores, so two assignments and not one wider one.
- */
-void
-V90Equalizer::resetMeanErrorEnergyDiagnostics()
-{
-	meanErrorCount = 0;
-	meanErrorFull = 0;
-}
-
-/*
- * The two coefficient loaders.  `mov (%esi,%edx,4),%eax; mov %eax,(%ecx,%edx,4)`
- * is a plain copy, and the count is UNSIGNED -- the guard is `cmp %ebx,%edx;
- * jae` and the latch is `jb`, so a count of zero copies nothing and there is
- * no bound against the equaliser's own length.  The destination pointer is
- * loaded once, inside the guard.
- */
-void
-V90Equalizer::setLinearEquCoeff(float *src, unsigned int n)
-{
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-		linearEquCoefs[i] = src[i];
-}
-
-void
-V90Equalizer::setDfeCoeff(float *src, unsigned int n)
-{
-	unsigned int i;
-
-	for (i = 0; i < n; i++)
-		dfeCoefs[i] = src[i];
 }
 
 /*
@@ -931,93 +868,36 @@ V90Equalizer::zeroDfeCoefs()
 }
 
 /*
- * setLinearEquEdgesFadingParams -- `reset`'s last five statements, exposed.
- *
- * The same two clamps against the same 0.5f (`.rodata.cst4+0x294`), the same
- * `fildll` of `linearEquLength` scaling BOTH ratios -- one `fmul %st,%st(1)`
- * and one `fmulp %st,%st(2)`, so the DFE half is a fraction of the LINEAR
- * length here too -- the same pair of truncating `fistpll`s, and the same two
- * `hamming` calls with the second a tail call.  Written against the same
- * `clamp_fade_ratio` as `reset` so the two cannot drift apart.
+ * The two coefficient loaders.  `mov (%esi,%edx,4),%eax; mov %eax,(%ecx,%edx,4)`
+ * is a plain copy, and the count is UNSIGNED -- the guard is `cmp %ebx,%edx;
+ * jae` and the latch is `jb`, so a count of zero copies nothing and there is
+ * no bound against the equaliser's own length.  The destination pointer is
+ * loaded once, inside the guard.
  */
 void
-V90Equalizer::setLinearEquEdgesFadingParams(float left, float right)
-{
-	float l, r, scale;
-
-	l = clamp_fade_ratio(left);
-	r = clamp_fade_ratio(right);
-
-	scale = (float)linearEquLength;
-	linearEquWindowHalf = (unsigned int)(l * scale);
-	dfeWindowHalf = (unsigned int)(r * scale);
-
-	hamming(linearEquWindow, 2 * linearEquWindowHalf);
-	hamming(dfeWindow, 2 * dfeWindowHalf);
-}
-
-/*
- * freeze -- both step sizes to zero and nothing else.  The two zeros go out
- * the same way `enterPhase3` sends them, as an integer register holding the
- * float's bit pattern.
- */
-void
-V90Equalizer::freeze()
-{
-	setLinearEquBeta(0.0f);
-	setDfeBeta(0.0f);
-}
-
-/*
- * restoreEqualizerToFloat -- the fixed-point coefficients back into the float
- * arrays, and the mode off.
- *
- * Three loops and a restore.  The first and third undo the scaling
- * `convertEqualizerToMmx` applied: the object divides ONE by the scale and
- * multiplies, rather than dividing by it, and the reciprocal is recomputed
- * inside the loop -- `fld1` outside, `fld %st(0)` then `fdivs` within.  It is
- * written as the one expression it is; hoisting the reciprocal is the
- * compiler's business and changes no value.
- *
- * The second loop is a plain 16-bit widening, `filds` into `fstps`, with no
- * scale at all -- so whatever `array_ec` holds is a count and not a
- * coefficient.
- *
- * BETWEEN THEM, +0x20 IS RESTORED FROM +0xf8, which is where
- * `convertEqualizerToMmx` parked it.  See the header.
- *
- * The whole body is under `mmxMode`, and the mode is cleared last -- so a
- * second call does nothing, which is what makes this callable from `enterRRN`
- * and `enterFPE` without either of them checking first.
- */
-void
-V90Equalizer::restoreEqualizerToFloat()
+V90Equalizer::setLinearEquCoeff(float *src, unsigned int n)
 {
 	unsigned int i;
 
-	if (mmxMode == 0)
-		return;
-
-	for (i = 0; i < linearEquLength; i++)
-		linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
-		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
-					  array_d8Aligned, i);
-
-	for (i = 0; i < word_1c; i++)
-		array_18[i] = (float)array_ecAligned[i];
-
-	word_20 = word_20Saved;
-
-	for (i = 0; i < dfeLength; i++) {
-		dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
-		    * (float)mmx_coef_get(dfeMmxCoefsAligned,
-					  array_118Aligned, i);
-		array_44[i] = (float)array_12cAligned[i];
-	}
-
-	edprintf("V90Equalizer: Equalizer restored to FLOAT mode.\r\n");
-	mmxMode = 0;
+	for (i = 0; i < n; i++)
+		linearEquCoefs[i] = src[i];
 }
+
+void
+V90Equalizer::setDfeCoeff(float *src, unsigned int n)
+{
+	unsigned int i;
+
+	for (i = 0; i < n; i++)
+		dfeCoefs[i] = src[i];
+}
+
+void
+V90Equalizer::loadCoefsFromFile()
+{
+}
+
+/* ============================================================ state entries */
 
 /*
  * linearEquFadeEdges -- taper both ends of the linear equaliser with the two
@@ -1079,51 +959,137 @@ V90Equalizer::linearEquFadeEdges()
 }
 
 /*
- * The conversion factor's diagnostic: `edprint_stat`'s hand-built decimal with
- * the sign and the digits taken from DIFFERENT expressions.  The object
- * reloads the member for the comparison --
- *
- *      3757f:  d9 ee           fldz
- *      3758e:  d8 9d c4 ..     fcomps 0xc4(%ebp)
- *
- * -- while the three printed digits come from that member scaled by 1e-8,
- * which is what the "e8" on the end of the format string means.  The scale is
- * a DOUBLE (`fldl` out of .rodata.cst8) and the fractional multiplier is a
- * float (`flds` out of .rodata.cst4); 1e-8 is not exactly representable in
- * either, so the two are different numbers and the printed digits show it.
+ * The three that are one `ret`.  See the header.
  */
-static inline void
-edprint_scaled_stat(const char *fmt, float v, long double scaled,
-		    long double scale)
+void
+V90Equalizer::printCoefsToFile() const
 {
-	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl(scaled),
-		 __builtin_abs((int)((scaled - (long double)(int)scaled)
-				     * scale)));
 }
 
 /*
- * The same decimal applied to an INTEGER, which is why its fractional digits
- * are a compile-time zero: `v - (int)v` is integer arithmetic and folds before
- * it ever reaches the coprocessor, so the whole third argument becomes `xor
- * %esi,%esi` and the object carries no 1e3 constant at all.  THE MISSING
- * CONSTANT IS THE EVIDENCE -- .rodata.cst4 holds every other scale this
- * function uses (1e5, 1e4, 2**30, 2**24, 2**20, 2**-16, 2.0) and nothing near
- * a thousand -- so the argument was an int and not a float.  Finding 2146.
+ * enterPhase4 -- freeze the equaliser, freeze the resampler's band-limited
+ * loop, and dump both filters.
  *
- * The sign still costs a comparison on the coprocessor, because it is against
- * a float zero and the usual arithmetic conversions promote:
+ * Four things happen and three of them are diagnostics:
  *
- *      375dc:  d9 ee           fldz
- *      375de:  db 85 c8 ..     fildl 0xc8(%ebp)
- *      375ed:  de d9           fcompp
+ *  1. the state, both step sizes to zero, and the resampler's BLL state saved
+ *     into +0x04 and set to `V90_BLL_FROZEN` with a one-sample count;
+ *  2. the timing offset printed;
+ *  3. when the spectral verifier's +0x28 is 2 -- the German-PBX arm
+ *     `enterRRN` and `enterFPE` also have -- the DFE coefficients zeroed;
+ *  4. the mean-error diagnostics reset, and both filters summarised.
+ *
+ * THE TIMING OFFSET IS FETCHED FOUR TIMES.  `getTimingOffsetPPM` is called
+ * once for the fractional digits' minuend, once for their subtrahend, once
+ * for the integer part and once for the sign -- four `call`s, in the order
+ * GCC evaluates the three arguments right to left.  It is written out four
+ * times below because that is what the object does; a temporary would be one
+ * call and would read the same value, but it is not what was compiled.
+ *
+ * `V90Resampler` derives from `ResamplerTiming`, which derives from
+ * `ResamplerTimingOffset`, so `resampler->getTimingOffsetPPM()` is the
+ * `_ZNK21ResamplerTimingOffset18getTimingOffsetPPMEv` the object calls with
+ * the resampler pointer unadjusted -- offset zero of a single-inheritance
+ * chain.
+ *
+ * THE UNCONDITIONAL EARLY-OUT IS THE `enter*` FAMILY'S.  `cmpl $0x2,0x60;
+ * je <return>`, and `stateCount` is not touched -- the same as `enterRRN` and
+ * `enterFPE` and unlike `enterPhase3`.
  */
-static inline void
-edprint_int_stat(const char *fmt, int v)
+void
+V90Equalizer::enterPhase4()
 {
-	edprintf(fmt, !(v <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl((long double)v),
-		 __builtin_abs((int)((v - (int)v) * 1.0e3f)));
+	float sum, absSum, ppm, ppmFrac;
+	unsigned int i, n;
+
+	if (state == V90EQU_STATE_PHASE4)
+		return;
+
+	edprintf("V90Equalizer: enter Phase 4\r\n");
+	state = V90EQU_STATE_PHASE4;
+
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+
+	savedBllState = resampler->bllState;
+	resampler->setBllState(V90_BLL_FROZEN, 1);
+
+	/*
+	 * THE FRACTIONAL PART IS ROUNDED TO SINGLE PRECISION TWICE, AND IT
+	 * MATTERS.  The object stores the first call's result to a 4-byte
+	 * slot, calls again, subtracts, and stores the DIFFERENCE to the same
+	 * 4-byte slot before scaling it:
+	 *
+	 *     36b96:  d9 5c 24 38     fstps 0x38(%esp)      ; t
+	 *     36bcc:  d8 6c 24 38     fsubrs 0x38(%esp)     ; t - (int)t
+	 *     36bd0:  d9 5c 24 38     fstps 0x38(%esp)      ; rounded again
+	 *     36bd4:  d9 05 ..        flds  1e4
+	 *     36bda:  d8 4c 24 38     fmuls 0x38(%esp)
+	 *
+	 * `getTimingOffsetPPM` returns its result in st(0) at EXTENDED
+	 * precision -- it is `1e6f * timingOffset / ppmScale` and nothing
+	 * rounds it on the way out -- so keeping the difference in a register
+	 * changes the fourth decimal digit at the truncation, which is
+	 * exactly what the printed `%04d` carries.  Two `float` locals is what
+	 * the object has and what makes the transcript agree; measured, not
+	 * assumed (the first spelling here used `long double` throughout and
+	 * disagreed on every non-zero offset).
+	 *
+	 * Hoisting them out of the argument list changes no order: GCC
+	 * evaluates the three arguments right to left, so the two calls the
+	 * fractional digits need come first either way.
+	 */
+	ppm = resampler->getTimingOffsetPPM();
+	ppmFrac = ppm - (float)(int)resampler->getTimingOffsetPPM();
+
+	edprintf("V90Equalizer: timing offset on freeze (phase4) = "
+		 "%c%d.%04d\r\n",
+		 !(resampler->getTimingOffsetPPM() <= 0.0f) ? '+' : '-',
+		 (int)__builtin_fabsl((long double)
+				      resampler->getTimingOffsetPPM()),
+		 __builtin_abs((int)(1.0e4f * ppmFrac)));
+
+	if (spectralVerifier->word_28 == 2) {
+		for (i = 0; i < dfeLength; i++)
+			dfeCoefs[i] = 0;
+
+		if (mmxMode != 0) {
+			n = dfeLength + 8;
+			for (i = 0; i < n; i++) {
+				dfeMmxCoefs[i] = 0;
+				array_118[i] = 0;
+			}
+		}
+
+		edprintf("V90Equalizer: Dfe coefs zeroed!!\r\n");
+	}
+
+	meanErrorFull = 0;
+	meanErrorCount = 0;
+
+	summarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,
+			&minLeCoefValue, &sum, &absSum);
+
+	edprintf("=======================================================\r\n");
+	edprintf("Linear Equalizer:\r\n");
+	edprint_stat("minLeCoefValue  = %c%d.%010d\r\n", minLeCoefValue,
+		     1.0e10f);
+	edprint_stat("maxLeCoefValue  = %c%d.%06d\r\n", maxLeCoefValue, 1.0e6);
+	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
+	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
+	edprintf("=======================================================\r\n");
+
+	summarise_coefs(dfeCoefs, dfeLength, &maxDfeCoefValue,
+			&minDfeCoefValue, &sum, &absSum);
+
+	edprintf("DFE:\r\n");
+	edprint_stat("minDfeCoefValue  = %c%d.%010d\r\n", minDfeCoefValue,
+		     1.0e10f);
+	edprint_stat("maxDfeCoefValue  = %c%d.%06d\r\n", maxDfeCoefValue,
+		     1.0e6);
+	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
+	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
+	edprintf("=======================================================\r\n");
 }
 
 /*
@@ -1412,257 +1378,6 @@ V90Equalizer::convertEqualizerToMmx()
 	edprintf("V90Equalizer: LE & DFE running in MMX mode.\r\n");
 }
 
-/* ============================================================ state entries */
-
-/*
- * enterRRN and enterFPE -- the same 387 bytes with the state constant and the
- * entry string swapped, the way `setLinearEquBeta` and `setDfeBeta` are the
- * same 350.  Written out twice for the same reason.
- *
- * THEY RETURN AN int AND THE OTHER `enter*` MEMBERS DO NOT.  `%edi` is zeroed
- * at entry, made 1 on exactly one path, and moved to `%eax` at both returns;
- * the 1 means "the equaliser was taken out of fixed-point mode", which a
- * caller cannot see from the state word.  Finding 2134.
- *
- * NEITHER TOUCHES `stateCount`.  `enterPhase3` and `enterChannelVerification`
- * zero +0x64 in the instruction after they write +0x60; these two write +0x60
- * and leave +0x64 alone.
- *
- * THREE INDEPENDENT CONDITIONS, NOT A CHAIN.  The German-PBX arm, the EIA-6
- * freeze and the fixed-point restore each test their own thing and any
- * combination can run.  GCC cross-jumps the second and third out of both arms
- * of the first, which is why `isV90WithEia6` is called from two sites and the
- * `mmxMode` test from three.
- *
- * `mmxMode` IS READ ONCE FOR THE ARRAY CLEAR AND AGAIN FOR THE RESTORE.  The
- * first read is cached across the two clearing loops (`mov 0xb0(%esi),%ebx`
- * before the German-PBX test, used after it); the second is reloaded because
- * `setDfeBeta` and `setLinearEquBeta` intervene.  Neither of them writes
- * +0xb0, so the two agree -- it is one field read twice in the source.
- */
-int
-V90Equalizer::enterRRN()
-{
-	unsigned int i, n;
-
-	if (state == V90EQU_STATE_RRN)
-		return 0;
-
-	edprintf("V90Equalizer: enter RRN state\r\n");
-	state = V90EQU_STATE_RRN;
-
-	if (spectralVerifier->word_28 == 2) {
-		for (i = 0; i < dfeLength; i++)
-			dfeCoefs[i] = 0;
-
-		if (mmxMode != 0) {
-			n = dfeLength + 8;
-			for (i = 0; i < n; i++) {
-				dfeMmxCoefs[i] = 0;
-				array_118[i] = 0;
-			}
-		}
-
-		edprintf("V90Equalizer: Dfe coefs zeroed (GERMAN_PBX) !!\r\n");
-		setDfeBeta(params->GERMAN_PBX_DFE_TRN2D_FAST_BETA);
-	}
-
-	if (preFilter->isV90WithEia6()) {
-		setLinearEquBeta(0.0f);
-		setDfeBeta(0.0f);
-		edprintf("V90Equalizer: Dfe & Linear EQU coefs freezed "
-			 "(RRN : EIA6 )!!\r\n");
-	}
-
-	if (mmxMode != 0) {
-		edprintf("V90Equalizer: restoring Equalizer to float...\r\n");
-		restoreEqualizerToFloat();
-		mmxMode = 0;
-		return 1;
-	}
-
-	return 0;
-}
-
-/*
- * One filter's coefficients summarised: the largest and smallest magnitude,
- * the signed sum and the sum of magnitudes.
- *
- * `enterPhase4` runs this twice, once over `linearEquCoefs` and once over
- * `dfeCoefs`, and the two are instruction for instruction the same with the
- * length, the array and the two destination slots moved -- the relationship
- * the two step-size setters have.  Written once here; the object has it
- * twice, inline.
- *
- * THE FIRST COEFFICIENT IS READ UNCONDITIONALLY AND IS NOT IN EITHER SUM.
- * `flds (%edx)` happens before the `cmp $1,%eax; jbe` that guards the loop,
- * so a zero-length filter reads `coefs[0]` anyway; and the loop runs from 1,
- * so `coefs[0]` seeds the maximum and the minimum and contributes to neither
- * total.  Both are the object's; docs/deviations.md D325.
- *
- * THE MAXIMUM AND MINIMUM ARE OF THE MAGNITUDE and the sums are not: `fabs`
- * is applied before both comparisons and before the second accumulator, and
- * the first accumulator takes the coefficient as it stands.
- */
-static void
-summarise_coefs(const float *coefs, unsigned int len, float *maxOut,
-		float *minOut, float *sumOut, float *absSumOut)
-{
-	float mx, mn, sum, absSum;
-	unsigned int i;
-
-	sum = 0;
-	absSum = 0;
-
-	mx = mn = __builtin_fabsf(coefs[0]);
-	*maxOut = mx;
-	*minOut = mn;
-
-	for (i = 1; i < len; i++) {
-		float a = __builtin_fabsf(coefs[i]);
-
-		if (a > mx) {
-			mx = a;
-			*maxOut = mx;
-		}
-		if (a < mn) {
-			mn = a;
-			*minOut = mn;
-		}
-		sum += coefs[i];
-		absSum += __builtin_fabsf(coefs[i]);
-	}
-
-	*sumOut = sum;
-	*absSumOut = absSum;
-}
-
-/*
- * enterPhase4 -- freeze the equaliser, freeze the resampler's band-limited
- * loop, and dump both filters.
- *
- * Four things happen and three of them are diagnostics:
- *
- *  1. the state, both step sizes to zero, and the resampler's BLL state saved
- *     into +0x04 and set to `V90_BLL_FROZEN` with a one-sample count;
- *  2. the timing offset printed;
- *  3. when the spectral verifier's +0x28 is 2 -- the German-PBX arm
- *     `enterRRN` and `enterFPE` also have -- the DFE coefficients zeroed;
- *  4. the mean-error diagnostics reset, and both filters summarised.
- *
- * THE TIMING OFFSET IS FETCHED FOUR TIMES.  `getTimingOffsetPPM` is called
- * once for the fractional digits' minuend, once for their subtrahend, once
- * for the integer part and once for the sign -- four `call`s, in the order
- * GCC evaluates the three arguments right to left.  It is written out four
- * times below because that is what the object does; a temporary would be one
- * call and would read the same value, but it is not what was compiled.
- *
- * `V90Resampler` derives from `ResamplerTiming`, which derives from
- * `ResamplerTimingOffset`, so `resampler->getTimingOffsetPPM()` is the
- * `_ZNK21ResamplerTimingOffset18getTimingOffsetPPMEv` the object calls with
- * the resampler pointer unadjusted -- offset zero of a single-inheritance
- * chain.
- *
- * THE UNCONDITIONAL EARLY-OUT IS THE `enter*` FAMILY'S.  `cmpl $0x2,0x60;
- * je <return>`, and `stateCount` is not touched -- the same as `enterRRN` and
- * `enterFPE` and unlike `enterPhase3`.
- */
-void
-V90Equalizer::enterPhase4()
-{
-	float sum, absSum, ppm, ppmFrac;
-	unsigned int i, n;
-
-	if (state == V90EQU_STATE_PHASE4)
-		return;
-
-	edprintf("V90Equalizer: enter Phase 4\r\n");
-	state = V90EQU_STATE_PHASE4;
-
-	setLinearEquBeta(0.0f);
-	setDfeBeta(0.0f);
-
-	savedBllState = resampler->bllState;
-	resampler->setBllState(V90_BLL_FROZEN, 1);
-
-	/*
-	 * THE FRACTIONAL PART IS ROUNDED TO SINGLE PRECISION TWICE, AND IT
-	 * MATTERS.  The object stores the first call's result to a 4-byte
-	 * slot, calls again, subtracts, and stores the DIFFERENCE to the same
-	 * 4-byte slot before scaling it:
-	 *
-	 *     36b96:  d9 5c 24 38     fstps 0x38(%esp)      ; t
-	 *     36bcc:  d8 6c 24 38     fsubrs 0x38(%esp)     ; t - (int)t
-	 *     36bd0:  d9 5c 24 38     fstps 0x38(%esp)      ; rounded again
-	 *     36bd4:  d9 05 ..        flds  1e4
-	 *     36bda:  d8 4c 24 38     fmuls 0x38(%esp)
-	 *
-	 * `getTimingOffsetPPM` returns its result in st(0) at EXTENDED
-	 * precision -- it is `1e6f * timingOffset / ppmScale` and nothing
-	 * rounds it on the way out -- so keeping the difference in a register
-	 * changes the fourth decimal digit at the truncation, which is
-	 * exactly what the printed `%04d` carries.  Two `float` locals is what
-	 * the object has and what makes the transcript agree; measured, not
-	 * assumed (the first spelling here used `long double` throughout and
-	 * disagreed on every non-zero offset).
-	 *
-	 * Hoisting them out of the argument list changes no order: GCC
-	 * evaluates the three arguments right to left, so the two calls the
-	 * fractional digits need come first either way.
-	 */
-	ppm = resampler->getTimingOffsetPPM();
-	ppmFrac = ppm - (float)(int)resampler->getTimingOffsetPPM();
-
-	edprintf("V90Equalizer: timing offset on freeze (phase4) = "
-		 "%c%d.%04d\r\n",
-		 !(resampler->getTimingOffsetPPM() <= 0.0f) ? '+' : '-',
-		 (int)__builtin_fabsl((long double)
-				      resampler->getTimingOffsetPPM()),
-		 __builtin_abs((int)(1.0e4f * ppmFrac)));
-
-	if (spectralVerifier->word_28 == 2) {
-		for (i = 0; i < dfeLength; i++)
-			dfeCoefs[i] = 0;
-
-		if (mmxMode != 0) {
-			n = dfeLength + 8;
-			for (i = 0; i < n; i++) {
-				dfeMmxCoefs[i] = 0;
-				array_118[i] = 0;
-			}
-		}
-
-		edprintf("V90Equalizer: Dfe coefs zeroed!!\r\n");
-	}
-
-	meanErrorFull = 0;
-	meanErrorCount = 0;
-
-	summarise_coefs(linearEquCoefs, linearEquLength, &maxLeCoefValue,
-			&minLeCoefValue, &sum, &absSum);
-
-	edprintf("=======================================================\r\n");
-	edprintf("Linear Equalizer:\r\n");
-	edprint_stat("minLeCoefValue  = %c%d.%010d\r\n", minLeCoefValue,
-		     1.0e10f);
-	edprint_stat("maxLeCoefValue  = %c%d.%06d\r\n", maxLeCoefValue, 1.0e6);
-	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
-	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
-	edprintf("=======================================================\r\n");
-
-	summarise_coefs(dfeCoefs, dfeLength, &maxDfeCoefValue,
-			&minDfeCoefValue, &sum, &absSum);
-
-	edprintf("DFE:\r\n");
-	edprint_stat("minDfeCoefValue  = %c%d.%010d\r\n", minDfeCoefValue,
-		     1.0e10f);
-	edprint_stat("maxDfeCoefValue  = %c%d.%06d\r\n", maxDfeCoefValue,
-		     1.0e6);
-	edprint_stat("coefs sum  = %c%d.%06d\r\n", sum, 1.0e6);
-	edprint_stat("abs coefs sum  = %c%d.%06d\r\n", absSum, 1.0e6);
-	edprintf("=======================================================\r\n");
-}
-
 /*
  * enterDataPhase -- 1,688 bytes at 0x37d40, and the `enter*` family's shape
  * around a body that is `enterPhase4`'s second half repeated.
@@ -1752,6 +1467,59 @@ V90Equalizer::enterDataPhase()
 	return 0;
 }
 
+/* =============================================== the mean-error diagnostic */
+
+/*
+ * restoreEqualizerToFloat -- the fixed-point coefficients back into the float
+ * arrays, and the mode off.
+ *
+ * Three loops and a restore.  The first and third undo the scaling
+ * `convertEqualizerToMmx` applied: the object divides ONE by the scale and
+ * multiplies, rather than dividing by it, and the reciprocal is recomputed
+ * inside the loop -- `fld1` outside, `fld %st(0)` then `fdivs` within.  It is
+ * written as the one expression it is; hoisting the reciprocal is the
+ * compiler's business and changes no value.
+ *
+ * The second loop is a plain 16-bit widening, `filds` into `fstps`, with no
+ * scale at all -- so whatever `array_ec` holds is a count and not a
+ * coefficient.
+ *
+ * BETWEEN THEM, +0x20 IS RESTORED FROM +0xf8, which is where
+ * `convertEqualizerToMmx` parked it.  See the header.
+ *
+ * The whole body is under `mmxMode`, and the mode is cleared last -- so a
+ * second call does nothing, which is what makes this callable from `enterRRN`
+ * and `enterFPE` without either of them checking first.
+ */
+void
+V90Equalizer::restoreEqualizerToFloat()
+{
+	unsigned int i;
+
+	if (mmxMode == 0)
+		return;
+
+	for (i = 0; i < linearEquLength; i++)
+		linearEquCoefs[i] = (1.0f / linearEquMmxConversionFactor)
+		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
+					  array_d8Aligned, i);
+
+	for (i = 0; i < word_1c; i++)
+		array_18[i] = (float)array_ecAligned[i];
+
+	word_20 = word_20Saved;
+
+	for (i = 0; i < dfeLength; i++) {
+		dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
+		    * (float)mmx_coef_get(dfeMmxCoefsAligned,
+					  array_118Aligned, i);
+		array_44[i] = (float)array_12cAligned[i];
+	}
+
+	edprintf("V90Equalizer: Equalizer restored to FLOAT mode.\r\n");
+	mmxMode = 0;
+}
+
 /*
  * enterFPE -- `enterRRN` with state 5 and its own entry string.  Everything
  * after the first `edprintf` is instruction for instruction the same, down to
@@ -1802,7 +1570,176 @@ V90Equalizer::enterFPE()
 	return 0;
 }
 
-/* =============================================== the mean-error diagnostic */
+/*
+ * enterRRN and enterFPE -- the same 387 bytes with the state constant and the
+ * entry string swapped, the way `setLinearEquBeta` and `setDfeBeta` are the
+ * same 350.  Written out twice for the same reason.
+ *
+ * THEY RETURN AN int AND THE OTHER `enter*` MEMBERS DO NOT.  `%edi` is zeroed
+ * at entry, made 1 on exactly one path, and moved to `%eax` at both returns;
+ * the 1 means "the equaliser was taken out of fixed-point mode", which a
+ * caller cannot see from the state word.  Finding 2134.
+ *
+ * NEITHER TOUCHES `stateCount`.  `enterPhase3` and `enterChannelVerification`
+ * zero +0x64 in the instruction after they write +0x60; these two write +0x60
+ * and leave +0x64 alone.
+ *
+ * THREE INDEPENDENT CONDITIONS, NOT A CHAIN.  The German-PBX arm, the EIA-6
+ * freeze and the fixed-point restore each test their own thing and any
+ * combination can run.  GCC cross-jumps the second and third out of both arms
+ * of the first, which is why `isV90WithEia6` is called from two sites and the
+ * `mmxMode` test from three.
+ *
+ * `mmxMode` IS READ ONCE FOR THE ARRAY CLEAR AND AGAIN FOR THE RESTORE.  The
+ * first read is cached across the two clearing loops (`mov 0xb0(%esi),%ebx`
+ * before the German-PBX test, used after it); the second is reloaded because
+ * `setDfeBeta` and `setLinearEquBeta` intervene.  Neither of them writes
+ * +0xb0, so the two agree -- it is one field read twice in the source.
+ */
+int
+V90Equalizer::enterRRN()
+{
+	unsigned int i, n;
+
+	if (state == V90EQU_STATE_RRN)
+		return 0;
+
+	edprintf("V90Equalizer: enter RRN state\r\n");
+	state = V90EQU_STATE_RRN;
+
+	if (spectralVerifier->word_28 == 2) {
+		for (i = 0; i < dfeLength; i++)
+			dfeCoefs[i] = 0;
+
+		if (mmxMode != 0) {
+			n = dfeLength + 8;
+			for (i = 0; i < n; i++) {
+				dfeMmxCoefs[i] = 0;
+				array_118[i] = 0;
+			}
+		}
+
+		edprintf("V90Equalizer: Dfe coefs zeroed (GERMAN_PBX) !!\r\n");
+		setDfeBeta(params->GERMAN_PBX_DFE_TRN2D_FAST_BETA);
+	}
+
+	if (preFilter->isV90WithEia6()) {
+		setLinearEquBeta(0.0f);
+		setDfeBeta(0.0f);
+		edprintf("V90Equalizer: Dfe & Linear EQU coefs freezed "
+			 "(RRN : EIA6 )!!\r\n");
+	}
+
+	if (mmxMode != 0) {
+		edprintf("V90Equalizer: restoring Equalizer to float...\r\n");
+		restoreEqualizerToFloat();
+		mmxMode = 0;
+		return 1;
+	}
+
+	return 0;
+}
+
+/*
+ * enterChannelVerification -- `enterPhase3`'s shape with a resampler call on
+ * the end.
+ *
+ * The same early-out on the same field, the same two setters with zero, the
+ * same state-and-count pair; then the one thing this one does that the other
+ * does not, which is to put the resampler's band-limited loop into
+ * V90_BLL_PRE_ANSPCM with a one-sample count.  `V90Demodulator::
+ * enterChannelVerification` is the only caller.
+ */
+void
+V90Equalizer::enterChannelVerification()
+{
+	if (state == V90EQU_STATE_CHANNEL_VERIFY)
+		return;
+
+	edprintf("V90Equalizer: enterChannelVerification\r\n");
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+	state = V90EQU_STATE_CHANNEL_VERIFY;
+	stateCount = 0;
+
+	resampler->setBllState(V90_BLL_PRE_ANSPCM, 1);
+}
+
+
+/*
+ * ===========================================================================
+ * `V90Equalizer::process(float *, unsigned, short *, float *, unsigned &)`
+ * -- 9,364 bytes at 0x38d80, the class's hub and the largest member of it.
+ *
+ * ONE CALL CARRIES A BLOCK OF RECEIVER SAMPLES THROUGH THE EQUALISER AND OUT
+ * AS SYMBOLS.  Two input samples make one T/2-spaced symbol, so `nOut` comes
+ * back as `n >> 1`, and an odd sample is held over to the next call in
+ * `word_68`/`word_6c`.  Each symbol is
+ *
+ *      y    = linear equaliser over the delay line at `array_18`
+ *      d    = decision-feedback filter over `array_44`
+ *      soft = y - d
+ *      decision = whichever slicer `state` selects
+ *      err  = soft - decision        the DFE adapts on this
+ *      y - decision                  the linear half adapts on THIS
+ *
+ * and the two errors differ by exactly `d`, so a test whose DFE output is
+ * zero cannot tell them apart.
+ *
+ * EVERYTHING IS WRITTEN TWICE, BECAUSE THE EQUALISER HAS TWO REPRESENTATIONS.
+ * `mmxMode` selects a 16-bit fixed-point form: the coefficients live as an
+ * aligned/unaligned SHORT PAIR holding the two halves of one 32-bit
+ * accumulator, the history lives in `array_ecAligned`, the samples are
+ * converted into `block_b4` on the way in and the soft outputs back out of
+ * `block_b8` on the way out.  The field is re-read from memory at every test
+ * because it can change inside the loop -- `enterDataPhase`, `enterRRN` and
+ * `enterFPE` can each flip it -- and the caller then re-expresses the
+ * in-flight state in the other representation.  Those re-convert blocks are
+ * NOT four copies of one block: one of the three forward ones truncates the
+ * DFE output through sixteen bits and two do not, so they are three source
+ * sites and a single helper would be wrong at exactly one of them.
+ *
+ * WHAT A READER SHOULD KNOW BEFORE CHANGING ANYTHING HERE:
+ *
+ *   - `word_20` retreats by TWO per symbol and the second step is
+ *     UNCONDITIONAL.  The path that skips the coefficient update rejoins the
+ *     history shift inside it, not before it, so a reading that made the
+ *     second decrement part of the update is wrong on exactly that path.
+ *     Finding 5700 §1.
+ *   - `updateCoefs` is ONE variable, not two disjoint live ranges sharing a
+ *     slot.  It starts at 1, the PHASE3 arm loads it from
+ *     `phase3Demod->word_408`, a high-error symbol zeroes it, and four clean
+ *     symbols in a row close the burst.  When a burst ends with
+ *     `word_94 <= 2` the closing arm never fires, so `updateCoefs` stays 0
+ *     and the equaliser stops adapting for the rest of the call.  That
+ *     asymmetry is the object's and is reproduced.  Finding 5700 §3.
+ *   - `state` is WIDER than the seven `V90EQU_STATE_*` values.  The dispatch
+ *     is `cmp $6; ja default`, and the error tail then tests the live value
+ *     against 10..16, so those comparisons are reachable rather than dead.
+ *     Finding 5700 §2.
+ *   - the 10, 11, 12, 16, 13, 14, 15 order in that tail is the source's `&&`
+ *     order and not a reassociation GCC was free to choose: only the
+ *     ADJACENT 10, 11, 12 fold into one range test, which is what the object
+ *     encodes.  Reordering them numerically moves the code generation.
+ *   - `fdot` carries TWO accumulators and is unrolled by four.  GCC 3.4.2 at
+ *     -O3 neither unrolls a loop nor reassociates a float sum, so both are in
+ *     the source; collapsing them changes the arithmetic.
+ *   - the high-error test is a `long double`, and the TYPE is what selects
+ *     the object's `fld %st(0); fabs; flds; fcomp %st(1); jae`.  Every
+ *     `float` spelling emits `fcoms mem; jbe` whatever the operand order and
+ *     sends a NaN error down the other arm.  Six spellings were compiled
+ *     through the period compiler to settle that -- finding 5701, which
+ *     supersedes 5700's paragraph calling it an operand-order trap.
+ *
+ * blob 0x38d80.  docs/v90equprocess.md is the arm-by-arm decode; findings
+ * 5700, 5701 and 6200 are the argument, and D850 the deviations.
+ * ===========================================================================
+ */
+
+void
+V90Equalizer::printEquStuff()
+{
+}
 
 /*
  * calcMeanErrorStatistics -- mean, standard deviation, variance, minimum and
@@ -1882,219 +1819,6 @@ V90Equalizer::calcMeanErrorStatistics()
 
 	return std;
 }
-
-/*
- * The three that are one `ret`.  See the header.
- */
-void
-V90Equalizer::printCoefsToFile() const
-{
-}
-
-void
-V90Equalizer::loadCoefsFromFile()
-{
-}
-
-void
-V90Equalizer::printEquStuff()
-{
-}
-
-
-/*
- * ===========================================================================
- * `V90Equalizer::process(float *, unsigned, short *, float *, unsigned &)`
- * -- 9,364 bytes at 0x38d80, the class's hub and the largest member of it.
- *
- * ONE CALL CARRIES A BLOCK OF RECEIVER SAMPLES THROUGH THE EQUALISER AND OUT
- * AS SYMBOLS.  Two input samples make one T/2-spaced symbol, so `nOut` comes
- * back as `n >> 1`, and an odd sample is held over to the next call in
- * `word_68`/`word_6c`.  Each symbol is
- *
- *      y    = linear equaliser over the delay line at `array_18`
- *      d    = decision-feedback filter over `array_44`
- *      soft = y - d
- *      decision = whichever slicer `state` selects
- *      err  = soft - decision        the DFE adapts on this
- *      y - decision                  the linear half adapts on THIS
- *
- * and the two errors differ by exactly `d`, so a test whose DFE output is
- * zero cannot tell them apart.
- *
- * EVERYTHING IS WRITTEN TWICE, BECAUSE THE EQUALISER HAS TWO REPRESENTATIONS.
- * `mmxMode` selects a 16-bit fixed-point form: the coefficients live as an
- * aligned/unaligned SHORT PAIR holding the two halves of one 32-bit
- * accumulator, the history lives in `array_ecAligned`, the samples are
- * converted into `block_b4` on the way in and the soft outputs back out of
- * `block_b8` on the way out.  The field is re-read from memory at every test
- * because it can change inside the loop -- `enterDataPhase`, `enterRRN` and
- * `enterFPE` can each flip it -- and the caller then re-expresses the
- * in-flight state in the other representation.  Those re-convert blocks are
- * NOT four copies of one block: one of the three forward ones truncates the
- * DFE output through sixteen bits and two do not, so they are three source
- * sites and a single helper would be wrong at exactly one of them.
- *
- * WHAT A READER SHOULD KNOW BEFORE CHANGING ANYTHING HERE:
- *
- *   - `word_20` retreats by TWO per symbol and the second step is
- *     UNCONDITIONAL.  The path that skips the coefficient update rejoins the
- *     history shift inside it, not before it, so a reading that made the
- *     second decrement part of the update is wrong on exactly that path.
- *     Finding 5700 §1.
- *   - `updateCoefs` is ONE variable, not two disjoint live ranges sharing a
- *     slot.  It starts at 1, the PHASE3 arm loads it from
- *     `phase3Demod->word_408`, a high-error symbol zeroes it, and four clean
- *     symbols in a row close the burst.  When a burst ends with
- *     `word_94 <= 2` the closing arm never fires, so `updateCoefs` stays 0
- *     and the equaliser stops adapting for the rest of the call.  That
- *     asymmetry is the object's and is reproduced.  Finding 5700 §3.
- *   - `state` is WIDER than the seven `V90EQU_STATE_*` values.  The dispatch
- *     is `cmp $6; ja default`, and the error tail then tests the live value
- *     against 10..16, so those comparisons are reachable rather than dead.
- *     Finding 5700 §2.
- *   - the 10, 11, 12, 16, 13, 14, 15 order in that tail is the source's `&&`
- *     order and not a reassociation GCC was free to choose: only the
- *     ADJACENT 10, 11, 12 fold into one range test, which is what the object
- *     encodes.  Reordering them numerically moves the code generation.
- *   - `fdot` carries TWO accumulators and is unrolled by four.  GCC 3.4.2 at
- *     -O3 neither unrolls a loop nor reassociates a float sum, so both are in
- *     the source; collapsing them changes the arithmetic.
- *   - the high-error test is a `long double`, and the TYPE is what selects
- *     the object's `fld %st(0); fabs; flds; fcomp %st(1); jae`.  Every
- *     `float` spelling emits `fcoms mem; jbe` whatever the operand order and
- *     sends a NaN error down the other arm.  Six spellings were compiled
- *     through the period compiler to settle that -- finding 5701, which
- *     supersedes 5700's paragraph calling it an operand-order trap.
- *
- * blob 0x38d80.  docs/v90equprocess.md is the arm-by-arm decode; findings
- * 5700, 5701 and 6200 are the argument, and D850 the deviations.
- * ===========================================================================
- */
-
-/*
- * The float dot product, and its shape is forced.  Four taps per pass into
- * TWO accumulators -- even indices into the one the object keeps on top of
- * the x87 stack, odd indices AND the whole scalar tail into %st(1), combined
- * by the single `faddp %st,%st(1)` at 0x39177.  The count runs DOWN and the
- * test is `cmp $0x3,%ecx; ja`, which is UNSIGNED, where the fixed-point twin
- * below counts up with a signed `jl`.
- *
- * Factored out because both filters use it and the object has it inlined at
- * both sites.  It must stay `inline`: a helper with no blob symbol has its
- * bytes counted against neither side, so `compare.py`'s per-symbol view of
- * `process` would lose them (finding 605).
- */
-static inline float
-fdot(const float *x, const float *h, unsigned int n)
-{
-	float a0 = 0.0f;
-	float a1 = 0.0f;
-
-	while (n > 3) {
-		a0 += x[0] * h[0];
-		a1 += x[1] * h[1];
-		a0 += x[2] * h[2];
-		a1 += x[3] * h[3];
-		x += 4;
-		h += 4;
-		n -= 4;
-	}
-	while (n != 0) {
-		a1 += *x++ * *h++;
-		n--;
-	}
-	return a1 + a0;
-}
-
-/*
- * The fixed-point dot product.  One accumulator, counting UP against a
- * SIGNED bound -- `jl` at 0x39035 and 0x39088 -- so the index and the limit
- * are `int` whatever the length fields are declared as.
- */
-static inline int
-mmxDot(const short *h, const short *x, int n)
-{
-	int s = 0;
-	int i;
-
-	for (i = 0; i < n; i++)
-		s += (int)h[i] * (int)x[i];
-	return s;
-}
-
-/*
- * `sar %cl` masks its count to five bits; C leaves `>> n` undefined outside
- * 0..31.  Both fixed-point step sizes are a truncated logarithm of two fields
- * the caller controls and CAN come out negative, so the mask is written out
- * rather than left to chance -- the same argument `one_shifted_by` above
- * makes for the left shift.
- *
- * IT IS NOT FREE, AND THE COMMENT HERE USED TO CLAIM IT WAS.  The object
- * loads the count with `movzbl 0x64(%esp),%ecx` and shifts; ours emits
- * `and $0x1f,%ecx` first, at both LMS sites.  Two instructions the object
- * does not have, in exchange for defined behaviour on a count the object
- * itself only survives because the hardware masks -- D851, and D561's
- * disposition.  Measured, not assumed: the assertion that GCC folds the mask
- * away was wrong and `objdump` says so.
- */
-static inline int
-sar_by(int v, int n)
-{
-	return v >> (n & 31);
-}
-
-/*
- * `fsqrt`, as the object computes it: the block's mean square arrives on the
- * x87 stack from a `fildll`/`FDIVRP` pair and leaves it through a single
- * `d9 fa`, with no round trip through memory and no library call.  GCC will
- * not emit that from `sqrt()` at this tree's flags -- it emits a call
- * returning a double, and the result is then rounded to float, so the
- * intermediate loses the extended precision the object keeps.  The same
- * argument, and the same remedy, as `p4d_x87_fsqrt` in
- * src/pump/v90/V90Phase4Demodulator.cpp and `x87_log10` above.
- */
-/*
- * NARROW TO `float`, AND MAKE THE COMPILER DO IT.  The object rounds both
- * filter outputs to `float` before it subtracts them -- `fstps 0xb0(%esp)` at
- * 0x391f0 stores `y`, `fsubrs 0xb0(%esp)` at 0x391fc reads it straight back,
- * and `d` comes out of its own slot at 0x391e7 -- and it rounds `soft` the
- * same way at 0x39220 before the error tail reloads it at 0x394e8.  A plain
- * assignment to a `float` local SAYS that and neither compiler is obliged to
- * do it: x87 excess precision is `-fexcess-precision=fast` on both, GCC 3.4.2
- * has no other setting, and an 80-bit value that never leaves the register
- * stack makes the DFE coefficients drift by a few ulps within three symbols.
- * Measured: 2,459 of 110,894 differential checks on GCC 13 and 701 on GCC
- * 3.4.2, all of them `outFloat` and `dfeCoefs`.  Finding 6203.
- */
-static inline float
-v90equ_narrow(float x)
-{
-	volatile float t = x;
-
-	return t;
-}
-
-static inline long double
-v90equ_x87_fsqrt(long double x)
-{
-	long double r;
-
-	__asm__ ("fsqrt" : "=t" (r) : "0" (x));
-	return r;
-}
-
-/*
- * One high-error diagnostic value, as the three printf arguments the object
- * builds by hand.  The scale here is a FLOAT `1000.0f`, loaded once with
- * `flds` and reused for both values -- not `edprint_stat`'s `long double`.
- * The magnitude is the `long double` finding 5701 identified: the same value
- * the comparison above the print tests, computed once.
- */
-#define V90EQU_ERRSIGN(v)	(!((v) <= 0.0f) ? '+' : '-')
-#define V90EQU_ERRFRAC(v) \
-	__builtin_abs((int)(((long double)(v) - (long double)(int)(v)) \
-			    * 1000.0f))
 
 void
 V90Equalizer::process(float *in, unsigned int n, short *outSym,
@@ -2999,4 +2723,280 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		word_34 = 0;
 		linearEquFadeEdges();
 	}
+}
+
+/*
+ * setLinearEquEdgesFadingParams -- `reset`'s last five statements, exposed.
+ *
+ * The same two clamps against the same 0.5f (`.rodata.cst4+0x294`), the same
+ * `fildll` of `linearEquLength` scaling BOTH ratios -- one `fmul %st,%st(1)`
+ * and one `fmulp %st,%st(2)`, so the DFE half is a fraction of the LINEAR
+ * length here too -- the same pair of truncating `fistpll`s, and the same two
+ * `hamming` calls with the second a tail call.  Written against the same
+ * `clamp_fade_ratio` as `reset` so the two cannot drift apart.
+ */
+void
+V90Equalizer::setLinearEquEdgesFadingParams(float left, float right)
+{
+	float l, r, scale;
+
+	l = clamp_fade_ratio(left);
+	r = clamp_fade_ratio(right);
+
+	scale = (float)linearEquLength;
+	linearEquWindowHalf = (unsigned int)(l * scale);
+	dfeWindowHalf = (unsigned int)(r * scale);
+
+	hamming(linearEquWindow, 2 * linearEquWindowHalf);
+	hamming(dfeWindow, 2 * dfeWindowHalf);
+}
+
+/*
+ * reset -- the whole equaliser back to its constructed state, and the only
+ * member of the class that reads the parameter block.
+ *
+ * FIVE THINGS IN IT ARE NOT OBVIOUS FROM THE STORES.
+ *
+ * 1. THE TWO BETAS ARE SEEDED WITH A SENTINEL BEFORE THE SETTERS RUN.
+ *    `1e-14f` is exactly 0x283424dc, the immediate the object plants in
+ *    +0x10 and +0x3c; `setLinearEquBeta` and `setDfeBeta` compare their
+ *    argument against the field and return early when it matches, so seeding
+ *    a value nothing can legitimately hold is what forces both to do their
+ *    work for an argument of zero.  The header says the same thing from the
+ *    setter's side.
+ *
+ * 2. THE CURSOR IS CLAMPED WITH UNSIGNED ARITHMETIC AND THE EDGE CASE IS
+ *    REACHABLE.  `linearEquLength - 1` is 0xffffffff when the equaliser has
+ *    no taps, and `jae` is unsigned, so the clamp does nothing and the 1.0f
+ *    lands at `linearEquCoefs[cursor]` for whatever cursor was passed.  That
+ *    is what the object does; it is not defended against here.
+ *
+ * 3. THE TWO FLOAT ARRAYS ARE CLEARED IN ONE LOOP, IN OPPOSITE DIRECTIONS.
+ *    One counter, `linearEquCoefs[i]` ascending and `array_18[word_1c - 1 -
+ *    i]` descending.
+ *
+ * 4. THE FIXED-POINT ARRAYS ARE ALL `+ 8` LONGER than the filter they belong
+ *    to, and the whole group is skipped when `mmxArraysPresent` is clear --
+ *    which is a different field from `mmxMode`, zeroed a hundred
+ *    instructions earlier in the same function.
+ *
+ * 5. THE TWO WINDOW LENGTHS ARE BOTH SCALED BY THE LINEAR EQUALISER'S
+ *    LENGTH, not one each by its own.  `fildll` converts `linearEquLength`
+ *    once and `fmul` / `fmulp` apply it to both ratios, so `dfeWindowHalf`
+ *    is a fraction of the LINEAR length and `dfeLength` is not in it at all.
+ *    Read twice; it is what the object does.
+ */
+void
+V90Equalizer::reset(unsigned int cursor)
+{
+	unsigned int i, n;
+	float left, right, scale;
+
+	edprintf("V90Equalizer: reset\r\n");
+
+	short_08 = 0;
+	linearEquBeta = 1e-14f;
+	dfeBeta = 1e-14f;
+	mmxMode = 0;
+	maxLeCoefValue = 0;
+	minLeCoefValue = 0;
+	maxDfeCoefValue = 0;
+	minDfeCoefValue = 0;
+
+	setLinearEquBeta(0.0f);
+	setDfeBeta(0.0f);
+
+	state = V90EQU_STATE_RESET;
+	stateCount = 0;
+
+	word_20 = word_1c - linearEquLength - 1;
+
+	for (i = 0; i < linearEquLength; i++) {
+		linearEquCoefs[i] = 0;
+		array_18[word_1c - 1 - i] = 0;
+	}
+
+	if (linearEquLength - 1 < cursor)
+		cursor = linearEquLength - 1;
+	linearEquCoefs[cursor] = 1.0f;
+
+	for (i = 0; i < dfeLength; i++) {
+		array_44[i] = 0;
+		dfeCoefs[i] = 0;
+	}
+
+	if (mmxArraysPresent) {
+		n = linearEquLength + 8;
+		for (i = 0; i < n; i++) {
+			linearEquMmxCoefs[i] = 0;
+			array_d8[i] = 0;
+		}
+
+		n = word_1c + 8;
+		for (i = 0; i < n; i++)
+			array_ec[i] = 0;
+
+		n = dfeLength + 8;
+		for (i = 0; i < n; i++) {
+			dfeMmxCoefs[i] = 0;
+			array_118[i] = 0;
+			array_12c[i] = 0;
+		}
+	}
+
+	word_6c = 0;
+	word_7c = 0;
+	meanErrorEnergyCurrent = 0;
+	meanErrorEnergyMean = 0;
+	meanErrorEnergyMin = 0;
+	meanErrorEnergyMax = 0;
+	ph4MeanErrorEnergyBeforeUpdate = 0.0f;
+	ph4MeanErrorEnergyBeforeToAfterUpdateRatio = 0.0f;
+	errorEnergyMeanK = params->ERROR_ENERGY_MEAN_K;
+	word_68 = 0;
+	word_70 = 0;
+	errorEnergyMeanBlockLen = params->ERROR_ENERGY_MEAN_BLOCK_LEN;
+	meanErrorCount = 0;
+	word_78 = 0;
+	meanErrorFull = 0;
+	word_a4 = 0;
+	word_94 = 0;
+	flag_144 = 1;
+	flag_146 = 1;
+	word_34 = 0;
+
+	left = clamp_fade_ratio(params->LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
+	right = clamp_fade_ratio(params->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
+
+	scale = (float)linearEquLength;
+	linearEquWindowHalf = (unsigned int)(left * scale);
+	dfeWindowHalf = (unsigned int)(right * scale);
+
+	hamming(linearEquWindow, 2 * linearEquWindowHalf);
+	hamming(dfeWindow, 2 * dfeWindowHalf);
+}
+
+/*
+ * THE CONSTRUCTOR IS AN ALLOCATOR AND NOTHING ELSE.  Eleven arguments in,
+ * seven of them stored untouched, three lengths derived, fifteen
+ * `sysdep_malloc`s, six alignment triples, one diagnostic, and a tail call to
+ * `reset`.  It initialises no other field: everything the object holds when
+ * it is handed back that is not a pointer or a length was written by `reset`.
+ *
+ * THE THREE LENGTHS ARE ROUNDED DOWN, TWO OF THEM TO A MULTIPLE OF FOUR.
+ * `shr $2` then a scale by four is `& ~3u` written so the quotient can be
+ * reused as the malloc's scale -- `shl $4` on the same register is
+ * `length * sizeof(float)` -- and it is a LOGICAL shift, which is what makes
+ * both arguments unsigned as the mangling already said.  `word_1c` is rounded
+ * to a multiple of two instead, and from a SIGNED divide:
+ *
+ *      c1 ea 1f    shr $0x1f,%edx      ; sign bit
+ *      01 d1       add %edx,%ecx       ; round toward zero
+ *      d1 f9       sar $1,%ecx
+ *
+ * so `LINEAR_EQU_HISTORY_LENGTH` is an int and a negative one would make the
+ * length negative and the allocation enormous.  See docs/deviations.md D175.
+ *
+ * WHAT DECIDES `mmxArraysPresent`.  Three things: the parameter block's
+ * `ENABLE_EQUALIZER_MMX`, the computational mode, and one word of the host's
+ * modem parameter block reached through `params->modemParams`.  The two arms
+ * do not test that word the same way -- mode 1 accepts everything except 2,
+ * every other mode accepts only 1 -- and the object writes it as two arms
+ * that GCC then cross-jumps, the `je` at 3b774 landing in the middle of the
+ * other arm's comparison.  Written here as the two arms it came from.
+ *
+ * THE FIXED-POINT ARRAYS ARE ALLOCATED RAW AND USED ALIGNED.  Each of the six
+ * is followed by `skew = (align8(p) - p) / 2` and `aligned = p + 2 * skew`;
+ * see the note in the header.  `reset` clears the RAW array, not the aligned
+ * one, so the last `skew` shorts of each allocation are cleared and the eight
+ * extra entries the length carries are what keeps that inside the block.
+ */
+V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
+			   V90Phase3Demodulator *p3d, V90Phase4Demodulator *p4d,
+			   V90Demapper *dem, V90ConnectionEvaluator *ce,
+			   V90SpectralVerifier *sv, V90Parameters *parms,
+			   V90Resampler *rs, V90PreFilter *pf,
+			   V90ComputationalMode mode)
+{
+	params = parms;
+	resampler = rs;
+
+	phase3Demod = p3d;
+	phase4Demod = p4d;
+	demapper = dem;
+	connEval = ce;
+	spectralVerifier = sv;
+	preFilter = pf;
+
+	linearEquLength = linearEquLen & ~3u;
+	linearEquCoefs = (float *)sysdep_malloc(linearEquLength *
+						sizeof(float));
+
+	word_1c = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);
+	array_18 = (float *)sysdep_malloc(word_1c * sizeof(float));
+
+	linearEquWindow = (float *)sysdep_malloc(linearEquLength *
+						 sizeof(float));
+	dfeWindow = (float *)sysdep_malloc(linearEquLength * sizeof(float));
+
+	dfeLength = dfeLen & ~3u;
+	dfeCoefs = (float *)sysdep_malloc(dfeLength * sizeof(float));
+	array_44 = (float *)sysdep_malloc(dfeLength * sizeof(float));
+
+	mmxArraysPresent = 0;
+	if (params->ENABLE_EQUALIZER_MMX != 0) {
+		if ((int)mode == V90EQU_COMP_MODE_1) {
+			if (params->modemParams->unnamed_005c != 2)
+				mmxArraysPresent = 1;
+		} else {
+			if (params->modemParams->unnamed_005c == 1)
+				mmxArraysPresent = 1;
+		}
+	}
+
+	if (mmxArraysPresent != 0) {
+		block_b8 = sysdep_malloc(0x200);
+		block_b4 = sysdep_malloc(0x400);
+
+		linearEquMmxCoefs = (short *)sysdep_malloc(
+		    (linearEquLength + 8) * sizeof(short));
+		array_d8 = (short *)sysdep_malloc(
+		    (linearEquLength + 8) * sizeof(short));
+		array_ec = (short *)sysdep_malloc(
+		    (word_1c + 8) * sizeof(short));
+		dfeMmxCoefs = (short *)sysdep_malloc(
+		    (dfeLength + 8) * sizeof(short));
+		array_118 = (short *)sysdep_malloc(
+		    (dfeLength + 8) * sizeof(short));
+		array_12c = (short *)sysdep_malloc(
+		    (dfeLength + 8) * sizeof(short));
+
+		linearEquMmxCoefsSkew = mmx_skew(linearEquMmxCoefs);
+		linearEquMmxCoefsAligned = linearEquMmxCoefs +
+		    linearEquMmxCoefsSkew;
+
+		array_d8Skew = mmx_skew(array_d8);
+		array_d8Aligned = array_d8 + array_d8Skew;
+
+		array_ecSkew = mmx_skew(array_ec);
+		array_ecAligned = array_ec + array_ecSkew;
+
+		dfeMmxCoefsSkew = mmx_skew(dfeMmxCoefs);
+		dfeMmxCoefsAligned = dfeMmxCoefs + dfeMmxCoefsSkew;
+
+		array_118Skew = mmx_skew(array_118);
+		array_118Aligned = array_118 + array_118Skew;
+
+		array_12cSkew = mmx_skew(array_12c);
+		array_12cAligned = array_12c + array_12cSkew;
+
+		edprintf("V90Equalizer: Created - MMX mode is enabled.\r\n");
+	} else {
+		edprintf("V90Equalizer: Created - MMX mode is disabled.\r\n");
+	}
+
+	meanErrorEnergy = (float *)sysdep_malloc(V90EQU_MEAN_ERROR_LEN *
+						 sizeof(float));
+
+	reset(linearEquLength / 2);
 }
