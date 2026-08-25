@@ -94,6 +94,19 @@ int V90SpectralShaper::actionLookupTable[8][16] = {
 };
 
 /*
+ * Both pointers are tested and neither is nulled; the encoder's destructor is
+ * the implicit member call and is not written out.
+ */
+V90SpectralShaper::~V90SpectralShaper()
+{
+	if (delayLine != 0)
+		sysdep_free(delayLine);
+
+	if (trialLine != 0)
+		sysdep_free(trialLine);
+}
+
+/*
  * ===========================================================================
  * pow10Table -- .data+0xae0, 20 bytes
  *
@@ -115,6 +128,22 @@ int V90SpectralShaper::actionLookupTable[8][16] = {
  */
 unsigned int pow10Table[5] = { 1, 10, 100, 1000, 10000 };
 
+/*
+ * THE DESTRUCTOR IS DEFINED FIRST, AND THAT ORDER IS INERT -- MEASURED, NOT
+ * INHERITED.  The blob emits this file D2, D1, C1, C2, reset, ...; we emitted
+ * C2, C1, D2, D1, ...  Swapping the two definitions moves our emission to
+ * D2, D1, C2, C1 -- the blob's first two, exactly -- and **not one byte
+ * changes anywhere in the tree**: `reset` stays at 15 differing bytes,
+ * `process` at 279, and the four head symbols keep the identity they already
+ * had.  That is refinement.md 9a's null with the detector shown to fire (the
+ * order demonstrably moved), and it is worth contrasting with
+ * V92Transmitter.cpp, where the identical swap traded two symbols for two.
+ * The blob's C1-before-C2 clone order is not reachable from source: GCC 3.4.2
+ * emits this class's constructor clones C2-first whatever the file says.
+ * Kept because it is reorder-only and costs nothing, as 7796's neutral files
+ * were.  Finding 7846.
+ */
+
 V90SpectralShaper::V90SpectralShaper()
 	: oddEncoder(), pde(6)
 {
@@ -124,19 +153,6 @@ V90SpectralShaper::V90SpectralShaper()
 	windowLength = 24;
 	writeIndex = 0;
 	state = 0;
-}
-
-/*
- * Both pointers are tested and neither is nulled; the encoder's destructor is
- * the implicit member call and is not written out.
- */
-V90SpectralShaper::~V90SpectralShaper()
-{
-	if (delayLine != 0)
-		sysdep_free(delayLine);
-
-	if (trialLine != 0)
-		sysdep_free(trialLine);
 }
 
 /*
@@ -563,6 +579,22 @@ V90SpectralShaper::advanceTrellis()
  * pointer, `delayLine`, in both cases (0x330bb).  The shift-down that follows
  * moves `windowLength - blockLength` entries and is written as the object
  * indexes it, source index from `blockLength` and destination from zero.
+ *
+ * THE +3 IS NOT THE DELAY-LINE LOOP, AND THAT IS AN EXHAUSTED FAMILY RATHER
+ * THAN AN OPINION.  This function is the one ABSENCE in its cluster -- 122
+ * instructions against the blob's 125 with padding stripped, so lever 2 says
+ * a statement of ours is missing -- and the `pos` cursor was the obvious
+ * candidate, because the blob's frame is 0x1c against our 0xc and it defers
+ * loading `in` until after the first loop, both of which read as more spilling
+ * and therefore more locals.  Seven spellings of the loop were compiled on the
+ * period compiler (`pos` as written; `writeIndex` incremented in place;
+ * `writeIndex + i` with and without the cursor; the cursor assigned inside the
+ * body; and the ternary written as an if/else in two of those), giving SIX
+ * distinct emissions.  Two keep the blob's 362 bytes and both still differ in
+ * 279; the other five change the SIZE.  None is closer.  So the missing
+ * statement is elsewhere, and the residual here is block layout -- the blob
+ * puts the odd-index encoder call inline after the loop and jumps back, where
+ * we send it out of line.  Finding 7846.
  * ===========================================================================
  */
 void

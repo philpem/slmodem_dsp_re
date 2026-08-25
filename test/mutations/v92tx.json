@@ -70,13 +70,13 @@
  },
  {
   "label": "the precoder's null test is dropped",
-  "find": "\tdelete precoder;",
-  "replace": "\tprecoder->~V92Precoder();\n\tsysdep_free(precoder);"
+  "find": "\tif (precoder != 0) {\n\t\tdelete precoder;\n\t\tprecoder = 0;\n\t}",
+  "replace": "\tprecoder->~V92Precoder();\n\tsysdep_free(precoder);\n\tprecoder = 0;"
  },
  {
   "label": "the precoder is not nulled after its free",
-  "find": "\tdelete precoder;\n\tprecoder = 0;",
-  "replace": "\tdelete precoder;"
+  "find": "\tif (precoder != 0) {\n\t\tdelete precoder;\n\t\tprecoder = 0;\n\t}",
+  "replace": "\tif (precoder != 0) {\n\t\tdelete precoder;\n\t}"
  },
  {
   "label": "the pre-filter is nulled after its free as well",

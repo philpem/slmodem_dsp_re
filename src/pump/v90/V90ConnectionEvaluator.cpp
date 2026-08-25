@@ -118,6 +118,14 @@ typedef char v90ce_size[(sizeof(V90ConnectionEvaluator) == 0xbc) ? 1 : -1];
 #define CONNEVAL_INITIAL_PERIOD	1600
 
 /*
+ * The destructor: one byte, `c3`.  `D1` at 0x3e390 and `D2` at 0x3e380, and
+ * no `D0` -- so it is not virtual, and the class owns no allocation.
+ */
+V90ConnectionEvaluator::~V90ConnectionEvaluator()
+{
+}
+
+/*
  * reset -- forty-eight stores, nineteen of them the configuration.
  *
  * The order below is the object's store order, which is NOT the order a
@@ -126,6 +134,21 @@ typedef char v90ce_size[(sizeof(V90ConnectionEvaluator) == 0xbc) ? 1 : -1];
  * come out in the middle and the configuration copies come out in two runs.
  * Statement order is the one thing GCC does not simply preserve (CLAUDE.md),
  * so this is a transcription of the stores and not a claim about the source.
+ *
+ * AND ITS 120 DIFFERING BYTES ARE NOT DEFINITION ORDER -- MEASURED, NOT
+ * ASSUMED.  This function is EXPOSED in refinement.md lever 3b's sense (the
+ * file compiles differently under `-fno-peephole2`, so a scratch comes off the
+ * round-robin cursor), and it used to sit at emission index 0, where 7808 says
+ * a reorder cannot reach it at all.  The destructor was moved above it so that
+ * the file now emits D2, D1, reset -- the blob's own first three, in the
+ * blob's own order, with the blob's own predecessors ahead of it -- and NOT
+ * ONE of the 120 bytes moved.  The reorder is kept because it is
+ * reorder-only, costs nothing and takes the symbol out of index 0; what it
+ * proves is 3a's "index-for-index agreement is not sufficient", so the
+ * residual is INSIDE this function.  The stores above are ten independent
+ * assignments, so the source-order domain is 10! and out of reach of an
+ * exhaustive compile; nothing smaller than that has been shown to contain the
+ * preimage.  Finding 7844.
  */
 void
 V90ConnectionEvaluator::reset()
@@ -201,14 +224,6 @@ V90ConnectionEvaluator::V90ConnectionEvaluator(V90Parameters *p)
 {
 	params = p;
 	reset();
-}
-
-/*
- * The destructor: one byte, `c3`.  `D1` at 0x3e390 and `D2` at 0x3e380, and
- * no `D0` -- so it is not virtual, and the class owns no allocation.
- */
-V90ConnectionEvaluator::~V90ConnectionEvaluator()
-{
 }
 
 /*

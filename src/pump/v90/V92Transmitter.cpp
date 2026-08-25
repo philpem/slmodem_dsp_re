@@ -212,6 +212,20 @@ V92Transmitter::V92Transmitter()
  * `sysdep_free` tolerates NULL, so dropping one leaves every byte of the
  * object unchanged and moves only `harness_alloc.free_null`, which is why
  * t_v92tx.cpp asserts that counter over all sixty-four null combinations.
+ *
+ * THE DEFINITION STAYS BELOW THE CONSTRUCTOR, AND THAT IS A MEASURED CHOICE
+ * RATHER THAN THE OBJECT'S ORDER.  The blob emits this file D2, D1, C1, C2,
+ * reset, process; we emit C2, C1, D2, D1, reset, process.  Moving this whole
+ * block above the constructor -- refinement.md lever 3 -- reaches D2, D1, C2,
+ * C1 and is a NET LOSS OF ONE: D1 gains byte identity (its two residual bytes
+ * are a `pop %edx` where we emit `pop %eax`, which is peephole2's
+ * esp-adjust-to-pop pattern taking a scratch off the round-robin cursor, so
+ * D1 is EXPOSED in lever 3b's sense) and C1 and C2 both LOSE theirs, because
+ * the cursor state now arriving at them is the destructors' and not the file
+ * head's.  The blob's C1-before-C2 clone order is not reachable from here at
+ * all: GCC 3.4.2 emits this class's constructor clones C2-first whatever the
+ * source says, so the file cannot hold both.  Reverted, and the measurement
+ * kept -- 7797's ruling.  Finding 7842.
  * ===========================================================================
  */
 V92Transmitter::~V92Transmitter()
@@ -229,8 +243,23 @@ V92Transmitter::~V92Transmitter()
 
 	delete[] byte_58;
 
-	delete precoder;
-	precoder = 0;
+	/*
+	 * THE ZERO IS INSIDE THE GUARD, and the object says so: the blob's
+	 * `movl $0x0,0x4c(%esi)` sits in the taken arm, after the
+	 * `call sysdep_free`, where ours had it on the fall-through path.  The
+	 * outer test is redundant to `delete` and GCC 3.4.2 folds it, so this
+	 * costs no instruction; what it buys is the store's basic block.
+	 * Five spellings compiled on the period compiler -- bare
+	 * `delete; zero`, this one, `!= 0` and the implicit test, the
+	 * open-coded `~V92Precoder(); sysdep_free()` form, and the guard with
+	 * the zero left outside -- giving three distinct emissions, of which
+	 * exactly one reaches positional byte identity.  D2 goes EXACT and D1
+	 * from 46 differing bytes to 2.  Finding 7841.
+	 */
+	if (precoder != 0) {
+		delete precoder;
+		precoder = 0;
+	}
 
 	delete preFilter;
 
@@ -496,13 +525,39 @@ V92Transmitter::process(unsigned char *bits, unsigned int nbits, short *out,
 	unsigned int i;
 
 	for (i = 0; i < nbits; i++) {
-		bitBuffer[bitsBuffered] = bits[i];
+		/*
+		 * THE BUFFER GOES THROUGH A LOCAL, AND IT IS THE OBJECT'S
+		 * ADDRESSING MODE THAT SAYS SO.  The blob stores with
+		 * `mov %al,(%ecx,%edi,1)` -- base `bitsBuffered`, index
+		 * `bitBuffer` -- and `bitBuffer[bitsBuffered]` gives the two
+		 * the other way round.  Both are COMPONENT_REFs, so
+		 * `tree_swap_operands_p` canonicalises the PLUS; reading one
+		 * into a local makes it a DECL and the swap stops, which is
+		 * refinement.md lever 9's own remedy.  Scale is 1, so nothing
+		 * about the types forces which register is the base.
+		 */
+		unsigned char *buf = bitBuffer;
+
+		buf[bitsBuffered] = bits[i];
 		bitsBuffered++;
 
 		if (bitsBuffered >= (unsigned int)K) {
-			int precoded[V92TX_PRECODER_SYMBOLS];
-			float shaped[V92TX_FRAME_SYMBOLS];
+			/*
+			 * DECLARED points, shaped, precoded -- the frame slots
+			 * are the object's, not a preference: the blob builds
+			 * the pre-filter's argument with `lea 0x70(%esp),%ebx`
+			 * where our old order gave `lea 0x30(%esp)`.  The
+			 * cross product of all 3! declaration orders with four
+			 * spellings of the store above was compiled on the
+			 * period compiler -- 24 cells, TWELVE distinct
+			 * emissions, exactly ONE at positional byte identity.
+			 * The table separates the two facts: the declaration
+			 * order alone takes 110 differing bytes of 355 to ONE,
+			 * and the local closes that one.  Finding 7847.
+			 */
 			float points[V92TX_FRAME_SYMBOLS];
+			float shaped[V92TX_FRAME_SYMBOLS];
+			int precoded[V92TX_PRECODER_SYMBOLS];
 			unsigned int k;
 			unsigned int j;
 

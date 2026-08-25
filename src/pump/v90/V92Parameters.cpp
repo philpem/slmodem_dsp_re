@@ -39,8 +39,18 @@ V92Parameters::setToDefault()
 	V92_PHASE2_INFO_TX_POWER_MEASURE_POINT = 1;
 	V92_EXTEND_EU = 0;
 	V92_DELAY_BEFOR_STEADY_STATE = 5000;
-	V92_RRN_START_DELAY = 4000;
+	/*
+	 * SIMULATION_SWITCH (+0x28) BEFORE START_DELAY (+0x24), which is not
+	 * this struct's offset order and is not an accident.  Two independent
+	 * observables agree on it: the blob's `setToDefault` emits
+	 * `movl $0x0,0x28(%eax)` ahead of `movl $0xfa0,0x24(%eax)`, and
+	 * `loadParams` below -- 1,384 bytes and byte-exact against the object,
+	 * 54 calls to an external function GCC may not reorder, so its emitted
+	 * call order IS its source order -- reads the two in this same order.
+	 * The author wrote one field list and used it twice.
+	 */
 	V92_RRN_SIMULATION_SWITCH = 0;
+	V92_RRN_START_DELAY = 4000;
 	V92_SILENCE_RRN_REQUESTE = 0;
 	V92_RRN_TRN2U_DD_LENGTH = 12000;
 	V92_MAX_SILENCE_LENGTH_FLAG = 0;
@@ -60,12 +70,24 @@ V92Parameters::setToDefault()
 	V92_ECHO_FILTER_LENGTH = 180;
 	V92_ECHO_INITIAL_DELAY = 840;
 	V92_ECHO_DELAY_OFFSET = -14;
-	V92_ECHO_FAST_BETA_FACTOR = 1.953125e-10f;
+	/*
+	 * THE TWO DECAYS, THEN THE TWO DURATIONS, THEN THE TWO BETAS -- not the
+	 * struct's offset order (+0x78 beta, +0x7c decay, +0x80 beta, +0x84
+	 * decay, +0x88 dur, +0x8c dur) and not `loadParams`' order either, so
+	 * this one is NOT the shared field list the swap above is.  All 6! = 720
+	 * orderings of these six statements were compiled on the period
+	 * compiler; they give 720 DISTINCT emissions -- the map is a bijection,
+	 * so the harness demonstrably fires -- and exactly ONE reaches
+	 * positional byte identity.  Nearest near-miss is 6 differing bytes.
+	 * A unique preimage, so the order is decoded rather than fitted
+	 * (7782's ruling).  Finding 7840.
+	 */
 	V92_ECHO_FAST_DECAY_FACTOR = 1.0f;
-	V92_ECHO_SLOW_BETA_FACTOR = 1.8554687e-10f;
 	V92_ECHO_SLOW_DECAY_FACTOR = 0.9987f;
 	V92_ECHO_FAST_UPDATE_DURATION = 9000;
 	V92_ECHO_SLOW_UPDATE_DURATION = 11000;
+	V92_ECHO_FAST_BETA_FACTOR = 1.953125e-10f;
+	V92_ECHO_SLOW_BETA_FACTOR = 1.8554687e-10f;
 	V92_RESAMPLER_RESULOTION = 1600;
 	V92_LINEAR_EQU_LENGTH = 128;
 	V92_LE_PHASE_3_BETA = 3e-10f;

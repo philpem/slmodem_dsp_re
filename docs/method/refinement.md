@@ -199,6 +199,19 @@ it the other way inverts the diagnosis. Three of this cluster's four real
 deltas are EXTRAS in our code, not absences, which is the opposite of the
 lever's worked example and wants a different search.
 
+**AND `--why`'s PADDING-STRIPPED COUNTS ARE THEMSELVES WRONG WHEREVER THE
+FUNCTION CONTAINS A `mov %reg,%reg` (7848).** `byteident._padding` knows `nop`
+and the `lea 0x0(...)` forms and **does not know the two-byte self-move**, which
+is what GCC emits to align a loop head inside a function; `instrcount.py` does,
+through its own `_SELFMOV` regex. So on `unitePhasesInfoOfUref` `--why` prints
+**"204 against 204 with alignment padding stripped"** -- EQUAL, lever 2 does not
+apply -- while the true code counts are blob 202 against ours 203, a real
+**+1 EXTRA**. The blob has two self-moves there and we have one, so the error
+does not even cancel. **`instrcount.py` is the authority for the count and
+`--why`'s parenthesis is not**; where the two disagree, disassemble and count.
+Fixing `_padding` would move grade 1 as well as the message, so it has not been
+done inside a refinement pass.
+
 **A SECOND OBSERVABLE, INDEPENDENT OF THE BYTE GRADE:** the order of `.rodata`
 strings a function references. It agrees or disagrees without reference to any
 instruction, so it corroborates a statement-order decoding that the byte grade
@@ -465,6 +478,18 @@ any permutation, that 1 of the remaining 25 REGALLOC symbols
 all. It also explains 7796 and 7801 after the fact: nearly every REGALLOC symbol
 is peephole2-touched, which is why aiming whole files at that bucket paid and
 aiming at BYTES did not.
+
+**DO NOT RUN THE TWO COMPARES INSIDE THE PERIOD CONTAINER (7845).** The
+obvious implementation is a shell loop next to the two `g++` calls, and
+**binutils 2.15 has no `objdump --disassemble=SYM`**: both sides come out
+empty, `cmp` calls them equal, and every symbol in every file reads CLEARED --
+the direction that licenses skipping work, so nothing downstream questions it.
+One run reported **24 of 24 CLEARED over two files**; the same script over
+`V92Transmitter.cpp`, whose D1 residual IS a peephole2-allocated `pop`
+register, called that CLEARED too, which is what exposed it. Disassemble on the
+HOST, score through `byteident.py`'s own `body()`, and have the tool print how
+many symbols it found EXPOSED -- a run with zero is a run to distrust, not a
+clean file. Rebuilt that way the same four files read 25 of 45 exposed.
 
 **AND IT HAS BEEN WATCHED FIRE IN BOTH DIRECTIONS, because a certificate that
 licenses SKIPPING work is exactly the shape `gates.md` rule 3 exists for.**
