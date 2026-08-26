@@ -9130,3 +9130,42 @@ not merely compatible with it.
 `count` that divides both lengths exactly, the overrun is always zero and the
 deviation is inert; the differential test drives cadences where it is not
 (150-sample phases in 40-sample blocks) as well as where it is.
+
+## D950 ⚠ `FPM_phasor_dp` halves the sum of its two fractional fields, and nothing explains the halving
+
+The double-precision phasor's advance is
+
+    acc = ((phase + inc) << 15) + ((frac_phase + frac_inc) >> 1);
+
+and the `>> 1` is the object's `sar $1,%ebx` at 0x0a949e -- a single arithmetic
+right shift on the SUM, after the addition and before it joins the accumulator.
+
+**Why it is a deviation entry rather than a comment.** The accumulator's two
+halves are fifteen bits each: `phase` is stored as `acc >> 15` and
+`frac_phase` as the remainder against `1 << 15`. So the fractional field's
+natural weight is one part in 32768, and a fractional increment joining the
+accumulator ought to join it unscaled. The halving means the effective
+increment is `inc + frac_inc/2` rather than `inc + frac_inc`, i.e. the
+fractional half runs at HALF the rate the split implies, and one unit of
+`frac_inc` is 1/65536 of a phase unit rather than 1/32768. Nothing in the
+object says why. There is no scaling constant, no compensating doubling
+anywhere in the function, and no caller: `readelf -rW` finds no relocation
+against `FPM_phasor_dp` in 1.2 MB (F8320), so there is no configuration to
+read the intended units off.
+
+Three readings fit and the object cannot separate them: the two fields are
+Q16 and the shift converts them to the accumulator's Q15; the shift is a
+guard against the sum overflowing a short, which it can (`0x7fff + 0x7fff`);
+or it is a defect and the author meant `>> 0`. **Naming the fields for any of
+them would be naming on inference, so they stay `frac_phase` and `frac_inc`,
+which is what the arithmetic establishes and no more** -- CLAUDE.md's rule,
+and F8168's own warning against reading a Q-format into them.
+
+**Reproduced**, and pinned: `test/mutations/fpmphasordp.json` carries five
+mutations of this one expression -- no halving, halved twice, only one operand
+halved, a division instead of a shift, and the operands read unsigned -- and
+`t_fpm_phasordp` catches all five.
+
+**Status:** unmeasured, and unmeasurable from this object, for D405's reason:
+the function has no caller, so no configuration exists that would say which
+reading is the author's.

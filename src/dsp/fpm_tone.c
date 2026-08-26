@@ -492,9 +492,9 @@ FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
  * The receive-side counterpart of FPM_TONE_generate's reversal bookkeeping.
  *
  * WHAT IT MEASURES is a sign change in the input's autocorrelation at a lag of
- * cfg.f1e samples, reported as the interval since the last one.  That is a 180
+ * cfg.rev_lag samples, reported as the interval since the last one.  That is a 180
  * degree phase reversal ONLY for a carrier whose period divides the lag, and
- * the config it shares is not such a carrier: cfg.f1e is 40, which at 8 kHz is
+ * the config it shares is not such a carrier: cfg.rev_lag is 40, which at 8 kHz is
  * ten and a HALF cycles of the built-in 2100 Hz, so a steady tone already
  * correlates negatively, the test below is satisfied continuously and the
  * function degenerates into a 20 ms metronome.  At 1800 Hz the same lag is
@@ -513,22 +513,22 @@ FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
  *    is looked at, so a call with a count of zero still filters nothing but
  *    still runs the filter's own argument checks.
  *
- * 2. Each filtered sample is pushed into `rev_hist`, which is 2*cfg.f1e words
+ * 2. Each filtered sample is pushed into `rev_hist`, which is 2*cfg.rev_lag words
  *    long, and two sliding sums are updated:
  *
- *      rev_corr    sum over the last cfg.f1e products x[k] * x[k - cfg.f1e]
- *      rev_energy  sum over the last 2*cfg.f1e squares, each Q15-scaled
+ *      rev_corr    sum over the last cfg.rev_lag products x[k] * x[k - cfg.rev_lag]
+ *      rev_energy  sum over the last 2*cfg.rev_lag squares, each Q15-scaled
  *
  *    Both are maintained by adding the new term and subtracting the one
  *    falling out of the window, which is what makes the single read of
- *    `rev_hist[idx]` -- the sample from 2*cfg.f1e ago, about to be
+ *    `rev_hist[idx]` -- the sample from 2*cfg.rev_lag ago, about to be
  *    overwritten -- serve as both operands of the removal.
  *
  * 3. A reversal is declared when
  *
- *      2 * rev_corr  <  (cfg.f1c * rev_energy) >> 15
+ *      2 * rev_corr  <  (cfg.rev_thresh * rev_energy) >> 15
  *
- *    i.e. when the lag-cfg.f1e correlation drops below a configured fraction
+ *    i.e. when the lag-cfg.rev_lag correlation drops below a configured fraction
  *    of the energy.  `rev_age` counts samples and is reported, in units of
  *    eight, only if it has passed 160 -- so reversals closer together than 20
  *    ms are swallowed and the result is in the same units as cfg.rev_period.
@@ -552,7 +552,7 @@ short
 FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 {
 	short *hist = state->rev_hist;
-	int lag = state->cfg.f1e;
+	int lag = state->cfg.rev_lag;
 	int idx = state->rev_idx;
 	int corr = state->rev_corr;
 	int energy = state->rev_energy;
@@ -599,7 +599,7 @@ FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
 		else
 			energy_s = (short)energy;
 
-		if (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {
+		if (2 * corr_s < (state->cfg.rev_thresh * energy_s) >> 15) {
 			if (state->rev_age > 160) {
 				period = (short)(state->rev_age >> 3);
 				state->rev_age = 0;

@@ -291,6 +291,72 @@ FPM_phasor(struct fpm_phasor *p)
 }
 
 /*
+ * FPM_phasor_dp -- .text 0x0a93e0, 246 bytes.
+ *
+ * `FPM_phasor` with a FRACTIONAL phase carried between calls, so the tone's
+ * frequency is not restricted to a whole phase unit per sample.  Placed here,
+ * between `FPM_phasor` and `FPM_phasor_demod`, because that is the object's own
+ * emission order (0x0a9300, 0x0a93e0, 0x0a94e0) and emission order is a codegen
+ * carrier for everything after it (finding F7796).
+ *
+ * THE LOOKUP IS `FPM_phasor`'S, INSTRUCTION FOR INSTRUCTION.  The object's two
+ * functions are byte-identical from their prologues to 0x0a944f -- same `>> 5`
+ * index, same `>> 8` quadrant, same odd-quadrant reflection, same `& 0xff`,
+ * same interpolation, same `(unsigned short)` narrowing before the quadrant
+ * sign, same `>> 15` -- so `phasor_split`, `interpolate` and `phasor_value` are
+ * reused verbatim rather than copied.  It is the third user of the UNMASKED
+ * quadrant, with relocations at 0x0a944b against `FPM_cos_sign` and 0x0a9472
+ * against `FPM_sin_sign`, so it indexes the extended arrays with the same
+ * `FPM_PHASOR_SIGN_BELOW` bias and D392 covers it too.
+ *
+ * ONLY THE ADVANCE DIFFERS.  A 30-bit accumulator is assembled from the two
+ * halves, advanced, wrapped at one cycle and split back:
+ *
+ *     acc = ((phase + inc) << 15) + ((frac_phase + frac_inc) >> 1);
+ *     if (acc > 0x3fffffff) acc -= 0x40000000;
+ *     phase      = (short)(acc >> 15);
+ *     frac_phase = (short)(acc - ((short)(acc >> 15) << 15));
+ *
+ * The `sar $1` at 0x0a949e is the `>> 1`, and it is REAL: it moves the output,
+ * and no Q-format we can point at explains it.  See D950, and do not read a
+ * scale into the two fractional fields on the strength of it.
+ *
+ * THE `(short)` ON `whole` IS THE OBJECT'S `cwtl` AT 0x0a94b9 AND IS
+ * BEHAVIOURALLY DEAD.  It is written this way because the object encodes it,
+ * not because anything can observe it: `p->phase` truncates to sixteen bits
+ * anyway, and every candidate spelling of `whole` differs from this one by a
+ * multiple of 65536, whose contribution to `whole << 15` is a multiple of 2^31
+ * and therefore zero in the low sixteen bits that `p->frac_phase` keeps.  So
+ * the claim it carries belongs to the codegen tier and no differential test
+ * can ever adjudicate it.  This paragraph replaces a first draft that said the
+ * opposite; `test/mutations/fpmphasordp.json` carries the three mutations that
+ * proved it, marked equivalent with the argument (finding F8163's shape, and
+ * finding F8322).
+ *
+ * Finding F8168 carries the decode; this is its implementation.
+ */
+void
+FPM_phasor_dp(struct fpm_phasor_dp *p)
+{
+	int phase = (short)p->phase;
+	int idx, frac, quad;
+	int acc, whole;
+
+	phasor_split(phase, &idx, &frac, &quad);
+	p->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);
+	p->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);
+
+	acc = ((phase + (short)p->inc) << 15)
+	    + ((p->frac_phase + p->frac_inc) >> 1);
+	if (acc > 0x3fffffff)
+		acc -= FPM_PHASOR_DP_CYCLE;
+
+	whole = (short)(acc >> 15);
+	p->phase = (unsigned short)whole;
+	p->frac_phase = (short)(acc - (whole << 15));
+}
+
+/*
  * FPM_phasor_demod -- .text 0x0a94e0, 161 bytes.
  *
  * Identical to FPM_phasor except that it does not compute the sine: `p->sin`

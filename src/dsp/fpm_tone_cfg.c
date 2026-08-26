@@ -49,8 +49,8 @@ const struct fpm_tone_cfg FPM_TONE_CFG_data = {
 	 * dropped them, which the differential test caught immediately.  That
 	 * is the argument for this form in one line.
 	 */
-	.f1c = 16384,
-	.f1e = 40
+	.rev_thresh = 16384,	/* one half, Q15 */
+	.rev_lag = 40		/* samples; 2*40 is `rev_hist`'s 80 words */
 	/* r16 and extra are zero */
 };
 

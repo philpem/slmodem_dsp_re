@@ -146,7 +146,7 @@ static const struct fpm_tone_cfg TONEv23_CFG = {
 	.min_level = 3,
 	.damp = 30720,		/* 0.9375 in Q15 */
 	.len = 53,
-	.f1c = 16384
+	.rev_thresh = 16384
 	/* src is filled in by create; everything else is zero */
 };
 

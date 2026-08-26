@@ -1,0 +1,157 @@
+[
+ {
+  "note": "FPM_phasor_dp -- the double-precision phase accumulator.  Its LOOKUP is FPM_phasor's, instruction for instruction, and the `fpmphasor` set already adjudicates that shared code through `t_fpm_phasor`; a mutation to `phasor_split`, `interpolate` or `phasor_value` would be caught by BOTH binaries and scored against whichever suite ran it.  This set therefore attacks what is NEW: the six-field struct's offsets, the 30-bit accumulator, the halving, the wrap and the narrowing.  Finding F8168 is the decode."
+ },
+ {
+  "note": "WHY THE SHARED LOOKUP IS STILL ATTACKED ONCE.  The first two entries below change `phasor_value`'s call sites INSIDE FPM_phasor_dp only, so they say that this function reads the tables and the sign arrays the object's relocations say it does (0x0a944b FPM_cos_sign, 0x0a9472 FPM_sin_sign) rather than merely that some function somewhere does.  Everything else in the shared path belongs to `fpmphasor`."
+ },
+ {
+  "label": "the cosine output takes the sine table",
+  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
+  "replace": "\tp->cos = phasor_value(fpm_sin_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc"
+ },
+ {
+  "label": "the quadrant is masked before it indexes the sign tables, in the dp path",
+  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
+  "replace": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad & 3);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad & 3);\n\n\tacc"
+ },
+ {
+  "label": "the fractional sum is not halved",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + (p->frac_phase + p->frac_inc);"
+ },
+ {
+  "label": "the fractional sum is halved twice",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + ((p->frac_phase + p->frac_inc) >> 2);"
+ },
+ {
+  "label": "only the stored fractional phase is halved, not the sum",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + ((p->frac_phase >> 1) + p->frac_inc);"
+ },
+ {
+  "label": "the halving is a division, so it rounds toward zero on a negative sum",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + ((p->frac_phase + p->frac_inc) / 2);"
+ },
+ {
+  "label": "the fractional fields are read unsigned",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + (((unsigned short)p->frac_phase + (unsigned short)p->frac_inc) >> 1);"
+ },
+ {
+  "label": "the fractional increment is not added at all",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + ((p->frac_phase + p->frac_phase) >> 1);"
+ },
+ {
+  "label": "the coarse part is shifted by 14, not 15",
+  "find": "\tacc = ((phase + (short)p->inc) << 15)",
+  "replace": "\tacc = ((phase + (short)p->inc) << 14)"
+ },
+ {
+  "label": "the phase increment is read unsigned",
+  "find": "\tacc = ((phase + (short)p->inc) << 15)",
+  "replace": "\tacc = ((phase + (int)p->inc) << 15)"
+ },
+ {
+  "label": "the coarse sum is truncated to a short before the shift",
+  "find": "\tacc = ((phase + (short)p->inc) << 15)",
+  "replace": "\tacc = (((short)(phase + (short)p->inc)) << 15)"
+ },
+ {
+  "label": "the wrap compares against the cycle rather than one below it",
+  "find": "\tif (acc > 0x3fffffff)",
+  "replace": "\tif (acc >= 0x3fffffff)"
+ },
+ {
+  "label": "the wrap is >= the cycle, so the boundary value is not wrapped",
+  "equivalent": true,
+  "why": "`acc > 0x3fffffff` and `acc >= 0x40000000` are the same predicate over the integers -- there is no value between them -- so this is a spelling and not a claim.  Kept because the object encodes `cmp $0x3fffffff / jle`, so the SPELLING is decided by the codegen tier and not by this one, and an entry saying so is worth more than its absence.",
+  "find": "\tif (acc > 0x3fffffff)",
+  "replace": "\tif (acc >= 0x40000000)"
+ },
+ {
+  "label": "the wrap is unsigned, so a negative accumulator wraps too",
+  "find": "\tif (acc > 0x3fffffff)",
+  "replace": "\tif ((unsigned)acc > 0x3fffffffu)"
+ },
+ {
+  "label": "the wrap subtracts a coarse cycle, not a dp cycle",
+  "find": "\t\tacc -= FPM_PHASOR_DP_CYCLE;",
+  "replace": "\t\tacc -= FPM_PHASOR_CYCLE;"
+ },
+ {
+  "label": "the wrap is a mask rather than a subtraction",
+  "find": "\tif (acc > 0x3fffffff)\n\t\tacc -= FPM_PHASOR_DP_CYCLE;",
+  "replace": "\tacc &= 0x3fffffff;"
+ },
+ {
+  "label": "there is no wrap",
+  "find": "\tif (acc > 0x3fffffff)\n\t\tacc -= FPM_PHASOR_DP_CYCLE;",
+  "replace": "\t(void)0;"
+ },
+ {
+  "note": "THE NARROWING, AND IT IS BEHAVIOURALLY DEAD -- THE SET IS WHAT PROVED IT.  The object narrows `acc >> 15` to a short with `cwtl` at 0x0a94b9 before shifting it back, and the first draft of this function's comment said the narrowing was OBSERVABLE, diverging once `phase + inc` leaves the 16-bit range.  It is not, and the argument is F8163's exactly: every path from `whole` to an output passes through a 16-bit truncation with only `+`, `-` and `<<` between, and every candidate spelling of `whole` differs from the object's by a multiple of 65536, whose contribution to `whole << 15` is a multiple of 2^31 and therefore ZERO in the low sixteen bits.  So the three below cannot be caught by ANY differential test, the `(short)` in `src/` is there because the object encodes it, and the claim it carries belongs to the codegen tier."
+ },
+ {
+  "label": "the remainder is taken against the untruncated quotient",
+  "equivalent": true,
+  "why": "`whole` differs from the object's by a multiple of 65536; `p->phase` truncates it to sixteen bits, so that store is unchanged, and `whole << 15` differs by a multiple of 2^31, which is zero modulo 2^16, so the `(short)` on the remainder makes that store unchanged too.",
+  "find": "\twhole = (short)(acc >> 15);\n\tp->phase = (unsigned short)whole;\n\tp->frac_phase = (short)(acc - (whole << 15));",
+  "replace": "\twhole = acc >> 15;\n\tp->phase = (unsigned short)whole;\n\tp->frac_phase = (short)(acc - (whole << 15));"
+ },
+ {
+  "label": "the quotient is narrowed unsigned",
+  "equivalent": true,
+  "why": "The same argument, and a narrower difference: `(unsigned short)` and `(short)` of one value differ by exactly 65536 or by nothing, and 65536 << 15 is 2^31, zero in the low sixteen bits.",
+  "find": "\twhole = (short)(acc >> 15);",
+  "replace": "\twhole = (unsigned short)(acc >> 15);"
+ },
+ {
+  "label": "the accumulator is shifted right by 16, not 15",
+  "find": "\twhole = (short)(acc >> 15);",
+  "replace": "\twhole = (short)(acc >> 16);"
+ },
+ {
+  "label": "the remainder is a mask rather than a subtraction",
+  "equivalent": true,
+  "why": "Algebraically the same value for every `acc`.  `whole << 15` contributes only bit 15 to the low sixteen, and that bit is bit 15 of `acc` because `whole` is `acc >> 15`; subtracting it from `acc` clears exactly that bit, which is what `& 0x7fff` does.  The arithmetic shift makes it hold for negative `acc` too -- it rounds toward minus infinity, so the remainder is the non-negative one either way.  Kept because `acc - (whole << 15)` is what the object encodes (`shl $0xf` then `sub`) and the mask is not.",
+  "find": "\tp->frac_phase = (short)(acc - (whole << 15));",
+  "replace": "\tp->frac_phase = (short)(acc & 0x7fff);"
+ },
+ {
+  "label": "the fractional phase is not written back",
+  "find": "\tp->frac_phase = (short)(acc - (whole << 15));",
+  "replace": "\t(void)whole;"
+ },
+ {
+  "label": "the fractional increment is written back instead of the fractional phase",
+  "find": "\tp->frac_phase = (short)(acc - (whole << 15));",
+  "replace": "\tp->frac_inc = (short)(acc - (whole << 15));"
+ },
+ {
+  "note": "WHICH FIELD IS WHICH.  The six are +0x00 phase, +0x02 cos, +0x04 sin, +0x06 inc, +0x08 frac_phase, +0x0a frac_inc, read off the object's stores and loads at 0x0a945d, 0x0a9476, 0x0a9480, 0x0a9494, 0x0a9498 and 0x0a94bf.  The struct itself lives in the header and `mutate.py` mutates ONE source, so the assignment of role to offset is attacked HERE, at the uses -- which is where a wrong assignment would show, and it keeps the set inside the file the suite names."
+ },
+ {
+  "label": "the two outputs are stored the other way round",
+  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc",
+  "replace": "\tp->sin = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->cos = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\n\tacc"
+ },
+ {
+  "label": "the two fractional fields swap roles: the increment accumulates",
+  "find": "\t    + ((p->frac_phase + p->frac_inc) >> 1);",
+  "replace": "\t    + ((p->frac_inc + p->frac_phase) >> 1);\n\tp->frac_inc = p->frac_phase;"
+ },
+ {
+  "label": "the coarse increment is taken from the fractional one",
+  "find": "\tacc = ((phase + (short)p->inc) << 15)",
+  "replace": "\tacc = ((phase + (short)p->frac_inc) << 15)"
+ },
+ {
+  "label": "the coarse phase is not written back",
+  "find": "\tp->phase = (unsigned short)whole;",
+  "replace": "\t(void)0;"
+ }
+]

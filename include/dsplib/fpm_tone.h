@@ -42,21 +42,31 @@ struct fpm_tone_cfg {
 	short len;		/* +0x14 its length, and the detector's tap
 				 *       count                               */
 	short r16[3];		/* +0x16 .. +0x1a                            */
-	short f1c;		/* +0x1c NOT padding: 16384 in the built-in
-				 *       config.  FPM_TONE_find_rev's only
-				 *       reader -- the Q15 fraction of the
-				 *       windowed energy that twice the lag
-				 *       correlation must fall below for the
-				 *       search to fire.  Left
-				 *       spelled `f1c` only because the
-				 *       initialiser lives in fpm_tone_cfg.c;
-				 *       a rename belongs with that file.    */
-	short f1e;		/* +0x1e NOT padding: 40.  FPM_TONE_find_rev's
-				 *       correlation LAG in samples, and half
-				 *       the length of `rev_hist` -- the
-				 *       delay line is indexed modulo 2*f1e,
-				 *       and 2*40 is exactly the 80 words the
-				 *       object reserves.                    */
+	/*
+	 * The phase-reversal detector's two parameters.  Both were spelled
+	 * `f1c` and `f1e` -- an offset wearing a name, CLAUDE.md's worst of the
+	 * four naming states -- until finding F8171 decoded them and F8321
+	 * renamed them.  EVIDENCE CLASS 2, a callee that types them: the
+	 * arithmetic in `FPM_TONE_find_rev` is the whole derivation and no
+	 * format string or caller names either.  Neither is padding; the
+	 * positional initialiser they used to sit in hid that.
+	 */
+	short rev_thresh;	/* +0x1c 16384, i.e. one half in Q15.
+				 *       FPM_TONE_find_rev's only reader: the
+				 *       fraction of the windowed energy that
+				 *       twice the lag correlation must fall
+				 *       below for a reversal to be reported,
+				 *       `2*corr < (rev_thresh * energy) >> 15`
+				 */
+	short rev_lag;		/* +0x1e 40.  FPM_TONE_find_rev's correlation
+				 *       LAG in samples, and half the length of
+				 *       `rev_hist` -- the delay line is indexed
+				 *       modulo 2*rev_lag, and 2*40 is exactly
+				 *       the 80 words the object reserves.
+				 *       NOTE F8171: at the built-in 2100 Hz a
+				 *       lag of 40 is 10.5 carrier cycles, so
+				 *       the detector does not do what its name
+				 *       says on its own configuration.       */
 	short extra;		/* +0x20 added to the history buffer's length */
 	short pad22;
 };
@@ -125,18 +135,18 @@ struct fpm_tone {
 					 *       the search.                  */
 	short rev_corr;			/* +0x4e the running correlation of the
 					 *       input against itself delayed by
-					 *       cfg.f1e, over a window of
-					 *       cfg.f1e products.  Held as an
+					 *       cfg.rev_lag, over a window of
+					 *       cfg.rev_lag products.  Held as an
 					 *       int inside the loop and stored
 					 *       back SATURATED -- see the note
 					 *       in FPM_TONE_find_rev.        */
 	short rev_energy;		/* +0x50 the running energy of the same
-					 *       input over 2*cfg.f1e samples,
+					 *       input over 2*cfg.rev_lag samples,
 					 *       Q15-scaled per term and stored
 					 *       back saturated the same way.  */
 	short rev_hist[80];		/* +0x52 the delay line both of those
 					 *       slide over, indexed modulo
-					 *       2*cfg.f1e.  Eighty words is
+					 *       2*cfg.rev_lag.  Eighty words is
 					 *       FPM_TONE_create's own second
 					 *       clearing loop, +0x52..+0xf0.  */
 	short rev_idx;			/* +0xf2 write position in rev_hist   */
@@ -250,12 +260,12 @@ short FPM_TONE_detect(struct fpm_tone *state, const short *samples,
 		      short count);
 
 /*
- * Time the sign changes of `samples`' autocorrelation at a lag of `cfg.f1e`
+ * Time the sign changes of `samples`' autocorrelation at a lag of `cfg.rev_lag`
  * samples.  `samples` is filtered IN PLACE on the way in, through the one
  * biquad at `rev_block`.
  *
  * A sign change there is a 180 degree phase reversal only where the carrier's
- * period divides `cfg.f1e`, which the built-in 2100 Hz config's does NOT --
+ * period divides `cfg.rev_lag`, which the built-in 2100 Hz config's does NOT --
  * read the derivation above FPM_TONE_find_rev in src/dsp/fpm_tone.c before
  * treating this as an answer-tone reversal detector for a given tone.
  *

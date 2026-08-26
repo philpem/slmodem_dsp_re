@@ -105,6 +105,60 @@ unsigned long ref_VPcmV34GetVisualDiagnostics(void *obj, int what,
 
 extern unsigned int ref_dsplibs_debug_level;
 
+/*
+ * THE ELEVEN ACCESSORS, CALLED BY NAME RATHER THAN THROUGH THE DISPATCHER.
+ * See `run_members` below for why the section exists.
+ *
+ * `this` IS AN ORDINARY FIRST STACK ARGUMENT, and that was read off the object
+ * rather than assumed: `_ZN12VPcmFloModem16getConstellationEP11int_complexm`
+ * opens `push %ebp; push %edi; push %esi; push %ebx; sub $0x1c,%esp` and then
+ * `mov 0x30(%esp),%edi` -- 16 bytes of saves plus 28 of frame plus the return
+ * address is 0x30, so that load IS the first argument. No `regparm` here;
+ * these are `T` symbols and keep the C convention. `t_v34mp.cpp`'s
+ * `getMPrecvdBits` is the other case and needed `regparm(1)` because the object
+ * keeps it LOCAL -- and its header comment says why getting this wrong is the
+ * worse failure: it links and passes garbage.
+ *
+ * `extern "C"` for F225's reason: `symmap.py` prepends `ref_` to the raw symbol
+ * string and never demangles, so a C++ declaration would mangle the already
+ * mangled name a second time.
+ */
+unsigned long ref_VPcmFloModem_getConstellation(void *self, void *points,
+						unsigned long maxCount)
+    asm("ref__ZN12VPcmFloModem16getConstellationEP11int_complexm");
+unsigned long ref_VPcmFloModem_getLinearEqualizer(void *self, void *points,
+						  unsigned long maxCount)
+    asm("ref__ZN12VPcmFloModem18getLinearEqualizerEP11int_complexm");
+unsigned long ref_VPcmFloModem_getDFE(void *self, void *points,
+				      unsigned long maxCount)
+    asm("ref__ZN12VPcmFloModem6getDFEEP11int_complexm");
+
+int ref_K56Flex_getConstellation(void *self, void *points,
+				 unsigned long maxCount)
+    asm("ref__ZN15K56FlexFloModem16getConstellationEP11int_complexm");
+int ref_K56Flex_getLinearEqualizer(void *self, void *points,
+				   unsigned long maxCount)
+    asm("ref__ZN15K56FlexFloModem18getLinearEqualizerEP11int_complexm");
+int ref_K56Flex_getDFE(void *self, void *points, unsigned long maxCount)
+    asm("ref__ZN15K56FlexFloModem6getDFEEP11int_complexm");
+int ref_K56Flex_getDecisionErrors(void *self, void *points,
+				  unsigned long maxCount)
+    asm("ref__ZN15K56FlexFloModem17getDecisionErrorsEP11int_complexm");
+int ref_K56Flex_getResamplerPhase(void *self, void *points,
+				  unsigned long maxCount)
+    asm("ref__ZN15K56FlexFloModem17getResamplerPhaseEP11int_complexm");
+int ref_K56Flex_getResamplerOffset(void *self, void *points,
+				   unsigned long maxCount)
+    asm("ref__ZN15K56FlexFloModem18getResamplerOffsetEP11int_complexm");
+int ref_K56Flex_getK56FlexMpBits(void *self, short *bits)
+    asm("ref__ZN15K56FlexFloModem16getK56FlexMpBitsEPs");
+int ref_K56Flex_getK56FlexJaBits(void *self, short *bits)
+    asm("ref__ZN15K56FlexFloModem16getK56FlexJaBitsEPs");
+void ref_K56Flex_setMinMaxRates(void *self, int lo, int hi)
+    asm("ref__ZN15K56FlexFloModem14setMinMaxRatesEii");
+void ref_K56Flex_enterPhase3FullDuplex(void *self)
+    asm("ref__ZN15K56FlexFloModem21enterPhase3FullDuplexEv");
+
 }
 
 /*
@@ -1214,6 +1268,177 @@ run_visual_separation(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * THE ACCESSORS BY NAME
+ * ===========================================================================
+ *
+ * WHAT THIS ADDS OVER `run_visual`, WHICH ALREADY DRIVES THE SAME CODE.
+ *
+ * `VPcmV34GetVisualDiagnostics` dispatches to these eleven members, and its
+ * blob-side alias calls the blob's own renamed copies internally, so every one
+ * of them is ALREADY compared against the object by the section above --
+ * transitively. `coverage.py` cannot see that: it counts a symbol tested when
+ * some test object references its `ref_` alias BY NAME, and these were not
+ * referenced by name anywhere. They read as "translated, alias exists, and NOT
+ * tested" while being differentially exercised on every one of `run_visual`'s
+ * trials. Finding F8326.
+ *
+ * So this section closes a LABELLING gap and not a coverage one, and it is
+ * worth having for a second reason that is real: it pins the EXPORTED SYMBOL.
+ * `run_visual` would still pass if a member stopped being called and the
+ * dispatcher grew an equivalent body inline; this would not. The blob exports
+ * eleven entry points and a caller outside this library may use any of them.
+ *
+ * The fixture is `setup_visual`'s, unchanged -- the point is the call, not a
+ * new input space -- and the whole point array plus every object is compared,
+ * so a member writing somewhere it should not is a failure here as well.
+ */
+static int
+run_members(void)
+{
+	int li, mi, ph, ri, n = 100000;
+	int sawPoints = 0, sawNone = 0, sawClamp = 0;
+
+	diff_begin("the accessors, called by name");
+
+	set_level(0);
+
+	for (li = 0; li < NLEN; li++)
+	for (mi = 0; mi < NMAX; mi++)
+	for (ph = 0; ph < 2; ph++)
+	for (ri = 0; ri < NROLE; ri++) {
+		struct vtrial t;
+		unsigned long g0, g1, mx = max_v[mi];
+		int k0, k1;
+		short jb[2][8];
+		long tag;
+
+		t.status = 0;
+		t.ri = ri;
+		t.li = li;
+		t.mi = mi;
+		t.si = (li * NMAX + mi) % NSWEEP;
+		t.phase3 = ph;
+		t.analog = ((li + mi) & 1);
+		t.session = ((li + ph) & 1);
+
+		tag = (long)li * 100000 + mi * 10000 + ph * 1000 + ri * 100;
+
+		/* --- VPcmFloModem::getConstellation ---------------------- */
+		setup_visual(n++, &t);
+		g0 = XF(0)->getConstellation(pts[0], mx);
+		g1 = ref_VPcmFloModem_getConstellation(XF(1), pts[1], mx);
+		diff_eq_int("getConstellation count (%ld)", (long)g0, (long)g1,
+			    tag);
+		compare_visual("getConstellation", tag);
+		diff_eq_int("getConstellation stayed inside the bound (%ld)",
+			    guard_touched(mx), 0, tag);
+		if (g1 > 0ul)
+			sawPoints = 1;
+		else
+			sawNone = 1;
+		if (g1 == mx && len_v[li] > (unsigned int)mx)
+			sawClamp = 1;
+
+		/* --- VPcmFloModem::getLinearEqualizer -------------------- */
+		setup_visual(n++, &t);
+		g0 = XF(0)->getLinearEqualizer(pts[0], mx);
+		g1 = ref_VPcmFloModem_getLinearEqualizer(XF(1), pts[1], mx);
+		diff_eq_int("getLinearEqualizer count (%ld)", (long)g0,
+			    (long)g1, tag);
+		compare_visual("getLinearEqualizer", tag);
+		diff_eq_int("getLinearEqualizer stayed inside the bound (%ld)",
+			    guard_touched(mx), 0, tag);
+
+		/* --- VPcmFloModem::getDFE -------------------------------- */
+		setup_visual(n++, &t);
+		g0 = XF(0)->getDFE(pts[0], mx);
+		g1 = ref_VPcmFloModem_getDFE(XF(1), pts[1], mx);
+		diff_eq_int("getDFE count (%ld)", (long)g0, (long)g1, tag);
+		compare_visual("getDFE", tag);
+		diff_eq_int("getDFE stayed inside the bound (%ld)",
+			    guard_touched(mx), 0, tag);
+
+		/*
+		 * --- the eight K56flex stubs -------------------------------
+		 *
+		 * Every one is `xor %eax,%eax; ret` or a bare `ret`, so the
+		 * claim under test is what they do NOT do: no point is
+		 * written, no short is written, and the object they are
+		 * called on is untouched.  `guard_touched(0)` is the whole
+		 * array, and it is checked against the SEED rather than
+		 * against the other side, so two identical overruns would
+		 * still fail.
+		 */
+		setup_visual(n++, &t);
+		memset(jb, 0x5a, sizeof jb);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getConstellation(pts[0], mx);
+		k1 = ref_K56Flex_getConstellation(k56_[1], pts[1], mx);
+		diff_eq_int("K56 getConstellation (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getLinearEqualizer(pts[0],
+								      mx);
+		k1 = ref_K56Flex_getLinearEqualizer(k56_[1], pts[1], mx);
+		diff_eq_int("K56 getLinearEqualizer (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getDFE(pts[0], mx);
+		k1 = ref_K56Flex_getDFE(k56_[1], pts[1], mx);
+		diff_eq_int("K56 getDFE (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getDecisionErrors(pts[0],
+								     mx);
+		k1 = ref_K56Flex_getDecisionErrors(k56_[1], pts[1], mx);
+		diff_eq_int("K56 getDecisionErrors (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getResamplerPhase(pts[0],
+								     mx);
+		k1 = ref_K56Flex_getResamplerPhase(k56_[1], pts[1], mx);
+		diff_eq_int("K56 getResamplerPhase (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getResamplerOffset(pts[0],
+								      mx);
+		k1 = ref_K56Flex_getResamplerOffset(k56_[1], pts[1], mx);
+		diff_eq_int("K56 getResamplerOffset (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getK56FlexMpBits(jb[0]);
+		k1 = ref_K56Flex_getK56FlexMpBits(k56_[1], jb[1]);
+		diff_eq_int("K56 getK56FlexMpBits (%ld)", k0, k1, tag);
+
+		k0 = ((K56FlexFloModem *)k56_[0])->getK56FlexJaBits(jb[0]);
+		k1 = ref_K56Flex_getK56FlexJaBits(k56_[1], jb[1]);
+		diff_eq_int("K56 getK56FlexJaBits (%ld)", k0, k1, tag);
+
+		((K56FlexFloModem *)k56_[0])->setMinMaxRates(li, mi);
+		ref_K56Flex_setMinMaxRates(k56_[1], li, mi);
+
+		((K56FlexFloModem *)k56_[0])->enterPhase3FullDuplex();
+		ref_K56Flex_enterPhase3FullDuplex(k56_[1]);
+
+		diff_eq_int("the K56flex stubs wrote no point (%ld)",
+			    guard_touched(0ul), 0, tag);
+		diff_eq_int("the K56flex stubs wrote no short (%ld)",
+			    memcmp(jb[0], jb[1], sizeof jb[0]) != 0 ||
+			    jb[0][0] != (short)0x5a5a, 0, tag);
+		compare_visual("the K56flex stubs", tag);
+	}
+
+	/*
+	 * NON-VACUITY, and it is about what the trials OBSERVED rather than
+	 * about a branch being entered (finding F8163): the constellation
+	 * getter must have returned points on some trial and none on another,
+	 * and `maxCount` must have clamped a longer field on at least one.
+	 */
+	diff_eq_int("getConstellation returned points somewhere", sawPoints,
+		    1, 0);
+	diff_eq_int("getConstellation returned none somewhere", sawNone, 1, 0);
+	diff_eq_int("maxCount clamped a longer field somewhere", sawClamp,
+		    1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1224,6 +1449,7 @@ main(void)
 	bad |= run_transcript();
 	bad |= run_visual();
 	bad |= run_visual_separation();
+	bad |= run_members();
 
 	return bad;
 }

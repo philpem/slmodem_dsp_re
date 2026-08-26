@@ -267,5 +267,55 @@ main(void)
 	}
 	rc |= diff_end();
 
+	/*
+	 * `reset` CALLED ON ITS OWN, and until this section it was declared
+	 * here and never called.
+	 *
+	 * The constructor tail-jumps to it, so every trial above drives it --
+	 * but only transitively, and `coverage.py` counts a symbol tested when
+	 * a test object references its `ref_` alias BY NAME.  A declaration
+	 * emits no reference, so `_ZN5QueueIfE5resetEv` read as "translated,
+	 * alias exists, and NOT tested" while being exercised on every
+	 * construction in the file.  Finding F8326.
+	 *
+	 * Called on a queue that has been FILLED, which is the part the
+	 * constructor's call cannot reach: on a fresh object the cursors are
+	 * already where `reset` puts them, so a `reset` that did nothing would
+	 * pass a test that only ever ran it at construction.  The stored
+	 * samples are compared afterwards as well -- `reset` moves the cursors
+	 * and must not touch the store.
+	 */
+	diff_begin("queue: reset on a filled queue");
+	for (n = 1; n <= 10; n++) {
+		Queue<float> q(n);
+		ref_queue *r = (ref_queue *)refobj;
+
+		memset(refobj, 0, sizeof(refobj));
+		ref_qctor(refobj, n);
+
+		for (k = 0; k < n + 3; k++) {
+			float v;
+			unsigned bitsv = 0x40000000u + k;
+
+			memcpy(&v, &bitsv, 4);
+			q.write(v);
+			ref_qwrite1(refobj, v);
+		}
+		compare(&q, r, (long)n);
+
+		q.reset();
+		ref_qreset(refobj);
+		compare(&q, r, (long)n + 900000);
+
+		/* And it is still usable afterwards, on both sides. */
+		diff_eq_int("write after reset", q.write(1.0f),
+			    ref_qwrite1(refobj, 1.0f), (long)n + 901000);
+		compare(&q, r, (long)n + 901000);
+
+		q.~Queue();
+		ref_qdtor(refobj);
+	}
+	rc |= diff_end();
+
 	return rc;
 }

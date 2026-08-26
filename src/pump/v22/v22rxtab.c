@@ -217,13 +217,22 @@ short V22DiconnectThreshTable[V22_DISCONNECT_THRESHOLDS] = {
  * shared 53-tap prototype -- into the copy before creating anything.  That
  * assignment is what types these as `struct fpm_tone_cfg`; it reads the
  * dword at the library config's +0x10, and the only thing there is `src`.
+ *
+ * `rev_thresh` and `rev_lag` HOLD 40 AND 0 HERE, not the library config's
+ * 16384 and 40, and that is the object's -- `.rodata:0x84e0` words 14 and 15,
+ * dumped and checked.  A lag of zero means `FPM_TONE_find_rev` would divide
+ * its history modulo zero, so these two copies are not configured for the
+ * reversal detector and nothing in V.22 calls it.  The pair was named from the
+ * arithmetic in that function (finding F8171) and renamed here in F8321; the
+ * values are carried unexplained because they are the object's and no reader
+ * of them exists on this path.
  */
 const struct fpm_tone_cfg TONEv22_CFG = {
 	2100, 11587, 0, 2981,		/* freq, scale, rev_period, ratio    */
 	328, 1, 31457, 0,		/* f08, min_level, damp, pad0e       */
 	0,				/* src -- patched by V22FP_create    */
 	53, { 0, 0, 0 },		/* len, r16                          */
-	40, 0,				/* f1c, f1e                          */
+	40, 0,				/* rev_thresh, rev_lag -- see below  */
 	0, 0				/* extra, pad22                      */
 };
 
