@@ -91546,3 +91546,230 @@ per-symbol in both directions over all 1251 symbols rather than trusting the
 set diff, which is the only reason this is written down at all. A pass that had
 followed the standing "diff the SET" instruction to the letter would have
 reported a clean +7.
+
+### F8160. `Dialer.c +18` is not a dialler span and not a seam — it is the lower half of V.32, and V.32 is 9,539 bytes bigger than the fence thought
+
+`tools/service.py` reports `Dialer.c +18` as the largest open **data-mode**
+span at **9,539 bytes**, which made it look like the obvious next
+reconstruction target now that `src/dialer/dialer.c` and `dialercfg.c` exist.
+It is not a target. **Every symbol in it is V.32**, which is fenced.
+
+`service.py --list data`, restricted to that span, is 35 symbols:
+
+    V32FP_recreate 3733   DemodDataV32 604   SetRxModeV32 577   SetTxModeV32 520
+    V32FP_modem 356   SetAdaptEcV32 319   V32FP_delete 293   TxHdxTRN 237
+    SetECRndTripDelayV32 233   TxHdxNoCarrier 217   TxHdxScrSequence 209
+    TxHdxData 194   TxHdxCarrierState 194   CodeESeq 183   V32FP_create 169
+    CodeRateSeq 164   CodeFinalRateSeq 164   TxHdxFinishFrame 152
+    DecodeRateSeq 152   TxHdxNull 116   TxHdxTone 113   V32TxHdxModem 96
+    SetRxLoopsV32 83   SetAdaptEqV32 79   GetRateV32 78
+    V32FP_GetCleanedSamples 53   RetrainDetectV32 53   RxClampV32 49
+    RenegotiateDetectV32 44   DescrambleDataV32 30   ScrambleDataV32 28
+    EpochDetectV32 17   SeedScramblerV32 15   RateToSeq 14   TxClockSyncV32 1
+
+**Those 35 sum to exactly 9,539** — the span's whole data-mode total — so the
+V.32-only subtotal is not a majority reading, it is the complete one. Any
+non-V.32 member would have left it short.
+
+**The fence's arithmetic was therefore wrong.** V.32 was being costed at 32,921
+bytes, which is `V32mod.c +39` (31,230) plus `v32.c` (1,691). Add this span and
+**V.32 is 42,460 bytes across three span labels**, not 32,921 across two.
+
+**And the span boundary bisects one module.** `nm -n` puts the whole V.32 block
+at 0x7fce0-0x844a0, in this order:
+
+    0x7fce0  V32TxHdxModem     |
+    0x7fd40  TxHdxTone         |  Dialer.c +18
+    ...      (8 TxHdx* states) |
+    0x82630  V32FP_modem       |
+    ---------------------------+ span boundary falls between two adjacent
+    0x827a0  v32_data          |  functions of the same module, 0x170 apart
+    0x82b00  v32_handshake     |  V32mod.c +39
+    0x838f0  V32RxHdxModem     |
+    0x83900  RxHdxTone         |
+    ...      (12 RxHdx* states)|
+    0x844a0  RxHdxNull         |
+
+The transmit half of the half-duplex state machine is in one span and the
+receive half in the other. So "is `Dialer.c` a tractable seam?" has a stronger
+answer than *entangled*: **there is no seam, because there is no dialler code
+in it.** README already says the span brackets nineteen translation units and
+that its contents are not attributed; this measures what they actually are.
+
+**The bare `TxHdx*`/`RxHdx*` names are V.32's, not shared with V.22.** They
+carry no modulation suffix, unlike `TxHdxDataB103` or `RxHdxStartV17`, so they
+could have been shared machinery. They are not: every relocation in the object
+naming one lies between 0x7f11f and 0x85bbe, inside the V.32 block, and V.22's
+own code begins at `V22FP_modem` 0x887b0 — 0xbf2 beyond the last of them. No
+V.22 function references any of the eighteen.
+
+**Consequence for planning.** There is no data-mode reconstruction work of any
+size left outside the fences in this span, or in the two beside it. What
+`service.py` reports as DATA and is genuinely reachable today is V.32 (42,460
+B, fenced), V.22 (`V32mod.c +39`'s `v22_*` and `v22.c`, fenced by a sibling
+agent's claim), `FPM_TONE_find_rev` (547 B), and the `dp_*` registration
+functions (`prop_dp_init`/`_exit`, `dp_vpcm_exit`, `dp_call_exit`, 186 B
+total). The registration functions are NOT available either — see F8165.
+
+### F8161. `FPM_iir_filt_block` is `FPM_iir_filt` inlined over a block, and it writes back a register it never assigns when `sections` is zero
+
+`FPM_iir_filt_block` (0x0a8b10, 287 B) has no `call` instruction and no
+relocation. Its inner loop is `FPM_iir_filt`'s body **instruction for
+instruction** — the same `+0x2000 >> 14` on the two recursive terms, the same
+bare `>> 14` on the two feedforward ones, the same clamp to +0x7fff and
+-0x7fff rather than -0x8000, and the same `(short)ff + ((c[4]*w) >> 14)`
+narrowing at the end. GCC 3.4.2 at `-O3` inlines a GLOBAL function within its
+own translation unit, and `FPM_iir_filt` keeps its own symbol regardless; this
+is F7940's observation with the callee visible rather than lost.
+
+The source that reproduces it is one line:
+
+    for (i = 0; i < count; i++)
+        samples[i] = FPM_iir_filt(samples[i], coeff, state, sections);
+
+with `short i` — the object re-narrows the counter with `cwtl` after each
+increment and compares 16 bits. Landed and green on the first attempt:
+`t_fpm_iir` gains **61,197 checks** over seven fragment sizes, three real
+coefficient sets, the unstable pair, and a block-versus-repeated-single
+cross-check against the blob's `FPM_iir_filt`.
+
+**The defect.** `sections - 1` is hoisted to `(%esp)` and the inner loop is
+guarded at 0x0a8b66 with `cmpw $0xffff`. The write-back at 0x0a8c19 is
+`mov %dx,-0x2(%edi)`, and `%edx` is assigned **only** at 0x0a8bf5, inside that
+loop. On the `sections == 0` path the store commits whatever the caller left in
+`%edx`; the correct value, the untouched sample, is still in `%ebx`.
+Unreachable — nothing in the object calls this symbol at all — and recorded as
+**deviation D393**, not reproduced, and not behind `DSPLIB_REPRODUCE_BUGS`
+because there is no behaviour to reproduce: the object's output on that path is
+a property of its caller's registers, not of its own code.
+
+**`t_fpm_iir` deliberately does not drive `sections == 0`.** A differential
+check there would be comparing two arbitrary choices and would pass or fail on
+register weather. `FPM_iir_filt_II`, in the same translation unit, has a
+well-defined zero-section case and **is** tested on it — the difference is that
+its accumulator stayed in one register.
+
+### F8162. `FPM_lmsupd2` is `ecc_adapt`'s arithmetic as a library routine, and that is what names its two multipliers
+
+`FPM_lmsupd2` (0x0abc60, 182 B) is `FPM_lmsupd` with the correction formed in
+two rounded stages instead of one:
+
+    FPM_lmsupd    (hist[k] * err + 0x20000) >> 18
+    FPM_lmsupd2   ((short)((hist[k] * mu + 0x10) >> 5) * err + 0x10000) >> 17
+
+The walk is identical. The `(short)` between the stages is the object's `cwtl`
+at 0x0abcb1 and is load-bearing: fold the two shifts into one `>> 22` and the
+function differs only where the intermediate leaves 16 bits, which small `mu`
+never does. `t_fpm_lmsupd` counts the inputs where the narrowing actually
+changed the value and **asserts the count is non-zero**, because without that
+the test passes against a version with no cast at all.
+
+**Naming it was the interesting part, and the answer did not come from a
+caller.** `readelf -r` finds **no relocation naming `FPM_lmsupd2` anywhere in
+`dsplibs.o`**, and none naming `FPM_block_update` or `FPM_circ_dotp2` either;
+`service.py` puts all three in the class no entry point reaches. So the strong
+evidence classes — a format string, a caller that types it — are both
+unavailable, and argument position alone (`err` sits in the slot `FPM_lmsupd`
+calls `err`) is the weakest class this tree recognises.
+
+**What settled it is a reconstructed sibling.** `ecc_adapt` in
+`src/dsp/fpm_ecc.c` is this arithmetic exactly — same `0x10 >> 5` stage, same
+narrowing, same `0x10000 >> 17` stage, same order — and it was recovered from
+the code `FPM_ECC_cancel` inlines, where the echo canceller's context does
+supply the meanings: the multiplier on the history sample is the adaptation
+step, the one on the narrowed product is the residual. Two independent lines
+landing on the same assignment is what makes `mu`/`err` worth writing down
+rather than `mul1`/`mul2`.
+
+**The argument order is the reverse of the application order** — `err` is the
+fifth argument and is applied second; `mu` is the sixth and is applied first.
+So the signature is `FPM_lmsupd`'s with `mu` appended, not the arithmetic's.
+The header says so, because this is exactly the kind of thing a future reader
+transposes.
+
+### F8163. `FPM_block_update`'s accumulator is 16-bit and its circular wrap is one conditional add, not a modulo
+
+`FPM_block_update` (0x0abd20, 244 B), nine arguments, no caller in the object.
+It correlates a block of `count` samples against a circular history and adds
+the scaled result into each of `taps` coefficients. Two properties are easy to
+smooth over and are not smoothable:
+
+- **The accumulator is a `short`.** `movswl %dx,%esi` at 0x0abdbd re-truncates
+  it on every inner iteration, so this is not an `int` narrowed at the end and
+  a long correlation wraps repeatedly.
+- **The wrap is a single conditional add.** The running index descends in its
+  own register and 0x0abdd4-0x0abddd adds `hlen` to a *copy*, leaving the
+  running value alone. Once it has fallen below `-hlen` the "wrapped" index is
+  still negative and the load goes below `hist`. `pos = (pos + hlen) % hlen`,
+  or updating the running value in place, is a different function.
+
+`pos` is 16-bit throughout — the object reads it with `movswl %cx,%eax` every
+iteration — so its decrement wraps at 16 bits.
+
+**Both are checked, with the checks guarded against going vacuous.**
+`t_fpm_lmsupd` simulates the index walk alongside the call and counts how often
+the accumulator actually truncated and how often the wrapped index was still
+negative; the run asserts both counts are non-zero. To make the second case a
+defined read rather than undefined behaviour in the harness, `hist` points into
+the **middle** of a 2,112-word array, so the out-of-contract indices are
+ordinary reads of initialised memory on both sides. The comparison stays exact;
+only the domain is wider than any caller would use.
+
+The three history/sample/coefficient loads are all `movzwl` and every one of
+them is discarded above bit 15 by a 16-bit store — dead extensions in the sense
+of F614, carrying no type information either way.
+
+### F8164. `FPM_circ_dotp2` is `ecc_filter` as a library routine, and its translation unit is an inference rather than a derivation
+
+`FPM_circ_dotp2` (0x0a6d30, 195 B) is the generic form of `ecc_filter`: the
+same circular walk — `widx` down to 0, then `taps - 1` back down to `widx + 1`,
+coefficients advancing across both halves — and the same `>> 3` on each
+product. It generalises it two ways: the coefficients advance by a **stride**
+rather than by one, and it is told the **total** shift and applies the residual
+`shift - 3` to the sum itself. `ecc_filter` leaves that residual 14 to
+`FPM_ECC_cancel`, so `shift == 17` is `ecc_filter` plus what its caller does —
+which is how the sixth argument was identified at all.
+
+`FPM_ECC_cancel` contains **no `call` instruction anywhere in its 2,064 bytes**,
+so its copy of the loop is inlined and this symbol stands alone, unreferenced,
+exactly as `FPM_lmsupd2` and `FPM_block_update` do. All three look like a
+library the author shipped and then hand-inlined for speed.
+
+**The translation unit is not settled by the address, and this file says so
+rather than pretending otherwise.** `tools/tuattrib.py` reports it `ambiguous`
+and brackets it `fpm_div.c|fpm_ecc.c` — it sits between `FPM_div_32`
+(0x0a6c90) and `FPM_ECC_cancel` (0x0a6e00) with no surviving local symbol on
+either side to anchor it. It is placed **first in `src/dsp/fpm_ecc.c`** because
+a circular dot product is that file's own inner loop and has nothing to do with
+division, and because first-in-file reproduces the object's emission order
+under either attribution. **That is an inference from content**, the weakest of
+the three classes, and it is labelled as one in the source comment. If a later
+pass finds a `fpm_div.c` local below 0x0a6d30, it moves.
+
+**`shift < 3` is out of contract.** The residual is computed as `shift - 3`
+into `%cl` and x86 masks a shift count to five bits, so `shift == 2` shifts
+right by 31 rather than left by one. Not recorded as a deviation — nothing
+calls it, so there is no behaviour to preserve — and the tests stay at
+`shift >= 3`.
+
+### F8165. The `dp_*` registration functions look like 186 bytes of free data-mode work and are fenced by their closure
+
+`prop_dp_init` (0x0, 44 B), `prop_dp_exit` (0x30, 44 B), `dp_vpcm_exit` (70 B)
+and `dp_call_exit` (28 B) are the only other unwritten symbols `service.py`
+classes as DATA outside V.32 and V.22, and at 186 bytes total they read as an
+easy afternoon.
+
+They are not available. `tools/closure.py --missing prop_dp_init prop_dp_exit
+dp_vpcm_exit dp_call_exit` pulls in the entire V.32 and V.22 registration
+world — `v22_ops`, `v32_ops`, `V32NextState`, `V32_TX_MODE`, `V32_RX_MODE`,
+`V32_RATE_SEQ`, `V32_ESEQ`, `V32_FINAL_RATE_SEQ`, `V32_CONNECT`, `RATEv32`,
+`SnrToRetrainTable`, `SMCv32_CFG`, `PPSv32_ICOFFS`, `PPSv32_QCOFFS`,
+`SREv32_CFG`, `V32_CFG`, `PPSv32_CFG`, `V32_CTL`, `V32_S_DATA_COEF`,
+`V32DiconnectThreshTable`, `V22_PROTOCOL` and the rest. `prop_dp_init` is the
+top-level datapump registration and reaches every datapump the object has, so
+it is the last thing that can be written, not the first.
+
+**The general point, since this is the second time in one pass:** a symbol's
+byte count says nothing about whether it can be landed. What decides is the
+closure, and for a registration or dispatch function the closure is the whole
+system. Cost the closure before costing the bytes.

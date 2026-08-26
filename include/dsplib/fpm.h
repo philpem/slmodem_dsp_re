@@ -100,4 +100,40 @@ int FPM_sqrt_table_size(void);
 void FPM_lmsupd(short *coeff, const short *hist, short widx, short taps,
 		short err);
 
+/*
+ * The same walk with the correction formed in two rounded stages:
+ *
+ *     ((short)((hist[k] * mu + 0x10) >> 5) * err + 0x10000) >> 17
+ *
+ * The intermediate narrowing to 16 bits is load-bearing, not cosmetic.  Note
+ * the argument ORDER -- `err` first, in `FPM_lmsupd`'s slot, then `mu`, which
+ * is the reverse of the order they are applied in.  Nothing in the object
+ * calls this; the names come from `ecc_adapt`, which is the same arithmetic
+ * with a caller to type it.  See src/dsp/fpm_lmsupd.c and finding F8162.
+ */
+void FPM_lmsupd2(short *coeff, const short *hist, short widx, short taps,
+		 short err, short mu);
+
+/*
+ * Correlate `count` samples against a circular history and accumulate the
+ * scaled result into `taps` coefficients.  The accumulator is 16-bit and
+ * truncates every iteration, and the circular wrap is a single conditional
+ * add rather than a modulo -- both are load-bearing.  No caller in the object.
+ * See src/dsp/fpm_lmsupd.c and finding F8163.
+ */
+void FPM_block_update(short *coeff, short taps, const short *hist, short widx,
+		      short hlen, const short *x, short count, short step,
+		      short gain);
+
+/*
+ * Dot a circular history against a strided coefficient array, walking `widx`
+ * down to 0 and then `taps - 1` back down to `widx + 1` while the coefficients
+ * advance by `stride` across both halves.  Each product is shifted down 3
+ * inside the loop and the remaining `shift - 3` is applied to the sum, so
+ * `shift` is the TOTAL right shift.  Defined in src/dsp/fpm_ecc.c; see finding
+ * F8164 for why there rather than in fpm_div.c.
+ */
+short FPM_circ_dotp2(const short *coeff, const short *hist, short widx,
+		     short taps, short stride, short shift);
+
 #endif /* DSPLIB_FPM_H */

@@ -12,8 +12,60 @@
  * coefficients to build the echo estimate that is subtracted from the input.
  */
 
+#include "dsplib/fpm.h"
 #include "dsplib/fpm_ecc.h"
 #include "dsplib/sysdep.h"
+
+/*
+ * FPM_circ_dotp2 -- .text 0x0a6d30, 195 bytes.
+ *
+ * The LIBRARY form of `ecc_filter` below: the same circular walk, the same
+ * `>> 3` on each product, generalised with a coefficient STRIDE and with the
+ * caller's residual shift folded in.  `ecc_filter` shifts each product by 3
+ * and leaves the remaining 14 to `FPM_ECC_cancel`; this one is told the TOTAL
+ * shift and applies `shift - 3` to the sum itself, so `shift == 17` is
+ * `ecc_filter` plus what its caller does.  The two are not interchangeable in
+ * the object -- `FPM_ECC_cancel` contains no `call` instruction at all, so its
+ * copy is inlined and this one stands alone.
+ *
+ * WHICH TRANSLATION UNIT IT BELONGS TO IS NOT SETTLED BY THE ADDRESS.
+ * `tools/tuattrib.py` reports it `ambiguous` and brackets it `fpm_div.c|
+ * fpm_ecc.c`: it sits between `FPM_div_32` (0x0a6c90) and `FPM_ECC_cancel`
+ * (0x0a6e00) with a surviving local symbol on neither side of it.  It is put
+ * here, first in the file, because a circular dot product is this file's own
+ * inner loop and is nothing to do with division, and because first-in-file
+ * reproduces the object's emission order either way.  That is an inference
+ * from content, not a derivation -- finding F8164 says so, and if a later pass
+ * finds a `fpm_div.c` local symbol below 0x0a6d30 it moves.
+ *
+ * NO CALLER ANYWHERE IN THE OBJECT, so `coeff`, `stride` and `shift` are named
+ * for what the instructions do with them and not for a role.
+ *
+ * `shift` BELOW 3 IS OUT OF CONTRACT.  The object computes the residual as
+ * `shift - 3` into `%cl` and executes `sar %cl,%edi`, and x86 masks the count
+ * to five bits -- so `shift == 2` shifts right by 31, not left by one.  Not
+ * reproduced as a deviation because nothing calls it and there is no
+ * behaviour to preserve; the tests stay inside `shift >= 3`.
+ */
+short
+FPM_circ_dotp2(const short *coeff, const short *hist, short widx, short taps,
+	       short stride, short shift)
+{
+	const short *c = coeff;
+	int acc = 0;
+	short i;
+
+	for (i = widx; i >= 0; i--) {
+		acc += (hist[i] * *c) >> 3;
+		c += stride;
+	}
+	for (i = (short)(taps - 1); i > widx; i--) {
+		acc += (hist[i] * *c) >> 3;
+		c += stride;
+	}
+
+	return (short)(acc >> (shift - 3));
+}
 
 /*
  * One section against one coefficient block.  The history is circular with
