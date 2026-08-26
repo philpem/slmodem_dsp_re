@@ -38,6 +38,17 @@
  * from content, not a derivation -- finding F8164 says so, and if a later pass
  * finds a `fpm_div.c` local symbol below 0x0a6d30 it moves.
  *
+ * PUTTING IT FIRST COST THE REST OF THIS FILE NOTHING, and that was MEASURED
+ * rather than assumed: emission order drives register allocation (findings
+ * F7796 and F7800) and `make phase` cannot see a bystander regression at all
+ * (F8111).  Built both ways with the period compiler and compared raw `.text`
+ * bytes per symbol, `FPM_ECC_cancel` (1873 B), `FPM_ECC_init` (599 B) and
+ * `FPM_ECC_free` (98 B) come out byte-identical with and without this function
+ * above them, relocation targets included.  Finding F8167, which also records
+ * that the first attempt at that measurement compared objdump TEXT and
+ * reported all three CHANGED -- objdump prints absolute branch targets, and
+ * 195 bytes of new function ahead of them moves every one.
+ *
  * NO CALLER ANYWHERE IN THE OBJECT, so `coeff`, `stride` and `shift` are named
  * for what the instructions do with them and not for a role.
  *

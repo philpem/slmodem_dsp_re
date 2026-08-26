@@ -91622,13 +91622,27 @@ narrowing at the end. GCC 3.4.2 at `-O3` inlines a GLOBAL function within its
 own translation unit, and `FPM_iir_filt` keeps its own symbol regardless; this
 is F7940's observation with the callee visible rather than lost.
 
-The source that reproduces it is one line:
+The source is one line:
 
     for (i = 0; i < count; i++)
         samples[i] = FPM_iir_filt(samples[i], coeff, state, sections);
 
 with `short i` — the object re-narrows the counter with `cwtl` after each
-increment and compares 16 bits. Landed and green on the first attempt:
+increment and compares 16 bits.
+
+**IT IS NOT "the source that REPRODUCES it", and this finding said so before
+the codegen tier was run.** `byteident.py --why FPM_iir_filt_block` puts ours
+at **72 instructions against the blob's 86, 29 bytes short** — grade SIZE, and
+grade 1 rejected as lever 2, a missing statement rather than a renaming. What
+IS confirmed is the inlining: our build emits no `call` either, so the callee
+does vanish into the loop. The remaining 14 instructions are open, and F8166
+records where the other three in this batch stand and why the number is not
+alarming. The wording is corrected rather than the code, because the
+differential tier is green and the codegen residual is the ordinary state of a
+first reconstruction here — but "reproduces" is a word that has to be earned by
+`byteident`, and it was written before the measurement.
+
+Landed and green on the first attempt:
 `t_fpm_iir` gains **61,197 checks** over seven fragment sizes, three real
 coefficient sets, the unstable pair, and a block-versus-repeated-single
 cross-check against the blob's `FPM_iir_filt`.
@@ -91804,3 +91818,119 @@ it is the last thing that can be written, not the first.
 byte count says nothing about whether it can be landed. What decides is the
 closure, and for a registration or dispatch function the closure is the whole
 system. Cost the closure before costing the bytes.
+
+### F8166. The codegen tier on this batch: four functions 13-29 bytes short, which is exactly where their already-accepted siblings sit
+
+Every function in this pass is green on the differential tier under GCC 3.4.2.
+None of them is byte-identical, and the numbers only mean something beside the
+functions that were already accepted in the same files:
+
+| symbol | grade 0 | instructions, blob vs ours | status |
+|---|--:|---|---|
+| `FPM_iir_filt` | 10 B differ | 59 / 55 | **accepted, earlier pass** |
+| `FPM_iir_filt_II` | 19 B differ | 73 / 65 | **accepted, earlier pass** |
+| `FPM_lmsupd` | 22 B differ | 54 / 47 | **accepted, earlier pass** |
+| `FPM_lmsupd2` | 13 B differ | 65 / 57 | this pass |
+| `FPM_circ_dotp2` | 16 B differ | 64 / 58 | this pass |
+| `FPM_block_update` | 27 B differ | 71 / 69 | this pass |
+| `FPM_iir_filt_block` | 29 B differ | 86 / 72 | this pass |
+
+`byteident.py` rejects all seven at grade 1 as **lever 2 — a missing or added
+statement, not a renaming**. So the residual is of one kind throughout these
+two files and predates this batch; the three new ones are not worse than the
+three that were already there, and two of them are better. This is the ordinary
+state of a first reconstruction in this tree and the refinement waves are what
+close it. Recorded so the next pass has a baseline rather than a starting point
+it has to re-derive.
+
+**The ratchet fails, and not because of this batch.**
+`tools/toolchain/compare.py --ratchet` reports `same_size was 71, now 52`.
+Its stored baseline is `{compared: 986, identical: 350, same_size: 71}` against
+a tree that now compares **1255** symbols with **627** identical. A function
+moving out of *same size, different instructions* and into *identical* is a
+gain that shows up in that field as a loss, and 277 of them have moved since
+the baseline was blessed. The floor is stale tree-wide — F556's failure mode,
+"a gain measured at a merge and never blessed" — and it is left for whoever
+next re-blesses it deliberately, because re-blessing it here would bury the
+number under an unrelated batch.
+
+### F8167. Putting a new function first in an existing file cost nothing here, and it was measured rather than argued
+
+`FPM_circ_dotp2` was placed **first** in `src/dsp/fpm_ecc.c`, ahead of
+`ecc_filter`, `ecc_adapt`, `FPM_ECC_cancel`, `FPM_ECC_init` and
+`FPM_ECC_free`. Register allocation follows a translation unit's emission order
+(F7796, F7800), and F8111 — the commit this pass started from — is a 22-byte
+bystander regression that was *"invisible to every counter the project uses"*
+and landed only because it was disclosed. `make phase` cannot see this class of
+change at all.
+
+So it was A/B'd: build `build/tc_out` with `master`'s `fpm_ecc.c`, keep the
+object, restore the new one, rebuild, and compare the **raw `.text` bytes** of
+each symbol between the two objects.
+
+    FPM_ECC_cancel   BYTE-IDENTICAL (1873 B,  0 relocations)
+    FPM_ECC_init     BYTE-IDENTICAL ( 599 B, 12 relocations)
+    FPM_ECC_free     BYTE-IDENTICAL (  98 B,  6 relocations)
+
+Relocation targets compared by name as well as the bytes. `ecc_filter` and
+`ecc_adapt` are `static` and fully inlined, so they have no symbol on either
+side and are covered by `FPM_ECC_cancel`'s 1,873 bytes being unmoved.
+
+**The first attempt at this measurement reported all three CHANGED, and was
+measuring itself.** It compared `objdump -d` text, which prints **absolute**
+branch targets: adding 195 bytes of function ahead of them shifts every target
+in the file and every `jmp` reads as a difference. Same size, same instruction
+count, "changed" — which is precisely the artefact `byteident.py`'s header
+warns about and says cost 310 functions a false verdict. Comparing raw bytes
+instead makes branch displacements PC-relative and therefore invariant, and the
+answer inverted. **An A/B tool that has not been made to handle relocation and
+addressing is reporting its own artefacts**, and the failure mode is quiet:
+CHANGED at an identical instruction count reads as a real regression.
+
+### F8168. `FPM_phasor_dp` is a double-precision phasor, it is NOT blocked, and its closure requirement is the same spurious one `FPM_phasor` already carries
+
+Left unwritten in this pass for time, not for an obstacle, and the next pass
+should not re-derive any of this.
+
+`FPM_phasor_dp` (0x0a93e0, 246 B) is `FPM_phasor` with a **fractional phase**
+carried between calls. Its argument is a six-field structure, two fields wider
+than `struct fpm_phasor`:
+
+    +0x00 phase        +0x06 inc
+    +0x02 cos          +0x08 fractional phase, written back each call
+    +0x04 sin          +0x0a fractional increment
+
+The trigonometry is `FPM_phasor`'s exactly — same `>> 5` index, same `>> 8`
+quadrant, same odd-quadrant reflection (`frac = 32 - frac`, `idx = ~idx`), same
+`& 0xff`, same interpolation, same `(unsigned short)` narrowing before the
+quadrant sign, same `>> 15`. So `phasor_split`, `interpolate` and
+`phasor_value` in `src/dsp/fpm_phasor.c` are reusable verbatim. Only the
+advance differs:
+
+    acc = ((phase + inc) << 15) + ((frac_phase + frac_inc) >> 1);
+    if (acc > 0x3fffffff)
+        acc -= 0x40000000;
+    p->phase      = (short)(acc >> 15);
+    p->frac_phase = (short)(acc - ((short)(acc >> 15) << 15));
+
+The `>> 1` on the sum of the two fractional fields is the object's `sar $1,%ebx`
+at 0x0a949e and is not explained by anything visible; do not name those two
+fields for a Q-format on the strength of it.
+
+**It reads the sign tables unmasked, exactly as `FPM_phasor` does** — relocations
+at 0x0a944b against `FPM_cos_sign` and 0x0a9472 against `FPM_sin_sign` — so it
+is D392's third user and must index `FPM_cos_sign_ext` / `FPM_sin_sign_ext`
+with the `FPM_PHASOR_SIGN_BELOW` bias. `src/dsp/fpm_phasor.c` already says so,
+in a note written for whoever writes this function.
+
+**Its closure looks blocking and is not.** `closure.py --missing FPM_phasor_dp`
+demands `FPM_cos_table` and `FPM_sin_table` (0x0cde0 and 0x0cbc0, 514 B each,
+`R`). Those are unwritten as *global symbols* and always will be: `FPM_phasor`
+is written, passes, and references the same two tables at 0x0a934e, 0x0a9356,
+0x0a9376 and 0x0a9385, because this tree carries their contents as
+`static const unsigned short fpm_cos_table[257]` / `fpm_sin_table[257]` in
+`src/dsp/fpm_phasor.c`. `closure.py` computes from the BLOB's relocations and
+cannot see that a factoring difference has already satisfied the requirement.
+**A closure entry naming a table our tree carries under a different linkage is
+not a blocker** — check whether an already-written sibling depends on the same
+symbol before believing it, which is the opposite mistake to F8165's.

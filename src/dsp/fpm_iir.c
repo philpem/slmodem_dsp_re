@@ -72,7 +72,16 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
  * rounding on the two recursive terms, the same truncation on the two
  * feedforward ones, and the same asymmetric clamp to -0x7fff.  GCC inlines the
  * call at -O3 within the translation unit, so the object shows no `call` here
- * and FPM_iir_filt keeps its own symbol regardless (compare finding F7940).
+ * and FPM_iir_filt keeps its own symbol regardless (compare finding F7940) --
+ * and our build inlines it too, which was checked rather than assumed.
+ *
+ * THE CODEGEN IS NOT CLOSED: 72 instructions against the object's 86, 29 bytes
+ * short, rejected at grade 1 as a missing statement rather than a renaming.
+ * The differential tier is green over the whole driven domain and this is the
+ * same class and size of residual `FPM_iir_filt` and `FPM_iir_filt_II` above
+ * and below it already carry (10 and 19 bytes), so it is a refinement target
+ * and not a defect.  Finding F8166 has the table; do not read the one-line
+ * body below as "reproduces the object" without re-running `byteident.py`.
  *
  * `sections - 1` is hoisted out of the outer loop by the compiler, and the
  * inner counter is decremented as a 16-bit value and tested against -1, the
