@@ -93463,6 +93463,28 @@ of four.
 closed on its own and drops the next pass's Hdx closure from 17,496 to states
 plus next-state code alone.
 
+**AND THAT IS NOW MEASURED ON THE FINISHED TREE, NOT PREDICTED.** With all three
+of this pass's batches merged — the rate codec and sequence machinery (F8202),
+the datapump control surface (F8210–F8218) and the receive leaf with both
+drivers (F8225–F8239) — `closure.py` over the same twenty-two roots reports
+
+```
+31 symbols, 13344 bytes (unwritten only)
+```
+
+and the decomposition is the brief for the next V.32 pass:
+
+| | symbols | bytes |
+|---|--:|--:|
+| the Hdx states, less the two drivers already written | 20 | 4,359 |
+| `V32OrgNextState`, `V32AnsNextState`, `V32RngInitNextState`, `V32RngRespNextState`, `V32LocLoopNextState` | 5 | 8,833 |
+| `V32NextState`, `V32_CONNECT`, `V32_RX_MODE`, `V32_TX_MODE` (`.data`) | 4 | 66 |
+| `SREv32_CFG`, `V32_S_DATA_COEF` (`.rodata`) | 2 | 86 |
+| | **31** | **13,344** |
+
+It is one commit and five reading jobs; F8201 is why those are different
+questions.
+
 ### F8201. V.32's own translation-unit names are in the object, and the span boundary at 0x827a0 is one of the author's own file boundaries
 
 `docs/modules.md` already carries them and nothing had read them against the
