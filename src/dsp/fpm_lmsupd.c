@@ -128,11 +128,18 @@ FPM_lmsupd2(short *coeff, const short *hist, short widx, short taps, short err,
  *             pos -= step
  *         coeff[i] = (short)(coeff[i] + gain * acc)
  *
- * THREE THINGS HERE ARE EASY TO SMOOTH OVER AND ARE NOT SMOOTHABLE:
+ * `acc` IS A SHORT and is re-truncated on every inner iteration (`movswl
+ * %dx,%esi` at 0x0abdbd), so this is not an int accumulator narrowed at the
+ * end.  **That is a codegen claim and nothing else**: `acc` is used exactly
+ * once, in `(short)(coeff[i] + gain * acc)`, so a 32-bit accumulator is
+ * congruent to this one modulo 65536 at every step and produces a bit-
+ * identical coefficient for every input.  Written this way because it is what
+ * the object's instructions say and what makes the compiler emit them; do not
+ * expect a differential test to defend it, and see the `equivalent` entry in
+ * `test/mutations/fpmlmsupd2.json` for the proof that none can.  Finding F8163.
  *
- *   - `acc` is a SHORT and is re-truncated on every inner iteration
- *     (`movswl %dx,%esi` at 0x0abdbd), so this is not an int accumulator that
- *     happens to be narrowed at the end.  A long correlation wraps repeatedly.
+ * TWO THINGS HERE ARE EASY TO SMOOTH OVER AND DO CHANGE THE ANSWER:
+ *
  *   - THE WRAP IS A SINGLE CONDITIONAL ADD, NOT A MODULO.  `pos` runs down
  *     monotonically in its own register and the wrap is computed into a
  *     different one (0x0abdd4-0x0abddd adds `hlen` to a copy and leaves `pos`

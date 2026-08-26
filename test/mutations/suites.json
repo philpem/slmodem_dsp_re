@@ -799,5 +799,17 @@
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
+ ],
+ "fpmlmsupd2": [
+  "src/dsp/fpm_lmsupd.c",
+  "build/test/t_fpm_lmsupd"
+ ],
+ "fpmcircdotp": [
+  "src/dsp/fpm_ecc.c",
+  "build/test/t_fpm_ecc"
+ ],
+ "fpmiirblock": [
+  "src/dsp/fpm_iir.c",
+  "build/test/t_fpm_iir"
  ]
 }

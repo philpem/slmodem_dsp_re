@@ -99,14 +99,19 @@ run2(short taps, short widx, short err, short mu)
  * ---------------------------------------------------------------------------
  * FPM_block_update -- correlate a block against a circular history.
  *
- * Three properties are load-bearing and each has its own non-vacuity guard,
- * because every one of them is invisible on gentle inputs:
+ * The property that decides the answer is the circular wrap: it is ONE
+ * conditional add, so an index that has run below `-hlen` stays negative after
+ * it and reads below `hist`.  `wrap_neg_seen` counts how often the driven
+ * inputs actually got there, and the guard at the end of main asserts it fired.
  *
- *   - the accumulator is a SHORT and truncates on every inner iteration, not
- *     an int narrowed at the end (`acc_trunc_seen`);
- *   - the circular wrap is ONE conditional add, so an index that has run below
- *     `-hlen` stays negative after it and reads below `hist` (`wrap_neg_seen`);
- *   - `gain * acc` is added to the coefficient and truncated.
+ * `acc_trunc_seen` counts the 16-bit accumulator's truncations and is kept for
+ * exactly one reason, which is NOT coverage: it is the case that taught this
+ * pass the difference.  A guard proves the branch was REACHED.  It does not
+ * prove the test can tell that branch from its alternative -- and here it
+ * cannot, because `acc` feeds only `(short)(coeff[i] + gain * acc)`, which is
+ * linear modulo 65536, so a 32-bit accumulator gives bit-identical output on
+ * every input.  The mutation that widens it is recorded `equivalent` with the
+ * proof.  Finding F8163; do not read a firing counter as a tested claim.
  *
  * `hist` therefore points into the MIDDLE of a much larger array, so the
  * out-of-contract negative indices are ordinary reads of initialised memory on

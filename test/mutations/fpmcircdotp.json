@@ -1,0 +1,39 @@
+[
+ {
+  "note": "FPM_circ_dotp2 -- the library form of this file's own `ecc_filter`, with no caller anywhere in the object (finding F8164).  The mutations attack the three things that distinguish it from a plain dot product: the SPLIT circular walk, the coefficient STRIDE, and the fact that `>> 3` is applied per PRODUCT while the residual `shift - 3` is applied to the SUM."
+ },
+ {
+  "note": "The `ecc_filter` and `ecc_adapt` statics below it in the same file are NOT attacked here.  They are already adjudicated by `t_fpm_ecc`'s eighteen `cancel:` cases, which drive them through `FPM_ECC_cancel` against the blob; a second set aimed at the same lines would record the same verdicts under a different name."
+ },
+
+ {
+  "label": "the residual shift is the whole shift, not shift - 3",
+  "find": "\treturn (short)(acc >> (shift - 3));",
+  "replace": "\treturn (short)(acc >> shift);"
+ },
+ {
+  "label": "the per-product shift is applied to the sum instead",
+  "find": "\tfor (i = widx; i >= 0; i--) {\n\t\tacc += (hist[i] * *c) >> 3;",
+  "replace": "\tfor (i = widx; i >= 0; i--) {\n\t\tacc += hist[i] * *c;"
+ },
+ {
+  "label": "the coefficients advance by one rather than by the stride",
+  "find": "\tfor (i = widx; i >= 0; i--) {\n\t\tacc += (hist[i] * *c) >> 3;\n\t\tc += stride;",
+  "replace": "\tfor (i = widx; i >= 0; i--) {\n\t\tacc += (hist[i] * *c) >> 3;\n\t\tc++;"
+ },
+ {
+  "label": "the second half of the walk stops at widx rather than above it",
+  "find": "\tfor (i = (short)(taps - 1); i > widx; i--) {",
+  "replace": "\tfor (i = (short)(taps - 1); i >= widx; i--) {"
+ },
+ {
+  "label": "the second half of the walk starts at taps rather than taps - 1",
+  "find": "\tfor (i = (short)(taps - 1); i > widx; i--) {\n\t\tacc += (hist[i] * *c) >> 3;",
+  "replace": "\tfor (i = (short)taps; i > widx; i--) {\n\t\tacc += (hist[i] * *c) >> 3;"
+ },
+ {
+  "label": "the coefficient pointer restarts at the base for the second half",
+  "find": "\tfor (i = (short)(taps - 1); i > widx; i--) {\n\t\tacc += (hist[i] * *c) >> 3;\n\t\tc += stride;",
+  "replace": "\tc = coeff;\n\tfor (i = (short)(taps - 1); i > widx; i--) {\n\t\tacc += (hist[i] * *c) >> 3;\n\t\tc += stride;"
+ }
+]

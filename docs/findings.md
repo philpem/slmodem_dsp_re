@@ -91696,24 +91696,55 @@ smooth over and are not smoothable:
 
 - **The accumulator is a `short`.** `movswl %dx,%esi` at 0x0abdbd re-truncates
   it on every inner iteration, so this is not an `int` narrowed at the end and
-  a long correlation wraps repeatedly.
+  a long correlation wraps repeatedly. **But see below — this one is not
+  observable, and saying so is the point of the finding.**
 - **The wrap is a single conditional add.** The running index descends in its
   own register and 0x0abdd4-0x0abddd adds `hlen` to a *copy*, leaving the
   running value alone. Once it has fallen below `-hlen` the "wrapped" index is
   still negative and the load goes below `hist`. `pos = (pos + hlen) % hlen`,
-  or updating the running value in place, is a different function.
+  or updating the running value in place, is a different function, and the
+  mutation that makes it one **is caught**.
 
 `pos` is 16-bit throughout — the object reads it with `movswl %cx,%eax` every
 iteration — so its decrement wraps at 16 bits.
 
-**Both are checked, with the checks guarded against going vacuous.**
+**THE ACCUMULATOR'S WIDTH IS UNOBSERVABLE FROM THE OUTPUT, AND THE FIRST DRAFT
+OF THIS FINDING CLAIMED OTHERWISE.** The mutation that widens `acc` to `int`
+and drops its cast came back NOT CAUGHT, and it is right to. By induction the
+two accumulators are congruent modulo 65536 at every step — the narrow one is
+`trunc16(acc + p)`, the wide one is `acc + p`, and `trunc16` is the identity
+modulo 65536 — and everything downstream is linear over that modulus, because
+`acc` is used exactly once, in `(short)(coeff[i] + gain * acc)`. So
+`gain * acc` agrees modulo 65536 too and the stored coefficient is bit-
+identical for **every** input. No fixture separates them. The width is settled
+by the object's instruction and by the codegen tier, not by this one, and the
+mutation is recorded `equivalent` with that proof rather than deleted.
+
+**The trap that produced the wrong first draft is worth more than the result.**
+`t_fpm_lmsupd` counts how often the accumulator actually truncated, the count is
+large, and the guard asserting it is non-zero passes. That looks like coverage
+and is not: **it proves the truncation HAPPENS, not that it MATTERS.** A
+non-vacuity guard licenses the claim "this input set reaches the branch"; it
+does not license "this test can tell the branch from its alternative". Only the
+mutation tier can say the second, and here it said no.
+
+**Two mutations in this one pass turned out equivalent for the same reason** —
+this and `fpmiirblock`'s `the section output is not narrowed to 16 bits`. Both
+are intermediate narrowings whose only consumer is itself narrowed to 16 bits.
+That is a recognisable shape: **an intermediate `(short)` is behaviourally dead
+wherever every path from it to an output passes through another 16-bit
+truncation with only additions and multiplications in between.** It is still
+worth writing, because it is what makes the compiler emit the object's
+`movswl`; it is simply not this tier's to adjudicate. Look for the shape before
+writing the mutation, not after.
+
+**What IS checked here, and how the out-of-contract read is made legal.**
 `t_fpm_lmsupd` simulates the index walk alongside the call and counts how often
-the accumulator actually truncated and how often the wrapped index was still
-negative; the run asserts both counts are non-zero. To make the second case a
-defined read rather than undefined behaviour in the harness, `hist` points into
-the **middle** of a 2,112-word array, so the out-of-contract indices are
-ordinary reads of initialised memory on both sides. The comparison stays exact;
-only the domain is wider than any caller would use.
+the wrapped index was still negative, asserting the count is non-zero. To make
+that a defined read rather than undefined behaviour in the harness, `hist`
+points into the **middle** of a 2,112-word array, so the out-of-contract indices
+are ordinary reads of initialised memory on both sides. The comparison stays
+exact; only the domain is wider than any caller would use.
 
 The three history/sample/coefficient loads are all `movzwl` and every one of
 them is discarded above bit 15 by a 16-bit store — dead extensions in the sense

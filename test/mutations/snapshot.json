@@ -315,6 +315,18 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "fpmcircdotp": {
+   "key": "231d1f41f25cf32d213fab89e4d29f792e244e721c3690cca6995bf0d2f3032c",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the coefficient pointer restarts at the base for the second half": "caught",
+    "the coefficients advance by one rather than by the stride": "caught",
+    "the per-product shift is applied to the sum instead": "caught",
+    "the residual shift is the whole shift, not shift - 3": "caught",
+    "the second half of the walk starts at taps rather than taps - 1": "caught",
+    "the second half of the walk stops at widx rather than above it": "caught"
+   }
+  },
   "fpmfserecv": {
    "key": "1de8d5608fd76384895d4feae2180d47481768593bb8a13662daf36ffce84bdf",
    "summary": "45 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
@@ -364,6 +376,36 @@
     "the write index wraps one entry late": "caught",
     "training ends one symbol early": "caught",
     "training holds the integrator down, as V.22 does": "caught"
+   }
+  },
+  "fpmiirblock": {
+   "key": "2f4ea01709792cc93b6e722f61bf5a31fe80c446e5474807b162d0c586bd514d",
+   "summary": "9 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the block filters every sample but the last": "caught",
+    "the block is filtered back to front": "caught",
+    "the feedforward terms round like the recursive ones": "caught",
+    "the form I cascade shifts numerator and denominator together": "caught",
+    "the form I cascade's coefficients are in textbook order": "caught",
+    "the recursive node's lower clamp is symmetric at -0x8000": "caught",
+    "the recursive node's lower clamp tests strictly less than": "caught",
+    "the recursive terms truncate like the feedforward ones": "caught",
+    "the section output is not narrowed to 16 bits before the last term": "equivalent"
+   }
+  },
+  "fpmlmsupd2": {
+   "key": "47e7aded6f3acef1f28ec4058dd21055cb355a755a9444cd3202097d93fc79bc",
+   "summary": "9 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "block_update accumulates in 32 bits instead of re-truncating each iteration": "equivalent",
+    "block_update replaces the coefficient instead of accumulating into it": "caught",
+    "block_update's circular wrap is a modulo rather than one conditional add": "caught",
+    "block_update's index advances instead of retreating": "caught",
+    "block_update's starting index does not back off by the tap number": "caught",
+    "lmsupd2's first stage truncates instead of rounding": "caught",
+    "lmsupd2's intermediate is not narrowed to 16 bits between the two multiplies": "caught",
+    "lmsupd2's second stage shifts by 18, as the single-stage form does": "caught",
+    "lmsupd2's two multipliers are transposed": "caught"
    }
   },
   "fpmmtd": {
