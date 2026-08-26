@@ -7,9 +7,10 @@
  *   FPM_FSE_init     .text 0x0a86b0
  *   avg_err_show.0   .bss  0x0008d0     4   (LOCAL, function-scope static)
  *
- * The three are written in the object's own emission order, which is also
- * `FSE_getdiag`, receive, free, init -- `FSE_getdiag` at 0x0a7d10 is the
- * translation unit's first symbol and is not reconstructed here.
+ *   FSE_getdiag      .text 0x0a7d10   229
+ *
+ * The four are written in the object's own emission order: `FSE_getdiag` at
+ * 0x0a7d10 is the translation unit's first symbol, then receive, free, init.
  *
  * See dsplib/fpm_fse.h for what the block is.
  */
@@ -62,6 +63,60 @@
  * symbol times sixteen.  Nothing else in the block reads it.
  */
 #define FPM_FSE_SHOW_SAMPLES	0x1c1f
+
+/*
+ * Drain one of the two scatter logs into `out` and report how many points came
+ * out.  A `which` that is neither 0 nor 1 copies nothing and reports none.
+ *
+ * THE TWO ARMS ARE NOT SYMMETRICAL, and both asymmetries are the object's:
+ *
+ *   - `diag` is discarded outright when it holds more than FPM_FSE_DIAG - 1,
+ *     which `FPM_FSE_receive` can leave it holding.  `diag2` has no such
+ *     guard.
+ *   - `diag` is emptied AFTER the copy and `diag2` BEFORE it.  Neither order
+ *     is observable unless `out` overlaps the block, which no caller in the
+ *     object arranges; the object's order is written and no claim is made
+ *     that it matters.
+ *
+ * Both counts are held down to `max` the same way, and the return is the
+ * number actually copied and not the number that was waiting.
+ */
+int
+FSE_getdiag(struct fpm_fse *state, int which, struct fpm_fse_point *out,
+	    int max)
+{
+	int n, i;
+
+	switch (which) {
+	case 0:
+		n = state->diag_n;
+		if (n > FPM_FSE_DIAG - 1) {
+			state->diag_n = 0;
+			return 0;
+		}
+		if (n > max)
+			n = max;
+		for (i = 0; i < n; i++) {
+			out[i].i = state->diag[i].i;
+			out[i].q = state->diag[i].q;
+		}
+		state->diag_n = 0;
+		return n;
+
+	case 1:
+		n = state->diag2_n;
+		if (n > max)
+			n = max;
+		state->diag2_n = 0;
+		for (i = 0; i < n; i++) {
+			out[i].i = state->diag2[i].i;
+			out[i].q = state->diag2[i].q;
+		}
+		return n;
+	}
+
+	return 0;
+}
 
 /*
  * One block in, one symbol per `cfg.interp` samples out.  `count` samples are

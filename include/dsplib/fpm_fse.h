@@ -193,4 +193,16 @@ void FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg,
 		  int fresh);
 void FPM_FSE_free(struct fpm_fse *state);
 
+/*
+ * Drain one of the two scatter logs into `out`, at most `max` points, and
+ * report how many were copied.  `which` selects `diag` (0) or `diag2` (1);
+ * anything else copies nothing and reports none.  The log it reads is emptied
+ * whether or not anything was copied.
+ *
+ * `V32FP_GetDiagnostics` is its only caller in the object and forwards all four
+ * arguments; the block it hands over is the V.32 datapump's equaliser.
+ */
+int FSE_getdiag(struct fpm_fse *state, int which, struct fpm_fse_point *out,
+		int max);
+
 #endif /* DSPLIB_FPM_FSE_H */

@@ -7,14 +7,14 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##########################........]  75.8%    556945 bytes, 1256 symbols
-  tested      [##################################]  99.9%    556142 bytes, 1240 of 1256 that can be
+  translated  [##########################........]  76.5%    562148 bytes, 1295 symbols
+  tested      [##################################]  99.9%    561345 bytes, 1279 of 1295 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 21 of ours (10728 bytes).
+  the file-local symbols too -- 22 of ours (10729 bytes).
 
   translated, alias exists, and NOT tested:
     _ZN12VPcmFloModem16getConstellationEP11int_complexm    469 bytes
@@ -95,11 +95,11 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                 74158 bytes   299 symbols
-    V32mod.c +39                                   37698 bytes    76 symbols
-    Dialer.c +18                                   10605 bytes    38 symbols
+    class1tx.c +94                                 73929 bytes   298 symbols
+    V32mod.c +39                                   36744 bytes    64 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
     Fdspkrnl.c +13                                  7629 bytes    27 symbols
+    Dialer.c +18                                    6585 bytes    12 symbols
     Beepgen.c +3                                    6546 bytes    27 symbols
     VPcmV34Main.cpp +72                             5805 bytes    67 symbols
     class1.c                                        4626 bytes    14 symbols

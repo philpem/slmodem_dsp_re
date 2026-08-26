@@ -8816,3 +8816,317 @@ fails on it.
 relocations of any kind name them), so no caller exists whose behaviour could
 be affected, and whether the vendor's intended caller would have reached
 either arm cannot be known from this object.
+
+## D480 ⚠ `FSE_getdiag` throws away a scatter log that is filled exactly to capacity
+
+Its `which == 0` arm guards the waiting count against `FPM_FSE_DIAG - 1` and
+discards everything above it:
+
+    a7d46: mov  0x4e0c(%esi),%edx      ; diag_n
+    a7d4c: cmp  $0x1df,%edx            ; 479
+    a7d52: jg   a7d97                  ; -> zero the count, return 0
+
+`FPM_FSE_receive` fills `diag` to 480 entries -- its own guard is the same
+`> FPM_FSE_DIAG - 1`, and it RESETS rather than wrapping -- so a count of
+exactly 480 is reachable between two receive calls, and 480 points of
+constellation display are dropped instead of delivered. The `which == 1` arm
+has no capacity guard at all.
+
+`unmeasured`: the log is a diagnostic display and nothing in the datapump reads
+it back, so a dropped block costs a frame of a scatter plot and nothing else.
+`test/unit/t_v32fpsub.c` drives 478, 479, 480 and 481 and holds the
+reconstruction to the object at each.
+
+## D481 ⚠ `V32FP_delete` passes a second argument to five deallocators that take one
+
+Finding F8215 has the disassembly. Before each of `FPM_FSE_free`,
+`FPM_SRE_free`, `FPM_ECC_free`, `FPM_MRF_free` and `FPM_PPS_free` the object
+stores a literal 1 into the outgoing area's second slot; all five callees read
+only the first. GCC does not emit dead stores there, so the author's
+declarations for these five had two parameters and this tree's have one.
+
+`src/pump/v32/v32fpctl.c` makes the one-argument call, so the reconstruction
+emits five fewer instructions than the object at those sites. Invisible to the
+differential tier -- the argument is never read -- and visible to the codegen
+tier, where it is five `mov $1` / `mov %reg,0x4(%esp)` pairs. Repairing it means
+changing five prototypes in five headers, which is a change to files outside
+this batch.
+
+`unmeasured` in the sense that nothing establishes what the 1 MEANT. It is not
+`unmeasured` about whether it is there.
+
+## D482 ⚠ `RxClampV32`'s cursor is a `short` tested against -1, so a negative block length writes 65,535 words
+
+    825fc: movswl 0x9e(%ebx),%eax    ; the block length
+    82603: dec    %eax
+    ...
+    82611: movswl %ax,%ecx
+    82614: inc    %ax
+    82616: jne    82606              ; body
+
+The loop runs from `n - 1` down to 0 and stops when the 16-bit cursor reaches
+-1. A length of 0 writes nothing, which is right; a NEGATIVE length starts below
+-1, wraps through -32768 to 32767, and writes 65,535 words before it reaches the
+sentinel -- 128 KB past whatever buffer the caller supplied.
+
+Not reachable through anything read so far: the eleven `RxHdx*` states that call
+it all pass the same +0x9e that `RxHdxNull` accumulates as a positive sample
+count. Recorded because the truncation is what distinguishes the object's loop
+from `for (i = 0; i < n; i++)`, and **it is MEASURED rather than asserted** --
+`test/unit/t_v32fpctl.c` drives a length of -1 into a buffer sized for it and
+compares all 65,535 words against the object's.
+
+## D483 ⚠ `CalcTurnAroundDelay` narrows to sixteen bits before it clamps, so a large underflow comes back positive
+
+    83b07: sub  %edx,%eax     ; budget - (three charges)
+    83b09: cwtl               ; <- narrowed here
+    83b0a: mov  %eax,%edx
+    83b0c: not  %edx
+    83b0e: sar  $0xf,%edx
+    83b11: and  %edx,%eax     ; x < 0 ? 0 : x
+    83b14: cwtl
+
+The four fields are 16-bit and the subtraction is done at 32 bits, but `cwtl`
+takes the low half BEFORE the branchless clamp. A budget that undershoots by
+more than 32,768 therefore wraps to a positive number and is reported as
+surplus turnaround time rather than as none.
+
+`unmeasured`: the four fields are timing quantities in symbols and nothing read
+so far puts a charge anywhere near 32,768. `test/unit/t_v32fpctl.c` sweeps the
+budget and the charges across the sign boundary and holds the reconstruction to
+the object either side of it.
+
+## D490 -- `FPM_AGC_agc` is called with four arguments and defined with three  `unmeasured`
+
+Every V.32 call site pushes a fourth outgoing slot holding the constant 1 --
+`DemodDataV32` at 81ce6, `RxHdxTone` at 83937, `RxHdxNoSignal` at 83a37 -- and
+`FPM_AGC_agc` (0xa6750, 566 bytes) reads only 0x50, 0x54 and 0x58 off its
+frame, never 0x5c. The two declarations that must exist to produce this are a
+four-parameter prototype in the caller's translation unit and a
+three-parameter definition; the extra argument is pushed and ignored, so
+nothing observable depends on it.
+
+Not V.32's alone: `DemodDataV17`, `Detect_v22` and `v23FP_rx_progress` do the
+same, and `src/pump/v23/bwchdem.c` and `src/pump/v22/v22data.c` already record
+it at their own call sites. `src/pump/v32/v32demod.c` follows them and passes
+three, which costs one instruction against the object and is the whole of the
+deviation. Adding a fourth parameter to `fpm_agc.h` would move the code
+generation of every other caller in the tree to fix one dead store, so it is
+not done. See finding F8234.
+
+## D491 -- `DemodDataV32` masks three of its four equaliser enables with the AGC's flag and leaves the fourth bare  `unmeasured`
+
+Four `int`s in the datapump block are copied into named enables of the timing
+recovery and the equaliser, and three of the four are ANDed with `agc.f18`
+first:
+
+    sre.adapt   = fp[0x04] & agc.f18       81d26
+    fse.pll_on  = fp[0x08] & agc.f18       81d7f
+    fse.tilt_on = fp[0x0c] & agc.f18       81e50   (mode 6, timing mode != 0)
+    fse.lms_on  = fp[0x10] & agc.f18       81e58   (same arm)
+
+but on the arm taken when `hdx->mode` is NOT 6, the object writes
+`fse.tilt_on = 1` and `fse.lms_on = fp[0x10]` -- `mov 0x10(%edx),%ebp` at
+81d8e followed by `mov %ebp,0x250(%edx)` at 81d9c, with no `and %ebx`. Every
+sibling assignment in the function carries the mask and this one does not.
+
+The asymmetry is codegen-visible, so it is reproduced rather than repaired:
+`src/pump/v32/v32demod.c` writes the bare assignment with a comment naming this
+entry, and `test/mutations/v32demod.json` carries the repair as a mutation
+("D491 undone") which the differential test catches. Whether the author
+intended the equaliser's coefficient adaptation to survive the AGC's gate
+outside mode 6, or omitted the mask, cannot be told from this object.
+
+**Status:** unmeasured. Reaching it needs `hdx->mode != 6`, a live carrier and
+`agc.f18` clear at the same time; the differential test constructs exactly that
+and both sides agree, but whether a running V.32 modem produces the
+combination is a question about `V32FP_control` and the handshake, neither of
+which is reconstructed.
+
+## D492 -- `hdx->mode` reaches 6 and `V32NextState` has six slots, the last of them unrelocated  `unmeasured`
+
+`V32NextState` (.data 0x76cc) is 24 bytes -- six pointers -- and the object
+relocates five: `V32OrgNextState`, `V32AnsNextState`, `V32LocLoopNextState`
+twice, and `V32RngInitNextState` at indices 0 to 4. Index 5 carries no
+relocation. The table is indexed by `hdx + 0x76`, loaded `movswl` and used
+directly: `call *0x0(,%edx,4)` at 7fd9b in `TxHdxTone` is one of several.
+
+`V32FP_modem` (82735) writes **6** into that field, together with
+`hdx->state = 0x22` (`V32_STATE_DONT_CARE`), when bit 0 of the instance's
+status byte is set. Six is one past the last slot the table has, so a dispatch
+taken with the mode at 6 would call through `.data + 0x76e4`, outside the
+symbol.
+
+This is the shape of D1 and D4 -- a table whose own index expression can reach
+past its last entry -- and it is recorded on that resemblance and nothing more.
+`DemodDataV32` only COMPARES the field against 6 and never indexes with it, so
+the reconstruction is not affected; the dispatch sites belong to the `TxHdx*`
+states, which are not written. **Whether mode 6 can be live at a dispatch is
+not measured and is not claimed**: `blobfix.md`'s warning applies with force,
+because this would be a missing DECISION rather than a missing value if it is
+real, and index 5 being NULL suggests the table's tail is deliberately inert.
+
+## D493 -- a V.32 transmit state can return a negative sample count and walk the output pointer backwards  `unmeasured`
+
+`V32TxHdxModem` sign-extends the state's return with `cwtl` (7fd25) before both
+`lea (%esi,%eax,1),%edx` and `lea (%ebx,%eax,2),%ebx`, so a state returning a
+negative count subtracts from the running total and moves the output cursor
+DOWN by twice that many bytes -- below the buffer the caller supplied. Nothing
+bounds it and no store is guarded.
+
+No state does: every `TxHdx*` exit read so far returns `hdx->sample_len`, which
+`V32FP_control` and `V32FP_recreate` fill from `V32_SAMPLE_LEN`. So this is a
+property of the arithmetic, not a live fault, and it is recorded for the same
+reason D430 is -- the sign extension is what distinguishes the object's
+expression from an unsigned one, and `test/unit/t_v32hdx.c` drives a state that
+returns -20 and -50 over a guard region so the reconstruction is held to it.
+
+**Status:** unmeasured. Establishing whether any real state can return a
+negative count needs the twenty states, none of which is reconstructed.
+
+## D404 ⚠ `RateToSeq` indexes `V32_RATE_SEQ` with its argument and does not bound it
+
+```
+   821e0:  0f bf 44 24 08          movswl 0x8(%esp),%eax
+   821e5:  0f b7 84 00 00 00 00    movzwl 0x0(%eax,%eax,1),%eax  <== V32_RATE_SEQ
+   821ed:  c3                      ret
+```
+
+Three instructions, no compare. The table is 14 bytes — seven shorts — and the
+argument is a signed `short`, so any value outside 0..6 reads elsewhere in
+`.data`. The neighbours are `V32_FINAL_RATE_SEQ` two bytes below and the
+padding above, so a small overrun returns a plausible rate signal rather than
+faulting.
+
+The first argument is a modem instance and **is never read**, which is the
+other half of why there is no guard: the function has nothing to validate
+against.
+
+**Reproduced.** `src/pump/v32/v32seq.c` has no bound either, and the
+differential test deliberately does not sweep out of range — the two tables sit
+at different addresses in the two objects, so an out-of-bounds read is not a
+comparison of anything.
+
+**Status:** unmeasured. Every in-object caller of `RateToSeq` is unwritten
+(`V32OrgNextState` and its three siblings), so whether any of them can produce
+an index outside 0..6 is a question for the pass that writes them.
+
+## D401 ⚠ `InitGenSequence` divides by its width argument with no test for zero
+
+```
+   8368d:  31 d2                   xor    %edx,%edx
+   8368f:  f7 f1                   div    %ecx
+```
+
+`%ecx` is the fourth argument zero-extended from 16 bits, and nothing between
+the load and the divide compares it. A width of zero raises `#DE` and the
+process dies.
+
+The same argument then becomes the shift count of `mov $1,%eax; shl %cl,%eax`,
+so a caller passing zero would in any case get a field mask of zero.
+
+**Reproduced.** The reconstruction divides in the same place with the same lack
+of a guard. `DSPLIB_REPRODUCE_BUGS` is not involved: nothing here is fixed, so
+there is nothing to fence.
+
+**Status:** unmeasured, and the reason is D404's. The callers are the unwritten
+next-state functions.
+
+## D402 ⚠ Two variable shifts in the generator can exceed the width of their type
+
+`InitGenSequence` computes `(1 << width) - 1` and `GenSequence` computes
+`pattern >> (index * width)`. Both are `shl`/`sar` with the count in `%cl`,
+which x86 masks to five bits, so the object's behaviour for a count of 32 or
+more is a shift by count mod 32. In C that shift is undefined.
+
+The reconstruction writes the shift and does not mask it, so GCC emits the same
+instruction and the same thing happens — but it is *undefined*, not *defined to
+match*, which is why it is recorded rather than left implicit.
+
+**Not reachable with the object's own configurations.** `index` is bounded by
+`total / width - 1` and `width` by the field layout of a 16-bit pattern word, so
+`index * width` stays under 16 for every call the handshake can make; the
+literal 16-bit rate signals V32_RATE_SEQ holds are what those calls carry.
+
+**Status:** unmeasured, for D404's reason.
+
+## D403 ⚠ `DetSequence`'s bit counter is a `short` and its bit width is an `unsigned short`, so a width above 32767 never terminates
+
+The inner loop counts `%esi`, sign-extended from 16 bits at every step —
+
+```
+   8384e:  8d 46 01                lea    0x1(%esi),%eax
+   83851:  0f bf f0                movswl %ax,%esi
+   83854:  3b ee                   cmp    %ebp,%esi
+   83856:  7c a8                   jl     83800
+```
+
+— against `%ebp`, which is `movzwl 0x54(%edi)`, the detector's bit width **zero**
+-extended. So the bound reaches 65535 and the counter wraps to -32768 at 32767:
+the comparison is true again and the loop restarts, for ever. Nothing else in
+the loop changes, so it is a true non-termination and not merely a long run.
+
+**Reproduced**, `short bit` against `int nbits`, and it is not hypothetical:
+this was found because a mutation that pointed the detector at the *generator's*
+width field — which the test fixture filled with a pseudorandom value — hung and
+was recorded `caught (hang)` rather than caught by a check. The fixture now pins
+that field small so the mutation fails a check instead; the deviation is what is
+left.
+
+**Status:** unmeasured. `InitDetSequence` is the only writer of the field and
+takes it from its caller, and every caller is unwritten. The widths the V.32
+handshake actually uses are the number of bits per received word, which is
+single figures.
+
+## D405 ⚠ `GenerateAnsTone`'s two phases end on DIFFERENT comparisons
+
+The tone phase:
+
+```
+   8684a:  8b 43 0c    mov  0xc(%ebx),%eax        ; elapsed
+   8684d:  01 f0       add  %esi,%eax             ; + count
+   8684f:  3b 43 10    cmp  0x10(%ebx),%eax       ; vs TONE_LEN
+   86852:  7c 1f       jl   86873                 ; continue if BELOW
+```
+
+The silence phase, forty bytes earlier:
+
+```
+   8680b:  8b 43 0c    mov  0xc(%ebx),%eax        ; elapsed
+   8680e:  01 f0       add  %esi,%eax             ; + count
+   86810:  3b 43 14    cmp  0x14(%ebx),%eax       ; vs SILENCE_LEN
+   86813:  7e 5e       jle  86873                 ; continue if AT OR BELOW
+```
+
+`jl` against `jle`. So a tone whose accumulated count lands exactly on
+`TONE_LEN` has ENDED, and a silence whose accumulated count lands exactly on
+`SILENCE_LEN` has NOT: the silence runs for one further block, and therefore
+for `SILENCE_LEN + 1` samples or more where the tone runs for `TONE_LEN` or
+more. With the two lengths set equal — which is the obvious configuration —
+the silence is one block longer than the tone.
+
+**Reproduced**, `>=` for the tone and `>` for the silence, and the differential
+test lands a case exactly on each boundary so that the asymmetry is checked
+rather than assumed. Mutating either comparison into the other's is caught.
+
+**Status:** unmeasured, and unmeasurable from this object: `GenerateAnsTone`
+has no caller anywhere in `dsplibs.o`, so no configuration of `TONE_LEN` and
+`SILENCE_LEN` exists to say whether one block matters. Whether this is a
+defect or a deliberate guard band cannot be decided here.
+
+## D406 ⚠ `GenerateAnsTone` discards the overrun at every phase change
+
+Both ending arms write a literal zero to the sample counter --
+`movl $0x0,0xc(%ebx)` at 0x86815 and 0x86854 -- rather than the excess over
+the phase's length. So a phase that ends on a block overshooting its length by
+N samples starts the next phase at 0 and the N are lost; the cadence drifts
+later by up to one block per phase change.
+
+**Reproduced.** Carrying the overrun instead is one of the suite's mutations
+and is caught, so the reconstruction is pinned to the object's behaviour and
+not merely compatible with it.
+
+**Status:** unmeasured, for D405's reason -- no caller exists. Note that with a
+`count` that divides both lengths exactly, the overrun is always zero and the
+deviation is inert; the differential test drives cadences where it is not
+(150-sample phases in 40-sample blocks) as well as where it is.

@@ -52,9 +52,21 @@
   "src/dsp/FloatARMA.cpp",
   "build/test/t_floatarma"
  ],
+ "fpmcircdotp": [
+  "src/dsp/fpm_ecc.c",
+  "build/test/t_fpm_ecc"
+ ],
  "fpmfserecv": [
   "src/dsp/fpm_fse.c",
   "build/test/t_fpm_fse_recv"
+ ],
+ "fpmiirblock": [
+  "src/dsp/fpm_iir.c",
+  "build/test/t_fpm_iir"
+ ],
+ "fpmlmsupd2": [
+  "src/dsp/fpm_lmsupd.c",
+  "build/test/t_fpm_lmsupd"
  ],
  "fpmmtd": [
   "src/dsp/fpm_mtd.c",
@@ -83,6 +95,10 @@
  "fpmtonerev": [
   "src/dsp/fpm_tone.c",
   "build/test/t_fpm_tone"
+ ],
+ "fsegetdiag": [
+  "src/dsp/fpm_fse.c",
+  "build/test/t_v32fpsub"
  ],
  "gtonedet": [
   "src/dsp/GenericToneDetector.cpp",
@@ -148,9 +164,33 @@
   "src/pump/v29/v29data.c",
   "build/test/t_v29data"
  ],
+ "v32anstone": [
+  "src/pump/v32/v32anstone.c",
+  "build/test/t_v32anstone"
+ ],
  "v32data": [
   "src/pump/v32/v32data.c",
   "build/test/t_v32data"
+ ],
+ "v32demod": [
+  "src/pump/v32/v32demod.c",
+  "build/test/t_v32demod"
+ ],
+ "v32fpctl": [
+  "src/pump/v32/v32fpctl.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32fpsub": [
+  "src/pump/v32/v32fpctl.c",
+  "build/test/t_v32fpsub"
+ ],
+ "v32hdx": [
+  "src/pump/v32/v32hdx.c",
+  "build/test/t_v32hdx"
+ ],
+ "v32seq": [
+  "src/pump/v32/v32seq.c",
+  "build/test/t_v32seq"
  ],
  "v34datapump": [
   "src/pump/v34/v34hshak.c",
@@ -444,13 +484,13 @@
   "src/pump/v90/V90ModemCtor.cpp",
   "build/test/t_v90modemctor"
  ],
- "v90modprog": [
-  "src/pump/v90/V90Modulator.cpp",
-  "build/test/t_v90modprog"
- ],
  "v90modemreset": [
   "src/pump/v90/V90Modem.cpp",
   "build/test/t_v90modemctor"
+ ],
+ "v90modprog": [
+  "src/pump/v90/V90Modulator.cpp",
+  "build/test/t_v90modprog"
  ],
  "v90modprogbts": [
   "src/pump/v90/V90BitsToSymbol.cpp",
@@ -803,17 +843,5 @@
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
- ],
- "fpmlmsupd2": [
-  "src/dsp/fpm_lmsupd.c",
-  "build/test/t_fpm_lmsupd"
- ],
- "fpmcircdotp": [
-  "src/dsp/fpm_ecc.c",
-  "build/test/t_fpm_ecc"
- ],
- "fpmiirblock": [
-  "src/dsp/fpm_iir.c",
-  "build/test/t_fpm_iir"
  ]
 }
