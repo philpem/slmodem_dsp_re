@@ -46,13 +46,32 @@ SpanDSP already implements Class 1 fax in the open-source world, so the
 marginal value of reconstructing it is lower than for anything else here. It is
 a project phase, not a wave.
 
-**WHAT TO DO BEFORE IT, AND THIS IS THE POINT:** leaf functions and small
-shared modules. 149 unwritten symbols (17,808 bytes) have **no entry point
-reaching them at all**, and much of the FAX span's cost is shared underpinning
-rather than fax logic. Clearing the leaves first makes the eventual FAX work
-smaller and is easy-win work in its own right -- `closure.py --missing` over a
-FAX entry point will name the shared pieces without committing anyone to the
-fax path.
+**"LEAVES BEFORE FAX" WAS TRUE, IT PAID, AND IT IS NOW EXHAUSTED -- MEASURED,
+SO DO NOT RE-DERIVE IT (F8320).**
+
+- **Backward, what it already banked:** of the fax closure's 45 already-written
+  call symbols, **42 of them -- 18,156 bytes, 18.7% of the closure's 96,874
+  bytes of code -- were written because a NON-FAX path needed them.** The
+  strategy worked. It happened as a side effect of the data-mode work.
+- **Forward, what is left to clear in advance: 0 bytes of code**, and 9,510
+  bytes of data symbols. **All 283 unwritten fax `.text` symbols are reached by
+  a fax entry point and by nothing else** -- zero overlap with data, voice, CID
+  or ring.
+- **The 0 is not a tool artefact.** A reverse-edge probe over the whole
+  no-entry-point bucket found **129 of 139 symbols have no relocation anywhere
+  in the 1.2 MB pointing at them, and 0 have a FAX-reachable referrer**. They
+  are exported API surface with no internal caller, not a missing graph hop --
+  and that includes names that read like core fax (`GenEQTrnSequenceV27`,
+  `GenEQTrnSequenceV29`, `fax_class1_status`, `cHDLCtx_off_init`).
+
+**AND THE OBVIOUS METHOD FOR CHECKING IS VACUOUS.** `service.py`'s `none`
+bucket is *defined* as `unwritten − r_data − r_fax − r_oth`, so intersecting it
+with the FAX closure is empty **by construction**. Anyone who runs that
+intersection gets 0 and learns nothing from it. The reverse-edge probe is what
+answers the question.
+
+So: schedule the 139 leaves (16,013 bytes) **on their own merit**, and FAX on
+its own size. Neither is a reason for the other.
 
 ## The rule that is not relaxed
 
