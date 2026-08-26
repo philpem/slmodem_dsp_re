@@ -1076,9 +1076,25 @@ V90Demodulator::indicateRemoteRateReneg() const
  *    0x1ba53, and left on the stack across the second `fyl2x` -- `fmul
  *    %st,%st(1)` for the first result and `fmulp` for the second.  That is
  *    the compiler hoisting one constant out of two expressions, so the
- *    source has the literal twice; writing it once into a local moves the
- *    code.  Both are `10.0f * log10f(x)`, built as `log10(2) * log2(x)` by
- *    `fldlg2 / fyl2x`, which is how this compiler open-codes `log10f`.
+ *    source has the literal twice.  Both are `10.0f * log10f(x)`, built as
+ *    `log10(2) * log2(x)` by `fldlg2 / fyl2x`, which is how this compiler
+ *    open-codes `log10f`.
+ *
+ *    TWO CLAIMS THAT USED TO BE HERE ARE WRONG AND THE MEASUREMENT IS IN
+ *    F8061.  "Writing it once into a local moves the code" -- it does not;
+ *    that cell is byte-identical to this one.  And WE DO NOT EMIT THE
+ *    ARRANGEMENT DESCRIBED ABOVE: we load the constant BEFORE the first
+ *    `fyl2x` and multiply `fmul %st(1),%st`, which needs no `fxch`, so we
+ *    are one instruction short of the blob and 84 of 418 bytes differ.
+ *    Fifteen spellings of these two expressions give ONE emission and
+ *    eighteen cells of statement order crossed with the helper's `asm`
+ *    formulation give twelve, of which exactly one reaches the object -- and
+ *    that one is `__asm__ __volatile__`, declined as fitting the compiler.
+ *    A two-arm model isolates it: the same two expressions over this helper
+ *    emit OUR arrangement with the plain `asm` and the BLOB's with the
+ *    volatile one, nothing else differing.  So the residual belongs to the
+ *    stand-in below rather than to the source here, and the paragraph above
+ *    describes the OBJECT and not this file's output.
  *
  * 4. THE RBS PACKING IS LSB-FIRST AND THE OBJECT PROVES THE ORDER.  Five
  *    `lea (%r,%r,2)` steps fold the six bytes from the TOP down --
@@ -2213,6 +2229,36 @@ V90Demodulator::enterChannelVerification(short, short short414)
  * carries values on both sides of it, on finding F613's argument that a
  * signedness the reachable domain never exercises is a defect no test can
  * see.
+ *
+ * AND THE ADDITION IS NOT DONE AT `float` WIDTH, WHICH IS WHAT THE CAST
+ * BELOW IS FOR.  Written `product + 0.5f` this emits ONE instruction,
+ * `fadds 0x3f000000`; the object emits TWO, an `flds` of the same four-byte
+ * slot hoisted ABOVE the `fildll` and a `faddp %st,%st(1)` after the
+ * multiply.  Two operands in x87 registers is what GCC 3.4.2 emits for a
+ * commutative operation that is NOT in SFmode -- the SFmode memory form is
+ * `*fop_sf_comm` and there is no commutative memory form above it -- so the
+ * blob's encoding says the sum was computed wider than the product while the
+ * MULTIPLY kept `fmuls`, its own memory operand, and both constants stayed in
+ * `.rodata.cst4`.  Widening the whole expression instead gives `fmull` out of
+ * `.rodata.cst8` and does not match.
+ *
+ * V92MODULATOR'S CONSTRUCTOR IS THE INTERNAL CONTROL and it is what makes
+ * this a source fact rather than a flag: `blockSize = (unsigned int)(nSamples
+ * * ratio + 0.5f)` is the same idiom in the same object, and there the blob
+ * emits `fmuls` then `fadds` -- exactly what we emit here.  One object, one
+ * compiler, two spellings.
+ *
+ * SIXTEEN SPELLINGS COMPILED, THREE DISTINCT EMISSIONS, TEN REACH THE OBJECT.
+ * The ten are every way of putting the sum above `float`: `(double)` or
+ * `(long double)` on the product, on the constant, or on a local holding
+ * either.  So the domain is exhausted and the decoded fact is the WIDTH and
+ * not this spelling -- `double` and `long double` are indistinguishable here
+ * because the value is converted straight to `unsigned int` and never stored.
+ * `long double` is written because it is what this tree spells an x87
+ * intermediate that never spills (refinement.md lever 12, and
+ * V90Equalizer.cpp's file comment).  The six that miss are the baseline, its
+ * operand order, a `float` local, and the two whole-expression widenings.
+ * Finding F8060.
  */
 unsigned int
 V90Demodulator::getBitRate() const
@@ -2220,8 +2266,8 @@ V90Demodulator::getBitRate() const
 	if (byte_280 == 0)
 		return 0;
 
-	return (unsigned int)(mappingParamsAlt->word_0 * 8000u * (1.0f / 6.0f)
-			      + 0.5f);
+	return (unsigned int)((long double)(mappingParamsAlt->word_0 * 8000u
+					    * (1.0f / 6.0f)) + 0.5f);
 }
 
 /*
@@ -2426,26 +2472,58 @@ V90Demodulator::V90Demodulator(unsigned int levels, V90Phase2Info *phase2,
 	V90TRN2Designer *trn2;
 	V90ConstellationDesigner *cd;
 
-	params = par;
-	jd = jdArg;
+	/*
+	 * THE ORDER OF THESE TWELVE IS DECODED, NOT TRANSCRIBED, and the
+	 * distinction is refinement.md lever 1's "answer sheet" rule.  The
+	 * blob's value-to-slot map is IDENTICAL to ours -- all twelve
+	 * arguments reach the same member offsets, measured -- and its STORE
+	 * order was what we wrote here, because a store order is the first
+	 * thing anybody transcribes off a disassembly.  GCC 3.4.2 permutes
+	 * it, so what had to be found is the PREIMAGE of the blob's emission
+	 * and that is not readable anywhere.
+	 *
+	 * Wave 1 compiled every single-element move and every pairwise
+	 * transposition of the twelve -- 177 orders, 166 distinct emissions --
+	 * and took 77 differing bytes to 23, with the register naming eleven
+	 * instructions earlier going right as a bystander.  Wave 2 then
+	 * exhausted the order of every statement still misplaced, 5! over the
+	 * five heading it and 4! over the four ending it, 2,880 cells and
+	 * 2,880 distinct emissions, and reached TWO differing bytes.  Wave 3
+	 * is the block below.  Findings F8062 and F8063.
+	 */
 	phase2Info = phase2;
+	jd = jdArg;
 	jdV92 = jdV92Arg;
-	mappingParams = mappingParams1;
 	dil = dilArg;
+	mappingParams = mappingParams1;
+	params = par;
 	mappingParamsAlt = mappingParams2;
 	additionalCPinfo = cpInfo;
-	mp = mpArg;
-	cp = cpArg;
-	codecType = codec;
 	sessionFlag = flag;
+	cp = cpArg;
+	mp = mpArg;
+	codecType = codec;
 
+	/*
+	 * AND +0x24c IS CLEARED BEFORE +0x258, which is two bytes and the
+	 * whole of the residual wave 2 left.  Both stores are zero, so
+	 * nothing about the VALUES distinguishes them; what the object
+	 * records is which register the allocator gave each, `%esi` to
+	 * +0x24c and `%ecx` to +0x258, and that follows the order the two
+	 * statements are written in.  Every one of the 42 placements of the
+	 * pair among the five allocations was compiled -- the allocations
+	 * keep their own order, which is the blob's -- giving 42 distinct
+	 * emissions and exactly ONE that reaches the object.  A unique
+	 * preimage, so this order is decoded; the other arrangement is 2
+	 * bytes and the next nearest is 53.  Finding F8063.
+	 */
 	array_244 = sysdep_malloc(levels * V90DEM_ARRAY_244_WIDTH);
 	array_248 = sysdep_malloc(levels * V90DEM_ARRAY_248_WIDTH);
 	array_250 = sysdep_malloc(levels * V90DEM_ARRAY_250_WIDTH);
 	array_254 = sysdep_malloc(levels * V90DEM_ARRAY_254_WIDTH);
 	array_25c = sysdep_malloc(levels * V90DEM_ARRAY_25C_WIDTH);
-	word_258 = 0;
 	word_24c = 0;
+	word_258 = 0;
 
 	adid = (V90AutoDigitalImpDetector *)
 	    sysdep_malloc(sizeof(V90AutoDigitalImpDetector));

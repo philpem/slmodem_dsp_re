@@ -355,8 +355,26 @@ VPcmFloModem::setPcmSessionType(int sessionType)
 	edprintf("VPcmFloModem: setting PCM session to V.%d\n",
 		 sessionType != 0 ? 92 : 90);
 
-	p92 = v92modem.phase2Info;
+	/*
+	 * THE FLAG IS SET BEFORE THE POINTER IS FETCHED, and that order is
+	 * decoded rather than transcribed.  Nothing in the emission says it:
+	 * the object stores +0x611c and +0x11 in the order this reads and the
+	 * two are independent, so the only trace the choice leaves is which
+	 * register the allocator hands each -- `%eax` for the flag's `setne`
+	 * and `%edx` for the fetched pointer, where writing the fetch first
+	 * gets them the other way round.  That is five bytes of a 98-byte
+	 * function and `alpha_equal` ACCEPTS it as a renaming, which is
+	 * exactly why it needed enumerating rather than reading.
+	 *
+	 * The domain is every order of these three (the two that dereference
+	 * `p92` before assigning it are not orders, so six become four)
+	 * crossed with the four positions of the diagnostic: 12 cells, 10
+	 * distinct emissions, ONE reaching the object.  A unique preimage.
+	 * The arrangement written before this was 5 differing bytes and the
+	 * next nearest cell is 8.  Finding F8066.
+	 */
 	pcmSessionType = (sessionType != 0);
+	p92 = v92modem.phase2Info;
 	p92->v92CapabilitiesLocal = (unsigned char)sessionType;
 
 	modem.setSessionFlag((unsigned int)sessionType);

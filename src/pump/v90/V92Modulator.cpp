@@ -234,11 +234,24 @@ V92Modulator::reset()
 		dsplibs_debug_printf("V92Modulator reset\r\n");
 
 	scrambler.reset(0);
+	/*
+	 * `blockRemaining` IS ASSIGNED LAST IN THE SOURCE AND THIRD IN THE
+	 * OBJECT, and the two copies of this function are what prove it.
+	 * The comment above lists the STANDALONE symbol's emission order,
+	 * +0x2c +0x30 +0x08 +0x34 +0x38, which is what a disassembly gives
+	 * you; the constructor inlines the same statements and emits +0x08
+	 * LAST, after +0x38.  One source cannot be both emissions unless the
+	 * source order is neither, so it was enumerated: all 5! orders of
+	 * these five, 120 cells, 72 distinct emissions, scoring `reset` and
+	 * the constructor together.  Exactly ONE keeps `reset` byte-identical
+	 * AND closes the constructor -- a unique preimage over the pair --
+	 * and it is this one.  Finding F8065.
+	 */
 	phase = 0;
 	word_30 = 0;
-	blockRemaining = blockSize;
 	word_34 = 0;
 	resamplerPhaseChange = V92MOD_PHASECHG_NONE;
+	blockRemaining = blockSize;
 	queue->reset();
 	byte_0c = 0;
 	byte_0d = 0;
@@ -288,20 +301,47 @@ V92Modulator::V92Modulator(unsigned int nSamples, V92Phase2Info *p2,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V92Modulator constraction\r\n");
 
-	phase2Info = p2;
+	/*
+	 * THE ORDER OF THESE SEVEN IS DECODED AND IT IS NOT THE ORDER THE
+	 * STORES COME OUT IN.  All 5,040 orderings were compiled twice --
+	 * once with the `resampleIn` size written as a multiply and once as
+	 * the shift below -- and every one of the 10,080 cells gave a
+	 * DISTINCT object, so the generator is not the thing being measured.
+	 * Against the multiply, no cell reached the object at all and the
+	 * best was 354 differing bytes of 734: lever 1's killing branch, and
+	 * the reason the size expression was looked at next.  Against the
+	 * shift the same domain has a floor of 14 and this cell is it.
+	 * Findings F8064 and F8065.
+	 */
 	blockSize = (unsigned int)(nSamples
 				   * (V92MOD_RATE_NUM / V92MOD_RATE_DEN)
 				   + 0.5f);
+	phase2Info = p2;
 	ja = j;
 	cp = c;
 	dil = d;
-	params = pp;
 	mappingParams = mp;
+	params = pp;
 
 	buf_7c = (short *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
 					* sizeof(short));
+	/*
+	 * THE SECOND SIZE IS A SHIFT AND THE FIRST IS NOT, and the object is
+	 * what says so.  Both are `blockSize + V92MOD_BUF_SLACK` scaled, and
+	 * the blob scales them differently: `lea 0x14(%ebp,%ebp,1)` for the
+	 * `short` buffer above, and `add $0xa,%eax ; shl $0x2,%eax` -- the
+	 * addition kept, then the scale applied to it -- for this one.  Eight
+	 * spellings were compiled at each of the seven positions of the
+	 * `blockSize` statement, 56 cells and 14 distinct emissions, and the
+	 * SEVEN multiplicative ones all fold to a single `lea 0x28(,%reg,4)`:
+	 * `* sizeof(float)`, `sizeof(float) *`, `* 4`, `4u *`, a local for
+	 * the sum, `* sizeof(*resampleIn)` and an `(int)` cast.  Only `<< 2`
+	 * leaves the pair, because GCC 3.4.2 distributes a constant multiply
+	 * over the addition and does not distribute a shift.  That took the
+	 * constructor from 408 differing bytes to 18.  Finding F8064.
+	 */
 	resampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)
-					    * sizeof(float));
+					    << 2);
 	buf_88 = (unsigned char *)sysdep_malloc(blockSize * 8);
 	resampleOut = (float *)sysdep_malloc((nSamples + V92MOD_BUF_SLACK)
 					     * sizeof(float));
