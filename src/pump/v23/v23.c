@@ -67,7 +67,8 @@ extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
 extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
 			  unsigned short count);
 
-struct dp_operations v23_ops = {
+/* FILE-LOCAL, on the same evidence as b103.c's `b103_ops`.  Finding F8121. */
+static struct dp_operations v23_ops = {
 	.name = "v23",
 	.create = v23_create,
 	.destroy = v23_delete,

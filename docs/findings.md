@@ -91546,3 +91546,217 @@ per-symbol in both directions over all 1251 symbols rather than trusting the
 set diff, which is the only reason this is written down at all. A pass that had
 followed the standing "diff the SET" instruction to the letter would have
 reported a clean +7.
+
+### F8120. The fence lifted for V.22/V.23/B.103, and the first closures were all ORDER — including one this project had already written off as free
+
+The block F8120–F8139 belongs to this pass. Baseline measured before anything
+was touched, against freshly built objects: **EXACT 559 of 1251 (44.7%),
+grade 0 or 1 601, REGALLOC 35, RELOC 1, BYTES 77, SIZE 572.**
+
+**`DeleteV23Modem` (1 of 103) IS NOT A BUG, AND THE ONE BYTE SAYS SO ONLY
+AFTER YOU READ BOTH ARMS.** `--why` reports `row 12 MNEMONIC je vs jne`, which
+reads as an inverted condition — a behavioural defect — and it is not one. The
+blob branches away to `v23FP_rx_delete` and falls through to `BwChDem_Delete`;
+we do the opposite. **The arms are swapped, so the semantics are identical**,
+and the reason only ONE byte differs is that the two arms happen to be the
+same length, so the branch displacement (`0x1c`) does not move and only the
+condition byte (`0x74` against `0x75`) does. Writing the source `mode == 0`
+first, with `v23FP_rx_delete` as the then-arm, closes it. Domain 2, exhausted,
+unique preimage. **A one-byte mnemonic difference is the shape most likely to
+be misread as a defect; disassemble both arms before reporting one.**
+
+**`ScrambleDataV22` AND `DescrambleDataV22`: F7768 CALLED THE FIRST "FREE,
+SCHEDULING" AND IT WAS A RECOVERABLE SOURCE PROPERTY.** F7768 read the
+difference correctly — the blob stores `count` to its outgoing slot between
+the datapump load and the sub-object load, we do both loads first — and drew
+the wrong conclusion from it, that scheduling is the free column and there is
+nothing to take. What the scheduling difference comes WITH is a register
+difference, and that one is not free:
+
+    blob   mov 0x54(%edx),%eax ; add $0x1cc,%eax    05 cc 01 00 00     5 bytes
+    ours   mov 0x54(%eax),%edx ; add $0x1cc,%edx    81 c2 cc 01 00 00  6 bytes
+
+`add $imm32,%eax` has a one-byte-shorter opcode form than `add $imm32,r/m32`,
+so **which register holds the sub-object pointer is worth a byte** — and in
+`DescrambleDataV22` that byte is the entire SIZE difference. `ScrambleDataV22`
+escapes it only because its own constant, `0x30`, fits in an `imm8` and both
+spellings are three bytes; the same defect is there, costing 10 differing
+bytes instead of a size change.
+
+**Seven spellings compiled over the real translation unit, one preimage.**
+
+    v0  void *fp local (ours)           Scramble BYTES/10   Descramble SIZE/1
+    v1  NO local, inlined into the call Scramble EXACT      Descramble EXACT
+    v2  typed sub-object local          Scramble BYTES/11   Descramble SIZE/1
+    v3  both locals                     Scramble BYTES/11   Descramble SIZE/1
+    v4  unsigned char * local           Scramble BYTES/10   Descramble SIZE/1
+    v5  const local                     Scramble BYTES/10   Descramble SIZE/1
+    v6  sub-object via a char pointer   Scramble BYTES/11   Descramble SIZE/1
+
+**The intermediate local is what costs the register.** With it GCC 3.4.2 puts
+the sub-object pointer in `%edx`; without it the pointer lands in `%eax` and
+takes the short form. `ModDataV22` and `Detect_v22` are in the same file and
+did not move in any of the seven cells, so the change is isolated to the two
+functions it was aimed at.
+
+**AND LEVER 3 IS EXCLUDED FOR BOTH BY MEASUREMENT, NOT BY THE `+0x7f` SCREEN**
+(which F8042 and F8067 retired). The two-compile `-fno-peephole2` advance test
+over `v22data.c` reads `ScrambleDataV22`, `DescrambleDataV22` and `ModDataV22`
+**CLEARED** — peephole2 emits identical bytes either way, so it consumed no
+scratch and definition order cannot reach any of them — with `Detect_v22`
+UNDECIDED. **The run reports one non-CLEARED symbol, so it is not F7845's dead
+run that calls everything CLEARED.**
+
+**`ModDataV22`'s call-clobber hypothesis is CONFIRMED AND ALREADY SPENT — it
+is not the residual.** The brief asked whether it was still the live reading.
+It is not a live question: both sides reload `0x54(...)` between the two calls,
+`v22data.c`'s own file comment records why, and the source is already written
+that way. What remains is 59 of 95 bytes that census as F8000's `OPERANDS`
+bucket — 28 instructions against 28, **mnemonic multiset EQUAL**, every text
+difference a consistent two-pair register swap (`%eax`↔`%edx`, `%ebx`↔`%esi`)
+plus the order of the two incoming-argument loads. **The frame is identical on
+both sides** — `push %esi; push %ebx; sub $0x14,%esp` — so a frame-delta
+reading of the `0x24(%esp)`/`0x20(%esp)` rejection row is wrong; that row is
+the argument-load ORDER, not a spill slot and not a differing frame size.
+
+**AND ITS DOMAIN WAS RUN TO EXHAUSTION AND IS A CONSTANT MAP.** The scrambler
+pair had just closed on the shape of an intermediate local, so the obvious
+next move was the same lever here. Six spellings of `ModDataV22` were compiled
+over the real translation unit — the local reassigned (ours), initialised at
+its declaration, split into two locals, block-scoped once per call, spelt
+`unsigned char *`, and with the return value taken through a named temporary —
+and **all six emit BYTES/59. Not one byte moves in any cell.** By lever 1's
+own stopping rule that makes the map constant: no source spelling of this
+function produces the object's bytes, and the difference is therefore not the
+local's shape at all. The scramblers stayed EXACT across all six cells, which
+is the control that says the harness was varying something.
+
+Note the asymmetry, because it is the transferable part: the scramblers derive
+ONE argument from the loaded pointer and the local is pure overhead, so
+removing it moves the allocation; `ModDataV22` derives TWO arguments from each
+load, so the object itself must hold a temporary and there is no local to
+remove. **Check how many uses the load feeds before reaching for this lever.**
+Left open, with lever 3 excluded, the domain exhausted and the null recorded.
+
+### F8121. `b103_ops` and `v23_ops` went static after all — F7768's blocker was an accessor nobody needed
+
+F7768 established these two file-local from the relocation form (lever 5:
+the blob reaches them as `.data` plus an inline addend, we named the symbol),
+measured `static`, found **the relocations moved and the register choice did
+not**, and reverted — because `t_b103_reg`, `t_v23dp` and `t_v23direct` name
+the symbols directly and "making them static needs an accessor in `src/`, new
+code, in modulations this batch is fenced out of."
+
+**Both halves of that need correcting, and the second one is the useful one.**
+
+**1. F7768 MEASURED THE `exit` PAIR AND GENERALISED TO THE `init` PAIR, WHICH
+BEHAVES DIFFERENTLY.** The two functions are not in the same position:
+
+    dp_b103_exit   blob @.data,%edx | ours @b103_ops,%eax    registers DIFFER
+    dp_v23_exit    blob @.data,%eax | ours @v23_ops,%edx     registers DIFFER
+    dp_b103_init   blob @.data,%edx | ours @b103_ops,%edx    registers AGREE
+    dp_v23_init    blob @.data,%eax | ours @v23_ops,%eax     registers AGREE
+
+For the `init` pair the relocation form is the **only** difference, which is
+exactly why they sat in the UNRESOLVED bucket — "EXACT, but a section
+relocation cannot be compared by name". So `static` closes them outright,
+and F7768's "neither can reach grade 0 by it" is true of the two functions it
+measured and false of the two it did not.
+
+**2. NO ACCESSOR IS NEEDED. THE HARNESS ALREADY HAS THE SYMMETRIC PATH.**
+`test/harness/runtime.c` records what each side REGISTERS, in
+`harness_reg_ours` and `harness_reg_ref`, and the reference side has always
+been reached that way — `t_b103dp.c`'s own header comment says so: "they are
+reached the only way anything reaches them: through what the module
+registers." Our side was naming the symbol only because it could. Taking
+`harness_reg_ours.ops[0]` after `dp_b103_init()` makes the two columns
+symmetric and adds **nothing to `src/`** — so the lever-3 hazard of putting a
+new symbol in the TU never arises. `src/v8/v8dp.c`'s `v8_op` is the tree's own
+precedent: `static`, and named by no test anywhere.
+
+Five test files changed, four source/header files, `extern` removed from both
+headers. GCC 3.4.2 accepts `extern` followed by `static` silently, so the
+header declaration had to be removed rather than merely contradicted.
+
+**Scored per symbol in BOTH directions over all 1251 (F7880), not by a set
+diff. Four symbols moved and nothing else in the tree did:**
+
+    dp_b103_init   UNRESOLVED 2 -> EXACT
+    dp_v23_init    UNRESOLVED 1 -> EXACT
+    dp_b103_exit   BYTES 4 -> REGALLOC (grade 1)
+    dp_v23_exit    BYTES 2 -> REGALLOC (grade 1)
+
+The `exit` pair promoting only to grade 1 is F7768's own prediction, now
+observed: with the relocation matching, what is left is the register swap it
+measured.
+
+**READ THE BUCKET, NOT THE HEADLINE, AND THE ARITHMETIC IS NOT WHAT IT LOOKS
+LIKE.** UNRESOLVED counts inside "grade 0 or 1" but outside EXACT. So the
+`init` pair moves **EXACT by 2 and the 601 total by ZERO** — both buckets it
+crosses are already inside that total. The `+2` this change contributes to
+601 comes entirely from the **`exit`** pair, which crosses from BYTES
+(outside) to REGALLOC (inside). Stated the wrong way round, this reads as
+four symbols each worth a point in both columns, which is the sort of claim a
+later pass quotes without re-deriving. What the `init` pair buys beyond the
+count is the thing the count cannot show: two rows which could not be
+COMPARED by name now can be.
+
+### F8122. The V.22/V.23/B.103 span is a SIZE span, and that is the answer to whether the fence was worth lifting
+
+**THE DENOMINATOR IS THIS PASS'S OWN, NOT THE BRIEF'S.** The brief said "55
+non-exact symbols over ~17 files" for the wider span. Censused here — every
+object whose name carries `v22`, `v23`, `b103` or `bwchdem`, scored with
+`byteident`'s own `verdict` — the span holds **53 non-exact symbols over 16
+files at this pass's baseline**, and the difference is almost certainly which
+data-only translation units each side counted. Quote whichever you re-derive;
+do not mix them.
+
+Those 53 break down as **6 BYTES, 2 UNRESOLVED and 45 SIZE**, and the split is
+the whole point:
+
+    the eight-symbol worklist head    6 BYTES + 2 UNRESOLVED    all 8
+    everything else in the span       45 SIZE                   ZERO BYTES
+
+**Every BYTES symbol in the entire span was already on the worklist — six of
+six — and the wider span of 45 contains not one BYTES, REGALLOC or UNRESOLVED
+row. It is SIZE and nothing else.** `b103fp.c` is 14 open symbols and 5,418
+bytes, every one SIZE; `v22fp.c` 2 of 2 SIZE; `v22_sre.c`, `v22_fse.c`,
+`v22dec.c`, `v22_pps.c`, `v22_mrf.c`, `v23rx.c`, `bwchdem.c` the same.
+
+(A census taken part-way through this pass reads 3 BYTES rather than 6,
+because three of the six had already closed. **Take the baseline census before
+the first edit** — the figure moves under you otherwise, which is F7763's
+attribution puzzle in miniature.)
+
+That is the opposite shape from the V.90 cluster the refinement levers were
+built on, and it is the planning number: **the refinement playbook is aimed at
+BYTES and REGALLOC, and this span has almost none.** SIZE means code missing
+or extra — levers 2, 6 and 13, which is reconstruction work rather than
+refinement. A pass briefed to "close the remaining bytes" here will find eight
+symbols' worth of work and then a wall.
+
+**So the fence was worth lifting, and not for the reason the worklist implied.**
+The eight-symbol head was real and mostly closable — five closed, two promoted
+to grade 1, one left with an exhausted domain. The "wider span" of 45 symbols
+is not refinement at all, and the cheapest entries in it are the small
+SIZE deltas rather than anything in the BYTES bucket: `RxHdxStartB103` 1,
+`V22_iir_filt_demod` 2, `RxHdxDataB103` 3, `RxClampV22` and `TxNOP` 4,
+`RxDetMarkB103` 5, `v23FP_tx_progress` 6, `TxNoCarrierB103`, `ModDataB103`
+and `V22_FSE_init` 7. Those are where the next pass should start, and it
+should be briefed as reconstruction.
+
+**`v23FP_tx_create` (44 of 255) is the span's one real BYTES residual and it is
+NOT lever 8.** `--why` says `row 13 MNEMONIC mov vs movw`, which reads as a
+width defect. The census refutes it: 58 instructions against 58 with the
+**mnemonic multiset EQUAL**, so there is no surplus `movw` on either side and
+row 13 is simply where the two schedules diverge. Every text difference is a
+register rename but one, and that one is a naming artefact rather than code:
+the blob's relocation names `FPM_TONE_CFG` where ours names
+`FPM_TONE_CFG_data`, because `src/dsp/fpm_tone_cfg.c` defines the struct as
+`FPM_TONE_CFG_data` and adds a *pointer* called `FPM_TONE_CFG` that the blob
+does not have — the blob's `FPM_TONE_CFG` IS the struct, at `.rodata+0xd000`.
+Both reference the same field at `+0x10`, so nothing is wrong at runtime, but
+**no spelling of `v23tx.c` can make that relocation match while the shared
+file is factored that way.** Lever 3 is excluded for it too: the
+`-fno-peephole2` advance test over `v23tx.c` reads `v23FP_tx_create` and
+`v23FP_tx_delete` CLEARED, `v23FP_tx_progress` UNDECIDED. Left open.
