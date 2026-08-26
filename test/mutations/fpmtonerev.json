@@ -1,0 +1,141 @@
+[
+ {
+  "label": "NOTE: FPM_TONE_find_rev is two sliding sums, a threshold and a debounce; FPM_TONE_filter is FPM_TONE_detect's correlator with the deciding half removed. This set breaks one claim of each at a time.",
+  "_": "Both share src/dsp/fpm_tone.c with FPM_TONE_detect, whose correlator is textually identical, so several patterns here carry a neighbouring line purely so that they occur once in the file."
+ },
+ {
+  "label": "the delay line wraps at the LAG rather than at twice it",
+  "find": "\t\tidx = ((short)(idx + 1) < 2 * lag) ? (short)(idx + 1) : 0;",
+  "replace": "\t\tidx = ((short)(idx + 1) < lag) ? (short)(idx + 1) : 0;"
+ },
+ {
+  "label": "the delayed tap is taken ahead of the write position, not behind it",
+  "find": "\t\tj = (short)(idx - lag);",
+  "replace": "\t\tj = (short)(idx + lag);"
+ },
+ {
+  "label": "the negative delayed index wraps by one lag instead of two",
+  "find": "\t\t\tj = (short)(j + 2 * lag);",
+  "replace": "\t\t\tj = (short)(j + lag);"
+ },
+ {
+  "label": "the correlation term truncates instead of rounding",
+  "find": "\t\tcorr += ((samples[n] - hist[idx]) * hist[j] + 0x4000) >> 15;",
+  "replace": "\t\tcorr += ((samples[n] - hist[idx]) * hist[j]) >> 15;"
+ },
+ {
+  "label": "the term leaving the correlation window is never subtracted",
+  "find": "\t\tcorr += ((samples[n] - hist[idx]) * hist[j] + 0x4000) >> 15;",
+  "replace": "\t\tcorr += (samples[n] * hist[j] + 0x4000) >> 15;"
+ },
+ {
+  "label": "the clamp is folded back into the running correlation",
+  "find": "\t\tif (corr > 32767)\n\t\t\tcorr_s = 32767;\n\t\telse if (corr < -32768)\n\t\t\tcorr_s = -32768;",
+  "replace": "\t\tif (corr > 32767)\n\t\t\tcorr = corr_s = 32767;\n\t\telse if (corr < -32768)\n\t\t\tcorr = corr_s = -32768;"
+ },
+ {
+  "label": "the energy window subtracts the delayed tap rather than the oldest",
+  "find": "\t\t\t  - ((hist[idx] * hist[idx]) >> 15);",
+  "replace": "\t\t\t  - ((hist[j] * hist[j]) >> 15);"
+ },
+ {
+  "label": "the two energy terms share one truncation instead of one each",
+  "find": "\t\tenergy += ((samples[n] * samples[n]) >> 15)\n\t\t\t  - ((hist[idx] * hist[idx]) >> 15);",
+  "replace": "\t\tenergy += (samples[n] * samples[n] - hist[idx] * hist[idx]) >> 15;"
+ },
+ {
+  "label": "the reversal test is the wrong way round",
+  "find": "\t\tif (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {",
+  "replace": "\t\tif (2 * corr_s > (state->cfg.f1c * energy_s) >> 15) {"
+ },
+ {
+  "label": "the correlation is compared unscaled, without its factor of two",
+  "find": "\t\tif (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {",
+  "replace": "\t\tif (corr_s < (state->cfg.f1c * energy_s) >> 15) {"
+ },
+ {
+  "label": "the threshold is taken against the unclamped energy",
+  "find": "\t\tif (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {",
+  "replace": "\t\tif (2 * corr_s < (state->cfg.f1c * energy) >> 15) {"
+ },
+ {
+  "label": "no debounce: every reversal is reported however recent the last",
+  "find": "\t\t\tif (state->rev_age > 160) {",
+  "replace": "\t\t\tif (state->rev_age > 0) {"
+ },
+ {
+  "label": "the interval is reported in samples rather than eight-sample ticks",
+  "find": "\t\t\t\tperiod = (short)(state->rev_age >> 3);",
+  "replace": "\t\t\t\tperiod = state->rev_age;"
+ },
+ {
+  "label": "the age counter never advances",
+  "find": "\t\tstate->rev_age++;\n",
+  "replace": ""
+ },
+ {
+  "label": "the sample is never pushed into the delay line",
+  "find": "\t\thist[idx] = samples[n];\n",
+  "replace": ""
+ },
+ {
+  "label": "the input biquad is skipped, so the search sees the raw buffer",
+  "find": "\tFPM_iir_filt_II(samples, state->rev_block, state->rev_acc, 1, count);\n",
+  "replace": ""
+ },
+ {
+  "label": "the input biquad runs the detector's notch and state instead of its own",
+  "find": "\tFPM_iir_filt_II(samples, state->rev_block, state->rev_acc, 1, count);",
+  "replace": "\tFPM_iir_filt_II(samples, state->iir_self, state->kill_state, 1, count);"
+ },
+ {
+  "label": "count is counted down through 16 bits, as the rest of the module does",
+  "find": "\tfor (n = 0; n < count; n++) {\n\t\tshort j;",
+  "replace": "\tfor (n = (short)(count - 1); n != -1; n = (short)(n - 1)) {\n\t\tshort j;"
+ },
+ {
+  "label": "the correlation is stored back unclamped",
+  "find": "\tstate->rev_corr = corr_s;",
+  "replace": "\tstate->rev_corr = (short)corr;"
+ },
+ {
+  "label": "nothing is ever reported",
+  "find": "\treturn period;\n}",
+  "replace": "\treturn 0;\n}"
+ },
+ {
+  "label": "filter: the write index wraps one place late",
+  "find": "\t\tidx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;\n\t\thist[idx] = *samples;",
+  "replace": "\t\tidx = ((short)(idx + 1) <= taps) ? (short)(idx + 1) : 0;\n\t\thist[idx] = *samples;"
+ },
+ {
+  "label": "filter: the input is consumed twice, so the output lands one sample on",
+  "find": "\t\thist[idx] = *samples;\n",
+  "replace": "\t\thist[idx] = *samples++;\n"
+ },
+ {
+  "label": "filter: the correlator starts at the second tap of the kernel",
+  "find": "\t\tconst short *c = kernel;\n\t\tshort *p;\n\t\tint acc = 0;\n\t\tint k;",
+  "replace": "\t\tconst short *c = kernel + 1;\n\t\tshort *p;\n\t\tint acc = 0;\n\t\tint k;"
+ },
+ {
+  "label": "filter: the second loop covers the write position a second time",
+  "find": "\t\tfor (k = taps - 1; k > idx; k--)\n\t\t\tacc += *p-- * *c++;\n\n\t\t*samples++ = (short)(acc >> 15);",
+  "replace": "\t\tfor (k = taps - 1; k >= idx; k--)\n\t\t\tacc += *p-- * *c++;\n\n\t\t*samples++ = (short)(acc >> 15);"
+ },
+ {
+  "label": "filter: the output keeps one bit too many",
+  "find": "\t\t*samples++ = (short)(acc >> 15);",
+  "replace": "\t\t*samples++ = (short)(acc >> 14);"
+ },
+ {
+  "label": "filter: the write position is not carried between calls",
+  "find": "\t\t*samples++ = (short)(acc >> 15);\n\t}\n\n\tstate->hist_idx = (short)idx;",
+  "replace": "\t\t*samples++ = (short)(acc >> 15);\n\t}\n"
+ },
+ {
+  "label": "filter: a negative count does nothing, as FPM_TONE_find_rev's does",
+  "find": "\tint idx = state->hist_idx;\n\tint i;\n\n\tfor (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {",
+  "replace": "\tint idx = state->hist_idx;\n\tint i;\n\n\tfor (i = 0; i < count; i++) {"
+ }
+]

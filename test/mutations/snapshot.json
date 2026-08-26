@@ -509,7 +509,7 @@
    }
   },
   "fpmtonekill": {
-   "key": "950af3134891e06cc7c570e95bff191795011a46fa64dca980436041933a382e",
+   "key": "cc759d3a5ff056eb034b6336b648136901a8c16792b193c5cd1ed7aaf49432fb",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "one sample short: an off-by-one in the count": "caught",
@@ -518,6 +518,39 @@
     "the section count and the sample count are transposed": "caught",
     "the tone is left in: the call is dropped entirely": "caught",
     "two biquads instead of one, so it reads five coefficients and four state words past the end": "caught"
+   }
+  },
+  "fpmtonerev": {
+   "key": "86e8820d7ada8e123a3fea03f6c3d2063d7c8928c6f30d00e80167e139e2e051",
+   "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "count is counted down through 16 bits, as the rest of the module does": "caught",
+    "filter: a negative count does nothing, as FPM_TONE_find_rev's does": "caught",
+    "filter: the correlator starts at the second tap of the kernel": "caught",
+    "filter: the input is consumed twice, so the output lands one sample on": "caught",
+    "filter: the output keeps one bit too many": "caught",
+    "filter: the second loop covers the write position a second time": "caught",
+    "filter: the write index wraps one place late": "caught",
+    "filter: the write position is not carried between calls": "caught",
+    "no debounce: every reversal is reported however recent the last": "caught",
+    "nothing is ever reported": "caught",
+    "the age counter never advances": "caught",
+    "the clamp is folded back into the running correlation": "caught",
+    "the correlation is compared unscaled, without its factor of two": "caught",
+    "the correlation is stored back unclamped": "caught",
+    "the correlation term truncates instead of rounding": "caught",
+    "the delay line wraps at the LAG rather than at twice it": "caught",
+    "the delayed tap is taken ahead of the write position, not behind it": "caught",
+    "the energy window subtracts the delayed tap rather than the oldest": "caught",
+    "the input biquad is skipped, so the search sees the raw buffer": "caught",
+    "the input biquad runs the detector's notch and state instead of its own": "caught",
+    "the interval is reported in samples rather than eight-sample ticks": "caught",
+    "the negative delayed index wraps by one lag instead of two": "caught",
+    "the reversal test is the wrong way round": "caught",
+    "the sample is never pushed into the delay line": "caught",
+    "the term leaving the correlation window is never subtracted": "caught",
+    "the threshold is taken against the unclamped energy": "caught",
+    "the two energy terms share one truncation instead of one each": "caught"
    }
   },
   "gtonedet": {

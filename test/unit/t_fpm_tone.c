@@ -337,8 +337,18 @@ find_rev_stream(const char *what, int total, int len)
 	return diff_end();
 }
 
+/*
+ * `taps_override` shortens cfg.len AFTER creation, so the object keeps its
+ * full-length buffers while the correlator runs over fewer of them.  That is
+ * the only way to put a REAL, non-zero value one place past the last tap the
+ * loops are entitled to read: with taps at the config's own 53 the kernel ends
+ * with the allocation, an off-by-one reads whatever the allocator left there,
+ * and a mutation that walks one tap too far is invisible whenever that happens
+ * to be zero.  It was: the "second loop covers the write position a second
+ * time" mutation went UNCAUGHT until this argument existed.
+ */
 static int
-filter_stream(const char *what, int total, int len)
+filter_stream(const char *what, int total, int len, int taps_override)
 {
 	static short ba[1024], bb[1024];
 	unsigned char *a, *b;
@@ -351,6 +361,10 @@ filter_stream(const char *what, int total, int len)
 	if (a == 0 || b == 0) {
 		diff_eq_int("objects built (%ld)", 0, 1, 0);
 		return diff_end();
+	}
+	if (taps_override > 0) {
+		((struct fpm_tone *)a)->cfg.len = (short)taps_override;
+		((struct fpm_tone *)b)->cfg.len = (short)taps_override;
 	}
 	taps = ((struct fpm_tone *)a)->cfg.len;
 
@@ -912,10 +926,12 @@ main(void)
 	 * whatever index the previous call left behind.
 	 */
 	build_rev_stimulus(2100, 27852, 450, 3200);
-	rc |= filter_stream("filter blocks of 53", 3180, 53);
-	rc |= filter_stream("filter one at a time", 800, 1);
-	rc |= filter_stream("filter blocks of 7", 3199, 7);
-	rc |= filter_stream("filter blocks of 500", 3000, 500);
+	rc |= filter_stream("filter blocks of 53", 3180, 53, 0);
+	rc |= filter_stream("filter one at a time", 800, 1, 0);
+	rc |= filter_stream("filter blocks of 7", 3199, 7, 0);
+	rc |= filter_stream("filter blocks of 500", 3000, 500, 0);
+	/* Taps short of the buffer, so the tap past the end is a real one. */
+	rc |= filter_stream("filter with 40 of 53 taps", 3200, 25, 40);
 
 	diff_begin("FPM_TONE_filter coverage");
 	diff_eq_int("samples the correlator moved (%ld)", filt_moved > 0, 1,
