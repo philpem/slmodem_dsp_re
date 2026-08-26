@@ -8816,3 +8816,97 @@ fails on it.
 relocations of any kind name them), so no caller exists whose behaviour could
 be affected, and whether the vendor's intended caller would have reached
 either arm cannot be known from this object.
+
+## D404 ⚠ `RateToSeq` indexes `V32_RATE_SEQ` with its argument and does not bound it
+
+```
+   821e0:  0f bf 44 24 08          movswl 0x8(%esp),%eax
+   821e5:  0f b7 84 00 00 00 00    movzwl 0x0(%eax,%eax,1),%eax  <== V32_RATE_SEQ
+   821ed:  c3                      ret
+```
+
+Three instructions, no compare. The table is 14 bytes — seven shorts — and the
+argument is a signed `short`, so any value outside 0..6 reads elsewhere in
+`.data`. The neighbours are `V32_FINAL_RATE_SEQ` two bytes below and the
+padding above, so a small overrun returns a plausible rate signal rather than
+faulting.
+
+The first argument is a modem instance and **is never read**, which is the
+other half of why there is no guard: the function has nothing to validate
+against.
+
+**Reproduced.** `src/pump/v32/v32seq.c` has no bound either, and the
+differential test deliberately does not sweep out of range — the two tables sit
+at different addresses in the two objects, so an out-of-bounds read is not a
+comparison of anything.
+
+**Status:** unmeasured. Every in-object caller of `RateToSeq` is unwritten
+(`V32OrgNextState` and its three siblings), so whether any of them can produce
+an index outside 0..6 is a question for the pass that writes them.
+
+## D401 ⚠ `InitGenSequence` divides by its width argument with no test for zero
+
+```
+   8368d:  31 d2                   xor    %edx,%edx
+   8368f:  f7 f1                   div    %ecx
+```
+
+`%ecx` is the fourth argument zero-extended from 16 bits, and nothing between
+the load and the divide compares it. A width of zero raises `#DE` and the
+process dies.
+
+The same argument then becomes the shift count of `mov $1,%eax; shl %cl,%eax`,
+so a caller passing zero would in any case get a field mask of zero.
+
+**Reproduced.** The reconstruction divides in the same place with the same lack
+of a guard. `DSPLIB_REPRODUCE_BUGS` is not involved: nothing here is fixed, so
+there is nothing to fence.
+
+**Status:** unmeasured, and the reason is D404's. The callers are the unwritten
+next-state functions.
+
+## D402 ⚠ Two variable shifts in the generator can exceed the width of their type
+
+`InitGenSequence` computes `(1 << width) - 1` and `GenSequence` computes
+`pattern >> (index * width)`. Both are `shl`/`sar` with the count in `%cl`,
+which x86 masks to five bits, so the object's behaviour for a count of 32 or
+more is a shift by count mod 32. In C that shift is undefined.
+
+The reconstruction writes the shift and does not mask it, so GCC emits the same
+instruction and the same thing happens — but it is *undefined*, not *defined to
+match*, which is why it is recorded rather than left implicit.
+
+**Not reachable with the object's own configurations.** `index` is bounded by
+`total / width - 1` and `width` by the field layout of a 16-bit pattern word, so
+`index * width` stays under 16 for every call the handshake can make; the
+literal 16-bit rate signals V32_RATE_SEQ holds are what those calls carry.
+
+**Status:** unmeasured, for D404's reason.
+
+## D403 ⚠ `DetSequence`'s bit counter is a `short` and its bit width is an `unsigned short`, so a width above 32767 never terminates
+
+The inner loop counts `%esi`, sign-extended from 16 bits at every step —
+
+```
+   8384e:  8d 46 01                lea    0x1(%esi),%eax
+   83851:  0f bf f0                movswl %ax,%esi
+   83854:  3b ee                   cmp    %ebp,%esi
+   83856:  7c a8                   jl     83800
+```
+
+— against `%ebp`, which is `movzwl 0x54(%edi)`, the detector's bit width **zero**
+-extended. So the bound reaches 65535 and the counter wraps to -32768 at 32767:
+the comparison is true again and the loop restarts, for ever. Nothing else in
+the loop changes, so it is a true non-termination and not merely a long run.
+
+**Reproduced**, `short bit` against `int nbits`, and it is not hypothetical:
+this was found because a mutation that pointed the detector at the *generator's*
+width field — which the test fixture filled with a pseudorandom value — hung and
+was recorded `caught (hang)` rather than caught by a check. The fixture now pins
+that field small so the mutation fails a check instead; the deviation is what is
+left.
+
+**Status:** unmeasured. `InitDetSequence` is the only writer of the field and
+takes it from its caller, and every caller is unwritten. The widths the V.32
+handshake actually uses are the number of bits per received word, which is
+single figures.

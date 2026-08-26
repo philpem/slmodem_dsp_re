@@ -815,5 +815,9 @@
  "fpmiirblock": [
   "src/dsp/fpm_iir.c",
   "build/test/t_fpm_iir"
+ ],
+ "v32seq": [
+  "src/pump/v32/v32seq.c",
+  "build/test/t_v32seq"
  ]
 }

@@ -1,0 +1,277 @@
+[
+ {
+  "label": "NOTE: three separable machines in one file -- a five-armed ladder over a table, a field generator and a bit detector. The fixture is what makes the arms separable: the ladder is swept over ALL 65,536 rate signals against ALL SEVEN local indices, so an arm that swallows another arm's inputs cannot hide; the generator is run with four field widths, a non-power-of-two field count and three calls in a row so the index has to survive a call boundary; the detector is armed seven ways including an all-ones target that exercises the reg != -1 test, and fed in three bites for the same reason. Both sub-blocks are compared byte for byte after every call, so a store to an unnamed offset fails."
+ },
+ {
+  "label": "the ladder's first arm tests the local signal against the far end's bit rather than its own",
+  "find": "\tif ((seq & 0x0008) && (local & 0x0008))",
+  "replace": "\tif ((seq & 0x0008) && (seq & 0x0008))"
+ },
+ {
+  "label": "the 9600 arm and the 12000 arm are tried in the other order, which agrees for every signal that sets only one of them",
+  "find": "\tif ((seq & 0x0008) && (local & 0x0008))\n\t\trate = 5;\n\telse if ((seq & 0x0020) && (local & 0x0020))\n\t\trate = 4;",
+  "replace": "\tif ((seq & 0x0020) && (local & 0x0020))\n\t\trate = 4;\n\telse if ((seq & 0x0008) && (local & 0x0008))\n\t\trate = 5;"
+ },
+ {
+  "label": "the 0x0040 arm is tried before the 0x0200 arm, which is the numerically sorted order and not the object's",
+  "find": "\telse if ((seq & 0x0200) && (local & 0x0200))\n\t\trate = ((seq & 0x0080) && (local & 0x0080)) ? 2 : 1;\n\telse if ((seq & 0x0040) && (local & 0x0040))\n\t\trate = 3;",
+  "replace": "\telse if ((seq & 0x0040) && (local & 0x0040))\n\t\trate = 3;\n\telse if ((seq & 0x0200) && (local & 0x0200))\n\t\trate = ((seq & 0x0080) && (local & 0x0080)) ? 2 : 1;"
+ },
+ {
+  "label": "the 0x0080 sub-test only consults the far end, so index 2 is chosen where the object chooses 1",
+  "find": "\t\trate = ((seq & 0x0080) && (local & 0x0080)) ? 2 : 1;",
+  "replace": "\t\trate = (seq & 0x0080) ? 2 : 1;"
+ },
+ {
+  "label": "the 0x0080 sub-test's two answers are transposed",
+  "find": "\t\trate = ((seq & 0x0080) && (local & 0x0080)) ? 2 : 1;",
+  "replace": "\t\trate = ((seq & 0x0080) && (local & 0x0080)) ? 1 : 2;"
+ },
+ {
+  "label": "the last arm falls through to the no-rate answer instead of index 0",
+  "find": "\telse if ((seq & 0x0400) && (local & 0x0400))\n\t\trate = 0;",
+  "replace": "\telse if (0)\n\t\trate = 0;"
+ },
+ {
+  "label": "the ladder's default is index 0 rather than the no-rate value, which agrees wherever an arm fires",
+  "find": "\tint rate = V32_RATE_NONE;",
+  "replace": "\tint rate = 0;"
+ },
+ {
+  "label": "the local signal is read from the FINAL table, which differs from RATE_SEQ at exactly one index",
+  "find": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];",
+  "replace": "\tshort local = V32_FINAL_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];"
+ },
+ {
+  "label": "the local rate index is read from the two bytes above it",
+  "find": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];",
+  "replace": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX + 2) & 7];"
+ },
+ {
+  "label": "the local rate index is read out of the half-duplex block instead of the DSP block",
+  "find": "\tvoid *fp = FIELD_PTR(modem, V32_OBJ_FP);\n\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];",
+  "replace": "\tvoid *fp = FIELD_PTR(modem, V32_OBJ_HDX);\n\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX) & 7];"
+ },
+ {
+  "label": "RateToSeq answers from the FINAL table",
+  "find": "\treturn (unsigned short)V32_RATE_SEQ[rate];\n}",
+  "replace": "\treturn (unsigned short)V32_FINAL_RATE_SEQ[rate];\n}"
+ },
+ {
+  "label": "CodeRateSeq and CodeFinalRateSeq answer from each other's table",
+  "find": "\t\tout = (unsigned short)V32_FINAL_RATE_SEQ[rate];",
+  "replace": "\t\tout = (unsigned short)V32_RATE_SEQ[rate];"
+ },
+ {
+  "label": "the no-rate sentinel loses its top nibble, so CodeESeq answers CodeRateSeq's",
+  "find": "\treturn rate == V32_RATE_NONE ? V32_ESEQ_NONE",
+  "replace": "\treturn rate == V32_RATE_NONE ? V32_RATE_SEQ_NONE"
+ },
+ {
+  "label": "CodeRateSeq treats the no-rate index as a real one and indexes the table with it",
+  "find": "\tif (rate != V32_RATE_NONE)\n\t\tout = (unsigned short)V32_RATE_SEQ[rate];",
+  "replace": "\tout = (unsigned short)V32_RATE_SEQ[rate];"
+ },
+ {
+  "label": "the no-rate test is >= rather than ==, which agrees for every value the ladder can return",
+  "find": "\tif (rate != V32_RATE_NONE)\n\t\tout = (unsigned short)V32_RATE_SEQ[rate];",
+  "replace": "\tif (rate < V32_RATE_NONE)\n\t\tout = (unsigned short)V32_RATE_SEQ[rate];",
+  "equivalent": true,
+  "why": "`v32_common_rate` returns one of exactly seven values -- 0, 1, 2, 3, 4, 5 and V32_RATE_NONE, which is 6 -- so `rate != 6` and `rate < 6` partition the same domain and no input can separate them.  It is registered rather than deleted because the equality is the OBJECT's: 0x82388 is `cmp $0x6,%dx` with `je`, not a `jl`, and if the ladder ever gains an eighth answer this stops being equivalent and will be reported MIScounted.  An equivalence argument is only equivalence under the checks that exist (F651)."
+ },
+ {
+  "label": "the RATE_SEQ table's fifth entry is the FINAL table's, which is the one place the two differ",
+  "find": "\t0x0d11, 0x0b11, 0x0b91, 0x09d1, 0x09b1, 0x0ff9, 0x0997\n};",
+  "replace": "\t0x0d11, 0x0b11, 0x0b91, 0x09d1, 0x09b1, 0x0999, 0x0997\n};"
+ },
+ {
+  "label": "the E table is the rate table with the top nibble left off",
+  "find": "\t(short)0xfd11, (short)0xfb11, (short)0xfb91, (short)0xf9d1,",
+  "replace": "\t(short)0x0d11, (short)0x0b11, (short)0x0b91, (short)0x09d1,"
+ },
+ {
+  "label": "the generator's field count is not decremented, so the index starts one field past the top",
+  "find": "\tunsigned short top = (unsigned short)(total / width - 1);\t/* D401 */",
+  "replace": "\tunsigned short top = (unsigned short)(total / width);\t/* D401 */"
+ },
+ {
+  "label": "the generator's wrap mask and its starting index are set from different values",
+  "find": "\tFIELD_US(hdx, V32HDX_GEN_INDEX_MASK) = top;\n\tFIELD_US(hdx, V32HDX_GEN_INDEX) = top;",
+  "replace": "\tFIELD_US(hdx, V32HDX_GEN_INDEX_MASK) = top;\n\tFIELD_US(hdx, V32HDX_GEN_INDEX) = 0;"
+ },
+ {
+  "label": "the field mask is one bit too wide",
+  "find": "\t\t(unsigned short)((1u << width) - 1u);\t\t/* D402 */",
+  "replace": "\t\t(unsigned short)((1u << (width + 1)) - 1u);\t/* D402 */"
+ },
+ {
+  "label": "the field mask is (1 << width) rather than (1 << width) - 1",
+  "find": "\t\t(unsigned short)((1u << width) - 1u);\t\t/* D402 */",
+  "replace": "\t\t(unsigned short)(1u << width);\t\t\t/* D402 */"
+ },
+ {
+  "label": "InitGenSequence divides the other way round",
+  "find": "\tunsigned short top = (unsigned short)(total / width - 1);\t/* D401 */",
+  "replace": "\tunsigned short top = (unsigned short)(width / total - 1);\t/* D401 */"
+ },
+ {
+  "label": "the pattern and the width are written to each other's offsets",
+  "find": "\tFIELD_US(hdx, V32HDX_GEN_WIDTH) = width;\n\tFIELD_US(hdx, V32HDX_GEN_PATTERN) = pattern;",
+  "replace": "\tFIELD_US(hdx, V32HDX_GEN_WIDTH) = pattern;\n\tFIELD_US(hdx, V32HDX_GEN_PATTERN) = width;"
+ },
+ {
+  "label": "the generator counts the index UPWARDS, so the fields come out least significant first",
+  "find": "\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t FIELD_US(hdx, V32HDX_GEN_INDEX_MASK));",
+  "replace": "\t\tindex = (unsigned short)((index + 1) &\n\t\t\t\t\t FIELD_US(hdx, V32HDX_GEN_INDEX_MASK));"
+ },
+ {
+  "label": "the generator advances the index before emitting rather than after",
+  "find": "\t\t*out++ = (short)((pattern >> (index * width)) &\n\t\t\t\t FIELD_US(hdx, V32HDX_GEN_MASK));\t/* D402 */\n\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t FIELD_US(hdx, V32HDX_GEN_INDEX_MASK));",
+  "replace": "\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t FIELD_US(hdx, V32HDX_GEN_INDEX_MASK));\n\t\t*out++ = (short)((pattern >> (index * width)) &\n\t\t\t\t FIELD_US(hdx, V32HDX_GEN_MASK));\t/* D402 */"
+ },
+ {
+  "label": "the shift is the index alone rather than the index times the field width",
+  "find": "\t\t*out++ = (short)((pattern >> (index * width)) &",
+  "replace": "\t\t*out++ = (short)((pattern >> index) &"
+ },
+ {
+  "label": "the generator's index is not written back, so a second call restarts at the top field",
+  "find": "\tFIELD_US(hdx, V32HDX_GEN_INDEX) = index;\n}",
+  "replace": "}"
+ },
+ {
+  "label": "the wrap mask is applied before the decrement rather than after",
+  "find": "\t\tindex = (unsigned short)((index - 1) &\n\t\t\t\t\t FIELD_US(hdx, V32HDX_GEN_INDEX_MASK));",
+  "replace": "\t\tindex = (unsigned short)((index &\n\t\t\t\t\t FIELD_US(hdx, V32HDX_GEN_INDEX_MASK)) - 1);"
+ },
+ {
+  "label": "the detector's target and mask are stored to each other's offsets",
+  "find": "\tFIELD_I(hdx, V32HDX_DET_TARGET) = target;\n\tFIELD_I(hdx, V32HDX_DET_MASK) = mask;",
+  "replace": "\tFIELD_I(hdx, V32HDX_DET_TARGET) = mask;\n\tFIELD_I(hdx, V32HDX_DET_MASK) = target;"
+ },
+ {
+  "label": "InitDetSequence leaves the shift register where it was instead of clearing it",
+  "find": "\tFIELD_I(hdx, V32HDX_DET_REG) = 0;\n\tFIELD_I(hdx, V32HDX_DET_MATCH) = 0;",
+  "replace": "\tFIELD_I(hdx, V32HDX_DET_MATCH) = 0;"
+ },
+ {
+  "label": "InitDetSequence leaves the last match behind instead of clearing it",
+  "find": "\tFIELD_I(hdx, V32HDX_DET_REG) = 0;\n\tFIELD_I(hdx, V32HDX_DET_MATCH) = 0;",
+  "replace": "\tFIELD_I(hdx, V32HDX_DET_REG) = 0;"
+ },
+ {
+  "label": "the bits of each word are shifted in least significant first",
+  "find": "\t\t\t      (int)((word >> (nbits - 1 - bit)) & 1u);",
+  "replace": "\t\t\t      (int)((word >> bit) & 1u);"
+ },
+ {
+  "label": "the bit index is off by one, so the top bit of every word is dropped",
+  "find": "\t\t\t      (int)((word >> (nbits - 1 - bit)) & 1u);",
+  "replace": "\t\t\t      (int)((word >> (nbits - bit)) & 1u);"
+ },
+ {
+  "label": "the all-ones guard is dropped, which agrees on every arm whose target is not -1",
+  "find": "\t\t\tif (((reg & mask) == target) & (reg != -1)) {",
+  "replace": "\t\t\tif ((reg & mask) == target) {"
+ },
+ {
+  "label": "the all-ones guard tests the masked register rather than the register",
+  "find": "\t\t\tif (((reg & mask) == target) & (reg != -1)) {",
+  "replace": "\t\t\tif (((reg & mask) == target) & ((reg & mask) != -1)) {"
+ },
+ {
+  "label": "the match value is the whole register rather than the register masked by out_mask",
+  "find": "\t\t\t\tFIELD_I(hdx, V32HDX_DET_MATCH) =\n\t\t\t\t\treg & FIELD_I(hdx, V32HDX_DET_OUT_MASK);",
+  "replace": "\t\t\t\tFIELD_I(hdx, V32HDX_DET_MATCH) = reg;"
+ },
+ {
+  "label": "the match value is masked by the comparison mask rather than by out_mask",
+  "find": "\t\t\t\t\treg & FIELD_I(hdx, V32HDX_DET_OUT_MASK);",
+  "replace": "\t\t\t\t\treg & FIELD_I(hdx, V32HDX_DET_MASK);"
+ },
+ {
+  "label": "the inner loop STOPS at the first match, so the last match in a word no longer wins",
+  "find": "\t\t\t\tfound = 1;\n\t\t\t}\n\t\t}",
+  "replace": "\t\t\t\tfound = 1;\n\t\t\t\tbreak;\n\t\t\t}\n\t\t}"
+ },
+ {
+  "label": "the match is reported one word late",
+  "find": "\t\tnread++;\n\t\tfor (bit = 0; bit < nbits; bit++) {",
+  "replace": "\t\tfor (bit = 0; bit < nbits; bit++) {"
+ },
+ {
+  "label": "the found flag is hoisted out of the word loop, so a hit in an earlier word is still reported later",
+  "find": "\t\tunsigned int word = (unsigned short)*data++;\n\t\tint found = 0;\n\t\tshort bit;",
+  "replace": "\t\tunsigned int word = (unsigned short)*data++;\n\t\tstatic int found;\n\t\tshort bit;"
+ },
+ {
+  "label": "the register is not written back on the no-match path, so a pattern straddling two calls is lost",
+  "find": "\tFIELD_I(hdx, V32HDX_DET_REG) = reg;\n\n\treturn -1;",
+  "replace": "\treturn -1;"
+ },
+ {
+  "label": "the register is not written back on the match path either",
+  "find": "\t\t\t\tFIELD_I(hdx, V32HDX_DET_REG) = reg;\n\t\t\t\tfound = 1;",
+  "replace": "\t\t\t\tfound = 1;"
+ },
+ {
+  "label": "the no-match answer is 0 rather than -1, which is a valid word count",
+  "find": "\tFIELD_I(hdx, V32HDX_DET_REG) = reg;\n\n\treturn -1;",
+  "replace": "\tFIELD_I(hdx, V32HDX_DET_REG) = reg;\n\n\treturn 0;"
+ },
+ {
+  "label": "the detector's word count is zero-based",
+  "find": "\t\tif (found)\n\t\t\treturn nread;",
+  "replace": "\t\tif (found)\n\t\t\treturn (short)(nread - 1);"
+ },
+ {
+  "label": "the detector's bit width is read from the generator's width instead",
+  "find": "\tint nbits = FIELD_US(hdx, V32HDX_DET_WIDTH);",
+  "replace": "\tint nbits = FIELD_US(hdx, V32HDX_GEN_WIDTH);"
+ },
+ {
+  "label": "GetSequence returns the shift register rather than the value latched at the match",
+  "find": "\treturn FIELD_I(hdx, V32HDX_DET_MATCH);",
+  "replace": "\treturn FIELD_I(hdx, V32HDX_DET_REG);"
+ },
+ {
+  "label": "LoadReg's bound admits a sixth register",
+  "find": "\tshort value = 0;\n\n\tif (reg >= 0 && reg <= V32HDX_NREGS - 1) {",
+  "replace": "\tshort value = 0;\n\n\tif (reg >= 0 && reg <= V32HDX_NREGS) {"
+ },
+ {
+  "label": "LoadReg's bound is signed at the bottom, so a negative index reads before the array",
+  "find": "\tshort value = 0;\n\n\tif (reg >= 0 && reg <= V32HDX_NREGS - 1) {",
+  "replace": "\tshort value = 0;\n\n\tif (reg <= V32HDX_NREGS - 1) {"
+ },
+ {
+  "label": "StoreReg's bound is signed at the bottom, so a negative index writes before the array",
+  "find": "\tif (reg >= 0 && reg <= V32HDX_NREGS - 1) {\n\t\tvoid *hdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\n\t\t*((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg) = value;",
+  "replace": "\tif (reg <= V32HDX_NREGS - 1) {\n\t\tvoid *hdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\n\t\t*((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg) = value;"
+ },
+ {
+  "label": "StoreReg takes its index second and its value third, which is LoadReg's order and not the object's",
+  "find": "StoreReg(void *modem, short value, short reg)",
+  "replace": "StoreReg(void *modem, short reg, short value)"
+ },
+ {
+  "label": "the register array starts two bytes higher",
+  "find": "\t\tvalue = *((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg);",
+  "replace": "\t\tvalue = *((short *)(void *)FIELD(hdx, V32HDX_REGS + 2) + reg);"
+ },
+ {
+  "label": "StoreReg writes to the array LoadReg does not read",
+  "find": "\t\t*((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg) = value;",
+  "replace": "\t\t*((short *)(void *)FIELD(hdx, V32HDX_REGS + 2) + reg) = value;"
+ },
+ {
+  "label": "the registers are ints rather than shorts",
+  "find": "\t\t*((short *)(void *)FIELD(hdx, V32HDX_REGS) + reg) = value;",
+  "replace": "\t\t*((int *)(void *)FIELD(hdx, V32HDX_REGS) + reg) = value;"
+ },
+ {
+  "label": "the half-duplex block is reached at the DSP block's offset",
+  "find": "\tvoid *hdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\n\treturn FIELD_I(hdx, V32HDX_DET_MATCH);",
+  "replace": "\tvoid *hdx = FIELD_PTR(modem, V32_OBJ_FP);\n\n\treturn FIELD_I(hdx, V32HDX_DET_MATCH);"
+ }
+]

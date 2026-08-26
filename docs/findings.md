@@ -92783,3 +92783,163 @@ bytes, which is the complete reading rather than a majority one.
 **Schedule by SERVICE and by module, never by span label.** `service.py`
 classifies by which entry point reaches a symbol and is the authority; the
 span name is a locator, not a description.
+
+### F8200. V.32's half-duplex states cannot be landed for their own 4,467 bytes: the dispatch table welds them to 8,833 bytes of next-state code
+
+This session was briefed to take the half-duplex machine — `V32TxHdxModem`
+with eight `TxHdx*` states and `V32RxHdxModem` with twelve `RxHdx*`, 22 symbols
+and 4,467 bytes, the coherent module F8172 identifies. **It is a clean module
+seam and a bad BATCH seam, and `closure.py` is what says so.**
+
+Every terminal arm of every state dispatches through the same instruction:
+
+```
+   802fe:  0f bf 41 76             movswl 0x76(%ecx),%eax
+   80305:  ff 14 85 00 00 00 00    call   *0x0(,%eax,4)  <== R_386_32 V32NextState
+```
+
+`V32NextState` is a 24-byte table of six function pointers in `.data`. An
+indexed call cannot be inlined away, so the table has to be defined, so its
+entries have to name defined functions:
+
+| | bytes |
+|---|--:|
+| `V32OrgNextState` | 2,580 |
+| `V32AnsNextState` | 2,539 |
+| `V32RngInitNextState` | 1,610 |
+| `V32RngRespNextState` | 1,310 |
+| `V32LocLoopNextState` | 794 |
+| | **8,833** |
+
+So the minimum landable unit for the 22 states is **13,300 bytes**, and the
+figure `closure.py` actually reports is larger still because the next-state
+functions pull in the setters and the sequence codec as well:
+
+```
+$ python3 tools/closure.py V32TxHdxModem TxHdx... V32RxHdxModem RxHdx... --missing
+   63 symbols, 17,496 bytes (unwritten only)
+```
+
+**This is a general shape, not a V.32 accident.** A state machine whose arms
+dispatch through a table of its own successors has a link closure equal to the
+whole machine, however small any one state is. The rule that follows is:
+`--missing` over the module you intend to write is a PREREQUISITE for
+scheduling it, not a step inside it. The brief that sent this session had a
+figure for the module and none for its closure, and the two differ by a factor
+of four.
+
+**What was taken instead** is the layer underneath — see F8202 — which is
+closed on its own and drops the next pass's Hdx closure from 17,496 to states
+plus next-state code alone.
+
+### F8201. V.32's own translation-unit names are in the object, and the span boundary at 0x827a0 is one of the author's own file boundaries
+
+`docs/modules.md` already carries them and nothing had read them against the
+V.32 question. Twenty of the 281 `STT_FILE` names are V.32's, and they fall
+either side of exactly the address F8172 identifies as the span boundary:
+
+```
+  0x07a9f0-0x0827a0   V32.c  V32RXTAB.c  V32SMC_TX.c  V32TAB144.c
+                      V32TXHDX.c  V32TXTAB.c  V32dec.c  V32int.c
+  0x0827a0-0x092c00   V32mod.c  V32org.c  V32prc.c  V32rxhdx.c
+                      V32states.c  V32stc.c  V32RNG.c  V32Sdm_rx.c
+                      V32Sdm_tx.c  V32ans.c  V32loop.c
+```
+
+**`V32TXHDX.c` and `V32rxhdx.c` are two of the author's own files.** So F8172's
+"a span boundary can bisect a module" is right about the LOGICAL module and
+needs one refinement: the boundary at 0x827a0 is not an arbitrary cut through
+one translation unit, it is the point where the author's transmit half-duplex
+file ends and, eight files later, the receive one begins. The transmit and
+receive halves of V.32's half-duplex machine were separate translation units in
+the original, and the span labels are reporting that faithfully.
+
+That matters for scheduling: a V.32 pass should be scoped by these names, which
+are the author's, and not by `Dialer.c +18` / `V32mod.c +39`, which are the
+labels of whichever TU happened to bracket the range. `V32ans.c`, `V32org.c`,
+`V32loop.c` and `V32RNG.c` are the four next-state functions F8200 is about,
+one file each — which is the strongest available argument that they are four
+separate pieces of work and not one.
+
+### F8202. The V.32 rate-signal codec, the sequence generator and the sequence detector: 13 functions and 3 tables, written and differentially tested
+
+`src/pump/v32/v32seq.c`, `include/dsplib/v32seq.h`, `test/unit/t_v32seq.c`,
+`test/mutations/v32seq.json`. 1,528 bytes of the object over 13 functions plus
+42 bytes over three `.data` tables. Closed on its own —
+`closure.py <the 16 names> --batch` says `CLOSED`.
+
+**The ladder is one inlined static with five copies.** `SeqToRate`,
+`DecodeRateSeq`, `CodeRateSeq`, `CodeFinalRateSeq` and `CodeESeq` all open with
+the same instructions: the far end's rate signal in one register,
+`V32_RATE_SEQ[fp->0x2a]` in another, and a five-armed ladder picking the best
+rate both ends support. That is a `static` helper the compiler inlined into
+each of them (F7940's shape), which is why the worklist shows five functions
+and not six.
+
+**Each rate index owns a distinctive bit, and index 5 owns all of them.** Read
+off the bytes at `.data+0x76ac`:
+
+| index | RATE_SEQ | the bit the ladder tests |
+|--:|---|---|
+| 0 | 0x0d11 | 0x0400 |
+| 1 | 0x0b11 | 0x0200 |
+| 2 | 0x0b91 | 0x0200 and 0x0080 |
+| 3 | 0x09d1 | 0x0040 |
+| 4 | 0x09b1 | 0x0020 |
+| 5 | 0x0ff9 | 0x0008 — and every one of the others |
+| 6 | 0x0997 | none; this is "no rate in common" |
+
+The ladder tries them in the order 5, 4, {2,1}, 3, 0 — **not** sorted, and
+reproduced literally. `V32_FINAL_RATE_SEQ` differs from `V32_RATE_SEQ` at index
+5 alone (0x0999 against 0x0ff9); `V32_ESEQ[i]` is `V32_FINAL_RATE_SEQ[i] | 0xf000` at every index, index 5
+included -- so it tracks the FINAL table and not `V32_RATE_SEQ`.
+
+**All three tables are in `.data`, not `.rodata`, so they are not `const`** —
+CLAUDE.md's rule, applied. Nothing in the object writes them.
+
+**The differential test sweeps the ladder exhaustively**: all 65,536 rate
+signals against all seven local indices, for each of the five functions —
+2,293,760 comparisons, aggregated into one verdict per (function, index) that
+prints its own denominator. 2,878 checks over seven sections, and the whole
+binary runs in 18 ms.
+
+**Mutation: 54 mutations, 53 caught by test, 0 not caught, 1 equivalent, 0
+unusable, no `hang`.**
+
+### F8203. `diff_begin` zeroes `diff_failures`, so a multi-section test that returns it reports only its LAST section — 37 of 54 mutations came back NOT CAUGHT
+
+`t_v32seq.c` was written with seven `diff_begin`/`diff_end` sections and ended
+
+```c
+    return diff_failures != 0;
+```
+
+`diff_begin` sets `diff_checks = 0; diff_failures = 0` (`test/harness/harness.c`
+lines 40–41), so by the time `main` reads that counter it describes the seventh
+section and nothing else. The binary printed six sections' failures to stdout
+and **exited 0**.
+
+The first mutation run said `54 mutations: 17 caught, 37 NOT caught`, and the
+37 were not a random 37: they were **every mutation belonging to the first six
+sections**, with the seventh section's mutations all caught. That pattern is
+what identified the defect — a genuinely untested claim does not sort itself by
+source position.
+
+This is tiers.md §1's corollary with a different cause: *a test that links the
+wrong pair of objects reports NOT CAUGHT for everything, which is the same
+output an untested claim gives*. Here the objects were right and the exit code
+was wrong, and the effect is identical. **The mutation tier is the only thing
+that could have found it** — the differential tier was green, because every
+check really did pass; it was green for the same reason before and after.
+
+`if (diff_end()) return 1;` between sections (which `t_v32state.c` uses) or an
+accumulator (which `t_v32seq.c` now uses) both work. A test with more than one
+`diff_begin` that ends `return diff_failures != 0` does not.
+
+**THE REST OF THE TREE WAS CHECKED AND IS CLEAN, so this is a measurement and
+not a warning.** Every `test/unit/t_*.c` and `.cpp` was scanned for a file with
+more than one `diff_begin` whose exit path reads `diff_failures` or discards a
+`diff_end`: **zero**, once `t_v32seq.c` is excluded. The pattern to look for,
+if a suite ever reports a suspiciously position-correlated set of uncaught
+mutations, is that count against the number of `diff_begin` calls in the same
+file.
