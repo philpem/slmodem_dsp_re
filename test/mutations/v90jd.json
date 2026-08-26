@@ -4,8 +4,8 @@
  },
  {
   "label": "the two lookahead bits are transposed",
-  "find": "\tbits[49] = (unsigned char)(params->MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);\n\tbits[50] = (unsigned char)\n\t    ((params->MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);",
-  "replace": "\tbits[50] = (unsigned char)(params->MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);\n\tbits[49] = (unsigned char)\n\t    ((params->MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);"
+  "find": "\tbits[49] = (unsigned char)(look & 1);\n\tbits[50] = (unsigned char)((look >> 1) & 1);",
+  "replace": "\tbits[50] = (unsigned char)(look & 1);\n\tbits[49] = (unsigned char)((look >> 1) & 1);"
  },
  {
   "label": "the two constellation parameters are transposed",

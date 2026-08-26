@@ -35,7 +35,15 @@
 	typedef char v90pf_off_##tag[ \
 	    ((int)__builtin_offsetof(V90PreFilter, field) == (off)) ? 1 : -1]
 
-V90PF_OFF(fir,       0x00, fir);
+/*
+ * There is no `V90PF_OFF(fir, 0x00, ...)` any more: `FloatFIR` is a BASE and
+ * has no member name to take an offset of.  What that assertion was really
+ * buying -- that the FIR occupies exactly +0x00 to +0x13 -- is bought here
+ * instead by its size, since the ABI puts a class's first non-virtual base at
+ * offset zero and `codecType` is asserted at 0x14 immediately below.
+ */
+typedef char v90pf_fir_size[(sizeof(FloatFIR) == 0x14) ? 1 : -1];
+
 V90PF_OFF(codecType, 0x14, codectype);
 V90PF_OFF(phase2,    0x18, phase2);
 V90PF_OFF(params,    0x1c, params);
@@ -241,7 +249,7 @@ void
 V90PreFilter::setFilter(unsigned int gain)
 {
 	if ((unsigned int)this->gain != gain) {
-		fir.setCoefficients(getFilterPointer(gain),
+		setCoefficients(getFilterPointer(gain),
 				    getFilterLength(gain));
 		this->gain = (int)gain;
 	}
@@ -281,14 +289,14 @@ V90PreFilter::setFilter(PreFilterCoefType type, unsigned int gain)
 
 	switch ((int)type) {
 	case 2:
-		fir.setCoefficients(bank2((int)gain), 20);
+		setCoefficients(bank2((int)gain), 20);
 		break;
 	case 3:
-		fir.setCoefficients(bank3((int)gain), 40);
+		setCoefficients(bank3((int)gain), 40);
 		this->gain = (int)gain - 20;
 		break;
 	default:
-		fir.setCoefficients(bank1((int)gain), 20);
+		setCoefficients(bank1((int)gain), 20);
 		break;
 	}
 }
@@ -485,7 +493,7 @@ V90PreFilter::selectFilter()
 			}
 		}
 
-		fir.setCoefficients(coef, len);
+		setCoefficients(coef, len);
 		gain = want;
 		edprintf("V90PreFilter: Filter Gain = %d\r\n", want);
 		return;
@@ -530,14 +538,14 @@ V90PreFilter::selectFilter()
 
 	if (type == 2) {
 		coef = bank2(g);
-		fir.setCoefficients(coef, 20);
+		setCoefficients(coef, 20);
 	} else if (type == 3) {
 		coef = bank3(g);
-		fir.setCoefficients(coef, 40);
+		setCoefficients(coef, 40);
 		gain = g - 20;
 	} else {
 		coef = bank1(g);
-		fir.setCoefficients(coef, 20);
+		setCoefficients(coef, 20);
 	}
 
 	edprintf("V90PreFilter: Filter Gain = %d\r\n", g);
@@ -669,12 +677,12 @@ V90PreFilter::setParamEia6()
 void
 V90PreFilter::reset()
 {
-	fir.reset();
+	FloatFIR::reset();
 
 	refLoop = -1;
 	gain = 0;
 
-	fir.setCoefficients(&V90PreFilter::preFilterCoefType1[0][0], 20);
+	setCoefficients(&V90PreFilter::preFilterCoefType1[0][0], 20);
 }
 
 /* ================================================================ lifecycle */
@@ -737,7 +745,7 @@ V90PreFilter::reset()
  */
 V90PreFilter::V90PreFilter(__tHardwareCodecTypes__ codec, V90Phase2Info *info,
 			   V90Parameters *parms)
-	: fir(0x28, (float *)0, 0x63)
+	: FloatFIR(0x28, (float *)0, 0x63)
 {
 	int n;
 

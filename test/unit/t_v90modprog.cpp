@@ -585,7 +585,7 @@ static unsigned char tra[TR_MAX], trb[TR_MAX];
  * installs the address of ITS OWN copy of a static object and both copies are
  * linked into this binary at two addresses:
  *
- *   +0x06c  `preFilter.fir.coefficients`, which `V90PreFilter::reset` points
+ *   +0x06c  `preFilter.coefficients`, which `V90PreFilter::reset` points
  *           at `&preFilterCoefType1[0][0]`.  t_v90prefilter.cpp's claim.
  *   +0x094  the `V90Resampler` vptr, which is that side's own vtable.  A
  *           vtable cannot be content-checked -- ours holds our member

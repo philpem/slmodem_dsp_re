@@ -70,6 +70,7 @@ typedef char v90jd_size[(sizeof(V90Jd) == 0x90) ? 1 : -1];
  */
 V90Jd::V90Jd(V90Parameters *params)
 {
+	unsigned char look;
 	int mask;
 	int i;
 
@@ -82,9 +83,10 @@ V90Jd::V90Jd(V90Parameters *params)
 	 * `shr $1; and $1` -- the low two bits of the parameter's low byte,
 	 * and nothing above them can reach the message.
 	 */
-	bits[49] = (unsigned char)(params->MAX_SPECTRAL_SHAPER_LOOKAHEAD & 1);
-	bits[50] = (unsigned char)
-	    ((params->MAX_SPECTRAL_SHAPER_LOOKAHEAD >> 1) & 1);
+	look = (unsigned char)params->MAX_SPECTRAL_SHAPER_LOOKAHEAD;
+
+	bits[49] = (unsigned char)(look & 1);
+	bits[50] = (unsigned char)((look >> 1) & 1);
 
 	/*
 	 * The constellation size, two bits, one parameter each -- a whole-word

@@ -91130,3 +91130,394 @@ parenthetical rule; what it did not do was ask which OTHER files carry headings
 shaped like findings headings. The check that would have caught it is the one
 that caught the coefficients: read the diff for files that are not the one you
 meant to change.
+### F8080. THE CONSTRUCTOR/DESTRUCTOR VARIANT DIGIT DISTINGUISHES A BASE FROM A MEMBER, AND IT SETTLES `V90PreFilter` AGAINST F228
+
+`include/dsplib/V90PreFilter.h` carried this, for years:
+
+> FloatFIR IS AT OFFSET ZERO AND MIGHT BE A BASE CLASS.  Every call the object
+> makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which is what
+> both a first member and a public base look like; **nothing in the blob
+> distinguishes them.**
+
+The last clause is wrong, and the thing that distinguishes them is three
+relocations away.  GCC emits the **base-object** variants `C2`/`D2` when it
+constructs or destroys a BASE subobject and the **complete-object** variants
+`C1`/`D1` for a MEMBER.  The blob picks the base ones at every site:
+
+    44d86  V90PreFilter::C2  ->  R_386_PC32  _ZN8FloatFIRC2EjPfj
+    449fa  V90PreFilter::D2  ->  R_386_PC32  _ZN8FloatFIRD2Ev
+    44a1a  V90PreFilter::D1  ->  R_386_PC32  _ZN8FloatFIRD2Ev
+
+and this is not an aliasing artefact: all four of `_ZN8FloatFIRC1EjPfj`
+(0x46ce0), `C2` (0x46c70), `D1` (0x46d70) and `D2` (0x46d50) are distinct
+symbols at distinct addresses in the blob, with distinct bodies.  With `fir`
+written as a member we emitted `C1` and `D1`, which is what had held both
+destructors in the RELOC bucket at **1 differing byte of 19** apiece --
+`--why` rejecting at row 3, `NON-REGISTER OPERAND .+11 @_ZN8FloatFIRD2Ev |
+.+11 @_ZN8FloatFIRD1Ev`.
+
+Written `class V90PreFilter : public FloatFIR`, we emit `C2`/`D2` at all four
+sites and both destructors go **RELOC -> EXACT**.  Tree grade 0 **548 -> 550**,
+RELOC 3 -> 1, and BYTES (82), SIZE (577) and REGALLOC (36) do not move.
+
+**THE PREDICTION WAS WRITTEN BEFORE THE BUILD, AND ITS SECOND HALF MATTERS AS
+MUCH AS ITS FIRST.**  `V90PreFilter`'s C1/C2 were predicted NOT to close, on
+`--why`'s `blob 120 insns, ours 114` -- a six-instruction absence the variant
+digit cannot touch.  They did not.  So this decodes the CONTAINMENT
+RELATIONSHIP and nothing else, and the constructors' residual is still open and
+still lever 2's.
+
+Measured over the whole tree with `byteident.py`'s own `body()`/`verdict()`,
+every one of the 1251 shared symbols scored on both sides: **2 moved, both
+BETTER, none WORSE.**  That is F7880's blind spot checked rather than assumed --
+a symbol that stays BYTES or SIZE and degrades is invisible to a `--list-exact`
+set diff, so the A/B compares the per-symbol differing-byte COUNT and not
+membership.
+
+**THE COST, AND IT IS REAL BUT SMALL.**  A base with data plus a derived class
+with data is not standard-layout, so `__builtin_offsetof` in `V90PreFilter.cpp`
+becomes conditionally supported rather than well defined.  Both compilers
+accept it.  `V90PF_OFF(fir, 0x00, fir)` had to go -- a base has no member name
+to take an offset of -- and is replaced by `sizeof(FloatFIR) == 0x14`, which
+pins the same fact given that the ABI puts a first non-virtual base at offset
+zero and `codecType` is still asserted at 0x14 directly below it.
+
+**ONE CALL SITE OUTSIDE THE FILE HAD TO MOVE**, and it is named here because it
+is in a file this pass was fenced out of: `V90Demodulator.cpp:1241` spelled the
+convolution `preFilter.fir.process(...)`, and with no `fir` member it is
+`preFilter.process(...)`.  `V90PreFilter` declares no `process` of its own, so
+the inherited one is unambiguous.  The edit is one statement and changes no
+byte of `V90Demodulator.cpp`'s object -- it is in the tree-wide A/B above,
+which reports it unmoved.
+
+### F8081. THE VARIANT DISCRIMINATOR SWEEPS TO ZERO, AND IT RESOLVES TWO MORE F228 NOTES IN THE *MEMBER* DIRECTION
+
+F8080's mechanism is a general instrument, so it was run over everything rather
+than left as one file's fix.  `tools/`-style census, per CALLER: for every
+symbol both objects define, take the relocation targets matching
+`_ZN<class>[CD][0-2]E<args>`, group by (class, kind, argument list), and report
+any pair where the blob's variant digit and ours disagree.
+
+**Shown to fire before being believed** (F134, `gates.md` rule 3): run against
+the pre-fix object tree it reports exactly the four known sites -- `V90PreFilter`
+C1, C2, D1 and D2, each `blob 2 | ours 1`.  Run against the fixed tree:
+
+    denominator: 1251 symbols both objects define and disassemble
+                 127 of them reference at least one ctor/dtor
+                 0 (caller, class) pairs DISAGREE on the variant
+
+So `V90PreFilter` was the tree's ONLY instance reachable this way.  **The bound
+is the denominator and not the tree**: a caller we have not written, or one
+where GCC inlined the construction, carries no relocation and cannot appear.
+
+**THE BLOB NAMES ITS BASE CLASSES OUTRIGHT.**  Every `C2`/`D2` reference in the
+object, deduplicated, is five classes:
+
+    _ZN8FloatFIRC2EjPfj / D2Ev                V90PreFilter        <- F8080
+    _ZN9ResamplerC2Ejfj{f,Pf}j / D2Ev         ResamplerTimingOffset
+    _ZN21ResamplerTimingOffsetC2E... / D2Ev   ResamplerTiming
+    _ZN15ResamplerTimingC2E... / D2Ev         (V90Resampler's chain)
+    _ZN19GenericToneDetectorC2E... / D2Ev     ANSamToneDetector
+
+and the other four are already spelt `: public` in our headers, which is why
+the census comes back clean rather than because it is blind.
+
+**AND THE NEGATIVE IS WORTH AS MUCH.**  `Psd.h:7` and `FloatARMA.h:11` carry the
+identical F228 note -- "no deleting destructor, so offset 0 is a real member" --
+phrased as an open question in the same words `V90PreFilter.h` used.  The blob
+references `_ZN3PsdC1Ej10WindowTypej` and `_ZN3PsdD1Ev` twice each and their
+`C2`/`D2` **never**, and the same for `_ZN8FloatIIRC1EjPfj` / `D1Ev`.  So for
+those two the discriminator answers, and it answers MEMBER -- which is what we
+already write.  `FloatARMA` has no ctor/dtor relocation in the object at all,
+so it stays genuinely undecided; do not read the clean census as evidence
+about it.
+
+**WHERE THIS IS WORTH TRYING AGAIN.**  The instrument only reads relocated
+references, so the place it can still pay is a class whose containing type we
+write later, or one whose ctor/dtor we have not yet emitted.  Re-run the census
+after any batch that adds constructors; it is one pass over the objects and it
+prints its own denominator.
+
+### F8082. `V92Phase4Modulator`'s DESTRUCTOR IS `delete mapper`, AND THE LOCAL-COPY SPELLINGS THAT "EXPLAIN" IT ARE ALL FURTHER AWAY
+
+Ours was 67 bytes against the blob's 87, `--why` reporting `blob 25 insns,
+ours 23` with padding stripped, so lever 2's bare arithmetic said "a statement
+is missing".  Nothing is missing.  Reading the two side by side:
+
+    blob   sub $0xc,%esp; mov %esi,0x8(%esp); mov %ebx,0x4(%esp)
+           mov 0x70(%esi),%ebx        <- ONE load, into a callee-saved reg
+           ... call V92MapperD1 ... mov %ebx,(%esp); call sysdep_free
+    ours   push %ebx; sub $0x8,%esp
+           mov 0x70(%ebx),%eax        <- load into a caller-saved reg
+           ... call V92MapperD1 ... mov 0x70(%ebx),%eax   <- RELOAD
+                                      mov %eax,(%esp); call sysdep_free
+
+We reloaded `mapper` from +0x70 after the destructor call, because the call may
+have written it; the blob had already committed the value to `%ebx`, which
+costs it a second callee-saved register and the two stack slots to spill both.
+That is +3 prologue/epilogue instructions in the blob against +1 reload in
+ours, netting the `+2` `--why` prints -- so the instruction delta is a
+CONSEQUENCE of the register decision and not an inventory of statements.
+
+**EIGHT SPELLINGS, TWO PREIMAGES, AND THE OBVIOUS DIAGNOSIS IS WRONG.**  The
+natural reading of "loaded once and kept" is a local copy, and every local-copy
+form is FURTHER from the object than the shape it replaced:
+
+    A  if (mapper != 0) { mapper->~V92Mapper(); sysdep_free(mapper); }   SIZE 20
+    B  V92Mapper *m = mapper; if (m != 0) { m->~V92Mapper(); free(m); }  SIZE 26
+    C  the same with `if (m)`                                            SIZE 26
+    D  if (V92Mapper *m = mapper) { ... }                                SIZE 26
+    E  delete mapper;                                                    EXACT
+    F  if (mapper != 0) delete mapper;                                   EXACT
+    G  V92Mapper *m = mapper; delete m;                                  SIZE 26
+    H  local copy, comma operator instead of a block                     SIZE 26
+
+The five local-copy cells all land at 61 bytes against the object's 87 -- they
+remove the reload and the second callee-saved register with it.  So what is
+decoded is not "the pointer is read once": it is that the operand is the
+MEMBER and the expression is a `delete`.  **G is the cell that proves it** --
+a local copy followed by `delete` is not the same program to GCC 3.4.2 as
+`delete` on the member.
+
+E and F are byte-identical, so the object does not distinguish the redundant
+guard (a delete-expression tests for null itself and GCC folds it).  Two
+preimages, one decoded FACT, per rule 0.  `delete mapper` is written as the
+smaller claim.
+
+Lever 7's precondition is met and was checked before the edit rather than
+after: the object itself calls `_ZN9V92MapperD1Ev` at 0x16e73, so `delete` does
+not invent a destructor call.  The file gains the same per-file
+`inline void operator delete(void *p) { sysdep_free(p); }` that
+`V92Precoder.cpp` carries, positioned below its `sysdep_free` declaration and
+above its only user -- F7815 is why it is not consolidated into a header.  No
+sized form is needed: the Makefile already passes `-fno-sized-deallocation`
+(F7900).
+
+**File 25 -> 27 EXACT of 44.**  The enumeration scored every symbol the object
+defines, not just the two destructors, because lever 3b's cursor is threaded in
+emission order; no other symbol in the file moved in any of the eight cells.
+
+**A TRAP IN THE HARNESS, RECORDED BECAUSE IT LOOKED LIKE A RESULT.**  The first
+run inserted the `operator delete` by anchoring on the destructor's SIGNATURE,
+which also appears in the file's opening comment -- so it landed INSIDE that
+comment.  The file compiled clean, `delete` resolved to the undeclared
+`::operator delete`, and cells E and F scored `RELOC 1`: bytes identical,
+one relocation naming `_ZdlPv` where the blob names `sysdep_free`.  A
+one-relocation miss reads exactly like a near miss worth chasing.  Anchor an
+inserted definition on the BODY, and read a RELOC residual as a question about
+which symbol you actually called.
+
+### F8083. `V90Phase3Demodulator`'s DESTRUCTOR NEEDS BOTH ARMS CONVERTED, AND THE CROSS PRODUCT IS WHAT SHOWS IT
+
+Same shape as F8082, twice over: two guarded heap arms, each open-coding
+`p->~T(); sysdep_free(p);`, at 148 bytes against the object's 165.  Lever 2's
+"table that separates" says compile the CROSS PRODUCT rather than one site at a
+time.  Nine cells -- each arm as the open-coded form, as `delete p`, and as
+`if (p) delete p`:
+
+                    ansam=open    ansam=del     ansam=gdel
+    sd=open         SIZE  17      BYTES 30      BYTES 30
+    sd=del          SIZE   6      EXACT         EXACT
+    sd=gdel         SIZE   6      EXACT         EXACT
+
+**Neither arm closes it alone, and the two do not even fail the same way.**
+Converting the SD arm alone leaves a SIZE difference of 6; converting the ANSam
+arm alone leaves a SAME-SIZE 30-byte one, which is a different bucket
+entirely.  A pass that converted one site, saw BYTES 30 and read it as "this
+lever does not apply here" would have been wrong, and the cross product is the
+only thing that says so.
+
+All four both-converted cells are byte-exact, so as in F8082 the guard is not
+distinguished.  The object calls `V90SdDetector::~V90SdDetector` at 0x20c4b and
+`ANSamToneDetector::~ANSamToneDetector` at 0x20c73 itself, so lever 7's
+precondition holds for both arms.  **File 11 -> 13 EXACT of 24.**
+
+The pre-existing comment's claim that the null tests are load-bearing survives
+unchanged: `delete p` performs its own null test and calls nothing when the
+pointer is null, so `harness_alloc.free_null` -- which is what the test
+asserts -- does not move.
+
+### F8084. WHAT IS LEFT OF THIS LEVER, SCORED RATHER THAN GREPPED
+
+The playbook says the search for lever 7's remaining surface is one grep.  It
+is, and a grep alone is not a worklist: `src/` still open-codes
+`p->~T(); sysdep_free(p);` at **24 sites over 8 files**, and what decides
+whether a site is worth converting is the enclosing destructor's VERDICT.
+Scored after F8082 and F8083 landed:
+
+    FENCED  V90Demodulator      SIZE 128   ours 797 blob 669   8 sites
+    FENCED  V92Modulator        SIZE   1   ours 504 blob 503   5 sites
+            V92EchoCanceller    SIZE  67   ours 128 blob 195   1 site
+            V92Modem            SIZE  32   ours 261 blob 229   3 sites
+            V90ModemCtor        SIZE  16   ours 337 blob 321   4 sites
+            V90Phase4Modulator  SIZE  11   ours  83 blob  94   1 site
+            V90Modulator        SIZE   1   ours 200 blob 199   1 site
+
+**READ THE SIGN, WHICH IS LEVER 2's OWN WARNING IN A NEW COSTUME.**  A
+delete-expression emits MORE code than the open-coded form here -- that is the
+whole of F8082 -- so it can only help where OURS IS SHORTER.  `V92EchoCanceller`
+(67 short, one site) and `V90Phase4Modulator` (11 short, one site) are the two
+clean candidates.  `V90Demodulator` is 128 LONGER and `V92Modem` 32 longer, so
+whatever those are, converting a site can only make them worse, and the two
+fenced files are somebody else's in any case.
+
+`V90Demapper`, `V90SpectralShaper` and `V90Resampler` all still contain guarded
+`sysdep_free` calls and all three have byte-exact destructors already, which is
+the other half of the same point: the open-coded form is correct wherever the
+free is not the operand of a destructor call the object also makes.
+
+### F8085. `V90RDetector`'s FOUR DETECTORS: THE EARLY-EXIT RETURN IS A CONSTANT MAP, AND THE DOMAIN I CHOSE COULD NOT HAVE SEPARATED ANYTHING
+
+The three-way census (`Counter(text)`, then `Counter(mnemonic)`, padding AND
+self-moves stripped) over the four open symbols, `ours minus blob`:
+
+    detectRNot / detectRfNot   mov-1 xor+1            39 against 39   SIZE 1
+    detectR    / detectRf      mov-1 movzwl-1 xor+1   47 against 48   SIZE 4
+
+All four carry the SAME signature, which is what a four-way twin should do and
+is the reason to work them together.  Read against the rows, `xor+1 mov-1` is
+the early exit:
+
+    blob   mov %ax,0x20(%ecx); mov (%ecx),%eax; inc %eax; cmp $0x6,%eax
+           je ...; mov %eax,(%ecx); mov %ebx,%eax; pop %ebx; ret
+    ours   mov (%ecx),%edx; inc %edx; cmp $0x6,%edx; je ...
+           mov %ax,0x20(%ecx); xor %eax,%eax; mov %edx,(%ecx); pop %ebx; ret
+
+The blob returns `%ebx`, which still holds the verdict variable's zero
+initialiser; we emit `xor %eax,%eax` for a literal `return 0`.  `movzwl-1` is
+the other half: at the group boundary the blob RELOADS `movzwl 0x20(%ecx),%eax`
+where we keep the value in `%ax` and do `movzwl %ax,%eax`, having store-
+forwarded across the branch.
+
+**THE HYPOTHESIS WAS THAT THE ORIGINAL'S EARLY EXIT SAYS `return verdict`, AND
+IT IS REFUTED -- BUT READ WHAT THE REFUTATION IS WORTH.**  Three cells were
+compiled: as written, with all four early exits returning the verdict VARIABLE
+instead of the literal, and that plus explicit `(unsigned int)` casts on the
+group-boundary comparisons.  All three produce the **byte-identical object**,
+md5 `864ddd6d2d031c8f4ae1a16a570b31c2`, and not one of the four verdicts moves
+(SIZE 4, SIZE 4, SIZE 1, SIZE 1 in every cell).  That is lever 1's killing
+branch measured: the map is CONSTANT over this domain.
+
+**AND THE DOMAIN IS THE PROBLEM, WHICH IS THE PART WORTH RECORDING.**  F9a's
+rule is that an enumeration reporting "0 of N" without showing any cell
+differing from any other is indistinguishable from a broken generator.  The
+generator here is fine -- the source really did change, eight `return`
+statements and two casts -- but every cell is SEMANTICALLY IDENTICAL to every
+other: `verdict` is provably zero at the early exit so GCC folds it to a
+literal, and a cast between `unsigned short` and `unsigned int` is a no-op on a
+value already zero-extended.  A domain of synonyms cannot separate anything,
+and a null over one is much weaker than a null over a domain that could have
+answered.  So `xor %eax,%eax` against `mov %ebx,%eax` is NOT reachable by how
+the return is spelt, and the next pass should not re-try these three cells.
+
+What is still unexplained, and is where to aim next: the blob's RELOAD of
+`0x20(%ecx)` across the branch.  Something in the original stops GCC forwarding
+that store, and it is the same shape in all four functions.  A domain that
+could separate it has to change what the group-boundary comparison READS -- the
+member, a second local, or a value recomputed -- not how it is spelt.
+
+### F8086. `V90PreFilter`'s CONSTRUCTOR PAIR IS SIX MISSING LOADS, AND THE CENSUS NAMES THEM
+
+F8080 closed this file's destructors and predicted, in advance, that C1/C2
+would NOT close with them -- `--why` reads `blob 120 insns, ours 114`, a
+six-instruction absence the ctor/dtor variant digit cannot touch.  It did not.
+The three-way census says what the six are:
+
+    per-mnemonic delta, ours minus blob:  cmp-5  cmpl+5  dec-1  lea+1  mov-6
+
+**THE `cmp`/`cmpl` SWAP IS THE SAME FACT AS THE MISSING `mov`s, NOT A SECOND
+ONE.**  We emit five `cmpl $imm,<memory>` where the blob emits five
+`cmp $imm,%reg`: the blob has LOADED the value into a register first, and those
+loads are six of the `mov`s we are short.  `-6` total is exactly `mov-6`, with
+`cmp`/`cmpl` and `dec`/`lea` cancelling within themselves.
+
+**THE OBVIOUS READING IS "THE ORIGINAL USED A LOCAL", AND IT IS MEASURED AND
+WRONG.**  The body reads `V90PW(params)[0x008 / 4]` twice, once for the `< 0`
+test and once for the sixteen-arm `switch`, so hoisting it into an `int cfg`
+is the natural cell and the one a pass would reach for.  Compiled, it moves the
+census the WRONG WAY:
+
+    as written           cmp-5 cmpl+5 dec-1 lea+1 mov-6      delta -6
+    hoisted into `cfg`   cmp-5 cmpl+5 dec-1 lea+1 mov-8      delta -8
+
+The hoist removes two more loads when the blob has SIX MORE than us.  So the
+object is not reading that field into a local: it re-reads memory MORE often
+than we do, and the five `cmp $imm,%reg` against our five `cmpl $imm,<memory>`
+have to come from somewhere else in the body.  Reverted; the tree is back at
+-6 and the file is unchanged.
+
+Note the direction against F8082, because the pair is instructive: that
+destructor wanted the MEMBER and refused a local, and this constructor is
+short of loads while looking exactly like a hoisting candidate.  Neither is a
+rule.  The census per symbol is, and the sign is what it is for.
+
+Not carried further here for want of budget.  The file is `V90PreFilter.cpp`,
+the pair is
+`_ZN12V90PreFilterC1E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters`
+and its C2 twin, ours 556 bytes against 552.  What a next pass wants is the
+five sites where the blob compares a REGISTER and we compare MEMORY -- read
+them off `dis.py` and ask what put each value in a register, rather than
+assuming it was a source-level local.
+
+### F8087. `V90Jd`'s CONSTRUCTOR LOADS THE LOOKAHEAD AS ONE UNSIGNED BYTE, AND THE THREE SYMBOLS THAT MOVED WITH IT ARE LEVER 3b -- ONE OF THEM BACKWARDS
+
+`--why` on `_ZN5V90JdC1EP13V90Parameters` says `row 5 MNEMONIC movb vs mov`,
+one differing byte of 118 against 119.  The three-way census says more, and the
+rows say what it means.  `ours minus blob`, 40 instructions each side:
+
+    before   and+2 mov+2 sar+1 setne-2 shr-1 test-2
+    after    and+2 mov+2         setne-2      test-2
+
+    blob   movzbl 0x30(%ecx),%ebx      ONE byte-sized load
+           mov %bl,%dl ; shr $1,%bl ; and $0x1,%dl ; and $0x1,%bl
+    ours   movzbl 0x30(%edx),%eax ; and $0x1,%al   ; mov %al,0x33(%esi)
+           mov 0x30(%edx),%ebx         a SECOND load, 32 bits wide
+           sar $1,%ebx ; and $0x1,%bl
+
+We read the member twice -- once as a byte, once as a whole word -- and shifted
+the word ARITHMETICALLY, because `MAX_SPECTRAL_SHAPER_LOOKAHEAD` is declared
+`int`.  The object loads the low byte once and shifts it LOGICALLY in an 8-bit
+register, which is what an `unsigned char` local gives.  Writing
+
+    unsigned char look = (unsigned char)params->MAX_SPECTRAL_SHAPER_LOOKAHEAD;
+
+and taking both bits off `look` reproduces exactly that: `sar`/`shr` and the
+duplicate load leave the census.  It is lever 8's rule -- the extension follows
+the DECLARED TYPE OF THE LOCAL BEING LOADED INTO -- applied to a shift rather
+than to a widening, and it is forced evidence, not a hill-climb: nothing about
+a discarded upper half makes a 32-bit reload and an arithmetic shift free.
+The two spellings are identical over every `int` value, so no test can see it.
+
+Declaration placement is a CONSTANT MAP here and was measured rather than
+assumed: `unsigned char look = ...` mid-block and `unsigned char look;` at the
+top of the block with the assignment in place give the same object, symbol for
+symbol.  The block-top form is kept because it is the file's own style.
+
+**THE CONSTRUCTOR ITSELF DID NOT CLOSE -- IT IS STILL SIZE 1, STILL
+`movb vs mov` AT ROW 5 -- AND THREE OTHER SYMBOLS MOVED INSTEAD.  ONE OF THEM
+GOT WORSE.**  Nothing was edited outside the constructor:
+
+    _ZN5V90Jd11unPackResetEv     BYTES   2  ->  EXACT       gained
+    _ZN5V90Jd12getBitVectorEv    BYTES 247  ->  BYTES 232   15 bytes closer
+    _ZN5V90Jd8packDataEv         BYTES 230  ->  BYTES 252   22 bytes FURTHER
+
+That is F7827 exactly: `peep2_find_free_register`'s cursor is threaded through
+the translation unit in emission order, so changing what scratch the FIRST
+function consumes changes the state arriving at every successor.  The
+constructor is emitted ahead of all three.
+
+**IT IS KEPT, AND THE REGRESSION IS THE REASON THIS IS WRITTEN DOWN RATHER
+THAN THE REASON IT IS NOT.**  Net is +1 grade 0 (554 -> 555) and two of the
+three bystanders improved, and the source change is independently forced by the
+object's own encoding rather than chosen for the count.  But `packData` is 22
+bytes further away, in a function F7940 to F7944 worked recently and whose
+recorded residual is which crc element lands in which stack slot -- so whoever
+returns to it needs to know the cursor arriving at it has moved, and that
+reverting THIS constructor is one way to move it back.  The measurement is
+reproducible: build, then diff the per-symbol differing-byte counts, not the
+EXACT set, because BYTES to BYTES is invisible to a set diff (F7866, F7880).
+
+What is still open in the constructor is `and+2 mov+2 setne-2 test-2` -- the
+blob extracts some later flag with `test`/`setne`, a 0/1 boolean, where we
+mask with `and` and store the masked value.  Those are different programs
+unless the bit is bit 0, so that is the next cell and it is not this one.

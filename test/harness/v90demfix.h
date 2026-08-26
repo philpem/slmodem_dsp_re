@@ -225,8 +225,8 @@ setup(int trial, const struct trial_args *t)
 	fill_pair(dbuf[0], dbuf[1], sizeof(dbuf[0]));
 	fill_pair(sbuf[0], sbuf[1], sizeof(sbuf[0]));
 
-	fir_ctor(&D(0)->preFilter.fir, FIR_TAPS, 0, FIR_SLACK);
-	ref_fir_ctor(&D(1)->preFilter.fir, FIR_TAPS, 0, FIR_SLACK);
+	fir_ctor(static_cast<FloatFIR *>(&D(0)->preFilter), FIR_TAPS, 0, FIR_SLACK);
+	ref_fir_ctor(static_cast<FloatFIR *>(&D(1)->preFilter), FIR_TAPS, 0, FIR_SLACK);
 
 	for (side = 0; side < 2; side++) {
 		V90Demodulator *d = D(side);
@@ -337,14 +337,14 @@ setup(int trial, const struct trial_args *t)
 static void
 teardown(void)
 {
-	fir_dtor(&D(0)->preFilter.fir);
-	ref_fir_dtor(&D(1)->preFilter.fir);
+	fir_dtor(static_cast<FloatFIR *>(&D(0)->preFilter));
+	ref_fir_dtor(static_cast<FloatFIR *>(&D(1)->preFilter));
 }
 
 /*
  * A copy of one side's demodulator with every pointer replaced by something
  * both sides can agree about.  Same idiom as snap_dem in
- * t_v90sessionflag.cpp.  `preFilter.fir.coefficients` points into whichever
+ * t_v90sessionflag.cpp.  `preFilter.coefficients` (the FloatFIR base's) points into whichever
  * side's static coefficient table `selectFilter` chose, so it is replaced by
  * its offset from that side's own bank -- which is what t_v90prefilter.cpp
  * does, except that here `selectFilter` is already differentially tested and
@@ -383,8 +383,8 @@ snap_dem(unsigned char *dst, int side)
 	 * that `selectFilter` ran on the right object, and the prefilter's
 	 * `gain` and `refLoop` beside them say that.
 	 */
-	s->preFilter.fir.coefficients = NULL;
-	s->preFilter.fir.history = NULL;
+	s->preFilter.coefficients = NULL;
+	s->preFilter.history = NULL;
 	/*
 	 * NOTHING ELSE IS NEUTRALISED, DELIBERATELY.  Only a field this
 	 * fixture sets to a per-side address can differ for a reason that is

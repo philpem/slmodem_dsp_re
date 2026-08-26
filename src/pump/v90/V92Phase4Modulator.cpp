@@ -225,12 +225,52 @@ V92Phase4Modulator::V92Phase4Modulator(V92Parameters *p, V92BitsToSymbol *bts,
  * double-frees it.  Reproduced; see docs/deviations.md.
  * ===========================================================================
  */
+/*
+ * THE REPLACEMENT `operator delete`, exactly as `V92Precoder.cpp` carries it
+ * and for the same reason: the blob's global `operator delete` IS
+ * `sysdep_free` (refinement.md lever 7), and a delete-expression over an
+ * inline wrapper is the only spelling that emits what the object emits.
+ *
+ * ITS POSITION IS DELIBERATE AND IS NOT A TIDY-UP WAITING TO HAPPEN.  An
+ * inline function's place in the translation unit is a lever-3 carrier, and
+ * consolidating the array form into `sysdep.h` once cost eight destructors
+ * their byte identity (finding F7815).  One copy per file, here, below its
+ * `sysdep_free` declaration and above its only user.
+ *
+ * No sized form: the Makefile passes `-fno-sized-deallocation`, so the modern
+ * build resolves `delete` to this unsized operator the way 3.4.2 does
+ * (finding F7900).
+ */
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
+ * `delete mapper`, AND THE OPEN-CODED FORM IS NOT EQUIVALENT.  This body read
+ *
+ *     if (mapper != 0) { mapper->~V92Mapper(); sysdep_free(mapper); }
+ *
+ * which reloads `mapper` from +0x70 after the destructor call, because the
+ * call may have written it.  The blob loads it ONCE into `%ebx` and uses the
+ * same register for the free, which costs it a second callee-saved register
+ * and the stack slots to spill both -- 87 bytes against our 67.
+ *
+ * A delete-expression evaluates its operand once, and it is the ONLY spelling
+ * that does it the object's way.  Eight were compiled (finding F8082): the
+ * open-coded form, three local-copy forms, a comma operator, a local copy
+ * followed by `delete`, and the delete-expression with and without a
+ * redundant null guard.  Only the last two reach the object, and they reach
+ * it exactly; every local-copy form lands at 61 bytes, which is FURTHER from
+ * the blob than the shape they replaced.  So what is decoded is that the
+ * operand is the MEMBER and the expression is a `delete`, and not merely that
+ * the pointer is read once.
+ *
+ * The guarded spelling `if (mapper != 0) delete mapper;` is byte-identical --
+ * a delete-expression already tests for null, so GCC folds the guard away --
+ * and is therefore not distinguished by the object.  The unguarded one is
+ * written because it is the smaller claim.
+ */
 V92Phase4Modulator::~V92Phase4Modulator()
 {
-	if (mapper != 0) {
-		mapper->~V92Mapper();
-		sysdep_free(mapper);
-	}
+	delete mapper;
 }
 
 /*

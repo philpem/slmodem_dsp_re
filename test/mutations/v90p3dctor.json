@@ -97,27 +97,27 @@
  },
  {
   "label": "the destructor forgets to test the SD detector for null",
-  "find": "\tif (sdDetector) {\n\t\tsdDetector->~V90SdDetector();",
-  "replace": "\tif (1) {\n\t\tsdDetector->~V90SdDetector();"
+  "find": "\tdelete sdDetector;",
+  "replace": "\tsdDetector->~V90SdDetector();\n\tsysdep_free(sdDetector);"
  },
  {
   "label": "the destructor frees the SD detector without destroying it",
-  "find": "\t\tsdDetector->~V90SdDetector();\n\t\tsysdep_free(sdDetector);",
-  "replace": "\t\tsysdep_free(sdDetector);"
+  "find": "\tdelete sdDetector;",
+  "replace": "\tif (sdDetector)\n\t\tsysdep_free(sdDetector);"
  },
  {
   "label": "the destructor destroys the SD detector and leaks it",
-  "find": "\t\tsdDetector->~V90SdDetector();\n\t\tsysdep_free(sdDetector);",
-  "replace": "\t\tsdDetector->~V90SdDetector();"
+  "find": "\tdelete sdDetector;",
+  "replace": "\tif (sdDetector)\n\t\tsdDetector->~V90SdDetector();"
  },
  {
   "label": "the destructor leaves the ANSam detector alone",
-  "find": "\tif (ansamToneDetector) {\n\t\tansamToneDetector->~ANSamToneDetector();\n\t\tsysdep_free(ansamToneDetector);\n\t}",
+  "find": "\tdelete ansamToneDetector;",
   "replace": "\t(void)0;"
  },
  {
   "label": "the destructor nulls the two pointers it released",
-  "find": "\t\tansamToneDetector->~ANSamToneDetector();\n\t\tsysdep_free(ansamToneDetector);\n\t}",
-  "replace": "\t\tansamToneDetector->~ANSamToneDetector();\n\t\tsysdep_free(ansamToneDetector);\n\t\tansamToneDetector = 0;\n\t\tsdDetector = 0;\n\t}"
+  "find": "\tdelete ansamToneDetector;",
+  "replace": "\tdelete ansamToneDetector;\n\tansamToneDetector = 0;\n\tsdDetector = 0;"
  }
 ]

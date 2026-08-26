@@ -75,17 +75,17 @@
  },
  {
   "label": "the mapper's null test is dropped",
-  "find": "\tif (mapper != 0) {\n\t\tmapper->~V92Mapper();",
-  "replace": "\tif (mapper != (V92Mapper *)1) {\n\t\tmapper->~V92Mapper();"
+  "find": "\tdelete mapper;",
+  "replace": "\tmapper->~V92Mapper();\n\tsysdep_free(mapper);"
  },
  {
   "label": "the destructor nulls the mapper after freeing it",
-  "find": "\t\tmapper->~V92Mapper();\n\t\tsysdep_free(mapper);\n\t}",
-  "replace": "\t\tmapper->~V92Mapper();\n\t\tsysdep_free(mapper);\n\t\tmapper = 0;\n\t}"
+  "find": "\tdelete mapper;",
+  "replace": "\tdelete mapper;\n\tmapper = 0;"
  },
  {
   "label": "the destructor releases the caller's V92CP as well as the mapper",
-  "find": "\t\tsysdep_free(mapper);\n\t}\n}",
-  "replace": "\t\tsysdep_free(mapper);\n\t}\n\tsysdep_free(cp);\n}"
+  "find": "\tdelete mapper;\n}",
+  "replace": "\tdelete mapper;\n\tsysdep_free(cp);\n}"
  }
 ]

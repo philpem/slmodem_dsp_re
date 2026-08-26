@@ -31,8 +31,8 @@
  },
  {
   "label": "the FIR is built with one more sample of block slack",
-  "find": "\t: fir(0x28, (float *)0, 0x63)",
-  "replace": "\t: fir(0x28, (float *)0, 0x64)"
+  "find": "\t: FloatFIR(0x28, (float *)0, 0x63)",
+  "replace": "\t: FloatFIR(0x28, (float *)0, 0x64)"
  },
  {
   "label": "the out-of-range banner is printed at any debug level",
@@ -110,8 +110,8 @@
  },
  {
   "label": "setFilter(unsigned) always installs twenty taps",
-  "find": "\t\tfir.setCoefficients(getFilterPointer(gain),\n\t\t\t\t    getFilterLength(gain));",
-  "replace": "\t\tfir.setCoefficients(getFilterPointer(gain), 20);"
+  "find": "\t\tsetCoefficients(getFilterPointer(gain),\n\t\t\t\t    getFilterLength(gain));",
+  "replace": "\t\tsetCoefficients(getFilterPointer(gain), 20);"
  },
  {
   "label": "setFilter(unsigned) does not record the gain it installed",
@@ -120,8 +120,8 @@
  },
  {
   "label": "setFilter(type, gain) does not correct bank 3's row",
-  "find": "\t\tfir.setCoefficients(bank3((int)gain), 40);\n\t\tthis->gain = (int)gain - 20;",
-  "replace": "\t\tfir.setCoefficients(bank3((int)gain), 40);"
+  "find": "\t\tsetCoefficients(bank3((int)gain), 40);\n\t\tthis->gain = (int)gain - 20;",
+  "replace": "\t\tsetCoefficients(bank3((int)gain), 40);"
  },
  {
   "label": "bank 3's row correction is applied to every bank",
@@ -130,13 +130,13 @@
  },
  {
   "label": "the caller's type 2 selects bank 1",
-  "find": "\tcase 2:\n\t\tfir.setCoefficients(bank2((int)gain), 20);",
-  "replace": "\tcase 2:\n\t\tfir.setCoefficients(bank1((int)gain), 20);"
+  "find": "\tcase 2:\n\t\tsetCoefficients(bank2((int)gain), 20);",
+  "replace": "\tcase 2:\n\t\tsetCoefficients(bank1((int)gain), 20);"
  },
  {
   "label": "the caller's type 3 gets twenty taps",
-  "find": "\t\tfir.setCoefficients(bank3((int)gain), 40);",
-  "replace": "\t\tfir.setCoefficients(bank3((int)gain), 20);"
+  "find": "\t\tsetCoefficients(bank3((int)gain), 40);",
+  "replace": "\t\tsetCoefficients(bank3((int)gain), 20);"
  },
  {
   "label": "getV90Capability searches only for the -1 sentinel",

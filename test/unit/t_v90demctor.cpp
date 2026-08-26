@@ -55,7 +55,7 @@
  *     re-reading them whenever one changes.  INSIDE a live allocation, not
  *     equal to one -- the descrambler holds seven pointers into the MIDDLE of
  *     its buffer.
- *   - `preFilter.fir.coefficients`, which `V90PreFilter::reset` points at that
+ *   - `preFilter.coefficients`, which `V90PreFilter::reset` points at that
  *     side's own copy of a static table.  t_v90prefilter.cpp's claim, not this
  *     file's.
  *   - The `V90Resampler` vptr at +0x094, which is that side's own vtable.  The
@@ -253,7 +253,7 @@ D(int side)
  * The two words of the demodulator that hold a static address of that SIDE's
  * own, which no fixture can make agree and no allocator walk can find.
  *
- * `preFilter.fir.coefficients` is set by `V90PreFilter::reset` to
+ * `preFilter.coefficients` is set by `V90PreFilter::reset` to
  * `&preFilterCoefType1[0][0]`, which is in our `.rodata` for one side and in
  * the blob's for the other -- t_v90prefilter.cpp's claim.  The word at
  * +0x094 is the `V90Resampler` vptr, likewise each side's own; the rest of

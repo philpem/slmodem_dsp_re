@@ -279,7 +279,7 @@ prog_wire(int side, int trial)
 	d->word_290 = 64u;
 
 	/* The prefilter's FIR: a real bank, so `process` has coefficients. */
-	d->preFilter.fir.coefficients = fir_bank;
+	d->preFilter.coefficients = fir_bank;
 
 	/* The AGC, configured the way `V90Demodulator::reset` configures it. */
 	d->agc.alpha = 0.5f;
