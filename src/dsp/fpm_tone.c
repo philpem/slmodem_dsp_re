@@ -1,18 +1,14 @@
 /*
  * fpm_tone.c -- Fixed Point Modem: tone generation and detection.
  *
- * Reconstructed from dsplibs.o fpm_tone.c:
- *   FPM_TONE_set_freq   .text 0x0aaf50
- *   FPM_TONE_set_scale  .text 0x0aaf70
- *   FPM_TONE_generate   .text 0x0aad50
+ * Reconstructed from dsplibs.o fpm_tone.c.  Every function in the translation
+ * unit is here; the two written last, FPM_TONE_find_rev at .text 0x0ab170 and
+ * FPM_TONE_filter at 0x0ab3a0, are placed between FPM_TONE_detect and
+ * FPM_TONE_kill because that is where the object puts them.
  *
- * Not yet reconstructed: FPM_TONE_delete and the detector half
- * (_detect, _find_rev, _filter, _kill, _generate2, _generate_demod).
- *
- * The object is 0x108 bytes and is treated here as opaque storage accessed at
- * known offsets, because most of its fields belong to the detector.  That is
- * deliberate: naming a struct now would mean guessing at fields whose meaning
- * has not been established, and a wrong layout is worse than none.
+ * The whole 0x108-byte object is now modelled as fields in
+ * include/dsplib/fpm_tone.h.  The span that resisted longest, +0x4c..+0xf2,
+ * is FPM_TONE_find_rev's entire working set and nothing else's.
  */
 
 #include <stddef.h>
@@ -216,10 +212,14 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 	state->iir_coeff[4] = (short)((-(p.cos * damp)) >> 14);
 	/*
 	 * Clear the running state: the notch's history, both energy
-	 * estimates, and everything unattributed up to +0xf0.
+	 * estimates, and the whole of the phase-reversal search's working set.
 	 *
 	 * The original does this as two loops, 0x40..0x50 and 0x52..0xf0,
-	 * split around the hist_idx write between them.
+	 * split around the hist_idx write between them.  Those bounds are what
+	 * says where `rev_hist` begins and ends -- the first loop stops on
+	 * `rev_energy` and the second is exactly the eighty words of the delay
+	 * line -- so the field split in fpm_tone.h is the object's own and not
+	 * an inference from FPM_TONE_find_rev.
 	 *
 	 * CORRECTION: an earlier version of this stopped at 0xf0 and claimed
 	 * the last word of the region was deliberately left alone.  It is
@@ -232,8 +232,12 @@ FPM_TONE_create(struct fpm_tone *state, const struct fpm_tone_cfg *cfg)
 		state->iir_state[i] = 0;
 	state->e_tone = 0;
 	state->e_total = 0;
-	for (i = 0; i < (int)NELEMS(state->r4c); i++)
-		state->r4c[i] = 0;
+	state->rev_age = 0;
+	state->rev_corr = 0;
+	state->rev_energy = 0;
+	for (i = 0; i < (int)NELEMS(state->rev_hist); i++)
+		state->rev_hist[i] = 0;
+	state->rev_idx = 0;
 	state->hist_idx = 0;
 
 	/*
@@ -482,6 +486,180 @@ FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
 }
 
 /*
+ * ---------------------------------------------------------------------------
+ * FPM_TONE_find_rev -- .text 0x0ab170, 547 bytes.
+ *
+ * The receive-side counterpart of FPM_TONE_generate's reversal bookkeeping:
+ * it watches a tone for the 180 degree flips ITU-T V.25 puts in the answer
+ * tone and reports how far apart they are.  Its one caller in the object is
+ * `RxHdxPhsReversal` at .text 0x083b20, which narrows the result with
+ * `movswl %ax,%edi` -- so the return type is `short`, from the caller.
+ *
+ * Three things happen per call.
+ *
+ * 1. The whole buffer is filtered IN PLACE through the single biquad at
+ *    `rev_block`, with `rev_acc` as its state.  This happens BEFORE the count
+ *    is looked at, so a call with a count of zero still filters nothing but
+ *    still runs the filter's own argument checks.
+ *
+ * 2. Each filtered sample is pushed into `rev_hist`, which is 2*cfg.f1e words
+ *    long, and two sliding sums are updated:
+ *
+ *      rev_corr    sum over the last cfg.f1e products x[k] * x[k - cfg.f1e]
+ *      rev_energy  sum over the last 2*cfg.f1e squares, each Q15-scaled
+ *
+ *    Both are maintained by adding the new term and subtracting the one
+ *    falling out of the window, which is what makes the single read of
+ *    `rev_hist[idx]` -- the sample from 2*cfg.f1e ago, about to be
+ *    overwritten -- serve as both operands of the removal.
+ *
+ * 3. A reversal is declared when
+ *
+ *      2 * rev_corr  <  (cfg.f1c * rev_energy) >> 15
+ *
+ *    i.e. when the lag-cfg.f1e correlation drops below a configured fraction
+ *    of the energy.  `rev_age` counts samples and is reported, in units of
+ *    eight, only if it has passed 160 -- so reversals closer together than 20
+ *    ms are swallowed and the result is in the same units as cfg.rev_period.
+ *    The last one found in the block is the one returned.
+ *
+ * WHAT THE SATURATION DOES AND DOES NOT REACH, because it is the one place a
+ * plausible rewrite diverges.  The two sums run as 32-bit values for the whole
+ * block and are NEVER written back from their clamped forms; only the clamped
+ * short reaches the threshold test and the object.  So
+ * `corr = SAT(corr + term)` is wrong -- it would fold the clamp back into the
+ * running sum -- while the clamp still persists between calls, because the
+ * next call re-seeds the 32-bit sum from the stored short.  N one-sample calls
+ * therefore do not equal one N-sample call once either sum leaves +-32767, and
+ * the differential test drives both.
+ *
+ * `count` is compared against, not counted down through: a negative count does
+ * nothing at all here, where FPM_TONE_detect and the generators would run
+ * about 65536 times.  Reproduced as written.
+ */
+short
+FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count)
+{
+	short *hist = state->rev_hist;
+	int lag = state->cfg.f1e;
+	int idx = state->rev_idx;
+	int corr = state->rev_corr;
+	int energy = state->rev_energy;
+	short corr_s = state->rev_corr;
+	short energy_s = state->rev_energy;
+	short period = 0;
+	short n;
+
+	FPM_iir_filt_II(samples, state->rev_block, state->rev_acc, 1, count);
+
+	for (n = 0; n < count; n++) {
+		short j;
+
+		/*
+		 * Advance the write position, wrapping at 2*lag; then step
+		 * back by `lag` around the same ring for the delayed sample.
+		 * Both are 16-bit, and the wrap of the second is a single
+		 * add rather than a modulo because it can only underflow once.
+		 */
+		idx = ((short)(idx + 1) < 2 * lag) ? (short)(idx + 1) : 0;
+		j = (short)(idx - lag);
+		if (j < 0)
+			j = (short)(j + 2 * lag);
+
+		/*
+		 * hist[idx] is the sample from 2*lag ago and is read before it
+		 * is overwritten, so one load serves as the term leaving the
+		 * correlation window and the term leaving the energy window.
+		 */
+		corr += ((samples[n] - hist[idx]) * hist[j] + 0x4000) >> 15;
+		if (corr > 32767)
+			corr_s = 32767;
+		else if (corr < -32768)
+			corr_s = -32768;
+		else
+			corr_s = (short)corr;
+
+		energy += ((samples[n] * samples[n]) >> 15)
+			  - ((hist[idx] * hist[idx]) >> 15);
+		if (energy > 32767)
+			energy_s = 32767;
+		else if (energy < -32768)
+			energy_s = -32768;
+		else
+			energy_s = (short)energy;
+
+		if (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {
+			if (state->rev_age > 160) {
+				period = (short)(state->rev_age >> 3);
+				state->rev_age = 0;
+			}
+		}
+		state->rev_age++;
+
+		hist[idx] = samples[n];
+	}
+
+	state->rev_idx = (short)idx;
+	state->rev_corr = corr_s;
+	state->rev_energy = energy_s;
+
+	return period;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * FPM_TONE_filter -- .text 0x0ab3a0, 235 bytes.
+ *
+ * The detector's correlator on its own, run over the caller's buffer in place.
+ * Sample for sample it is FPM_TONE_detect's step 1 and nothing after it: the
+ * same `history` ring of cfg.len words, the same `kernel`, the same two loops
+ * around the wrap, the same unsaturated 32-bit accumulator and the same
+ * `>> 15` on the way out.
+ *
+ * It shares `hist_idx` with FPM_TONE_detect rather than keeping its own -- the
+ * object loads and stores +0x34, not a second index -- which is the one thing
+ * worth knowing before calling both on one tone object.
+ *
+ * The counter is 16-bit and tested against -1, so a count of 0 writes nothing
+ * and a NEGATIVE count runs about 65536 times.  That is the module's usual
+ * shape and it is FPM_TONE_find_rev, not this, that is the exception.
+ *
+ * Nothing in dsplibs.o calls it: `readelf -r` finds relocations naming
+ * FPM_TONE_detect, _kill and _find_rev and none naming this, and the symbol is
+ * GLOBAL, so a same-translation-unit call would still have left one.
+ */
+void
+FPM_TONE_filter(struct fpm_tone *state, short *samples, short count)
+{
+	const short *kernel = (const short *)state->kernel;
+	short *hist = (short *)state->history;
+	int taps = state->cfg.len;
+	int idx = state->hist_idx;
+	int i;
+
+	for (i = (short)(count - 1); i != -1; i = (short)(i - 1)) {
+		const short *c = kernel;
+		short *p;
+		int acc = 0;
+		int k;
+
+		idx = ((short)(idx + 1) < taps) ? (short)(idx + 1) : 0;
+		hist[idx] = *samples;
+
+		p = &hist[idx];
+		for (k = idx; k >= 0; k--)
+			acc += *p-- * *c++;
+		p += taps;		/* p is at hist[-1]; wrap to the top */
+		for (k = taps - 1; k > idx; k--)
+			acc += *p-- * *c++;
+
+		*samples++ = (short)(acc >> 15);
+	}
+
+	state->hist_idx = (short)idx;
+}
+
+/*
  * FPM_TONE_kill -- .text 0x0ab490, 61 bytes.
  *
  * One tail call's worth of function: the detector's notch, run over the
@@ -528,6 +706,11 @@ TONE_ASSERT_OFF(iir_coeff, 0x36);
 TONE_ASSERT_OFF(iir_state, 0x40);
 TONE_ASSERT_OFF(e_tone, 0x48);
 TONE_ASSERT_OFF(e_total, 0x4a);
+TONE_ASSERT_OFF(rev_age, 0x4c);
+TONE_ASSERT_OFF(rev_corr, 0x4e);
+TONE_ASSERT_OFF(rev_energy, 0x50);
+TONE_ASSERT_OFF(rev_hist, 0x52);
+TONE_ASSERT_OFF(rev_idx, 0xf2);
 TONE_ASSERT_OFF(rev_block, 0xf4);
 TONE_ASSERT_OFF(rev_acc, 0xf8);
 TONE_ASSERT_OFF(iir_self, 0xfc);

@@ -31,6 +31,8 @@ extern short ref_FPM_TONE_detect(void *state, const short *samples,
 				 short count);
 extern void ref_FPM_TONE_delete(void *state);
 extern void ref_FPM_TONE_kill(void *state, short *samples, short count);
+extern short ref_FPM_TONE_find_rev(void *state, short *samples, short count);
+extern void ref_FPM_TONE_filter(void *state, short *samples, short count);
 
 /*
  * Pass 0's filtered output, kept so pass 1 can be shown to differ from it.
@@ -191,6 +193,188 @@ detect_stream(const char *what, void *src, int freq, int scale,
 	}
 	rc = diff_end();
 	return rc;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * FPM_TONE_find_rev and FPM_TONE_filter.
+ *
+ * Both write through a pointer held in the object -- find_rev through
+ * `rev_acc` at +0xf8, filter through `history` at +0x30 -- so, like detect and
+ * unlike the generators, the two sides need separately created objects rather
+ * than two copies of one.  The pointer slots therefore differ and are skipped,
+ * and what they point at is compared by content.
+ *
+ * There are THREE observables for find_rev, not one: it returns a value, it
+ * filters the caller's buffer in place on the way in, and it updates five
+ * fields of the object.  All three are compared here.
+ *
+ * REACHING THE REVERSAL BRANCH IS THE WHOLE PROBLEM, exactly as it is for
+ * FPM_TONE_generate higher up this file.  find_rev correlates the input
+ * against itself delayed by `cfg.f1e` samples, which is 40, and declares a
+ * reversal when that correlation falls below cfg.f1c/2 of the windowed energy.
+ * A tone whose period does not divide the lag correlates NEGATIVELY to begin
+ * with, so the branch is either always or never taken and a reversal moves
+ * nothing.  At 1800 Hz the lag is exactly nine cycles, so a steady tone
+ * correlates positively and an inversion drives it negative -- which is what
+ * makes the stimulus below a 1800 Hz tone rather than the config's own 2100.
+ * The 2100 Hz stream is kept as the control for the always-taken case.
+ *
+ * The counters at the end are not decoration: each is a count of trials in
+ * which a COMPARED quantity took a particular value, and between them they say
+ * that the saturating and non-saturating arms of both accumulators, both arms
+ * of the delay-line wrap, the debounce and the report all actually ran.
+ */
+static short rev_stim[3600];
+static int rev_reports, rev_resets, rev_sat_pos, rev_sat_neg, rev_plain,
+	   rev_esat, rev_idx_low, rev_idx_high, rev_filtered;
+static int filt_moved, filt_wrapped;
+
+static void
+compare_rev(unsigned char *ours, unsigned char *ref, int tag)
+{
+	const short *ao = ((const struct fpm_tone *)ours)->rev_acc;
+	const short *ar = ((const struct fpm_tone *)ref)->rev_acc;
+	int i;
+
+	for (i = 0; i < FPM_TONE_STATE_SIZE; i += 2) {
+		if (is_pointer_slot(i) || is_pointer_slot(i - 2))
+			continue;
+		diff_eq_int("rev state 0x%02lx",
+			    *(short *)(ours + i), *(short *)(ref + i), i);
+	}
+	/*
+	 * The input biquad's own state, which lives on the heap and is the
+	 * only part of find_rev's working set that is not inside the object.
+	 */
+	for (i = 0; i < 4; i++)
+		diff_eq_int("rev_acc[%ld]", ao[i], ar[i], i);
+	(void)tag;
+}
+
+/*
+ * Fill `rev_stim` with `n` samples of a tone that reverses phase every
+ * `period` eight-sample ticks.  Generated eight samples at a time because
+ * FPM_TONE_generate advances its reversal counter by count>>3, so a shorter
+ * call would never reach the reversal at all.
+ */
+static void
+build_rev_stimulus(int freq, int scale, int period, int n)
+{
+	void *src = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+	int i;
+
+	memset(rev_stim, 0, sizeof(rev_stim));
+	if (src == 0)
+		return;
+	ref_FPM_TONE_set_freq(src, (short)freq);
+	ref_FPM_TONE_set_scale(src, (short)scale);
+	((struct fpm_tone *)src)->cfg.rev_period = (short)period;
+	for (i = 0; i + 8 <= n && i + 8 <= (int)(sizeof(rev_stim) / sizeof(rev_stim[0])); i += 8)
+		ref_FPM_TONE_generate(src, rev_stim + i, 8);
+	ref_FPM_TONE_delete(src);
+}
+
+static int
+find_rev_stream(const char *what, int total, int len)
+{
+	static short ba[1024], bb[1024];
+	unsigned char *a, *b;
+	int off, prev_age = 0;
+
+	a = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+	b = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+
+	diff_begin(what);
+	if (a == 0 || b == 0) {
+		diff_eq_int("objects built (%ld)", 0, 1, 0);
+		return diff_end();
+	}
+
+	for (off = 0; off + len <= total; off += len) {
+		struct fpm_tone *t = (struct fpm_tone *)a;
+		short va, vb;
+		int i;
+
+		memcpy(ba, rev_stim + off, (unsigned)len * sizeof(short));
+		memcpy(bb, rev_stim + off, (unsigned)len * sizeof(short));
+
+		va = ref_FPM_TONE_find_rev(a, ba, (short)len);
+		vb = FPM_TONE_find_rev((struct fpm_tone *)b, bb, (short)len);
+
+		diff_eq_int("returned (%ld)", vb, va, off);
+		for (i = 0; i < len; i++) {
+			diff_eq_int("filtered sample %ld", bb[i], ba[i], i);
+			if (ba[i] != rev_stim[off + i])
+				rev_filtered++;
+		}
+		compare_rev(b, a, off);
+
+		if (va != 0)
+			rev_reports++;
+		if (t->rev_age < prev_age)
+			rev_resets++;
+		prev_age = t->rev_age;
+		if (t->rev_corr == 32767)
+			rev_sat_pos++;
+		else if (t->rev_corr == -32768)
+			rev_sat_neg++;
+		else
+			rev_plain++;
+		if (t->rev_energy == 32767 || t->rev_energy == -32768)
+			rev_esat++;
+		/*
+		 * rev_idx below cfg.f1e is the only way the `j -= lag` step can
+		 * go negative and take the wrapping arm, so the two counters
+		 * together say both arms ran.  Exact only where a block is one
+		 * sample long, which the fragmented stream below is.
+		 */
+		if (t->rev_idx < t->cfg.f1e)
+			rev_idx_low++;
+		else
+			rev_idx_high++;
+	}
+	return diff_end();
+}
+
+static int
+filter_stream(const char *what, int total, int len)
+{
+	static short ba[1024], bb[1024];
+	unsigned char *a, *b;
+	int off, taps, prev_idx = 0;
+
+	a = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+	b = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+
+	diff_begin(what);
+	if (a == 0 || b == 0) {
+		diff_eq_int("objects built (%ld)", 0, 1, 0);
+		return diff_end();
+	}
+	taps = ((struct fpm_tone *)a)->cfg.len;
+
+	for (off = 0; off + len <= total; off += len) {
+		int i;
+
+		memcpy(ba, rev_stim + off, (unsigned)len * sizeof(short));
+		memcpy(bb, rev_stim + off, (unsigned)len * sizeof(short));
+
+		ref_FPM_TONE_filter(a, ba, (short)len);
+		FPM_TONE_filter((struct fpm_tone *)b, bb, (short)len);
+
+		for (i = 0; i < len; i++) {
+			diff_eq_int("correlated sample %ld", bb[i], ba[i], i);
+			if (ba[i] != rev_stim[off + i])
+				filt_moved++;
+		}
+		compare_detect(b, a, taps, off);
+
+		if (((struct fpm_tone *)a)->hist_idx < prev_idx)
+			filt_wrapped++;
+		prev_idx = ((struct fpm_tone *)a)->hist_idx;
+	}
+	return diff_end();
 }
 
 int
@@ -628,6 +812,196 @@ main(void)
 	rc |= diff_end();
 
 	/*
+	 * FPM_TONE_find_rev.  One stimulus, six chunkings, because the 32-bit
+	 * accumulators are re-seeded from their SATURATED shorts on every
+	 * entry: once either sum leaves +-32767, N one-sample calls stop being
+	 * the same thing as one N-sample call, and only running both says so.
+	 */
+	build_rev_stimulus(1800, 27852, 30, 3200);
+	rc |= find_rev_stream("find_rev 1800 Hz blocks of 40", 3200, 40);
+	rc |= find_rev_stream("find_rev 1800 Hz one at a time", 1600, 1);
+	rc |= find_rev_stream("find_rev 1800 Hz blocks of 7", 3200, 7);
+	rc |= find_rev_stream("find_rev 1800 Hz blocks of 500", 3000, 500);
+
+	/*
+	 * A level low enough that neither accumulator reaches its rail, so the
+	 * plain `(short)sum` arm of both clamps is the one taken.
+	 */
+	build_rev_stimulus(1800, 600, 30, 3200);
+	rc |= find_rev_stream("find_rev low level", 3200, 13);
+
+	/*
+	 * The control: the config's own 2100 Hz, where the lag is ten and a
+	 * half cycles and the steady tone correlates NEGATIVELY, so the
+	 * reversal test is satisfied continuously and the debounce -- not the
+	 * signal -- is what decides when a report comes out.
+	 */
+	build_rev_stimulus(2100, 27852, 450, 3200);
+	rc |= find_rev_stream("find_rev 2100 Hz", 3200, 32);
+
+	/* Silence: correlation and energy both zero, so nothing is ever
+	 * reported and rev_age simply runs. */
+	memset(rev_stim, 0, sizeof(rev_stim));
+	rc |= find_rev_stream("find_rev silence", 1600, 64);
+
+	/*
+	 * Zero and negative counts.  The input filter is called BEFORE the
+	 * count is looked at, and the three state words are written back
+	 * whether the loop runs or not, so both are observable rather than
+	 * vacuous.  A negative count does nothing here -- the opposite of
+	 * FPM_TONE_filter below, which runs about 65536 times.
+	 */
+	diff_begin("FPM_TONE_find_rev zero and negative count");
+	{
+		unsigned char *za = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		unsigned char *zb = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		short da = 1234, db = 1234;
+
+		diff_eq_int("objects built (%ld)", za != 0 && zb != 0, 1, 0);
+		if (za != 0 && zb != 0) {
+			short va = ref_FPM_TONE_find_rev(za, &da, 0);
+			short vb = FPM_TONE_find_rev((struct fpm_tone *)zb,
+						     &db, 0);
+
+			diff_eq_int("zero count returned (%ld)", vb, va, 0);
+			diff_eq_int("zero count sample (%ld)", db, da, 0);
+			compare_rev(zb, za, 0);
+
+			va = ref_FPM_TONE_find_rev(za, &da, -1);
+			vb = FPM_TONE_find_rev((struct fpm_tone *)zb, &db, -1);
+
+			diff_eq_int("negative count returned (%ld)", vb, va, -1);
+			diff_eq_int("negative count sample (%ld)", db, da, -1);
+			compare_rev(zb, za, -1);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * Anti-vacuity.  Every line is a count of trials in which a COMPARED
+	 * value took a particular form, so a find_rev that never reported, or
+	 * never railed, or never wrapped its delay line would fail here while
+	 * still agreeing sample for sample with a reconstruction that did the
+	 * same nothing.
+	 */
+	diff_begin("FPM_TONE_find_rev coverage");
+	diff_eq_int("reversals reported (%ld)", rev_reports > 0, 1,
+		    rev_reports);
+	diff_eq_int("rev_age reset (%ld)", rev_resets > 0, 1, rev_resets);
+	diff_eq_int("correlation railed high (%ld)", rev_sat_pos > 0, 1,
+		    rev_sat_pos);
+	diff_eq_int("correlation railed low (%ld)", rev_sat_neg > 0, 1,
+		    rev_sat_neg);
+	diff_eq_int("correlation off the rails (%ld)", rev_plain > 0, 1,
+		    rev_plain);
+	diff_eq_int("energy railed (%ld)", rev_esat > 0, 1, rev_esat);
+	diff_eq_int("delay index below the lag (%ld)", rev_idx_low > 0, 1,
+		    rev_idx_low);
+	diff_eq_int("delay index at or above it (%ld)", rev_idx_high > 0, 1,
+		    rev_idx_high);
+	diff_eq_int("samples the input filter moved (%ld)", rev_filtered > 0,
+		    1, rev_filtered);
+	rc |= diff_end();
+
+	/*
+	 * FPM_TONE_filter -- the detector's correlator alone, in place.
+	 *
+	 * The observables are the buffer, the shared write index at +0x34 and
+	 * the history ring on the heap, and all three are compared.  Chunked
+	 * several ways because the correlator restarts its two loops from
+	 * whatever index the previous call left behind.
+	 */
+	build_rev_stimulus(2100, 27852, 450, 3200);
+	rc |= filter_stream("filter blocks of 53", 3180, 53);
+	rc |= filter_stream("filter one at a time", 800, 1);
+	rc |= filter_stream("filter blocks of 7", 3199, 7);
+	rc |= filter_stream("filter blocks of 500", 3000, 500);
+
+	diff_begin("FPM_TONE_filter coverage");
+	diff_eq_int("samples the correlator moved (%ld)", filt_moved > 0, 1,
+		    filt_moved);
+	diff_eq_int("history ring wrapped (%ld)", filt_wrapped > 0, 1,
+		    filt_wrapped);
+	rc |= diff_end();
+
+	/*
+	 * The claim that filter and detect SHARE `hist_idx` rather than each
+	 * keeping its own, which is the one thing about this function that a
+	 * reader would guess wrongly.  Interleaving the two on one object is
+	 * what separates the readings: with a private index the two would walk
+	 * different positions and every sample after the first would differ.
+	 */
+	diff_begin("FPM_TONE_filter shares the detector's index");
+	{
+		unsigned char *ia = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		unsigned char *ib = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		static short fa[64], fb[64];
+		int taps, off, moved = 0;
+
+		diff_eq_int("objects built (%ld)", ia != 0 && ib != 0, 1, 0);
+		if (ia != 0 && ib != 0) {
+			taps = ((struct fpm_tone *)ia)->cfg.len;
+			for (off = 0; off + 16 <= 1600; off += 16) {
+				short va, vb;
+				int i;
+
+				memcpy(fa, rev_stim + off, 16 * sizeof(short));
+				memcpy(fb, rev_stim + off, 16 * sizeof(short));
+
+				ref_FPM_TONE_filter(ia, fa, 16);
+				FPM_TONE_filter((struct fpm_tone *)ib, fb, 16);
+				for (i = 0; i < 16; i++)
+					diff_eq_int("interleaved sample %ld",
+						    fb[i], fa[i], i);
+
+				va = ref_FPM_TONE_detect(ia, rev_stim + off, 16);
+				vb = FPM_TONE_detect((struct fpm_tone *)ib,
+						     rev_stim + off, 16);
+				diff_eq_int("interleaved verdict (%ld)", vb, va,
+					    off);
+				compare_detect(ib, ia, taps, off);
+
+				if (((struct fpm_tone *)ia)->hist_idx
+				    != ((struct fpm_tone *)ia)->cfg.len - 1)
+					moved++;
+			}
+			diff_eq_int("the shared index moved (%ld)", moved > 0,
+				    1, moved);
+		}
+	}
+	rc |= diff_end();
+
+	/*
+	 * Negative count: 16-bit and tested against -1, so it runs about
+	 * 65536 times rather than doing nothing.  Same shape as
+	 * FPM_TONE_generate2's above, and the opposite of FPM_TONE_find_rev's.
+	 */
+	diff_begin("FPM_TONE_filter negative count");
+	{
+		static short na[65600], nb[65600];
+		unsigned char *fa = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		unsigned char *fb = ref_FPM_TONE_create(0, ref_FPM_TONE_CFG);
+		int i;
+
+		diff_eq_int("objects built (%ld)", fa != 0 && fb != 0, 1, 0);
+		if (fa != 0 && fb != 0) {
+			for (i = 0; i < 65536; i++)
+				na[i] = nb[i] = (short)
+					(11000 * ((i & 1) ? -1 : 1) + (i & 511));
+
+			ref_FPM_TONE_filter(fa, na, -1);
+			FPM_TONE_filter((struct fpm_tone *)fb, nb, -1);
+
+			for (i = 0; i < 65535; i++)
+				diff_eq_int("wrapped sample %ld", nb[i], na[i],
+					    i);
+			compare_detect(fb, fa,
+				       ((struct fpm_tone *)fa)->cfg.len, -1);
+		}
+	}
+	rc |= diff_end();
+
+	/*
 	 * FPM_TONE_kill -- the notch run over the caller's buffer, in place.
 	 *
 	 * The observables are the BUFFER, which is filtered in place, and the
@@ -807,6 +1181,10 @@ main(void)
 
 	printf("t_fpm_tone: verdicts absent/present/nosignal %d/%d/%d\n",
 	       detect_verdicts[0], detect_verdicts[1], detect_verdicts[2]);
+	printf("t_fpm_tone: find_rev reports %d, resets %d, corr rails %d/%d "
+	       "plain %d, energy rails %d\n",
+	       rev_reports, rev_resets, rev_sat_pos, rev_sat_neg, rev_plain,
+	       rev_esat);
 
 	return rc;
 }

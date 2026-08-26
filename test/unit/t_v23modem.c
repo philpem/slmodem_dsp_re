@@ -173,7 +173,7 @@ compare_tone(const struct fpm_tone *a, const struct fpm_tone *b)
 							   hist_idx),
 		      (const char *)b + __builtin_offsetof(struct fpm_tone,
 							   hist_idx),
-		      __builtin_offsetof(struct fpm_tone, r4c)
+		      __builtin_offsetof(struct fpm_tone, rev_age)
 		      - __builtin_offsetof(struct fpm_tone, hist_idx),
 		      NULL, 0);
 }
