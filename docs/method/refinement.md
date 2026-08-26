@@ -712,6 +712,29 @@ lever 4 at all**, and 3622's own closing paragraph is the model for how far a
 headline of this shape is entitled to go: it is one scratch file plus one real
 one, so nothing should be built on it that a test does not check.
 
+### Lever 4a. The ctor/dtor VARIANT DIGIT distinguishes a base from a member at offset 0
+
+A public base subobject and a member at offset `+0` have the same address and
+the same field offsets, so a header can declare either and no offset assertion
+can tell them apart. `V90PreFilter.h` said as much: "nothing in the blob
+distinguishes" the two.
+
+**Something does. The Itanium ABI's variant digit.** GCC emits `C2`/`D2` for a
+BASE subobject's constructor and destructor and `C1`/`D1` for a complete
+object, so a member's ctor call names `D1` where an inherited base's names
+`D2` — and the blob picks the base ones (F8080). That is a forced difference:
+no spelling of a member produces `D2`.
+
+Closed `V90PreFilter`'s D1 and D2 out of the RELOC bucket, which is the only
+bucket where a differing relocation TARGET is the whole defect. A tree-wide
+census, **shown to fire on the pre-fix tree by catching exactly the four known
+sites**, then came back 0 of 1251 — and resolved `Psd` and `FloatIIR`'s
+identical open notes in the MEMBER direction, which is the opposite answer and
+equally forced.
+
+Read the variant digit before deciding a base-versus-member question is
+undecidable.
+
 ### Lever 5. Storage class, read off relocations
 
 - A relocation against a **section** symbol (`.data`/`.rodata`) rather than a

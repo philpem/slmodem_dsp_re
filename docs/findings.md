@@ -91521,3 +91521,28 @@ What is still open in the constructor is `and+2 mov+2 setne-2 test-2` -- the
 blob extracts some later flag with `test`/`setne`, a 0/1 boolean, where we
 mask with `and` and store the masked value.  Those are different programs
 unless the bit is bit 0, so that is the next cell and it is not this one.
+
+### F8111. A bystander made `packData` 22 bytes worse and it was disclosed, not discovered
+
+F8080's constructor fix moved `peep2_find_free_register`'s cursor, and
+`V90Jd::packData` went **BYTES 230 to 252** as a lever-3b bystander — nothing
+outside the constructor was edited. Verified on master after the merge.
+
+**It is invisible to every counter the project uses.** `--list-exact` diffs the
+EXACT set and `packData` is in neither side of it; the bucket totals do not
+move because BYTES to BYTES is not a bucket change; and grade 0 went UP by
+seven across the same merge. F7880 named this blind spot and this is its first
+appearance in a merge that also gained.
+
+**It is kept**, on the same reasoning as F7925: the constructor change is
+forced by the object's own encoding — the variant digit is not a preference —
+and reverting it to move the cursor back would trade seven closed symbols for
+22 bytes in one function that already carries a known open residual (F7940).
+Recorded so that whoever next works `packData` knows its baseline moved
+underneath it and why, rather than measuring a regression they did not cause.
+
+**The credit belongs to the pass, not to the process.** It scored every change
+per-symbol in both directions over all 1251 symbols rather than trusting the
+set diff, which is the only reason this is written down at all. A pass that had
+followed the standing "diff the SET" instruction to the letter would have
+reported a clean +7.
