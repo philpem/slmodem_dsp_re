@@ -90568,8 +90568,17 @@ outcome.
 lever 3 for 21 of 22 files in the DSP/V.34 span on the ground that no file
 stores a constant past `+0x7f`, so `peep2_find_free_register` never fires.
 That is one of the patterns with a `match_scratch`; the `add $imm,%esp` ->
-`pop %reg` epilogue conversion is another, and it fires in `hanning`,
-`hamming` and the blob's `blackman`.  **Screen on `match_scratch` consumers,
+`pop %reg` epilogue conversion is another, and it fires in all three of this
+file's cosine windows -- **on the OBJECT's side as well as ours**, which is
+the half that matters and which a `-fno-peephole2` run on our source cannot
+show.  Count the object's own prologue against its epilogue:
+
+    hanning    3 callee-saved pushes + `sub $0x4`, and FOUR pops
+    hamming    2 callee-saved pushes + `sub $0x4`, and THREE pops
+    blackman   2 callee-saved pushes + `sub $0x4`, and THREE pops
+
+The extra pop in each is the scratch, and in `hamming` and `blackman` it is
+`pop %eax`.  **Screen on `match_scratch` consumers,
 not on the long-move pattern alone** -- or, cheaper and exact, run the
 `-fno-peephole2` advance test.
 
