@@ -20,6 +20,12 @@
 /* A full cycle in phase units. */
 #define FPM_PHASOR_CYCLE 0x8000
 
+/*
+ * A full cycle on the DOUBLE-PRECISION accumulator, which carries fifteen
+ * fractional bits below the phase.  Exactly FPM_PHASOR_CYCLE << 15.
+ */
+#define FPM_PHASOR_DP_CYCLE 0x40000000
+
 struct fpm_phasor {
 	unsigned short phase;	/* +0x00 accumulator, 0 .. 0x7fff */
 	short cos;		/* +0x02 output                   */
@@ -28,6 +34,34 @@ struct fpm_phasor {
 };
 
 void FPM_phasor(struct fpm_phasor *p);
+
+/*
+ * The same oscillator with a FRACTIONAL phase carried between calls, so the
+ * increment need not be a whole phase unit.  Two fields wider than
+ * `struct fpm_phasor` and NOT a superset of it -- the two are separate types
+ * because the object's two functions take different objects, and nothing
+ * passes one to the other.
+ *
+ * The accumulator is 30-bit: `phase` is the top 15 bits and `frac_phase` the
+ * bottom 15, and the wrap subtracts 0x40000000 = one cycle at that scale.
+ * `FPM_phasor`'s wrap is the same rule at the coarse scale, 0x8000.
+ *
+ * The two fractional fields are summed and HALVED before they join the
+ * accumulator (deviation D950).  That halving is in the object and is not
+ * explained by anything visible, so neither field is named for a Q-format on
+ * the strength of it: what is established is where they sit and what the
+ * arithmetic does with them, which is finding F8168's decode.
+ */
+struct fpm_phasor_dp {
+	unsigned short phase;		/* +0x00 accumulator, high 15 bits  */
+	short cos;			/* +0x02 output                     */
+	short sin;			/* +0x04 output                     */
+	unsigned short inc;		/* +0x06 phase increment            */
+	short frac_phase;		/* +0x08 accumulator, low 15 bits   */
+	short frac_inc;			/* +0x0a fractional increment       */
+};
+
+void FPM_phasor_dp(struct fpm_phasor_dp *p);
 
 /*
  * The same, but cosine only.  `sin` is left UNTOUCHED, not zeroed -- a caller

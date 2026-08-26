@@ -12,6 +12,19 @@
   "note": "AND WHAT IS STILL NOT HERE.  Putting the two tables back to `static const` was named in the old set as the strongest single mutation that could not be written, because `fpm_phasor.h` declares them `extern short` and the mutation would not compile -- a build failure is not a kill.  That is now moot rather than pending: nothing depends on their section, their binding or their addresses, so there is no claim left for such a mutation to attack.  They are `.data` globals because the object's are `D` and not `R`, which is symbol-table fidelity and not behaviour."
  },
  {
+  "note": "THE INCREMENT'S SIGNEDNESS, ADDED IN F8323.  `inc` is an `unsigned short` field that both functions load with `movswl`, so the two readings agree over every value below 0x8000 and differ above it -- 613's shape, a defect no test can see until its domain is widened.  `t_fpm_phasor`'s increment list stopped at 0x7fff until this pass and these two mutations both survived; the three entries above 0x7fff are what adjudicates them."
+ },
+ {
+  "label": "the phase increment is read unsigned",
+  "find": "\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (short)p->inc);",
+  "replace": "\tp->sin = phasor_value(fpm_sin_table, FPM_sin_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (int)p->inc);"
+ },
+ {
+  "label": "the demodulator's phase increment is read unsigned",
+  "find": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (short)p->inc);",
+  "replace": "\tp->cos = phasor_value(fpm_cos_table, FPM_cos_sign_ext, idx, frac, quad);\n\tp->phase = phasor_advance(phase, (int)p->inc);"
+ },
+ {
   "label": "the quadrant is masked before it indexes the sign tables",
   "find": "\t\t\t* sign[FPM_PHASOR_SIGN_BELOW + quad]) >> 15);",
   "replace": "\t\t\t* sign[FPM_PHASOR_SIGN_BELOW + (quad & 3)]) >> 15);"

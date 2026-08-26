@@ -45,18 +45,18 @@
  },
  {
   "label": "the reversal test is the wrong way round",
-  "find": "\t\tif (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {",
-  "replace": "\t\tif (2 * corr_s > (state->cfg.f1c * energy_s) >> 15) {"
+  "find": "\t\tif (2 * corr_s < (state->cfg.rev_thresh * energy_s) >> 15) {",
+  "replace": "\t\tif (2 * corr_s > (state->cfg.rev_thresh * energy_s) >> 15) {"
  },
  {
   "label": "the correlation is compared unscaled, without its factor of two",
-  "find": "\t\tif (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {",
-  "replace": "\t\tif (corr_s < (state->cfg.f1c * energy_s) >> 15) {"
+  "find": "\t\tif (2 * corr_s < (state->cfg.rev_thresh * energy_s) >> 15) {",
+  "replace": "\t\tif (corr_s < (state->cfg.rev_thresh * energy_s) >> 15) {"
  },
  {
   "label": "the threshold is taken against the unclamped energy",
-  "find": "\t\tif (2 * corr_s < (state->cfg.f1c * energy_s) >> 15) {",
-  "replace": "\t\tif (2 * corr_s < (state->cfg.f1c * energy) >> 15) {"
+  "find": "\t\tif (2 * corr_s < (state->cfg.rev_thresh * energy_s) >> 15) {",
+  "replace": "\t\tif (2 * corr_s < (state->cfg.rev_thresh * energy) >> 15) {"
  },
  {
   "label": "no debounce: every reversal is reported however recent the last",

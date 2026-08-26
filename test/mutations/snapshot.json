@@ -425,16 +425,51 @@
    }
   },
   "fpmphasor": {
-   "key": "fba47ec4b55de13c96133254bed8a753c91a5aa3627cc5d3f92a7b993413257a",
-   "summary": "7 mutations: 7 caught (7 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "3e44e11df784e08bc4dfaf1a2a90a730a579d13e1f0ec819423429d11d7cf18e",
+   "summary": "9 mutations: 9 caught (9 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "the cosine's window is the masked quadrant's own signs": "caught",
     "the demodulator reads its phase unsigned": "caught",
+    "the demodulator's phase increment is read unsigned": "caught",
     "the exported FPM_cos_sign drifts from the extended copy of it": "caught",
+    "the phase increment is read unsigned": "caught",
     "the phase is read unsigned, so the quadrant never goes negative": "caught",
     "the quadrant is masked before it indexes the sign tables": "caught",
     "the sine's window has COEF_DC's third coefficient one out": "caught",
     "the sine's window pad is not zero, which is the quadrant -1 coincidence": "caught"
+   }
+  },
+  "fpmphasordp": {
+   "key": "fa5c576cba52ace1703492e39a08094b27e1acff4bcdc83c064c78321f49f3c8",
+   "summary": "27 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 4 equivalent, 0 MIScounted",
+   "verdicts": {
+    "only the stored fractional phase is halved, not the sum": "caught",
+    "the accumulator is shifted right by 16, not 15": "caught",
+    "the coarse increment is taken from the fractional one": "caught",
+    "the coarse part is shifted by 14, not 15": "caught",
+    "the coarse phase is not written back": "caught",
+    "the coarse sum is truncated to a short before the shift": "caught",
+    "the cosine output takes the sine table": "caught",
+    "the fractional fields are read unsigned": "caught",
+    "the fractional increment is not added at all": "caught",
+    "the fractional increment is written back instead of the fractional phase": "caught",
+    "the fractional phase is not written back": "caught",
+    "the fractional sum is halved twice": "caught",
+    "the fractional sum is not halved": "caught",
+    "the halving is a division, so it rounds toward zero on a negative sum": "caught",
+    "the phase increment is read unsigned": "caught",
+    "the quadrant is masked before it indexes the sign tables, in the dp path": "caught",
+    "the quotient is narrowed unsigned": "equivalent",
+    "the remainder is a mask rather than a subtraction": "equivalent",
+    "the remainder is taken against the untruncated quotient": "equivalent",
+    "the two fractional fields swap roles: the increment accumulates": "caught",
+    "the two outputs are stored the other way round": "caught",
+    "the wrap compares against the cycle rather than one below it": "caught",
+    "the wrap is >= the cycle, so the boundary value is not wrapped": "equivalent",
+    "the wrap is a mask rather than a subtraction": "caught",
+    "the wrap is unsigned, so a negative accumulator wraps too": "caught",
+    "the wrap subtracts a coarse cycle, not a dp cycle": "caught",
+    "there is no wrap": "caught"
    }
   },
   "fpmpps": {
@@ -563,7 +598,7 @@
    }
   },
   "fpmtonerev": {
-   "key": "1b95521a23c2712de70691401be56e9959c1f0e7d497f950ef4f7ca83f81e7c3",
+   "key": "db5dd55da5c3890c630c190e0081091d54a76c745ef32a60278afacbb7ea6561",
    "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "count is counted down through 16 bits, as the rest of the module does": "caught",
@@ -1484,7 +1519,7 @@
    }
   },
   "v34diagflo": {
-   "key": "80fc5dc33552917cbd427323a8ac9ef73def087d11a7ed4751c0a1dd64f2d0cd",
+   "key": "ee337c833e0c54ce9712a7c62c7da2534c1df0a0837ca4538f7898f8eac0aa99",
    "summary": "27 mutations: 26 caught (26 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "getConstellation: phase 3 and the data phase are exchanged": "caught",
@@ -1517,7 +1552,7 @@
    }
   },
   "v34diagk56": {
-   "key": "5403d0fe46412d866dcc3ccadcedef7d4e94d26c58fcb7cf9a24a52fab9fe8a2",
+   "key": "ee08866c62c047a572c7d94ee753bd710c4ca16baa52bb34cc02b602cdd393df",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "K56flex getConstellation reports a point": "caught",

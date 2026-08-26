@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##########################........]  76.5%    562148 bytes, 1295 symbols
-  tested      [##################################]  99.9%    561345 bytes, 1279 of 1295 that can be
+  translated  [##########################........]  76.6%    562394 bytes, 1296 symbols
+  tested      [##################################] 100.0%    562392 bytes, 1294 of 1296 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,22 +17,8 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 22 of ours (10729 bytes).
 
   translated, alias exists, and NOT tested:
-    _ZN12VPcmFloModem16getConstellationEP11int_complexm    469 bytes
-    _ZN12VPcmFloModem18getLinearEqualizerEP11int_complexm    155 bytes
-    _ZN12VPcmFloModem6getDFEEP11int_complexm        138 bytes
-    _ZN5QueueIfE5resetEv                             13 bytes
-    _ZN15K56FlexFloModem6getDFEEP11int_complexm       3 bytes
-    _ZN15K56FlexFloModem18getResamplerOffsetEP11int_complexm      3 bytes
-    _ZN15K56FlexFloModem18getLinearEqualizerEP11int_complexm      3 bytes
-    _ZN15K56FlexFloModem17getResamplerPhaseEP11int_complexm      3 bytes
-    _ZN15K56FlexFloModem17getDecisionErrorsEP11int_complexm      3 bytes
-    _ZN15K56FlexFloModem16getK56FlexMpBitsEPs         3 bytes
-    _ZN15K56FlexFloModem16getK56FlexJaBitsEPs         3 bytes
-    _ZN15K56FlexFloModem16getConstellationEP11int_complexm      3 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
-    _ZN15K56FlexFloModem21enterPhase3FullDuplexEv      1 bytes
-    _ZN15K56FlexFloModem14setMinMaxRatesEii           1 bytes
 
   file-local and NOT aliasable, so reached through a caller if at
   all: each of these names is used by more than one translation
@@ -95,7 +81,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                 73929 bytes   298 symbols
+    class1tx.c +94                                 73683 bytes   297 symbols
     V32mod.c +39                                   36744 bytes    64 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
     Fdspkrnl.c +13                                  7629 bytes    27 symbols

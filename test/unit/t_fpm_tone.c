@@ -211,8 +211,8 @@ detect_stream(const char *what, void *src, int freq, int scale,
  *
  * REACHING THE REVERSAL BRANCH IS THE WHOLE PROBLEM, exactly as it is for
  * FPM_TONE_generate higher up this file.  find_rev correlates the input
- * against itself delayed by `cfg.f1e` samples, which is 40, and declares a
- * reversal when that correlation falls below cfg.f1c/2 of the windowed energy.
+ * against itself delayed by `cfg.rev_lag` samples, which is 40, and declares a
+ * reversal when that correlation falls below cfg.rev_thresh/2 of the windowed energy.
  * A tone whose period does not divide the lag correlates NEGATIVELY to begin
  * with, so the branch is either always or never taken and a reversal moves
  * nothing.  At 1800 Hz the lag is exactly nine cycles, so a steady tone
@@ -324,12 +324,12 @@ find_rev_stream(const char *what, int total, int len)
 		if (t->rev_energy == 32767 || t->rev_energy == -32768)
 			rev_esat++;
 		/*
-		 * rev_idx below cfg.f1e is the only way the `j -= lag` step can
+		 * rev_idx below cfg.rev_lag is the only way the `j -= lag` step can
 		 * go negative and take the wrapping arm, so the two counters
 		 * together say both arms ran.  Exact only where a block is one
 		 * sample long, which the fragmented stream below is.
 		 */
-		if (t->rev_idx < t->cfg.f1e)
+		if (t->rev_idx < t->cfg.rev_lag)
 			rev_idx_low++;
 		else
 			rev_idx_high++;

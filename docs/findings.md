@@ -94254,3 +94254,292 @@ restoring gives exit 0.
 The general rule, and this is its third instance in the tree: **a gate that
 names what it protects protects only that.** `onedef` said "one type, one
 home"; the hole was everything that carries a layout and is not a type.
+
+### F8320. "Leaves before FAX" has ALREADY paid out: the remaining FAX closure shares NO code at all with any other entry point, and 9,510 bytes of data
+
+This block is F8320-F8326, claimed after checking every branch: the highest
+finding on any branch was F8250 and the highest deviation D940. This pass takes
+findings F8320-F8326 and deviation **D950**.
+
+**The question.** `CLAUDE.md` and this pass's brief both say to clear leaves
+and small shared modules before FAX, on the ground that *"much of the FAX span's
+cost is shared underpinning rather than fax logic"*, and propose measuring it by
+intersecting `closure.py --missing` over a FAX entry point with `service.py`'s
+no-entry-point set. **That intersection is empty by construction** --
+`service.py`'s `none` bucket is defined as `unwritten - r_data - r_fax - r_oth`,
+so nothing in it can be in the FAX closure -- and the honest measurement is a
+different one. Measured with `service.py`'s own graph and entry-point lists, at
+`89337d2c` with a full `build/repro`:
+
+    unwritten CALL symbols a FAX entry point reaches     283 sym   78,331 B
+      of those, also reached by a DATA entry point         0 sym        0 B
+      of those, also reached by voice / CID / ring         0 sym        0 B
+    unwritten NON-CALL symbols (data, tables) it reaches  254 sym   23,116 B
+      of those, also reached by data or voice             26 sym    9,510 B
+    the `none` bucket (no entry point reaches it)        139 sym   16,013 B
+      intersect the FAX closure                            0 sym        0 B
+
+**So the answer to "how much of the FAX closure is shared machinery this kind
+of work can clear in advance" is 9,510 bytes of 101,447, or 9.4% -- and NONE of
+it is code.** Every byte of the 78,331 of unwritten fax `.text` is reached by
+fax and by nothing else.
+
+**The sharing was real, and it is in the past.** Of the FAX closure's already
+written call symbols -- 45 symbols, 18,543 bytes -- **42 of them, 18,156 bytes
+(97.9%), were written because a data, voice, CID or ring path needed them**, and
+only 3 (387 bytes) are fax-only work already done. So "leaves before fax" was
+true, it made the fax phase **18.7%** smaller than it would otherwise be --
+18,156 bytes of the closure's 96,874 bytes of CODE, which is 18,543 written
+plus 78,331 unwritten and does NOT include the 23,116 bytes of data symbols --
+and it is now exhausted. **It was a one-off, not a policy worth another pass.**
+
+**The under-reach check, because a 0 from a graph walk needs one.** If the
+relocation closure missed a hop, the 0 would be a floor rather than an answer,
+and the `none` bucket contains names that look like core fax --
+`GenEQTrnSequenceV27` and `GenEQTrnSequenceV29` are V.27ter/V.29 equalizer
+training generators, and `fax_class1_status`, `FAXVMI_message`,
+`cHDLCtx_off_init` and eight `vXXtx_message`/`vXXrx_message` are fax-shaped
+too. Reverse-edge probe over the whole bucket:
+
+    none-bucket symbols with NO referrer at all in the blob: 129 of 139
+    none-bucket symbols WITH a FAX-reachable referrer:         0
+
+**129 of the 139 have no relocation anywhere in 1.2 MB pointing at them.** They
+are not unreachable because a hop is missing; nothing in this object can name
+their addresses. They are the library's exported API surface, called by
+`slmodemd` or by nothing, and writing them cannot shrink any closure because no
+closure contains them. The ten that do have referrers have referrers which are
+themselves unreachable, and none is FAX-reachable. So the 0 is an answer.
+
+**What this does NOT say.** It does not say the leaves are not worth writing --
+they are 16,013 bytes of the object and the reconstruction's goal is the whole
+of it. It says the *reason* given for doing them first does not hold any more,
+so they should be scheduled on their own merit and FAX should be scheduled on
+its own size.
+
+Reproduce: two scripts of about forty lines each over `closure.build_graph()`
+and `service.py`'s three entry-point lists -- one partitioning the FAX closure
+by which other entry points reach it, one walking reverse edges over the `none`
+bucket. The numbers above are from `python3 tools/service.py` plus those two.
+
+### F8321. `cfg.f1c` and `cfg.f1e` are renamed `rev_thresh` and `rev_lag`, and the codegen tier did not move
+
+F8171 decoded both and deliberately did not rename them, because the designated
+initialiser lives in `src/dsp/fpm_tone_cfg.c`, which every datapump reads, and
+that is a gate cycle of its own. This is that cycle.
+
+    cfg.f1c  +0x1c  ->  cfg.rev_thresh    16384, one half in Q15
+    cfg.f1e  +0x1e  ->  cfg.rev_lag       40 samples
+
+Evidence class 2 for both, a callee that types them: `FPM_TONE_find_rev`'s
+arithmetic is the whole derivation -- `2*corr < (rev_thresh * energy) >> 15`
+and a history indexed modulo `2*rev_lag` against an 80-word array. No format
+string names either and no caller passes either, so class 1 is not available
+and class 3 is not needed. The `rev_` prefix follows the struct's existing
+`rev_period` and the object's five `rev_*` state fields.
+
+**Four files, not two.** `fpm_tone_cfg.c` holds the library config;
+`src/pump/v23/v23rx.c` and `src/pump/v23/v23tx.c` each hold a designated
+initialiser setting `.f1c`, and `src/pump/v22/v22rxtab.c` holds TWO POSITIONAL
+initialisers whose only record of which field is which was a trailing comment.
+Missing any one of the four is a compile error, so the set is closed by the
+compiler rather than by grep -- but only for the designated ones: v22's
+positional pair would have gone on compiling with a stale comment, which is why
+the comment is now a paragraph.
+
+**And that paragraph carries a measurement.** `TONEv22_CFG` and
+`TONEv22INIT_CFG` hold **40 and 0** at +0x1c and +0x1e, not the library
+config's 16384 and 40 -- `.rodata:0x84e0` words 14 and 15, dumped with
+`tabdump.py --sym TONEv22_CFG --type s16`. A `rev_lag` of zero would divide by
+zero in `FPM_TONE_find_rev`, and nothing in V.22 calls it. The values are
+carried unexplained because they are the object's.
+
+**The acceptance test was that nothing moves**, since a rename is a
+compile-time substitution: `byteident.py` reports **586 EXACT and 623 grade 0
+or 1 over 1,297 symbols** before the rename and exactly the same three numbers
+after, on GCC 3.4.2 exact at `-O3`. `t_fpm_tone` passes and the `fpmtonerev`
+suite is **29 of 29 caught**, unchanged.
+
+### F8322. The `(short)` inside `FPM_phasor_dp`'s remainder is behaviourally DEAD, and the mutation set is what proved the source comment wrong
+
+The object narrows `acc >> 15` to a short with `cwtl` at 0x0a94b9 before
+shifting it back and subtracting. The first draft of the function's comment
+said that narrowing was OBSERVABLE -- that the stored `phase` is the truncated
+value and the remainder is taken against what was stored, so the two readings
+*"differ whenever `phase + inc` leaves the 16-bit range"*. **They do not, and
+three mutations of it survived a 1,005,941-check differential test to say so.**
+
+The argument is F8163's, and it is structural rather than empirical: every path
+from the quotient to a stored output passes through a 16-bit truncation, with
+only `+`, `-` and `<<` between. Every candidate spelling of the quotient --
+untruncated, truncated signed, truncated unsigned -- differs from the object's
+by a multiple of 65536, and 65536 shifted left 15 is 2^31, which is **zero in
+the low sixteen bits**. `p->phase` truncates directly; `p->frac_phase`
+truncates the difference. So no differential test can ever separate them, and a
+fourth mutation is equivalent for a plainer reason: `acc - (whole << 15)` and
+`acc & 0x7fff` are the same value for every `acc`, because `whole << 15`
+contributes exactly bit 15 of `acc` to the low sixteen and subtracting it
+clears that bit.
+
+All four are recorded `"equivalent": true` with the argument in `"why"`, which
+is the register's contract: *"we tried this and it survived for a reason"* is
+worth more than the absence of an entry. The `(short)` stays in `src/` because
+the object encodes it, and the claim it carries now belongs to the codegen tier
+where it can be adjudicated. **This is not the first time a mutation set has
+refuted a finding's own draft prose**; the pattern is worth naming -- a comment
+asserting that an intermediate cast is observable should be treated as a
+hypothesis until a mutation of it is caught.
+
+### F8323. `t_fpm_phasor`'s increment list stopped at 0x7fff, which left the increment's SIGNEDNESS untestable in three functions at once
+
+`struct fpm_phasor`'s `inc` is an `unsigned short` field, and the object loads
+it with `movswl` -- 0x0a9389 in `FPM_phasor`, 0x0a9569 in `FPM_phasor_demod`,
+0x0a9480 in `FPM_phasor_dp`. So a stored value of 0x8000 or more is a
+**negative** increment and the accumulator runs backwards.
+
+`t_fpm_phasor`'s `increments[]` ended `0x4000, 0x7ffe, 0x7fff`. Below 0x8000 a
+signed and an unsigned read agree on every value, so the mutation *"the phase
+increment is read unsigned"* could not be caught by any input the test offered
+-- F613's shape exactly, *"a real defect no test could see, because the two
+readings agree over every value the field holds"*, except that here the field
+holds the other half too.
+
+Found while writing `t_fpm_phasordp`, whose first mutation run had the same
+hole and reported the same survivor. Three entries -- 0x8000, 0xc000, 0xffff --
+were added to both tests' lists, and two new mutations to `fpmphasor.json` (one
+per function). The suite goes from 7 to **9 of 9 caught**, `fpmphasordp` from
+22 of 27 to **23 caught / 4 equivalent / 0 uncaught**.
+
+**The general shape, and it is cheap to check for:** wherever a struct field's
+declared type is wider-signed than the load the object uses, the test's input
+list has to cross the sign boundary or the declaration is unadjudicated. This
+tree has 147 single-bit and 235 multi-bit mask sites recorded; nobody has swept
+the `unsigned short` fields loaded with `movswl` the same way.
+
+### F8324. `FPM_phasor_dp` is written -- 246 bytes, 1,005,941 differential checks, 13 bytes from the object
+
+F8168 left it unwritten for time rather than for an obstacle and carried the
+full decode, and that held up exactly: the six-field struct, the advance
+recurrence and the `>> 1` are all as recorded, and nothing had to be
+re-derived. Its closure demand for `FPM_cos_table` / `FPM_sin_table` is
+spurious for the reason F8168 gives -- `FPM_phasor` already ships and carries
+those tables as file-statics.
+
+**The lookup is shared verbatim.** The object's two functions are byte-identical
+from their prologues to 0x0a944f, so `phasor_split`, `interpolate` and
+`phasor_value` are reused rather than copied, and `FPM_phasor_dp` is the third
+user of the UNMASKED quadrant that D392 covers -- relocations at 0x0a944b
+against `FPM_cos_sign` and 0x0a9472 against `FPM_sin_sign`.
+
+**Position in the file was chosen, and measured.** The object emits
+`FPM_phasor` (0x0a9300), `FPM_phasor_dp` (0x0a93e0), `FPM_phasor_demod`
+(0x0a94e0), so the new function goes between the other two -- emission order is
+a codegen carrier for everything after it (F7796). `byteident.py` reports 586
+EXACT and 623 grade 0-or-1 both before and after the insertion, with the
+denominator moving 1,296 to 1,297: **the insertion disturbed neither
+neighbour.**
+
+**The residual is expected and was not hill-climbed** (F7782, F8166). 13 bytes
+differ of 246, at 69 blob instructions against our 66. Its two siblings sit in
+the same place for the same reason -- `FPM_phasor` 12 bytes and 57 against 54,
+`FPM_phasor_demod` 19 bytes and 46 against 41 -- and the three-instruction
+shortfall is F7940's case: three `static` helpers that inline and have no
+symbol of their own, so a per-function count measures our factoring.
+
+Test: `test/unit/t_fpm_phasordp.c`, **1,005,941 differential trials in six
+sections**, every one comparing the WHOLE object with `diff_eq_obj`. The phase
+domain is swept exhaustively three times (fraction at rest, fraction carrying
+positive, fraction carrying negative); the fractional pair is swept at the
+carry boundary and says so rather than claiming exhaustiveness it does not
+have; the wrap at 0x3fffffff is driven from both sides; and a 20,000-call run
+feeds `frac_phase` back so the write-back is exercised as state and not as an
+argument. `failed |= diff_end()` per section, per F8203.
+
+Mutations: `fpmphasordp`, **27 mutations, 23 caught, 0 uncaught, 4 equivalent.**
+
+### F8325. `tools/toolchain/build.sh` reported "206 objects, 0 failed" twice and `byteident` compared 798 symbols then 1,297 -- and the denominator is the only reason anyone noticed
+
+Recorded as a hazard, not as a diagnosis: the cause was not established.
+
+Sequence, with no source change between the two: `build.sh` was run, reported
+`period toolchain: 206 objects, 0 failed, gcc 3.4.2`, and `ls build/tc_out`
+counted 206. `byteident.py` then reported **798 symbols both define, 306 EXACT
+(38.3%)**. `build.sh` was run again, reported the same line, and `byteident`
+reported **1,297 symbols, 586 EXACT (45.2%)** -- which matches the baseline
+taken before the change exactly.
+
+798 is close to the C-only half of the tree, so the shortfall looks like the
+C++ objects; `build.sh` clears its output directory and rebuilds, and its own
+count includes `tc_manifest.txt`, so 206 is 205 objects plus the manifest
+either way and **its report cannot distinguish the two states**.
+
+What made this visible is F2400's rule, and it is the fourth time it has paid:
+*a detector must report its denominator.* 306 of 798 at 38.3% is a completely
+plausible number, and every other line of the report -- the RELOC list, the
+BYTES list, the closest-first ordering -- rendered normally. Had `byteident`
+printed only a percentage, the rename in F8321 would have read as a 7-point
+regression caused by renaming two struct fields, which is impossible, and the
+next hour would have gone into explaining it.
+
+**The check to make, whenever `byteident` or `compare` is quoted:** the symbol
+count is part of the number. A run whose denominator differs from the previous
+run's is not comparable to it, whatever the percentage says.
+
+### F8326. `coverage.py`'s "translated, alias exists, and NOT tested" list was reporting a NAMING condition, not a coverage gap
+
+Thirteen of the sixteen symbols on that list were already compared against the
+blob on every trial of a test that ran them. They were not on the list because
+nothing drove them; they were on it because nothing named them.
+
+**The rule the tool applies**, stated in its own header: a symbol counts as
+tested when a compiled test object REFERENCES its `ref_` alias, read from
+`nm -u`. That is the right rule -- it is what stops a self-consistency check
+being counted -- but it has a blind spot, and the blind spot is a function
+reached only THROUGH a tested caller. `ref_VPcmV34GetVisualDiagnostics` is the
+blob's dispatcher, and the blob's own internal calls out of it are relocations
+against symbols `symmap.py` has also renamed, so calling the dispatcher's alias
+runs the blob's `_ZN12VPcmFloModem16getConstellationEP11int_complexm` against
+ours on every one of `t_v34diag`'s 32,408 visual checks. `nm -u` on the test
+object sees only the dispatcher.
+
+The same thing one level down: `Queue<float>`'s constructor **tail-jumps to
+`reset`**, so every construction in `t_queue.cpp` drives it, and `t_queue.cpp`
+even DECLARES `ref_qreset` -- a declaration emits no reference, so the symbol
+still read as untested.
+
+    before   1,279 of 1,295 that can be    99.9%
+    after    1,294 of 1,296 that can be   100.0%
+
+**What was written to close it, and it is worth having for a different reason
+than the one the list implied.** `t_v34diag.cpp` gains `run_members`, 7,923
+checks calling the eleven accessors BY NAME on the same `setup_visual` fixture
+-- three `VPcmFloModem` getters and the eight `K56FlexFloModem` stubs -- and
+`t_queue.cpp` gains 355 checks calling `reset` on a FILLED queue, which is the
+state the constructor's call cannot reach. Neither section widens the input
+space. What they add is that they pin the **exported entry point**: the
+dispatcher could stop calling a member and grow an equivalent body inline, and
+the old sections would still pass while a caller outside this library, which
+may use any of the eleven, would be broken.
+
+`this` is an ordinary first stack argument for all eleven, read off the object
+rather than assumed --
+`_ZN12VPcmFloModem16getConstellationEP11int_complexm` saves four registers,
+subtracts 0x1c and loads `0x30(%esp)`, which is 16 + 28 + 4. So no `regparm`,
+unlike `t_v34mp.cpp`'s `getMPrecvdBits`, which needs it because the object keeps
+that one LOCAL. Getting it wrong there links and passes garbage, so it was
+checked rather than inferred from the two being similar.
+
+**Two remain and are named rather than closed**, and they are the whole list
+now: `_ZN5V90JdD2Ev` and `_ZN5V92JdD2Ev`, one byte each. The D2 base-object
+destructor has no spelling in C++ source on either side, so reaching it needs
+an asm-named extern on the reference side AND a way to emit D2 rather than D1
+on ours, for one byte of denominator. Left alone deliberately.
+
+**The general shape, and it is the fourth member of a family this tree keeps
+finding.** F2400, F3055 and F3100 are all "a metric measured something other
+than what its label said, and rendered as a plausible number". This one is
+milder because it under-reports rather than over-reports -- a symbol reads
+untested when it is tested, never the other way round -- but the effect on
+scheduling is real: it put 803 bytes on a work list as a coverage hole when the
+coverage was already there. **Read that list as "not driven BY NAME", and
+decide per symbol whether the entry point is worth pinning.**

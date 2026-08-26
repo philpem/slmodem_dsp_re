@@ -80,6 +80,10 @@
   "src/dsp/fpm_phasor.c",
   "build/test/t_fpm_phasor"
  ],
+ "fpmphasordp": [
+  "src/dsp/fpm_phasor.c",
+  "build/test/t_fpm_phasordp"
+ ],
  "fpmpps": [
   "src/dsp/fpm_pps.c",
   "build/test/t_fpm_pps"

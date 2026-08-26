@@ -71,7 +71,18 @@ below(const short *table, int i)
 	return base[i - 4];
 }
 
-/* Increments spanning DC, the tones Bell 103 and V.21 use, and the extremes. */
+/*
+ * Increments spanning DC, the tones Bell 103 and V.21 use, and the extremes.
+ *
+ * THE LAST THREE ARE ABOVE 0x7fff AND THEY ARE THE POINT OF THIS PARAGRAPH.
+ * `inc` is an `unsigned short` field, and both `FPM_phasor` and
+ * `FPM_phasor_demod` load it with `movswl` (0x0a9389, 0x0a9569) -- so a value
+ * of 0x8000 or more is a NEGATIVE increment and the accumulator runs backwards.
+ * The list used to stop at 0x7fff, which left "the increment is read unsigned"
+ * untestable in both functions: below 0x8000 the two readings agree on every
+ * value, which is 613's shape exactly.  Found while writing `t_fpm_phasordp`,
+ * where the same hole let the same mutation survive; finding F8323.
+ */
 static const int increments[] = {
 	0, 1, 2, 7, 0x100, 0x1000,
 	4506,	/* ~1100 Hz at 8 kHz: Bell 103 originate mark  */
@@ -80,6 +91,7 @@ static const int increments[] = {
 	6758,	/* ~1650 Hz: V.21 channel 2 mark               */
 	7578,	/* ~1850 Hz: V.21 channel 2 space              */
 	0x4000, 0x7ffe, 0x7fff,
+	0x8000, 0xc000, 0xffff,		/* read signed: -32768, -16384, -1 */
 };
 
 int
