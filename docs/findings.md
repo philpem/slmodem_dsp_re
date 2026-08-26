@@ -92895,13 +92895,22 @@ reproduced literally. `V32_FINAL_RATE_SEQ` differs from `V32_RATE_SEQ` at index
 included -- so it tracks the FINAL table and not `V32_RATE_SEQ`.
 
 **All three tables are in `.data`, not `.rodata`, so they are not `const`** —
-CLAUDE.md's rule, applied. Nothing in the object writes them.
+CLAUDE.md's rule, applied. **That nothing in the object WRITES them is
+measured**, not assumed: pairing every `objdump -dr` relocation line naming one
+of the three with the instruction it belongs to gives nine referencing
+instructions in the whole object, all nine inside the six rate functions of
+this batch, and all nine loads with the table as the source operand.
 
-**The differential test sweeps the ladder exhaustively**: all 65,536 rate
-signals against all seven local indices, for each of the five functions —
-2,293,760 comparisons, aggregated into one verdict per (function, index) that
-prints its own denominator. 2,878 checks over seven sections, and the whole
-binary runs in 18 ms.
+**The differential test sweeps the ladder exhaustively in ONE of its two
+arguments.** All 65,536 rate signals against all seven local rate indices, for
+each of the five functions carrying the ladder — 2,293,760 comparisons,
+aggregated into one verdict per (function, index) that prints its own
+denominator. The asymmetry is deliberate and worth stating, because the ladder
+is symmetric in `seq` and `local` and the count above reads as exhaustive over
+the input space: `seq` is swept over all 65,536 values, `local` over the seven
+the object can produce, because `local` is only ever `V32_RATE_SEQ[fp->0x2a]`
+and that table has seven entries. 2,878 checks over seven sections, and the
+whole binary runs in 18 ms.
 
 **Mutation: 54 mutations, 53 caught by test, 0 not caught, 1 equivalent, 0
 unusable, no `hang`.**
@@ -92996,3 +93005,85 @@ one of the two was **F432's shape** — its label named the arm that ends a
 phase and its anchor landed in the DONE arm, which `anchorcheck.py` cannot
 see, because the anchor did match exactly once. The label was made true of the
 anchor rather than the other way round.
+
+### F8205. V.32's rate index is `rx_rate`'s, in the author's own words, and the ladder's arm order is descending line rate
+
+F8202 landed the rate-signal codec with the field it reads — a `short` at
+fp + 0x2a — deliberately left unnamed, on the ground that a caller or a format
+string was needed and neither had been found. **Both existed and the check took
+twenty minutes.** Recording the chain because it upgrades an evidence class 3
+to a class 1 and because the intermediate step is a trap.
+
+**Step 1: the config is copied into the modem object.** `V32FP_recreate` at
+0x7e8ad does `rep movsl` with `%ecx` = 0xc — twelve dwords, 48 bytes — from its
+second argument into its first. So `cfg + N` is `obj + N` for every N below
+0x30, which is also why `obj + 0x30` is the status byte and `obj + 0x31` the
+flags: they are the first two bytes past the copy.
+
+**Step 2: the author prints that copy, with names.** `relocscan.py --at
+.rodata.str1.4:0x011000` gives one referencing site, `.text+0x07f5b8`, inside
+`V32FP_recreate`, and the string is
+
+```
+V32FP Config: protocol=%d,tx_rate=%d,rx_rate=%d,timeout=%d,
+energy_drop_time=%d,tx_scale=%d,options=0x%x,trellis=%d
+```
+
+Pairing each conversion with the argument slot that feeds it — the eight loads
+at 0x7f57e..0x7f5bc, in stack-slot order — names eight fields of the config:
+
+| offset | name | how it is loaded |
+|---|---|---|
+| +0x00 | protocol | `movswl (%ebx)` |
+| **+0x02** | **tx_rate** | `movswl 0x2(%ebx)` |
+| **+0x04** | **rx_rate** | `movswl 0x4(%ebx)` |
+| +0x08 | timeout | `mov 0x8(%ebx)` |
+| +0x0c | tx_scale | `mov 0xc(%ebx)` |
+| +0x10 | options | `mov 0x10(%ebx)` |
+| +0x1c | trellis | `mov 0x1c(%ebx)` |
+| +0x2a | energy_drop_time | `movswl 0x2a(%ebx)` |
+
+**Step 3: two compare chains turn a rate into an index.** At 0x7e901
+`movzwl 0x2(%ebp)` — tx_rate — falls through four `cmp`s and stores into
+fp + 0x28; at 0x7e950 `movzwl 0x4(%ebp)` — rx_rate — does the same into
+fp + 0x2a. `%ebp` is the object and `%esi` is `0x68(%ebp)`, loaded at 0x7e8cb.
+Both chains test the same four constants:
+
+| line rate | constant | index |
+|--:|---|--:|
+| 14400 | 0x3840 | 5 |
+| 12000 | 0x2ee0 | 4 |
+| 9600 | 0x2580 | 2 with trellis, 1 without — `2 - (obj->trellis == 0)` at 0x7f60f |
+| 7200 | 0x1c20 | 3 |
+| anything else | — | 0 |
+
+**So fp + 0x2a is the RECEIVE rate's index and fp + 0x28 the transmit rate's,
+and the ladder reads the receive one.** That is the right way round: a rate
+signal advertises what its sender can RECEIVE.
+
+**THE TRAP, AND IT IS WHY THE FIRST DRAFT DECLINED TO NAME THE FIELD.**
+`obj + 0x2a` is `energy_drop_time` and `fp + 0x2a` is the receive rate index.
+They are the same offset in two different blocks, the printer walks the first,
+and a check that stopped at "the string says +0x2a is energy_drop_time" would
+have concluded the opposite of the truth. What separates them is step 3, which
+loads from `0x68(%ebp)` and not from `%ebp`.
+
+**And the ladder's arm order is settled by this too.** F8202 said the arms are
+tried in the order 5, 4, {2,1}, 3, 0 and that whether index 3 is a lower rate
+than index 1 "is a question this batch does not settle". It is settled: the
+order is 14400, 12000, 9600 with trellis preferred, 7200, fallback —
+**descending line rate**. The index numbering is not rate-ordered and the arm
+order is, so "sorting" the arms would swap 9600 and 7200. The comment in
+`src/pump/v32/v32seq.c` says so.
+
+**Index 0 is the one inference left**, and it is from the Recommendation rather
+than the object: the object only says "not one of those four", and V.32's
+remaining rate is 4800. Labelled as such in `v32seq.h` rather than asserted.
+
+**The general lesson is about WHERE to look for a format string.** F8202's draft
+looked for one in `V32FP_status`, the 1,084-byte diagnostic printer, and gave
+up because that function is unwritten. The string was in `V32FP_recreate`, which
+is unwritten too — but a format string does not need its function reconstructed
+to be read, only located, and `relocscan.py --at` locates it in one command.
+Reading eight `mov` offsets out of a 3,733-byte function is not reconstructing
+it.

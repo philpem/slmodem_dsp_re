@@ -39,18 +39,18 @@
  },
  {
   "label": "the local signal is read from the FINAL table, which differs from RATE_SEQ at exactly one index",
-  "find": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];",
-  "replace": "\tshort local = V32_FINAL_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];"
+  "find": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];",
+  "replace": "\tshort local = V32_FINAL_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];"
  },
  {
   "label": "the local rate index is read from the two bytes above it",
-  "find": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];",
-  "replace": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX + 2) & 7];"
+  "find": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];",
+  "replace": "\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX + 2) & 7];"
  },
  {
   "label": "the local rate index is read out of the half-duplex block instead of the DSP block",
-  "find": "\tvoid *fp = FIELD_PTR(modem, V32_OBJ_FP);\n\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];",
-  "replace": "\tvoid *fp = FIELD_PTR(modem, V32_OBJ_HDX);\n\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX) & 7];"
+  "find": "\tvoid *fp = FIELD_PTR(modem, V32_OBJ_FP);\n\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];",
+  "replace": "\tvoid *fp = FIELD_PTR(modem, V32_OBJ_HDX);\n\tshort local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX) & 7];"
  },
  {
   "label": "RateToSeq answers from the FINAL table",

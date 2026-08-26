@@ -37,8 +37,19 @@
  *
  * All three sit in section 143, which is `.data` (CLAUDE.md: `.data` rather
  * than `.rodata` says not `const`), and all three are GLOBAL, so they are not
- * `static` either.  Nothing in the object writes them; the author simply did
- * not write `const`.  Reproduced as declared rather than as used.
+ * `static` either.  The author simply did not write `const`; reproduced as
+ * declared rather than as used.
+ *
+ * THAT NOTHING WRITES THEM IS MEASURED, not assumed.  Pairing every
+ * `objdump -dr` relocation line naming one of the three with the instruction
+ * it belongs to gives NINE referencing instructions in the whole 1.2 MB
+ * object, and all nine are in this file's own six rate functions --
+ * `V32_RATE_SEQ` seven (RateToSeq, SeqToRate, CodeESeq, CodeRateSeq twice,
+ * CodeFinalRateSeq, DecodeRateSeq), `V32_FINAL_RATE_SEQ` one, `V32_ESEQ` one
+ * -- and every one of them is a `movswl`/`movzwl` load with the table as the
+ * SOURCE operand.  So no unwritten function can turn out to write them later,
+ * and the differential test's "the tables equal the blob's" check is true for
+ * the whole run rather than only at the start.
  */
 
 #ifndef DSPLIB_V32SEQ_H
@@ -94,21 +105,58 @@ extern "C" {
 #define V32HDX_DET_MATCH	0x68	/* int, reg & out_mask at the hit      */
 
 /*
- * A `short` in the DSP block that indexes `V32_RATE_SEQ`, so its entry is this
- * station's own rate signal.  THAT IS ALL THAT IS ESTABLISHED and the name
- * says no more: the object gives no format string for it in this batch, and
- * `V32FP_status`'s "tx_rate=%d,rx_rate=%d" -- which is where a real name would
- * come from -- is not reconstructed yet.  Naming it `tx_rate` would be a guess
- * a future reader could not tell from a derivation.
+ * The two rate indices in the DSP block, and THEY ARE THE AUTHOR'S OWN NAMES
+ * rather than usage inference.  The chain, all of it measured:
+ *
+ *   1. `V32FP_recreate` copies its `cfg` argument's first 48 bytes into the
+ *      modem object with `rep movsl` (`$0xc` dwords, 0x7e8ad), so cfg + N is
+ *      obj + N for N < 0x30.
+ *   2. The same function prints that copy at 0x7f5b2..0x7f5c0 through
+ *      `dsplibs_debug_printf` with the format string at
+ *      `.rodata.str1.4:0x011000` -- "V32FP Config: protocol=%d,tx_rate=%d,
+ *      rx_rate=%d,timeout=%d,energy_drop_time=%d,tx_scale=%d,options=0x%x,
+ *      trellis=%d".  Pairing each conversion with the argument slot that
+ *      feeds it gives obj + 0x00 protocol, **+0x02 tx_rate**, **+0x04
+ *      rx_rate**, +0x08 timeout, +0x2a energy_drop_time, +0x0c tx_scale,
+ *      +0x10 options, +0x1c trellis.
+ *   3. Two compare chains then map those two rates onto INDICES: obj + 0x02
+ *      at 0x7e901 into fp + 0x28, obj + 0x04 at 0x7e950 into fp + 0x2a, both
+ *      testing 0x3840, 0x2ee0, 0x2580 and 0x1c20 -- 14400, 12000, 9600 and
+ *      7200 -- with a fallback of 0.
+ *
+ * So fp + 0x2a is the RECEIVE rate's index and fp + 0x28 the transmit rate's,
+ * and the ladder in this file reads the RECEIVE one.  That is the right way
+ * round: a rate signal advertises what the sender can RECEIVE.
+ *
+ * BEWARE OF +0x2a IN THE OTHER STRUCT.  obj + 0x2a is `energy_drop_time` and
+ * fp + 0x2a is the receive rate index; they are the same offset in two
+ * different blocks and the printer above walks the first one.  An earlier
+ * draft of this header declined to name the field at all on the strength of
+ * that collision.
  */
-#define V32FP_RATE_INDEX	0x2a
+#define V32FP_TX_RATE_INDEX	0x28	/* short; nothing in this batch reads */
+#define V32FP_RX_RATE_INDEX	0x2a	/* short; the ladder's `local`        */
 
 /*
- * The rate indices.  0..5 are real rates and 6 means "no rate in common",
- * which is the value every caller in this file tests against.  Which line
- * rate each index IS is not established here -- it comes from the rate-signal
- * bit assignments in V.32bis, and the object only ever uses the index -- so
- * they are numbered and not named.
+ * The rate indices, and WHICH LINE RATE EACH ONE IS -- from `V32FP_recreate`'s
+ * two compare chains above, not from the V.32bis bit assignments:
+ *
+ *   5   14400   0x3840
+ *   4   12000   0x2ee0
+ *   2    9600   0x2580, with trellis coding
+ *   1    9600   0x2580, without -- `2 - (obj->trellis == 0)` at 0x7f60f
+ *   3    7200   0x1c20
+ *   0   the fallback, taken for any rate that is none of those four
+ *   6   NO RATE IN COMMON; not producible by `V32FP_recreate`, only by the
+ *       ladder, and the value every caller in this file tests against
+ *
+ * The numbering is NOT in rate order and the ladder's arm order IS: it tries
+ * 5, 4, {2,1}, 3, 0, which is 14400, 12000, 9600, 7200, then the fallback --
+ * descending line rate, with the trellis variant preferred at 9600.
+ *
+ * INDEX 0 IS THE ONE INFERENCE HERE, and it is from the Recommendation rather
+ * than the object: the object only says "not 14400, 12000, 9600 or 7200", and
+ * V.32's remaining rate is 4800.  Labelled rather than asserted.
  */
 #define V32_RATE_NONE		6
 #define V32_RATE_COUNT		7

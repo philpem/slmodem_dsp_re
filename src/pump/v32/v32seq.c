@@ -26,16 +26,16 @@
  * carries what had to be decided while writing the bodies.
  *
  * ---------------------------------------------------------------------------
- * THE LADDER IS AN INLINED STATIC, AND THE SEARCH ORDER IS NOT SORTED
+ * THE LADDER IS AN INLINED STATIC, AND ITS ARM ORDER IS DESCENDING LINE RATE
  *
  * Five of the six rate functions open with the same instructions, so the
  * ladder is a `static` helper GCC inlined into each (finding F7940).  Its arms
- * are tried in the order 5, 4, {2,1}, 3, 0 -- NOT in numerical order and not
- * in an order this file rearranges.  Whether index 3 really is a lower rate
- * than index 1 is a question about the V.32bis bit assignments that this batch
- * does not settle; what is settled is the order the object tries them in, and
- * that is reproduced literally.  Sorting the arms would change the answer for
- * any signal pair that sets both 0x0040 and 0x0200.
+ * are tried in the order 5, 4, {2,1}, 3, 0, which is NOT the numerical order
+ * of the indices and IS the descending order of the line rates they stand for:
+ * 14400, 12000, 9600 (trellis preferred), 7200, then the fallback.  The index
+ * -> rate mapping is `V32FP_recreate`'s and is derived in v32seq.h, so this is
+ * a fact about the object rather than a reading of it; a reader tempted to
+ * "sort" these arms would be reversing 9600 and 7200.
  *
  * ---------------------------------------------------------------------------
  * WHY `SeqToRate` AND `DecodeRateSeq` BOTH EXIST
@@ -109,7 +109,7 @@ static int
 v32_common_rate(void *modem, unsigned short seq)
 {
 	void *fp = FIELD_PTR(modem, V32_OBJ_FP);
-	short local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RATE_INDEX)];
+	short local = V32_RATE_SEQ[FIELD_S(fp, V32FP_RX_RATE_INDEX)];
 	int rate = V32_RATE_NONE;
 
 	if ((seq & 0x0008) && (local & 0x0008))

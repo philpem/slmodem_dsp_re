@@ -129,8 +129,8 @@ fx_same(const char *what, int input)
 static void
 set_rate_index(short idx)
 {
-	*(short *)(void *)(ours.fp + V32FP_RATE_INDEX) = idx;
-	*(short *)(void *)(theirs.fp + V32FP_RATE_INDEX) = idx;
+	*(short *)(void *)(ours.fp + V32FP_RX_RATE_INDEX) = idx;
+	*(short *)(void *)(theirs.fp + V32FP_RX_RATE_INDEX) = idx;
 }
 
 /* ------------------------------------------------------------------ */

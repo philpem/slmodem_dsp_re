@@ -1018,7 +1018,7 @@
    }
   },
   "v32anstone": {
-   "key": "51e66d1e9243b6e94c0ec626bceb7182b66cb7543622052541291b0a8f44804e",
+   "key": "b6be76848c680044c718ae9aeda0e168afa4c9ba1c008890c713f074c2c4668b",
    "summary": "24 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the counter is not stored at all, so the cadence never advances": "caught",
@@ -1081,7 +1081,7 @@
    }
   },
   "v32seq": {
-   "key": "d3ba455c10b73693543ef64eb251fe954b77bc66e7e7d2c562faa8ea967a9b33",
+   "key": "87703c5ef60c119366743d0d39dc6edfd44912a436401544842ed1b1731a93ec",
    "summary": "54 mutations: 53 caught (53 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "CodeRateSeq and CodeFinalRateSeq answer from each other's table": "caught",
