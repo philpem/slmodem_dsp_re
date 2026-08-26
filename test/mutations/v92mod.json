@@ -40,8 +40,8 @@
  },
  {
   "label": "the second buffer is a buffer of shorts",
-  "find": "\tresampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t\t    * sizeof(float));",
-  "replace": "\tresampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t\t    * sizeof(short));"
+  "find": "\tresampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t\t    << 2);",
+  "replace": "\tresampleIn = (float *)sysdep_malloc((blockSize + V92MOD_BUF_SLACK)\n\t\t\t\t\t    << 1);"
  },
  {
   "label": "the third buffer carries the same ten elements of slack as its neighbours",
@@ -126,8 +126,8 @@
  },
  {
   "label": "reset leaves +0x38 alone",
-  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tqueue->reset();",
-  "replace": "\tqueue->reset();"
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tblockRemaining = blockSize;",
+  "replace": "\tblockRemaining = blockSize;"
  },
  {
   "label": "reset writes a one into the float at +0x28",

@@ -90475,3 +90475,300 @@ Recorded because the section-order reading is a general instrument -- any
 COMDAT-heavy translation unit can be checked against the blob this way -- and
 because the C2/D2 surplus is now confirmed in two template families rather
 than one.
+
+### F8060. `getBitRate`: THE `+ 0.5f` IS ADDED WIDER THAN `float`, AND V92MODULATOR'S CONSTRUCTOR IS THE INTERNAL CONTROL THAT MAKES IT A SOURCE FACT
+
+`V90Demodulator::getBitRate` was SIZE, 85 bytes against the blob's 87, 24
+instructions against 25.  The whole of the difference is one instruction in the
+float-to-`unsigned` conversion:
+
+    blob   flds  0x3f000000      hoisted ABOVE the `fildll`
+           ...
+           fmuls 0x3e2aaaab
+           faddp %st,%st(1)
+    ours   fmuls 0x3e2aaaab
+           fadds 0x3f000000
+
+Two operands in x87 registers is what GCC 3.4.2 emits for a COMMUTATIVE
+operation that is not in SFmode -- the memory form `*fop_sf_comm` exists and
+there is no commutative memory form above it -- so the blob's encoding says the
+SUM was computed wider than `float` while the MULTIPLY kept `fmuls`, its own
+memory operand, and both constants stayed four bytes in `.rodata.cst4`.
+
+**THE CONTROL IS IN THE SAME OBJECT AND IS WHY THIS IS NOT A FLAG.**
+`V92Modulator::V92Modulator` computes `blockSize = (unsigned int)(nSamples *
+ratio + 0.5f)` -- the same idiom, the same compiler, the same object -- and
+there the blob emits `fmuls` then `fadds`, exactly what we emit in
+`getBitRate`.  One object, two spellings, so the difference is in the source
+and not in the build.
+
+**SIXTEEN SPELLINGS, THREE DISTINCT EMISSIONS, TEN PREIMAGES.**  Every way of
+putting the sum above `float` reaches the object: `(double)` or `(long double)`
+on the product, on the constant, or on a local holding either, and `+ 0.5`
+spelled as a `double` literal (GCC narrows it back to `.rodata.cst4`, so the
+pool type is not evidence about the literal once the add is wide).  The six
+that miss are the baseline, its operand order, a `float` local, and the two
+whole-expression widenings -- which move the MULTIPLY to `fmull` out of
+`.rodata.cst8` and are refuted by the pool as well as by the bytes.
+
+So this is F0's SEVERAL PREIMAGES case and the decoded fact is the WIDTH, not
+the spelling: `double` and `long double` are indistinguishable here because the
+value is converted straight to `unsigned int` and never stored, so no rounding
+is observable.  `long double` is written because it is what this tree spells an
+x87 intermediate that never spills (refinement.md lever 12).
+
+`getBitRate` goes EXACT.  `getAT_UD`, which inlines it, goes from 168 differing
+bytes to 84 -- see F8061.
+
+**AND IT COSTS EIGHT BYTES IN `V90Demodulator::progress`, WHICH IS RECORDED
+BECAUSE A SET DIFF CANNOT SEE IT (F7880).**  `progress` is SIZE on both sides
+and stays SIZE: 7,742 bytes / 1,785 instructions before, 7,750 / 1,786 after,
+against the blob's 7,276 / 1,698, with the differing-byte count going 466 to
+474.  It was attributed by compiling the `getBitRate` change ALONE -- the
+constructor reorder of F8062 adds nothing to it -- and the change is two frame
+slots trading places (`0x64`/`0x68`) with the branch displacements shifting
+after them, which is lever 3b's cursor arriving in a different state because
+the function ahead of it in the translation unit now emits one instruction
+more.  `progress` is 88 instructions from the blob and nowhere near closing, so
+the trade is +5 grade-0 symbols against 8 bytes in a symbol no lever has yet
+reached; it is named here so the next pass does not read it as a new defect.
+
+### F8061. `getAT_UD`: 168 DIFFERING BYTES TO 84, AND THE RESIDUAL `fxch` IS A PROPERTY OF THE INLINE-ASM STAND-IN RATHER THAN OF THE SOURCE
+
+With F8060 taken, `getAT_UD` is 418 bytes against 418, 105 instructions against
+106, and the three-way census reduces to ONE term: `fxch -1`, with
+`fmul %st(1),%st` where the blob has `fmul %st,%st(1)`.  The `jmp` our version
+carried into the aligned loop head is gone with it, so what was three defects
+cancelling to `-1` is now one.
+
+The two `10.0f * log10(x)` expressions share their constant.  The blob loads it
+AFTER the first `fyl2x` -- `flds 10.0f ; fmul %st,%st(1) ; fxch %st(1) ; fstps`
+-- and we load it BEFORE, which needs no `fxch` because the product is already
+on top.
+
+**NO SPELLING OF THE SOURCE MOVES IT.**  Literal type (`10.0f`, `10.0`,
+`10.0L`) crossed with the operand order of each of the two expressions
+independently, plus a shared local for the constant, a local for each log
+result, and the store's implicit conversion instead of the explicit `(float)`:
+**15 cells, ONE distinct emission.**  The literal types fold to one XFmode
+constant and the operand order canonicalises, so the null is expected and is
+not evidence on its own -- which is why the domain was widened until the
+generator was seen to fire: all 6 orders of the three diagnostics stores
+crossed with three formulations of the helper's `__asm__` gives **18 cells and
+12 distinct emissions**, from 34 differing bytes to 137.
+
+**EXACTLY ONE CELL REACHES THE OBJECT AND IT IS `__asm__ __volatile__`, AND IT
+IS DECLINED.**  A two-arm stand-alone model isolates it: the same two
+expressions over the same helper, compiled at this tree's flags, gives OUR
+arrangement with the plain `asm` and the BLOB's with the volatile one, and
+volatility is the only difference between the arms.  So the residual is a
+property of what the compiler may schedule ACROSS the asm, and not of the
+source around it.
+
+That is the reason to decline rather than to take it.  The helper is a
+documented stand-in -- F876 records that GCC 3.4.2 emits `fldlg2 / fxch /
+fyl2x` for `log10()` only under `-ffast-math`, which this tree's flags exclude
+-- and it earns its place by emitting the object's THREE INSTRUCTIONS, which it
+already does without `volatile`.  Making it also reproduce the object's
+SCHEDULE by adding a barrier is a second claim, and the control that would
+support it could not be obtained: neither `__builtin_log10` nor
+`__builtin_log10l` under `-ffast-math` expands inline on this compiler, both
+emitting `call log10`/`call log10l`, so there is no measurement showing the
+construct the object actually contains produces the blob's arrangement.
+Without it, `volatile` is a scheduling barrier chosen because it lands on the
+bytes, which is refinement.md's "What does not work" verbatim.  Six copies of
+this helper exist across the tree and none is volatile.
+
+`getAT_UD` stays BYTES at 84 of 418, 105 instructions against 106.
+
+### F8062. `V90Demodulator::V90Demodulator`: THE TWELVE ARGUMENT STORES HAVE THE BLOB'S VALUE-TO-SLOT MAP ALREADY, SO THE ONLY UNKNOWN IS THE PREIMAGE OF ITS ORDER
+
+1,002 bytes, 240 instructions on both sides, 77 differing bytes, and
+`--why` rejecting at `0x6c(%esp),%eax` against `0x78(%esp),%eax`.  That reads
+like a frame-size difference and is not one: the displacement census comes back
+IDENTICAL on both halves -- 41 distinct non-frame displacements over 67 uses,
+31 distinct frame slots over 79 uses, zero differing terms on either -- so no
+field offset and no stack slot differs anywhere in the function.
+
+Reading the eleven `arg -> member` copies out gives the same answer more
+sharply: every one of the twelve arguments reaches the same member offset on
+both sides.  **The value-to-slot maps are identical and only the ORDER
+differs**, which is lever 1 in its purest form and is why the frame slot in the
+rejecting row is a permutation rather than a defect.
+
+Our source order already produced the blob's STORE order, because a store order
+is the first thing anybody transcribes off a disassembly -- refinement.md's
+answer-sheet rule -- so what had to be found was the preimage of that emission
+under GCC 3.4.2's scheduling, and 12! is out of reach.
+
+    wave 1   every single-element move and every pairwise transposition
+             177 orders, 166 distinct emissions      77 differing bytes -> 23
+    wave 2   5! over the five statements still misplaced, x 4! over the four
+             2,880 cells, 2,880 distinct emissions               23 -> 2
+
+Wave 1 also took eleven instructions of register naming right as a BYSTANDER --
+`mov $0x63,%edx` against `%ecx` and two more, thirty rows earlier than anything
+that moved.
+
+**WAVE 2 IS CONDITIONED, NOT EXHAUSTED, AND THE DISTINCTION MATTERS.**  It
+holds `params = par` at the position wave 1 hill-climbed to and holds two more
+statements fixed, so its floor of 2 licenses "no preimage in the 5!x4!
+neighbourhood of wave 1's best cell" and NOT lever 1's killing branch.  F8063
+is what closed it.
+
+### F8063. THE LAST TWO BYTES OF THAT CONSTRUCTOR ARE WHICH OF TWO ZERO STORES IS WRITTEN FIRST, AND THE PREIMAGE IS UNIQUE
+
+Wave 2's residual is two bytes and both are register fields:
+
+    blob   mov %esi,0x24c(%ebx)   mov %ecx,0x258(%ebx)
+    ours   mov %ecx,0x24c(%ebx)   mov %esi,0x258(%ebx)
+
+Both stores are zero, so nothing about the VALUES distinguishes them and no
+differential test can either.  What the object records is which register the
+allocator gave each, and that follows the order the two statements are written
+in.
+
+Every placement of the pair among the five allocations they sit with was
+compiled -- the allocations keeping their own relative order, which is the
+blob's -- **42 cells, 42 distinct emissions, exactly ONE reaching the object**,
+and the batch contains its own baseline (the committed arrangement, at 2
+bytes) so the generator is seen to fire.  The next nearest cell after those two
+is 53 bytes, so this is a unique preimage and a decoded order rather than a
+fit.
+
+`word_24c = 0;` precedes `word_258 = 0;`.  **`V90DemodulatorC1` and `C2` both
+go EXACT**, 1,002 bytes each.
+
+### F8064. `V92Modulator::V92Modulator`: ONE BUFFER IS SIZED WITH A SHIFT AND THE OTHER WITH A MULTIPLY, AND 10,080 CELLS ARE WHAT SEPARATED THEM
+
+734 bytes on both sides, 408 differing, 187 instructions against 188, and the
+per-mnemonic delta is three terms: `lea +1 add -1 shl -1`.  The blob computes
+`(blockSize + 10) * 4` as `add $0xa,%eax ; shl $0x2,%eax` and we compute it as
+`lea 0x28(,%edx,4),%eax`.
+
+**THE STATEMENT-ORDER DOMAIN WAS EXHAUSTED FIRST AND HAS NO PREIMAGE.**  All
+5,040 orderings of the constructor's seven prologue statements -- the six
+argument stores and the `blockSize` float computation -- were compiled: **5,040
+cells, 5,040 DISTINCT emissions, none reaching the object**, floor 354 of 734.
+That is lever 1's killing branch, and it is what sent the search at the size
+expression rather than at the schedule.
+
+**SEVEN MULTIPLICATIVE SPELLINGS ALL FOLD TO ONE `lea`; ONLY THE SHIFT DOES
+NOT.**  `* sizeof(float)`, `sizeof(float) *`, `* 4`, `4u *`, a local for the
+sum, `* sizeof(*resampleIn)` and an `(int)` cast were crossed with the seven
+positions of the `blockSize` statement -- 56 cells, 14 distinct emissions --
+and every multiplicative cell emits `lea` in every position.  GCC 3.4.2
+distributes a constant multiply over the addition and does not distribute a
+shift, so the encoding forces the operator.  `<< 2` took 408 differing bytes to
+18 in one cell.
+
+The asymmetry is the object's, not ours: the `short` buffer immediately above
+is `lea 0x14(%ebp,%ebp,1)` in the blob and in our source, so the two sites are
+genuinely spelled differently in the original.
+
+Re-running the 5,040-order domain ON TOP of the shift gives 5,040 distinct
+emissions again and a floor of 14, so the order alone never closes it either
+way; what remained at 14 was F8065.
+
+### F8065. AND THE INLINED `reset` SCHEDULES DIFFERENTLY FROM THE STANDALONE ONE, SO THE SOURCE ORDER IS NEITHER
+
+The 14 bytes are three stores of the inlined `V92Modulator::reset`:
+
+    blob   movl $0x0,0x34(%esi) ; movl $0x0,0x38(%esi) ; mov %eax,0x8(%esi)
+    ours   mov %eax,0x8(%esi) ; movl $0x0,0x34(%esi) ; movl $0x0,0x38(%esi)
+
+`reset` is also its own 186-byte symbol and that symbol is byte-identical, and
+its emission order is `+0x2c +0x30 +0x08 +0x34 +0x38` -- which the file comment
+recorded as the object's order because it is what the disassembly shows.  The
+constructor inlines the same statements and the blob emits `+0x08` LAST.  **The
+object's own two copies schedule differently, so no source can be both and the
+source order is neither.**
+
+All 5! orders of the five scalar stores were compiled and BOTH symbols scored
+on every cell: **120 cells, 72 distinct emissions, exactly ONE keeps `reset`
+byte-identical and closes the constructor.**  A unique preimage over the PAIR,
+which is a stronger constraint than either symbol alone.
+
+`blockRemaining = blockSize;` is written LAST.  **`V92ModulatorC1` and `C2`
+both reach grade 0**, at `UNRESOLVED` and not `EXACT`: zero bytes differ and
+the single unresolved relocation is F604's case, the blob naming `.data` with
+an inline addend where we name `v92TxPreFilter`.
+
+**AND THAT `UNRESOLVED` WAS CHECKED RATHER THAN TAKEN ON TRUST, because it is
+the tool saying it CANNOT compare the target and the credit is claimed on top
+of it.**  `verdict()` calls a section-symbol/named-symbol pair SOFT, which
+would hide a real difference if the two sections disagreed -- lever 5's own
+signal is that `.data` rather than `.rodata` says not `const`, so a blob
+pointing into `.data` while we point into `.rodata` would be an unrecorded
+source fact and not a naming artefact.  It is not that case:
+`v92TxPreFilter` is `U` in this translation unit and `nm` gives it as **`D`**
+where it is defined, in `vpcm_tables.c` -- initialised, writable, global
+`.data`, which is the section the blob's addend is against.  So the sections
+AGREE, the only thing uncomparable is the name, and the byte comparison is
+zero over all 734.
+
+### F8066. `setPcmSessionType`: A GRADE-1 ACCEPT CLOSED ON ITS OWN STATEMENT ORDER, WITH A UNIQUE PREIMAGE IN TWELVE CELLS
+
+98 bytes both sides, 25 instructions both sides, 5 differing bytes, and
+`alpha_equal` ACCEPTS it -- a pure `%eax`/`%edx` exchange over five
+instructions, which is the tree's REGALLOC bucket and the bucket lever 3 exists
+for.  Lever 3's positional route is spent here: F7797 already took
+`VPcmFloModem.cpp` to 16 of 16 in the blob's emission order for no gain and
+reverted it, at a cost of twelve macro hoists.
+
+Lever 3b's advance test says the symbol is nonetheless EXPOSED, taking a
+`peephole2` scratch in `%ecx` -- run on the HOST through `byteident.body()`,
+F7845, and reporting 6 EXPOSED / 25 CLEARED / 35 undecided over the three files
+so the run is not the dead-detector shape.  F7827's precedent is that an
+EXPOSED symbol can close on its OWN statement order without anything being
+reordered around it, and that is what happened.
+
+Every order of the three statements (the two that dereference `p92` before
+assigning it are not orders, so six become four) crossed with the four
+positions of the `edprintf`: **12 cells, 10 distinct emissions, ONE reaching
+the object**, baseline 5 bytes and next nearest 8.
+
+`pcmSessionType = (sessionType != 0);` precedes `p92 = v92modem.phase2Info;`.
+**EXACT**, and no other symbol in the file moved.
+
+### F8067. THREE MEASURED NEGATIVES ON THE SAME WORKLIST, AND WHAT EACH ONE RETIRES
+
+**`v90RunDemodulator` HAS NO FIELD-OFFSET AND NO FRAME-LAYOUT DEFECT, over
+3,013 bytes.**  F7802 left 131 differing bytes reduced to three outgoing-argument
+store schedules and a 2,218-cell enumeration with no zero, and F7961 verified
+rather than inherited that decline.  The text census offered a new hypothesis --
+`movzbl 0x2428(%ebx),%ecx` against `movzbl 0x2429(%ebx),%eax`, a displacement
+one byte apart, which is not a renaming and is exactly what `alpha_why` rejects
+on.  It is refuted by measurement.  The DISPLACEMENT census comes back
+identical on both halves:
+
+    non-frame   blob 79 distinct / 192 uses   ours 79 / 192   0 differing terms
+    frame       blob 13 distinct /  61 uses   ours 13 /  61   0 differing terms
+
+The four texts that differ are `0x34(%eax)` against `0x34(%edx)` and
+`0x480(%edx)` against `0x480(%esi)` -- the same offsets through a different
+base register.  So every offset this function touches is right, every stack
+slot it uses is right, and the residual is confined to register naming and to
+which value goes into a slot whose multiset already agrees.  That is a narrower
+statement than F7802 could make and it is what a 3,000-byte function's negative
+looks like.
+
+**`V92Modulator::enterPhase3`'s STATEMENT ORDER IS EXHAUSTED WITH NO
+PREIMAGE.**  126 bytes both sides, 33 instructions both sides, 10 differing
+bytes, `alpha_equal` ACCEPTS -- another REGALLOC symbol, and an `%ecx`/`%edx`
+exchange.  All 4! orders of the four trailing stores: **24 cells, 24 distinct
+emissions, none reaching the object**, and the committed order is the best at
+10.  The exchange is in the argument setup for `phase3Modulator->reset(...)`,
+six arguments of one call, which no statement order can reach.  Lever 3's
+positional route was not spent on it either: the advance test calls it
+undecided, peephole2 firing on a pattern that takes no scratch.
+
+**AND ONE TOOL NOTE.  Do not screen with `mov $imm,disp(%reg)` counted in the
+FINISHED object.**  F8003's screen was reimplemented that way here and it is
+inverted: a split site no longer HAS that shape, so counting the survivors
+counts the sites peephole2 left alone.  `V92Modulator.cpp` scores ZERO by that
+count while the exact two-compile test finds two EXPOSED symbols in it
+(`initiateRRN` on `%esi`, `exitCPt` on `%edx`).  The numbers from that
+reimplementation are not quoted anywhere above; refinement.md's own advice
+stands unchanged -- use the shape to understand what is happening, use the two
+compiles to decide -- and this is one more instance of why.

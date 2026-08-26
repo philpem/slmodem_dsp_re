@@ -29,7 +29,6 @@
    "    sequence."
   ]
  },
-
  {
   "label": "ctor: the resampler is built with 50 phases, not 100",
   "find": "#define V90DEM_RESAMPLER_PHASES\t\t100u",
@@ -82,7 +81,6 @@
   "find": "#define V90DEM_DSC_OUT\t\t\t0x63u",
   "replace": "#define V90DEM_DSC_OUT\t\t\t0x62u"
  },
-
  {
   "label": "ctor: the prefilter is built with a constant codec type",
   "find": "\t  preFilter(codec, phase2, par),",
@@ -93,36 +91,35 @@
   "find": "\t  preFilter(codec, phase2, par),",
   "replace": "\t  preFilter(codec, (V90Phase2Info *)0, par),"
  },
-
  {
   "label": "ctor: the two Jd pointers land in each other's fields",
-  "find": "\tjd = jdArg;\n\tphase2Info = phase2;\n\tjdV92 = jdV92Arg;",
-  "replace": "\tjd = (V90Jd *)jdV92Arg;\n\tphase2Info = phase2;\n\tjdV92 = (V92Jd *)jdArg;"
+  "find": "\tjd = jdArg;\n\tjdV92 = jdV92Arg;",
+  "replace": "\tjd = (V90Jd *)jdV92Arg;\n\tjdV92 = (V92Jd *)jdArg;"
  },
  {
   "label": "ctor: the two mapping-parameter pointers are swapped",
-  "find": "\tmappingParams = mappingParams1;\n\tdil = dilArg;\n\tmappingParamsAlt = mappingParams2;",
-  "replace": "\tmappingParams = mappingParams2;\n\tdil = dilArg;\n\tmappingParamsAlt = mappingParams1;"
+  "find": "\tmappingParams = mappingParams1;\n\tparams = par;\n\tmappingParamsAlt = mappingParams2;",
+  "replace": "\tmappingParams = mappingParams2;\n\tparams = par;\n\tmappingParamsAlt = mappingParams1;"
  },
  {
   "label": "ctor: the V90CP and the V90MP land in each other's fields",
-  "find": "\tmp = mpArg;\n\tcp = cpArg;",
-  "replace": "\tmp = (V90MP *)cpArg;\n\tcp = (V90CP *)mpArg;"
+  "find": "\tcp = cpArg;\n\tmp = mpArg;",
+  "replace": "\tcp = (V90CP *)mpArg;\n\tmp = (V90MP *)cpArg;"
  },
  {
   "label": "ctor: the additional CP info is not stored",
-  "find": "\tadditionalCPinfo = cpInfo;\n\tmp = mpArg;",
-  "replace": "\tmp = mpArg;"
+  "find": "\tadditionalCPinfo = cpInfo;\n\tsessionFlag = flag;",
+  "replace": "\tsessionFlag = flag;"
  },
  {
   "label": "ctor: the DIL descriptor takes the CP info pointer",
-  "find": "\tdil = dilArg;\n\tmappingParamsAlt",
-  "replace": "\tdil = (tagV90DILdescriptor *)cpInfo;\n\tmappingParamsAlt"
+  "find": "\tdil = dilArg;\n\tmappingParams",
+  "replace": "\tdil = (tagV90DILdescriptor *)cpInfo;\n\tmappingParams"
  },
  {
   "label": "ctor: the Phase 2 record is not stored",
-  "find": "\tphase2Info = phase2;\n\tjdV92 = jdV92Arg;",
-  "replace": "\tjdV92 = jdV92Arg;"
+  "find": "\tphase2Info = phase2;\n\tjd = jdArg;",
+  "replace": "\tjd = jdArg;"
  },
  {
   "label": "ctor: +0x30 takes argument 13 rather than argument 14",
@@ -131,15 +128,14 @@
  },
  {
   "label": "ctor: the codec type is not stored at +0x00",
-  "find": "\tcodecType = codec;\n\tsessionFlag = flag;",
-  "replace": "\tsessionFlag = flag;"
+  "find": "\tmp = mpArg;\n\tcodecType = codec;",
+  "replace": "\tmp = mpArg;"
  },
  {
   "label": "ctor: +0x00 takes the session flag rather than the codec type",
-  "find": "\tcodecType = codec;\n\tsessionFlag = flag;",
-  "replace": "\tcodecType = (__tHardwareCodecTypes__)flag;\n\tsessionFlag = flag;"
+  "find": "\tmp = mpArg;\n\tcodecType = codec;",
+  "replace": "\tmp = mpArg;\n\tcodecType = (__tHardwareCodecTypes__)flag;"
  },
-
  {
   "label": "ctor: the first array is 8 bytes an element, not 4",
   "find": "#define V90DEM_ARRAY_244_WIDTH\t\t4u",
@@ -175,15 +171,14 @@
   "find": "\tarray_254 = sysdep_malloc(levels * V90DEM_ARRAY_254_WIDTH);",
   "replace": "\tarray_254 = sysdep_malloc(levels * 4u);"
  },
-
  {
   "label": "ctor: +0x258 keeps whatever the allocator left",
-  "find": "\tword_258 = 0;\n\tword_24c = 0;",
+  "find": "\tword_24c = 0;\n\tword_258 = 0;",
   "replace": "\tword_24c = 0;"
  },
  {
   "label": "ctor: +0x24c keeps whatever the allocator left",
-  "find": "\tword_258 = 0;\n\tword_24c = 0;",
+  "find": "\tword_24c = 0;\n\tword_258 = 0;",
   "replace": "\tword_258 = 0;"
  },
  {
@@ -226,7 +221,6 @@
   "find": "\tword_264 = 0;\n\tword_26c = 0;",
   "replace": "\tconstellationPower.pad_00[0] = 0;\n\tword_264 = 0;\n\tword_26c = 0;"
  },
-
  {
   "label": "ctor: the phase 3 demodulator is given a zero session flag",
   "find": "\tv90dem_p3d_ctor(p3d, params, &spectralVerifier, sessionFlag,",
@@ -247,7 +241,6 @@
   "find": "\tv90dem_demapper_ctor(dem, levels * 2, params, autoDigitalImpDetector);",
   "replace": "\tv90dem_demapper_ctor(dem, levels * 3, params, autoDigitalImpDetector);"
  },
-
  {
   "label": "ctor: the phase 4 demodulator's mapping parameters are swapped",
   "find": "\tv90dem_p4d_ctor(p4d, mappingParams, mappingParamsAlt, demapper, cp, mp,",
@@ -278,7 +271,6 @@
   "find": "\t\t\tphase3Demodulator, autoDigitalImpDetector, sessionFlag);",
   "replace": "\t\t\tphase3Demodulator, autoDigitalImpDetector, 0);"
  },
-
  {
   "label": "ctor: the equaliser's two lengths come from each other's parameters",
   "find": "\tv90dem_equ_ctor(equ, (unsigned int)V90PW(params)[PARAMS_LINEAR_EQU_LENGTH],\n\t\t\t(unsigned int)V90PW(params)[PARAMS_DFE_LENGTH],",
@@ -314,7 +306,6 @@
   "find": "\t\t\tphase3Demodulator, phase4Demodulator, demapper,",
   "replace": "\t\t\t(V90Phase3Demodulator *)phase4Demodulator,\n\t\t\t(V90Phase4Demodulator *)phase3Demodulator, demapper,"
  },
-
  {
   "label": "ctor: the TRN2 designer is given the descrambler as its power",
   "find": "\tv90dem_trn2_ctor(trn2, params, &constellationPower);",
@@ -330,7 +321,6 @@
   "find": "\tv90dem_cd_ctor(cd, params, &preFilter, &constellationPower);",
   "replace": "\tv90dem_cd_ctor(cd, params, &preFilter,\n\t\t       (V90ConstellationPower *)&spectralVerifier);"
  },
-
  {
   "label": "dtor: the session is not terminated first",
   "find": "\tsessionTermination();\n\n\tif (equalizer) {",

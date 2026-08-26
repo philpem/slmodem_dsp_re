@@ -165,23 +165,23 @@
  },
  {
   "label": "reset seeds the scrambler with ones",
-  "find": "\tscrambler.reset(0);\n\tphase = 0;",
-  "replace": "\tscrambler.reset(1);\n\tphase = 0;"
+  "find": "\tscrambler.reset(0);\n",
+  "replace": "\tscrambler.reset(1);\n"
  },
  {
   "label": "reset does not put the scrambler back",
-  "find": "\tscrambler.reset(0);\n\tphase = 0;\n",
-  "replace": "\tphase = 0;\n"
+  "find": "\tscrambler.reset(0);\n",
+  "replace": ""
  },
  {
   "label": "reset leaves the phase alone",
-  "find": "\tscrambler.reset(0);\n\tphase = 0;\n\tword_30 = 0;",
-  "replace": "\tscrambler.reset(0);\n\tword_30 = 0;"
+  "find": "\tphase = 0;\n\tword_30 = 0;",
+  "replace": "\tword_30 = 0;"
  },
  {
   "label": "reset takes the phase to phase 3 rather than to zero",
-  "find": "\tphase = 0;\n\tword_30 = 0;\n\tblockRemaining = blockSize;",
-  "replace": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;\n\tblockRemaining = blockSize;"
+  "find": "\tphase = 0;\n\tword_30 = 0;",
+  "replace": "\tphase = V92MOD_PHASE_3;\n\tword_30 = 0;"
  },
  {
   "label": "reset copies the block size the other way round",
@@ -190,13 +190,13 @@
  },
  {
   "label": "reset leaves the pending phase change staged",
-  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tqueue->reset();",
-  "replace": "\tqueue->reset();"
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tblockRemaining = blockSize;",
+  "replace": "\tblockRemaining = blockSize;"
  },
  {
   "label": "reset also clears the split point",
-  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tqueue->reset();",
-  "replace": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tresamplerPhaseChangeAt = 0;\n\tqueue->reset();"
+  "find": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tblockRemaining = blockSize;",
+  "replace": "\tresamplerPhaseChange = V92MOD_PHASECHG_NONE;\n\tresamplerPhaseChangeAt = 0;\n\tblockRemaining = blockSize;"
  },
  {
   "label": "reset helpfully clears the phase step nothing writes",
