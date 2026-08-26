@@ -92227,3 +92227,111 @@ cannot see that a factoring difference has already satisfied the requirement.
 **A closure entry naming a table our tree carries under a different linkage is
 not a blocker** — check whether an already-written sibling depends on the same
 symbol before believing it, which is the opposite mistake to F8165's.
+
+### F8169. The `r4c[84]` span was split by `FPM_TONE_create`'s clear loops, not by the function that reads it — and the same pass refuted a standing guess about `+0x28`
+
+*Delegated arm of this pass; `FPM_TONE_find_rev` (0x0ab170, 547 B) and
+`FPM_TONE_filter` (0x0ab3a0, 235 B), landed in the object's own emission order
+between `_detect` and `_kill`.*
+
+`include/dsplib/fpm_tone.h` carried 84 unmodelled bytes as `r4c[84]`. They are
+now five named fields — `rev_age` (+0x4c), `rev_corr` (+0x4e), `rev_energy`
+(+0x50), `rev_hist[80]` (+0x52) and `rev_idx` (+0xf2) — each with a
+`TONE_ASSERT_OFF`, and the whole 0x108-byte object is modelled.
+
+**The boundaries came from the CONSTRUCTOR, which is the stronger source.**
+`FPM_TONE_create` clears the object in two loops, +0x40..+0x50 and +0x52..+0xf0,
+and then stores zero to +0xf2 separately. Those bounds fix `rev_hist` at exactly
+80 words at +0x52 with a one-word index behind it, and they were readable in the
+object *before* `FPM_TONE_find_rev` was disassembled at all. A field split
+derived from a constructor's clear bounds is independent of how any reader
+happens to index; a split derived from the reader is a restatement of that
+reader's arithmetic.
+
+**AND THE HEADER'S STANDING GUESS ABOUT `+0x28` IS REFUTED.** It read that
+`rev_count` is a field *"FPM_TONE_find_rev and FPM_TONE_kill presumably use"*.
+Neither touches it. `find_rev` touches 0x1c, 0x1e, 0x4c, 0x4e, 0x50, 0x52,
+0xf2, 0xf4 and 0xf8; `filter` touches 0x14, 0x2c, 0x30, 0x34; `kill` touches
+0xfc and 0x100. `+0x28` is the **generator's** tick counter, written and read by
+`FPM_TONE_generate` alone, and the receive side's counter is the separate
+`rev_age` at +0x4c, which counts SAMPLES rather than ticks.
+
+That refutation is worth more than the fields. Its evidence class is **usage
+inference over a COMPLETE symbol set** — every function in the translation unit
+is now written, so the enumeration is exhaustive rather than a sample. Ordinary
+usage inference is this tree's weakest class precisely because an unread
+function might be the one that uses the field; when there are none left, the
+same method becomes decisive. **A guess phrased as "presumably X uses this"
+expires the moment X is written, and nothing goes back to check.** This one had
+been carried in a header comment for as long as the field had a name.
+
+`rev_block` (+0xf4) is settled at evidence class 2, callee-typed: it is the
+`const short *coeff` argument of `FPM_iir_filt_II(samples, rev_block, rev_acc,
+1, count)` — one biquad's `{ b0, b2, b1, a2, a1 }` — corroborated by `create`'s
+`malloc(10)`. `rev_acc` (+0xf8) is that filter's four-word direct-form-I state
+by the same argument, corroborated by `malloc(8)`. `create` builds the section
+at phase zero, so it is a notch at DC.
+
+### F8170. `FPM_TONE_filter` has no caller, and it is the ABSENCE of a relocation that proves it
+
+`readelf -r` finds relocations naming `FPM_TONE_detect` (many), `FPM_TONE_kill`
+(two, both in `RxHdxPhsReversal`) and `FPM_TONE_find_rev` (exactly one, at
+`.text` 0x083c16) — and **none naming `FPM_TONE_filter`**.
+
+This is F306/F333 used in the direction that actually proves something. A
+relocation being PRESENT only says the symbol is `GLOBAL`; its ABSENCE says the
+reference is local or that there is no reference. `FPM_TONE_filter` is `T`, so a
+call from inside its own translation unit would still have produced a
+relocation — which means the absence here is conclusive rather than suggestive.
+The symbol is entry-point-shaped and entirely unreferenced, exactly like
+`FPM_lmsupd2`, `FPM_block_update` and `FPM_circ_dotp2` in F8162 and F8164. That
+is now four in one pass, all of them library routines the object ships and never
+calls.
+
+**`FPM_TONE_find_rev`'s single caller types its return.** The one relocation at
+0x083c16 lies inside `RxHdxPhsReversal` (0x083b20-0x083db0), which narrows the
+result with `movswl %ax,%edi` — and that, not a guess, is where the `short`
+return type comes from. `RxHdxPhsReversal` is V.32 (F8160), so the tone
+reversal finder is reached from the V.32 half-duplex receive machine.
+
+### F8171. `FPM_TONE_find_rev` does not detect phase reversals on its own built-in configuration, and the test keeps the degenerate case as a control
+
+It times sign changes of the input's autocorrelation at a lag of `cfg.f1e`
+samples: it filters the caller's buffer in place through the single biquad at
+`rev_block`, then per sample slides a lag-`f1e` correlation (window `f1e`
+products) and an energy sum (window `2*f1e` squares) over `rev_hist`, and
+reports `rev_age >> 3` when `2*corr < (cfg.f1c * energy) >> 15` and
+`rev_age > 160`.
+
+**A lag correlation is a 180-degree phase-reversal detector only where the
+carrier's period divides the lag**, and the built-in configuration's does not.
+`f1e` is 40 and the built-in tone is 2100 Hz, so at 8 kHz the lag is 40 / (8000
+/ 2100) = **10.5 cycles** — half a cycle out. A steady, entirely un-reversed
+2100 Hz tone therefore correlates *negatively* at that lag, the threshold is
+satisfied continuously, and the function degenerates into a 20 ms metronome.
+Measured, and kept in `t_fpm_tone` as a control case rather than described.
+
+At 1800 Hz the same lag is exactly 9 cycles and it behaves as its name says.
+Its caller being V.32's `RxHdxPhsReversal` (F8170) makes 1800 Hz the plausible
+operating point — but **no configuration that caller actually passes has been
+read**, so that half is labelled inference and is deliberately kept out of the
+source comments.
+
+Two implementation details that a plausible-looking rewrite gets wrong: both
+sums run as **32-bit** values across the whole block and are only ever *stored*
+saturated, so `corr = SAT(corr + term)` diverges and is now a mutation; and
+`count` is **compared against, not counted down through**, so a negative count
+does nothing — the opposite of every other function in the file.
+
+`t_fpm_tone` gains 17 groups and **680,960 checks**, comparing return value,
+the in-place buffer and the whole object. New mutation suite `fpmtonerev`, **29
+of 29 caught**.
+
+**One mutation escaped first time round and the reason is a fixture trap worth
+naming.** *"the second loop covers the write position a second time"* survived
+because at the config's `cfg.len` of 53 the kernel ends exactly at its
+allocation, so the extra tap read whatever the allocator had left there — which
+was zero. The fix was not a better mutation but a better fixture: a
+`taps_override` that shortens `cfg.len` to 40 after creation, so there is a real
+tap one place past the end. **A buffer that ends at its allocation makes an
+off-by-one unobservable, and a zeroed heap makes it look deliberate.**

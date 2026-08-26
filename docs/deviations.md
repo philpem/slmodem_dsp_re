@@ -7386,6 +7386,54 @@ the sample itself and the compiler kept it in one register throughout.
 
 Finding F8161.
 
+## D394 ⚠ `FPM_TONE_find_rev`'s reversal history is a fixed 80 words while its index runs modulo `2 * cfg.f1e`
+
+*Batch of 2026-08-26, from `FPM_TONE_find_rev` (blob 0x0ab170). **Unmeasured**.*
+
+`rev_hist` occupies +0x52..+0xf0 — exactly 80 words, fixed by
+`FPM_TONE_create`'s second clear loop (finding F8169) and by the same bounds in
+the object. `rev_idx` advances modulo `2 * cfg.f1e`, so any `cfg.f1e` above 40
+walks the write straight through `rev_idx` (+0xf2), `rev_block` (+0xf4),
+`rev_acc` (+0xf8) and `iir_self` (+0xfc) — that is, through the biquad's
+coefficient pointer and its state.
+
+**Reachability: no configuration in the object sets `f1e` above 40.**
+`FPM_TONE_CFG`'s value is 40 and `2 * 40 == 80` exactly fills the region.
+
+**Reproduced, and not a defect in the reconstruction**: the object reserves the
+same fixed 80 words and indexes them the same way, so ours is faithful. Recorded
+because the bound is a *coincidence between a configuration constant and an
+array size*, with nothing in either the object or this tree tying them together
+— the kind of pairing that breaks silently the first time someone writes a
+second configuration, which is exactly what an 8 kHz retarget would do.
+
+Finding F8169.
+
+## D395 ⚠ `FPM_TONE_find_rev`'s age counter is a `short` advanced once per sample and reset only on a report
+
+*Batch of 2026-08-26, from `FPM_TONE_find_rev` (blob 0x0ab170). **Unmeasured**.*
+
+`rev_age` (+0x4c) increments once per input sample and is cleared only when a
+reversal is reported. A stream that never reports overflows it after 32,768
+samples — **4.1 seconds at 8 kHz** — after which the `rev_age > 160` gate fails
+for another ~32,768 samples and every reversal in that window is silently
+dropped.
+
+**Reachability: any call sequence that runs the detector for more than about
+four seconds without a report.** Whether `RxHdxPhsReversal` (the one caller,
+finding F8170) can hold it that long has NOT been established — that needs
+V.32's receive machine, which is unwritten.
+
+**Observability: the return value**, which is `rev_age >> 3` and would come back
+negative, and then the missed reports.
+
+**Reproduced.** `t_fpm_tone`'s silence stream runs 1,600 samples, so this is
+**unreached by the tests rather than disproved by them** — the distinction
+matters, and it is why this entry says `unmeasured` rather than
+`out-of-contract`.
+
+Finding F8171.
+
 ## D410 ⚠ `V92setParamsInfoFromCPUnPck` stores through all ten of the block's array pointers without testing one of them
 
 **This entry was written with a number in the three-eighties and moved to 410
