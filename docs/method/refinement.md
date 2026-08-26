@@ -36,6 +36,37 @@ normal (7769).
 
 ---
 
+## AIM A PASS AT A TRANSLATION UNIT, NOT AT A SYMBOL
+
+The tree's own evidence says the compilation unit is the natural unit of work,
+and every mechanism this file documents that acts at range does so through one:
+
+- **Lever 3's carrier is a cursor threaded through a TU in emission order**, so
+  fixing one symbol moves its successors. A symbol at emission index 0 cannot
+  be reached by a reorder at all, and fixing an EXPOSED symbol early in a file
+  changes every symbol after it (F7827).
+- **Bystanders are the rule, not the exception.** `loadParams` -- 7,894 bytes,
+  the largest such symbol in the tree -- closed as a bystander of a reorder
+  aimed at something else (F7800). A pass editing `Scrambler.h` closed eleven
+  symbols in a directory it had been fenced out of. `V92Modem::printTitle`
+  closed with no edit to it at all, and was recorded as UNSTABLE for the same
+  reason.
+- **The regression runs the same way.** F8080's constructor fix cost
+  `V90Jd::packData` 22 bytes as a cursor bystander, invisible to every counter
+  the project prints (F8111).
+- **The operator-definition position, the file's `static` helpers, and its
+  declaration order are all TU-scoped**, not symbol-scoped (F7815, F7940,
+  Lever 4).
+
+**So brief a pass on a FILE and require it to score the whole file both
+directions**, rather than on a list of symbols drawn from across the tree. A
+symbol-drawn worklist makes every one of the effects above look like noise; a
+file-drawn one makes them the signal. It also makes the enumeration cheaper --
+one `build.sh` per cell covers every symbol in the unit at once.
+
+The exception is a symbol big enough to be its own unit: a 3,000-byte function
+is a file's worth of work on its own.
+
 ## The levers, in the order they have paid off
 
 Levers 0 to 9 came out of the refinement waves, in that order. **10, 11 and 12
