@@ -231,7 +231,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase blobfix blobfix-check onedef period
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase blobfix blobfix-check onedef vendor period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -728,7 +728,8 @@ COVCOUNTS  := build-cov/measured.txt
 # `$(MAKE)` is what marks that line recursive, which is what carries -jN into
 # the sub-make through the jobserver, so the eight still run in parallel with
 # each other.  Findings 1563, 3215 and 3521.
-PHASE_TIERS := period test check64 interop params coverage debugcov onedef
+PHASE_TIERS := period test check64 interop params coverage debugcov onedef \
+               vendor
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
@@ -881,6 +882,22 @@ check64:
 #
 onedef:
 	@$(PYTHON) tools/onedef.py
+
+#
+# THE VENDORED HEADERS ARE STILL VERBATIM.  `third_party/slmodem/*.h` are
+# slmodemd's own, copied byte for byte, and they are the only non-derived
+# statement this tree has of the boundary types -- `struct dp`,
+# `struct dp_operations`, `enum DP_ID`, the `DPSTAT_*` codes.  A hand copy of
+# a layout is `onedef.py`'s failure mode one repository out: both halves
+# compile and every offset in the loser is quietly wrong.
+#
+# Cheap -- seven sha256es -- so it runs in `phase`.  It checks the copies
+# against tools/vendor.json ALWAYS, and upstream against the copies only when
+# upstream is present, saying which it did.  A fresh clone or an agent
+# worktree has no upstream, and a skip that renders as a pass is F2400.
+#
+vendor:
+	@$(PYTHON) tools/vendorcheck.py
 
 #
 # THE PERIOD DIFFERENTIAL -- the same suite, built and run by GCC 3.4.2 and

@@ -94639,3 +94639,92 @@ through make.
 **Still spelled twice:** the flag string itself, in `period.mk` and
 `period_inner.sh:23`. That is the divergence class F1990 and V3 in
 `compilers.md` are both about, and it is not closed here.
+
+### F8401. slmodemd's headers are vendored verbatim, and its `.c` files — not its headers — are where the dsplibs API signatures live
+
+Two separate things, found together while answering "can we take the API
+signatures from slmodem's source".
+
+**THE HEADERS DECLARE NOTHING THE BLOB DEFINES.** Every identifier followed by
+`(` across all seven of `slmodemd/*.h` is 82 names; intersected with
+`nm --defined-only ref/slmodemd/dsplibs.o`, the answer is **zero**. The traffic
+through the headers runs the other way — the blob's UNDEFINED symbols include
+eight slmodemd declares: `modem_get_bits`, `modem_put_bits`,
+`modem_dp_register`, `modem_dp_deregister`, `modem_get_param`,
+`modem_set_param`, `modem_get_sreg`, `modem_debug_log_data`. dsplibs registers
+vtables and calls back; slmodemd reaches the datapumps through function
+pointers, never by name. That is why the API surface has no published header:
+**there is nothing to publish**, by design.
+
+**THE SIGNATURES ARE IN THE `.c` FILES, AS LOCAL `extern` DECLARATIONS, AND
+THERE ARE 25.** `modem.c:75-100` carries nineteen of them, `modem_at.c:824`
+one, `modem_main.c:102-103` two:
+
+    modem.c:75   extern void *dp_runtime_create(struct modem *m);
+    modem.c:77   extern void *dcr_create();
+    modem.c:81   extern void *RD_create(struct modem *m, unsigned rate);
+    modem.c:84   extern void  RD_ring_details(void *obj, long *freq, long *duration);
+    modem.c:87   extern void *CID_create(struct modem *m, unsigned rate, unsigned cid_val);
+    modem.c:92   extern void *VOICE_create(struct modem *m, unsigned srate);
+    modem.c:98   extern void *FAX_create(struct modem *m, unsigned caller, unsigned srate);
+    modem_at.c:824  extern int FAX_class1_command(void *obj, unsigned cmd, unsigned param);
+    modem_main.c:102 extern int  prop_dp_init(void);
+
+— the whole of Ring Detect, Caller ID, Voice, the DCR, the dp runtime, and all
+four of the FAX entry points, written by the authors. Evidence rank 1, the same
+rank as a `.rodata` format string, and stronger than anything the disassembly
+can yield. Two details worth not smoothing over: `dcr_create()` has **empty
+parens, not `(void)`** — a K&R unprototyped declaration, which is what the
+author wrote; and `modem_at.c:600`'s `modem_voice_command` is slmodemd's own,
+not `VOICE_command`.
+
+**AND THE TYPE BOUNDARY WAS A HAND COPY THAT SAID SO.** `include/dsplib/dp.h`
+opened with "the originals are in slmodemd/modem_dp.h; they are duplicated here
+so this tree builds standalone", and the duplication is wider than that one
+file: `include/dsplib/v8dp.h:16,24` respells `DP_V8` and `DP_V32`, `v23.h` and
+`b103.h` respell their own DP_IDs with a comment naming `modem_defs.h`, and
+`dp.h` respells the seven `DPSTAT_*` codes. Every one of them is a value nobody
+checks. That is `onedef.py`'s argument one repository out: two definitions of a
+layout, both compiling, and every offset in the loser quietly wrong.
+
+So the seven headers are now vendored **verbatim** at `third_party/slmodem/`,
+with `tools/vendor.json` recording a sha256 per file, the upstream path, and
+the BSD-3 notice. `tools/vendorcheck.py` runs in `make phase`.
+
+**VERBATIM MEANS THE VENDORED FILE IS NEVER EDITED, AND EVERY ACCOMMODATION
+LANDS ON OUR SIDE.** That is the rule that makes a drift check mean anything.
+Concretely: `modem_dp.h` declares `int (*delete)(struct dp *)`, so these
+headers **cannot be included from a `.cpp`** — no `.cpp` in this tree needs
+them today, and if one ever does the fix is a wrapper of ours that `#define`s
+around the keyword, not a rename in the file.
+
+**TWO DIFFERENT FAILURES, AND ONE IS NOT ALWAYS CHECKABLE.** The copies against
+the manifest catches a local edit, an unrecorded addition and a deletion, and
+is always checkable. Upstream against the copies catches upstream moving, and
+needs upstream to be there — which in a fresh clone or an agent worktree it is
+not, exactly as `third_party/spandsp` is not (F1563). An absent upstream
+therefore SKIPS and says so with the file count; it does not report a clean
+run, because a skip rendering as a pass is F2400's shape and this tree has been
+bitten by it four times. `--self-test` builds a throwaway tree and breaks it
+four ways — edit, delete, unrecorded addition, upstream drift — and requires
+each to be reported.
+
+**Provenance is pinned by hash, not by commit.** `slmodemd/` is untracked in
+the parent repository as of `09831d27`, so there is no revision to name, and
+three same-named directories exist under `d-modem/` — the manifest records
+which path is upstream so that "checked against upstream" says which.
+
+Go/no-go, both measured before any of this was written: `modem_dp.h`
+preprocesses and compiles clean standalone under GCC 3.4.2 with only
+`-Ithird_party/slmodem` (it pulls `<linux/types.h>` and `<sys/types.h>`, both
+present in the period container); and no `.cpp` in `src/` includes
+`include/dsplib/dp.h`, so the `delete` keyword does not bite today.
+
+**What is NOT done here** is the rewiring: `include/dsplib/dp.h` still carries
+its own copy of `struct dp` and `struct dp_operations`, and the five
+`dp_operations` initialisers still spell the third member `.destroy` because
+`delete` was a C++ keyword when somebody wrote them. Landing that is a
+separate change whose acceptance test is the same one F8400 used — a pure
+header re-plumb must leave all 205 period objects byte-identical, and if it
+does not, the hand copy disagreed with the real one and that is a defect
+rather than a plumbing nuisance.

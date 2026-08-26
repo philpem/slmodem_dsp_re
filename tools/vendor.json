@@ -1,0 +1,15 @@
+{
+  "_why": "slmodemd's OWN headers, copied VERBATIM.  They are the other side of the ABI dsplibs.o was compiled against, so they are the only non-derived statement of the boundary types this tree has.  They are NEVER edited: every accommodation lands on our side.  tools/vendorcheck.py enforces both halves of that -- the copies against these hashes, and (when it is present) upstream against the copies.  Finding F8401.",
+  "upstream": "/home/philpem/dev/sip-D-modem/slmodemd",
+  "upstream_note": "untracked in the parent repository as of 09831d27, so there is no commit to pin -- the hashes below ARE the pin.  Three same-named decoys exist under d-modem/; the path above is the one that is upstream.",
+  "licence": "BSD 3-clause, Copyright (c) 2002 Smart Link Ltd.  Verbatim copying carries the notice, which is what clause 1 requires.",
+  "files": {
+    "modem.h": "559106b466134508bebd66de65f7960ba9a864569758ad8b9d69ac5b7620326a",
+    "modem_debug.h": "93c179f40389ee9aa7b00cdc71a57145acb40ee2e68c358b02ed32b358fcd83f",
+    "modem_defs.h": "dc7e0a41f1f7d49680b61092237012cbb9d961f21b513aa9d2781cf1dfed8fd5",
+    "modem_dp.h": "9789ef3480f4792db970139250802b839c1bdaa6e1177c81e701424f4c44711f",
+    "modem_homolog.h": "140057f5f6647ca5fe0bee4505243039feadfb7d1eabb4de19e9cd0d6dea1415",
+    "modem_param.h": "a03f456be0ba24cd471e8c787dde1581a16e25c01e83055782c555e61ff4565b",
+    "modem_timer.h": "dcc2c46f643743ea6d5f2afc5a283d077a00cb02fb8cadacc3b85afd06e2ae97"
+  }
+}
