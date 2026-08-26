@@ -9,11 +9,11 @@
  * The default config is the ITU-T V.25 answer tone: 2100 Hz with a 180 degree
  * phase reversal every 450 ms, which disables network echo cancellers.
  *
- * STATUS: create, delete, set_freq, set_scale, generate and detect are all
- * reconstructed and verified.  The object is still treated as opaque storage
- * of a known size, accessed by offset, because a good half of its 0x108 bytes
- * has no known purpose yet -- FPM_TONE_find_rev and FPM_TONE_kill use fields
- * this module does not.
+ * STATUS: every function in the translation unit is reconstructed, and the
+ * whole 0x108 bytes is now modelled as fields.  The last unattributed span,
+ * carried as `r4c[84]` while FPM_TONE_find_rev was unwritten, turned out to be
+ * that function's entire working set: two running accumulators, a counter, an
+ * 80-word delay line and its index.
  */
 
 #ifndef DSPLIB_FPM_TONE_H
@@ -43,10 +43,20 @@ struct fpm_tone_cfg {
 				 *       count                               */
 	short r16[3];		/* +0x16 .. +0x1a                            */
 	short f1c;		/* +0x1c NOT padding: 16384 in the built-in
-				 *       config.  Nothing reconstructed reads
-				 *       it yet -- FPM_TONE_find_rev and
-				 *       _kill are the candidates.          */
-	short f1e;		/* +0x1e NOT padding: 40                     */
+				 *       config.  FPM_TONE_find_rev's only
+				 *       reader -- the Q15 fraction of the
+				 *       windowed energy that twice the lag
+				 *       correlation must fall below for the
+				 *       search to fire.  Left
+				 *       spelled `f1c` only because the
+				 *       initialiser lives in fpm_tone_cfg.c;
+				 *       a rename belongs with that file.    */
+	short f1e;		/* +0x1e NOT padding: 40.  FPM_TONE_find_rev's
+				 *       correlation LAG in samples, and half
+				 *       the length of `rev_hist` -- the
+				 *       delay line is indexed modulo 2*f1e,
+				 *       and 2*40 is exactly the 80 words the
+				 *       object reserves.                    */
 	short extra;		/* +0x20 added to the history buffer's length */
 	short pad22;
 };
@@ -56,14 +66,16 @@ struct fpm_tone_cfg {
  * an address like `+0x4a` says nothing about what lives there, and this
  * module has three separate sub-systems sharing one allocation.
  *
- * Roughly a third of it is still unattributed: `r4c` covers everything
- * between the detector's energy estimates and the reversal buffers, which
- * FPM_TONE_find_rev and FPM_TONE_kill presumably use.  It is a named
- * reserved region rather than a hole, so a field can be sited in it later
- * without recounting anything.
+ * The span that used to be carried here as `r4c[84]` is now named.  It is the
+ * phase-reversal search's working set and nothing else, and the split is not
+ * inferred from FPM_TONE_find_rev alone: FPM_TONE_create clears the object in
+ * two loops, +0x40..+0x50 and +0x52..+0xf0, with a separate store of zero to
+ * +0xf2 after the second.  Those bounds are the array's own -- 80 words at
+ * +0x52 with an index behind them -- and they were visible in the object
+ * before any of this was read.
  *
- * 32-BIT LAYOUT: the reserved region is a byte count from a build where
- * pointers are four bytes.  See the assertions in src/dsp/fpm_tone.c.
+ * 32-BIT LAYOUT: the layout below is from a build where pointers are four
+ * bytes.  See the assertions in src/dsp/fpm_tone.c.
  */
 struct fpm_tone {
 	struct fpm_tone_cfg cfg;	/* +0x00 copied wholesale by create   */
@@ -72,7 +84,16 @@ struct fpm_tone {
 	unsigned short phase;		/* +0x24 accumulator                  */
 	unsigned short inc;		/* +0x26 increment; hz * 32768 / 8000 */
 	unsigned short rev_count;	/* +0x28 8-sample ticks since the last
-					 *       phase reversal               */
+					 *       phase reversal.  The
+					 *       GENERATOR's, and only the
+					 *       generator's -- FPM_TONE_generate
+					 *       is the sole reader and writer.
+					 *       An earlier note here guessed
+					 *       that find_rev or kill might use
+					 *       it; neither touches +0x28.  The
+					 *       receive side's own counter is
+					 *       `rev_age` below, and it counts
+					 *       SAMPLES rather than ticks.    */
 	short pad2a;
 
 	/* --- the detector --------------------------------------------- */
@@ -90,12 +111,50 @@ struct fpm_tone {
 					 *       not.  See finding F33.        */
 	short e_total;			/* +0x4a smoothed total energy        */
 
-	/* --- unattributed --------------------------------------------- */
-	short r4c[84];			/* +0x4c .. +0xf3                     */
-
 	/* --- the phase-reversal search -------------------------------- */
-	short *rev_block;		/* +0xf4 10 bytes                     */
-	short *rev_acc;			/* +0xf8 8 bytes                      */
+	/*
+	 * All five of these are FPM_TONE_find_rev's, and it is the only
+	 * function in the object that reads or writes any of them.
+	 */
+	short rev_age;			/* +0x4c samples since the last
+					 *       reversal was REPORTED.  It
+					 *       advances once per sample and is
+					 *       reset only when a reversal is
+					 *       both seen and older than 160
+					 *       samples, which is what debounces
+					 *       the search.                  */
+	short rev_corr;			/* +0x4e the running correlation of the
+					 *       input against itself delayed by
+					 *       cfg.f1e, over a window of
+					 *       cfg.f1e products.  Held as an
+					 *       int inside the loop and stored
+					 *       back SATURATED -- see the note
+					 *       in FPM_TONE_find_rev.        */
+	short rev_energy;		/* +0x50 the running energy of the same
+					 *       input over 2*cfg.f1e samples,
+					 *       Q15-scaled per term and stored
+					 *       back saturated the same way.  */
+	short rev_hist[80];		/* +0x52 the delay line both of those
+					 *       slide over, indexed modulo
+					 *       2*cfg.f1e.  Eighty words is
+					 *       FPM_TONE_create's own second
+					 *       clearing loop, +0x52..+0xf0.  */
+	short rev_idx;			/* +0xf2 write position in rev_hist   */
+
+	short *rev_block;		/* +0xf4 10 bytes: the { b0, b2, b1,
+					 *       a2, a1 } of ONE biquad, and
+					 *       typed by its use -- find_rev
+					 *       hands it to FPM_iir_filt_II as
+					 *       the coefficient argument with a
+					 *       section count of 1, which is
+					 *       also why create allocates
+					 *       exactly ten bytes.  Built at
+					 *       phase zero, so the section is
+					 *       a notch at DC.               */
+	short *rev_acc;			/* +0xf8 8 bytes: that filter's direct
+					 *       form I state, four words for
+					 *       the one section, by the same
+					 *       argument                     */
 	short *iir_self;		/* +0xfc points at iir_coeff[0]; the
 					 *       original stores it rather than
 					 *       recomputing it               */
@@ -189,6 +248,43 @@ short FPM_TONE_generate2(struct fpm_tone *state, short *cos_out,
  */
 short FPM_TONE_detect(struct fpm_tone *state, const short *samples,
 		      short count);
+
+/*
+ * Time the sign changes of `samples`' autocorrelation at a lag of `cfg.f1e`
+ * samples.  `samples` is filtered IN PLACE on the way in, through the one
+ * biquad at `rev_block`.
+ *
+ * A sign change there is a 180 degree phase reversal only where the carrier's
+ * period divides `cfg.f1e`, which the built-in 2100 Hz config's does NOT --
+ * read the derivation above FPM_TONE_find_rev in src/dsp/fpm_tone.c before
+ * treating this as an answer-tone reversal detector for a given tone.
+ *
+ * Returns 0 when nothing was found, and otherwise the interval since the last
+ * one it reported, in units of eight samples -- the same units
+ * `cfg.rev_period` is expressed in, so the two are directly comparable.  A
+ * report is suppressed unless more than 160 samples have passed since the last
+ * one, so the shortest interval this can ever return is 20.
+ *
+ * A NEGATIVE `count` does nothing here, which is not what the rest of the
+ * module does: FPM_TONE_detect, _generate2, _generate_demod and _filter all
+ * count down through a 16-bit value and run about 65536 times.  This one
+ * compares against `count` instead.
+ */
+short FPM_TONE_find_rev(struct fpm_tone *state, short *samples, short count);
+
+/*
+ * Run `samples` through the detector's correlator, in place.
+ *
+ * It is the first half of FPM_TONE_detect and nothing else: the same circular
+ * `history` of `cfg.len` words, the same `kernel`, the same two-loop wrap and
+ * the same `>> 15`.  What it does not do is square, smooth or decide, and it
+ * shares `hist_idx` with the detector -- so a filter pass and a detect pass on
+ * one object walk the same write position and interleave.
+ *
+ * Nothing in dsplibs.o calls it: it is the only FPM_TONE entry point with no
+ * relocation naming it anywhere in the object.
+ */
+void FPM_TONE_filter(struct fpm_tone *state, short *samples, short count);
 
 /*
  * Remove the configured tone from `samples`, in place, `count` at a time.
