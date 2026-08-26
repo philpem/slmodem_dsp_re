@@ -42,7 +42,8 @@
 # because the blob carries more sections than ld 2.15's default layout leaves
 # segments for.  Static linking sidesteps the program-header table entirely.
 #
-# FLAGS COME FROM build.sh, NOT FROM THE MAKEFILE, because build.sh's set was
+# FLAGS COME FROM tools/toolchain/period.mk, NOT FROM THE TOP-LEVEL MAKEFILE,
+# because period.mk's set was
 # derived from the object (findings F606, F607, F612, F616) and the Makefile's was
 # not.  Three of the Makefile's must NOT appear here:
 #
@@ -104,7 +105,7 @@ KEEP=${KEEP-1}
 
 # MAKEFLAGS is cleared and the banner suppressed: run from inside a make
 # recipe, both leak "Entering directory" and a jobserver warning into the
-# variable, and the container then tries to compile them.  build.sh's note.
+# variable, and the container then tries to compile them.  period.mk's note.
 SRC=$(MAKEFLAGS= make -s --no-print-directory print-SRC | sed 's/^SRC = //')
 CXXSRC=$(MAKEFLAGS= make -s --no-print-directory print-CXXSRC | sed 's/^CXXSRC = //')
 

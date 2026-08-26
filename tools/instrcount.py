@@ -185,7 +185,7 @@ def main():
                 objs.append(os.path.join(dirpath, nm))
     if not objs:
         sys.exit('instrcount.py: TC_OUT (%s) holds no objects.  Run\n'
-                 '  tools/toolchain/build.sh\n'
+                 '  make tc\n'
                  'first; a zero denominator is finding F2400.' % args.tcout)
 
     bsyms = symbols(blob)

@@ -904,13 +904,31 @@ period: $(REF)
 	@REF=$(REF) tools/toolchain/period.sh
 
 # The period-toolchain build and the similarity ratchet.  NOT part of `phase`:
-.PHONY: similarity
-byteident:
+#
+# `tc` IS THAT BUILD, and it is a real makefile now rather than a shell script
+# that rebuilt all 205 objects, serially, on every run.
+# `tools/toolchain/period.mk` has one rule per object and `-MMD -MP` header
+# dependencies, so an edited source recompiles ONE object, an edited header
+# recompiles exactly its includers, and an unchanged tree compiles nothing.
+# `-j$(J)`, never `-j$$(nproc)`, for the reason at the top of this file.
+#
+# BOTH READERS DEPEND ON IT, AND THEY USED NOT TO.  That is why
+# `byteident.py::_staleness` exists -- "no Makefile rule depends on it, so any
+# change to src/ leaves it behind while every count here keeps rendering as a
+# clean, plausible, WRONG number", which happened, and read a merge's grades
+# off objects compiled before the merge.  A dependency is the fix that guard
+# was standing in for.  The guard STAYS: it still catches the directory being
+# read by something that did not come through make.
+#
+.PHONY: tc byteident similarity
+tc:
+	@$(MAKE) -f tools/toolchain/period.mk -j$(J)
+
+byteident: tc
 	@$(PYTHON) tools/toolchain/byteident.py
 
-similarity:
-	tools/toolchain/build.sh
-	python3 tools/toolchain/compare.py --ratchet
+similarity: tc
+	@$(PYTHON) tools/toolchain/compare.py --ratchet
 
 coverage: $(BUILD)/tumap.json $(OBJ) $(REF)
 	@$(PYTHON) tools/coverage.py --md docs/coverage.md

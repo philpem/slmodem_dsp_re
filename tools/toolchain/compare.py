@@ -13,7 +13,7 @@ and findings F606 and F2200):
 
     docker build --platform linux/386 -f tools/toolchain/Dockerfile.exact \
                  -t dsplibs-tc342 tools/toolchain
-    tools/toolchain/build.sh            # writes build/tc_out/*.o
+    make tc                              # writes build/tc_out/*.o
     tools/toolchain/compare.py
 
 THE COMPILER IS GCC 3.4.2 ITSELF, bootstrapped from the GNU tarball.  Until
@@ -271,7 +271,7 @@ def main():
         for k, v in sizes(o).items():
             ours.setdefault(k, (v, o))
     if not ours:
-        sys.exit("no objects in %s -- run tools/toolchain/build.sh first" % OURS)
+        sys.exit("no objects in %s -- run `make tc` first" % OURS)
 
     print("  blob built by: %s" % comment(BLOB))
     print("  ours built by: %s" % comment(objs[0]))
@@ -343,7 +343,7 @@ def main():
                 n += int(f[1])
         return n
 
-    # build.sh records object -> source; the underscore encoding is not
+    # period.mk records object -> source; the underscore encoding is not
     # reversible (`dp_wrapper.c` would come back as `dp/wrapper.c`).
     manifest = {}
     try:

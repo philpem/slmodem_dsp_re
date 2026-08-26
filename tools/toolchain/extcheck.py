@@ -189,7 +189,7 @@ def extensions(insns):
 def load_ours():
     """Objects from TC_OUT, or die.  AN EMPTY SET IS NOT A CLEAN TREE.
 
-    This tool defaulted to `/tmp/tc_out` while `build.sh` and `compare.py`
+    This tool defaulted to `/tmp/tc_out` while `period.mk` and `compare.py`
     moved to `build/tc_out`, so with no environment set it globbed an absent
     directory, compared zero symbols, printed "(none)" and exited 0 -- the
     dead detector of finding F618 back in the tree, and no way to see it from
@@ -197,8 +197,8 @@ def load_ours():
     """
     objs = sorted(glob.glob(os.path.join(OURS, "*.o")))
     if not objs:
-        sys.exit("extcheck: no objects in TC_OUT=%s -- run tools/toolchain/"
-                 "build.sh first.  Refusing to report a clean tree that was "
+        sys.exit("extcheck: no objects in TC_OUT=%s -- run `make tc` "
+                 "first.  Refusing to report a clean tree that was "
                  "never examined." % OURS)
     ours = {}
     for o in objs:

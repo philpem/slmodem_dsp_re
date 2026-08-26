@@ -29,9 +29,13 @@ Three habits, each of which has cost this project real time when skipped:
    not the row the comparison rejects on. One pass quoted the wrong one and
    had to correct itself (7778).
 
-`make phase` does **not** build `build/tc_out`. Nothing does except
-`tools/toolchain/build.sh`. The tool now refuses to print when `src/` is newer,
-because it once reported pre-merge grades as current and they looked entirely
+`make phase` does **not** build `build/tc_out` — it needs docker and the
+toolchain image, which not every checkout has. `make byteident` and
+`make similarity` DO, since both now depend on `make tc`
+(`tools/toolchain/period.mk`), which is incremental: one edited source
+recompiles one object. The staleness guard stays anyway, because it also
+catches the directory being read by something that did not come through
+make — it once reported pre-merge grades as current and they looked entirely
 normal (7769).
 
 ---

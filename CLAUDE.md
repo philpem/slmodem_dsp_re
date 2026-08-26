@@ -387,7 +387,7 @@ the blob's `.comment` back byte for byte, double space and all:
 
 ```
 tools/toolchain/build-gentoo-image.sh              # about a minute
-TC_IMAGE=dsplibs-tc342-gentoo tools/toolchain/build.sh
+TC_IMAGE=dsplibs-tc342-gentoo make tc
 PERIOD_IMG=dsplibs-tc342-gentoo make period
 ```
 
@@ -403,7 +403,7 @@ re-measured on the real compiler and both survive symbol for symbol. Findings
 F2320, F2500 and F2501.
 
 The flags were derived from the object, not guessed, and are in
-`tools/toolchain/build.sh` with the evidence beside each:
+`tools/toolchain/period.mk` with the evidence beside each:
 
     -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
     -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args
@@ -562,7 +562,8 @@ detector; both aids are now validated by reintroducing a known defect and
 watching it appear, then restoring and watching it go. Finding F134's argument.
 
 **And it happened again, to both of them at once.** They kept defaulting to
-`TC_OUT=/tmp/tc_out` after `build.sh` moved its output to `build/tc_out`, so
+`TC_OUT=/tmp/tc_out` after the period build moved its output to
+`build/tc_out`, so
 with no environment set they compared **zero** symbols and reported a clean
 tree, exit 0 (finding F2400). Both now refuse to run on an empty `TC_OUT` and
 print the number of symbols compared on every line that carries a verdict. **A

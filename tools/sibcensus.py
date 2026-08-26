@@ -205,7 +205,7 @@ def main():
     ours = ours_scan()
     if not ours:
         sys.exit("sibcensus.py: no objects in %s -- run "
-                 "tools/toolchain/build.sh first." % OURS)
+                 "`make tc` first." % OURS)
     common = sorted(k for k in ours if k in blob)
     if not common:
         sys.exit("sibcensus.py: blob and %s share NO symbols; the denominator "

@@ -274,9 +274,9 @@ anywhere else.
 
 ### V8 — flags that must NOT cross over
 
-`tools/toolchain/build.sh`'s flag set is derived from the object (findings
-F606, F607, F612, F616); the Makefile's is not. Three of the Makefile's must not
-be passed to the period compiler:
+`tools/toolchain/period.mk`'s flag set is derived from the object (findings
+F606, F607, F612, F616); the TOP-LEVEL `Makefile`'s is not. Three of the
+top-level Makefile's must not be passed to the period compiler:
 
 | flag | why |
 |---|---|

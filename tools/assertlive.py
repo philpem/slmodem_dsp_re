@@ -18,7 +18,7 @@ THE FAILURE MODE, WHICH HAS HAPPENED
 `__SIZEOF_POINTER__` is a GCC 4.6+ predefine.  GCC 3.4.2 does not have it, so
 `#if __SIZEOF_POINTER__ == 4` reads `#if 0` and **every assertion in the file
 vanishes while the file compiles clean** -- structural checks deleted, exit 0,
-nothing printed.  `build.sh` and `period_inner.sh` both pass
+nothing printed.  `period.mk` and `period_inner.sh` both pass
 `-D__SIZEOF_POINTER__=4` to prevent it, and the day either stops doing so the
 tree loses its layout checks in silence.
 
@@ -40,8 +40,8 @@ WHAT THIS CHECKS -- THREE THINGS, BECAUSE THEY FAIL DIFFERENTLY
    does not, every guard is inert.  Self-validating: no recorded number to go
    stale, and it cannot pass because somebody forgot to update a baseline.
 2. **Both period build scripts must still pass the flag.**  A comparison run
-   with THIS tool's flags cannot see a missing `-D` in `build.sh` -- and a
-   missing `-D` in `build.sh` is exactly the failure that happened.  Only
+   with THIS tool's flags cannot see a missing `-D` in `period.mk` -- and a
+   missing `-D` in `period.mk` is exactly the failure that happened.  Only
    reading the scripts catches it.
 3. **The count must not DECREASE.**  Checks 1 and 2 both pass while a single
    header's guard goes inert: injecting `#if 0` over `V90Parameters.h`'s guard
@@ -118,7 +118,7 @@ def sweep(paths, ptr):
 # fail differently: a moved `#endif` breaks the first, a dropped `-D` the
 # second.
 #
-BUILDERS = ("tools/toolchain/build.sh", "tools/toolchain/period_inner.sh")
+BUILDERS = ("tools/toolchain/period.mk", "tools/toolchain/period_inner.sh")
 
 
 def flag_present():
@@ -167,7 +167,7 @@ def main():
             "  The guarded layout assertions are inert, so the period build is\n"
             "  compiling with its structural checks deleted and exiting 0.\n"
             "  Check that -D__SIZEOF_POINTER__=4 is still in BOTH\n"
-            "  tools/toolchain/build.sh and tools/toolchain/period_inner.sh,\n"
+            "  tools/toolchain/period.mk and tools/toolchain/period_inner.sh,\n"
             "  and that no `#endif` has been moved so as to swallow a guarded\n"
             "  region (finding F7799)." % (on, off))
 

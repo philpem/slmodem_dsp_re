@@ -94543,3 +94543,99 @@ untested when it is tested, never the other way round -- but the effect on
 scheduling is real: it put 803 bytes on a work list as a coverage hole when the
 coverage was already there. **Read that list as "not driven BY NAME", and
 decide per symbol whether the entry point is worth pinning.**
+
+### F8400. `build.sh` is a makefile now, and three of the four ways that conversion fails are silent
+
+`tools/toolchain/build.sh` rebuilt all 205 objects, serially, in one container,
+on every run. It had exactly one piece of dependency tracking — `rm -rf $OUT` —
+and the cost of that shows up twice in this tree's own record: `byteident.py`
+grew a staleness guard whose docstring says the quiet part ("no Makefile rule
+depends on it, so any change to `src/` leaves it behind while every count here
+keeps rendering as a clean, plausible, WRONG number"), and F8325 is a whole
+finding about that build reporting "206 objects, 0 failed" twice while
+`byteident` compared 798 symbols and then 1,297.
+
+It is now `tools/toolchain/period.mk`: one rule per object, real `-MMD -MP`
+header dependencies, and `-j`. Measured on this tree:
+
+| | before | after |
+|---|---|---|
+| no-op run | 205 objects | **0 objects** |
+| one edited source | 205 objects | **1 object** |
+| one edited header (`toneiir.h`) | 205 objects | **7 objects** — and the `.d` files predicted 7 |
+| parallelism | none, the loop was serial | `-j$(J)` |
+
+**THE ACCEPTANCE TEST IS BYTE IDENTITY, AND IT PASSED 205/205.** The pristine
+`build/tc_out` was copied aside with `cp -a` (never `cp -al` — D-agents.md's
+write-through hazard) and compared after a full rebuild through the makefile:
+same 205 file names, 205 objects byte-identical, `tc_manifest.txt` identical.
+Re-checked after the incremental runs above, still 205/205. Nothing about the
+codegen tier moves; `compare.py --ratchet` reports the same numbers it did
+before, and did not rewrite `ratchet.json`.
+
+**THE `docker exec` DESIGN LOOKS EIGHT TIMES CHEAPER AND IS NOT.** `docker run
+--rm ... true` costs 0.55 s here and `docker exec` into a live container 0.07 s,
+so a persistent container is the obvious optimisation. It loses on the case
+that matters: the incremental build compiles ONE object, and `exec` has to
+start the container first, so `run` (0.55 + 0.25) beats `start + exec`
+(0.55 + 0.07 + 0.25) outright. It only wins the full rebuild, and buys that
+with daemon state outliving make, a name race under `-j`, and a container left
+running when make is interrupted. Measure the case you actually have.
+
+**THE FOUR TRAPS. Three of them build clean and produce a wrong answer.**
+
+1. **The object name is not stem-preserving, so no pattern rule can express
+   it.** `src/pump/v34/v34hshak.c` → `src_pump_v34_v34hshak.c.o`: the whole
+   path, extension included, slashes to underscores — and `build.sh`'s own
+   comment says the encoding is not reversible. Rules are generated forward,
+   source → object, by `$(foreach)`/`$(eval)`; the reverse mapping stays where
+   it was, in `tc_manifest.txt`, which `compare.py:346` reads.
+2. **`-MMD -MF` without `-MT '$@'` tracks NOTHING, silently.** GCC names the
+   dep rule after the `-o` argument, which inside the container is
+   `/out/src_x.c.o`; make knows that object as `$(TC_OUT)/src_x.c.o`. The two
+   never match, every generated rule is inert, and the `.d` files exist, the
+   build succeeds and header edits are ignored for ever. GCC 3.4.2's `-MT`
+   *adds* a target rather than replacing the `-o`-derived one, so each `.d`
+   also carries an inert rule for `/out/…` — left alone rather than
+   post-processed, because a sed over generated makefiles is a second place
+   for this to go wrong.
+3. **Flags and image must be a PREREQUISITE, because `rm -rf` was doing that
+   job.** Without it `TC_EXTRA=-O2 make tc` over an up-to-date tree recompiles
+   nothing and then compares `-O3` objects believing they are `-O2` — and
+   F2155, F1990 and F2200 all rest on that comparison being clean. A
+   content-compared stamp holds the image and the whole flag string; changing
+   `TC_EXTRA` was shown to touch it and make every object out of date, and
+   re-running with the same value was shown to leave it alone. The upside is
+   that `TC_OUT` no longer has to be set alongside an A/B knob.
+4. **A partial `build/tc_out` is a state `rm -rf` made impossible.** Nine tools
+   glob that directory and would score whatever survived a failed build —
+   F2400 and F3100's shape exactly. So the default goal asserts object count
+   against source count and refuses to print its summary otherwise; stale
+   objects and `.d` files whose source has gone are pruned before the count;
+   and the recipes no longer send the compiler's stderr to `/dev/null`, which
+   is what made F43568 ("`build.sh` discards the compiler's…") possible.
+
+**`-n` CANNOT TEST ANY OF THIS.** The flags stamp is a `FORCE` target, so under
+`--dry-run` make assumes its recipe updates the file and reports all 205
+objects out of date on a no-op run. Every number in the table above is from a
+real run.
+
+**AND THE SOURCE LIST STILL HAS ONE HOME.** `period.mk` shells out to
+`$(MAKE) -s print-SRC` rather than re-deriving it with `find`, which would be a
+second definition of the same set. An empty answer is refused with `$(error)`:
+a build whose source list came back empty compiles nothing, asserts 0 against
+0, and exits 0.
+
+`build.sh` survives as a labelled shim that `exec`s the makefile at the same
+half-the-cores `-j`, because nine tools name it in their error messages and
+five agents were running against that instruction when it changed. Those
+messages now say `make tc`; `tools/assertlive.py`'s `BUILDERS` names
+`period.mk` and `period_inner.sh`, since a shim is not a place to look for
+`-D__SIZEOF_POINTER__=4`. `make byteident` and `make similarity` now depend on
+`make tc` — the dependency the staleness guard was standing in for. The guard
+stays: it still catches the directory being read by something that did not come
+through make.
+
+**Still spelled twice:** the flag string itself, in `period.mk` and
+`period_inner.sh:23`. That is the divergence class F1990 and V3 in
+`compilers.md` are both about, and it is not closed here.

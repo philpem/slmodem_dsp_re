@@ -1,106 +1,33 @@
 #!/bin/sh
 #
-# Build every reconstructed translation unit with the period toolchain and
-# leave the objects where compare.py looks for them.  See the Dockerfile for
-# what the toolchain is and compare.py for where each flag came from.
+# A SHIM.  THE BUILD IS `tools/toolchain/period.mk`.
 #
-# Nothing here touches build/ -- the project's own build is untouched and this
-# output is for comparison only.
+# This used to be the build itself: 106 lines that recompiled all 205 objects,
+# serially, in one container, on every run, because `rm -rf $OUT` was the only
+# dependency tracking it had.  It is a proper makefile now -- one rule per
+# object, real `-MMD -MP` header dependencies, and `-j` -- so an edited source
+# recompiles one object and an unchanged tree compiles nothing.
 #
-set -e
-cd "$(dirname "$0")/../.."
+# THIS FILE STAYS BECAUSE NINE TOOLS NAME IT IN THEIR ERROR MESSAGES and tell
+# the reader to run it, and because agents were running against that
+# instruction when it changed.  Prefer `make tc` in anything new; every knob
+# still works, because they are passed straight through:
 #
-# UNDER build/, NOT UNDER /tmp, so `make clean` reaches it.  This defaulted to
-# /tmp/tc_out and wrote its manifest to /tmp/tc_manifest.txt -- 152 objects and
-# an index that nothing in the tree ever removed, and that two concurrent
-# worktrees would have written over each other.
+#     TC_IMAGE=dsplibs-tc342-gentoo sh tools/toolchain/build.sh
+#     TC_EXTRA=-O2 make tc
 #
-OUT=${TC_OUT:-$PWD/build/tc_out}
-# `-mno-ieee-fp` IS IN `make period` TOO NOW, so the two sets are identical
-# again.  It used to be here only: the object's float compares are ordered --
-# 406 against four, and those four are inside libm -- and with the flag the
-# period tier went 181 passed to 176, failing five suites on NaN and near-NaN
-# inputs.  Finding F1990 refused to say whether that meant five defects or a
-# wrong flag; findings F2300 to 2303 say it was five defects, and the tier is
-# green with the flag.
+# `-D__SIZEOF_POINTER__=4` IS NOT IN THIS FILE ANY MORE, and that matters:
+# `tools/assertlive.py` checks the flag is still passed by reading the build
+# scripts, so its BUILDERS list names `period.mk` and `period_inner.sh`.  A
+# shim is not a place to look for a flag.
 #
-# THE SAME FLAGS `make period` USES, and they must stay the same.  The two
-# diverged once and it cost real coverage: this script passed neither
-# -D__SIZEOF_POINTER__=4 nor the compat header, so it compiled a smaller set
-# than the period differential AND silently elided the 81 offset assertions
-# guarded on that predefine -- V3 in docs/method/compilers.md, the variance
-# that fails OPEN.
-#
-# -std=gnu99 is NOT here and is not an oversight: it is the C dialect the
-# TEST HARNESS needs, and this script compiles only src/.
-# ONE LINE, deliberately: $FLAGS is interpolated into the `docker ... sh -c`
-# string below, where a newline ends the command rather than separating words.
-FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args -Iinclude -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
+cd "$(dirname "$0")/../.." || exit 1
 
-# TWO KNOBS, BOTH FOR A/B MEASUREMENT AND NEITHER A WAY TO CHANGE THE BUILD.
-#
-#   TC_IMAGE=dsplibs-tc      the OLD image, Debian sarge's GCC 3.4.4; the
-#                            default is now `dsplibs-tc342`, GCC 3.4.2 itself
-#                            (Dockerfile.exact).  Finding F2200
-#   TC_IMAGE=dsplibs-tc342-gentoo
-#                            the THIRD arm and the only exact one: Gentoo's
-#                            gcc-3.4.2-r2, built from the ebuild inside
-#                            stage3-x86-2005.0, printing the blob's .comment
-#                            back byte for byte (Dockerfile.gentoo).  It is
-#                            NOT the default because it needs a stage3 and
-#                            28 MB of distfiles that are not in git -- and it
-#                            costs nothing to skip: 182 of 183 objects come
-#                            out byte-identical to the default's, and the
-#                            symbol match is 334 either way.  Finding F2500
-#   TC_EXTRA="-O2"           APPENDED after $FLAGS, so a repeat of an option
-#                            overrides the one above -- `-O2` beats the `-O3`,
-#                            `-mieee-fp` beats the `-mno-ieee-fp`.  That is how
-#                            finding F2200's arms were taken without editing
-#                            this line, which is what a flag conclusion has to
-#                            be measured against.
-#
-# Set TC_OUT as well when you set either, or you will compare one arm against
-# another arm's leftovers.  Findings F2155 and F1990 are the flag record; this
-# is not a supported way to build the tree differently from what they say.
-IMAGE=${TC_IMAGE:-dsplibs-tc342}
-FLAGS="$FLAGS $TC_EXTRA"
+# The same halving `make`'s own `J` does -- never `$(nproc)`, which leaves the
+# machine unusable for the real-time DSP work this tree also does.  Under the
+# script this build was serial; a shim that stayed serial would be SLOWER than
+# what it replaced, because there is now one container per object.
+J=${J:-$(( $(nproc 2>/dev/null || echo 4) / 2 ))}
+[ "$J" -ge 1 ] 2>/dev/null || J=1
 
-if ! docker image inspect "$IMAGE" >/dev/null 2>&1; then
-    echo "tools/toolchain: no docker image '$IMAGE'.  Build it with" >&2
-    echo "  docker build --platform linux/386 \\" >&2
-    echo "    -f tools/toolchain/Dockerfile.exact -t dsplibs-tc342 tools/toolchain" >&2
-    echo "(the older 3.4.4 image is Dockerfile, -t dsplibs-tc.  Finding F2200.)" >&2
-    exit 1
-fi
-
-# MAKEFLAGS is cleared and the directory banner suppressed: run from inside a
-# make recipe, both leak `make[1]: Entering directory ...` and a jobserver
-# warning into the variable, and the container then tries to compile them.
-SRC=$(MAKEFLAGS= make -s --no-print-directory print-SRC | sed 's/^SRC = //')
-CXXSRC=$(MAKEFLAGS= make -s --no-print-directory print-CXXSRC | sed 's/^CXXSRC = //')
-
-rm -rf "$OUT"; mkdir -p "$OUT"
-
-# Object name -> source path.  The names are the path with slashes turned into
-# underscores, which is NOT reversible: `src/core/dp_wrapper.c` and a directory
-# called `dp` produce the same string.  Record the mapping rather than guess it.
-for f in $SRC $CXXSRC; do
-    echo "$(echo "$f" | tr / _).o $f"
-done > "$OUT/tc_manifest.txt"
-# See tools/toolchain/period.sh for why --rm alone is not the whole of
-# cleaning up: --name gives the trap a handle, and --user keeps root-owned
-# objects out of the tree.
-NAME="dsplibs-tcbuild-$$"
-cleanup() { docker rm -f "$NAME" >/dev/null 2>&1 || true; }
-trap cleanup EXIT INT TERM
-
-docker run --rm --name "$NAME" --user "$(id -u):$(id -g)" --platform linux/386 \
-  -v "$PWD:/src" -v "$OUT:/out" -w /src "$IMAGE" sh -c "
-    fail=0
-    for f in $SRC; do
-      gcc -c $FLAGS -o /out/\$(echo \$f | tr / _).o \$f 2>/dev/null || { echo \"  FAIL \$f\"; fail=\$((fail+1)); }
-    done
-    for f in $CXXSRC; do
-      g++ -c $FLAGS -fno-exceptions -fno-rtti -o /out/\$(echo \$f | tr / _).o \$f 2>/dev/null || { echo \"  FAIL \$f\"; fail=\$((fail+1)); }
-    done
-    echo \"period toolchain: \$(ls /out | wc -l) objects, \$fail failed, gcc \$(gcc -dumpversion)\""
+exec make -f tools/toolchain/period.mk -j"$J" "$@"

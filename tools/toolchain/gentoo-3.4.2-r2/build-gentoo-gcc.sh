@@ -291,7 +291,7 @@ esac
 #
 #  * CHOST is i386-pc-linux-gnu, which is this stage3's own (its /etc/make.conf
 #    says so), not the i686-pc-linux-gnu that Dockerfile.exact forces.  It sets
-#    a DEFAULT -march/-mtune only, and build.sh passes both explicitly.
+#    a DEFAULT -march/-mtune only, and period.mk passes both explicitly.
 #
 #  * --disable-nls where a default 2005.0 profile would have had USE=nls.
 #    Diagnostics language only; it cannot reach code generation, and the stock

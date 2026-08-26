@@ -197,7 +197,7 @@ def classify(bm, om):
 def collect():
     if not OURS or not os.path.isdir(OURS):
         sys.exit("samesize: TC_OUT is empty or absent (%r).  Run\n"
-                 "  TC_OUT=$PWD/build/tc_out tools/toolchain/build.sh\n"
+                 "  make tc\n"
                  "first -- finding F2400 is what happens when this is skipped."
                  % OURS)
     blob = sizes(BLOB)

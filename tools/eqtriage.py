@@ -385,7 +385,7 @@ def load():
             ours.setdefault(k, o)
     if not ours:
         sys.exit("eqtriage.py: no objects in %s -- run "
-                 "tools/toolchain/build.sh first." % bi.OURS)
+                 "`make tc` first." % bi.OURS)
     common = sorted(k for k in ours if k in blob)
     if not common:
         sys.exit("eqtriage.py: blob and %s share NO symbols; the denominator "

@@ -119,13 +119,13 @@ def main():
     blob = sizes(BLOB)
 
     # AN EMPTY SET IS NOT A CLEAN TREE.  This defaulted to `/tmp/tc_out` after
-    # build.sh moved to `build/tc_out`, so it globbed nothing, compared nothing
+    # the period build moved to `build/tc_out`, so it globbed nothing, compared
     # and printed "0 functions differ" -- which reads as good news.  Finding
     # 2400.
     objs = sorted(glob.glob(os.path.join(OURS, "*.o")))
     if not objs:
-        sys.exit("storeorder: no objects in TC_OUT=%s -- run tools/toolchain/"
-                 "build.sh first.  Refusing to report a clean tree that was "
+        sys.exit("storeorder: no objects in TC_OUT=%s -- run `make tc` "
+                 "first.  Refusing to report a clean tree that was "
                  "never examined." % OURS)
     ours = {}
     for o in objs:

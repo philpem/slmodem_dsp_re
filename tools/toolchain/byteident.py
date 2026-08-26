@@ -551,11 +551,15 @@ def _staleness():
     """Newest source and newest period object, when the source is newer.
 
     A SILENT STALE MEASUREMENT IS THE FAILURE MODE THIS TOOL IS MOST PRONE TO.
-    `build/tc_out` is written only by `tools/toolchain/build.sh`; the gate does
-    not build it and no Makefile rule depends on it, so any change to `src/`
-    leaves it behind while every count here keeps rendering as a clean,
-    plausible, WRONG number.  That happened: a merge's grades were read off
-    objects compiled before the merge, and the figures looked entirely normal.
+    `build/tc_out` is written by `tools/toolchain/period.mk` and by nothing
+    else.  `make phase` still does not build it -- it needs docker and the
+    toolchain image, which not every checkout has.  `make byteident` DOES
+    now, and used not to, which is why this guard was written: any change to
+    `src/` left the objects behind while every count here kept rendering as a
+    clean, plausible, WRONG number.  That happened: a merge's grades were
+    read off objects compiled before the merge, and the figures looked
+    entirely normal.  The dependency is the real fix; this stays because it
+    also catches the directory being read by something that is not make.
     Findings F2400 and F2401 are the same shape -- a detector reporting on
     nothing and rendering as a pass.
     """
@@ -684,7 +688,7 @@ def main():
             allobjs.setdefault(k, []).append(o)
     if not ours:
         sys.exit("byteident.py: no objects in %s -- run "
-                 "tools/toolchain/build.sh first." % OURS)
+                 "`make tc` first." % OURS)
     stale_src, stale_obj = _staleness()
     if stale_src:
         sys.exit(
@@ -693,10 +697,10 @@ def main():
             "    newest source : %s\n"
             "    newest object : %s\n\n"
             "  `make phase` does NOT build %s -- it is written only by\n"
-            "  tools/toolchain/build.sh, so a merge that changes src/ leaves\n"
+            "  tools/toolchain/period.mk, so a merge that changes src/ leaves\n"
             "  these objects behind without touching anything the gate reads.\n"
             "  This reported pre-merge grades as current once already.\n\n"
-            "  Run:  sh tools/toolchain/build.sh"
+            "  Run:  make tc"
             % (OURS, stale_src, stale_obj, OURS))
 
     common = sorted(k for k in ours if k in blob)
