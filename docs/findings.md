@@ -92154,3 +92154,597 @@ did not.
 edits a header reaching several TUs cannot read one object and conclude
 anything; `--comdat` is the check, and F8144's instantiation-order lever is
 exactly the kind of work that needs it.
+### F8160. `Dialer.c +18`'s data-mode content is V.32, not dialler code — and no V.32 total can be quoted from a span label at all
+
+**READ F8112 FIRST; this corrects one number in it and strengthens its
+argument.** F8112 lifted the V.32 fence while this pass was running, and its
+tally listed the four open data-mode spans like this:
+
+    V32mod.c +39   31230 B      Dialer.c +18    9539 B
+    v32.c           1691 B      v22.c           1071 B
+
+and concluded **32,921** bytes were behind the fence — `V32mod.c +39` plus
+`v32.c` — with `Dialer.c +18` counted as something else and "the Dialer and
+V.22 passes" named as separate work still to land.
+
+**There is no Dialer pass in that 9,539 bytes: it is V.32 work.**
+
+**AND THE CORRECTION IS NOT "ADD 9,539 TO 32,921".** This finding's whole
+thesis is that a span label is a range marker and not an attribution, so it
+cannot then take 32,921 on trust — and that number does not survive the same
+test. Subtotalling `V32mod.c +39` by symbol name the way this finding does for
+`Dialer.c +18`:
+
+    V32mod.c +39, 31,230 B over 50 symbols
+        12,154   V.22           v22_originate, v22_retrain, v22_answer,
+                                v22_local_loop, the two rmloop2 halves,
+                                v22_data, DemodDataV22, V22FP_modem, V22_status
+        14,695   V.32           the V32*NextState family, V32FP_status,
+                                V32FP_control, v32_data, v32_handshake, and the
+                                twelve RxHdx* states
+         4,381   unattributed   connect_2400, connect_1200, the three Detect_*,
+                                Set{Rx,Tx}Rate, MakeTxData, {Gen,Det}Sequence,
+                                StoreReg, LoadReg, SetToneDetect, ResetRx and
+                                the two Init*Sequence
+
+**39% of F8112's "V.32" span is V.22 by name.** So adding 9,539 to 32,921 would
+compound an error rather than fix one.
+
+**THE NET CORRECTION GOES DOWN, NOT UP, AND THAT IS THE OPPOSITE OF WHAT THIS
+FINDING'S OPENING SUGGESTS.** F8112 swept in 12,154 B of V.22 and left out
+9,539 B of V.32, so it over-counts by at least 2,615. Subtotalling all four
+spans by name, with the twelve `RxHdx*` states settled by the relocation-range
+argument below and the five unsuffixed rate coders by address containment:
+
+    Dialer.c +18                      9,539     8,862 by name + 677 by address
+    v32.c                             1,691
+    V32mod.c +39, V.32 share         14,695
+                                    -------
+    V.32, firm                       25,925     58.6% of the 44,264 remaining
+    V32mod.c +39, unattributed      + 4,381     connect_*, Detect_*, Set{Rx,Tx}Rate,
+                                    -------     MakeTxData, {Gen,Det}Sequence,
+    V.32, ceiling                    30,306     StoreReg, LoadReg, ... 68.5%
+
+    V.22  = 12,154 (V32mod.c +39) + 1,071 (v22.c) = 13,225        29.9%
+
+**Both ends are below F8112's 32,921.** V.32 is **59-68%** of what remains of
+data mode, not 74%; V.22 is 30%; together they are **88-98%**. So F8112's
+CONCLUSION — that the fence made "cover the data modes" unreachable — is intact
+and, if anything, understated, because the two fenced modes together are nearer
+all of it than V.32 alone ever was. Only the single number moves.
+
+The 4,381 B are left unattributed on purpose. They carry no modulation in their
+names and the relocation-range argument that settled `TxHdx*`/`RxHdx*` has not
+been run on them; splitting the difference silently is what produced 32,921.
+
+Measured as follows. `tools/service.py` reports `Dialer.c +18` as the largest
+open **data-mode** span at **9,539 bytes**, which made it look like the obvious
+next reconstruction target now that `src/dialer/dialer.c` and `dialercfg.c`
+exist. **Every data-mode symbol in it is V.32.**
+
+`service.py --list data`, restricted to that span, is 35 symbols:
+
+    V32FP_recreate 3733   DemodDataV32 604   SetRxModeV32 577   SetTxModeV32 520
+    V32FP_modem 356   SetAdaptEcV32 319   V32FP_delete 293   TxHdxTRN 237
+    SetECRndTripDelayV32 233   TxHdxNoCarrier 217   TxHdxScrSequence 209
+    TxHdxData 194   TxHdxCarrierState 194   CodeESeq 183   V32FP_create 169
+    CodeRateSeq 164   CodeFinalRateSeq 164   TxHdxFinishFrame 152
+    DecodeRateSeq 152   TxHdxNull 116   TxHdxTone 113   V32TxHdxModem 96
+    SetRxLoopsV32 83   SetAdaptEqV32 79   GetRateV32 78
+    V32FP_GetCleanedSamples 53   RetrainDetectV32 53   RxClampV32 49
+    RenegotiateDetectV32 44   DescrambleDataV32 30   ScrambleDataV32 28
+    EpochDetectV32 17   SeedScramblerV32 15   RateToSeq 14   TxClockSyncV32 1
+
+**Those 35 sum to exactly 9,539** — the span's whole data-mode total — so the
+V.32-only subtotal is not a majority reading, it is the complete one. Any
+non-V.32 member would have left it short.
+
+**Five of the 35 carry no `V32` in their name** — `CodeESeq`, `CodeRateSeq`,
+`CodeFinalRateSeq`, `DecodeRateSeq` and `RateToSeq`, 677 B — and they are not
+an exception: at 0x821e0–0x824b0 they sit *inside* the contiguous V.32 block
+below, between `V32TxHdxModem` and `V32FP_modem`. They are V.32bis rate
+sequences.
+
+**The span is not all V.32, and the qualifier "data-mode" is doing real work.**
+`GetNextDigitAndReturnNextState`, 895 B at 0x7abb0, is in this same span and is
+genuine dialler code — but `service.py` puts it in the class *no entry point
+reaches*, not in DATA, so it is not part of the 9,539 and not part of what a
+data-mode pass would be scheduling.
+
+**And the span boundary bisects one module.** `nm -n` puts the whole V.32 block
+at 0x7fce0-0x844a0, in this order:
+
+    0x7fce0  V32TxHdxModem     |
+    0x7fd40  TxHdxTone         |  Dialer.c +18
+    ...      (8 TxHdx* states) |
+    0x82630  V32FP_modem       |
+    ---------------------------+ span boundary falls between two adjacent
+    0x827a0  v32_data          |  functions of the same module, 0x170 apart
+    0x82b00  v32_handshake     |  V32mod.c +39
+    0x838f0  V32RxHdxModem     |
+    0x83900  RxHdxTone         |
+    ...      (12 RxHdx* states)|
+    0x844a0  RxHdxNull         |
+
+The transmit half of the half-duplex state machine is in one span and the
+receive half in the other. So "is `Dialer.c` a tractable seam?" has a stronger
+answer than *entangled*: **there is no seam, because there is no dialler code
+in it.** README already says the span brackets nineteen translation units and
+that its contents are not attributed; this measures what they actually are.
+
+**The bare `TxHdx*`/`RxHdx*` names are V.32's, not shared with V.22.** They
+carry no modulation suffix, unlike `TxHdxDataB103` or `RxHdxStartV17`, so they
+could have been shared machinery. They are not: every relocation in the object
+naming one lies between 0x7f11f and 0x85bbe, inside the V.32 block, and V.22's
+own code begins at `V22FP_modem` 0x887b0 — 0xbf2 beyond the last of them. No
+V.22 function references any of the eighteen.
+
+**Consequence for planning, now that F8112 has lifted the fence.** The span is
+workable — it just is not a dialler pass and must not be scheduled as one. It
+is the transmit half of V.32's half-duplex machine plus `V32FP_*`, and it
+should be taken WITH `V32mod.c +39`, because the two halves of one state
+machine share the `V32FP_*` object and the `TxHdx*`/`RxHdx*` families are
+written against each other. Splitting the work along the span labels would
+split it exactly where the module is most coupled.
+
+**And this was the whole of what was open outside the fences.** With V.32 and
+V.22 set aside, what `service.py` classed as DATA at the start of this pass was
+`FPM_TONE_find_rev` (547 B) and the `dp_*` registration functions
+(`prop_dp_init`/`_exit`, `dp_vpcm_exit`, `dp_call_exit`, 186 B) — and the
+registration functions are not available for a different reason, F8165. That
+narrowness is itself the argument F8112 makes from the other side.
+
+### F8161. `FPM_iir_filt_block` is `FPM_iir_filt` inlined over a block, and it writes back a register it never assigns when `sections` is zero
+
+`FPM_iir_filt_block` (0x0a8b10, 287 B) has no `call` instruction and no
+relocation. Its inner loop is `FPM_iir_filt`'s body **instruction for
+instruction** — the same `+0x2000 >> 14` on the two recursive terms, the same
+bare `>> 14` on the two feedforward ones, the same clamp to +0x7fff and
+-0x7fff rather than -0x8000, and the same `(short)ff + ((c[4]*w) >> 14)`
+narrowing at the end. GCC 3.4.2 at `-O3` inlines a GLOBAL function within its
+own translation unit, and `FPM_iir_filt` keeps its own symbol regardless; this
+is F7940's observation with the callee visible rather than lost.
+
+The source is one line:
+
+    for (i = 0; i < count; i++)
+        samples[i] = FPM_iir_filt(samples[i], coeff, state, sections);
+
+with `short i` — the object re-narrows the counter with `cwtl` after each
+increment and compares 16 bits.
+
+**IT IS NOT "the source that REPRODUCES it", and this finding said so before
+the codegen tier was run.** `byteident.py --why FPM_iir_filt_block` puts ours
+at **72 instructions against the blob's 86, 29 bytes short** — grade SIZE, and
+grade 1 rejected as lever 2, a missing statement rather than a renaming. What
+IS confirmed is the inlining: our build emits no `call` either, so the callee
+does vanish into the loop. The remaining 14 instructions are open, and F8166
+records where the other three in this batch stand and why the number is not
+alarming. The wording is corrected rather than the code, because the
+differential tier is green and the codegen residual is the ordinary state of a
+first reconstruction here — but "reproduces" is a word that has to be earned by
+`byteident`, and it was written before the measurement.
+
+Landed and green on the first attempt:
+`t_fpm_iir` gains **61,197 checks** over seven fragment sizes, three real
+coefficient sets, the unstable pair, and a block-versus-repeated-single
+cross-check against the blob's `FPM_iir_filt`.
+
+**The defect.** `sections - 1` is hoisted to `(%esp)` and the inner loop is
+guarded at 0x0a8b66 with `cmpw $0xffff`. The write-back at 0x0a8c19 is
+`mov %dx,-0x2(%edi)`, and `%edx` is assigned **only** at 0x0a8bf5, inside that
+loop. On the `sections == 0` path the store commits whatever the caller left in
+`%edx`; the correct value, the untouched sample, is still in `%ebx`.
+Unreachable — nothing in the object calls this symbol at all — and recorded as
+**deviation D393**, not reproduced, and not behind `DSPLIB_REPRODUCE_BUGS`
+because there is no behaviour to reproduce: the object's output on that path is
+a property of its caller's registers, not of its own code.
+
+**`t_fpm_iir` deliberately does not drive `sections == 0`.** A differential
+check there would be comparing two arbitrary choices and would pass or fail on
+register weather. `FPM_iir_filt_II`, in the same translation unit, has a
+well-defined zero-section case and **is** tested on it — the difference is that
+its accumulator stayed in one register.
+
+### F8162. `FPM_lmsupd2` is `ecc_adapt`'s arithmetic as a library routine, and that is what names its two multipliers
+
+`FPM_lmsupd2` (0x0abc60, 182 B) is `FPM_lmsupd` with the correction formed in
+two rounded stages instead of one:
+
+    FPM_lmsupd    (hist[k] * err + 0x20000) >> 18
+    FPM_lmsupd2   ((short)((hist[k] * mu + 0x10) >> 5) * err + 0x10000) >> 17
+
+The walk is identical. The `(short)` between the stages is the object's `cwtl`
+at 0x0abcb1 and is load-bearing: fold the two shifts into one `>> 22` and the
+function differs only where the intermediate leaves 16 bits, which small `mu`
+never does. `t_fpm_lmsupd` counts the inputs where the narrowing actually
+changed the value and **asserts the count is non-zero**, because without that
+the test passes against a version with no cast at all.
+
+**Naming it was the interesting part, and the answer did not come from a
+caller.** `readelf -r` finds **no relocation naming `FPM_lmsupd2` anywhere in
+`dsplibs.o`**, and none naming `FPM_block_update` or `FPM_circ_dotp2` either;
+`service.py` puts all three in the class no entry point reaches. So the strong
+evidence classes — a format string, a caller that types it — are both
+unavailable, and argument position alone (`err` sits in the slot `FPM_lmsupd`
+calls `err`) is the weakest class this tree recognises.
+
+**What settled it is a reconstructed sibling.** `ecc_adapt` in
+`src/dsp/fpm_ecc.c` is this arithmetic exactly — same `0x10 >> 5` stage, same
+narrowing, same `0x10000 >> 17` stage, same order — and it was recovered from
+the code `FPM_ECC_cancel` inlines, where the echo canceller's context does
+supply the meanings: the multiplier on the history sample is the adaptation
+step, the one on the narrowed product is the residual. Two independent lines
+landing on the same assignment is what makes `mu`/`err` worth writing down
+rather than `mul1`/`mul2`.
+
+**The argument order is the reverse of the application order** — `err` is the
+fifth argument and is applied second; `mu` is the sixth and is applied first.
+So the signature is `FPM_lmsupd`'s with `mu` appended, not the arithmetic's.
+The header says so, because this is exactly the kind of thing a future reader
+transposes.
+
+### F8163. `FPM_block_update`'s accumulator is 16-bit and its circular wrap is one conditional add, not a modulo
+
+`FPM_block_update` (0x0abd20, 244 B), nine arguments, no caller in the object.
+It correlates a block of `count` samples against a circular history and adds
+the scaled result into each of `taps` coefficients. Two properties are easy to
+smooth over and are not smoothable:
+
+- **The accumulator is a `short`.** `movswl %dx,%esi` at 0x0abdbd re-truncates
+  it on every inner iteration, so this is not an `int` narrowed at the end and
+  a long correlation wraps repeatedly. **But see below — this one is not
+  observable, and saying so is the point of the finding.**
+- **The wrap is a single conditional add.** The running index descends in its
+  own register and 0x0abdd4-0x0abddd adds `hlen` to a *copy*, leaving the
+  running value alone. Once it has fallen below `-hlen` the "wrapped" index is
+  still negative and the load goes below `hist`. `pos = (pos + hlen) % hlen`,
+  or updating the running value in place, is a different function, and the
+  mutation that makes it one **is caught**.
+
+`pos` is 16-bit throughout — the object reads it with `movswl %cx,%eax` every
+iteration — so its decrement wraps at 16 bits.
+
+**THE ACCUMULATOR'S WIDTH IS UNOBSERVABLE FROM THE OUTPUT, AND THE FIRST DRAFT
+OF THIS FINDING CLAIMED OTHERWISE.** The mutation that widens `acc` to `int`
+and drops its cast came back NOT CAUGHT, and it is right to. By induction the
+two accumulators are congruent modulo 65536 at every step — the narrow one is
+`trunc16(acc + p)`, the wide one is `acc + p`, and `trunc16` is the identity
+modulo 65536 — and everything downstream is linear over that modulus, because
+`acc` is used exactly once, in `(short)(coeff[i] + gain * acc)`. So
+`gain * acc` agrees modulo 65536 too and the stored coefficient is bit-
+identical for **every** input. No fixture separates them. The width is settled
+by the object's instruction and by the codegen tier, not by this one, and the
+mutation is recorded `equivalent` with that proof rather than deleted.
+
+**The trap that produced the wrong first draft is worth more than the result.**
+`t_fpm_lmsupd` counts how often the accumulator actually truncated, the count is
+large, and the guard asserting it is non-zero passes. That looks like coverage
+and is not: **it proves the truncation HAPPENS, not that it MATTERS.** A
+non-vacuity guard licenses the claim "this input set reaches the branch"; it
+does not license "this test can tell the branch from its alternative". Only the
+mutation tier can say the second, and here it said no.
+
+**Two mutations in this one pass turned out equivalent for the same reason** —
+this and `fpmiirblock`'s `the section output is not narrowed to 16 bits`. Both
+are intermediate narrowings whose only consumer is itself narrowed to 16 bits.
+That is a recognisable shape: **an intermediate `(short)` is behaviourally dead
+wherever every path from it to an output passes through another 16-bit
+truncation with only additions and multiplications in between.** It is still
+worth writing, because it is what makes the compiler emit the object's
+`movswl`; it is simply not this tier's to adjudicate. Look for the shape before
+writing the mutation, not after.
+
+**What IS checked here, and how the out-of-contract read is made legal.**
+`t_fpm_lmsupd` simulates the index walk alongside the call and counts how often
+the wrapped index was still negative, asserting the count is non-zero. To make
+that a defined read rather than undefined behaviour in the harness, `hist`
+points into the **middle** of a 2,112-word array, so the out-of-contract indices
+are ordinary reads of initialised memory on both sides. The comparison stays
+exact; only the domain is wider than any caller would use.
+
+The three history/sample/coefficient loads are all `movzwl` and every one of
+them is discarded above bit 15 by a 16-bit store — dead extensions in the sense
+of F614, carrying no type information either way.
+
+### F8164. `FPM_circ_dotp2` is `ecc_filter` as a library routine, and its translation unit is an inference rather than a derivation
+
+`FPM_circ_dotp2` (0x0a6d30, 195 B) is the generic form of `ecc_filter`: the
+same circular walk — `widx` down to 0, then `taps - 1` back down to `widx + 1`,
+coefficients advancing across both halves — and the same `>> 3` on each
+product. It generalises it two ways: the coefficients advance by a **stride**
+rather than by one, and it is told the **total** shift and applies the residual
+`shift - 3` to the sum itself. `ecc_filter` leaves that residual 14 to
+`FPM_ECC_cancel`, so `shift == 17` is `ecc_filter` plus what its caller does —
+which is how the sixth argument was identified at all.
+
+`FPM_ECC_cancel` contains **no `call` instruction anywhere in its 2,064 bytes**,
+so its copy of the loop is inlined and this symbol stands alone, unreferenced,
+exactly as `FPM_lmsupd2` and `FPM_block_update` do. All three look like a
+library the author shipped and then hand-inlined for speed.
+
+**The translation unit is not settled by the address, and this file says so
+rather than pretending otherwise.** `tools/tuattrib.py` reports it `ambiguous`
+and brackets it `fpm_div.c|fpm_ecc.c` — it sits between `FPM_div_32`
+(0x0a6c90) and `FPM_ECC_cancel` (0x0a6e00) with no surviving local symbol on
+either side to anchor it. It is placed **first in `src/dsp/fpm_ecc.c`** because
+a circular dot product is that file's own inner loop and has nothing to do with
+division, and because first-in-file reproduces the object's emission order
+under either attribution. **That is an inference from content**, the weakest of
+the three classes, and it is labelled as one in the source comment. If a later
+pass finds a `fpm_div.c` local below 0x0a6d30, it moves.
+
+**`shift < 3` is out of contract.** The residual is computed as `shift - 3`
+into `%cl` and x86 masks a shift count to five bits, so `shift == 2` shifts
+right by 31 rather than left by one. Not recorded as a deviation — nothing
+calls it, so there is no behaviour to preserve — and the tests stay at
+`shift >= 3`.
+
+### F8165. The `dp_*` registration functions look like 186 bytes of free data-mode work and are fenced by their closure
+
+`prop_dp_init` (0x0, 44 B), `prop_dp_exit` (0x30, 44 B), `dp_vpcm_exit` (70 B)
+and `dp_call_exit` (28 B) are the only other unwritten symbols `service.py`
+classes as DATA outside V.32 and V.22, and at 186 bytes total they read as an
+easy afternoon.
+
+They are not available. `tools/closure.py --missing prop_dp_init prop_dp_exit
+dp_vpcm_exit dp_call_exit` pulls in the entire V.32 and V.22 registration
+world — `v22_ops`, `v32_ops`, `V32NextState`, `V32_TX_MODE`, `V32_RX_MODE`,
+`V32_RATE_SEQ`, `V32_ESEQ`, `V32_FINAL_RATE_SEQ`, `V32_CONNECT`, `RATEv32`,
+`SnrToRetrainTable`, `SMCv32_CFG`, `PPSv32_ICOFFS`, `PPSv32_QCOFFS`,
+`SREv32_CFG`, `V32_CFG`, `PPSv32_CFG`, `V32_CTL`, `V32_S_DATA_COEF`,
+`V32DiconnectThreshTable`, `V22_PROTOCOL` and the rest. `prop_dp_init` is the
+top-level datapump registration and reaches every datapump the object has, so
+it is the last thing that can be written, not the first.
+
+**The general point, since this is the second time in one pass:** a symbol's
+byte count says nothing about whether it can be landed. What decides is the
+closure, and for a registration or dispatch function the closure is the whole
+system. Cost the closure before costing the bytes.
+
+### F8166. The codegen tier on this batch: four functions 13-29 bytes short, which is exactly where their already-accepted siblings sit
+
+Every function in this pass is green on the differential tier under GCC 3.4.2.
+None of them is byte-identical, and the numbers only mean something beside the
+functions that were already accepted in the same files:
+
+| symbol | grade 0 | instructions, blob vs ours | status |
+|---|--:|---|---|
+| `FPM_iir_filt` | 10 B differ | 59 / 55 | **accepted, earlier pass** |
+| `FPM_iir_filt_II` | 19 B differ | 73 / 65 | **accepted, earlier pass** |
+| `FPM_lmsupd` | 22 B differ | 54 / 47 | **accepted, earlier pass** |
+| `FPM_lmsupd2` | 13 B differ | 65 / 57 | this pass |
+| `FPM_circ_dotp2` | 16 B differ | 64 / 58 | this pass |
+| `FPM_block_update` | 27 B differ | 71 / 69 | this pass |
+| `FPM_iir_filt_block` | 29 B differ | 86 / 72 | this pass |
+
+`byteident.py` rejects all seven at grade 1 as **lever 2 — a missing or added
+statement, not a renaming**. So the residual is of one kind throughout these
+two files and predates this batch; the three new ones are not worse than the
+three that were already there, and two of them are better. This is the ordinary
+state of a first reconstruction in this tree and the refinement waves are what
+close it. Recorded so the next pass has a baseline rather than a starting point
+it has to re-derive.
+
+**The ratchet fails, and not because of this batch.**
+`tools/toolchain/compare.py --ratchet` reports `same_size was 71, now 52`.
+Its stored baseline is `{compared: 986, identical: 350, same_size: 71}` against
+a tree that now compares **1255** symbols with **627** identical. A function
+moving out of *same size, different instructions* and into *identical* is a
+gain that shows up in that field as a loss, and 277 of them have moved since
+the baseline was blessed. The floor is stale tree-wide — F556's failure mode,
+"a gain measured at a merge and never blessed" — and it is left for whoever
+next re-blesses it deliberately, because re-blessing it here would bury the
+number under an unrelated batch.
+
+### F8167. Putting a new function first in an existing file cost nothing here, and it was measured rather than argued
+
+`FPM_circ_dotp2` was placed **first** in `src/dsp/fpm_ecc.c`, ahead of
+`ecc_filter`, `ecc_adapt`, `FPM_ECC_cancel`, `FPM_ECC_init` and
+`FPM_ECC_free`. Register allocation follows a translation unit's emission order
+(F7796, F7800), and F8111 — the commit this pass started from — is a 22-byte
+bystander regression that was *"invisible to every counter the project uses"*
+and landed only because it was disclosed. `make phase` cannot see this class of
+change at all.
+
+So it was A/B'd: build `build/tc_out` with `master`'s `fpm_ecc.c`, keep the
+object, restore the new one, rebuild, and compare the **raw `.text` bytes** of
+each symbol between the two objects.
+
+    FPM_ECC_cancel   BYTE-IDENTICAL (1873 B,  0 relocations)
+    FPM_ECC_init     BYTE-IDENTICAL ( 599 B, 12 relocations)
+    FPM_ECC_free     BYTE-IDENTICAL (  98 B,  6 relocations)
+
+Relocation targets compared by name as well as the bytes. `ecc_filter` and
+`ecc_adapt` are `static` and fully inlined, so they have no symbol on either
+side and are covered by `FPM_ECC_cancel`'s 1,873 bytes being unmoved.
+
+**The first attempt at this measurement reported all three CHANGED, and was
+measuring itself.** It compared `objdump -d` text, which prints **absolute**
+branch targets: adding 195 bytes of function ahead of them shifts every target
+in the file and every `jmp` reads as a difference. Same size, same instruction
+count, "changed" — which is precisely the artefact `byteident.py`'s header
+warns about and says cost 310 functions a false verdict. Comparing raw bytes
+instead makes branch displacements PC-relative and therefore invariant, and the
+answer inverted. **An A/B tool that has not been made to handle relocation and
+addressing is reporting its own artefacts**, and the failure mode is quiet:
+CHANGED at an identical instruction count reads as a real regression.
+
+### F8168. `FPM_phasor_dp` is a double-precision phasor, it is NOT blocked, and its closure requirement is the same spurious one `FPM_phasor` already carries
+
+Left unwritten in this pass for time, not for an obstacle, and the next pass
+should not re-derive any of this.
+
+`FPM_phasor_dp` (0x0a93e0, 246 B) is `FPM_phasor` with a **fractional phase**
+carried between calls. Its argument is a six-field structure, two fields wider
+than `struct fpm_phasor`:
+
+    +0x00 phase        +0x06 inc
+    +0x02 cos          +0x08 fractional phase, written back each call
+    +0x04 sin          +0x0a fractional increment
+
+The trigonometry is `FPM_phasor`'s exactly — same `>> 5` index, same `>> 8`
+quadrant, same odd-quadrant reflection (`frac = 32 - frac`, `idx = ~idx`), same
+`& 0xff`, same interpolation, same `(unsigned short)` narrowing before the
+quadrant sign, same `>> 15`. So `phasor_split`, `interpolate` and
+`phasor_value` in `src/dsp/fpm_phasor.c` are reusable verbatim. Only the
+advance differs:
+
+    acc = ((phase + inc) << 15) + ((frac_phase + frac_inc) >> 1);
+    if (acc > 0x3fffffff)
+        acc -= 0x40000000;
+    p->phase      = (short)(acc >> 15);
+    p->frac_phase = (short)(acc - ((short)(acc >> 15) << 15));
+
+The `>> 1` on the sum of the two fractional fields is the object's `sar $1,%ebx`
+at 0x0a949e and is not explained by anything visible; do not name those two
+fields for a Q-format on the strength of it.
+
+**It reads the sign tables unmasked, exactly as `FPM_phasor` does** — relocations
+at 0x0a944b against `FPM_cos_sign` and 0x0a9472 against `FPM_sin_sign` — so it
+is D392's third user and must index `FPM_cos_sign_ext` / `FPM_sin_sign_ext`
+with the `FPM_PHASOR_SIGN_BELOW` bias. `src/dsp/fpm_phasor.c` already says so,
+in a note written for whoever writes this function.
+
+**Its closure looks blocking and is not.** `closure.py --missing FPM_phasor_dp`
+demands `FPM_cos_table` and `FPM_sin_table` (0x0cde0 and 0x0cbc0, 514 B each,
+`R`). Those are unwritten as *global symbols* and always will be: `FPM_phasor`
+is written, passes, and references the same two tables at 0x0a934e, 0x0a9356,
+0x0a9376 and 0x0a9385, because this tree carries their contents as
+`static const unsigned short fpm_cos_table[257]` / `fpm_sin_table[257]` in
+`src/dsp/fpm_phasor.c`. `closure.py` computes from the BLOB's relocations and
+cannot see that a factoring difference has already satisfied the requirement.
+**A closure entry naming a table our tree carries under a different linkage is
+not a blocker** — check whether an already-written sibling depends on the same
+symbol before believing it, which is the opposite mistake to F8165's.
+
+### F8169. The `r4c[84]` span was split by `FPM_TONE_create`'s clear loops, not by the function that reads it — and the same pass refuted a standing guess about `+0x28`
+
+*Delegated arm of this pass; `FPM_TONE_find_rev` (0x0ab170, 547 B) and
+`FPM_TONE_filter` (0x0ab3a0, 235 B), landed in the object's own emission order
+between `_detect` and `_kill`.*
+
+`include/dsplib/fpm_tone.h` carried 84 unmodelled bytes as `r4c[84]`. They are
+now five named fields — `rev_age` (+0x4c), `rev_corr` (+0x4e), `rev_energy`
+(+0x50), `rev_hist[80]` (+0x52) and `rev_idx` (+0xf2) — each with a
+`TONE_ASSERT_OFF`, and the whole 0x108-byte object is modelled.
+
+**The boundaries came from the CONSTRUCTOR, which is the stronger source.**
+`FPM_TONE_create` clears the object in two loops, +0x40..+0x50 and +0x52..+0xf0,
+and then stores zero to +0xf2 separately. Those bounds fix `rev_hist` at exactly
+80 words at +0x52 with a one-word index behind it, and they were readable in the
+object *before* `FPM_TONE_find_rev` was disassembled at all. A field split
+derived from a constructor's clear bounds is independent of how any reader
+happens to index; a split derived from the reader is a restatement of that
+reader's arithmetic.
+
+**AND THE HEADER'S STANDING GUESS ABOUT `+0x28` IS REFUTED.** It read that
+`rev_count` is a field *"FPM_TONE_find_rev and FPM_TONE_kill presumably use"*.
+Neither touches it. `find_rev` touches 0x1c, 0x1e, 0x4c, 0x4e, 0x50, 0x52,
+0xf2, 0xf4 and 0xf8; `filter` touches 0x14, 0x2c, 0x30, 0x34; `kill` touches
+0xfc and 0x100. `+0x28` is the **generator's** tick counter, written and read by
+`FPM_TONE_generate` alone, and the receive side's counter is the separate
+`rev_age` at +0x4c, which counts SAMPLES rather than ticks.
+
+That refutation is worth more than the fields. Its evidence class is **usage
+inference over a COMPLETE symbol set** — every function in the translation unit
+is now written, so the enumeration is exhaustive rather than a sample. Ordinary
+usage inference is this tree's weakest class precisely because an unread
+function might be the one that uses the field; when there are none left, the
+same method becomes decisive. **A guess phrased as "presumably X uses this"
+expires the moment X is written, and nothing goes back to check.** This one had
+been carried in a header comment for as long as the field had a name.
+
+`rev_block` (+0xf4) is settled at evidence class 2, callee-typed: it is the
+`const short *coeff` argument of `FPM_iir_filt_II(samples, rev_block, rev_acc,
+1, count)` — one biquad's `{ b0, b2, b1, a2, a1 }` — corroborated by `create`'s
+`malloc(10)`. `rev_acc` (+0xf8) is that filter's four-word direct-form-I state
+by the same argument, corroborated by `malloc(8)`. `create` builds the section
+at phase zero, so it is a notch at DC.
+
+### F8170. `FPM_TONE_filter` has no caller, and it is the ABSENCE of a relocation that proves it
+
+`readelf -r` finds relocations naming `FPM_TONE_detect` (many), `FPM_TONE_kill`
+(two, both in `RxHdxPhsReversal`) and `FPM_TONE_find_rev` (exactly one, at
+`.text` 0x083c16) — and **none naming `FPM_TONE_filter`**.
+
+This is F306/F333 used in the direction that actually proves something. A
+relocation being PRESENT only says the symbol is `GLOBAL`; its ABSENCE says the
+reference is local or that there is no reference. `FPM_TONE_filter` is `T`, so a
+call from inside its own translation unit would still have produced a
+relocation — which means the absence here is conclusive rather than suggestive.
+The symbol is entry-point-shaped and entirely unreferenced, exactly like
+`FPM_lmsupd2`, `FPM_block_update` and `FPM_circ_dotp2` in F8162 and F8164. That
+is now four in one pass, all of them library routines the object ships and never
+calls.
+
+**`FPM_TONE_find_rev`'s single caller types its return.** The one relocation at
+0x083c16 lies inside `RxHdxPhsReversal` (0x083b20-0x083db0), which narrows the
+result with `movswl %ax,%edi` — and that, not a guess, is where the `short`
+return type comes from. `RxHdxPhsReversal` is V.32 (F8160), so the tone
+reversal finder is reached from the V.32 half-duplex receive machine.
+
+### F8171. `FPM_TONE_find_rev` does not detect phase reversals on its own built-in configuration, and the test keeps the degenerate case as a control
+
+It times sign changes of the input's autocorrelation at a lag of `cfg.f1e`
+samples: it filters the caller's buffer in place through the single biquad at
+`rev_block`, then per sample slides a lag-`f1e` correlation (window `f1e`
+products) and an energy sum (window `2*f1e` squares) over `rev_hist`, and
+reports `rev_age >> 3` when `2*corr < (cfg.f1c * energy) >> 15` and
+`rev_age > 160`.
+
+**A lag correlation is a 180-degree phase-reversal detector only where the
+carrier's period divides the lag**, and the built-in configuration's does not.
+`f1e` is 40 and the built-in tone is 2100 Hz, so at 8 kHz the lag is 40 / (8000
+/ 2100) = **10.5 cycles** — half a cycle out. A steady, entirely un-reversed
+2100 Hz tone therefore correlates *negatively* at that lag, the threshold is
+satisfied continuously, and the function degenerates into a 20 ms metronome.
+Measured, and kept in `t_fpm_tone` as a control case rather than described.
+
+At 1800 Hz the same lag is exactly 9 cycles and it behaves as its name says.
+Its caller being V.32's `RxHdxPhsReversal` (F8170) makes 1800 Hz the plausible
+operating point — but **no configuration that caller actually passes has been
+read**, so that half is labelled inference and is deliberately kept out of the
+source comments.
+
+Two implementation details that a plausible-looking rewrite gets wrong: both
+sums run as **32-bit** values across the whole block and are only ever *stored*
+saturated, so `corr = SAT(corr + term)` diverges and is now a mutation; and
+`count` is **compared against, not counted down through**, so a negative count
+does nothing — the opposite of every other function in the file.
+
+`t_fpm_tone` gains 17 groups and **680,960 checks**, comparing return value,
+the in-place buffer and the whole object. New mutation suite `fpmtonerev`, **29
+of 29 caught**.
+
+**One mutation escaped first time round and the reason is a fixture trap worth
+naming.** *"the second loop covers the write position a second time"* survived
+because at the config's `cfg.len` of 53 the kernel ends exactly at its
+allocation, so the extra tap read whatever the allocator had left there — which
+was zero. The fix was not a better mutation but a better fixture: a
+`taps_override` that shortens `cfg.len` to 40 after creation, so there is a real
+tap one place past the end. **A buffer that ends at its allocation makes an
+off-by-one unobservable, and a zeroed heap makes it look deliberate.**
+
+### `cfg.f1c` and `cfg.f1e` are now decodable, and the rename is a PENDING TASK
+
+Both are bare `fNNNN` names — CLAUDE.md's worst of the four naming states, *an
+offset wearing a name* — and this pass settled what they are:
+
+    cfg.f1c   +0x1c   16384   the Q15 threshold fraction, used as
+                              `2*corr < (f1c * energy) >> 15`, i.e. one half
+    cfg.f1e   +0x1e      40   the correlation LAG in samples, and the modulus
+                              of the `rev_hist` index is 2 * this
+
+Evidence class 2 for both — the arithmetic in `FPM_TONE_find_rev` types them,
+the way a callee's signature would. `include/dsplib/fpm_tone.h` documents both
+against the old spellings.
+
+**The rename was not done, and deliberately.** The designated initialiser lives
+in `src/dsp/fpm_tone_cfg.c`, outside the delegated arm's file list, and a rename
+that touches a config file every datapump reads is a gate cycle of its own.
+Recorded here rather than left in a hand-over because that is D28's precedent in
+`docs/fastpass.md`: an unrecorded observation is unrecoverable, and it will not
+be noticed twice. Whoever renames them should do `fpm_tone_cfg.c`, the header
+and the two uses together, and the change is a pure compile-time substitution —
+`compare.py` must not move.

@@ -315,6 +315,18 @@
     "the two sums land in the other member": "caught"
    }
   },
+  "fpmcircdotp": {
+   "key": "231d1f41f25cf32d213fab89e4d29f792e244e721c3690cca6995bf0d2f3032c",
+   "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the coefficient pointer restarts at the base for the second half": "caught",
+    "the coefficients advance by one rather than by the stride": "caught",
+    "the per-product shift is applied to the sum instead": "caught",
+    "the residual shift is the whole shift, not shift - 3": "caught",
+    "the second half of the walk starts at taps rather than taps - 1": "caught",
+    "the second half of the walk stops at widx rather than above it": "caught"
+   }
+  },
   "fpmfserecv": {
    "key": "1de8d5608fd76384895d4feae2180d47481768593bb8a13662daf36ffce84bdf",
    "summary": "45 mutations: 43 caught (43 by test, 0 by strings), 0 NOT caught, 0 unusable, 2 equivalent, 0 MIScounted",
@@ -364,6 +376,36 @@
     "the write index wraps one entry late": "caught",
     "training ends one symbol early": "caught",
     "training holds the integrator down, as V.22 does": "caught"
+   }
+  },
+  "fpmiirblock": {
+   "key": "2f4ea01709792cc93b6e722f61bf5a31fe80c446e5474807b162d0c586bd514d",
+   "summary": "9 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the block filters every sample but the last": "caught",
+    "the block is filtered back to front": "caught",
+    "the feedforward terms round like the recursive ones": "caught",
+    "the form I cascade shifts numerator and denominator together": "caught",
+    "the form I cascade's coefficients are in textbook order": "caught",
+    "the recursive node's lower clamp is symmetric at -0x8000": "caught",
+    "the recursive node's lower clamp tests strictly less than": "caught",
+    "the recursive terms truncate like the feedforward ones": "caught",
+    "the section output is not narrowed to 16 bits before the last term": "equivalent"
+   }
+  },
+  "fpmlmsupd2": {
+   "key": "47e7aded6f3acef1f28ec4058dd21055cb355a755a9444cd3202097d93fc79bc",
+   "summary": "9 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "block_update accumulates in 32 bits instead of re-truncating each iteration": "equivalent",
+    "block_update replaces the coefficient instead of accumulating into it": "caught",
+    "block_update's circular wrap is a modulo rather than one conditional add": "caught",
+    "block_update's index advances instead of retreating": "caught",
+    "block_update's starting index does not back off by the tap number": "caught",
+    "lmsupd2's first stage truncates instead of rounding": "caught",
+    "lmsupd2's intermediate is not narrowed to 16 bits between the two multiplies": "caught",
+    "lmsupd2's second stage shifts by 18, as the single-stage form does": "caught",
+    "lmsupd2's two multipliers are transposed": "caught"
    }
   },
   "fpmmtd": {
@@ -509,7 +551,7 @@
    }
   },
   "fpmtonekill": {
-   "key": "950af3134891e06cc7c570e95bff191795011a46fa64dca980436041933a382e",
+   "key": "89082ab26303390791bd9feba61b21f3fdde3797c534759956e34f02049e52df",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "one sample short: an off-by-one in the count": "caught",
@@ -518,6 +560,41 @@
     "the section count and the sample count are transposed": "caught",
     "the tone is left in: the call is dropped entirely": "caught",
     "two biquads instead of one, so it reads five coefficients and four state words past the end": "caught"
+   }
+  },
+  "fpmtonerev": {
+   "key": "1b95521a23c2712de70691401be56e9959c1f0e7d497f950ef4f7ca83f81e7c3",
+   "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "count is counted down through 16 bits, as the rest of the module does": "caught",
+    "filter: a negative count does nothing, as FPM_TONE_find_rev's does": "caught",
+    "filter: the correlator starts at the second tap of the kernel": "caught",
+    "filter: the input is consumed twice, so the output lands one sample on": "caught",
+    "filter: the output keeps one bit too many": "caught",
+    "filter: the second loop covers the write position a second time": "caught",
+    "filter: the write index wraps one place late": "caught",
+    "filter: the write position is not carried between calls": "caught",
+    "no debounce: every reversal is reported however recent the last": "caught",
+    "nothing is ever reported": "caught",
+    "the age counter never advances": "caught",
+    "the clamp is folded back into the running correlation": "caught",
+    "the correlation is compared unscaled, without its factor of two": "caught",
+    "the correlation is stored back unclamped": "caught",
+    "the correlation term truncates instead of rounding": "caught",
+    "the debounce is 200 samples rather than 160": "caught",
+    "the debounce is off by one: 159 rather than 160": "caught",
+    "the delay line wraps at the LAG rather than at twice it": "caught",
+    "the delayed tap is taken ahead of the write position, not behind it": "caught",
+    "the energy window subtracts the delayed tap rather than the oldest": "caught",
+    "the input biquad is skipped, so the search sees the raw buffer": "caught",
+    "the input biquad runs the detector's notch and state instead of its own": "caught",
+    "the interval is reported in samples rather than eight-sample ticks": "caught",
+    "the negative delayed index wraps by one lag instead of two": "caught",
+    "the reversal test is the wrong way round": "caught",
+    "the sample is never pushed into the delay line": "caught",
+    "the term leaving the correlation window is never subtracted": "caught",
+    "the threshold is taken against the unclamped energy": "caught",
+    "the two energy terms share one truncation instead of one each": "caught"
    }
   },
   "gtonedet": {

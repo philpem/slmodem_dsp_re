@@ -1,0 +1,55 @@
+[
+ {
+  "note": "fpm_iir.c had no mutation set at all until FPM_iir_filt_block was written (finding F8161).  The block form is one statement, so most of this set attacks the ENGINE it inlines -- the asymmetric clamp and the two rounding asymmetries that `FPM_iir_filt`'s own file header says must be preserved -- plus the two things the block form adds: the write-back position and the direction of the walk."
+ },
+ {
+  "note": "`sections == 0` is not attacked, because it is not tested: the object writes back a register it never assigns on that path, so there is no reference behaviour to compare against (deviation D393).  A mutation there would be recorded against a claim nobody makes."
+ },
+ {
+  "label": "the block filters every sample but the last",
+  "find": "\tfor (i = 0; i < count; i++)\n\t\tsamples[i] = FPM_iir_filt(samples[i], coeff, state, sections);",
+  "replace": "\tfor (i = 0; i < count - 1; i++)\n\t\tsamples[i] = FPM_iir_filt(samples[i], coeff, state, sections);"
+ },
+ {
+  "label": "the block is filtered back to front",
+  "find": "\t\tsamples[i] = FPM_iir_filt(samples[i], coeff, state, sections);",
+  "replace": "\t\tsamples[count - 1 - i] = FPM_iir_filt(samples[count - 1 - i],\n\t\t\t\t\t\t      coeff, state, sections);"
+ },
+ {
+  "label": "the recursive node's lower clamp is symmetric at -0x8000",
+  "find": "\t\telse if (acc <= -0x8000)\n\t\t\tw = -0x7fff;",
+  "replace": "\t\telse if (acc <= -0x8000)\n\t\t\tw = -0x8000;"
+ },
+ {
+  "label": "the recursive node's lower clamp tests strictly less than",
+  "find": "\t\telse if (acc <= -0x8000)",
+  "replace": "\t\telse if (acc < -0x8000)"
+ },
+ {
+  "label": "the feedforward terms round like the recursive ones",
+  "find": "\t\tff = (coeff[1] * w1) >> 14;",
+  "replace": "\t\tff = (coeff[1] * w1 + 0x2000) >> 14;"
+ },
+ {
+  "label": "the recursive terms truncate like the feedforward ones",
+  "find": "\t\tacc = acc_in + ((coeff[0] * w1 + 0x2000) >> 14);",
+  "replace": "\t\tacc = acc_in + ((coeff[0] * w1) >> 14);"
+ },
+ {
+  "label": "the section output is not narrowed to 16 bits before the last term",
+  "find": "\t\tacc_in = (short)((short)ff + ((coeff[4] * w) >> 14));",
+  "replace": "\t\tacc_in = (short)(ff + ((coeff[4] * w) >> 14));",
+  "equivalent": true,
+  "why": "A CODEGEN CLAIM, NOT A BEHAVIOURAL ONE, AND THIS TIER CANNOT REACH IT. `(short)ff` is congruent to `ff` modulo 65536, and the whole expression is narrowed to `short` again on assignment, so `(short)((short)ff + x)` and `(short)(ff + x)` agree on EVERY input by construction -- there is no history, coefficient set or clamp state that separates them, and widening the fixture cannot help. What the inner cast buys is the object's own `movswl %cx,%ecx` at 0x0a8bc8: without it GCC 3.4.2 has no reason to emit that instruction. So the claim is real, it is adjudicated by `make similarity` and `byteident.py`, and it is recorded here as equivalent rather than deleted so that nobody re-derives the same negative result. It expires if the harness ever gains an instruction-level observable (tiers.md, F651)."
+ },
+ {
+  "label": "the form I cascade's coefficients are in textbook order",
+  "find": "\t\t\tnum = c[0] * acc + c[1] * s[0];",
+  "replace": "\t\t\tnum = c[0] * acc + c[2] * s[0];"
+ },
+ {
+  "label": "the form I cascade shifts numerator and denominator together",
+  "find": "\t\t\tnum += c[2] * x1;\n\t\t\tnum >>= 14;",
+  "replace": "\t\t\tnum += c[2] * x1;"
+ }
+]

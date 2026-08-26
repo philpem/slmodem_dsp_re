@@ -4,7 +4,7 @@
  * Reconstructed from dsplibs.o fpm_iir.c.  The TU holds three filters:
  *
  *   FPM_iir_filt       .text 0x0a8a50   direct form II, one sample
- *   FPM_iir_filt_block .text 0x0a8b10   not yet reconstructed
+ *   FPM_iir_filt_block .text 0x0a8b10   direct form II, a block
  *   FPM_iir_filt_II    .text 0x0a8c30   direct form I, a block
  *
  * FPM_iir_filt: direct form II, 5 coefficients and 2 state words per
@@ -61,6 +61,49 @@ FPM_iir_filt(short x, const short *coeff, short *state, short sections)
 	}
 
 	return (short)acc_in;
+}
+
+/*
+ * FPM_iir_filt_block -- .text 0x0a8b10, 287 bytes.
+ *
+ * FPM_iir_filt over a block, in place.  It is the SATURATING direct form II
+ * engine applied `count` times, not a second filter: the object's inner loop
+ * is FPM_iir_filt's body instruction for instruction -- the same 0x2000
+ * rounding on the two recursive terms, the same truncation on the two
+ * feedforward ones, and the same asymmetric clamp to -0x7fff.  GCC inlines the
+ * call at -O3 within the translation unit, so the object shows no `call` here
+ * and FPM_iir_filt keeps its own symbol regardless (compare finding F7940) --
+ * and our build inlines it too, which was checked rather than assumed.
+ *
+ * THE CODEGEN IS NOT CLOSED: 72 instructions against the object's 86, 29 bytes
+ * short, rejected at grade 1 as a missing statement rather than a renaming.
+ * The differential tier is green over the whole driven domain and this is the
+ * same class and size of residual `FPM_iir_filt` and `FPM_iir_filt_II` above
+ * and below it already carry (10 and 19 bytes), so it is a refinement target
+ * and not a defect.  Finding F8166 has the table; do not read the one-line
+ * body below as "reproduces the object" without re-running `byteident.py`.
+ *
+ * `sections - 1` is hoisted out of the outer loop by the compiler, and the
+ * inner counter is decremented as a 16-bit value and tested against -1, the
+ * same shape FPM_iir_filt_II uses below.  The outer counter is a `short` too:
+ * the object re-narrows it with `cwtl` after each increment and compares 16
+ * bits against `count`.
+ *
+ * NOTHING HERE IS TESTED AT `sections == 0`, on purpose.  The object's write-
+ * back at 0x0a8c19 stores `%dx`, which on that path is never assigned -- the
+ * inner loop is guarded by `cmpw $0xffff` at 0x0a8b66 and the register carries
+ * in whatever the caller left.  Any value our compiler puts there is as
+ * defensible as the object's, so a differential check on that input would be
+ * comparing two arbitrary choices.  Deviation D393.
+ */
+void
+FPM_iir_filt_block(short *samples, const short *coeff, short *state,
+		   short sections, short count)
+{
+	short i;
+
+	for (i = 0; i < count; i++)
+		samples[i] = FPM_iir_filt(samples[i], coeff, state, sections);
 }
 
 /*

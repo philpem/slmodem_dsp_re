@@ -16,11 +16,15 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/fpm.h"
 #include "dsplib/fpm_ecc.h"
 
 extern void ref_FPM_ECC_init(void *state, const void *cfg, int fresh);
 extern void ref_FPM_ECC_free(void *state);
 extern struct fpm_ecc_cfg ref_ECC_CFG;
+extern short ref_FPM_circ_dotp2(const short *coeff, const short *hist,
+				short widx, short taps, short stride,
+				short shift);
 
 /*
  * Six constellation maps of our own.  The real ones are SMCv32_IMAP16 and
@@ -248,6 +252,77 @@ cancel_case(const char *tag, const struct fpm_ecc_cfg *cfg, short near_delay,
 	return diff_end();
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * FPM_circ_dotp2 -- the library form of this file's own `ecc_filter`.
+ *
+ * Three things distinguish it from a plain dot product, and a lazy input set
+ * checks none of them:
+ *
+ *   - the walk is CIRCULAR and split in two halves at `widx`, so a `widx` in
+ *     the middle is the only shape that exercises both;
+ *   - the coefficients advance by `stride`, so a stride of 1 would leave the
+ *     whole generalisation untested and is not the only case driven here;
+ *   - `>> 3` is applied per PRODUCT and `shift - 3` to the SUM, which is not
+ *     the same as one `>> shift` at the end -- each product loses its low
+ *     three bits separately.  `dotp_trunc_seen` counts the products where
+ *     that per-term truncation actually discarded something.
+ *
+ * `shift < 3` is not driven: the object computes the residual into `%cl` and
+ * x86 masks a shift count to five bits, so `shift == 2` shifts right by 31.
+ * Nothing calls this function, so there is no behaviour there to preserve.
+ */
+#define DTAPS	64
+
+static short d_hist[DTAPS];
+static short d_coeff[DTAPS * 8];
+static int dotp_trunc_seen, dotp_nonzero_seen;
+
+static unsigned dseed;
+
+static int
+drnd(int range)
+{
+	dseed = dseed * 1103515245u + 12345u;
+	return (int)((dseed >> 13) % (unsigned)range);
+}
+
+static int
+dotp_case(short widx, short taps, short stride, short shift)
+{
+	short got, want;
+	int i;
+
+	for (i = 0; i < DTAPS; i++)
+		d_hist[i] = (short)(drnd(65535) - 32768);
+	for (i = 0; i < DTAPS * 8; i++)
+		d_coeff[i] = (short)(drnd(65535) - 32768);
+
+	{
+		const short *c = d_coeff;
+
+		for (i = widx; i >= 0; i--) {
+			if ((d_hist[i] * *c) & 7)
+				dotp_trunc_seen++;
+			c += stride;
+		}
+		for (i = taps - 1; i > widx; i--) {
+			if ((d_hist[i] * *c) & 7)
+				dotp_trunc_seen++;
+			c += stride;
+		}
+	}
+
+	want = ref_FPM_circ_dotp2(d_coeff, d_hist, widx, taps, stride, shift);
+	got = FPM_circ_dotp2(d_coeff, d_hist, widx, taps, stride, shift);
+
+	if (want != 0)
+		dotp_nonzero_seen++;
+
+	diff_eq_int("widx %ld", got, want, widx);
+	return 0;
+}
+
 int
 main(void)
 {
@@ -402,6 +477,70 @@ main(void)
 	cfg.qmap = test_qmap;
 	rc |= cancel_case("cancel: ECC_CFG's own shape", &cfg, 12, 6, 0, 0,
 			  1, 1, 0x29, 0, 40, 24);
+
+
+	/* --- FPM_circ_dotp2 --------------------------------------------- */
+
+	dseed = 9137u;
+	diff_begin("FPM_circ_dotp2");
+
+	/* Stride 1 and shift 17: exactly what `ecc_filter` plus its caller
+	 * does, which is the one configuration with a known intended use. */
+	for (i = 0; i < DTAPS; i += 3)
+		dotp_case((short)i, DTAPS, 1, 17);
+
+	/* Both ends of the walk, where one of the two halves does nothing. */
+	dotp_case(0, DTAPS, 1, 17);
+	dotp_case(DTAPS - 1, DTAPS, 1, 17);
+	dotp_case(-1, DTAPS, 1, 17);
+
+	/* Degenerate lengths. */
+	dotp_case(0, 1, 1, 17);
+	dotp_case(0, 2, 1, 17);
+	dotp_case(1, 2, 1, 17);
+	dotp_case(-1, 0, 1, 17);
+
+	/* The stride generalisation, which stride 1 cannot reach. */
+	for (i = 1; i <= 8; i++)
+		dotp_case(20, DTAPS, (short)i, 17);
+	for (i = 1; i <= 8; i++)
+		dotp_case(0, DTAPS, (short)i, 17);
+
+	/*
+	 * A negative stride is NOT driven.  It is arithmetically fine on both
+	 * sides -- the object scales the stride by two and adds -- but it
+	 * walks below `d_coeff`, and this harness does not read outside its
+	 * own arrays without a backing region to read into.  Compare
+	 * `t_fpm_lmsupd`'s `FPM_block_update` case, where the out-of-contract
+	 * index IS driven because `hist` was placed in the middle of a padded
+	 * array for exactly that purpose.
+	 */
+
+	/* The shift, over its whole usable range.  `shift == 3` leaves the
+	 * sum unshifted, which is where a residual applied in the wrong
+	 * direction would show. */
+	for (i = 3; i <= 20; i++)
+		dotp_case(20, DTAPS, 1, (short)i);
+
+	/* A sweep of lengths, so no tap count is special. */
+	for (i = 1; i <= DTAPS; i += 7)
+		for (j = -1; j < i; j += 5)
+			dotp_case((short)j, (short)i, 1, 17);
+
+	rc |= diff_end();
+
+	/*
+	 * Non-vacuity.  A run in which every product's low three bits were
+	 * already zero would not distinguish per-product truncation from one
+	 * shift at the end, and a run whose every answer was zero would not
+	 * distinguish anything at all.
+	 */
+	diff_begin("FPM_circ_dotp2 reached its edge cases");
+	diff_eq_int("per-product truncation fired (%ld times)",
+		    dotp_trunc_seen > 0, 1, dotp_trunc_seen);
+	diff_eq_int("non-zero results seen (%ld)", dotp_nonzero_seen > 0, 1,
+		    dotp_nonzero_seen);
+	rc |= diff_end();
 
 	return rc;
 }

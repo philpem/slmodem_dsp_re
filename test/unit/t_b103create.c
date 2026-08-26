@@ -103,8 +103,7 @@ dsp_is_pointer(int off)
 static int
 tone_is_pointer(int off)
 {
-	return off == OFF(struct fpm_tone, r4c)
-			+ (int)sizeof(((struct fpm_tone *)0)->r4c) - 2
+	return off == OFF(struct fpm_tone, rev_idx)
 	       || off == OFF(struct fpm_tone, cfg) + OFF(struct fpm_tone_cfg, src)
 	       || off == OFF(struct fpm_tone, kernel)
 	       || off == OFF(struct fpm_tone, history)
