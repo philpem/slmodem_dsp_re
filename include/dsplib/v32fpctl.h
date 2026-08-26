@@ -244,7 +244,7 @@ struct fpm_fse_point;
 
 /*
  * `SetAdaptEcV32`.  RESET re-runs `FPM_ECC_init` in place; ON clears the delay
- * line and enables both update loops; SLOW divides the update gain by five and
+ * line and enables both update loops; SLOW divides the update gain by ten and
  * touches nothing else.  Any other value does nothing.
  */
 #define V32_ADAPTEC_RESET	0
@@ -360,7 +360,7 @@ void SetAdaptEqV32(void *modem, unsigned short mode);
 
 /*
  * Echo canceller: 0 re-initialise, 1 off, 2 on and cleared, 3 divide the update
- * gain by five.  Anything else does nothing.
+ * gain by ten.  Anything else does nothing.
  */
 void SetAdaptEcV32(void *modem, unsigned short mode);
 

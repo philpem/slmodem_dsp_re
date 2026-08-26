@@ -1,0 +1,80 @@
+[
+ {
+  "label": "NOTE: `FSE_getdiag` in src/dsp/fpm_fse.c, driven by build/test/t_v32fpsub. The two arms are asymmetric on purpose -- one has a capacity guard and the other has none, one empties before the copy and the other after -- so the sweep drives the count at, just below and just above the guard, a `max` either side of it, and a NEGATIVE count that neither arm guards. THE TWO EMPTYING ORDERS ARE NOT SEPARABLE by anything here: they differ only if `out` overlaps the block, which no caller arranges, so no mutation claims them."
+ },
+ {
+  "label": "the capacity guard admits a log filled exactly to capacity, which is the entry D480 records",
+  "find": "\t\tif (n > FPM_FSE_DIAG - 1) {",
+  "replace": "\t\tif (n > FPM_FSE_DIAG) {"
+ },
+ {
+  "label": "an over-full log is delivered instead of discarded",
+  "find": "\t\tif (n > FPM_FSE_DIAG - 1) {\n\t\t\tstate->diag_n = 0;\n\t\t\treturn 0;\n\t\t}",
+  "replace": "\t\tif (n > FPM_FSE_DIAG - 1)\n\t\t\tn = FPM_FSE_DIAG - 1;"
+ },
+ {
+  "label": "the discard path leaves the count where it was",
+  "find": "\t\t\tstate->diag_n = 0;\n\t\t\treturn 0;",
+  "replace": "\t\t\treturn 0;"
+ },
+ {
+  "label": "the first log is held down to max the wrong way round",
+  "find": "\t\tif (n > max)\n\t\t\tn = max;\n\t\tfor (i = 0; i < n; i++) {\n\t\t\tout[i].i = state->diag[i].i;",
+  "replace": "\t\tif (n < max)\n\t\t\tn = max;\n\t\tfor (i = 0; i < n; i++) {\n\t\t\tout[i].i = state->diag[i].i;"
+ },
+ {
+  "label": "the first log is copied from the second",
+  "find": "\t\t\tout[i].i = state->diag[i].i;\n\t\t\tout[i].q = state->diag[i].q;",
+  "replace": "\t\t\tout[i].i = state->diag2[i].i;\n\t\t\tout[i].q = state->diag2[i].q;"
+ },
+ {
+  "label": "the first log's I and Q are transposed on the way out",
+  "find": "\t\t\tout[i].i = state->diag[i].i;\n\t\t\tout[i].q = state->diag[i].q;\n\t\t}\n\t\tstate->diag_n = 0;",
+  "replace": "\t\t\tout[i].i = state->diag[i].q;\n\t\t\tout[i].q = state->diag[i].i;\n\t\t}\n\t\tstate->diag_n = 0;"
+ },
+ {
+  "label": "the first log copies one point past what it reports",
+  "find": "\t\tfor (i = 0; i < n; i++) {\n\t\t\tout[i].i = state->diag[i].i;",
+  "replace": "\t\tfor (i = 0; i <= n; i++) {\n\t\t\tout[i].i = state->diag[i].i;"
+ },
+ {
+  "label": "the first log is not emptied after it is drained",
+  "find": "\t\t}\n\t\tstate->diag_n = 0;\n\t\treturn n;",
+  "replace": "\t\t}\n\t\treturn n;"
+ },
+ {
+  "label": "the caller is told how many were waiting rather than how many were copied",
+  "find": "\t\tstate->diag_n = 0;\n\t\treturn n;",
+  "replace": "\t\tstate->diag_n = 0;\n\t\treturn state->diag_n + max;"
+ },
+ {
+  "label": "the second log gains the capacity guard the first has",
+  "find": "\t\tn = state->diag2_n;\n\t\tif (n > max)",
+  "replace": "\t\tn = state->diag2_n;\n\t\tif (n > FPM_FSE_DIAG2 - 1) {\n\t\t\tstate->diag2_n = 0;\n\t\t\treturn 0;\n\t\t}\n\t\tif (n > max)"
+ },
+ {
+  "label": "the second arm empties the FIRST log's count",
+  "find": "\t\tstate->diag2_n = 0;\n\t\tfor (i = 0; i < n; i++) {",
+  "replace": "\t\tstate->diag_n = 0;\n\t\tfor (i = 0; i < n; i++) {"
+ },
+ {
+  "label": "the second log is copied from the first",
+  "find": "\t\t\tout[i].i = state->diag2[i].i;\n\t\t\tout[i].q = state->diag2[i].q;",
+  "replace": "\t\t\tout[i].i = state->diag[i].i;\n\t\t\tout[i].q = state->diag[i].q;"
+ },
+ {
+  "label": "the first selector drains the second log",
+  "find": "\tswitch (which) {\n\tcase 0:\n\t\tn = state->diag_n;",
+  "replace": "\tswitch (which) {\n\tcase 0:\n\t\tn = state->diag2_n;"
+ },
+ {
+  "label": "an unrecognised selector drains the first log instead of reporting none",
+  "find": "\t}\n\n\treturn 0;\n}",
+  "replace": "\t}\n\n\treturn state->diag_n;\n}"
+ },
+ {
+  "label": "a negative count is clamped rather than passed straight back",
+  "find": "\t\tn = state->diag2_n;\n\t\tif (n > max)\n\t\t\tn = max;",
+  "replace": "\t\tn = state->diag2_n;\n\t\tif (n < 0)\n\t\t\tn = 0;\n\t\tif (n > max)\n\t\t\tn = max;"
+ }
+]

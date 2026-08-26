@@ -92817,3 +92817,223 @@ F7880, F8146): a number that is easy to compute standing in for the one that
 answers the question. Here the question is "did anything get worse", and the
 easy answer was "did any bucket shrink" — which is not the same question when
 one of the buckets is a waiting room.
+
+### F8210. The V.32 datapump block's sub-object map, and the two entries nobody had asserted
+
+*This batch holds F8210-F8224: the twenty-one functions of
+`src/pump/v32/v32fpctl.c` plus `FSE_getdiag`.*
+
+The V.32 instance holds two pointers -- `V32_OBJ_HDX` at +0x64 to the
+half-duplex handshake context and `V32_OBJ_FP` at +0x68 to the datapump block --
+and the datapump block is a tiling of sub-objects other headers already model.
+Seven of the nine were already established; the two that were not are what make
+the two mode setters readable instead of thirty magic offsets.
+
+| fp + | struct | what pins it |
+|---|---|---|
+| 0x30 | `v32_sdm` | **NEW** -- `ScrambleDataV32` hands it to `SDMv32_scrambler` |
+| 0x48 | `v32_smc` | v32data.h, `V32FP_SMC` |
+| 0x60 | `fpm_pps` | v32data.h, `V32FP_PPS` |
+| 0xb0 | `v32_symout` | v32data.h, `V32FP_SYMOUT` |
+| 0xc4 | `fpm_mrf` | `V32FP_delete` hands it to `FPM_MRF_free` |
+| 0xe0 | `fpm_ecc` | `SetAdaptEcV32` hands it to `FPM_ECC_init` |
+| 0x148 | `fpm_sre` | `V32FP_delete` hands it to `FPM_SRE_free` |
+| 0x204 | `fpm_fse` | **NEW** -- `V32FP_GetDiagnostics` hands it to `FSE_getdiag` |
+| 0x50b0 | `v32_sdm` | `DescrambleDataV32` hands it to `SDMv32_descrambler` |
+
+The equaliser being at +0x204 is worth more than one row, because `fpm_fse.h`
+already models that whole 0x4e18-byte block: **fp + 0x230 is `cfg.owner`,
+fp + 0x234 is `cfg.decision`, and fp + 0x23c is `mu_sel`.** That is why
+`SetRxModeV32` stores an `FSE_decision_*` function pointer at +0x234 and
+`SetAdaptEqV32` stores 0 or 1 at +0x23c -- neither is a bare offset, both are
+named fields, and `v32dec.h` already types `cfg.owner` as `struct v32_dec *`.
+
+Every row is exercised by `test/unit/t_v32fpctl.c` and `t_v32fpsub.c`, which
+compare the whole 20 KB block byte for byte against the object's after each
+call.
+
+### F8211. `SetTxModeV32` and `SetRxModeV32` are one configurator written twice, 0x5080 apart
+
+`SetTxModeV32` writes seven fields at fp + 0x30..0x46 and `SetRxModeV32` writes
+seven at fp + 0x50b0..0x50c6. **Every pair differs by exactly 0x5080**, and both
+bases are `struct v32_sdm` (F8210). So the tail both share is the scrambler's
+own configuration rather than arithmetic on offsets:
+
+    shift    the bits taken out of the register per symbol
+    outmask  (1 << shift) - 1
+    regmask  ~outmask, so `reg << shift` leaves room for the new group
+    tapN     the Recommendation's tap position, less that shift
+
+The seven modes and what each installs:
+
+| mode | group | shift | encoder | map | uncoded bits | rate |
+|---|---|---|---|---|---|---|
+| 0 | 2 | 2 | abs | `SMCv32_?MAP16` | -- | 4800, absolute |
+| 1 | 2 | 2 | dif | `SMCv32_?MAP16` | -- | 4800 |
+| 2 | 4 | 4 | dif | `SMCv32_?MAP16` | -- | 9600, no trellis |
+| 3 | 4 | 4 | tcm | `VTBv32_?MAP32` | 2 | 9600 |
+| 4 | 3 | 3 | tcm | `VTBv32_?MAP16T` | 1 | 7200 |
+| 5 | 5 | 5 | tcm | `VTBv32_?MAP64` | 3 | 12000 |
+| 6 | 6 | **3** | tcm | `VTBv32_?MAP128` | 4 | 14400 |
+
+**The mode is the rate code plus one.** `GetRateV32` returns 0..5 for
+4800 / 9600-no-trellis / 9600 / 7200 / 12000 / 14400, and each maps onto the arm
+one higher; mode 0 is the extra one, the absolute-mapping four-point used in
+training. Three independent statements per arm agree on that -- the map pair,
+the group width, and the uncoded-bit count -- so the naming in
+`include/dsplib/v32fpctl.h` is not read off any single store.
+
+The receive side installs the matching slicer at `cfg.decision`
+(`FSE_decision_AB`, `_4pt`, `_16pt`, `_32pt`, `_16Tpt`, `_64pt`, `_128pt`, in
+mode order) and runs `VTBv32_init` on the decoder's Viterbi state for the four
+trellis modes.
+
+### F8212. `v32_sdm` +0x02 and +0x04 are the two ABSOLUTE tap positions, read sixteen bits at a time
+
+v32scram.h names +0x14 and +0x16 `tap1` and `tap2` and records that both are
+right shifts applied to the register. Both mode setters compute them:
+
+    tap1 = *(unsigned short *)(sdm + 0x02) - shift
+    tap2 = *(unsigned short *)(sdm + 0x04) - shift
+
+-- so +0x02 and +0x04 hold the taps as the Recommendation states them (V.32's
+scrambler is 1 + x^-18 + x^-23), and the stored `tap1`/`tap2` are what is left
+once the group shift is taken out. v32scram.h has +0x02 as `pad02` "not read
+here" and +0x04..+0x07 as one `int pad04`; **the second is under-modelled -- it
+is read here as a 16-bit field.** Not repaired: that header belongs to another
+agent's files in this pass, and `include/dsplib/v32fpctl.h` reaches both by byte
+offset with the derivation beside them.
+
+### F8213. Four more facts about `struct v32_dec`, two of which name bits and one of which is past its end
+
+`v32dec.h` models the decoder's context from the four slicers. This batch's
+pollers and the receive mode setter read it from the other side:
+
+- **+0x62 `retrain`'s two bits are named by their pollers.** The header has it
+  as "1 or 2; a request, not a state -- nothing here reads it back".
+  `RetrainDetectV32` tests **bit 0**, `RenegotiateDetectV32` tests **bit 1**,
+  and each clears its own bit, zeroes `count` and reports 1. So bit 0 is a
+  retrain request and bit 1 a rate renegotiation, and both are now
+  `V32_DEC_RETRAIN_REQ` / `V32_DEC_RENEG_REQ`.
+- **+0x64 `rate_change` is `EpochDetectV32`'s whole body** -- it returns it and
+  does not clear it -- and `SetRxModeV32`'s absolute four-point arm zeroes it.
+- **+0x04 is written by `SetRxModeV32`** with 0 or 2 across the three arms that
+  touch it. It falls inside the header's `pad02[6]`, so that padding is not
+  entirely padding.
+- **+0x74 is a retrain COUNTER, one past the struct's end.**
+  `RetrainDetectV32` increments it as an `unsigned short` on every fired
+  retrain and nothing else in this batch reads it.
+
+The first two are named in `include/dsplib/v32fpctl.h`; the last two are
+recorded there as offsets rather than added to a header this batch does not
+own.
+
+### F8214. The 14400 arm's scrambler shift of 3 is not a defect, and two independent readings meet on it
+
+Across the seven modes the scrambler shift is 2, 2, 4, 4, 3, 5, **3** while the
+bits per symbol are 2, 2, 4, 4, 3, 5, **6**. Six of seven agree, and the
+128-point trellis arm reads as a copy-paste of the 16-point one -- 14400 bit/s
+with the bit packer taking three bits a symbol would be a serious fault, and it
+appears in `SetTxModeV32` and `SetRxModeV32` both.
+
+**It is correct.** v32scram.h, written from `SDMv32_scrambler` alone and before
+any of this was read, records that the consumer special-cases `group == 6` into
+two three-bit groups most significant first and shifts by three. The mode setter
+writes `group = 6` and `shift = 3` because that is what the scrambler wants at
+14400.
+
+Recorded because the near-miss is instructive: the pattern-completion reading
+was corroborated by a SECOND field -- `v32_smc`'s uncoded-bit count, 1, 2, 3, 4
+across the four trellis modes, which is exactly `bits - 2` and pins mode 6 at
+six bits -- and it was still wrong about what the shift means. **A consistent
+table tells you the shape of a column, not its meaning.** The deviation drafted
+against this was withdrawn before it was written.
+
+### F8215. `V32FP_delete` passes a second argument to five `FPM_*_free` functions that take one
+
+Before each of `FPM_FSE_free`, `FPM_SRE_free`, `FPM_ECC_free`, `FPM_MRF_free`
+and `FPM_PPS_free` the object stores a literal 1 into the outgoing argument
+area's second slot:
+
+    7f811: mov  $0x1,%ecx
+    7f816: mov  %ecx,0x4(%esp)
+    7f823: mov  %edx,(%esp)
+    7f826: call FPM_FSE_free
+
+`FPM_FSE_free` reads only `0x10(%esp)`, and so do the other four. GCC does not
+emit dead stores into the outgoing area, and the 8-byte frame exists only
+because something in the function needs two argument slots -- nothing else in it
+does -- so **the declaration in scope when `V32FP_delete` was compiled had two
+parameters.** `fresh`, as on each of these blocks' matching `_init`, is the
+obvious candidate and is not claimed.
+
+Invisible to the differential tier in both directions, so
+`src/pump/v32/v32fpctl.c` makes the one-argument call the tree's headers declare
+and D481 records the difference. Repairing it means changing five prototypes in
+five headers this batch does not own.
+
+### F8216. `SetTxModeV32` writes two `v32_smc` fields the encoders' own reading could not name
+
+`v32smc.h` was written from the three `SMCv32_encoder_*` arms and has +0x02 as
+`pad02` ("not read by any encoder") and +0x14 as `f14` ("tcm only; a shift
+count"). The transmit mode setter writes both:
+
+- **`pad02` takes the encoder selector's own value** -- 1 for the absolute
+  four-point arm, 0 for the differential arms, 2 for the four trellis arms --
+  and it is written from the same register as `V32FP_ENCODER_SEL`. It stays
+  unread by every encoder, so the header's statement is still true.
+- **`f14` is the UNCODED BIT COUNT.** It is written only by the four trellis
+  arms, with 2, 1, 3 and 4 for the 32-, 16-, 64- and 128-point constellations --
+  exactly `bits per symbol - 2`, which is V.32's own split of a symbol into two
+  convolutionally coded bits and the rest uncoded. The trellis encoder reading
+  it as a shift count agrees: it shifts the uncoded part into place.
+
+A rename of `f14` belongs with `v32smc.h`, which this batch does not own.
+
+### F8217. `ScramblerOn` and `DescramblerOn` are V.22, not V.32, and one instruction says so
+
+Both were briefed to this batch as V.32 leaves. They are not. Each is eleven
+bytes:
+
+    8e670: mov 0x4(%esp),%edx      8e680: mov 0x4(%esp),%edx
+    8e674: mov 0x54(%edx),%eax     8e684: mov 0x54(%edx),%eax
+    8e677: mov 0x18(%eax),%eax     8e687: mov 0x1c(%eax),%eax
+    8e67a: ret                     8e68a: ret
+
+**+0x54 is `V22_OBJ_FP`** (`include/dsplib/v22prc.h`), not V.32's +0x68, and
+they sit in the middle of the V.22 leaf family -- `ResetRx`, `SetAdaptEqV22`,
+`TxClockSync`, `CarrierDetect`, `SignalDetect`, `GetSignalQuality` -- six of
+which are already reconstructed in `src/pump/v22/v22prc.c`.
+`docs/attribution.md` marks both `_(ambiguous)_` and nothing in `.text` calls
+either.
+
+What they return is `struct v22fp_dsp`'s +0x18 and +0x1c, which `v22fp.h`
+carries as `r18` and `r1c` with the note "<- params.flags bit 0 / bit 1".
+**Those two fields can now be named from their accessors:** r18 is the
+scrambler enable and r1c the descrambler enable.
+
+Dropped from this batch rather than written into a V.32 file with a V.22 layout.
+They are leaves nothing reaches, so `closure.py --batch` stays CLOSED without
+them, and they belong beside `SetAdaptEqV22` in `v22prc.c` -- which had an
+unmerged WIP commit against it at the time, which is the other reason not to
+reach into it from here.
+
+### F8218. `SetAdaptEcV32` mode 3 divides the update gain by TEN, and the post-shift is the only thing that says so
+
+    81f66: mov    $0x66666667,%edx
+    81f6b: movswl 0x140(%ecx),%ebx     ; fpm_ecc::mu
+    81f74: imul   %edx                 ; edx:eax = mu * 0x66666667
+    81f78: sar    $0x1f,%eax           ; the sign
+    81f7b: sar    $0x2,%edx
+    81f7e: sub    %eax,%edx
+    81f80: mov    %dx,0x140(%ecx)
+
+0x66666667 is the reciprocal multiplier for both 5 and 10 -- it is 0.4 in Q32 --
+and **only the post-shift separates them**: `sar $1` is a fifth, `sar $2` a
+tenth. The first reconstruction wrote `mu / 5`, compiled to the identical
+instruction sequence with one different immediate, and the differential test
+separated them on the first trial: 41 came back 8 against the object's 4.
+
+Worth the entry because the failure mode is general. A magic-number divide's
+multiplier identifies a FAMILY of divisors, and reading the constant without the
+shift is a one-bit error that produces entirely plausible code.

@@ -737,7 +737,18 @@ run_ecdelay(void)
 	/* A NEGATIVE far-tap count is what reaches the zero clamp: the raise to
 	 * the tap length happens first, so both inputs have to be negative. */
 	static const short taps[] = { -8, 0, 6, 30 };
-	static const short hdxlag[] = { 0, 9, 40 };
+	/*
+	 * NEGATIVE context delays are what make the near tap's wrap reachable
+	 * at all: the line is `lag + d + 2 * symlen` and the tap is
+	 * `d + symlen`, so the two differ by `lag + symlen` and the
+	 * conditional subtraction can only fire when that is not positive.
+	 * With a non-negative lag it is dead code and a mutation of it
+	 * survives -- which is how this line came to be here.
+	 *
+	 * -11 and -47 are the two that make `lag + symlen` exactly 1, which is
+	 * where the wrap and a wrap tested one short of the length differ.
+	 */
+	static const short hdxlag[] = { -60, -47, -20, -11, 0, 9, 40 };
 	unsigned d, l, t, h;
 	unsigned seed = 0x7711u;
 

@@ -520,7 +520,11 @@ SetAdaptEqV32(void *modem, unsigned short mode)
  * because init has just overwritten them.
  *
  * V32_ADAPTEC_ON clears the delay line before enabling the two update loops.
- * V32_ADAPTEC_SLOW divides the update gain by five and changes nothing else.
+ * V32_ADAPTEC_SLOW divides the update gain by TEN and changes nothing else.
+ * The object writes that as the usual reciprocal multiply -- `imul
+ * $0x66666667`, `sar $2` on the high half, less the sign -- and the shift is
+ * what says ten rather than five: 0x66666667 / 2^32 is 0.4, and the extra two
+ * places take it to 0.1.  Both readings compile; only one agrees.
  */
 void
 SetAdaptEcV32(void *modem, unsigned short mode)
@@ -552,7 +556,7 @@ SetAdaptEcV32(void *modem, unsigned short mode)
 
 	case V32_ADAPTEC_SLOW:
 		ecc = ECC(FP(modem));
-		ecc->mu = (short)(ecc->mu / 5);
+		ecc->mu = (short)(ecc->mu / 10);
 		break;
 
 	case V32_ADAPTEC_RESET:

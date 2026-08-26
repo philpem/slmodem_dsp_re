@@ -815,5 +815,17 @@
  "fpmiirblock": [
   "src/dsp/fpm_iir.c",
   "build/test/t_fpm_iir"
+ ],
+ "v32fpctl": [
+  "src/pump/v32/v32fpctl.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32fpsub": [
+  "src/pump/v32/v32fpctl.c",
+  "build/test/t_v32fpsub"
+ ],
+ "fsegetdiag": [
+  "src/dsp/fpm_fse.c",
+  "build/test/t_v32fpsub"
  ]
 }
