@@ -34,7 +34,26 @@
  *
  * The loop is written up-counting where the object counts down from
  * `count - 1`.  Both run exactly `count` times for every `unsigned short`
- * count, which is a form the compiler is free to choose.
+ * count.
+ *
+ * **THAT IS NOT A FORM THE COMPILER IS FREE TO CHOOSE, and this comment said
+ * it was.**  The object's loop foot is
+ *
+ *     lea -0x1(%ebx),%eax ; movzwl %ax,%ebx ; inc %ax ; jne
+ *
+ * -- a SIXTEEN-BIT countdown, truncated on every pass, which is the counter's
+ * declared type and not something strength reduction makes of a 32-bit
+ * induction variable.  `SDMv32_scrambler` next door was closed sixteen bytes
+ * on exactly that motif over a 22-cell domain (F8242).
+ *
+ * Writing it HERE makes the function worse -- 156 bytes to 173 against the
+ * object's 152 -- because it does not stand alone: the object's same loop
+ * computes its ring wrap branchlessly (`setl`/`neg`/`and`, F8249) where we
+ * branch, and the two interact through the loop's register pressure.  All four
+ * cells of {short, int wrap locals} x {up, countdown} were compiled and the
+ * countdown arm is worse at both.  So the direction is DECODED and UNBOUGHT,
+ * which is a different state from free, and the next pass here should move
+ * both together or neither.
  */
 
 #include "dsplib/v32data.h"

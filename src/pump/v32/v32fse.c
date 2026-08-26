@@ -533,12 +533,31 @@ FSE_decision_16pt(struct fpm_fse *state, short *angle, short *mag)
  * combined, which is not the same as shifting the sum: each term is rounded
  * towards minus infinity on its own, so the result can be one less than the
  * combined form.  The object does it this way and so do we.
+ *
+ * THE ABSOLUTE VALUES ARE TAKEN IN 32 BITS AND TRUNCATED AFTERWARDS, AND THE
+ * TWO STEPS MUST BE SEPARATE STATEMENTS.  The object spends
+ *
+ *     cltd ; xor %edx,%eax ; sub %edx,%eax ; movswl %ax,%ecx
+ *     cltd ; mov %edx,%eax ; xor %ebp,%eax ; sub %edx,%eax ; cwtl
+ *
+ * -- GCC's branchless ABS_EXPR expansion, then a narrowing.  Written as one
+ * expression, `short ai = (short)(i < 0 ? -i : i)`, fold distributes the
+ * narrowing cast into the COND_EXPR's two arms, the result is no longer an
+ * ABS_EXPR at all, and 3.4.2 emits `test`/`jns`/`neg` instead -- which cost
+ * `FSE_decision_32pt` 97 bytes and `FSE_decision_128pt` 99, in a helper that
+ * has no symbol of its own to attribute them to.  Twelve spellings were
+ * compiled; `int ai = ...` alone recovers the ABS_EXPR and loses the
+ * truncation (a real difference at i = -32768, which the object's `movswl`
+ * and `cwtl` show it does perform), and only the split form gives both.
+ * Findings F8240 and F8241.
  */
 static int
 fse_rotate(int i, int q, short *ri, short *rq)
 {
-	short ai = (short)(i < 0 ? -i : i);
-	short aq = (short)(q < 0 ? -q : q);
+	int ti = i < 0 ? -i : i;
+	int tq = q < 0 ? -q : q;
+	short ai = (short)ti;
+	short aq = (short)tq;
 	int sel = (ai > aq) + (i > q ? 2 : 0);
 	int c = DECv32_COS_ROT_ANGLE[sel];
 	int s = DECv32_SIN_ROT_ANGLE[sel];

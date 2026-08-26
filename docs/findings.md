@@ -92817,3 +92817,398 @@ F7880, F8146): a number that is easy to compute standing in for the one that
 answers the question. Here the question is "did anything get worse", and the
 easy answer was "did any bucket shrink" — which is not the same question when
 one of the buckets is a waiting room.
+
+## F8240. THE ABSOLUTE VALUE IN `fse_rotate` IS AN `ABS_EXPR` THE NARROWING CAST DESTROYED, AND IT COST 196 BYTES IN A HELPER WITH NO SYMBOL OF ITS OWN
+
+`FSE_decision_32pt` was 818 bytes against the object's 721 and
+`FSE_decision_128pt` 1131 against 1032 -- 97 and 99 over, the two widest gaps
+in the seventeen already-written V.32 symbols. Neither difference is in either
+function. Both are in `fse_rotate`, a file-scope `static` that GCC inlines
+into exactly those two and which therefore **has no blob symbol and no row in
+any per-function census**. That is F7940's blind spot with two symbols behind
+it instead of one.
+
+The three-way census (`Counter(text)`, then `Counter(mnemonic)`, padding AND
+self-moves stripped) named it without any disassembly:
+
+    FSE_decision_32pt    cltd -2   xor -2   sub -2   neg +2   jns +2
+    FSE_decision_128pt   cltd -2   xor -3   sub -2   neg +2   jns +2
+
+`cltd; xor %edx,%eax; sub %edx,%eax` is GCC's branchless `ABS_EXPR` expansion.
+Two of them in the object, none in ours, and `test`/`jns`/`neg` -- a BRANCH --
+where they should be. Two per function is exactly `fse_rotate`'s two
+absolute values, so the count identifies the site before anything is read.
+
+**The cause is that `fold` distributes a narrowing cast into a `COND_EXPR`'s
+arms.** The source was
+
+    short ai = (short)(i < 0 ? -i : i);
+
+and after distribution the arms are `(short)(-i)` and `(short)i`, the tree is
+no longer an `ABS_EXPR` at all, and 3.4.2 emits the branch. `_16Tpt` writes the
+same idiom on a plain `int` five lines away and DOES get the object's form,
+which is what said the free variable is the narrowing and not the idiom.
+
+Twelve cells over {`fse_rotate`'s parameter types} x {five spellings of the
+absolute value}, compiled against the real translation unit and scored through
+`byteident.py`'s own `body()` and `verdict()`:
+
+    short ai = (short)(i < 0 ? -i : i);       818 / 1131   the tree's
+    short ai = i < 0 ? -i : i;                818 / 1131   identical bytes
+    short ai; ai = i < 0 ? -i : i;            818 / 1131   identical bytes
+    int   ai = i < 0 ? -i : i;                722 / 1035
+    int ti = ...; short ai = (short)ti;       722 / 1035   FEWER instructions
+    int ti = ...; short ai = ti;              722 / 1035   identical to it
+
+and the `short`-parameter arm (`fse_rotate(short i, short q, ...)`, tried
+because the object's two comparisons there are 16-bit) is WORSE at 758 / 1075.
+Four distinct emissions over the twelve, so the harness is not a null
+generator; the control cell is byte-identical to `build/tc_out`.
+
+**Taken: the split form, and the reason is behaviour and not the byte count.**
+`int ai` alone recovers the `ABS_EXPR` and LOSES the truncation -- at
+i = -32768 it compares 32768 where a `short` compares -32768 -- and the object
+performs that truncation: `movswl %ax,%ecx` after the first abs, `cwtl` after
+the second. The split form gives both, at the same 722/1035 and at one to two
+FEWER extra instructions than `int` (32pt +4 against +5, 128pt +1 against +3).
+Choosing `int` on its size alone would have been a wrong-but-plausible change
+with the same score.
+
+Tree-wide, both directions over all 1257 symbols: 2 better, 0 worse. Neither
+closes -- 722 against 721 and 1035 against 1032 -- and the residual is named in
+F8241.
+
+## F8241. WHAT IS LEFT IN `_32pt` AND `_128pt` AFTER F8240, AND WHY IT IS NOT WORTH ANOTHER CELL
+
+One byte and three. The census of the residual is register allocation in both:
+
+    _32pt    cltd -2  setg -2  setl +2  lea +2  mov +5  cmp +3
+    _128pt   cltd -2  setg -2  setl +1  lea +3  mov -1  cwtl -4  movzbl +4
+
+`cltd` against `sar $0x1f,%reg` is the SAME `ABS_EXPR` expansion under a
+different allocation -- `cltd` is available only when the value is already in
+`%eax` -- and `setg` against `setl` is the same condition with the two
+operands the other way round. Neither is a source property under lever 9's own
+rule: both operands of `ai > aq` are `DECL_P`, so `tree_swap_operands_p`
+returns 0 and no spelling of the comparison can move it.
+
+Recorded rather than chased, which is lever 11's `printSpectrum` precedent. A
+symbol one byte from its size is not one byte from grade 0.
+
+## F8242. THE V.32 SCRAMBLER PAIR'S LOOP COUNTER IS A SIXTEEN-BIT COUNTDOWN, AND TWENTY-TWO CELLS SAY NOTHING ELSE PRODUCES IT
+
+`SDMv32_scrambler` and `SDMv32_descrambler` are 349 bytes each in the object
+and were 368 and 365. The census pointed at the loop and not at the
+arithmetic: ours had FEWER instructions and MORE bytes, with `incl`, `shll`,
+`andl`, `cmpl` -- memory-operand forms -- where the object has `inc`, `shl`,
+`and`, `dec` on registers, and `ja`/`jbe`/`cmpl` where the object has
+`jne`. Bigger instructions at a smaller count is the spill signature.
+
+The object opens both functions with
+
+    dec %eax ; movzwl %ax,%ecx ; inc %ax ; mov %ecx,0x10(%esp) ; jne
+
+and repeats `dec ; movzwl %bp,%eax ; inc %bp ; mov %eax,slot` at the foot of
+every iteration. **The truncation to sixteen bits on every pass is the
+counter's declared type.** F7941's warning -- that the walking pointer and the
+countdown are what strength reduction MAKES of a subscript, so writing them by
+hand hands the compiler back what it would have derived -- does not reach this
+one: no 32-bit induction variable is truncated to 16 bits per iteration, so
+the width is information the compiler did not invent.
+
+Twenty-two cells over {`unsigned int` up, `unsigned short` up, `unsigned short`
+down, `unsigned int` down, `while (count--)`, `while (n--)` on a local,
+`if (count) do ... while (--count)`} x {`buf[i]`, a walking parameter, a
+walking local}, four of which do not compile and are counted on neither side.
+Counting the object's own motif in each:
+
+    the motif `dec movzwl inc mov`     object 1
+    the eight `while (n--)` cells      2 each
+    the fourteen others                0 each
+
+`while (count--)` and `unsigned short n = count; while (n--)` are
+indistinguishable -- both emit the motif, both land at 352 bytes, and they
+differ by one instruction text on the descrambler and none on the scrambler --
+so the parameter is used directly and the choice between them is NOT decided.
+Fourteen distinct emissions over fourteen scoring cells, so the domain is real
+and not a constant map.
+
+**AND THE BUFFER POINTER IS A SECOND FORCED OBSERVABLE, WHICH IS WHAT MAKES
+THIS AN EDIT AND NOT A BYTE COUNT.** The object walks `buf` with
+`add $0x2,%esi`: the pointer is in a REGISTER. Counting `(register walk,
+memory walk)` per cell, and it splits BY FUNCTION --
+
+                              SDMv32_scrambler   SDMv32_descrambler
+    the object                    (2, 0)              (2, 0)
+    a local `short *p`            (2, 0)              (0, 2)
+    the parameter, `buf++`        (0, 2)              (0, 2)
+    `buf[i]`                      (0, 0)              (0, 0)
+
+-- so the local is the only spelling that reproduces the object's form, and it
+does so **in the scrambler only**. No cell of the twenty-two reaches (2, 0) in
+the descrambler; there the pointer is spilled at every spelling, which is
+F8243's allocation difference and not something a source form reaches. What the
+spelling decides everywhere is whether a WALK EXISTS AT ALL, and the last row
+is why F7941's warning does not reach this site. F7941 is that the
+walking pointer and the countdown are what strength reduction MAKES of a
+subscript, so hand-writing them removes the information the compiler needed.
+**3.4.2 does not make one here**: `buf[i]` compiles to a scaled index and no
+induction pointer exists to be handed back. The walk is source, not output.
+
+**Taken on those two observables, and it does not close.** Scrambler 368 -> 352
+against 349, tree-wide 1 better and 0 worse; descrambler stays at 365 bytes
+while its instruction delta goes -6 to -2. What is left is F8243, and it is
+NOT the pointer: after this edit the pointer's addressing form matches the
+object exactly and only the spill SET differs.
+
+**AND IT DOES NOT TRANSPLANT, WHICH IS NOT THE SAME AS NOT APPLYING.**
+`TxNoCarrierV32` in `v32data.c` carries a file comment saying the object
+"counts down from `count - 1`" and calling the direction a form the compiler
+is free to choose. **That comment is wrong and the object settles it**: its
+loop foot is `lea -0x1(%ebx),%eax ; movzwl %ax,%ebx ; inc %ax ; jne`, the same
+sixteen-bit countdown with `lea -1` for `dec`, and the motif count is 1 in the
+object and 0 in what we emit. So the mechanism IS there.
+
+**Writing it there anyway makes the function worse**: 156 bytes to 173,
+against the object's 152. The countdown does not stand alone in that function
+-- the object's loop ALSO computes its ring wrap branchlessly (F8249) and we
+branch, and the two interact through the loop's register pressure. Compiled as
+a two-axis cross product, {short, int wrap locals} x {up, countdown}, the
+countdown arm is worse at BOTH wrap spellings (173 and 171 against 156 and
+154). Declined there, and the reason is recorded rather than the verdict: a
+mechanism recovered in one file of a family is a hypothesis in the next one,
+and a hypothesis that is TRUE of the object can still be unbuyable on its own.
+
+## F8243. WHAT IS LEFT IN THE SCRAMBLER PAIR IS SPILL PLACEMENT, AND OURS IS THE EXACT INVERSE OF THE OBJECT'S
+
+Both functions need more live values than there are registers, and both
+compilations spill -- different things.
+
+    the object   `reg` in %ebx, the buffer pointer in %esi, and the three
+                 shift amounts (`shift`, `tap1`, `tap2`) in stack slots,
+                 reloaded as bytes with `movzbl slot,%ecx` before each shift
+    ours         the shift amounts in registers and `reg` in `(%esp)` with
+                 `shll %cl,(%esp)` / `and %edx,(%esp)` / `or %eax,(%esp)`
+                 -- the buffer pointer is in a register on both sides once
+                 F8242's local is in place
+
+Same number of spills; opposite choice of what to spill. The residual census is
+`addl +2 / add -2`, `shll +2 / shl -3`, `movzbl -3`, `movzwl -3` and nothing
+else, which is that sentence in counts.
+
+Nothing in the levers steers this. Lever 12's premise is a spill NARROWER than
+the value it holds and these are all four bytes wide; lever 3 is about register
+CHOICE at an identical instruction sequence and these sequences are not
+identical. Recorded as the boundary of what source form reaches here.
+
+## F8244. THE FIRST WORKLIST SCOPED AS A TRANSLATION UNIT RATHER THAN A SYMBOL LIST -- AND ALL THREE OF ITS WINS WERE INVISIBLE TO A SYMBOL-DRAWN ONE
+
+`refinement.md`'s opening section says to brief a pass on a FILE. This pass was
+briefed that way over seventeen already-written V.32 symbols in five
+`.c` files, so its yield is worth stating against that framing.
+
+**Every mechanism found acted through a construct that is not one of the
+seventeen symbols.**
+
+- `fse_rotate` is a file-scope `static` with no blob symbol. It carries the
+  whole of F8240's 196 bytes and appears in no census, no `--near` row and no
+  `--why` output. A worklist naming `FSE_decision_32pt` and
+  `FSE_decision_128pt` would have sent two agents at two functions whose own
+  bodies are almost right.
+- `fse_quality` is a second such helper, inlined into six of the nine slicers,
+  and its `&&` chain is why the SAME five-term signature appears in six
+  different symbols' censuses:
+
+        _4pt     setl +1  setle +1  test +1  je +1   against jg -1  jge -1
+        _16pt    setl +1  setle +1  test +2  je +1   against jg -1  jge -1
+        _16Tpt   setl +1  setle +1  test +2  je +1   against jg -1  jge -1
+        _32pt    setl +1  setle +1           je +1   against jg -1  jge +1
+        _64pt    setl +9  setle +1  test +1  je +1   against jg -3  jge -5
+        _128pt   setle +3           test +5  je +1   against jg -1  jge -1
+
+  Six rows of a symbol-drawn worklist; ONE construct, in a function that has
+  no symbol. (`_64pt`'s +9 is its own region tree on top, and F8245 shows that
+  half is a constant map.) Reading those six rows as six defects is what a
+  symbol-drawn list forces; reading them as one construct is what the file
+  gives you for free.
+- The scrambler pair's loop is one edit scored on two symbols at once, and the
+  cost of the domain -- 22 compiles -- is the same whether it is scored on one
+  symbol or on two.
+
+**And the enumeration is cheaper by the size of the family.** One container
+pass compiles every cell of a whole `.c`; the five V.32 files rebuild in
+seven seconds together. Fifty-seven cells were compiled across five rounds for
+less wall time than one `make phase`.
+
+**What the framing did NOT deliver: the two shared mechanisms were shared by
+SHAPE, not by file.** `fse_quality`'s six inlinings are in one file; but the
+COUNTDOWN loop recovered in `v32scram.c` was refuted in `v32data.c` (F8242),
+and the ternary-versus-branch question raised by `FSE_decision_64pt` turned out
+to be a constant map (F8245). So the unit that paid is the TRANSLATION UNIT for
+the enumeration's cost and the INLINED HELPER for the mechanism. Those are not
+the same object and the brief should say which it means.
+
+## F8245. FOUR MEASURED NULLS FROM THE V.32 PASS, EACH OF WHICH LOOKED LIKE A LEVER
+
+Recorded so nobody spends the cells again.
+
+**1. `?:` against `if`/`else` is a CONSTANT MAP.** `FSE_decision_64pt`'s census
+is `setl +9, lea +8, xor +6` against `mov -17, jge -5, jg -3, jle -2` -- nine
+`setcc` for ten branches, which reads as a source-level if-conversion. Its
+region tree is eight `base = (short)(q > 0x1fff ? 0x28 : 0x2c);` statements.
+All eight were rewritten as `if`/`else` and **every cell is byte-identical to
+its control**, in all nine symbols of the file. GCC folds the two spellings to
+one tree before any of this is decided.
+
+**2. `& 0xffffu` against `(unsigned short)` moves bytes and closes nothing.**
+The object truncates with `movzwl %ax,%eax` (3 bytes) where we emit
+`and $0xffff,%eax` (5), so the cast looked like six free bytes in each
+scrambler. Compiled at all four sites: the object files differ, the symbol byte
+COUNTS do not move at all, and neither verdict changes. Read the size before
+reading the mnemonic.
+
+**3. Nested `if`s for `fse_quality`'s `&&` chain are NEGATIVE.** The object
+spends three branches where we spend `setl`/`setle`/`test`/`je` and one branch,
+which is `fold` turning `TRUTH_ANDIF` into `TRUTH_AND`. Writing the three
+conditions as nested `if`s does change the emission -- and moves
+`FSE_decision_4pt` from 19 bytes under the object to 35, and
+`FSE_decision_64pt` from 3 under to 19. It improves `_32pt` and `_128pt` by two
+instructions each while moving neither's byte count. Declined: a lever that
+costs two symbols to pay two instructions in two others is not one.
+
+**4. `short di, dq` against `int di, dq` in `FSE_decision_AB` is a CONSTANT
+MAP.** The object spills SIXTEEN-BIT values (`mov %si,0x20(%esp)`,
+`mov %ax,0x10(%esp)`) into a `sub $0x5c,%esp` frame where ours is
+`sub $0x20`, which is lever 12's own rule -- a two-byte spill cannot hold an
+`int` -- so the difference locals looked like the place to start. Declaring
+them `short` emits BYTE-IDENTICAL code: every product is promoted to `int`
+before the multiply either way and nothing downstream can see the declaration.
+A `short` local is free HERE; that is not a general statement, and it is the
+counterexample to reading every 16-bit spill as a retype.
+
+**5. And the obvious six `short` locals for `_AB` OVERSHOOT.** The object is
+678 bytes and we are 627 -- the one symbol in the worklist where the object is
+substantially BIGGER, so lever 2's absence shape applies and the 16-bit spills
+say the missing thing is `short` locals. Reading `m->sym_i2`, `m->sym_q2`,
+`m->sym_i` and `m->sym_q` into four more of them takes `_AB` to 723: 51 bytes
+under becomes 45 bytes OVER, and the instruction delta goes -7 to +4. So the
+diagnosis is right in kind and wrong in quantity, and `_AB` stays open with
+its frame delta (0x5c against 0x20) as the live lead. It is the largest
+remaining gap in the seventeen.
+
+**6. `ModDataV32`'s sub-object base is not a source local.** The object reaches
+the encoder table and its selector through `lea 0x30(%edx),%ecx` and then
+`0x68(%ecx)` and `0x74(%ecx)`, where we address `0x98(%edx)` and `0xa4(%edx)`
+from `fp` directly -- textbook evidence for a local holding `fp + 0x30`. Given
+one, GCC 3.4.2 emits **exactly the same bytes**: one distinct emission over the
+four cells. The base register is a CSE decision downstream of the addressing,
+not a declaration.
+
+## F8246. LEVER 3 CANNOT REACH A WORKLIST THAT IS ENTIRELY `SIZE`, AND THE ADVANCE TEST IS ON RECORD FOR ALL SEVENTEEN ANYWAY
+
+All seventeen already-written V.32 symbols are in the `SIZE` bucket -- none is
+`BYTES`, `REGALLOC` or `RELOC`. Lever 3 steers REGISTER CHOICE at an identical
+instruction sequence; these differ by 1 to 23 instructions and 3 to 99 bytes,
+so the mechanism has nothing to act on whatever the file order is. The
+playbook's own yield table says the same thing one bucket further out: 16 of 25
+`REGALLOC` candidates closed against 0 of 9 `BYTES`.
+
+The two-compile advance test was run anyway, because it is cheap and because
+`-fno-peephole2` answers for the SYMBOL rather than for its position. Five
+files, ten compiles, disassembled on the HOST and scored through
+`byteident.body()` as F7845 requires:
+
+    v32fse.c    2 EXPOSED (`_128pt` %al, `_trn` %bl)  6 UNDECIDED  1 CLEARED
+    v32scram.c  1 EXPOSED (`descrambler` %bp)         1 UNDECIDED
+    v32smc.c    0 EXPOSED                             3 UNDECIDED
+    v32vtb.c    0 EXPOSED                             1 UNDECIDED
+    v32data.c   0 EXPOSED                             1 UNDECIDED  1 CLEARED
+
+**And the detector reported three false EXPOSED on its first run.** `%eiz` is
+not a register: it is how objdump renders the absent index of
+`lea 0x0(,%esi,1),%esi`, which is GCC's loop-head PADDING, so a file whose
+padding landed differently between the two compiles read as "a scratch was
+allocated on %eiz". Stripping `byteident._padding` rows before collecting the
+register set removes all three. F7845's rule is that a run with zero EXPOSED is
+to be distrusted; this is the same rule's other side -- an EXPOSED count that
+went UP for a reason that is not a scratch.
+
+None of the seventeen is COMDAT (`byteident.py --comdat` lists four symbols and
+none of them is here), so F8146 does not apply either: each is defined by
+exactly one object and scored once.
+
+## F8247. `ModDataV32`'S SEVENTEEN BYTES ARE THE PROLOGUE, AND THE COMPILER CHOSE IT BY THE FUNCTION'S OWN SIZE
+
+104 bytes against 121, 29 instructions against 32, and the census is
+`mov -6, push +2, pop +2, add -1`. The disassembly is unambiguous:
+
+    the object   sub $0x1c,%esp ; mov %edi,0x18(%esp) ; mov %ebx,0x10(%esp)
+                 mov %esi,0x14(%esp)  ...  three loads back, add $0x1c,%esp
+    ours         push %esi ; push %ebx ; sub $0x14,%esp ... pop %ebx ; pop %esi
+
+Same function, same three-or-two callee-saved registers, different way of
+saving them. This is GCC 3.4.2's `use_fast_prologue_epilogue`, which is
+`!expensive_function_p (frame.nregs)` -- move-based saves are longer and
+faster, push-based saves shorter and slower, and the choice is made by walking
+the function's own insn count against a budget scaled by how many registers
+are being saved. The object saves three and is not "expensive"; we save two and
+are.
+
+So the difference is downstream of how many registers the body needs and how
+many instructions it is, neither of which is a spelling. It is the same
+residual F7480 already recorded from the other end ("the blob spills four to
+stack slots where ours pushes two") and it is now named. `ModDataV22` next door
+is EXACT, so the shape is reproducible in this codebase when the counts line
+up; there is no flag or attribute to reach for here and none should be.
+
+## F8248. THE PASS'S BASELINE DID NOT MATCH THE BRIEF'S, AND THE LIVE MEASUREMENT IS THE ONE THAT COUNTS
+
+The brief quoted master at `1251` symbols, `BYTES 73`, `SIZE 571`. Measured at
+`39c11285` with `tools/toolchain/build.sh` and `byteident.py` on the same
+commit: **1257 symbols, EXACT 569 (45.3%), REGALLOC 32, RELOC 1, BYTES 74,
+SIZE 576, UNRESOLVED 5**. `EXACT` and `REGALLOC` agree; the denominator and the
+two loss buckets are each six and five higher.
+
+Nothing was diagnosed from the difference and nothing needs to be: the rule is
+`refinement.md`'s second habit, that a number measured only after a change is
+not evidence about the change, and its corollary here is that a number
+INHERITED from a brief is not a baseline either. The per-symbol table this pass
+scored against was written before the first edit and diffed in both directions
+after each one, which is what F7880 asks for -- a symbol that stays `SIZE` and
+gets WORSE is invisible to a set diff of the `EXACT` set, and three of this
+pass's five candidate edits were rejected on exactly that column.
+
+## F8249. THE V.32 TRANSMITTER'S RING WRAP IS BRANCHLESS IN THE OBJECT AND BRANCHY IN OURS -- FIVE SYMBOLS, TWO FILES, ONE CONSTRUCT, AND IT IS NOT THE LOCALS' WIDTH
+
+The second cross-file signature this pass found, and unlike F8240's it is
+NOT recovered. It is written down because it is one construct behind 34 bytes
+in four of the five non-`FSE` symbols, and because the obvious lever has been
+measured and does not do it.
+
+The object computes `widx = next < limit ? next : 0` as
+
+    xor %edx,%edx ; cmp %di,%ax ; setl %dl ; neg %edx ; and %eax,%edx
+
+-- `mask = -(next < limit); widx = next & mask`, which is GCC's
+`noce_try_store_flag_mask`. We emit `cmp` and a branch. The census signature is
+the same in all four, and `SMCv32_encoder_dif` carries two of them:
+
+    SMCv32_encoder_abs   setl -1  neg -1  and -1  movsbl -1  against jl +1
+    SMCv32_encoder_dif   setl -2  neg -2  and -4             against jl +1 ja +2
+    SMCv32_encoder_tcm   setl -1  neg -1  and -1  movsbl -1  against jl +1 ja +1
+    TxNoCarrierV32       setl -1  neg -1  and -1             against jl +1 jb +1
+
+**The transform is an `SImode` one and our wrap locals are `short`, which is
+the obvious explanation and it is wrong.** Declaring `widx`, `limit`, `next`
+and `quad` as `int` in `TxNoCarrierV32` does move the function -- 156 bytes to
+154, two off the object's 152, its closest cell -- and the `setl`/`neg`/`and`
+motif count stays at **zero**. So the two bytes are not this mechanism, and
+taking them would be hill-climbing on a byte count with no decoded fact behind
+it, which is what F7782 refuses. Declined; four distinct emissions over the
+four cells, so the domain is real.
+
+What is left to try, and nobody has: the arms' own types, the comparison's
+operand order (lever 9), and whether the `quad` update in the same loop is
+what blocks the if-conversion by making the block two stores instead of one.
+The 34 bytes are the largest single lead left in the V.32 worklist after
+`FSE_decision_AB`'s 51.
