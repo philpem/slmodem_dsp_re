@@ -91822,10 +91822,35 @@ test. Subtotalling `V32mod.c +39` by symbol name the way this finding does for
                                 StoreReg, LoadReg, SetToneDetect, ResetRx and
                                 the two Init*Sequence
 
-**39% of F8112's "V.32" span is V.22 by name.** So 32,921 over-counts in one
-direction, adding 9,539 to it would over-count further, and **the honest
-position is that V.32's size is not a number this project currently has.** What
-is owned is the claim in this finding's title, which needs no total.
+**39% of F8112's "V.32" span is V.22 by name.** So adding 9,539 to 32,921 would
+compound an error rather than fix one.
+
+**THE NET CORRECTION GOES DOWN, NOT UP, AND THAT IS THE OPPOSITE OF WHAT THIS
+FINDING'S OPENING SUGGESTS.** F8112 swept in 12,154 B of V.22 and left out
+9,539 B of V.32, so it over-counts by at least 2,615. Subtotalling all four
+spans by name, with the twelve `RxHdx*` states settled by the relocation-range
+argument below and the five unsuffixed rate coders by address containment:
+
+    Dialer.c +18                      9,539     8,862 by name + 677 by address
+    v32.c                             1,691
+    V32mod.c +39, V.32 share         14,695
+                                    -------
+    V.32, firm                       25,925     58.6% of the 44,264 remaining
+    V32mod.c +39, unattributed      + 4,381     connect_*, Detect_*, Set{Rx,Tx}Rate,
+                                    -------     MakeTxData, {Gen,Det}Sequence,
+    V.32, ceiling                    30,306     StoreReg, LoadReg, ... 68.5%
+
+    V.22  = 12,154 (V32mod.c +39) + 1,071 (v22.c) = 13,225        29.9%
+
+**Both ends are below F8112's 32,921.** V.32 is **59-68%** of what remains of
+data mode, not 74%; V.22 is 30%; together they are **88-98%**. So F8112's
+CONCLUSION — that the fence made "cover the data modes" unreachable — is intact
+and, if anything, understated, because the two fenced modes together are nearer
+all of it than V.32 alone ever was. Only the single number moves.
+
+The 4,381 B are left unattributed on purpose. They carry no modulation in their
+names and the relocation-range argument that settled `TxHdx*`/`RxHdx*` has not
+been run on them; splitting the difference silently is what produced 32,921.
 
 Measured as follows. `tools/service.py` reports `Dialer.c +18` as the largest
 open **data-mode** span at **9,539 bytes**, which made it look like the obvious
@@ -92335,3 +92360,26 @@ was zero. The fix was not a better mutation but a better fixture: a
 `taps_override` that shortens `cfg.len` to 40 after creation, so there is a real
 tap one place past the end. **A buffer that ends at its allocation makes an
 off-by-one unobservable, and a zeroed heap makes it look deliberate.**
+
+### `cfg.f1c` and `cfg.f1e` are now decodable, and the rename is a PENDING TASK
+
+Both are bare `fNNNN` names — CLAUDE.md's worst of the four naming states, *an
+offset wearing a name* — and this pass settled what they are:
+
+    cfg.f1c   +0x1c   16384   the Q15 threshold fraction, used as
+                              `2*corr < (f1c * energy) >> 15`, i.e. one half
+    cfg.f1e   +0x1e      40   the correlation LAG in samples, and the modulus
+                              of the `rev_hist` index is 2 * this
+
+Evidence class 2 for both — the arithmetic in `FPM_TONE_find_rev` types them,
+the way a callee's signature would. `include/dsplib/fpm_tone.h` documents both
+against the old spellings.
+
+**The rename was not done, and deliberately.** The designated initialiser lives
+in `src/dsp/fpm_tone_cfg.c`, outside the delegated arm's file list, and a rename
+that touches a config file every datapump reads is a gate cycle of its own.
+Recorded here rather than left in a hand-over because that is D28's precedent in
+`docs/fastpass.md`: an unrecorded observation is unrecoverable, and it will not
+be noticed twice. Whoever renames them should do `fpm_tone_cfg.c`, the header
+and the two uses together, and the change is a pure compile-time substitution —
+`compare.py` must not move.
