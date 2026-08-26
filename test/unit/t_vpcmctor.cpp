@@ -747,7 +747,7 @@ excl_add(int k, unsigned off, unsigned len)
 }
 
 static unsigned int
-u32(const unsigned char *p, unsigned off)
+rd_u32(const unsigned char *p, unsigned off)
 {
 	unsigned int v;
 
@@ -773,12 +773,12 @@ iir_at(const struct region *r, unsigned o)
 
 	if ((size_t)o + 0x34 > r->nfull)
 		return 0;
-	nden = u32(r->a, o + 0x10);
-	nnum = u32(r->a, o + 0x14);
-	ilen = u32(r->a, o + 0x18);
-	olen = u32(r->a, o + 0x1c);
-	if (nden != u32(r->b, o + 0x10) || nnum != u32(r->b, o + 0x14)
-	    || ilen != u32(r->b, o + 0x18) || olen != u32(r->b, o + 0x1c))
+	nden = rd_u32(r->a, o + 0x10);
+	nnum = rd_u32(r->a, o + 0x14);
+	ilen = rd_u32(r->a, o + 0x18);
+	olen = rd_u32(r->a, o + 0x1c);
+	if (nden != rd_u32(r->b, o + 0x10) || nnum != rd_u32(r->b, o + 0x14)
+	    || ilen != rd_u32(r->b, o + 0x18) || olen != rd_u32(r->b, o + 0x1c))
 		return 0;
 	if (nden < 1 || nden > 64 || nnum < 1 || nnum > 64)
 		return 0;
@@ -831,9 +831,9 @@ iir_scan(const struct region *r)
 		if (!iir_at(r, o))
 			continue;
 		n_iir++;
-		nden = u32(r->a, o + 0x10);
-		nnum = u32(r->a, o + 0x14);
-		olen = u32(r->a, o + 0x1c);
+		nden = rd_u32(r->a, o + 0x10);
+		nnum = rd_u32(r->a, o + 0x14);
+		olen = rd_u32(r->a, o + 0x1c);
 		da = vptr(r->a, o + 0x00);
 		db = vptr(r->b, o + 0x00);
 		na = vptr(r->a, o + 0x04);
@@ -856,7 +856,7 @@ iir_scan(const struct region *r)
 		 * comparison because `m_acc` holds whatever each side's
 		 * storage held, which is a fixture property and not a claim.
 		 */
-		if (u32(r->a, o + 0x28) != olen
+		if (rd_u32(r->a, o + 0x28) != olen
 		    || memcmp(r->a + o + 0x2c, zero8, 8) == 0) {
 			printf("    a filter at region %d +0x%04x: OUR m_i is"
 			       " not m_outLen or our m_acc is zero -- finding"
@@ -864,7 +864,7 @@ iir_scan(const struct region *r)
 			       r->k, o);
 			bad++;
 		}
-		if (u32(r->b, o + 0x28) != olen
+		if (rd_u32(r->b, o + 0x28) != olen
 		    || memcmp(r->b + o + 0x2c, zero8, 8) == 0) {
 			printf("    a filter at region %d +0x%04x: the BLOB's"
 			       " m_i is not m_outLen or its m_acc is zero --"
@@ -1042,8 +1042,8 @@ report_diffs(int report)
 				       "  raw %08x/%08x\n", k,
 				       k < 0 ? 0 : pmap.off[k],
 				       (unsigned long)n, o, wa, wb,
-				       u32(region_v[r].a, o),
-				       u32(region_v[r].b, o));
+				       rd_u32(region_v[r].a, o),
+				       rd_u32(region_v[r].b, o));
 		}
 	}
 	return bad;

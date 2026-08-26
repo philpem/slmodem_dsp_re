@@ -12,19 +12,18 @@
 #include "dsplib/dp.h"
 #include "dsplib/v8.h"
 
-/* The id this datapump registers under. */
-#define DP_V8	8
-
 /*
- * The datapump ids V.8 can hand over to.  Two of them are also ids a call can
- * be STARTED with, meaning "this may end up as V.90 or V.92"; the other two
- * are only ever arrived at, by winning the modulation negotiation.  They are
- * the standard numbers, which is why 34 and 32 are what they are.
+ * The id this datapump registers under is `DP_V8`, and the ids it can hand
+ * over to are `DP_V32`, `DP_V34`, `DP_V90` and `DP_V92`.  All five are
+ * slmodemd's own enumerators now, from `enum DP_ID` in the vendored
+ * `<modem_defs.h>` that `dsplib/dp.h` above pulls in; this header used to
+ * `#define` all five, which would have rewritten each enumerator's own
+ * definition into `8 = 8`.  Two of the four -- V.90 and V.92 -- are also ids
+ * a call can be STARTED with, meaning "this may end up as V.90 or V.92"; the
+ * other two are only ever arrived at, by winning the modulation negotiation.
+ * They are the standard numbers, which is why 34 and 32 are what they are.
+ * Findings F8402 and F8410.
  */
-#define DP_V32	32
-#define DP_V34	34
-#define DP_V90	90
-#define DP_V92	92
 
 /* The only rate the handshake runs at. */
 #define V8_DP_RATE	9600
@@ -71,7 +70,7 @@ struct v8_dp {
  * matches the original's, and three of this tree's four datapumps already
  * export what the blob keeps local.
  */
-struct dp *v8_create(void *modem, int id, int caller, int srate, int max_frag,
+struct dp *v8_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 		     struct dp_operations *op);
 int v8_delete(struct dp *dp);
 

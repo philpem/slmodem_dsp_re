@@ -58,20 +58,19 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v23.h"
 
-/* Provided by the modem core (slmodemd/modem.c). */
-
-extern int modem_dp_register(int id, void *op);
-extern void modem_dp_deregister(int id, void *op);
-extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
-			  unsigned short count);
-extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
-			  unsigned short count);
+/*
+ * `modem_dp_register`, `modem_dp_deregister`, `modem_get_bits`,
+ * `modem_put_bits` and `modem_get_sreg` are DECLARED BY THE VENDORED HEADERS
+ * now (`third_party/slmodem/modem_dp.h` and `modem_defs.h`, reached through
+ * `dsplib/dp.h`).  This file used to declare the ones it needed locally, and
+ * three of those declarations disagreed with the author's own -- see F8412.
+ */
 
 /* FILE-LOCAL, on the same evidence as b103.c's `b103_ops`.  Finding F8121. */
 static struct dp_operations v23_ops = {
 	.name = "v23",
 	.create = v23_create,
-	.destroy = v23_delete,
+	.delete = v23_delete,
 	/*
 	 * `process` is dp_wrapper_run, NOT v23_process -- see b103.c for what
 	 * that says about the architecture.  v23_process reaches the table
@@ -106,7 +105,7 @@ dp_v23_exit(void)
  * block -- 35 blocks, 700 ms of dead line before the call is dropped.
  */
 struct dp *
-v23_create(void *modem, int id, int caller, int srate, int max_frag,
+v23_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 	   struct dp_operations *op)
 {
 	struct v23_cfg cfg;

@@ -16,12 +16,17 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 
-extern int modem_dp_register(int id, void *op);
-extern void modem_dp_deregister(int id, void *op);
+/*
+ * `modem_dp_register`, `modem_dp_deregister`, `modem_get_bits`,
+ * `modem_put_bits` and `modem_get_sreg` are DECLARED BY THE VENDORED HEADERS
+ * now (`third_party/slmodem/modem_dp.h` and `modem_defs.h`, reached through
+ * `dsplib/dp.h`).  This file used to declare the ones it needed locally, and
+ * three of those declarations disagreed with the author's own -- see F8412.
+ */
 
 
 struct dp *
-v8_create(void *modem, int id, int caller, int srate, int max_frag,
+v8_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 	  struct dp_operations *op)
 {
 	struct v8_cfg cfg;
@@ -119,7 +124,7 @@ static struct dp_operations v8_op = {
 	.name = "V8",
 	.use_count = 0,
 	.create = v8_create,
-	.destroy = v8_delete,
+	.delete = v8_delete,
 	.process = v8_process,
 	.hangup = 0
 };

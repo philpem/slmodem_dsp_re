@@ -111,7 +111,7 @@ CXX        := g++
 # untidiness rather than breakage, but the fix is to not emit them.
 #
 DEPFLAGS   := -MMD -MP
-CFLAGS     := -fno-pie -fno-stack-protector -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude $(DEPFLAGS)
+CFLAGS     := -fno-pie -fno-stack-protector -Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -Ithird_party/slmodem $(DEPFLAGS)
 
 # The same flags without the dependency generation, for syntax-only passes.
 SYNCFLAGS   = $(filter-out $(DEPFLAGS),$(CFLAGS))

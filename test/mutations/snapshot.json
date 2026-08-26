@@ -10151,7 +10151,7 @@
     "the srate guard moves BELOW the announcement": "caught",
     "the table carries a hangup entry": "caught",
     "the table's .create is empty": "caught",
-    "the table's .destroy is empty": "caught",
+    "the table's .delete is empty": "caught",
     "the table's .process is empty": "caught",
     "the table's .process is the WRONG function": "caught",
     "the table's name is not VPCM": "caught",

@@ -502,8 +502,8 @@
  "replace": "\t.create = 0,\n"
 },
 {
- "label": "the table's .destroy is empty",
- "find": "\t.destroy = vpcm_delete,\n",
- "replace": "\t.destroy = 0,\n"
+ "label": "the table's .delete is empty",
+ "find": "\t.delete = vpcm_delete,\n",
+ "replace": "\t.delete = 0,\n"
 }
 ]

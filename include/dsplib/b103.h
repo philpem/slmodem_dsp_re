@@ -13,9 +13,12 @@
 #include "dsplib/b103fp.h"
 #include "dsplib/dp_wrapper.h"
 
-/* Datapump identifiers, from slmodemd's enum DP_ID (modem_defs.h). */
-#define DP_V21  21
-#define DP_B103 103
+/*
+ * `DP_V21` and `DP_B103` are slmodemd's own enumerators now, from `enum DP_ID`
+ * in the vendored `<modem_defs.h>` that `dsplib/dp.h` above pulls in.  This
+ * header used to `#define` both, which would have rewritten each enumerator's
+ * own definition into `21 = 21`.  Findings F8402 and F8410.
+ */
 
 /*
  * The datapump's own state.  840 bytes, of which the first 20 are the
@@ -71,7 +74,7 @@ struct b103_dp {
  * The dp_operations entry points.  Declared here so a test can call them
  * directly rather than only through the ops table.
  */
-struct dp *b103_create(void *modem, int id, int caller, int srate,
+struct dp *b103_create(struct modem *modem, enum DP_ID id, int caller, int srate,
 		       int max_frag, struct dp_operations *op);
 int b103_delete(struct dp *dp);
 int b103_process(void *dp, void *in, void *out, int count);

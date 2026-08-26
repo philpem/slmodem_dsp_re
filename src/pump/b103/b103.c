@@ -35,15 +35,13 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/modem_params.h"
 
-/* Provided by the modem core (slmodemd/modem.c). */
-
-extern int modem_dp_register(int id, void *op);
-extern int modem_get_bits(void *modem, int chan, unsigned char *bits,
-			  unsigned short count);
-extern int modem_put_bits(void *modem, int chan, const unsigned char *bits,
-			  unsigned short count);
-
-extern void modem_dp_deregister(int id, void *op);
+/*
+ * `modem_dp_register`, `modem_dp_deregister`, `modem_get_bits`,
+ * `modem_put_bits` and `modem_get_sreg` are DECLARED BY THE VENDORED HEADERS
+ * now (`third_party/slmodem/modem_dp.h` and `modem_defs.h`, reached through
+ * `dsplib/dp.h`).  This file used to declare the ones it needed locally, and
+ * three of those declarations disagreed with the author's own -- see F8412.
+ */
 
 /*
  * Bell 103 and V.21 share one implementation: same 300 bit/s FSK, differing
@@ -66,7 +64,7 @@ extern void modem_dp_deregister(int id, void *op);
 static struct dp_operations b103_ops = {
 	.name = "b103",
 	.create = b103_create,
-	.destroy = b103_delete,
+	.delete = b103_delete,
 	/*
 	 * `process` is dp_wrapper_run, NOT b103_process.  The core always
 	 * calls the wrapper; the wrapper calls b103_process at the datapump's
@@ -117,7 +115,7 @@ dp_b103_exit(void)
  * rather than 3200.
  */
 struct dp *
-b103_create(void *modem, int id, int caller, int srate, int max_frag,
+b103_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
 	struct b103_cfg cfg;

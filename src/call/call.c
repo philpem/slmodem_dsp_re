@@ -1,7 +1,7 @@
 /*
  * call.c -- the call-setup datapump.
  *
- * Registered as `DP_CALL`, this is what runs between "go off hook" and "we
+ * Registered as `DP_CALLPROG`, this is what runs between "go off hook" and "we
  * have a carrier".  All the judgement lives in `CALLPROG_Progress`; this file
  * dials, feeds it 48 samples at a time whatever size the host asks in, and
  * turns the message it returns into a datapump status.
@@ -23,8 +23,13 @@
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 
-extern long modem_get_sreg(void *modem, unsigned int num);
-extern int modem_dp_register(int id, void *op);
+/*
+ * `modem_dp_register`, `modem_dp_deregister`, `modem_get_bits`,
+ * `modem_put_bits` and `modem_get_sreg` are DECLARED BY THE VENDORED HEADERS
+ * now (`third_party/slmodem/modem_dp.h` and `modem_defs.h`, reached through
+ * `dsplib/dp.h`).  This file used to declare the ones it needed locally, and
+ * three of those declarations disagreed with the author's own -- see F8412.
+ */
 
 /* The rate the supervisor works at; anything else needs resampling. */
 #define CALL_NATIVE_RATE	8000
@@ -83,7 +88,7 @@ call_dial_string(struct call_dp *st, char *buf, size_t buflen)
 }
 
 struct dp *
-call_create(void *modem, int id, int caller, int srate, int max_frag,
+call_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
 	struct callprog_cfg cfg;
@@ -321,7 +326,7 @@ static struct dp_operations call_op = {
 	.name = "call",
 	.use_count = 0,
 	.create = call_create,
-	.destroy = call_delete,
+	.delete = call_delete,
 	.process = call_run,
 	.hangup = 0,
 };
@@ -329,5 +334,5 @@ static struct dp_operations call_op = {
 void
 dp_call_init(void)
 {
-	modem_dp_register(DP_CALL, &call_op);
+	modem_dp_register(DP_CALLPROG, &call_op);
 }

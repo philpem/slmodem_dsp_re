@@ -119,8 +119,8 @@ main(void)
 					    db->v8->timeout_a,
 					    da->v8->timeout_a, id);
 
-				oa->destroy(b);
-				ob->destroy(a);
+				oa->delete(b);
+				ob->delete(a);
 			}
 		}
 	}
@@ -363,8 +363,8 @@ main(void)
 						    (long)(lvl * 64 + si));
 				}
 
-				oa->destroy(b);
-				ob->destroy(a);
+				oa->delete(b);
+				ob->delete(a);
 			}
 
 			dsplib_debug_capture_on = 0;

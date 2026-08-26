@@ -94793,3 +94793,314 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+### F8410. The hand copy of `struct dp` is gone rather than checked, and 201 of 205 period objects are byte-identical — the four that moved are one aliasing decision, four times
+
+`include/dsplib/dp.h` no longer declares `struct dp`, `struct dp_operations`
+or the seven `DPSTAT_*` codes. It includes `<modem_dp.h>` from
+`third_party/slmodem/`, which F8401 vendored verbatim, so the two trees now
+**cannot** diverge instead of merely being checked for divergence. Landed with
+it: `include/dsplib/modem_params.h` stops declaring `struct dsp_info`, nine
+`DP_*` macros that would have rewritten `enum DP_ID`'s own enumerators into
+`23 = 23` are deleted, the five `dp_operations` initialisers revert from this
+tree's `.destroy` to the author's `.delete`, the five `create` functions take
+upstream's signature, and five `.c` files stop declaring the host callbacks
+locally.
+
+**THE ACCEPTANCE TEST WAS F8400's AND IT CAME OUT 201/205, NOT 205/205.** Same
+205 file names, identical `tc_manifest.txt`, and the four that moved are:
+
+| object | symbol | bytes | mnemonics |
+|---|---|---|---|
+| `src/core/dp_param.c` | `dp_runtime_create` | 1300 → 1300 | 79 → 79, same multiset |
+| `src/pump/v23/v23.c` | `v23_create` | 2456 → 2456 | 74 → 74, same multiset |
+| `src/pump/v90/vpcm.c` | `vpcm_create` | 6992 → 6992 | 241 → 241, same multiset |
+| `src/v8/v8dp.c` | `v8_create` | 2280 → 2280 | 140 → 140, same multiset |
+
+Every other symbol in all four objects, and all 201 other objects, is
+byte-identical. Each of the four is a **pure permutation**: the same
+instructions in a different order, no instruction added, removed or changed.
+And the set of symbols whose mnemonic sequence matches the blob is **648
+before and 648 after, with zero gained and zero lost** — `samesize.py
+--identical` diffed as sets, not compared as counts, because a count can gain
+four and lose four and not move.
+
+**THE CAUSE IS TYPE-BASED ALIAS ANALYSIS, AND IT IS THE SAME CAUSE IN ALL
+FOUR.** The re-plumb changes no layout — `struct dp` is 20 bytes either way,
+`struct dsp_info` 16 — but it changes four *types*: `int id` becomes
+`enum DP_ID id`, `void *modem` becomes `struct modem *modem`, and
+`int clock_deviation` becomes `long` (F8411). GCC 3.4.2 at `-O3` puts each of
+those in a different alias set from the one our inferred spelling had, which
+changes what it may hoist a load across, which changes the schedule. It is not
+a free choice the scheduler happened to make differently; it is a
+*consequence* the compiler was forced into by a type.
+
+**AND IN THE ONE CASE THE BLOB CAN ADJUDICATE, THE BLOB AGREES WITH THE
+VENDORED TYPE.** See F8411 — this is the finding's real result, and it is why
+`201/205` is a better outcome than `205/205` would have been.
+
+**What was NOT changed, deliberately.**
+
+- `src/pump/v34/v34pcmif.c` and `src/pump/v34/v34pcmmain.cpp` respell `DP_V34`,
+  `DP_V90` and `DP_V92` as their own macros and reach neither `dp.h` nor
+  `modem_defs.h`. Left alone, as F8402 scoped them: they are a separate
+  question and touching them here would put a codegen change in a commit whose
+  whole claim is that it has none.
+- `modem_params.h` still reproduces `enum MODEM_PARAMETER_NAMES` as ~63
+  `MDMPRM_*` macros, and `third_party/slmodem/modem_param.h` is vendored and
+  carries the enum. That is the same class of hand copy as this finding closes
+  and it is bigger: the values are macros here and enumerators there, so the
+  collision behaviour is the reverse of the `DP_*` one. Not attempted.
+- `test/harness/runtime.c` and `test/interop/runtime64.c` define
+  `modem_get_bits`, `modem_put_bits` and `modem_get_sreg` with the tree's old
+  signatures. Neither includes `dsplib/dp.h`, so neither conflicts, and the
+  harness is apparatus rather than reconstruction. Left.
+
+**`DP_CALL` IS RESPELLED `DP_CALLPROG` AND THAT WAS A CHOICE, NOT A FORCED
+MOVE.** Unlike the other nine it did not collide by name, so keeping it would
+have compiled. It is the *worse* case of the same defect: a name collision is
+caught by the compiler, a second private name for the same number is caught by
+nothing at all. There is no evidence either way about what dsplibs' own author
+called id 2, so the tie goes to the spelling that has a home. Checked first
+that `DP_CALL` reaches no anchor in `test/mutations` — a respelling that breaks
+one costs seventeen tests at a stroke (F5813) — and it reaches none; the five
+uses are `call.c:332` and four lines of `t_call.c`/`t_calldirect.c`.
+
+**THE `-I` IS IN SIX PLACES, NOT THE THREE THE JOB EXPECTED.** `modem_dp.h`
+includes `<modem_defs.h>` with angle brackets, so everything that preprocesses
+our headers needs `-Ithird_party/slmodem`: `tools/toolchain/period.mk`,
+`tools/toolchain/period_inner.sh`, the top-level `Makefile` — and also
+`tools/assertlive.py`, `tools/offcheck.py` and `tools/debugcov.py`, each of
+which spells its own `-Iinclude` and shells out to a compiler. `assertlive.py`
+is the one that mattered: it treats a file that fails to preprocess as *not
+evidence* and returns `None` rather than zero, so it would have failed loudly
+rather than silently — but only because F2400's rule had already been applied
+to it. The flag string is still spelled twice between `period.mk` and
+`period_inner.sh:23`; F8400 left that open and this does not close it.
+
+**The C++ keyword accommodation is F8402's, with one refinement.** `dp.h`
+macro-renames `delete` around `#include <modem_dp.h>` under `__cplusplus` and
+`#undef`s it on the next line. The refinement: `<modem_defs.h>` is pulled in
+**first, outside the window**, so that `modem_dp.h`'s own
+`#include <modem_defs.h>` is a no-op against its `__MODEM_DEFS_H__` guard and
+the window contains modem_dp.h's text and nothing else. Without that, the
+window would reach `<sys/types.h>`, which is exactly where a stray `delete`
+macro does damage in C++. Verified rather than reasoned: a probe TU containing
+`new`, `delete`, an embedded `struct dp` and a call through the renamed member
+compiles clean under GCC 3.4.2 with `-fno-exceptions -fno-rtti`. And no `.cpp`
+in the tree references the member — grepped for `.delete`, `->delete` and
+`.destroy` over every `.cpp` and `.hpp`, zero hits, and no `.cpp` names
+`dp_operations` or `struct dp` at all.
+
+**`onedef.py` NOW SCANS `third_party/slmodem/*.h`, AND WITHOUT THAT THIS
+CHANGE WOULD HAVE MADE IT BLINDER.** The tool globbed `include/**` and `src/**`
+only, so `struct dp` leaving `dp.h` for a vendored header would have dropped
+its type count by three and reported OK for no better reason than that nobody
+was looking. With the vendored headers in scope, measured on `master` and on
+this branch with the *same* tool:
+
+| | `master` | this branch |
+|---|---|---|
+| unregistered duplicates | **3** — `dp`, `dp_operations`, `dsp_info` | **0** |
+| known duplicates | 1 (`V90Phase4Demodulator`) | 1 |
+| verdict | **FAIL, exit 1** | OK, exit 0 |
+| types / files | — | 243 / 143 |
+| macro tier | — | 8 multiply defined, all agreeing |
+
+The shipped tool said `225 types, 137 files, 1 known duplicates OK` on the
+same tree, which is the number to quote for the before if you want one — and
+it is exactly the reading that made three cross-repository duplicate
+definitions invisible.
+
+### F8411. `clock_deviation` is `long`, and the object says so through an alias set it could not have said any other way
+
+F8402 left this open on the ground that the two candidates were not equivalent
+evidence and told whoever landed it to settle it from the disassembly of
+whoever writes the field. Settled, two ways, and the second was not expected.
+
+**FIRST, THE DISASSEMBLY CANNOT DISCRIMINATE, AND THAT IS A PROOF RATHER THAN
+A FAILED SEARCH.** On i386 `int` and `long` are the same size, the same
+signedness, the same alignment and the same code generation, so no instruction
+in a 32-bit object can distinguish them. The two sites bear that out — the
+store in `vpcm_delete`
+
+    3dea:  8b 42 4c    mov    0x4c(%edx),%eax
+    3ded:  89 41 04    mov    %eax,0x4(%ecx)
+
+and the load in `dp_runtime_create`
+
+    5980:  8b 4e 04    mov    0x4(%esi),%ecx
+
+are plain 32-bit moves with no extension and nothing forced. There is also no
+rank-1 evidence anywhere: `clock_deviation` appears exactly once in the whole
+of slmodemd, at its declaration, so no format string prints it.
+
+**SECOND, THE TIE BREAKS ON OWNERSHIP, WHICH IS RANK 2 AND NOT USAGE
+INFERENCE.** `struct dsp_info` is not this object's type. slmodemd embeds one
+in `struct modem` (`modem.h:405`), hands out its address as MDMPRM_DSPINFO
+(`modem_param.c:81`, `return (long)(&m->dsp_info);`) and serialises it to a
+file at `sizeof(*info)` (`modem_datafile.c:102,126`). This object never
+allocates one; it dereferences a host pointer. A consumer of a foreign type
+does not get to declare that type, and its author wrote `long`.
+
+**And `long` is the INCONVENIENT choice**, which is what makes this not
+fitting the evidence: it takes our LP64 build from 16 bytes to 24, where `int`
+would have kept `make check64` quiet. The rule was "do not pick the one that
+makes the build work", and the one that makes the build work is the one being
+rejected.
+
+**THIRD, AND THIS IS THE PART THAT WAS NOT EXPECTED: THE OBJECT DOES
+ADJUDICATE, THROUGH TBAA.** `dp_runtime_create` copies four words out of the
+`dsp_info` into the runtime block. Our source is
+
+    rt->clockDeviation = info->clock_deviation;      /* int  <- +0x04 */
+    rt->connectionType = (int)info->connection_type; /* int  <- +0x00 */
+
+preceded by a run of stores of constants into other `int` fields of `rt`.
+Whether the compiler may hoist the `+0x04` load **above** that run of stores
+depends entirely on whether the load and the stores are in the same alias set
+— that is, on whether `clock_deviation` has the same type as the `int` fields
+being stored. It is a decision the compiler is forced into by the type; it is
+not the free scheduling choice CLAUDE.md tells you to ignore.
+
+The blob hoists it. `dp_runtime_create` at 0x5975 onwards:
+
+    5975:  mov    %eax,0x10(%ebx)
+    5978:  mov    $0x6,%eax
+    597d:  mov    %dl,0x2(%ebx)
+    5980:  mov    0x4(%esi),%ecx      <-- the load, EARLY
+    5983:  movl   $0x0,0xc(%ebx)      <-- the run of constant stores
+    598a:  movl   $0x3c,0x4(%ebx)
+    5991:  movl   $0x28,0x8(%ebx)
+    5998:  movl   $0x2bc,0x14(%ebx)
+    599f:  movl   $0x0,0x40(%ebx)
+    59a6:  movl   $0x6,0x44(%ebx)
+    59ad:  mov    (%esi),%edx
+    59af:  mov    %ecx,0x4c(%ebx)     <-- the store, LATE
+
+**A FULL 2x2 ON THE SAME COMPILER AND THE SAME FLAGS, WITH THE TWO TYPES AS
+THE ONLY VARIABLES**, because the first reading of this — "the load and its
+own destination must differ" — is wrong and the control is what says so. The
+fourth arm needs `clock_deviation` back at `int`, which may not be done by
+editing the vendored file; it was done with a scratch include directory ahead
+of `third_party/slmodem` on the `-I` path, and that harness is validated by
+its own control arm reproducing the pristine object byte for byte.
+
+| `dsp_info.clock_deviation` | `_tagModemParameters.clockDeviation` | `mov 0x4(%esi)` relative to `movl $0x0,0xc(%ebx)` |
+|---|---|---|
+| `int` | `int` | **after** — not hoisted (byte-identical to the pristine object) |
+| `int` | `long` | **after** — not hoisted |
+| `long` | `int` | **before** — hoisted |
+| `long` | `long` | **before** — hoisted |
+| — | — | **BLOB: before — hoisted** |
+
+So the carrier is the SOURCE field's type and only that: the destination's
+type moves nothing, which rules out the reading that the load is being kept
+below its own store. What it is being kept below is the run of constant stores
+into the *other* `int` fields of the runtime block — `unnamed_0004 = 60`,
+`unnamed_0008 = 40`, `unnamed_0014 = 700`, `powerReductionTenths = 0`,
+`unnamed_0044 = 6` — and an `int` load may not cross those while a `long` one
+may. The blob crosses them.
+
+Neither arm matches the blob's schedule in full — both are tagged `SCHED` by
+`samesize.py`, differing in the free permutation of `mov %dl,0x2(%ebx)`
+against `mov %eax,0x10(%ebx)` and in which register holds the `+0x00` load —
+but the hoist is not in the free column, it is a two-valued consequence of a
+type, and only one value of that type produces the blob's.
+
+**Do not "fix" `struct _tagModemParameters` +0x04c to match.** It stays `int`
+on the opposite reasoning and `modem_params.h` now says so in its own comment:
+THAT struct is library-internal and this object allocates it, so its width is
+the object's to state, and the object's width is four bytes. `dsp_info` is the
+host's. Same-looking question, different owner, opposite answer — and the two
+having different types is precisely what produces the hoist above.
+
+### F8412. Three more hand-copied declarations disagreed with the author's own, and none of the three is visible at 32 bits
+
+Found by including `<modem_dp.h>`, not by looking for them: five `.c` files
+declared the host's callbacks locally, the vendored header declares the same
+five, and the compiler refused three of the pairs. F8402 predicted the type
+divergence class from one instance; here are three more, all in the same
+shape as `clock_deviation` — identical on i386, different under LP64 or in
+what they permit.
+
+| callback | ours | slmodemd's | where ours was |
+|---|---|---|---|
+| `modem_get_sreg` | `long (void *, unsigned int)` | `int (struct modem *, unsigned int)` | `call.c:26` |
+| `modem_get_bits` | `int (void *, int, unsigned char *, unsigned short)` | `int (struct modem *, int, u8 *, int)` | `v23.c:65`, `b103.c:41`, `vpcm.c:64` |
+| `modem_put_bits` | `int (void *, int, const unsigned char *, unsigned short)` | `int (struct modem *, int, u8 *, int)` | `v23.c:67`, `b103.c:43`, `vpcm.c:65` |
+
+`modem_dp_register` and `modem_dp_deregister` were `(int id, void *op)` here
+against `(enum DP_ID, struct dp_operations *)` upstream; those two are
+narrowing rather than a width disagreement and cost nothing.
+
+**`modem_get_sreg`'s `long` is the interesting one and it was reasoned, not
+copied.** `modem_params.h:92-96` argues the `long` on `modem_get_param`
+explicitly and correctly: MDMPRM_DP_ADDR carries the datapump's address
+through that otherwise int-shaped API, so a narrower return type truncates a
+pointer wherever `long` is wider than one. `git log -S` puts the
+`modem_get_sreg` declaration in the same commit (`86f044bb`, "call:
+reconstruct the call-setup datapump`) with no argument of its own, so it is
+that reasoning applied by **analogy to a different function** — and it does
+not carry, because `modem_get_sreg` returns an S-register value and never a
+pointer. slmodemd's `modem_defs.h:438` says `int`. Ours is deleted; the
+vendored declaration stands. `modem_get_param` and `modem_set_param` keep
+their `long` and their argument, and are untouched: `modem_param.h` is
+vendored but not included, so there is no conflict to resolve.
+
+**THE WIDTH CHANGE ON THE BIT PIPE COSTS NOTHING BECAUSE THE CASTS ARE IN THE
+SOURCE.** Widening `unsigned short count` to `int n` looked like the one
+change here that could move code generation — a narrowed argument forces a
+`movzwl` the wide one does not need. It does not, because all four call sites
+already narrow explicitly: `v23.c:218` and `:232` and `b103.c:244` and `:264`
+pass `(unsigned short)n_tx` and `(unsigned short)n_rx`. The cast is what emits
+the `movzwl`, and the cast is in the reconstruction's own source, so the
+parameter type never had anything to do. Confirmed by the acceptance test: of the
+two objects whose bit pipe was rewidened, `v23.c`'s only difference is
+`v23_create`'s schedule (F8410's cause, not this one) and **`b103.c` did not
+move at all** -- it is one of the 201 byte-identical objects.
+
+### F8413. A vendored header brings its whole NAMESPACE, and the three things that caught here were all outside `src/`
+
+`src/` compiled clean at the first attempt and stayed byte-identical bar the
+four schedule permutations of F8410. Everything that broke was in `test/`, and
+none of it was predicted by F8402's survey — which looked at `src/` and at
+`.cpp` files, because that is where the `delete` keyword bites.
+
+**1. `<modem_defs.h>` TYPEDEFS `u8`, `u16`, `u32`, `s8`, `s16`, `s32` AT FILE
+SCOPE, AND A TEST HAD A FUNCTION CALLED `u32`.**
+`test/unit/t_vpcmctor.cpp:750` defines `unsigned rd_u32(const unsigned char *,
+unsigned)` — it was `u32` — a little-endian word reader used sixteen times.
+GCC 3.4.2 rejects it with `redeclared as different kind of symbol`, naming the
+vendored typedef. Renamed on our side, which is where a test-harness
+accommodation belongs. Nothing in `include/` or `src/` uses any of the six
+names, which is why the scan that was run before the edits came back clean and
+the one that mattered had not been run.
+
+**2. FIVE `.destroy` MEMBER ACCESSES IN `test/unit/t_vpcmdp.c`**, past the
+five `dp_operations` initialisers F8402 enumerated. They are function-pointer
+identity checks — `vpcm_op.create != vpcm_op.destroy` and so on — so they read
+the member without initialising it and no survey of initialisers would find
+them. Eight more were in `t_v23dp.c`, `t_v8dp.c`, `t_b103dp.c`, `t_v34link.c`,
+`t_call.c`, `t_vpcmrun.c` and `t_v34conn.c`.
+
+**3. A MUTATION ANCHOR NAMED THE OLD SPELLING, AND THAT IS THE ONE THAT WOULD
+HAVE BEEN MISSED.** `test/mutations/vpcmdp.json`'s "the table's .destroy is
+empty" has `find: "\t.destroy = vpcm_delete,\n"`, which after the rename
+matched zero times. `make phase`'s `refs` tier caught it — `1 anchor(s) match
+other than exactly once` — and it is F5813's shape: an anchor is a claim about
+the file, and a rename silently voids it. The anchor, its label and its key in
+`test/mutations/snapshot.json` were all respelled together, because a label
+that says `.destroy` about a `.delete` is a comment with no gate behind it.
+
+**THE METHOD LESSON IS ABOUT THE GREP, NOT ABOUT THE HEADERS.** All three were
+inside the output of greps that had already been run and were `head`-truncated
+or filtered: `| head -30` cut the `.destroy` list off at the twentieth line,
+and a `grep -v` for comment lines removed member accesses that happened to
+share a line with one. **A grep whose purpose is completeness must not be
+piped into `head`, and must not be filtered for readability** — that is the
+same defect as a detector without a denominator (F134, F2400), one keystroke
+smaller. What found them in the end was compiling everything: a
+`-fsyntax-only` sweep over all 340-odd files under `test/` and `testbench/`
+costs seconds and reports the real answer, and the only failures it now shows
+are eight files wanting SpanDSP's include path.

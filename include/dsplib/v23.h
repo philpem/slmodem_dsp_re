@@ -12,8 +12,12 @@
 #include "dsplib/dp_wrapper.h"
 #include "dsplib/v23fp.h"
 
-/* Datapump identifier, from slmodemd's enum DP_ID (modem_defs.h). */
-#define DP_V23 23
+/*
+ * `DP_V23` is slmodemd's own enumerator now, from `enum DP_ID` in the
+ * vendored `<modem_defs.h>` that `dsplib/dp.h` above pulls in.  This header
+ * used to `#define` it, which would have rewritten the enumerator's own
+ * definition into `23 = 23`.  Findings F8402 and F8410.
+ */
 
 /*
  * The datapump's own state.  840 bytes, laid out exactly as Bell 103's is --
@@ -67,7 +71,7 @@ struct v23_dp {
  * The dp_operations entry points.  Declared here so a test can call them
  * directly rather than only through the ops table.
  */
-struct dp *v23_create(void *modem, int id, int caller, int srate, int max_frag,
+struct dp *v23_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 		      struct dp_operations *op);
 int v23_delete(struct dp *dp);
 int v23_process(void *dp_arg, void *in, void *out, int count);

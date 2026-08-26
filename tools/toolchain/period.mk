@@ -111,7 +111,7 @@ TC_EXTRA ?=
 #
 TC_FLAGS := -O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387 \
             -mno-ieee-fp -fomit-frame-pointer -maccumulate-outgoing-args \
-            -Iinclude -D__SIZEOF_POINTER__=4 \
+            -Iinclude -Ithird_party/slmodem -D__SIZEOF_POINTER__=4 \
             -include tools/toolchain/period_compat.h
 TC_FLAGS += $(TC_EXTRA)
 

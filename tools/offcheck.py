@@ -102,7 +102,7 @@ def main():
         sys.stdout.write(src)
         return 0
 
-    r = subprocess.run(["gcc", "-m32", "-Iinclude", "-fsyntax-only",
+    r = subprocess.run(["gcc", "-m32", "-Iinclude", "-Ithird_party/slmodem", "-fsyntax-only",
                         "-xc", "-"], input=src, capture_output=True, text=True)
     if r.returncode == 0:
         print("offsets: %d annotations, all match __builtin_offsetof  OK"

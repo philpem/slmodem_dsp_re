@@ -159,7 +159,7 @@ ops_of(int ref)
 		dp_call_init();
 
 	for (i = 0; i < log->count; i++)
-		if (log->id[i] == DP_CALL)
+		if (log->id[i] == DP_CALLPROG)
 			return log->ops[i];
 	return 0;
 }
@@ -184,7 +184,7 @@ drive(struct side *s, int ref, const char *dialstr, int srate, int samples,
 	params(dialstr);
 	harness_param_set(MDMPRM_DP_ADDR, (long)(intptr_t)&s->call);
 
-	s->dp = s->op->create((void *)0xD1A1u, DP_CALL, 1, srate, 160, s->op);
+	s->dp = s->op->create((void *)0xD1A1u, DP_CALLPROG, 1, srate, 160, s->op);
 	if (s->dp == 0)
 		return;
 
@@ -259,9 +259,9 @@ run(const char *label, const char *dialstr, int signal, int srate, int samples,
 	}
 
 	if (side_a.dp != 0)
-		side_a.op->destroy(side_a.dp);
+		side_a.op->delete(side_a.dp);
 	if (side_b.dp != 0)
-		side_b.op->destroy(side_b.dp);
+		side_b.op->delete(side_b.dp);
 	side_a.dp = side_b.dp = 0;
 
 	return diff_end();

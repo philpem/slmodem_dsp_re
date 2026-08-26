@@ -1488,12 +1488,12 @@ main(void)
 	 * modelled only the create half would be asserting a leak as correct.
 	 *
 	 * THE 250 V.PCM REGIONS ARE DELIBERATELY NOT TORN DOWN, and that is
-	 * not an oversight.  `ops->destroy` frees the whole graph, every
+	 * not an oversight.  `ops->delete` frees the whole graph, every
 	 * `reg[]` entry then dangles, and the run above has already finished
 	 * with it -- so calling it would test the destructor, which is a
 	 * different test with a different fixture, while adding a window in
 	 * which this one's snapshot machinery points at freed memory.  Finding
-	 * F800 measured that `->destroy` balances to `live=0, bad_free=0`; that
+	 * F800 measured that `->delete` balances to `live=0, bad_free=0`; that
 	 * is where the claim belongs.
 	 */
 	diff_begin("the host's own blocks are freed by the host's own free");

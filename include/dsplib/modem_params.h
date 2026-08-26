@@ -23,6 +23,20 @@
 #ifndef DSPLIB_MODEM_PARAMS_H
 #define DSPLIB_MODEM_PARAMS_H
 
+/*
+ * For `struct dsp_info`, which this file used to hand-copy.  It is the HOST's
+ * type -- slmodemd embeds one in `struct modem` (`modem.h:405`), hands out its
+ * address as MDMPRM_DSPINFO (`modem_param.c:81`) and serialises it at
+ * `sizeof(*info)` (`modem_datafile.c:102,126`); this object never allocates
+ * one.  So the declaration is upstream's to make, and the copy is now gone
+ * rather than merely checked.  Findings F8402 and F8411.
+ *
+ * `<modem_defs.h>` and not `"dsplib/dp.h"`: this header wants only that one
+ * type, and routing it through `dp.h` would drag `struct dp` and the C++
+ * `delete` accommodation into the fifty-odd files that include this one.
+ */
+#include <modem_defs.h>
+
 #define MDMPRM_NONE                                      0
 #define MDMPRM_RX_RATE                                   1
 #define MDMPRM_RATE                                      1
@@ -235,26 +249,34 @@ struct _tagModemParameters {
 };
 
 /*
- * `struct dsp_info` -- the host's per-line record, MDMPRM_DSPINFO's answer.
+ * `struct dsp_info` -- the host's per-line record, MDMPRM_DSPINFO's answer --
+ * IS NO LONGER DECLARED HERE.  It comes from `<modem_defs.h>`, included at the
+ * top of this file; see `third_party/slmodem/modem_defs.h:366`.
  *
+ * What this object does with it, kept because the derivation is still ours:
  * `vpcm_create` stores `modem_get_param(modem, MDMPRM_DSPINFO)` at its root
  * +0x24 (0x3abf) and never dereferences it; `vpcm_delete` writes two words
  * through it (0x3de7-0x3df3) and `dp_runtime_create` reads four (0x5955,
  * 0x5963, 0x5980, 0x59ad).  Those four accesses are at +0x00, +0x04, +0x08
- * and +0x0c, all four bytes wide, and they are the whole structure --
- * slmodemd declares exactly those four members in that order
- * (`slmodemd/modem_defs.h:366`), so the NAMES are the host's and the OFFSETS
- * and WIDTHS are this object's.  `long clock_deviation` there is `int` here
- * for the reason given above.
+ * and +0x0c, all four bytes wide, and they are the whole structure -- exactly
+ * the four members slmodemd declares, in that order.
  *
- * It is 16 bytes and it is the host's storage, not the library's: nothing in
- * this object allocates one.  A test that constructs V.PCM must own one.
+ * `clock_deviation` at +0x004 IS `long`, not the `int` this file used to say,
+ * and the two are indistinguishable in the object: on i386 they are the same
+ * size, signedness, alignment and code generation, so the store at 0x3dea and
+ * the load at 0x5980 are both a plain 32-bit `mov` and no instruction in a
+ * 32-bit object could ever tell them apart.  The tie breaks on OWNERSHIP --
+ * the struct is slmodemd's, embedded in its `struct modem` -- and not on
+ * convenience: `long` is the choice that makes our LP64 build 24 bytes rather
+ * than 16.  Finding F8411.
+ *
+ * DO NOT "fix" this to match `struct _tagModemParameters` +0x04c above, which
+ * stays `int` on the opposite reasoning: THAT struct is library-internal and
+ * this object allocates it, so its width is the object's to state.  Same
+ * question, different owner, opposite answer.
+ *
+ * It is the host's storage, not the library's: nothing in this object
+ * allocates one.  A test that constructs V.PCM must own one.
  */
-struct dsp_info {
-	unsigned int	connection_type;	/* +0x000 */
-	int		clock_deviation;	/* +0x004 */
-	unsigned int	qc_lapm;		/* +0x008 */
-	unsigned int	qc_index;		/* +0x00c */
-};
 
 #endif /* DSPLIB_MODEM_PARAMS_H */

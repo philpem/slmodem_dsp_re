@@ -84,7 +84,7 @@ def live(path, ptr):
     """
     cxx = path.endswith(".cpp")
     cmd = ["g++", "-m32", "-nostdinc++"] if cxx else ["gcc", "-m32"]
-    cmd += ["-E", "-Iinclude", "-U__SIZEOF_POINTER__"]
+    cmd += ["-E", "-Iinclude", "-Ithird_party/slmodem", "-U__SIZEOF_POINTER__"]
     if ptr is not None:
         cmd.append("-D__SIZEOF_POINTER__=%d" % ptr)
     r = subprocess.run(cmd + [path], capture_output=True, text=True)

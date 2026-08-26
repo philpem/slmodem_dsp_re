@@ -53,6 +53,23 @@ KNOWN = {
 DEFN = re.compile(r'^(class|struct|enum|union)\s+(\w+)\s*(?::[^{;]*)?\{', re.M)
 
 
+#
+# THE VENDORED HEADERS ARE IN SCOPE, and that is the whole point of them.
+# `third_party/slmodem/*.h` are slmodemd's own seven headers, copied byte for
+# byte (F8401).  Leaving them OUT of this sweep would have made vendoring look
+# like progress to this tool while it was actually going blind: `struct dp`,
+# `struct dp_operations` and `struct dsp_info` would simply have left the set
+# it globs, and the count would have dropped by three for no better reason
+# than that nobody was looking any more.  With them IN, the tool reports the
+# duplicates while they exist and reports none once the hand copies are gone
+# -- which is a measurement rather than an absence.  Finding F8410.
+#
+# They are never edited (`tools/vendorcheck.py` enforces that), so a duplicate
+# reported here is always OURS to remove.
+#
+VENDORED = "third_party/slmodem/*.h"
+
+
 def homes():
     """type -> set of files defining it.  Comments stripped first: this file's
     own docstring would otherwise report itself, and several headers quote a
@@ -61,7 +78,8 @@ def homes():
     for f in sorted(glob.glob('include/**/*.h', recursive=True) +
                     glob.glob('src/**/*.[ch]', recursive=True) +
                     glob.glob('src/**/*.cpp', recursive=True) +
-                    glob.glob('src/**/*.hpp', recursive=True)):
+                    glob.glob('src/**/*.hpp', recursive=True) +
+                    glob.glob(VENDORED, recursive=True)):
         try:
             s = open(f, encoding='latin-1').read()
         except OSError:
@@ -92,7 +110,7 @@ MACRO_DEF = re.compile(r"^\s*#\s*define\s+([A-Za-z_]\w*)\s+(\S.*?)\s*(?:/\*.*)?$
 def macro_clashes():
     """(clashing macros, count of benign multiply-defined ones)."""
     val = {}
-    for pat in ("include/**/*.h", "src/**/*.h"):
+    for pat in ("include/**/*.h", "src/**/*.h", VENDORED):
         for f in sorted(glob.glob(pat, recursive=True)):
             for line in open(f, errors="surrogateescape"):
                 m = MACRO_DEF.match(line)

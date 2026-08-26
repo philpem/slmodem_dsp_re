@@ -27,7 +27,7 @@
  * anything reaches them: through what the module registers.
  *
  *   ref_dp_b103_init()  ->  the harness records the ops pointer
- *   ops->create, ops->destroy
+ *   ops->create, ops->delete
  *   b103_process is not in the table -- `process` there is dp_wrapper_run --
  *   so it is read back out of the wrapper the datapump built.
  *
@@ -51,7 +51,7 @@ find_ref_ops(void)
 		return 0;
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
 	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
-	return ref_ops != 0 && ref_ops->create != 0 && ref_ops->destroy != 0
+	return ref_ops != 0 && ref_ops->create != 0 && ref_ops->delete != 0
 	    && our_ops != 0;
 }
 
@@ -65,7 +65,7 @@ ref_b103_create(void *modem, int id, int caller, int srate, int max_frag,
 static int
 ref_b103_delete(struct dp *dp)
 {
-	return ref_ops->destroy(dp);
+	return ref_ops->delete(dp);
 }
 
 /* Read the reference's own process function out of the wrapper it built. */

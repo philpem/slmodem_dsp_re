@@ -1258,10 +1258,10 @@ run_op_table(void)
 	diff_eq_int("and the blob's is ref_vpcm_create (%ld)",
 		    (void *)ref_vpcm_op.create == (void *)&ref_vpcm_create, 1,
 		    0);
-	diff_eq_int("destroy is vpcm_delete (%ld)",
-		    (void *)vpcm_op.destroy == (void *)&vpcm_delete, 1, 0);
+	diff_eq_int("delete is vpcm_delete (%ld)",
+		    (void *)vpcm_op.delete == (void *)&vpcm_delete, 1, 0);
 	diff_eq_int("and the blob's is ref_vpcm_delete (%ld)",
-		    (void *)ref_vpcm_op.destroy == (void *)&ref_vpcm_delete, 1,
+		    (void *)ref_vpcm_op.delete == (void *)&ref_vpcm_delete, 1,
 		    0);
 	diff_eq_int("process is vpcm_run DIRECTLY (%ld)",
 		    (void *)vpcm_op.process == (void *)&vpcm_run, 1, 0);
@@ -1270,13 +1270,13 @@ run_op_table(void)
 
 	/* The three slots are three DIFFERENT functions on each side. */
 	diff_eq_int("the three slots are three distinct functions, ours (%ld)",
-		    (void *)vpcm_op.create != (void *)vpcm_op.destroy
+		    (void *)vpcm_op.create != (void *)vpcm_op.delete
 		    && (void *)vpcm_op.create != (void *)vpcm_op.process
-		    && (void *)vpcm_op.destroy != (void *)vpcm_op.process, 1, 0);
+		    && (void *)vpcm_op.delete != (void *)vpcm_op.process, 1, 0);
 	diff_eq_int("and the blob's (%ld)",
-		    (void *)ref_vpcm_op.create != (void *)ref_vpcm_op.destroy
+		    (void *)ref_vpcm_op.create != (void *)ref_vpcm_op.delete
 		    && (void *)ref_vpcm_op.create != (void *)ref_vpcm_op.process
-		    && (void *)ref_vpcm_op.destroy != (void *)ref_vpcm_op.process,
+		    && (void *)ref_vpcm_op.delete != (void *)ref_vpcm_op.process,
 		    1, 0);
 
 	return diff_end();

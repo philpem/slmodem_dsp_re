@@ -278,7 +278,7 @@ int vpcm_run(struct dp *dp, void *in, void *out, int count);
  * `vpcm_op`; they lose the `static` here for `vpcm_run`'s reason, which is
  * that a test calls them by name.
  */
-struct dp *vpcm_create(void *modem, int id, int caller, int srate,
+struct dp *vpcm_create(struct modem *modem, enum DP_ID id, int caller, int srate,
 		       int max_frag, struct dp_operations *op);
 int vpcm_delete(struct dp *dp);
 

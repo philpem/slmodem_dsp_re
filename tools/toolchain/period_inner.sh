@@ -23,7 +23,7 @@ mkdir -p "$OUT"
 FLAGS="-O3 -frename-registers -march=i386 -mtune=i686 -mfpmath=387
        -mno-ieee-fp
        -fomit-frame-pointer -maccumulate-outgoing-args
-       -Iinclude -Itest/harness -DDSPLIB_REPRODUCE_BUGS
+       -Iinclude -Ithird_party/slmodem -Itest/harness -DDSPLIB_REPRODUCE_BUGS
        -D__SIZEOF_POINTER__=4 -include tools/toolchain/period_compat.h"
 
 # GCC 3.4 defaults to gnu89, where a declaration in a `for` initialiser is an

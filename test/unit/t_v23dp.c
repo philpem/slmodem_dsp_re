@@ -42,7 +42,7 @@ find_ref_ops(void)
 		return 0;
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
 	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
-	return ref_ops != 0 && ref_ops->create != 0 && ref_ops->destroy != 0
+	return ref_ops != 0 && ref_ops->create != 0 && ref_ops->delete != 0
 	    && our_ops != 0;
 }
 
@@ -56,7 +56,7 @@ ref_v23_create(void *modem, int id, int caller, int srate, int max_frag,
 static int
 ref_v23_delete(struct dp *dp)
 {
-	return ref_ops->destroy(dp);
+	return ref_ops->delete(dp);
 }
 
 static dp_process_fn

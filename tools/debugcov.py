@@ -119,7 +119,7 @@ BUILD = "build-cov"
 # The denominators, for `make phase`'s closing line to quote.  Under BUILD/ so
 # it is gitignored and so a `make clean` takes it with the data it describes.
 COUNTS = os.path.join(BUILD, "measured.txt")
-COV = ("-Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -MMD -MP "
+COV = ("-Wall -Wextra -Wno-unused-parameter -g -O2 -Iinclude -Ithird_party/slmodem -MMD -MP "
        "--coverage")
 LD = "-no-pie -Wl,-z,noexecstack,-z,notext --coverage"
 

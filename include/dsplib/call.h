@@ -7,7 +7,7 @@
  * `CALLPROG_Progress`; the rest of this module is the plumbing that gets
  * samples in and out of it at the size it wants.
  *
- * It registers itself under `DP_CALL` from `dp_call_init`, and the operations
+ * It registers itself under `DP_CALLPROG` from `dp_call_init`, and the operations
  * table is the only thing here with external linkage in the original -- the
  * four functions behind it are file statics, so a test reaches them by
  * calling `dp_call_init` and taking the pointers out of the registration.
@@ -28,10 +28,22 @@
  * names here say which is which.
  */
 /*
- * The id this datapump registers under.  The others live in b103.h, which is
- * where the original happens to put them.
+ * THE ID THIS DATAPUMP REGISTERS UNDER IS `DP_CALLPROG`, WHICH IS UPSTREAM'S
+ * SPELLING OF THE 2 THIS HEADER USED TO CALL `DP_CALL`.
+ *
+ * Unlike the other nine, `DP_CALL` did NOT collide by name with anything in
+ * `enum DP_ID`, so keeping it would have compiled.  It is deleted anyway:
+ * one value with two spellings across the two repositories is precisely the
+ * divergence this vendoring exists to close, and it is the WORSE case of it
+ * -- a name collision is caught by the compiler, whereas a second private
+ * name for the same number is caught by nothing at all.  There is no evidence
+ * either way about what dsplibs' own author called it, so the tie goes to the
+ * spelling that has a home.
+ *
+ * Checked before respelling: `DP_CALL` reaches no mutation anchor in
+ * `test/mutations`.  A respelling that breaks one costs seventeen
+ * tests at a stroke (F5813).  Findings F8402 and F8410.
  */
-#define DP_CALL			2
 
 #define CALL_RING_BYTES		192	/* 96 samples             */
 #define CALL_BLOCK_BYTES	96	/* 48 samples per block   */
@@ -98,7 +110,7 @@ struct call_dp {
  * `call_run` is `.process`, with no dp_wrapper in between: this datapump does
  * its own rate conversion.
  */
-struct dp *call_create(void *modem, int id, int caller, int srate,
+struct dp *call_create(struct modem *modem, enum DP_ID id, int caller, int srate,
 		       int max_frag, struct dp_operations *op);
 int call_delete(struct dp *dp);
 int call_run(struct dp *dp, void *in, void *out, int count);

@@ -60,17 +60,19 @@
 #define DSPLIB_VPCM_UNWRITTEN	__attribute__((weak))
 #include "dsplib/vpcm.h"
 
-/* The bit pipe.  Undefined in the object; the host supplies both. */
-extern int modem_get_bits(void *m, int nbits, unsigned char *buf, int n);
-extern int modem_put_bits(void *m, int nbits, const unsigned char *buf, int n);
+/*
+ * `modem_dp_register`, `modem_dp_deregister`, `modem_get_bits`,
+ * `modem_put_bits` and `modem_get_sreg` are DECLARED BY THE VENDORED HEADERS
+ * now (`third_party/slmodem/modem_dp.h` and `modem_defs.h`, reached through
+ * `dsplib/dp.h`).  This file used to declare the ones it needed locally, and
+ * three of those declarations disagreed with the author's own -- see F8412.
+ */
 
 /*
- * The datapump registry, also the host's.  `src/pump/v23/v23.c` declares the
- * same two the same way and for the same reason: there is no header for them
- * in this tree because there is none in the object either -- they are
- * undefined symbols, resolved by slmodemd's `modem.c`.
+ * The bit pipe and the datapump registry are the host's, and they are
+ * undefined symbols in the object -- resolved by slmodemd's `modem.c`.  There
+ * IS a header for them, and it is slmodemd's own: see the note above.
  */
-extern int modem_dp_register(int id, void *op);
 
 /*
  * `dp_param_get` -- src/core/dp_param.c, and it is `modem_get_param(modem,
@@ -626,7 +628,7 @@ typedef char vpcm_bits_size[
  * the original.
  */
 struct dp *
-vpcm_create(void *modem, int id, int caller, int srate, int max_frag,
+vpcm_create(struct modem *modem, enum DP_ID id, int caller, int srate, int max_frag,
 	    struct dp_operations *op)
 {
 	struct vpcm_root *s;
@@ -828,7 +830,7 @@ vpcm_delete(struct dp *dp)
 struct dp_operations vpcm_op = {
 	.name = "VPCM",
 	.create = vpcm_create,
-	.destroy = vpcm_delete,
+	.delete = vpcm_delete,
 	.process = vpcm_run
 	/* use_count and hangup are zero */
 };

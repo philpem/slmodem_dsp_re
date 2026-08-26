@@ -381,7 +381,7 @@ run_v8(struct dp_operations *ops)
 	 * keeps the allocation accounting readable.
 	 */
 	for (ep = 0; ep < NEP; ep++)
-		ops->destroy(dp[ep]);
+		ops->delete(dp[ep]);
 }
 
 /* --- V.34 ----------------------------------------------------------------- */
@@ -585,7 +585,7 @@ run_v34(struct dp_operations *ops, int nblock)
 	}
 
 	for (ep = 0; ep < NEP; ep++)
-		ops->destroy(dp[ep]);
+		ops->delete(dp[ep]);
 }
 
 /* --- main ----------------------------------------------------------------- */

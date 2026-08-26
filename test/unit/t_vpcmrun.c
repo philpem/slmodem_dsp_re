@@ -321,7 +321,7 @@ run_v8(struct dp_operations *ops)
 	v8_ok = done[0] && done[1];
 
 	for (ep = 0; ep < NEP; ep++)
-		ops->destroy(dp[ep]);
+		ops->delete(dp[ep]);
 
 	memcpy(rt_snap, rt_buf, sizeof(rt_snap));
 	memcpy(info_snap, info_buf, sizeof(info_snap));
@@ -590,7 +590,7 @@ run_v34(struct dp_operations *ops, int run)
 	}
 
 	for (ep = 0; ep < NEP; ep++)
-		ops->destroy(dp[ep]);
+		ops->delete(dp[ep]);
 }
 
 /* --- main ----------------------------------------------------------------- */
