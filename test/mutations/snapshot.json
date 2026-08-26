@@ -509,7 +509,7 @@
    }
   },
   "fpmtonekill": {
-   "key": "cc759d3a5ff056eb034b6336b648136901a8c16792b193c5cd1ed7aaf49432fb",
+   "key": "89082ab26303390791bd9feba61b21f3fdde3797c534759956e34f02049e52df",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "one sample short: an off-by-one in the count": "caught",
@@ -521,8 +521,8 @@
    }
   },
   "fpmtonerev": {
-   "key": "86e8820d7ada8e123a3fea03f6c3d2063d7c8928c6f30d00e80167e139e2e051",
-   "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "1b95521a23c2712de70691401be56e9959c1f0e7d497f950ef4f7ca83f81e7c3",
+   "summary": "29 mutations: 29 caught (29 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "count is counted down through 16 bits, as the rest of the module does": "caught",
     "filter: a negative count does nothing, as FPM_TONE_find_rev's does": "caught",
@@ -539,6 +539,8 @@
     "the correlation is compared unscaled, without its factor of two": "caught",
     "the correlation is stored back unclamped": "caught",
     "the correlation term truncates instead of rounding": "caught",
+    "the debounce is 200 samples rather than 160": "caught",
+    "the debounce is off by one: 159 rather than 160": "caught",
     "the delay line wraps at the LAG rather than at twice it": "caught",
     "the delayed tap is taken ahead of the write position, not behind it": "caught",
     "the energy window subtracts the delayed tap rather than the oldest": "caught",

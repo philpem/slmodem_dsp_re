@@ -45,9 +45,9 @@ struct fpm_tone_cfg {
 	short f1c;		/* +0x1c NOT padding: 16384 in the built-in
 				 *       config.  FPM_TONE_find_rev's only
 				 *       reader -- the Q15 fraction of the
-				 *       windowed energy that the lag
-				 *       correlation must fall below for a
-				 *       phase reversal to be declared.  Left
+				 *       windowed energy that twice the lag
+				 *       correlation must fall below for the
+				 *       search to fire.  Left
 				 *       spelled `f1c` only because the
 				 *       initialiser lives in fpm_tone_cfg.c;
 				 *       a rename belongs with that file.    */
@@ -250,13 +250,19 @@ short FPM_TONE_detect(struct fpm_tone *state, const short *samples,
 		      short count);
 
 /*
- * Look for a 180 degree phase reversal in `samples`, which is filtered IN
- * PLACE on the way in through the one biquad at `rev_block`.
+ * Time the sign changes of `samples`' autocorrelation at a lag of `cfg.f1e`
+ * samples.  `samples` is filtered IN PLACE on the way in, through the one
+ * biquad at `rev_block`.
+ *
+ * A sign change there is a 180 degree phase reversal only where the carrier's
+ * period divides `cfg.f1e`, which the built-in 2100 Hz config's does NOT --
+ * read the derivation above FPM_TONE_find_rev in src/dsp/fpm_tone.c before
+ * treating this as an answer-tone reversal detector for a given tone.
  *
  * Returns 0 when nothing was found, and otherwise the interval since the last
- * reversal it reported, in units of eight samples -- the same units
+ * one it reported, in units of eight samples -- the same units
  * `cfg.rev_period` is expressed in, so the two are directly comparable.  A
- * reversal is ignored unless more than 160 samples have passed since the last
+ * report is suppressed unless more than 160 samples have passed since the last
  * one, so the shortest interval this can ever return is 20.
  *
  * A NEGATIVE `count` does nothing here, which is not what the rest of the

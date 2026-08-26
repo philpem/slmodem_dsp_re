@@ -489,11 +489,22 @@ FPM_TONE_generate_demod(struct fpm_tone *state, short *out, short count)
  * ---------------------------------------------------------------------------
  * FPM_TONE_find_rev -- .text 0x0ab170, 547 bytes.
  *
- * The receive-side counterpart of FPM_TONE_generate's reversal bookkeeping:
- * it watches a tone for the 180 degree flips ITU-T V.25 puts in the answer
- * tone and reports how far apart they are.  Its one caller in the object is
- * `RxHdxPhsReversal` at .text 0x083b20, which narrows the result with
- * `movswl %ax,%edi` -- so the return type is `short`, from the caller.
+ * The receive-side counterpart of FPM_TONE_generate's reversal bookkeeping.
+ *
+ * WHAT IT MEASURES is a sign change in the input's autocorrelation at a lag of
+ * cfg.f1e samples, reported as the interval since the last one.  That is a 180
+ * degree phase reversal ONLY for a carrier whose period divides the lag, and
+ * the config it shares is not such a carrier: cfg.f1e is 40, which at 8 kHz is
+ * ten and a HALF cycles of the built-in 2100 Hz, so a steady tone already
+ * correlates negatively, the test below is satisfied continuously and the
+ * function degenerates into a 20 ms metronome.  At 1800 Hz the same lag is
+ * nine whole cycles and it behaves as its name says.  Do not read it as a
+ * V.25 answer-tone detector on the strength of the configuration it is
+ * declared beside.
+ *
+ * Its one caller in the object is `RxHdxPhsReversal` at .text 0x083b20, which
+ * narrows the result with `movswl %ax,%edi` -- so the return type is `short`,
+ * and that is the caller's word for it rather than an inference.
  *
  * Three things happen per call.
  *

@@ -64,6 +64,16 @@
   "replace": "\t\t\tif (state->rev_age > 0) {"
  },
  {
+  "label": "the debounce is 200 samples rather than 160",
+  "find": "\t\t\tif (state->rev_age > 160) {",
+  "replace": "\t\t\tif (state->rev_age > 200) {"
+ },
+ {
+  "label": "the debounce is off by one: 159 rather than 160",
+  "find": "\t\t\tif (state->rev_age > 160) {",
+  "replace": "\t\t\tif (state->rev_age > 159) {"
+ },
+ {
   "label": "the interval is reported in samples rather than eight-sample ticks",
   "find": "\t\t\t\tperiod = (short)(state->rev_age >> 3);",
   "replace": "\t\t\t\tperiod = state->rev_age;"
