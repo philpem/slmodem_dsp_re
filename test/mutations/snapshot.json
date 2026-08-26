@@ -598,7 +598,7 @@
    }
   },
   "fsegetdiag": {
-   "key": "fecd5e510576416a6a86db4c4623fab2056e0126c80791578fb5c2142b76c271",
+   "key": "92fcd6c0e827fb207755164c72c3e5f9d07db2a96377e80d28caaa50e47f2ce1",
    "summary": "15 mutations: 15 caught (15 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "a negative count is clamped rather than passed straight back": "caught",
@@ -1039,7 +1039,7 @@
    }
   },
   "v32anstone": {
-   "key": "f9423d4c6b7cb34d9ec9d66e2fc14919f3fc4b30bcdbefbbce56f1621de1f697",
+   "key": "93382e1d0bec0a897c2e3103a2cc1f0ce502185e9357b324bfb23f87465965ee",
    "summary": "24 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the counter is not stored at all, so the cadence never advances": "caught",
@@ -1102,7 +1102,7 @@
    }
   },
   "v32demod": {
-   "key": "42819a289f30cf2c41de4169da8f71e23648859a11a30157d9136bf9d558e1c7",
+   "key": "a1442b42b5995a2371851c511ec784fa441b7134a4d58aaa3e8f70a6f59bed95",
    "summary": "50 mutations: 49 caught (49 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "D491 undone: outside mode 6 the lms enable is masked by the AGC's flag like its three siblings": "caught",
@@ -1158,7 +1158,7 @@
    }
   },
   "v32fpctl": {
-   "key": "39fc14247302e48f151ce28648387be00a694dfb1eec906c063b5e450c1e440f",
+   "key": "47adfcfe09d13a594e34c8ee5b155dda719d8fa8737d9abfdedb2d07e5924278",
    "summary": "60 mutations: 60 caught (60 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "12000 initialises the Viterbi decoder for 14400": "caught",
@@ -1224,7 +1224,7 @@
    }
   },
   "v32fpsub": {
-   "key": "39df25a7422c5172fb89b7a37c3208fd259c1fff94350371f440e870758716cf",
+   "key": "4adbadb78971f954b3ca46df0e1e18b170f39ae30baca7fb4b42c1759ab0828e",
    "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "only two of the three tone objects are released": "caught",
@@ -1257,7 +1257,7 @@
    }
   },
   "v32hdx": {
-   "key": "ad673db8bc316e84427c215bdb5b09e288b3e403239be94cf00d1e3e8c664b09",
+   "key": "e3e98960984e26cd675aa891a6245bb66f425ec0ae1925ef5ffc48ec869a3084",
    "summary": "19 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN": "caught",
@@ -1282,7 +1282,7 @@
    }
   },
   "v32seq": {
-   "key": "db6707aaee3bb0e0027f0f82a7ff48a4e69f5afcfbfbb3e3cc3c23da1644a66b",
+   "key": "6b254a8d2e0e418756910dce17dd1fa3bf0d6667e4a9bfb89d9f214a47578983",
    "summary": "54 mutations: 53 caught (53 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "CodeRateSeq and CodeFinalRateSeq answer from each other's table": "caught",
