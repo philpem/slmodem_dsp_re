@@ -44,6 +44,50 @@
 #define SDM_SPLIT_GROUP		6
 #define SDM_SPLIT_SHIFT		3
 
+/*
+ * THE LOOP COUNTER IS A SIXTEEN-BIT COUNTDOWN, and that is read off the
+ * object rather than chosen.  Both functions open
+ *
+ *     dec %eax ; movzwl %ax,%ecx ; inc %ax ; mov %ecx,0x10(%esp) ; jne
+ *
+ * and repeat the same four-instruction motif at the foot of every iteration.
+ * The truncation to sixteen bits on EVERY pass is the counter's declared
+ * type; it is not something strength reduction makes of a 32-bit induction
+ * variable, which is the distinction finding F7941 draws.  Twenty-two cells
+ * were compiled over {counter type} x {direction} x {subscript, walking
+ * pointer} and the motif appears in the eight `while (n--)` cells and in no
+ * other -- `for (i = 0; i < count; i++)` with `i` either 16 or 32 bits does
+ * not produce it at any buffer spelling.  `while (count--)` and a local
+ * `unsigned short n = count` are indistinguishable here, so the parameter is
+ * used directly.
+ *
+ * AND THE BUFFER IS WALKED THROUGH A LOCAL, WHICH IS A SECOND FORCED
+ * OBSERVABLE AND NOT A TIDYING.  The object walks `buf` with `add $0x2,%esi`
+ * -- the pointer lives in a register.  Only a local `short *p = buf`
+ * reproduces that; walking the PARAMETER gives `addl $0x2,0x30(%esp)`, a
+ * read-modify-write on its own incoming slot, and subscripting gives a scaled
+ * index and no walk at all.  Counted as (register walk, memory walk):
+ *
+ *                            scrambler   descrambler
+ *     the object               (2, 0)      (2, 0)
+ *     a local `short *p`       (2, 0)      (0, 2)
+ *     the parameter, `buf++`   (0, 2)      (0, 2)
+ *     `buf[i]`                 (0, 0)      (0, 0)
+ *
+ * -- so the local buys the object's own form in the SCRAMBLER and nothing in
+ * the descrambler, where no cell of the twenty-two gets the pointer into a
+ * register at all.  Do not read the local as fixing both.  The `buf[i]` row is
+ * why F7941 does not bite here: 3.4.2 does NOT strength-reduce this subscript
+ * into a walking pointer, so writing one is not handing the compiler back what
+ * it would have derived.
+ *
+ * It does not CLOSE either function: the scrambler goes 368 bytes to 352
+ * against the object's 349 and the descrambler stays at 365, and what is left
+ * is spill placement -- the object keeps `reg` in a register and spills the
+ * three shift amounts to stack slots, and we do the exact opposite.  Findings
+ * F8242 and F8243.
+ */
+
 void
 SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 {
@@ -51,13 +95,13 @@ SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 	const unsigned int regmask = sdm->regmask;
 	unsigned int reg = sdm->reg;
 	int shift = sdm->group;
-	unsigned int i;
+	short *p = buf;
 
 	if (sdm->group == SDM_SPLIT_GROUP)
 		shift = SDM_SPLIT_SHIFT;
 
-	for (i = 0; i < count; i++) {
-		unsigned int in = (unsigned short)buf[i];
+	while (count--) {
+		unsigned int in = (unsigned short)p[0];
 		unsigned int low = in & 7;
 		unsigned int out;
 
@@ -75,10 +119,11 @@ SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 				^ (reg >> sdm->tap2)) & 0xffffu;
 			out2 &= outmask;
 			reg = ((reg << shift) & regmask) | out2;
-			buf[i] = (short)((out << 3) | out2);
+			p[0] = (short)((out << 3) | out2);
 		} else {
-			buf[i] = (short)out;
+			p[0] = (short)out;
 		}
+		p++;
 	}
 
 	sdm->reg = reg;
@@ -91,13 +136,13 @@ SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 	const unsigned int regmask = sdm->regmask;
 	unsigned int reg = sdm->reg;
 	int shift = sdm->group;
-	unsigned int i;
+	short *p = buf;
 
 	if (sdm->group == SDM_SPLIT_GROUP)
 		shift = SDM_SPLIT_SHIFT;
 
-	for (i = 0; i < count; i++) {
-		unsigned int in = (unsigned short)buf[i];
+	while (count--) {
+		unsigned int in = (unsigned short)p[0];
 		unsigned int low = in & 7;
 		unsigned int out;
 
@@ -115,10 +160,11 @@ SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count)
 				^ (reg >> sdm->tap2)) & 0xffffu;
 			out2 &= outmask;
 			reg = ((reg << shift) & regmask) | low;
-			buf[i] = (short)((out << 3) | out2);
+			p[0] = (short)((out << 3) | out2);
 		} else {
-			buf[i] = (short)out;
+			p[0] = (short)out;
 		}
+		p++;
 	}
 
 	sdm->reg = reg;
