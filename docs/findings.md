@@ -90711,3 +90711,96 @@ fenced files are somebody else's in any case.
 `sysdep_free` calls and all three have byte-exact destructors already, which is
 the other half of the same point: the open-coded form is correct wherever the
 free is not the operand of a destructor call the object also makes.
+
+### F8085. `V90RDetector`'s FOUR DETECTORS: THE EARLY-EXIT RETURN IS A CONSTANT MAP, AND THE DOMAIN I CHOSE COULD NOT HAVE SEPARATED ANYTHING
+
+The three-way census (`Counter(text)`, then `Counter(mnemonic)`, padding AND
+self-moves stripped) over the four open symbols, `ours minus blob`:
+
+    detectRNot / detectRfNot   mov-1 xor+1            39 against 39   SIZE 1
+    detectR    / detectRf      mov-1 movzwl-1 xor+1   47 against 48   SIZE 4
+
+All four carry the SAME signature, which is what a four-way twin should do and
+is the reason to work them together.  Read against the rows, `xor+1 mov-1` is
+the early exit:
+
+    blob   mov %ax,0x20(%ecx); mov (%ecx),%eax; inc %eax; cmp $0x6,%eax
+           je ...; mov %eax,(%ecx); mov %ebx,%eax; pop %ebx; ret
+    ours   mov (%ecx),%edx; inc %edx; cmp $0x6,%edx; je ...
+           mov %ax,0x20(%ecx); xor %eax,%eax; mov %edx,(%ecx); pop %ebx; ret
+
+The blob returns `%ebx`, which still holds the verdict variable's zero
+initialiser; we emit `xor %eax,%eax` for a literal `return 0`.  `movzwl-1` is
+the other half: at the group boundary the blob RELOADS `movzwl 0x20(%ecx),%eax`
+where we keep the value in `%ax` and do `movzwl %ax,%eax`, having store-
+forwarded across the branch.
+
+**THE HYPOTHESIS WAS THAT THE ORIGINAL'S EARLY EXIT SAYS `return verdict`, AND
+IT IS REFUTED -- BUT READ WHAT THE REFUTATION IS WORTH.**  Three cells were
+compiled: as written, with all four early exits returning the verdict VARIABLE
+instead of the literal, and that plus explicit `(unsigned int)` casts on the
+group-boundary comparisons.  All three produce the **byte-identical object**,
+md5 `864ddd6d2d031c8f4ae1a16a570b31c2`, and not one of the four verdicts moves
+(SIZE 4, SIZE 4, SIZE 1, SIZE 1 in every cell).  That is lever 1's killing
+branch measured: the map is CONSTANT over this domain.
+
+**AND THE DOMAIN IS THE PROBLEM, WHICH IS THE PART WORTH RECORDING.**  F9a's
+rule is that an enumeration reporting "0 of N" without showing any cell
+differing from any other is indistinguishable from a broken generator.  The
+generator here is fine -- the source really did change, eight `return`
+statements and two casts -- but every cell is SEMANTICALLY IDENTICAL to every
+other: `verdict` is provably zero at the early exit so GCC folds it to a
+literal, and a cast between `unsigned short` and `unsigned int` is a no-op on a
+value already zero-extended.  A domain of synonyms cannot separate anything,
+and a null over one is much weaker than a null over a domain that could have
+answered.  So `xor %eax,%eax` against `mov %ebx,%eax` is NOT reachable by how
+the return is spelt, and the next pass should not re-try these three cells.
+
+What is still unexplained, and is where to aim next: the blob's RELOAD of
+`0x20(%ecx)` across the branch.  Something in the original stops GCC forwarding
+that store, and it is the same shape in all four functions.  A domain that
+could separate it has to change what the group-boundary comparison READS -- the
+member, a second local, or a value recomputed -- not how it is spelt.
+
+### F8086. `V90PreFilter`'s CONSTRUCTOR PAIR IS SIX MISSING LOADS, AND THE CENSUS NAMES THEM
+
+F8080 closed this file's destructors and predicted, in advance, that C1/C2
+would NOT close with them -- `--why` reads `blob 120 insns, ours 114`, a
+six-instruction absence the ctor/dtor variant digit cannot touch.  It did not.
+The three-way census says what the six are:
+
+    per-mnemonic delta, ours minus blob:  cmp-5  cmpl+5  dec-1  lea+1  mov-6
+
+**THE `cmp`/`cmpl` SWAP IS THE SAME FACT AS THE MISSING `mov`s, NOT A SECOND
+ONE.**  We emit five `cmpl $imm,<memory>` where the blob emits five
+`cmp $imm,%reg`: the blob has LOADED the value into a register first, and those
+loads are six of the `mov`s we are short.  `-6` total is exactly `mov-6`, with
+`cmp`/`cmpl` and `dec`/`lea` cancelling within themselves.
+
+**THE OBVIOUS READING IS "THE ORIGINAL USED A LOCAL", AND IT IS MEASURED AND
+WRONG.**  The body reads `V90PW(params)[0x008 / 4]` twice, once for the `< 0`
+test and once for the sixteen-arm `switch`, so hoisting it into an `int cfg`
+is the natural cell and the one a pass would reach for.  Compiled, it moves the
+census the WRONG WAY:
+
+    as written           cmp-5 cmpl+5 dec-1 lea+1 mov-6      delta -6
+    hoisted into `cfg`   cmp-5 cmpl+5 dec-1 lea+1 mov-8      delta -8
+
+The hoist removes two more loads when the blob has SIX MORE than us.  So the
+object is not reading that field into a local: it re-reads memory MORE often
+than we do, and the five `cmp $imm,%reg` against our five `cmpl $imm,<memory>`
+have to come from somewhere else in the body.  Reverted; the tree is back at
+-6 and the file is unchanged.
+
+Note the direction against F8082, because the pair is instructive: that
+destructor wanted the MEMBER and refused a local, and this constructor is
+short of loads while looking exactly like a hoisting candidate.  Neither is a
+rule.  The census per symbol is, and the sign is what it is for.
+
+Not carried further here for want of budget.  The file is `V90PreFilter.cpp`,
+the pair is
+`_ZN12V90PreFilterC1E23__tHardwareCodecTypes__P13V90Phase2InfoP13V90Parameters`
+and its C2 twin, ours 556 bytes against 552.  What a next pass wants is the
+five sites where the blob compares a REGISTER and we compare MEMORY -- read
+them off `dis.py` and ask what put each value in a register, rather than
+assuming it was a source-level local.
