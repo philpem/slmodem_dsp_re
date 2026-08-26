@@ -819,5 +819,9 @@
  "v32seq": [
   "src/pump/v32/v32seq.c",
   "build/test/t_v32seq"
+ ],
+ "v32anstone": [
+  "src/pump/v32/v32anstone.c",
+  "build/test/t_v32anstone"
  ]
 }

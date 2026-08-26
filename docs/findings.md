@@ -92943,3 +92943,56 @@ more than one `diff_begin` whose exit path reads `diff_failures` or discards a
 if a suite ever reports a suspiciously position-correlated set of uncaught
 mutations, is that count against the number of `diff_begin` calls in the same
 file.
+
+### F8204. `GenerateAnsTone`: V.32's answer-tone cadence, written — and it is callerless, which is what bounds how much of its context can be named
+
+`src/pump/v32/v32anstone.c`, `include/dsplib/v32anstone.h`,
+`test/unit/t_v32anstone.c`, `test/mutations/v32anstone.json`. 199 bytes at
+0x867c0, the last V.32 function in the object before `CreateV23Modem` at
+0x86890. Closed on its own; its only callee is `FPM_TONE_generate`.
+
+Three phases driven from one `int` in a caller-owned context: **0** runs the
+tone generator, **1** writes zeros, anything else returns immediately. Each
+phase ends when the samples emitted reach its own length, at which point the
+counter is zeroed and the phase advances. There is no way back to 0 from
+inside the function.
+
+**NOTHING IN THE OBJECT CALLS IT.** `objdump -dr` over all 1.2 MB finds the
+symbol's definition and its own internal branches and nothing else. That is
+not a curiosity, it is the constraint on the work: the strongest evidence
+class this tree recognises for naming a field — a caller that types it — does
+not exist here, and the second-strongest reaches exactly one field, the
+`struct fpm_tone *` that `FPM_TONE_generate`'s prototype types. So the context
+is left unmodelled and its offsets are named for what the instructions
+touching them do, and the offsets the function never touches (+0x00, +0x08,
++0x18, and everything past +0x1f) are not named at all, because a callerless
+function cannot bound the size of what it is handed.
+
+**Two things the object does that a reader will assume it does not**, both
+recorded as deviations:
+
+- **The two phase ends use different comparisons.** The tone ends when
+  `elapsed + count >= TONE_LEN` (`cmp; jl` to continue) and the silence when
+  it is strictly `> SILENCE_LEN` (`cmp; jle` to continue). A silence of
+  exactly `SILENCE_LEN` samples is one block short of ending; a tone of
+  exactly `TONE_LEN` is not. D405.
+- **The overrun is discarded at every phase change.** The ending arm writes
+  ZERO to the counter, not `elapsed - LENGTH`, so a block that overshoots the
+  tone by 40 samples starts the silence at 0 and the 40 are lost. D406.
+
+**It always returns 1**, on all five exits, so no caller can branch on it.
+
+**The differential test compares the tone OBJECT, not just the samples**, and
+that is the load-bearing part: a body that ran the generator during the
+silence phase and then wrote zeros over its output would produce a
+byte-identical output buffer and a moved phase accumulator. That mutation is
+in the suite and is caught by the object comparison alone.
+
+**Mutation: 24 mutations, 23 caught by test, 0 not caught, 1 equivalent.** Two
+came back NOT CAUGHT on the first run and both were the fixture's fault rather
+than the suite's: every done-phase case had `elapsed` zero, so a body that
+stored the counter on the arm that must not store it wrote zero over zero. And
+one of the two was **F432's shape** — its label named the arm that ends a
+phase and its anchor landed in the DONE arm, which `anchorcheck.py` cannot
+see, because the anchor did match exactly once. The label was made true of the
+anchor rather than the other way round.

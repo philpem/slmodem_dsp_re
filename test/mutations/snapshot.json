@@ -1017,6 +1017,36 @@
     "the write cursor is written back into the read cursor": "caught"
    }
   },
+  "v32anstone": {
+   "key": "51e66d1e9243b6e94c0ec626bceb7182b66cb7543622052541291b0a8f44804e",
+   "summary": "24 mutations: 23 caught (23 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the counter is not stored at all, so the cadence never advances": "caught",
+    "the counter is read from the word above it": "caught",
+    "the counter is tested before the block is added to it": "caught",
+    "the done phase falls through to the counter store instead of returning": "caught",
+    "the done test is >= rather than a fallthrough, so a negative phase generates tone": "caught",
+    "the generator is given a block one sample short": "caught",
+    "the generator is not run at all, so the tone phase emits whatever was in the buffer": "caught",
+    "the generator is taken from the word below it": "caught",
+    "the phase is incremented rather than assigned, which agrees for every phase the object can reach and not for a corrupt one": "equivalent",
+    "the phase is read from the counter's offset": "caught",
+    "the silence is a constant that is not zero": "caught",
+    "the silence loop writes one sample too many": "caught",
+    "the silence loop's bound is unsigned, so a negative count writes 4 billion words": "caught",
+    "the silence phase carries its overrun rather than zeroing it": "caught",
+    "the silence phase ends one sample early, which is the tone phase's comparison and not its own": "caught",
+    "the silence phase measures itself against the tone length": "caught",
+    "the silence phase runs the generator first and then zeroes over it, which no output comparison can see": "caught",
+    "the silence phase wraps round to the tone phase instead of stopping": "caught",
+    "the tone phase advances straight to the done phase": "caught",
+    "the tone phase carries its overrun into the silence instead of zeroing it": "caught",
+    "the tone phase ends one sample early, which agrees except when elapsed + count lands exactly on TONE_LEN": "caught",
+    "the tone phase measures itself against the silence length": "caught",
+    "the tone phase's ending arm falls through to the counter store, so the zero it just wrote is overwritten by the accumulated count": "caught",
+    "the two phase codes are transposed, so 0 is silence and 1 is tone": "caught"
+   }
+  },
   "v32data": {
    "key": "3164c1ec1ee5771b6ab5284e0aa195844aff8644c27b38b4c057926b667399d8",
    "summary": "27 mutations: 27 caught (27 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1051,7 +1081,7 @@
    }
   },
   "v32seq": {
-   "key": "099c91911eb48b98162044af57226e2497fbd82a168d1761a1458a505128a8c5",
+   "key": "d3ba455c10b73693543ef64eb251fe954b77bc66e7e7d2c562faa8ea967a9b33",
    "summary": "54 mutations: 53 caught (53 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "CodeRateSeq and CodeFinalRateSeq answer from each other's table": "caught",

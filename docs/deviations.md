@@ -8910,3 +8910,56 @@ left.
 takes it from its caller, and every caller is unwritten. The widths the V.32
 handshake actually uses are the number of bits per received word, which is
 single figures.
+
+## D405 ⚠ `GenerateAnsTone`'s two phases end on DIFFERENT comparisons
+
+The tone phase:
+
+```
+   8684a:  8b 43 0c    mov  0xc(%ebx),%eax        ; elapsed
+   8684d:  01 f0       add  %esi,%eax             ; + count
+   8684f:  3b 43 10    cmp  0x10(%ebx),%eax       ; vs TONE_LEN
+   86852:  7c 1f       jl   86873                 ; continue if BELOW
+```
+
+The silence phase, forty bytes earlier:
+
+```
+   8680b:  8b 43 0c    mov  0xc(%ebx),%eax        ; elapsed
+   8680e:  01 f0       add  %esi,%eax             ; + count
+   86810:  3b 43 14    cmp  0x14(%ebx),%eax       ; vs SILENCE_LEN
+   86813:  7e 5e       jle  86873                 ; continue if AT OR BELOW
+```
+
+`jl` against `jle`. So a tone whose accumulated count lands exactly on
+`TONE_LEN` has ENDED, and a silence whose accumulated count lands exactly on
+`SILENCE_LEN` has NOT: the silence runs for one further block, and therefore
+for `SILENCE_LEN + 1` samples or more where the tone runs for `TONE_LEN` or
+more. With the two lengths set equal — which is the obvious configuration —
+the silence is one block longer than the tone.
+
+**Reproduced**, `>=` for the tone and `>` for the silence, and the differential
+test lands a case exactly on each boundary so that the asymmetry is checked
+rather than assumed. Mutating either comparison into the other's is caught.
+
+**Status:** unmeasured, and unmeasurable from this object: `GenerateAnsTone`
+has no caller anywhere in `dsplibs.o`, so no configuration of `TONE_LEN` and
+`SILENCE_LEN` exists to say whether one block matters. Whether this is a
+defect or a deliberate guard band cannot be decided here.
+
+## D406 ⚠ `GenerateAnsTone` discards the overrun at every phase change
+
+Both ending arms write a literal zero to the sample counter --
+`movl $0x0,0xc(%ebx)` at 0x86815 and 0x86854 -- rather than the excess over
+the phase's length. So a phase that ends on a block overshooting its length by
+N samples starts the next phase at 0 and the N are lost; the cadence drifts
+later by up to one block per phase change.
+
+**Reproduced.** Carrying the overrun instead is one of the suite's mutations
+and is caught, so the reconstruction is pinned to the object's behaviour and
+not merely compatible with it.
+
+**Status:** unmeasured, for D405's reason -- no caller exists. Note that with a
+`count` that divides both lengths exactly, the overrun is always zero and the
+deviation is inert; the differential test drives cadences where it is not
+(150-sample phases in 40-sample blocks) as well as where it is.
