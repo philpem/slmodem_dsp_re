@@ -92117,3 +92117,40 @@ What has not been drawn around this symbol is how `sym`'s ADDRESS reaches that
 parameter — a direct `&sym` is one of several spellings, and a local `short *`
 pointing at it, or a second variable sharing the slot, would give the reload a
 different RTL shape without changing the callee at all.
+
+### F8146. `byteident` scored one COMDAT copy out of three, so glob order decided the grade — the tree is 569, not 572
+
+A COMDAT symbol is emitted by **every** translation unit that instantiates it,
+and `byteident.py` resolved each symbol with `setdefault` over a sorted glob:
+it scored whichever copy the filesystem named first and never looked at the
+rest. Found by the pass that had just closed five `Scrambler` members and
+noticed its own three defining objects disagreeing (F8144's neighbour).
+
+**34 symbols are multiply defined; 4 of them get different verdicts from
+different copies:**
+
+    _ZN9ScramblerIhhE5resetEh     Scrambler.cpp BYTES 1  V90P4M BYTES 1  V92P4M EXACT
+    _ZN9ScramblerIhhEC1Ejjj       Scrambler.cpp EXACT    V90P4M BYTES 10 V92P4M EXACT
+    _ZN9ScramblerIhiE5resetEh     Scrambler.cpp EXACT    V90P3M BYTES 1  V92P3M EXACT
+    _ZN9ScramblerIhiEC1Ejjj       Scrambler.cpp EXACT    V90P3M EXACT    V92P3M BYTES 22
+
+**Every defining object is scored now and the WORST verdict wins.** The blob
+has one copy because the linker picked one and we cannot know which; claiming
+the best would be claiming the luckiest. `--comdat` lists the disagreements
+with a per-object breakdown.
+
+**THE TREE'S HEADLINE FIGURE WAS OVERSTATED BY THREE.** Grade 0 reads **569,
+not 572**, and grade 0-or-1 **606, not 608** — the corrected numbers are the
+ones to quote from here. Nothing regressed; the count was wrong, not the code.
+
+This is the same family as F7630, F7793, F7865 and F7880: **an easy number
+standing in for the one that answers the question.** Here the easy number was
+"the first object defining this symbol", and the question was "does our tree
+reproduce this function". It also explains a thing that had looked like noise —
+a template member closing in one file while an identical-looking one elsewhere
+did not.
+
+**AND IT MEANS TEMPLATE WORK MUST SCORE EVERY DEFINING OBJECT.** A pass that
+edits a header reaching several TUs cannot read one object and conclude
+anything; `--comdat` is the check, and F8144's instantiation-order lever is
+exactly the kind of work that needs it.

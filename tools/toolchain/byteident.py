@@ -587,6 +587,8 @@ def main():
     ap = argparse.ArgumentParser(description=__doc__,
                                  formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--list-exact", action="store_true")
+    ap.add_argument("--comdat", action="store_true",
+                    help="list symbols whose defining objects disagree")
     ap.add_argument("--near", type=int, metavar="N", default=0,
                     help="list the N symbols closest to closing, by |instruction "
                          "delta| with alignment padding stripped")
@@ -662,10 +664,24 @@ def main():
                  "  Every count below would be computed against NOTHING and\n"
                  "  would render as a clean zero.  From a worktree, BLOB must\n"
                  "  be explicit.  Findings F2400, F2401." % BLOB)
+    #
+    # A COMDAT SYMBOL IS DEFINED BY EVERY TU THAT INSTANTIATES IT, and this
+    # used to `setdefault` over a sorted glob -- scoring whichever copy the
+    # filesystem named first and silently ignoring the rest.  **34 symbols are
+    # multiply defined and 4 of them get DIFFERENT verdicts depending on which
+    # copy is read**, so the grade was decided by glob order (F8146).
+    #
+    # Every defining object is scored and the WORST verdict wins.  The blob has
+    # one copy because the linker picked one; we cannot know which, so claiming
+    # the best would be claiming the luckiest.  `--comdat` lists the ones that
+    # disagree.
+    #
     ours = {}
+    allobjs = {}
     for o in sorted(glob.glob(os.path.join(OURS, "*.o"))):
         for k, v in sizes(o).items():
             ours.setdefault(k, o)
+            allobjs.setdefault(k, []).append(o)
     if not ours:
         sys.exit("byteident.py: no objects in %s -- run "
                  "tools/toolchain/build.sh first." % OURS)
@@ -690,10 +706,24 @@ def main():
 
     buckets = {"EXACT": [], "UNRESOLVED": [], "REGALLOC": [], "RELOC": [],
                "BYTES": [], "SIZE": [], "NODATA": []}
+    #
+    # Worst-first, so `max` over this key picks the copy furthest from exact.
+    #
+    RANK = {"EXACT": 0, "UNRESOLVED": 1, "REGALLOC": 2, "RELOC": 3,
+            "BYTES": 4, "SIZE": 5, "NODATA": 6}
+    comdat_split = []
     for k in common:
         ab, ar = body(BLOB, k)
-        bb, br = body(ours[k], k)
-        v, n = verdict(ab, ar, bb, br)
+        objs = allobjs.get(k, [ours[k]])
+        scored = []
+        for o in objs:
+            bb2, br2 = body(o, k)
+            scored.append((verdict(ab, ar, bb2, br2), o))
+        if len({s[0][0] for s in scored}) > 1:
+            comdat_split.append((k, sorted({s[0][0] for s in scored})))
+        (v, n), worst_obj = max(scored, key=lambda s: RANK.get(s[0][0], 9))
+        ours[k] = worst_obj
+        bb, br = body(worst_obj, k)
         #
         # GRADE 1 IS CHECKED ONLY WHERE GRADE 0 FAILED.  A byte-identical
         # function is trivially alpha-equal and asking again costs two
@@ -717,6 +747,22 @@ def main():
     ex = len(buckets["EXACT"])
     un = len(buckets["UNRESOLVED"])
     ra = len(buckets["REGALLOC"])
+    if comdat_split:
+        print("  NOTE: %d COMDAT symbol(s) get different verdicts from different\n"
+              "        defining objects; the WORST is scored.  --comdat lists them."
+              % len(comdat_split))
+    if a.comdat:
+        print("\n  COMDAT symbols whose defining objects DISAGREE:\n")
+        for k, vs in sorted(comdat_split):
+            print("    %-14s %s" % ("/".join(vs), k))
+            for o in sorted(allobjs.get(k, [])):
+                ab2, ar2 = body(BLOB, k)
+                bb2, br2 = body(o, k)
+                vv, nn = verdict(ab2, ar2, bb2, br2)
+                print("        %-11s %5d  %s" % (vv, nn, os.path.basename(o)))
+        print("\n  The blob has ONE copy because the linker picked one, and we\n"
+              "  cannot know which.  Scoring the best would be scoring the\n"
+              "  luckiest, so the worst is scored (F8146).")
     print("  grade 0  EXACT      same bytes, same places  : %4d  (%.1f%%)"
           % (ex, 100.0 * ex / n))
     print("           UNRESOLVED as EXACT, but a section  : %4d" % un)
