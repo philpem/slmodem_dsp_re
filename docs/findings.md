@@ -91823,3 +91823,52 @@ wholly explicit instantiations has the same hidden order — `src/dsp/Queue.cpp`
 carries the identical note about instantiating member by member. The screen is
 NOT `nm -n`, which is constant there by construction; it is lever 3b's advance
 test per symbol, and then the position of whichever lines it calls EXPOSED.
+
+### F8145. `generateE2u`'s eight bytes are one reload, and 24 cells do not reach it
+
+`V92Phase4Modulator::generateE2u` is BYTES 8 of 239 with the census
+`cwtl-1 movswl+2 movzwl-2`. It has two `return sym;` sites and the object
+treats them differently — F7802's per-site rule, not a retype:
+
+    site A, the mapper arm     call; mov %ax,0x12(%esp); add $0x14,%esp; cwtl
+                               IDENTICAL on both sides
+    site B, the bitsToSymbol   blob  movzwl 0x12(%esp),%eax; add; cwtl
+    arm                        ours  movswl 0x12(%esp),%eax; add
+
+**Site A settles the declared type inside the blob itself.** The `cwtl` there
+sign-extends the value `V92Mapper::process` left in `%ax` without reloading;
+an `unsigned short` local would have made it `movzwl %ax,%eax`. So `short sym`
+stands, and lever 8's toneiir trap is avoided the same way it was for
+`generateCPt` (F8141) — one field, or here one local, with both extensions.
+
+**What differs is that the blob's load and its extension are two RTL insns
+that `combine` did not merge.** Site B has to reload, because the callee
+`V92BitsToSymbol::process(unsigned int &, short *)` wrote through the pointer;
+the blob loads with the don't-care extension and re-derives the sign extension
+afterwards, where ours folds both into one `movswl`.
+
+**Twenty-four cells, six distinct emissions, no preimage.**
+
+    8 spellings of site B's return -- plain, `(short)`, `(int)`,
+    `(int)(short)`, a `short` temp, an `int` temp, unary plus, a cast into a
+    temp                                    ONE emission.  CONSTANT MAP.
+    the same 8 with a second local for the
+    second arm                              ONE emission, and WORSE: SIZE 16
+    4 control structures x 2 returns --
+    the committed early return, one shared
+    `return` with if/else, the same with
+    the arms exchanged, and the early
+    return taken out of the other arm       4 emissions, none the object:
+                                            SIZE 5, SIZE 2, SIZE 3
+
+So neither how the value is written out nor which arm carries the early return
+reaches it. **DECLINED under F7782** — the committed shape is the only one of
+the six that is even the right SIZE, and every alternative is further away.
+
+**What is left, for whoever returns to it.** The residual is a single
+instruction pair and the mechanism is a missed `combine`, which is downstream
+of RTL rather than of a spelling this enumeration covered. F7940's rule says
+the next thing to widen is the callee set, and the callee here is a real
+out-of-line call in another translation unit — so the boundary that has not
+been drawn around this symbol is `V92BitsToSymbol::process`'s own signature
+and whether `sym` is passed as something other than `short *`.
