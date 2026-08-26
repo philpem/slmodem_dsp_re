@@ -7335,6 +7335,57 @@ Findings F3588 for the original derivation, 3620-3622 for the translation-unit
 attribution and the emission order, 3623 for what each compiler showed before
 any fix, 3624 for the instrumented build, and 3700-3703 for this one.
 
+## D393 🐛 `FPM_iir_filt_block` writes back a register it never assigned when `sections` is zero
+
+*Batch of 2026-08-26, from `FPM_iir_filt_block` (blob 0x0a8b10, 287 B).*
+
+The function is `FPM_iir_filt` over a block: GCC inlines the call at `-O3`
+within the translation unit, so the object holds the single-sample engine's
+body verbatim inside a two-deep loop nest and shows no `call`.
+
+The inner loop is guarded. `sections - 1` is hoisted out of the outer loop into
+`(%esp)` at 0x0a8b4a, and each outer iteration tests it:
+
+    a8b66:  cmpw   $0xffff,(%esp)          ; (short)(sections-1) == -1 ?
+    a8c02:  jne    a8b74                   ; enter the inner loop only if not
+
+The write-back at the bottom of the outer loop is:
+
+    a8c19:  mov    %dx,-0x2(%edi)          ; samples[i] = %dx
+
+`%edx` is assigned **only** at 0x0a8bf5, inside the inner loop. Nothing in the
+prologue or the outer loop writes it, so on the `sections == 0` path the store
+commits whatever the caller happened to leave in `%edx`. The correct value
+there is the untouched input sample, which the object still holds in `%ebx`.
+
+**Reachability: none in the object.** `service.py` puts the symbol in the "no
+entry point reaches it" class, and no relocation anywhere in `dsplibs.o` names
+it — it is a `T` symbol with no caller. A `sections` of zero is therefore not
+reachable *a fortiori*, and would be an odd thing to ask a cascade for in any
+case.
+
+**Observability: the whole block.** Every sample would be overwritten with the
+same stale register, since `%edx` is not touched between outer iterations
+either.
+
+**Not reproduced, and not behind `DSPLIB_REPRODUCE_BUGS`** — there is nothing
+to reproduce. The object's value on that path is a property of its caller's
+register state, not of its own code, so there is no behaviour a differential
+test could compare against. `src/dsp/fpm_iir.c` writes the sample back
+unchanged, which is what the source plainly said before the compiler lost it.
+
+**And `t_fpm_iir` deliberately does not drive `sections == 0`.** Comparing two
+arbitrary choices would be a check that passes or fails on register weather.
+The zero-`count` case IS driven, and the compared domain is `sections` 1..3
+against the three real coefficient sets plus the unstable pair, at seven
+fragment sizes.
+
+Contrast `FPM_iir_filt_II` directly below it in the same TU, whose zero-section
+case is well defined and IS tested (`iir_II zero sections`): its accumulator is
+the sample itself and the compiler kept it in one register throughout.
+
+Finding F8161.
+
 ## D410 ⚠ `V92setParamsInfoFromCPUnPck` stores through all ten of the block's array pointers without testing one of them
 
 **This entry was written with a number in the three-eighties and moved to 410

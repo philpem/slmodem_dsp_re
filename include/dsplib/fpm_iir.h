@@ -34,6 +34,16 @@
 short FPM_iir_filt(short x, const short *coeff, short *state, short sections);
 
 /*
+ * FPM_iir_filt over `count` samples, in place.  Same engine, same state
+ * layout (2 * sections words), same saturation -- see src/dsp/fpm_iir.c.
+ *
+ * `sections == 0` is NOT a defined input: the object writes back a register it
+ * never assigned on that path.  Deviation D393.
+ */
+void FPM_iir_filt_block(short *samples, const short *coeff, short *state,
+			short sections, short count);
+
+/*
  * Filter `count` samples in place through `sections` cascaded biquads,
  * direct form I.  `state` must hold 4 * sections words.
  *
