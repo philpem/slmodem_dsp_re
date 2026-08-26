@@ -94728,3 +94728,68 @@ separate change whose acceptance test is the same one F8400 used — a pure
 header re-plumb must leave all 205 period objects byte-identical, and if it
 does not, the hand copy disagreed with the real one and that is a defect
 rather than a plumbing nuisance.
+
+### F8402. `struct dsp_info`'s `clock_deviation` is `int` here and `long` upstream — identical at 32 bits, 8 bytes apart at 64
+
+Measured while working out what it would cost to make `include/dsplib/dp.h`
+include the vendored `modem_dp.h` rather than hand-copy it (F8401). Two things
+block that, and both are worth having on the record whether or not the
+rewiring lands.
+
+**1. THE ONE TYPE THE TWO TREES SPELL DIFFERENTLY.**
+
+    include/dsplib/modem_params.h:253   int  clock_deviation;   /* +0x004 */
+    third_party/slmodem/modem_defs.h:368 long clock_deviation;
+
+Every other member agrees. On i386 `int` and `long` are both 4 bytes, so the
+layout is identical, **no differential test can see this, and none ever will**
+— which is precisely why it survived. It is visible only where the tree is
+built LP64, and `make check64` does exactly that: ours stays 16 bytes and
+slmodemd's becomes 24. A unified tree has to pick one, and slmodemd's own
+`modem.c` reads the field as a `long`.
+
+This is `onedef.py`'s failure mode one repository out, and it is the concrete
+answer to "what does vendoring actually buy" — a hand copy of a layout is a
+divergence nothing can see, and here is one, found within an hour of the
+copies being taken. Four files reach both headers (`src/call/call.c`,
+`src/v8/v8proc.c`, `src/pump/v90/vpcm.c`, `include/dsplib/vpcm.h`), so they
+cannot both be included until this is settled.
+
+**Not settled here**, because the two candidates are not equivalent evidence:
+`long` is what the author of the OTHER side wrote, and `int` is what this
+reconstruction inferred. Settle it from the disassembly of whoever writes the
+field, per the usual order — a caller that types it beats usage inference.
+
+**2. THE C++ KEYWORD REACHES THREE `.cpp` FILES, TRANSITIVELY.** `modem_dp.h`
+declares `int (*delete)(struct dp *);` and `delete` is a C++ keyword. No `.cpp`
+includes `dsplib/dp.h` directly — which is what made the vendoring look free —
+but `include/dsplib/vpcm.h` does, and `VPcmXfCreate.cpp`, `v34pcmmain.cpp` and
+`v34pcmcreate.cpp` all include `vpcm.h`.
+
+**And a forward declaration will not get them out of it**: `vpcm.h:173` embeds
+`struct dp dp;` as the first member of the VPCM root, because the object does
+— `3a76: mov %ebx,0x10(%ebx)` is `root->dp.dp_data = root`. An embedded member
+needs the complete type.
+
+So the accommodation is required, and by F8401's rule it lands on OUR side, not
+in the vendored file: `dp.h` macro-renames the member around the include under
+`__cplusplus` and `#undef`s immediately after. The layout is unaffected, the C
+half keeps the author's spelling, and no `.cpp` in the tree references that
+member. It is ugly and it is contained, which is the correct trade when the
+alternative is editing a file whose whole value is being unedited.
+
+**The rest of the rewiring is bulk, not difficulty.** Nine of our macros
+collide by NAME with `enum DP_ID`'s enumerators, so a macro would rewrite the
+enumerator's own definition into `8 = 8` — `DP_V23` (`v23.h`), `DP_V8`,
+`DP_V32`, `DP_V34`, `DP_V90`, `DP_V92` (`v8dp.h`), `DP_V21`, `DP_B103`
+(`b103.h`) — plus all seven `DPSTAT_*` in `dp.h`, which agree in value.
+`call.h`'s `DP_CALL 2` does not collide by name; upstream spells it
+`DP_CALLPROG`. `src/pump/v34/v34pcmif.c` and `v34pcmmain.cpp` respell `DP_V34`
+and friends too but reach neither header, so they are out of scope until they
+do. The five `dp_operations` initialisers spell the third member `.destroy`,
+which is this tree's own rename of `delete` and reverts with them.
+
+**The acceptance test is F8400's**: a pure header re-plumb must leave all 205
+period objects byte-identical. If it does not, the hand copy disagreed with the
+real one somewhere else too, and that is a defect rather than a plumbing
+nuisance.
