@@ -217,7 +217,16 @@ DSPMATH_STEP void hanning(T *w, unsigned n)
 			long double x = (long double)(unsigned long long)i;
 			long double c;
 
-			x = x * 6.283185307179586L;	/* .rodata.cst8+0x38 */
+			/*
+			 * A DOUBLE, and the pool says so: the object loads
+			 * this with `fldl` out of `.rodata.cst8+0x38`, which
+			 * the comment beside it has always recorded.  Spelt
+			 * `6.283185307179586L` the constant becomes XFmode,
+			 * moves to `.rodata.cst16` and is loaded with `fldt`
+			 * -- same six bytes, different section, and the
+			 * relocation target is what gives it away.  Lever 11.
+			 */
+			x = x * 6.283185307179586;	/* .rodata.cst8+0x38 */
 			x = x * inv;
 			__asm__ ("fcos" : "=t" (c) : "0" (x));
 
@@ -227,34 +236,59 @@ DSPMATH_STEP void hanning(T *w, unsigned n)
 	}
 }
 
+/*
+ * NO `if (n == 0) return;`, AND THE RECIPROCAL IS INSIDE THE LOOP.  Both are
+ * read off the object rather than chosen, and together they take this from 44
+ * differing bytes of 104 to one.
+ *
+ * The guard: the object's only entry test is `xor %ecx,%ecx; cmp %ebx,%ecx;
+ * jae`, which is the `for` loop's own condition.  An explicit `n == 0` guard
+ * compiles to a `test %ebx,%ebx; je` IN FRONT of that -- GCC 3.4.2 does not
+ * fold the two -- so the guard's presence is directly observable and it is
+ * absent.  With `i` unsigned and `i < n`, the loop is its own guard.
+ *
+ * The reciprocal's PLACEMENT: written before the loop, the divide is emitted
+ * before the guard branch, because that is where the statement is.  The object
+ * divides AFTER it, in the loop preheader, alongside the three constant loads
+ * -- which is where loop-invariant motion puts a computation that was written
+ * inside the body.  So `d` is a body-local that GCC hoists, not a preheader
+ * local that GCC sinks.  Four cells (guard x placement) and exactly one maps
+ * onto the object, so this decodes a fact and not a text: any spelling that
+ * leaves the divide loop-invariant INSIDE the body will do, `d` declared here
+ * or the reciprocal written into the multiply.  Finding F8040.
+ *
+ * n == 1 DIVIDES BY ZERO and the object really does it: 1/(n-1) is +inf,
+ * 0 * inf is the x87 indefinite, and w[0] comes out 0xffc00000.  Reproduced
+ * bit for bit.  A one-tap window from this routine is garbage, and that is the
+ * original's behaviour rather than an artefact here.  Note this is exactly why
+ * the n == 0 guard could be dropped without the n == 1 one appearing: they are
+ * different questions, and only the first is answered by the loop.
+ *
+ * THE ONE BYTE THAT IS LEFT is `pop %eax` against our `pop %ecx` -- the dummy
+ * pop that undoes `sub $0x4,%esp`.  That register comes from `peephole2`'s
+ * `match_scratch` and `peep2_find_free_register`'s round-robin cursor, which
+ * is threaded through a TRANSLATION UNIT in emission order (lever 3b).  The
+ * object's unit is not this one: its `.gnu.linkonce.t` run interleaves these
+ * templates with `LowPassFIR<float>` and `Resampler::timingCorrection`, so the
+ * cursor arrived at `hamming` having been advanced by code that is not in
+ * `DspMath.cpp` at all.  Finding F8042.
+ */
 template <typename T>
 DSPMATH_STEP void hamming(T *w, unsigned n)
 {
-	if (n == 0)
-		return;
+	unsigned i;
 
-	{
-		/*
-		 * n == 1 DIVIDES BY ZERO and the object really does it:
-		 * 1/(n-1) is +inf, 0 * inf is the x87 indefinite, and w[0]
-		 * comes out 0xffc00000.  Reproduced bit for bit.  A one-tap
-		 * window from this routine is garbage, and that is the
-		 * original's behaviour rather than an artefact here.
-		 */
+	for (i = 0; i < n; i++) {
+		long double x = (long double)(unsigned long long)i;
+		long double c;
 		long double d = 1.0 / (long double)(unsigned long long)(n - 1);
-		unsigned i;
 
-		for (i = 0; i < n; i++) {
-			long double x = (long double)(unsigned long long)i;
-			long double c;
+		x = x * 6.283185307179586;	/* .rodata.cst8+0x40 */
+		x = x * d;			/* a reciprocal MULTIPLY */
+		__asm__ ("fcos" : "=t" (c) : "0" (x));
 
-			x = x * 6.283185307179586;	/* .rodata.cst8+0x40 */
-			x = x * d;			/* a reciprocal MULTIPLY */
-			__asm__ ("fcos" : "=t" (c) : "0" (x));
-
-			/* 0.54 and 0.46, .rodata.cst8+0x50 and +0x48. */
-			w[i] = (T)(0.54 - c * 0.46);
-		}
+		/* 0.54 and 0.46, .rodata.cst8+0x50 and +0x48. */
+		w[i] = (T)(0.54 - c * 0.46);
 	}
 }
 
@@ -281,6 +315,25 @@ DSPMATH_STEP void blackman(T *w, unsigned n)
 		 * 0xa3800000, about -1.39e-17, because 0.42 + 0.08 is not
 		 * exactly 0.5 in binary.  An implementation that tidies them
 		 * to 0.0f fails.
+		 *
+		 * THIS ONE IS STILL FOUR BYTES OFF AND THE LOOP BODY IS NOT
+		 * WHY -- 40 spellings say so, and the count is the point.
+		 * The object holds nine `fxch` where we hold three and spend
+		 * `fldt`/`fstpt` twice over a 0x14 frame against its 0x4; the
+		 * 0x4 is ALIGNMENT (push, push, sub 4 lands esp at 0 mod 16)
+		 * and not a spill slot, so there is no narrow spill to read a
+		 * type off -- lever 12's premise fails here rather than its
+		 * conclusion.  Crossing {`x` as `(float)i` or via `unsigned
+		 * long long`} x {the reciprocal likewise} x {before the loop,
+		 * first in the body, or between the angles} x {four ways of
+		 * pairing the two angle multiplies}, plus the guard on and
+		 * off, gives 40 cells: SIX distinct emissions, ALL of them
+		 * 156 bytes, none of them 152.  No preimage, so by lever 0
+		 * the difference is not the loop body's statement order, its
+		 * angle factoring, or those two conversions -- it is upstream
+		 * of the text, and dropping the guard alone would move this
+		 * from 60 instructions to 58 and further away.  Do not spend
+		 * another pass inside these braces.  Finding F8041.
 		 */
 		long double d = 1.0 / (float)(n - 1);
 		unsigned i;

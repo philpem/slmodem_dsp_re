@@ -90475,3 +90475,156 @@ Recorded because the section-order reading is a general instrument -- any
 COMDAT-heavy translation unit can be checked against the blob this way -- and
 because the C2/D2 surplus is now confirmed in two template families rather
 than one.
+
+### F8040. `hamming<float>`: THE `n == 0` GUARD IS ABSENT AND THE RECIPROCAL IS INSIDE THE LOOP -- 44 DIFFERING BYTES OF 104 TO ONE
+
+`_Z7hammingIfEvPT_j` was BYTES, 44 of 104 differing, 42 blob instructions
+against our 43.  Two source properties, both read off the object rather than
+chosen, take it to ONE differing byte and grade 1 ACCEPT.
+
+**The guard.** The object's only entry test is `xor %ecx,%ecx; cmp %ebx,%ecx;
+jae` -- the `for` loop's own condition, with `i` unsigned.  Our source carried
+an explicit `if (n == 0) return;`, which GCC 3.4.2 compiles to a
+`test %ebx,%ebx; je` IN FRONT of that and does not fold away.  So the presence
+of a source-level `n == 0` guard is directly observable in the emission, and
+in `hamming` it is absent.
+
+**The reciprocal's placement.** Written before the loop, `1.0/(n-1)` is emitted
+BEFORE the guard branch, because that is where the statement is.  The object
+divides AFTER it, in the loop preheader, interleaved with the three constant
+loads -- which is where loop-invariant motion puts a computation written inside
+the body.  So `d` is a body-local GCC hoists, not a preheader local GCC sinks.
+
+Four cells, guard x placement, enumerated before any cell was read:
+
+    guard, d before the loop    BYTES 44 of 104   42 blob / 43 ours   (the tree)
+    guard, d in the body        SIZE  12          42 / 44
+    no guard, d before          BYTES 39          42 / 41
+    no guard, d in the body     BYTES  1          42 / 42
+
+One cell reaches the object.  By F0 this is the SEVERAL-PREIMAGES case rather
+than a unique text: what is decoded is the FACT that the divide is
+loop-invariant code written inside the body, and any spelling with that
+property will do -- `d` declared there, or the reciprocal written into the
+multiply.  The two facts are independent and both are needed; neither alone
+gets below 39.
+
+**`hanning` is NOT the same shape and the difference is in the object.** Its
+blob DOES carry `test %esi,%esi; je`, but that is its own loop condition
+(`for (i = 1; i <= n; i++)` guards on `n != 0`), so it says nothing about a
+source guard either way.  Its eight cells -- guard x placement x the `L`
+suffix below -- gave no cell below 105 bytes against the blob's 108, so
+`hanning` was left structurally alone.
+
+The whole-tree effect is REGALLOC 36 -> 37, BYTES 82 -> 81, grade 0-or-1
+589 -> 590, with the EXACT set diffed and unchanged.  `make phase` green.
+
+### F8041. `blackman<float>` IS A CONSTANT MAP OVER 40 CELLS, AND LEVER 12's PREMISE FAILS ON IT
+
+The brief for this pass named `blackman` as levers 11 and 12's first real test
+on a genuinely x87 symbol.  **Both are a measured NO, and 12's is the more
+useful because the PREMISE fails rather than the conclusion.**
+
+Lever 12 says a spill slot narrower than the value it holds is forced evidence
+about a local's type.  `blackman`'s blob frame is `sub $0x4,%esp` against our
+`sub $0x14`, which reads like a four-byte `float` spill against our
+`long double` one.  It is not a spill slot at all: `push %esi`, `push %ebx`,
+`sub $0x4` lands `%esp` at 0 mod 16 from the ABI's 12-mod-16 entry, and there
+is no `fstps`/`flds` through `(%esp)` anywhere in the blob's body -- its only
+`fstps` is the output store `(%esi,%ecx,4)`.  The four bytes are ALIGNMENT.
+**A frame size is not a spill width; read the stores, not the `sub`.**
+
+Lever 11 is spent here as F7831 already found for `hamming`: the pool types
+agree, `fldl` 4 against 4 and one `flds` each side.
+
+What is left is the x87 ARRANGEMENT -- the blob spends nine `fxch` where we
+spend three, and pays for it with two `fldt`/`fstpt` pairs through a 12-byte
+slot.  Forty cells were enumerated over the loop body before any was read:
+{`x` as `(float)i` or `(long double)(unsigned long long)i`} x {the reciprocal
+likewise} x {declared before the loop, first in the body, or between the two
+angle multiplies} x {four pairings of the angle multiplies -- one expression
+each, both partial products then both scalings, one angle finished before the
+other, or the reciprocal folded inline with no named `d`}, plus the four
+guard/placement cells of F8040.
+
+**SIX distinct emissions, and every one of them is 156 bytes against the
+object's 152.**  No preimage.  By F0 the difference is therefore NOT the loop
+body's statement order, its angle factoring, or either conversion -- and note
+that removing the guard alone moves it from 60 instructions to 58, i.e.
+FURTHER from the object's 60, so the delta-0 the worklist showed was two
+errors cancelling exactly as F7983 warns.  The boundary enumerated was the
+loop body; whatever carries the difference is upstream of it.
+
+### F8042. THE `DspMath` TEMPLATES ARE NOT A TRANSLATION UNIT OF THEIR OWN IN THE OBJECT, WHICH BOUNDS WHAT LEVER 3b CAN REACH
+
+`hamming`'s one residual byte is `pop %eax` against our `pop %ecx` -- the dummy
+pop that undoes `sub $0x4,%esp`.  The lever 3b advance test says what it is:
+compiled `-fno-peephole2` the function grows to 110 bytes, loses all three
+`xor`, loses that `pop` for an `add $0x4,%esp`, and gains `lea`/`mov`.  A
+scratch was allocated and the register can be named, which is 3b's EXPOSED
+outcome.
+
+**F8003's screen is too narrow and this is the counterexample.**  It retired
+lever 3 for 21 of 22 files in the DSP/V.34 span on the ground that no file
+stores a constant past `+0x7f`, so `peep2_find_free_register` never fires.
+That is one of the patterns with a `match_scratch`; the `add $imm,%esp` ->
+`pop %reg` epilogue conversion is another, and it fires in `hanning`,
+`hamming` and the blob's `blackman`.  **Screen on `match_scratch` consumers,
+not on the long-move pattern alone** -- or, cheaper and exact, run the
+`-fno-peephole2` advance test.
+
+The cursor is threaded through a TRANSLATION UNIT in emission order, and the
+object's unit is not ours.  Its `.gnu.linkonce.t` run reads
+
+    sum, mean, sqrSum, Var, Resampler::timingCorrection, LowPassFIR<float>::~,
+    boxcar, hanning, hamming, blackman, designWindow, sinc,
+    LowPassFIR<float>::design x2, LowPassFIR<float>::ctor, Std
+
+so these templates were defined in a HEADER and instantiated implicitly by
+whichever unit used them first -- there was no `DspMath.cpp`.  The cursor
+reached `hamming` having been advanced by code that is not in our file at all,
+which is why the byte is not reachable from it.
+
+Reordering our explicit instantiations to the blob's own relative order
+(`sinc` and `Std` moved last) was tried and REJECTED: `hamming`'s byte did not
+move and `sinc` went from EXACT to BYTES 2.  Exactly F7880's blind spot --
+the EXACT-set diff would have shown the loss, and a count would not.
+
+### F8043. `dp_vpcm_init`: `static` FIXES THE RELOCATION HALF, AND THE REGISTER HALF IS NOT REACHABLE FROM THIS TRANSLATION UNIT
+
+F8007 recorded that this symbol needs BOTH the register rotation and
+`vpcm_op` made `static`.  **The second half is confirmed and the first is now
+measured to be out of reach**, so the row is left alone rather than half-done.
+
+`static` is right on the object's own evidence: `readelf` shows `vpcm_op` as a
+LOCAL OBJECT in the blob and `nm` prints it `d`, and the blob's three argument
+loads relocate against the `.data` SECTION symbol where ours name `vpcm_op`.
+Compiled `static`, the relocations agree and the instruction TEXT multiset
+becomes equal -- the only difference left is the scratch register triple,
+`edx, eax, ecx` in the object against `ecx, edx, eax` in ours.
+
+Those three are `peep2_find_free_register` again: `modem_dp_register(id,
+&vpcm_op)` is a store of a relocated immediate into an outgoing argument slot,
+which is the i386.md long-move split, so each call consumes one scratch.
+
+**A MINIMAL TRANSLATION UNIT SETTLES IT.**  A file containing nothing but
+`vpcm_op` and `dp_vpcm_init` compiles to the SAME `ecx, edx, eax` as the whole
+of `vpcm.c` does, so nothing before it in our file consumes a scratch and the
+cursor is at its initial state.  The object's triple is therefore not reachable
+from search_ofs 0, and something before `dp_vpcm_init` in the ORIGINAL's unit
+consumed at least one.  Our `vpcm_run` is 273 bytes and 52 instructions from
+the blob's and `vpcm_create` 18 bytes and 4 instructions, so the candidate is
+right there and the row cannot close before they do.
+
+Reordering `vpcm.c` to the blob's own definition order -- the blob runs
+`vpcm_create` 0x3a00, `vpcm_delete` 0x3dd0, `vpcm_run` 0x3e40 where our file
+runs `vpcm_run`, `vpcm_create`, `vpcm_delete` -- was built and measured: not
+one of the four symbols moved by a byte.  Recorded so the next pass does not
+re-derive it.
+
+`static` alone was NOT taken.  It changes no verdict (BYTES 6 either way), and
+`include/dsplib/vpcm.h` records a standing decision that `vpcm_run`,
+`vpcm_create` and `vpcm_delete` lose their `static` because tests call them by
+name; `test/unit/t_vpcmdp.c` compares `vpcm_op` against the blob's
+`ref_vpcm_op` field by field through that name.  This is F7768's `b103_ops` /
+`v23_ops` case exactly, and it gets F7768's answer.
