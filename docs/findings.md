@@ -90804,3 +90804,66 @@ and its C2 twin, ours 556 bytes against 552.  What a next pass wants is the
 five sites where the blob compares a REGISTER and we compare MEMORY -- read
 them off `dis.py` and ask what put each value in a register, rather than
 assuming it was a source-level local.
+
+### F8087. `V90Jd`'s CONSTRUCTOR LOADS THE LOOKAHEAD AS ONE UNSIGNED BYTE, AND THE THREE SYMBOLS THAT MOVED WITH IT ARE LEVER 3b -- ONE OF THEM BACKWARDS
+
+`--why` on `_ZN5V90JdC1EP13V90Parameters` says `row 5 MNEMONIC movb vs mov`,
+one differing byte of 118 against 119.  The three-way census says more, and the
+rows say what it means.  `ours minus blob`, 40 instructions each side:
+
+    before   and+2 mov+2 sar+1 setne-2 shr-1 test-2
+    after    and+2 mov+2         setne-2      test-2
+
+    blob   movzbl 0x30(%ecx),%ebx      ONE byte-sized load
+           mov %bl,%dl ; shr $1,%bl ; and $0x1,%dl ; and $0x1,%bl
+    ours   movzbl 0x30(%edx),%eax ; and $0x1,%al   ; mov %al,0x33(%esi)
+           mov 0x30(%edx),%ebx         a SECOND load, 32 bits wide
+           sar $1,%ebx ; and $0x1,%bl
+
+We read the member twice -- once as a byte, once as a whole word -- and shifted
+the word ARITHMETICALLY, because `MAX_SPECTRAL_SHAPER_LOOKAHEAD` is declared
+`int`.  The object loads the low byte once and shifts it LOGICALLY in an 8-bit
+register, which is what an `unsigned char` local gives.  Writing
+
+    unsigned char look = (unsigned char)params->MAX_SPECTRAL_SHAPER_LOOKAHEAD;
+
+and taking both bits off `look` reproduces exactly that: `sar`/`shr` and the
+duplicate load leave the census.  It is lever 8's rule -- the extension follows
+the DECLARED TYPE OF THE LOCAL BEING LOADED INTO -- applied to a shift rather
+than to a widening, and it is forced evidence, not a hill-climb: nothing about
+a discarded upper half makes a 32-bit reload and an arithmetic shift free.
+The two spellings are identical over every `int` value, so no test can see it.
+
+Declaration placement is a CONSTANT MAP here and was measured rather than
+assumed: `unsigned char look = ...` mid-block and `unsigned char look;` at the
+top of the block with the assignment in place give the same object, symbol for
+symbol.  The block-top form is kept because it is the file's own style.
+
+**THE CONSTRUCTOR ITSELF DID NOT CLOSE -- IT IS STILL SIZE 1, STILL
+`movb vs mov` AT ROW 5 -- AND THREE OTHER SYMBOLS MOVED INSTEAD.  ONE OF THEM
+GOT WORSE.**  Nothing was edited outside the constructor:
+
+    _ZN5V90Jd11unPackResetEv     BYTES   2  ->  EXACT       gained
+    _ZN5V90Jd12getBitVectorEv    BYTES 247  ->  BYTES 232   15 bytes closer
+    _ZN5V90Jd8packDataEv         BYTES 230  ->  BYTES 252   22 bytes FURTHER
+
+That is F7827 exactly: `peep2_find_free_register`'s cursor is threaded through
+the translation unit in emission order, so changing what scratch the FIRST
+function consumes changes the state arriving at every successor.  The
+constructor is emitted ahead of all three.
+
+**IT IS KEPT, AND THE REGRESSION IS THE REASON THIS IS WRITTEN DOWN RATHER
+THAN THE REASON IT IS NOT.**  Net is +1 grade 0 (554 -> 555) and two of the
+three bystanders improved, and the source change is independently forced by the
+object's own encoding rather than chosen for the count.  But `packData` is 22
+bytes further away, in a function F7940 to F7944 worked recently and whose
+recorded residual is which crc element lands in which stack slot -- so whoever
+returns to it needs to know the cursor arriving at it has moved, and that
+reverting THIS constructor is one way to move it back.  The measurement is
+reproducible: build, then diff the per-symbol differing-byte counts, not the
+EXACT set, because BYTES to BYTES is invisible to a set diff (F7866, F7880).
+
+What is still open in the constructor is `and+2 mov+2 setne-2 test-2` -- the
+blob extracts some later flag with `test`/`setne`, a 0/1 boolean, where we
+mask with `and` and store the masked value.  Those are different programs
+unless the bit is bit 0, so that is the next cell and it is not this one.
