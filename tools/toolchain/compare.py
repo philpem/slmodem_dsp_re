@@ -394,7 +394,22 @@ def main():
             was = json.load(open(RATCHET))
         except (OSError, ValueError):
             sys.exit("no %s -- run with --update to set the floor" % RATCHET)
-        bad = [k for k in ("identical", "same_size") if now[k] < was[k]]
+        #
+        # ONLY `identical` RATCHETS.  `same_size` counts functions whose byte
+        # count agrees and whose instructions do not, and **it goes DOWN when
+        # one of them becomes identical** -- which is the outcome this tool
+        # exists to encourage.  Ratcheting on it meant the check failed on
+        # progress: it sat red while `identical` went 350 to 627 and
+        # `same_size` fell 71 to 52, because 277 functions had graduated out
+        # of the bucket it was guarding.  A gate that is permanently red
+        # protects nothing, and one that fails on improvement teaches people
+        # to pass `--update` without reading it.
+        #
+        # `same_size` is reported with its direction and is informational: a
+        # fall is ambiguous (graduation, or a size that stopped matching) and
+        # the per-symbol scoring in `byteident.py` is what resolves it.
+        #
+        bad = [k for k in ("identical",) if now[k] < was[k]]
         if bad:
             print("\nRATCHET FAILED -- the reconstruction moved AWAY from the"
                   "\noriginal's code generation, and no differential test can"
@@ -404,6 +419,14 @@ def main():
             print("\n  If the change was deliberate, re-bless with --update"
                   "\n  and say in the commit message why fewer functions match.")
             return 1
+        if now["same_size"] < was["same_size"]:
+            print("\n  note: same_size %d -> %d.  A FALL IS AMBIGUOUS -- a"
+                  "\n  function leaves that bucket both by becoming identical"
+                  "\n  and by ceasing to match on size.  identical went %d -> %d"
+                  "\n  over the same period; score per-symbol with"
+                  "\n  `byteident.py --list-exact` to tell the two apart."
+                  % (was["same_size"], now["same_size"],
+                     was["identical"], now["identical"]))
         gained = [k for k in now if k in was and now[k] > was[k]]
         print("\nratchet OK%s" % ("" if not gained else
               " -- gained: " + ", ".join("%s %d->%d" % (k, was[k], now[k])

@@ -1,0 +1,257 @@
+[
+ {
+  "label": "NOTE: one wrapper over five DSP blocks, so almost every mutation moves a sub-object, a buffer, a count or a branch -- and each of those agrees with its wrong reading over most inputs. The fixture is what separates them: the object's own configurations through the blob's own init, both buffers canaried, a masked whole-block comparison of `fp`, the eight-plus heap regions compared through their pointers, and the diagnostics captured at level 3 so the two zero-returning arms -- which share a return value AND a status bit -- are told apart by what they print."
+ },
+ {
+  "label": "the resampler writes into the cleaned copy instead of the working buffer",
+  "find": "\tn = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),",
+  "replace": "\tn = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, CLEAN_OF(fp),"
+ },
+ {
+  "label": "the resampler is given the equaliser's block instead of its own",
+  "find": "\tn = (unsigned short)FPM_MRF_filter(MRF_OF(fp), in, RXBUF_OF(fp),\n\t\t\t\t\t   (short)count);",
+  "replace": "\tn = (unsigned short)FPM_MRF_filter((struct fpm_mrf *)(void *)FIELD(fp, V32FP_ECC), in, RXBUF_OF(fp),\n\t\t\t\t\t   (short)count);"
+ },
+ {
+  "label": "the echo canceller runs on the cleaned copy, so the working buffer is never cancelled",
+  "find": "\tFPM_ECC_cancel(ECC_OF(fp), RXBUF_OF(fp), n);",
+  "replace": "\tFPM_ECC_cancel(ECC_OF(fp), CLEAN_OF(fp), n);"
+ },
+ {
+  "label": "the canceller is given the resampler's own count rather than the count it produced",
+  "find": "\tFPM_ECC_cancel(ECC_OF(fp), RXBUF_OF(fp), n);",
+  "replace": "\tFPM_ECC_cancel(ECC_OF(fp), RXBUF_OF(fp), count);"
+ },
+ {
+  "label": "the training gate needs BOTH cancellers adapting, not either",
+  "find": "\tif (ECC_OF(fp)->adapt_near != 0 || ECC_OF(fp)->adapt_far != 0)",
+  "replace": "\tif (ECC_OF(fp)->adapt_near != 0 && ECC_OF(fp)->adapt_far != 0)"
+ },
+ {
+  "label": "the training gate watches only the near canceller",
+  "find": "\tif (ECC_OF(fp)->adapt_near != 0 || ECC_OF(fp)->adapt_far != 0)",
+  "replace": "\tif (ECC_OF(fp)->adapt_near != 0)"
+ },
+ {
+  "label": "the training gate watches only the far canceller",
+  "find": "\tif (ECC_OF(fp)->adapt_near != 0 || ECC_OF(fp)->adapt_far != 0)",
+  "replace": "\tif (ECC_OF(fp)->adapt_far != 0)"
+ },
+ {
+  "label": "the copy runs the other way, filling the working buffer from the stale cleaned one",
+  "find": "\t\tCLEAN_OF(fp)[i] = RXBUF_OF(fp)[i];",
+  "replace": "\t\tRXBUF_OF(fp)[i] = CLEAN_OF(fp)[i];"
+ },
+ {
+  "label": "the copy runs one sample short",
+  "find": "\tfor (i = 0; i < (int)n; i++)",
+  "replace": "\tfor (i = 0; i + 1 < (int)n; i++)"
+ },
+ {
+  "label": "the copy loop's bound is unsigned, which agrees over every count and not over the guard",
+  "find": "\tfor (i = 0; i < (int)n; i++)",
+  "replace": "\tfor (i = 0; i < (int)(n + 1); i++)"
+ },
+ {
+  "label": "only the cleaned length is published; the working length keeps its old value",
+  "find": "\tFIELD_SHORT(fp, V32FP_RXLEN) = (short)n;",
+  "replace": ""
+ },
+ {
+  "label": "the two published lengths are transposed onto each other's field",
+  "find": "\tFIELD_SHORT(fp, V32FP_CLEANLEN) = (short)n;\n\tFIELD_SHORT(fp, V32FP_RXLEN) = (short)n;",
+  "replace": "\tFIELD_SHORT(fp, V32FP_CLEANLEN + 12) = (short)n;\n\tFIELD_SHORT(fp, V32FP_RXLEN) = (short)n;"
+ },
+ {
+  "label": "the training gate returns before the copy and the two lengths, instead of after them",
+  "find": "\tFIELD_SHORT(fp, V32FP_CLEANLEN) = (short)n;\n\tFIELD_SHORT(fp, V32FP_RXLEN) = (short)n;\n\n\tif (ec_training != 0)\n\t\treturn 0;",
+  "replace": "\tif (ec_training != 0)\n\t\treturn 0;\n\n\tFIELD_SHORT(fp, V32FP_CLEANLEN) = (short)n;\n\tFIELD_SHORT(fp, V32FP_RXLEN) = (short)n;"
+ },
+ {
+  "label": "the mode test reads the handshake state at +0x74 rather than the mode at +0x76",
+  "find": "\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tif (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6) {\n\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)",
+  "replace": "\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tif (FIELD_SHORT(hdx, V32HDX_STATE) == V32_MODE_6) {\n\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)"
+ },
+ {
+  "label": "the energy gate is entered for every mode except 6",
+  "find": "\tif (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6) {\n\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)",
+  "replace": "\tif (FIELD_SHORT(hdx, V32HDX_MODE) != V32_MODE_6) {\n\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)"
+ },
+ {
+  "label": "the energy gate is entered one mode too high",
+  "find": "\tif (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6) {\n\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)",
+  "replace": "\tif (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6 + 1) {\n\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)"
+ },
+ {
+  "label": "the floor is inclusive, so a block exactly at it is declined",
+  "find": "\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)\n\t\t    > FPM_rms(RXBUF_OF(fp), n)) {",
+  "replace": "\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)\n\t\t    >= FPM_rms(RXBUF_OF(fp), n)) {"
+ },
+ {
+  "label": "the floor comparison is the wrong way round, so a loud block is the one declined",
+  "find": "\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)\n\t\t    > FPM_rms(RXBUF_OF(fp), n)) {",
+  "replace": "\t\tif (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)\n\t\t    < FPM_rms(RXBUF_OF(fp), n)) {"
+ },
+ {
+  "label": "the energy is measured on the cleaned copy rather than the working buffer",
+  "equivalent": true,
+  "why": "EQUIVALENT, and provably so rather than for want of an input.  The copy immediately above this line writes `clean[i] = rxbuf[i]` for every i in [0, n), and the measurement reads exactly n elements, so the two calls are handed the same n values in the same order and `FPM_rms` is a pure function of those.  Nothing between the copy and the measurement writes either buffer.  It is not equivalent at tier 3 -- the object loads 0x50cc and a wrong reading would load 0x50d0, one instruction apart -- so the claim is real and the codegen tier is what holds it.  Finding F8232.",
+  "find": "\t\t    > FPM_rms(RXBUF_OF(fp), n)) {",
+  "replace": "\t\t    > FPM_rms(CLEAN_OF(fp), n)) {"
+ },
+ {
+  "label": "the low-energy arm SETS the carrier bit instead of clearing it",
+  "find": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t\t(unsigned char)~V32_STATUS_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) |=\n\t\t\t\t(unsigned char)V32_STATUS_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the low-energy arm clears the silence bit rather than the carrier bit",
+  "find": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t\t(unsigned char)~V32_STATUS_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t\t(unsigned char)~V32_STATUS_SILENCE;\n\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the low-energy diagnostic is gated at level 3 like its neighbour instead of level 2",
+  "find": "\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"v32 low sig energy\\n\");",
+  "replace": "\t\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\t\tdsplibs_debug_printf(\"v32 low sig energy\\n\");"
+ },
+ {
+  "label": "the no-carrier diagnostic is gated at level 2 instead of level 3",
+  "find": "\t\tif (DSPLIB_DEBUG_VERBOSE())\n\t\t\tdsplibs_debug_printf(\"sre no carrier\\n\");",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"sre no carrier\\n\");"
+ },
+ {
+  "label": "the two diagnostic strings are transposed onto each other's arm",
+  "find": "\t\t\tdsplibs_debug_printf(\"v32 low sig energy\\n\");",
+  "replace": "\t\t\tdsplibs_debug_printf(\"sre no carrier\\n\");"
+ },
+ {
+  "label": "the gain control runs on the cleaned copy",
+  "find": "\tFPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);",
+  "replace": "\tFPM_AGC_agc(AGC_OF(fp), CLEAN_OF(fp), n);"
+ },
+ {
+  "label": "the gain control is handed the equaliser instead of its own block",
+  "find": "\tFPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);",
+  "replace": "\tFPM_AGC_agc((struct fpm_agc *)(void *)FIELD(fp, V32FP_FSE), RXBUF_OF(fp), n);"
+ },
+ {
+  "label": "the silence bit is set when the gain control DID see a signal",
+  "find": "\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));",
+  "replace": "\t\t\t\t| (AGC_OF(fp)->signal != 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));"
+ },
+ {
+  "label": "the silence bit is set from the gate flag rather than from the signal report",
+  "find": "\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));",
+  "replace": "\t\t\t\t| (AGC_OF(fp)->f18 == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));"
+ },
+ {
+  "label": "the status byte is assigned rather than read-modify-written, so the other six bits are lost",
+  "find": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) =\n\t\t(unsigned char)((FIELD_BYTE(modem, V32_OBJ_STATUS)\n\t\t\t\t & (unsigned char)~V32_STATUS_SILENCE)\n\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));",
+  "replace": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) =\n\t\t(unsigned char)(AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0);"
+ },
+ {
+  "label": "the timing recovery's enable comes from the carrier loop's field",
+  "find": "\tSRE_OF(fp)->adapt = FIELD_INT(fp, V32FP_SRE_ADAPT_EN) & enables;",
+  "replace": "\tSRE_OF(fp)->adapt = FIELD_INT(fp, V32FP_FSE_PLL_EN) & enables;"
+ },
+ {
+  "label": "the timing recovery's enable is not gated by the AGC's flag",
+  "find": "\tSRE_OF(fp)->adapt = FIELD_INT(fp, V32FP_SRE_ADAPT_EN) & enables;",
+  "replace": "\tSRE_OF(fp)->adapt = FIELD_INT(fp, V32FP_SRE_ADAPT_EN);"
+ },
+ {
+  "label": "the gate is re-read after the timing recovery rather than held across it",
+  "find": "\tenables = AGC_OF(fp)->f18;\n\tSRE_OF(fp)->adapt",
+  "replace": "\tenables = AGC_OF(fp)->signal;\n\tSRE_OF(fp)->adapt"
+ },
+ {
+  "label": "the timing recovery is handed the same buffer twice, so the recovered symbols never reach the equaliser",
+  "find": "\tm = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, (short)n);",
+  "replace": "\tm = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), RXBUF_OF(fp), (short)n);"
+ },
+ {
+  "label": "the timing recovery's two buffers are transposed",
+  "find": "\tm = FPM_SRE_recover(SRE_OF(fp), RXBUF_OF(fp), in, (short)n);",
+  "replace": "\tm = FPM_SRE_recover(SRE_OF(fp), in, RXBUF_OF(fp), (short)n);"
+ },
+ {
+  "label": "the carrier test reads the timing recovery's mode rather than its squelch",
+  "find": "\tif (SRE_OF(fp)->active == 0) {",
+  "replace": "\tif (SRE_OF(fp)->mode == 0) {"
+ },
+ {
+  "label": "the carrier arms are swapped: a live carrier is the one reported missing",
+  "find": "\tif (SRE_OF(fp)->active == 0) {",
+  "replace": "\tif (SRE_OF(fp)->active != 0) {"
+ },
+ {
+  "label": "the no-carrier arm leaves the carrier bit alone",
+  "find": "\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t(unsigned char)~V32_STATUS_CARRIER;\n\t\treturn 0;",
+  "replace": "\t\treturn 0;"
+ },
+ {
+  "label": "the carrier bit is set before the arm that clears it rather than after",
+  "find": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) |= V32_STATUS_CARRIER;",
+  "replace": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) |= V32_STATUS_SILENCE;"
+ },
+ {
+  "label": "the carrier loop's enable comes from the tilt filter's field",
+  "find": "\tFSE_OF(fp)->pll_on = FIELD_INT(fp, V32FP_FSE_PLL_EN) & enables;",
+  "replace": "\tFSE_OF(fp)->pll_on = FIELD_INT(fp, V32FP_FSE_TILT_EN) & enables;"
+ },
+ {
+  "label": "the carrier loop's enable is not gated by the AGC's flag",
+  "find": "\tFSE_OF(fp)->pll_on = FIELD_INT(fp, V32FP_FSE_PLL_EN) & enables;",
+  "replace": "\tFSE_OF(fp)->pll_on = FIELD_INT(fp, V32FP_FSE_PLL_EN);"
+ },
+ {
+  "label": "the mode-6 sub-test reads the squelch rather than the timing mode",
+  "find": "\t\tif (SRE_OF(fp)->mode == 0) {",
+  "replace": "\t\tif (SRE_OF(fp)->active == 0) {"
+ },
+ {
+  "label": "the mode-6 sub-test's two arms are swapped",
+  "find": "\t\tif (SRE_OF(fp)->mode == 0) {",
+  "replace": "\t\tif (SRE_OF(fp)->mode != 0) {"
+ },
+ {
+  "label": "mode 6 with a zero timing mode leaves the two equaliser enables alone instead of clearing them",
+  "find": "\t\t\tFSE_OF(fp)->tilt_on = 0;\n\t\t\tFSE_OF(fp)->lms_on = 0;",
+  "replace": "\t\t\tFSE_OF(fp)->tilt_on = 1;\n\t\t\tFSE_OF(fp)->lms_on = 1;"
+ },
+ {
+  "label": "the mode-6 tilt and lms enables are read from each other's field",
+  "find": "\t\t\tFSE_OF(fp)->tilt_on =\n\t\t\t\tFIELD_INT(fp, V32FP_FSE_TILT_EN) & enables;\n\t\t\tFSE_OF(fp)->lms_on =\n\t\t\t\tFIELD_INT(fp, V32FP_FSE_LMS_EN) & enables;",
+  "replace": "\t\t\tFSE_OF(fp)->tilt_on =\n\t\t\t\tFIELD_INT(fp, V32FP_FSE_LMS_EN) & enables;\n\t\t\tFSE_OF(fp)->lms_on =\n\t\t\t\tFIELD_INT(fp, V32FP_FSE_TILT_EN) & enables;"
+ },
+ {
+  "label": "D491 undone: outside mode 6 the lms enable is masked by the AGC's flag like its three siblings",
+  "find": "\t\tFSE_OF(fp)->lms_on = FIELD_INT(fp, V32FP_FSE_LMS_EN);",
+  "replace": "\t\tFSE_OF(fp)->lms_on = FIELD_INT(fp, V32FP_FSE_LMS_EN) & enables;"
+ },
+ {
+  "label": "outside mode 6 the tilt filter is forced OFF rather than on",
+  "find": "\t\tFSE_OF(fp)->tilt_on = 1;",
+  "replace": "\t\tFSE_OF(fp)->tilt_on = 0;"
+ },
+ {
+  "label": "outside mode 6 the lms enable is forced on rather than taken from the instance",
+  "find": "\t\tFSE_OF(fp)->lms_on = FIELD_INT(fp, V32FP_FSE_LMS_EN);",
+  "replace": "\t\tFSE_OF(fp)->lms_on = 1;"
+ },
+ {
+  "label": "the equaliser is given the resampler's count rather than the timing recovery's",
+  "find": "\treturn FPM_FSE_receive(FSE_OF(fp), in, out, m);",
+  "replace": "\treturn FPM_FSE_receive(FSE_OF(fp), in, out, n);"
+ },
+ {
+  "label": "the equaliser reads the working buffer rather than the buffer the timing recovery wrote",
+  "find": "\treturn FPM_FSE_receive(FSE_OF(fp), in, out, m);",
+  "replace": "\treturn FPM_FSE_receive(FSE_OF(fp), RXBUF_OF(fp), out, m);"
+ },
+ {
+  "label": "the equaliser's decisions are returned as zero",
+  "find": "\treturn FPM_FSE_receive(FSE_OF(fp), in, out, m);",
+  "replace": "\tFPM_FSE_receive(FSE_OF(fp), in, out, m);\n\treturn 0;"
+ }
+]
