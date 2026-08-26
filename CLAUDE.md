@@ -25,9 +25,19 @@ symbol; this is the authority on which services we work.
 | **FAX** (`class1*.c`, `src/pump/v17/`) | **LAST**, deliberately |
 
 **V.32 was fenced for most of the project and is not any more.** It is a DATA
-MODE -- `service.py`'s own classifier lists it as one -- and it carries **32,921
-of the 44,264 unwritten data-mode bytes, 74% of the remainder**, plus 17
-already-written symbols sitting in SIZE. Any goal phrased as "cover the data
+MODE -- `service.py`'s own classifier lists it as one -- and it carries
+**25,925 bytes firm and 30,306 at the ceiling, 59-68% of the unwritten data-mode
+remainder**, plus 17 already-written symbols sitting in SIZE.
+
+**DO NOT READ A SPAN NAME AS A MODULE NAME.** The first figure written here was
+32,921 and it was wrong in both directions at once (F8160): it swept in 12,154
+bytes of V.22 that merely sit in a span *named* `V32mod.c`, and it omitted the
+9,539 bytes of V.32 that sit in a span named `Dialer.c`. The span labels come
+from the blob's layout, and **a span boundary can bisect a module** -- V.32's
+half-duplex machine is split across two of them, `V32TxHdxModem` and eight
+`TxHdx*` states on one side and `V32RxHdxModem` with twelve `RxHdx*` on the
+other, divided between two adjacent functions 0x170 apart. Schedule V.32 as
+`Dialer.c +18` **and** `V32mod.c +39` together, and never as a "Dialer pass". Any goal phrased as "cover the data
 modes" requires it, and while it was fenced that goal could not be reached.
 
 **FAX IS LAST ON PURPOSE, AND THE REASON IS NOT DIFFICULTY.** It is 283 symbols

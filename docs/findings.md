@@ -92748,3 +92748,38 @@ Recorded here rather than left in a hand-over because that is D28's precedent in
 be noticed twice. Whoever renames them should do `fpm_tone_cfg.c`, the header
 and the two uses together, and the change is a pure compile-time substitution —
 `compare.py` must not move.
+
+### F8172. F8112's V.32 figure was wrong in both directions, and the cause is reading a span name as a module name
+
+F8112 lifted the V.32 fence and put the size of what it opened at **32,921
+bytes, 74% of the unwritten data-mode remainder**. The reconstruction pass sent
+at `Dialer.c +18` found the number is wrong twice over (F8160):
+
+- It **swept in 12,154 bytes of V.22** — 39% of the `V32mod.c +39` span by name
+  — which are not V.32 at all.
+- It **omitted 9,539 bytes of V.32** that sit in the span named `Dialer.c +18`,
+  every byte of that span's data-mode half.
+
+**V.32 is 25,925 bytes firm and 30,306 at the ceiling: 59–68%, not 74%.** The
+conclusion F8112 drew is intact and was understated — V.32 is still the
+overwhelming majority of what remains in data mode, and lifting it was still
+required for "cover the data modes" to be reachable. Only the figure moves.
+
+**THE CAUSE IS GENERAL AND WORTH MORE THAN THE ARITHMETIC.** The span labels in
+`coverage.py` and `service.py` come from the BLOB'S LAYOUT, not from module
+boundaries, and **a span boundary can bisect a module**. V.32's half-duplex
+machine is split across two: `V32TxHdxModem` and eight `TxHdx*` states in
+`Dialer.c +18`, `V32RxHdxModem` and twelve `RxHdx*` in `V32mod.c +39`, divided
+between two adjacent functions 0x170 apart (`V32FP_modem` at 0x82630 and
+`v32_data` at 0x827a0). The bare `Hdx` names are V.32's and not shared with
+V.22: every relocation naming one lies inside 0x7f11f–0x85bbe, and V.22 begins
+0xbf2 further on.
+
+So a brief that says "reconstruct the `Dialer.c` span" is asking for V.32 work
+under a name that hides it, and the agent that took it found **no dialler code
+in that span's data-mode half at all** — 35 symbols summing to exactly 9,539
+bytes, which is the complete reading rather than a majority one.
+
+**Schedule by SERVICE and by module, never by span label.** `service.py`
+classifies by which entry point reaches a symbol and is the authority; the
+span name is a locator, not a description.
