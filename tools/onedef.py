@@ -73,6 +73,36 @@ def homes():
     return found
 
 
+#
+# ONE TYPE ONE HOME GATES A TYPE; A MACRO IS NOT A TYPE, AND THAT WAS THE HOLE.
+# Two parallel headers gave `V32_OBJ_STATUS` two different offsets, 0x30 and
+# 0x31.  Each header was internally consistent, each suite was green, and the
+# pair is legal C right up until one translation unit includes both -- at which
+# point one of them silently wins and every field after it is wrong in the
+# other half.  No differential test can see that, because until the collision
+# happens both halves are self-consistent.  Finding F8206.
+#
+# Only OBJECT-LIKE macros are compared.  A function-like macro's body is not a
+# value and two spellings of one can be equivalent; an offset is a number and
+# two numbers either agree or they do not.
+#
+MACRO_DEF = re.compile(r"^\s*#\s*define\s+([A-Za-z_]\w*)\s+(\S.*?)\s*(?:/\*.*)?$")
+
+
+def macro_clashes():
+    """(clashing macros, count of benign multiply-defined ones)."""
+    val = {}
+    for pat in ("include/**/*.h", "src/**/*.h"):
+        for f in sorted(glob.glob(pat, recursive=True)):
+            for line in open(f, errors="surrogateescape"):
+                m = MACRO_DEF.match(line)
+                if m and "(" not in m.group(1):
+                    val.setdefault(m.group(1), {})[f] = m.group(2).strip()
+    multi = {k: v for k, v in val.items() if len(v) > 1}
+    clash = {k: v for k, v in multi.items() if len(set(v.values())) > 1}
+    return clash, len(multi) - len(clash)
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     ap.add_argument("--list", action="store_true")
@@ -102,11 +132,22 @@ def main():
         print("  STALE      no longer duplicated, drop from KNOWN: %s"
               % ", ".join(sorted(stale)))
 
-    if new or stale:
+    clash, seen = macro_clashes()
+    for name, where in sorted(clash.items()):
+        print("  MACRO      %s has DIFFERENT values in %d headers:" % (name, len(where)))
+        for f, v in sorted(where.items()):
+            print("               %-50s %s" % (f, v[:44]))
+        print("             Each header is internally consistent and both compile;")
+        print("             this is legal C until one TU includes both, and no")
+        print("             differential test can see it.  Finding F8206.")
+
+    if new or stale or clash:
         return 1
     print("one definition: %d types, %d files, %d known duplicates  OK"
           % (len(found), len({f for fs in found.values() for f in fs}),
              len(dups)))
+    print("one value:      %d object-like macro(s) defined in more than one "
+          "header, all agreeing  OK" % seen)
     return 0
 
 

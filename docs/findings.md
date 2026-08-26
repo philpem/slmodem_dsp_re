@@ -94223,3 +94223,34 @@ disjoint NAME spaces. The cheapest prevention is to have the parallel briefs
 name the shared offsets up front, which this pass did for `V32_OBJ_HDX` (both
 agents were told the spelling and the `#ifndef` guard, and it came through
 clean) and did not for anything else.
+
+## F8250. `onedef.py` gates a type and a macro is not a type, so two headers gave one offset two values
+
+F8206 found `V32_OBJ_STATUS` defined as **0x30 in one header and 0x31 in
+another**. Each header was internally consistent, each suite was green, and the
+pair is **legal C right up until one translation unit includes both** — at
+which point one definition silently wins and every field derived from it is
+wrong in the other half. The pass fixed it by renaming the demod side to
+`V32_OBJ_FLAGS`.
+
+**Nothing would have caught it.** `onedef.py` enforces one type one home, and a
+macro is not a type; the differential tier cannot see it because until the
+collision happens both halves are self-consistent; `offcheck.py` compares
+annotations to `__builtin_offsetof` inside a single TU. It is the same shape as
+CLAUDE.md's `V90Parameters` worked example — 0x504 in one header and 0x558 in
+another — which cost real time and was fixed by hand.
+
+`onedef.py` now also compares **object-like macro values across headers** and
+fails on a disagreement. Only object-like ones: a function-like macro's body is
+not a value and two spellings can be equivalent, while an offset is a number
+and two numbers either agree or they do not.
+
+**Today it reports 8 macros defined in more than one header, all agreeing.**
+That is the population the check protects — zero clashes now, and eight places
+where a future edit could open one silently. Shown firing by injection: giving
+`MDMPRM_RX_RATE` a second value in `b103.h` produces the report and exit 1;
+restoring gives exit 0.
+
+The general rule, and this is its third instance in the tree: **a gate that
+names what it protects protects only that.** `onedef` said "one type, one
+home"; the hole was everything that carries a layout and is not a type.
