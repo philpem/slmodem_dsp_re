@@ -61,8 +61,28 @@ and every mechanism this file documents that acts at range does so through one:
 **So brief a pass on a FILE and require it to score the whole file both
 directions**, rather than on a list of symbols drawn from across the tree. A
 symbol-drawn worklist makes every one of the effects above look like noise; a
-file-drawn one makes them the signal. It also makes the enumeration cheaper --
-one `build.sh` per cell covers every symbol in the unit at once.
+file-drawn one makes them the signal.
+
+**BUT SAY WHICH UNIT YOU MEAN, BECAUSE THE ANSWER DIFFERS BY WHAT YOU ARE
+ASKING FOR (F8249).** The first pass deliberately scoped this way came back
+with three scopes, not one:
+
+- **The translation unit is the right unit for COST.** One container pass per
+  file; that pass ran 58 cells in less wall time than a single `make phase`.
+- **The INLINED HELPER is the unit for every mechanism that actually PAID.**
+  `fse_rotate` has no symbol of its own and carries 196 bytes across two
+  symbols; `fse_quality`'s single `&&` chain produces the same five-term
+  signature in **six** symbols' censuses -- six rows of a symbol-drawn
+  worklist, one construct. This is F7940 arriving from the other direction:
+  the helper is invisible to a per-symbol view AND is where the defect lives.
+- **A shape repeated ACROSS files is the largest thing left over.** The object
+  computes `widx = next < limit ? next : 0` branchlessly in three
+  `SMCv32_encoder_*` and in `TxNoCarrierV32` -- 34 bytes, five sites, two
+  files -- which no single-file scope contains.
+
+So: enumerate at the file for cost, hunt at the helper for yield, and expect
+the residue to be cross-file. A brief that just says "work the TU" gets the
+cheapest of the three and misses the other two.
 
 The exception is a symbol big enough to be its own unit: a 3,000-byte function
 is a file's worth of work on its own.
