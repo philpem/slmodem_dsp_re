@@ -50,7 +50,20 @@ extern void modem_dp_deregister(int id, void *op);
  * only in tone frequencies, which b103_create selects from the DP_ID.  That
  * is why one ops table is registered under both.
  */
-struct dp_operations b103_ops = {
+/*
+ * FILE-LOCAL, read off the relocation form.  `dp_b103_init` and
+ * `dp_b103_exit` reach this table in the blob as `.data` plus an inline
+ * addend, not as a named symbol, and by lever 5's rule that means the
+ * original's was `static` -- the same evidence that settled
+ * `RcFixed_Check_Combination`.  `src/v8/v8dp.c`'s `v8_op` is the tree's own
+ * precedent and has always been spelt this way.
+ *
+ * F7768 measured the change and could not take it: the tests named this
+ * symbol directly, so making it static needed an accessor.  It does not --
+ * the harness already records what the module REGISTERS, on both sides, and
+ * that is the path the modem core itself takes.  Finding F8121.
+ */
+static struct dp_operations b103_ops = {
 	.name = "b103",
 	.create = b103_create,
 	.destroy = b103_delete,
