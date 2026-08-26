@@ -144,7 +144,9 @@ extern "C" {
  *   5   14400   0x3840
  *   4   12000   0x2ee0
  *   2    9600   0x2580, with trellis coding
- *   1    9600   0x2580, without -- `2 - (obj->trellis == 0)` at 0x7f60f
+ *   1    9600   0x2580, without -- `2 - (obj->trellis == 0)`, and BOTH chains
+ *                do it: 0x7f40b stores to fp + 0x28, 0x7f60f to fp + 0x2a,
+ *                the same six instructions against the same obj + 0x1c
  *   3    7200   0x1c20
  *   0   the fallback, taken for any rate that is none of those four
  *   6   NO RATE IN COMMON; not producible by `V32FP_recreate`, only by the
