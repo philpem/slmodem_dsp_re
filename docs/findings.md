@@ -91868,7 +91868,10 @@ the six that is even the right SIZE, and every alternative is further away.
 **What is left, for whoever returns to it.** The residual is a single
 instruction pair and the mechanism is a missed `combine`, which is downstream
 of RTL rather than of a spelling this enumeration covered. F7940's rule says
-the next thing to widen is the callee set, and the callee here is a real
-out-of-line call in another translation unit — so the boundary that has not
-been drawn around this symbol is `V92BitsToSymbol::process`'s own signature
-and whether `sym` is passed as something other than `short *`.
+the next thing to widen is the callee set — but the callee is NOT the open
+question here, because the mangled name settles it: `_ZN15V92BitsToSymbol7`
+`processERjPs` is `(unsigned int &, short *)`, evidence class 2 and forced.
+What has not been drawn around this symbol is how `sym`'s ADDRESS reaches that
+parameter — a direct `&sym` is one of several spellings, and a local `short *`
+pointing at it, or a second variable sharing the slot, would give the reload a
+different RTL shape without changing the callee at all.
