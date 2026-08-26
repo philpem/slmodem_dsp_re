@@ -90749,3 +90749,54 @@ from the tree, and its open questions are the loop rotation in the handshake
 arm -- the object falls through its entry test where we emit a `jmp` into it
 -- and whether `f124` should be retyped `unsigned short` in `v34recv.h`,
 which F8044 shows is forced but which reaches every other user of that field.
+
+### F8046. `Descrambler<h,i>`'s BULK LOOP DECREMENTS `pTap2` BEFORE `pTap1` -- 25 DIFFERING BYTES OF 120 TO SIX
+
+F8002 enumerated 22 cells over the two bulk `process` loops and closed
+`Scrambler<int,unsigned char>::process` exactly, leaving
+`Descrambler<h,i>::process(const h *, i *, unsigned)` at 25 differing bytes of
+120 with the note that its body "wants the input walked INSIDE the store".
+That is right and it was not the whole of it: **the axis nobody varied is the
+ORDER OF THE TWO DECREMENTS.**
+
+Nine cells over the loop body, enumerated before any was read.  Against the
+object's 120 bytes and 49 instructions, ours 120 and 49 throughout:
+
+    pTap1-- then pTap2--   (the tree's own order)          25 differing bytes
+    xor operands swapped, pTap1 first                      10
+    `*out++ = r` moved past the decrements                 32
+    `*pOut ^ (*pTap1 ^ *pTap2)` re-associated              SIZE, 136 v 120
+    r built in two statements, both taps post-decremented  SIZE, 136 v 120
+    pTap2-- then pTap1--                                    6
+    the same with explicit parentheses                      6
+    `*pTap2--` written into the expression, pTap1-- after    6
+    both taps post-decremented in the expression             6
+
+Four cells reach six and they emit the SAME BYTES, so what is decoded is the
+ORDER and not which of the four the author typed -- F0's several-preimages
+case.  `pTap2--; pTap1--;` is what went in, for this header's style.
+
+**AND IT IS THE OPPOSITE OF `Scrambler`'s BULK LOOP**, which is `pTap1--;
+pTap2--;` and EXACT.  The two templates differ here because the object says
+they differ, which is the third place they diverge -- after `process`'s
+in-class status and after the input being walked inside the store.
+
+**OPEN AT SIX BYTES, AND THE RESIDUAL IS NAMED**: one `mov %eax,0x28(%esp)`
+sits one instruction earlier in ours than in the object; every other
+instruction and operand is identical and the mnemonic multiset was already
+equal.  That is scheduling, tiers.md's free column, so this is
+decoded-and-open in F8006's sense rather than closed.
+
+Measured F7880-safely: the whole tree dumped per symbol with its
+differing-byte count before and after, 1251 rows, and **exactly one row
+moves** -- this one, 25 to 6.  Nothing else in the tree changes by a byte,
+which matters because `Scrambler.h` is a header and 34 symbols come out of
+its own translation unit.  Grade counts do not move (it stays BYTES);
+`make phase` green.
+
+**A NOTE ON THE GATE, because it fired on this commit.** The source comment
+citing this finding was written before the finding was, and `refcheck` inside
+`make phase`'s `refs` tier reported `DANGLING include/dsplib/Scrambler.h:723
+finding 8046` and failed the tier.  `make phase`'s own status was
+`Makefile:734: phase Error 2` while the harness reported the wrapper's exit 0
+-- F7900 exactly, and the reason to read MAKE's line and not the exit code.

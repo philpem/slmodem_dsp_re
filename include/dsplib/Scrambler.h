@@ -696,6 +696,32 @@ T Descrambler<T, I>::process(T in)
 	return (T)r;
 }
 
+/*
+ * `pTap2` IS DECREMENTED BEFORE `pTap1` HERE, WHICH IS THE OTHER WAY ROUND
+ * FROM `Scrambler`'s BULK LOOP ABOVE -- and it is the object that says so,
+ * not a preference.  Nine cells over this body, enumerated before any was
+ * read: the two decrement orders, the two xor associations, the four
+ * placements of a post-decrement inside the expression, and `*out++ = r`
+ * moved past the decrements.
+ *
+ *     pTap1 first (the tree's own order)          25 differing bytes of 120
+ *     xor operands swapped, pTap1 first           10
+ *     `*out++ = r` before the decrements          32
+ *     the xor re-associated                       SIZE, 136 against 120
+ *     pTap2 first                                  6   <-- four cells
+ *
+ * The four that reach 6 are `pTap2--; pTap1--;`, the same with explicit
+ * parentheses, `*pTap2--` written into the expression, and both taps
+ * post-decremented in it; they emit the SAME BYTES.  So what is decoded is
+ * the ORDER and not which of the four the author typed -- F0's
+ * several-preimages case.
+ *
+ * STILL OPEN AT SIX BYTES, and the residual is named: one
+ * `mov %eax,0x28(%esp)` sits one instruction earlier in ours than in the
+ * object, with every other instruction and operand identical.  That is
+ * scheduling, which is tiers.md's free column, so this is recorded as
+ * decoded-and-open rather than closed.  Finding F8046.
+ */
 template <class T, class I>
 void Descrambler<T, I>::process(const T *in, I *out, unsigned int n)
 {
@@ -704,8 +730,8 @@ void Descrambler<T, I>::process(const T *in, I *out, unsigned int n)
 
 		*pOut = *in++;
 		r = (I)(*pOut ^ *pTap1 ^ *pTap2);
-		pTap1--;
 		pTap2--;
+		pTap1--;
 		*out++ = r;
 		if (--pOut < pLimit) {
 			resetHistoryIndexes();
