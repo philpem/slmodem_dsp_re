@@ -92856,10 +92856,23 @@ the original, and the span labels are reporting that faithfully.
 
 That matters for scheduling: a V.32 pass should be scoped by these names, which
 are the author's, and not by `Dialer.c +18` / `V32mod.c +39`, which are the
-labels of whichever TU happened to bracket the range. `V32ans.c`, `V32org.c`,
-`V32loop.c` and `V32RNG.c` are the four next-state functions F8200 is about,
-one file each — which is the strongest available argument that they are four
-separate pieces of work and not one.
+labels of whichever TU happened to bracket the range.
+
+**AND IT SPLITS THE 8,833 BYTES F8200 SAYS CANNOT BE SPLIT — for READING, not
+for LINKING, and the distinction is the whole point.** `V32ans.c`, `V32org.c`,
+`V32loop.c` and `V32RNG.c` are four of the author's files and
+`V32AnsNextState`, `V32OrgNextState`, `V32LocLoopNextState` and the two
+`V32Rng*NextState` functions are what is in them — one machine each, for the
+answering station, the originating station, local loopback and the ring
+sequence. So the next V.32 unit is **13,344 bytes and indivisible at the LINK
+boundary** (F8200: the `V32NextState` table names all five, so all five must
+exist before any state compiles), and at the same time it is **five
+independent reading jobs plus twenty states**, which is how a brief for it
+should be written and how it can be split across agents who land together.
+
+Those are different questions and conflating them is what makes a batch either
+impossible or unreadable. F8200 answers "what must be in one commit"; this
+answers "what can be read separately inside it".
 
 ### F8202. The V.32 rate-signal codec, the sequence generator and the sequence detector: 13 functions and 3 tables, written and differentially tested
 
