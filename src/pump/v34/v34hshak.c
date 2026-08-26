@@ -9924,7 +9924,26 @@ v34handshak(void *vobj)
 #define DP_MODE		0x2218	/* int:   T3C_MODE, handshake above 1        */
 #define DP_FAA98	0xaa98	/* short: copied into the receiver's +0x260  */
 
-/* The receiver's own fields, none of which is mapped as a member yet. */
+/*
+ * The receiver's own fields.  THESE ARE ALL MEMBERS OF `struct v34_receiver`
+ * ALREADY -- `f124`, `f21a`, `f252`, `f254`, `f256`, `f258`, `f25a`, `f25c`,
+ * `f25e`, `f260` and `flags`, at exactly these offsets, in
+ * `include/dsplib/v34recv.h`.  This comment used to say none of them was
+ * mapped, which is how the offset-passing accessors below survived a reading
+ * of this function's codegen.
+ *
+ * THE ACCESSORS ARE A KNOWN DEFECT AND FINDING F8044 IS THE WRITE-UP.  The
+ * object holds `&obj->rxq` and `&obj->txq` in registers -- `lea 0x264(%ebx),
+ * %esi` and `lea 0x221c(%ebx),%edi` -- and addresses every field as a
+ * constant displacement off them.  Because `off` here is a PARAMETER, ours
+ * loads fold but the STORES do not, and `dp_run`'s `int failed` parameter
+ * materialises a boolean where the object branches.  Rewriting through a
+ * local `struct v34_receiver *rx` takes this from 40 differing bytes to 34
+ * with every extension site right, and was DECLINED under F7782 because no
+ * cell in a fourteen-cell enumeration maps onto the object -- see F8045,
+ * which also records that the two byte-CLOSEST cells compute something the
+ * object does not.
+ */
 #define DP_RX_ERR	0x021a	/* short: the block's error measure          */
 #define DP_RX_BLOCKS	0x0124	/* short: blocks received, capped at 30,000  */
 #define DP_RX_THR_A	0x0252	/* short: +0x258's threshold                 */

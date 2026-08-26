@@ -90475,3 +90475,337 @@ Recorded because the section-order reading is a general instrument -- any
 COMDAT-heavy translation unit can be checked against the blob this way -- and
 because the C2/D2 surplus is now confirmed in two template families rather
 than one.
+
+### F8040. `hamming<float>`: THE `n == 0` GUARD IS ABSENT AND THE RECIPROCAL IS INSIDE THE LOOP -- 44 DIFFERING BYTES OF 104 TO ONE
+
+`_Z7hammingIfEvPT_j` was BYTES, 44 of 104 differing, 42 blob instructions
+against our 43.  Two source properties, both read off the object rather than
+chosen, take it to ONE differing byte and grade 1 ACCEPT.
+
+**The guard.** The object's only entry test is `xor %ecx,%ecx; cmp %ebx,%ecx;
+jae` -- the `for` loop's own condition, with `i` unsigned.  Our source carried
+an explicit `if (n == 0) return;`, which GCC 3.4.2 compiles to a
+`test %ebx,%ebx; je` IN FRONT of that and does not fold away.  So the presence
+of a source-level `n == 0` guard is directly observable in the emission, and
+in `hamming` it is absent.
+
+**The reciprocal's placement.** Written before the loop, `1.0/(n-1)` is emitted
+BEFORE the guard branch, because that is where the statement is.  The object
+divides AFTER it, in the loop preheader, interleaved with the three constant
+loads -- which is where loop-invariant motion puts a computation written inside
+the body.  So `d` is a body-local GCC hoists, not a preheader local GCC sinks.
+
+Four cells, guard x placement, enumerated before any cell was read:
+
+    guard, d before the loop    BYTES 44 of 104   42 blob / 43 ours   (the tree)
+    guard, d in the body        SIZE  12          42 / 44
+    no guard, d before          BYTES 39          42 / 41
+    no guard, d in the body     BYTES  1          42 / 42
+
+One cell reaches the object.  By F0 this is the SEVERAL-PREIMAGES case rather
+than a unique text: what is decoded is the FACT that the divide is
+loop-invariant code written inside the body, and any spelling with that
+property will do -- `d` declared there, or the reciprocal written into the
+multiply.  The two facts are independent and both are needed; neither alone
+gets below 39.
+
+**`hanning` is NOT the same shape and the difference is in the object.** Its
+blob DOES carry `test %esi,%esi; je`, but that is its own loop condition
+(`for (i = 1; i <= n; i++)` guards on `n != 0`), so it says nothing about a
+source guard either way.  Its eight cells -- guard x placement x the `L`
+suffix below -- gave no cell below 105 bytes against the blob's 108, so
+`hanning` was left structurally alone.
+
+The whole-tree effect is REGALLOC 36 -> 37, BYTES 82 -> 81, grade 0-or-1
+589 -> 590, with the EXACT set diffed and unchanged.  `make phase` green.
+
+### F8041. `blackman<float>` IS A CONSTANT MAP OVER 40 CELLS, AND LEVER 12's PREMISE FAILS ON IT
+
+The brief for this pass named `blackman` as levers 11 and 12's first real test
+on a genuinely x87 symbol.  **Both are a measured NO, and 12's is the more
+useful because the PREMISE fails rather than the conclusion.**
+
+Lever 12 says a spill slot narrower than the value it holds is forced evidence
+about a local's type.  `blackman`'s blob frame is `sub $0x4,%esp` against our
+`sub $0x14`, which reads like a four-byte `float` spill against our
+`long double` one.  It is not a spill slot at all: `push %esi`, `push %ebx`,
+`sub $0x4` lands `%esp` at 0 mod 16 from the ABI's 12-mod-16 entry, and there
+is no `fstps`/`flds` through `(%esp)` anywhere in the blob's body -- its only
+`fstps` is the output store `(%esi,%ecx,4)`.  The four bytes are ALIGNMENT.
+**A frame size is not a spill width; read the stores, not the `sub`.**
+
+Lever 11 is spent here as F7831 already found for `hamming`: the pool types
+agree, `fldl` 4 against 4 and one `flds` each side.
+
+What is left is the x87 ARRANGEMENT -- the blob spends nine `fxch` where we
+spend three, and pays for it with two `fldt`/`fstpt` pairs through a 12-byte
+slot.  Forty cells were enumerated over the loop body before any was read:
+{`x` as `(float)i` or `(long double)(unsigned long long)i`} x {the reciprocal
+likewise} x {declared before the loop, first in the body, or between the two
+angle multiplies} x {four pairings of the angle multiplies -- one expression
+each, both partial products then both scalings, one angle finished before the
+other, or the reciprocal folded inline with no named `d`}, plus the four
+guard/placement cells of F8040.
+
+**SIX distinct emissions, and every one of them is 156 bytes against the
+object's 152.**  No preimage.  By F0 the difference is therefore NOT the loop
+body's statement order, its angle factoring, or either conversion -- and note
+that removing the guard alone moves it from 60 instructions to 58, i.e.
+FURTHER from the object's 60, so the delta-0 the worklist showed was two
+errors cancelling exactly as F7983 warns.  The boundary enumerated was the
+loop body; whatever carries the difference is upstream of it.
+
+### F8042. THE `DspMath` TEMPLATES ARE NOT A TRANSLATION UNIT OF THEIR OWN IN THE OBJECT, WHICH BOUNDS WHAT LEVER 3b CAN REACH
+
+`hamming`'s one residual byte is `pop %eax` against our `pop %ecx` -- the dummy
+pop that undoes `sub $0x4,%esp`.  The lever 3b advance test says what it is:
+compiled `-fno-peephole2` the function grows to 110 bytes, loses all three
+`xor`, loses that `pop` for an `add $0x4,%esp`, and gains `lea`/`mov`.  A
+scratch was allocated and the register can be named, which is 3b's EXPOSED
+outcome.
+
+**F8003's screen is too narrow and this is the counterexample.**  It retired
+lever 3 for 21 of 22 files in the DSP/V.34 span on the ground that no file
+stores a constant past `+0x7f`, so `peep2_find_free_register` never fires.
+That is one of the patterns with a `match_scratch`; the `add $imm,%esp` ->
+`pop %reg` epilogue conversion is another, and it fires in all three of this
+file's cosine windows -- **on the OBJECT's side as well as ours**, which is
+the half that matters and which a `-fno-peephole2` run on our source cannot
+show.  Count the object's own prologue against its epilogue:
+
+    hanning    3 callee-saved pushes + `sub $0x4`, and FOUR pops
+    hamming    2 callee-saved pushes + `sub $0x4`, and THREE pops
+    blackman   2 callee-saved pushes + `sub $0x4`, and THREE pops
+
+The extra pop in each is the scratch, and in `hamming` and `blackman` it is
+`pop %eax`.  **Screen on `match_scratch` consumers,
+not on the long-move pattern alone** -- or, cheaper and exact, run the
+`-fno-peephole2` advance test.
+
+The cursor is threaded through a TRANSLATION UNIT in emission order, and the
+object's unit is not ours.  Its `.gnu.linkonce.t` run reads
+
+    sum, mean, sqrSum, Var, Resampler::timingCorrection, LowPassFIR<float>::~,
+    boxcar, hanning, hamming, blackman, designWindow, sinc,
+    LowPassFIR<float>::design x2, LowPassFIR<float>::ctor, Std
+
+so these templates were defined in a HEADER and instantiated implicitly by
+whichever unit used them first -- there was no `DspMath.cpp`.  The cursor
+reached `hamming` having been advanced by code that is not in our file at all,
+which is why the byte is not reachable from it.
+
+Reordering our explicit instantiations to the blob's own relative order
+(`sinc` and `Std` moved last) was tried and REJECTED: `hamming`'s byte did not
+move and `sinc` went from EXACT to BYTES 2.  Exactly F7880's blind spot --
+the EXACT-set diff would have shown the loss, and a count would not.
+
+### F8043. `dp_vpcm_init`: `static` FIXES THE RELOCATION HALF, AND THE REGISTER HALF IS NOT REACHABLE FROM THIS TRANSLATION UNIT
+
+F8007 recorded that this symbol needs BOTH the register rotation and
+`vpcm_op` made `static`.  **The second half is confirmed and the first is now
+measured to be out of reach**, so the row is left alone rather than half-done.
+
+`static` is right on the object's own evidence: `readelf` shows `vpcm_op` as a
+LOCAL OBJECT in the blob and `nm` prints it `d`, and the blob's three argument
+loads relocate against the `.data` SECTION symbol where ours name `vpcm_op`.
+Compiled `static`, the relocations agree and the instruction TEXT multiset
+becomes equal -- the only difference left is the scratch register triple,
+`edx, eax, ecx` in the object against `ecx, edx, eax` in ours.
+
+Those three are `peep2_find_free_register` again: `modem_dp_register(id,
+&vpcm_op)` is a store of a relocated immediate into an outgoing argument slot,
+which is the i386.md long-move split, so each call consumes one scratch.
+
+**A MINIMAL TRANSLATION UNIT SETTLES IT.**  A file containing nothing but
+`vpcm_op` and `dp_vpcm_init` compiles to the SAME `ecx, edx, eax` as the whole
+of `vpcm.c` does, so nothing before it in our file consumes a scratch and the
+cursor is at its initial state.  The object's triple is therefore not reachable
+from search_ofs 0, and something before `dp_vpcm_init` in the ORIGINAL's unit
+consumed at least one.  Our `vpcm_run` is 273 bytes and 52 instructions from
+the blob's and `vpcm_create` 18 bytes and 4 instructions, so the candidate is
+right there and the row cannot close before they do.
+
+Reordering `vpcm.c` to the blob's own definition order -- the blob runs
+`vpcm_create` 0x3a00, `vpcm_delete` 0x3dd0, `vpcm_run` 0x3e40 where our file
+runs `vpcm_run`, `vpcm_create`, `vpcm_delete` -- was built and measured: not
+one of the four symbols moved by a byte.  Recorded so the next pass does not
+re-derive it.
+
+`static` alone was NOT taken.  It changes no verdict (BYTES 6 either way), and
+`include/dsplib/vpcm.h` records a standing decision that `vpcm_run`,
+`vpcm_create` and `vpcm_delete` lose their `static` because tests call them by
+name; `test/unit/t_vpcmdp.c` compares `vpcm_op` against the blob's
+`ref_vpcm_op` field by field through that name.  This is F7768's `b103_ops` /
+`v23_ops` case exactly, and it gets F7768's answer.
+
+### F8044. `datapumpv34`: THE `movswl`/`movzwl` DELTA IS NOT THE DEFECT -- `dp_rxget`/`dp_rxput`'s OFFSET PARAMETER IS, AND IT CARRIES THE BRANCH SHAPE TOO
+
+F8007 named this the biggest lever-8 surface in the tree: `movswl +16
+movzwl -9` per mnemonic, 25 extension sites, 40 differing bytes of 1028.
+**The extensions are downstream.**  What the object shows first is two
+`lea`s in the prologue --
+
+    lea 0x264(%ebx),%esi        &obj->rxq, i.e. T3C_RX(obj)
+    lea 0x221c(%ebx),%edi       &obj->txq
+
+-- and then every receiver field addressed as a constant displacement off
+`%esi`: `0x124(%esi)`, `0x21a(%esi)`, `0x252(%esi)`, `0x258(%esi)`.  Ours
+addresses all of them absolutely off `%ebx` (`0x388`, `0x47e`, `0x4b6`,
+`0x4bc`) because the source reaches them through
+
+    static short dp_rxget(const struct v34_object *obj, unsigned off)
+    { return *(const short *)((const char *)&obj->rxq + off); }
+
+whose offset is a PARAMETER.  The loads fold after inlining; the STORES do
+not, and come out as `mov $0x258,%esi; mov %dx,0x264(%ebx,%esi,1)` -- an
+indexed store with a constant materialised into a register.  This is F13's
+lever, the syntactic form of the reference, on a `char *` cast rather than on
+a member subscript.
+
+**AND THE SAME HELPER CARRIES THE BRANCH SHAPE.**  `dp_run(obj, counter, int
+failed)` takes the verdict as an `int` parameter, so each of the three
+call sites materialises a boolean -- `setl %al; xor %edx,%edx; test $0x1,%al;
+je` -- where the object simply branches.  That is the whole of our `setg +1
+setl +2 test +3 je +3` against the object's `jle -3 jl -1 jge -1`.  The
+addressing fix and the branch-shape fix are ONE change, not two.
+
+**THE SOURCE COMMENT THAT SENT THE PREVIOUS READING WRONG IS STALE.**  It says
+of the receiver's offsets "none of which is mapped as a member yet";
+`include/dsplib/v34recv.h` declares `f124`, `f21a`, `f252`, `f254`, `f256`,
+`f258`, `f25a`, `f25c`, `f25e`, `f260` and `flags` at exactly those offsets.
+CLAUDE.md's rule about a paragraph that states a live defect applies to source
+comments too.
+
+**THE 25 SITES, CLASSIFIED** (blob's `%esi` is `%ebx+0x264`, so `0x21a(%esi)`
+and our `0x47e(%ebx)` are one address):
+
+    off    blob            ours       class
+    0x122  movzwl x2       movzwl x2  agrees -- rx->flags is `unsigned short`
+    0x124  movzwl          movswl     FORCED.  The 32-bit result IS used: the
+                                      object compares it against 0x752f with a
+                                      SIGNED `jg` on a zero-extended value, so
+                                      the field is `unsigned short` widened to
+                                      int.  F613's class, a real defect no
+                                      test can see.
+    0x21a  movzwl          movswl     DEAD -- the object's compare is 16-bit,
+                                      `cmp 0x252(%esi),%di`.  F7803: follows
+                                      the LOCAL's declared type, so the local
+                                      is `unsigned short`.  See F8045 for why
+                                      that alone is not safe.
+    0x252  none            movswl     NOT signedness.  The object compares
+    0x254  none            movswl     16-bit memory directly and never loads
+    0x256  none            movswl     these at all; the extension is ours.
+    0x258  movzwl          movswl x3  DEAD, into a 16-bit store.
+    0x25a  movswl x2 +     movswl x3  BOTH EXTENSIONS ON ONE FIELD in the
+           movzwl                     object.  F7802/F8's own trap: this is
+    0x25c  movswl +        movswl x2  NOT a field retype, and retyping would
+           movzwl                     match some sites and break others.
+    0x2aa0 movzwl x4       movzwl x3  agrees
+    0xaa96 movswl x2 +     movswl x2 + agrees exactly, both extensions
+           movzwl x3       movzwl x3
+    0xaa98 movzwl x3       movswl x3  DEAD, straight into a 16-bit store.
+                                      `hs_get`'s return type is SHARED, so the
+                                      fix is a local, not a signature change.
+
+So of 25 blob sites: three agree already (0x122, 0xaa96, 0x2aa0), three are
+the addressing form and not signedness at all (0x252/4/6), two are the
+one-field-both-extensions trap (0x25a, 0x25c), and four are real -- 0x124
+forced, 0x21a, 0x258 and 0xaa98 dead.  **A retype sweep driven by the
+per-mnemonic delta would have got three of those wrong in three different
+ways.**
+
+### F8045. THE BYTE-CLOSEST CELL OF `datapumpv34` IS BEHAVIOURALLY WRONG, WHICH IS WHY THE REWRITE WAS DECLINED
+
+Fourteen cells were built over the rewritten function -- a local
+`struct v34_receiver *rx` and `struct v34_queue *tx` replacing
+`dp_rxget`/`dp_rxput`/`dp_run`, crossed with {counter update as a ternary, as
+`if/else` with `+ 1`, as `if/else` with `++`} x {`err` declared `short`,
+`unsigned short`, or no local at all} x {the timer span in a variable or its
+expression repeated at both tests} x {the three threshold compares written
+either way round}.  Against the object's 1028 bytes and 211 instructions:
+
+    the tree, via the helpers               SIZE 40    988 B   211 insn
+    ptr + ternary        + unsigned short   SIZE 52    976 B   204
+    ptr + if/else        + short            SIZE 30    998 B   205
+    ptr + if/else + (short) cast            SIZE 34    994 B   206
+    ptr + if/else        + unsigned short   SIZE 24   1004 B   208
+    ... + span expression repeated          SIZE 23   1005 B   209
+
+**The last two are the closest on bytes and they do not compute what the
+object computes.**  The object loads `movzwl 0x21a(%esi),%edi` and then
+compares SIXTEEN BITS, `cmp 0x252(%esi),%di` with a signed `jle`, so its
+comparison is `(short)f21a <= (short)f252`.  A plain `unsigned short err`
+promotes to `int` as 0..65535, giving a 32-bit compare against a
+sign-extended threshold, and for a negative `f21a` the two disagree.  The
+extension is F7803-dead and says the LOCAL is `unsigned short`; the compare
+is a separate fact and says it is done in 16 signed bits.  Both are needed
+and only the cast cell has both.
+
+The cast cell, `unsigned short err` compared as `(short)err`, reproduces the
+object's operand set at all four sites exactly --
+`movzwl 0x21a(%esi),%edi`, `cmp 0x252(%esi),%di`, `cmp 0x254(%esi),%di`,
+`cmp 0x256(%esi),%di` -- and differs only in the compare's operand ORDER,
+`cmp %di,0x252(%esi)` against the object's `cmp 0x252(%esi),%di`.  Writing the
+comparison the other way round (`rx->f252 < (short)err`) does not move it:
+**GCC canonicalises the compare and the spelling is not observable**, which is
+F9's own recorded result reproduced on a second family.
+
+**Declined under F7782.**  No cell maps onto the object, so this is
+hill-climbing on byte count and the byte count is actively misleading here --
+the two cells it favours are the two that are wrong.  The next pass should
+start from the cast cell (SIZE 34, every extension site right) rather than
+from the tree, and its open questions are the loop rotation in the handshake
+arm -- the object falls through its entry test where we emit a `jmp` into it
+-- and whether `f124` should be retyped `unsigned short` in `v34recv.h`,
+which F8044 shows is forced but which reaches every other user of that field.
+
+### F8046. `Descrambler<h,i>`'s BULK LOOP DECREMENTS `pTap2` BEFORE `pTap1` -- 25 DIFFERING BYTES OF 120 TO SIX
+
+F8002 enumerated 22 cells over the two bulk `process` loops and closed
+`Scrambler<int,unsigned char>::process` exactly, leaving
+`Descrambler<h,i>::process(const h *, i *, unsigned)` at 25 differing bytes of
+120 with the note that its body "wants the input walked INSIDE the store".
+That is right and it was not the whole of it: **the axis nobody varied is the
+ORDER OF THE TWO DECREMENTS.**
+
+Nine cells over the loop body, enumerated before any was read.  Against the
+object's 120 bytes and 49 instructions, ours 120 and 49 throughout:
+
+    pTap1-- then pTap2--   (the tree's own order)          25 differing bytes
+    xor operands swapped, pTap1 first                      10
+    `*out++ = r` moved past the decrements                 32
+    `*pOut ^ (*pTap1 ^ *pTap2)` re-associated              SIZE, 136 v 120
+    r built in two statements, both taps post-decremented  SIZE, 136 v 120
+    pTap2-- then pTap1--                                    6
+    the same with explicit parentheses                      6
+    `*pTap2--` written into the expression, pTap1-- after    6
+    both taps post-decremented in the expression             6
+
+Four cells reach six and they emit the SAME BYTES, so what is decoded is the
+ORDER and not which of the four the author typed -- F0's several-preimages
+case.  `pTap2--; pTap1--;` is what went in, for this header's style.
+
+**AND IT IS THE OPPOSITE OF `Scrambler`'s BULK LOOP**, which is `pTap1--;
+pTap2--;` and EXACT.  The two templates differ here because the object says
+they differ, which is the third place they diverge -- after `process`'s
+in-class status and after the input being walked inside the store.
+
+**OPEN AT SIX BYTES, AND THE RESIDUAL IS NAMED**: one `mov %eax,0x28(%esp)`
+sits one instruction earlier in ours than in the object; every other
+instruction and operand is identical and the mnemonic multiset was already
+equal.  That is scheduling, tiers.md's free column, so this is
+decoded-and-open in F8006's sense rather than closed.
+
+Measured F7880-safely: the whole tree dumped per symbol with its
+differing-byte count before and after, 1251 rows, and **exactly one row
+moves** -- this one, 25 to 6.  Nothing else in the tree changes by a byte,
+which matters because `Scrambler.h` is a header and 34 symbols come out of
+its own translation unit.  Grade counts do not move (it stays BYTES);
+`make phase` green.
+
+**A NOTE ON THE GATE, because it fired on this commit.** The source comment
+citing this finding was written before the finding was, and `refcheck` inside
+`make phase`'s `refs` tier reported `DANGLING include/dsplib/Scrambler.h:723
+finding 8046` and failed the tier.  `make phase`'s own status was
+`Makefile:734: phase Error 2` while the harness reported the wrapper's exit 0
+-- F7900 exactly, and the reason to read MAKE's line and not the exit code.
