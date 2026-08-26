@@ -104,19 +104,28 @@ extern "C" {
 #define V32_OBJ_RMS_MIN		0x28
 
 /*
- * The instance's status byte.  Eight bits, of which this function owns two.
+ * The instance's FLAGS byte.  Eight bits, of which this function owns two.
  *
  * Named by BIT VALUE and kept 1:1 with the object, per CLAUDE.md: a macro is
  * a compile-time substitution and cannot move code generation.
+ *
+ * THIS USED TO BE SPELLED `V32_OBJ_STATUS` AND THE RENAME IS NOT COSMETIC.
+ * `include/dsplib/v32fpctl.h`, written in parallel, gives that same name to
+ * obj + 0x30 -- one macro, two offsets, two headers, and legal C right up to
+ * the first translation unit that includes both.  0x30 is a CODE and 0x31 a
+ * bit field: `RxHdxNull` writes 0x10 to 0x30 beside the string
+ * `V32_MSG_NO_CARRIER` and ORs 0x02 into 0x31, and `V32FP_recreate` clears
+ * 0x30 as an int, stores a byte 1 into it, and ORs 0x40 into 0x31.  So the
+ * split is the object's and this side is what moves.  See F8206.
  */
-#define V32_OBJ_STATUS		0x31
+#define V32_OBJ_FLAGS		0x31
 
 /*
  * Set from `sre.active`, which `fpm_sre.h` calls "the squelch let the PLL
  * run", and cleared on the path that prints "sre no carrier".  The string is
  * the author's own name for the condition that clears it.
  */
-#define V32_STATUS_CARRIER	0x20
+#define V32_FLAG_CARRIER	0x20
 
 /*
  * Set when `agc.signal` is ZERO -- note the inversion.  `fpm_agc.h` types
@@ -124,7 +133,7 @@ extern "C" {
  * the gate", so the bit stands for the AGC having seen nothing.  Evidence is
  * the callee's own field name and its documented sense; no string prints it.
  */
-#define V32_STATUS_SILENCE	0x40
+#define V32_FLAG_SILENCE	0x40
 
 /* The four enables, typed by the sub-object field each is copied into. */
 #define V32FP_SRE_ADAPT_EN	0x04

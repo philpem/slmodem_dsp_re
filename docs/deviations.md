@@ -8817,6 +8817,85 @@ relocations of any kind name them), so no caller exists whose behaviour could
 be affected, and whether the vendor's intended caller would have reached
 either arm cannot be known from this object.
 
+## D480 ⚠ `FSE_getdiag` throws away a scatter log that is filled exactly to capacity
+
+Its `which == 0` arm guards the waiting count against `FPM_FSE_DIAG - 1` and
+discards everything above it:
+
+    a7d46: mov  0x4e0c(%esi),%edx      ; diag_n
+    a7d4c: cmp  $0x1df,%edx            ; 479
+    a7d52: jg   a7d97                  ; -> zero the count, return 0
+
+`FPM_FSE_receive` fills `diag` to 480 entries -- its own guard is the same
+`> FPM_FSE_DIAG - 1`, and it RESETS rather than wrapping -- so a count of
+exactly 480 is reachable between two receive calls, and 480 points of
+constellation display are dropped instead of delivered. The `which == 1` arm
+has no capacity guard at all.
+
+`unmeasured`: the log is a diagnostic display and nothing in the datapump reads
+it back, so a dropped block costs a frame of a scatter plot and nothing else.
+`test/unit/t_v32fpsub.c` drives 478, 479, 480 and 481 and holds the
+reconstruction to the object at each.
+
+## D481 ⚠ `V32FP_delete` passes a second argument to five deallocators that take one
+
+Finding F8215 has the disassembly. Before each of `FPM_FSE_free`,
+`FPM_SRE_free`, `FPM_ECC_free`, `FPM_MRF_free` and `FPM_PPS_free` the object
+stores a literal 1 into the outgoing area's second slot; all five callees read
+only the first. GCC does not emit dead stores there, so the author's
+declarations for these five had two parameters and this tree's have one.
+
+`src/pump/v32/v32fpctl.c` makes the one-argument call, so the reconstruction
+emits five fewer instructions than the object at those sites. Invisible to the
+differential tier -- the argument is never read -- and visible to the codegen
+tier, where it is five `mov $1` / `mov %reg,0x4(%esp)` pairs. Repairing it means
+changing five prototypes in five headers, which is a change to files outside
+this batch.
+
+`unmeasured` in the sense that nothing establishes what the 1 MEANT. It is not
+`unmeasured` about whether it is there.
+
+## D482 ⚠ `RxClampV32`'s cursor is a `short` tested against -1, so a negative block length writes 65,535 words
+
+    825fc: movswl 0x9e(%ebx),%eax    ; the block length
+    82603: dec    %eax
+    ...
+    82611: movswl %ax,%ecx
+    82614: inc    %ax
+    82616: jne    82606              ; body
+
+The loop runs from `n - 1` down to 0 and stops when the 16-bit cursor reaches
+-1. A length of 0 writes nothing, which is right; a NEGATIVE length starts below
+-1, wraps through -32768 to 32767, and writes 65,535 words before it reaches the
+sentinel -- 128 KB past whatever buffer the caller supplied.
+
+Not reachable through anything read so far: the eleven `RxHdx*` states that call
+it all pass the same +0x9e that `RxHdxNull` accumulates as a positive sample
+count. Recorded because the truncation is what distinguishes the object's loop
+from `for (i = 0; i < n; i++)`, and **it is MEASURED rather than asserted** --
+`test/unit/t_v32fpctl.c` drives a length of -1 into a buffer sized for it and
+compares all 65,535 words against the object's.
+
+## D483 ⚠ `CalcTurnAroundDelay` narrows to sixteen bits before it clamps, so a large underflow comes back positive
+
+    83b07: sub  %edx,%eax     ; budget - (three charges)
+    83b09: cwtl               ; <- narrowed here
+    83b0a: mov  %eax,%edx
+    83b0c: not  %edx
+    83b0e: sar  $0xf,%edx
+    83b11: and  %edx,%eax     ; x < 0 ? 0 : x
+    83b14: cwtl
+
+The four fields are 16-bit and the subtraction is done at 32 bits, but `cwtl`
+takes the low half BEFORE the branchless clamp. A budget that undershoots by
+more than 32,768 therefore wraps to a positive number and is reported as
+surplus turnaround time rather than as none.
+
+`unmeasured`: the four fields are timing quantities in symbols and nothing read
+so far puts a charge anywhere near 32,768. `test/unit/t_v32fpctl.c` sweeps the
+budget and the charges across the sign boundary and holds the reconstruction to
+the object either side of it.
+
 ## D490 -- `FPM_AGC_agc` is called with four arguments and defined with three  `unmeasured`
 
 Every V.32 call site pushes a fourth outgoing slot holding the constant 1 --

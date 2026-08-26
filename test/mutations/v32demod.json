@@ -101,13 +101,13 @@
  },
  {
   "label": "the low-energy arm SETS the carrier bit instead of clearing it",
-  "find": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t\t(unsigned char)~V32_STATUS_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())",
-  "replace": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) |=\n\t\t\t\t(unsigned char)V32_STATUS_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())"
+  "find": "\t\t\tFIELD_BYTE(modem, V32_OBJ_FLAGS) &=\n\t\t\t\t(unsigned char)~V32_FLAG_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\tFIELD_BYTE(modem, V32_OBJ_FLAGS) |=\n\t\t\t\t(unsigned char)V32_FLAG_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())"
  },
  {
   "label": "the low-energy arm clears the silence bit rather than the carrier bit",
-  "find": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t\t(unsigned char)~V32_STATUS_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())",
-  "replace": "\t\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t\t(unsigned char)~V32_STATUS_SILENCE;\n\t\t\tif (DSPLIB_DEBUG_ON())"
+  "find": "\t\t\tFIELD_BYTE(modem, V32_OBJ_FLAGS) &=\n\t\t\t\t(unsigned char)~V32_FLAG_CARRIER;\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\t\tFIELD_BYTE(modem, V32_OBJ_FLAGS) &=\n\t\t\t\t(unsigned char)~V32_FLAG_SILENCE;\n\t\t\tif (DSPLIB_DEBUG_ON())"
  },
  {
   "label": "the low-energy diagnostic is gated at level 3 like its neighbour instead of level 2",
@@ -136,18 +136,18 @@
  },
  {
   "label": "the silence bit is set when the gain control DID see a signal",
-  "find": "\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));",
-  "replace": "\t\t\t\t| (AGC_OF(fp)->signal != 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));"
+  "find": "\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_FLAG_SILENCE : 0));",
+  "replace": "\t\t\t\t| (AGC_OF(fp)->signal != 0\n\t\t\t\t   ? V32_FLAG_SILENCE : 0));"
  },
  {
   "label": "the silence bit is set from the gate flag rather than from the signal report",
-  "find": "\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));",
-  "replace": "\t\t\t\t| (AGC_OF(fp)->f18 == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));"
+  "find": "\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_FLAG_SILENCE : 0));",
+  "replace": "\t\t\t\t| (AGC_OF(fp)->f18 == 0\n\t\t\t\t   ? V32_FLAG_SILENCE : 0));"
  },
  {
   "label": "the status byte is assigned rather than read-modify-written, so the other six bits are lost",
-  "find": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) =\n\t\t(unsigned char)((FIELD_BYTE(modem, V32_OBJ_STATUS)\n\t\t\t\t & (unsigned char)~V32_STATUS_SILENCE)\n\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0));",
-  "replace": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) =\n\t\t(unsigned char)(AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_STATUS_SILENCE : 0);"
+  "find": "\tFIELD_BYTE(modem, V32_OBJ_FLAGS) =\n\t\t(unsigned char)((FIELD_BYTE(modem, V32_OBJ_FLAGS)\n\t\t\t\t & (unsigned char)~V32_FLAG_SILENCE)\n\t\t\t\t| (AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_FLAG_SILENCE : 0));",
+  "replace": "\tFIELD_BYTE(modem, V32_OBJ_FLAGS) =\n\t\t(unsigned char)(AGC_OF(fp)->signal == 0\n\t\t\t\t   ? V32_FLAG_SILENCE : 0);"
  },
  {
   "label": "the timing recovery's enable comes from the carrier loop's field",
@@ -186,13 +186,13 @@
  },
  {
   "label": "the no-carrier arm leaves the carrier bit alone",
-  "find": "\t\tFIELD_BYTE(modem, V32_OBJ_STATUS) &=\n\t\t\t(unsigned char)~V32_STATUS_CARRIER;\n\t\treturn 0;",
+  "find": "\t\tFIELD_BYTE(modem, V32_OBJ_FLAGS) &=\n\t\t\t(unsigned char)~V32_FLAG_CARRIER;\n\t\treturn 0;",
   "replace": "\t\treturn 0;"
  },
  {
   "label": "the carrier bit is set before the arm that clears it rather than after",
-  "find": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) |= V32_STATUS_CARRIER;",
-  "replace": "\tFIELD_BYTE(modem, V32_OBJ_STATUS) |= V32_STATUS_SILENCE;"
+  "find": "\tFIELD_BYTE(modem, V32_OBJ_FLAGS) |= V32_FLAG_CARRIER;",
+  "replace": "\tFIELD_BYTE(modem, V32_OBJ_FLAGS) |= V32_FLAG_SILENCE;"
  },
  {
   "label": "the carrier loop's enable comes from the tilt filter's field",

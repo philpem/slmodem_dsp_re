@@ -112,8 +112,8 @@ DemodDataV32(void *modem, short *in, unsigned short *out, unsigned short count)
 	if (FIELD_SHORT(hdx, V32HDX_MODE) == V32_MODE_6) {
 		if (FIELD_SHORT(modem, V32_OBJ_RMS_MIN)
 		    > FPM_rms(RXBUF_OF(fp), n)) {
-			FIELD_BYTE(modem, V32_OBJ_STATUS) &=
-				(unsigned char)~V32_STATUS_CARRIER;
+			FIELD_BYTE(modem, V32_OBJ_FLAGS) &=
+				(unsigned char)~V32_FLAG_CARRIER;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("v32 low sig energy\n");
 			return 0;
@@ -125,11 +125,11 @@ DemodDataV32(void *modem, short *in, unsigned short *out, unsigned short count)
 	FPM_AGC_agc(AGC_OF(fp), RXBUF_OF(fp), n);
 
 	fp = FIELD_PTR(modem, V32_OBJ_FP);
-	FIELD_BYTE(modem, V32_OBJ_STATUS) =
-		(unsigned char)((FIELD_BYTE(modem, V32_OBJ_STATUS)
-				 & (unsigned char)~V32_STATUS_SILENCE)
+	FIELD_BYTE(modem, V32_OBJ_FLAGS) =
+		(unsigned char)((FIELD_BYTE(modem, V32_OBJ_FLAGS)
+				 & (unsigned char)~V32_FLAG_SILENCE)
 				| (AGC_OF(fp)->signal == 0
-				   ? V32_STATUS_SILENCE : 0));
+				   ? V32_FLAG_SILENCE : 0));
 
 	enables = AGC_OF(fp)->f18;
 	SRE_OF(fp)->adapt = FIELD_INT(fp, V32FP_SRE_ADAPT_EN) & enables;
@@ -139,11 +139,11 @@ DemodDataV32(void *modem, short *in, unsigned short *out, unsigned short count)
 	if (SRE_OF(fp)->active == 0) {
 		if (DSPLIB_DEBUG_VERBOSE())
 			dsplibs_debug_printf("sre no carrier\n");
-		FIELD_BYTE(modem, V32_OBJ_STATUS) &=
-			(unsigned char)~V32_STATUS_CARRIER;
+		FIELD_BYTE(modem, V32_OBJ_FLAGS) &=
+			(unsigned char)~V32_FLAG_CARRIER;
 		return 0;
 	}
-	FIELD_BYTE(modem, V32_OBJ_STATUS) |= V32_STATUS_CARRIER;
+	FIELD_BYTE(modem, V32_OBJ_FLAGS) |= V32_FLAG_CARRIER;
 
 	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
 	FSE_OF(fp)->pll_on = FIELD_INT(fp, V32FP_FSE_PLL_EN) & enables;

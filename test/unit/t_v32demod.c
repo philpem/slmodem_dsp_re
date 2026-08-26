@@ -300,7 +300,7 @@ build(struct fix *f, const struct trial *t)
 	put_ptr(f->obj, V32_OBJ_HDX, f->hdx);
 	put_ptr(f->obj, V32_OBJ_FP, f->fp);
 	put_short(f->obj, V32_OBJ_RMS_MIN, t->rms_min);
-	f->obj[V32_OBJ_STATUS] = t->status;
+	f->obj[V32_OBJ_FLAGS] = t->status;
 
 	put_short(f->hdx, V32HDX_MODE, t->mode);
 
@@ -448,7 +448,7 @@ static void
 tally(const struct trial *t, unsigned short ret)
 {
 	const char *tx = dsplib_debug_capture_text(1);
-	unsigned char st = fb.obj[V32_OBJ_STATUS];
+	unsigned char st = fb.obj[V32_OBJ_FLAGS];
 	int low, nocar;
 
 	if (tx == 0)
@@ -473,11 +473,11 @@ tally(const struct trial *t, unsigned short ret)
 		hit_mode6_rms_pass++;
 	if (t->mode != V32_MODE_6)
 		hit_mode_other++;
-	if ((st & V32_STATUS_SILENCE) != 0)
+	if ((st & V32_FLAG_SILENCE) != 0)
 		hit_silence_set++;
 	else
 		hit_silence_clear++;
-	if ((st & V32_STATUS_CARRIER) != 0)
+	if ((st & V32_FLAG_CARRIER) != 0)
 		hit_carrier_set++;
 	else
 		hit_carrier_clear++;
@@ -489,12 +489,12 @@ tally(const struct trial *t, unsigned short ret)
 	 * transposing them shows), and the no-carrier arm entered with the
 	 * carrier bit already SET (so the clear is not a no-op).
 	 */
-	if ((st & V32_STATUS_CARRIER) != 0 && t->mode == V32_MODE_6
+	if ((st & V32_FLAG_CARRIER) != 0 && t->mode == V32_MODE_6
 	    && fse_of(&fb)->tilt_on != fse_of(&fb)->lms_on)
 		hit_tilt_lms_distinct++;
-	if (nocar && (t->status & V32_STATUS_CARRIER) != 0)
+	if (nocar && (t->status & V32_FLAG_CARRIER) != 0)
 		hit_carrier_cleared_from_set++;
-	if ((st & (unsigned char)~(V32_STATUS_SILENCE | V32_STATUS_CARRIER))
+	if ((st & (unsigned char)~(V32_FLAG_SILENCE | V32_FLAG_CARRIER))
 	    != 0)
 		hit_status_other_bits++;
 
@@ -503,7 +503,7 @@ tally(const struct trial *t, unsigned short ret)
 	 * and separately the arm where `lms_on` is NOT?  Both are read off
 	 * the equaliser afterwards, which is where the branch writes.
 	 */
-	if ((st & V32_STATUS_CARRIER) != 0) {
+	if ((st & V32_FLAG_CARRIER) != 0) {
 		if (t->mode == V32_MODE_6) {
 			if (t->sre_mode == 0)
 				hit_sre_mode0++;
@@ -545,8 +545,8 @@ run_at(const struct trial *t, long trial, unsigned level)
 	diff_begin(t->what);
 
 	diff_eq_int("return (%ld)", ra, rb, trial);
-	diff_eq_int("status byte (%ld)", fa.obj[V32_OBJ_STATUS],
-		    fb.obj[V32_OBJ_STATUS], trial);
+	diff_eq_int("status byte (%ld)", fa.obj[V32_OBJ_FLAGS],
+		    fb.obj[V32_OBJ_FLAGS], trial);
 	diff_eq_int("V32FP_RXLEN (%ld)", get_short(fa.fp, V32FP_RXLEN),
 		    get_short(fb.fp, V32FP_RXLEN), trial);
 	diff_eq_int("V32FP_CLEANLEN (%ld)", get_short(fa.fp, V32FP_CLEANLEN),

@@ -96,6 +96,10 @@
   "src/dsp/fpm_tone.c",
   "build/test/t_fpm_tone"
  ],
+ "fsegetdiag": [
+  "src/dsp/fpm_fse.c",
+  "build/test/t_v32fpsub"
+ ],
  "gtonedet": [
   "src/dsp/GenericToneDetector.cpp",
   "build/test/t_gtonedet"
@@ -171,6 +175,14 @@
  "v32demod": [
   "src/pump/v32/v32demod.c",
   "build/test/t_v32demod"
+ ],
+ "v32fpctl": [
+  "src/pump/v32/v32fpctl.c",
+  "build/test/t_v32fpctl"
+ ],
+ "v32fpsub": [
+  "src/pump/v32/v32fpctl.c",
+  "build/test/t_v32fpsub"
  ],
  "v32hdx": [
   "src/pump/v32/v32hdx.c",
