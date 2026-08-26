@@ -49,8 +49,8 @@
  },
  {
   "label": "the prefilter writes over its own input rather than into +0x244",
-  "find": "preFilter.fir.process(in, (float *)array_244, nofIn);",
-  "replace": "preFilter.fir.process(in, in, nofIn);"
+  "find": "preFilter.process(in, (float *)array_244, nofIn);",
+  "replace": "preFilter.process(in, in, nofIn);"
  },
  {
   "label": "the AGC runs over the resampler's output, not the prefilter's",

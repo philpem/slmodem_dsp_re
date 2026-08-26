@@ -13,10 +13,10 @@
  * FOUR WORDS CAN NEVER COMPARE EQUAL AS ADDRESSES, and none of them is
  * skipped (finding F224):
  *
- *   fir.history       a sysdep_malloc return; compared as null / not null,
+ *   FloatFIR::history       a sysdep_malloc return; compared as null / not null,
  *                     with the buffer it points at compared in full
  *   phase2, params    each replaced by its offset from THAT side's own block
- *   fir.coefficients  the hard one.  It points into one of three coefficient
+ *   FloatFIR::coefficients  the hard one.  It points into one of three coefficient
  *                     banks, and our banks and the blob's are at different
  *                     addresses in a different order, so neither the pointer
  *                     nor its distance from any one base is comparable.  What
@@ -248,7 +248,7 @@ cand(int side, int bank, int row)
 static int
 which_bank(int side)
 {
-	const float *p = P(side)->fir.coefficients;
+	const float *p = P(side)->coefficients;
 	int g = P(side)->gain;
 
 	int c30 = ((unsigned int)g > 30) ? 30 : g;
@@ -296,8 +296,8 @@ snapshot(void *dst, int side)
 	V90PreFilter *s = (V90PreFilter *)dst;
 
 	memcpy(dst, slot[side], sizeof(V90PreFilter));
-	s->fir.coefficients = (float *)(long)which_bank(side);
-	s->fir.history = (float *)(P(side)->fir.history != 0 ? 1 : 0);
+	s->coefficients = (float *)(long)which_bank(side);
+	s->history = (float *)(P(side)->history != 0 ? 1 : 0);
 	s->phase2 = (V90Phase2Info *)((char *)P(side)->phase2 -
 				      (char *)ph2[side]);
 	s->params = (V90Parameters *)((char *)P(side)->params -
@@ -365,10 +365,10 @@ compare(const char *what, int trial)
 
 	memset(&ha, 0, sizeof(ha));
 	memset(&hb, 0, sizeof(hb));
-	if (P(0)->fir.history != 0)
-		memcpy(&ha, P(0)->fir.history, sizeof(ha));
-	if (P(1)->fir.history != 0)
-		memcpy(&hb, P(1)->fir.history, sizeof(hb));
+	if (P(0)->history != 0)
+		memcpy(&ha, P(0)->history, sizeof(ha));
+	if (P(1)->history != 0)
+		memcpy(&hb, P(1)->history, sizeof(hb));
 	diff_eq_obj(what, struct pf_hist, &ha, &hb, trial);
 }
 
@@ -654,7 +654,7 @@ run_selectfilter_auto(void)
 					    " same way (%ld)",
 					    which_bank(0), which_bank(1), loop);
 
-				if (seedgain == 0 && P(0)->fir.taps == FIR_TAPS)
+				if (seedgain == 0 && P(0)->taps == FIR_TAPS)
 					saw_same = 1;
 				if (t >= 0 && t <= 3)
 					saw_bank[t] = 1;
@@ -955,7 +955,7 @@ run_setparam(void)
  * THE FIR IS THE POINT.  A whole-object comparison would pass on a `reset`
  * that never called `FloatFIR::reset` at all, because both sides start from
  * the same fill and neither writes a coefficient it did not already have --
- * so the check that the FIR really was reloaded is that `fir.coefficients`
+ * so the check that the FIR really was reloaded is that `FloatFIR::coefficients`
  * comes out pointing at `preFilterCoefType1` ROW 0 on the blob's side, read
  * against the blob's OWN copy of the table.  The two copies are at different
  * addresses, which is exactly why the check is worth making: our side must
@@ -1001,14 +1001,14 @@ run_reset(void)
 			 * base and ours is ours.
 			 */
 			diff_eq_int("the blob took its own table (%ld)",
-				    P(1)->fir.coefficients == &ref_coef1[0][0],
+				    P(1)->coefficients == &ref_coef1[0][0],
 				    1, tag);
 			diff_eq_int("and ours took ours (%ld)",
-				    P(0)->fir.coefficients
+				    P(0)->coefficients
 				    == &V90PreFilter::preFilterCoefType1[0][0],
 				    1, tag);
 			diff_eq_int("twenty taps (%ld)",
-				    (long)P(1)->fir.taps, 20, tag);
+				    (long)P(1)->taps, 20, tag);
 
 			if (memcmp(before, slot[1], SLOT) != 0)
 				saw_moved = 1;
@@ -1206,10 +1206,10 @@ run_ctor(void)
 			 */
 			diff_eq_int("gain (%ld)", P(1)->gain, 0, trial);
 			diff_eq_int("refLoop (%ld)", P(1)->refLoop, -1, trial);
-			diff_eq_int("taps (%ld)", (long)P(1)->fir.taps, 20,
+			diff_eq_int("taps (%ld)", (long)P(1)->taps, 20,
 				    trial);
 			diff_eq_int("bufferLength (%ld)",
-				    (long)P(1)->fir.bufferLength, FIR_BUF,
+				    (long)P(1)->bufferLength, FIR_BUF,
 				    trial);
 			diff_eq_int("phase2 (%ld)",
 				    P(1)->phase2 == P2(1), 1, trial);
@@ -1217,11 +1217,11 @@ run_ctor(void)
 				    (void *)P(1)->params ==
 				    (void *)parm[1], 1, trial);
 			diff_eq_int("coefficients are bank 1 row 0 (%ld)",
-				    P(0)->fir.coefficients ==
+				    P(0)->coefficients ==
 				    &V90PreFilter::preFilterCoefType1[0][0],
 				    1, trial);
 			diff_eq_int("and the blob's are its own (%ld)",
-				    P(1)->fir.coefficients == &ref_coef1[0][0],
+				    P(1)->coefficients == &ref_coef1[0][0],
 				    1, trial);
 
 			diff_eq_int("codecType (%ld)", P(1)->codecType,
@@ -1267,13 +1267,13 @@ run_ctor(void)
 			/*
 			 * The destructor changes NOTHING in the object -- it
 			 * does not clear the pointer it just freed -- so the
-			 * two sides still agree, and `fir.history` is still
+			 * two sides still agree, and `FloatFIR::history` is still
 			 * not null on either.
 			 */
 			diff_eq_int("the destructor left the object alone "
 				    "(%ld)",
-				    P(0)->fir.history != 0 &&
-				    P(1)->fir.history != 0, 1, trial);
+				    P(0)->history != 0 &&
+				    P(1)->history != 0, 1, trial);
 		    }
 
 	dsplib_debug_capture_on = 0;
@@ -1312,12 +1312,12 @@ run_dtor(void)
 			trial++;
 			setup_bare((int)trial, mode);
 
-			P(0)->fir.history = P(1)->fir.history = 0;
+			P(0)->history = P(1)->history = 0;
 			if (!null) {
-				P(0)->fir.history =
+				P(0)->history =
 				    (float *)sysdep_malloc(FIR_BUF *
 							   sizeof(float));
-				P(1)->fir.history =
+				P(1)->history =
 				    (float *)sysdep_malloc(FIR_BUF *
 							   sizeof(float));
 			}
@@ -1641,7 +1641,7 @@ run_filteraccessors(void)
  *
  * THE GUARD NEEDS TWO CALLS TO BE VISIBLE.  Half the trials below enter with
  * `gain` already equal to the argument, where the object stores nothing and
- * leaves `fir.coefficients` at the NULL the FIR constructor left; the other
+ * leaves `FloatFIR::coefficients` at the NULL the FIR constructor left; the other
  * half enter with it different.  Every trial then calls a SECOND time with
  * the same argument, which must change nothing whatever the first call did.
  */
@@ -1697,7 +1697,7 @@ run_setfilter_gain(void)
 						   dsplib_debug_capture_text(1))
 					    == 0, 1, trial);
 
-				if (P(1)->fir.coefficients == 0)
+				if (P(1)->coefficients == 0)
 					sawskipped++;
 				else
 					sawinstalled++;

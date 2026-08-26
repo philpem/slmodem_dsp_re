@@ -1238,7 +1238,13 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 
 	word_38 += nofIn;
 
-	preFilter.fir.process(in, (float *)array_244, nofIn);
+	/*
+	 * `preFilter.fir.process` until finding F8080: `FloatFIR` is a public
+	 * BASE of `V90PreFilter`, not a member, so the FIR's `process` is
+	 * inherited and there is no `fir` to qualify it with.  V90PreFilter
+	 * declares no `process` of its own, so this is unambiguous.
+	 */
+	preFilter.process(in, (float *)array_244, nofIn);
 	agc.process((const float *)array_244, (float *)array_244, nofIn);
 	resampler.resample((const float *)array_244, nofIn,
 			   (float *)array_248, word_24c);

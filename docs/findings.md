@@ -90475,3 +90475,111 @@ Recorded because the section-order reading is a general instrument -- any
 COMDAT-heavy translation unit can be checked against the blob this way -- and
 because the C2/D2 surplus is now confirmed in two template families rather
 than one.
+
+### F8080. THE CONSTRUCTOR/DESTRUCTOR VARIANT DIGIT DISTINGUISHES A BASE FROM A MEMBER, AND IT SETTLES `V90PreFilter` AGAINST F228
+
+`include/dsplib/V90PreFilter.h` carried this, for years:
+
+> FloatFIR IS AT OFFSET ZERO AND MIGHT BE A BASE CLASS.  Every call the object
+> makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which is what
+> both a first member and a public base look like; **nothing in the blob
+> distinguishes them.**
+
+The last clause is wrong, and the thing that distinguishes them is three
+relocations away.  GCC emits the **base-object** variants `C2`/`D2` when it
+constructs or destroys a BASE subobject and the **complete-object** variants
+`C1`/`D1` for a MEMBER.  The blob picks the base ones at every site:
+
+    44d86  V90PreFilter::C2  ->  R_386_PC32  _ZN8FloatFIRC2EjPfj
+    449fa  V90PreFilter::D2  ->  R_386_PC32  _ZN8FloatFIRD2Ev
+    44a1a  V90PreFilter::D1  ->  R_386_PC32  _ZN8FloatFIRD2Ev
+
+and this is not an aliasing artefact: all four of `_ZN8FloatFIRC1EjPfj`
+(0x46ce0), `C2` (0x46c70), `D1` (0x46d70) and `D2` (0x46d50) are distinct
+symbols at distinct addresses in the blob, with distinct bodies.  With `fir`
+written as a member we emitted `C1` and `D1`, which is what had held both
+destructors in the RELOC bucket at **1 differing byte of 19** apiece --
+`--why` rejecting at row 3, `NON-REGISTER OPERAND .+11 @_ZN8FloatFIRD2Ev |
+.+11 @_ZN8FloatFIRD1Ev`.
+
+Written `class V90PreFilter : public FloatFIR`, we emit `C2`/`D2` at all four
+sites and both destructors go **RELOC -> EXACT**.  Tree grade 0 **548 -> 550**,
+RELOC 3 -> 1, and BYTES (82), SIZE (577) and REGALLOC (36) do not move.
+
+**THE PREDICTION WAS WRITTEN BEFORE THE BUILD, AND ITS SECOND HALF MATTERS AS
+MUCH AS ITS FIRST.**  `V90PreFilter`'s C1/C2 were predicted NOT to close, on
+`--why`'s `blob 120 insns, ours 114` -- a six-instruction absence the variant
+digit cannot touch.  They did not.  So this decodes the CONTAINMENT
+RELATIONSHIP and nothing else, and the constructors' residual is still open and
+still lever 2's.
+
+Measured over the whole tree with `byteident.py`'s own `body()`/`verdict()`,
+every one of the 1251 shared symbols scored on both sides: **2 moved, both
+BETTER, none WORSE.**  That is F7880's blind spot checked rather than assumed --
+a symbol that stays BYTES or SIZE and degrades is invisible to a `--list-exact`
+set diff, so the A/B compares the per-symbol differing-byte COUNT and not
+membership.
+
+**THE COST, AND IT IS REAL BUT SMALL.**  A base with data plus a derived class
+with data is not standard-layout, so `__builtin_offsetof` in `V90PreFilter.cpp`
+becomes conditionally supported rather than well defined.  Both compilers
+accept it.  `V90PF_OFF(fir, 0x00, fir)` had to go -- a base has no member name
+to take an offset of -- and is replaced by `sizeof(FloatFIR) == 0x14`, which
+pins the same fact given that the ABI puts a first non-virtual base at offset
+zero and `codecType` is still asserted at 0x14 directly below it.
+
+**ONE CALL SITE OUTSIDE THE FILE HAD TO MOVE**, and it is named here because it
+is in a file this pass was fenced out of: `V90Demodulator.cpp:1241` spelled the
+convolution `preFilter.fir.process(...)`, and with no `fir` member it is
+`preFilter.process(...)`.  `V90PreFilter` declares no `process` of its own, so
+the inherited one is unambiguous.  The edit is one statement and changes no
+byte of `V90Demodulator.cpp`'s object -- it is in the tree-wide A/B above,
+which reports it unmoved.
+
+### F8081. THE VARIANT DISCRIMINATOR SWEEPS TO ZERO, AND IT RESOLVES TWO MORE F228 NOTES IN THE *MEMBER* DIRECTION
+
+F8080's mechanism is a general instrument, so it was run over everything rather
+than left as one file's fix.  `tools/`-style census, per CALLER: for every
+symbol both objects define, take the relocation targets matching
+`_ZN<class>[CD][0-2]E<args>`, group by (class, kind, argument list), and report
+any pair where the blob's variant digit and ours disagree.
+
+**Shown to fire before being believed** (F134, `gates.md` rule 3): run against
+the pre-fix object tree it reports exactly the four known sites -- `V90PreFilter`
+C1, C2, D1 and D2, each `blob 2 | ours 1`.  Run against the fixed tree:
+
+    denominator: 1251 symbols both objects define and disassemble
+                 127 of them reference at least one ctor/dtor
+                 0 (caller, class) pairs DISAGREE on the variant
+
+So `V90PreFilter` was the tree's ONLY instance reachable this way.  **The bound
+is the denominator and not the tree**: a caller we have not written, or one
+where GCC inlined the construction, carries no relocation and cannot appear.
+
+**THE BLOB NAMES ITS BASE CLASSES OUTRIGHT.**  Every `C2`/`D2` reference in the
+object, deduplicated, is five classes:
+
+    _ZN8FloatFIRC2EjPfj / D2Ev                V90PreFilter        <- F8080
+    _ZN9ResamplerC2Ejfj{f,Pf}j / D2Ev         ResamplerTimingOffset
+    _ZN21ResamplerTimingOffsetC2E... / D2Ev   ResamplerTiming
+    _ZN15ResamplerTimingC2E... / D2Ev         (V90Resampler's chain)
+    _ZN19GenericToneDetectorC2E... / D2Ev     ANSamToneDetector
+
+and the other four are already spelt `: public` in our headers, which is why
+the census comes back clean rather than because it is blind.
+
+**AND THE NEGATIVE IS WORTH AS MUCH.**  `Psd.h:7` and `FloatARMA.h:11` carry the
+identical F228 note -- "no deleting destructor, so offset 0 is a real member" --
+phrased as an open question in the same words `V90PreFilter.h` used.  The blob
+references `_ZN3PsdC1Ej10WindowTypej` and `_ZN3PsdD1Ev` twice each and their
+`C2`/`D2` **never**, and the same for `_ZN8FloatIIRC1EjPfj` / `D1Ev`.  So for
+those two the discriminator answers, and it answers MEMBER -- which is what we
+already write.  `FloatARMA` has no ctor/dtor relocation in the object at all,
+so it stays genuinely undecided; do not read the clean census as evidence
+about it.
+
+**WHERE THIS IS WORTH TRYING AGAIN.**  The instrument only reads relocated
+references, so the place it can still pay is a class whose containing type we
+write later, or one whose ctor/dtor we have not yet emitted.  Re-run the census
+after any batch that adds constructors; it is one pass over the objects and it
+prints its own denominator.

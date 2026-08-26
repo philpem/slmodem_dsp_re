@@ -22,12 +22,29 @@
  * displacement is +0x24, and the store there is four bytes, so the object is
  * 0x28.  (Finding F234.)
  *
- * FloatFIR IS AT OFFSET ZERO AND MIGHT BE A BASE CLASS.  Every call the
- * object makes to `FloatFIR::setCoefficients` passes `this` unadjusted, which
- * is what both a first member and a public base look like; nothing in the
- * blob distinguishes them.  It is written as a member because that keeps
- * V90PreFilter standard-layout, so `__builtin_offsetof` in the .cpp is well
- * defined rather than merely supported.
+ * FloatFIR IS A PUBLIC BASE CLASS, AND THE BLOB SAYS SO OUTRIGHT.  This
+ * paragraph used to read "might be a base class ... nothing in the blob
+ * distinguishes them", and that was wrong: `setCoefficients` passing `this`
+ * unadjusted is indeed ambiguous, but the CONSTRUCTOR AND DESTRUCTOR VARIANT
+ * the object references is not.  GCC uses the base-object variants C2/D2 for
+ * a base subobject and the complete-object variants C1/D1 for a member, and
+ * the blob picks the base ones at every site:
+ *
+ *     44d86  V90PreFilter::C2  ->  R_386_PC32  _ZN8FloatFIRC2EjPfj
+ *     449fa  V90PreFilter::D2  ->  R_386_PC32  _ZN8FloatFIRD2Ev
+ *     44a1a  V90PreFilter::D1  ->  R_386_PC32  _ZN8FloatFIRD2Ev
+ *
+ * and all four of FloatFIR's C1/C2/D1/D2 are distinct symbols at distinct
+ * addresses in the blob, so the choice is a real one and not an alias.  With
+ * `fir` written as a member we emitted `_ZN8FloatFIRC1EjPfj` and
+ * `_ZN8FloatFIRD1Ev` instead, which is what held both destructors in the
+ * RELOC bucket at one differing byte of nineteen.  Finding F8080.
+ *
+ * The cost is that V90PreFilter is no longer standard-layout, so the
+ * `__builtin_offsetof` assertions in the .cpp are conditionally supported
+ * rather than well defined.  GCC accepts them on both compilers and the
+ * assertion on `fir` itself is replaced by one on `sizeof(FloatFIR)`, which
+ * pins the same fact -- see the .cpp.
  */
 
 #ifndef DSPLIB_V90PREFILTER_H
@@ -134,7 +151,7 @@ struct V90CodecEntry {
  */
 enum PreFilterCoefType { PreFilterCoefType_BASE_PIN = -0x7fffffff - 1 };
 
-class V90PreFilter {
+class V90PreFilter : public FloatFIR {
 public:
 	/* Written -- batch 3. */
 	void selectFilter();
@@ -202,7 +219,12 @@ public:
 	 * standard-layout.  The names are invented; the mangling never carries
 	 * a data member's name.
 	 */
-	FloatFIR fir;			/* +0x00 20 bytes, see the note above */
+	/*
+	 * +0x00 to +0x13 is the FloatFIR base subobject, twenty bytes; see
+	 * the note at the top of this file for why it is a base and not a
+	 * member.  Its own fields are inherited, so `setCoefficients`,
+	 * `process` and `FloatFIR::reset` are called unqualified here.
+	 */
 	int codecType;			/* +0x14 index into dataBase          */
 	V90Phase2Info *phase2;		/* +0x18 the constructor's 2nd argument */
 	V90Parameters *params;		/* +0x1c the constructor's 3rd argument */

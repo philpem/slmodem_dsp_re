@@ -577,7 +577,7 @@ static const struct alias_word aliasword[] = {
 	 * reason; they are named here rather than discovered so that a THIRD
 	 * such word would be a failure and not a silently widened hole.
 	 *
-	 *   +0x06c  `preFilter.fir.coefficients`, which `V90PreFilter::reset`
+	 *   +0x06c  `preFilter.coefficients`, which `V90PreFilter::reset`
 	 *           points at a row of `preFilterCoefType1` -- the row depends
 	 *           on the codec type, which this sweep varies, so the address
 	 *           moves from trial to trial and is still one table's row on
