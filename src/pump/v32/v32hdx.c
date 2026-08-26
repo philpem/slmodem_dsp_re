@@ -1,0 +1,89 @@
+/*
+ * v32hdx.c -- ITU-T V.32 / V.32bis: the two half-duplex drivers.
+ *
+ * Reconstructed from dsplibs.o:
+ *
+ *   V32TxHdxModem   .text 0x07fce0   96
+ *   V32RxHdxModem   .text 0x0838f0   12
+ *
+ * The contract these two impose on the twenty V.32 `TxHdx*` / `RxHdx*` states
+ * is written up in `include/dsplib/v32hdx.h` and is the reason this file
+ * exists before any of those states do.
+ *
+ * ---------------------------------------------------------------------------
+ * THE ACCUMULATOR IS A `short`, AND THAT IS FORCED
+ *
+ * The object accumulates the state's return with
+ *
+ *      lea (%esi,%eax,1),%edx      total + n, in 32 bits
+ *      movswl %dx,%esi             truncated to 16 and sign-extended back
+ *
+ * every iteration, so the running total is sixteen bits wide throughout.
+ *
+ * AN `int` ACCUMULATOR IS INDISTINGUISHABLE AT TIER 1, and the reason is
+ * arithmetic rather than a shortage of test inputs: `total` reaches exactly
+ * one observable -- `*nsamples`, a `short *` -- and addition mod 2**16 is
+ * associative, so truncating every term and truncating once at the end store
+ * the same sixteen bits for EVERY sequence of state returns.  `out` advances
+ * by `n` and not by `total`, so nothing else can see it either.  The measured
+ * mutation is recorded `equivalent` on exactly that argument.  `short` is
+ * written because the OBJECT encodes it and tier 3 reads it, which is the
+ * only tier that can: finding F8231.
+ *
+ * The state's own return is sign-extended with `cwtl` before being added, so
+ * a state returning a negative count walks `out` BACKWARDS -- `lea
+ * (%ebx,%eax,2),%ebx` with a negative %eax.  No state does; that it is
+ * expressible is D493.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE CONTEXT IS RE-READ INSIDE THE LOOP
+ *
+ * `mov 0x64(%edi),%edx` sits at the loop's back-edge target (7fd06) and not
+ * before it, and the first iteration jumps past it because the value is
+ * already in %edx from the +0x9e read.  So the reload is real and is written
+ * as one: a state may replace the whole context, and the next iteration must
+ * see the replacement rather than a cached pointer.  Writing `hdx` once
+ * outside the loop compiles to one fewer instruction and is a different
+ * program.
+ */
+
+#include "dsplib/v32hdx.h"
+
+/* The instance is not modelled; see v32hdx.h.  These are the only accessors. */
+#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
+#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
+
+void
+V32TxHdxModem(void *modem, short *data, short *out, short *nsamples)
+{
+	unsigned short left;
+	short total = 0;
+	void *hdx;
+
+	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+	left = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);
+
+	do {
+		short n;
+
+		/* Re-read: a state may have swapped the context. */
+		hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+		n = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))
+			(modem, data, out, &left);
+		total = (short)(total + n);
+		out += n;
+	} while (left != 0);
+
+	*nsamples = total;
+}
+
+void
+V32RxHdxModem(void *modem, short *in, unsigned short *out,
+	      unsigned short *count)
+{
+	void *hdx;
+
+	hdx = FIELD_PTR(modem, V32_OBJ_HDX);
+	(*(v32_rxhdx_fn *)(void *)FIELD(hdx, V32HDX_RXSTATE))
+		(modem, in, out, count);
+}
