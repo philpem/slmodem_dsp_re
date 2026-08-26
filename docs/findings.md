@@ -91741,3 +91741,85 @@ the unreachable head. Lever 3b's advance test calls `setMappingParams`
 EXPOSED (`ecx`) and `recivedRt` EXPOSED (`esi`), so the cursor does reach
 them — but there is nothing left to move it with. Lever 3 is spent here and
 the next lever for those three has to be something else.
+
+### F8144. The peephole2 cursor is steerable by EXPLICIT INSTANTIATION order, which `nm -n` cannot see
+
+`src/dsp/Scrambler.cpp` holds no function bodies. It is thirty-four explicit
+instantiations and a block of offset assertions, and lever 3's own text records
+COMDAT as outside the definition-order question — every instantiation lands in
+its own `.gnu.linkonce.t.*` section and they come out SORTED, so the object is
+**34 of 34 at the blob's index under every arrangement** and the portable
+`nm -n` check is a constant.
+
+**The cursor is not the section order.** `peep2_find_free_register`'s
+`search_ofs` is threaded in the order GCC PROCESSES functions, which for
+explicit instantiations is the order they are written. So this file has an
+emission order that is fully under our control and completely invisible to the
+check lever 3 tells you to run.
+
+**It fires, and the measurement is two enumerations.**
+
+    120 cells   all 5! orders of the five instantiation GROUPS
+                5 distinct emissions.  `Scrambler<h,h>`'s C1 moves between 2
+                and 15 differing bytes; the COMMITTED order is the maximum,
+                25 of 34, and no cell beats it.  `reset` never moves.
+    72 cells    all 9 positions of `Scrambler<h,h>`'s constructor line x all
+                9 of its `reset` line, the other seven held in relative order.
+                2 distinct emissions.  **57 of 72 put C1 at BYTE IDENTITY.**
+
+**The fact decoded is that the constructor was not first.** The 15 cells that
+miss are exactly "constructor first" (all 9 `reset` positions) and
+"constructor second with `reset` not above it" (6 more); every other
+arrangement reaches the object. With the constructor written first, C1 emits
+`xor %edx,%edx` where the blob has `xor %ecx,%ecx` — two bytes in 102, and
+`--why` accepts it as REGALLOC, which is the bucket the standing advice says
+not to chase. F0's several-preimages case: no author's order is recovered, and
+the file says so rather than implying one.
+
+**+1 EXACT tree-wide, 0 worse, all 1251 scored in both directions.** Grade 0
+573 -> 574, REGALLOC 30 -> 29. The move is one line.
+
+**AND A COMDAT SYMBOL HAS ONE COPY PER TRANSLATION UNIT, WHICH IS F7880's
+BLIND SPOT IN A COSTUME THIS PROJECT HAS NOT NAMED.** `byteident.py` resolves
+each symbol with `ours.setdefault(k, o)` over a sorted glob, so it scores the
+alphabetically first object that defines it and never looks at the others.
+Three of our objects define this constructor, and they do not agree:
+
+    _ZN9ScramblerIhhEC1Ejjj    EXACT     src_dsp_Scrambler.cpp.o
+                               EXACT     src_pump_v90_V92Phase4Modulator.cpp.o
+                               BYTES 10  src_pump_v90_V90Phase4Modulator.cpp.o
+
+So byte identity is achieved in the copy the tool scores, and **which copy the
+original linker kept is not established by this measurement.** The two members
+closed by F8140 and F8142 have no such gap — `copyHistoryTail` and
+`processAllOnes` are EXACT in all three objects — and this is the only symbol
+in the pass where the copies disagree. Any future work on a template member
+should score every object that defines it, not the one the glob picks.
+
+**THE SECOND COPY IS ALSO THE MECHANISM'S BEST CORROBORATION, and it comes
+from a file this pass never edited.** `V92Phase4Modulator.cpp`'s own copy of
+C1 was ALREADY byte-identical before the move, and `nm -n` on that object puts
+the `Scrambler<h,h>` clones at indices 1 to 8 — not at 0. Same template, same
+header, two translation units: the one where the constructor is not first
+matches the blob and the one where it was first did not. That is an
+independent instance of the same fact, obtained without a permutation.
+
+**Three negatives came with it and they are worth more than the byte.**
+`Scrambler<h,h>::reset` sits at ONE differing byte — `pop %edx` against our
+`pop %eax`, F8042's add-to-pop epilogue conversion, the second `match_scratch`
+consumer — and it does not move in ANY of the 192 cells across both
+enumerations. `Scrambler<h,h>::process(const T *, I *, j)` holds at REGALLOC 8
+throughout, which agrees with lever 3b clearing it: peephole2 does nothing to
+that symbol, so no ordering of anything can reach it. And the lever was run a
+third time on `Descrambler<int,int>::process(int)` (REGALLOC, 12 of 118) —
+all 6 positions of that group's constructor line crossed with all 6 of the
+target's, 30 cells, TWO distinct emissions splitting on the same
+before-or-after relation, and **the symbol is immovable at 12 differing bytes
+in every one**. So the lever fires on this file wherever you point it and
+closes exactly one symbol; EXPOSED remains necessary and not sufficient.
+
+**Where to look next for this lever.** Any translation unit that is mostly or
+wholly explicit instantiations has the same hidden order — `src/dsp/Queue.cpp`
+carries the identical note about instantiating member by member. The screen is
+NOT `nm -n`, which is constant there by construction; it is lever 3b's advance
+test per symbol, and then the position of whichever lines it calls EXPOSED.
