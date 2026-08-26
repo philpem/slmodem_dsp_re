@@ -90628,3 +90628,124 @@ re-derive it.
 name; `test/unit/t_vpcmdp.c` compares `vpcm_op` against the blob's
 `ref_vpcm_op` field by field through that name.  This is F7768's `b103_ops` /
 `v23_ops` case exactly, and it gets F7768's answer.
+
+### F8044. `datapumpv34`: THE `movswl`/`movzwl` DELTA IS NOT THE DEFECT -- `dp_rxget`/`dp_rxput`'s OFFSET PARAMETER IS, AND IT CARRIES THE BRANCH SHAPE TOO
+
+F8007 named this the biggest lever-8 surface in the tree: `movswl +16
+movzwl -9` per mnemonic, 25 extension sites, 40 differing bytes of 1028.
+**The extensions are downstream.**  What the object shows first is two
+`lea`s in the prologue --
+
+    lea 0x264(%ebx),%esi        &obj->rxq, i.e. T3C_RX(obj)
+    lea 0x221c(%ebx),%edi       &obj->txq
+
+-- and then every receiver field addressed as a constant displacement off
+`%esi`: `0x124(%esi)`, `0x21a(%esi)`, `0x252(%esi)`, `0x258(%esi)`.  Ours
+addresses all of them absolutely off `%ebx` (`0x388`, `0x47e`, `0x4b6`,
+`0x4bc`) because the source reaches them through
+
+    static short dp_rxget(const struct v34_object *obj, unsigned off)
+    { return *(const short *)((const char *)&obj->rxq + off); }
+
+whose offset is a PARAMETER.  The loads fold after inlining; the STORES do
+not, and come out as `mov $0x258,%esi; mov %dx,0x264(%ebx,%esi,1)` -- an
+indexed store with a constant materialised into a register.  This is F13's
+lever, the syntactic form of the reference, on a `char *` cast rather than on
+a member subscript.
+
+**AND THE SAME HELPER CARRIES THE BRANCH SHAPE.**  `dp_run(obj, counter, int
+failed)` takes the verdict as an `int` parameter, so each of the three
+call sites materialises a boolean -- `setl %al; xor %edx,%edx; test $0x1,%al;
+je` -- where the object simply branches.  That is the whole of our `setg +1
+setl +2 test +3 je +3` against the object's `jle -3 jl -1 jge -1`.  The
+addressing fix and the branch-shape fix are ONE change, not two.
+
+**THE SOURCE COMMENT THAT SENT THE PREVIOUS READING WRONG IS STALE.**  It says
+of the receiver's offsets "none of which is mapped as a member yet";
+`include/dsplib/v34recv.h` declares `f124`, `f21a`, `f252`, `f254`, `f256`,
+`f258`, `f25a`, `f25c`, `f25e`, `f260` and `flags` at exactly those offsets.
+CLAUDE.md's rule about a paragraph that states a live defect applies to source
+comments too.
+
+**THE 25 SITES, CLASSIFIED** (blob's `%esi` is `%ebx+0x264`, so `0x21a(%esi)`
+and our `0x47e(%ebx)` are one address):
+
+    off    blob            ours       class
+    0x122  movzwl x2       movzwl x2  agrees -- rx->flags is `unsigned short`
+    0x124  movzwl          movswl     FORCED.  The 32-bit result IS used: the
+                                      object compares it against 0x752f with a
+                                      SIGNED `jg` on a zero-extended value, so
+                                      the field is `unsigned short` widened to
+                                      int.  F613's class, a real defect no
+                                      test can see.
+    0x21a  movzwl          movswl     DEAD -- the object's compare is 16-bit,
+                                      `cmp 0x252(%esi),%di`.  F7803: follows
+                                      the LOCAL's declared type, so the local
+                                      is `unsigned short`.  See F8045 for why
+                                      that alone is not safe.
+    0x252  none            movswl     NOT signedness.  The object compares
+    0x254  none            movswl     16-bit memory directly and never loads
+    0x256  none            movswl     these at all; the extension is ours.
+    0x258  movzwl          movswl x3  DEAD, into a 16-bit store.
+    0x25a  movswl x2 +     movswl x3  BOTH EXTENSIONS ON ONE FIELD in the
+           movzwl                     object.  F7802/F8's own trap: this is
+    0x25c  movswl +        movswl x2  NOT a field retype, and retyping would
+           movzwl                     match some sites and break others.
+    0x2aa0 movzwl x4       movzwl x3  agrees
+    0xaa96 movswl x2 +     movswl x2 + agrees exactly, both extensions
+           movzwl x3       movzwl x3
+    0xaa98 movzwl x3       movswl x3  DEAD, straight into a 16-bit store.
+                                      `hs_get`'s return type is SHARED, so the
+                                      fix is a local, not a signature change.
+
+So of 25 blob sites: three agree already (0x122, 0xaa96, 0x2aa0), three are
+the addressing form and not signedness at all (0x252/4/6), two are the
+one-field-both-extensions trap (0x25a, 0x25c), and four are real -- 0x124
+forced, 0x21a, 0x258 and 0xaa98 dead.  **A retype sweep driven by the
+per-mnemonic delta would have got three of those wrong in three different
+ways.**
+
+### F8045. THE BYTE-CLOSEST CELL OF `datapumpv34` IS BEHAVIOURALLY WRONG, WHICH IS WHY THE REWRITE WAS DECLINED
+
+Fourteen cells were built over the rewritten function -- a local
+`struct v34_receiver *rx` and `struct v34_queue *tx` replacing
+`dp_rxget`/`dp_rxput`/`dp_run`, crossed with {counter update as a ternary, as
+`if/else` with `+ 1`, as `if/else` with `++`} x {`err` declared `short`,
+`unsigned short`, or no local at all} x {the timer span in a variable or its
+expression repeated at both tests} x {the three threshold compares written
+either way round}.  Against the object's 1028 bytes and 211 instructions:
+
+    the tree, via the helpers               SIZE 40    988 B   211 insn
+    ptr + ternary        + unsigned short   SIZE 52    976 B   204
+    ptr + if/else        + short            SIZE 30    998 B   205
+    ptr + if/else + (short) cast            SIZE 34    994 B   206
+    ptr + if/else        + unsigned short   SIZE 24   1004 B   208
+    ... + span expression repeated          SIZE 23   1005 B   209
+
+**The last two are the closest on bytes and they do not compute what the
+object computes.**  The object loads `movzwl 0x21a(%esi),%edi` and then
+compares SIXTEEN BITS, `cmp 0x252(%esi),%di` with a signed `jle`, so its
+comparison is `(short)f21a <= (short)f252`.  A plain `unsigned short err`
+promotes to `int` as 0..65535, giving a 32-bit compare against a
+sign-extended threshold, and for a negative `f21a` the two disagree.  The
+extension is F7803-dead and says the LOCAL is `unsigned short`; the compare
+is a separate fact and says it is done in 16 signed bits.  Both are needed
+and only the cast cell has both.
+
+The cast cell, `unsigned short err` compared as `(short)err`, reproduces the
+object's operand set at all four sites exactly --
+`movzwl 0x21a(%esi),%edi`, `cmp 0x252(%esi),%di`, `cmp 0x254(%esi),%di`,
+`cmp 0x256(%esi),%di` -- and differs only in the compare's operand ORDER,
+`cmp %di,0x252(%esi)` against the object's `cmp 0x252(%esi),%di`.  Writing the
+comparison the other way round (`rx->f252 < (short)err`) does not move it:
+**GCC canonicalises the compare and the spelling is not observable**, which is
+F9's own recorded result reproduced on a second family.
+
+**Declined under F7782.**  No cell maps onto the object, so this is
+hill-climbing on byte count and the byte count is actively misleading here --
+the two cells it favours are the two that are wrong.  The next pass should
+start from the cast cell (SIZE 34, every extension site right) rather than
+from the tree, and its open questions are the loop rotation in the handshake
+arm -- the object falls through its entry test where we emit a `jmp` into it
+-- and whether `f124` should be retyped `unsigned short` in `v34recv.h`,
+which F8044 shows is forced but which reaches every other user of that field.
