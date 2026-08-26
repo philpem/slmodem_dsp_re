@@ -63,12 +63,37 @@ SCR_MAP(DescramblerII, dii);
 
 #endif /* 32-bit host */
 
-/* Scrambler<unsigned char, unsigned char> -- nine members, 696 bytes. */
+/*
+ * Scrambler<unsigned char, unsigned char> -- nine members, 696 bytes.
+ *
+ * THE CONSTRUCTOR IS NOT FIRST, AND THAT IS MEASURED RATHER THAN TIDY.  This
+ * file holds no bodies at all, so nothing in it looks like it could move a
+ * byte -- and `nm -n` cannot see the difference either, because every one of
+ * the thirty-four lands in its own `.gnu.linkonce.t.*` section and they come
+ * out SORTED whatever order they are written in.  The object is 34 of 34 at
+ * the blob's index under every arrangement.
+ *
+ * What the order does reach is lever 3b's `peep2_find_free_register` cursor,
+ * which is threaded in the order GCC PROCESSES functions, not the order they
+ * are emitted.  With the constructor written first, `Scrambler<h,h>`'s C1
+ * comes out `xor %edx,%edx` where the blob has `xor %ecx,%ecx`; with one
+ * scratch-consuming instantiation ahead of it, it is byte-identical.
+ *
+ * Seventy-two cells, exhausted: all 9 positions of this group's constructor
+ * line crossed with all 9 of its `reset` line, the other seven held in
+ * their relative order.  TWO distinct emissions, and 57 of the 72 put C1 at
+ * byte identity -- every arrangement except "constructor first" and
+ * "constructor second with `reset` not above it".  So what is decoded is that
+ * the constructor was not the first thing in this translation unit, which is
+ * F0's several-preimages case; the position below is the smallest move that
+ * reaches the object and no claim is made that it is the author's.
+ * Finding F8144.
+ */
+template Scrambler<unsigned char, unsigned char>::~Scrambler();
+template void Scrambler<unsigned char, unsigned char>::resetHistoryIndexes();
 template Scrambler<unsigned char, unsigned char>::Scrambler(unsigned int,
 							   unsigned int,
 							   unsigned int);
-template Scrambler<unsigned char, unsigned char>::~Scrambler();
-template void Scrambler<unsigned char, unsigned char>::resetHistoryIndexes();
 template void Scrambler<unsigned char, unsigned char>::copyHistoryTail();
 template void Scrambler<unsigned char, unsigned char>::reset(unsigned char);
 template unsigned char

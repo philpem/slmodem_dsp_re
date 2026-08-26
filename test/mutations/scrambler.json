@@ -85,18 +85,18 @@
   },
   {
     "label": "copyHistoryTail: the destination is pInitOut, not pInitOut + 1",
-    "find": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tT *dst = pInitOut + 1;\n\tconst T *src = pLimit;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n",
-    "replace": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tT *dst = pInitOut;\n\tconst T *src = pLimit;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n"
+    "find": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tconst T *src = pLimit;\n\tT *dst = pInitOut + 1;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n",
+    "replace": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tconst T *src = pLimit;\n\tT *dst = pInitOut;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n"
   },
   {
     "label": "copyHistoryTail: the source starts one element in",
-    "find": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tT *dst = pInitOut + 1;\n\tconst T *src = pLimit;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n",
-    "replace": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tT *dst = pInitOut + 1;\n\tconst T *src = pLimit + 1;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n"
+    "find": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tconst T *src = pLimit;\n\tT *dst = pInitOut + 1;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n",
+    "replace": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tconst T *src = pLimit + 1;\n\tT *dst = pInitOut + 1;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n"
   },
   {
     "label": "copyHistoryTail: one element short of tailLength",
-    "find": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tT *dst = pInitOut + 1;\n\tconst T *src = pLimit;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n",
-    "replace": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tT *dst = pInitOut + 1;\n\tconst T *src = pLimit;\n\tunsigned int n = tailLength;\n\n\twhile (n-- > 1)\n\t\t*dst++ = *src++;\n}\n"
+    "find": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tconst T *src = pLimit;\n\tT *dst = pInitOut + 1;\n\tunsigned int n = tailLength;\n\n\twhile (n--)\n\t\t*dst++ = *src++;\n}\n",
+    "replace": "void Scrambler<T, I>::copyHistoryTail()\n{\n\tconst T *src = pLimit;\n\tT *dst = pInitOut + 1;\n\tunsigned int n = tailLength;\n\n\twhile (n-- > 1)\n\t\t*dst++ = *src++;\n}\n"
   },
   {
     "label": "reset: two bits of the argument reach the buffer",
