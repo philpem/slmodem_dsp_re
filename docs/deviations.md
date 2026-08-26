@@ -8816,3 +8816,91 @@ fails on it.
 relocations of any kind name them), so no caller exists whose behaviour could
 be affected, and whether the vendor's intended caller would have reached
 either arm cannot be known from this object.
+
+## D490 -- `FPM_AGC_agc` is called with four arguments and defined with three  `unmeasured`
+
+Every V.32 call site pushes a fourth outgoing slot holding the constant 1 --
+`DemodDataV32` at 81ce6, `RxHdxTone` at 83937, `RxHdxNoSignal` at 83a37 -- and
+`FPM_AGC_agc` (0xa6750, 566 bytes) reads only 0x50, 0x54 and 0x58 off its
+frame, never 0x5c. The two declarations that must exist to produce this are a
+four-parameter prototype in the caller's translation unit and a
+three-parameter definition; the extra argument is pushed and ignored, so
+nothing observable depends on it.
+
+Not V.32's alone: `DemodDataV17`, `Detect_v22` and `v23FP_rx_progress` do the
+same, and `src/pump/v23/bwchdem.c` and `src/pump/v22/v22data.c` already record
+it at their own call sites. `src/pump/v32/v32demod.c` follows them and passes
+three, which costs one instruction against the object and is the whole of the
+deviation. Adding a fourth parameter to `fpm_agc.h` would move the code
+generation of every other caller in the tree to fix one dead store, so it is
+not done. See finding F8234.
+
+## D491 -- `DemodDataV32` masks three of its four equaliser enables with the AGC's flag and leaves the fourth bare  `unmeasured`
+
+Four `int`s in the datapump block are copied into named enables of the timing
+recovery and the equaliser, and three of the four are ANDed with `agc.f18`
+first:
+
+    sre.adapt   = fp[0x04] & agc.f18       81d26
+    fse.pll_on  = fp[0x08] & agc.f18       81d7f
+    fse.tilt_on = fp[0x0c] & agc.f18       81e50   (mode 6, timing mode != 0)
+    fse.lms_on  = fp[0x10] & agc.f18       81e58   (same arm)
+
+but on the arm taken when `hdx->mode` is NOT 6, the object writes
+`fse.tilt_on = 1` and `fse.lms_on = fp[0x10]` -- `mov 0x10(%edx),%ebp` at
+81d8e followed by `mov %ebp,0x250(%edx)` at 81d9c, with no `and %ebx`. Every
+sibling assignment in the function carries the mask and this one does not.
+
+The asymmetry is codegen-visible, so it is reproduced rather than repaired:
+`src/pump/v32/v32demod.c` writes the bare assignment with a comment naming this
+entry, and `test/mutations/v32demod.json` carries the repair as a mutation
+("D491 undone") which the differential test catches. Whether the author
+intended the equaliser's coefficient adaptation to survive the AGC's gate
+outside mode 6, or omitted the mask, cannot be told from this object.
+
+**Status:** unmeasured. Reaching it needs `hdx->mode != 6`, a live carrier and
+`agc.f18` clear at the same time; the differential test constructs exactly that
+and both sides agree, but whether a running V.32 modem produces the
+combination is a question about `V32FP_control` and the handshake, neither of
+which is reconstructed.
+
+## D492 -- `hdx->mode` reaches 6 and `V32NextState` has six slots, the last of them unrelocated  `unmeasured`
+
+`V32NextState` (.data 0x76cc) is 24 bytes -- six pointers -- and the object
+relocates five: `V32OrgNextState`, `V32AnsNextState`, `V32LocLoopNextState`
+twice, and `V32RngInitNextState` at indices 0 to 4. Index 5 carries no
+relocation. The table is indexed by `hdx + 0x76`, loaded `movswl` and used
+directly: `call *0x0(,%edx,4)` at 7fd9b in `TxHdxTone` is one of several.
+
+`V32FP_modem` (82735) writes **6** into that field, together with
+`hdx->state = 0x22` (`V32_STATE_DONT_CARE`), when bit 0 of the instance's
+status byte is set. Six is one past the last slot the table has, so a dispatch
+taken with the mode at 6 would call through `.data + 0x76e4`, outside the
+symbol.
+
+This is the shape of D1 and D4 -- a table whose own index expression can reach
+past its last entry -- and it is recorded on that resemblance and nothing more.
+`DemodDataV32` only COMPARES the field against 6 and never indexes with it, so
+the reconstruction is not affected; the dispatch sites belong to the `TxHdx*`
+states, which are not written. **Whether mode 6 can be live at a dispatch is
+not measured and is not claimed**: `blobfix.md`'s warning applies with force,
+because this would be a missing DECISION rather than a missing value if it is
+real, and index 5 being NULL suggests the table's tail is deliberately inert.
+
+## D493 -- a V.32 transmit state can return a negative sample count and walk the output pointer backwards  `unmeasured`
+
+`V32TxHdxModem` sign-extends the state's return with `cwtl` (7fd25) before both
+`lea (%esi,%eax,1),%edx` and `lea (%ebx,%eax,2),%ebx`, so a state returning a
+negative count subtracts from the running total and moves the output cursor
+DOWN by twice that many bytes -- below the buffer the caller supplied. Nothing
+bounds it and no store is guarded.
+
+No state does: every `TxHdx*` exit read so far returns `hdx->sample_len`, which
+`V32FP_control` and `V32FP_recreate` fill from `V32_SAMPLE_LEN`. So this is a
+property of the arithmetic, not a live fault, and it is recorded for the same
+reason D430 is -- the sign extension is what distinguishes the object's
+expression from an unsigned one, and `test/unit/t_v32hdx.c` drives a state that
+returns -20 and -50 over a guard region so the reconstruction is held to it.
+
+**Status:** unmeasured. Establishing whether any real state can return a
+negative count needs the twenty states, none of which is reconstructed.
