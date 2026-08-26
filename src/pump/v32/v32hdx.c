@@ -36,6 +36,24 @@
  * expressible is D493.
  *
  * ---------------------------------------------------------------------------
+ * THE TWO STATEMENTS ARE IN THE AUTHOR'S ORDER, AND THAT IS DECODED
+ *
+ * The object schedules
+ *
+ *      lea (%esi,%eax,1),%edx      total + n
+ *      lea (%ebx,%eax,2),%ebx      out += n
+ *      movswl %dx,%esi             the truncation
+ *
+ * with the pointer advance BETWEEN the sum and its truncation.  The two
+ * statements are independent -- each reads `n` and neither reads what the
+ * other writes -- so both orders are legal C and both compile.  The candidate
+ * space therefore has exactly TWO members and it was ENUMERATED rather than
+ * searched, per finding F7770: `out += n` first gives byte identity with the
+ * object and `total` first does not (six bytes differ, the two `lea`s
+ * swapped).  A complete enumeration with a unique preimage is F7782's TAKEN
+ * side, so this is the author's order and not a fit to the compiler.
+ *
+ * ---------------------------------------------------------------------------
  * WHY THE CONTEXT IS RE-READ INSIDE THE LOOP
  *
  * `mov 0x64(%edi),%edx` sits at the loop's back-edge target (7fd06) and not
@@ -70,8 +88,8 @@ V32TxHdxModem(void *modem, short *data, short *out, short *nsamples)
 		hdx = FIELD_PTR(modem, V32_OBJ_HDX);
 		n = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))
 			(modem, data, out, &left);
-		total = (short)(total + n);
 		out += n;
+		total = (short)(total + n);
 	} while (left != 0);
 
 	*nsamples = total;

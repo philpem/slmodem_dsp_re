@@ -26,8 +26,8 @@
   "label": "the running total is accumulated at full width instead of being truncated to a short every iteration",
   "equivalent": true,
   "why": "EQUIVALENT AT TIER 1 AND ONLY AT TIER 1, and the argument is arithmetic rather than a claim about this fixture.  `total` reaches exactly one observable -- `*nsamples`, a `short *` -- so whatever width it is accumulated at, what is stored is the sum mod 2**16.  Addition mod 2**16 is associative, so truncating after every term and truncating once at the end give the same sixteen bits for EVERY sequence of returns, not merely for the ones a real V32_SYMBOL_LEN can produce.  `out` advances by `n` and not by `total`, and the loop exits on `left`, so no other path can see the difference.  The claim is therefore a CODEGEN-tier one: the object encodes `lea (%esi,%eax,1),%edx` followed by `movswl %dx,%esi` on every iteration, which tier 3 reads directly and tier 1 provably never can.  Finding F8231.",
-  "find": "\tunsigned short left;\n\tshort total = 0;\n\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);\n\n\tdo {\n\t\tshort n;\n\n\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);\n\t\ttotal = (short)(total + n);",
-  "replace": "\tunsigned short left;\n\tint total = 0;\n\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);\n\n\tdo {\n\t\tshort n;\n\n\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);\n\t\ttotal = total + n;"
+  "find": "\tunsigned short left;\n\tshort total = 0;\n\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);\n\n\tdo {\n\t\tshort n;\n\n\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);\n\t\tout += n;\n\t\ttotal = (short)(total + n);",
+  "replace": "\tunsigned short left;\n\tint total = 0;\n\tvoid *hdx;\n\n\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\tleft = (unsigned short)*(short *)(void *)FIELD(hdx, V32HDX_SYMBOL_LEN);\n\n\tdo {\n\t\tshort n;\n\n\t\t/* Re-read: a state may have swapped the context. */\n\t\thdx = FIELD_PTR(modem, V32_OBJ_HDX);\n\t\tn = (*(v32_txhdx_fn *)(void *)FIELD(hdx, V32HDX_TXSTATE))\n\t\t\t(modem, data, out, &left);\n\t\tout += n;\n\t\ttotal = total + n;"
  },
  {
   "label": "the state's return is subtracted from the running total",
@@ -41,8 +41,8 @@
  },
  {
   "label": "the output pointer advances by the running total rather than by this call's count",
-  "find": "\t\ttotal = (short)(total + n);\n\t\tout += n;",
-  "replace": "\t\ttotal = (short)(total + n);\n\t\tout += total;"
+  "find": "\t\tout += n;\n\t\ttotal = (short)(total + n);",
+  "replace": "\t\tout += total;\n\t\ttotal = (short)(total + n);"
  },
  {
   "label": "the loop tests the budget before the first call, so an already-spent block calls no state at all",

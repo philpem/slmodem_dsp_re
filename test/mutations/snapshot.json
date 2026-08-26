@@ -1107,7 +1107,7 @@
    }
   },
   "v32hdx": {
-   "key": "3b215c9fbbf62fc2e21c8ee526f551a006c16f8a171b10486eb11994484517f5",
+   "key": "d39377464c01b4f4125f4d7314002de29f486a4744fcfce30182c351e2045614",
    "summary": "19 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
    "verdicts": {
     "the budget is seeded from V32_SAMPLE_LEN instead of V32_SYMBOL_LEN": "caught",

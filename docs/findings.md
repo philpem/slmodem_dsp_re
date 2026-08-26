@@ -93120,34 +93120,55 @@ that script, `tools/toolchain/byteident.py --why`:
 | symbol | ours | blob | grade 0 | grade 1 |
 |---|--:|--:|---|---|
 | `V32RxHdxModem` | 12 | 12 | **EXACT** | ACCEPT |
-| `V32TxHdxModem` | 96 | 96 | BYTES, 6 differ | REJECT, `lea` vs `movswl` at row 23 |
+| `V32TxHdxModem` | 96 | 96 | **EXACT** | ACCEPT |
 | `DemodDataV32` | 588 | 604 | SIZE, 16 differ | REJECT, 154 instructions against 159 |
 
-`V32RxHdxModem` is byte-identical, which is grade 0 and the 100% line; the
-other two sit inside the 13–29 byte band F7782 rules acceptable and no
-byte-count hill-climbing was done.
+**Two of the three are byte-identical, which is grade 0 and the 100% line.**
+`V32TxHdxModem` got there by a two-element enumeration and it is worth
+recording as a worked case of F7770's rule, because the space really was
+finite:
 
-**`DemodDataV32`'s instruction-count gap was discharged rather than assumed
-away.** F7630 is explicit that a GAP is a missing call until proven otherwise,
-and the proof is a histogram: **both sides make exactly 8 calls**, to the same
-eight sites in the same order. The six-instruction difference (162 against 156
-counting padding, 159 against 154 without) decomposes as
+Its first spelling differed in **six bytes of 96**, and `--why` named the row:
+`lea` against `movswl`. The object schedules `lea (%esi,%eax,1),%edx` (the
+sum), then `lea (%ebx,%eax,2),%ebx` (the pointer advance), then `movswl
+%dx,%esi` (the truncation) — the advance sits BETWEEN the sum and its own
+truncation. Ours put the two `lea`s together. The two source statements
 
-- **2 instructions: D490** — the object's dead fourth argument to
-  `FPM_AGC_agc`, `mov $0x1,%eax` and `mov %eax,0xc(%esp)`;
-- **2 instructions: integer if-conversion** — the object builds the silence bit
-  branchlessly with `sete %al; shl $0x6,%al`, ours with a branch (`je` 4
-  against 3). CLAUDE.md lists if-conversion in the FREE column (grade 2, and
-  F2411's case), so it is not chased;
-- **the remainder: the width of the energy comparison.** The object narrows it
-  to `cmpw %ax,0x28(%ebp)` after a dead `cwtl`; ours promotes both `short`
-  operands to `int` and compares at 32 bits (`movswl` 2 against 0, `cwtl` 0
-  against 1). The two decide identically over every value either operand can
-  hold — both are shorts on both sides — so this is grade 2 as well.
+    total = (short)(total + n);
+    out += n;
 
-Nothing is absent and nothing is extra: the histogram accounts for every
-instruction of the difference, which is what an instruction-count gap has to
-be reduced to before it can be set aside.
+are independent — each reads `n`, neither reads what the other writes — so
+both orders are legal and the candidate space has exactly **two** members.
+Both were compiled: `out += n` first is byte-identical, `total` first is the
+six-byte miss. A complete enumeration with a unique preimage is F7782's TAKEN
+side, so the order in `src/pump/v32/v32hdx.c` is DECODED from the object
+rather than fitted to the compiler, and the finding is a fact about what the
+author wrote.
+
+**`DemodDataV32`'s instruction-count gap is discharged, and only as far as it
+was measured.** F7630 is explicit that a GAP is a missing call until proven
+otherwise. The proof is a call histogram: **both sides make exactly 8 calls,
+to the same eight sites in the same order**, so nothing is absent. That is the
+whole of the obligation and the whole of the claim.
+
+Three contributors to the remaining difference were identified by mnemonic
+histogram and are named as *contributors*, not as an exhaustive decomposition
+— the histogram nets to six instructions across nine mnemonics and no attempt
+was made to assign every one:
+
+- **D490** — the object's dead fourth argument to `FPM_AGC_agc`, `mov
+  $0x1,%eax` and `mov %eax,0xc(%esp)`.
+- **Integer if-conversion** — the object builds the silence bit branchlessly
+  with `sete %al; shl $0x6,%al` where ours branches (`je` 4 against 3).
+  CLAUDE.md lists if-conversion in the FREE column (grade 2, F2411's case).
+- **The width of the energy comparison** — the object narrows it to `cmpw
+  %ax,0x28(%ebp)` after a dead `cwtl`; ours promotes both `short` operands to
+  `int` and compares at 32 bits (`movswl` 2 against 0, `cwtl` 0 against 1).
+  Both decide identically over every value either operand can hold.
+
+Neither of the last two was chased, per F7782 and this batch's brief: 16
+differing bytes of 604 is inside the 13–29 band, and unlike the transmit
+driver's swap neither has a finite enumerated space behind it.
 
 ## F8239. What this batch did NOT settle, for whoever writes the V.32 states
 
