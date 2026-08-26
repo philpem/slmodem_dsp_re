@@ -92783,3 +92783,37 @@ bytes, which is the complete reading rather than a majority one.
 **Schedule by SERVICE and by module, never by span label.** `service.py`
 classifies by which entry point reaches a symbol and is the authority; the
 span name is a locator, not a description.
+
+### F8173. The ratchet failed on progress for 279 functions, because `same_size` is not monotone
+
+`compare.py --ratchet` guarded two columns and failed if EITHER fell:
+
+    bad = [k for k in ("identical", "same_size") if now[k] < was[k]]
+
+**`same_size` counts functions whose byte count agrees and whose instructions
+do not — so it goes DOWN when one of them becomes identical**, which is the
+outcome the tool exists to encourage. The check had been red on
+
+    same_size  was 71, now 52
+
+while `identical` had gone **350 to 629** over the same period. 279 functions
+had graduated out of the bucket it was guarding, and it read that as the
+reconstruction "moving AWAY from the original's code generation".
+
+**A gate that is permanently red protects nothing**, and one that fails on
+improvement teaches the next reader to pass `--update` without looking — which
+is how a real regression would have got through. The last pass to hit it left
+it unblessed and said so, correctly, because re-blessing a floor you did not
+move is not the reader's job.
+
+Now it ratchets on `identical` alone. `same_size` is reported with its
+direction and an explicit note that **a fall is AMBIGUOUS** — a function leaves
+that bucket both by becoming identical and by ceasing to match on size — with a
+pointer to per-symbol scoring, which is what tells the two apart. Floor
+re-blessed at 1,257 compared / 629 identical / 52 same_size.
+
+**This is the fifth member of a family this session** (F7630, F7793, F7865,
+F7880, F8146): a number that is easy to compute standing in for the one that
+answers the question. Here the question is "did anything get worse", and the
+easy answer was "did any bucket shrink" — which is not the same question when
+one of the buckets is a waiting room.
