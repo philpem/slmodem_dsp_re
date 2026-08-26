@@ -93530,9 +93530,18 @@ answers "what can be read separately inside it".
 ### F8202. The V.32 rate-signal codec, the sequence generator and the sequence detector: 13 functions and 3 tables, written and differentially tested
 
 `src/pump/v32/v32seq.c`, `include/dsplib/v32seq.h`, `test/unit/t_v32seq.c`,
-`test/mutations/v32seq.json`. 1,528 bytes of the object over 13 functions plus
-42 bytes over three `.data` tables. Closed on its own —
+`test/mutations/v32seq.json`. **1,406 bytes** of the object over 13 functions
+plus 42 bytes over three `.data` tables. Closed on its own —
 `closure.py <the 16 names> --batch` says `CLOSED`.
+
+> This paragraph said **1,528** until review caught it, and the wrong number
+> was the transmit Hdx states' total (237+217+209+194+194+152+116+113+96)
+> transcribed from earlier in the same session. The 122-byte gap against the
+> measured coverage delta had been noticed and explained away as a counting
+> subtlety; it was not. 14+150+183+164+164+152+68+118+52+275+11+26+29 = 1,406,
+> and the pass's four batches sum to 1,406 + 199 + 2,886 + 712 = 5,203, which
+> is exactly what `make coverage` moved (556,945 → 562,148). CLAUDE.md's rule
+> about a paragraph that states a COUNT applies to a finding's own arithmetic.
 
 **The ladder is one inlined static with five copies.** `SeqToRate`,
 `DecodeRateSeq`, `CodeRateSeq`, `CodeFinalRateSeq` and `CodeESeq` all open with
@@ -93719,9 +93728,17 @@ Both chains test the same four constants:
 |--:|---|--:|
 | 14400 | 0x3840 | 5 |
 | 12000 | 0x2ee0 | 4 |
-| 9600 | 0x2580 | 2 with trellis, 1 without — `2 - (obj->trellis == 0)` at 0x7f60f |
+| 9600 | 0x2580 | 2 with trellis, 1 without — `2 - (obj->trellis == 0)`, at **0x7f40b for tx** and **0x7f60f for rx** |
 | 7200 | 0x1c20 | 3 |
 | anything else | — | 0 |
+
+**BOTH chains split on trellis, and that was checked rather than assumed.**
+The rx arm at 0x7f60f and the tx arm at 0x7f40b are the same six instructions
+against the same `obj + 0x1c`, differing only in the store — `mov %cx,0x2a(%esi)`
+against `mov %cx,0x28(%esi)`. The check was worth making: a sibling batch found
+that at fp + 0x2c / 0x2e **both** 9600 arms of `SetTxModeV32` write 1, the
+trellis arm by falling into the other's store (F8211's neighbourhood), so this
+author does write exactly that asymmetry elsewhere. Here he does not.
 
 **So fp + 0x2a is the RECEIVE rate's index and fp + 0x28 the transmit rate's,
 and the ladder reads the receive one.** That is the right way round: a rate

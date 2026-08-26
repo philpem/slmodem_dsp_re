@@ -183,6 +183,9 @@ extern "C" {
  *     5   |  0x0ff9  |   0x0008   |     0x0999     | 0xf999
  *     6   |  0x0997  |    none    |     0x0997     | 0xf997
  *
+ * The line rate each index stands for is `V32FP_recreate`'s and is tabulated
+ * below; the arm order is descending rate.
+ *
  * Index 5's RATE_SEQ entry has every one of those bits, which is why it is
  * the first arm of the ladder.  Index 6 has none of them and is never
  * selected by the ladder -- `CodeRateSeq` and `CodeESeq` substitute a literal
