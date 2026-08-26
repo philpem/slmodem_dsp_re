@@ -91546,3 +91546,33 @@ per-symbol in both directions over all 1251 symbols rather than trusting the
 set diff, which is the only reason this is written down at all. A pass that had
 followed the standing "diff the SET" instruction to the letter would have
 reported a clean +7.
+
+### F8112. V.32 is a data mode and was fenced, so "cover the data modes" was an unreachable goal
+
+The standing scope rule barred V.22, V.32, FAX, Voice, CID and Ring. V.22,
+V.23 and B.103 were lifted earlier today. The owner then set the condition
+"lift the fence once all the data modes are covered" — **and that condition
+could not be satisfied, because V.32 is a data mode.**
+
+`tools/service.py`'s own classifier says so in its header: *DATA MODE —
+V.90/V.92/V.34/**V.32**/V.22/B.103/V.23/V.8*. And it is not a rounding error:
+
+    V32mod.c +39   31230 B      Dialer.c +18    9539 B
+    v32.c           1691 B      v22.c           1071 B
+                                other             733 B
+
+**32,921 of 44,264 remaining data-mode bytes — 74% — were behind the fence**,
+plus 17 already-written V.32 symbols in the SIZE bucket (7,075 B). Once the
+Dialer and V.22 passes land, V.32 is essentially all that remains of data mode.
+
+Lifted. FAX, Voice, CID and Ring are unaffected by that argument since none is
+a data mode; the owner has separately opened Ring, CID and Voice, and put FAX
+last.
+
+**THE RULE HAD NO HOME, WHICH IS WHY IT COULD DRIFT.** It lived in
+conversation and in whatever an agent brief happened to say, so each pass got a
+hand-copied version and the copies disagreed — one brief fenced `src/pump/v17/`
+explicitly, another did not mention it. It is now a table in `CLAUDE.md`
+alongside the pointer to `service.py`, which is the authority on which service
+reaches a symbol. **A scope rule that only exists in briefs is a rule that is
+re-derived, slightly differently, every time it is needed.**
