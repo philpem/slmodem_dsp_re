@@ -351,6 +351,21 @@ V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *p,
 }
 
 /*
+ * THE REPLACEMENT `operator delete`, as `V92Precoder.cpp` and
+ * `V92Phase4Modulator.cpp` carry it: the blob's global `operator delete` IS
+ * `sysdep_free` (refinement.md lever 7), and a delete-expression over an
+ * inline wrapper is the only spelling that emits what the object emits.
+ *
+ * ONE COPY PER FILE, HERE, AND THAT IS DELIBERATE.  An inline function's
+ * position in the translation unit is a lever-3 carrier; consolidating the
+ * array form into `sysdep.h` once cost eight destructors their byte identity
+ * (finding F7815).  No sized form -- the Makefile passes
+ * `-fno-sized-deallocation`, so the modern build resolves `delete` the way
+ * 3.4.2 does (finding F7900).
+ */
+inline void operator delete(void *p) { sysdep_free(p); }
+
+/*
  * `~V90Phase3Demodulator` -- 165 bytes at 0x20cb0 (D1) and 0x20c00 (D2).
  *
  * Two guarded heap arms and then two calls this file must NOT write: the
@@ -358,23 +373,39 @@ V90Phase3Demodulator::V90Phase3Demodulator(V90Parameters *p,
  * the body, in reverse declaration order, and both are visible at 0x20c2c
  * and 0x20c37 in the object.
  *
- * THE NULL TESTS ARE NOT DECORATION.  This tree's `sysdep_free` tolerates
- * NULL, so dropping either `if` leaves every byte comparison unchanged; what
- * moves is `harness_alloc.free_null`, which is what the test asserts.  The
- * SD detector is freed FIRST, which is the reverse of nothing -- the two
- * allocations are independent -- but it is the object's order and is
- * reproduced.
+ * THE NULL TESTS ARE NOT DECORATION, AND A DELETE-EXPRESSION IS WHERE THEY
+ * NOW LIVE.  `sysdep_free` tolerates NULL here, so an unguarded open-coded
+ * free left every byte comparison unchanged and moved only
+ * `harness_alloc.free_null`, which is what the test asserts.  `delete p` does
+ * its own null test and calls nothing when the pointer is null, so that
+ * assertion is unaffected by the change below.  The SD detector is released
+ * FIRST, which is the reverse of nothing -- the two allocations are
+ * independent -- but it is the object's order and is reproduced.
+ *
+ * BOTH ARMS ARE DELETE-EXPRESSIONS, AND THE CROSS PRODUCT IS WHAT SHOWS THEY
+ * BOTH HAVE TO BE.  This body open-coded `p->~T(); sysdep_free(p);` twice and
+ * sat 17 bytes short of the object's 165.  Nine cells were compiled -- each
+ * arm as the open-coded form, as `delete p`, and as `if (p) delete p` --
+ * and the table separates cleanly (finding F8083):
+ *
+ *     sd=open  ansam=open    SIZE 17      sd=del   ansam=open    SIZE 6
+ *     sd=open  ansam=del     BYTES 30     sd=del   ansam=del     EXACT
+ *     sd=open  ansam=gdel    BYTES 30     sd=gdel  ansam=del     EXACT
+ *
+ * Neither arm closes it alone and the two do not even fail the same way --
+ * converting the SD arm alone leaves a SIZE difference, converting the ANSam
+ * arm alone leaves a same-size 30-byte one.  All four cells with both arms
+ * converted are byte-exact, so the guard is again not distinguished by the
+ * object (a delete-expression already tests for null) and the unguarded
+ * spelling is written as the smaller claim.  The object calls
+ * `V90SdDetector::~V90SdDetector` and `ANSamToneDetector::~ANSamToneDetector`
+ * itself at 0x20c4b and 0x20c73, which is lever 7's precondition for writing
+ * `delete` at all: it must not invent a destructor call.
  */
 V90Phase3Demodulator::~V90Phase3Demodulator()
 {
-	if (sdDetector) {
-		sdDetector->~V90SdDetector();
-		sysdep_free(sdDetector);
-	}
-	if (ansamToneDetector) {
-		ansamToneDetector->~ANSamToneDetector();
-		sysdep_free(ansamToneDetector);
-	}
+	delete sdDetector;
+	delete ansamToneDetector;
 }
 
 /*

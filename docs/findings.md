@@ -90583,3 +90583,131 @@ references, so the place it can still pay is a class whose containing type we
 write later, or one whose ctor/dtor we have not yet emitted.  Re-run the census
 after any batch that adds constructors; it is one pass over the objects and it
 prints its own denominator.
+
+### F8082. `V92Phase4Modulator`'s DESTRUCTOR IS `delete mapper`, AND THE LOCAL-COPY SPELLINGS THAT "EXPLAIN" IT ARE ALL FURTHER AWAY
+
+Ours was 67 bytes against the blob's 87, `--why` reporting `blob 25 insns,
+ours 23` with padding stripped, so lever 2's bare arithmetic said "a statement
+is missing".  Nothing is missing.  Reading the two side by side:
+
+    blob   sub $0xc,%esp; mov %esi,0x8(%esp); mov %ebx,0x4(%esp)
+           mov 0x70(%esi),%ebx        <- ONE load, into a callee-saved reg
+           ... call V92MapperD1 ... mov %ebx,(%esp); call sysdep_free
+    ours   push %ebx; sub $0x8,%esp
+           mov 0x70(%ebx),%eax        <- load into a caller-saved reg
+           ... call V92MapperD1 ... mov 0x70(%ebx),%eax   <- RELOAD
+                                      mov %eax,(%esp); call sysdep_free
+
+We reloaded `mapper` from +0x70 after the destructor call, because the call may
+have written it; the blob had already committed the value to `%ebx`, which
+costs it a second callee-saved register and the two stack slots to spill both.
+That is +3 prologue/epilogue instructions in the blob against +1 reload in
+ours, netting the `+2` `--why` prints -- so the instruction delta is a
+CONSEQUENCE of the register decision and not an inventory of statements.
+
+**EIGHT SPELLINGS, TWO PREIMAGES, AND THE OBVIOUS DIAGNOSIS IS WRONG.**  The
+natural reading of "loaded once and kept" is a local copy, and every local-copy
+form is FURTHER from the object than the shape it replaced:
+
+    A  if (mapper != 0) { mapper->~V92Mapper(); sysdep_free(mapper); }   SIZE 20
+    B  V92Mapper *m = mapper; if (m != 0) { m->~V92Mapper(); free(m); }  SIZE 26
+    C  the same with `if (m)`                                            SIZE 26
+    D  if (V92Mapper *m = mapper) { ... }                                SIZE 26
+    E  delete mapper;                                                    EXACT
+    F  if (mapper != 0) delete mapper;                                   EXACT
+    G  V92Mapper *m = mapper; delete m;                                  SIZE 26
+    H  local copy, comma operator instead of a block                     SIZE 26
+
+The five local-copy cells all land at 61 bytes against the object's 87 -- they
+remove the reload and the second callee-saved register with it.  So what is
+decoded is not "the pointer is read once": it is that the operand is the
+MEMBER and the expression is a `delete`.  **G is the cell that proves it** --
+a local copy followed by `delete` is not the same program to GCC 3.4.2 as
+`delete` on the member.
+
+E and F are byte-identical, so the object does not distinguish the redundant
+guard (a delete-expression tests for null itself and GCC folds it).  Two
+preimages, one decoded FACT, per rule 0.  `delete mapper` is written as the
+smaller claim.
+
+Lever 7's precondition is met and was checked before the edit rather than
+after: the object itself calls `_ZN9V92MapperD1Ev` at 0x16e73, so `delete` does
+not invent a destructor call.  The file gains the same per-file
+`inline void operator delete(void *p) { sysdep_free(p); }` that
+`V92Precoder.cpp` carries, positioned below its `sysdep_free` declaration and
+above its only user -- F7815 is why it is not consolidated into a header.  No
+sized form is needed: the Makefile already passes `-fno-sized-deallocation`
+(F7900).
+
+**File 25 -> 27 EXACT of 44.**  The enumeration scored every symbol the object
+defines, not just the two destructors, because lever 3b's cursor is threaded in
+emission order; no other symbol in the file moved in any of the eight cells.
+
+**A TRAP IN THE HARNESS, RECORDED BECAUSE IT LOOKED LIKE A RESULT.**  The first
+run inserted the `operator delete` by anchoring on the destructor's SIGNATURE,
+which also appears in the file's opening comment -- so it landed INSIDE that
+comment.  The file compiled clean, `delete` resolved to the undeclared
+`::operator delete`, and cells E and F scored `RELOC 1`: bytes identical,
+one relocation naming `_ZdlPv` where the blob names `sysdep_free`.  A
+one-relocation miss reads exactly like a near miss worth chasing.  Anchor an
+inserted definition on the BODY, and read a RELOC residual as a question about
+which symbol you actually called.
+
+### F8083. `V90Phase3Demodulator`'s DESTRUCTOR NEEDS BOTH ARMS CONVERTED, AND THE CROSS PRODUCT IS WHAT SHOWS IT
+
+Same shape as F8082, twice over: two guarded heap arms, each open-coding
+`p->~T(); sysdep_free(p);`, at 148 bytes against the object's 165.  Lever 2's
+"table that separates" says compile the CROSS PRODUCT rather than one site at a
+time.  Nine cells -- each arm as the open-coded form, as `delete p`, and as
+`if (p) delete p`:
+
+                    ansam=open    ansam=del     ansam=gdel
+    sd=open         SIZE  17      BYTES 30      BYTES 30
+    sd=del          SIZE   6      EXACT         EXACT
+    sd=gdel         SIZE   6      EXACT         EXACT
+
+**Neither arm closes it alone, and the two do not even fail the same way.**
+Converting the SD arm alone leaves a SIZE difference of 6; converting the ANSam
+arm alone leaves a SAME-SIZE 30-byte one, which is a different bucket
+entirely.  A pass that converted one site, saw BYTES 30 and read it as "this
+lever does not apply here" would have been wrong, and the cross product is the
+only thing that says so.
+
+All four both-converted cells are byte-exact, so as in F8082 the guard is not
+distinguished.  The object calls `V90SdDetector::~V90SdDetector` at 0x20c4b and
+`ANSamToneDetector::~ANSamToneDetector` at 0x20c73 itself, so lever 7's
+precondition holds for both arms.  **File 11 -> 13 EXACT of 24.**
+
+The pre-existing comment's claim that the null tests are load-bearing survives
+unchanged: `delete p` performs its own null test and calls nothing when the
+pointer is null, so `harness_alloc.free_null` -- which is what the test
+asserts -- does not move.
+
+### F8084. WHAT IS LEFT OF THIS LEVER, SCORED RATHER THAN GREPPED
+
+The playbook says the search for lever 7's remaining surface is one grep.  It
+is, and a grep alone is not a worklist: `src/` still open-codes
+`p->~T(); sysdep_free(p);` at **24 sites over 8 files**, and what decides
+whether a site is worth converting is the enclosing destructor's VERDICT.
+Scored after F8082 and F8083 landed:
+
+    FENCED  V90Demodulator      SIZE 128   ours 797 blob 669   8 sites
+    FENCED  V92Modulator        SIZE   1   ours 504 blob 503   5 sites
+            V92EchoCanceller    SIZE  67   ours 128 blob 195   1 site
+            V92Modem            SIZE  32   ours 261 blob 229   3 sites
+            V90ModemCtor        SIZE  16   ours 337 blob 321   4 sites
+            V90Phase4Modulator  SIZE  11   ours  83 blob  94   1 site
+            V90Modulator        SIZE   1   ours 200 blob 199   1 site
+
+**READ THE SIGN, WHICH IS LEVER 2's OWN WARNING IN A NEW COSTUME.**  A
+delete-expression emits MORE code than the open-coded form here -- that is the
+whole of F8082 -- so it can only help where OURS IS SHORTER.  `V92EchoCanceller`
+(67 short, one site) and `V90Phase4Modulator` (11 short, one site) are the two
+clean candidates.  `V90Demodulator` is 128 LONGER and `V92Modem` 32 longer, so
+whatever those are, converting a site can only make them worse, and the two
+fenced files are somebody else's in any case.
+
+`V90Demapper`, `V90SpectralShaper` and `V90Resampler` all still contain guarded
+`sysdep_free` calls and all three have byte-exact destructors already, which is
+the other half of the same point: the open-coded form is correct wherever the
+free is not the operand of a destructor call the object also makes.
