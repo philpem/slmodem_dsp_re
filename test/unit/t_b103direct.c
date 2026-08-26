@@ -68,16 +68,24 @@ extern int ref_dp_b103_init(void);
 extern void ref_dp_b103_exit(void);
 
 static struct dp_operations *ref_ops;
+/*
+ * And OURS the same way.  `b103_ops` is file-local in the original (finding
+ * F8121), so our side has no more of a symbol to name than the reference's
+ * does, and both tables now come out of the registration log.
+ */
+static struct dp_operations *our_ops;
 
 static int
 find_ref_ops(void)
 {
 	harness_reg_reset();
 	ref_dp_b103_init();
-	if (harness_reg_ref.count < 1)
+	dp_b103_init();
+	if (harness_reg_ref.count < 1 || harness_reg_ours.count < 1)
 		return 0;
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
-	return ref_ops != 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return ref_ops != 0 && our_ops != 0;
 }
 
 /* A maximal-length sequence, so the transmitted data is not all one value. */
@@ -164,12 +172,12 @@ main(void)
 		db = ref_b103_create((void *)0x1234, cases[k].id,
 				     cases[k].caller, 8000, 160, ref_ops);
 		da = b103_create((void *)0x1234, cases[k].id, cases[k].caller,
-				 8000, 160, &b103_ops);
+				 8000, 160, our_ops);
 		diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, (long)k);
 		if (da == 0 || db == 0)
 			continue;
 
-		normalise(&na, (struct b103_dp *)da, &b103_ops, "ours",
+		normalise(&na, (struct b103_dp *)da, our_ops, "ours",
 			  (long)k);
 		normalise(&nb, (struct b103_dp *)db, ref_ops, "ref", (long)k);
 		diff_eq_obj(cases[k].name, struct b103_dp, &na, &nb, (long)k);
@@ -198,11 +206,11 @@ main(void)
 		db = ref_b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
 				     ref_ops);
 		da = b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
-				 &b103_ops);
+				 our_ops);
 		diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, 0);
 
 		if (da != 0 && db != 0) {
-			normalise(&at_create, (struct b103_dp *)da, &b103_ops,
+			normalise(&at_create, (struct b103_dp *)da, our_ops,
 				  "ours", -1);
 
 			for (f = 0; f < 200; f++) {
@@ -226,7 +234,7 @@ main(void)
 					diff_eq_int("block: sample[%ld]",
 						    out_a[i], out_b[i], i);
 
-				normalise(&na, (struct b103_dp *)da, &b103_ops,
+				normalise(&na, (struct b103_dp *)da, our_ops,
 					  "ours", f);
 				normalise(&nb, (struct b103_dp *)db, ref_ops,
 					  "ref", f);
@@ -274,7 +282,7 @@ main(void)
 
 		harness_alloc_reset();
 		dp = b103_create((void *)0x1234, DP_B103, 1, 8000, 160,
-				 &b103_ops);
+				 our_ops);
 		aa = harness_alloc.allocs;
 		arc = b103_delete(dp);
 		af = harness_alloc.frees;

@@ -10,6 +10,40 @@ is about *how to work here* rather than what the work is.
 progress belonging to a different effort. To you it does not exist. Scope any
 subagent prompt to exclude it.
 
+## Scope: which services are open, and the one that is not
+
+This was a conversational rule for a long time and had no home in the tree,
+which is why it was hand-copied into every agent brief and drifted. It lives
+here now. `tools/service.py` is the authority on which service reaches a
+symbol; this is the authority on which services we work.
+
+| service | status |
+|---|---|
+| V.90, V.92, V.34, **V.32**, V.22, V.23, B.103, V.8 | **OPEN** -- the data modes |
+| Ring detect, Caller ID | **OPEN** -- small, and worth clearing |
+| Voice | **OPEN**, lowest priority |
+| **FAX** (`class1*.c`, `src/pump/v17/`) | **LAST**, deliberately |
+
+**V.32 was fenced for most of the project and is not any more.** It is a DATA
+MODE -- `service.py`'s own classifier lists it as one -- and it carries **32,921
+of the 44,264 unwritten data-mode bytes, 74% of the remainder**, plus 17
+already-written symbols sitting in SIZE. Any goal phrased as "cover the data
+modes" requires it, and while it was fenced that goal could not be reached.
+
+**FAX IS LAST ON PURPOSE, AND THE REASON IS NOT DIFFICULTY.** It is 283 symbols
+and 78,331 bytes -- larger than everything else remaining put together -- and
+SpanDSP already implements Class 1 fax in the open-source world, so the
+marginal value of reconstructing it is lower than for anything else here. It is
+a project phase, not a wave.
+
+**WHAT TO DO BEFORE IT, AND THIS IS THE POINT:** leaf functions and small
+shared modules. 149 unwritten symbols (17,808 bytes) have **no entry point
+reaching them at all**, and much of the FAX span's cost is shared underpinning
+rather than fax logic. Clearing the leaves first makes the eventual FAX work
+smaller and is easy-win work in its own right -- `closure.py --missing` over a
+FAX entry point will name the shared pieces without committing anyone to the
+fax path.
+
 ## The rule that is not relaxed
 
 **Nothing is committed that has not passed a differential test**, and nothing

@@ -57,7 +57,11 @@ struct v23_dp {
 #define V23_RATE_BACKWARD 75
 #define V23_SILENCE_MS    700
 
-extern struct dp_operations v23_ops;
+/*
+ * `v23_ops` is NOT declared here -- file-local in v23.c, on the same
+ * evidence as b103.h's note.  Take it from `harness_reg_ours.ops[0]` after
+ * `dp_v23_init()`.  Finding F8121.
+ */
 
 /*
  * The dp_operations entry points.  Declared here so a test can call them

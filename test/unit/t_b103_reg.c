@@ -25,7 +25,14 @@ extern int ref_dp_wrapper_run(struct dp *dp, void *in, void *out, int count);
 int
 main(void)
 {
-	struct dp_operations *ref_ops;
+	/*
+	 * BOTH sides are taken from what the module registered.  `b103_ops` is
+	 * file-local in the original (finding F8121), so there is no more a
+	 * symbol to name on our side than there is on the reference's, and
+	 * reading both out of the registration log is what makes the two
+	 * columns below symmetric rather than one direct and one indirect.
+	 */
+	struct dp_operations *ref_ops, *our_ops;
 	int i, n;
 
 	harness_reg_reset();
@@ -62,9 +69,10 @@ main(void)
 	}
 
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
-	if (ref_ops != 0) {
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	if (ref_ops != 0 && our_ops != 0) {
 		diff_eq_int("name matches (%ld)",
-			    strcmp(b103_ops.name, ref_ops->name), 0, 0);
+			    strcmp(our_ops->name, ref_ops->name), 0, 0);
 
 		/*
 		 * The structural claim: the modem core calls the wrapper, and
@@ -72,18 +80,18 @@ main(void)
 		 * point at *its own* dp_wrapper_run.
 		 */
 		diff_eq_int("ours: process is dp_wrapper_run (%ld)",
-			    (void *)b103_ops.process == (void *)dp_wrapper_run,
+			    (void *)our_ops->process == (void *)dp_wrapper_run,
 			    1, 0);
 		diff_eq_int("ref: process is dp_wrapper_run (%ld)",
 			    (void *)ref_ops->process
 			    == (void *)ref_dp_wrapper_run, 1, 0);
 
 		diff_eq_int("ours: no hangup handler (%ld)",
-			    b103_ops.hangup == 0, 1, 0);
+			    our_ops->hangup == 0, 1, 0);
 		diff_eq_int("ref: no hangup handler (%ld)",
 			    ref_ops->hangup == 0, 1, 0);
 		diff_eq_int("use_count starts zero (%ld)",
-			    b103_ops.use_count, ref_ops->use_count, 0);
+			    our_ops->use_count, ref_ops->use_count, 0);
 	}
 
 	ref_dp_b103_exit();

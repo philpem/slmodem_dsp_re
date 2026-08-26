@@ -42,16 +42,20 @@ extern int ref_dp_v23_init(void);
 extern void ref_dp_v23_exit(void);
 
 static struct dp_operations *ref_ops;
+/* Ours the same way -- `v23_ops` is file-local.  Finding F8121. */
+static struct dp_operations *our_ops;
 
 static int
 find_ref_ops(void)
 {
 	harness_reg_reset();
 	ref_dp_v23_init();
-	if (harness_reg_ref.count < 1)
+	dp_v23_init();
+	if (harness_reg_ref.count < 1 || harness_reg_ours.count < 1)
 		return 0;
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
-	return ref_ops != 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return ref_ops != 0 && our_ops != 0;
 }
 
 static unsigned char pattern[511];
@@ -142,13 +146,13 @@ drive(const char *what, int caller, const short *signal, int frames)
 	harness_modem_reset(pattern, (int)sizeof(pattern));
 	db = ref_v23_create((void *)0x1234, DP_V23, caller, 8000, 160,
 			    ref_ops);
-	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, &v23_ops);
+	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, our_ops);
 	diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, caller);
 	if (da == 0 || db == 0)
 		return diff_end();
 
 	/* The constructor, whole-object, before anything has run. */
-	normalise(&na, (struct v23_dp *)da, &v23_ops, "ours", -1);
+	normalise(&na, (struct v23_dp *)da, our_ops, "ours", -1);
 	normalise(&nb, (struct v23_dp *)db, ref_ops, "ref", -1);
 	diff_eq_obj("after create", struct v23_dp, &na, &nb, caller);
 	at_create = na;
@@ -168,7 +172,7 @@ drive(const char *what, int caller, const short *signal, int frames)
 		for (i = 0; i < 160; i++)
 			diff_eq_int("transmitted[%ld]", out_a[i], out_b[i], i);
 
-		normalise(&na, (struct v23_dp *)da, &v23_ops, "ours", f);
+		normalise(&na, (struct v23_dp *)da, our_ops, "ours", f);
 		normalise(&nb, (struct v23_dp *)db, ref_ops, "ref", f);
 		diff_eq_obj("after block", struct v23_dp, &na, &nb, f);
 		if (memcmp(&na, &at_create, sizeof(na)) != 0)
@@ -241,7 +245,7 @@ main(void)
 		rf = harness_alloc.frees;
 
 		harness_alloc_reset();
-		dp = v23_create((void *)0x1234, DP_V23, 1, 8000, 160, &v23_ops);
+		dp = v23_create((void *)0x1234, DP_V23, 1, 8000, 160, our_ops);
 		aa = harness_alloc.allocs;
 		v23_delete(dp);
 		af = harness_alloc.frees;

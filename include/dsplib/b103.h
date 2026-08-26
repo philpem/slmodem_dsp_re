@@ -58,7 +58,14 @@ struct b103_dp {
 #define MDMPRM_RX_RATE 1
 #define MDMPRM_TX_RATE 2
 
-extern struct dp_operations b103_ops;
+/*
+ * `b103_ops` is NOT declared here: it is file-local in b103.c, because the
+ * blob's `dp_b103_init`/`dp_b103_exit` reach it through a `.data` section
+ * relocation rather than by name.  A test wanting the table takes it from
+ * what `dp_b103_init` registered -- `harness_reg_ours.ops[0]` -- which is the
+ * path the modem core uses and is symmetric with the reference side.
+ * Finding F8121.
+ */
 
 /*
  * The dp_operations entry points.  Declared here so a test can call them

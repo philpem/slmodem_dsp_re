@@ -54,18 +54,30 @@
 void
 ScrambleDataV22(void *modem, unsigned short *data, unsigned short count)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
-
-	FPM_SDM_scrambler((struct fpm_sdm *)FIELD(fp, V22FP_SDM_TX),
+	/*
+	 * NO INTERMEDIATE LOCAL, and that is measured rather than a style
+	 * choice.  Seven spellings of these two wrappers were compiled --
+	 * `void *` local, no local, a typed sub-object local, both locals,
+	 * an `unsigned char *` local, a `const` local, and the sub-object
+	 * computed through a char pointer -- and this is the ONLY one that
+	 * reproduces either function.  It is a unique preimage over an
+	 * exhausted domain and it closes BOTH.
+	 *
+	 * What the local costs is the register: with it, GCC puts the
+	 * sub-object pointer in %edx and pays the 6-byte `add $imm32,%edx`;
+	 * without it the pointer lands in %eax and takes the 5-byte
+	 * `add $imm32,%eax` short form the object uses.  In DescrambleDataV22
+	 * that one byte is the whole size difference.  Finding F8120.
+	 */
+	FPM_SDM_scrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_TX),
 			  data, count);
 }
 
 void
 DescrambleDataV22(void *modem, unsigned short *data, unsigned short count)
 {
-	void *fp = FIELD_PTR(modem, V22_OBJ_FP);
-
-	FPM_SDM_descrambler((struct fpm_sdm *)FIELD(fp, V22FP_SDM_RX),
+	/* No intermediate local, for the reason ScrambleDataV22 records. */
+	FPM_SDM_descrambler((struct fpm_sdm *)FIELD(FIELD_PTR(modem, V22_OBJ_FP), V22FP_SDM_RX),
 			    data, count);
 }
 

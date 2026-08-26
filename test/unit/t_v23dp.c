@@ -29,16 +29,21 @@ extern void ref_dp_v23_exit(void);
 extern int ref_dp_wrapper_run(struct dp *dp, void *in, void *out, int count);
 
 static struct dp_operations *ref_ops;
+/* Ours the same way -- `v23_ops` is file-local.  Finding F8121. */
+static struct dp_operations *our_ops;
 
 static int
 find_ref_ops(void)
 {
 	harness_reg_reset();
 	ref_dp_v23_init();
-	if (harness_reg_ref.count < 1)
+	dp_v23_init();
+	if (harness_reg_ref.count < 1 || harness_reg_ours.count < 1)
 		return 0;
 	ref_ops = (struct dp_operations *)harness_reg_ref.ops[0];
-	return ref_ops != 0 && ref_ops->create != 0 && ref_ops->destroy != 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return ref_ops != 0 && ref_ops->create != 0 && ref_ops->destroy != 0
+	    && our_ops != 0;
 }
 
 static struct dp *
@@ -187,7 +192,7 @@ drive(const char *what, int caller, const short *signal, int frames)
 	harness_modem_reset(pattern, (int)sizeof(pattern));
 	db = ref_v23_create((void *)0x1234, DP_V23, caller, 8000, 160,
 			    ref_ops);
-	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, &v23_ops);
+	da = v23_create((void *)0x1234, DP_V23, caller, 8000, 160, our_ops);
 	diff_eq_int("both built (%ld)", da != 0 && db != 0, 1, caller);
 	if (da == 0 || db == 0)
 		return;
@@ -285,7 +290,12 @@ main(void)
 
 	diff_begin("v23 registration");
 	{
-		struct dp_operations *ops;
+		/*
+		 * `ours` comes out of the registration log for the same
+		 * reason `ops` does: `v23_ops` is file-local in the original,
+		 * so neither side has a table to name.  Finding F8121.
+		 */
+		struct dp_operations *ops, *ours;
 
 		harness_reg_reset();
 		ref_dp_v23_init();
@@ -304,9 +314,10 @@ main(void)
 		}
 
 		ops = (struct dp_operations *)harness_reg_ref.ops[0];
-		if (ops != 0) {
+		ours = (struct dp_operations *)harness_reg_ours.ops[0];
+		if (ops != 0 && ours != 0) {
 			diff_eq_int("name matches (%ld)",
-				    strcmp(v23_ops.name, ops->name), 0, 0);
+				    strcmp(ours->name, ops->name), 0, 0);
 			/*
 			 * The structural claim, as in t_b103_reg: the core
 			 * calls the wrapper and the wrapper calls the
@@ -314,17 +325,17 @@ main(void)
 			 * dp_wrapper_run.
 			 */
 			diff_eq_int("ours: process is dp_wrapper_run (%ld)",
-				    (void *)v23_ops.process
+				    (void *)ours->process
 				    == (void *)dp_wrapper_run, 1, 0);
 			diff_eq_int("ref: process is dp_wrapper_run (%ld)",
 				    (void *)ops->process
 				    == (void *)ref_dp_wrapper_run, 1, 0);
 			diff_eq_int("ours: no hangup handler (%ld)",
-				    v23_ops.hangup == 0, 1, 0);
+				    ours->hangup == 0, 1, 0);
 			diff_eq_int("ref: no hangup handler (%ld)",
 				    ops->hangup == 0, 1, 0);
 			diff_eq_int("use_count starts zero (%ld)",
-				    v23_ops.use_count, ops->use_count, 0);
+				    ours->use_count, ops->use_count, 0);
 		}
 
 		ref_dp_v23_exit();
@@ -360,7 +371,7 @@ main(void)
 					    cases[k].caller, 8000, 160,
 					    ref_ops);
 			da = v23_create((void *)0x1234, DP_V23,
-					cases[k].caller, 8000, 160, &v23_ops);
+					cases[k].caller, 8000, 160, our_ops);
 			diff_eq_int("both built (%ld)", da != 0 && db != 0, 1,
 				    (long)k);
 			if (da == 0 || db == 0)
@@ -426,7 +437,7 @@ main(void)
 
 		harness_alloc_reset();
 		dp = v23_create((void *)0x1234, DP_V23, 1, 8000, 160,
-				&v23_ops);
+				our_ops);
 		aa = harness_alloc.allocs;
 		v23_delete(dp);
 		af = harness_alloc.frees;

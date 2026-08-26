@@ -184,10 +184,21 @@ DeleteV23Modem(struct v23modem *m)
 	if (m->answer_tone != NULL)
 		FPM_TONE_delete(m->answer_tone);
 	v23FP_tx_delete(m->tx);
-	if (m->mode != 0)
-		BwChDem_Delete(m->rx);
-	else
+	/*
+	 * TESTED ON mode == 0, NOT ON mode != 0, and the two spellings are
+	 * not interchangeable in the object.  Both arms do the same work
+	 * either way round; what the order decides is which one the compiler
+	 * leaves as the FALLTHROUGH.  The blob falls through to
+	 * BwChDem_Delete and branches away to v23FP_rx_delete, so the source
+	 * tested the mode-0 case.  Written the other way (`mode != 0` first)
+	 * the whole function is byte-identical except the one condition byte
+	 * -- 0x74 against 0x75 -- because the two arms happen to be the same
+	 * length and the displacement does not move.  Finding F8120.
+	 */
+	if (m->mode == 0)
 		v23FP_rx_delete(m->rx);
+	else
+		BwChDem_Delete(m->rx);
 	sysdep_free(m);
 }
 
