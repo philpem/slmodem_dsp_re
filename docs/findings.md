@@ -91789,28 +91789,48 @@ Both reference the same field at `+0x10`, so nothing is wrong at runtime, but
 file is factored that way.** Lever 3 is excluded for it too: the
 `-fno-peephole2` advance test over `v23tx.c` reads `v23FP_tx_create` and
 `v23FP_tx_delete` CLEARED, `v23FP_tx_progress` UNDECIDED. Left open.
-### F8160. `Dialer.c +18` is not a dialler span and not a seam — it is the lower half of V.32, and F8112's V.32 total is 9,539 bytes short
+### F8160. `Dialer.c +18`'s data-mode content is V.32, not dialler code — and no V.32 total can be quoted from a span label at all
 
-**READ F8112 FIRST; this finding corrects one number in it and confirms the
-rest.** F8112 lifted the V.32 fence while this pass was running, and its
+**READ F8112 FIRST; this corrects one number in it and strengthens its
+argument.** F8112 lifted the V.32 fence while this pass was running, and its
 tally listed the four open data-mode spans like this:
 
     V32mod.c +39   31230 B      Dialer.c +18    9539 B
     v32.c           1691 B      v22.c           1071 B
 
 and concluded **32,921** bytes were behind the fence — `V32mod.c +39` plus
-`v32.c`, with `Dialer.c +18` counted as something else, and "the Dialer and
+`v32.c` — with `Dialer.c +18` counted as something else and "the Dialer and
 V.22 passes" named as separate work still to land.
 
-`Dialer.c +18` **is V.32**. So the figure is **42,460 of 44,264 remaining
-data-mode bytes, 96%, not 74%**, and there is no Dialer pass: that phrase names
-V.32 work. F8112's conclusion is strengthened, not weakened — V.32 was even more
-of what remained than it claimed.
+**There is no Dialer pass in that 9,539 bytes: it is V.32 work.**
+
+**AND THE CORRECTION IS NOT "ADD 9,539 TO 32,921".** This finding's whole
+thesis is that a span label is a range marker and not an attribution, so it
+cannot then take 32,921 on trust — and that number does not survive the same
+test. Subtotalling `V32mod.c +39` by symbol name the way this finding does for
+`Dialer.c +18`:
+
+    V32mod.c +39, 31,230 B over 50 symbols
+        12,154   V.22           v22_originate, v22_retrain, v22_answer,
+                                v22_local_loop, the two rmloop2 halves,
+                                v22_data, DemodDataV22, V22FP_modem, V22_status
+        14,695   V.32           the V32*NextState family, V32FP_status,
+                                V32FP_control, v32_data, v32_handshake, and the
+                                twelve RxHdx* states
+         4,381   unattributed   connect_2400, connect_1200, the three Detect_*,
+                                Set{Rx,Tx}Rate, MakeTxData, {Gen,Det}Sequence,
+                                StoreReg, LoadReg, SetToneDetect, ResetRx and
+                                the two Init*Sequence
+
+**39% of F8112's "V.32" span is V.22 by name.** So 32,921 over-counts in one
+direction, adding 9,539 to it would over-count further, and **the honest
+position is that V.32's size is not a number this project currently has.** What
+is owned is the claim in this finding's title, which needs no total.
 
 Measured as follows. `tools/service.py` reports `Dialer.c +18` as the largest
 open **data-mode** span at **9,539 bytes**, which made it look like the obvious
 next reconstruction target now that `src/dialer/dialer.c` and `dialercfg.c`
-exist. **Every symbol in it is V.32.**
+exist. **Every data-mode symbol in it is V.32.**
 
 `service.py --list data`, restricted to that span, is 35 symbols:
 
@@ -91829,7 +91849,17 @@ exist. **Every symbol in it is V.32.**
 V.32-only subtotal is not a majority reading, it is the complete one. Any
 non-V.32 member would have left it short.
 
-**So V.32 is 42,460 bytes across THREE span labels**, not 32,921 across two.
+**Five of the 35 carry no `V32` in their name** — `CodeESeq`, `CodeRateSeq`,
+`CodeFinalRateSeq`, `DecodeRateSeq` and `RateToSeq`, 677 B — and they are not
+an exception: at 0x821e0–0x824b0 they sit *inside* the contiguous V.32 block
+below, between `V32TxHdxModem` and `V32FP_modem`. They are V.32bis rate
+sequences.
+
+**The span is not all V.32, and the qualifier "data-mode" is doing real work.**
+`GetNextDigitAndReturnNextState`, 895 B at 0x7abb0, is in this same span and is
+genuine dialler code — but `service.py` puts it in the class *no entry point
+reaches*, not in DATA, so it is not part of the 9,539 and not part of what a
+data-mode pass would be scheduling.
 
 **And the span boundary bisects one module.** `nm -n` puts the whole V.32 block
 at 0x7fce0-0x844a0, in this order:
