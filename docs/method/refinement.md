@@ -52,7 +52,7 @@ MECHANISM is measured and the four-compile ladder is real; the GENERALITY is
 not established. It is also what corrected lever 6's recorded negative, so
 read the two together.
 
-### F0. What an enumeration proves depends on how many cells hit zero
+### Lever 0. What an enumeration proves depends on how many cells hit zero
 
 Running the domain to completion is necessary; it is not the whole story. Say
 which of these you have, per function (7789 does it per closure):
@@ -127,7 +127,7 @@ symbol's defect can be.
 explicitly, because stopping at a tempting near-miss is how an exhausted
 enumeration turns back into a search.
 
-### F1. Statement order — enumerate, do not search
+### Lever 1. Statement order — enumerate, do not search
 
 The single most productive lever: ten of the closures across four passes.
 
@@ -213,7 +213,7 @@ searching. Record which side you are on and what the domain was — a finding
 that says "closed by reordering" without saying how many spellings were
 compiled is not reviewable.
 
-### F2. Instruction count at EQUAL byte size means a missing or extra statement
+### Lever 2. Instruction count at EQUAL byte size means a missing or extra statement
 
 Cheap, and it finds things no test can:
 
@@ -303,7 +303,7 @@ compile the CROSS PRODUCT rather than one at a time: a cell that changes one
 difference and not the other proves the two are independent, which no single
 comparison can (7792).
 
-### F3. Definition order in the translation unit
+### Lever 3. Definition order in the translation unit
 
 Two character-identical bodies in one TU compile to **different bytes**, and it
 follows the position, not the text:
@@ -363,7 +363,7 @@ is outside this ordering entirely: 3 grade 1 and 6 BYTES live there. Two
 regions are not reachable by definition order at all: that head, where
 templates and clones interleave, and the cgraph tail.
 
-### F3a. The pre-check, before you permute anything (7801)
+### Lever 3a. The pre-check, before you permute anything (7801)
 
 Three questions, all answered from the objects, and one of them stops a file
 being permuted into a null nobody can read.
@@ -495,7 +495,26 @@ blob's `nm -n` order exactly, 15 for 15, reorder-only**, and the pair stays at
 spending a reorder on it -- and prefer the `-fno-peephole2` certificate below,
 which is stronger because it answers for the symbol rather than its position.
 
-### F3b. The mechanism, settled: a round-robin cursor in `peephole2` (7812)
+**THE CHEAP SCREEN FOR THIS LEVER IS WRONG, AND TWO PASSES FOUND IT WRONG
+INDEPENDENTLY (F8042, F8067).** F8003 retired lever 3 for 21 of 22 files on the
+test "does this file store a constant past `+0x7f`", the idea being that if
+`i386.md:17507` never fires then no scratch is consumed. **Both halves fail:**
+
+- **It is not the only `match_scratch` consumer.** The `add $imm,%esp` to
+  `pop %reg` epilogue conversion takes one too, and the OBJECT ITSELF carries
+  that conversion in all three cosine windows -- their prologue and epilogue
+  counts do not balance (F8042).
+- **The implementation counted the wrong side.** Counting surviving
+  `mov $imm,disp>0x7f` in the FINAL object counts the sites peephole2 LEFT
+  ALONE, the inverse of the intent. `V92Modulator.cpp` scores zero on it while
+  the exact test finds two EXPOSED symbols in it (F8067).
+
+**So do not screen -- run the advance test.** Compile with and without
+`-fno-peephole2` and compare bytes; it is two compiles and it is the authority.
+No number from the `+0x7f` screen should be quoted, and **lever 3 is NOT
+retired for any file on the strength of it.**
+
+### Lever 3b. The mechanism, settled: a round-robin cursor in `peephole2` (7812)
 
 **It is not the register allocator, and it is not a counter.** Swap two
 definitions in `V90Phase4Modulator.cpp` and dump every RTL pass with `-da`:
@@ -659,7 +678,7 @@ shown to fire first — `-fmem-report` reads 6040k of arena at the default
 against 1520k at the aggressive setting, and the compile goes 0.131 s to
 0.234 s collecting.
 
-### F4. File-scope declaration order
+### Lever 4. File-scope declaration order
 
 GCC 3.4.2 emits file-scope objects in **reverse definition order**. Verify that
 on our own object before leaning on it — it was checked ten-for-ten first.
@@ -693,7 +712,7 @@ lever 4 at all**, and 3622's own closing paragraph is the model for how far a
 headline of this shape is entitled to go: it is one scratch file plus one real
 one, so nothing should be built on it that a test does not check.
 
-### F5. Storage class, read off relocations
+### Lever 5. Storage class, read off relocations
 
 - A relocation against a **section** symbol (`.data`/`.rodata`) rather than a
   named one says the object was file-local: `static`.
@@ -707,7 +726,7 @@ All three at once on `RcFixed_Check_Combination` (7767). `nm` showed ours as
 same way, and adding `static` moved the relocations but **not the register
 choice**, so neither reached grade 0 by it (7768).
 
-### F6. Unrolled and partially-unrolled code
+### Lever 6. Unrolled and partially-unrolled code
 
 The object is frequently more unrolled than the natural source. When you write
 source in an unrolled or partially-unrolled shape to match it, **put the
@@ -767,7 +786,7 @@ a state struct leaves nothing to fold, and `-O3` then takes our function from
 loop"; it is that the original's hand optimisation was expressed as literals at
 the call site, and the expansion is downstream of that.
 
-### F7. `delete[]` versus an explicit guarded free
+### Lever 7. `delete[]` versus an explicit guarded free
 
 **The blob's global `operator delete` IS `sysdep_free`** -- it contains no
 `_Znwj`, `_ZdlPv` or `_ZdaPv` at all, and its compiler-generated `D0Ev`
@@ -893,7 +912,7 @@ are no unrelocated calls out of those five functions and no local text symbols
 in their span to be the target of one. Declined; do not rename the file to buy
 the spelling (7818).
 
-### F8. Width and signedness — and the DESTINATION's declared type
+### Lever 8. Width and signedness — and the DESTINATION's declared type
 
 7630's `movzwl` copied as 32 bits. Equal instruction count hides it completely.
 
@@ -965,7 +984,7 @@ would not convert silently in C++ at all — it needs a cast the object gives no
 reason for. Evidence class 2 beats class 3, and `compare.py` did not move by
 one symbol on the retype (5850).
 
-### F9. Operand order — which is decided by the TREE, not by how you spell it
+### Lever 9. Operand order — which is decided by the TREE, not by how you spell it
 
 `return dsp->rx_energy & dsp->rx_tone;` — swapping the two operands gave byte
 identity. That much has always been in this file. What was missing is that the
@@ -1032,7 +1051,7 @@ wants the narrow memory operand SECOND. The order was never the free variable.
 spellings are refused by a test and CLAUDE.md's rule is that the differential
 tier decides.
 
-### F9a. And a NULL over a whole file family is a result — prove the harness fires first
+### Lever 9a. And a NULL over a whole file family is a result — prove the harness fires first
 
 Lever 3 was run to exhaustion over eight small `fpm_*.c` files that were NOT
 in the blob's emission order — seven at 3! and one at 4!, each maximal run of
@@ -1054,7 +1073,7 @@ and pays nothing, so record it and **do not keep the diff**. An enumeration
 that reports "0 of 6 cells" without showing that any cell differed from any
 other is indistinguishable from a broken generator.
 
-### F10. Where a member's body is written — in-class is implicitly `inline`
+### Lever 10. Where a member's body is written — in-class is implicitly `inline`
 
 A member defined inside the class body is implicitly `inline`, which moves it
 from `--param max-inline-insns-auto` (100) to `max-inline-insns-single` (500),
@@ -1114,7 +1133,7 @@ still 419 bytes, to the byte). Cause not found, recorded rather than chased
 (5802). **Do not reach for `__attribute__((noinline))`** — that is fitting the
 compiler, and it puts a construct in `src/` the original cannot have had.
 
-### F11. The constant pool is a typed, per-function observable
+### Lever 11. The constant pool is a typed, per-function observable
 
 `.rodata.cst4` against `.rodata.cst8` against `.rodata.cst16` names the literal's
 type, and the load instruction says it again:
@@ -1157,7 +1176,17 @@ the linker, so in a `.o` the duplicates are all still there — `0.5f` appears a
 and a reader who treats slot identity as expression identity will mis-read
 every inlined float constant in this object (4340).
 
-### F12. Spill width is forced; a value that never spills is not
+**FIRST TEST ON A GENUINELY x87 SYMBOL, AND IT FOUND A NEW FAILURE MODE
+(F8041).** `hamming<float>` was this lever's own named example and is SPENT --
+`fldl` 4 against 4, fixed by an earlier pass. `hanning<float>` did have the
+defect, and fixing it **moved no grade at all**: `6.283185307179586L` puts the
+constant in `.rodata.cst16` reached by `fldt` where the object has `.cst8`
+reached by `fldl`, and those are **the same six bytes in the function**. So a
+real recovery here can be VERDICT-INVISIBLE, and the only thing that sees it is
+the constant pool's SECTION, not the instruction stream. Verified bit-exact
+against the blob's own `ref_hanning` over n = 0..300.
+
+### Lever 12. Spill width is forced; a value that never spills is not
 
 The tree's standing rule is "the object keeps intermediates in registers and
 never rounds them, so spell them `long double`" — `V90Equalizer.cpp`'s file
@@ -1186,7 +1215,15 @@ a spill slot narrower than the value it holds makes a spill forced.
 
 ---
 
-### F13. What the compiler can hoist out of memory depends on the SYNTACTIC FORM of the reference, not on the alias set
+**AND ITS PREMISE FAILS ON THE FIRST SYMBOL IT WAS AIMED AT (F8043).**
+`blackman<float>` was chosen because it carries `sub $0x14` where the object
+has `sub $0x4`, read as a spill-width difference. It is not: the object's
+`sub $0x4` is **ABI alignment** -- push, push, sub 4 puts `%esp` at 0 mod 16 --
+and there is no `fstps`/`flds` through `(%esp)` anywhere in its body. **A frame
+size is not a spill width.** Look for an actual spill through the frame before
+reading a frame delta as this lever.
+
+### Lever 13. What the compiler can hoist out of memory depends on the SYNTACTIC FORM of the reference, not on the alias set
 
 `V90Jd::packData` keeps `int crc[16]` -- a member -- out of memory for the
 whole of its group loop: sixteen loads into stack slots before it, both groups

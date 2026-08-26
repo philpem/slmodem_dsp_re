@@ -91105,3 +91105,28 @@ count while the exact two-compile test finds two EXPOSED symbols in it
 reimplementation are not quoted anywhere above; refinement.md's own advice
 stands unchanged -- use the shape to understand what is happening, use the two
 compiles to decide -- and this is one more instance of why.
+
+### F8110. The F-prefix migration renamed the PLAYBOOK'S LEVER headings too, and that undid what the prefix was for
+
+`docs/method/refinement.md` numbers its levers `### 3b.`, `### 11.`, `### 12.`
+in the same shape a finding heading uses, so F7883's migration matched them and
+wrote `### F3b.`, `### F11.`, `### F12.`
+
+**That is the collision the prefix existed to remove, reintroduced one level
+up.** After the migration, "F11" meant lever 11 in one file and finding F11 in
+every other, and nothing in the text distinguished them. `refcheck` stayed
+green throughout, because it resolves finding numbers out of `findings.md` and
+had no reason to object to a heading elsewhere -- the same blindness as F7833,
+where every wrongly-rewritten reference still resolved.
+
+Renamed to `### Lever 0.` … `### Lever 13.`, seventeen headings. Nothing cited
+a lever as an F-number, so the rename costs no references.
+
+**The general point, and it is the third time this shape has appeared today:**
+a migration that matches on FORM will match everything of that form, including
+things that are not what the migration is about. F7883's own dry run caught
+`fcomp %st(1)` and `(2400)` for exactly this reason and dropped the bare-
+parenthetical rule; what it did not do was ask which OTHER files carry headings
+shaped like findings headings. The check that would have caught it is the one
+that caught the coefficients: read the diff for files that are not the one you
+meant to change.
