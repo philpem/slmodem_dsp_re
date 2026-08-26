@@ -157,9 +157,28 @@ struct fpm_fse_point;
 
 /*
  * MODELLED, UNNAMED -- one short per direction, set by the mode setters to
- * 0, 0, 1, 1, 3, 4, 5 across the seven modes.  That is neither the constellation
- * size nor the bit rate nor `VTBv32_init`'s argument (which is 2, 3, 4, 5 for
- * the four trellis modes), so no available reading fits and none is invented.
+ * 0, 0, 1, 1, 3, 4, 5 across the seven modes.
+ *
+ * THE NEAREST READING FITS SIX OF THE SEVEN AND IS THEREFORE DECLINED.  Those
+ * values are `GetRateV32`'s own rate codes on every mode but one: 14400 -> 5,
+ * 12000 -> 4, 7200 -> 3, and an unrecognised rate -> 0, which is what the two
+ * 4800 arms leave.  **The exception is 9600.**  `GetRateV32` splits it --
+ * V32_RATE_9600_NT (1) without the trellis and V32_RATE_9600 (2) with it -- and
+ * both 9600 arms of `SetTxModeV32` write 1 here, the trellis one by falling
+ * into the other's store.  So the value 2 never appears at either offset in
+ * this batch, and a field that collapses the two 9600 arms is not that
+ * encoding however well it correlates on the other six.
+ *
+ * `V32FP_recreate` and `V32FP_control` both touch this neighbourhood and
+ * neither is reconstructed, so whether anything ever writes 2 here is open.
+ * Until it is settled the name stays neutral: a six-of-seven fit is exactly
+ * the case CLAUDE.md rates worse than leaving it padded.
+ *
+ * (`fp + 0x28` and `fp + 0x2a` ARE the transmit and receive rate indices,
+ * derived separately from `V32FP_recreate`'s own configuration dump.  They are
+ * a different pair, two bytes below these, and `obj + 0x2a` is a third thing
+ * again -- `energy_drop_time`.  Three quantities within four bytes of one
+ * another across two blocks, so read the base register before the offset.)
  */
 #define V32FP_SHORT_2C		0x2c	/* transmit                           */
 #define V32FP_SHORT_2E		0x2e	/* receive                            */
