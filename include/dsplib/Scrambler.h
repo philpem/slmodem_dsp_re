@@ -518,11 +518,36 @@ void Descrambler<T, I>::resetHistoryIndexes()
  * and invisible to the bucket diff, since SIZE to SIZE moves no bucket.
  * Finding F7866.
  */
+/*
+ * `src` IS DECLARED BEFORE `dst`, AND THAT ONE FACT CLOSED ALL FIVE.  Both
+ * bodies emitted the object's sixteen instructions in the object's order with
+ * the two pointers in each other's registers -- the blob puts `src` (`pLimit`,
+ * +0x00) in `%ebx` and `dst` (`pInitOut + 1`, +0x04) in `%ecx`, and ours had
+ * them the other way round in every instantiation.  `--why` called it
+ * REGALLOC, which is the bucket this file's brief says not to chase; the
+ * register choice here is not free, it follows the DECLARATION ORDER of the
+ * two locals, and nothing else in the body reaches it.
+ *
+ * Eighteen cells, enumerated to completion before any was read: 3! orders of
+ * the three declarations crossed with three loop-body spellings (`*dst++ =
+ * *src++`, and the split form with each increment order).  The `while (n--)`
+ * entry shape is held fixed because F7861 decoded it.
+ *
+ *     src BEFORE dst  (SDN, SND, NSD)  x  all three loops   ->  EXACT, 9 cells
+ *     dst BEFORE src  (DSN, DNS, NDS)  x  all three loops   ->  7 differing
+ *                                                               bytes, 9 cells
+ *
+ * TWO distinct emissions over the whole domain, and the split is exactly on
+ * the pair's relative order: `n`'s position is free and so is the loop
+ * spelling, all three of which emit the SAME BYTES.  So what is decoded is
+ * the ORDER OF THE PAIR and not the whole declaration list -- F0's
+ * several-preimages case, and the finding says which fact.  Finding F8140.
+ */
 template <class T, class I>
 void Scrambler<T, I>::copyHistoryTail()
 {
-	T *dst = pInitOut + 1;
 	const T *src = pLimit;
+	T *dst = pInitOut + 1;
 	unsigned int n = tailLength;
 
 	while (n--)
@@ -532,8 +557,8 @@ void Scrambler<T, I>::copyHistoryTail()
 template <class T, class I>
 void Descrambler<T, I>::copyHistoryTail()
 {
-	T *dst = pInitOut + 1;
 	const T *src = pLimit;
+	T *dst = pInitOut + 1;
 	unsigned int n = tailLength;
 
 	while (n--)
@@ -644,6 +669,42 @@ T Scrambler<T, I>::process(T in)
 	return r;
 }
 
+/*
+ * `pTap2` IS DECREMENTED BEFORE `pTap1` IN BOTH OF THESE, WHICH IS THE ORDER
+ * `Descrambler`'s BULK LOOP ALREADY USES AND THE OPPOSITE OF `Scrambler`'s OWN
+ * -- and it is the object that says so.  The tell is the WRITE-BACK: GCC
+ * hoists both taps into registers for the whole loop body and stores them
+ * back in the order the source decrements them, so the blob's
+ *
+ *     mov %eax,0x18(%esi) / mov %ecx,0x14(%esi)      pTap2 then pTap1
+ *
+ * against our `0x14` then `0x18` is the source order read straight off the
+ * object.  The two taps swapping registers (blob `pTap2`->%eax,
+ * `pTap1`->%ecx) is the same fact and not a second one.
+ *
+ * Thirty-two cells, enumerated before any was read: 2 decrement orders x 4 xor
+ * spellings (which tap is named first, crossed with whether the `1` leads or
+ * trails) x 2 local declaration orders x 2 orders of the two stores.  Eight
+ * distinct emissions, FOUR of them the object:
+ *
+ *     pTap2-- first, taps named pTap1 then pTap2, `*out++ = r` before
+ *     `*p = (T)r`                                          EXACT, 4 cells
+ *     pTap1-- first, everything else held                  8 differing bytes
+ *     taps named pTap2 then pTap1, pTap2-- first           8 differing bytes
+ *     `*p = (T)r` before `*out++ = r`                      8 to 42
+ *
+ * The four that reach zero are the two declaration orders of `p` and `r`
+ * crossed with the two parenthesisations of the xor -- both FREE, they emit
+ * the same bytes.  So three facts are decoded (the decrement order, which tap
+ * the xor names first, and that the caller's store comes before the history
+ * store) and two spellings are not.  F0's several-preimages case.
+ * Finding F8142.
+ *
+ * `Scrambler<h,h>::process(const T *, I *, j)` does NOT move with them: it
+ * stays REGALLOC at 8 differing bytes in all thirty-two cells, and its own
+ * `<i,h>` twin is EXACT from the same template text, so its residual is not a
+ * spelling this file can reach.
+ */
 template <class T, class I>
 void Scrambler<T, I>::processAllOnes(I *out, unsigned int n)
 {
@@ -651,8 +712,8 @@ void Scrambler<T, I>::processAllOnes(I *out, unsigned int n)
 		T *p = pOut;
 		I r = (I)(1 ^ *pTap1 ^ *pTap2);
 
-		pTap1--;
 		pTap2--;
+		pTap1--;
 		*out++ = r;
 		*p = (T)r;
 		if (--pOut < pLimit) {
@@ -669,8 +730,8 @@ void Scrambler<T, I>::processAllZeros(I *out, unsigned int n)
 		T *p = pOut;
 		I r = (I)(*pTap1 ^ *pTap2);
 
-		pTap1--;
 		pTap2--;
+		pTap1--;
 		*out++ = r;
 		*p = (T)r;
 		if (--pOut < pLimit) {

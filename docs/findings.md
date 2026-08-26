@@ -91546,3 +91546,198 @@ per-symbol in both directions over all 1251 symbols rather than trusting the
 set diff, which is the only reason this is written down at all. A pass that had
 followed the standing "diff the SET" instruction to the letter would have
 reported a clean +7.
+
+### F8140. `copyHistoryTail` closed five for five on which of two pointers is declared first
+
+All five instantiations of `Scrambler`/`Descrambler::copyHistoryTail` sat at
+REGALLOC — sixteen instructions in the object's order, every operand right,
+and the two walking pointers in each other's registers. The blob puts `src`
+(`pLimit`, +0x00) in `%ebx` and `dst` (`pInitOut + 1`, +0x04) in `%ecx`; ours
+had them the other way round in every one. The load ORDER was already the
+blob's (+0x04, +0x00, +0x1c) on both sides, so nothing in the emission pointed
+at the source.
+
+**Declaring `src` before `dst` closed all five, and the domain was exhausted
+first.** Eighteen cells, drawn before any was read: 3! orders of the three
+local declarations crossed with three loop-body spellings (`*dst++ = *src++`
+and the split form with each increment order). The `while (n--)` entry shape
+was held fixed because F7861 decoded it.
+
+    src BEFORE dst  (SDN, SND, NSD)  x  all three loops   EXACT      9 cells
+    dst BEFORE src  (DSN, DNS, NDS)  x  all three loops   7 bytes    9 cells
+
+**Two distinct emissions over eighteen cells, and the split is exactly on the
+pair's relative order.** `n`'s position is free — SDN, SND and NSD emit the
+same bytes — and so is the loop spelling, all three of which do. So this is
+F0's SEVERAL-PREIMAGES case and the fact decoded is the ORDER OF THE PAIR, not
+the author's whole declaration list. It is not lever 1's statement order
+either: no statement moved, and the loop is the same three instructions in the
+same places.
+
+**Lever 3b cleared it before the enumeration was drawn**, which is what said
+the cause had to be in the source. Both objects of `src/dsp/Scrambler.cpp`
+compiled with and without `-fno-peephole2`, disassembled on the HOST (F7845),
+scored through `byteident.body()`: all five `copyHistoryTail` are byte
+IDENTICAL across the pair — peephole2 consumes no scratch in them and the
+cursor cannot reach them, so no reordering of any kind could ever have moved
+them. The run found 5 EXPOSED and 9 UNDECIDED over the file's 44 symbols, so
+it is not the F7845 dead-detector shape.
+
+**Tree-wide, both directions, over all 1251: +5 EXACT, 0 worse, 0 changed at
+equal rank.** `Scrambler.h` is a shared header and an earlier pass on it closed
+eleven symbols in `src/pump/v90/`, so the whole tree was scored per symbol
+rather than by the EXACT set (F7880). Grade 0 559 -> 564, REGALLOC 35 -> 30,
+BYTES and SIZE unmoved. The three `copyHistoryTail` mutations in
+`test/mutations/scrambler.json` were re-anchored on the new text and re-run:
+all three still caught.
+
+**Read it beside F7815.** That finding measured an inline function's POSITION
+in the translation unit as a lever-3 carrier; this is the ORDER OF TWO LOCALS
+inside one body deciding which of two callee-saved-versus-caller-saved
+registers a pointer gets. Both are cases of "the register choice is not free",
+which is the standing reason REGALLOC is deprioritised — and REGALLOC is where
+this one lived for two previous passes over the same file.
+
+### F8141. `generateCPt` has no preimage over 96 cells, and both of its tempting levers are constant maps
+
+`V92Phase4Modulator::generateCPt` is BYTES 29 of 94 and its census is 30
+instructions against 30 with the mnemonic multiset differing by exactly
+`cwtl+1 movzwl-1`. The whole of it is ONE load: the blob reads `amplitude`
+(+0x40) `movzwl 0x40(%ebx),%edx` and we read it `movswl 0x40(%ebx),%eax`.
+Everything else in the 22-row text delta is the register consequence — with
+`sym` in `%edx` the return needs `movswl %dx,%eax`, with `sym` in `%eax` it
+needs `cwtl`.
+
+**Lever 8's trap check says the field is not what varies, and we already
+reproduce the proof.** Every reference to +0x40 across the class's 36 blob
+symbols: `generateRu` and `generateRuNot` each carry BOTH extensions on that
+one field — `movswl` for `sym = amplitude` and `movzwl` for `sym = -amplitude`
+— and ours matches them instruction for instruction. That is the toneiir case
+(lever 8) exactly: one field, both extensions, so `short amplitude` stands and
+the question is per SITE.
+
+**Ninety-six cells, fourteen distinct emissions, none of them the object.**
+Twelve spellings of the +/- selection (negate the local, negate the member,
+if/else both ways, ternary both ways, negate-first both ways, a returned
+ternary, a bare `if`, a cast, `0 - sym`) crossed with two declared types for
+`sym` and with two further factors added after the first round came back
+empty, on F7940's rule that a no-preimage result is only as good as the
+boundary:
+
+    declaration order   `unsigned int bit` before `short sym`, and after
+                        -> IDENTICAL EMISSION in all 24 pairs.  DEAD.
+    xor operand order   `(unsigned char)scrambler.process(...) ^ prevBit`
+                        and `prevBit ^ (unsigned char)scrambler.process(...)`
+                        -> IDENTICAL EMISSION in all 24 pairs.  DEAD.
+
+The second is lever 9's own stopping rule showing up: GCC 3.4.2 canonicalises
+the operand order of a commutative `^`, so the spelling cannot reach it. The
+first is the negative that matters here, because F8140 closed five symbols on
+declaration order in the same pass — **the lever that had just paid does not
+generalise**, and a pass that reached for it here on the strength of that
+would have been fitting a pattern rather than measuring one.
+
+**DECLINED at 22 differing bytes of 94, which is closer than the 29 we ship.**
+`unsigned short sym` reaches 22 and `sym = -amplitude` reaches SIZE 2. F7782
+is the ruling: take the bytes when the space is exhausted and one element maps,
+decline when you are searching. Neither is forced by anything in the object and
+`unsigned short` contradicts the sign extension the blob spends on the return,
+so the tree keeps the spelling the evidence supports and this records where the
+floor is.
+
+**The bystander worth knowing about.** `generateSymbol` inlines `generateCPt`,
+and its SIZE delta moves from 47 to 8 under the `T2`/`T4` cells with
+`unsigned short`. That is a SIZE symbol nobody is aiming at and the movement is
+not evidence — but it is the largest single response in the table, so whoever
+next works `generateSymbol` should know the two are coupled and that its
+residual is partly `generateCPt`'s.
+
+### F8142. `processAllOnes` and `processAllZeros` closed on the decrement order, read off the write-back
+
+Both were BYTES 8 of 120 with an EQUAL mnemonic multiset — F8000's OPERANDS
+class, 42 and 41 instructions against the same. Two things differed and they
+are one thing: the two taps sit in each other's registers (blob `pTap2`->%eax,
+`pTap1`->%ecx) and the write-back runs
+
+    blob   mov %eax,0x18(%esi) / mov %ecx,0x14(%esi)     pTap2 then pTap1
+    ours   mov %eax,0x14(%esi) / mov %ecx,0x18(%esi)     pTap1 then pTap2
+
+**The write-back order IS the source's decrement order, and that is the
+readable part.** GCC hoists both taps into registers for the whole loop body,
+so the two `mov` back to +0x14 and +0x18 at the end of the iteration come out
+in the order the source spells `pTapN--`. Our source said `pTap1--; pTap2--;`.
+The object says `pTap2--; pTap1--;` — which is the order F8046 already decoded
+for `Descrambler`'s bulk loop and the opposite of `Scrambler::process`'s own.
+
+**Thirty-two cells, eight distinct emissions, four of them the object.** The
+domain was drawn before any cell was read: 2 decrement orders x 4 xor
+spellings (which tap is named first, crossed with whether the `1` leads or
+trails) x 2 orders of the two local declarations x 2 orders of the two stores.
+The `while (n--)` entry shape and the restart test were held fixed (F7861).
+
+    pTap2-- first, xor names pTap1 first, `*out++ = r` first    EXACT   4 cells
+    pTap1-- first, everything else held                         8 bytes
+    xor names pTap2 first, pTap2-- first                        8 bytes
+    `*p = (T)r` before `*out++ = r`                             8 to 42 bytes
+
+Three facts are decoded — the decrement order, which tap the xor names first,
+and that the caller's store precedes the history store — and two spellings are
+NOT: the declaration order of `p` and `r` is free, and so is whether the `1`
+leads or trails the xor. Both free pairs emit the same bytes. F0's
+several-preimages case, and this is which fact.
+
+**+2 EXACT tree-wide, 0 worse, over all 1251 scored in both directions.**
+Grade 0 571 -> 573, BYTES 77 -> 75.
+
+**And the negative beside it.** `Scrambler<h,h>::process(const T *, I *, j)`
+stays REGALLOC at 8 differing bytes in ALL thirty-two cells while its `<i,h>`
+twin is EXACT from the same template text — so its residual is not a spelling
+of this body, and the uniformity argument says so: a defect the shared source
+carried would show at both instantiations. Lever 3b clears it too (byte
+identical with and without `-fno-peephole2`), so it is neither the cursor nor
+the text, and it is left open rather than hill-climbed.
+
+### F8143. Lever 3 is spent on `V92Phase4Modulator.cpp`: the blob's order is reachable, is reached, and pays nothing
+
+`nm -n --defined-only` on `build/tc_out/src_pump_v90_V92Phase4Modulator.cpp.o`
+against the blob puts the file at **31 of 44 at the blob's index**. Nine of the
+thirteen misses are in the head, where the `Scrambler<h,h>` template clones
+interleave — lever 3's own excluded region. The four that our source controls
+are two adjacent transpositions of documented identical twins:
+
+    blob   ... generateRm(34)  generateB1u(35) ... generateCPu(38) generateSUVu(39)
+    ours   ... generateB1u(34) generateRm(35)  ... generateSUVu(38) generateCPu(39)
+
+GCC 3.4.2 emits this block in reverse source order, so reaching the blob's
+order means swapping each pair in the source. All four combinations were
+compiled — a 2x2 whose identity cell is asserted equal to the committed text
+and whose every cell is asserted a line-multiset permutation of the span
+(F7799's rule, checked in the generator rather than after the fact).
+
+**The order is REACHED: 31 of 44 goes to 35 of 44, indices 34, 35, 38 and 39
+all landing on the blob's own.** And not one verdict or differing-byte count
+moves, on any of the file's 44 symbols, in any of the four cells:
+`generateE2u` stays BYTES 8, `generateCPt` BYTES 29, `reset` BYTES 46,
+`generateSymbol` SIZE 47, `generateCPu`/`generateSUVu` SIZE 1 each.
+
+**The detector fires, which is what makes the null readable** (9a's rule, and
+F134's argument). The four cells give TWO distinct emissions — swapping
+`generateCPu`/`generateSUVu` changes bytes, swapping the `generateRm`/
+`generateB1u` twins changes none, which is what identical bodies at adjacent
+indices should do. A run reporting "4 cells, 1 emission" would have been
+indistinguishable from a broken generator.
+
+**Not kept.** F7797 is the ruling: record that the order is achievable and pays
+nothing, and do not keep the diff. Wave 9a's kept-neutral precedent
+(`V90ConnectionEvaluator.cpp`, `V90SpectralShaper.cpp`) is for permutations
+that change **not one byte anywhere**; this one changes bytes without moving a
+verdict, so keeping it would carry churn that F7880's blind spot makes
+expensive to police for no measured gain.
+
+**What it means for the file's three REGALLOC symbols.** `recivedEd`,
+`recivedRt` and `setMappingParams` sit at indices 26, 28 and 29, all three at
+the blob's own index with every predecessor also at the blob's index except
+the unreachable head. Lever 3b's advance test calls `setMappingParams`
+EXPOSED (`ecx`) and `recivedRt` EXPOSED (`esi`), so the cursor does reach
+them — but there is nothing left to move it with. Lever 3 is spent here and
+the next lever for those three has to be something else.
