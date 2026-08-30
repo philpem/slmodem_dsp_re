@@ -55,7 +55,7 @@ green phase says otherwise. The worktrees are locked so nothing is reclaimed.
 
 | agent | scope | worktree branch | state |
 |---|---|---|---|
-| A | `dp_vpcm_exit`, `dp_call_exit`, `dp_init.c +2` (CID_*, prop_dp_*), `b103.c +2` leaves | `worktree-agent-a4b2869817b730940` | uncommitted: 28 files, 2,100 insertions; findings F8410–F8413 drafted; killed at the mutation-baseline/phase step |
+| A | `dp_vpcm_exit`, `dp_call_exit`, `dp_init.c +2` (CID_*, prop_dp_*), `b103.c +2` leaves | `worktree-agent-a4b2869817b730940` | **COMMITTED `eea174a1`** — 12 symbols, period green at 262 passed / 0 failed (= master's 258 tests + A's 4). Findings F8410–F8413 |
 | B | the 67 `VPcmV34Main.cpp +72` leaves | `worktree-agent-a25c3f9a37c3f9e5c` | uncommitted: 40 files, 3,069 insertions + 2,081 untracked lines; **no findings written yet** (killed as it started them) |
 | C | `Beepgen.c`/`Fdspkrnl.c` leaves + `RingDetector_Reset` | `worktree-agent-a4f874eb60f1b56fd` | uncommitted: 7 files, 1,614 insertions + 2,201 untracked lines; findings F8460–F8466 drafted; killed waiting on `t_v90cdesign` |
 | D | `V32mod.c`/`Dialer.c` leaves + fax-named exported API leaves | `worktree-agent-a0e1e3bc9a937ef60` | uncommitted: 10 files, 440 insertions + 2,589 untracked lines; findings F8490–F8496 drafted; killed mid-period-tier |
@@ -72,5 +72,43 @@ and all four died before their first commit.
 
 For wave 2: parallelise the *reading and writing* (which is what subagents are
 for — their turns don't accumulate in the parent's window) but **serialise the
-gate**, one `make phase` at a time over a merged tree, or give the agents a
-cheap inner loop (`make one T=…`) and let the parent run the single gate.
+gate**, one at a time over a merged tree, or give the agents a cheap inner loop
+(`make one T=…`) and let the parent run the single gate.
+
+### `make period` is the gate for this work, and why
+
+Settled 2026-08-30. **`make period` alone**, not `make phase`, for three
+reasons that compound:
+
+1. **It is the tier that decides** and the only one with no allow-list —
+   CLAUDE.md's own position. Our source and the object, same compiler.
+2. **This machine runs GCC 14; the tree was calibrated against GCC 13.**
+   `tools/gccdiverge.json` was built for 13, so a modern-tier failure here may
+   be an artefact of an uncalibrated compiler rather than a defect. One such
+   breakage already bit: `t_v34rx.c` called `ref_V34InitializeImplementation‐
+   Specific` without declaring it, which 13 warned about and **14 makes a hard
+   error**, so `make phase` could not reach the test tier at all on a clean
+   master (fixed in `9e152274`; the suite was swept and it was the only one).
+   The hazard is that someone "fixes" `src/` to satisfy GCC 14 and moves the
+   reconstruction away from the object — invisible to every test, because
+   period would still pass. **Never edit `src/` to satisfy the modern tier.**
+3. **`make phase` interleaves its tiers and its log cannot be read by
+   position.** At `J>1` the period, modern-`test` and coverage tiers run
+   CONCURRENTLY into one stream — three copies of `t_v90cdesign` were observed
+   running at once on a 3-core box. A reading of "PASS lines before the first
+   `gcc -m32` line are the period tier's" is WRONG, and this pass made that
+   mistake before catching it. Attribute a verdict to a compiler by running
+   that compiler alone, never by line number.
+
+The modern tier is still the portability check and `make check64` still proves
+64-bit cleanliness; recalibrating them for GCC 14 is its own task, not part of
+a reconstruction wave.
+
+**Operational notes.** `J` defaults to `nproc/2`, which is 1 on this 3-core
+machine — pass `J=3` when the machine is yours (the Makefile says so at line
+62). Run the gate under `nohup` so an interrupted shell does not kill it: a
+stopped `make` leaves its `docker run` child ALIVE and compiling, which is one
+source of the contention above. And a wrapper must exit with `make`'s own
+status — `make … > log; echo; tail` reports the exit code of `tail`, and
+reported a red gate as exit 0 in this very pass, which is findings F2400 and
+F3100 with the gate itself as the victim.

@@ -269,7 +269,7 @@ is still the fast loop between commits.
 The modern build runs in the same `phase` and still has to pass. It is the
 portability check, and `make check64` proves the tree is 64-bit clean. Where
 GCC 13 provably cannot reproduce the object from correct source, the site is
-declared in `tools/gccdiverge.json` -- seven entries today, twelve checks --
+declared in `tools/gccdiverge.json` -- eight entries today, thirteen checks --
 rather than papered over in `src/`. That register names CHECKS, not tests, and
 a stale entry (an allow-listed test that starts passing) fails the gate.
 **`make period` has no allow-list and is not getting one.**
@@ -294,7 +294,7 @@ process`'s own binary and its divergence is the whole test's, not one check
 lifted out of a healthy group -- and the no-suite rule binds it just the same.
 **Do not register a mutation suite for it.**
 
-**The seven are two causes, and only two.** Five of them are the object's
+**The eight are two causes, and only two.** Five of them are the object's
 equality tests: a single ordered `fcom` with no parity test, which GCC 13
 will not emit at all -- `-mno-ieee-fp` is accepted by it and does nothing, and
 `-ffinite-math-only` does the job by withdrawing NaN semantics from the whole
@@ -303,11 +303,14 @@ source is the object's, `make period` proves it, and the modern build
 declares. `t_agc`, `t_v90equ`, `t_v92ecnan`, `t_v90adidnan` and `t_v90p4dnan`.
 Findings F2300 and F2304.
 
-The other two are **x87 excess precision**, where the object narrows an
+The other three are **x87 excess precision**, where the object narrows an
 intermediate the modern compiler keeps at 80 bits: `t_psd` in the FFT
-butterflies reaching a decibel (1453), and `t_v90equproc` on the one
+butterflies reaching a decibel (1453), `t_v90equproc` on the one
 subtraction inside `V90Equalizer::process` whose difference feeds the squared
-error, the DFE step and the high-error test (6203). Neither is closable by
+error, the DFE step and the high-error test (6203), and `t_v90specproc`, which
+is 1453 INHERITED rather than a third site -- `V90SpectralVerifier::process`
+calls `Psd::process` and takes 1 and 2 ULP in the 32 spectrum bins, nothing
+about `process` itself (5804). Neither is closable by
 choosing a type -- 6203 measured all three candidates, and the `float` the
 author wrote is the only one that is exactly green on the period compiler.
 `-fexcess-precision=standard` would close both and is a translation-unit-wide
