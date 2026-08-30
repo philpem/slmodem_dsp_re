@@ -149,7 +149,7 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 		hdx->iir = (short *)sysdep_malloc(0x20);
 
 		dsp = fp->dsp;
-		dsp->r1f4 = sysdep_malloc(0x154);
+		dsp->rx_scratch = sysdep_malloc(0x154);
 		dsp->ra8 = sysdep_malloc(0x18);
 		dsp->pps_coff_i = (short *)sysdep_malloc(V22_PPS_COEFFS * 2);
 		dsp->pps_coff_q = (short *)sysdep_malloc(V22_PPS_COEFFS * 2);
@@ -395,7 +395,7 @@ V22FP_delete(struct v22fp *fp)
 	sysdep_free(fp->dsp->mrf_coeff);
 	sysdep_free(fp->dsp->fse_coff_i);
 	sysdep_free(fp->dsp->fse_coff_q);
-	sysdep_free(fp->dsp->r1f4);
+	sysdep_free(fp->dsp->rx_scratch);
 
 	sysdep_free(fp->hdx);
 	sysdep_free(fp->dsp);
@@ -461,7 +461,7 @@ V22FP_ASSERT_OFF(d_sdm2, struct v22fp_dsp, sdm2, 0x1cc);
 V22FP_ASSERT_OFF(d_mrfc, struct v22fp_dsp, mrf_coeff, 0x1e4);
 V22FP_ASSERT_OFF(d_fsei, struct v22fp_dsp, fse_coff_i, 0x1e8);
 V22FP_ASSERT_OFF(d_fseq, struct v22fp_dsp, fse_coff_q, 0x1ec);
-V22FP_ASSERT_OFF(d_r1f4, struct v22fp_dsp, r1f4, 0x1f4);
+V22FP_ASSERT_OFF(d_scratch, struct v22fp_dsp, rx_scratch, 0x1f4);
 
 V22FP_ASSERT_OFF(o_status, struct v22fp, status, 0x1c);
 V22FP_ASSERT_OFF(o_flags, struct v22fp, flags, 0x1d);

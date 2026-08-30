@@ -300,8 +300,23 @@ struct v22fp_dsp {
 	 */
 	short *fse_coff_i;	/* +0x1e8 V22_FSE_TAPS entries              */
 	short *fse_coff_q;	/* +0x1ec V22_FSE_TAPS entries              */
-	unsigned char r1f0[4];	/* +0x1f0 not written by create             */
-	void *r1f4;		/* +0x1f4 340 bytes, never written by create*/
+	/*
+	 * +0x1f0 is where `DemodDataV22` parks `V22_MRF_filter`'s return --
+	 * the number of samples the rate converter produced from the block
+	 * just filtered.  A 16-bit store, and nothing reconstructed reads it
+	 * back, so it is named for what is written into it and no more.
+	 */
+	short rx_count;		/* +0x1f0 not written by create             */
+	short pad1f2;		/* +0x1f2                                   */
+	/*
+	 * 340 bytes, 170 shorts, never written by create.  `DemodDataV22`
+	 * hands it to `V22_MRF_filter` as its `short *out` and then to
+	 * `FPM_rms`, `FPM_AGC_agc` and `V22_SRE_recover` as their input, so
+	 * the element type is forced by four callee signatures at once; the
+	 * name is the same one `struct b103fp_dsp` uses for the buffer in the
+	 * same position of the same author's other datapump.
+	 */
+	short *rx_scratch;	/* +0x1f4                                   */
 };
 
 /*
