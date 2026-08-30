@@ -95681,3 +95681,57 @@ and that wants its own row; no row has been written.
 The rule to carry forward: a field the callee uses as a SUBSCRIPT is as
 load-bearing as a field it uses as a POINTER, and a fixture must plant both in
 range. Audit for `[` as well as for `->`.
+
+## F8594. What V.32 needs next, measured after the half-duplex wave: eight tables unblock 3,733 bytes
+
+With the twenty half-duplex states, the five dispatchers and `v32_handshake`
+landed, the whole remaining V.32 datapump is ONE closure of 25 symbols and 9,384
+bytes:
+
+```
+$ python3 tools/closure.py dp_v32_init dp_v32_exit v32_create v32_process \
+        v32_delete v32_data --missing
+25 symbols, 9384 bytes (unwritten only)
+
+  call    11 symbols, 8668 bytes   V32FP_recreate 3733, V32FP_status 1084,
+                                   v32_process 871, v32_data 859,
+                                   V32FP_control 776, v32_create 627,
+                                   V32FP_modem 356, V32FP_create 169,
+                                   v32_delete 95, dp_v32_init/exit 49 each
+  data     8 symbols,  100 bytes
+  rodata   6 symbols,  616 bytes
+```
+
+**THE FOURTEEN TABLES ARE THE LEVER, AND TWELVE OF THEM ARE WRITABLE TODAY.**
+`V32FP_recreate` -- 3,733 bytes, the largest unwritten symbol outside
+`VPcmV34Main.cpp` -- is blocked on EIGHT symbols and every one of them is a
+table:
+
+```
+$ python3 tools/closure.py V32FP_recreate --missing
+  data     SMCv32_CFG (4)  V32_SAMPLE_LEN (4)  V32_TURNAROUND_DLY (4)
+  rodata   PPSv32_ICOFFS (240)  PPSv32_QCOFFS (240)  V32_CFG (48)
+           PPSv32_CFG (40)  V32DiconnectThreshTable (16)
+```
+
+596 bytes of tables stand between this tree and 3,733 bytes of code. The same
+eight plus `Control_Flag`, `RATEv32`, `SnrToRetrainTable` and `V32_CTL` unblock
+`V32FP_control`, `V32FP_status` and `V32FP_modem` as well.
+
+Only TWO of the fourteen are not writable today, and both hold `.text`
+relocations into the closure itself: `V32_PROTOCOL` (9 dwords -- six of
+`v32_handshake`, one of `v32_data`, and `v32_null_protocol`, so it needs
+`v32_data`) and `v32_ops` (`{name, v32_create, v32_delete, dp_wrapper_run}`,
+so it needs the two lifecycle functions). They land with the code, not before
+it.
+
+**So the next V.32 pass is: write the twelve tables, then `V32FP_recreate`, then
+the rest of the FP layer, then `v32.c`'s five.** That is a shape the last wave
+did not have -- F8200's Hdx closure was all-or-nothing across 13 KB of code,
+and this one is a 596-byte prefix that opens the largest single item on its own.
+
+The residue of `V32mod.c +39` after this wave is 24,781 bytes over 46 symbols,
+and MOST OF IT IS NOT V.32: `v22_originate`, `v22_answer`, `v22_retrain`,
+`v22_data`, `connect_1200`, `connect_2400`, `cid_*` and `data_*` sit in a span
+named `V32mod.c`. CLAUDE.md's warning that a span name is not a module name
+still binds; read the queue, not the heading.
