@@ -97201,3 +97201,47 @@ of the test.
 The anti-vacuity guards are named for what they would have caught: without
 "the machine moved", "the data path ran" and "words were handed back", a pair
 of datapumps that never left state 1 passes every other check in the file.
+
+### F8605. The eleven queued `v22fp.h` renames are applied, and the COMPILER was the oracle that found the sites
+
+F8526, F8531 and F8534 each established field names and each deferred the
+rename for the same scheduling reason -- three to five V.22 reconstructions in
+flight against one base commit, and a rename touching all of them is a merge
+conflict waiting to happen. The branches have landed, so the eleven are
+applied in one pass:
+
+    struct v22fp_params  r0c -> tx_gain               F8534, F8600
+                         r18 -> carrier_loss_ms       F8531
+    struct v22fp_hdx     r04 -> node_deadline         F8531
+                         r0c -> connect_substate      F8531
+                         r0e -> protocol              F8529, F8534
+                         r10 -> trained               F8531
+                         r34 -> rx_shift              F8534, F8600
+                         r3c -> carrier_loss_blocks   F8531
+    struct v22fp_dsp     r18 -> scrambler_on          F8526
+                         r1c -> descrambler_on        F8526
+    struct v22fp         status: the COMMENT, from b103fp.h's analogy to the
+                         author's own `v22: V22STAT: --> %d`   F8531, F8601
+
+**A TEXTUAL SWEEP CANNOT DO THIS AND MUST NOT BE USED.** Six of the ten old
+names are spelt identically on more than one struct in the same files:
+`dsp->r0c` and `hdx->r0c` both occur, `fse.r18` and `dsp->r18` both occur, and
+`fp->r34` is `struct v22fp`'s own field and not `hdx`'s. `sed` renames all of
+them. What was done instead is to rename the DECLARATION and let `gcc
+-fsyntax-only` name every site it broke: 136 in `src/`, 115 in the tests, and
+the struct in each error message is what says which of the two `r0c`s it is.
+
+**The tests needed a second pass for a reason worth writing down.** Five of
+them build a local `struct scenario` / `scen` / `poke` whose members MIRROR
+the fields they are poked into, so `a->hdx->r04 = s->r04` has the same
+identifier on both sides and a line-oriented fix renames the mirror too. Those
+were renamed as well, which is what the tests should have; the two sites the
+compiler still rejected afterwards (`s->r0e != KEEP`, `if (s->r18 != 0)`) are
+exactly the ones where the mirror appeared WITHOUT the field beside it.
+
+**And the pass is proved to be nothing but a rename.** Reverse-mapping the ten
+new names back to the old ones in the ten `src/pump/v22/*.c` files and
+comparing against `git show HEAD:` is byte-identical for all ten, so no
+statement, constant or type moved with them. A macro or field renaming is a
+compile-time substitution and `compare.py` cannot budge; that is the check the
+period tier still owes, and it is the only one outstanding.

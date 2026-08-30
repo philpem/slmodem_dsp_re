@@ -252,8 +252,8 @@ run_readers(void)
 
 	for (i = 0; i < sizeof(values) / sizeof(values[0]); i++)
 		for (j = 0; j < sizeof(values) / sizeof(values[0]); j++) {
-			fp->dsp->r18 = values[i];
-			fp->dsp->r1c = values[j];
+			fp->dsp->scrambler_on = values[i];
+			fp->dsp->descrambler_on = values[j];
 
 			diff_eq_int("ScramblerOn, case %ld", ScramblerOn(fp),
 				    ref_ScramblerOn(fp), tag);

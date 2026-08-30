@@ -24,14 +24,14 @@
  * makes with `dsp->r04`; the comparison is unaffected because the two sides
  * start each block from the same state.
  *
- *   1. `hdx->r0c` is set directly, so each node can be entered without
+ *   1. `hdx->connect_substate` is set directly, so each node can be entered without
  *      walking the whole ladder, and a value with no case (0, 7, 14) drops
  *      straight through to the carrier-loss tail with no callee having run.
  *      That is what makes the tail deterministic: nothing has touched
  *      `sre.active` between the poke and `CarrierDetect`.
  *
  *   2. `dsp->sre.active` is `CarrierDetect`'s field (v22prc.h's
- *      V22FP_CARRIER), and `hdx->r3c` is the carrier-loss counter.  Setting
+ *      V22FP_CARRIER), and `hdx->carrier_loss_blocks` is the carrier-loss counter.  Setting
  *      the pair chooses which of the tail's four arms runs.
  *
  *   3. `dsp->fse.decision` IS A FUNCTION POINTER, so the symbols the
@@ -343,19 +343,19 @@ struct scenario {
 	const char *name;
 	int mode;		/* V22FP_create mode                        */
 	int f14;		/* V22FP_create flags bit 11                */
-	short node;		/* hdx->r0c poked before the first block    */
-	int r04;		/* hdx->r04, the last node's deadline       */
+	short node;		/* hdx->connect_substate poked before the first block    */
+	int node_deadline;	/* hdx->node_deadline, the last node's     */
 	int force;		/* forced symbol, or -1 for the real slicer */
 	int carrier;		/* poked into sre.active, or -1 to leave it */
-	int r10;		/* hdx->r10 poked before the first block    */
-	int r3c;		/* hdx->r3c poked before the first block    */
+	int trained;		/* hdx->trained poked before block one     */
+	int carrier_loss_blocks; /* hdx->carrier_loss_blocks, poked    */
 	/*
-	 * `params.r18` is the carrier-loss grace time, and the tail rewrites
+	 * `params.carrier_loss_ms` is the carrier-loss grace time, and the tail rewrites
 	 * the status byte once it expires.  A node scenario that wants its
 	 * own status to survive to the end of the call raises it; the tail
 	 * scenarios keep the 700 ms `v22_create` configures.  0 leaves it.
 	 */
-	int r18;
+	int carrier_loss_ms;
 	int amp;		/* input amplitude                          */
 	int blocks;
 	/*
@@ -537,19 +537,19 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 	unsigned short tc_a, tc_b, rc_a, rc_b;
 	int blk;
 
-	a->hdx->r0c = s->node;
-	b->hdx->r0c = s->node;
-	a->hdx->r04 = s->r04;
-	b->hdx->r04 = s->r04;
-	a->hdx->r10 = s->r10;
-	b->hdx->r10 = s->r10;
-	a->hdx->r3c = s->r3c;
-	b->hdx->r3c = s->r3c;
+	a->hdx->connect_substate = s->node;
+	b->hdx->connect_substate = s->node;
+	a->hdx->node_deadline = s->node_deadline;
+	b->hdx->node_deadline = s->node_deadline;
+	a->hdx->trained = s->trained;
+	b->hdx->trained = s->trained;
+	a->hdx->carrier_loss_blocks = s->carrier_loss_blocks;
+	b->hdx->carrier_loss_blocks = s->carrier_loss_blocks;
 	a->hdx->gtimer = s->gtimer;
 	b->hdx->gtimer = s->gtimer;
-	if (s->r18 != 0) {
-		a->params.r18 = (short)s->r18;
-		b->params.r18 = (short)s->r18;
+	if (s->carrier_loss_ms != 0) {
+		a->params.carrier_loss_ms = (short)s->carrier_loss_ms;
+		b->params.carrier_loss_ms = (short)s->carrier_loss_ms;
 	}
 
 	memset(txout_a, 0, sizeof(txout_a));
@@ -601,8 +601,8 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 		tc_a = tc_b = TXSYMS;
 		rc_a = rc_b = BLOCK;
 
-		node_before = a->hdx->r0c;
-		r10_before = a->hdx->r10;
+		node_before = a->hdx->connect_substate;
+		r10_before = a->hdx->trained;
 		flags_before = a->flags;
 		note_node(node_before);
 
@@ -628,7 +628,7 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 
 		/* ---- coverage, from the reference graph only ---- */
 		if (node_before >= 0 && node_before < 16) {
-			if (a->hdx->r0c != node_before)
+			if (a->hdx->connect_substate != node_before)
 				saw_advance[node_before]++;
 		}
 
@@ -681,19 +681,19 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 		fired = 0;
 		switch (node_before) {
 		case V22_NODE_2400A:
-			fired = a->hdx->r0c == V22_NODE_2400B;
+			fired = a->hdx->connect_substate == V22_NODE_2400B;
 			break;
 		case V22_NODE_2400B:
-			fired = a->hdx->r0c == V22_NODE_2400C;
+			fired = a->hdx->connect_substate == V22_NODE_2400C;
 			break;
 		case V22_NODE_2400C:
-			fired = a->hdx->r0c == V22_NODE_2400D || connected;
+			fired = a->hdx->connect_substate == V22_NODE_2400D || connected;
 			break;
 		case V22_NODE_2400D:
 			fired = timed_out;
 			break;
 		case V22_NODE_1200_12:
-			fired = a->hdx->r0c == V22_NODE_1200_13 || connected;
+			fired = a->hdx->connect_substate == V22_NODE_1200_13 || connected;
 			break;
 		case V22_NODE_1200_13:
 			fired = timed_out;

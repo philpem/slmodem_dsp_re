@@ -34,7 +34,7 @@
  *
  * The four configurations are chosen to cover the two gates the OBJECT
  * carries rather than the callees: `dsp->r2e == 2` selects the IIR front end
- * and `hdx->r0e == 0` enables the level check, and `V22FP_create`'s mode and
+ * and `hdx->protocol == 0` enables the level check, and `V22FP_create`'s mode and
  * its flags bit 11 set those two independently.
  */
 
@@ -503,7 +503,7 @@ run_demod(void)
 				saw_iir++;
 			else
 				saw_no_iir++;
-			if (a->hdx->r0e == 0)
+			if (a->hdx->protocol == 0)
 				saw_level_check++;
 			else
 				saw_level_skipped++;

@@ -142,12 +142,12 @@ DemodDataV22(struct v22fp *fp, short *in, unsigned short *sym,
 	fp->dsp->rx_count = (short)n_rate;
 
 	/*
-	 * The disconnect check, skipped entirely when hdx->r0e is set.  Note
+	 * The disconnect check, skipped entirely when hdx->protocol is set.  Note
 	 * the comparison is against `params.disconnect_thresh`, which
 	 * `V22FP_create` loads from V22DiconnectThreshTable regardless of what
 	 * the template held -- see v22fp.h.
 	 */
-	if (fp->hdx->r0e == 0
+	if (fp->hdx->protocol == 0
 	    && fp->params.disconnect_thresh
 	       > FPM_rms(fp->dsp->rx_scratch, n_rate)) {
 		fp->dsp->sre.active = 0;

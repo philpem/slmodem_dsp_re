@@ -73,13 +73,13 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 * The receiver is not run at all on this arm -- the count is
 		 * zeroed rather than demodulated -- and the only thing that
 		 * happens is the carrier-loss timer, against `params.r08`
-		 * instead of `params.r18`.  The comparison is UNSIGNED in the
+		 * instead of `params.carrier_loss_ms`.  The comparison is UNSIGNED in the
 		 * object (`ja`), which is what the cast reproduces.
 		 */
 		*rxcount = 0;
 		hdx = fp->hdx;
-		hdx->r3c++;
-		if ((unsigned int)(hdx->r3c * V22_BLOCK_MS)
+		hdx->carrier_loss_blocks++;
+		if ((unsigned int)(hdx->carrier_loss_blocks * V22_BLOCK_MS)
 		    > (unsigned int)fp->params.r08) {
 			status = V22_ST_NO_CARRIER;
 			RxClampV22(fp, rxin, (short *)rxsym,
@@ -111,13 +111,13 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 				hdx->gtimer = 0;
 				hdx->r08 = 0;
 				hdx->r0a = 0;
-				hdx->r0c = 0;
+				hdx->connect_substate = 0;
 				HDX_0038(hdx) = 0;
 				ResetRx(fp);
 				SetAdaptEqV22(fp, 1);
 				SetTxRate(fp, V22_RATE_1200);
 				SetRxRate(fp, V22_RATE_1200);
-				fp->hdx->r0e = V22_PROTOCOL_RETRAIN;
+				fp->hdx->protocol = V22_PROTOCOL_RETRAIN;
 				RxClampV22(fp, rxin, (short *)rxsym,
 					   (short *)rxcount);
 				/*
@@ -146,8 +146,8 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 						   + V22_BLOCK_MS);
 				if ((unsigned short)hdx->r08
 				    > V22_DATA_QUALITY_MAX) {
-					hdx->r0e = V22_PROTOCOL_RETRAIN;
-					hdx->r0c = 1;
+					hdx->protocol = V22_PROTOCOL_RETRAIN;
+					hdx->connect_substate = 1;
 					SetAdaptEqV22(fp, 1);
 					status = V22_ST_RETRAIN;
 					HDX_0038(fp->hdx) = 1;
@@ -162,43 +162,43 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 		if (CarrierDetect(fp)) {
 			hdx = fp->hdx;
-			if (hdx->r3c > V22_DATA_CARRIER_BACK
+			if (hdx->carrier_loss_blocks > V22_DATA_CARRIER_BACK
 			    && fp->dsp->r2a == 1) {
-				hdx->r0e = V22_PROTOCOL_RETRAIN;
-				hdx->r0c = 1;
+				hdx->protocol = V22_PROTOCOL_RETRAIN;
+				hdx->connect_substate = 1;
 				SetAdaptEqV22(fp, 1);
 				status = V22_ST_RETRAIN;
 				hdx = fp->hdx;
 				HDX_0038(hdx) = 1;
-				hdx->r3c = 0;
+				hdx->carrier_loss_blocks = 0;
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 						"Carrier back during "
 						"carrier_loss_time (v22_data)"
 						". Retrain initiated.");
 			} else {
-				hdx->r3c = 0;
+				hdx->carrier_loss_blocks = 0;
 			}
 		} else {
 			hdx = fp->hdx;
-			hdx->r3c++;
+			hdx->carrier_loss_blocks++;
 			/*
 			 * SIGNED and sixteen bits: the object narrows the
 			 * product with `movswl` and compares the two halves
 			 * as words.  The format string names both -- the
-			 * product is `carrier_loss_time` and `params.r18` is
+			 * product is `carrier_loss_time` and `params.carrier_loss_ms` is
 			 * the limit it is measured against.
 			 */
-			if (fp->params.r18
-			    >= (short)(hdx->r3c * V22_BLOCK_MS)) {
+			if (fp->params.carrier_loss_ms
+			    >= (short)(hdx->carrier_loss_blocks * V22_BLOCK_MS)) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 						"V22_MSG_NO_CARRIER won't be "
 						"reported (carrier_loss_time "
 						"%d of %d ms)\n",
-						(int)(short)(hdx->r3c
+						(int)(short)(hdx->carrier_loss_blocks
 							     * V22_BLOCK_MS),
-						(int)fp->params.r18);
+						(int)fp->params.carrier_loss_ms);
 			} else {
 				status = V22_ST_NO_CARRIER;
 				if (DSPLIB_DEBUG_ON())
@@ -232,12 +232,12 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 	fp->r1e[0] = (unsigned char)(fp->r1e[0] | V22_ANS_R1E_SET);
 	fp->status = V22_ST_ANS_RMLOOP2;
 
-	switch (hdx->r0c) {
+	switch (hdx->connect_substate) {
 	case V22_RMLOOP2_START:
 		hdx->gtimer = 0;
 		hdx->r08 = 0;
-		hdx->r10 = 0;
-		hdx->r0c = V22_RMLOOP2_DETECT;
+		hdx->trained = 0;
+		hdx->connect_substate = V22_RMLOOP2_DETECT;
 		SetAdaptEqV22(fp, 1);
 
 		ScrambleDataV22(fp, txsym, *txcount);
@@ -271,7 +271,7 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		if ((unsigned short)hdx->r08 > V22_RMLOOP2_DETECT_MAX) {
 			hdx->gtimer = 0;
 			hdx->r08 = 0;
-			hdx->r0c = V22_RMLOOP2_ANSWER;
+			hdx->connect_substate = V22_RMLOOP2_ANSWER;
 			/*
 			 * The equaliser is frozen into sub-state 2 only when
 			 * the last block produced no symbols at all -- the
@@ -280,7 +280,7 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 			 * non-zero.
 			 */
 			if (detected == 0) {
-				hdx->r10 = 1;
+				hdx->trained = 1;
 				SetAdaptEqV22(fp, 3);
 			}
 		}
@@ -307,9 +307,9 @@ v22_ans_rmloop2(struct v22fp *fp, unsigned short *txsym, short *txout,
 		    && (short)Detect_1s(rxsym, rxcount, fp->params.bps,
 					V22_DET_THRESH_Q15) == 0) {
 			hdx = fp->hdx;
-			hdx->r10 = 0;
+			hdx->trained = 0;
 			hdx->r08 = 0;
-			hdx->r0c = V22_RMLOOP2_LOOP;
+			hdx->connect_substate = V22_RMLOOP2_LOOP;
 			SetAdaptEqV22(fp, 3);
 			/*
 			 * Clamped TWICE on this arm: once here and once on

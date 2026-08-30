@@ -8,7 +8,7 @@
  * `v22_process`, over a cross-connected link -- and a live link only ever
  * visits the states the handshake reaches, in the order it reaches them.
  * This file is the other half: it PUTS the machine into each of the seven
- * `V22_PROTOCOL` states and each of the eight sub-states `hdx->r0c` takes,
+ * `V22_PROTOCOL` states and each of the eight sub-states `hdx->connect_substate` takes,
  * and drives one block from each.  Fifty-six starting points, none of which
  * a link would produce on demand.
  *
@@ -374,10 +374,10 @@ main(void)
 
 			build_input(state * 8 + sub);
 
-			fa->hdx->r0e = (short)state;
-			fb->hdx->r0e = (short)state;
-			fa->hdx->r0c = (short)sub;
-			fb->hdx->r0c = (short)sub;
+			fa->hdx->protocol = (short)state;
+			fb->hdx->protocol = (short)state;
+			fa->hdx->connect_substate = (short)sub;
+			fb->hdx->connect_substate = (short)sub;
 
 			memset(out_a, 0x33, sizeof(out_a));
 			memset(out_b, 0x33, sizeof(out_b));

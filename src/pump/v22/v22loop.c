@@ -21,7 +21,7 @@
  * THE ARM THAT JUMPS INTO ANOTHER ONE.  Finding F8528's shape is here twice
  * and neither is where it looks:
  *
- *   - Sub-state 0's "bit clear" branch (0x8aaf8) sets `hdx->r0c` to 3 and then
+ *   - Sub-state 0's "bit clear" branch (0x8aaf8) sets `hdx->connect_substate` to 3 and then
  *     jumps BACKWARDS into the middle of sub-state 1's timeout arm (0x8aa0a),
  *     four instructions past the store that sets `r0c` to 2.  So the two share
  *     `fp->flags |= 0x10`, `SetTxRate(fp, 0)` and `SetRxRate(fp, 0)`, and
@@ -55,7 +55,7 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 	fp->r1e[0] = (unsigned char)(fp->r1e[0] | V22_LOOP_R1E_SET);
 	fp->status = V22_STATUS_01;
 
-	switch (hdx->r0c) {
+	switch (hdx->connect_substate) {
 	case V22_LOOP_NODE_0:
 		hdx->gtimer = 0;
 		hdx->r08 = 0;
@@ -73,9 +73,9 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 * v22status.h establishes it as `params.flags` bit 10.
 		 */
 		if (st.flags2 & V22_STATUS2_PARAM_BIT10) {
-			fp->hdx->r0c = V22_LOOP_NODE_1;
+			fp->hdx->connect_substate = V22_LOOP_NODE_1;
 		} else {
-			fp->hdx->r0c = V22_LOOP_NODE_3;
+			fp->hdx->connect_substate = V22_LOOP_NODE_3;
 			fp->flags = (unsigned char)(fp->flags
 						    | V22FP_FLAG_1D_BIT4);
 			SetTxRate(fp, V22_RATE_1200);
@@ -102,7 +102,7 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		if ((unsigned int)ReadGTimer(fp) > V22_LOOP_TONE_MS) {
 			hdx = fp->hdx;
 			hdx->gtimer = 0;
-			hdx->r0c = V22_LOOP_NODE_2;
+			hdx->connect_substate = V22_LOOP_NODE_2;
 			fp->flags = (unsigned char)(fp->flags
 						    | V22FP_FLAG_1D_BIT4);
 			SetTxRate(fp, V22_RATE_1200);
@@ -127,7 +127,7 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 		    == FPM_TONE_NOSIGNAL) {
 			hdx = fp->hdx;
 			hdx->gtimer = 0;
-			hdx->r0c = V22_LOOP_NODE_3;
+			hdx->connect_substate = V22_LOOP_NODE_3;
 		}
 		break;
 
@@ -215,16 +215,16 @@ v22_local_loop(struct v22fp *fp, unsigned short *txsym, short *txout,
 			hdx->gtimer = 0;
 			hdx->r08 = 0;
 			hdx->r0a = 0;
-			hdx->r0c = V22_NODE_2400A;
+			hdx->connect_substate = V22_NODE_2400A;
 			SetAdaptEqV22(fp, 2);
 		} else if ((unsigned short)hdx->r0a > V22_LOOP_ONES_MS) {
 			hdx->gtimer = 0;
 			hdx->r08 = 0;
 			hdx->r0a = 0;
-			hdx->r0c = V22_NODE_1200_12;
+			hdx->connect_substate = V22_NODE_1200_12;
 			SetAdaptEqV22(fp, 2);
 		} else if ((unsigned int)ReadGTimer(fp)
-			   > (unsigned int)fp->hdx->r04) {
+			   > (unsigned int)fp->hdx->node_deadline) {
 			fp->flags = (unsigned char)(fp->flags
 						    | V22FP_FLAGS_TIMEOUT);
 			fp->status = V22_STATUS_16;

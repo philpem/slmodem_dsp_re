@@ -54,21 +54,21 @@
  * Both functions end in the same block:
  *
  *     if (CarrierDetect(fp)) ... return;
- *     elapsed = ++hdx->r3c * 20;
- *     if (params.r18 < elapsed) { status = NO_CARRIER; RxClampV22(...); }
- *     else debug("... (carrier_loss_time %d of %d ms)", elapsed, params.r18);
+ *     elapsed = ++hdx->carrier_loss_blocks * 20;
+ *     if (params.carrier_loss_ms < elapsed) { status = NO_CARRIER; RxClampV22(...); }
+ *     else debug("... (carrier_loss_time %d of %d ms)", elapsed, params.carrier_loss_ms);
  *
  * and that format string is the strongest evidence in either function.  It
  * prints the two operands of the comparison as milliseconds, so
- * `hdx->r3c` is a COUNT OF CONSECUTIVE BLOCKS WITHOUT CARRIER and
- * `params.r18` is the CARRIER-LOSS GRACE TIME IN MILLISECONDS -- 700 as
+ * `hdx->carrier_loss_blocks` is a COUNT OF CONSECUTIVE BLOCKS WITHOUT CARRIER and
+ * `params.carrier_loss_ms` is the CARRIER-LOSS GRACE TIME IN MILLISECONDS -- 700 as
  * `v22_create` configures it, 35 blocks.  The 20 is `ReadGTimer`'s own block
  * length, so the two agree on what a block is.  Neither field is renamed
  * here; see the note at the bottom of this file.
  *
  * The tails are NOT identical.  connect_1200 returns the moment
  * `CarrierDetect` is true; connect_2400 first checks whether it is coming
- * back INSIDE the grace window (`hdx->r3c != 0`) and, if so, initiates a
+ * back INSIDE the grace window (`hdx->carrier_loss_blocks != 0`) and, if so, initiates a
  * retrain -- "Carrier back during carrier_loss_time (Connect_2400). Retrain
  * initiated." -- which is its own fourth format string.
  *
@@ -76,7 +76,7 @@
  * THE TIMER COMPARISONS ARE UNSIGNED, AND THAT IS ENCODED
  *
  * Every one of the six `ReadGTimer` tests is a `jbe`, not a `jle`, including
- * the two against `hdx->r04`.  `ReadGTimer` returns `int` and the constants
+ * the two against `hdx->node_deadline`.  `ReadGTimer` returns `int` and the constants
  * are positive, so no reachable value can tell the two readings apart; the
  * unsigned form is what the object encodes and is what is written.
  *
@@ -175,7 +175,7 @@ struct v22fp;
 
 /*
  * One datapump block on the shared clock, and the multiplier the carrier-loss
- * counter is scaled by before it is compared with `params.r18`.  The same 20
+ * counter is scaled by before it is compared with `params.carrier_loss_ms`.  The same 20
  * `ReadGTimer` adds, and the format string is what says both are milliseconds.
  */
 #define V22_BLOCK_MS		20
@@ -187,7 +187,7 @@ struct v22fp;
 #define V22_HDX_R38_RETRAIN	1
 
 /*
- * `hdx->r0e` on the same path.  Unestablished; `V22FP_create` writes 1, 2 or
+ * `hdx->protocol` on the same path.  Unestablished; `V22FP_create` writes 1, 2 or
  * 3 there and nothing reconstructed reads it.
  */
 #define V22_HDX_R0E_RETRAIN	6

@@ -32,15 +32,15 @@
  *     "Signal quality < Retrain level. Retrain initiated."
  *     "Carrier back during carrier_loss_time (v22_data). Retrain initiated."
  *
- * The first prints `hdx->r3c * 20` and `params.r18`, in that order, as the two
- * halves of "carrier_loss_time %d of %d ms".  So `hdx->r3c` counts 20 ms
- * blocks of lost carrier and `params.r18` is the limit, in milliseconds, at
+ * The first prints `hdx->carrier_loss_blocks * 20` and `params.carrier_loss_ms`, in that order, as the two
+ * halves of "carrier_loss_time %d of %d ms".  So `hdx->carrier_loss_blocks` counts 20 ms
+ * blocks of lost carrier and `params.carrier_loss_ms` is the limit, in milliseconds, at
  * which the loss is reported -- which is exactly the 700 `v22_create` puts
  * there.  v22fp.h names neither, and this header does not rename them; the
  * derivation is recorded here and in the report, and the code below uses the
  * existing spellings.
  *
- * `params.r08` is compared against the same `hdx->r3c * 20` product on the
+ * `params.r08` is compared against the same `hdx->carrier_loss_blocks * 20` product on the
  * OTHER arm -- the one `params.flags` bit 11 selects -- so it is a limit of
  * the same kind and the same unit, 60000 ms from `v22_create`.  Again not
  * renamed here.
@@ -76,7 +76,7 @@ struct v22fp;
 
 /*
  * `params.flags` bit 11.  v22fp.h records it as "cfg.f14 bit 0 -> flags bit
- * 11, which forces hdx.r0e to 0 whatever the mode selected"; `v22_data` is the
+ * 11, which forces hdx.protocol to 0 whatever the mode selected"; `v22_data` is the
  * first reconstructed reader of it, and what it selects there is a receiver
  * that never runs -- no demodulation, no carrier test, just the timer.
  * v22status.h spells bits 9 and 10 the same way.
@@ -116,7 +116,7 @@ struct v22fp;
 #define V22_ANS_R1E_SET		0x02	/* fp->r1e[0]  |= this, ans_rmloop2  */
 
 /*
- * `hdx->r0c` selects the sub-state inside `v22_ans_rmloop2`.  Four live
+ * `hdx->connect_substate` selects the sub-state inside `v22_ans_rmloop2`.  Four live
  * values and a silent default: anything outside 0..3 does nothing at all
  * except the two stores at the top.
  */
@@ -152,7 +152,7 @@ struct v22fp;
 #define V22_DATA_RETRAIN_LEVEL	0x7f37
 
 /*
- * `hdx->r3c` above this, with the carrier back and the receiver at 2400,
+ * `hdx->carrier_loss_blocks` above this, with the carrier back and the receiver at 2400,
  * retrains.  Fifteen blocks, 300 ms, and the message calls the elapsed
  * quantity `carrier_loss_time`.
  */
@@ -170,7 +170,7 @@ struct v22fp;
  * three things that can end the connection -- a retrain request in the
  * received symbol stream, the signal quality falling below the retrain level
  * for three seconds, and the carrier going away for longer than
- * `params.r18` milliseconds.
+ * `params.carrier_loss_ms` milliseconds.
  */
 void v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 	      short *rxin, unsigned short *rxsym, unsigned short *txcount,
@@ -178,7 +178,7 @@ void v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 /*
  * The answering station's remote-loopback state, a four-way machine on
- * `hdx->r0c`.  Sub-state 3 is the loop itself: the demodulated symbols are
+ * `hdx->connect_substate`.  Sub-state 3 is the loop itself: the demodulated symbols are
  * scrambled and modulated straight back out, which is what the name says and
  * what the argument flow shows -- `rxsym` is handed to `ScrambleDataV22` and
  * then to `ModDataV22`, and `txsym` is not read at all on that arm.

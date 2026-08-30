@@ -11,10 +11,10 @@
  * `.rodata` + 0x8544 and its seven relocations resolve to `v22_data`,
  * `v22_originate`, `v22_answer`, `v22_local_loop`, `v22_org_rmloop2`,
  * `v22_ans_rmloop2` and `v22_retrain`; `V22FP_modem` indexes it with
- * `fp->hdx->r0e`, so index 1 is `v22_originate` and index 2 is `v22_answer`
+ * `fp->hdx->protocol`, so index 1 is `v22_originate` and index 2 is `v22_answer`
  * (finding F8529).  Each takes the SAME seven arguments `connect_1200` and
  * `connect_2400` take -- see v22conn.h, which carries that derivation -- and
- * each dispatches on `fp->hdx->r0c` through a jump table of its own:
+ * each dispatches on `fp->hdx->connect_substate` through a jump table of its own:
  * `.rodata` + 0x85b8 for `v22_answer` (fifteen entries, 0..14) and
  * `.rodata` + 0x85f4 for `v22_originate` (fourteen, 0..13).  Both tables end
  * the same way -- 8..11 hand over to `connect_2400` and 12..13 to
@@ -226,7 +226,7 @@ struct v22fp;
  * own `cmp`.  The clock advances 20 ms per call, so the effective thresholds
  * are the next multiple of 20 above each.
  *
- * Two of the arms have no constant at all and compare against `hdx->r04`, the
+ * Two of the arms have no constant at all and compare against `hdx->node_deadline`, the
  * caller's own limit -- 60,000 ms as `v22_create` configures it: `v22_answer`'s
  * NODE_3 and `v22_originate`'s NODE_1 and NODE_3.
  */

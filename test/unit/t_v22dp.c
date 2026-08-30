@@ -186,18 +186,18 @@ compare_dp(const char *what, struct v22_dp *a, struct v22_dp *b, long tag)
 	snprintf(buf, sizeof(buf), "%s: params.flags (%%ld)", what);
 	diff_eq_int(buf, (long)a->fp->params.flags, (long)b->fp->params.flags,
 		    tag);
-	snprintf(buf, sizeof(buf), "%s: params.r18 (%%ld)", what);
-	diff_eq_int(buf, a->fp->params.r18, b->fp->params.r18, tag);
-	snprintf(buf, sizeof(buf), "%s: params.r0c, the tx gain (%%ld)", what);
-	diff_eq_int(buf, a->fp->params.r0c, b->fp->params.r0c, tag);
-	snprintf(buf, sizeof(buf), "%s: hdx.r04, the node deadline (%%ld)",
+	snprintf(buf, sizeof(buf), "%s: params.carrier_loss_ms (%%ld)", what);
+	diff_eq_int(buf, a->fp->params.carrier_loss_ms, b->fp->params.carrier_loss_ms, tag);
+	snprintf(buf, sizeof(buf), "%s: params.tx_gain, the tx gain (%%ld)", what);
+	diff_eq_int(buf, a->fp->params.tx_gain, b->fp->params.tx_gain, tag);
+	snprintf(buf, sizeof(buf), "%s: hdx.node_deadline, the node deadline (%%ld)",
 		 what);
-	diff_eq_int(buf, a->fp->hdx->r04, b->fp->hdx->r04, tag);
-	snprintf(buf, sizeof(buf), "%s: hdx.r0e, the protocol state (%%ld)",
+	diff_eq_int(buf, a->fp->hdx->node_deadline, b->fp->hdx->node_deadline, tag);
+	snprintf(buf, sizeof(buf), "%s: hdx.protocol, the protocol state (%%ld)",
 		 what);
-	diff_eq_int(buf, a->fp->hdx->r0e, b->fp->hdx->r0e, tag);
-	snprintf(buf, sizeof(buf), "%s: hdx.r34, the rx shift (%%ld)", what);
-	diff_eq_int(buf, a->fp->hdx->r34, b->fp->hdx->r34, tag);
+	diff_eq_int(buf, a->fp->hdx->protocol, b->fp->hdx->protocol, tag);
+	snprintf(buf, sizeof(buf), "%s: hdx.rx_shift, the rx shift (%%ld)", what);
+	diff_eq_int(buf, a->fp->hdx->rx_shift, b->fp->hdx->rx_shift, tag);
 	snprintf(buf, sizeof(buf), "%s: fp status byte (%%ld)", what);
 	diff_eq_int(buf, (long)a->fp->status, (long)b->fp->status, tag);
 	snprintf(buf, sizeof(buf), "%s: fp flags byte (%%ld)", what);
@@ -398,12 +398,12 @@ main(void)
 				    (long)((struct v22_dp *)refs.ans)->fp->status,
 				    f);
 			diff_eq_int("block %ld: originate protocol state",
-				    ((struct v22_dp *)ours.org)->fp->hdx->r0e,
-				    ((struct v22_dp *)refs.org)->fp->hdx->r0e,
+				    ((struct v22_dp *)ours.org)->fp->hdx->protocol,
+				    ((struct v22_dp *)refs.org)->fp->hdx->protocol,
 				    f);
 			diff_eq_int("block %ld: answer protocol state",
-				    ((struct v22_dp *)ours.ans)->fp->hdx->r0e,
-				    ((struct v22_dp *)refs.ans)->fp->hdx->r0e,
+				    ((struct v22_dp *)ours.ans)->fp->hdx->protocol,
+				    ((struct v22_dp *)refs.ans)->fp->hdx->protocol,
 				    f);
 			diff_eq_int("block %ld: originate bits_per_word",
 				    ((struct v22_dp *)ours.org)->bits_per_word,

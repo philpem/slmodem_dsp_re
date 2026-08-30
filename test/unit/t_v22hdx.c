@@ -14,7 +14,7 @@
  *
  * A SINGLE CALL EXERCISES ONE ARM OF ONE SUBSTATE, which is the whole problem
  * with testing a state machine one block at a time.  So the sweep is a table
- * of scenarios; each pins `hdx->r0c` to one substate, optionally pre-loads the
+ * of scenarios; each pins `hdx->connect_substate` to one substate, optionally pre-loads the
  * three state words the substate branches on, and runs a run of blocks.  The
  * guards at the bottom assert that every arm this test claims to cover was
  * actually taken, counted on the REFERENCE graph so the numbers describe the
@@ -404,10 +404,10 @@ struct scen {
 	int peer_mode;		/* cfg.mode for the peer                    */
 	int pattern;		/* peer MakeTxData selector, or PEER_*      */
 	int scramble;		/* peer scrambles before modulating         */
-	int state;		/* forced into hdx->r0c, -1 to let it run   */
+	int state;		/* forced into hdx->connect_substate, -1 to let it run   */
 	int gtimer;		/* forced into hdx->gtimer, -1 to leave     */
 	int r08;		/* forced into hdx->r08, -1 to leave        */
-	int r10;		/* forced into hdx->r10, -1 to leave        */
+	int trained;		/* forced into hdx->trained, -1 to leave    */
 	int r38;		/* forced into hdx+0x38, -1 to leave        */
 	int blocks;
 	/*
@@ -514,8 +514,8 @@ run_scen(hdx_fn theirs, hdx_fn mine, const struct scen *s, long tag,
 		struct obs o;
 
 		if (s->state >= 0) {
-			a->hdx->r0c = (short)s->state;
-			b->hdx->r0c = (short)s->state;
+			a->hdx->connect_substate = (short)s->state;
+			b->hdx->connect_substate = (short)s->state;
 		}
 		if (s->gtimer >= 0) {
 			a->hdx->gtimer = s->gtimer;
@@ -525,9 +525,9 @@ run_scen(hdx_fn theirs, hdx_fn mine, const struct scen *s, long tag,
 			a->hdx->r08 = (short)s->r08;
 			b->hdx->r08 = (short)s->r08;
 		}
-		if (s->r10 >= 0) {
-			a->hdx->r10 = s->r10;
-			b->hdx->r10 = s->r10;
+		if (s->trained >= 0) {
+			a->hdx->trained = s->trained;
+			b->hdx->trained = s->trained;
 		}
 		if (s->r38 >= 0) {
 			r38_set(a->hdx, (short)s->r38);
@@ -549,17 +549,17 @@ run_scen(hdx_fn theirs, hdx_fn mine, const struct scen *s, long tag,
 		txc_a = txc_b = TXSYM;
 		rxc_a = rxc_b = BLOCK;
 
-		o.r0c_before = a->hdx->r0c;
+		o.r0c_before = a->hdx->connect_substate;
 		o.r08_before = a->hdx->r08;
-		o.r10_before = a->hdx->r10;
+		o.r10_before = a->hdx->trained;
 		o.flags_before = a->flags;
 
 		theirs(a, td_a, out_a, in_a, sym_a, &txc_a, &rxc_a);
 		mine(b, td_b, out_b, in_b, sym_b, &txc_b, &rxc_b);
 
-		o.r0c_after = a->hdx->r0c;
+		o.r0c_after = a->hdx->connect_substate;
 		o.r08_after = a->hdx->r08;
-		o.r10_after = a->hdx->r10;
+		o.r10_after = a->hdx->trained;
 		o.gtimer_after = a->hdx->gtimer;
 		o.status_after = a->status;
 		o.flags_after = a->flags;
@@ -686,10 +686,10 @@ record_rmloop2(const struct obs *o, const struct scen *s)
 	if (st == 1) {
 		if (o->r0c_after == 2 && o->r08_after == 0) {
 			/*
-			 * The threshold arm sets `r10` when and only when the
+			 * The threshold arm sets `trained` when and only when the
 			 * acknowledgement was NOT seen in this block, so the
 			 * flag is what separates the two arms.  Entered with
-			 * `r10` already set the arm is invisible, so those
+			 * `trained` already set the arm is invisible, so those
 			 * blocks are counted as neither.
 			 */
 			rm_thresh[1]++;
@@ -831,7 +831,7 @@ run_retrain(void)
 /*
  * The remote-loopback sweep.  Substates 1 and 2 both branch on `hdx->r08`
  * clearing 231 ms, which only a peer sending the acknowledgement pattern can
- * reach; substate 2 additionally branches on `hdx->r10`, which is pre-loaded.
+ * reach; substate 2 additionally branches on `hdx->trained`, which is pre-loaded.
  */
 static int
 run_rmloop2(void)
@@ -858,11 +858,11 @@ run_rmloop2(void)
 	 { 0, 0, 0, PEER_SILENCE,          0,  1, 1300,  -1, -1, -1,  6, 0, 0 },
 	 { 1, 1, 0, PEER_NOISE,            0,  1, 1300, 240, -1, -1,  6, 0, 0 },
 
-	/* -- substate 2: scrambled ones, both arms of hdx->r10 --            */
+	/* -- substate 2: scrambled ones, both arms of hdx->trained --            */
 	 { 0, 0, 0, PEER_SILENCE,          0,  2,   -1,  -1,  0, -1, 12, 0, 0 },
 	 { 0, 0, 0, PEER_NOISE,            0,  2,   -1,  -1,  0, -1, 12, 0, 0 },
 	 { 0, 0, 0, PEER_NOISE,            0,  2,   -1,  -1,  1, -1, 12, 0, 0 },
-	/* an acknowledgement still arriving, so the r10 arm is NOT taken     */
+	/* an acknowledgement still arriving, so the trained arm is NOT taken     */
 	 { 1, 0, 0, V22_TXDATA_SYMBOL_10,  0,  2,    0,  -1,  0, -1,300, 1, 0 },
 	 { 1, 0, 1, V22_TXDATA_SYMBOL_10,  0,  2,    0,  -1,  0, -1,300, 1, 0 },
 	/* scrambled ones, which is what `Detect_1s` counts, at both rates    */
@@ -978,9 +978,9 @@ main(void)
 		    rm_ack_seen > 0, 1, rm_ack_seen);
 	diff_eq_int("rmloop2 no acknowledgement (%ld)",
 		    rm_ack_missing > 0, 1, rm_ack_missing);
-	diff_eq_int("rmloop2 substate 2 with r10 set (%ld)",
+	diff_eq_int("rmloop2 substate 2 with trained set (%ld)",
 		    rm_r10_preset > 0, 1, rm_r10_preset);
-	diff_eq_int("rmloop2 substate 2 with r10 clear (%ld)",
+	diff_eq_int("rmloop2 substate 2 with trained clear (%ld)",
 		    rm_r10_clear > 0, 1, rm_r10_clear);
 	diff_eq_int("rmloop2 substate 2 cleared 231 ms (%ld)",
 		    rm_thresh[2] > 0, 1, rm_thresh[2]);

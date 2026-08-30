@@ -137,7 +137,7 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 		| (unsigned int)((cfg->f0c & 1) << 10)
 		| (unsigned int)((cfg->f14 & 1) << 11)
 		| (unsigned int)((cfg->f18 & 1) << 9);
-	p.r18 = (short)cfg->f10;
+	p.carrier_loss_ms = (short)cfg->f10;
 
 	if (fp == NULL) {
 		/*
@@ -182,8 +182,8 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	dsp->r0c = 1;
 	dsp->eq_adapt = 1;
 	dsp->r14 = 0;
-	dsp->r18 = (int)(fp->params.flags & 1);
-	dsp->r1c = (int)((fp->params.flags >> 1) & 1);
+	dsp->scrambler_on = (int)(fp->params.flags & 1);
+	dsp->descrambler_on = (int)((fp->params.flags >> 1) & 1);
 	dsp->r20 = (int)((fp->params.flags >> 2) & 1);
 
 	dsp->r28 = (short)(fp->params.bps != 1200);
@@ -191,17 +191,17 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 
 	switch (fp->params.mode) {
 	case 0:
-		hdx->r0e = 1;
+		hdx->protocol = 1;
 		dsp->r2c = 1;
 		dsp->r2e = 2;
 		break;
 	case 1:
-		hdx->r0e = 2;
+		hdx->protocol = 2;
 		dsp->r2c = 2;
 		dsp->r2e = 1;
 		break;
 	default:
-		hdx->r0e = 3;
+		hdx->protocol = 3;
 		dsp->r2c = (short)fp->params.r14;
 		dsp->r2e = (short)fp->params.r14;
 		break;
@@ -212,20 +212,20 @@ V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg)
 	 * bit rather than a neighbour.
 	 */
 	if (fp->params.flags & 0x800)
-		hdx->r0e = 0;
+		hdx->protocol = 0;
 
 	hdx->gtimer = 0;
 	hdx->r08 = 0;
 	hdx->r0a = 0;
-	hdx->r0c = 0;
+	hdx->connect_substate = 0;
 	hdx->r28 = 0;
 	hdx->r30 = 0x2454;
 	hdx->r32 = 0;
-	hdx->r34 = 0;
-	hdx->r04 = fp->params.r08;
-	hdx->r10 = 0;
+	hdx->rx_shift = 0;
+	hdx->node_deadline = fp->params.r08;
+	hdx->trained = 0;
 	hdx->r2c = 0;
-	hdx->r3c = 0;
+	hdx->carrier_loss_blocks = 0;
 
 	/*
 	 * The four sub-objects.  Each `create` is handed the existing pointer,
@@ -427,13 +427,13 @@ V22FP_delete(struct v22fp *fp)
  *
  *   1. stage the caller's transmit words, int to short, into
  *      `tx_in_internal`;
- *   2. stage the caller's input samples, right-shifted by `hdx->r34`, into
+ *   2. stage the caller's input samples, right-shifted by `hdx->rx_shift`, into
  *      `rx_in_internal`;
- *   3. dispatch through `V22_PROTOCOL[hdx->r0e]`;
+ *   3. dispatch through `V22_PROTOCOL[hdx->protocol]`;
  *   4. take the symbol count back, and -- THE POLICY -- move the machine to
  *      state 0 for five values of `fp->status`;
  *   5. copy `rx_out_internal` out to the caller's int array;
- *   6. scale exactly V22_TX_BLOCK transmit samples by `params.r0c` in Q15;
+ *   6. scale exactly V22_TX_BLOCK transmit samples by `params.tx_gain` in Q15;
  *   7. report no symbols at all unless `fp->status` is zero.
  *
  * THE COUNTS CHANGE WIDTH ACROSS THE CALL.  The caller's are `int`; the
@@ -478,7 +478,7 @@ static short rx_in_internal[V22FP_RX_IN_ENTRIES];
  * off the object rather than inferred; `include/dsplib/v22status.h` records
  * the same seven against `V22_status`'s own parallel table.
  *
- * `hdx->r0e` indexes it, sign-extended and WITH NO BOUNDS CHECK.
+ * `hdx->protocol` indexes it, sign-extended and WITH NO BOUNDS CHECK.
  */
 static void (* const V22_PROTOCOL[7])(struct v22fp *fp, unsigned short *txsym,
 				      short *txout, short *rxin,
@@ -525,14 +525,14 @@ V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
 	/*
 	 * Stage the input samples, right-shifted by the receive input shift.
 	 * The load is `movswl` and the shift `sar`, so the arithmetic is
-	 * signed; the shift count is `movzwl`, so `hdx->r34` is read as an
+	 * signed; the shift count is `movzwl`, so `hdx->rx_shift` is read as an
 	 * unsigned sixteen-bit field.
 	 */
 	for (i = 0; i < *n_rx; i++)
 		rx_in_internal[i] =
-			(short)((int)rx_in[i] >> fp->hdx->r34);
+			(short)((int)rx_in[i] >> fp->hdx->rx_shift);
 
-	V22_PROTOCOL[fp->hdx->r0e](fp, tx_in_internal, tx_out, rx_in_internal,
+	V22_PROTOCOL[fp->hdx->protocol](fp, tx_in_internal, tx_out, rx_in_internal,
 				   rx_out_internal, &tx_syms, &rx_syms);
 
 	*n_rx = rx_syms;
@@ -548,12 +548,12 @@ V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
 	 * them.
 	 */
 	if (fp->status == 3 || fp->status == 4) {
-		fp->hdx->r0e = 0;
-		fp->hdx->r0c = 0;
+		fp->hdx->protocol = 0;
+		fp->hdx->connect_substate = 0;
 	}
 	if (fp->status >= 6 && fp->status <= 8) {
-		fp->hdx->r0e = 0;
-		fp->hdx->r0c = 0;
+		fp->hdx->protocol = 0;
+		fp->hdx->connect_substate = 0;
 	}
 
 	/* Widen the recovered symbols back out to int. */
@@ -563,11 +563,11 @@ V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
 	/*
 	 * The transmit output gain, Q15, over exactly V22_TX_BLOCK samples --
 	 * a literal 160 in the object and not `*n_tx` or a parameter, which is
-	 * the same block length `TxNOP` emits.  `params.r0c` is 13014 in the
+	 * the same block length `TxNOP` emits.  `params.tx_gain` is 13014 in the
 	 * template, which is 0.397.
 	 */
 	for (i = 0; i < V22_TX_BLOCK; i++)
-		tx_out[i] = (short)(((int)tx_out[i] * fp->params.r0c) >> 15);
+		tx_out[i] = (short)(((int)tx_out[i] * fp->params.tx_gain) >> 15);
 
 	/*
 	 * Anything but status 0 reports NO received symbols, whatever the
@@ -612,17 +612,17 @@ V22FP_ASSERT_OFF(p_r08, struct v22fp_params, r08, 0x08);
 V22FP_ASSERT_OFF(p_flags, struct v22fp_params, flags, 0x10);
 V22FP_ASSERT_OFF(p_r14, struct v22fp_params, r14, 0x14);
 V22FP_ASSERT_OFF(p_thresh, struct v22fp_params, disconnect_thresh, 0x16);
-V22FP_ASSERT_OFF(p_r18, struct v22fp_params, r18, 0x18);
+V22FP_ASSERT_OFF(p_r18, struct v22fp_params, carrier_loss_ms, 0x18);
 
-V22FP_ASSERT_OFF(h_r04, struct v22fp_hdx, r04, 0x04);
-V22FP_ASSERT_OFF(h_r0e, struct v22fp_hdx, r0e, 0x0e);
+V22FP_ASSERT_OFF(h_r04, struct v22fp_hdx, node_deadline, 0x04);
+V22FP_ASSERT_OFF(h_r0e, struct v22fp_hdx, protocol, 0x0e);
 V22FP_ASSERT_OFF(h_tone, struct v22fp_hdx, tone, 0x14);
 V22FP_ASSERT_OFF(h_mtd, struct v22fp_hdx, mtd, 0x18);
 V22FP_ASSERT_OFF(h_mtd_s1, struct v22fp_hdx, mtd_s1, 0x1c);
 V22FP_ASSERT_OFF(h_mtd2, struct v22fp_hdx, mtd2, 0x20);
 V22FP_ASSERT_OFF(h_iir, struct v22fp_hdx, iir, 0x24);
 V22FP_ASSERT_OFF(h_r30, struct v22fp_hdx, r30, 0x30);
-V22FP_ASSERT_OFF(h_r3c, struct v22fp_hdx, r3c, 0x3c);
+V22FP_ASSERT_OFF(h_r3c, struct v22fp_hdx, carrier_loss_blocks, 0x3c);
 
 V22FP_ASSERT_OFF(d_r20, struct v22fp_dsp, r20, 0x20);
 V22FP_ASSERT_OFF(d_r28, struct v22fp_dsp, r28, 0x28);
