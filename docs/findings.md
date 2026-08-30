@@ -94977,3 +94977,39 @@ nothing. So the +0x164 offset reaches an argument nobody looks at, and no
 differential test can separate it from any other offset. `t_v22ctl.c` says so
 rather than dressing the check up. Same shape as findings F860–F862's
 `loadParams`.
+
+### F8528. `V22_status` scales the quality number on the 1200 arm and not on the 2400 one, because the 2400 arm jumps into the middle of the 1200 path
+
+`V22_status` (0x8c450, 310 bytes) reports the equaliser's mean-square error as
+`0x800 - err`, counting down from 2048 with no clamp. Which `err` it uses
+depends on `dsp->r2a`, the receive-rate flag `SetRxRate` writes:
+
+    1200    err = (fse.mse * 0x143c) >> 14      0.31616 * mse
+    2400    err = fse.mse                        unscaled
+
+so the same error reports three times worse at 2400. The 1200 report reaches
+zero at an mse of 6478 and the 2400 report at 2048, and both go negative past
+that.
+
+**It is easy to miss and a plausible sweep will not find it.** The two arms
+share the subtraction, the store and the whole flag sequence after it; the only
+difference is four instructions before the join, where the 2400 arm loads the
+raw `mse` into the register the scaled value would otherwise have occupied and
+jumps into the middle of the other path. Reading the fall-through arm alone
+gives a complete-looking function. And the constructor leaves `r2a` at one
+value, so a test that never drives `SetRxRate` — or that drives it and then
+sweeps `mse` — takes one arm and agrees with a reconstruction that scales both
+or neither.
+
+`t_v22status.c` drives `r2a` both ways on every `mse` value and guards both
+arms. That is what caught it: the first reconstruction scaled unconditionally
+and failed 5,376 of 17,920 checks, all of them on byte 6.
+
+The rest of the function is uncontroversial and is recorded for completeness:
+`PROTOCOL[hdx->r0e]` into the first word with no bounds check, the two rates
+from `dsp->r28` and `dsp->r2a`, four words written zero, eight flag bits at
++0x14 — three enables direct, three inverted, one unconditional 1, one from
+`params.flags` bit 9 — and bit 0 of +0x15 from `params.flags` bit 10. Every one
+of the eight bits at +0x14 is written, so the caller's value there does not
+survive; only bit 0 of +0x15 is, so the caller's other seven bits DO, and a
+report block that starts zeroed cannot tell the two apart.
