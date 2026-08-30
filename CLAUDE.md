@@ -81,7 +81,9 @@ pass, leave it out and record the attempt. The goal is a replacement that
 behaves *identically* to the blob, so any test disagreeing with the blob is a
 hard failure whatever build it came from — never a tolerance to widen.
 
-Run `make phase`, not `make test`.
+Run `make phase`, not `make test`. **But the tier that DECIDES is
+`make period`, and where the two disagree the period compiler wins** — see
+"Gate on `make period`" below before reading a red modern tier as a defect.
 
 **IT IS A RULE ABOUT `src/`, AND `testbench/` IS NOT `src/`.** The harness is
 measurement apparatus -- it places calls, records both ends, and analyses what
@@ -245,6 +247,48 @@ in `tools/toolchain/`, links them against the blob with binutils 2.15, and
 runs the suite. Our source and the object, compiled by the same compiler,
 compared at runtime -- so a difference is a difference in the code and not in
 the toolchain.
+
+### Gate on `make period`, and read a red modern tier with suspicion
+
+**Gate a reconstruction commit on `make period` ALONE.** It is the only tier
+with no allow-list and the only one whose verdict is about the CODE. Three
+things make this a rule rather than a preference, and all three were measured
+in the 2026-08-30 leaf wave (findings F8410-F8497, `docs/remaining.md`):
+
+- **The modern compiler here may not be the one the register was built for.**
+  `tools/gccdiverge.json` was calibrated against GCC 13; a machine with GCC 14
+  produces failures that are the COMPILER and not the source. One such
+  breakage stopped `make phase` reaching the test tier at all on a clean
+  master: `t_v34rx.c` used a `ref_` name it never declared, which 13 warned
+  about and 14 makes a hard error. **`make -s print-CC` and check before
+  believing a modern failure.**
+- **THE HAZARD IS ONE-WAY AND SILENT.** Editing `src/` to satisfy the modern
+  compiler moves the reconstruction AWAY from the object while `make period`
+  keeps passing, so no test can ever report it. A construct the modern build
+  demands is apparatus (see the flag/shim rule above), never source. **Never
+  edit `src/` to make the modern tier green.**
+- **`make phase`'s log CANNOT be read by position.** At `J>1` it runs the
+  period, modern-`test` and coverage tiers CONCURRENTLY into one stream --
+  three copies of `t_v90cdesign` at once on a 3-core box. "The PASS lines
+  before the first `gcc -m32` line are the period tier's" is WRONG, and that
+  session believed it for several turns. **Attribute a verdict to a compiler
+  by running that compiler alone.**
+
+`make phase` is still what proves portability, 64-bit cleanliness and the
+structural checks, and still has to pass before a branch is called finished.
+What it is not is the thing that decides whether a function matches the blob.
+
+**And the gate must report its denominator like everything else here.** The
+run prints `period differential: N passed, M failed`; N is the TEST COUNT, so
+check it moved by the number of tests you added -- 262 where master is 258 is
+a gate that ran your four, and 258 is a gate that silently ran none of them.
+Findings F134 and F2401, applied to the gate.
+
+**Operationally:** `J` defaults to `nproc/2`, so pass `J=$(nproc)` when the
+machine is yours; run it under `nohup`, because an interrupted `make` leaves
+its `docker run` child alive and compiling; and never end the wrapper with
+`echo`/`tail`, which reports THAT command's exit status and turned a red gate
+into an exit 0 in the wave above.
 
 **IT IS GCC 3.4.2 ITSELF SINCE FINDING F2200**, bootstrapped from the GNU
 tarball by `tools/toolchain/Dockerfile.exact`, and until then it was Debian
@@ -647,6 +691,21 @@ Task numbers are not safe across sessions either: two task stores exist whose
 
 ## Traps
 
+- **AN UNWRITTEN CALLEE DOES NOT "RESOLVE TO THE BLOB". IT FAILS TO LINK.**
+  `symmap.py` renames EVERY defined blob symbol to `ref_*`, and every test
+  binary links all of `$(OBJ_REPRO)`, so one reference from `src/` to a symbol
+  this tree has not written is an undefined reference that fails the whole
+  suite. The scaffold that would change this is the F214 spike, which **F215
+  declined** -- so do not brief anyone with "unwritten callees resolve at link
+  time", which a 2026-08-30 wave's briefs did, costing nine symbols that were
+  written and then had to be withdrawn (F8492).
+  **AND IT BINDS ON DATA REFERENCES, NOT ONLY CALLS.** Storing a handler's
+  address -- `movl $handler, field` -- has no `call`, appears in no call
+  graph, and pins the symbol at link exactly the same way; `RxNextStateV21`
+  alone installs three. Check `dis.py` for BOTH relocation kinds before
+  scheduling a symbol, not just `R_386_PC32` (F8493). A symbol whose referents
+  are unwritten is BLOCKED, not hard: it becomes writable the moment they
+  land, and the honest move is to leave it and say so.
 - **A `.c` calling a `.cpp` is about the LINK LINE, and the link line has been
   fixed.** This used to read "a `.c` may not call anything defined in a
   `.cpp`", because the interop binaries linked only `$(SRC)` -- every `.c`
