@@ -3,7 +3,7 @@
  *
  * Reconstructed from dsplibs.o:
  *   FPM_FSE_receive  .text 0x0a7e00  2131
- *   FPM_FSE_free     .text 0x0a8660    80
+ *   FPM_FSE_free     .text 0x0a8660    68
  *   FPM_FSE_init     .text 0x0a86b0
  *   avg_err_show.0   .bss  0x0008d0     4   (LOCAL, function-scope static)
  *

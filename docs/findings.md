@@ -95299,3 +95299,69 @@ is consistent with the `int` declaration and a `short` variable, and is NOT a
 reason to change the header. Four sign mutants survive everything except a
 test that drives a negative through each, so all three were measured rather
 than assumed.
+
+### F8535. Seven of the nine addresses in this wave's task briefs were wrong, every size was right, and nothing anywhere could have caught it
+
+The V.22 handler wave was dispatched to five subagents, each brief naming its
+functions as `name .text 0xNNNNNN NNNN bytes`. **Every byte count was correct
+and seven of the nine addresses were not.** The true table, from `nm -S`:
+
+    v22_data          0x088910   946      brief said 0x08ae00
+    connect_2400      0x088cd0  1505      brief said 0x08a7a0
+    v22_retrain       0x0892c0  2284      brief said 0x089b90
+    v22_org_rmloop2   0x089bb0  1050      brief said 0x08b0a0
+    v22_ans_rmloop2   0x089fd0  1160      brief said 0x08b4c0
+    connect_1200      0x08a460   818      correct
+    v22_local_loop    0x08a7a0  1104      correct
+    v22_answer        0x08abf0  1789      brief said 0x08a1c0
+    v22_originate     0x08b2f0  2655      brief said 0x089180
+
+The asymmetry is the whole finding. The SIZES came from `readyqueue.py`, which
+reads the object; the ADDRESSES were typed into prose, and nothing reads prose.
+Worse, 0x08a7a0 was given as `connect_2400`'s address and is in fact
+`v22_local_loop`'s, so one brief pointed at a real function that was not the
+one it named — the failure mode that looks most like being right.
+
+**No work was harmed, and that is the second half of it.** `tools/dis.py`
+takes a SYMBOL NAME and resolves it through `nm`, so every agent disassembled
+the right function regardless of what its brief claimed; the addresses were
+decoration throughout. One agent noticed and said so, which is how this came to
+be measured at all. But the same numbers would have been copied into a file
+header, and a `.c` file's "Reconstructed from dsplibs.o: name .text 0xNNNNNN"
+banner is exactly as unchecked as a brief — `docs/method/compilers.md`'s point
+about a rules file having a comment's shelf-life and no gate behind it, in a
+different costume.
+
+Two cheap defences. The first is a rule and the second is now a tool.
+
+  - **Do not write an address into a brief at all.** The name and the size are
+    sufficient — `dis.py` needs the name, `readyqueue.py` supplies the size,
+    and an address adds nothing a tool consumes.
+  - **`tools/bannercheck.py` reads the banners and asks `nm -S`.** Almost every
+    file in `src/` opens with one, and until now nothing read them.
+
+**And the tool immediately found the same defect in three older places**, which
+is what turns this from a slip into a pattern. Over the whole tree: **254
+banners, 251 agreeing and 3 wrong**, all three with the same signature as the
+briefs — the size right and the address wrong, or a size that had never been
+re-measured:
+
+    src/dsp/fpm_fse.c:6    FPM_FSE_free  said 80 bytes, object says 68
+    src/pump/v23/v23.c:8   dp_v23_init   said 0x004ef0, object says 0x004f70
+    src/pump/v23/v23.c:9   dp_v23_exit   said 0x004f10, object says 0x004f90
+    src/pump/v22/v22prc.c  RxTrained2400 said 143 bytes, object says 136
+
+All four are corrected, and the tree now reads 254 of 254. The tool was put
+through F134's ritual before any of that was believed: a one-digit change to
+`V22FP_create`'s address in `v22fp.c` makes it print the row and exit 1, and
+restoring the digit makes it exit 0.
+
+It prints its denominator on every run and refuses when it finds no banners at
+all, because a checker that silently measured nothing is F2400 and F3110's
+defect exactly. It also skips `.text 0x...` mentions whose name is a bare
+lower-case word — "the block at .text 0x08c340" is prose, not a claim — and
+prints how many it skipped rather than dropping them quietly; nine tree-wide.
+
+It is NOT wired into `make phase`. That is a scheduling decision for whoever
+owns the gate, not something a datapump wave should do on its own; the tool
+exits non-zero on a disagreement and is ready for it.
