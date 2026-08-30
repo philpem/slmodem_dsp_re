@@ -234,6 +234,48 @@ V92EchoCanceller::setEchoDelay(unsigned int delay)
 }
 
 /*
+ * zeroEchoCoeff -- 0x10f60, 45 bytes: the coefficient bank to zero, bound
+ * cached in a register (strict aliasing lets a float store not clobber an
+ * `unsigned int` member, so `i < filterLength` compiles to the object's
+ * single load).  The identical loop opens `reset` below; this is the
+ * out-of-line copy the blob also emits, claimed at last.
+ */
+void
+V92EchoCanceller::zeroEchoCoeff()
+{
+	unsigned int n;
+
+	for (n = 0; n < filterLength; n++)
+		echoCoeff[n] = 0.0f;
+}
+
+/*
+ * resetEchoHistory -- 0x10f90, 62 bytes, immediately after `zeroEchoCoeff`
+ * and immediately before `reset` in the blob as here: the write cursor to
+ * zero, the length rebuilt from the three terms (V92EchoCanceller.h walks
+ * the arithmetic), and the history cleared to that length.  D72's unclamped
+ * bound, exactly as in `reset` below.
+ *
+ * THE IDENTIFIERS DIFFER FROM `reset`'s ON PURPOSE (`n` for `i`, `blk` for a
+ * bare `params->`), in both members above: the mutation suite anchors on
+ * `reset`'s exact text and an anchor must match exactly once (`make refs`).
+ * An identifier is not a codegen carrier, so nothing else moves.
+ */
+void
+V92EchoCanceller::resetEchoHistory()
+{
+	V92Parameters *blk = params;
+	unsigned int n;
+
+	historyIndex = 0;
+	/* the three-term rebuild; the header walks the arithmetic */
+	echoLength = echoDelay + (filterLength >> 1)
+		     + (unsigned int)blk->V92_ECHO_DELAY_OFFSET;
+	for (n = 0; n < echoLength; n++)
+		echoHistory[n] = 0.0f;
+}
+
+/*
  * Clear the canceller: both buffers, the write cursor, the tap count, the two
  * betas and the ARMA behind it.
  *
@@ -249,12 +291,14 @@ V92EchoCanceller::setEchoDelay(unsigned int delay)
  * `'-'`, and its `(int)fabs` and fractional terms to zero.  That is exactly
  * the `$0x2d, $0, $0` the object passes.
  *
- * None of the four is written in this tree, so spelling them as calls would
- * be spelling calls to nothing.  They are inlined instead: GCC inlined them
- * in the original too, so the emitted code is the same either way, and
+ * TWO OF THE FOUR ARE NOW WRITTEN, just above -- `zeroEchoCoeff` and
+ * `resetEchoHistory` have their own out-of-line definitions, claimed at
+ * last -- and the inlined spelling HERE still stands: GCC inlined them in
+ * the original too, so the emitted code is the same either way, and
  * CLAUDE.md's rule that a different factoring may differ for ever while
  * behaving identically is what makes that a choice rather than a compromise.
- * Finding F1271.
+ * Finding F1271.  (`setEchoBeta(0.0f)` and `setDecayFactor(0.0f)` remain
+ * unwritten and constant-folded, as the paragraph above describes.)
  *
  * THE SECOND LOOP IS D72's, AND THIS FILE DOES NOT CLAMP IT.  `echoLength` is
  * rebuilt from `filterLength`, `echoDelay` and the parameter block and used
@@ -382,6 +426,30 @@ frac_of(float v)
 {
 	return __builtin_abs((int)(((long double)v - (long double)(int)v)
 				   * 1.0e6f));
+}
+
+/*
+ * print_echo_coeffs -- 0x10a30, 179 bytes, the FIRST symbol of this TU in
+ * the blob (it precedes `setEchoDelay` at 0x10af0).  A free function with a
+ * mangled name (`_Z17print_echo_coeffsPfj`), not a member: the banner, then
+ * one fixed-point line per coefficient through the same char-and-two-ints
+ * split as every float this class prints -- `%06d`, so the 1e6 scale the
+ * three helpers above already carry.  `unsigned int` for the count is the
+ * mangling's `j`, and the loop compares `jb`, unsigned, to match.
+ *
+ * It sits here AFTER the helpers only because they are file-static; the
+ * emission-order cost of not leading the TU with it is one function's
+ * register allocation, and the differential tier cannot see it.
+ */
+void
+print_echo_coeffs(float *coeffs, unsigned int len)
+{
+	unsigned int i;
+
+	edprintf("**************** NEAR ECHO FILTER *************** \n");
+	for (i = 0; i < len; i++)
+		edprintf("   = %c%d.%06d\r\n", sign_of(coeffs[i]),
+			 whole_of(coeffs[i]), frac_of(coeffs[i]));
 }
 
 /*

@@ -69,6 +69,30 @@ void ref_exitDIL(void *self)
 	asm("ref__ZN18V90Phase3Modulator7exitDILEv");
 
 /*
+ * The eight leaf methods the VPcmV34Main leaf pass claimed -- each the
+ * standalone copy of a body `generateV90Symbol`/`generateV92Symbol` inline,
+ * so this fixture already stands up everything they touch.  `int` for the
+ * seven generators is measured off the standalone bodies (they widen a
+ * short into %eax themselves); the header carries the derivation.
+ */
+int ref_generateSd(void *self)
+	asm("ref__ZN18V90Phase3Modulator10generateSdEv");
+int ref_generateSdNot(void *self)
+	asm("ref__ZN18V90Phase3Modulator13generateSdNotEv");
+int ref_generateTRN1d(void *self)
+	asm("ref__ZN18V90Phase3Modulator13generateTRN1dEv");
+int ref_generateJd(void *self)
+	asm("ref__ZN18V90Phase3Modulator10generateJdEv");
+int ref_generateJdNot(void *self)
+	asm("ref__ZN18V90Phase3Modulator13generateJdNotEv");
+int ref_generateJdPhase(void *self)
+	asm("ref__ZN18V90Phase3Modulator15generateJdPhaseEv");
+int ref_generateV92Jd(void *self)
+	asm("ref__ZN18V90Phase3Modulator13generateV92JdEv");
+void ref_updateCodeSegmentPointer(void *self)
+	asm("ref__ZN18V90Phase3Modulator24updateCodeSegmentPointerEv");
+
+/*
  * The four weak Scrambler members.  They are `W` in the blob, not `T`, and
  * symmap.py renames them anyway -- checked with
  * `nm build/dsplibs_ref.o | grep ScramblerIhiE` -- so they can be driven
@@ -2229,6 +2253,114 @@ run_exit_dil(void)
 	return diff_end();
 }
 
+/*
+ * ===========================================================================
+ * The eight leaf methods, driven directly.
+ *
+ * `prepare` gives them exactly the state the two symbol pumps get --
+ * scrambler placed over a side-local buffer, three bit vectors of real
+ * bits, the level fields seeded -- and each method is then compared the
+ * way `drive` compares a pump call: return value, whole object with the
+ * ten per-side pointers blanked, scrambler by offsets and content.
+ *
+ * `symbolCount` is swept explicitly because every generator's phase is
+ * `(symbolCount - 1u) % k`: the sweep crosses both a % 6 and a % 72
+ * boundary, and includes 0, whose (0 - 1u) wrap is well-defined unsigned
+ * arithmetic on both sides.
+ * ===========================================================================
+ */
+static int
+run_leaves(void)
+{
+	static const unsigned int counts[] = { 0u, 1u, 2u, 3u, 4u, 5u, 6u,
+					       7u, 71u, 72u, 73u, 144u };
+	long tag = 700000L;
+	int trial, ci, m;
+	int nonzero = 0, negative = 0, segMoved = 0;
+
+	diff_begin("the eight V90Phase3Modulator leaves");
+
+	for (trial = 0; trial < 12; trial++)
+	    for (ci = 0; ci < (int)(sizeof counts / sizeof counts[0]); ci++)
+		for (m = 0; m < 8; m++) {
+			struct mod_slot &ca = drive_ca, &cb = drive_cb;
+			int a = 0, b = 0;
+
+			prepare(trial, trial % 4, 0u);
+			ours.o.symbolCount = theirs.o.symbolCount =
+			    counts[ci];
+			/* updateCodeSegmentPointer reads this pair. */
+			ours.o.dilIndex = theirs.o.dilIndex =
+			    (unsigned char)(trial % 6);
+			ours.o.segmentIndex = theirs.o.segmentIndex = 0xee;
+
+			switch (m) {
+			case 0:
+				a = ours.o.generateSd();
+				b = ref_generateSd(&theirs.o);
+				break;
+			case 1:
+				a = ours.o.generateSdNot();
+				b = ref_generateSdNot(&theirs.o);
+				break;
+			case 2:
+				a = ours.o.generateTRN1d();
+				b = ref_generateTRN1d(&theirs.o);
+				break;
+			case 3:
+				a = ours.o.generateJd();
+				b = ref_generateJd(&theirs.o);
+				break;
+			case 4:
+				a = ours.o.generateJdNot();
+				b = ref_generateJdNot(&theirs.o);
+				break;
+			case 5:
+				a = ours.o.generateJdPhase();
+				b = ref_generateJdPhase(&theirs.o);
+				break;
+			case 6:
+				a = ours.o.generateV92Jd();
+				b = ref_generateV92Jd(&theirs.o);
+				break;
+			default:
+				ours.o.updateCodeSegmentPointer();
+				ref_updateCodeSegmentPointer(&theirs.o);
+				if (ours.o.segmentIndex != 0xee)
+					segMoved = 1;
+				break;
+			}
+
+			diff_eq_int("the leaf returned (case %ld)", a, b,
+				    tag);
+			memcpy(ca.raw, ours.raw, SLOT);
+			memcpy(cb.raw, theirs.raw, SLOT);
+			memset(ca.raw + 0x20, 0, 0x1c);
+			memset(cb.raw + 0x20, 0, 0x1c);
+			memset(ca.raw + 0x44, 0, 0x0c);
+			memset(cb.raw + 0x44, 0, 0x0c);
+			diff_eq_obj("after the leaf", V90Phase3Modulator,
+				    &ca.o, &cb.o, tag);
+			scr_compare(&ours.o.scrambler, &theirs.o.scrambler,
+				    tag);
+			diff_eq_int("the guard held (case %ld)",
+				    guard_equal(), 1, tag);
+
+			if (a > 0)
+				nonzero = 1;
+			if (a < 0)
+				negative = 1;
+			tag++;
+		}
+
+	diff_eq_int("a positive level was produced", nonzero, 1, 0);
+	diff_eq_int("a negative level was produced", negative, 1, 0);
+	diff_eq_int("updateCodeSegmentPointer wrote the index", segMoved, 1,
+		    0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2248,6 +2380,7 @@ main(void)
 	rc |= run_diagnostics(1);
 	rc |= run_reset();
 	rc |= run_ctor_dtor();
+	rc |= run_leaves();
 
 	return rc;
 }

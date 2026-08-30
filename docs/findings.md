@@ -95294,3 +95294,31 @@ compare of the object would have reported one differing run and said nothing
 about which field was wrong.  Whoever takes the fax phase should restore
 `t_faxsgd.c` FIRST, from this commit's parent, and make it pass before
 trusting any SGD reconstruction.  (2026-08-30)
+### F8430. The `VPcmV34Main.cpp +72` leaf batch has NO derivation record, and this is the note saying so
+
+All 67 no-entry-point leaves of the `VPcmV34Main.cpp +72` span are written
+and differentially green against the blob under the period compiler (265
+passed, 0 failed, over seven new binaries: `t_cevalleaves`,
+`t_dilfreefns`, `t_jdmpleaves`, `t_k56flexleaves`, `t_p2echoleaves`,
+`t_trn2dknown`, `t_vpcmleaves`).  What does NOT exist is the reasoning: the
+agent that wrote them was killed by a session limit at the moment it began
+writing its findings, and nothing was recovered.
+
+This finding is deliberately not a reconstruction of that reasoning.  Writing
+one from the diff would put a guess into the record wearing a derivation's
+clothes, which is the failure CLAUDE.md's naming section calls worse than
+leaving a field padded -- a wrong note is believed by every future reader and
+no test can fail on it.
+
+What IS established, and needs no reasoning to trust: every one of the 67
+passes a differential test against the blob, and the tests are in the tree
+to be read.  What is NOT established is why any particular spelling was
+chosen -- so if one of these functions later needs a codegen-level
+refinement, or its field names are questioned, treat the names as
+UNSOURCED and re-derive from `dis.py` rather than citing this batch.
+
+The two names `service.py --list none` prints as missing here,
+`...evaluateMeanErrorStdPhase3E` and `...recivedPartTwoSilenceRrnSUVtag`,
+are that tool's COLUMN TRUNCATION and not absent symbols; both are defined,
+as `...Phase3Ef` and `...SUVtagEv`.  Check a suspected gap with `nm` before
+believing it.  (2026-08-30)

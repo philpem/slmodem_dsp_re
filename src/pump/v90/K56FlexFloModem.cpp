@@ -35,6 +35,27 @@
 
 #include "dsplib/sysdep.h"
 
+/*
+ * The constructor and the destructor -- 0x10170/0x10180 and 0x10190/0x101a0,
+ * ONE BYTE of `c3` each, all four.  A constructor that initialises nothing
+ * and a destructor that releases nothing, which is the same statement the
+ * other fifteen members make: the class is a name list.  The three
+ * parameters are the mangling's (`PviP19_tagModemParameters`) and are never
+ * read, so they are unnamed like every other ignored argument here.
+ *
+ * Declaring the pair makes the class non-trivial, which K56FlexFloModem.h
+ * used to avoid on behalf of a union fixture; no fixture puts the class in a
+ * union today (every test reaches it through a cast), so the cost is gone
+ * and the two blob symbols are claimed.
+ */
+K56FlexFloModem::K56FlexFloModem(void *, int, _tagModemParameters *)
+{
+}
+
+K56FlexFloModem::~K56FlexFloModem()
+{
+}
+
 int
 K56FlexFloModem::getK56FlexMpBits(short *)
 {
@@ -166,6 +187,20 @@ K56FlexFloModem::k56FlexRunDemodulator(float *, unsigned int, int *, int *)
 }
 
 /*
+ * getK56MPsReceiver -- 0x10290, `31 c0 c3`, the last member before the two
+ * C-linkage helpers.  The same `xor %eax,%eax; ret` as the bit getters, so
+ * it RETURNS ZERO: the header used to spell the return `void` with a note
+ * that no `void` had been measured, and the `xor` is the measurement --
+ * a void function leaves %eax alone.  `int` is as far as it goes, per the
+ * file convention for `31 c0 c3`.
+ */
+int
+K56FlexFloModem::getK56MPsReceiver()
+{
+	return 0;
+}
+
+/*
  * ---------------------------------------------------------------------------
  * `K56FLEX_Create` and `K56FLEX_Delete`, .text+0x102a0 and +0x102c0.
  *
@@ -224,6 +259,20 @@ K56FLEX_Delete(void *obj)
 {
 	if (obj != 0)
 		sysdep_free(obj);
+}
+
+/*
+ * `K56FLEX_SessionTermination` -- 0x102e0, `31 c0 c3`, the third and last of
+ * the C-linkage helpers and the very next symbol after `K56FLEX_Delete`.
+ * Returns zero and reads nothing, like the class it fronts; `int` per the
+ * same convention as `getK56MPsReceiver` above.  It takes no arguments this
+ * file can see -- the body reads no stack slot -- and no call site exists in
+ * the object to say otherwise, so the declaration is `(void)`.
+ */
+int
+K56FLEX_SessionTermination(void)
+{
+	return 0;
 }
 
 }

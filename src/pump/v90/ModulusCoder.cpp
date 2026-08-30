@@ -52,12 +52,39 @@ ModulusEncoder::ModulusEncoder()
 }
 
 /*
+ * The seven-argument form, 0x32390/0x323d0 (C2/C1), 53 bytes each: seven
+ * `unsigned int` parameters stored to +0x00..+0x18 in argument order with no
+ * arithmetic anywhere -- a constructor whose whole job is its initialiser
+ * list, which is how it is spelled.  The parameter names are the offsets
+ * because the object gives no meanings (ModulusCoder.h).
+ */
+ModulusEncoder::ModulusEncoder(unsigned int a, unsigned int b, unsigned int c,
+			       unsigned int d, unsigned int e, unsigned int f,
+			       unsigned int g)
+	: field_00(a), field_04(b), field_08(c), field_0c(d), field_10(e),
+	  field_14(f), field_18(g)
+{
+}
+
+/*
  * Byte for byte the encoder's, which is the object's own claim: the two
  * functions are 53 bytes each and differ in nothing but their symbol names.
  */
 ModulusDecoder::ModulusDecoder()
 	: field_00(0), field_04(0), field_08(0), field_0c(0), field_10(0),
 	  field_14(0), field_18(0)
+{
+}
+
+/*
+ * Byte for byte the encoder's seven-argument form again -- 0x32070/0x320b0,
+ * 53 bytes each, differing from 0x32390/0x323d0 in nothing but the names.
+ */
+ModulusDecoder::ModulusDecoder(unsigned int a, unsigned int b, unsigned int c,
+			       unsigned int d, unsigned int e, unsigned int f,
+			       unsigned int g)
+	: field_00(a), field_04(b), field_08(c), field_0c(d), field_10(e),
+	  field_14(f), field_18(g)
 {
 }
 

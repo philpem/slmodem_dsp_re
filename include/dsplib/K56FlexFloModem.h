@@ -29,11 +29,13 @@
  * "returns void" and no further.  A `short` or an `unsigned` return would
  * compile to the same two bytes.
  *
- * The members below that are declared and not defined are here for the
- * record; nothing defined here calls one, which is what keeps the batch
- * closed (docs/v90cpp.md).  Declaring a constructor or destructor is
- * deliberately avoided: it would make the class non-trivial and delete the
- * defaulted members of the union the test fixture puts it in.
+ * Every member below is now defined in src/pump/v90/K56FlexFloModem.cpp;
+ * nothing defined there calls another, which is what keeps the batch closed
+ * (docs/v90cpp.md).  The constructor and destructor ARE declared now --
+ * this used to be avoided for a union fixture's sake, but no fixture puts
+ * the class in a union today (every test reaches it through a cast), and
+ * the blob has all four symbols (C1/C2 at 0x10170/0x10180, D1/D2 at
+ * 0x10190/0x101a0, one `ret` each).
  */
 
 #ifndef DSPLIB_K56FLEXFLOMODEM_H
@@ -44,7 +46,10 @@ struct _tagModemParameters;
 
 class K56FlexFloModem {
 public:
-	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All thirteen are stubs. */
+	/* Defined in src/pump/v90/K56FlexFloModem.cpp.  All are stubs. */
+	K56FlexFloModem(void *, int, _tagModemParameters *);
+	~K56FlexFloModem();
+
 	int getK56FlexMpBits(short *);
 	int getK56FlexJaBits(short *);
 	void setMinMaxRates(int, int);
@@ -94,16 +99,16 @@ public:
 	int getResamplerPhase(int_complex *, unsigned long);
 
 	/*
-	 * Declared, not defined.  The signature is the mangling's, so this is
-	 * a specification and not a guess; the return type is unrecoverable
-	 * and is spelled `void` to say exactly that -- no `void` here was
-	 * measured.
+	 * The signature is the mangling's.  `31 c0 c3` like the bit getters,
+	 * so it returns zero and `int` is the file's convention for exactly
+	 * that shape; the old `void` here was a placeholder, not a
+	 * measurement, and the `xor %eax,%eax` overrules it.
 	 */
-	void getK56MPsReceiver();
+	int getK56MPsReceiver();
 };
 
 /*
- * The two C-linkage helpers that share the class's translation unit; see
+ * The three C-linkage helpers that share the class's translation unit; see
  * src/pump/v90/K56FlexFloModem.cpp for why they are attributed there.
  *
  * `K56FLEX_OBJECT_SIZE` is the `movl $0x14,(%esp)` at .text+0x102a3 and
@@ -119,6 +124,7 @@ public:
 extern "C" {
 void *K56FLEX_Create(void *, void *, void *, int);
 void K56FLEX_Delete(void *obj);
+int K56FLEX_SessionTermination(void);
 }
 
 #endif /* DSPLIB_K56FLEXFLOMODEM_H */

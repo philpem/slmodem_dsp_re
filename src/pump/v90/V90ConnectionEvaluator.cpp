@@ -8,9 +8,10 @@
  * used to live inside `V90Demodulator.h` and what did and did not move when
  * it came out.
  *
- * THE OTHER THREE ARE THE BIG END OF THE PROCESSING HALF -- `evaluateConnection`
- * (3,857 bytes), `evaluateMeanErrorStdPhase3` (234) and `printStatus` (177).
- * They are declared in the header for the record and not defined here.
+ * `evaluateMeanErrorStdPhase3` (234 bytes) and `printStatus` (177) are
+ * defined below since the VPcmV34Main leaf pass; `evaluateConnection`
+ * (3,857 bytes) is the one member still declared for the record and not
+ * defined here.
  * `evaluatePhase3` (980 bytes) and `evaluatePhase4` (1,353) ARE defined here,
  * and both return `int` -- see the header's verdict block.
  *
@@ -763,6 +764,48 @@ V90ConnectionEvaluator::evaluatePhase3()
  * why the test compares state and verdict but not the transcript on that one
  * path.  Finding F1388.
  */
+/*
+ * ===========================================================================
+ * evaluateMeanErrorStdPhase3 -- 234 bytes, 0x3f9d0, between the two big
+ * evaluators in the blob as here.
+ *
+ * One comparison and one verdict: with `TRN1D_MEAN_ERROR_STD_EVALUATION_
+ * ENABLE` set and the standard deviation at or above `TRN1D_MAX_MEAN_ERROR_
+ * STD_IN_PHASE3`, announce the fall-back, zero the retrain counter, the
+ * evaluator counter and `word_90`, and return 5 -- the same verdict code
+ * `evaluatePhase3`'s own fall-back arm returns.  Otherwise return 0.
+ *
+ * `int` IS MEASURED: `%esi` is zeroed at entry, set to 5 only on the verdict
+ * arm, and moved to `%eax` at both exits -- a `void` function arranges
+ * neither.  The header's old `void` was the not-measured placeholder.
+ *
+ * The comparison is `jbe` off a single ordered `fcomp` -- the object's usual
+ * NaN-blind compare (the ce_sign block above walks the family) -- and the
+ * fraction is the `%04d` scale, this class's only ten-thousandths site.
+ */
+int
+V90ConnectionEvaluator::evaluateMeanErrorStdPhase3(float std)
+{
+	int ret = 0;
+
+	if (params->TRN1D_MEAN_ERROR_STD_EVALUATION_ENABLE != 0
+	    && params->TRN1D_MAX_MEAN_ERROR_STD_IN_PHASE3 <= std) {
+		int frac = (int)((std - (float)(int)std) * 10000.0f);
+
+		edprintf("V90ConnectionEvaluator (phase3): initiating fall "
+			 "back to V34 due to large mean error variance, "
+			 "std = %c%d.%04d\r\n",
+			 !(0.0f >= std) ? '+' : '-',
+			 (int)__builtin_fabsf(std),
+			 (frac < 0) ? -frac : frac);
+		nofV90Retrains = 0;	/* +0x04 */
+		word_1c = 0;		/* +0x1c */
+		word_90 = 0;		/* +0x90 */
+		ret = 5;
+	}
+	return ret;
+}
+
 int
 V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 {
@@ -1576,4 +1619,36 @@ V90ConnectionEvaluator::evaluateConnection()
 	word_74 = 0;
 	word_70 = 0;
 	return verdict;
+}
+
+/*
+ * ===========================================================================
+ * printStatus -- 177 bytes, 0x40140, the class's last symbol in the blob as
+ * here.  Nine ungated `edprintf` lines, one per counter, in offset order --
+ * and the LABELS ARE THE AUTHOR'S OWN NAMES for the six fields this tree
+ * still numbers: +0x10 prints as "rateUpCounter", +0x14 "rateDownCounter",
+ * +0x18 "retrainCounter", +0x1c "evaluatorCounter", +0x20 "fadeCounter".
+ * They stay `word_*` here because the header's own derivations for +0x10
+ * and +0x18 read them as DURATIONS the evaluators count against, and a
+ * rename that picks the diagnostic's word over the measured role belongs to
+ * a pass that reconciles the two, not to the leaf that quotes the string.
+ * `const` is the mangling's (`_ZNK...`).
+ * ===========================================================================
+ */
+void
+V90ConnectionEvaluator::printStatus() const
+{
+	edprintf("V90ConnectionEvaluator Status Summary:\r\n");
+	edprintf("V90ConnectionEvaluator: nofRetrainsSoFar = %d\r\n",
+		 nofV90Retrains);
+	edprintf("V90ConnectionEvaluator: nofRateRenegSoFar = %d\r\n",
+		 nofRemoteRateReneg);
+	edprintf("V90ConnectionEvaluator: nofRemoteRetrainsSoFar = %d\r\n",
+		 nofRemoteRetrains);
+	edprintf("V90ConnectionEvaluator: rateUpCounter = %d\r\n", word_10);
+	edprintf("V90ConnectionEvaluator: rateDownCounter = %d\r\n", word_14);
+	edprintf("V90ConnectionEvaluator: retrainCounter = %d\r\n", word_18);
+	edprintf("V90ConnectionEvaluator: evaluatorCounter = %d\r\n",
+		 word_1c);
+	edprintf("V90ConnectionEvaluator: fadeCounter = %d\r\n", word_20);
 }

@@ -115,6 +115,28 @@ V90Phase2Info::V90Phase2Info(V90Parameters *p)
 }
 
 /*
+ * setToDefault -- 0x2a950, 49 bytes: the constructor's five copies again,
+ * reading the parameter block back from `params` instead of taking it, and
+ * storing nothing else -- the four arrays and `params` itself survive.
+ * The two `setne` stores and the two byte narrowings are the constructor's,
+ * unchanged.  The local is `blk` rather than the constructor's `p` because
+ * the mutation suite anchors on the constructor's exact text and an anchor
+ * must match exactly once (`make refs`); an identifier moves no codegen.
+ */
+void
+V90Phase2Info::setToDefault()
+{
+	V90Parameters *blk = params;
+
+	pcmType = (blk->PHASE2_INFO_A_OR_MU != 0);
+	rtd = blk->PHASE2_INFO_RTD;
+	Uinfo = (unsigned char)blk->PHASE2_INFO_UINFO;
+	maxTxPower = (unsigned char)blk->PHASE2_INFO_MAX_TX_POWER;
+	txPowerMeasurementPoint =
+	    (blk->PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
+}
+
+/*
  * ===========================================================================
  * Printing a float without a %f.
  *

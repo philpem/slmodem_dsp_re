@@ -156,6 +156,22 @@ public:
 		     V92ComputationalMode v92Mode);
 
 	/*
+	 * The destructor -- D2 at 0xd030 and D1 at 0xd0a0, 97 bytes each.
+	 * The body is empty: the 97 bytes are the six member destructions
+	 * the compiler generates for the six typed embedded members below,
+	 * in reverse declaration order, which is exactly the blob's call
+	 * sequence.  VPcmFloModem.cpp defines it.
+	 */
+	~VPcmFloModem();
+
+	/*
+	 * internalReset -- 0xd4f0, 165 bytes of constant stores: the
+	 * transmit-side bookkeeping back to its phase 3 entry values, with
+	 * the V.90 baud allow list (index 5 barred).  VPcmFloModem.cpp.
+	 */
+	void internalReset();
+
+	/*
 	 * Turn the V.34 line probe into the Phase 2 record, and report
 	 * whatever the modem already knows about Uinfo.
 	 *
@@ -235,16 +251,12 @@ public:
 	 *   d200  resetBitPointer()                          51 B
 	 *   d5a0  copyMpInfoForInterface()                  183 B
 	 *
-	 * THEY ARE DEFINED `inline` IN THE .cpp AND THEIR SYMBOLS ARE
-	 * THEREFORE NOT CLAIMED.  That is 7570's move for
-	 * `setConstellationMask` translated to members: the CODE is
-	 * reconstructed -- it is what the three MP/CP arms and the two
-	 * rate-renegotiation arms are made of -- and the 451 bytes of
-	 * out-of-line symbol are a further seven differential tests this
-	 * batch was not scoped to write.  Drop the `inline` in
-	 * src/pump/v90/VPcmFloModem.cpp to claim them, and expect coverage to
-	 * gain 451 bytes and seven symbols that this batch's arithmetic does
-	 * not account for.
+	 * THE `inline` HAS BEEN DROPPED AND ALL SEVEN SYMBOLS ARE CLAIMED
+	 * (this paragraph used to price that move at "451 bytes and seven
+	 * differential tests"; t_vpcmleaves.cpp is the tests).  The fourteen
+	 * inlined sites in `v90RunDemodulator` are unchanged -- GCC still
+	 * inlines a same-TU callee at -O3 -- and the out-of-line copies now
+	 * exist as the blob has them.
 	 */
 	void setTerminateJaFlag(unsigned char v);
 	void setTerminateCpFlag(unsigned char v);

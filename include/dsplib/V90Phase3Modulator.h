@@ -265,13 +265,20 @@ public:
 	 * Declared, not defined -- see the file comment.  A return type is not
 	 * mangled, so it is unknown for all of them.
 	 */
-	void generateSd();
-	void generateSdNot();
-	void generateJd();
-	void generateJdNot();
-	void generateJdPhase();
-	void generateV92Jd();
-	void generateTRN1d();
+	/*
+	 * `int`, measured off the standalone bodies since the VPcmV34Main
+	 * leaf pass: each ends by widening a short into %eax itself
+	 * (`movswl`), which a `void` or caller-widened `short` return would
+	 * not.  All eight are defined in V90Phase3Modulator.cpp, each one a
+	 * call to the file-static body the symbol pumps inline.
+	 */
+	int generateSd();
+	int generateSdNot();
+	int generateJd();
+	int generateJdNot();
+	int generateJdPhase();
+	int generateV92Jd();
+	int generateTRN1d();
 	void updateCodeSegmentPointer();
 	void exitJd();
 	void exitJdPhase();
