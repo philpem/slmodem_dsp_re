@@ -47,9 +47,30 @@ stubs (`VPcmV34Progress` ×5, `vpcm_run` ×5, `v34handshak` ×1 — see
 Finding blocks assigned: A F8410–8429, B F8430–8459, C F8460–8489,
 D F8490–8519.
 
-| agent | scope | branch | outcome |
+**WAVE 1 IS STALLED, AND NOTHING FROM IT IS TRUSTED YET.** All four agents
+were killed by an account session limit on 2026-08-30, every one of them while
+WAITING ON `make phase`. **No agent committed, so no symbol in this wave has
+passed the gate** — the work is source on disk, not reconstruction, until a
+green phase says otherwise. The worktrees are locked so nothing is reclaimed.
+
+| agent | scope | worktree branch | state |
 |---|---|---|---|
-| A | `dp_vpcm_exit`, `dp_call_exit`, `dp_init.c +2` (CID_*, prop_dp_*), `b103.c +2` leaves | `recon/closers-b103` | running |
-| B | the 67 `VPcmV34Main.cpp +72` leaves | `recon/vpcm-leaves` | running |
-| C | `Beepgen.c`/`Fdspkrnl.c` leaves + `RingDetector_Reset` | `recon/voice-leaves` | running |
-| D | `V32mod.c`/`Dialer.c` leaves + fax-named exported API leaves | `recon/fax-api-leaves` | running |
+| A | `dp_vpcm_exit`, `dp_call_exit`, `dp_init.c +2` (CID_*, prop_dp_*), `b103.c +2` leaves | `worktree-agent-a4b2869817b730940` | uncommitted: 28 files, 2,100 insertions; findings F8410–F8413 drafted; killed at the mutation-baseline/phase step |
+| B | the 67 `VPcmV34Main.cpp +72` leaves | `worktree-agent-a25c3f9a37c3f9e5c` | uncommitted: 40 files, 3,069 insertions + 2,081 untracked lines; **no findings written yet** (killed as it started them) |
+| C | `Beepgen.c`/`Fdspkrnl.c` leaves + `RingDetector_Reset` | `worktree-agent-a4f874eb60f1b56fd` | uncommitted: 7 files, 1,614 insertions + 2,201 untracked lines; findings F8460–F8466 drafted; killed waiting on `t_v90cdesign` |
+| D | `V32mod.c`/`Dialer.c` leaves + fax-named exported API leaves | `worktree-agent-a0e1e3bc9a937ef60` | uncommitted: 10 files, 440 insertions + 2,589 untracked lines; findings F8490–F8496 drafted; killed mid-period-tier |
+
+### What wave 1 cost, and the scheduling lesson (for wave 2)
+
+**Do not run N agents that each run `make phase`.** The gate is expensive — the
+period tier builds ~200 objects under an i386 container and the suite includes
+heavyweight tests (`t_v90cdesign` alone ran 28 minutes of CPU from cold) — and
+four concurrent phases on one machine contend for Docker and the CPU rather
+than overlapping. Agent A measured **4 objects in 50 minutes at J=1 with five
+containers contending**. All four agents spent most of their budget waiting,
+and all four died before their first commit.
+
+For wave 2: parallelise the *reading and writing* (which is what subagents are
+for — their turns don't accumulate in the parent's window) but **serialise the
+gate**, one `make phase` at a time over a merged tree, or give the agents a
+cheap inner loop (`make one T=…`) and let the parent run the single gate.
