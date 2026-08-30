@@ -10,21 +10,26 @@
  *   v22_delete  .text 0x0050e0   72 bytes
  *
  * ---------------------------------------------------------------------------
- * THE LAYOUT IS READ FROM `v22_create`, WHICH IS NOT WRITTEN YET
+ * THE LAYOUT IS COMPLETE, AND THE ARITHMETIC IS WHAT SAYS SO
  *
- * `v22_create` (0x4fb0, 300 bytes) allocates 0x344 bytes, zeroes them, and
- * stores five things: the datapump id at +0x00, the modem at +0x04, the
- * operations table at +0x0c, the wrapper at BOTH +0x10 and +0x20, and the
- * V22FP object at +0x1c.  Those five are what is modelled here.  Everything
- * from +0x14 to +0x1b and everything above +0x24 is left unmapped, because
- * `v22_process` is what would name it and `v22_process` has not been read.
+ * `v22_create` (0x4fb0) allocates 0x344 bytes, zeroes them, and stores five
+ * things: the datapump id at +0x00, the modem at +0x04, the operations table
+ * at +0x0c, the wrapper at BOTH +0x10 and +0x20, and the V22FP object at
+ * +0x1c.  `v22_process` (0x5130) supplies the rest: it passes +0x14 to
+ * `modem_get_bits` and `modem_put_bits` as their bit width, tests and writes
+ * +0x18, and indexes two INT arrays with a scale of 4, at +0x24 and +0x1b4.
  *
- * So this is a PARTIAL model of a struct whose size is known exactly, and the
- * two `unmapped_*` runs are the honest statement of that.  Compare
- * `struct b103_dp`, where the same author's other datapump has `caller`,
- * `tx_bits_wanted` and `last_status` in the corresponding gap and two
- * hundred-entry bit buffers above -- a plausible guide to what will turn up
- * here, and NOT evidence for any of it.
+ * The two arrays close the struct exactly.  0x1b4 + 100 * 4 = 0x344, which is
+ * the allocation size -- so the second array is a hundred entries and there is
+ * nothing after it.  That is not an assumption about how big a bit buffer
+ * should be; it is the only length that makes the object's own malloc size
+ * come out right, and `struct b103_dp` independently has two hundred-entry
+ * int arrays in the same position for the same reason.
+ *
+ * The one difference from B103 is that its gap holds THREE ints -- `caller`,
+ * `tx_bits_wanted` and `last_status` -- where this holds two, which is why its
+ * arrays sit four bytes higher at +0x28 and +0x1b8 and its object is 840 bytes
+ * to this one's 836.
  *
  * ---------------------------------------------------------------------------
  * WHAT `v22_create` SETTLES ABOUT THE CONFIGURATION IT BUILDS
@@ -56,16 +61,44 @@ struct dp_wrapper;
 struct v22fp;
 
 /*
+ * Entries in each bit buffer.  NOT a round number chosen for comfort: it is
+ * what closes the object, 0x1b4 + 100 * 4 = 0x344.  `v22_process` also clamps
+ * a received count to it -- `cmp $0x64` -- which is the same number reached a
+ * second way.
+ */
+#define V22_BIT_BUFFER	100
+
+/*
  * 836 bytes, of which the first 20 are the `struct dp` the modem core sees --
  * so a `struct dp *` from this module can be cast back to one of these, which
  * is what `v22_delete` does.
  */
 struct v22_dp {
 	struct dp dp;			/* +0x000 .. +0x013                */
-	unsigned char unmapped_0014[0x1c - 0x14];
+	/*
+	 * +0x14 is the bit width `modem_get_bits` and `modem_put_bits` are
+	 * called with, and it is also the shift `v22_process` uses to build
+	 * the mask `(1 << width) - 1` it applies to every received word.
+	 */
+	int bits_per_word;		/* +0x014                          */
+	/*
+	 * +0x18 is how many transmit bits to fetch per block, and it doubles
+	 * as the "carry data" flag: zero takes the branch that transmits
+	 * nothing.  `b103_dp` has the same field with the same double duty.
+	 */
+	int tx_bits_wanted;		/* +0x018                          */
 	struct v22fp *fp;		/* +0x01c the modulation           */
 	struct dp_wrapper *wrapper;	/* +0x020                          */
-	unsigned char unmapped_0024[0x344 - 0x24];
+	/*
+	 * The bit buffers.  Both are indexed as INTS by v22_process, and the
+	 * second one's hundred entries are what make the object come out at
+	 * exactly 0x344 bytes.  The transmit buffer is also read back as
+	 * BYTES through the same address -- `modem_get_bits` fills it as
+	 * bytes and the loop then widens them in place, backwards, so one
+	 * buffer serves both widths, exactly as `b103_process` does.
+	 */
+	int tx_bits[V22_BIT_BUFFER];	/* +0x024                          */
+	int rx_bits[V22_BIT_BUFFER];	/* +0x1b4                          */
 };
 
 /* The datapump runs at 8 kHz in 160-sample fragments, as B103 does. */
