@@ -60,6 +60,22 @@
     "corrupt 'tone detected by cadence dial\\\\n'": "caught"
    }
   },
+  "cidwrap": {
+   "key": "4983c7a06f74b73f89b51131178c7cc1a8622528b2bf6bd19651268e72826953",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a settled verdict does not end the call": "caught",
+    "create hands back the receiver, not the wrapper": "caught",
+    "failure keeps consuming": "caught",
+    "only the first string is delivered": "caught",
+    "success returns 2": "caught",
+    "the CRLF is one byte": "caught",
+    "the buffer advances half a chunk": "caught",
+    "the rate gate admits everything": "caught",
+    "the string walk skips a byte": "caught",
+    "the success print gates at level 3": "caught"
+   }
+  },
   "dcr": {
    "key": "ce90f606d0c07cf2a9129b7c01d0fa6fad955af05c8d8d8ebfbd4bf3364bc55b",
    "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -148,6 +164,17 @@
     "drop the framing 0 after the CRC": "caught",
     "invert the tail test": "caught",
     "the frame-boundary 0 before the CRC is dropped": "uncaught"
+   }
+  },
+  "dpinit": {
+   "key": "0ff4ba08385242a5233d2c8d55822bcb44956f3ded373e43bb0162c8c3f40b5d",
+   "summary": "5 mutations: 5 caught (5 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "call registers after b103": "caught",
+    "exit leaves vpcm registered": "caught",
+    "exit unwinds in reverse": "caught",
+    "init returns 1": "caught",
+    "v8 never registers": "caught"
    }
   },
   "dtmf": {
@@ -758,6 +785,31 @@
     "the second digit is divided out by the first modulus": "caught",
     "the second digit takes the third modulus": "caught",
     "the sixth word is the fifth quotient's remainder instead": "caught"
+   }
+  },
+  "mohdet": {
+   "key": "65870567f8a313226469fd88a4ccc61fef47e97e08c0a2b506f0303048f72e7a",
+   "summary": "19 mutations: 18 caught (18 by test, 0 by strings), 0 NOT caught, 0 unusable, 1 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a completed block keeps its accumulators": "caught",
+    "a failed block keeps the signal count": "caught",
+    "an out-of-range code answers -1": "caught",
+    "selector 0x64 answers as 0x65": "caught",
+    "the 0x66 set gets the 0x65 b1": "caught",
+    "the Fs/4 set's a2 is one off": "caught",
+    "the block is 32 samples": "caught",
+    "the input energy rounds without +32": "caught",
+    "the input-energy floor is tenfold lower": "caught",
+    "the output energy is shifted one more": "caught",
+    "the output-energy ceiling is tenfold higher": "caught",
+    "the ratio shift is 3, not NOTCH_IN_OUT_RATIO_SHIFT": "caught",
+    "the trigger is 50 detections": "caught",
+    "the x history is updated with the output, not the input": "caught",
+    "the x1 product keeps 32 bits instead of truncating to short": "equivalent",
+    "the y1 term's rounding is dropped": "caught",
+    "the y2 term adds instead of subtracting": "caught",
+    "timeout code 12 is 96 seconds": "caught",
+    "timeout code 13 is a second, not no-limit": "caught"
    }
   },
   "notch": {

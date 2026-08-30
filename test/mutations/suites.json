@@ -847,5 +847,17 @@
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
+ ],
+ "mohdet": [
+  "src/pump/v90/mohdet.cpp",
+  "build/test/t_mohdet"
+ ],
+ "cidwrap": [
+  "src/service/cid.c",
+  "build/test/t_cid"
+ ],
+ "dpinit": [
+  "src/core/dp_init.c",
+  "build/test/t_dpinit"
  ]
 }

@@ -268,6 +268,13 @@ int VPcmV34GetCurrentTxCarrier(void *obj);
 /* The equaliser's signal-to-noise ratio in whole dB, 0 when unavailable. */
 int VPcmV34GetSNR(void *obj);
 
+/*
+ * One load each, +0x49c and +0x4a0, and no caller anywhere in the object;
+ * v34fsk.h's field comments carry the naming derivation.
+ */
+int getTimingOffset(void *obj);
+int getTimingPhase(void *obj);
+
 /* Tell the datapump something happened: 0/1 samples, 2 CAS, 3 three-way. */
 void VPcmV34NotifyDP(void *obj, int what);
 

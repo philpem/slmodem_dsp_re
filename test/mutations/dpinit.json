@@ -1,0 +1,36 @@
+[
+ {
+  "note": "The registration aggregate's claims: seven pumps, one order, both ways,"
+ },
+ {
+  "note": "and both halves return 0.  t_dpinit sees order through its interleaving"
+ },
+ {
+  "note": "check and membership through the combined counts."
+ },
+ {
+  "label": "v8 never registers",
+  "find": "\tdp_v8_init();\n",
+  "replace": "\n"
+ },
+ {
+  "label": "call registers after b103",
+  "find": "\tdp_call_init();\n\tdp_b103_init();",
+  "replace": "\tdp_b103_init();\n\tdp_call_init();"
+ },
+ {
+  "label": "init returns 1",
+  "find": "\tdp_vpcm_init();\n\treturn 0;\n}",
+  "replace": "\tdp_vpcm_init();\n\treturn 1;\n}"
+ },
+ {
+  "label": "exit leaves vpcm registered",
+  "find": "\tdp_v8_exit();\n\tdp_vpcm_exit();",
+  "replace": "\tdp_v8_exit();"
+ },
+ {
+  "label": "exit unwinds in reverse",
+  "find": "\tdp_call_exit();\n\tdp_b103_exit();",
+  "replace": "\tdp_b103_exit();\n\tdp_call_exit();"
+ }
+]

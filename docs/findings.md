@@ -94793,3 +94793,145 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+### F8410. The exported-API pass: 12 no-caller/registration symbols written, and where each one turned out to live
+
+Batch of 2026-08-30, all differential tests green.  The twelve, with their
+homes and the evidence that placed them:
+
+| symbol | bytes | home |
+|---|--:|---|
+| `prop_dp_init` / `prop_dp_exit` | 44+44 | `src/core/dp_init.c` (new) |
+| `dp_call_exit` | 28 | `src/call/call.c` |
+| `dp_vpcm_exit` | 70 | `src/pump/v90/vpcm.c` |
+| `CID_create` / `CID_delete` / `CID_process` | 195+84+386 | `src/service/cid.c` (new) |
+| `retrainDetector` / `resetRetrainDetector` / `interpretMohTimeout` | 390+118+102 | `src/pump/v90/mohdet.cpp` (new) |
+| `getTimingOffset` / `getTimingPhase` | 11+11 | `src/pump/v34/v34pcmif.c` |
+
+Placement notes worth keeping:
+
+- **The span label `dp_init.c` names two DISJOINT stretches**, 0x0..0x5b and
+  0x340..0x5f5, with `dcr.c`'s four functions between them -- so one
+  translation unit holding both is impossible and they get two files.  The
+  CID trio is the modem-facing wrapper over the unwritten FSK receiver at
+  0x8fd60 onwards; its signatures are QUOTED from slmodemd's own externs
+  (`ref/slmodemd/modem.c:87-89`), not inferred.
+- **The retrain trio sits in a span labelled `b103.c`** (0x5f80..0x61f6,
+  between `dp_wrapper_run` and the first `VPcmV34Main.cpp` exports) and is
+  C++-mangled, so whatever the original file was, it was compiled as C++.
+  The MODULE is V.92 modem-on-hold, which is what the file is named for.
+- **`getTimingOffset`/`getTimingPhase` sit between `VPcmV34GetSNR` and
+  `VPcmV34GetCleanedSamples`**, both single loads off the argument at +0x49c
+  and +0x4a0, every neighbour taking `tagV34Object *`.  Placed at the blob's
+  own relative index in `v34pcmif.c`, whose definition order is load-bearing
+  (F7796); the emission-order gate there is now 36 of 36.
+- `prop_dp_init` calls the seven `dp_*_init` in the order call, b103, v22,
+  v23, v32, v8, vpcm; `prop_dp_exit` calls the exits in the SAME order, not
+  reversed.  Both end `xor %eax,%eax; ret` -- both return int 0 -- although
+  slmodemd's own extern declares the exit half `void`
+  (`ref/slmodemd/modem_main.c:103`).
+
+Tests: `t_dpinit` (45 checks), `t_cid` (91), `t_mohdet` (166+),
+`t_v34timing` (48).
+
+### F8411. `retrainDetector`'s detect arm REJOINS THE RESET TAIL, and the differential test's ragged-chunk case is what caught the misreading
+
+First reading of 0x5f80: on a detected 64-sample block the accumulators keep
+their values (`mov %eax,0x14(%ebp)`, `mov %edx,0x18(%ebp)`,
+`movl $0x40,0x1c(%ebp)` at 0x60cf..0x60d8 look like state being retained).
+That reading passed a plausible-looking source review and FAILED the
+differential test only in the split-call scenario -- by the whole-buffer call
+the return value happened to agree.
+
+What the object actually does: the detect arm's exit branch (`jbe 60a7` /
+`jmp 60a7`) lands INSIDE the reset block, after the `notchDetectSigCnt = 0`
+store but before the three accumulator-zeroing stores at 0x60ab..0x60b9.  So
+EVERY completed block zeroes `energyInp`, `energyOut` and the sample counter;
+only the signal count survives a detection.  The dead-looking stores at
+0x60cf are alive for one instruction window only because
+`dsplibs_debug_printf` is an opaque call that might read the struct --
+exactly the store pattern `src/service/dcr.c`'s header documents (F4202's
+neighbourhood), in a second module.
+
+Two lessons re-earned: a branch target inside another arm's straight-line
+tail is worth tracing to the INSTRUCTION, not the label; and a differential
+test that varies call granularity catches state-retention errors that any
+single-call test misses.
+
+### F8412. Unconditional unwritten callees: the harness bridge (`test/harness/unwritten.c`), and what it does to a test's two logs
+
+`symmap.py` renames EVERY symbol the blob defines to `ref_*` (F214's spike to
+rename only what we define was declined by F215), so a reconstructed caller
+with an UNCONDITIONAL unwritten callee -- `CID_process` calling
+`cid_progress`, `prop_dp_init` calling `dp_v22_init` -- cannot link at all:
+F217's every-binary wall.  For `v34handshak` the answer was to write the
+callees first; here the callees are the whole FSK caller-ID receiver and the
+whole V.22 and V.32 datapumps, far outside the batch, so this batch lands
+F214's documented escape hatch AT THE HARNESS TIER instead:
+
+- `src/` declares the nine callees **weak** (the `DSPLIB_VPCM_UNWRITTEN`
+  idiom) and calls them by their real names, unconditionally, as the object
+  does.  No `ref_` name and no null test appears in `src/`.
+- `test/harness/unwritten.c` defines each real name as a forward to the
+  blob's `ref_` alias.  When a bridged symbol is reconstructed the two
+  definitions collide and every link fails LOUDLY, which is the wanted
+  expiry.
+- The interop binaries link no blob and never reach these paths; their weak
+  references resolve to zero.
+
+**The consequence a test must be written for:** a bridged callee is blob code
+whichever side calls it, so its stateful host callbacks land on the
+REFERENCE side's logs and transcripts even for our-side calls.  Two shapes
+follow.  `t_dpinit` states its expectation as an INTERLEAVING: our
+`prop_dp_init` fills `harness_reg_ours` with the five written pumps and
+`harness_reg_ref` with the blob's v22/v32, and the two must be complementary
+ordered subsequences of what `ref_prop_dp_init` alone produces.  `t_cid`
+cannot strcmp the debug transcripts whole -- the receiver's lines all sit on
+side 1 -- so it counts the wrapper's own five format strings per side
+instead.  Both tests say so in their headers, and both collapse to straight
+symmetry when the bridges expire.
+
+### F8413. Small facts settled by this batch's disassembly, one per line
+
+- `struct v34_object` gains `timing_offset` (+0x49c) and `timing_phase`
+  (+0x4a0), named from the object's own exported accessor names -- the same
+  evidence class as a format string.  They are the ONLY readers anywhere in
+  the 1.2 MB; no writer was traced.  What the values mean is not claimed.
+- `interpretMohTimeout` is a 14-entry jump table at `.rodata+0x260`: codes
+  0..13 map to 0, 10, 20, 30, 40, 60, 120, 180, 240, 360, 480, 720, 960, -1
+  seconds; anything else (negatives included -- the guard is an UNSIGNED
+  16-bit `cmp $0xd; ja`) answers 0.  The V.92 MOH timeout ladder.
+- `resetRetrainDetector` knows exactly two coefficient sets, selected by
+  0x65 (notch at Fs/4: b1=0, a1=0, a2=0x39c3) and 0x66 (notch at Fs/8:
+  b1=0x5a82=2cos(pi/4) Q14, a1=0x55fc, a2=0x39c3).  Any other selector
+  zeroes the state and LEAVES THE COEFFICIENTS.  With no caller anywhere in
+  the object, what 0x65/0x66 mean has no source of evidence; they stay
+  numeric.  `tag_retrainReqDet` is 32 bytes; `include/dsplib/mohdet.h` is
+  its one home, and the field names `notchDetectSigCnt`, `energyInp`,
+  `energyOut` and `NOTCH_IN_OUT_RATIO_SHIFT` (=2) are the author's own,
+  from the format string at `.rodata.str1.4+0x86c`.
+- `retrainDetector`'s per-term truncation is REQUIRED: each Q14 product is
+  narrowed to short individually (`sar $0xe` then `movswl`), and x[n-1] at
+  full short range times b1=23170 exceeds any short, so summing first is a
+  different function.  The three coefficients are hoisted to locals BEFORE
+  the loop, which the compiler could not do on its own past the loop's
+  short stores through `det` -- the locals are the author's.
+- `CID_process` chunks its input at 192 samples, maps `cid_progress`'s
+  answer 0/1/other to keep-going/success/failure, and on success walks up
+  to FOUR consecutive NUL-terminated strings from `cid_get_strings`,
+  sending each plus its own "\r\n" (the 3-byte string at
+  `.rodata.str1.1+0x27`) to `modem_send_to_tty`.  The first chunk that
+  settles the verdict ends the call: the rest of the buffer is not offered.
+- `CID_create` accepts line rates 8000 and 9600 only, allocates 8 bytes
+  ({modem, receiver}), passes its `cid_val` through as `cid_create(0,
+  cid_val, 0)`, and calls `cid_freq_sampl(cid, 9600)` on the 9600 path.
+- `t_cid` proves the SUCCESS path against the blob's own receiver with a
+  synthesised Bell 202 burst: 300 alternating seizure bits, 180 mark bits,
+  an SDMF message (type 0x04, MMDDHHMM + number) with a valid 256-complement
+  checksum, 1200/2200 Hz FSK at 1200 baud, 8000 Hz.  The blob's
+  `cid_progress` returns 1 on it and hands back 3 strings; wrecking the
+  checksum turns the verdict into failure (-1 from the wrapper) with
+  nothing delivered.  The generator is in the test for the next reader.
+- A TTY capture (`harness_tty_ours`/`harness_tty_ref`, `modem_send_to_tty`)
+  is new in the harness; the ref-side stub used to `abort()` as
+  "unexpected", and `CID_process`'s whole point is to write there.
