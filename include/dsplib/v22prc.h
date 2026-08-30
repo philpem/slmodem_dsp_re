@@ -4,7 +4,10 @@
  * Nine leaf functions from two of the author's translation units, grouped
  * here because they share one property: none of them calls anything, so all
  * nine could be written and tested before the datapump object they read is
- * modelled.
+ * modelled.  (Three more joined in the 2026-08-30 leaf batch --
+ * `V22FP_control`, `ScramblerOn`, `DescramblerOn`, no-entry-point exports
+ * from the same neighbourhood -- so the counts in this header's history
+ * below are of the original nine-then-ten, not of the file today.)
  *
  * THE OBJECT IS NOT MODELLED HERE, DELIBERATELY.  Four of these reach fields
  * of the V.22 datapump instance and the receiver hanging off it, and the
@@ -72,6 +75,45 @@
 #define V22FP_EQ_ADAPT		0x10	/* int                                */
 #define V22FP_EQ_MODE		0x16c	/* short                              */
 #define V22FP_EQ_EXTRA		0x180	/* int, mode 3 only                   */
+
+/*
+ * The pair `ScramblerOn` / `DescramblerOn` return, and `V22FP_control`
+ * writes from bits 0 and 1 of its control byte.  In struct v22fp_dsp these
+ * are r18 and r1c, seeded by create from params.flags bits 0 and 1; the two
+ * accessor names are the evidence for what the pair indicates.
+ */
+#define V22FP_SCRAMBLER_ON	0x18	/* int */
+#define V22FP_DESCRAMBLER_ON	0x1c	/* int */
+
+/*
+ * The rest of what V22FP_control touches.  Meanings are NOT established --
+ * each name records where the value comes from, not what it does:
+ *
+ *   V22FP_CTL_BIT2   dsp r20, <- control byte 0xc bit 2 (create seeds it
+ *                    from params.flags bit 2)
+ *   V22FP_AGC_F18    dsp->agc.f18 -- fpm_agc.h: "set to 1 by init on reset;
+ *                    agc() never reads it, a caller must".  V22FP_control is
+ *                    that caller's other half: it writes !(byte 0xc bit 3).
+ *   V22FP_FLAGS_B1   byte 1 of params.flags (the object's +0x11); control
+ *                    rewrites bit 1 of it, i.e. flags bit 9, from control
+ *                    byte 0xc bit 7.
+ *   V22HDX_R0C/R0E   the tone/detector context words v22fp.h names r0c and
+ *                    r0e; control writes (1,6) or (0,4) from byte 0xd.
+ */
+#define V22FP_CTL_BIT2		0x20	/* int   */
+#define V22FP_AGC_F18		0xe8	/* int   */
+#define V22FP_FLAGS_B1		0x11	/* byte, in the OBJECT not the dsp   */
+#define V22HDX_R0C		0x0c	/* short */
+#define V22HDX_R0E		0x0e	/* short */
+
+/*
+ * The control block V22FP_control is handed.  Only bytes 0xc and 0xd are
+ * read; nothing else about the block's shape is visible from here.
+ */
+#define V22CTL_FLAGS		0x0c	/* byte: bit 0 scrambler on, bit 1
+					 * descrambler on, bits 2/3/7 above  */
+#define V22CTL_MODE		0x0d	/* byte: bit 2 and bits 7:6 == 10
+					 * drive the (r0c, r0e) pair         */
 
 /*
  * The datapump's block, in samples.  TxNOP emits exactly this many and then
@@ -150,5 +192,17 @@ void TxClockSync(void *modem);
  * symmetrical and the order the caller uses them in matters.
  */
 void SetAdaptEqV22(void *modem, unsigned short mode);
+
+/*
+ * Apply a host control block: two flag bytes fanned out into the DSP block,
+ * the tone/detector context and the object's own flags word.  Returns 1,
+ * always.  See the V22CTL_* / V22FP_CTL_* notes above for what each bit is
+ * known to reach.
+ */
+int V22FP_control(void *modem, const unsigned char *ctl);
+
+/* Bits 0 and 1 of the control byte, read back. */
+int ScramblerOn(void *modem);
+int DescramblerOn(void *modem);
 
 #endif /* DSPLIB_V22PRC_H */

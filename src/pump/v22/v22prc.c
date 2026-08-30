@@ -15,6 +15,14 @@
  *   SignalDetect    .text 0x08e640   14    |  after DemodDataV22
  *   GetSignalQuality .text 0x08e650  25   /
  *
+ * plus, from the 2026-08-30 no-entry-point leaf batch (finding F8320's
+ * bucket -- exported API nothing in the object calls), three more of the
+ * same shape from the same two neighbourhoods:
+ *
+ *   V22FP_control   .text 0x08c3b0  145      after ReadGTimer
+ *   ScramblerOn     .text 0x08e670   11   \  after GetSignalQuality
+ *   DescramblerOn   .text 0x08e680   11   /
+ *
  * `tools/tumap.py` puts thirteen V.22 translation units in one shared
  * bracket, so it cannot say which of `V22.c`, `v22prc.c` and `v22stc.c` each
  * block belongs to; they are together here because none of them calls
@@ -50,6 +58,7 @@
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 #define FIELD_SHORT(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
 #define FIELD_USHORT(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
+#define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
 /*
  * One block of the datapump is 20 ms, so the shared clock is in
@@ -226,4 +235,69 @@ TxClockSync(void *modem)
 	short baud = FIELD_SHORT(fp, V22FP_BAUD);
 
 	FIELD_SHORT(fp, V22FP_TX_CLOCK) = (short)(baud * 3);
+}
+
+/*
+ * V22FP_control  .text 0x08c3b0  145 bytes
+ *
+ * Fan a host control block out into the datapump.  Byte V22CTL_FLAGS
+ * carries five live bits; byte V22CTL_MODE two encodings of the
+ * (r0c, r0e) pair.  The object re-reads both control bytes after the
+ * conditional stores rather than caching them, and reloads the dsp
+ * pointer with them -- kept, since a control block aliasing the object
+ * would make the difference visible.
+ *
+ * Returns 1, always.
+ */
+int
+V22FP_control(void *modem, const unsigned char *ctl)
+{
+	void *dsp = FIELD_PTR(modem, V22_OBJ_FP);
+	void *hdx;
+	unsigned char c = ctl[V22CTL_FLAGS];
+
+	FIELD_INT(dsp, V22FP_DESCRAMBLER_ON) = (c >> 1) & 1;
+	FIELD_INT(dsp, V22FP_SCRAMBLER_ON) = c & 1;
+
+	if (ctl[V22CTL_MODE] & 0x04) {
+		hdx = FIELD_PTR(modem, V22_OBJ_GTIMER);
+		FIELD_SHORT(hdx, V22HDX_R0E) = 6;
+		FIELD_SHORT(hdx, V22HDX_R0C) = 1;
+	}
+	if ((ctl[V22CTL_MODE] >> 6) == 2) {
+		hdx = FIELD_PTR(modem, V22_OBJ_GTIMER);
+		FIELD_SHORT(hdx, V22HDX_R0E) = 4;
+		FIELD_SHORT(hdx, V22HDX_R0C) = 0;
+	}
+
+	c = ctl[V22CTL_FLAGS];
+	dsp = FIELD_PTR(modem, V22_OBJ_FP);
+	FIELD_INT(dsp, V22FP_CTL_BIT2) = (c >> 2) & 1;
+	FIELD_INT(dsp, V22FP_AGC_F18) = (c & 0x08) == 0;
+	FIELD_BYTE(modem, V22FP_FLAGS_B1) =
+	    (unsigned char)((FIELD_BYTE(modem, V22FP_FLAGS_B1) & ~0x02)
+			    | ((c >> 7) << 1));
+	return 1;
+}
+
+/*
+ * ScramblerOn / DescramblerOn  .text 0x08e670 / 0x08e680  11 bytes each
+ *
+ * Read back the two enables V22FP_control wrote (create seeds them from
+ * params.flags bits 0 and 1).
+ */
+int
+ScramblerOn(void *modem)
+{
+	void *dsp = FIELD_PTR(modem, V22_OBJ_FP);
+
+	return FIELD_INT(dsp, V22FP_SCRAMBLER_ON);
+}
+
+int
+DescramblerOn(void *modem)
+{
+	void *dsp = FIELD_PTR(modem, V22_OBJ_FP);
+
+	return FIELD_INT(dsp, V22FP_DESCRAMBLER_ON);
 }

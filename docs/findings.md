@@ -94793,3 +94793,165 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+### F8490. `GetNextDigitAndReturnNextState` was already written -- it is the inlining-boundary artefact wearing a leaf's name
+
+The no-entry-point bucket lists it as 895 unwritten bytes in `Dialer.c +18`.
+It has been in `src/dialer/dialer.c` since the dialler pass, as the file
+static the object also has (`t` at 0x07abb0, argument in `%eax` per F51's
+convention) -- and the modern compiler inlines it entirely into
+`DialerProgress`, so our object emits NO standalone symbol and every tool
+that counts written symbols by name counts it unwritten.  This is CLAUDE.md's
+"per-function count across an inlining boundary" trap surfacing inside the
+leaf bucket itself: the 16,013-byte figure for the 139 leaves carries these
+895 bytes as remaining work that does not exist.  Behaviour is covered by
+`t_dialerprog`, which drives it through `DialerProgress` exactly as the blob's
+callers must.  Nothing to write; recorded so the next scheduler subtracts it.
+(2026-08-30)
+
+### F8491. The FAXVMI dispatch: slot map, message tables, and the author's strings
+
+`vxx_message` (.rodata 0x94e0, 52 bytes) is thirteen function pointers and
+its relocations name every one: slots 0-4 are `null_message` five times over,
+then v21tx, v21rx, v27tx, v27rx, v29tx, v29rx, v17tx, v17rx `_message` --
+transmit before receive per modulation, V.21 lowest.  `vxx_status` (0x95a0)
+is the same permutation over the `_status` family, so the slot map is a
+property of the VMI, not of one table.  `FAXVMI_message` (0x0957b0) reads
+the slot from the VMI object's +0x0e and the wrapped handle from +0x28,
+initialises its out-parameter to NULL, and dispatches with no bound check.
+
+The eight `*_MESG` tables (.data 0x7960..0x80a0) resolve to strings now
+vendored verbatim in `src/fax/class1tx.c` -- including the author's
+"Protocal", "Transmition", and V29TX's "CONNECT: V.29 Transmit 7600 bps"
+where V.29's rate ladder says 7200.  All eight reporters share one shape
+(unsigned guard, byte-masked index) and one off-by-one, D951.  Because
+every `vxx_message` target is one of this batch's functions, the table
+itself could be reconstructed alongside them; `vxx_status` cannot yet (the
+`_status` family is unwritten) and stays the blob's.  (2026-08-30)
+
+### F8492. Nine scoped leaves are blocked by the link constraint, not by difficulty -- the "unwritten callees resolve to the blob" premise is the F214 spike, which F215 declined
+
+This batch's brief asserted unwritten callees resolve to the blob at link
+time.  In this tree they do not: `symmap.py` renames EVERY defined blob
+symbol to `ref_*` (the F214 scaffold that would change that is a spike
+branch, declined by F215), every test binary links all of `$(OBJ_REPRO)`,
+so one undefined reference fails the whole suite.  Nine of the batch's
+no-entry-point leaves reference symbols that only exist in the blob and are
+NOT in the no-entry-point bucket themselves (each is service-reachable, so
+writing it would leave the bucket's scope):
+
+    cid_reset                            calls reset_cid (Rxcid.c)
+    fax_class1_status                    calls FAXVMI_status
+    _send_hdlc_between_buffer_state_init tail-calls _handle_hdlc_input_open
+    cHDLCtx_off_init                     calls FAXVMI_control (and copies
+                                         V21RX_CTL / FAXVMI_CTL)
+    GenEQTrnSequenceV27                  calls ScrambleDataV27
+    voice_set_online / voice_set_duplex  call detector_set_enable AND store
+                                         voice_online / voice_duplex
+    RxNextStateV21 / TxNextStateV21      store six RxHdx*/TxHdx* handler
+                                         addresses
+
+The last two rows show the constraint binds on DATA references exactly as on
+calls: installing an unreconstructed handler's address is an `R_386_32`
+against a symbol nothing defines.  All nine are small (1,230 blob bytes
+total) and every one becomes writable the moment its referents land --
+most referent groups are fax-phase, `reset_cid` and
+`detector_set_enable` are CID/voice service work.  Declined rather than
+written half-connected; the attempts are recorded in the owning files'
+headers (`src/service/cid.c`, `src/fax/class1.c`, `src/fax/class1tx.c`,
+`include/dsplib/voice.h`).  (2026-08-30)
+
+### F8493. Storing a function pointer is the same link constraint as calling it
+
+Separated from F8492 because it is the half a callee-oriented scan misses: a
+`movl $handler, field` site has no `call`, shows up in no call graph, and
+still pins the handler at link time.  `RxNextStateV21` alone installs three
+(`RxHdxWaitV21`, `RxHdxDataV21`, `RxHdxIdleV21`), `TxNextStateV21` three
+more, `voice_set_online`/`voice_set_duplex` one each -- so a leaf pass that
+had checked only for `R_386_PC32` call relocations would have written them
+and failed 90-odd binaries at link.  Check `dis.py` for BOTH relocation
+kinds before scheduling a leaf.  (2026-08-30)
+
+### F8494. `FPM_xor_table` is popcount over a byte, and its consumers can index it with sixteen bits
+
+512 bytes at .rodata 0xc7a0: entry i is the number of set bits in i,
+verified for all 256 entries against the blob and now reconstructed in
+`src/dsp/fpm_xor.c`.  The name is the author's use, not the content:
+`SGD_correlate` and `SGD_sequence_det` XOR two symbol words and read the
+Hamming distance out.  Both index with `movzwl` of a full 16-bit XOR, so
+symbols differing above bit 7 read past the table -- into the blob's
+neighbouring .rodata there, ours here -- which constrains every future test
+and caller to byte-ranged symbols (the fax training alphabets are).  This
+is the same table `src/dsp/fpm_div.c`'s underflow note reads entry 0 of;
+that neighbour effect is the blob's layout and does not transfer.
+(2026-08-30)
+
+### F8495. The SGD object: 0x5c bytes, a 13-dword config copy, and a status block cleared at widths its copy ignores
+
+`SGD_create` (0x09f300, read for evidence): `rep movsl` copies 13 dwords of
+caller config (or `SGD_CFG`, .data 0x80e0, whose defaults are w00=8,
+history=50, seq and ref both pointing at FPM_xor_table as a placeholder,
+w26=0x2000), then derives +0x4e = w1c-1, +0x54 = w02+w24-1, +0x56 =
+w00*w24*(0x4000-w26) truncated to a short, allocates 2*(w02+w04)-2 bytes of
+history at +0x50 on the fresh path, and zeroes the six status fields.
+`SGD_status` copies +0x34..+0x4b as dwords (a struct assignment, pads
+riding along) and clears the six fields INDIVIDUALLY -- two of them as
+words -- so the two pad shorts survive in the object while the copy that
+just left carried them out.  The full layout is `include/dsplib/sgd.h`;
+`t_faxsgd` drives both sides' objects through the blob's own
+`ref_SGD_create` so the derived fields are the constructor's, not the
+test's.  Also settled there: `SGD_correlate`'s scale is `1 / (p0 * n)` in
+INTEGER arithmetic -- zero for any |p0*n| > 1 -- so the "correlation" is
+1 for every real configuration; and `SGD_sequence_det`'s threshold accept
+compares the running best SIGNED where the best-so-far update compared it
+UNSIGNED.  (2026-08-30)
+
+### F8496. The Caller ID service object: 0x3fc bytes, and mode 0 is FSK, not DTMF
+
+`cid_create` (0x08fe10, read for evidence) allocates 0x3fc bytes: +0x00 the
+DTMF receiver (`create_cid_dtmf`), +0x04 the FSK receiver (`create_cid`),
++0x260 the mode, +0x264 the second constructor argument, +0x3f8 cleared.
+The mode tests -- identical in create, `cid_reset` and `cid_threshold` --
+are `!= 0` for the DTMF side and `!= 1` for the FSK side, with anything
+above 1 clamped to 5 (both): so mode 0 means FSK-only, which is backwards
+from what the field order suggests and is why the header spells it out.
+`cid_threshold` stores one int argument into BOTH receivers as a short:
+`dtmf_rx.sens` (+0x33e) and the FSK object's f028 (+0x28) -- the same f028
+`create_cid` seeds with 2 and `pack_next_bit` uses as its seizure run
+length, so one field is the FSK detector's threshold AND the framer's
+timing constant.  Modelled in `include/dsplib/cid_modem.h`; the framer's
+five state fields are carved out of `struct cid`'s pad in cid.h, all six
+names usage inference and marked so.  (2026-08-30)
+
+### F8497. The SGD engine is WITHDRAWN, not written: `det_at` proves the object model wrong, and 3,603 checks are what caught it
+
+`src/fax/sgd.c` was written in this batch and is removed again rather than
+committed.  Under the period compiler `t_faxsgd` fails 96 of 3,603 checks,
+and the shape of the failure is a layout claim and not an arithmetic one:
+
+    t_faxsgd.c:142: after step: det_at offset  got 20, reference -6181684
+    t_faxsgd.c:200: sequence_det return        got 0,  reference -21320
+
+`det_at` is compared as an offset -- `status.det_at - (short *)buf` -- so a
+value of -6181684 says the blob's pointer does not aim into the object's own
+buffer AT ALL, at a distance of megabytes.  Ours lands at word 20, which is
+the plausible-looking answer.  Two readings survive that: `buf` is not at the
+offset F8495 assigned it, or `det_at` is not a pointer into `buf` in the
+first place and the whole status block is misread.  Both are structural, so
+no amount of adjusting the detector's arithmetic reaches them, and F8495's
+"0x5c bytes, a 13-dword config copy" must be treated as UNCONFIRMED for the
+status half of the object.
+
+Withdrawn: `src/fax/sgd.c` (5 functions, 212 lines), `include/dsplib/sgd.h`,
+`test/unit/t_faxsgd.c`.  The rest of the batch is unaffected -- nothing
+outside those three files names an `SGD_` symbol, only a comment in
+`src/dsp/fpm_xor.c` does, and `GenEQTrnSequenceV29` and `_handle_status`
+pass in the same binary.
+
+The test is kept in the record because it is the asset: a detector that
+compares `det_at` as an OFFSET rather than as a pointer value is what turned
+an invisible layout error into a 96-check failure.  Rewriting it as a byte
+compare of the object would have reported one differing run and said nothing
+about which field was wrong.  Whoever takes the fax phase should restore
+`t_faxsgd.c` FIRST, from this commit's parent, and make it pass before
+trusting any SGD reconstruction.  (2026-08-30)
