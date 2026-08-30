@@ -214,7 +214,8 @@ CXXFLAGS   := $(CFLAGS) -fno-exceptions -fno-rtti -nostdinc++ \
 # the same object, and a fixture each of them copies is a fixture sixteen of
 # them will drift.  It costs every other binary some .bss and nothing else.
 HARNESS    := test/harness/harness.c test/harness/runtime.c \
-              test/harness/fakedp.c test/harness/v34hsstep.c
+              test/harness/fakedp.c test/harness/v34hsstep.c \
+              test/harness/unwritten.c
 HARNESS_OBJ:= $(patsubst %.c,$(BUILD)/%.o,$(HARNESS))
 
 TESTS      := $(basename $(notdir $(wildcard test/unit/t_*.c)))

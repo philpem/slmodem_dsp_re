@@ -106,4 +106,16 @@ extern const short AUTOCOR_COEF_9600[5];
  */
 const short *CID_MTD_coeff(int which, int rate);
 
+/*
+ * The TOP of the stack: slmodemd's own three entry points, defined in
+ * src/service/cid.c and declared by the host verbatim
+ * (ref/slmodemd/modem.c:87-89) -- the signatures are quoted from there.
+ * `in` is `void *` in the host's extern and is a buffer of line samples
+ * (shorts); `CID_process` returns 0 while a message is still arriving, 1
+ * once one has been delivered to the TTY, -1 when the receiver gives up.
+ */
+void *CID_create(void *m, unsigned rate, unsigned cid_val);
+void CID_delete(void *cid);
+int CID_process(void *cid, void *in, int count);
+
 #endif /* DSPLIB_CID_H */

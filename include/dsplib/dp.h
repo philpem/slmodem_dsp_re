@@ -49,4 +49,13 @@ struct dp {
 #define DPSTAT_NOANSWER   8
 #define DPSTAT_CHANGEDP  10
 
+/*
+ * This half is dsplibs' OWN export, not slmodemd's ABI: the aggregate
+ * registration pair `modem_main.c` calls once each way.  slmodemd declares
+ * the exit half `void`; the object's `xor %eax,%eax; ret` says both halves
+ * return 0, and src/core/dp_init.c is the definition.
+ */
+int prop_dp_init(void);
+int prop_dp_exit(void);
+
 #endif /* DSPLIB_DP_H */

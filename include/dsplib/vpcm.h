@@ -287,6 +287,7 @@ extern struct dp_operations vpcm_op;
 
 /* 0x44c0, 72 bytes: three `modem_dp_register` calls and a zero. */
 int dp_vpcm_init(void);
+void dp_vpcm_exit(void);
 
 /*
  * ---------------------------------------------------------------------------

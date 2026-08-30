@@ -743,8 +743,47 @@ modem_get_sreg(void *m, unsigned sreg)
 long ref_modem_get_sreg(void *m, unsigned sreg)
 { return modem_get_sreg(m, sreg); }
 
+/*
+ * TTY capture, one transcript a side; harness.h says why `len` keeps
+ * counting past the cap.  slmodemd's own modem_send_to_tty forwards to
+ * modem_put_chars and returns its count, so returning `n` is the success
+ * shape of the real host.  This replaced an `unexpected()` abort when
+ * CID_process arrived: that function's whole point is to write here.
+ */
+struct tty_log harness_tty_ours;
+struct tty_log harness_tty_ref;
+
+void
+harness_tty_reset(void)
+{
+	memset(&harness_tty_ours, 0, sizeof(harness_tty_ours));
+	memset(&harness_tty_ref, 0, sizeof(harness_tty_ref));
+}
+
+static int
+tty_add(struct tty_log *log, const void *buf, int n)
+{
+	if (n > 0) {
+		int room = HARNESS_TTY_MAX - log->len;
+
+		if (room > 0)
+			memcpy(log->data + log->len,
+			       buf, n < room ? n : room);
+		log->len += n;
+	}
+	log->calls++;
+	return n;
+}
+
+int
+modem_send_to_tty(void *m, const void *buf, int n)
+{
+	(void)m;
+	return tty_add(&harness_tty_ours, buf, n);
+}
+
 int ref_modem_send_to_tty(void *m, const void *buf, int n)
-{ (void)m; (void)buf; (void)n; unexpected("modem_send_to_tty"); return 0; }
+{ (void)m; return tty_add(&harness_tty_ref, buf, n); }
 
 int ref_modem_recv_from_tty(void *m, void *buf, int n)
 { (void)m; (void)buf; (void)n; unexpected("modem_recv_from_tty"); return 0; }

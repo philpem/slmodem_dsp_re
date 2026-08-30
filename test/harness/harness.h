@@ -128,6 +128,25 @@ extern struct reg_log harness_reg_ref;
 void harness_reg_reset(void);
 
 /*
+ * The TTY, one transcript per side, so what `modem_send_to_tty` was handed
+ * can be compared like any other output.  Bytes past the cap are counted in
+ * `len` and dropped, never truncating a comparison silently: a test compares
+ * `len` first, and equal lengths above the cap already differ from what fits.
+ * `calls` is the anti-vacuity number -- CID sends each string and its CRLF
+ * as separate calls, and a wrapper that coalesced them would hand equal
+ * bytes over a different call pattern.
+ */
+#define HARNESS_TTY_MAX	4096
+struct tty_log {
+	int calls;
+	int len;			/* total OFFERED, even past the cap */
+	unsigned char data[HARNESS_TTY_MAX];
+};
+extern struct tty_log harness_tty_ours;
+extern struct tty_log harness_tty_ref;
+void harness_tty_reset(void);
+
+/*
  * Allocation bookkeeping, so a test can assert that create/delete balance.
  * `bad_free` counts frees of pointers the allocator never handed out --
  * double frees and wild pointers -- which are swallowed rather than passed to
