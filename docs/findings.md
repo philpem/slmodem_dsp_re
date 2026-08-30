@@ -95067,3 +95067,53 @@ seven zeroes, and the two other seven-entry tables in the same module —
 `v22prc.h` mentions — made "seven of something" look like a coincidence rather
 than a key. `tools/relocscan.py --at .rodata:0x8544` names the one caller in a
 single command.
+
+### F8530. `src/core/fixedrc.c` allocates with `calloc` and frees with `free` where the object uses `sysdep_malloc` and `sysdep_free`, and nothing in the tree could see it
+
+Found by accident, and the accident is the point: `t_v22del.c` builds a V.22
+datapump with the BLOB's `v22_create` and tears it down with OUR `v22_delete`,
+which is the one arrangement in the tree where an allocator mismatch becomes
+visible. At a host sample rate of 9600 the wrapper builds two rate converters,
+the blob's constructor takes four blocks for them through `sysdep_malloc`, and
+our teardown released **42 of the 46** blocks — four short, `live == 4`, with
+no bad free and no crash.
+
+The four are not a leak in `v22_delete` or in `dp_wrapper_delete`, both of
+which do call `RcFixed_Delete` on both converters. They are the converters'
+own blocks, released through libc `free` rather than through `sysdep_free`, so
+the harness's ledger never saw the calls.
+
+    RcFixed_Create   b0f2f   six sysdep_malloc sites, three sysdep_memset
+    RcFixed_Delete   b0d90   three sysdep_free sites
+    src/core/fixedrc.c:194,198   calloc
+    src/core/fixedrc.c:200,238,239   free
+
+**No existing test can fail on this**, which is why it survived. Every test
+that touches a rate converter builds it and destroys it on the same side, and
+`calloc`/`free` are self-consistent; the harness substitutes `sysdep_malloc`
+and `sysdep_free` and simply never receives the call. It takes a
+cross-allocator run — blob constructor, our destructor — to separate the two,
+and until this one there was none, because `RcFixed_Create` has no caller a
+differential test reaches from the reference side.
+
+**Whether it is a defect depends on `sysdep_free`, and this tree cannot say.**
+Under the harness the two are the same heap and nothing breaks. Under slmodemd
+they need not be: `sysdep_malloc` is the host's hook, and a host that pools or
+instruments it gets a pointer freed by the wrong deallocator. The object calls
+the hook; we do not; that is a difference in the code and not in the
+toolchain, which is the standard this project holds itself to.
+
+**It is left unfixed here deliberately, and not out of caution about the
+change itself.** `calloc` also ZEROES, and the object's `sysdep_malloc` does
+not — `RcFixed_Create` follows two of its six allocations with an explicit
+`sysdep_memset` and the rest with nothing, so a straight substitution changes
+which regions start zeroed and that is a behavioural question needing its own
+reading of all six sites. `src/core/fixedrc.c` is also outside the V.22 scope
+this was found under, and three V.22 reconstructions were in flight against
+the same base commit.
+
+`t_v22del.c` therefore drives the constructor at the datapump's own 8000 Hz,
+where `dp_wrapper_create` builds no converters at all and the ledgers match
+exactly, 42 for 42. That is not a tolerance being widened — the test asserts
+equality and gets it — but the 9600 arm is worth re-adding the moment this is
+settled, because it is four more blocks of coverage for free.
