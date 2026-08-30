@@ -70,25 +70,16 @@ cid_get_strings(void *cid)
 	return ref_cid_get_strings(cid);
 }
 
-/* --- the V.22 and V.32 registration pairs (0x5360/0x53b0, 0x4bb0/0x4bf0),
- *     for prop_dp_init/prop_dp_exit -------------------------------------- */
+/* --- the V.32 registration pair (0x4bb0/0x4bf0), for prop_dp_init/exit ---
+ *
+ * V.22's pair used to be bridged here beside it.  `src/pump/v22/v22.c` now
+ * defines `dp_v22_init` and `dp_v22_exit` itself, so the bridge is deleted
+ * rather than left to collide -- which is the "WHEN A BRIDGED SYMBOL IS
+ * RECONSTRUCTED" paragraph above, taken.  t_dpinit's asymmetry shrinks from
+ * two unwritten datapumps to one. ---------------------------------------- */
 
-extern int ref_dp_v22_init(void);
-extern void ref_dp_v22_exit(void);
 extern int ref_dp_v32_init(void);
 extern void ref_dp_v32_exit(void);
-
-int
-dp_v22_init(void)
-{
-	return ref_dp_v22_init();
-}
-
-void
-dp_v22_exit(void)
-{
-	ref_dp_v22_exit();
-}
 
 int
 dp_v32_init(void)

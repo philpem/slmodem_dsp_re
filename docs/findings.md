@@ -97003,3 +97003,201 @@ is what exposed the reasoning error: the same failure simply reappeared for
 entry 2, so the exclusion was not naming a defect, it was hiding one. An
 exclusion that moves when you move it is a tolerance being widened, which is
 the thing this tree does not do.
+
+**THE WAVE HAS SINCE LANDED. Read F8600-F8604 next**, and F8602 for what
+happened to this entry's divergence.
+
+### F8600. The V.22 lifecycle lands: `V22FP_modem` is a marshalling layer with one piece of policy in it, and the policy is the machine's own state transition
+
+`V22FP_modem` (0x887b0, 346 bytes) is the only caller of the seven-state
+`V22_PROTOCOL` machine, and it is seven movements long:
+
+  1. seed two SIXTEEN-BIT counts on its own stack from the caller's `int`
+     pair -- the transmit one at `esp+0x2a`, the receive one at `esp+0x28`,
+     adjacent;
+  2. clear three bits of `fp->flags` and one of `fp->r1e[0]` (`andb $0xf8`,
+     `andb $0xfd`); what they indicate is established by nothing and they
+     stay masks;
+  3. stage the transmit words, int to short, into `tx_in_internal`
+     (`.bss` 0x3a0, 100 entries);
+  4. stage the input samples, arithmetically right-shifted by `hdx->r34`,
+     into `rx_in_internal` (`.bss` 0x560, 160 entries) -- `movswl`, then `sar`
+     by a `movzwl` count;
+  5. dispatch `V22_PROTOCOL[hdx->r0e]`, sign-extended and with no bounds
+     check, and write the handler's receive count back;
+  6. copy that many entries of `rx_out_internal` (`.bss` 0x480, 100) out to
+     the caller's `int` array, `movzwl` per entry;
+  7. scale exactly `V22_TX_BLOCK` = 160 transmit samples by `params.r0c` in
+     Q15, and then force the receive count to zero for any non-zero
+     `fp->status`.
+
+**The transmit count is never written back.** Only the receive one is.
+Whatever the handler leaves in its own transmit count is dropped, which is the
+object's and not an omission in the reconstruction.
+
+**THE STATE TRANSITION IS HERE AND IN NO HANDLER.** Between 5 and 6 the object
+tests the status byte twice, in this order and re-reading it between them: 3 or
+4, then 6, 7 or 8; either sets `hdx->r0e = 0` and `hdx->r0c = 0`, which is the
+`v22_data` state with its sub-state cleared. With 3 fixed as
+`V22_MSG_CONNECT_2400` and 4 fixed as the 1200 connect (F8601), that reads as
+"any connect code enters the data state". F8534 named this; this is the
+committed form of it.
+
+**Two field names follow, and both are class-2 evidence -- a caller that types
+the field.** `params.r0c` is the transmit output gain: v22fp.h had it as
+"template 13014; read by nothing", and 13014/32768 is 0.397. `hdx->r34` is the
+receive input right shift.
+
+**The return is the whole 32-bit word at fp+0x1c and this is MEASURED, not
+argued.** The object emits `mov 0x1c(%ebp),%eax` where a byte field would force
+a `movzbl`, and reads the same four bytes as a BYTE three times in the lines
+above it. A draft had argued that no test could separate the two readings
+because `v22_process` only looks at the low byte; the test separated them on
+the first call, 0 against 17664 (F8538). `B103FP_modem` does the same thing and
+`src/pump/b103/b103fp.c`'s `memcpy` into an `int` is the spelling reused here.
+
+`t_v22dp.c` and `t_v22modem.c` are the tests; both are green under `make one`.
+
+### F8601. `v22_process`'s jump table has seventeen entries, status 4 is the 1200 connect, and the second argument to `modem_get_bits` is the WORD WIDTH rather than a channel
+
+`v22_process` (0x5130, 557 bytes) translates the low byte of what
+`V22FP_modem` returns through a jump table at `.rodata` + 0x21c:
+
+    0                -> DPSTAT_OK
+    1                -> DPSTAT_OK, and tx_bits_wanted = 0
+    3                -> DPSTAT_CONNECT, bits_per_word = 4, 2400 bit/s each way
+    4                -> DPSTAT_CONNECT, bits_per_word = 2, 1200 bit/s each way
+    everything else  -> DPSTAT_ERROR
+
+**So status 4 is the 1200 connect**, which F8531 left unnamed and which nothing
+in `.rodata` prints. What names it is this caller: two bits per word and
+`modem_set_param(MDMPRM_TX_RATE, 1200)` beside the 2400 arm for 3.
+`include/dsplib/v22.h` spells it `V22_MSG_CONNECT_1200`.
+
+**THE TABLE'S LENGTH IS EVIDENCE AND THE CASE LABELS ARE NOT.** Seventeen
+entries with a `cmp $0x10; ja` in front means the highest case label the author
+wrote was 16, with twelve of the seventeen landing on the same block as
+`default`. 16 is `V22_MSG_NO_CARRIER`, so it is spelt as an explicit case
+falling into the default -- but any assignment of the twelve dead labels is
+behaviourally identical, and what the object forces is only that a label at 16
+exists. Recorded so a later reader does not take the spelling for a derivation.
+
+**Four differences from `b103_process`, all of them the object's:**
+
+  - the second argument to `modem_get_bits` and `modem_put_bits` is
+    `self->bits_per_word`, not a literal channel number. slmodemd spells that
+    parameter `nbits`; b103 passes 1 because Bell 103 carries one bit per
+    symbol, and V.22 passes 2 or 4 for the same reason. The two are the same
+    quantity, not two conventions.
+  - `modem_put_bits` is called UNCONDITIONALLY, even with a count of zero:
+    when `tx_bits_wanted` is zero the object sets the receive count to zero
+    and falls into the same call rather than branching round it.
+  - the widening loop runs from `n - 1` down to 0 (`mov %eax,%edx; jmp .test;
+    .test: dec %edx; jns .body`), where `b103_process`'s really does start at
+    `n`. Two different loops in the same shape; both are reproduced as written.
+  - the line rate is reported on EVERY connecting block, not only on the
+    transition into one. There is no edge test in this function at all; the
+    only thing conditioned on a change is the `v22: V22STAT: --> %d` message.
+
+The receive-count clamp is `cmp $0x64; jbe`, i.e. UNSIGNED against
+`V22_BIT_BUFFER`, and its format string names the variable the author used:
+`v22: FATAL: rx_len is huge (%d).`
+
+### F8602. F8538's divergence does not reproduce, and what AGREED in it is what localises it
+
+The experiment F8538 declined on -- two graphs from `V22FP_create`, `hdx->r0e`
+swept 0..6 and `hdx->r0c` 0..7, one block driven from each of the fifty-six
+starting states -- is `test/unit/t_v22modem.c`, re-run against this
+reconstruction. It is **green over 16,745 checks**, and what it compares is a
+superset of what that attempt did: the return, both counts, the 160 transmit
+samples, **the whole 100-entry receive array rather than the first reported
+entries**, the three structs with pointers blanked, and all twenty-eight heap
+regions.
+
+**The whole-array comparison matters and is the point.** `V22FP_modem` forces
+the receive count to zero for any non-zero status AFTER the copy-out, so a test
+that compares only what the count reports compares nothing on most states --
+which is the "channel the test cannot see" F8538 named without being able to
+close.
+
+**What the old symptom rules in.** It was: ours holding `V22_CLAMP_VALUE`
+where the reference held 0, with the return, both counts, the transmit block,
+all three structs and all twenty-eight heap regions AGREEING. Those five
+agreeing is a strong statement: the handler ran, wrote the same bytes into the
+same objects, and reported the same counts on both sides. **The only step left
+that can differ is the copy-out itself** -- its bound, or the buffer it reads
+from. `tx_in_internal` holds the caller's data words, which in that sweep were
+small integers including 15, and it sits 224 bytes from `rx_out_internal` in
+the same `.bss`; a copy-out reading the wrong one of the three statics
+reproduces every observable of that report. That is a bounded conclusion, not
+a diagnosis: the code was never committed and is not in the tree, so what it
+actually did cannot be established.
+
+**Two candidate defects were injected and neither has that signature**, which
+is what rules them out rather than an argument:
+
+  - moving the zeroing of the receive count AHEAD of the copy-out fires (2,248
+    of 16,745 checks) but with the polarity reversed -- ours holds the test's
+    poison and the REFERENCE holds the 15s;
+  - permuting `V22_PROTOCOL` (entries 1 and 2 swapped) fires (4,617 checks)
+    but diverges the TRANSMIT samples too, which F8538 recorded as agreeing.
+
+The permutation is worth its own sentence for a different reason: F8538 read
+"exclude the failing table entry and the next one fails" as the tell that an
+exclusion hides a defect, and it is -- but a permuted dispatch table produces
+exactly that pattern, because every entry is then wrong and removing one only
+exposes the next. The reading was right; the shape it points at is a defect
+that is uniform across the table, not one specific to an entry.
+
+### F8603. `v22_create`, `v22_delete` and `v22_process` are file-static, and the already-committed `v22_delete` was not
+
+`nm` shows a lower-case `t` for all three and an upper-case `T` for
+`dp_v22_init` and `dp_v22_exit` -- exactly `b103.c`'s split, from the same
+author. `v22_delete` was committed GLOBAL in an earlier wave, when nothing else
+in `v22.c` existed and `t_v22del.c` had to be able to name it. It is `static`
+now.
+
+**This is codegen-visible, not cosmetic.** GCC 3.4 gives a static function
+`regparm(2)` when it can see every call site, so an `extern` copy is compiled
+with a different calling convention from the object's -- the same argument
+F8462 makes for `GetGain`, `EchoCanceler` and `bValidateEnergyValue`.
+
+Both tests reach all three the way the modem core does: `t_v22del.c` and
+`t_v22dp.c` call `dp_v22_init`, take the `struct dp_operations *` the harness
+recorded, and go through `create` and `destroy`; `v22_process` is not in that
+table at all -- `process` there is `dp_wrapper_run` -- so it is read back out
+of the wrapper the datapump built. That is `t_b103dp.c`'s method (F8121) and
+it is more honest than a direct call, not less.
+
+`v22_ops` (`.data` 0x78, 24 bytes) is likewise LOCAL, and
+`test/harness/unwritten.c`'s bridge for `dp_v22_init`/`dp_v22_exit` is deleted
+rather than left to collide -- which is that file's own "WHEN A BRIDGED SYMBOL
+IS RECONSTRUCTED" paragraph, taken. `t_dpinit.c`'s asymmetry shrinks from two
+unwritten datapumps to one, which it was written to survive.
+
+### F8604. `t_v22dp.c` drives V.22 as a LINK, because V.22 will not acquire from a tone
+
+`t_b103dp.c` drives Bell 103 with a single sine at the far end's mark
+frequency and that is enough: FSK acquisition needs no handshake. V.22 does --
+600-baud QPSK, the far end's scrambler running, and a seven-node machine with
+deadlines on `ReadGTimer`'s 20 ms clock -- so a tone produces a datapump that
+sits in one state for the whole run and a test that proves two implementations
+agree about doing nothing.
+
+The stimulus is therefore the OTHER STATION: a second datapump created with
+the opposite `caller`, cross-connected, one block of loop delay each way. Four
+instances run per block -- our originator and answerer, the blob's originator
+and answerer -- with the halves of each pair connected only to each other.
+Over 400 blocks the reference originator fetches bits 312 times, hands back
+3,744 data words, reports a line rate, and its status byte takes three
+distinct values; 138,767 checks and no divergence.
+
+**The four instances share the three `.bss` staging buffers on each side**,
+because they are file-static in the object and file-static here. Running the
+two stations in a fixed order per block is what keeps both sides seeing the
+same sharing, and it is the object's own re-entrancy rather than a limitation
+of the test.
+
+The anti-vacuity guards are named for what they would have caught: without
+"the machine moved", "the data path ran" and "words were handed back", a pair
+of datapumps that never left state 1 passes every other check in the file.

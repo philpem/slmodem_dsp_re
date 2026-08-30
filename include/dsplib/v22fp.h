@@ -385,6 +385,25 @@ struct v22fp *V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg);
 void V22FP_delete(struct v22fp *fp);
 
 /*
+ * One block of the modulation: stage the caller's words and samples into the
+ * three file-static buffers, dispatch through `V22_PROTOCOL[hdx->r0e]`, take
+ * the symbol count back, copy the symbols out, and scale V22_TX_BLOCK
+ * transmit samples by `params.r0c` in Q15.
+ *
+ * `n_tx` and `n_rx` are the CALLER'S counts and are `int`; the handlers' pair
+ * is `unsigned short` and lives on V22FP_modem's own stack (finding F8534).
+ * Only `*n_rx` is written back, and it is forced to zero unless `fp->status`
+ * is zero.
+ *
+ * Returns the whole 32-bit word at fp+0x1c -- status in the low byte, flags
+ * in the next -- exactly as `B103FP_modem` does.  `v22_process` reads only
+ * the low byte of it, and that is the caller's business rather than this
+ * function's (finding F8538).
+ */
+int V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
+		const short *rx_in, int *rx_bits, int *n_tx, int *n_rx);
+
+/*
  * The equaliser's diagnostic hook, reached from outside without knowing
  * where the equaliser lives.  `V22_FSE_getdiag` is a stub returning zero
  * (v22_fse.h), so today this returns zero for any live object.

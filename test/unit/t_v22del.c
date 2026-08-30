@@ -51,6 +51,25 @@ extern struct dp *ref_v22_create(void *modem, int id, int caller, int srate,
 				 int max_frag, struct dp_operations *op);
 extern int ref_v22_delete(struct dp *dp);
 
+/*
+ * OUR `v22_delete` IS FILE-STATIC, as the object's is, so there is no name to
+ * call.  It is reached the only way anything reaches it -- out of the
+ * operations table `dp_v22_init` registers, which is the path the modem core
+ * itself takes.  Same move as `t_b103dp.c`, finding F8121.
+ */
+static struct dp_operations *our_ops;
+
+static int
+find_our_ops(void)
+{
+	harness_reg_reset();
+	dp_v22_init();
+	if (harness_reg_ours.count < 1)
+		return 0;
+	our_ops = (struct dp_operations *)harness_reg_ours.ops[0];
+	return our_ops != 0 && our_ops->destroy != 0;
+}
+
 struct ledger {
 	int allocs;
 	int frees;
@@ -80,7 +99,7 @@ cycle(int id, int caller, int ours, int *allocs_after_create)
 	if (allocs_after_create != 0)
 		*allocs_after_create = harness_alloc.allocs;
 
-	l.ret = ours ? v22_delete(dp) : ref_v22_delete(dp);
+	l.ret = ours ? our_ops->destroy(dp) : ref_v22_delete(dp);
 
 	l.allocs = harness_alloc.allocs;
 	l.frees = harness_alloc.frees;
@@ -108,6 +127,12 @@ main(void)
 	};
 	int rc = 0;
 	unsigned k;
+
+	diff_begin("v22 registration");
+	diff_eq_int("our ops table is reachable (%ld)", find_our_ops(), 1, 0);
+	rc |= diff_end();
+	if (our_ops == 0)
+		return rc;
 
 	/*
 	 * 1. The blob builds, the blob tears down.  The baseline, so the
