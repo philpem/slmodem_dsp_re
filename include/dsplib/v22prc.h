@@ -194,15 +194,10 @@ void TxClockSync(void *modem);
 void SetAdaptEqV22(void *modem, unsigned short mode);
 
 /*
- * Apply a host control block: two flag bytes fanned out into the DSP block,
- * the tone/detector context and the object's own flags word.  Returns 1,
- * always.  See the V22CTL_* / V22FP_CTL_* notes above for what each bit is
- * known to reach.
+ * V22FP_control, ScramblerOn and DescramblerOn are declared by
+ * `dsplib/v22ctl.h`, against the modelled `struct v22fp` rather than the
+ * `void *modem` this header uses.  They were reconstructed twice, in two
+ * waves; `v22ctl.c` is their one home.  Include that header to call them.
  */
-int V22FP_control(void *modem, const unsigned char *ctl);
-
-/* Bits 0 and 1 of the control byte, read back. */
-int ScramblerOn(void *modem);
-int DescramblerOn(void *modem);
 
 #endif /* DSPLIB_V22PRC_H */

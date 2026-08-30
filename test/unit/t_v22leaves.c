@@ -40,6 +40,14 @@ extern int ref_V22FP_GetDiagnostics(void *modem);
  * the mismatch harmless and the differential decides the behaviour.
  */
 extern int V22FP_GetDiagnostics(void *modem);
+/*
+ * Declared here rather than taken from a header: these three now live in
+ * `v22ctl.c` typed against `struct v22fp`, and this test drives them through
+ * the object pointer it already holds.  Both spellings pass the same pointer.
+ */
+extern int V22FP_control(void *modem, const unsigned char *ctl);
+extern int ScramblerOn(void *modem);
+extern int DescramblerOn(void *modem);
 
 #define MODEM_BYTES	0x60
 #define HDX_BYTES	0x40
