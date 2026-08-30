@@ -1,0 +1,115 @@
+[
+ {
+  "note": "src/service/fdspkrnl.c against build/test/t_fdspkrnl.  The claims: the sliding window's origin and direction, the error path, the half-peak double-talk gate, the LMS update, the energy gate's scale/threshold/ring, the countdown length, the block reversal, and the TONE trio's exact arithmetic."
+ },
+ {
+  "label": "the reference window starts one sample later",
+  "find": "\tint pos = offset + 159;",
+  "replace": "\tint pos = offset + 160;"
+ },
+ {
+  "label": "the error flips sign",
+  "find": "\t\te = x - acc;",
+  "replace": "\t\te = acc - x;"
+ },
+ {
+  "label": "the double-talk threshold is a quarter of the peak",
+  "find": "\t\tpeak = peak * 0.5f;",
+  "replace": "\t\tpeak = peak * 0.25f;"
+ },
+ {
+  "label": "the taps are overwritten instead of adapted",
+  "find": "\t\t\t\t\tcoef[m] += g * hist[pos + m];",
+  "replace": "\t\t\t\t\tcoef[m] = g * hist[pos + m];"
+ },
+ {
+  "label": "the echo estimate reads the window backwards",
+  "find": "\t\t\tfor (j = 0; j < ntaps; j++)\n\t\t\t\tacc += coef[j] * hist[pos + j];",
+  "replace": "\t\t\tfor (j = 0; j < ntaps; j++)\n\t\t\t\tacc += coef[j] * hist[pos + ntaps - 1 - j];"
+ },
+ {
+  "label": "the verdict fires on any quiet sample",
+  "find": "\t*verdict = quiet > 80;",
+  "replace": "\t*verdict = quiet > 0;"
+ },
+ {
+  "label": "the energy scale becomes full 16-bit scale",
+  "find": "\thist[*idxp] = (int)(fComputeRMSValueFloatBuf(n, buf) * 32000.0f);",
+  "replace": "\thist[*idxp] = (int)(fComputeRMSValueFloatBuf(n, buf) * 32768.0f);"
+ },
+ {
+  "label": "the energy ring index never advances",
+  "find": "\t*idxp = (*idxp + 1) % histlen;",
+  "replace": "\t*idxp = *idxp % histlen;"
+ },
+ {
+  "label": "the high-energy threshold drops an order of magnitude",
+  "find": "\tif (avg > 2200) {",
+  "replace": "\tif (avg > 220) {",
+  "note": "the quiet blocks average ~900, between the two thresholds."
+ },
+ {
+  "label": "the saturation countdown is half as long",
+  "find": "\t\t\tk->saturation = 0x500 / n * 2;",
+  "replace": "\t\t\tk->saturation = 0x500 / n;",
+  "note": "the InitObj round moves and every k->saturation comparison after round 0 shifts by the difference."
+ },
+ {
+  "label": "the beep suppressor answers 1",
+  "find": "\tif (bInternalBeepInProgress)\n\t\treturn 0;",
+  "replace": "\tif (bInternalBeepInProgress)\n\t\treturn 1;"
+ },
+ {
+  "label": "the delay shift moves two blocks",
+  "find": "\tfor (i = FDSP_DLY - 1; i >= FDSP_BLOCK; i--)\n\t\ta->dly[i] = a->dly[i - FDSP_BLOCK];",
+  "replace": "\tfor (i = FDSP_DLY - 1; i >= FDSP_BLOCK; i--)\n\t\ta->dly[i] = a->dly[i - FDSP_BLOCK / 2];"
+ },
+ {
+  "label": "the fresh reference lands forward, not reversed",
+  "find": "\tfor (i = 0; i < FDSP_BLOCK; i++)\n\t\trev_a[i] = in_b[FDSP_BLOCK - 1 - i];",
+  "replace": "\tfor (i = 0; i < FDSP_BLOCK; i++)\n\t\trev_a[i] = in_b[i];"
+ },
+ {
+  "label": "chan_a runs at chan_b's filter length",
+  "find": "\tEchoCanceler(a->dly, a->offset, a->coef, k->ntaps_a, in_a, out_a,\n\t\t     b->cross, &a->verdict, a->mu, valid);",
+  "replace": "\tEchoCanceler(a->dly, a->offset, a->coef, k->ntaps_b, in_a, out_a,\n\t\t     b->cross, &a->verdict, a->mu, valid);"
+ },
+ {
+  "label": "the expiry test admits the exact boundary",
+  "find": "\tif (t->duration > tm || 0.0f >= t->duration) {",
+  "replace": "\tif (t->duration >= tm || 0.0f >= t->duration) {",
+  "note": "the {0.125, n=1} case lands duration == tm exactly."
+ },
+ {
+  "label": "a zero duration counts as finite",
+  "find": "\tif (t->duration > tm || 0.0f >= t->duration) {\n\t\tt->elapsed = tm;",
+  "replace": "\tif (t->duration > tm || 0.0f > t->duration) {\n\t\tt->elapsed = tm;"
+ },
+ {
+  "note": "NOT here: restoring the four missing digits of the truncated two-pi (6.28318530718 vs 6.283185307179586).  Tried, and it SURVIVED: the two constants differ by 4.1e-13, adjacent floats near 6.28 are 4.8e-7 apart, so no float phase can sit between them for the comparison and the subtraction's difference vanishes when the result narrows to float.  The literal is established by the 8-byte constant at .rodata.cst8+0x1d8 -- the author's own digits -- and rests on the disassembly, not on behaviour."
+ },
+ {
+  "label": "the FIR ring wraps to slot 1, not slot 0",
+  "find": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;",
+  "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;",
+  "note": "wrapping past the end instead (<=) would write dly[len], outside the ring, so the off-by-one is probed from the safe side."
+ },
+ {
+  "label": "the FIR's wrapped half double-counts the newest tap",
+  "find": "\t\tfor (j = len - 1; j > idx; j--)\n\t\t\tacc += *c++ * dly[j];",
+  "replace": "\t\tfor (j = len - 1; j >= idx; j--)\n\t\t\tacc += *c++ * dly[j];"
+ },
+ {
+  "note": "NOT here: reassociating the biquad's feed sum.  The first attempt (`*buf + c[1]*z2 + c[2]*z1`) merely COMMUTES the first addition, which is exact -- an equivalent mutant, withdrawn.  A true reassociation (`c[1]*z2 + (*buf + c[2]*z1)`) is then shielded the same way as the reciprocal tails in the beepgen file: extended-precision intermediates make the ordering difference ~2^-64 relative, invisible after the narrowing store for any same-scale input.  The source order matches the object's fadd sequence and is carried by the disassembly."
+ },
+ {
+  "label": "the biquad loses its unit delay",
+  "find": "\t\told2 = t->iir_z2;\n\t\tt->iir_z2 = w;\n\t\tt->iir_z1 = old2;",
+  "replace": "\t\told2 = t->iir_z2;\n\t\tt->iir_z2 = w;\n\t\tt->iir_z1 = w;\n\t\t(void)old2;"
+ },
+ {
+  "label": "the float memset stops one short",
+  "find": "\tfor (i = 0; i < n; i++)\n\t\tbuf[i] = v;",
+  "replace": "\tfor (i = 0; i + 1 < n; i++)\n\t\tbuf[i] = v;"
+ }
+]

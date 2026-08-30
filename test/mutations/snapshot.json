@@ -25,6 +25,31 @@
     "the two durations are exchanged": "caught"
    }
   },
+  "beepgen": {
+   "key": "bbb81d32c3b55c817f549249ef395e64af217b39539c9f5f790a9866c828a34c",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "'3' moves one DTMF column left": "caught",
+    "CrossDataLinks scales at 32768 instead of 32000": "caught",
+    "FindCorrelation scans 21 lags": "caught",
+    "Float2Linear rounds instead of truncating": "caught",
+    "Float2Linear's zero-gain test becomes a sign test": "caught",
+    "GetGain's base scale becomes a float constant": "caught",
+    "GetGain's level term flips sign": "caught",
+    "Linear2Float loses its gain": "caught",
+    "bSearchEnergy grades the front kilosample, not the back": "caught",
+    "bSearchEnergy's gate reads buf2[0]": "caught",
+    "bSearchEnergy's threshold drops an order of magnitude": "caught",
+    "check_for_valid drops the w[2] repeat requirement": "caught",
+    "check_for_valid stops scanning at w[5]": "caught",
+    "check_for_valid_easy stops scanning at w[2]": "caught",
+    "the '!' marker indexes the zero entries, not the -1s": "caught",
+    "the frequency outputs are swapped": "caught",
+    "the max-abs scan forgets to fold negatives": "caught",
+    "the peak position records the lag index, not the lag": "caught",
+    "the short flavour's mean goes signed": "caught"
+   }
+  },
   "cadence": {
    "key": "29892a12eb458c10c36f80f1d4d38423f61f72723c931ce33f5daaaa9ef11b4b",
    "summary": "6 mutations: 6 caught (6 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -277,6 +302,32 @@
     "the threshold staircase runs the other way": "caught",
     "the tone bank is always given the caller's block": "caught",
     "the tone/raw comparison is the other way round": "caught"
+   }
+  },
+  "fdspkrnl": {
+   "key": "c7163c4dae7bda4ca3c1b9d7d4aa3495ca7ec5e56875af551aa87014f1d59a03",
+   "summary": "20 mutations: 20 caught (20 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "a zero duration counts as finite": "caught",
+    "chan_a runs at chan_b's filter length": "caught",
+    "the FIR ring wraps to slot 1, not slot 0": "caught",
+    "the FIR's wrapped half double-counts the newest tap": "caught",
+    "the beep suppressor answers 1": "caught",
+    "the biquad loses its unit delay": "caught",
+    "the delay shift moves two blocks": "caught",
+    "the double-talk threshold is a quarter of the peak": "caught",
+    "the echo estimate reads the window backwards": "caught",
+    "the energy ring index never advances": "caught",
+    "the energy scale becomes full 16-bit scale": "caught",
+    "the error flips sign": "caught",
+    "the expiry test admits the exact boundary": "caught",
+    "the float memset stops one short": "caught",
+    "the fresh reference lands forward, not reversed": "caught",
+    "the high-energy threshold drops an order of magnitude": "caught",
+    "the reference window starts one sample later": "caught",
+    "the saturation countdown is half as long": "caught",
+    "the taps are overwritten instead of adapted": "caught",
+    "the verdict fires on any quiet sample": "caught"
    }
   },
   "floatarma": {
@@ -915,6 +966,23 @@
     "the designing constructor's redundant Resampler::reset() is dropped": "equivalent",
     "timingCorrection scales by its argument": "caught",
     "timingCorrection subtracts the offset": "caught"
+   }
+  },
+  "ringdet": {
+   "key": "6b4505fb0a44772e87a1903aff3eae5038b52d1314ea44f50468108170586be3",
+   "summary": "11 mutations: 11 caught (11 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "short_38's denominator halves": "caught",
+    "short_3e initialises to 0": "caught",
+    "short_46 forgets its minus": "caught",
+    "the first min_off clamp floor drops": "caught",
+    "the max_freq clamp admits 101": "caught",
+    "the min_freq clamp excludes 13": "caught",
+    "the min_on clamp floor drops to 39": "caught",
+    "the negative mode's short_34 is the positive mode's": "caught",
+    "the threshold divider works per 79 samples": "caught",
+    "the threshold is used signed": "caught",
+    "zero threshold selects the negative mode": "caught"
    }
   },
   "scrambler": {

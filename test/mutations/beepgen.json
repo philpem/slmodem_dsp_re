@@ -1,0 +1,114 @@
+[
+ {
+  "note": "src/service/beepgen.c against build/test/t_beepgen.  Every claim here is behavioural: the DTMF table, the validity predicates' exact window shape, the truncating casts, the integer-vs-float mean, the reciprocal tail, the hardwired scales and thresholds, and GetGain's dB arithmetic."
+ },
+ {
+  "label": "the frequency outputs are swapped",
+  "find": "\t*colp = col[ci];\n\t*rowp = row[ri];",
+  "replace": "\t*colp = col[ri];\n\t*rowp = row[ci];"
+ },
+ {
+  "label": "'3' moves one DTMF column left",
+  "find": "\tcase '3': ri = 0; ci = 2; break;",
+  "replace": "\tcase '3': ri = 0; ci = 1; break;"
+ },
+ {
+  "label": "the '!' marker indexes the zero entries, not the -1s",
+  "find": "\t\tri = 5; ci = 5;",
+  "replace": "\t\tri = 4; ci = 4;"
+ },
+ {
+  "label": "check_for_valid drops the w[2] repeat requirement",
+  "find": "\tif (v != w[1])\n\t\treturn 0;\n\tif (v != w[2])\n\t\treturn 0;\n\tif (v == w[3])",
+  "replace": "\tif (v != w[1])\n\t\treturn 0;\n\tif (v != w[1])\n\t\treturn 0;\n\tif (v == w[3])"
+ },
+ {
+  "label": "check_for_valid stops scanning at w[5]",
+  "find": "\tif (v == w[6])\n\t\treturn 0;\n\treturn 1;\n}\n\n/* The short window",
+  "replace": "\tif (v == w[5])\n\t\treturn 0;\n\treturn 1;\n}\n\n/* The short window",
+  "note": "w[6] becomes a repeat of the w[5] test; the pattern where only w[6] collides then passes as valid."
+ },
+ {
+  "label": "check_for_valid_easy stops scanning at w[2]",
+  "find": "\tif (v == w[3])\n\t\treturn 0;\n\treturn 1;\n}\n\n/*\n * float -> 16-bit",
+  "replace": "\tif (v == w[2])\n\t\treturn 0;\n\treturn 1;\n}\n\n/*\n * float -> 16-bit",
+  "note": "same shape one window over: only-w[3]-collides passes as valid."
+ },
+ {
+  "label": "Float2Linear's zero-gain test becomes a sign test",
+  "find": "\tif (gain == 0.0f)\n\t\treturn;\n\tfor (i = 0; i < n; i++)\n\t\tdst[i] = (short)(src[i] * gain);",
+  "replace": "\tif (gain <= 0.0f)\n\t\treturn;\n\tfor (i = 0; i < n; i++)\n\t\tdst[i] = (short)(src[i] * gain);",
+  "note": "the gain list carries -1.0f and -2.0f, which must convert, and 0.0f, which must not."
+ },
+ {
+  "label": "Float2Linear rounds instead of truncating",
+  "find": "\t\tdst[i] = (short)(src[i] * gain);",
+  "replace": "\t\tdst[i] = (short)(src[i] * gain + 0.5f);"
+ },
+ {
+  "label": "Linear2Float loses its gain",
+  "find": "\t\tdst[i] = src[i] * gain;",
+  "replace": "\t\tdst[i] = src[i] + gain;"
+ },
+ {
+  "label": "the short flavour's mean goes signed",
+  "find": "\tmean = sum / n;",
+  "replace": "\tmean = (int)sum / (int)n;",
+  "note": "the two divisions agree until the running sum's top bit is set, which the +/-32768 sample list reaches."
+ },
+ {
+  "note": "NOT here: swapping the two tails (`acc / n` vs `acc * (1.0f/n)`).  Both were tried and both SURVIVED 48 fresh buffers, and the reason is structural, not bad luck: everything runs at x87 extended precision and only narrows to float at the very end, so the reciprocal's extra rounding sits ~2^-64 relative below the result and moves the final float only when the extended values straddle a float boundary within ~1e-12 -- which no practical input does.  The spelling difference is REAL (fdivrp in one function, fdivrp-then-fmulp in the other, blob 0xae120/0xae180) but it is carried by the disassembly and the codegen tier, not by any behavioural check.  Same class as the 0.0001 note above."
+ },
+ {
+  "label": "CrossDataLinks scales at 32768 instead of 32000",
+  "find": "\t\tflt_out[i] = lin_in[i] * (1.0f / 32000.0f);",
+  "replace": "\t\tflt_out[i] = lin_in[i] * (1.0f / 32768.0f);"
+ },
+ {
+  "label": "bSearchEnergy's gate reads buf2[0]",
+  "find": "\tif (buf2[1] != 0) {",
+  "replace": "\tif (buf2[0] != 0) {"
+ },
+ {
+  "label": "bSearchEnergy's threshold drops an order of magnitude",
+  "find": "\t\tif (acc * 0.001f > 40000.0f)",
+  "replace": "\t\tif (acc * 0.001f > 4000.0f)",
+  "note": "the mid drive level (~1.3e4) sits between the two thresholds, so the verdict flips there."
+ },
+ {
+  "label": "bSearchEnergy grades the front kilosample, not the back",
+  "find": "\tfor (i = 0; i < 1000; i++)\n\t\tsum += buf1[1000 + i];",
+  "replace": "\tfor (i = 0; i < 1000; i++)\n\t\tsum += buf1[i];",
+  "note": "only the sum's window moves; the squared loop still reads the back, so the mean is wrong whenever the two kilosamples differ."
+ },
+ {
+  "label": "FindCorrelation scans 21 lags",
+  "find": "\tif (end > pos + 20)\n\t\tend = pos + 20;",
+  "replace": "\tif (end > pos + 21)\n\t\tend = pos + 21;",
+  "note": "corrbuf[20] gains no 21st slot, but out[], *posp and the peak all move on the wide-window case."
+ },
+ {
+  "note": "NOT here: `corr = acc * 0.0001f`.  The claim that the scale is the DOUBLE 0.0001 is real -- the object multiplies by an 8-byte constant at .rodata.cst8+0x1a8 -- but the float constant differs by 5e-8 relative and every value the test can observe (the truncated short, the unsigned peak) quantises far coarser than that, so the mutation survives any input that is not tuned to sit within 5e-4 of a truncation boundary.  The constant's width rests on the disassembly, not on a behavioural check."
+ },
+ {
+  "label": "the peak position records the lag index, not the lag",
+  "find": "\t\t\t\t*peakposp = i;",
+  "replace": "\t\t\t\t*peakposp = k;"
+ },
+ {
+  "label": "GetGain's base scale becomes a float constant",
+  "find": "\t*gain2 = pow(10.0, (double)atten * -0.05 + base) * 0.276;",
+  "replace": "\t*gain2 = pow(10.0, (double)atten * -0.05 + base) * 0.276f;"
+ },
+ {
+  "label": "GetGain's level term flips sign",
+  "find": "\tdouble base = (double)(6 - high) * 0.05;",
+  "replace": "\tdouble base = (double)(high - 6) * 0.05;"
+ },
+ {
+  "label": "the max-abs scan forgets to fold negatives",
+  "find": "\t\tif (BEEP_FABS(buf[i]) > max)\n\t\t\tmax = BEEP_FABS(buf[i]);",
+  "replace": "\t\tif (buf[i] > max)\n\t\t\tmax = buf[i];",
+  "note": "the all-negative buffer pins it: the seed folds, the scan must too."
+ }
+]

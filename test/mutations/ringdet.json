@@ -1,0 +1,63 @@
+[
+ {
+  "note": "src/service/voice.c against build/test/t_ringdet.  Every clamp boundary in the grid sits on both sides of its constant, both threshold signs appear including zero, and the whole state struct is compared -- so each mutation below moves at least one grid cell."
+ },
+ {
+  "label": "the min_freq clamp excludes 13",
+  "find": "\tif (c->min_freq <= 13)\n\t\ts->min_freq = 14;",
+  "replace": "\tif (c->min_freq < 13)\n\t\ts->min_freq = 14;"
+ },
+ {
+  "label": "the max_freq clamp admits 101",
+  "find": "\tif (s->max_freq > 100)\n\t\ts->max_freq = 100;",
+  "replace": "\tif (s->max_freq > 101)\n\t\ts->max_freq = 101;"
+ },
+ {
+  "label": "the min_on clamp floor drops to 39",
+  "find": "\tif (s->min_on_dur <= 39)\n\t\ts->min_on_dur = 40;",
+  "replace": "\tif (s->min_on_dur <= 38)\n\t\ts->min_on_dur = 39;"
+ },
+ {
+  "label": "the first min_off clamp floor drops",
+  "find": "\tif (s->min_off_dur <= 119)\n\t\ts->min_off_dur = 120;\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif (s->min_off_dur <= 118)\n\t\ts->min_off_dur = 119;\n\n\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the threshold divider works per 79 samples",
+  "find": "\ts->short_30 = athr / (c->fs / 80);",
+  "replace": "\ts->short_30 = athr / (c->fs / 79);"
+ },
+ {
+  "label": "short_38's denominator halves",
+  "find": "\ts->short_38 = 3 * c->fs / (4 * c->min_freq);",
+  "replace": "\ts->short_38 = 3 * c->fs / (2 * c->min_freq);"
+ },
+ {
+  "label": "short_46 forgets its minus",
+  "find": "\ts->short_46 = -athr;",
+  "replace": "\ts->short_46 = athr;"
+ },
+ {
+  "label": "the negative mode's short_34 is the positive mode's",
+  "find": "\t\ts->short_32 = 0;\n\t\ts->short_34 = 200;",
+  "replace": "\t\ts->short_32 = 0;\n\t\ts->short_34 = 100;"
+ },
+ {
+  "label": "zero threshold selects the negative mode",
+  "find": "\tif (c->threshold < 0) {\n\t\ts->short_32 = 0;",
+  "replace": "\tif (c->threshold <= 0) {\n\t\ts->short_32 = 0;"
+ },
+ {
+  "label": "short_3e initialises to 0",
+  "find": "\ts->short_3e = 1;",
+  "replace": "\ts->short_3e = 0;"
+ },
+ {
+  "label": "the threshold is used signed",
+  "find": "\tint athr = thr < 0 ? -thr : thr;",
+  "replace": "\tint athr = thr;"
+ },
+ {
+  "note": "NOT here: deleting the negative branch's second min_off clamp.  It is dead -- the first clamp already forced >= 120 -- so no test can catch its removal; it stays in the source because the object emits it, and the differential proves the surviving text harmless rather than this file proving it necessary."
+ }
+]

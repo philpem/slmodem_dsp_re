@@ -94793,3 +94793,202 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+### F8460. The voice-area no-caller leaves: all 20 symbols of Beepgen.c, Fdspkrnl.c and voice.c#3 written and differentially green in one pass
+
+This block is F8460-F8466, the range assigned by the parent session's brief
+(2026-08-30). Base commit `c1ca61af`.
+
+The no-entry-point bucket's voice-area spans held twenty `.text` symbols,
+6,236 blob bytes, none with any internal caller in the 1.2 MB (the
+exported-API-surface class F8320's reverse-edge probe identified). All twenty
+are now in `src/`, each behind a differential test:
+
+    src/service/beepgen.c   GetGain 432, beepgen_get_freqs 469,
+                            check_for_valid 52, check_for_valid_easy 34,
+                            zFLTUTL_Float2Linear 101, zFLTUTL_Linear2Float 49,
+                            fComputeRMSValueFloatBuf 82,
+                            fComputeRMSValueShortBuf 85, CrossDataLinks 123,
+                            bSearchEnergy 267, FindCorrelation 275,
+                            zfFLTUTL_GetMaxAbsValue 106
+    src/service/fdspkrnl.c  EchoCanceler 359, zFLTUTL_FloatMemSet 27,
+                            bValidateEnergyValue 296, FDSP_Kernel_Loop 530,
+                            TONE_generate 254, TONE_filter 185, TONE_kill 133
+    src/service/voice.c     RingDetector_Reset 449
+
+Every function was decoded from `tools/dis.py` by hand -- Ghidra was
+unavailable (`decompile.sh` pins 11.4.2 and only a 12.2 tree exists on this
+machine) and turned out not to be missed at these sizes. Tests: `t_beepgen`
+(~123k checks), `t_fdspkrnl` (~33k), `t_ringdet` (~9k), all comparing exactly
+-- no float tolerance anywhere -- plus per-side debug transcript comparison
+with asserted line counts, so a dead debug gate cannot pass as a quiet one.
+Mutation suites `beepgen`, `fdspkrnl`, `ringdet`.
+
+Because these are no-caller leaves, every signature is derived from the body
+alone: the headers (`beepgen.h`, `fdspkrnl.h`, `ringdet.h`) say so, and the
+comments carry the derivations. Notable readings, each verified by the tests:
+`fComputeRMSValueShortBuf` removes an INTEGER mean (unsigned `sum/n`) where
+the float flavour removes a float one and multiplies by `1.0f/n` where the
+short flavour divides; `bSearchEnergy` takes `(new1, new2, buf1, buf2, fresh,
+total)` and grades `buf1[1000..1999]` at threshold 40000.0f gated on
+`buf2[1]`; `FindCorrelation` scans at most 20 lags of a 1000-sample pattern,
+keeps a dead `float[20]` of correlations the object also keeps, and clamps
+its peak through `(unsigned)fabs(corr)`; `zfFLTUTL_GetMaxAbsValue` spells
+|x| as the macro `(x) > 0 ? (x) : -(x)` re-expanded per use, which is
+visible in the object as a re-test of the sign after each copy.
+
+### F8461. The FDSP kernel object model: two channels of block-LMS echo cancellation with reversed-block delay lines, read from four functions plus the blob's InitObj
+
+`FDSP_Kernel_Loop(k, in_a, out_b, in_b, out_a)` processes one 160-sample
+block full-duplex. The kernel struct (`include/dsplib/fdspkrnl.h`): +0x04 a
+saturation countdown (the object's own debug line "Delayed
+FDSP_Kernel_InitObj invocation due to saturation. \n" names it), +0x08/+0x0c
+the two filter lengths (InitObj defaults 80/40), +0x10 a short-buffer area
+the loop itself never touches, +0x14/+0x18 the two channel pointers.
+
+Each channel is 0x16a8 bytes: `float dly[0x500]` at +0, `float cross[160]`
+at +0x1400, coef pointer (240 floats, InitObj's clearing size) at +0x1680,
+verdict +0x1684, short offset +0x1688, `float mu` +0x168c (InitObj: 0.032f
+for channel A, 0.0f for B), `int energy[4]` ring +0x1694, index +0x16a4.
+
+The delay line's layout is the non-obvious part: the loop shifts the whole
+line UP a block (`dly[i] = dly[i-160]` descending from 0x4ff), and the tail
+copies each fresh far-end block in REVERSED (`rev[i] = in[159-i]`, then
+`sysdep_memcpy` to `dly[0]`). `EchoCanceler`'s window therefore slides DOWN
+one sample per output sample from `offset+159`, which restores the usual
+convolution direction. Each direction's error is written both to its output
+and to the OTHER channel's `cross` block; nothing reconstructed reads
+`cross` back yet. The double-talk gate counts samples with `fabs(x)` below
+HALF the window's peak |reference| (peak taken with the ternary-macro |x|,
+the near sample with `fabs` -- the object distinguishes the two spellings),
+adapts only on those, and reports `count > 80` through the verdict field.
+
+`bValidateEnergyValue` gates each direction: block variance (the float RMS
+routine) times 32000 into the `energy[]` ring as an int, and while the ring
+AVERAGE exceeds 2200 the countdown runs 1280/n*2 blocks, re-initialising the
+whole kernel through the blob's `FDSP_Kernel_InitObj` at zero. Only a quiet
+average with no countdown pending returns 1, which is what licenses tap
+adaptation. `t_fdspkrnl` drives the countdown across its whole arc --
+`strstr` assertions on the captured transcripts prove both saturation arms
+actually fired -- and runs six full-duplex blocks end to end with every
+channel byte compared.
+
+### F8462. GetGain, EchoCanceler and bValidateEnergyValue are LOCAL in the blob and take GCC 3.4's static-function regparm(2); our copies are external and ordinary, per the t_dialstring precedent
+
+All three are `t` in the object's symbol table, and their bodies read
+regparm(2): first argument in `%eax`, second in `%edx`, the rest on the
+stack (`EchoCanceler` starts `add $0x9f,%edx` on an incoming register
+argument). The two-pass objcopy (F221) already gives them `ref_` aliases, so
+the tests declare the reference side `__attribute__((regparm(2)))` and call
+our external copies the ordinary way -- each side as its own compiler built
+it, exactly as `t_dialstring.c` documents for `AnalyseDialString`.
+
+`GetGain`'s derivation, since it is otherwise opaque: reads
+`GetDTMFHighToneLevel` (20), `GetDTMFHighAndLowToneLevelDifference` (36) and
+`GetAdditAttenToBeepgenVoice` (60) -- the parameter names are
+`modem_params.h`'s, and the object's own debug strings name the outputs:
+"BeepGen: GAIN1*1000" prints the second argument's target, "GAIN2*1000" the
+third's. GAIN2 = pow(10, (6-p20)*0.05 - p60*0.05) * 0.276; GAIN1 = GAIN2 *
+pow(10, -p36*0.05). The 0.05s and 0.276 are the blob's `.rodata.cst8`
+doubles at 0x188/0x190/0x198.
+
+### F8463. A call from src/ to an unwritten blob function cannot link -- symmap renames every defined symbol -- so the harness now carries forwarders for stateless blob-resolved callees, and runtime64 carries abort stubs
+
+`TONE_generate` calls `MTK_phasor` and `bValidateEnergyValue` calls
+`FDSP_Kernel_InitObj`; neither callee is reconstructed. `tools/symmap.py`
+renames every symbol the blob DEFINES to `ref_*` (the F214/F215 scaffold
+that would rename only what we define was measured and declined), so those
+calls came up undefined in every test binary at once.
+
+The resolution extends symmap's own SHARED/STATEFUL split one step: the
+differential harness (`test/harness/runtime.c`) defines unprefixed
+`MTK_phasor` and `FDSP_Kernel_InitObj` that forward to the `ref_` aliases.
+Both were checked in the disassembly to write only through their argument --
+no global, no static -- so one copy serving both sides carries nothing
+across the comparison, the same argument that lets both sides share
+`sysdep_memcpy`. A STATEFUL callee must not be added to that list. The
+64-bit interop build has no blob, so `test/interop/runtime64.c` defines the
+same two names as `abort()` stubs beside its modem-core stubs: no interop
+test enters the voice path, and a plausible default would be worse than a
+crash. When either function is reconstructed in `src/`, its forwarder
+collides at link time and is deleted -- a loud removal, not a silent one.
+
+Consequences for the tests: `TONE_generate`'s oscillator is the same blob
+code on both sides, so `t_fdspkrnl` compares everything around it (state
+in, scaling, the ms clock, the phase inversion); and the InitObj arm of the
+saturation countdown re-initialises both sides' hand-built kernels with the
+blob's own code, after which every channel byte is still compared.
+
+### F8464. The author's four-digits-short two-pi, the RMS that never takes the root -- and the x87 extended-precision shield that makes a class of spelling claims untestable behaviourally
+
+`TONE_generate`'s phase wrap subtracts `6.28318530718` -- the blob's
+`.rodata.cst8` at 0x1d8 is exactly that decimal, NOT double 2*pi
+(6.283185307179586...). The truncation is the author's typing and is kept
+verbatim; the sibling constant at 0x1d0 is full-precision pi, so the pair
+cannot be one rounding convention. The expiry semantics around it: a
+positive duration reached by the 0.125 ms-per-sample clock resets the clock
+and jumps the phase by pi -- the beep cadence INVERTS the tone rather than
+gating it; duration <= 0 means endless.
+
+**The shield, measured on this pass's own mutation suites.** Four mutations
+that looked adjudicable were written and all four SURVIVED, for one
+structural reason: this code computes everything at x87 extended precision
+and narrows to float only at the stores, so a spelling change whose
+difference is ~2^-64 relative (a reciprocal-multiply for a divide, a
+reassociated sum) or smaller than a float ulp at the value (the truncated
+two-pi's 4.1e-13, against 4.8e-7 float spacing near 6.28) is ERASED by the
+narrowing on every practical input. Those spellings are still real -- the
+object's fdivrp/fmulp sequences and its 8-byte constants are unambiguous --
+but they rest on the disassembly and the codegen tier, not on any
+behavioural check, and the mutation files (`beepgen.json`, `fdspkrnl.json`)
+now carry one note each saying so instead of a mutation that cannot fire.
+A fifth attempt was withdrawn as EQUIVALENT before running: commuting the
+first two operands of a sum is exact in IEEE arithmetic and mutates
+nothing.
+
+`fComputeRMSValue{Float,Short}Buf` return mean-removed average POWER -- no
+square root anywhere -- so the `RMS` of the exported names oversells; kept,
+of course, since the names are the object's. Constants placed this pass,
+all read from `.rodata` and green differentially: 1/32000 and 32000
+(CrossDataLinks, the +/-32000 voice full scale), 32000.0
+(bValidateEnergyValue's energy scale), 0.5 (the double-talk half-peak),
+40000.0f over variance*0.001f (bSearchEnergy), 2200 and 1280/n*2 (the
+energy gate), 0.0001 as a DOUBLE (FindCorrelation), 0.05/-0.05/0.276
+(GetGain), 0.125f ms/sample and pi (TONE_generate).
+
+### F8465. RingDetector_Reset: the cfg and state fields named by the object's own format string, a doubly-applied clamp, and an unguarded division
+
+The debug line at `.rodata.str1.4+0x46c` -- "Reset Soft Ring: Threshold =
+%d, Fs = %d, MinFreq = %d, MaxFreq =%d ... minOnDur = %d, minOffDur = %d" --
+prints `cfg+0x14`, `state+0x10`, `state+0x00/04/08/0c`, which names both
+structs' first six fields (tier-1 evidence, `include/dsplib/ringdet.h`).
+Clamps: min_freq >= 14, max_freq <= 100, min_on_dur >= 40, min_off_dur >=
+120. Derived shorts: |threshold| / (fs/80) at +0x30 (copied to +0x4e and
++0x50), 3*fs/(4*cfg_min_freq) at +0x38 -- both from the RAW cfg values,
+before clamping. |threshold| at +0x36 and +0x44, its negation at +0x46. The
+threshold's SIGN selects a mode: negative gives +0x32/+0x34 = 0/200 where
+non-negative gives 2/100.
+
+Two faithful oddities: the negative-threshold arm clamps min_off_dur >= 120
+a SECOND time, dead because the first clamp already ran (the ringdet
+mutation file records why no mutation can adjudicate dead code); and
++0x30's divisor `fs/80` is unguarded, so an fs below 80 divides by zero --
+the object traps identically, so the test grid stays at fs >= 80 and the
+test says why. `t_ringdet` covers the full clamp/sign grid, 8,967
+configurations, whole-struct compare against an 0xa5 prefill, plus one
+captured-transcript configuration comparing all six formatted values.
+
+### F8466. bInternalBeepInProgress is defined in fdspkrnl.c, and its second referrer is the unwritten function at 0xaea27
+
+The `.bss` word at 0x8ec, LOCAL in the blob, suppresses
+`bValidateEnergyValue` entirely when set. `relocscan --at .bss:0x8ec` finds
+exactly two referrers: 0xaebeb (bValidateEnergyValue) and 0xaea3f, inside
+the unwritten function between EchoCanceler's end (0xaea26) and
+zFLTUTL_FloatMemSet (0xaea70) -- presumably the beep path's setter, same
+TU. Defined non-static in `src/service/fdspkrnl.c` for the same testability
+trade the LOCAL functions make (the blob side's copy has a `ref_` alias via
+the two-pass objcopy, so both sides are drivable). If the 0xaea27 function
+turns out to live elsewhere when written, the definition moves with the
+evidence. Neighbouring locals for the eventual voice pass: `pGlobalFDSPObj`
+at 0x8e4, `uCorrelationReportsNo` at 0x8e8 (single referrer 0xae61d, also
+unwritten, in the Beepgen.c span).
