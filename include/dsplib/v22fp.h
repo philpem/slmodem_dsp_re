@@ -389,6 +389,6 @@ void V22FP_delete(struct v22fp *fp);
  * where the equaliser lives.  `V22_FSE_getdiag` is a stub returning zero
  * (v22_fse.h), so today this returns zero for any live object.
  */
-int V22FP_GetDiagnostics(struct v22fp *fp);
+/* V22FP_GetDiagnostics is declared by dsplib/v22ctl.h, its one home. */
 
 #endif /* DSPLIB_V22FP_H */

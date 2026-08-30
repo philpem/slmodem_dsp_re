@@ -403,20 +403,11 @@ V22FP_delete(struct v22fp *fp)
 }
 
 /*
- * V22FP_GetDiagnostics  .text 0x088480  33 bytes
- *
- * Hand the equaliser's diagnostic entry the equaliser.  `V22_FSE_getdiag` is
- * a stub that returns zero and reads nothing (see v22_fse.h), so the whole
- * function is the address computation `&fp->dsp->fse` -- the object is a
- * rewrite of the first argument and a tail jump.  Declared with the one
- * argument the object is seen to pass; the stub's own arity note in
- * v22_fse.h explains why more cannot be ruled out.
+ * V22FP_GetDiagnostics lives in `v22ctl.c`.  It was reconstructed twice, in
+ * two waves, with identical bodies and identical signatures; the banner here
+ * also had its size wrong (33 against the object's 0x15 = 21), which is what
+ * `tools/bannercheck.py` exists to catch.
  */
-int
-V22FP_GetDiagnostics(struct v22fp *fp)
-{
-	return V22_FSE_getdiag(&fp->dsp->fse);
-}
 
 /*
  * ---------------------------------------------------------------------------

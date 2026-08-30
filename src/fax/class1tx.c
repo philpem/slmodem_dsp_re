@@ -4,10 +4,10 @@
  * Reconstructed from dsplibs.o's class1tx.c +94 span (the split into author
  * files inside that span is NOT established -- see class1tx.h):
  *
- *   v17tx_message / v17rx_message   .text 0x09c240 / 0x09c270   39 each
- *   v21tx_message / v21rx_message   .text 0x09c4e0 / 0x09c510   39 each
- *   v27tx_message / v27rx_message   .text 0x09c7e0 / 0x09c810   39 each
- *   v29tx_message / v29rx_message   .text 0x09caa0 / 0x09cad0   39 each
+ *   v17tx_message / v17rx_message   .text 0x09c270 / 0x09c270   39 each
+ *   v21tx_message / v21rx_message   .text 0x09c510 / 0x09c510   39 each
+ *   v27tx_message / v27rx_message   .text 0x09c810 / 0x09c810   39 each
+ *   v29tx_message / v29rx_message   .text 0x09cad0 / 0x09cad0   39 each
  *   _init_tx_nulls_state            .text 0x09cf60              15
  *   null_message                    .text 0x09f140              11
  *   _handle_hdlc_input_close        .text 0x09ecd0              34
