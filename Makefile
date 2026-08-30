@@ -232,7 +232,7 @@ SYMMAP     := $(BUILD)/symmap.txt
 # them for test binaries only.
 LDFLAGS    := -no-pie -Wl,-z,noexecstack,-z,notext
 
-.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase blobfix blobfix-check onedef vendor period
+.PHONY: firewall strings offsets refs all test check64 docs clean interop capture coverage worklist debugcov phase blobfix blobfix-check onedef vendor banners period
 
 # Keep intermediates: chained implicit rules otherwise delete them, forcing a
 # full rebuild on every invocation.
@@ -730,7 +730,7 @@ COVCOUNTS  := build-cov/measured.txt
 # the sub-make through the jobserver, so the eight still run in parallel with
 # each other.  Findings 1563, 3215 and 3521.
 PHASE_TIERS := period test check64 interop params coverage debugcov onedef \
-               vendor
+               vendor banners
 
 phase: prereq
 	@$(MAKE) --no-print-directory $(PHASE_TIERS)
@@ -883,6 +883,19 @@ check64:
 #
 onedef:
 	@$(PYTHON) tools/onedef.py
+
+#
+# BANNERS.  Every `.text 0xNNNN  N bytes` in a source banner, checked against
+# `nm -S` on the blob.  A wrong address or size is invisible to every other
+# tier -- no test can fail on a comment -- and the record is the deliverable,
+# so this is the only thing that can catch it.  It earned its place: it found
+# four stale addresses in `src/fax/class1tx.c`, all off by 0x30, and a size
+# recorded as 33 where the object says 0x15.  C++ banners are matched through
+# `nm -SC`, so a name mangled in the object still resolves to what the author
+# wrote.  Finding F8535.
+#
+banners:
+	@$(PYTHON) tools/bannercheck.py
 
 #
 # THE VENDORED HEADERS ARE STILL VERBATIM.  `third_party/slmodem/*.h` are

@@ -90,14 +90,53 @@ def blob_path():
 
 
 def symbols(obj):
-    """name -> [(addr, size)].  A name can appear twice; both are accepted."""
+    """name -> [(addr, size)].  A name can appear twice; both are accepted.
+
+    C++ SYMBOLS ARE INDEXED UNDER THEIR SOURCE NAME AS WELL AS THEIR MANGLED
+    ONE.  A banner in a `.cpp` writes what the author wrote -- `retrainDetector`
+    -- and the object holds `_Z15retrainDetectorP17tag_retrainReqDetPsi`, so a
+    mangled-only table reports six of this tree's own banners as naming no
+    symbol at all.  That is a FALSE ABSENCE, and it is worse than noise: the
+    ABSENT class is meant to catch a banner naming something the object does
+    not define, and six standing false positives make a real one unreadable.
+    So `nm -SC` is read beside `nm -S` and each mangled entry is aliased under
+    its demangled base name (`Class::method` and the bare `method`).
+    """
     out = subprocess.run(['nm', '-S', obj], capture_output=True,
                          text=True).stdout
     table = {}
+    raw = set()
     for line in out.splitlines():
         f = line.split()
         if len(f) == 4:
             table.setdefault(f[3], []).append((int(f[0], 16), int(f[1], 16)))
+            raw.add(f[3])
+
+    dem = subprocess.run(['nm', '-SC', obj], capture_output=True,
+                         text=True).stdout
+    for line in dem.splitlines():
+        f = line.split(None, 3)
+        if len(f) != 4:
+            continue
+        try:
+            addr, size = int(f[0], 16), int(f[1], 16)
+        except ValueError:
+            continue
+        name = f[3].strip()
+        if name in raw:                 # not mangled: nothing to alias
+            continue
+        if '(' in name:                 # drop the argument list
+            name = name[:name.index('(')]
+        name = name.strip()
+        if not name:
+            continue
+        # The size comes from THIS line, never from an address lookup: two
+        # symbols can share an address, and collapsing them by address aliased
+        # one symbol's size onto another's name -- which invented eight
+        # disagreements the first time this was written.
+        for alias in (name, name.rsplit('::', 1)[-1]):
+            if (addr, size) not in table.setdefault(alias, []):
+                table[alias].append((addr, size))
     return table
 
 

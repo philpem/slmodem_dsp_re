@@ -97003,3 +97003,41 @@ is what exposed the reasoning error: the same failure simply reappeared for
 entry 2, so the exclusion was not naming a defect, it was hiding one. An
 exclusion that moves when you move it is a tolerance being widened, which is
 the thing this tree does not do.
+
+### F8598. `bannercheck.py` is wired into `make phase`, and its C++ blindness is fixed first
+
+`tools/bannercheck.py` (F8535) checks every `.text 0xNNNN  N bytes` banner in
+`src/` and `include/` against `nm -S` on the blob. It is now a `make phase`
+tier, `banners`, on the argument that no OTHER tier can catch what it catches:
+a wrong address or size in a comment fails no test, and in this tree the record
+is the deliverable. It had already earned it -- four stale addresses in
+`src/fax/class1tx.c` all off by 0x30, and a size given as 33 where the object
+says 0x15.
+
+**IT WAS NOT WIRED IN AS FOUND.** It read `nm -S` only, so a C++ banner naming
+what the AUTHOR wrote (`retrainDetector`) could not match the object's
+`_Z15retrainDetectorP17tag_retrainReqDetPsi`, and six of this tree's own
+banners reported as naming no symbol the object defines. Those were FALSE
+ABSENCES, and a standing false positive is worse than noise in a gate: the
+ABSENT class exists to catch a banner naming something that does not exist, and
+six permanent ones make a real one unreadable. `nm -SC` is now read beside
+`nm -S` and each mangled entry is aliased under its demangled base name, both
+`Class::method` and the bare `method`.
+
+**THE FIRST ATTEMPT AT THAT ALIAS INVENTED EIGHT DISAGREEMENTS**, which is
+worth recording because the mechanism is general. It collapsed the demangled
+pass through an `addr -> (addr, size)` map, and TWO SYMBOLS CAN SHARE AN
+ADDRESS -- so one symbol's size was aliased onto another symbol's name, and
+`dcr_delete` was reported as saying 17 where the object says 32 when both
+numbers were right for different symbols. The size must come from the
+demangled line itself, never from an address lookup. A tool that gains eight
+findings after a change to its LOOKUP has found a bug in itself, not in the
+tree.
+
+Shown to fire before being trusted, per F134, on all three verdict classes and
+including the new demangling path: a wrong address on a C++ banner
+(`retrainDetector` moved to 0x005f90) reports ADDR; a wrong size on a C banner
+(`V22FP_GetDiagnostics` given as 22) reports SIZE; a banner renamed to
+`retrainDetectorXYZ` reports ABSENT. Each restored to 322 agree / 0 / 0. The
+`banners` target itself was then injected against and exits 2, so the GATE
+fails and not merely the tool. (2026-08-30)
