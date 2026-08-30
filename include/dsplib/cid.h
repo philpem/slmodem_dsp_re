@@ -59,7 +59,23 @@ struct cid {
 	short dead;			/* +0x07c samples in the dead zone  */
 	short mtd1_state[2];		/* +0x07e MTD_COEF_1's biquad       */
 	short mtd2_state[2];		/* +0x082 MTD_COEF_2's biquad       */
-	unsigned char pad_086[218];	/* +0x086 to 0x160, the allocation  */
+	unsigned char pad_086[82];	/* +0x086 -- includes +0x90, where
+					 * cid_modem's bit buffer lands     */
+	/*
+	 * `pack_next_bit`'s territory (Rxcid.c): the async framer that turns
+	 * the demodulated bit stream into message bytes.  All six names are
+	 * usage inference from that one function -- see src/service/rxcid.c
+	 * for the derivation.
+	 */
+	unsigned char data[124];	/* +0x0d8 assembled message bytes   */
+	short mark_bal;			/* +0x154 mark/space balance while
+					 *        hunting carrier (state 0) */
+	short pack_state;		/* +0x156 0 hunt, 3 wait-start-run,
+					 *        1 wait start bit, 2 shift */
+	short pack_acc;			/* +0x158 the byte being assembled  */
+	short pack_pos;			/* +0x15a bit position / zero-run   */
+	short pack_len;			/* +0x15c bytes stored into `data`  */
+	unsigned char pad_15e[2];	/* +0x15e to 0x160, the allocation  */
 };
 
 /* The line rate, and the only value either leaf tests for. */
@@ -88,6 +104,27 @@ short CID_FSD_demodulate(const short *samples, short *bits, short count,
  * with the input's own energy.  See src/service/cid_mtd.c.
  */
 short CID_MTD_detect(const short *samples, short count, struct cid *cid);
+
+/*
+ * Feed the framer one demodulated bit.  Argument order is the object's:
+ * the BIT first, the object second.
+ *
+ * State 0 hunts carrier on a mark/space balance counter; more than 15 net
+ * marks arms state 3, which waits for f028 + 1 consecutive spaces...
+ * except that the object then backdates the run to f028 and enters state 2
+ * directly, so the byte collector starts at bit position f028 rather than
+ * 0.  State 1 waits for a start bit (a 0); state 2 shifts eight bits
+ * LSB-first into pack_acc and appends the byte to `data`.  Nothing bounds
+ * pack_len against sizeof(data) -- that is the object's own shape, and
+ * cid_modem is what must keep the message short.
+ *
+ * f028 doubles as the framer's run length here and as the FSK threshold
+ * cid_threshold stores; create_cid seeds it with 2.
+ */
+void pack_next_bit(short bit, struct cid *cid);
+
+/* Rxcid.c's reset; unreconstructed, reachable from the CID service. */
+void reset_cid(struct cid *cid);
 
 /*
  * The demodulator's coefficients, all three GLOBAL in the object and all

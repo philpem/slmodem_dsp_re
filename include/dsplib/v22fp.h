@@ -369,4 +369,11 @@ struct v22fp *V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg);
  */
 void V22FP_delete(struct v22fp *fp);
 
+/*
+ * The equaliser's diagnostic hook, reached from outside without knowing
+ * where the equaliser lives.  `V22_FSE_getdiag` is a stub returning zero
+ * (v22_fse.h), so today this returns zero for any live object.
+ */
+int V22FP_GetDiagnostics(struct v22fp *fp);
+
 #endif /* DSPLIB_V22FP_H */

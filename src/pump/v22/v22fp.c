@@ -403,6 +403,22 @@ V22FP_delete(struct v22fp *fp)
 }
 
 /*
+ * V22FP_GetDiagnostics  .text 0x088480  33 bytes
+ *
+ * Hand the equaliser's diagnostic entry the equaliser.  `V22_FSE_getdiag` is
+ * a stub that returns zero and reads nothing (see v22_fse.h), so the whole
+ * function is the address computation `&fp->dsp->fse` -- the object is a
+ * rewrite of the first argument and a tail jump.  Declared with the one
+ * argument the object is seen to pass; the stub's own arity note in
+ * v22_fse.h explains why more cannot be ruled out.
+ */
+int
+V22FP_GetDiagnostics(struct v22fp *fp)
+{
+	return V22_FSE_getdiag(&fp->dsp->fse);
+}
+
+/*
  * ---------------------------------------------------------------------------
  * The layout, held to the compiler.
  *

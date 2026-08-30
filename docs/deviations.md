@@ -9169,3 +9169,62 @@ halved, a division instead of a shift, and the operands read unsigned -- and
 **Status:** unmeasured, and unmeasurable from this object, for D405's reason:
 the function has no caller, so no configuration exists that would say which
 reading is the author's.
+
+## D951 ⚠ All eight fax message reporters guard their table with its own entry count
+
+`v17rx_message` and its seven siblings answer `*out = TABLE[code]` under a
+guard of `(unsigned)code > N` -- and N is the table's ENTRY COUNT, not
+count-minus-one, in every one of the eight (`cmp $0xa` over ten entries,
+`cmp $0x7` over seven, `cmp $0x6` over six, `cmp $0x8` over eight, read off
+0x09c240..0x09cad0). `code == N` therefore reads one pointer past the table
+and hands the caller whatever `.data` the link put there. Reproduced
+verbatim in `src/fax/class1tx.c`; `t_class1leaves` pins every in-range and
+above-range code and SKIPS exactly the one-past code, because the byte the
+two links placed after the table is not the same byte and no equivalence is
+defined over it.
+
+**Status:** unmeasured. Whether any caller can present `code == N` is a
+question about FAXVMI's callers, which are not reconstructed.
+
+## D952 ⚠ `FIFO_full_test` computes its occupancy fraction in a short that wraps at count 2
+
+The test is `(count << 14) / size >= 0x399b` -- 90% in Q14 -- but the
+numerator is truncated to a SHORT before the divide (`shl $0xe; cwtl` at
+0x096dd0): a count of 1 gives 16384, a count of 2 gives -32768, and every
+count above 1 therefore answers "not full" through a negative quotient for
+any positive size. With a positive size the only input that can answer 1 is
+count == 1 with size == 1. Reproduced in `src/fax/fifo.c`; `t_class1leaves`
+sweeps counts against positive and negative sizes.
+
+**Status:** unmeasured. What `count` means at +0x0c (bytes? frames?) is
+`FIFO_create`'s to settle; if it counts something that can only be 0 or 1
+the wrap is unreachable.
+
+## D953 ⚠ `SGD_sequence_det` reports a stack local it never wrote when no alignment scores
+
+The best-alignment index lives in a stack slot that is only written when a
+trial distance beats the running best (initialised to 0xffff). When no
+trial does -- `n == 0`, or every distance saturating to 0xffff -- and the
+acceptance test still passes (0xffff reads as -1 through `movswl`, so any
+non-negative threshold accepts it), the object stores `buf + base +
+GARBAGE` into its status block and returns the garbage as the match index.
+The reconstruction initialises the slot to 0 (`src/fax/sgd.c`), which is
+observable only on exactly that degenerate path; `t_faxsgd` does not drive
+it, because there is nothing defined to compare there.
+
+**Status:** unmeasured, and unmeasurable against the object on the affected
+path -- the value compared would be the blob's stack residue.
+
+## D954 ⚠ `pack_next_bit` enters its byte collector with the bit position backdated, not cleared
+
+The framer's seizure state (3) counts consecutive spaces and, on reaching
+`f028 + 1` of them, enters the collector state (2) -- but it writes the
+counter BACK TO f028 and that same field is the collector's bit position,
+so the first byte after seizure collects only bits f028..7 and keeps zeros
+below (the accumulator was cleared entering state 3, and is NOT cleared on
+the 3->2 transition -- only the 1->2 transition clears it). With
+`create_cid`'s seed of 2 the first byte holds six live bits. Reproduced in
+`src/service/rxcid.c` and exercised by `t_cidleaves`' streams.
+
+**Status:** unmeasured. Whether the first post-seizure byte ever reaches
+`cid_get_strings` is `cid_modem`'s question, and it is not reconstructed.
