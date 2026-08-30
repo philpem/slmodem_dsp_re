@@ -84,6 +84,23 @@ public:
 	V92Phase2Info(V92Parameters *params);
 
 	/*
+	 * setToDefault -- 0x15f10, 87 bytes: the record refilled from the
+	 * five `V92_PHASE2_INFO_*` parameters plus the three echo-canceller
+	 * sizing bytes at +0x14..+0x16 (from `V92_NOF_FILTER_SECTIONS`,
+	 * `V92_MAX_TOTAL_NOF_COEFFS`, `V92_MAX_NOF_COEFFS_IN_EACH_SECTION`),
+	 * with the local/remote capability bytes reset to the local-V.92
+	 * defaults (+0x11 = 1, the rest 0).
+	 *
+	 * printInfo -- 0x16030, 572 bytes, `const` because the symbol is
+	 * `_ZNK...`: the record through `dsplibs_debug_printf` (gated here,
+	 * at level > 1) and `edprintf` (ungated, self-gating one level
+	 * down), in the object's own order.  Both defined in
+	 * src/pump/v90/V92Phase2Info.cpp.
+	 */
+	void setToDefault();
+	void printInfo() const;
+
+	/*
 	 * +0x00  `printInfo` compares it against 1 and prints "A_LAW" for 1
 	 * and "MU_LAW" for anything else -- the same two spellings and the
 	 * same comparison V90Phase2Info::printInfo uses on its own +0x00.

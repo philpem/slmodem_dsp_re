@@ -24,8 +24,8 @@
  },
  {
   "label": "the local capability byte is cleared rather than set",
-  "find": "\tv92CapabilitiesLocal = 1;",
-  "replace": "\tv92CapabilitiesLocal = 0;"
+  "find": "\tshortPhase2Local = 0;\n\tv92CapabilitiesLocal = 1;",
+  "replace": "\tshortPhase2Local = 0;\n\tv92CapabilitiesLocal = 0;"
  },
  {
   "label": "the local capability byte is set on the wrong field",
@@ -39,8 +39,8 @@
  },
  {
   "label": "v90UseHighCarrier is left as it was",
-  "find": "\tv90UseHighCarrier = 0;",
-  "replace": "\t;"
+  "find": "\tv90UseHighCarrier = 0;\n\tmaxNofCoeffsInEachSection =",
+  "replace": "\t;\n\tmaxNofCoeffsInEachSection ="
  },
  {
   "label": "the three filter counts are rotated",

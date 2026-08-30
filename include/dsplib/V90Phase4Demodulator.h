@@ -272,15 +272,24 @@ public:
 	 * that widens is one whose own result is `int`, so `getDecision`
 	 * does.  Nothing else in the object separates the three.
 	 *
-	 * The rest of the class -- `trn2dKnownDemod`, `setSessionFlag` and
-	 * the rest -- is declared nowhere yet and belongs to whichever batch
-	 * writes it.  `trn2dKnownDemod` is blocked on `V90SpectralShaper`,
-	 * which is not written.  `reset` used to head that list and is now
-	 * below.
+	 * `setSessionFlag` and the remainder are declared nowhere yet and
+	 * belong to whichever batch writes them.  `trn2dKnownDemod` headed
+	 * that list -- with a stale note blaming `V90SpectralShaper`, which
+	 * was never its dependency -- and is written now (the VPcmV34Main
+	 * leaf pass); `reset` moved below earlier.
 	 */
 	int getDecision(short sample);
 	short getV90Decision(short sample);
 	short getV92Decision(short sample);
+
+	/*
+	 * trn2dKnownDemod -- 0x25de0, 170 bytes.  Re-derive the known TRN2d
+	 * symbol from the embedded modulator and the impairment detector's
+	 * `linMapp`; the short argument is never read.  `int` is measured:
+	 * the callee widens its short product itself (`movswl %di,%eax`).
+	 * The .cpp carries the four forced encodings.
+	 */
+	int trn2dKnownDemod(short);
 
 	/*
 	 * `reset` -- .text+0x277c0, 504 bytes, and the WHOLE receiver's

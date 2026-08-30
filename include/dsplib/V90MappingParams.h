@@ -200,6 +200,18 @@ void getCodecConstellationMask(V90MappingParams *params, int which,
 int getDataBitRate(V90MappingParams *params, int islong);
 
 /*
+ * The three callerless setters (0x33570, 0x335f0, 0x33690), the inverses of
+ * the getters beside them; V90MappingParamsInt.cpp defines each as a
+ * wrapper over the file-static body `setParamsInfoFromCPUnPck` inlines.
+ * All three are unmangled in the blob, hence this C block.
+ */
+void setConstellationMask(V90MappingParams *params, int which,
+			  const short *mask);
+void setCodecConstellationMask(V90MappingParams *params, int which,
+			       const short *mask);
+void setDataBitRate(V90MappingParams *params, int islong, int rate);
+
+/*
  * Fill this block from an unpacked V.90 CP message.  It writes `word_0`, both
  * byte tables, `constellationSize`, `word_61c`, the six shaper words and
  * `distinctIndex` -- essentially the whole block.

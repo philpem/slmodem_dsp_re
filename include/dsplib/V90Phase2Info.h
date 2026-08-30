@@ -51,9 +51,9 @@
  * path unbuildable.  The union in t_v90p2info.cpp became a byte array and a
  * cast; that is the whole of the damage.
  *
- * `setToDefault` is still not written.  It repeats the constructor's five
- * copies without storing `params`, nothing in the construction closure needs
- * it, and finding F255 records it.
+ * `setToDefault` is written now (the VPcmV34Main leaf pass; it was declined
+ * earlier under finding F255).  It repeats the constructor's five copies
+ * without storing `params`, reading the pointer back from +0x20 instead.
  *
  * ------------------------------------------------------------------------
  * THE COLLISION IS RESOLVED.  include/dsplib/V90PreFilter.h used to carry its
@@ -112,6 +112,13 @@ public:
 	 * path through the function assigns %eax before its `ret`.
 	 */
 	void printInfo() const;
+
+	/*
+	 * setToDefault -- 0x2a950, 49 bytes: the constructor's five parameter
+	 * copies again, reading `params` back from +0x20 instead of taking an
+	 * argument.  src/pump/v90/V90Phase2Info.cpp defines it.
+	 */
+	void setToDefault();
 
 	/* --- data members; see the file comment on the naming --- */
 

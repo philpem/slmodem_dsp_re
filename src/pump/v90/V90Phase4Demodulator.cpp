@@ -32,6 +32,10 @@
 
 #include "dsplib/debug.h"
 #include "dsplib/encode.h"
+/* No linkage guard of its own, so it takes the usual wrapper. */
+extern "C" {
+#include "dsplib/pcm.h"
+}
 #include "dsplib/V90Parameters.h"
 #include "dsplib/V90MappingParams.h"
 #include "dsplib/V90ConnectionEvaluator.h"
@@ -216,10 +220,12 @@ V90Phase4Demodulator::~V90Phase4Demodulator()
  * translation unit, so the file's order is the original's.
  *
  * `trn2dKnownDemod` at 0x25de0 sits between `resetBeforRRN` and `detectFPE`
- * in that run and is deliberately absent: it calls `V90Phase4Modulator` and
- * `V90SpectralShaper` members that nothing in this tree has written, and one
- * unwritten callee fails every differential binary rather than only its own
- * (finding F215).
+ * in that run and IS WRITTEN NOW, in that position, by the VPcmV34Main leaf
+ * pass -- the paragraph here used to call it deliberately absent on
+ * unwritten callees, and its callees (`V90Phase4Modulator::generateSymbol`,
+ * `linear2alaw`, `linear2ulaw`) are all written today.  The
+ * `V90SpectralShaper` dependency the old text named was never this
+ * function's: its three calls are the ones just listed.
  * ===========================================================================
  */
 
@@ -363,6 +369,58 @@ V90Phase4Demodulator::resetBeforRRN()
 	int_0044 = 0;
 	int_0048 = 0;
 	uchar_0030 = 0;
+}
+
+/*
+ * `trn2dKnownDemod` -- 170 bytes at 0x25de0, between `resetBeforRRN` and
+ * `detectFPE` in the blob as here.
+ *
+ * The known TRN2d symbol, re-derived: run the EMBEDDED modulator's own
+ * generator one symbol forward, split the result into sign and magnitude,
+ * put the magnitude back through the companding law in force, and read the
+ * learned level for (phase, code) out of the impairment detector's
+ * `linMapp`.  The SHORT ARGUMENT IS NEVER READ -- no instruction touches
+ * 0x24(%esp) -- so it is unnamed, exactly like the K56 stubs' parameters.
+ *
+ * FOUR ENCODINGS THE INSTRUCTIONS FORCE, all reproduced:
+ *
+ *   - the magnitude goes through a SHORT intermediate and is
+ *     absolute-valued AGAIN inside each arm (`movswl %ax,%ebx` at +0x35,
+ *     then `sar/xor/sub` at +0x58 and +0x9a) -- observable only at
+ *     generateSymbol() == -32768, where the double abs hands the compander
+ *     32768 rather than -32768;
+ *   - the law test is a SIXTEEN-BIT compare (`cmpw $0x0,0xa95c`) of the
+ *     four-byte `pcmType`, hence the `(short)` cast: an upper half left
+ *     non-zero reads as mu-law here and as A-law to a `cmpl`;
+ *   - the A-law code is `linear2alaw(..) ^ 0xd5` and the mu-law code
+ *     `0xff - linear2ulaw(..)` widened through a short -- the same
+ *     complement pair `resetDILGenerator` documents;
+ *   - the table read is FLAT, `idx * 128 + code` off `linMapp[0]`, and the
+ *     code can exceed 127 (it is a full eight-bit value), so the flat
+ *     spelling is kept rather than a two-subscript one that would claim the
+ *     row bounds it.  `movzwl`, so the level is read unsigned; the product
+ *     against the +/-1 sign is truncated to short by the CALLEE
+ *     (`movswl %di,%eax`), which is what makes the return `int`.
+ */
+int
+V90Phase4Demodulator::trn2dKnownDemod(short)
+{
+	short gen = (short)phase4Modulator.generateSymbol();
+	short sign = (short)((gen < 0) ? -1 : 1);
+	short mag = (short)((gen < 0) ? -gen : gen);
+	unsigned int idx = (countInState - 1u) % 6u;
+	const unsigned short *tab =
+	    (const unsigned short *)autoDigitalImpDetector->linMapp;
+	int code;
+	unsigned short level;
+
+	if ((short)autoDigitalImpDetector->pcmType != 0)
+		code = linear2alaw((mag < 0) ? -mag : mag) ^ 0xd5;
+	else
+		code = (short)(0xff - linear2ulaw((mag < 0) ? -mag : mag));
+
+	level = tab[idx * 128u + (unsigned int)code];
+	return (short)(sign * level);
 }
 
 /*

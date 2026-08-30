@@ -169,7 +169,13 @@ public:
 	 * therefore unknown for both of them.  They belong to whichever batch
 	 * writes the last two members of this class's processing half.
 	 */
-	void evaluateMeanErrorStdPhase3(float);
+	/*
+	 * `int` is measured off 0x3f9d0 (%esi zeroed, 5 on the verdict arm,
+	 * moved to %eax at both exits); it returns `evaluatePhase3`'s own
+	 * fall-back verdict code.  Both defined in the .cpp since the
+	 * VPcmV34Main leaf pass.
+	 */
+	int evaluateMeanErrorStdPhase3(float);
 	void printStatus() const;
 
 	/*

@@ -32,6 +32,89 @@ typedef char v92jd_size[(sizeof(V92Jd) == 0xdc) ? 1 : -1];
 
 /*
  * ===========================================================================
+ * THE FIVE SETTERS, 0x11b90..0x11f62, four of them here ahead of the
+ * constructor because that is the blob's emission order for this TU --
+ * `setJdPhase` (0x11b90), `setMaxLookahead` (0x11bf0), `setRatesMask`
+ * (0x11c10) and `setConstelSize` (0x11c60) come BEFORE `C2` (0x11c80), and
+ * `resetCrc` (0x11f40) sits between `getMaxLookahead` (0x11f20) and
+ * `packJdPhaseData` (0x11f70).  Emission order is a register-allocation
+ * carrier (finding F7796), so the file keeps it.
+ *
+ * Each is one field of what the constructor writes, at the same offsets and
+ * in the constructor's own spelling; the differences from V90Jd's four are
+ * exactly the constructor's differences -- the phase group, the 11-bit
+ * second mask group, and the constellation pair landing in `phaseBits`.
+ *
+ * THE LOOP VARIABLES ARE `k` WHERE THE CONSTRUCTOR'S ARE `i` AND `u`: the
+ * mutation suite anchors on the constructor's exact text and an anchor must
+ * match exactly once (`make refs`).  An identifier moves no codegen; the
+ * declared TYPES (`int` against `unsigned`) are kept, because those do.
+ * ===========================================================================
+ */
+
+/*
+ * 0x11b90, 87 bytes.  The constructor's phase conversion, verbatim: Q16
+ * through a `long long` (`fistpll` -- a 32-bit conversion would be `fistpl`),
+ * truncated to `int`, low sixteen bits into `phaseBits[18..33]`.  The loop
+ * counter is UNSIGNED (`cmp $0xf; jbe`), as in the constructor.
+ */
+void
+V92Jd::setJdPhase(float jdPhase)
+{
+	long long scaled;
+	int q;
+	unsigned k;
+
+	scaled = (long long)(65536.0f * jdPhase);
+	q = (int)scaled;
+	for (k = 0; k <= 15; k++)
+		phaseBits[V90JD_GROUP1 + 1 + k] =
+		    (unsigned char)((q & (1 << k)) != 0);
+}
+
+/* 0x11bf0, 26 bytes.  The pair at `bits[49]`/`bits[50]`, low bit first. */
+void
+V92Jd::setMaxLookahead(unsigned char v)
+{
+	bits[49] = (unsigned char)(v & 1);
+	bits[50] = (unsigned char)((v >> 1) & 1);
+}
+
+/*
+ * 0x11c10, 71 bytes.  The 27-bit rate mask into the two framed groups --
+ * bits 0..15 to `bits[18..33]`, bits 16..26 to `bits[35..45]`.  The second
+ * loop stops one earlier than V90Jd's (`cmp $0xa` against `cmp $0xb`), which
+ * is the constructor's difference too.  `sar`, so the parameter is signed,
+ * and both counters `jle`: `int`.
+ */
+void
+V92Jd::setRatesMask(int mask)
+{
+	int k;
+
+	for (k = 0; k <= 15; k++)
+		bits[V90JD_GROUP1 + 1 + k] =
+		    (unsigned char)(((mask >> k) & 1) != 0);
+
+	for (k = 0; k <= 10; k++)
+		bits[V90JD_GROUP2 + 1 + k] =
+		    (unsigned char)(((mask >> (16 + k)) & 1) != 0);
+}
+
+/*
+ * 0x11c60, 19 bytes.  Two bytes stored whole -- and into `phaseBits[48]` and
+ * `phaseBits[49]` (+0x7a, +0x7b), NOT the `bits[47]`/`bits[48]` V90Jd's
+ * writes: D271's split, seen from the setter side.
+ */
+void
+V92Jd::setConstelSize(unsigned char first, unsigned char second)
+{
+	phaseBits[48] = first;
+	phaseBits[49] = second;
+}
+
+/*
+ * ===========================================================================
  * The constructor, 0x11c80.  Three fields of V90Parameters, and one of them
  * goes through the coprocessor.
  *
@@ -197,6 +280,20 @@ unsigned char
 V92Jd::getMaxLookahead()
 {
 	return (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));
+}
+
+/*
+ * 0x11f40, 35 bytes: the CRC register to all ones, `jle` against 15 so the
+ * counter is `int`.  The same loop is inlined into both packers below; this
+ * is the out-of-line copy, claimed at last.
+ */
+void
+V92Jd::resetCrc()
+{
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		crc[i] = 1;
 }
 
 /*

@@ -1152,11 +1152,12 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
  * one appears open-coded inside `v90RunDemodulator` between one and three
  * times.
  *
- * THEY ARE `inline` HERE AND THEIR SYMBOLS ARE NOT CLAIMED, which is finding
- * F7570's move for `setConstellationMask` and `setCodecConstellationMask`
- * carried over to members: writing the symbols is 451 further bytes with
- * seven differential tests of their own, and this batch is scoped to one.
- * `include/dsplib/VPcmFloModem.h` says what dropping the `inline` costs.
+ * THE `inline` IS NOW DROPPED AND THE SEVEN SYMBOLS ARE CLAIMED -- the move
+ * `include/dsplib/VPcmFloModem.h` priced ("451 bytes and seven differential
+ * tests") has been made, and t_vpcmleaves.cpp is those tests.  Dropping the
+ * keyword changes nothing about the fourteen inlined sites: GCC still
+ * inlines a same-TU callee at -O3, and now also emits the out-of-line copy
+ * the blob has.
  *
  * WHY THEY ARE FUNCTIONS AND NOT OPEN-CODED HERE TOO.  The alternative
  * spelling -- the same statements written out at each of the fourteen sites
@@ -1173,7 +1174,7 @@ VPcmFloModem::getDFE(int_complex *points, unsigned long maxCount)
  * the diagnostic is a tail call, and the argument is re-widened from the byte
  * that was just stored (`movzbl %dl,%eax`), not reloaded.
  */
-inline void
+void
 VPcmFloModem::setTerminateJaFlag(unsigned char v)
 {
 	terminateJa = v;			/* +0x7dce */
@@ -1181,7 +1182,7 @@ VPcmFloModem::setTerminateJaFlag(unsigned char v)
 		dsplibs_debug_printf("Ja Flag set to %d\r\n", v);
 }
 
-inline void
+void
 VPcmFloModem::setTerminateCpFlag(unsigned char v)
 {
 	terminateCp = v;			/* +0x7dcf */
@@ -1189,7 +1190,7 @@ VPcmFloModem::setTerminateCpFlag(unsigned char v)
 		dsplibs_debug_printf("CP Flag set to %d\r\n", v);
 }
 
-inline void
+void
 VPcmFloModem::setTerminateCpNotFlag(unsigned char v)
 {
 	terminateCpNot = v;			/* +0x7dd0 */
@@ -1203,7 +1204,7 @@ VPcmFloModem::setTerminateCpNotFlag(unsigned char v)
  * setter is `nofTransmitSequences = 0` followed by the assignment its name
  * describes, and no caller has to say so.
  */
-inline void
+void
 VPcmFloModem::setMinNofTransmitSequences(unsigned short n)
 {
 	nofTransmitSequences = 0;		/* +0x7dd4 */
@@ -1223,7 +1224,7 @@ VPcmFloModem::setMinNofTransmitSequences(unsigned short n)
  * sixteen points and four, which is what the Jd diagnostic's own
  * "(0 = 4 points / 1 = 16 points)" says.
  */
-inline void
+void
 VPcmFloModem::setNofBitsPhase4(unsigned int constel)
 {
 	nofBitsPerSymbol = (constel == 0) ? 2 : 4;	/* +0x7dd2 */
@@ -1239,7 +1240,7 @@ VPcmFloModem::setNofBitsPhase4(unsigned int constel)
  * Note that it does NOT touch `minNofTransmitSequences`, which is why the two
  * arms that want it at 1 call `setMinNofTransmitSequences` afterwards.
  */
-inline void
+void
 VPcmFloModem::resetBitPointer()
 {
 	bitPointer = 0;				/* +0x1738 */
@@ -1248,6 +1249,41 @@ VPcmFloModem::resetBitPointer()
 	terminateCpNot = 0;			/* +0x7dd0 */
 	cpNotLoaded = 0;			/* +0x7dd1 */
 	nofTransmitSequences = 0;		/* +0x7dd4 */
+}
+
+/*
+ * d4f0, 165 bytes, between `setV34BaudForV34` (d4c0) and
+ * `copyMpInfoForInterface` (d5a0) in the blob.  The transmit-side subset of
+ * `enterPhase3`'s constant stores: the two bit-vector counts and the bit
+ * pointer, the five flag bytes at +0x173a, the V.34 baud allow list (the
+ * `setV34BaudForV90` values -- index 5, the 3429 rate, barred), the four
+ * termination/CPnot bytes, `nofBitsPerSymbol` back to 2, and the sequence
+ * counter pair to 0 and 1.  Every store is a constant; nothing is read.
+ */
+void
+VPcmFloModem::internalReset()
+{
+	nofBits = 0;				/* +0x1736 */
+	cpNofBits = 0;				/* +0x7dcc */
+	bitPointer = 0;				/* +0x1738 */
+	flags_173a[0] = 0;		/* +0x173a */
+	flags_173a[1] = 0;		/* +0x173b */
+	flags_173a[2] = 0;		/* +0x173c */
+	flag_173d = 0;			/* +0x173d */
+	flag_173e = 0;			/* +0x173e */
+	v34BaudAllow[0] = 1;		/* +0x217: the V.90 run of six  */
+	v34BaudAllow[1] = 0;		/* +0x218 */
+	v34BaudAllow[2] = 1;		/* +0x219 */
+	v34BaudAllow[3] = 1;		/* +0x21a */
+	v34BaudAllow[4] = 1;		/* +0x21b */
+	v34BaudAllow[5] = 0;		/* +0x21c: 3429 baud barred     */
+	terminateJa = 0;		/* +0x7dce */
+	terminateCp = 0;		/* +0x7dcf */
+	terminateCpNot = 0;		/* +0x7dd0 */
+	cpNotLoaded = 0;		/* +0x7dd1 */
+	nofBitsPerSymbol = 2;		/* +0x7dd2 */
+	nofTransmitSequences = 0;	/* +0x7dd4 */
+	minNofTransmitSequences = 1;	/* +0x7dd6 */
 }
 
 /*
@@ -1272,7 +1308,7 @@ VPcmFloModem::resetBitPointer()
  * PURPOSE, which is what a wrong claim looks like from the outside rather
  * than a weak trial.  Findings F7585 and F6103.
  */
-inline void
+void
 VPcmFloModem::copyMpInfoForInterface()
 {
 	mpType = modem.mp.Type;

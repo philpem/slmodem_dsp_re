@@ -2,12 +2,12 @@
  * V90Phase4Modulator.h -- the V.90 / V.92 phase 4 downstream symbol source.
  *
  * Reconstructed from dsplibs.o.  Forty-three members and 12,078 bytes of
- * code, of which THIRTY-NINE are written in
+ * code, ALL of which are now written in
  * src/pump/v90/V90Phase4Modulator.cpp -- `grep -c '^V90Phase4Modulator::'`
  * is where that number comes from, so it can be re-measured rather than
- * believed.  Both symbol pumps, `reset`, `generateSymbol` (finding F7520) and
+ * believed.  Both symbol pumps, `reset`, `generateSymbol` (finding F7520),
  * the three callerless message sources `generateMP`, `generateCPd` and
- * `generateSUVd` (the newest) are among them; the four that are not are
+ * `generateSUVd`, and -- the last four, from the VPcmV34Main leaf pass --
  * `generateB1d`, `generateTRN2d`, `generateEd` and
  * `recivedPartTwoSilenceRrnSUVtag`.
  *
@@ -350,6 +350,19 @@ public:
 	short generateRdRtNot();
 	short generateRf();
 	short generateRfNot();
+
+	/*
+	 * The three training sources, 149 bytes each (0x2d9f0, 0x2da90,
+	 * 0x2db30): scramble a converter-sized run of constant ones (B1d,
+	 * TRN2d) or zeros (Ed) and drain one symbol.  `short` by the same
+	 * class convention as the message sources; the .cpp's block comment
+	 * carries the derivation.  And the five-byte sibling call at 0x2cc60,
+	 * whose whole body is `recivedSUVtag()`.
+	 */
+	short generateB1d();
+	short generateTRN2d();
+	short generateEd();
+	void recivedPartTwoSilenceRrnSUVtag();
 	short generateRi();
 	short generateRiNot();
 	short generateDataSymbolBeforeFPE();

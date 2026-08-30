@@ -100,6 +100,17 @@ enum DilType {
 void setDilDescriptor(tagV90DILdescriptor *d, DilType type);
 
 /*
+ * The other two free functions of the TU, written by the VPcmV34Main leaf
+ * pass: the boundary search standalone (0x31da0) and the table-driven
+ * length (0x31e20).  Both return `unsigned int` -- the search's own counter
+ * and the accumulator, each moved to %eax whole.  `PcmType` comes from
+ * V90Phase3Modulator.h, which this header already relies on for the
+ * descriptor overload below.
+ */
+unsigned int getSegmentPointer(PcmType pcmType, int level);
+unsigned int calculateDilLength(DilType type, PcmType pcmType);
+
+/*
  * The number of phase 3 symbols the DIL sequence in `dil` will occupy, as the
  * sum over its `dilCount` entries of `6 * segmentSize[segment] + 6`, where
  * `segment` is the G.711 segment the entry's code falls in.  Zero for a null

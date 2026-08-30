@@ -114,6 +114,36 @@ V90MP::~V90MP()
 }
 
 /*
+ * resetCRC -- 0x1f150, 32 bytes: the CRC register to all ones, sixteen BYTE
+ * stores (`mov %cl`) where V90Jd's CRC keeps ints.  `jle` against 15, so the
+ * counter is `int`.  The identical loop opens `calcCRC`'s callers inline;
+ * this is the out-of-line copy.
+ */
+void
+V90MP::resetCRC()
+{
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		crc[i] = 1;
+}
+
+/*
+ * resetDetector -- 0x1f3c0, 24 bytes, four stores and a `ret`.  The same
+ * four `reset` and the constructor repeat inline (the block comment below
+ * has the measurement and finding F1237 for why the repetition is the
+ * original's and not a call).
+ */
+void
+V90MP::resetDetector()
+{
+	byte_1b = 18;
+	word_14 = 0;
+	byte_19 = 0;
+	byte_1a = 0;
+}
+
+/*
  * reset -- the constructor's forty bytes again, instruction for instruction.
  *
  * 0x1f3e0 and 0x1f410 differ in nothing but their address: the same six
@@ -308,6 +338,29 @@ V90MP::evaluateInfo()
 		h3Real = (short)((h3Real << 1) | (bits[i] & 1));
 	for (i = 0x98; i > 0x88; i--)
 		h3Imag = (short)((h3Imag << 1) | (bits[i] & 1));
+}
+
+/*
+ * calcSequenceLength -- 0x1f910, 116 bytes, between `evaluateInfo` and
+ * `infoToBits` in the blob as here.
+ *
+ * Round `byte_119 + 1` UP to a multiple of the group size and store it in
+ * `byte_118` -- except that the exact-multiple arm stores `byte_119 + 1`
+ * through a BYTE increment of the saved copy (`incb 0x3(%esp)`), so the two
+ * arms agree only below 256.  The division is `div` against `word_114`:
+ * unsigned, and a group size of zero traps exactly as the object does.
+ */
+void
+V90MP::calcSequenceLength()
+{
+	unsigned char b = byte_119;
+	unsigned int w = (unsigned int)b + 1;
+	unsigned int q = w / word_114;
+
+	if (q * word_114 != w)
+		byte_118 = (unsigned char)((q + 1) * word_114);
+	else
+		byte_118 = (unsigned char)(b + 1);
 }
 
 /*
@@ -748,6 +801,41 @@ V90MP::evaluateCRC()
  * `PrintBase2` (0x20130) is a plain global symbol, so as with the CRC the two
  * copies of its body here are the original's own repetition, not an inlining.
  */
+
+/*
+ * PrintBase2 -- 0x20130, 81 bytes, immediately before `bitsToInfo` in the
+ * blob as here.  Render `value` in binary into `out`, NUL-terminated.
+ *
+ * With `nofBits` non-zero the mask starts at bit `nofBits - 1` and every
+ * position prints, leading zeros included -- which is the form the two
+ * inline copies in `bitsToInfo` specialise (nofBits = 14).  With it zero the
+ * mask starts at bit 31 and `started` suppresses the leading zeros, so the
+ * output is the minimal representation -- and an all-zero value prints
+ * NOTHING but the terminator, which is the object's behaviour and not an
+ * edge this file guards.
+ */
+void
+V90MP::PrintBase2(char *out, unsigned long value, unsigned short nofBits)
+{
+	unsigned long mask = 0x80000000ul;
+	int started;
+
+	if (nofBits != 0)
+		mask = 1ul << (nofBits - 1);
+	started = (nofBits != 0);
+
+	while (mask != 0) {
+		if ((value & mask) != 0) {
+			*out++ = '1';
+			started = 1;
+		} else if (started) {
+			*out++ = '0';
+		}
+		mask >>= 1;
+	}
+	*out = '\0';
+}
+
 int
 V90MP::bitsToInfo(int bit)
 {

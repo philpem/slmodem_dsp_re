@@ -325,6 +325,30 @@ setCodecConstellationMaskInline(V90MappingParams *params, int which,
 }
 
 /*
+ * THE TWO GLOBALS THEMSELVES, claimed by the VPcmV34Main leaf pass.  The
+ * paragraph above priced the move ("delete the `static` and add a
+ * prototype"); it is made as a WRAPPER instead, because fifty-five mutation
+ * anchors in v90unpck/v92mpunpck name the `*Inline` spellings and renaming
+ * the helpers would orphan them all.  GCC inlines a same-TU callee at -O3,
+ * so each wrapper's body IS the helper's -- one symbol, the blob's 128
+ * bytes -- and the call sites above keep the factoring F5821 measured.
+ * `extern "C"` because both blob symbols are unmangled; neither has a
+ * caller anywhere in the object.
+ */
+extern "C" void
+setConstellationMask(V90MappingParams *params, int which, const short *mask)
+{
+	setConstellationMaskInline(params, which, mask);
+}
+
+extern "C" void
+setCodecConstellationMask(V90MappingParams *params, int which,
+			  const short *mask)
+{
+	setCodecConstellationMaskInline(params, which, mask);
+}
+
+/*
  * ===========================================================================
  * getDataBitRate (.text+0x33670, 24 bytes)
  * ===========================================================================
@@ -403,6 +427,13 @@ setDataBitRateInline(V90MappingParams *params, int islong, int rate)
 		params->word_0 = (unsigned int)(rate + 0x14);
 	else
 		params->word_0 = (unsigned int)(rate + 8);
+}
+
+/* The global, on the same wrapper terms as the two mask setters above. */
+extern "C" void
+setDataBitRate(V90MappingParams *params, int islong, int rate)
+{
+	setDataBitRateInline(params, islong, rate);
 }
 
 /*

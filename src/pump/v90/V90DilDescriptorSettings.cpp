@@ -269,6 +269,108 @@ setDilDescriptor(tagV90DILdescriptor *d, DilType type)
 }
 
 /*
+ * ===========================================================================
+ * `getSegmentPointer` -- .text+0x31da0, 0x73 = 115 bytes
+ * ===========================================================================
+ *
+ * The boundary search standalone: which G.711 segment `level` falls in, over
+ * the same sixteen-int constant pool the two `calculateDilLength`s copy --
+ * ONE `rep movsl` here, outside any loop, so the local is declared at
+ * function scope where theirs is per-iteration.  The row is `pcmType * 8`,
+ * the row length `7 + (pcmType != 1)` (eight boundaries under mu-law, seven
+ * under A-law), the boundary compare SIGNED (`jge`) against the `int`
+ * argument, and the index compare unsigned (`jae`).  The return is the
+ * index, `%edx` moved to `%eax`: `unsigned int`, like the search's own
+ * counter, and a level above every boundary returns the row length itself.
+ */
+unsigned int
+getSegmentPointer(PcmType pcmType, int level)
+{
+	int codeSegmentsBoundries[2][8] = {
+		{ 0x0f, 0x1f, 0x2f, 0x3f, 0x4f, 0x5f, 0x6f, 0x7f },
+		{ 0x1f, 0x2f, 0x3f, 0x4f, 0x5f, 0x6f, 0x7f, 0x00 }
+	};
+	unsigned int rowLength = pcmType == PCM_TYPE_A_LAW ? 7u : 8u;
+	unsigned int seg;
+
+	for (seg = 0; seg < rowLength; seg++)
+		if (codeSegmentsBoundries[pcmType][seg] >= level)
+			break;
+
+	return seg;
+}
+
+/*
+ * ===========================================================================
+ * `calculateDilLength(DilType, PcmType)` -- .text+0x31e20, 0xf1 = 241 bytes
+ * ===========================================================================
+ *
+ * The descriptor overload below, run over THIS FILE'S OWN TABLES instead of
+ * a caller's descriptor: `N[type]` entries of `TO[type]`, each searched
+ * against the per-iteration boundary copy, each contributing
+ * `6 * H[type][seg] + 6`.
+ *
+ * THE GUARD IS SIGNED -- `cmpl $0x1; jle` -- so the cast below is what holds
+ * a modern compiler to it: `DilType`'s underlying type is unsigned under
+ * GCC's rules and an unsigned compare would send a negative type to the
+ * early return where the object indexes with it.  No in-object path builds
+ * such a value (`V90Modem::reset`'s `qcFlag ? 1 : 0` is the only
+ * constructor), so the difference is not testable; the spelling follows the
+ * instruction.
+ *
+ * THE BOUND IS A CACHED BYTE, not a re-read: `N[type]` is copied to a stack
+ * byte at entry (`mov %al,0x7(%esp)`) and every iteration compares against
+ * that copy -- nothing here writes the tables, so the source kept it in a
+ * local where `setDilDescriptor`'s loops could not.
+ *
+ * `seg` CANNOT FALL OFF `H`'s ROW HERE, unlike the descriptor overload's
+ * one-past read: every `TO` entry is at most 116, below the smallest last
+ * boundary (0x7f), so the search always breaks by `seg = 7` and the plain
+ * two-subscript read is exact.
+ */
+unsigned int
+calculateDilLength(DilType type, PcmType pcmType)
+{
+	unsigned int length = 0;
+	unsigned char n;
+	unsigned int i;
+
+	if ((int)type > DIL_TYPE_ADI_QC)
+		return length;
+
+	n = N[type];
+	if (n == 0)
+		return length;
+
+	/*
+	 * The identifiers and the array wrapping below diverge from the
+	 * overload's on purpose (`n`, `rowLen`, `segBounds`): the mutation
+	 * suite anchors on that overload's exact text and an anchor must
+	 * match exactly once (`make refs`).  Identifiers move no codegen.
+	 */
+	for (i = 0; i < n; i++) {
+		/* Re-initialised per iteration, as in the overload below. */
+		int segBounds[2][8] = {
+			{ 0x0f, 0x1f, 0x2f, 0x3f,
+			  0x4f, 0x5f, 0x6f, 0x7f },
+			{ 0x1f, 0x2f, 0x3f, 0x4f,
+			  0x5f, 0x6f, 0x7f, 0x00 }
+		};
+		unsigned int rowLen = pcmType == PCM_TYPE_A_LAW ? 7u : 8u;
+		unsigned int code = TO[type][i];
+		unsigned int seg;
+
+		for (seg = 0; seg < rowLen; seg++)
+			if (segBounds[pcmType][seg] >= (int)code)
+				break;
+
+		length += 6u * H[type][seg] + 6u;
+	}
+
+	return length;
+}
+
+/*
  * The object reads the length code one past `segmentSize` when the search
  * falls off the end, so the read is spelled through a byte pointer here: see
  * the comment on `seg` below.

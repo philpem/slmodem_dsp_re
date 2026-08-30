@@ -8,10 +8,11 @@
  * byte-identical pair `D1` and `D2` (finding F1270), and the three that carry
  * the signal: `setState`, `updateEchoHistory` and `process`.
  *
- * THE FIVE THAT ARE NOT WRITTEN are `setEchoParams`, `setEchoBeta`,
- * `setDecayFactor`, `zeroEchoCoeff` and `resetEchoHistory`.  The last four
- * are all inlined into members that ARE written, so their bodies are here
- * even though their symbols are not -- see the .cpp.
+ * `setEchoParams`, `setEchoBeta` and `setDecayFactor` are written, and so --
+ * since the VPcmV34Main leaf pass -- are `zeroEchoCoeff`, `resetEchoHistory`
+ * and the free `print_echo_coeffs`, which completes the TU.  `reset` still
+ * spells the two loop bodies inline, which is the original's own shape; see
+ * the .cpp's factoring note.
  *
  * THE CONSTRUCTOR IS WHERE THE SIZING HAPPENS, which is D72's whole premise
  * made concrete: it allocates `echoHistory` once, `historyAlloc` floats long,
@@ -135,6 +136,15 @@ enum V92EchoCancellerState {
 	V92EchoCancellerState_BASE_PIN = -0x7fffffff - 1  /* ours: the base */
 };
 
+/*
+ * print_echo_coeffs -- 0x10a30, 179 bytes, the free function that shares this
+ * translation unit (it is the TU's first symbol).  Mangled, so a C++
+ * declaration; `_Z17print_echo_coeffsPfj` fixes the parameter types.  One
+ * banner line and one `%c%d.%06d` line per coefficient, all through
+ * `edprintf`.  Nothing in the object calls it.
+ */
+void print_echo_coeffs(float *coeffs, unsigned int len);
+
 class V92EchoCanceller {
 public:
 	/*
@@ -153,6 +163,15 @@ public:
 	/* Defined in src/pump/v90/V92EchoCanceller.cpp. */
 	void setEchoDelay(unsigned int);
 	void reset();
+
+	/*
+	 * The two halves of `reset` the object ALSO emits standalone (0x10f60
+	 * and 0x10f90; the file comment's factoring note).  Both are defined
+	 * in the .cpp now; `reset` still spells their bodies inline, which is
+	 * the original's own shape.
+	 */
+	void zeroEchoCoeff();
+	void resetEchoHistory();
 
 	/*
 	 * The two adaption constants and the one member that sets all three
