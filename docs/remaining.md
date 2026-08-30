@@ -5,21 +5,22 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `91e1de4d` (wave 1 merged), 2026-08-30:
+Measured at `6a51f40b` (waves 1 and 2 merged), 2026-08-30:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 78.4%  (575,845 bytes / 1,426 symbols)   was 76.6% / 1,296
-remaining  158,760 bytes /   435 symbols            was        565
-  data modes            61 sym   38,980 B
+translated 82.3%  (604,812 bytes / 1,471 symbols)   was 76.6% / 1,296
+remaining 129,793 bytes /   390 symbols
+  data modes            16 sym   10,013 B   was 65 sym / 39,166 B
   fax only             283 sym   78,331 B
   voice / CID / ring    67 sym   23,802 B
   no-entry-point leaves 15 sym    3,167 B   was 138 sym / 15,767 B
 ```
 
-**Wave 1 cleared the leaf bucket: 138 symbols down to 15, 15,767 bytes to
-3,167.** Merged master is green on the period compiler at 275 passed, 0
-failed — master's 258 tests plus the wave's 17.
+**The data modes are 74% cleared.** Wave 1 took the leaf bucket from 138
+symbols to 15; wave 2 took the data-mode bucket from 65 symbols / 39,166 bytes
+to **16 / 10,013**. Merged master is period-green at **293 passed, 0 failed** —
+master's 258 tests plus 35 new ones across the two waves.
 
 ## The order
 
@@ -34,9 +35,10 @@ phase, last on purpose).
 | 2 | leaves: V.90/V.92 API surface | `VPcmV34Main.cpp +72` | 5,805 | **DONE** — wave 1, `f76eceeb` (no derivations: F8430) |
 | 3 | leaves: voice-span utilities | `Beepgen.c +3`, `Fdspkrnl.c +13`, `RingDetector_Reset` | ~4.3 K | **DONE** — wave 1, `688a1fb2` |
 | 4 | leaves: V32mod/Dialer + fax-named exported API | `V32mod.c +39`, `Dialer.c +18`, `class1*.c` leaves | ~4.7 K | **DONE** — wave 1, `9b1739ee`; SGD withdrawn (F8497), 9 blocked on the link constraint (F8492) |
-| 5 | **V.32/V.32bis** | `Dialer.c +18` + `V32mod.c +39` together | 25,925 firm / 30,306 ceiling | **NEXT — wave 2** |
-| 6 | V.22/V.22bis/Bell 212 | `V32mod.c +39` (v22_* ~12 K) + `v22.c` | ~13 K | wave 2, same spans as V.32 |
-| 7 | v32.c dispatch | `v32.c` (needs V.32 data tables) | 1,691 | with wave 2 |
+| 5 | V.32/V.32bis half-duplex machine | `Dialer.c +18` + `V32mod.c +39` together | 13,344 | **DONE** — wave 2, merge `a6da902b`. 26 symbols, 8 `TxHdx*`, 12 `RxHdx*`, all four `V32*NextState`, 6 tables |
+| 6 | V.22/V.22bis/Bell 212 | `V32mod.c +39` + `v22.c` | ~15.9 K | **DONE** — wave 2, merge `41c62864`. 22 symbols, all seven `V22_PROTOCOL` handlers. Lifecycle DECLINED (F8538) |
+| 6b | **V.22 lifecycle — the declined set** | `v22.c` | 999 | **NEXT.** `V22FP_modem` 346, `v22_process` 557, `v22_create` 300, `dp_v22_init`/`exit`, `V22_PROTOCOL`, `v22_ops`, three `.bss` buffers. Written and compiling but NOT committed: the differential test fails and the agent could not establish why (F8538) |
+| 7 | **V.32 FP layer and dispatch** | `Dialer.c +18`, `V32mod.c +39`, `v32.c` | 9,384 | **NEXT.** One closure of 25 symbols, no longer all-or-nothing: `V32FP_recreate` (3,733) is blocked on **eight tables totalling 596 bytes and nothing else**. Order: tables → `V32FP_recreate` → FP layer (`_status` 1084, `_control` 776, `_modem` 356, `_create` 169) → `v32_data` 859 → `v32.c`'s five (F8594) |
 | 8 | Caller ID + ring detect | `cid_*` in `V32mod.c`, the rest of `voice.c#3`'s `RingDetector_*`/`RD_*` | ~7 K | after data modes. `CID_*` and `RingDetector_Reset` already landed in wave 1 |
 | 9 | voice | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3` remainders | ~15 K | low priority |
 | 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last. Restore `t_faxsgd.c` from `9b1739ee^` first (F8497) |
@@ -142,3 +144,74 @@ source of the contention above. And a wrapper must exit with `make`'s own
 status — `make … > log; echo; tail` reports the exit code of `tail`, and
 reported a red gate as exit 0 in this very pass, which is findings F2400 and
 F3100 with the gate itself as the victim.
+
+## Wave 2 ledger (V.32 and V.22, two dependency-ordered chains)
+
+Finding blocks: V.22 F8520–8559, V.32 F8560–8599. Both agents used `make one`
+as their inner loop and ran NO gate; the parent gated each branch on `make
+period` alone, then the merged tree. Merged master **293 passed, 0 failed**.
+
+| chain | commit | outcome |
+|---|---|---|
+| V.32/V.32bis | merge `a6da902b` (branch head `d97ddb87`) | 26 symbols / 13,344 B, period 266/266. Nothing declined, nothing left blocked in that closure. F8560–F8594 |
+| V.22/V.22bis | merge `41c62864` (branch head `f217acae`) | 22 symbols / ~15.9 K, period 268/268. Lifecycle DECLINED (F8538). F8520–F8538 |
+
+### What wave 2 established
+
+- **F8587 is the transferable one, and it bounds a technique this tree
+  relies on.** A blob-against-blob dry run CANNOT catch an unplanted
+  SUBSCRIPT: both sides read the same out-of-bounds neighbour of the same
+  array and agree, so every comparison passes and only a segfault is left to
+  chance. It is F134's dead detector again. A fixture must plant every field a
+  callee uses as a subscript, not only every field it DEREFERENCES — and the
+  test's own anti-vacuity counter was being satisfied by the undefined read,
+  so it was reporting coverage the fixture had not arranged. See D955.
+- **The V.22 lifecycle was DECLINED, correctly (F8538).** Written, compiling,
+  and left uncommitted because its differential test fails and the agent could
+  not establish why: ours holds `V22_CLAMP_VALUE` where the blob holds 0, while
+  the return, both counts, the transmit samples, all three structs and all 28
+  heap regions agree over 18,018 checks. Driving a handler directly gives zero
+  divergences, so it is not the handlers. **An exclusion that moves when you
+  move it is hiding a defect, not naming one** — scoping the sweep away from
+  the failing table entry made the same failure reappear for the next entry.
+- **Three facts that survive the decline:** `V22FP_modem` returns the whole
+  32-bit word at `fp+0x1c`, not the status byte (an argument in a header
+  comment was standing where a measurement was available, and the measurement
+  refuted it on the first call); `v22_create`, `v22_delete` and `v22_process`
+  are FILE-STATIC in the object, so the committed `v22_delete` is global and
+  should not be; and status 4 is the 1200 connect.
+- **`tools/bannercheck.py` is new (F8535)** and checks source banners against
+  `nm -S`. Seven of nine addresses in one agent's own subagent briefs were
+  wrong while every size was right. It found four more stale ones in wave 1's
+  `src/fax/class1tx.c`, all off by 0x30, now corrected. **It is not wired into
+  `make phase`** — that is a decision someone should make deliberately.
+- **Open, and named:** F8533 (transmit path diverges between two graphs after
+  ~40 blocks; the probe to run is a stack poison), F8537 (`FPM_TONE_generate`
+  returns its count while `fpm_tone.h` declares it `void`; `v22_originate`'s
+  NODE_3 divides by `hdx->r32` unguarded and faults in the blob), F8530
+  (`fixedrc.c` uses `calloc`/`free` where the object uses
+  `sysdep_malloc`/`sysdep_free` — left alone because `calloc` also zeroes).
+  Eleven `v22fp.h` field renames are queued with evidence across F8526, F8531,
+  F8534 and F8538, deliberately held back while five branches were live.
+  `t_v32nsrng` and `t_v32nsloop` have no mutation suite registered.
+
+### THE MERGE DEFECT THIS WAVE PRODUCED, AND THE RULE FROM IT
+
+**Both waves reconstructed the same four symbols** — `V22FP_control`,
+`ScramblerOn`, `DescramblerOn` and `V22FP_GetDiagnostics` — because the wave 2
+brief did not EXCLUDE what wave 1 had already landed. Each branch was
+period-green alone; merged, they were two definitions of one symbol. Git
+merged them without a conflict marker, and the failure surfaced only at the
+period compiler: first `conflicting types for 'V22FP_control'`, then
+`multiple definition` failing **293 of 293 binaries**.
+
+**So: scope a wave against what is WRITTEN, not against the span list**, and
+after any multi-branch merge run a whole-tree duplicate sweep —
+
+    for o in build/period/src_*.o; do nm --defined-only "$o" \
+        | awk -v f="$o" '$2 ~ /^[TD]$/ {print $3, f}'; done | sort | uniq -d -f0
+
+— rather than chasing one `multiple definition` at a time, which is what this
+pass did for three rounds before doing the sweep. Fixed in `b5532c22` and
+`6a51f40b`; the typed copies were kept, since the rest of V.22 is built on
+`struct v22fp`.
