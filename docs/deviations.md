@@ -9007,9 +9007,43 @@ differential test deliberately does not sweep out of range — the two tables si
 at different addresses in the two objects, so an out-of-bounds read is not a
 comparison of anything.
 
-**Status:** unmeasured. Every in-object caller of `RateToSeq` is unwritten
-(`V32OrgNextState` and its three siblings), so whether any of them can produce
-an index outside 0..6 is a question for the pass that writes them.
+**Status:** BOUNDED on the answer side, and the pass that was to settle it has
+run. `V32AnsNextState`'s only call is `RateToSeq(modem, (short)GetRateV32(modem))`
+and `GetRateV32` returns 0..6 by construction, so that caller cannot go out of
+range. The org, ring and local-loop siblings are written now too and can be
+settled the same way by reading their argument's provenance; nobody has, so they
+stay unmeasured. See D955 for the SECOND site on the same table, which is where
+this actually bit.
+
+## D955 ⚠ `v32_common_rate` indexes `V32_RATE_SEQ` from a FIELD, and five exported functions reach it
+
+The second site on the seven-entry table D404 covers, and the one that has
+actually caused a fault here. `v32_common_rate` is `static` in the object and
+inlined into `DecodeRateSeq`, `CodeRateSeq`, `CodeFinalRateSeq`, `CodeESeq` and
+`SeqToRate`, and it opens by subscripting `V32_RATE_SEQ` with
+`fp->rx_rate_index` at `fp + 0x2a` -- a FIELD of the datapump block, not an
+argument -- with no compare. A sixteen-bit field reads up to 64 KB either side
+of a fourteen-byte table.
+
+**Why it is worse than D404 in practice.** D404's index is an argument, so a
+caller's provenance bounds it and the reader can see the call. This one's index
+is state, so it is bounded by whatever last wrote `fp + 0x2a`, and five
+exported entry points reach it without naming it.
+
+**Reproduced**, and for D404's reason the differential test does not sweep out
+of range.
+
+**Status:** measured for the writers this tree has, unmeasured in general. It
+cost a real fault during the V.32 half-duplex pass: a test fixture filled the
+datapump block with pseudorandom bytes and planted only the fields a callee
+DEREFERENCES, and a subscript is not a dereference (finding F8587). The result
+was a segfault in a later trial than the one that set it up, and, before that,
+a silent one-byte disagreement four calls downstream that moved with the
+fixture seed. The six V.32 tests were then swept: `t_v32nsorg` sweeps the field
+0..6, `t_v32nsrng` and `t_v32nsloop` plant it from nine and seven in-range
+profiles, `t_v32rxhdx` pins it at 2, and `t_v32txhdx` and `t_v32hshake` never
+reach the ladder. **Any new fixture that fills `fp` with random bytes and
+drives any arm consulting the rate ladder has this bug.**
 
 ## D401 ⚠ `InitGenSequence` divides by its width argument with no test for zero
 
