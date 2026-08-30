@@ -95206,3 +95206,96 @@ it to 12, which is 600 baud at 8 kHz and is what `v22_fse.h` derived
 independently. And descrambling happens BEFORE `RxTrained1200`/`RxTrained2400`,
 so the training predicates see descrambled symbols; a test that wants to reach
 them has to stand the descrambler down as well as override the slicer.
+
+### F8533. The V.22 transmit path disagrees with ITSELF across two graphs after about forty blocks, and the obvious explanation is refuted
+
+**The observation, and it is the blob's, not a reconstruction's.** A sweep that
+drove 42 consecutive blocks through one `struct v22fp` built by `V22FP_create`
+found two blocks on which the TRANSMIT SAMPLES differed between the two
+graphs, while the graphs themselves, the received symbols and both counts
+still matched. It was re-run with **the blob's own `ref_v22_ans_rmloop2` on
+both sides** and the disagreement reproduced at the same two blocks. So it is
+not a difference between our code and the object's; it is a difference between
+two runs of the object's own code on two objects built identically.
+
+**The explanation first reached for is wrong.** `v22fp.h` records several
+regions `V22FP_create` never writes — `dsp->ra8`, `dsp->ra0`, `dsp->r24`,
+`dsp->rx_scratch` — and "the transmit chain reads uninitialised memory" is the
+natural reading. It cannot be right here: `test/harness/runtime.c`'s
+`sysdep_malloc` fills every block with a FIXED non-zero pattern precisely so
+that an unwritten field is identical on both sides and obviously wrong when
+read. Two graphs therefore start with byte-identical contents everywhere,
+which `t_v22fpcreate.c` independently confirms by comparing all twenty-eight
+regions of two freshly built graphs and finding them equal.
+
+**What is left is a hypothesis and is labelled as one.** The two graphs are
+allocated back to back, so what differs between them is not their CONTENTS but
+their NEIGHBOURS: a read past the end of any of the eleven buffers
+`V22FP_create` allocates lands on a different block in each graph. That would
+produce exactly this signature — identical for a while, then diverging once
+the read reaches past a boundary, and deterministic again the moment each call
+gets a freshly allocated graph, because the allocator recycles the same
+chunks in the same order.
+
+It is NOT established. Nothing has been traced, no offset has been read, and
+the transmit chain (`ModDataV22` -> `FPM_SMC_encode` -> `V22_PPS_filter`) has
+its own tests that pass. The next step is a probe rather than an argument:
+poison a guard region after each of the eleven allocations and see which one
+is read.
+
+**What was done about it meanwhile.** `t_v22ans.c` builds a fresh graph per
+call in that sweep, which makes both sides see the same allocation layout, and
+its header carries the reason so the next reader does not re-derive it. That is
+NOT a tolerance being widened — every check still asserts exact equality — but
+it does mean the long-run behaviour of the transmit path is currently untested
+past the point where this bites, and that is the cost of leaving it open.
+
+### F8534. The seven V.22 protocol handlers share one signature, and it belongs to `V22_PROTOCOL` rather than to any of them
+
+All seven entries of `V22_PROTOCOL` (F8529) take the same seven arguments in
+the same order, over stack ranges 1,234 bytes apart in the object:
+
+    void handler(struct v22fp *fp, unsigned short *txsym, short *txout,
+                 short *rxin, unsigned short *rxsym,
+                 unsigned short *txcount, unsigned short *rxcount)
+
+Each element's type is forced by a callee rather than inferred, and both
+counts CHANGE UNITS across the call: `*txcount` goes in as a data-word count
+and `*rxcount` goes in as an input sample count and comes out as a symbol
+count, with `RxClampV22` overwriting `rxsym` and `*rxcount` on most exit paths.
+A caller must reset both per block.
+
+`V22FP_modem` is where that shape comes from, and it is worth reading for its
+own sake: it copies the caller's transmit words into `tx_in_internal`
+(`.bss`+0x3a0) and the caller's input samples, right-shifted by `hdx->r34`,
+into `rx_in_internal` (`.bss`+0x560); dispatches through the table; copies
+`rx_out_internal` (`.bss`+0x480) back out; and only then scales 160 transmit
+samples by `params.r0c` in Q15. **That names `params.r0c`** — v22fp.h has it as
+"template 13014; read by nothing", and 13014/32768 is 0.397, so it is the
+transmit output GAIN. `hdx->r34` is likewise the receive input right shift.
+
+`V22FP_modem` also carries the machine's own state transition, which no
+handler has: after the dispatch it tests `fp->status` and, for 3 or 4 and for
+6, 7 or 8, sets `hdx->r0e = 0` and `hdx->r0c = 0` — that is, moves to
+`v22_data`, index 0. With 3 already fixed as `V22_MSG_CONNECT_2400` this reads
+as "any connect code enters the data state", and it is the strongest thing yet
+said about what the status codes are for.
+
+**One status value is corroborated from outside V.22 entirely.** 0x10 is
+NO_CARRIER, and `v32demod.h` independently records the same author's
+`RxHdxNull` writing 0x10 into the V.32 object's status byte beside
+`V32_MSG_NO_CARRIER`. Same value, same role, different datapump — which is
+better evidence than either module could give alone. 0x0b is RETRAIN (both
+"Retrain initiated." sites) and 9 is the retrain request.
+
+**And a signedness cluster, all of it forced.** `hdx->r08` is declared `short`
+in `v22fp.h` and is read `movzwl` into an UNSIGNED compare (`ja` against 231)
+at every site — it accumulates milliseconds and never legitimately goes
+negative, but the type the object encodes is `unsigned short`. Every
+`ReadGTimer` comparison in the family is `jbe` (F8532). And `Detect_1s`,
+`Detect_Rmloop2_ACK` and `Detect_Retrain`, declared `int` in `v22det.h`, are
+narrowed to a `short` LOCAL by every caller — a `cwtl` at the call site — which
+is consistent with the `int` declaration and a `short` variable, and is NOT a
+reason to change the header. Four sign mutants survive everything except a
+test that drives a negative through each, so all three were measured rather
+than assumed.
