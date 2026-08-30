@@ -20,9 +20,9 @@
  * closes it at twenty-five call symbols and six data symbols.  A state
  * installs its successor by STORING that successor's address into the
  * context, and a `movl $handler, field` is a relocation exactly as a `call`
- * is -- so no proper subset of the twenty-five can be linked (findings F8492,
- * F8493).  They land together or not at all, and one header is the honest
- * shape of that.
+ * is -- so no proper subset of the twenty-five can be linked.  They land
+ * together or not at all, and one header is the honest shape of that.
+ * Findings F8200 (which predicted the closure) and F8562 (which measured it).
  *
  * ---------------------------------------------------------------------------
  * THE OBJECT'S OWN FILE NAMES

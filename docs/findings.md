@@ -94891,7 +94891,9 @@ $ python3 tools/closure.py RxHdxNull RxHdxTone TxHdxNull TxHdxTone \
 
 which is F8200's figure exactly. **The smallest landable unit of the V.32
 half-duplex machine is therefore the whole machine**, and the reason is the
-link rule of F8492/F8493 rather than anything about difficulty: a state
+link rule rather than anything about difficulty -- `symmap.py` renames every
+defined blob symbol to `ref_*`, so a reference from `src/` to a symbol this tree
+has not written is an undefined reference that fails the whole suite: a state
 installs its successor with `movl $handler, 0x6c(%edx)`, and a stored function
 pointer is a relocation exactly as a `call` is. `RxHdxNull` at 0x844cc/0x844d3
 is the shortest instance — two stores, two relocations, `TxHdxNoCarrier` and
