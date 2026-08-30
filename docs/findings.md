@@ -94793,3 +94793,187 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+### F8520. V.22's three pattern detectors are one correlator written out three times, and every one of its accumulators is sixteen bits and wraps
+
+`Detect_1s` (0x8c0f0, 199 bytes), `Detect_Rmloop2_ACK` (0x8c010, 209) and
+`Detect_Retrain` (0x8bef0, 288) are the same arithmetic three times over.
+Each keeps three running sums over the received symbols —
+
+    sumsq  = sum s[i] * s[i]
+    corr   = sum s[i] * ideal
+    energy = sum ideal * ideal
+
+— and declares a match when `|2*corr - sumsq|` clears a fraction of `energy`.
+Expanding the left-hand side gives `energy - sum (s[i] - ideal)^2`, so the test
+is "the symbols are close to the ideal" written without a subtraction inside
+the loop.
+
+**All three accumulators are `short` and truncate on EVERY iteration** — a
+`cwtl` or a `movswl %ax` after each add — and the final comparison is a 16-bit
+`cmp` on both operands. `energy` is just `n * ideal^2`, so at 2400 bit/s
+(ideal 15) it passes 32767 after 145 symbols and wraps. An `int` accumulator
+agrees with the object over every short input and disagrees over every long
+one, which is why `t_v22det.c` sweeps to 8,192 symbols and asserts that each
+wrap was actually reached.
+
+The ideals are the object's: 15 and 3 for `Detect_1s`, which are exactly the
+two symbols `v22prc.h`'s `RxTrained2400` and `RxTrained1200` look for; 10 and 2
+for `Detect_Rmloop2_ACK`, which nothing corroborates and which are named for
+their value alone. The threshold is a parameter in `Detect_1s` and a literal
+0x7eb8 — 0.99 in Q15 — in the other two. The comparison is `>` in `Detect_1s`
+and `>=` in both others, one instruction apart in the object, and the asymmetry
+is the original's.
+
+A match returns `*count * 0x6aab >> 14`, i.e. 1.66668 per symbol, which is one
+600-baud symbol interval in milliseconds. The constant is the object's; the
+UNIT is inference from that arithmetic and from the 600 baud `v22_fse.h`
+establishes.
+
+### F8521. `Detect_Retrain`'s two loops run over different sets, so a stream that is quadrant 3 throughout scores exactly zero and never fires
+
+Its first loop walks EVERY symbol and accumulates `q*q` where `q` is
+`(sym >> 2) & 3`, the quadrant `fpm_smc.h` establishes. Its second walks only
+the EVEN indices and accumulates the correlation against the constant quadrant
+3 and the ideal energy. So `sumsq` has twice as many terms as `corr`.
+
+The consequence is not obvious and it caught the test before it caught the
+code. On a stream whose quadrant is 3 everywhere, `sumsq = 9n` and
+`2*corr = 18*ceil(n/2) = 9n`, so the difference is 0 and the detector never
+matches at any length. What DOES match is quadrant 3 on the even symbols and
+quadrant 0 on the odd ones: then `sumsq = corr = energy` and the difference is
+exactly `energy`, which clears the 0.99 threshold. `t_v22det.c`'s "detector
+fired" coverage guard is what found this — the first version of the test used
+the obvious stream, took only the negative arm, and the guard refused it.
+
+A second condition is ANDed with the correlation: the object counts consecutive
+even indices satisfying `sym[i] == sym[i-2] && sym[i+1] == sym[i-1]`, resetting
+to zero on any that does not, and requires strictly more than two. Both
+conditions are computed with `setcc` and ANDed rather than short-circuited.
+
+### F8522. `MakeTxData`'s loops count DOWN to zero and never test for positive, so a negative count writes 65535 symbols and one selector does not terminate at all
+
+`MakeTxData` (0x8bd50, 195 bytes) dispatches on a five-entry jump table at
+`.rodata + 0x862c` and fills the caller's buffer with a fixed pattern: case 0
+alternating 0 and 3 in PAIRS, case 1 all 3, case 2 all 15, case 3 all 2, case 4
+all 10. The range test is UNSIGNED (`cmp $0x4 / ja`), so a negative selector is
+a silent no-op and not case 0. Cases 1 and 2 emit exactly what `RxTrained1200`
+and `RxTrained2400` accept, which is the only corroboration any of the five
+has.
+
+Every loop is `for (i = *count; i != 0; i--)`. There is no `> 0`. A count of -1
+therefore writes 65535 symbols rather than none, which is the whole difference
+between this and the `for (i = 0; i < n; i++)` anybody would write instead, and
+`t_v22det.c` tests it with a buffer big enough to hold them.
+
+**Case 0 does not terminate on an ODD count.** It writes two symbols per step
+and decrements by two, and the odd sixteen-bit values form a cycle under -2
+that never contains zero. That is the one input no differential test can take —
+neither side returns — so it is recorded here and in `v22det.h` instead.
+
+### F8523. A V.22 rate change re-derives `FPM_SDM_init`'s width arithmetic in place rather than calling it, and its selector is not `v22fp_cfg::rate`'s
+
+`SetTxRate` (0x8e120, 205 bytes) and `SetRxRate` (0x8e1f0, 211) each write four
+scrambler fields directly — `nbits`, `mask`, `notmask` and the two tap shifts —
+and clear the shift register, which is exactly what `FPM_SDM_init` computes
+from `nbits`. Neither calls it. That is what makes the rate switchable without
+discarding the object.
+
+Beyond the scrambler, the transmit side moves the symbol coder's `qshift` and
+`amask` (0 and 0 at 1200, 2 and 3 at 2400) and repoints the pulse shaper's
+`imap`/`qmap` at the 1200 or 2400 constellation tables; the receive side
+repoints the equaliser's slicer at `FSEv22_decision12` or `FSEv22_decision24`.
+`dsp->r28` and `dsp->r2a` take 0 or 1 with the rate.
+
+**Selector 0 is 1200 and selector 1 is 2400, and anything else does nothing at
+all, silently.** That is NOT `struct v22fp_cfg::rate`'s encoding, where 0 gives
+2400 and both 1 and 2 give 1200 (v22fp.h). The two are three functions apart in
+the same module and mean opposite things; what names these two is the field
+widths `fpm_smc.h` already records for V.22bis at 2400, not any caller.
+
+### F8524. `ResetRx` hands `V22_FSE_init` the equaliser as its own configuration
+
+`ResetRx` (0x8e570, 62 bytes) is `V22_SRE_init(&dsp->sre, 0)` followed by
+`V22_FSE_init(&dsp->fse, &dsp->fse, 0)` — the object passes the same pointer in
+both of the first two argument slots.
+
+It is not a transcription slip. `struct v22_fse_cfg` is the two words `icoff`
+and `qcoff`, and `struct v22_fse` opens with the same two in the same places,
+so the call re-seeds the equaliser from the coefficient tables it is already
+pointing at. Both calls pass `fresh` = 0, so nothing is allocated and nothing
+is freed. The object also reloads `fp->dsp` between the two calls rather than
+keeping it in a register, which is the same "read the field once per use"
+`v22data.c` records for this block.
+
+### F8525. `DemodDataV22` destroys its input buffer twice over, and its return is the equaliser's own counter and not its callee's
+
+`DemodDataV22` (0x8e370, 510 bytes) is the whole V.22 receive block: an
+optional IIR front end when `dsp->r2e == 2`, then rate conversion, a level
+check, AGC, symbol-clock recovery and equalisation.
+
+**The buffer plumbing is worth stating because it is not what a signature
+suggests.** `V22_MRF_filter` reads the caller's `in` and writes
+`dsp->rx_scratch`; `V22_SRE_recover` reads `rx_scratch` and writes back over
+`in`; `V22_FSE_receive` then reads `in` and writes the caller's symbol array.
+So `in` is both the input and an intermediate, and it must be large enough for
+whatever the resampler produces as well as for what the caller put there.
+
+The function returns `dsp->fse.n_out` after the call, NOT `V22_FSE_receive`'s
+return, which it discards. Zero doubles as the disconnect answer: when
+`hdx->r0e` is zero and `params.disconnect_thresh` exceeds `FPM_rms` of the
+resampled block, it clears `sre.active` and returns 0 without running anything
+further.
+
+Two of its four flag gates read `sre.acquiring` and `sre.mode`, which only move
+when the clock loop locks onto a real carrier — noise will not do it. `dsp->r04`
+is what the function ANDs into `sre.adapt`, and `v22_sre.c`'s update returns
+before touching either field when `adapt` is zero, so clearing `r04` freezes
+both state words and lets a test drive them directly. That is how
+`t_v22rate.c` reaches all six combinations.
+
+It also passes a FOURTH argument to `FPM_AGC_agc`, the constant 1, which that
+function does not have. Third site of the same pattern, after `bwchdem.c` and
+`v22data.c`'s `Detect_v22`, and ignored in the same way.
+
+### F8526. `ScramblerOn` and `DescramblerOn` name two of the V.22 datapump's flag words, and the rename is deferred rather than declined
+
+`ScramblerOn` (0x8e670, 11 bytes) returns `dsp->r18`; `DescramblerOn` (0x8e680,
+11 bytes) returns `dsp->r1c`; `V22FP_control` (0x8c3b0, 145 bytes) sets exactly
+those two from bits 0 and 1 of one control byte, and `V22FP_create` derives
+both from `params.flags` bits 0 and 1. Two accessors whose names say what they
+answer, reading two fields a third function sets from two adjacent bits, is the
+"a caller or callee that types it" rule at its strongest: `r18` is the transmit
+scrambler's enable and `r1c` is the receive descrambler's.
+
+**They are not renamed in `v22fp.h` in the commit that establishes this**, and
+the reason is scheduling rather than doubt: two other V.22 reconstructions were
+in flight against the same base commit and both reach those fields, so the
+rename is a merge conflict waiting to happen. The evidence is in
+`include/dsplib/v22ctl.h`; the edit belongs to whoever lands last.
+
+The same function's other writes are `dsp->r20` from bit 2, `dsp->agc.f18` from
+the INVERSE of bit 3, and `params.flags` bit 9 from bit 7. Its second byte
+carries a flag at bit 2 and a two-bit field at bits 7:6, tested in that order
+and both writing the same pair of half-duplex words, so a byte carrying both
+leaves the field's values in place. It returns a literal 1 on every path.
+
+### F8527. The four exported V.22 accessors have no caller anywhere in the 1.2 MB, and one of them is covered by nothing
+
+`objdump -dr` over the whole object finds no relocation against
+`V22FP_GetDiagnostics`, `V22FP_control`, `ScramblerOn` or `DescramblerOn`. They
+are exported surface, reached by the host or by a part of slmodemd this library
+does not contain — the same shape `CLAUDE.md` records for the 129 no-referrer
+symbols in the leaf bucket.
+
+That has a cost worth naming. Nothing corroborates `V22FP_control`'s second
+parameter from the outside, so its type comes from its own two loads and no
+more: twelve bytes of that block are unmodelled because the function reads
++0x0c and +0x0d and nothing else.
+
+**And `V22FP_GetDiagnostics`'s only content is untestable.** It computes
+`&dsp->fse` — a tail jump after rewriting one argument slot — and hands it to
+`V22_FSE_getdiag`, which is a three-instruction stub that returns 0 and reads
+nothing. So the +0x164 offset reaches an argument nobody looks at, and no
+differential test can separate it from any other offset. `t_v22ctl.c` says so
+rather than dressing the check up. Same shape as findings F860–F862's
+`loadParams`.
