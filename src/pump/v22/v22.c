@@ -86,11 +86,15 @@ extern int modem_put_bits(void *modem, int nbits, const unsigned char *bits,
  * below is the derivation itself and not a restatement of it: change either
  * array and the file stops compiling.
  *
- * Compiled only under the 32-bit ABI these offsets describe.  Under 3.4.2 the
- * `__SIZEOF_POINTER__` spelling would silently vanish -- see
- * docs/method/compilers.md -- so the guard is on the pointer size the
- * preprocessor can actually compute.
+ * Compiled only under the 32-bit ABI these offsets describe, and the guard
+ * WAS MISSING: the assertions went in ungated and `make check64` has been
+ * failing on them ever since, seven errors deep in a log nobody reads the
+ * head of.  `-D__SIZEOF_POINTER__=4` is in `period.mk` and `period_inner.sh`
+ * precisely so that the guard is live on 3.4.2, which does not define the
+ * macro itself -- see docs/method/compilers.md and `tools/assertlive.py`,
+ * which is what checks that the guard is not silently `#if 0`.
  */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define V22_ASSERT_OFF(tag, type, field, want) \
 	typedef char tag[(__builtin_offsetof(type, field) == (want)) ? 1 : -1]
 
@@ -102,6 +106,7 @@ V22_ASSERT_OFF(d_txb, struct v22_dp, tx_bits, 0x24);
 V22_ASSERT_OFF(d_rxb, struct v22_dp, rx_bits, 0x1b4);
 
 typedef char v22_dp_size[(sizeof(struct v22_dp) == 0x344) ? 1 : -1];
+#endif /* 32-bit */
 
 static struct dp *v22_create(void *modem, int id, int caller, int srate,
 			     int max_frag, struct dp_operations *op);

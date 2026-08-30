@@ -97245,3 +97245,23 @@ comparing against `git show HEAD:` is byte-identical for all ten, so no
 statement, constant or type moved with them. A macro or field renaming is a
 compile-time substitution and `compare.py` cannot budge; that is the check the
 period tier still owes, and it is the only one outstanding.
+
+### F8606. `make check64` was already red on `master`, on seven ungated offset assertions in `src/pump/v22/v22.c`
+
+`v22.c`'s six `V22FP_ASSERT_OFF`s and its `sizeof` assertion went in with no
+`#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4` around them, and
+`struct v22_dp` begins with a `struct dp` that holds three pointers -- so at 64
+bits every offset moves and all seven arrays get a negative size.
+
+**It is inherited, not introduced.** `git show 321a56e5:src/pump/v22/v22.c`
+compiled with `SYNCFLAGS` gives the same seven errors, so the wave that added
+the file left `make check64` red and `make phase` with it. What made it easy
+to miss is that the file's OWN COMMENT described the guard -- "compiled only
+under the 32-bit ABI these offsets describe... the guard is on the pointer size
+the preprocessor can actually compute" -- while no `#if` existed. That is
+findings F6100 and F6103's defect exactly: a comment asserting a property
+nothing checks.
+
+Fixed here, since `v22.c` is this wave's file. `tools/assertlive.py` now counts
+1,711 assertions that exist only at 32 bits (was 1,710) and `make check64`
+reports clean in both configurations.
