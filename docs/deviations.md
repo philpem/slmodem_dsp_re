@@ -9262,3 +9262,26 @@ the 3->2 transition -- only the 1->2 transition clears it). With
 
 **Status:** unmeasured. Whether the first post-seizure byte ever reaches
 `cid_get_strings` is `cid_modem`'s question, and it is not reconstructed.
+
+## D960 ⚠ `V32FP_recreate` hands `FPM_MTD_create` a stack configuration with its fifth field uninitialised
+
+The multi-tone detector's configuration is five fields and the constructor
+fills four of them -- `coeff`, `tones`, `ratio` and `min_level`, at +0x00,
++0x04, +0x06 and +0x08 (0x7f239..0x7f29e) -- and writes nothing at +0x0a.
+`FPM_MTD_create` then copies all five into the object, so `mtd->cfg.f0a` is
+whatever the caller's frame held.
+
+**IT IS FOUR ASSIGNMENTS AND NOT A PARTIAL INITIALISER**, which is what
+settles that this is the author's and not an artefact of how we read it: a
+C89 aggregate initialiser naming four of five members zero-fills the fifth,
+and GCC would have emitted a `movw $0x0,0xa(%esp)` for it. There is no such
+store. `src/pump/v32/v32fprecr.c` reproduces the four assignments rather
+than tidying the fifth.
+
+Nothing in `fpm_mtd.c` reads `cfg.f0a`, so the value cannot reach a verdict;
+what it does reach is a differential comparison of the detector object, and
+`test/unit/t_v32fprecr.c` excludes that one field BY NAME -- the two sides run
+on two different stacks and comparing it compares the frames.
+
+**Status:** unmeasurable against the object. The value compared would be the
+blob's stack residue, exactly as for D7 and for `fpm_tone`'s +0xf2.
