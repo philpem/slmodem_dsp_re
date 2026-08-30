@@ -117,7 +117,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 				SetAdaptEqV22(fp, 1);
 				SetTxRate(fp, V22_RATE_1200);
 				SetRxRate(fp, V22_RATE_1200);
-				fp->hdx->r0e = V22_HDX_R0E_SIX;
+				fp->hdx->r0e = V22_PROTOCOL_RETRAIN;
 				RxClampV22(fp, rxin, (short *)rxsym,
 					   (short *)rxcount);
 				/*
@@ -146,7 +146,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 						   + V22_BLOCK_MS);
 				if ((unsigned short)hdx->r08
 				    > V22_DATA_QUALITY_MAX) {
-					hdx->r0e = V22_HDX_R0E_SIX;
+					hdx->r0e = V22_PROTOCOL_RETRAIN;
 					hdx->r0c = 1;
 					SetAdaptEqV22(fp, 1);
 					status = V22_ST_RETRAIN;
@@ -164,7 +164,7 @@ v22_data(struct v22fp *fp, unsigned short *txsym, short *txout,
 			hdx = fp->hdx;
 			if (hdx->r3c > V22_DATA_CARRIER_BACK
 			    && fp->dsp->r2a == 1) {
-				hdx->r0e = V22_HDX_R0E_SIX;
+				hdx->r0e = V22_PROTOCOL_RETRAIN;
 				hdx->r0c = 1;
 				SetAdaptEqV22(fp, 1);
 				status = V22_ST_RETRAIN;
