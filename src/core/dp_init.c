@@ -29,13 +29,15 @@
 #include "dsplib/call.h"
 #include "dsplib/dp.h"
 #include "dsplib/v23.h"
+#include "dsplib/v32.h"
 #include "dsplib/v8dp.h"
 #include "dsplib/vpcm.h"
 
 /*
- * The two datapumps this tree has not written yet.  No header declares
- * them.  Declared `int`/`void` on the family pattern -- the result is
- * discarded, so the caller's code is the `call` either way.
+ * The ONE datapump this tree has not written yet.  No header declares it;
+ * V.32's pair is now `src/pump/v32/v32.c`'s and comes in through `v32.h`.
+ * Declared `int`/`void` on the family pattern -- the result is discarded, so
+ * the caller's code is the `call` either way.
  *
  * WEAK, the `DSPLIB_VPCM_UNWRITTEN` idiom (vpcm.h explains it at length):
  * the differential binaries bridge each name to the blob's copy through
@@ -46,8 +48,6 @@
 #define DSPLIB_DPINIT_UNWRITTEN __attribute__((weak))
 extern int dp_v22_init(void) DSPLIB_DPINIT_UNWRITTEN;
 extern void dp_v22_exit(void) DSPLIB_DPINIT_UNWRITTEN;
-extern int dp_v32_init(void) DSPLIB_DPINIT_UNWRITTEN;
-extern void dp_v32_exit(void) DSPLIB_DPINIT_UNWRITTEN;
 
 int
 prop_dp_init(void)

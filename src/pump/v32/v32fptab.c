@@ -40,7 +40,8 @@
  *   ctl0 & 0x08  ->  fp + 0x00 = 0 / 1        84571   INVERTED
  *   ctl0 & 0x10  ->  fp + 0x0c = 0 / 1        8457c   INVERTED
  *   ctl0 & 0x20  ->  fp + 0x10 = 0 / 1        84588   INVERTED
- *   ctl0 & 0x80  ->  obj + 0x11 bit 1         8459e   V32_OBJ_FLAGS
+ *   ctl0 & 0x80  ->  obj + 0x11 bit 1         8459e   options bit 9, NOT
+ *                                                 V32_OBJ_FLAGS -- F8657
  *   ctl1 & 0x04  ->  the rate-change arm,  cleared with andb $0xfb  84669
  *   ctl1 & 0x08  ->  the mode-change arm,  cleared with andb $0xf7  84700
  *   ctl  + 0x14  ->  non-zero re-seeds the hdx length fields  845b2
@@ -100,9 +101,9 @@
 	typedef char v32fp_off_##tag[ \
 		((int)__builtin_offsetof(type, field) == (off)) ? 1 : -1]
 
-V32FP_ASSERT_OFF(p_bps, struct v32fp_params, bps, 0x02);
-V32FP_ASSERT_OFF(p_r08, struct v32fp_params, r08, 0x08);
-V32FP_ASSERT_OFF(p_flags, struct v32fp_params, flags, 0x10);
+V32FP_ASSERT_OFF(p_txrate, struct v32fp_params, tx_rate, 0x02);
+V32FP_ASSERT_OFF(p_timeout, struct v32fp_params, timeout, 0x08);
+V32FP_ASSERT_OFF(p_options, struct v32fp_params, options, 0x10);
 V32FP_ASSERT_OFF(p_ecdly, struct v32fp_params, ec_near_delay,
 		 V32_OBJ_EC_NEAR_DELAY);
 V32FP_ASSERT_OFF(p_symlen, struct v32fp_params, symlen_sel,
@@ -131,12 +132,12 @@ typedef char v32_smc_cfg_is_4[(sizeof(struct v32_smc_cfg) == 4) ? 1 : -1];
 
 const struct v32fp_params V32_CFG = {
 	0,			/* protocol                                  */
-	14400,			/* bps                                       */
-	14400,			/* bps2                                      */
+	14400,			/* tx_rate                                   */
+	14400,			/* rx_rate                                   */
 	0,			/* r06                                       */
-	120000,			/* r08                                       */
-	17887,			/* r0c                                       */
-	0x68b,			/* flags                                     */
+	120000,			/* timeout                                   */
+	17887,			/* tx_scale                                  */
+	0x68b,			/* options                                   */
 	0,			/* ec_near_delay                             */
 	0,			/* r16                                       */
 	0,			/* symlen_sel                                */
@@ -145,7 +146,7 @@ const struct v32fp_params V32_CFG = {
 	0,			/* r20                                       */
 	0,			/* r24                                       */
 	103,			/* disconnect_thresh -- never survives       */
-	0,			/* r2a                                       */
+	0,			/* energy_drop_time                          */
 	0,			/* r2c                                       */
 	0			/* r2e                                       */
 };

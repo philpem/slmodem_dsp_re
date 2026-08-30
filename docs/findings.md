@@ -97584,3 +97584,71 @@ used by a second translation unit** (there is another `PROTOCOL` at
 `.rodata:0x8c0c`), so `symmap.py` leaves both local and no `ref_PROTOCOL`
 exists. It is therefore `static` on our side too and is reachable to a test
 only through the status field.
+
+## F8657. obj + 0x11 is the second byte of `params.options`, not `V32_OBJ_FLAGS` at 0x31, and reading it as the latter cost two functions their whole flag byte
+
+F8642's bit table for `struct v32fp_ctl` has the row
+
+```
+    ctl0 & 0x80  ->  obj + 0x11 bit 1      8459e   V32_OBJ_FLAGS
+```
+
+The OFFSET is right and the LABEL is wrong: `V32_OBJ_FLAGS` is 0x31, thirty-two
+bytes further on. obj + 0x11 is inside the 48-byte parameter block -- it is the
+byte holding bits 8..15 of `params.options` -- and the two are easy to
+transpose because both are read `movzbl`, masked with `andb` and stored back.
+
+**THREE SITES REACH IT AND THEY ARE ONE ROUND TRIP.**
+
+```
+    7f740/7f75d  V32FP_create   bit 2 <- cfg->r10 bit 0        options bit 10
+    8459e        V32FP_control  bit 1 <- ctl->ctl0 bit 7       options bit  9
+    84a65        V32FP_status   ctl0 bit 7 <- bit 1
+    84a76        V32FP_status   flags1 bit 0 <- bit 2
+```
+
+So the caller's configuration goes in through `V32FP_create` and comes back
+out through `V32FP_status::flags1`, and the control block's bit 7 goes in
+through `V32FP_control` and comes back out through `V32FP_status::flags` bit 7.
+That symmetry is what says they are two bits and not four.
+
+**WHAT IT COST.** Written as 0x31 it fails in a way that looks like something
+else entirely. `V32FP_status` reported `flags` 0x3b where the object reports
+0xbb and `flags1` 0xaa where the object reports 0xab -- one bit each. Bit 7 of
+that byte is `V32_STFLAG_RETRAIN_DET`, which `v32_data` tests to decide whether
+to poll `RetrainDetectV32` at all, so the single wrong offset silently removed
+an entire arm of a different function. And `V32FP_control` wrote bit 1 of
+obj + 0x31 -- `V32_FLAG_FAULT` -- which is a *real* flag that other written
+code reads, so the object came back plausible and wrong rather than obviously
+broken.
+
+The template's `options` is 0x68b, so the byte is 0x06 and BOTH bits are set in
+every configuration `V32_CFG` produces. A test that only ever built the default
+object would see the right answer from the wrong offset for bit 2, because
+obj + 0x31 after `V32FP_recreate` is 0x40 and bit 2 of that is zero -- which is
+the wrong answer, and is exactly what made this visible.
+
+## F8658. `DemodDataV32` writes through its input buffer, so two sides of a differential test cannot share one
+
+`t_v32fpdisp.c` first handed `V32FP_modem` and `ref_V32FP_modem` the SAME
+`short in[64]`, on the reasoning that an input is an input. The two disagreed
+on the receive count -- ours 12 symbols, the object's 0 -- with the object's
+side, which ran SECOND, getting nothing.
+
+`DemodDataV32`'s second parameter is a plain `short *` and not a `const short
+*`, and `v32demod.h` has said so since it was written. The receive chain works
+in place, so the first side's call left a different array behind for the second
+side, and the two were no longer being given the same input at all.
+
+**IT PRESENTS AS A DEFECT IN THE CODE UNDER TEST, NOT IN THE FIXTURE.** What
+the failure looked like was `V32FP_modem` returning a different status and
+`v32_data` taking a different arm -- four fields apart from the buffer, with
+every intermediate that was compared agreeing. The signature that identified it
+is the one F8587 already names: **the disagreement tracked which side ran
+first**, not any input the test varied.
+
+The rule this leaves is narrow and worth stating: in a differential test, every
+buffer a callee can WRITE gets one copy per side, and "can write" is settled by
+the declared parameter type, not by what the function is called. `t_v32cfg.c`
+already does this for `FPM_AGC_agc`'s in-place gain buffer; this is the same
+thing at a point where the buffer reads like a pure input.

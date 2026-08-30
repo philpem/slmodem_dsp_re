@@ -29,6 +29,27 @@
  * and not ours.  Finding F8641.
  *
  * ---------------------------------------------------------------------------
+ * SIX OF THE EIGHTEEN FIELDS ARE NAMED BY THE AUTHOR, NOT BY US
+ *
+ * `V32FP_recreate` prints its whole parameter block at debug level 2, and the
+ * format string is `.rodata.str1.4 + 0x11000`:
+ *
+ *     V32FP Config: protocol=%d,tx_rate=%d,rx_rate=%d,timeout=%d,
+ *     energy_drop_time=%d,tx_scale=%d,options=0x%x,trellis=%d
+ *
+ * The eight arguments are pushed at 7f577..7f5b5 in this order, so the
+ * correspondence is read off the instructions and not guessed:
+ *
+ *     protocol          +0x00  movswl        trellis           +0x1c  32-bit
+ *     tx_rate           +0x02  movswl        options           +0x10  32-bit
+ *     rx_rate           +0x04  movswl        tx_scale          +0x0c  32-bit
+ *     timeout           +0x08  32-bit        energy_drop_time  +0x2a  movswl
+ *
+ * That is CLAUDE.md's strongest evidence class -- the original author's own
+ * words -- and it is what settles `tx_rate` against `rx_rate`, which nothing
+ * else here can: `V32FP_control` writes one value into both.  Finding F8644.
+ *
+ * ---------------------------------------------------------------------------
  * WHY THE UNKNOWN FIELDS ARE `rNN` AND NOT `short_NNNN`
  *
  * CLAUDE.md's convention for "modelled, unnamed" is `type_NNNN`.  This struct
@@ -73,19 +94,23 @@ struct v32fp_params {
 	 */
 	short protocol;
 	/*
-	 * +0x02 and +0x04, both in bit/s.  `V32FP_recreate` runs the SAME
+	 * +0x02 and +0x04, both in bit/s, and NAMED BY DIRECTION IN THE
+	 * AUTHOR'S OWN FORMAT STRING.  `V32FP_recreate` runs the SAME
 	 * four-way ladder on each -- 0x3840, 0x2ee0, 0x2580, 0x1c20 -- and
 	 * `V32FP_control` writes one value into both (846af..846b3), so no
-	 * differential test can tell a swap of them apart.  +0x04 is the one
-	 * `GetRateV32` reports, which is v32fpctl.h's V32_OBJ_BPS.
+	 * differential test can tell a swap of them apart; what tells them
+	 * apart is `V32FP Config: ... tx_rate=%d,rx_rate=%d ...`, printed
+	 * with +0x02 then +0x04.  +0x04 is the one `GetRateV32` reports,
+	 * which is v32fpctl.h's V32_OBJ_BPS.
 	 */
-	short bps;		/* +0x02 template 14400                      */
-	short bps2;		/* +0x04 template 14400                      */
+	short tx_rate;		/* +0x02 template 14400                      */
+	short rx_rate;		/* +0x04 template 14400                      */
 	short r06;		/* +0x06 template 0                          */
-	int r08;		/* +0x08 template 120000; <- cfg + 0x08      */
-	int r0c;		/* +0x0c template 17887                      */
+	int timeout;		/* +0x08 template 120000; <- cfg + 0x08      */
+	int tx_scale;		/* +0x0c template 17887                      */
 	/*
-	 * +0x10 is a bit set, read a byte at a time exactly as V.22's is.
+	 * +0x10 is `options` -- the author's word, and printed as `0x%x` --
+	 * a bit set read a byte at a time exactly as V.22's is.
 	 * Bits 0, 1 and 2 are copied out into three ints at fp + 0x1c, +0x20
 	 * and +0x24 (7e8bf..7e8fe); bit 10 -- that is, bit 2 of the byte at
 	 * +0x11 -- is patched from the caller's configuration by
@@ -95,7 +120,7 @@ struct v32fp_params {
 	 * `movzbl`/`andb` against immediates, which is what CLAUDE.md's
 	 * measurement says a bitfield would move away from.
 	 */
-	unsigned int flags;	/* +0x10 template 0x68b                      */
+	unsigned int options;	/* +0x10 template 0x68b                      */
 	/*
 	 * +0x14.  v32fpctl.h's V32_OBJ_EC_NEAR_DELAY: `SetAdaptEcV32` mode 0
 	 * copies it into `fpm_ecc::near_delay`.  `V32FP_create` patches it
@@ -140,7 +165,12 @@ struct v32fp_params {
 	 * field at the same position in its own parameter block.
 	 */
 	short disconnect_thresh; /* +0x28 template 103                       */
-	short r2a;		/* +0x2a template 0; <- (short)cfg + 0x0c    */
+	/*
+	 * +0x2a is `energy_drop_time` in the format string, printed with
+	 * `movswl` -- so it is a signed short and the extension is not dead.
+	 * `V32FP_create` patches it from the low half of cfg + 0x0c.
+	 */
+	short energy_drop_time;	/* +0x2a template 0                          */
 	short r2c;		/* +0x2c template 0; zeroed at 7e8b6         */
 	short r2e;		/* +0x2e template 0                          */
 };
@@ -171,7 +201,34 @@ struct v32fp_params {
  * each one's destination and nothing about its meaning, and a destination
  * offset dressed as a name is what CLAUDE.md says not to write.  The
  * destinations are tabulated in `v32fptab.c`.
+ *
+ * ONE BIT IS NAMED, AND BY THE AUTHOR.  `V32FP_control` prints
+ * `Patch: set ctl_ptr->vxx_ctl.options.retrain = TRUE` at 84737 and then sets
+ * bit 2 of +0x0d on both the debug and the non-debug path (8472e, 84743);
+ * the arm that bit selects re-runs `V32FP_recreate` and hands the machine to
+ * `V32OrgNextState` or `V32AnsNextState`, which is a retrain.  So
+ * `V32_CTL1_RETRAIN` is 0x04 in the original's own words -- and the string
+ * also says the argument is called `ctl_ptr` and that the block is reached as
+ * `vxx_ctl`, a per-modulation control record inside something larger.
+ *
+ * Nothing names any other bit and none is guessed.  The string's dotted path
+ * says the original spelled these as BITFIELDS inside an `options` member;
+ * they are two `unsigned char` here because CLAUDE.md's rule is that a
+ * bitfield declaration additionally claims a packing order, and because the
+ * byte values are what the object settles.  Finding F8644.
  */
+
+/* `.rodata.str1.4 + 0x110bc`, printed by `V32FP_control` itself. */
+#define V32_CTL1_RETRAIN	0x04
+/*
+ * The other arm's bit, and it is NOT named by anything.  `V32FP_control`
+ * tests it at 84680 and clears it at 84700; the arm it selects re-enters the
+ * ring handshake through `V32RngInitNextState` or `V32RngRespNextState` and
+ * installs a new line rate from the request, which is a renegotiation.  That
+ * is USAGE INFERENCE and the weakest name in this header; the bit VALUE is
+ * measured and the meaning is not.
+ */
+#define V32_CTL1_RENEG		0x08
 struct v32fp_ctl {
 	unsigned short bps;	/* +0x00 template 9600                       */
 	short r02;		/* +0x02 template 9600; no reader written    */

@@ -129,12 +129,12 @@ test_params(void)
 
 	diff_eq_int("protocol (%ld)", V32_CFG.protocol, ref_V32_CFG.protocol,
 		    0x00);
-	diff_eq_int("bps (%ld)", V32_CFG.bps, ref_V32_CFG.bps, 0x02);
-	diff_eq_int("bps2 (%ld)", V32_CFG.bps2, ref_V32_CFG.bps2, 0x04);
+	diff_eq_int("tx_rate (%ld)", V32_CFG.tx_rate, ref_V32_CFG.tx_rate, 0x02);
+	diff_eq_int("rx_rate (%ld)", V32_CFG.rx_rate, ref_V32_CFG.rx_rate, 0x04);
 	diff_eq_int("r06 (%ld)", V32_CFG.r06, ref_V32_CFG.r06, 0x06);
-	diff_eq_int("r08 (%ld)", V32_CFG.r08, ref_V32_CFG.r08, 0x08);
-	diff_eq_int("r0c (%ld)", V32_CFG.r0c, ref_V32_CFG.r0c, 0x0c);
-	diff_eq_int("flags (%ld)", (long)V32_CFG.flags, (long)ref_V32_CFG.flags,
+	diff_eq_int("timeout (%ld)", V32_CFG.timeout, ref_V32_CFG.timeout, 0x08);
+	diff_eq_int("tx_scale (%ld)", V32_CFG.tx_scale, ref_V32_CFG.tx_scale, 0x0c);
+	diff_eq_int("options (%ld)", (long)V32_CFG.options, (long)ref_V32_CFG.options,
 		    0x10);
 	diff_eq_int("ec_near_delay (%ld)", V32_CFG.ec_near_delay,
 		    ref_V32_CFG.ec_near_delay, 0x14);
@@ -148,7 +148,7 @@ test_params(void)
 	diff_eq_int("r24 (%ld)", V32_CFG.r24, ref_V32_CFG.r24, 0x24);
 	diff_eq_int("disconnect_thresh (%ld)", V32_CFG.disconnect_thresh,
 		    ref_V32_CFG.disconnect_thresh, 0x28);
-	diff_eq_int("r2a (%ld)", V32_CFG.r2a, ref_V32_CFG.r2a, 0x2a);
+	diff_eq_int("energy_drop_time (%ld)", V32_CFG.energy_drop_time, ref_V32_CFG.energy_drop_time, 0x2a);
 	diff_eq_int("r2c (%ld)", V32_CFG.r2c, ref_V32_CFG.r2c, 0x2c);
 	diff_eq_int("r2e (%ld)", V32_CFG.r2e, ref_V32_CFG.r2e, 0x2e);
 
@@ -176,10 +176,10 @@ test_ctl(void)
 {
 	diff_begin("V32_CTL (struct v32fp_ctl)");
 
-	diff_eq_int("bps (%ld)", V32_CTL.bps, ref_V32_CTL.bps, 0x00);
+	diff_eq_int("tx_rate (%ld)", V32_CTL.bps, ref_V32_CTL.bps, 0x00);
 	diff_eq_int("r02 (%ld)", V32_CTL.r02, ref_V32_CTL.r02, 0x02);
 	diff_eq_int("r04 (%ld)", V32_CTL.r04, ref_V32_CTL.r04, 0x04);
-	diff_eq_int("r08 (%ld)", V32_CTL.r08, ref_V32_CTL.r08, 0x08);
+	diff_eq_int("timeout (%ld)", V32_CTL.r08, ref_V32_CTL.r08, 0x08);
 	diff_eq_int("ctl0 (%ld)", V32_CTL.ctl0, ref_V32_CTL.ctl0, 0x0c);
 	diff_eq_int("ctl1 (%ld)", V32_CTL.ctl1, ref_V32_CTL.ctl1, 0x0d);
 	diff_eq_int("r0e (%ld)", V32_CTL.r0e, ref_V32_CTL.r0e, 0x0e);
