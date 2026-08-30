@@ -129,8 +129,8 @@
  * the rate back up, and 7 waits for `RxTrained2400`.
  */
 void v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
-		 short *rxin, unsigned short *rxsym, short *txcount,
-		 short *rxcount);
+		 short *rxin, unsigned short *rxsym, unsigned short *txcount,
+		 unsigned short *rxcount);
 
 /*
  * The originating end of the remote-loopback-2 exchange.  Three substates in
@@ -138,7 +138,7 @@ void v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
  * and setting bit 1 of `fp->r1e[0]`.
  */
 void v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
-		     short *rxin, unsigned short *rxsym, short *txcount,
-		     short *rxcount);
+		     short *rxin, unsigned short *rxsym,
+		     unsigned short *txcount, unsigned short *rxcount);
 
 #endif /* DSPLIB_V22HDX_H */

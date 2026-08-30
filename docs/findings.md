@@ -95453,3 +95453,82 @@ Eleven format strings name the nodes in the author's own words
 `NODE_1/3/4/5/6`) and four name status codes: `V22_MSG_ERROR1` = 17,
 `_ERROR3` = 19, `_ERROR4` = 20, `_ERROR5` = 21. With F8531's three and F8534's
 two, eleven of the status byte's values are now the author's own names.
+
+### F8538. The V.22 lifecycle wave is written and DECLINED: an integration test finds a divergence the seven per-handler tests cannot, and it is not yet localised
+
+`V22FP_modem`, `v22_process`, `v22_create`, `dp_v22_init`, `dp_v22_exit`,
+`V22_PROTOCOL` and the three `.bss` buffers were all reconstructed and all
+compile and link. **None of them is committed**, because the differential test
+written for them fails and the cause is not established. This entry is the
+record of the attempt, so the next one starts from here rather than from the
+disassembly.
+
+**What is settled, and is worth having whatever happens to the code.**
+
+  - `V22FP_modem` (0x887b0) widens the caller's transmit words into
+    `tx_in_internal` (`.bss` 0x3a0, 100 entries), right-shifts the caller's
+    input samples by `hdx->r34` into `rx_in_internal` (0x560, 160 entries),
+    dispatches through `V22_PROTOCOL[hdx->r0e]`, copies `rx_out_internal`
+    (0x480, 100 entries) back out, and scales exactly 160 transmit samples by
+    `params.r0c` in Q15. It names two fields `v22fp.h` had as unread:
+    `params.r0c` is the transmit output gain and `hdx->r34` the receive input
+    shift.
+  - **All three buffers are `.bss` statics, so two V.22 datapumps in one
+    process share them.** And the names COLLIDE across modules: `nm` finds
+    three `tx_in_internal` and three `rx_out_internal` in the object, at
+    0x1c0/0x3a0/0x6c0 and 0x2a0/0x480/0x7a0. `tools/symmap.py` cannot
+    globalize a name it sees three times, so only `rx_in_internal` — unique —
+    has a `ref_` alias. A test can read the blob's copy of one of the three
+    and not the other two.
+  - **`V22FP_modem` returns the whole 32-bit word at `fp` + 0x1c**, not the
+    status byte: the object loads four bytes where an `unsigned char status`
+    would force a `movzbl`. A draft argued no test could tell, because
+    `v22_process` uses the low byte; the test told immediately, 0 against
+    17664. An argument was reached for where a measurement was available.
+  - `v22_create`, `v22_delete` and `v22_process` are **file-static in the
+    object** — lower-case `t` — and only `dp_v22_init`/`dp_v22_exit` are
+    global, exactly as b103.c's split. **Our committed `v22_delete` is global
+    and should become static** when the rest lands, reached the way
+    `t_b103dp.c` reaches b103's: out of the table `dp_v22_init` registers.
+  - `v22_process`'s status jump table has seventeen entries. 0 and 1 give
+    `DPSTAT_OK` (1 also clears `tx_bits_wanted`), 3 and 4 give
+    `DPSTAT_CONNECT` after setting four bits per symbol and 2400, or two and
+    1200, through `modem_set_param`; everything else gives `DPSTAT_ERROR`.
+    **So status 4 is the 1200 connect**, which F8531 had left unnamed.
+  - When `tx_bits_wanted` is zero, nothing is fetched and the word count
+    handed to the modem is a literal 12 — one 600-baud block at 20 ms.
+
+**The failure, precisely.** Driving `V22FP_modem` on two graphs built by
+`V22FP_create`, over `hdx->r0e` 0..6 and `hdx->r0c` 0..7, the receive-word
+output `rxout` diverges: ours holds 15 — `V22_CLAMP_VALUE`, so an
+`RxClampV22` — where the reference holds 0. Everything else agrees: the
+return, both counts, the transmit samples, the input buffer, all three structs
+and all twenty-eight heap regions, over 18,018 checks.
+
+**Two things are established about it and one is not.**
+
+  1. It is NOT the handlers. Driving `v22_answer` DIRECTLY, outside the
+     dispatch layer, with two fresh graphs and two private symbol buffers,
+     gives **0 divergences over all eight sub-states**. The per-handler tests
+     are not missing anything about the handler.
+  2. It is NOT `rx_in_internal`: the blob's copy is readable through
+     `ref_rx_in_internal` and matches ours exactly, sample for sample.
+  3. What is NOT established is why the two `rx_out_internal` statics come to
+     differ. They are written only by the handler, through a pointer the layer
+     passes; the handler agrees when driven directly; and the copy-out only
+     ever compares the first `*rxcount` entries, so any entry above that count
+     is a channel the test cannot see. The first visible divergence is at
+     entry 0, which that channel does not obviously explain.
+
+**What the next attempt should do first**, in order: make our three statics
+temporarily non-`static` and compare them against the blob's after EVERY call
+rather than only through the copy-out — the hidden channel is the prime
+suspect and it is cheap to close; then, if they agree, the fault is in the
+layer's own copy loops rather than in what the handler wrote.
+
+**And the reason this is declined rather than committed with the failing case
+excluded.** Scoping the sweep away from `V22_PROTOCOL` entry 1 was tried and
+is what exposed the reasoning error: the same failure simply reappeared for
+entry 2, so the exclusion was not naming a defect, it was hiding one. An
+exclusion that moves when you move it is a tolerance being widened, which is
+the thing this tree does not do.

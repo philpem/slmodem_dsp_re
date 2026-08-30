@@ -62,17 +62,26 @@
 #include "dsplib/v22prc.h"
 #include "dsplib/v22rate.h"
 
+/*
+ * The signature is `V22_PROTOCOL`'s, not this pair's: all seven handlers sit
+ * in one table and `V22FP_modem` calls them through it, so the two counts are
+ * `unsigned short *` here as they are for the other five.  The object cannot
+ * tell the two signednesses apart at this boundary -- it passes the address
+ * of a 16-bit stack slot -- and what each handler's body READS is a separate
+ * question, settled per use inside it.  Finding F8534.
+ */
 typedef void (*hdx_fn)(struct v22fp *fp, unsigned short *txdata, short *txout,
-		       short *rxin, unsigned short *rxsym, short *txcount,
-		       short *rxcount);
+		       short *rxin, unsigned short *rxsym,
+		       unsigned short *txcount, unsigned short *rxcount);
 
 extern void ref_v22_retrain(struct v22fp *fp, unsigned short *txdata,
 			    short *txout, short *rxin, unsigned short *rxsym,
-			    short *txcount, short *rxcount);
+			    unsigned short *txcount, unsigned short *rxcount);
 extern void ref_v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata,
 				short *txout, short *rxin,
-				unsigned short *rxsym, short *txcount,
-				short *rxcount);
+				unsigned short *rxsym,
+				unsigned short *txcount,
+				unsigned short *rxcount);
 
 /* ------------------------------------------------------------------------ */
 
@@ -483,7 +492,7 @@ run_scen(hdx_fn theirs, hdx_fn mine, const struct scen *s, long tag,
 	struct v22fp_cfg pcfg = base_cfg(s->peer_mode, 0, s->cfg_rate);
 	struct v22fp *a = V22FP_create(0, &cfg);
 	struct v22fp *b = V22FP_create(0, &cfg);
-	short txc_a, txc_b, rxc_a, rxc_b;
+	unsigned short txc_a, txc_b, rxc_a, rxc_b;
 	long blocks = 0;
 	int blk;
 

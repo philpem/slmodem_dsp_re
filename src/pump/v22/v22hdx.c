@@ -57,8 +57,8 @@
  */
 void
 v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
-	    short *rxin, unsigned short *rxsym, short *txcount,
-	    short *rxcount)
+	    short *rxin, unsigned short *rxsym, unsigned short *txcount,
+	    unsigned short *rxcount)
 {
 	short added = 0;
 	short mtd;
@@ -71,7 +71,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * Send scrambled ones at whatever rate is current and wait for
 		 * the far end's own signal to stop.
 		 */
-		MakeTxData((short *)txdata, txcount,
+		MakeTxData((short *)txdata, (const short *)txcount,
 			   (short)(V22_TXDATA_ONES_1200 +
 				   (fp->params.bps2 != V22_HDX_BPS_1200)));
 		ScrambleDataV22(fp, txdata, *txcount);
@@ -94,7 +94,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 			SetAdaptEqV22(fp, 2);
 		}
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_SILENCE) {
 			SetTxRate(fp, V22_RATE_2400);
 			SetRxRate(fp, V22_RATE_2400);
@@ -121,14 +121,14 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		SetTxRate(fp, V22_RATE_1200);
 		SetRxRate(fp, V22_RATE_1200);
 
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_S1);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_S1);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		FPM_MTD_detect(fp->hdx->mtd_s1, fp->dsp->rx_scratch,
 			       fp->dsp->rx_count);
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		ReadGTimer(fp);
 		break;
 
@@ -138,7 +138,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * been unrecognisable, and then branch on the halfword at
 		 * hdx + 0x38: substate 3 when it is 1 and substate 4 otherwise.
 		 */
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_S1);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_S1);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
@@ -147,7 +147,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		if (*rxcount != 0 && mtd == FPM_MTD_ABSENT)
 			fp->hdx->r08 += V22_HDX_TICK_MS;
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_S1)
 			fp->hdx->r0c =
 				(short)(3 + (V22_HDX_R38(fp->hdx) != 1));
@@ -158,7 +158,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * The same wait as substate 0, but sending 1200 bit/s ones and
 		 * with a hard stop that gives up on the retrain entirely.
 		 */
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_ONES_1200);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_ONES_1200);
 		ScrambleDataV22(fp, txdata, *txcount);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
@@ -179,9 +179,9 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 			SetAdaptEqV22(fp, 2);
 		}
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_SILENCE) {
-			RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+			RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 			SetTxRate(fp, V22_RATE_2400);
 			SetRxRate(fp, V22_RATE_2400);
 			SetAdaptEqV22(fp, 3);
@@ -192,13 +192,13 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 	case 4:
 		/* 450 ms of 1200 bit/s ones, then bring the receiver up. */
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_ONES_1200);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_ONES_1200);
 		ScrambleDataV22(fp, txdata, *txcount);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_ONES1200) {
 			SetRxRate(fp, V22_RATE_2400);
 			fp->hdx->r0c = 5;
@@ -211,14 +211,14 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * comes back -- the receiver moved to 2400 at the end of
 		 * substate 4.  After 600 ms the transmitter follows.
 		 */
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_ONES_1200);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_ONES_1200);
 		ScrambleDataV22(fp, txdata, *txcount);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		DescrambleDataV22(fp, rxsym, *rxcount);
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_DESCR1200) {
 			SetTxRate(fp, V22_RATE_2400);
 			fp->hdx->r0c = 6;
@@ -228,14 +228,14 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 	case 6:
 		/* Both directions at 2400 now; 800 ms, then let the equaliser
 		 * adapt in its second mode. */
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_ONES_2400);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_ONES_2400);
 		ScrambleDataV22(fp, txdata, *txcount);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		DescrambleDataV22(fp, rxsym, *rxcount);
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_ONES2400) {
 			SetAdaptEqV22(fp, 3);
 			fp->hdx->r0c = 7;
@@ -249,7 +249,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * both exits stamp `fp->status` the same.  The extra
 		 * `RxClampV22` is the object's -- see the file header.
 		 */
-		MakeTxData((short *)txdata, txcount, V22_TXDATA_ONES_2400);
+		MakeTxData((short *)txdata, (const short *)txcount, V22_TXDATA_ONES_2400);
 		ScrambleDataV22(fp, txdata, *txcount);
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
 
@@ -259,10 +259,10 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 				  (const unsigned short *)rxcount)) {
 			fp->flags |= 0x29;
 			fp->status = 3;
-			RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+			RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		}
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_TRAIN2400) {
 			fp->flags |= 0x01;
 			fp->status = 3;
@@ -281,8 +281,8 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
  */
 void
 v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
-		short *rxin, unsigned short *rxsym, short *txcount,
-		short *rxcount)
+		short *rxin, unsigned short *rxsym, unsigned short *txcount,
+		unsigned short *rxcount)
 {
 	short ack = 0;
 
@@ -301,7 +301,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		fp->hdx->r10 = 0;
 		SetAdaptEqV22(fp, 1);
 
-		MakeTxData((short *)txdata, txcount,
+		MakeTxData((short *)txdata, (const short *)txcount,
 			   (short)(V22_TXDATA_ONES_1200 +
 				   (fp->params.bps2 != V22_HDX_BPS_1200)));
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
@@ -312,7 +312,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 				rxsym, (const unsigned short *)rxcount,
 				fp->params.bps2);
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		fp->hdx->r0c = 1;
 		break;
 
@@ -321,7 +321,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * Count acknowledgement.  231 ms of it moves on; 1,300 ms
 		 * without it gives up and goes back to substate 0.
 		 */
-		MakeTxData((short *)txdata, txcount,
+		MakeTxData((short *)txdata, (const short *)txcount,
 			   (short)(V22_TXDATA_ONES_1200 +
 				   (fp->params.bps2 != V22_HDX_BPS_1200)));
 		*txcount = ModDataV22(fp, txdata, txout, *txcount);
@@ -334,7 +334,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 			fp->hdx->r08 += ack;
 		}
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned short)fp->hdx->r08 > V22_RMLOOP2_PATTERN_MS) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
@@ -361,7 +361,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 * `Detect_1s` runs on every block, acknowledged or not, and
 		 * takes its threshold from here rather than carrying one.
 		 */
-		MakeTxData((short *)txdata, txcount,
+		MakeTxData((short *)txdata, (const short *)txcount,
 			   (short)(V22_TXDATA_ONES_1200 +
 				   (fp->params.bps2 != V22_HDX_BPS_1200)));
 		ScrambleDataV22(fp, txdata, *txcount);
@@ -383,7 +383,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 					  fp->params.bps2,
 					  V22_RMLOOP2_ONES_Q15);
 
-		RxClampV22(fp, rxin, (short *)rxsym, rxcount);
+		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned short)fp->hdx->r08 > V22_RMLOOP2_PATTERN_MS) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
