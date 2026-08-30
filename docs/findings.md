@@ -97003,3 +97003,174 @@ is what exposed the reasoning error: the same failure simply reappeared for
 entry 2, so the exclusion was not naming a defect, it was hiding one. An
 exclusion that moves when you move it is a tolerance being widened, which is
 the thing this tree does not do.
+
+## F8640. `RATEv32` settles v32seq.h's one open inference: rate index 0 is 4800, in the author's own bytes
+
+`v32seq.h` derives the V.32bis rate index -> line rate correspondence from
+`V32FP_recreate`'s four-way ladder, which tests 0x3840, 0x2ee0, 0x2580 and
+0x1c20 and falls through to index 0 for anything else. That gives indices
+1 to 5 and leaves index 0 as "not 14400, 12000, 9600 or 7200"; the header
+labelled it 4800 from the Recommendation and said so:
+
+> INDEX 0 IS THE ONE INFERENCE HERE, and it is from the Recommendation rather
+> than the object [...] Labelled rather than asserted.
+
+`RATEv32` asserts it. Twelve bytes at `.data:0x00775c`, file-local, six
+shorts, indexed at 84986 and 84996 in `V32FP_status`:
+
+```
+    0   4800     3    7200
+    1   9600     4   12000
+    2   9600     5   14400
+```
+
+-- which is v32seq.h's ladder exactly, 9600 twice for the non-trellis and
+trellis variants at 1 and 2, and **4800 at index 0**. The inference is now a
+measurement.
+
+`SnrToRetrainTable`, twelve bytes at `.data:0x007750` and read once at 84ab9,
+is indexed the same way and corroborates the ordering independently: 9, 13,
+13, 11, 20, 24. The values ascend with the LINE RATE and not with the index --
+7200's 11 sits between 4800's 9 and 9600's 13 -- so a table indexed by
+anything else would have to be a coincidence in six places. What the numbers
+are is not established; they are compared against a value the receiver
+computes and 84ac0 branches on the comparison, which is consistent with a
+signal-to-noise floor per rate and is inference either way.
+
+Both are `.data` and neither is `const`, which is the object's placement and
+not a preference; `src/pump/v32/v32fptab.c` has them.
+
+## F8641. V.32's parameter block is V.22's with twenty more bytes, and the correspondence is what fixes eight field boundaries no test can see
+
+`V32_CFG` is 48 bytes at `.rodata:0x006da0` and it is a TEMPLATE, not a
+configuration read in place. Three `rep movsl` of exactly twelve dwords move
+it or something shaped like it:
+
+```
+    7e89e   V32FP_recreate   arg1 -> the object's first 48 bytes
+    7f5fd   V32FP_recreate   V32_CFG -> the same, when arg1 is null
+    7f714   V32FP_create     V32_CFG -> a stack local, patched, then passed
+                             to V32FP_recreate as that arg1
+```
+
+So the object's first 48 bytes ARE the parameter block, and the block is one
+struct because the object treats it as one movable thing.
+
+**THE V.22 CORRESPONDENCE IS THE EVIDENCE FOR THE BOUNDARIES.**
+`struct v22fp_params` (v22fp.h) is 28 bytes and `V22_CFG` is its template;
+`V22FP_create` copies it to the stack and patches six fields. Set the two
+side by side:
+
+```
+              V.22                     V.32
+    +0x00     mode      short          protocol  short   (0)
+    +0x02     bps       short  1200    bps       short   14400
+    +0x04     bps2      short  1200    bps2      short   14400
+    +0x06     r06       short          r06       short
+    +0x08     r08       int   120000   r08       int     120000
+    +0x0c     r0c       int    13014   r0c       int      17887
+    +0x10     flags     uint   0x65b   flags     uint     0x68b
+    +0x11     patched byte, bit 2      patched byte, bit 2
+    +0x14     r14       ushort   1     ec_near_delay ushort
+    +0x16     disconnect_thresh 103    r16       short
+    ...                                symlen_sel short  (V32_OBJ_SYMLEN_SEL)
+    +0x1c                              trellis   int     (V32_OBJ_TRELLIS)
+    +0x28                              disconnect_thresh short  103
+```
+
+Eleven of the twelve fields below +0x14 are at the same offset with the same
+width and, in three cases, the same VALUE -- 120000 at +0x08 in both, and the
+103 that `V32DiconnectThreshTable[3]` / `V22DiconnectThreshTable[3]`
+immediately overwrites with 150 on every path in both. The read-modify-write
+of the byte at +0x11 inside a 32-bit flag word at +0x10 is the same
+instruction sequence in the two `create` functions. This is one parameter
+block written twice by one author, and it is what makes the V.32 boundaries
+derived rather than fitted: no differential test can see a field boundary
+inside a block that is only ever copied wholesale.
+
+Four of the eighteen fields now carry names and the rest are `rNN`:
+`protocol` from the format string `V32FP_recreate` prints obj + 0x00 with
+(v32nsrng.c already cites it), `ec_near_delay` and `symlen_sel` and `trellis`
+from v32fpctl.h's own offset macros, and `disconnect_thresh` from the table
+it is loaded from -- which is V.22's argument at V.22's offset.
+
+**+0x16 AND +0x18 ARE TWO SELECTORS, NOT ONE.** Both index the same three
+two-entry length tables. `V32FP_recreate` uses +0x16 for all three (7f13d,
+7f150, 7f165). `V32FP_control` loads BOTH, computes
+`V32_SAMPLE_LEN[+0x18] / V32_SAMPLE_LEN[+0x16]`, multiplies hdx + 0x9c by the
+quotient, and then re-seeds hdx + 0x84, +0x9e and +0xa0 from +0x18 alone. So
++0x18 is the selector being moved TO and +0x16 the one in force; the second
+half of that is usage inference from the division and +0x16 is left unnamed
+on that ground.
+
+## F8642. `V32_CTL` is a control REQUEST and not a configuration, and `Control_Flag` is why the call happens one entry late
+
+`V32_CTL` is 32 bytes at `.rodata:0x007f20`. Neither of its two referrers
+reads a field out of it: `v32_data` (82919) and `V32FP_status` (84ad5) each
+copy all eight dwords to a stack local, OR a bit into the byte at +0x0d, and
+`v32_data` then hands `&local` to `V32FP_control` as its second argument.
+`V32FP_control` (0x84530) is the only reader of the fields.
+
+Widths are all forced, and the byte pair is the point of the object:
+
+```
+    ctl0 & 0x01  ->  fp + 0x1c = 1 / 0     84549
+    ctl0 & 0x02  ->  fp + 0x20             84558
+    ctl0 & 0x04  ->  fp + 0x24             84564
+    ctl0 & 0x08  ->  fp + 0x00 = 0 / 1     84571   INVERTED
+    ctl0 & 0x10  ->  fp + 0x0c             8457c   INVERTED
+    ctl0 & 0x20  ->  fp + 0x10             84588   INVERTED
+    ctl0 & 0x80  ->  obj + 0x11 bit 1      8459e   V32_OBJ_FLAGS
+    ctl1 & 0x04  ->  the rate arm, cleared with `andb $0xfb`   84669
+    ctl1 & 0x08  ->  the mode arm, cleared with `andb $0xf7`   84700
+```
+
+**IT IS TWO BYTES AND NOT ONE `unsigned int`.** Every access on both sides is
+byte-wide -- `movzbl 0xc(%edi)`, `testb $0x8,0xd(%edi)`, `orb $0x8,0x2d(%esp)`
+-- and the two arms CLEAR their own bit in the caller's block, which is a
+request being consumed. The template's 0x83 / 0x01 would sit at +0x0c as the
+single int 387 on a little-endian host, so a merged reading passes a value
+comparison and loses the declaration; `t_v32fptab.c` asserts the two bytes
+separately for that reason.
+
+The bits are NOT named. What is established is each one's DESTINATION, and
+fp + 0x00 .. fp + 0x24 is itself unnamed -- ten `int`s that `V32FP_recreate`
+sets to 1 wholesale (7e8e4 .. 7e91e) and this table's bits then set
+individually. A destination offset dressed as a bit name is exactly what
+CLAUDE.md says not to write, so the table above lives in the source comment
+and the constants do not exist yet.
+
+`Control_Flag` is one `.bss` int, GLOBAL, and `v32_data` is its only referrer.
+It is tested at the TOP of `v32_data` (827ce) and set at 82a4e on one arm and
+cleared at 82a91 on the other, with the `V32FP_control` call between the test
+and the clear -- so a request built on one entry is issued on the NEXT one.
+That is a static and not a field of the instance, so two V.32 datapumps in
+one process share it; recorded here rather than as a deviation, because
+nothing in this tree instantiates two.
+
+## F8643. The three V.32 length tables are one family of twelve contiguous bytes, and one selector picks a column in all three
+
+```
+    V32_TURNAROUND_DLY  .data 0x0076c0   { 64, 360 }
+    V32_SYMBOL_LEN      .data 0x0076c4   { 12,  48 }
+    V32_SAMPLE_LEN      .data 0x0076c8   { 40, 160 }
+```
+
+Twelve contiguous bytes, all GLOBAL, all two entries, and the same selector
+indexes all three within twenty instructions of each other in
+`V32FP_recreate` (7f13d, 7f150, 7f165 against obj + 0x16) and again in
+`V32FP_control` (84611, 84624 against obj + 0x18). `V32_SYMBOL_LEN` was
+already written from the first of those sites; the other two are new here.
+
+The destinations are v32hdx.h's own: `V32_SYMBOL_LEN[sel]` reaches hdx + 0x84
+and hdx + 0x9e, `V32_SAMPLE_LEN[sel]` reaches hdx + 0xa0, and
+`V32_TURNAROUND_DLY[sel]` reaches hdx + 0x94 -- which v32fpctl.h describes as
+the budget `CalcTurnAroundDelay` spends against the three charges beside it.
+
+**WHAT THE TWO COLUMNS ARE IS NOT ESTABLISHED.** The ratios are 4:1 in
+samples, 4:1 in symbols and 45:8 in turnaround delay, so column 1 is not
+column 0 scaled by one factor and the selector is not a sample-rate switch
+alone. `t_v32fptab.c` asserts instead that no two of the three tables are
+equal at either index, which is what stops a source that swapped two of them
+from passing -- the failure mode a family of same-shaped tables indexed by
+one variable actually has.

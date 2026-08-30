@@ -323,6 +323,17 @@ struct fpm_fse_point;
  */
 extern short V32_SYMBOL_LEN[2];
 
+/*
+ * Its two neighbours, twelve contiguous `.data` bytes with it and indexed by
+ * the same selector at every site.  `V32_SAMPLE_LEN` reaches hdx + 0xa0
+ * (v32hdx.h's V32HDX_SAMPLE_LEN) from both `V32FP_recreate` and
+ * `V32FP_control`, and `V32_TURNAROUND_DLY` reaches hdx + 0x94, which
+ * v32fpctl.h describes below as the budget `CalcTurnAroundDelay` spends.
+ * `src/pump/v32/v32fptab.c` has the layout note.
+ */
+extern short V32_TURNAROUND_DLY[2];
+extern short V32_SAMPLE_LEN[2];
+
 /* ------------------------------------------------------------------------ */
 
 /*

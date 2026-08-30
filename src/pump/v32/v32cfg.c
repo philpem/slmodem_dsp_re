@@ -8,6 +8,9 @@
  *   AGCv32_CFG     .data   0x007648    24
  *   MRFv32_COFFS   .rodata 0x0070a0   720
  *   MRFv32_CFG     .rodata 0x007370    16
+ *   PPSv32_QCOFFS  .rodata 0x007b00   240
+ *   PPSv32_ICOFFS  .rodata 0x007c00   240
+ *   PPSv32_CFG     .rodata 0x007d00    40
  *
  * These are INSTANCES of structs this tree already has and already tests:
  * `struct fpm_agc_cfg` from `fpm_agc.h` and `struct fpm_mrf_cfg` from
@@ -56,7 +59,10 @@
 
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_mrf.h"
+#include "dsplib/fpm_pps.h"
 #include "dsplib/v32cfg.h"
+#include "dsplib/v32dec.h"	/* SMCv32_IMAP16 / SMCv32_QMAP16, PPSv32_CFG's
+				 * two constellation maps                     */
 
 /*
  * SECTIONS ARE MIRRORED, not chosen.  `nm` gives AGC_DEF_ALPHA, AGC_DEF_BETA,
@@ -165,5 +171,85 @@ const struct fpm_mrf_cfg MRFv32_CFG = {
 	MRFv32_COFFS,
 	360,			/* taps, across all nine branches         */
 	0,			/* pad0a                                  */
+	0			/* aux                                    */
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE PULSE SHAPER.
+ *
+ *   PPSv32_QCOFFS  .rodata 0x007b00  240
+ *   PPSv32_ICOFFS  .rodata 0x007c00  240
+ *   PPSv32_CFG     .rodata 0x007d00   40
+ *
+ * `PPSv32_CFG` is an instance of `struct fpm_pps_cfg` and it fits without a
+ * field left over, which is the same check `MRFv32_CFG` passes above: ten
+ * dwords, four of them relocations, and `coeffs` at +0x20 lands on 120 --
+ * exactly the two coefficient tables' length.  `phases` is 10 and
+ * `coeffs / phases` is 12 taps per branch.
+ *
+ * THE FOUR POINTERS ARE READ FROM THE RELOCATIONS AND NOT FROM THE BYTES.
+ * All four dwords are zero in the file; `tools/relocscan.py` resolves them to
+ * `SMCv32_IMAP16`, `SMCv32_QMAP16`, `PPSv32_ICOFFS` and `PPSv32_QCOFFS` in
+ * that order, and `mapped` being 1 is what says the constellation maps are
+ * used at all -- the ring carries indices, and `imap`/`qmap` turn them into
+ * I and Q.  Reading the bytes instead would have given four nulls and a
+ * shaper that filtered nothing.
+ *
+ * `scale` is 131072, which is 4.0 in the Q15 the field's name implies rather
+ * than a gain below unity.  `t_v32data.c` and `t_v32txhdx.c` already carry
+ * that number as `PPS_SCALE`, quoted from this table's +0x08 before the table
+ * itself was written; they now have the table to quote instead.
+ *
+ * THE TWO COEFFICIENT TABLES ARE NOT THE SAME FILTER.  `ICOFFS` is symmetric
+ * about its centre and `QCOFFS` is ANTI-symmetric -- element k against
+ * element 119 - k is +1 times in the first and -1 times in the second -- which
+ * is the in-phase/quadrature pair of a passband shaping filter and not two
+ * copies of one prototype.  Byte-exact from the object; deriving the design
+ * is deferred with every other coefficient derivation.
+ */
+const short PPSv32_QCOFFS[120] = {
+	0, -1, -2, -2, -1, 0, 0, -2, -6, -12,
+	-14, -12, -5, 0, 1, -7, -20, -31, -29, -12,
+	12, 30, 28, 7, -19, -29, -6, 44, 100, 129,
+	112, 59, 8, 3, 65, 169, 258, 273, 193, 60,
+	-41, -36, 88, 263, 366, 297, 51, -259, -461, -421,
+	-151, 168, 260, -94, -911, -1942, -2754, -2923, -2240, -840,
+	840, 2240, 2923, 2754, 1942, 911, 94, -260, -168, 151,
+	421, 461, 259, -51, -297, -366, -263, -88, 36, 41,
+	-60, -193, -273, -258, -169, -65, -3, -8, -59, -112,
+	-129, -100, -44, 6, 29, 19, -7, -28, -30, -12,
+	12, 29, 31, 20, 7, -1, 0, 5, 12, 14,
+	12, 6, 2, 0, 0, 1, 2, 2, 1, 0,
+};
+
+const short PPSv32_ICOFFS[120] = {
+	-1, -1, 0, 0, 0, 0, -2, -5, -5, -2,
+	3, 10, 13, 9, 1, -4, -1, 12, 34, 50,
+	51, 35, 11, 0, 11, 47, 88, 107, 86, 31,
+	-27, -50, -20, 48, 106, 104, 20, -113, -226, -251,
+	-172, -42, 36, -20, -224, -485, -657, -626, -393, -101,
+	36, -143, -629, -1195, -1486, -1190, -216, 1210, 2623, 3499,
+	3499, 2623, 1210, -216, -1190, -1486, -1195, -629, -143, 36,
+	-101, -393, -626, -657, -485, -224, -20, 36, -42, -172,
+	-251, -226, -113, 20, 104, 106, 48, -20, -50, -27,
+	31, 86, 107, 88, 47, 11, 0, 11, 35, 51,
+	50, 34, 12, -1, -4, 1, 9, 13, 10, 3,
+	-2, -5, -5, -2, 0, 0, 0, 0, -1, -1,
+};
+
+const struct fpm_pps_cfg PPSv32_CFG = {
+	10,			/* phases                                 */
+	3,			/* step                                   */
+	1,			/* mapped                                 */
+	131072,			/* scale                                  */
+	0,			/* step_adj                               */
+	0,			/* pad0e                                  */
+	SMCv32_IMAP16,
+	SMCv32_QMAP16,
+	PPSv32_ICOFFS,
+	PPSv32_QCOFFS,
+	120,			/* coeffs -- 12 taps in each of 10 phases */
+	0,			/* pad22                                  */
 	0			/* aux                                    */
 };
