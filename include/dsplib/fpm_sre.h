@@ -307,4 +307,12 @@ extern short SREv32_PLL_K2[FPM_SRE_MODES];
 extern short SREv32_xCLOCK[3];
 extern short SREv32_yCLOCK[3];
 
+/*
+ * V.32's configuration, .rodata 0x007020 and therefore const, pointing at all
+ * six of the tables above.  `V32OrgNextState` hands it to `FPM_SRE_init`.
+ * Finding F1615 declined to write it while the field boundaries were unread;
+ * they are the eighteen above and it is now in `src/pump/v32/v32sre_tables.c`.
+ */
+extern const struct fpm_sre_cfg SREv32_CFG;
+
 #endif /* DSPLIB_FPM_SRE_H */
