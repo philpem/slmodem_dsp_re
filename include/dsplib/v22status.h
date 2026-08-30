@@ -15,22 +15,26 @@
  * `PROTOCOL` IS A SEVEN-ENTRY TABLE AND ITS VALUES ARE NOT DECODED
  *
  * The object indexes it with `hdx->r0e` -- sign-extended, and with NO BOUNDS
- * CHECK -- and stores the entry as the report's first word.  The table is
+ * CHECK -- and stores the entry as the report's first word.
  *
- *     index    0  1  2  3  4  5  6
- *     value    3  0  1  2  7  8  5
+ * WHAT THE INDEX IS, IS SETTLED.  `hdx->r0e` is what `V22FP_modem` indexes
+ * `V22_PROTOCOL` with, and that table's seven entries carry RELOCATIONS
+ * naming the seven V.22 protocol handlers, so the index is the protocol state
+ * and the object tells us which state each value is (finding F8529):
  *
- * and five of the seven indices are reachable from what is reconstructed:
- * `V22FP_create` leaves `r0e` at 1, 2 or 3 depending on its mode (v22fp.h)
- * and `V22FP_control` sets it to 4 or 6 (v22ctl.h).  Indices 0 and 5 are
- * reachable only from something that has not been read yet.
+ *     index    0             1              2            3
+ *     handler  v22_data      v22_originate  v22_answer   v22_local_loop
+ *     value    3             0              1            2
  *
- * WHAT THE VALUES MEAN IS NOT ESTABLISHED.  slmodemd's `modem_defs.h` -- the
- * vendored copy in third_party/slmodem -- has no enumeration whose members are
- * 0, 1, 2, 3, 5, 7 and 8, and there is no format string anywhere that prints
- * one.  They are carried as the object's own numbers.  A later reading that
- * finds the host's enumeration should say so here rather than assume the
- * obvious ordering.
+ *     index    4                5                6
+ *     handler  v22_org_rmloop2  v22_ans_rmloop2  v22_retrain
+ *     value    7                8                5
+ *
+ * WHAT THE VALUES MEAN IS STILL NOT ESTABLISHED.  slmodemd's `modem_defs.h`
+ * -- the vendored copy in third_party/slmodem -- has no enumeration whose
+ * members are 0, 1, 2, 3, 5, 7 and 8, and there is no format string anywhere
+ * that prints one.  They are carried as the object's own numbers, and the
+ * table above is the mapping they are a mapping FROM, not a decoding of them.
  *
  * The symbol is LOCAL in the object (`nm` shows a lower-case `r`), so it is
  * `static` here.  There is a SECOND local symbol also called `PROTOCOL`, 18

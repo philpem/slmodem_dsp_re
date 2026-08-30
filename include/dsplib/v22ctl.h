@@ -83,21 +83,31 @@ struct v22fp_ctl {
 
 /*
  * `flags_0d` carries one flag and one two-bit field, and they are checked in
- * that order.  Both select the same PAIR of half-duplex words -- `hdx->r0e`
+ * that order.  Both write the same PAIR of half-duplex words -- `hdx->r0e`
  * and `hdx->r0c` -- so the second overwrites the first when both apply.
  *
  * The two-bit field is bits 7:6 and only the value 2 does anything; the
  * object shifts the whole byte right by six and compares, so bit 7 set with
  * bit 6 clear is the case that fires.  A width and a shift rather than a flag
  * name, because it is not a single bit.
+ *
+ * WHAT THE TWO VALUES SELECT IS SETTLED, and not by this function.  `hdx->r0e`
+ * is the index `V22FP_modem` uses into `V22_PROTOCOL`, a seven-entry table of
+ * the seven V.22 protocol handlers; the relocations name them, so 6 is
+ * `v22_retrain` and 4 is `v22_org_rmloop2` (finding F8529).  So this byte's
+ * bit 2 requests a RETRAIN and its two-bit field selects the ORIGINATE
+ * remote-loopback-2 state.
  */
-#define V22_CTL_HDX_SIX		(1 << 2)	/* r0e = 6, r0c = 1 */
+#define V22_CTL_RETRAIN		(1 << 2)	/* r0e = 6, r0c = 1 */
 #define V22_CTL_HDX_SHIFT	6
-#define V22_CTL_HDX_FOUR	2		/* r0e = 4, r0c = 0 */
+#define V22_CTL_HDX_ORG_RMLOOP2	2		/* r0e = 4, r0c = 0 */
 
-/* The values that pair of writes installs.  See v22fp.h on hdx->r0e. */
-#define V22_HDX_R0E_SIX		6
-#define V22_HDX_R0E_FOUR	4
+/*
+ * The values that pair of writes installs: two of `V22_PROTOCOL`'s seven
+ * indices.  See v22status.h for the whole table.
+ */
+#define V22_PROTOCOL_RETRAIN		6
+#define V22_PROTOCOL_ORG_RMLOOP2	4
 
 /*
  * The equaliser's diagnostic word.

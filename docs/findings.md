@@ -95013,3 +95013,57 @@ from `dsp->r28` and `dsp->r2a`, four words written zero, eight flag bits at
 of the eight bits at +0x14 is written, so the caller's value there does not
 survive; only bit 0 of +0x15 is, so the caller's other seven bits DO, and a
 report block that starts zeroed cannot tell the two apart.
+
+### F8529. `V22_PROTOCOL`'s relocations name all seven V.22 protocol states, which decodes `hdx->r0e` and settles what `v22fp_cfg::mode` selects
+
+`V22_PROTOCOL` is 28 bytes of `.rodata` at 0x8544 and its contents are seven
+zeroes — every word is an `R_386_32` relocation, so `objdump -s` shows nothing
+and `objdump -r` shows everything. It is the trap `tools/dis.py`'s own header
+warns about, one section along.
+
+The relocations are, in order:
+
+    index    0             1              2            3
+    handler  v22_data      v22_originate  v22_answer   v22_local_loop
+
+    index    4                5                6
+    handler  v22_org_rmloop2  v22_ans_rmloop2  v22_retrain
+
+`V22FP_modem` (0x887b0) indexes it at 0x8885f — `call *0x8544(,%edx,4)` — with
+`edx` loaded at 0x88829 as `movswl 0xe(%esi)` where `esi` is `fp->hdx`. So
+**`struct v22fp_hdx::r0e` is the protocol state**, and the seven handlers this
+tree has been reconstructing one at a time are its seven values.
+
+**That settles three things nothing else in the object does.**
+
+1. `V22FP_create` leaves `r0e` at 1 for mode 0, 2 for mode 1 and 3 for
+   anything else (v22fp.h). Those are `v22_originate`, `v22_answer` and
+   `v22_local_loop`, so `struct v22fp_cfg::mode` really does "select the
+   station's role" as that header guessed, and now the guess has a table
+   behind it: **0 is the originating station and 1 is the answering one.**
+   `v22_create` only ever passes 0 or 1, which is consistent.
+2. `V22FP_control` sets `r0e` to 6 when bit 2 of its second control byte is
+   set, and to 4 when bits 7:6 hold 2 (F8526). Those are `v22_retrain` and
+   `v22_org_rmloop2`, so that byte's bit 2 REQUESTS A RETRAIN and its two-bit
+   field enters the originate remote-loopback-2 state. `include/dsplib/
+   v22ctl.h`'s constants are named for that.
+3. `V22_status`'s `PROTOCOL` table (F8528) is indexed by the same `r0e`, so its
+   seven values line up with the seven handlers: 3 for data, 0 for originate,
+   1 for answer, 2 for local loop, 7 for originate RMLOOP2, 8 for answer
+   RMLOOP2, 5 for retrain. **The values themselves are still not decoded** —
+   no enumeration in slmodemd's vendored `modem_defs.h` has those members and
+   no format string prints one — but they are now a mapping from something
+   named rather than from an index.
+
+`hdx->r0e` is NOT renamed in `v22fp.h` at the commit that establishes this, for
+the same scheduling reason F8526 gives: three V.22 reconstructions were in
+flight against one base commit and all three reach that field. `protocol` is
+the name it should take, and the edit belongs to whoever lands last.
+
+**And the method note is the one that keeps recurring.** The whole result came
+from `objdump -r`, not from reading code: the seven-entry table looked like
+seven zeroes, and the two other seven-entry tables in the same module —
+`PROTOCOL`'s status codes and, on the transmit side, the state handlers
+`v22prc.h` mentions — made "seven of something" look like a coincidence rather
+than a key. `tools/relocscan.py --at .rodata:0x8544` names the one caller in a
+single command.

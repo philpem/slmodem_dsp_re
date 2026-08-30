@@ -37,12 +37,12 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 * field's values in place; that ordering is the object's and is
 	 * observable, which is why it is not tidied into an if/else.
 	 */
-	if (ctl->flags_0d & V22_CTL_HDX_SIX) {
-		fp->hdx->r0e = V22_HDX_R0E_SIX;
+	if (ctl->flags_0d & V22_CTL_RETRAIN) {
+		fp->hdx->r0e = V22_PROTOCOL_RETRAIN;
 		fp->hdx->r0c = 1;
 	}
-	if ((ctl->flags_0d >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_FOUR) {
-		fp->hdx->r0e = V22_HDX_R0E_FOUR;
+	if ((ctl->flags_0d >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
+		fp->hdx->r0e = V22_PROTOCOL_ORG_RMLOOP2;
 		fp->hdx->r0c = 0;
 	}
 

@@ -192,9 +192,9 @@ run_control(void)
 						    tag);
 					compare_graphs(b, a, tag);
 
-					six = (b0d & V22_CTL_HDX_SIX) != 0;
+					six = (b0d & V22_CTL_RETRAIN) != 0;
 					four = (b0d >> V22_CTL_HDX_SHIFT)
-					       == V22_CTL_HDX_FOUR;
+					       == V22_CTL_HDX_ORG_RMLOOP2;
 					if (six && four)
 						saw_hdx_both++;
 					else if (six)
