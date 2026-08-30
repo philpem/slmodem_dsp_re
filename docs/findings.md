@@ -95117,3 +95117,92 @@ where `dp_wrapper_create` builds no converters at all and the ledgers match
 exactly, 42 for 42. That is not a tolerance being widened — the test asserts
 equality and gets it — but the 9600 arm is worth re-adding the moment this is
 settled, because it is four more blocks of coverage for free.
+
+### F8531. `connect_1200` and `connect_2400` are a shared subroutine of three protocol states, not states of the machine — and one of their format strings names four V.22 fields at once
+
+`connect_2400` is at **0x088cd0**, not at 0x08a7a0 as a task brief had it;
+0x08a7a0 is `v22_local_loop`. The size settles it: 0x892b1 − 0x88cd0 = 1505.
+Recorded because the wrong address survived being written down twice.
+
+Neither function is in `V22_PROTOCOL`. That table's seven relocations are the
+seven state handlers (F8529), and these two are called *by* three of them —
+`v22_originate`, `v22_answer` and `v22_local_loop`, two relocations each — and
+by nothing else. So the V.22 machine has seven states and a shared connect
+subroutine, and a count of "seven-entry tables in this module" is not a count
+of state machines: the `.rodata` blocks at 0x8560, 0x8580, 0x85b8 and 0x85f4
+are the handlers' own jump tables, whose entries point INSIDE functions.
+
+**The naming chain, and it is the author's own words.** `.rodata.str1.4` at
+0x114d0 is
+
+    V22_MSG_NO_CARRIER won't be reported (carrier_loss_time %d of %d ms)
+
+and the two `%d`s are the two operands of the comparison the message guards.
+The first is `20 * hdx->r3c` and the second is `params.r18`, so
+
+  - `struct v22fp_hdx::r3c` counts CONSECUTIVE CARRIER-LESS BLOCKS, and the
+    factor of 20 is `ReadGTimer`'s own block length, so the string and the
+    timer agree on what a block is;
+  - `struct v22fp_params::r18` is the CARRIER-LOSS GRACE TIME in milliseconds.
+    `v22_create` passes 700, which is 35 blocks.
+
+`.rodata.str1.1` at 0x5eb is `v22: V22STAT: --> %d\n`, which makes
+`struct v22fp::status` a MESSAGE CODE rather than a state — v22fp.h had only
+b103fp.h's analogy for that byte and said so. Three of its values are fixed by
+adjacent printfs: 3 is `V22_MSG_CONNECT_2400`, 16 is `V22_MSG_NO_CARRIER`, 23
+is `V22_MSG_ERROR7`. The others seen written here — 1, 4, 11 and 24 — are
+named by nothing and stay value-named.
+
+Three more fields follow from use rather than from a string, and are weaker in
+exactly that way: `hdx->r0c` is the connect SUB-STATE (`connect_2400` prints
+`NODE_2400A`..`NODE_2400D` on entering 8, 9, 10 and 11, read two independent
+ways that agree; 12 and 13 are named by nothing and the NODE_1200A/B analogy is
+recorded, not used); `hdx->r10` latches `RxTrained1200`/`RxTrained2400`'s
+verdict and is tested `== 1`; `hdx->r04` is the current node's DEADLINE in ms
+on `ReadGTimer`'s clock, and `v22_create`'s 60000 is that deadline.
+
+**None of the six is applied to `v22fp.h` at the commit that establishes
+them**, for F8526's reason: three further V.22 reconstructions were in flight
+against one base commit and all three reach those fields. The renames are
+queued, not declined.
+
+`hdx` +0x38 also wants a `short`. It currently falls inside
+`unsigned char r36[6]` — unmodelled space — and `connect_2400`'s retrain path
+is its first reader (`movw $0x1,0x38(%eax)`). Only the SHAPE is established,
+not the meaning, so it stays inside the byte array with a comment rather than
+becoming a named field on the strength of one store.
+
+### F8532. Every `ReadGTimer` comparison in the V.22 connect family is UNSIGNED, and a 20 ms clock needs two probes per deadline
+
+`ReadGTimer` returns `int`. All six comparisons of its result in
+`connect_1200` and `connect_2400` — including both against `hdx->r04`, the
+node deadline — are `jbe` and not `jle`. The two readings agree over every
+clock value a session can produce, so this is unreachable in service and
+provable only by driving a negative clock, which `t_v22conn.c` does: an
+injected signed comparison fails on that input and on no other. The reading is
+established rather than assumed, which is the distinction F614's "forced"
+column is about.
+
+**And a method note that generalises past V.22.** A node deadline compared
+against `ReadGTimer` can only be pinned from ONE SIDE per probe, because the
+timer advances in multiples of 20 and therefore presents only every twentieth
+value. Starting the clock at C−20 catches a constant that moved DOWN and misses
+one that moved UP. Injecting `790 → 791` went unnoticed while `449 → 448` was
+caught, which is the same defect surviving or not purely by which side of the
+step it fell on. Two probes per constant — C−20 and C−19 — closes it. Eleven of
+twelve injected defects were caught once that was in place.
+
+The twelfth is recorded as unobservable rather than as a gap.
+`NODE_1200_13` calls `RxClampV22` twice on the trained path, once inside the
+`if` and once after; `NODE_2400D`, otherwise the same node, calls it once.
+Removing the inner call cannot be detected by any input, because the second
+call writes the same twelve values over the first. It is in the source because
+it is in the object, and the comment beside it says no test defends it.
+
+Two smaller things from the same reading, both corroborating headers written
+earlier from the other end: `rxcount` is an IN AND OUT parameter — input sample
+count on the way in, symbol count on the way out, and `RxClampV22` then forces
+it to 12, which is 600 baud at 8 kHz and is what `v22_fse.h` derived
+independently. And descrambling happens BEFORE `RxTrained1200`/`RxTrained2400`,
+so the training predicates see descrambled symbols; a test that wants to reach
+them has to stand the descrambler down as well as override the slicer.
