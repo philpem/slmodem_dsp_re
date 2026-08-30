@@ -12,6 +12,10 @@
   "src/dsp/ANSamToneDetector.cpp",
   "build/test/t_gtonedet"
  ],
+ "beepgen": [
+  "src/service/beepgen.c",
+  "build/test/t_beepgen"
+ ],
  "cadence": [
   "src/callprog/cadence.c",
   "build/test/t_cadence"
@@ -71,6 +75,10 @@
  "fpmmtd": [
   "src/dsp/fpm_mtd.c",
   "build/test/t_fpm_mtd"
+ ],
+ "fdspkrnl": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_fdspkrnl"
  ],
  "fpmmtdlayout": [
   "src/dsp/fpm_mtd.c",
@@ -139,6 +147,10 @@
  "resamplerto": [
   "src/pump/v90/ResamplerTimingOffset.cpp",
   "build/test/t_resampler"
+ ],
+ "ringdet": [
+  "src/service/voice.c",
+  "build/test/t_ringdet"
  ],
  "scrambler": [
   "include/dsplib/Scrambler.h",
