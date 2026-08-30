@@ -95218,6 +95218,13 @@ both sides** and the disagreement reproduced at the same two blocks. So it is
 not a difference between our code and the object's; it is a difference between
 two runs of the object's own code on two objects built identically.
 
+**PARTLY CORRECTED BY F8536, WHICH SHOULD BE READ WITH THIS.** The
+refutation below is of the HEAP form of the uninitialised-memory
+explanation and is sound as far as it goes. It is not a refutation of the
+STACK form, which F8536 then measured and which this entry did not
+consider -- the harness fills what `sysdep_malloc` hands out and has no
+way to fill a call frame.
+
 **The explanation first reached for is wrong.** `v22fp.h` records several
 regions `V22FP_create` never writes — `dsp->ra8`, `dsp->ra0`, `dsp->r24`,
 `dsp->rx_scratch` — and "the transmit chain reads uninitialised memory" is the
@@ -95365,3 +95372,84 @@ prints how many it skipped rather than dropping them quietly; nine tree-wide.
 It is NOT wired into `make phase`. That is a scheduling decision for whoever
 owns the gate, not something a datapump wave should do on its own; the tool
 exits non-zero on a disagreement and is ready for it.
+
+### F8536. `DemodDataV22` reads uninitialised STACK on any short block, which is the mechanism F8533 looked for and half-refuted
+
+`DemodDataV22`'s IIR front end — taken whenever `dsp->r2e == 2`, i.e. in any
+mode-0 graph — declares a `short mix[V22_IIR_BLOCK]` of 160 entries, asks
+`FPM_TONE_generate_demod` for `count` of them, and then hands the whole array
+to `V22_iir_filt_demod`, whose loop runs the filter's own fixed 160. For
+`count` below 160 the tail of that array is whatever the call frame held.
+
+`src/pump/v22/v22rate.c` says so in a comment — "a short block leaves the tail
+of the mixer at whatever the stack held. The object's." — but a comment is not
+a measurement. It is one now: driving 16, 32, 48, 80 and 120 samples through
+two graphs makes the two sides differ **from byte 2\*count onward and not
+before**, exactly at the fill boundary, on every one of the five. A short block
+is therefore not a usable differential input for anything downstream of this
+function, and `t_v22org.c` uses full blocks for that reason.
+
+**This is the correction F8533 needs.** That entry observed the blob
+disagreeing with itself across two graphs, reached for "it reads memory the
+constructor never wrote", and refuted it on the grounds that
+`test/harness/runtime.c`'s `sysdep_malloc` fills every block with a fixed
+non-zero pattern. The refutation is sound and it is also too narrow: **the
+harness fills the HEAP and cannot fill a call frame.** Uninitialised memory was
+the right family after all; the wrong half of it had been ruled out.
+
+It does not close F8533 by itself. That sweep drove full 160-sample blocks, so
+this particular array was fully written on every call, and the divergence it saw
+was in the TRANSMIT samples rather than the receive path. What changes is the
+ranking: another uninitialised stack array somewhere in the transmit chain is
+now a better hypothesis than the heap over-read F8533 proposed, and the probe
+to run first is a stack poison rather than a heap guard region.
+
+### F8537. Two defects in modules outside V.22 that only a V.22 caller could have found
+
+**`FPM_TONE_generate` returns its `count` and `fpm_tone.h` declares it
+`void`.** The object loads `0xc(%esp)` — the third argument — into `%eax`
+immediately before both of its `ret`s, on every path. Our reconstruction
+returns nothing, so a caller that reads the value gets whatever was in `%eax`,
+and the two diverge.
+
+It is latent rather than live: the only two call sites reached so far are in
+`v22_originate` and `v22_answer`, both of which store the result into
+`*txcount`, and both were written with the literal 160 that is the argument at
+those sites rather than by calling for the value. So nothing is wrong today and
+something will be wrong the moment a caller needs it. The declaration should
+become `short FPM_TONE_generate(...)`; it is not changed here because
+`fpm_tone.h` is a differentially-tested module outside this wave's scope and
+the change wants its own test.
+
+**`v22_originate`'s NODE_3 can divide by zero, in the blob.** At 0x8b718 it
+loads `hdx->r32` with `movzwl` and at 0x8b737 divides by it with an unsigned
+`div` — no test, no guard. `V22FP_create` leaves `r32` at zero and the only
+thing that increments it is a received block that produced symbols, so
+reaching that arm before any such block faults. Reproduced as the object has
+it; every test scenario avoids it, and it is recorded rather than defended
+against, because a guard would be a fix and this is a reconstruction.
+
+**And two smaller things from the same reading.** `v22_originate`'s jump table
+has FOURTEEN entries, not the ten a first count suggests — the bound is
+`cmp $0xd` — and nodes 10..13 are real arms (8..11 reach `connect_2400`,
+12..13 reach `connect_1200`), so reading the table short would have made four
+live nodes look like the default. `v22_answer`'s NODE_0 stores `hdx->r0c = 3`
+twice, five calls apart, with no other writer between; the second store is
+dead, removing it passes the whole suite, and it is reproduced anyway because
+it is in the object.
+
+**The two functions are NOT mirror images**, which is the trap this pair sets.
+The carrier hunt appears three times across them and differs every time:
+`v22_answer`'s NODE_3 resets `hdx->r0a` on the same 59 ms rule `r08` gets and
+NEITHER of `v22_originate`'s two copies does; `v22_originate`'s NODE_5 keeps no
+gap because it reaches no verdict; and its NODE_6 2400 verdict neither prints
+nor sets the `r1e` bit its own 1200 verdict sets, and does not consult
+`params.bps2` the way the answer machine does. Writing either as the other's
+mirror produces a complete-looking wrong function — the same shape as F8528 and
+F8521, for the third time in one wave.
+
+Eleven format strings name the nodes in the author's own words
+(`V22_answer,NODE_0/1/3/4/SILENCE_AFTER_2100`, `V22_originate,NODE_0` and
+`NODE_1/3/4/5/6`) and four name status codes: `V22_MSG_ERROR1` = 17,
+`_ERROR3` = 19, `_ERROR4` = 20, `_ERROR5` = 21. With F8531's three and F8534's
+two, eleven of the status byte's values are now the author's own names.
