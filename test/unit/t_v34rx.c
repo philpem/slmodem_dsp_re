@@ -34,6 +34,7 @@ extern void ref_V34agc(void *rx);
 extern void ref_rxtiming(void *obj);
 extern void ref_txrxdmainit(short *dst, const short *src);
 extern void ref_V34SetupDemodulator(void *obj, short baud, short carrier);
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern void ref_v34FreezeEcho(void *obj);
 extern int ref_adaptecho(void *obj);
 extern int ref_modem_serrint(void *obj);
