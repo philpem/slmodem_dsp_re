@@ -5,17 +5,21 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `c1ca61af`, 2026-08-30:
+Measured at `91e1de4d` (wave 1 merged), 2026-08-30:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 76.6%  (562,394 bytes / 1,296 symbols)
-remaining  157,731 bytes / 565 symbols
-  data modes            65 sym   39,166 B
+translated 78.4%  (575,845 bytes / 1,426 symbols)   was 76.6% / 1,296
+remaining  158,760 bytes /   435 symbols            was        565
+  data modes            61 sym   38,980 B
   fax only             283 sym   78,331 B
-  voice / CID / ring    70 sym   24,467 B
-  no-entry-point leaves 138 sym  15,767 B
+  voice / CID / ring    67 sym   23,802 B
+  no-entry-point leaves 15 sym    3,167 B   was 138 sym / 15,767 B
 ```
+
+**Wave 1 cleared the leaf bucket: 138 symbols down to 15, 15,767 bytes to
+3,167.** Merged master is green on the period compiler at 275 passed, 0
+failed — master's 258 tests plus the wave's 17.
 
 ## The order
 
@@ -26,39 +30,65 @@ phase, last on purpose).
 
 | # | work | spans involved | size (blob bytes) | status |
 |--:|---|---|--:|---|
-| 1 | small closers | `dp_init.c +2`, `vpcm.c`, `call.c`, `b103.c +2` leaves | ~1.5 K | **in progress** (wave 1, 2026-08-30) |
-| 2 | leaves: V.90/V.92 API surface | `VPcmV34Main.cpp +72` | 5,805 | **in progress** (wave 1) |
-| 3 | leaves: voice-span utilities | `Beepgen.c +3`, `Fdspkrnl.c +13`, `RingDetector_Reset` | ~4.3 K | **in progress** (wave 1) |
-| 4 | leaves: V32mod/Dialer + fax-named exported API | `V32mod.c +39`, `Dialer.c +18`, `class1*.c` leaves | ~4.7 K | **in progress** (wave 1) |
-| 5 | V.32/V.32bis | `Dialer.c +18` + `V32mod.c +39` together | 25,925 firm / 30,306 ceiling | next — wave 2 |
+| 1 | small closers | `dp_init.c +2`, `vpcm.c`, `call.c`, `b103.c +2` leaves | ~1.5 K | **DONE** — wave 1, `eea174a1` |
+| 2 | leaves: V.90/V.92 API surface | `VPcmV34Main.cpp +72` | 5,805 | **DONE** — wave 1, `f76eceeb` (no derivations: F8430) |
+| 3 | leaves: voice-span utilities | `Beepgen.c +3`, `Fdspkrnl.c +13`, `RingDetector_Reset` | ~4.3 K | **DONE** — wave 1, `688a1fb2` |
+| 4 | leaves: V32mod/Dialer + fax-named exported API | `V32mod.c +39`, `Dialer.c +18`, `class1*.c` leaves | ~4.7 K | **DONE** — wave 1, `9b1739ee`; SGD withdrawn (F8497), 9 blocked on the link constraint (F8492) |
+| 5 | **V.32/V.32bis** | `Dialer.c +18` + `V32mod.c +39` together | 25,925 firm / 30,306 ceiling | **NEXT — wave 2** |
 | 6 | V.22/V.22bis/Bell 212 | `V32mod.c +39` (v22_* ~12 K) + `v22.c` | ~13 K | wave 2, same spans as V.32 |
 | 7 | v32.c dispatch | `v32.c` (needs V.32 data tables) | 1,691 | with wave 2 |
-| 8 | Caller ID + ring detect | `cid_*` in `V32mod.c`, `CID_*` in `dp_init.c`, `RingDetector_*`/`RD_*` in `voice.c#3` | ~7 K | after data modes |
+| 8 | Caller ID + ring detect | `cid_*` in `V32mod.c`, the rest of `voice.c#3`'s `RingDetector_*`/`RD_*` | ~7 K | after data modes. `CID_*` and `RingDetector_Reset` already landed in wave 1 |
 | 9 | voice | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3` remainders | ~15 K | low priority |
-| 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last |
+| 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last. Restore `t_faxsgd.c` from `9b1739ee^` first (F8497) |
+| 11 | the 15 remaining leaves | mostly `class1*.c`; 9 of them are F8492's link-blocked set | 3,167 | unblocks as their referents land — not a wave of its own |
 
 Also on the board, not TU work: three written functions still route arms into
 stubs (`VPcmV34Progress` ×5, `vpcm_run` ×5, `v34handshak` ×1 — see
 `tools/worklist.py`'s closing section), and the tested-against-blob share is
-1.2% with `v34handshak` (61,541 B) the largest untested translated symbol.
+1.1% with `v34handshak` (61,541 B) the largest untested translated symbol.
+Recalibrating the MODERN tier for GCC 14 is its own task (see below).
 
 ## Wave 1 ledger (small closers + leaves, four parallel agents)
 
 Finding blocks assigned: A F8410–8429, B F8430–8459, C F8460–8489,
 D F8490–8519.
 
-**WAVE 1 IS STALLED, AND NOTHING FROM IT IS TRUSTED YET.** All four agents
-were killed by an account session limit on 2026-08-30, every one of them while
-WAITING ON `make phase`. **No agent committed, so no symbol in this wave has
-passed the gate** — the work is source on disk, not reconstruction, until a
-green phase says otherwise. The worktrees are locked so nothing is reclaimed.
+**WAVE 1 IS COMPLETE AND MERGED.** All four agents were killed mid-gate by an
+account session limit on 2026-08-30 having committed nothing; the work was
+recovered from their locked worktrees, gated one at a time on the period
+compiler, and merged. Merged master: **275 passed, 0 failed**.
 
-| agent | scope | worktree branch | state |
+| agent | scope | commit | outcome |
 |---|---|---|---|
-| A | `dp_vpcm_exit`, `dp_call_exit`, `dp_init.c +2` (CID_*, prop_dp_*), `b103.c +2` leaves | `worktree-agent-a4b2869817b730940` | **COMMITTED `eea174a1`** — 12 symbols, period green at 262 passed / 0 failed (= master's 258 tests + A's 4). Findings F8410–F8413 |
-| B | the 67 `VPcmV34Main.cpp +72` leaves | `worktree-agent-a25c3f9a37c3f9e5c` | uncommitted: 40 files, 3,069 insertions + 2,081 untracked lines; **no findings written yet** (killed as it started them) |
-| C | `Beepgen.c`/`Fdspkrnl.c` leaves + `RingDetector_Reset` | `worktree-agent-a4f874eb60f1b56fd` | uncommitted: 7 files, 1,614 insertions + 2,201 untracked lines; findings F8460–F8466 drafted; killed waiting on `t_v90cdesign` |
-| D | `V32mod.c`/`Dialer.c` leaves + fax-named exported API leaves | `worktree-agent-a0e1e3bc9a937ef60` | uncommitted: 10 files, 440 insertions + 2,589 untracked lines; findings F8490–F8496 drafted; killed mid-period-tier |
+| A | `dp_vpcm_exit`, `dp_call_exit`, `dp_init.c +2` (CID_*, prop_dp_*), `b103.c +2` leaves | `eea174a1` | 12 symbols, period 262/262. F8410–F8413 |
+| B | the 67 `VPcmV34Main.cpp +72` leaves | `f76eceeb` | all 67, period 265/265. **No derivation record** — F8430 |
+| C | `Beepgen.c`/`Fdspkrnl.c` leaves + `RingDetector_Reset` | `688a1fb2` | 20 symbols, period 261/261. F8460–F8466 |
+| D | `V32mod.c`/`Dialer.c` leaves + fax-named exported API | `9b1739ee` | period 261/261. SGD **withdrawn** (F8497), 9 link-blocked (F8492). F8490–F8497 |
+
+Merge commits `04e5284d`, `f45e66c7`, `91e1de4d`; the plumbing fix `9e152274`.
+`src/service/cid.c` was an add/add conflict — A's `CID_*` wrappers and D's
+`cid_*` setters both created it — and was hand-merged keeping both, per the
+F700 rule against `checkout --ours`.
+
+**Three things wave 1 established that outlive it.**
+
+- **The link constraint (F8492, F8493).** A `src/` reference to an unwritten
+  blob symbol CANNOT link: `symmap.py` renames every defined blob symbol, and
+  every test binary links all of `$(OBJ_REPRO)`. This applies to a STORED
+  function pointer exactly as to a call, so a leaf pass that checked only
+  `R_386_PC32` call relocations would have written nine symbols that fail 90-odd
+  binaries at link. Check `dis.py` for BOTH relocation kinds before scheduling.
+  The premise "unwritten callees resolve to the blob" is the F214 spike, which
+  F215 declined — do not brief an agent with it, as this wave's briefs wrongly did.
+- **A span name is not a module name, again.** `GetNextDigit‐
+  AndReturnNextState` (895 B, the largest item in D's scope) was ALREADY
+  WRITTEN — an inlining-boundary artefact wearing a leaf's name (F8490). Check
+  before scheduling by size.
+- **The SGD withdrawal is the model for a failure (F8497).** 96 of 3,603
+  checks failed with `det_at` landing megabytes outside the object's own
+  buffer. It was removed rather than committed, because the defect is
+  structural and no arithmetic fix reaches it. The TEST is the asset and is
+  recoverable from `9b1739ee^`.
 
 ### What wave 1 cost, and the scheduling lesson (for wave 2)
 
