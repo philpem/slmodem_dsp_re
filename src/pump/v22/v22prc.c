@@ -8,7 +8,7 @@
  *   RxClampV22      .text 0x08c370   44    |  the 0x8bd50..0x8c5a0 block,
  *   ReadGTimer      .text 0x08c3a0   15    |  with MakeTxData and the
  *   RxTrained1200   .text 0x08be20   63    |  Detect_* family
- *   RxTrained2400   .text 0x08be60  143   /
+ *   RxTrained2400   .text 0x08be60  136   /
  *
  *   TxClockSync     .text 0x08e610   22   \
  *   CarrierDetect   .text 0x08e630   14    |  the 0x8e120..0x8e669 block,

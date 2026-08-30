@@ -96265,3 +96265,741 @@ and MOST OF IT IS NOT V.32: `v22_originate`, `v22_answer`, `v22_retrain`,
 `v22_data`, `connect_1200`, `connect_2400`, `cid_*` and `data_*` sit in a span
 named `V32mod.c`. CLAUDE.md's warning that a span name is not a module name
 still binds; read the queue, not the heading.
+### F8520. V.22's three pattern detectors are one correlator written out three times, and every one of its accumulators is sixteen bits and wraps
+
+`Detect_1s` (0x8c0f0, 199 bytes), `Detect_Rmloop2_ACK` (0x8c010, 209) and
+`Detect_Retrain` (0x8bef0, 288) are the same arithmetic three times over.
+Each keeps three running sums over the received symbols —
+
+    sumsq  = sum s[i] * s[i]
+    corr   = sum s[i] * ideal
+    energy = sum ideal * ideal
+
+— and declares a match when `|2*corr - sumsq|` clears a fraction of `energy`.
+Expanding the left-hand side gives `energy - sum (s[i] - ideal)^2`, so the test
+is "the symbols are close to the ideal" written without a subtraction inside
+the loop.
+
+**All three accumulators are `short` and truncate on EVERY iteration** — a
+`cwtl` or a `movswl %ax` after each add — and the final comparison is a 16-bit
+`cmp` on both operands. `energy` is just `n * ideal^2`, so at 2400 bit/s
+(ideal 15) it passes 32767 after 145 symbols and wraps. An `int` accumulator
+agrees with the object over every short input and disagrees over every long
+one, which is why `t_v22det.c` sweeps to 8,192 symbols and asserts that each
+wrap was actually reached.
+
+The ideals are the object's: 15 and 3 for `Detect_1s`, which are exactly the
+two symbols `v22prc.h`'s `RxTrained2400` and `RxTrained1200` look for; 10 and 2
+for `Detect_Rmloop2_ACK`, which nothing corroborates and which are named for
+their value alone. The threshold is a parameter in `Detect_1s` and a literal
+0x7eb8 — 0.99 in Q15 — in the other two. The comparison is `>` in `Detect_1s`
+and `>=` in both others, one instruction apart in the object, and the asymmetry
+is the original's.
+
+A match returns `*count * 0x6aab >> 14`, i.e. 1.66668 per symbol, which is one
+600-baud symbol interval in milliseconds. The constant is the object's; the
+UNIT is inference from that arithmetic and from the 600 baud `v22_fse.h`
+establishes.
+
+### F8521. `Detect_Retrain`'s two loops run over different sets, so a stream that is quadrant 3 throughout scores exactly zero and never fires
+
+Its first loop walks EVERY symbol and accumulates `q*q` where `q` is
+`(sym >> 2) & 3`, the quadrant `fpm_smc.h` establishes. Its second walks only
+the EVEN indices and accumulates the correlation against the constant quadrant
+3 and the ideal energy. So `sumsq` has twice as many terms as `corr`.
+
+The consequence is not obvious and it caught the test before it caught the
+code. On a stream whose quadrant is 3 everywhere, `sumsq = 9n` and
+`2*corr = 18*ceil(n/2) = 9n`, so the difference is 0 and the detector never
+matches at any length. What DOES match is quadrant 3 on the even symbols and
+quadrant 0 on the odd ones: then `sumsq = corr = energy` and the difference is
+exactly `energy`, which clears the 0.99 threshold. `t_v22det.c`'s "detector
+fired" coverage guard is what found this — the first version of the test used
+the obvious stream, took only the negative arm, and the guard refused it.
+
+A second condition is ANDed with the correlation: the object counts consecutive
+even indices satisfying `sym[i] == sym[i-2] && sym[i+1] == sym[i-1]`, resetting
+to zero on any that does not, and requires strictly more than two. Both
+conditions are computed with `setcc` and ANDed rather than short-circuited.
+
+### F8522. `MakeTxData`'s loops count DOWN to zero and never test for positive, so a negative count writes 65535 symbols and one selector does not terminate at all
+
+`MakeTxData` (0x8bd50, 195 bytes) dispatches on a five-entry jump table at
+`.rodata + 0x862c` and fills the caller's buffer with a fixed pattern: case 0
+alternating 0 and 3 in PAIRS, case 1 all 3, case 2 all 15, case 3 all 2, case 4
+all 10. The range test is UNSIGNED (`cmp $0x4 / ja`), so a negative selector is
+a silent no-op and not case 0. Cases 1 and 2 emit exactly what `RxTrained1200`
+and `RxTrained2400` accept, which is the only corroboration any of the five
+has.
+
+Every loop is `for (i = *count; i != 0; i--)`. There is no `> 0`. A count of -1
+therefore writes 65535 symbols rather than none, which is the whole difference
+between this and the `for (i = 0; i < n; i++)` anybody would write instead, and
+`t_v22det.c` tests it with a buffer big enough to hold them.
+
+**Case 0 does not terminate on an ODD count.** It writes two symbols per step
+and decrements by two, and the odd sixteen-bit values form a cycle under -2
+that never contains zero. That is the one input no differential test can take —
+neither side returns — so it is recorded here and in `v22det.h` instead.
+
+### F8523. A V.22 rate change re-derives `FPM_SDM_init`'s width arithmetic in place rather than calling it, and its selector is not `v22fp_cfg::rate`'s
+
+`SetTxRate` (0x8e120, 205 bytes) and `SetRxRate` (0x8e1f0, 211) each write four
+scrambler fields directly — `nbits`, `mask`, `notmask` and the two tap shifts —
+and clear the shift register, which is exactly what `FPM_SDM_init` computes
+from `nbits`. Neither calls it. That is what makes the rate switchable without
+discarding the object.
+
+Beyond the scrambler, the transmit side moves the symbol coder's `qshift` and
+`amask` (0 and 0 at 1200, 2 and 3 at 2400) and repoints the pulse shaper's
+`imap`/`qmap` at the 1200 or 2400 constellation tables; the receive side
+repoints the equaliser's slicer at `FSEv22_decision12` or `FSEv22_decision24`.
+`dsp->r28` and `dsp->r2a` take 0 or 1 with the rate.
+
+**Selector 0 is 1200 and selector 1 is 2400, and anything else does nothing at
+all, silently.** That is NOT `struct v22fp_cfg::rate`'s encoding, where 0 gives
+2400 and both 1 and 2 give 1200 (v22fp.h). The two are three functions apart in
+the same module and mean opposite things; what names these two is the field
+widths `fpm_smc.h` already records for V.22bis at 2400, not any caller.
+
+### F8524. `ResetRx` hands `V22_FSE_init` the equaliser as its own configuration
+
+`ResetRx` (0x8e570, 62 bytes) is `V22_SRE_init(&dsp->sre, 0)` followed by
+`V22_FSE_init(&dsp->fse, &dsp->fse, 0)` — the object passes the same pointer in
+both of the first two argument slots.
+
+It is not a transcription slip. `struct v22_fse_cfg` is the two words `icoff`
+and `qcoff`, and `struct v22_fse` opens with the same two in the same places,
+so the call re-seeds the equaliser from the coefficient tables it is already
+pointing at. Both calls pass `fresh` = 0, so nothing is allocated and nothing
+is freed. The object also reloads `fp->dsp` between the two calls rather than
+keeping it in a register, which is the same "read the field once per use"
+`v22data.c` records for this block.
+
+### F8525. `DemodDataV22` destroys its input buffer twice over, and its return is the equaliser's own counter and not its callee's
+
+`DemodDataV22` (0x8e370, 510 bytes) is the whole V.22 receive block: an
+optional IIR front end when `dsp->r2e == 2`, then rate conversion, a level
+check, AGC, symbol-clock recovery and equalisation.
+
+**The buffer plumbing is worth stating because it is not what a signature
+suggests.** `V22_MRF_filter` reads the caller's `in` and writes
+`dsp->rx_scratch`; `V22_SRE_recover` reads `rx_scratch` and writes back over
+`in`; `V22_FSE_receive` then reads `in` and writes the caller's symbol array.
+So `in` is both the input and an intermediate, and it must be large enough for
+whatever the resampler produces as well as for what the caller put there.
+
+The function returns `dsp->fse.n_out` after the call, NOT `V22_FSE_receive`'s
+return, which it discards. Zero doubles as the disconnect answer: when
+`hdx->r0e` is zero and `params.disconnect_thresh` exceeds `FPM_rms` of the
+resampled block, it clears `sre.active` and returns 0 without running anything
+further.
+
+Two of its four flag gates read `sre.acquiring` and `sre.mode`, which only move
+when the clock loop locks onto a real carrier — noise will not do it. `dsp->r04`
+is what the function ANDs into `sre.adapt`, and `v22_sre.c`'s update returns
+before touching either field when `adapt` is zero, so clearing `r04` freezes
+both state words and lets a test drive them directly. That is how
+`t_v22rate.c` reaches all six combinations.
+
+It also passes a FOURTH argument to `FPM_AGC_agc`, the constant 1, which that
+function does not have. Third site of the same pattern, after `bwchdem.c` and
+`v22data.c`'s `Detect_v22`, and ignored in the same way.
+
+### F8526. `ScramblerOn` and `DescramblerOn` name two of the V.22 datapump's flag words, and the rename is deferred rather than declined
+
+`ScramblerOn` (0x8e670, 11 bytes) returns `dsp->r18`; `DescramblerOn` (0x8e680,
+11 bytes) returns `dsp->r1c`; `V22FP_control` (0x8c3b0, 145 bytes) sets exactly
+those two from bits 0 and 1 of one control byte, and `V22FP_create` derives
+both from `params.flags` bits 0 and 1. Two accessors whose names say what they
+answer, reading two fields a third function sets from two adjacent bits, is the
+"a caller or callee that types it" rule at its strongest: `r18` is the transmit
+scrambler's enable and `r1c` is the receive descrambler's.
+
+**They are not renamed in `v22fp.h` in the commit that establishes this**, and
+the reason is scheduling rather than doubt: two other V.22 reconstructions were
+in flight against the same base commit and both reach those fields, so the
+rename is a merge conflict waiting to happen. The evidence is in
+`include/dsplib/v22ctl.h`; the edit belongs to whoever lands last.
+
+The same function's other writes are `dsp->r20` from bit 2, `dsp->agc.f18` from
+the INVERSE of bit 3, and `params.flags` bit 9 from bit 7. Its second byte
+carries a flag at bit 2 and a two-bit field at bits 7:6, tested in that order
+and both writing the same pair of half-duplex words, so a byte carrying both
+leaves the field's values in place. It returns a literal 1 on every path.
+
+### F8527. The four exported V.22 accessors have no caller anywhere in the 1.2 MB, and one of them is covered by nothing
+
+`objdump -dr` over the whole object finds no relocation against
+`V22FP_GetDiagnostics`, `V22FP_control`, `ScramblerOn` or `DescramblerOn`. They
+are exported surface, reached by the host or by a part of slmodemd this library
+does not contain — the same shape `CLAUDE.md` records for the 129 no-referrer
+symbols in the leaf bucket.
+
+That has a cost worth naming. Nothing corroborates `V22FP_control`'s second
+parameter from the outside, so its type comes from its own two loads and no
+more: twelve bytes of that block are unmodelled because the function reads
++0x0c and +0x0d and nothing else.
+
+**And `V22FP_GetDiagnostics`'s only content is untestable.** It computes
+`&dsp->fse` — a tail jump after rewriting one argument slot — and hands it to
+`V22_FSE_getdiag`, which is a three-instruction stub that returns 0 and reads
+nothing. So the +0x164 offset reaches an argument nobody looks at, and no
+differential test can separate it from any other offset. `t_v22ctl.c` says so
+rather than dressing the check up. Same shape as findings F860–F862's
+`loadParams`.
+
+### F8528. `V22_status` scales the quality number on the 1200 arm and not on the 2400 one, because the 2400 arm jumps into the middle of the 1200 path
+
+`V22_status` (0x8c450, 310 bytes) reports the equaliser's mean-square error as
+`0x800 - err`, counting down from 2048 with no clamp. Which `err` it uses
+depends on `dsp->r2a`, the receive-rate flag `SetRxRate` writes:
+
+    1200    err = (fse.mse * 0x143c) >> 14      0.31616 * mse
+    2400    err = fse.mse                        unscaled
+
+so the same error reports three times worse at 2400. The 1200 report reaches
+zero at an mse of 6478 and the 2400 report at 2048, and both go negative past
+that.
+
+**It is easy to miss and a plausible sweep will not find it.** The two arms
+share the subtraction, the store and the whole flag sequence after it; the only
+difference is four instructions before the join, where the 2400 arm loads the
+raw `mse` into the register the scaled value would otherwise have occupied and
+jumps into the middle of the other path. Reading the fall-through arm alone
+gives a complete-looking function. And the constructor leaves `r2a` at one
+value, so a test that never drives `SetRxRate` — or that drives it and then
+sweeps `mse` — takes one arm and agrees with a reconstruction that scales both
+or neither.
+
+`t_v22status.c` drives `r2a` both ways on every `mse` value and guards both
+arms. That is what caught it: the first reconstruction scaled unconditionally
+and failed 5,376 of 17,920 checks, all of them on byte 6.
+
+The rest of the function is uncontroversial and is recorded for completeness:
+`PROTOCOL[hdx->r0e]` into the first word with no bounds check, the two rates
+from `dsp->r28` and `dsp->r2a`, four words written zero, eight flag bits at
++0x14 — three enables direct, three inverted, one unconditional 1, one from
+`params.flags` bit 9 — and bit 0 of +0x15 from `params.flags` bit 10. Every one
+of the eight bits at +0x14 is written, so the caller's value there does not
+survive; only bit 0 of +0x15 is, so the caller's other seven bits DO, and a
+report block that starts zeroed cannot tell the two apart.
+
+### F8529. `V22_PROTOCOL`'s relocations name all seven V.22 protocol states, which decodes `hdx->r0e` and settles what `v22fp_cfg::mode` selects
+
+`V22_PROTOCOL` is 28 bytes of `.rodata` at 0x8544 and its contents are seven
+zeroes — every word is an `R_386_32` relocation, so `objdump -s` shows nothing
+and `objdump -r` shows everything. It is the trap `tools/dis.py`'s own header
+warns about, one section along.
+
+The relocations are, in order:
+
+    index    0             1              2            3
+    handler  v22_data      v22_originate  v22_answer   v22_local_loop
+
+    index    4                5                6
+    handler  v22_org_rmloop2  v22_ans_rmloop2  v22_retrain
+
+`V22FP_modem` (0x887b0) indexes it at 0x8885f — `call *0x8544(,%edx,4)` — with
+`edx` loaded at 0x88829 as `movswl 0xe(%esi)` where `esi` is `fp->hdx`. So
+**`struct v22fp_hdx::r0e` is the protocol state**, and the seven handlers this
+tree has been reconstructing one at a time are its seven values.
+
+**That settles three things nothing else in the object does.**
+
+1. `V22FP_create` leaves `r0e` at 1 for mode 0, 2 for mode 1 and 3 for
+   anything else (v22fp.h). Those are `v22_originate`, `v22_answer` and
+   `v22_local_loop`, so `struct v22fp_cfg::mode` really does "select the
+   station's role" as that header guessed, and now the guess has a table
+   behind it: **0 is the originating station and 1 is the answering one.**
+   `v22_create` only ever passes 0 or 1, which is consistent.
+2. `V22FP_control` sets `r0e` to 6 when bit 2 of its second control byte is
+   set, and to 4 when bits 7:6 hold 2 (F8526). Those are `v22_retrain` and
+   `v22_org_rmloop2`, so that byte's bit 2 REQUESTS A RETRAIN and its two-bit
+   field enters the originate remote-loopback-2 state. `include/dsplib/
+   v22ctl.h`'s constants are named for that.
+3. `V22_status`'s `PROTOCOL` table (F8528) is indexed by the same `r0e`, so its
+   seven values line up with the seven handlers: 3 for data, 0 for originate,
+   1 for answer, 2 for local loop, 7 for originate RMLOOP2, 8 for answer
+   RMLOOP2, 5 for retrain. **The values themselves are still not decoded** —
+   no enumeration in slmodemd's vendored `modem_defs.h` has those members and
+   no format string prints one — but they are now a mapping from something
+   named rather than from an index.
+
+`hdx->r0e` is NOT renamed in `v22fp.h` at the commit that establishes this, for
+the same scheduling reason F8526 gives: three V.22 reconstructions were in
+flight against one base commit and all three reach that field. `protocol` is
+the name it should take, and the edit belongs to whoever lands last.
+
+**And the method note is the one that keeps recurring.** The whole result came
+from `objdump -r`, not from reading code: the seven-entry table looked like
+seven zeroes, and the two other seven-entry tables in the same module —
+`PROTOCOL`'s status codes and, on the transmit side, the state handlers
+`v22prc.h` mentions — made "seven of something" look like a coincidence rather
+than a key. `tools/relocscan.py --at .rodata:0x8544` names the one caller in a
+single command.
+
+### F8530. `src/core/fixedrc.c` allocates with `calloc` and frees with `free` where the object uses `sysdep_malloc` and `sysdep_free`, and nothing in the tree could see it
+
+Found by accident, and the accident is the point: `t_v22del.c` builds a V.22
+datapump with the BLOB's `v22_create` and tears it down with OUR `v22_delete`,
+which is the one arrangement in the tree where an allocator mismatch becomes
+visible. At a host sample rate of 9600 the wrapper builds two rate converters,
+the blob's constructor takes four blocks for them through `sysdep_malloc`, and
+our teardown released **42 of the 46** blocks — four short, `live == 4`, with
+no bad free and no crash.
+
+The four are not a leak in `v22_delete` or in `dp_wrapper_delete`, both of
+which do call `RcFixed_Delete` on both converters. They are the converters'
+own blocks, released through libc `free` rather than through `sysdep_free`, so
+the harness's ledger never saw the calls.
+
+    RcFixed_Create   b0f2f   six sysdep_malloc sites, three sysdep_memset
+    RcFixed_Delete   b0d90   three sysdep_free sites
+    src/core/fixedrc.c:194,198   calloc
+    src/core/fixedrc.c:200,238,239   free
+
+**No existing test can fail on this**, which is why it survived. Every test
+that touches a rate converter builds it and destroys it on the same side, and
+`calloc`/`free` are self-consistent; the harness substitutes `sysdep_malloc`
+and `sysdep_free` and simply never receives the call. It takes a
+cross-allocator run — blob constructor, our destructor — to separate the two,
+and until this one there was none, because `RcFixed_Create` has no caller a
+differential test reaches from the reference side.
+
+**Whether it is a defect depends on `sysdep_free`, and this tree cannot say.**
+Under the harness the two are the same heap and nothing breaks. Under slmodemd
+they need not be: `sysdep_malloc` is the host's hook, and a host that pools or
+instruments it gets a pointer freed by the wrong deallocator. The object calls
+the hook; we do not; that is a difference in the code and not in the
+toolchain, which is the standard this project holds itself to.
+
+**It is left unfixed here deliberately, and not out of caution about the
+change itself.** `calloc` also ZEROES, and the object's `sysdep_malloc` does
+not — `RcFixed_Create` follows two of its six allocations with an explicit
+`sysdep_memset` and the rest with nothing, so a straight substitution changes
+which regions start zeroed and that is a behavioural question needing its own
+reading of all six sites. `src/core/fixedrc.c` is also outside the V.22 scope
+this was found under, and three V.22 reconstructions were in flight against
+the same base commit.
+
+`t_v22del.c` therefore drives the constructor at the datapump's own 8000 Hz,
+where `dp_wrapper_create` builds no converters at all and the ledgers match
+exactly, 42 for 42. That is not a tolerance being widened — the test asserts
+equality and gets it — but the 9600 arm is worth re-adding the moment this is
+settled, because it is four more blocks of coverage for free.
+
+### F8531. `connect_1200` and `connect_2400` are a shared subroutine of three protocol states, not states of the machine — and one of their format strings names four V.22 fields at once
+
+`connect_2400` is at **0x088cd0**, not at 0x08a7a0 as a task brief had it;
+0x08a7a0 is `v22_local_loop`. The size settles it: 0x892b1 − 0x88cd0 = 1505.
+Recorded because the wrong address survived being written down twice.
+
+Neither function is in `V22_PROTOCOL`. That table's seven relocations are the
+seven state handlers (F8529), and these two are called *by* three of them —
+`v22_originate`, `v22_answer` and `v22_local_loop`, two relocations each — and
+by nothing else. So the V.22 machine has seven states and a shared connect
+subroutine, and a count of "seven-entry tables in this module" is not a count
+of state machines: the `.rodata` blocks at 0x8560, 0x8580, 0x85b8 and 0x85f4
+are the handlers' own jump tables, whose entries point INSIDE functions.
+
+**The naming chain, and it is the author's own words.** `.rodata.str1.4` at
+0x114d0 is
+
+    V22_MSG_NO_CARRIER won't be reported (carrier_loss_time %d of %d ms)
+
+and the two `%d`s are the two operands of the comparison the message guards.
+The first is `20 * hdx->r3c` and the second is `params.r18`, so
+
+  - `struct v22fp_hdx::r3c` counts CONSECUTIVE CARRIER-LESS BLOCKS, and the
+    factor of 20 is `ReadGTimer`'s own block length, so the string and the
+    timer agree on what a block is;
+  - `struct v22fp_params::r18` is the CARRIER-LOSS GRACE TIME in milliseconds.
+    `v22_create` passes 700, which is 35 blocks.
+
+`.rodata.str1.1` at 0x5eb is `v22: V22STAT: --> %d\n`, which makes
+`struct v22fp::status` a MESSAGE CODE rather than a state — v22fp.h had only
+b103fp.h's analogy for that byte and said so. Three of its values are fixed by
+adjacent printfs: 3 is `V22_MSG_CONNECT_2400`, 16 is `V22_MSG_NO_CARRIER`, 23
+is `V22_MSG_ERROR7`. The others seen written here — 1, 4, 11 and 24 — are
+named by nothing and stay value-named.
+
+Three more fields follow from use rather than from a string, and are weaker in
+exactly that way: `hdx->r0c` is the connect SUB-STATE (`connect_2400` prints
+`NODE_2400A`..`NODE_2400D` on entering 8, 9, 10 and 11, read two independent
+ways that agree; 12 and 13 are named by nothing and the NODE_1200A/B analogy is
+recorded, not used); `hdx->r10` latches `RxTrained1200`/`RxTrained2400`'s
+verdict and is tested `== 1`; `hdx->r04` is the current node's DEADLINE in ms
+on `ReadGTimer`'s clock, and `v22_create`'s 60000 is that deadline.
+
+**None of the six is applied to `v22fp.h` at the commit that establishes
+them**, for F8526's reason: three further V.22 reconstructions were in flight
+against one base commit and all three reach those fields. The renames are
+queued, not declined.
+
+`hdx` +0x38 also wants a `short`. It currently falls inside
+`unsigned char r36[6]` — unmodelled space — and `connect_2400`'s retrain path
+is its first reader (`movw $0x1,0x38(%eax)`). Only the SHAPE is established,
+not the meaning, so it stays inside the byte array with a comment rather than
+becoming a named field on the strength of one store.
+
+### F8532. Every `ReadGTimer` comparison in the V.22 connect family is UNSIGNED, and a 20 ms clock needs two probes per deadline
+
+`ReadGTimer` returns `int`. All six comparisons of its result in
+`connect_1200` and `connect_2400` — including both against `hdx->r04`, the
+node deadline — are `jbe` and not `jle`. The two readings agree over every
+clock value a session can produce, so this is unreachable in service and
+provable only by driving a negative clock, which `t_v22conn.c` does: an
+injected signed comparison fails on that input and on no other. The reading is
+established rather than assumed, which is the distinction F614's "forced"
+column is about.
+
+**And a method note that generalises past V.22.** A node deadline compared
+against `ReadGTimer` can only be pinned from ONE SIDE per probe, because the
+timer advances in multiples of 20 and therefore presents only every twentieth
+value. Starting the clock at C−20 catches a constant that moved DOWN and misses
+one that moved UP. Injecting `790 → 791` went unnoticed while `449 → 448` was
+caught, which is the same defect surviving or not purely by which side of the
+step it fell on. Two probes per constant — C−20 and C−19 — closes it. Eleven of
+twelve injected defects were caught once that was in place.
+
+The twelfth is recorded as unobservable rather than as a gap.
+`NODE_1200_13` calls `RxClampV22` twice on the trained path, once inside the
+`if` and once after; `NODE_2400D`, otherwise the same node, calls it once.
+Removing the inner call cannot be detected by any input, because the second
+call writes the same twelve values over the first. It is in the source because
+it is in the object, and the comment beside it says no test defends it.
+
+Two smaller things from the same reading, both corroborating headers written
+earlier from the other end: `rxcount` is an IN AND OUT parameter — input sample
+count on the way in, symbol count on the way out, and `RxClampV22` then forces
+it to 12, which is 600 baud at 8 kHz and is what `v22_fse.h` derived
+independently. And descrambling happens BEFORE `RxTrained1200`/`RxTrained2400`,
+so the training predicates see descrambled symbols; a test that wants to reach
+them has to stand the descrambler down as well as override the slicer.
+
+### F8533. The V.22 transmit path disagrees with ITSELF across two graphs after about forty blocks, and the obvious explanation is refuted
+
+**The observation, and it is the blob's, not a reconstruction's.** A sweep that
+drove 42 consecutive blocks through one `struct v22fp` built by `V22FP_create`
+found two blocks on which the TRANSMIT SAMPLES differed between the two
+graphs, while the graphs themselves, the received symbols and both counts
+still matched. It was re-run with **the blob's own `ref_v22_ans_rmloop2` on
+both sides** and the disagreement reproduced at the same two blocks. So it is
+not a difference between our code and the object's; it is a difference between
+two runs of the object's own code on two objects built identically.
+
+**PARTLY CORRECTED BY F8536, WHICH SHOULD BE READ WITH THIS.** The
+refutation below is of the HEAP form of the uninitialised-memory
+explanation and is sound as far as it goes. It is not a refutation of the
+STACK form, which F8536 then measured and which this entry did not
+consider -- the harness fills what `sysdep_malloc` hands out and has no
+way to fill a call frame.
+
+**The explanation first reached for is wrong.** `v22fp.h` records several
+regions `V22FP_create` never writes — `dsp->ra8`, `dsp->ra0`, `dsp->r24`,
+`dsp->rx_scratch` — and "the transmit chain reads uninitialised memory" is the
+natural reading. It cannot be right here: `test/harness/runtime.c`'s
+`sysdep_malloc` fills every block with a FIXED non-zero pattern precisely so
+that an unwritten field is identical on both sides and obviously wrong when
+read. Two graphs therefore start with byte-identical contents everywhere,
+which `t_v22fpcreate.c` independently confirms by comparing all twenty-eight
+regions of two freshly built graphs and finding them equal.
+
+**What is left is a hypothesis and is labelled as one.** The two graphs are
+allocated back to back, so what differs between them is not their CONTENTS but
+their NEIGHBOURS: a read past the end of any of the eleven buffers
+`V22FP_create` allocates lands on a different block in each graph. That would
+produce exactly this signature — identical for a while, then diverging once
+the read reaches past a boundary, and deterministic again the moment each call
+gets a freshly allocated graph, because the allocator recycles the same
+chunks in the same order.
+
+It is NOT established. Nothing has been traced, no offset has been read, and
+the transmit chain (`ModDataV22` -> `FPM_SMC_encode` -> `V22_PPS_filter`) has
+its own tests that pass. The next step is a probe rather than an argument:
+poison a guard region after each of the eleven allocations and see which one
+is read.
+
+**What was done about it meanwhile.** `t_v22ans.c` builds a fresh graph per
+call in that sweep, which makes both sides see the same allocation layout, and
+its header carries the reason so the next reader does not re-derive it. That is
+NOT a tolerance being widened — every check still asserts exact equality — but
+it does mean the long-run behaviour of the transmit path is currently untested
+past the point where this bites, and that is the cost of leaving it open.
+
+### F8534. The seven V.22 protocol handlers share one signature, and it belongs to `V22_PROTOCOL` rather than to any of them
+
+All seven entries of `V22_PROTOCOL` (F8529) take the same seven arguments in
+the same order, over stack ranges 1,234 bytes apart in the object:
+
+    void handler(struct v22fp *fp, unsigned short *txsym, short *txout,
+                 short *rxin, unsigned short *rxsym,
+                 unsigned short *txcount, unsigned short *rxcount)
+
+Each element's type is forced by a callee rather than inferred, and both
+counts CHANGE UNITS across the call: `*txcount` goes in as a data-word count
+and `*rxcount` goes in as an input sample count and comes out as a symbol
+count, with `RxClampV22` overwriting `rxsym` and `*rxcount` on most exit paths.
+A caller must reset both per block.
+
+`V22FP_modem` is where that shape comes from, and it is worth reading for its
+own sake: it copies the caller's transmit words into `tx_in_internal`
+(`.bss`+0x3a0) and the caller's input samples, right-shifted by `hdx->r34`,
+into `rx_in_internal` (`.bss`+0x560); dispatches through the table; copies
+`rx_out_internal` (`.bss`+0x480) back out; and only then scales 160 transmit
+samples by `params.r0c` in Q15. **That names `params.r0c`** — v22fp.h has it as
+"template 13014; read by nothing", and 13014/32768 is 0.397, so it is the
+transmit output GAIN. `hdx->r34` is likewise the receive input right shift.
+
+`V22FP_modem` also carries the machine's own state transition, which no
+handler has: after the dispatch it tests `fp->status` and, for 3 or 4 and for
+6, 7 or 8, sets `hdx->r0e = 0` and `hdx->r0c = 0` — that is, moves to
+`v22_data`, index 0. With 3 already fixed as `V22_MSG_CONNECT_2400` this reads
+as "any connect code enters the data state", and it is the strongest thing yet
+said about what the status codes are for.
+
+**One status value is corroborated from outside V.22 entirely.** 0x10 is
+NO_CARRIER, and `v32demod.h` independently records the same author's
+`RxHdxNull` writing 0x10 into the V.32 object's status byte beside
+`V32_MSG_NO_CARRIER`. Same value, same role, different datapump — which is
+better evidence than either module could give alone. 0x0b is RETRAIN (both
+"Retrain initiated." sites) and 9 is the retrain request.
+
+**And a signedness cluster, all of it forced.** `hdx->r08` is declared `short`
+in `v22fp.h` and is read `movzwl` into an UNSIGNED compare (`ja` against 231)
+at every site — it accumulates milliseconds and never legitimately goes
+negative, but the type the object encodes is `unsigned short`. Every
+`ReadGTimer` comparison in the family is `jbe` (F8532). And `Detect_1s`,
+`Detect_Rmloop2_ACK` and `Detect_Retrain`, declared `int` in `v22det.h`, are
+narrowed to a `short` LOCAL by every caller — a `cwtl` at the call site — which
+is consistent with the `int` declaration and a `short` variable, and is NOT a
+reason to change the header. Four sign mutants survive everything except a
+test that drives a negative through each, so all three were measured rather
+than assumed.
+
+### F8535. Seven of the nine addresses in this wave's task briefs were wrong, every size was right, and nothing anywhere could have caught it
+
+The V.22 handler wave was dispatched to five subagents, each brief naming its
+functions as `name .text 0xNNNNNN NNNN bytes`. **Every byte count was correct
+and seven of the nine addresses were not.** The true table, from `nm -S`:
+
+    v22_data          0x088910   946      brief said 0x08ae00
+    connect_2400      0x088cd0  1505      brief said 0x08a7a0
+    v22_retrain       0x0892c0  2284      brief said 0x089b90
+    v22_org_rmloop2   0x089bb0  1050      brief said 0x08b0a0
+    v22_ans_rmloop2   0x089fd0  1160      brief said 0x08b4c0
+    connect_1200      0x08a460   818      correct
+    v22_local_loop    0x08a7a0  1104      correct
+    v22_answer        0x08abf0  1789      brief said 0x08a1c0
+    v22_originate     0x08b2f0  2655      brief said 0x089180
+
+The asymmetry is the whole finding. The SIZES came from `readyqueue.py`, which
+reads the object; the ADDRESSES were typed into prose, and nothing reads prose.
+Worse, 0x08a7a0 was given as `connect_2400`'s address and is in fact
+`v22_local_loop`'s, so one brief pointed at a real function that was not the
+one it named — the failure mode that looks most like being right.
+
+**No work was harmed, and that is the second half of it.** `tools/dis.py`
+takes a SYMBOL NAME and resolves it through `nm`, so every agent disassembled
+the right function regardless of what its brief claimed; the addresses were
+decoration throughout. One agent noticed and said so, which is how this came to
+be measured at all. But the same numbers would have been copied into a file
+header, and a `.c` file's "Reconstructed from dsplibs.o: name .text 0xNNNNNN"
+banner is exactly as unchecked as a brief — `docs/method/compilers.md`'s point
+about a rules file having a comment's shelf-life and no gate behind it, in a
+different costume.
+
+Two cheap defences. The first is a rule and the second is now a tool.
+
+  - **Do not write an address into a brief at all.** The name and the size are
+    sufficient — `dis.py` needs the name, `readyqueue.py` supplies the size,
+    and an address adds nothing a tool consumes.
+  - **`tools/bannercheck.py` reads the banners and asks `nm -S`.** Almost every
+    file in `src/` opens with one, and until now nothing read them.
+
+**And the tool immediately found the same defect in three older places**, which
+is what turns this from a slip into a pattern. Over the whole tree: **254
+banners, 251 agreeing and 3 wrong**, all three with the same signature as the
+briefs — the size right and the address wrong, or a size that had never been
+re-measured:
+
+    src/dsp/fpm_fse.c:6    FPM_FSE_free  said 80 bytes, object says 68
+    src/pump/v23/v23.c:8   dp_v23_init   said 0x004ef0, object says 0x004f70
+    src/pump/v23/v23.c:9   dp_v23_exit   said 0x004f10, object says 0x004f90
+    src/pump/v22/v22prc.c  RxTrained2400 said 143 bytes, object says 136
+
+All four are corrected, and the tree now reads 254 of 254. The tool was put
+through F134's ritual before any of that was believed: a one-digit change to
+`V22FP_create`'s address in `v22fp.c` makes it print the row and exit 1, and
+restoring the digit makes it exit 0.
+
+It prints its denominator on every run and refuses when it finds no banners at
+all, because a checker that silently measured nothing is F2400 and F3110's
+defect exactly. It also skips `.text 0x...` mentions whose name is a bare
+lower-case word — "the block at .text 0x08c340" is prose, not a claim — and
+prints how many it skipped rather than dropping them quietly; nine tree-wide.
+
+It is NOT wired into `make phase`. That is a scheduling decision for whoever
+owns the gate, not something a datapump wave should do on its own; the tool
+exits non-zero on a disagreement and is ready for it.
+
+### F8536. `DemodDataV22` reads uninitialised STACK on any short block, which is the mechanism F8533 looked for and half-refuted
+
+`DemodDataV22`'s IIR front end — taken whenever `dsp->r2e == 2`, i.e. in any
+mode-0 graph — declares a `short mix[V22_IIR_BLOCK]` of 160 entries, asks
+`FPM_TONE_generate_demod` for `count` of them, and then hands the whole array
+to `V22_iir_filt_demod`, whose loop runs the filter's own fixed 160. For
+`count` below 160 the tail of that array is whatever the call frame held.
+
+`src/pump/v22/v22rate.c` says so in a comment — "a short block leaves the tail
+of the mixer at whatever the stack held. The object's." — but a comment is not
+a measurement. It is one now: driving 16, 32, 48, 80 and 120 samples through
+two graphs makes the two sides differ **from byte 2\*count onward and not
+before**, exactly at the fill boundary, on every one of the five. A short block
+is therefore not a usable differential input for anything downstream of this
+function, and `t_v22org.c` uses full blocks for that reason.
+
+**This is the correction F8533 needs.** That entry observed the blob
+disagreeing with itself across two graphs, reached for "it reads memory the
+constructor never wrote", and refuted it on the grounds that
+`test/harness/runtime.c`'s `sysdep_malloc` fills every block with a fixed
+non-zero pattern. The refutation is sound and it is also too narrow: **the
+harness fills the HEAP and cannot fill a call frame.** Uninitialised memory was
+the right family after all; the wrong half of it had been ruled out.
+
+It does not close F8533 by itself. That sweep drove full 160-sample blocks, so
+this particular array was fully written on every call, and the divergence it saw
+was in the TRANSMIT samples rather than the receive path. What changes is the
+ranking: another uninitialised stack array somewhere in the transmit chain is
+now a better hypothesis than the heap over-read F8533 proposed, and the probe
+to run first is a stack poison rather than a heap guard region.
+
+### F8537. Two defects in modules outside V.22 that only a V.22 caller could have found
+
+**`FPM_TONE_generate` returns its `count` and `fpm_tone.h` declares it
+`void`.** The object loads `0xc(%esp)` — the third argument — into `%eax`
+immediately before both of its `ret`s, on every path. Our reconstruction
+returns nothing, so a caller that reads the value gets whatever was in `%eax`,
+and the two diverge.
+
+It is latent rather than live: the only two call sites reached so far are in
+`v22_originate` and `v22_answer`, both of which store the result into
+`*txcount`, and both were written with the literal 160 that is the argument at
+those sites rather than by calling for the value. So nothing is wrong today and
+something will be wrong the moment a caller needs it. The declaration should
+become `short FPM_TONE_generate(...)`; it is not changed here because
+`fpm_tone.h` is a differentially-tested module outside this wave's scope and
+the change wants its own test.
+
+**`v22_originate`'s NODE_3 can divide by zero, in the blob.** At 0x8b718 it
+loads `hdx->r32` with `movzwl` and at 0x8b737 divides by it with an unsigned
+`div` — no test, no guard. `V22FP_create` leaves `r32` at zero and the only
+thing that increments it is a received block that produced symbols, so
+reaching that arm before any such block faults. Reproduced as the object has
+it; every test scenario avoids it, and it is recorded rather than defended
+against, because a guard would be a fix and this is a reconstruction.
+
+**And two smaller things from the same reading.** `v22_originate`'s jump table
+has FOURTEEN entries, not the ten a first count suggests — the bound is
+`cmp $0xd` — and nodes 10..13 are real arms (8..11 reach `connect_2400`,
+12..13 reach `connect_1200`), so reading the table short would have made four
+live nodes look like the default. `v22_answer`'s NODE_0 stores `hdx->r0c = 3`
+twice, five calls apart, with no other writer between; the second store is
+dead, removing it passes the whole suite, and it is reproduced anyway because
+it is in the object.
+
+**The two functions are NOT mirror images**, which is the trap this pair sets.
+The carrier hunt appears three times across them and differs every time:
+`v22_answer`'s NODE_3 resets `hdx->r0a` on the same 59 ms rule `r08` gets and
+NEITHER of `v22_originate`'s two copies does; `v22_originate`'s NODE_5 keeps no
+gap because it reaches no verdict; and its NODE_6 2400 verdict neither prints
+nor sets the `r1e` bit its own 1200 verdict sets, and does not consult
+`params.bps2` the way the answer machine does. Writing either as the other's
+mirror produces a complete-looking wrong function — the same shape as F8528 and
+F8521, for the third time in one wave.
+
+Eleven format strings name the nodes in the author's own words
+(`V22_answer,NODE_0/1/3/4/SILENCE_AFTER_2100`, `V22_originate,NODE_0` and
+`NODE_1/3/4/5/6`) and four name status codes: `V22_MSG_ERROR1` = 17,
+`_ERROR3` = 19, `_ERROR4` = 20, `_ERROR5` = 21. With F8531's three and F8534's
+two, eleven of the status byte's values are now the author's own names.
+
+### F8538. The V.22 lifecycle wave is written and DECLINED: an integration test finds a divergence the seven per-handler tests cannot, and it is not yet localised
+
+`V22FP_modem`, `v22_process`, `v22_create`, `dp_v22_init`, `dp_v22_exit`,
+`V22_PROTOCOL` and the three `.bss` buffers were all reconstructed and all
+compile and link. **None of them is committed**, because the differential test
+written for them fails and the cause is not established. This entry is the
+record of the attempt, so the next one starts from here rather than from the
+disassembly.
+
+**What is settled, and is worth having whatever happens to the code.**
+
+  - `V22FP_modem` (0x887b0) widens the caller's transmit words into
+    `tx_in_internal` (`.bss` 0x3a0, 100 entries), right-shifts the caller's
+    input samples by `hdx->r34` into `rx_in_internal` (0x560, 160 entries),
+    dispatches through `V22_PROTOCOL[hdx->r0e]`, copies `rx_out_internal`
+    (0x480, 100 entries) back out, and scales exactly 160 transmit samples by
+    `params.r0c` in Q15. It names two fields `v22fp.h` had as unread:
+    `params.r0c` is the transmit output gain and `hdx->r34` the receive input
+    shift.
+  - **All three buffers are `.bss` statics, so two V.22 datapumps in one
+    process share them.** And the names COLLIDE across modules: `nm` finds
+    three `tx_in_internal` and three `rx_out_internal` in the object, at
+    0x1c0/0x3a0/0x6c0 and 0x2a0/0x480/0x7a0. `tools/symmap.py` cannot
+    globalize a name it sees three times, so only `rx_in_internal` — unique —
+    has a `ref_` alias. A test can read the blob's copy of one of the three
+    and not the other two.
+  - **`V22FP_modem` returns the whole 32-bit word at `fp` + 0x1c**, not the
+    status byte: the object loads four bytes where an `unsigned char status`
+    would force a `movzbl`. A draft argued no test could tell, because
+    `v22_process` uses the low byte; the test told immediately, 0 against
+    17664. An argument was reached for where a measurement was available.
+  - `v22_create`, `v22_delete` and `v22_process` are **file-static in the
+    object** — lower-case `t` — and only `dp_v22_init`/`dp_v22_exit` are
+    global, exactly as b103.c's split. **Our committed `v22_delete` is global
+    and should become static** when the rest lands, reached the way
+    `t_b103dp.c` reaches b103's: out of the table `dp_v22_init` registers.
+  - `v22_process`'s status jump table has seventeen entries. 0 and 1 give
+    `DPSTAT_OK` (1 also clears `tx_bits_wanted`), 3 and 4 give
+    `DPSTAT_CONNECT` after setting four bits per symbol and 2400, or two and
+    1200, through `modem_set_param`; everything else gives `DPSTAT_ERROR`.
+    **So status 4 is the 1200 connect**, which F8531 had left unnamed.
+  - When `tx_bits_wanted` is zero, nothing is fetched and the word count
+    handed to the modem is a literal 12 — one 600-baud block at 20 ms.
+
+**The failure, precisely.** Driving `V22FP_modem` on two graphs built by
+`V22FP_create`, over `hdx->r0e` 0..6 and `hdx->r0c` 0..7, the receive-word
+output `rxout` diverges: ours holds 15 — `V22_CLAMP_VALUE`, so an
+`RxClampV22` — where the reference holds 0. Everything else agrees: the
+return, both counts, the transmit samples, the input buffer, all three structs
+and all twenty-eight heap regions, over 18,018 checks.
+
+**Two things are established about it and one is not.**
+
+  1. It is NOT the handlers. Driving `v22_answer` DIRECTLY, outside the
+     dispatch layer, with two fresh graphs and two private symbol buffers,
+     gives **0 divergences over all eight sub-states**. The per-handler tests
+     are not missing anything about the handler.
+  2. It is NOT `rx_in_internal`: the blob's copy is readable through
+     `ref_rx_in_internal` and matches ours exactly, sample for sample.
+  3. What is NOT established is why the two `rx_out_internal` statics come to
+     differ. They are written only by the handler, through a pointer the layer
+     passes; the handler agrees when driven directly; and the copy-out only
+     ever compares the first `*rxcount` entries, so any entry above that count
+     is a channel the test cannot see. The first visible divergence is at
+     entry 0, which that channel does not obviously explain.
+
+**What the next attempt should do first**, in order: make our three statics
+temporarily non-`static` and compare them against the blob's after EVERY call
+rather than only through the copy-out — the hidden channel is the prime
+suspect and it is cheap to close; then, if they agree, the fault is in the
+layer's own copy loops rather than in what the handler wrote.
+
+**And the reason this is declined rather than committed with the failing case
+excluded.** Scoping the sweep away from `V22_PROTOCOL` entry 1 was tried and
+is what exposed the reasoning error: the same failure simply reappeared for
+entry 2, so the exclusion was not naming a defect, it was hiding one. An
+exclusion that moves when you move it is a tolerance being widened, which is
+the thing this tree does not do.
