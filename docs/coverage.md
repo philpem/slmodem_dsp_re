@@ -7,16 +7,39 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##########################........]  76.6%    562394 bytes, 1296 symbols
-  tested      [##################################] 100.0%    562392 bytes, 1294 of 1296 that can be
+  translated  [###########################.......]  78.4%    575789 bytes, 1322 symbols
+  tested      [#################################.]  97.9%    563583 bytes, 1297 of 1322 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 22 of ours (10729 bytes).
+  the file-local symbols too -- 23 of ours (10932 bytes).
 
   translated, alias exists, and NOT tested:
+    receiver                                       4326 bytes
+    V34agc                                          827 bytes
+    V34SetupDemodulator                             777 bytes
+    adaptecho                                       755 bytes
+    decoderv34                                      714 bytes
+    TimingV34                                       686 bytes
+    rxtiming                                        669 bytes
+    setInitialPhase                                 567 bytes
+    setTimingStateParameters                        462 bytes
+    txmit                                           392 bytes
+    agcadapt                                        268 bytes
+    rxtiminginit                                    261 bytes
+    V34scrambler                                    256 bytes
+    V34descrambler                                  236 bytes
+    v34FreezeEcho                                   222 bytes
+    decision                                        170 bytes
+    updateAlpha                                     169 bytes
+    V34nlencoder                                    119 bytes
+    txrxdmainit                                      98 bytes
+    rxreadqueue                                      70 bytes
+    txwritequeue                                     68 bytes
+    bitreverse                                       64 bytes
+    polyValue                                        28 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
 
@@ -82,12 +105,12 @@ dsplibs.o reconstruction coverage
 
   what is left, by translation-unit span:
     class1tx.c +94                                 73683 bytes   297 symbols
-    V32mod.c +39                                   36744 bytes    64 symbols
+    V32mod.c +39                                   24781 bytes    46 symbols
     voice.c#3 +3                                    9373 bytes    21 symbols
     Fdspkrnl.c +13                                  7629 bytes    27 symbols
-    Dialer.c +18                                    6585 bytes    12 symbols
     Beepgen.c +3                                    6546 bytes    27 symbols
     VPcmV34Main.cpp +72                             5805 bytes    67 symbols
+    Dialer.c +18                                    5153 bytes     4 symbols
     class1.c                                        4626 bytes    14 symbols
     class1rx.c                                      2495 bytes     5 symbols
     v32.c                                           1691 bytes     5 symbols

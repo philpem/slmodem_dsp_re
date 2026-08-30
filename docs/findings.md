@@ -94793,3 +94793,891 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+## F8560. `v32hdx.h`'s reading of the `V32NextState` table is wrong in two of six slots, and the error is the one `dis.py` exists to prevent
+
+`include/dsplib/v32hdx.h` was written when only the drivers had been read, and
+its prose lists the dispatch table as
+
+```
+     0  V32OrgNextState        3  V32LocLoopNextState
+     1  V32AnsNextState        4  V32RngInitNextState
+     2  V32LocLoopNextState    5  (no relocation)
+```
+
+Slot 5 IS relocated, and it names the one next-state function that list never
+mentions. `tools/tabdump.py --sym V32NextState` prints all six:
+
+```
+   +0x00  V32OrgNextState        +0x0c  V32LocLoopNextState
+   +0x04  V32AnsNextState        +0x10  V32RngInitNextState
+   +0x08  V32LocLoopNextState    +0x14  V32RngRespNextState
+```
+
+The six dwords are ZERO in the file — every value is a relocation — so a
+reading taken from the bytes sees six nulls and a reading taken from trimmed
+`objdump` output sees nothing at all. This is exactly the failure
+`tools/dis.py`'s own header comment records three times over, and it has now
+happened a fourth, in a header rather than in a source file. The correction is
+recorded in `include/dsplib/v32hdxst.h` beside the corrected table, and
+`src/pump/v32/v32hdx_tables.c` is the definition.
+
+**What it changes substantively**: `V32RngRespNextState` (1,310 bytes) reads as
+unreachable through the table under the old list, and mode 5 reads as a hole.
+Both are wrong, and a scheduling decision taken from the old list would have
+left the function out of the machine's closure.
+
+## F8561. `SREv32_CFG` is writable now, and F1615's reason for declining it has expired
+
+`src/pump/v32/v32sre_tables.c` carries V.32's six symbol-timing tables and says
+in its header that `SREv32_CFG` is deliberately absent:
+
+> it is 14 dwords whose field boundaries cannot be settled until
+> `FPM_SRE_recover` is read, and a byte comparison would pass for every wrong
+> reading of them alike. See finding F1615.
+
+That was right when it was written and is not right now. `FPM_SRE_recover` has
+since been read and `struct fpm_sre_cfg` in `include/dsplib/fpm_sre.h` names all
+eighteen fields with the instruction that forces each one. So the boundaries are
+settled by the CODE THAT CONSUMES the table rather than by the table's own
+bytes, and writing it as a struct initialiser is a reading rather than a byte
+copy: every value lands in a field the SRE block dereferences by name.
+
+```
+ clock_len 3   groups_acq 3   groups_trk 16   settle 70
+ acc_down 8192 acc_up 16384   coeffs 180      pad0e 0
+ proto SREv32_COFFS   disc SREv32_XB_COFFS
+ xclock SREv32_xCLOCK yclock SREv32_yCLOCK
+ pll_k1 SREv32_PLL_K1 pll_k2 SREv32_PLL_K2
+ mag_hi 2      mag_lo 1       err_hi 9830     err_lo 200
+ rms_min 1500  rms_len 9      pad34 0         pad36 0
+```
+
+Compiled with GCC 14 at `-m32` the object's fifty-six bytes and ours agree
+byte for byte outside the six relocated pointer slots, which are addends and
+compare as zero on both sides; the six relocations name the same six tables.
+
+**It also separates V.32's config from the built-in `FPM_SRE_CFG` in a way the
+header had bounded but not settled.** `fpm_sre.h` says of the built-in that
+"the six pointers are ZERO ... a caller copies the static onto the stack and
+patches the tables in before calling init". V.32 does not do that: its config
+carries its six tables directly as relocations, and `V32OrgNextState` (0x82f9e)
+loads the address and hands it straight to `FPM_SRE_init`. So the patch-at-the-
+call-site shape is the BUILT-IN's, not the block's contract.
+
+## F8562. The twenty V.32 half-duplex states and their five dispatchers are one strongly-connected component of thirty-one symbols, and the reverse direction is what proves it
+
+F8200 established that the twenty-two Hdx symbols cannot be landed for their own
+bytes because the dispatch table welds them to 8,833 bytes of next-state code,
+and predicted the residue at 31 symbols / 13,344 bytes once the layer beneath
+was written. That prediction is now confirmed on the merged tree, and the
+component is closed in BOTH directions rather than only outward:
+
+```
+$ python3 tools/closure.py RxHdxNull --missing
+closure of RxHdxNull: 28 symbols, 12869 bytes (unwritten only)
+```
+
+A 103-byte leaf reaches twenty-two of the twenty-five call symbols. Adding the
+three the walk does not reach from there — `RxHdxTone`, `TxHdxNull`,
+`TxHdxTone` — closes it at
+
+```
+$ python3 tools/closure.py RxHdxNull RxHdxTone TxHdxNull TxHdxTone \
+        V32OrgNextState V32AnsNextState V32RngInitNextState \
+        V32RngRespNextState V32LocLoopNextState --missing
+31 symbols, 13344 bytes (unwritten only)
+```
+
+which is F8200's figure exactly. **The smallest landable unit of the V.32
+half-duplex machine is therefore the whole machine**, and the reason is the
+link rule of F8492/F8493 rather than anything about difficulty: a state
+installs its successor with `movl $handler, 0x6c(%edx)`, and a stored function
+pointer is a relocation exactly as a `call` is. `RxHdxNull` at 0x844cc/0x844d3
+is the shortest instance — two stores, two relocations, `TxHdxNoCarrier` and
+`RxHdxError`.
+
+The practical consequence for scheduling is that a wave taking any part of this
+machine takes all of it, and that no member of it can be differentially tested
+until every member exists. That is a property of the object and not of the
+harness: `symmap.py` renames every defined blob symbol to `ref_*`, so an
+unwritten callee does not fall back to the blob.
+
+## F8563. `V32_S_COEF` is left undefined on purpose: a table with no consumer cannot be differentially tested
+
+`.rodata` 0x006d60 and 0x006d7e hold two fifteen-short banks, `V32_S_DATA_COEF`
+and `V32_S_COEF`, adjacent and identical in shape. Both are `struct
+fpm_mtd_cfg::coeff` -- the type is the CALLEE's and not the table's, from
+`include/dsplib/fpm_mtd.h`'s "+0x00 is a POINTER to the coefficient bank, not a
+scalar".
+
+Only the first is written. It is in the half-duplex machine's link closure --
+`V32OrgNextState` (830b8) and `V32AnsNextState` (860c3) store its address into
+the MTD before `FPM_MTD_create`, and `RxHdxSTone` (842b3) tests
+`mtd->cfg.coeff == V32_S_DATA_COEF` -- so a reference exists to compare against
+`ref_V32_S_DATA_COEF`. Nothing written, and nothing in this batch, names
+`V32_S_COEF`.
+
+Adding it would move `coverage.py`'s count by one symbol and thirty bytes and
+would be checked by nothing: with no consumer there is no differential test to
+write, only a byte copy of a byte copy. The rule of the tree is that nothing is
+committed which has not passed a differential test, and a transcription that
+can only be compared against its own source is not one. It is left for the pass
+that writes its consumer, which the identity test in `RxHdxSTone` says will be
+whatever installs the OTHER S-tone bank.
+
+**And the identity test is why the values are not the evidence.** `RxHdxSTone`
+compares the POINTER, not the coefficients, so the two banks are distinguished
+by which symbol was installed and not by what they contain. Nothing in the
+object prints either name, so anything past "the DATA mode's one" -- a centre
+frequency, a bandwidth -- would be usage inference about a resonator and is not
+recorded.
+
+## F8565. hdx + 0x78 is the handshake state's countdown and hdx + 0x84 is the per-block charge; both named from an exhaustive reader set
+
+V.32's half-duplex machine carries TWO budgets and they are easily confused.
+`*left` is the BLOCK's symbol budget: `V32TxHdxModem` seeds it from hdx + 0x9e
+and its exhaustion ends one call to the driver. hdx + 0x78 is the HANDSHAKE
+STATE's countdown; it outlives the block and reaching zero or below is what
+transitions. It is an `int` and that is forced -- every access in the eight
+`TxHdx*` states is a 32-bit `mov`/`sub` with no truncation (7fd75, 7fdf8,
+80177, 802dd).
+
+Its name is usage inference but over an exhaustive set: outside these eight and
+the twelve `RxHdx*`, the only writers in the whole 1.2 MB are the five
+`V32*NextState` dispatchers, which set it to a per-state literal on entry to
+each handshake state (0x8, 0x10, 0x18, 0x24, 0x28, 0x38, 0x40, 0x80, 0xb4,
+0x100, 0x200, 0x400, 0x500, 0x610, 0x960, 0xa60, 0x1a6c, 0x1b00, 0x1bbc,
+0x2000 among others), every transmit state subtracts what it just consumed, and
+the `<= 0` test is the sole trigger for `V32NextState`. `RxHdxTone` (839ce)
+compares it against 0xb4, which is exactly what `V32AnsNextState` (86462) and
+`V32LocLoopNextState` (867ad) seed it with -- i.e. "is this still the first
+block of this state".
+
+hdx + 0x84 is a `short` and is what a WHOLE-BLOCK state charges against that
+countdown, once per call. `V32FP_recreate` (7f123) and `V32FP_control` (84606)
+both fill it from the table the object names `V32_SYMBOL_LEN`, and
+`V32OrgNextState` (83529) copies hdx + 0x9e into it -- the same value again. It
+is nonetheless a SEPARATE field and not an alias to +0x9e, because
+`V32RngRespNextState` (85594) writes ZERO there while leaving +0x9e alone,
+which makes a tone or silence state run to its countdown rather than to a block
+count. The name therefore describes what its only two readers (`TxHdxTone`,
+`TxHdxNull`) do with it rather than the table it usually comes from; naming it
+`SYMBOL_LEN_84` would have been the wrong-name-believed-for-ever failure
+CLAUDE.md rates worse than padding. Macros `V32HDX_STATE_LEFT` and
+`V32HDX_BLOCK_CHARGE` in `src/pump/v32/v32txhdx.c`.
+
+## F8566. The V.32 transmit states' count clamp is a SIGNED compare with an UNSIGNED SIXTEEN-BIT TRUNCATION, and it is not a `min`
+
+Six of the eight `TxHdx*` states open with what reads as
+`count = min(*left, hdx->left)`. It is not. The object emits
+
+```
+   cmp %eax,%ecx ; mov %eax,%ebx ; jg .Lkeep ; movzwl %cx,%ebx
+```
+
+at 7fde8, 7febb, 7ffab, 80088 and 80157: the comparison is between
+`(int)hdx->left` and `(int)*left` and is SIGNED, and the losing arm is
+truncated to sixteen bits UNSIGNED. Since the countdown is charged the symbols
+OFFERED rather than the count taken (F8567), it goes negative as a matter of
+course -- and a negative countdown does not produce a zero or a small count but
+its low sixteen bits: -1 gives 0xffff and the state then asks `GenSequence`,
+`ScrambleDataV32` and `ModDataV32` for 65,535 symbols. Writing this as a `min`
+over `int`, or clamping the result at zero, is a different program on exactly
+those inputs.
+
+`TxHdxNoCarrier` is the ONLY one of the six that guards it, with a separate
+`hdx->left > 0` test that GCC if-converts to `setg %bl; neg %ebx; and %ecx,%ebx`
+at 8016b -- same inputs, a different answer from its five siblings.
+`TxHdxFinishFrame` has neither the clamp nor the guard: `*left` itself is the
+count.
+
+The test drives countdowns of -65530 and -131064, whose low halves are 6 and 8,
+so the truncating arm is exercised without asking a leaf for 65,535 symbols;
+mutating the clamp to a zero-clamp is caught in 8 sections.
+
+## F8567. The countdown is charged the symbols OFFERED, not the count taken, and the two whole-block states charge a different field again
+
+Every one of the six symbol-wise transmit states subtracts `*left` -- the
+symbols the driver offered -- from hdx + 0x78, and NOT the `count` it just
+clamped that to (`sub %ecx,0x78(%edx)` at 7fdf8 with %ecx the ORIGINAL `*left`,
+and the same at 7fec7, 7ffb7, 80098, 80177, 80231). It then reduces `*left` by
+`count`. So a block whose countdown is smaller than its symbol budget
+overshoots: countdown 5 against 12 offered leaves -7, not 0. Both readings
+transition, so only the countdown's VALUE separates them, which is why the
+differential test compares the whole context rather than only the observable
+returns.
+
+`TxHdxTone` and `TxHdxNull` charge neither: they subtract hdx + 0x84 once per
+call (7fd78, 802d6) and set `*left` to zero outright, because they consume the
+whole block regardless of what was offered. Charging `count` instead of `*left`
+is caught in 9 sections; charging +0x9e instead of +0x84 in 40.
+
+## F8568. `TxHdxTone` and `TxHdxNull` read their return value AFTER the transition, from a context that may have been replaced
+
+Both return hdx + 0xa0, `V32_SAMPLE_LEN[rate]`, and both RE-READ obj + 0x64
+after the `V32NextState` call before doing so (7fda2, 8030c) while using the
+pre-transition pointer on the fall-through path. A transition may install an
+entirely different handshake context -- that is the contract `v32hdx.h` records
+for the driver's own loop -- so the sample count these two report is the NEW
+context's block length and not the block they just filled.
+
+The same reload appears mid-function in the six symbol-wise states:
+`mov 0x64(%edi),%eax` after the modulator returns (7fe2a, 7ff05, 80015, 800ca,
+801a9, 80262), so the countdown test reads the context as the CALLEES left it.
+
+Both are testable and both are tested: the scripted dispatcher swaps obj + 0x64
+to an alternate context whose +0xa0 differs, and the encoder stub inside
+`ModDataV32` does the same mid-call for the four states that reach it. Caching
+either is caught (7 and 9 sections). Whether the post-transition read is a
+defect in the original is not settled here; it is what the object does.
+
+## F8569. `TxHdxNull`'s zero fill is `while (i-- != 0)` over an `int`, and the two things this batch could NOT settle at tier 1
+
+The fill loop is `dec %eax; cmp $0xffffffff,%eax; jne` entered at its TEST
+(802c6..802d4), which is `while (i-- != 0)` and NOT `for (i = 0; i < n; i++)`:
+the two agree for every non-negative block length and diverge without bound for
+a negative one, where the object runs 2**32 - |n| iterations filling memory
+until it faults. The counter is an `int` -- 32 bits throughout with no
+truncation -- although the field it is seeded from is a `short` (`movswl` at
+802bf), which is F7803's rule about the declared type of the LOCAL rather than
+the field. The object has no guard; a differential test must therefore not
+drive hdx + 0xa0 negative, and that is a property of the original rather than a
+limitation of the harness. A deviation number is not claimed here.
+
+TWO THINGS IN THIS BATCH ARE INVISIBLE TO TIER 1 AND ARE RECORDED RATHER THAN
+CLOSED.
+
+First, `TxHdxFinishFrame` subtracts `*left` from the countdown BEFORE calling
+`ScrambleDataV32` (80231 before 8023f); moving the subtraction after the call
+survives the full differential suite, because the scrambler cannot reach
+hdx + 0x78 and does not change `*left`. The object's schedule is the only
+evidence and it is tier 3 -- one of twenty injected mutations, and the only
+survivor.
+
+Second, all six modulating states hold the leaf's return in a `short` local
+(`movswl %ax,%esi`) while `ModDataV32` and `TxNoCarrierV32` are declared
+`unsigned short`; the two readings differ only above 32,767 samples in one call
+and reach the caller as the same sixteen bits either way, so no test at this
+boundary can separate them. The `short` is written because the object encodes
+it.
+
+## F8588. `V32RngInitNextState`'s DONE arm overwrites the cleardown it just posted
+
+The DONE arm (84ca0) decodes two rate signals -- `regs[4]` and `regs[1]` -- and
+if either is `V32_RATE_NONE` it sets hdx + 0x78 to 0x40, ORs `V32_FLAG_FAULT`
+onto obj + 0x31, writes 0x0e to obj + 0x30 and sets hdx + 0x74 to
+`V32_STATE_CLEARDOWN`.
+
+It then FALLS INTO the common tail at 84cf7, which the non-fault path reaches by
+a two-instruction block at 85246 whose only content is reloading `hdx` and
+jumping there. That tail writes hdx + 0x7c = 0, hdx + 0x78 = hdx + 0x80, ORs
+0x05 onto the flags and writes `V32_CONNECT[rate]` to obj + 0x30.
+
+So on the fault path only the STATE and the fault bit survive: the reason code
+0x0e and the 0x40 countdown are both clobbered before the function returns, and
+the instance reports a connect status while sitting in CLEARDOWN. Reproduced as
+written -- the reconstruction is the object's, not the intent's.
+
+`V32RngRespNextState` does NOT have the defect: its cleardown arm is in state F
+(85474) and returns.
+
+## F8589. `V32LocLoopNextState` fills two slots of `V32NextState`, and slot 3 is dead in this object
+
+The function never reads hdx + 0x76, so its own 794 bytes cannot explain the
+duplicate. Every write of hdx + 0x76 in the 1.2 MB was enumerated:
+
+```
+  7e9a0  V32FP_recreate  mode = 0   protocol == 0
+  7f62b  V32FP_recreate  mode = 1   protocol == 1
+  7f3bd  V32FP_recreate  mode = 2   every other protocol
+  8469c  V32FP_control   mode = 4   unless the mode was already 5
+  82991  v32_data        mode = 5
+  82735  V32FP_modem     mode = 6   with state 34, parking the machine
+```
+
+`V32FP_recreate`'s three are one ladder on obj + 0x00 (`protocol`): 0 and 1
+select the originate and answer dispatchers, every other value falls into slot
+2. **No instruction anywhere writes 3.** The duplicate therefore maps two
+adjacent protocol values onto one machine and only one of the two is reachable
+here. Which pair of loopbacks was intended is not in the object and is not
+guessed.
+
+Separately, 82735's mode **6** is one past the six-slot table and is written
+together with state 34, which every dispatcher's `cmp $0x21` bound rejects.
+That is F8239's open question about mode 6, seen from the table's side: the
+index is out of range for `V32NextState` as well as for the state list. Whoever
+writes `V32FP_modem` should read it against this.
+
+## F8590. The two-instruction landing pad at 84e99/84e9d, and the bit it must not clear
+
+`V32RngInitNextState`'s states B and C share a tail of exactly two
+instructions: 84e99 `andb $0xfb,0x31(%esi)` falls into 84e9d
+`movl $RxHdxToneData,0x70(%ebx)`. C's "countdown still positive" arm and B's
+"countdown still positive" arm both enter at 84e99; B's TRANSITION path
+re-loads `hdx` at 84eea and enters at **84e9d** -- `eb ae`, four bytes further
+on -- so it installs the receive state without clearing bit 0x04.
+
+A first reconstruction read that jump as 84e99 and cleared the bit on both
+paths. The difference is observable only when bit 0x04 was set on entry AND the
+countdown had expired; the state sweep in `test/unit/t_v32nsrng.c` reached it in
+2 trials of 324 and reported obj + 0x31 as ours 0x00 against the blob's 0x04.
+
+Source spelling: the flag clear is the `else` of the countdown test, and the
+receive-state store follows both arms. The general lesson is that a `jmp` into
+the MIDDLE of a two-instruction block is indistinguishable from a `jmp` to its
+head at every input but one, and the byte offset is the only evidence.
+
+## F8591. The "state %s(%d)" trace belongs to `V32RNG.c`, not to next-state dispatchers as a class
+
+`V32RngInitNextState` (84d30) and `V32RngRespNextState` (85350) both end with
+`cmpl $0x1,dsplibs_debug_level; ja` and a `dsplibs_debug_printf` of
+`.rodata.str1.1 + 0x3971`, `"state %s(%d)\n"`, whose arguments are
+`V32StateName(modem->hdx->state)` and the same state read a second time --
+which is why each epilogue reloads obj + 0x64 twice. `V32AnsNextState` has the
+same site with its own copy of the string at +0x397f.
+
+`V32LocLoopNextState` has NO such site: its default label at 86550 is three
+instructions and a `ret`, and there is no `cmpl $0x1,dsplibs_debug_level`
+anywhere in its 794 bytes. `t_v32nsloop.c` runs every trial at level 2 with the
+harness's capture on and asserts both transcripts are empty, so a
+reconstruction that copied the RNG epilogue into `V32loop.c` fails rather than
+passing silently. A diagnostic is a property of the author's file, not of the
+role.
+
+## F8592. hdx + 0x48 is `short`, and the object uses both extensions on it
+
+`V32RngInitNextState` at 85128 and `V32RngRespNextState` at 857ce load
+hdx + 0x48 with `movswl` and USE the 32-bit result -- `0x18 - it`, stored into
+the `int` at hdx + 0x78. Finding F613's rule makes that FORCED, so the field is
+`short`.
+
+The `RxHdx*` states load the SAME field with `movzwl` and store sixteen bits
+straight back (84000/84017, 840ac/840b1), which is F614's dead extension and
+says nothing about the field. This is the second worked instance in the tree of
+614's point that the blob uses both extensions on one field, and it is a clean
+one: the forced site and the free site are 5 KB apart and were read by
+different passes.
+
+The field's ROLE is not established and is not named: it is a counter the
+receive states increment and these two arms charge against a budget of 0x18.
+
+## F8593. obj + 0x00 (`protocol`) splits both RNG machines the same way, one state apart
+
+Six sites across `V32RngInitNextState` and `V32RngRespNextState` branch on
+obj + 0x00, always as `protocol == 0`, always through the branchless
+`cmp $1,%reg; sbb %reg,%reg; ...` idiom, whose `cmp` is UNSIGNED so only zero
+takes the first arm:
+
+```
+  RngInit A (84f45, 84f8c)  InitGenSequence pattern 0 or 3; SetToneDetect 600 or 1800 Hz
+  RngInit B (84ed2)         InitGenSequence pattern 15 or 12
+  RngInit C (851df)         v32_smc::state[0] = 12 or 0
+  RngResp B (8561d)         InitGenSequence pattern 0 or 3
+  RngResp C (855b1)         InitGenSequence pattern 15 or 12
+  RngResp D (8556e)         v32_smc::state[0] = 12 or 0
+```
+
+So the responder runs the initiator's split shifted one state later. The two
+tone frequencies are 0x258 and 0x708 built as `(-1200 & mask) + 1800`, i.e.
+600 Hz and 1800 Hz, and `SetToneDetect`'s parameter is `short hz`
+(`v32fpctl.h`). `V32_TX_MODE[V32_RATE_NONE]` is 7, outside `SetTxModeV32`'s
+0..6, so every no-common-rate path posts `V32_STATUS_BAD_MODE` as a side effect
+before the arm's own reason code lands.
+
+## F8578. `V32OrgNextState` reconstructed: V.32's ORIGINATE handshake, twenty-five arms
+
+`.text 0x082be0`, 2580 bytes, `src/pump/v32/v32nsorg.c`, differentially green at
+`t_v32nsorg` (95 sections). A jump table at `.rodata + 0x7dec` with 34 slots on
+a `movswl` of hdx + 0x74 compared UNSIGNED against 0x21: states W..DONE
+(24..32), DONT_CARE (34) and any negative take the default, which does nothing
+but the trace.
+
+Each live arm writes the next state, reloads the countdown at +0x78 from a
+literal or from +0x80, clears the counter at +0x7c, installs a
+`TxHdx*`/`RxHdx*` pair (either, both or neither) and reconfigures the datapump.
+
+**The progression is state -> state+1 with exactly two exceptions and both are
+the object's**: V (23) writes 23 again -- it is the CONNECT step, posting
+`V32_CONNECT[rate]` into `V32_OBJ_STATUS` and ORing 0x19 onto the flags, so
+both U and V transition into it and re-entering it repeats it; and ERROR (33)
+writes no state at all, only reloading the countdown.
+
+Three arms are conditional and fall through to the trace when the test fails:
+B on +0x7c above 0x95f (UNSIGNED, `jbe`), D on +0xa8 above 0x48 (SIGNED 16-bit,
+`jle`), and S, which always advances but posts `V32_FLAG_FAULT` and status 0x17
+when `DecodeRateSeq` returns `V32_RATE_NONE` and then CONTINUES -- the object
+jumps back into the flow at 82c57 rather than returning. The full
+from/to/installed-pair table is in the file header.
+
+`TxHdxTone`, `TxHdxData`, `TxHdxFinishFrame`, `TxHdxNull`, `RxHdxTone`,
+`RxHdxSequenceE`, `RxHdxToneData` and `RxHdxError` are not reached from this
+dispatcher.
+
+## F8579. An arm can inherit a callee by jumping into the middle of another arm, and this one does: state G shares state Q's `FPM_AGC_Freeze`
+
+`833a6` is `jmp 83010`, which lands three instructions INSIDE the `V32_STATE_Q`
+arm, before that arm's `InitDetSequence` -- so `V32_STATE_G` runs BOTH the
+detector arming and the `FPM_AGC_Freeze(fp + 0x1d8)` that follows it, and the
+two arms differ only in the detector's `out_mask` (-1 for G, 0xffff for Q).
+
+A first transcription read the jump as "G shares Q's `InitDetSequence`" and
+stopped there. **The differential test caught it**, reporting one unexplained
+differing word at `fixture + 1024`, which is `fp + 0x200` = `agc + 0x28` =
+`fpm_agc::freeze`, ours 0 against the blob's 1.
+
+Every one of this function's shared tails has to be read to its own
+`jmp 82ce0`, not to the first call after the landing point. It is the same
+class of trap as F8590's two-instruction landing pad, one arm larger.
+
+## F8580. Five call sites, three relocations: the object tail-merges this function's calls, and the relocation multiset is what measures it
+
+`V32OrgNextState` has five source call sites for `SetAdaptEcV32` (L, M, N, S, V)
+and five for `InitDetSequence` (E, G, N, Q, S), and the object contains **three**
+relocations for each: L and M jump into V's call at 82dbd, E jumps into S's at
+82cc9 and G into Q's at 83010.
+
+Comparing the MULTISET of relocated symbol names between our GCC 14 `-O2` object
+and the blob's range gives an exact match on all 44 symbols except those two
+rows, where we emit 5 and 4 -- and that is cross-jumping, not a source
+difference.
+
+**The comparison is worth doing on any large switch before trusting a
+transcription.** It is one command, it is insensitive to scheduling and
+register allocation, and on this function every other count matched exactly
+(8 `LoadReg` including the dead one of F8581, 8 `InitGenSequence`, 6
+`TxHdxNoCarrier`, 7 `TxHdxScrSequence`, 5 `RxHdxData`, 5 `StoreReg`, 4
+`DecodeRateSeq`, 2 each of `AGC_DEF_ALPHA` and `AGC_DEF_BETA`) -- which is a
+completeness check no disassembly reading gives you on its own. Adding the
+missing `FPM_AGC_Freeze` of F8579 moved our `InitDetSequence` count from 5 to 4,
+because GCC 14 then merged G's and Q's tails too, corroborating the object's 3
+from the other direction.
+
+## F8581. The second `LoadReg` in `V32_STATE_I` is dead and is NOT differentially testable
+
+The `V32_STATE_I` arm calls `LoadReg(modem, 0)` twice: at 8326e, whose result is
+added into hdx + 0x78, and at 832a3, whose result is left dead in `%eax`.
+`LoadReg` is a bounds check and a load with no side effect, so **removing the
+second call is behaviourally invisible and `t_v32nsorg` cannot catch it** -- it
+is reproduced on the strength of the disassembly alone, and only tier 3 can see
+it. Recorded so a later mutation pass classifies it `equivalent` rather than
+hunting for a missing check.
+
+The arm also shows why `HDX()` must be a re-dereferencing macro rather than a
+local: the store at 8327e goes through the context pointer loaded at function
+ENTRY, while 83274 reloads it for the next statement, and a single local would
+have used one register for both. 82d0f in the trace is the second witness:
+`V32StateName(hdx->state)` is called and only then is the context re-read for
+the `%d`.
+
+## F8582. Comparing a dispatcher that stores SYMBOL addresses: normalise, do not skip -- and `FPM_TONE_create` writes two buffers a caller-owned state must supply
+
+Two problems make a whole-context comparison of a next-state dispatcher look
+impossible, and neither needs a skip list. Our side stores our
+`TxHdxScrSequence`, `V32_S_DATA_COEF` and `AGC_DEF_ALPHA`; the blob's stores
+`symmap.py`'s `ref_` copies; and both fixtures hold their own addresses.
+
+`t_v32nsorg` compares every word of the fixture and, **only where the two
+differ**, normalises: an address inside that side's own fixture becomes its
+offset, an address in a table of seventeen KNOWN SYMBOL PAIRS becomes that
+pair's index, anything else still fails and names the byte offset. That is not
+an allow-list -- an injected `TxHdxTRN -> TxHdxCarrierState`, a wrong pointer
+that IS in the table, fails -- and a counter of the words the rule rescued is
+asserted non-zero, so a run that installed nothing cannot pass vacuously.
+
+Only four windows are skipped outright, each a callee-owned configuration whose
+pointers belong to a separately-tested function (pps `cfg.imap`/`qmap`, the sre
+cfg's six table pointers, the fse cfg's `pll_k1`/`k2`/`owner`/`decision`, and
+the whole `struct vtb`), and the arguments passed to those callees stay
+observable in the non-pointer fields beside them.
+
+**The fixture also has to stop four callees allocating**, because two heap
+pointers are two different addresses for ever: preset `sre->cfg.coeffs` to
+`SREv32_CFG`'s own 180 so `FPM_SRE_init` takes its reuse path, hand
+`FPM_MTD_create` and `FPM_TONE_create` non-NULL states, and rely on
+`SetRxModeV32` passing `VTBv32_init` an `alloc` of zero.
+
+**`FPM_TONE_create` writes `state->rev_block[0..4]` and `state->rev_acc[0..3]`
+UNCONDITIONALLY**, through pointers only the owned path ever allocates, so a
+caller-supplied tone object with those two NULL segfaults even when `cfg.len` is
+zero. `kernel` and `history` may stay NULL, because only the `len`-bounded loop
+reads them.
+
+## F8570. The V.32 half-duplex context opens with an embedded `struct fpm_agc`, and the fit is exact
+
+`RxHdxTone` (8393e), `RxHdxNoSignal` (83a3e) and `RxHdxPhsReversal` (83b4a) all
+hand `FPM_AGC_agc` the context pointer ITSELF as its first argument, and that
+function's first parameter is a `struct fpm_agc *` -- evidence class 2, a callee
+that types it. `sizeof(struct fpm_agc)` is 0x2c and `V32_HDX_TONE0` is 0x2c, so
+the AGC occupies hdx + 0x00..0x2b with nothing over and nothing missing.
+
+This is a SECOND AGC: `v32demod.h` puts the datapump's own at fp + 0x1d8 and
+`DemodDataV32` drives that one. Both are initialised from `AGCv32_CFG` and only
+the handshake states touch the first.
+
+All three call sites also pass a FOURTH argument, the constant 1 at 0xc(%esp),
+which `FPM_AGC_agc` never reads -- the same residual `src/pump/v32/v32demod.c`
+(81ce6), `src/pump/v23/bwchdem.c` and `src/pump/v22/v22data.c` already record at
+their own call sites. Three arguments are passed here too.
+
+## F8571. `RxHdxPhsReversal` holds the only two diagnostics in `V32rxhdx.c`, and both name the field just stored
+
+`.rodata.str1.1:0x37f3` is `"v32 Turn Around Delay = %d\n"`, referenced at
+83d15, and its argument is the value stored into hdx + 0x7c at 83c5d -- which is
+`CalcTurnAroundDelay`'s return, inlined immediately above.
+
+`.rodata.str1.1:0x380f` is `"v32 RTD = %d\n"`, referenced at 83d9c, and its
+argument is the value stored into hdx + 0x96 at 83d73, read back through the
+16-bit field (which is why the printed value is the truncated one). So
+**hdx + 0x96 is the round-trip delay and is named `V32HDX_RTD`** on evidence
+class 1.
+
+hdx + 0x7c is NOT named for the turnaround delay: it is only SEEDED with it
+here, and every other state adds `V32HDX_SYMBOL_LEN` to it and compares it
+against hdx + 0x80.
+
+Both strings are found with `tools/relocscan.py --at .rodata.str1.1:0xNNNN`;
+grepping the disassembly for either address finds nothing (F604).
+
+## F8572. The V.32 half-duplex block counter and its bound are UNSIGNED, and that is forced
+
+hdx + 0x7c and hdx + 0x80 are compared in ten places across `V32rxhdx.c` and
+every single one is `jb` or `jbe`, never `jl`/`jle`: 83978, 83a73 (`cmpl $0x3c`
+with `jbe`), 83a9c, 83cc3, 83e4f, 83f52, 840cc, 841eb, 842e6, 843f2, 844c2. The
+compiler was not free to choose -- signed operands give the signed branch -- so
+both fields are `unsigned int`. The addend is `short` and is sign-extended into
+them (`movswl 0x9e`), so a negative symbol length really does subtract.
+
+By contrast hdx + 0x78, the counter `RxHdxTone` gates on, is compared with
+`cmpl $0xb4` and `jle` at 839ce and is therefore `int`. Three fields within
+eight bytes of each other, two unsigned and one signed.
+
+## F8573. `RxHdxTone`'s gate is three ORed terms over two config fields, and the second is a bit of `options`
+
+83928..839df: `cmpw $0x1,(%ebx)` / `testb $0x4,0x11(%ebx)` /
+`cmpl $0xb4,0x78(%edx)`, laid out as `if (A || B || C) { AGC; detect; maybe
+dispatch; }` with two early exits into the body -- the shape is unambiguous
+because the third test's fall-through is a `jmp` backwards to the body and its
+taken edge skips it.
+
+obj + 0x00 is `protocol` and obj + 0x10 is `options`, both from
+`V32FP_recreate`'s config dump at `.rodata.str1.4:0x011000` as
+`include/dsplib/v32seq.h` derives them (evidence class 1). `testb $0x4` against
+the SECOND byte of a 32-bit field at +0x10 is GCC's encoding of
+`options & 0x400`, so the bit tested is 0x400. What that bit SELECTS is not
+established -- its only reader in the object is this gate -- so it is named
+`V32_OPT_0400`, by value, per CLAUDE.md.
+
+The reading matters: with protocol 1, the option clear and hdx + 0x78 at or
+below 180, the state runs neither the AGC nor the tone detector, and the block
+passes through untouched except for the counter and the clamp.
+
+## F8574. `RxHdxPhsReversal`'s second test of hdx + 0x90 is NOT an `else`, and the run counter at hdx + 0xac reads the opposite way to its obvious name
+
+The object tests hdx + 0x90 at 83ba8 and again at 83cb2, and the second test's
+taken edge (`je 83bac`, 83cb4) is a BACKWARD branch into the first test's other
+arm. So the source is two separate statements -- `if (f90 != 0) { reversal
+search }` then `if (f90 == 0) { tone detect }` -- and not an if/else: the
+reversal arm may dispatch through `V32NextState`, the object RELOADS obj + 0x64
+at 83ca9 afterwards, and if the dispatch cleared +0x90 (or replaced the whole
+context with one whose +0x90 is clear) the tone-detect arm runs in the SAME call
+on the NEW context. Written as an `else` this is unreachable and no fixture that
+does not mutate the context from inside the dispatch can tell the two apart.
+The reload after the dispatch is load-bearing for the same reason, and the
+object reloads obj + 0x64 after every call in all twelve states -- after the
+AGC, after each tone call, after `DemodDataV32`, after the dispatch, and even
+after `dsplibs_debug_printf` (83d21, 83da8).
+
+**AND THE RUN COUNTER AT hdx + 0xac READS THE OPPOSITE WAY TO ITS NAME.**
+`FPM_TONE_detect` reports the tone's PRESENCE as ZERO (`fpm_tone.h`; finding F33
+for why this module inverts against `FPM_MTD_detect`), and 83bc5's `jne` routes
+the NON-zero -- tone absent -- verdict to the store of zero at 83d07, while the
+fall-through increments. So +0xac counts consecutive blocks the tone was
+PRESENT in, resets on any other verdict, and once it exceeds three it arms
++0x90 and clears itself: the state waits for four blocks of tone and only then
+starts hunting for that tone's phase reversals. Read the obvious way round it is
+a MISS counter, which is the reading a first draft of `t_v32rxhdx.c` encoded in
+four trial names; every one of those trials then RESET the counter, +0x90 was
+never armed by it, and the arming path sat untested behind four green sections
+until a non-vacuity counter that could not fire said so.
+
+## F8575. `CalcTurnAroundDelay` appears twice in the blob's `V32rxhdx.c`: out of line at 0x83ae0 and inlined at 83c29
+
+83c29..83c55 is that function's 53 bytes instruction for instruction -- four
+`movzwl`s of hdx + 0x98, +0x9c, +0x9a and +0x94, the subtraction, `cwtl`, and
+the branchless `(~v >> 15) & v` clamp followed by a second `cwtl`.
+
+That is what GCC 3.4.2 at `-O3` does with a same-translation-unit GLOBAL: it
+inlines the call and still emits the out-of-line copy for external callers. It
+is therefore evidence that `CalcTurnAroundDelay` and the twelve `RxHdx*` shared
+a translation unit in the original, which agrees with the blob's `FILE` symbols.
+
+This tree splits by ROLE rather than by the blob's translation units, so the
+function lives in `src/pump/v32/v32fpctl.c` with the family it configures and
+`v32rxhdx.c` calls it. Differentially identical; a tier-2 residual of one call
+sequence in one function.
+
+## F8576. `RxHdxSequenceE` is the first reader AND writer found of `v32seq.h`'s five scratch registers, and it uses `regs[4]`
+
+`include/dsplib/v32seq.h` records `V32HDX_REGS` at hdx + 0x3c with five entries
+and says "What they HOLD is not established -- nothing in this batch reads
+them". `LoadReg` bounds the index at 4 and the element type is `short`, so the
+five occupy 0x3c, 0x3e, 0x40, 0x42 and 0x44.
+
+`RxHdxSequenceE` stores the low half of `GetSequence`'s return into hdx + 0x44
+at 84076 and reads it straight back at 8407d as `DecodeRateSeq`'s `seq` argument
+(which `v32seq.h` types `unsigned short`). So `regs[4]` is used here as a
+one-field parking slot for the received rate signal between the two calls --
+evidence class 2, and it names this USE rather than the register.
+
+hdx + 0x46 and hdx + 0x48 are separate fields; +0x48 is `RxHdxSequenceE`'s own
+post-decode symbol counter, and F8592 settles its type.
+
+## F8577. The six reason codes `V32rxhdx.c` posts at obj + 0x30 do NOT index the state, and the halves test in `RxHdxRateSequence` is real
+
+Ten of the twelve states post a byte at obj + 0x30 together with
+`V32_FLAG_FAULT`, always at the same site -- hdx + 0x7c reaching hdx + 0x80 --
+and the values are 0x10 (`RxHdxTone` 8397e, `RxHdxNull` 844c8), 0x11
+(`RxHdxNoSignal`), 0x12 (`RxHdxPhsReversal`), 0x13 (`RxHdxRateSequence`,
+`RxHdxSequence`, `RxHdxSequenceE`), 0x14 (`RxHdxToneData`, `RxHdxSTone`) and
+0x15 (`RxHdxEpoch`).
+
+Two of the six are shared by two states each and one by three, so a table
+indexed by state would get six of the ten wrong; they are reason codes in the
+same byte `SetTxModeV32`/`SetRxModeV32` write `V32_STATUS_BAD_MODE` (0x17) into.
+Nothing in the object prints them, so they are named by VALUE.
+
+Separately: `RxHdxRateSequence` calls `GetSequence` TWICE (83e28 and 83e35),
+shifts the first result right by 16 LOGICALLY and masks the second with 0xffff,
+and dispatches only if the two agree -- i.e. the detector's match word must
+carry the same rate signal in both halves. `RxHdxSequence` is the same function
+without that test, which is the whole difference between them; a reconstruction
+that wrote `DetSequence(...) >= 0` for both would pass every fixture whose match
+word happens to be symmetric.
+
+## F8583. `V32AnsNextState`'s arm set is enumerated, not inferred
+
+The dispatch at 0x85ac2 is `movswl 0x74(%ebx)` / `cmp $0x21,%eax` / `ja` /
+`jmp *.rodata+0x8068(,%eax,4)`, a 34-entry table. Five of the thirty-four slots
+-- 5, 19, 20, 31, 32 -- hold the address of the default label (0x85b10), which
+is how GCC fills a dense jump table for cases the source did not write.
+
+So the author's arms are known EXACTLY rather than bounded: A B B2 C D E F G H I
+J K L M N O P Q T U V W X Y Z END F2 X2 ERROR, twenty-nine of them, with D2, R,
+S, CLEARDOWN and DONE absent from the source and DONT_CARE (34) past the table
+entirely. The `ja` is unsigned, so a negative state takes the same default; -1
+and -32768 are in `t_v32nsans.c`'s sweep for exactly that reason.
+
+Six arms (A, B2, C, D, E, F) are conditional and do nothing until their
+condition holds, which makes the function a "poll me again" step rather than a
+table walk. Six further arms share tails with another arm by cross-jumping
+(H->U at 861ec, P->X at 85fe7, J and L->V at 86190 and 8616b, G->U at 8624c,
+A->B at 8646f); each is a common suffix and the reconstruction writes every arm
+out in full. The reconstruction's relocation multiset matches the blob's exactly
+and its callee-name multiset differs only by those merges -- F8580's method,
+applied independently here.
+
+## F8584. The V.32 half-duplex context's counters and the instance's flag bytes, and the signedness the object forces
+
+`V32AnsNextState` drives four previously unmodelled 32-bit fields of the
+half-duplex context and three 16-bit ones, and it is the main writer of two
+bytes of the instance besides. All of them are MODELLED, UNNAMED: their shape
+and their signedness are read off the object, their meaning is usage inference,
+and CLAUDE.md's rule is that a wrong name is worse than a numbered one.
+
+hdx + 0x78 is the TRANSMIT budget. Every arm that installs a `TxHdx*` sets it,
+five of the eight transmit states `sub` from it (7fdf8, 7fec7, 7ffb7, 80098,
+80231), and four arms here test it SIGNED -- `test`/`jg` at 86451, 863c3 and
+862b7, `jle` at 863c8 -- so it is `int` and it is expected to go negative.
+
+hdx + 0x7c is the RECEIVE counter. The receive states ADD into it (83925,
+83a1f, 83b95 and six more) and compare it against hdx + 0x80, and EVERY compare
+on it anywhere in the object is UNSIGNED: `jb` at 83978, 83a9c and 83cc3, `jbe`
+at 83a73 and at 86361 in the C arm. So it is `unsigned int`, and that is forced
+rather than chosen.
+
+hdx + 0x80 is the limit +0x7c is measured against, and also the value eight arms
+here copy into +0x78. `V32FP_recreate` (7f116) is its only writer: it stores
+`((obj + 0x8) * 0x4ccc) >> 13` once, at construction.
+
+hdx + 0x90 is written 1 by the C and D arms; `RxHdxPhsReversal` (83b9b, 83bf2)
+reads and rewrites it. Nothing here reads it back, so it is an output of this
+function and an input to that state, and nothing more.
+
+The three shorts are +0x96, which `RxHdxRateSequence` writes (83c94, 83d73,
+83d8c) and the F arm hands to `StoreReg`; +0xa8, zeroed by the C arm and tested
+`> 0x48` by the D arm; and +0xaa, zeroed by the E arm and tested `> 0x5f` by the
+F arm. `RxHdxPhsReversal` (83b87, 83ba1) and `RxHdxNoSignal` (83a22, 83a30)
+count the last two up with `movzwl`, and both tests here are a SIGNED
+`cmpw`/`jle`. The extensions on the increments are dead at these magnitudes
+(F614), so `short` is what the compare forces and the increment does not
+contradict.
+
++0x78 and +0x7c having DIFFERENT signedness is not a style choice. It is nine
+instructions, and a reconstruction that models both as `int` passes every test
+except one that drives +0x7c above 0x7fffffff -- which `t_v32nsans.c` does.
+
+Two bytes of the INSTANCE are the same kind of thing. obj + 0x11 is an option
+byte whose bit 0x02 the B arm tests to pick a transmit budget of 0xa60 over
+0x100; bit 0x04 of the same byte is tested by `V32FP_recreate` (7f38e, 7f49f)
+and by `RxHdxTone` (839c4), and `V32FP_control` (845a2) rewrites the byte.
+obj + 0x32 is a second flags byte, distinct from `V32_OBJ_FLAGS` at +0x31, and
+only two sites in the whole 1.2 MB touch it: `orb $0x8` here at 86265 and the
+same instruction in `RxHdxSTone` at 83439. Bits 0x01, 0x08 and 0x10 of
+obj + 0x31, ORed in together by the END arm, are unnamed too, and keep the
+spelling `src/pump/v32/v32hshake.c` already uses for 0x01 and 0x08.
+
+AGAINST ALL OF THAT, ONE PAIR OF BITS IS RE-DERIVED RATHER THAN GUESSED.
+`include/dsplib/v32demod.h` names bit 0x20 of obj + 0x31 CARRIER, from
+`sre.active` and the "sre no carrier" string, and bit 0x40 SILENCE, from
+`agc.signal` being zero, and says plainly that no format string prints either.
+The F arm of `V32AnsNextState` -- reached when the phase-reversal count at
+hdx + 0xaa passes 0x5f, that is, when the far end's signal has been present long
+enough to commit -- reads obj + 0x31 at 8625f and writes back
+`(flags & 0xbf) | 0x20` at 8626d..86273: clear SILENCE, set CARRIER, in one
+statement, at the exact moment the handshake decides a carrier is up.
+`V32OrgNextState`'s D2 arm and `V32LocLoopNextState`'s state G do the same
+pairing. The readings were made independently, from different functions and
+different evidence, and they meet. That raises both names from usage inference
+on one function to usage inference agreeing across four, which is as strong as
+either is going to get without a format string.
+
+## F8586. Two structural surprises in the answer handshake, both the object's own text
+
+First, `V32_STATE_END` transitions to ITSELF: table slot 28 reaches 0x85bca and
+0x85bca stores 0x1c -- 28 -- back into hdx + 0x74. State Z (slot 27, at
+0x85c46) also moves to END, so the chain terminates there and a further call in
+END re-posts `V32_CONNECT[rate]` into the status byte, ORs 0x19 into the flags,
+re-arms the equaliser at `V32_ADAPTEQ_MU1`, re-runs `SetRxLoopsV32(3)` and
+re-clears the decoder's `retrain` at fp + 0x230 + 0x62. It is idempotent, not a
+loop bug, and it is why `t_v32nsans.c` asserts the END arm's new state rather
+than assuming a successor. `V32OrgNextState`'s state V is the same shape
+(F8578) and `V32LocLoopNextState`'s state I is a third: three of the five
+dispatchers park rather than terminate.
+
+Second, the ONLY branch out of the chain is the B2 arm's: if hdx + 0x78 has
+already gone non-positive when B2 is reached, the arm installs `TxHdxNoCarrier`
+and `RxHdxError`, ORs `V32_FLAG_FAULT` into obj + 0x31, writes 0x16 to
+obj + 0x30 and goes to `V32_STATE_ERROR` (the out-of-line block at 0x8647a). No
+other arm can leave the chain; the T arm's "no rate in common" posts a fault and
+status 0x17 but has ALREADY advanced to U, so the handshake continues and only
+the status carries the failure out.
+
+## F8585. `V32_CONNECT` is a per-rate STATUS code at obj + 0x30, not a handshake state number
+
+`src/pump/v32/v32hdx_tables.c` recorded the table's entries {4, 3, 25, 24, 26,
+27, 14} as "handshake state numbers of `v32state.h` ... the field the table is
+copied into (hdx + 0x74)". Nothing copies them there.
+
+All five reference sites in the object -- 82d99 in `V32OrgNextState`, 84d16 and
+853c3 in the two ring dispatchers, 85c12 in `V32AnsNextState` and 86591 in
+`V32LocLoopNextState` -- load the entry with `movzwl` and store the LOW BYTE
+into obj + 0x30, which `v32fpctl.h` names `V32_OBJ_STATUS` and describes as a
+reason code.
+
+The values happening to fall inside 0..34 is what the earlier reading leaned on,
+and it is a coincidence: the same byte receives 0x0f, 0x16 and 0x17 from
+`V32AnsNextState`, 0x0e from `V32RngInitNextState`, and 0x10 to 0x15 from ten
+receive states (F8577), none of which is a handshake state either.
+
+The table's own name is the only evidence about its meaning and it says
+"connect", not "state". The extension is dead (only %al is used), so per F614
+the `movzwl` says nothing about the element type; `short` stands on the symbol's
+fourteen bytes over seven rates. The comment in `v32hdx_tables.c` is corrected.
+
+**The general point is that a value's RANGE is not evidence about its
+namespace.** Seven small integers that all fall inside a known 0..34 enumeration
+look like members of it, and here they are members of a different, denser space
+that happens to overlap. What settled it was reading the STORE, not the table.
+
+## F8587. A blob-against-blob dry run cannot catch an unplanted SUBSCRIPT, because both sides agree on the same wrong answer
+
+This is F134's argument and F2400's failure mode in a new place: a check that
+cannot fail. The apparatus in question is the pre-commit dry run in which a
+differential test is linked with our-side symbols macro-mapped onto the `ref_`
+ones, so both sides execute the blob. It is a good thing to do -- it proves the
+fixture is dereference-safe and that every arm of the function under test is
+reachable, and for `t_v32nsans.c` it passed 542 sections. It is BLIND to an
+entire class of fixture defect, and the blindness is structural rather than
+accidental.
+
+A fixture plants the fields a callee DEREFERENCES, because a null or wild
+pointer faults immediately and loudly. It is easy not to plant a field the
+callee uses as a SUBSCRIPT, because nothing in a pointer audit finds one.
+`v32_common_rate` -- `static` in the object, inlined into `DecodeRateSeq`,
+`CodeRateSeq`, `CodeFinalRateSeq`, `CodeESeq` and `SeqToRate` -- opens with
+
+```
+    short local = V32_RATE_SEQ[fp->rx_rate_index];
+```
+
+against a SEVEN-entry table, with no bound check anywhere in the object; this is
+the same table and the same absence of a guard that deviation D404 records for
+`RateToSeq`, at a second site and reached from five exported functions rather
+than one. `t_v32nsans.c` filled the datapump block with pseudorandom bytes and
+never planted fp + 0x2a, so the ladder subscripted that table with a random
+sixteen-bit index and read up to 64 KB either side of it.
+
+**WHY THE DRY RUN IS SILENT.** Under it, both sides read `ref_V32_RATE_SEQ` --
+one array, one address, one wild index, one wrong answer, delivered identically
+to both. Every comparison agrees and the test reports a clean run. The only
+thing left to chance is whether the index happens to land on an unmapped page,
+and in that run it did not. Under the REAL differential link the same fixture
+diverges immediately and for a reason that has nothing to do with the code under
+test: ours subscripts `V32_RATE_SEQ` and the blob's subscripts
+`ref_V32_RATE_SEQ`, two arrays at different addresses, so out of bounds they
+pick up different neighbours and the ladder returns a different rate. D404
+already states this in the small -- "the two tables sit at different addresses
+in the two objects, so an out-of-bounds read is not a comparison of anything" --
+and the general form is that a dry run turns exactly the defects that depend on
+our-side and blob-side symbols having different addresses into
+non-observations. That is the class the dry run exists to be cheap about, and it
+is the class it cannot see.
+
+**NEITHER SYMPTOM POINTED AT THE CAUSE.** The wild read SEGFAULTED, but in a
+later trial than the one that set it up, and with stdout block-buffered the
+visible output stopped mid-line so the crash appeared to belong to the arm
+before it. And what the comparison reported was one byte at hdx + 0x3e -- the
+scratch register the L arm's `StoreReg(modem, seq, 1)` writes, four calls
+downstream of the fault. The signature that identifies it, and the only one that
+did, is that the failure MOVED WITH THE FIXTURE SEED: the same arm passed at one
+mode and failed at the next two, and the mode is a field this function never
+reads. A per-trial difference that tracks the seed rather than the input is a
+fixture defect until proved otherwise.
+
+**A SECOND COST, AND IT IS THE ONE THAT WOULD HAVE SURVIVED THE CRASH.** The
+test's own non-vacuity check that "every rate including `V32_RATE_NONE` came out
+of the ladder" was being SATISFIED BY THE UNDEFINED READ. Had the index never
+happened to fault, the test would have passed while reporting coverage the
+fixture had not arranged -- an anti-vacuity counter measuring garbage is worse
+than none, because it is believed.
+
+**THE REPAIR IS NOT MERELY TO PLANT THE FIELD.** The ladder is a bitwise AND of
+the far end's sequence against `V32_RATE_SEQ[local]`, so a fixed local station
+can only ever reach the rungs its own entry carries, and only index 5 (0x0ff9)
+carries all five test bits. The local index is therefore SWEPT 0..6 beside the
+sequence, and the sequence list gained five values that isolate one rung each.
+
+**THE OTHER FIVE V.32 TESTS OF THIS WAVE WERE MEASURED, NOT ASSUMED, AND ARE
+CLEAN.** `t_v32nsorg` plants fp + 0x2a and + 0x28 from a trial field and already
+SWEEPS the local index 0..6 for states T, U and V -- the stronger form, arrived
+at independently. `t_v32nsrng`'s nine profiles carry 5, 1, 3, 0, 4, 6, 5, 2, 2
+and `t_v32nsloop`'s seven carry 5, 1, 3, 0, 4, 6, 2, all in range.
+`t_v32rxhdx` pins it at 2. `t_v32txhdx` and `t_v32hshake` never drive the
+ladder. So `t_v32nsans` was the only one exposed.
+
+**AND THIS WAVE PARTLY CLOSES D404's OPEN STATUS.** D404 says "every in-object
+caller of `RateToSeq` is unwritten (`V32OrgNextState` and its three siblings), so
+whether any of them can produce an index outside 0..6 is a question for the pass
+that writes them". This is that pass, and for the answer side the answer is no:
+`V32AnsNextState`'s single call is `RateToSeq(modem, (short)GetRateV32(modem))`
+in the L arm, and `GetRateV32` returns 0..6 by construction -- five equality
+compares against bit rates, else `V32_RATE_INVALID` (6). The other three
+dispatchers are now written and can be settled the same way, after which D404's
+status moves from unmeasured to bounded. `v32_common_rate`'s subscript of the
+same table from fp + 0x2a is a SECOND, distinct site that D404 does not cover
+and that wants its own row; no row has been written.
+
+The rule to carry forward: a field the callee uses as a SUBSCRIPT is as
+load-bearing as a field it uses as a POINTER, and a fixture must plant both in
+range. Audit for `[` as well as for `->`.
