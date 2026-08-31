@@ -54,4 +54,45 @@ int _init_tx_nulls_state(struct fax_class1 *ctx);
  */
 int _handle_hdlc_input_close(struct fax_class1 *ctx);
 
+/* Clear the session countdown, after one log line.  Returns 0. */
+int _hdlc_receive_state_init(struct fax_class1 *ctx);
+
+/*
+ * THE HOST LINK IS DLE-STUFFED BYTES ONE WAY AND 16-BIT ELEMENTS THE OTHER.
+ * `_handle_data_input` and `_handle_hdlc_input` take `unsigned char *` at a
+ * stride of one and write `unsigned short *` at a stride of two;
+ * `_handle_data_output` goes the other way.  Every load is a `movzbl`, so
+ * only the low eight bits of an element ever carry data.
+ *
+ * `count` IS THE DESTINATION'S SIZE, NOT A REQUEST, in all three -- see the
+ * per-function notes in class1tx.c for what each one can write past its input
+ * length.  Sizing a destination from the input alone is F8607/D956.
+ */
+
+/*
+ * Unstuff a transmit block.  `*count` in is the byte count, out is the
+ * element count -- and is ZERO for ever once DLE ETX has been seen.  Writes
+ * at most `*count + 20` elements: the padding after DLE ETX is twenty long.
+ * Returns 0.
+ */
+int _handle_data_input(struct fax_class1 *ctx, const unsigned char *src,
+		       unsigned short *dst, int *count);
+
+/*
+ * The same for an HDLC frame, with the write cursor kept in the SESSION
+ * (`f1250`) so a frame accumulates across calls -- `dst` is the whole frame's
+ * buffer, not one block's.  Returns 1 on the call that completes a frame and
+ * 0 otherwise; `*count` comes back as the frame length or as zero.
+ */
+int _handle_hdlc_input(struct fax_class1 *ctx, const unsigned char *src,
+		       unsigned short *dst, int *count);
+
+/*
+ * Recover an octet from each of `count` elements, DLE-stuff them into `dst`,
+ * and append DLE ETX when `terminate` is set.  Returns the byte count, which
+ * can reach `2 * count + 2`.
+ */
+int _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
+			unsigned char *dst, int count, int terminate);
+
 #endif /* DSPLIB_CLASS1TX_H */

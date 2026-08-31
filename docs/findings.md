@@ -101275,3 +101275,144 @@ against the restored source. The closing "restore is clean" check therefore
 reported a red tree over correct code. `touch` the sources after any restore
 that does not go through git -- this is F134's dead detector with the
 timestamp as the mechanism.
+
+## F8934. The Class 1 state handlers take NINE arguments, and `fax_class1_progress`'s marshalling is what says so
+
+`class1_state_functions` is a `0x4c`-byte COMMON array -- nineteen slots --
+filled by `fax_class1_create`, and `fax_class1_progress` dispatches through it
+at 0x0937f8 with `call *class1_state_functions(,%edx,4)`. The nine slots it
+fills first, at 0x0937bd..0x0937f5, are the signature:
+
+    (%esp)   the session          0x14(%esp)  &a local copy of the rx count
+    0x04     the received block   0x18        the transmit count, by pointer
+    0x08     the block to send    0x1c        a 32-bit word
+    0x0c     a 32-bit word        0x20        a 32-bit word, read and written
+    0x10     a 32-bit word
+
+Three of the nine are read by none of the four handlers reconstructed here, so
+only their WIDTH is established and `class1.h` says so rather than guessing a
+type.
+
+**Two of them are named by the object's own words.** The transmit count is
+`TxSmpCnt`: `fax_class1_progress` follows the dispatch with
+
+    9389b:  8b 5c 24 58     mov    0x58(%esp),%ebx
+    9389f:  81 3b a0 00 00  cmpl   $0xa0,(%ebx)
+    938a5:  74 0d           je     938b4
+      ... "ERROR: TxSmpCnt != 160 !!!\n"
+
+so a handler that leaves anything but 160 there is a diagnosed error, which
+is also where `CLASS1_BLOCK_SAMPLES` comes from.
+
+**And the RX COUNT IS A COPY.** `fax_class1_progress` loads `*arg5` into a
+local at 0x0936d7 and passes `&local`, so a handler writing through that
+pointer does not reach `progress`'s caller. Nothing here writes it, but the
+next handler that does must not be read as an out-parameter.
+
+## F8935. `states_names` and `status_names` are the author's names for nineteen states and eleven results
+
+`.rodata 0x9360` is twenty `{int, char *}` pairs and `.rodata 0x9300` is
+eleven, and `fax_class1_progress` searches the first at 0x093826 to log a
+transition. They are the strongest class of evidence this tree recognises --
+the author's own words for the values -- and they are now in `class1.h`
+verbatim, `RECIEVE_SILENCE_STATE`'s spelling included:
+
+    0 T30_SILENCE_BEFORE_PREAMBLE  7  HDLC_EMULATE_RECEIVE  14 ANSWER_TONE
+    1 T30_PREAMBLE                 8  IDLE                  15 SEND_SILENCE
+    2 SEND_HDLC_BUFFER             9  TX_SCRAMBLED_ONES     16 RECIEVE_SILENCE
+    3 SEND_HDLC_BETWEEN_BUFFER     10 TX_DATA               17 CHDLCTX_OFF
+    4 HDLC_RECEIVE_LOOK_CARRIER    11 TX_NULLS              18 TX_SILENCE_
+    5 HDLC_RECEIVE                 12 RX_LOOK_CARRIER          BEFORE_SCRM_ONES
+    6 HDLC_RECEIVE_BETWEEN_BUFFERS 13 RX_DATA               19 MAX_STATES
+
+    0 FAX_CLASS1_NO_MESSAGE        4 ..ERROR_NO_CARRIER      8 ..NO_CARRIER_
+    1 FAX_CLASS1_OK                5 ..ERROR_ON_HOOK            NO_MESSAGE
+    2 FAX_CLASS1_ERROR             6 ..CONNECT               9 ..OTHER_CARRIER
+    3 FAX_CLASS1_OK_NO_CARRIER     7 ..NO_CARRIER           10 ..ACCEPT_RATE
+
+**That names a field, not just constants.** `fax_class1_progress` RETURNS
+`ctx->+0x122c` (0x093a43: it loads that field and leaves it in `eax`), and the
+values the two silence states write into it are 3 and 0 -- `OK_NO_CARRIER`
+when the silence expires or is abandoned, `NO_MESSAGE` when energy appears.
+Both readings are coherent, so `+0x122c` is `status`.
+
+The nineteen against `class1_state_functions`'s nineteen slots also settles
+that 19 is the COUNT and not a state.
+
+## F8936. `+0x12bc` is `energy` because the object prints it under that name, and the threshold is 100
+
+`_recieve_silence_state` stores `FPM_rms`'s answer into `+0x12bc` and then
+prints exactly that value:
+
+    "Energy %d > silence treshold\n"        .rodata.str1.1 0x40f2
+    "Energy %d < silence treshold...\n"     .rodata.str1.4 0x11784
+    "Abort waiting for silence!"            .rodata.str1.1 0x4110
+
+The author's spellings, kept. That is evidence class 1 for the field's name
+and for `CLASS1_SILENCE_THRESHOLD`'s, and the constant is `cmp $0x64,%ax` --
+a SIGNED sixteen-bit compare, so a negative energy would count as silence.
+`FPM_rms` cannot return one, and the test is written as the object has it
+rather than as it would need to be if it could.
+
+The counter the state runs against `countdown` is `+0x12b8`, and its compare
+is `jae` -- UNSIGNED -- which is why `silence_blocks` is an `unsigned int`
+while `countdown`, which `_recieve_silence_state_init` fills from a SIGNED
+divide, is an `int`.
+
+## F8937. Both host-link input paths keep their DLE escape in ONE field, and the escape survives across calls
+
+`_handle_data_input` (0x09eb60) and `_handle_hdlc_input` (0x09ed00) are
+separate functions doing the same unstuffing, and both use `ctx->+0x124c` for
+"a DLE has been seen". So a block that ends on a bare DLE arms the escape for
+the NEXT block, and a session that interleaves the two paths shares one
+escape state between them.
+
+They differ in three ways, and each difference is the point of having two
+functions:
+
+- the data path's write cursor is a local starting at zero; the HDLC path's
+  is the SESSION's `+0x1250`, so a frame accumulates across calls and the
+  caller's destination is the whole frame's, not one block's;
+- the data path treats DLE ETX as END OF SESSION -- it latches `+0x12b0` and
+  every later call returns immediately with a count of zero -- while the HDLC
+  path treats it as END OF FRAME, doing exactly the two stores
+  `_handle_hdlc_input_close` does and returning 1;
+- the data path logs a DLE that reached the escape arm ("CLASS1: DLE %1X in
+  data\n", at debug level 3 and above); the HDLC path silently drops the
+  same byte.
+
+**The two stores at end of frame are the same two.** `_handle_hdlc_input`'s
+DLE ETX arm and `_handle_hdlc_input_close` both write `f1250 - 1` into
+`+0x000` and set `f1224` when `flags004` bit 4 is on. That the pair appears
+twice, and nowhere else, is what makes the bit worth a name -- and also all
+that is known about it, so `CLASS1_FLAG_FRAME_END_LATCH` records the site and
+claims nothing about what configures it.
+
+## F8938. `_handle_data_output` recovers each octet by an eight-bit start-bit search, and locks the alignment for the carrier
+
+The transmit direction is not a mirror of the receive one. Each element
+contributes its LOW BYTE to the top of a 32-bit window whose lower three bytes
+are the previous three (`ctx->+0x12a0`, and `window >> 8` goes back into it),
+and the octet is extracted through a mask and a shift held in the session.
+
+While `+0x129c` is clear, those two are re-initialised to 0xff0000 and 16 and
+then walked upward until the window has a ZERO bit -- the start bit -- with
+eight tried before the search gives up. On success the flag is set and the
+mask and shift are FROZEN, so the search costs one attempt per carrier rather
+than one per octet.
+
+**The recovered octet's least significant bit is the start bit itself.** The
+mask is `0xff0000 << k` and the shift `16 + k` for the same `k`, so the eight
+bits taken begin AT the zero the search stopped on. That is the object's
+arrangement, checked against the instructions twice because it reads like a
+transcription error, and it is reproduced.
+
+On the give-up path the octet is 0xff, the flag is NOT set, and the mask and
+shift are left where the search abandoned them -- 0xff000000 and 24 -- for the
+next element to re-initialise. Recorded as D1056 because nothing reads them in
+between and the effect is therefore invisible from here.
+
+Then the ordinary DLE stuffing: a recovered 0x10 is written twice, and the
+`terminate` argument appends DLE ETX. So the destination holds up to
+`2 * count + 2` bytes, which `class1tx.h` states because sizing it from
+`count` is F8607/D956's defect.
