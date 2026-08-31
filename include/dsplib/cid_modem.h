@@ -15,8 +15,13 @@
  * DTMF side only, and anything above 1 is clamped to 5, which is both.  Note
  * the polarity: mode 0 is FSK, not DTMF.
  *
- * Only what this batch's leaves touch is modelled; the rest is padding until
- * the CID service pass (cid_modem, cid_progress, cid_get_strings) names it.
+ * `cid_progress` is what makes it a STATE and not just a configuration: from
+ * mode 5 it writes 3 the moment the DTMF receiver reports digits arriving and
+ * 2 the moment the FSK receiver reports a whole message, so the automatic mode
+ * commits to one side and stays there.  See the constants below.
+ *
+ * Every byte of the object is modelled now that `cid_progress` is written;
+ * +0x268 was the last padded span and is its block buffer.
  */
 
 #ifndef DSPLIB_CID_MODEM_H
@@ -24,6 +29,45 @@
 
 struct dtmf_rx;
 struct cid;
+
+/*
+ * THE FIVE VALUES OF `mode`, and the evidence for each name.
+ *
+ * 0, 1 and 5 are structural: every function in cid.c gates the FSK side on
+ * `mode != 1` and the DTMF side on `mode != 0`, and `cid_create` clamps
+ * anything above 1 to 5 while printing " AUTOMATIC MODULATION MODE " -- the
+ * author's own words, so CID_MODE_AUTOMATIC is evidence rule 1.
+ *
+ * 3 is ALSO the author's own word.  `cid_progress` prints
+ * "\n DTMF demodulator Failed after CID_MESSAGE state \n" on exactly the test
+ * `mode == 3`, so 3 is the state the author called CID_MESSAGE: the automatic
+ * mode has seen DTMF digits arriving and committed to the DTMF receiver.
+ *
+ * 2 is usage inference (evidence rule 3) from two independent sites that
+ * agree: `cid_progress` writes it only when the FSK receiver has returned a
+ * whole checksum-good message, in the same statement pair that makes the
+ * function return success, and `cid_get_strings` is the one function that
+ * routes mode 2 to the FSK renderer rather than the DTMF one.  So it is "the
+ * FSK message is in", named conservatively.
+ */
+#define CID_MODE_FSK		0	/* FSK receiver only                */
+#define CID_MODE_DTMF		1	/* DTMF receiver only               */
+#define CID_MODE_FSK_DONE	2	/* an FSK message has been received */
+#define CID_MODE_CID_MESSAGE	3	/* committed to DTMF -- the string  */
+#define CID_MODE_AUTOMATIC	5	/* both, and undecided              */
+
+/*
+ * The block `cid_progress` accumulates before it asks a receiver anything:
+ * 160 samples at a line rate of 8000 and 192 at anything else, which is 20 ms
+ * either way.  The object spells it as a comparison against 8000 followed by
+ * `sete/dec/and $0xffffffe0/lea 0xc0(%eax)`, so the two constants differ by
+ * exactly 32 and 192 is the one the comparison falls through to.
+ *
+ * 192 is also `CID_process`'s chunk, so the service feeds exactly one 9600 Hz
+ * block per call; at 8000 it feeds one block and 32 samples of the next.
+ */
+#define CID_BLOCK_8000		160
+#define CID_BLOCK_9600		192
 
 /* 0x3fc bytes; `cid_create` allocates exactly that. */
 struct cid_modem {
@@ -41,8 +85,27 @@ struct cid_modem {
 	int mode;			/* +0x260 see the encoding above    */
 	int f264;			/* +0x264 <- cid_create's 2nd arg;
 					 *         rewritten by cid_value   */
-	unsigned char pad_268[0x190];	/* +0x268                           */
-	int f3f8;			/* +0x3f8 cleared by cid_create and
+	/*
+	 * +0x268 is `cid_progress`'s BLOCK BUFFER, and that function is what
+	 * settles it: it copies the caller's samples into
+	 * `0x266(%ebx,%edx,2)` with `%edx = f3f8 + 1` -- the same address as
+	 * `0x268 + f3f8*2` -- until `f3f8` reaches the block length, then
+	 * hands `ctx + 0x268` and that length to `dtmf_modem` / `cid_modem`
+	 * as their sample pointer.  So it is one `short` array and `f3f8` is
+	 * its fill level.
+	 *
+	 * THE LENGTH IS BOUNDED FROM BOTH SIDES AND THE TWO DO NOT MEET.
+	 * The lower bound is measured: `cid_progress`'s block length is 192
+	 * at any line rate other than 8000, so at least 192 shorts are
+	 * written.  The upper bound is the layout -- `f3f8` sits at +0x3f8
+	 * and 0x3f8 - 0x268 is exactly 400 bytes -- so at most 200.  Nothing
+	 * in the object reads or writes +0x3e8..+0x3f8, so the array is
+	 * declared to fill the space; the eight shorts past 192 are the
+	 * reading, not a measurement.
+	 */
+	short samples[200];		/* +0x268 cid_progress's block      */
+	int f3f8;			/* +0x3f8 fill level of `samples`;
+					 *         cleared by cid_create and
 					 *         cid_reset                */
 };
 
@@ -95,6 +158,26 @@ void *cid_create(struct cid_modem *ctx, int cid_val, int mode);
  * which is safe only because the modes that never build one leave it null.
  */
 void cid_delete(struct cid_modem *ctx);
+
+/*
+ * The service's own state machine, and the top of the Caller ID receiver.
+ *
+ * It buffers `*count` samples from `in` into `ctx->samples` and, every time
+ * that buffer fills to one block, hands the block to whichever receivers
+ * `ctx->mode` selects and reads their verdicts; a call with enough samples
+ * runs several blocks, and a partial block is left in the buffer for the next
+ * call.  `*count` is set to zero on entry and never read again -- it is an
+ * argument in name and an input-length-in, nothing-out in fact.
+ *
+ * THE THIRD ARGUMENT IS NEVER READ.  `0x48(%esp)` appears nowhere in the 992
+ * bytes; it is kept because `CID_process` passes a literal 0 in that slot and
+ * the object's stack layout says the function takes four.
+ *
+ * The result is what `CID_process` turns into its own: 0 while the message is
+ * still arriving, 1 for a complete one, and 2 or 3 for the several ways it
+ * gives up.  Nothing returns -1.
+ */
+short cid_progress(struct cid_modem *ctx, short *in, int what, short *count);
 
 /*
  * Reset both receivers in place.  Same clamp as cid_create and the same

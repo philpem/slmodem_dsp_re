@@ -15,8 +15,9 @@
  * so the signatures here are quoted, not inferred.  The object underneath is
  * eight bytes: the modem handle, for `modem_send_to_tty`, and the real CID
  * receiver `cid_create` hands back.  Everything that demodulates lives below
- * this file -- `cid_progress` and friends are unwritten and resolve to the
- * blob's own copies at link time.
+ * this file, in `src/service/rxcid.c`, `cid_fsd.c`, `cid_mtd.c` and
+ * `dtmf_rx.c`, and all of it is written -- an unwritten callee would not
+ * "resolve to the blob's copy at link time" but fail to link at all (F8492).
  *
  * THE SPAN NAME IS NOT THE MODULE NAME (the CLAUDE.md rule): the blob's
  * layout labels 0x340..0x5f5 `dp_init.c`, the same label as the two
@@ -34,6 +35,7 @@
  *   cid_value             .text 0x08fe00    15
  *   cid_create            .text 0x08fe10   204
  *   cid_delete            .text 0x08fee0    86
+ *   cid_progress          .text 0x08ff40   992
  *   cid_get_strings       .text 0x090320   145
  *   _look_for             .text 0x0903c0    72
  *   _look_for_other_than  .text 0x090410    88
@@ -45,7 +47,9 @@
  * and `create_cid` (Rxcid.c) written first, which is why F8492 records the
  * link constraint -- not difficulty -- as what ordered this file.
  *
- * `cid_progress` (0x08ff40, 992 bytes) is the one still to come.
+ * `cid_progress` was the last of them and is written now, so this file is
+ * complete and no CID symbol is bridged in `test/harness/unwritten.c` any
+ * more.
  *
  * See include/dsplib/cid_modem.h for the object and the mode encoding.
  */
@@ -60,23 +64,14 @@
 extern int modem_send_to_tty(void *m, const void *buf, int n);
 
 /*
- * The receiver underneath, all five unwritten.  Only what these three
- * callers establish is declared: `cid_progress` reads four arguments and
- * its result is used as a `short` (`cwtl` after the call), and
- * `cid_create`'s first and third arguments are passed as constant zero
- * here, so their types are this file's reading.
- *
- * WEAK, the `DSPLIB_VPCM_UNWRITTEN` idiom (vpcm.h explains it at length):
- * in the differential binaries `test/harness/unwritten.c` bridges each name
- * to the blob's ref_ alias, and in the interop binaries -- which link no
- * blob and never construct a CID -- the weak references resolve to zero.
- * When the receiver is reconstructed, its definitions take over and the
- * bridge collides loudly.  No null tests at the call sites: the object
- * calls all five unconditionally, and so does this file.
+ * THE WEAK DECLARATION OF `cid_progress` THAT USED TO BE HERE IS GONE.
+ * It was the `DSPLIB_*_UNWRITTEN` idiom, bridged to the blob's `ref_` alias
+ * by `test/harness/unwritten.c` while the receiver underneath was unwritten;
+ * this file defines the function now, so the bridge is deleted and the
+ * declaration comes from `cid_modem.h` like every other one here.  That is the
+ * "WHEN A BRIDGED SYMBOL IS RECONSTRUCTED" paragraph in `unwritten.c`, taken
+ * for the fifth and last CID symbol.
  */
-#define DSPLIB_CID_UNWRITTEN __attribute__((weak))
-extern short cid_progress(void *cid, short *in, int what, short *count)
-	DSPLIB_CID_UNWRITTEN;
 
 /* The line rates `CID_create` accepts; cid.h names the same two values. */
 #define CID_LINE_8000	8000
@@ -106,12 +101,11 @@ extern short cid_progress(void *cid, short *in, int what, short *count)
 #define CID_VALUE_RAW	2
 
 /*
- * The mode `cid_create` clamps everything above 1 to, and the object's own
- * debug line for it is "\n AUTOMATIC MODULATION MODE \n" -- a format string
- * the author wrote, which is the strongest naming evidence this file has.
- * Both receivers are built and both are asked.
+ * The five values of `mode` -- including CID_MODE_AUTOMATIC, whose name is the
+ * object's own "\n AUTOMATIC MODULATION MODE \n" -- now live in cid_modem.h
+ * beside the object they belong to, because `cid_progress` reads and writes
+ * three more of them than this file used to.
  */
-#define CID_MODE_AUTOMATIC	5
 
 struct CID {
 	void *modem;		/* +0x0 slmodemd's struct modem       */
@@ -377,6 +371,177 @@ cid_delete(struct cid_modem *ctx)
 }
 
 /*
+ * The service's state machine: buffer the caller's samples a block at a time
+ * and run whichever receivers the mode selects over each full block.
+ *
+ * THE BLOCK IS 20 ms.  `len` is 160 when the receiver's `rate` is 8000 and 192
+ * otherwise, taken from the DTMF receiver when the mode has one and then
+ * OVERWRITTEN from the FSK receiver when the mode has one of those -- two
+ * separate `if`s in the object, not an if/else, so mode 5 ends up using the
+ * FSK receiver's rate for both.  Neither is initialised in the object; the two
+ * tests are `mode != 0` and `mode != 1` and cannot both be false, so `len` is
+ * always assigned before it is read.
+ *
+ * `*count` IS AN INPUT ONLY.  The object reads it once as a short and stores
+ * zero over it immediately, and never looks at it again -- so a caller cannot
+ * learn how many samples were consumed, and `CID_process` does not try.
+ *
+ * THE THIRD ARGUMENT IS NEVER READ: `0x48(%esp)` appears nowhere in the
+ * function's 992 bytes, and `CID_process` passes a literal zero into it.
+ *
+ * WHAT THE RETURN VALUES MEAN comes from the four format strings this
+ * function carries, which are the author's own words:
+ *
+ *   1  a whole message arrived           (a receiver answered 3)
+ *   2  a receiver gave up                ("... demodulator Failed ...")
+ *   3  the DTMF receiver is mid-string in mode 1, or the mode is one of the
+ *      values the dispatch has no arm for
+ *   0  nothing has happened yet
+ *
+ * `CID_process` reads 1 as success and everything non-zero as failure, so 2
+ * and 3 both end the call there.
+ *
+ * THE THREE RESULT VARIABLES ARE FUNCTION-SCOPE AND ALL START AT 1, and the
+ * join below tests all three whatever arm ran -- so a block processed in mode
+ * 5 is judged partly on `res`, which only the single-receiver arms ever
+ * write, and a block processed in mode 3 is judged partly on the automatic
+ * arm's two.  That is the object's shape: three separate stack slots, each
+ * initialised to 1 in the prologue and each surviving from one turn of the
+ * outer loop to the next.
+ *
+ * `ret = 3` on the mode > 1, mode != 5 path is set BEFORE the `mode == 3`
+ * test and so covers mode 3 as well as the modes with no arm at all -- which
+ * means a mode-3 block where the DTMF receiver is still collecting returns 3
+ * and `CID_process` calls that a failure.  Kept as encoded; slmodemd only ever
+ * reaches mode 0, because `CID_create` passes `cid_create` a mode of zero.
+ */
+short
+cid_progress(struct cid_modem *ctx, short *in, int what, short *count)
+{
+	int len = 0;
+	short n;
+	short i;
+	int ret = 0;
+	short auto_dtmf = 1;
+	short auto_fsk = 1;
+	short res = 1;
+
+	if (ctx->mode != CID_MODE_FSK)
+		len = ctx->dtmf->rate != DTMF_RX_RATE_8000
+		      ? CID_BLOCK_9600 : CID_BLOCK_8000;
+	if (ctx->mode != CID_MODE_DTMF)
+		len = ctx->fsk->rate != CID_RATE_8000
+		      ? CID_BLOCK_9600 : CID_BLOCK_8000;
+
+	n = *count;
+	*count = 0;
+	i = 0;
+
+	for (;;) {
+		/*
+		 * Top up the block from the caller's buffer.  `i` and `n` are
+		 * shorts and the comparison is sixteen bits wide, which is the
+		 * object's; `f3f8` is the fill level and survives the call, so
+		 * a caller feeding fewer samples than a block just returns 0
+		 * and comes back.
+		 */
+		while (i < n && ctx->f3f8 < len)
+			ctx->samples[ctx->f3f8++] = in[i++];
+
+		if (ctx->f3f8 != len)
+			return (short)ret;
+
+		if (ctx->mode <= CID_MODE_DTMF) {
+			if (ctx->mode == CID_MODE_DTMF)
+				res = (short)dtmf_modem(ctx->samples, len,
+						       ctx->dtmf);
+			else
+				res = (short)cid_modem(ctx->samples, len,
+						      ctx->fsk);
+			/*
+			 * The mode is re-read from memory here, and after
+			 * every debug call below, because the object does:
+			 * `cmpl $0x1,0x260(%ebx)` rather than a cached copy.
+			 */
+			if (res == 2 && ctx->mode == CID_MODE_DTMF)
+				ret = 3;
+		} else {
+			if (ctx->mode == CID_MODE_AUTOMATIC) {
+				auto_dtmf = (short)dtmf_modem(ctx->samples, len,
+							     ctx->dtmf);
+				auto_fsk = (short)cid_modem(ctx->samples, len,
+							    ctx->fsk);
+			} else {
+				ret = 3;
+				if (ctx->mode == CID_MODE_CID_MESSAGE)
+					res = (short)dtmf_modem(ctx->samples,
+							       len, ctx->dtmf);
+			}
+
+			/* Digits are arriving: commit to the DTMF side. */
+			if (auto_dtmf == 2)
+				ctx->mode = CID_MODE_CID_MESSAGE;
+			/*
+			 * A DTMF string that completed or gave up inside one
+			 * block of the automatic mode is a failure, and the
+			 * author says why: there were not enough digits.
+			 */
+			if (auto_dtmf == 3 || auto_dtmf == -1) {
+				ret = 2;
+				ctx->mode = CID_MODE_CID_MESSAGE;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "\n DTMF Failed , not enough numbers detected \n");
+			}
+			/* A whole FSK message: commit to the FSK side and win. */
+			if (auto_fsk == 3) {
+				ctx->mode = CID_MODE_FSK_DONE;
+				ret = 1;
+			}
+			/*
+			 * The FSK receiver gave up.  It is reset and the run
+			 * continues -- this arm does NOT set `ret`, so the
+			 * automatic mode keeps hunting on the DTMF side.
+			 */
+			if (auto_fsk == -1) {
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "\n FSK demodulator Failed \n");
+				reset_cid(ctx->fsk);
+			}
+		}
+
+		if (res == 3)
+			ret = 1;
+		if (res == -1) {
+			ret = 2;
+			/*
+			 * Three separate tests of the mode, each re-reading
+			 * the field, and each with its own message: which
+			 * receiver failed, and -- for mode 3 -- that it failed
+			 * after the automatic mode had already committed to it.
+			 * That last string is where CID_MODE_CID_MESSAGE's
+			 * name comes from.
+			 */
+			if (ctx->mode == CID_MODE_FSK
+			    && dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "\n FSK demodulator Failed \n");
+			if (ctx->mode == CID_MODE_DTMF
+			    && dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "\n DTMF demodulator Failed  \n");
+			if (ctx->mode == CID_MODE_CID_MESSAGE
+			    && dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "\n DTMF demodulator Failed after CID_MESSAGE state \n");
+		}
+
+		ctx->f3f8 = 0;
+	}
+}
+
+/*
  * Clear the whole string buffer, render into it, and hand it back.  The
  * memset is unconditional and covers all 0x258 bytes, so a caller walking the
  * result stops on a NUL whatever the renderers did.
@@ -400,7 +565,7 @@ cid_get_strings(struct cid_modem *ctx)
 
 	sysdep_memset(out, 0, sizeof(ctx->strings));
 
-	if (ctx->mode != 0 && ctx->mode != 2) {
+	if (ctx->mode != CID_MODE_FSK && ctx->mode != CID_MODE_FSK_DONE) {
 		for (i = 0; i <= 15; i++)
 			out[i] = ctx->dtmf->digits[i];
 		return out;

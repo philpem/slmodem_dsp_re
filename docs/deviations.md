@@ -9588,3 +9588,40 @@ author carried the dead pair across when this driver was written from that one.
 `band_pass`'s own treatment.  A modern compiler deletes the stores again, which
 changes nothing observable; the period compiler emits them, and they are part of
 the frame layout `buf`'s offset depends on.
+
+## D976 🐛 `cid_progress` abandons the call one block after the automatic mode commits to DTMF
+
+*2026-08-31.* The automatic mode (5) runs both receivers over every block. When
+`dtmf_modem` answers 2 -- digits are arriving -- the function writes
+`ctx->mode = 3`, the state the object's own string calls CID_MESSAGE, and
+returns without raising `ret`. So far so good.
+
+The next call takes the mode-3 arm, and that arm sets `ret = 3`
+**unconditionally**, before it has asked the receiver anything (0x90051, between
+the `cmp $0x3` and its branch -- finding F8738). Only two of `dtmf_modem`'s four
+answers overwrite it: 3, a string terminated by 'C', gives `ret = 1`, and -1
+gives `ret = 2`. Answers 1 and 2 -- nothing yet, and still collecting -- leave
+`ret` at 3.
+
+`CID_process` reads 1 as success and every other non-zero value as failure, so
+it returns -1 and stops offering samples. A DTMF caller-ID string takes many
+20 ms blocks to arrive, so **the automatic mode can never complete one**: the
+block after it commits reports failure. The only way through is for the whole
+remaining string to terminate inside a single block, which the DTMF state
+machine cannot do.
+
+The same statement makes modes 2, 4 and any other value above 1 return 3 for
+ever while still consuming samples -- and mode 2 is reachable, since it is what
+the automatic mode writes on a successful FSK message. A caller that keeps
+feeding an object after success gets a failure rather than a repeat of the
+success.
+
+**Status:** reproduced as encoded in `src/service/cid.c`; `t_cidprog`'s "mode 3,
+DTMF collecting" and "mode 5, DTMF collecting" cases assert the returned 3
+against the reference, so the quirk is pinned rather than tolerated. **Not
+reachable from slmodemd**, which is presumably why it survived: `CID_create`
+calls `cid_create(0, cid_val, 0)`, so the mode is 0 for the life of the object
+and the mode-5 arm that would raise it never runs. A host that wanted
+DTMF-carried caller ID would have to write `mode` itself, and would hit this
+immediately. The fix is to move the `ret = 3` inside the `else` that has no
+receiver arm; it would break bit-exactness for no caller that exists today.

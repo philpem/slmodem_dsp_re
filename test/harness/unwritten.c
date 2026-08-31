@@ -34,30 +34,18 @@
 
 /* --- the Caller ID receiver, span cid_modem.c (0x8fd60..) ------------- */
 
-extern short ref_cid_progress(void *cid, short *in, int what, short *count);
-
 /*
- * FOUR of the five CID bridges are GONE -- `cid_create`, `cid_delete`,
- * `cid_freq_sampl` and `cid_get_strings` are all defined in
- * `src/service/cid.c` now, which is the "WHEN A BRIDGED SYMBOL IS
- * RECONSTRUCTED" paragraph above taken four times.  `t_cidsvc` drives each
- * straight against its ref_ alias with no split.
+ * ALL FIVE CID BRIDGES ARE GONE.  `cid_create`, `cid_delete`,
+ * `cid_freq_sampl`, `cid_get_strings` and now `cid_progress` are every one of
+ * them defined in `src/service/cid.c`, which is the "WHEN A BRIDGED SYMBOL IS
+ * RECONSTRUCTED" paragraph above taken five times.
  *
- * `cid_progress` is the last one, and while it stands `CID_process`'s test
- * keeps the split that paragraph describes.
- */
-
-short
-cid_progress(void *cid, short *in, int what, short *count)
-{
-	return ref_cid_progress(cid, in, what, count);
-}
-
-/*
- * `cid_get_strings`'s bridge is GONE too: src/service/cid.c defines it, and
- * with `data_formatted_output` and `data_unformatted_output` written under it
- * the whole render path is ours.  `CID_process`'s remaining bridged callees
- * are `cid_create`, `cid_delete` and `cid_progress`.
+ * `cid_progress` was the last, and with it the split that paragraph describes
+ * has collapsed for the whole service: `CID_process` and everything under it
+ * is ours on our side and the blob's on the reference side, so `t_cid` no
+ * longer has a shared-callee caveat to state and `t_cidprog` drives
+ * `cid_progress` straight against `ref_cid_progress` with no bridge in
+ * between.
  */
 
 /* --- BOTH registration pairs are gone, and this note is what is left ---

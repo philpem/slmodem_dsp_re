@@ -50,8 +50,8 @@
  },
  {
   "label": "success returns 2",
-  "find": "\t\t\tret = 1;",
-  "replace": "\t\t\tret = 2;"
+  "find": "\t\t\tret = 1;\n\t\t\tp = cid_get_strings",
+  "replace": "\t\t\tret = 2;\n\t\t\tp = cid_get_strings"
  },
  {
   "label": "failure keeps consuming",

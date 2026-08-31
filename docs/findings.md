@@ -98652,3 +98652,210 @@ all four functions, both clamps, the `f264` store, the DTMF digit count and
 `cid_get_strings`'s mode-2 route.
 
 `t_cidsvc` is 2,547 checks in six groups.
+
+## F8733. `cid_modem + 0x268` is `cid_progress`'s block buffer, and its length is bounded from both sides without the bounds meeting
+
+*2026-08-31.* `struct cid_modem`'s last padded span, `pad_268[0x190]`, is one
+`short` array and `f3f8` at +0x3f8 is its fill level. `cid_progress` settles
+both:
+
+    8ffee:  66 89 84 53 66 02 00 00   mov %ax,0x266(%ebx,%edx,2)   %edx = f3f8+1
+    90107:  66 89 94 43 68 02 00 00   mov %dx,0x268(%ebx,%eax,2)   %eax = f3f8
+
+The two stores are the same address written two ways -- `0x266 + (f3f8+1)*2` is
+`0x268 + f3f8*2` -- and are the only writes into the span anywhere in the
+object. When the level reaches the block length the function passes
+`lea 0x268(%ebx)` and that length to `dtmf_modem` and `cid_modem` as their
+sample pointer and count, so the span is read as `short` too.
+
+**The length is bounded from both directions and the bounds do not meet.** The
+lower bound is measured: the block length is 192 whenever the receiver's `rate`
+is not 8000, so at least 192 shorts are written. The upper bound is the layout:
+`f3f8` sits at +0x3f8 and 0x3f8 - 0x268 is exactly 400 bytes, so at most 200.
+Nothing in the object reads or writes +0x3e8..+0x3f8. The field is declared
+`short samples[200]` -- the array filling the space to the next known field,
+which is this tree's standard reading -- and the eight shorts past 192 are that
+reading and not a measurement. Recorded so a later pass that finds a field at
++0x3e8 knows which half was proved.
+
+`t_cidprog` asserts `sizeof(struct cid_modem) == CID_MODEM_BYTES` and
+`sizeof(samples)/sizeof(short) == 200`, so the layout claim is checked rather
+than commented.
+
+## F8734. `cid_progress`'s third argument is never read, and the caller passes a literal zero into it
+
+*2026-08-31.* `cid_progress(struct cid_modem *ctx, short *in, int what,
+short *count)` puts its four arguments at `0x40(%esp)`, `0x44`, `0x48` and
+`0x4c` after four pushes and `sub $0x2c`. `0x40`, `0x44` and `0x4c` are all
+read. **`0x48` appears nowhere in the 992 bytes** -- the count of `0x48(%esp)`
+over 0x8ff40..0x90320 is zero.
+
+The argument is not inferred from a stack layout alone: `CID_process` at 0x470
+stores a constant 0 into the third slot before the call, so the function really
+does take four and the third really is dead. It is reproduced as a
+named-but-unused parameter rather than dropped, because dropping it would
+change the calling sequence at the one call site the object has.
+
+The pair `(what, count)` reads like a request/response pair reduced to one
+direction: `*count` is read once as a short and immediately overwritten with
+zero (`movswl (%edx),%ebp` then `movw $0x0,(%edx)` at 0x8ffb3), and never read
+again -- so it is an input length the function destroys, and a caller cannot
+learn how many samples were consumed. `CID_process` does not try.
+
+## F8735. `mode` is a STATE, not a configuration, and `cid_progress` names two more of its values from the object's own strings
+
+*2026-08-31.* Everything written before `cid_progress` read `cid_modem->mode`
+as a configuration -- which receivers to build. It is also the automatic
+detector's state, and `cid_progress` is the only function that writes it:
+
+- **3 is the author's own word.** The function prints
+  `"\n DTMF demodulator Failed after CID_MESSAGE state \n"`
+  (`.rodata.str1.4 + 0x11614`) on exactly the test `ctx->mode == 3`, so 3 is
+  the state the author called CID_MESSAGE. It is entered from mode 5 the moment
+  `dtmf_modem` answers 2 -- digits arriving -- so it means "the automatic mode
+  has committed to the DTMF receiver". Evidence rule 1.
+- **2 is usage inference from two independent sites that agree.**
+  `cid_progress` writes 2 only when `cid_modem` has answered 3, which is a
+  whole checksum-good message, in the same statement pair that makes the
+  function return 1 for success; and `cid_get_strings` is the one function in
+  the tree that routes mode 2 to the FSK renderer rather than the DTMF one.
+  Named `CID_MODE_FSK_DONE` and marked as rule-3 evidence in the header.
+
+That resolves the oddity `cid_modem.h`'s header comment flagged and could not
+explain, and which finding F8731 recorded as unreachable-by-construction:
+`cid_get_strings` tests `mode != 0 && mode != 2` where every other function
+tests `> 1`, `!= 0` or `== 5`. Mode 2 is above 1 and belongs on the FSK side
+because the FSK receiver is the one that has the answer. F8731's ruling that no
+caller going through `cid_create` can present mode 2 still stands for
+`cid_create`; what it missed is that `cid_progress` writes the value itself.
+
+The five constants now live in `include/dsplib/cid_modem.h` -- `CID_MODE_FSK`,
+`CID_MODE_DTMF`, `CID_MODE_FSK_DONE`, `CID_MODE_CID_MESSAGE`,
+`CID_MODE_AUTOMATIC` -- which is one home for a value four functions test.
+`CID_MODE_AUTOMATIC` moved there from `src/service/cid.c`.
+
+## F8736. `cid_progress`'s block is 20 ms at either rate, and both thresholds under it are therefore constant
+
+*2026-08-31.* The block length is if-converted twice over, once from each
+receiver:
+
+    8ff7c:  cmpw $0x1f40,0x33c(%edi)     dtmf->rate != 8000?
+    8ff85:  setne %cl
+    8ff88:  movzbl %cl,%eax
+    8ff8b:  dec %eax                     0 if !=8000, -1 if ==8000
+    8ff8c:  and $0xffffffe0,%eax         0 or -32
+    8ff8f:  lea 0xc0(%eax),%edi          192 or 160
+
+and again at 0x8ff9a from `fsk->rate`, the second overwriting the first -- two
+separate `if`s (`mode != 0` and `mode != 1`), not an if/else, so mode 5 ends up
+using the FSK receiver's rate for both. 160 samples at 8000 Hz and 192 at 9600
+are both 20 ms.
+
+**That makes `cid_modem`'s two confidence thresholds constants in practice.**
+F8712 recorded them as `m*18/256` and `m*12/256` with
+`m = (rate == 9600 ? 49152 : 40960) / count`; at 160/8000 and 192/9600 `m` is
+256 either way, so the thresholds are 18 and 12 at every rate `cid_progress`
+can produce. The design F8712 described as rate-independent is rate-independent
+because its only caller feeds it a fixed duration.
+
+192 is also `CID_process`'s `CID_CHUNK`, so at 9600 the service feeds exactly
+one block per call and at 8000 one block plus 32 samples of the next -- which
+is why the carried remainder in `f3f8` exists at all.
+
+`len` is left UNINITIALISED by the object; the two tests are `mode != 0` and
+`mode != 1` and cannot both be false, so it is always assigned before it is
+read. `src/` initialises it to zero, which is dead on every path, because every
+alternative spelling that makes the exhaustion visible changes what happens when
+a receiver pointer is null. Note that a `len` of 0 makes the function loop for
+ever -- the outer loop's only exit is `f3f8 != len` and `f3f8` is 0 after each
+block -- which is how the injection ritual's "the first read is gated on
+mode != 1" mutant was caught, by hanging.
+
+## F8737. `cid_progress` keeps three result variables alive across arms and across turns of its loop, and the join tests all three whatever ran
+
+*2026-08-31.* The prologue writes 1 into three separate stack slots -- `0x1c`,
+`0x20` and `0x24` -- and 0 into a fourth, `0x28`, the return value. Each of the
+three is written by ONE dispatch arm and read by the join that follows EVERY
+arm:
+
+- `0x20` and `0x1c` are `dtmf_modem`'s and `cid_modem`'s answers, and only the
+  mode-5 arm writes them.
+- `0x24` is the single-receiver answer, written by the mode-0, mode-1 and
+  mode-3 arms.
+- the join tests `0x20` for 2 and for 3-or-(-1), then `0x1c` for 3 and for -1,
+  then `0x24` for 3 and for -1. The mode <= 1 arm jumps straight to the `0x24`
+  tests (0x90187 -> 0x900b8) and skips the first four; every other arm runs all
+  six.
+
+So a block processed in mode 3 is judged partly on two variables the mode-3 arm
+never wrote, and if a caller has moved the mode between calls those variables
+hold the PREVIOUS block's answers -- the outer loop can run several blocks in
+one call, and the slots persist across it. That is the object's shape, not an
+artefact of the reconstruction, and it is why the three locals are
+function-scope in `src/` rather than declared inside the loop.
+
+`t_cidprog` drives two blocks in one call with a seed that fires on the first,
+which is the only case in the file where the carry is observable; a mutant that
+resets the three at the top of each turn is caught there and nowhere else.
+
+## F8738. `cid_progress` sets `ret = 3` for every mode above 1 that is not 5, BEFORE it tests for mode 3 -- so a mode-3 block that is still collecting reports failure
+
+*2026-08-31.*
+
+    90049:  b9 03 00 00 00     mov $0x3,%ecx
+    9004e:  83 fe 03           cmp $0x3,%esi
+    90051:  89 4c 24 28        mov %ecx,0x28(%esp)      ret = 3, unconditional
+    90055:  0f 84 94 02 00 00  je 902ef                 mode 3 -> dtmf_modem
+
+The store sits between the compare and the branch, so it is on the path for
+mode 3 as well as for the modes with no arm at all. `CID_process` reads
+anything non-zero and non-1 as failure, so in the CID_MESSAGE state a block
+where `dtmf_modem` is still collecting (answer 1 or 2) returns 3 and the host
+abandons the call -- exactly the state the automatic mode enters when it has
+just started seeing digits. Only the DTMF answers 3 and -1 rewrite `ret`
+afterwards, to 1 and 2. Deviation D976.
+
+It is unreachable from slmodemd, which is presumably why it survived:
+`CID_create` calls `cid_create(0, cid_val, 0)`, so the mode is 0 for the life
+of the object and the only path that could raise it -- the mode-5 arm's
+`ctx->mode = 3` -- is never taken.
+
+## F8739. What `t_cidprog` pins, and the one gap that only a rate mismatch could expose
+
+*2026-08-31.* `cid_progress` has one exit -- `f3f8 != len` -- so a call always
+drains its input, and the fill level afterwards is `(f3f8_before + n) % len`
+with `(f3f8_before + n) / len` blocks processed. `t_cidprog` asserts that
+against the REFERENCE on every call, which pins the block length by an
+independent statement of the same fact rather than by our own copy of it.
+
+**The arms that need a receiver to answer 3 or -1 are PLANTED**, the way
+`t_rxcid` plants the framer. The seeds are read off the receivers' own source:
+`cid_modem` reaches the checksum once `mark_conf` is at least 18 (F8736) and
+answers 3 or -1 from a `pack_len` of 10 with `data[1] = 5`; `dtmf_modem`
+answers 2 from `ndigits > 2`, -1 from that plus `nsamples > 3*rate`, and 3 from
+a pending `last_digit` of 12 committed by a block the band pass calls silent.
+Real audio -- a Bell 202 mark tone and bit stream, and DTMF tone pairs --
+drives the same paths where no specific verdict is needed.
+
+**THE GAP THE RITUAL FOUND, AND IT IS THE SHAPE F8732 DESCRIBES.** Every case
+in the first draft gave both receivers the same rate, and with the rates equal
+the two rate reads are indistinguishable: the mutant "the length comes from the
+DTMF receiver in both ifs" survived 8,218 checks including every mode, every
+input length and both rates. It is the same failure as F8732's unfalsifiable
+`f3f8` clear -- a statement whose effect is invisible because the fixture never
+puts the two sides of it in disagreement. One 600-check section with
+`dtmf->rate` and `fsk->rate` swapped both ways catches it, and four siblings
+besides: each read sourced from the wrong receiver, each gate swapped, and the
+two `if`s made an if/else.
+
+The ritual was 37 mutants: 33 caught, 3 equivalent, 1 real gap now closed. The
+three equivalent ones are the three result variables initialised to 0 rather
+than 1 (0 matches none of the tested values 2, 3 and -1 any more than 1 does),
+and `n` and `i` declared `int` rather than `short` (`n`'s only source is a
+`short` and `i` is bounded by it, so no input separates them -- the object's
+`cwtl` and `cmp %bp,%ax` is a codegen fact only the period compiler can see).
+
+The one thing the file does NOT pin is the four debug strings, because every
+site is gated on `dsplibs_debug_level > 1` and the harness runs at 0. They are
+covered by `make one`'s `strings` tier, which checks every literal in `src/`
+exists in the object, and that is the whole of the evidence for them.
