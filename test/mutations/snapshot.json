@@ -1037,7 +1037,7 @@
    }
   },
   "ringdet": {
-   "key": "4f67fa675c49cac5d0ed3ca997e2c883bcdba5ba0df479e77a4bf42ea1498023",
+   "key": "0332c8698278bed0c82e98efaa41c1cdc787d6d8a29eb5a8f4c2be115a3171d2",
    "summary": "41 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "GetLastRing returns the two values swapped": "caught",
