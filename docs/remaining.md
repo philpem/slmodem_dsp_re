@@ -35,6 +35,62 @@ each other. **Six of the ten sit in the span labelled `class1tx.c +94`, which
 is the FAX span** — a pass that reads "fax is last" as "skip that span" strands
 them. That is the span-is-not-a-module rule with real money on it.
 
+## THE DECISION TO DO FAX, TAKEN 2026-08-31
+
+**Fax is no longer last, and this is the reason changing rather than the plan
+drifting.** README's order and CLAUDE.md both put fax last, and CLAUDE.md is
+explicit that the ground was **VALUE, NOT DIFFICULTY**: it is 283 symbols and
+78,331 bytes, larger than everything else remaining put together, and SpanDSP
+already implements Class 1 fax in the open-source world, so the marginal worth
+of reconstructing it is lower than for anything else here.
+
+That reasoning is still true. What changed is the GOAL. The objective has moved
+from "cover the data modes and the services" -- which is now **done**, all of
+it -- to **completing the object**. Under the new goal fax is not low-value; it
+is the only thing between the tree and a finished reconstruction. Decided
+deliberately, and it should be changed back the same way.
+
+**THE STATED REASON FOR GOING NOW WAS WRONG, AND THE CORRECT ONE IS SIZE.** The
+proposal was that voice depends on part of fax. It does not:
+`closure.py` over voice's ten remaining symbols returns **17 symbols / 6,502
+bytes, every one of them voice's own** (ten call, five data, two rodata). What
+is true is that six voice symbols SIT IN the span labelled `class1tx.c +94`,
+which is the fax span -- and that is the span-is-not-a-module trap this file
+opens with, the same one that made the first V.32 estimate wrong in both
+directions (F8160). **There is no ordering constraint between voice and fax.**
+Fax is next because it is 76% of what is left, not because anything waits on it.
+
+### What fax looks like, measured rather than quoted
+
+| span | bytes |
+|---|--:|
+| `class1tx.c +94` | 68,409 |
+| `class1.c` | 4,146 |
+| `voice.c#3 +3` | 3,253 |
+| `class1rx.c` | 2,495 |
+| `V32mod.c +39` | 28 |
+
+**83 symbols are startable today -- 14,080 bytes with no unwritten dependency**,
+and they fall into families that parallelise cleanly rather than one monolith:
+the three demodulators (`DemodDataV17`/`V27`/`V29`), their carrier and quality
+detectors (`DataCarrierDetect*`, `QualityDetect*`), the V.27 scrambler pair,
+`SMC_encoder`, the SGD sequence engine, and the FAXVMI framing layer.
+`class1rx.c` has **0** ready, so it is downstream of the rest.
+
+### Two things the fax phase inherits
+
+- **RESTORE `test/unit/t_faxsgd.c` FROM `9b1739ee^` BEFORE ATTEMPTING SGD.**
+  Wave 1 wrote the SGD engine, failed 96 of 3,603 checks under the period
+  compiler with `det_at` landing megabytes outside the object's own buffer, and
+  WITHDREW it rather than commit a structural error. F8497 says plainly that the
+  TEST is the asset: it compares `det_at` as an OFFSET rather than a pointer
+  value, which is what turned an invisible layout error into a 96-check failure.
+  A byte compare of the object would have reported one differing run and named
+  no field.
+- **The 12 remaining leaves are mostly in these same files**, and 9 of them are
+  F8492's link-blocked set. They unblock as their fax referents land, so they
+  come free with this phase rather than needing a pass of their own.
+
 ## The order
 
 Follows README's agreed order and CLAUDE.md's scheduling doctrine (V.32 is

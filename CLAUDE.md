@@ -40,6 +40,13 @@ other, divided between two adjacent functions 0x170 apart. Schedule V.32 as
 `Dialer.c +18` **and** `V32mod.c +39` together, and never as a "Dialer pass". Any goal phrased as "cover the data
 modes" requires it, and while it was fenced that goal could not be reached.
 
+**FAX WAS LAST ON PURPOSE, AND SINCE 2026-08-31 IT IS THE CURRENT PHASE.**
+The order below is unchanged as history and the reason it gave was never
+difficulty; what changed is the GOAL, from covering the modes to completing the
+object. The data modes and the services are done, so fax is the only thing
+left. `docs/remaining.md` carries the decision and the measured scope. Read the
+rest of this paragraph as why it was deferred, not as a reason to defer it now.
+
 **FAX IS LAST ON PURPOSE, AND THE REASON IS NOT DIFFICULTY.** It is 283 symbols
 and 78,331 bytes -- larger than everything else remaining put together -- and
 SpanDSP already implements Class 1 fax in the open-source world, so the
