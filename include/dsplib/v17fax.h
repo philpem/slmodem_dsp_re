@@ -192,6 +192,14 @@ struct fpm_sdm;
 #define V17RXC_SCRATCH		0x1c
 
 /*
+ * The short that chooses which of `DataCarrierDetectV17`'s two completely
+ * different bodies runs: zero takes the same path as `CarrierDetectV17`,
+ * non-zero takes the V.21 tone watch.  Neutral -- nothing traced writes it,
+ * so what selects the mode is outside what has been read.
+ */
+#define V17RXC_SHORT_0020	0x20
+
+/*
  * The SECOND detector chain, which is `DataCarrierDetectV17`'s alone: a
  * `struct fpm_mtd *` at +0x24, its own `short *` buffer at +0x28, a sample
  * counter at +0x2c, a latch at +0x2e and a `struct fpm_agc` at +0x30.
@@ -200,21 +208,29 @@ struct fpm_sdm;
  * first pair are.  `V17RXC_AGC` is `FPM_AGC_agc`'s first argument, so it is
  * `struct fpm_agc` by the same rank-2 rule.
  *
- * The counter is the one the "V17: V21 Carrier detected" message hangs off:
- * it accumulates the sample count while the tone detector stays silent, is
- * cleared the moment the detector fires, and crossing 0x4ff (1,279 samples,
- * 160 ms at 8 kHz) is what prints the message and drops the carrier.  So
- * "silence" is what it counts, and that IS established by the branch the
- * string sits on.
+ * THE COUNTER COUNTS `FPM_MTD_ABSENT`, WHICH IS NOT SILENCE.  It is the field
+ * the "V17: V21 Carrier detected" message hangs off, and the temptation is to
+ * read it as a silence timer -- but the object accumulates while
+ * `FPM_MTD_detect` returns ZERO and clears on anything else, and `fpm_mtd.h`
+ * defines `FPM_MTD_ABSENT` as 0 and glosses it "signal present, but not in
+ * band".  `FPM_MTD_PRESENT` is 1 and `FPM_MTD_NOSIGNAL` is 2, so both a
+ * detected tone AND a dead line clear it.
+ *
+ * So what crossing 0x4ff means is 1,280 consecutive samples -- 160 ms at
+ * 8 kHz -- of energy on the line that is NOT the band this detector watches,
+ * which is a coherent reason to conclude something else has taken the
+ * channel.  Whether that band is V.17's or V.21's depends on the config
+ * `V17RX_create` gives the detector, and `V17RX_create` is not reconstructed,
+ * so the name stays with what the verdict says rather than with the message.
  */
 #define V17RXC_MTD2		0x24
 #define V17RXC_BUF2		0x28
-#define V17RXC_SILENCE		0x2c
+#define V17RXC_OFFBAND		0x2c
 #define V17RXC_SHORT_002E	0x2e
 #define V17RXC_AGC		0x30
 
-/* The threshold the silence counter is compared against, from the object. */
-#define V17RXC_SILENCE_MAX	0x4ff
+/* The threshold the counter is compared against, from the object. */
+#define V17RXC_OFFBAND_MAX	0x4ff
 
 /* ------------------------------------------------------------------------ */
 /* Inside the demodulator state at V17RX_OBJ_STATE                          */
@@ -471,7 +487,20 @@ void SetEncoderV17(void *modem, short which, short arg);
  * in the object because the load of `params + 0x10` sits between the two and
  * may alias, and it survives here for the same reason -- both blocks are
  * `unsigned char *`.  Removing it would be tidier and would stop being the
- * object.
+ * object.  The consequence -- the caller's bits 2..7 of that byte are
+ * DESTROYED, while +0x15 four instructions away carefully preserves its own --
+ * is deviation D1032.
+ *
+ * A LEAD THAT IS NOT EVIDENCE HERE, and is recorded as a lead: a parallel
+ * reconstruction pass reports that this same 0x1c-byte block is already
+ * modelled as `struct v22_status` and `struct v32_status`, with +0x00 a
+ * protocol word, +0x02 and +0x04 bit rates, +0x06 a quality, +0x08 an SNR,
+ * +0x14 and +0x15 flag bytes and +0x18 an int -- which would be rank-2
+ * evidence for naming every field above.  NEITHER HEADER EXISTS ON THIS
+ * BRANCH, so nothing here is named from it and nothing here cites it.  Anyone
+ * merging the two passes should check `nm -S`, read those headers, and name
+ * these offsets then; four spellings of one block is the thing to avoid, and
+ * "one type, one home" is the rule that will decide it.
  */
 int V17TX_status(void *params, void *status);
 
@@ -488,6 +517,30 @@ int V17TX_status(void *params, void *status);
  * here to reproduce.
  */
 int CarrierDetectV17(void *modem);
+
+/*
+ * Report the carrier verdict for a block of `count` samples, and run the two
+ * watchdogs behind it.
+ *
+ * It has the SAME HEAD as `CarrierDetectV17` -- the same three gates, the same
+ * two arms, the same doubled test of the decoder error and the same format
+ * string -- but only while the control block's `V17RXC_SHORT_0020` is zero.
+ * When it is not, the function takes a completely different path: it copies
+ * the block into its own buffer, gain-controls it, runs the SECOND tone
+ * detector over it, and accumulates the sample count for as long as that
+ * detector answers `FPM_MTD_ABSENT` -- see `V17RXC_OFFBAND`, which is not the
+ * silence timer it looks like.  Crossing `V17RXC_OFFBAND_MAX` prints "V17: V21
+ * Carrier detected" and drops the verdict.
+ *
+ * The energy watchdog runs on BOTH paths and is the one the "-8 dB" string
+ * belongs to; see `V17RXS_SHORT_4FB4`.
+ *
+ * `in` IS NOT MODIFIED.  The gain control runs over the private copy at
+ * `V17RXC_BUF2`, not over the caller's block -- which is the one place a
+ * careless reading of the two `FPM_AGC_agc` call sites in this file could go
+ * wrong, since `DemodDataV17`'s runs over the caller's.
+ */
+short DataCarrierDetectV17(void *modem, const short *in, unsigned short count);
 
 /*
  * Report the carrier verdict, and maintain the smoothed decoder error behind

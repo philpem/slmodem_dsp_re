@@ -9,6 +9,8 @@
  *   SetEncoderV17     .text 0x0a0a00   90
  *   V17TX_status      .text 0x0a1bd0  106
  *   CarrierDetectV17  .text 0x0a5260  121
+ *   DataCarrierDetectV17
+ *                     .text 0x0a52e0  625
  *   QualityDetectV17  .text 0x0a5560  266
  *   EpochDetectV17    .text 0x0a5670   22
  *   GetSNRV17         .text 0x0a5690   23
@@ -21,7 +23,7 @@
  * THIS IS NOT ONE TRANSLATION UNIT, AND THE ADDRESSES SAY SO
  *
  * `tools/tumap.py` brackets 95 units together as `class1tx.c +94`, so it
- * cannot separate them -- but the ten symbols above span 0x09ff80 to 0x0a5735,
+ * cannot separate them -- but the symbols above span 0x09ff80 to 0x0a5735,
  * about 22 KB, with hundreds of unrelated functions between them.  GCC emits
  * one unit's functions contiguously, so at least three units are represented
  * here.  The definitions are ORDERED BY THE OBJECT'S OWN ADDRESSES anyway,
@@ -48,6 +50,9 @@
 #include "dsplib/v17fax.h"
 
 #include "dsplib/debug.h"
+#include "dsplib/fpm.h"
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sdm.h"
 
 /* The instances are not modelled; see v17fax.h.  These are the only accessors. */
@@ -207,6 +212,115 @@ CarrierDetectV17(void *modem)
 				dsplibs_debug_printf(
 					"V17 Decoder error too big..."
 					" no carrier\n");
+		}
+	}
+
+	return r;
+}
+
+/* --------------------------------------------------------------------- */
+
+short
+DataCarrierDetectV17(void *modem, const short *in, unsigned short count)
+{
+	unsigned char *rx;
+	unsigned char *ctl;
+	short r;
+
+	rx = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_STATE);
+	ctl = (unsigned char *)FIELD_PTR(modem, V17RX_OBJ_CTL);
+
+	/* +0xd0 is read 16-bit HERE and 32-bit in CarrierDetectV17. */
+	r = (short)(AT_S(rx, V17RXS_AGC_SIGNAL) & AT_I(rx, V17RXS_INT_0120));
+
+	if (AT_S(ctl, V17RXC_SHORT_0020) == 0) {
+		/*
+		 * The same three gates and the same two arms as
+		 * `CarrierDetectV17`, including its doubled test of the
+		 * decoder error and its format string.
+		 */
+		if (AT_I(ctl, V17RXC_INT_0010) != 0
+		    && AT_I(rx, V17RXS_EPOCH) != 0
+		    && AT_S(rx, V17RXS_SHORT_0094) > V17RXS_0094_MIN) {
+			if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX)
+				r = 0;
+			else
+				r &= 1;
+			if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"V17 Decoder error too big..."
+						" no carrier\n");
+			}
+		}
+	} else {
+		if (AT_S(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX
+		    || (r & 1) == 0)
+			AT_S(ctl, V17RXC_SHORT_002E) = 1;
+
+		r = 1;
+		if (AT_S(ctl, V17RXC_SHORT_002E) != 0) {
+			short *buf;
+			short i;
+
+			buf = (short *)FIELD_PTR(ctl, V17RXC_BUF2);
+			for (i = 0; i < (int)count; i++)
+				buf[i] = (short)(unsigned short)in[i];
+
+			/*
+			 * The object passes FOUR arguments here, the fourth a
+			 * constant 1 the callee never reads; see D1031.
+			 */
+			FPM_AGC_agc((struct fpm_agc *)(void *)
+					FIELD(ctl, V17RXC_AGC),
+				    (short *)FIELD_PTR(ctl, V17RXC_BUF2),
+				    count);
+
+			if (FPM_MTD_detect((struct fpm_mtd *)
+						FIELD_PTR(ctl, V17RXC_MTD2),
+					   (const short *)
+						FIELD_PTR(ctl, V17RXC_BUF2),
+					   (short)count) != 0)
+				AT_S(ctl, V17RXC_OFFBAND) = 0;
+			else
+				AT_S(ctl, V17RXC_OFFBAND) = (short)
+					(AT_US(ctl, V17RXC_OFFBAND) + count);
+
+			if (AT_S(ctl, V17RXC_OFFBAND) > V17RXC_OFFBAND_MAX) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"V17: V21 Carrier detected\n");
+				r = 0;
+			}
+		}
+	}
+
+	if (AT_S(rx, V17RXS_SHORT_4FB4) != 0) {
+		short rms;
+		unsigned short phase;
+
+		rms = FPM_rms(in, count);
+
+		/*
+		 * No rounding term on this one, unlike QualityDetectV17's
+		 * smoothing: the object is `imul $0x32fe ; sar $0xf` and
+		 * nothing else.
+		 */
+		if ((int)rms < ((int)AT_S(rx, V17RXS_RMS_REF)
+				* V17RXS_RMS_DROP_Q15) >> 15) {
+			r = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+					"sudden energy drop > 8[dB],"
+					" no carrier");
+		}
+
+		phase = (unsigned short)(AT_US(rx, V17RXS_RMS_PHASE) + 1);
+		if ((short)phase == V17RXS_RMS_PERIOD) {
+			AT_S(rx, V17RXS_RMS_REF) = rms;
+			AT_S(rx, V17RXS_RMS_PHASE) = 0;
+		} else {
+			AT_S(rx, V17RXS_RMS_PHASE) = (short)phase;
 		}
 	}
 

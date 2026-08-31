@@ -9169,3 +9169,75 @@ halved, a division instead of a shift, and the operands read unsigned -- and
 **Status:** unmeasured, and unmeasurable from this object, for D405's reason:
 the function has no caller, so no configuration exists that would say which
 reading is the author's.
+
+## D1031 -- both V.17 callers pass `FPM_AGC_agc` a FOURTH argument, and we pass three  `equivalent`
+
+*2026-08-31.* `DataCarrierDetectV17` at a539f and `DemodDataV17` at a50b1 both
+write the constant 1 into `0xc(%esp)` before their `FPM_AGC_agc` call, on top
+of the three arguments `include/dsplib/fpm_agc.h` declares. With
+`-maccumulate-outgoing-args` that slot is a fourth argument and not a spill:
+nothing else reads it, and the same slot is overwritten with a different value
+before the next call in each function.
+
+`FPM_AGC_agc` never reads it. Its frame is four pushes and `sub $0x3c`, so the
+arguments are at `0x50`, `0x54` and `0x58`; a fourth would be at `0x5c`, and no
+instruction in the function touches it. The disagreement is therefore invisible
+at runtime, and cdecl means the extra push costs the callee nothing.
+
+`src/fax/v17.c` passes three, because the prototype has three and adding a
+fourth would mean changing a header this batch does not own and that is right
+about the callee. Only `DataCarrierDetectV17` is reconstructed here;
+`DemodDataV17` is declined for the reasons in F8861, and this entry will apply
+to it unchanged when it lands. Finding F8857.
+
+**Status:** equivalent -- the argument is written by the object and read by
+nothing. Recorded so that a later pass which does reconcile `fpm_agc.h` with
+its callers knows the fourth argument is real, is always 1, and is dead.
+
+## D1032 🐛 `V17TX_status` ASSIGNS its caller's flag byte and destroys every bit already in it, having just masked two of them out
+
+*2026-08-31.* Four statements of the object write two flag bytes of the status
+block, and the first is dead:
+
+    a1c18   movzbl 0x14(%edx),%eax ; and $0xfc,%al ; mov %al,0x14(%edx)
+    a1c21   movzbl 0x10(%ecx),%eax
+    a1c25   andb   $0xfe,0x15(%edx)
+    a1c2b   and    $0x4,%al ; mov %al,0x14(%edx)
+
+`+0x15` is a genuine read-modify-write: `andb $0xfe` clears bit 0 and leaves
+bits 1..7 alone. `+0x14` is not. The last store is a plain `mov %al` of
+`params[0x10] & 0x04`, so it overwrites the whole byte -- and the `and $0xfc`
+that preceded it, which had carefully preserved bits 2..7 while clearing bits
+0 and 1, is thrown away along with them.
+
+**Why that reads as a defect rather than as a choice.** The two bytes are
+written four instructions apart, by what is plainly one piece of code, and they
+disagree about what they are doing: one preserves the caller's bits and the
+other does not. The dead `and $0xfc` is the evidence that the author INTENDED
+to preserve them at +0x14 too -- a mask that clears exactly two bits is not
+something you write on the way to overwriting all eight. The natural reading is
+that the last statement should have been `|=` and is `=`.
+
+**Reproduced**, because the reconstruction's job is to behave identically, and
+the dead store is reproduced with it: `src/fax/v17.c` writes the same three
+statements in the same order, which GCC keeps for the same aliasing reason
+(F8856).
+
+**Measured, not assumed.** `t_v17fax.c` hands both flag bytes in as `0xff`,
+which is what makes "assigned" and "merged" different answers -- with a
+pseudorandom byte the two agree whenever the bits happen to be clear -- and
+asserts the separating count for each of the two readings:
+
+    merging the status flag byte separates       (assignment at +0x14)
+    clearing status +0x15 outright separates     (the mask at +0x15 is live)
+
+**Status:** reproduced and asserted. What is NOT established is the harm: no
+caller of `V17TX_status` is reconstructed, so whether anything downstream reads
+bits 2..7 of that byte is unknown, and this entry claims only that they are
+destroyed and that the object's own instructions say that was not the plan.
+
+A parallel reconstruction pass reports the identical shape in `V21TX_status`
+and a DIFFERENT one in `V27TX_status`, which is said to OR its bit in and keep
+the rest. Neither is checked here -- neither function is in this batch, and the
+headers that would carry them are not on this branch -- so it is recorded as a
+lead for whoever takes those two, not as evidence for this entry.

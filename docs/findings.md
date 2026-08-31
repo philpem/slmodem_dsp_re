@@ -95036,7 +95036,143 @@ made:
    separating.
 
 Everything else is: 33 separating counts are asserted non-zero, including the
-smoothing weights over 60 consecutive blocks (F8790's rule), the block
+smoothing weights over 60 consecutive blocks (F8860's rule), the block
 counter's signedness at 0x8000 (F8855), the 32-bit read of the AGC signal
 (F8853), and both sides' diagnostic transcripts compared as output at
 `dsplibs_debug_level` 2.
+
+### F8860. SEVEN of an agent brief's finding citations resolve to nothing, and the rules they carried are right anyway
+
+*2026-08-31.* A task brief for the V.17 fax batch cited eleven findings and two
+deviations by number. Checked against this tree:
+
+    F8492  F8493  F8587  F8607  F8790  D-955  D-956    resolve to NOTHING
+    F134  F220  F245  F604  F3052  F3509  F3574
+    F6100  F6103  F7796  F7803                          all resolve
+
+(The two deviation numbers are written with a hyphen throughout this entry.
+`refcheck.py`'s `DEV_REF` is `\bD(\d+)\b`, so spelling them the ordinary way
+inside a finding ABOUT their not existing makes the gate red on the entry that
+records it. Do not "fix" the hyphen.)
+
+The eleven that resolve are the ones `CLAUDE.md` itself carries. The seven that
+do not are the ones the brief supplied on its own, and every one of them was
+attached to a real, load-bearing instruction:
+
+* **F8790** -- "a swapped smoothing weight is invisible to every codegen check
+  AND to any one-block fixture; multi-block fixtures are not optional in DSP
+  code";
+* **D-955 / F8587** -- "a fixture must plant every field a callee uses as a
+  SUBSCRIPT, not only every field it DEREFERENCES", with the argument that a
+  blob-against-blob dry run cannot catch an unplanted subscript because both
+  sides read the same wild index and agree;
+* **F8607 / D-956** -- "size test destinations from the INPUT COUNT, not from
+  the buffer";
+* **F8492 / F8493** -- the claim that every callee the batch reaches is already
+  written, for both relocation kinds, checked at `6ee3e861`.
+
+**The instructions are all sound and all were followed** -- the last one was
+independently re-checked here by disassembling every call site, and it is
+correct. What is not sound is the citation, and the cost is real in two ways.
+A number that looks like a citation carries the authority of one whether or not
+it resolves; and writing one into the tree turns `make refs` RED, which is how
+this was found -- four dangling references at once, from text that had already
+passed a manual `refcheck.py` run earlier in the same session.
+
+This is F6100 and F6103's class with a BRIEF as the carrier rather than a
+comment or `CLAUDE.md`, and briefs have no gate at all. The practical rule for
+anyone writing one: cite only numbers you have grepped, or state the rule
+without a number.
+
+**The multi-block rule specifically, re-measured here rather than taken on
+trust.**
+`QualityDetectV17`'s average is
+`0.1 * error + 0.9 * average` in Q15, the two weights being 0xccd and 0x7333.
+On a SINGLE block from a fresh counter the object takes the seeding arm, which
+writes the raw error and touches neither weight, so a fixture of one block
+separates nothing at all; on a single block from a non-zero counter with
+`error == average` the two orderings give the same answer. `t_v17fax.c`
+therefore drives 96 blocks over nine sequences with the error moving on every
+one, and the swap separates.
+
+`DataCarrierDetectV17` is the same shape and worse: the off-band counter, the
+V.21 latch, the energy reference, its two-block phase, the AGC's gain and the
+tone detector's resonators ALL persist across calls, so a one-block fixture
+would leave five of the six untested. It is driven over 15 sequences.
+
+**This is F6100 and F6103's class, in a brief rather than in a comment or in
+`CLAUDE.md`.** A number that looks like a citation carries the authority of one
+whether or not it resolves, and nothing checks a brief. The check that exists
+is `refcheck.py`, and it only sees the citation once someone writes it into the
+tree -- which is what happened here, four dangling references at once, and is
+the reason the number is worth spending.
+
+### F8861. Eleven of the twelve V.17 fax primitives are written; `DemodDataV17` is declined and the reason is the fixture, not the function
+
+*2026-08-31.* `DataCarrierDetectV17` (625 bytes) joins the ten of F8859, taking
+`src/fax/v17.c` to 1,663 bytes over eleven symbols. 51,462 differential checks
+and 54 separating trials, `make one` green, NOT period-gated.
+
+**Two of its readings need an EXACT boundary and no sweep of tones reaches
+either.** The off-band counter advances by the block length from wherever it
+is, so the values it can take step straight over 0x4ff and `>` and `>=` differ
+on that one value alone; the test seeds the counter at `0x4ff - count` on
+blocks whose tone the detector reports ABSENT, which puts the post-update value
+exactly on it. The energy watchdog is worse: `rms < thr` and `rms <= thr`
+differ only at equality, and the rounded threshold differs from the plain one
+only when the multiply carries. So the block is generated first, its RMS is
+MEASURED with the blob's own `FPM_rms`, and the reference is then SOLVED for --
+the `ref` whose `(ref * 0x32fe) >> 15` is exactly that RMS and whose rounded
+form is one higher. Two of twelve attempts have no solution, which is
+arithmetic and not a fault (the threshold tops out at 13053), and they are
+counted and reported rather than asserted.
+
+**The ritual was run, on this function.** Changing the one `>` to `>=` in
+`src/fax/v17.c` turns 63 of 4,114 checks red; restoring it turns them green
+again. F134's argument, and it is what says the boundary chase actually
+lands.
+
+**`DemodDataV17` (415 bytes) is LEFT OUT.** The function itself is a wrapper --
+AGC, an optional tone-kill and tone-detect front end, then resampler,
+symbol recoverer and equaliser in series, with three flag words ANDed and
+stored between the second and third. Reading it took one pass. What it needs is
+a fixture, and the fixture is the problem:
+
+* it hands FOUR live FPM objects to their modules from inside the receiver
+  state -- `fpm_mrf` at +0x98, `fpm_agc` at +0xb4, `fpm_sre` at +0xe0 and
+  `fpm_fse` at +0x170 -- plus a `fpm_tone` and a `fpm_mtd` reached by pointer
+  from the control block, so SIX modules must be initialised before a single
+  call can be made;
+* the object's own V.17 configurations are not packaged. `AGCv17_CFG` exists in
+  `.rodata` and is used by `t_v17fax.c` already, but there is no `MRFv17_CFG`,
+  `SREv17_CFG` or `FSEv17_CFG`: `V17RX_create` builds those on the stack from
+  `MRFv17_COFFS`, `FSEv17_ICOFF`, `FSEv17_QCOFF`, `CRRv17_CLK`,
+  `CRRv17_PLL_K1`, `CRRv17_PLL_K2` and `FSEv17_decision`, and `V17RX_create` is
+  3,201 bytes of unwritten code. Inventing the scalar fields those configs need
+  -- `taps`, `interp`, `block`, `clk_mod`, `decimate` -- is exactly the
+  unplanted-subscript hazard F8860 lists, because a wrong `taps` is a subscript
+  and a blob-against-blob dry run cannot catch one: both sides read the same
+  wild index and agree.
+
+**The way in is `test/unit/t_v32demod.c`, and it is a way in rather than a
+worked answer.** It builds the same four objects for V.32 from
+`ref_MRFv32_CFG`, `ref_SREv32_CFG`, `ref_FSEv32_CFG` and `ref_AGCv32_CFG`,
+which ARE packaged structs in the object, so borrowing those makes every
+subscript known-good and costs a differential test nothing -- both sides run
+the same configuration over the same samples, and what is compared is the V.17
+code around it. That is the shape the next attempt should take, and it should
+say in its own comments that the configuration is V.32's and why that is
+sound.
+
+Two further things the next attempt already has, from this one:
+
+* **the return-value and fourth-argument disagreements with `FPM_AGC_agc`**,
+  F8857, and D1031, which records the fourth argument and applies to
+  `DemodDataV17` unchanged when it lands; and
+* **the offsets**, all of them, in `v17fax.h` -- `V17RXC_MTD`, `V17RXC_TONE`,
+  `V17RXC_SHORT_0018`, `V17RXC_SCRATCH`, `V17RXS_MRF`, `V17RXS_AGC`,
+  `V17RXS_SRE`, `V17RXS_FSE`, `V17RXS_BUF_MRF`, `V17RXS_BUF_SRE` and the four
+  int flags -- with the tiling of F8854 behind the four object addresses.
+
+Sizing the two intermediate buffers from the INPUT COUNT rather than from the
+buffer is the other rule F8860 lists, and is the other thing that will bite.

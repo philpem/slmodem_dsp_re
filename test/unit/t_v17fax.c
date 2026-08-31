@@ -83,7 +83,7 @@
  *         it at 0x8000, where a signed reading SMOOTHS and an unsigned one
  *         returns untouched: the two leave different memory behind, so this
  *         one is a measurement and not a codegen note.
- *       - the two smoothing weights swapped.  Finding F8790: invisible to
+ *       - the two smoothing weights swapped.  Finding F8860: invisible to
  *         every codegen check AND to any one-block fixture, so the counter is
  *         driven over 60 consecutive blocks with the error moving on each.
  *       - the round-to-nearest term dropped.
@@ -102,11 +102,15 @@
  * on one side and not the other shows up in the transcript and nowhere else.
  */
 
+#include <math.h>
 #include <string.h>
 
 #include "harness.h"
 #include "dsplib/v17fax.h"
 #include "dsplib/debug.h"
+#include "dsplib/fpm.h"
+#include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sdm.h"
 
 extern int ref_V17RX_modem(void *modem, short *in, short *out,
@@ -121,12 +125,38 @@ extern short ref_GetSNRV17(void *modem);
 extern void ref_StoreCoefV17(void *modem);
 extern void ref_Restore_rateV17(void *modem);
 
+extern short ref_DataCarrierDetectV17(void *modem, const short *in,
+				      unsigned short count);
+
+extern void ref_FPM_AGC_init(struct fpm_agc *agc, const struct fpm_agc_cfg *cfg,
+			     int reset);
+extern void ref_FPM_AGC_agc(struct fpm_agc *agc, short *samples,
+			    unsigned short count);
+extern struct fpm_mtd *ref_FPM_MTD_create(struct fpm_mtd *state,
+					  const struct fpm_mtd_cfg *cfg);
+extern short ref_FPM_MTD_detect(struct fpm_mtd *state, const short *samples,
+				short count);
+extern short ref_FPM_rms(const short *samples, unsigned short count);
+
+/*
+ * `AGCv17_CFG` is the object's OWN V.17 gain-control configuration, .rodata
+ * 0x9e10, and is used here for that reason.  The tone detector's is not: no
+ * `MTDv17_CFG` exists in the object, so `MTDv22_CFG` stands in.  That costs
+ * nothing a differential test cares about -- both sides run the same detector
+ * over the same samples, and what is being compared is the V.17 code around
+ * it -- but it does mean the FREQUENCIES below are chosen to move THAT bank's
+ * verdict, and are not a claim about what V.17 listens for.
+ */
+extern const struct fpm_agc_cfg ref_AGCv17_CFG;
+extern const struct fpm_mtd_cfg ref_MTDv22_CFG;
+
 extern unsigned int ref_dsplibs_debug_level;
 
 /* --------------------------------------------------------------------- */
 
 #define OBJ_SIZE	0x80
-#define CTL_SIZE	0x40
+/* Past V17RXC_AGC (0x30) plus a whole struct fpm_agc. */
+#define CTL_SIZE	0x80
 #define RXS_SIZE	0x5000		/* the object reaches +0x4fb8       */
 #define FP_SIZE		0x100
 #define PRM_SIZE	0x40
@@ -137,6 +167,9 @@ extern unsigned int ref_dsplibs_debug_level;
 #define NBIG_IN		4096
 #define NBIG_OUT	48000
 #define OMARK		0x5ead
+
+#define MTD_ACC		16		/* two words per tone section       */
+#define NBLK		512		/* the largest block driven below   */
 
 static unsigned rng_state;
 
@@ -168,6 +201,10 @@ struct fix {
 	short		save0[COEF_SLOTS];
 	short		save1[COEF_SLOTS];
 	short		ratesave[4];
+	/* DataCarrierDetectV17's private detector chain. */
+	struct fpm_mtd	mtd;
+	short		mtd_acc[MTD_ACC];
+	short		buf2[NBLK];
 	double		align;
 };
 
@@ -324,13 +361,48 @@ ctl_diff(const struct fix *a, const struct fix *b)
 	int i;
 
 	for (i = 0; i < CTL_SIZE; i++) {
+		/* Three per-fixture pointers, and they differ for ever. */
 		if (i >= V17RXC_PROCESS
 		    && i < V17RXC_PROCESS + (int)sizeof(void *))
+			continue;
+		if (i >= V17RXC_MTD2
+		    && i < V17RXC_BUF2 + (int)sizeof(void *))
 			continue;
 		if (a->ctl[i] != b->ctl[i])
 			return i;
 	}
 	return -1;
+}
+
+/*
+ * The detector's own state, field by field, because its `acc` pointer is
+ * per-fixture and a whole-struct compare would report that for ever.  The
+ * config's `coeff` is NOT skipped: both sides copy it from the same
+ * `MTDv22_CFG`, so it must come out equal.
+ */
+static long
+mtd_diff(const struct fix *a, const struct fix *b)
+{
+	if (a->mtd.cfg.coeff != b->mtd.cfg.coeff)
+		return 0;
+	if (a->mtd.cfg.tones != b->mtd.cfg.tones)
+		return 4;
+	if (a->mtd.cfg.ratio != b->mtd.cfg.ratio)
+		return 6;
+	if (a->mtd.cfg.min_level != b->mtd.cfg.min_level)
+		return 8;
+	if (a->mtd.cfg.f0a != b->mtd.cfg.f0a)
+		return 0x0a;
+	if (a->mtd.dc_state[0] != b->mtd.dc_state[0]
+	    || a->mtd.dc_state[1] != b->mtd.dc_state[1])
+		return 0x10;
+	if (a->mtd.out_of_band != b->mtd.out_of_band)
+		return 0x14;
+	if (a->mtd.wideband != b->mtd.wideband)
+		return 0x16;
+	return first_diff((const unsigned char *)b->mtd_acc,
+			  (const unsigned char *)a->mtd_acc,
+			  (int)sizeof(a->mtd_acc)) < 0 ? -1 : 0x100;
 }
 
 /*
@@ -375,6 +447,12 @@ compare_all(struct fix *a, struct fix *b, long where)
 		    first_diff((const unsigned char *)b->coef1,
 			       (const unsigned char *)a->coef1,
 			       (int)sizeof(a->coef1)), -1, where);
+	diff_eq_int("at %ld: first differing detector field", mtd_diff(b, a),
+		    -1, where);
+	diff_eq_int("at %ld: first differing detector-buffer byte",
+		    first_diff((const unsigned char *)b->buf2,
+			       (const unsigned char *)a->buf2,
+			       (int)sizeof(a->buf2)), -1, where);
 }
 
 /* --------------------------------------------------------------------- */
@@ -419,11 +497,15 @@ static long seed_off_sep, seed_width_sep, seed_base_sep;
 static long enc_mode1_sep, enc_default_sep, enc_sel_sep;
 static long enc_wrote, enc_declined;
 static long sta_null_sep, sta_10_sep, sta_mask_sep, sta_0e_sep;
+static long sta_assign_sep, sta_15_sep;
 static long rxm_bit_sep, rxm_byte_sep, rxm_swap_sep;
 static long rxm_wb_sep, rxm_slot_sep, rxm_result_sep;
 static long rxm_wrapped, rxm_calls_seen;
 static long cd_width_sep, cd_gate999_sep, cd_gate3fff_sep, cd_arm_sep;
 static long cd_true, cd_false, cd_printed;
+static long dcd_sep[8];
+static long dcd_true, dcd_false, dcd_counted, dcd_refreshed, dcd_printed;
+static long dcd_edge, dcd_edge_unsolved;
 static long qd_signed_sep, qd_weight_sep, qd_round_sep;
 static long qd_judge_sep, qd_smoothed, qd_judged, qd_unreliable;
 static long snr_free_checked, coef_n_sep, coef_swap_sep, restore_sep;
@@ -586,6 +668,16 @@ run_txstatus(void)
 		put_s(mb.prm, 0x10, (short)(0x0400 | (s * 3)));
 		put_s(ma.sta, 0x0e, 0x3c3c);
 		put_s(mb.sta, 0x0e, 0x3c3c);
+		/*
+		 * The two flag bytes go in ALL ONES, which is what makes
+		 * "assigned" and "merged" different answers: the object
+		 * ASSIGNS +0x14 outright, so every bit the caller had is lost,
+		 * and MASKS +0x15, so every bit but 0 survives.  With a
+		 * pseudorandom byte the two readings agree whenever the bits
+		 * happen to be clear.
+		 */
+		ma.sta[0x14] = mb.sta[0x14] = 0xff;
+		ma.sta[0x15] = mb.sta[0x15] = 0xff;
 
 		ra = ref_V17TX_status(ma.prm, ma.sta);
 		rb = V17TX_status(mb.prm, mb.sta);
@@ -607,6 +699,31 @@ run_txstatus(void)
 		mc.sta[0x14] = (unsigned char)(ma.prm[0x10] & 0x02);
 		if (memcmp(mc.sta, ma.sta, STA_SIZE) != 0)
 			sta_mask_sep++;
+
+		/*
+		 * WRONG READING: the flag byte MERGED rather than assigned.
+		 * The object's final store to +0x14 is a plain `mov %al`, so
+		 * the `and $0xfc` four instructions earlier is dead and the
+		 * caller's bits do not survive; an `|=` keeps them.
+		 */
+		memcpy(&mc, &ma, sizeof(mc));
+		rehome(&mc);
+		mc.sta[0x14] = (unsigned char)(0xfc
+					       | (ma.prm[0x10] & 0x04));
+		if (memcmp(mc.sta, ma.sta, STA_SIZE) != 0)
+			sta_assign_sep++;
+
+		/*
+		 * WRONG READING: +0x15 ASSIGNED zero rather than masked.  It
+		 * is the other way round from +0x14 -- `andb $0xfe` is the
+		 * only write to it and it is live -- so bits 1..7 must come
+		 * through unchanged.
+		 */
+		memcpy(&mc, &ma, sizeof(mc));
+		rehome(&mc);
+		mc.sta[0x15] = 0;
+		if (memcmp(mc.sta, ma.sta, STA_SIZE) != 0)
+			sta_15_sep++;
 
 		/* WRONG READING: status + 0x0e written too. */
 		memcpy(&mc, &ma, sizeof(mc));
@@ -989,6 +1106,482 @@ run_cd(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* DataCarrierDetectV17                                                  */
+
+/*
+ * The private detector chain lives inside the fixture, so a whole-struct copy
+ * has to be re-homed the same way `rehome` re-homes the instance pointers.
+ */
+static void
+rehome_dcd(struct fix *f)
+{
+	rehome(f);
+	f->mtd.acc = f->mtd_acc;
+	put_ptr(f->ctl, V17RXC_MTD2, &f->mtd);
+	put_ptr(f->ctl, V17RXC_BUF2, f->buf2);
+}
+
+static void
+dcd_setup(struct fix *f, int use_ref)
+{
+	struct fpm_agc *agc;
+
+	memset(&f->mtd, 0, sizeof(f->mtd));
+	memset(f->mtd_acc, 0, sizeof(f->mtd_acc));
+	memset(f->buf2, 0, sizeof(f->buf2));
+	f->mtd.acc = f->mtd_acc;
+	if (use_ref)
+		ref_FPM_MTD_create(&f->mtd, &ref_MTDv22_CFG);
+	else
+		FPM_MTD_create(&f->mtd, &ref_MTDv22_CFG);
+
+	put_ptr(f->ctl, V17RXC_MTD2, &f->mtd);
+	put_ptr(f->ctl, V17RXC_BUF2, f->buf2);
+
+	agc = (struct fpm_agc *)(void *)(f->ctl + V17RXC_AGC);
+	memset(agc, 0, sizeof(*agc));
+	if (use_ref)
+		ref_FPM_AGC_init(agc, &ref_AGCv17_CFG, 1);
+	else
+		FPM_AGC_init(agc, &ref_AGCv17_CFG, 1);
+}
+
+/*
+ * `DataCarrierDetectV17` with one reading changed, driven through the BLOB's
+ * own callees so the only difference is the reading itself.
+ */
+#define DCD_FAITHFUL	0
+#define DCD_INVERT	1	/* accumulate on a detection, clear on none */
+#define DCD_GE_MAX	2	/* the counter's threshold inclusive        */
+#define DCD_LE_DROP	3	/* the energy test inclusive                */
+#define DCD_ROUND	4	/* a round-to-nearest the object has not    */
+#define DCD_PERIOD3	5	/* the reference refreshed every third block */
+#define DCD_MODE22	6	/* the mode selector two bytes high         */
+
+static short
+drive_dcd(struct fix *f, const short *in, unsigned short count, int variant)
+{
+	unsigned char *rx = f->rxs;
+	unsigned char *ctl = f->ctl;
+	short r;
+
+	r = (short)(get_s(rx, V17RXS_AGC_SIGNAL)
+		    & get_i(rx, V17RXS_INT_0120));
+
+	if (get_s(ctl, variant == DCD_MODE22 ? V17RXC_SHORT_0020 + 2
+					     : V17RXC_SHORT_0020) == 0) {
+		if (get_i(ctl, V17RXC_INT_0010) != 0
+		    && get_i(rx, V17RXS_EPOCH) != 0
+		    && get_s(rx, V17RXS_SHORT_0094) > V17RXS_0094_MIN) {
+			if (get_s(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX)
+				r = 0;
+			else
+				r &= 1;
+		}
+	} else {
+		if (get_s(rx, V17RXS_DEC_ERROR) > V17RXS_DEC_ERROR_MAX
+		    || (r & 1) == 0)
+			put_s(ctl, V17RXC_SHORT_002E, 1);
+
+		r = 1;
+		if (get_s(ctl, V17RXC_SHORT_002E) != 0) {
+			short *buf = (short *)get_ptr(ctl, V17RXC_BUF2);
+			int hit;
+			short i;
+
+			for (i = 0; i < (int)count; i++)
+				buf[i] = in[i];
+
+			ref_FPM_AGC_agc((struct fpm_agc *)(void *)
+						(ctl + V17RXC_AGC), buf, count);
+			hit = ref_FPM_MTD_detect((struct fpm_mtd *)
+						 get_ptr(ctl, V17RXC_MTD2),
+						 buf, (short)count) != 0;
+			if (variant == DCD_INVERT)
+				hit = !hit;
+			if (hit)
+				put_s(ctl, V17RXC_OFFBAND, 0);
+			else
+				put_s(ctl, V17RXC_OFFBAND, (short)
+				      (get_us(ctl, V17RXC_OFFBAND) + count));
+
+			if (variant == DCD_GE_MAX
+			    ? get_s(ctl, V17RXC_OFFBAND) >= V17RXC_OFFBAND_MAX
+			    : get_s(ctl, V17RXC_OFFBAND) > V17RXC_OFFBAND_MAX)
+				r = 0;
+		}
+	}
+
+	if (get_s(rx, V17RXS_SHORT_4FB4) != 0) {
+		short rms = ref_FPM_rms(in, count);
+		unsigned short phase;
+		int thr = (int)get_s(rx, V17RXS_RMS_REF) * V17RXS_RMS_DROP_Q15;
+
+		thr = (variant == DCD_ROUND ? thr + 0x4000 : thr) >> 15;
+		if (variant == DCD_LE_DROP ? (int)rms <= thr : (int)rms < thr)
+			r = 0;
+
+		phase = (unsigned short)(get_us(rx, V17RXS_RMS_PHASE) + 1);
+		if ((short)phase == (variant == DCD_PERIOD3
+				     ? 3 : V17RXS_RMS_PERIOD)) {
+			put_s(rx, V17RXS_RMS_REF, rms);
+			put_s(rx, V17RXS_RMS_PHASE, 0);
+		} else {
+			put_s(rx, V17RXS_RMS_PHASE, (short)phase);
+		}
+	}
+	return r;
+}
+
+/* Everything a DCD call can leave behind, in one comparison against `ma`. */
+static int
+dcd_differs(const struct fix *w, short rw, short ra)
+{
+	return rw != ra
+	    || get_s(w->ctl, V17RXC_OFFBAND) != get_s(ma.ctl, V17RXC_OFFBAND)
+	    || get_s(w->ctl, V17RXC_SHORT_002E)
+	       != get_s(ma.ctl, V17RXC_SHORT_002E)
+	    || get_s(w->rxs, V17RXS_RMS_REF) != get_s(ma.rxs, V17RXS_RMS_REF)
+	    || get_s(w->rxs, V17RXS_RMS_PHASE)
+	       != get_s(ma.rxs, V17RXS_RMS_PHASE);
+}
+
+static short tone_in[NBLK];
+static short tone_ref[NBLK];
+static double tone_phase;
+
+static void
+fill_tone(int n, int hz, int amp)
+{
+	static const double twopi = 6.283185307179586476925286766559;
+	int i;
+
+	for (i = 0; i < n; i++) {
+		tone_in[i] = (short)(amp * sin(tone_phase));
+		tone_phase += twopi * (double)hz / 8000.0;
+		if (tone_phase > twopi)
+			tone_phase -= twopi;
+	}
+	memcpy(tone_ref, tone_in, (size_t)n * sizeof(tone_in[0]));
+}
+
+/*
+ * The frequencies, and why these.  `MTDv22_CFG`'s bank answers ABSENT at
+ * 2200 Hz and PRESENT elsewhere in band (`t_v22data.c` measured that sweep and
+ * finding F3574's lesson is why it is not guessed here), and NOSIGNAL below
+ * its gate.  ABSENT is ZERO, which is what ADVANCES the counter -- so a table
+ * without 2200 Hz in it would leave the counter pinned and three separating
+ * counts dead.
+ */
+static const struct { int hz; int amp; } dtones[] = {
+	{ 2200, 12000 },	/* ABSENT: the counter advances             */
+	{ 1200, 12000 },	/* PRESENT: the counter clears              */
+	{ 2200,  9000 },
+	{    0,     0 },	/* silence: NOSIGNAL, which also clears     */
+	{ 2200, 14000 },
+	{  400,  6000 }
+};
+#define NDTONE	(int)(sizeof(dtones) / sizeof(dtones[0]))
+
+static void
+dcd_state(struct fix *f, short mode, short latch, short offband, int gate,
+	  int epoch, short g94, short err, short lo, short hi, short watchdog,
+	  short ref)
+{
+	put_s(f->rxs, V17RXS_AGC_SIGNAL, lo);
+	put_s(f->rxs, V17RXS_AGC_SIGNAL + 2, hi);
+	put_i(f->rxs, V17RXS_INT_0120, -1);
+	put_i(f->ctl, V17RXC_INT_0010, gate);
+	put_i(f->rxs, V17RXS_EPOCH, epoch);
+	put_s(f->rxs, V17RXS_SHORT_0094, g94);
+	put_s(f->rxs, V17RXS_DEC_ERROR, err);
+	put_s(f->ctl, V17RXC_SHORT_0020, mode);
+	put_s(f->ctl, V17RXC_SHORT_0020 + 2, (short)~mode);
+	put_s(f->ctl, V17RXC_SHORT_002E, latch);
+	put_s(f->ctl, V17RXC_OFFBAND, offband);
+	put_s(f->rxs, V17RXS_SHORT_4FB4, watchdog);
+	put_s(f->rxs, V17RXS_RMS_REF, ref);
+	put_s(f->rxs, V17RXS_RMS_PHASE, 0);
+}
+
+/*
+ * A multi-block run.  Everything this function keeps -- the counter, the
+ * latch, the energy reference and its phase, the AGC's gain and the
+ * detector's resonators -- carries across calls, so a one-block fixture would
+ * measure almost none of it (finding F8860).
+ */
+static void
+run_dcd_seq(unsigned seed, short mode, short latch, short offband, int gate,
+	    int epoch, short g94, short err, short lo, short watchdog,
+	    short ref, int blocks, int n, int chase)
+{
+	long where = (long)mode * 1000000 + (long)offband * 100 + n;
+	int i;
+
+	fixture(&ma, seed);
+	fixture(&mb, seed);
+	dcd_setup(&ma, 1);
+	dcd_setup(&mb, 0);
+	dcd_state(&ma, mode, latch, offband, gate, epoch, g94, err, lo, 1,
+		  watchdog, ref);
+	dcd_state(&mb, mode, latch, offband, gate, epoch, g94, err, lo, 1,
+		  watchdog, ref);
+
+	tone_phase = 0.0;
+	for (i = 0; i < blocks; i++) {
+		short ra, rb, rc;
+		int v;
+
+		fill_tone(n, dtones[i % NDTONE].hz, dtones[i % NDTONE].amp);
+
+		/*
+		 * CHASING THE EXACT BOUNDARY, because a sweep never reaches it.
+		 * The counter advances by `count` from wherever it is, so the
+		 * values it can take are an arithmetic progression that steps
+		 * straight over 0x4ff -- and `> 0x4ff` and `>= 0x4ff` differ on
+		 * that one value and nowhere else.  Seeding it at 0x4ff minus
+		 * the block length, on a block whose tone is the one the
+		 * detector reports ABSENT, is what puts the post-update value
+		 * exactly on it.  The separating count below is what says the
+		 * chase worked; a silent miss would fail the run.
+		 */
+		if (chase && dtones[i % NDTONE].hz == 2200) {
+			put_s(ma.ctl, V17RXC_OFFBAND,
+			      (short)(V17RXC_OFFBAND_MAX - n));
+			put_s(mb.ctl, V17RXC_OFFBAND,
+			      (short)(V17RXC_OFFBAND_MAX - n));
+			offband = (short)(V17RXC_OFFBAND_MAX - n);
+		}
+
+		memcpy(&msnap, &mb, sizeof(msnap));
+		rehome_dcd(&msnap);
+
+		dsplib_debug_capture_reset();
+		ra = ref_DataCarrierDetectV17(ma.robj, tone_in, (unsigned short)n);
+		rb = DataCarrierDetectV17(mb.robj, tone_in, (unsigned short)n);
+
+		diff_eq_int("at %ld: data carrier verdict", (long)rb, (long)ra,
+			    where + i);
+		diff_eq_int("at %ld: the input block was not modified",
+			    memcmp(tone_in, tone_ref,
+				   (size_t)n * sizeof(tone_in[0])), 0,
+			    where + i);
+		compare_all(&ma, &mb, where + i);
+		debug_compare(where + i);
+
+		if (ra != 0)
+			dcd_true++;
+		else
+			dcd_false++;
+		if (get_s(ma.ctl, V17RXC_OFFBAND) != offband)
+			dcd_counted++;
+		if (get_s(ma.rxs, V17RXS_RMS_PHASE) == 0 && watchdog != 0)
+			dcd_refreshed++;
+		if (dsplib_debug_capture_lines(1) != 0)
+			dcd_printed++;
+		offband = get_s(ma.ctl, V17RXC_OFFBAND);
+
+		/* The faithful local model first: it must agree exactly. */
+		memcpy(&mc, &msnap, sizeof(mc));
+		rehome_dcd(&mc);
+		rc = drive_dcd(&mc, tone_in, (unsigned short)n, DCD_FAITHFUL);
+		diff_eq_int("at %ld: the local model agrees",
+			    dcd_differs(&mc, rc, ra), 0, where + i);
+
+		for (v = DCD_INVERT; v <= DCD_MODE22; v++) {
+			memcpy(&mc, &msnap, sizeof(mc));
+			rehome_dcd(&mc);
+			rc = drive_dcd(&mc, tone_in, (unsigned short)n, v);
+			if (dcd_differs(&mc, rc, ra))
+				dcd_sep[v]++;
+		}
+	}
+}
+
+/*
+ * The energy watchdog's two remaining readings need the RMS to land EXACTLY
+ * on the threshold, and no sweep of tones will do that either.
+ *
+ *   `rms < thr` against `rms <= thr`   differ only at rms == thr
+ *   `(ref * 0x32fe) >> 15` against `(ref * 0x32fe + 0x4000) >> 15`
+ *                                     differ only when the low 15 bits carry,
+ *                                     and then only observably when rms sits
+ *                                     between the two
+ *
+ * So the block is generated first, its RMS is MEASURED with the blob's own
+ * `FPM_rms`, and the reference is then solved for: the `ref` whose threshold
+ * is exactly that RMS, and whose rounded threshold is one higher.  Both
+ * readings then flip the verdict and the faithful one does not.
+ */
+static int
+solve_ref(short rms, int want_round_carry)
+{
+	int ref;
+
+	if (rms < 0)
+		return -1;
+	for (ref = 0; ref <= 32767; ref++) {
+		int t = (ref * V17RXS_RMS_DROP_Q15) >> 15;
+		int tr = (ref * V17RXS_RMS_DROP_Q15 + 0x4000) >> 15;
+
+		if (t == (int)rms && (!want_round_carry || tr == (int)rms + 1))
+			return ref;
+	}
+	return -1;
+}
+
+static void
+run_dcd_edge(unsigned seed, int hz, int amp, int n, int want_round_carry)
+{
+	long where = (long)hz * 100 + n + (want_round_carry ? 1 : 0);
+	short rms, ra, rb, rc;
+	int ref, v;
+
+	fixture(&ma, seed);
+	dcd_setup(&ma, 1);
+	tone_phase = 0.25;
+	fill_tone(n, hz, amp);
+	rms = ref_FPM_rms(tone_in, (unsigned short)n);
+
+	/*
+	 * NOT EVERY BLOCK HAS A SOLUTION, and that is arithmetic rather than a
+	 * fault: the threshold tops out at (32767 * 0x32fe) >> 15 == 13053, so
+	 * a loud block has no reference that puts its RMS on the edge, and the
+	 * rounded form needs a carry as well.  An unsolved attempt is COUNTED
+	 * and reported rather than asserted -- the assertion that matters is
+	 * `dcd_edge > 0` at the end, which says the edge was reached at all.
+	 */
+	ref = solve_ref(rms, want_round_carry);
+	if (ref < 0) {
+		dcd_edge_unsolved++;
+		return;
+	}
+
+	fixture(&ma, seed);
+	fixture(&mb, seed);
+	dcd_setup(&ma, 1);
+	dcd_setup(&mb, 0);
+	/*
+	 * The head is switched off -- mode 0 with the gate clear -- so the
+	 * verdict reaching the watchdog is the AGC signal alone, and a flip
+	 * there is unambiguously the watchdog's.
+	 */
+	dcd_state(&ma, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, (short)ref);
+	dcd_state(&mb, 0, 0, 0, 0, 0, 0, 0, 1, 1, 1, (short)ref);
+
+	memcpy(&msnap, &mb, sizeof(msnap));
+	rehome_dcd(&msnap);
+
+	dsplib_debug_capture_reset();
+	ra = ref_DataCarrierDetectV17(ma.robj, tone_in, (unsigned short)n);
+	rb = DataCarrierDetectV17(mb.robj, tone_in, (unsigned short)n);
+
+	diff_eq_int("at %ld: edge verdict", (long)rb, (long)ra, where);
+	diff_eq_int("at %ld: the edge block was not modified",
+		    memcmp(tone_in, tone_ref, (size_t)n * sizeof(tone_in[0])),
+		    0, where);
+	compare_all(&ma, &mb, where);
+	debug_compare(where);
+	diff_eq_int("at %ld: the RMS sits exactly on the threshold",
+		    (long)rms,
+		    (long)(((int)ref * V17RXS_RMS_DROP_Q15) >> 15), where);
+	dcd_edge++;
+
+	memcpy(&mc, &msnap, sizeof(mc));
+	rehome_dcd(&mc);
+	rc = drive_dcd(&mc, tone_in, (unsigned short)n, DCD_FAITHFUL);
+	diff_eq_int("at %ld: the local model agrees on the edge",
+		    dcd_differs(&mc, rc, ra), 0, where);
+
+	for (v = DCD_INVERT; v <= DCD_MODE22; v++) {
+		memcpy(&mc, &msnap, sizeof(mc));
+		rehome_dcd(&mc);
+		rc = drive_dcd(&mc, tone_in, (unsigned short)n, v);
+		if (dcd_differs(&mc, rc, ra))
+			dcd_sep[v]++;
+	}
+}
+
+static int
+run_dcd(void)
+{
+	unsigned s;
+
+	diff_begin("DataCarrierDetectV17");
+	debug_begin(2u);
+
+	/*
+	 * The V.21 watch, long enough for the counter to cross 0x4ff and print.
+	 * 40 blocks of 160 samples is 6,400, and the ABSENT tone is one block
+	 * in six, so the counter both advances and is cleared repeatedly.
+	 */
+	run_dcd_seq(0xaaaa1111u, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 40,
+		    160, 0);
+	/* The same, chasing the exact 0x4ff boundary; see the note above. */
+	run_dcd_seq(0xaaaa1112u, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 40,
+		    160, 1);
+	run_dcd_seq(0xaaaa1113u, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 24,
+		    77, 1);
+	/* The same, with the counter seeded just below the threshold. */
+	run_dcd_seq(0xaaaa2222u, 1, 1, 0x4f0, 1, 1, 1000, 0x0100, 1, 1, 8000,
+		    12, 160, 0);
+	/* The latch clear, so the whole tone-watch body is skipped. */
+	run_dcd_seq(0xaaaa3333u, 1, 0, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 6,
+		    160, 0);
+	/* The latch clear AND a verdict with bit 0 clear, which sets it. */
+	run_dcd_seq(0xaaaa4444u, 1, 0, 0, 1, 1, 1000, 0x0100, 2, 1, 8000, 6,
+		    160, 0);
+	/* The latch clear and a decoder error over the gate, which also sets it. */
+	run_dcd_seq(0xaaaa5555u, 1, 0, 0, 1, 1, 1000, 0x4000, 1, 1, 8000, 6,
+		    160, 0);
+
+	/* The CarrierDetectV17-shaped path, with and without the gates. */
+	run_dcd_seq(0xaaaa6666u, 0, 0, 0, 1, 1, 1000, 0x4000, 1, 1, 8000, 8,
+		    160, 0);
+	run_dcd_seq(0xaaaa7777u, 0, 0, 0, 1, 1, 1000, 0x0100, 3, 1, 8000, 8,
+		    160, 0);
+	run_dcd_seq(0xaaaa8888u, 0, 0, 0, 0, 1, 1000, 0x4000, 1, 1, 8000, 4,
+		    160, 0);
+	run_dcd_seq(0xaaaa9999u, 0, 0, 0, 1, 0, 1000, 0x4000, 1, 1, 8000, 4,
+		    160, 0);
+	run_dcd_seq(0xaaaaaaaau, 0, 0, 0, 1, 1, 999, 0x4000, 1, 1, 8000, 4,
+		    160, 0);
+
+	/* The energy watchdog off, so the second half of the function is dead. */
+	run_dcd_seq(0xaaaabbbbu, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 0, 8000, 6,
+		    160, 0);
+	/* A high reference, so the drop fires and the message prints. */
+	run_dcd_seq(0xaaaaccccu, 0, 0, 0, 0, 0, 0, 0, 1, 1, 32767, 10, 160, 0);
+	/* A zero reference, so the drop can never fire. */
+	run_dcd_seq(0xaaaaddddu, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 6, 160, 0);
+
+	/* Block lengths: a short one, an odd one and a long one. */
+	run_dcd_seq(0xaaaaeeeeu, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 8,
+		    40, 0);
+	run_dcd_seq(0xaaaaffffu, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 8,
+		    77, 0);
+	run_dcd_seq(0xaaab0000u, 1, 1, 0, 1, 1, 1000, 0x0100, 1, 1, 8000, 6,
+		    512, 0);
+
+	/*
+	 * And the energy watchdog's exact edge, both readings, over a spread
+	 * of block lengths and levels so the solved reference is not one
+	 * lucky number.
+	 */
+	for (s = 0; s < 6; s++) {
+		static const int hzs[] = { 1000, 1800, 2200, 600, 3000, 1400 };
+		static const int amps[] = { 12000, 9000, 6000, 3000, 1500, 800 };
+		static const int ns[] = { 160, 80, 40, 200, 120, 64 };
+
+		run_dcd_edge(0xabcd0000u + s, hzs[s], amps[s], ns[s], 0);
+		run_dcd_edge(0xabce0000u + s, hzs[s], amps[s], ns[s], 1);
+	}
+
+	debug_end();
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 /* QualityDetectV17                                                      */
 
 static short
@@ -1044,7 +1637,7 @@ qd_differs(const struct fix *w)
 }
 
 /*
- * A multi-block run.  Finding F8790: a swapped smoothing weight is invisible
+ * A multi-block run.  Finding F8860: a swapped smoothing weight is invisible
  * to any single-block fixture, so the counter is driven from `start` through
  * `blocks` consecutive calls with the error moving on every one.
  */
@@ -1311,6 +1904,7 @@ main(void)
 	rc |= run_txstatus();
 	rc |= run_rxm();
 	rc |= run_cd();
+	rc |= run_dcd();
 	rc |= run_qd();
 	rc |= run_accessors();
 
@@ -1349,6 +1943,10 @@ main(void)
 		    1, sta_mask_sep);
 	diff_eq_int("writing status +0x0e separates (%ld)", sta_0e_sep > 0, 1,
 		    sta_0e_sep);
+	diff_eq_int("merging the status flag byte separates (%ld)",
+		    sta_assign_sep > 0, 1, sta_assign_sep);
+	diff_eq_int("clearing status +0x15 outright separates (%ld)",
+		    sta_15_sep > 0, 1, sta_15_sep);
 
 	diff_eq_int("the cleared bit separates (%ld)", rxm_bit_sep > 0, 1,
 		    rxm_bit_sep);
@@ -1380,6 +1978,38 @@ main(void)
 		    cd_false);
 	diff_eq_int("CarrierDetectV17 printed (%ld)", cd_printed > 0, 1,
 		    cd_printed);
+
+	diff_eq_int("inverting the off-band counter separates (%ld)",
+		    dcd_sep[DCD_INVERT] > 0, 1, dcd_sep[DCD_INVERT]);
+	diff_eq_int("the off-band threshold's strictness separates (%ld)",
+		    dcd_sep[DCD_GE_MAX] > 0, 1, dcd_sep[DCD_GE_MAX]);
+	diff_eq_int("the energy test's strictness separates (%ld)",
+		    dcd_sep[DCD_LE_DROP] > 0, 1, dcd_sep[DCD_LE_DROP]);
+	diff_eq_int("adding a rounding term to the -8 dB scale separates (%ld)",
+		    dcd_sep[DCD_ROUND] > 0, 1, dcd_sep[DCD_ROUND]);
+	diff_eq_int("a three-block reference period separates (%ld)",
+		    dcd_sep[DCD_PERIOD3] > 0, 1, dcd_sep[DCD_PERIOD3]);
+	diff_eq_int("the mode selector's offset separates (%ld)",
+		    dcd_sep[DCD_MODE22] > 0, 1, dcd_sep[DCD_MODE22]);
+	diff_eq_int("DataCarrierDetectV17 said yes (%ld)", dcd_true > 0, 1,
+		    dcd_true);
+	diff_eq_int("DataCarrierDetectV17 said no (%ld)", dcd_false > 0, 1,
+		    dcd_false);
+	diff_eq_int("the off-band counter moved (%ld)", dcd_counted > 0, 1,
+		    dcd_counted);
+	diff_eq_int("the energy reference was refreshed (%ld)",
+		    dcd_refreshed > 0, 1, dcd_refreshed);
+	diff_eq_int("DataCarrierDetectV17 printed (%ld)", dcd_printed > 0, 1,
+		    dcd_printed);
+	diff_eq_int("the energy threshold's exact edge was reached (%ld)",
+		    dcd_edge > 0, 1, dcd_edge);
+	/*
+	 * Reported, not asserted: see run_dcd_edge.  It is here so a future
+	 * change that quietly stopped SOLVING any of them is visible beside
+	 * the count that did.
+	 */
+	diff_eq_int("edge attempts with no solvable reference (%ld)",
+		    dcd_edge_unsolved < dcd_edge, 1, dcd_edge_unsolved);
 
 	diff_eq_int("an unsigned block counter separates (%ld)",
 		    qd_signed_sep > 0, 1, qd_signed_sep);
