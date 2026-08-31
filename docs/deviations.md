@@ -9447,19 +9447,22 @@ per-FIFO parameter, which is not something an accident carries. Recorded
 because a caller written from the return value would be wrong, and the
 callers are not written yet.
 
-## D982 ⚠ `silence_is_more_then`'s scale is 10 per unit, and nothing reconstructed says which unit
+## D982 ✓ `silence_is_more_then`'s argument is in SECONDS, not milliseconds -- RESOLVED
 
-The comparison is `s->count > (int)(10.0f * ms)`, with the multiply done at
+The comparison is `s->count > (int)(10.0f * t)`, with the multiply done at
 x87 precision and the truncation toward zero (`fldcw` with RC=11 at
-0xb0360). At the 8 kHz this object works at, "ms" would want 8 per
-millisecond, not 10 -- so either `count` does not tick per sample, or the
-argument is not milliseconds. The blob's own name for the function says
-"more then", and nothing else in it says more.
+0xb0360). At the 8 kHz this object works at, a millisecond argument would
+want 8 per unit and not 10, and this entry was opened not knowing which of
+`count` and the argument was the odd one.
 
-**Status:** unmeasured. `silence_progress` (0xb0420) is the only writer of
-`count` and it is not reconstructed -- it needs the LOCAL `.data` table at
-0x84d4 that the blob calls `silence_level_table`. That function settles the
-unit and this entry should be revisited with it.
+**It was `count`.** `silence_progress` -- reconstructed in the same pass,
+once its `silence_level_table` was written -- advances `count` once per
+800-sample block, which is 100 ms. Ten of those is a second, so `t` is in
+SECONDS and the 10 is exact.
+
+**Status:** resolved, from the object. `include/dsplib/silence.h` says so at
+the declaration; the parameter is spelled `t` rather than `ms` for the same
+reason.
 
 ## D983 ⚠ `silence_progress` writes every escape at `out[0]`, and advances only the LENGTH
 
