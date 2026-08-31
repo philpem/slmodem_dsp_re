@@ -34,6 +34,7 @@
 #include "dsplib/dtmf_rx.h"
 
 extern void ref_cid_freq_sampl(void *ctx, int rate);
+extern char *ref_cid_get_strings(void *ctx);
 
 #define GUARD	32
 
@@ -162,6 +163,118 @@ run(int mode, int rate)
 	}
 }
 
+/* ------------------------------------------------------------------ */
+/*
+ * cid_get_strings.  The renderers underneath it have their own test
+ * (t_cidata); what is measured here is the ROUTING -- which receiver the mode
+ * picks, which renderer `f264` picks, that the buffer is cleared in full
+ * first, and that the answer is `ctx + 8` and not a copy.
+ *
+ * The box is heap-sized with a wide trailing guard because
+ * `data_formatted_output` has no output bound of its own: 0x258 is the
+ * object's budget, not a clamp it enforces, so a message that renders long
+ * would run past `strings` into the rest of the object.  Both sides would do
+ * it identically and the comparison would still pass -- the guard is what
+ * turns that into a named failure instead of a stack smash.
+ */
+
+#define BIGGUARD	4096
+
+struct sbox {
+	struct cid_modem ctx;
+	unsigned char guard[BIGGUARD];
+	struct dtmf_rx dtmf;
+	struct cid fsk;
+};
+
+static int seen_dtmf_path;
+static int seen_raw_path;
+static int seen_formatted_path;
+static int seen_rendered;	/* the FSK path wrote something */
+
+static void
+sbuild(struct sbox *a, struct sbox *b, int mode, int f264,
+       const unsigned char *msg, int msglen)
+{
+	fill_bytes(a, sizeof(*a));
+	memset(a->guard, 0xa5, sizeof(a->guard));
+	a->ctx.dtmf = &a->dtmf;
+	a->ctx.fsk = &a->fsk;
+	a->ctx.mode = mode;
+	a->ctx.f264 = f264;
+
+	/*
+	 * D955/F8587: `pack_len` is a SUBSCRIPT into `data` for the renderers,
+	 * so it is planted rather than left to the random fill, and the
+	 * message is copied in whole.  A wild `pack_len` would be read
+	 * identically by both sides and the test would agree on nonsense.
+	 */
+	memset(a->fsk.data, 0, sizeof(a->fsk.data));
+	if (msglen > (int)sizeof(a->fsk.data))
+		msglen = (int)sizeof(a->fsk.data);
+	memcpy(a->fsk.data, msg, (size_t)msglen);
+	a->fsk.pack_len = (short)msglen;
+
+	memcpy(b, a, sizeof(*a));
+	b->ctx.dtmf = &b->dtmf;
+	b->ctx.fsk = &b->fsk;
+}
+
+static void
+srun(const char *what, int mode, int f264, const unsigned char *msg,
+     int msglen, long tag)
+{
+	static struct sbox a, b;
+	char label[128];
+	char *ra, *rb;
+	unsigned char clean[BIGGUARD];
+
+	memset(clean, 0xa5, sizeof(clean));
+	sbuild(&a, &b, mode, f264, msg, msglen);
+
+	ra = ref_cid_get_strings(&a.ctx);
+	rb = cid_get_strings(&b.ctx);
+
+	snprintf(label, sizeof(label), "%s: returns ctx + 8 (%%ld)", what);
+	diff_eq_int(label, rb == b.ctx.strings, 1, tag);
+	snprintf(label, sizeof(label), "%s: reference returns ctx + 8 (%%ld)",
+		 what);
+	diff_eq_int(label, ra == a.ctx.strings, 1, tag);
+
+	snprintf(label, sizeof(label), "%s: strings after %%ld", what);
+	diff_eq_int(label, memcmp(a.ctx.strings, b.ctx.strings,
+				  sizeof(a.ctx.strings)), 0, tag);
+	snprintf(label, sizeof(label), "%s: DTMF receiver after %%ld", what);
+	diff_eq_obj(label, struct dtmf_rx, &b.dtmf, &a.dtmf, tag);
+	snprintf(label, sizeof(label), "%s: FSK receiver after %%ld", what);
+	diff_eq_obj(label, struct cid, &b.fsk, &a.fsk, tag);
+
+	snprintf(label, sizeof(label), "%s: reference stayed in bounds (%%ld)",
+		 what);
+	diff_eq_int(label, memcmp(a.guard, clean, BIGGUARD), 0, tag);
+	snprintf(label, sizeof(label), "%s: we stayed in bounds (%%ld)", what);
+	diff_eq_int(label, memcmp(b.guard, clean, BIGGUARD), 0, tag);
+
+	/* Which arm the OBJECT took, measured on the reference side. */
+	if (mode != 0 && mode != 2) {
+		seen_dtmf_path++;
+		snprintf(label, sizeof(label),
+			 "%s: DTMF path copied sixteen digits (%%ld)", what);
+		diff_eq_int(label,
+			    memcmp(a.ctx.strings, a.dtmf.digits, 16), 0, tag);
+		snprintf(label, sizeof(label),
+			 "%s: DTMF path stopped at sixteen (%%ld)", what);
+		diff_eq_int(label, a.ctx.strings[16], 0, tag);
+	} else {
+		if (f264 == 2)
+			seen_raw_path++;
+		else
+			seen_formatted_path++;
+		if (a.ctx.strings[0] != 0)
+			seen_rendered++;
+	}
+}
+
 int
 main(void)
 {
@@ -206,6 +319,80 @@ main(void)
 	diff_eq_int("mode 1 cases with the FSK gate shut (%ld)",
 		    seen_fsk_gated > 0, 1, seen_fsk_gated);
 	rc |= diff_end();
+
+	/* ---------------------------------------------------------------- */
+	{
+		/*
+		 * A multiple-data-message frame: type, total length, then
+		 * (tag, length, bytes) entries.  Tags 1, 2 and 7 are the three
+		 * `_look_for_other_than` excludes, so a frame carrying only
+		 * those exercises the labelled fields and one carrying tag 3
+		 * as well exercises the leftover arm.
+		 */
+		static const unsigned char mdmf[] = {
+			0x80, 29,
+			1, 8, '0','8','3','1','1','2','3','4',
+			2, 10, '5','5','5','1','2','3','4','5','6','7',
+			7, 5, 'A','B','C','D','E'
+		};
+		static const unsigned char mdmf_extra[] = {
+			0x80, 36,
+			1, 8, '0','8','3','1','1','2','3','4',
+			2, 10, '5','5','5','1','2','3','4','5','6','7',
+			7, 5, 'A','B','C','D','E',
+			3, 5, 'x','y','z','!','?'
+		};
+		/* A single-data-message frame: no tags at all. */
+		static const unsigned char sdmf[] = {
+			0x04, 18,
+			'0','8','3','1','1','2','3','4',
+			'5','5','5','1','2','3','4','5','6','7'
+		};
+		static const unsigned char empty[] = { 0x80, 0 };
+		static const struct {
+			const char *name;
+			const unsigned char *msg;
+			int len;
+		} frames[] = {
+			{ "mdmf", mdmf, (int)sizeof(mdmf) },
+			{ "mdmf+leftover", mdmf_extra, (int)sizeof(mdmf_extra) },
+			{ "sdmf", sdmf, (int)sizeof(sdmf) },
+			{ "empty frame", empty, (int)sizeof(empty) },
+			{ "no message", empty, 0 }
+		};
+		static const int gs_modes[] = { 0, 2, 1, 5, 3, -1 };
+		static const int gs_vals[] = { 0, 1, 2, 3, -2 };
+		unsigned f, m, v;
+		char what[96];
+
+		diff_begin("cid_get_strings routing");
+		for (f = 0; f < sizeof(frames) / sizeof(frames[0]); f++)
+			for (m = 0; m < sizeof(gs_modes) / sizeof(gs_modes[0]);
+			     m++)
+				for (v = 0;
+				     v < sizeof(gs_vals) / sizeof(gs_vals[0]);
+				     v++) {
+					snprintf(what, sizeof(what),
+						 "%s mode %d value %d",
+						 frames[f].name, gs_modes[m],
+						 gs_vals[v]);
+					srun(what, gs_modes[m], gs_vals[v],
+					     frames[f].msg, frames[f].len,
+					     (long)f);
+				}
+		rc |= diff_end();
+
+		diff_begin("cid_get_strings: every route was taken");
+		diff_eq_int("DTMF routes (%ld)", seen_dtmf_path > 0, 1,
+			    seen_dtmf_path);
+		diff_eq_int("raw routes (%ld)", seen_raw_path > 0, 1,
+			    seen_raw_path);
+		diff_eq_int("formatted routes (%ld)", seen_formatted_path > 0,
+			    1, seen_formatted_path);
+		diff_eq_int("FSK routes that rendered something (%ld)",
+			    seen_rendered > 0, 1, seen_rendered);
+		rc |= diff_end();
+	}
 
 	return rc;
 }

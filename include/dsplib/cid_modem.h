@@ -29,7 +29,15 @@ struct cid;
 struct cid_modem {
 	struct dtmf_rx *dtmf;		/* +0x000 DTMF receiver, modes 1/5  */
 	struct cid *fsk;		/* +0x004 FSK receiver, modes 0/5   */
-	unsigned char pad_008[0x258];	/* +0x008 cid_modem/progress state  */
+	/*
+	 * +0x008 is the STRING BUFFER, and `cid_get_strings` is what settles
+	 * it: that function memsets exactly 0x258 bytes from +0x008, hands the
+	 * same address to `data_formatted_output` / `data_unformatted_output`
+	 * as their output, and RETURNS it.  So the whole span is one array and
+	 * not a field bank -- 600 bytes of NUL-terminated fields, which is the
+	 * shape `CID_process` walks.
+	 */
+	char strings[0x258];		/* +0x008 what cid_get_strings returns */
 	int mode;			/* +0x260 see the encoding above    */
 	int f264;			/* +0x264 <- cid_create's 2nd arg;
 					 *         rewritten by cid_value   */
@@ -51,6 +59,24 @@ void cid_threshold(struct cid_modem *ctx, int thr);
 
 /* Store `v` at +0x264 -- the same slot cid_create seeds from its 2nd arg. */
 void cid_value(struct cid_modem *ctx, int v);
+
+/*
+ * Render whatever the receivers collected into `ctx->strings` and return it.
+ * The buffer is cleared first, in full, so the answer is always a run of
+ * NUL-terminated fields even when nothing rendered.
+ *
+ * WHICH RECEIVER IS ASKED is `mode != 0 && mode != 2` -- the DTMF side then,
+ * and the FSK side otherwise.  Note that mode 2 takes the FSK path despite
+ * being above 1, which no other function in this file does; `cid_create`
+ * clamps anything above 1 to 5, so it is reachable only by a caller that
+ * writes `mode` itself.
+ *
+ * On the DTMF side it copies SIXTEEN bytes of the receiver's `digits[20]`,
+ * with no terminator of its own -- the twentieth byte and the terminator are
+ * the DTMF receiver's business.  On the FSK side `ctx->f264 == 2` selects the
+ * raw hex dump and anything else the labelled rendering.
+ */
+char *cid_get_strings(struct cid_modem *ctx);
 
 /*
  * Retune both receivers to a new LINE rate.  Same mode gating as

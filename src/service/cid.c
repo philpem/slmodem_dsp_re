@@ -31,14 +31,15 @@
  *   cid_freq_sampl        .text 0x08fd60   107
  *   cid_threshold         .text 0x08fdd0    40
  *   cid_value             .text 0x08fe00    15
+ *   cid_get_strings       .text 0x090320   145
  *   _look_for             .text 0x0903c0    72
  *   _look_for_other_than  .text 0x090410    88
  *
  * The four leaves were exported API with no internal referrer (finding
  * F8320's bucket), written on their own merit; `cid_freq_sampl` came with the
  * CID service pass and calls nothing.  The rest of the TU -- cid_reset,
- * cid_create, cid_delete, cid_progress, cid_get_strings -- is written as the
- * receiver underneath it lands.  See docs/findings.md F8492 for why the
+ * cid_create, cid_delete, cid_progress -- is written as the receiver
+ * underneath it lands.  See docs/findings.md F8492 for why the
  * link constraint, not difficulty, is what orders this file.
  *
  * See include/dsplib/cid_modem.h for the object and the mode encoding.
@@ -74,7 +75,6 @@ extern void *cid_create(void *m, unsigned cid_val, int w)
 extern void cid_delete(void *cid) DSPLIB_CID_UNWRITTEN;
 extern short cid_progress(void *cid, short *in, int what, short *count)
 	DSPLIB_CID_UNWRITTEN;
-extern char *cid_get_strings(void *cid) DSPLIB_CID_UNWRITTEN;
 
 /* The line rates `CID_create` accepts; cid.h names the same two values. */
 #define CID_LINE_8000	8000
@@ -93,6 +93,15 @@ extern char *cid_get_strings(void *cid) DSPLIB_CID_UNWRITTEN;
  * all three of cid_freq_sampl's arms.
  */
 #define CID_F02C_RESET	9
+
+/*
+ * The one value of `f264` -- the `cid_val` slmodemd hands `CID_create`, which
+ * `cid_create` parks at +0x264 and `cid_value` overwrites -- that the object
+ * tests for: it sends `cid_get_strings` to the raw hex dump instead of the
+ * labelled rendering.  Usage inference from that single comparison; no format
+ * string names it and no other function reads the field.
+ */
+#define CID_VALUE_RAW	2
 
 struct CID {
 	void *modem;		/* +0x0 slmodemd's struct modem       */
@@ -254,6 +263,44 @@ void
 cid_value(struct cid_modem *ctx, int v)
 {
 	ctx->f264 = v;
+}
+
+/*
+ * Clear the whole string buffer, render into it, and hand it back.  The
+ * memset is unconditional and covers all 0x258 bytes, so a caller walking the
+ * result stops on a NUL whatever the renderers did.
+ *
+ * The receiver is chosen by `mode != 0 && mode != 2`, if-converted in the
+ * object into two `setne`s and a `test`.  **Mode 2 is on the FSK side**,
+ * which no other test in this file does -- everything else reads `> 1` or
+ * `== 5` -- and `cid_create` clamps anything above 1 to 5, so the value is
+ * reachable only from a caller that writes `mode` itself.  Kept as written.
+ *
+ * The DTMF answer is sixteen bytes of `digits[20]` copied byte by byte, with
+ * no terminator added: the object's loop runs 0..15 inclusive and stops.  It
+ * relies on the memset above for the terminator, which is why that covers the
+ * whole buffer rather than the sixteen bytes it is about to fill.
+ */
+char *
+cid_get_strings(struct cid_modem *ctx)
+{
+	char *out = ctx->strings;
+	int i;
+
+	sysdep_memset(out, 0, sizeof(ctx->strings));
+
+	if (ctx->mode != 0 && ctx->mode != 2) {
+		for (i = 0; i <= 15; i++)
+			out[i] = ctx->dtmf->digits[i];
+		return out;
+	}
+
+	if (ctx->f264 == CID_VALUE_RAW)
+		data_unformatted_output(ctx->fsk, out);
+	else
+		data_formatted_output(ctx->fsk, out);
+
+	return out;
 }
 
 /*

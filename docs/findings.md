@@ -98223,3 +98223,205 @@ which is what separates the stored width from the compared one; a test using
 only in-range rates passes with the `short` cast deleted. Seven anti-vacuity
 counters, all read off the REFERENCE side (finding F134), assert that each of
 the five stores fired and that both gates were seen shut.
+
+## F8731. `cid_get_strings` routes on mode 2 as if it were the FSK side, and `cid_create` makes that value unreachable
+
+*2026-08-31.* `cid_get_strings` (`.text` 0x090320, 145 bytes) is the Caller ID
+service's one output function: it clears `cid_modem + 0x008` in full -- 0x258
+bytes, which is what settles that span as a single `char strings[600]` and not
+a field bank -- renders into it, and returns that address.
+
+**The receiver it asks is chosen by `mode != 0 && mode != 2`**, if-converted in
+the object into `setne %dl` / `setne %cl` / `test`:
+
+    90343  mov 0x260(%ebx),%eax
+    90349  test %eax,%eax / setne %dl        mode != 0
+    9034e  cmp $0x2,%eax  / setne %cl        mode != 2
+    90357  test %eax,%edx / je -> FSK side
+
+That test appears nowhere else in the translation unit. `cid_reset`,
+`cid_create`, `cid_delete`, `cid_freq_sampl` and `cid_threshold` all read
+`!= 0`, `!= 1`, `> 1` or `== 5`; only this one singles out 2. And
+`cid_create` clamps every mode above 1 to 5 (0x8feaf `dec %esi / jle`, then
+`mov $0x5`), so **no caller going through `cid_create` can ever present mode
+2** -- it is reachable only by writing `cid_modem + 0x260` directly, which
+nothing in the object does. Kept exactly as written; the mode encoding in
+`include/dsplib/cid_modem.h` gains the note rather than a guess about intent.
+
+**The DTMF answer is sixteen bytes and adds no terminator.** The loop is
+`cmp $0xf,%edx / jle`, so 0..15 inclusive out of `digits[20]`, copied byte by
+byte into the buffer -- and it relies on the unconditional memset above for
+the NUL that `CID_process`'s walk needs. That is why the memset covers all
+0x258 bytes rather than the sixteen it is about to fill; deleting it would
+leave the DTMF path returning an unterminated string.
+
+**On the FSK side `f264 == 2` picks the raw hex dump** and anything else the
+labelled rendering, which is the only test of that field anywhere in the
+object -- `cid_create` seeds it from `CID_create`'s `cid_val` argument and
+`cid_value` overwrites it, and neither reads it. `CID_VALUE_RAW` is usage
+inference from that single comparison and `src/service/cid.c` says so.
+
+`t_cidsvc` drives all five frame shapes (a multiple-data-message frame, one
+with a leftover tag, a single-data-message frame, an empty frame, and no
+message at all) against six modes and five values, 1,250 checks. The box
+carries a 4 KB guard between the object and the two receivers because
+`data_formatted_output` has no output bound of its own: 0x258 is the object's
+budget and not a clamp it enforces, so an over-long render would be made
+identically by both sides and agree. The guard is what turns that into a named
+failure. `pack_len` is planted rather than left to the random fill, which is
+D955/F8587 -- it is a SUBSCRIPT into `cid->data` for the renderers, and a
+blob-against-blob run cannot catch an unplanted one.
+
+## F8700. Data.c's two outer renderers take the FSK RECEIVER, and `cid_get_strings` is what proves it
+
+`data_unformatted_output` (0x0904f0, 117 bytes) and `data_formatted_output`
+(0x090570, 1310 bytes) have exactly one referrer between them in the whole
+1.2 MB -- `cid_get_strings` at 0x090320, one `R_386_PC32` each -- and that
+function settles both arguments without any inference:
+
+    9033b:  mov  %esi,(%esp)          esi = ctx + 8
+    9033e:  call sysdep_memset        (ctx + 8, 0, 0x258)
+    9037a:  cmpl $0x2,0x264(%ebx)     ctx->f264, cid_value's slot
+    90387:  mov  0x4(%ebx),%edx       ctx->fsk
+    9038d:  call data_formatted_output
+    903a4:  call data_unformatted_output
+
+So the first argument is `struct cid *` -- the FSK receiver, not the
+`cid_modem` -- and the second is the 0x258-byte string buffer at
+`cid_modem + 0x008`, which `cid_get_strings` clears first and returns.  That
+buffer is 600 bytes and is the object's own budget for everything these two
+write.  `f264 == 2` selects the raw hex dump and anything else the labelled
+rendering.
+
+The offsets both renderers use inside that receiver are already named, and
+from a different function: `cid->data` at +0x0d8 and `cid->pack_len` at
++0x15c, both derived from `pack_next_bit` in `Rxcid.c` and recorded in
+`include/dsplib/cid.h`.  `data_formatted_output`'s opening
+`cmpw $0x0,0x15c(%eax)` is therefore "did the framer store any bytes", and
+its `+0xd8` is the assembled message.  Two independent derivations agreeing
+is the strongest evidence available here: neither function references any
+`.rodata` at all, so there is no format string to take the author's own words
+from, and every label these two emit is written as seven separate immediate
+byte stores rather than copied from a string constant.
+
+Both written to `src/service/data.c` on 2026-08-31 and driven by
+`test/unit/t_datafmt.c`.
+
+## F8701. The formatted renderer's whole layout is one idiom, `out += i + 1`, and it explains three of the four oddities
+
+Every field `data_formatted_output` emits has the same shape: seven label
+bytes stored as immediates (`DATE = `, `TIME = `, `NMBR = `, `NAME = `,
+`MESG = `, no NUL among them), a write index `i` set to 7, a copy loop
+writing `out[i++]`, then `out[i] = 0` and `out += i + 1` to step past the
+terminator.  The compiler folds the constant cases: SDMF's DATE and TIME
+fields are always eleven characters, so both pointer steps are literally
+`add $0xc,%ebx` in the object and the terminator is `movb $0x0,0xb(%ebx)`.
+
+Reading it that way settles three things that look arbitrary in the
+disassembly:
+
+- **the NMBR label is unconditional and the NAME field is not.**  `i = 7` is
+  stored at 0x907e4 BEFORE the `cmpw $0x0,0x8(%esp)` that tests the tag-2
+  position, so a missing number still emits `NMBR = ` and its terminator; the
+  tag-7 test at 0x90850 guards the `out += i + 1` as well as the label, so a
+  missing name emits nothing at all.
+- **`i` is left at 7 after a MESG field**, because the hex dump is an inlined
+  `data_raw` writing through its own pointer and nothing feeds its length
+  back.  The next MESG field therefore starts at `out + 8` and overwrites the
+  previous one's digits.  Deviation D971.
+- **the two length caps are different numbers on purpose.**  The fields this
+  function copies itself stop at 255 counting the two header bytes
+  (`cmp $0xff`); `data_raw`'s dump stops at 245 (`cmp $0xf5`).  They are two
+  separate constants in two separate pieces of code.
+
+## F8702. `cid->data` is unsigned and the walkers read it signed, and BOTH readings appear in `data_formatted_output`
+
+The object reads `data[1]` two different ways inside this one function.
+Everything the renderer does for itself is a `movzbl` -- the message-type test
+is `cmpb $0x80,0xd8(%eax)`, which cannot be an equality test at all on a
+signed `char` (0x80 promotes to 128 and a signed char never reaches it), the
+SDMF length is `movzbl 0xd9(%edi)` at 0x90651, each copied field's length is
+`movzbl` at 0x907f5 and 0x90895, and the MESG guard is an UNSIGNED
+`cmpb $0x1,...; jbe` at 0x90960.  Everything the inlined TLV walks and the
+inlined `data_raw` do is a `movsbl`: 0x906a5, 0x906ce, 0x90709, 0x908f0,
+0x909ab.
+
+That is not an inconsistency, it is the argument types.  `cid->data` is
+`unsigned char[]`, which is how `cid.h` already declares it; `_look_for`,
+`_look_for_other_than` and `data_raw` all take a `const char *`, so the same
+bytes are re-read signed through those.  `src/service/data.c` casts at the
+three call boundaries and nowhere else, and the resulting extension matches
+the object at every site.
+
+The MESG entry is where the split is observable rather than merely visible: a
+length byte of 0xff passes the guard (255 > 1, unsigned) and then makes
+`data_raw` dump `-1 + 2 = 1` byte.  `t_datafmt`'s `mdmf_mesg_ff` case is
+exactly that message and asserts the two hex digits.
+
+## F8703. Data.c carries its own copies of both TLV walkers, and cross-TU inlining is what proves it
+
+`data_formatted_output` contains four inlined TLV walks -- one search for a
+tag, expanded three times for tags 1, 7 and 2, and two expansions of the
+other-than search -- and all of them are `_look_for` and
+`_look_for_other_than` body for body: the length loaded ONCE as a signed char
+before the loop, positions compared 16 bits at a time (`cmp %cx,%dx`), the
+advance `pos = (short)(pos + buf[pos+1] + 2)`, and the other-than test built
+as two `setne` results ANDed together for tags 1 and 7 with tag 2 tested
+apart.
+
+But `_look_for` (0x0903c0) and `_look_for_other_than` (0x090410) are
+`cid.c`'s, and finding F1410 puts `cid.c` and `Data.c` in different
+translation units.  GCC 3.4.2 cannot inline across that boundary, so Data.c
+must have had its own copies.  `src/service/data.c` writes them as
+`data_look_for` and `data_look_for_other_than`, static, with the derivation
+in a comment; both are inlined away at -O3 and neither leaves a symbol, which
+is what the object shows.
+
+The same argument the other way round is what puts `data_raw` in this file
+rather than beside it: the MESG hex dump at 0x909ab is `data_raw` inlined,
+which the compiler can only have done from the same TU.
+
+## F8704. `data_raw`'s 245-byte cap is UNREACHABLE through either outer renderer
+
+`data_raw` caps its byte count at 0xf5 before doubling, and neither function
+that calls it can reach the cap.  Both call sites read the length through a
+`const char *`, so it is a signed char and at most 127; `127 + 2 = 129` and
+the cap is 245.  `data_unformatted_output` dumps at most 258 hex digits and
+`data_formatted_output`'s MESG field at most the same.
+
+The cap is therefore live only for a direct caller of `data_raw` -- of which
+the object has none, it being exported API with no internal referrer (F8320's
+bucket) -- and `t_cidleaves` is where it is exercised, by calling `data_raw`
+itself.  `t_datafmt` does not assert it, and says so rather than carrying a
+check that could never fire on its inputs.
+
+Worth knowing before anyone reads the 600-byte string buffer as safe: it is
+not the hex dump that overruns it, it is the 255-byte cap on the copied
+fields (D972).
+
+## F8705. An `except` of 0 is observable only when a NEGATIVE length steps the walk backwards, and a mutant survived the whole suite until that case existed
+
+`data_formatted_output` opens its MESG loop with
+`_look_for_other_than(msg, 2, 0)` and continues it with
+`_look_for_other_than(msg, pos, pos)`.  The first call's `except` is a literal
+0 and the object folds it to `test %ebx,%ebx` at 0x90923.
+
+That zero cannot matter on any well-formed message.  The walk starts at
+position 2 and every non-negative length byte moves it forward by at least
+two, so position 0 -- and 1 -- is unreachable and the exclusion never fires.
+A mutation changing that 0 to a 1 passed every one of 4,198 differential
+checks in `t_datafmt`, including 600 fuzzed messages, and was the only one of
+eight injected defects to survive.
+
+The shape that separates them is a length byte of -3 on the first entry,
+which steps the position from 2 back to 1, where the message's own length
+byte is then read as a tag.  `t_datafmt` now carries that message
+(`mdmf walk steps back to 1`) and the mutant is caught.  It is bounded and
+terminating on purpose: every step after the one backwards is forward, which
+is the discipline `t_cidleaves` established for these walkers, since a length
+of -2 leaves the position where it was and hangs both sides identically.
+
+The general point is the one F134 keeps making in a new place: a differential
+suite that never constructs the input a branch needs reports a clean run and a
+dead branch identically.  The injection ritual is what told the two apart --
+eight defects, seven caught by the suite as first written, one not.

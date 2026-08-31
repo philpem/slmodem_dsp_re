@@ -37,7 +37,6 @@
 extern void *ref_cid_create(void *m, unsigned cid_val, int w);
 extern void ref_cid_delete(void *cid);
 extern short ref_cid_progress(void *cid, short *in, int what, short *count);
-extern char *ref_cid_get_strings(void *cid);
 
 void *
 cid_create(void *m, unsigned cid_val, int w)
@@ -63,11 +62,12 @@ cid_progress(void *cid, short *in, int what, short *count)
 	return ref_cid_progress(cid, in, what, count);
 }
 
-char *
-cid_get_strings(void *cid)
-{
-	return ref_cid_get_strings(cid);
-}
+/*
+ * `cid_get_strings`'s bridge is GONE too: src/service/cid.c defines it, and
+ * with `data_formatted_output` and `data_unformatted_output` written under it
+ * the whole render path is ours.  `CID_process`'s remaining bridged callees
+ * are `cid_create`, `cid_delete` and `cid_progress`.
+ */
 
 /* --- BOTH registration pairs are gone, and this note is what is left ---
  *

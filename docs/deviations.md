@@ -9415,3 +9415,93 @@ symbol count a well-behaved handler returns**, and should guard past it.
 checks above. `t_v22modem` sizes its destination at four times the input block
 and asserts a guard past it, so the next occurrence is a named failure rather
 than a compiler-dependent verdict.
+
+## D970 🐛 `data_formatted_output` renders DATE and TIME from `data[1..8]` when the message has no tag 1
+
+The MDMF path takes the date-and-time entry's position from an inlined
+`_look_for(msg, 1)`, which returns -1 when there is no such entry, and then
+uses it as an offset with no test at all:
+
+    906c9:  mov    $0xffffffff,%eax
+    906d7:  movswl %ax,%edi              edi = -1
+    90760:  add    %edx,%edi             edi = cid + (-1)
+    90762:  lea    0xda(%edi),%edx       = data + 1
+    90786:  lea    0xde(%edi),%edx       = data + 5
+
+so `DATE = ` is filled with `data[1..4]` -- the message's own length byte,
+the first entry's tag and length, and its first two value bytes -- and
+`TIME = ` with `data[5..8]`.  Both are in bounds and both are nonsense.  The
+tag-2 and tag-7 positions ARE guarded, each by a `cmpw $0x0 ... jle` on the
+short holding them, so this is one field pair the author did not guard rather
+than a uniform omission.
+
+`src/service/data.c` reproduces it, unguarded, and `t_datafmt`'s
+`mdmf no date` case asserts the rendered DATE and TIME against
+`mdmf_nodate[1..8]` directly -- an oracle over the message, so the check would
+fail if either side started guarding.
+
+**Status:** reproduced, and out of contract only in the sense that a
+conforming MDMF frame always carries tag 1.  Nothing bounds what the framer
+stores, so a corrupt or truncated frame reaches it.  Documentation only: a
+host-side fix would have to invent the eight characters the field wants.
+
+## D971 🐛 A second MESG field starts eight bytes into the first and overwrites its digits
+
+Each output field advances the write pointer by `i + 1`, where `i` is the
+index one past the last byte written.  Every field maintains `i` except the
+MESG one: its value comes from an inlined `data_raw` writing through its own
+pointer, and `i` is left at 7 -- the index just past the label:
+
+    909a4:  movl $0x7,(%esp)         i = 7, and nothing updates it
+    9096e:  mov  (%esp),%esi         next field base = base + i + 1
+    90971:  mov  0x4(%esp),%eax
+    90975:  add  %esi,%eax
+    90977:  lea  0x1(%eax),%ebx
+
+So the second leftover tag's field begins at the first one's base + 8, its
+`MESG = ` label overwriting all but the first hex digit of the first one's
+dump.  A message with two such entries renders
+`MESG = 0MESG = 0c024344` -- the stray `0` is the first dump's surviving
+first digit -- and every earlier MESG field is lost.  Only the last one
+survives intact.
+
+Reproduced in `src/service/data.c`; `t_datafmt`'s `mdmf two mesg` case
+asserts that exact byte sequence against the reference, so the quirk is
+pinned rather than merely tolerated.
+
+**Status:** reproduced.  Reachable whenever a frame carries more than one
+parameter outside tags 1, 2 and 7, which the protocol permits.  Documentation
+only -- the fix is a one-line index update and would break bit-exactness for
+no caller that currently depends on the second field.
+
+## D972 🐛 The 255-byte field cap lets both renderers read past the receiver and write past the 600-byte string buffer
+
+Every copied field's length is `data[pos + 1] + 2` read UNSIGNED and capped
+at 255 (`cmp $0xff` at 0x90800 and 0x908a0, and 0x9065b for the SDMF number),
+so one entry can copy 253 bytes.  Neither end of that is bounded by anything
+real:
+
+- **the read.**  `cid->data` is 124 bytes at +0x0d8 inside a `struct cid` the
+  object allocates 0x160 bytes for.  A tag-2 entry at position 126 with a
+  length byte of 0xff reads `data[128..380]`, which is 0xf4 bytes past the
+  allocation.
+- **the write.**  `cid_get_strings` supplies `cid_modem + 0x008`, 0x258 = 600
+  bytes.  DATE and TIME take 12 each and a capped NMBR and NAME 261 each --
+  546 before a single MESG field, and each MESG field adds 8 plus up to 499.
+  Past 600 the writes land on `cid_modem->mode` at +0x260 and onwards.
+
+Both caps are the object's own and both are reproduced in
+`src/service/data.c`.  What is NOT reachable here is `data_raw`'s 245-byte
+cap, which needs a length above 243 read as a signed char: see finding F8704.
+
+`test/unit/t_datafmt.c` is sized from these bounds rather than from comfort
+(the D956 rule): the receiver sits in a box with 512 bytes of randomly filled
+slack behind it so the over-reads land on defined memory identical on both
+sides, and the output buffer is 4096 with the whole of it compared, so a write
+outside the intended region fails rather than passing unnoticed.
+
+**Status:** reproduced, and reachable from the wire -- `pack_next_bit` stores
+message bytes with no bound against `sizeof(data)` either (see cid.h), so the
+length byte is whatever arrived.  A host-side fix belongs in whatever
+constructs the `cid_modem`, by sizing the string buffer for the worst case the
+cap allows rather than for the message the protocol describes.
