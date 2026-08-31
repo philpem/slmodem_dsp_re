@@ -55,8 +55,9 @@ public:
 	ModulusEncoder();
 
 	/*
-	 * Declared and deliberately not defined.  Both are the mangling's
-	 * signatures.  `progress` reads +0x18 as an index into its first
+	 * Both signatures are the mangling's; the seven-argument form is now
+	 * defined too (seven stores in argument order, ModulusCoder.cpp).
+	 * `progress` reads +0x18 as an index into its first
 	 * argument (`mov 0x18(%eax),%ebp` then `movzbl (%edx,%ebp,1),%ebx`),
 	 * so that word is a byte position in the caller's buffer and the run
 	 * is resumable; the other six it uses as a group and this file does
@@ -93,7 +94,6 @@ public:
 	/* Written. */
 	ModulusDecoder();
 
-	/* Declared and deliberately not defined. */
 	ModulusDecoder(unsigned int a, unsigned int b, unsigned int c,
 		       unsigned int d, unsigned int e, unsigned int f,
 		       unsigned int g);

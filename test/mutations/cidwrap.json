@@ -1,0 +1,91 @@
+[
+ {
+  "note": "The Caller ID wrapper's claims."
+ },
+ {
+  "note": ""
+ },
+ {
+  "note": "The receiver below the wrapper is the blob's own (bridged, see"
+ },
+ {
+  "note": "test/harness/unwritten.c), so what these mutations attack is what"
+ },
+ {
+  "note": "src/service/cid.c itself decides: the rate gate, the verdict mapping,"
+ },
+ {
+  "note": "the early exit, the buffer walk, and the four-string TTY delivery."
+ },
+ {
+  "note": ""
+ },
+ {
+  "note": "NOTE, on two decisions no mutation here holds: the 192-sample chunk"
+ },
+ {
+  "note": "size is invisible to the test because cid_progress's behaviour depends"
+ },
+ {
+  "note": "only on the cumulative sample stream, not on how calls slice it; and"
+ },
+ {
+  "note": "the cid_freq_sampl call on the 9600 path is only reachable by feeding a"
+ },
+ {
+  "note": "9600 Hz burst, which the generator does not produce.  Both are held by"
+ },
+ {
+  "note": "the differential shape of the code alone."
+ },
+ {
+  "label": "the rate gate admits everything",
+  "find": "\tif (rate != CID_LINE_8000 && rate != CID_LINE_9600)\n\t\treturn 0;",
+  "replace": "\tif (0)\n\t\treturn 0;"
+ },
+ {
+  "label": "create hands back the receiver, not the wrapper",
+  "find": "\treturn cid;\n}",
+  "replace": "\treturn cid->cid;\n}"
+ },
+ {
+  "label": "success returns 2",
+  "find": "\t\t\tret = 1;\n\t\t\tp = cid_get_strings",
+  "replace": "\t\t\tret = 2;\n\t\t\tp = cid_get_strings"
+ },
+ {
+  "label": "failure keeps consuming",
+  "find": "\t\t\tret = -1;",
+  "replace": "\t\t\tret = 0;"
+ },
+ {
+  "label": "only the first string is delivered",
+  "find": "for (i = 0; i <= 3; i++)",
+  "replace": "for (i = 0; i <= 0; i++)"
+ },
+ {
+  "label": "the CRLF is one byte",
+  "find": "modem_send_to_tty(cid->modem, \"\\r\\n\", 2);",
+  "replace": "modem_send_to_tty(cid->modem, \"\\r\\n\", 1);"
+ },
+ {
+  "label": "the string walk skips a byte",
+  "find": "\t\t\t\tp += sysdep_strlen(p) + 1;",
+  "replace": "\t\t\t\tp += sysdep_strlen(p) + 2;"
+ },
+ {
+  "label": "the success print gates at level 3",
+  "find": "\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\tdsplibs_debug_printf(\"cid: CID Success\\n\");",
+  "replace": "\t\t\tif (dsplibs_debug_level > 2)\n\t\t\t\tdsplibs_debug_printf(\"cid: CID Success\\n\");"
+ },
+ {
+  "label": "the buffer advances half a chunk",
+  "find": "\t\tbuf += chunk;",
+  "replace": "\t\tbuf += chunk / 2;"
+ },
+ {
+  "label": "a settled verdict does not end the call",
+  "find": "\t\tif (ret)\n\t\t\tbreak;",
+  "replace": "\t\tif (0)\n\t\t\tbreak;"
+ }
+]

@@ -63,6 +63,38 @@ TxNoCarrierV29(void *modem, const unsigned short *data, short *out,
 }
 
 /*
+ * GenEQTrnSequenceV29  .text 0x0a4770  99 bytes
+ *
+ * The V.29 equaliser-training generator: a 7-bit LFSR whose feedback is
+ * bit0 XOR bit1, planted at bit 7 BEFORE the shift so it lands at bit 6
+ * after -- the object computes `((sr << 6) & 0x80) ^ ((sr & 1) << 7)`, ORs
+ * it in, shifts right once and masks to 7 bits.  A 1 bit answers
+ * constellation index 0xb, a 0 bit answers 0.
+ *
+ * The register is a short in a block this tree has not modelled (see
+ * V29TX_OBJ_SCRAM in v29data.h); it is read once, stepped n times and
+ * written back once, exactly as the object does.
+ */
+void
+GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n)
+{
+	void *blk = *(void **)(void *)((unsigned char *)modem
+				       + V29TX_OBJ_SCRAM);
+	short *srp = (short *)(void *)((unsigned char *)blk + V29SCRAM_SR);
+	int sr = *srp;
+	unsigned short i;
+
+	for (i = n; i != 0; i--) {
+		int lsb = sr & 1;
+		int fb = ((sr << 6) & 0x80) ^ (lsb << 7);
+
+		sr = (int)(((unsigned)(sr | fb) >> 1) & 0x7f);
+		*out++ = (unsigned short)(lsb ? 0xb : 0);
+	}
+	*srp = (short)sr;
+}
+
+/*
  * The block's own allocation is the only thing that fixes its length, so
  * assert it rather than trusting the layout to add up by eye.  These are what
  * would have caught a wrong `pad_` run before it silently under-allocated

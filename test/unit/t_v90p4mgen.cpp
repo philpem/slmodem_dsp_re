@@ -119,6 +119,8 @@ void ref_p4m_recivedFirstRrnE2u(void *)
 	asm("ref__ZN18V90Phase4Modulator18recivedFirstRrnE2uEv");
 void ref_p4m_recivedPartOneSilenceRrnSUVtag(void *)
 	asm("ref__ZN18V90Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv");
+void ref_p4m_recivedPartTwoSilenceRrnSUVtag(void *)
+	asm("ref__ZN18V90Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv");
 short ref_p4m_generateDataSymbolBeforeFPE(void *)
 	asm("ref__ZN18V90Phase4Modulator27generateDataSymbolBeforeFPEEv");
 short ref_p4m_generateDataSymbolBeforeRRN(void *)
@@ -391,6 +393,8 @@ static void our_recivedFirstRrnE2u(void *p)
 	{ ((V90Phase4Modulator *)p)->recivedFirstRrnE2u(); }
 static void our_recivedPartOneSilenceRrnSUVtag(void *p)
 	{ ((V90Phase4Modulator *)p)->recivedPartOneSilenceRrnSUVtag(); }
+static void our_recivedPartTwoSilenceRrnSUVtag(void *p)
+	{ ((V90Phase4Modulator *)p)->recivedPartTwoSilenceRrnSUVtag(); }
 
 static const struct arm edges[] = {
 	{ "exitRi",		our_exitRi,	  ref_p4m_exitRi },
@@ -411,7 +415,16 @@ static const struct arm edges[] = {
 					   ref_p4m_recivedFirstRrnE2u },
 	{ "recivedPartOneSilenceRrnSUVtag",
 	  our_recivedPartOneSilenceRrnSUVtag,
-					   ref_p4m_recivedPartOneSilenceRrnSUVtag }
+					   ref_p4m_recivedPartOneSilenceRrnSUVtag },
+	/*
+	 * The five-byte sibling call the VPcmV34Main leaf pass claimed: its
+	 * whole body is `recivedSUVtag()`, so the grid that drives that edge
+	 * drives this one, and what THIS row adds is the claim that the
+	 * symbol goes where its name says rather than to a different callee.
+	 */
+	{ "recivedPartTwoSilenceRrnSUVtag",
+	  our_recivedPartTwoSilenceRrnSUVtag,
+					   ref_p4m_recivedPartTwoSilenceRrnSUVtag }
 };
 
 #define NEDGES		((int)(sizeof edges / sizeof edges[0]))

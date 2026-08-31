@@ -1,0 +1,173 @@
+[
+ {
+  "note": "src/service/fdspkrnl.c against build/test/t_tonecreate.  The claims: the object's size, the default configuration and its 48-byte copy, the allocation gate's two conditions and the four block sizes behind it, the 2*pi/8000 scale, what the oscillator leaves in `step` and `phase`, the three resonator coefficients and their signs, the FIR's modulation and doubling, the cleared block's bounds, where iir_coef points, the 60 Hz notch's five coefficients, and TONE_CFG's own words."
+ },
+ {
+  "label": "the object is allocated four bytes short",
+  "find": "\t\tt = (struct fdsp_tone *)sysdep_malloc(sizeof(*t));",
+  "replace": "\t\tt = (struct fdsp_tone *)sysdep_malloc(sizeof(*t) - 4);"
+ },
+ {
+  "label": "the gate opens whenever the length is positive, allocated or not",
+  "find": "\tif (allocated && t->fir_len > 0) {",
+  "replace": "\tif (t->fir_len > 0) {"
+ },
+ {
+  "note": "NOT here: weakening the gate's `t->fir_len > 0` to `>= 0`.  It changes nothing unless the call ALLOCATES -- a supplied object leaves the gate shut either way -- and an allocating call with a zero length is exactly the input deviation D995 says the unmutated function crashes on, by writing seven floats through the two pointers the gate did not set.  So the only fixture that could catch it is one that cannot be run against the correct source, which is the NOT CAUGHT-while-modelling-nothing shape.  The other half of the gate, `allocated`, IS registered and is caught."
+ },
+ {
+  "label": "the FIR blocks are allocated in shorts rather than floats",
+  "find": "\t\tt->fir_coef = (float *)sysdep_malloc(t->fir_len * 4);",
+  "replace": "\t\tt->fir_coef = (float *)sysdep_malloc(t->fir_len * 2);"
+ },
+ {
+  "label": "the biquad block is 16 bytes rather than 20",
+  "find": "\t\tt->ptr_01b4 = (float *)sysdep_malloc(20);",
+  "replace": "\t\tt->ptr_01b4 = (float *)sysdep_malloc(16);"
+ },
+ {
+  "label": "the biquad state block is 4 bytes rather than 8",
+  "find": "\t\tt->ptr_01b8 = (float *)sysdep_malloc(8);",
+  "replace": "\t\tt->ptr_01b8 = (float *)sysdep_malloc(4);"
+ },
+ {
+  "label": "a NULL configuration is not replaced by the default",
+  "find": "\tif (cfg == 0)\n\t\tcfg = &TONE_CFG;",
+  "replace": "\tif (cfg == 0)\n\t\treturn t;"
+ },
+ {
+  "label": "the configuration copy stops four bytes short",
+  "find": "\tmemcpy(t, cfg, sizeof(*cfg));",
+  "replace": "\tmemcpy(t, cfg, sizeof(*cfg) - 4);"
+ },
+ {
+  "label": "the phase scale is 2*pi/4000 rather than 2*pi/8000",
+  "find": "\tosc.phase = t->freq * 0.0007853981633975;",
+  "replace": "\tosc.phase = t->freq * 0.001570796326795;"
+ },
+ {
+  "label": "the oscillator advances before its first sample",
+  "find": "\tosc.step = 0.0f;\n\tMTK_phasor(&osc);",
+  "replace": "\tosc.step = osc.phase;\n\tMTK_phasor(&osc);"
+ },
+ {
+  "label": "the object keeps the reduced angle as its phase",
+  "find": "\tt->phase = 0.0f;\n\tt->step = osc.phase;",
+  "replace": "\tt->phase = osc.phase;\n\tt->step = osc.phase;"
+ },
+ {
+  "label": "the step is taken from the cosine rather than the angle",
+  "find": "\tt->step = osc.phase;",
+  "replace": "\tt->step = osc.out_04;"
+ },
+ {
+  "label": "the resonator's first coefficient loses its sign",
+  "find": "\tt->det_coef[0] = -2.0f * osc.out_04;",
+  "replace": "\tt->det_coef[0] = 2.0f * osc.out_04;"
+ },
+ {
+  "label": "the resonator's second coefficient loses its sign",
+  "find": "\tt->det_coef[1] = -t->det_coef[0] * t->pole_radius;",
+  "replace": "\tt->det_coef[1] = t->det_coef[0] * t->pole_radius;"
+ },
+ {
+  "label": "the resonator's second coefficient uses the radius squared",
+  "find": "\tt->det_coef[1] = -t->det_coef[0] * t->pole_radius;",
+  "replace": "\tt->det_coef[1] = -t->det_coef[0] * t->pole_radius\n\t\t\t * t->pole_radius;"
+ },
+ {
+  "label": "the resonator's third coefficient loses its sign",
+  "find": "\tt->det_coef[2] = t->pole_radius * -t->pole_radius;",
+  "replace": "\tt->det_coef[2] = t->pole_radius * t->pole_radius;"
+ },
+ {
+  "label": "the FIR taps advance by nothing",
+  "find": "\tosc.step = osc.phase;\n\tfor (i = 0; i < t->fir_len; i++) {",
+  "replace": "\tfor (i = 0; i < t->fir_len; i++) {"
+ },
+ {
+  "label": "the FIR taps are not doubled",
+  "find": "\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;",
+  "replace": "\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i];"
+ },
+ {
+  "label": "the FIR taps are modulated by the sine rather than the cosine",
+  "find": "\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;",
+  "replace": "\t\tt->fir_coef[i] = osc.out_08 * t->fir_proto[i] * 2.0f;"
+ },
+ {
+  "label": "the delay line is not cleared with the taps",
+  "find": "\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i]",
+  "replace": "\t\tt->fir_coef[i]"
+ },
+ {
+  "label": "the oscillator is stepped after the tap rather than before it",
+  "find": "\t\tMTK_phasor(&osc);\n\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;",
+  "replace": "\t\tt->fir_dly[i] = 0.0f;\n\t\tt->fir_coef[i] = osc.out_04 * t->fir_proto[i] * 2.0f;\n\t\tMTK_phasor(&osc);"
+ },
+ {
+  "label": "the cleared block is one word short",
+  "find": "\tfor (i = 0; i <= 79; i++)",
+  "replace": "\tfor (i = 0; i < 79; i++)"
+ },
+ {
+  "label": "iir_coef points at the resonator's second coefficient",
+  "find": "\tt->iir_coef = t->det_coef;",
+  "replace": "\tt->iir_coef = t->det_coef + 1;"
+ },
+ {
+  "label": "the notch is at 120 Hz rather than 60",
+  "find": "\thum.phase = 0.04712389f;",
+  "replace": "\thum.phase = 0.09424778f;"
+ },
+ {
+  "label": "the notch's pole term loses its sign",
+  "find": "\tbiquad[0] = -0.9215999841690063f;",
+  "replace": "\tbiquad[0] = 0.9215999841690063f;"
+ },
+ {
+  "label": "the notch's feedback gain is 2 rather than 2*0.96",
+  "find": "\tbiquad[2] = 1.92 * hum.out_04;",
+  "replace": "\tbiquad[2] = 2.0 * hum.out_04;"
+ },
+ {
+  "label": "the notch's zero term loses its sign",
+  "find": "\tbiquad[3] = -2.0f * hum.out_04;",
+  "replace": "\tbiquad[3] = 2.0f * hum.out_04;"
+ },
+ {
+  "label": "the notch's last coefficient is left at zero",
+  "find": "\tbiquad[4] = 1.0f;",
+  "replace": "\tbiquad[4] = 0.0f;"
+ },
+ {
+  "label": "the notch's state is not cleared",
+  "find": "\tt->ptr_01b8[0] = 0.0f;\n\tt->ptr_01b8[1] = 0.0f;",
+  "replace": "\tt->ptr_01b8[0] = 0.0f;"
+ },
+ {
+  "label": "TONE_CFG's tone is 2000 Hz rather than 2100",
+  "find": "\t2100.0f,\t\t/* +0x00 freq                            */",
+  "replace": "\t2000.0f,\t\t/* +0x00 freq                            */"
+ },
+ {
+  "label": "TONE_CFG's duration is 45 ms rather than 450",
+  "find": "\t450.0f,\t\t\t/* +0x08 duration, ms                    */",
+  "replace": "\t45.0f,\t\t\t/* +0x08 duration, ms                    */"
+ },
+ {
+  "label": "TONE_CFG claims 52 taps",
+  "find": "\t53,\t\t\t/* +0x20 fir_len, and ToneLPF's length    */",
+  "replace": "\t52,\t\t\t/* +0x20 fir_len, and ToneLPF's length    */"
+ },
+ {
+  "label": "ToneLPF's peak tap is one ULP low",
+  "find": "\t0.0411031917f, 0.0416515991f, 0.0418356508f,",
+  "replace": "\t0.0411031917f, 0.0416515991f, 0.0418356469f,"
+ },
+ {
+  "label": "ToneLPF's first tap loses its sign",
+  "find": "\t-0.00173766701f, -0.00138069503f, -0.000847295218f,",
+  "replace": "\t0.00173766701f, -0.00138069503f, -0.000847295218f,"
+ }
+]

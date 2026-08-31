@@ -1,0 +1,216 @@
+[
+ {
+  "note": "src/service/voice.c against build/test/t_ringdet.  Every clamp boundary in the grid sits on both sides of its constant, both threshold signs appear including zero, and the whole state struct is compared -- so each mutation below moves at least one grid cell."
+ },
+ {
+  "label": "the min_freq clamp excludes 13",
+  "find": "\tif (c->min_freq <= 13)\n\t\ts->min_freq = 14;",
+  "replace": "\tif (c->min_freq < 13)\n\t\ts->min_freq = 14;"
+ },
+ {
+  "label": "the max_freq clamp admits 101",
+  "find": "\tif (s->max_freq > 100)\n\t\ts->max_freq = 100;",
+  "replace": "\tif (s->max_freq > 101)\n\t\ts->max_freq = 101;"
+ },
+ {
+  "label": "the min_on clamp floor drops to 39",
+  "find": "\tif (s->min_on_dur <= 39)\n\t\ts->min_on_dur = 40;",
+  "replace": "\tif (s->min_on_dur <= 38)\n\t\ts->min_on_dur = 39;"
+ },
+ {
+  "label": "the first min_off clamp floor drops",
+  "find": "\tif (s->min_off_dur <= 119)\n\t\ts->min_off_dur = 120;\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tif (s->min_off_dur <= 118)\n\t\ts->min_off_dur = 119;\n\n\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the threshold divider works per 79 samples",
+  "find": "\ts->idle_debounce = athr / (c->fs / 80);",
+  "replace": "\ts->idle_debounce = athr / (c->fs / 79);"
+ },
+ {
+  "label": "short_38's denominator halves",
+  "find": "\ts->guard_limit = 3 * c->fs / (4 * c->min_freq);",
+  "replace": "\ts->guard_limit = 3 * c->fs / (2 * c->min_freq);"
+ },
+ {
+  "label": "short_46 forgets its minus",
+  "find": "\ts->lower_level = -athr;",
+  "replace": "\ts->lower_level = athr;"
+ },
+ {
+  "label": "the negative mode's short_34 is the positive mode's",
+  "find": "\t\ts->lock_debounce = 0;\n\t\ts->lock_level = 200;",
+  "replace": "\t\ts->lock_debounce = 0;\n\t\ts->lock_level = 100;"
+ },
+ {
+  "label": "zero threshold selects the negative mode",
+  "find": "\tif (c->threshold < 0) {\n\t\ts->lock_debounce = 0;",
+  "replace": "\tif (c->threshold <= 0) {\n\t\ts->lock_debounce = 0;"
+ },
+ {
+  "label": "short_3e initialises to 0",
+  "find": "\ts->ring_reported = 0;\n\ts->state = RD_STATE_SEARCH;",
+  "replace": "\ts->ring_reported = 0;\n\ts->state = 0;"
+ },
+ {
+  "label": "the threshold is used signed",
+  "find": "\tint athr = thr < 0 ? -thr : thr;",
+  "replace": "\tint athr = thr;"
+ },
+ {
+  "note": "Below: the ring detector proper (Create/Delete/GetLastRing/Process) and the four RD_* entry points, against the same binary.  Every one of these moves at least one of t_ringdet's per-block object comparisons."
+ },
+ {
+  "label": "RD_create accepts 9601 rather than 9600",
+  "find": "\tif (rate != RD_RATE_8000 && rate != RD_RATE_9600)",
+  "replace": "\tif (rate != RD_RATE_8000 && rate != 9601)"
+ },
+ {
+  "label": "RD_create's min_freq is 16",
+  "find": "\tcfg.min_freq = 15;",
+  "replace": "\tcfg.min_freq = 16;"
+ },
+ {
+  "label": "RD_create's max_freq is 81",
+  "find": "\tcfg.max_freq = 80;",
+  "replace": "\tcfg.max_freq = 81;"
+ },
+ {
+  "label": "RD_create's minOnDur is 121",
+  "find": "\tcfg.min_on_dur = 120;",
+  "replace": "\tcfg.min_on_dur = 121;"
+ },
+ {
+  "label": "codec 14 gets the 650 threshold",
+  "find": "\tcase 14:\n\t\tcfg.threshold = 850;",
+  "replace": "\tcase 14:\n\t\tcfg.threshold = 650;"
+ },
+ {
+  "label": "codec 12 falls to the default",
+  "find": "\tcase 4:\n\tcase 12:",
+  "replace": "\tcase 4:"
+ },
+ {
+  "label": "the default threshold is positive",
+  "find": "#define RD_THRESHOLD_DEFAULT\t(-3000)",
+  "replace": "#define RD_THRESHOLD_DEFAULT\t(3000)"
+ },
+ {
+  "label": "GetLastRing returns the two values swapped",
+  "find": "\t*freq = s->last_freq;\n\t*dur = s->last_duration;",
+  "replace": "\t*freq = s->last_duration;\n\t*dur = s->last_freq;"
+ },
+ {
+  "label": "the silence window is measured per 1001 ms",
+  "find": "\tint off_samples = s->fs * s->min_off_dur / 1000;",
+  "replace": "\tint off_samples = s->fs * s->min_off_dur / 1001;"
+ },
+ {
+  "label": "the lost-carrier period is one sample longer",
+  "find": "\t\tperiod = s->fs / min_freq;",
+  "replace": "\t\tperiod = s->fs / min_freq + 1;"
+ },
+ {
+  "label": "the lost-carrier test admits equality",
+  "find": "\t\tif (s->cross_samples > period) {",
+  "replace": "\t\tif (s->cross_samples >= period) {"
+ },
+ {
+  "label": "the ring is declared at minOnDur rather than past it",
+  "find": "\t\t    s->cycles * 1000 / s->freq_avg > s->min_on_dur) {",
+  "replace": "\t\t    s->cycles * 1000 / s->freq_avg >= s->min_on_dur) {"
+ },
+ {
+  "label": "a start edge reports the measured frequency",
+  "find": "\t\t\ts->ring_active = 1;\n\t\t\ts->last_freq = 0;",
+  "replace": "\t\t\ts->ring_active = 1;\n\t\t\ts->last_freq = s->freq_avg;"
+ },
+ {
+  "label": "the silence test uses only the idle counter",
+  "find": "\t\tif (s->idle_samples > off_samples ||\n\t\t    s->band_samples > off_samples) {",
+  "replace": "\t\tif (s->idle_samples > off_samples) {"
+ },
+ {
+  "label": "SEARCH latches on a sample equal to the threshold",
+  "find": "\t\t\tif (sample > thr) {",
+  "replace": "\t\t\tif (sample >= thr) {"
+ },
+ {
+  "label": "SEARCH's positive debounce admits equality",
+  "find": "\t\t\t\tif (++s->above_run > s->above_need) {\n\t\t\t\t\ts->state = RD_STATE_HIGH;\n\t\t\t\t\ts->upper_level = thr;",
+  "replace": "\t\t\t\tif (++s->above_run >= s->above_need) {\n\t\t\t\t\ts->state = RD_STATE_HIGH;\n\t\t\t\t\ts->upper_level = thr;"
+ },
+ {
+  "label": "entering HIGH leaves the idle debounce in place",
+  "find": "\t\t\t\t\ts->below_need = s->lock_debounce;",
+  "replace": "\t\t\t\t\ts->below_need = s->idle_debounce;"
+ },
+ {
+  "label": "entering LOW forgets the sign of its crossing level",
+  "find": "\t\t\t\t\ts->upper_level = (short)-s->lock_level;",
+  "replace": "\t\t\t\t\ts->upper_level = (short)s->lock_level;"
+ },
+ {
+  "label": "HIGH's full-amplitude test admits the guard band",
+  "find": "\t\t\t\tif (sample >= s->upper_level) {",
+  "replace": "\t\t\t\tif (sample >= s->lower_level) {"
+ },
+ {
+  "label": "the cycle marker is the lock debounce, not the idle one",
+  "find": "\t\t\t\t\tif (s->below_need == s->idle_debounce)",
+  "replace": "\t\t\t\t\tif (s->below_need == s->lock_debounce)"
+ },
+ {
+  "label": "a crossing does not clear the guard run",
+  "find": "\t\t\t\t\ts->state = RD_STATE_LOW;\n\t\t\t\t\ts->guard_run = 0;",
+  "replace": "\t\t\t\t\ts->state = RD_STATE_LOW;"
+ },
+ {
+  "label": "the guard band tolerates one sample more",
+  "find": "\tif (++s->guard_run > s->guard_limit) {",
+  "replace": "\tif (++s->guard_run >= s->guard_limit) {"
+ },
+ {
+  "label": "the guard reset seeds idle_samples with zero",
+  "find": "\t\ts->idle_samples = s->guard_limit;",
+  "replace": "\t\ts->idle_samples = 0;"
+ },
+ {
+  "label": "the frequency band excludes its top value",
+  "find": "\tif (f < s->max_freq + 1 && f >= min_freq) {",
+  "replace": "\tif (f < s->max_freq && f >= min_freq) {"
+ },
+ {
+  "label": "the running mean divides by the old count",
+  "find": "\t\ts->freq_avg = (short)((s->freq_avg * n + f) / (n + 1));",
+  "replace": "\t\ts->freq_avg = (short)((s->freq_avg * n + f) / (n > 0 ? n : 1));"
+ },
+ {
+  "label": "a measured cycle does not restart the half-cycle counter",
+  "find": "\ts->cycles++;\n\ts->half_samples = 0;",
+  "replace": "\ts->cycles++;"
+ },
+ {
+  "label": "the closing edge's correction is 21 ms",
+  "find": "\t\t\tms = s->min_on_dur - s->min_off_dur + 20",
+  "replace": "\t\t\tms = s->min_on_dur - s->min_off_dur + 21"
+ },
+ {
+  "label": "the opening edge's correction adds rather than subtracts",
+  "find": "\t\t\tms = s->min_off_dur - s->min_on_dur - 20",
+  "replace": "\t\t\tms = s->min_off_dur - s->min_on_dur + 20"
+ },
+ {
+  "label": "the closing edge is not held at minOnDur",
+  "find": "\t\t\tif (ms < s->min_on_dur)\n\t\t\t\tms = s->min_on_dur;",
+  "replace": "\t\t\tif (ms < 0)\n\t\t\t\tms = 0;"
+ },
+ {
+  "label": "the edge does not restart the report counter",
+  "find": "\t\ts->last_duration = ms;\n\t\ts->report_samples = 0;",
+  "replace": "\t\ts->last_duration = ms;"
+ },
+ {
+  "note": "NOT here: deleting the negative branch's second min_off clamp.  It is dead -- the first clamp already forced >= 120 -- so no test can catch its removal; it stays in the source because the object emits it, and the differential proves the surviving text harmless rather than this file proving it necessary."
+ }
+]

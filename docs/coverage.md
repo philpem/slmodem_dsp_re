@@ -7,16 +7,28 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##########################........]  76.6%    562394 bytes, 1296 symbols
-  tested      [##################################] 100.0%    562392 bytes, 1294 of 1296 that can be
+  translated  [##############################....]  86.8%    637908 bytes, 1554 symbols
+  tested      [##################################]  99.0%    631385 bytes, 1540 of 1554 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 22 of ours (10729 bytes).
+  the file-local symbols too -- 33 of ours (14739 bytes).
 
   translated, alias exists, and NOT tested:
+    VOICE_process                                  2016 bytes
+    detector_progress                               814 bytes
+    voice_command                                   802 bytes
+    voice_create                                    642 bytes
+    VOICE_command                                   548 bytes
+    VOICE_create                                    493 bytes
+    detector_create                                 411 bytes
+    voice_modem                                     338 bytes
+    voice_delete                                    181 bytes
+    VOICE_delete                                    133 bytes
+    GenEQTrnSequenceV29                              99 bytes
+    _handle_status                                   44 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
 
@@ -81,16 +93,12 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                 73683 bytes   297 symbols
-    V32mod.c +39                                   36744 bytes    64 symbols
-    voice.c#3 +3                                    9373 bytes    21 symbols
-    Fdspkrnl.c +13                                  7629 bytes    27 symbols
-    Dialer.c +18                                    6585 bytes    12 symbols
-    Beepgen.c +3                                    6546 bytes    27 symbols
-    VPcmV34Main.cpp +72                             5805 bytes    67 symbols
-    class1.c                                        4626 bytes    14 symbols
+    class1tx.c +94                                 70321 bytes   274 symbols
+    class1.c                                        4296 bytes    10 symbols
+    voice.c#3 +3                                    3253 bytes     4 symbols
     class1rx.c                                      2495 bytes     5 symbols
-    v32.c                                           1691 bytes     5 symbols
-    v22.c                                           1071 bytes     5 symbols
-    dp_init.c +2                                     753 bytes     5 symbols
+    v22.c                                            929 bytes     3 symbols
+    Dialer.c +18                                     895 bytes     1 symbols
+    V32mod.c +39                                      28 bytes     1 symbols
+    pow.S#279 +1                                       0 bytes     9 symbols
 ```

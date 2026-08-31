@@ -10,10 +10,10 @@
  * believing this sentence; the last two revisions of it were stale before
  * they were read (findings F6100, F6103).
  *
- * THE FOUR THAT ARE NOT HERE are `generateB1d`, `generateTRN2d` and
- * `generateEd` -- 149 bytes each, and the obvious next batch, since the three
- * message sources below have just taken the other half of that group -- and
- * `recivedPartTwoSilenceRrnSUVtag`, which is five bytes.  `setMappingParams`,
+ * ALL FORTY-THREE ARE NOW HERE: `generateB1d`, `generateTRN2d`,
+ * `generateEd` and `recivedPartTwoSilenceRrnSUVtag` -- the four this
+ * paragraph used to list as missing -- were claimed by the VPcmV34Main leaf
+ * pass.  `setMappingParams`,
  * `reset`, `generateSymbol`, `generateV90Symbol` and `generateV92Symbol` used
  * to be on that list and are now written; the last two are 2,235 and 3,922
  * bytes and are where the state machine is dispatched rather than edged,
@@ -636,6 +636,19 @@ V90Phase4Modulator::recivedPartOneSilenceRrnSUVtag()
 }
 
 /*
+ * recivedPartTwoSilenceRrnSUVtag -- .text+0x2cc60, 5 bytes: a single `jmp`
+ * with a relocation on it, a sibling call to `recivedSUVtag` -- a distinct
+ * function whose body is one call, not an alias.  The V.92 sibling at
+ * .text+0x174f0 is the same five bytes and the same spelling
+ * (V92Phase4Modulator.cpp).
+ */
+void
+V90Phase4Modulator::recivedPartTwoSilenceRrnSUVtag()
+{
+	recivedSUVtag();
+}
+
+/*
  * recivedCPtag -- .text+0x2cc70, the largest of the fifteen.  The one member
  * that acts when `word_0020` is NON-zero, and the only one that sets
  * `cp->word_00` to 1 rather than 0 -- V90CP.h reads that as selecting the
@@ -1146,6 +1159,77 @@ V90Phase4Modulator::generateDataSymbolBeforeRRN()
  * `mov %eax,0x1c(%esp)` at +0x2dbe4 -- the same store the branch then tests.
  * ===========================================================================
  */
+/*
+ * ===========================================================================
+ * THE THREE TRAINING SOURCES -- generateB1d (.text+0x2d9f0), generateTRN2d
+ * (+0x2da90) and generateEd (+0x2db30), 149 bytes each, immediately before
+ * `generateMP` in the blob as here.  The "obvious next batch" of the block
+ * comment below, claimed by the VPcmV34Main leaf pass.
+ *
+ * The same shape as the three message sources below with the scrambler's
+ * input GENERATED rather than fetched: ask the converter how many bits it
+ * wants; if none, drain a symbol; otherwise scramble that many constant ones
+ * (B1d, TRN2d) or zeros (Ed) into `scrambledBits`, feed them in, and drain.
+ * The branch is the other way round from `generateMP`'s -- the drain-only
+ * arm returns EARLY here (`test %eax,%eax; jne` at +0x2da0a) where the
+ * message sources fall through -- and the count is the LOCAL `nofBits`, not
+ * a field, so nothing is re-read after the scrambler returns.
+ *
+ * B1d AND TRN2d ARE BYTE-IDENTICAL BODIES UNDER TWO NAMES (all 160 bytes,
+ * `cmp` against `cmp`), both `processAllOnes`; Ed differs in the one callee,
+ * `processAllZeros`.  Written out three times because the object emits three
+ * bodies, exactly as for the message sources below.
+ *
+ * `short`, by the class convention the block comment below derives; the
+ * status both `V90BitsToSymbol::process` overloads return is discarded, both
+ * times, as there.  The symbol slot is uninitialised on the same terms too.
+ * ===========================================================================
+ */
+short
+V90Phase4Modulator::generateB1d()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.processAllOnes(scrambledBits, nofBits);
+		bitsToSymbol->process(scrambledBits, nofBits);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
+	return symbol;
+}
+
+short
+V90Phase4Modulator::generateTRN2d()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.processAllOnes(scrambledBits, nofBits);
+		bitsToSymbol->process(scrambledBits, nofBits);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
+	return symbol;
+}
+
+short
+V90Phase4Modulator::generateEd()
+{
+	unsigned int nofBits;
+	short symbol;
+
+	nofBits = bitsToSymbol->nofBitsForNextTime();
+	if (nofBits != 0) {
+		scrambler.processAllZeros(scrambledBits, nofBits);
+		bitsToSymbol->process(scrambledBits, nofBits);
+	}
+	bitsToSymbol->process(nofBits, &symbol);
+	return symbol;
+}
+
 short
 V90Phase4Modulator::generateMP()
 {

@@ -79,6 +79,14 @@ long modem_get_param(void *m, unsigned p) { (void)m; (void)p; return 0; }
 long modem_get_sreg(void *m, unsigned n) { (void)m; (void)n; return 0; }
 
 /*
+ * The FDSP kernel's not-yet-reconstructed callees.  fdspkrnl.c imports
+ * them (the differential build forwards them to the blob's own code); no
+ * interop test enters the voice path, so reaching one here is a test bug
+ * and aborts rather than returning something plausible.
+ */
+void FDSP_Kernel_InitObj(void *k) { (void)k; abort(); }
+
+/*
  * The diagnostic hooks.
  *
  * Duplicated from test/harness/runtime.c rather than shared, because the two

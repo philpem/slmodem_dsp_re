@@ -94794,6 +94794,6370 @@ period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
 
+### F8410. The exported-API pass: 12 no-caller/registration symbols written, and where each one turned out to live
+
+Batch of 2026-08-30, all differential tests green.  The twelve, with their
+homes and the evidence that placed them:
+
+| symbol | bytes | home |
+|---|--:|---|
+| `prop_dp_init` / `prop_dp_exit` | 44+44 | `src/core/dp_init.c` (new) |
+| `dp_call_exit` | 28 | `src/call/call.c` |
+| `dp_vpcm_exit` | 70 | `src/pump/v90/vpcm.c` |
+| `CID_create` / `CID_delete` / `CID_process` | 195+84+386 | `src/service/cid.c` (new) |
+| `retrainDetector` / `resetRetrainDetector` / `interpretMohTimeout` | 390+118+102 | `src/pump/v90/mohdet.cpp` (new) |
+| `getTimingOffset` / `getTimingPhase` | 11+11 | `src/pump/v34/v34pcmif.c` |
+
+Placement notes worth keeping:
+
+- **The span label `dp_init.c` names two DISJOINT stretches**, 0x0..0x5b and
+  0x340..0x5f5, with `dcr.c`'s four functions between them -- so one
+  translation unit holding both is impossible and they get two files.  The
+  CID trio is the modem-facing wrapper over the unwritten FSK receiver at
+  0x8fd60 onwards; its signatures are QUOTED from slmodemd's own externs
+  (`ref/slmodemd/modem.c:87-89`), not inferred.
+- **The retrain trio sits in a span labelled `b103.c`** (0x5f80..0x61f6,
+  between `dp_wrapper_run` and the first `VPcmV34Main.cpp` exports) and is
+  C++-mangled, so whatever the original file was, it was compiled as C++.
+  The MODULE is V.92 modem-on-hold, which is what the file is named for.
+- **`getTimingOffset`/`getTimingPhase` sit between `VPcmV34GetSNR` and
+  `VPcmV34GetCleanedSamples`**, both single loads off the argument at +0x49c
+  and +0x4a0, every neighbour taking `tagV34Object *`.  Placed at the blob's
+  own relative index in `v34pcmif.c`, whose definition order is load-bearing
+  (F7796); the emission-order gate there is now 36 of 36.
+- `prop_dp_init` calls the seven `dp_*_init` in the order call, b103, v22,
+  v23, v32, v8, vpcm; `prop_dp_exit` calls the exits in the SAME order, not
+  reversed.  Both end `xor %eax,%eax; ret` -- both return int 0 -- although
+  slmodemd's own extern declares the exit half `void`
+  (`ref/slmodemd/modem_main.c:103`).
+
+Tests: `t_dpinit` (45 checks), `t_cid` (91), `t_mohdet` (166+),
+`t_v34timing` (48).
+
+### F8411. `retrainDetector`'s detect arm REJOINS THE RESET TAIL, and the differential test's ragged-chunk case is what caught the misreading
+
+First reading of 0x5f80: on a detected 64-sample block the accumulators keep
+their values (`mov %eax,0x14(%ebp)`, `mov %edx,0x18(%ebp)`,
+`movl $0x40,0x1c(%ebp)` at 0x60cf..0x60d8 look like state being retained).
+That reading passed a plausible-looking source review and FAILED the
+differential test only in the split-call scenario -- by the whole-buffer call
+the return value happened to agree.
+
+What the object actually does: the detect arm's exit branch (`jbe 60a7` /
+`jmp 60a7`) lands INSIDE the reset block, after the `notchDetectSigCnt = 0`
+store but before the three accumulator-zeroing stores at 0x60ab..0x60b9.  So
+EVERY completed block zeroes `energyInp`, `energyOut` and the sample counter;
+only the signal count survives a detection.  The dead-looking stores at
+0x60cf are alive for one instruction window only because
+`dsplibs_debug_printf` is an opaque call that might read the struct --
+exactly the store pattern `src/service/dcr.c`'s header documents (F4202's
+neighbourhood), in a second module.
+
+Two lessons re-earned: a branch target inside another arm's straight-line
+tail is worth tracing to the INSTRUCTION, not the label; and a differential
+test that varies call granularity catches state-retention errors that any
+single-call test misses.
+
+### F8412. Unconditional unwritten callees: the harness bridge (`test/harness/unwritten.c`), and what it does to a test's two logs
+
+`symmap.py` renames EVERY symbol the blob defines to `ref_*` (F214's spike to
+rename only what we define was declined by F215), so a reconstructed caller
+with an UNCONDITIONAL unwritten callee -- `CID_process` calling
+`cid_progress`, `prop_dp_init` calling `dp_v22_init` -- cannot link at all:
+F217's every-binary wall.  For `v34handshak` the answer was to write the
+callees first; here the callees are the whole FSK caller-ID receiver and the
+whole V.22 and V.32 datapumps, far outside the batch, so this batch lands
+F214's documented escape hatch AT THE HARNESS TIER instead:
+
+- `src/` declares the nine callees **weak** (the `DSPLIB_VPCM_UNWRITTEN`
+  idiom) and calls them by their real names, unconditionally, as the object
+  does.  No `ref_` name and no null test appears in `src/`.
+- `test/harness/unwritten.c` defines each real name as a forward to the
+  blob's `ref_` alias.  When a bridged symbol is reconstructed the two
+  definitions collide and every link fails LOUDLY, which is the wanted
+  expiry.
+- The interop binaries link no blob and never reach these paths; their weak
+  references resolve to zero.
+
+**The consequence a test must be written for:** a bridged callee is blob code
+whichever side calls it, so its stateful host callbacks land on the
+REFERENCE side's logs and transcripts even for our-side calls.  Two shapes
+follow.  `t_dpinit` states its expectation as an INTERLEAVING: our
+`prop_dp_init` fills `harness_reg_ours` with the five written pumps and
+`harness_reg_ref` with the blob's v22/v32, and the two must be complementary
+ordered subsequences of what `ref_prop_dp_init` alone produces.  `t_cid`
+cannot strcmp the debug transcripts whole -- the receiver's lines all sit on
+side 1 -- so it counts the wrapper's own five format strings per side
+instead.  Both tests say so in their headers, and both collapse to straight
+symmetry when the bridges expire.
+
+### F8413. Small facts settled by this batch's disassembly, one per line
+
+- `struct v34_object` gains `timing_offset` (+0x49c) and `timing_phase`
+  (+0x4a0), named from the object's own exported accessor names -- the same
+  evidence class as a format string.  They are the ONLY readers anywhere in
+  the 1.2 MB; no writer was traced.  What the values mean is not claimed.
+- `interpretMohTimeout` is a 14-entry jump table at `.rodata+0x260`: codes
+  0..13 map to 0, 10, 20, 30, 40, 60, 120, 180, 240, 360, 480, 720, 960, -1
+  seconds; anything else (negatives included -- the guard is an UNSIGNED
+  16-bit `cmp $0xd; ja`) answers 0.  The V.92 MOH timeout ladder.
+- `resetRetrainDetector` knows exactly two coefficient sets, selected by
+  0x65 (notch at Fs/4: b1=0, a1=0, a2=0x39c3) and 0x66 (notch at Fs/8:
+  b1=0x5a82=2cos(pi/4) Q14, a1=0x55fc, a2=0x39c3).  Any other selector
+  zeroes the state and LEAVES THE COEFFICIENTS.  With no caller anywhere in
+  the object, what 0x65/0x66 mean has no source of evidence; they stay
+  numeric.  `tag_retrainReqDet` is 32 bytes; `include/dsplib/mohdet.h` is
+  its one home, and the field names `notchDetectSigCnt`, `energyInp`,
+  `energyOut` and `NOTCH_IN_OUT_RATIO_SHIFT` (=2) are the author's own,
+  from the format string at `.rodata.str1.4+0x86c`.
+- `retrainDetector`'s per-term truncation is REQUIRED: each Q14 product is
+  narrowed to short individually (`sar $0xe` then `movswl`), and x[n-1] at
+  full short range times b1=23170 exceeds any short, so summing first is a
+  different function.  The three coefficients are hoisted to locals BEFORE
+  the loop, which the compiler could not do on its own past the loop's
+  short stores through `det` -- the locals are the author's.
+- `CID_process` chunks its input at 192 samples, maps `cid_progress`'s
+  answer 0/1/other to keep-going/success/failure, and on success walks up
+  to FOUR consecutive NUL-terminated strings from `cid_get_strings`,
+  sending each plus its own "\r\n" (the 3-byte string at
+  `.rodata.str1.1+0x27`) to `modem_send_to_tty`.  The first chunk that
+  settles the verdict ends the call: the rest of the buffer is not offered.
+- `CID_create` accepts line rates 8000 and 9600 only, allocates 8 bytes
+  ({modem, receiver}), passes its `cid_val` through as `cid_create(0,
+  cid_val, 0)`, and calls `cid_freq_sampl(cid, 9600)` on the 9600 path.
+- `t_cid` proves the SUCCESS path against the blob's own receiver with a
+  synthesised Bell 202 burst: 300 alternating seizure bits, 180 mark bits,
+  an SDMF message (type 0x04, MMDDHHMM + number) with a valid 256-complement
+  checksum, 1200/2200 Hz FSK at 1200 baud, 8000 Hz.  The blob's
+  `cid_progress` returns 1 on it and hands back 3 strings; wrecking the
+  checksum turns the verdict into failure (-1 from the wrapper) with
+  nothing delivered.  The generator is in the test for the next reader.
+- A TTY capture (`harness_tty_ours`/`harness_tty_ref`, `modem_send_to_tty`)
+  is new in the harness; the ref-side stub used to `abort()` as
+  "unexpected", and `CID_process`'s whole point is to write there.
+### F8460. The voice-area no-caller leaves: all 20 symbols of Beepgen.c, Fdspkrnl.c and voice.c#3 written and differentially green in one pass
+
+This block is F8460-F8466, the range assigned by the parent session's brief
+(2026-08-30). Base commit `c1ca61af`.
+
+The no-entry-point bucket's voice-area spans held twenty `.text` symbols,
+6,236 blob bytes, none with any internal caller in the 1.2 MB (the
+exported-API-surface class F8320's reverse-edge probe identified). All twenty
+are now in `src/`, each behind a differential test:
+
+    src/service/beepgen.c   GetGain 432, beepgen_get_freqs 469,
+                            check_for_valid 52, check_for_valid_easy 34,
+                            zFLTUTL_Float2Linear 101, zFLTUTL_Linear2Float 49,
+                            fComputeRMSValueFloatBuf 82,
+                            fComputeRMSValueShortBuf 85, CrossDataLinks 123,
+                            bSearchEnergy 267, FindCorrelation 275,
+                            zfFLTUTL_GetMaxAbsValue 106
+    src/service/fdspkrnl.c  EchoCanceler 359, zFLTUTL_FloatMemSet 27,
+                            bValidateEnergyValue 296, FDSP_Kernel_Loop 530,
+                            TONE_generate 254, TONE_filter 185, TONE_kill 133
+    src/service/voice.c     RingDetector_Reset 449
+
+Every function was decoded from `tools/dis.py` by hand -- Ghidra was
+unavailable (`decompile.sh` pins 11.4.2 and only a 12.2 tree exists on this
+machine) and turned out not to be missed at these sizes. Tests: `t_beepgen`
+(~123k checks), `t_fdspkrnl` (~33k), `t_ringdet` (~9k), all comparing exactly
+-- no float tolerance anywhere -- plus per-side debug transcript comparison
+with asserted line counts, so a dead debug gate cannot pass as a quiet one.
+Mutation suites `beepgen`, `fdspkrnl`, `ringdet`.
+
+Because these are no-caller leaves, every signature is derived from the body
+alone: the headers (`beepgen.h`, `fdspkrnl.h`, `ringdet.h`) say so, and the
+comments carry the derivations. Notable readings, each verified by the tests:
+`fComputeRMSValueShortBuf` removes an INTEGER mean (unsigned `sum/n`) where
+the float flavour removes a float one and multiplies by `1.0f/n` where the
+short flavour divides; `bSearchEnergy` takes `(new1, new2, buf1, buf2, fresh,
+total)` and grades `buf1[1000..1999]` at threshold 40000.0f gated on
+`buf2[1]`; `FindCorrelation` scans at most 20 lags of a 1000-sample pattern,
+keeps a dead `float[20]` of correlations the object also keeps, and clamps
+its peak through `(unsigned)fabs(corr)`; `zfFLTUTL_GetMaxAbsValue` spells
+|x| as the macro `(x) > 0 ? (x) : -(x)` re-expanded per use, which is
+visible in the object as a re-test of the sign after each copy.
+
+### F8461. The FDSP kernel object model: two channels of block-LMS echo cancellation with reversed-block delay lines, read from four functions plus the blob's InitObj
+
+`FDSP_Kernel_Loop(k, in_a, out_b, in_b, out_a)` processes one 160-sample
+block full-duplex. The kernel struct (`include/dsplib/fdspkrnl.h`): +0x04 a
+saturation countdown (the object's own debug line "Delayed
+FDSP_Kernel_InitObj invocation due to saturation. \n" names it), +0x08/+0x0c
+the two filter lengths (InitObj defaults 80/40), +0x10 a short-buffer area
+the loop itself never touches, +0x14/+0x18 the two channel pointers.
+
+Each channel is 0x16a8 bytes: `float dly[0x500]` at +0, `float cross[160]`
+at +0x1400, coef pointer (240 floats, InitObj's clearing size) at +0x1680,
+verdict +0x1684, short offset +0x1688, `float mu` +0x168c (InitObj: 0.032f
+for channel A, 0.0f for B), `int energy[4]` ring +0x1694, index +0x16a4.
+
+The delay line's layout is the non-obvious part: the loop shifts the whole
+line UP a block (`dly[i] = dly[i-160]` descending from 0x4ff), and the tail
+copies each fresh far-end block in REVERSED (`rev[i] = in[159-i]`, then
+`sysdep_memcpy` to `dly[0]`). `EchoCanceler`'s window therefore slides DOWN
+one sample per output sample from `offset+159`, which restores the usual
+convolution direction. Each direction's error is written both to its output
+and to the OTHER channel's `cross` block; nothing reconstructed reads
+`cross` back yet. The double-talk gate counts samples with `fabs(x)` below
+HALF the window's peak |reference| (peak taken with the ternary-macro |x|,
+the near sample with `fabs` -- the object distinguishes the two spellings),
+adapts only on those, and reports `count > 80` through the verdict field.
+
+`bValidateEnergyValue` gates each direction: block variance (the float RMS
+routine) times 32000 into the `energy[]` ring as an int, and while the ring
+AVERAGE exceeds 2200 the countdown runs 1280/n*2 blocks, re-initialising the
+whole kernel through the blob's `FDSP_Kernel_InitObj` at zero. Only a quiet
+average with no countdown pending returns 1, which is what licenses tap
+adaptation. `t_fdspkrnl` drives the countdown across its whole arc --
+`strstr` assertions on the captured transcripts prove both saturation arms
+actually fired -- and runs six full-duplex blocks end to end with every
+channel byte compared.
+
+### F8462. GetGain, EchoCanceler and bValidateEnergyValue are LOCAL in the blob and take GCC 3.4's static-function regparm(2); our copies are external and ordinary, per the t_dialstring precedent
+
+All three are `t` in the object's symbol table, and their bodies read
+regparm(2): first argument in `%eax`, second in `%edx`, the rest on the
+stack (`EchoCanceler` starts `add $0x9f,%edx` on an incoming register
+argument). The two-pass objcopy (F221) already gives them `ref_` aliases, so
+the tests declare the reference side `__attribute__((regparm(2)))` and call
+our external copies the ordinary way -- each side as its own compiler built
+it, exactly as `t_dialstring.c` documents for `AnalyseDialString`.
+
+`GetGain`'s derivation, since it is otherwise opaque: reads
+`GetDTMFHighToneLevel` (20), `GetDTMFHighAndLowToneLevelDifference` (36) and
+`GetAdditAttenToBeepgenVoice` (60) -- the parameter names are
+`modem_params.h`'s, and the object's own debug strings name the outputs:
+"BeepGen: GAIN1*1000" prints the second argument's target, "GAIN2*1000" the
+third's. GAIN2 = pow(10, (6-p20)*0.05 - p60*0.05) * 0.276; GAIN1 = GAIN2 *
+pow(10, -p36*0.05). The 0.05s and 0.276 are the blob's `.rodata.cst8`
+doubles at 0x188/0x190/0x198.
+
+### F8463. A call from src/ to an unwritten blob function cannot link -- symmap renames every defined symbol -- so the harness now carries forwarders for stateless blob-resolved callees, and runtime64 carries abort stubs
+
+`TONE_generate` calls `MTK_phasor` and `bValidateEnergyValue` calls
+`FDSP_Kernel_InitObj`; neither callee is reconstructed. `tools/symmap.py`
+renames every symbol the blob DEFINES to `ref_*` (the F214/F215 scaffold
+that would rename only what we define was measured and declined), so those
+calls came up undefined in every test binary at once.
+
+The resolution extends symmap's own SHARED/STATEFUL split one step: the
+differential harness (`test/harness/runtime.c`) defines unprefixed
+`MTK_phasor` and `FDSP_Kernel_InitObj` that forward to the `ref_` aliases.
+Both were checked in the disassembly to write only through their argument --
+no global, no static -- so one copy serving both sides carries nothing
+across the comparison, the same argument that lets both sides share
+`sysdep_memcpy`. A STATEFUL callee must not be added to that list. The
+64-bit interop build has no blob, so `test/interop/runtime64.c` defines the
+same two names as `abort()` stubs beside its modem-core stubs: no interop
+test enters the voice path, and a plausible default would be worse than a
+crash. When either function is reconstructed in `src/`, its forwarder
+collides at link time and is deleted -- a loud removal, not a silent one.
+
+Consequences for the tests: `TONE_generate`'s oscillator is the same blob
+code on both sides, so `t_fdspkrnl` compares everything around it (state
+in, scaling, the ms clock, the phase inversion); and the InitObj arm of the
+saturation countdown re-initialises both sides' hand-built kernels with the
+blob's own code, after which every channel byte is still compared.
+
+### F8464. The author's four-digits-short two-pi, the RMS that never takes the root -- and the x87 extended-precision shield that makes a class of spelling claims untestable behaviourally
+
+`TONE_generate`'s phase wrap subtracts `6.28318530718` -- the blob's
+`.rodata.cst8` at 0x1d8 is exactly that decimal, NOT double 2*pi
+(6.283185307179586...). The truncation is the author's typing and is kept
+verbatim; the sibling constant at 0x1d0 is full-precision pi, so the pair
+cannot be one rounding convention. The expiry semantics around it: a
+positive duration reached by the 0.125 ms-per-sample clock resets the clock
+and jumps the phase by pi -- the beep cadence INVERTS the tone rather than
+gating it; duration <= 0 means endless.
+
+**The shield, measured on this pass's own mutation suites.** Four mutations
+that looked adjudicable were written and all four SURVIVED, for one
+structural reason: this code computes everything at x87 extended precision
+and narrows to float only at the stores, so a spelling change whose
+difference is ~2^-64 relative (a reciprocal-multiply for a divide, a
+reassociated sum) or smaller than a float ulp at the value (the truncated
+two-pi's 4.1e-13, against 4.8e-7 float spacing near 6.28) is ERASED by the
+narrowing on every practical input. Those spellings are still real -- the
+object's fdivrp/fmulp sequences and its 8-byte constants are unambiguous --
+but they rest on the disassembly and the codegen tier, not on any
+behavioural check, and the mutation files (`beepgen.json`, `fdspkrnl.json`)
+now carry one note each saying so instead of a mutation that cannot fire.
+A fifth attempt was withdrawn as EQUIVALENT before running: commuting the
+first two operands of a sum is exact in IEEE arithmetic and mutates
+nothing.
+
+`fComputeRMSValue{Float,Short}Buf` return mean-removed average POWER -- no
+square root anywhere -- so the `RMS` of the exported names oversells; kept,
+of course, since the names are the object's. Constants placed this pass,
+all read from `.rodata` and green differentially: 1/32000 and 32000
+(CrossDataLinks, the +/-32000 voice full scale), 32000.0
+(bValidateEnergyValue's energy scale), 0.5 (the double-talk half-peak),
+40000.0f over variance*0.001f (bSearchEnergy), 2200 and 1280/n*2 (the
+energy gate), 0.0001 as a DOUBLE (FindCorrelation), 0.05/-0.05/0.276
+(GetGain), 0.125f ms/sample and pi (TONE_generate).
+
+### F8465. RingDetector_Reset: the cfg and state fields named by the object's own format string, a doubly-applied clamp, and an unguarded division
+
+The debug line at `.rodata.str1.4+0x46c` -- "Reset Soft Ring: Threshold =
+%d, Fs = %d, MinFreq = %d, MaxFreq =%d ... minOnDur = %d, minOffDur = %d" --
+prints `cfg+0x14`, `state+0x10`, `state+0x00/04/08/0c`, which names both
+structs' first six fields (tier-1 evidence, `include/dsplib/ringdet.h`).
+Clamps: min_freq >= 14, max_freq <= 100, min_on_dur >= 40, min_off_dur >=
+120. Derived shorts: |threshold| / (fs/80) at +0x30 (copied to +0x4e and
++0x50), 3*fs/(4*cfg_min_freq) at +0x38 -- both from the RAW cfg values,
+before clamping. |threshold| at +0x36 and +0x44, its negation at +0x46. The
+threshold's SIGN selects a mode: negative gives +0x32/+0x34 = 0/200 where
+non-negative gives 2/100.
+
+Two faithful oddities: the negative-threshold arm clamps min_off_dur >= 120
+a SECOND time, dead because the first clamp already ran (the ringdet
+mutation file records why no mutation can adjudicate dead code); and
++0x30's divisor `fs/80` is unguarded, so an fs below 80 divides by zero --
+the object traps identically, so the test grid stays at fs >= 80 and the
+test says why. `t_ringdet` covers the full clamp/sign grid, 8,967
+configurations, whole-struct compare against an 0xa5 prefill, plus one
+captured-transcript configuration comparing all six formatted values.
+
+### F8466. bInternalBeepInProgress is defined in fdspkrnl.c, and its second referrer is the unwritten function at 0xaea27
+
+The `.bss` word at 0x8ec, LOCAL in the blob, suppresses
+`bValidateEnergyValue` entirely when set. `relocscan --at .bss:0x8ec` finds
+exactly two referrers: 0xaebeb (bValidateEnergyValue) and 0xaea3f, inside
+the unwritten function between EchoCanceler's end (0xaea26) and
+zFLTUTL_FloatMemSet (0xaea70) -- presumably the beep path's setter, same
+TU. Defined non-static in `src/service/fdspkrnl.c` for the same testability
+trade the LOCAL functions make (the blob side's copy has a `ref_` alias via
+the two-pass objcopy, so both sides are drivable). If the 0xaea27 function
+turns out to live elsewhere when written, the definition moves with the
+evidence. Neighbouring locals for the eventual voice pass: `pGlobalFDSPObj`
+at 0x8e4, `uCorrelationReportsNo` at 0x8e8 (single referrer 0xae61d, also
+unwritten, in the Beepgen.c span).
+### F8490. `GetNextDigitAndReturnNextState` was already written -- it is the inlining-boundary artefact wearing a leaf's name
+
+The no-entry-point bucket lists it as 895 unwritten bytes in `Dialer.c +18`.
+It has been in `src/dialer/dialer.c` since the dialler pass, as the file
+static the object also has (`t` at 0x07abb0, argument in `%eax` per F51's
+convention) -- and the modern compiler inlines it entirely into
+`DialerProgress`, so our object emits NO standalone symbol and every tool
+that counts written symbols by name counts it unwritten.  This is CLAUDE.md's
+"per-function count across an inlining boundary" trap surfacing inside the
+leaf bucket itself: the 16,013-byte figure for the 139 leaves carries these
+895 bytes as remaining work that does not exist.  Behaviour is covered by
+`t_dialerprog`, which drives it through `DialerProgress` exactly as the blob's
+callers must.  Nothing to write; recorded so the next scheduler subtracts it.
+(2026-08-30)
+
+### F8491. The FAXVMI dispatch: slot map, message tables, and the author's strings
+
+`vxx_message` (.rodata 0x94e0, 52 bytes) is thirteen function pointers and
+its relocations name every one: slots 0-4 are `null_message` five times over,
+then v21tx, v21rx, v27tx, v27rx, v29tx, v29rx, v17tx, v17rx `_message` --
+transmit before receive per modulation, V.21 lowest.  `vxx_status` (0x95a0)
+is the same permutation over the `_status` family, so the slot map is a
+property of the VMI, not of one table.  `FAXVMI_message` (0x0957b0) reads
+the slot from the VMI object's +0x0e and the wrapped handle from +0x28,
+initialises its out-parameter to NULL, and dispatches with no bound check.
+
+The eight `*_MESG` tables (.data 0x7960..0x80a0) resolve to strings now
+vendored verbatim in `src/fax/class1tx.c` -- including the author's
+"Protocal", "Transmition", and V29TX's "CONNECT: V.29 Transmit 7600 bps"
+where V.29's rate ladder says 7200.  All eight reporters share one shape
+(unsigned guard, byte-masked index) and one off-by-one, D951.  Because
+every `vxx_message` target is one of this batch's functions, the table
+itself could be reconstructed alongside them; `vxx_status` cannot yet (the
+`_status` family is unwritten) and stays the blob's.  (2026-08-30)
+
+### F8492. Nine scoped leaves are blocked by the link constraint, not by difficulty -- the "unwritten callees resolve to the blob" premise is the F214 spike, which F215 declined
+
+This batch's brief asserted unwritten callees resolve to the blob at link
+time.  In this tree they do not: `symmap.py` renames EVERY defined blob
+symbol to `ref_*` (the F214 scaffold that would change that is a spike
+branch, declined by F215), every test binary links all of `$(OBJ_REPRO)`,
+so one undefined reference fails the whole suite.  Nine of the batch's
+no-entry-point leaves reference symbols that only exist in the blob and are
+NOT in the no-entry-point bucket themselves (each is service-reachable, so
+writing it would leave the bucket's scope):
+
+    cid_reset                            calls reset_cid (Rxcid.c)
+    fax_class1_status                    calls FAXVMI_status
+    _send_hdlc_between_buffer_state_init tail-calls _handle_hdlc_input_open
+    cHDLCtx_off_init                     calls FAXVMI_control (and copies
+                                         V21RX_CTL / FAXVMI_CTL)
+    GenEQTrnSequenceV27                  calls ScrambleDataV27
+    voice_set_online / voice_set_duplex  call detector_set_enable AND store
+                                         voice_online / voice_duplex
+    RxNextStateV21 / TxNextStateV21      store six RxHdx*/TxHdx* handler
+                                         addresses
+
+The last two rows show the constraint binds on DATA references exactly as on
+calls: installing an unreconstructed handler's address is an `R_386_32`
+against a symbol nothing defines.  All nine are small (1,230 blob bytes
+total) and every one becomes writable the moment its referents land --
+most referent groups are fax-phase, `reset_cid` and
+`detector_set_enable` are CID/voice service work.  Declined rather than
+written half-connected; the attempts are recorded in the owning files'
+headers (`src/service/cid.c`, `src/fax/class1.c`, `src/fax/class1tx.c`,
+`include/dsplib/voice.h`).  (2026-08-30)
+
+### F8493. Storing a function pointer is the same link constraint as calling it
+
+Separated from F8492 because it is the half a callee-oriented scan misses: a
+`movl $handler, field` site has no `call`, shows up in no call graph, and
+still pins the handler at link time.  `RxNextStateV21` alone installs three
+(`RxHdxWaitV21`, `RxHdxDataV21`, `RxHdxIdleV21`), `TxNextStateV21` three
+more, `voice_set_online`/`voice_set_duplex` one each -- so a leaf pass that
+had checked only for `R_386_PC32` call relocations would have written them
+and failed 90-odd binaries at link.  Check `dis.py` for BOTH relocation
+kinds before scheduling a leaf.  (2026-08-30)
+
+### F8494. `FPM_xor_table` is popcount over a byte, and its consumers can index it with sixteen bits
+
+512 bytes at .rodata 0xc7a0: entry i is the number of set bits in i,
+verified for all 256 entries against the blob and now reconstructed in
+`src/dsp/fpm_xor.c`.  The name is the author's use, not the content:
+`SGD_correlate` and `SGD_sequence_det` XOR two symbol words and read the
+Hamming distance out.  Both index with `movzwl` of a full 16-bit XOR, so
+symbols differing above bit 7 read past the table -- into the blob's
+neighbouring .rodata there, ours here -- which constrains every future test
+and caller to byte-ranged symbols (the fax training alphabets are).  This
+is the same table `src/dsp/fpm_div.c`'s underflow note reads entry 0 of;
+that neighbour effect is the blob's layout and does not transfer.
+(2026-08-30)
+
+### F8495. The SGD object: 0x5c bytes, a 13-dword config copy, and a status block cleared at widths its copy ignores
+
+`SGD_create` (0x09f300, read for evidence): `rep movsl` copies 13 dwords of
+caller config (or `SGD_CFG`, .data 0x80e0, whose defaults are w00=8,
+history=50, seq and ref both pointing at FPM_xor_table as a placeholder,
+w26=0x2000), then derives +0x4e = w1c-1, +0x54 = w02+w24-1, +0x56 =
+w00*w24*(0x4000-w26) truncated to a short, allocates 2*(w02+w04)-2 bytes of
+history at +0x50 on the fresh path, and zeroes the six status fields.
+`SGD_status` copies +0x34..+0x4b as dwords (a struct assignment, pads
+riding along) and clears the six fields INDIVIDUALLY -- two of them as
+words -- so the two pad shorts survive in the object while the copy that
+just left carried them out.  The full layout is `include/dsplib/sgd.h`;
+`t_faxsgd` drives both sides' objects through the blob's own
+`ref_SGD_create` so the derived fields are the constructor's, not the
+test's.  Also settled there: `SGD_correlate`'s scale is `1 / (p0 * n)` in
+INTEGER arithmetic -- zero for any |p0*n| > 1 -- so the "correlation" is
+1 for every real configuration; and `SGD_sequence_det`'s threshold accept
+compares the running best SIGNED where the best-so-far update compared it
+UNSIGNED.  (2026-08-30)
+
+### F8496. The Caller ID service object: 0x3fc bytes, and mode 0 is FSK, not DTMF
+
+`cid_create` (0x08fe10, read for evidence) allocates 0x3fc bytes: +0x00 the
+DTMF receiver (`create_cid_dtmf`), +0x04 the FSK receiver (`create_cid`),
++0x260 the mode, +0x264 the second constructor argument, +0x3f8 cleared.
+The mode tests -- identical in create, `cid_reset` and `cid_threshold` --
+are `!= 0` for the DTMF side and `!= 1` for the FSK side, with anything
+above 1 clamped to 5 (both): so mode 0 means FSK-only, which is backwards
+from what the field order suggests and is why the header spells it out.
+`cid_threshold` stores one int argument into BOTH receivers as a short:
+`dtmf_rx.sens` (+0x33e) and the FSK object's f028 (+0x28) -- the same f028
+`create_cid` seeds with 2 and `pack_next_bit` uses as its seizure run
+length, so one field is the FSK detector's threshold AND the framer's
+timing constant.  Modelled in `include/dsplib/cid_modem.h`; the framer's
+five state fields are carved out of `struct cid`'s pad in cid.h, all six
+names usage inference and marked so.  (2026-08-30)
+
+### F8497. The SGD engine is WITHDRAWN, not written: `det_at` proves the object model wrong, and 3,603 checks are what caught it
+
+`src/fax/sgd.c` was written in this batch and is removed again rather than
+committed.  Under the period compiler `t_faxsgd` fails 96 of 3,603 checks,
+and the shape of the failure is a layout claim and not an arithmetic one:
+
+    t_faxsgd.c:142: after step: det_at offset  got 20, reference -6181684
+    t_faxsgd.c:200: sequence_det return        got 0,  reference -21320
+
+`det_at` is compared as an offset -- `status.det_at - (short *)buf` -- so a
+value of -6181684 says the blob's pointer does not aim into the object's own
+buffer AT ALL, at a distance of megabytes.  Ours lands at word 20, which is
+the plausible-looking answer.  Two readings survive that: `buf` is not at the
+offset F8495 assigned it, or `det_at` is not a pointer into `buf` in the
+first place and the whole status block is misread.  Both are structural, so
+no amount of adjusting the detector's arithmetic reaches them, and F8495's
+"0x5c bytes, a 13-dword config copy" must be treated as UNCONFIRMED for the
+status half of the object.
+
+Withdrawn: `src/fax/sgd.c` (5 functions, 212 lines), `include/dsplib/sgd.h`,
+`test/unit/t_faxsgd.c`.  The rest of the batch is unaffected -- nothing
+outside those three files names an `SGD_` symbol, only a comment in
+`src/dsp/fpm_xor.c` does, and `GenEQTrnSequenceV29` and `_handle_status`
+pass in the same binary.
+
+The test is kept in the record because it is the asset: a detector that
+compares `det_at` as an OFFSET rather than as a pointer value is what turned
+an invisible layout error into a 96-check failure.  Rewriting it as a byte
+compare of the object would have reported one differing run and said nothing
+about which field was wrong.
+
+**CORRECTION, 2026-08-31: `t_faxsgd.c` IS NOT RECOVERABLE, AND THE SENTENCE
+THIS REPLACES WAS WRONG.**  It told the fax phase to restore the file "from
+this commit's parent".  The file was never committed -- it existed only as an
+UNTRACKED file in the withdrawing agent's worktree, and the withdrawal deleted
+it rather than preserving it.  Checked before writing this: no commit on any
+branch touches the path, no reachable tree contains it, `git fsck
+--lost-found` holds no matching blob, and the worktree is gone.  It is lost.
+
+That is a defect in HOW the withdrawal was done, not in the decision to
+withdraw.  **The rule it establishes: when work is withdrawn for failing its
+test, COMMIT IT FIRST -- on a side branch, or as a dead file -- and only then
+remove it, so the test survives its subject.**  A finding that promises a
+recovery path must name one that exists; this one sent a future reader into an
+empty tree, which is the "a wrong name is believed by every future reader"
+failure applied to a procedure instead of a name.
+
+What DOES survive is this finding's description of the test, which is enough
+to rebuild it: drive the blob's own object pair, compare `status.det_at` as an
+OFFSET from `buf` rather than as a pointer value, and compare the whole
+0x5c-byte object after every step.  The fax phase must write that test again
+before trusting any SGD reconstruction.  (2026-08-30, corrected 2026-08-31)
+### F8430. The `VPcmV34Main.cpp +72` leaf batch has NO derivation record, and this is the note saying so
+
+All 67 no-entry-point leaves of the `VPcmV34Main.cpp +72` span are written
+and differentially green against the blob under the period compiler (265
+passed, 0 failed, over seven new binaries: `t_cevalleaves`,
+`t_dilfreefns`, `t_jdmpleaves`, `t_k56flexleaves`, `t_p2echoleaves`,
+`t_trn2dknown`, `t_vpcmleaves`).  What does NOT exist is the reasoning: the
+agent that wrote them was killed by a session limit at the moment it began
+writing its findings, and nothing was recovered.
+
+This finding is deliberately not a reconstruction of that reasoning.  Writing
+one from the diff would put a guess into the record wearing a derivation's
+clothes, which is the failure CLAUDE.md's naming section calls worse than
+leaving a field padded -- a wrong note is believed by every future reader and
+no test can fail on it.
+
+What IS established, and needs no reasoning to trust: every one of the 67
+passes a differential test against the blob, and the tests are in the tree
+to be read.  What is NOT established is why any particular spelling was
+chosen -- so if one of these functions later needs a codegen-level
+refinement, or its field names are questioned, treat the names as
+UNSOURCED and re-derive from `dis.py` rather than citing this batch.
+
+The two names `service.py --list none` prints as missing here,
+`...evaluateMeanErrorStdPhase3E` and `...recivedPartTwoSilenceRrnSUVtag`,
+are that tool's COLUMN TRUNCATION and not absent symbols; both are defined,
+as `...Phase3Ef` and `...SUVtagEv`.  Check a suspected gap with `nm` before
+believing it.  (2026-08-30)
+## F8560. `v32hdx.h`'s reading of the `V32NextState` table is wrong in two of six slots, and the error is the one `dis.py` exists to prevent
+
+`include/dsplib/v32hdx.h` was written when only the drivers had been read, and
+its prose lists the dispatch table as
+
+```
+     0  V32OrgNextState        3  V32LocLoopNextState
+     1  V32AnsNextState        4  V32RngInitNextState
+     2  V32LocLoopNextState    5  (no relocation)
+```
+
+Slot 5 IS relocated, and it names the one next-state function that list never
+mentions. `tools/tabdump.py --sym V32NextState` prints all six:
+
+```
+   +0x00  V32OrgNextState        +0x0c  V32LocLoopNextState
+   +0x04  V32AnsNextState        +0x10  V32RngInitNextState
+   +0x08  V32LocLoopNextState    +0x14  V32RngRespNextState
+```
+
+The six dwords are ZERO in the file — every value is a relocation — so a
+reading taken from the bytes sees six nulls and a reading taken from trimmed
+`objdump` output sees nothing at all. This is exactly the failure
+`tools/dis.py`'s own header comment records three times over, and it has now
+happened a fourth, in a header rather than in a source file. The correction is
+recorded in `include/dsplib/v32hdxst.h` beside the corrected table, and
+`src/pump/v32/v32hdx_tables.c` is the definition.
+
+**What it changes substantively**: `V32RngRespNextState` (1,310 bytes) reads as
+unreachable through the table under the old list, and mode 5 reads as a hole.
+Both are wrong, and a scheduling decision taken from the old list would have
+left the function out of the machine's closure.
+
+## F8561. `SREv32_CFG` is writable now, and F1615's reason for declining it has expired
+
+`src/pump/v32/v32sre_tables.c` carries V.32's six symbol-timing tables and says
+in its header that `SREv32_CFG` is deliberately absent:
+
+> it is 14 dwords whose field boundaries cannot be settled until
+> `FPM_SRE_recover` is read, and a byte comparison would pass for every wrong
+> reading of them alike. See finding F1615.
+
+That was right when it was written and is not right now. `FPM_SRE_recover` has
+since been read and `struct fpm_sre_cfg` in `include/dsplib/fpm_sre.h` names all
+eighteen fields with the instruction that forces each one. So the boundaries are
+settled by the CODE THAT CONSUMES the table rather than by the table's own
+bytes, and writing it as a struct initialiser is a reading rather than a byte
+copy: every value lands in a field the SRE block dereferences by name.
+
+```
+ clock_len 3   groups_acq 3   groups_trk 16   settle 70
+ acc_down 8192 acc_up 16384   coeffs 180      pad0e 0
+ proto SREv32_COFFS   disc SREv32_XB_COFFS
+ xclock SREv32_xCLOCK yclock SREv32_yCLOCK
+ pll_k1 SREv32_PLL_K1 pll_k2 SREv32_PLL_K2
+ mag_hi 2      mag_lo 1       err_hi 9830     err_lo 200
+ rms_min 1500  rms_len 9      pad34 0         pad36 0
+```
+
+Compiled with GCC 14 at `-m32` the object's fifty-six bytes and ours agree
+byte for byte outside the six relocated pointer slots, which are addends and
+compare as zero on both sides; the six relocations name the same six tables.
+
+**It also separates V.32's config from the built-in `FPM_SRE_CFG` in a way the
+header had bounded but not settled.** `fpm_sre.h` says of the built-in that
+"the six pointers are ZERO ... a caller copies the static onto the stack and
+patches the tables in before calling init". V.32 does not do that: its config
+carries its six tables directly as relocations, and `V32OrgNextState` (0x82f9e)
+loads the address and hands it straight to `FPM_SRE_init`. So the patch-at-the-
+call-site shape is the BUILT-IN's, not the block's contract.
+
+## F8562. The twenty V.32 half-duplex states and their five dispatchers are one strongly-connected component of thirty-one symbols, and the reverse direction is what proves it
+
+F8200 established that the twenty-two Hdx symbols cannot be landed for their own
+bytes because the dispatch table welds them to 8,833 bytes of next-state code,
+and predicted the residue at 31 symbols / 13,344 bytes once the layer beneath
+was written. That prediction is now confirmed on the merged tree, and the
+component is closed in BOTH directions rather than only outward:
+
+```
+$ python3 tools/closure.py RxHdxNull --missing
+closure of RxHdxNull: 28 symbols, 12869 bytes (unwritten only)
+```
+
+A 103-byte leaf reaches twenty-two of the twenty-five call symbols. Adding the
+three the walk does not reach from there — `RxHdxTone`, `TxHdxNull`,
+`TxHdxTone` — closes it at
+
+```
+$ python3 tools/closure.py RxHdxNull RxHdxTone TxHdxNull TxHdxTone \
+        V32OrgNextState V32AnsNextState V32RngInitNextState \
+        V32RngRespNextState V32LocLoopNextState --missing
+31 symbols, 13344 bytes (unwritten only)
+```
+
+which is F8200's figure exactly. **The smallest landable unit of the V.32
+half-duplex machine is therefore the whole machine**, and the reason is the
+link rule rather than anything about difficulty -- `symmap.py` renames every
+defined blob symbol to `ref_*`, so a reference from `src/` to a symbol this tree
+has not written is an undefined reference that fails the whole suite: a state
+installs its successor with `movl $handler, 0x6c(%edx)`, and a stored function
+pointer is a relocation exactly as a `call` is. `RxHdxNull` at 0x844cc/0x844d3
+is the shortest instance — two stores, two relocations, `TxHdxNoCarrier` and
+`RxHdxError`.
+
+The practical consequence for scheduling is that a wave taking any part of this
+machine takes all of it, and that no member of it can be differentially tested
+until every member exists. That is a property of the object and not of the
+harness: `symmap.py` renames every defined blob symbol to `ref_*`, so an
+unwritten callee does not fall back to the blob.
+
+## F8563. `V32_S_COEF` is left undefined on purpose: a table with no consumer cannot be differentially tested
+
+`.rodata` 0x006d60 and 0x006d7e hold two fifteen-short banks, `V32_S_DATA_COEF`
+and `V32_S_COEF`, adjacent and identical in shape. Both are `struct
+fpm_mtd_cfg::coeff` -- the type is the CALLEE's and not the table's, from
+`include/dsplib/fpm_mtd.h`'s "+0x00 is a POINTER to the coefficient bank, not a
+scalar".
+
+Only the first is written. It is in the half-duplex machine's link closure --
+`V32OrgNextState` (830b8) and `V32AnsNextState` (860c3) store its address into
+the MTD before `FPM_MTD_create`, and `RxHdxSTone` (842b3) tests
+`mtd->cfg.coeff == V32_S_DATA_COEF` -- so a reference exists to compare against
+`ref_V32_S_DATA_COEF`. Nothing written, and nothing in this batch, names
+`V32_S_COEF`.
+
+Adding it would move `coverage.py`'s count by one symbol and thirty bytes and
+would be checked by nothing: with no consumer there is no differential test to
+write, only a byte copy of a byte copy. The rule of the tree is that nothing is
+committed which has not passed a differential test, and a transcription that
+can only be compared against its own source is not one. It is left for the pass
+that writes its consumer, which the identity test in `RxHdxSTone` says will be
+whatever installs the OTHER S-tone bank.
+
+**And the identity test is why the values are not the evidence.** `RxHdxSTone`
+compares the POINTER, not the coefficients, so the two banks are distinguished
+by which symbol was installed and not by what they contain. Nothing in the
+object prints either name, so anything past "the DATA mode's one" -- a centre
+frequency, a bandwidth -- would be usage inference about a resonator and is not
+recorded.
+
+## F8565. hdx + 0x78 is the handshake state's countdown and hdx + 0x84 is the per-block charge; both named from an exhaustive reader set
+
+V.32's half-duplex machine carries TWO budgets and they are easily confused.
+`*left` is the BLOCK's symbol budget: `V32TxHdxModem` seeds it from hdx + 0x9e
+and its exhaustion ends one call to the driver. hdx + 0x78 is the HANDSHAKE
+STATE's countdown; it outlives the block and reaching zero or below is what
+transitions. It is an `int` and that is forced -- every access in the eight
+`TxHdx*` states is a 32-bit `mov`/`sub` with no truncation (7fd75, 7fdf8,
+80177, 802dd).
+
+Its name is usage inference but over an exhaustive set: outside these eight and
+the twelve `RxHdx*`, the only writers in the whole 1.2 MB are the five
+`V32*NextState` dispatchers, which set it to a per-state literal on entry to
+each handshake state (0x8, 0x10, 0x18, 0x24, 0x28, 0x38, 0x40, 0x80, 0xb4,
+0x100, 0x200, 0x400, 0x500, 0x610, 0x960, 0xa60, 0x1a6c, 0x1b00, 0x1bbc,
+0x2000 among others), every transmit state subtracts what it just consumed, and
+the `<= 0` test is the sole trigger for `V32NextState`. `RxHdxTone` (839ce)
+compares it against 0xb4, which is exactly what `V32AnsNextState` (86462) and
+`V32LocLoopNextState` (867ad) seed it with -- i.e. "is this still the first
+block of this state".
+
+hdx + 0x84 is a `short` and is what a WHOLE-BLOCK state charges against that
+countdown, once per call. `V32FP_recreate` (7f123) and `V32FP_control` (84606)
+both fill it from the table the object names `V32_SYMBOL_LEN`, and
+`V32OrgNextState` (83529) copies hdx + 0x9e into it -- the same value again. It
+is nonetheless a SEPARATE field and not an alias to +0x9e, because
+`V32RngRespNextState` (85594) writes ZERO there while leaving +0x9e alone,
+which makes a tone or silence state run to its countdown rather than to a block
+count. The name therefore describes what its only two readers (`TxHdxTone`,
+`TxHdxNull`) do with it rather than the table it usually comes from; naming it
+`SYMBOL_LEN_84` would have been the wrong-name-believed-for-ever failure
+CLAUDE.md rates worse than padding. Macros `V32HDX_STATE_LEFT` and
+`V32HDX_BLOCK_CHARGE` in `src/pump/v32/v32txhdx.c`.
+
+## F8566. The V.32 transmit states' count clamp is a SIGNED compare with an UNSIGNED SIXTEEN-BIT TRUNCATION, and it is not a `min`
+
+Six of the eight `TxHdx*` states open with what reads as
+`count = min(*left, hdx->left)`. It is not. The object emits
+
+```
+   cmp %eax,%ecx ; mov %eax,%ebx ; jg .Lkeep ; movzwl %cx,%ebx
+```
+
+at 7fde8, 7febb, 7ffab, 80088 and 80157: the comparison is between
+`(int)hdx->left` and `(int)*left` and is SIGNED, and the losing arm is
+truncated to sixteen bits UNSIGNED. Since the countdown is charged the symbols
+OFFERED rather than the count taken (F8567), it goes negative as a matter of
+course -- and a negative countdown does not produce a zero or a small count but
+its low sixteen bits: -1 gives 0xffff and the state then asks `GenSequence`,
+`ScrambleDataV32` and `ModDataV32` for 65,535 symbols. Writing this as a `min`
+over `int`, or clamping the result at zero, is a different program on exactly
+those inputs.
+
+`TxHdxNoCarrier` is the ONLY one of the six that guards it, with a separate
+`hdx->left > 0` test that GCC if-converts to `setg %bl; neg %ebx; and %ecx,%ebx`
+at 8016b -- same inputs, a different answer from its five siblings.
+`TxHdxFinishFrame` has neither the clamp nor the guard: `*left` itself is the
+count.
+
+The test drives countdowns of -65530 and -131064, whose low halves are 6 and 8,
+so the truncating arm is exercised without asking a leaf for 65,535 symbols;
+mutating the clamp to a zero-clamp is caught in 8 sections.
+
+## F8567. The countdown is charged the symbols OFFERED, not the count taken, and the two whole-block states charge a different field again
+
+Every one of the six symbol-wise transmit states subtracts `*left` -- the
+symbols the driver offered -- from hdx + 0x78, and NOT the `count` it just
+clamped that to (`sub %ecx,0x78(%edx)` at 7fdf8 with %ecx the ORIGINAL `*left`,
+and the same at 7fec7, 7ffb7, 80098, 80177, 80231). It then reduces `*left` by
+`count`. So a block whose countdown is smaller than its symbol budget
+overshoots: countdown 5 against 12 offered leaves -7, not 0. Both readings
+transition, so only the countdown's VALUE separates them, which is why the
+differential test compares the whole context rather than only the observable
+returns.
+
+`TxHdxTone` and `TxHdxNull` charge neither: they subtract hdx + 0x84 once per
+call (7fd78, 802d6) and set `*left` to zero outright, because they consume the
+whole block regardless of what was offered. Charging `count` instead of `*left`
+is caught in 9 sections; charging +0x9e instead of +0x84 in 40.
+
+## F8568. `TxHdxTone` and `TxHdxNull` read their return value AFTER the transition, from a context that may have been replaced
+
+Both return hdx + 0xa0, `V32_SAMPLE_LEN[rate]`, and both RE-READ obj + 0x64
+after the `V32NextState` call before doing so (7fda2, 8030c) while using the
+pre-transition pointer on the fall-through path. A transition may install an
+entirely different handshake context -- that is the contract `v32hdx.h` records
+for the driver's own loop -- so the sample count these two report is the NEW
+context's block length and not the block they just filled.
+
+The same reload appears mid-function in the six symbol-wise states:
+`mov 0x64(%edi),%eax` after the modulator returns (7fe2a, 7ff05, 80015, 800ca,
+801a9, 80262), so the countdown test reads the context as the CALLEES left it.
+
+Both are testable and both are tested: the scripted dispatcher swaps obj + 0x64
+to an alternate context whose +0xa0 differs, and the encoder stub inside
+`ModDataV32` does the same mid-call for the four states that reach it. Caching
+either is caught (7 and 9 sections). Whether the post-transition read is a
+defect in the original is not settled here; it is what the object does.
+
+## F8569. `TxHdxNull`'s zero fill is `while (i-- != 0)` over an `int`, and the two things this batch could NOT settle at tier 1
+
+The fill loop is `dec %eax; cmp $0xffffffff,%eax; jne` entered at its TEST
+(802c6..802d4), which is `while (i-- != 0)` and NOT `for (i = 0; i < n; i++)`:
+the two agree for every non-negative block length and diverge without bound for
+a negative one, where the object runs 2**32 - |n| iterations filling memory
+until it faults. The counter is an `int` -- 32 bits throughout with no
+truncation -- although the field it is seeded from is a `short` (`movswl` at
+802bf), which is F7803's rule about the declared type of the LOCAL rather than
+the field. The object has no guard; a differential test must therefore not
+drive hdx + 0xa0 negative, and that is a property of the original rather than a
+limitation of the harness. A deviation number is not claimed here.
+
+TWO THINGS IN THIS BATCH ARE INVISIBLE TO TIER 1 AND ARE RECORDED RATHER THAN
+CLOSED.
+
+First, `TxHdxFinishFrame` subtracts `*left` from the countdown BEFORE calling
+`ScrambleDataV32` (80231 before 8023f); moving the subtraction after the call
+survives the full differential suite, because the scrambler cannot reach
+hdx + 0x78 and does not change `*left`. The object's schedule is the only
+evidence and it is tier 3 -- one of twenty injected mutations, and the only
+survivor.
+
+Second, all six modulating states hold the leaf's return in a `short` local
+(`movswl %ax,%esi`) while `ModDataV32` and `TxNoCarrierV32` are declared
+`unsigned short`; the two readings differ only above 32,767 samples in one call
+and reach the caller as the same sixteen bits either way, so no test at this
+boundary can separate them. The `short` is written because the object encodes
+it.
+
+## F8588. `V32RngInitNextState`'s DONE arm overwrites the cleardown it just posted
+
+The DONE arm (84ca0) decodes two rate signals -- `regs[4]` and `regs[1]` -- and
+if either is `V32_RATE_NONE` it sets hdx + 0x78 to 0x40, ORs `V32_FLAG_FAULT`
+onto obj + 0x31, writes 0x0e to obj + 0x30 and sets hdx + 0x74 to
+`V32_STATE_CLEARDOWN`.
+
+It then FALLS INTO the common tail at 84cf7, which the non-fault path reaches by
+a two-instruction block at 85246 whose only content is reloading `hdx` and
+jumping there. That tail writes hdx + 0x7c = 0, hdx + 0x78 = hdx + 0x80, ORs
+0x05 onto the flags and writes `V32_CONNECT[rate]` to obj + 0x30.
+
+So on the fault path only the STATE and the fault bit survive: the reason code
+0x0e and the 0x40 countdown are both clobbered before the function returns, and
+the instance reports a connect status while sitting in CLEARDOWN. Reproduced as
+written -- the reconstruction is the object's, not the intent's.
+
+`V32RngRespNextState` does NOT have the defect: its cleardown arm is in state F
+(85474) and returns.
+
+## F8589. `V32LocLoopNextState` fills two slots of `V32NextState`, and slot 3 is dead in this object
+
+The function never reads hdx + 0x76, so its own 794 bytes cannot explain the
+duplicate. Every write of hdx + 0x76 in the 1.2 MB was enumerated:
+
+```
+  7e9a0  V32FP_recreate  mode = 0   protocol == 0
+  7f62b  V32FP_recreate  mode = 1   protocol == 1
+  7f3bd  V32FP_recreate  mode = 2   every other protocol
+  8469c  V32FP_control   mode = 4   unless the mode was already 5
+  82991  v32_data        mode = 5
+  82735  V32FP_modem     mode = 6   with state 34, parking the machine
+```
+
+`V32FP_recreate`'s three are one ladder on obj + 0x00 (`protocol`): 0 and 1
+select the originate and answer dispatchers, every other value falls into slot
+2. **No instruction anywhere writes 3.** The duplicate therefore maps two
+adjacent protocol values onto one machine and only one of the two is reachable
+here. Which pair of loopbacks was intended is not in the object and is not
+guessed.
+
+Separately, 82735's mode **6** is one past the six-slot table and is written
+together with state 34, which every dispatcher's `cmp $0x21` bound rejects.
+That is F8239's open question about mode 6, seen from the table's side: the
+index is out of range for `V32NextState` as well as for the state list. Whoever
+writes `V32FP_modem` should read it against this.
+
+## F8590. The two-instruction landing pad at 84e99/84e9d, and the bit it must not clear
+
+`V32RngInitNextState`'s states B and C share a tail of exactly two
+instructions: 84e99 `andb $0xfb,0x31(%esi)` falls into 84e9d
+`movl $RxHdxToneData,0x70(%ebx)`. C's "countdown still positive" arm and B's
+"countdown still positive" arm both enter at 84e99; B's TRANSITION path
+re-loads `hdx` at 84eea and enters at **84e9d** -- `eb ae`, four bytes further
+on -- so it installs the receive state without clearing bit 0x04.
+
+A first reconstruction read that jump as 84e99 and cleared the bit on both
+paths. The difference is observable only when bit 0x04 was set on entry AND the
+countdown had expired; the state sweep in `test/unit/t_v32nsrng.c` reached it in
+2 trials of 324 and reported obj + 0x31 as ours 0x00 against the blob's 0x04.
+
+Source spelling: the flag clear is the `else` of the countdown test, and the
+receive-state store follows both arms. The general lesson is that a `jmp` into
+the MIDDLE of a two-instruction block is indistinguishable from a `jmp` to its
+head at every input but one, and the byte offset is the only evidence.
+
+## F8591. The "state %s(%d)" trace belongs to `V32RNG.c`, not to next-state dispatchers as a class
+
+`V32RngInitNextState` (84d30) and `V32RngRespNextState` (85350) both end with
+`cmpl $0x1,dsplibs_debug_level; ja` and a `dsplibs_debug_printf` of
+`.rodata.str1.1 + 0x3971`, `"state %s(%d)\n"`, whose arguments are
+`V32StateName(modem->hdx->state)` and the same state read a second time --
+which is why each epilogue reloads obj + 0x64 twice. `V32AnsNextState` has the
+same site with its own copy of the string at +0x397f.
+
+`V32LocLoopNextState` has NO such site: its default label at 86550 is three
+instructions and a `ret`, and there is no `cmpl $0x1,dsplibs_debug_level`
+anywhere in its 794 bytes. `t_v32nsloop.c` runs every trial at level 2 with the
+harness's capture on and asserts both transcripts are empty, so a
+reconstruction that copied the RNG epilogue into `V32loop.c` fails rather than
+passing silently. A diagnostic is a property of the author's file, not of the
+role.
+
+## F8592. hdx + 0x48 is `short`, and the object uses both extensions on it
+
+`V32RngInitNextState` at 85128 and `V32RngRespNextState` at 857ce load
+hdx + 0x48 with `movswl` and USE the 32-bit result -- `0x18 - it`, stored into
+the `int` at hdx + 0x78. Finding F613's rule makes that FORCED, so the field is
+`short`.
+
+The `RxHdx*` states load the SAME field with `movzwl` and store sixteen bits
+straight back (84000/84017, 840ac/840b1), which is F614's dead extension and
+says nothing about the field. This is the second worked instance in the tree of
+614's point that the blob uses both extensions on one field, and it is a clean
+one: the forced site and the free site are 5 KB apart and were read by
+different passes.
+
+The field's ROLE is not established and is not named: it is a counter the
+receive states increment and these two arms charge against a budget of 0x18.
+
+## F8593. obj + 0x00 (`protocol`) splits both RNG machines the same way, one state apart
+
+Six sites across `V32RngInitNextState` and `V32RngRespNextState` branch on
+obj + 0x00, always as `protocol == 0`, always through the branchless
+`cmp $1,%reg; sbb %reg,%reg; ...` idiom, whose `cmp` is UNSIGNED so only zero
+takes the first arm:
+
+```
+  RngInit A (84f45, 84f8c)  InitGenSequence pattern 0 or 3; SetToneDetect 600 or 1800 Hz
+  RngInit B (84ed2)         InitGenSequence pattern 15 or 12
+  RngInit C (851df)         v32_smc::state[0] = 12 or 0
+  RngResp B (8561d)         InitGenSequence pattern 0 or 3
+  RngResp C (855b1)         InitGenSequence pattern 15 or 12
+  RngResp D (8556e)         v32_smc::state[0] = 12 or 0
+```
+
+So the responder runs the initiator's split shifted one state later. The two
+tone frequencies are 0x258 and 0x708 built as `(-1200 & mask) + 1800`, i.e.
+600 Hz and 1800 Hz, and `SetToneDetect`'s parameter is `short hz`
+(`v32fpctl.h`). `V32_TX_MODE[V32_RATE_NONE]` is 7, outside `SetTxModeV32`'s
+0..6, so every no-common-rate path posts `V32_STATUS_BAD_MODE` as a side effect
+before the arm's own reason code lands.
+
+## F8578. `V32OrgNextState` reconstructed: V.32's ORIGINATE handshake, twenty-five arms
+
+`.text 0x082be0`, 2580 bytes, `src/pump/v32/v32nsorg.c`, differentially green at
+`t_v32nsorg` (95 sections). A jump table at `.rodata + 0x7dec` with 34 slots on
+a `movswl` of hdx + 0x74 compared UNSIGNED against 0x21: states W..DONE
+(24..32), DONT_CARE (34) and any negative take the default, which does nothing
+but the trace.
+
+Each live arm writes the next state, reloads the countdown at +0x78 from a
+literal or from +0x80, clears the counter at +0x7c, installs a
+`TxHdx*`/`RxHdx*` pair (either, both or neither) and reconfigures the datapump.
+
+**The progression is state -> state+1 with exactly two exceptions and both are
+the object's**: V (23) writes 23 again -- it is the CONNECT step, posting
+`V32_CONNECT[rate]` into `V32_OBJ_STATUS` and ORing 0x19 onto the flags, so
+both U and V transition into it and re-entering it repeats it; and ERROR (33)
+writes no state at all, only reloading the countdown.
+
+Three arms are conditional and fall through to the trace when the test fails:
+B on +0x7c above 0x95f (UNSIGNED, `jbe`), D on +0xa8 above 0x48 (SIGNED 16-bit,
+`jle`), and S, which always advances but posts `V32_FLAG_FAULT` and status 0x17
+when `DecodeRateSeq` returns `V32_RATE_NONE` and then CONTINUES -- the object
+jumps back into the flow at 82c57 rather than returning. The full
+from/to/installed-pair table is in the file header.
+
+`TxHdxTone`, `TxHdxData`, `TxHdxFinishFrame`, `TxHdxNull`, `RxHdxTone`,
+`RxHdxSequenceE`, `RxHdxToneData` and `RxHdxError` are not reached from this
+dispatcher.
+
+## F8579. An arm can inherit a callee by jumping into the middle of another arm, and this one does: state G shares state Q's `FPM_AGC_Freeze`
+
+`833a6` is `jmp 83010`, which lands three instructions INSIDE the `V32_STATE_Q`
+arm, before that arm's `InitDetSequence` -- so `V32_STATE_G` runs BOTH the
+detector arming and the `FPM_AGC_Freeze(fp + 0x1d8)` that follows it, and the
+two arms differ only in the detector's `out_mask` (-1 for G, 0xffff for Q).
+
+A first transcription read the jump as "G shares Q's `InitDetSequence`" and
+stopped there. **The differential test caught it**, reporting one unexplained
+differing word at `fixture + 1024`, which is `fp + 0x200` = `agc + 0x28` =
+`fpm_agc::freeze`, ours 0 against the blob's 1.
+
+Every one of this function's shared tails has to be read to its own
+`jmp 82ce0`, not to the first call after the landing point. It is the same
+class of trap as F8590's two-instruction landing pad, one arm larger.
+
+## F8580. Five call sites, three relocations: the object tail-merges this function's calls, and the relocation multiset is what measures it
+
+`V32OrgNextState` has five source call sites for `SetAdaptEcV32` (L, M, N, S, V)
+and five for `InitDetSequence` (E, G, N, Q, S), and the object contains **three**
+relocations for each: L and M jump into V's call at 82dbd, E jumps into S's at
+82cc9 and G into Q's at 83010.
+
+Comparing the MULTISET of relocated symbol names between our GCC 14 `-O2` object
+and the blob's range gives an exact match on all 44 symbols except those two
+rows, where we emit 5 and 4 -- and that is cross-jumping, not a source
+difference.
+
+**The comparison is worth doing on any large switch before trusting a
+transcription.** It is one command, it is insensitive to scheduling and
+register allocation, and on this function every other count matched exactly
+(8 `LoadReg` including the dead one of F8581, 8 `InitGenSequence`, 6
+`TxHdxNoCarrier`, 7 `TxHdxScrSequence`, 5 `RxHdxData`, 5 `StoreReg`, 4
+`DecodeRateSeq`, 2 each of `AGC_DEF_ALPHA` and `AGC_DEF_BETA`) -- which is a
+completeness check no disassembly reading gives you on its own. Adding the
+missing `FPM_AGC_Freeze` of F8579 moved our `InitDetSequence` count from 5 to 4,
+because GCC 14 then merged G's and Q's tails too, corroborating the object's 3
+from the other direction.
+
+## F8581. The second `LoadReg` in `V32_STATE_I` is dead and is NOT differentially testable
+
+The `V32_STATE_I` arm calls `LoadReg(modem, 0)` twice: at 8326e, whose result is
+added into hdx + 0x78, and at 832a3, whose result is left dead in `%eax`.
+`LoadReg` is a bounds check and a load with no side effect, so **removing the
+second call is behaviourally invisible and `t_v32nsorg` cannot catch it** -- it
+is reproduced on the strength of the disassembly alone, and only tier 3 can see
+it. Recorded so a later mutation pass classifies it `equivalent` rather than
+hunting for a missing check.
+
+The arm also shows why `HDX()` must be a re-dereferencing macro rather than a
+local: the store at 8327e goes through the context pointer loaded at function
+ENTRY, while 83274 reloads it for the next statement, and a single local would
+have used one register for both. 82d0f in the trace is the second witness:
+`V32StateName(hdx->state)` is called and only then is the context re-read for
+the `%d`.
+
+## F8582. Comparing a dispatcher that stores SYMBOL addresses: normalise, do not skip -- and `FPM_TONE_create` writes two buffers a caller-owned state must supply
+
+Two problems make a whole-context comparison of a next-state dispatcher look
+impossible, and neither needs a skip list. Our side stores our
+`TxHdxScrSequence`, `V32_S_DATA_COEF` and `AGC_DEF_ALPHA`; the blob's stores
+`symmap.py`'s `ref_` copies; and both fixtures hold their own addresses.
+
+`t_v32nsorg` compares every word of the fixture and, **only where the two
+differ**, normalises: an address inside that side's own fixture becomes its
+offset, an address in a table of seventeen KNOWN SYMBOL PAIRS becomes that
+pair's index, anything else still fails and names the byte offset. That is not
+an allow-list -- an injected `TxHdxTRN -> TxHdxCarrierState`, a wrong pointer
+that IS in the table, fails -- and a counter of the words the rule rescued is
+asserted non-zero, so a run that installed nothing cannot pass vacuously.
+
+Only four windows are skipped outright, each a callee-owned configuration whose
+pointers belong to a separately-tested function (pps `cfg.imap`/`qmap`, the sre
+cfg's six table pointers, the fse cfg's `pll_k1`/`k2`/`owner`/`decision`, and
+the whole `struct vtb`), and the arguments passed to those callees stay
+observable in the non-pointer fields beside them.
+
+**The fixture also has to stop four callees allocating**, because two heap
+pointers are two different addresses for ever: preset `sre->cfg.coeffs` to
+`SREv32_CFG`'s own 180 so `FPM_SRE_init` takes its reuse path, hand
+`FPM_MTD_create` and `FPM_TONE_create` non-NULL states, and rely on
+`SetRxModeV32` passing `VTBv32_init` an `alloc` of zero.
+
+**`FPM_TONE_create` writes `state->rev_block[0..4]` and `state->rev_acc[0..3]`
+UNCONDITIONALLY**, through pointers only the owned path ever allocates, so a
+caller-supplied tone object with those two NULL segfaults even when `cfg.len` is
+zero. `kernel` and `history` may stay NULL, because only the `len`-bounded loop
+reads them.
+
+## F8570. The V.32 half-duplex context opens with an embedded `struct fpm_agc`, and the fit is exact
+
+`RxHdxTone` (8393e), `RxHdxNoSignal` (83a3e) and `RxHdxPhsReversal` (83b4a) all
+hand `FPM_AGC_agc` the context pointer ITSELF as its first argument, and that
+function's first parameter is a `struct fpm_agc *` -- evidence class 2, a callee
+that types it. `sizeof(struct fpm_agc)` is 0x2c and `V32_HDX_TONE0` is 0x2c, so
+the AGC occupies hdx + 0x00..0x2b with nothing over and nothing missing.
+
+This is a SECOND AGC: `v32demod.h` puts the datapump's own at fp + 0x1d8 and
+`DemodDataV32` drives that one. Both are initialised from `AGCv32_CFG` and only
+the handshake states touch the first.
+
+All three call sites also pass a FOURTH argument, the constant 1 at 0xc(%esp),
+which `FPM_AGC_agc` never reads -- the same residual `src/pump/v32/v32demod.c`
+(81ce6), `src/pump/v23/bwchdem.c` and `src/pump/v22/v22data.c` already record at
+their own call sites. Three arguments are passed here too.
+
+## F8571. `RxHdxPhsReversal` holds the only two diagnostics in `V32rxhdx.c`, and both name the field just stored
+
+`.rodata.str1.1:0x37f3` is `"v32 Turn Around Delay = %d\n"`, referenced at
+83d15, and its argument is the value stored into hdx + 0x7c at 83c5d -- which is
+`CalcTurnAroundDelay`'s return, inlined immediately above.
+
+`.rodata.str1.1:0x380f` is `"v32 RTD = %d\n"`, referenced at 83d9c, and its
+argument is the value stored into hdx + 0x96 at 83d73, read back through the
+16-bit field (which is why the printed value is the truncated one). So
+**hdx + 0x96 is the round-trip delay and is named `V32HDX_RTD`** on evidence
+class 1.
+
+hdx + 0x7c is NOT named for the turnaround delay: it is only SEEDED with it
+here, and every other state adds `V32HDX_SYMBOL_LEN` to it and compares it
+against hdx + 0x80.
+
+Both strings are found with `tools/relocscan.py --at .rodata.str1.1:0xNNNN`;
+grepping the disassembly for either address finds nothing (F604).
+
+## F8572. The V.32 half-duplex block counter and its bound are UNSIGNED, and that is forced
+
+hdx + 0x7c and hdx + 0x80 are compared in ten places across `V32rxhdx.c` and
+every single one is `jb` or `jbe`, never `jl`/`jle`: 83978, 83a73 (`cmpl $0x3c`
+with `jbe`), 83a9c, 83cc3, 83e4f, 83f52, 840cc, 841eb, 842e6, 843f2, 844c2. The
+compiler was not free to choose -- signed operands give the signed branch -- so
+both fields are `unsigned int`. The addend is `short` and is sign-extended into
+them (`movswl 0x9e`), so a negative symbol length really does subtract.
+
+By contrast hdx + 0x78, the counter `RxHdxTone` gates on, is compared with
+`cmpl $0xb4` and `jle` at 839ce and is therefore `int`. Three fields within
+eight bytes of each other, two unsigned and one signed.
+
+## F8573. `RxHdxTone`'s gate is three ORed terms over two config fields, and the second is a bit of `options`
+
+83928..839df: `cmpw $0x1,(%ebx)` / `testb $0x4,0x11(%ebx)` /
+`cmpl $0xb4,0x78(%edx)`, laid out as `if (A || B || C) { AGC; detect; maybe
+dispatch; }` with two early exits into the body -- the shape is unambiguous
+because the third test's fall-through is a `jmp` backwards to the body and its
+taken edge skips it.
+
+obj + 0x00 is `protocol` and obj + 0x10 is `options`, both from
+`V32FP_recreate`'s config dump at `.rodata.str1.4:0x011000` as
+`include/dsplib/v32seq.h` derives them (evidence class 1). `testb $0x4` against
+the SECOND byte of a 32-bit field at +0x10 is GCC's encoding of
+`options & 0x400`, so the bit tested is 0x400. What that bit SELECTS is not
+established -- its only reader in the object is this gate -- so it is named
+`V32_OPT_0400`, by value, per CLAUDE.md.
+
+The reading matters: with protocol 1, the option clear and hdx + 0x78 at or
+below 180, the state runs neither the AGC nor the tone detector, and the block
+passes through untouched except for the counter and the clamp.
+
+## F8574. `RxHdxPhsReversal`'s second test of hdx + 0x90 is NOT an `else`, and the run counter at hdx + 0xac reads the opposite way to its obvious name
+
+The object tests hdx + 0x90 at 83ba8 and again at 83cb2, and the second test's
+taken edge (`je 83bac`, 83cb4) is a BACKWARD branch into the first test's other
+arm. So the source is two separate statements -- `if (f90 != 0) { reversal
+search }` then `if (f90 == 0) { tone detect }` -- and not an if/else: the
+reversal arm may dispatch through `V32NextState`, the object RELOADS obj + 0x64
+at 83ca9 afterwards, and if the dispatch cleared +0x90 (or replaced the whole
+context with one whose +0x90 is clear) the tone-detect arm runs in the SAME call
+on the NEW context. Written as an `else` this is unreachable and no fixture that
+does not mutate the context from inside the dispatch can tell the two apart.
+The reload after the dispatch is load-bearing for the same reason, and the
+object reloads obj + 0x64 after every call in all twelve states -- after the
+AGC, after each tone call, after `DemodDataV32`, after the dispatch, and even
+after `dsplibs_debug_printf` (83d21, 83da8).
+
+**AND THE RUN COUNTER AT hdx + 0xac READS THE OPPOSITE WAY TO ITS NAME.**
+`FPM_TONE_detect` reports the tone's PRESENCE as ZERO (`fpm_tone.h`; finding F33
+for why this module inverts against `FPM_MTD_detect`), and 83bc5's `jne` routes
+the NON-zero -- tone absent -- verdict to the store of zero at 83d07, while the
+fall-through increments. So +0xac counts consecutive blocks the tone was
+PRESENT in, resets on any other verdict, and once it exceeds three it arms
++0x90 and clears itself: the state waits for four blocks of tone and only then
+starts hunting for that tone's phase reversals. Read the obvious way round it is
+a MISS counter, which is the reading a first draft of `t_v32rxhdx.c` encoded in
+four trial names; every one of those trials then RESET the counter, +0x90 was
+never armed by it, and the arming path sat untested behind four green sections
+until a non-vacuity counter that could not fire said so.
+
+## F8575. `CalcTurnAroundDelay` appears twice in the blob's `V32rxhdx.c`: out of line at 0x83ae0 and inlined at 83c29
+
+83c29..83c55 is that function's 53 bytes instruction for instruction -- four
+`movzwl`s of hdx + 0x98, +0x9c, +0x9a and +0x94, the subtraction, `cwtl`, and
+the branchless `(~v >> 15) & v` clamp followed by a second `cwtl`.
+
+That is what GCC 3.4.2 at `-O3` does with a same-translation-unit GLOBAL: it
+inlines the call and still emits the out-of-line copy for external callers. It
+is therefore evidence that `CalcTurnAroundDelay` and the twelve `RxHdx*` shared
+a translation unit in the original, which agrees with the blob's `FILE` symbols.
+
+This tree splits by ROLE rather than by the blob's translation units, so the
+function lives in `src/pump/v32/v32fpctl.c` with the family it configures and
+`v32rxhdx.c` calls it. Differentially identical; a tier-2 residual of one call
+sequence in one function.
+
+## F8576. `RxHdxSequenceE` is the first reader AND writer found of `v32seq.h`'s five scratch registers, and it uses `regs[4]`
+
+`include/dsplib/v32seq.h` records `V32HDX_REGS` at hdx + 0x3c with five entries
+and says "What they HOLD is not established -- nothing in this batch reads
+them". `LoadReg` bounds the index at 4 and the element type is `short`, so the
+five occupy 0x3c, 0x3e, 0x40, 0x42 and 0x44.
+
+`RxHdxSequenceE` stores the low half of `GetSequence`'s return into hdx + 0x44
+at 84076 and reads it straight back at 8407d as `DecodeRateSeq`'s `seq` argument
+(which `v32seq.h` types `unsigned short`). So `regs[4]` is used here as a
+one-field parking slot for the received rate signal between the two calls --
+evidence class 2, and it names this USE rather than the register.
+
+hdx + 0x46 and hdx + 0x48 are separate fields; +0x48 is `RxHdxSequenceE`'s own
+post-decode symbol counter, and F8592 settles its type.
+
+## F8577. The six reason codes `V32rxhdx.c` posts at obj + 0x30 do NOT index the state, and the halves test in `RxHdxRateSequence` is real
+
+Ten of the twelve states post a byte at obj + 0x30 together with
+`V32_FLAG_FAULT`, always at the same site -- hdx + 0x7c reaching hdx + 0x80 --
+and the values are 0x10 (`RxHdxTone` 8397e, `RxHdxNull` 844c8), 0x11
+(`RxHdxNoSignal`), 0x12 (`RxHdxPhsReversal`), 0x13 (`RxHdxRateSequence`,
+`RxHdxSequence`, `RxHdxSequenceE`), 0x14 (`RxHdxToneData`, `RxHdxSTone`) and
+0x15 (`RxHdxEpoch`).
+
+Two of the six are shared by two states each and one by three, so a table
+indexed by state would get six of the ten wrong; they are reason codes in the
+same byte `SetTxModeV32`/`SetRxModeV32` write `V32_STATUS_BAD_MODE` (0x17) into.
+Nothing in the object prints them, so they are named by VALUE.
+
+Separately: `RxHdxRateSequence` calls `GetSequence` TWICE (83e28 and 83e35),
+shifts the first result right by 16 LOGICALLY and masks the second with 0xffff,
+and dispatches only if the two agree -- i.e. the detector's match word must
+carry the same rate signal in both halves. `RxHdxSequence` is the same function
+without that test, which is the whole difference between them; a reconstruction
+that wrote `DetSequence(...) >= 0` for both would pass every fixture whose match
+word happens to be symmetric.
+
+## F8583. `V32AnsNextState`'s arm set is enumerated, not inferred
+
+The dispatch at 0x85ac2 is `movswl 0x74(%ebx)` / `cmp $0x21,%eax` / `ja` /
+`jmp *.rodata+0x8068(,%eax,4)`, a 34-entry table. Five of the thirty-four slots
+-- 5, 19, 20, 31, 32 -- hold the address of the default label (0x85b10), which
+is how GCC fills a dense jump table for cases the source did not write.
+
+So the author's arms are known EXACTLY rather than bounded: A B B2 C D E F G H I
+J K L M N O P Q T U V W X Y Z END F2 X2 ERROR, twenty-nine of them, with D2, R,
+S, CLEARDOWN and DONE absent from the source and DONT_CARE (34) past the table
+entirely. The `ja` is unsigned, so a negative state takes the same default; -1
+and -32768 are in `t_v32nsans.c`'s sweep for exactly that reason.
+
+Six arms (A, B2, C, D, E, F) are conditional and do nothing until their
+condition holds, which makes the function a "poll me again" step rather than a
+table walk. Six further arms share tails with another arm by cross-jumping
+(H->U at 861ec, P->X at 85fe7, J and L->V at 86190 and 8616b, G->U at 8624c,
+A->B at 8646f); each is a common suffix and the reconstruction writes every arm
+out in full. The reconstruction's relocation multiset matches the blob's exactly
+and its callee-name multiset differs only by those merges -- F8580's method,
+applied independently here.
+
+## F8584. The V.32 half-duplex context's counters and the instance's flag bytes, and the signedness the object forces
+
+`V32AnsNextState` drives four previously unmodelled 32-bit fields of the
+half-duplex context and three 16-bit ones, and it is the main writer of two
+bytes of the instance besides. All of them are MODELLED, UNNAMED: their shape
+and their signedness are read off the object, their meaning is usage inference,
+and CLAUDE.md's rule is that a wrong name is worse than a numbered one.
+
+hdx + 0x78 is the TRANSMIT budget. Every arm that installs a `TxHdx*` sets it,
+five of the eight transmit states `sub` from it (7fdf8, 7fec7, 7ffb7, 80098,
+80231), and four arms here test it SIGNED -- `test`/`jg` at 86451, 863c3 and
+862b7, `jle` at 863c8 -- so it is `int` and it is expected to go negative.
+
+hdx + 0x7c is the RECEIVE counter. The receive states ADD into it (83925,
+83a1f, 83b95 and six more) and compare it against hdx + 0x80, and EVERY compare
+on it anywhere in the object is UNSIGNED: `jb` at 83978, 83a9c and 83cc3, `jbe`
+at 83a73 and at 86361 in the C arm. So it is `unsigned int`, and that is forced
+rather than chosen.
+
+hdx + 0x80 is the limit +0x7c is measured against, and also the value eight arms
+here copy into +0x78. `V32FP_recreate` (7f116) is its only writer: it stores
+`((obj + 0x8) * 0x4ccc) >> 13` once, at construction.
+
+hdx + 0x90 is written 1 by the C and D arms; `RxHdxPhsReversal` (83b9b, 83bf2)
+reads and rewrites it. Nothing here reads it back, so it is an output of this
+function and an input to that state, and nothing more.
+
+The three shorts are +0x96, which `RxHdxRateSequence` writes (83c94, 83d73,
+83d8c) and the F arm hands to `StoreReg`; +0xa8, zeroed by the C arm and tested
+`> 0x48` by the D arm; and +0xaa, zeroed by the E arm and tested `> 0x5f` by the
+F arm. `RxHdxPhsReversal` (83b87, 83ba1) and `RxHdxNoSignal` (83a22, 83a30)
+count the last two up with `movzwl`, and both tests here are a SIGNED
+`cmpw`/`jle`. The extensions on the increments are dead at these magnitudes
+(F614), so `short` is what the compare forces and the increment does not
+contradict.
+
++0x78 and +0x7c having DIFFERENT signedness is not a style choice. It is nine
+instructions, and a reconstruction that models both as `int` passes every test
+except one that drives +0x7c above 0x7fffffff -- which `t_v32nsans.c` does.
+
+Two bytes of the INSTANCE are the same kind of thing. obj + 0x11 is an option
+byte whose bit 0x02 the B arm tests to pick a transmit budget of 0xa60 over
+0x100; bit 0x04 of the same byte is tested by `V32FP_recreate` (7f38e, 7f49f)
+and by `RxHdxTone` (839c4), and `V32FP_control` (845a2) rewrites the byte.
+obj + 0x32 is a second flags byte, distinct from `V32_OBJ_FLAGS` at +0x31, and
+only two sites in the whole 1.2 MB touch it: `orb $0x8` here at 86265 and the
+same instruction in `RxHdxSTone` at 83439. Bits 0x01, 0x08 and 0x10 of
+obj + 0x31, ORed in together by the END arm, are unnamed too, and keep the
+spelling `src/pump/v32/v32hshake.c` already uses for 0x01 and 0x08.
+
+AGAINST ALL OF THAT, ONE PAIR OF BITS IS RE-DERIVED RATHER THAN GUESSED.
+`include/dsplib/v32demod.h` names bit 0x20 of obj + 0x31 CARRIER, from
+`sre.active` and the "sre no carrier" string, and bit 0x40 SILENCE, from
+`agc.signal` being zero, and says plainly that no format string prints either.
+The F arm of `V32AnsNextState` -- reached when the phase-reversal count at
+hdx + 0xaa passes 0x5f, that is, when the far end's signal has been present long
+enough to commit -- reads obj + 0x31 at 8625f and writes back
+`(flags & 0xbf) | 0x20` at 8626d..86273: clear SILENCE, set CARRIER, in one
+statement, at the exact moment the handshake decides a carrier is up.
+`V32OrgNextState`'s D2 arm and `V32LocLoopNextState`'s state G do the same
+pairing. The readings were made independently, from different functions and
+different evidence, and they meet. That raises both names from usage inference
+on one function to usage inference agreeing across four, which is as strong as
+either is going to get without a format string.
+
+## F8586. Two structural surprises in the answer handshake, both the object's own text
+
+First, `V32_STATE_END` transitions to ITSELF: table slot 28 reaches 0x85bca and
+0x85bca stores 0x1c -- 28 -- back into hdx + 0x74. State Z (slot 27, at
+0x85c46) also moves to END, so the chain terminates there and a further call in
+END re-posts `V32_CONNECT[rate]` into the status byte, ORs 0x19 into the flags,
+re-arms the equaliser at `V32_ADAPTEQ_MU1`, re-runs `SetRxLoopsV32(3)` and
+re-clears the decoder's `retrain` at fp + 0x230 + 0x62. It is idempotent, not a
+loop bug, and it is why `t_v32nsans.c` asserts the END arm's new state rather
+than assuming a successor. `V32OrgNextState`'s state V is the same shape
+(F8578) and `V32LocLoopNextState`'s state I is a third: three of the five
+dispatchers park rather than terminate.
+
+Second, the ONLY branch out of the chain is the B2 arm's: if hdx + 0x78 has
+already gone non-positive when B2 is reached, the arm installs `TxHdxNoCarrier`
+and `RxHdxError`, ORs `V32_FLAG_FAULT` into obj + 0x31, writes 0x16 to
+obj + 0x30 and goes to `V32_STATE_ERROR` (the out-of-line block at 0x8647a). No
+other arm can leave the chain; the T arm's "no rate in common" posts a fault and
+status 0x17 but has ALREADY advanced to U, so the handshake continues and only
+the status carries the failure out.
+
+## F8585. `V32_CONNECT` is a per-rate STATUS code at obj + 0x30, not a handshake state number
+
+`src/pump/v32/v32hdx_tables.c` recorded the table's entries {4, 3, 25, 24, 26,
+27, 14} as "handshake state numbers of `v32state.h` ... the field the table is
+copied into (hdx + 0x74)". Nothing copies them there.
+
+All five reference sites in the object -- 82d99 in `V32OrgNextState`, 84d16 and
+853c3 in the two ring dispatchers, 85c12 in `V32AnsNextState` and 86591 in
+`V32LocLoopNextState` -- load the entry with `movzwl` and store the LOW BYTE
+into obj + 0x30, which `v32fpctl.h` names `V32_OBJ_STATUS` and describes as a
+reason code.
+
+The values happening to fall inside 0..34 is what the earlier reading leaned on,
+and it is a coincidence: the same byte receives 0x0f, 0x16 and 0x17 from
+`V32AnsNextState`, 0x0e from `V32RngInitNextState`, and 0x10 to 0x15 from ten
+receive states (F8577), none of which is a handshake state either.
+
+The table's own name is the only evidence about its meaning and it says
+"connect", not "state". The extension is dead (only %al is used), so per F614
+the `movzwl` says nothing about the element type; `short` stands on the symbol's
+fourteen bytes over seven rates. The comment in `v32hdx_tables.c` is corrected.
+
+**The general point is that a value's RANGE is not evidence about its
+namespace.** Seven small integers that all fall inside a known 0..34 enumeration
+look like members of it, and here they are members of a different, denser space
+that happens to overlap. What settled it was reading the STORE, not the table.
+
+## F8587. A blob-against-blob dry run cannot catch an unplanted SUBSCRIPT, because both sides agree on the same wrong answer
+
+This is F134's argument and F2400's failure mode in a new place: a check that
+cannot fail. The apparatus in question is the pre-commit dry run in which a
+differential test is linked with our-side symbols macro-mapped onto the `ref_`
+ones, so both sides execute the blob. It is a good thing to do -- it proves the
+fixture is dereference-safe and that every arm of the function under test is
+reachable, and for `t_v32nsans.c` it passed 542 sections. It is BLIND to an
+entire class of fixture defect, and the blindness is structural rather than
+accidental.
+
+A fixture plants the fields a callee DEREFERENCES, because a null or wild
+pointer faults immediately and loudly. It is easy not to plant a field the
+callee uses as a SUBSCRIPT, because nothing in a pointer audit finds one.
+`v32_common_rate` -- `static` in the object, inlined into `DecodeRateSeq`,
+`CodeRateSeq`, `CodeFinalRateSeq`, `CodeESeq` and `SeqToRate` -- opens with
+
+```
+    short local = V32_RATE_SEQ[fp->rx_rate_index];
+```
+
+against a SEVEN-entry table, with no bound check anywhere in the object; this is
+the same table and the same absence of a guard that deviation D404 records for
+`RateToSeq`, at a second site and reached from five exported functions rather
+than one. `t_v32nsans.c` filled the datapump block with pseudorandom bytes and
+never planted fp + 0x2a, so the ladder subscripted that table with a random
+sixteen-bit index and read up to 64 KB either side of it.
+
+**WHY THE DRY RUN IS SILENT.** Under it, both sides read `ref_V32_RATE_SEQ` --
+one array, one address, one wild index, one wrong answer, delivered identically
+to both. Every comparison agrees and the test reports a clean run. The only
+thing left to chance is whether the index happens to land on an unmapped page,
+and in that run it did not. Under the REAL differential link the same fixture
+diverges immediately and for a reason that has nothing to do with the code under
+test: ours subscripts `V32_RATE_SEQ` and the blob's subscripts
+`ref_V32_RATE_SEQ`, two arrays at different addresses, so out of bounds they
+pick up different neighbours and the ladder returns a different rate. D404
+already states this in the small -- "the two tables sit at different addresses
+in the two objects, so an out-of-bounds read is not a comparison of anything" --
+and the general form is that a dry run turns exactly the defects that depend on
+our-side and blob-side symbols having different addresses into
+non-observations. That is the class the dry run exists to be cheap about, and it
+is the class it cannot see.
+
+**NEITHER SYMPTOM POINTED AT THE CAUSE.** The wild read SEGFAULTED, but in a
+later trial than the one that set it up, and with stdout block-buffered the
+visible output stopped mid-line so the crash appeared to belong to the arm
+before it. And what the comparison reported was one byte at hdx + 0x3e -- the
+scratch register the L arm's `StoreReg(modem, seq, 1)` writes, four calls
+downstream of the fault. The signature that identifies it, and the only one that
+did, is that the failure MOVED WITH THE FIXTURE SEED: the same arm passed at one
+mode and failed at the next two, and the mode is a field this function never
+reads. A per-trial difference that tracks the seed rather than the input is a
+fixture defect until proved otherwise.
+
+**A SECOND COST, AND IT IS THE ONE THAT WOULD HAVE SURVIVED THE CRASH.** The
+test's own non-vacuity check that "every rate including `V32_RATE_NONE` came out
+of the ladder" was being SATISFIED BY THE UNDEFINED READ. Had the index never
+happened to fault, the test would have passed while reporting coverage the
+fixture had not arranged -- an anti-vacuity counter measuring garbage is worse
+than none, because it is believed.
+
+**THE REPAIR IS NOT MERELY TO PLANT THE FIELD.** The ladder is a bitwise AND of
+the far end's sequence against `V32_RATE_SEQ[local]`, so a fixed local station
+can only ever reach the rungs its own entry carries, and only index 5 (0x0ff9)
+carries all five test bits. The local index is therefore SWEPT 0..6 beside the
+sequence, and the sequence list gained five values that isolate one rung each.
+
+**THE OTHER FIVE V.32 TESTS OF THIS WAVE WERE MEASURED, NOT ASSUMED, AND ARE
+CLEAN.** `t_v32nsorg` plants fp + 0x2a and + 0x28 from a trial field and already
+SWEEPS the local index 0..6 for states T, U and V -- the stronger form, arrived
+at independently. `t_v32nsrng`'s nine profiles carry 5, 1, 3, 0, 4, 6, 5, 2, 2
+and `t_v32nsloop`'s seven carry 5, 1, 3, 0, 4, 6, 2, all in range.
+`t_v32rxhdx` pins it at 2. `t_v32txhdx` and `t_v32hshake` never drive the
+ladder. So `t_v32nsans` was the only one exposed.
+
+**AND THIS WAVE PARTLY CLOSES D404's OPEN STATUS.** D404 says "every in-object
+caller of `RateToSeq` is unwritten (`V32OrgNextState` and its three siblings), so
+whether any of them can produce an index outside 0..6 is a question for the pass
+that writes them". This is that pass, and for the answer side the answer is no:
+`V32AnsNextState`'s single call is `RateToSeq(modem, (short)GetRateV32(modem))`
+in the L arm, and `GetRateV32` returns 0..6 by construction -- five equality
+compares against bit rates, else `V32_RATE_INVALID` (6). The other three
+dispatchers are now written and can be settled the same way, after which D404's
+status moves from unmeasured to bounded. `v32_common_rate`'s subscript of the
+same table from fp + 0x2a is a SECOND, distinct site that D404 does not cover
+and that wants its own row; no row has been written.
+
+The rule to carry forward: a field the callee uses as a SUBSCRIPT is as
+load-bearing as a field it uses as a POINTER, and a fixture must plant both in
+range. Audit for `[` as well as for `->`.
+
+## F8594. What V.32 needs next, measured after the half-duplex wave: eight tables unblock 3,733 bytes
+
+With the twenty half-duplex states, the five dispatchers and `v32_handshake`
+landed, the whole remaining V.32 datapump is ONE closure of 25 symbols and 9,384
+bytes:
+
+```
+$ python3 tools/closure.py dp_v32_init dp_v32_exit v32_create v32_process \
+        v32_delete v32_data --missing
+25 symbols, 9384 bytes (unwritten only)
+
+  call    11 symbols, 8668 bytes   V32FP_recreate 3733, V32FP_status 1084,
+                                   v32_process 871, v32_data 859,
+                                   V32FP_control 776, v32_create 627,
+                                   V32FP_modem 356, V32FP_create 169,
+                                   v32_delete 95, dp_v32_init/exit 49 each
+  data     8 symbols,  100 bytes
+  rodata   6 symbols,  616 bytes
+```
+
+**THE FOURTEEN TABLES ARE THE LEVER, AND TWELVE OF THEM ARE WRITABLE TODAY.**
+`V32FP_recreate` -- 3,733 bytes, the largest unwritten symbol outside
+`VPcmV34Main.cpp` -- is blocked on EIGHT symbols and every one of them is a
+table:
+
+```
+$ python3 tools/closure.py V32FP_recreate --missing
+  data     SMCv32_CFG (4)  V32_SAMPLE_LEN (4)  V32_TURNAROUND_DLY (4)
+  rodata   PPSv32_ICOFFS (240)  PPSv32_QCOFFS (240)  V32_CFG (48)
+           PPSv32_CFG (40)  V32DiconnectThreshTable (16)
+```
+
+596 bytes of tables stand between this tree and 3,733 bytes of code. The same
+eight plus `Control_Flag`, `RATEv32`, `SnrToRetrainTable` and `V32_CTL` unblock
+`V32FP_control`, `V32FP_status` and `V32FP_modem` as well.
+
+Only TWO of the fourteen are not writable today, and both hold `.text`
+relocations into the closure itself: `V32_PROTOCOL` (9 dwords -- six of
+`v32_handshake`, one of `v32_data`, and `v32_null_protocol`, so it needs
+`v32_data`) and `v32_ops` (`{name, v32_create, v32_delete, dp_wrapper_run}`,
+so it needs the two lifecycle functions). They land with the code, not before
+it.
+
+**So the next V.32 pass is: write the twelve tables, then `V32FP_recreate`, then
+the rest of the FP layer, then `v32.c`'s five.** That is a shape the last wave
+did not have -- F8200's Hdx closure was all-or-nothing across 13 KB of code,
+and this one is a 596-byte prefix that opens the largest single item on its own.
+
+The residue of `V32mod.c +39` after this wave is 24,781 bytes over 46 symbols,
+and MOST OF IT IS NOT V.32: `v22_originate`, `v22_answer`, `v22_retrain`,
+`v22_data`, `connect_1200`, `connect_2400`, `cid_*` and `data_*` sit in a span
+named `V32mod.c`. CLAUDE.md's warning that a span name is not a module name
+still binds; read the queue, not the heading.
+### F8520. V.22's three pattern detectors are one correlator written out three times, and every one of its accumulators is sixteen bits and wraps
+
+`Detect_1s` (0x8c0f0, 199 bytes), `Detect_Rmloop2_ACK` (0x8c010, 209) and
+`Detect_Retrain` (0x8bef0, 288) are the same arithmetic three times over.
+Each keeps three running sums over the received symbols —
+
+    sumsq  = sum s[i] * s[i]
+    corr   = sum s[i] * ideal
+    energy = sum ideal * ideal
+
+— and declares a match when `|2*corr - sumsq|` clears a fraction of `energy`.
+Expanding the left-hand side gives `energy - sum (s[i] - ideal)^2`, so the test
+is "the symbols are close to the ideal" written without a subtraction inside
+the loop.
+
+**All three accumulators are `short` and truncate on EVERY iteration** — a
+`cwtl` or a `movswl %ax` after each add — and the final comparison is a 16-bit
+`cmp` on both operands. `energy` is just `n * ideal^2`, so at 2400 bit/s
+(ideal 15) it passes 32767 after 145 symbols and wraps. An `int` accumulator
+agrees with the object over every short input and disagrees over every long
+one, which is why `t_v22det.c` sweeps to 8,192 symbols and asserts that each
+wrap was actually reached.
+
+The ideals are the object's: 15 and 3 for `Detect_1s`, which are exactly the
+two symbols `v22prc.h`'s `RxTrained2400` and `RxTrained1200` look for; 10 and 2
+for `Detect_Rmloop2_ACK`, which nothing corroborates and which are named for
+their value alone. The threshold is a parameter in `Detect_1s` and a literal
+0x7eb8 — 0.99 in Q15 — in the other two. The comparison is `>` in `Detect_1s`
+and `>=` in both others, one instruction apart in the object, and the asymmetry
+is the original's.
+
+A match returns `*count * 0x6aab >> 14`, i.e. 1.66668 per symbol, which is one
+600-baud symbol interval in milliseconds. The constant is the object's; the
+UNIT is inference from that arithmetic and from the 600 baud `v22_fse.h`
+establishes.
+
+### F8521. `Detect_Retrain`'s two loops run over different sets, so a stream that is quadrant 3 throughout scores exactly zero and never fires
+
+Its first loop walks EVERY symbol and accumulates `q*q` where `q` is
+`(sym >> 2) & 3`, the quadrant `fpm_smc.h` establishes. Its second walks only
+the EVEN indices and accumulates the correlation against the constant quadrant
+3 and the ideal energy. So `sumsq` has twice as many terms as `corr`.
+
+The consequence is not obvious and it caught the test before it caught the
+code. On a stream whose quadrant is 3 everywhere, `sumsq = 9n` and
+`2*corr = 18*ceil(n/2) = 9n`, so the difference is 0 and the detector never
+matches at any length. What DOES match is quadrant 3 on the even symbols and
+quadrant 0 on the odd ones: then `sumsq = corr = energy` and the difference is
+exactly `energy`, which clears the 0.99 threshold. `t_v22det.c`'s "detector
+fired" coverage guard is what found this — the first version of the test used
+the obvious stream, took only the negative arm, and the guard refused it.
+
+A second condition is ANDed with the correlation: the object counts consecutive
+even indices satisfying `sym[i] == sym[i-2] && sym[i+1] == sym[i-1]`, resetting
+to zero on any that does not, and requires strictly more than two. Both
+conditions are computed with `setcc` and ANDed rather than short-circuited.
+
+### F8522. `MakeTxData`'s loops count DOWN to zero and never test for positive, so a negative count writes 65535 symbols and one selector does not terminate at all
+
+`MakeTxData` (0x8bd50, 195 bytes) dispatches on a five-entry jump table at
+`.rodata + 0x862c` and fills the caller's buffer with a fixed pattern: case 0
+alternating 0 and 3 in PAIRS, case 1 all 3, case 2 all 15, case 3 all 2, case 4
+all 10. The range test is UNSIGNED (`cmp $0x4 / ja`), so a negative selector is
+a silent no-op and not case 0. Cases 1 and 2 emit exactly what `RxTrained1200`
+and `RxTrained2400` accept, which is the only corroboration any of the five
+has.
+
+Every loop is `for (i = *count; i != 0; i--)`. There is no `> 0`. A count of -1
+therefore writes 65535 symbols rather than none, which is the whole difference
+between this and the `for (i = 0; i < n; i++)` anybody would write instead, and
+`t_v22det.c` tests it with a buffer big enough to hold them.
+
+**Case 0 does not terminate on an ODD count.** It writes two symbols per step
+and decrements by two, and the odd sixteen-bit values form a cycle under -2
+that never contains zero. That is the one input no differential test can take —
+neither side returns — so it is recorded here and in `v22det.h` instead.
+
+### F8523. A V.22 rate change re-derives `FPM_SDM_init`'s width arithmetic in place rather than calling it, and its selector is not `v22fp_cfg::rate`'s
+
+`SetTxRate` (0x8e120, 205 bytes) and `SetRxRate` (0x8e1f0, 211) each write four
+scrambler fields directly — `nbits`, `mask`, `notmask` and the two tap shifts —
+and clear the shift register, which is exactly what `FPM_SDM_init` computes
+from `nbits`. Neither calls it. That is what makes the rate switchable without
+discarding the object.
+
+Beyond the scrambler, the transmit side moves the symbol coder's `qshift` and
+`amask` (0 and 0 at 1200, 2 and 3 at 2400) and repoints the pulse shaper's
+`imap`/`qmap` at the 1200 or 2400 constellation tables; the receive side
+repoints the equaliser's slicer at `FSEv22_decision12` or `FSEv22_decision24`.
+`dsp->r28` and `dsp->r2a` take 0 or 1 with the rate.
+
+**Selector 0 is 1200 and selector 1 is 2400, and anything else does nothing at
+all, silently.** That is NOT `struct v22fp_cfg::rate`'s encoding, where 0 gives
+2400 and both 1 and 2 give 1200 (v22fp.h). The two are three functions apart in
+the same module and mean opposite things; what names these two is the field
+widths `fpm_smc.h` already records for V.22bis at 2400, not any caller.
+
+### F8524. `ResetRx` hands `V22_FSE_init` the equaliser as its own configuration
+
+`ResetRx` (0x8e570, 62 bytes) is `V22_SRE_init(&dsp->sre, 0)` followed by
+`V22_FSE_init(&dsp->fse, &dsp->fse, 0)` — the object passes the same pointer in
+both of the first two argument slots.
+
+It is not a transcription slip. `struct v22_fse_cfg` is the two words `icoff`
+and `qcoff`, and `struct v22_fse` opens with the same two in the same places,
+so the call re-seeds the equaliser from the coefficient tables it is already
+pointing at. Both calls pass `fresh` = 0, so nothing is allocated and nothing
+is freed. The object also reloads `fp->dsp` between the two calls rather than
+keeping it in a register, which is the same "read the field once per use"
+`v22data.c` records for this block.
+
+### F8525. `DemodDataV22` destroys its input buffer twice over, and its return is the equaliser's own counter and not its callee's
+
+`DemodDataV22` (0x8e370, 510 bytes) is the whole V.22 receive block: an
+optional IIR front end when `dsp->r2e == 2`, then rate conversion, a level
+check, AGC, symbol-clock recovery and equalisation.
+
+**The buffer plumbing is worth stating because it is not what a signature
+suggests.** `V22_MRF_filter` reads the caller's `in` and writes
+`dsp->rx_scratch`; `V22_SRE_recover` reads `rx_scratch` and writes back over
+`in`; `V22_FSE_receive` then reads `in` and writes the caller's symbol array.
+So `in` is both the input and an intermediate, and it must be large enough for
+whatever the resampler produces as well as for what the caller put there.
+
+The function returns `dsp->fse.n_out` after the call, NOT `V22_FSE_receive`'s
+return, which it discards. Zero doubles as the disconnect answer: when
+`hdx->r0e` is zero and `params.disconnect_thresh` exceeds `FPM_rms` of the
+resampled block, it clears `sre.active` and returns 0 without running anything
+further.
+
+Two of its four flag gates read `sre.acquiring` and `sre.mode`, which only move
+when the clock loop locks onto a real carrier — noise will not do it. `dsp->r04`
+is what the function ANDs into `sre.adapt`, and `v22_sre.c`'s update returns
+before touching either field when `adapt` is zero, so clearing `r04` freezes
+both state words and lets a test drive them directly. That is how
+`t_v22rate.c` reaches all six combinations.
+
+It also passes a FOURTH argument to `FPM_AGC_agc`, the constant 1, which that
+function does not have. Third site of the same pattern, after `bwchdem.c` and
+`v22data.c`'s `Detect_v22`, and ignored in the same way.
+
+### F8526. `ScramblerOn` and `DescramblerOn` name two of the V.22 datapump's flag words, and the rename is deferred rather than declined
+
+`ScramblerOn` (0x8e670, 11 bytes) returns `dsp->r18`; `DescramblerOn` (0x8e680,
+11 bytes) returns `dsp->r1c`; `V22FP_control` (0x8c3b0, 145 bytes) sets exactly
+those two from bits 0 and 1 of one control byte, and `V22FP_create` derives
+both from `params.flags` bits 0 and 1. Two accessors whose names say what they
+answer, reading two fields a third function sets from two adjacent bits, is the
+"a caller or callee that types it" rule at its strongest: `r18` is the transmit
+scrambler's enable and `r1c` is the receive descrambler's.
+
+**They are not renamed in `v22fp.h` in the commit that establishes this**, and
+the reason is scheduling rather than doubt: two other V.22 reconstructions were
+in flight against the same base commit and both reach those fields, so the
+rename is a merge conflict waiting to happen. The evidence is in
+`include/dsplib/v22ctl.h`; the edit belongs to whoever lands last.
+
+The same function's other writes are `dsp->r20` from bit 2, `dsp->agc.f18` from
+the INVERSE of bit 3, and `params.flags` bit 9 from bit 7. Its second byte
+carries a flag at bit 2 and a two-bit field at bits 7:6, tested in that order
+and both writing the same pair of half-duplex words, so a byte carrying both
+leaves the field's values in place. It returns a literal 1 on every path.
+
+### F8527. The four exported V.22 accessors have no caller anywhere in the 1.2 MB, and one of them is covered by nothing
+
+`objdump -dr` over the whole object finds no relocation against
+`V22FP_GetDiagnostics`, `V22FP_control`, `ScramblerOn` or `DescramblerOn`. They
+are exported surface, reached by the host or by a part of slmodemd this library
+does not contain — the same shape `CLAUDE.md` records for the 129 no-referrer
+symbols in the leaf bucket.
+
+That has a cost worth naming. Nothing corroborates `V22FP_control`'s second
+parameter from the outside, so its type comes from its own two loads and no
+more: twelve bytes of that block are unmodelled because the function reads
++0x0c and +0x0d and nothing else.
+
+**And `V22FP_GetDiagnostics`'s only content is untestable.** It computes
+`&dsp->fse` — a tail jump after rewriting one argument slot — and hands it to
+`V22_FSE_getdiag`, which is a three-instruction stub that returns 0 and reads
+nothing. So the +0x164 offset reaches an argument nobody looks at, and no
+differential test can separate it from any other offset. `t_v22ctl.c` says so
+rather than dressing the check up. Same shape as findings F860–F862's
+`loadParams`.
+
+### F8528. `V22_status` scales the quality number on the 1200 arm and not on the 2400 one, because the 2400 arm jumps into the middle of the 1200 path
+
+`V22_status` (0x8c450, 310 bytes) reports the equaliser's mean-square error as
+`0x800 - err`, counting down from 2048 with no clamp. Which `err` it uses
+depends on `dsp->r2a`, the receive-rate flag `SetRxRate` writes:
+
+    1200    err = (fse.mse * 0x143c) >> 14      0.31616 * mse
+    2400    err = fse.mse                        unscaled
+
+so the same error reports three times worse at 2400. The 1200 report reaches
+zero at an mse of 6478 and the 2400 report at 2048, and both go negative past
+that.
+
+**It is easy to miss and a plausible sweep will not find it.** The two arms
+share the subtraction, the store and the whole flag sequence after it; the only
+difference is four instructions before the join, where the 2400 arm loads the
+raw `mse` into the register the scaled value would otherwise have occupied and
+jumps into the middle of the other path. Reading the fall-through arm alone
+gives a complete-looking function. And the constructor leaves `r2a` at one
+value, so a test that never drives `SetRxRate` — or that drives it and then
+sweeps `mse` — takes one arm and agrees with a reconstruction that scales both
+or neither.
+
+`t_v22status.c` drives `r2a` both ways on every `mse` value and guards both
+arms. That is what caught it: the first reconstruction scaled unconditionally
+and failed 5,376 of 17,920 checks, all of them on byte 6.
+
+The rest of the function is uncontroversial and is recorded for completeness:
+`PROTOCOL[hdx->r0e]` into the first word with no bounds check, the two rates
+from `dsp->r28` and `dsp->r2a`, four words written zero, eight flag bits at
++0x14 — three enables direct, three inverted, one unconditional 1, one from
+`params.flags` bit 9 — and bit 0 of +0x15 from `params.flags` bit 10. Every one
+of the eight bits at +0x14 is written, so the caller's value there does not
+survive; only bit 0 of +0x15 is, so the caller's other seven bits DO, and a
+report block that starts zeroed cannot tell the two apart.
+
+### F8529. `V22_PROTOCOL`'s relocations name all seven V.22 protocol states, which decodes `hdx->r0e` and settles what `v22fp_cfg::mode` selects
+
+`V22_PROTOCOL` is 28 bytes of `.rodata` at 0x8544 and its contents are seven
+zeroes — every word is an `R_386_32` relocation, so `objdump -s` shows nothing
+and `objdump -r` shows everything. It is the trap `tools/dis.py`'s own header
+warns about, one section along.
+
+The relocations are, in order:
+
+    index    0             1              2            3
+    handler  v22_data      v22_originate  v22_answer   v22_local_loop
+
+    index    4                5                6
+    handler  v22_org_rmloop2  v22_ans_rmloop2  v22_retrain
+
+`V22FP_modem` (0x887b0) indexes it at 0x8885f — `call *0x8544(,%edx,4)` — with
+`edx` loaded at 0x88829 as `movswl 0xe(%esi)` where `esi` is `fp->hdx`. So
+**`struct v22fp_hdx::r0e` is the protocol state**, and the seven handlers this
+tree has been reconstructing one at a time are its seven values.
+
+**That settles three things nothing else in the object does.**
+
+1. `V22FP_create` leaves `r0e` at 1 for mode 0, 2 for mode 1 and 3 for
+   anything else (v22fp.h). Those are `v22_originate`, `v22_answer` and
+   `v22_local_loop`, so `struct v22fp_cfg::mode` really does "select the
+   station's role" as that header guessed, and now the guess has a table
+   behind it: **0 is the originating station and 1 is the answering one.**
+   `v22_create` only ever passes 0 or 1, which is consistent.
+2. `V22FP_control` sets `r0e` to 6 when bit 2 of its second control byte is
+   set, and to 4 when bits 7:6 hold 2 (F8526). Those are `v22_retrain` and
+   `v22_org_rmloop2`, so that byte's bit 2 REQUESTS A RETRAIN and its two-bit
+   field enters the originate remote-loopback-2 state. `include/dsplib/
+   v22ctl.h`'s constants are named for that.
+3. `V22_status`'s `PROTOCOL` table (F8528) is indexed by the same `r0e`, so its
+   seven values line up with the seven handlers: 3 for data, 0 for originate,
+   1 for answer, 2 for local loop, 7 for originate RMLOOP2, 8 for answer
+   RMLOOP2, 5 for retrain. **The values themselves are still not decoded** —
+   no enumeration in slmodemd's vendored `modem_defs.h` has those members and
+   no format string prints one — but they are now a mapping from something
+   named rather than from an index.
+
+`hdx->r0e` is NOT renamed in `v22fp.h` at the commit that establishes this, for
+the same scheduling reason F8526 gives: three V.22 reconstructions were in
+flight against one base commit and all three reach that field. `protocol` is
+the name it should take, and the edit belongs to whoever lands last.
+
+**And the method note is the one that keeps recurring.** The whole result came
+from `objdump -r`, not from reading code: the seven-entry table looked like
+seven zeroes, and the two other seven-entry tables in the same module —
+`PROTOCOL`'s status codes and, on the transmit side, the state handlers
+`v22prc.h` mentions — made "seven of something" look like a coincidence rather
+than a key. `tools/relocscan.py --at .rodata:0x8544` names the one caller in a
+single command.
+
+### F8530. `src/core/fixedrc.c` allocates with `calloc` and frees with `free` where the object uses `sysdep_malloc` and `sysdep_free`, and nothing in the tree could see it
+
+Found by accident, and the accident is the point: `t_v22del.c` builds a V.22
+datapump with the BLOB's `v22_create` and tears it down with OUR `v22_delete`,
+which is the one arrangement in the tree where an allocator mismatch becomes
+visible. At a host sample rate of 9600 the wrapper builds two rate converters,
+the blob's constructor takes four blocks for them through `sysdep_malloc`, and
+our teardown released **42 of the 46** blocks — four short, `live == 4`, with
+no bad free and no crash.
+
+The four are not a leak in `v22_delete` or in `dp_wrapper_delete`, both of
+which do call `RcFixed_Delete` on both converters. They are the converters'
+own blocks, released through libc `free` rather than through `sysdep_free`, so
+the harness's ledger never saw the calls.
+
+    RcFixed_Create   b0f2f   six sysdep_malloc sites, three sysdep_memset
+    RcFixed_Delete   b0d90   three sysdep_free sites
+    src/core/fixedrc.c:194,198   calloc
+    src/core/fixedrc.c:200,238,239   free
+
+**No existing test can fail on this**, which is why it survived. Every test
+that touches a rate converter builds it and destroys it on the same side, and
+`calloc`/`free` are self-consistent; the harness substitutes `sysdep_malloc`
+and `sysdep_free` and simply never receives the call. It takes a
+cross-allocator run — blob constructor, our destructor — to separate the two,
+and until this one there was none, because `RcFixed_Create` has no caller a
+differential test reaches from the reference side.
+
+**Whether it is a defect depends on `sysdep_free`, and this tree cannot say.**
+Under the harness the two are the same heap and nothing breaks. Under slmodemd
+they need not be: `sysdep_malloc` is the host's hook, and a host that pools or
+instruments it gets a pointer freed by the wrong deallocator. The object calls
+the hook; we do not; that is a difference in the code and not in the
+toolchain, which is the standard this project holds itself to.
+
+**It is left unfixed here deliberately, and not out of caution about the
+change itself.** `calloc` also ZEROES, and the object's `sysdep_malloc` does
+not — `RcFixed_Create` follows two of its six allocations with an explicit
+`sysdep_memset` and the rest with nothing, so a straight substitution changes
+which regions start zeroed and that is a behavioural question needing its own
+reading of all six sites. `src/core/fixedrc.c` is also outside the V.22 scope
+this was found under, and three V.22 reconstructions were in flight against
+the same base commit.
+
+`t_v22del.c` therefore drives the constructor at the datapump's own 8000 Hz,
+where `dp_wrapper_create` builds no converters at all and the ledgers match
+exactly, 42 for 42. That is not a tolerance being widened — the test asserts
+equality and gets it — but the 9600 arm is worth re-adding the moment this is
+settled, because it is four more blocks of coverage for free.
+
+### F8531. `connect_1200` and `connect_2400` are a shared subroutine of three protocol states, not states of the machine — and one of their format strings names four V.22 fields at once
+
+`connect_2400` is at **0x088cd0**, not at 0x08a7a0 as a task brief had it;
+0x08a7a0 is `v22_local_loop`. The size settles it: 0x892b1 − 0x88cd0 = 1505.
+Recorded because the wrong address survived being written down twice.
+
+Neither function is in `V22_PROTOCOL`. That table's seven relocations are the
+seven state handlers (F8529), and these two are called *by* three of them —
+`v22_originate`, `v22_answer` and `v22_local_loop`, two relocations each — and
+by nothing else. So the V.22 machine has seven states and a shared connect
+subroutine, and a count of "seven-entry tables in this module" is not a count
+of state machines: the `.rodata` blocks at 0x8560, 0x8580, 0x85b8 and 0x85f4
+are the handlers' own jump tables, whose entries point INSIDE functions.
+
+**The naming chain, and it is the author's own words.** `.rodata.str1.4` at
+0x114d0 is
+
+    V22_MSG_NO_CARRIER won't be reported (carrier_loss_time %d of %d ms)
+
+and the two `%d`s are the two operands of the comparison the message guards.
+The first is `20 * hdx->r3c` and the second is `params.r18`, so
+
+  - `struct v22fp_hdx::r3c` counts CONSECUTIVE CARRIER-LESS BLOCKS, and the
+    factor of 20 is `ReadGTimer`'s own block length, so the string and the
+    timer agree on what a block is;
+  - `struct v22fp_params::r18` is the CARRIER-LOSS GRACE TIME in milliseconds.
+    `v22_create` passes 700, which is 35 blocks.
+
+`.rodata.str1.1` at 0x5eb is `v22: V22STAT: --> %d\n`, which makes
+`struct v22fp::status` a MESSAGE CODE rather than a state — v22fp.h had only
+b103fp.h's analogy for that byte and said so. Three of its values are fixed by
+adjacent printfs: 3 is `V22_MSG_CONNECT_2400`, 16 is `V22_MSG_NO_CARRIER`, 23
+is `V22_MSG_ERROR7`. The others seen written here — 1, 4, 11 and 24 — are
+named by nothing and stay value-named.
+
+Three more fields follow from use rather than from a string, and are weaker in
+exactly that way: `hdx->r0c` is the connect SUB-STATE (`connect_2400` prints
+`NODE_2400A`..`NODE_2400D` on entering 8, 9, 10 and 11, read two independent
+ways that agree; 12 and 13 are named by nothing and the NODE_1200A/B analogy is
+recorded, not used); `hdx->r10` latches `RxTrained1200`/`RxTrained2400`'s
+verdict and is tested `== 1`; `hdx->r04` is the current node's DEADLINE in ms
+on `ReadGTimer`'s clock, and `v22_create`'s 60000 is that deadline.
+
+**None of the six is applied to `v22fp.h` at the commit that establishes
+them**, for F8526's reason: three further V.22 reconstructions were in flight
+against one base commit and all three reach those fields. The renames are
+queued, not declined.
+
+`hdx` +0x38 also wants a `short`. It currently falls inside
+`unsigned char r36[6]` — unmodelled space — and `connect_2400`'s retrain path
+is its first reader (`movw $0x1,0x38(%eax)`). Only the SHAPE is established,
+not the meaning, so it stays inside the byte array with a comment rather than
+becoming a named field on the strength of one store.
+
+### F8532. Every `ReadGTimer` comparison in the V.22 connect family is UNSIGNED, and a 20 ms clock needs two probes per deadline
+
+`ReadGTimer` returns `int`. All six comparisons of its result in
+`connect_1200` and `connect_2400` — including both against `hdx->r04`, the
+node deadline — are `jbe` and not `jle`. The two readings agree over every
+clock value a session can produce, so this is unreachable in service and
+provable only by driving a negative clock, which `t_v22conn.c` does: an
+injected signed comparison fails on that input and on no other. The reading is
+established rather than assumed, which is the distinction F614's "forced"
+column is about.
+
+**And a method note that generalises past V.22.** A node deadline compared
+against `ReadGTimer` can only be pinned from ONE SIDE per probe, because the
+timer advances in multiples of 20 and therefore presents only every twentieth
+value. Starting the clock at C−20 catches a constant that moved DOWN and misses
+one that moved UP. Injecting `790 → 791` went unnoticed while `449 → 448` was
+caught, which is the same defect surviving or not purely by which side of the
+step it fell on. Two probes per constant — C−20 and C−19 — closes it. Eleven of
+twelve injected defects were caught once that was in place.
+
+The twelfth is recorded as unobservable rather than as a gap.
+`NODE_1200_13` calls `RxClampV22` twice on the trained path, once inside the
+`if` and once after; `NODE_2400D`, otherwise the same node, calls it once.
+Removing the inner call cannot be detected by any input, because the second
+call writes the same twelve values over the first. It is in the source because
+it is in the object, and the comment beside it says no test defends it.
+
+Two smaller things from the same reading, both corroborating headers written
+earlier from the other end: `rxcount` is an IN AND OUT parameter — input sample
+count on the way in, symbol count on the way out, and `RxClampV22` then forces
+it to 12, which is 600 baud at 8 kHz and is what `v22_fse.h` derived
+independently. And descrambling happens BEFORE `RxTrained1200`/`RxTrained2400`,
+so the training predicates see descrambled symbols; a test that wants to reach
+them has to stand the descrambler down as well as override the slicer.
+
+### F8533. The V.22 transmit path disagrees with ITSELF across two graphs after about forty blocks, and the obvious explanation is refuted
+
+**The observation, and it is the blob's, not a reconstruction's.** A sweep that
+drove 42 consecutive blocks through one `struct v22fp` built by `V22FP_create`
+found two blocks on which the TRANSMIT SAMPLES differed between the two
+graphs, while the graphs themselves, the received symbols and both counts
+still matched. It was re-run with **the blob's own `ref_v22_ans_rmloop2` on
+both sides** and the disagreement reproduced at the same two blocks. So it is
+not a difference between our code and the object's; it is a difference between
+two runs of the object's own code on two objects built identically.
+
+**PARTLY CORRECTED BY F8536, WHICH SHOULD BE READ WITH THIS.** The
+refutation below is of the HEAP form of the uninitialised-memory
+explanation and is sound as far as it goes. It is not a refutation of the
+STACK form, which F8536 then measured and which this entry did not
+consider -- the harness fills what `sysdep_malloc` hands out and has no
+way to fill a call frame.
+
+**The explanation first reached for is wrong.** `v22fp.h` records several
+regions `V22FP_create` never writes — `dsp->ra8`, `dsp->ra0`, `dsp->r24`,
+`dsp->rx_scratch` — and "the transmit chain reads uninitialised memory" is the
+natural reading. It cannot be right here: `test/harness/runtime.c`'s
+`sysdep_malloc` fills every block with a FIXED non-zero pattern precisely so
+that an unwritten field is identical on both sides and obviously wrong when
+read. Two graphs therefore start with byte-identical contents everywhere,
+which `t_v22fpcreate.c` independently confirms by comparing all twenty-eight
+regions of two freshly built graphs and finding them equal.
+
+**What is left is a hypothesis and is labelled as one.** The two graphs are
+allocated back to back, so what differs between them is not their CONTENTS but
+their NEIGHBOURS: a read past the end of any of the eleven buffers
+`V22FP_create` allocates lands on a different block in each graph. That would
+produce exactly this signature — identical for a while, then diverging once
+the read reaches past a boundary, and deterministic again the moment each call
+gets a freshly allocated graph, because the allocator recycles the same
+chunks in the same order.
+
+It is NOT established. Nothing has been traced, no offset has been read, and
+the transmit chain (`ModDataV22` -> `FPM_SMC_encode` -> `V22_PPS_filter`) has
+its own tests that pass. The next step is a probe rather than an argument:
+poison a guard region after each of the eleven allocations and see which one
+is read.
+
+**What was done about it meanwhile.** `t_v22ans.c` builds a fresh graph per
+call in that sweep, which makes both sides see the same allocation layout, and
+its header carries the reason so the next reader does not re-derive it. That is
+NOT a tolerance being widened — every check still asserts exact equality — but
+it does mean the long-run behaviour of the transmit path is currently untested
+past the point where this bites, and that is the cost of leaving it open.
+
+### F8534. The seven V.22 protocol handlers share one signature, and it belongs to `V22_PROTOCOL` rather than to any of them
+
+All seven entries of `V22_PROTOCOL` (F8529) take the same seven arguments in
+the same order, over stack ranges 1,234 bytes apart in the object:
+
+    void handler(struct v22fp *fp, unsigned short *txsym, short *txout,
+                 short *rxin, unsigned short *rxsym,
+                 unsigned short *txcount, unsigned short *rxcount)
+
+Each element's type is forced by a callee rather than inferred, and both
+counts CHANGE UNITS across the call: `*txcount` goes in as a data-word count
+and `*rxcount` goes in as an input sample count and comes out as a symbol
+count, with `RxClampV22` overwriting `rxsym` and `*rxcount` on most exit paths.
+A caller must reset both per block.
+
+`V22FP_modem` is where that shape comes from, and it is worth reading for its
+own sake: it copies the caller's transmit words into `tx_in_internal`
+(`.bss`+0x3a0) and the caller's input samples, right-shifted by `hdx->r34`,
+into `rx_in_internal` (`.bss`+0x560); dispatches through the table; copies
+`rx_out_internal` (`.bss`+0x480) back out; and only then scales 160 transmit
+samples by `params.r0c` in Q15. **That names `params.r0c`** — v22fp.h has it as
+"template 13014; read by nothing", and 13014/32768 is 0.397, so it is the
+transmit output GAIN. `hdx->r34` is likewise the receive input right shift.
+
+`V22FP_modem` also carries the machine's own state transition, which no
+handler has: after the dispatch it tests `fp->status` and, for 3 or 4 and for
+6, 7 or 8, sets `hdx->r0e = 0` and `hdx->r0c = 0` — that is, moves to
+`v22_data`, index 0. With 3 already fixed as `V22_MSG_CONNECT_2400` this reads
+as "any connect code enters the data state", and it is the strongest thing yet
+said about what the status codes are for.
+
+**One status value is corroborated from outside V.22 entirely.** 0x10 is
+NO_CARRIER, and `v32demod.h` independently records the same author's
+`RxHdxNull` writing 0x10 into the V.32 object's status byte beside
+`V32_MSG_NO_CARRIER`. Same value, same role, different datapump — which is
+better evidence than either module could give alone. 0x0b is RETRAIN (both
+"Retrain initiated." sites) and 9 is the retrain request.
+
+**And a signedness cluster, all of it forced.** `hdx->r08` is declared `short`
+in `v22fp.h` and is read `movzwl` into an UNSIGNED compare (`ja` against 231)
+at every site — it accumulates milliseconds and never legitimately goes
+negative, but the type the object encodes is `unsigned short`. Every
+`ReadGTimer` comparison in the family is `jbe` (F8532). And `Detect_1s`,
+`Detect_Rmloop2_ACK` and `Detect_Retrain`, declared `int` in `v22det.h`, are
+narrowed to a `short` LOCAL by every caller — a `cwtl` at the call site — which
+is consistent with the `int` declaration and a `short` variable, and is NOT a
+reason to change the header. Four sign mutants survive everything except a
+test that drives a negative through each, so all three were measured rather
+than assumed.
+
+### F8535. Seven of the nine addresses in this wave's task briefs were wrong, every size was right, and nothing anywhere could have caught it
+
+The V.22 handler wave was dispatched to five subagents, each brief naming its
+functions as `name .text 0xNNNNNN NNNN bytes`. **Every byte count was correct
+and seven of the nine addresses were not.** The true table, from `nm -S`:
+
+    v22_data          0x088910   946      brief said 0x08ae00
+    connect_2400      0x088cd0  1505      brief said 0x08a7a0
+    v22_retrain       0x0892c0  2284      brief said 0x089b90
+    v22_org_rmloop2   0x089bb0  1050      brief said 0x08b0a0
+    v22_ans_rmloop2   0x089fd0  1160      brief said 0x08b4c0
+    connect_1200      0x08a460   818      correct
+    v22_local_loop    0x08a7a0  1104      correct
+    v22_answer        0x08abf0  1789      brief said 0x08a1c0
+    v22_originate     0x08b2f0  2655      brief said 0x089180
+
+The asymmetry is the whole finding. The SIZES came from `readyqueue.py`, which
+reads the object; the ADDRESSES were typed into prose, and nothing reads prose.
+Worse, 0x08a7a0 was given as `connect_2400`'s address and is in fact
+`v22_local_loop`'s, so one brief pointed at a real function that was not the
+one it named — the failure mode that looks most like being right.
+
+**No work was harmed, and that is the second half of it.** `tools/dis.py`
+takes a SYMBOL NAME and resolves it through `nm`, so every agent disassembled
+the right function regardless of what its brief claimed; the addresses were
+decoration throughout. One agent noticed and said so, which is how this came to
+be measured at all. But the same numbers would have been copied into a file
+header, and a `.c` file's "Reconstructed from dsplibs.o: name .text 0xNNNNNN"
+banner is exactly as unchecked as a brief — `docs/method/compilers.md`'s point
+about a rules file having a comment's shelf-life and no gate behind it, in a
+different costume.
+
+Two cheap defences. The first is a rule and the second is now a tool.
+
+  - **Do not write an address into a brief at all.** The name and the size are
+    sufficient — `dis.py` needs the name, `readyqueue.py` supplies the size,
+    and an address adds nothing a tool consumes.
+  - **`tools/bannercheck.py` reads the banners and asks `nm -S`.** Almost every
+    file in `src/` opens with one, and until now nothing read them.
+
+**And the tool immediately found the same defect in three older places**, which
+is what turns this from a slip into a pattern. Over the whole tree: **254
+banners, 251 agreeing and 3 wrong**, all three with the same signature as the
+briefs — the size right and the address wrong, or a size that had never been
+re-measured:
+
+    src/dsp/fpm_fse.c:6    FPM_FSE_free  said 80 bytes, object says 68
+    src/pump/v23/v23.c:8   dp_v23_init   said 0x004ef0, object says 0x004f70
+    src/pump/v23/v23.c:9   dp_v23_exit   said 0x004f10, object says 0x004f90
+    src/pump/v22/v22prc.c  RxTrained2400 said 143 bytes, object says 136
+
+All four are corrected, and the tree now reads 254 of 254. The tool was put
+through F134's ritual before any of that was believed: a one-digit change to
+`V22FP_create`'s address in `v22fp.c` makes it print the row and exit 1, and
+restoring the digit makes it exit 0.
+
+It prints its denominator on every run and refuses when it finds no banners at
+all, because a checker that silently measured nothing is F2400 and F3110's
+defect exactly. It also skips `.text 0x...` mentions whose name is a bare
+lower-case word — "the block at .text 0x08c340" is prose, not a claim — and
+prints how many it skipped rather than dropping them quietly; nine tree-wide.
+
+It is NOT wired into `make phase`. That is a scheduling decision for whoever
+owns the gate, not something a datapump wave should do on its own; the tool
+exits non-zero on a disagreement and is ready for it.
+
+### F8536. `DemodDataV22` reads uninitialised STACK on any short block, which is the mechanism F8533 looked for and half-refuted
+
+`DemodDataV22`'s IIR front end — taken whenever `dsp->r2e == 2`, i.e. in any
+mode-0 graph — declares a `short mix[V22_IIR_BLOCK]` of 160 entries, asks
+`FPM_TONE_generate_demod` for `count` of them, and then hands the whole array
+to `V22_iir_filt_demod`, whose loop runs the filter's own fixed 160. For
+`count` below 160 the tail of that array is whatever the call frame held.
+
+`src/pump/v22/v22rate.c` says so in a comment — "a short block leaves the tail
+of the mixer at whatever the stack held. The object's." — but a comment is not
+a measurement. It is one now: driving 16, 32, 48, 80 and 120 samples through
+two graphs makes the two sides differ **from byte 2\*count onward and not
+before**, exactly at the fill boundary, on every one of the five. A short block
+is therefore not a usable differential input for anything downstream of this
+function, and `t_v22org.c` uses full blocks for that reason.
+
+**This is the correction F8533 needs.** That entry observed the blob
+disagreeing with itself across two graphs, reached for "it reads memory the
+constructor never wrote", and refuted it on the grounds that
+`test/harness/runtime.c`'s `sysdep_malloc` fills every block with a fixed
+non-zero pattern. The refutation is sound and it is also too narrow: **the
+harness fills the HEAP and cannot fill a call frame.** Uninitialised memory was
+the right family after all; the wrong half of it had been ruled out.
+
+It does not close F8533 by itself. That sweep drove full 160-sample blocks, so
+this particular array was fully written on every call, and the divergence it saw
+was in the TRANSMIT samples rather than the receive path. What changes is the
+ranking: another uninitialised stack array somewhere in the transmit chain is
+now a better hypothesis than the heap over-read F8533 proposed, and the probe
+to run first is a stack poison rather than a heap guard region.
+
+### F8537. Two defects in modules outside V.22 that only a V.22 caller could have found
+
+**`FPM_TONE_generate` returns its `count` and `fpm_tone.h` declares it
+`void`.** The object loads `0xc(%esp)` — the third argument — into `%eax`
+immediately before both of its `ret`s, on every path. Our reconstruction
+returns nothing, so a caller that reads the value gets whatever was in `%eax`,
+and the two diverge.
+
+It is latent rather than live: the only two call sites reached so far are in
+`v22_originate` and `v22_answer`, both of which store the result into
+`*txcount`, and both were written with the literal 160 that is the argument at
+those sites rather than by calling for the value. So nothing is wrong today and
+something will be wrong the moment a caller needs it. The declaration should
+become `short FPM_TONE_generate(...)`; it is not changed here because
+`fpm_tone.h` is a differentially-tested module outside this wave's scope and
+the change wants its own test.
+
+**`v22_originate`'s NODE_3 can divide by zero, in the blob.** At 0x8b718 it
+loads `hdx->r32` with `movzwl` and at 0x8b737 divides by it with an unsigned
+`div` — no test, no guard. `V22FP_create` leaves `r32` at zero and the only
+thing that increments it is a received block that produced symbols, so
+reaching that arm before any such block faults. Reproduced as the object has
+it; every test scenario avoids it, and it is recorded rather than defended
+against, because a guard would be a fix and this is a reconstruction.
+
+**And two smaller things from the same reading.** `v22_originate`'s jump table
+has FOURTEEN entries, not the ten a first count suggests — the bound is
+`cmp $0xd` — and nodes 10..13 are real arms (8..11 reach `connect_2400`,
+12..13 reach `connect_1200`), so reading the table short would have made four
+live nodes look like the default. `v22_answer`'s NODE_0 stores `hdx->r0c = 3`
+twice, five calls apart, with no other writer between; the second store is
+dead, removing it passes the whole suite, and it is reproduced anyway because
+it is in the object.
+
+**The two functions are NOT mirror images**, which is the trap this pair sets.
+The carrier hunt appears three times across them and differs every time:
+`v22_answer`'s NODE_3 resets `hdx->r0a` on the same 59 ms rule `r08` gets and
+NEITHER of `v22_originate`'s two copies does; `v22_originate`'s NODE_5 keeps no
+gap because it reaches no verdict; and its NODE_6 2400 verdict neither prints
+nor sets the `r1e` bit its own 1200 verdict sets, and does not consult
+`params.bps2` the way the answer machine does. Writing either as the other's
+mirror produces a complete-looking wrong function — the same shape as F8528 and
+F8521, for the third time in one wave.
+
+Eleven format strings name the nodes in the author's own words
+(`V22_answer,NODE_0/1/3/4/SILENCE_AFTER_2100`, `V22_originate,NODE_0` and
+`NODE_1/3/4/5/6`) and four name status codes: `V22_MSG_ERROR1` = 17,
+`_ERROR3` = 19, `_ERROR4` = 20, `_ERROR5` = 21. With F8531's three and F8534's
+two, eleven of the status byte's values are now the author's own names.
+
+### F8538. The V.22 lifecycle wave is written and DECLINED: an integration test finds a divergence the seven per-handler tests cannot, and it is not yet localised
+
+`V22FP_modem`, `v22_process`, `v22_create`, `dp_v22_init`, `dp_v22_exit`,
+`V22_PROTOCOL` and the three `.bss` buffers were all reconstructed and all
+compile and link. **None of them is committed**, because the differential test
+written for them fails and the cause is not established. This entry is the
+record of the attempt, so the next one starts from here rather than from the
+disassembly.
+
+**What is settled, and is worth having whatever happens to the code.**
+
+  - `V22FP_modem` (0x887b0) widens the caller's transmit words into
+    `tx_in_internal` (`.bss` 0x3a0, 100 entries), right-shifts the caller's
+    input samples by `hdx->r34` into `rx_in_internal` (0x560, 160 entries),
+    dispatches through `V22_PROTOCOL[hdx->r0e]`, copies `rx_out_internal`
+    (0x480, 100 entries) back out, and scales exactly 160 transmit samples by
+    `params.r0c` in Q15. It names two fields `v22fp.h` had as unread:
+    `params.r0c` is the transmit output gain and `hdx->r34` the receive input
+    shift.
+  - **All three buffers are `.bss` statics, so two V.22 datapumps in one
+    process share them.** And the names COLLIDE across modules: `nm` finds
+    three `tx_in_internal` and three `rx_out_internal` in the object, at
+    0x1c0/0x3a0/0x6c0 and 0x2a0/0x480/0x7a0. `tools/symmap.py` cannot
+    globalize a name it sees three times, so only `rx_in_internal` — unique —
+    has a `ref_` alias. A test can read the blob's copy of one of the three
+    and not the other two.
+  - **`V22FP_modem` returns the whole 32-bit word at `fp` + 0x1c**, not the
+    status byte: the object loads four bytes where an `unsigned char status`
+    would force a `movzbl`. A draft argued no test could tell, because
+    `v22_process` uses the low byte; the test told immediately, 0 against
+    17664. An argument was reached for where a measurement was available.
+  - `v22_create`, `v22_delete` and `v22_process` are **file-static in the
+    object** — lower-case `t` — and only `dp_v22_init`/`dp_v22_exit` are
+    global, exactly as b103.c's split. **Our committed `v22_delete` is global
+    and should become static** when the rest lands, reached the way
+    `t_b103dp.c` reaches b103's: out of the table `dp_v22_init` registers.
+  - `v22_process`'s status jump table has seventeen entries. 0 and 1 give
+    `DPSTAT_OK` (1 also clears `tx_bits_wanted`), 3 and 4 give
+    `DPSTAT_CONNECT` after setting four bits per symbol and 2400, or two and
+    1200, through `modem_set_param`; everything else gives `DPSTAT_ERROR`.
+    **So status 4 is the 1200 connect**, which F8531 had left unnamed.
+  - When `tx_bits_wanted` is zero, nothing is fetched and the word count
+    handed to the modem is a literal 12 — one 600-baud block at 20 ms.
+
+**The failure, precisely.** Driving `V22FP_modem` on two graphs built by
+`V22FP_create`, over `hdx->r0e` 0..6 and `hdx->r0c` 0..7, the receive-word
+output `rxout` diverges: ours holds 15 — `V22_CLAMP_VALUE`, so an
+`RxClampV22` — where the reference holds 0. Everything else agrees: the
+return, both counts, the transmit samples, the input buffer, all three structs
+and all twenty-eight heap regions, over 18,018 checks.
+
+**Two things are established about it and one is not.**
+
+  1. It is NOT the handlers. Driving `v22_answer` DIRECTLY, outside the
+     dispatch layer, with two fresh graphs and two private symbol buffers,
+     gives **0 divergences over all eight sub-states**. The per-handler tests
+     are not missing anything about the handler.
+  2. It is NOT `rx_in_internal`: the blob's copy is readable through
+     `ref_rx_in_internal` and matches ours exactly, sample for sample.
+  3. What is NOT established is why the two `rx_out_internal` statics come to
+     differ. They are written only by the handler, through a pointer the layer
+     passes; the handler agrees when driven directly; and the copy-out only
+     ever compares the first `*rxcount` entries, so any entry above that count
+     is a channel the test cannot see. The first visible divergence is at
+     entry 0, which that channel does not obviously explain.
+
+**What the next attempt should do first**, in order: make our three statics
+temporarily non-`static` and compare them against the blob's after EVERY call
+rather than only through the copy-out — the hidden channel is the prime
+suspect and it is cheap to close; then, if they agree, the fault is in the
+layer's own copy loops rather than in what the handler wrote.
+
+**And the reason this is declined rather than committed with the failing case
+excluded.** Scoping the sweep away from `V22_PROTOCOL` entry 1 was tried and
+is what exposed the reasoning error: the same failure simply reappeared for
+entry 2, so the exclusion was not naming a defect, it was hiding one. An
+exclusion that moves when you move it is a tolerance being widened, which is
+the thing this tree does not do.
+
+### F8598. `bannercheck.py` is wired into `make phase`, and its C++ blindness is fixed first
+
+`tools/bannercheck.py` (F8535) checks every `.text 0xNNNN  N bytes` banner in
+`src/` and `include/` against `nm -S` on the blob. It is now a `make phase`
+tier, `banners`, on the argument that no OTHER tier can catch what it catches:
+a wrong address or size in a comment fails no test, and in this tree the record
+is the deliverable. It had already earned it -- four stale addresses in
+`src/fax/class1tx.c` all off by 0x30, and a size given as 33 where the object
+says 0x15.
+
+**IT WAS NOT WIRED IN AS FOUND.** It read `nm -S` only, so a C++ banner naming
+what the AUTHOR wrote (`retrainDetector`) could not match the object's
+`_Z15retrainDetectorP17tag_retrainReqDetPsi`, and six of this tree's own
+banners reported as naming no symbol the object defines. Those were FALSE
+ABSENCES, and a standing false positive is worse than noise in a gate: the
+ABSENT class exists to catch a banner naming something that does not exist, and
+six permanent ones make a real one unreadable. `nm -SC` is now read beside
+`nm -S` and each mangled entry is aliased under its demangled base name, both
+`Class::method` and the bare `method`.
+
+**THE FIRST ATTEMPT AT THAT ALIAS INVENTED EIGHT DISAGREEMENTS**, which is
+worth recording because the mechanism is general. It collapsed the demangled
+pass through an `addr -> (addr, size)` map, and TWO SYMBOLS CAN SHARE AN
+ADDRESS -- so one symbol's size was aliased onto another symbol's name, and
+`dcr_delete` was reported as saying 17 where the object says 32 when both
+numbers were right for different symbols. The size must come from the
+demangled line itself, never from an address lookup. A tool that gains eight
+findings after a change to its LOOKUP has found a bug in itself, not in the
+tree.
+
+Shown to fire before being trusted, per F134, on all three verdict classes and
+including the new demangling path: a wrong address on a C++ banner
+(`retrainDetector` moved to 0x005f90) reports ADDR; a wrong size on a C banner
+(`V22FP_GetDiagnostics` given as 22) reports SIZE; a banner renamed to
+`retrainDetectorXYZ` reports ABSENT. Each restored to 322 agree / 0 / 0. The
+`banners` target itself was then injected against and exits 2, so the GATE
+fails and not merely the tool. (2026-08-30)
+## F8640. `RATEv32` settles v32seq.h's one open inference: rate index 0 is 4800, in the author's own bytes
+
+`v32seq.h` derives the V.32bis rate index -> line rate correspondence from
+`V32FP_recreate`'s four-way ladder, which tests 0x3840, 0x2ee0, 0x2580 and
+0x1c20 and falls through to index 0 for anything else. That gives indices
+1 to 5 and leaves index 0 as "not 14400, 12000, 9600 or 7200"; the header
+labelled it 4800 from the Recommendation and said so:
+
+> INDEX 0 IS THE ONE INFERENCE HERE, and it is from the Recommendation rather
+> than the object [...] Labelled rather than asserted.
+
+`RATEv32` asserts it. Twelve bytes at `.data:0x00775c`, file-local, six
+shorts, indexed at 84986 and 84996 in `V32FP_status`:
+
+```
+    0   4800     3    7200
+    1   9600     4   12000
+    2   9600     5   14400
+```
+
+-- which is v32seq.h's ladder exactly, 9600 twice for the non-trellis and
+trellis variants at 1 and 2, and **4800 at index 0**. The inference is now a
+measurement.
+
+`SnrToRetrainTable`, twelve bytes at `.data:0x007750` and read once at 84ab9,
+is indexed the same way and corroborates the ordering independently: 9, 13,
+13, 11, 20, 24. The values ascend with the LINE RATE and not with the index --
+7200's 11 sits between 4800's 9 and 9600's 13 -- so a table indexed by
+anything else would have to be a coincidence in six places. What the numbers
+are is not established; they are compared against a value the receiver
+computes and 84ac0 branches on the comparison, which is consistent with a
+signal-to-noise floor per rate and is inference either way.
+
+Both are `.data` and neither is `const`, which is the object's placement and
+not a preference; `src/pump/v32/v32fptab.c` has them.
+
+## F8641. V.32's parameter block is V.22's with twenty more bytes, and the correspondence is what fixes eight field boundaries no test can see
+
+`V32_CFG` is 48 bytes at `.rodata:0x006da0` and it is a TEMPLATE, not a
+configuration read in place. Three `rep movsl` of exactly twelve dwords move
+it or something shaped like it:
+
+```
+    7e89e   V32FP_recreate   arg1 -> the object's first 48 bytes
+    7f5fd   V32FP_recreate   V32_CFG -> the same, when arg1 is null
+    7f714   V32FP_create     V32_CFG -> a stack local, patched, then passed
+                             to V32FP_recreate as that arg1
+```
+
+So the object's first 48 bytes ARE the parameter block, and the block is one
+struct because the object treats it as one movable thing.
+
+**THE V.22 CORRESPONDENCE IS THE EVIDENCE FOR THE BOUNDARIES.**
+`struct v22fp_params` (v22fp.h) is 28 bytes and `V22_CFG` is its template;
+`V22FP_create` copies it to the stack and patches six fields. Set the two
+side by side:
+
+```
+              V.22                     V.32
+    +0x00     mode      short          protocol  short   (0)
+    +0x02     bps       short  1200    bps       short   14400
+    +0x04     bps2      short  1200    bps2      short   14400
+    +0x06     r06       short          r06       short
+    +0x08     r08       int   120000   r08       int     120000
+    +0x0c     r0c       int    13014   r0c       int      17887
+    +0x10     flags     uint   0x65b   flags     uint     0x68b
+    +0x11     patched byte, bit 2      patched byte, bit 2
+    +0x14     r14       ushort   1     ec_near_delay ushort
+    +0x16     disconnect_thresh 103    r16       short
+    ...                                symlen_sel short  (V32_OBJ_SYMLEN_SEL)
+    +0x1c                              trellis   int     (V32_OBJ_TRELLIS)
+    +0x28                              disconnect_thresh short  103
+```
+
+Eleven of the twelve fields below +0x14 are at the same offset with the same
+width and, in three cases, the same VALUE -- 120000 at +0x08 in both, and the
+103 that `V32DiconnectThreshTable[3]` / `V22DiconnectThreshTable[3]`
+immediately overwrites with 150 on every path in both. The read-modify-write
+of the byte at +0x11 inside a 32-bit flag word at +0x10 is the same
+instruction sequence in the two `create` functions. This is one parameter
+block written twice by one author, and it is what makes the V.32 boundaries
+derived rather than fitted: no differential test can see a field boundary
+inside a block that is only ever copied wholesale.
+
+Four of the eighteen fields now carry names and the rest are `rNN`:
+`protocol` from the format string `V32FP_recreate` prints obj + 0x00 with
+(v32nsrng.c already cites it), `ec_near_delay` and `symlen_sel` and `trellis`
+from v32fpctl.h's own offset macros, and `disconnect_thresh` from the table
+it is loaded from -- which is V.22's argument at V.22's offset.
+
+**+0x16 AND +0x18 ARE TWO SELECTORS, NOT ONE.** Both index the same three
+two-entry length tables. `V32FP_recreate` uses +0x16 for all three (7f13d,
+7f150, 7f165). `V32FP_control` loads BOTH, computes
+`V32_SAMPLE_LEN[+0x18] / V32_SAMPLE_LEN[+0x16]`, multiplies hdx + 0x9c by the
+quotient, and then re-seeds hdx + 0x84, +0x9e and +0xa0 from +0x18 alone. So
++0x18 is the selector being moved TO and +0x16 the one in force; the second
+half of that is usage inference from the division and +0x16 is left unnamed
+on that ground.
+
+## F8642. `V32_CTL` is a control REQUEST and not a configuration, and `Control_Flag` is why the call happens one entry late
+
+`V32_CTL` is 32 bytes at `.rodata:0x007f20`. Neither of its two referrers
+reads a field out of it: `v32_data` (82919) and `V32FP_status` (84ad5) each
+copy all eight dwords to a stack local, OR a bit into the byte at +0x0d, and
+`v32_data` then hands `&local` to `V32FP_control` as its second argument.
+`V32FP_control` (0x84530) is the only reader of the fields.
+
+Widths are all forced, and the byte pair is the point of the object:
+
+```
+    ctl0 & 0x01  ->  fp + 0x1c = 1 / 0     84549
+    ctl0 & 0x02  ->  fp + 0x20             84558
+    ctl0 & 0x04  ->  fp + 0x24             84564
+    ctl0 & 0x08  ->  fp + 0x00 = 0 / 1     84571   INVERTED
+    ctl0 & 0x10  ->  fp + 0x0c             8457c   INVERTED
+    ctl0 & 0x20  ->  fp + 0x10             84588   INVERTED
+    ctl0 & 0x80  ->  obj + 0x11 bit 1      8459e   V32_OBJ_FLAGS
+    ctl1 & 0x04  ->  the rate arm, cleared with `andb $0xfb`   84669
+    ctl1 & 0x08  ->  the mode arm, cleared with `andb $0xf7`   84700
+```
+
+**IT IS TWO BYTES AND NOT ONE `unsigned int`.** Every access on both sides is
+byte-wide -- `movzbl 0xc(%edi)`, `testb $0x8,0xd(%edi)`, `orb $0x8,0x2d(%esp)`
+-- and the two arms CLEAR their own bit in the caller's block, which is a
+request being consumed. The template's 0x83 / 0x01 would sit at +0x0c as the
+single int 387 on a little-endian host, so a merged reading passes a value
+comparison and loses the declaration; `t_v32fptab.c` asserts the two bytes
+separately for that reason.
+
+The bits are NOT named. What is established is each one's DESTINATION, and
+fp + 0x00 .. fp + 0x24 is itself unnamed -- ten `int`s that `V32FP_recreate`
+sets to 1 wholesale (7e8e4 .. 7e91e) and this table's bits then set
+individually. A destination offset dressed as a bit name is exactly what
+CLAUDE.md says not to write, so the table above lives in the source comment
+and the constants do not exist yet.
+
+`Control_Flag` is one `.bss` int, GLOBAL, and `v32_data` is its only referrer.
+It is tested at the TOP of `v32_data` (827ce) and set at 82a4e on one arm and
+cleared at 82a91 on the other, with the `V32FP_control` call between the test
+and the clear -- so a request built on one entry is issued on the NEXT one.
+That is a static and not a field of the instance, so two V.32 datapumps in
+one process share it; recorded here rather than as a deviation, because
+nothing in this tree instantiates two.
+
+## F8643. The three V.32 length tables are one family of twelve contiguous bytes, and one selector picks a column in all three
+
+```
+    V32_TURNAROUND_DLY  .data 0x0076c0   { 64, 360 }
+    V32_SYMBOL_LEN      .data 0x0076c4   { 12,  48 }
+    V32_SAMPLE_LEN      .data 0x0076c8   { 40, 160 }
+```
+
+Twelve contiguous bytes, all GLOBAL, all two entries, and the same selector
+indexes all three within twenty instructions of each other in
+`V32FP_recreate` (7f13d, 7f150, 7f165 against obj + 0x16) and again in
+`V32FP_control` (84611, 84624 against obj + 0x18). `V32_SYMBOL_LEN` was
+already written from the first of those sites; the other two are new here.
+
+The destinations are v32hdx.h's own: `V32_SYMBOL_LEN[sel]` reaches hdx + 0x84
+and hdx + 0x9e, `V32_SAMPLE_LEN[sel]` reaches hdx + 0xa0, and
+`V32_TURNAROUND_DLY[sel]` reaches hdx + 0x94 -- which v32fpctl.h describes as
+the budget `CalcTurnAroundDelay` spends against the three charges beside it.
+
+**WHAT THE TWO COLUMNS ARE IS NOT ESTABLISHED.** The ratios are 4:1 in
+samples, 4:1 in symbols and 45:8 in turnaround delay, so column 1 is not
+column 0 scaled by one factor and the selector is not a sample-rate switch
+alone. `t_v32fptab.c` asserts instead that no two of the three tables are
+equal at either index, which is what stops a source that swapped two of them
+from passing -- the failure mode a family of same-shaped tables indexed by
+one variable actually has.
+
+## F8650. `V32FP_recreate` takes three arguments and reads two; the third is dead in all 3733 bytes
+
+`V32FP_recreate` (.text 0x07e870) is the V.32 datapump's whole constructor,
+and its frame is `sub $0x18c,%esp` after four pushes, so its arguments are at
+`0x1a0`, `0x1a4` and `0x1a8` of `%esp`. **Nothing in the function touches
+`0x1a8`.** Both callers pass a third argument -- `V32FP_create` (0x7f7a4)
+hands its own second argument through and `V32FP_control` (0x84530) passes
+zero -- so the parameter exists, is moved as one dword by both writers, and is
+never read. It is declared `void *` on that evidence and nothing narrower; if
+a later reader types it, this is the site to correct.
+
+The other two are settled by use and by the two call sites:
+
+```
+    arg0   void *modem        NULL allocates the whole tree; otherwise it is
+                              re-initialised in place
+    arg1   const struct v32fp_params *   NULL means "use V32_CFG" (0x7f5fd)
+    return the instance, in %eax at 0x7f3ab -- `mov %ebp,%eax`
+```
+
+**THE `fresh` FLAG IS THE POINT OF THE FUNCTION.** The NULL-instance arm sets
+a local to 1 and everything else reads it: it is the third argument of all six
+`FPM_*_init` calls, `VTBv32_init`'s `alloc`, and the test that decides whether
+each of the three `FPM_TONE_create` calls is handed the existing tone object
+or a NULL that makes it allocate a new one. `fpm_pps.h`, `fpm_sre.h`,
+`fpm_ecc.h` and `fpm_fse.h` already name that parameter `fresh` and describe
+it as "the buffers do not exist yet"; this function is what supplies it, and
+one function therefore serves both the constructor and the reconfigure. That
+is exactly what `V32FP_control` needs, and it calls it as
+`V32FP_recreate(obj, obj, 0)` -- the instance as BOTH arguments, which works
+because the instance's first 48 bytes ARE the parameter block (F8641).
+
+## F8651. The parameter block's +0x24 is ONE field under six spellings, and this is the function that fills all six
+
+`obj + 0x24` is read once, at 0x7e8bc, kept in a stack slot for the whole
+function, and written into six configuration structures and nothing else:
+
+```
+    7eae4   fpm_pps_cfg  + 0x24   `aux`           -> FPM_PPS_init
+    7eb7e   fpm_mrf_cfg  + 0x0c   `aux`           -> FPM_MRF_init
+    7ebb0   fpm_ecc_cfg  + 0x14   `aux`           -> FPM_ECC_init
+    7ec91   fpm_sre_cfg  + 0x34   `pad34`/`pad36` -> FPM_SRE_init
+    7ed20   fpm_fse_cfg  + 0x34   `reserved34`    -> FPM_FSE_init
+    7f047   fpm_tone_cfg + 0x18   inside `r16[3]` -> FPM_TONE_create
+```
+
+Every one of those is a 32-bit slot at the tail of a configuration that the
+module owning it independently recorded as copied by init and read by nothing
+-- fpm_mrf.h's "copied wholesale by init and read by nothing. One dword,
+always zero", fpm_ecc.h's "unread by any of the three; a pointer only by
+analogy", fpm_fse.h's "zero in every instance". Six modules reached that
+conclusion separately; this function shows the six are one field with one
+source. In every configuration this tree has, the value is zero.
+
+**IT IS STILL NOT NAMED.** What the six slots are FOR is no more established
+than it was; what is established is that they are filled together, from one
+place, and that a datapump could distinguish itself to all six sub-objects
+through them. `v32fp.h` keeps `r24`.
+
+**AND TWO OF THE SIX HAVE NO MEMBER TO ASSIGN.** `fpm_sre_cfg` spells the
+slot as two shorts and `fpm_tone_cfg` spells it inside a three-element array,
+and renaming either is a change to a header that another datapump initialises
+POSITIONALLY -- `src/pump/v22/v22rxtab.c` initialises an `fpm_tone_cfg` as
+`53, { 0, 0, 0 }`. `src/pump/v32/v32fprecr.c` therefore writes those two
+through the slot's address with a four-byte `memcpy`, which is the object's
+single 32-bit store and no aliasing pun. The rename is owed and is recorded
+here rather than done from a pass that does not own v22.
+
+## F8652. fp + 0x5098 is a `struct v32_smc`: the RECEIVE symbol coder, from the same four-byte template as the transmit one
+
+`V32FP_recreate` writes the same seven fields at fp + 0x48 and at fp + 0x5098,
+in the same order, from one stack copy of `SMCv32_CFG`:
+
+```
+    +0x00  mode    = (fp->tx_rate_index != 0)     the template's low half,
+                                                  replaced on both
+    +0x02  pad02   = SMCv32_CFG's high half       the only surviving pair
+    +0x08  state[0] = 0, +0x0a state[1] = 0       a two-iteration loop
+    +0x06  quad    = 0
+    +0x10  f10     = 0     +0x0e  f0e = 0     +0x12  pad12 = 0
+    +0x04  shift   = 2 * (mode != 0)
+```
+
+Transmit at 0x7ea4f..0x7eaa9 and receive at 0x7ee9f..0x7eef6, instruction for
+instruction with a displacement of 0x5050. So v32fpctl.h's `V32FP_SHORT_5098`
+and `V32FP_SHORT_509C` are that object's `mode` and `shift`, and the receive
+side has a symbol coder of its own rather than two loose shorts.
+
+**THE LAYOUT CLOSES AROUND IT.** fp + 0x5020 is `struct v32_dec` (it is what
+`fpm_fse_cfg::owner` is pointed at, 0x7ed37) and 0x5098 - 0x5020 is 0x78;
+fp + 0x50b0 is the descrambler, 0x18 further on, one byte more than
+`sizeof(struct v32_smc)`. Both neighbours were already established.
+
+**AND THE WHOLE BLOCK IS A TILING WHOSE SIZES ALL CLOSE.** Six sub-object
+sizes measured by six other files land the next base of this function exactly:
+`fpm_pps` 0x38 from 0x60 reaches 0x98, `fpm_mrf` 0x1c from 0xc4 reaches 0xe0,
+`fpm_ecc` 0x68 from 0xe0 reaches 0x148, `fpm_sre` 0x90 from 0x148 reaches
+0x1d8, `fpm_agc` 0x2c from 0x1d8 reaches 0x204 and `fpm_fse` 0x4e18 from 0x204
+reaches 0x501c. Six independent `sizeof` readings, six exact joins, and the
+0x50dc this function asks `sysdep_malloc` for is four bytes past the last
+field it writes.
+
+## F8653. `VTBv32_init` is INLINED into `V32FP_recreate` in the object, and the pair is what proves they shared a translation unit
+
+0x7ee15..0x7ee9f is `VTBv32_init`'s complete body with no call: the survivor
+ring allocated when `fresh`, the 128-node clear, the four-armed rate switch
+writing `nsub`, `imap`, `qmap`, `bound`, `region`, `grid` and `mask`, then
+`shift = nsub` and the eight metrics cleared. `VTBv32_init` is a GLOBAL
+symbol at 0x7e700 of 355 bytes, so it ends at 0x7e863 -- **twelve bytes before
+`V32FP_recreate` starts**. GCC cannot inline across a translation unit, so
+the two were in one, and `-O3`'s `-finline-functions` took it.
+
+`src/pump/v32/v32fprecr.c` CALLS it. The behaviour is identical -- the
+inlined arms are `VTBv32_init`'s own, arm for arm and literal for literal --
+and our factoring differing from the object's is finding F605's case rather
+than a defect. It does mean a per-function byte comparison reads this
+function as short of code it deliberately does not emit; that is the
+per-function count measuring our factoring, which 605 says to read from the
+per-file rollup instead.
+
+## F8654. The half-duplex scratch bank is SEVEN words here and its two accessors bound it at FIVE
+
+`v32seq.h` derives `V32HDX_NREGS` 5 from `LoadReg`/`StoreReg`, which reject an
+index above 4 (`cmp $0x4,%dx` with an unsigned branch). `V32FP_recreate`
+clears hdx + 0x3c, +0x3e, +0x40, +0x42, +0x44, +0x46 and +0x48 -- **seven**
+words, seven separate `movw $0x0` in ascending order at 0x7f256..0x7f27a --
+and the next field either header names is `V32HDX_GEN_INDEX` at +0x4a.
+
+Nothing decides between "the array is seven and the accessors are stricter
+than the storage" and "the array is five and +0x46/+0x48 are two other
+fields", and the object writes the same instruction for all seven, so the
+constructor cannot tell them apart. Recorded rather than reconciled;
+`v32seq.h`'s 5 stands because it is the reading with a bound behind it.
+
+## F8655. The three `SDMv32` tables ARE referenced, and their consumer settles what `v32scram_tables.c` said could not be settled
+
+`src/pump/v32/v32scram_tables.c` carried this, in capitals:
+
+> ALL THREE ARE UNREFERENCED. `tools/relocscan.py --into SDMv32` resolves all
+> 10,514 R_386_32 relocations in the object and finds nothing pointing at any
+> of them
+
+and drew a conclusion from it -- "the element width is verifiable and the
+SHAPE is not" -- and left the tap mapping open with "the function that would
+settle it is not in the object". **All of that is retracted.**
+`V32FP_recreate` reads every one of them, in four relocations that were always
+there: `SDMv32_CFG` at 0x7e9a6 and 0x7e9b2, `SDMv32_GPC` at 0x7e9eb,
+`SDMv32_GPA` at 0x7eb5c.
+
+What the consumer settles:
+
+- **`SDMv32_CFG` is a three-word template for a `struct v32_sdm`'s first six
+  bytes** -- `group`, `tap1_pos`, `tap2_pos` in v32fpctl.h's names. It is
+  copied to a stack local as one dword plus one word, and then entries 0 and 1
+  are BOTH overwritten before the local is installed: entry 0 by the group
+  width (4 when the transmit rate index is non-zero, else 2) and entry 1 by
+  `SDMv32_GPC` or `SDMv32_GPA`. **Only the 23 at entry 2 reaches the object**,
+  and it is `tap2_pos`. So the 4 and the 5 in that table are dead, which is
+  why they read as a plausible group width and a plausible tap and could never
+  be checked against anything.
+- **`SDMv32_GPC` is the transmit first tap position and `SDMv32_GPA` the
+  receive one**, both indexed by the half-duplex mode, which this function
+  sets to 0, 1 or 2 -- so at least three of the four entries are reachable and
+  `short[4]` stands.
+- **The tap mapping is therefore `tap1 = GP?[mode] - group` and
+  `tap2 = 23 - group`.** The second tap is the register LENGTH in both
+  directions, which is the `x^-23` term V.32's two scrambling polynomials
+  share, and the first is the exponent that distinguishes them -- 5 for GPC
+  and 18 for GPA at mode 0, the other way round at mode 1. That is the
+  question `v32scram_tables.c` said the object could not answer.
+
+One stack local serves both directions: the group width and `tap2_pos` are
+shared and only entry 1 is rewritten between the transmit install (0x7ea0f)
+and the receive one (0x7eefc).
+
+**THE LESSON IS THE TOOL RUN, NOT THE TABLES.** A "no referrer anywhere in
+1.2 MB" claim is exactly the shape CLAUDE.md warns about -- a detector that
+prints nothing is indistinguishable from a detector that is broken -- and this
+one had a conclusion built on top of it in a source comment with no gate
+behind it. The relocations resolve; whatever produced that sentence did not.
+
+## F8656. `fpm_sre`'s four caller-supplied ppm parameters have a caller, and it is this one
+
+`fpm_sre.h` records, from `FPM_SRE_init`'s own offset set:
+
+> FOUR OF THESE ARE NEVER WRITTEN BY init -- `ppm_step`, `ppm_scale`,
+> `ppm_period` and `ppm_n_max` are read-only to both functions, so a caller
+> has to fill them and an all-zero state divides by zero in `ppm_n`
+
+`V32FP_recreate` fills exactly those four, immediately after `FPM_SRE_init`
+returns, and nothing else in the object writes any of them:
+
+```
+    7ecc3   sre + 0x7c   ppm_step   = 12
+    7ecca   sre + 0x8a   ppm_period = 9600
+    7ecf1   sre + 0x8c   ppm_n_max  = 0x68
+    7ed01   sre + 0x88   ppm_scale  = 1000000 / (cfg.clock_len * 9600)
+```
+
+`ppm_scale` is a signed `idiv` of the literal 1000000 by the STACK COPY of the
+configuration's `clock_len` times 9600, truncated to a short. A prediction
+made by fpm_sre.h from the meter's arithmetic, and satisfied here by a value
+it never saw.
+
+The same statement group seeds a second reader-free region: the instance's
+diagnostic window at obj + 0x34..0x63, nine pointers and three counts derived
+from the equaliser and the echo canceller after both are initialised. Four of
+the pointers are the four coefficient banks inside ONE `fpm_ecc::coef[0]`
+allocation, at `coef[0]`, `+near_taps`, `+2*near_taps` and
+`+2*near_taps+far_taps` shorts, with the two tap counts beside them -- which
+is fpm_ecc.h's own "near-I, near-Q, far-I, far-Q" layout, stated there from
+the canceller's side and confirmed here from the window's. Nothing
+reconstructed READS the window, so its consumer is open and the offsets stay
+offsets.
+
+## F8644. `V32FP_recreate` prints its own parameter block, and the format string names six of the eighteen fields
+
+`.rodata.str1.4 + 0x11000`, printed at debug level 2 by `V32FP_recreate`
+itself:
+
+```
+V32FP Config: protocol=%d,tx_rate=%d,rx_rate=%d,timeout=%d,
+energy_drop_time=%d,tx_scale=%d,options=0x%x,trellis=%d
+```
+
+The eight arguments are pushed at 7f577..7f5b5, so the correspondence is read
+off the instructions rather than guessed:
+
+```
+    esp+0x04  params + 0x00  movswl   protocol
+    esp+0x08  params + 0x02  movswl   tx_rate
+    esp+0x0c  params + 0x04  movswl   rx_rate
+    esp+0x10  params + 0x08  32-bit   timeout
+    esp+0x14  params + 0x2a  movswl   energy_drop_time
+    esp+0x18  params + 0x0c  32-bit   tx_scale
+    esp+0x1c  params + 0x10  32-bit   options
+    esp+0x20  params + 0x1c  32-bit   trellis
+```
+
+Five of those had been `rNN` in F8641's table and one had been guessed:
+`bps`/`bps2` are `tx_rate`/`rx_rate`, `r08` is `timeout`, `r0c` is `tx_scale`,
+`flags` is `options` and `r2a` is `energy_drop_time`.
+
+**IT SETTLES THE ONE THING NOTHING ELSE COULD.** F8641 recorded that
+`V32FP_control` writes ONE value into both +0x02 and +0x04 (846af..846b3), so
+no differential test can tell a swap of them apart. The format string prints
+them in offset order with two different names, which is the only evidence
+there is or can be that +0x02 is the transmit side.
+
+**AND TWO OF THE SIX ARE CORROBORATED BY USE, INDEPENDENTLY.**
+
+- `tx_scale` at +0x0c is the multiplier `V32FP_modem` applies to every output
+  sample on its way out: `out[i] = (out[i] * obj->tx_scale) >> 15` at
+  82752..82773. The template's 17887 is 0.546 in Q15.
+- `energy_drop_time` at +0x2a is what `v32_data` compares its carrier-loss
+  timer against (828d0), and the debug line beside that comparison is
+  `carrier_loss_time %d of %d ms` -- so it is a DURATION in milliseconds, and
+  the template's 700 is 0.7 s.
+
+`energy_drop_time` is also the one of the six whose extension is NOT dead: it
+is printed with `movswl` and compared with a signed 16-bit `jge`, so it is a
+signed `short` and not an unsigned one.
+
+Two more strings belong to the same function and are reproduced with it:
+`V32FP version: %s %s` at `.rodata.str1.1 + 0x3782`, printed with `15:48:07`
+and **`Sep 22 2005`** -- `__TIME__` and `__DATE__`, and that date is the day
+`.comment` says the compiler itself was built (F606).
+
+## F8645. `v32_data` defers its retrain request into a dead stack frame, and `V32FP_control`'s `Patch:` line is the author's own workaround
+
+Recorded as deviation **D961**; this finding is the reading, not the register
+entry.
+
+`v32_data` builds a `struct v32fp_ctl` from `V32_CTL` in a stack local. The
+renegotiation arm calls `V32FP_control` with it in the same frame. The retrain
+arm does not: it sets the file-static `Control_Flag` and returns, and the call
+is made from the top of the NEXT `v32_data`, on a local of THAT frame which
+nothing on that path writes.
+
+**WHAT MAKES THIS A FINDING RATHER THAN JUST A BUG** is the evidence it
+carries. `V32FP_control` opens with
+
+```
+   8453f:  80 7e 30 09    cmpb   $0x9,0x30(%esi)     V32_OBJ_STATUS == 9
+```
+
+and, on the match, prints `Patch: set ctl_ptr->vxx_ctl.options.retrain = TRUE`
+and sets bit 2 of the request's second byte. Nine is exactly the status
+`v32_data`'s retrain arm posts. So:
+
+- the retrain bit is `V32_CTL1_RETRAIN`, **named by the author** and by nothing
+  else -- CLAUDE.md's strongest evidence class, at a site where usage inference
+  would have given the same answer with far less confidence;
+- the argument is called `ctl_ptr` and the block is reached as `vxx_ctl`, a
+  per-modulation control record inside something larger, which is the only
+  glimpse this tree has of the structure above `struct v32fp_ctl`;
+- the dotted path `options.retrain` says the original spelled these bits as
+  BITFIELDS inside an `options` member. They are two `unsigned char` here
+  because a bitfield declaration additionally claims a packing order and
+  because the byte values are what the object settles (CLAUDE.md's rule);
+- and the word `Patch` says the author found the lifetime bug, recovered the
+  one bit that mattered from the status code, and left the rest.
+
+## F8646. `V32_CONNECT`'s seven codes are exactly the CONNECT arm of `v32_process`'s jump table, six of seven, with the seventh landing on no-carrier
+
+`v32hdx_tables.c` reads `V32_CONNECT` -- `.data:0x007724`, seven shorts,
+{4, 3, 25, 24, 26, 27, 14} -- as "per-RATE status codes, and the table's own
+name is the only evidence about what they mean" (F8585). The consumer side now
+corroborates it, and from a completely different direction.
+
+`v32_process` switches on `V32FP_modem`'s return -- `V32_OBJ_STATUS` -- through
+a 29-entry jump table at `.rodata + 0x1a8`:
+
+```
+    3, 4, 13, 24, 25, 26, 27          -> DPSTAT_CONNECT
+    12, 14                            -> "nocarrier",  DPSTAT_ERROR
+    16 .. 23                          -> "error",      DPSTAT_ERROR
+    0, 1, 2, 5..11, 15, 28            -> DPSTAT_OK
+    anything above 28                 -> "unknown",    DPSTAT_ERROR
+```
+
+Six of `V32_CONNECT`'s seven entries -- 4, 3, 25, 24, 26, 27, the six real
+rates -- are in the CONNECT arm and nowhere else. The seventh, 14, is the
+`V32_RATE_NONE` slot, and it is in the NO-CARRIER arm. A table of seven codes
+indexed by rate, whose six rate entries all mean "connected" and whose
+"no rate in common" entry means "no carrier", is not a coincidence at that
+arity.
+
+Two of the 29 codes now have names from the object itself: **12 is
+`V32_MSG_NO_CARRIER`**, which is the `.rodata` string `v32_data` prints beside
+it, and 9 is the retrain request `V32FP_control` tests for (F8645). The rest
+are numbered.
+
+## F8647. `V32FP_control`'s rate-fallback table is v32seq.h's rate ladder stepped down exactly one rung, and it confirms index 0 a second time
+
+The retrain arm, when `fp + 0x50d8` is set, switches on the receive rate INDEX
+at fp + 0x2e through a six-entry jump table at `.rodata + 0x7f40` and writes a
+new line rate into the object:
+
+```
+    index 5 -> 12000        index 3 -> 4800
+    index 4 ->  9600        index 0 -> no write at all
+    index 2 ->  7200
+    index 1 ->  7200
+```
+
+`v32seq.h`'s ladder is 5 = 14400, 4 = 12000, {2,1} = 9600, 3 = 7200, 0 = 4800,
+tried in that order. Line the two up and every entry is the NEXT RUNG DOWN:
+14400 falls back to 12000, 12000 to 9600, either 9600 to 7200, 7200 to 4800,
+and 4800 -- the bottom -- falls back to nothing, which is why index 0's slot
+is the only one that writes no rate.
+
+This is an independent confirmation of the whole index-to-rate correspondence
+from a table that mentions no rate index anywhere, and it is the second
+confirmation of index 0 = 4800 after `RATEv32` (F8640): the ladder's bottom
+rung is the one with nowhere to go.
+
+## F8648. V.32's block is five milliseconds, and the object says so three times over
+
+`v32_create` builds its wrapper with `dp_wrapper_create(self, v32_process, 40,
+srate, 8000)` -- a 40-sample fragment at 8000 Hz, which is 5 ms.
+
+`v32_data` counts blocks in hdx + 0xae, multiplies by five, and compares the
+product against `params.energy_drop_time`; the debug line beside the
+comparison is `V32_MSG_NO_CARRIER won't be reported (carrier_loss_time %d of
+%d ms)`. So the unit is MILLISECONDS, five of them is one block, and the
+template's `energy_drop_time` of 700 is 0.7 s of dead line before no-carrier is
+reported.
+
+40 samples at 8000 Hz is also exactly **twelve symbols** at V.32's 2400 baud,
+which is `V32_SYMBOL_LEN[0]` and is the literal `v32_process` writes into
+`struct v32_dp::symbols_per_block` on connect. The same twelve appears a
+fourth time as `V32_SYMBOL_LEN`'s first entry, written from `V32FP_recreate`.
+
+`v32_process` also derives `bits_per_symbol` as `line_rate / 2400`, emitted as
+an UNSIGNED magic multiply (`mov $0x1b4e81b5,%eax; mull; shr $0x8,%edx`), which
+is what makes `struct v32_dp::line_rate` an `unsigned int` rather than an
+`int` -- a signed divide by 2400 is `imul`, `sar` and a sign correction, and
+that is not what is there.
+
+## F8649. `V32_PROTOCOL` is five handshake slots, one data slot and THREE null ones, which corrects F8594
+
+F8594 read `V32_PROTOCOL` (`.data:0x007700`, 36 bytes, GLOBAL) as "9 dwords --
+six of `v32_handshake`, one of `v32_data`, and `v32_null_protocol`". The nine
+`R_386_32 .text` relocations resolve as:
+
+```
+    [0] v32_handshake      [3] v32_null_protocol   [6] v32_data
+    [1] v32_handshake      [4] v32_handshake       [7] v32_null_protocol
+    [2] v32_handshake      [5] v32_handshake       [8] v32_null_protocol
+```
+
+FIVE handshake, one data, THREE null. Slots 0, 1, 2, 4 and 5 are exactly
+`v32hdxst.h`'s `V32_MODE_ORIGINATE`, `ANSWER`, `LOCLOOP_2`, `RING_INIT` and
+`RING_RESP`; slot 3 is `V32_MODE_LOCLOOP_3`, which `V32NextState` gives a
+handler and this table does not; and slot 6 is the data mode `V32FP_modem`
+installs when obj + 0x31 bit 0 is set.
+
+**All nine dwords are ZERO in the file**, so a byte comparison of two all-zero
+tables passes while naming nothing -- the trap `tools/dis.py` exists for, and
+the reason `t_v32fpdisp.c` resolves every slot to a function before comparing.
+
+A second nine-entry table sits 0x68 above it: `PROTOCOL`, `.data:0x007768`,
+`{0, 1, 2, 9, 6, 6, 3, 7, 8}`, indexed the same way, which `V32FP_status`
+copies into `struct v32_status::protocol`. **It is file-local AND its name is
+used by a second translation unit** (there is another `PROTOCOL` at
+`.rodata:0x8c0c`), so `symmap.py` leaves both local and no `ref_PROTOCOL`
+exists. It is therefore `static` on our side too and is reachable to a test
+only through the status field.
+
+## F8657. obj + 0x11 is the second byte of `params.options`, not `V32_OBJ_FLAGS` at 0x31, and reading it as the latter cost two functions their whole flag byte
+
+F8642's bit table for `struct v32fp_ctl` has the row
+
+```
+    ctl0 & 0x80  ->  obj + 0x11 bit 1      8459e   V32_OBJ_FLAGS
+```
+
+The OFFSET is right and the LABEL is wrong: `V32_OBJ_FLAGS` is 0x31, thirty-two
+bytes further on. obj + 0x11 is inside the 48-byte parameter block -- it is the
+byte holding bits 8..15 of `params.options` -- and the two are easy to
+transpose because both are read `movzbl`, masked with `andb` and stored back.
+
+**THREE SITES REACH IT AND THEY ARE ONE ROUND TRIP.**
+
+```
+    7f740/7f75d  V32FP_create   bit 2 <- cfg->r10 bit 0        options bit 10
+    8459e        V32FP_control  bit 1 <- ctl->ctl0 bit 7       options bit  9
+    84a65        V32FP_status   ctl0 bit 7 <- bit 1
+    84a76        V32FP_status   flags1 bit 0 <- bit 2
+```
+
+So the caller's configuration goes in through `V32FP_create` and comes back
+out through `V32FP_status::flags1`, and the control block's bit 7 goes in
+through `V32FP_control` and comes back out through `V32FP_status::flags` bit 7.
+That symmetry is what says they are two bits and not four.
+
+**WHAT IT COST.** Written as 0x31 it fails in a way that looks like something
+else entirely. `V32FP_status` reported `flags` 0x3b where the object reports
+0xbb and `flags1` 0xaa where the object reports 0xab -- one bit each. Bit 7 of
+that byte is `V32_STFLAG_RETRAIN_DET`, which `v32_data` tests to decide whether
+to poll `RetrainDetectV32` at all, so the single wrong offset silently removed
+an entire arm of a different function. And `V32FP_control` wrote bit 1 of
+obj + 0x31 -- `V32_FLAG_FAULT` -- which is a *real* flag that other written
+code reads, so the object came back plausible and wrong rather than obviously
+broken.
+
+The template's `options` is 0x68b, so the byte is 0x06 and BOTH bits are set in
+every configuration `V32_CFG` produces. A test that only ever built the default
+object would see the right answer from the wrong offset for bit 2, because
+obj + 0x31 after `V32FP_recreate` is 0x40 and bit 2 of that is zero -- which is
+the wrong answer, and is exactly what made this visible.
+
+## F8658. `DemodDataV32` writes through its input buffer, so two sides of a differential test cannot share one
+
+`t_v32fpdisp.c` first handed `V32FP_modem` and `ref_V32FP_modem` the SAME
+`short in[64]`, on the reasoning that an input is an input. The two disagreed
+on the receive count -- ours 12 symbols, the object's 0 -- with the object's
+side, which ran SECOND, getting nothing.
+
+`DemodDataV32`'s second parameter is a plain `short *` and not a `const short
+*`, and `v32demod.h` has said so since it was written. The receive chain works
+in place, so the first side's call left a different array behind for the second
+side, and the two were no longer being given the same input at all.
+
+**IT PRESENTS AS A DEFECT IN THE CODE UNDER TEST, NOT IN THE FIXTURE.** What
+the failure looked like was `V32FP_modem` returning a different status and
+`v32_data` taking a different arm -- four fields apart from the buffer, with
+every intermediate that was compared agreeing. The signature that identified it
+is the one F8587 already names: **the disagreement tracked which side ran
+first**, not any input the test varied.
+
+The rule this leaves is narrow and worth stating: in a differential test, every
+buffer a callee can WRITE gets one copy per side, and "can write" is settled by
+the declared parameter type, not by what the function is called. `t_v32cfg.c`
+already does this for `FPM_AGC_agc`'s in-place gain buffer; this is the same
+thing at a point where the buffer reads like a pure input.
+**THE WAVE HAS SINCE LANDED. Read F8600-F8604 next**, and F8602 for what
+happened to this entry's divergence.
+
+### F8600. The V.22 lifecycle lands: `V22FP_modem` is a marshalling layer with one piece of policy in it, and the policy is the machine's own state transition
+
+`V22FP_modem` (0x887b0, 346 bytes) is the only caller of the seven-state
+`V22_PROTOCOL` machine, and it is seven movements long:
+
+  1. seed two SIXTEEN-BIT counts on its own stack from the caller's `int`
+     pair -- the transmit one at `esp+0x2a`, the receive one at `esp+0x28`,
+     adjacent;
+  2. clear three bits of `fp->flags` and one of `fp->r1e[0]` (`andb $0xf8`,
+     `andb $0xfd`); what they indicate is established by nothing and they
+     stay masks;
+  3. stage the transmit words, int to short, into `tx_in_internal`
+     (`.bss` 0x3a0, 100 entries);
+  4. stage the input samples, arithmetically right-shifted by `hdx->r34`,
+     into `rx_in_internal` (`.bss` 0x560, 160 entries) -- `movswl`, then `sar`
+     by a `movzwl` count;
+  5. dispatch `V22_PROTOCOL[hdx->r0e]`, sign-extended and with no bounds
+     check, and write the handler's receive count back;
+  6. copy that many entries of `rx_out_internal` (`.bss` 0x480, 100) out to
+     the caller's `int` array, `movzwl` per entry;
+  7. scale exactly `V22_TX_BLOCK` = 160 transmit samples by `params.r0c` in
+     Q15, and then force the receive count to zero for any non-zero
+     `fp->status`.
+
+**The transmit count is never written back.** Only the receive one is.
+Whatever the handler leaves in its own transmit count is dropped, which is the
+object's and not an omission in the reconstruction.
+
+**THE STATE TRANSITION IS HERE AND IN NO HANDLER.** Between 5 and 6 the object
+tests the status byte twice, in this order and re-reading it between them: 3 or
+4, then 6, 7 or 8; either sets `hdx->r0e = 0` and `hdx->r0c = 0`, which is the
+`v22_data` state with its sub-state cleared. With 3 fixed as
+`V22_MSG_CONNECT_2400` and 4 fixed as the 1200 connect (F8601), that reads as
+"any connect code enters the data state". F8534 named this; this is the
+committed form of it.
+
+**Two field names follow, and both are class-2 evidence -- a caller that types
+the field.** `params.r0c` is the transmit output gain: v22fp.h had it as
+"template 13014; read by nothing", and 13014/32768 is 0.397. `hdx->r34` is the
+receive input right shift.
+
+**The return is the whole 32-bit word at fp+0x1c and this is MEASURED, not
+argued.** The object emits `mov 0x1c(%ebp),%eax` where a byte field would force
+a `movzbl`, and reads the same four bytes as a BYTE three times in the lines
+above it. A draft had argued that no test could separate the two readings
+because `v22_process` only looks at the low byte; the test separated them on
+the first call, 0 against 17664 (F8538). `B103FP_modem` does the same thing and
+`src/pump/b103/b103fp.c`'s `memcpy` into an `int` is the spelling reused here.
+
+`t_v22dp.c` and `t_v22modem.c` are the tests; both are green under `make one`.
+
+### F8601. `v22_process`'s jump table has seventeen entries, status 4 is the 1200 connect, and the second argument to `modem_get_bits` is the WORD WIDTH rather than a channel
+
+`v22_process` (0x5130, 557 bytes) translates the low byte of what
+`V22FP_modem` returns through a jump table at `.rodata` + 0x21c:
+
+    0                -> DPSTAT_OK
+    1                -> DPSTAT_OK, and tx_bits_wanted = 0
+    3                -> DPSTAT_CONNECT, bits_per_word = 4, 2400 bit/s each way
+    4                -> DPSTAT_CONNECT, bits_per_word = 2, 1200 bit/s each way
+    everything else  -> DPSTAT_ERROR
+
+**So status 4 is the 1200 connect**, which F8531 left unnamed and which nothing
+in `.rodata` prints. What names it is this caller: two bits per word and
+`modem_set_param(MDMPRM_TX_RATE, 1200)` beside the 2400 arm for 3.
+`include/dsplib/v22.h` spells it `V22_MSG_CONNECT_1200`.
+
+**THE TABLE'S LENGTH IS EVIDENCE AND THE CASE LABELS ARE NOT.** Seventeen
+entries with a `cmp $0x10; ja` in front means the highest case label the author
+wrote was 16, with twelve of the seventeen landing on the same block as
+`default`. 16 is `V22_MSG_NO_CARRIER`, so it is spelt as an explicit case
+falling into the default -- but any assignment of the twelve dead labels is
+behaviourally identical, and what the object forces is only that a label at 16
+exists. Recorded so a later reader does not take the spelling for a derivation.
+
+**Four differences from `b103_process`, all of them the object's:**
+
+  - the second argument to `modem_get_bits` and `modem_put_bits` is
+    `self->bits_per_word`, not a literal channel number. slmodemd spells that
+    parameter `nbits`; b103 passes 1 because Bell 103 carries one bit per
+    symbol, and V.22 passes 2 or 4 for the same reason. The two are the same
+    quantity, not two conventions.
+  - `modem_put_bits` is called UNCONDITIONALLY, even with a count of zero:
+    when `tx_bits_wanted` is zero the object sets the receive count to zero
+    and falls into the same call rather than branching round it.
+  - the widening loop runs from `n - 1` down to 0 (`mov %eax,%edx; jmp .test;
+    .test: dec %edx; jns .body`), where `b103_process`'s really does start at
+    `n`. Two different loops in the same shape; both are reproduced as written.
+  - the line rate is reported on EVERY connecting block, not only on the
+    transition into one. There is no edge test in this function at all; the
+    only thing conditioned on a change is the `v22: V22STAT: --> %d` message.
+
+The receive-count clamp is `cmp $0x64; jbe`, i.e. UNSIGNED against
+`V22_BIT_BUFFER`, and its format string names the variable the author used:
+`v22: FATAL: rx_len is huge (%d).`
+
+### F8602. F8538's divergence does not reproduce, and what AGREED in it is what localises it
+
+The experiment F8538 declined on -- two graphs from `V22FP_create`, `hdx->r0e`
+swept 0..6 and `hdx->r0c` 0..7, one block driven from each of the fifty-six
+starting states -- is `test/unit/t_v22modem.c`, re-run against this
+reconstruction. It is **green over 16,745 checks**, and what it compares is a
+superset of what that attempt did: the return, both counts, the 160 transmit
+samples, **the whole 100-entry receive array rather than the first reported
+entries**, the three structs with pointers blanked, and all twenty-eight heap
+regions.
+
+**The whole-array comparison matters and is the point.** `V22FP_modem` forces
+the receive count to zero for any non-zero status AFTER the copy-out, so a test
+that compares only what the count reports compares nothing on most states --
+which is the "channel the test cannot see" F8538 named without being able to
+close.
+
+**What the old symptom rules in.** It was: ours holding `V22_CLAMP_VALUE`
+where the reference held 0, with the return, both counts, the transmit block,
+all three structs and all twenty-eight heap regions AGREEING. Those five
+agreeing is a strong statement: the handler ran, wrote the same bytes into the
+same objects, and reported the same counts on both sides. **The only step left
+that can differ is the copy-out itself** -- its bound, or the buffer it reads
+from. `tx_in_internal` holds the caller's data words, which in that sweep were
+small integers including 15, and it sits 224 bytes from `rx_out_internal` in
+the same `.bss`; a copy-out reading the wrong one of the three statics
+reproduces every observable of that report. That is a bounded conclusion, not
+a diagnosis: the code was never committed and is not in the tree, so what it
+actually did cannot be established.
+
+**Two candidate defects were injected and neither has that signature**, which
+is what rules them out rather than an argument:
+
+  - moving the zeroing of the receive count AHEAD of the copy-out fires (2,248
+    of 16,745 checks) but with the polarity reversed -- ours holds the test's
+    poison and the REFERENCE holds the 15s;
+  - permuting `V22_PROTOCOL` (entries 1 and 2 swapped) fires (4,617 checks)
+    but diverges the TRANSMIT samples too, which F8538 recorded as agreeing.
+
+The permutation is worth its own sentence for a different reason: F8538 read
+"exclude the failing table entry and the next one fails" as the tell that an
+exclusion hides a defect, and it is -- but a permuted dispatch table produces
+exactly that pattern, because every entry is then wrong and removing one only
+exposes the next. The reading was right; the shape it points at is a defect
+that is uniform across the table, not one specific to an entry.
+
+**RETRACTED IN PART, THE SAME DAY, AND THE RETRACTION IS THE FINDING (F8608).**
+Both injections above were run under `make one`, i.e. GCC 14 -- and GCC 14 is
+the compiler that HIDES this test's real divergence. Under `make period` the
+same tree fails `t_v22modem` in the TRANSMIT SAMPLES, which is precisely the
+observable the second bullet used as its discriminator. So:
+
+  - "a permuted `V22_PROTOCOL` diverges the transmit samples, and F8538 said
+    they agreed" **is not an elimination.** F8538's transmit-sample agreement
+    was, on the evidence available, also a `make one` measurement, and this
+    tree has now measured that transmit samples can agree under GCC 14 in
+    exactly these poked states while diverging under GCC 3.4.2. A permuted
+    table is back among the live hypotheses for that attempt.
+  - What still holds without any compiler behind it is that THIS wave's table
+    is right: its order is read off seven `R_386_32` relocations at
+    `.rodata` + 0x8544 naming the seven handlers, which is the object and not
+    an inference.
+  - The first bullet's elimination survives, because its discriminator is a
+    POLARITY (which side holds the poison) rather than a value, and a polarity
+    cannot be reversed by a code generator.
+
+**The general lesson, and it is the one CLAUDE.md's "Gate on `make period`"
+section already states from the other direction:** an elimination is only as
+good as the tier it was measured on, and a GREEN modern tier is not evidence
+about the code. Every "X is ruled out because observable Y agreed" needs the
+compiler named beside it, exactly as `compare.py`'s numbers do.
+
+### F8603. `v22_create`, `v22_delete` and `v22_process` are file-static, and the already-committed `v22_delete` was not
+
+`nm` shows a lower-case `t` for all three and an upper-case `T` for
+`dp_v22_init` and `dp_v22_exit` -- exactly `b103.c`'s split, from the same
+author. `v22_delete` was committed GLOBAL in an earlier wave, when nothing else
+in `v22.c` existed and `t_v22del.c` had to be able to name it. It is `static`
+now.
+
+**This is codegen-visible, not cosmetic.** GCC 3.4 gives a static function
+`regparm(2)` when it can see every call site, so an `extern` copy is compiled
+with a different calling convention from the object's -- the same argument
+F8462 makes for `GetGain`, `EchoCanceler` and `bValidateEnergyValue`.
+
+Both tests reach all three the way the modem core does: `t_v22del.c` and
+`t_v22dp.c` call `dp_v22_init`, take the `struct dp_operations *` the harness
+recorded, and go through `create` and `destroy`; `v22_process` is not in that
+table at all -- `process` there is `dp_wrapper_run` -- so it is read back out
+of the wrapper the datapump built. That is `t_b103dp.c`'s method (F8121) and
+it is more honest than a direct call, not less.
+
+`v22_ops` (`.data` 0x78, 24 bytes) is likewise LOCAL, and
+`test/harness/unwritten.c`'s bridge for `dp_v22_init`/`dp_v22_exit` is deleted
+rather than left to collide -- which is that file's own "WHEN A BRIDGED SYMBOL
+IS RECONSTRUCTED" paragraph, taken. `t_dpinit.c`'s asymmetry shrinks from two
+unwritten datapumps to one, which it was written to survive.
+
+### F8604. `t_v22dp.c` drives V.22 as a LINK, because V.22 will not acquire from a tone
+
+`t_b103dp.c` drives Bell 103 with a single sine at the far end's mark
+frequency and that is enough: FSK acquisition needs no handshake. V.22 does --
+600-baud QPSK, the far end's scrambler running, and a seven-node machine with
+deadlines on `ReadGTimer`'s 20 ms clock -- so a tone produces a datapump that
+sits in one state for the whole run and a test that proves two implementations
+agree about doing nothing.
+
+The stimulus is therefore the OTHER STATION: a second datapump created with
+the opposite `caller`, cross-connected, one block of loop delay each way. Four
+instances run per block -- our originator and answerer, the blob's originator
+and answerer -- with the halves of each pair connected only to each other.
+Over 400 blocks the reference originator fetches bits 312 times, hands back
+3,744 data words, reports a line rate, and its status byte takes three
+distinct values; 138,767 checks and no divergence.
+
+**The four instances share the three `.bss` staging buffers on each side**,
+because they are file-static in the object and file-static here. Running the
+two stations in a fixed order per block is what keeps both sides seeing the
+same sharing, and it is the object's own re-entrancy rather than a limitation
+of the test.
+
+The anti-vacuity guards are named for what they would have caught: without
+"the machine moved", "the data path ran" and "words were handed back", a pair
+of datapumps that never left state 1 passes every other check in the file.
+
+### F8605. The eleven queued `v22fp.h` renames are applied, and the COMPILER was the oracle that found the sites
+
+F8526, F8531 and F8534 each established field names and each deferred the
+rename for the same scheduling reason -- three to five V.22 reconstructions in
+flight against one base commit, and a rename touching all of them is a merge
+conflict waiting to happen. The branches have landed, so the eleven are
+applied in one pass:
+
+    struct v22fp_params  r0c -> tx_gain               F8534, F8600
+                         r18 -> carrier_loss_ms       F8531
+    struct v22fp_hdx     r04 -> node_deadline         F8531
+                         r0c -> connect_substate      F8531
+                         r0e -> protocol              F8529, F8534
+                         r10 -> trained               F8531
+                         r34 -> rx_shift              F8534, F8600
+                         r3c -> carrier_loss_blocks   F8531
+    struct v22fp_dsp     r18 -> scrambler_on          F8526
+                         r1c -> descrambler_on        F8526
+    struct v22fp         status: the COMMENT, from b103fp.h's analogy to the
+                         author's own `v22: V22STAT: --> %d`   F8531, F8601
+
+**A TEXTUAL SWEEP CANNOT DO THIS AND MUST NOT BE USED.** Six of the ten old
+names are spelt identically on more than one struct in the same files:
+`dsp->r0c` and `hdx->r0c` both occur, `fse.r18` and `dsp->r18` both occur, and
+`fp->r34` is `struct v22fp`'s own field and not `hdx`'s. `sed` renames all of
+them. What was done instead is to rename the DECLARATION and let `gcc
+-fsyntax-only` name every site it broke: 136 in `src/`, 115 in the tests, and
+the struct in each error message is what says which of the two `r0c`s it is.
+
+**The tests needed a second pass for a reason worth writing down.** Five of
+them build a local `struct scenario` / `scen` / `poke` whose members MIRROR
+the fields they are poked into, so `a->hdx->r04 = s->r04` has the same
+identifier on both sides and a line-oriented fix renames the mirror too. Those
+were renamed as well, which is what the tests should have; the two sites the
+compiler still rejected afterwards (`s->r0e != KEEP`, `if (s->r18 != 0)`) are
+exactly the ones where the mirror appeared WITHOUT the field beside it.
+
+**And the pass is proved to be nothing but a rename.** Reverse-mapping the ten
+new names back to the old ones in the ten `src/pump/v22/*.c` files and
+comparing against `git show HEAD:` is byte-identical for all ten, so no
+statement, constant or type moved with them. A macro or field renaming is a
+compile-time substitution and `compare.py` cannot budge; that is the check the
+period tier still owes, and it is the only one outstanding.
+
+### F8606. `make check64` was already red on `master`, on seven ungated offset assertions in `src/pump/v22/v22.c`
+
+`v22.c`'s six `V22FP_ASSERT_OFF`s and its `sizeof` assertion went in with no
+`#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4` around them, and
+`struct v22_dp` begins with a `struct dp` that holds three pointers -- so at 64
+bits every offset moves and all seven arrays get a negative size.
+
+**It is inherited, not introduced.** `git show 321a56e5:src/pump/v22/v22.c`
+compiled with `SYNCFLAGS` gives the same seven errors, so the wave that added
+the file left `make check64` red and `make phase` with it. What made it easy
+to miss is that the file's OWN COMMENT described the guard -- "compiled only
+under the 32-bit ABI these offsets describe... the guard is on the pointer size
+the preprocessor can actually compute" -- while no `#if` existed. That is
+findings F6100 and F6103's defect exactly: a comment asserting a property
+nothing checks.
+
+Fixed here, since `v22.c` is this wave's file. `tools/assertlive.py` now counts
+1,711 assertions that exist only at 32 bits (was 1,710) and `make check64`
+reports clean in both configurations.
+
+### F8607. A `diff_begin` group's ten-line cap made a 3,192-check failure unattributable, and the fix is a per-case line the cap cannot reach
+
+`t_v22modem.c` drives fifty-six starting states inside ONE `diff_begin` group.
+When the period tier failed it, the report was ten lines naming ten SAMPLE
+INDICES and not one of the fifty-six cases they came from:
+
+    test/unit/t_v22modem.c:398: tx sample[8]  got 0, reference 5205
+    FAIL V22FP_modem over every V22_PROTOCOL state 3192/16745 checks failed
+
+Three thousand failures, and nothing in the output says which state, which
+sub-state, or how many cases were involved. The label carried the array index
+because that is what varies INSIDE a case; what varies BETWEEN cases was in a
+loop variable the label never saw.
+
+Two fixes, and the second is the one that generalises:
+
+  - every label now names the case -- `st 4 sub 2: tx sample[%ld]` -- built
+    with `snprintf`, including the labels `compare_graphs` passes to
+    `diff_eq_obj` and `cmp_raw`;
+  - **a `printf` summary line per case, which no cap can suppress**: the two
+    returns, both counts on both sides, both status bytes, the number of
+    differing transmit samples with the first index and its two values, and the
+    number of differing receive words. Fifty-six lines, and they turn "3,192
+    checks failed" into a map of which states diverge and by how much.
+
+**The general rule: a group whose members are CASES needs the case in the
+label, or its cap destroys exactly the information the failure is about.** The
+tree already knows a detector must report its denominator (F134, F2401); this
+is the same argument about which of many inputs the denominator covers. A test
+that sweeps a domain should print one line per point of that domain
+unconditionally, because the cap exists for the flood and the map is not the
+flood.
+
+The arithmetic in that first report is itself worth keeping, because it
+identifies the failure without any further instrumentation: the reference's
+5205 is the TEST'S OWN POISON scaled by the transmit gain --
+`(0x3333 * 13014) >> 15 == 5205` -- so the blob's handler wrote nothing to
+those samples and ours wrote zeros over them.
+
+### F8608. The V.22 lifecycle FAILS the period gate, and the compiler is the whole variable: GCC 14 is green at `-O2` AND at the period flag set
+
+`make period` reports `t_v22modem` FAIL, 3,192 of 16,745 checks, `period
+differential: 294 passed, 1 failed`. `make one` is green. The first thing to
+establish was whether that is an OPTIMISATION difference this tree could
+reproduce locally, and it is not:
+
+    make one T=t_v22modem                                   PASS
+    make one T=t_v22modem CFLAGS="... -O3 -march=i386 -mtune=i686
+        -mno-ieee-fp -frename-registers -fomit-frame-pointer
+        -maccumulate-outgoing-args"                         PASS
+
+So GCC 14 given the period compiler's own flags still cannot see it. The
+variable is the compiler itself, which puts the defect in the class of things
+a code generator is free to change: an uninitialised local, a strict-aliasing
+assumption, or stack layout.
+
+**THE POPULATION IS IDENTIFIED, AND IT IS EXACTLY THE CASES WHERE NEITHER SIDE
+WRITES THE TRANSMIT BLOCK.** With `tx[0]` printed unconditionally on both
+sides, the GCC-14 map shows **nineteen of the fifty-six cases reading
+5205/5205** -- the untouched poison, on both sides:
+
+    state 1 (v22_originate)   sub 2, 7
+    state 2 (v22_answer)      sub 2, 5, 6, 7
+    state 3 (v22_local_loop)  sub 4, 5, 6, 7
+    state 4 (v22_org_rmloop2) sub 3, 4, 5, 6, 7
+    state 5 (v22_ans_rmloop2) sub 4, 5, 6, 7
+
+and 19 x 160 = 3,040 of the period tier's 3,192 failing checks. Every one is a
+HIGH sub-state -- an arm off the end of that handler's own dispatch, reachable
+only by poking `hdx->connect_substate` -- and states 0 (`v22_data`) and 6
+(`v22_retrain`) contribute none.
+
+So the failing behaviour is: on arms where the blob's handler writes NOTHING to
+the transmit block, ours writes zeros over it, under GCC 3.4.2 and not under
+GCC 14. `TxNOP` is the only thing in the tree that writes 160 zeros there, and
+it is called from `v22loop.c` and `v22org.c` only -- which does not cover
+states 4 and 5, so either more than one mechanism is in play or the zeros come
+from somewhere else. **It was somewhere else: F8609 is the answer, and it is
+not `TxNOP`.**
+
+### F8609. `V22FP_modem`'s copy-out is UNBOUNDED, and a handler arm that never touches `*rxcount` makes it copy the input SAMPLE count out of a 100-entry buffer
+
+The loop at 0x888a7 is
+
+    for (i = 0; i < *n_rx; i++) rx_bits[i] = rx_out_internal[i];
+
+and `*n_rx` is its ONLY bound -- there is no `cmp $0x64` anywhere in
+`V22FP_modem`, unlike `v22_process`, which does clamp and whose format string
+calls the value `rx_len`. The count goes IN as the input SAMPLE count and is
+supposed to come back as a SYMBOL count; `rx_out_internal` is 100 entries
+(`nm`: 0xc8 bytes at `.bss` 0x480) and a 20 ms block is 160 samples.
+
+**So any handler arm that returns without setting `*rxcount` leaves 160 there,
+and the copy-out reads sixty entries past the end of `rx_out_internal` and
+writes sixty past the end of the caller's array.** Nineteen of `t_v22modem`'s
+fifty-six poked states do exactly that -- the high sub-states of states 1 to 5,
+each one an arm off the end of that handler's own dispatch, `v22_local_loop`'s
+being a literal `default: break;` with nothing in it.
+
+**IT IS THE OBJECT'S BEHAVIOUR, NOT OURS, AND THE NUMBER IS EXACT.** Counting
+the entries each side actually wrote, over all fifty-six cases:
+
+    36 cases   both sides wrote 12 entries
+     1 case    both sides wrote 13
+    19 cases   both sides wrote 160        <- 60 past rx_out_internal's 100
+
+160 is the input sample count handed in, unchanged, and 160 - 100 = 60 is the
+overrun. The blob does it identically, which is what says this is reproduced
+rather than introduced -- and a sixteen-element guard past every buffer is
+clean on all fifty-six once the destination is sized for it.
+
+**A CAUTION ABOUT THE INSTRUMENTATION ITSELF, because it nearly inverted this
+conclusion.** The first version of that `printf` had two arguments in the wrong
+order against its format, and it rendered as `over 60/0` -- which reads as "the
+reference does not overrun", i.e. as a defect in ours rather than a faithful
+reproduction. The numbers were real and the LABELS were wrong. A diagnostic
+added to settle a question is apparatus like any other and gets the same
+treatment: check it against a case whose answer you already know before
+believing what it says about one you do not.
+
+**AND IT IS WHY A COMPILER DECIDED THE VERDICT (F8608).** The test declared
+`int rx_a[100]`, so both sides' sixty-int overruns landed 240 bytes outside the
+array, in whatever the compiler had put next. GCC 14's `.bss` layout absorbed
+them harmlessly and the test passed; GCC 3.4.2's put the TRANSMIT buffer in the
+way, so our side's overrun wrote zeros over `out_a` before `V22FP_modem`'s gain
+loop scaled it -- giving `ours 0, reference 5205`, where 5205 is the untouched
+poison scaled by the gain. Every observable of F8608's report follows from
+that one sentence, and nothing in `src/` is wrong.
+
+**The fix is sizing, not scoping.** The destination is now `4 * FRAG` ints with
+the guard past it, which is what the API can demand rather than what a
+well-behaved handler happens to return; the guards stay and are asserted, so
+the next overrun is a named failure instead of a compiler-dependent verdict.
+The comparison covers the 100 entries backed by real `rx_out_internal` storage.
+**Entries at index 100 and above are compared by nothing, and that exclusion is
+provable rather than convenient**: they are the object's own out-of-bounds
+READ, so their value is whatever its `.bss` neighbour holds -- 0x548..0x560 is
+padding and 0x560 is `rx_in_internal` in the blob, and something else in any
+other object. Two different objects have two different neighbours, necessarily
+and for ever. That is CLAUDE.md's "two heap pointers hold two different
+addresses and always will", and unlike F8538's rejected exclusion it does not
+MOVE when you move it -- 100 is `nm`'s number, not a number chosen to make a
+case pass.
+
+**AND IT IS PROBABLY WHAT F8538 DECLINED ON, WHICH WOULD MEAN THAT WAVE'S CODE
+WAS NEVER WRONG.** F8602 reasoned that with the return, both counts, the
+transmit block, the structs and the heap all agreeing, "the only step left that
+can differ is the copy-out itself -- its bound, or the buffer it reads from".
+That was right, and the answer is its BOUND. Now put F8538's symptom beside
+this mechanism: ours holding `V22_CLAMP_VALUE` -- 15, which is exactly what
+`RxClampV22` leaves in the first twelve entries of `rx_out_internal` -- where
+the reference held 0, with every other observable agreeing. An unbounded
+copy-out from a too-small destination scatters those 15s into whichever test
+array the linker put next, on one side and not necessarily the other; and
+"exclude the failing entry and the next one fails" is what damage that moves
+with layout looks like. Every element of that report is accounted for.
+
+**IT IS AN INFERENCE FROM A SYMPTOM, NOT A MEASUREMENT, AND IT STAYS ONE UNTIL
+SOMEBODY RUNS THIS.** The settling experiment, stated so it can be executed
+rather than argued:
+
+    recover wave 2's uncommitted V22FP_modem, change NOTHING in it, enlarge
+    only its test's receive destination to hold the input SAMPLE count, and
+    run that binary under `make period`.
+
+Green settles it: the code was correct and the fixture was not. Red refutes it
+and names a real defect in that implementation. **Neither outcome is available
+from anything in the tree today**, because that code was never committed --
+recovering it means finding the session's worktree if it still exists. If it
+does not, re-deriving the function tests a NEW implementation rather than
+theirs, which is not the same claim and must not be reported as if it were.
+
+**What IS measured is weaker and worth separating from it.** This wave
+established that the pattern EXISTS -- a correct `V22FP_modem`, a fixture whose
+destination was 240 bytes too small, and a period report reading `ours 0,
+reference 5205` that looked exactly like a defect in `src/` (F8608). That makes
+F8538 an instance of a demonstrated failure mode rather than of a hypothetical
+one. It does not make it an instance.
+
+The lesson is not "commit it anyway" -- declining was right on the evidence
+they had, and this entry does not second-guess it. It is that **when every
+observable but one agrees, suspect the apparatus's buffers before the
+reconstruction's logic**, and that a differential fixture must be sized for
+what the API can return rather than for what a well-behaved callee does.
+
+**THE SERVICE-SIDE COROLLARY IS A LATENT HEAP OVERFLOW IN THE ORIGINAL, AND IT
+HAS A DEVIATION ROW: D956.** That row carries the reachability argument, the
+fix form and the apparatus consequence; what follows here is the short version.
+`v22_process` hands `self->rx_bits`, which is `int[100]` and the LAST member of
+the `sysdep_malloc`'d `struct v22_dp`, with `count` = 160. If any reachable
+handler arm ever returned without setting `*rxcount`, `V22FP_modem` would write
+sixty ints past the end of that allocation -- and `v22_process`'s own clamp
+cannot help, because it runs on the value AFTER `V22FP_modem` has already
+copied and, for a non-zero status, zeroed it. Nothing reaches it in service:
+`t_v22dp` drives a full cross-connected handshake for 400 blocks and passes the
+period gate, and every arm a live machine visits sets the count. Recorded
+because it is the original's, because it is one poked sub-state away, and
+because it is the reason this test needed a buffer four times the size of the
+one a reasonable reading would have given it.
+
+## F8730. `cid_freq_sampl` writes 9 into the FSK receiver's f02c three separate times, from three separate tests, and the value never varies
+
+*2026-08-31.* `cid_freq_sampl` (`.text` 0x08fd60, 107 bytes) is the Caller ID
+service's rate setter. Two of its four statements are the mode gating
+`cid_threshold` already uses -- `mode != 0` reaches the DTMF receiver's `rate`
+at +0x33c, `mode != 1` reaches the FSK receiver's at +0x2a -- and the argument
+is an `int` stored as a `short` on both sides.
+
+The other three are the interesting part. The object emits `movw $0x9,0x2c(reg)`
+**three times**, into `struct cid`'s `f02c`, under three different conditions:
+
+    8fd89  xor %ecx,%ecx / test %edx,%edx / sete %cl      ecx = (mode == 0)
+    8fd90  cmp $0x2580,%ebx / sete %al                    eax = (rate == 9600)
+    8fd99  test %ecx,%eax / je ...  -> movw $0x9,0x2c
+    8fda6  cmp $0x1f40,%ebx / sete %bl                    ebx = (rate == 8000)
+    8fdaf  test %ecx,%ebx / je ...  -> movw $0x9,0x2c
+    8fdbc  dec %edx / jle ...       -> movw $0x9,0x2c     mode > 1
+
+The `mode == 0` predicate is computed ONCE, into `%ecx`, and reused for both
+rate tests; the `mode > 1` arm is a plain compare on the same register. That
+is what a compiler does to two statements sharing an outer condition, not to
+one test of a rate pair -- so the source is three `if`s and not one, and the
+reconstruction keeps them as three.
+
+**The value is 9 in all three, and 9 is also what `create_cid` seeds `f02c`
+with** (`include/dsplib/cid.h`, from the CID leaf batch). So over the modes and
+rates this service actually uses, the function's whole effect on `f02c` is to
+put it back where it started. Nothing in the object reads a rate-dependent
+value into it, and no format string names it, so `CID_F02C_RESET` is defined
+in `src/service/cid.c` as usage inference and the field keeps its `f02c` name.
+
+**The gating is also what makes the null pointer safe.** Mode 1 builds no FSK
+receiver, and every one of the five stores above is under `mode != 1`,
+`mode == 0` or `mode > 1`; mode 1 touches the FSK side not at all. The mirror
+holds for mode 0 and the DTMF side.
+
+`t_cidsvc` drives all ten modes against thirteen rates, 546 checks, and
+compares the whole of `struct cid_modem`, `struct dtmf_rx` and `struct cid`
+rather than the three fields the function writes. The two receiver pointers
+are zeroed in a copy before the comparison, since they hold different
+addresses on the two sides by construction. Two of the rates are 0x12580 and
+0x11f40 -- 9600 and 8000 in the low sixteen bits and neither as an `int` --
+which is what separates the stored width from the compared one; a test using
+only in-range rates passes with the `short` cast deleted. Seven anti-vacuity
+counters, all read off the REFERENCE side (finding F134), assert that each of
+the five stores fired and that both gates were seen shut.
+
+## F8731. `cid_get_strings` routes on mode 2 as if it were the FSK side, and `cid_create` makes that value unreachable
+
+*2026-08-31.* `cid_get_strings` (`.text` 0x090320, 145 bytes) is the Caller ID
+service's one output function: it clears `cid_modem + 0x008` in full -- 0x258
+bytes, which is what settles that span as a single `char strings[600]` and not
+a field bank -- renders into it, and returns that address.
+
+**The receiver it asks is chosen by `mode != 0 && mode != 2`**, if-converted in
+the object into `setne %dl` / `setne %cl` / `test`:
+
+    90343  mov 0x260(%ebx),%eax
+    90349  test %eax,%eax / setne %dl        mode != 0
+    9034e  cmp $0x2,%eax  / setne %cl        mode != 2
+    90357  test %eax,%edx / je -> FSK side
+
+That test appears nowhere else in the translation unit. `cid_reset`,
+`cid_create`, `cid_delete`, `cid_freq_sampl` and `cid_threshold` all read
+`!= 0`, `!= 1`, `> 1` or `== 5`; only this one singles out 2. And
+`cid_create` clamps every mode above 1 to 5 (0x8feaf `dec %esi / jle`, then
+`mov $0x5`), so **no caller going through `cid_create` can ever present mode
+2** -- it is reachable only by writing `cid_modem + 0x260` directly, which
+nothing in the object does. Kept exactly as written; the mode encoding in
+`include/dsplib/cid_modem.h` gains the note rather than a guess about intent.
+
+**The DTMF answer is sixteen bytes and adds no terminator.** The loop is
+`cmp $0xf,%edx / jle`, so 0..15 inclusive out of `digits[20]`, copied byte by
+byte into the buffer -- and it relies on the unconditional memset above for
+the NUL that `CID_process`'s walk needs. That is why the memset covers all
+0x258 bytes rather than the sixteen it is about to fill; deleting it would
+leave the DTMF path returning an unterminated string.
+
+**On the FSK side `f264 == 2` picks the raw hex dump** and anything else the
+labelled rendering, which is the only test of that field anywhere in the
+object -- `cid_create` seeds it from `CID_create`'s `cid_val` argument and
+`cid_value` overwrites it, and neither reads it. `CID_VALUE_RAW` is usage
+inference from that single comparison and `src/service/cid.c` says so.
+
+`t_cidsvc` drives all five frame shapes (a multiple-data-message frame, one
+with a leftover tag, a single-data-message frame, an empty frame, and no
+message at all) against six modes and five values, 1,250 checks. The box
+carries a 4 KB guard between the object and the two receivers because
+`data_formatted_output` has no output bound of its own: 0x258 is the object's
+budget and not a clamp it enforces, so an over-long render would be made
+identically by both sides and agree. The guard is what turns that into a named
+failure. `pack_len` is planted rather than left to the random fill, which is
+D955/F8587 -- it is a SUBSCRIPT into `cid->data` for the renderers, and a
+blob-against-blob run cannot catch an unplanted one.
+
+## F8700. Data.c's two outer renderers take the FSK RECEIVER, and `cid_get_strings` is what proves it
+
+`data_unformatted_output` (0x0904f0, 117 bytes) and `data_formatted_output`
+(0x090570, 1310 bytes) have exactly one referrer between them in the whole
+1.2 MB -- `cid_get_strings` at 0x090320, one `R_386_PC32` each -- and that
+function settles both arguments without any inference:
+
+    9033b:  mov  %esi,(%esp)          esi = ctx + 8
+    9033e:  call sysdep_memset        (ctx + 8, 0, 0x258)
+    9037a:  cmpl $0x2,0x264(%ebx)     ctx->f264, cid_value's slot
+    90387:  mov  0x4(%ebx),%edx       ctx->fsk
+    9038d:  call data_formatted_output
+    903a4:  call data_unformatted_output
+
+So the first argument is `struct cid *` -- the FSK receiver, not the
+`cid_modem` -- and the second is the 0x258-byte string buffer at
+`cid_modem + 0x008`, which `cid_get_strings` clears first and returns.  That
+buffer is 600 bytes and is the object's own budget for everything these two
+write.  `f264 == 2` selects the raw hex dump and anything else the labelled
+rendering.
+
+The offsets both renderers use inside that receiver are already named, and
+from a different function: `cid->data` at +0x0d8 and `cid->pack_len` at
++0x15c, both derived from `pack_next_bit` in `Rxcid.c` and recorded in
+`include/dsplib/cid.h`.  `data_formatted_output`'s opening
+`cmpw $0x0,0x15c(%eax)` is therefore "did the framer store any bytes", and
+its `+0xd8` is the assembled message.  Two independent derivations agreeing
+is the strongest evidence available here: neither function references any
+`.rodata` at all, so there is no format string to take the author's own words
+from, and every label these two emit is written as seven separate immediate
+byte stores rather than copied from a string constant.
+
+Both written to `src/service/data.c` on 2026-08-31 and driven by
+`test/unit/t_datafmt.c`.
+
+## F8701. The formatted renderer's whole layout is one idiom, `out += i + 1`, and it explains three of the four oddities
+
+Every field `data_formatted_output` emits has the same shape: seven label
+bytes stored as immediates (`DATE = `, `TIME = `, `NMBR = `, `NAME = `,
+`MESG = `, no NUL among them), a write index `i` set to 7, a copy loop
+writing `out[i++]`, then `out[i] = 0` and `out += i + 1` to step past the
+terminator.  The compiler folds the constant cases: SDMF's DATE and TIME
+fields are always eleven characters, so both pointer steps are literally
+`add $0xc,%ebx` in the object and the terminator is `movb $0x0,0xb(%ebx)`.
+
+Reading it that way settles three things that look arbitrary in the
+disassembly:
+
+- **the NMBR label is unconditional and the NAME field is not.**  `i = 7` is
+  stored at 0x907e4 BEFORE the `cmpw $0x0,0x8(%esp)` that tests the tag-2
+  position, so a missing number still emits `NMBR = ` and its terminator; the
+  tag-7 test at 0x90850 guards the `out += i + 1` as well as the label, so a
+  missing name emits nothing at all.
+- **`i` is left at 7 after a MESG field**, because the hex dump is an inlined
+  `data_raw` writing through its own pointer and nothing feeds its length
+  back.  The next MESG field therefore starts at `out + 8` and overwrites the
+  previous one's digits.  Deviation D971.
+- **the two length caps are different numbers on purpose.**  The fields this
+  function copies itself stop at 255 counting the two header bytes
+  (`cmp $0xff`); `data_raw`'s dump stops at 245 (`cmp $0xf5`).  They are two
+  separate constants in two separate pieces of code.
+
+## F8702. `cid->data` is unsigned and the walkers read it signed, and BOTH readings appear in `data_formatted_output`
+
+The object reads `data[1]` two different ways inside this one function.
+Everything the renderer does for itself is a `movzbl` -- the message-type test
+is `cmpb $0x80,0xd8(%eax)`, which cannot be an equality test at all on a
+signed `char` (0x80 promotes to 128 and a signed char never reaches it), the
+SDMF length is `movzbl 0xd9(%edi)` at 0x90651, each copied field's length is
+`movzbl` at 0x907f5 and 0x90895, and the MESG guard is an UNSIGNED
+`cmpb $0x1,...; jbe` at 0x90960.  Everything the inlined TLV walks and the
+inlined `data_raw` do is a `movsbl`: 0x906a5, 0x906ce, 0x90709, 0x908f0,
+0x909ab.
+
+That is not an inconsistency, it is the argument types.  `cid->data` is
+`unsigned char[]`, which is how `cid.h` already declares it; `_look_for`,
+`_look_for_other_than` and `data_raw` all take a `const char *`, so the same
+bytes are re-read signed through those.  `src/service/data.c` casts at the
+three call boundaries and nowhere else, and the resulting extension matches
+the object at every site.
+
+The MESG entry is where the split is observable rather than merely visible: a
+length byte of 0xff passes the guard (255 > 1, unsigned) and then makes
+`data_raw` dump `-1 + 2 = 1` byte.  `t_datafmt`'s `mdmf_mesg_ff` case is
+exactly that message and asserts the two hex digits.
+
+## F8703. Data.c carries its own copies of both TLV walkers, and cross-TU inlining is what proves it
+
+`data_formatted_output` contains four inlined TLV walks -- one search for a
+tag, expanded three times for tags 1, 7 and 2, and two expansions of the
+other-than search -- and all of them are `_look_for` and
+`_look_for_other_than` body for body: the length loaded ONCE as a signed char
+before the loop, positions compared 16 bits at a time (`cmp %cx,%dx`), the
+advance `pos = (short)(pos + buf[pos+1] + 2)`, and the other-than test built
+as two `setne` results ANDed together for tags 1 and 7 with tag 2 tested
+apart.
+
+But `_look_for` (0x0903c0) and `_look_for_other_than` (0x090410) are
+`cid.c`'s, and finding F1410 puts `cid.c` and `Data.c` in different
+translation units.  GCC 3.4.2 cannot inline across that boundary, so Data.c
+must have had its own copies.  `src/service/data.c` writes them as
+`data_look_for` and `data_look_for_other_than`, static, with the derivation
+in a comment; both are inlined away at -O3 and neither leaves a symbol, which
+is what the object shows.
+
+The same argument the other way round is what puts `data_raw` in this file
+rather than beside it: the MESG hex dump at 0x909ab is `data_raw` inlined,
+which the compiler can only have done from the same TU.
+
+## F8704. `data_raw`'s 245-byte cap is UNREACHABLE through either outer renderer
+
+`data_raw` caps its byte count at 0xf5 before doubling, and neither function
+that calls it can reach the cap.  Both call sites read the length through a
+`const char *`, so it is a signed char and at most 127; `127 + 2 = 129` and
+the cap is 245.  `data_unformatted_output` dumps at most 258 hex digits and
+`data_formatted_output`'s MESG field at most the same.
+
+The cap is therefore live only for a direct caller of `data_raw` -- of which
+the object has none, it being exported API with no internal referrer (F8320's
+bucket) -- and `t_cidleaves` is where it is exercised, by calling `data_raw`
+itself.  `t_datafmt` does not assert it, and says so rather than carrying a
+check that could never fire on its inputs.
+
+Worth knowing before anyone reads the 600-byte string buffer as safe: it is
+not the hex dump that overruns it, it is the 255-byte cap on the copied
+fields (D972).
+
+## F8705. An `except` of 0 is observable only when a NEGATIVE length steps the walk backwards, and a mutant survived the whole suite until that case existed
+
+`data_formatted_output` opens its MESG loop with
+`_look_for_other_than(msg, 2, 0)` and continues it with
+`_look_for_other_than(msg, pos, pos)`.  The first call's `except` is a literal
+0 and the object folds it to `test %ebx,%ebx` at 0x90923.
+
+That zero cannot matter on any well-formed message.  The walk starts at
+position 2 and every non-negative length byte moves it forward by at least
+two, so position 0 -- and 1 -- is unreachable and the exclusion never fires.
+A mutation changing that 0 to a 1 passed every one of 4,198 differential
+checks in `t_datafmt`, including 600 fuzzed messages, and was the only one of
+eight injected defects to survive.
+
+The shape that separates them is a length byte of -3 on the first entry,
+which steps the position from 2 back to 1, where the message's own length
+byte is then read as a tag.  `t_datafmt` now carries that message
+(`mdmf walk steps back to 1`) and the mutant is caught.  It is bounded and
+terminating on purpose: every step after the one backwards is forward, which
+is the discipline `t_cidleaves` established for these walkers, since a length
+of -2 leaves the position where it was and hangs both sides identically.
+
+The general point is the one F134 keeps making in a new place: a differential
+suite that never constructs the input a branch needs reports a clean run and a
+dead branch identically.  The injection ritual is what told the two apart --
+eight defects, seven caught by the suite as first written, one not.
+
+## F8710. Rxcid.c is closed, and `+0x024` was never a field of `struct cid`: it is `mrf.history`
+
+`src/service/rxcid.c` now carries all four of the original's `Rxcid.c`
+(2026-08-31):
+
+    reset_cid       .text 0x0918b0    517 bytes
+    create_cid      .text 0x091ac0    183 bytes
+    pack_next_bit   .text 0x091b80    301 bytes   (already written)
+    cid_modem       .text 0x091cb0   1487 bytes
+
+plus the file-static `V23_MRF_FILT` (`.rodata 0x009240`, 180 bytes, LOCAL `r`),
+which is `reset_cid`'s resampler prototype.  `test/unit/t_rxcid.c` is the
+differential test: 3,838 checks over 632 `cid_modem` calls.
+
+**THE TRAP THIS BATCH WAS BRIEFED FOR, AND WHAT IT ACTUALLY WAS.**  `reset_cid`
+opens `mov 0x24(%ebx),%eax; test %eax,%eax` and passes `1` when that is zero as
+`FPM_MRF_init`'s `fresh`; `create_cid` writes `movl $0x0,0x24(%ebx)`.  Read as a
+field of `struct cid` that is the shape of a flag nothing ever sets, which would
+make every reset allocate a new resampler buffer and leak the last one --
+`FPM_MRF_init` with `fresh` set does not inspect the existing pointer and does
+not free it (`src/dsp/fpm_mrf.c`).  It is not a field.  `struct fpm_mrf` is 0x1c
+bytes and sits at `cid + 0x0c`, so `mrf.history` is at `cid + 0x24` exactly, and
+the object is asking "have I allocated yet".  `src/service/cid_mtd.c` had
+already worked out the arithmetic ("the `fpm_mrf` at +0x0c has one at +0x24")
+without drawing the conclusion.  The source is `FPM_MRF_init(&cid->mrf, &cfg,
+cid->mrf.history == NULL)`, `t_rxcid` requires the pointer to be UNCHANGED
+across a second reset, and mutating the argument back to a constant `1` is
+caught.
+
+**THE FIELDS THIS SETTLES.**  `+0x000`--`+0x028` and `+0x086`--`+0x152` were pad
+in `include/dsplib/cid.h` and are now modelled:
+
+    +0x000  int   gain          cid_modem's AGC multiplier
+    +0x004  short short_004     cleared by reset_cid, read by nothing written
+    +0x006  short dc            block-mean estimate cid_modem subtracts
+    +0x008  short short_008     cleared by reset_cid, read by nothing written
+    +0x00a  short pad_00a       alignment; never written
+    +0x00c  struct fpm_mrf mrf  9:10, taps 90, history_len 10
+    +0x086..+0x08c  short short_086/088/08a/08c   cleared only
+    +0x08e  short mark_conf     the mark-tone confidence counter
+    +0x090  short bits[36]      cid_modem's demodulated-bit buffer
+    +0x0d8  unsigned char data[120]    (was 124 -- see below)
+    +0x150  short short_150     cleared only
+    +0x152  short short_152     cleared only
+
+`gain` and `dc` are usage inference from `cid_modem` and say so in the header.
+`data`'s length moves from 124 to 120 because `reset_cid`'s byte loop runs
+`i <= 0x77` and `+0x150` and `+0x152` are then cleared as two SEPARATE shorts,
+in the same emission group as `+0x154` and `+0x156`, which are known shorts.
+Every offset from `+0x154` up is unchanged, so `pack_next_bit` and `t_cidleaves`
+are untouched.  `make offsets` goes from 1,651 annotations to 1,666, all
+matching.
+
+**`f028` IS THE "Threshold", AND THE OBJECT SAYS SO.**  `create_cid`'s second
+trace is `.rodata.str1.4:0x116a8`, "FSK CID  Setting  Fs = %d   Threshold = %d
+!\n", with `cid->rate` and a constant 2 -- and 2 is what `create_cid` has just
+put in `+0x028`.  That is evidence tier 1, the author's own words, and it is
+stronger than the usage inference `include/dsplib/cid.h` carried.  **The field
+is NOT renamed here**, because `src/service/cid.c` and `test/unit/t_cidsvc.c`
+name it and were being edited concurrently by another agent; the comment carries
+the evidence and the rename is a one-line follow-up for whoever owns those two
+files next.
+
+The other three strings are `.rodata.str1.1:0x3e30` "FSK CID Reset !\n"
+(`reset_cid`), `0x3e41` "FSK CID Creating \n" (`create_cid`) and `0x3e54`
+"Tone 1200 Detected\n" (`cid_modem`, on the branch where `CID_MTD_detect`
+answers 0).
+
+## F8711. `reset_cid` clears the same span three times, and two of the three loops are unfalsifiable
+
+`reset_cid` has four clearing loops.  The first runs fifty shorts from `+0x030`
+(`movw $0x0,0x30(%ebx,%eax,2)`, `cmp $0x31,%ax`), which is `lpf_hist` and
+everything after it as far as `+0x092` -- two shorts INTO the bit buffer at
+`+0x090`.  The second clears `ac_hist`, five shorts at `+0x054`.  The third
+clears `lpf_hist`, seventeen shorts at `+0x030`.  Both of those spans are strict
+subsets of the first, so the second and third loops write zeros over zeros.
+
+**This is not a curiosity, it is a limit on what any differential test can
+say.**  Shortening the `ac_hist` loop to four and the `lpf_hist` loop to sixteen
+both survive `t_rxcid` in full, because the first loop already covered them.
+Shortening the FIFTY to forty-nine is caught, and so is shortening the 120-byte
+`data` loop -- those two are the only clearing bounds this file pins.  The
+redundant pair are transcribed from `dis.py` and marked in the source as
+untestable.
+
+**The store ORDER is NOT decoded, and the file says so.**  The 27 scalar stores
+between the loops come out interleaved -- `0x80, 0x84, 0x82, 0x88, 0x86, 0x8c,
+0x8a, 0x8e`, and `0x76` before `0x74` -- which is the i686 scheduler pairing
+independent stores, not an emission of the author's order.  `reset_dtmf`'s
+neighbouring order WAS decoded, by compiling all 8! permutations on the period
+toolchain and finding a unique zero-difference cell; no such enumeration was run
+here, because this batch had no docker, and the source is written ascending by
+offset with that stated in a comment.  The enumeration is available to a later
+refinement pass and would be worth running: the same high-then-low pairing that
+8! resolved for `reset_dtmf` is visible in this emission too.
+
+## F8712. `cid_modem`'s two thresholds are 40 ms and 26.7 ms of mark tone, and neither the rate nor the block length moves them
+
+`cid_modem` computes
+
+    m = (cid->rate == 9600 ? 49152 : 40960) / count;   if (m <= 0) m = 1;
+
+and compares `mark_conf` against `m * 18 >> 8` and `m * 12 >> 8`.  Read as
+numbers those are meaningless; read as time they are exact.  `mark_conf` gains
+`f02c` -- 9, from `create_cid` -- for each block `CID_MTD_detect` accepts, so
+the upper gate is reached after `m * 18 / (256 * 9)` blocks, which is
+`40960 * 18 / (256 * 9) = 320` SAMPLES at 8000 and `49152 * 18 / (256 * 9) =
+384` at 9600.  Both are 40 ms.  The lower gate is 213 and 256 samples, both
+26.7 ms.  The block length cancels out of both, which is what makes the division
+by `count` the right shape rather than an odd one.
+
+So the machine is: 26.7 ms of 1200 Hz starts the resampler and the AGC, 40 ms
+starts the demodulator, and the AGC re-adapts only in the 13 ms between them --
+after which the gain that was found is held for the rest of the message.  The
+detector runs only BELOW the upper gate, so crossing it is also what stops the
+confidence being cleared by the next quiet block.
+
+**AND THE MULTIPLIERS ARE WHY THIS TEST HAS A SWEEP.**  Every natural input
+steps `mark_conf` by 9 at a time, so an 18 written as 17 moves the gate from 36
+to 34 and no multiple of 9 ever lands in the gap: the mutation survived a
+286-call test that included silence, noise, an out-of-band tone, 24 blocks of
+mark tone and 60 blocks of Bell 202 data.  `t_rxcid` plants `mark_conf` at every
+integer from 0 to 56 instead, once against a block the detector rejects and once
+against one it accepts, and all four gate sites are then caught.
+
+## F8713. What `t_rxcid` pins and what it provably cannot: eight mutations that are equivalent, not missed
+
+Fifty-three distinct mutations were injected into `src/service/rxcid.c` and the
+test re-run for each (F134's ritual).  Forty-five are caught.  The eight that
+are not were each traced, and all eight are behaviourally equivalent to the
+original -- they are limits of the differential tier, not gaps in the fixture,
+and every one of them is fixed instead by the object's own encoding in `dis.py`:
+
+- **the `& 1` at `cid_modem`'s call into `pack_next_bit`.**  `and $0x1,%ebx` at
+  0x920fb is in the object and cannot be inferred from behaviour, because
+  `CID_FSD_demodulate` only ever emits 0 or 1 and the mask is then the identity.
+  It matters to the FUNCTION, whose states 0 and 3 test `== 1` and `!= 0` and
+  would disagree on a 2; it cannot matter to this caller.
+- **the DC-subtraction loop's DIRECTION.**  It subtracts a constant from every
+  element, so ascending and descending are the same function.  The object's
+  descending form is kept because GCC does not reverse loops, so the source must
+  have been descending -- and its entry guard is `ncount != 0` rather than
+  `ncount >= 1`, which is what `i = n; while (i--)` compiles to and what
+  `for (i = n - 1; i >= 0; i--)` does not.
+- **the gain loop's bound being `nsamp` rather than `ncount`.**  At 8000 the
+  resampler leaves `nsamp` below `ncount` and the tail is never read again; at
+  9600 they are equal.
+- **`nbits <= 0` versus `nbits < 0`.**  The bit loop does nothing at zero either
+  way and both paths return 2.
+- **`reset_cid`'s `ac_hist` and `lpf_hist` loops** -- F8711, two of the eight.
+- **`create_cid` writing its three settings before the reset instead of after.**
+  `reset_cid` does not touch `rate`, `f028` or `f02c`.
+- **the DEFAULT `msglen` of 115.**  It applies only when `pack_len <= 2`, where
+  any value above 2 behaves identically -- `115 -> 114` survives and `115 -> 2`
+  is caught.  The 115 in the CLAMP is a different constant at the same value and
+  IS pinned, at `data[1] == 113` against a `pack_len` of exactly 115.
+
+Three mutations were caught only after the fixture was extended, and all three
+are worth keeping as shapes: the threshold multipliers (F8712); the gain floor,
+which needs a full-scale block against a freshly reset `gain` of zero before
+`(0 + 0) >> 1` reaches it; and `pack_len > 2`, which separates from
+`pack_len > 1` at exactly one input -- a `pack_len` of 2 with a declared body
+length of 0, where believing the declaration returns -1 and not believing it
+demodulates.
+
+## F8714. `V23_MRF_FILT` is 90 taps and is not the `_V23_MRF_FILT` of the same name
+
+Two tables in the object are called V23_MRF_FILT and they are different objects
+with different lengths, different sections and different linkage:
+
+    _V23_MRF_FILT   .rodata 0x0081c0   96 bytes   48 shorts   GLOBAL `R`
+     V23_MRF_FILT   .rodata 0x009240  180 bytes   90 shorts   LOCAL  `r`
+
+The global is `src/pump/v23/v23filt.c`'s, and the name-collision note in
+`include/dsplib/v23fp.h` covers it.  The local is Rxcid.c's own static and is
+what `reset_cid` installs, with `branches = 9`, `decimate = 10`, `taps = 90` --
+so `FPM_MRF_filter` reads it as nine polyphase phases of ten by its coefficient
+stride, and the array itself is a plain symmetric linear-phase FIR (`v[i] ==
+v[89-i]` for all 90, verified).  90 taps over 9 branches gives a history of 10,
+which is the `history_len` `t_rxcid` asserts.
+
+**A file-static cannot be named from a test, and the pointer is how it gets
+one.**  `reset_cid` leaves `V23_MRF_FILT`'s address in `cid->mrf.cfg.coeff`, so
+`t_rxcid` compares 180 bytes through the two objects' `coeff` pointers -- the
+blob's copy on one side and ours on the other, which is the same accessor move
+`t_cid_mtd` makes for `MTD_COEF_*` and `fpm_div.c` makes for `FPM_div_table`.
+That is the only differential check the table can have, and without it the two
+pointer fields would simply be blanked before `diff_eq_obj` (they hold different
+addresses and always will) and the table would be untested while every other
+check stayed green.
+
+## F8732. `cid_reset`'s clear of `f3f8` is unfalsifiable from a freshly created object, and the injection ritual is what found that
+
+*2026-08-31.* The Caller ID service object's lifecycle -- `cid_create`
+(0x08fe10, 204), `cid_reset` (0x08fce0, 118) and `cid_delete` (0x08fee0, 86) --
+is three functions whose observable output is almost entirely the state of two
+objects they hand to somebody else's constructor. Two things had to be
+arranged before `t_cidsvc` could measure them at all, and both were found by
+reintroducing a defect and watching for it rather than by reading.
+
+**One: `cid_delete` has NO output.** Nothing survives it to be compared. The
+only differential evidence is how many blocks each side released, so the test
+takes `harness_alloc.live` as a DELTA per side and compares the two deltas --
+which is robust to the leak the second `cid_create` causes (`create_cid` nulls
+`mrf.history` and the reset behind it allocates a new buffer), because the leak
+has only to be MATCHED and not modelled. Deleting our `sysdep_free(ctx->fsk)`
+is caught by that check and by nothing else in the binary.
+
+**Two: `cid_reset` clears `f3f8`, and `cid_create` already left it zero.**
+A reset that never touches the field is indistinguishable from one that does
+unless something puts a value there first. The first run of the ritual reported
+that mutant MISSED, and the fix was to dirty `f3f8`, four fields of the FSK
+receiver and two of the DTMF one -- identically on both sides -- before calling
+reset. `cmp_pair` then has something to disagree about. The same run added a
+second reset from a mode of 3, because the clamp on the reset path is a
+different statement from `cid_create`'s and neither test covers the other.
+
+**Eleven mutants caught, one equivalent.** The equivalent one is
+`(short)rate` -> `rate` in `cid_freq_sampl`: the destination field is a
+`short`, so the cast is a no-op in C and the mutation cannot be observed. It
+is recorded as equivalent rather than missed, which is the distinction
+findings F134 and F8713 both turn on. The caught set covers each mode gate in
+all four functions, both clamps, the `f264` store, the DTMF digit count and
+`cid_get_strings`'s mode-2 route.
+
+`t_cidsvc` is 2,547 checks in six groups.
+
+## F8733. `cid_modem + 0x268` is `cid_progress`'s block buffer, and its length is bounded from both sides without the bounds meeting
+
+*2026-08-31.* `struct cid_modem`'s last padded span, `pad_268[0x190]`, is one
+`short` array and `f3f8` at +0x3f8 is its fill level. `cid_progress` settles
+both:
+
+    8ffee:  66 89 84 53 66 02 00 00   mov %ax,0x266(%ebx,%edx,2)   %edx = f3f8+1
+    90107:  66 89 94 43 68 02 00 00   mov %dx,0x268(%ebx,%eax,2)   %eax = f3f8
+
+The two stores are the same address written two ways -- `0x266 + (f3f8+1)*2` is
+`0x268 + f3f8*2` -- and are the only writes into the span anywhere in the
+object. When the level reaches the block length the function passes
+`lea 0x268(%ebx)` and that length to `dtmf_modem` and `cid_modem` as their
+sample pointer and count, so the span is read as `short` too.
+
+**The length is bounded from both directions and the bounds do not meet.** The
+lower bound is measured: the block length is 192 whenever the receiver's `rate`
+is not 8000, so at least 192 shorts are written. The upper bound is the layout:
+`f3f8` sits at +0x3f8 and 0x3f8 - 0x268 is exactly 400 bytes, so at most 200.
+Nothing in the object reads or writes +0x3e8..+0x3f8. The field is declared
+`short samples[200]` -- the array filling the space to the next known field,
+which is this tree's standard reading -- and the eight shorts past 192 are that
+reading and not a measurement. Recorded so a later pass that finds a field at
++0x3e8 knows which half was proved.
+
+`t_cidprog` asserts `sizeof(struct cid_modem) == CID_MODEM_BYTES` and
+`sizeof(samples)/sizeof(short) == 200`, so the layout claim is checked rather
+than commented.
+
+## F8734. `cid_progress`'s third argument is never read, and the caller passes a literal zero into it
+
+*2026-08-31.* `cid_progress(struct cid_modem *ctx, short *in, int what,
+short *count)` puts its four arguments at `0x40(%esp)`, `0x44`, `0x48` and
+`0x4c` after four pushes and `sub $0x2c`. `0x40`, `0x44` and `0x4c` are all
+read. **`0x48` appears nowhere in the 992 bytes** -- the count of `0x48(%esp)`
+over 0x8ff40..0x90320 is zero.
+
+The argument is not inferred from a stack layout alone: `CID_process` at 0x470
+stores a constant 0 into the third slot before the call, so the function really
+does take four and the third really is dead. It is reproduced as a
+named-but-unused parameter rather than dropped, because dropping it would
+change the calling sequence at the one call site the object has.
+
+The pair `(what, count)` reads like a request/response pair reduced to one
+direction: `*count` is read once as a short and immediately overwritten with
+zero (`movswl (%edx),%ebp` then `movw $0x0,(%edx)` at 0x8ffb3), and never read
+again -- so it is an input length the function destroys, and a caller cannot
+learn how many samples were consumed. `CID_process` does not try.
+
+## F8735. `mode` is a STATE, not a configuration, and `cid_progress` names two more of its values from the object's own strings
+
+*2026-08-31.* Everything written before `cid_progress` read `cid_modem->mode`
+as a configuration -- which receivers to build. It is also the automatic
+detector's state, and `cid_progress` is the only function that writes it:
+
+- **3 is the author's own word.** The function prints
+  `"\n DTMF demodulator Failed after CID_MESSAGE state \n"`
+  (`.rodata.str1.4 + 0x11614`) on exactly the test `ctx->mode == 3`, so 3 is
+  the state the author called CID_MESSAGE. It is entered from mode 5 the moment
+  `dtmf_modem` answers 2 -- digits arriving -- so it means "the automatic mode
+  has committed to the DTMF receiver". Evidence rule 1.
+- **2 is usage inference from two independent sites that agree.**
+  `cid_progress` writes 2 only when `cid_modem` has answered 3, which is a
+  whole checksum-good message, in the same statement pair that makes the
+  function return 1 for success; and `cid_get_strings` is the one function in
+  the tree that routes mode 2 to the FSK renderer rather than the DTMF one.
+  Named `CID_MODE_FSK_DONE` and marked as rule-3 evidence in the header.
+
+That resolves the oddity `cid_modem.h`'s header comment flagged and could not
+explain, and which finding F8731 recorded as unreachable-by-construction:
+`cid_get_strings` tests `mode != 0 && mode != 2` where every other function
+tests `> 1`, `!= 0` or `== 5`. Mode 2 is above 1 and belongs on the FSK side
+because the FSK receiver is the one that has the answer. F8731's ruling that no
+caller going through `cid_create` can present mode 2 still stands for
+`cid_create`; what it missed is that `cid_progress` writes the value itself.
+
+The five constants now live in `include/dsplib/cid_modem.h` -- `CID_MODE_FSK`,
+`CID_MODE_DTMF`, `CID_MODE_FSK_DONE`, `CID_MODE_CID_MESSAGE`,
+`CID_MODE_AUTOMATIC` -- which is one home for a value four functions test.
+`CID_MODE_AUTOMATIC` moved there from `src/service/cid.c`.
+
+## F8736. `cid_progress`'s block is 20 ms at either rate, and both thresholds under it are therefore constant
+
+*2026-08-31.* The block length is if-converted twice over, once from each
+receiver:
+
+    8ff7c:  cmpw $0x1f40,0x33c(%edi)     dtmf->rate != 8000?
+    8ff85:  setne %cl
+    8ff88:  movzbl %cl,%eax
+    8ff8b:  dec %eax                     0 if !=8000, -1 if ==8000
+    8ff8c:  and $0xffffffe0,%eax         0 or -32
+    8ff8f:  lea 0xc0(%eax),%edi          192 or 160
+
+and again at 0x8ff9a from `fsk->rate`, the second overwriting the first -- two
+separate `if`s (`mode != 0` and `mode != 1`), not an if/else, so mode 5 ends up
+using the FSK receiver's rate for both. 160 samples at 8000 Hz and 192 at 9600
+are both 20 ms.
+
+**That makes `cid_modem`'s two confidence thresholds constants in practice.**
+F8712 recorded them as `m*18/256` and `m*12/256` with
+`m = (rate == 9600 ? 49152 : 40960) / count`; at 160/8000 and 192/9600 `m` is
+256 either way, so the thresholds are 18 and 12 at every rate `cid_progress`
+can produce. The design F8712 described as rate-independent is rate-independent
+because its only caller feeds it a fixed duration.
+
+192 is also `CID_process`'s `CID_CHUNK`, so at 9600 the service feeds exactly
+one block per call and at 8000 one block plus 32 samples of the next -- which
+is why the carried remainder in `f3f8` exists at all.
+
+`len` is left UNINITIALISED by the object; the two tests are `mode != 0` and
+`mode != 1` and cannot both be false, so it is always assigned before it is
+read. `src/` initialises it to zero, which is dead on every path, because every
+alternative spelling that makes the exhaustion visible changes what happens when
+a receiver pointer is null. Note that a `len` of 0 makes the function loop for
+ever -- the outer loop's only exit is `f3f8 != len` and `f3f8` is 0 after each
+block -- which is how the injection ritual's "the first read is gated on
+mode != 1" mutant was caught, by hanging.
+
+## F8737. `cid_progress` keeps three result variables alive across arms and across turns of its loop, and the join tests all three whatever ran
+
+*2026-08-31.* The prologue writes 1 into three separate stack slots -- `0x1c`,
+`0x20` and `0x24` -- and 0 into a fourth, `0x28`, the return value. Each of the
+three is written by ONE dispatch arm and read by the join that follows EVERY
+arm:
+
+- `0x20` and `0x1c` are `dtmf_modem`'s and `cid_modem`'s answers, and only the
+  mode-5 arm writes them.
+- `0x24` is the single-receiver answer, written by the mode-0, mode-1 and
+  mode-3 arms.
+- the join tests `0x20` for 2 and for 3-or-(-1), then `0x1c` for 3 and for -1,
+  then `0x24` for 3 and for -1. The mode <= 1 arm jumps straight to the `0x24`
+  tests (0x90187 -> 0x900b8) and skips the first four; every other arm runs all
+  six.
+
+So a block processed in mode 3 is judged partly on two variables the mode-3 arm
+never wrote, and if a caller has moved the mode between calls those variables
+hold the PREVIOUS block's answers -- the outer loop can run several blocks in
+one call, and the slots persist across it. That is the object's shape, not an
+artefact of the reconstruction, and it is why the three locals are
+function-scope in `src/` rather than declared inside the loop.
+
+`t_cidprog` drives two blocks in one call with a seed that fires on the first,
+which is the only case in the file where the carry is observable; a mutant that
+resets the three at the top of each turn is caught there and nowhere else.
+
+## F8738. `cid_progress` sets `ret = 3` for every mode above 1 that is not 5, BEFORE it tests for mode 3 -- so a mode-3 block that is still collecting reports failure
+
+*2026-08-31.*
+
+    90049:  b9 03 00 00 00     mov $0x3,%ecx
+    9004e:  83 fe 03           cmp $0x3,%esi
+    90051:  89 4c 24 28        mov %ecx,0x28(%esp)      ret = 3, unconditional
+    90055:  0f 84 94 02 00 00  je 902ef                 mode 3 -> dtmf_modem
+
+The store sits between the compare and the branch, so it is on the path for
+mode 3 as well as for the modes with no arm at all. `CID_process` reads
+anything non-zero and non-1 as failure, so in the CID_MESSAGE state a block
+where `dtmf_modem` is still collecting (answer 1 or 2) returns 3 and the host
+abandons the call -- exactly the state the automatic mode enters when it has
+just started seeing digits. Only the DTMF answers 3 and -1 rewrite `ret`
+afterwards, to 1 and 2. Deviation D976.
+
+It is unreachable from slmodemd, which is presumably why it survived:
+`CID_create` calls `cid_create(0, cid_val, 0)`, so the mode is 0 for the life
+of the object and the only path that could raise it -- the mode-5 arm's
+`ctx->mode = 3` -- is never taken.
+
+## F8739. What `t_cidprog` pins, and the one gap that only a rate mismatch could expose
+
+*2026-08-31.* `cid_progress` has one exit -- `f3f8 != len` -- so a call always
+drains its input, and the fill level afterwards is `(f3f8_before + n) % len`
+with `(f3f8_before + n) / len` blocks processed. `t_cidprog` asserts that
+against the REFERENCE on every call, which pins the block length by an
+independent statement of the same fact rather than by our own copy of it.
+
+**The arms that need a receiver to answer 3 or -1 are PLANTED**, the way
+`t_rxcid` plants the framer. The seeds are read off the receivers' own source:
+`cid_modem` reaches the checksum once `mark_conf` is at least 18 (F8736) and
+answers 3 or -1 from a `pack_len` of 10 with `data[1] = 5`; `dtmf_modem`
+answers 2 from `ndigits > 2`, -1 from that plus `nsamples > 3*rate`, and 3 from
+a pending `last_digit` of 12 committed by a block the band pass calls silent.
+Real audio -- a Bell 202 mark tone and bit stream, and DTMF tone pairs --
+drives the same paths where no specific verdict is needed.
+
+**THE GAP THE RITUAL FOUND, AND IT IS THE SHAPE F8732 DESCRIBES.** Every case
+in the first draft gave both receivers the same rate, and with the rates equal
+the two rate reads are indistinguishable: the mutant "the length comes from the
+DTMF receiver in both ifs" survived 8,218 checks including every mode, every
+input length and both rates. It is the same failure as F8732's unfalsifiable
+`f3f8` clear -- a statement whose effect is invisible because the fixture never
+puts the two sides of it in disagreement. One 600-check section with
+`dtmf->rate` and `fsk->rate` swapped both ways catches it, and four siblings
+besides: each read sourced from the wrong receiver, each gate swapped, and the
+two `if`s made an if/else.
+
+The ritual was 37 mutants: 33 caught, 3 equivalent, 1 real gap now closed. The
+three equivalent ones are the three result variables initialised to 0 rather
+than 1 (0 matches none of the tested values 2, 3 and -1 any more than 1 does),
+and `n` and `i` declared `int` rather than `short` (`n`'s only source is a
+`short` and `i` is bounded by it, so no input separates them -- the object's
+`cwtl` and `cmp %bp,%ax` is a codegen fact only the period compiler can see).
+
+The one thing the file does NOT pin is the four debug strings, because every
+site is gated on `dsplibs_debug_level > 1` and the harness runs at 0. They are
+covered by `make one`'s `strings` tier, which checks every literal in `src/`
+exists in the object, and that is the whole of the evidence for them.
+### F8740. The software ring detector is reconstructed whole -- nine symbols, 2,061 bytes, and it is a hysteretic zero-crossing counter rather than a filter
+
+*2026-08-31.* `voice.c#3`'s ring-detect half is written and green: `RD_create`
+(293), `RD_delete` (84), `RD_process` (130), `RD_ring_details` (16),
+`RingDetector_Delete` (17), `RingDetector_Reset` (already written),
+`RingDetector_Create` (452), `RingDetector_GetLastRing` (24) and
+`RingDetector_Process` (1,045). Eight new, 2,061 bytes, in
+`src/service/voice.c` with `include/dsplib/ringdet.h`.
+
+**There is no filter and no transform in it.** A ring at 20-25 Hz is two
+octaves below anything else on the line, so the object simply compares the
+sample against a threshold with wide hysteresis and counts the crossings:
+
+- **three states** at `+0x3e` -- SEARCH (1), HIGH (2), LOW (3);
+- **two levels** at `+0x44`/`+0x46`, which SWAP ROLES rather than merely sign
+  between the half cycles. In HIGH they are `+threshold` (full amplitude) and
+  `+lock_level` (the crossing that ends the half); in LOW they are
+  `-lock_level` (the crossing) and `-threshold` (full amplitude). A sample
+  between them is in a guard band that is tolerated for three quarters of a
+  period at `min_freq` and no longer;
+- **a debounce that tightens once locked** -- SEARCH needs
+  `|threshold|/(fs/80)` consecutive samples (10 at 8 kHz and a 1000 threshold)
+  and a locked half cycle needs 2, or 0 in the negative-threshold mode;
+- **a frequency measured once per FULL cycle**, `fs / (half_samples + 1)`,
+  folded into a running integer mean, and accepted only inside
+  `[min_freq, max_freq]`;
+- **a ring declared** when `cycles * 1000 / freq_avg` passes `minOnDur`, and
+  withdrawn when either silence counter passes `minOffDur` in samples.
+
+The measurement is taken on one crossing of each pair and not both, and the
+marker for which is `above_need == idle_debounce`: entering HIGH from SEARCH
+overwrites `below_need` with the locked debounce and leaves `above_need` at
+the idle one, so the 3->2 crossing is the one that still carries it. That is
+the whole mechanism by which a half-cycle counter yields a full-cycle period.
+
+`t_ringdet` is 1,249,563 differential checks over 37 process scenarios, 48
+create/delete cases and 8,967 reset configurations, comparing the whole
+0x52-byte object after every block; `test/mutations/ringdet.json` is 41
+mutations, all 41 caught.
+
+### F8741. `RD_process`'s own format string types two fields, and slmodemd's use of them fixes the units
+
+*2026-08-31.* `RD_process` prints
+
+    "RD: RD: freq = %d, duration = %d\n"
+
+with exactly the two values `RingDetector_GetLastRing` hands back, so `+0x2e`
+is a FREQUENCY and `+0x24` is a DURATION on the author's own authority
+(`.rodata.str1.4:0x448`, reached through `relocscan`, not through a search of
+the disassembly -- finding F604). That is tier 1, and it is the only tier-1
+naming in this struct beyond the six `Reset` already prints.
+
+`modem.c`'s `modem_ring_detector_process` then fixes the units and the
+protocol without any inference:
+
+    if (freq == 0)      report ring start
+    else if (freq > 0)  ring finishing; ring_count = duration * freq / 1000
+
+-- so the frequency is Hz, the duration is milliseconds, and a reported zero
+frequency is not a failure but the OPENING edge. That is why `Process` writes
+`last_freq = 0` on the sample that declares a ring and copies `freq_avg` into
+it on the sample that ends one: the same two-word report carries both edges
+and the caller tells them apart by the sign. Everything else in
+`struct ring_detector` is named by usage inference and says so in the header.
+
+### F8742. `RingDetector_Create` is `malloc` plus an INLINED `RingDetector_Reset`, and the out-of-line copy is emitted as well
+
+*2026-08-31.* `RingDetector_Create` (0x2550, 452 bytes) contains no call. Its
+body is `sysdep_malloc(0x54)` followed instruction for instruction by
+`RingDetector_Reset`'s -- the same clamps, the same `fs/80` and
+`3*fs/(4*min_freq)` divisions, the same debug line with the same six
+arguments, the same duplicated `min_off_dur >= 120` clamp in the negative
+branch. `RingDetector_Reset` is nonetheless a separate GLOBAL symbol at
+0x2380, because the rest of the object calls it.
+
+That is GCC 3.4 at `-O3`: `-finline-functions` inlines an externally-visible
+function at a call site and still emits the out-of-line copy. So the source is
+the call it must have been, and the 452 bytes are counted against
+`RingDetector_Create` while the code they contain is `RingDetector_Reset`'s.
+It is the inlining-boundary trap of CLAUDE.md read the other way round -- here
+the blob has TWO symbols for one piece of source rather than one symbol for
+two pieces.
+
+**It also makes `RD_create`'s null check unreachable.** `Create` dereferences
+the returned pointer on the instruction after the `call` (`movw $0x0,0x3a(%esi)`)
+with no test, so a failed allocation faults inside `Create` and never returns
+the zero `RD_create` goes on to test for. Both are reproduced; neither is
+repaired.
+
+### F8743. The ring threshold is a twelve-entry jump table on `MDMPRM_CODECTYPE`, and nine of the twelve arms are the default
+
+*2026-08-31.* `RD_create` fixes five of the six configuration fields as
+constants -- fs from its argument, `minFreq` 15, `maxFreq` 80, `minOnDur` 120,
+`minOffDur` 120 -- and reads only the threshold from the modem:
+
+    modem_get_param(modem, MDMPRM_CODECTYPE) - 4, range 0..11, .rodata:0xa4
+
+    codec  4, 12   ->  1000
+    codec 13, 15   ->   650
+    codec 14       ->   850
+    everything else -> -3000
+
+The negative default is not a sentinel. `Reset` takes `|threshold|` everywhere
+and uses the SIGN to select the second constant pair -- `lock_debounce` 0 and
+`lock_level` 200 rather than 2 and 100 -- so the default is a 3000-count
+threshold with zero debounce and a 200-count crossing level, and the three
+named codecs get a low threshold with two samples of debounce.
+
+The object names no codec constant anywhere in the 1.2 MB: the V.90 manglings
+record that `__tHardwareCodecTypes__` exists and nothing about its enumerators
+(`include/dsplib/V90CodecType.h`), so the switch is written with the numbers
+the object tests and no invented names.
+
+**The table was read through `tools/dis.py` and `objdump -s -j .rodata`, not
+off the disassembly.** `jmp *0xa4(,%eax,4)` carries one `R_386_32` against the
+section symbol; the twelve targets are inline addends and a bare `objdump -d`
+shows the table's bytes disassembled as instructions.
+
+### F8744. The closing edge's duration floor cannot be reached by playing audio, and reaching it needs the object's two separate silence counters
+
+*2026-08-31.* `RingDetector_Process` reports a duration of
+
+    ring ending:   minOnDur  - minOffDur + 20 + elapsed_ms, held >= minOnDur
+    ring starting: minOffDur - minOnDur  - 20 + elapsed_ms, held >= minOffDur
+
+and the OPENING floor is routine -- a ring is declared after `minOnDur` of
+tone, so `elapsed - 20` is below `minOffDur` on every default cadence and the
+clamp fires constantly. The CLOSING floor is not reachable at all by audio: a
+ring ends only once a silence counter passes `minOffDur` in samples, so
+`elapsed_ms >= minOffDur` always, so the corrected value is always at least
+`minOnDur + 20`. Mutating that clamp away survived every cadence this test
+plays.
+
+It is reachable, and what makes it reachable is that the object keeps the
+silence and the report in DIFFERENT counters: `idle_samples` (+0x1c) and
+`band_samples` (+0x20) decide when the ring ends, `report_samples` (+0x14)
+measures the duration, and only the latter is zeroed on an edge. Poking
+`idle_samples` past the window immediately after the opening edge -- through
+`struct ring_detector *` on both sides at once, so the poke is also a check on
+the layout claim -- ends the ring on the next single sample with
+`elapsed_ms == 0`, and the reported duration is the floor. `t_ringdet` does
+exactly that and the mutation is caught.
+
+**The general form is worth keeping.** A clamp whose guard condition is
+implied by the state machine that reaches it is dead to any test driven only
+through the front door, and the way in is a field the machine keeps separately
+from the one the guard reads. Look for the second counter before recording the
+arm as unreachable.
+
+### F8745. `RD_ring_details` is declared `long *` upstream and stores 32 bits, and this tree writes `int *`
+
+*2026-08-31.* slmodemd's `modem.c` declares
+
+    extern void RD_ring_details(void *obj, long *freq, long *duration);
+
+and calls it with two `long` locals. The object stores through both pointers
+with `mov %edx,(%eax)` -- 32 bits -- because it was built for ILP32, where the
+two spellings are the same type. They are not the same type anywhere this tree
+also has to compile (`make check64`), and the instructions are what the
+reconstruction follows, so `ringdet.h` declares `int *` and the header says
+why.
+
+This is the same call the tree already made for `dsp_info::clock_deviation`,
+which is `int` here and `long` in slmodemd's own header. Recorded rather than
+left implicit because the two are now a pattern: **a vendored upstream
+declaration is evidence about the API's intent and not about its ABI**, and
+where they disagree the instructions win.
+
+### F8760. The beep generator's object is 0x12c bytes, a twenty-entry tone queue with three host callbacks bolted on the end
+
+*2026-08-31.* `beepgen_create` allocates 0x12c (0xacda1) and the stores across
+the five entry points fix every field of it:
+
+    +0x00 modem      +0x14 gain1     +0x24 queued    +0x11c fn_011c
+    +0x04 phase1     +0x18 gain2     +0x28 playing   +0x120 hook_on_proc
+    +0x08 phase2     +0x1c elapsed   +0x2c tone[20]  +0x124 fn_0124
+    +0x0c freq1      +0x20 duration        {f,f,int} +0x128 dur_units_per_sec
+    +0x10 freq2
+
+The queue length is not a guess: 0x11c - 0x2c is 240 and the entry stride is
+12 -- `lea (%eax,%eax,2)` then `lea (%ebx,%ecx,4)` at 0xace1d and 0xad352 --
+so it is exactly twenty.
+
+**`dur_units_per_sec` is derived, not named by hand.** The object computes the
+tone's sample count as `duration * 8000 / [+0x128]`, and 8000 is the sample
+rate the phase step confirms independently (0.000785 radians per sample per
+hertz is 2*pi/8000 to three figures), so +0x128 is the number of duration
+units in one second. It is 10 for an ordinary tone and 100 for the '!'
+marker, in all three places that set it.
+
+**The three callbacks are the host's, and only one of them is named.**
+`beepgen_create` copies them out of a sixteen-byte configuration block whose
+own source is outside the object -- `voice_create` (0xac210, not
+reconstructed) passes ITS first argument straight through at 0xac2cd -- so
+there is no caller in the 1.2 MB that types them. +0x120 is `hook_on_proc`
+because `beepgen_sample` prints the author's own "Hook on proc\n" immediately
+before the only call to it (0xad421); the other two keep neutral names.
++0x011c fires at the symmetric position, when a -1 tone becomes current, and
++0x124 is asked for the marker's duration with the literal 24, which nothing
+in the object explains.
+
+### F8761. `beepgen_start_dtmf` is `beepgen_get_freqs` and `beepgen_start_beep` inlined, and only two characters are not a DTMF pair
+
+*2026-08-31.* 877 bytes of `beepgen_start_dtmf` are two other functions of the
+same translation unit expanded into it at `-O3`: the col/row tables
+`{1209,1336,1477,1633,0,-1}` and `{697,770,852,941,0,-1}` are built on the
+stack at 0xacf54-0xacfc1, the jump table at .rodata+0xee3c indexes `code -
+0x21` over 0x24 cases with the same sixteen bodies `beepgen_get_freqs` has,
+and the whole tail from 0xad006 is `beepgen_start_beep`'s body including its
+"start beep %d %d %d" line. So the source is three lines and a special case,
+and writing it that way reproduces the behaviour exactly.
+
+The two characters that are not a DTMF pair:
+
+- **'!'** takes its duration from `fn_0124(modem, 24)` BEFORE the debug line
+  (0xad140), and `beepgen_get_freqs` then hands it -1/-1, which
+  `beepgen_start_beep` reads as the start marker.
+- **','** is checked AFTER the table lookup, silences both halves and triples
+  the duration (`lea 0x0(%ebp,%ebp,2)` at 0xad119), printing
+  "\n *** digit ',' => pause".
+
+`code` is an `int`: it is loaded and compared 32 bits wide against 0x21 and
+0x2c, and only the inlined `beepgen_get_freqs` narrows it with `movzbl`.
+
+### F8762. `beepgen_sample` is the second site in this tree needing `-funsafe-math-optimizations`, and the pragma is scoped to the function
+
+*2026-08-31.* 0xad2a8 is `fsin` and 0xad2af is `fcos`. GCC expands `sin()` and
+`cos()` inline to the x87 instructions only under
+`flag_unsafe_math_optimizations`; without it the call goes to libm. That is
+the same observation `src/dsp/fft.cpp` records for `four1` and `realfft`, and
+the object has twelve such sites over eight functions with **no `sin`, `cos`
+or `sqrt` relocation anywhere in the 1.2 MB and no such symbol defined in it**
+-- only `pow`, which is compiled in. So the original's build of this library
+had the flag on.
+
+`fft.cpp` puts `#pragma GCC optimize` at file scope because the whole file
+wants it. `beepgen.c` cannot: the reciprocal tails and mean-removed sums of
+`fComputeRMSValue*Buf`, `bSearchEnergy` and `FindCorrelation` share the
+translation unit and are already differentially green under the tree's
+ordinary flags, and reassociation is exactly what would move them. So the
+pragma here is bracketed by `push_options`/`pop_options` around the one
+function, and GCC 14 emits `fsin`/`fcos` for it and nothing else changes.
+
+**GCC 3.4.2 ignores the pragma entirely**, so the period build calls libm and
+differs from the object around the 54th bit of a double that is then rounded
+to a 24-bit float -- fft.cpp's finding F833 argument, and the same conclusion:
+the flag is here on the disassembly's authority, not the test's.
+
+### F8763. The tone detector's object is 0x38 bytes and its output mode is named by its own setters
+
+*2026-08-31.* `detector_create` is blocked -- it still needs ten unwritten
+symbols -- but it settles two things about the object for free: it allocates
+0x38 at 0xad5da and it stores 1 into +0x34 at 0xad498. The three setters that
+ARE writable then name that word without any inference: `detector_set_output_
+status` writes 0 and `detector_set_output_in_stream` writes 1 to it, so it is
+a mode selector and the created default is "in stream". `detector_set_enable`
+writes a 16-bit value at +0x00.
+
+Nothing else about the 0x38 is modelled, and `detector.h` says so: the middle
+0x32 bytes are a pad until `detector_create` lands.
+
+### F8764. `FDSP_DP_Run` is a pure rescaler with a dead argument, and its count is unsigned
+
+*2026-08-31.* All 138 bytes: `*countp` samples of 16-bit linear multiplied by
+1/32000 into a float buffer, `*countp` floats multiplied by 32000 and stored
+through a round-to-zero `fistps`, `*status = 2`, `return 1`. No filtering, no
+state, no object pointer -- the FDSP kernel is nowhere in it.
+
+Two things the disassembly forces. The count is loaded with `movzwl` (0xae4a6)
+into a value used as a signed 32-bit loop bound, so the pointee is an
+`unsigned short` and not a `short` -- finding F613's forced case. And the
+SIXTH argument's stack slot, `0x20(%esp)`, is never loaded: seven arguments go
+in and six are used. Recorded as D986 rather than dropped from the signature,
+because the ABI is what the caller has to satisfy.
+
+The receive scale is the float nearest 1/32000 (0x3803126f), loaded once
+outside the loop, which is the constant `1.0f / 32000.0f` folds to and the
+same one `CrossDataLinks` two functions earlier already uses.
+
+### F8765. `create_dtmf` confirms `struct dtmf` from the constructor's side, and its loops count in a short
+
+*2026-08-31.* `dtmf.h`'s layout was derived from `dtmf_detect` and `dtmf_test`
+alone, with `create_dtmf` named in the header as unreconstructed. Writing it
+is an independent check on that layout from the other end, and the layout
+holds: 0x98 allocated, `notch_state[8][2]` and `energy[8]` cleared together in
+one loop, `bias_state[2]` in a second, `hist[8]` set to -1 in a third, then
+`total`, `count`, `phase`, `held`, `easy` zero and `digit` -1. The 0x80..0x8f
+`pad_80` is untouched, exactly as the header claims.
+
+The loop counters are 16-bit: `inc %eax; cwtl; cmp $0x7,%ax; jle` at
+0xadf27-0xadf2d and twice more. So the author wrote `short i` and the bounds
+are `<= 7` and `<= 1`, which is what the reconstruction spells.
+
+### F8766. The `Beepgen.c` span is NOT all callerless surface, and the reverse edges are what say so
+
+*2026-08-31.* `beepgen.c`'s header comment said none of its symbols has an
+internal caller in the blob, which was true of the eleven leaves that had been
+written. It is not true of the span: `readelf -r` finds `beepgen_create`
+called once, from `voice_create` at 0xac2d5, `create_dtmf` called from
+`detector_create` at 0xad4b1, and `detector_set_enable` called from six sites
+across `voice_dle_command`, `voice_create` and `voice_command`.
+
+That matters for evidence, not for scheduling: `voice_create` is what proves
+the configuration block is sixteen bytes of `{modem, fn, fn, fn}` and that it
+is the VOICE service's own argument passed through, which no amount of
+reading `beepgen_create` alone could establish. **Run the relocation table
+before recording a symbol as having no caller** -- the call-graph tools answer
+the forward question and this one is backward.
+### F8770. Three LOCAL functions in the blob that are NOT regparm(2): being `t` predicts nothing, the body does
+
+*2026-08-31.* `vce_hook_on` (0x600), `vce_hook_off` (0x630) and
+`vce_get_sreg` (0x660) are `t` in the object's symbol table, exactly as
+`GetGain`, `EchoCanceler` and `bValidateEnergyValue` are in F8462 -- and
+unlike those three they take their arguments on the STACK:
+
+    vce_hook_on   sub $0xc,%esp ; ... ; mov 0x10(%esp),%eax   -> arg0
+    vce_get_sreg  push %ebx ; sub $0x8,%esp ;
+                  mov 0x10(%esp),%eax ; mov 0x14(%esp),%ebx   -> arg0, arg1
+
+So `t_vce.c` declares their `ref_` aliases plainly, with no
+`__attribute__((regparm(2)))`, and the calls agree.
+
+**Why it matters as a rule.** GCC 3.4's static-function regparm is
+`cgraph_local_info(decl)->local`, which is withdrawn as soon as the address of
+the function is taken or the unit-at-a-time bookkeeping cannot prove the
+function local -- so the convention is a property of what the whole
+translation unit does with the symbol, not of its binding. F8462 read as "a
+LOCAL blob function is regparm(2)"; it is not, and a test that declared these
+three that way would pass its own build and compare two different functions.
+**Read the prologue, not the symbol table.**
+
+### F8771. `vce_get_sreg` is the voice service's own S-register reader, and slmodemd's `struct voice_info` decodes all seven of its cases
+
+*2026-08-31.* `vce_get_sreg(modem, num)` calls
+`modem_get_param(modem, 12)` -- MDMPRM_VOICEINFO -- and answers seven register
+numbers out of the block it gets back and out of three built-in constants.
+Everything else returns 0.
+
+The block is slmodemd's `struct voice_info` (`ref/slmodemd/modem_defs.h`),
+eleven `unsigned` members, and the three offsets the object reads land on
+exactly the three members its register numbers name -- which is what makes
+this a derivation rather than a plausible fit:
+
+| num | slmodemd's name for it | answer |
+|---|---|---|
+| 24 | `SREG_FLASH_TIMER` | 20, constant |
+| 72 | `SREG_HANDSET_GANE` (their spelling) | 19, constant |
+| 73 | `SREG_VOICE_DIALTONE_DETECT_DELAY` | 3, constant |
+| 82 | `SREG_SILENCE_DETECT_SENSITIVITY` (#VSS) | +0x24 `silence_detect_sensitivity`, reduced |
+| 83 | `SREG_SILENCE_DETECT_DURATION` (#VSP) | +0x28 `silence_detect_period` |
+| 138 | `SREG_MIC_GAIN` | +0x08 `rx_gain` |
+| 139 | `SREG_LINE_RECORD_GAIN` | +0x08 `rx_gain` |
+
++0x08, +0x24 and +0x28 are members 2, 9 and 10 of eleven four-byte members, so
+the layout corroborates rather than being assumed; and both accesses to the
+sensitivity are unsigned in the object (`shr $0x6`, `jbe`), which is the type
+slmodemd declares.
+
+**The sensitivity mapping is not a plain shift**, and this is the part no
+amount of reading the register number would have given:
+
+    level = sensitivity >> 6;
+    if (level == 0)  return sensitivity != 0;   /* 1..63 -> level 1 */
+    if (level > 3)   return 3;
+    return level;
+
+So zero is the only raw value that reports level 0, and everything above 191
+saturates at 3.
+
+**The three constants are answered without storage.** Setting S24, S72 or S73
+anywhere cannot move what this function returns -- and it still pays for the
+`modem_get_param` call, which the object makes unconditionally before the
+switch.
+
+### F8772. The MTK tables: two exact identities, three near-miss closed forms, and why they stay literal
+
+*2026-08-31.* Six symbols in `.data`, 3,628 bytes, all six now in
+`src/service/mtk_tables.c` and proved byte for byte by `t_mtktab`:
+
+    MTK_xor_table  0x8500   512   MTK_cos_table  0x8f40  1028
+    MTK_atan_table 0x8700  1028   MTK_sin_sign   0x9344    16
+    MTK_sin_table  0x8b20  1028   MTK_cos_sign   0x9354    16
+
+**Two identities hold BIT FOR BIT, so they are checked and not described:**
+
+- `MTK_xor_table[i] == popcount(i)` for all 256 entries, as a `short`. That is
+  the whole derivation of that table and it explains the name -- an XOR/parity
+  weight lookup.
+- `MTK_cos_table[i] == MTK_sin_table[256 - i]` for all 257. One quarter wave,
+  stored twice, read from both ends.
+
+**Three closed forms are within one ULP and reproduce NOTHING exactly**, which
+is why the tables stay literal (`docs/coefficients.md`, and the fast pass's
+rule that a byte-exact copy is byte-exact):
+
+    MTK_sin_table[i]  = sin(i * pi / 512)     1 of 257 entries differs
+    MTK_cos_table[i]  = cos(i * pi / 512)     2 of 257 differ
+    MTK_atan_table[i] = atan(i / 256.0)       1 of 257 differs
+
+A generator would therefore be WRONG in one to two cells each, and the failure
+would be invisible to anything but a byte comparison. Measured with the
+double-precision libm result rounded to `float`; whatever the author's
+generator was, it was not that.
+
+**The shape is `MTK_phasor`'s (0xb0690), the only caller of the sine pair.**
+The angle is reduced, scaled and rounded to a 16-bit integer; the low 8 bits
+index the table and the interpolation reads `[i]` and `[i+1]`, which is why
+257 and not 256; bits 8-9 select the quadrant and index the two four-entry
+sign vectors, so the stored quarter wave carries no sign of its own --
+`MTK_cos_sign` is `+ - - +` and `MTK_sin_sign` is `+ + - -`.
+
+**Alignment is the compiler's, not an attribute.** The four tables of 32 bytes
+or more sit on 32-byte boundaries and the two 16-byte ones only on 4, which is
+GCC's i386 `DATA_ALIGNMENT` boost when optimising. Nothing to declare.
+
+**Which TU they came from is NOT settled.** `tumap.py` brackets the range
+holding `MTK_phasor` between fourteen candidate file names, of which `PHASOR.c`
+and `TABLES.c` are the suggestive two. The file name in `src/` is ours; the six
+symbol names are the author's.
+
+**AND `silence_level_table` IS DECLINED, NOT FORGOTTEN, AND THE REASON IS THAT
+IT IS `static`.** It was scheduled with these six and it does not belong with
+them: it is `d` in the object -- LOCAL -- at `.data` 0x84d4, 16 bytes, and the
+only three references to it in the whole 1.2 MB are inside `silence_progress`
+(0xb03b0..0xb0690's neighbour), which is unwritten. A `static` array with no
+reader **is not emitted at all** by either compiler, so defining it in a file
+of its own would either vanish or have to be made external -- and external is a
+change to the object's own linkage made purely to give a test something to
+compare. Neither is worth doing before its one consumer exists.
+
+Its content is recorded here so the next agent does not have to re-derive it.
+Sixteen bytes at `.data` 0x84d4, which as four floats are
+
+    -1.0f, 2.5147244e-06f, 6.9853459e-06f, 2.2632519e-05f
+
+(raw words `bf800000 3628c2a3 36ea63aa 37bddaf7`). The first entry is a
+placeholder for what follows, and the other three ascend by roughly 2.8x,
+which is what a table of energy thresholds indexed by a 0..3 sensitivity
+LEVEL looks like -- and F8771 has just established that `vce_get_sreg`
+reports exactly such a level, 0..3, for `SREG_SILENCE_DETECT_SENSITIVITY`.
+That is a reading, not a derivation; `silence_progress` is what settles it,
+and **the table belongs in whichever file gets `silence_progress`, spelled
+`static`.**
+
+**AND `MTK_phasor` IS DECLINED FOR AN OWNERSHIP REASON, NOT A TECHNICAL ONE
+-- SO THE WHOLE DECODE IS WRITTEN OUT HERE.** It is 271 bytes at 0xb0690 and
+it is no longer blocked on anything: the six tables above are its only
+unwritten referents and they have landed. What stops it is that writing it
+costs two files this agent does not own in a parallel wave --
+`test/harness/runtime.c`, which defines an unprefixed `MTK_phasor`
+forwarding to `ref_MTK_phasor` (F8463) and would collide at link, and
+`include/dsplib/fdspkrnl.h`, whose `struct mtk_phasor` and "Still the blob's"
+comment would both need revisiting -- and that `TONE_generate`'s existing
+test compares a `TONE_generate` whose oscillator IS the blob's, so a
+reconstruction that is not bit-identical breaks somebody else's green test
+rather than its own.
+
+Read off `dis.py`, with every `DE`-encoding taken from the bytes and not the
+AT&T mnemonic (F245): `de e9` at 0xb071e is FSUBP, `de ca` at 0xb0760 is
+FMULP `st(2)`, `de c1` at 0xb0762 is FADDP.
+
+    x = fmodf(p->phase, 6.28318530718);   /* fprem against a FLOAT 2pi */
+    if (x < 0.0f)
+            x = x + 6.28318530718;        /* the DOUBLE literal, renarrowed */
+    p->phase = x;                         /* stored once, after the merge */
+
+    y = x * 162.97466172610083;           /* DOUBLE constant, narrowed to float */
+    n = (short)y;                         /* fist m16, round-to-zero */
+    q = n >> 8;                           /* arithmetic; indexes the sign vectors */
+    frac = y - n;                         /* kept at 80 bits, never narrowed */
+    if (n & 0x100) {
+            frac = 1.0f - frac;
+            n = ~n;                       /* `not %eax` before the mask */
+    }
+    i = n & 0xff;
+
+    p->out_04 = MTK_cos_table[i]
+                + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;
+    p->out_04 = p->out_04 * MTK_cos_sign[q];
+    p->out_08 = MTK_sin_table[i]
+                + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;
+    p->out_08 = p->out_08 * MTK_sin_sign[q];
+
+    s = x + p->step;                      /* fadds +0x0c, in extended */
+    if (s >= 3.141592653589793)           /* fcoml against a DOUBLE pi */
+            s = s - 6.28318530718;
+    p->phase = s;
+
+162.97466172610083 is 512/pi to a float's worth of digits, which is what
+makes `q` the quadrant and `i` the 0..255 index into a 257-entry quarter
+wave. **Each output is written TWICE**, unsigned then signed -- that is not a
+transcription slip, it is two statements in the source: GCC's `fsts` narrows
+the stored copy and then multiplies the 80-bit value it still holds, which a
+single `interp * sign` statement would not emit.
+
+**THE PART TO EXPECT TROUBLE FROM is `frac`**, which the object keeps at 80
+bits from the `fsubp` all the way through both interpolations. That is
+exactly the shape behind `t_v90equproc` and `t_psd` in `tools/gccdiverge.json`
+-- the modern compiler keeps intermediates the object also kept, but narrows
+and widens at different points -- so whoever writes it should expect the
+period tier to be the one that decides, and should not touch `src/` to make
+GCC 14 agree.
+
+### F8773. Four `voice.c#3` symbols are appended out of emission order, on purpose, and the reason is that this session could not measure the alternative
+
+*2026-08-31.* `vce_hook_on`, `vce_hook_off` and `vce_get_sreg` are the FIRST
+three symbols of the `voice.c#3` span (0x600, 0x630, 0x660) and
+`STRM_VCE_GetFDSPEnvironmentalParams` is at 0x13b0 -- all four before
+`RD_create` at 0x2130. Faithful emission order would put them at the top of
+`src/service/voice.c`; they are appended to the bottom instead.
+
+**Why.** Emission order is a register-allocation carrier (F7796, F7800): it is
+upstream of a function and moves code the function did not change. The nine
+ring-detector functions above them were written and measured in their current
+position by another agent in the same wave, and this session has no period
+compiler with which to re-measure them after a move -- so the choice was
+between an unmeasured reorder that could silently cost byte identity above,
+and a recorded deviation from the order rule. **An unmeasurable change to
+already-measured code is not an improvement**, so the deviation is taken and
+written down in the file's own banner as well as here.
+
+**What to do about it.** The next refinement pass with `byteident.py`
+available should try the faithful order and keep it if nothing above
+regresses. It is a two-minute experiment for whoever can run the tool, and an
+unbounded risk for whoever cannot.
+
+### F8774. `voice_dle_command` sits in a bracket labelled `class1tx.c` and is voice, not fax
+
+*2026-08-31.* `voice_dle_command` (0xabe20, 196 bytes) falls inside the
+`tumap.py` bracket 0x94870..0xac960, whose first label is `class1tx.c`. The
+bracket is SHARED -- `voice.c#260` is in it too -- and everything inside the
+function says voice: the symbol name, and all three strings it prints ("voice
+dle command: ETX", "voice <CAN> command", "Unknown command - %2x").
+
+So it is reconstructed in `src/service/voicecmd.c` and not in `src/fax/`,
+which is CLAUDE.md's "do not read a span name as a module name" applied to a
+case where the span label is not merely imprecise but from the wrong service
+entirely. It is not put in `src/service/voice.c` either: 0xa9000 bytes
+separate it from the `voice.c#3` span, so whatever TU it belongs to is not
+that one.
+
+**What it does.** Two DLE-shielded control codes of a voice connection:
+
+    <DLE><ETX> (0x03)  sets +0x744, returns 0
+    <DLE><CAN> (0x18)  sets +0x748, returns 9
+    anything else      writes nothing, returns 0
+
+The command byte is loaded with `movsbl`, so it is a SIGNED char: 0x83 reaches
+the default arm as -125 and that is what the object's `%2x` prints. The two
+flag names (`dle_etx`, `dle_can`) are usage inference, the weakest grade --
+what is established is the store and the author's word for the command that
+causes it; what consumes either flag is unwritten and so unknown. 9 has no
+name in the object or in slmodemd's `VOICE_STATUS_*` / `VOICE_CMD_*`, whose
+values do not reach it, so it stays a number.
+### F8750. `FDSP_Kernel_InitObj`'s LMS step is one ULP BELOW `0.032f`, and the tidy literal fails the differential test
+
+*2026-08-31.* The object sets chan_a's step with
+
+    aeb13:	b8 6e 12 03 3d       	mov    $0x3d03126e,%eax
+    aeb1d:	89 83 8c 16 00 00    	mov    %eax,0x168c(%ebx)
+
+and `include/dsplib/fdspkrnl.h` had recorded that constant as "0.032f" since
+the span was first read. **It is not.** `0.032` lands at 0.592 of the way
+between two floats, so correct rounding goes UP: `fl(0.032)` is `0x3d03126f`
+= 0.03200000151991844, and the object's word is `0x3d03126e` =
+0.031999997794628143310546875, one ULP below. Whatever produced it truncated
+the mantissa rather than rounding it.
+
+**It is not cosmetic and no reading of the disassembly alone would have caught
+it.** Writing `a->mu = 0.032f;` compiles, looks right, and fails
+`t_fdspkrnl` at `mu 120  got 0.0320000015, reference 0.0319999978  (1 ULP)` --
+the step feeds every tap update in `EchoCanceler`, so the two sides' filters
+diverge from the first adapting block. The differential tier found it on the
+first run; the header's comment had been wrong for as long as it existed.
+
+`src/service/fdspkrnl.c` now spells the constant as the float's exact value,
+`0.031999997794628143310546875f`, which every correctly-rounding compiler must
+reproduce bit for bit. `0.0319999978f` also works on GCC 14 and was declined:
+nine significant digits round-trip a float only if the compiler's
+decimal-to-binary conversion is correctly rounded, which is the very
+assumption this constant proves the ORIGINAL compiler did not satisfy.
+
+**The general form.** A constant read as a 32-bit `mov` immediate is exact
+evidence; the decimal you would write for it is a guess, and the guess is
+wrong whenever the author's toolchain rounded differently from yours. Spell
+the object's word, not your reading of it.
+
+### F8751. `FIFO8`'s parameters are a STRUCT, and the object copies them as one -- which is what names the type
+
+*2026-08-31.* `FIFO8_create` reads its second argument as
+
+    aef40:	8b 10                	mov    (%eax),%edx
+    aef46:	0f b7 40 04          	movzwl 0x4(%eax),%eax
+
+and later writes the same six bytes into the ring with `mov %edx,(%ebx)`
+and `mov %dx,0x4(%ebx)`. A four-byte load plus a two-byte load, and the
+same pair on the way out, is GCC's **structure assignment of a six-byte
+object**, not three field copies -- three shorts copied individually would
+be three `movzwl`/`movw` pairs. So the ring's first six bytes are a nested
+struct of the parameters, and `src/service/fifo8.c` spells it that way.
+
+The blob agrees by name: the default instance it reads when the argument is
+NULL is a LOCAL `.data` object at 0x83a0 called **`FIFO_CFG`** -- the
+author's own name, in the same family as `TONE_CFG` (0x83c0), `MTDv22_CFG`
+and `AGCv23_CFG`. Its three shorts are `{ 0, 300, 0 }`: a 300-byte ring
+padded with zero. `t_fdspkfifo`'s `cfg == NULL` arm is the only thing that
+compares our copy of those values against the blob's, because a LOCAL data
+object has no `ref_` name to read.
+
+The leading short is never read by any of the four FIFO8 functions and keeps
+a neutral name.
+
+### F8752. `FIFO8_read` PADS, and that is the only reason a caller can trust its output length
+
+*2026-08-31.* `FIFO8_read(f, dst, n)` copies `min(count, n)` bytes out of
+the ring and then writes `n - min(count, n)` more, each of them `cfg.fill`:
+
+    af060:	0f b7 47 04          	movzwl 0x4(%edi),%eax
+    af064:	88 01                	mov    %al,(%ecx)
+
+-- the pad byte re-read from the object on every pass, because the
+destination may be the object. The RETURN value is the number that came out
+of the RING, so a caller that reads it as "bytes written" is wrong by the
+pad; the destination is always exactly `n` bytes long.
+
+`FIFO8_write` has no matching behaviour: it clips to the free room and
+returns what it took, and a full ring takes nothing. So the pair is
+asymmetric on purpose -- the read side feeds something that must have a
+sample every period (the voice path) and the write side must not overrun.
+
+### F8753. `TONE_detect` is TONE_filter's FIR plus TONE_kill's biquad, and that is what names five fields of the tone object
+
+*2026-08-31.* `TONE_detect` (0xaf9f0, 422 bytes) has no format string and no
+typed callee, so nothing above evidence class 3 was available for its
+fields. What settles five of them is that its arithmetic is another
+reconstructed function's, instruction for instruction:
+
+    w  = c[1]*z2 + x + c[2]*z1
+    y  = c[0]*z2 + w + z1
+    z1 = z2 ; z2 = w
+
+is exactly `TONE_kill`'s already-verified shape, with `x` the FIR output,
+`c[0..2]` read INLINE from +0x48/+0x4c/+0x50 rather than through a pointer,
+and the state at +0x54/+0x58. So those five are `det_coef[3]`, `det_z1` and
+`det_z2` -- the roles come from the identity, not from the way they read.
+
+The two smoothed powers are then
+
+    e_res = e_res*0.95 + (fir^2 - biquad^2)*(1 - 0.95)
+    e_tot = e_tot*0.95 + fir^2          *(1 - 0.95)
+
+and **both constants are DOUBLES, one of which is not 0.05**: the object's
+second word is 0.050000000000000044, exactly `fl(1.0 - 0.95)`. That is a
+compile-time fold of the complement, so the author wrote one pole and
+derived the other, and `TONE_DETECT_POLE` reproduces the fold rather than
+the value.
+
+`e_res` and `e_tot` are `float` locals and the object proves it: each is
+spilled to a 4-byte slot and reloaded once per pass (0xafb1d and 0xafb35),
+which is a narrowing a wider local would not do.
+
+The verdict is three-way -- 2 below the power floor at +0x14, then
+`e_tot * (+0x0c) >= e_res` -- and +0x0c and +0x14 keep neutral names,
+because "a ratio" and "a floor" is all the code says about them.
+
+### F8754. `silence_create` checks its allocation and `FIFO8_create` does not, in the same span
+
+*2026-08-31.* Two creators forty bytes apart in the blob, both taking an
+optional caller-supplied object and allocating when handed NULL:
+
+    b03f1:	call   sysdep_malloc
+    b03f6:	89 c2  mov %eax,%edx
+    b03f8:	31 c0  xor %eax,%eax
+    b03fa:	85 d2  test %edx,%edx
+    b03fc:	75 bf  jne  ...            <- silence_create returns NULL on failure
+
+    aefb6:	call   sysdep_malloc
+    aefbb:	89 c3  mov %eax,%ebx
+    aefbd:	0f b7 44 24 12  movzwl ... <- FIFO8_create dereferences it at once
+
+`FIFO8_create` stores the ring pointer straight into the block it has just
+been handed, so an out-of-memory there is a null dereference. Neither
+behaviour is a defect this project may repair -- the reconstruction is of
+what the object does -- and both are written as the object has them.
+
+Neither arm can be driven from a fixture: the harness allocator does not
+fail on request, so `t_fdspksil` records the check rather than testing it,
+and the mutation set carries a NOT-here note instead of a mutant that would
+read NOT CAUGHT while modelling nothing.
+
+### F8746. Voice is a strict three-layer pipeline, and the layering is what makes it parallelisable — measured, so it need not be re-derived
+
+*2026-08-31.* At `852cb72c` (the ring detector landed, nothing else of voice
+written) `tools/service.py --list other` reported 59 symbols / 21,741 bytes
+for "voice / Caller ID / ring detect only". Ten of those are Caller ID
+(`cid_modem` 1,487, `data_formatted_output` 1,310, `cid_progress` 992,
+`reset_cid` 517, `cid_create` 204, `create_cid` 183, `cid_get_strings` 145,
+`data_unformatted_output` 117, `cid_freq_sampl` 107, `cid_delete` 86 —
+5,148 bytes). **Voice itself was therefore 49 symbols / 16,593 bytes reached
+by an entry point, plus `voice_set_online` (47) and `voice_set_duplex` (45)
+in the no-entry-point bucket: 51 symbols / 16,685 bytes.**
+
+`readyqueue.py` per span shows it is not a flat list but three layers, and
+almost nothing crosses a layer boundary sideways:
+
+| layer | what | bytes |
+|---|---|--:|
+| 1 | the leaves: `FIFO8_*`, `silence_{create,delete,is_more_then}`, `TONE_{detect,delete}`, `_status`, `FDSP_Kernel_{InitObj,SetInternalBeepInProgress}`, `beepgen_*`, `create_dtmf`, `FDSP_DP_Run`, `detector_set_*`, `vce_*`, `STRM_VCE_GetFDSPEnvironmentalParams`, `voice_dle_command`, the MTK tables | ~4,700 |
+| 2 | the per-block path: `silence_progress`, `MTK_phasor`, `TONE_create`, `detector_{create,progress,delete}`, `FDSP_DP_{Create,Delete}`, `voice_{rx,tx,duplex,set_rx,set_tx,online}`, `voice_set_{online,duplex}` | ~6,300 |
+| 3 | the service faces: `VOICE_{create,delete,command,process}` and `voice_{create,command,modem,delete}` | ~5,700 |
+
+**Layer 1 has no internal edges at all**, which is the fact worth recording:
+its four spans (`voice.c#3 +3`, `Fdspkrnl.c +13`, `Beepgen.c +3` and the
+voice share of `class1tx.c +94`) were taken by four agents at once with no
+coordination beyond a file-ownership split, and merged with conflicts only in
+`docs/findings.md`, `docs/deviations.md` and the two mutation JSONs — never in
+`src/`. Layer 2 then opened in one step: `voice_online` went from "needs 2" to
+READY the moment `beepgen_sample` and
+`FDSP_Kernel_SetInternalBeepInProgress` landed, and `voice_rx` and
+`voice_set_rx` from "needs 5" to "needs `silence_progress`".
+
+**THE SPAN LABELS MISLEAD HERE MORE THAN USUAL, and CLAUDE.md's rule is not
+enough on its own.** "Do not read a span name as a module name" was written
+for V.32, where a span named `V32mod.c` held V.22. Voice is the same defect in
+a worse place: **six voice symbols sit in a span labelled `class1tx.c +94`**,
+which is the FAX span — the largest thing left in the object and deliberately
+LAST. `voice_command` (802), `voice_create` (642), `voice_online` (508),
+`voice_modem` (338), `voice_dle_command` (196) and `voice_delete` (181), 2,667
+bytes, are voice and not fax, and a pass that took "fax is last" to mean "skip
+`class1tx.c +94`" would leave 16% of voice permanently unscheduled. File
+layout is ours; they belong in `src/service/`, and each such file's banner
+names the span it came from so the next reader is not surprised twice.
+
+**`service.py`'s `other` bucket does not separate the three services**, so the
+Caller ID subtraction above is by name and by hand. That is fine for a
+scheduling figure and is not evidence; `tools/closure.py` from the three entry
+point sets is what would settle it if a sharper number is ever needed.
+### F8755. `silence_progress` converts a setting through the x87 as unsigned, and GCC 14 folds the conversion the object performs
+
+*2026-08-31.* At 0xb05a3 the object takes the answer to its second settings
+query and does
+
+    b05a3:	55                   	push   %ebp        (zero)
+    b05a4:	50                   	push   %eax
+    b05a5:	df 2c 24             	fildll (%esp)
+    ...
+    b05c2:	db 5c 24 10          	fistpl 0x10(%esp)   (RC = toward zero)
+
+-- a 32-bit value zero-extended to 64 bits, converted to floating point, and
+truncated back to `int`. That is `(int)(double)(unsigned int)v`; a plain
+`(int)v` needs neither instruction, so the cast chain is carried by the
+disassembly and `src/service/silence.c` spells it.
+
+**It cannot be probed from the modern side.** For `v < 2^31` the chain and a
+plain cast agree exactly. For `v >= 2^31` the double is out of `int` range,
+which C leaves undefined: the x87 answers `0x80000000` and **GCC 14 folds
+the whole chain to `(int)v`** -- measured, `(int)(double)0xffffff00u` gives
+-256 on GCC 14 at `-O2 -mfpmath=387` and the blob gives -2147483648.
+
+So `t_fdspksil` sweeps the setting only to `0x7fffffff`. Driving it past
+that would compare two compilers' treatment of undefined behaviour and
+report it as a defect in `src/`, which is the failure mode CLAUDE.md's
+"never edit `src/` to make the modern tier green" rule exists to stop --
+here in its other direction, where the test rather than the source is what
+must not chase the modern compiler.
+
+The difference is confined to the debug line: the value only reaches
+`s->count > level`, and both readings are negative, so the run always
+escapes on the first silent block either way.
+
+### F8747. `silence_level_table` prints as 2699, 7500 and 24299, its comment said 2700/7500/24300, and only ONE ULP direction per row is catchable at all
+
+*2026-08-31.* Two results, from re-reading a function another agent had
+already written and passed. Both were found by an INDEPENDENT SECOND READ of
+the same 623 bytes, which is the only cross-check a single-author
+reconstruction ever gets, and the second result contradicts that read as well.
+
+**THE COMMENT WAS WRONG IN TWO OF THREE FIGURES.** `silence.c`'s table header
+said the three live rows turn back into "2700, 7500 and 24300" through
+`SILENCE_FULLSCALE2`. The object loads both operands with `flds` and
+multiplies at x87 EXTENDED precision (0xb052e-0xb053c), so the product of two
+24-bit mantissas is EXACT in a 64-bit one, and 0xb054b then sets
+round-toward-zero with `or $0xc00` before `fistpl`. Truncating the exact
+products
+
+    2699.999989941716    7500.000216186047    24299.999177098274
+
+gives **2699, 7500, 24299**. Round each product to a `float` first -- which is
+what a compile-time fold in `float` does, and what a reader does in their head
+-- and you get the round numbers the comment claimed. Both sides of the
+differential print whichever it is, so nothing in the suite could ever fail on
+it: findings F6100 and F6103's shape exactly, in a comment written three hours
+earlier.
+
+**AND THE TABLE ITSELF WAS COVERED BY NOTHING.** `fdspksil.json` reached it
+only through "the threshold test runs the wrong way round", which moves the
+COMPARISON and leaves the four words untouched -- so a mistyped digit in any
+row was untested. Three one-ULP mutants now cover it and are caught.
+
+**THE INTERESTING PART IS WHICH ONES.** The obvious expectation is six mutants,
+one per row per direction. Registering all six gives three permanent NOT CAUGHT
+rows, and the reason is that **the threshold branch catches none of the six.**
+The value reaching `acc > silence_level_table[lvl]` is always a block sum times
+0.00125; that map steps by about 1.28 ULP and therefore SKIPS floats, so a
+one-ULP move of the threshold has no preimage on either side and no input the
+function accepts can land in the gap. Every catch is the DEBUG LINE instead,
+and only where the one-ULP step crosses an INTEGER in the truncation above.
+Rows 1 and 3 sit just below an integer, so only a step UP crosses it; row 2
+sits just above one, so only a step DOWN does. One direction per row, and
+which direction is a property of the constant rather than of the code.
+
+**THE SECOND READ GOT THAT PART WRONG TOO, AND THAT IS THE POINT.** It reported
+rows 1 and 3 catchable in both directions with row 2 high as the single gap.
+Running the suite says the opposite: rows 1 and 3 are catchable UP only, row 2
+DOWN only. An analytical argument about which mutants a test can distinguish
+is a hypothesis, and `mutate.py` is the measurement -- the same relationship
+`extcheck.py` has to `dis.py` (finding F2402, one report in five real). Neither
+read was worthless and neither was authoritative; the run settled it.
+
+**What the second read DID settle, by agreeing:** the sixteen bytes
+(`bf800000 3628c2a3 36ea63aa 37bddaf7`) byte for byte, and that
+`silence_progress` is plain cdecl with all five arguments on the stack despite
+being `t`/LOCAL in the symbol table -- the prologue reads 0x30(%esp) upward
+after `sub $0x2c`. That is F8770's correction of F8462 confirmed a second time
+on a second function: **LOCAL predicts nothing about the calling convention;
+read the prologue.**
+### F8780. `MTK_phasor` reconstructed: a quarter-wave oscillator whose two spellings of 2*pi are not the same number
+
+*2026-08-31.* 271 bytes at 0xb0690, `src/service/mtk.c`, proved by
+`t_mtkphasor` at 189,701 checks with a 19-mutant set at 19 caught. Finding
+F8772 wrote the decode out when it declined the function; this confirms it
+against `tools/dis.py` line by line and adds what the decode did not settle.
+
+**THE TWO 2*PI CONSTANTS ARE DIFFERENT NUMBERS AND BOTH ARE THE AUTHOR'S.**
+
+    .rodata.cst4 0x57c   6.2831854820251465   the FLOAT, the fmodf modulus
+    .rodata.cst8 0x1f8   6.28318530718        a DOUBLE, eleven decimals
+    .rodata.cst8 0x208   3.141592653589793    the double NEAREST pi
+
+0x1f8 is *not* the double nearest 2*pi -- 0x182d4454fb211940 is; the object
+has 0xea2e4454fb211940, which is what a typed `6.28318530718` gives. 0x208
+*is* the double nearest pi. So the author typed a truncated 2*pi and a full
+pi in the same function, and `TONE_generate` carries the same truncated one.
+The float at 0x57c cannot take sides: the float nearest 6.28318530718 and
+the float nearest 2*pi are the same float.
+
+That mismatch is not cosmetic. It is what makes deviation D993: the
+reduction is against the LARGER constant and the correction adds the
+SMALLER, so a phase in `[-6.357343096397017e-08, 0)` comes back rounded up
+to the float 2*pi, scales to 1024.0000038, and indexes `MTK_cos_sign[4]`.
+
+**`fprem` IS THE ONLY ONE IN THE OBJECT, and no `fmod` symbol is defined or
+referenced anywhere in the 1.2 MB.** That is F8762's argument for `fsin` and
+`fcos`, and it says the original's build expanded the remainder inline. No
+pragma is set here, and the reason is measured rather than assumed: GCC 14
+at `-O3 -mfpmath=387` already emits the `fprem` loop for `fmodf` with an
+out-of-line fallback, so the only thing a
+`#pragma GCC optimize("unsafe-math-optimizations")` would buy is a
+period-compiler mnemonic, at the price of licensing reassociation across an
+interpolation the differential tier is currently exact on.
+
+**THREE MUTANTS THE DIFFERENTIAL TIER PROVABLY CANNOT SEE**, all recorded as
+NOT-here notes rather than left to read NOT CAUGHT:
+
+- The first `p->phase = x` is dead in the object too -- both exits store the
+  advanced angle over it.
+- `(short)y` versus `(int)y` agree over the whole reachable domain, because
+  the reduction bounds y below 1024. The sixteen bits are `fists` and
+  `cwtl`, which is codegen evidence.
+- `s >= pi` versus `s > pi` differ only at exactly the double pi, and no
+  pair of floats sums to it: pi is M * 2^-51, so a float partner would need
+  to be within 2^-28 of it and the float spacing there is 2.4e-07.
+
+A fourth is the one F8772 predicted trouble from. The object applies each
+sign to the 80-bit value the register still holds (`fsts`, `fmuls`,
+`fstps`), which is why the source is two statements per output; under
+`-mfpmath=387` -- both builds here -- GCC keeps the wide value for the
+one-statement spelling too, so that claim is `compare.py`'s and not a
+mutation set's.
+
+**TWO FORWARDERS WERE DELETED, and the second one is easy to miss.**
+`test/harness/runtime.c` defined an unprefixed `MTK_phasor` forwarding to
+`ref_MTK_phasor` (F8463) and `test/interop/runtime64.c` defined an aborting
+stub of the same name; both collide with `src/` now and both are gone. The
+interop one is not mentioned by F8463 or F8772 and is only reachable through
+`make phase`, so a `make one`-only session would not have found it.
+
+**AND THE HAZARD F8772 NAMED IS CLEARED.** `TONE_generate`'s existing test
+passed because the oscillator under it was the blob's; it is ours now and
+`t_fdspkrnl` is still green at 1,416 checks for that section and 45,905
+across the binary.
+
+### F8781. `TONE_create` is a 2100 Hz answer-tone builder, and its allocation gate has TWO conditions rather than one
+
+*2026-08-31.* 521 bytes at 0xaf690, `src/service/fdspkrnl.c`, with
+`TONE_CFG` (`.data` 0x83c0, 48 bytes) and the `ToneLPF` it points at
+(`.data` 0x8400, 212 bytes). Proved by `t_tonecreate` at 86,136 checks,
+mutation set 33 of 33 caught.
+
+**THE CONFIGURATION IS A SEPARATE 48-BYTE TYPE AND THE OBJECT SAYS SO.**
+`rep movsl` with `$0xc` in `%ecx` at 0xaf6c5 copies twelve words from `cfg`
+over the head of a 0x1c8-byte tone object, and both configs in `.data` are
+0x30 bytes. So the author cannot have declared them as whole tone objects,
+and `struct fdsp_tone_cfg` is a real type rather than a convenience;
+`fdspkrnl.c` asserts its eight named fields against `struct fdsp_tone`'s
+offsets so the two layouts cannot drift apart silently.
+
+**THE GATE IS `test %edx,%eax` OVER TWO `set` RESULTS** (0xaf6d9): `setne`
+on "this call allocated the object" and `setg` on "fir_len > 0". Three of
+the four combinations skip all four `sysdep_malloc` calls, and the FIR loop
+and the biquad stores still run -- which is deviation D995, a wild write of
+seven floats whenever the object was allocated and the length was not
+positive. Reading the gate as one condition invents a function that cannot
+fault.
+
+**WHAT THE COEFFICIENTS ARE.** The detector's three are a resonator at the
+tone frequency with the configured pole radius:
+
+    det_coef[0] = -2 cos(w)        det_coef[1] = 2 r cos(w)
+    det_coef[2] = -r*r             w = 2*pi*freq/8000, r = +0x018
+
+which is what names +0x018 `pole_radius`, and `iir_coef` (+0x1bc) is set to
+point at `det_coef` itself rather than at the 20-byte block -- the two
+filters share one coefficient triple. The 20-byte block is a different
+filter entirely: a 60 Hz notch with poles at radius 0.96, built from a
+SECOND phasor at 0.04712389f (2*pi*60/8000) as
+`{-0.96*0.96, 1, 1.92 cos, -2 cos, 1}`. Only that second phasor is zeroed by
+the `rep stos` at entry; the tone's has both its fields written.
+
+**2*pi/8000 IS TYPED SHORT HERE TOO.** `.rodata.cst8` 0x1c0 is
+0.0007853981633975, three digits short of the nearest double, which is the
+same habit as `MTK_phasor`'s 6.28318530718 (finding F8780) in the function
+next door.
+
+**`ToneLPF` IS TWO DIFFERENT ARRAYS AND NEITHER GETS A `ref_` ALIAS.** The
+blob defines the name twice, both LOCAL: `r` at 0xd040, 53 shorts, the
+fixed-point pump's, already in `src/dsp/fpm_tone_cfg.c`; and `d` at 0x8400,
+53 floats, this one. They are the same filter at different quantisations
+rather than a copy -- the float peak is 0.0418356508 and the short peak is
+1370, and 0.0418356508 * 32768 is 1370.9. Because the name is used by two
+translation units, `symmap.py` refuses to globalize either, so the test
+reaches the float one through `ref_TONE_CFG.fir_proto` -- the blob's own
+pointer to its own array, which is a direct comparison and not a lookup.
+
+**`TONEamode_CFG` IS DECLINED, and the reason is ownership.** It is 48 bytes
+at `.data` 0x8240, `d` and not `D`, and the only relocation anywhere in the
+1.2 MB that names it is at 0xad4a3, inside `detector_create` (0xad480) --
+which needs `detector.h` and belongs to another agent's wave. A `static`
+whose one reader lives in someone else's translation unit is exactly the
+case F8772 declined `silence_level_table` on, and the answer is the same:
+write it with its reader. Its contents are 980 Hz, amp 0.353599995,
+duration 0 (endless), 0.75, 0.01, 0.000199999995, pole radius 0.9375, a
+NULL `fir_proto`, fir_len 53, and three zero words -- and that NULL with a
+positive length is worth checking against D995 when someone does write it.
+
+### F8782. `FDSP_DP_Create` and `FDSP_DP_Delete`: the kernel's constructor names its own two arguments, and both functions dereference a channel before they test it
+
+*2026-08-31.* 650 bytes at 0xae5c0 and 157 at 0xae520, both written into
+`src/service/fdspkrnl.c` with the two `.bss` words they touch. Proved by
+`t_fdspdp` at 24,580 checks, mutation set 22 of 22 caught.
+
+**THE ARGUMENTS ARE NAMED BY THE OBJECT'S OWN FORMAT STRING**, which is
+evidence order 1 and is why they are not `a` and `b`:
+`"ver 120 sRxSamplesDelay %d ,sTxSamplesDelay %d \n"` at `.rodata.str1.4`
+0x12f30. The RX delay is stored into `chan_a->offset` and the TX delay into
+`chan_b->offset` (0xae6c2), so the string also settles which channel is
+which direction -- something four already-reconstructed functions in the
+same file could not say.
+
+**BOTH ARE `short`** (`movswl` at 0xae5de and 0xae5e3), and `int_00` is
+`(sRxSamplesDelay >= 0) ? 2 : 0` written branchlessly as
+`sar $0x1f; not; and $0x2`. It lands on the field `FDSP_Kernel_InitObj` has
+just set to 2, so the only thing this function can do to it is clear it, and
+only a NEGATIVE rx delay does.
+
+**THE TWO `offset` STORES ARE INSIDE THE ALLOCATING ARM.** A caller handing
+in an existing kernel gets it re-initialised and keeps its old offsets --
+`t_fdspdp` asserts that directly, because a reader who moved the two stores
+out of the `if` would pass every other check in the file.
+
+**AND BOTH FUNCTIONS READ THROUGH A CHANNEL POINTER BEFORE TESTING IT.**
+`FDSP_DP_Delete` does `mov 0x14(%ebx),%eax; mov 0x1680(%eax),%edx` at
+0xae533 and only asks whether `chan_a` was NULL at 0xae540; `chan_b` is the
+same three instructions later. `FDSP_DP_Create` stores both offsets through
+`chan_a` and `chan_b` at 0xae6c2 BEFORE it tests whether the allocation
+chain succeeded. So the NULL tests in `Delete` guard `sysdep_free` and
+nothing else, and the only caller that can produce a kernel with a missing
+channel is `Create`'s own out-of-memory path -- which the harness allocator
+cannot drive, so all three sites are recorded at their definitions rather
+than tested. This wave's deviation numbers (D993-D995) are spent; the row
+these want is the next block's.
+
+**`uCorrelationReportsNo` IS WRITE-ONLY IN THE WHOLE OBJECT.** A reverse
+scan of `.bss` 0x8e8 finds exactly one relocation against it, the store at
+0xae61d. Its name is the author's and nothing in the 1.2 MB reads it back,
+so nothing here says what it counts.
+
+**Both globals are external in `src/` and `b` in the blob**, which is the
+trade `bInternalBeepInProgress` in the same file already makes: a `static`
+cannot be compared against the blob's copy, and `symmap.py` renames the
+blob's so the two sides keep their own.
+
+**Two mutants are NOT-here notes.** The three pointer-clearing stores at
+0xae729 are overwritten by the allocations that follow on every path the
+harness can produce, and the ORDER of the two channel allocations (chan_b
+first, then chan_a) and of the two tap allocations is invisible because each
+pair is the same size -- the books are identical either way. Both are read
+from the disassembly and written down instead.
+
+### F8785. `struct voice_ctx` gets a home, a size, and eighteen fields it did not have
+
+*2026-08-31.* The type was introduced by the `voice_dle_command` wave in
+`include/dsplib/voicecmd.h`, modelled as far as that one function could see
+it: `unsigned char pad_0000[0x744]` and two int flags. Writing the three
+per-block handlers reaches far more of it, and `voice_create` settles what
+`voicecmd.h` could only leave open:
+
+    ac247:	c7 04 24 dc 07 00 00 	movl   $0x7dc,(%esp)
+    ac252:	call   sysdep_malloc
+    ac268:	b9 dc 07 00 00       	mov    $0x7dc,%ecx
+    ac275:	call   sysdep_memset
+
+So `sizeof` is 0x7dc, and it is measured rather than bounded. The definition
+moved to `include/dsplib/voice.h`, which is now its one home; `voicecmd.h`
+includes that file and defines nothing. **The TAG kept its original spelling.**
+`struct voice` would have read better and `src/service/voicecmd.c` already
+names `voice_ctx`, that file belonged to another agent in this wave, and a
+rename to make a name prettier is not worth a cross-agent edit.
+
+What `voice_create` types by construction, which is the strongest grade
+available for most of these -- a callee that takes the value:
+
+    +0x000  struct beepgen_config   copied whole, handed to beepgen_create
+    +0x010  mode = 2                +0x014 int_0014 = 4
+    +0x018  beepgen_create          +0x01c detector_create
+    +0x020  handler = voice_online  +0x024 FIFO8_create
+    +0x028  silence_create          +0x034 FDSP_DP_Create
+    +0x740  beep_done = 1           +0x744/+0x748 the two DLE flags = 0
+    +0x74c  out_format = 0          +0x758 rate = 8000  +0x75a bits = 8
+    +0x75e/+0x760/+0x762 = 0x3f     +0x764 = 0
+
+`beep_done`, `out_format`, `underrun` (+0x75c) and `detector_enable` (+0x762)
+are named from what the handlers DO with them and are usage inference, the
+weakest grade; `voice.h` says so at each. `detector_enable` is the least weak
+of the four, because `voice_set_online` hands it to `detector_set_enable` and
+that callee types it.
+
+**The staging area at +0x38 and the float buffer at +0x100 are bounded by each
+other and by nothing else.** `voice_tx`'s `lea 0x100(%edi)` is what says the
+floats start there; nothing says where either array ends. The lengths in
+`voice.h` fill the space up to the next field this tree has read and are
+labelled as such. The 200 that falls out for the staging area is 22 bytes
+short of what `voice_tx` reads into it at 11025 Hz, which is deviation D996.
+
+### F8786. `voice_online` types `FDSP_DP_Run`'s never-loaded sixth argument, and a sibling is what does it
+
+*2026-08-31.* D986 recorded that `FDSP_DP_Run` (0xae490) takes seven arguments
+and never loads the sixth, and `beepgen.h` typed that slot `void *unused`
+because the function's own 138 bytes carry no evidence about it. A function's
+own body is not the only evidence there is.
+
+`voice_online` (0xabf50) has the same signature slot for slot -- and that is
+not an assertion about layout, it is what `voice_duplex` (0xb01e0) proves by
+forwarding arguments 1 through 6 of its own into the `FDSP_DP_Run` call
+unchanged:
+
+    b0203:	8b 5c 24 38          	mov    0x38(%esp),%ebx   <- its arg2
+    b0221:	89 5c 24 08          	mov    %ebx,0x8(%esp)    <- the call's arg3
+    b01e3:	8b 4c 24 44          	mov    0x44(%esp),%ecx   <- its arg5
+    b01ff:	89 4c 24 14          	mov    %ecx,0x14(%esp)   <- the call's arg6
+
+And `voice_online` WRITES that slot, as sixteen bits, twice:
+
+    ac014:	66 89 0f             	mov    %cx,(%edi)
+    ac063:	66 c7 06 00 00       	movw   $0x0,(%esi)
+
+So the slot is a `unsigned short *`. `voice_tx` (0xafd60) says what it is FOR:
+it reads `*that` as the number of escaped bytes waiting in the receive buffer
+and writes back how much room the FIFO now has (`170 - fill`, floored at
+zero), which makes it the HOST BYTE count against `countp`'s SAMPLE count.
+`beepgen.h`, `voice.h` and D986 all now say `unsigned short *hostcount`.
+
+The general point is the one CLAUDE.md's evidence order already makes and this
+is a clean instance of: grade 2 is "a callee or caller that types it", and a
+SIBLING with a shared signature is the same kind of evidence arriving from a
+third direction. A slot no function reads is not a slot no function types.
+
+### F8787. All five of the voice block symbols are GLOBAL, so F8770's regparm hazard does not arise -- and the prologues were read anyway
+
+*2026-08-31.* F8770 corrects F8462: a LOCAL blob function is not automatically
+`regparm(2)`, and the way to settle it is the callee's PROLOGUE and not the
+symbol table. The five symbols in `src/service/voicedp.c` are all `GLOBAL` in
+`readelf -sW`, so GCC 3.4 gave them the ordinary convention whatever it does
+to statics, and the `ref_` aliases in `t_voicedp` and `t_voicedptx` carry no
+attribute.
+
+That is the symbol table, which is the thing F8770 says not to trust, so each
+prologue was read as well:
+
+    abf5b:	8b 6c 24 30          	mov    0x30(%esp),%ebp   voice_online
+    afd70:	8b 44 24 48          	mov    0x48(%esp),%eax   voice_tx
+    b01e3:	8b 4c 24 44          	mov    0x44(%esp),%ecx   voice_duplex
+    abef3:	8b 4c 24 10          	mov    0x10(%esp),%ecx   voice_set_online
+    abf28:	8b 54 24 10          	mov    0x10(%esp),%edx   voice_set_duplex
+
+Every one of them fetches its first argument from the stack before touching
+`%eax` or `%edx`, which is what cdecl looks like and what `regparm(2)` never
+does. The two agree here; the point of writing it down is that the agreement
+was checked rather than assumed.
+
+`detector_delete` (0xad620) is GLOBAL too and reads `0x10(%esp)` into `%esi`
+at 0xad627, same answer.
+
+
+### F8788. `beepgen_config`'s second slot is the host's SETTINGS CALLBACK, and beepgen calls it with the wrong number of arguments
+
+*2026-08-31.* `include/dsplib/beepgen.h` types the sixteen-byte host block's
++0x04 as `void (*fn_04)(void *modem)`, because the only reconstructed use was
+`beepgen_start_beep`'s, which calls the copy at `beepgen` +0x11c with one
+argument and ignores any result. Two sites in `voice_set_rx` (0xaf190) say
+what it actually is.
+
+**It is passed to `silence_create` as that function's `query`:**
+
+    af1c8:	8b 4b 04             	mov    0x4(%ebx),%ecx    <- cfg.fn_04
+    af1cb:	89 4c 24 08          	mov    %ecx,0x8(%esp)    <- arg 3
+    af1db:	call   silence_create
+
+and `silence.h` -- written from `silence_progress`, independently -- types
+that parameter `unsigned int (*)(void *obj, int what)`.
+
+**And it is CALLED here, with two arguments, for an unsigned answer:**
+
+    af226:	b9 48 00 00 00       	mov    $0x48,%ecx
+    af237:	89 4c 24 04          	mov    %ecx,0x4(%esp)    <- arg 2
+    af23b:	8b 03                	mov    (%ebx),%eax       <- cfg.modem
+    af240:	ff 53 04             	call   *0x4(%ebx)
+    af243:	31 d2                	xor    %edx,%edx
+    af24a:	52                   	push   %edx
+    af24b:	50                   	push   %eax
+    af24c:	df 2c 24             	fildll (%esp)            <- (float)(unsigned)
+
+`push 0; push %eax; fildll` is GCC's unsigned-32-to-float sequence, so the
+return type is `unsigned int` and not `int`. Three such calls, at +0x48,
++0x8a and +0x8b, each scaled by 1/128 into a per-format receive gain.
+
+So the slot is `unsigned int (*)(void *, int)`, and `beepgen_start_beep`'s
+one-argument call of the same function pointer reads a stack word the caller
+never wrote. **That is the object's, and it is cdecl, so it does not corrupt
+anything** -- the callee simply sees rubbish where its `what` should be.
+
+`beepgen.h` IS NOT CHANGED BY THIS FINDING, deliberately. Retyping the field
+would need a cast at `beepgen_create`'s copy and another at the call, on two
+functions already measured, to buy a comment; `voicedp.c` casts at its own
+call site instead and points here. Whoever next touches `beepgen_start_beep`
+should decide it with `byteident.py` rather than from this paragraph.
+
+### F8789. `voice_rx` reads `*countp` as a SIGNED short once and as an unsigned short everywhere else
+
+*2026-08-31.* The first load is the odd one:
+
+    af2ed:	0f bf 02             	movswl (%edx),%eax       <- sign-extended
+    af2fa:	0f b7 d8             	movzwl %ax,%ebx          <- and back down
+
+and every later read of the same address is `movzwl` (0xaf3bd, 0xaf606,
+0xaf510). The sign-extended value is used for exactly one thing: it is
+`silence_progress`'s third argument, and `silence.h` declares that parameter
+`short`.
+
+That is F613's forced case and it settles the source rather than leaving a
+choice: `short n = *countp;` where `countp` is the handlers' shared
+`unsigned short *`, with `(unsigned short)n` for the loop bounds. The two
+readings agree over every value below 32768, which is every value the object
+can produce, so no test can separate them -- the disassembly is the only
+evidence and it is unambiguous.
+
+The dead `jle` at 0xaf30e is the corroboration: the compiler emitted a
+`<= 0` guard on a value it had just zero-extended and already tested against
+zero, which is what a signed promotion of an unsigned short looks like.
+
+### F8790. `voice_rx`'s DC smoothing keeps 99% of the OLD estimate, and reading it the other way round survives every check but the second block
+
+*2026-08-31.* The fold is six x87 instructions and two `.rodata.cst8`
+doubles:
+
+    af5d1:	dd 05 b8 01 00 00    	fldl   0x1b8      <- onto the block mean
+    af5d7:	dd 05 b0 01 00 00    	fldl   0x1b0      <- onto the stored dc
+    af5dd:	d8 8f cc 07 00 00    	fmuls  0x7cc(%edi)
+    af5e3:	d9 c9                	fxch   %st(1)
+    af5e5:	de ca                	fmulp  %st,%st(2)
+    af5e7:	de c1                	faddp  %st,%st(1)
+
+and the section holds them in the order 0.99, 0.01:
+
+     01b0 ae47e17a 14aeef3f 7b14ae47 e17a843f
+
+So 0x1b0 is 0.99 and it is the one `fmuls 0x7cc` applies -- to the STORED
+estimate -- while 0x1b8's 0.01 travels down the stack to the block mean. The
+result is `dc = dc * 0.99 + mean * 0.01`: a 100-block time constant, which is
+also the only reading that makes physical sense for a DC tracker.
+
+**This reconstruction had it backwards and nothing structural caught it.**
+`mean * 0.99 + dc * 0.01` has the same instruction sequence, the same
+constants, the same register pressure and the same everything a codegen
+comparison can see; it is a different function only in what it computes. The
+first block of any sequence is the SEED path, which does not use either
+weight, so a fixture that ran one block per context would have passed --
+`t_voicedprx` runs four, and the mismatch appears on the second, in the low
+sixteen bits of `+0x7cc`.
+
+Two lessons, and the second is the one worth keeping:
+
+- **Read a constant's ADDRESS out of the section dump, not out of the order
+  it is loaded in.** The object pushes 0x1b8 first precisely so that it ends
+  up deepest; "first loaded" and "first operand" are opposites here.
+- **A stateful estimator needs a MULTI-BLOCK fixture.** One call per context
+  exercises the seed and nothing else, and every recursive filter in this
+  object has that shape. The rule is the same one D955/F8587 makes about
+  planting a subscript: the fixture has to reach the state, not just the
+  code.
+
+### F8791. The `>> 2` in `voice_rx` costs two bits of u-law range and makes its own DLE shield unreachable
+
+*2026-08-31.* The receive loop converts a float to a 16-bit integer and then
+shifts it right by two before encoding:
+
+    af410:	d8 0d 54 05 00 00    	fmuls  0x554          <- 32767.0f
+    af424:	df 5c 24 32          	fistps 0x32(%esp)
+    af42c:	0f b7 44 24 32       	movzwl 0x32(%esp),%eax
+    af431:	98                   	cwtl
+    af432:	c1 f8 02             	sar    $0x2,%eax
+    af438:	call   linear2ulaw
+
+so a full-scale float reaches `linear2ulaw` as +/-8191 rather than +/-32767 --
+12 bits into a coder built for 14. That is a scaling choice and this project
+does not second-guess it.
+
+What it also does is make the DLE shield forty instructions later dead, and
+that is measurable rather than arguable. An exhaustive sweep of
+`linear2ulaw` over its whole 16-bit domain finds 0x10 for exactly 512 inputs,
+the contiguous run -16251..-15740; over the reachable [-8192, 8191] it
+produces no code below 0x1f at all. Deviation D984 records the shield;
+`t_voicedprx` carries the sweep, asserts the absence, and separately asserts
+that `linear2ulaw(-16250)` IS 0x10 -- because an absence measured with a
+broken call looks the same as an absence.
+
+**The general point is about coverage claims.** The fixture's first version
+asserted that the doubling HAD fired, which is the normal way to keep a
+mutation set honest, and it failed on every input because the arm cannot fire.
+The right answer was not to hunt for an input; it was to prove there is none
+and assert that instead. A coverage counter that can never move is F134's
+dead detector wearing the opposite sign.
+
+### F8748. The voice wave, closed: 49 symbols and 12,368 bytes in one session, and what the layering bought
+
+*2026-08-31.* F8746 measured voice as 51 symbols / 16,685 bytes over three
+layers at the ring-detect commit. It now stands at **10 symbols / 6,378
+bytes**, and the ring detector's own 8 symbols / 2,061 bytes went with it.
+Six agents, five worktrees, and no merge conflict in `src/` at all.
+The mutant total is read from `snapshot.json`, not summed from the agents'
+reports: 444 of 444 across fifteen suites, 0 NOT CAUGHT and 0 never
+recorded. It is three higher than the agents between them claimed, because
+F8747 added three to `fdspksil` after the fact.
+
+| wave | symbols | bytes | mutants |
+|---|--:|--:|--:|
+| ring detect (`voice.c#3`, `RD_*` + `RingDetector_*`) | 8 | 2,061 | 41/41 |
+| `Fdspkrnl.c +13` leaves + `silence_progress` | 13 | 2,304 | 101/101 |
+| `Beepgen.c +3` generators | 10 | 2,306 | 64/64 |
+| `vce_*`, `voice_dle_command`, the MTK tables | 5 + tables | 616 + 3,628 data | 46/46 |
+| `MTK_phasor`, `TONE_create`, `FDSP_DP_*` | 6 + tables | 1,599 + 268 data | 74/74 |
+| the per-block path, `voice_online` … `voice_set_tx` | 9 | 3,631 | 118/118 |
+| per-wave rows as reported | 51 | 12,517 | **444/444** |
+| **`service.py`'s measured delta** | **49** | **12,368** | |
+
+**QUOTE THE DELTA, NOT THE SUM.** The two figures differ by 2 symbols and 149
+bytes and neither is wrong: the per-wave rows are what each agent reported and
+count two DATA symbols (`silence_level_table`, 16 bytes, and `ToneLPF`, which
+`nm` shows as `d`/`r` and not `.text` at all), while `service.py`'s bucket
+counts CALL symbols only. The delta is the number to quote for remaining work,
+because it is the one measured the same way at both ends — 59 symbols / 18,746
+bytes of voice and ring detect before, 10 / 6,378 after. The data tables are a
+further 3,896 bytes and are counted by neither.
+
+**WHAT THE LAYERING BOUGHT, AND WHAT IT DID NOT.** F8746's claim that layer 1
+has no internal edges held: four agents took its four spans concurrently and
+the only conflicts were `docs/findings.md`, `docs/deviations.md` and the two
+mutation JSONs, all append-at-end and all resolved by keeping both sides.
+Layer 2 was NOT parallel in the same way — `voice_online` waited on
+`beepgen_sample`, `TONE_create` on `MTK_phasor`, `voice_rx` on
+`silence_progress` — and taking it as two agents on disjoint FILES rather than
+disjoint SYMBOLS is what kept it conflict-free.
+
+**THE ONE REAL COLLISION WAS A SCHEDULING ERROR, NOT A TOOL ERROR.** Two
+agents were briefed on `silence_progress` because the second brief was written
+from a `readyqueue` run against a branch that was one commit behind the first
+agent's final state. `readyqueue.py` was right about the tree it was given.
+**A ready set is only true of the commit it was measured at, and work in
+flight is invisible to it** — so re-measure at the moment of briefing, not at
+the moment of planning, and say in the brief which commit the list came from.
+
+It cost nothing and paid twice: the duplicate became an independent second
+read, which confirmed the committed table byte for byte and the calling
+convention from the prologue, and found a comment defect no test could fail on
+(F8747). That is the only cross-check a single-author reconstruction gets.
+Deliberately commissioning one for a function that matters is worth
+considering; arriving at one by accident is not a plan.
+
+**THREE THINGS THE WAVE ESTABLISHED THAT OUTLIVE IT.**
+
+1. **F8770's correction of F8462 is now confirmed on three functions.** LOCAL
+   in the symbol table predicts NOTHING about the calling convention: the
+   `vce_*` trio, `silence_progress` and `MTK_phasor` are all `t`/LOCAL and all
+   plain cdecl with every argument on the stack. Read the prologue.
+2. **A runtime forwarder lives in TWO files.** `test/harness/runtime.c` is the
+   one everybody greps; `test/interop/runtime64.c` had its own aborting
+   `MTK_phasor` stub, named by nothing and reachable only from `make phase`.
+   Writing a symbol means removing both.
+3. **A stateful estimator needs a multi-block fixture.** `voice_rx`'s DC
+   smoothing keeps 99% of the OLD estimate; the first reconstruction had the
+   two weights swapped, and that is invisible to every codegen check and to
+   any fixture that runs one block per context (F8790).
+
+**WHAT IS LEFT IS THE SERVICE FACES AND THE DETECTOR**, and it is no longer a
+leaf problem: `VOICE_process` (2,016), `voice_command` (802), `detector_progress`
+(814), `voice_create` (642), `VOICE_command` (548), `VOICE_create` (493),
+`detector_create` (411), `voice_modem` (338), `voice_delete` (181) and
+`VOICE_delete` (133). `detector_create` needs `TONEamode_CFG`, declined twice
+now on the same ground both times — it is `d`/LOCAL with its only referent
+inside `detector_create` itself, so it must be written WITH its reader
+(F8772's argument for `silence_level_table`, F8781 for this one, and F8781
+records its twelve words). `detector_progress` needs five data symbols.
+Everything else is blocked on those two and on each other.
+
+### F8800. The detector closure, written: two functions, seven file-local data symbols, and why the data was the blocker
+
+*2026-08-31.* `detector_create` (0xad480, 411 bytes) and `detector_progress`
+(0xad6e0, 814 bytes) into `src/service/detector.c`, with `status`
+(`.data` 0x8200), `tone_char` (0x8210), `tone_integration_threshold` (0x8214),
+`tone` (0x821c), `TONEamode_CFG` (0x8240), `enable` (`.rodata` 0xeecc) and
+`lookup_table` (0xeedc). All nine names are the blob's own.
+
+**THE BLOCKER WAS NEVER THE CALL GRAPH.** Every callee -- `create_dtmf`,
+`TONE_create`, `TONE_detect`, `dtmf_progress`, `cadence_create`,
+`cadence_progress`, `_status` -- has been written for some time. What blocked
+these two was the DATA: seven LOCAL symbols whose only reader in the whole
+1.2 MB is one of these two functions, which is the case F8772 declined
+`silence_level_table` on and F8781 declined `TONEamode_CFG` on. A `static`
+goes in the translation unit of its reader, so the data could not land until
+the reader did, and the reader could not be written without the data.
+
+**WHAT THE TABLES ARE.** Four tones -- 1300, 1100, 2100 and 2225 Hz -- each
+with an `enable` bit (2, 4, 8, 0x10), an integration threshold (25, 21, 12,
+25), an in-stream letter (`'e'`, `'c'`, `'a'`, `'f'`) and a status code
+(3, 4, 5, 6). The cadence arm's own letters are the immediates 0x62 `'b'` and
+0x64 `'d'` with codes 1 and 2, so the six events number 1..6 without a gap and
+the letter/code pairs are two spellings of one table. `lookup_table` is
+"147*2580369#ABCD", which is `low + 4 * high` over the DTMF plan in the order
+`dtmf_test` reports it.
+
+The span label is `Beepgen.c` and that is a LAYOUT label: this is voice-service
+code, `voice_create` is the only caller of `detector_create` in the object, and
+`struct detector` is `struct voice`'s +0x01c.
+
+Proved by `t_detector`.
+
+### F8801. The cadence arm's float-to-short scale is 16000, not full scale
+
+*2026-08-31.* `.rodata.cst4` 0x504, read at 0xad75d and again at 0xad7a0, is
+`0x467a0000` = **16000.0f**. It is easy to assume 32767 here and it is not
+that: a full-scale float sample reaches half of `short`'s range before the
+cadence detectors ever see it, so every envelope, threshold and
+`Get_Detection_Threshold_Table` value the cadence path works with is 6 dB down
+on what the same code would see fed from `zFLTUTL_Float2Linear`.
+
+The conversion is `(short)(samples[i] * 16000.0f)` written twice, once per
+cadence, and the object recomputes it rather than reusing the first result --
+`cadence_progress` may write through `samples`, so the compiler cannot hoist
+it and neither should the source.
+
+### F8802. `TONEamode_CFG`'s NULL `fir_proto` is patched from `TONE_CFG` before use, which closes F8781's D995 worry
+
+*2026-08-31.* F8781 recorded `TONEamode_CFG` as holding a NULL `fir_proto`
+with `fir_len` 53 and flagged it against D995 -- `TONE_create`'s FIR loop runs
+whenever the object was allocated, so a NULL prototype with a positive length
+would be a wild READ of 53 floats.
+
+It never happens. `detector_create` copies the config to a stack local
+(`rep movsl`, `$0xc` words, 0xad4bb) and immediately overwrites +0x1c from the
+GLOBAL `TONE_CFG`:
+
+    ad4c0:  8b 0d 1c 00 00 00    mov    0x1c,%ecx    <== R_386_32 TONE_CFG
+    ad4c6:  89 4c 24 4c          mov    %ecx,0x4c(%esp)
+
+0x4c - 0x30 is +0x1c, which `fdspkrnl.h` names `fir_proto`. So the four
+detector resonators share the 2100 Hz answer tone's 53-tap prototype -- the
+float `ToneLPF` at `.data` 0x8400 -- and only `freq` differs between them.
+`TONEamode_CFG` is the ONLY config in the object with a NULL there, and the
+only code that reads it repairs it first. D995 stands as written for a caller
+who supplies its own config; it has no reachable instance here.
+
+### F8803. `detector_create`'s third argument is the S-register getter, and its result is used UNSIGNED
+
+*2026-08-31.* The callback at 0x88(%esp) is called once, as `f(modem, 0x49)`
+(0xad522). 73 is `SREG_VOICE_DIALTONE_DETECT_DELAY`, and the chain that types
+it is `VOICE_create` -> `struct beepgen_config` -> `voice_create` ->
+`detector_create`, with `vce_get_sreg` at the far end. That is evidence class
+2 and it is what lets `+0x30` be named `dialtone_detect_delay` rather than
+left as `int_0030`.
+
+**THE ARITHMETIC IS `r * 50 / 4` AND THE OBJECT SAYS WHICH SPELLING:**
+
+    ad529:  8d 1c 80             lea    (%eax,%eax,4),%ebx     ; *5
+    ad52c:  8d 34 9b             lea    (%ebx,%ebx,4),%esi     ; *25
+    ad52f:  01 f6                add    %esi,%esi              ; *50
+    ad531:  c1 ee 02             shr    $0x2,%esi              ; /4, UNSIGNED
+
+`shr` and not `sar`, so the multiplicand is unsigned -- which is why the
+function-pointer type in `detector.h` returns `unsigned int`, matching the
+shape `silence_create` already takes. `* 25 / 2` would have produced one `lea`
+fewer and `shr $1`, and `* 12` no shift at all; the test sweeps 0, 1, 3, 7, 30
+and 255 against the blob, where those three spellings disagree.
+
+12.5 per second is one per 640 samples at 8 kHz, which is the order of the
+dial-tone cadence's own verdict interval -- but **nothing in the 1.2 MB reads
+this field back**, so that is arithmetic and not evidence, and `detector.h`
+says so.
+
+### F8804. The tone report fires when the counter PASSES the threshold, and it then fires on EVERY block after that
+
+*2026-08-31.* Two things about `detector_progress`'s tone arm, and both are
+easy to get subtly wrong.
+
+**The comparison is unsigned and its sense is "skip while threshold >= count":**
+
+    ad85d:  0f b7 44 5e 24       movzwl 0x24(%esi,%ebx,2),%eax
+    ad862:  40                   inc    %eax
+    ad868:  66 39 84 1b 14 82 00 cmp    %ax,0x8214(%ebx,%ebx,1)
+    ad870:  73 23                jae    ad895
+
+`cmp %ax,mem` computes `mem - ax`, and `jae` takes CF=0, i.e. `threshold >=
+counter`. So the report needs `counter > threshold` and the first report lands
+on the threshold's value PLUS ONE -- block 26, 22, 13 and 26 for the four
+tones. `t_detector` asserts that number per tone, which is also what pins the
+subscript: the four thresholds differ, so a swapped index moves it.
+
+**And the counter is not cleared by reporting.** Only a non-zero `TONE_detect`
+verdict clears it (0xad916). Once a tone has passed its threshold it reports on
+every subsequent block for as long as the condition holds, so a long run of
+non-tone signal produces one line per block and not one line. Reproduced; it is
+the object's behaviour and not a defect in the reconstruction.
+
+### F8805. The DTMF arm advances the caller's cursor and the other two arms do not, so tone and cadence events overwrite each other
+
+*2026-08-31.* In DETECTOR_OUTPUT_IN_STREAM mode `detector_progress` has three
+places that append two bytes, and they do not agree about the cursor.
+
+The DTMF arm writes them inline -- `*outlen += 2; out[0] = 0x10; out[1] = c;`
+-- and then **advances its own copy of `out` by two** (0xad907, stored back to
+0x3c(%esp) at 0xad90a), so a later arm in the same block writes after it.
+
+The tone arm and both cadence arms call `_status(out, outlen, code)`, which
+does the same three stores and does NOT advance anything. So two tone reports
+in one block write the same two bytes twice while `*outlen` grows by four, and
+the caller is left with two bytes of whatever the buffer held. That is the
+object's shape, not a transcription slip: `voicedp.c`'s own call site spells
+the correct idiom, `_status(out + *countp, countp, 3)`, which is what makes
+the difference deliberate enough to record rather than assume.
+
+The DTMF arm is also NOT `_status` inlined, though its three stores are that
+function's in that order: `_status` prints "DLE %d" under
+`dsplibs_debug_level > 1` and the DTMF arm has no such line, only the one
+debug gate at 0xad8e3.
+
+`t_detector` compares the whole output buffer after every block, so the
+overwrite is asserted rather than merely tolerated.
+
+### F8806. The "false dtmf detect" arm is unreachable, and that is measured on the blob rather than argued from a header
+
+*2026-08-31.* `detector_progress` guards its emit path with `if (c < 0)`,
+where `c` is `-1` when `r` is outside 0..15 and `lookup_table[r]` otherwise
+(0xad8c5). The arm prints "false dtmf detect %d" with the INDEX, not the
+character.
+
+It cannot fire. `dtmf_progress` returns `dtmf_test`'s verdict, which is
+`low + 4 * high` over two groups of four, or -1, or -2 -- and -1 and -2 have
+already been filtered out by the range test above it. Every one of the sixteen
+`lookup_table` entries is a printable ASCII character, so `c >= 0` always.
+
+`t_detector` does not take that from `dtmf.h`: `probe_false_dtmf()` drives the
+BLOB's `dtmf_progress` over all sixteen tone pairs, asserts the result is in
+-2..15 on every call, and asserts all sixteen indices were actually seen so the
+bound is not vacuous. The arm's coverage counter is then asserted at ZERO, so
+a future change that makes it reachable fails here rather than passing quietly.
+
+### F8807. The "extra i++" on the dial-tone arm is tail duplication, not a semantic double increment
+
+*2026-08-31.* `detector_progress`'s cadence loop appears to increment `i` twice
+on the dial-detected path: 0xad82b and 0xad961 both do `inc %ebx` inside the
+"dial detected" arms, where the fall-through path increments at 0xad7d6.
+
+Reading the edges settles it. Each of those arms does its own
+`cmp %ebx,%edi` and jumps to the loop's own back-edge test (0xad744 /
+0xad7d9), so all three paths execute exactly ONE increment before the
+condition is re-tested. GCC duplicated the loop tail into both arms; the
+source is an ordinary `for (i = 0; i < count; i++)` with two independent `if`
+bodies.
+
+This is worth recording because the wrong reading is behaviourally different
+-- it would drop every second sample after the first dial-tone detection --
+and it survives a single-block fixture perfectly.
+
+### F8808. The DTMF arm is an `if`, not a drain loop, and the jump target is what says so
+
+*2026-08-31.* The gate at 0xad6fd/0xad700 branches to 0xad89d when
+`enable & 1` is set, and every exit from that block jumps to **0xad706** --
+the instruction AFTER the branch, not the branch itself. So the arm runs once
+per call.
+
+It reads like a loop because 0xad90e reloads `d->enable` immediately before
+the jump. That reload is not a loop condition: `d->enable` is re-read from
+memory at all of its uses (0xad6fa, 0xad895, 0xad90e, 0xad916 and 0xad9c9),
+because a call to `dtmf_progress`, `TONE_detect` or `_status` may alias the
+field. The source holds no local copy of it, and reproducing it as one would
+be a behavioural change a caller could observe.
+
+There is also nothing to drain: `dtmf_progress` already walks every sample of
+the block and returns the last digit it settled.
+
+### F8809. `TONE_detect` and `cadence_progress` are CALLED as if they returned `short`, while this tree declares both `int`
+
+*2026-08-31.* Two call sites in `detector_progress` narrow their callee's
+result to sixteen bits before testing it:
+
+    ad854:  66 85 c0             test   %ax,%ax          ; TONE_detect
+    ad78e:  98                   cwtl                    ; cadence_progress
+    ad78f:  66 48                dec    %ax
+    ad791:  74 5d                je     ...
+
+`test %ax,%ax` and `cwtl; dec %ax` are what a compiler emits for a `short`
+return, not an `int` one. `fdspkrnl.h` declares `int TONE_detect(...)` and
+`cadence.h` declares `int cadence_progress(...)`, both from their own
+definitions, and both return only 0, 1, 2 or 7 -- so the two readings agree
+over every value either function can produce and no differential test can
+separate them.
+
+**Recorded, and NOT acted on.** Retyping either would change the codegen of
+`src/service/fdspkrnl.c` and `src/callprog/cadence.c`, which are settled
+against the object on their own account; the honest move is to leave the
+declarations where the definitions put them and hand this to a codegen pass
+that can measure both arms under the period compiler. It is the same class of
+observation as F613 -- a forced encoding that behaviour cannot see -- with the
+difference that here the fix is not local to the function being written.
+
+### F8810. `struct detector`'s remaining fields, and which of them earned a name
+
+*2026-08-31.* The 0x34-0x24 region `detector.h` carried as `pad_0024` is now
+three things, and three fields elsewhere were renamed or retyped:
+
+- **+0x24 `tone_integration[4]`**, `unsigned short` (`movzwl` at 0xad85d,
+  unsigned compare at 0xad870). Named from the author's own
+  `tone_integration_threshold`, which is the symbol it is compared against.
+- **+0x2c `int_002c`**, written 0 by `detector_create` and read by NOTHING in
+  the object. Modelled, unnamed -- the four-state rule's `type_NNNN`.
+- **+0x30 `dialtone_detect_delay`**, from F8803's chain to `vce_get_sreg`.
+- **+0x00 `enable`** retyped `short` -> `unsigned short`. The object loads it
+  `movzwl` at every site. This is a 614-class dead extension at all of them
+  (the masks are all under 0x40) and it changes no behaviour for any value the
+  field can hold, so it is a codegen claim and is flagged as one.
+- **+0x04 `ptr_0004` -> `dtmf`**, typed `struct dtmf *`: `create_dtmf`
+  returns into it (0xad4bd), `dtmf_progress` is handed it (0xad8b1), and
+  `detector_progress` reads `->held` (+0x90) through it at 0xad709.
+- **+0x0c and +0x10 -> `cadence_busy` and `cadence_dial`**, from the object's
+  own format strings "busy detected by cadence\n" (`.rodata.str1.1` 0x5105)
+  and "dial detected by cadence\n" (0x511f) -- evidence class 1 -- and
+  confirmed independently by the `cadence_setup.tone` each is created with,
+  `CADENCE_TONE_BUSY` (0) and `CADENCE_TONE_DIAL` (1).
+- **+0x08 `cadence_0008` stays neutral.** `detector_create` zeroes it on the
+  allocating path and nothing ever builds it; `detector_delete`'s NULL guard
+  is the only code that looks at it. Nothing names it, so nothing names it.
+
+The two renames reach `src/service/beepgen.c`'s `detector_delete`,
+`test/unit/t_voicedpdel.c` and the three anchors in
+`test/mutations/voicedpdel.json` that quote that function's text; all four
+were updated together and `mutsnap.py --check` is unchanged at 228 stale, 0
+missing, exit 0.
+
+### F8811. The detector's own six-event vocabulary is one table spelled two ways
+
+*2026-08-31.* `detector_progress` reports the same six events through two
+alternative channels, chosen by `output_mode`, and the object carries the two
+spellings as separate data:
+
+    event       letter                    status code
+    busy        0x62 'b'  (immediate)     1  (immediate)
+    dial tone   0x64 'd'  (immediate)     2  (immediate)
+    1300 Hz     tone_char[0] 'e'          status[0] 3
+    1100 Hz     tone_char[1] 'c'          status[1] 4
+    2100 Hz     tone_char[2] 'a'          status[2] 5
+    2225 Hz     tone_char[3] 'f'          status[3] 6
+
+The DTMF arm is outside this scheme entirely: it emits the digit character and
+has no status-mode form, so a detector in DETECTOR_OUTPUT_STATUS mode reports
+DTMF nowhere and returns 0 for it.
+
+The letters are the IS-101 voice-mode shielded event codes and 'b'/'d' belong
+to the same set, which is a strong reading of what the table IS -- but it is an
+outside-the-object reading, so `detector.h` records the correspondence and does
+not derive the names from it. What the object itself establishes is only that
+the letter and the code are alternatives for one event.
+
+### F8812. Four fixture defects the detector's mutation run found, and every one of them let a WRONG source pass a green suite
+
+*2026-08-31.* `t_detector` was green over about 1.86 M checks before any
+mutation was applied, and an ad-hoc 44-mutation set then caught 37. The six it
+missed were not exotic: each was a claim the suite looked like it was testing
+and was not. They are recorded because the SHAPE recurs, not because these
+particular six matter.
+
+**1. AN ARM THAT RUNS LATER OVERWRITES THE ARM YOU ARE TESTING.** The fixture
+forced both cadence detectors into "always detect" in EVERY run, including the
+tone runs. The dial arm runs last and assigns `ret = 2`, so the tone arm's
+`ret = status[i]` was clobbered in every block of every status-mode run --
+`status[]` could be rotated, or replaced outright by `ret = 99`, and 1.86 M
+checks still passed. The two cadences are now forced separately, and the
+busy-only run is what makes `ret = 1` distinguishable from `ret = 2` at all.
+
+**2. A FIELD THAT IS ZERO AT EVERY BLOCK BOUNDARY OBSERVES NOTHING.**
+`cmp_cadence` compared five hand-picked fields of the `toneiir` underneath,
+one of them `env_band` -- which `toneiir_progress` RESETS at every verdict.
+The block length was a whole number of verdict intervals, so it was zero on
+both sides always. Consequence: the sample handed to `cadence_progress` was
+not compared at ALL. Injecting 32767 for the object's 16000, and `samples[0]`
+for `samples[i]`, both passed. The whole 168-byte object is now compared
+word by word, and `env_prev` -- the field that carries a level across the
+reset -- is what catches both.
+
+**3. A PLANTED FIELD DOES NOT SURVIVE THE CALL THAT REWRITES IT.** The
+`dtmf->held` run planted 1 and left the DTMF bit enabled; `dtmf_progress` runs
+first and rewrites `held`, so from block 1 the gate was open and the run
+measured nothing. Fixed by clearing the DTMF bit for that run, and by reading
+the gate's value back from the OBJECT rather than from the fixture's argument.
+
+**4. A RANGE BOUND NEEDS ITS ENDPOINT, AND A CURSOR NEEDS A SECOND WRITER.**
+One DTMF digit was driven (index 9), so narrowing the object's `r > 15` to
+`r > 14` changed nothing; the sequence now includes index 15. And the DTMF
+arm's `out += 2` (F8805) is invisible unless something else writes into the
+same block, so one run now drives a digit and a cadence event together.
+
+**ONE MUTANT IS GENUINELY EQUIVALENT AND IS RECORDED AS SUCH**, rather than
+chased: `cadence_create`'s `extra` on the BUSY call. `extra` does two things
+in `cadence_create` -- it clears `continuous`, which is already 0 for busy,
+and it scales `cfg.duration_ms = (extra + 1) * c->validation`, where
+`validation` is 0 for every tone but dial. So 2 and 0 build the same object.
+The mutation was moved to the DIAL call, where it is caught.
+
+**FINAL: 44 of 44 usable mutations caught, 0 uncaught, 0 equivalent left in
+the set.** The set is NOT registered in `test/mutations/` -- the snapshot
+re-record is deferred tree-wide, and a registered-but-unrecorded suite reads
+MISSING to `mutsnap.py --check` and fails the gate (findings F6000-F6002).
+
+### F8813. `voice_create`'s "four dead locals" are a `struct beepgen_config` built by ROTATING the voice config, and the `lea` is what proves it
+
+*2026-08-31.* The four words `voice_create` writes to `0x20(%esp)` before it
+allocates anything (0xac230-0xac24e) read as dead stores, and one earlier
+reading of this function recorded them as GCC hoisting or as four unused
+locals. They are neither. **0xac29f is `lea 0x20(%esp),%esi` and `%esi` is
+`beepgen_create`'s second argument at 0xac2c9**, so those sixteen bytes are an
+addressable object that is passed on. There is nothing left to decide: an
+addressable local handed to a callee is not dead.
+
+**AND IT IS NOT A COPY, IT IS A ROTATION.** Three of the four words change
+slot:
+
+    ac230:  mov 0x8(%esi),%ebx      ac236:  mov %ebx,0x24(%esp)   +0x08 -> +0x04
+    ac233:  mov 0x4(%esi),%edx      ac23d:  mov %edx,0x2c(%esp)   +0x04 -> +0x0c
+    ac23a:  mov 0xc(%esi),%ecx      ac241:  mov %ecx,0x28(%esp)   +0x0c -> +0x08
+    ac245:  mov (%esi),%eax         ac24e:  mov %eax,0x20(%esp)   +0x00 -> +0x00
+
+Composed with `beepgen_create`'s own copy (0xacd45-0xacd61: cfg+0x04 to
+bg+0x11c, cfg+0x08 to bg+0x120, cfg+0x0c to bg+0x124), the voice config's
+`fn_08` becomes `beepgen.fn_011c`, its `fn_0c` becomes `hook_on_proc`, and its
+`fn_04` becomes `fn_0124`.
+
+**SO `voice_ctx` +0x000 IS NOT A `struct beepgen_config`**, which is what
+`voice.h` and `beepgen.h` both said until now, and `struct voice_config` is
+now defined in voice.h with those comments corrected in both files. The
+separate copy at 0xac27a-0xac295 -- the one that fills `v->cfg` -- is
+straight, so the two blocks are genuinely two types of the same size.
+
+The loads for the local happen BEFORE `sysdep_malloc`, and that is source
+order rather than scheduling: GCC cannot hoist a load of `*cfg` across an
+opaque call. `t_voicesvc` asserts the rotation from both sides -- the three
+callbacks are the test's own functions, so the slot each landed in is compared
+by address.
+
+### F8814. The rotation is what settles `fn_04`, and it explains `beepgen_start_dtmf`'s 24
+
+*2026-08-31.* F8766 recorded `beepgen_config.fn_0124` as "supplies the
+marker's duration, and its 24 is unexplained". F8813's rotation explains it.
+
+The slot `fn_0124` is fed from the VOICE config's `+0x04`, and `+0x04` is the
+S-register getter: `detector_create` (0xac2f8) and `silence_create` (0xac337)
+are both handed it as their third argument, `voicedp.c` reads the three
+receive gains through it, and F8803 already traced the chain to
+`vce_get_sreg`. So `beepgen_start_dtmf`'s `bg->fn_0124(bg->modem, 24)` is
+`vce_get_sreg(modem, SREG_FLASH_TIMER)` -- 24 is that register's number in
+`vce.h` and in slmodemd's own `modem_defs.h` -- and the answer is
+`VCE_FLASH_TIMER`, 20. The '!' start marker's duration is the flash timer.
+
+**AND IT DISSOLVES A CLASH THREE FILES HAD BEEN WORKING AROUND.** The detector
+pass reported that `beepgen_config.fn_04` is declared `void (*)(void *)` while
+three places call the same field with two arguments and use the result --
+`detector_create`, `voicedp.c:343`'s cast, and `voice.h`'s own comment on the
+receive gains -- and asked whether the declaration was wrong. It is not:
+`beepgen_config.fn_04` is a one-argument callback and always was, and the
+three two-argument users were all reading the VOICE config's `+0x04`, which is
+a different field of a different struct. No declaration in `beepgen.h`
+changed; two of its comments did.
+
+**WHAT DOES NEED A CAST IS THE RESULT TYPE, AND IT IS ONE SITE.** Three
+readings of `vce_get_sreg`'s return coexist in the tree -- `unsigned int` from
+F8803's `shr` (detector.h's `detector_sreg_fn`, and `silence_create`'s third
+parameter), `int` from `beepgen_config.fn_0c`, and
+`int (*)(void *, unsigned int)` from `vce.h`'s own declaration of the function
+-- and no single spelling satisfies all three. `voice_config.fn_04` takes the
+two-of-three one and `voice_create` casts once, into the beepgen config.
+Recorded rather than papered over: the cast reconciles two readings of one
+function, and is not a silenced diagnostic.
+
+### F8815. Three calls this file makes are INLINED in the object, and all three are provably the callee's own text
+
+*2026-08-31.* `voice_command`'s mode arms 2 and 3 (0xac780 and 0xac7a9),
+`voice_modem`'s DLE-reset block (0xac8e0), and `voice_modem`'s status tail all
+have no `call` in the object. They are not open-coded: they are
+`voice_set_online` (0xabef0, 47 bytes), `voice_set_duplex` (0xabf20, 45) and
+`_handle_status` (0xac7d0, 44) inlined by `-O3`'s `-finline-functions`, and
+all three are in the same translation unit there.
+
+The proof for the first two is instruction for instruction. `voice_set_online`
+is `movzwl 0x762(%ecx),%edx; movl $0x2,0x10(%ecx);
+movl $voice_online,0x20(%ecx)` and then `detector_set_enable(d, %edx)`;
+0xac780 and 0xac8e0 are that sequence with a different register allocation and
+nothing else, including the ORDER -- the enable word is loaded before `mode`
+is written at all three sites. `voice_set_duplex` is the same shape with 3,
+`voice_duplex` and the immediate 0x24, and 0xac7a9 is it.
+
+**OURS ARE CALLS AND THAT IS OUR FACTORING, NOT THE AUTHOR'S.**
+`voice_set_online` and `voice_set_duplex` live in `src/service/voicedp.c` and
+`_handle_status` in `src/voice/voice.c`, so the period compiler cannot see
+their bodies from `voicesvc.c` and will emit three calls the object does not
+have. The SOURCE is the object's either way; the difference is where this tree
+put the callees, and it is named here so a codegen pass does not read it as a
+defect in `voicesvc.c`. Closing it means moving those functions into this
+translation unit, which is a larger question than this pass.
+
+### F8816. `voice_command`'s opcodes 7 and 8 are TIME_MARK and VLS in that order, and the jump table is the only authority
+
+*2026-08-31.* The eleven-entry table at `.rodata` 0xed80, read with pyelftools
+rather than off a disassembly listing:
+
+    0 -> ac66e   1 -> ac4d6   2 -> ac639   3 -> ac5b4   4 -> ac500
+    5 -> ac5f3   6 -> ac5d8   7 -> ac61e   8 -> ac59a   9 -> ac57d
+    10 -> ac532
+
+0xac61e prints `.rodata.str1.1` 0x4fdd, "VOICE_TIME_MARK_COMMAND %d", and
+stores sixteen bits at +0x764 (`marker_period`). 0xac59a prints 0x500e,
+"VOICE_VLS_COMMAND %d", and stores thirty-two bits at +0x74c (`out_format`).
+So **7 is TIME_MARK and 8 is VLS**, and a brief written for this pass had the
+two descriptions crossed against the same table it quoted.
+
+Worth recording because the crossing is nearly invisible: both arms print,
+both store, both return 0, and the only thing separating them is that the two
+fields are different WIDTHS at different offsets. A test that drove each
+opcode and checked "the field this trial expected to move" would have agreed
+with the crossed reading. `t_voicesvc` compares the WHOLE context after every
+call, which is what makes the table and the test say the same thing.
+
+Entry 4 is 0xac500, the `ret = 7` tail: the table's default label. The object
+has no arm for opcode 4, and `voice.h` gives it no name.
+
+### F8817. `voice_ctx.dp` is a `struct fdsp_kernel *` and is spelled `void *`, because one declaration elsewhere is still behind
+
+*2026-08-31.* `voice_create` fills +0x034 from `FDSP_DP_Create` (0xac2c1) and
+`voice_delete` hands it to `FDSP_DP_Delete` (0xac1f3), so the field's type is
+`struct fdsp_kernel *` at both ends. `voice.h` had it as `int *`.
+
+It is spelled `void *` rather than the true type because `FDSP_DP_Run`
+(declared in beepgen.h, defined in src/service/beepgen.c) declares the SAME
+object `int *status` -- that function's only use of it is to store 2 into the
+kernel's `int_00` -- and `voicedp.c:697` passes this field straight into it.
+`void *` is the one spelling both call sites accept without a cast; `int *`
+needed two casts inside `voicesvc.c`, and `struct fdsp_kernel *` would need
+one in a file this pass does not own. When `FDSP_DP_Run`'s first parameter is
+retyped this becomes `struct fdsp_kernel *` and the note goes away.
+
+### F8818. `voice_command`'s shape: one `ret`, a default of 7, and a debug line before the range check
+
+*2026-08-31.* The function reads as eleven independent arms and is one
+variable. 0xac4a7 is `xor %ebp,%ebp` before anything else, 0xac500 is
+`mov $0x7,%ebp`, and every arm reaches 0xac505's `mov %ebp,%eax` -- so the
+source is `int ret = 0; switch (...) { ... default: ret = 7; } return ret;`,
+and the two mode-gate refusals set that same variable rather than returning
+early.
+
+Three details a straightforward rewrite gets wrong:
+
+- **The debug line comes BEFORE the range check** (0xac4a9 against 0xac4ca),
+  so an out-of-range opcode still names itself in the log.
+- **The two gated arms each carry their OWN copy of the gate.** 0xac4d6 tests
+  `(unsigned)(mode - 2) <= 1` for DTMF and 0xac66e tests it again for beep;
+  only the refusal at 0xac4e5 is shared. A single gate hoisted above the
+  switch would be a different function.
+- **`VOICE_RESET_DUPLEX_COMMAND`'s debug line comes AFTER its work**, alone
+  among the arms: 0xac563 tests the level, 0xac56a stores the new kernel, and
+  0xac56f prints. Every other arm prints first.
+
+### F8819. `out_format`'s writer is the VLS command, which is stronger evidence than its readers were
+
+*2026-08-31.* `voice.h` typed +0x74c from its READS -- every reconstructed use
+is `(unsigned)(out_format - 1) <= 1`, so 1 and 2 select 16-bit linear -- and
+graded that as usage inference. The only WRITER in the object is now
+reconstructed: `voice_command`'s case 8 prints "VOICE_VLS_COMMAND %d" and
+stores that word whole (0xac5a7-0xac5af).
+
+The name stays `out_format`, because the READS are still what say what the
+field selects and the object nowhere expands "VLS". What the header now
+records is that the value is the host's VLS argument, passed through unchanged
+and unvalidated -- any int can be stored, and everything outside {1, 2} means
+"float" to the three readers. The two comments are reconciled rather than one
+overwriting the other.
+
+### F8820. `voice_modem`'s output-mode test is the opposite way round from the obvious reading, and its buffer arithmetic is in BYTES
+
+*2026-08-31.* Two things in a 338-byte function that a plausible rewrite gets
+backwards, and neither is caught by a single-block fixture.
+
+**THE MODE TEST.** 0xac81a is `cmpl $0x3,0x10(%ebx)` and 0xac826 is
+`je 0xac928`, and 0xac928 calls `detector_set_output_status`. So DUPLEX takes
+the STATUS arm and every other mode takes IN_STREAM -- the reverse of "duplex
+is the one that streams events". Written the other way round it passes any
+fixture whose detector never fires, which is every fixture built from
+broadband noise: the tone counters integrate the ZEROS `TONE_detect` returns
+when the tone IS present, so noise keeps every counter at zero and nothing is
+ever emitted. `t_voicesvc` drives an actual 2100 Hz tone for that reason.
+
+**THE ARITHMETIC.** 0xac877 is `add %ebp,%edx`, not `lea (%ebp,%edx,2)`, where
+`%edx` is the detector's byte count and `%ebp` is `voice_modem`'s fifth
+argument. That argument is `short *tx_lin` in the handler signature and an
+`unsigned char *` to `detector_progress`, and the advance is in BYTES. Ours
+casts once through a local `unsigned char *out`, so both uses read from one
+spelling.
+
+**AND THE SEVENTH ARGUMENT THE HANDLER RECEIVES IS A LOCAL** (0xac86b,
+`lea 0x28(%esp)`), holding the count the block arrived with. The handler
+writes back into that local; `voice_modem` then adds the detector's byte count
+and stores the sum through the CALLER's pointer (0xac8a8). `t_voicesvc`
+installs its own handler and asserts the pointer is not the caller's, on both
+sides.
+
+### F8821. The three-mask word in `VOICE_DETECTOR_ENABLE_COMMAND` is a forced spelling, and the top byte is the one that says so
+
+*2026-08-31.* Case 5 unpacks one `int` into three fields, and the object's
+encoding fixes the source exactly:
+
+    ac5f5:  0f b6 f1           movzbl %cl,%esi        -> +0x75e
+    ac5f8:  0f b6 dd           movzbl %ch,%ebx        -> +0x760
+    ac602:  c1 f9 10           sar    $0x10,%ecx
+    ac605:  81 e1 ff 00 00 00  and    $0xff,%ecx      -> +0x762
+
+`sar` and not `shr`, so the shifted value is a SIGNED `int`; and the `and`
+that follows means the source masks after shifting rather than relying on a
+narrowing store. `(w >> 16) & 0xff` on a signed `w` is the only one of the
+obvious spellings that produces both instructions -- an `unsigned` `w` gives
+`shr` and no mask, and `(unsigned char)(w >> 16)` gives a `movzbl` on the
+third byte the way the first two do.
+
+**AND NO DIFFERENTIAL TEST CAN EVER SEE IT, WHICH WAS MEASURED RATHER THAN
+ASSUMED.** A mutation replacing `(arg[0] >> 16) & 0xff` with
+`((unsigned)arg[0] >> 16) & 0xff` runs UNCAUGHT through 269,670 checks,
+including 0x80402010 and 0xffffffff -- and it must, because the `& 0xff`
+discards exactly the bits the two shifts disagree about. The two spellings are
+behaviourally identical over the whole `int` domain. So this is a 613-class
+finding: a FORCED encoding that only the codegen tier can grade, and the
+mutation is recorded as equivalent rather than chased. The first pass at this
+finding claimed the test distinguished them, and it does not.
+
+This arm has no debug line of its own, which is also forced: 0xac5f3 is the
+table target and the first instruction there is the load of `arg[0]`.
+
+### F8822. What `t_voicesvc` measures, and the one path it cannot reach
+
+*2026-08-31.* 269,670 checks over five groups, all green under `make one`
+(GCC 14, 32-bit; NOT period-gated by this pass):
+
+    voice_create           773 checks    2 debug levels + the NULL config
+    voice_delete            96 checks    all 32 pointer shapes
+    voice_command       49,848 checks    14 opcodes x 4 modes x 2 beep
+                                         states, + 15 targeted values
+    voice_modem        218,910 checks    12 trials x 48 blocks
+    coverage                43 checks    every count taken FROM THE RUN
+
+**49 MUTATIONS RUN BY HAND, 47 CAUGHT, 2 EQUIVALENT AND PROVED SO.** The set
+is NOT registered in `test/mutations/` -- the snapshot re-record is deferred
+tree-wide and a registered-but-unrecorded suite reads MISSING to
+`mutsnap.py --check` (F6000-F6002). Six of the 47 were caught only after the
+fixture was strengthened, and each says something about what a weaker fixture
+misses:
+
+- **`beep_done` had to be planted at BOTH values.** `voice_create` leaves it
+  at 1 and three command arms write 1 into it, so deleting those stores was
+  invisible. Every command trial now runs at 0 and at 1.
+- **The DLE flags had to be raised ONE AT A TIME.** The first fixture set
+  `dle_etx` and `dle_can` together, which makes `||` and `&&` agree; three
+  trials now raise ETX alone, CAN alone and both.
+- **VLS needed a value wider than a short.** Every earlier argument fitted in
+  16 bits, so `out_format = (short)arg[0]` passed.
+- **The two echo delays needed the TRANSCRIPT.** Handing them to
+  `FDSP_DP_Create` swapped changes no field this test compares -- it changes
+  `chan_a->offset` and `chan_b->offset` inside the kernel -- but that
+  function prints both, so comparing the filtered create transcript catches
+  it.
+- **`voice_delete`'s `%lX` argument needed a self-check.** The two sides
+  necessarily print different pointers, so the transcripts cannot be
+  compared; each side is now matched against its OWN context address.
+
+The two equivalent ones are recorded rather than chased: `((unsigned)arg[0] >>
+16) & 0xff` for `(arg[0] >> 16) & 0xff` (F8821 -- the mask discards the bits
+the shifts disagree about), and passing the local copy of the sample count to
+`detector_progress` instead of re-reading `*countp` (nothing writes it in
+between). Both are FORCED ENCODINGS the object settles and behaviour cannot.
+
+**NOTHING IS HAND-PLANTED.** Every `struct voice_ctx` comes from
+`voice_create` or `ref_voice_create`, which is the only fixture shape D955 and
+F8587's hazard cannot apply to: a constructor cannot forget a field it sets
+itself. The delete sweep subtracts from a complete graph -- freeing the
+sub-object first, then NULLing the slot -- rather than adding to an empty one.
+
+**AND THE HAZARD STILL FIRED, ONE LEVEL DOWN.** `voice_create` reaches
+`cadence_create` through `detector_create`, and that function turns
+`GetDialToneDetectionThreshold` into a SUBSCRIPT --
+`Get_Detection_Threshold_Table(level_fix)`. The harness's unforced parameter
+answer is `0x5A000000 + param * 7`, whose low sixteen bits are a wild index,
+and the two sides read different entries: `cadence.threshold` came out 7 on
+ours and 0 on the blob's. It was found only because the comparison walks both
+cadence objects word by word; the context, the detector, the beep generator,
+the FIFO and the silence detector all compared clean. The fixture now calls
+t_detector's own `set_params()`, so both tests drive the same country. **An
+unplanted subscript two calls below the function under test is still an
+unplanted subscript**, and "the constructor built it" does not reach that far
+down.
+
+**THE PATH IT CANNOT REACH** is `voice_create`'s teardown, both entries
+(0xac3e1 and 0xac420). The only way any of the five constructors returns 0 is
+a failed `sysdep_malloc`, and the harness allocator has no failure injection.
+The arms are transcribed from the object and are NOT covered; the nearest
+proxy is `voice_delete`'s own 32-shape sweep, which drives the same five
+guards in the same order over the same sub-objects.
+
+**ONE DEBUG LINE IS EXCLUDED FROM THE TRANSCRIPT COMPARISON AND IT IS THE
+OBJECT'S DOING.** `STRM_VCE_GetFDSPEnvironmentalParams` prints its two output
+words BEFORE writing them (deviation D991), so "voice: StrmVCE old:" reports
+each side's own stack -- -31248/2412 against 2052/-24112, and both are
+correct. The line is filtered from both transcripts and the filter's hit count
+is asserted non-zero, so a filter that matched everything would read as zero
+rather than as a clean pass. Every other line is compared in full, including
+`FDSP_DP_Create`'s two and all six `VOICE_*_COMMAND` ones.
+
+### F8823. `voice_delete`'s free order is witnessed twice, and its last call is a tail call
+
+*2026-08-31.* beepgen, detector, fifo, silence, dp, self -- and each of the
+five guarded. The order is not read off one function: `voice_create`'s own
+failure path (0xac3e1) frees the same five in the same order with the same
+guards, which is a second witness inside the same object.
+
+`sysdep_free` is a TAIL CALL at both of `voice_delete`'s exits (0xac18c and
+0xac200 are `jmp` off a restored stack), so the object's last statement is a
+call with no `return` after it. The C for that is an ordinary trailing
+`sysdep_free(v);` in a `void` function; there is nothing to spell differently,
+and the tail call is the compiler's.
+
+`voice_delete` does NOT guard `v` itself -- it dereferences +0x18 before
+anything else -- so a NULL context faults. That is the object's, and it is
+left alone.
+
+### F8830. `VOICE_command`'s eight opcodes wear the HOST's names, and the host's header and the object's strings agree arm for arm
+
+*2026-08-31.* `ref/slmodemd/modem.c` declares all four of this layer's
+functions at lines 92-95 and `modem_defs.h` declares `enum VOICE_CMD` with
+eight enumerators. Seven of `VOICE_command`'s eight arms print a string that
+names the same thing the enumerator does, in the same order:
+
+    0  VOICE_CMD_STATE_COMMAND   "voice: VCE: VOICE_CMD_SET_MODE: COMMAND"
+    1  VOICE_CMD_STATE_RX        "voice: VCE: VOICE_CMD_SET_MODE: RX"
+    2  VOICE_CMD_STATE_TX        "voice: VCE: VOICE_CMD_SET_MODE: TX"
+    3  VOICE_CMD_STATE_DUPLEX    "voice: VCE: Unknown command %u"   <-- D1021
+    4  VOICE_CMD_STATE_SPEAKER   "voice: VCE: VOICE_CMD_SET_MODE: SPEAKER"
+    5  VOICE_CMD_BEEP            "voice: VCE: VOICE_CMD_BEEP, %d %d %d"
+    6  VOICE_CMD_DTMF            "voice: VCE: VOICE_CMD_DTMF, %d %d"
+    7  VOICE_CMD_ABORT           "voice: VCE: VOICE_CMD_ABORT"
+
+Two independent evidence-class-1 sources landing on the same eight names is as
+strong as naming gets in this tree, and it is what settles arm 3 as a defect
+rather than a misreading: the host has a DUPLEX command and this object has no
+arm for it.
+
+The jump table at `.rodata` 0x8 was read with pyelftools against the
+relocations, not off the disassembly, so the eight targets are the linker's
+own: 0x9c5, 0xa28, 0xa40, **0xa10**, 0xa58, 0xac3, 0xa73, 0xab0. Slot 3 is
+the out-of-range label.
+
+The names are kept in slmodemd's spelling in `include/dsplib/vce.h` so a grep
+across the two trees matches, exactly as `SREG_HANDSET_GANE` is kept.
+
+### F8831. `VOICE_STATE_*` and `VOICE_STATUS_*` are the host's too, and the object writes every one of them
+
+*2026-08-31.* The same header carries `VOICE_STATE_COMMAND 0`, `_RX 1`,
+`_TX 2`, `_DUPLEX (TX|RX)`, `_SPEAKER 8` and `VOICE_STATUS_OK 1`,
+`_ERROR 2`, `_CONNECT 3`. Both sets are corroborated by what `VOICE_process`
+does with them rather than merely fitted to the numbers:
+
+  - `struct vce +0x0c` takes 0 from VOICE_OK, VOICE_START_ONLINE, VOICE_ERROR
+    and START_ONLINE_AFTER_ABORT, 2 from VOICE_START_TX, 1 from
+    VOICE_START_RX and 3 from VOICE_START_DUPLEX. So the field is the STATE
+    and its names are the host's.
+  - The host-facing block then reads it the right way round for those names:
+    state 2 (TX, playback) pulls `host_count` bytes FROM the host, and state 1
+    (RX, record) pulls a fixed 160 to watch for `<DLE>'!'` and pushes the
+    handler's block back TO the host.
+  - The return takes 1 from the two "online" messages, 3 from the three
+    "start" ones and 2 from ERROR and from an unknown message --
+    `modem_voice_process` in modem.c switches on exactly those three names.
+
+`VOICE_STATE_SPEAKER` is never written by this object; the SPEAKER *command*
+maps to `voice_command`'s mode 3, which is DUPLEX.
+
+### F8832. The fourteen `voice_modem` messages, ten of them by the author's own identifier, and the chain that ends in V.253
+
+*2026-08-31.* `VOICE_process`'s second jump table, at `.rodata` 0x28, has
+fourteen entries. Arms 0..9 each print "voice: STRM_VCE" followed by an
+identifier, so those ten names are transcribed:
+
+    0 VOICE_NO_MESSAGE   5 VOICE_START_DUPLEX
+    1 VOICE_OK           6 VOICE_PURGE
+    2 VOICE_START_ONLINE 7 VOICE_ERROR
+    3 VOICE_START_TX     8 VOICE_START_ONLINE_AFTER_ABORT
+    4 VOICE_START_RX     9 VOICE_CANCEL
+
+Arms 10..13 print English rather than an identifier -- "BUSY", "DIALTONE",
+"FAX Tone", "Underrun" -- so those keep the author's WORD and not his
+spelling, and each sends the host two bytes: `<DLE>` then `'b'`, `'d'`, `'c'`
+and `'u'`. Those are V.253's shielded codes for busy, dial tone, fax calling
+tone and transmit-buffer underrun.
+
+**That closes a chain across four files and three sessions, and every hop was
+independently derived.** `detector_progress` names its two cadence results
+`cadence_busy` and `cadence_dial` from the object's own format strings
+(F8800); `_handle_status` maps codes 1, 2 and 4 to 10, 11 and 12
+(src/voice/voice.c); those three arms here emit `'b'`, `'d'` and `'c'`. Nobody
+guessed at any hop and the ends agree.
+
+### F8833. `VOICE_create`'s block size divides by 8000, not by 1000, and the magic number is what says so
+
+*2026-08-31.* 0x7d5-0x801 is `lea (%ebx,%ebx,4); shl $5` -- `rate * 160` --
+then `mov $0x10624dd3,%eax; mul %ecx; shr $0x9,%edx`.
+
+0x10624dd3 is 274,877,907. The *same constant* is GCC's reciprocal for /1000
+at a total shift of 38 and for **/8000 at a total shift of 41**, and the code
+shifts the high word by 9, which is 32 + 9 = 41: 2^41 / 274877907 = 8000.0000.
+Verified against the three rates the function accepts -- 1280000 -> 160,
+1536000 -> 192, 7680000 -> 960.
+
+Reading it as /1000 gives 1280 at 8 kHz, which is eight times too large and
+would make the ring buffers overflow at every rate. It does not, and the
+object's own 160 -- hardcoded as the resampler's output limit at 0xd3c and as
+`blkcount` at 0xdb9 -- is the check: `rate * 160 / 8000` is 160 at 8 kHz,
+which is exactly what the rest of the function assumes.
+
+Note for the next reader: a reciprocal constant identifies a divisor only
+together with its SHIFT. Two divisors a factor of eight apart share this one.
+
+### F8834. voice.h's `rx_flt` / `tx_flt` are NOT crossed, and `VOICE_process` is what proves it
+
+*2026-08-31.* `VOICE_process` fills `struct vce +0x960` from the LINE (input
+ring -> `RcFixed_Resample` -> `short` -> scale) and hands it to `voice_modem`
+in the slot voice.h calls **`tx_flt`**; what comes back in `rx_flt`
+(`+0xbe0`) is scaled and resampled OUT to the line. Read as line-relative that
+is backwards, and this pass was briefed to expect a misnaming in already-landed
+work.
+
+It is not a misnaming. The names are relative to the DSP's HOST link, and all
+four agree once that is seen:
+
+    rx_lin  = host_in    bytes the DSP received FROM the host
+    rx_flt  = to_line    what the host sent, on its way to the line
+    tx_flt  = from_line  what the line delivered, on its way to the host
+    tx_lin  = host_out   bytes the DSP transmits TO the host
+
+`voice_tx` un-escaping host bytes out of `rx_lin`, and `voice_modem` appending
+the detector's `<DLE>` events to `tx_lin`, are the two independent
+confirmations. **`include/dsplib/voice.h` needs no rename** and none was made.
+
+### F8835. The `voice.c#3` group is now eight functions in the object's order among themselves, and the file as a whole is still not
+
+*2026-08-31.* F8773 recorded that the four `vce_*`/`STRM_VCE_*` functions were
+appended after the ring detector rather than placed at their addresses, and
+asked whoever next ran `byteident.py` to try the faithful order. The four
+`VOICE_*` functions land in the same group and are placed at their addresses
+WITHIN it -- vce_hook_on, vce_hook_off, vce_get_sreg, VOICE_create,
+VOICE_delete, VOICE_command, VOICE_process, STRM_VCE_GetFDSPEnvironmentalParams
+-- so the group is internally faithful.
+
+The FILE is not: all eight precede `RD_create` in the object and follow it
+here. Moving the ring detector was declined for F8773's reason unchanged --
+this session has no period compiler, the detector's nine symbols were measured
+in their current position, and "keep it if nothing above regresses" is a
+condition that cannot be evaluated without the measurement. It is a one-block
+move for whoever has the toolchain.
+
+### F8836. `VOICE_create`'s "one converter built, the other failed" teardown cannot be entered
+
+*2026-08-31.* The function runs two independent ladders and then tests both
+results, so a reader expects three outcomes. There are two. `RcFixed_Create`
+answers non-NULL for every mode this function asks for -- 2, 3, 4 and 5 are
+all populated in `fixedRc_UpFact`/`DownFact` -- so at 9600 and 48000 both
+succeed and at every other rate both ladders are skipped and both stay NULL.
+The teardown IS reached, by the unsupported-rate path; the `RcFixed_Delete`
+inside it is not.
+
+`t_voiceapi` drives 8000, 9600, 48000, 11025 and 0, reaches the teardown four
+times, and asserts the allocation balance each time. The mutant
+`if (!rc_in || !rc_out)` -> `if (!rc_in)` survives its 79-mutation set and is
+recorded as EQUIVALENT on this argument rather than as a gap.
+
+### F8837. `VOICE_command`'s `host_count = 0` is NOT in the shared tail, and only a differential object comparison could have said so
+
+*2026-08-31.* Seven of the eight arms converge on a call to `voice_command`,
+and the obvious reading of 0x9e0-0x9fe is one tail: clear `host_count`, call,
+return. It is two. `movl $0x0,0x14(%esi)` is at 0x9e0 and the join is at
+**0x9ec**, four instructions later -- so only the four STATE arms, which reach
+0x9e0, clear the field. BEEP, DTMF and ABORT jump straight to 0x9ec, and so
+does every refusal.
+
+The first draft got this wrong and no return value could have shown it: all
+eight arms answer whatever `voice_command` answered. What caught it was
+`t_voiceapi` planting a distinct non-zero `host_count` before every call and
+comparing the whole 0x1484-byte object afterwards -- the failure was three
+bytes at `struct vce + 20` on exactly the three arms that skip the store.
+Plant a field the function might not write, and compare the object, not the
+answer.
+
+### F8838. 9600 Hz is the only rate at which `VOICE_process` can run at all, and the two others fail in different ways
+
+*2026-08-31.* `VOICE_create` accepts three rates. Only one of them yields an
+object `VOICE_process` can be called on.
+
+  - **8000** -- neither converter is built, and the object's
+    `RcFixed_Resample` dereferences its handle on its fourth instruction
+    (`mov (%edx),%ecx` at 0xb12bf) with no NULL test before it. The blob
+    faults on the first complete block. Found by running it: t_voiceproc
+    segfaulted inside `ref_VOICE_process` at count 160. Deviation D1022.
+  - **48000** -- `block` is 960, the ring cursors wrap modulo 1920, and the
+    ring's array is 384 samples. Deviation D1023.
+  - **9600** -- `block` is 192 and `2 * block` is 384, which is the array
+    EXACTLY. Both converters exist and are inverses (5/6 in, 6/5 out).
+
+The array is therefore sized for 9600 and nothing else, which is the rate
+`fixedrc.h`'s banner already says the host runs at. That is a coherent design
+with two unusable options bolted on, not three supported rates.
+
+`src/core/fixedrc.c` tolerates a NULL handle where the object does not, which
+is a pre-existing and documented tolerance in that file and is why the 8 kHz
+case cannot be compared differentially at all. t_voiceproc asserts the
+PRECONDITION on both sides instead -- that an 8 kHz object has both converter
+pointers NULL -- and drives 9600 only.
+
+### F8839. What `t_voiceapi` and `t_voiceproc` pin, and the two mutants that survive on purpose
+
+*2026-08-31.* 3,149 checks over five sections in t_voiceapi and 1,911 over
+seven in t_voiceproc, every arm counted from the RUN.
+
+t_voiceapi: five rates, every opcode 0..9 plus 100 and 0xffffffff, six
+`tone_duration` values spanning the DTMF floor, both debug levels, a NULL
+handle at ten opcodes, and an eight-way mask over `VOICE_delete`'s guards.
+All eight command arms fire (6 each), the out-of-range arm 48 times, both
+sides of the DTMF floor 6 each, four teardowns.
+
+t_voiceproc: 124 calls, 331 handler calls a side. Every one of the fourteen
+message arms fires at least twice and the unknown arm four times; all four
+states are driven with four host-input scripts each; the outer loop runs more
+than once 113 times and exactly once 11; a ring cursor wraps 7 times. The
+message arms are reached by PLANTING the fixture's own handler in
+`voice_ctx.handler` -- one function per side so the two cannot consume each
+other's script -- because `voice_modem`'s answer is that handler's return
+whenever the detector is quiet.
+
+Two things worth copying from this fixture:
+
+  - **every message is driven twice, once alone and once in the MIDDLE of a
+    four-block run with a silent message last.** F8812 recorded a `ret = 99`
+    surviving 1.86 M checks because a later arm clobbered it; `VOICE_process`
+    has exactly that shape and the middle-of-run case is what closes it.
+  - **the output buffer is guarded and the guard is checked past the
+    high-water mark**, which is how D1020 is asserted rather than merely
+    reproduced.
+
+An ad-hoc 79-mutation set catches 77. The two survivors are argued equivalent,
+not left unexplained: F8836's unreachable converter test, and
+`outlen = v->block` -> `outlen = 0`, where `RcFixed_Resample` reads a limit of
+0 as "no limit" and the output at 9600 is exactly `block` samples anyway, so
+no input distinguishes them. Two of the four that survived the first pass were
+real: the 48 kHz converter modes, which nothing could see because that rate
+cannot be run, and which are now pinned by asserting the up/down factors on
+our own converters. No suite is registered -- the re-record is deferred
+(docs/remaining.md).
+
+### F8840. The harness had no `modem_recv_from_tty` at all, only a `ref_` alias that aborted
+
+*2026-08-31.* `test/harness/runtime.c` implemented `modem_send_to_tty` for
+both sides with a transcript each, and for the other direction had only
+`ref_modem_recv_from_tty`, whose body was `unexpected("modem_recv_from_tty")`.
+So the reconstruction side had no definition at all and the reference side
+aborted: any function that reads from the host was untestable rather than
+untested, and nothing said so.
+
+`VOICE_process` reads from the host in two of its four states. The harness now
+carries `struct tty_in` -- one scripted buffer, two cursors, for the same
+reason `struct modem_shim` has two -- with call and byte counts a test can
+compare. This is apparatus, not reconstruction, and CLAUDE.md's rule about
+`src/` does not reach it; what does reach it is that a detector must report its
+denominator, so both counts are compared on every trial.
+
+### F8841. Voice is complete, and the `voice.c#1..#3` spans hold nothing unwritten
+
+*2026-08-31.* With `VOICE_create` (493), `VOICE_delete` (133),
+`VOICE_command` (548) and `VOICE_process` (2016) -- 3,190 bytes -- landed,
+every symbol in the voice service is written. What remains in the object is
+fax and the leaf set.
+
+The four are the OUTER layer and they are thin: `VOICE_command` translates
+eight host opcodes into four `voice_command` ones and forwards, `VOICE_create`
+and `VOICE_delete` are construction around `voice_create`/`voice_delete` plus
+a pair of rate converters, and only `VOICE_process` has real work in it -- two
+nested loops, two rate-conversion rings and a fourteen-way message dispatch.
+Five of the six deviations recorded against them (D1020-D1025) are in that one
+function or in the object it builds.
+
+### F8846. The voice wave took `mutsnap.py` from 1 current to 0, and the cause is a file gaining functions rather than anything going wrong
+
+*2026-08-31.* `docs/remaining.md` records the mutation snapshot as **1 current,
+227 stale, 0 never recorded, of 228 registered**, the one current entry being
+`ringdet` (41 mutations, 41 caught), recorded complete just before the full
+re-record was deferred. After this wave it reads **0 current, 228 stale, 0
+never recorded, of 228 registered.**
+
+**Nothing regressed.** `ringdet` still reports 41 of 41 caught; it went stale
+because `src/service/voice.c` -- the `voice.c#3` translation unit, which holds
+`RD_*`/`RingDetector_*` -- gained `VOICE_create`, `VOICE_delete`,
+`VOICE_command` and `VOICE_process`, and staleness is a property of the FILE
+the suite mutates, not of the suite's own result. Two of this wave's three
+commits changed a file some existing suite mutates, so the same would have
+happened to any of them.
+
+**The gate is unaffected and this is why it matters to say so.** `mutsnap.py
+--check` fails on MISSING, not on stale, and the count of never-recorded
+suites is still 0 -- all three agents were briefed not to register a suite
+they could not record, and none did. What is lost is the last current
+baseline, so the deferred re-record (`docs/remaining.md`'s own section, with
+its three preconditions) is now the only way back to a non-zero `current`.
+
+**And two of the three commits had to edit `test/mutations/*.json`
+DESCRIPTORS**, which is a different thing again from a snapshot: a `find`
+string that quotes a field name stops matching the moment the field is
+renamed, and the mutation then silently stops applying -- F134's dead detector
+with a mutation as the victim. `voicedpdel.json` needed six descriptors
+rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
+`cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
+`test/mutations/` for it; passing `make phase` proves nothing here, because a
+descriptor that no longer matches is not an error.
 ## F8862. The V.27ter receiver block is TILED by four FPM modules, and that is what makes its offsets readable rather than guessed
 
 `V27RX_create` is 2,210 bytes and is not reconstructed, so by `v17data.h`'s

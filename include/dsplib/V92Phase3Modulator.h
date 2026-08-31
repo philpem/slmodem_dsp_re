@@ -195,12 +195,18 @@ public:
 	 * theirs.  The `__builtin_offsetof` half was stale -- `offsetof` wants
 	 * standard layout, which a user-provided constructor does not affect.
 	 */
-	void generateRu();
-	void generateRuNot();
-	void genereteSu();		/* the object's own spelling */
-	void genereteSuNot();		/* likewise */
-	void generateJa();
-	void generateTRN1u();
+	/*
+	 * `int`, measured off the standalone bodies since the VPcmV34Main
+	 * leaf pass (each widens a short into %eax itself); all six defined
+	 * in V92Phase3Modulator.cpp as calls to the file-static bodies
+	 * `generateSymbol` inlines.
+	 */
+	int generateRu();
+	int generateRuNot();
+	int genereteSu();		/* the object's own spelling */
+	int genereteSuNot();		/* likewise */
+	int generateJa();
+	int generateTRN1u();
 	void exitJa();
 	void exitSilence();
 	void exitSuSecond();

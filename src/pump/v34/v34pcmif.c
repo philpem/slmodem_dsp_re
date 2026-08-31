@@ -613,6 +613,30 @@ VPcmV34GetSNR(void *objp)
 }
 
 /*
+ * `getTimingOffset` -- 0x71b0, 11 bytes -- and `getTimingPhase` -- 0x71c0,
+ * 11 bytes.  Two one-load accessors with NO CALLER anywhere in the object
+ * (the no-entry-point bucket: exported API surface), sitting between
+ * `VPcmV34GetSNR` and `VPcmV34GetCleanedSamples` where every neighbour takes
+ * the V.34 object.  The field comments in `v34fsk.h` carry the naming
+ * derivation; nothing but these two functions reads either word.
+ */
+int
+getTimingOffset(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return obj->timing_offset;
+}
+
+int
+getTimingPhase(void *objp)
+{
+	struct v34_object *obj = (struct v34_object *)objp;
+
+	return obj->timing_phase;
+}
+
+/*
  * ---------------------------------------------------------------------------
  * TWO OF `vpcm_run`'s FIVE CALLEES, and they are the two that are leaves.
  *

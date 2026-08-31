@@ -5,8 +5,8 @@
  *   v23_create   .text 0x004c30   274 bytes   (file-local)
  *   v23_delete   .text 0x004d50    72 bytes   (file-local)
  *   v23_process  .text 0x004da0   464 bytes   (file-local)
- *   dp_v23_init  .text 0x004ef0    30 bytes
- *   dp_v23_exit  .text 0x004f10    28 bytes
+ *   dp_v23_init  .text 0x004f70    30 bytes
+ *   dp_v23_exit  .text 0x004f90    28 bytes
  *   v23_ops      .data  0x000060    24 bytes
  *
  * The thin layer between the modem core and the V.23 modulation, and it is

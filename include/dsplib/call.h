@@ -105,5 +105,6 @@ int call_run(struct dp *dp, void *in, void *out, int count);
 long call_GetSRegister(void *modem, unsigned short num);
 
 void dp_call_init(void);
+void dp_call_exit(void);
 
 #endif /* DSPLIB_CALL_H */

@@ -71,6 +71,7 @@ extern int modem_put_bits(void *m, int nbits, const unsigned char *buf, int n);
  * undefined symbols, resolved by slmodemd's `modem.c`.
  */
 extern int modem_dp_register(int id, void *op);
+extern void modem_dp_deregister(int id, void *op);
 
 /*
  * `dp_param_get` -- src/core/dp_param.c, and it is `modem_get_param(modem,
@@ -840,4 +841,20 @@ dp_vpcm_init(void)
 	modem_dp_register(VPCM_DP_V90, &vpcm_op);
 	modem_dp_register(VPCM_DP_V92, &vpcm_op);
 	return 0;
+}
+
+/*
+ * `dp_vpcm_exit` -- 0x4510, 70 bytes.  The same three ids in the same order,
+ * the way back out.  Unlike `dp_vpcm_init` it returns nothing: the object
+ * ends `add $0xc,%esp; ret` with no write to %eax, where the init ends
+ * `xor %eax,%eax` -- and slmodemd's own extern for the aggregate
+ * (`ref/slmodemd/modem_main.c:103`) says `void prop_dp_exit(void)` against
+ * `int prop_dp_init(void)`, the same asymmetry one level up.
+ */
+void
+dp_vpcm_exit(void)
+{
+	modem_dp_deregister(VPCM_DP_V34, &vpcm_op);
+	modem_dp_deregister(VPCM_DP_V90, &vpcm_op);
+	modem_dp_deregister(VPCM_DP_V92, &vpcm_op);
 }

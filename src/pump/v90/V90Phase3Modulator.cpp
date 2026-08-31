@@ -322,6 +322,51 @@ updateCodeSegment(V90Phase3Modulator *m)
 
 /*
  * ===========================================================================
+ * THE EIGHT LEAF METHODS, claimed by the VPcmV34Main leaf pass.
+ *
+ * The object emits every one of these as a `T` symbol of its own AND inlines
+ * the identical body into the two symbol pumps; the file-static helpers
+ * above are those bodies, so each method below is one call the compiler
+ * inlines straight back.  Blob addresses, in emission order: `generateSd`
+ * 0x2ac60, `generateSdNot` 0x2acf0, `updateCodeSegmentPointer` 0x2ae90 --
+ * then, after `generateDIL` (0x2b070): `generateJdNot` 0x2b220, `generateJd`
+ * 0x2b260, `generateTRN1d` 0x2b2b0, `generateJdPhase` 0x2b9f0 and
+ * `generateV92Jd` 0x2ba40, which sit further down this file for the same
+ * emission-order reason (F7796).
+ *
+ * THE RETURN TYPE IS `int` FOR THE SEVEN GENERATORS, read off the standalone
+ * bodies: each ends `movswl %dx,%eax` (or `mov %ebx,%eax` of a `movswl`'d
+ * value), the CALLEE widening a short -- where a `short` return leaves the
+ * widening to the caller, as `V90Phase4Modulator`'s sequence readers do.
+ * The header used to spell them `void` with the usual not-measured caveat;
+ * the standalone bodies are the measurement.
+ *
+ * Their unreachable default arms differ from the helpers': past the `%6u`
+ * the standalone bodies return whatever is in a callee-saved register, the
+ * helpers return 0, and no input reaches either.
+ * ===========================================================================
+ */
+int
+V90Phase3Modulator::generateSd()
+{
+	return sdSymbol(this);
+}
+
+int
+V90Phase3Modulator::generateSdNot()
+{
+	return sdNotSymbol(this);
+}
+
+/* 0x2ae90, 59 bytes: the helper above, standalone. */
+void
+V90Phase3Modulator::updateCodeSegmentPointer()
+{
+	updateCodeSegment(this);
+}
+
+/*
+ * ===========================================================================
  * `V90Phase3Modulator::generateDIL` -- .text+0x2b070, 0x1aa = 426 bytes.
  *
  * One symbol of the digital impairment learning sequence, and the four
@@ -471,6 +516,46 @@ V90Phase3Modulator::generateDIL()
 	}
 
 	return level;
+}
+
+/* 0x2b220, 51 bytes: the shared scrambled-symbol body with a constant 0. */
+int
+V90Phase3Modulator::generateJdNot()
+{
+	return scrambledSymbol(this, 0);
+}
+
+/* 0x2b260, 80 bytes: the 72-bit Jd vector through the scrambler. */
+int
+V90Phase3Modulator::generateJd()
+{
+	return scrambledSymbol(this, vectorBit(jdBits, symbolCount));
+}
+
+/*
+ * 0x2b2b0, 60 bytes.  NOT the shared body: the scrambler is driven with a
+ * constant 1 and its raw output picks the sign directly -- `polarity` is
+ * neither read nor written, which is what separates TRN1d from JdNot.
+ */
+int
+V90Phase3Modulator::generateTRN1d()
+{
+	if (scrambler.process(1))
+		return codeLevel;
+	return (short)-codeLevel;
+}
+
+/* 0x2b9f0 and 0x2ba40, 80 bytes each: the two V.92 vectors, same body. */
+int
+V90Phase3Modulator::generateJdPhase()
+{
+	return scrambledSymbol(this, vectorBit(jdV92PhaseBits, symbolCount));
+}
+
+int
+V90Phase3Modulator::generateV92Jd()
+{
+	return scrambledSymbol(this, vectorBit(jdV92Bits, symbolCount));
 }
 
 /*

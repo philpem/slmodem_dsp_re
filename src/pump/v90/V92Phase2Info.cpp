@@ -2,10 +2,10 @@
  * V92Phase2Info.cpp -- what V.92 Phase 2 concluded, as the constructor builds
  * it.
  *
- * Reconstructed from dsplibs.o.  One of the class's three members,
- * `V92Phase2Info(V92Parameters *)` at 0x15f70; `include/dsplib/
- * V92Phase2Info.h` carries the object map and says where each field came
- * from.  `printInfo` and `setToDefault` are not written here.
+ * Reconstructed from dsplibs.o.  All three of the class's members --
+ * `setToDefault()` at 0x15f10, `V92Phase2Info(V92Parameters *)` at 0x15f70
+ * and `printInfo() const` at 0x16030; `include/dsplib/V92Phase2Info.h`
+ * carries the object map and says where each field came from.
  *
  * THIS FILE DID NOT EXIST UNTIL THE CONSTRUCTOR DID, and that is why the
  * offset assertions below moved here from src/pump/v90/VPcmFloModem.cpp.
@@ -27,6 +27,8 @@
 
 #include "dsplib/V92Parameters.h"
 #include "dsplib/V92Phase2Info.h"
+#include "dsplib/debug.h"
+#include "dsplib/encode.h"
 
 /*
  * Hold the compiler to the map in the header, the way V90Jd.cpp does:
@@ -100,6 +102,41 @@ typedef char v92p2i_size[(sizeof(V92Phase2Info) == 0x2c) ? 1 : -1];
  * what is not free is which byte gets which value.
  * ===========================================================================
  */
+/*
+ * setToDefault -- 0x15f10, 87 bytes, immediately BEFORE the constructor in
+ * the blob as here.  The constructor's fourteen stores minus the one that
+ * sizes the object: `params` is read back from +0x28 instead of stored.
+ * The store order below is the object's, as in the constructor.  The local
+ * is `blk` (the constructor's is `p`) and the constants carry offset
+ * comments because the mutation suite anchors on the constructor's exact
+ * text and an anchor must match exactly once (`make refs`); neither an
+ * identifier nor a comment moves codegen.
+ */
+void
+V92Phase2Info::setToDefault()
+{
+	V92Parameters *blk = params;
+
+	pcmType = (blk->V92_PHASE2_INFO_A_OR_MU != 0);
+	rtd = blk->V92_PHASE2_INFO_RTD;
+	Uinfo = (unsigned char)blk->V92_PHASE2_INFO_UINFO;
+	maxTxPower = (unsigned char)blk->V92_PHASE2_INFO_MAX_TX_POWER;
+
+	shortPhase2Remote = 0;		/* +0x12 */
+	v92CapabilitiesRemote = 0;	/* +0x13 */
+	shortPhase2Local = 0;		/* +0x10 */
+	v92CapabilitiesLocal = 1;	/* +0x11 */
+
+	txPowerMeasurementPoint =
+	    (blk->V92_PHASE2_INFO_TX_POWER_MEASURE_POINT != 0);
+
+	nofFilterSections = (unsigned char)blk->V92_NOF_FILTER_SECTIONS;
+	maxTotalNofCoeffs = (unsigned char)blk->V92_MAX_TOTAL_NOF_COEFFS;
+	v90UseHighCarrier = 0;		/* +0x17 */
+	maxNofCoeffsInEachSection =
+	    (unsigned char)blk->V92_MAX_NOF_COEFFS_IN_EACH_SECTION;
+}
+
 V92Phase2Info::V92Phase2Info(V92Parameters *p)
 {
 	params = p;
@@ -121,4 +158,97 @@ V92Phase2Info::V92Phase2Info(V92Parameters *p)
 	v90UseHighCarrier = 0;
 	maxNofCoeffsInEachSection =
 	    (unsigned char)p->V92_MAX_NOF_COEFFS_IN_EACH_SECTION;
+}
+
+/*
+ * ===========================================================================
+ * printInfo -- 0x16030, 572 bytes.
+ *
+ * The same char-and-two-ints fixed-point split as V90Phase2Info::printInfo,
+ * and the three helpers below are that file's, duplicated because they are
+ * file-static there as the original's were here; finding F256 carries the
+ * long-double measurement they rest on.
+ *
+ * THE GATING IS THE OBJECT'S AND IT IS MIXED.  The first four lines go
+ * through `dsplibs_debug_printf`, each behind its own `dsplibs_debug_level`
+ * test (the object re-reads the level before every one); the middle four go
+ * through `edprintf` UNGATED -- edprintf self-gates one level down -- and
+ * the L2 loop runs its twenty-one iterations at every level with only the
+ * printing gated, the level re-read once per iteration, exactly as
+ * V90Phase2Info's loop does.
+ *
+ * `maxTxPower` prints `(maxTxPower + 1) * -0.5` under a [dBm0] label: the
+ * field is a code in half-decibel steps, V90Phase2Info.h's reading, and the
+ * product is always negative so its sign prints '-' on every input.
+ * ===========================================================================
+ */
+
+/* `0 < v`, C0 of an fcom against a pushed zero; see V90Phase2Info.cpp. */
+static char
+sign_of(float v)
+{
+	return (0.0f < v) ? '+' : '-';
+}
+
+/* `fabs` then a truncating `fistpl`: the magnitude, toward zero. */
+static int
+whole_of(float v)
+{
+	return (int)__builtin_fabsf(v);
+}
+
+/* The scaled fraction, absolute; V90Phase2Info.cpp's derivation (F256). */
+static int
+frac_of(float v, float scale)
+{
+	long double x = (long double)v;
+	long double d = (long double)(int)v - x;
+	int n = (int)(d * (long double)scale);
+
+	return (n < 0) ? -n : n;
+}
+
+void
+V92Phase2Info::printInfo() const
+{
+	unsigned int i;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Phase2Info: pcmType = %s\r\n",
+				     pcmType == 1 ? "A_LAW" : "MU_LAW");
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Phase2Info: rtd = %d\r\n", rtd);
+
+	if (DSPLIB_DEBUG_ON()) {
+		float p = (float)((int)maxTxPower + 1) * -0.5f;
+
+		dsplibs_debug_printf(
+		    "V92Phase2Info: maxTxPower [dBm0]  = %c%d.%01d\r\n",
+		    sign_of(p), whole_of(p), frac_of(p, 10.0f));
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "V92Phase2Info: txPowerMeasurementPoint = %s\r\n",
+		    txPowerMeasurementPoint == 1 ? "CodecOutput"
+						 : "DigitalModemTerminal");
+
+	edprintf("V92Phase2Info: ShortPhase2: local=%d , remote=%d\r\n",
+		 shortPhase2Local, shortPhase2Remote);
+	edprintf("V92Phase2Info: v92Capabilities: local=%d , remote=%d\r\n",
+		 v92CapabilitiesLocal, v92CapabilitiesRemote);
+	edprintf("V92Phase2Info: v90UseHighCarrier = %d\r\n",
+		 v90UseHighCarrier);
+	edprintf("V92Phase2Info: Uinfo = %d\r\n", Uinfo);
+
+	for (i = 0; i < V92PHASE2INFO_L2; i++) {
+		if (DSPLIB_DEBUG_ON()) {
+			float v = L2[i];
+
+			dsplibs_debug_printf(
+			    "V92Phase2Info: L2[%d] = %c%d.%03d\r\n", (int)i,
+			    sign_of(v), whole_of(v), frac_of(v, 1000.0f));
+		}
+	}
 }

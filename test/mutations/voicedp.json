@@ -1,0 +1,160 @@
+[
+ {
+  "note": "src/service/voicedp.c against build/test/t_voicedp.  Only the two setters, voice_online and voice_duplex are mutated here; voice_tx's own claims are in voicedptx.json, because t_voicedp never calls it and a mutant no binary can reach reads NOT CAUGHT while modelling nothing."
+ },
+ {
+  "label": "voice_set_online writes the wrong mode",
+  "find": "\tv->mode = 2;\n\tv->handler = voice_online;",
+  "replace": "\tv->mode = 3;\n\tv->handler = voice_online;"
+ },
+ {
+  "label": "voice_set_online installs the duplex handler",
+  "find": "\tv->handler = voice_online;\n\tdetector_set_enable",
+  "replace": "\tv->handler = voice_duplex;\n\tdetector_set_enable"
+ },
+ {
+  "label": "voice_set_online enables the detector with the duplex constant",
+  "find": "\tdetector_set_enable(v->detector, (short)v->detector_enable);",
+  "replace": "\tdetector_set_enable(v->detector, 0x24);"
+ },
+ {
+  "label": "voice_set_duplex writes the online mode",
+  "find": "\tv->mode = 3;\n\tv->handler = voice_duplex;",
+  "replace": "\tv->mode = 2;\n\tv->handler = voice_duplex;"
+ },
+ {
+  "label": "voice_set_duplex reads the context's mask instead of its constant",
+  "find": "\tdetector_set_enable(v->detector, 0x24);",
+  "replace": "\tdetector_set_enable(v->detector, (short)v->detector_enable);"
+ },
+ {
+  "label": "voice_set_tx writes the online mode",
+  "find": "\tv->mode = 1;\n\tv->handler = voice_tx;",
+  "replace": "\tv->mode = 2;\n\tv->handler = voice_tx;"
+ },
+ {
+  "label": "voice_set_tx installs the receive handler",
+  "find": "\tv->handler = voice_tx;\n\tdetector_set_enable",
+  "replace": "\tv->handler = voice_rx;\n\tdetector_set_enable"
+ },
+ {
+  "label": "voice_set_tx uses the receive detector mask",
+  "find": "\tdetector_set_enable(v->detector, (short)v->detector_enable_tx);",
+  "replace": "\tdetector_set_enable(v->detector, (short)v->detector_enable_rx);"
+ },
+ {
+  "label": "voice_set_tx writes a 7200 Hz format",
+  "find": "\tv->rate_bits.s.bits = 8;\n\tv->rate_bits.s.rate = 8000;\n\tv->underrun = 1;",
+  "replace": "\tv->rate_bits.s.bits = 8;\n\tv->rate_bits.s.rate = 7200;\n\tv->underrun = 1;"
+ },
+ {
+  "label": "voice_set_tx writes a 4-bit format",
+  "find": "\tv->rate_bits.s.bits = 8;\n\tv->rate_bits.s.rate = 8000;",
+  "replace": "\tv->rate_bits.s.bits = 4;\n\tv->rate_bits.s.rate = 8000;"
+ },
+ {
+  "label": "voice_set_tx starts the underrun latch DOWN, so the first empty block reports",
+  "find": "\tv->rate_bits.s.rate = 8000;\n\tv->underrun = 1;",
+  "replace": "\tv->rate_bits.s.rate = 8000;\n\tv->underrun = 0;"
+ },
+ {
+  "label": "the beep's full scale is FDSP_DP_Run's 32000 rather than 30000",
+  "find": "#define VOICE_BEEP_FULL_SCALE\t30000.0f",
+  "replace": "#define VOICE_BEEP_FULL_SCALE\t32000.0f"
+ },
+ {
+  "label": "the linear output format test admits one value too many",
+  "find": "#define VOICE_OUT_IS_LINEAR(v)\t((unsigned int)((v)->out_format - 1) <= 1u)",
+  "replace": "#define VOICE_OUT_IS_LINEAR(v)\t((unsigned int)((v)->out_format - 1) <= 2u)"
+ },
+ {
+  "label": "voice_online tests beep_done the wrong way round",
+  "find": "\tif (v->beep_done) {\n\t\tif (VOICE_OUT_IS_LINEAR(v)) {",
+  "replace": "\tif (!v->beep_done) {\n\t\tif (VOICE_OUT_IS_LINEAR(v)) {"
+ },
+ {
+  "label": "voice_online's beep sample is not scaled before the cast",
+  "find": "\t\t\ttx_lin[i] = (short)(s * VOICE_BEEP_FULL_SCALE);",
+  "replace": "\t\t\ttx_lin[i] = (short)s;"
+ },
+ {
+  "label": "voice_online stops the beep loop on the wrong return value",
+  "find": "\t\twhile (i < *countp && r != 1) {\n\t\t\tfloat s;",
+  "replace": "\t\twhile (i < *countp && r != 2) {\n\t\t\tfloat s;"
+ },
+ {
+  "label": "voice_online's linear tail is not zeroed",
+  "find": "\t\twhile (i < *countp)\n\t\t\ttx_lin[i++] = 0;",
+  "replace": "\t\twhile (i < *countp)\n\t\t\ttx_lin[i++] = 1;"
+ },
+ {
+  "label": "voice_online's float tail is not zeroed",
+  "find": "\t\twhile (i < *countp)\n\t\t\trx_flt[i++] = 0.0f;",
+  "replace": "\t\twhile (i < *countp)\n\t\t\trx_flt[i++] = 1.0f;"
+ },
+ {
+  "label": "voice_online does not latch beep_done when the queue empties",
+  "find": "\t\tv->beep_done = 1;\n\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\tret = 1;",
+  "replace": "\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\tret = 1;"
+ },
+ {
+  "label": "voice_online answers 0 rather than 1 on the block that ends the beep",
+  "find": "\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\tret = 1;\n\t}",
+  "replace": "\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t}"
+ },
+ {
+  "label": "D997's dead store is repaired, so the caller sees the sample count",
+  "find": "\t*hostcount = *countp;\n\t*countp = 0;\n\t*hostcount = 0;",
+  "replace": "\t*hostcount = *countp;\n\t*countp = 0;"
+ },
+ {
+  "label": "voice_online leaves the sample count alone",
+  "find": "\t*countp = 0;\n\t*hostcount = 0;",
+  "replace": "\t*hostcount = 0;"
+ },
+ {
+  "label": "voice_online drops the second half of its mode test",
+  "find": "\tif (v->int_0014 != v->mode && v->int_0014 != 0)\n\t\tret = VOICE_ONLINE_MODE_STATUS;",
+  "replace": "\tif (v->int_0014 != v->mode)\n\t\tret = VOICE_ONLINE_MODE_STATUS;"
+ },
+ {
+  "label": "voice_online answers the duplex code on a mode mismatch",
+  "find": "#define VOICE_ONLINE_MODE_STATUS\t2",
+  "replace": "#define VOICE_ONLINE_MODE_STATUS\t5"
+ },
+ {
+  "label": "voice_duplex hands the datapump its two counts the wrong way round",
+  "find": "\tFDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, hostcount, countp);",
+  "replace": "\tFDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, countp, hostcount);"
+ },
+ {
+  "label": "voice_duplex does not run the datapump at all",
+  "find": "\tFDSP_DP_Run(v->dp, rx_lin, rx_flt, tx_flt, tx_lin, hostcount, countp);\n\n\tif (!v->beep_done) {",
+  "replace": "\n\tif (!v->beep_done) {"
+ },
+ {
+  "label": "voice_duplex overlays the beep even after it has finished",
+  "find": "\tif (!v->beep_done) {\n\t\tunsigned short i = 0;",
+  "replace": "\tif (v->beep_done || 1) {\n\t\tunsigned short i = 0;"
+ },
+ {
+  "label": "voice_duplex lays the beep over the transmit side",
+  "find": "\t\t\tr = beepgen_sample(v->beepgen, &rx_flt[i]);\n\t\t\ti++;\n\t\t}\n\t\tif (r == 1) {",
+  "replace": "\t\t\tr = beepgen_sample(v->beepgen, &tx_flt[i]);\n\t\t\ti++;\n\t\t}\n\t\tif (r == 1) {"
+ },
+ {
+  "label": "voice_duplex does not latch beep_done",
+  "find": "\t\t\tv->beep_done = 1;\n\t\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\t\tret = 1;",
+  "replace": "\t\t\tFDSP_Kernel_SetInternalBeepInProgress(0);\n\t\t\tret = 1;"
+ },
+ {
+  "label": "voice_duplex gains voice_online's second mode test",
+  "find": "\tif (v->int_0014 != v->mode)\n\t\tret = VOICE_DUPLEX_MODE_STATUS;",
+  "replace": "\tif (v->int_0014 != v->mode && v->int_0014 != 0)\n\t\tret = VOICE_DUPLEX_MODE_STATUS;"
+ },
+ {
+  "label": "voice_duplex answers the online code on a mode mismatch",
+  "find": "#define VOICE_DUPLEX_MODE_STATUS\t5",
+  "replace": "#define VOICE_DUPLEX_MODE_STATUS\t2"
+ }
+]
