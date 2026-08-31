@@ -5,35 +5,28 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `fb4519de` (waves 1–4 merged), 2026-08-31:
+Measured at `e1604049`, 2026-08-31:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 86.0%  (631,530 bytes / 1,544 symbols)   was 76.6% / 1,296
-remaining 103,075 bytes /   305 symbols
+translated 86.8%  (637,908 bytes / 1,554 symbols)   was 76.6% / 1,296
+remaining  96,697 bytes /   295 symbols
   DATA MODES             0 sym        0 B   COMPLETE
-  fax only             283 sym   78,331 B   <-- 76% of what is left
-  voice                 10 sym    6,378 B   Caller ID and ring detect COMPLETE
+  voice / CID / ring     0 sym        0 B   COMPLETE
+  fax only             283 sym   78,331 B   <-- 96% of the remaining BYTES
   no-entry-point leaves 12 sym    2,957 B
 ```
 
-## Where this stands
+## EVERYTHING EXCEPT FAX IS DONE
 
-**The data modes are complete**, and so are **Caller ID** and **ring detect**.
-Merged master is period-green at **315 passed, 0 failed**, with `onedef`,
-`banners` (366/366) and `check64` green.
+Data modes, Caller ID, ring detect and voice all report **0 symbols, 0 bytes**
+from `service.py`. Merged master is period-green at **319 passed, 0 failed**,
+with `onedef`, `banners` (376/376), `check64` and `refcheck` clean.
 
-**FAX is now 76% of everything that remains** — 283 symbols against 22 in every
-other bucket combined. The project is at the phase boundary README describes:
-everything except fax is essentially done, and fax was deferred on VALUE
-(SpanDSP already implements Class 1 in the open-source world), not difficulty.
-
-**Voice's last 10 symbols are NOT a leaf problem and NOT independent.**
-`detector_create` (411) needs `TONEamode_CFG` and `tone`; `detector_progress`
-(814) needs five data symbols; the other eight are blocked on those two and on
-each other. **Six of the ten sit in the span labelled `class1tx.c +94`, which
-is the FAX span** — a pass that reads "fax is last" as "skip that span" strands
-them. That is the span-is-not-a-module rule with real money on it.
+What is left is fax — 283 symbols, 78,331 bytes — and 12 no-entry-point leaves
+of 2,957 bytes, **9 of which are F8492's link-blocked set and unblock as their
+fax referents land.** So the leaves are not a separate phase; they come free
+with fax.
 
 ## THE DECISION TO DO FAX, TAKEN 2026-08-31
 
@@ -110,7 +103,7 @@ phase, last on purpose).
 | 7 | V.32 FP layer and dispatch | `Dialer.c +18`, `V32mod.c +39`, `v32.c` | 9,384 | **DONE** — wave 3, merge `e9110d66`. All 25, closure now empty; 14 tables, not the 12 predicted |
 | 8 | Caller ID | `cid_*`/`data_*` in `V32mod.c +39` | 5,446 | **DONE** — wave 4, `011b53c5`, period 303/303. 11 functions + `V23_MRF_FILT`; CID closure empty. F8700–F8739, D970–D976 |
 | 8b | Ring detect | `RingDetector_*`/`RD_*` in `voice.c#3 +3` | 2,061 | **DONE** — wave 4, `fb4519de`. All 8 symbols; 1,249,563 differential checks, 41/41 mutants caught |
-| 9 | **Voice** | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3`, `class1tx.c +94` | 6,378 left of 16,685 | **MOSTLY DONE** — wave 4. 41 of 51 symbols written. The last 10 are interdependent, not leaves; six sit in the FAX span |
+| 9 | Voice | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3`, `class1tx.c +94` | 16,685 | **DONE** — wave 5, merge `e1604049`, period 319/319. All 51 symbols; bucket is zero |
 | 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last. Restore `t_faxsgd.c` from `9b1739ee^` first (F8497) |
 | 11 | the 15 remaining leaves | mostly `class1*.c`; 9 of them are F8492's link-blocked set | 3,167 | unblocks as their referents land — not a wave of its own |
 
@@ -496,3 +489,69 @@ running it detached does not exist in the sharded path.
 tool that emitted a partial snapshot here would have produced something
 indistinguishable from a baseline, which is the failure this whole register
 exists to prevent (F347).
+
+## Wave 5 — voice closed (merge `e1604049`, period 319/319)
+
+All ten remaining call symbols and all seven data symbols, 6,502 bytes.
+`detector_create`/`detector_progress` in a new `src/service/detector.c` with
+the seven data symbols `static` beside them; `voice_*` in a new
+`src/service/voicesvc.c`; the four `VOICE_*` in `src/service/voice.c`.
+Findings F8800–F8846, deviations D1000–D1025.
+
+**`TONEamode_CFG` was written WITH `detector_create`**, as the previous wave's
+decline required — a `d`/LOCAL array whose only referent is inside one
+unwritten function. Its twelve words were checked against F8781 AND against the
+object's bytes rather than re-derived from the finding alone.
+
+### What this wave found in the ORIGINAL, and could not test
+
+- **D1022 — the blob's `VOICE_process` FAULTS at 8 kHz.** No converters are
+  built and `RcFixed_Resample` dereferences NULL four instructions in; it was
+  found by running it, when the first `t_voiceproc` segfaulted inside
+  `ref_VOICE_process`. Our `fixedrc.c` carries a pre-existing NULL guard the
+  object lacks, **so 8 kHz cannot be compared differentially at all** — the
+  tests assert the precondition on both sides and drive 9,600 Hz only, which
+  F8838 shows is the only rate that rate can actually run.
+- **D1020 — the outer loop advances the caller's buffers by the SAMPLE count
+  while consuming twice that in bytes.** Reproduced and ASSERTED rather than
+  merely noted: the test checks the output byte at `3*block-1` was written,
+  `3*block` was not, and `4*block-1` — which a correct pass would reach — was
+  not. Reachable as soon as `count > 192`.
+- D1021, D1023, D1024, D1025 — a mode reporting itself unknown, cursors
+  wrapping 1,536 samples past a 384-sample array at 48 kHz, and an
+  uninitialised ABORT argument.
+
+### Two corrections the wave made to its own brief
+
+- **The divisor is 8000, not 1000** (F8833). `0x10624dd3` is GCC's reciprocal
+  for both; the SHIFT separates them, and `shr $9` on the high word gives 8000.
+  That also explains why the rings do not overflow at 8 or 9.6 kHz — and it
+  made D1020 twice as reachable as first estimated.
+- **`voice.h`'s `rx_flt`/`tx_flt` are NOT crossed** (F8834). They are named from
+  the DSP's side of the host link, and all four buffer names are consistent
+  under that reading. No rename was made.
+
+### Process notes
+
+- **A branch moved underneath a running gate.** A subagent re-committed after
+  its parent had reported, so the branch head went `afbb9e2a` -> `e225ad5b`
+  mid-build. The gate was killed and restarted at the settled head.
+  `git diff afbb9e2a e225ad5b` was EMPTY — the content was identical and the
+  history was merely reshaped — but a build torn by a checkout underneath it is
+  not a result, and that could not be known without checking. **Read the branch
+  head at the moment you start a gate, and re-read it before believing the
+  verdict.**
+- **The merged tree was NOT re-gated, deliberately.** Master differs from the
+  gated branch head only by `CLAUDE.md` and `docs/remaining.md`; `git diff
+  --name-only` over `src/ include/ test/ tools/ Makefile` is empty, and neither
+  file is read by any tier. The 319/0 verdict carries. Recorded because
+  "I skipped the gate" needs its reason written down to be checkable.
+- The harness gained `modem_recv_from_tty` (F8840). It previously existed only
+  as a `ref_` alias whose body was `unexpected()`, which made two of
+  `VOICE_process`'s four states untestable. Additive, but it relinks every test
+  binary.
+- **F8846 — the snapshot is back to 0 current / 228 stale**, because
+  `src/service/voice.c` gained functions and `ringdet` went stale with it.
+  Nothing is MISSING so the gate is unaffected. Six `voicedpdel.json` mutation
+  DESCRIPTORS also needed rewriting for field renames: **a `find` string that
+  quotes a renamed field stops matching silently.**
