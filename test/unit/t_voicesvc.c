@@ -1038,7 +1038,7 @@ t_modem(void)
 	 * could never be observed.
 	 */
 	/*
-	 * AND THIS IS THE DEVIATION, ASSERTED RATHER THAN ARGUED (D1012).
+	 * AND THIS IS THE DEVIATION, ASSERTED RATHER THAN ARGUED (D1011).
 	 * `detector_progress` answers 3, 4, 5 and 6 for the four tones, and
 	 * `voice_modem`'s chain tests 1, 2 and 4 only -- so 1100 Hz becomes
 	 * 12 and the other three are DISCARDED, the handler's own return

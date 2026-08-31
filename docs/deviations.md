@@ -10183,3 +10183,144 @@ detector in the run, and three of them are observed to vanish. Whether that
 is deliberate -- 1100 Hz is the calling-tone frequency and the other three are
 answer/fax tones a voice call has no use for -- is not established by
 anything in the object.
+
+## D1020 ⚠ `VOICE_process` advances the caller's buffers by HALF what it consumed
+
+`VOICE_process` takes the caller's `in` and `out` a block at a time. The
+INNER loop moves `2 * n` bytes per step -- `n` SAMPLES -- and advances its own
+working copies of both pointers by `2 * n`. The OUTER step, at 0xf69-0xf7b,
+advances the caller's pointers by `chunk`:
+
+    f69:  mov  0x58(%esp),%ecx          ; chunk, in SAMPLES
+    f6d:  sub  %ecx,0x9c(%esp)          ; count -= chunk
+    f74:  add  %ecx,0x94(%esp)          ; in  += chunk     <-- BYTES
+    f7b:  add  %ecx,0x98(%esp)          ; out += chunk     <-- BYTES
+
+Both are plain `add`s of the sample count onto a pointer slot, not
+`lea (,%ecx,2)`, and slmodemd's own prototype declares both parameters
+`void *` (`modem.c` line 94) -- so the arithmetic is in bytes and the advance
+is exactly half the `2 * chunk` bytes the inner loop just moved. Every outer
+iteration after the first therefore re-reads and re-writes the second half of
+the block it has already handled, and the last byte written is at
+`(iterations - 1) * block + 2 * chunk_last` instead of `2 * count`.
+
+It is reachable at every rate: the outer loop runs more than once as soon as
+`count` exceeds `block`, which is 192 samples at the only rate this function
+can be called at (F8838).
+
+**Status:** reproduced exactly -- `in = (unsigned char *)in + chunk;` -- and
+asserted rather than merely reproduced. `t_voiceproc`'s `t_underadvance` runs
+`count = 2 * block`, then asserts that the output byte at `3 * block - 1` WAS
+written, that the byte at `3 * block` was NOT, and that the byte at
+`4 * block - 1` -- which a correct pass would have reached -- was not either.
+The guard region past the high-water mark is checked on all 124 calls. Both
+"repair" mutants (`+ 2 * chunk` on `in` and on `out`) are caught.
+
+## D1021 ⚠ `VOICE_CMD_STATE_DUPLEX` is inside the accepted range and reports itself unknown
+
+`VOICE_command` accepts opcodes 0..7 and dispatches through a jump table at
+`.rodata` 0x8. Slot 3 holds 0xa10, which is the SAME label the out-of-range
+path uses: it prints "voice: VCE: Unknown command %u" and answers -1.
+
+The host has that command. `enum VOICE_CMD` in `ref/slmodemd/modem_defs.h`
+lists `VOICE_CMD_STATE_DUPLEX` third, between `_STATE_TX` and `_STATE_SPEAKER`,
+and `modem_voice_command` will pass it. The other seven enumerators each have
+a working arm whose debug string names the enumerator (F8830), so this is one
+missing arm and not a numbering disagreement.
+
+The capability is not lost, only its name: `VOICE_CMD_STATE_SPEAKER` maps to
+`voice_command`'s mode 3, which IS `VOICE_MODE_DUPLEX`. So a host that wants
+duplex has to ask for the speaker.
+
+**Status:** reproduced -- `case 3` is absent from the switch, so GCC puts the
+default label in slot 3 exactly as the object does. `t_voiceapi` drives opcode
+3 at both debug levels and asserts the -1 and the untouched `host_count`.
+
+## D1022 ⚠ At 8 kHz `VOICE_create` builds no rate converters and `VOICE_process` then faults
+
+`VOICE_create` jumps over both `RcFixed_Create` ladders when the rate is 8000
+(`cmp $0x1f40,%ebx; je` at 0x76c), leaving `rc_in` and `rc_out` at the zero
+`sysdep_memset` left. `VOICE_process` passes `rc_in` to `RcFixed_Resample`
+unconditionally (0xd75, `mov 0x18(%edi),%ebx`), and that function's fourth
+instruction is `mov (%edx),%ecx` at 0xb12bf -- it dereferences the handle with
+no NULL test anywhere before it.
+
+So an 8 kHz voice object faults on the first block that fills the input ring,
+which is the 160th sample. The rate is the one slmodemd is most likely to hand
+it: `VOICE_create(m, m->srate)`.
+
+**Status:** the object's behaviour is reproduced up to the point where the two
+implementations differ, and they differ in `src/core/fixedrc.c`, not here:
+that file's `RcFixed_Resample` carries a NULL guard the object does not have,
+which is a pre-existing tolerance recorded in its own comments. So OUR
+`VOICE_process` at 8 kHz returns having moved no audio -- `rlen` is 0, both
+scaling loops are empty and the output ring is never written -- where the blob
+faults.
+
+That difference cannot be closed from this file and is not closed here. It
+also means the 8 kHz case cannot be differentially tested at all;
+`t_voiceproc` asserts the PRECONDITION instead (both converter pointers NULL
+on both sides, and both present at 9600) and drives 9600 only. Discovered by
+running it: the first version of `t_voiceproc` segfaulted inside
+`ref_VOICE_process` at `count = 160`.
+
+## D1023 ⚠ At 48 kHz the ring cursors wrap 1,536 samples past the end of the array
+
+Each of `struct vce`'s two rings is 0x310 bytes: four 32-bit fields and a
+384-sample array. `VOICE_process` wraps both cursors modulo `2 * block` and
+`RcFixed_Resample` works on a half-window of `block` samples at
+`data[blk]`, so the type is self-consistent only while `2 * block <= 384`.
+
+    rate    block   2 * block   array
+    8000     160       320       384    fits
+    9600     192       384       384    fits exactly
+    48000    960      1920       384    1,536 samples over
+
+The sizes are not inferred: 0xe64 + 0x310 is 0x1174, the second ring's offset,
+and 0x1174 + 0x310 is 0x1484, the allocation exactly. So a 48 kHz object
+indexes 3 KB past its own end on the first block, into the heap.
+
+**Status:** reproduced -- the modulus is `% (2 * v->block)` and the array is
+`short data[384]`, both the object's. `t_voiceproc` does NOT drive 48 kHz for
+this reason and says so; the arithmetic is asserted directly in
+`t_rate_bounds` instead, including the 1,536. `t_voiceapi` does CREATE at
+48 kHz, which is safe -- the overrun needs `VOICE_process`.
+
+## D1024 ⚠ `VOICE_create` asks the voice core for a mode that does not exist
+
+The constructor issues two commands into the object it has just built, through
+one argument block (0x850-0x88e):
+
+    arg[0] = 0;  voice_command(v->voice, VOICE_VLS_COMMAND, arg);
+    arg[0] = 4;  voice_command(v->voice, VOICE_SET_MODE_COMMAND, arg);
+
+`voice_command`'s SET_MODE arm switches `arg[0]` over 0..3 -- RX, TX, ONLINE,
+DUPLEX -- and 4 is none of them, so the inner switch matches nothing and the
+only thing the call achieves is the `beep_done = 1` on the join at 0xac65e.
+`voice_create` has already left `beep_done` at 1, so the second command is a
+no-op in full.
+
+The first is nearly one too: VLS with 0 sets `out_format = 0`, which is what
+`sysdep_memset` left.
+
+**Status:** reproduced, both calls, in the object's order. `t_voiceapi`
+compares the whole `struct voice_ctx` after every create, so a changed
+argument shows up; the mutant `arg[0] = 4` -> `3` is caught, because 3 IS a
+mode and installs the duplex handler.
+
+## D1025 ⚠ `VOICE_CMD_ABORT` passes its argument block uninitialised
+
+Seven of `VOICE_command`'s eight arms converge on
+`voice_command(v->voice, op, arg)` with a three-int local at `0x10(%esp)`.
+The ABORT arm (0xab0) writes none of it: it sets the opcode to 9 and jumps
+straight to the join at 0x9ec, so the callee is handed whatever was on the
+stack.
+
+It is harmless. `voice_command`'s `VOICE_ABORT_COMMAND` arm prints a fixed
+string and sets `dle_can = 1`; it reads no element of `arg` (0xac531-0xac545).
+
+**Status:** reproduced -- the arm assigns `op` and nothing else, so GCC leaves
+`arg` alone exactly as the object does. It is left uninitialised rather than
+tidied, because zeroing it would be a store the object does not make and would
+show in a codegen comparison. `t_voiceapi` drives ABORT at both debug levels
+and over six `tone_duration` values and compares the full object each time.
