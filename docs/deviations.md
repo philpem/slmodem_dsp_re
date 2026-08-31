@@ -9262,3 +9262,77 @@ the 3->2 transition -- only the 1->2 transition clears it). With
 
 **Status:** unmeasured. Whether the first post-seizure byte ever reaches
 `cid_get_strings` is `cid_modem`'s question, and it is not reconstructed.
+
+## D956 🐛 `V22FP_modem` copies `*n_rx` symbols out of a hundred-entry buffer with no clamp, and `v22_process` hands it the LAST member of a malloc'd struct
+
+The copy-out at 0x888a7 is
+
+    for (i = 0; i < *n_rx; i++) rx_bits[i] = rx_out_internal[i];
+
+and `*n_rx` is its only bound. There is no `cmp $0x64` anywhere in
+`V22FP_modem` -- unlike `v22_process`, which does clamp and whose format string
+calls the value `rx_len`. `rx_out_internal` is a hundred entries (`nm`: 0xc8
+bytes at `.bss` 0x480).
+
+**The count changes units across the handler call and nothing enforces it.**
+`*n_rx` goes IN as the input SAMPLE count and is supposed to come back as a
+SYMBOL count (finding F8534). A handler arm that returns without touching it
+leaves the sample count there, and a 20 ms block is 160 samples: the copy-out
+then reads sixty entries past the end of `rx_out_internal` and writes sixty
+past the end of the caller's array.
+
+**In service the caller's array is `self->rx_bits`**, `int[100]` at +0x1b4 --
+the LAST member of the 0x344-byte `sysdep_malloc`'d `struct v22_dp` -- and
+`v22_process` sets `rx_len = count`, which `dp_wrapper` calls with 160. So the
+overrun is 240 bytes past the end of a heap allocation, into the allocator's
+own bookkeeping.
+
+**`v22_process`'s clamp cannot save it, and the ordering is why.** That clamp
+runs on the value `V22FP_modem` RETURNS, which is after the copy-out has
+already happened -- and for any non-zero status `V22FP_modem` has by then
+forced the count to zero, so the clamp sees 0 and the caller never learns that
+anything happened.
+
+**Reproduced, not fixed**, and measured on both sides: over `t_v22modem`'s
+fifty-six starting states, 36 cases copy 12 entries, one copies 13, and
+nineteen copy 160 -- the same nineteen, with the same counts, from the blob and
+from `src/`. That symmetry is what says this is the original's behaviour rather
+than a reconstruction defect (finding F8609).
+
+**WHY IT IS LATENT RATHER THAN EXPLOITABLE, and it is checkable rather than
+asserted.** The nineteen arms are the high sub-states of `hdx->connect_substate`
+in protocol states 1 to 5 -- arms off the end of each handler's own dispatch,
+`v22_local_loop`'s being a literal empty `default:`. Nothing a live machine
+does reaches them:
+
+- every arm a running handshake visits sets the count, and `t_v22dp` drives a
+  full cross-connected link for 400 blocks -- both stations, both sides -- with
+  no overrun and no divergence;
+- the only writer of the sub-state from OUTSIDE the machine is `V22FP_control`,
+  which writes exactly two pairs, `(protocol 6, sub 1)` and `(protocol 4,
+  sub 0)` (finding F8526). Neither is among the nineteen: state 6 contributes
+  none of them and state 4's begin at sub 3.
+
+So reaching it needs a caller that writes `hdx->connect_substate` directly,
+which no exported entry point does.
+
+**Fix form: documentation only.** There is nothing to clamp host-side -- the
+count is internal to the object -- and clamping it in `src/` would fail the
+differential test against every one of those nineteen cases. A blob-side
+override could bound the loop at 100, and is not proposed: the path is
+unreachable from the API, and the entries past 100 are ALSO an out-of-bounds
+read, so a clamp changes what a caller sees in a region the object never
+promised anything about.
+
+**The apparatus consequence is real and has already cost a gate.** A fixture
+that hands `V22FP_modem` a hundred-entry receive array and pokes a sub-state
+inherits this overrun, and where it lands is whatever the compiler put next --
+which is how `t_v22modem` came to pass under GCC 14 and fail under GCC 3.4.2
+with a symptom that read as a defect in `src/` (F8608, F8609). **Any new
+fixture must size that destination for the input SAMPLE count, not for the
+symbol count a well-behaved handler returns**, and should guard past it.
+
+**Status:** measured for the arms this tree drives, and latent by the two
+checks above. `t_v22modem` sizes its destination at four times the input block
+and asserts a guard past it, so the next occurrence is a named failure rather
+than a compiler-dependent verdict.

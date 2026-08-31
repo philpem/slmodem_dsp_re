@@ -97449,16 +97449,37 @@ array the linker put next, on one side and not necessarily the other; and
 "exclude the failing entry and the next one fails" is what damage that moves
 with layout looks like. Every element of that report is accounted for.
 
-**It cannot be established**, because that code was never committed and is not
-in the tree, and this is inference from a symptom rather than a measurement of
-their binary. But it is the first explanation that needs no defect in `src/` at
-all, and the honest reading is that F8538 may have declined correct code
-because its test handed the object a buffer the object does not promise to stay
-inside. The lesson is not "commit it anyway" -- declining was right on the
-evidence they had -- it is that **when every observable but one agrees, suspect
-the apparatus's buffers before the reconstruction's logic.**
+**IT IS AN INFERENCE FROM A SYMPTOM, NOT A MEASUREMENT, AND IT STAYS ONE UNTIL
+SOMEBODY RUNS THIS.** The settling experiment, stated so it can be executed
+rather than argued:
 
-**THE SERVICE-SIDE COROLLARY IS A LATENT HEAP OVERFLOW IN THE ORIGINAL.**
+    recover wave 2's uncommitted V22FP_modem, change NOTHING in it, enlarge
+    only its test's receive destination to hold the input SAMPLE count, and
+    run that binary under `make period`.
+
+Green settles it: the code was correct and the fixture was not. Red refutes it
+and names a real defect in that implementation. **Neither outcome is available
+from anything in the tree today**, because that code was never committed --
+recovering it means finding the session's worktree if it still exists. If it
+does not, re-deriving the function tests a NEW implementation rather than
+theirs, which is not the same claim and must not be reported as if it were.
+
+**What IS measured is weaker and worth separating from it.** This wave
+established that the pattern EXISTS -- a correct `V22FP_modem`, a fixture whose
+destination was 240 bytes too small, and a period report reading `ours 0,
+reference 5205` that looked exactly like a defect in `src/` (F8608). That makes
+F8538 an instance of a demonstrated failure mode rather than of a hypothetical
+one. It does not make it an instance.
+
+The lesson is not "commit it anyway" -- declining was right on the evidence
+they had, and this entry does not second-guess it. It is that **when every
+observable but one agrees, suspect the apparatus's buffers before the
+reconstruction's logic**, and that a differential fixture must be sized for
+what the API can return rather than for what a well-behaved callee does.
+
+**THE SERVICE-SIDE COROLLARY IS A LATENT HEAP OVERFLOW IN THE ORIGINAL, AND IT
+HAS A DEVIATION ROW: D956.** That row carries the reachability argument, the
+fix form and the apparatus consequence; what follows here is the short version.
 `v22_process` hands `self->rx_bits`, which is `int[100]` and the LAST member of
 the `sysdep_malloc`'d `struct v22_dp`, with `count` = 160. If any reachable
 handler arm ever returned without setting `*rxcount`, `V22FP_modem` would write
