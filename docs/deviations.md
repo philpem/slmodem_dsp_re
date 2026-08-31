@@ -10567,3 +10567,179 @@ function do what its name says.
 observable and neither is ours to remove. `t_faxsgd` drives the +/-1 cases
 where the accumulation IS live as well as the degenerate ones, and never
 drives `p[0]*n == 0`.
+## D1050 ⚠ `size` is read signed by `FIFO_full_test` and unsigned by the transfers
+
+One field, two readings, both the object's.
+
+`FIFO_full_test` (0x096dd0) divides by `f->size` with `idiv`, so a negative
+capacity divides and the quotient's sign is what the threshold sees --
+faxfifo.h's note about a negative size flipping the wrapped numerator back
+over the threshold depends on exactly that.
+
+`FIFO_read` (0x096cf0) and `FIFO_write` (0x096d6c) wrap their cursors with a
+sixteen-bit UNSIGNED compare instead:
+
+    96cc1:  66 3b 54 24 04   cmp  0x4(%esp),%dx
+    96cc6:  89 d0            mov  %edx,%eax
+    96cc8:  72 02            jb   96ccc
+
+`jb`, not `jl`, on a 16-bit operand -- so a size of -1 is 65535 here and -1
+there. A caller cannot see both readings at once, because a FIFO whose size is
+negative has a buffer `sysdep_malloc` was asked for a negative number of bytes
+for, and `FIFO_create` never builds one.
+
+**Status:** reproduced. `fifo.c` reads the field into an `unsigned short`
+local in the transfers and leaves `FIFO_full_test`'s signed divide alone; this
+is finding F614's "one field, both extensions" with the two sites in different
+functions. `t_faxframing` drives the transfers with a positive size only,
+because a negative one makes `buf[rd]` a wild subscript that F8587 says both
+sides would agree on while proving nothing; `t_class1leaves` keeps the signed
+sizes, where they are the point.
+
+## D1051 ⚠ `FIFO_write`'s free space is a sixteen-bit subtraction and wraps
+
+`FIFO_write` computes the space left as
+
+    96d28:  0f b7 55 02      movzwl 0x2(%ebp),%edx     ; size
+    96d32:  0f b7 57 0c      movzwl 0xc(%edi),%edx     ; count
+    96d36:  29 d6            sub    %edx,%esi
+    96d38:  0f b7 c6         movzwl %si,%eax
+
+so an occupancy already PAST the capacity reports `65536 - (count - size)`
+free rather than none, and the write proceeds. With the cursors in range the
+walk still stays inside the buffer -- it wraps at `size` on every step -- so
+nothing is corrupted; what is wrong is `count`, which grows further past
+`size` on each such call and never recovers.
+
+It is unreachable through `FIFO_create` plus these three entry points alone:
+create zeroes the occupancy, write clamps and read only subtracts what it
+found. It needs a caller that writes `count` itself.
+
+**Status:** reproduced, and driven deliberately -- `t_faxframing`'s
+`run_fifo_write_wrap` plants `count = size + 1` and asserts the wrap FIRED
+(the reference returned 8 of 8 requested) rather than assuming it did.
+
+## D1052 ⚠ the framing walks count down to zero, so a negative count is a long walk
+
+`faxvmi_gen_fcs16`, `faxvmi_byte_reverse` and `faxvmi_frame_reverse` all
+carry their loop counter as a sixteen-bit value and continue while it is
+non-zero:
+
+    967d9:  8d 47 ff         lea    -0x1(%edi),%eax
+    967dc:  0f bf f8         movswl %ax,%edi
+    967df:  66 40            inc    %ax
+    967e1:  75 b1            jne    96794
+
+so `count == -1` runs 65,535 times rather than none, walking 128 KB past the
+buffer. `faxvmi_frame_reverse` has the same shape twice over -- once for the
+frame count and once for each frame's length element, which it reads out of
+the buffer, so a corrupt length is a walk of the same kind.
+
+**Status:** reproduced (`for (i = count; i != 0; i--)` is the object's loop,
+not `i > 0`), and NOT driven: a test that passed a negative count would read
+and write far outside any fixture on both sides at once, which F8587 says
+would agree and prove nothing, with a segfault the only other outcome.
+Recorded so the fax phase's callers can be checked against it when they land.
+
+## D1053 ⚠ three Class 1 state handlers are file-local in the object and global here
+
+`_send_silence_state` (0x092c00), `_recieve_silence_state` (0x092c40) and
+`_idle_state` (0x092dd0) are `t` in the symbol table, not `T`. Nothing calls
+them by name: `fax_class1_create` stores their addresses into
+`class1_state_functions`, and because they are local the store is an
+`R_386_32` against the SECTION symbol with the address as an inline addend --
+
+    .text+0x092ef4 -> .text:0x092dd0        (_idle_state)
+    .text+0x092f40 -> .text:0x092c00        (_send_silence_state)
+
+-- so they appear in no call graph and under no name, and `objdump -r | grep
+_idle_state` finds nothing at all. Only `_idle_state_init` of the four is
+global.
+
+Our copies are global. That is the same divergence `getbit` and
+`ApplyBulkDelay` carry in `src/pump/v34/v34hshak.c` and for the same reason:
+`symmap.py`'s two-pass objcopy promotes a local before renaming it, so
+`ref__idle_state` exists and the handler can be driven directly instead of
+through `fax_class1_progress`, which is 1,145 unwritten bytes (F221, F227).
+
+**Status:** reproduced everywhere it can be. The alternative -- `static` in
+`src/fax/class1.c` -- would match the object's storage class and make the
+functions untestable until `fax_class1_progress` lands, which is the trade
+F227 already settled the other way. It is recorded rather than hidden because
+a `nm` diff of our object against the blob's will show three symbols promoted,
+and that must not read as a defect. Revisit when `fax_class1_progress` is
+written: at that point `static` costs nothing and should be taken.
+
+## D1054 ⚠ `_handle_data_input` latches the block's last byte before it knows the block will be consumed
+
+The very first thing the function does after the closed-session early return
+is
+
+    9eb7f:  8b 54 24 2c     mov    0x2c(%esp),%edx      ; count
+    9eb83:  8b 02           mov    (%edx),%eax
+    9eb85:  85 c0           test   %eax,%eax
+    9eb87:  7e 0d           jle    9eb96
+    9eb89:  0f b6 4c 28 ff  movzbl -0x1(%eax,%ebp,1),%ecx
+    9eb8e:  89 8f 38 12 00  mov    %ecx,0x1238(%edi)
+
+-- `ctx->last_in_byte = src[*count - 1]`, before the unstuffing loop runs.
+So the field records the last byte of the block the caller OFFERED, and not
+the last byte the function consumed: when the loop stops early at DLE ETX,
+everything after the ETX is discarded and `last_in_byte` still holds a byte
+from inside the discarded tail. It is also written on a call that consumes
+nothing else at all.
+
+**Status:** reproduced, and pinned -- `t_class1handlers` compares the whole
+`struct fax_class1` after every call and its streams put a byte after the
+DLE ETX for exactly this reason. Nothing in the object reads the field, so
+whether it is a defect cannot be settled here; what is recorded is that the
+value is the block's, not the frame's.
+
+## D1055 ⚠ the DLE ETX padding is bounded by the OUTPUT INDEX, not by the destination
+
+After DLE ETX, `_handle_data_input` appends twenty zero elements:
+
+    9ec65:  b8 13 00 00 00  mov    $0x13,%eax
+    9ec70:  81 fe ff 07 00  cmp    $0x7ff,%esi
+    9ec76:  7f 0b           jg     9ec83
+    9ec7c:  66 c7 04 77 00  movw   $0x0,(%edi,%esi,2)
+
+The guard is `out > 0x7ff`, a limit on the number of elements ALREADY
+written -- so it protects a destination of 2,048 elements and nothing
+smaller. A caller that sized `dst` from `*count`, which is the natural
+reading of an in/out length, is overrun by up to twenty elements, and the
+guard cannot see it.
+
+That is F8607/D956's shape again: a copy-out whose bound comes from the wrong
+quantity. Here the bound at least exists, which is why this is recorded
+separately rather than as another instance.
+
+**Status:** reproduced, with the constant as the object has it.
+`t_class1handlers` sizes its destination `IN_MAX + 20 + GUARD` and compares
+the guard region, so an off-by-one in the padding is a failure and not a
+corruption. `class1tx.h` states the requirement so the fax phase's callers
+can be checked against it as they land.
+
+## D1056 ⚠ a failed start-bit search leaves the alignment half-moved for the next element
+
+`_handle_data_output`'s search walks `async_mask` and `async_shift` upward
+looking for a zero bit, and gives up after eight:
+
+    9ee8f:  83 f9 07        cmp    $0x7,%ecx
+    9ee92:  7f 31           jg     9eec5                ; give up
+
+The give-up path goes straight to the common emit, so it does NOT set
+`async_locked` -- correctly, the alignment was never found -- but it also
+does not restore `async_mask` and `async_shift`, which the search left at
+0xff000000 and 24. They are re-initialised to 0xff0000 and 16 at the top of
+the next unlocked element, so nothing reads the abandoned values and the
+effect is invisible.
+
+It becomes visible only if the caller reads either field between blocks. The
+octet emitted for that element is 0xff, which is the initialised value and
+not a recovered one.
+
+**Status:** reproduced exactly, including the fields left where the search
+abandoned them. `t_class1handlers` drives both outcomes and asserts each
+fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
+are all ones for the give-up, and one with a zero among them for the lock.

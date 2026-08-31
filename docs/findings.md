@@ -101628,3 +101628,321 @@ transmission without telling the transmitter its sequence has restarted.
 Reading it the other way round -- "the clear list is just create's, minus the
 allocation" -- is right about the code and misses that one omission, which is
 the only thing separating the two lists. (2026-08-31)
+## F8930. The Class 1 FIFO holds SIXTEEN-BIT elements, not bytes, and `FIFO_create` is what says so
+
+`faxfifo.h` had modelled two fields and called the capacity "bytes". It is
+elements, and the evidence is in `FIFO_create` (0x096bb0), which this batch
+read for the layout without writing the function:
+
+    96c2e:  c7 04 24 14 00 00 00   movl   $0x14,(%esp)
+    96c35:  e8 ...                 call   sysdep_malloc
+    96c3c:  0f b7 44 24 12         movzwl 0x12(%esp),%eax
+    96c41:  01 c0                  add    %eax,%eax
+    96c46:  e8 ...                 call   sysdep_malloc
+
+0x14 for the object -- so it is twenty bytes, which fixes the layout at
++0x00..+0x13 -- and `size * 2` for the buffer. Every access in `FIFO_read`
+and `FIFO_write` then scales by two (`mov %ax,(%edi,%ecx,2)`), so `size`,
+`count`, `rd` and `wr` are all counted in 16-bit elements.
+
+The other thing `FIFO_create` settles is that +0x00 and +0x02 are one aligned
+pair: it copies six bytes of configuration as ONE 32-bit store to +0x00 plus
+one 16-bit store to +0x04, which is what a six-byte struct assignment
+compiles to. So +0x00 is a short, not two bytes of padding, even though no
+reconstructed function reads it.
+
+**`FIFO_create` itself is BLOCKED and stays blocked.** It reads the default
+configuration `FIFO_CFG` when its argument is null, and `FIFO_CFG` is an
+unwritten data symbol -- naming it from `src/` fails every binary at link
+(F8492, F8493). It becomes writable the moment that symbol lands.
+
+## F8931. `FIFO_read` always writes `count` elements, and pads the shortfall from a configured value
+
+The second loop is the one to notice:
+
+    96cd8:  8b 44 24 08     mov    0x8(%esp),%eax      ; count - take
+    96ce0:  0f b7 77 04     movzwl 0x4(%edi),%esi      ; f->fill
+    96ce7:  66 89 31        mov    %si,(%ecx)
+
+so a caller asking for 100 elements from a FIFO holding 3 gets 3 real ones
+and 97 copies of the field at +0x04, and the RETURN VALUE is 3. The
+destination must therefore be sized from the REQUEST, never from the
+occupancy or the return.
+
+That is F8607/D956's shape exactly -- an unbounded copy-out into a
+destination sized from the wrong quantity -- with the difference that here the
+object bounds the write and the hazard is only in the caller's arithmetic. It
+is called out in `faxfifo.h` so the fax phase's callers can be checked against
+it as they land, and `t_faxframing` sizes its destinations from the largest
+count any case passes plus a guard region it compares.
+
+The fill field is named from usage inference and nothing stronger: it is
+written only by `FIFO_create`, out of the configuration, and read only here.
+
+## F8932. The Class 1 FCS is CRC-16-CCITT, 0x1021, MSB-first, seeded 0xFFFF and complemented -- derived, then checked exhaustively against an independent model
+
+`faxvmi_gen_fcs16` (0x096780) uses no table. Two nibble steps per element,
+and each step is
+
+    t = ((octet << k) ^ fcs) & 0xf000        k = 8, then 12
+    fcs = (((fcs ^ (t >> 11)) << 4) ^ t) | (t >> 12)
+
+Write n = t >> 12, so t = n << 12. Then (t >> 11) << 4 is n << 5, and the
+step is
+
+    fcs = (fcs << 4) ^ (n << 12) ^ (n << 5) ^ n
+
+and (n << 12) ^ (n << 5) ^ n is n * 0x1021 with the x^16 term dropped. So the
+generator is **x^16 + x^12 + x^5 + 1 = 0x1021**, fed most significant nibble
+first, with no reflection anywhere. `mov $0xffff,%ebx` at 0x096787 is the
+seed and `not %ebx` at 0x0967e3 is the final complement.
+
+k = 8 selects bits 7..4 of the element and k = 12 selects bits 3..0, so only
+the low byte of each 16-bit element reaches the register and the upper byte is
+ignored.
+
+**The bit order HDLC wants is arranged OUTSIDE this function**, by
+`faxvmi_byte_reverse`, which is why an unreflected 0x1021 is the right
+polynomial here and not the reflected 0x8408 that a bare "HDLC FCS" would
+suggest. `getbit` in `src/pump/v34/v34hshak.c` computes the same polynomial
+the same way for V.34's CRC, and `v8_crc` for V.8's.
+
+**Checked rather than asserted.** `t_faxframing` carries `crc_bitwise`, a
+one-bit-at-a-time model that shares no code and no shape with the nibble
+form, and compares it against the BLOB over all 65,536 one-element frames and
+all 65,536 two-element frames whose first element sweeps the whole alphabet --
+so the register entering the second step takes 65,536 values and the state is
+swept as well as the input. 131,072 agreements, counted from the run and
+asserted as a number, not as a boolean.
+
+## F8933. The framing walks count down to zero on a sixteen-bit counter, and the injection ritual found one equivalent mutant and no gaps
+
+Ten hand-injected defects over `fifo.c` and `faxvmi.c`, each built and run
+under `make one`:
+
+    caught  FIFO_read wrap off by one        (>= size  ->  > size)
+    caught  FIFO_write wrap off by one
+    caught  FIFO_read occupancy update       (count -= take  ->  -= 0)
+    caught  FCS x^5 term                     (t >> 11  ->  t >> 10)
+    caught  FCS nibble mask                  (0xf000  ->  0xe000)
+    caught  FCS seed                         (0xffff  ->  0xfffe)
+    caught  FCS final complement             (~fcs  ->  fcs)
+    caught  byte_reverse bit count           (bit >= 0  ->  bit > 0)
+    caught  frame_reverse stride             (buf += len  ->  len + 1)
+    EQUIV   FIFO_write clamp                 (put > avail  ->  put >= avail)
+
+The tenth is genuinely equivalent, not a hole: when `put == avail` the
+assignment it guards is a no-op, so no input can separate the two spellings.
+Recorded because "one not caught" in a mutation column is otherwise
+indistinguishable from a missing check, and `mutate.py` cannot tell them
+apart either.
+
+**AND THE RITUAL ITSELF NEARLY LIED.** Restoring each file with `mv
+file.bak file` puts back the BACKUP's mtime, which is older than the mutated
+write, so `make` declares the binary up to date and re-runs the LAST mutant
+against the restored source. The closing "restore is clean" check therefore
+reported a red tree over correct code. `touch` the sources after any restore
+that does not go through git -- this is F134's dead detector with the
+timestamp as the mechanism.
+
+## F8934. The Class 1 state handlers take NINE arguments, and `fax_class1_progress`'s marshalling is what says so
+
+`class1_state_functions` is a `0x4c`-byte COMMON array -- nineteen slots --
+filled by `fax_class1_create`, and `fax_class1_progress` dispatches through it
+at 0x0937f8 with `call *class1_state_functions(,%edx,4)`. The nine slots it
+fills first, at 0x0937bd..0x0937f5, are the signature:
+
+    (%esp)   the session          0x14(%esp)  &a local copy of the rx count
+    0x04     the received block   0x18        the transmit count, by pointer
+    0x08     the block to send    0x1c        a 32-bit word
+    0x0c     a 32-bit word        0x20        a 32-bit word, read and written
+    0x10     a 32-bit word
+
+Three of the nine are read by none of the four handlers reconstructed here, so
+only their WIDTH is established and `class1.h` says so rather than guessing a
+type.
+
+**Two of them are named by the object's own words.** The transmit count is
+`TxSmpCnt`: `fax_class1_progress` follows the dispatch with
+
+    9389b:  8b 5c 24 58     mov    0x58(%esp),%ebx
+    9389f:  81 3b a0 00 00  cmpl   $0xa0,(%ebx)
+    938a5:  74 0d           je     938b4
+      ... "ERROR: TxSmpCnt != 160 !!!\n"
+
+so a handler that leaves anything but 160 there is a diagnosed error, which
+is also where `CLASS1_BLOCK_SAMPLES` comes from.
+
+**And the RX COUNT IS A COPY.** `fax_class1_progress` loads `*arg5` into a
+local at 0x0936d7 and passes `&local`, so a handler writing through that
+pointer does not reach `progress`'s caller. Nothing here writes it, but the
+next handler that does must not be read as an out-parameter.
+
+## F8935. `states_names` and `status_names` are the author's names for nineteen states and eleven results
+
+`.rodata 0x9360` is twenty `{int, char *}` pairs and `.rodata 0x9300` is
+eleven, and `fax_class1_progress` searches the first at 0x093826 to log a
+transition. They are the strongest class of evidence this tree recognises --
+the author's own words for the values -- and they are now in `class1.h`
+verbatim, `RECIEVE_SILENCE_STATE`'s spelling included:
+
+    0 T30_SILENCE_BEFORE_PREAMBLE  7  HDLC_EMULATE_RECEIVE  14 ANSWER_TONE
+    1 T30_PREAMBLE                 8  IDLE                  15 SEND_SILENCE
+    2 SEND_HDLC_BUFFER             9  TX_SCRAMBLED_ONES     16 RECIEVE_SILENCE
+    3 SEND_HDLC_BETWEEN_BUFFER     10 TX_DATA               17 CHDLCTX_OFF
+    4 HDLC_RECEIVE_LOOK_CARRIER    11 TX_NULLS              18 TX_SILENCE_
+    5 HDLC_RECEIVE                 12 RX_LOOK_CARRIER          BEFORE_SCRM_ONES
+    6 HDLC_RECEIVE_BETWEEN_BUFFERS 13 RX_DATA               19 MAX_STATES
+
+    0 FAX_CLASS1_NO_MESSAGE        4 ..ERROR_NO_CARRIER      8 ..NO_CARRIER_
+    1 FAX_CLASS1_OK                5 ..ERROR_ON_HOOK            NO_MESSAGE
+    2 FAX_CLASS1_ERROR             6 ..CONNECT               9 ..OTHER_CARRIER
+    3 FAX_CLASS1_OK_NO_CARRIER     7 ..NO_CARRIER           10 ..ACCEPT_RATE
+
+**That names a field, not just constants.** `fax_class1_progress` RETURNS
+`ctx->+0x122c` (0x093a43: it loads that field and leaves it in `eax`), and the
+values the two silence states write into it are 3 and 0 -- `OK_NO_CARRIER`
+when the silence expires or is abandoned, `NO_MESSAGE` when energy appears.
+Both readings are coherent, so `+0x122c` is `status`.
+
+The nineteen against `class1_state_functions`'s nineteen slots also settles
+that 19 is the COUNT and not a state.
+
+## F8936. `+0x12bc` is `energy` because the object prints it under that name, and the threshold is 100
+
+`_recieve_silence_state` stores `FPM_rms`'s answer into `+0x12bc` and then
+prints exactly that value:
+
+    "Energy %d > silence treshold\n"        .rodata.str1.1 0x40f2
+    "Energy %d < silence treshold...\n"     .rodata.str1.4 0x11784
+    "Abort waiting for silence!"            .rodata.str1.1 0x4110
+
+The author's spellings, kept. That is evidence class 1 for the field's name
+and for `CLASS1_SILENCE_THRESHOLD`'s, and the constant is `cmp $0x64,%ax` --
+a SIGNED sixteen-bit compare, so a negative energy would count as silence.
+`FPM_rms` cannot return one, and the test is written as the object has it
+rather than as it would need to be if it could.
+
+The counter the state runs against `countdown` is `+0x12b8`, and its compare
+is `jae` -- UNSIGNED -- which is why `silence_blocks` is an `unsigned int`
+while `countdown`, which `_recieve_silence_state_init` fills from a SIGNED
+divide, is an `int`.
+
+## F8937. Both host-link input paths keep their DLE escape in ONE field, and the escape survives across calls
+
+`_handle_data_input` (0x09eb60) and `_handle_hdlc_input` (0x09ed00) are
+separate functions doing the same unstuffing, and both use `ctx->+0x124c` for
+"a DLE has been seen". So a block that ends on a bare DLE arms the escape for
+the NEXT block, and a session that interleaves the two paths shares one
+escape state between them.
+
+They differ in three ways, and each difference is the point of having two
+functions:
+
+- the data path's write cursor is a local starting at zero; the HDLC path's
+  is the SESSION's `+0x1250`, so a frame accumulates across calls and the
+  caller's destination is the whole frame's, not one block's;
+- the data path treats DLE ETX as END OF SESSION -- it latches `+0x12b0` and
+  every later call returns immediately with a count of zero -- while the HDLC
+  path treats it as END OF FRAME, doing exactly the two stores
+  `_handle_hdlc_input_close` does and returning 1;
+- the data path logs a DLE that reached the escape arm ("CLASS1: DLE %1X in
+  data\n", at debug level 3 and above); the HDLC path silently drops the
+  same byte.
+
+**The two stores at end of frame are the same two.** `_handle_hdlc_input`'s
+DLE ETX arm and `_handle_hdlc_input_close` both write `f1250 - 1` into
+`+0x000` and set `f1224` when `flags004` bit 4 is on. That the pair appears
+twice, and nowhere else, is what makes the bit worth a name -- and also all
+that is known about it, so `CLASS1_FLAG_FRAME_END_LATCH` records the site and
+claims nothing about what configures it.
+
+## F8938. `_handle_data_output` recovers each octet by an eight-bit start-bit search, and locks the alignment for the carrier
+
+The transmit direction is not a mirror of the receive one. Each element
+contributes its LOW BYTE to the top of a 32-bit window whose lower three bytes
+are the previous three (`ctx->+0x12a0`, and `window >> 8` goes back into it),
+and the octet is extracted through a mask and a shift held in the session.
+
+While `+0x129c` is clear, those two are re-initialised to 0xff0000 and 16 and
+then walked upward until the window has a ZERO bit -- the start bit -- with
+eight tried before the search gives up. On success the flag is set and the
+mask and shift are FROZEN, so the search costs one attempt per carrier rather
+than one per octet.
+
+**The recovered octet's least significant bit is the start bit itself.** The
+mask is `0xff0000 << k` and the shift `16 + k` for the same `k`, so the eight
+bits taken begin AT the zero the search stopped on. That is the object's
+arrangement, checked against the instructions twice because it reads like a
+transcription error, and it is reproduced.
+
+On the give-up path the octet is 0xff, the flag is NOT set, and the mask and
+shift are left where the search abandoned them -- 0xff000000 and 24 -- for the
+next element to re-initialise. Recorded as D1056 because nothing reads them in
+between and the effect is therefore invisible from here.
+
+Then the ordinary DLE stuffing: a recovered 0x10 is written twice, and the
+`terminate` argument appends DLE ETX. So the destination holds up to
+`2 * count + 2` bytes, which `class1tx.h` states because sizing it from
+`count` is F8607/D956's defect.
+
+## F8939. The byte counts in this pass's first commit message are wrong, and the right ones are here
+
+`ea2704af`'s message says "1,177 blob bytes" for the six symbols it writes.
+The true total is **712**:
+
+    FIFO_read              176      faxvmi_gen_fcs16       108
+    FIFO_write             152      faxvmi_byte_reverse     93
+    FIFO_delete             32      faxvmi_frame_reverse   151
+
+`1023980a`'s 1,306 is right (3 + 72 + 64 + 274 + 79 + 321 + 238 + 255), so the
+pass's total over fourteen symbols is **2,018 bytes**, not 2,483.
+
+Recorded rather than rewritten: the commit is already on the branch and
+amending it would rewrite a hash another session may have read. This is
+F6100's rule applied to a commit message -- a stale count with no gate behind
+it is a defect, and the fix is to correct it where it will be read.
+
+**A count in a commit message is not checked by anything.** `bannercheck.py`
+checks the per-symbol banners in `src/`, which were right; nothing sums them.
+
+## F8940. The injection ritual over the Class 1 handlers found TWO real gaps, and both are now closed
+
+Sixteen hand-injected defects over `src/fax/class1.c` and
+`src/fax/class1tx.c`, each built and run against the blob. Fourteen were
+caught on the first pass. The two that were not are the interesting ones,
+because neither was an equivalent mutant:
+
+- **`ctx->energy > 100` -> `>= 100`.** The two spellings differ on exactly
+  one input -- an energy of 100 -- and the fixture's blocks were a loud ramp
+  and silence, so nothing landed on it. Closed by SEARCHING for the input
+  rather than computing it: `FPM_rms` is already reconstructed and tested, so
+  the test sweeps a constant amplitude until its RMS is 100 and then drives
+  that block differentially. What the search produced is checked against the
+  REFERENCE's own `energy` afterwards, so a search that found the wrong block
+  fails a denominator instead of testing nothing.
+- **`out > 0x7ff` -> `out > 0x800`.** D1055's padding limit is on the OUTPUT
+  INDEX, so no input under 2,048 elements can reach it and every case in the
+  fixture was 64 bytes. Closed with one deliberate case: 2,040 literal bytes
+  then DLE ETX, a destination sized for the 2,049 a wrong limit would write,
+  and an assertion that the reference stopped at 2,048.
+
+Both mutants are caught now, and so is `>=` in the other direction.
+
+**THE LESSON IS ABOUT WHAT A RANDOM FIXTURE CANNOT REACH.** Both gaps are
+boundary values that no amount of random or shaped input finds by accident:
+one is a single point in a 65,536-wide range, the other needs an input
+thirty-two times larger than anything the fixture was built for. A coverage
+counter would have reported both arms as covered, because both arms DID run --
+just never at the boundary. Only the mutation told the difference.
+
+**AND THE RITUAL'S OWN COST HAD TO BE FIXED FIRST.** Driving it through
+`make one` took about ten minutes per mutant on a box with four other agents
+building: the wall clock was dominated by the `refs`, `banners`, `offsets` and
+`mutsnap` gate, which re-runs in full for every mutant and says nothing about
+it. `make build/test/<name>` followed by running the binary is the same
+verdict in well under a minute. Two runs were abandoned mid-flight before this
+was measured; that is why the shape is written down.
+
+Findings F8933 records the first batch's ten (nine caught, one provably
+equivalent) and the timestamp trap that made its closing check lie.
