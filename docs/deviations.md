@@ -10425,3 +10425,69 @@ harness allocator and compares the LIVENESS of all ten blocks either side,
 plus the allocator's own counters; it also asserts that the BLOB left nothing
 live and made no bad free, without which two implementations that both leaked
 everything would agree and pass.
+
+## D1030 ⚠ `DemodDataV21` stores the value `FPM_AGC_agc` leaves in `%eax`, and that function returns `void`
+
+*2026-08-31.* `unmeasured`.
+
+    a576d   call   <== R_386_PC32 FPM_AGC_agc
+    a5772   mov    0x50(%edi),%edx
+    a5778   mov    %eax,0x4(%edx)          dsp->int_0004 = the return
+
+`FPM_AGC_agc` is declared `void FPM_AGC_agc(struct fpm_agc *, short *,
+unsigned short)` in `include/dsplib/fpm_agc.h`, and the object gives it no
+return value to give. What the caller actually collects is whatever the callee
+left in `%eax`.
+
+**WHAT IT COLLECTS IS `agc->signal`, and that is settled rather than guessed.**
+`FPM_AGC_agc` has exactly ONE `ret` in the whole function, so there is a single
+exit and a single last writer of `%eax` to find. It is the three instructions
+immediately before the epilogue:
+
+    a6884   setg   %dl
+    a6887   movzbl %dl,%eax
+    a688a   mov    %eax,0x1c(%edi)      agc->signal = 0 or 1
+    a688d   add    $0x3c,%esp           the epilogue touches %eax no further
+    a6890   pop    %ebx / %esi / %edi / %ebp
+    a6894   ret
+
+so the value left in `%eax` is the one just stored to `agc + 0x1c`, which
+`fpm_agc.h` line 64 declares as `int signal` and documents as an OUTPUT. It is
+a boolean from `setg`, not an energy: the object's `dsp + 0x04` receives
+`dsp->agc.signal`, 0 or 1. (Blocks of code appear at higher addresses than the
+`ret`; they jump back into the body and are not a second exit.)
+
+Independent corroboration, from a different datapump: `src/pump/b103/b103fp.c`
+makes that assignment EXPLICITLY at its own identically-placed field --
+`struct b103_dsp` has `rx_energy` at +0x04 with the comment "<- agc.signal
+after each block" -- and `src/pump/v23/bwchdem.c` already reads the field at
+its own call site rather than the register.
+
+**THIS IS NOT COVERED BY D490.** That entry is the same prototype mismatch on
+the other half of the signature -- `FPM_AGC_agc` is CALLED with four arguments
+and DEFINED with three -- and it rests explicitly on the extra argument being
+dead: nothing observable depends on it. Here the value **is** used, and stored
+into a field two other functions read.
+
+**Status:** NOT reproduced as written; `src/fax/v21.c` reads
+`dsp->agc.signal` instead. The two are the same value on every path, which is
+what the single exit and the single last writer establish. Reading the
+register would mean declaring `FPM_AGC_agc` to return `int`, which moves code
+generation for every one of its other callers in order to match one site --
+exactly the trade D490 declines when it refuses to add a fourth parameter. The
+cost here is one reload, and `t_v21hdx` compares the field after every block on
+both sides, so an implementation that collected a different value would fail.
+
+### Addendum to D1038 -- the empty loop reaches a host-visible field
+
+*2026-08-31.* D1038 records that `GetSNRV21` returns a literal 0 and calls the
+effect unobservable. It is unobservable **within that function**, and the V.21
+receive machine then carries it outward: `RxHdxDataV21` tests `GetSNRV21`'s
+answer and raises the receiver's `V21RX_FLAG_LOW_SNR` when it is low, so with
+a literal 0 the bit is raised on EVERY demodulating block; and `V21RX_status`
+reads that bit and reports `quality = 0` for the life of every V.21
+connection. So the dead accumulation is not merely a curiosity in one leaf --
+whatever it was meant to compute, the field it fed is the one the host is
+told about, and the host is told the worst possible value always.
+
+Reproduced throughout, and tested at each hop.
