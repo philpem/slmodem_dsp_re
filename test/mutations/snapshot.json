@@ -998,6 +998,31 @@
     "timeout code 13 is a second, not no-limit": "caught"
    }
   },
+  "mtkphasor": {
+   "key": "5ff5ca4f5af59a8b1e99713a977ec6a6a0f06cc204151469bbbdb8772cd75dcb",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the advance is taken from the unreduced phase": "caught",
+    "the advance wraps at 2*pi rather than at pi": "caught",
+    "the advanced phase is not stored": "caught",
+    "the correction adds the float 2*pi rather than the double": "caught",
+    "the cosine output takes the sine sign vector": "caught",
+    "the fold is selected by bit 9 rather than bit 8": "caught",
+    "the fold negates the fraction rather than reversing it": "caught",
+    "the fold negates the index rather than complementing it": "caught",
+    "the fraction is taken the other way round": "caught",
+    "the index keeps only seven bits": "caught",
+    "the interpolation's difference runs backwards": "caught",
+    "the quadrant comes from bit 7 rather than bit 8": "caught",
+    "the reduction corrects a zero as well as a negative": "caught",
+    "the reduction uses the double 2*pi rather than the float one": "caught",
+    "the scale is 256/pi rather than 512/pi": "caught",
+    "the scaled angle rounds rather than truncating": "caught",
+    "the sine output reads the cosine table": "caught",
+    "the two outputs are written to each other's field": "caught",
+    "the wrap adds 2*pi rather than subtracting it": "caught"
+   }
+  },
   "mtktab": {
    "key": "edb065cfb2deade6667a8f4cc2a3f6c1d7825bb3bcf9d2e3cfbc236a95a76f55",
    "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",

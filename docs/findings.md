@@ -98946,3 +98946,69 @@ must not chase the modern compiler.
 The difference is confined to the debug line: the value only reaches
 `s->count > level`, and both readings are negative, so the run always
 escapes on the first silent block either way.
+
+### F8780. `MTK_phasor` reconstructed: a quarter-wave oscillator whose two spellings of 2*pi are not the same number
+
+*2026-08-31.* 271 bytes at 0xb0690, `src/service/mtk.c`, proved by
+`t_mtkphasor` at 189,701 checks with a 19-mutant set at 19 caught. Finding
+F8772 wrote the decode out when it declined the function; this confirms it
+against `tools/dis.py` line by line and adds what the decode did not settle.
+
+**THE TWO 2*PI CONSTANTS ARE DIFFERENT NUMBERS AND BOTH ARE THE AUTHOR'S.**
+
+    .rodata.cst4 0x57c   6.2831854820251465   the FLOAT, the fmodf modulus
+    .rodata.cst8 0x1f8   6.28318530718        a DOUBLE, eleven decimals
+    .rodata.cst8 0x208   3.141592653589793    the double NEAREST pi
+
+0x1f8 is *not* the double nearest 2*pi -- 0x182d4454fb211940 is; the object
+has 0xea2e4454fb211940, which is what a typed `6.28318530718` gives. 0x208
+*is* the double nearest pi. So the author typed a truncated 2*pi and a full
+pi in the same function, and `TONE_generate` carries the same truncated one.
+The float at 0x57c cannot take sides: the float nearest 6.28318530718 and
+the float nearest 2*pi are the same float.
+
+That mismatch is not cosmetic. It is what makes deviation D993: the
+reduction is against the LARGER constant and the correction adds the
+SMALLER, so a phase in `[-6.357343096397017e-08, 0)` comes back rounded up
+to the float 2*pi, scales to 1024.0000038, and indexes `MTK_cos_sign[4]`.
+
+**`fprem` IS THE ONLY ONE IN THE OBJECT, and no `fmod` symbol is defined or
+referenced anywhere in the 1.2 MB.** That is F8762's argument for `fsin` and
+`fcos`, and it says the original's build expanded the remainder inline. No
+pragma is set here, and the reason is measured rather than assumed: GCC 14
+at `-O3 -mfpmath=387` already emits the `fprem` loop for `fmodf` with an
+out-of-line fallback, so the only thing a
+`#pragma GCC optimize("unsafe-math-optimizations")` would buy is a
+period-compiler mnemonic, at the price of licensing reassociation across an
+interpolation the differential tier is currently exact on.
+
+**THREE MUTANTS THE DIFFERENTIAL TIER PROVABLY CANNOT SEE**, all recorded as
+NOT-here notes rather than left to read NOT CAUGHT:
+
+- The first `p->phase = x` is dead in the object too -- both exits store the
+  advanced angle over it.
+- `(short)y` versus `(int)y` agree over the whole reachable domain, because
+  the reduction bounds y below 1024. The sixteen bits are `fists` and
+  `cwtl`, which is codegen evidence.
+- `s >= pi` versus `s > pi` differ only at exactly the double pi, and no
+  pair of floats sums to it: pi is M * 2^-51, so a float partner would need
+  to be within 2^-28 of it and the float spacing there is 2.4e-07.
+
+A fourth is the one F8772 predicted trouble from. The object applies each
+sign to the 80-bit value the register still holds (`fsts`, `fmuls`,
+`fstps`), which is why the source is two statements per output; under
+`-mfpmath=387` -- both builds here -- GCC keeps the wide value for the
+one-statement spelling too, so that claim is `compare.py`'s and not a
+mutation set's.
+
+**TWO FORWARDERS WERE DELETED, and the second one is easy to miss.**
+`test/harness/runtime.c` defined an unprefixed `MTK_phasor` forwarding to
+`ref_MTK_phasor` (F8463) and `test/interop/runtime64.c` defined an aborting
+stub of the same name; both collide with `src/` now and both are gone. The
+interop one is not mentioned by F8463 or F8772 and is only reachable through
+`make phase`, so a `make one`-only session would not have found it.
+
+**AND THE HAZARD F8772 NAMED IS CLEARED.** `TONE_generate`'s existing test
+passed because the oscillator under it was the blob's; it is ours now and
+`t_fdspkrnl` is still green at 1,416 checks for that section and 45,905
+across the binary.

@@ -9609,3 +9609,64 @@ own 160-sample service interval it cannot, and the overwrite needs a call of
 at least 1600 samples. `t_fdspksil` drives 1700-sample calls and compares
 the buffer and the length against the blob, so the behaviour is reproduced
 whatever it turns out to mean.
+
+## D993 🐛 `MTK_phasor` reads one past the end of both sign vectors for a phase in a 64-nanoradian window below zero
+
+*2026-08-31.* The reduction and the correction use DIFFERENT constants, and
+that is what opens the window. `fmodf` reduces against the FLOAT 2*pi at
+`.rodata.cst4` 0x57c (6.2831854820251465), and the correction at 0xb06c3 adds
+the DOUBLE at `.rodata.cst8` 0x1f8 (6.28318530718) -- which is smaller. For
+almost every negative phase that is harmless: the sum is below the float
+modulus and the scaled angle is at most 1023.
+
+For a phase in `[-6.357343096397017e-08, 0)` it is not. The sum rounds UP to
+the float 2*pi itself, `x * 162.97466172610083` is then 1024.0000038, `fists`
+gives 1024, and `n >> 8` is **4** -- one past the end of `MTK_cos_sign[4]`
+and `MTK_sin_sign[4]`, two sixteen-byte arrays at `.data` 0x9354 and 0x9344.
+The table lookups themselves stay in range: 1024 is 0x400, so `n & 0x100` is
+0 and `n & 0xff` is 0.
+
+The window is reachable rather than theoretical. The advance wraps at PI,
+not at 2*pi (0xb0776), so `p->phase` is left in `[-pi, pi)` and is negative
+about half the time; any step that lands the phase within 64 nanoradians
+below zero walks into it on the next call.
+
+**Status:** measured for the input range, UNMEASURED for reachability from a
+real caller, and deliberately NOT DRIVEN. `t_mtkphasor` refuses every phase
+in the window and counts the refusals, because comparing our out-of-bounds
+read against the blob's compares two different pieces of memory and would
+fail for a reason that is not about the reconstruction. It drives the two
+floats bracketing the window instead and asserts that the near one was
+refused and the far one was not. `TONE_generate` is the only reconstructed
+caller and it starts the phase from `TONE_create`, so whether any tone the
+object generates ever lands there is that function's question and not this
+one's.
+
+## D994 ⚠ the width of `silence_progress`'s floating round trip is UNDECIDABLE, not merely unmeasured
+
+*2026-08-31.* Recorded at the request of the agent that wrote
+`src/service/silence.c`, from an independent read of the same function.
+
+The round trip itself is FORCED. At 0xb05a3 the duration register's answer
+is pushed as `{%eax, 0}` and loaded with `fildll` -- GCC's
+unsigned-to-floating sequence, which a signed `int` would have made a plain
+`fildl` -- and it is truncated straight back with `fistpl`, with no
+arithmetic in between. The `(int)(double)` cast chain in the reconstruction
+is what spells that; a plain `(int)` would emit neither instruction.
+
+**What no fixture can decide is `float` against `double` against no round
+trip at all.** The three differ only above 2^24, and every value above 65535
+is one value to the comparison that consumes the result: `s->count > level`,
+on a sixteen-bit `count`. Above 2^31 all three conversions come back
+negative, so they agree there too. Driven against the blob at 0, 1, 5,
+0x00ffffff, 0x01000001 (2^24+1, the smallest value at which a `float` round
+trip and a `double` one give different integers), 0x7fffffff, 0x80000000 and
+0xffffffff -- every one agrees, and every one would agree for all three
+spellings.
+
+**Status:** measured, and the measurement's answer is that the question is
+not decidable from behaviour. `double` is the right thing to write because
+it is the reading that stays exact on a narrowing FPU and so needs no
+divergence declared; that is a choice recorded, not a fact derived. A
+mutation that drops or narrows the cast will read NOT CAUGHT and should be a
+note rather than a registered mutant.

@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#############################.....]  84.5%    620544 bytes, 1519 symbols
-  tested      [####..............................]  12.7%     78600 bytes, 47 of 1519 that can be
+  translated  [#############################.....]  84.6%    621167 bytes, 1520 symbols
+  tested      [####..............................]  11.5%     71589 bytes, 12 of 1520 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -124,6 +124,7 @@ dsplibs.o reconstruction coverage
     _ZN17V90SpectralShaper14advanceTrellisEv       1054 bytes
     v22_org_rmloop2                                1050 bytes
     CID_FSD_demodulate                             1049 bytes
+    RingDetector_Process                           1045 bytes
     _ZN9Resampler8resampleEPKfjPfRj                1039 bytes
     FSE_decision_128pt                             1032 bytes
     getFrame                                       1028 bytes
@@ -147,6 +148,7 @@ dsplibs.o reconstruction coverage
     setfinalrate                                    905 bytes
     _Z14getMPrecvdBitsP12tagV34Object               895 bytes   (file-local)
     _ZN5V90Jd10unPackDataEi                         879 bytes
+    beepgen_start_dtmf                              877 bytes
     v32_process                                     871 bytes   (file-local)
     _ZN12V90Equalizer5resetEj                       862 bytes
     v32_data                                        859 bytes   (file-local)
@@ -286,6 +288,7 @@ dsplibs.o reconstruction coverage
     _ZN14ModulusEncoder8progressEPhPj               497 bytes
     VPCMXF_Create                                   495 bytes
     v8_V21_Init                                     492 bytes
+    beepgen_sample                                  491 bytes
     FSE_decision_16pt                               490 bytes
     shellDemapper                                   489 bytes
     FPM_TONE_detect                                 488 bytes
@@ -293,6 +296,7 @@ dsplibs.o reconstruction coverage
     _ZN5V90MP12evaluateInfoEv                       482 bytes
     _ZN18V90Phase3Modulator5resetE7PcmTypeh20Phase3ModulatorStatejP5V90JdP5V92JdPK19tagV90DILdescriptorj    479 bytes
     _ZN13V92Parameters12setToDefaultEv              477 bytes
+    beepgen_get_freqs                               469 bytes
     _ZN12VPcmFloModem16getConstellationEP11int_complexm    469 bytes
     _ZN15V92BitsToSymbol7processEPhRjPs             468 bytes
     FSE_decision_4pt                                468 bytes
@@ -307,6 +311,8 @@ dsplibs.o reconstruction coverage
     v8_getbit                                       453 bytes
     txmitquadbit                                    453 bytes
     v34setuptxmit                                   452 bytes
+    RingDetector_Create                             452 bytes
+    RingDetector_Reset                              449 bytes
     _ZN14V90Demodulator11enterPhase3Ev              448 bytes
     VPcmV34InitMOH                                  444 bytes
     _ZN21V92ConvolutionEncoder10inverseMapEPi       440 bytes
@@ -314,6 +320,7 @@ dsplibs.o reconstruction coverage
     AnalyseDialString                               436 bytes   (file-local)
     getbit                                          433 bytes   (file-local)
     _ZN22V90ConnectionEvaluator5resetEv             433 bytes
+    GetGain                                         432 bytes   (file-local)
     FSE_decision_16Tpt                              432 bytes
     _ZN18V90Phase3Modulator11generateDILEv          426 bytes
     _ZN19GenericToneDetector7processEPfj            422 bytes
@@ -389,6 +396,8 @@ dsplibs.o reconstruction coverage
     _ZN12V90ModulatorC1EjP13V90Phase2InfoP5V90JdP5V92JdP19tagV90DILdescriptorP16V90MappingParamsS9_P22tagV90AdditionalCPinfoP5V90CPP5V90MPP13V90Parametersj    338 bytes
     V22FP_delete                                    332 bytes
     _ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h    331 bytes
+    beepgen_start_beep                              327 bytes
+    FDSP_Kernel_InitObj                             323 bytes
     _ZN14V90Demodulator14enterDataPhaseEv           322 bytes
     _ZN8V90ModemD2Ev                                321 bytes
     _ZN8V90ModemD1Ev                                321 bytes
@@ -415,6 +424,7 @@ dsplibs.o reconstruction coverage
     _ZN18V92Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv    294 bytes
     FSEv22_decision12                               294 bytes
     V32FP_delete                                    293 bytes
+    RD_create                                       293 bytes
     _ZN18V92Phase4Modulator5resetEsh23V92Phase4ModulatorStatejj    290 bytes
     V22_PPS_init                                    290 bytes
     Detect_Retrain                                  288 bytes
@@ -429,6 +439,7 @@ dsplibs.o reconstruction coverage
     V34EqualizerFilter                              279 bytes
     _ZN12V92Modulator11initiateFPEEv                276 bytes
     reset_dtmf                                      275 bytes
+    FindCorrelation                                 275 bytes
     DetSequence                                     275 bytes
     v23_create                                      274 bytes   (file-local)
     VPcmV34SetV90RateReneg                          274 bytes
@@ -447,6 +458,7 @@ dsplibs.o reconstruction coverage
     _ZN19V90SpectralVerifier7processEPfj            268 bytes
     FPM_FSD_init                                    268 bytes
     v8_detectorinit                                 267 bytes
+    bSearchEnergy                                   267 bytes
     _ZN19GenericToneDetectorC2EjjPdS0_jjfjfjj       267 bytes
     _ZN19GenericToneDetectorC1EjjPdS0_jjfjfjj       267 bytes
     _ZN18V90Phase4Modulator26recivedFirstSUVuPartTwoRrnEv    266 bytes
@@ -496,6 +508,7 @@ dsplibs.o reconstruction coverage
     _ZN8V92ModemD1Ev                                229 bytes
     FSE_getdiag                                     229 bytes
     FPM_FSM_modulate                                229 bytes
+    create_dtmf                                     228 bytes
     V22_MRF_init                                    228 bytes
     _ZN21V90ConstellationPower20getConstellationInfoEP16V90MappingParams26V90TxPowerMeasurementPointj    227 bytes
     v8_rxinit                                       226 bytes
@@ -537,6 +550,7 @@ dsplibs.o reconstruction coverage
     _ZN24V90ConstellationDesigner4maxKEP16V90MappingParams    204 bytes
     _ZN15V90TRN2Designer4maxKEP16V90MappingParams    204 bytes
     v32_handshake                                   203 bytes   (file-local)
+    beepgen_create                                  203 bytes
     FPM_log10                                       203 bytes
     dftupdate                                       200 bytes
     _ZN18V90Phase4Modulator27recivedPartTwoSilenceRrnSUVEv    200 bytes
@@ -569,6 +583,7 @@ dsplibs.o reconstruction coverage
     _ZN15ResamplerTiming16timingCorrectionEf        191 bytes
     FPM_iir_filt                                    191 bytes
     _ZN12V90Modulator14enterDataPhaseEv             190 bytes
+    vce_get_sreg                                    188 bytes   (file-local)
     _ZN8V90Modem8progressEPiRjPfj                   188 bytes
     _ZN24V90ConstellationDesigner14spectralDesignEj28V90SpecialSpectralConditions    188 bytes
     detectorinit                                    186 bytes
@@ -657,6 +672,7 @@ dsplibs.o reconstruction coverage
     _Z8blackmanIfEvPT_j                             152 bytes
     TxNoCarrierV32                                  152 bytes
     TxHdxFinishFrame                                152 bytes
+    STRM_VCE_GetFDSPEnvironmentalParams             152 bytes
     DecodeRateSeq                                   152 bytes
     V34XF_IndicateJdReceived                        150 bytes
     V34XF_IndicateDilReceived                       150 bytes
@@ -707,6 +723,7 @@ dsplibs.o reconstruction coverage
     _ZN9V90MapperC1EP13V90Parameters                138 bytes
     _ZN8V92Modem5resetEv                            138 bytes
     _ZN12VPcmFloModem6getDFEEP11int_complexm        138 bytes
+    FDSP_DP_Run                                     138 bytes
     B103LocLoopNextState                            138 bytes
     _ZN15V90BitsToSymbol19setSymbolsBlockSizeEj     137 bytes
     _ZN9ScramblerIihE7processEPKiPhj                136 bytes
@@ -727,6 +744,7 @@ dsplibs.o reconstruction coverage
     _ZN12V90Modulator11enterPhase3Ev                130 bytes
     V22IIRFilterInit                                130 bytes
     TxHdxSilenceB103                                130 bytes
+    RD_process                                      130 bytes
     _ZN12V90Resampler5resetEv                       129 bytes
     setConstellationMask                            128 bytes
     setCodecConstellationMask                       128 bytes
@@ -747,6 +765,7 @@ dsplibs.o reconstruction coverage
     _ZN11V90DemapperD1Ev                            123 bytes
     VPcmV34GetMaxUpstreamRateIndex                  123 bytes
     V34XF_GetMaxUpstreamRateIndex                   123 bytes
+    CrossDataLinks                                  123 bytes
     _ZN12V90PreFilter16getV90CapabilityEv           122 bytes
     _ZN10GenericIIRIfdE5resetEv                     122 bytes
     FSE_decision_CD                                 122 bytes
@@ -815,6 +834,7 @@ dsplibs.o reconstruction coverage
     _ZN9ScramblerIhhE7processEh                     107 bytes
     _ZN11DescramblerIiiEC1Ejjj                      107 bytes
     _ZN10GenericIIRIfdEC1EjjPdS1_j                  107 bytes
+    zfFLTUTL_GetMaxAbsValue                         106 bytes
     _ZN15ResamplerTiming5resetEj                    106 bytes
     _ZN10LowPassFIRIfE6designEjf10WindowTypef       106 bytes
     V92deleteFilterCoefficients                     106 bytes
@@ -843,6 +863,7 @@ dsplibs.o reconstruction coverage
     _ZN11DescramblerIhiEC1Ejjj                      102 bytes
     _Z19interpretMohTimeouts                        102 bytes
     V34TimingFiltersInit                            102 bytes
+    zFLTUTL_Float2Linear                            101 bytes
     _ZN5V90CP18calcSequenceLengthEv                 101 bytes
     linear2ulaw                                     100 bytes
     _ZN18V90Phase4Modulator13generateRiNotEv        100 bytes
@@ -928,6 +949,7 @@ dsplibs.o reconstruction coverage
     _ZN14V90Demodulator14setSessionFlagEj            86 bytes
     FPM_SDM_init                                     86 bytes
     v8_ansaminit                                     85 bytes
+    fComputeRMSValueShortBuf                         85 bytes
     dp_wrapper_delete                                85 bytes
     _ZN9ResamplerD0Ev                                85 bytes
     _ZN5QueueIfE5writeEf                             85 bytes
@@ -935,12 +957,14 @@ dsplibs.o reconstruction coverage
     _ZN15V92BitsToSymbolD1Ev                         84 bytes
     _ZN15V90BitsToSymbolD2Ev                         84 bytes
     _ZN15V90BitsToSymbolD1Ev                         84 bytes
+    RD_delete                                        84 bytes
     CID_delete                                       84 bytes
     dftnlinitSignalBins                              83 bytes
     dftnlinitNoiseBins                               83 bytes
     V34EchoCleanUp                                   83 bytes
     SetRxLoopsV32                                    83 bytes
     silence_create                                   82 bytes
+    fComputeRMSValueFloatBuf                         82 bytes
     _ZN3PsdC2Ej10WindowTypej                         82 bytes
     _ZN3PsdC1Ej10WindowTypej                         82 bytes
     GetFP_Value                                      82 bytes
@@ -1103,6 +1127,7 @@ dsplibs.o reconstruction coverage
     CalcTurnAroundDelay                              53 bytes
     BwChDem_Delete                                   53 bytes
     ulaw2alaw                                        52 bytes
+    check_for_valid                                  52 bytes
     _ZN5QueueIfEC1Ej                                 52 bytes
     _ZN20V90Phase4DemodulatorD2Ev                    52 bytes
     _ZN20V90Phase4DemodulatorD1Ev                    52 bytes
@@ -1118,6 +1143,7 @@ dsplibs.o reconstruction coverage
     _ZN12VPcmFloModem15resetBitPointerEv             51 bytes
     alaw2ulaw                                        50 bytes
     _ZNK19V90SpectralVerifier13freqToLeftBinEf       50 bytes
+    zFLTUTL_Linear2Float                             49 bytes
     dp_v32_init                                      49 bytes
     dp_v32_exit                                      49 bytes
     dp_b103_exit                                     49 bytes
@@ -1183,6 +1209,8 @@ dsplibs.o reconstruction coverage
     _ZN18V90Phase4Modulator15generateRdRtNotEv       41 bytes
     _ZN14V90Demodulator6reInitEv                     41 bytes
     VPcmV34GetCurrentRxCarrier                       41 bytes
+    vce_hook_on                                      40 bytes   (file-local)
+    vce_hook_off                                     40 bytes   (file-local)
     cid_threshold                                    40 bytes
     _ZNK14V90Demodulator23indicateRemoteRateRenegEv     40 bytes
     _ZN5V90MPC2Ev                                    40 bytes
@@ -1220,6 +1248,7 @@ dsplibs.o reconstruction coverage
     _ZN12V90Resampler20getTimingHistoryMeanEv        35 bytes
     V22_PPS_free                                     35 bytes
     FPM_PPS_free                                     35 bytes
+    check_for_valid_easy                             34 bytes
     _handle_hdlc_input_close                         34 bytes
     _ZN18V92Phase4Modulator9recivedCPEv              34 bytes
     V34InitHilbertFilter                             34 bytes
@@ -1307,6 +1336,7 @@ dsplibs.o reconstruction coverage
     _ZN3AgcIfEC1Ev                                   24 bytes
     _ZN15V90TRN2Designer18setNofUcodesInTrn2Es       24 bytes
     _ZN13V90Parameters11initSessionEv                24 bytes
+    RingDetector_GetLastRing                         24 bytes
     Get_Detection_Threshold_Table                    24 bytes
     _iir_filter_delete                               23 bytes
     _ZN9ScramblerIihE19resetHistoryIndexesEv         23 bytes
@@ -1364,8 +1394,10 @@ dsplibs.o reconstruction coverage
     _ZN3AgcIfE6freezeEv                              17 bytes
     _ZN25SerialDifferentialEncoderIhE7processEh      17 bytes
     VPcmV34LogTimingOffset                           17 bytes
+    RingDetector_Delete                              17 bytes
     EpochDetectV32                                   17 bytes
     V22_MRF_free                                     16 bytes
+    RD_ring_details                                  16 bytes
     FPM_MRF_free                                     16 bytes
     CarrierDetectB103                                16 bytes
     setScramble                                      15 bytes
@@ -1389,8 +1421,11 @@ dsplibs.o reconstruction coverage
     RateToSeq                                        14 bytes
     FPM_TONE_set_scale                               14 bytes
     CarrierDetect                                    14 bytes
+    detector_set_enable                              13 bytes
     _ZN5QueueIfE5resetEv                             13 bytes
     _ZN20V90Phase3Demodulator18resetJdNotDetectorEv     13 bytes
+    detector_set_output_status                       12 bytes
+    detector_set_output_in_stream                    12 bytes
     _ZN3Psd16setOverlapLengthEj                      12 bytes
     _ZN20V90Phase3Demodulator11getMaxUcodeEv         12 bytes
     _ZN18V92Phase4Modulator27recivedPartOneSilenceRrnSUVEv     12 bytes
@@ -1418,6 +1453,7 @@ dsplibs.o reconstruction coverage
     toneiir_delete                                    5 bytes
     silence_delete                                    5 bytes
     dp_runtime_delete                                 5 bytes
+    beepgen_delete                                    5 bytes
     _ZN18V92Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv      5 bytes
     _ZN18V90Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv      5 bytes
     Dual_TONE_delete                                  5 bytes
@@ -1555,7 +1591,7 @@ dsplibs.o reconstruction coverage
     voice.c#3 +3                                    6443 bytes     8 symbols
     V32mod.c +39                                    5294 bytes    12 symbols
     class1.c                                        4296 bytes    10 symbols
-    Fdspkrnl.c +13                                  4180 bytes     8 symbols
+    Fdspkrnl.c +13                                  3557 bytes     7 symbols
     class1rx.c                                      2495 bytes     5 symbols
     Beepgen.c +3                                    2165 bytes     5 symbols
     v22.c                                            929 bytes     3 symbols

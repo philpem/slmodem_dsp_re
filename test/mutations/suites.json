@@ -891,5 +891,9 @@
  "mtktab": [
   "src/service/mtk_tables.c",
   "build/test/t_mtktab"
+ ],
+ "mtkphasor": [
+  "src/service/mtk.c",
+  "build/test/t_mtkphasor"
  ]
 }
