@@ -110,8 +110,22 @@ phase, last on purpose).
 Also on the board, not TU work: three written functions still route arms into
 stubs (`VPcmV34Progress` ×5, `vpcm_run` ×5, `v34handshak` ×1 — see
 `tools/worklist.py`'s closing section), and the tested-against-blob share is
-1.1% with `v34handshak` (61,541 B) the largest untested translated symbol.
+**99.0%** -- 1,540 of 1,554 translated symbols are driven against the blob
+itself, 631,385 bytes.
 Recalibrating the MODERN tier for GCC 14 is its own task (see below).
+
+**THE 1.1% THIS PARAGRAPH USED TO CLAIM WAS AN ARTEFACT, NOT A MEASUREMENT.**
+`coverage.py`'s `tested` line needs `build/dsplibs_ref.o` and the test binaries
+under `build/test`, and every low reading in this session was taken while
+`build/repro` and `build/test` were ABSENT -- deleted, correctly, by the V.22
+wave because they had been built with non-default `-O3` flags. The headline
+`translated` figure does not depend on those, which is why it stayed right
+while `tested` read 1.1% and was quoted repeatedly, including into this file.
+Rebuild with a plain `make` before believing either number, and note that the
+fourteen currently listed as untested are the just-merged voice symbols whose
+test binaries are not yet built -- the SAME artefact, one wave younger. This is
+findings F3055/F3110 again: a tool reading an object tree that is not there
+reports a clean, plausible and wrong number.
 
 ## Wave 1 ledger (small closers + leaves, four parallel agents)
 
