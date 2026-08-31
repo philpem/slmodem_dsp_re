@@ -94793,3 +94793,245 @@ which is this tree's own rename of `delete` and reverts with them.
 period objects byte-identical. If it does not, the hand copy disagreed with the
 real one somewhere else too, and that is a defect rather than a plumbing
 nuisance.
+
+## F8862. The V.27ter receiver block is TILED by four FPM modules, and that is what makes its offsets readable rather than guessed
+
+`V27RX_create` is 2,210 bytes and is not reconstructed, so by `v17data.h`'s
+ruling the instance stays `void *` and every offset is a named constant. The
+V.27ter receive block is the first one where that ruling gives more than a list
+of numbers, because the block is not opaque: four of the library's own modules
+are embedded in it and three of them are NAMED BY A CALLEE.
+
+`V27RX_delete` hands `rx + 0x124` to `FPM_FSE_free`, `rx + 0x94` to
+`FPM_SRE_free` and `rx + 0x4c` to `FPM_MRF_free`; `DemodDataV27` hands
+`rx + 0x68` to `FPM_AGC_agc`. That is evidence class 2 -- a callee types it --
+for all four. What turns four data points into a layout is that they tile with
+no gap and no overlap:
+
+    0x4c  + sizeof(struct fpm_mrf) == 0x4c  + 0x1c   == 0x68
+    0x68  + sizeof(struct fpm_agc) == 0x68  + 0x2c   == 0x94
+    0x94  + sizeof(struct fpm_sre) == 0x94  + 0x90   == 0x124
+    0x124 + sizeof(struct fpm_fse) == 0x124 + 0x4e18 == 0x4f3c
+
+and `V27RX_delete`'s two scratch pointers are at 0x4f40 and 0x4f44, four bytes
+past the end of the last one. So every offset the five reading functions touch
+between 0x4c and 0x4f3c lands inside a module whose fields are already named
+and already differentially tested, and eight of them are named fields rather
+than numbers:
+
+    rx + 0x84   fpm_agc::signal      rx + 0x168  fpm_fse::pll_on
+    rx + 0xd4   fpm_sre::active      rx + 0x16c  fpm_fse::tilt_on
+    rx + 0xdc   fpm_sre::adapt       rx + 0x170  fpm_fse::lms_on
+    rx + 0x164  fpm_fse::lms_force   rx + 0x176  fpm_fse::mse
+
+The last is corroborated independently by the author's own words, which is
+evidence class 1: `DataCarrierDetectV27` compares `rx + 0x176` against 0x3fff
+and prints "V27 Decoder error too big... no carrier" above it, and `fpm_fse.h`
+had already called +0x52 the smoothed squared decision error from
+`FPM_FSE_receive`'s own reconstruction. Neither reading was derived from the
+other.
+
+**The three caller-owned enables are named the same way, off their
+DESTINATION.** `DemodDataV27` ANDs the AGC's gate into `rx + 0x04`,
+`rx + 0x08` and `rx + 0x10` and stores the results into `fpm_sre::adapt`,
+`fpm_fse::pll_on` and `fpm_fse::lms_on` respectively, so what each one enables
+is read off where the value lands rather than off a name -- there is no name.
+`V27RX_create` sets all three to 1 at 99ceb..99d06.
+
+## F8863. `fse->cfg.owner` is `rx + 0x14`, and every decoder offset is confirmed by the function that writes it as well as the one that reads it
+
+`V27RX_decision` is `fpm_fse_decision` for V.27ter and works entirely relative
+to `state->cfg.owner`. `V27RX_create` builds the FSE configuration on the
+stack and sets that member -- 99b65 loads `obj + 0x54`, adds 0x14, and stores
+the result at the stack configuration's +0x2c, which `fpm_fse.h` already calls
+`owner`. So the decoder block is `rx + 0x14`, and the fields the slicer uses
+can be checked against the stores the constructor makes:
+
+    99c54  rx + 0x20 = (params->f8 == 1)          dec + 0x0c  eight_phase
+    99c6c  rx + 0x28 = V27RX_DEC_PHS_MASK[rate]   dec + 0x14  phase mask
+    99c2b  rx + 0x2a = 0                          dec + 0x16  last index
+    99ca4  rx + 0x2c = V27RX_DEC_PMAP[rate]       dec + 0x18  bit map
+    99c7d  rx + 0x32 = 0x3299                     dec + 0x1e  (unread)
+    99cbf  rx + 0x34 = V27RX_DEC_LAST_PHASE[rate] dec + 0x20  phase table
+    99c97  rx + 0x3a = 0                          dec + 0x26  symbol count
+
+**And dec + 0x1e is the interesting one.** `V27RX_create` writes 0x3299 there
+and nothing reconstructed reads it; `V27RX_decision` writes the LITERAL 0x3299
+through its magnitude argument. Two independent occurrences of one number in
+two translation units, so the constant is the author's decision magnitude and
+not a coincidence of one disassembly.
+
+## F8864. V.27ter's phase convention, read off the object's own tables
+
+A full revolution is 0x8000, not 0x10000, and the object states it three ways.
+`V27RX_decision` folds the phase difference into [0, 0x8000] by adding 0x8000
+when it is negative and subtracting it when it exceeds 0x8000; and the phase
+tables are
+
+    V27RX_DEC_LAST_PHASE_2400   0x0000 0x2000 0x4000 0x6000
+    V27RX_DEC_LAST_PHASE_4800   0x0000 0x1000 0x2000 ... 0x7000
+    V27RX_DEC_PHS_MASK          3, 7
+    V27RX_DEC_PMAP_2400         0 1 3 2
+    V27RX_DEC_PMAP_4800         1 0 2 3 7 6 4 5
+
+-- four and eight evenly spaced phases over 0x8000, with the mask matching the
+table length and the bit maps Gray-coded, which is V.27ter's own dibit and
+tribit assignment. `dec->eight_phase` selects 8 over 4 in the slicer, and
+`V27RX_create` fills it from `params->f8 == 1` where the same `params->f8`
+indexes all three table pairs. So the field is the rate and the count follows
+it, twice over.
+
+## F8865. `V27RX_decision`'s initial distance is the loop's own expression at half a revolution, and the sign of the constant was the compiler's to choose
+
+The slicer opens with
+
+    mov %ebx,%ecx ; sub $0x8000,%ecx ; js -> mov $0xffff8000,%eax ; sub %ebx,%eax
+                                      else   lea 0x8000(%ebx),%eax
+    ...
+    movswl %ax,%esi
+
+which reads as `-0x8000 - diff` on one arm and `diff + 0x8000` on the other --
+neither of which is the distance to anything. It becomes one expression once
+the `movswl` is taken into account: the result is used only as a `short`, and
+0x8000 is its own negation modulo 2^16, so both arms are the low half of
+
+    diff >= 0x8000 ? diff - 0x8000 : 0x8000 - diff
+
+which is the SAME expression the loop applies to every table entry, with the
+entry replaced by half a revolution. That is the largest distance any legal
+phase can be at, so the peeled initialisation is a sentinel written in the
+loop's own terms rather than a constant.
+
+**The trap this rules out is a real one.** Writing the sentinel as the obvious
+`best = 0x8000` gives `(short)0x8000` = -32768, the SMALLEST value, and nothing
+can then beat it -- the slicer returns phase 0 for every input. `t_v27fax`
+carries that spelling as a variant and it separates.
+
+## F8866. `V27TX_status` is the odd one of four, and it SETS the bit its three siblings clear
+
+`V17TX_status`, `V29TX_status` and `V27TX_status` are the same forty-line
+function: copy two 16-bit fields, zero seven more, copy one 32-bit field,
+clear a bit of a second flags byte, and set the first flags byte to
+`src->f10 & 0x04`. `V21TX_status` is the same shape without the 32-bit copy.
+
+Where V.17 and V.29 clear bits 0 and 1 of the destination's +0x14 --
+
+    a1c18: movzbl 0x14(%edx),%eax ; and $0xfc,%al ; mov %al,0x14(%edx)
+
+V.27ter SETS bit 0 and then clears bit 1:
+
+    a3f19: movzbl 0x14(%ecx),%eax ; or $0x1,%al
+           mov %al,%dl ; and $0xfd,%dl ; and $0x1,%al ; mov %dl,0x14(%ecx)
+
+and the final store is `(flags & 0x01) | (src->f10 & 0x04)` rather than
+`src->f10 & 0x04`. So the destination's bit 0 comes out SET for V.27ter and
+CLEAR for the other three, on every input. That difference is observable and
+`t_v27fax` separates it on every trial. Recorded as D1033.
+
+## F8867. ...and the intermediate store that makes it odd is provably dead, which is why the fact is written down rather than left to a test
+
+`V27TX_status` writes its destination's +0x14 TWICE, and the second write
+depends on nothing the first one produced except bit 0 of the value that was
+already in a register. The first store is not dead to the COMPILER -- an
+aliasing read of the source's +0x10 follows it and nothing proves the two
+blocks are disjoint -- but it is dead to every caller:
+
+  - the only later read that can see that byte is `src->f10` at a displacement
+    of +4, and only bit 2 of it is used; neither `| 0x01` nor `& ~0x02` touches
+    bit 2;
+  - the 32-bit copy from `src + 0x18` can overlap +0x14 at a displacement of
+    -4, but the SECOND store to +0x14 precedes that read and overwrites the
+    first.
+
+Measured, not argued: `t_v27fax` runs the pair at every four-byte displacement
+from -0x20 to +0x20 with a variant that omits the store, and asserts that the
+variant NEVER separates -- an assertion of zero, which is the only shape in
+which "this cannot be seen" is itself checkable. A reconstruction that dropped
+the store would pass every differential test there is. It is kept because the
+object makes it. The same holds for V.17 and V.29, whose first store is dead
+for the same reason.
+
+## F8868. `V27RX_modem` is a do-while, and it reads the same sixteen bits signed and unsigned within one iteration
+
+The receive driver calls the handler at `(*(void **)(obj + 0x50))[3]` in a
+loop, and three things about the loop are forced by the object rather than
+chosen:
+
+  - **It is a do-while.** The entry at a2c81 loads the count and falls into
+    the body without a test, so a handler is entered once even when the caller
+    offers no samples -- which is how a state that only has to emit gets to
+    run at all. `t_v27fax` drives a count of zero and the blob calls the
+    handler.
+  - **The consumed count is `(short)before - (unsigned short)after`.** The
+    same `%cx` is extended with `movswl` at the top of the loop and `movzwl`
+    after the call, and BOTH results are used at full width by the
+    subtraction, so neither extension is finding F614's free case. The two
+    readings agree over every count below 0x8000 and diverge above it; the
+    test reaches the divergence with a starting count of 0x8002.
+  - **The accumulated output count is a `short`**, `add %edx,%eax` followed by
+    `cwtl` on every iteration, and it is written back OVER the caller's input
+    count. So the argument is the number of input samples on the way in and
+    the number of output samples on the way out.
+
+The return is the 32-bit word at obj + 0x1c, whose byte 1 the function clears
+bit 1 of on entry -- one word, not two fields: `V27RX_create` zeroes all four
+bytes with one `movl` and then writes the two bytes separately.
+
+## F8869. Two arms of `V27RX_decision` are unreachable under the object's own phase tables
+
+The fold is written as two independent tests, `if (diff < 0) diff += 0x8000`
+and `if (diff > 0x8000) diff -= 0x8000`, and the initial distance branches on
+`diff >= 0x8000`. With the object's own tables the second and third are dead:
+every entry of `V27RX_DEC_LAST_PHASE_*` is in [0, 0x7000], so
+`*angle - tbl[last]` is at most 0x7fff and the negative arm brings anything
+below zero back to at most 0x7fff. `diff > 0x8000` cannot happen and
+`diff == 0x8000` cannot happen either.
+
+This is not a defect and not a deviation from any specification -- it is
+defensive code for a configuration the constructor never builds. It matters
+for two reasons. First, a differential test that used only the object's tables
+would leave both arms uncovered while looking thorough, so `t_v27fax` plants a
+third table shape spread across the whole signed range and a fourth input
+chosen to make the folded difference exactly one revolution -- the only value
+on which `>` and `>=` differ. Second, it bounds what the reconstruction of
+those arms rests on: their behaviour is measured, but only against tables the
+author's own code cannot produce. Recorded as D1034.
+
+## F8870. Three more `FPM_*_free` call sites pass an argument the callee does not have
+
+`V27RX_delete` stores the constant 1 at `0x4(%esp)` before each of
+`FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`, and none of the three reads
+it -- exactly the shape `v22data.c` and `bwchdem.c` record for `FPM_AGC_agc`
+(F8234). cdecl makes it harmless. Three modules and two directions now: the
+`_agc` sites pass a fourth argument to a three-argument function and the
+`_free` sites pass a second to a one-argument one, and in both cases the extra
+value is the literal 1. Whatever prototype the author was compiling against,
+it was not the one the object's own definitions imply, and the pattern is now
+consistent enough to look like a property of a shared header rather than of
+any one call site.
+
+Not reproduced, here or anywhere: an extra cdecl argument changes no
+behaviour, and writing one would need a prototype this tree has no evidence
+for.
+
+## F8871. What a delete test can and cannot measure through this harness, and saying which
+
+`V27RX_delete` makes eleven calls in a fixed order. `t_v27fax` checks
+
+  - the SET of pointers released, pointer by pointer rather than by a count,
+    because a count cannot tell a missed free from a double one;
+  - the multiplicity -- twenty allocations, twenty frees;
+  - that nothing unknown was freed (`harness_alloc.bad_free`);
+  - that five named wrong readings each change one of those.
+
+It does NOT check the ORDER, and cannot: the harness allocator records what is
+live, not the sequence of `sysdep_free` calls, and `testbench/` may be extended
+but `src/` may not be changed to make an order observable. Every ordering of
+these eleven calls produces the same live set, because no callee reads memory
+another has already freed under this allocator.
+
+So the order in `src/fax/v27.c` is taken from the disassembly alone. That is
+weaker than the rest of this batch and is recorded here rather than left
+implicit -- the alternative, an order probe built on the allocator's LIFO
+recycling, is finding F1353's mistake and would be reading the allocator rather
+than the code.

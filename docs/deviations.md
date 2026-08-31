@@ -9169,3 +9169,74 @@ halved, a division instead of a shift, and the operands read unsigned -- and
 **Status:** unmeasured, and unmeasurable from this object, for D405's reason:
 the function has no caller, so no configuration exists that would say which
 reading is the author's.
+
+## D1033 ⚠ `V27TX_status` sets the bit its three siblings clear, through a store that nothing can observe
+
+**What the object does.** Four functions fill a caller's status block from a
+datapump's own -- `V17TX_status`, `V21TX_status`, `V27TX_status` and
+`V29TX_status` -- and three of them clear bits 0 and 1 of the destination's
+byte at +0x14 with a single `and $0xfc,%al`. `V27TX_status` instead ORs bit 0
+in, clears bit 1 separately, and then reads bit 0 back out of the value it
+computed:
+
+    a3f19  movzbl 0x14(%ecx),%eax
+    a3f1d  or     $0x1,%al          <-- the other three have `and $0xfc,%al`
+    a3f1f  mov    %al,%dl
+    a3f21  and    $0xfd,%dl
+    a3f24  and    $0x1,%al
+    a3f26  mov    %dl,0x14(%ecx)    <-- dead; see below
+    ...
+    a3f36  mov    %al,0x14(%ecx)    <-- (flags & 1) | (src->f10 & 4)
+
+so V.27ter's destination comes out with bit 0 SET on every input and the other
+three come out with it clear.
+
+**Why it is here rather than a plain finding.** The store at a3f26 cannot be
+seen by any caller. Its value differs from the final one in bit 0 alone plus
+whatever the destination already held above bit 2, and the only later reads
+that can reach that byte are the source's +0x10 -- of which only bit 2 is
+used, and neither the OR nor the AND touches bit 2 -- and the 32-bit copy from
+the source's +0x18, which happens after the SECOND store. `t_v27fax` runs the
+two blocks at every four-byte overlap from -0x20 to +0x20 and asserts the
+omission never separates. F8867.
+
+The asymmetry with the other three, on the other hand, IS observable, on every
+input.
+
+**Reproduced.** `src/fax/v27.c` makes both stores and computes the final byte
+the object's way. The dead store is kept for the reason every inert site in
+this tree is kept: it is what the object contains, the compiler had no choice
+but to emit it, and a reconstruction that dropped it would differ in its
+control flow while passing every test.
+
+**Status:** unmeasured against hardware. Nothing reconstructed reads the
+destination's +0x14, so what bit 0 announces is not known and the difference
+between V.27ter and its three siblings cannot be attributed. It may be
+deliberate and it may be a copy-and-paste slip in the original; the object
+cannot separate those.
+
+## D1034 ⚠ `V27RX_decision` guards against a phase difference its own tables cannot produce
+
+**What the object does.** The slicer folds the measured phase difference into
+one revolution with two independent tests --
+
+    if (diff < 0)      diff += 0x8000;
+    if (diff > 0x8000) diff -= 0x8000;
+
+-- and then branches on `diff >= 0x8000` again to seed the search. Under the
+configuration `V27RX_create` builds, the second test and that branch are dead:
+`V27RX_DEC_LAST_PHASE_2400` and `_4800` hold only 0x0000..0x7000, so
+`*angle - tbl[last]` is at most 0x7fff, and the negative arm brings anything
+below zero back into the same range.
+
+**Reproduced**, arms and all, and covered: `t_v27fax` plants a phase table
+spread across the whole signed range and an input that makes the folded
+difference exactly 0x8000 -- the single value on which `>` and `>=` differ --
+and both are separated against the blob. See F8869 for why the coverage was
+built deliberately rather than found.
+
+**Status:** unmeasured, and unmeasurable from this object. The arms behave
+identically to the blob over every input either can be given, but only inputs
+that need a phase table the author's own constructor never installs reach
+them. Whether they guard a configuration that existed in some other product
+using the same source, or are simply belt and braces, the object does not say.
