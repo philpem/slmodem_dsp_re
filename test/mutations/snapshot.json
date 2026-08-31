@@ -376,6 +376,34 @@
     "the tone/raw comparison is the other way round": "caught"
    }
   },
+  "fdspdp": {
+   "key": "94cb53c9c4e949f045580da0ca02633baa5bb003d70444b276502c2eed0cf6cd",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "FDSP_DP_Delete clears the global for a NULL kernel too": "caught",
+    "FDSP_DP_Delete does not clear the global": "caught",
+    "FDSP_DP_Delete leaves chan_a's taps": "caught",
+    "FDSP_DP_Delete leaves chan_b": "caught",
+    "FDSP_DP_Delete leaves the buffer block": "caught",
+    "FDSP_DP_Delete leaves the kernel itself": "caught",
+    "chan_a gets 120 taps rather than 240": "caught",
+    "chan_b is allocated as a kernel": "caught",
+    "int_00 is decided by the TX delay": "caught",
+    "int_00 is left as InitObj set it": "caught",
+    "int_00 treats zero as negative": "caught",
+    "int_00's two answers are the other way round": "caught",
+    "the buffer block is allocated as a channel": "caught",
+    "the correlation counter is not cleared": "caught",
+    "the correlation counter is set to one": "caught",
+    "the delays are applied on the re-initialising path as well": "caught",
+    "the entry line prints the two delays the other way round": "caught",
+    "the global is not published": "caught",
+    "the kernel is allocated four bytes short": "caught",
+    "the kernel is not initialised": "caught",
+    "the re-initialisation line is printed on both paths": "caught",
+    "the two delays land on the other channel each": "caught"
+   }
+  },
   "fdspkfifo": {
    "key": "ac9d978cc309d1a488aecb627c290c2a1de9676931247b8453e903fd36814afb",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",

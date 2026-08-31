@@ -899,5 +899,9 @@
  "tonecreate": [
   "src/service/fdspkrnl.c",
   "build/test/t_tonecreate"
+ ],
+ "fdspdp": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_fdspdp"
  ]
 }

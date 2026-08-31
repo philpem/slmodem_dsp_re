@@ -170,6 +170,34 @@ struct fdsp_tone {
 extern int bInternalBeepInProgress;
 
 /*
+ * The kernel FDSP_DP_Create last handed out, and a counter written by that
+ * function and read by nothing in the whole object.  Both are `b` in the
+ * blob and external here, the same trade `bInternalBeepInProgress` makes.
+ */
+extern struct fdsp_kernel *pGlobalFDSPObj;
+extern unsigned int uCorrelationReportsNo;
+
+/*
+ * Create the kernel, or re-initialise one the caller already has, and
+ * publish it in `pGlobalFDSPObj`.
+ *
+ * The two delays are the object's own names, from the debug line it prints
+ * on entry: the RX one becomes chan_a's window offset and the TX one
+ * chan_b's.  A negative RX delay leaves `int_00` at 0 instead of 2.
+ * Returns the kernel, or NULL if any of the six allocations failed.
+ */
+struct fdsp_kernel *FDSP_DP_Create(struct fdsp_kernel *k,
+				   short sRxSamplesDelay,
+				   short sTxSamplesDelay);
+
+/*
+ * Free the kernel, its buffer block and both channels with their taps, and
+ * clear `pGlobalFDSPObj`.  A NULL kernel is a no-op; a kernel with a NULL
+ * CHANNEL is not, and faults -- see the note at the definition.
+ */
+void FDSP_DP_Delete(struct fdsp_kernel *k);
+
+/*
  * Raise or drop the beep flag, with a debug line either way.  The flag is
  * the object's own; this is only its setter, and the other writer -- the
  * unreconstructed function at 0xaea27 -- writes it directly.

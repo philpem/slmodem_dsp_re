@@ -99131,3 +99131,57 @@ write it with its reader. Its contents are 980 Hz, amp 0.353599995,
 duration 0 (endless), 0.75, 0.01, 0.000199999995, pole radius 0.9375, a
 NULL `fir_proto`, fir_len 53, and three zero words -- and that NULL with a
 positive length is worth checking against D995 when someone does write it.
+
+### F8782. `FDSP_DP_Create` and `FDSP_DP_Delete`: the kernel's constructor names its own two arguments, and both functions dereference a channel before they test it
+
+*2026-08-31.* 650 bytes at 0xae5c0 and 157 at 0xae520, both written into
+`src/service/fdspkrnl.c` with the two `.bss` words they touch. Proved by
+`t_fdspdp` at 24,580 checks, mutation set 22 of 22 caught.
+
+**THE ARGUMENTS ARE NAMED BY THE OBJECT'S OWN FORMAT STRING**, which is
+evidence order 1 and is why they are not `a` and `b`:
+`"ver 120 sRxSamplesDelay %d ,sTxSamplesDelay %d \n"` at `.rodata.str1.4`
+0x12f30. The RX delay is stored into `chan_a->offset` and the TX delay into
+`chan_b->offset` (0xae6c2), so the string also settles which channel is
+which direction -- something four already-reconstructed functions in the
+same file could not say.
+
+**BOTH ARE `short`** (`movswl` at 0xae5de and 0xae5e3), and `int_00` is
+`(sRxSamplesDelay >= 0) ? 2 : 0` written branchlessly as
+`sar $0x1f; not; and $0x2`. It lands on the field `FDSP_Kernel_InitObj` has
+just set to 2, so the only thing this function can do to it is clear it, and
+only a NEGATIVE rx delay does.
+
+**THE TWO `offset` STORES ARE INSIDE THE ALLOCATING ARM.** A caller handing
+in an existing kernel gets it re-initialised and keeps its old offsets --
+`t_fdspdp` asserts that directly, because a reader who moved the two stores
+out of the `if` would pass every other check in the file.
+
+**AND BOTH FUNCTIONS READ THROUGH A CHANNEL POINTER BEFORE TESTING IT.**
+`FDSP_DP_Delete` does `mov 0x14(%ebx),%eax; mov 0x1680(%eax),%edx` at
+0xae533 and only asks whether `chan_a` was NULL at 0xae540; `chan_b` is the
+same three instructions later. `FDSP_DP_Create` stores both offsets through
+`chan_a` and `chan_b` at 0xae6c2 BEFORE it tests whether the allocation
+chain succeeded. So the NULL tests in `Delete` guard `sysdep_free` and
+nothing else, and the only caller that can produce a kernel with a missing
+channel is `Create`'s own out-of-memory path -- which the harness allocator
+cannot drive, so all three sites are recorded at their definitions rather
+than tested. This wave's deviation numbers (D993-D995) are spent; the row
+these want is the next block's.
+
+**`uCorrelationReportsNo` IS WRITE-ONLY IN THE WHOLE OBJECT.** A reverse
+scan of `.bss` 0x8e8 finds exactly one relocation against it, the store at
+0xae61d. Its name is the author's and nothing in the 1.2 MB reads it back,
+so nothing here says what it counts.
+
+**Both globals are external in `src/` and `b` in the blob**, which is the
+trade `bInternalBeepInProgress` in the same file already makes: a `static`
+cannot be compared against the blob's copy, and `symmap.py` renames the
+blob's so the two sides keep their own.
+
+**Two mutants are NOT-here notes.** The three pointer-clearing stores at
+0xae729 are overwritten by the allocations that follow on every path the
+harness can produce, and the ORDER of the two channel allocations (chan_b
+first, then chan_a) and of the two tap allocations is invisible because each
+pair is the same size -- the books are identical either way. Both are read
+from the disassembly and written down instead.
