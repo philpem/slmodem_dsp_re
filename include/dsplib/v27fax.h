@@ -2,12 +2,11 @@
  * v27fax.h -- ITU-T V.27ter (fax): the receiver's primitives, and the
  * transmitter's status filler.
  *
- * Eleven functions sit directly on the FPM layer here.  Nine of them reach
+ * Eleven functions sit directly on the FPM layer here.  Ten of them reach
  * into the V.27ter modem instance, pick a sub-object out of it, and either
  * hand that sub-object to the module that owns it or read one field back out;
  * one is the equaliser's slicer, and one is a constant.  The last two --
- * `DemodDataV27` and `DataCarrierDetectV27` -- are not reconstructed yet and
- * are marked below.
+ * `DemodDataV27` -- is not reconstructed yet and is marked below.
  *
  *   GetSNRV27             a constant
  *   V27RX_status          "did the caller supply somewhere to write"
@@ -18,8 +17,8 @@
  *   V27RX_delete          release the receiver
  *   V27RX_decision        the equaliser's slicer: nearest DPSK phase
  *   QualityDetectV27      smooth the equaliser's MSE and grade it
+ *   DataCarrierDetectV27  carrier up/down, and the V.21 escape
  *   DemodDataV27          AGC -> resample -> symbol recovery -> equalise  [-]
- *   DataCarrierDetectV27  carrier up/down, and the V.21 escape           [-]
  *
  * `tools/service.py` puts all eleven on the FAX side.
  *
@@ -376,6 +375,71 @@ int EpochDetectV27(void *modem);
  */
 int CarrierDetectV27(void *modem);
 
+/* ------------------------------------------------------------------ */
+/* The status block `V27TX_status` fills                                */
+
+/*
+ * NOT the modem instance: this is the caller's own block, and the four
+ * `*TX_status` functions are the only reconstructed writers of it.  What is
+ * named here is what four functions agree on plus one literal; the rest keeps
+ * its offset, because agreeing on WHERE a field is says nothing about what it
+ * means.
+ *
+ * THE ONE FIELD WITH RANK-1 EVIDENCE IS +0x02, AND IT IS A BIT RATE.
+ * `V21TX_status` does not copy it from anywhere -- it stores the literal
+ * `movw $0x12c,0x2(%edx)` at 0xa2c11, and 0x12c is 300, which is V.21's bit
+ * rate to the digit.  V.17, V.27ter and V.29 fill the same slot from their
+ * own handle's +0x02 instead, which is what a rate-selectable modem would do
+ * with a field a fixed-rate one can write as a constant.
+ *
+ * +0x10 IS BOUNDED AND NOT NAMED.  V.17, V.27ter and V.29 give it the same
+ * value they gave +0x02 -- the object reads the source's +0x02 a second time
+ * rather than reusing the first read -- and V.21 gives it zero where it gave
+ * +0x02 its 300.  So it is a second slot related to the rate and it is NOT
+ * simply a copy of the first, since the one modem that knows its rate
+ * statically writes two different numbers into them.  What distinguishes them
+ * is not established.
+ *
+ * A PARALLEL PASS ON V.21 IS MODELLING THE SAME BLOCK AS A STRUCT, from the
+ * same four functions.  This header deliberately does not, for the same
+ * reason it does not model the instance: nothing here allocates the block or
+ * bounds its extent, so a struct would state a size the object has not shown.
+ * Whoever merges the two should reconcile them rather than let a third
+ * spelling accumulate -- see F8872.
+ */
+#define V27STAT_WORD_00		0x00	/* copied from the handle's +0x00  */
+#define V27STAT_BIT_RATE	0x02	/* bit/s; V21TX_status writes 300  */
+#define V27STAT_ZERO_04		0x04	/* all four zero these five        */
+#define V27STAT_ZERO_06		0x06
+#define V27STAT_ZERO_08		0x08
+#define V27STAT_ZERO_0A		0x0a
+#define V27STAT_ZERO_0C		0x0c
+#define V27STAT_WORD_10		0x10	/* see the note above              */
+#define V27STAT_ZERO_12		0x12
+#define V27STAT_FLAGS0		0x14	/* byte; the asymmetry lives here  */
+#define V27STAT_FLAGS1		0x15	/* byte                            */
+#define V27STAT_WORD_18		0x18	/* int; V.17 and V.27ter only      */
+
+/*
+ * The two bits of `V27STAT_FLAGS0` this function decides, and the one bit of
+ * `V27STAT_FLAGS1` it clears.
+ *
+ * NAMED BY BIT VALUE AND NOT BY MEANING, because the meaning is not
+ * established -- nothing reconstructed reads any of them.  What IS
+ * established is that bit 0 comes out set for V.27ter and clear for the other
+ * three, that bit 1 is cleared by all four, and that bit 2 is copied from the
+ * transmitter handle's +0x10.
+ */
+#define V27STAT_F0_BIT0		0x01
+#define V27STAT_F0_BIT1		0x02
+#define V27STAT_F0_FROM_TX	0x04	/* the bit taken from tx + 0x10    */
+#define V27STAT_F1_BIT0		0x01
+
+/*
+ * The byte of the transmitter's handle that supplies V27STAT_F0_FROM_TX.
+ */
+#define V27TX_HANDLE_FLAGS	0x10
+
 /*
  * Copy the transmitter's status into the caller's block, reporting 1, or 0 if
  * there is no block.
@@ -443,12 +507,27 @@ unsigned short V27RX_decision(struct fpm_fse *state, short *angle, short *mag);
 short QualityDetectV27(void *modem);
 
 /*
- * `DemodDataV27` and `DataCarrierDetectV27` ARE NOT DECLARED HERE, because
- * they are not written yet.  Both drive the four embedded modules for real
- * rather than merely reading their flags, so a differential test for either
- * needs the receiver's whole FPM chain configured; the offsets and constants
- * they need are all above, which is why they are stated here rather than
- * deferred with the code.
+ * Is the far end still there?
+ *
+ * Three tests, and which of them run depends on V27SH_V21_WATCH and
+ * V27RX_RMS_ON: the equaliser's mse against V27RX_MSE_NO_CARRIER, a V.21 tone
+ * detector run over a gain-controlled copy of the block, and the energy-drop
+ * detector at V27RX_RMS_REF.  Any of them may clear the answer; none of them
+ * sets it.
+ *
+ * RETURNS `short`, and NOT a code: the carrier term is
+ * `(short)(signal & active)` and three of the six paths out return it
+ * unchanged, so the value is whatever those two 32-bit flags AND to in their
+ * low half.  Only the paths that DENY carrier produce a constant.
+ */
+short DataCarrierDetectV27(void *modem, short *samples, unsigned short count);
+
+/*
+ * `DemodDataV27` IS NOT DECLARED HERE, because it is not written yet.  It
+ * drives all four embedded modules end to end, so a differential test for it
+ * needs the receiver's whole FPM chain configured rather than merely planted;
+ * the offsets and constants it needs are all above, which is why they are
+ * stated here rather than deferred with the code.
  */
 
 #endif /* DSPLIB_V27FAX_H */

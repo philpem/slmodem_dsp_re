@@ -20,14 +20,17 @@
  * too -- so the models are not a second opinion, they are a second
  * independent statement of the same claim.
  *
- * THE THREE STATEFUL ONES ARE DRIVEN OVER MANY BLOCKS, not one.  Finding F8790
- * is a swapped smoothing weight that no codegen check and no single-block
- * fixture can see; `QualityDetectV27` has exactly that shape -- a 0.9/0.1
- * first-order smoother -- so it is run as a sequence and the whole sequence's
- * state is compared, not just the last call's return.
+ * THE STATEFUL ONES ARE DRIVEN OVER MANY BLOCKS, not one.  A swapped
+ * smoothing weight is invisible to every codegen check and to any one-block
+ * fixture: on the first block the accumulator is whatever the caller left, so
+ * both orderings produce a number and neither is obviously wrong.
+ * `QualityDetectV27` has exactly that shape -- a 0.9/0.1 first-order smoother
+ * -- and `DataCarrierDetectV27` carries three separate pieces of state across
+ * calls, so both are run as SEQUENCES and the whole sequence's state is
+ * compared rather than the last call's return.
  *
- * WHAT THE FIXTURE HAS TO PLANT, and why more than the obvious.  D955/F8587:
- * a fixture must plant every field a callee uses as a SUBSCRIPT, not only
+ * WHAT THE FIXTURE HAS TO PLANT, and why more than the obvious.
+ * A fixture must plant every field a callee uses as a SUBSCRIPT, not only
  * every field it dereferences, because a blob-against-blob dry run cannot
  * catch an unplanted subscript -- both sides read the same wild index and
  * agree.  `V27RX_decision` indexes two tables by three different fields
@@ -61,6 +64,8 @@
 #include "dsplib/fpm_sre.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/debug.h"
+#include "dsplib/fpm.h"
+#include "dsplib/b103fp.h"
 
 extern short ref_GetSNRV27(void *modem);
 extern int ref_V27RX_status(void *rx, void *status);
@@ -73,6 +78,8 @@ extern void ref_V27RX_delete(void *modem);
 extern unsigned short ref_V27RX_decision(struct fpm_fse *state, short *angle,
 					 short *mag);
 extern short ref_QualityDetectV27(void *modem);
+extern short ref_DataCarrierDetectV27(void *modem, short *samples,
+				      unsigned short count);
 
 extern unsigned int ref_dsplibs_debug_level;
 
@@ -85,6 +92,9 @@ extern unsigned int ref_dsplibs_debug_level;
 #define NTBL		16	/* phase / pmap table entries, 4x the widest
 				 * the object ever configures                */
 #define NBUF		512
+#define DCD_N		160	/* 20 ms at 8 kHz                          */
+#define DCD_BLOCKS	24
+#define MTD_TONES	2	/* MTDb103_COEF is two biquad sections     */
 
 /*
  * The whole modem, in one contiguous block so that a snapshot is a memcpy and
@@ -97,6 +107,11 @@ struct v27_fixture {
 	short		pmap[NTBL];
 	short		bufa[NBUF];
 	short		bufb[NBUF];
+	short		shbuf[NBUF];
+	short		acc_a[MTD_TONES * 2];
+	short		acc_b[MTD_TONES * 2];
+	struct fpm_mtd	mtd_a;
+	struct fpm_mtd	mtd_b;
 	unsigned char	rx[RX_SIZE];
 	double		align;
 };
@@ -425,6 +440,21 @@ run_flags(void)
 
 static long txst_sep[TXST_VARIANTS];
 static long txst_alias_trials;
+static long txst_ff_trials;	/* the flags byte started all ones        */
+
+/*
+ * Force the three bytes the flags arithmetic reads, or -1 to leave them as
+ * the random fill left them.
+ *
+ * A RANDOM FLAGS BYTE IS NOT ENOUGH FOR THE ONE THING THIS FUNCTION DOES
+ * DIFFERENTLY FROM ITS THREE SIBLINGS.  V.27ter's answer is
+ * `1 | (tx->flags & 4)` where theirs is `tx->flags & 4`, and a reading that
+ * MERGED the two stores -- keeping the destination's other bits instead of
+ * discarding them -- agrees with both on a byte whose bit 0 was already set.
+ * So the sweep is pinned at 0x00 and 0xff explicitly rather than left to
+ * come out of a generator.
+ */
+static int txst_f0 = -1, txst_f1 = -1, txst_txf = -1;
 
 static int
 txst_model(int variant, unsigned char *st, const unsigned char *tx)
@@ -476,6 +506,12 @@ run_txstatus_one(int tx_off, int st_off, unsigned seed, long tag)
 
 	rng_seed(seed);
 	rng_fill(tx_pristine.blk, sizeof tx_pristine.blk);
+	if (st_off >= 0 && txst_f0 >= 0)
+		tx_pristine.blk[st_off + 0x14] = (unsigned char)txst_f0;
+	if (st_off >= 0 && txst_f1 >= 0)
+		tx_pristine.blk[st_off + 0x15] = (unsigned char)txst_f1;
+	if (tx_off >= 0 && txst_txf >= 0)
+		tx_pristine.blk[tx_off + 0x10] = (unsigned char)txst_txf;
 
 	tx_work = tx_pristine;
 	tx = tx_off < 0 ? 0 : tx_work.blk + tx_off;
@@ -547,6 +583,38 @@ run_txstatus(void)
 			txst_alias_trials++;
 		}
 	}
+
+	/*
+	 * And the flags byte pinned, both ways round, on disjoint blocks.
+	 * The assertions below are the deviation D1033 states, written as a
+	 * fact about the BLOB rather than about the reconstruction: bit 0 of
+	 * the destination comes out SET whatever it went in as, and bit 2
+	 * follows the transmitter handle's own bit 2.
+	 */
+	for (d = 0; d < 4; d++) {
+		unsigned char *st;
+		unsigned char got;
+
+		txst_f0 = (d & 1) ? 0xff : 0x00;
+		txst_f1 = (d & 1) ? 0xff : 0x00;
+		txst_txf = (d & 2) ? 0xff : 0x00;
+
+		run_txstatus_one(0, TXST_SPAN, 0x0badf00du + (unsigned)d,
+				 (long)(400 + d));
+		txst_ff_trials++;
+
+		st = tx_snap.blk + TXST_SPAN;
+		got = st[0x14];
+		diff_eq_int("the blob SET bit 0 of the flags byte (%ld)",
+			    got & 0x01, 1, (long)d);
+		diff_eq_int("the blob took bit 2 from the handle (%ld)",
+			    got & 0x04, (txst_txf & 0x04), (long)d);
+		diff_eq_int("the blob kept nothing else (%ld)",
+			    got & ~0x05, 0, (long)d);
+		diff_eq_int("the blob cleared bit 0 of the second byte (%ld)",
+			    st[0x15] & 0x01, 0, (long)d);
+	}
+	txst_f0 = txst_f1 = txst_txf = -1;
 
 	return diff_end();
 }
@@ -842,7 +910,7 @@ run_decision(void)
 /*
  * Variants:
  *   0  the reading this reconstruction claims
- *   1  the two smoothing weights swapped (finding F8790's shape)
+ *   1  the two smoothing weights swapped
  *   2  the +0x4000 rounding dropped from both terms
  *   3  the two terms summed before the shift rather than after,
  *      which is the same arithmetic with one rounding step instead of two
@@ -1540,6 +1608,453 @@ run_delete(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* 10.  DataCarrierDetectV27                                              */
+/*
+ * The first of the two that drives live modules rather than reading flags,
+ * so the fixture has to CONFIGURE them and not merely plant them: an
+ * uninitialised `fpm_agc` has a zero block length and divides by it, and an
+ * uninitialised `fpm_mtd` has a null coefficient pointer.  Both live inside
+ * the fixture and neither allocates, so a snapshot is still a memcpy.
+ *
+ * Variants:
+ *   0  the reading this reconstruction claims
+ *   1  the mse threshold compared with >= rather than >
+ *   2  the settled-symbol gate ignored, so the mse test always applies
+ *   3  `cd &= 1` on the settled path replaced by leaving `cd` alone
+ *   4  the V.21 arm's unconditional `cd = 1` omitted
+ *   5  the arming condition without its `(cd & 1) == 0` half
+ *   6  the V.21 sample counter not zeroed when the detector fires
+ *   7  the energy comparison the other way round
+ *   8  the reference level republished every call rather than every second
+ *   9  the block not copied into the shared buffer before gain control
+ *  10  the -8 dB scale applied without its >> 15
+ *  11  the V.21 timeout compared with >= rather than >
+ */
+#define DCD_VARIANTS	12
+
+static long dcd_sep[DCD_VARIANTS];
+static long dcd_watch_trials;	/* the V.21 arm ran                       */
+static long dcd_armed_trials;	/* ... and was armed, so the detector ran */
+static long dcd_hit_trials;	/* ... and the detector fired             */
+static long dcd_timeout_trials;	/* ... and the 0x4ff timeout expired      */
+static long dcd_settled_trials;	/* the symbol counter was past 0x5db      */
+static long dcd_mse_trials;	/* the mse was over the threshold         */
+static long dcd_drop_trials;	/* the energy-drop test fired             */
+static long dcd_republish_trials;/* the reference level was refreshed     */
+
+static const short dcd_alpha = 29491;	/* 0.9 in Q15 */
+static const short dcd_beta = 3277;	/* 0.1 in Q15 */
+static struct fpm_agc_cfg dcd_agc_cfg;
+static struct fpm_mtd_cfg dcd_mtd_cfg;
+
+static void
+dcd_cfg_init(void)
+{
+	dcd_agc_cfg.ref_level = 16384;
+	dcd_agc_cfg.acquire_level = 10;
+	dcd_agc_cfg.squelch_level = 80;
+	dcd_agc_cfg.f06 = 0;
+	dcd_agc_cfg.f08 = 0;
+	dcd_agc_cfg.block_len = 36;
+	dcd_agc_cfg.alpha = &dcd_alpha;
+	dcd_agc_cfg.beta = &dcd_beta;
+	dcd_agc_cfg.f14 = 0;
+	dcd_agc_cfg.f16 = 0;
+
+	/*
+	 * Bell 103's detector bank, borrowed because it is the one pair of
+	 * biquads this tree has extracted and asserted.  What it is tuned to
+	 * does not matter -- the blob and the reconstruction run the same
+	 * filter over the same samples -- but it must be a REAL bank, because
+	 * `FPM_MTD_detect` runs `FPM_iir_filt` through `cfg.coeff` and a null
+	 * or random pointer there is not a wrong answer, it is a fault.
+	 */
+	dcd_mtd_cfg.coeff = MTDb103_COEF;
+	dcd_mtd_cfg.tones = MTD_TONES;
+	dcd_mtd_cfg.ratio = 24576;
+	dcd_mtd_cfg.min_level = 246;
+	dcd_mtd_cfg.f0a = 0;
+}
+
+/*
+ * Configure the shared block's two detectors and its gain control, on top of
+ * whatever `fx_build` randomised.  This is exactly what `FPM_MTD_create`
+ * does with a caller-supplied state and array -- copy the configuration,
+ * clear the accumulators and the two filter states -- written out here
+ * because create would clear `work`'s arrays rather than this copy's.
+ */
+static void
+dcd_setup(struct v27_fixture *f)
+{
+	int i;
+
+	for (i = 0; i < MTD_TONES * 2; i++) {
+		f->acc_a[i] = 0;
+		f->acc_b[i] = 0;
+	}
+	for (i = 0; i < NBUF; i++)
+		f->shbuf[i] = 0;
+
+	f->mtd_a.cfg = dcd_mtd_cfg;
+	f->mtd_a.acc = work.acc_a;
+	f->mtd_a.dc_state[0] = 0;
+	f->mtd_a.dc_state[1] = 0;
+	f->mtd_a.out_of_band = 0;
+	f->mtd_a.wideband = 0;
+
+	f->mtd_b.cfg = dcd_mtd_cfg;
+	f->mtd_b.acc = work.acc_b;
+	f->mtd_b.dc_state[0] = 0;
+	f->mtd_b.dc_state[1] = 0;
+	f->mtd_b.out_of_band = 0;
+	f->mtd_b.wideband = 0;
+
+	FXP(f->sh, V27SH_MTD) = &work.mtd_a;
+	FXP(f->sh, V27SH_MTD_V21) = &work.mtd_b;
+	FXP(f->sh, V27SH_BUF) = work.shbuf;
+
+	FPM_AGC_init((struct fpm_agc *)(void *)FX(f->sh, V27SH_AGC),
+		     &dcd_agc_cfg, 1);
+}
+
+static short
+dcd_model(int variant, struct v27_fixture *f, short *samples,
+	  unsigned short count, int cover)
+{
+	void *rx = f->rx;
+	void *sh = f->sh;
+	void *dec = FX(rx, V27RX_DEC);
+	struct fpm_fse *fse = (struct fpm_fse *)(void *)FX(rx, V27RX_FSE);
+	struct fpm_agc *agc = (struct fpm_agc *)(void *)FX(rx, V27RX_AGC);
+	struct fpm_sre *sre = (struct fpm_sre *)(void *)FX(rx, V27RX_SRE);
+	int mse_bad = variant == 1 ? fse->mse >= V27RX_MSE_NO_CARRIER
+				   : fse->mse > V27RX_MSE_NO_CARRIER;
+	short cd;
+
+	cd = (short)(agc->signal & sre->active);
+
+	if (cover && mse_bad)
+		dcd_mse_trials++;
+
+	if (FXU(sh, V27SH_V21_WATCH) == 0) {
+		if (variant == 2
+		    || FXS(dec, V27DEC_SYM_COUNT) > V27RX_DEC_SETTLED) {
+			if (cover)
+				dcd_settled_trials++;
+			if (mse_bad)
+				cd = 0;
+			else if (variant != 3)
+				cd &= 1;
+		}
+	} else {
+		short i;
+
+		if (cover)
+			dcd_watch_trials++;
+		if (mse_bad || (variant != 5 && (cd & 1) == 0))
+			FXS(sh, V27SH_V21_ARMED) = 1;
+
+		if (variant != 4)
+			cd = 1;
+		if (FXS(sh, V27SH_V21_ARMED) != 0) {
+			/*
+			 * THE SUB-OBJECTS ARE TAKEN FROM `f`, NOT THROUGH THE
+			 * PLANTED POINTERS.  Every pointer in the fixture aims
+			 * at `work`, because that is the copy the code under
+			 * test is handed; a model that followed them would
+			 * mutate `work` instead of its own copy and compare a
+			 * state against itself.  What the model is for is the
+			 * arithmetic and the control flow -- the indirection
+			 * is what the src-against-blob comparison covers.
+			 */
+			short *buf = f->shbuf;
+
+			if (cover)
+				dcd_armed_trials++;
+			if (variant != 9)
+				for (i = 0; i < (int)count; i = (short)(i + 1))
+					buf[i] = samples[i];
+
+			FPM_AGC_agc((struct fpm_agc *)(void *)
+					FX(sh, V27SH_AGC), buf, count);
+
+			f->mtd_b.acc = f->acc_b;
+			i = FPM_MTD_detect(&f->mtd_b, buf, (short)count);
+			f->mtd_b.acc = work.acc_b;
+			if (i != 0) {
+				if (cover)
+					dcd_hit_trials++;
+				if (variant != 6)
+					FXU(sh, V27SH_V21_SAMPLES) = 0;
+			} else {
+				FXU(sh, V27SH_V21_SAMPLES) =
+					(unsigned short)
+					(FXU(sh, V27SH_V21_SAMPLES) + count);
+			}
+
+			if (variant == 11
+			    ? FXS(sh, V27SH_V21_SAMPLES) >= V27SH_V21_TIMEOUT
+			    : FXS(sh, V27SH_V21_SAMPLES) > V27SH_V21_TIMEOUT) {
+				if (cover)
+					dcd_timeout_trials++;
+				cd = 0;
+			}
+		}
+	}
+
+	if (FXS(rx, V27RX_RMS_ON) != 0) {
+		short level = FPM_rms(samples, count);
+		int thresh = FXS(rx, V27RX_RMS_REF) * V27RX_RMS_DROP_Q15;
+		unsigned short n;
+
+		if (variant != 10)
+			thresh >>= 15;
+
+		if (variant == 7 ? level > (short)thresh
+				 : level < (short)thresh) {
+			if (cover)
+				dcd_drop_trials++;
+			cd = 0;
+		}
+
+		n = (unsigned short)(FXU(rx, V27RX_RMS_COUNT) + 1);
+		if (n == 2 || variant == 8) {
+			if (cover)
+				dcd_republish_trials++;
+			FXS(rx, V27RX_RMS_REF) = level;
+			FXU(rx, V27RX_RMS_COUNT) = 0;
+		} else {
+			FXU(rx, V27RX_RMS_COUNT) = n;
+		}
+	}
+
+	return cd;
+}
+
+static short dcd_in[DCD_BLOCKS][DCD_N];
+static short dcd_ref_ret[DCD_BLOCKS];
+static short dcd_our_ret[DCD_BLOCKS];
+static short dcd_mod_ret[DCD_BLOCKS];
+
+/*
+ * The stimulus: loud for the first half of the run and 22 dB quieter for the
+ * second, so the energy-drop test has something to detect, with a tone
+ * riding on it so the V.21 detector has something to lock to.  A flat noise
+ * block would leave four of the nine coverage counters at zero.
+ */
+static void
+dcd_stimulus(unsigned seed)
+{
+	int b, i;
+	int phase = 0;
+
+	rng_seed(seed);
+	for (b = 0; b < DCD_BLOCKS; b++) {
+		int amp = b < DCD_BLOCKS / 2 ? 9000 : 700;
+
+		for (i = 0; i < DCD_N; i++) {
+			int t = (phase / 4) % 8;
+			static const int wave[8] = { 0, 707, 1000, 707,
+						     0, -707, -1000, -707 };
+
+			dcd_in[b][i] = (short)((amp * wave[t]) / 1000
+					       + (int)(rng_next() % 401) - 200);
+			phase++;
+		}
+	}
+}
+
+static void
+run_dcd_one(unsigned seed, unsigned short watch, short armed,
+	    short rms_on, short rms_ref, short mse, unsigned short sym_count,
+	    unsigned short count, unsigned short samples0, int force_absent,
+	    int level, long tag)
+{
+	static struct v27_fixture model;
+	int i, v;
+
+	fx_build(&pristine, seed);
+	dcd_setup(&pristine);
+
+	FXU(pristine.sh, V27SH_V21_WATCH) = watch;
+	FXS(pristine.sh, V27SH_V21_ARMED) = armed;
+	FXU(pristine.sh, V27SH_V21_SAMPLES) = samples0;
+	/*
+	 * The V.21 timeout at 0x4ff is not reachable by stimulus alone: the
+	 * detector reports NOSIGNAL as well as PRESENT through the same
+	 * non-zero return, and either resets the counter -- so any block the
+	 * bank does not like clears the very thing the timeout counts.  It is
+	 * reached by CONSTRUCTION instead: a counter already at the threshold
+	 * and a detector state whose out-of-band energy is 90% of its total,
+	 * which is the one shape that returns ABSENT for a block of no
+	 * samples at all.
+	 */
+	if (force_absent) {
+		pristine.mtd_b.wideband = 10000;
+		pristine.mtd_b.out_of_band = 9000;
+	}
+
+	/*
+	 * The carrier term, pinned rather than left to the random fill.
+	 *
+	 * `cd` is `(short)(signal & active)` and three of the six paths out
+	 * return it unchanged, so its LOW BIT decides two of the branches and
+	 * its upper bits decide whether `cd &= 1` is observable at all.  Left
+	 * random it happened to be even on the one trial where the mse
+	 * threshold is exactly 0x3fff, which is the only input that separates
+	 * `>` from `>=` -- so that check measured nothing while looking
+	 * thorough.  Derived from the seed here so the sweep covers odd, even
+	 * and zero without any trial being able to drift.
+	 */
+	fx_agc(&pristine)->signal = (int)(0x0f0f0000u | (seed & 0xfu));
+	fx_sre(&pristine)->active = 0x00ff0007;
+	FXS(pristine.rx, V27RX_RMS_ON) = rms_on;
+	FXS(pristine.rx, V27RX_RMS_REF) = rms_ref;
+	FXU(pristine.rx, V27RX_RMS_COUNT) = 0;
+	FXU(DEC(&pristine), V27DEC_SYM_COUNT) = sym_count;
+	((struct fpm_fse *)(void *)FX(pristine.rx, V27RX_FSE))->mse = mse;
+
+	dcd_stimulus(seed);
+
+	dsplibs_debug_level = ref_dsplibs_debug_level =
+			(unsigned)(level < 0 ? 0 : level);
+	dsplib_debug_capture_on = 1;
+	dsplib_debug_capture_reset();
+
+	work = pristine;
+	for (i = 0; i < DCD_BLOCKS; i++)
+		dcd_ref_ret[i] = ref_DataCarrierDetectV27(work.obj, dcd_in[i],
+							  count);
+	snap = work;
+
+	work = pristine;
+	for (i = 0; i < DCD_BLOCKS; i++) {
+		dcd_our_ret[i] = DataCarrierDetectV27(work.obj, dcd_in[i],
+						      count);
+		diff_eq_int("DataCarrierDetectV27 block %ld", dcd_our_ret[i],
+			    dcd_ref_ret[i], (long)(tag * 100 + i));
+	}
+	diff_eq_obj("DataCarrierDetectV27 state", struct v27_fixture, &work,
+		    &snap, tag);
+
+	dsplib_debug_capture_on = 0;
+	diff_eq_int("DataCarrierDetectV27 transcript (%ld)",
+		    strcmp(dsplib_debug_capture_text(0),
+			   dsplib_debug_capture_text(1)) == 0, 1, tag);
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	/*
+	 * The models, with the debug level back at zero so that nothing they
+	 * call can add to a transcript that has already been compared.
+	 */
+	for (v = 0; v < DCD_VARIANTS; v++) {
+		int differs = 0;
+
+		model = pristine;
+		for (i = 0; i < DCD_BLOCKS; i++) {
+			dcd_mod_ret[i] = dcd_model(v, &model, dcd_in[i], count,
+						   v == 0);
+			if (dcd_mod_ret[i] != dcd_ref_ret[i])
+				differs = 1;
+		}
+		/*
+		 * The whole fixture, minus the pointer to `work` the model
+		 * copy still carries -- it is compared field by field through
+		 * the two blocks the function writes rather than by memcmp,
+		 * because `model` and `snap` are different objects and only
+		 * `snap` was ever handed to the code under test.
+		 */
+		if (FXU(model.sh, V27SH_V21_SAMPLES)
+		    != FXU(snap.sh, V27SH_V21_SAMPLES)
+		    || FXS(model.sh, V27SH_V21_ARMED)
+		       != FXS(snap.sh, V27SH_V21_ARMED)
+		    || FXS(model.rx, V27RX_RMS_REF) != FXS(snap.rx,
+							   V27RX_RMS_REF)
+		    || FXU(model.rx, V27RX_RMS_COUNT)
+		       != FXU(snap.rx, V27RX_RMS_COUNT)
+		    || memcmp(model.shbuf, snap.shbuf,
+			      sizeof model.shbuf) != 0
+		    || memcmp(&model.mtd_b, &snap.mtd_b,
+			      sizeof model.mtd_b) != 0
+		    || memcmp(model.acc_b, snap.acc_b,
+			      sizeof model.acc_b) != 0
+		    || memcmp(FX(model.sh, V27SH_AGC), FX(snap.sh, V27SH_AGC),
+			      sizeof(struct fpm_agc)) != 0)
+			differs = 1;
+
+		if (v == 0)
+			diff_eq_int("DataCarrierDetectV27 model (%ld)",
+				    differs, 0, tag);
+		else if (differs)
+			dcd_sep[v]++;
+	}
+}
+
+static int
+run_dcd(void)
+{
+	static const unsigned short counts[] = { 0, 1, 36, DCD_N };
+	unsigned c;
+	int lvl;
+	long tag = 0;
+
+	dcd_cfg_init();
+	diff_begin("DataCarrierDetectV27");
+
+	for (c = 0; c < sizeof(counts) / sizeof(counts[0]); c++) {
+		unsigned short n = counts[c];
+
+		/*
+		 * The no-watch half: both sides of the settled gate, both
+		 * sides of the mse threshold, and the threshold itself --
+		 * which is compared with `>`, so 0x3fff must NOT fire.
+		 */
+		run_dcd_one(0x0a1b2c3du, 0, 0, 0, 0, 0x0100, 0, n, 0, 0, -1,
+			    tag++);
+		run_dcd_one(0x0a1b2c3du, 0, 0, 0, 0, 0x0100, 0x0600, n, 0, 0,
+			    -1, tag++);
+		run_dcd_one(0x0a1b2c3du, 0, 0, 0, 0, 0x7000, 0x0600, n, 0, 0,
+			    -1, tag++);
+		run_dcd_one(0x0a1b2c3du, 0, 0, 0, 0, 0x3fff, 0x0600, n, 0, 0,
+			    -1, tag++);
+		run_dcd_one(0x11223344u, 0, 0, 1, 20000, 0x0100, 0x0600, n, 0,
+			    0, -1, tag++);
+		run_dcd_one(0x11223344u, 0, 0, 1, 0, 0x0100, 0x0600, n, 0, 0,
+			    -1, tag++);
+
+		/* The V.21 half: not armed, armed, and armed by the mse. */
+		run_dcd_one(0x55667788u, 1, 0, 0, 0, 0x0100, 0x0600, n, 0, 0,
+			    -1, tag++);
+		run_dcd_one(0x55667788u, 1, 1, 0, 0, 0x0100, 0x0600, n, 0, 0,
+			    -1, tag++);
+		run_dcd_one(0x55667788u, 1, 0, 0, 0, 0x7000, 0x0600, n, 0, 0,
+			    -1, tag++);
+		run_dcd_one(0x99aabbccu, 1, 1, 1, 20000, 0x0100, 0x0600, n, 0,
+			    0, -1, tag++);
+
+		/*
+		 * The V.21 timeout, by construction -- see the note in
+		 * run_dcd_one -- and the value one below it, so that `>` is
+		 * separated from `>=` rather than merely exercised.
+		 */
+		run_dcd_one(0x0f0f0f0fu, 1, 1, 0, 0, 0x0100, 0x0600, n, 0x500,
+			    1, -1, tag++);
+		run_dcd_one(0x0f0f0f0fu, 1, 1, 0, 0, 0x0100, 0x0600, n, 0x4ff,
+			    1, -1, tag++);
+	}
+
+	/* And the three diagnostic sites, at every level that can reach them. */
+	for (lvl = 0; lvl <= 3; lvl++) {
+		run_dcd_one(0x11223344u, 0, 0, 1, 20000, 0x7000, 0x0600,
+			    DCD_N, 0, 0, lvl, 900 + lvl);
+		run_dcd_one(0x99aabbccu, 1, 1, 1, 20000, 0x7000, 0x0600,
+			    DCD_N, 0x500, 1, lvl, 920 + lvl);
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 static int
 sep_report(void)
@@ -1594,6 +2109,8 @@ sep_report(void)
 		    txst_sep[5], 0, txst_alias_trials);
 	diff_eq_int("V27TX_status overlapped the blocks (%ld)",
 		    txst_alias_trials > 0, 1, txst_alias_trials);
+	diff_eq_int("V27TX_status pinned the flags byte (%ld)",
+		    txst_ff_trials > 0, 1, txst_ff_trials);
 
 	for (i = 1; i < DEC_VARIANTS; i++)
 		diff_eq_int("V27RX_decision variant separates (%ld)",
@@ -1641,6 +2158,27 @@ sep_report(void)
 			    del_sep[i] > 0, 1, (long)(i * 1000 + del_sep[i]));
 	diff_eq_int("V27RX_delete ran (%ld)", del_trials > 0, 1, del_trials);
 
+	for (i = 1; i < DCD_VARIANTS; i++)
+		diff_eq_int("DataCarrierDetectV27 variant separates (%ld)",
+			    dcd_sep[i] > 0, 1,
+			    (long)(i * 100000 + dcd_sep[i]));
+	diff_eq_int("DataCarrierDetectV27 ran the V.21 arm (%ld)",
+		    dcd_watch_trials > 0, 1, dcd_watch_trials);
+	diff_eq_int("DataCarrierDetectV27 ran the V.21 detector (%ld)",
+		    dcd_armed_trials > 0, 1, dcd_armed_trials);
+	diff_eq_int("DataCarrierDetectV27 saw the detector fire (%ld)",
+		    dcd_hit_trials > 0, 1, dcd_hit_trials);
+	diff_eq_int("DataCarrierDetectV27 reached the V.21 timeout (%ld)",
+		    dcd_timeout_trials > 0, 1, dcd_timeout_trials);
+	diff_eq_int("DataCarrierDetectV27 passed the settled gate (%ld)",
+		    dcd_settled_trials > 0, 1, dcd_settled_trials);
+	diff_eq_int("DataCarrierDetectV27 saw a bad mse (%ld)",
+		    dcd_mse_trials > 0, 1, dcd_mse_trials);
+	diff_eq_int("DataCarrierDetectV27 saw the energy drop (%ld)",
+		    dcd_drop_trials > 0, 1, dcd_drop_trials);
+	diff_eq_int("DataCarrierDetectV27 republished the level (%ld)",
+		    dcd_republish_trials > 0, 1, dcd_republish_trials);
+
 	return diff_end();
 }
 
@@ -1657,6 +2195,7 @@ main(void)
 	rc |= run_quality();
 	rc |= run_modem();
 	rc |= run_delete();
+	rc |= run_dcd();
 	rc |= sep_report();
 
 	return rc;

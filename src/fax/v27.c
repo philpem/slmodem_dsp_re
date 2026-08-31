@@ -10,6 +10,7 @@
  *   V27RX_status         .text 0x0a3320   11
  *   V27TX_status         .text 0x0a3ed0  118
  *   CarrierDetectV27     .text 0x0a5ac0   22
+ *   DataCarrierDetectV27 .text 0x0a5ae0  579
  *   QualityDetectV27     .text 0x0a5d30  266
  *   EpochDetectV27       .text 0x0a5e40   22
  *   GetSNRV27            .text 0x0a5e60    6
@@ -21,10 +22,10 @@
  * has been established.  `include/dsplib/v27fax.h` carries the offset
  * evidence.
  *
- * `DemodDataV27` (0x0a5950, 331) and `DataCarrierDetectV27` (0x0a5ae0, 579)
- * belong here and are NOT YET WRITTEN: both drive the live FPM chain, so a
- * differential test for either needs the four embedded modules configured and
- * not merely planted, and this file carries only what `t_v27fax` measures.
+ * `DemodDataV27` (0x0a5950, 331) belongs here and is NOT YET WRITTEN: it
+ * drives all four embedded modules end to end, so a differential test for it
+ * needs the receiver's whole chain configured rather than merely planted, and
+ * this file carries only what `t_v27fax` measures.
  *
  * ---------------------------------------------------------------------------
  * WHAT THE FOUR READING FUNCTIONS SHARE
@@ -34,12 +35,11 @@
  * for nearly every one of them:
  *
  *   fpm_agc::signal   more than half the last call's blocks were above the
- *                     gate.  `CarrierDetectV27` and `QualityDetectV27` both
- *                     AND it with
+ *                     gate.  `CarrierDetectV27`, `QualityDetectV27` and
+ *                     `DataCarrierDetectV27` all AND it with
  *   fpm_sre::active   the symbol recovery's own squelch let the PLL run, and
  *   fpm_fse::mse      the equaliser's smoothed squared decision error, which
- *                     is what the object's own "Decoder error too big" line
- *                     is about.
+ *                     is what "Decoder error too big" is about.
  *
  * So "carrier" here means the level gate and the timing loop agree, and
  * "quality" means the equaliser is not struggling.  Neither is inferred from
@@ -279,30 +279,131 @@ V27TX_status(const void *tx, void *status)
 	if (status == 0)
 		return 0;
 
-	FIELD_US(status, 0x00) = FIELD_US(tx, 0x00);
-	FIELD_US(status, 0x02) = FIELD_US(tx, 0x02);
-	FIELD_US(status, 0x04) = 0;
-	FIELD_US(status, 0x06) = 0;
-	FIELD_US(status, 0x08) = 0;
-	FIELD_US(status, 0x0a) = 0;
-	FIELD_US(status, 0x0c) = 0;
-	FIELD_US(status, 0x10) = FIELD_US(tx, 0x02);
-	FIELD_US(status, 0x12) = 0;
+	FIELD_US(status, V27STAT_WORD_00) = FIELD_US(tx, V27STAT_WORD_00);
+	FIELD_US(status, V27STAT_BIT_RATE) = FIELD_US(tx, V27STAT_BIT_RATE);
+	FIELD_US(status, V27STAT_ZERO_04) = 0;
+	FIELD_US(status, V27STAT_ZERO_06) = 0;
+	FIELD_US(status, V27STAT_ZERO_08) = 0;
+	FIELD_US(status, V27STAT_ZERO_0A) = 0;
+	FIELD_US(status, V27STAT_ZERO_0C) = 0;
+	/*
+	 * The SOURCE IS READ AGAIN, not reused: `movzwl 0x2(%ebx),%eax` at
+	 * a3f0b after the store at a3efb.  Observable only if the two blocks
+	 * overlap, and what the compiler was forced to encode.
+	 */
+	FIELD_US(status, V27STAT_WORD_10) = FIELD_US(tx, V27STAT_BIT_RATE);
+	FIELD_US(status, V27STAT_ZERO_12) = 0;
 
 	/*
-	 * V.17, V.21 and V.29 spell this `flags &= ~(0x01 | 0x02)`.  V.27ter
-	 * sets bit 0 instead of clearing it, which changes what the last line
-	 * of the function produces.  Finding F8866.
+	 * V.17, V.21 and V.29 spell this `flags &= ~(BIT0 | BIT1)`.  V.27ter
+	 * SETS bit 0 instead of clearing it, which changes what the last line
+	 * of the function produces.  Finding F8866, deviation D1033.
 	 */
-	flags = (unsigned char)(*FIELD(status, 0x14) | 0x01);
-	*FIELD(status, 0x14) = (unsigned char)(flags & (unsigned char)~0x02);
-	*FIELD(status, 0x15) &= (unsigned char)~0x01;
-	*FIELD(status, 0x14) = (unsigned char)((flags & 0x01)
-					       | (*FIELD(tx, 0x10) & 0x04));
+	flags = (unsigned char)(*FIELD(status, V27STAT_FLAGS0)
+				| V27STAT_F0_BIT0);
+	*FIELD(status, V27STAT_FLAGS0) =
+			(unsigned char)(flags & (unsigned char)~V27STAT_F0_BIT1);
+	*FIELD(status, V27STAT_FLAGS1) &= (unsigned char)~V27STAT_F1_BIT0;
+	*FIELD(status, V27STAT_FLAGS0) =
+			(unsigned char)((flags & V27STAT_F0_BIT0)
+					| (*FIELD(tx, V27TX_HANDLE_FLAGS)
+					   & V27STAT_F0_FROM_TX));
 
-	FIELD_I(status, 0x18) = FIELD_I(tx, 0x18);
+	FIELD_I(status, V27STAT_WORD_18) = FIELD_I(tx, V27STAT_WORD_18);
 
 	return 1;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * Carrier, and the two things that can take it away.
+ *
+ * The V.21 arm exists because a fax receiver that has lost the image carrier
+ * must notice the sending end going back to the control channel.  It is armed
+ * -- and stays armed -- the moment the equaliser's error goes bad or carrier
+ * drops, and from then on every block is copied out, gain-controlled and run
+ * past the V.21 tone detector.  0x4ff samples without a hit is what the
+ * detector needs to be believed.
+ */
+short
+DataCarrierDetectV27(void *modem, short *samples, unsigned short count)
+{
+	void *rx = FIELD_PTR(modem, V27_OBJ_RX);
+	void *sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+	void *dec = FIELD(rx, V27RX_DEC);
+	short cd;
+
+	cd = (short)(RX_AGC(rx)->signal & RX_SRE(rx)->active);
+
+	if (FIELD_US(sh, V27SH_V21_WATCH) == 0) {
+		if (FIELD_S(dec, V27DEC_SYM_COUNT) > V27RX_DEC_SETTLED) {
+			if (RX_FSE(rx)->mse > V27RX_MSE_NO_CARRIER)
+				cd = 0;
+			else
+				cd &= 1;
+		}
+		if (RX_FSE(rx)->mse > V27RX_MSE_NO_CARRIER && DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27 Decoder error too big..."
+					     " no carrier\n");
+	} else {
+		short i;
+
+		if (RX_FSE(rx)->mse > V27RX_MSE_NO_CARRIER || (cd & 1) == 0)
+			FIELD_S(sh, V27SH_V21_ARMED) = 1;
+
+		cd = 1;
+		if (FIELD_S(sh, V27SH_V21_ARMED) != 0) {
+			short *buf = (short *)FIELD_PTR(sh, V27SH_BUF);
+
+			for (i = 0; i < (int)count; i = (short)(i + 1))
+				buf[i] = samples[i];
+
+			FPM_AGC_agc((struct fpm_agc *)(void *)
+					FIELD(sh, V27SH_AGC), buf, count);
+
+			if (FPM_MTD_detect((struct fpm_mtd *)
+						FIELD_PTR(sh, V27SH_MTD_V21),
+					   buf, (short)count) != 0)
+				FIELD_US(sh, V27SH_V21_SAMPLES) = 0;
+			else
+				FIELD_US(sh, V27SH_V21_SAMPLES) =
+					(unsigned short)
+					(FIELD_US(sh, V27SH_V21_SAMPLES)
+					 + count);
+
+			if (FIELD_S(sh, V27SH_V21_SAMPLES)
+			    > V27SH_V21_TIMEOUT) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+						"V27: V21 Carrier detected\n");
+				cd = 0;
+			}
+		}
+	}
+
+	if (FIELD_S(rx, V27RX_RMS_ON) != 0) {
+		short level = FPM_rms(samples, count);
+		unsigned short n;
+
+		if (level < (short)((FIELD_S(rx, V27RX_RMS_REF)
+				     * V27RX_RMS_DROP_Q15) >> 15)) {
+			cd = 0;
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf("sudden energy drop >"
+						     " 8[dB], no carrier");
+		}
+
+		n = (unsigned short)(FIELD_US(rx, V27RX_RMS_COUNT) + 1);
+		if (n == 2) {
+			FIELD_S(rx, V27RX_RMS_REF) = level;
+			FIELD_US(rx, V27RX_RMS_COUNT) = 0;
+		} else {
+			FIELD_US(rx, V27RX_RMS_COUNT) = n;
+		}
+	}
+
+	return cd;
 }
 
 /* ------------------------------------------------------------------ */
