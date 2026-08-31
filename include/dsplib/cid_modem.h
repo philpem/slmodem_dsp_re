@@ -79,6 +79,31 @@ void cid_value(struct cid_modem *ctx, int v);
 char *cid_get_strings(struct cid_modem *ctx);
 
 /*
+ * Build the service object and its receivers.  A null `ctx` allocates
+ * CID_MODEM_BYTES and takes `mode` from the argument -- clamped to
+ * CID_MODE_AUTOMATIC above 1; a non-null one keeps the mode it has and only
+ * (re)builds, handing each constructor the existing pointer so a second call
+ * reuses the allocation.  `cid_val` lands at +0x264.  Null on failure.
+ *
+ * Returns `void *` because `CID_create` stores it as one; the object it hands
+ * back is the `struct cid_modem` it was given or allocated.
+ */
+void *cid_create(struct cid_modem *ctx, int cid_val, int mode);
+
+/*
+ * Free the receivers and the object.  `ctx->fsk` is freed unconditionally,
+ * which is safe only because the modes that never build one leave it null.
+ */
+void cid_delete(struct cid_modem *ctx);
+
+/*
+ * Reset both receivers in place.  Same clamp as cid_create and the same
+ * mode gating, but it BUILDS nothing: raising the mode here and then calling
+ * this walks a null receiver, exactly as the object does.
+ */
+void cid_reset(struct cid_modem *ctx);
+
+/*
  * Retune both receivers to a new LINE rate.  Same mode gating as
  * cid_threshold: the DTMF receiver's `rate` for modes 1 and 5, the FSK
  * receiver's for modes 0 and 5.  `rate` arrives as an int and is stored as a

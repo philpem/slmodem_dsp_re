@@ -10,7 +10,10 @@
  *   Cidfsd.c   CID_FSD_demodulate   .text 0x092280   1049 bytes
  *   Cidmtd.c   CID_MTD_detect       .text 0x0926a0    259 bytes
  *
- * one translation unit each (finding F1410).
+ * one translation unit each (finding F1410).  `Rxcid.c` -- reset_cid,
+ * create_cid, pack_next_bit and cid_modem -- is src/service/rxcid.c, and it
+ * is what named everything below +0x028 and everything from +0x086 to +0x152
+ * (finding F8710).
  *
  * THE TWO RATES ARE NOT THE TWO RATES.  `rate` holds 8000 or 9600 and is the
  * rate the LINE runs at, which is what CID_MTD_detect's coefficients are
@@ -20,9 +23,9 @@
  * (finding F1509).
  *
  * WHAT THE OBJECT IS.  `create_cid` allocates 0x160 bytes and sets `rate` to
- * 8000, +0x28 to 2 and +0x2c to 9.  Only the span this batch reads is named
- * below; the rest is reset_cid's and cid_progress's, and is padding until a
- * later batch writes them.  `cid_modem` passes `cid + 0x90` to
+ * 8000, +0x28 to 2 and +0x2c to 9.  Every byte of it is now modelled as a
+ * field; the ones still spelled `short_NNN` are cleared by reset_cid and read
+ * by nothing this tree has written.  `cid_modem` passes `cid + 0x90` to
  * CID_FSD_demodulate as the bit buffer, so the demodulated bits land inside
  * the object -- but the function itself takes the buffer as an argument and
  * does not know that.
@@ -31,17 +34,38 @@
 #ifndef DSPLIB_CID_H
 #define DSPLIB_CID_H
 
+#include "dsplib/fpm_mrf.h"
+
 struct cid {
 	/*
-	 * +0x00c is a `struct fpm_mrf`, the 9:10 resampler that makes the
-	 * 8000 Hz line into the 7200 Hz the demodulator wants -- so this pad
-	 * ends at a real boundary, not a convenient one.  Findings F1509,
-	 * F1510; a later batch writing `reset_cid` will name the rest.
+	 * reset_cid's and cid_modem's territory.  `gain` is the AGC
+	 * multiplier cid_modem adapts and applies to the whole block; `dc` is
+	 * the block-mean estimate it subtracts, updated as
+	 * 0.8 * this block's mean + 0.2 * the last value.  Both are usage
+	 * inference from cid_modem and nothing else -- neither appears in a
+	 * format string.  Finding F8710.
 	 */
-	unsigned char pad_000[40];	/* +0x000 reset_cid's territory     */
-	short f028;			/* +0x028 create_cid puts 2 here    */
+	int gain;			/* +0x000 cid_modem's AGC multiplier*/
+	short short_004;		/* +0x004 cleared by reset_cid only */
+	short dc;			/* +0x006 running DC estimate       */
+	short short_008;		/* +0x008 cleared by reset_cid only */
+	short pad_00a;			/* +0x00a alignment; never written  */
+	/*
+	 * The 9:10 resampler that makes the 8000 Hz line into the 7200 Hz the
+	 * demodulator wants; reset_cid configures it from V23_MRF_FILT, which
+	 * is Rxcid.c's own static.  Findings F1509, F1510.  Naming it also
+	 * exposes the pointer at +0x024, which is `mrf.history` and NOT a
+	 * field of `struct cid`: create_cid nulls it and reset_cid passes
+	 * `mrf.history == NULL` as FPM_MRF_init's `fresh`, which is what
+	 * stops a second reset leaking the buffer.
+	 */
+	struct fpm_mrf mrf;		/* +0x00c 9:10, 8000 Hz -> 7200 Hz  */
+	short f028;			/* +0x028 create_cid puts 2 here;
+					 *        the object's own debug text
+					 *        calls it the "Threshold"   */
 	short rate;			/* +0x02a 8000 or 9600, the LINE    */
-	short f02c;			/* +0x02c create_cid puts 9 here    */
+	short f02c;			/* +0x02c create_cid puts 9 here;
+					 *        cid_modem's confidence step*/
 	short lpf_idx;			/* +0x02e write index, 0..16        */
 	short lpf_hist[17];		/* +0x030 fix_LPF's circular buffer */
 	short ac_idx;			/* +0x052 write index, 0..4         */
@@ -53,21 +77,45 @@ struct cid {
 	int high_level;			/* +0x068 mean of the first 128     */
 	int low_sum;			/* +0x06c running negative total    */
 	int high_sum;			/* +0x070 first 128 positives       */
-	unsigned char pad_074[4];	/* +0x074 not read by either leaf   */
+	short short_074;		/* +0x074 cleared by reset_cid only */
+	short short_076;		/* +0x076 cleared by reset_cid only */
 	short run;			/* +0x078 samples agreeing          */
 	short opp;			/* +0x07a samples disagreeing       */
 	short dead;			/* +0x07c samples in the dead zone  */
 	short mtd1_state[2];		/* +0x07e MTD_COEF_1's biquad       */
 	short mtd2_state[2];		/* +0x082 MTD_COEF_2's biquad       */
-	unsigned char pad_086[82];	/* +0x086 -- includes +0x90, where
-					 * cid_modem's bit buffer lands     */
+	short short_086;		/* +0x086 cleared by reset_cid only */
+	short short_088;		/* +0x088 cleared by reset_cid only */
+	short short_08a;		/* +0x08a cleared by reset_cid only */
+	short short_08c;		/* +0x08c cleared by reset_cid only */
+	/*
+	 * The mark-tone confidence.  cid_modem adds `f02c` to it for every
+	 * block CID_MTD_detect answers 0 for and zeroes it otherwise, then
+	 * compares it against two thresholds derived from the block length --
+	 * about 26.7 ms of tone to start resampling and about 40 ms to start
+	 * demodulating.  Finding F8712.
+	 */
+	short mark_conf;		/* +0x08e mark-tone confidence      */
+	/*
+	 * Where cid_modem has CID_FSD_demodulate put the demodulated bits.
+	 * The length is the space to `data`, not a bound the object checks:
+	 * CID_FSD_demodulate takes the buffer as an argument and writes one
+	 * short per bit with no limit, so more than 216 samples reaching the
+	 * demodulator would run past it.  cid_modem's own 206-short frame
+	 * buffer is the tighter limit and fails first.  Deviation D973.
+	 */
+	short bits[36];			/* +0x090 cid_modem's bit buffer    */
 	/*
 	 * `pack_next_bit`'s territory (Rxcid.c): the async framer that turns
-	 * the demodulated bit stream into message bytes.  All six names are
-	 * usage inference from that one function -- see src/service/rxcid.c
-	 * for the derivation.
+	 * the demodulated bit stream into message bytes.  The six framer names
+	 * are usage inference from that one function -- see src/service/rxcid.c
+	 * for the derivation.  The LENGTH of `data` is reset_cid's: it clears
+	 * exactly 120 bytes from +0x0d8 and then clears +0x150 and +0x152 as
+	 * two separate shorts alongside +0x154 and +0x156.
 	 */
-	unsigned char data[124];	/* +0x0d8 assembled message bytes   */
+	unsigned char data[120];	/* +0x0d8 assembled message bytes   */
+	short short_150;		/* +0x150 cleared by reset_cid only */
+	short short_152;		/* +0x152 cleared by reset_cid only */
 	short mark_bal;			/* +0x154 mark/space balance while
 					 *        hunting carrier (state 0) */
 	short pack_state;		/* +0x156 0 hunt, 3 wait-start-run,
@@ -123,8 +171,43 @@ short CID_MTD_detect(const short *samples, short count, struct cid *cid);
  */
 void pack_next_bit(short bit, struct cid *cid);
 
-/* Rxcid.c's reset; unreconstructed, reachable from the CID service. */
+/*
+ * Put the receiver back to the state a new one is in, and configure the 9:10
+ * resampler from Rxcid.c's own static filter.  `rate`, `f028` and `f02c` are
+ * the caller's and survive; everything else is cleared.
+ *
+ * FPM_MRF_init is asked to allocate only when `mrf.history` is still NULL, so
+ * calling this repeatedly reuses the buffer rather than leaking it.
+ */
 void reset_cid(struct cid *cid);
+
+/*
+ * Construct one.  NULL allocates 0x160 bytes; anything else is the caller's
+ * storage.  Returns the object either way.  Seeds `rate` with 8000, `f028`
+ * with 2 and `f02c` with 9, all AFTER the reset.
+ */
+struct cid *create_cid(struct cid *cid);
+
+/*
+ * One block of line samples through the FSK receiver, and the top of this
+ * file's stack.  Four stages, each gated on how much mark tone has been seen:
+ *
+ *   1. copy to a local buffer and subtract the tracked DC.
+ *   2. below ~40 ms of confidence, ask CID_MTD_detect whether 1200 Hz is
+ *      there; a yes adds `f02c` to `mark_conf`, a no clears it.
+ *   3. above ~26.7 ms, resample 8000 -> 7200 (9600 is already right) and,
+ *      while the confidence is still between the two thresholds, re-adapt
+ *      `gain` from the block's mean absolute value; then apply `gain`.
+ *   4. above ~40 ms, demodulate into `bits` and push each bit through
+ *      pack_next_bit.  Once `data[1] + 3` bytes have arrived, checksum them.
+ *
+ * Returns 1 while still hunting, 2 while collecting, 3 for a message whose
+ * checksum agrees, and -1 for one that does not.
+ *
+ * `count` MUST NOT exceed 206: the local sample buffer is that long in the
+ * object and nothing checks.  Deviation D973.
+ */
+int cid_modem(const short *samples, unsigned short count, struct cid *cid);
 
 /*
  * The demodulator's coefficients, all three GLOBAL in the object and all

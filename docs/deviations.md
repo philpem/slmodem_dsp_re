@@ -9505,3 +9505,86 @@ message bytes with no bound against `sizeof(data)` either (see cid.h), so the
 length byte is whatever arrived.  A host-side fix belongs in whatever
 constructs the `cid_modem`, by sizing the string buffer for the worst case the
 cap allows rather than for the message the protocol describes.
+
+## D973 🐛 `cid_modem` has three unbounded buffers, and the message checksum reads past the object's own allocation
+
+`cid_modem(const short *samples, unsigned short count, struct cid *cid)` at
+0x91cb0 bounds nothing by anything the caller can see.
+
+**The frame buffer.**  The opening loop is `for (i = 0; i < count; i++) buf[i] =
+samples[i]` into a 206-short local (`sub $0x1dc,%esp`, `buf` at `%esp+0x40`,
+0x19c bytes).  `count` is its only bound.  A caller handing it more than 206
+samples overwrites the frame, and `count` is `cid_progress`'s to choose.
+
+**The bit buffer.**  `CID_FSD_demodulate(buf, cid + 0x90, nsamp, cid)` writes
+one short per bit with no limit of its own -- the same shape D956 records in
+`V22FP_modem` -- and `cid + 0x90` is 36 shorts before `cid->data` starts at
+`+0xd8`.  At six samples to the bit that is 216 samples reaching the
+demodulator, which is a `count` above 240 at 8000 (9:10 first) or 216 at 9600.
+The 206-short frame buffer above is the tighter of the two and fails first, so
+this one is reachable only through the first; `include/dsplib/cid.h` gives the
+field its length from the space available, not from a check the object makes.
+
+**The checksum, and this one is reachable from the LINE.**  Once `pack_len`
+reaches the message length, the object sums `data[0 .. data[1]+1]` and compares
+`data[data[1]+2]` against the negated total.  `data[1]` is a RECEIVED byte and
+the length is clamped only where it selects `msglen`, never where it indexes:
+
+    91f7a:  add    $0xd8,%ecx          ; ecx = cid->data
+    91f8b:  movzbl 0x1(%ecx),%edi      ; edi = data[1], 0..255
+    91f8f:  lea    0x2(%edi),%esi      ; the sum runs to data[1]+2
+    91fad:  cmp    %bl,0x2(%edi,%ecx,1)
+
+`data` is 120 bytes at `+0x0d8` and the object is 0x160, so `data[1] = 255`
+sums as far as `data[256]` and compares `data[257]` -- 137 bytes past the array
+and 121 past the allocation.  It is a READ, so the effect is a wrong checksum
+verdict rather than corruption, and the clamp at 115 does not help because it is
+applied to `msglen` and not to `data[1]`.
+
+**Status:** reproduced exactly in `src/service/rxcid.c`.  `test/unit/t_rxcid.c`
+keeps every block at or below 160 samples and sweeps declared lengths only up to
+115, deliberately: firing the overrun at a stack object would be testing the
+harness's luck rather than the reconstruction.  A caller-side clamp is
+`cid_progress`'s question and is not this file's to answer.
+
+## D974 ⚠ `reset_cid` clears fifty shorts from `+0x030`, two of them inside the bit buffer, and then clears part of the same span twice more
+
+`reset_cid`'s first loop is
+
+    91950:  movw   $0x0,0x30(%ebx,%eax,2)
+    91959:  cmp    $0x31,%ax
+
+-- fifty shorts, `+0x030` through `+0x092`.  `+0x090` is where `cid_modem` has
+`CID_FSD_demodulate` put the demodulated bits, so the last two clear the front
+of a buffer that is not part of the demodulator's state at all.  Harmless: those
+bits are written before they are read on every path.
+
+The two loops after it, five shorts at `+0x054` (`ac_hist`) and seventeen at
+`+0x030` (`lpf_hist`), are strict subsets of the first and write zeros over
+zeros.  All three are reproduced.
+
+**Status:** reproduced, and UNFALSIFIABLE in the second and third cases --
+shortening either survives `t_rxcid` in full, because the fifty-short loop has
+already cleared what they clear (F8711, F8713).  They are transcribed from
+`dis.py` and marked as such in the source.  Nothing about the object is wrong
+here; what is worth recording is that a future reader who "simplifies" the
+redundant pair away will not be caught by any test in the tree.
+
+## D975 ⚠ `cid_modem` builds both of `Dtmf_Rx.c`'s high-pass coefficient sets on its frame and reads neither
+
+Ten shorts are stored to `%esp+0x20` and `%esp+0x30` at the top of `cid_modem`
+and never loaded:
+
+    esp+0x20   { -12971, 12917, 28620, -25834, 12917 }
+    esp+0x30   { -13484, 13194, 29347, -26388, 13194 }
+
+They are `band_pass`'s `BP_HP_8000` and `BP_HP_9600` byte for byte -- the same
+two sets D253 records as initialised-and-unread in `band_pass` itself, so the
+author carried the dead pair across when this driver was written from that one.
+`cid_modem` has no IIR at all; the filtering it does is `CID_MTD_detect`'s and
+`CID_FSD_demodulate`'s, and both keep their coefficients elsewhere.
+
+**Status:** reproduced in `src/service/rxcid.c` with `(void)` casts, following
+`band_pass`'s own treatment.  A modern compiler deletes the stores again, which
+changes nothing observable; the period compiler emits them, and they are part of
+the frame layout `buf`'s offset depends on.

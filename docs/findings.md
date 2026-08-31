@@ -98425,3 +98425,230 @@ The general point is the one F134 keeps making in a new place: a differential
 suite that never constructs the input a branch needs reports a clean run and a
 dead branch identically.  The injection ritual is what told the two apart --
 eight defects, seven caught by the suite as first written, one not.
+
+## F8710. Rxcid.c is closed, and `+0x024` was never a field of `struct cid`: it is `mrf.history`
+
+`src/service/rxcid.c` now carries all four of the original's `Rxcid.c`
+(2026-08-31):
+
+    reset_cid       .text 0x0918b0    517 bytes
+    create_cid      .text 0x091ac0    183 bytes
+    pack_next_bit   .text 0x091b80    301 bytes   (already written)
+    cid_modem       .text 0x091cb0   1487 bytes
+
+plus the file-static `V23_MRF_FILT` (`.rodata 0x009240`, 180 bytes, LOCAL `r`),
+which is `reset_cid`'s resampler prototype.  `test/unit/t_rxcid.c` is the
+differential test: 3,838 checks over 632 `cid_modem` calls.
+
+**THE TRAP THIS BATCH WAS BRIEFED FOR, AND WHAT IT ACTUALLY WAS.**  `reset_cid`
+opens `mov 0x24(%ebx),%eax; test %eax,%eax` and passes `1` when that is zero as
+`FPM_MRF_init`'s `fresh`; `create_cid` writes `movl $0x0,0x24(%ebx)`.  Read as a
+field of `struct cid` that is the shape of a flag nothing ever sets, which would
+make every reset allocate a new resampler buffer and leak the last one --
+`FPM_MRF_init` with `fresh` set does not inspect the existing pointer and does
+not free it (`src/dsp/fpm_mrf.c`).  It is not a field.  `struct fpm_mrf` is 0x1c
+bytes and sits at `cid + 0x0c`, so `mrf.history` is at `cid + 0x24` exactly, and
+the object is asking "have I allocated yet".  `src/service/cid_mtd.c` had
+already worked out the arithmetic ("the `fpm_mrf` at +0x0c has one at +0x24")
+without drawing the conclusion.  The source is `FPM_MRF_init(&cid->mrf, &cfg,
+cid->mrf.history == NULL)`, `t_rxcid` requires the pointer to be UNCHANGED
+across a second reset, and mutating the argument back to a constant `1` is
+caught.
+
+**THE FIELDS THIS SETTLES.**  `+0x000`--`+0x028` and `+0x086`--`+0x152` were pad
+in `include/dsplib/cid.h` and are now modelled:
+
+    +0x000  int   gain          cid_modem's AGC multiplier
+    +0x004  short short_004     cleared by reset_cid, read by nothing written
+    +0x006  short dc            block-mean estimate cid_modem subtracts
+    +0x008  short short_008     cleared by reset_cid, read by nothing written
+    +0x00a  short pad_00a       alignment; never written
+    +0x00c  struct fpm_mrf mrf  9:10, taps 90, history_len 10
+    +0x086..+0x08c  short short_086/088/08a/08c   cleared only
+    +0x08e  short mark_conf     the mark-tone confidence counter
+    +0x090  short bits[36]      cid_modem's demodulated-bit buffer
+    +0x0d8  unsigned char data[120]    (was 124 -- see below)
+    +0x150  short short_150     cleared only
+    +0x152  short short_152     cleared only
+
+`gain` and `dc` are usage inference from `cid_modem` and say so in the header.
+`data`'s length moves from 124 to 120 because `reset_cid`'s byte loop runs
+`i <= 0x77` and `+0x150` and `+0x152` are then cleared as two SEPARATE shorts,
+in the same emission group as `+0x154` and `+0x156`, which are known shorts.
+Every offset from `+0x154` up is unchanged, so `pack_next_bit` and `t_cidleaves`
+are untouched.  `make offsets` goes from 1,651 annotations to 1,666, all
+matching.
+
+**`f028` IS THE "Threshold", AND THE OBJECT SAYS SO.**  `create_cid`'s second
+trace is `.rodata.str1.4:0x116a8`, "FSK CID  Setting  Fs = %d   Threshold = %d
+!\n", with `cid->rate` and a constant 2 -- and 2 is what `create_cid` has just
+put in `+0x028`.  That is evidence tier 1, the author's own words, and it is
+stronger than the usage inference `include/dsplib/cid.h` carried.  **The field
+is NOT renamed here**, because `src/service/cid.c` and `test/unit/t_cidsvc.c`
+name it and were being edited concurrently by another agent; the comment carries
+the evidence and the rename is a one-line follow-up for whoever owns those two
+files next.
+
+The other three strings are `.rodata.str1.1:0x3e30` "FSK CID Reset !\n"
+(`reset_cid`), `0x3e41` "FSK CID Creating \n" (`create_cid`) and `0x3e54`
+"Tone 1200 Detected\n" (`cid_modem`, on the branch where `CID_MTD_detect`
+answers 0).
+
+## F8711. `reset_cid` clears the same span three times, and two of the three loops are unfalsifiable
+
+`reset_cid` has four clearing loops.  The first runs fifty shorts from `+0x030`
+(`movw $0x0,0x30(%ebx,%eax,2)`, `cmp $0x31,%ax`), which is `lpf_hist` and
+everything after it as far as `+0x092` -- two shorts INTO the bit buffer at
+`+0x090`.  The second clears `ac_hist`, five shorts at `+0x054`.  The third
+clears `lpf_hist`, seventeen shorts at `+0x030`.  Both of those spans are strict
+subsets of the first, so the second and third loops write zeros over zeros.
+
+**This is not a curiosity, it is a limit on what any differential test can
+say.**  Shortening the `ac_hist` loop to four and the `lpf_hist` loop to sixteen
+both survive `t_rxcid` in full, because the first loop already covered them.
+Shortening the FIFTY to forty-nine is caught, and so is shortening the 120-byte
+`data` loop -- those two are the only clearing bounds this file pins.  The
+redundant pair are transcribed from `dis.py` and marked in the source as
+untestable.
+
+**The store ORDER is NOT decoded, and the file says so.**  The 27 scalar stores
+between the loops come out interleaved -- `0x80, 0x84, 0x82, 0x88, 0x86, 0x8c,
+0x8a, 0x8e`, and `0x76` before `0x74` -- which is the i686 scheduler pairing
+independent stores, not an emission of the author's order.  `reset_dtmf`'s
+neighbouring order WAS decoded, by compiling all 8! permutations on the period
+toolchain and finding a unique zero-difference cell; no such enumeration was run
+here, because this batch had no docker, and the source is written ascending by
+offset with that stated in a comment.  The enumeration is available to a later
+refinement pass and would be worth running: the same high-then-low pairing that
+8! resolved for `reset_dtmf` is visible in this emission too.
+
+## F8712. `cid_modem`'s two thresholds are 40 ms and 26.7 ms of mark tone, and neither the rate nor the block length moves them
+
+`cid_modem` computes
+
+    m = (cid->rate == 9600 ? 49152 : 40960) / count;   if (m <= 0) m = 1;
+
+and compares `mark_conf` against `m * 18 >> 8` and `m * 12 >> 8`.  Read as
+numbers those are meaningless; read as time they are exact.  `mark_conf` gains
+`f02c` -- 9, from `create_cid` -- for each block `CID_MTD_detect` accepts, so
+the upper gate is reached after `m * 18 / (256 * 9)` blocks, which is
+`40960 * 18 / (256 * 9) = 320` SAMPLES at 8000 and `49152 * 18 / (256 * 9) =
+384` at 9600.  Both are 40 ms.  The lower gate is 213 and 256 samples, both
+26.7 ms.  The block length cancels out of both, which is what makes the division
+by `count` the right shape rather than an odd one.
+
+So the machine is: 26.7 ms of 1200 Hz starts the resampler and the AGC, 40 ms
+starts the demodulator, and the AGC re-adapts only in the 13 ms between them --
+after which the gain that was found is held for the rest of the message.  The
+detector runs only BELOW the upper gate, so crossing it is also what stops the
+confidence being cleared by the next quiet block.
+
+**AND THE MULTIPLIERS ARE WHY THIS TEST HAS A SWEEP.**  Every natural input
+steps `mark_conf` by 9 at a time, so an 18 written as 17 moves the gate from 36
+to 34 and no multiple of 9 ever lands in the gap: the mutation survived a
+286-call test that included silence, noise, an out-of-band tone, 24 blocks of
+mark tone and 60 blocks of Bell 202 data.  `t_rxcid` plants `mark_conf` at every
+integer from 0 to 56 instead, once against a block the detector rejects and once
+against one it accepts, and all four gate sites are then caught.
+
+## F8713. What `t_rxcid` pins and what it provably cannot: eight mutations that are equivalent, not missed
+
+Fifty-three distinct mutations were injected into `src/service/rxcid.c` and the
+test re-run for each (F134's ritual).  Forty-five are caught.  The eight that
+are not were each traced, and all eight are behaviourally equivalent to the
+original -- they are limits of the differential tier, not gaps in the fixture,
+and every one of them is fixed instead by the object's own encoding in `dis.py`:
+
+- **the `& 1` at `cid_modem`'s call into `pack_next_bit`.**  `and $0x1,%ebx` at
+  0x920fb is in the object and cannot be inferred from behaviour, because
+  `CID_FSD_demodulate` only ever emits 0 or 1 and the mask is then the identity.
+  It matters to the FUNCTION, whose states 0 and 3 test `== 1` and `!= 0` and
+  would disagree on a 2; it cannot matter to this caller.
+- **the DC-subtraction loop's DIRECTION.**  It subtracts a constant from every
+  element, so ascending and descending are the same function.  The object's
+  descending form is kept because GCC does not reverse loops, so the source must
+  have been descending -- and its entry guard is `ncount != 0` rather than
+  `ncount >= 1`, which is what `i = n; while (i--)` compiles to and what
+  `for (i = n - 1; i >= 0; i--)` does not.
+- **the gain loop's bound being `nsamp` rather than `ncount`.**  At 8000 the
+  resampler leaves `nsamp` below `ncount` and the tail is never read again; at
+  9600 they are equal.
+- **`nbits <= 0` versus `nbits < 0`.**  The bit loop does nothing at zero either
+  way and both paths return 2.
+- **`reset_cid`'s `ac_hist` and `lpf_hist` loops** -- F8711, two of the eight.
+- **`create_cid` writing its three settings before the reset instead of after.**
+  `reset_cid` does not touch `rate`, `f028` or `f02c`.
+- **the DEFAULT `msglen` of 115.**  It applies only when `pack_len <= 2`, where
+  any value above 2 behaves identically -- `115 -> 114` survives and `115 -> 2`
+  is caught.  The 115 in the CLAMP is a different constant at the same value and
+  IS pinned, at `data[1] == 113` against a `pack_len` of exactly 115.
+
+Three mutations were caught only after the fixture was extended, and all three
+are worth keeping as shapes: the threshold multipliers (F8712); the gain floor,
+which needs a full-scale block against a freshly reset `gain` of zero before
+`(0 + 0) >> 1` reaches it; and `pack_len > 2`, which separates from
+`pack_len > 1` at exactly one input -- a `pack_len` of 2 with a declared body
+length of 0, where believing the declaration returns -1 and not believing it
+demodulates.
+
+## F8714. `V23_MRF_FILT` is 90 taps and is not the `_V23_MRF_FILT` of the same name
+
+Two tables in the object are called V23_MRF_FILT and they are different objects
+with different lengths, different sections and different linkage:
+
+    _V23_MRF_FILT   .rodata 0x0081c0   96 bytes   48 shorts   GLOBAL `R`
+     V23_MRF_FILT   .rodata 0x009240  180 bytes   90 shorts   LOCAL  `r`
+
+The global is `src/pump/v23/v23filt.c`'s, and the name-collision note in
+`include/dsplib/v23fp.h` covers it.  The local is Rxcid.c's own static and is
+what `reset_cid` installs, with `branches = 9`, `decimate = 10`, `taps = 90` --
+so `FPM_MRF_filter` reads it as nine polyphase phases of ten by its coefficient
+stride, and the array itself is a plain symmetric linear-phase FIR (`v[i] ==
+v[89-i]` for all 90, verified).  90 taps over 9 branches gives a history of 10,
+which is the `history_len` `t_rxcid` asserts.
+
+**A file-static cannot be named from a test, and the pointer is how it gets
+one.**  `reset_cid` leaves `V23_MRF_FILT`'s address in `cid->mrf.cfg.coeff`, so
+`t_rxcid` compares 180 bytes through the two objects' `coeff` pointers -- the
+blob's copy on one side and ours on the other, which is the same accessor move
+`t_cid_mtd` makes for `MTD_COEF_*` and `fpm_div.c` makes for `FPM_div_table`.
+That is the only differential check the table can have, and without it the two
+pointer fields would simply be blanked before `diff_eq_obj` (they hold different
+addresses and always will) and the table would be untested while every other
+check stayed green.
+
+## F8732. `cid_reset`'s clear of `f3f8` is unfalsifiable from a freshly created object, and the injection ritual is what found that
+
+*2026-08-31.* The Caller ID service object's lifecycle -- `cid_create`
+(0x08fe10, 204), `cid_reset` (0x08fce0, 118) and `cid_delete` (0x08fee0, 86) --
+is three functions whose observable output is almost entirely the state of two
+objects they hand to somebody else's constructor. Two things had to be
+arranged before `t_cidsvc` could measure them at all, and both were found by
+reintroducing a defect and watching for it rather than by reading.
+
+**One: `cid_delete` has NO output.** Nothing survives it to be compared. The
+only differential evidence is how many blocks each side released, so the test
+takes `harness_alloc.live` as a DELTA per side and compares the two deltas --
+which is robust to the leak the second `cid_create` causes (`create_cid` nulls
+`mrf.history` and the reset behind it allocates a new buffer), because the leak
+has only to be MATCHED and not modelled. Deleting our `sysdep_free(ctx->fsk)`
+is caught by that check and by nothing else in the binary.
+
+**Two: `cid_reset` clears `f3f8`, and `cid_create` already left it zero.**
+A reset that never touches the field is indistinguishable from one that does
+unless something puts a value there first. The first run of the ritual reported
+that mutant MISSED, and the fix was to dirty `f3f8`, four fields of the FSK
+receiver and two of the DTMF one -- identically on both sides -- before calling
+reset. `cmp_pair` then has something to disagree about. The same run added a
+second reset from a mode of 3, because the clamp on the reset path is a
+different statement from `cid_create`'s and neither test covers the other.
+
+**Eleven mutants caught, one equivalent.** The equivalent one is
+`(short)rate` -> `rate` in `cid_freq_sampl`: the destination field is a
+`short`, so the cast is a no-op in C and the mutation cannot be observed. It
+is recorded as equivalent rather than missed, which is the distinction
+findings F134 and F8713 both turn on. The caught set covers each mode gate in
+all four functions, both clamps, the `f264` store, the DTMF digit count and
+`cid_get_strings`'s mode-2 route.
+
+`t_cidsvc` is 2,547 checks in six groups.

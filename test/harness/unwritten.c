@@ -34,26 +34,17 @@
 
 /* --- the Caller ID receiver, span cid_modem.c (0x8fd60..) ------------- */
 
-extern void *ref_cid_create(void *m, unsigned cid_val, int w);
-extern void ref_cid_delete(void *cid);
 extern short ref_cid_progress(void *cid, short *in, int what, short *count);
 
-void *
-cid_create(void *m, unsigned cid_val, int w)
-{
-	return ref_cid_create(m, cid_val, w);
-}
-
-void
-cid_delete(void *cid)
-{
-	ref_cid_delete(cid);
-}
-
 /*
- * `cid_freq_sampl`'s bridge is GONE: src/service/cid.c defines it, and the
- * "WHEN A BRIDGED SYMBOL IS RECONSTRUCTED" paragraph above is what happened.
- * t_cidsvc drives it straight against ref_cid_freq_sampl with no split.
+ * FOUR of the five CID bridges are GONE -- `cid_create`, `cid_delete`,
+ * `cid_freq_sampl` and `cid_get_strings` are all defined in
+ * `src/service/cid.c` now, which is the "WHEN A BRIDGED SYMBOL IS
+ * RECONSTRUCTED" paragraph above taken four times.  `t_cidsvc` drives each
+ * straight against its ref_ alias with no split.
+ *
+ * `cid_progress` is the last one, and while it stands `CID_process`'s test
+ * keeps the split that paragraph describes.
  */
 
 short

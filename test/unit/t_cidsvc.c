@@ -35,6 +35,9 @@
 
 extern void ref_cid_freq_sampl(void *ctx, int rate);
 extern char *ref_cid_get_strings(void *ctx);
+extern void *ref_cid_create(void *ctx, int cid_val, int mode);
+extern void ref_cid_delete(void *ctx);
+extern void ref_cid_reset(void *ctx);
 
 #define GUARD	32
 
@@ -275,6 +278,214 @@ srun(const char *what, int mode, int f264, const unsigned char *msg,
 	}
 }
 
+/* ------------------------------------------------------------------ */
+/*
+ * The lifecycle: cid_create, cid_reset, cid_delete.
+ *
+ * Three pointers hold different addresses on the two sides by construction --
+ * the two receivers, the DTMF receiver's own `bufp`, and the resampler's
+ * `mrf.history` -- so each is compared for NULLNESS and then zeroed in a copy
+ * before the object comparison, which is CLAUDE.md's "a loop is still right
+ * where some region must be skipped" applied four times.  The resampler
+ * history is compared by CONTENT over `history_len` shorts, which is what
+ * keeps the skip from hiding the buffer the reset just filled.
+ */
+
+static int seen_built_dtmf;
+static int seen_built_fsk;
+static int seen_built_both;
+static int seen_reused;
+static int seen_deletes;
+
+static void
+cmp_pair(const char *what, struct cid_modem *a, struct cid_modem *b, long tag)
+{
+	char label[160];
+	struct cid_modem ca = *a, cb = *b;
+
+	snprintf(label, sizeof(label), "%s: DTMF built on both sides (%%ld)",
+		 what);
+	diff_eq_int(label, (a->dtmf != 0) == (b->dtmf != 0), 1, tag);
+	snprintf(label, sizeof(label), "%s: FSK built on both sides (%%ld)",
+		 what);
+	diff_eq_int(label, (a->fsk != 0) == (b->fsk != 0), 1, tag);
+
+	ca.dtmf = cb.dtmf = 0;
+	ca.fsk = cb.fsk = 0;
+	snprintf(label, sizeof(label), "%s: service object %%ld", what);
+	diff_eq_obj(label, struct cid_modem, &cb, &ca, tag);
+
+	if (a->dtmf && b->dtmf) {
+		struct dtmf_rx da = *a->dtmf, db = *b->dtmf;
+
+		snprintf(label, sizeof(label),
+			 "%s: DTMF bufp both set or both clear (%%ld)", what);
+		diff_eq_int(label, (da.bufp != 0) == (db.bufp != 0), 1, tag);
+		da.bufp = db.bufp = 0;
+		snprintf(label, sizeof(label), "%s: DTMF receiver %%ld", what);
+		diff_eq_obj(label, struct dtmf_rx, &db, &da, tag);
+		seen_built_dtmf++;
+	}
+
+	if (a->fsk && b->fsk) {
+		struct cid fa = *a->fsk, fb = *b->fsk;
+
+		snprintf(label, sizeof(label),
+			 "%s: mrf history both set or both clear (%%ld)", what);
+		diff_eq_int(label,
+			    (fa.mrf.history != 0) == (fb.mrf.history != 0), 1,
+			    tag);
+		if (fa.mrf.history && fb.mrf.history) {
+			int n = fa.mrf.history_len < fb.mrf.history_len
+				? fa.mrf.history_len : fb.mrf.history_len;
+
+			snprintf(label, sizeof(label),
+				 "%s: mrf history contents %%ld", what);
+			diff_eq_int(label,
+				    memcmp(fa.mrf.history, fb.mrf.history,
+					   (size_t)n * sizeof(short)),
+				    0, tag);
+		}
+		/*
+		 * `mrf.cfg.coeff` points at V23_MRF_FILT, which is a
+		 * file-static of Rxcid.c on both sides -- so the two pointers
+		 * differ and the ninety taps behind them must not.  That
+		 * comparison is the only place the blob's table is checked
+		 * against ours through the reset that installs it.
+		 */
+		snprintf(label, sizeof(label),
+			 "%s: mrf coeff both set or both clear (%%ld)", what);
+		diff_eq_int(label,
+			    (fa.mrf.cfg.coeff != 0) == (fb.mrf.cfg.coeff != 0),
+			    1, tag);
+		if (fa.mrf.cfg.coeff && fb.mrf.cfg.coeff) {
+			int n = fa.mrf.cfg.taps < fb.mrf.cfg.taps
+				? fa.mrf.cfg.taps : fb.mrf.cfg.taps;
+
+			snprintf(label, sizeof(label),
+				 "%s: mrf coefficients %%ld", what);
+			diff_eq_int(label,
+				    memcmp(fa.mrf.cfg.coeff, fb.mrf.cfg.coeff,
+					   (size_t)n * sizeof(short)),
+				    0, tag);
+		}
+
+		fa.mrf.history = fb.mrf.history = 0;
+		fa.mrf.cfg.coeff = fb.mrf.cfg.coeff = 0;
+		snprintf(label, sizeof(label), "%s: FSK receiver %%ld", what);
+		diff_eq_obj(label, struct cid, &fb, &fa, tag);
+		seen_built_fsk++;
+	}
+
+	if (a->dtmf && a->fsk)
+		seen_built_both++;
+}
+
+static void
+lifecycle(int mode, int cid_val)
+{
+	struct cid_modem *a, *b;
+	char what[96];
+	void *ra, *rb;
+	long tag = (long)cid_val;
+	int base, dref, dours;
+
+	snprintf(what, sizeof(what), "mode %d value %d", mode, cid_val);
+
+	/*
+	 * ALLOCATION BALANCE IS WHAT MAKES cid_delete OBSERVABLE.  Nothing
+	 * survives a delete to be compared, so the only differential evidence
+	 * is how many blocks each side released; a delete that skips the FSK
+	 * receiver or frees the wrong pointer moves this and nothing else.
+	 * The counts are taken as DELTAS per side and compared with each
+	 * other, so the second create's known leak (create_cid nulls
+	 * mrf.history and the reset allocates a new buffer) does not have to
+	 * be modelled -- only matched.
+	 */
+	base = harness_alloc.live;
+	ra = ref_cid_create(0, cid_val, mode);
+	dref = harness_alloc.live - base;
+	base = harness_alloc.live;
+	rb = cid_create(0, cid_val, mode);
+	dours = harness_alloc.live - base;
+	diff_eq_int("cid_create allocated the same block count (%ld)", dours,
+		    dref, tag);
+
+	diff_eq_int("cid_create returned non-null on both sides (%ld)",
+		    (ra != 0) == (rb != 0), 1, tag);
+	if (!ra || !rb)
+		return;
+	a = (struct cid_modem *)ra;
+	b = (struct cid_modem *)rb;
+	cmp_pair(what, a, b, tag);
+
+	/* A second create on the SAME object must reuse, not rebuild. */
+	{
+		void *da = a->dtmf, *fa = a->fsk;
+
+		ref_cid_create(a, cid_val + 1, 0);
+		cid_create(b, cid_val + 1, 0);
+		cmp_pair("second create", a, b, tag);
+		diff_eq_int("second create reused the DTMF receiver (%ld)",
+			    a->dtmf == da, 1, tag);
+		diff_eq_int("second create reused the FSK receiver (%ld)",
+			    a->fsk == fa, 1, tag);
+		seen_reused++;
+	}
+
+	/*
+	 * DIRTY THE STATE cid_reset IS SUPPOSED TO CLEAR before calling it.
+	 * `f3f8` comes out of create already zero, so a reset that never
+	 * touches it is indistinguishable from one that does unless something
+	 * puts a value there first -- the injection ritual missed exactly that
+	 * mutant until this existed (finding F8732).  The same argument covers
+	 * the receivers, so both are scribbled on identically.
+	 */
+	a->f3f8 = b->f3f8 = 0x1234;
+	if (a->fsk && b->fsk) {
+		a->fsk->pack_len = b->fsk->pack_len = 11;
+		a->fsk->pack_state = b->fsk->pack_state = 2;
+		a->fsk->mark_bal = b->fsk->mark_bal = 9;
+		a->fsk->thresh = b->fsk->thresh = 4242;
+	}
+	if (a->dtmf && b->dtmf) {
+		a->dtmf->ndigits = b->dtmf->ndigits = 4;
+		a->dtmf->state = b->dtmf->state = 2;
+	}
+
+	ref_cid_reset(a);
+	cid_reset(b);
+	cmp_pair("after reset", a, b, tag);
+
+	/*
+	 * And the clamp on the reset path, which is a different statement
+	 * from cid_create's: raise the mode above 1 and it must come back 5.
+	 * Both receivers already exist here, so nothing walks a null.
+	 */
+	if (a->dtmf && a->fsk) {
+		a->mode = b->mode = 3;
+		a->f3f8 = b->f3f8 = 0x4321;
+		ref_cid_reset(a);
+		cid_reset(b);
+		cmp_pair("after reset from mode 3", a, b, tag);
+		diff_eq_int("reset clamped mode 3 to 5 (%ld)", a->mode, 5, tag);
+	}
+
+	base = harness_alloc.live;
+	ref_cid_delete(a);
+	dref = harness_alloc.live - base;
+	base = harness_alloc.live;
+	cid_delete(b);
+	dours = harness_alloc.live - base;
+	diff_eq_int("cid_delete released the same block count (%ld)", dours,
+		    dref, tag);
+	diff_eq_int("no free of a pointer the allocator never gave out (%ld)",
+		    harness_alloc.bad_free, 0, tag);
+	diff_eq_int("the live set never overflowed (%ld)",
+		    harness_alloc.overflow, 0, tag);
+	seen_deletes++;
+}
+
 int
 main(void)
 {
@@ -391,6 +602,33 @@ main(void)
 			    1, seen_formatted_path);
 		diff_eq_int("FSK routes that rendered something (%ld)",
 			    seen_rendered > 0, 1, seen_rendered);
+		rc |= diff_end();
+	}
+
+	/* ---------------------------------------------------------------- */
+	{
+		static const int lc_modes[] = { 0, 1, 2, 3, 5, -1 };
+		static const int lc_vals[] = { 0, 2, 7 };
+		unsigned m, v;
+
+		diff_begin("cid_create / cid_reset / cid_delete lifecycle");
+		for (m = 0; m < sizeof(lc_modes) / sizeof(lc_modes[0]); m++)
+			for (v = 0; v < sizeof(lc_vals) / sizeof(lc_vals[0]);
+			     v++)
+				lifecycle(lc_modes[m], lc_vals[v]);
+		rc |= diff_end();
+
+		diff_begin("the lifecycle built both receivers");
+		diff_eq_int("objects with a DTMF receiver (%ld)",
+			    seen_built_dtmf > 0, 1, seen_built_dtmf);
+		diff_eq_int("objects with an FSK receiver (%ld)",
+			    seen_built_fsk > 0, 1, seen_built_fsk);
+		diff_eq_int("objects with both (%ld)", seen_built_both > 0, 1,
+			    seen_built_both);
+		diff_eq_int("second creates that reused (%ld)", seen_reused > 0,
+			    1, seen_reused);
+		diff_eq_int("lifecycles that reached the delete (%ld)",
+			    seen_deletes > 0, 1, seen_deletes);
 		rc |= diff_end();
 	}
 

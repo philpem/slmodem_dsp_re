@@ -28,19 +28,24 @@
  * and TLV walkers, written in the same wave from the V32mod.c span:
  * Reconstructed from dsplibs.o cid.c (finding F1410 for the TU map):
  *
+ *   cid_reset             .text 0x08fce0   118
  *   cid_freq_sampl        .text 0x08fd60   107
  *   cid_threshold         .text 0x08fdd0    40
  *   cid_value             .text 0x08fe00    15
+ *   cid_create            .text 0x08fe10   204
+ *   cid_delete            .text 0x08fee0    86
  *   cid_get_strings       .text 0x090320   145
  *   _look_for             .text 0x0903c0    72
  *   _look_for_other_than  .text 0x090410    88
  *
  * The four leaves were exported API with no internal referrer (finding
  * F8320's bucket), written on their own merit; `cid_freq_sampl` came with the
- * CID service pass and calls nothing.  The rest of the TU -- cid_reset,
- * cid_create, cid_delete, cid_progress -- is written as the receiver
- * underneath it lands.  See docs/findings.md F8492 for why the
- * link constraint, not difficulty, is what orders this file.
+ * CID service pass and calls nothing.  The rest came with the receiver
+ * underneath: `cid_reset`, `cid_create` and `cid_delete` needed `reset_cid`
+ * and `create_cid` (Rxcid.c) written first, which is why F8492 records the
+ * link constraint -- not difficulty -- as what ordered this file.
+ *
+ * `cid_progress` (0x08ff40, 992 bytes) is the one still to come.
  *
  * See include/dsplib/cid_modem.h for the object and the mode encoding.
  */
@@ -70,9 +75,6 @@ extern int modem_send_to_tty(void *m, const void *buf, int n);
  * calls all five unconditionally, and so does this file.
  */
 #define DSPLIB_CID_UNWRITTEN __attribute__((weak))
-extern void *cid_create(void *m, unsigned cid_val, int w)
-	DSPLIB_CID_UNWRITTEN;
-extern void cid_delete(void *cid) DSPLIB_CID_UNWRITTEN;
 extern short cid_progress(void *cid, short *in, int what, short *count)
 	DSPLIB_CID_UNWRITTEN;
 
@@ -102,6 +104,14 @@ extern short cid_progress(void *cid, short *in, int what, short *count)
  * string names it and no other function reads the field.
  */
 #define CID_VALUE_RAW	2
+
+/*
+ * The mode `cid_create` clamps everything above 1 to, and the object's own
+ * debug line for it is "\n AUTOMATIC MODULATION MODE \n" -- a format string
+ * the author wrote, which is the strongest naming evidence this file has.
+ * Both receivers are built and both are asked.
+ */
+#define CID_MODE_AUTOMATIC	5
 
 struct CID {
 	void *modem;		/* +0x0 slmodemd's struct modem       */
@@ -211,6 +221,32 @@ CID_process(void *cidp, void *in, int count)
 
 
 /*
+ * Reset both receivers in place, without freeing or reallocating anything.
+ *
+ * The mode clamp is `cid_create`'s, repeated: anything above 1 becomes 5, so
+ * a caller can raise the mode between calls and the receivers it needs are
+ * the ones that get reset.  What it does NOT do is BUILD the second receiver,
+ * so raising the mode here leaves a null pointer that `reset_dtmf` or
+ * `reset_cid` then walks -- the object has no guard and neither has this.
+ *
+ * `f3f8` is `cid_progress`'s sample-buffer fill level, cleared last, and the
+ * mode-5 arm puts `f02c` back exactly as `cid_freq_sampl` and `cid_create` do.
+ */
+void
+cid_reset(struct cid_modem *ctx)
+{
+	if (ctx->mode > 1)
+		ctx->mode = CID_MODE_AUTOMATIC;
+	if (ctx->mode != 0)
+		reset_dtmf(ctx->dtmf);
+	if (ctx->mode != 1)
+		reset_cid(ctx->fsk);
+	ctx->f3f8 = 0;
+	if (ctx->mode == CID_MODE_AUTOMATIC)
+		ctx->fsk->f02c = CID_F02C_RESET;
+}
+
+/*
  * Retune both receivers.  The mode gating is cid_threshold's -- `!= 0` reaches
  * the DTMF receiver, `!= 1` the FSK one -- and `rate` is stored as a short on
  * both sides, which is the object's own truncation of the int argument.
@@ -263,6 +299,81 @@ void
 cid_value(struct cid_modem *ctx, int v)
 {
 	ctx->f264 = v;
+}
+
+/*
+ * Build the service object, or rebuild the receivers inside one the caller
+ * already has: a null `ctx` allocates 0x3fc bytes and takes `mode` from the
+ * argument, and a non-null one keeps the mode it already has and only builds.
+ * Both paths end at the same three statements, which is why the object reads
+ * `ctx->mode` back from memory after each call rather than keeping it in a
+ * register -- `create_cid_dtmf` and `create_cid` could have changed it.
+ *
+ * THE CLAMP IS THE AUTHOR'S OWN WORDS: any mode above 1 becomes 5 and, at
+ * debug level 2, says so as " AUTOMATIC MODULATION MODE ".  That is the
+ * strongest evidence available for what mode 5 means (CLAUDE.md's evidence
+ * order, rule 1) and it is why the constant is named rather than left as 5.
+ *
+ * Each receiver constructor is handed the EXISTING pointer, so a second call
+ * on the same object reuses the allocation rather than leaking it.
+ */
+void *
+cid_create(struct cid_modem *ctx, int cid_val, int mode)
+{
+	if (!ctx) {
+		ctx = sysdep_malloc(CID_MODEM_BYTES);
+		if (!ctx)
+			return 0;
+
+		ctx->mode = mode;
+		ctx->fsk = 0;
+		ctx->dtmf = 0;
+		ctx->f3f8 = 0;
+
+		if (mode > 1) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "\n AUTOMATIC MODULATION MODE \n");
+			ctx->mode = CID_MODE_AUTOMATIC;
+		}
+	}
+
+	if (ctx->mode != 0)
+		ctx->dtmf = create_cid_dtmf(ctx->dtmf);
+	if (ctx->mode != 1)
+		ctx->fsk = create_cid(ctx->fsk);
+	if (ctx->mode == CID_MODE_AUTOMATIC)
+		ctx->fsk->f02c = CID_F02C_RESET;
+
+	ctx->f264 = cid_val;
+	return ctx;
+}
+
+/*
+ * Tear the object down.  The DTMF receiver is released with a plain
+ * `sysdep_free` -- it owns nothing -- and the FSK one needs its resampler
+ * history released first.
+ *
+ * `sysdep_free(ctx->fsk)` is UNCONDITIONAL, including on the DTMF-only mode
+ * where nothing ever built one: the pointer is null there and free(NULL) is
+ * the object's own reading of it.  The mode is re-read from memory between
+ * the two tests, which is why this is two `if`s and not an if/else chain.
+ *
+ * The object places a literal 1 in the second argument slot before
+ * `FPM_MRF_free`, which takes ONE argument and never loads it (0xa8df0 reads
+ * `0x4(%esp)` and tail-calls `sysdep_free`).  Not reproduced, on exactly the
+ * ground `B103FP_delete` states for the same dead slot: an argument the callee
+ * never loads has no observable effect.
+ */
+void
+cid_delete(struct cid_modem *ctx)
+{
+	if (ctx->mode != 0)
+		sysdep_free(ctx->dtmf);
+	if (ctx->mode != 1)
+		FPM_MRF_free(&ctx->fsk->mrf);
+	sysdep_free(ctx->fsk);
+	sysdep_free(ctx);
 }
 
 /*
