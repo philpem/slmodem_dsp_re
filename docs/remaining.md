@@ -5,22 +5,32 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `6a51f40b` (waves 1 and 2 merged), 2026-08-30:
+Measured at `ea5dfa6f` (waves 1–3 merged), 2026-08-31:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 82.3%  (604,812 bytes / 1,471 symbols)   was 76.6% / 1,296
-remaining 129,793 bytes /   390 symbols
-  data modes            16 sym   10,013 B   was 65 sym / 39,166 B
+translated 83.6%  (613,896 bytes / 1,484 symbols)   was 76.6% / 1,296
+remaining 120,709 bytes /   365 symbols
+  DATA MODES             0 sym        0 B   <-- COMPLETE, was 65 / 39,166
   fax only             283 sym   78,331 B
   voice / CID / ring    67 sym   23,802 B
-  no-entry-point leaves 15 sym    3,167 B   was 138 sym / 15,767 B
+  no-entry-point leaves 15 sym    3,167 B   was 138 / 15,767
 ```
 
-**The data modes are 74% cleared.** Wave 1 took the leaf bucket from 138
-symbols to 15; wave 2 took the data-mode bucket from 65 symbols / 39,166 bytes
-to **16 / 10,013**. Merged master is period-green at **293 passed, 0 failed** —
-master's 258 tests plus 35 new ones across the two waves.
+## THE DATA MODES ARE DONE
+
+`service.py` reports **0 symbols, 0 bytes** reachable from a data-mode entry
+point: V.90, V.92, V.34, V.32, V.22, B.103, V.23 and V.8 are all reconstructed.
+The `v32.c` and `v22.c` spans are empty, and what remains in `V32mod.c +39` is
+28 bytes of FAX. Merged master is period-green at **299 passed, 0 failed** —
+the 258 tests this work started from plus 41 new ones.
+
+That was README's goal for the phase: "cover the data modes", which CLAUDE.md
+noted could not be reached while V.32 was fenced. It is reached.
+
+**What is left is three populations and no data mode among them**: fax (the
+deliberate last phase), the voice/CID/ring services, and 15 leaves — 9 of
+which are F8492's link-blocked set and unblock as their referents land.
 
 ## The order
 
@@ -37,9 +47,9 @@ phase, last on purpose).
 | 4 | leaves: V32mod/Dialer + fax-named exported API | `V32mod.c +39`, `Dialer.c +18`, `class1*.c` leaves | ~4.7 K | **DONE** — wave 1, `9b1739ee`; SGD withdrawn (F8497), 9 blocked on the link constraint (F8492) |
 | 5 | V.32/V.32bis half-duplex machine | `Dialer.c +18` + `V32mod.c +39` together | 13,344 | **DONE** — wave 2, merge `a6da902b`. 26 symbols, 8 `TxHdx*`, 12 `RxHdx*`, all four `V32*NextState`, 6 tables |
 | 6 | V.22/V.22bis/Bell 212 | `V32mod.c +39` + `v22.c` | ~15.9 K | **DONE** — wave 2, merge `41c62864`. 22 symbols, all seven `V22_PROTOCOL` handlers. Lifecycle DECLINED (F8538) |
-| 6b | **V.22 lifecycle — the declined set** | `v22.c` | 999 | **NEXT.** `V22FP_modem` 346, `v22_process` 557, `v22_create` 300, `dp_v22_init`/`exit`, `V22_PROTOCOL`, `v22_ops`, three `.bss` buffers. Written and compiling but NOT committed: the differential test fails and the agent could not establish why (F8538) |
-| 7 | **V.32 FP layer and dispatch** | `Dialer.c +18`, `V32mod.c +39`, `v32.c` | 9,384 | **NEXT.** One closure of 25 symbols, no longer all-or-nothing: `V32FP_recreate` (3,733) is blocked on **eight tables totalling 596 bytes and nothing else**. Order: tables → `V32FP_recreate` → FP layer (`_status` 1084, `_control` 776, `_modem` 356, `_create` 169) → `v32_data` 859 → `v32.c`'s five (F8594) |
-| 8 | Caller ID + ring detect | `cid_*` in `V32mod.c`, the rest of `voice.c#3`'s `RingDetector_*`/`RD_*` | ~7 K | after data modes. `CID_*` and `RingDetector_Reset` already landed in wave 1 |
+| 6b | V.22 lifecycle | `v22.c` | 999 | **DONE** — wave 3, merge `ea5dfa6f`. F8538's failure was a TEST-BUFFER defect, not the source (F8607) |
+| 7 | V.32 FP layer and dispatch | `Dialer.c +18`, `V32mod.c +39`, `v32.c` | 9,384 | **DONE** — wave 3, merge `e9110d66`. All 25, closure now empty; 14 tables, not the 12 predicted |
+| 8 | **Caller ID + ring detect** | `cid_*` in `V32mod.c`, `RingDetector_*`/`RD_*` in `voice.c#3` | ~7 K | **NEXT.** Part of the 67-symbol voice/CID/ring bucket. `CID_*` and `RingDetector_Reset` already landed in wave 1 |
 | 9 | voice | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3` remainders | ~15 K | low priority |
 | 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last. Restore `t_faxsgd.c` from `9b1739ee^` first (F8497) |
 | 11 | the 15 remaining leaves | mostly `class1*.c`; 9 of them are F8492's link-blocked set | 3,167 | unblocks as their referents land — not a wave of its own |
@@ -215,3 +225,81 @@ after any multi-branch merge run a whole-tree duplicate sweep —
 pass did for three rounds before doing the sweep. Fixed in `b5532c22` and
 `6a51f40b`; the typed copies were kept, since the rest of V.22 is built on
 `struct v22fp`.
+
+## Wave 3 ledger (V.22 lifecycle, V.32 FP layer) — the data modes closed
+
+Finding blocks: V.22 F8600–8639, V.32 F8640–8679. Merges `e9110d66` (V.32 FP)
+and `ea5dfa6f` (V.22 lifecycle). Merged master **299 passed, 0 failed**, and
+`onedef`, `banners` (348/348) and `check64` all green.
+
+| chain | commit | outcome |
+|---|---|---|
+| V.32 FP layer and dispatch | `9c876c1f` | All 25 symbols / 9,384 B, period 297/297. `closure.py` on the V.32 entry points now reports 0 symbols, 0 bytes. 14 tables written, not the 12 F8594 predicted. F8640–F8658, D960, D961 |
+| V.22 lifecycle | `d50604eb` | All 9 symbols, period 295/295, storage classes reproducing the object exactly. Eleven queued `v22fp.h` renames applied and proved pure. F8600–F8609, D956 |
+
+### The lesson of this wave: `make one` HID A REAL DEFECT
+
+The V.22 lifecycle was `make one`-green under GCC 14 and **failed the period
+gate** at `t_v22modem`, 3,192 of 16,745 checks, `tx sample[8] got 0, reference
+5205`. That is the case for gating on period stated as a measurement rather
+than a principle, and it is the mirror image of the usual worry: not the modern
+compiler inventing a failure, but **hiding one**.
+
+The cause was the TEST's buffer, not `src/` (F8607). `V22FP_modem`'s copy-out
+is `for (i = 0; i < *n_rx; i++)` with NO clamp — there is no `cmp $0x64`
+anywhere in the object's loop at 0x888a7 — and `*n_rx` goes in as a SAMPLE
+count and is meant to come back as a SYMBOL count, so nineteen of fifty-six
+poked states leave 160 there and overrun a hundred-entry buffer. **Both sides
+overrun identically** (36 cases write 12, one writes 13, nineteen write 160),
+which is what proves it is the object reproduced rather than our defect. GCC
+14's `.bss` layout absorbed the overrun; 3.4.2 put the transmit buffer in the
+way. Recorded as **D956**, reproduced not fixed.
+
+**AND IT RETRACTED AN ELIMINATION, WHICH IS THE PART TO COPY.** The agent had
+ruled out a permuted `V22_PROTOCOL` using the transmit samples as the
+discriminator — under GCC 14, the compiler that hides exactly that observable.
+It withdrew the elimination rather than defending it, which re-opens F8538
+honestly. Both its injections had the same flaw; an injection is only as good
+as the compiler it runs under.
+
+**F8538 may have declined CORRECT code.** The same failure mode explains its
+symptom (`V22_CLAMP_VALUE` where the blob held 0 is what `RxClampV22` leaves in
+the first twelve entries, with an unbounded copy-out from a too-small
+destination). It is written as an INFERENCE with a named settling measurement —
+recover that wave's `V22FP_modem` unchanged, enlarge only its test's
+destination, run under `make period` — and explicitly NOT as a finding of fact,
+because the code was never committed and re-deriving it would test a different
+implementation.
+
+### Other things worth carrying
+
+- **D961** — `v32_data` hands `V32FP_control` an uninitialised stack local one
+  block after building the request. Reproduced, not fixed, and **no differential
+  test can cover that arm**; both tests clear `Control_Flag` and assert it clear
+  rather than pretending to cover it.
+- **F8653** — `VTBv32_init` is inlined in the object and called by us, so a
+  per-function byte comparison reads 355 bytes short at `V32FP_recreate`. F605's
+  case; no divergence to declare.
+- **A merge conflict that had to be resolved by taking NEITHER side.** Both
+  agents deleted their own `dp_v*_init`/`exit` bridge from
+  `test/harness/unwritten.c`, so each branch kept the other's. Taking either
+  side entire would have kept a bridge whose symbol is now defined in `src/`,
+  and the period link would have said `multiple definition`. See the note now
+  in that file.
+- **`check64` WAS RED ON MASTER** from the wave-2 merge — seven ungated offset
+  assertions in `src/pump/v22/v22.c` under a comment describing a guard that did
+  not exist. Fixed in `afb1e9fb`. It was red because this session gated on
+  `make period` alone and did not run the structural tiers it had said it would
+  keep; `onedef`, `banners` and `check64` are now run on every merge.
+- **Mutation suites are the outstanding debt.** `mutsnap.py --check` reports
+  0 current, 216 stale, 0 never recorded. The V.22 and V.32 waves added none,
+  and `t_v32nsrng`/`t_v32nsloop` still want registering — correctly declined
+  until the snapshot is re-recorded, since a registered-but-unrecorded suite
+  reads MISSING and fails the gate.
+- **D956's fix is available and not taken.** The overrun is a defect in the
+  ORIGINAL that we reproduce, so `src/` must keep it for the differential tier —
+  but this tree has `DSPLIB_REPRODUCE_BUGS` (six sites today, `fpm_div.c` the
+  worked example), where the default build carries the fix and the repro build
+  stays faithful. A clamp to the buffer's own hundred entries under
+  `#ifndef DSPLIB_REPRODUCE_BUGS` is that shape. D956 currently records the fix
+  form as documentation only; revisiting that is a small, self-contained task.
