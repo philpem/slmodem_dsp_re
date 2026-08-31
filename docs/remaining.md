@@ -393,3 +393,50 @@ tool had the last word over both readings.
 
 **When briefing concurrent agents, re-measure readiness at the commit each brief
 is actually written against, and say in the brief which commit that was.**
+
+## The mutation re-record is DEFERRED to a faster machine, and here is what it needs
+
+Attempted 2026-08-31 and stopped deliberately at 11% (1,065 of 10,075
+mutations, ~35 minutes) once the full cost was measured: **about 5.5 hours on
+this 3-core box.** That is a machine problem, not a method problem, and the run
+should be repeated where it is cheap rather than nursed where it is not.
+
+**State: 1 current, 227 stale, 0 never recorded, of 228 registered.** The one
+current entry is `ringdet` (41 mutations, 41 caught), recorded complete before
+the full pass began. Nothing is MISSING, so the gate is not failing on this —
+staleness is a trustworthiness problem, not a red build.
+
+**What the run costs, measured rather than estimated:**
+
+- 10,075 mutations over 228 suites; the median suite is 27 mutations and the
+  largest, `v34hstx1`, is 776.
+- ~2.2 s per mutation serial — a rebuild and a test run each.
+- ~30 mutations/minute at `--jobs 2`.
+
+**THREE THINGS THAT MUST BE TRUE BEFORE IT WILL RUN AT ALL**, each of which
+cost an attempt here:
+
+1. **`build/repro` and `build/test` must exist.** A shard copies the whole
+   build tree; those two had been deleted (correctly — they had been built with
+   non-default `-O3` flags and `make` does not track flag changes) and nothing
+   had rebuilt them. A plain `make` restores them.
+2. **The shard trees need REAL DISK, not tmpfs.** Each shard `cp -a`s the whole
+   build tree, which is **1.1 GB** here — `build/test` alone is 320 test
+   binaries statically linked against the blob. On a 1.9 GB `/tmp` tmpfs one
+   shard barely fits and two cannot, which is what produced
+   `N of N shards died; this run is not a result`. Set `TMPDIR` to a disk-backed
+   directory. Budget 1.1 GB per job.
+3. **Reap orphaned shard trees after any failed run.** A killed run leaves
+   `$TMPDIR/mutate-<pid>-*` behind; the first failure here left ~500 MB.
+   `mutate.py`'s `reap_stale_workdirs` removes only those whose pid is gone.
+
+**What is NOT a risk, and was checked rather than assumed:** an interrupted run
+does not leave `src/` mutated. Mutants are applied inside the shard COPIES, so
+`git status` stayed clean through three aborted runs. The danger that motivated
+running it detached does not exist in the sharded path.
+
+**Credit where it is due:** `mutsnap.py` reported nothing from the broken runs
+— `COULD NOT RUN -- left stale, not recorded`, and a refusal to summarise. A
+tool that emitted a partial snapshot here would have produced something
+indistinguishable from a baseline, which is the failure this whole register
+exists to prevent (F347).
