@@ -10324,3 +10324,96 @@ string and sets `dle_can = 1`; it reads no element of `arg` (0xac531-0xac545).
 tidied, because zeroing it would be a store the object does not make and would
 show in a codegen comparison. `t_voiceapi` drives ABORT at both debug levels
 and over six `tone_duration` values and compares the full object each time.
+
+## D1040 ⚠ V.27ter's `pending = ok * pending` can never be non-zero
+
+The bit path multiplies the guard's `ok` flag by `pending` and stores the
+result back into `pending` (0x9aa88 scrambler, 0x9acf7 descrambler). `ok` is
+`~(alldiff | inverting) & 1` and `inverting` was assigned from `pending`, so
+the two are never both one and the product is always zero. `pending` is set
+only by the `run == 33` arm immediately below it.
+
+**Status:** reproduced, not simplified. It is dead arithmetic in the ORIGINAL,
+not a misreading -- the `imul` is there, and a source that wrote `pending = 0`
+would emit a different instruction. `t_sdmv27` seeds `pending` and `inverting`
+apart in all four combinations and both directions, which is the only way to
+reach the multiply with a non-zero left operand, and both sides agree.
+Finding F8906.
+
+## D1041 ⚠ V.27ter's scrambler discards the `inverting` it is handed
+
+`SDMv27_scrambler` assigns `inverting = pending` at the top of each bit, so
+whatever `inverting` a caller left in the object is overwritten before it is
+read. `SDMv27_descrambler` assigns it on the back edge instead, so its first
+bit does read the incoming value.
+
+**Status:** reproduced in both directions as written, and NOT interchangeable.
+Each placement is self-consistent with the exit state its own function leaves
+-- (pending 1, inverting 0) for the scrambler, (1, 1) for the descrambler --
+so each inverts exactly one bit on the call after a threshold. Giving the
+scrambler the descrambler's placement fails 1,994 of `t_sdmv27`'s first 7,179
+checks. What is unreachable is only the pair (pending 0, inverting 1), which
+`run_seeded_flags` drives by hand. Finding F8901, which records that the first
+draft of this entry claimed the difference was unreachable and an injection
+refuted it.
+
+## D1042 ⚠ `SMC_encoder` indexes four tables with values nothing bounds
+
+In its complex form the encoder reads `imap[index]` and `qmap[index]` with
+`index` built from the data word and the running quadrant, and `cosine[acc]`
+and `sine[acc]` with the carrier accumulator. None of the four is bounds
+checked, and neither `index` nor `acc` is clamped: `acc` is wrapped by a
+single conditional subtract, so a seeded value at or above `2 * rot_mod`
+stays out of range, and a negative `quad` (reachable through `pmask` 0xffff,
+which V.29 does not use) indexes backwards.
+
+It is the same shape as the index form's documented `widx` overrun and the
+same shape as `fpm_smc.h`'s note on the wraps; it is recorded separately
+because the complex form dereferences FOUR pointers rather than storing to
+one, so a wild index reads as well as writes.
+
+**Status:** reproduced. Not reachable from the object's own configs --
+`V29TX_create` sets `rot_mod` 24 against a 32-entry phasor and `pmask` 7
+against 16-entry maps -- so `t_faxsmc` drives the out-of-range cases only
+where both sides read the same over-sized table, which is what keeps the
+comparison meaningful rather than reading two different pieces of rubbish
+(D955's rule, applied to a test's own fixture).
+
+## D1043 🐛 `SDMv27_init` faults on the null config it means to default
+
+`SDMv27_init` (0x9a830) reads `cfg->nbits` twice and guards only the first.
+The null arm is out of line at 0x9a880 --
+
+    9a838:  test   %ecx,%ecx
+    9a83a:  je     9a880
+    9a83c:  movzwl (%ecx),%edx
+    9a83f:  mov    %dx,(%eax)          <- sdm->nbits
+    ...
+    9a85a:  cmpw   $0x2,(%ecx)         <- cfg->nbits AGAIN, %ecx still NULL
+    ...
+    9a880:  movzwl SDMv27_CFG,%edx
+    9a887:  jmp    9a83f
+
+-- and it loads the default VALUE and jumps back into the common path with the
+caller's null pointer still in `%ecx`. Five stores later the mask branch
+dereferences it. So the defaulting the function plainly intends works for
+`nbits` and then faults three instructions after it would have mattered.
+
+Found by running it: `t_sdmv27` drove `SDMv27_init(s, NULL)` on both sides and
+the binary segfaulted with no output, which is the same way D1022 was found.
+
+**Status:** reproduced. `src/fax/sdmv27.c` guards one read and not the other,
+which is what the object does; a source that wrote `if (cfg == 0) cfg =
+&SDMv27_CFG;` would use the corrected pointer at both sites and would not be
+the object.
+
+**Unreachable in service.** Both callers pass a stack local --
+`SetScramblerV27` at 0xa5ecd (`lea 0x12(%esp),%edx`) and `V27RX_create` at
+0x99cde -- so nothing in the object ever takes the arm. `SDMv27_CFG` is
+therefore referenced by `SDMv27_init` and read by nobody; it is reproduced as
+two bytes of `.data`, not as a working default.
+
+**No differential test can cover it**, for D961's reason: both sides fault
+identically and a fault is not a comparison. `t_sdmv27` asserts the
+precondition -- a config pointer is required -- and says why at the call site
+rather than pretending to cover it.

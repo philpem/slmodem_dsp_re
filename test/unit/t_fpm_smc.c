@@ -252,8 +252,12 @@ run_tables(void)
 		    ref_SMCv22_CFG.amask, 0);
 	diff_eq_int("cfg pmask (%ld)", SMCv22_CFG.pmask,
 		    ref_SMCv22_CFG.pmask, 0);
-	diff_eq_int("cfg f20 (%ld)", SMCv22_CFG.f20, ref_SMCv22_CFG.f20, 0);
-	diff_eq_int("cfg f24 (%ld)", SMCv22_CFG.f24, ref_SMCv22_CFG.f24, 0);
+	/* +0x20 and +0x24 are relocated pointers, null in this config; compare
+	 * them as pointers, since that is now their declared type. */
+	diff_eq_int("cfg cosine null (%ld)", SMCv22_CFG.cosine != 0,
+		    ref_SMCv22_CFG.cosine != 0, 0);
+	diff_eq_int("cfg sine null (%ld)", SMCv22_CFG.sine != 0,
+		    ref_SMCv22_CFG.sine != 0, 0);
 	diff_eq_int("cfg f28 (%ld)", SMCv22_CFG.f28, ref_SMCv22_CFG.f28, 0);
 
 	/*
