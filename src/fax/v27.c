@@ -279,10 +279,10 @@ V27TX_status(const void *tx, void *status)
 	if (status == 0)
 		return 0;
 
-	FIELD_US(status, V27STAT_WORD_00) = FIELD_US(tx, V27STAT_WORD_00);
-	FIELD_US(status, V27STAT_BIT_RATE) = FIELD_US(tx, V27STAT_BIT_RATE);
-	FIELD_US(status, V27STAT_ZERO_04) = 0;
-	FIELD_US(status, V27STAT_ZERO_06) = 0;
+	FIELD_US(status, V27STAT_PROTOCOL) = FIELD_US(tx, V27STAT_PROTOCOL);
+	FIELD_US(status, V27STAT_TX_BPS) = FIELD_US(tx, V27STAT_TX_BPS);
+	FIELD_US(status, V27STAT_RX_BPS) = 0;
+	FIELD_US(status, V27STAT_QUALITY) = 0;
 	FIELD_US(status, V27STAT_ZERO_08) = 0;
 	FIELD_US(status, V27STAT_ZERO_0A) = 0;
 	FIELD_US(status, V27STAT_ZERO_0C) = 0;
@@ -291,7 +291,7 @@ V27TX_status(const void *tx, void *status)
 	 * a3f0b after the store at a3efb.  Observable only if the two blocks
 	 * overlap, and what the compiler was forced to encode.
 	 */
-	FIELD_US(status, V27STAT_WORD_10) = FIELD_US(tx, V27STAT_BIT_RATE);
+	FIELD_US(status, V27STAT_WORD_10) = FIELD_US(tx, V27STAT_TX_BPS);
 	FIELD_US(status, V27STAT_ZERO_12) = 0;
 
 	/*
@@ -299,15 +299,15 @@ V27TX_status(const void *tx, void *status)
 	 * SETS bit 0 instead of clearing it, which changes what the last line
 	 * of the function produces.  Finding F8866, deviation D1033.
 	 */
-	flags = (unsigned char)(*FIELD(status, V27STAT_FLAGS0)
-				| V27STAT_F0_BIT0);
-	*FIELD(status, V27STAT_FLAGS0) =
-			(unsigned char)(flags & (unsigned char)~V27STAT_F0_BIT1);
-	*FIELD(status, V27STAT_FLAGS1) &= (unsigned char)~V27STAT_F1_BIT0;
-	*FIELD(status, V27STAT_FLAGS0) =
-			(unsigned char)((flags & V27STAT_F0_BIT0)
+	flags = (unsigned char)(*FIELD(status, V27STAT_FLAGS)
+				| V27STAT_FLAGS_BIT0);
+	*FIELD(status, V27STAT_FLAGS) =
+			(unsigned char)(flags & (unsigned char)~V27STAT_FLAGS_BIT1);
+	*FIELD(status, V27STAT_FLAGS2) &= (unsigned char)~V27STAT_FLAGS2_BIT0;
+	*FIELD(status, V27STAT_FLAGS) =
+			(unsigned char)((flags & V27STAT_FLAGS_BIT0)
 					| (*FIELD(tx, V27TX_HANDLE_FLAGS)
-					   & V27STAT_F0_FROM_TX));
+					   & V27STAT_FLAGS_FROM_TX));
 
 	FIELD_I(status, V27STAT_WORD_18) = FIELD_I(tx, V27STAT_WORD_18);
 

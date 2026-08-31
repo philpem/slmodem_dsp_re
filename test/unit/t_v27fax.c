@@ -20,17 +20,18 @@
  * too -- so the models are not a second opinion, they are a second
  * independent statement of the same claim.
  *
- * THE STATEFUL ONES ARE DRIVEN OVER MANY BLOCKS, not one.  A swapped
- * smoothing weight is invisible to every codegen check and to any one-block
- * fixture: on the first block the accumulator is whatever the caller left, so
+ * THE STATEFUL ONES ARE DRIVEN OVER MANY BLOCKS, not one.  Finding F8790 is
+ * a swapped smoothing weight that no codegen check and no one-block fixture
+ * can see: on the first block the accumulator is whatever the caller left, so
  * both orderings produce a number and neither is obviously wrong.
  * `QualityDetectV27` has exactly that shape -- a 0.9/0.1 first-order smoother
  * -- and `DataCarrierDetectV27` carries three separate pieces of state across
  * calls, so both are run as SEQUENCES and the whole sequence's state is
  * compared rather than the last call's return.
  *
- * WHAT THE FIXTURE HAS TO PLANT, and why more than the obvious.
- * A fixture must plant every field a callee uses as a SUBSCRIPT, not only
+ * WHAT THE FIXTURE HAS TO PLANT, and why more than the obvious.  D955 and
+ * finding F8587:
+ * a fixture must plant every field a callee uses as a SUBSCRIPT, not only
  * every field it dereferences, because a blob-against-blob dry run cannot
  * catch an unplanted subscript -- both sides read the same wild index and
  * agree.  `V27RX_decision` indexes two tables by three different fields
@@ -910,7 +911,7 @@ run_decision(void)
 /*
  * Variants:
  *   0  the reading this reconstruction claims
- *   1  the two smoothing weights swapped
+ *   1  the two smoothing weights swapped (finding F8790's shape)
  *   2  the +0x4000 rounding dropped from both terms
  *   3  the two terms summed before the shift rather than after,
  *      which is the same arithmetic with one rounding step instead of two

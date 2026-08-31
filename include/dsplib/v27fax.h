@@ -379,64 +379,71 @@ int CarrierDetectV27(void *modem);
 /* The status block `V27TX_status` fills                                */
 
 /*
- * NOT the modem instance: this is the caller's own block, and the four
- * `*TX_status` functions are the only reconstructed writers of it.  What is
- * named here is what four functions agree on plus one literal; the rest keeps
- * its offset, because agreeing on WHERE a field is says nothing about what it
- * means.
+ * NOT the modem instance: this is the caller's own block, and it is ALREADY
+ * MODELLED TWICE in this tree -- `struct v22_status` in
+ * `include/dsplib/v22status.h` and `struct v32_status` in
+ * `include/dsplib/v32fpstat.h`, both from datapumps that fill the same block
+ * with the same fields at the same offsets.  Those are evidence class 2 for
+ * the four names below and this header takes them.
  *
- * THE ONE FIELD WITH RANK-1 EVIDENCE IS +0x02, AND IT IS A BIT RATE.
- * `V21TX_status` does not copy it from anywhere -- it stores the literal
- * `movw $0x12c,0x2(%edx)` at 0xa2c11, and 0x12c is 300, which is V.21's bit
- * rate to the digit.  V.17, V.27ter and V.29 fill the same slot from their
- * own handle's +0x02 instead, which is what a rate-selectable modem would do
- * with a field a fixed-rate one can write as a constant.
+ * IT DOES NOT DEFINE A THIRD STRUCTURE, deliberately.  V.27ter writes +0x0c
+ * and +0x18, both of which are outside what `struct v22_status` models, so a
+ * `struct v27_status` would assert an extent nothing here can bound -- the
+ * block is the caller's and no reconstructed function allocates it.  Named
+ * constants say exactly what is known and no more.  A parallel V.21 pass has
+ * reached the same block from the other side; whoever merges the two should
+ * reconcile the spellings rather than let a fourth accumulate.  F8872.
+ *
+ * THE RATE FIELD IS RANK 1 AS WELL AS RANK 2.  `V21TX_status` does not copy
+ * +0x02 from anywhere -- it stores the literal `movw $0x12c,0x2(%edx)` at
+ * 0xa2c11, and 0x12c is 300, which is V.21's bit rate to the digit.  V.17,
+ * V.27ter and V.29 fill the same slot from their own handle's +0x02 instead,
+ * which is what a rate-selectable modem does with a field a fixed-rate one
+ * can write as a constant.  `v22status.h` calls it `tx_bps` independently.
+ *
+ * AND V.27ter'S ZEROES ARE INFORMATIVE.  It zeroes `rx_bps` and `quality`
+ * while filling `tx_bps`, which is what a HALF-DUPLEX TRANSMITTER's status
+ * would carry: there is no receive rate to report and no equaliser to grade.
+ * V.22's full-duplex `V22_status` fills all four.
  *
  * +0x10 IS BOUNDED AND NOT NAMED.  V.17, V.27ter and V.29 give it the same
- * value they gave +0x02 -- the object reads the source's +0x02 a second time
+ * value they gave +0x02 -- the object reads the source's +0x02 a SECOND time
  * rather than reusing the first read -- and V.21 gives it zero where it gave
- * +0x02 its 300.  So it is a second slot related to the rate and it is NOT
- * simply a copy of the first, since the one modem that knows its rate
- * statically writes two different numbers into them.  What distinguishes them
- * is not established.
- *
- * A PARALLEL PASS ON V.21 IS MODELLING THE SAME BLOCK AS A STRUCT, from the
- * same four functions.  This header deliberately does not, for the same
- * reason it does not model the instance: nothing here allocates the block or
- * bounds its extent, so a struct would state a size the object has not shown.
- * Whoever merges the two should reconcile them rather than let a third
- * spelling accumulate -- see F8872.
+ * +0x02 its 300.  So it is not simply a copy of the first, since the one
+ * modem that knows its rate statically writes two different numbers into
+ * them.  `v22status.h` leaves it unnamed too.
  */
-#define V27STAT_WORD_00		0x00	/* copied from the handle's +0x00  */
-#define V27STAT_BIT_RATE	0x02	/* bit/s; V21TX_status writes 300  */
-#define V27STAT_ZERO_04		0x04	/* all four zero these five        */
-#define V27STAT_ZERO_06		0x06
+#define V27STAT_PROTOCOL	0x00	/* copied from the handle's +0x00  */
+#define V27STAT_TX_BPS		0x02	/* bit/s; V21TX_status writes 300  */
+#define V27STAT_RX_BPS		0x04	/* zeroed: no receive side here    */
+#define V27STAT_QUALITY		0x06	/* zeroed: no equaliser here       */
 #define V27STAT_ZERO_08		0x08
 #define V27STAT_ZERO_0A		0x0a
-#define V27STAT_ZERO_0C		0x0c
+#define V27STAT_ZERO_0C		0x0c	/* outside struct v22_status       */
 #define V27STAT_WORD_10		0x10	/* see the note above              */
 #define V27STAT_ZERO_12		0x12
-#define V27STAT_FLAGS0		0x14	/* byte; the asymmetry lives here  */
-#define V27STAT_FLAGS1		0x15	/* byte                            */
-#define V27STAT_WORD_18		0x18	/* int; V.17 and V.27ter only      */
+#define V27STAT_FLAGS		0x14	/* byte; the asymmetry lives here  */
+#define V27STAT_FLAGS2		0x15	/* byte                            */
+#define V27STAT_WORD_18		0x18	/* int; outside struct v22_status  */
 
 /*
- * The two bits of `V27STAT_FLAGS0` this function decides, and the one bit of
- * `V27STAT_FLAGS1` it clears.
+ * The two bits of `V27STAT_FLAGS` this function decides, and the one bit of
+ * `V27STAT_FLAGS2` it clears.
  *
- * NAMED BY BIT VALUE AND NOT BY MEANING, because the meaning is not
- * established -- nothing reconstructed reads any of them.  What IS
- * established is that bit 0 comes out set for V.27ter and clear for the other
- * three, that bit 1 is cleared by all four, and that bit 2 is copied from the
- * transmitter handle's +0x10.
+ * NAMED BY BIT VALUE AND NOT BY MEANING, because V.22's assignment of these
+ * bits is V.22's: `v22status.h` reads bit 0 as its scrambler enable off five
+ * datapump words this modem does not have.  What IS established here is that
+ * bit 0 comes out set for V.27ter and clear for the other three, that bit 1
+ * is cleared by all four, and that bit 2 is copied from the transmitter
+ * handle's own +0x10.
  */
-#define V27STAT_F0_BIT0		0x01
-#define V27STAT_F0_BIT1		0x02
-#define V27STAT_F0_FROM_TX	0x04	/* the bit taken from tx + 0x10    */
-#define V27STAT_F1_BIT0		0x01
+#define V27STAT_FLAGS_BIT0	0x01
+#define V27STAT_FLAGS_BIT1	0x02
+#define V27STAT_FLAGS_FROM_TX	0x04	/* the bit taken from tx + 0x10    */
+#define V27STAT_FLAGS2_BIT0	0x01
 
 /*
- * The byte of the transmitter's handle that supplies V27STAT_F0_FROM_TX.
+ * The byte of the transmitter's handle that supplies V27STAT_FLAGS_FROM_TX.
  */
 #define V27TX_HANDLE_FLAGS	0x10
 

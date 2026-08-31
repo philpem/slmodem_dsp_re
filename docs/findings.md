@@ -101399,3 +101399,97 @@ weaker than the rest of this batch and is recorded here rather than left
 implicit -- the alternative, an order probe built on the allocator's LIFO
 recycling, is finding F1353's mistake and would be reading the allocator rather
 than the code.
+
+## F8872. The `*TX_status` report block is now modelled three ways, and this batch deliberately did not make it four
+
+`V22_status` fills a caller-owned block that `include/dsplib/v22status.h`
+models as `struct v22_status`; `include/dsplib/v32fpstat.h` models the same
+block as `struct v32_status`; and the four `*TX_status` functions --
+`V17TX_status`, `V21TX_status`, `V27TX_status`, `V29TX_status` -- fill it
+again, field for field at the same offsets. That is four datapumps writing one
+host-owned structure.
+
+**The fields V.27ter's copy settles.** `v22status.h` names +0x02 `tx_bps` from
+V.22's own two rates. The V.21 filler says the same thing more directly and
+independently: it does not COPY +0x02 from anywhere, it stores the literal
+`movw $0x12c,0x2(%edx)` at 0xa2c11, and 0x12c is 300, which is V.21's bit rate
+to the digit. V.17, V.27ter and V.29 fill the same slot from their own
+handle's +0x02, which is what a rate-selectable modem does with a field a
+fixed-rate one can write as a constant.
+
+**And V.27ter's ZEROES are informative in a way a full-duplex filler's are
+not.** It writes `tx_bps` and zeroes `rx_bps` and `quality`, which is exactly
+what a half-duplex fax TRANSMITTER has to report -- no receive rate, no
+equaliser to grade. V.22's full-duplex `V22_status` fills all four. So the
+V.22 names are corroborated by which of the fields a one-way modem declines to
+fill, and that reading did not come from V.22.
+
+**`include/dsplib/v27fax.h` names the offsets and does NOT define a third
+structure**, for two reasons and neither is style. V.27ter writes +0x0c and
++0x18 and both are outside what `struct v22_status` models, so a
+`struct v27_status` would assert an extent nothing in this batch can bound --
+the block belongs to the caller and no reconstructed function allocates it.
+And a fourth spelling of one layout is what "one type, one home" exists to
+prevent; `onedef.py` gates by type NAME and would not catch it, because four
+different names for one layout are four different types as far as the tool is
+concerned.
+
+**The follow-up, stated so it is not lost.** Someone should reconcile
+`v22_status`, `v32_status` and the `*TX_status` family into one type with one
+home, sized by whichever caller can be shown to allocate it. Until then this
+header's constants and those two structures must not drift: they describe the
+same bytes.
+
+## F8873. What the V.27ter receive batch settled, and the one function it left
+
+Ten of the eleven V.27ter receive primitives are reconstructed and driven
+against the blob by `t_v27fax` -- 27,144 checks, every one of them a
+comparison with the object:
+
+    V27RX_delete          193    V27TX_status          118
+    V27RX_decision        284    DataCarrierDetectV27  579
+    V27RX_modem           127    QualityDetectV27      266
+    V27RX_status           11    EpochDetectV27         22
+    CarrierDetectV27       22    GetSNRV27               6
+
+1,628 bytes of 1,959. `DemodDataV27` (331) is the one left, and the reason is
+the fixture rather than the function: it is the only member that drives all
+four embedded FPM modules end to end, so a differential test for it has to
+CONFIGURE `fpm_mrf`, `fpm_agc`, `fpm_sre` and `fpm_fse` -- with their nine
+allocated buffers -- rather than plant them. `DataCarrierDetectV27` needed two
+of the four and they fit inside the fixture struct; the full chain does not,
+and its buffers come from `sysdep_malloc`, so a snapshot/restore pair would
+have to cover the heap as well as the fixture. `harness_alloc_live_set` and
+`harness_alloc_reqsize` make that possible generically and it is the route to
+take. The reading of `DemodDataV27` is written down in the header's field
+notes -- what it ANDs into which flag, in which order -- so the work left is
+the apparatus and not the analysis.
+
+**What this batch establishes that outlives it**, in one place:
+
+  - the receiver block's layout, because four FPM modules tile it exactly
+    (F8862), which is the first time an unmodelled instance in this project
+    has been readable rather than merely enumerable;
+  - the decoder block at `rx + 0x14`, every offset confirmed by the
+    constructor as well as by the slicer (F8863);
+  - V.27ter's phase convention, 0x8000 to the revolution, four or eight Gray
+    coded phases (F8864);
+  - a sentinel written in the loop's own terms, and the obvious spelling of it
+    that would break the slicer completely (F8865);
+  - the one asymmetry in a four-member family, and the fact that the store
+    which makes it is unobservable (F8866, F8867, D1033);
+  - two arms that the object's own tables cannot reach (F8869, D1034);
+  - three more call sites for the extra-argument pattern (F8870);
+  - and what a delete test cannot see through this harness (F8871).
+
+**What the period gate should watch.** None of this has been through GCC 3.4.2
+-- the worktree it was written in has no docker -- and `make one` is GCC 14,
+which has hidden a real defect in this tree before (F8607). The sites to look
+at first if `make period` disagrees are the ones where a `short` narrowing is
+load-bearing rather than incidental: `V27RX_decision`'s distance, which the
+object narrows with `cwtl` before every comparison; `V27RX_modem`'s
+accumulated count, narrowed the same way once per iteration; and
+`QualityDetectV27`'s smoother, whose two terms are shifted down fifteen
+SEPARATELY and summed afterwards. There is no floating point anywhere in this
+batch, so none of the x87 or NaN causes behind `tools/gccdiverge.json` can
+apply to it.
