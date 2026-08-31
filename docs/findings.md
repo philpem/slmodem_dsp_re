@@ -101158,6 +101158,442 @@ rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
 `cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
 `test/mutations/` for it; passing `make phase` proves nothing here, because a
 descriptor that no longer matches is not an error.
+
+### F8850. V.17 has TWO instance types, and one contradiction is what proves it
+
+*2026-08-31.* The twelve V.17 fax primitives in `dsplibs.o` all take a `void *`
+first argument, and it is tempting to read them as twelve views of one object.
+They are not, and the object says so without ambiguity:
+
+* `SeedScramblerV17` (0xa09f0) and `SetEncoderV17` (0xa0a00) both dereference
+  `obj + 0x28` as a POINTER and write through it. `include/dsplib/v17data.h`
+  already establishes that offset twice over as `V17TX_OBJ_FP`, the
+  transmitter's 0x90-byte private block.
+* `V17RX_modem` (0x9ff80) does `andb $0xfd,0x29(%eax)` and then, four
+  instructions from the epilogue, `mov 0x28(%esi),%eax` and returns it.
+
+Byte 0x29 is byte 1 of the four bytes at 0x28. Clearing a bit of a live
+pointer and then handing it back to a caller is not something one object
+survives, so the two functions are not looking at the same struct.
+
+The split is corroborated by every other offset in the batch, and the two sets
+are disjoint apart from the collision itself. The transmit pair touch 0x24 and
+0x28 only. The ten receive-side functions touch 0x18, 0x1c and 0x20 (three
+`short *` save pointers), 0x28 and 0x29 (an int and a bit inside it), 0x5c (a
+control block) and 0x60 (the demodulator state), and none of them dereferences
+0x28.
+
+`V17TX_status` is in neither set: it takes two blocks and never indirects
+through an instance at all.
+
+### F8851. `SeedScramblerV17` writes `struct fpm_sdm::reg`, and `fpm_sdm.h` is what says so
+
+*2026-08-31.* Fifteen bytes: `fp = obj[0x28]; *(int *)(fp + 0x2c) = arg2`.
+Taken alone that is an offset with a suggestive function name attached, which
+is CLAUDE.md's weakest evidence class.
+
+It is not alone. `v17data.h` records, from `V17TX_create`, that an `SDM` is
+built at `fp + 0x1c` and that neither of the two transmit data leaves touches
+it. `include/dsplib/fpm_sdm.h` models that struct independently: it is 0x18
+bytes, and `unsigned int reg` -- "shift register; init clears it" -- is at
++0x10. 0x1c + 0x10 is 0x2c, and `reg` is the ONLY 32-bit field in the struct,
+which is what the 32-bit store demands.
+
+So the pairing is two independent statements meeting: the author's own word
+"SeedScrambler", and a modelled struct's own field. An `FPM_SDM` is a shift
+register with two taps, which is what a scrambler is.
+
+### F8852. `SetEncoderV17` is what BOUNDS `V17FP_ENCODER_SEL`, and mode 1 is asymmetric
+
+*2026-08-31.* `v17data.h` records of the encoder selector at `fp + 0x8c`:
+"Nothing here bounds the index; `V17TX_create` never writes it, so whatever
+sets it is outside what has been read." `SetEncoderV17` (0xa0a00, 90 bytes) is
+that writer, and it closes the question:
+
+    which == 0    ->  sel = 0, and *(short *)(fp + 0x3a) = arg
+    which == 1    ->  sel = 1, and nothing else
+    which == 2    ->  sel = 2, and *(short *)(fp + 0x3a) = arg
+    anything else ->  `ret`, with nothing written at all
+
+The selector therefore holds 0, 1 or 2 and nothing else, which matches
+`V17TX_create`'s three-entry table exactly -- `SMCv17_encoder_dif` at fp+0x80,
+`_abs` at fp+0x84, `_tcm` at fp+0x88 -- so the argument names the encoder by
+that numbering.
+
+**The asymmetry is the object's and is not a reading error.** Mode 1 stores the
+selector and returns; the arm is `mov 0x28(%edx),%eax ; mov $0x1,%ecx ; mov
+%cx,0x8c(%eax) ; ret`, with `%ecx` -- which held the sign-extended third
+argument on entry -- overwritten by the constant. Modes 0 and 2 keep it and
+store it at fp+0x3a, which is `V17FP_SMC` + 6, inside the SMCv17 coder state
+that nothing models. So the differential and trellis encoders take a second
+value and the absolute encoder does not.
+
+`which` is loaded `movswl` and its 32-bit result drives a signed comparison
+chain, so `short` is forced. It is NOT separable by test, and `t_v17fax.c` says
+so: no `short` has an unsigned reading that lands on 0, 1 or 2 when its signed
+one does not, since -1 is 65535 either way and both fall out of the switch.
+
+### F8853. Receiver state + 0xd0 is read 32 bits wide in one function and 16 in two others, and only one of the three can see the difference
+
+*2026-08-31.* Three V.17 functions form the carrier verdict the same way, by
+ANDing receiver state + 0xd0 with + 0x120. They do not agree on the width of
+the first operand:
+
+    CarrierDetectV17      a526b   mov    0xd0(%edx),%ecx      32-bit
+    QualityDetectV17      a557c   movswl 0xd0(%ecx),%eax      16-bit, signed
+    DataCarrierDetectV17  a5309   movswl 0xd0(%edx),%eax      16-bit, signed
+
+Both instructions are FORCED in CLAUDE.md's sense -- an `int` field cannot
+produce `movswl` and a `short` field cannot produce a 32-bit load -- so the
+three functions did not share a declaration of whatever struct this is. That is
+a fact about the original's source, not a choice, and `src/fax/v17.c` spells
+each site the way the object does rather than picking one.
+
+**Only `CarrierDetectV17` can be made to show it.** The other two narrow the
+AND back to a `short` with `movswl %ax`, and `(short)(x & m)` depends on
+nothing above bit 15, so their own reading is unobservable by construction.
+
+**And on any reachable state it is unobservable everywhere**, because of F8854:
+the field is `struct fpm_agc::signal`, which only ever holds 0 or 1.
+`t_v17fax.c` therefore separates it with a synthetic non-zero short at +0xd2,
+and says in its header comment that the state is synthetic. The width is
+followed because the object was not free to choose it, not because a modem can
+reach the difference.
+
+### F8854. The four FPM objects TILE the V.17 receiver state exactly, which confirms all four offsets at once and identifies +0xd0
+
+*2026-08-31.* `DemodDataV17` computes four addresses inside the block at
+instance + 0x60 and hands each to one module, which is rank-2 evidence for each
+on its own:
+
+    rx + 0x098  ->  FPM_MRF_filter     struct fpm_mrf
+    rx + 0x0b4  ->  FPM_AGC_agc        struct fpm_agc
+    rx + 0x0e0  ->  FPM_SRE_recover    struct fpm_sre
+    rx + 0x170  ->  FPM_FSE_receive    struct fpm_fse
+
+Take the four `sizeof`s from the four headers that model those structs --
+derived from their own functions, with nothing to do with V.17 -- and every
+boundary is the previous object's end:
+
+    0x098 + 0x001c = 0x0b4        0x0b4 + 0x002c = 0x0e0
+    0x0e0 + 0x0090 = 0x170        0x170 + 0x4e18 = 0x4f88
+
+No gaps, no overlaps, and the last lands just below `+0x4fa4`, the first of the
+block's own pointer fields. Four `add $imm` agreeing with four independently
+derived struct sizes is not a coincidence that one wrong offset survives, and
+it also explains why the block is twenty kilobytes: the equaliser alone is
+19.5 KB of it.
+
+**The tiling names a field the three detectors read.** `offsetof(struct
+fpm_agc, signal)` is 0x1c, and 0xb4 + 0x1c is 0xd0 -- so the "+0xd0" of F8853,
+read by `CarrierDetectV17`, `QualityDetectV17` and `DataCarrierDetectV17`, is
+the AGC's own signal flag. `fpm_agc.h` describes it as "more than half the
+blocks in the last call were above the gate", which is exactly what the first
+term of a carrier verdict wants, and `FPM_AGC_agc` is its only writer.
+`v17fax.h` spells it `V17RXS_AGC_SIGNAL` as `(V17RXS_AGC + 0x1c)` rather than
+as a bare 0xd0, so the derivation is visible at the use site.
+
+### F8855. `QualityDetectV17`'s block counter is SIGNED, and one `jg` on a 16-bit compare is what rules the alternative out
+
+*2026-08-31.* The counter at receiver state + 0x4fae is LOADED with `movzwl` at
+both sites, which reads as `unsigned short` and would be free if nothing else
+used it -- only `%bx` is ever touched. But it is also COMPARED:
+
+    a55ac   test %bx,%bx ; jne          n != 0
+    a55d6   cmp  $0x31,%bx ; jg         n > 0x31
+    a5625   cmp  $0x32,%bx ; jne        n != 0x32
+
+`jg` is the signed conditional, on a 16-bit compare. For an `unsigned short`
+promoted to `int`, `n > 0x31` is a comparison of a value in [0, 65535], and a
+16-bit signed compare would answer it wrongly for everything from 0x8000 up;
+GCC does not emit that. So the value the comparisons see is a `short`, and the
+`movzwl` is a load of an `unsigned short` FIELD into a `short` local -- F7803's
+rule, applied where the dead extension actually is dead.
+
+**It is separable, and `t_v17fax.c` separates it.** Seed the counter at 0x8000:
+the signed reading is negative, so not above 0x31, so it SMOOTHS the average
+and writes the counter back; the unsigned reading is 32768, above 0x31 and not
+equal to 0x32, so it returns having touched nothing. Two different memories, so
+this is a measurement and not a codegen note.
+
+### F8856. `V17TX_status` has a dead store that survives because of ALIASING, and would not survive being tidied
+
+*2026-08-31.* The object writes `status + 0x14` twice, four instructions apart:
+
+    a1c18   movzbl 0x14(%edx),%eax ; and $0xfc,%al ; mov %al,0x14(%edx)
+    a1c21   movzbl 0x10(%ecx),%eax
+    a1c25   andb   $0xfe,0x15(%edx)
+    a1c2b   and    $0x4,%al ; mov %al,0x14(%edx)
+
+The second store covers the first for every input, so the first is dead -- and
+GCC 3.4.2 at -O3 kept it anyway, because the load of `params + 0x10` sits
+between them and the two blocks may alias. The reconstruction keeps it for
+exactly the same reason: both pointers are `unsigned char *`, so no compiler
+may prove the load does not read what the first store wrote.
+
+**It is not separable and `t_v17fax.c` does not claim it is.** It is recorded
+here because a later reader will see a dead statement and want to delete it,
+and deleting it stops the source being the object's.
+
+### F8857. `FPM_AGC_agc` takes FOUR arguments and returns a value at the V.17 call sites, and our header says three and `void`
+
+*2026-08-31.* `include/dsplib/fpm_agc.h` declares `void FPM_AGC_agc(struct
+fpm_agc *, short *, unsigned short)`, derived from the function's own body.
+Both V.17 callers disagree with it, in two ways:
+
+* **Four arguments.** `DemodDataV17` writes `0xc(%esp)` with the constant 1
+  before the call (a50b1) and `DataCarrierDetectV17` does the same (a539f).
+  The callee never reads `0x5c(%esp)`, so the fourth argument is ignored and
+  the disagreement is invisible at runtime.
+* **A return value.** `DemodDataV17` stores `%eax` immediately after the call
+  (a50d5) and later ANDs it with three separate fields of the receiver state,
+  writing the three results to +0x128, +0x1b4 and +0x1bc.
+
+`FPM_AGC_agc` has a SINGLE exit, and the last thing it does before the epilogue
+is `movzbl %dl,%eax ; mov %eax,0x1c(%edi)` -- so `%eax` on return is always the
+value it just stored in `agc->signal`. The V.17 author's declaration therefore
+returned that flag, and any reconstruction of `DemodDataV17` can read
+`agc->signal` after the call instead: that is not an approximation of the
+object but the same value by construction, for as long as `FPM_AGC_agc` has
+one exit.
+
+The pair is worth separating from an ordinary signature disagreement: the
+object's own `.text` contains a call site whose prototype cannot have matched
+the header this tree derived from the callee, which is a reminder that a
+reconstruction's headers are per-callee and the original's were per-caller.
+
+### F8858. `tools/bannercheck.py` reads eleven banners in `src/fax/v17.c` and agrees with all eleven -- and it skipped one silently until the banner was reformatted
+
+*2026-08-31.* **THIS ENTRY PREVIOUSLY SAID THE TOOL DOES NOT EXIST. THAT WAS
+WRONG, AND F8860 IS WHY.** It was written from a worktree branched 106 commits
+behind `master`, where `tools/bannercheck.py` had not yet landed. It is on
+`master`, it works, and it has now been run:
+
+    $ python3 tools/bannercheck.py src/fax/v17.c
+    bannercheck.py: 11 banner(s) read from ref/slmodemd/dsplibs.o
+      11 agree, 0 disagree, 0 name no symbol the object defines
+      0 further `.text 0x...` mention(s) skipped as prose
+
+**What is worth keeping is what the first run said, which was TEN.** The file
+has eleven symbols. `DataCarrierDetectV17` is the longest name in the batch and
+its banner had been wrapped onto two lines to keep the column alignment --
+
+     *   DataCarrierDetectV17
+     *                     .text 0x0a52e0  625
+
+-- and the tool's line-oriented reader saw a name with no address on one line
+and an address with no name on the next, matched neither, and reported a clean
+run over the other ten. Exit 0, no warning, and the one banner nobody had
+checked by hand was the one for the largest function in the batch.
+
+That is F134's shape exactly: the denominator was printed and it was the only
+thing that said anything was wrong. Widening the columns so the entry fits on
+one line took the count to eleven and all eleven agree. Anyone adding a long
+symbol to a banner block should read the COUNT the tool prints, not its
+verdict.
+
+The `0 further mention(s) skipped as prose` line is the same defence from the
+other side, and it is worth knowing it exists: the tool distinguishes a banner
+from an address quoted in a comment, and says how many it set aside.
+
+"Checked by hand against `nm -S`" is what the previous version of this entry
+claimed instead, and it was true -- the eleven addresses and sizes were right.
+It is also exactly the practice that has been wrong before: the brief this
+batch came with notes that "seven of nine addresses in one past brief were
+wrong while every size was right".
+
+### F8859. Ten of the twelve V.17 fax primitives are written, and every non-separable claim in the test is declared as one
+
+*2026-08-31.* `src/fax/v17.c`, `include/dsplib/v17fax.h` and
+`test/unit/t_v17fax.c` land ten symbols, 1,038 bytes: `V17RX_modem` (127),
+`SeedScramblerV17` (15), `SetEncoderV17` (90), `V17TX_status` (106),
+`CarrierDetectV17` (121), `QualityDetectV17` (266), `EpochDetectV17` (22),
+`GetSNRV17` (23), `StoreCoefV17` (81) and `Restore_rateV17` (37). 41,819
+differential checks, `make one` green, NOT period-gated.
+
+Three of the readings the test names CANNOT be separated, and saying so is the
+point of the entry -- a separating count of zero that nobody declared reads as
+a defect in the test, and one that is quietly dropped reads as a claim nobody
+made:
+
+1. **`SetEncoderV17`'s `movswl`** -- F8852.
+2. **`V17TX_status`'s dead store** -- F8856.
+3. **`V17RX_modem`'s `short` running total.** The object narrows it with `cwtl`
+   on every iteration, but the only place it escapes is a 16-bit store through
+   `count`, and truncating modulo 65536 at every step gives the same value as
+   truncating once at the end. The 2,000-sample trial drives the total past
+   32767 so the corner is REACHED, and that is counted; it is just not
+   separating.
+
+Everything else is: 33 separating counts are asserted non-zero, including the
+smoothing weights over 60 consecutive blocks (F8790's rule), the block
+counter's signedness at 0x8000 (F8855), the 32-bit read of the AGC signal
+(F8853), and both sides' diagnostic transcripts compared as output at
+`dsplibs_debug_level` 2.
+
+### F8860. An agent worktree can be branched from a commit other than the one its brief was measured at, and both symptoms read as facts about the PROJECT
+
+*2026-08-31.* **THIS ENTRY PREVIOUSLY SAID "SEVEN OF AN AGENT BRIEF'S FINDING
+CITATIONS RESOLVE TO NOTHING". THAT WAS WRONG.** All seven exist on `master`.
+What was true is narrower and more useful, and it is worth the number:
+
+**The brief said its readiness was measured at `6ee3e861`. The worktree was
+branched from `c1ca61af`, 106 commits earlier.**
+
+    $ git merge-base worktree-agent-a1ace38f7fa845717 master
+    c1ca61afe8edfd5e8e8361fc745c83448ba31aa6
+    $ git rev-list --count HEAD..master
+    106
+
+Two of the four agents running in parallel that day had the same stale base.
+
+**THE TWO SYMPTOMS BOTH LIE IN THE SAME DIRECTION.** Neither of them says
+"your tree is old"; both say "the project is missing something":
+
+* **A citation that resolves to nothing.** `F8492`, `F8493`, `F8587`, `F8607`,
+  `F8790` and two deviation numbers were all absent, and `tools/refcheck.py`
+  reported them DANGLING once they were written into source comments -- which
+  turned `make refs` red and is how any of this surfaced. Every one of them is
+  present on `master`. The natural reading of a dangling citation is that the
+  brief invented it; the correct reading was that the tree could not see it.
+* **A file that does not exist.** `tools/bannercheck.py`,
+  `include/dsplib/v22status.h` and `include/dsplib/v32fpstat.h` were all
+  absent. The first was written up as a missing tool (F8858, now corrected).
+  The other two were the naming evidence for `V17TX_status`'s block, and
+  declining to name from a header that could not be read was the right call
+  under the information available -- but the information was wrong, and the
+  right call cost a header full of `short_0a`-shaped names that a merge then
+  had to redo.
+
+**WHAT TO CHECK, AND IT IS TWO COMMANDS.** A brief that names the commit its
+readiness was measured at is stating a testable fact:
+
+    git merge-base HEAD master        # must be master's head, or the named commit
+    git rev-list --count HEAD..master # must be 0, or explained
+
+Run them BEFORE scoping, not after committing. Everything downstream of a
+stale base is suspect in the same direction: the scope check reads
+already-written symbols as unwritten, which is how a past wave landed merged
+duplicates and failed 293 of 293 binaries at link; `make one` is green against
+a link line and a harness that have both moved; and a "nothing else defines
+this" grep is a statement about a tree nobody will merge into.
+
+**Recovery is a merge, not a rebase, and the conflicts are worth naming.** The
+only two here were `docs/findings.md` and `docs/deviations.md`, and both were
+pure append-versus-append at the end of the file: 382 lines of ours against
+6,364 of master's, and 71 against 1,120. Both sides were kept by hand.
+`git checkout --ours` on either would have discarded master's entire block
+while leaving a file that compiles and a suite that passes -- F700, and these
+two files are the worst possible place for it, because nothing downstream reads
+them. After the merge: `refcheck.py` clean at 8,400 references with no
+duplicate heading, `bannercheck.py` eleven of eleven, and the suite green at
+51,462 checks against a tree 106 commits newer than the one it was written on.
+
+**ONE SMALL THING SURVIVES FROM THE WRONG VERSION AND IS WORTH KEEPING.**
+`refcheck.py`'s `DEV_REF` is `\bD(\d+[a-z]?)\b`, so a finding that MENTIONS a
+deviation number it is arguing does not exist is itself red. The two numbers
+in the list above are spelled with a hyphen for that reason. It stopped being
+necessary the moment the merge made them resolve, and it is recorded because
+the next person writing about a missing number will hit it.
+
+**And the rules the seven citations carried are all sound**, which is why
+nothing in this batch had to be redone on their account: multi-block fixtures
+in DSP code (F8790), planting every field a callee uses as a SUBSCRIPT and not
+only every field it dereferences (F8587), sizing test destinations from the
+input count (F8607), and the claim that every callee this batch reaches is
+already written (F8492, F8493), which was independently re-checked here by
+disassembling every call site.
+
+### F8861. Eleven of the twelve V.17 fax primitives are written; `DemodDataV17` is declined and the reason is the fixture, not the function
+
+*2026-08-31.* `DataCarrierDetectV17` (625 bytes) joins the ten of F8859, taking
+`src/fax/v17.c` to 1,663 bytes over eleven symbols. 51,462 differential checks
+and 54 separating trials, `make one` green, NOT period-gated.
+
+**Two of its readings need an EXACT boundary and no sweep of tones reaches
+either.** The off-band counter advances by the block length from wherever it
+is, so the values it can take step straight over 0x4ff and `>` and `>=` differ
+on that one value alone; the test seeds the counter at `0x4ff - count` on
+blocks whose tone the detector reports ABSENT, which puts the post-update value
+exactly on it. The energy watchdog is worse: `rms < thr` and `rms <= thr`
+differ only at equality, and the rounded threshold differs from the plain one
+only when the multiply carries. So the block is generated first, its RMS is
+MEASURED with the blob's own `FPM_rms`, and the reference is then SOLVED for --
+the `ref` whose `(ref * 0x32fe) >> 15` is exactly that RMS and whose rounded
+form is one higher. Two of twelve attempts have no solution, which is
+arithmetic and not a fault (the threshold tops out at 13053), and they are
+counted and reported rather than asserted.
+
+**The ritual was run, on this function.** Changing the one `>` to `>=` in
+`src/fax/v17.c` turns 63 of 4,114 checks red; restoring it turns them green
+again. F134's argument, and it is what says the boundary chase actually
+lands.
+
+**`V17TX_status`'s block is now `struct v17_status`, and that is a merge
+dividend rather than a re-derivation.** It was written with raw offsets and a
+prose note saying the naming evidence could not be read; after the merge of
+F8860 it could. `v22status.h` and `v32fpstat.h` model the same 0x1c-byte
+layout for their own datapumps, and the V.17 write set matches it field for
+field INCLUDING what it skips -- +0x0e and +0x16, and +0x16 is the one offset
+`v32_status` itself annotates "not written". The bit-rate reading at +0x02 was
+then confirmed from the object directly rather than borrowed: `V21TX_status`
+(0xa2c00) stores the literal `$0x12c`, 300, into it, and V.21 is a 300 bit/s
+modem.
+
+That makes FOUR differently-named types for one block. No gate fires, because
+"one type, one home" is about a type having one definition and these are four
+types -- but they are one thing. The fields here are deliberately spelled the
+way `v22_status` and `v32_status` already spell them wherever those two agree,
+so a later unification is a rename; where they disagree the neutral offset name
+is kept, because V.17 writes a constant zero to every one of those and has no
+evidence of its own to break the tie. `t_v17fax.c` asserts `sizeof` and two
+offsets so a struct that drifted would fail rather than silently move every
+access.
+
+**`DemodDataV17` (415 bytes) is LEFT OUT.** The function itself is a wrapper --
+AGC, an optional tone-kill and tone-detect front end, then resampler,
+symbol recoverer and equaliser in series, with three flag words ANDed and
+stored between the second and third. Reading it took one pass. What it needs is
+a fixture, and the fixture is the problem:
+
+* it hands FOUR live FPM objects to their modules from inside the receiver
+  state -- `fpm_mrf` at +0x98, `fpm_agc` at +0xb4, `fpm_sre` at +0xe0 and
+  `fpm_fse` at +0x170 -- plus a `fpm_tone` and a `fpm_mtd` reached by pointer
+  from the control block, so SIX modules must be initialised before a single
+  call can be made;
+* the object's own V.17 configurations are not packaged. `AGCv17_CFG` exists in
+  `.rodata` and is used by `t_v17fax.c` already, but there is no `MRFv17_CFG`,
+  `SREv17_CFG` or `FSEv17_CFG`: `V17RX_create` builds those on the stack from
+  `MRFv17_COFFS`, `FSEv17_ICOFF`, `FSEv17_QCOFF`, `CRRv17_CLK`,
+  `CRRv17_PLL_K1`, `CRRv17_PLL_K2` and `FSEv17_decision`, and `V17RX_create` is
+  3,201 bytes of unwritten code. Inventing the scalar fields those configs need
+  -- `taps`, `interp`, `block`, `clk_mod`, `decimate` -- is exactly F8587's
+  hazard, because a wrong `taps` is a SUBSCRIPT and a blob-against-blob dry run
+  cannot catch an unplanted one: both sides read the same wild index and
+  agree.
+
+**The way in is `test/unit/t_v32demod.c`, and it is a way in rather than a
+worked answer.** It builds the same four objects for V.32 from
+`ref_MRFv32_CFG`, `ref_SREv32_CFG`, `ref_FSEv32_CFG` and `ref_AGCv32_CFG`,
+which ARE packaged structs in the object, so borrowing those makes every
+subscript known-good and costs a differential test nothing -- both sides run
+the same configuration over the same samples, and what is compared is the V.17
+code around it. That is the shape the next attempt should take, and it should
+say in its own comments that the configuration is V.32's and why that is
+sound.
+
+Two further things the next attempt already has, from this one:
+
+* **the return-value and fourth-argument disagreements with `FPM_AGC_agc`**,
+  F8857, and D1031, which records the fourth argument and applies to
+  `DemodDataV17` unchanged when it lands; and
+* **the offsets**, all of them, in `v17fax.h` -- `V17RXC_MTD`, `V17RXC_TONE`,
+  `V17RXC_SHORT_0018`, `V17RXC_SCRATCH`, `V17RXS_MRF`, `V17RXS_AGC`,
+  `V17RXS_SRE`, `V17RXS_FSE`, `V17RXS_BUF_MRF`, `V17RXS_BUF_SRE` and the four
+  int flags -- with the tiling of F8854 behind the four object addresses.
+
+Sizing the two intermediate buffers from the INPUT COUNT rather than from the
+buffer is F8607's rule, and is the other thing that will bite.
 ## F8862. The V.27ter receiver block is TILED by four FPM modules, and that is what makes its offsets readable rather than guessed
 
 `V27RX_create` is 2,210 bytes and is not reconstructed, so by `v17data.h`'s

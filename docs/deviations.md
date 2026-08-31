@@ -10632,3 +10632,107 @@ identically to the blob over every input either can be given, but only inputs
 that need a phase table the author's own constructor never installs reach
 them. Whether they guard a configuration that existed in some other product
 using the same source, or are simply belt and braces, the object does not say.
+## D1031 -- both V.17 callers pass `FPM_AGC_agc` a FOURTH argument, and we pass three  `equivalent`
+
+*2026-08-31.* `DataCarrierDetectV17` at a539f and `DemodDataV17` at a50b1 both
+write the constant 1 into `0xc(%esp)` before their `FPM_AGC_agc` call, on top
+of the three arguments `include/dsplib/fpm_agc.h` declares. With
+`-maccumulate-outgoing-args` that slot is a fourth argument and not a spill:
+nothing else reads it, and the same slot is overwritten with a different value
+before the next call in each function.
+
+`FPM_AGC_agc` never reads it. Its frame is four pushes and `sub $0x3c`, so the
+arguments are at `0x50`, `0x54` and `0x58`; a fourth would be at `0x5c`, and no
+instruction in the function touches it. The disagreement is therefore invisible
+at runtime, and cdecl means the extra push costs the callee nothing.
+
+`src/fax/v17.c` passes three, because the prototype has three and adding a
+fourth would mean changing a header this batch does not own and that is right
+about the callee. Only `DataCarrierDetectV17` is reconstructed here;
+`DemodDataV17` is declined for the reasons in F8861, and this entry will apply
+to it unchanged when it lands. Finding F8857.
+
+**Status:** equivalent -- the argument is written by the object and read by
+nothing. Recorded so that a later pass which does reconcile `fpm_agc.h` with
+its callers knows the fourth argument is real, is always 1, and is dead.
+
+## D1032 🐛 `V17TX_status` ASSIGNS its caller's flag byte and destroys every bit already in it, having just masked two of them out
+
+*2026-08-31.* Four statements of the object write two flag bytes of the status
+block, and the first is dead:
+
+    a1c18   movzbl 0x14(%edx),%eax ; and $0xfc,%al ; mov %al,0x14(%edx)
+    a1c21   movzbl 0x10(%ecx),%eax
+    a1c25   andb   $0xfe,0x15(%edx)
+    a1c2b   and    $0x4,%al ; mov %al,0x14(%edx)
+
+`+0x15` is a genuine read-modify-write: `andb $0xfe` clears bit 0 and leaves
+bits 1..7 alone. `+0x14` is not. The last store is a plain `mov %al` of
+`params[0x10] & 0x04`, so it overwrites the whole byte -- and the `and $0xfc`
+that preceded it, which had carefully preserved bits 2..7 while clearing bits
+0 and 1, is thrown away along with them.
+
+**Why that reads as a defect rather than as a choice.** The two bytes are
+written four instructions apart, by what is plainly one piece of code, and they
+disagree about what they are doing: one preserves the caller's bits and the
+other does not. The dead `and $0xfc` is the evidence that the author INTENDED
+to preserve them at +0x14 too -- a mask that clears exactly two bits is not
+something you write on the way to overwriting all eight. The natural reading is
+that the last statement should have been `|=` and is `=`.
+
+**Reproduced**, because the reconstruction's job is to behave identically, and
+the dead store is reproduced with it: `src/fax/v17.c` writes the same three
+statements in the same order, which GCC keeps for the same aliasing reason
+(F8856).
+
+**Measured, not assumed.** `t_v17fax.c` hands both flag bytes in as `0xff`,
+which is what makes "assigned" and "merged" different answers -- with a
+pseudorandom byte the two agree whenever the bits happen to be clear -- and
+asserts the separating count for each of the two readings:
+
+    merging the status flag byte separates       (assignment at +0x14)
+    clearing status +0x15 outright separates     (the mask at +0x15 is live)
+
+**Status:** reproduced and asserted. What is NOT established is the harm: no
+caller of `V17TX_status` is reconstructed, so whether anything downstream reads
+bits 2..7 of that byte is unknown, and this entry claims only that they are
+destroyed and that the object's own instructions say that was not the plan.
+
+**IT IS FOUR FUNCTIONS, NOT ONE, AND THAT IS MEASURED HERE.** A parallel
+reconstruction pass reported the identical shape in `V21TX_status` and a
+DIFFERENT one in `V27TX_status`, said to OR its bit in and keep the rest. The
+first half is right and the second is not; both were checked against
+`tools/dis.py` rather than taken:
+
+* `V21TX_status` 0xa2c26 and `V29TX_status` 0xa5078 are `V17TX_status`
+  instruction for instruction -- `movzbl`, `and $0xfc`, `mov %al`, then the
+  `andb $0xfe` on +0x15 and the plain `mov %al` of `p[0x10] & 4`.
+* `V27TX_status` 0xa3f19 LOOKS like a merge and is not:
+
+        a3f19  movzbl 0x14(%ecx),%eax   ; the caller's byte
+        a3f1d  or     $0x1,%al
+        a3f1f  mov    %al,%dl
+        a3f21  and    $0xfd,%dl
+        a3f24  and    $0x1,%al          ; <-- everything else is gone
+        a3f26  mov    %dl,0x14(%ecx)    ; and this store is dead too
+        a3f29  movzbl 0x10(%ebx),%edx
+        a3f2d  andb   $0xfe,0x15(%ecx)
+        a3f31  and    $0x4,%dl
+        a3f34  or     %dl,%al
+        a3f36  mov    %al,0x14(%ecx)    ; = 1 | (p[0x10] & 4)
+
+  `and $0x1` is applied to `caller | 1`, so `%al` is the constant 1 whatever
+  the caller had, and the final store assigns `1 | (p[0x10] & 4)`. Bits 2..7
+  are destroyed exactly as in the other three, and V.27 carries a SECOND dead
+  store on top -- the `mov %dl` at a3f26 -- which the intervening load of
+  `p[0x10]` keeps alive for the same aliasing reason.
+
+So all four members of the family assign, all four have at least one dead
+read-modify-write in front of the assignment, and V.27's `or $0x1` is more
+evidence for the reading above rather than a counterexample to it: it is a bit
+the author wanted SET, written in the merge idiom, in a statement that then
+throws the merge away.
+
+None of the other three is in this batch and none is reconstructed, so this is
+corroboration for the shape and a lead for whoever takes them -- not a claim
+about their behaviour, which only their own differential tests can settle.
