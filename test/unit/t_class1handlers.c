@@ -330,6 +330,55 @@ run_data_output(void)
 	return diff_end();
 }
 
+/*
+ * D1055's limit is on the OUTPUT INDEX, so nothing under 2,048 elements can
+ * reach it.  This case drives it deliberately: 2,040 literal bytes then
+ * DLE ETX, so the padding starts at 2,040, stores eight elements and then
+ * stops -- and the destination is sized for the 2,049 a WRONG limit would
+ * write, so an off-by-one is a compared difference rather than memory
+ * corruption.
+ *
+ * It exists because the injection ritual found `out > 0x7ff` -> `out > 0x800`
+ * NOT CAUGHT by the small cases.  See F8940.
+ */
+#define BIG_IN		2042
+#define BIG_OUT		(2048 + 20 + GUARD)
+
+static int
+run_data_input_limit(void)
+{
+	static unsigned char src[BIG_IN];
+	static unsigned short dst_a[BIG_OUT], dst_b[BIG_OUT];
+	int i, ca, cb, ra, rb;
+
+	diff_begin("_handle_data_input at the padding limit (D1055)");
+	for (i = 0; i < BIG_IN - 2; i++)
+		src[i] = (unsigned char)(0x20 + (i % 0x50));	/* no DLE */
+	src[BIG_IN - 2] = CLASS1_DLE;
+	src[BIG_IN - 1] = CLASS1_ETX;
+
+	ctx_plant();
+	ctx_a.dle_seen = ctx_b.dle_seen = 0;
+	ctx_a.data_input_closed = ctx_b.data_input_closed = 0;
+	memset(dst_a, 0x5a, sizeof(dst_a));
+	memcpy(dst_b, dst_a, sizeof(dst_a));
+	ca = cb = BIG_IN;
+
+	ra = ref__handle_data_input(&ctx_a, src, dst_a, &ca);
+	rb = _handle_data_input(&ctx_b, src, dst_b, &cb);
+
+	diff_eq_int("limit: return (%ld)", rb, ra, 0);
+	diff_eq_int("limit: count (%ld)", (long)cb, (long)ca, 0);
+	diff_eq_int("limit: dst and guard (%ld)",
+		    memcmp(dst_a, dst_b, sizeof(dst_a)), 0, 0);
+	ctx_compare("limit", 0);
+
+	/* the guard fired, and the REFERENCE is what says so */
+	diff_eq_int("limit: the reference stopped at 2048 (%ld)", (long)ca,
+		    2048, (long)ca);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -337,6 +386,7 @@ main(void)
 
 	rc |= run_state_init();
 	rc |= run_data_input();
+	rc |= run_data_input_limit();
 	rc |= run_hdlc_input();
 	rc |= run_data_output();
 	return rc;

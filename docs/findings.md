@@ -101416,3 +101416,64 @@ Then the ordinary DLE stuffing: a recovered 0x10 is written twice, and the
 `terminate` argument appends DLE ETX. So the destination holds up to
 `2 * count + 2` bytes, which `class1tx.h` states because sizing it from
 `count` is F8607/D956's defect.
+
+## F8939. The byte counts in this pass's first commit message are wrong, and the right ones are here
+
+`ea2704af`'s message says "1,177 blob bytes" for the six symbols it writes.
+The true total is **712**:
+
+    FIFO_read              176      faxvmi_gen_fcs16       108
+    FIFO_write             152      faxvmi_byte_reverse     93
+    FIFO_delete             32      faxvmi_frame_reverse   151
+
+`1023980a`'s 1,306 is right (3 + 72 + 64 + 274 + 79 + 321 + 238 + 255), so the
+pass's total over fourteen symbols is **2,018 bytes**, not 2,483.
+
+Recorded rather than rewritten: the commit is already on the branch and
+amending it would rewrite a hash another session may have read. This is
+F6100's rule applied to a commit message -- a stale count with no gate behind
+it is a defect, and the fix is to correct it where it will be read.
+
+**A count in a commit message is not checked by anything.** `bannercheck.py`
+checks the per-symbol banners in `src/`, which were right; nothing sums them.
+
+## F8940. The injection ritual over the Class 1 handlers found TWO real gaps, and both are now closed
+
+Sixteen hand-injected defects over `src/fax/class1.c` and
+`src/fax/class1tx.c`, each built and run against the blob. Fourteen were
+caught on the first pass. The two that were not are the interesting ones,
+because neither was an equivalent mutant:
+
+- **`ctx->energy > 100` -> `>= 100`.** The two spellings differ on exactly
+  one input -- an energy of 100 -- and the fixture's blocks were a loud ramp
+  and silence, so nothing landed on it. Closed by SEARCHING for the input
+  rather than computing it: `FPM_rms` is already reconstructed and tested, so
+  the test sweeps a constant amplitude until its RMS is 100 and then drives
+  that block differentially. What the search produced is checked against the
+  REFERENCE's own `energy` afterwards, so a search that found the wrong block
+  fails a denominator instead of testing nothing.
+- **`out > 0x7ff` -> `out > 0x800`.** D1055's padding limit is on the OUTPUT
+  INDEX, so no input under 2,048 elements can reach it and every case in the
+  fixture was 64 bytes. Closed with one deliberate case: 2,040 literal bytes
+  then DLE ETX, a destination sized for the 2,049 a wrong limit would write,
+  and an assertion that the reference stopped at 2,048.
+
+Both mutants are caught now, and so is `>=` in the other direction.
+
+**THE LESSON IS ABOUT WHAT A RANDOM FIXTURE CANNOT REACH.** Both gaps are
+boundary values that no amount of random or shaped input finds by accident:
+one is a single point in a 65,536-wide range, the other needs an input
+thirty-two times larger than anything the fixture was built for. A coverage
+counter would have reported both arms as covered, because both arms DID run --
+just never at the boundary. Only the mutation told the difference.
+
+**AND THE RITUAL'S OWN COST HAD TO BE FIXED FIRST.** Driving it through
+`make one` took about ten minutes per mutant on a box with four other agents
+building: the wall clock was dominated by the `refs`, `banners`, `offsets` and
+`mutsnap` gate, which re-runs in full for every mutant and says nothing about
+it. `make build/test/<name>` followed by running the binary is the same
+verdict in well under a minute. Two runs were abandoned mid-flight before this
+was measured; that is why the shape is written down.
+
+Findings F8933 records the first batch's ten (nine caught, one provably
+equivalent) and the timestamp trap that made its closing check lie.

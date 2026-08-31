@@ -34,6 +34,7 @@
 #include "harness.h"
 #include "dsplib/class1.h"
 #include "dsplib/debug.h"
+#include "dsplib/fpm.h"
 
 extern unsigned int ref_dsplibs_debug_level;
 
@@ -266,6 +267,63 @@ run_recv_silence(void)
 	return diff_end();
 }
 
+/*
+ * THE THRESHOLD IS `> 100`, AND ONLY AN ENERGY OF EXACTLY 100 SEPARATES THAT
+ * FROM `>= 100`.  The random and shaped blocks above never land on it, so the
+ * injection ritual reported `>` -> `>=` NOT CAUGHT -- a real hole, not an
+ * equivalent mutant, because the two spellings send an exactly-100 block down
+ * different arms.  See F8940.
+ *
+ * The amplitude is FOUND rather than computed: `FPM_rms` is already
+ * reconstructed and tested, so it is used to search for a constant block
+ * whose RMS is the threshold, and the case is then run differentially like
+ * any other.  What the search produced is checked against the REFERENCE's own
+ * `energy` afterwards, so a search that found the wrong block fails the
+ * denominator instead of quietly testing nothing.
+ */
+static int
+run_recv_silence_exact(void)
+{
+	int v, found = -1;
+	unsigned i;
+	long on_threshold = 0;
+
+	diff_begin("_recieve_silence_state on an energy of exactly 100");
+
+	for (v = 1; v < 20000 && found < 0; v++) {
+		for (i = 0; i < 160; i++)
+			rx_b[i] = (short)v;
+		if (FPM_rms(rx_b, 160) == CLASS1_SILENCE_THRESHOLD)
+			found = v;
+	}
+	diff_eq_int("a constant block of RMS 100 was found (%ld)", found > 0, 1,
+		    (long)found);
+	if (found <= 0)
+		return diff_end();
+
+	for (i = 0; i < 8; i++) {
+		int cd = (int)(i % 4) + 1;
+		int ra, rb;
+
+		plant(160, cd, (unsigned int)(i % 3), 0);
+		for (v = 0; v < 160; v++) {
+			rx_a[v] = (short)found;
+			rx_b[v] = (short)found;
+		}
+		ra = ref__recieve_silence_state(&ctx_a, rx_a, tx_a, 0, 0,
+						&rxc_a, &txc_a, 0, &w8_a);
+		rb = _recieve_silence_state(&ctx_b, rx_b, tx_b, 0, 0, &rxc_b,
+					    &txc_b, 0, &w8_b);
+		diff_eq_int("exact-threshold return (%ld)", rb, ra, (long)i);
+		compare("exact-threshold", (long)i);
+		if (ctx_a.energy == CLASS1_SILENCE_THRESHOLD)
+			on_threshold++;
+	}
+	diff_eq_int("the reference measured exactly 100 (%ld)",
+		    on_threshold, 8, on_threshold);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -274,5 +332,6 @@ main(void)
 	rc |= run_idle();
 	rc |= run_send_silence();
 	rc |= run_recv_silence();
+	rc |= run_recv_silence_exact();
 	return rc;
 }
