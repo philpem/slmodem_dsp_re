@@ -97041,3 +97041,651 @@ including the new demangling path: a wrong address on a C++ banner
 `retrainDetectorXYZ` reports ABSENT. Each restored to 322 agree / 0 / 0. The
 `banners` target itself was then injected against and exits 2, so the GATE
 fails and not merely the tool. (2026-08-30)
+## F8640. `RATEv32` settles v32seq.h's one open inference: rate index 0 is 4800, in the author's own bytes
+
+`v32seq.h` derives the V.32bis rate index -> line rate correspondence from
+`V32FP_recreate`'s four-way ladder, which tests 0x3840, 0x2ee0, 0x2580 and
+0x1c20 and falls through to index 0 for anything else. That gives indices
+1 to 5 and leaves index 0 as "not 14400, 12000, 9600 or 7200"; the header
+labelled it 4800 from the Recommendation and said so:
+
+> INDEX 0 IS THE ONE INFERENCE HERE, and it is from the Recommendation rather
+> than the object [...] Labelled rather than asserted.
+
+`RATEv32` asserts it. Twelve bytes at `.data:0x00775c`, file-local, six
+shorts, indexed at 84986 and 84996 in `V32FP_status`:
+
+```
+    0   4800     3    7200
+    1   9600     4   12000
+    2   9600     5   14400
+```
+
+-- which is v32seq.h's ladder exactly, 9600 twice for the non-trellis and
+trellis variants at 1 and 2, and **4800 at index 0**. The inference is now a
+measurement.
+
+`SnrToRetrainTable`, twelve bytes at `.data:0x007750` and read once at 84ab9,
+is indexed the same way and corroborates the ordering independently: 9, 13,
+13, 11, 20, 24. The values ascend with the LINE RATE and not with the index --
+7200's 11 sits between 4800's 9 and 9600's 13 -- so a table indexed by
+anything else would have to be a coincidence in six places. What the numbers
+are is not established; they are compared against a value the receiver
+computes and 84ac0 branches on the comparison, which is consistent with a
+signal-to-noise floor per rate and is inference either way.
+
+Both are `.data` and neither is `const`, which is the object's placement and
+not a preference; `src/pump/v32/v32fptab.c` has them.
+
+## F8641. V.32's parameter block is V.22's with twenty more bytes, and the correspondence is what fixes eight field boundaries no test can see
+
+`V32_CFG` is 48 bytes at `.rodata:0x006da0` and it is a TEMPLATE, not a
+configuration read in place. Three `rep movsl` of exactly twelve dwords move
+it or something shaped like it:
+
+```
+    7e89e   V32FP_recreate   arg1 -> the object's first 48 bytes
+    7f5fd   V32FP_recreate   V32_CFG -> the same, when arg1 is null
+    7f714   V32FP_create     V32_CFG -> a stack local, patched, then passed
+                             to V32FP_recreate as that arg1
+```
+
+So the object's first 48 bytes ARE the parameter block, and the block is one
+struct because the object treats it as one movable thing.
+
+**THE V.22 CORRESPONDENCE IS THE EVIDENCE FOR THE BOUNDARIES.**
+`struct v22fp_params` (v22fp.h) is 28 bytes and `V22_CFG` is its template;
+`V22FP_create` copies it to the stack and patches six fields. Set the two
+side by side:
+
+```
+              V.22                     V.32
+    +0x00     mode      short          protocol  short   (0)
+    +0x02     bps       short  1200    bps       short   14400
+    +0x04     bps2      short  1200    bps2      short   14400
+    +0x06     r06       short          r06       short
+    +0x08     r08       int   120000   r08       int     120000
+    +0x0c     r0c       int    13014   r0c       int      17887
+    +0x10     flags     uint   0x65b   flags     uint     0x68b
+    +0x11     patched byte, bit 2      patched byte, bit 2
+    +0x14     r14       ushort   1     ec_near_delay ushort
+    +0x16     disconnect_thresh 103    r16       short
+    ...                                symlen_sel short  (V32_OBJ_SYMLEN_SEL)
+    +0x1c                              trellis   int     (V32_OBJ_TRELLIS)
+    +0x28                              disconnect_thresh short  103
+```
+
+Eleven of the twelve fields below +0x14 are at the same offset with the same
+width and, in three cases, the same VALUE -- 120000 at +0x08 in both, and the
+103 that `V32DiconnectThreshTable[3]` / `V22DiconnectThreshTable[3]`
+immediately overwrites with 150 on every path in both. The read-modify-write
+of the byte at +0x11 inside a 32-bit flag word at +0x10 is the same
+instruction sequence in the two `create` functions. This is one parameter
+block written twice by one author, and it is what makes the V.32 boundaries
+derived rather than fitted: no differential test can see a field boundary
+inside a block that is only ever copied wholesale.
+
+Four of the eighteen fields now carry names and the rest are `rNN`:
+`protocol` from the format string `V32FP_recreate` prints obj + 0x00 with
+(v32nsrng.c already cites it), `ec_near_delay` and `symlen_sel` and `trellis`
+from v32fpctl.h's own offset macros, and `disconnect_thresh` from the table
+it is loaded from -- which is V.22's argument at V.22's offset.
+
+**+0x16 AND +0x18 ARE TWO SELECTORS, NOT ONE.** Both index the same three
+two-entry length tables. `V32FP_recreate` uses +0x16 for all three (7f13d,
+7f150, 7f165). `V32FP_control` loads BOTH, computes
+`V32_SAMPLE_LEN[+0x18] / V32_SAMPLE_LEN[+0x16]`, multiplies hdx + 0x9c by the
+quotient, and then re-seeds hdx + 0x84, +0x9e and +0xa0 from +0x18 alone. So
++0x18 is the selector being moved TO and +0x16 the one in force; the second
+half of that is usage inference from the division and +0x16 is left unnamed
+on that ground.
+
+## F8642. `V32_CTL` is a control REQUEST and not a configuration, and `Control_Flag` is why the call happens one entry late
+
+`V32_CTL` is 32 bytes at `.rodata:0x007f20`. Neither of its two referrers
+reads a field out of it: `v32_data` (82919) and `V32FP_status` (84ad5) each
+copy all eight dwords to a stack local, OR a bit into the byte at +0x0d, and
+`v32_data` then hands `&local` to `V32FP_control` as its second argument.
+`V32FP_control` (0x84530) is the only reader of the fields.
+
+Widths are all forced, and the byte pair is the point of the object:
+
+```
+    ctl0 & 0x01  ->  fp + 0x1c = 1 / 0     84549
+    ctl0 & 0x02  ->  fp + 0x20             84558
+    ctl0 & 0x04  ->  fp + 0x24             84564
+    ctl0 & 0x08  ->  fp + 0x00 = 0 / 1     84571   INVERTED
+    ctl0 & 0x10  ->  fp + 0x0c             8457c   INVERTED
+    ctl0 & 0x20  ->  fp + 0x10             84588   INVERTED
+    ctl0 & 0x80  ->  obj + 0x11 bit 1      8459e   V32_OBJ_FLAGS
+    ctl1 & 0x04  ->  the rate arm, cleared with `andb $0xfb`   84669
+    ctl1 & 0x08  ->  the mode arm, cleared with `andb $0xf7`   84700
+```
+
+**IT IS TWO BYTES AND NOT ONE `unsigned int`.** Every access on both sides is
+byte-wide -- `movzbl 0xc(%edi)`, `testb $0x8,0xd(%edi)`, `orb $0x8,0x2d(%esp)`
+-- and the two arms CLEAR their own bit in the caller's block, which is a
+request being consumed. The template's 0x83 / 0x01 would sit at +0x0c as the
+single int 387 on a little-endian host, so a merged reading passes a value
+comparison and loses the declaration; `t_v32fptab.c` asserts the two bytes
+separately for that reason.
+
+The bits are NOT named. What is established is each one's DESTINATION, and
+fp + 0x00 .. fp + 0x24 is itself unnamed -- ten `int`s that `V32FP_recreate`
+sets to 1 wholesale (7e8e4 .. 7e91e) and this table's bits then set
+individually. A destination offset dressed as a bit name is exactly what
+CLAUDE.md says not to write, so the table above lives in the source comment
+and the constants do not exist yet.
+
+`Control_Flag` is one `.bss` int, GLOBAL, and `v32_data` is its only referrer.
+It is tested at the TOP of `v32_data` (827ce) and set at 82a4e on one arm and
+cleared at 82a91 on the other, with the `V32FP_control` call between the test
+and the clear -- so a request built on one entry is issued on the NEXT one.
+That is a static and not a field of the instance, so two V.32 datapumps in
+one process share it; recorded here rather than as a deviation, because
+nothing in this tree instantiates two.
+
+## F8643. The three V.32 length tables are one family of twelve contiguous bytes, and one selector picks a column in all three
+
+```
+    V32_TURNAROUND_DLY  .data 0x0076c0   { 64, 360 }
+    V32_SYMBOL_LEN      .data 0x0076c4   { 12,  48 }
+    V32_SAMPLE_LEN      .data 0x0076c8   { 40, 160 }
+```
+
+Twelve contiguous bytes, all GLOBAL, all two entries, and the same selector
+indexes all three within twenty instructions of each other in
+`V32FP_recreate` (7f13d, 7f150, 7f165 against obj + 0x16) and again in
+`V32FP_control` (84611, 84624 against obj + 0x18). `V32_SYMBOL_LEN` was
+already written from the first of those sites; the other two are new here.
+
+The destinations are v32hdx.h's own: `V32_SYMBOL_LEN[sel]` reaches hdx + 0x84
+and hdx + 0x9e, `V32_SAMPLE_LEN[sel]` reaches hdx + 0xa0, and
+`V32_TURNAROUND_DLY[sel]` reaches hdx + 0x94 -- which v32fpctl.h describes as
+the budget `CalcTurnAroundDelay` spends against the three charges beside it.
+
+**WHAT THE TWO COLUMNS ARE IS NOT ESTABLISHED.** The ratios are 4:1 in
+samples, 4:1 in symbols and 45:8 in turnaround delay, so column 1 is not
+column 0 scaled by one factor and the selector is not a sample-rate switch
+alone. `t_v32fptab.c` asserts instead that no two of the three tables are
+equal at either index, which is what stops a source that swapped two of them
+from passing -- the failure mode a family of same-shaped tables indexed by
+one variable actually has.
+
+## F8650. `V32FP_recreate` takes three arguments and reads two; the third is dead in all 3733 bytes
+
+`V32FP_recreate` (.text 0x07e870) is the V.32 datapump's whole constructor,
+and its frame is `sub $0x18c,%esp` after four pushes, so its arguments are at
+`0x1a0`, `0x1a4` and `0x1a8` of `%esp`. **Nothing in the function touches
+`0x1a8`.** Both callers pass a third argument -- `V32FP_create` (0x7f7a4)
+hands its own second argument through and `V32FP_control` (0x84530) passes
+zero -- so the parameter exists, is moved as one dword by both writers, and is
+never read. It is declared `void *` on that evidence and nothing narrower; if
+a later reader types it, this is the site to correct.
+
+The other two are settled by use and by the two call sites:
+
+```
+    arg0   void *modem        NULL allocates the whole tree; otherwise it is
+                              re-initialised in place
+    arg1   const struct v32fp_params *   NULL means "use V32_CFG" (0x7f5fd)
+    return the instance, in %eax at 0x7f3ab -- `mov %ebp,%eax`
+```
+
+**THE `fresh` FLAG IS THE POINT OF THE FUNCTION.** The NULL-instance arm sets
+a local to 1 and everything else reads it: it is the third argument of all six
+`FPM_*_init` calls, `VTBv32_init`'s `alloc`, and the test that decides whether
+each of the three `FPM_TONE_create` calls is handed the existing tone object
+or a NULL that makes it allocate a new one. `fpm_pps.h`, `fpm_sre.h`,
+`fpm_ecc.h` and `fpm_fse.h` already name that parameter `fresh` and describe
+it as "the buffers do not exist yet"; this function is what supplies it, and
+one function therefore serves both the constructor and the reconfigure. That
+is exactly what `V32FP_control` needs, and it calls it as
+`V32FP_recreate(obj, obj, 0)` -- the instance as BOTH arguments, which works
+because the instance's first 48 bytes ARE the parameter block (F8641).
+
+## F8651. The parameter block's +0x24 is ONE field under six spellings, and this is the function that fills all six
+
+`obj + 0x24` is read once, at 0x7e8bc, kept in a stack slot for the whole
+function, and written into six configuration structures and nothing else:
+
+```
+    7eae4   fpm_pps_cfg  + 0x24   `aux`           -> FPM_PPS_init
+    7eb7e   fpm_mrf_cfg  + 0x0c   `aux`           -> FPM_MRF_init
+    7ebb0   fpm_ecc_cfg  + 0x14   `aux`           -> FPM_ECC_init
+    7ec91   fpm_sre_cfg  + 0x34   `pad34`/`pad36` -> FPM_SRE_init
+    7ed20   fpm_fse_cfg  + 0x34   `reserved34`    -> FPM_FSE_init
+    7f047   fpm_tone_cfg + 0x18   inside `r16[3]` -> FPM_TONE_create
+```
+
+Every one of those is a 32-bit slot at the tail of a configuration that the
+module owning it independently recorded as copied by init and read by nothing
+-- fpm_mrf.h's "copied wholesale by init and read by nothing. One dword,
+always zero", fpm_ecc.h's "unread by any of the three; a pointer only by
+analogy", fpm_fse.h's "zero in every instance". Six modules reached that
+conclusion separately; this function shows the six are one field with one
+source. In every configuration this tree has, the value is zero.
+
+**IT IS STILL NOT NAMED.** What the six slots are FOR is no more established
+than it was; what is established is that they are filled together, from one
+place, and that a datapump could distinguish itself to all six sub-objects
+through them. `v32fp.h` keeps `r24`.
+
+**AND TWO OF THE SIX HAVE NO MEMBER TO ASSIGN.** `fpm_sre_cfg` spells the
+slot as two shorts and `fpm_tone_cfg` spells it inside a three-element array,
+and renaming either is a change to a header that another datapump initialises
+POSITIONALLY -- `src/pump/v22/v22rxtab.c` initialises an `fpm_tone_cfg` as
+`53, { 0, 0, 0 }`. `src/pump/v32/v32fprecr.c` therefore writes those two
+through the slot's address with a four-byte `memcpy`, which is the object's
+single 32-bit store and no aliasing pun. The rename is owed and is recorded
+here rather than done from a pass that does not own v22.
+
+## F8652. fp + 0x5098 is a `struct v32_smc`: the RECEIVE symbol coder, from the same four-byte template as the transmit one
+
+`V32FP_recreate` writes the same seven fields at fp + 0x48 and at fp + 0x5098,
+in the same order, from one stack copy of `SMCv32_CFG`:
+
+```
+    +0x00  mode    = (fp->tx_rate_index != 0)     the template's low half,
+                                                  replaced on both
+    +0x02  pad02   = SMCv32_CFG's high half       the only surviving pair
+    +0x08  state[0] = 0, +0x0a state[1] = 0       a two-iteration loop
+    +0x06  quad    = 0
+    +0x10  f10     = 0     +0x0e  f0e = 0     +0x12  pad12 = 0
+    +0x04  shift   = 2 * (mode != 0)
+```
+
+Transmit at 0x7ea4f..0x7eaa9 and receive at 0x7ee9f..0x7eef6, instruction for
+instruction with a displacement of 0x5050. So v32fpctl.h's `V32FP_SHORT_5098`
+and `V32FP_SHORT_509C` are that object's `mode` and `shift`, and the receive
+side has a symbol coder of its own rather than two loose shorts.
+
+**THE LAYOUT CLOSES AROUND IT.** fp + 0x5020 is `struct v32_dec` (it is what
+`fpm_fse_cfg::owner` is pointed at, 0x7ed37) and 0x5098 - 0x5020 is 0x78;
+fp + 0x50b0 is the descrambler, 0x18 further on, one byte more than
+`sizeof(struct v32_smc)`. Both neighbours were already established.
+
+**AND THE WHOLE BLOCK IS A TILING WHOSE SIZES ALL CLOSE.** Six sub-object
+sizes measured by six other files land the next base of this function exactly:
+`fpm_pps` 0x38 from 0x60 reaches 0x98, `fpm_mrf` 0x1c from 0xc4 reaches 0xe0,
+`fpm_ecc` 0x68 from 0xe0 reaches 0x148, `fpm_sre` 0x90 from 0x148 reaches
+0x1d8, `fpm_agc` 0x2c from 0x1d8 reaches 0x204 and `fpm_fse` 0x4e18 from 0x204
+reaches 0x501c. Six independent `sizeof` readings, six exact joins, and the
+0x50dc this function asks `sysdep_malloc` for is four bytes past the last
+field it writes.
+
+## F8653. `VTBv32_init` is INLINED into `V32FP_recreate` in the object, and the pair is what proves they shared a translation unit
+
+0x7ee15..0x7ee9f is `VTBv32_init`'s complete body with no call: the survivor
+ring allocated when `fresh`, the 128-node clear, the four-armed rate switch
+writing `nsub`, `imap`, `qmap`, `bound`, `region`, `grid` and `mask`, then
+`shift = nsub` and the eight metrics cleared. `VTBv32_init` is a GLOBAL
+symbol at 0x7e700 of 355 bytes, so it ends at 0x7e863 -- **twelve bytes before
+`V32FP_recreate` starts**. GCC cannot inline across a translation unit, so
+the two were in one, and `-O3`'s `-finline-functions` took it.
+
+`src/pump/v32/v32fprecr.c` CALLS it. The behaviour is identical -- the
+inlined arms are `VTBv32_init`'s own, arm for arm and literal for literal --
+and our factoring differing from the object's is finding F605's case rather
+than a defect. It does mean a per-function byte comparison reads this
+function as short of code it deliberately does not emit; that is the
+per-function count measuring our factoring, which 605 says to read from the
+per-file rollup instead.
+
+## F8654. The half-duplex scratch bank is SEVEN words here and its two accessors bound it at FIVE
+
+`v32seq.h` derives `V32HDX_NREGS` 5 from `LoadReg`/`StoreReg`, which reject an
+index above 4 (`cmp $0x4,%dx` with an unsigned branch). `V32FP_recreate`
+clears hdx + 0x3c, +0x3e, +0x40, +0x42, +0x44, +0x46 and +0x48 -- **seven**
+words, seven separate `movw $0x0` in ascending order at 0x7f256..0x7f27a --
+and the next field either header names is `V32HDX_GEN_INDEX` at +0x4a.
+
+Nothing decides between "the array is seven and the accessors are stricter
+than the storage" and "the array is five and +0x46/+0x48 are two other
+fields", and the object writes the same instruction for all seven, so the
+constructor cannot tell them apart. Recorded rather than reconciled;
+`v32seq.h`'s 5 stands because it is the reading with a bound behind it.
+
+## F8655. The three `SDMv32` tables ARE referenced, and their consumer settles what `v32scram_tables.c` said could not be settled
+
+`src/pump/v32/v32scram_tables.c` carried this, in capitals:
+
+> ALL THREE ARE UNREFERENCED. `tools/relocscan.py --into SDMv32` resolves all
+> 10,514 R_386_32 relocations in the object and finds nothing pointing at any
+> of them
+
+and drew a conclusion from it -- "the element width is verifiable and the
+SHAPE is not" -- and left the tap mapping open with "the function that would
+settle it is not in the object". **All of that is retracted.**
+`V32FP_recreate` reads every one of them, in four relocations that were always
+there: `SDMv32_CFG` at 0x7e9a6 and 0x7e9b2, `SDMv32_GPC` at 0x7e9eb,
+`SDMv32_GPA` at 0x7eb5c.
+
+What the consumer settles:
+
+- **`SDMv32_CFG` is a three-word template for a `struct v32_sdm`'s first six
+  bytes** -- `group`, `tap1_pos`, `tap2_pos` in v32fpctl.h's names. It is
+  copied to a stack local as one dword plus one word, and then entries 0 and 1
+  are BOTH overwritten before the local is installed: entry 0 by the group
+  width (4 when the transmit rate index is non-zero, else 2) and entry 1 by
+  `SDMv32_GPC` or `SDMv32_GPA`. **Only the 23 at entry 2 reaches the object**,
+  and it is `tap2_pos`. So the 4 and the 5 in that table are dead, which is
+  why they read as a plausible group width and a plausible tap and could never
+  be checked against anything.
+- **`SDMv32_GPC` is the transmit first tap position and `SDMv32_GPA` the
+  receive one**, both indexed by the half-duplex mode, which this function
+  sets to 0, 1 or 2 -- so at least three of the four entries are reachable and
+  `short[4]` stands.
+- **The tap mapping is therefore `tap1 = GP?[mode] - group` and
+  `tap2 = 23 - group`.** The second tap is the register LENGTH in both
+  directions, which is the `x^-23` term V.32's two scrambling polynomials
+  share, and the first is the exponent that distinguishes them -- 5 for GPC
+  and 18 for GPA at mode 0, the other way round at mode 1. That is the
+  question `v32scram_tables.c` said the object could not answer.
+
+One stack local serves both directions: the group width and `tap2_pos` are
+shared and only entry 1 is rewritten between the transmit install (0x7ea0f)
+and the receive one (0x7eefc).
+
+**THE LESSON IS THE TOOL RUN, NOT THE TABLES.** A "no referrer anywhere in
+1.2 MB" claim is exactly the shape CLAUDE.md warns about -- a detector that
+prints nothing is indistinguishable from a detector that is broken -- and this
+one had a conclusion built on top of it in a source comment with no gate
+behind it. The relocations resolve; whatever produced that sentence did not.
+
+## F8656. `fpm_sre`'s four caller-supplied ppm parameters have a caller, and it is this one
+
+`fpm_sre.h` records, from `FPM_SRE_init`'s own offset set:
+
+> FOUR OF THESE ARE NEVER WRITTEN BY init -- `ppm_step`, `ppm_scale`,
+> `ppm_period` and `ppm_n_max` are read-only to both functions, so a caller
+> has to fill them and an all-zero state divides by zero in `ppm_n`
+
+`V32FP_recreate` fills exactly those four, immediately after `FPM_SRE_init`
+returns, and nothing else in the object writes any of them:
+
+```
+    7ecc3   sre + 0x7c   ppm_step   = 12
+    7ecca   sre + 0x8a   ppm_period = 9600
+    7ecf1   sre + 0x8c   ppm_n_max  = 0x68
+    7ed01   sre + 0x88   ppm_scale  = 1000000 / (cfg.clock_len * 9600)
+```
+
+`ppm_scale` is a signed `idiv` of the literal 1000000 by the STACK COPY of the
+configuration's `clock_len` times 9600, truncated to a short. A prediction
+made by fpm_sre.h from the meter's arithmetic, and satisfied here by a value
+it never saw.
+
+The same statement group seeds a second reader-free region: the instance's
+diagnostic window at obj + 0x34..0x63, nine pointers and three counts derived
+from the equaliser and the echo canceller after both are initialised. Four of
+the pointers are the four coefficient banks inside ONE `fpm_ecc::coef[0]`
+allocation, at `coef[0]`, `+near_taps`, `+2*near_taps` and
+`+2*near_taps+far_taps` shorts, with the two tap counts beside them -- which
+is fpm_ecc.h's own "near-I, near-Q, far-I, far-Q" layout, stated there from
+the canceller's side and confirmed here from the window's. Nothing
+reconstructed READS the window, so its consumer is open and the offsets stay
+offsets.
+
+## F8644. `V32FP_recreate` prints its own parameter block, and the format string names six of the eighteen fields
+
+`.rodata.str1.4 + 0x11000`, printed at debug level 2 by `V32FP_recreate`
+itself:
+
+```
+V32FP Config: protocol=%d,tx_rate=%d,rx_rate=%d,timeout=%d,
+energy_drop_time=%d,tx_scale=%d,options=0x%x,trellis=%d
+```
+
+The eight arguments are pushed at 7f577..7f5b5, so the correspondence is read
+off the instructions rather than guessed:
+
+```
+    esp+0x04  params + 0x00  movswl   protocol
+    esp+0x08  params + 0x02  movswl   tx_rate
+    esp+0x0c  params + 0x04  movswl   rx_rate
+    esp+0x10  params + 0x08  32-bit   timeout
+    esp+0x14  params + 0x2a  movswl   energy_drop_time
+    esp+0x18  params + 0x0c  32-bit   tx_scale
+    esp+0x1c  params + 0x10  32-bit   options
+    esp+0x20  params + 0x1c  32-bit   trellis
+```
+
+Five of those had been `rNN` in F8641's table and one had been guessed:
+`bps`/`bps2` are `tx_rate`/`rx_rate`, `r08` is `timeout`, `r0c` is `tx_scale`,
+`flags` is `options` and `r2a` is `energy_drop_time`.
+
+**IT SETTLES THE ONE THING NOTHING ELSE COULD.** F8641 recorded that
+`V32FP_control` writes ONE value into both +0x02 and +0x04 (846af..846b3), so
+no differential test can tell a swap of them apart. The format string prints
+them in offset order with two different names, which is the only evidence
+there is or can be that +0x02 is the transmit side.
+
+**AND TWO OF THE SIX ARE CORROBORATED BY USE, INDEPENDENTLY.**
+
+- `tx_scale` at +0x0c is the multiplier `V32FP_modem` applies to every output
+  sample on its way out: `out[i] = (out[i] * obj->tx_scale) >> 15` at
+  82752..82773. The template's 17887 is 0.546 in Q15.
+- `energy_drop_time` at +0x2a is what `v32_data` compares its carrier-loss
+  timer against (828d0), and the debug line beside that comparison is
+  `carrier_loss_time %d of %d ms` -- so it is a DURATION in milliseconds, and
+  the template's 700 is 0.7 s.
+
+`energy_drop_time` is also the one of the six whose extension is NOT dead: it
+is printed with `movswl` and compared with a signed 16-bit `jge`, so it is a
+signed `short` and not an unsigned one.
+
+Two more strings belong to the same function and are reproduced with it:
+`V32FP version: %s %s` at `.rodata.str1.1 + 0x3782`, printed with `15:48:07`
+and **`Sep 22 2005`** -- `__TIME__` and `__DATE__`, and that date is the day
+`.comment` says the compiler itself was built (F606).
+
+## F8645. `v32_data` defers its retrain request into a dead stack frame, and `V32FP_control`'s `Patch:` line is the author's own workaround
+
+Recorded as deviation **D961**; this finding is the reading, not the register
+entry.
+
+`v32_data` builds a `struct v32fp_ctl` from `V32_CTL` in a stack local. The
+renegotiation arm calls `V32FP_control` with it in the same frame. The retrain
+arm does not: it sets the file-static `Control_Flag` and returns, and the call
+is made from the top of the NEXT `v32_data`, on a local of THAT frame which
+nothing on that path writes.
+
+**WHAT MAKES THIS A FINDING RATHER THAN JUST A BUG** is the evidence it
+carries. `V32FP_control` opens with
+
+```
+   8453f:  80 7e 30 09    cmpb   $0x9,0x30(%esi)     V32_OBJ_STATUS == 9
+```
+
+and, on the match, prints `Patch: set ctl_ptr->vxx_ctl.options.retrain = TRUE`
+and sets bit 2 of the request's second byte. Nine is exactly the status
+`v32_data`'s retrain arm posts. So:
+
+- the retrain bit is `V32_CTL1_RETRAIN`, **named by the author** and by nothing
+  else -- CLAUDE.md's strongest evidence class, at a site where usage inference
+  would have given the same answer with far less confidence;
+- the argument is called `ctl_ptr` and the block is reached as `vxx_ctl`, a
+  per-modulation control record inside something larger, which is the only
+  glimpse this tree has of the structure above `struct v32fp_ctl`;
+- the dotted path `options.retrain` says the original spelled these bits as
+  BITFIELDS inside an `options` member. They are two `unsigned char` here
+  because a bitfield declaration additionally claims a packing order and
+  because the byte values are what the object settles (CLAUDE.md's rule);
+- and the word `Patch` says the author found the lifetime bug, recovered the
+  one bit that mattered from the status code, and left the rest.
+
+## F8646. `V32_CONNECT`'s seven codes are exactly the CONNECT arm of `v32_process`'s jump table, six of seven, with the seventh landing on no-carrier
+
+`v32hdx_tables.c` reads `V32_CONNECT` -- `.data:0x007724`, seven shorts,
+{4, 3, 25, 24, 26, 27, 14} -- as "per-RATE status codes, and the table's own
+name is the only evidence about what they mean" (F8585). The consumer side now
+corroborates it, and from a completely different direction.
+
+`v32_process` switches on `V32FP_modem`'s return -- `V32_OBJ_STATUS` -- through
+a 29-entry jump table at `.rodata + 0x1a8`:
+
+```
+    3, 4, 13, 24, 25, 26, 27          -> DPSTAT_CONNECT
+    12, 14                            -> "nocarrier",  DPSTAT_ERROR
+    16 .. 23                          -> "error",      DPSTAT_ERROR
+    0, 1, 2, 5..11, 15, 28            -> DPSTAT_OK
+    anything above 28                 -> "unknown",    DPSTAT_ERROR
+```
+
+Six of `V32_CONNECT`'s seven entries -- 4, 3, 25, 24, 26, 27, the six real
+rates -- are in the CONNECT arm and nowhere else. The seventh, 14, is the
+`V32_RATE_NONE` slot, and it is in the NO-CARRIER arm. A table of seven codes
+indexed by rate, whose six rate entries all mean "connected" and whose
+"no rate in common" entry means "no carrier", is not a coincidence at that
+arity.
+
+Two of the 29 codes now have names from the object itself: **12 is
+`V32_MSG_NO_CARRIER`**, which is the `.rodata` string `v32_data` prints beside
+it, and 9 is the retrain request `V32FP_control` tests for (F8645). The rest
+are numbered.
+
+## F8647. `V32FP_control`'s rate-fallback table is v32seq.h's rate ladder stepped down exactly one rung, and it confirms index 0 a second time
+
+The retrain arm, when `fp + 0x50d8` is set, switches on the receive rate INDEX
+at fp + 0x2e through a six-entry jump table at `.rodata + 0x7f40` and writes a
+new line rate into the object:
+
+```
+    index 5 -> 12000        index 3 -> 4800
+    index 4 ->  9600        index 0 -> no write at all
+    index 2 ->  7200
+    index 1 ->  7200
+```
+
+`v32seq.h`'s ladder is 5 = 14400, 4 = 12000, {2,1} = 9600, 3 = 7200, 0 = 4800,
+tried in that order. Line the two up and every entry is the NEXT RUNG DOWN:
+14400 falls back to 12000, 12000 to 9600, either 9600 to 7200, 7200 to 4800,
+and 4800 -- the bottom -- falls back to nothing, which is why index 0's slot
+is the only one that writes no rate.
+
+This is an independent confirmation of the whole index-to-rate correspondence
+from a table that mentions no rate index anywhere, and it is the second
+confirmation of index 0 = 4800 after `RATEv32` (F8640): the ladder's bottom
+rung is the one with nowhere to go.
+
+## F8648. V.32's block is five milliseconds, and the object says so three times over
+
+`v32_create` builds its wrapper with `dp_wrapper_create(self, v32_process, 40,
+srate, 8000)` -- a 40-sample fragment at 8000 Hz, which is 5 ms.
+
+`v32_data` counts blocks in hdx + 0xae, multiplies by five, and compares the
+product against `params.energy_drop_time`; the debug line beside the
+comparison is `V32_MSG_NO_CARRIER won't be reported (carrier_loss_time %d of
+%d ms)`. So the unit is MILLISECONDS, five of them is one block, and the
+template's `energy_drop_time` of 700 is 0.7 s of dead line before no-carrier is
+reported.
+
+40 samples at 8000 Hz is also exactly **twelve symbols** at V.32's 2400 baud,
+which is `V32_SYMBOL_LEN[0]` and is the literal `v32_process` writes into
+`struct v32_dp::symbols_per_block` on connect. The same twelve appears a
+fourth time as `V32_SYMBOL_LEN`'s first entry, written from `V32FP_recreate`.
+
+`v32_process` also derives `bits_per_symbol` as `line_rate / 2400`, emitted as
+an UNSIGNED magic multiply (`mov $0x1b4e81b5,%eax; mull; shr $0x8,%edx`), which
+is what makes `struct v32_dp::line_rate` an `unsigned int` rather than an
+`int` -- a signed divide by 2400 is `imul`, `sar` and a sign correction, and
+that is not what is there.
+
+## F8649. `V32_PROTOCOL` is five handshake slots, one data slot and THREE null ones, which corrects F8594
+
+F8594 read `V32_PROTOCOL` (`.data:0x007700`, 36 bytes, GLOBAL) as "9 dwords --
+six of `v32_handshake`, one of `v32_data`, and `v32_null_protocol`". The nine
+`R_386_32 .text` relocations resolve as:
+
+```
+    [0] v32_handshake      [3] v32_null_protocol   [6] v32_data
+    [1] v32_handshake      [4] v32_handshake       [7] v32_null_protocol
+    [2] v32_handshake      [5] v32_handshake       [8] v32_null_protocol
+```
+
+FIVE handshake, one data, THREE null. Slots 0, 1, 2, 4 and 5 are exactly
+`v32hdxst.h`'s `V32_MODE_ORIGINATE`, `ANSWER`, `LOCLOOP_2`, `RING_INIT` and
+`RING_RESP`; slot 3 is `V32_MODE_LOCLOOP_3`, which `V32NextState` gives a
+handler and this table does not; and slot 6 is the data mode `V32FP_modem`
+installs when obj + 0x31 bit 0 is set.
+
+**All nine dwords are ZERO in the file**, so a byte comparison of two all-zero
+tables passes while naming nothing -- the trap `tools/dis.py` exists for, and
+the reason `t_v32fpdisp.c` resolves every slot to a function before comparing.
+
+A second nine-entry table sits 0x68 above it: `PROTOCOL`, `.data:0x007768`,
+`{0, 1, 2, 9, 6, 6, 3, 7, 8}`, indexed the same way, which `V32FP_status`
+copies into `struct v32_status::protocol`. **It is file-local AND its name is
+used by a second translation unit** (there is another `PROTOCOL` at
+`.rodata:0x8c0c`), so `symmap.py` leaves both local and no `ref_PROTOCOL`
+exists. It is therefore `static` on our side too and is reachable to a test
+only through the status field.
+
+## F8657. obj + 0x11 is the second byte of `params.options`, not `V32_OBJ_FLAGS` at 0x31, and reading it as the latter cost two functions their whole flag byte
+
+F8642's bit table for `struct v32fp_ctl` has the row
+
+```
+    ctl0 & 0x80  ->  obj + 0x11 bit 1      8459e   V32_OBJ_FLAGS
+```
+
+The OFFSET is right and the LABEL is wrong: `V32_OBJ_FLAGS` is 0x31, thirty-two
+bytes further on. obj + 0x11 is inside the 48-byte parameter block -- it is the
+byte holding bits 8..15 of `params.options` -- and the two are easy to
+transpose because both are read `movzbl`, masked with `andb` and stored back.
+
+**THREE SITES REACH IT AND THEY ARE ONE ROUND TRIP.**
+
+```
+    7f740/7f75d  V32FP_create   bit 2 <- cfg->r10 bit 0        options bit 10
+    8459e        V32FP_control  bit 1 <- ctl->ctl0 bit 7       options bit  9
+    84a65        V32FP_status   ctl0 bit 7 <- bit 1
+    84a76        V32FP_status   flags1 bit 0 <- bit 2
+```
+
+So the caller's configuration goes in through `V32FP_create` and comes back
+out through `V32FP_status::flags1`, and the control block's bit 7 goes in
+through `V32FP_control` and comes back out through `V32FP_status::flags` bit 7.
+That symmetry is what says they are two bits and not four.
+
+**WHAT IT COST.** Written as 0x31 it fails in a way that looks like something
+else entirely. `V32FP_status` reported `flags` 0x3b where the object reports
+0xbb and `flags1` 0xaa where the object reports 0xab -- one bit each. Bit 7 of
+that byte is `V32_STFLAG_RETRAIN_DET`, which `v32_data` tests to decide whether
+to poll `RetrainDetectV32` at all, so the single wrong offset silently removed
+an entire arm of a different function. And `V32FP_control` wrote bit 1 of
+obj + 0x31 -- `V32_FLAG_FAULT` -- which is a *real* flag that other written
+code reads, so the object came back plausible and wrong rather than obviously
+broken.
+
+The template's `options` is 0x68b, so the byte is 0x06 and BOTH bits are set in
+every configuration `V32_CFG` produces. A test that only ever built the default
+object would see the right answer from the wrong offset for bit 2, because
+obj + 0x31 after `V32FP_recreate` is 0x40 and bit 2 of that is zero -- which is
+the wrong answer, and is exactly what made this visible.
+
+## F8658. `DemodDataV32` writes through its input buffer, so two sides of a differential test cannot share one
+
+`t_v32fpdisp.c` first handed `V32FP_modem` and `ref_V32FP_modem` the SAME
+`short in[64]`, on the reasoning that an input is an input. The two disagreed
+on the receive count -- ours 12 symbols, the object's 0 -- with the object's
+side, which ran SECOND, getting nothing.
+
+`DemodDataV32`'s second parameter is a plain `short *` and not a `const short
+*`, and `v32demod.h` has said so since it was written. The receive chain works
+in place, so the first side's call left a different array behind for the second
+side, and the two were no longer being given the same input at all.
+
+**IT PRESENTS AS A DEFECT IN THE CODE UNDER TEST, NOT IN THE FIXTURE.** What
+the failure looked like was `V32FP_modem` returning a different status and
+`v32_data` taking a different arm -- four fields apart from the buffer, with
+every intermediate that was compared agreeing. The signature that identified it
+is the one F8587 already names: **the disagreement tracked which side ran
+first**, not any input the test varied.
+
+The rule this leaves is narrow and worth stating: in a differential test, every
+buffer a callee can WRITE gets one copy per side, and "can write" is settled by
+the declared parameter type, not by what the function is called. `t_v32cfg.c`
+already does this for `FPM_AGC_agc`'s in-place gain buffer; this is the same
+thing at a point where the buffer reads like a pure input.

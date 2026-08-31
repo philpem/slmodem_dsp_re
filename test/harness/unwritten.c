@@ -75,8 +75,6 @@ cid_get_strings(void *cid)
 
 extern int ref_dp_v22_init(void);
 extern void ref_dp_v22_exit(void);
-extern int ref_dp_v32_init(void);
-extern void ref_dp_v32_exit(void);
 
 int
 dp_v22_init(void)
@@ -90,14 +88,3 @@ dp_v22_exit(void)
 	ref_dp_v22_exit();
 }
 
-int
-dp_v32_init(void)
-{
-	return ref_dp_v32_init();
-}
-
-void
-dp_v32_exit(void)
-{
-	ref_dp_v32_exit();
-}

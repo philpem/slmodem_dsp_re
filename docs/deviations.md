@@ -9262,3 +9262,83 @@ the 3->2 transition -- only the 1->2 transition clears it). With
 
 **Status:** unmeasured. Whether the first post-seizure byte ever reaches
 `cid_get_strings` is `cid_modem`'s question, and it is not reconstructed.
+
+## D960 ⚠ `V32FP_recreate` hands `FPM_MTD_create` a stack configuration with its fifth field uninitialised
+
+The multi-tone detector's configuration is five fields and the constructor
+fills four of them -- `coeff`, `tones`, `ratio` and `min_level`, at +0x00,
++0x04, +0x06 and +0x08 (0x7f239..0x7f29e) -- and writes nothing at +0x0a.
+`FPM_MTD_create` then copies all five into the object, so `mtd->cfg.f0a` is
+whatever the caller's frame held.
+
+**IT IS FOUR ASSIGNMENTS AND NOT A PARTIAL INITIALISER**, which is what
+settles that this is the author's and not an artefact of how we read it: a
+C89 aggregate initialiser naming four of five members zero-fills the fifth,
+and GCC would have emitted a `movw $0x0,0xa(%esp)` for it. There is no such
+store. `src/pump/v32/v32fprecr.c` reproduces the four assignments rather
+than tidying the fifth.
+
+Nothing in `fpm_mtd.c` reads `cfg.f0a`, so the value cannot reach a verdict;
+what it does reach is a differential comparison of the detector object, and
+`test/unit/t_v32fprecr.c` excludes that one field BY NAME -- the two sides run
+on two different stacks and comparing it compares the frames.
+
+**Status:** unmeasurable against the object. The value compared would be the
+blob's stack residue, exactly as for D7 and for `fpm_tone`'s +0xf2.
+
+## D961 🐛 `v32_data` hands `V32FP_control` an UNINITIALISED STACK LOCAL, one block after building the request in a frame that is gone
+
+`v32_data` (0x0827a0) builds a `struct v32fp_ctl` from the `V32_CTL` template
+in a **stack local** and issues it two ways.
+
+The RENEGOTIATION arm (82919) builds it and calls `V32FP_control` immediately,
+in the same frame. That one is correct.
+
+The RETRAIN arm (829c5) builds it, sets the file-static `Control_Flag` to 1 at
+82a4e, and returns WITHOUT calling. The call is made on the NEXT entry to
+`v32_data`, from the test at 827ce:
+
+```
+   827ce:  83 3d 00 00 00 00 01    cmpl   $0x1,Control_Flag
+   827d9:  0f 84 a0 02 00 00       je     82a7f
+   ...
+   82a7f:  89 3c 24                mov    %edi,(%esp)
+   82a82:  8d 5c 24 20             lea    0x20(%esp),%ebx      <- the local
+   82a86:  89 5c 24 04             mov    %ebx,0x4(%esp)
+   82a8a:  e8 fc ff ff ff          call   V32FP_control
+```
+
+`0x20(%esp)` is a local of THIS invocation and nothing on this path writes it.
+The thirty-two bytes handed to `V32FP_control` are whatever the previous call
+left on the stack: it reads `ctl0` and `ctl1` as bit sets, `r14` as a flag,
+`bps` as a line rate, and `trellis` and two more `int`s that it copies into the
+datapump block. The request the retrain arm built is gone.
+
+**THE AUTHOR KNEW.** `V32FP_control` opens by testing `V32_OBJ_STATUS` against
+9 -- the code the retrain arm posts -- and, if it matches, prints
+
+```
+Patch: set ctl_ptr->vxx_ctl.options.retrain = TRUE
+```
+
+and sets the retrain bit itself (8472e and 84743). That recovers the ONE bit
+that mattered from the status code; everything else in the block is still
+whatever the stack held. The word `Patch` is the original author's.
+
+**Reproduced.** The reconstruction has the same local, the same deferral and
+the same `Control_Flag`, so it does the same thing. `DSPLIB_REPRODUCE_BUGS` is
+not involved: nothing here is fixed, so there is nothing to fence.
+
+**NO DIFFERENTIAL TEST CAN COVER THIS ARM**, and that is a property of the
+defect and not a gap in the test. The two sides run in two different stack
+frames with two different histories, so the bytes are different by
+construction and the comparison is not a comparison of anything -- the same
+argument D404 makes about two tables at two addresses. `t_v32fpdisp.c` and
+`t_v32dp.c` therefore CLEAR `Control_Flag` on both sides before every trial
+and assert it clear, so the arm is never entered by accident and never
+silently passes.
+
+**Status:** measured for the writers this tree has, unmeasured in general.
+`Control_Flag` is also a file-static rather than a field, so two V.32
+datapumps in one process would share the pending-request flag; nothing in this
+tree instantiates two. Finding F8645.

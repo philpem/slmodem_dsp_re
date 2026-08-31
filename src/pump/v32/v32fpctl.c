@@ -24,7 +24,9 @@
  *   v32_null_protocol        .text 0x082bd0    1   (file-local there)
  *   SetToneDetect            .text 0x083600  110
  *   CalcTurnAroundDelay      .text 0x083ae0   53
+ *   V32_TURNAROUND_DLY       .data 0x0076c0    4
  *   V32_SYMBOL_LEN           .data 0x0076c4    4
+ *   V32_SAMPLE_LEN           .data 0x0076c8    4
  *
  * The functions are in the object's address order, which is what
  * `docs/method/refinement.md` lever 1 asks for: emission order is upstream of
@@ -110,12 +112,30 @@
 #define DEC(fp)		((struct v32_dec *)FSE(fp)->cfg.owner)
 
 /*
- * The symbol ring's length, indexed by V32_OBJ_SYMLEN_SEL.
+ * THE THREE LENGTH TABLES ARE ONE FAMILY AND THE OBJECT LAYS THEM OUT AS ONE.
  *
- * `.data` in the object -- so not const, even though nothing writes it -- and
- * two entries, which is the symbol size and the section layout together.
+ *   V32_TURNAROUND_DLY  .data 0x0076c0   4   { 64, 360 }
+ *   V32_SYMBOL_LEN      .data 0x0076c4   4   { 12,  48 }
+ *   V32_SAMPLE_LEN      .data 0x0076c8   4   { 40, 160 }
+ *
+ * Twelve contiguous bytes, all three GLOBAL, all three two entries, and all
+ * three indexed by the SAME selector at every site -- `V32FP_recreate` uses
+ * obj + 0x16 for all three within twenty instructions (7f13d, 7f150, 7f165)
+ * and `V32FP_control` uses obj + 0x18 for two of them (84611, 84624).  They
+ * are declared here in the object's address order for that reason.
+ *
+ * The ratio between the two columns is 4:1 in samples (40 and 160), 4:1 in
+ * symbols (12 and 48) and 45:8 in turnaround delay (64 and 360), so the third
+ * is not simply the other two scaled and the selector is not a sample-rate
+ * switch alone.  Nothing written establishes what the two columns ARE; what
+ * is established is that one selector picks a column in all three.
+ *
+ * `.data` in the object -- so not const, even though nothing writes any of
+ * them.
  */
+short V32_TURNAROUND_DLY[2] = { 64, 360 };
 short V32_SYMBOL_LEN[2] = { 12, 48 };
+short V32_SAMPLE_LEN[2] = { 40, 160 };
 
 /* --------------------------------------------------------------------- */
 
