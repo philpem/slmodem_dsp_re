@@ -1,0 +1,50 @@
+[
+ {
+  "note": "src/service/beepgen.c against build/test/t_voicedpdel.  Only detector_delete is mutated here; the rest of that file's claims are in beepgen.json, whose binary is t_beepgen.  Every claim is about WHICH allocations survive, which is the only observable a destructor has."
+ },
+ {
+  "label": "the +0x04 block is leaked",
+  "find": "\tsysdep_free(d->ptr_0004);\n\tfor (i = 0; i <= 3; i++)",
+  "replace": "\tfor (i = 0; i <= 3; i++)"
+ },
+ {
+  "label": "the +0x04 block is freed twice",
+  "find": "\tsysdep_free(d->ptr_0004);\n\tfor",
+  "replace": "\tsysdep_free(d->ptr_0004);\n\tsysdep_free(d->ptr_0004);\n\tfor"
+ },
+ {
+  "label": "only three of the four tones are deleted",
+  "find": "\tfor (i = 0; i <= 3; i++)",
+  "replace": "\tfor (i = 0; i < 3; i++)"
+ },
+ {
+  "label": "the tone loop deletes the first tone four times",
+  "find": "\t\tTONE_delete(d->tone[i]);",
+  "replace": "\t\tTONE_delete(d->tone[0]);"
+ },
+ {
+  "label": "the tone array is read one slot early",
+  "find": "\t\tTONE_delete(d->tone[i]);\n\tif (d->cadence_0008 != NULL)",
+  "replace": "\t\tTONE_delete(d->tone[i] - 1);\n\tif (d->cadence_0008 != NULL)"
+ },
+ {
+  "label": "the first cadence's guard is inverted",
+  "find": "\tif (d->cadence_0008 != NULL)\n\t\tcadence_delete(d->cadence_0008);",
+  "replace": "\tif (d->cadence_0008 == NULL)\n\t\tcadence_delete(d->cadence_0008);"
+ },
+ {
+  "label": "the second cadence is deleted twice and the third not at all",
+  "find": "\tif (d->cadence_0010 != NULL)\n\t\tcadence_delete(d->cadence_0010);",
+  "replace": "\tif (d->cadence_000c != NULL)\n\t\tcadence_delete(d->cadence_000c);"
+ },
+ {
+  "label": "the third cadence is leaked",
+  "find": "\tif (d->cadence_0010 != NULL)\n\t\tcadence_delete(d->cadence_0010);\n\tsysdep_free(d);",
+  "replace": "\tsysdep_free(d);"
+ },
+ {
+  "label": "the detector itself is leaked",
+  "find": "\t\tcadence_delete(d->cadence_0010);\n\tsysdep_free(d);",
+  "replace": "\t\tcadence_delete(d->cadence_0010);"
+ }
+]

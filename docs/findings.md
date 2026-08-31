@@ -98866,3 +98866,107 @@ Neither arm can be driven from a fixture: the harness allocator does not
 fail on request, so `t_fdspksil` records the check rather than testing it,
 and the mutation set carries a NOT-here note instead of a mutant that would
 read NOT CAUGHT while modelling nothing.
+
+### F8785. `struct voice_ctx` gets a home, a size, and eighteen fields it did not have
+
+*2026-08-31.* The type was introduced by the `voice_dle_command` wave in
+`include/dsplib/voicecmd.h`, modelled as far as that one function could see
+it: `unsigned char pad_0000[0x744]` and two int flags. Writing the three
+per-block handlers reaches far more of it, and `voice_create` settles what
+`voicecmd.h` could only leave open:
+
+    ac247:	c7 04 24 dc 07 00 00 	movl   $0x7dc,(%esp)
+    ac252:	call   sysdep_malloc
+    ac268:	b9 dc 07 00 00       	mov    $0x7dc,%ecx
+    ac275:	call   sysdep_memset
+
+So `sizeof` is 0x7dc, and it is measured rather than bounded. The definition
+moved to `include/dsplib/voice.h`, which is now its one home; `voicecmd.h`
+includes that file and defines nothing. **The TAG kept its original spelling.**
+`struct voice` would have read better and `src/service/voicecmd.c` already
+names `voice_ctx`, that file belonged to another agent in this wave, and a
+rename to make a name prettier is not worth a cross-agent edit.
+
+What `voice_create` types by construction, which is the strongest grade
+available for most of these -- a callee that takes the value:
+
+    +0x000  struct beepgen_config   copied whole, handed to beepgen_create
+    +0x010  mode = 2                +0x014 int_0014 = 4
+    +0x018  beepgen_create          +0x01c detector_create
+    +0x020  handler = voice_online  +0x024 FIFO8_create
+    +0x028  silence_create          +0x034 FDSP_DP_Create
+    +0x740  beep_done = 1           +0x744/+0x748 the two DLE flags = 0
+    +0x74c  out_format = 0          +0x758 rate = 8000  +0x75a bits = 8
+    +0x75e/+0x760/+0x762 = 0x3f     +0x764 = 0
+
+`beep_done`, `out_format`, `underrun` (+0x75c) and `detector_enable` (+0x762)
+are named from what the handlers DO with them and are usage inference, the
+weakest grade; `voice.h` says so at each. `detector_enable` is the least weak
+of the four, because `voice_set_online` hands it to `detector_set_enable` and
+that callee types it.
+
+**The staging area at +0x38 and the float buffer at +0x100 are bounded by each
+other and by nothing else.** `voice_tx`'s `lea 0x100(%edi)` is what says the
+floats start there; nothing says where either array ends. The lengths in
+`voice.h` fill the space up to the next field this tree has read and are
+labelled as such. The 200 that falls out for the staging area is 22 bytes
+short of what `voice_tx` reads into it at 11025 Hz, which is deviation D996.
+
+### F8786. `voice_online` types `FDSP_DP_Run`'s never-loaded sixth argument, and a sibling is what does it
+
+*2026-08-31.* D986 recorded that `FDSP_DP_Run` (0xae490) takes seven arguments
+and never loads the sixth, and `beepgen.h` typed that slot `void *unused`
+because the function's own 138 bytes carry no evidence about it. A function's
+own body is not the only evidence there is.
+
+`voice_online` (0xabf50) has the same signature slot for slot -- and that is
+not an assertion about layout, it is what `voice_duplex` (0xb01e0) proves by
+forwarding arguments 1 through 6 of its own into the `FDSP_DP_Run` call
+unchanged:
+
+    b0203:	8b 5c 24 38          	mov    0x38(%esp),%ebx   <- its arg2
+    b0221:	89 5c 24 08          	mov    %ebx,0x8(%esp)    <- the call's arg3
+    b01e3:	8b 4c 24 44          	mov    0x44(%esp),%ecx   <- its arg5
+    b01ff:	89 4c 24 14          	mov    %ecx,0x14(%esp)   <- the call's arg6
+
+And `voice_online` WRITES that slot, as sixteen bits, twice:
+
+    ac014:	66 89 0f             	mov    %cx,(%edi)
+    ac063:	66 c7 06 00 00       	movw   $0x0,(%esi)
+
+So the slot is a `unsigned short *`. `voice_tx` (0xafd60) says what it is FOR:
+it reads `*that` as the number of escaped bytes waiting in the receive buffer
+and writes back how much room the FIFO now has (`170 - fill`, floored at
+zero), which makes it the HOST BYTE count against `countp`'s SAMPLE count.
+`beepgen.h`, `voice.h` and D986 all now say `unsigned short *hostcount`.
+
+The general point is the one CLAUDE.md's evidence order already makes and this
+is a clean instance of: grade 2 is "a callee or caller that types it", and a
+SIBLING with a shared signature is the same kind of evidence arriving from a
+third direction. A slot no function reads is not a slot no function types.
+
+### F8787. All five of the voice block symbols are GLOBAL, so F8770's regparm hazard does not arise -- and the prologues were read anyway
+
+*2026-08-31.* F8770 corrects F8462: a LOCAL blob function is not automatically
+`regparm(2)`, and the way to settle it is the callee's PROLOGUE and not the
+symbol table. The five symbols in `src/service/voicedp.c` are all `GLOBAL` in
+`readelf -sW`, so GCC 3.4 gave them the ordinary convention whatever it does
+to statics, and the `ref_` aliases in `t_voicedp` and `t_voicedptx` carry no
+attribute.
+
+That is the symbol table, which is the thing F8770 says not to trust, so each
+prologue was read as well:
+
+    abf5b:	8b 6c 24 30          	mov    0x30(%esp),%ebp   voice_online
+    afd70:	8b 44 24 48          	mov    0x48(%esp),%eax   voice_tx
+    b01e3:	8b 4c 24 44          	mov    0x44(%esp),%ecx   voice_duplex
+    abef3:	8b 4c 24 10          	mov    0x10(%esp),%ecx   voice_set_online
+    abf28:	8b 54 24 10          	mov    0x10(%esp),%edx   voice_set_duplex
+
+Every one of them fetches its first argument from the stack before touching
+`%eax` or `%edx`, which is what cdecl looks like and what `regparm(2)` never
+does. The two agree here; the point of writing it down is that the agreement
+was checked rather than assumed.
+
+`detector_delete` (0xad620) is GLOBAL too and reads `0x10(%esp)` into `%esi`
+at 0xad627, same answer.

@@ -9447,11 +9447,21 @@ pair, 0x18/0x1c the transmit pair, 0x24 the count.
 
 It is kept in the signature because the ABI is the caller's contract and
 dropping it would shift the count pointer by one slot, which would link and
-then read the wrong stack word. `beepgen.h` types it `void *` and says it is a
-placeholder; there is no evidence in the object for what it was.
+then read the wrong stack word.
 
-**Status:** faithful and inert. The test passes a distinct object through it
-and checks that neither side writes to it.
+**UPDATED 2026-08-31: THE SLOT IS NOW TYPED, BY A SIBLING RATHER THAN BY A
+GUESS.** This entry used to end "`beepgen.h` types it `void *` and says it is a
+placeholder; there is no evidence in the object for what it was". There is
+now. `voice_online` (0xabf50) has this signature slot for slot -- context,
+receive pair, transmit pair, this slot, count -- and it WRITES the slot, twice
+and as sixteen bits: `mov %cx,(%edi)` at 0xac014 and `movw $0x0,(%esi)` at
+0xac063. `voice_duplex` (0xb01e0) closes the loop by forwarding its own such
+argument straight into this call. So the type is `unsigned short *`, the name
+is `hostcount`, and both are in `beepgen.h` and `voice.h`. Finding F8786.
+
+**Status:** faithful and inert HERE, and no longer untyped. The test passes a
+distinct object through it and checks that neither side writes to it;
+`t_voicedp` exercises the same slot at the sibling that does write it.
 
 ## D987 🐛 `beepgen_create` hands `GetGain` its two output pointers in the opposite order to every other call site
 
@@ -9584,3 +9594,96 @@ argument is not milliseconds. The blob's own name for the function says
 `count` and it is not reconstructed -- it needs the LOCAL `.data` table at
 0x84d4 that the blob calls `silence_level_table`. That function settles the
 unit and this entry should be revisited with it.
+
+## D996 ⚠ `voice_tx` asks the FIFO for 222 bytes into a 200-byte staging area
+
+*2026-08-31.* At 11025 Hz `voice_tx` (0xafd60) sets its read length to 222
+(`0xde` at 0xafdad) and passes it to `FIFO8_read` with the staging area at
+`v + 0x38` as the destination. The next field this tree has read is the float
+working buffer at `v + 0x100`, so the staging area is 200 bytes, and the read
+runs 22 bytes past it into the first five and a half floats.
+
+The 8000 Hz and 7200 Hz lengths -- 160 and 144 -- fit. Only the 11025 arm
+overruns, and only when the FIFO actually holds that much: the arm is guarded
+by `fill > 0xdb`, which is 219.
+
+Nothing here is repaired. `struct voice_ctx` gives the staging area exactly
+the space the object gives it, so the reconstruction overruns identically into
+identically-placed floats, which is the whole point.
+
+**Status:** unmeasured in the sense that matters -- whether the author knew.
+The overrun itself is arithmetic and is not in doubt. The bound is our reading
+of where the float buffer starts, and that reading comes from `voice_tx`'s own
+`lea 0x100(%edi)`; if some other function shows the staging area is longer and
+the floats begin later, this entry goes away and the field comment in
+`voice.h` goes with it.
+
+## D997 🐛 `voice_online` stores the sample count into `*hostcount` and overwrites it with zero on every path
+
+*2026-08-31.* At 0xac014 (and 0xac051 on the beep-finished path) the function
+loads its sixth argument and writes the block's sample count through it:
+
+    ac010:	8b 7c 24 44          	mov    0x44(%esp),%edi
+    ac014:	66 89 0f             	mov    %cx,(%edi)
+
+Eleven instructions later it reloads the same argument into `%esi` and writes
+zero through it:
+
+    ac05c:	8b 74 24 44          	mov    0x44(%esp),%esi
+    ac063:	66 c7 06 00 00       	movw   $0x0,(%esi)
+
+Nothing between them reads the slot, and there is no branch between them:
+0xac054 is the join of both paths and 0xac063 is unconditional. So the first
+store is dead on every path and the caller always sees zero.
+
+It is reproduced and not repaired. `t_voicedp` asserts the outcome
+absolutely -- `*hostcount` is 0 after every call, whatever `*countp` was.
+
+**Status:** unmeasured. `voice_tx`, the sibling handler, writes a MEANINGFUL
+value into the same slot (the FIFO's free room), so the dead store looks like
+the remains of the same idea rather than a typo, and a caller that read it
+would get the count it had just supplied. What consumes it is unwritten.
+
+## D998 ⚠ `voice_tx`'s DLE scan reads one byte past its input when the last byte is a DLE
+
+*2026-08-31.* The un-escape loop tests `i < *hostcount` at the top and then,
+on seeing a DLE, increments `i` and reads again with no second test:
+
+    afdf9:	0f b6 04 2b          	movzbl (%ebx,%ebp,1),%eax
+    afdfd:	3c 10                	cmp    $0x10,%al
+    afdff:	75 df                	jne    afde0
+    afe01:	8d 53 01             	lea    0x1(%ebx),%edx
+    afe04:	0f b7 da             	movzwl %dx,%ebx
+    afe07:	0f b6 04 2b          	movzbl (%ebx,%ebp,1),%eax
+
+So a buffer whose last byte is 0x10 has its first byte past the end read, and
+that byte then decides between a literal DLE (copied into the FIFO) and a
+command (handed to `voice_dle_command`, which can set `dle_etx` or `dle_can`).
+It is a read of one byte, never a write, and the caller's buffer is a datapump
+block that is longer than the count in every use this tree can see.
+
+**Status:** unmeasured. It is reproduced exactly, and `t_voicedptx` drives it
+with a planted byte after the count so both sides read the same thing -- which
+makes the two agree without making the read safe.
+
+## D999 ⚠ `voice_tx` zero-fills a fixed 160 floats and a variable number of shorts, in the two arms of one branch
+
+*2026-08-31.* When the FIFO is short of a block, `voice_tx` fills the output
+with silence. The linear arm fills `*countp` samples:
+
+    aff50:	8b 54 24 50          	mov    0x50(%esp),%edx
+    aff58:	66 c7 04 42 00 00    	movw   $0x0,(%edx,%eax,2)
+    aff62:	66 39 06             	cmp    %ax,(%esi)        <- *countp
+
+The float arm fills 160, from an immediate, and ignores `*countp`:
+
+    affbc:	c7 04 90 00 00 00 00 	movl   $0x0,(%eax,%edx,4)
+    affc6:	66 81 fa 9f 00       	cmp    $0x9f,%dx         <- 159
+
+160 is the 8 kHz block length, so the two agree at 8 kHz and part company
+everywhere else: at 11025 a float block is left with its tail unwritten, and a
+`*countp` below 160 has the fill run past the caller's block.
+
+**Status:** unmeasured. Both arms are reproduced as written and `t_voicedptx`
+drives `*countp` above and below 160 in both formats, so the divergence is
+under test even though nothing here says which arm the author meant.

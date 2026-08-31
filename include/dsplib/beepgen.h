@@ -232,11 +232,18 @@ float zfFLTUTL_GetMaxAbsValue(float *buf, unsigned int n);
  * It converts `*countp` samples each way and does nothing else: the receive
  * side is 16-bit linear scaled by 1/32000, the transmit side float scaled by
  * 32000 and truncated toward zero.  `*status` is set to 2 and 1 is returned
- * unconditionally.  The sixth argument is READ BY NOTHING -- it occupies a
- * stack slot the object never loads -- so its type here is a placeholder.
+ * unconditionally.
+ *
+ * `hostcount` IS READ BY NOTHING HERE -- this function never loads that stack
+ * slot -- and it used to be typed `void *unused` for that reason.  A SIBLING
+ * types it: `voice_online` (voice.h) has this signature slot for slot, and it
+ * WRITES that argument as an `unsigned short *`, twice.  `voice_duplex` then
+ * forwards its own such argument straight into this call.  Finding F8786 and
+ * deviation D986.
  */
 int FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt, float *tx_flt,
-		short *tx_lin, void *unused, unsigned short *countp);
+		short *tx_lin, unsigned short *hostcount,
+		unsigned short *countp);
 
 #ifdef __cplusplus
 }

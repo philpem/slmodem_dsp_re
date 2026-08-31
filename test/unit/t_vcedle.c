@@ -2,11 +2,15 @@
  * t_vcedle.c -- differential test of `voice_dle_command`.
  *
  * THE WHOLE CONTEXT IS COMPARED, NOT THE TWO FLAGS.  `struct voice_ctx` is
- * 0x74c bytes and only two of them are modelled, so a store anywhere else --
- * which is exactly what a wrong offset would be -- has to be visible.  Both
+ * 0x7dc bytes and this function models two of them, so a store anywhere else
+ * -- which is exactly what a wrong offset would be -- has to be visible.  Both
  * sides get their own copy, both are prefilled with 0xa5 (never zero: zero is
  * the one filler that makes "never written" look like "written correctly"),
- * and `diff_eq_obj` compares all 1,868 bytes after every call.
+ * and `diff_eq_obj` compares all 2,012 bytes after every call.
+ *
+ * The size used to be 0x74c here, which was as far as `voice_dle_command`
+ * could see; `voice_create` settles it at 0x7dc and the struct moved to
+ * `dsplib/voice.h`.  Finding F8785.
  *
  * THE SWEEP IS EVERY BYTE VALUE, and it is done twice -- once over
  * `signed char` -128..127 and once over the 0..255 an `unsigned char` caller
