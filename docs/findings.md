@@ -99429,3 +99429,80 @@ mutation set honest, and it failed on every input because the arm cannot fire.
 The right answer was not to hunt for an input; it was to prove there is none
 and assert that instead. A coverage counter that can never move is F134's
 dead detector wearing the opposite sign.
+
+### F8748. The voice wave, closed: 49 symbols and 12,368 bytes in one session, and what the layering bought
+
+*2026-08-31.* F8746 measured voice as 51 symbols / 16,685 bytes over three
+layers at the ring-detect commit. It now stands at **10 symbols / 6,378
+bytes**, and the ring detector's own 8 symbols / 2,061 bytes went with it.
+Six agents, five worktrees, one merge conflict in `src/` — none.
+
+| wave | symbols | bytes | mutants |
+|---|--:|--:|--:|
+| ring detect (`voice.c#3`, `RD_*` + `RingDetector_*`) | 8 | 2,061 | 41/41 |
+| `Fdspkrnl.c +13` leaves + `silence_progress` | 13 | 2,304 | 98/98 |
+| `Beepgen.c +3` generators | 10 | 2,306 | 64/64 |
+| `vce_*`, `voice_dle_command`, the MTK tables | 5 + tables | 616 + 3,628 data | 46/46 |
+| `MTK_phasor`, `TONE_create`, `FDSP_DP_*` | 6 + tables | 1,599 + 268 data | 74/74 |
+| the per-block path, `voice_online` … `voice_set_tx` | 9 | 3,631 | 118/118 |
+| per-wave rows as reported | 51 | 12,517 | **441/441** |
+| **`service.py`'s measured delta** | **49** | **12,368** | |
+
+**QUOTE THE DELTA, NOT THE SUM.** The two figures differ by 2 symbols and 149
+bytes and neither is wrong: the per-wave rows are what each agent reported and
+count two DATA symbols (`silence_level_table`, 16 bytes, and `ToneLPF`, which
+`nm` shows as `d`/`r` and not `.text` at all), while `service.py`'s bucket
+counts CALL symbols only. The delta is the number to quote for remaining work,
+because it is the one measured the same way at both ends — 59 symbols / 18,746
+bytes of voice and ring detect before, 10 / 6,378 after. The data tables are a
+further 3,896 bytes and are counted by neither.
+
+**WHAT THE LAYERING BOUGHT, AND WHAT IT DID NOT.** F8746's claim that layer 1
+has no internal edges held: four agents took its four spans concurrently and
+the only conflicts were `docs/findings.md`, `docs/deviations.md` and the two
+mutation JSONs, all append-at-end and all resolved by keeping both sides.
+Layer 2 was NOT parallel in the same way — `voice_online` waited on
+`beepgen_sample`, `TONE_create` on `MTK_phasor`, `voice_rx` on
+`silence_progress` — and taking it as two agents on disjoint FILES rather than
+disjoint SYMBOLS is what kept it conflict-free.
+
+**THE ONE REAL COLLISION WAS A SCHEDULING ERROR, NOT A TOOL ERROR.** Two
+agents were briefed on `silence_progress` because the second brief was written
+from a `readyqueue` run against a branch that was one commit behind the first
+agent's final state. `readyqueue.py` was right about the tree it was given.
+**A ready set is only true of the commit it was measured at, and work in
+flight is invisible to it** — so re-measure at the moment of briefing, not at
+the moment of planning, and say in the brief which commit the list came from.
+
+It cost nothing and paid twice: the duplicate became an independent second
+read, which confirmed the committed table byte for byte and the calling
+convention from the prologue, and found a comment defect no test could fail on
+(F8747). That is the only cross-check a single-author reconstruction gets.
+Deliberately commissioning one for a function that matters is worth
+considering; arriving at one by accident is not a plan.
+
+**THREE THINGS THE WAVE ESTABLISHED THAT OUTLIVE IT.**
+
+1. **F8770's correction of F8462 is now confirmed on three functions.** LOCAL
+   in the symbol table predicts NOTHING about the calling convention: the
+   `vce_*` trio, `silence_progress` and `MTK_phasor` are all `t`/LOCAL and all
+   plain cdecl with every argument on the stack. Read the prologue.
+2. **A runtime forwarder lives in TWO files.** `test/harness/runtime.c` is the
+   one everybody greps; `test/interop/runtime64.c` had its own aborting
+   `MTK_phasor` stub, named by nothing and reachable only from `make phase`.
+   Writing a symbol means removing both.
+3. **A stateful estimator needs a multi-block fixture.** `voice_rx`'s DC
+   smoothing keeps 99% of the OLD estimate; the first reconstruction had the
+   two weights swapped, and that is invisible to every codegen check and to
+   any fixture that runs one block per context (F8790).
+
+**WHAT IS LEFT IS THE SERVICE FACES AND THE DETECTOR**, and it is no longer a
+leaf problem: `VOICE_process` (2,016), `voice_command` (802), `detector_progress`
+(814), `voice_create` (642), `VOICE_command` (548), `VOICE_create` (493),
+`detector_create` (411), `voice_modem` (338), `voice_delete` (181) and
+`VOICE_delete` (133). `detector_create` needs `TONEamode_CFG`, declined twice
+now on the same ground both times — it is `d`/LOCAL with its only referent
+inside `detector_create` itself, so it must be written WITH its reader
+(F8772's argument for `silence_level_table`, F8781 for this one, and F8781
+records its twelve words). `detector_progress` needs five data symbols.
+Everything else is blocked on those two and on each other.
