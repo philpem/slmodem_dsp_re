@@ -170,5 +170,26 @@
  },
  {
   "note": "NOT here: advancing `out` between silence_progress's two escapes.  That is deviation D983 -- the object does NOT advance it, and a mutant that fixed the overwrite would be testing our opinion of the bug rather than the object's behaviour.  The 1700-sample calls in t_fdspksil compare the whole destination buffer against the blob's, so the overwrite is reproduced and would be caught if it stopped being."
+ },
+ {
+  "note": "silence_level_table's three live rows, one ULP each, and EXACTLY ONE DIRECTION PER ROW IS CATCHABLE.  They are here because the suite otherwise reached the table only through `the threshold test runs the wrong way round`, which moves the COMPARISON and not the CONSTANTS -- a wrong word in the table was covered by nothing.  Finding F8747 has the measurement."
+ },
+ {
+  "label": "silence level 1 is one ULP high",
+  "find": "\t0.000002514724428692716173827648162841796875f",
+  "replace": "\t0.0000025147246560663916170597076416015625f"
+ },
+ {
+  "label": "silence level 2 is one ULP low",
+  "find": "\t0.0000069853458626312203705310821533203125f",
+  "replace": "\t0.00000698534540788386948406696319580078125f"
+ },
+ {
+  "label": "silence level 3 is one ULP high",
+  "find": "\t0.000022632519176113419234752655029296875f",
+  "replace": "\t0.000022632520995102822780609130859375f"
+ },
+ {
+  "note": "THE OTHER THREE DIRECTIONS ARE UNCATCHABLE AND WERE MEASURED, NOT ASSUMED -- registering them would put three permanent NOT CAUGHT rows in the gate. The threshold branch `acc > silence_level_table[lvl]` catches NONE of the six: the value reaching it is a block sum times 0.00125, a map that steps by about 1.28 ULP and therefore SKIPS floats, so a one-ULP move of the threshold has no preimage on either side.  Every one of the three above is caught by the DEBUG LINE instead, and only because it crosses an integer there: the object multiplies the row by SILENCE_FULLSCALE2 at 80-bit precision (exact) and truncates toward zero, so the printed values are 2699, 7500 and 24299 from exact products 2699.999989942, 7500.000216186 and 24299.999177098.  Rows 1 and 3 sit just BELOW an integer, so only a step UP crosses it; row 2 sits just ABOVE one, so only a step DOWN does.  An earlier reading of this had rows 1 and 3 catchable both ways and row 2 high as the single gap; running it says otherwise, and the run is what is recorded."
  }
 ]

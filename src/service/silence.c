@@ -86,7 +86,25 @@ silence_delete(struct silence *s)
  *
  * They are energies per sample of a signal scaled to +-1.0, so
  * SILENCE_FULLSCALE2 turns them back into the counts^2 the debug line
- * prints: 2700, 7500 and 24300.
+ * prints -- and what it prints is **2699, 7500 and 24299**, not the round
+ * numbers they were evidently chosen to be.
+ *
+ * THE TWO OFF-BY-ONES ARE REAL AND NO TEST CAN FAIL ON THEM, which is why
+ * they are spelled out here.  The object loads both operands with `flds` and
+ * multiplies at x87 EXTENDED precision (0xb052e-0xb053c), so the product of
+ * two 24-bit mantissas is EXACT in a 64-bit one; it then truncates rather
+ * than rounds, because 0xb054b sets the control word's round-toward-zero
+ * bits with `or $0xc00` before `fistpl`.  Truncating the exact products
+ *
+ *     2699.999989941716    7500.000216186047    24299.999177098274
+ *
+ * gives 2699, 7500, 24299.  Round each product to a float FIRST -- which is
+ * what happens if you fold the expression at compile time in `float`, and
+ * what a reader naturally does in their head -- and you get 2700, 7500,
+ * 24300, which is what this comment used to claim.  Both sides of the
+ * differential print the same thing either way, so the mistake was invisible
+ * to the suite: findings F6100 and F6103's shape, and F8747 for the
+ * measurement.
  */
 static float silence_level_table[4] = {
 	-1.0f,

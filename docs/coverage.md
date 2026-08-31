@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#############################.....]  84.6%    621167 bytes, 1520 symbols
-  tested      [####..............................]  11.5%     71589 bytes, 12 of 1520 that can be
+  translated  [#############################.....]  84.6%    621438 bytes, 1521 symbols
+  tested      [####..............................]  12.0%     74522 bytes, 24 of 1521 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -271,7 +271,6 @@ dsplibs.o reconstruction coverage
     preinitdigital                                  533 bytes
     FPM_MRF_filter                                  533 bytes
     _ZN9V90Mapper7processEPhjPsRj                   530 bytes
-    FDSP_Kernel_Loop                                530 bytes
     CreateV23Modem                                  524 bytes
     SetTxModeV32                                    520 bytes
     _ZN9V90Mapper5resetEP16V90MappingParams7PcmType    517 bytes
@@ -324,7 +323,6 @@ dsplibs.o reconstruction coverage
     FSE_decision_16Tpt                              432 bytes
     _ZN18V90Phase3Modulator11generateDILEv          426 bytes
     _ZN19GenericToneDetector7processEPfj            422 bytes
-    TONE_detect                                     422 bytes
     tone_detect                                     420 bytes
     _ZNK14V90Demodulator8getAT_UDEP21TAG_DiagnosticResults    418 bytes
     _ZN20V90SignBitsExtractor7processEPhS0_         417 bytes
@@ -372,7 +370,6 @@ dsplibs.o reconstruction coverage
     GetVPcmMinimalTxPowerReduction                  362 bytes
     _ZN15V92BitsToSymbol7processERjPs               359 bytes
     _ZN12V90PreFilter13autoSelectionEv              359 bytes
-    EchoCanceler                                    359 bytes   (file-local)
     SMCv32_encoder_dif                              357 bytes
     V32FP_modem                                     356 bytes
     _ZN14V92Transmitter7processEPhjPsRj             355 bytes
@@ -397,7 +394,6 @@ dsplibs.o reconstruction coverage
     V22FP_delete                                    332 bytes
     _ZN24V90ConstellationDesigner18findNextUcodeToAddEPhhPA128_sS2_PsPA128_h    331 bytes
     beepgen_start_beep                              327 bytes
-    FDSP_Kernel_InitObj                             323 bytes
     _ZN14V90Demodulator14enterDataPhaseEv           322 bytes
     _ZN8V90ModemD2Ev                                321 bytes
     _ZN8V90ModemD1Ev                                321 bytes
@@ -418,7 +414,6 @@ dsplibs.o reconstruction coverage
     toneiir_create                                  297 bytes
     _ZN12V90Equalizer23restoreEqualizerToFloatEv    297 bytes
     FPM_MTD_detect                                  297 bytes
-    bValidateEnergyValue                            296 bytes   (file-local)
     _ZN18V92Phase4Modulator12recivedCPtagEv         296 bytes
     B103OriginateNextState                          295 bytes
     _ZN18V92Phase4Modulator30recivedPartOneSilenceRrnSUVtagEv    294 bytes
@@ -475,7 +470,6 @@ dsplibs.o reconstruction coverage
     V34scrambler                                    256 bytes
     v23FP_tx_create                                 255 bytes
     _ZN18V90Phase4Modulator5resetE7PcmTypeh20Phase4ModulatorStatejj    255 bytes
-    TONE_generate                                   254 bytes
     CALLPROG_Delete                                 252 bytes
     _ZN18V92Phase4Modulator9recivedRtEv             251 bytes
     txmitdibit                                      250 bytes
@@ -589,7 +583,6 @@ dsplibs.o reconstruction coverage
     detectorinit                                    186 bytes
     _ZN12V92Modulator5resetEv                       186 bytes
     _ZN12V92PreFilter7processEPfS0_                 185 bytes
-    TONE_filter                                     185 bytes
     FPM_MTD_create                                  184 bytes
     _ZN20V90Phase4Demodulator15trn2dKnownDemodEs    183 bytes
     _ZN12VPcmFloModem22copyMpInfoForInterfaceEv     183 bytes
@@ -733,7 +726,6 @@ dsplibs.o reconstruction coverage
     _ZN8SineWaveIffE8generateEPfm                   134 bytes
     _ZN15V90BitsToSymbol18nofBitsForNextTimeEv      134 bytes
     _ZN18V92Phase3Modulator13genereteSuNotEv        133 bytes
-    TONE_kill                                       133 bytes
     FPM_sqrt                                        133 bytes
     _ZN25V90AutoDigitalImpDetector30unSuspectedPhaseNearestLinMappEss    132 bytes
     dftRetrainDetInit                               131 bytes
@@ -981,7 +973,6 @@ dsplibs.o reconstruction coverage
     SetAdaptEqV32                                    79 bytes
     _ZN18V92Phase4Modulator13generateTRN2uEv         78 bytes
     _ZN12V90Modulator5resetEv                        78 bytes
-    TONE_delete                                      78 bytes
     GetRateV32                                       78 bytes
     FPM_TONE_delete                                  78 bytes
     v8_phase_rev_init                                77 bytes
@@ -1097,7 +1088,6 @@ dsplibs.o reconstruction coverage
     _ZN5V90CP23printNofRecievedMpMpNotEv             56 bytes
     _ZN12VPcmFloModem16setNofBitsPhase4Ej            56 bytes
     _ZN12V90Equalizer6freezeEv                       56 bytes
-    FDSP_Kernel_SetInternalBeepInProgress            55 bytes
     FAXVMI_message                                   55 bytes
     _ZN27ParallelDifferentialEncoderIhE7processEPhS1_     54 bytes
     _ZN24V90ConstellationDesignerC2EP13V90ParametersP12V90PreFilterP21V90ConstellationPower     54 bytes
@@ -1311,7 +1301,6 @@ dsplibs.o reconstruction coverage
     ScrambleDataV32                                  28 bytes
     ScrambleDataV22                                  28 bytes
     FPM_TONE_set_freq                                28 bytes
-    zFLTUTL_FloatMemSet                              27 bytes
     _ZN20V90Phase3Demodulator14setSessionFlagEj      27 bytes
     v8_TONEq_init                                    26 bytes
     _ZN5V92Jd15setMaxLookaheadEh                     26 bytes
@@ -1591,7 +1580,7 @@ dsplibs.o reconstruction coverage
     voice.c#3 +3                                    6443 bytes     8 symbols
     V32mod.c +39                                    5294 bytes    12 symbols
     class1.c                                        4296 bytes    10 symbols
-    Fdspkrnl.c +13                                  3557 bytes     7 symbols
+    Fdspkrnl.c +13                                  3286 bytes     6 symbols
     class1rx.c                                      2495 bytes     5 symbols
     Beepgen.c +3                                    2165 bytes     5 symbols
     v22.c                                            929 bytes     3 symbols
