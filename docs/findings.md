@@ -98859,3 +98859,1336 @@ The one thing the file does NOT pin is the four debug strings, because every
 site is gated on `dsplibs_debug_level > 1` and the harness runs at 0. They are
 covered by `make one`'s `strings` tier, which checks every literal in `src/`
 exists in the object, and that is the whole of the evidence for them.
+### F8740. The software ring detector is reconstructed whole -- nine symbols, 2,061 bytes, and it is a hysteretic zero-crossing counter rather than a filter
+
+*2026-08-31.* `voice.c#3`'s ring-detect half is written and green: `RD_create`
+(293), `RD_delete` (84), `RD_process` (130), `RD_ring_details` (16),
+`RingDetector_Delete` (17), `RingDetector_Reset` (already written),
+`RingDetector_Create` (452), `RingDetector_GetLastRing` (24) and
+`RingDetector_Process` (1,045). Eight new, 2,061 bytes, in
+`src/service/voice.c` with `include/dsplib/ringdet.h`.
+
+**There is no filter and no transform in it.** A ring at 20-25 Hz is two
+octaves below anything else on the line, so the object simply compares the
+sample against a threshold with wide hysteresis and counts the crossings:
+
+- **three states** at `+0x3e` -- SEARCH (1), HIGH (2), LOW (3);
+- **two levels** at `+0x44`/`+0x46`, which SWAP ROLES rather than merely sign
+  between the half cycles. In HIGH they are `+threshold` (full amplitude) and
+  `+lock_level` (the crossing that ends the half); in LOW they are
+  `-lock_level` (the crossing) and `-threshold` (full amplitude). A sample
+  between them is in a guard band that is tolerated for three quarters of a
+  period at `min_freq` and no longer;
+- **a debounce that tightens once locked** -- SEARCH needs
+  `|threshold|/(fs/80)` consecutive samples (10 at 8 kHz and a 1000 threshold)
+  and a locked half cycle needs 2, or 0 in the negative-threshold mode;
+- **a frequency measured once per FULL cycle**, `fs / (half_samples + 1)`,
+  folded into a running integer mean, and accepted only inside
+  `[min_freq, max_freq]`;
+- **a ring declared** when `cycles * 1000 / freq_avg` passes `minOnDur`, and
+  withdrawn when either silence counter passes `minOffDur` in samples.
+
+The measurement is taken on one crossing of each pair and not both, and the
+marker for which is `above_need == idle_debounce`: entering HIGH from SEARCH
+overwrites `below_need` with the locked debounce and leaves `above_need` at
+the idle one, so the 3->2 crossing is the one that still carries it. That is
+the whole mechanism by which a half-cycle counter yields a full-cycle period.
+
+`t_ringdet` is 1,249,563 differential checks over 37 process scenarios, 48
+create/delete cases and 8,967 reset configurations, comparing the whole
+0x52-byte object after every block; `test/mutations/ringdet.json` is 41
+mutations, all 41 caught.
+
+### F8741. `RD_process`'s own format string types two fields, and slmodemd's use of them fixes the units
+
+*2026-08-31.* `RD_process` prints
+
+    "RD: RD: freq = %d, duration = %d\n"
+
+with exactly the two values `RingDetector_GetLastRing` hands back, so `+0x2e`
+is a FREQUENCY and `+0x24` is a DURATION on the author's own authority
+(`.rodata.str1.4:0x448`, reached through `relocscan`, not through a search of
+the disassembly -- finding F604). That is tier 1, and it is the only tier-1
+naming in this struct beyond the six `Reset` already prints.
+
+`modem.c`'s `modem_ring_detector_process` then fixes the units and the
+protocol without any inference:
+
+    if (freq == 0)      report ring start
+    else if (freq > 0)  ring finishing; ring_count = duration * freq / 1000
+
+-- so the frequency is Hz, the duration is milliseconds, and a reported zero
+frequency is not a failure but the OPENING edge. That is why `Process` writes
+`last_freq = 0` on the sample that declares a ring and copies `freq_avg` into
+it on the sample that ends one: the same two-word report carries both edges
+and the caller tells them apart by the sign. Everything else in
+`struct ring_detector` is named by usage inference and says so in the header.
+
+### F8742. `RingDetector_Create` is `malloc` plus an INLINED `RingDetector_Reset`, and the out-of-line copy is emitted as well
+
+*2026-08-31.* `RingDetector_Create` (0x2550, 452 bytes) contains no call. Its
+body is `sysdep_malloc(0x54)` followed instruction for instruction by
+`RingDetector_Reset`'s -- the same clamps, the same `fs/80` and
+`3*fs/(4*min_freq)` divisions, the same debug line with the same six
+arguments, the same duplicated `min_off_dur >= 120` clamp in the negative
+branch. `RingDetector_Reset` is nonetheless a separate GLOBAL symbol at
+0x2380, because the rest of the object calls it.
+
+That is GCC 3.4 at `-O3`: `-finline-functions` inlines an externally-visible
+function at a call site and still emits the out-of-line copy. So the source is
+the call it must have been, and the 452 bytes are counted against
+`RingDetector_Create` while the code they contain is `RingDetector_Reset`'s.
+It is the inlining-boundary trap of CLAUDE.md read the other way round -- here
+the blob has TWO symbols for one piece of source rather than one symbol for
+two pieces.
+
+**It also makes `RD_create`'s null check unreachable.** `Create` dereferences
+the returned pointer on the instruction after the `call` (`movw $0x0,0x3a(%esi)`)
+with no test, so a failed allocation faults inside `Create` and never returns
+the zero `RD_create` goes on to test for. Both are reproduced; neither is
+repaired.
+
+### F8743. The ring threshold is a twelve-entry jump table on `MDMPRM_CODECTYPE`, and nine of the twelve arms are the default
+
+*2026-08-31.* `RD_create` fixes five of the six configuration fields as
+constants -- fs from its argument, `minFreq` 15, `maxFreq` 80, `minOnDur` 120,
+`minOffDur` 120 -- and reads only the threshold from the modem:
+
+    modem_get_param(modem, MDMPRM_CODECTYPE) - 4, range 0..11, .rodata:0xa4
+
+    codec  4, 12   ->  1000
+    codec 13, 15   ->   650
+    codec 14       ->   850
+    everything else -> -3000
+
+The negative default is not a sentinel. `Reset` takes `|threshold|` everywhere
+and uses the SIGN to select the second constant pair -- `lock_debounce` 0 and
+`lock_level` 200 rather than 2 and 100 -- so the default is a 3000-count
+threshold with zero debounce and a 200-count crossing level, and the three
+named codecs get a low threshold with two samples of debounce.
+
+The object names no codec constant anywhere in the 1.2 MB: the V.90 manglings
+record that `__tHardwareCodecTypes__` exists and nothing about its enumerators
+(`include/dsplib/V90CodecType.h`), so the switch is written with the numbers
+the object tests and no invented names.
+
+**The table was read through `tools/dis.py` and `objdump -s -j .rodata`, not
+off the disassembly.** `jmp *0xa4(,%eax,4)` carries one `R_386_32` against the
+section symbol; the twelve targets are inline addends and a bare `objdump -d`
+shows the table's bytes disassembled as instructions.
+
+### F8744. The closing edge's duration floor cannot be reached by playing audio, and reaching it needs the object's two separate silence counters
+
+*2026-08-31.* `RingDetector_Process` reports a duration of
+
+    ring ending:   minOnDur  - minOffDur + 20 + elapsed_ms, held >= minOnDur
+    ring starting: minOffDur - minOnDur  - 20 + elapsed_ms, held >= minOffDur
+
+and the OPENING floor is routine -- a ring is declared after `minOnDur` of
+tone, so `elapsed - 20` is below `minOffDur` on every default cadence and the
+clamp fires constantly. The CLOSING floor is not reachable at all by audio: a
+ring ends only once a silence counter passes `minOffDur` in samples, so
+`elapsed_ms >= minOffDur` always, so the corrected value is always at least
+`minOnDur + 20`. Mutating that clamp away survived every cadence this test
+plays.
+
+It is reachable, and what makes it reachable is that the object keeps the
+silence and the report in DIFFERENT counters: `idle_samples` (+0x1c) and
+`band_samples` (+0x20) decide when the ring ends, `report_samples` (+0x14)
+measures the duration, and only the latter is zeroed on an edge. Poking
+`idle_samples` past the window immediately after the opening edge -- through
+`struct ring_detector *` on both sides at once, so the poke is also a check on
+the layout claim -- ends the ring on the next single sample with
+`elapsed_ms == 0`, and the reported duration is the floor. `t_ringdet` does
+exactly that and the mutation is caught.
+
+**The general form is worth keeping.** A clamp whose guard condition is
+implied by the state machine that reaches it is dead to any test driven only
+through the front door, and the way in is a field the machine keeps separately
+from the one the guard reads. Look for the second counter before recording the
+arm as unreachable.
+
+### F8745. `RD_ring_details` is declared `long *` upstream and stores 32 bits, and this tree writes `int *`
+
+*2026-08-31.* slmodemd's `modem.c` declares
+
+    extern void RD_ring_details(void *obj, long *freq, long *duration);
+
+and calls it with two `long` locals. The object stores through both pointers
+with `mov %edx,(%eax)` -- 32 bits -- because it was built for ILP32, where the
+two spellings are the same type. They are not the same type anywhere this tree
+also has to compile (`make check64`), and the instructions are what the
+reconstruction follows, so `ringdet.h` declares `int *` and the header says
+why.
+
+This is the same call the tree already made for `dsp_info::clock_deviation`,
+which is `int` here and `long` in slmodemd's own header. Recorded rather than
+left implicit because the two are now a pattern: **a vendored upstream
+declaration is evidence about the API's intent and not about its ABI**, and
+where they disagree the instructions win.
+
+### F8760. The beep generator's object is 0x12c bytes, a twenty-entry tone queue with three host callbacks bolted on the end
+
+*2026-08-31.* `beepgen_create` allocates 0x12c (0xacda1) and the stores across
+the five entry points fix every field of it:
+
+    +0x00 modem      +0x14 gain1     +0x24 queued    +0x11c fn_011c
+    +0x04 phase1     +0x18 gain2     +0x28 playing   +0x120 hook_on_proc
+    +0x08 phase2     +0x1c elapsed   +0x2c tone[20]  +0x124 fn_0124
+    +0x0c freq1      +0x20 duration        {f,f,int} +0x128 dur_units_per_sec
+    +0x10 freq2
+
+The queue length is not a guess: 0x11c - 0x2c is 240 and the entry stride is
+12 -- `lea (%eax,%eax,2)` then `lea (%ebx,%ecx,4)` at 0xace1d and 0xad352 --
+so it is exactly twenty.
+
+**`dur_units_per_sec` is derived, not named by hand.** The object computes the
+tone's sample count as `duration * 8000 / [+0x128]`, and 8000 is the sample
+rate the phase step confirms independently (0.000785 radians per sample per
+hertz is 2*pi/8000 to three figures), so +0x128 is the number of duration
+units in one second. It is 10 for an ordinary tone and 100 for the '!'
+marker, in all three places that set it.
+
+**The three callbacks are the host's, and only one of them is named.**
+`beepgen_create` copies them out of a sixteen-byte configuration block whose
+own source is outside the object -- `voice_create` (0xac210, not
+reconstructed) passes ITS first argument straight through at 0xac2cd -- so
+there is no caller in the 1.2 MB that types them. +0x120 is `hook_on_proc`
+because `beepgen_sample` prints the author's own "Hook on proc\n" immediately
+before the only call to it (0xad421); the other two keep neutral names.
++0x011c fires at the symmetric position, when a -1 tone becomes current, and
++0x124 is asked for the marker's duration with the literal 24, which nothing
+in the object explains.
+
+### F8761. `beepgen_start_dtmf` is `beepgen_get_freqs` and `beepgen_start_beep` inlined, and only two characters are not a DTMF pair
+
+*2026-08-31.* 877 bytes of `beepgen_start_dtmf` are two other functions of the
+same translation unit expanded into it at `-O3`: the col/row tables
+`{1209,1336,1477,1633,0,-1}` and `{697,770,852,941,0,-1}` are built on the
+stack at 0xacf54-0xacfc1, the jump table at .rodata+0xee3c indexes `code -
+0x21` over 0x24 cases with the same sixteen bodies `beepgen_get_freqs` has,
+and the whole tail from 0xad006 is `beepgen_start_beep`'s body including its
+"start beep %d %d %d" line. So the source is three lines and a special case,
+and writing it that way reproduces the behaviour exactly.
+
+The two characters that are not a DTMF pair:
+
+- **'!'** takes its duration from `fn_0124(modem, 24)` BEFORE the debug line
+  (0xad140), and `beepgen_get_freqs` then hands it -1/-1, which
+  `beepgen_start_beep` reads as the start marker.
+- **','** is checked AFTER the table lookup, silences both halves and triples
+  the duration (`lea 0x0(%ebp,%ebp,2)` at 0xad119), printing
+  "\n *** digit ',' => pause".
+
+`code` is an `int`: it is loaded and compared 32 bits wide against 0x21 and
+0x2c, and only the inlined `beepgen_get_freqs` narrows it with `movzbl`.
+
+### F8762. `beepgen_sample` is the second site in this tree needing `-funsafe-math-optimizations`, and the pragma is scoped to the function
+
+*2026-08-31.* 0xad2a8 is `fsin` and 0xad2af is `fcos`. GCC expands `sin()` and
+`cos()` inline to the x87 instructions only under
+`flag_unsafe_math_optimizations`; without it the call goes to libm. That is
+the same observation `src/dsp/fft.cpp` records for `four1` and `realfft`, and
+the object has twelve such sites over eight functions with **no `sin`, `cos`
+or `sqrt` relocation anywhere in the 1.2 MB and no such symbol defined in it**
+-- only `pow`, which is compiled in. So the original's build of this library
+had the flag on.
+
+`fft.cpp` puts `#pragma GCC optimize` at file scope because the whole file
+wants it. `beepgen.c` cannot: the reciprocal tails and mean-removed sums of
+`fComputeRMSValue*Buf`, `bSearchEnergy` and `FindCorrelation` share the
+translation unit and are already differentially green under the tree's
+ordinary flags, and reassociation is exactly what would move them. So the
+pragma here is bracketed by `push_options`/`pop_options` around the one
+function, and GCC 14 emits `fsin`/`fcos` for it and nothing else changes.
+
+**GCC 3.4.2 ignores the pragma entirely**, so the period build calls libm and
+differs from the object around the 54th bit of a double that is then rounded
+to a 24-bit float -- fft.cpp's finding F833 argument, and the same conclusion:
+the flag is here on the disassembly's authority, not the test's.
+
+### F8763. The tone detector's object is 0x38 bytes and its output mode is named by its own setters
+
+*2026-08-31.* `detector_create` is blocked -- it still needs ten unwritten
+symbols -- but it settles two things about the object for free: it allocates
+0x38 at 0xad5da and it stores 1 into +0x34 at 0xad498. The three setters that
+ARE writable then name that word without any inference: `detector_set_output_
+status` writes 0 and `detector_set_output_in_stream` writes 1 to it, so it is
+a mode selector and the created default is "in stream". `detector_set_enable`
+writes a 16-bit value at +0x00.
+
+Nothing else about the 0x38 is modelled, and `detector.h` says so: the middle
+0x32 bytes are a pad until `detector_create` lands.
+
+### F8764. `FDSP_DP_Run` is a pure rescaler with a dead argument, and its count is unsigned
+
+*2026-08-31.* All 138 bytes: `*countp` samples of 16-bit linear multiplied by
+1/32000 into a float buffer, `*countp` floats multiplied by 32000 and stored
+through a round-to-zero `fistps`, `*status = 2`, `return 1`. No filtering, no
+state, no object pointer -- the FDSP kernel is nowhere in it.
+
+Two things the disassembly forces. The count is loaded with `movzwl` (0xae4a6)
+into a value used as a signed 32-bit loop bound, so the pointee is an
+`unsigned short` and not a `short` -- finding F613's forced case. And the
+SIXTH argument's stack slot, `0x20(%esp)`, is never loaded: seven arguments go
+in and six are used. Recorded as D986 rather than dropped from the signature,
+because the ABI is what the caller has to satisfy.
+
+The receive scale is the float nearest 1/32000 (0x3803126f), loaded once
+outside the loop, which is the constant `1.0f / 32000.0f` folds to and the
+same one `CrossDataLinks` two functions earlier already uses.
+
+### F8765. `create_dtmf` confirms `struct dtmf` from the constructor's side, and its loops count in a short
+
+*2026-08-31.* `dtmf.h`'s layout was derived from `dtmf_detect` and `dtmf_test`
+alone, with `create_dtmf` named in the header as unreconstructed. Writing it
+is an independent check on that layout from the other end, and the layout
+holds: 0x98 allocated, `notch_state[8][2]` and `energy[8]` cleared together in
+one loop, `bias_state[2]` in a second, `hist[8]` set to -1 in a third, then
+`total`, `count`, `phase`, `held`, `easy` zero and `digit` -1. The 0x80..0x8f
+`pad_80` is untouched, exactly as the header claims.
+
+The loop counters are 16-bit: `inc %eax; cwtl; cmp $0x7,%ax; jle` at
+0xadf27-0xadf2d and twice more. So the author wrote `short i` and the bounds
+are `<= 7` and `<= 1`, which is what the reconstruction spells.
+
+### F8766. The `Beepgen.c` span is NOT all callerless surface, and the reverse edges are what say so
+
+*2026-08-31.* `beepgen.c`'s header comment said none of its symbols has an
+internal caller in the blob, which was true of the eleven leaves that had been
+written. It is not true of the span: `readelf -r` finds `beepgen_create`
+called once, from `voice_create` at 0xac2d5, `create_dtmf` called from
+`detector_create` at 0xad4b1, and `detector_set_enable` called from six sites
+across `voice_dle_command`, `voice_create` and `voice_command`.
+
+That matters for evidence, not for scheduling: `voice_create` is what proves
+the configuration block is sixteen bytes of `{modem, fn, fn, fn}` and that it
+is the VOICE service's own argument passed through, which no amount of
+reading `beepgen_create` alone could establish. **Run the relocation table
+before recording a symbol as having no caller** -- the call-graph tools answer
+the forward question and this one is backward.
+### F8770. Three LOCAL functions in the blob that are NOT regparm(2): being `t` predicts nothing, the body does
+
+*2026-08-31.* `vce_hook_on` (0x600), `vce_hook_off` (0x630) and
+`vce_get_sreg` (0x660) are `t` in the object's symbol table, exactly as
+`GetGain`, `EchoCanceler` and `bValidateEnergyValue` are in F8462 -- and
+unlike those three they take their arguments on the STACK:
+
+    vce_hook_on   sub $0xc,%esp ; ... ; mov 0x10(%esp),%eax   -> arg0
+    vce_get_sreg  push %ebx ; sub $0x8,%esp ;
+                  mov 0x10(%esp),%eax ; mov 0x14(%esp),%ebx   -> arg0, arg1
+
+So `t_vce.c` declares their `ref_` aliases plainly, with no
+`__attribute__((regparm(2)))`, and the calls agree.
+
+**Why it matters as a rule.** GCC 3.4's static-function regparm is
+`cgraph_local_info(decl)->local`, which is withdrawn as soon as the address of
+the function is taken or the unit-at-a-time bookkeeping cannot prove the
+function local -- so the convention is a property of what the whole
+translation unit does with the symbol, not of its binding. F8462 read as "a
+LOCAL blob function is regparm(2)"; it is not, and a test that declared these
+three that way would pass its own build and compare two different functions.
+**Read the prologue, not the symbol table.**
+
+### F8771. `vce_get_sreg` is the voice service's own S-register reader, and slmodemd's `struct voice_info` decodes all seven of its cases
+
+*2026-08-31.* `vce_get_sreg(modem, num)` calls
+`modem_get_param(modem, 12)` -- MDMPRM_VOICEINFO -- and answers seven register
+numbers out of the block it gets back and out of three built-in constants.
+Everything else returns 0.
+
+The block is slmodemd's `struct voice_info` (`ref/slmodemd/modem_defs.h`),
+eleven `unsigned` members, and the three offsets the object reads land on
+exactly the three members its register numbers name -- which is what makes
+this a derivation rather than a plausible fit:
+
+| num | slmodemd's name for it | answer |
+|---|---|---|
+| 24 | `SREG_FLASH_TIMER` | 20, constant |
+| 72 | `SREG_HANDSET_GANE` (their spelling) | 19, constant |
+| 73 | `SREG_VOICE_DIALTONE_DETECT_DELAY` | 3, constant |
+| 82 | `SREG_SILENCE_DETECT_SENSITIVITY` (#VSS) | +0x24 `silence_detect_sensitivity`, reduced |
+| 83 | `SREG_SILENCE_DETECT_DURATION` (#VSP) | +0x28 `silence_detect_period` |
+| 138 | `SREG_MIC_GAIN` | +0x08 `rx_gain` |
+| 139 | `SREG_LINE_RECORD_GAIN` | +0x08 `rx_gain` |
+
++0x08, +0x24 and +0x28 are members 2, 9 and 10 of eleven four-byte members, so
+the layout corroborates rather than being assumed; and both accesses to the
+sensitivity are unsigned in the object (`shr $0x6`, `jbe`), which is the type
+slmodemd declares.
+
+**The sensitivity mapping is not a plain shift**, and this is the part no
+amount of reading the register number would have given:
+
+    level = sensitivity >> 6;
+    if (level == 0)  return sensitivity != 0;   /* 1..63 -> level 1 */
+    if (level > 3)   return 3;
+    return level;
+
+So zero is the only raw value that reports level 0, and everything above 191
+saturates at 3.
+
+**The three constants are answered without storage.** Setting S24, S72 or S73
+anywhere cannot move what this function returns -- and it still pays for the
+`modem_get_param` call, which the object makes unconditionally before the
+switch.
+
+### F8772. The MTK tables: two exact identities, three near-miss closed forms, and why they stay literal
+
+*2026-08-31.* Six symbols in `.data`, 3,628 bytes, all six now in
+`src/service/mtk_tables.c` and proved byte for byte by `t_mtktab`:
+
+    MTK_xor_table  0x8500   512   MTK_cos_table  0x8f40  1028
+    MTK_atan_table 0x8700  1028   MTK_sin_sign   0x9344    16
+    MTK_sin_table  0x8b20  1028   MTK_cos_sign   0x9354    16
+
+**Two identities hold BIT FOR BIT, so they are checked and not described:**
+
+- `MTK_xor_table[i] == popcount(i)` for all 256 entries, as a `short`. That is
+  the whole derivation of that table and it explains the name -- an XOR/parity
+  weight lookup.
+- `MTK_cos_table[i] == MTK_sin_table[256 - i]` for all 257. One quarter wave,
+  stored twice, read from both ends.
+
+**Three closed forms are within one ULP and reproduce NOTHING exactly**, which
+is why the tables stay literal (`docs/coefficients.md`, and the fast pass's
+rule that a byte-exact copy is byte-exact):
+
+    MTK_sin_table[i]  = sin(i * pi / 512)     1 of 257 entries differs
+    MTK_cos_table[i]  = cos(i * pi / 512)     2 of 257 differ
+    MTK_atan_table[i] = atan(i / 256.0)       1 of 257 differs
+
+A generator would therefore be WRONG in one to two cells each, and the failure
+would be invisible to anything but a byte comparison. Measured with the
+double-precision libm result rounded to `float`; whatever the author's
+generator was, it was not that.
+
+**The shape is `MTK_phasor`'s (0xb0690), the only caller of the sine pair.**
+The angle is reduced, scaled and rounded to a 16-bit integer; the low 8 bits
+index the table and the interpolation reads `[i]` and `[i+1]`, which is why
+257 and not 256; bits 8-9 select the quadrant and index the two four-entry
+sign vectors, so the stored quarter wave carries no sign of its own --
+`MTK_cos_sign` is `+ - - +` and `MTK_sin_sign` is `+ + - -`.
+
+**Alignment is the compiler's, not an attribute.** The four tables of 32 bytes
+or more sit on 32-byte boundaries and the two 16-byte ones only on 4, which is
+GCC's i386 `DATA_ALIGNMENT` boost when optimising. Nothing to declare.
+
+**Which TU they came from is NOT settled.** `tumap.py` brackets the range
+holding `MTK_phasor` between fourteen candidate file names, of which `PHASOR.c`
+and `TABLES.c` are the suggestive two. The file name in `src/` is ours; the six
+symbol names are the author's.
+
+**AND `silence_level_table` IS DECLINED, NOT FORGOTTEN, AND THE REASON IS THAT
+IT IS `static`.** It was scheduled with these six and it does not belong with
+them: it is `d` in the object -- LOCAL -- at `.data` 0x84d4, 16 bytes, and the
+only three references to it in the whole 1.2 MB are inside `silence_progress`
+(0xb03b0..0xb0690's neighbour), which is unwritten. A `static` array with no
+reader **is not emitted at all** by either compiler, so defining it in a file
+of its own would either vanish or have to be made external -- and external is a
+change to the object's own linkage made purely to give a test something to
+compare. Neither is worth doing before its one consumer exists.
+
+Its content is recorded here so the next agent does not have to re-derive it.
+Sixteen bytes at `.data` 0x84d4, which as four floats are
+
+    -1.0f, 2.5147244e-06f, 6.9853459e-06f, 2.2632519e-05f
+
+(raw words `bf800000 3628c2a3 36ea63aa 37bddaf7`). The first entry is a
+placeholder for what follows, and the other three ascend by roughly 2.8x,
+which is what a table of energy thresholds indexed by a 0..3 sensitivity
+LEVEL looks like -- and F8771 has just established that `vce_get_sreg`
+reports exactly such a level, 0..3, for `SREG_SILENCE_DETECT_SENSITIVITY`.
+That is a reading, not a derivation; `silence_progress` is what settles it,
+and **the table belongs in whichever file gets `silence_progress`, spelled
+`static`.**
+
+**AND `MTK_phasor` IS DECLINED FOR AN OWNERSHIP REASON, NOT A TECHNICAL ONE
+-- SO THE WHOLE DECODE IS WRITTEN OUT HERE.** It is 271 bytes at 0xb0690 and
+it is no longer blocked on anything: the six tables above are its only
+unwritten referents and they have landed. What stops it is that writing it
+costs two files this agent does not own in a parallel wave --
+`test/harness/runtime.c`, which defines an unprefixed `MTK_phasor`
+forwarding to `ref_MTK_phasor` (F8463) and would collide at link, and
+`include/dsplib/fdspkrnl.h`, whose `struct mtk_phasor` and "Still the blob's"
+comment would both need revisiting -- and that `TONE_generate`'s existing
+test compares a `TONE_generate` whose oscillator IS the blob's, so a
+reconstruction that is not bit-identical breaks somebody else's green test
+rather than its own.
+
+Read off `dis.py`, with every `DE`-encoding taken from the bytes and not the
+AT&T mnemonic (F245): `de e9` at 0xb071e is FSUBP, `de ca` at 0xb0760 is
+FMULP `st(2)`, `de c1` at 0xb0762 is FADDP.
+
+    x = fmodf(p->phase, 6.28318530718);   /* fprem against a FLOAT 2pi */
+    if (x < 0.0f)
+            x = x + 6.28318530718;        /* the DOUBLE literal, renarrowed */
+    p->phase = x;                         /* stored once, after the merge */
+
+    y = x * 162.97466172610083;           /* DOUBLE constant, narrowed to float */
+    n = (short)y;                         /* fist m16, round-to-zero */
+    q = n >> 8;                           /* arithmetic; indexes the sign vectors */
+    frac = y - n;                         /* kept at 80 bits, never narrowed */
+    if (n & 0x100) {
+            frac = 1.0f - frac;
+            n = ~n;                       /* `not %eax` before the mask */
+    }
+    i = n & 0xff;
+
+    p->out_04 = MTK_cos_table[i]
+                + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;
+    p->out_04 = p->out_04 * MTK_cos_sign[q];
+    p->out_08 = MTK_sin_table[i]
+                + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;
+    p->out_08 = p->out_08 * MTK_sin_sign[q];
+
+    s = x + p->step;                      /* fadds +0x0c, in extended */
+    if (s >= 3.141592653589793)           /* fcoml against a DOUBLE pi */
+            s = s - 6.28318530718;
+    p->phase = s;
+
+162.97466172610083 is 512/pi to a float's worth of digits, which is what
+makes `q` the quadrant and `i` the 0..255 index into a 257-entry quarter
+wave. **Each output is written TWICE**, unsigned then signed -- that is not a
+transcription slip, it is two statements in the source: GCC's `fsts` narrows
+the stored copy and then multiplies the 80-bit value it still holds, which a
+single `interp * sign` statement would not emit.
+
+**THE PART TO EXPECT TROUBLE FROM is `frac`**, which the object keeps at 80
+bits from the `fsubp` all the way through both interpolations. That is
+exactly the shape behind `t_v90equproc` and `t_psd` in `tools/gccdiverge.json`
+-- the modern compiler keeps intermediates the object also kept, but narrows
+and widens at different points -- so whoever writes it should expect the
+period tier to be the one that decides, and should not touch `src/` to make
+GCC 14 agree.
+
+### F8773. Four `voice.c#3` symbols are appended out of emission order, on purpose, and the reason is that this session could not measure the alternative
+
+*2026-08-31.* `vce_hook_on`, `vce_hook_off` and `vce_get_sreg` are the FIRST
+three symbols of the `voice.c#3` span (0x600, 0x630, 0x660) and
+`STRM_VCE_GetFDSPEnvironmentalParams` is at 0x13b0 -- all four before
+`RD_create` at 0x2130. Faithful emission order would put them at the top of
+`src/service/voice.c`; they are appended to the bottom instead.
+
+**Why.** Emission order is a register-allocation carrier (F7796, F7800): it is
+upstream of a function and moves code the function did not change. The nine
+ring-detector functions above them were written and measured in their current
+position by another agent in the same wave, and this session has no period
+compiler with which to re-measure them after a move -- so the choice was
+between an unmeasured reorder that could silently cost byte identity above,
+and a recorded deviation from the order rule. **An unmeasurable change to
+already-measured code is not an improvement**, so the deviation is taken and
+written down in the file's own banner as well as here.
+
+**What to do about it.** The next refinement pass with `byteident.py`
+available should try the faithful order and keep it if nothing above
+regresses. It is a two-minute experiment for whoever can run the tool, and an
+unbounded risk for whoever cannot.
+
+### F8774. `voice_dle_command` sits in a bracket labelled `class1tx.c` and is voice, not fax
+
+*2026-08-31.* `voice_dle_command` (0xabe20, 196 bytes) falls inside the
+`tumap.py` bracket 0x94870..0xac960, whose first label is `class1tx.c`. The
+bracket is SHARED -- `voice.c#260` is in it too -- and everything inside the
+function says voice: the symbol name, and all three strings it prints ("voice
+dle command: ETX", "voice <CAN> command", "Unknown command - %2x").
+
+So it is reconstructed in `src/service/voicecmd.c` and not in `src/fax/`,
+which is CLAUDE.md's "do not read a span name as a module name" applied to a
+case where the span label is not merely imprecise but from the wrong service
+entirely. It is not put in `src/service/voice.c` either: 0xa9000 bytes
+separate it from the `voice.c#3` span, so whatever TU it belongs to is not
+that one.
+
+**What it does.** Two DLE-shielded control codes of a voice connection:
+
+    <DLE><ETX> (0x03)  sets +0x744, returns 0
+    <DLE><CAN> (0x18)  sets +0x748, returns 9
+    anything else      writes nothing, returns 0
+
+The command byte is loaded with `movsbl`, so it is a SIGNED char: 0x83 reaches
+the default arm as -125 and that is what the object's `%2x` prints. The two
+flag names (`dle_etx`, `dle_can`) are usage inference, the weakest grade --
+what is established is the store and the author's word for the command that
+causes it; what consumes either flag is unwritten and so unknown. 9 has no
+name in the object or in slmodemd's `VOICE_STATUS_*` / `VOICE_CMD_*`, whose
+values do not reach it, so it stays a number.
+### F8750. `FDSP_Kernel_InitObj`'s LMS step is one ULP BELOW `0.032f`, and the tidy literal fails the differential test
+
+*2026-08-31.* The object sets chan_a's step with
+
+    aeb13:	b8 6e 12 03 3d       	mov    $0x3d03126e,%eax
+    aeb1d:	89 83 8c 16 00 00    	mov    %eax,0x168c(%ebx)
+
+and `include/dsplib/fdspkrnl.h` had recorded that constant as "0.032f" since
+the span was first read. **It is not.** `0.032` lands at 0.592 of the way
+between two floats, so correct rounding goes UP: `fl(0.032)` is `0x3d03126f`
+= 0.03200000151991844, and the object's word is `0x3d03126e` =
+0.031999997794628143310546875, one ULP below. Whatever produced it truncated
+the mantissa rather than rounding it.
+
+**It is not cosmetic and no reading of the disassembly alone would have caught
+it.** Writing `a->mu = 0.032f;` compiles, looks right, and fails
+`t_fdspkrnl` at `mu 120  got 0.0320000015, reference 0.0319999978  (1 ULP)` --
+the step feeds every tap update in `EchoCanceler`, so the two sides' filters
+diverge from the first adapting block. The differential tier found it on the
+first run; the header's comment had been wrong for as long as it existed.
+
+`src/service/fdspkrnl.c` now spells the constant as the float's exact value,
+`0.031999997794628143310546875f`, which every correctly-rounding compiler must
+reproduce bit for bit. `0.0319999978f` also works on GCC 14 and was declined:
+nine significant digits round-trip a float only if the compiler's
+decimal-to-binary conversion is correctly rounded, which is the very
+assumption this constant proves the ORIGINAL compiler did not satisfy.
+
+**The general form.** A constant read as a 32-bit `mov` immediate is exact
+evidence; the decimal you would write for it is a guess, and the guess is
+wrong whenever the author's toolchain rounded differently from yours. Spell
+the object's word, not your reading of it.
+
+### F8751. `FIFO8`'s parameters are a STRUCT, and the object copies them as one -- which is what names the type
+
+*2026-08-31.* `FIFO8_create` reads its second argument as
+
+    aef40:	8b 10                	mov    (%eax),%edx
+    aef46:	0f b7 40 04          	movzwl 0x4(%eax),%eax
+
+and later writes the same six bytes into the ring with `mov %edx,(%ebx)`
+and `mov %dx,0x4(%ebx)`. A four-byte load plus a two-byte load, and the
+same pair on the way out, is GCC's **structure assignment of a six-byte
+object**, not three field copies -- three shorts copied individually would
+be three `movzwl`/`movw` pairs. So the ring's first six bytes are a nested
+struct of the parameters, and `src/service/fifo8.c` spells it that way.
+
+The blob agrees by name: the default instance it reads when the argument is
+NULL is a LOCAL `.data` object at 0x83a0 called **`FIFO_CFG`** -- the
+author's own name, in the same family as `TONE_CFG` (0x83c0), `MTDv22_CFG`
+and `AGCv23_CFG`. Its three shorts are `{ 0, 300, 0 }`: a 300-byte ring
+padded with zero. `t_fdspkfifo`'s `cfg == NULL` arm is the only thing that
+compares our copy of those values against the blob's, because a LOCAL data
+object has no `ref_` name to read.
+
+The leading short is never read by any of the four FIFO8 functions and keeps
+a neutral name.
+
+### F8752. `FIFO8_read` PADS, and that is the only reason a caller can trust its output length
+
+*2026-08-31.* `FIFO8_read(f, dst, n)` copies `min(count, n)` bytes out of
+the ring and then writes `n - min(count, n)` more, each of them `cfg.fill`:
+
+    af060:	0f b7 47 04          	movzwl 0x4(%edi),%eax
+    af064:	88 01                	mov    %al,(%ecx)
+
+-- the pad byte re-read from the object on every pass, because the
+destination may be the object. The RETURN value is the number that came out
+of the RING, so a caller that reads it as "bytes written" is wrong by the
+pad; the destination is always exactly `n` bytes long.
+
+`FIFO8_write` has no matching behaviour: it clips to the free room and
+returns what it took, and a full ring takes nothing. So the pair is
+asymmetric on purpose -- the read side feeds something that must have a
+sample every period (the voice path) and the write side must not overrun.
+
+### F8753. `TONE_detect` is TONE_filter's FIR plus TONE_kill's biquad, and that is what names five fields of the tone object
+
+*2026-08-31.* `TONE_detect` (0xaf9f0, 422 bytes) has no format string and no
+typed callee, so nothing above evidence class 3 was available for its
+fields. What settles five of them is that its arithmetic is another
+reconstructed function's, instruction for instruction:
+
+    w  = c[1]*z2 + x + c[2]*z1
+    y  = c[0]*z2 + w + z1
+    z1 = z2 ; z2 = w
+
+is exactly `TONE_kill`'s already-verified shape, with `x` the FIR output,
+`c[0..2]` read INLINE from +0x48/+0x4c/+0x50 rather than through a pointer,
+and the state at +0x54/+0x58. So those five are `det_coef[3]`, `det_z1` and
+`det_z2` -- the roles come from the identity, not from the way they read.
+
+The two smoothed powers are then
+
+    e_res = e_res*0.95 + (fir^2 - biquad^2)*(1 - 0.95)
+    e_tot = e_tot*0.95 + fir^2          *(1 - 0.95)
+
+and **both constants are DOUBLES, one of which is not 0.05**: the object's
+second word is 0.050000000000000044, exactly `fl(1.0 - 0.95)`. That is a
+compile-time fold of the complement, so the author wrote one pole and
+derived the other, and `TONE_DETECT_POLE` reproduces the fold rather than
+the value.
+
+`e_res` and `e_tot` are `float` locals and the object proves it: each is
+spilled to a 4-byte slot and reloaded once per pass (0xafb1d and 0xafb35),
+which is a narrowing a wider local would not do.
+
+The verdict is three-way -- 2 below the power floor at +0x14, then
+`e_tot * (+0x0c) >= e_res` -- and +0x0c and +0x14 keep neutral names,
+because "a ratio" and "a floor" is all the code says about them.
+
+### F8754. `silence_create` checks its allocation and `FIFO8_create` does not, in the same span
+
+*2026-08-31.* Two creators forty bytes apart in the blob, both taking an
+optional caller-supplied object and allocating when handed NULL:
+
+    b03f1:	call   sysdep_malloc
+    b03f6:	89 c2  mov %eax,%edx
+    b03f8:	31 c0  xor %eax,%eax
+    b03fa:	85 d2  test %edx,%edx
+    b03fc:	75 bf  jne  ...            <- silence_create returns NULL on failure
+
+    aefb6:	call   sysdep_malloc
+    aefbb:	89 c3  mov %eax,%ebx
+    aefbd:	0f b7 44 24 12  movzwl ... <- FIFO8_create dereferences it at once
+
+`FIFO8_create` stores the ring pointer straight into the block it has just
+been handed, so an out-of-memory there is a null dereference. Neither
+behaviour is a defect this project may repair -- the reconstruction is of
+what the object does -- and both are written as the object has them.
+
+Neither arm can be driven from a fixture: the harness allocator does not
+fail on request, so `t_fdspksil` records the check rather than testing it,
+and the mutation set carries a NOT-here note instead of a mutant that would
+read NOT CAUGHT while modelling nothing.
+
+### F8746. Voice is a strict three-layer pipeline, and the layering is what makes it parallelisable — measured, so it need not be re-derived
+
+*2026-08-31.* At `852cb72c` (the ring detector landed, nothing else of voice
+written) `tools/service.py --list other` reported 59 symbols / 21,741 bytes
+for "voice / Caller ID / ring detect only". Ten of those are Caller ID
+(`cid_modem` 1,487, `data_formatted_output` 1,310, `cid_progress` 992,
+`reset_cid` 517, `cid_create` 204, `create_cid` 183, `cid_get_strings` 145,
+`data_unformatted_output` 117, `cid_freq_sampl` 107, `cid_delete` 86 —
+5,148 bytes). **Voice itself was therefore 49 symbols / 16,593 bytes reached
+by an entry point, plus `voice_set_online` (47) and `voice_set_duplex` (45)
+in the no-entry-point bucket: 51 symbols / 16,685 bytes.**
+
+`readyqueue.py` per span shows it is not a flat list but three layers, and
+almost nothing crosses a layer boundary sideways:
+
+| layer | what | bytes |
+|---|---|--:|
+| 1 | the leaves: `FIFO8_*`, `silence_{create,delete,is_more_then}`, `TONE_{detect,delete}`, `_status`, `FDSP_Kernel_{InitObj,SetInternalBeepInProgress}`, `beepgen_*`, `create_dtmf`, `FDSP_DP_Run`, `detector_set_*`, `vce_*`, `STRM_VCE_GetFDSPEnvironmentalParams`, `voice_dle_command`, the MTK tables | ~4,700 |
+| 2 | the per-block path: `silence_progress`, `MTK_phasor`, `TONE_create`, `detector_{create,progress,delete}`, `FDSP_DP_{Create,Delete}`, `voice_{rx,tx,duplex,set_rx,set_tx,online}`, `voice_set_{online,duplex}` | ~6,300 |
+| 3 | the service faces: `VOICE_{create,delete,command,process}` and `voice_{create,command,modem,delete}` | ~5,700 |
+
+**Layer 1 has no internal edges at all**, which is the fact worth recording:
+its four spans (`voice.c#3 +3`, `Fdspkrnl.c +13`, `Beepgen.c +3` and the
+voice share of `class1tx.c +94`) were taken by four agents at once with no
+coordination beyond a file-ownership split, and merged with conflicts only in
+`docs/findings.md`, `docs/deviations.md` and the two mutation JSONs — never in
+`src/`. Layer 2 then opened in one step: `voice_online` went from "needs 2" to
+READY the moment `beepgen_sample` and
+`FDSP_Kernel_SetInternalBeepInProgress` landed, and `voice_rx` and
+`voice_set_rx` from "needs 5" to "needs `silence_progress`".
+
+**THE SPAN LABELS MISLEAD HERE MORE THAN USUAL, and CLAUDE.md's rule is not
+enough on its own.** "Do not read a span name as a module name" was written
+for V.32, where a span named `V32mod.c` held V.22. Voice is the same defect in
+a worse place: **six voice symbols sit in a span labelled `class1tx.c +94`**,
+which is the FAX span — the largest thing left in the object and deliberately
+LAST. `voice_command` (802), `voice_create` (642), `voice_online` (508),
+`voice_modem` (338), `voice_dle_command` (196) and `voice_delete` (181), 2,667
+bytes, are voice and not fax, and a pass that took "fax is last" to mean "skip
+`class1tx.c +94`" would leave 16% of voice permanently unscheduled. File
+layout is ours; they belong in `src/service/`, and each such file's banner
+names the span it came from so the next reader is not surprised twice.
+
+**`service.py`'s `other` bucket does not separate the three services**, so the
+Caller ID subtraction above is by name and by hand. That is fine for a
+scheduling figure and is not evidence; `tools/closure.py` from the three entry
+point sets is what would settle it if a sharper number is ever needed.
+### F8755. `silence_progress` converts a setting through the x87 as unsigned, and GCC 14 folds the conversion the object performs
+
+*2026-08-31.* At 0xb05a3 the object takes the answer to its second settings
+query and does
+
+    b05a3:	55                   	push   %ebp        (zero)
+    b05a4:	50                   	push   %eax
+    b05a5:	df 2c 24             	fildll (%esp)
+    ...
+    b05c2:	db 5c 24 10          	fistpl 0x10(%esp)   (RC = toward zero)
+
+-- a 32-bit value zero-extended to 64 bits, converted to floating point, and
+truncated back to `int`. That is `(int)(double)(unsigned int)v`; a plain
+`(int)v` needs neither instruction, so the cast chain is carried by the
+disassembly and `src/service/silence.c` spells it.
+
+**It cannot be probed from the modern side.** For `v < 2^31` the chain and a
+plain cast agree exactly. For `v >= 2^31` the double is out of `int` range,
+which C leaves undefined: the x87 answers `0x80000000` and **GCC 14 folds
+the whole chain to `(int)v`** -- measured, `(int)(double)0xffffff00u` gives
+-256 on GCC 14 at `-O2 -mfpmath=387` and the blob gives -2147483648.
+
+So `t_fdspksil` sweeps the setting only to `0x7fffffff`. Driving it past
+that would compare two compilers' treatment of undefined behaviour and
+report it as a defect in `src/`, which is the failure mode CLAUDE.md's
+"never edit `src/` to make the modern tier green" rule exists to stop --
+here in its other direction, where the test rather than the source is what
+must not chase the modern compiler.
+
+The difference is confined to the debug line: the value only reaches
+`s->count > level`, and both readings are negative, so the run always
+escapes on the first silent block either way.
+
+### F8747. `silence_level_table` prints as 2699, 7500 and 24299, its comment said 2700/7500/24300, and only ONE ULP direction per row is catchable at all
+
+*2026-08-31.* Two results, from re-reading a function another agent had
+already written and passed. Both were found by an INDEPENDENT SECOND READ of
+the same 623 bytes, which is the only cross-check a single-author
+reconstruction ever gets, and the second result contradicts that read as well.
+
+**THE COMMENT WAS WRONG IN TWO OF THREE FIGURES.** `silence.c`'s table header
+said the three live rows turn back into "2700, 7500 and 24300" through
+`SILENCE_FULLSCALE2`. The object loads both operands with `flds` and
+multiplies at x87 EXTENDED precision (0xb052e-0xb053c), so the product of two
+24-bit mantissas is EXACT in a 64-bit one, and 0xb054b then sets
+round-toward-zero with `or $0xc00` before `fistpl`. Truncating the exact
+products
+
+    2699.999989941716    7500.000216186047    24299.999177098274
+
+gives **2699, 7500, 24299**. Round each product to a `float` first -- which is
+what a compile-time fold in `float` does, and what a reader does in their head
+-- and you get the round numbers the comment claimed. Both sides of the
+differential print whichever it is, so nothing in the suite could ever fail on
+it: findings F6100 and F6103's shape exactly, in a comment written three hours
+earlier.
+
+**AND THE TABLE ITSELF WAS COVERED BY NOTHING.** `fdspksil.json` reached it
+only through "the threshold test runs the wrong way round", which moves the
+COMPARISON and leaves the four words untouched -- so a mistyped digit in any
+row was untested. Three one-ULP mutants now cover it and are caught.
+
+**THE INTERESTING PART IS WHICH ONES.** The obvious expectation is six mutants,
+one per row per direction. Registering all six gives three permanent NOT CAUGHT
+rows, and the reason is that **the threshold branch catches none of the six.**
+The value reaching `acc > silence_level_table[lvl]` is always a block sum times
+0.00125; that map steps by about 1.28 ULP and therefore SKIPS floats, so a
+one-ULP move of the threshold has no preimage on either side and no input the
+function accepts can land in the gap. Every catch is the DEBUG LINE instead,
+and only where the one-ULP step crosses an INTEGER in the truncation above.
+Rows 1 and 3 sit just below an integer, so only a step UP crosses it; row 2
+sits just above one, so only a step DOWN does. One direction per row, and
+which direction is a property of the constant rather than of the code.
+
+**THE SECOND READ GOT THAT PART WRONG TOO, AND THAT IS THE POINT.** It reported
+rows 1 and 3 catchable in both directions with row 2 high as the single gap.
+Running the suite says the opposite: rows 1 and 3 are catchable UP only, row 2
+DOWN only. An analytical argument about which mutants a test can distinguish
+is a hypothesis, and `mutate.py` is the measurement -- the same relationship
+`extcheck.py` has to `dis.py` (finding F2402, one report in five real). Neither
+read was worthless and neither was authoritative; the run settled it.
+
+**What the second read DID settle, by agreeing:** the sixteen bytes
+(`bf800000 3628c2a3 36ea63aa 37bddaf7`) byte for byte, and that
+`silence_progress` is plain cdecl with all five arguments on the stack despite
+being `t`/LOCAL in the symbol table -- the prologue reads 0x30(%esp) upward
+after `sub $0x2c`. That is F8770's correction of F8462 confirmed a second time
+on a second function: **LOCAL predicts nothing about the calling convention;
+read the prologue.**
+### F8780. `MTK_phasor` reconstructed: a quarter-wave oscillator whose two spellings of 2*pi are not the same number
+
+*2026-08-31.* 271 bytes at 0xb0690, `src/service/mtk.c`, proved by
+`t_mtkphasor` at 189,701 checks with a 19-mutant set at 19 caught. Finding
+F8772 wrote the decode out when it declined the function; this confirms it
+against `tools/dis.py` line by line and adds what the decode did not settle.
+
+**THE TWO 2*PI CONSTANTS ARE DIFFERENT NUMBERS AND BOTH ARE THE AUTHOR'S.**
+
+    .rodata.cst4 0x57c   6.2831854820251465   the FLOAT, the fmodf modulus
+    .rodata.cst8 0x1f8   6.28318530718        a DOUBLE, eleven decimals
+    .rodata.cst8 0x208   3.141592653589793    the double NEAREST pi
+
+0x1f8 is *not* the double nearest 2*pi -- 0x182d4454fb211940 is; the object
+has 0xea2e4454fb211940, which is what a typed `6.28318530718` gives. 0x208
+*is* the double nearest pi. So the author typed a truncated 2*pi and a full
+pi in the same function, and `TONE_generate` carries the same truncated one.
+The float at 0x57c cannot take sides: the float nearest 6.28318530718 and
+the float nearest 2*pi are the same float.
+
+That mismatch is not cosmetic. It is what makes deviation D993: the
+reduction is against the LARGER constant and the correction adds the
+SMALLER, so a phase in `[-6.357343096397017e-08, 0)` comes back rounded up
+to the float 2*pi, scales to 1024.0000038, and indexes `MTK_cos_sign[4]`.
+
+**`fprem` IS THE ONLY ONE IN THE OBJECT, and no `fmod` symbol is defined or
+referenced anywhere in the 1.2 MB.** That is F8762's argument for `fsin` and
+`fcos`, and it says the original's build expanded the remainder inline. No
+pragma is set here, and the reason is measured rather than assumed: GCC 14
+at `-O3 -mfpmath=387` already emits the `fprem` loop for `fmodf` with an
+out-of-line fallback, so the only thing a
+`#pragma GCC optimize("unsafe-math-optimizations")` would buy is a
+period-compiler mnemonic, at the price of licensing reassociation across an
+interpolation the differential tier is currently exact on.
+
+**THREE MUTANTS THE DIFFERENTIAL TIER PROVABLY CANNOT SEE**, all recorded as
+NOT-here notes rather than left to read NOT CAUGHT:
+
+- The first `p->phase = x` is dead in the object too -- both exits store the
+  advanced angle over it.
+- `(short)y` versus `(int)y` agree over the whole reachable domain, because
+  the reduction bounds y below 1024. The sixteen bits are `fists` and
+  `cwtl`, which is codegen evidence.
+- `s >= pi` versus `s > pi` differ only at exactly the double pi, and no
+  pair of floats sums to it: pi is M * 2^-51, so a float partner would need
+  to be within 2^-28 of it and the float spacing there is 2.4e-07.
+
+A fourth is the one F8772 predicted trouble from. The object applies each
+sign to the 80-bit value the register still holds (`fsts`, `fmuls`,
+`fstps`), which is why the source is two statements per output; under
+`-mfpmath=387` -- both builds here -- GCC keeps the wide value for the
+one-statement spelling too, so that claim is `compare.py`'s and not a
+mutation set's.
+
+**TWO FORWARDERS WERE DELETED, and the second one is easy to miss.**
+`test/harness/runtime.c` defined an unprefixed `MTK_phasor` forwarding to
+`ref_MTK_phasor` (F8463) and `test/interop/runtime64.c` defined an aborting
+stub of the same name; both collide with `src/` now and both are gone. The
+interop one is not mentioned by F8463 or F8772 and is only reachable through
+`make phase`, so a `make one`-only session would not have found it.
+
+**AND THE HAZARD F8772 NAMED IS CLEARED.** `TONE_generate`'s existing test
+passed because the oscillator under it was the blob's; it is ours now and
+`t_fdspkrnl` is still green at 1,416 checks for that section and 45,905
+across the binary.
+
+### F8781. `TONE_create` is a 2100 Hz answer-tone builder, and its allocation gate has TWO conditions rather than one
+
+*2026-08-31.* 521 bytes at 0xaf690, `src/service/fdspkrnl.c`, with
+`TONE_CFG` (`.data` 0x83c0, 48 bytes) and the `ToneLPF` it points at
+(`.data` 0x8400, 212 bytes). Proved by `t_tonecreate` at 86,136 checks,
+mutation set 33 of 33 caught.
+
+**THE CONFIGURATION IS A SEPARATE 48-BYTE TYPE AND THE OBJECT SAYS SO.**
+`rep movsl` with `$0xc` in `%ecx` at 0xaf6c5 copies twelve words from `cfg`
+over the head of a 0x1c8-byte tone object, and both configs in `.data` are
+0x30 bytes. So the author cannot have declared them as whole tone objects,
+and `struct fdsp_tone_cfg` is a real type rather than a convenience;
+`fdspkrnl.c` asserts its eight named fields against `struct fdsp_tone`'s
+offsets so the two layouts cannot drift apart silently.
+
+**THE GATE IS `test %edx,%eax` OVER TWO `set` RESULTS** (0xaf6d9): `setne`
+on "this call allocated the object" and `setg` on "fir_len > 0". Three of
+the four combinations skip all four `sysdep_malloc` calls, and the FIR loop
+and the biquad stores still run -- which is deviation D995, a wild write of
+seven floats whenever the object was allocated and the length was not
+positive. Reading the gate as one condition invents a function that cannot
+fault.
+
+**WHAT THE COEFFICIENTS ARE.** The detector's three are a resonator at the
+tone frequency with the configured pole radius:
+
+    det_coef[0] = -2 cos(w)        det_coef[1] = 2 r cos(w)
+    det_coef[2] = -r*r             w = 2*pi*freq/8000, r = +0x018
+
+which is what names +0x018 `pole_radius`, and `iir_coef` (+0x1bc) is set to
+point at `det_coef` itself rather than at the 20-byte block -- the two
+filters share one coefficient triple. The 20-byte block is a different
+filter entirely: a 60 Hz notch with poles at radius 0.96, built from a
+SECOND phasor at 0.04712389f (2*pi*60/8000) as
+`{-0.96*0.96, 1, 1.92 cos, -2 cos, 1}`. Only that second phasor is zeroed by
+the `rep stos` at entry; the tone's has both its fields written.
+
+**2*pi/8000 IS TYPED SHORT HERE TOO.** `.rodata.cst8` 0x1c0 is
+0.0007853981633975, three digits short of the nearest double, which is the
+same habit as `MTK_phasor`'s 6.28318530718 (finding F8780) in the function
+next door.
+
+**`ToneLPF` IS TWO DIFFERENT ARRAYS AND NEITHER GETS A `ref_` ALIAS.** The
+blob defines the name twice, both LOCAL: `r` at 0xd040, 53 shorts, the
+fixed-point pump's, already in `src/dsp/fpm_tone_cfg.c`; and `d` at 0x8400,
+53 floats, this one. They are the same filter at different quantisations
+rather than a copy -- the float peak is 0.0418356508 and the short peak is
+1370, and 0.0418356508 * 32768 is 1370.9. Because the name is used by two
+translation units, `symmap.py` refuses to globalize either, so the test
+reaches the float one through `ref_TONE_CFG.fir_proto` -- the blob's own
+pointer to its own array, which is a direct comparison and not a lookup.
+
+**`TONEamode_CFG` IS DECLINED, and the reason is ownership.** It is 48 bytes
+at `.data` 0x8240, `d` and not `D`, and the only relocation anywhere in the
+1.2 MB that names it is at 0xad4a3, inside `detector_create` (0xad480) --
+which needs `detector.h` and belongs to another agent's wave. A `static`
+whose one reader lives in someone else's translation unit is exactly the
+case F8772 declined `silence_level_table` on, and the answer is the same:
+write it with its reader. Its contents are 980 Hz, amp 0.353599995,
+duration 0 (endless), 0.75, 0.01, 0.000199999995, pole radius 0.9375, a
+NULL `fir_proto`, fir_len 53, and three zero words -- and that NULL with a
+positive length is worth checking against D995 when someone does write it.
+
+### F8782. `FDSP_DP_Create` and `FDSP_DP_Delete`: the kernel's constructor names its own two arguments, and both functions dereference a channel before they test it
+
+*2026-08-31.* 650 bytes at 0xae5c0 and 157 at 0xae520, both written into
+`src/service/fdspkrnl.c` with the two `.bss` words they touch. Proved by
+`t_fdspdp` at 24,580 checks, mutation set 22 of 22 caught.
+
+**THE ARGUMENTS ARE NAMED BY THE OBJECT'S OWN FORMAT STRING**, which is
+evidence order 1 and is why they are not `a` and `b`:
+`"ver 120 sRxSamplesDelay %d ,sTxSamplesDelay %d \n"` at `.rodata.str1.4`
+0x12f30. The RX delay is stored into `chan_a->offset` and the TX delay into
+`chan_b->offset` (0xae6c2), so the string also settles which channel is
+which direction -- something four already-reconstructed functions in the
+same file could not say.
+
+**BOTH ARE `short`** (`movswl` at 0xae5de and 0xae5e3), and `int_00` is
+`(sRxSamplesDelay >= 0) ? 2 : 0` written branchlessly as
+`sar $0x1f; not; and $0x2`. It lands on the field `FDSP_Kernel_InitObj` has
+just set to 2, so the only thing this function can do to it is clear it, and
+only a NEGATIVE rx delay does.
+
+**THE TWO `offset` STORES ARE INSIDE THE ALLOCATING ARM.** A caller handing
+in an existing kernel gets it re-initialised and keeps its old offsets --
+`t_fdspdp` asserts that directly, because a reader who moved the two stores
+out of the `if` would pass every other check in the file.
+
+**AND BOTH FUNCTIONS READ THROUGH A CHANNEL POINTER BEFORE TESTING IT.**
+`FDSP_DP_Delete` does `mov 0x14(%ebx),%eax; mov 0x1680(%eax),%edx` at
+0xae533 and only asks whether `chan_a` was NULL at 0xae540; `chan_b` is the
+same three instructions later. `FDSP_DP_Create` stores both offsets through
+`chan_a` and `chan_b` at 0xae6c2 BEFORE it tests whether the allocation
+chain succeeded. So the NULL tests in `Delete` guard `sysdep_free` and
+nothing else, and the only caller that can produce a kernel with a missing
+channel is `Create`'s own out-of-memory path -- which the harness allocator
+cannot drive, so all three sites are recorded at their definitions rather
+than tested. This wave's deviation numbers (D993-D995) are spent; the row
+these want is the next block's.
+
+**`uCorrelationReportsNo` IS WRITE-ONLY IN THE WHOLE OBJECT.** A reverse
+scan of `.bss` 0x8e8 finds exactly one relocation against it, the store at
+0xae61d. Its name is the author's and nothing in the 1.2 MB reads it back,
+so nothing here says what it counts.
+
+**Both globals are external in `src/` and `b` in the blob**, which is the
+trade `bInternalBeepInProgress` in the same file already makes: a `static`
+cannot be compared against the blob's copy, and `symmap.py` renames the
+blob's so the two sides keep their own.
+
+**Two mutants are NOT-here notes.** The three pointer-clearing stores at
+0xae729 are overwritten by the allocations that follow on every path the
+harness can produce, and the ORDER of the two channel allocations (chan_b
+first, then chan_a) and of the two tap allocations is invisible because each
+pair is the same size -- the books are identical either way. Both are read
+from the disassembly and written down instead.
+
+### F8785. `struct voice_ctx` gets a home, a size, and eighteen fields it did not have
+
+*2026-08-31.* The type was introduced by the `voice_dle_command` wave in
+`include/dsplib/voicecmd.h`, modelled as far as that one function could see
+it: `unsigned char pad_0000[0x744]` and two int flags. Writing the three
+per-block handlers reaches far more of it, and `voice_create` settles what
+`voicecmd.h` could only leave open:
+
+    ac247:	c7 04 24 dc 07 00 00 	movl   $0x7dc,(%esp)
+    ac252:	call   sysdep_malloc
+    ac268:	b9 dc 07 00 00       	mov    $0x7dc,%ecx
+    ac275:	call   sysdep_memset
+
+So `sizeof` is 0x7dc, and it is measured rather than bounded. The definition
+moved to `include/dsplib/voice.h`, which is now its one home; `voicecmd.h`
+includes that file and defines nothing. **The TAG kept its original spelling.**
+`struct voice` would have read better and `src/service/voicecmd.c` already
+names `voice_ctx`, that file belonged to another agent in this wave, and a
+rename to make a name prettier is not worth a cross-agent edit.
+
+What `voice_create` types by construction, which is the strongest grade
+available for most of these -- a callee that takes the value:
+
+    +0x000  struct beepgen_config   copied whole, handed to beepgen_create
+    +0x010  mode = 2                +0x014 int_0014 = 4
+    +0x018  beepgen_create          +0x01c detector_create
+    +0x020  handler = voice_online  +0x024 FIFO8_create
+    +0x028  silence_create          +0x034 FDSP_DP_Create
+    +0x740  beep_done = 1           +0x744/+0x748 the two DLE flags = 0
+    +0x74c  out_format = 0          +0x758 rate = 8000  +0x75a bits = 8
+    +0x75e/+0x760/+0x762 = 0x3f     +0x764 = 0
+
+`beep_done`, `out_format`, `underrun` (+0x75c) and `detector_enable` (+0x762)
+are named from what the handlers DO with them and are usage inference, the
+weakest grade; `voice.h` says so at each. `detector_enable` is the least weak
+of the four, because `voice_set_online` hands it to `detector_set_enable` and
+that callee types it.
+
+**The staging area at +0x38 and the float buffer at +0x100 are bounded by each
+other and by nothing else.** `voice_tx`'s `lea 0x100(%edi)` is what says the
+floats start there; nothing says where either array ends. The lengths in
+`voice.h` fill the space up to the next field this tree has read and are
+labelled as such. The 200 that falls out for the staging area is 22 bytes
+short of what `voice_tx` reads into it at 11025 Hz, which is deviation D996.
+
+### F8786. `voice_online` types `FDSP_DP_Run`'s never-loaded sixth argument, and a sibling is what does it
+
+*2026-08-31.* D986 recorded that `FDSP_DP_Run` (0xae490) takes seven arguments
+and never loads the sixth, and `beepgen.h` typed that slot `void *unused`
+because the function's own 138 bytes carry no evidence about it. A function's
+own body is not the only evidence there is.
+
+`voice_online` (0xabf50) has the same signature slot for slot -- and that is
+not an assertion about layout, it is what `voice_duplex` (0xb01e0) proves by
+forwarding arguments 1 through 6 of its own into the `FDSP_DP_Run` call
+unchanged:
+
+    b0203:	8b 5c 24 38          	mov    0x38(%esp),%ebx   <- its arg2
+    b0221:	89 5c 24 08          	mov    %ebx,0x8(%esp)    <- the call's arg3
+    b01e3:	8b 4c 24 44          	mov    0x44(%esp),%ecx   <- its arg5
+    b01ff:	89 4c 24 14          	mov    %ecx,0x14(%esp)   <- the call's arg6
+
+And `voice_online` WRITES that slot, as sixteen bits, twice:
+
+    ac014:	66 89 0f             	mov    %cx,(%edi)
+    ac063:	66 c7 06 00 00       	movw   $0x0,(%esi)
+
+So the slot is a `unsigned short *`. `voice_tx` (0xafd60) says what it is FOR:
+it reads `*that` as the number of escaped bytes waiting in the receive buffer
+and writes back how much room the FIFO now has (`170 - fill`, floored at
+zero), which makes it the HOST BYTE count against `countp`'s SAMPLE count.
+`beepgen.h`, `voice.h` and D986 all now say `unsigned short *hostcount`.
+
+The general point is the one CLAUDE.md's evidence order already makes and this
+is a clean instance of: grade 2 is "a callee or caller that types it", and a
+SIBLING with a shared signature is the same kind of evidence arriving from a
+third direction. A slot no function reads is not a slot no function types.
+
+### F8787. All five of the voice block symbols are GLOBAL, so F8770's regparm hazard does not arise -- and the prologues were read anyway
+
+*2026-08-31.* F8770 corrects F8462: a LOCAL blob function is not automatically
+`regparm(2)`, and the way to settle it is the callee's PROLOGUE and not the
+symbol table. The five symbols in `src/service/voicedp.c` are all `GLOBAL` in
+`readelf -sW`, so GCC 3.4 gave them the ordinary convention whatever it does
+to statics, and the `ref_` aliases in `t_voicedp` and `t_voicedptx` carry no
+attribute.
+
+That is the symbol table, which is the thing F8770 says not to trust, so each
+prologue was read as well:
+
+    abf5b:	8b 6c 24 30          	mov    0x30(%esp),%ebp   voice_online
+    afd70:	8b 44 24 48          	mov    0x48(%esp),%eax   voice_tx
+    b01e3:	8b 4c 24 44          	mov    0x44(%esp),%ecx   voice_duplex
+    abef3:	8b 4c 24 10          	mov    0x10(%esp),%ecx   voice_set_online
+    abf28:	8b 54 24 10          	mov    0x10(%esp),%edx   voice_set_duplex
+
+Every one of them fetches its first argument from the stack before touching
+`%eax` or `%edx`, which is what cdecl looks like and what `regparm(2)` never
+does. The two agree here; the point of writing it down is that the agreement
+was checked rather than assumed.
+
+`detector_delete` (0xad620) is GLOBAL too and reads `0x10(%esp)` into `%esi`
+at 0xad627, same answer.
+
+
+### F8788. `beepgen_config`'s second slot is the host's SETTINGS CALLBACK, and beepgen calls it with the wrong number of arguments
+
+*2026-08-31.* `include/dsplib/beepgen.h` types the sixteen-byte host block's
++0x04 as `void (*fn_04)(void *modem)`, because the only reconstructed use was
+`beepgen_start_beep`'s, which calls the copy at `beepgen` +0x11c with one
+argument and ignores any result. Two sites in `voice_set_rx` (0xaf190) say
+what it actually is.
+
+**It is passed to `silence_create` as that function's `query`:**
+
+    af1c8:	8b 4b 04             	mov    0x4(%ebx),%ecx    <- cfg.fn_04
+    af1cb:	89 4c 24 08          	mov    %ecx,0x8(%esp)    <- arg 3
+    af1db:	call   silence_create
+
+and `silence.h` -- written from `silence_progress`, independently -- types
+that parameter `unsigned int (*)(void *obj, int what)`.
+
+**And it is CALLED here, with two arguments, for an unsigned answer:**
+
+    af226:	b9 48 00 00 00       	mov    $0x48,%ecx
+    af237:	89 4c 24 04          	mov    %ecx,0x4(%esp)    <- arg 2
+    af23b:	8b 03                	mov    (%ebx),%eax       <- cfg.modem
+    af240:	ff 53 04             	call   *0x4(%ebx)
+    af243:	31 d2                	xor    %edx,%edx
+    af24a:	52                   	push   %edx
+    af24b:	50                   	push   %eax
+    af24c:	df 2c 24             	fildll (%esp)            <- (float)(unsigned)
+
+`push 0; push %eax; fildll` is GCC's unsigned-32-to-float sequence, so the
+return type is `unsigned int` and not `int`. Three such calls, at +0x48,
++0x8a and +0x8b, each scaled by 1/128 into a per-format receive gain.
+
+So the slot is `unsigned int (*)(void *, int)`, and `beepgen_start_beep`'s
+one-argument call of the same function pointer reads a stack word the caller
+never wrote. **That is the object's, and it is cdecl, so it does not corrupt
+anything** -- the callee simply sees rubbish where its `what` should be.
+
+`beepgen.h` IS NOT CHANGED BY THIS FINDING, deliberately. Retyping the field
+would need a cast at `beepgen_create`'s copy and another at the call, on two
+functions already measured, to buy a comment; `voicedp.c` casts at its own
+call site instead and points here. Whoever next touches `beepgen_start_beep`
+should decide it with `byteident.py` rather than from this paragraph.
+
+### F8789. `voice_rx` reads `*countp` as a SIGNED short once and as an unsigned short everywhere else
+
+*2026-08-31.* The first load is the odd one:
+
+    af2ed:	0f bf 02             	movswl (%edx),%eax       <- sign-extended
+    af2fa:	0f b7 d8             	movzwl %ax,%ebx          <- and back down
+
+and every later read of the same address is `movzwl` (0xaf3bd, 0xaf606,
+0xaf510). The sign-extended value is used for exactly one thing: it is
+`silence_progress`'s third argument, and `silence.h` declares that parameter
+`short`.
+
+That is F613's forced case and it settles the source rather than leaving a
+choice: `short n = *countp;` where `countp` is the handlers' shared
+`unsigned short *`, with `(unsigned short)n` for the loop bounds. The two
+readings agree over every value below 32768, which is every value the object
+can produce, so no test can separate them -- the disassembly is the only
+evidence and it is unambiguous.
+
+The dead `jle` at 0xaf30e is the corroboration: the compiler emitted a
+`<= 0` guard on a value it had just zero-extended and already tested against
+zero, which is what a signed promotion of an unsigned short looks like.
+
+### F8790. `voice_rx`'s DC smoothing keeps 99% of the OLD estimate, and reading it the other way round survives every check but the second block
+
+*2026-08-31.* The fold is six x87 instructions and two `.rodata.cst8`
+doubles:
+
+    af5d1:	dd 05 b8 01 00 00    	fldl   0x1b8      <- onto the block mean
+    af5d7:	dd 05 b0 01 00 00    	fldl   0x1b0      <- onto the stored dc
+    af5dd:	d8 8f cc 07 00 00    	fmuls  0x7cc(%edi)
+    af5e3:	d9 c9                	fxch   %st(1)
+    af5e5:	de ca                	fmulp  %st,%st(2)
+    af5e7:	de c1                	faddp  %st,%st(1)
+
+and the section holds them in the order 0.99, 0.01:
+
+     01b0 ae47e17a 14aeef3f 7b14ae47 e17a843f
+
+So 0x1b0 is 0.99 and it is the one `fmuls 0x7cc` applies -- to the STORED
+estimate -- while 0x1b8's 0.01 travels down the stack to the block mean. The
+result is `dc = dc * 0.99 + mean * 0.01`: a 100-block time constant, which is
+also the only reading that makes physical sense for a DC tracker.
+
+**This reconstruction had it backwards and nothing structural caught it.**
+`mean * 0.99 + dc * 0.01` has the same instruction sequence, the same
+constants, the same register pressure and the same everything a codegen
+comparison can see; it is a different function only in what it computes. The
+first block of any sequence is the SEED path, which does not use either
+weight, so a fixture that ran one block per context would have passed --
+`t_voicedprx` runs four, and the mismatch appears on the second, in the low
+sixteen bits of `+0x7cc`.
+
+Two lessons, and the second is the one worth keeping:
+
+- **Read a constant's ADDRESS out of the section dump, not out of the order
+  it is loaded in.** The object pushes 0x1b8 first precisely so that it ends
+  up deepest; "first loaded" and "first operand" are opposites here.
+- **A stateful estimator needs a MULTI-BLOCK fixture.** One call per context
+  exercises the seed and nothing else, and every recursive filter in this
+  object has that shape. The rule is the same one D955/F8587 makes about
+  planting a subscript: the fixture has to reach the state, not just the
+  code.
+
+### F8791. The `>> 2` in `voice_rx` costs two bits of u-law range and makes its own DLE shield unreachable
+
+*2026-08-31.* The receive loop converts a float to a 16-bit integer and then
+shifts it right by two before encoding:
+
+    af410:	d8 0d 54 05 00 00    	fmuls  0x554          <- 32767.0f
+    af424:	df 5c 24 32          	fistps 0x32(%esp)
+    af42c:	0f b7 44 24 32       	movzwl 0x32(%esp),%eax
+    af431:	98                   	cwtl
+    af432:	c1 f8 02             	sar    $0x2,%eax
+    af438:	call   linear2ulaw
+
+so a full-scale float reaches `linear2ulaw` as +/-8191 rather than +/-32767 --
+12 bits into a coder built for 14. That is a scaling choice and this project
+does not second-guess it.
+
+What it also does is make the DLE shield forty instructions later dead, and
+that is measurable rather than arguable. An exhaustive sweep of
+`linear2ulaw` over its whole 16-bit domain finds 0x10 for exactly 512 inputs,
+the contiguous run -16251..-15740; over the reachable [-8192, 8191] it
+produces no code below 0x1f at all. Deviation D984 records the shield;
+`t_voicedprx` carries the sweep, asserts the absence, and separately asserts
+that `linear2ulaw(-16250)` IS 0x10 -- because an absence measured with a
+broken call looks the same as an absence.
+
+**The general point is about coverage claims.** The fixture's first version
+asserted that the doubling HAD fired, which is the normal way to keep a
+mutation set honest, and it failed on every input because the arm cannot fire.
+The right answer was not to hunt for an input; it was to prove there is none
+and assert that instead. A coverage counter that can never move is F134's
+dead detector wearing the opposite sign.
+
+### F8748. The voice wave, closed: 49 symbols and 12,368 bytes in one session, and what the layering bought
+
+*2026-08-31.* F8746 measured voice as 51 symbols / 16,685 bytes over three
+layers at the ring-detect commit. It now stands at **10 symbols / 6,378
+bytes**, and the ring detector's own 8 symbols / 2,061 bytes went with it.
+Six agents, five worktrees, and no merge conflict in `src/` at all.
+The mutant total is read from `snapshot.json`, not summed from the agents'
+reports: 444 of 444 across fifteen suites, 0 NOT CAUGHT and 0 never
+recorded. It is three higher than the agents between them claimed, because
+F8747 added three to `fdspksil` after the fact.
+
+| wave | symbols | bytes | mutants |
+|---|--:|--:|--:|
+| ring detect (`voice.c#3`, `RD_*` + `RingDetector_*`) | 8 | 2,061 | 41/41 |
+| `Fdspkrnl.c +13` leaves + `silence_progress` | 13 | 2,304 | 101/101 |
+| `Beepgen.c +3` generators | 10 | 2,306 | 64/64 |
+| `vce_*`, `voice_dle_command`, the MTK tables | 5 + tables | 616 + 3,628 data | 46/46 |
+| `MTK_phasor`, `TONE_create`, `FDSP_DP_*` | 6 + tables | 1,599 + 268 data | 74/74 |
+| the per-block path, `voice_online` … `voice_set_tx` | 9 | 3,631 | 118/118 |
+| per-wave rows as reported | 51 | 12,517 | **444/444** |
+| **`service.py`'s measured delta** | **49** | **12,368** | |
+
+**QUOTE THE DELTA, NOT THE SUM.** The two figures differ by 2 symbols and 149
+bytes and neither is wrong: the per-wave rows are what each agent reported and
+count two DATA symbols (`silence_level_table`, 16 bytes, and `ToneLPF`, which
+`nm` shows as `d`/`r` and not `.text` at all), while `service.py`'s bucket
+counts CALL symbols only. The delta is the number to quote for remaining work,
+because it is the one measured the same way at both ends — 59 symbols / 18,746
+bytes of voice and ring detect before, 10 / 6,378 after. The data tables are a
+further 3,896 bytes and are counted by neither.
+
+**WHAT THE LAYERING BOUGHT, AND WHAT IT DID NOT.** F8746's claim that layer 1
+has no internal edges held: four agents took its four spans concurrently and
+the only conflicts were `docs/findings.md`, `docs/deviations.md` and the two
+mutation JSONs, all append-at-end and all resolved by keeping both sides.
+Layer 2 was NOT parallel in the same way — `voice_online` waited on
+`beepgen_sample`, `TONE_create` on `MTK_phasor`, `voice_rx` on
+`silence_progress` — and taking it as two agents on disjoint FILES rather than
+disjoint SYMBOLS is what kept it conflict-free.
+
+**THE ONE REAL COLLISION WAS A SCHEDULING ERROR, NOT A TOOL ERROR.** Two
+agents were briefed on `silence_progress` because the second brief was written
+from a `readyqueue` run against a branch that was one commit behind the first
+agent's final state. `readyqueue.py` was right about the tree it was given.
+**A ready set is only true of the commit it was measured at, and work in
+flight is invisible to it** — so re-measure at the moment of briefing, not at
+the moment of planning, and say in the brief which commit the list came from.
+
+It cost nothing and paid twice: the duplicate became an independent second
+read, which confirmed the committed table byte for byte and the calling
+convention from the prologue, and found a comment defect no test could fail on
+(F8747). That is the only cross-check a single-author reconstruction gets.
+Deliberately commissioning one for a function that matters is worth
+considering; arriving at one by accident is not a plan.
+
+**THREE THINGS THE WAVE ESTABLISHED THAT OUTLIVE IT.**
+
+1. **F8770's correction of F8462 is now confirmed on three functions.** LOCAL
+   in the symbol table predicts NOTHING about the calling convention: the
+   `vce_*` trio, `silence_progress` and `MTK_phasor` are all `t`/LOCAL and all
+   plain cdecl with every argument on the stack. Read the prologue.
+2. **A runtime forwarder lives in TWO files.** `test/harness/runtime.c` is the
+   one everybody greps; `test/interop/runtime64.c` had its own aborting
+   `MTK_phasor` stub, named by nothing and reachable only from `make phase`.
+   Writing a symbol means removing both.
+3. **A stateful estimator needs a multi-block fixture.** `voice_rx`'s DC
+   smoothing keeps 99% of the OLD estimate; the first reconstruction had the
+   two weights swapped, and that is invisible to every codegen check and to
+   any fixture that runs one block per context (F8790).
+
+**WHAT IS LEFT IS THE SERVICE FACES AND THE DETECTOR**, and it is no longer a
+leaf problem: `VOICE_process` (2,016), `voice_command` (802), `detector_progress`
+(814), `voice_create` (642), `VOICE_command` (548), `VOICE_create` (493),
+`detector_create` (411), `voice_modem` (338), `voice_delete` (181) and
+`VOICE_delete` (133). `detector_create` needs `TONEamode_CFG`, declined twice
+now on the same ground both times — it is `d`/LOCAL with its only referent
+inside `detector_create` itself, so it must be written WITH its reader
+(F8772's argument for `silence_level_table`, F8781 for this one, and F8781
+records its twelve words). `detector_progress` needs five data symbols.
+Everything else is blocked on those two and on each other.

@@ -258,33 +258,25 @@ sysdep_memcpy(void *dst, const void *src, size_t n)
  *
  * Reconstructed code may call a blob function that is not reconstructed
  * yet.  dsplibs_ref.o renames every symbol the blob DEFINES to ref_*, so
- * such a call would go undefined at link time; these forwarders hand the
+ * such a call would go undefined at link time; a forwarder here hands the
  * reconstruction the blob's own implementation -- which is exactly what the
  * eventual reconstruction must be differentially identical to, so nothing
  * is presumed that the tests do not enforce later.
  *
  * The sharing argument is the SHARED/STATEFUL split at the top of this
- * file: both of these write only through their argument (read from the
- * disassembly -- neither touches a global), so one copy serving both sides
+ * file: a forwarder may only be added for a callee that writes nothing but
+ * its argument (read from the disassembly), so one copy serving both sides
  * carries no state across the comparison.  A stateful callee must NOT be
  * added here; it belongs to the renamed side with a driven ref_ shim.
  *
  * When one of these is reconstructed in src/, this forwarder collides with
  * the new definition at link time and is deleted -- a loud removal.
+ *
+ * `MTK_phasor` was the last one and its removal is that loud removal:
+ * `src/service/mtk.c` defines it now, and `FDSP_Kernel_InitObj`'s went the
+ * same way in commit 9109caa0.  The section is kept, empty, because the
+ * argument above is what the next one has to satisfy.
  */
-void ref_MTK_phasor(void *p);
-void
-MTK_phasor(void *p)
-{
-	ref_MTK_phasor(p);
-}
-
-void ref_FDSP_Kernel_InitObj(void *k);
-void
-FDSP_Kernel_InitObj(void *k)
-{
-	ref_FDSP_Kernel_InitObj(k);
-}
 
 void *
 sysdep_memset(void *dst, int c, size_t n)

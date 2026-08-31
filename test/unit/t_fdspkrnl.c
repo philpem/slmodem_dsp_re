@@ -3,11 +3,14 @@
  * helpers, the float memset, and the echo-canceller kernel.
  *
  * The kernel objects are built BY HAND, field by field, because nothing
- * reconstructed allocates them; FDSP_Kernel_InitObj is still the blob's and
- * both sides call that same code on their own objects, so an InitObj
- * triggered mid-test (the saturation countdown expiring) initialises both
- * sides identically.  Channel structs carry a heap pointer (`coef`), so the
- * comparison is field-by-field rather than one diff_eq_obj over the struct.
+ * reconstructed allocates them.  Channel structs carry a heap pointer
+ * (`coef`), so the comparison is field-by-field rather than one diff_eq_obj
+ * over the struct.
+ *
+ * FDSP_Kernel_InitObj is reconstructed now, so an InitObj triggered mid-test
+ * -- the saturation countdown expiring inside bValidateEnergyValue -- runs
+ * OUR code on our side and the blob's on the reference's, and section 8
+ * drives it directly on top of that.
  *
  * EchoCanceler and bValidateEnergyValue are LOCAL in the blob: their ref_
  * aliases take GCC 3.4's regparm(2) static convention and are declared so
@@ -27,6 +30,7 @@
 #include "dsplib/debug.h"
 #include "dsplib/beepgen.h"
 #include "dsplib/fdspkrnl.h"
+#include "dsplib/sysdep.h"
 
 extern unsigned int ref_dsplibs_debug_level;
 extern int ref_bInternalBeepInProgress;
@@ -51,6 +55,10 @@ extern int ref_bValidateEnergyValue(float *buf, unsigned int n, int *hist,
 	__attribute__((regparm(2)));
 extern int ref_FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a,
 				float *out_b, float *in_b, float *out_a);
+extern void ref_FDSP_Kernel_InitObj(struct fdsp_kernel *k);
+extern void ref_FDSP_Kernel_SetInternalBeepInProgress(int on);
+extern void ref_TONE_delete(struct fdsp_tone *t);
+extern int ref_TONE_detect(struct fdsp_tone *t, float *buf, short n);
 
 static unsigned int lcg_state = 0xbeef101u;
 static unsigned int
@@ -76,14 +84,14 @@ set_level(unsigned int lvl)
 
 /*
  * One side's kernel: the struct, two channels, their coef arrays (240
- * floats, InitObj's clearing size) and the short area k->ptr_10 points at
+ * floats, InitObj's clearing size) and the buffer area k->buffers points at
  * (InitObj clears 0x271c bytes of it).
  */
 struct kernel_side {
 	struct fdsp_kernel k;
 	struct fdsp_channel a, b;
 	float coef_a[240], coef_b[240];
-	unsigned char shorts[0x2720];
+	struct fdsp_buffers shorts;
 };
 
 static void
@@ -96,7 +104,7 @@ build_side(struct kernel_side *s)
 	s->k.saturation = 0;
 	s->k.ntaps_a = 80;
 	s->k.ntaps_b = 40;
-	s->k.ptr_10 = s->shorts;
+	s->k.buffers = &s->shorts;
 	s->k.chan_a = &s->a;
 	s->k.chan_b = &s->b;
 	s->a.coef = s->coef_a;
@@ -117,7 +125,7 @@ static void
 clone_side(struct kernel_side *dst, const struct kernel_side *src)
 {
 	memcpy(dst, src, sizeof(*src));
-	dst->k.ptr_10 = dst->shorts;
+	dst->k.buffers = &dst->shorts;
 	dst->k.chan_a = &dst->a;
 	dst->k.chan_b = &dst->b;
 	dst->a.coef = dst->coef_a;
@@ -167,7 +175,7 @@ compare_sides(struct kernel_side *got, struct kernel_side *want, long tag)
 		diff_eq_float("coef_b[%ld]", got->coef_b[i], want->coef_b[i],
 			      tag * 1000 + i);
 	}
-	if (memcmp(got->shorts, want->shorts, sizeof(got->shorts)))
+	if (memcmp(&got->shorts, &want->shorts, sizeof(got->shorts)))
 		diff_eq_int("shorts area differs", 1, 0, tag);
 }
 
@@ -531,6 +539,272 @@ main(void)
 			}
 			compare_sides(&kb, &ka, 100 + block);
 		}
+	}
+	failed |= diff_end();
+
+	/*
+	 * SECTION 8 -- FDSP_Kernel_InitObj, called directly.
+	 *
+	 * Every region it clears starts NON-ZERO on both sides, so a loop
+	 * that stopped short leaves the fill behind rather than a zero that
+	 * was already there; the scalar defaults start wrong for the same
+	 * reason.  compare_sides() then covers the whole object including
+	 * the 0x271c-byte buffer area.
+	 */
+	diff_begin("FDSP_Kernel_InitObj direct");
+	{
+		static struct kernel_side ka, kb;
+		unsigned char *pa, *pb;
+
+		build_side(&ka);
+		/* garbage everywhere InitObj is supposed to write */
+		for (i = 0; i < 240; i++) {
+			ka.coef_a[i] = smallf() * 7.0f + 1.0f;
+			ka.coef_b[i] = smallf() * 7.0f + 2.0f;
+		}
+		for (i = 0; i < FDSP_DLY; i++) {
+			ka.a.dly[i] = smallf() * 9.0f + 3.0f;
+			ka.b.dly[i] = smallf() * 9.0f + 4.0f;
+		}
+		for (i = 0; i < 4; i++) {
+			ka.a.energy[i] = (int)(lcg() & 0xffff) + 1;
+			ka.b.energy[i] = (int)(lcg() & 0xffff) + 1;
+		}
+		ka.a.energy_idx = 3;
+		ka.b.energy_idx = 2;
+		ka.a.mu = 5.5f;
+		ka.b.mu = 6.5f;
+		ka.a.short_1690 = 0x1234;
+		ka.b.short_1690 = 0x5678;
+		ka.k.int_00 = 99;
+		ka.k.saturation = 77;
+		ka.k.ntaps_a = 11;
+		ka.k.ntaps_b = 22;
+		pa = (unsigned char *)&ka.shorts;
+		for (i = 0; i < sizeof(ka.shorts); i++)
+			pa[i] = (unsigned char)(0xa5 + i);
+		clone_side(&kb, &ka);
+		pb = (unsigned char *)&kb.shorts;
+		diff_eq_int("fill planted", memcmp(pa, pb,
+			    sizeof(ka.shorts)), 0, 0);
+		/* the fill must be non-zero, or the clearing test is vacuous */
+		diff_eq_int("fill is not already zero", pa[0] != 0, 1, 0);
+
+		ref_FDSP_Kernel_InitObj(&ka.k);
+		FDSP_Kernel_InitObj(&kb.k);
+		compare_sides(&kb, &ka, 200);
+		/* and it really did clear: not a no-op on both sides */
+		diff_eq_int("dly cleared", kb.a.dly[7] == 0.0f, 1, 0);
+		diff_eq_int("buffer area cleared", pb[0] == 0, 1, 0);
+		diff_eq_int("last buffer int cleared",
+			    kb.shorts.int_2718 == 0, 1, 0);
+
+		/* twice over, from the already-clean state */
+		ref_FDSP_Kernel_InitObj(&ka.k);
+		FDSP_Kernel_InitObj(&kb.k);
+		compare_sides(&kb, &ka, 201);
+	}
+	failed |= diff_end();
+
+	/*
+	 * SECTION 9 -- FDSP_Kernel_SetInternalBeepInProgress.
+	 *
+	 * The flag is written whatever the level is; only the message is
+	 * gated, and its "ON"/"OFF" arm follows the argument.  Both non-zero
+	 * arguments and zero are driven, and the level is swept 0..3 because
+	 * a gate at the wrong threshold is invisible at any single level
+	 * (the argument in debug.h).
+	 */
+	diff_begin("FDSP_Kernel_SetInternalBeepInProgress");
+	{
+		static const int args[] = { 1, 0, 7, 0, -3 };
+		unsigned int lvl, ai;
+
+		for (lvl = 0; lvl <= 3; lvl++)
+		for (ai = 0; ai < sizeof(args) / sizeof(args[0]); ai++) {
+			long tag = (long)(lvl * 10 + ai);
+
+			set_level(lvl);
+			dsplib_debug_capture_reset();
+			dsplib_debug_capture_on = 1;
+			ref_FDSP_Kernel_SetInternalBeepInProgress(args[ai]);
+			FDSP_Kernel_SetInternalBeepInProgress(args[ai]);
+			dsplib_debug_capture_on = 0;
+			diff_eq_int("beep flag %ld", bInternalBeepInProgress,
+				    ref_bInternalBeepInProgress, tag);
+			diff_eq_int("beep lines %ld",
+				    (int)dsplib_debug_capture_lines(0),
+				    (int)dsplib_debug_capture_lines(1), tag);
+			diff_eq_int("beep text %ld",
+				    strcmp(dsplib_debug_capture_text(0),
+					   dsplib_debug_capture_text(1)),
+				    0, tag);
+			/* the gate really is > 1, and the arm really moves */
+			diff_eq_int("beep gated %ld",
+				    (int)dsplib_debug_capture_lines(0),
+				    lvl > 1 ? 1 : 0, tag);
+			if (lvl > 1)
+				diff_eq_int("beep arm %ld",
+					    strstr(dsplib_debug_capture_text(0),
+						   args[ai] ? "ON" : "OFF")
+					    != NULL, 1, tag);
+		}
+		set_level(0);
+		bInternalBeepInProgress = 0;
+		ref_bInternalBeepInProgress = 0;
+	}
+	failed |= diff_end();
+
+	/*
+	 * SECTION 10 -- TONE_delete.
+	 *
+	 * There is nothing to compare but the allocator's books, so that is
+	 * what is compared: each side gets its own five blocks, the counters
+	 * are read after each run, and `bad_free` catches a pointer freed
+	 * that was never handed out -- which is what a wrong field offset
+	 * would produce.  Both arms of the `fir_len > 0` test are driven,
+	 * and the zero arm must leave the four hanging blocks LIVE.
+	 */
+	diff_begin("TONE_delete");
+	{
+		static const short lens[] = { 4, 0, -1 };
+		unsigned int li;
+
+		for (li = 0; li < 3; li++) {
+			struct alloc_log la, lb;
+			struct fdsp_tone *ta, *tb;
+
+			harness_alloc_reset();
+			ta = (struct fdsp_tone *)sysdep_malloc(sizeof(*ta));
+			memset(ta, 0, sizeof(*ta));
+			ta->fir_len = lens[li];
+			ta->fir_coef = (float *)sysdep_malloc(16);
+			ta->fir_dly = (float *)sysdep_malloc(16);
+			ta->ptr_01b4 = (float *)sysdep_malloc(16);
+			ta->ptr_01b8 = (float *)sysdep_malloc(16);
+			ref_TONE_delete(ta);
+			la = harness_alloc;
+
+			harness_alloc_reset();
+			tb = (struct fdsp_tone *)sysdep_malloc(sizeof(*tb));
+			memset(tb, 0, sizeof(*tb));
+			tb->fir_len = lens[li];
+			tb->fir_coef = (float *)sysdep_malloc(16);
+			tb->fir_dly = (float *)sysdep_malloc(16);
+			tb->ptr_01b4 = (float *)sysdep_malloc(16);
+			tb->ptr_01b8 = (float *)sysdep_malloc(16);
+			TONE_delete(tb);
+			lb = harness_alloc;
+
+			diff_eq_int("delete frees %ld", lb.frees, la.frees,
+				    (long)li);
+			diff_eq_int("delete live %ld", lb.live, la.live,
+				    (long)li);
+			diff_eq_int("delete bad_free %ld", lb.bad_free,
+				    la.bad_free, (long)li);
+			diff_eq_int("delete free_null %ld", lb.free_null,
+				    la.free_null, (long)li);
+			diff_eq_int("delete bytes %ld", (int)lb.bytes,
+				    (int)la.bytes, (long)li);
+			/* the arms are distinguishable, not both "5 frees" */
+			diff_eq_int("delete arm %ld", lb.frees,
+				    lens[li] > 0 ? 5 : 1, (long)li);
+			diff_eq_int("delete nothing wild %ld", lb.bad_free, 0,
+				    (long)li);
+		}
+		harness_alloc_reset();
+	}
+	failed |= diff_end();
+
+	/*
+	 * SECTION 11 -- TONE_detect.
+	 *
+	 * The FIR half is TONE_filter's, so the axes that matter here are
+	 * the biquad and the two smoothed powers: the ring index is swept
+	 * over every slot of three lengths, and the starting powers and
+	 * thresholds are chosen so that all three verdicts appear -- below
+	 * the floor (2), above it and inside the ratio (1), above it and
+	 * outside (0).  A zero block length is driven too, because the tail
+	 * still runs for it.
+	 */
+	diff_begin("TONE_detect");
+	{
+		static const short lens[] = { 1, 5, 16 };
+		unsigned int li, idx, vi;
+		int seen[3];
+
+		seen[0] = seen[1] = seen[2] = 0;
+		for (li = 0; li < 3; li++)
+		for (idx = 0; idx <= (unsigned int)lens[li]; idx++)
+		for (vi = 0; vi < 4; vi++) {
+			struct fdsp_tone ta, tb;
+			float coefa[16], dlya[16], dlyb[16];
+			float ba[40], bb[40];
+			short bn = (short)(vi == 3 ? 0 : 40);
+			long tag = (long)((li * 100 + idx) * 10 + vi);
+			int ra, rb;
+
+			for (i = 0; i < 16; i++) {
+				coefa[i] = smallf();
+				dlya[i] = smallf() * 100.0f;
+			}
+			memcpy(dlyb, dlya, sizeof(dlya));
+			memset(&ta, 0, sizeof(ta));
+			ta.fir_len = lens[li];
+			ta.fir_idx = (short)idx;
+			ta.fir_coef = coefa;
+			ta.fir_dly = dlya;
+			ta.det_coef[0] = smallf();
+			ta.det_coef[1] = smallf();
+			ta.det_coef[2] = smallf();
+			ta.det_z1 = smallf() * 10.0f;
+			ta.det_z2 = smallf() * 10.0f;
+			/*
+			 * vi picks the verdict arm: a floor above anything
+			 * the block can reach (2), then a ratio that admits
+			 * (1) and one that refuses (0).
+			 */
+			ta.float_0014 = vi == 0 ? 1.0e9f : 1.0e-6f;
+			ta.float_000c = vi == 1 ? 1.0e6f : 1.0e-6f;
+			ta.float_005c = 250.0f;
+			ta.float_0060 = 700.0f;
+			memcpy(&tb, &ta, sizeof(ta));
+			tb.fir_dly = dlyb;   /* own delay line, same bits */
+
+			for (i = 0; i < 40; i++)
+				ba[i] = smallf() * 50.0f;
+			memcpy(bb, ba, sizeof(ba));
+
+			ra = ref_TONE_detect(&ta, ba, bn);
+			rb = TONE_detect(&tb, bb, bn);
+			diff_eq_int("detect ret %ld", rb, ra, tag);
+			if (ra >= 0 && ra <= 2)
+				seen[ra]++;
+			diff_eq_int("detect fir_idx %ld", tb.fir_idx,
+				    ta.fir_idx, tag);
+			diff_eq_float("detect z1 %ld", tb.det_z1, ta.det_z1,
+				      tag);
+			diff_eq_float("detect z2 %ld", tb.det_z2, ta.det_z2,
+				      tag);
+			diff_eq_float("detect e_res %ld", tb.float_005c,
+				      ta.float_005c, tag);
+			diff_eq_float("detect e_tot %ld", tb.float_0060,
+				      ta.float_0060, tag);
+			for (i = 0; i < 16; i++)
+				diff_eq_float("detect dly[%ld]", dlyb[i],
+					      dlya[i], tag * 100 + i);
+			/* the input block must not be written */
+			for (i = 0; i < 40; i++)
+				diff_eq_float("detect in[%ld]", bb[i], ba[i],
+					      tag * 100 + i);
+		}
+		/*
+		 * F134: a verdict arm nothing entered proves nothing, so the
+		 * coverage is asserted FROM THE RUN.
+		 */
+		diff_eq_int("verdict 0 seen", seen[0] > 0, 1, 0);
+		diff_eq_int("verdict 1 seen", seen[1] > 0, 1, 0);
+		diff_eq_int("verdict 2 seen", seen[2] > 0, 1, 0);
 	}
 	failed |= diff_end();
 
