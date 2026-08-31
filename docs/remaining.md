@@ -49,7 +49,8 @@ phase, last on purpose).
 | 6 | V.22/V.22bis/Bell 212 | `V32mod.c +39` + `v22.c` | ~15.9 K | **DONE** — wave 2, merge `41c62864`. 22 symbols, all seven `V22_PROTOCOL` handlers. Lifecycle DECLINED (F8538) |
 | 6b | V.22 lifecycle | `v22.c` | 999 | **DONE** — wave 3, merge `ea5dfa6f`. F8538's failure was a TEST-BUFFER defect, not the source (F8607) |
 | 7 | V.32 FP layer and dispatch | `Dialer.c +18`, `V32mod.c +39`, `v32.c` | 9,384 | **DONE** — wave 3, merge `e9110d66`. All 25, closure now empty; 14 tables, not the 12 predicted |
-| 8 | **Caller ID + ring detect** | `cid_*` in `V32mod.c`, `RingDetector_*`/`RD_*` in `voice.c#3` | ~7 K | **NEXT.** Part of the 67-symbol voice/CID/ring bucket. `CID_*` and `RingDetector_Reset` already landed in wave 1 |
+| 8 | Caller ID | `cid_*`/`data_*` in `V32mod.c +39` | 5,446 | **DONE** — wave 4, `011b53c5`, period 303/303. 11 functions + `V23_MRF_FILT`; CID closure empty. F8700–F8739, D970–D976 |
+| 8b | **Ring detect** | `RingDetector_*`/`RD_*` in `voice.c#3 +3` | ~2 K | **IN PROGRESS** — wave 4. Kept with voice: same blob TU, and `RingDetector_Reset` already lives in `src/service/voice.c` |
 | 9 | voice | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3` remainders | ~15 K | low priority |
 | 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last. Restore `t_faxsgd.c` from `9b1739ee^` first (F8497) |
 | 11 | the 15 remaining leaves | mostly `class1*.c`; 9 of them are F8492's link-blocked set | 3,167 | unblocks as their referents land — not a wave of its own |
@@ -303,3 +304,36 @@ implementation.
   stays faithful. A clamp to the buffer's own hundred entries under
   `#ifndef DSPLIB_REPRODUCE_BUGS` is that shape. D956 currently records the fix
   form as documentation only; revisiting that is a small, self-contained task.
+
+## Wave 4 — Caller ID (done), ring detect and voice (in progress)
+
+CID landed at `011b53c5`, period-green **303 passed, 0 failed**, with `onedef`,
+`banners` (359/359) and `refcheck` clean. Eleven functions and one table,
+5,446 bytes; `closure.py` over `CID_create`/`CID_process`/`CID_delete` is now
+empty. Findings F8700–F8739, deviations D970–D976.
+
+**It declined `_put_silence` (28 B) as OUT OF SCOPE, correctly** — the symbol
+sits in the CID span but is the first global of the FAX `class1.c` translation
+unit, and `src/fax/**` was fenced for that agent. A span name is not a module
+name, and this is the rule being applied rather than quoted.
+
+Two results worth carrying:
+
+- **`mode` is a STATE, not a configuration** (F8735). The object's own string
+  names 3 `CID_MESSAGE`, which is the author's word and the strongest class of
+  evidence this tree recognises.
+- **D976** — `ret = 3` is stored between the `cmp $0x3` and its branch, so the
+  automatic mode reports failure the block AFTER it commits to DTMF.
+  Reproduced; unreachable from slmodemd because `CID_create` fixes the mode
+  at 0.
+
+**All five CID bridges are gone from `test/harness/unwritten.c`**, which now
+carries no CID bridge at all.
+
+**Mutation suites were deliberately NOT registered** for the four new binaries,
+because a registered suite that cannot be recorded reads MISSING and fails the
+gate. The injection ritual was run by hand instead — 8 mutants on `data.c`, 11
+on `cid.c`, 37 on `cid_progress` (33 caught, 3 equivalent, **1 real gap found
+and closed**). That is the right trade while the snapshot is stale, but it
+makes the mutation debt larger: `mutsnap.py --check` is 0 current / 216 stale /
+0 never recorded, and a re-record pass is now overdue across V.22, V.32 and CID.
