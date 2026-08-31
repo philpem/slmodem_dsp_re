@@ -103834,3 +103834,52 @@ is equally safe; either is fine, naming after the field alone is not.
 
 `tools/assertlive.py` still reports the guard live, so the assertions are
 being compiled and not silently skipped.  (2026-08-31)
+
+### F9001. `t_v29fax`'s AGC-identity scaffolding SEGFAULTS under the period compiler, and it is withdrawn rather than left red
+
+`run_agc_identity()` in `test/unit/t_v29fax.c` crashes the binary built by GCC
+3.4.2. Under GCC 14 the same source passes 76,917 checks. It is withdrawn --
+`#if 0`, with the call removed from `main()` -- and preserved intact on branch
+`withdrawn/v29-agc-identity` at `62cb0d84`, per F8497's correction: **commit
+withdrawn work before removing it, so the next attempt inherits it.**
+
+**WHAT IS ESTABLISHED, measured on a five-second loop (`make period
+T=t_v29fax`):**
+
+- The crash is that one section. With only it disabled, `t_v29fax` passes the
+  period gate. **No V.29 symbol is implicated** -- the reconstruction and the
+  other nine sections stand.
+- It is the call, not the setup. Unbuffered instrumentation prints `pre-init`,
+  `post-init`, `pre-agc` and dies in
+  `((agc_int_fn)ref_FPM_AGC_agc)(&agc, samples, count)`.
+- **It is not a zero count.** `k * 30` makes the first trial's count 0, and
+  `FPM_AGC_agc` decrements without a zero guard (`dec %eax` at 0xa67e3), which
+  looked like the answer; forcing every count non-zero crashes identically.
+- **It is not a buffer overrun of `samples`**: `NBUF` is 512 against a maximum
+  driven count of 330.
+- **It is not the AGC machinery.** `t_agc` passes the period gate, and our
+  `AGCv22_CFG` is 0x18 bytes, matching the object's.
+- **It is not `regparm`.** `FPM_AGC_agc` is `T`, not `t`, so F8462 does not
+  apply, and the cast changes only the return type, which is benign on cdecl.
+
+**WHAT IS NOT ESTABLISHED IS THE CAUSE**, and this note does not guess at one.
+The remaining candidates are the third argument to `ref_FPM_AGC_init(&agc,
+&AGCv22_CFG, 1)` -- a V.22 configuration driving a V.29 fixture, where a value
+used as a SUBSCRIPT would be D955's shape exactly -- and some interaction
+between our `struct fpm_agc` instance and what the blob's `init` writes into
+it. Both are testable on the same five-second loop.
+
+**THE MEASUREMENT IT MADE IS NOT WITHDRAWN WITH IT, BUT IT IS NOW UNSUPPORTED.**
+The section existed to show that `FPM_AGC_agc` leaves `agc->signal` in `%eax`,
+which justified a cast used nowhere else. That claim was only ever measured
+under GCC 14. Anyone relying on it should re-measure; anyone deleting the
+`agc_int_fn` typedef will find it has no other user.
+
+**AND THE BUFFERING TRAP BIT AGAIN.** `build/period/t_v29fax.run.log` was ZERO
+BYTES, because stdout is block-buffered to a file and a segfault loses the
+buffer -- so the log said nothing at all about a test that had run. `stdbuf`
+cannot help: the period binaries are statically linked. `setvbuf(stdout, 0,
+_IONBF, 0)` at the top of `main` is what made the crash visible, and it is the
+first thing to add when a period binary dies silently. This is the same trap
+recorded in the V.32 pass (F8587's segfault appearing in the wrong arm).
+(2026-08-31)
