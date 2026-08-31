@@ -5,32 +5,35 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `ea5dfa6f` (waves 1–3 merged), 2026-08-31:
+Measured at `fb4519de` (waves 1–4 merged), 2026-08-31:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 83.6%  (613,896 bytes / 1,484 symbols)   was 76.6% / 1,296
-remaining 120,709 bytes /   365 symbols
-  DATA MODES             0 sym        0 B   <-- COMPLETE, was 65 / 39,166
-  fax only             283 sym   78,331 B
-  voice / CID / ring    67 sym   23,802 B
-  no-entry-point leaves 15 sym    3,167 B   was 138 / 15,767
+translated 86.0%  (631,530 bytes / 1,544 symbols)   was 76.6% / 1,296
+remaining 103,075 bytes /   305 symbols
+  DATA MODES             0 sym        0 B   COMPLETE
+  fax only             283 sym   78,331 B   <-- 76% of what is left
+  voice                 10 sym    6,378 B   Caller ID and ring detect COMPLETE
+  no-entry-point leaves 12 sym    2,957 B
 ```
 
-## THE DATA MODES ARE DONE
+## Where this stands
 
-`service.py` reports **0 symbols, 0 bytes** reachable from a data-mode entry
-point: V.90, V.92, V.34, V.32, V.22, B.103, V.23 and V.8 are all reconstructed.
-The `v32.c` and `v22.c` spans are empty, and what remains in `V32mod.c +39` is
-28 bytes of FAX. Merged master is period-green at **299 passed, 0 failed** —
-the 258 tests this work started from plus 41 new ones.
+**The data modes are complete**, and so are **Caller ID** and **ring detect**.
+Merged master is period-green at **315 passed, 0 failed**, with `onedef`,
+`banners` (366/366) and `check64` green.
 
-That was README's goal for the phase: "cover the data modes", which CLAUDE.md
-noted could not be reached while V.32 was fenced. It is reached.
+**FAX is now 76% of everything that remains** — 283 symbols against 22 in every
+other bucket combined. The project is at the phase boundary README describes:
+everything except fax is essentially done, and fax was deferred on VALUE
+(SpanDSP already implements Class 1 in the open-source world), not difficulty.
 
-**What is left is three populations and no data mode among them**: fax (the
-deliberate last phase), the voice/CID/ring services, and 15 leaves — 9 of
-which are F8492's link-blocked set and unblock as their referents land.
+**Voice's last 10 symbols are NOT a leaf problem and NOT independent.**
+`detector_create` (411) needs `TONEamode_CFG` and `tone`; `detector_progress`
+(814) needs five data symbols; the other eight are blocked on those two and on
+each other. **Six of the ten sit in the span labelled `class1tx.c +94`, which
+is the FAX span** — a pass that reads "fax is last" as "skip that span" strands
+them. That is the span-is-not-a-module rule with real money on it.
 
 ## The order
 
@@ -50,8 +53,8 @@ phase, last on purpose).
 | 6b | V.22 lifecycle | `v22.c` | 999 | **DONE** — wave 3, merge `ea5dfa6f`. F8538's failure was a TEST-BUFFER defect, not the source (F8607) |
 | 7 | V.32 FP layer and dispatch | `Dialer.c +18`, `V32mod.c +39`, `v32.c` | 9,384 | **DONE** — wave 3, merge `e9110d66`. All 25, closure now empty; 14 tables, not the 12 predicted |
 | 8 | Caller ID | `cid_*`/`data_*` in `V32mod.c +39` | 5,446 | **DONE** — wave 4, `011b53c5`, period 303/303. 11 functions + `V23_MRF_FILT`; CID closure empty. F8700–F8739, D970–D976 |
-| 8b | **Ring detect** | `RingDetector_*`/`RD_*` in `voice.c#3 +3` | ~2 K | **IN PROGRESS** — wave 4. Kept with voice: same blob TU, and `RingDetector_Reset` already lives in `src/service/voice.c` |
-| 9 | voice | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3` remainders | ~15 K | low priority |
+| 8b | Ring detect | `RingDetector_*`/`RD_*` in `voice.c#3 +3` | 2,061 | **DONE** — wave 4, `fb4519de`. All 8 symbols; 1,249,563 differential checks, 41/41 mutants caught |
+| 9 | **Voice** | `voice.c#3`, `Fdspkrnl.c +13`, `Beepgen.c +3`, `class1tx.c +94` | 6,378 left of 16,685 | **MOSTLY DONE** — wave 4. 41 of 51 symbols written. The last 10 are interdependent, not leaves; six sit in the FAX span |
 | 10 | FAX Class 1 | `class1tx.c +94`, `class1.c`, `class1rx.c`, fax arms of `voice.c#3` | 78,331 | **held off** — project phase, last. Restore `t_faxsgd.c` from `9b1739ee^` first (F8497) |
 | 11 | the 15 remaining leaves | mostly `class1*.c`; 9 of them are F8492's link-blocked set | 3,167 | unblocks as their referents land — not a wave of its own |
 
@@ -337,3 +340,56 @@ on `cid.c`, 37 on `cid_progress` (33 caught, 3 equivalent, **1 real gap found
 and closed**). That is the right trade while the snapshot is stale, but it
 makes the mutation debt larger: `mutsnap.py --check` is 0 current / 216 stale /
 0 never recorded, and a re-record pass is now overdue across V.22, V.32 and CID.
+
+## Wave 4 ledger — Caller ID, ring detect, most of voice
+
+Merges `011b53c5` (CID, period 303/303) and `fb4519de` (ring + voice, period
+311/311 on its branch, 315/315 merged). Findings F8700–F8799, deviations
+D970–D999.
+
+| work | symbols | bytes | result |
+|---|--:|--:|---|
+| Caller ID | 11 + 1 table | 5,446 | closure empty. F8700–F8739, D970–D976 |
+| Ring detect | 8 | 2,061 | 1,249,563 differential checks; 41/41 mutants caught |
+| Voice | 41 of 51 | 10,307 of 16,685 | 444/444 mutants caught over fifteen suites |
+
+### What this wave established
+
+- **Ring detect is a hysteretic zero-crossing counter, not a filter** — three
+  states, two comparator levels that swap ROLES (not merely sign) between half
+  cycles, a debounce that tightens once locked, one frequency measurement per
+  full cycle. Two fields are named from the object's own words (`RD_process`
+  prints `freq`/`duration` over exactly what `GetLastRing` returns); the rest is
+  usage inference and the header says so per field.
+- **A `d`/LOCAL array whose only referent is inside one unwritten function must
+  be written WITH that function.** `TONEamode_CFG` was declined on that ground
+  and its twelve words recorded verbatim in F8781; `silence_level_table` was
+  declined the same way and written later when its reader arrived. This is the
+  link constraint (F8492/F8493) in its data form.
+- **F8790 — a swapped smoothing weight is invisible to every codegen check AND
+  to any one-block fixture.** Multi-block fixtures are not a nicety here.
+- **`make one` remains necessary and not sufficient**, and this wave adds a
+  second shape of it: `beepgen_sample` carries a `#pragma GCC optimize(
+  "unsafe-math-optimizations")` scoped to one function, justified by the OBJECT
+  containing `fsin` at 0xad2a8 (F8762, on `fft.cpp`'s F833 precedent) — **and
+  GCC 3.4.2 ignores the pragma and calls libm**. The period gate passed anyway,
+  so the two paths agree here; the seam is documented rather than assumed away.
+
+### The process defect this wave surfaced, and it is worth more than the code
+
+**A READY SET IS ONLY TRUE OF THE COMMIT IT WAS MEASURED AT, and work in flight
+is invisible to it.** Two agents were briefed on `silence_progress` because the
+second brief was measured against a branch one commit behind the first agent's
+final state. `readyqueue.py` was not wrong — it was answering about the tree it
+was given.
+
+It cost nothing and paid twice: the duplicate became an independent second read
+that confirmed the committed table byte-for-byte, and it found a comment
+claiming a debug line prints 2700/7500/24300 when it prints 2699/7500/24299
+(F8747). Correcting that revealed the table was covered by no mutation at all,
+and that only one ULP direction per row is catchable — which the second read
+ALSO predicted wrongly, and `mutate.py` settled. Three layers of check, and the
+tool had the last word over both readings.
+
+**When briefing concurrent agents, re-measure readiness at the commit each brief
+is actually written against, and say in the brief which commit that was.**
