@@ -101336,3 +101336,35 @@ with complemented bits -- an observable no output sample can carry, and one
 that only exists because the state is compared rather than the samples alone.
 It is finding F8790's point again: a one-block, output-only fixture would have
 called this function's second argument dead.
+
+## F8893. V.21's mutation numbers, run by hand, and the two survivors confirm two deviations
+
+*2026-08-31.* No mutation suite was registered for `t_v21fax`: the tree-wide
+snapshot is 0 current / 228 stale, and a registered suite that cannot be
+recorded reads MISSING to `mutsnap.py --check` and fails the gate. So the set
+was run by hand, `tools/mutate.py src/fax/v21.c build/test/t_v21fax` over a
+descriptor file placed under `test/mutations/` for the run and deleted after
+it -- placed there because `mutate.py`'s `COPY` list is `Makefile src include
+test tools docs` and a descriptor outside the tree, or untracked at the root,
+is not in the copy it chdirs into.
+
+**29 mutations, 27 caught, 2 not caught, 0 unusable.** The two survivors were
+PREDICTED before the run and are not gaps:
+
+- *the empty second loop removed.* D1038: the object counts to the same bound
+  a second time with no body. It has no observable effect, so no differential
+  test can distinguish its presence from its absence. Deleting it is an
+  equivalent mutant by construction.
+- *the dead clear narrowed.* D1037: `st->flags &= ~(BIT0|BIT1)` is
+  overwritten three statements later by a plain assignment, so narrowing the
+  mask changes nothing. Also equivalent by construction -- and the mutation
+  that DOES matter, `=` changed to `|=`, is caught.
+
+That is the useful shape of the result: **the two mutants that survived are
+the two places the source already says nothing is observable**, and each one
+independently confirms the deviation that says so. A survivor whose deviation
+had not already been written would have been a gap.
+
+The other 27 span all seven functions and include the six frees of
+`V21RX_delete` individually, the mixed-signedness cursor read, the mute and
+its restore, and the resampler fed the bit count rather than the sample count.
