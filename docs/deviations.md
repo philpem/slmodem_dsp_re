@@ -10324,3 +10324,67 @@ string and sets `dle_can = 1`; it reads no element of `arg` (0xac531-0xac545).
 tidied, because zeroing it would be a store the object does not make and would
 show in a codegen comparison. `t_voiceapi` drives ABORT at both debug levels
 and over six `tone_duration` values and compares the full object each time.
+
+## D1037 ⚠ `V21TX_status` ASSIGNS the report's flag byte over its own clear
+
+*2026-08-31.* Three of the four `*TX_status` functions -- V.21, V.17 and
+V.29 -- clear bits 0 and 1 of the report's `+0x14`, clear bit 0 of `+0x15`,
+and then STORE `tx->flags10 & 0x04` over `+0x14` outright:
+
+    a2c26   movzbl 0x14(%edx),%eax     read the caller's flags
+    a2c3c   and    $0xfc,%al           clear bits 0 and 1
+    a2c3e   mov    %al,0x14(%edx)      ...and store it
+    a2c4d   movzbl 0x10(%ecx),%eax     read the transmitter's byte
+    a2c55   and    $0x4,%al
+    a2c57   mov    %al,0x14(%edx)      store, not merge
+
+So the read-modify-write four instructions earlier is dead, and every bit the
+caller had in that byte other than bit 2 is lost. `V27TX_status` is the one
+that does not do this: it ORs bit 0 in first and keeps it (`and $0x1,%al;
+or %dl,%al`), so V.27's report carries two bits where the others carry one.
+
+**Status:** reproduced. `t_v21fax` hands in a status block whose flag byte is
+0xff and compares the whole block afterwards; the `|=` reading is one of its
+named wrong readings and its separating count is asserted non-zero from the
+run, so the assignment is measured rather than assumed -- and injecting `|=`
+into `src/` fails 24 of that test's 3,414 checks. `struct v22_status` and
+`struct v32_status`
+describe the same host-facing block, and neither of their fillers does this.
+
+## D1038 ⚠ `GetSNRV21` runs a second loop with no body and returns a literal 0
+
+*2026-08-31.* After rectifying `fsd.trace` into the block's own buffer, the
+object counts from zero to the same bound again with nothing between the
+increment and the test (0x0a5868..0x0a5875), then returns 0:
+
+    a5868   xor    %eax,%eax
+    a586a   jmp    a5872
+    a5870   inc    %eax
+    a5871   cwtl
+    a5872   cmp    %bx,%ax
+    a5875   jl     a5870
+    a5878   xor    %eax,%eax           the return
+
+The natural reading is an accumulation whose result became dead before the
+compiler saw it -- which would also explain why a function called `GetSNR`
+computes no ratio -- but the object does not say so and nothing is claimed.
+`GetSNRV17` and `GetSNRV29` return `13 - rx[0x1c2]` and `14 - rx[0x172]`
+respectively and have no such loop; `GetSNRV27` returns the constant 10.
+
+**Status:** reproduced, as an empty `for`. It has no observable effect, so no
+test can distinguish it from its absence; it is written because it is in the
+object and commented as unrecoverable rather than explained.
+
+## D1039 ⚠ `V21RX_delete` frees seven blocks with no NULL guard and takes the handle
+
+*2026-08-31.* Nothing in the teardown is guarded: `FPM_MTD_delete(dsp->mtd)`
+dereferences at once, and the four `sysdep_free` calls and the final tail call
+are unconditional. The last of them releases the handle itself, so a caller
+that supplied its own storage has it freed -- which is D8's shape in
+`B103FP_delete`, in a different datapump.
+
+**Status:** reproduced. `t_v21fax` builds the whole receiver out of the
+harness allocator and compares the LIVENESS of all ten blocks either side,
+plus the allocator's own counters; it also asserts that the BLOB left nothing
+live and made no bad free, without which two implementations that both leaked
+everything would agree and pass.

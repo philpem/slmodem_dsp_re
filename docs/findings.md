@@ -101158,3 +101158,181 @@ rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
 `cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
 `test/mutations/` for it; passing `make phase` proves nothing here, because a
 descriptor that no longer matches is not an error.
+
+## F8886. The fax `*TX_status` block is `struct v22_status` and `struct v32_status`, a third time
+
+*2026-08-31.* `V21TX_status` fills a caller-owned block at +0x00 (a protocol
+word), +0x02 and +0x04 (two rates in bit/s), +0x06, +0x08, +0x0a, +0x0c,
++0x10, +0x12, and two flag bytes at +0x14 and +0x15. That is field for field
+the block `V22_status` fills (`include/dsplib/v22status.h`) and the block
+`V32FP_status` fills (`include/dsplib/v32fpstat.h`), and the latter also
+carries the `short` at +0x16 and the `int` at +0x18 that `V17TX_status` and
+`V27TX_status` write.
+
+**The +0x02 reading is confirmed by the object's own literal.** V.21 stores
+`0x12c` = 300 there unconditionally, and 300 bit/s is what `class1tx.c`'s
+`V21TX_MESG` calls the V.21 connection ("CONNECT: V.21 Transmit 300 bps").
+V.17, V.27 and V.29 all copy their handle's `+0x02` instead. So the field is
+the transmit bit rate, and that is the author's own number rather than an
+inference from the two existing headers.
+
+**A THIRD DEFINITION OF ONE TYPE IS NOW IN THE TREE, DELIBERATELY.**
+`struct v21_status` in `include/dsplib/v21fax.h` is a fourth spelling of the
+same 0x1c bytes. `tools/onedef.py` does not complain -- these are four
+DIFFERENT type names, not four definitions of one -- so nothing gates it, and
+that is exactly why it is written down here. It was not unified because
+`v22status.h` and `v32fpstat.h` belong to other modules, and because three
+other agents were writing `*TX_status` for V.17, V.27 and V.29 in the same
+wave; unifying under one file while four branches were live is the merge
+defect `docs/remaining.md` records from wave 2. **The unification is a small,
+self-contained follow-up and someone should take it.**
+
+## F8887. V.21's transmit and receive halves are two objects, and a struct spanning both would have been fiction
+
+*2026-08-31.* `ModDataV21` reads its handle's +0x24; `V21RX_modem` reads
++0x18, +0x19, +0x4c and +0x50. Collecting those into one `struct v21fp` was
+the obvious move and would have been wrong: the object has `V21TX_create`
+(0x0992f0, 757 bytes) and `V21RX_create` (0x098e70, 1,011 bytes) as separate
+constructors with separate deletes (`V21TX_delete` 0x0995f0, `V21RX_delete`
+0x099270), and `faxvmi.h` already records that FAXVMI gives the two halves
+separate slots -- 5 for v21tx and 6 for v21rx -- with a handle each at its own
++0x28.
+
+So `+0x24` and `+0x50` are offsets in different blocks.
+`include/dsplib/v21fax.h` keeps them apart and both handles are `void *`,
+which is `v17data.h`'s ruling applied: neither constructor is reconstructed,
+so naming the handles' fields would be guessing.
+
+**The general form:** two functions sharing a name prefix are not evidence
+that they share an object. The constructor list is, and it is one `nm` away.
+
+## F8888. The V.21 DSP blocks are gapless, and that is what makes them a reading rather than a guess
+
+*2026-08-31.* Neither V.21 constructor is reconstructed, so the two DSP
+sub-blocks were laid out from the callees each field is handed to -- which
+CLAUDE.md ranks second behind a format string -- and then checked for gaps.
+
+Transmit, at `tx + 0x24`:
+
+    +0x00  struct fpm_fsm   FPM_FSM_modulate's first argument (0xa58a6)
+    +0x10  struct fpm_mrf   FPM_MRF_filter's first argument (0xa58ca)
+    +0x2c  short *          passed as the modulator's OUTPUT and the
+                            converter's INPUT: one shared intermediate
+
+`sizeof(struct fpm_fsm)` is 0x10 and `sizeof(struct fpm_mrf)` is 0x1c, so
+0x00, 0x10 and 0x2c abut exactly. The block is those three things and nothing
+else.
+
+Receive, at `rx + 0x50`:
+
+    +0x00  int              read by nothing traced
+    +0x04  int              CarrierDetectV21
+    +0x08  int              CarrierDetectV21
+    +0x0c  0x2c bytes       UNMODELLED
+    +0x38  struct fpm_mrf   FPM_MRF_free's argument (0x992b2)
+    +0x54  struct fpm_fsd   FPM_FSD_free's argument (0x9929b)
+    +0x8c  struct fpm_mtd * FPM_MTD_delete's argument (0x99284)
+    +0x90  short *          sysdep_free'd (0x992c3), and GetSNRV21's output
+
+0x1c and 0x38 again abut, so 0x38, 0x54, 0x8c and 0x90 are forced once 0x54 is
+known. **And 0x54 is confirmed twice over:** `GetSNRV21` reads `rx + 0x70` as
+a `short *` and `rx + 0x74` as a `short`, which under a `struct fpm_fsd` at
+0x54 are exactly `fsd.trace` ("the lowpass output, one word per input sample")
+and `fsd.last_count` ("the `count` of the last call"). A function that
+rectifies the demodulator's own trace over the demodulator's own last count is
+the two readings agreeing without either being derived from the other.
+
+**The only gap is 0x0c..0x37, 44 bytes, and it is left unmodelled.** It is the
+right size for a `struct fpm_agc`, and `struct b103_dsp` has one at exactly
++0x0c with `rx_energy` and `rx_tone` at +0x04 and +0x08 above it -- the same
+two ints `CarrierDetectB103` ANDs. That parallel is why the shape is
+believable and it is NOT why anything is named: nothing reconstructed writes
+either V.21 field, so both keep their offsets.
+
+## F8889. V.21's receive flag bit 1 is an error one-shot, enumerated rather than inferred
+
+*2026-08-31.* `V21RX_modem` opens with `andb $0xfd,0x19(%eax)`, clearing bit 1
+of the receiver handle's flags byte on every block. Bell 103's identically
+placed bit is `B103_FLAG_TIMEOUT`, a one-shot cleared by `B103FP_modem` and
+set by every timeout path (finding F38), and the temptation was to carry the
+name across.
+
+Every instruction in the object that writes `+0x19` of this handle was
+enumerated instead. Bit 1 has exactly one setter -- `orb $0x2,0x19(%edx)` at
+0x0a1ccc, inside `RxHdxErrorV21` -- and exactly one clearer, `V21RX_modem`'s.
+So it is an ERROR event a caller must read each block or lose, and it is named
+`V21RX_FLAG_ERROR` on that measurement and not on the analogy.
+
+The same sweep bounds what is left for whoever writes the half-duplex machine:
+bit 0 is set by `RxHdxStartV21`, `RxHdxWaitV21`, `RxHdxDataV21` and
+`RxNextStateV21` and cleared by three of them; bit 5 (0x20) is set by
+`RxHdxDataV21`, `RxHdxIdleV21` and `RxHdxWaitV21` and cleared by
+`RxHdxIdleV21` and `RxHdxStartV21`, which is `B103_FLAG_CARRIER`'s position
+and role; bit 7 is set and cleared by `RxHdxDataV21` and is the only one
+anything TESTS -- `V21RX_status` does, at 0x0a2487. `V21RX_create` seeds the
+byte with `orb $0x50`. None of those is named here.
+
+## F8890. `V21RX_modem`'s cursor arithmetic mixes a sign-extended and a zero-extended count, and it is forced
+
+*2026-08-31.* The loop reads `*count` twice per iteration and extends the two
+reads differently:
+
+    a1c70   movswl %cx,%ebx        the count BEFORE the handler ran
+    a1c8c   movzwl 0x0(%ebp),%ecx  re-read after
+    a1c91   movzwl %cx,%edx
+    a1c94   sub    %edx,%ebx       consumed = before - remaining
+
+`%ebx` is sign-extended and `%edx` zero-extended, and the difference feeds a
+32-bit `lea` that advances the input cursor -- so the second extension's upper
+half IS USED and the reading is FORCED, not finding F614's free kind. Written
+as `short before` against `unsigned short remaining`, whose integer promotions
+give exactly that.
+
+**It is reachable and it is tested.** With `*count` at -1 on entry and a
+handler that leaves 0x8000, the object's answer is `-1 - 32768 = -32769` where
+a uniformly signed reading gives `-1 - (-32768) = 32767`: the input cursor ends
+65,536 words apart. `t_v21fax` drives it, and injecting `(short)remaining`
+into `src/` fails one of that test's 49,786 checks -- one, because only the
+hostile script reaches it, which is the whole reason the script exists.
+
+The loop is also a DO-WHILE: `*count` of zero on entry still dispatches the
+handler once. Injecting a `while` fails nine checks.
+
+## F8891. A handler stub that bounds-checks its own cursor is what lets a hostile count be tested at all
+
+*2026-08-31.* F8890's corner sends `V21RX_modem`'s input cursor 65,537 words
+below the buffer -- on the blob's side exactly as on ours. The obvious
+fixture, a stub that writes through whatever pointer it is handed, turns that
+trial into a segfault or a silent corruption of whatever `.bss` follows, and
+the first version of this test did the second: its window check was written
+against the cursor's offset FROM THE CURSOR BASE rather than from the array,
+so a legal-looking offset of 4,095 wrote 1,024 words past the end of a
+4,096-word array and into the next fixture's buffer. Both sides did it, so the
+comparison stayed green for the array under test and failed only in the
+neighbour -- which is what made it findable.
+
+The rule the test now follows: **a stub standing in for a callee must check
+the cursor against the ARRAY, not against the pointer it was handed**, and log
+the offset either way. The offset is the observable; the dereference is not.
+This is D955 / finding F8587's problem seen from the other end -- there, an
+unplanted subscript made both sides agree on a wild read; here, a
+wrongly-bounded stub made both sides agree while corrupting something else.
+
+## F8892. `TxNoCarrierV21` mutes by zeroing `fpm_fsm`'s `cfg.scale`, and the bits still matter
+
+*2026-08-31.* `TxNoCarrierV21` saves the `short` at `tx_dsp + 0x06`, stores
+zero, calls `FPM_FSM_modulate`, restores it, and then resamples exactly as
+`ModDataV21` does. Under the `struct fpm_fsm` at +0x00 that short is
+`cfg.scale`, and `FPM_FSM_modulate` re-applies it per bit
+(`FPM_TONE_set_scale(state->tone, state->cfg.scale)`), so every sample comes
+out silent while the tone's phase, the symbol count and the resampler's
+history advance as they would have. That is `TxNoCarrierB103` exactly.
+
+**The second argument is NOT ignored here**, which is where V.21 differs from
+`TxNoCarrierV17`: the bits are handed to the modulator, which retunes per bit,
+so two bit patterns leave the tone object in different states even at scale
+zero. `t_v21fax` separates that by comparing the tone objects after two runs
+with complemented bits -- an observable no output sample can carry, and one
+that only exists because the state is compared rather than the samples alone.
+It is finding F8790's point again: a one-block, output-only fixture would have
+called this function's second argument dead.
