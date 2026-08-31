@@ -1,0 +1,75 @@
+[
+ {
+  "note": "src/service/voicecmd.c against build/test/t_vcedle.  Every byte value is swept twice, the whole 1,868-byte context is compared after each call, and the transcript is taken at levels 0, 1 and 2 including the sign-extension of 0x83 -- so each mutation below moves a compared value or a printed line."
+ },
+ {
+  "label": "ETX is recognised as 0x04",
+  "find": "\tcase VOICE_DLE_ETX:",
+  "replace": "\tcase VOICE_DLE_ETX + 1:"
+ },
+ {
+  "label": "CAN is recognised as 0x19",
+  "find": "\tcase VOICE_DLE_CAN:",
+  "replace": "\tcase VOICE_DLE_CAN + 1:"
+ },
+ {
+  "label": "ETX sets the CAN flag",
+  "find": "\t\tv->dle_etx = 1;",
+  "replace": "\t\tv->dle_can = 1;"
+ },
+ {
+  "label": "CAN sets the ETX flag",
+  "find": "\t\tv->dle_can = 1;",
+  "replace": "\t\tv->dle_etx = 1;"
+ },
+ {
+  "label": "the ETX flag is set to 2",
+  "find": "\t\tv->dle_etx = 1;\n\t\treturn 0;",
+  "replace": "\t\tv->dle_etx = 2;\n\t\treturn 0;"
+ },
+ {
+  "label": "ETX returns 1",
+  "find": "\t\tv->dle_etx = 1;\n\t\treturn 0;",
+  "replace": "\t\tv->dle_etx = 1;\n\t\treturn 1;"
+ },
+ {
+  "label": "CAN returns 8",
+  "find": "\t\treturn VOICE_DLE_CAN_STATUS;",
+  "replace": "\t\treturn VOICE_DLE_CAN_STATUS - 1;"
+ },
+ {
+  "label": "an unknown command returns 9",
+  "find": "\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);\n\treturn 0;",
+  "replace": "\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);\n\treturn VOICE_DLE_CAN_STATUS;"
+ },
+ {
+  "label": "the command byte is printed without its sign extension",
+  "find": "dsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);",
+  "replace": "dsplibs_debug_printf(\"Unknown command - %2x\\n\", (unsigned char)cmd);"
+ },
+ {
+  "label": "ETX and CAN announce each other",
+  "find": "\t\t\tdsplibs_debug_printf(\"voice dle command: ETX\\n\");",
+  "replace": "\t\t\tdsplibs_debug_printf(\"voice <CAN> command\\n\");"
+ },
+ {
+  "label": "the unknown-command line prints decimal",
+  "find": "dsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);",
+  "replace": "dsplibs_debug_printf(\"Unknown command - %2d\\n\", cmd);"
+ },
+ {
+  "label": "the unknown-command gate fires at level 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"Unknown command - %2x\\n\", cmd);"
+ },
+ {
+  "label": "the CAN gate fires at level 1",
+  "find": "\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"voice <CAN> command\\n\");",
+  "replace": "\t\tif (dsplibs_debug_level > 0)\n\t\t\tdsplibs_debug_printf(\"voice <CAN> command\\n\");"
+ },
+ {
+  "label": "the ETX arm falls through to CAN",
+  "find": "\t\tv->dle_etx = 1;\n\t\treturn 0;\n\tcase VOICE_DLE_CAN:",
+  "replace": "\t\tv->dle_etx = 1;\n\t\t/* fallthrough */\n\tcase VOICE_DLE_CAN:"
+ }
+]

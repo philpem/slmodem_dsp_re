@@ -98344,3 +98344,190 @@ which is `int` here and `long` in slmodemd's own header. Recorded rather than
 left implicit because the two are now a pattern: **a vendored upstream
 declaration is evidence about the API's intent and not about its ABI**, and
 where they disagree the instructions win.
+
+### F8770. Three LOCAL functions in the blob that are NOT regparm(2): being `t` predicts nothing, the body does
+
+*2026-08-31.* `vce_hook_on` (0x600), `vce_hook_off` (0x630) and
+`vce_get_sreg` (0x660) are `t` in the object's symbol table, exactly as
+`GetGain`, `EchoCanceler` and `bValidateEnergyValue` are in F8462 -- and
+unlike those three they take their arguments on the STACK:
+
+    vce_hook_on   sub $0xc,%esp ; ... ; mov 0x10(%esp),%eax   -> arg0
+    vce_get_sreg  push %ebx ; sub $0x8,%esp ;
+                  mov 0x10(%esp),%eax ; mov 0x14(%esp),%ebx   -> arg0, arg1
+
+So `t_vce.c` declares their `ref_` aliases plainly, with no
+`__attribute__((regparm(2)))`, and the calls agree.
+
+**Why it matters as a rule.** GCC 3.4's static-function regparm is
+`cgraph_local_info(decl)->local`, which is withdrawn as soon as the address of
+the function is taken or the unit-at-a-time bookkeeping cannot prove the
+function local -- so the convention is a property of what the whole
+translation unit does with the symbol, not of its binding. F8462 read as "a
+LOCAL blob function is regparm(2)"; it is not, and a test that declared these
+three that way would pass its own build and compare two different functions.
+**Read the prologue, not the symbol table.**
+
+### F8771. `vce_get_sreg` is the voice service's own S-register reader, and slmodemd's `struct voice_info` decodes all seven of its cases
+
+*2026-08-31.* `vce_get_sreg(modem, num)` calls
+`modem_get_param(modem, 12)` -- MDMPRM_VOICEINFO -- and answers seven register
+numbers out of the block it gets back and out of three built-in constants.
+Everything else returns 0.
+
+The block is slmodemd's `struct voice_info` (`ref/slmodemd/modem_defs.h`),
+eleven `unsigned` members, and the three offsets the object reads land on
+exactly the three members its register numbers name -- which is what makes
+this a derivation rather than a plausible fit:
+
+| num | slmodemd's name for it | answer |
+|---|---|---|
+| 24 | `SREG_FLASH_TIMER` | 20, constant |
+| 72 | `SREG_HANDSET_GANE` (their spelling) | 19, constant |
+| 73 | `SREG_VOICE_DIALTONE_DETECT_DELAY` | 3, constant |
+| 82 | `SREG_SILENCE_DETECT_SENSITIVITY` (#VSS) | +0x24 `silence_detect_sensitivity`, reduced |
+| 83 | `SREG_SILENCE_DETECT_DURATION` (#VSP) | +0x28 `silence_detect_period` |
+| 138 | `SREG_MIC_GAIN` | +0x08 `rx_gain` |
+| 139 | `SREG_LINE_RECORD_GAIN` | +0x08 `rx_gain` |
+
++0x08, +0x24 and +0x28 are members 2, 9 and 10 of eleven four-byte members, so
+the layout corroborates rather than being assumed; and both accesses to the
+sensitivity are unsigned in the object (`shr $0x6`, `jbe`), which is the type
+slmodemd declares.
+
+**The sensitivity mapping is not a plain shift**, and this is the part no
+amount of reading the register number would have given:
+
+    level = sensitivity >> 6;
+    if (level == 0)  return sensitivity != 0;   /* 1..63 -> level 1 */
+    if (level > 3)   return 3;
+    return level;
+
+So zero is the only raw value that reports level 0, and everything above 191
+saturates at 3.
+
+**The three constants are answered without storage.** Setting S24, S72 or S73
+anywhere cannot move what this function returns -- and it still pays for the
+`modem_get_param` call, which the object makes unconditionally before the
+switch.
+
+### F8772. The MTK tables: two exact identities, three near-miss closed forms, and why they stay literal
+
+*2026-08-31.* Six symbols in `.data`, 3,628 bytes, all six now in
+`src/service/mtk_tables.c` and proved byte for byte by `t_mtktab`:
+
+    MTK_xor_table  0x8500   512   MTK_cos_table  0x8f40  1028
+    MTK_atan_table 0x8700  1028   MTK_sin_sign   0x9344    16
+    MTK_sin_table  0x8b20  1028   MTK_cos_sign   0x9354    16
+
+**Two identities hold BIT FOR BIT, so they are checked and not described:**
+
+- `MTK_xor_table[i] == popcount(i)` for all 256 entries, as a `short`. That is
+  the whole derivation of that table and it explains the name -- an XOR/parity
+  weight lookup.
+- `MTK_cos_table[i] == MTK_sin_table[256 - i]` for all 257. One quarter wave,
+  stored twice, read from both ends.
+
+**Three closed forms are within one ULP and reproduce NOTHING exactly**, which
+is why the tables stay literal (`docs/coefficients.md`, and the fast pass's
+rule that a byte-exact copy is byte-exact):
+
+    MTK_sin_table[i]  = sin(i * pi / 512)     1 of 257 entries differs
+    MTK_cos_table[i]  = cos(i * pi / 512)     2 of 257 differ
+    MTK_atan_table[i] = atan(i / 256.0)       1 of 257 differs
+
+A generator would therefore be WRONG in one to two cells each, and the failure
+would be invisible to anything but a byte comparison. Measured with the
+double-precision libm result rounded to `float`; whatever the author's
+generator was, it was not that.
+
+**The shape is `MTK_phasor`'s (0xb0690), the only caller of the sine pair.**
+The angle is reduced, scaled and rounded to a 16-bit integer; the low 8 bits
+index the table and the interpolation reads `[i]` and `[i+1]`, which is why
+257 and not 256; bits 8-9 select the quadrant and index the two four-entry
+sign vectors, so the stored quarter wave carries no sign of its own --
+`MTK_cos_sign` is `+ - - +` and `MTK_sin_sign` is `+ + - -`.
+
+**Alignment is the compiler's, not an attribute.** The four tables of 32 bytes
+or more sit on 32-byte boundaries and the two 16-byte ones only on 4, which is
+GCC's i386 `DATA_ALIGNMENT` boost when optimising. Nothing to declare.
+
+**Which TU they came from is NOT settled.** `tumap.py` brackets the range
+holding `MTK_phasor` between fourteen candidate file names, of which `PHASOR.c`
+and `TABLES.c` are the suggestive two. The file name in `src/` is ours; the six
+symbol names are the author's.
+
+**AND `silence_level_table` IS DECLINED, NOT FORGOTTEN, AND THE REASON IS THAT
+IT IS `static`.** It was scheduled with these six and it does not belong with
+them: it is `d` in the object -- LOCAL -- at `.data` 0x84d4, 16 bytes, and the
+only three references to it in the whole 1.2 MB are inside `silence_progress`
+(0xb03b0..0xb0690's neighbour), which is unwritten. A `static` array with no
+reader **is not emitted at all** by either compiler, so defining it in a file
+of its own would either vanish or have to be made external -- and external is a
+change to the object's own linkage made purely to give a test something to
+compare. Neither is worth doing before its one consumer exists.
+
+Its content is recorded here so the next agent does not have to re-derive it.
+Sixteen bytes at `.data` 0x84d4, which as four floats are
+
+    -1.0f, 2.5147244e-06f, 6.9853459e-06f, 2.2632519e-05f
+
+(raw words `bf800000 3628c2a3 36ea63aa 37bddaf7`). The first entry is a
+sentinel and the other three ascend by roughly 2.8x, which is what a table of
+energy thresholds indexed by a 0..3 sensitivity LEVEL looks like -- and F8771
+has just established that `vce_get_sreg` reports exactly such a level, 0..3,
+for `SREG_SILENCE_DETECT_SENSITIVITY`. That is a reading, not a derivation;
+`silence_progress` is what settles it, and **the table belongs in whichever
+file gets `silence_progress`, spelled `static`.**
+
+### F8773. Four `voice.c#3` symbols are appended out of emission order, on purpose, and the reason is that this session could not measure the alternative
+
+*2026-08-31.* `vce_hook_on`, `vce_hook_off` and `vce_get_sreg` are the FIRST
+three symbols of the `voice.c#3` span (0x600, 0x630, 0x660) and
+`STRM_VCE_GetFDSPEnvironmentalParams` is at 0x13b0 -- all four before
+`RD_create` at 0x2130. Faithful emission order would put them at the top of
+`src/service/voice.c`; they are appended to the bottom instead.
+
+**Why.** Emission order is a register-allocation carrier (F7796, F7800): it is
+upstream of a function and moves code the function did not change. The nine
+ring-detector functions above them were written and measured in their current
+position by another agent in the same wave, and this session has no period
+compiler with which to re-measure them after a move -- so the choice was
+between an unmeasured reorder that could silently cost byte identity above,
+and a recorded deviation from the order rule. **An unmeasurable change to
+already-measured code is not an improvement**, so the deviation is taken and
+written down in the file's own banner as well as here.
+
+**What to do about it.** The next refinement pass with `byteident.py`
+available should try the faithful order and keep it if nothing above
+regresses. It is a two-minute experiment for whoever can run the tool, and an
+unbounded risk for whoever cannot.
+
+### F8774. `voice_dle_command` sits in a bracket labelled `class1tx.c` and is voice, not fax
+
+*2026-08-31.* `voice_dle_command` (0xabe20, 196 bytes) falls inside the
+`tumap.py` bracket 0x94870..0xac960, whose first label is `class1tx.c`. The
+bracket is SHARED -- `voice.c#260` is in it too -- and everything inside the
+function says voice: the symbol name, and all three strings it prints ("voice
+dle command: ETX", "voice <CAN> command", "Unknown command - %2x").
+
+So it is reconstructed in `src/service/voicecmd.c` and not in `src/fax/`,
+which is CLAUDE.md's "do not read a span name as a module name" applied to a
+case where the span label is not merely imprecise but from the wrong service
+entirely. It is not put in `src/service/voice.c` either: 0xa9000 bytes
+separate it from the `voice.c#3` span, so whatever TU it belongs to is not
+that one.
+
+**What it does.** Two DLE-shielded control codes of a voice connection:
+
+    <DLE><ETX> (0x03)  sets +0x744, returns 0
+    <DLE><CAN> (0x18)  sets +0x748, returns 9
+    anything else      writes nothing, returns 0
+
+The command byte is loaded with `movsbl`, so it is a SIGNED char: 0x83 reaches
+the default arm as -125 and that is what the object's `%2x` prints. The two
+flag names (`dle_etx`, `dle_can`) are usage inference, the weakest grade --
+what is established is the store and the author's word for the command that
+causes it; what consumes either flag is unwritten and so unknown. 9 has no
+name in the object or in slmodemd's `VOICE_STATUS_*` / `VOICE_CMD_*`, whose
+values do not reach it, so it stays a number.

@@ -1,0 +1,55 @@
+[
+ {
+  "note": "src/service/mtk_tables.c against build/test/t_mtktab.  Every one of the 3,628 bytes is compared by memcmp AND entry by entry, so a single changed literal in any of the six tables is caught twice.  The mutations touch the first, a middle and the last entry of each table, which is what distinguishes a comparison that runs from one whose loop bound came out short."
+ },
+ {
+  "label": "MTK_atan_table's first entry",
+  "find": "\t0.0f, 0.0039062302f,",
+  "replace": "\t0.5f, 0.0039062302f,"
+ },
+ {
+  "label": "MTK_atan_table's last entry",
+  "find": "\t0.7853982f,\t/* 256 */",
+  "replace": "\t0.7853981f,\t/* 256 */"
+ },
+ {
+  "label": "MTK_sin_table's first entry",
+  "find": "\t0.0f, 0.0061358847f,",
+  "replace": "\t0.25f, 0.0061358847f,"
+ },
+ {
+  "label": "MTK_sin_table's end point is not 1",
+  "find": "\t1.0f,\t/* 256 */",
+  "replace": "\t0.9999f,\t/* 256 */"
+ },
+ {
+  "label": "MTK_cos_table's first entry is not 1",
+  "find": "\t1.0f, 0.99998116f,",
+  "replace": "\t0.9999f, 0.99998116f,"
+ },
+ {
+  "label": "MTK_cos_table's end point is not 0",
+  "find": "\t0.0f,\t/* 256 */",
+  "replace": "\t0.25f,\t/* 256 */"
+ },
+ {
+  "label": "MTK_sin_sign's third quadrant is positive",
+  "find": "const float MTK_sin_sign[4] = {\n\t1.0f, 1.0f, -1.0f, -1.0f,",
+  "replace": "const float MTK_sin_sign[4] = {\n\t1.0f, 1.0f, 1.0f, -1.0f,"
+ },
+ {
+  "label": "MTK_cos_sign's fourth quadrant is negative",
+  "find": "const float MTK_cos_sign[4] = {\n\t1.0f, -1.0f, -1.0f, 1.0f,",
+  "replace": "const float MTK_cos_sign[4] = {\n\t1.0f, -1.0f, -1.0f, -1.0f,"
+ },
+ {
+  "label": "MTK_xor_table's first row loses a bit",
+  "find": "\t0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 4,\t/*   0 */",
+  "replace": "\t0, 1, 1, 2, 1, 2, 2, 3, 1, 2, 2, 3, 2, 3, 3, 3,\t/*   0 */"
+ },
+ {
+  "label": "MTK_xor_table's last entry is not 8",
+  "find": "\t4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 8,\t/* 240 */",
+  "replace": "\t4, 5, 5, 6, 5, 6, 6, 7, 5, 6, 6, 7, 6, 7, 7, 7,\t/* 240 */"
+ }
+]

@@ -1,0 +1,75 @@
+/*
+ * voicecmd.h -- `voice_dle_command` and the two flags it sets.
+ *
+ *   voice_dle_command  .text 0x0abe20  196 bytes
+ *
+ * IT IS VOICE, NOT FAX, AND THE SPAN NAME SAYS OTHERWISE.  `tumap.py` puts
+ * it in a bracket whose label is `class1tx.c`, and that label comes from the
+ * blob's LAYOUT rather than from any claim about the module: the bracket is
+ * shared with `voice.c#260`, the symbol is `voice_*`, and all three strings
+ * it prints say "voice".  CLAUDE.md's rule for exactly this ("do not read a
+ * span name as a module name") is why it lives in its own file here instead
+ * of in `src/fax/class1tx.c`.
+ *
+ * WHAT IT IS.  The DLE-shielded control codes of a voice connection.  In a
+ * voice call the modem escapes in-band commands with DLE; this handles two of
+ * them and rejects everything else:
+ *
+ *   <DLE><ETX>  (0x03)  end of the voice data stream -- sets `dle_etx`,
+ *                       returns 0
+ *   <DLE><CAN>  (0x18)  abort -- sets `dle_can`, returns 9
+ *   anything else       nothing is written; returns 0, and at debug level
+ *                       > 1 prints "Unknown command - %2x"
+ *
+ * The command byte is loaded with `movsbl`, so it is a SIGNED char and a
+ * high-bit byte reaches the default arm as a negative number rather than as
+ * 0x80..0xff.  That is a real difference from `unsigned char` for exactly the
+ * printed value, which is why the type is spelled out rather than left to a
+ * plain `char` whose signedness varies by target.
+ */
+
+#ifndef DSPLIB_VOICECMD_H
+#define DSPLIB_VOICECMD_H
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/*
+ * The two DLE-shielded codes the object knows, by their ASCII names -- which
+ * is how the author's own strings spell them ("voice dle command: ETX",
+ * "voice <CAN> command").
+ */
+#define VOICE_DLE_ETX	0x03
+#define VOICE_DLE_CAN	0x18
+
+/* What <DLE><CAN> returns.  The object has no name for it and neither has
+ * slmodemd's `VOICE_STATUS_*` / `VOICE_CMD_*`, whose values do not reach 9,
+ * so it is left as the number the object returns. */
+#define VOICE_DLE_CAN_STATUS	9
+
+/*
+ * The voice service's context, modelled ONLY as far as `voice_dle_command`
+ * sees it: two `int` flags 0x744 and 0x748 into an object whose size and
+ * remaining layout are unknown.  Nothing else in this tree reaches it yet.
+ *
+ * The FIELD NAMES ARE USAGE INFERENCE, the weakest of CLAUDE.md's three
+ * grades, and are recorded as such: what is established is that the object
+ * stores 1 at +0x744 on the ETX path and 1 at +0x748 on the CAN path, and
+ * that the author's printf on each of those paths names the command.  What
+ * consumes either flag is not written and so is not known -- `VOICE_process`
+ * is the obvious candidate and is unreconstructed.
+ */
+struct voice_ctx {
+	unsigned char	pad_0000[0x744];
+	int		dle_etx;	/* +0x744 set to 1 by <DLE><ETX> */
+	int		dle_can;	/* +0x748 set to 1 by <DLE><CAN> */
+};
+
+int voice_dle_command(struct voice_ctx *v, signed char cmd);
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif /* DSPLIB_VOICECMD_H */

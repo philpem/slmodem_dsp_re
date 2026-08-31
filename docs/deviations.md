@@ -9415,3 +9415,55 @@ symbol count a well-behaved handler returns**, and should guard past it.
 checks above. `t_v22modem` sizes its destination at four times the input block
 and asserts a guard past it, so the next occurrence is a named failure rather
 than a compiler-dependent verdict.
+
+## D990 ⚠ `vce_get_sreg` answers 0 for every S-register slmodemd has a value for, and answers three of its own out of thin air
+
+The voice service reads S-registers through its own function rather than
+through the host's `modem_get_sreg`, and that function knows seven numbers:
+four out of `struct voice_info` and three as compile-time constants (S24 = 20,
+S72 = 19, S73 = 3). Everything else -- every register the host stores, sets
+from an AT command and reports -- reads back **0**, not the host's value and
+not an error.
+
+So on this modem, `ATS30?` and the voice path's idea of S30 are unrelated;
+and setting S24, S72 or S73 anywhere cannot move what the voice path uses,
+because the object holds no storage for them at all. It still pays for a
+`modem_get_param(MDMPRM_VOICEINFO)` call on those three arms and on the
+default one, which is faithful in `src/service/voice.c` and asserted by
+`t_vce`.
+
+**Status:** unmeasured as a *fault*. It is only wrong if something calls
+`vce_get_sreg` for a register outside the seven, and nothing reconstructed
+does -- `VOICE_process` is its only plausible caller and is unwritten. The
+three constants may equally be a deliberate hard-coding of a modem whose
+handset gain and flash timer are not adjustable.
+
+## D991 ⚠ `STRM_VCE_GetFDSPEnvironmentalParams` is a setter with a getter's name, and discards what it is given
+
+Both out-parameters are overwritten with constants -- 51 and 369 -- whatever
+they held, and the incoming values are only ever *printed*, at debug level
+above 1, under the label "old:". So the two echo delays cannot be configured
+through this entry point and the caller's values cannot influence anything;
+a caller that read the name as "get the current values" would find them
+replaced.
+
+**Status:** unmeasured, and probably not a fault at all -- the "old:"/"new:"
+pair reads as the author instrumenting a deliberate override. Recorded
+because the NAME is the only thing that suggests otherwise, and a future
+reader will meet the name before the body. Reproduced faithfully;
+`t_vce` compares both delays against a distinct seed per call, so the
+overwrite is proved rather than assumed.
+
+## D992 ⚠ `voice_dle_command` gives an unknown command the same answer as `<DLE><ETX>`
+
+Three arms, two return values: `<DLE><CAN>` returns 9 and **both** the
+`<DLE><ETX>` arm and the unrecognised-command arm return 0. The two are
+distinguishable only by the flag at +0x744, which the ETX arm sets and the
+default arm does not -- so a caller that switches on the return value alone
+treats every malformed shielded byte as an end-of-data.
+
+**Status:** unmeasured. What consumes the flag is unwritten (`VOICE_process`),
+so whether the caller looks at it cannot be established here. Reproduced
+faithfully in `src/service/voicecmd.c`; `t_vcedle` sweeps all 256 byte values
+and compares the whole 1,868-byte context, so the difference between the two
+arms is proved even though the return values agree.
