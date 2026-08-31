@@ -98176,3 +98176,171 @@ period gate, and every arm a live machine visits sets the count. Recorded
 because it is the original's, because it is one poked sub-state away, and
 because it is the reason this test needed a buffer four times the size of the
 one a reasonable reading would have given it.
+
+### F8740. The software ring detector is reconstructed whole -- nine symbols, 2,061 bytes, and it is a hysteretic zero-crossing counter rather than a filter
+
+*2026-08-31.* `voice.c#3`'s ring-detect half is written and green: `RD_create`
+(293), `RD_delete` (84), `RD_process` (130), `RD_ring_details` (16),
+`RingDetector_Delete` (17), `RingDetector_Reset` (already written),
+`RingDetector_Create` (452), `RingDetector_GetLastRing` (24) and
+`RingDetector_Process` (1,045). Eight new, 2,061 bytes, in
+`src/service/voice.c` with `include/dsplib/ringdet.h`.
+
+**There is no filter and no transform in it.** A ring at 20-25 Hz is two
+octaves below anything else on the line, so the object simply compares the
+sample against a threshold with wide hysteresis and counts the crossings:
+
+- **three states** at `+0x3e` -- SEARCH (1), HIGH (2), LOW (3);
+- **two levels** at `+0x44`/`+0x46`, which SWAP ROLES rather than merely sign
+  between the half cycles. In HIGH they are `+threshold` (full amplitude) and
+  `+lock_level` (the crossing that ends the half); in LOW they are
+  `-lock_level` (the crossing) and `-threshold` (full amplitude). A sample
+  between them is in a guard band that is tolerated for three quarters of a
+  period at `min_freq` and no longer;
+- **a debounce that tightens once locked** -- SEARCH needs
+  `|threshold|/(fs/80)` consecutive samples (10 at 8 kHz and a 1000 threshold)
+  and a locked half cycle needs 2, or 0 in the negative-threshold mode;
+- **a frequency measured once per FULL cycle**, `fs / (half_samples + 1)`,
+  folded into a running integer mean, and accepted only inside
+  `[min_freq, max_freq]`;
+- **a ring declared** when `cycles * 1000 / freq_avg` passes `minOnDur`, and
+  withdrawn when either silence counter passes `minOffDur` in samples.
+
+The measurement is taken on one crossing of each pair and not both, and the
+marker for which is `above_need == idle_debounce`: entering HIGH from SEARCH
+overwrites `below_need` with the locked debounce and leaves `above_need` at
+the idle one, so the 3->2 crossing is the one that still carries it. That is
+the whole mechanism by which a half-cycle counter yields a full-cycle period.
+
+`t_ringdet` is 1,249,563 differential checks over 37 process scenarios, 48
+create/delete cases and 8,967 reset configurations, comparing the whole
+0x52-byte object after every block; `test/mutations/ringdet.json` is 41
+mutations, all 41 caught.
+
+### F8741. `RD_process`'s own format string types two fields, and slmodemd's use of them fixes the units
+
+*2026-08-31.* `RD_process` prints
+
+    "RD: RD: freq = %d, duration = %d\n"
+
+with exactly the two values `RingDetector_GetLastRing` hands back, so `+0x2e`
+is a FREQUENCY and `+0x24` is a DURATION on the author's own authority
+(`.rodata.str1.4:0x448`, reached through `relocscan`, not through a search of
+the disassembly -- finding F604). That is tier 1, and it is the only tier-1
+naming in this struct beyond the six `Reset` already prints.
+
+`modem.c`'s `modem_ring_detector_process` then fixes the units and the
+protocol without any inference:
+
+    if (freq == 0)      report ring start
+    else if (freq > 0)  ring finishing; ring_count = duration * freq / 1000
+
+-- so the frequency is Hz, the duration is milliseconds, and a reported zero
+frequency is not a failure but the OPENING edge. That is why `Process` writes
+`last_freq = 0` on the sample that declares a ring and copies `freq_avg` into
+it on the sample that ends one: the same two-word report carries both edges
+and the caller tells them apart by the sign. Everything else in
+`struct ring_detector` is named by usage inference and says so in the header.
+
+### F8742. `RingDetector_Create` is `malloc` plus an INLINED `RingDetector_Reset`, and the out-of-line copy is emitted as well
+
+*2026-08-31.* `RingDetector_Create` (0x2550, 452 bytes) contains no call. Its
+body is `sysdep_malloc(0x54)` followed instruction for instruction by
+`RingDetector_Reset`'s -- the same clamps, the same `fs/80` and
+`3*fs/(4*min_freq)` divisions, the same debug line with the same six
+arguments, the same duplicated `min_off_dur >= 120` clamp in the negative
+branch. `RingDetector_Reset` is nonetheless a separate GLOBAL symbol at
+0x2380, because the rest of the object calls it.
+
+That is GCC 3.4 at `-O3`: `-finline-functions` inlines an externally-visible
+function at a call site and still emits the out-of-line copy. So the source is
+the call it must have been, and the 452 bytes are counted against
+`RingDetector_Create` while the code they contain is `RingDetector_Reset`'s.
+It is the inlining-boundary trap of CLAUDE.md read the other way round -- here
+the blob has TWO symbols for one piece of source rather than one symbol for
+two pieces.
+
+**It also makes `RD_create`'s null check unreachable.** `Create` dereferences
+the returned pointer on the instruction after the `call` (`movw $0x0,0x3a(%esi)`)
+with no test, so a failed allocation faults inside `Create` and never returns
+the zero `RD_create` goes on to test for. Both are reproduced; neither is
+repaired.
+
+### F8743. The ring threshold is a twelve-entry jump table on `MDMPRM_CODECTYPE`, and nine of the twelve arms are the default
+
+*2026-08-31.* `RD_create` fixes five of the six configuration fields as
+constants -- fs from its argument, `minFreq` 15, `maxFreq` 80, `minOnDur` 120,
+`minOffDur` 120 -- and reads only the threshold from the modem:
+
+    modem_get_param(modem, MDMPRM_CODECTYPE) - 4, range 0..11, .rodata:0xa4
+
+    codec  4, 12   ->  1000
+    codec 13, 15   ->   650
+    codec 14       ->   850
+    everything else -> -3000
+
+The negative default is not a sentinel. `Reset` takes `|threshold|` everywhere
+and uses the SIGN to select the second constant pair -- `lock_debounce` 0 and
+`lock_level` 200 rather than 2 and 100 -- so the default is a 3000-count
+threshold with zero debounce and a 200-count crossing level, and the three
+named codecs get a low threshold with two samples of debounce.
+
+The object names no codec constant anywhere in the 1.2 MB: the V.90 manglings
+record that `__tHardwareCodecTypes__` exists and nothing about its enumerators
+(`include/dsplib/V90CodecType.h`), so the switch is written with the numbers
+the object tests and no invented names.
+
+**The table was read through `tools/dis.py` and `objdump -s -j .rodata`, not
+off the disassembly.** `jmp *0xa4(,%eax,4)` carries one `R_386_32` against the
+section symbol; the twelve targets are inline addends and a bare `objdump -d`
+shows the table's bytes disassembled as instructions.
+
+### F8744. The closing edge's duration floor cannot be reached by playing audio, and reaching it needs the object's two separate silence counters
+
+*2026-08-31.* `RingDetector_Process` reports a duration of
+
+    ring ending:   minOnDur  - minOffDur + 20 + elapsed_ms, held >= minOnDur
+    ring starting: minOffDur - minOnDur  - 20 + elapsed_ms, held >= minOffDur
+
+and the OPENING floor is routine -- a ring is declared after `minOnDur` of
+tone, so `elapsed - 20` is below `minOffDur` on every default cadence and the
+clamp fires constantly. The CLOSING floor is not reachable at all by audio: a
+ring ends only once a silence counter passes `minOffDur` in samples, so
+`elapsed_ms >= minOffDur` always, so the corrected value is always at least
+`minOnDur + 20`. Mutating that clamp away survived every cadence this test
+plays.
+
+It is reachable, and what makes it reachable is that the object keeps the
+silence and the report in DIFFERENT counters: `idle_samples` (+0x1c) and
+`band_samples` (+0x20) decide when the ring ends, `report_samples` (+0x14)
+measures the duration, and only the latter is zeroed on an edge. Poking
+`idle_samples` past the window immediately after the opening edge -- through
+`struct ring_detector *` on both sides at once, so the poke is also a check on
+the layout claim -- ends the ring on the next single sample with
+`elapsed_ms == 0`, and the reported duration is the floor. `t_ringdet` does
+exactly that and the mutation is caught.
+
+**The general form is worth keeping.** A clamp whose guard condition is
+implied by the state machine that reaches it is dead to any test driven only
+through the front door, and the way in is a field the machine keeps separately
+from the one the guard reads. Look for the second counter before recording the
+arm as unreachable.
+
+### F8745. `RD_ring_details` is declared `long *` upstream and stores 32 bits, and this tree writes `int *`
+
+*2026-08-31.* slmodemd's `modem.c` declares
+
+    extern void RD_ring_details(void *obj, long *freq, long *duration);
+
+and calls it with two `long` locals. The object stores through both pointers
+with `mov %edx,(%eax)` -- 32 bits -- because it was built for ILP32, where the
+two spellings are the same type. They are not the same type anywhere this tree
+also has to compile (`make check64`), and the instructions are what the
+reconstruction follows, so `ringdet.h` declares `int *` and the header says
+why.
+
+This is the same call the tree already made for `dsp_info::clock_deviation`,
+which is `int` here and `long` in slmodemd's own header. Recorded rather than
+left implicit because the two are now a pattern: **a vendored upstream
+declaration is evidence about the API's intent and not about its ABI**, and
+where they disagree the instructions win.
