@@ -10324,3 +10324,75 @@ string and sets `dle_can = 1`; it reads no element of `arg` (0xac531-0xac545).
 tidied, because zeroing it would be a store the object does not make and would
 show in a codegen comparison. `t_voiceapi` drives ABORT at both debug levels
 and over six `tone_duration` values and compares the full object each time.
+
+## D1035 ⚠ `V29TX_status` ASSIGNS the report's flag byte, discarding the caller's bits and the two it has just cleared
+
+`V29TX_status` (0x0a5030) clears the low two bits of the report's +0x14, clears
+bit 0 of its +0x15, and then stores `handle[0x10] & 0x04` over the WHOLE of
++0x14:
+
+    a5078:  movzbl 0x14(%edx),%eax
+    a507c:  and    $0xfc,%al
+    a507e:  mov    %al,0x14(%edx)          the two bits cleared
+    a5081:  movzbl 0x10(%ecx),%eax
+    a5085:  andb   $0xfe,0x15(%edx)
+    a5089:  and    $0x4,%al
+    a508b:  mov    %al,0x14(%edx)          the whole byte replaced
+
+So the report's flag byte comes back with exactly one bit possibly set and every
+other bit -- including anything the caller had put there, and including the two
+the first statement went to the trouble of clearing -- gone. The `&= 0xfc` is
+therefore visible only through the aliasing described in F8878 and has no effect
+on any sane caller.
+
+The neighbouring byte is treated the other way round: +0x15 is MERGED, `&= ~1`,
+so the caller's other seven bits survive. One function, two conventions, three
+statements apart.
+
+`V17TX_status` (0x0a1bd0) has the identical shape, and a parallel V.21 pass
+records the same thing at `V21TX_status` (0x0a2c00) as its own deviation --
+three modulations, one idiom, so this is the author's and not a slip at one
+site. `V22_status` builds the same byte a bit at a time instead and writes all
+eight bits deliberately, which is consistent with the byte being wholly owned by
+the callee.
+
+**Reproduced.** `test/unit/t_v29fax.c` makes it a measurement rather than an
+inherited assumption: half its trials hand the report a flag byte of 0xff, so
+the merging reading cannot agree with the assigning one by accident, and the
+separating count for that reading is asserted non-zero. Injecting the merge
+(`|=` for `=`) fails the suite.
+
+**Status:** reproduced, and unmeasurable against a real caller -- no caller of
+`V29TX_status` outside `v29tx_status`'s two-instruction thunk is reconstructed,
+so nothing says whether any bit the assignment destroys was ever set.
+
+
+## D1036 🐛 `DemodDataV29` reads a return value from a `void` function, and only the object's register allocation makes it work
+
+`DemodDataV29` (0x0a5ff0) calls `FPM_AGC_agc` and uses `%eax` afterwards as the
+carrier bit, ANDing it into three of the receiver's enable words. `FPM_AGC_agc`
+returns `void` and takes three arguments; the call site pushes four and consumes
+a result. The caller's translation unit had a prototype the definition did not
+match, in both directions at once (F8875).
+
+It is undefined behaviour that happens to be correct, and the reason it is
+correct is a property of the compiled object rather than of the source:
+`FPM_AGC_agc` has one `ret`, every path reaches the same epilogue, and the two
+instructions before it are `movzbl %dl,%eax` / `mov %eax,0x1c(%edi)` -- the store
+to `agc->signal`. So the register holds that field on every return, and reading
+the field instead is exactly equivalent.
+
+**NOT reproduced, because it cannot be**: `include/dsplib/fpm_agc.h` declares
+`FPM_AGC_agc` correctly and a second, disagreeing prototype in `src/` would be
+"one type, one home" in its function-prototype form. Where `DemodDataV29` lands
+it will read `RX_AGC(rx)->signal`, and `test/unit/t_v29fax.c`'s
+`run_agc_identity` asserts the two are the same value -- through an
+`int`-returning cast of the blob's own `ref_FPM_AGC_agc`, over twelve trials
+including empty and all-silent blocks -- so the equivalence this substitution
+rests on is measured on every run rather than believed once.
+
+**Status:** the defect is the ORIGINAL's and is inert in it. Our replacement is
+observably identical. The risk it carries is not to correctness but to the
+codegen tier: reading the field emits one extra load that the object does not
+have, so `DemodDataV29` cannot reach byte identity while this stands. Recorded
+so that is not later mistaken for a source defect.
