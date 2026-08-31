@@ -101158,3 +101158,120 @@ rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
 `cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
 `test/mutations/` for it; passing `make phase` proves nothing here, because a
 descriptor that no longer matches is not an error.
+
+## F8930. The Class 1 FIFO holds SIXTEEN-BIT elements, not bytes, and `FIFO_create` is what says so
+
+`faxfifo.h` had modelled two fields and called the capacity "bytes". It is
+elements, and the evidence is in `FIFO_create` (0x096bb0), which this batch
+read for the layout without writing the function:
+
+    96c2e:  c7 04 24 14 00 00 00   movl   $0x14,(%esp)
+    96c35:  e8 ...                 call   sysdep_malloc
+    96c3c:  0f b7 44 24 12         movzwl 0x12(%esp),%eax
+    96c41:  01 c0                  add    %eax,%eax
+    96c46:  e8 ...                 call   sysdep_malloc
+
+0x14 for the object -- so it is twenty bytes, which fixes the layout at
++0x00..+0x13 -- and `size * 2` for the buffer. Every access in `FIFO_read`
+and `FIFO_write` then scales by two (`mov %ax,(%edi,%ecx,2)`), so `size`,
+`count`, `rd` and `wr` are all counted in 16-bit elements.
+
+The other thing `FIFO_create` settles is that +0x00 and +0x02 are one aligned
+pair: it copies six bytes of configuration as ONE 32-bit store to +0x00 plus
+one 16-bit store to +0x04, which is what a six-byte struct assignment
+compiles to. So +0x00 is a short, not two bytes of padding, even though no
+reconstructed function reads it.
+
+**`FIFO_create` itself is BLOCKED and stays blocked.** It reads the default
+configuration `FIFO_CFG` when its argument is null, and `FIFO_CFG` is an
+unwritten data symbol -- naming it from `src/` fails every binary at link
+(F8492, F8493). It becomes writable the moment that symbol lands.
+
+## F8931. `FIFO_read` always writes `count` elements, and pads the shortfall from a configured value
+
+The second loop is the one to notice:
+
+    96cd8:  8b 44 24 08     mov    0x8(%esp),%eax      ; count - take
+    96ce0:  0f b7 77 04     movzwl 0x4(%edi),%esi      ; f->fill
+    96ce7:  66 89 31        mov    %si,(%ecx)
+
+so a caller asking for 100 elements from a FIFO holding 3 gets 3 real ones
+and 97 copies of the field at +0x04, and the RETURN VALUE is 3. The
+destination must therefore be sized from the REQUEST, never from the
+occupancy or the return.
+
+That is F8607/D956's shape exactly -- an unbounded copy-out into a
+destination sized from the wrong quantity -- with the difference that here the
+object bounds the write and the hazard is only in the caller's arithmetic. It
+is called out in `faxfifo.h` so the fax phase's callers can be checked against
+it as they land, and `t_faxframing` sizes its destinations from the largest
+count any case passes plus a guard region it compares.
+
+The fill field is named from usage inference and nothing stronger: it is
+written only by `FIFO_create`, out of the configuration, and read only here.
+
+## F8932. The Class 1 FCS is CRC-16-CCITT, 0x1021, MSB-first, seeded 0xFFFF and complemented -- derived, then checked exhaustively against an independent model
+
+`faxvmi_gen_fcs16` (0x096780) uses no table. Two nibble steps per element,
+and each step is
+
+    t = ((octet << k) ^ fcs) & 0xf000        k = 8, then 12
+    fcs = (((fcs ^ (t >> 11)) << 4) ^ t) | (t >> 12)
+
+Write n = t >> 12, so t = n << 12. Then (t >> 11) << 4 is n << 5, and the
+step is
+
+    fcs = (fcs << 4) ^ (n << 12) ^ (n << 5) ^ n
+
+and (n << 12) ^ (n << 5) ^ n is n * 0x1021 with the x^16 term dropped. So the
+generator is **x^16 + x^12 + x^5 + 1 = 0x1021**, fed most significant nibble
+first, with no reflection anywhere. `mov $0xffff,%ebx` at 0x096787 is the
+seed and `not %ebx` at 0x0967e3 is the final complement.
+
+k = 8 selects bits 7..4 of the element and k = 12 selects bits 3..0, so only
+the low byte of each 16-bit element reaches the register and the upper byte is
+ignored.
+
+**The bit order HDLC wants is arranged OUTSIDE this function**, by
+`faxvmi_byte_reverse`, which is why an unreflected 0x1021 is the right
+polynomial here and not the reflected 0x8408 that a bare "HDLC FCS" would
+suggest. `getbit` in `src/pump/v34/v34hshak.c` computes the same polynomial
+the same way for V.34's CRC, and `v8_crc` for V.8's.
+
+**Checked rather than asserted.** `t_faxframing` carries `crc_bitwise`, a
+one-bit-at-a-time model that shares no code and no shape with the nibble
+form, and compares it against the BLOB over all 65,536 one-element frames and
+all 65,536 two-element frames whose first element sweeps the whole alphabet --
+so the register entering the second step takes 65,536 values and the state is
+swept as well as the input. 131,072 agreements, counted from the run and
+asserted as a number, not as a boolean.
+
+## F8933. The framing walks count down to zero on a sixteen-bit counter, and the injection ritual found one equivalent mutant and no gaps
+
+Ten hand-injected defects over `fifo.c` and `faxvmi.c`, each built and run
+under `make one`:
+
+    caught  FIFO_read wrap off by one        (>= size  ->  > size)
+    caught  FIFO_write wrap off by one
+    caught  FIFO_read occupancy update       (count -= take  ->  -= 0)
+    caught  FCS x^5 term                     (t >> 11  ->  t >> 10)
+    caught  FCS nibble mask                  (0xf000  ->  0xe000)
+    caught  FCS seed                         (0xffff  ->  0xfffe)
+    caught  FCS final complement             (~fcs  ->  fcs)
+    caught  byte_reverse bit count           (bit >= 0  ->  bit > 0)
+    caught  frame_reverse stride             (buf += len  ->  len + 1)
+    EQUIV   FIFO_write clamp                 (put > avail  ->  put >= avail)
+
+The tenth is genuinely equivalent, not a hole: when `put == avail` the
+assignment it guards is a no-op, so no input can separate the two spellings.
+Recorded because "one not caught" in a mutation column is otherwise
+indistinguishable from a missing check, and `mutate.py` cannot tell them
+apart either.
+
+**AND THE RITUAL ITSELF NEARLY LIED.** Restoring each file with `mv
+file.bak file` puts back the BACKUP's mtime, which is older than the mutated
+write, so `make` declares the binary up to date and re-runs the LAST mutant
+against the restored source. The closing "restore is clean" check therefore
+reported a red tree over correct code. `touch` the sources after any restore
+that does not go through git -- this is F134's dead detector with the
+timestamp as the mechanism.

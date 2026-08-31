@@ -50,3 +50,80 @@ FAXVMI_message(struct faxvmi *vmi, unsigned char code)
 	vxx_message[(unsigned short)vmi->slot](vmi->handle, code, &msg);
 	return msg;
 }
+
+/*
+ * The framing layer's three pure buffer walks.
+ *
+ *   faxvmi_gen_fcs16     .text 0x096780   108
+ *   faxvmi_byte_reverse  .text 0x0967f0    93
+ *   faxvmi_frame_reverse .text 0x096850   151
+ *
+ * All three count DOWN from `count` and stop at zero, so a negative count
+ * runs 65536 + count times before the 16-bit counter reaches zero rather
+ * than not running at all.  That is the object's and is reproduced; D1052.
+ */
+
+/*
+ * Two nibble steps per element, high nibble first.  Written as the object
+ * computes it: `t` is the polynomial multiplicand already shifted into bits
+ * 15..12, so `t >> 11` is the x^5 term, `t >> 12` is the x^0 term, and `t`
+ * itself is the x^12 one.  See faxvmi.h for the derivation of 0x1021.
+ */
+#define FCS16_NIBBLE(fcs, shifted)					\
+	do {								\
+		unsigned int t_ = ((shifted) ^ (fcs)) & 0xf000u;	\
+		(fcs) = (unsigned short)					\
+			(((((fcs) ^ (t_ >> 11)) << 4) ^ t_) | (t_ >> 12)); \
+	} while (0)
+
+int
+faxvmi_gen_fcs16(unsigned short *buf, short count)
+{
+	unsigned short fcs = 0xffff;
+	short i;
+
+	for (i = count; i != 0; i--) {
+		unsigned int octet = *buf++;
+
+		FCS16_NIBBLE(fcs, octet << 8);
+		FCS16_NIBBLE(fcs, octet << 12);
+	}
+	return (unsigned short)~fcs;
+}
+
+void
+faxvmi_byte_reverse(unsigned short *buf, short count)
+{
+	short i;
+
+	for (i = count; i != 0; i--) {
+		unsigned short in = *buf;
+		unsigned short out = 0;
+		short bit;
+
+		for (bit = 7; bit >= 0; bit--) {
+			out = (unsigned short)((out << 1) | (in & 1));
+			in >>= 1;
+		}
+		*buf++ = out;
+	}
+}
+
+/*
+ * The inner walk is faxvmi_byte_reverse's, which the object inlines here
+ * while still emitting the standalone copy -- F605's inlining boundary, so a
+ * per-function byte comparison will read this function long and that one
+ * short.  Written as the call it is.
+ */
+void
+faxvmi_frame_reverse(unsigned short *buf, short count)
+{
+	short i;
+
+	for (i = count; i != 0; i--) {
+		short len = (short)*buf++;
+
+		faxvmi_byte_reverse(buf, len);
+		buf += len;
+	}
+}

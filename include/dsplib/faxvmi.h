@@ -42,4 +42,39 @@ extern faxvmi_message_fn const vxx_message[13];
  */
 char *FAXVMI_message(struct faxvmi *vmi, unsigned char code);
 
+/*
+ * THE FRAMING LAYER STORES ONE OCTET PER 16-BIT ELEMENT.  Every buffer these
+ * three walk is `unsigned short *` with a stride of 2, and every load is a
+ * `movzwl`; only the low eight bits of an element carry data.
+ */
+
+/*
+ * The HDLC frame check sequence over `count` elements.
+ *
+ * THE GENERATOR IS 0x1021 -- x^16 + x^12 + x^5 + 1, the CRC-CCITT/T.30
+ * polynomial -- with the register initialised to 0xFFFF, fed MOST significant
+ * nibble first, and COMPLEMENTED on the way out.  That is read off the
+ * instructions and not guessed: each of the two steps per element computes
+ * n = (fcs ^ (octet << k)) >> 12 and then
+ *
+ *     fcs = (fcs << 4) ^ (n << 12) ^ (n << 5) ^ n
+ *
+ * and (n << 12) ^ (n << 5) ^ n is exactly n * 0x1021 with the x^16 term
+ * dropped.  k is 8 for the high nibble and 12 for the low one, so the two
+ * steps consume bits 7..4 then 3..0 of the element.  There is no reflection
+ * anywhere in here; the bit order HDLC wants is arranged OUTSIDE, by
+ * faxvmi_byte_reverse.
+ */
+int faxvmi_gen_fcs16(unsigned short *buf, short count);
+
+/* Reverse the low eight bits of each of `count` elements, in place. */
+void faxvmi_byte_reverse(unsigned short *buf, short count);
+
+/*
+ * `count` length-prefixed frames laid end to end -- one element of length,
+ * then that many data elements -- each of which has faxvmi_byte_reverse run
+ * over its data.  The length element itself is NOT reversed.
+ */
+void faxvmi_frame_reverse(unsigned short *buf, short count);
+
 #endif /* DSPLIB_FAXVMI_H */
