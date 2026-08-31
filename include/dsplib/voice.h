@@ -186,7 +186,12 @@ struct voice_ctx {
 	 */
 	short			underrun;
 
-	short			short_075e;	/* +0x75e create writes 0x3f */
+	/*
+	 * +0x75e  The transmit path's detector mask, typed the same way as
+	 * the two below it: `voice_set_tx` hands it to `detector_set_enable`.
+	 * `voice_create` starts it at 0x3f.
+	 */
+	unsigned short		detector_enable_tx;
 
 	/*
 	 * +0x760  The receive path's detector mask, typed by the callee
@@ -297,6 +302,7 @@ int voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 void voice_set_online(struct voice_ctx *v);
 void voice_set_duplex(struct voice_ctx *v);
 void voice_set_rx(struct voice_ctx *v);
+void voice_set_tx(struct voice_ctx *v);
 
 #ifdef __cplusplus
 }

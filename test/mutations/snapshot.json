@@ -10419,8 +10419,8 @@
    }
   },
   "voicedp": {
-   "key": "bd7486d196947343e56cfd06191f2222337d4b1f69d20c8a7ea21fce715fa85f",
-   "summary": "25 mutations: 25 caught (25 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "19235334686add4c2dc9ed8e8c70924ec4c8ce45818e7540a98ccd7fd06f1902",
+   "summary": "31 mutations: 31 caught (31 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "D997's dead store is repaired, so the caller sees the sample count": "caught",
     "the beep's full scale is FDSP_DP_Run's 32000 rather than 30000": "caught",
@@ -10446,7 +10446,13 @@
     "voice_set_duplex writes the online mode": "caught",
     "voice_set_online enables the detector with the duplex constant": "caught",
     "voice_set_online installs the duplex handler": "caught",
-    "voice_set_online writes the wrong mode": "caught"
+    "voice_set_online writes the wrong mode": "caught",
+    "voice_set_tx installs the receive handler": "caught",
+    "voice_set_tx starts the underrun latch DOWN, so the first empty block reports": "caught",
+    "voice_set_tx uses the receive detector mask": "caught",
+    "voice_set_tx writes a 4-bit format": "caught",
+    "voice_set_tx writes a 7200 Hz format": "caught",
+    "voice_set_tx writes the online mode": "caught"
    }
   },
   "voicedpdel": {

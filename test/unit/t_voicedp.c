@@ -1,7 +1,8 @@
 /*
  * t_voicedp.c -- differential tests for the voice service's beep-side block
- * handlers and the two setters that install them: `voice_set_online`,
- * `voice_set_duplex`, `voice_online` and `voice_duplex`.
+ * handlers and three of the four setters: `voice_set_online`,
+ * `voice_set_duplex`, `voice_set_tx`, `voice_online` and `voice_duplex`.
+ * (`voice_set_rx` is in t_voicedprx with the handler it installs.)
  *
  * NONE OF THE FOUR HAS AN INTERNAL CALLER IN THE BLOB except through the
  * handler slot `voice_create` and the two setters write, so every input here
@@ -50,10 +51,14 @@ extern unsigned int ref_dsplibs_debug_level;
 
 extern void ref_voice_set_online(struct voice_ctx *v);
 extern void ref_voice_set_duplex(struct voice_ctx *v);
+extern void ref_voice_set_tx(struct voice_ctx *v);
 extern int ref_voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 			    float *tx_flt, short *tx_lin,
 			    unsigned short *hostcount,
 			    unsigned short *countp);
+extern int ref_voice_tx(struct voice_ctx *v, short *rx_lin, float *rx_flt,
+			float *tx_flt, short *tx_lin,
+			unsigned short *hostcount, unsigned short *countp);
 extern int ref_voice_duplex(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 			    float *tx_flt, short *tx_lin,
 			    unsigned short *hostcount,
@@ -174,7 +179,7 @@ t_setters(void)
 	static const unsigned short enables[] = { 0, 1, 0x24, 0x3f, 0xffff,
 						  0x8000 };
 
-	diff_begin("voice_set_online and voice_set_duplex");
+	diff_begin("voice_set_online, voice_set_duplex and voice_set_tx");
 
 	for (e = 0; e < sizeof enables / sizeof enables[0]; e++) {
 		long tag = (long)enables[e];
@@ -227,6 +232,40 @@ t_setters(void)
 			    &db, &da, tag);
 		diff_eq_int("duplex enable is the constant 0x24",
 			    (long)(unsigned short)db.enable, 0x24, tag);
+
+		/*
+		 * And the transmit setter, which is the one that also writes a
+		 * format and starts the underrun latch UP -- see voicedp.c for
+		 * why an armed-but-empty FIFO must not report.
+		 */
+		memset(&a, HARNESS_MALLOC_FILL, sizeof a);
+		memset(&b, HARNESS_MALLOC_FILL, sizeof b);
+		memset(&da, HARNESS_MALLOC_FILL, sizeof da);
+		memset(&db, HARNESS_MALLOC_FILL, sizeof db);
+		a.detector = &da;
+		b.detector = &db;
+		a.detector_enable_tx = enables[e];
+		b.detector_enable_tx = enables[e];
+
+		ref_voice_set_tx(&a);
+		voice_set_tx(&b);
+
+		diff_eq_int("tx installs voice_tx", b.handler == voice_tx, 1,
+			    tag);
+		diff_eq_int("tx installs ref_voice_tx on the ref side",
+			    (void *)a.handler == (void *)ref_voice_tx, 1, tag);
+		diff_eq_int("tx sets mode 1", b.mode, 1, tag);
+		diff_eq_int("tx sets the 8 kHz 8-bit format",
+			    (long)b.rate_bits.both, VOICE_RATE_BITS(8, 8000),
+			    tag);
+		diff_eq_int("tx starts the underrun latch up", b.underrun, 1,
+			    tag);
+		ctx_compare("context after voice_set_tx", &b, &a, tag);
+		diff_eq_obj("detector after voice_set_tx", struct detector,
+			    &db, &da, tag);
+		diff_eq_int("tx enable is the context's tx mask",
+			    (long)(unsigned short)db.enable,
+			    (long)enables[e], tag);
 	}
 	return diff_end();
 }
@@ -514,17 +553,20 @@ t_tail_difference(void)
 }
 
 /*
- * The diagnostic transcript.  Every gated site in these two functions is the
- * one line "beepgend end, send ok", printed on the block that retires the
- * beep, so levels 0, 1 and 2 are all run and the text is compared.
+ * The diagnostic transcript.  Two gated sites reach this binary: the block
+ * handlers' one line "beepgend end, send ok", printed when the beep queue
+ * retires, and `voice_set_tx`'s "PCM 8 bit.", which no handler ever prints --
+ * so the setter is driven here too, or that line would go untested.
  */
 static int
 t_debug(void)
 {
 	static const unsigned int levels[] = { 0, 1, 2 };
+	static struct voice_ctx sa, sb;
+	static struct detector sda, sdb;
 	unsigned int l;
 
-	diff_begin("the beep-finished line at levels 0, 1 and 2");
+	diff_begin("the gated lines at levels 0, 1 and 2");
 
 	for (l = 0; l < 3; l++) {
 		unsigned int lvl = levels[l];
@@ -534,6 +576,16 @@ t_debug(void)
 		dsplib_debug_capture_on = 1;
 		online_case(0, 1, 8, 2, 2, 1, 0, 1000 + (long)lvl);
 		duplex_case(0, 1, 8, 3, 3, 1, 0, 1000 + (long)lvl);
+		memset(&sa, HARNESS_MALLOC_FILL, sizeof sa);
+		memset(&sb, HARNESS_MALLOC_FILL, sizeof sb);
+		memset(&sda, HARNESS_MALLOC_FILL, sizeof sda);
+		memset(&sdb, HARNESS_MALLOC_FILL, sizeof sdb);
+		sa.detector = &sda;
+		sb.detector = &sdb;
+		sa.detector_enable_tx = 0x3f;
+		sb.detector_enable_tx = 0x3f;
+		ref_voice_set_tx(&sa);
+		voice_set_tx(&sb);
 		dsplib_debug_capture_on = 0;
 
 		diff_eq_int("transcript line count at level %ld",
@@ -543,15 +595,19 @@ t_debug(void)
 			    strcmp(dsplib_debug_capture_text(0),
 				   dsplib_debug_capture_text(1)) == 0, 1,
 			    (long)lvl);
-		if (lvl > 1)
+		if (lvl > 1) {
 			diff_eq_int("the beep-finished line is there at %ld",
 				    strstr(dsplib_debug_capture_text(1),
 					   "beepgend end, send ok") != 0, 1,
 				    (long)lvl);
-		else
+			diff_eq_int("voice_set_tx's format line too, at %ld",
+				    strstr(dsplib_debug_capture_text(1),
+					   "PCM 8 bit.") != 0, 1, (long)lvl);
+		} else {
 			diff_eq_int("nothing is printed below level 2",
 				    dsplib_debug_capture_lines(1), 0,
 				    (long)lvl);
+		}
 	}
 	set_level(0);
 	return diff_end();

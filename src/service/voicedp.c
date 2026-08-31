@@ -1,5 +1,5 @@
 /*
- * voicedp.c -- the voice service's per-block handlers and the two setters
+ * voicedp.c -- the voice service's per-block handlers and the four setters
  * that install them.
  *
  * In the object's emission order, with the span `tumap.py` labels each:
@@ -9,6 +9,7 @@
  *     0xabf50  voice_online       508    class1tx.c +94
  *     0xaf190  voice_set_rx       305    Fdspkrnl.c +13
  *     0xaf2d0  voice_rx           949    Fdspkrnl.c +13
+ *     0xafcf0  voice_set_tx       110    Fdspkrnl.c +13
  *     0xafd60  voice_tx          1150    Fdspkrnl.c +13
  *     0xb01e0  voice_duplex       251    Fdspkrnl.c +13
  *
@@ -20,7 +21,7 @@
  * same correction `voicecmd.h` records for `voice_dle_command`, two functions
  * earlier in the same bracket.
  *
- * THE THREE HANDLERS SHARE A SIGNATURE AND NOT A JOB.  All five arguments
+ * THE FOUR HANDLERS SHARE A SIGNATURE AND NOT A JOB.  All five arguments
  * after the context are the datapump's block buffers, in `FDSP_DP_Run`'s
  * order (voice.h's `voice_handler_fn`), and each handler uses a different
  * subset:
@@ -46,7 +47,7 @@
  * `rx_lin` and writes back how much room the FIFO now has; `voice_online`
  * writes it and never reads it.
  *
- * All seven are GLOBAL in the blob, so all seven are plain cdecl -- there is
+ * All eight are GLOBAL in the blob, so all eight are plain cdecl -- there is
  * no regparm question here.  Finding F8770's hazard is about LOCAL symbols and
  * the prologues confirm it: each of these reads its arguments off the stack.
  */
@@ -88,6 +89,7 @@ VOICE_ASSERT_OFF(out_format, 0x74c);
 VOICE_ASSERT_OFF(rx_armed, 0x756);
 VOICE_ASSERT_OFF(rate_bits, 0x758);
 VOICE_ASSERT_OFF(underrun, 0x75c);
+VOICE_ASSERT_OFF(detector_enable_tx, 0x75e);
 VOICE_ASSERT_OFF(detector_enable_rx, 0x760);
 VOICE_ASSERT_OFF(detector_enable, 0x762);
 VOICE_ASSERT_OFF(marker_period, 0x764);
@@ -492,6 +494,36 @@ voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 	if (v->int_0014 != v->mode)
 		ret = VOICE_RX_MODE_STATUS;
 	return ret;
+}
+
+/*
+ * Go into transmit: mode 1, the transmit handler, the transmit detector mask
+ * and the 8 kHz 8-bit format.
+ *
+ * IT STARTS THE UNDERRUN LATCH UP, not down.  A path that has just been armed
+ * has an empty FIFO by definition, so the first block would report "not
+ * enough data" for a condition the host has had no chance to fix; the latch
+ * suppresses exactly that one report and `voice_tx` clears it on the first
+ * block that has a whole block's worth.
+ *
+ * The two halves of the format are stored bits-first here and rate-first in
+ * `voice_set_rx`, which is scheduling and not source (finding F617's rule:
+ * store order needs the full-text test, and neither function has had it).
+ * Each is written in its own object's order.
+ */
+void
+voice_set_tx(struct voice_ctx *v)
+{
+	v->mode = 1;
+	v->handler = voice_tx;
+	detector_set_enable(v->detector, (short)v->detector_enable_tx);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("PCM 8 bit.\n");
+
+	v->rate_bits.s.bits = 8;
+	v->rate_bits.s.rate = 8000;
+	v->underrun = 1;
 }
 
 /*
