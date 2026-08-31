@@ -4,10 +4,15 @@
  * TONE_* helpers of the same TU.
  *
  * Emission order follows the object: EchoCanceler 0xae8c0,
- * zFLTUTL_FloatMemSet 0xaea70, bValidateEnergyValue 0xaebe0,
- * FDSP_Kernel_Loop 0xaed10, TONE_generate 0xaf8f0, TONE_filter 0xafba0,
- * TONE_kill 0xafc60.  FDSP_Kernel_InitObj (0xaea90) and MTK_phasor
- * (0xb0690) sit between/after and stay the blob's for now.
+ * FDSP_Kernel_SetInternalBeepInProgress 0xaea30, zFLTUTL_FloatMemSet
+ * 0xaea70, FDSP_Kernel_InitObj 0xaea90, bValidateEnergyValue 0xaebe0,
+ * FDSP_Kernel_Loop 0xaed10, TONE_delete 0xaf8a0, TONE_generate 0xaf8f0,
+ * TONE_detect 0xaf9f0, TONE_filter 0xafba0, TONE_kill 0xafc60.
+ *
+ * The span's other reconstructed neighbours are NOT here: the FIFO8 ring
+ * (0xaef30..0xaf150) is in fifo8.c and the silence detector with `_status`
+ * (0xb02e0..0xb0415) is in silence.c, following the split the tree had
+ * already made for voice_* .  MTK_phasor (0xb0690) is still the blob's.
  *
  * All floating point here is x87-shaped: every accumulation runs at
  * register precision and narrows only at the stores, on both compilers this
@@ -28,6 +33,20 @@
  * can drive it, the same trade the functions themselves make.
  */
 int bInternalBeepInProgress;
+
+/*
+ * chan_a's LMS step, as FDSP_Kernel_InitObj stores it: `mov $0x3d03126e`.
+ *
+ * IT IS NOT `0.032f`.  fl(0.032) is 0x3d03126f -- 0.032 sits at .592 of the
+ * way between two floats, so correct rounding goes UP and the object's word
+ * is one ULP BELOW it.  Whatever produced 0x3d03126e truncated rather than
+ * rounded, so the tidy literal is not what the author's compiler emitted and
+ * writing it here costs the differential test (it fails at 1 ULP, which is
+ * exactly the size of the disagreement).  What is written is the object's
+ * float spelled exactly, so any correctly-rounding compiler reproduces the
+ * word.  Finding F8750.
+ */
+#define FDSP_CHAN_A_MU	0.031999997794628143310546875f
 
 /* (x) > 0 ? (x) : -(x) -- the object's conditional-negate shape. */
 #define FDSP_FABS(x) ((x) > 0.0f ? (x) : -(x))
@@ -94,6 +113,19 @@ EchoCanceler(float *hist, int offset, float *coef, unsigned int ntaps,
 	*verdict = quiet > 80;
 }
 
+/*
+ * Raise or drop the beep flag.  The store happens whatever the debug level
+ * is -- the gate is only around the message, and the object computes the
+ * "ON"/"OFF" pointer inside it.
+ */
+void
+FDSP_Kernel_SetInternalBeepInProgress(int on)
+{
+	bInternalBeepInProgress = on;
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Internal Beep %s \n", on ? "ON" : "OFF");
+}
+
 /* buf[0..n-1] = v. */
 void
 zFLTUTL_FloatMemSet(float v, float *buf, unsigned int n)
@@ -102,6 +134,65 @@ zFLTUTL_FloatMemSet(float v, float *buf, unsigned int n)
 
 	for (i = 0; i < n; i++)
 		buf[i] = v;
+}
+
+/*
+ * Everything back to its starting state, and the fixed defaults with it.
+ *
+ * Nothing is allocated here: the two channel pointers, their `coef` arrays
+ * and `buffers` must all be set before the call, and all four are
+ * dereferenced.  The tap count is a CONSTANT of the object -- 80 on chan_a
+ * and 40 on chan_b, cleared 240 at a time regardless -- so the 240 is the
+ * allocation size the creator must have used, not k->ntaps_*.
+ *
+ * chan_a adapts (see FDSP_CHAN_A_MU) and chan_b does not; EchoCanceler skips
+ * both the convolution and the tap update when mu is zero, so chan_b's
+ * direction passes through until something raises its step.
+ */
+void
+FDSP_Kernel_InitObj(struct fdsp_kernel *k)
+{
+	struct fdsp_channel *a, *b;
+	struct fdsp_buffers *p;
+	unsigned int i;
+
+	p = k->buffers;
+	for (i = 0; i < 2000; i++) {
+		p->short_0000[i] = 0;
+		p->short_0fa0[i] = 0;
+	}
+
+	b = k->chan_b;
+	b->energy_idx = 0;
+	for (i = 0; i < 4; i++)
+		b->energy[i] = 0;
+
+	a = k->chan_a;
+	a->energy_idx = 0;
+	for (i = 0; i < 4; i++)
+		a->energy[i] = 0;
+
+	k->saturation = 0;
+	p->int_2710 = 0;
+	p->int_2714 = 0;
+	p->int_2718 = 0;
+
+	k->int_00 = 2;
+	k->ntaps_a = 80;
+	k->ntaps_b = 40;
+	a->mu = FDSP_CHAN_A_MU;
+	b->mu = 0.0f;
+	a->short_1690 = 0;
+	b->short_1690 = 0;
+
+	for (i = 0; i < FDSP_DLY; i++)
+		b->dly[i] = 0.0f;
+	for (i = 0; i < 240; i++)
+		b->coef[i] = 0.0f;
+	for (i = 0; i < FDSP_DLY; i++)
+		a->dly[i] = 0.0f;
+	for (i = 0; i < 240; i++)
+		a->coef[i] = 0.0f;
 }
 
 /*
@@ -211,6 +302,24 @@ FDSP_Kernel_Loop(struct fdsp_kernel *k, float *in_a, float *out_b,
 }
 
 /*
+ * Free the object and, when it has a filter, the four blocks that hang off
+ * it.  `fir_len > 0` is the whole test: the object frees +0x1b8 and +0x1b4
+ * -- two pointers nothing reconstructed reads -- and then the FIR's delay
+ * line and coefficients, in that order.
+ */
+void
+TONE_delete(struct fdsp_tone *t)
+{
+	if (t->fir_len > 0) {
+		sysdep_free(t->ptr_01b8);
+		sysdep_free(t->ptr_01b4);
+		sysdep_free(t->fir_dly);
+		sysdep_free(t->fir_coef);
+	}
+	sysdep_free(t);
+}
+
+/*
  * n samples of tone: MTK_phasor advances the oscillator, `amp` scales it,
  * and a millisecond clock (0.125 ms per sample: 8 kHz) runs against
  * `duration`.  When a positive duration expires the clock resets and the
@@ -244,6 +353,79 @@ TONE_generate(struct fdsp_tone *t, float *buf, short n)
 		p = p - 6.28318530718;
 	ph.phase = p;
 	t->phase = ph.phase;
+}
+
+/*
+ * The smoothing pole of TONE_detect's two power estimates.  Both constants
+ * are DOUBLES in the object, and the second is not the double nearest 0.05
+ * -- it is 0.050000000000000044, exactly fl(1.0 - 0.95).  That is a
+ * compile-time fold of the complement, so the author wrote one constant and
+ * derived the other; the spelling here reproduces the fold.
+ */
+#define TONE_DETECT_POLE	0.95
+
+/*
+ * The tone verdict.
+ *
+ * Per sample: the FIR of TONE_filter (same ring, same wrap, same two-part
+ * MAC -- and the same state fields, so a TONE_filter and a TONE_detect on
+ * one object would fight over `fir_idx`), then a two-pole section whose
+ * coefficients live inline at +0x48 and whose arithmetic is TONE_kill's.
+ *
+ * Two one-pole power estimates come out of it: `e_tot` follows the FIR
+ * output's square, `e_res` follows the DIFFERENCE of the two squares.  Both
+ * are `float` locals, so each pass narrows them -- the object spills and
+ * reloads a 4-byte slot at exactly those two points, which is not something
+ * a wider local would do.
+ *
+ * The verdict is then a floor test and a ratio test; see the header.
+ */
+int
+TONE_detect(struct fdsp_tone *t, float *buf, short n)
+{
+	float *dly = t->fir_dly;
+	const float *coef = t->fir_coef;
+	short len = t->fir_len;
+	short idx = t->fir_idx;
+	float e_res = t->float_005c;
+	float e_tot = t->float_0060;
+	short i;
+
+	i = n;
+	while (i--) {
+		const float *c = coef;
+		float acc = 0.0f;
+		float w, y;
+		int j;
+
+		idx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;
+		dly[idx] = *buf++;
+		for (j = idx; j >= 0; j--)
+			acc += *c++ * dly[j];
+		for (j = len - 1; j > idx; j--)
+			acc += *c++ * dly[j];
+
+		w = t->det_coef[1] * t->det_z2 + acc +
+		    t->det_coef[2] * t->det_z1;
+		y = t->det_coef[0] * t->det_z2 + w + t->det_z1;
+		t->det_z1 = t->det_z2;
+		t->det_z2 = w;
+
+		e_res = e_res * TONE_DETECT_POLE +
+			(acc * acc - y * y) * (1 - TONE_DETECT_POLE);
+		e_tot = e_tot * TONE_DETECT_POLE +
+			acc * acc * (1 - TONE_DETECT_POLE);
+	}
+	t->fir_idx = idx;
+
+	if (0.0f > e_res)
+		e_res = 0.0f;
+	t->float_005c = e_res;
+	t->float_0060 = e_tot;
+
+	if (e_tot < t->float_0014)
+		return 2;
+	return e_tot * t->float_000c >= e_res;
 }
 
 /*

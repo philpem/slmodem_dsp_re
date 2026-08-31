@@ -76,9 +76,17 @@
   "src/dsp/fpm_mtd.c",
   "build/test/t_fpm_mtd"
  ],
+ "fdspkfifo": [
+  "src/service/fifo8.c",
+  "build/test/t_fdspkfifo"
+ ],
  "fdspkrnl": [
   "src/service/fdspkrnl.c",
   "build/test/t_fdspkrnl"
+ ],
+ "fdspksil": [
+  "src/service/silence.c",
+  "build/test/t_fdspksil"
  ],
  "fpmmtdlayout": [
   "src/dsp/fpm_mtd.c",

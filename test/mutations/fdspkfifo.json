@@ -1,0 +1,88 @@
+[
+ {
+  "note": "src/service/fifo8.c against build/test/t_fdspkfifo.  The claims: the built-in default parameters (a LOCAL .data object in the blob, so only the cfg == NULL path can compare them), which allocation each create path makes, the clip against free room, the clip against bytes held, the two cursors' wrap, the pad-out with cfg.fill, and the two frees in delete."
+ },
+ {
+  "label": "the built-in default ring is one byte longer",
+  "find": "static struct fifo8_cfg FIFO_CFG = { 0, 300, 0 };",
+  "replace": "static struct fifo8_cfg FIFO_CFG = { 0, 301, 0 };"
+ },
+ {
+  "label": "the built-in default pads with 1 rather than 0",
+  "find": "static struct fifo8_cfg FIFO_CFG = { 0, 300, 0 };\n",
+  "replace": "static struct fifo8_cfg FIFO_CFG = { 0, 300, 1 };\n"
+ },
+ {
+  "label": "create allocates one byte too many for the ring",
+  "find": "\t\tf->buf = (unsigned char *)sysdep_malloc(c.size);",
+  "replace": "\t\tf->buf = (unsigned char *)sysdep_malloc(c.size + 1);"
+ },
+ {
+  "label": "create's clearing loop stops one byte short",
+  "find": "\tfor (i = 0; i < f->cfg.size; i++)\n\t\tf->buf[i] = 0;",
+  "replace": "\tfor (i = 0; i + 1 < f->cfg.size; i++)\n\t\tf->buf[i] = 0;"
+ },
+ {
+  "label": "create leaves the read cursor at 1",
+  "find": "\tf->count = 0;\n\tf->rd = 0;\n\tf->wr = 0;",
+  "replace": "\tf->count = 0;\n\tf->rd = 1;\n\tf->wr = 0;"
+ },
+ {
+  "label": "create takes the parameters by reference to the default",
+  "find": "\tif (cfg != 0)\n\t\tc = *cfg;\n\telse\n\t\tc = FIFO_CFG;",
+  "replace": "\tc = FIFO_CFG;\n\t(void)cfg;"
+ },
+ {
+  "label": "read takes the caller's n rather than what is held",
+  "find": "\tunsigned short cnt = f->count > n ? n : f->count;",
+  "replace": "\tunsigned short cnt = f->count > n ? f->count : n;"
+ },
+ {
+  "label": "the read cursor wraps one slot past the end",
+  "find": "\t\trd++;\n\t\tif (rd >= size)\n\t\t\trd = 0;",
+  "replace": "\t\trd++;\n\t\tif (rd > size)\n\t\t\trd = 0;"
+ },
+ {
+  "label": "a short read pads with zero rather than cfg.fill",
+  "find": "\t\t*dst++ = (unsigned char)f->cfg.fill;",
+  "replace": "\t\t*dst++ = 0;"
+ },
+ {
+  "label": "read empties the ring rather than removing what it took",
+  "find": "\tf->rd = rd;\n\tf->count -= cnt;",
+  "replace": "\tf->rd = rd;\n\tf->count = 0;"
+ },
+ {
+  "label": "read does not write the cursor back",
+  "find": "\tf->rd = rd;\n\tf->count -= cnt;\n\treturn cnt;",
+  "replace": "\tf->count -= cnt;\n\treturn cnt;"
+ },
+ {
+  "label": "write measures the free room as the whole ring",
+  "find": "\tunsigned short room = size - f->count;",
+  "replace": "\tunsigned short room = size;"
+ },
+ {
+  "label": "write takes the caller's n rather than the free room",
+  "find": "\tunsigned short cnt = n > room ? room : n;",
+  "replace": "\tunsigned short cnt = n > room ? n : room;"
+ },
+ {
+  "label": "the write cursor wraps one slot past the end",
+  "find": "\t\twr++;\n\t\tif (wr >= size)\n\t\t\twr = 0;",
+  "replace": "\t\twr++;\n\t\tif (wr > size)\n\t\t\twr = 0;"
+ },
+ {
+  "label": "write sets the held count rather than adding to it",
+  "find": "\tf->wr = wr;\n\tf->count += cnt;",
+  "replace": "\tf->wr = wr;\n\tf->count = cnt;"
+ },
+ {
+  "label": "delete leaks the ring buffer",
+  "find": "\tsysdep_free(f->buf);\n\tsysdep_free(f);",
+  "replace": "\tsysdep_free(f);"
+ },
+ {
+  "note": "NOT here: making create's ring allocation unconditional.  It would allocate a buffer over the caller's own on the supplied-struct path, which the harness allocator reports as a leak rather than as a difference in what the object does -- the same verdict a real defect gives, from a mutant that no longer models one.  The conditional is carried by the disassembly: sysdep_malloc is reached only through the `f == NULL` branch at 0xaefaf."
+ }
+]
