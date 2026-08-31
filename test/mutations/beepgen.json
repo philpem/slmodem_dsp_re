@@ -30,8 +30,8 @@
  },
  {
   "label": "check_for_valid_easy stops scanning at w[2]",
-  "find": "\tif (v == w[3])\n\t\treturn 0;\n\treturn 1;\n}\n\n/*\n * float -> 16-bit",
-  "replace": "\tif (v == w[2])\n\t\treturn 0;\n\treturn 1;\n}\n\n/*\n * float -> 16-bit",
+  "find": "\tif (v == w[3])\n\t\treturn 0;\n\treturn 1;\n}\n",
+  "replace": "\tif (v == w[2])\n\t\treturn 0;\n\treturn 1;\n}\n",
   "note": "same shape one window over: only-w[3]-collides passes as valid."
  },
  {
@@ -110,5 +110,231 @@
   "find": "\t\tif (BEEP_FABS(buf[i]) > max)\n\t\t\tmax = BEEP_FABS(buf[i]);",
   "replace": "\t\tif (buf[i] > max)\n\t\t\tmax = buf[i];",
   "note": "the all-negative buffer pins it: the seed folds, the scan must too."
+ },
+ {
+  "label": "beepgen_create copies the wrong config callback into fn_011c",
+  "find": "\tbg->fn_011c = cfg->fn_04;",
+  "replace": "\tbg->fn_011c = cfg->fn_08;"
+ },
+ {
+  "label": "beepgen_create does not clear the queue length",
+  "find": "\tbg->queued = 0;\n\tbg->playing = 0;",
+  "replace": "\tbg->playing = 0;"
+ },
+ {
+  "label": "beepgen_create allocates more than the object",
+  "find": "sysdep_malloc(sizeof(struct beepgen))",
+  "replace": "sysdep_malloc(0x130)"
+ },
+ {
+  "label": "beepgen_create clears only the first phase",
+  "find": "\tbg->phase1 = 0.0f;\n\tbg->phase2 = 0.0f;\n\t/*",
+  "replace": "\tbg->phase1 = 0.0f;\n\t/*"
+ },
+ {
+  "label": "beepgen_create does not keep the modem handle",
+  "find": "\tbg->modem = cfg->modem;",
+  "replace": "\tbg->modem = 0;"
+ },
+ {
+  "label": "start_beep: the ordinary duration unit is hundredths of a second",
+  "find": "\t\tbg->dur_units_per_sec = 10;\n\t\tbg->freq1 = (float)freq1;",
+  "replace": "\t\tbg->dur_units_per_sec = 100;\n\t\tbg->freq1 = (float)freq1;"
+ },
+ {
+  "label": "start_beep: the marker keeps the ordinary duration unit",
+  "find": "\t\t\tbg->dur_units_per_sec = 100;\n\t\t\tbg->gain1 = 0.0f;",
+  "replace": "\t\t\tbg->dur_units_per_sec = 10;\n\t\t\tbg->gain1 = 0.0f;"
+ },
+ {
+  "label": "start_beep: the marker frequency is -2",
+  "find": "\t\t} else if (freq1 == -1) {",
+  "replace": "\t\t} else if (freq1 == -2) {"
+ },
+ {
+  "label": "start_beep: a zero second frequency silences the first gain",
+  "find": "\t\tif (freq2 == 0)\n\t\t\tbg->gain2 = 0.0f;",
+  "replace": "\t\tif (freq2 == 0)\n\t\t\tbg->gain1 = 0.0f;"
+ },
+ {
+  "label": "start_beep: the two gains come back the way beepgen_create takes them",
+  "find": "\t\tGetGain(bg, &bg->gain2, &bg->gain1);",
+  "replace": "\t\tGetGain(bg, &bg->gain1, &bg->gain2);"
+ },
+ {
+  "label": "sample: the two gains come back the way beepgen_create takes them",
+  "find": "D987. */\n\tGetGain(bg, &bg->gain2, &bg->gain1);",
+  "replace": "D987. */\n\tGetGain(bg, &bg->gain1, &bg->gain2);"
+ },
+ {
+  "label": "start_beep: the sample count is taken at 4 kHz",
+  "find": "\t\tbg->duration = duration * 8000 / bg->dur_units_per_sec;",
+  "replace": "\t\tbg->duration = duration * 4000 / bg->dur_units_per_sec;"
+ },
+ {
+  "label": "start_beep: the queue length does not advance",
+  "find": "\tbg->queued++;",
+  "replace": "\tbg->queued += 0;"
+ },
+ {
+  "label": "start_beep: every tone lands in entry zero",
+  "find": "\tt = &bg->tone[bg->queued];",
+  "replace": "\tt = &bg->tone[0];"
+ },
+ {
+  "label": "start_beep: the first-tone setup runs on every call",
+  "find": "\tif (bg->queued == 0) {",
+  "replace": "\tif (bg->queued >= 0) {"
+ },
+ {
+  "label": "start_beep: the queued duration is the sample count",
+  "find": "\tt->duration = duration;",
+  "replace": "\tt->duration = bg->duration;"
+ },
+ {
+  "label": "start_dtmf: the start marker is '\"'",
+  "find": "\tif (code == '!')\n\t\tduration = bg->fn_0124",
+  "replace": "\tif (code == '\"')\n\t\tduration = bg->fn_0124"
+ },
+ {
+  "label": "start_dtmf: the marker callback is asked for 25",
+  "find": "bg->fn_0124(bg->modem, 24);",
+  "replace": "bg->fn_0124(bg->modem, 25);"
+ },
+ {
+  "label": "start_dtmf: a pause is twice the duration",
+  "find": "\t\tduration = duration * 3;",
+  "replace": "\t\tduration = duration * 2;"
+ },
+ {
+  "label": "start_dtmf: a pause keeps its row tone",
+  "find": "\t\tcol = 0;\n\t\trow = 0;",
+  "replace": "\t\tcol = 0;"
+ },
+ {
+  "label": "start_dtmf: the column and row come back swapped",
+  "find": "\tbeepgen_get_freqs((unsigned char)code, &col, &row);",
+  "replace": "\tbeepgen_get_freqs((unsigned char)code, &row, &col);"
+ },
+ {
+  "label": "sample: sine and cosine are exchanged",
+  "find": "\t*out = sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2;",
+  "replace": "\t*out = cos(bg->phase1) * bg->gain1 + sin(bg->phase2) * bg->gain2;"
+ },
+ {
+  "label": "sample: the two gains are exchanged",
+  "find": "\t*out = sin(bg->phase1) * bg->gain1 + cos(bg->phase2) * bg->gain2;",
+  "replace": "\t*out = sin(bg->phase1) * bg->gain2 + cos(bg->phase2) * bg->gain1;"
+ },
+ {
+  "label": "sample: the phase step is the exact 2*pi/8000",
+  "find": "\tbg->phase1 += BEEPGEN_PHASE_STEP * bg->freq1;",
+  "replace": "\tbg->phase1 += 0.0007853981633974483 * bg->freq1;",
+  "note": "the object's literal is 0.000785, which is the rounded value and not the exact one; three figures is 0.05% flat at 1633 Hz and the exact constant is a different float in the very first sample."
+ },
+ {
+  "label": "sample: the second phase advances at the first's rate",
+  "find": "\tbg->phase2 += BEEPGEN_PHASE_STEP * bg->freq2;",
+  "replace": "\tbg->phase2 += BEEPGEN_PHASE_STEP * bg->freq1;"
+ },
+ {
+  "label": "sample: the tone ends one sample early",
+  "find": "\tif (bg->elapsed <= bg->duration)",
+  "replace": "\tif (bg->elapsed < bg->duration)"
+ },
+ {
+  "label": "sample: the queue is retired one tone late",
+  "find": "\tif (bg->playing >= bg->queued) {",
+  "replace": "\tif (bg->playing > bg->queued) {"
+ },
+ {
+  "label": "sample: the hook-on gate reads the second frequency",
+  "find": "\tif (bg->freq1 == -1.0f) {",
+  "replace": "\tif (bg->freq2 == -1.0f) {"
+ },
+ {
+  "label": "sample: advancing does not restart the sample counter",
+  "find": "\tbg->elapsed = 0;\n\tbg->duration = bg->tone[bg->playing].duration * 8000",
+  "replace": "\tbg->duration = bg->tone[bg->playing].duration * 8000"
+ },
+ {
+  "label": "sample: advancing keeps the previous tone's duration unit",
+  "find": "\tbg->dur_units_per_sec = 10;\n\tbg->freq1 = bg->tone[bg->playing].freq1;",
+  "replace": "\tbg->freq1 = bg->tone[bg->playing].freq1;"
+ },
+ {
+  "label": "sample: a marker tone keeps its first gain",
+  "find": "\t} else if (t->freq1 == -1.0f) {\n\t\tbg->gain1 = 0.0f;",
+  "replace": "\t} else if (t->freq1 == -1.0f) {"
+ },
+ {
+  "label": "sample: the queue length is not cleared when it runs out",
+  "find": "\t\tbg->queued = 0;\n\t\treturn 1;",
+  "replace": "\t\treturn 1;"
+ },
+ {
+  "label": "detector: set_output_status selects the in-stream mode",
+  "find": "\td->output_mode = DETECTOR_OUTPUT_STATUS;",
+  "replace": "\td->output_mode = DETECTOR_OUTPUT_IN_STREAM;"
+ },
+ {
+  "label": "detector: set_output_in_stream selects the status mode",
+  "find": "\td->output_mode = DETECTOR_OUTPUT_IN_STREAM;",
+  "replace": "\td->output_mode = DETECTOR_OUTPUT_STATUS;"
+ },
+ {
+  "label": "detector: only the low byte of the enable word is stored",
+  "find": "\td->enable = enable;",
+  "replace": "\td->enable = (unsigned char)enable;"
+ },
+ {
+  "label": "create_dtmf: the verdict history starts at zero",
+  "find": "\t\td->hist[i] = -1;",
+  "replace": "\t\td->hist[i] = 0;"
+ },
+ {
+  "label": "create_dtmf: the held digit starts at zero",
+  "find": "\td->digit = -1;",
+  "replace": "\td->digit = 0;"
+ },
+ {
+  "label": "create_dtmf: the notch loop stops one tone short",
+  "find": "\tfor (i = 0; i <= 7; i++) {",
+  "replace": "\tfor (i = 0; i <= 6; i++) {"
+ },
+ {
+  "label": "create_dtmf: the history loop stops one entry short",
+  "find": "\tfor (i = 0; i <= 7; i++)\n\t\td->hist[i] = -1;",
+  "replace": "\tfor (i = 0; i <= 6; i++)\n\t\td->hist[i] = -1;"
+ },
+ {
+  "label": "create_dtmf: only half the bias notch is cleared",
+  "find": "\tfor (i = 0; i <= 1; i++)\n\t\td->bias_state[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i <= 0; i++)\n\t\td->bias_state[i] = 0.0f;"
+ },
+ {
+  "label": "create_dtmf: the receiver is one byte larger",
+  "find": "sysdep_malloc(sizeof(struct dtmf))",
+  "replace": "sysdep_malloc(sizeof(struct dtmf) + 1)"
+ },
+ {
+  "label": "FDSP_DP_Run: the receive scale is 1/32768",
+  "find": "\t\trx_flt[i] = rx_lin[i] * (1.0f / 32000.0f);",
+  "replace": "\t\trx_flt[i] = rx_lin[i] * (1.0f / 32768.0f);"
+ },
+ {
+  "label": "FDSP_DP_Run: the transmit scale is 32768",
+  "find": "\t\ttx_lin[i] = (short)(tx_flt[i] * 32000.0f);",
+  "replace": "\t\ttx_lin[i] = (short)(tx_flt[i] * 32768.0f);"
+ },
+ {
+  "label": "FDSP_DP_Run: the status word is 1",
+  "find": "\t*status = 2;",
+  "replace": "\t*status = 1;"
+ },
+ {
+  "label": "FDSP_DP_Run: the verdict is 0",
+  "find": "\t*status = 2;\n\treturn 1;",
+  "replace": "\t*status = 2;\n\treturn 0;"
  }
 ]

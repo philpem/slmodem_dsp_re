@@ -6,10 +6,13 @@
  * the original TU: `GetGain` is LOCAL (`t`) in the object and lives at the
  * top of it, so the file boundary is the author's and not just the layout's.
  *
- * None of these symbols has an internal caller in the blob -- they are
+ * Most of these symbols have no internal caller in the blob -- they are
  * exported API surface (the reverse-edge probe over the no-entry-point
- * bucket, CLAUDE.md's F8320 discussion) -- so every signature below is
- * derived from the function body alone and says so where it is thin.
+ * bucket, CLAUDE.md's F8320 discussion) -- so most signatures below are
+ * derived from the function body alone and say so where they are thin.
+ * The exception is the generator itself: `voice_create` calls
+ * `beepgen_create`, and that call is where `struct beepgen_config`'s shape
+ * comes from (finding F8766).
  */
 
 #ifndef DSPLIB_BEEPGEN_H
@@ -20,15 +23,120 @@ extern "C" {
 #endif
 
 /*
- * The beep generator object, as far as `GetGain` sees it: one pointer, at
- * +0, handed to modem_get_param.  The real object is certainly larger --
- * nothing reconstructed yet allocates one -- so this models only the prefix
- * that is established.  Extend it from the creator's disassembly when that
- * is written, not from here.
+ * One queued tone.  `beepgen_start_beep` appends one of these and
+ * `beepgen_sample` walks them; 12 bytes each, twenty of them in the object.
+ */
+struct beepgen_tone {
+	float	freq1;		/* +0x00  column/high tone, Hz, as a float */
+	float	freq2;		/* +0x04  row/low tone                     */
+	int	duration;	/* +0x08  in 1/dur_units_per_sec seconds   */
+};
+
+/* (0x11c - 0x2c) / 12.  The object bounds-checks none of it. */
+#define BEEPGEN_TONES	20
+
+/*
+ * The beep generator, 0x12c bytes -- the size `beepgen_create` allocates.
+ *
+ * The oscillator is open-loop: two independent phases advanced by
+ * BEEPGEN_PHASE_STEP * frequency per sample, summed through the two gains
+ * `GetGain` computes.  A tone lasts `duration` samples, counted in
+ * `elapsed`; when it expires the next entry of `tone[]` becomes current, and
+ * when the last one expires `queued` goes back to zero.
+ *
+ * Two frequency values are special and both are the DIAL STRING's, arriving
+ * through `beepgen_get_freqs`: 0 silences that half (its gain is forced to
+ * zero) and -1 is the '!' start marker, which additionally switches
+ * `dur_units_per_sec` from 10 to 100 and fires a callback.
  */
 struct beepgen {
-	void	*modem;		/* +0x00  handle for modem_get_param */
+	void	*modem;		/* +0x00  handle for modem_get_param       */
+	float	phase1;		/* +0x04  oscillator phase, radians        */
+	float	phase2;		/* +0x08                                   */
+	float	freq1;		/* +0x0c  current tone, Hz                 */
+	float	freq2;		/* +0x10                                   */
+	float	gain1;		/* +0x14  amplitude of the freq1 tone      */
+	float	gain2;		/* +0x18  amplitude of the freq2 tone      */
+	int	elapsed;	/* +0x1c  samples emitted from this tone   */
+	int	duration;	/* +0x20  samples this tone lasts          */
+	int	queued;		/* +0x24  entries in tone[]                */
+	int	playing;	/* +0x28  index of the tone being played   */
+	struct beepgen_tone tone[BEEPGEN_TONES];
+				/* +0x2c                                   */
+	/*
+	 * Three host callbacks, copied out of `struct beepgen_config`.  The
+	 * middle one is named from the object's own debug line: `beepgen_
+	 * sample` prints "Hook on proc" immediately before calling it, at
+	 * the only site that does.  The other two are neutral names --
+	 * `fn_011c` fires when a -1 (start-marker) tone BECOMES CURRENT,
+	 * which is the symmetric position, but nothing in the object says
+	 * what it is for; `fn_0124` supplies the marker's duration and its
+	 * 24 is unexplained (see beepgen_start_dtmf).
+	 */
+	void	(*fn_011c)(void *modem);		/* +0x11c */
+	void	(*hook_on_proc)(void *modem);		/* +0x120 */
+	int	(*fn_0124)(void *modem, int what);	/* +0x124 */
+	int	dur_units_per_sec;
+				/* +0x128 10 or 100: `duration` is
+				 *        tone.duration * 8000 / this, and
+				 *        8000 is the sample rate, so this
+				 *        is duration units per second     */
 };
+
+/*
+ * What `beepgen_create` reads.  Sixteen bytes, and `voice_create` (not
+ * reconstructed) passes its OWN first argument through unchanged, so this
+ * is the voice service's configuration seen from the beep generator's end.
+ * If a voice reconstruction needs the same block it must include this
+ * header rather than spell the type again.
+ */
+struct beepgen_config {
+	void	*modem;			/* +0x00 */
+	void	(*fn_04)(void *modem);	/* +0x04 -> beepgen.fn_011c      */
+	void	(*fn_08)(void *modem);	/* +0x08 -> beepgen.hook_on_proc */
+	int	(*fn_0c)(void *modem, int what);
+					/* +0x0c -> beepgen.fn_0124      */
+};
+
+/*
+ * Radians per sample per hertz.  The object's literal is 0.000785, which is
+ * 2*pi/8000 rounded to three figures and NOT the exact value -- so it is
+ * kept as written; at 1633 Hz it is 0.05% flat.
+ */
+#define BEEPGEN_PHASE_STEP	0.000785
+
+/*
+ * `cfg` is copied, not retained.  A NULL `bg` allocates; the result is NULL
+ * only when that allocation fails.
+ */
+struct beepgen *beepgen_create(struct beepgen *bg,
+			       const struct beepgen_config *cfg);
+
+/* Frees whatever it is given, NULL included -- it is a bare sysdep_free. */
+void beepgen_delete(struct beepgen *bg);
+
+/*
+ * Append one tone.  When the queue was EMPTY this also makes the tone
+ * current, which is where the gains, the -1 marker and the sample count are
+ * settled; when it was not, only the queue entry is written.  `duration` is
+ * in 1/10 s for an ordinary tone (see dur_units_per_sec).
+ */
+void beepgen_start_beep(struct beepgen *bg, int freq1, int freq2,
+			int duration);
+
+/*
+ * One dial-string character.  '!' takes its duration from the config's
+ * third callback instead of the argument, ',' is a pause -- silence at
+ * three times the duration -- and everything else is the DTMF pair
+ * `beepgen_get_freqs` gives, appended through `beepgen_start_beep`.
+ */
+void beepgen_start_dtmf(struct beepgen *bg, int code, int duration);
+
+/*
+ * One 8 kHz sample into *out.  Returns 1 on the sample that retires the
+ * LAST queued tone (and leaves the queue empty), 0 otherwise.
+ */
+int beepgen_sample(struct beepgen *bg, float *out);
 
 /*
  * DTMF frequencies for one dial character.  `*colp` gets the column tone
@@ -114,6 +222,21 @@ int FindCorrelation(short *pattern, short *sig, unsigned int *posp,
 
 /* max |buf[i]| over n entries; buf[0] unconditionally seeds the maximum. */
 float zfFLTUTL_GetMaxAbsValue(float *buf, unsigned int n);
+
+/*
+ * FDSP_DP_Run -- the datapump wrapper's per-block conversion, 0xae490, which
+ * sits between FindCorrelation and zfFLTUTL_GetMaxAbsValue and so is inside
+ * this file's address range even though its name belongs with fdspkrnl.c.
+ * Declared here for that reason; move it when FDSP_DP_Create lands.
+ *
+ * It converts `*countp` samples each way and does nothing else: the receive
+ * side is 16-bit linear scaled by 1/32000, the transmit side float scaled by
+ * 32000 and truncated toward zero.  `*status` is set to 2 and 1 is returned
+ * unconditionally.  The sixth argument is READ BY NOTHING -- it occupies a
+ * stack slot the object never loads -- so its type here is a placeholder.
+ */
+int FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt, float *tx_flt,
+		short *tx_lin, void *unused, unsigned short *countp);
 
 #ifdef __cplusplus
 }

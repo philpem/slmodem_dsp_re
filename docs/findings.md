@@ -98344,3 +98344,144 @@ which is `int` here and `long` in slmodemd's own header. Recorded rather than
 left implicit because the two are now a pattern: **a vendored upstream
 declaration is evidence about the API's intent and not about its ABI**, and
 where they disagree the instructions win.
+
+### F8760. The beep generator's object is 0x12c bytes, a twenty-entry tone queue with three host callbacks bolted on the end
+
+*2026-08-31.* `beepgen_create` allocates 0x12c (0xacda1) and the stores across
+the five entry points fix every field of it:
+
+    +0x00 modem      +0x14 gain1     +0x24 queued    +0x11c fn_011c
+    +0x04 phase1     +0x18 gain2     +0x28 playing   +0x120 hook_on_proc
+    +0x08 phase2     +0x1c elapsed   +0x2c tone[20]  +0x124 fn_0124
+    +0x0c freq1      +0x20 duration        {f,f,int} +0x128 dur_units_per_sec
+    +0x10 freq2
+
+The queue length is not a guess: 0x11c - 0x2c is 240 and the entry stride is
+12 -- `lea (%eax,%eax,2)` then `lea (%ebx,%ecx,4)` at 0xace1d and 0xad352 --
+so it is exactly twenty.
+
+**`dur_units_per_sec` is derived, not named by hand.** The object computes the
+tone's sample count as `duration * 8000 / [+0x128]`, and 8000 is the sample
+rate the phase step confirms independently (0.000785 radians per sample per
+hertz is 2*pi/8000 to three figures), so +0x128 is the number of duration
+units in one second. It is 10 for an ordinary tone and 100 for the '!'
+marker, in all three places that set it.
+
+**The three callbacks are the host's, and only one of them is named.**
+`beepgen_create` copies them out of a sixteen-byte configuration block whose
+own source is outside the object -- `voice_create` (0xac210, not
+reconstructed) passes ITS first argument straight through at 0xac2cd -- so
+there is no caller in the 1.2 MB that types them. +0x120 is `hook_on_proc`
+because `beepgen_sample` prints the author's own "Hook on proc\n" immediately
+before the only call to it (0xad421); the other two keep neutral names.
++0x011c fires at the symmetric position, when a -1 tone becomes current, and
++0x124 is asked for the marker's duration with the literal 24, which nothing
+in the object explains.
+
+### F8761. `beepgen_start_dtmf` is `beepgen_get_freqs` and `beepgen_start_beep` inlined, and only two characters are not a DTMF pair
+
+*2026-08-31.* 877 bytes of `beepgen_start_dtmf` are two other functions of the
+same translation unit expanded into it at `-O3`: the col/row tables
+`{1209,1336,1477,1633,0,-1}` and `{697,770,852,941,0,-1}` are built on the
+stack at 0xacf54-0xacfc1, the jump table at .rodata+0xee3c indexes `code -
+0x21` over 0x24 cases with the same sixteen bodies `beepgen_get_freqs` has,
+and the whole tail from 0xad006 is `beepgen_start_beep`'s body including its
+"start beep %d %d %d" line. So the source is three lines and a special case,
+and writing it that way reproduces the behaviour exactly.
+
+The two characters that are not a DTMF pair:
+
+- **'!'** takes its duration from `fn_0124(modem, 24)` BEFORE the debug line
+  (0xad140), and `beepgen_get_freqs` then hands it -1/-1, which
+  `beepgen_start_beep` reads as the start marker.
+- **','** is checked AFTER the table lookup, silences both halves and triples
+  the duration (`lea 0x0(%ebp,%ebp,2)` at 0xad119), printing
+  "\n *** digit ',' => pause".
+
+`code` is an `int`: it is loaded and compared 32 bits wide against 0x21 and
+0x2c, and only the inlined `beepgen_get_freqs` narrows it with `movzbl`.
+
+### F8762. `beepgen_sample` is the second site in this tree needing `-funsafe-math-optimizations`, and the pragma is scoped to the function
+
+*2026-08-31.* 0xad2a8 is `fsin` and 0xad2af is `fcos`. GCC expands `sin()` and
+`cos()` inline to the x87 instructions only under
+`flag_unsafe_math_optimizations`; without it the call goes to libm. That is
+the same observation `src/dsp/fft.cpp` records for `four1` and `realfft`, and
+the object has twelve such sites over eight functions with **no `sin`, `cos`
+or `sqrt` relocation anywhere in the 1.2 MB and no such symbol defined in it**
+-- only `pow`, which is compiled in. So the original's build of this library
+had the flag on.
+
+`fft.cpp` puts `#pragma GCC optimize` at file scope because the whole file
+wants it. `beepgen.c` cannot: the reciprocal tails and mean-removed sums of
+`fComputeRMSValue*Buf`, `bSearchEnergy` and `FindCorrelation` share the
+translation unit and are already differentially green under the tree's
+ordinary flags, and reassociation is exactly what would move them. So the
+pragma here is bracketed by `push_options`/`pop_options` around the one
+function, and GCC 14 emits `fsin`/`fcos` for it and nothing else changes.
+
+**GCC 3.4.2 ignores the pragma entirely**, so the period build calls libm and
+differs from the object around the 54th bit of a double that is then rounded
+to a 24-bit float -- fft.cpp's finding F833 argument, and the same conclusion:
+the flag is here on the disassembly's authority, not the test's.
+
+### F8763. The tone detector's object is 0x38 bytes and its output mode is named by its own setters
+
+*2026-08-31.* `detector_create` is blocked -- it still needs ten unwritten
+symbols -- but it settles two things about the object for free: it allocates
+0x38 at 0xad5da and it stores 1 into +0x34 at 0xad498. The three setters that
+ARE writable then name that word without any inference: `detector_set_output_
+status` writes 0 and `detector_set_output_in_stream` writes 1 to it, so it is
+a mode selector and the created default is "in stream". `detector_set_enable`
+writes a 16-bit value at +0x00.
+
+Nothing else about the 0x38 is modelled, and `detector.h` says so: the middle
+0x32 bytes are a pad until `detector_create` lands.
+
+### F8764. `FDSP_DP_Run` is a pure rescaler with a dead argument, and its count is unsigned
+
+*2026-08-31.* All 138 bytes: `*countp` samples of 16-bit linear multiplied by
+1/32000 into a float buffer, `*countp` floats multiplied by 32000 and stored
+through a round-to-zero `fistps`, `*status = 2`, `return 1`. No filtering, no
+state, no object pointer -- the FDSP kernel is nowhere in it.
+
+Two things the disassembly forces. The count is loaded with `movzwl` (0xae4a6)
+into a value used as a signed 32-bit loop bound, so the pointee is an
+`unsigned short` and not a `short` -- finding F613's forced case. And the
+SIXTH argument's stack slot, `0x20(%esp)`, is never loaded: seven arguments go
+in and six are used. Recorded as D986 rather than dropped from the signature,
+because the ABI is what the caller has to satisfy.
+
+The receive scale is the float nearest 1/32000 (0x3803126f), loaded once
+outside the loop, which is the constant `1.0f / 32000.0f` folds to and the
+same one `CrossDataLinks` two functions earlier already uses.
+
+### F8765. `create_dtmf` confirms `struct dtmf` from the constructor's side, and its loops count in a short
+
+*2026-08-31.* `dtmf.h`'s layout was derived from `dtmf_detect` and `dtmf_test`
+alone, with `create_dtmf` named in the header as unreconstructed. Writing it
+is an independent check on that layout from the other end, and the layout
+holds: 0x98 allocated, `notch_state[8][2]` and `energy[8]` cleared together in
+one loop, `bias_state[2]` in a second, `hist[8]` set to -1 in a third, then
+`total`, `count`, `phase`, `held`, `easy` zero and `digit` -1. The 0x80..0x8f
+`pad_80` is untouched, exactly as the header claims.
+
+The loop counters are 16-bit: `inc %eax; cwtl; cmp $0x7,%ax; jle` at
+0xadf27-0xadf2d and twice more. So the author wrote `short i` and the bounds
+are `<= 7` and `<= 1`, which is what the reconstruction spells.
+
+### F8766. The `Beepgen.c` span is NOT all callerless surface, and the reverse edges are what say so
+
+*2026-08-31.* `beepgen.c`'s header comment said none of its symbols has an
+internal caller in the blob, which was true of the eleven leaves that had been
+written. It is not true of the span: `readelf -r` finds `beepgen_create`
+called once, from `voice_create` at 0xac2d5, `create_dtmf` called from
+`detector_create` at 0xad4b1, and `detector_set_enable` called from six sites
+across `voice_dle_command`, `voice_create` and `voice_command`.
+
+That matters for evidence, not for scheduling: `voice_create` is what proves
+the configuration block is sixteen bytes of `{modem, fn, fn, fn}` and that it
+is the VOICE service's own argument passed through, which no amount of
+reading `beepgen_create` alone could establish. **Run the relocation table
+before recording a symbol as having no caller** -- the call-graph tools answer
+the forward question and this one is backward.

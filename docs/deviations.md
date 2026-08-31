@@ -9415,3 +9415,77 @@ symbol count a well-behaved handler returns**, and should guard past it.
 checks above. `t_v22modem` sizes its destination at four times the input block
 and asserts a guard past it, so the next occurrence is a named failure rather
 than a compiler-dependent verdict.
+
+## D985 ⚠ `beepgen_start_beep` indexes a twenty-entry queue with a counter nothing bounds
+
+*2026-08-31.* The queue entry is addressed as `bg + 12 * bg->queued + 0x2c`
+(0xace1d) and `bg->queued` is incremented on every call with no test against
+anything. The array ends at +0x11c, so the twenty-first call writes the first
+callback pointer, the twenty-second the second, the twenty-third the third,
+and the twenty-fourth `dur_units_per_sec`; from the twenty-fifth on it is past
+the 0x12c the object was allocated with.
+
+`beepgen_sample` clears `queued` when the last tone retires, so the queue only
+grows while something is playing and a caller would have to enqueue twenty-one
+tones without ever sampling. Nothing reconstructed does that -- `voice_create`
+is the only internal caller of `beepgen_create` and it is not written -- so
+this is **unmeasured** in the sense that no reachable path is known to hit it.
+
+The reconstruction reproduces it: `t = &bg->tone[bg->queued]` with no clamp,
+which is what the object does. The differential test stops at four queued
+tones deliberately, because a fixture that drove it past twenty would be
+comparing two different out-of-bounds writes rather than the code.
+
+**Status:** faithful, unmeasured for reachability.
+
+## D986 ⚠ `FDSP_DP_Run` takes seven arguments and never loads the sixth
+
+*2026-08-31.* The stack slot at `0x20(%esp)` -- the sixth argument, between
+the transmit output buffer and the sample count -- is not read anywhere in the
+138 bytes. Every other slot is: 0x0c is the status word, 0x10/0x14 the receive
+pair, 0x18/0x1c the transmit pair, 0x24 the count.
+
+It is kept in the signature because the ABI is the caller's contract and
+dropping it would shift the count pointer by one slot, which would link and
+then read the wrong stack word. `beepgen.h` types it `void *` and says it is a
+placeholder; there is no evidence in the object for what it was.
+
+**Status:** faithful and inert. The test passes a distinct object through it
+and checks that neither side writes to it.
+
+## D987 🐛 `beepgen_create` hands `GetGain` its two output pointers in the opposite order to every other call site
+
+*2026-08-31.* `GetGain` writes two levels through pointer parameters, and its
+own debug lines name them: the SECOND parameter is "GAIN1*1000" and the THIRD
+is "GAIN2*1000". The third is the unattenuated one,
+`10^((6 - high - atten)/20) * 0.276`; the second is that multiplied by
+`10^(-difference/20)`, where the difference is
+`GetDTMFHighAndLowToneLevelDifference` -- the DTMF twist.
+
+It is LOCAL in the blob, so GCC 3.4 gave it `regparm(2)` and the argument
+order is read off the registers:
+
+    beepgen_create      0xacd24/0xacd2f   edx = &+0x14, stack = &+0x18
+    beepgen_start_beep  0xace85/0xacea4   edx = &+0x18, stack = &+0x14
+    beepgen_sample      0xad361/0xad370   edx = &+0x18, stack = &+0x14
+
+Two of the three agree and the third does not. **The two that agree are the
+ones that are right**: `beepgen_sample` multiplies `sin(phase1)` -- the
+oscillator that runs at `freq1`, which is `beepgen_get_freqs`'s COLUMN and so
+the DTMF high group -- by +0x14, and the high group is the tone that must NOT
+carry the twist attenuation. `beepgen_create` gives +0x14 the attenuated
+level and +0x18 the unattenuated one, i.e. the pair swapped.
+
+**It is inert, which is presumably why it survived.** A created object has
+`freq1 == freq2 == 0` and an empty queue, so nothing can be sampled from it;
+the first `beepgen_start_beep` recomputes both gains in the right order before
+the first tone is heard. The only way to observe it is to read the fields
+between `beepgen_create` and the first `beepgen_start_beep`, which is what the
+differential test does.
+
+The reconstruction reproduces all three orders as written, and the comment at
+each site says which of the two it is.
+
+**Status:** measured. `t_beepgen` compares all 0x12c bytes after
+`beepgen_create` and after the first beep, so both orders are pinned; a
+mutation that makes the three agree is caught.
