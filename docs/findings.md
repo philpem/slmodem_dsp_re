@@ -98867,6 +98867,143 @@ fail on request, so `t_fdspksil` records the check rather than testing it,
 and the mutation set carries a NOT-here note instead of a mutant that would
 read NOT CAUGHT while modelling nothing.
 
+### F8746. Voice is a strict three-layer pipeline, and the layering is what makes it parallelisable — measured, so it need not be re-derived
+
+*2026-08-31.* At `852cb72c` (the ring detector landed, nothing else of voice
+written) `tools/service.py --list other` reported 59 symbols / 21,741 bytes
+for "voice / Caller ID / ring detect only". Ten of those are Caller ID
+(`cid_modem` 1,487, `data_formatted_output` 1,310, `cid_progress` 992,
+`reset_cid` 517, `cid_create` 204, `create_cid` 183, `cid_get_strings` 145,
+`data_unformatted_output` 117, `cid_freq_sampl` 107, `cid_delete` 86 —
+5,148 bytes). **Voice itself was therefore 49 symbols / 16,593 bytes reached
+by an entry point, plus `voice_set_online` (47) and `voice_set_duplex` (45)
+in the no-entry-point bucket: 51 symbols / 16,685 bytes.**
+
+`readyqueue.py` per span shows it is not a flat list but three layers, and
+almost nothing crosses a layer boundary sideways:
+
+| layer | what | bytes |
+|---|---|--:|
+| 1 | the leaves: `FIFO8_*`, `silence_{create,delete,is_more_then}`, `TONE_{detect,delete}`, `_status`, `FDSP_Kernel_{InitObj,SetInternalBeepInProgress}`, `beepgen_*`, `create_dtmf`, `FDSP_DP_Run`, `detector_set_*`, `vce_*`, `STRM_VCE_GetFDSPEnvironmentalParams`, `voice_dle_command`, the MTK tables | ~4,700 |
+| 2 | the per-block path: `silence_progress`, `MTK_phasor`, `TONE_create`, `detector_{create,progress,delete}`, `FDSP_DP_{Create,Delete}`, `voice_{rx,tx,duplex,set_rx,set_tx,online}`, `voice_set_{online,duplex}` | ~6,300 |
+| 3 | the service faces: `VOICE_{create,delete,command,process}` and `voice_{create,command,modem,delete}` | ~5,700 |
+
+**Layer 1 has no internal edges at all**, which is the fact worth recording:
+its four spans (`voice.c#3 +3`, `Fdspkrnl.c +13`, `Beepgen.c +3` and the
+voice share of `class1tx.c +94`) were taken by four agents at once with no
+coordination beyond a file-ownership split, and merged with conflicts only in
+`docs/findings.md`, `docs/deviations.md` and the two mutation JSONs — never in
+`src/`. Layer 2 then opened in one step: `voice_online` went from "needs 2" to
+READY the moment `beepgen_sample` and
+`FDSP_Kernel_SetInternalBeepInProgress` landed, and `voice_rx` and
+`voice_set_rx` from "needs 5" to "needs `silence_progress`".
+
+**THE SPAN LABELS MISLEAD HERE MORE THAN USUAL, and CLAUDE.md's rule is not
+enough on its own.** "Do not read a span name as a module name" was written
+for V.32, where a span named `V32mod.c` held V.22. Voice is the same defect in
+a worse place: **six voice symbols sit in a span labelled `class1tx.c +94`**,
+which is the FAX span — the largest thing left in the object and deliberately
+LAST. `voice_command` (802), `voice_create` (642), `voice_online` (508),
+`voice_modem` (338), `voice_dle_command` (196) and `voice_delete` (181), 2,667
+bytes, are voice and not fax, and a pass that took "fax is last" to mean "skip
+`class1tx.c +94`" would leave 16% of voice permanently unscheduled. File
+layout is ours; they belong in `src/service/`, and each such file's banner
+names the span it came from so the next reader is not surprised twice.
+
+**`service.py`'s `other` bucket does not separate the three services**, so the
+Caller ID subtraction above is by name and by hand. That is fine for a
+scheduling figure and is not evidence; `tools/closure.py` from the three entry
+point sets is what would settle it if a sharper number is ever needed.
+### F8755. `silence_progress` converts a setting through the x87 as unsigned, and GCC 14 folds the conversion the object performs
+
+*2026-08-31.* At 0xb05a3 the object takes the answer to its second settings
+query and does
+
+    b05a3:	55                   	push   %ebp        (zero)
+    b05a4:	50                   	push   %eax
+    b05a5:	df 2c 24             	fildll (%esp)
+    ...
+    b05c2:	db 5c 24 10          	fistpl 0x10(%esp)   (RC = toward zero)
+
+-- a 32-bit value zero-extended to 64 bits, converted to floating point, and
+truncated back to `int`. That is `(int)(double)(unsigned int)v`; a plain
+`(int)v` needs neither instruction, so the cast chain is carried by the
+disassembly and `src/service/silence.c` spells it.
+
+**It cannot be probed from the modern side.** For `v < 2^31` the chain and a
+plain cast agree exactly. For `v >= 2^31` the double is out of `int` range,
+which C leaves undefined: the x87 answers `0x80000000` and **GCC 14 folds
+the whole chain to `(int)v`** -- measured, `(int)(double)0xffffff00u` gives
+-256 on GCC 14 at `-O2 -mfpmath=387` and the blob gives -2147483648.
+
+So `t_fdspksil` sweeps the setting only to `0x7fffffff`. Driving it past
+that would compare two compilers' treatment of undefined behaviour and
+report it as a defect in `src/`, which is the failure mode CLAUDE.md's
+"never edit `src/` to make the modern tier green" rule exists to stop --
+here in its other direction, where the test rather than the source is what
+must not chase the modern compiler.
+
+The difference is confined to the debug line: the value only reaches
+`s->count > level`, and both readings are negative, so the run always
+escapes on the first silent block either way.
+
+### F8747. `silence_level_table` prints as 2699, 7500 and 24299, its comment said 2700/7500/24300, and only ONE ULP direction per row is catchable at all
+
+*2026-08-31.* Two results, from re-reading a function another agent had
+already written and passed. Both were found by an INDEPENDENT SECOND READ of
+the same 623 bytes, which is the only cross-check a single-author
+reconstruction ever gets, and the second result contradicts that read as well.
+
+**THE COMMENT WAS WRONG IN TWO OF THREE FIGURES.** `silence.c`'s table header
+said the three live rows turn back into "2700, 7500 and 24300" through
+`SILENCE_FULLSCALE2`. The object loads both operands with `flds` and
+multiplies at x87 EXTENDED precision (0xb052e-0xb053c), so the product of two
+24-bit mantissas is EXACT in a 64-bit one, and 0xb054b then sets
+round-toward-zero with `or $0xc00` before `fistpl`. Truncating the exact
+products
+
+    2699.999989941716    7500.000216186047    24299.999177098274
+
+gives **2699, 7500, 24299**. Round each product to a `float` first -- which is
+what a compile-time fold in `float` does, and what a reader does in their head
+-- and you get the round numbers the comment claimed. Both sides of the
+differential print whichever it is, so nothing in the suite could ever fail on
+it: findings F6100 and F6103's shape exactly, in a comment written three hours
+earlier.
+
+**AND THE TABLE ITSELF WAS COVERED BY NOTHING.** `fdspksil.json` reached it
+only through "the threshold test runs the wrong way round", which moves the
+COMPARISON and leaves the four words untouched -- so a mistyped digit in any
+row was untested. Three one-ULP mutants now cover it and are caught.
+
+**THE INTERESTING PART IS WHICH ONES.** The obvious expectation is six mutants,
+one per row per direction. Registering all six gives three permanent NOT CAUGHT
+rows, and the reason is that **the threshold branch catches none of the six.**
+The value reaching `acc > silence_level_table[lvl]` is always a block sum times
+0.00125; that map steps by about 1.28 ULP and therefore SKIPS floats, so a
+one-ULP move of the threshold has no preimage on either side and no input the
+function accepts can land in the gap. Every catch is the DEBUG LINE instead,
+and only where the one-ULP step crosses an INTEGER in the truncation above.
+Rows 1 and 3 sit just below an integer, so only a step UP crosses it; row 2
+sits just above one, so only a step DOWN does. One direction per row, and
+which direction is a property of the constant rather than of the code.
+
+**THE SECOND READ GOT THAT PART WRONG TOO, AND THAT IS THE POINT.** It reported
+rows 1 and 3 catchable in both directions with row 2 high as the single gap.
+Running the suite says the opposite: rows 1 and 3 are catchable UP only, row 2
+DOWN only. An analytical argument about which mutants a test can distinguish
+is a hypothesis, and `mutate.py` is the measurement -- the same relationship
+`extcheck.py` has to `dis.py` (finding F2402, one report in five real). Neither
+read was worthless and neither was authoritative; the run settled it.
+
+**What the second read DID settle, by agreeing:** the sixteen bytes
+(`bf800000 3628c2a3 36ea63aa 37bddaf7`) byte for byte, and that
+`silence_progress` is plain cdecl with all five arguments on the stack despite
+being `t`/LOCAL in the symbol table -- the prologue reads 0x30(%esp) upward
+after `sub $0x2c`. That is F8770's correction of F8462 confirmed a second time
+on a second function: **LOCAL predicts nothing about the calling convention;
+read the prologue.**
+
 ### F8785. `struct voice_ctx` gets a home, a size, and eighteen fields it did not have
 
 *2026-08-31.* The type was introduced by the `voice_dle_command` wave in
@@ -98970,3 +99107,4 @@ was checked rather than assumed.
 
 `detector_delete` (0xad620) is GLOBAL too and reads `0x10(%esp)` into `%esi`
 at 0xad627, same answer.
+
