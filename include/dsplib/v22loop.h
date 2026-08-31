@@ -17,7 +17,7 @@
  * ---------------------------------------------------------------------------
  * THE DISPATCH IS A FOURTEEN-ENTRY JUMP TABLE AND ONLY TEN ENTRIES ARE LIVE
  *
- * `hdx->r0c` is loaded with `movswl` and range-checked against 13 with an
+ * `hdx->connect_substate` is loaded with `movswl` and range-checked against 13 with an
  * UNSIGNED `ja`, so a negative sub-state takes the default arm and not case 0.
  * The table at `.rodata` + 0x8580 has fourteen slots and four of them -- 4, 5,
  * 6 and 7 -- point at the function's own epilogue, i.e. at the default:
@@ -92,7 +92,7 @@
  *     (`test %ax,%ax`).  The second does NOT -- its full 32-bit return is
  *     added to `r0a` and only the sum is truncated -- so the two spellings
  *     below differ on purpose.
- *   - `hdx->r04` is the node deadline in `ReadGTimer`'s milliseconds, and it
+ *   - `hdx->node_deadline` is the node deadline in `ReadGTimer`'s milliseconds, and it
  *     is `params.r08` as `V22FP_create` copied it.
  *
  * ---------------------------------------------------------------------------

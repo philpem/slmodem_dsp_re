@@ -119,7 +119,7 @@
 #define V22_HDX_R38(hdx)	(*(const short *)(const void *)&(hdx)->r36[2])
 
 /*
- * Retrain.  Eight substates in `hdx->r0c`, dispatched through a jump table, and
+ * Retrain.  Eight substates in `hdx->connect_substate`, dispatched through a jump table, and
  * a value outside 0..7 -- including a negative one, because the range test is
  * unsigned -- does nothing at all beyond stamping `fp->status`.
  *
@@ -134,7 +134,7 @@ void v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 /*
  * The originating end of the remote-loopback-2 exchange.  Three substates in
- * the same `hdx->r0c`, and any other value returns after stamping `fp->status`
+ * the same `hdx->connect_substate`, and any other value returns after stamping `fp->status`
  * and setting bit 1 of `fp->r1e[0]`.
  */
 void v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,

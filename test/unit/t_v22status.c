@@ -10,7 +10,7 @@
  *
  * WHAT THE SWEEP HAS TO REACH, and why each dimension is here:
  *
- *   - `hdx->r0e` indexes PROTOCOL with no bounds check, so all seven in-range
+ *   - `hdx->protocol` indexes PROTOCOL with no bounds check, so all seven in-range
  *     values are driven.  Out of range is NOT driven: the object reads past
  *     the table and there is nothing to be differentially identical to.
  *   - `fse.mse` is subtracted from 2048 with no clamp, so the values include
@@ -88,21 +88,21 @@ main(void)
 	struct v22fp *fp = V22FP_create(0, &cfg);
 	long tag = 0;
 	int rc = 0;
-	int r0e, mi, enables, poison, ri, fl;
+	int protocol, mi, enables, poison, ri, fl;
 
 	diff_begin("V22_status");
 
-	for (r0e = 0; r0e < 7; r0e++)
+	for (protocol = 0; protocol < 7; protocol++)
 		for (mi = 0; mi < (int)(sizeof(mses) / sizeof(mses[0])); mi++)
 			for (enables = 0; enables < 64; enables++)
 				for (poison = 0; poison < 2; poison++) {
 					struct v22_status sa, sb;
 					int ra, rb;
 
-					ri = (r0e + mi + enables) % 4;
+					ri = (protocol + mi + enables) % 4;
 					fl = (mi + enables) & 3;
 
-					fp->hdx->r0e = (short)r0e;
+					fp->hdx->protocol = (short)protocol;
 					fp->dsp->fse.mse = mses[mi];
 					fp->dsp->r28 = rates[ri];
 					fp->dsp->r2a = rates[(ri + 1) & 3];
@@ -112,8 +112,8 @@ main(void)
 					 * pairing shows only when the six
 					 * disagree.
 					 */
-					fp->dsp->r18 = (enables >> 0) & 1;
-					fp->dsp->r1c = (enables >> 1) & 1;
+					fp->dsp->scrambler_on = (enables >> 0) & 1;
+					fp->dsp->descrambler_on = (enables >> 1) & 1;
 					fp->dsp->r20 = (enables >> 2) & 1;
 					fp->dsp->r00 = (enables >> 3) & 1;
 					fp->dsp->r0c = (enables >> 4) & 1;
@@ -151,7 +151,7 @@ main(void)
 						saw_rx_1200++;
 					if (poison && (sa.flags2 & 0xfe) != 0)
 						saw_flags2_preserved++;
-					protocol_seen[r0e]++;
+					protocol_seen[protocol]++;
 					tag++;
 				}
 
@@ -159,9 +159,9 @@ main(void)
 	V22FP_delete(fp);
 
 	diff_begin("v22status coverage guards");
-	for (r0e = 0; r0e < 7; r0e++)
+	for (protocol = 0; protocol < 7; protocol++)
 		diff_eq_int("PROTOCOL index %ld driven",
-			    protocol_seen[r0e] > 0, 1, r0e);
+			    protocol_seen[protocol] > 0, 1, protocol);
 	diff_eq_int("quality went negative (%ld)", saw_quality_negative > 0, 1,
 		    0);
 	diff_eq_int("quality stayed positive (%ld)", saw_quality_positive > 0,

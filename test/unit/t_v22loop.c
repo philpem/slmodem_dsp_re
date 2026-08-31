@@ -48,7 +48,7 @@
  *     first block of a fresh graph faces `acquire_level` and every later one
  *     faces `squelch_level`.
  *
- *   - `hdx->r08`, `hdx->r0a`, `hdx->gtimer` and `hdx->r04` POKED DIRECTLY.
+ *   - `hdx->r08`, `hdx->r0a`, `hdx->gtimer` and `hdx->node_deadline` POKED DIRECTLY.
  *     They are the handler's own state and every comparison against them is
  *     UNSIGNED in the object, so the sweeps carry values a working modem never
  *     reaches -- a negative `r08` whose value after the +20 step has bit 15
@@ -560,10 +560,10 @@ struct poke {
 	int rate;		/* struct v22fp_cfg::rate               */
 	int f0c;		/* -> params.flags bit 10               */
 	int amp;		/* input block amplitude                */
-	short r0c;		/* the sub-state to drive               */
-	short r0e;		/* non-zero skips the disconnect return */
+	short connect_substate;	/* the sub-state to drive       */
+	short protocol;		/* non-zero skips the disconnect return */
 	int gtimer;
-	int r04;
+	int node_deadline;
 	short r08;
 	short r0a;
 	int mtd;		/* 0 as built, 1 force ABSENT, 2 NOSIGNAL */
@@ -575,10 +575,10 @@ struct poke {
 static void
 apply(struct v22fp *p, const struct poke *k)
 {
-	p->hdx->r0c = k->r0c;
-	p->hdx->r0e = k->r0e;
+	p->hdx->connect_substate = k->connect_substate;
+	p->hdx->protocol = k->protocol;
 	p->hdx->gtimer = k->gtimer;
-	p->hdx->r04 = k->r04;
+	p->hdx->node_deadline = k->node_deadline;
 	p->hdx->r08 = k->r08;
 	p->hdx->r0a = k->r0a;
 	p->dsp->fse.decision = test_decision;
@@ -705,10 +705,10 @@ base_poke(void)
 	k.rate = 0;
 	k.f0c = 0;
 	k.amp = 0;
-	k.r0c = V22_LOOP_NODE_0;
-	k.r0e = 0;
+	k.connect_substate = V22_LOOP_NODE_0;
+	k.protocol = 0;
 	k.gtimer = 0;
-	k.r04 = 60000;
+	k.node_deadline = 60000;
 	k.r08 = 0;
 	k.r0a = 0;
 	return k;
@@ -738,7 +738,7 @@ run_node0(void)
 		struct v22fp *a, *b;
 		struct poke k = base_poke();
 
-		k.r0c = V22_LOOP_NODE_0;
+		k.connect_substate = V22_LOOP_NODE_0;
 		k.f0c = f0c;
 		k.rate = rate;
 		k.amp = amp ? 12000 : 0;
@@ -750,12 +750,12 @@ run_node0(void)
 		a = drive(&k, &b, tag);
 
 		node_seen[V22_LOOP_NODE_0]++;
-		if (a->hdx->r0c == V22_LOOP_NODE_1)
+		if (a->hdx->connect_substate == V22_LOOP_NODE_1)
 			saw_node0_to_1++;
-		else if (a->hdx->r0c == V22_LOOP_NODE_3)
+		else if (a->hdx->connect_substate == V22_LOOP_NODE_3)
 			saw_node0_to_3++;
 		diff_eq_int("f0c bit 0 selects the successor",
-			    a->hdx->r0c == V22_LOOP_NODE_1,
+			    a->hdx->connect_substate == V22_LOOP_NODE_1,
 			    (a->params.flags & V22_PARAMS_BIT10) != 0, tag);
 
 		tag++;
@@ -788,7 +788,7 @@ run_node1(void)
 		struct v22fp *a, *b;
 		struct poke k = base_poke();
 
-		k.r0c = V22_LOOP_NODE_1;
+		k.connect_substate = V22_LOOP_NODE_1;
 		k.rate = rate;
 		k.amp = amp ? 12000 : 0;
 		k.gtimer = gtimers[gi];
@@ -796,7 +796,7 @@ run_node1(void)
 		a = drive(&k, &b, tag);
 
 		node_seen[V22_LOOP_NODE_1]++;
-		if (a->hdx->r0c == V22_LOOP_NODE_2)
+		if (a->hdx->connect_substate == V22_LOOP_NODE_2)
 			saw_node1_expired++;
 		else
 			saw_node1_running++;
@@ -832,7 +832,7 @@ run_node2(void)
 		struct v22fp *a, *b;
 		struct poke k = base_poke();
 
-		k.r0c = V22_LOOP_NODE_2;
+		k.connect_substate = V22_LOOP_NODE_2;
 		k.rate = rate;
 		k.amp = amp ? 12000 : 0;
 		k.gtimer = gi ? 5000 : 0;
@@ -840,7 +840,7 @@ run_node2(void)
 		a = drive(&k, &b, tag);
 
 		node_seen[V22_LOOP_NODE_2]++;
-		if (a->hdx->r0c == V22_LOOP_NODE_3)
+		if (a->hdx->connect_substate == V22_LOOP_NODE_3)
 			saw_node2_quiet++;
 		else
 			saw_node2_signal++;
@@ -877,7 +877,7 @@ run_node3(void)
 	 */
 	static const short r0as[] = { -40, 0, 0xe6, 0xe7 };
 	/*
-	 * The node deadline, as (clock start, `hdx->r04`) pairs.
+	 * The node deadline, as (clock start, `hdx->node_deadline`) pairs.
 	 *
 	 * It is pinned FROM BOTH SIDES: the clock advances 20 ms per call, so
 	 * with the deadline at 100 the two starts 80 and 81 make `ReadGTimer`
@@ -888,7 +888,7 @@ run_node3(void)
 	 * read signed.
 	 *
 	 * The last pair is the WIDTH probe, and it is here because a mutant
-	 * that narrowed `hdx->r04` to sixteen bits survived a sweep that held
+	 * that narrowed `hdx->node_deadline` to sixteen bits survived a sweep that held
 	 * the deadline at 100: 0x10064 and 100 agree in their low half, so a
 	 * clock of 220 is under the real deadline and over the truncated one.
 	 */
@@ -926,17 +926,17 @@ run_node3(void)
 		else
 			set_pattern(p_zero, 1);
 
-		k.r0c = V22_LOOP_NODE_3;
+		k.connect_substate = V22_LOOP_NODE_3;
 		k.rate = rate;
 		k.amp = amp ? 12000 : 0;
 		/* Non-zero skips DemodDataV22's disconnect return. */
-		k.r0e = amp ? 1 : 0;
+		k.protocol = amp ? 1 : 0;
 		k.mtd = mi;
 		k.agc_gate = ag;
 		k.desc_fix = df;
 		k.r08 = pre_r08;
 		k.r0a = pre_r0a;
-		k.r04 = r04s[gi];
+		k.node_deadline = r04s[gi];
 		k.gtimer = gtimers[gi];
 
 		a = drive(&k, &b, tag);
@@ -971,7 +971,7 @@ run_node3(void)
 		 * value it holds afterwards.  Counted only where the tail did
 		 * NOT transition, because the transition zeroes it.
 		 */
-		if (a->hdx->r0c == V22_LOOP_NODE_3 && signalled) {
+		if (a->hdx->connect_substate == V22_LOOP_NODE_3 && signalled) {
 			if (a->hdx->r08
 			    == (short)((unsigned short)pre_r08
 				       + V22_LOOP_BLOCK_MS))
@@ -993,19 +993,19 @@ run_node3(void)
 		descrambled = memcmp(&g_pre_sdm2, &g_post_sdm2,
 				     sizeof(g_pre_sdm2)) != 0
 			      || a->hdx->r0a != pre_r0a;
-		if (a->hdx->r0c == V22_LOOP_NODE_3 && signalled) {
+		if (a->hdx->connect_substate == V22_LOOP_NODE_3 && signalled) {
 			if (descrambled)
 				saw_no_ones++;
 			else
 				saw_ones++;
 		}
-		if (a->hdx->r0c == V22_LOOP_NODE_3
+		if (a->hdx->connect_substate == V22_LOOP_NODE_3
 		    && a->hdx->r0a != pre_r0a)
 			saw_r0a_grew++;
 
-		if (a->hdx->r0c == V22_NODE_2400A)
+		if (a->hdx->connect_substate == V22_NODE_2400A)
 			saw_to_2400++;
-		else if (a->hdx->r0c == V22_NODE_1200_12)
+		else if (a->hdx->connect_substate == V22_NODE_1200_12)
 			saw_to_1200++;
 		else if (a->status == V22_STATUS_16)
 			saw_node3_timeout++;
@@ -1048,14 +1048,14 @@ run_dispatch(void)
 		struct poke k = base_poke();
 		short pre = states[si];
 
-		k.r0c = pre;
+		k.connect_substate = pre;
 		k.rate = rate;
 		k.amp = amp ? 12000 : 0;
-		k.r0e = amp ? 1 : 0;
+		k.protocol = amp ? 1 : 0;
 		k.dbg = dbg;
 		/* connect_* has its own deadlines; give them room to fire. */
 		k.gtimer = (si & 1) ? 1000 : 0;
-		k.r04 = 60000;
+		k.node_deadline = 60000;
 
 		a = drive(&k, &b, tag);
 
@@ -1072,7 +1072,7 @@ run_dispatch(void)
 			 * happened: the default arm is a bare `break`.
 			 */
 			diff_eq_int("default arm left the sub-state alone",
-				    a->hdx->r0c, pre, tag);
+				    a->hdx->connect_substate, pre, tag);
 			diff_eq_int("default arm status", a->status,
 				    V22_STATUS_01, tag);
 			diff_eq_int("default arm tx count", g_tcount_a, 12,

@@ -23,7 +23,7 @@
  * in a callee-saved register, so `fp->hdx` is spelled out at each use.
  *
  * ---------------------------------------------------------------------------
- * `v22_answer`'s NODE_0 SETS `hdx->r0c` TO 3 TWICE
+ * `v22_answer`'s NODE_0 SETS `hdx->connect_substate` TO 3 TWICE
  *
  * Once before `SetTxRate`/`SetRxRate` and again after `ModDataV22`, with five
  * calls in between and no other writer.  Both stores are `movw $0x3,0xc(...)`
@@ -87,7 +87,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->r0c) {
+	switch (fp->hdx->connect_substate) {
 	case V22_ANS_NODE_0:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_answer,NODE_0\n");
@@ -114,11 +114,11 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			 * and wait in NODE_1 anyway.
 			 */
 			TxNOP(fp, txsym, txout, (short *)txcount);
-			fp->hdx->r0c = V22_ANS_NODE_1;
+			fp->hdx->connect_substate = V22_ANS_NODE_1;
 			break;
 		}
 
-		fp->hdx->r0c = V22_ANS_NODE_3;
+		fp->hdx->connect_substate = V22_ANS_NODE_3;
 		SetTxRate(fp, V22_RATE_1200);
 		SetRxRate(fp, V22_RATE_1200);
 
@@ -127,7 +127,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*txcount = ModDataV22(fp, txsym, txout, *txcount);
 
 		/* Dead: nothing above has moved it.  See the file header. */
-		fp->hdx->r0c = V22_ANS_NODE_3;
+		fp->hdx->connect_substate = V22_ANS_NODE_3;
 
 		tone = fp->hdx->tone;
 		tone->cfg.freq = V22_ANS_TONE_HZ;
@@ -152,7 +152,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		if ((unsigned int)ReadGTimer(fp) > V22_ANS_NODE_1_MS) {
-			fp->hdx->r0c = V22_ANS_NODE_SILENCE_AFTER_2100;
+			fp->hdx->connect_substate = V22_ANS_NODE_SILENCE_AFTER_2100;
 			fp->hdx->gtimer = 0;
 			iSilenceAfter2100 = 0;
 			fp->flags |= V22FP_FLAG_1D_BIT4;
@@ -245,7 +245,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
 			fp->hdx->r0a = 0;
-			fp->hdx->r0c = V22_ANS_NODE_4;
+			fp->hdx->connect_substate = V22_ANS_NODE_4;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			fp->r1e[0] |= V22FP_R1E_BIT3;
 			FPM_AGC_Freeze(&fp->dsp->agc);
@@ -255,12 +255,12 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
 			fp->hdx->r0a = 0;
-			fp->hdx->r0c = V22_NODE_1200_12;
+			fp->hdx->connect_substate = V22_NODE_1200_12;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			fp->r1e[0] |= V22FP_R1E_BIT3;
 			FPM_AGC_Freeze(&fp->dsp->agc);
 		} else if ((unsigned int)ReadGTimer(fp)
-			   > (unsigned int)fp->hdx->r04) {
+			   > (unsigned int)fp->hdx->node_deadline) {
 			fp->flags |= V22FP_FLAGS_TIMEOUT;
 			fp->status = V22_MSG_ERROR5;
 			if (DSPLIB_DEBUG_ON())
@@ -283,7 +283,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		if ((unsigned int)ReadGTimer(fp) > V22_ANS_NODE_4_MS)
-			fp->hdx->r0c = V22_NODE_2400A;
+			fp->hdx->connect_substate = V22_NODE_2400A;
 		break;
 
 	case V22_NODE_2400A:
@@ -292,7 +292,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 	case V22_NODE_2400D:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_answer, NODE %d\n ",
-					     (int)fp->hdx->r0c);
+					     (int)fp->hdx->connect_substate);
 		connect_2400(fp, txsym, txout, rxin, rxsym, txcount, rxcount);
 		break;
 
@@ -300,7 +300,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 	case V22_NODE_1200_13:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_answer, NODE %d\n ",
-					     (int)fp->hdx->r0c);
+					     (int)fp->hdx->connect_substate);
 		connect_1200(fp, txsym, txout, rxin, rxsym, txcount, rxcount);
 		break;
 
@@ -310,7 +310,7 @@ v22_answer(struct v22fp *fp, unsigned short *txsym, short *txout,
 			    "V22_answer,NODE_SILENCE_AFTER_2100\n");
 
 		if (++iSilenceAfter2100 == V22_ANS_SILENCE_BLOCKS)
-			fp->hdx->r0c = V22_ANS_NODE_3;
+			fp->hdx->connect_substate = V22_ANS_NODE_3;
 		TxNOP(fp, txsym, txout, (short *)txcount);
 		break;
 
@@ -335,7 +335,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->r0c) {
+	switch (fp->hdx->connect_substate) {
 	case V22_ORG_NODE_0:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_originate,NODE_0\n");
@@ -343,7 +343,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		fp->hdx->gtimer = 0;
 		fp->hdx->r08 = 0;
 		fp->hdx->r0a = 0;
-		fp->hdx->r0c = V22_ORG_NODE_1;
+		fp->hdx->connect_substate = V22_ORG_NODE_1;
 
 		/*
 		 * THE REPORT IS ASKED FOR AND THEN IGNORED.  `v22_answer`'s
@@ -383,7 +383,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			 */
 			*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 			fp->hdx->gtimer = 0;
-			fp->hdx->r0c = V22_ORG_NODE_3;
+			fp->hdx->connect_substate = V22_ORG_NODE_3;
 			fp->flags |= V22FP_FLAG_1D_BIT4;
 		}
 
@@ -391,7 +391,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		if ((unsigned int)ReadGTimer(fp)
-		    > (unsigned int)fp->hdx->r04) {
+		    > (unsigned int)fp->hdx->node_deadline) {
 			fp->flags |= V22FP_FLAGS_TIMEOUT;
 			fp->status = V22_MSG_ERROR1;
 			if (DSPLIB_DEBUG_ON())
@@ -423,7 +423,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		if ((unsigned short)fp->hdx->r08 > V22_ORG_NODE_3_RUN_MS) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0c = V22_ORG_NODE_4;
+			fp->hdx->connect_substate = V22_ORG_NODE_4;
 			/*
 			 * The mean level over the blocks counted.  An UNSIGNED
 			 * divide, and by `r32` -- which is zero until the first
@@ -433,13 +433,13 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 					     / (unsigned short)fp->hdx->r32);
 			if ((unsigned int)fp->hdx->r2c
 			    > (unsigned short)fp->hdx->r30)
-				fp->hdx->r34 = 1;
+				fp->hdx->rx_shift = 1;
 		}
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		if ((unsigned int)ReadGTimer(fp)
-		    > (unsigned int)fp->hdx->r04) {
+		    > (unsigned int)fp->hdx->node_deadline) {
 			fp->flags |= V22FP_FLAGS_TIMEOUT;
 			fp->status = V22_MSG_ERROR3;
 			if (DSPLIB_DEBUG_ON())
@@ -458,7 +458,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		DescrambleDataV22(fp, rxsym, nsym);
 
 		if ((unsigned int)ReadGTimer(fp) > V22_ORG_NODE_4_MS) {
-			fp->hdx->r0c = V22_ORG_NODE_5;
+			fp->hdx->connect_substate = V22_ORG_NODE_5;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_NODE_5);
 		}
 
@@ -518,7 +518,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 		}
 
 		if ((unsigned int)ReadGTimer(fp) > V22_ORG_NODE_5_MS)
-			fp->hdx->r0c = V22_ORG_NODE_6;
+			fp->hdx->connect_substate = V22_ORG_NODE_6;
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		break;
@@ -574,7 +574,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
 			fp->hdx->r0a = 0;
-			fp->hdx->r0c = V22_NODE_2400A;
+			fp->hdx->connect_substate = V22_NODE_2400A;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			FPM_AGC_Freeze(&fp->dsp->agc);
 		} else if ((unsigned short)fp->hdx->r0a > V22_ORG_ONES_MS) {
@@ -586,7 +586,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
 			fp->hdx->r0a = 0;
-			fp->hdx->r0c = V22_NODE_1200_12;
+			fp->hdx->connect_substate = V22_NODE_1200_12;
 			SetAdaptEqV22(fp, V22_ORG_EQ_MODE_CARRIER);
 			FPM_AGC_Freeze(&fp->dsp->agc);
 		} else if ((unsigned int)ReadGTimer(fp) > V22_ORG_NODE_6_MS) {
@@ -603,7 +603,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 	case V22_NODE_2400D:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_originate, NODE %d\n ",
-					     (int)fp->hdx->r0c);
+					     (int)fp->hdx->connect_substate);
 		/* Set here and NOT on the connect_1200 arm below. */
 		fp->r1e[0] |= V22FP_R1E_BIT3;
 		connect_2400(fp, txsym, txout, rxin, rxsym, txcount, rxcount);
@@ -613,7 +613,7 @@ v22_originate(struct v22fp *fp, unsigned short *txsym, short *txout,
 	case V22_NODE_1200_13:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_originate, NODE %d\n ",
-					     (int)fp->hdx->r0c);
+					     (int)fp->hdx->connect_substate);
 		connect_1200(fp, txsym, txout, rxin, rxsym, txcount, rxcount);
 		break;
 

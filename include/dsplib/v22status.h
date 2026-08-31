@@ -14,10 +14,10 @@
  * ---------------------------------------------------------------------------
  * `PROTOCOL` IS A SEVEN-ENTRY TABLE AND ITS VALUES ARE NOT DECODED
  *
- * The object indexes it with `hdx->r0e` -- sign-extended, and with NO BOUNDS
+ * The object indexes it with `hdx->protocol` -- sign-extended, and with NO BOUNDS
  * CHECK -- and stores the entry as the report's first word.
  *
- * WHAT THE INDEX IS, IS SETTLED.  `hdx->r0e` is what `V22FP_modem` indexes
+ * WHAT THE INDEX IS, IS SETTLED.  `hdx->protocol` is what `V22FP_modem` indexes
  * `V22_PROTOCOL` with, and that table's seven entries carry RELOCATIONS
  * naming the seven V.22 protocol handlers, so the index is the protocol state
  * and the object tells us which state each value is (finding F8529):
@@ -71,7 +71,7 @@ struct v22fp;
  * are not written at all and are left unmodelled rather than named.
  */
 struct v22_status {
-	short protocol;		/* +0x00 PROTOCOL[hdx->r0e]                */
+	short protocol;		/* +0x00 PROTOCOL[hdx->protocol]                */
 	short tx_bps;		/* +0x02 1200, or 2400 when dsp->r28       */
 	short rx_bps;		/* +0x04 1200, or 2400 when dsp->r2a       */
 	short quality;		/* +0x06 see V22_STATUS_QUALITY_* below    */
@@ -118,8 +118,8 @@ struct v22_status {
  * return (finding F8526); `eq_adapt` is v22fp.h's own name.  `r20` and `r0c`
  * are not established and keep their offsets.
  */
-#define V22_STATUS_SCRAMBLER	(1 << 0)	/* dsp->r18 bit 0           */
-#define V22_STATUS_DESCRAMBLER	(1 << 1)	/* dsp->r1c bit 0           */
+#define V22_STATUS_SCRAMBLER	(1 << 0)	/* dsp->scrambler_on bit 0           */
+#define V22_STATUS_DESCRAMBLER	(1 << 1)	/* dsp->descrambler_on bit 0           */
 #define V22_STATUS_R20		(1 << 2)	/* dsp->r20 bit 0           */
 #define V22_STATUS_R00_OFF	(1 << 3)	/* set when dsp->r00 == 0   */
 #define V22_STATUS_R0C_OFF	(1 << 4)	/* set when dsp->r0c == 0   */

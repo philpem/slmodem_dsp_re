@@ -70,21 +70,17 @@ cid_get_strings(void *cid)
 	return ref_cid_get_strings(cid);
 }
 
-/* --- the V.22 and V.32 registration pairs (0x5360/0x53b0, 0x4bb0/0x4bf0),
- *     for prop_dp_init/prop_dp_exit -------------------------------------- */
-
-extern int ref_dp_v22_init(void);
-extern void ref_dp_v22_exit(void);
-
-int
-dp_v22_init(void)
-{
-	return ref_dp_v22_init();
-}
-
-void
-dp_v22_exit(void)
-{
-	ref_dp_v22_exit();
-}
-
+/* --- BOTH registration pairs are gone, and this note is what is left ---
+ *
+ * V.22's pair (`dp_v22_init`/`dp_v22_exit`) and V.32's (0x4bb0/0x4bf0) were
+ * both bridged here for `prop_dp_init`/`prop_dp_exit`.  `src/pump/v22/v22.c`
+ * and `src/pump/v32/v32.c` now define all four themselves, so both bridges
+ * are deleted rather than left to collide -- the "WHEN A BRIDGED SYMBOL IS
+ * RECONSTRUCTED" paragraph above, taken twice.
+ *
+ * They were removed by two different agents on two branches, each deleting
+ * only its own pair, so the merge conflicted with one bridge surviving on
+ * each side and BOTH had to go.  A resolution that took either side entire
+ * would have kept a bridge whose symbol is now defined in `src/`, and the
+ * period link would have said `multiple definition`.
+ * ------------------------------------------------------------------------ */

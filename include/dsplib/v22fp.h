@@ -10,6 +10,7 @@
  * Reconstructed from dsplibs.o:
  *   V22FP_create   .text 0x087990  2,449 bytes
  *   V22FP_delete   .text 0x088330    332 bytes
+ *   V22FP_modem    .text 0x0887b0    346 bytes
  *
  * THE ALLOCATION TREE.  Three allocations deep, and every size is a literal
  * in `V22FP_create`'s `sysdep_malloc` calls:
@@ -50,9 +51,16 @@
  * follow: a field gets a name only where an instruction forces its meaning.
  * A pointer handed to `FPM_SDM_init` is a `struct fpm_sdm` and there is
  * nothing else it could be; a word set to 1 and read by nothing is `rNN`.
- * Most of this object is still `rNN`, and that is the honest state of it --
- * `V22FP_process` and the seven `V22_PROTOCOL` handlers are what would give
- * the rest meaning, and none of them is reconstructed.
+ * Much of this object is still `rNN`, and that is the honest state of it.
+ *
+ * ELEVEN OF THEM HAVE SINCE BEEN NAMED, by the readers this header was
+ * waiting for: `V22FP_modem` and the seven `V22_PROTOCOL` handlers are all
+ * reconstructed now.  `params.tx_gain`, `params.carrier_loss_ms`,
+ * `hdx.node_deadline`, `hdx.connect_substate`, `hdx.protocol`, `hdx.trained`,
+ * `hdx.rx_shift`, `hdx.carrier_loss_blocks`, `dsp.scrambler_on`,
+ * `dsp.descrambler_on` and the reading of `status` as a MESSAGE CODE, each
+ * with its evidence beside it below.  Findings F8526, F8531, F8534 and
+ * F8600-F8605.
  */
 
 #ifndef DSPLIB_V22FP_H
@@ -98,11 +106,13 @@ struct v22fp_cfg {
 	 */
 	int rate;		/* +0x04 */
 	int f08;		/* +0x08 copied to params.r08 and thence to
-				 *       hdx.r04.  60000 from v22_create     */
+				 *       hdx.node_deadline.  60000 from
+				 *       v22_create                         */
 	int f0c;		/* +0x0c bit 0 -> params.flags bit 10        */
-	int f10;		/* +0x10 low 16 bits -> params.r18.  700     */
+	int f10;		/* +0x10 low 16 bits -> the object's
+				 *       params.carrier_loss_ms.  700       */
 	int f14;		/* +0x14 bit 0 -> params.flags bit 11, which
-				 *       forces hdx.r0e to 0 whatever the
+				 *       forces hdx.protocol to 0 whatever the
 				 *       mode selected                       */
 	int f18;		/* +0x18 bit 0 -> params.flags bit 9         */
 };
@@ -124,8 +134,8 @@ struct v22fp_cfg {
  * free column).
  */
 struct v22fp_params {
-	short mode;		/* +0x00 0, 1 or 2; selects hdx.r0e and the
-				 *       (r2c, r2e) pair in the DSP block    */
+	short mode;		/* +0x00 0, 1 or 2; selects hdx.protocol and
+				 *       the (r2c, r2e) pair in the DSP block */
 	short bps;		/* +0x02 1200 or 2400                       */
 	/*
 	 * +0x04 is UNCONDITIONALLY a copy of +0x02 -- the store runs on every
@@ -135,7 +145,13 @@ struct v22fp_params {
 	short bps2;		/* +0x04                                    */
 	short r06;		/* +0x06 template 0                         */
 	int r08;		/* +0x08 <- cfg.f08; template 120000        */
-	int r0c;		/* +0x0c template 13014; read by nothing    */
+	/*
+	 * +0x0c is the TRANSMIT OUTPUT GAIN, Q15.  `V22FP_modem` multiplies
+	 * every one of its 160 output samples by it and shifts right 15
+	 * (finding F8600), and the template's 13014 is 0.397.  It was "read
+	 * by nothing" until that function was reconstructed.
+	 */
+	int tx_gain;		/* +0x0c template 13014                     */
 	/*
 	 * +0x10 is a bit set.  Bits 0, 1 and 2 come from the template and are
 	 * copied out into three ints in the DSP block; bits 9, 10 and 11 are
@@ -156,7 +172,14 @@ struct v22fp_params {
 	 * table it is loaded from, which is the only evidence there is.
 	 */
 	short disconnect_thresh; /* +0x16                                   */
-	short r18;		/* +0x18 <- (short)cfg.f10; template 0      */
+	/*
+	 * +0x18 is the CARRIER-LOSS GRACE TIME in milliseconds, named by the
+	 * author's own format string: "V22_MSG_NO_CARRIER won't be reported
+	 * (carrier_loss_time %d of %d ms)" prints `20 * hdx->carrier_loss_
+	 * blocks` against this (finding F8531).  `v22_create` passes 700,
+	 * which is 35 blocks of ReadGTimer's 20 ms.
+	 */
+	short carrier_loss_ms;	/* +0x18 <- (short)cfg.f10; template 0      */
 	short r1a;		/* +0x1a template 0                         */
 };
 
@@ -171,17 +194,36 @@ struct v22fp_params {
 struct v22fp_hdx {
 	int gtimer;		/* +0x00 the shared millisecond clock, zeroed
 				 *       by create.  V22_OBJ_GTIMER         */
-	int r04;		/* +0x04 <- params.r08                      */
+	/*
+	 * +0x04 is the current node's DEADLINE, in milliseconds on
+	 * `ReadGTimer`'s clock: every node of the connect family compares the
+	 * timer against it, unsigned (findings F8531 and F8532).
+	 * `v22_create`'s 60000 is that deadline, 3000 blocks.
+	 */
+	int node_deadline;	/* +0x04 <- params.r08                      */
 	short r08;		/* +0x08 init 0                             */
 	short r0a;		/* +0x0a init 0                             */
-	short r0c;		/* +0x0c init 0                             */
 	/*
-	 * +0x0e is 1, 2 or 3 for modes 0, 1 and "anything else", and is then
-	 * forced to 0 if `params.flags` bit 11 is set.  Nothing reconstructed
-	 * reads it, so it keeps its offset for a name.
+	 * +0x0c is the SUB-STATE within the protocol state below.
+	 * `connect_2400` prints NODE_2400A..NODE_2400D on entering 8, 9, 10
+	 * and 11, read two independent ways that agree (F8531);
+	 * `V22FP_modem` clears it with the state on any connect code (F8600).
 	 */
-	short r0e;		/* +0x0e                                    */
-	int r10;		/* +0x10 init 0                             */
+	short connect_substate;	/* +0x0c init 0                             */
+	/*
+	 * +0x0e is the PROTOCOL STATE: the index `V22FP_modem` uses into
+	 * `V22_PROTOCOL`, sign-extended and unchecked, and the index
+	 * `V22_status` uses into its own parallel table.  1, 2 or 3 for modes
+	 * 0, 1 and "anything else", then forced to 0 -- `v22_data` -- if
+	 * `params.flags` bit 11 is set.  Findings F8529 and F8534;
+	 * v22status.h has the whole mapping.
+	 */
+	short protocol;		/* +0x0e                                    */
+	/*
+	 * +0x10 latches `RxTrained1200`/`RxTrained2400`'s verdict and is
+	 * tested `== 1` (finding F8531).
+	 */
+	int trained;		/* +0x10 init 0                             */
 	/*
 	 * The four sub-objects, named for the configuration each is built
 	 * with.  `FPM_TONE_create` and `FPM_MTD_create` take the existing
@@ -204,13 +246,24 @@ struct v22fp_hdx {
 	int r2c;		/* +0x2c init 0                             */
 	short r30;		/* +0x30 init 0x2454                        */
 	short r32;		/* +0x32 init 0                             */
-	short r34;		/* +0x34 init 0                             */
+	/*
+	 * +0x34 is the RECEIVE INPUT RIGHT SHIFT: `V22FP_modem` stages every
+	 * input sample as `(short)((int)in[i] >> rx_shift)`, with the count
+	 * loaded `movzwl` (finding F8600).
+	 */
+	short rx_shift;		/* +0x34 init 0                             */
 	/*
 	 * NOT written by create.  Six bytes rather than a shape, because
 	 * nothing reconstructed reads any of it.
 	 */
 	unsigned char r36[6];	/* +0x36 .. +0x3b                           */
-	int r3c;		/* +0x3c init 0                             */
+	/*
+	 * +0x3c counts CONSECUTIVE CARRIER-LESS BLOCKS.  The author's format
+	 * string prints `20 * this` -- ReadGTimer's own block length -- as
+	 * "carrier_loss_time %d of %d ms" against `params.carrier_loss_ms`,
+	 * so the string and the timer agree on what a block is (F8531).
+	 */
+	int carrier_loss_blocks; /* +0x3c init 0                            */
 };
 
 /*
@@ -235,8 +288,17 @@ struct v22fp_dsp {
 	 */
 	int eq_adapt;		/* +0x10 init 1                             */
 	int r14;		/* +0x14 init 0                             */
-	int r18;		/* +0x18 <- params.flags bit 0              */
-	int r1c;		/* +0x1c <- params.flags bit 1              */
+	/*
+	 * +0x18 and +0x1c are the transmit scrambler's and the receive
+	 * descrambler's enables.  `ScramblerOn` returns the first and
+	 * `DescramblerOn` the second; `V22FP_control` writes exactly those
+	 * two from bits 0 and 1 of one control byte, and create derives both
+	 * from `params.flags` bits 0 and 1.  Two accessors whose names say
+	 * what they answer, over two fields a third function sets from two
+	 * adjacent bits -- finding F8526.
+	 */
+	int scrambler_on;	/* +0x18 <- params.flags bit 0              */
+	int descrambler_on;	/* +0x1c <- params.flags bit 1              */
 	int r20;		/* +0x20 <- params.flags bit 2              */
 	unsigned char r24[4];	/* +0x24 not written by create              */
 	/*
@@ -336,11 +398,18 @@ struct v22fp {
 	struct v22fp_params params;	/* +0x00 .. +0x1b                   */
 	/*
 	 * +0x1c .. +0x1f are cleared as one 32-bit word and then two bytes of
-	 * it are set.  `status` and `flags` are b103fp.h's names for the two
-	 * bytes in the same place in the same author's other datapump, and
-	 * the shape is identical -- a byte set to 1 at the end of create and
-	 * a flags byte that gets 0x40 -- so the analogy is recorded here and
-	 * is NOT evidence.  Nothing reconstructed reads either.
+	 * it are set.  `status` and `flags` were b103fp.h's names for the two
+	 * bytes in the same place in the same author's other datapump, taken
+	 * on the analogy and recorded as NOT evidence; the name is now the
+	 * author's own.  `.rodata.str1.1` at 0x5eb is `v22: V22STAT: --> %d`,
+	 * printed by `v22_process` on this byte, so it is a MESSAGE CODE
+	 * rather than a state -- 3 is V22_MSG_CONNECT_2400, 4 the 1200
+	 * connect, 16 V22_MSG_NO_CARRIER, 23 V22_MSG_ERROR7 (findings F8531
+	 * and F8601).
+	 *
+	 * `V22FP_modem` reads these four bytes BOTH ways: the low byte three
+	 * times, and all four as one 32-bit word for its return value
+	 * (F8600).  Both readings are the original's.
 	 */
 	unsigned char status;		/* +0x1c set to 1 by create         */
 	unsigned char flags;		/* +0x1d |= 0x40                    */
@@ -383,6 +452,25 @@ struct v22fp *V22FP_create(struct v22fp *fp, const struct v22fp_cfg *cfg);
  * `V22FP_create(NULL, ...)` did not build.
  */
 void V22FP_delete(struct v22fp *fp);
+
+/*
+ * One block of the modulation: stage the caller's words and samples into the
+ * three file-static buffers, dispatch through `V22_PROTOCOL[hdx->protocol]`, take
+ * the symbol count back, copy the symbols out, and scale V22_TX_BLOCK
+ * transmit samples by `params.tx_gain` in Q15.
+ *
+ * `n_tx` and `n_rx` are the CALLER'S counts and are `int`; the handlers' pair
+ * is `unsigned short` and lives on V22FP_modem's own stack (finding F8534).
+ * Only `*n_rx` is written back, and it is forced to zero unless `fp->status`
+ * is zero.
+ *
+ * Returns the whole 32-bit word at fp+0x1c -- status in the low byte, flags
+ * in the next -- exactly as `B103FP_modem` does.  `v22_process` reads only
+ * the low byte of it, and that is the caller's business rather than this
+ * function's (finding F8538).
+ */
+int V22FP_modem(struct v22fp *fp, const int *tx_bits, short *tx_out,
+		const short *rx_in, int *rx_bits, int *n_tx, int *n_rx);
 
 /*
  * The equaliser's diagnostic hook, reached from outside without knowing

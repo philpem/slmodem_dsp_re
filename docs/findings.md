@@ -97689,3 +97689,490 @@ buffer a callee can WRITE gets one copy per side, and "can write" is settled by
 the declared parameter type, not by what the function is called. `t_v32cfg.c`
 already does this for `FPM_AGC_agc`'s in-place gain buffer; this is the same
 thing at a point where the buffer reads like a pure input.
+**THE WAVE HAS SINCE LANDED. Read F8600-F8604 next**, and F8602 for what
+happened to this entry's divergence.
+
+### F8600. The V.22 lifecycle lands: `V22FP_modem` is a marshalling layer with one piece of policy in it, and the policy is the machine's own state transition
+
+`V22FP_modem` (0x887b0, 346 bytes) is the only caller of the seven-state
+`V22_PROTOCOL` machine, and it is seven movements long:
+
+  1. seed two SIXTEEN-BIT counts on its own stack from the caller's `int`
+     pair -- the transmit one at `esp+0x2a`, the receive one at `esp+0x28`,
+     adjacent;
+  2. clear three bits of `fp->flags` and one of `fp->r1e[0]` (`andb $0xf8`,
+     `andb $0xfd`); what they indicate is established by nothing and they
+     stay masks;
+  3. stage the transmit words, int to short, into `tx_in_internal`
+     (`.bss` 0x3a0, 100 entries);
+  4. stage the input samples, arithmetically right-shifted by `hdx->r34`,
+     into `rx_in_internal` (`.bss` 0x560, 160 entries) -- `movswl`, then `sar`
+     by a `movzwl` count;
+  5. dispatch `V22_PROTOCOL[hdx->r0e]`, sign-extended and with no bounds
+     check, and write the handler's receive count back;
+  6. copy that many entries of `rx_out_internal` (`.bss` 0x480, 100) out to
+     the caller's `int` array, `movzwl` per entry;
+  7. scale exactly `V22_TX_BLOCK` = 160 transmit samples by `params.r0c` in
+     Q15, and then force the receive count to zero for any non-zero
+     `fp->status`.
+
+**The transmit count is never written back.** Only the receive one is.
+Whatever the handler leaves in its own transmit count is dropped, which is the
+object's and not an omission in the reconstruction.
+
+**THE STATE TRANSITION IS HERE AND IN NO HANDLER.** Between 5 and 6 the object
+tests the status byte twice, in this order and re-reading it between them: 3 or
+4, then 6, 7 or 8; either sets `hdx->r0e = 0` and `hdx->r0c = 0`, which is the
+`v22_data` state with its sub-state cleared. With 3 fixed as
+`V22_MSG_CONNECT_2400` and 4 fixed as the 1200 connect (F8601), that reads as
+"any connect code enters the data state". F8534 named this; this is the
+committed form of it.
+
+**Two field names follow, and both are class-2 evidence -- a caller that types
+the field.** `params.r0c` is the transmit output gain: v22fp.h had it as
+"template 13014; read by nothing", and 13014/32768 is 0.397. `hdx->r34` is the
+receive input right shift.
+
+**The return is the whole 32-bit word at fp+0x1c and this is MEASURED, not
+argued.** The object emits `mov 0x1c(%ebp),%eax` where a byte field would force
+a `movzbl`, and reads the same four bytes as a BYTE three times in the lines
+above it. A draft had argued that no test could separate the two readings
+because `v22_process` only looks at the low byte; the test separated them on
+the first call, 0 against 17664 (F8538). `B103FP_modem` does the same thing and
+`src/pump/b103/b103fp.c`'s `memcpy` into an `int` is the spelling reused here.
+
+`t_v22dp.c` and `t_v22modem.c` are the tests; both are green under `make one`.
+
+### F8601. `v22_process`'s jump table has seventeen entries, status 4 is the 1200 connect, and the second argument to `modem_get_bits` is the WORD WIDTH rather than a channel
+
+`v22_process` (0x5130, 557 bytes) translates the low byte of what
+`V22FP_modem` returns through a jump table at `.rodata` + 0x21c:
+
+    0                -> DPSTAT_OK
+    1                -> DPSTAT_OK, and tx_bits_wanted = 0
+    3                -> DPSTAT_CONNECT, bits_per_word = 4, 2400 bit/s each way
+    4                -> DPSTAT_CONNECT, bits_per_word = 2, 1200 bit/s each way
+    everything else  -> DPSTAT_ERROR
+
+**So status 4 is the 1200 connect**, which F8531 left unnamed and which nothing
+in `.rodata` prints. What names it is this caller: two bits per word and
+`modem_set_param(MDMPRM_TX_RATE, 1200)` beside the 2400 arm for 3.
+`include/dsplib/v22.h` spells it `V22_MSG_CONNECT_1200`.
+
+**THE TABLE'S LENGTH IS EVIDENCE AND THE CASE LABELS ARE NOT.** Seventeen
+entries with a `cmp $0x10; ja` in front means the highest case label the author
+wrote was 16, with twelve of the seventeen landing on the same block as
+`default`. 16 is `V22_MSG_NO_CARRIER`, so it is spelt as an explicit case
+falling into the default -- but any assignment of the twelve dead labels is
+behaviourally identical, and what the object forces is only that a label at 16
+exists. Recorded so a later reader does not take the spelling for a derivation.
+
+**Four differences from `b103_process`, all of them the object's:**
+
+  - the second argument to `modem_get_bits` and `modem_put_bits` is
+    `self->bits_per_word`, not a literal channel number. slmodemd spells that
+    parameter `nbits`; b103 passes 1 because Bell 103 carries one bit per
+    symbol, and V.22 passes 2 or 4 for the same reason. The two are the same
+    quantity, not two conventions.
+  - `modem_put_bits` is called UNCONDITIONALLY, even with a count of zero:
+    when `tx_bits_wanted` is zero the object sets the receive count to zero
+    and falls into the same call rather than branching round it.
+  - the widening loop runs from `n - 1` down to 0 (`mov %eax,%edx; jmp .test;
+    .test: dec %edx; jns .body`), where `b103_process`'s really does start at
+    `n`. Two different loops in the same shape; both are reproduced as written.
+  - the line rate is reported on EVERY connecting block, not only on the
+    transition into one. There is no edge test in this function at all; the
+    only thing conditioned on a change is the `v22: V22STAT: --> %d` message.
+
+The receive-count clamp is `cmp $0x64; jbe`, i.e. UNSIGNED against
+`V22_BIT_BUFFER`, and its format string names the variable the author used:
+`v22: FATAL: rx_len is huge (%d).`
+
+### F8602. F8538's divergence does not reproduce, and what AGREED in it is what localises it
+
+The experiment F8538 declined on -- two graphs from `V22FP_create`, `hdx->r0e`
+swept 0..6 and `hdx->r0c` 0..7, one block driven from each of the fifty-six
+starting states -- is `test/unit/t_v22modem.c`, re-run against this
+reconstruction. It is **green over 16,745 checks**, and what it compares is a
+superset of what that attempt did: the return, both counts, the 160 transmit
+samples, **the whole 100-entry receive array rather than the first reported
+entries**, the three structs with pointers blanked, and all twenty-eight heap
+regions.
+
+**The whole-array comparison matters and is the point.** `V22FP_modem` forces
+the receive count to zero for any non-zero status AFTER the copy-out, so a test
+that compares only what the count reports compares nothing on most states --
+which is the "channel the test cannot see" F8538 named without being able to
+close.
+
+**What the old symptom rules in.** It was: ours holding `V22_CLAMP_VALUE`
+where the reference held 0, with the return, both counts, the transmit block,
+all three structs and all twenty-eight heap regions AGREEING. Those five
+agreeing is a strong statement: the handler ran, wrote the same bytes into the
+same objects, and reported the same counts on both sides. **The only step left
+that can differ is the copy-out itself** -- its bound, or the buffer it reads
+from. `tx_in_internal` holds the caller's data words, which in that sweep were
+small integers including 15, and it sits 224 bytes from `rx_out_internal` in
+the same `.bss`; a copy-out reading the wrong one of the three statics
+reproduces every observable of that report. That is a bounded conclusion, not
+a diagnosis: the code was never committed and is not in the tree, so what it
+actually did cannot be established.
+
+**Two candidate defects were injected and neither has that signature**, which
+is what rules them out rather than an argument:
+
+  - moving the zeroing of the receive count AHEAD of the copy-out fires (2,248
+    of 16,745 checks) but with the polarity reversed -- ours holds the test's
+    poison and the REFERENCE holds the 15s;
+  - permuting `V22_PROTOCOL` (entries 1 and 2 swapped) fires (4,617 checks)
+    but diverges the TRANSMIT samples too, which F8538 recorded as agreeing.
+
+The permutation is worth its own sentence for a different reason: F8538 read
+"exclude the failing table entry and the next one fails" as the tell that an
+exclusion hides a defect, and it is -- but a permuted dispatch table produces
+exactly that pattern, because every entry is then wrong and removing one only
+exposes the next. The reading was right; the shape it points at is a defect
+that is uniform across the table, not one specific to an entry.
+
+**RETRACTED IN PART, THE SAME DAY, AND THE RETRACTION IS THE FINDING (F8608).**
+Both injections above were run under `make one`, i.e. GCC 14 -- and GCC 14 is
+the compiler that HIDES this test's real divergence. Under `make period` the
+same tree fails `t_v22modem` in the TRANSMIT SAMPLES, which is precisely the
+observable the second bullet used as its discriminator. So:
+
+  - "a permuted `V22_PROTOCOL` diverges the transmit samples, and F8538 said
+    they agreed" **is not an elimination.** F8538's transmit-sample agreement
+    was, on the evidence available, also a `make one` measurement, and this
+    tree has now measured that transmit samples can agree under GCC 14 in
+    exactly these poked states while diverging under GCC 3.4.2. A permuted
+    table is back among the live hypotheses for that attempt.
+  - What still holds without any compiler behind it is that THIS wave's table
+    is right: its order is read off seven `R_386_32` relocations at
+    `.rodata` + 0x8544 naming the seven handlers, which is the object and not
+    an inference.
+  - The first bullet's elimination survives, because its discriminator is a
+    POLARITY (which side holds the poison) rather than a value, and a polarity
+    cannot be reversed by a code generator.
+
+**The general lesson, and it is the one CLAUDE.md's "Gate on `make period`"
+section already states from the other direction:** an elimination is only as
+good as the tier it was measured on, and a GREEN modern tier is not evidence
+about the code. Every "X is ruled out because observable Y agreed" needs the
+compiler named beside it, exactly as `compare.py`'s numbers do.
+
+### F8603. `v22_create`, `v22_delete` and `v22_process` are file-static, and the already-committed `v22_delete` was not
+
+`nm` shows a lower-case `t` for all three and an upper-case `T` for
+`dp_v22_init` and `dp_v22_exit` -- exactly `b103.c`'s split, from the same
+author. `v22_delete` was committed GLOBAL in an earlier wave, when nothing else
+in `v22.c` existed and `t_v22del.c` had to be able to name it. It is `static`
+now.
+
+**This is codegen-visible, not cosmetic.** GCC 3.4 gives a static function
+`regparm(2)` when it can see every call site, so an `extern` copy is compiled
+with a different calling convention from the object's -- the same argument
+F8462 makes for `GetGain`, `EchoCanceler` and `bValidateEnergyValue`.
+
+Both tests reach all three the way the modem core does: `t_v22del.c` and
+`t_v22dp.c` call `dp_v22_init`, take the `struct dp_operations *` the harness
+recorded, and go through `create` and `destroy`; `v22_process` is not in that
+table at all -- `process` there is `dp_wrapper_run` -- so it is read back out
+of the wrapper the datapump built. That is `t_b103dp.c`'s method (F8121) and
+it is more honest than a direct call, not less.
+
+`v22_ops` (`.data` 0x78, 24 bytes) is likewise LOCAL, and
+`test/harness/unwritten.c`'s bridge for `dp_v22_init`/`dp_v22_exit` is deleted
+rather than left to collide -- which is that file's own "WHEN A BRIDGED SYMBOL
+IS RECONSTRUCTED" paragraph, taken. `t_dpinit.c`'s asymmetry shrinks from two
+unwritten datapumps to one, which it was written to survive.
+
+### F8604. `t_v22dp.c` drives V.22 as a LINK, because V.22 will not acquire from a tone
+
+`t_b103dp.c` drives Bell 103 with a single sine at the far end's mark
+frequency and that is enough: FSK acquisition needs no handshake. V.22 does --
+600-baud QPSK, the far end's scrambler running, and a seven-node machine with
+deadlines on `ReadGTimer`'s 20 ms clock -- so a tone produces a datapump that
+sits in one state for the whole run and a test that proves two implementations
+agree about doing nothing.
+
+The stimulus is therefore the OTHER STATION: a second datapump created with
+the opposite `caller`, cross-connected, one block of loop delay each way. Four
+instances run per block -- our originator and answerer, the blob's originator
+and answerer -- with the halves of each pair connected only to each other.
+Over 400 blocks the reference originator fetches bits 312 times, hands back
+3,744 data words, reports a line rate, and its status byte takes three
+distinct values; 138,767 checks and no divergence.
+
+**The four instances share the three `.bss` staging buffers on each side**,
+because they are file-static in the object and file-static here. Running the
+two stations in a fixed order per block is what keeps both sides seeing the
+same sharing, and it is the object's own re-entrancy rather than a limitation
+of the test.
+
+The anti-vacuity guards are named for what they would have caught: without
+"the machine moved", "the data path ran" and "words were handed back", a pair
+of datapumps that never left state 1 passes every other check in the file.
+
+### F8605. The eleven queued `v22fp.h` renames are applied, and the COMPILER was the oracle that found the sites
+
+F8526, F8531 and F8534 each established field names and each deferred the
+rename for the same scheduling reason -- three to five V.22 reconstructions in
+flight against one base commit, and a rename touching all of them is a merge
+conflict waiting to happen. The branches have landed, so the eleven are
+applied in one pass:
+
+    struct v22fp_params  r0c -> tx_gain               F8534, F8600
+                         r18 -> carrier_loss_ms       F8531
+    struct v22fp_hdx     r04 -> node_deadline         F8531
+                         r0c -> connect_substate      F8531
+                         r0e -> protocol              F8529, F8534
+                         r10 -> trained               F8531
+                         r34 -> rx_shift              F8534, F8600
+                         r3c -> carrier_loss_blocks   F8531
+    struct v22fp_dsp     r18 -> scrambler_on          F8526
+                         r1c -> descrambler_on        F8526
+    struct v22fp         status: the COMMENT, from b103fp.h's analogy to the
+                         author's own `v22: V22STAT: --> %d`   F8531, F8601
+
+**A TEXTUAL SWEEP CANNOT DO THIS AND MUST NOT BE USED.** Six of the ten old
+names are spelt identically on more than one struct in the same files:
+`dsp->r0c` and `hdx->r0c` both occur, `fse.r18` and `dsp->r18` both occur, and
+`fp->r34` is `struct v22fp`'s own field and not `hdx`'s. `sed` renames all of
+them. What was done instead is to rename the DECLARATION and let `gcc
+-fsyntax-only` name every site it broke: 136 in `src/`, 115 in the tests, and
+the struct in each error message is what says which of the two `r0c`s it is.
+
+**The tests needed a second pass for a reason worth writing down.** Five of
+them build a local `struct scenario` / `scen` / `poke` whose members MIRROR
+the fields they are poked into, so `a->hdx->r04 = s->r04` has the same
+identifier on both sides and a line-oriented fix renames the mirror too. Those
+were renamed as well, which is what the tests should have; the two sites the
+compiler still rejected afterwards (`s->r0e != KEEP`, `if (s->r18 != 0)`) are
+exactly the ones where the mirror appeared WITHOUT the field beside it.
+
+**And the pass is proved to be nothing but a rename.** Reverse-mapping the ten
+new names back to the old ones in the ten `src/pump/v22/*.c` files and
+comparing against `git show HEAD:` is byte-identical for all ten, so no
+statement, constant or type moved with them. A macro or field renaming is a
+compile-time substitution and `compare.py` cannot budge; that is the check the
+period tier still owes, and it is the only one outstanding.
+
+### F8606. `make check64` was already red on `master`, on seven ungated offset assertions in `src/pump/v22/v22.c`
+
+`v22.c`'s six `V22FP_ASSERT_OFF`s and its `sizeof` assertion went in with no
+`#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4` around them, and
+`struct v22_dp` begins with a `struct dp` that holds three pointers -- so at 64
+bits every offset moves and all seven arrays get a negative size.
+
+**It is inherited, not introduced.** `git show 321a56e5:src/pump/v22/v22.c`
+compiled with `SYNCFLAGS` gives the same seven errors, so the wave that added
+the file left `make check64` red and `make phase` with it. What made it easy
+to miss is that the file's OWN COMMENT described the guard -- "compiled only
+under the 32-bit ABI these offsets describe... the guard is on the pointer size
+the preprocessor can actually compute" -- while no `#if` existed. That is
+findings F6100 and F6103's defect exactly: a comment asserting a property
+nothing checks.
+
+Fixed here, since `v22.c` is this wave's file. `tools/assertlive.py` now counts
+1,711 assertions that exist only at 32 bits (was 1,710) and `make check64`
+reports clean in both configurations.
+
+### F8607. A `diff_begin` group's ten-line cap made a 3,192-check failure unattributable, and the fix is a per-case line the cap cannot reach
+
+`t_v22modem.c` drives fifty-six starting states inside ONE `diff_begin` group.
+When the period tier failed it, the report was ten lines naming ten SAMPLE
+INDICES and not one of the fifty-six cases they came from:
+
+    test/unit/t_v22modem.c:398: tx sample[8]  got 0, reference 5205
+    FAIL V22FP_modem over every V22_PROTOCOL state 3192/16745 checks failed
+
+Three thousand failures, and nothing in the output says which state, which
+sub-state, or how many cases were involved. The label carried the array index
+because that is what varies INSIDE a case; what varies BETWEEN cases was in a
+loop variable the label never saw.
+
+Two fixes, and the second is the one that generalises:
+
+  - every label now names the case -- `st 4 sub 2: tx sample[%ld]` -- built
+    with `snprintf`, including the labels `compare_graphs` passes to
+    `diff_eq_obj` and `cmp_raw`;
+  - **a `printf` summary line per case, which no cap can suppress**: the two
+    returns, both counts on both sides, both status bytes, the number of
+    differing transmit samples with the first index and its two values, and the
+    number of differing receive words. Fifty-six lines, and they turn "3,192
+    checks failed" into a map of which states diverge and by how much.
+
+**The general rule: a group whose members are CASES needs the case in the
+label, or its cap destroys exactly the information the failure is about.** The
+tree already knows a detector must report its denominator (F134, F2401); this
+is the same argument about which of many inputs the denominator covers. A test
+that sweeps a domain should print one line per point of that domain
+unconditionally, because the cap exists for the flood and the map is not the
+flood.
+
+The arithmetic in that first report is itself worth keeping, because it
+identifies the failure without any further instrumentation: the reference's
+5205 is the TEST'S OWN POISON scaled by the transmit gain --
+`(0x3333 * 13014) >> 15 == 5205` -- so the blob's handler wrote nothing to
+those samples and ours wrote zeros over them.
+
+### F8608. The V.22 lifecycle FAILS the period gate, and the compiler is the whole variable: GCC 14 is green at `-O2` AND at the period flag set
+
+`make period` reports `t_v22modem` FAIL, 3,192 of 16,745 checks, `period
+differential: 294 passed, 1 failed`. `make one` is green. The first thing to
+establish was whether that is an OPTIMISATION difference this tree could
+reproduce locally, and it is not:
+
+    make one T=t_v22modem                                   PASS
+    make one T=t_v22modem CFLAGS="... -O3 -march=i386 -mtune=i686
+        -mno-ieee-fp -frename-registers -fomit-frame-pointer
+        -maccumulate-outgoing-args"                         PASS
+
+So GCC 14 given the period compiler's own flags still cannot see it. The
+variable is the compiler itself, which puts the defect in the class of things
+a code generator is free to change: an uninitialised local, a strict-aliasing
+assumption, or stack layout.
+
+**THE POPULATION IS IDENTIFIED, AND IT IS EXACTLY THE CASES WHERE NEITHER SIDE
+WRITES THE TRANSMIT BLOCK.** With `tx[0]` printed unconditionally on both
+sides, the GCC-14 map shows **nineteen of the fifty-six cases reading
+5205/5205** -- the untouched poison, on both sides:
+
+    state 1 (v22_originate)   sub 2, 7
+    state 2 (v22_answer)      sub 2, 5, 6, 7
+    state 3 (v22_local_loop)  sub 4, 5, 6, 7
+    state 4 (v22_org_rmloop2) sub 3, 4, 5, 6, 7
+    state 5 (v22_ans_rmloop2) sub 4, 5, 6, 7
+
+and 19 x 160 = 3,040 of the period tier's 3,192 failing checks. Every one is a
+HIGH sub-state -- an arm off the end of that handler's own dispatch, reachable
+only by poking `hdx->connect_substate` -- and states 0 (`v22_data`) and 6
+(`v22_retrain`) contribute none.
+
+So the failing behaviour is: on arms where the blob's handler writes NOTHING to
+the transmit block, ours writes zeros over it, under GCC 3.4.2 and not under
+GCC 14. `TxNOP` is the only thing in the tree that writes 160 zeros there, and
+it is called from `v22loop.c` and `v22org.c` only -- which does not cover
+states 4 and 5, so either more than one mechanism is in play or the zeros come
+from somewhere else. **It was somewhere else: F8609 is the answer, and it is
+not `TxNOP`.**
+
+### F8609. `V22FP_modem`'s copy-out is UNBOUNDED, and a handler arm that never touches `*rxcount` makes it copy the input SAMPLE count out of a 100-entry buffer
+
+The loop at 0x888a7 is
+
+    for (i = 0; i < *n_rx; i++) rx_bits[i] = rx_out_internal[i];
+
+and `*n_rx` is its ONLY bound -- there is no `cmp $0x64` anywhere in
+`V22FP_modem`, unlike `v22_process`, which does clamp and whose format string
+calls the value `rx_len`. The count goes IN as the input SAMPLE count and is
+supposed to come back as a SYMBOL count; `rx_out_internal` is 100 entries
+(`nm`: 0xc8 bytes at `.bss` 0x480) and a 20 ms block is 160 samples.
+
+**So any handler arm that returns without setting `*rxcount` leaves 160 there,
+and the copy-out reads sixty entries past the end of `rx_out_internal` and
+writes sixty past the end of the caller's array.** Nineteen of `t_v22modem`'s
+fifty-six poked states do exactly that -- the high sub-states of states 1 to 5,
+each one an arm off the end of that handler's own dispatch, `v22_local_loop`'s
+being a literal `default: break;` with nothing in it.
+
+**IT IS THE OBJECT'S BEHAVIOUR, NOT OURS, AND THE NUMBER IS EXACT.** Counting
+the entries each side actually wrote, over all fifty-six cases:
+
+    36 cases   both sides wrote 12 entries
+     1 case    both sides wrote 13
+    19 cases   both sides wrote 160        <- 60 past rx_out_internal's 100
+
+160 is the input sample count handed in, unchanged, and 160 - 100 = 60 is the
+overrun. The blob does it identically, which is what says this is reproduced
+rather than introduced -- and a sixteen-element guard past every buffer is
+clean on all fifty-six once the destination is sized for it.
+
+**A CAUTION ABOUT THE INSTRUMENTATION ITSELF, because it nearly inverted this
+conclusion.** The first version of that `printf` had two arguments in the wrong
+order against its format, and it rendered as `over 60/0` -- which reads as "the
+reference does not overrun", i.e. as a defect in ours rather than a faithful
+reproduction. The numbers were real and the LABELS were wrong. A diagnostic
+added to settle a question is apparatus like any other and gets the same
+treatment: check it against a case whose answer you already know before
+believing what it says about one you do not.
+
+**AND IT IS WHY A COMPILER DECIDED THE VERDICT (F8608).** The test declared
+`int rx_a[100]`, so both sides' sixty-int overruns landed 240 bytes outside the
+array, in whatever the compiler had put next. GCC 14's `.bss` layout absorbed
+them harmlessly and the test passed; GCC 3.4.2's put the TRANSMIT buffer in the
+way, so our side's overrun wrote zeros over `out_a` before `V22FP_modem`'s gain
+loop scaled it -- giving `ours 0, reference 5205`, where 5205 is the untouched
+poison scaled by the gain. Every observable of F8608's report follows from
+that one sentence, and nothing in `src/` is wrong.
+
+**The fix is sizing, not scoping.** The destination is now `4 * FRAG` ints with
+the guard past it, which is what the API can demand rather than what a
+well-behaved handler happens to return; the guards stay and are asserted, so
+the next overrun is a named failure instead of a compiler-dependent verdict.
+The comparison covers the 100 entries backed by real `rx_out_internal` storage.
+**Entries at index 100 and above are compared by nothing, and that exclusion is
+provable rather than convenient**: they are the object's own out-of-bounds
+READ, so their value is whatever its `.bss` neighbour holds -- 0x548..0x560 is
+padding and 0x560 is `rx_in_internal` in the blob, and something else in any
+other object. Two different objects have two different neighbours, necessarily
+and for ever. That is CLAUDE.md's "two heap pointers hold two different
+addresses and always will", and unlike F8538's rejected exclusion it does not
+MOVE when you move it -- 100 is `nm`'s number, not a number chosen to make a
+case pass.
+
+**AND IT IS PROBABLY WHAT F8538 DECLINED ON, WHICH WOULD MEAN THAT WAVE'S CODE
+WAS NEVER WRONG.** F8602 reasoned that with the return, both counts, the
+transmit block, the structs and the heap all agreeing, "the only step left that
+can differ is the copy-out itself -- its bound, or the buffer it reads from".
+That was right, and the answer is its BOUND. Now put F8538's symptom beside
+this mechanism: ours holding `V22_CLAMP_VALUE` -- 15, which is exactly what
+`RxClampV22` leaves in the first twelve entries of `rx_out_internal` -- where
+the reference held 0, with every other observable agreeing. An unbounded
+copy-out from a too-small destination scatters those 15s into whichever test
+array the linker put next, on one side and not necessarily the other; and
+"exclude the failing entry and the next one fails" is what damage that moves
+with layout looks like. Every element of that report is accounted for.
+
+**IT IS AN INFERENCE FROM A SYMPTOM, NOT A MEASUREMENT, AND IT STAYS ONE UNTIL
+SOMEBODY RUNS THIS.** The settling experiment, stated so it can be executed
+rather than argued:
+
+    recover wave 2's uncommitted V22FP_modem, change NOTHING in it, enlarge
+    only its test's receive destination to hold the input SAMPLE count, and
+    run that binary under `make period`.
+
+Green settles it: the code was correct and the fixture was not. Red refutes it
+and names a real defect in that implementation. **Neither outcome is available
+from anything in the tree today**, because that code was never committed --
+recovering it means finding the session's worktree if it still exists. If it
+does not, re-deriving the function tests a NEW implementation rather than
+theirs, which is not the same claim and must not be reported as if it were.
+
+**What IS measured is weaker and worth separating from it.** This wave
+established that the pattern EXISTS -- a correct `V22FP_modem`, a fixture whose
+destination was 240 bytes too small, and a period report reading `ours 0,
+reference 5205` that looked exactly like a defect in `src/` (F8608). That makes
+F8538 an instance of a demonstrated failure mode rather than of a hypothetical
+one. It does not make it an instance.
+
+The lesson is not "commit it anyway" -- declining was right on the evidence
+they had, and this entry does not second-guess it. It is that **when every
+observable but one agrees, suspect the apparatus's buffers before the
+reconstruction's logic**, and that a differential fixture must be sized for
+what the API can return rather than for what a well-behaved callee does.
+
+**THE SERVICE-SIDE COROLLARY IS A LATENT HEAP OVERFLOW IN THE ORIGINAL, AND IT
+HAS A DEVIATION ROW: D956.** That row carries the reachability argument, the
+fix form and the apparatus consequence; what follows here is the short version.
+`v22_process` hands `self->rx_bits`, which is `int[100]` and the LAST member of
+the `sysdep_malloc`'d `struct v22_dp`, with `count` = 160. If any reachable
+handler arm ever returned without setting `*rxcount`, `V22FP_modem` would write
+sixty ints past the end of that allocation -- and `v22_process`'s own clamp
+cannot help, because it runs on the value AFTER `V22FP_modem` has already
+copied and, for a non-zero status, zeroed it. Nothing reaches it in service:
+`t_v22dp` drives a full cross-connected handshake for 400 blocks and passes the
+period gate, and every arm a live machine visits sets the count. Recorded
+because it is the original's, because it is one poked sub-state away, and
+because it is the reason this test needed a buffer four times the size of the
+one a reasonable reading would have given it.

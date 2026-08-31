@@ -71,7 +71,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->r0c) {
+	switch (fp->hdx->connect_substate) {
 	case V22_NODE_2400A:
 		/* Training at 1200: send ones, receive, clamp, wait. */
 		MakeTxData((short *)txsym, (const short *)txcount,
@@ -90,7 +90,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "connect_2400, NODE_2400B\n");
-			fp->hdx->r0c = V22_NODE_2400B;
+			fp->hdx->connect_substate = V22_NODE_2400B;
 			SetRxRate(fp, V22_RATE_2400);
 		}
 		break;
@@ -113,7 +113,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "connect_2400, NODE_2400C\n");
-			fp->hdx->r0c = V22_NODE_2400C;
+			fp->hdx->connect_substate = V22_NODE_2400C;
 			SetTxRate(fp, V22_RATE_2400);
 			SetAdaptEqV22(fp, 3);
 		}
@@ -133,15 +133,15 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*rxcount = nsym;
 		DescrambleDataV22(fp, rxsym, nsym);
 
-		if (fp->hdx->r10 == 0)
-			fp->hdx->r10 = RxTrained2400((const short *)rxsym,
+		if (fp->hdx->trained == 0)
+			fp->hdx->trained = RxTrained2400((const short *)rxsym,
 						     rxcount);
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		now = (unsigned int)ReadGTimer(fp);
 		if (now > V22_NODE_2400C_MS) {
-			if (fp->hdx->r10 == 1) {
+			if (fp->hdx->trained == 1) {
 				fp->flags |= V22FP_FLAGS_CONNECT;
 				fp->status = V22_MSG_CONNECT_2400;
 				if (DSPLIB_DEBUG_ON())
@@ -150,7 +150,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 					    "NODE_2400C\n");
 			} else {
 				fp->hdx->gtimer = 0;
-				fp->hdx->r0c = V22_NODE_2400D;
+				fp->hdx->connect_substate = V22_NODE_2400D;
 			}
 		}
 		break;
@@ -158,7 +158,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 	case V22_NODE_2400D:
 		/*
 		 * The last node tests the verdict fresh on every block rather
-		 * than latching it, and its deadline is `hdx->r04` -- the
+		 * than latching it, and its deadline is `hdx->node_deadline` -- the
 		 * caller's own limit, 60000 ms as `v22_create` configures it.
 		 */
 		MakeTxData((short *)txsym, (const short *)txcount,
@@ -181,7 +181,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		now = (unsigned int)ReadGTimer(fp);
-		if (now > (unsigned int)fp->hdx->r04) {
+		if (now > (unsigned int)fp->hdx->node_deadline) {
 			fp->flags |= V22FP_FLAGS_TIMEOUT;
 			fp->status = V22_MSG_ERROR7;
 			if (DSPLIB_DEBUG_ON())
@@ -203,13 +203,13 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		 * the grace window rather than never having been lost.  That
 		 * is a retrain, not a connect.
 		 */
-		if (fp->hdx->r3c != 0) {
-			fp->hdx->r0e = V22_HDX_R0E_RETRAIN;
-			fp->hdx->r0c = V22_NODE_RETRAIN;
+		if (fp->hdx->carrier_loss_blocks != 0) {
+			fp->hdx->protocol = V22_HDX_R0E_RETRAIN;
+			fp->hdx->connect_substate = V22_NODE_RETRAIN;
 			SetAdaptEqV22(fp, 1);
 			HDX_R38(fp->hdx) = V22_HDX_R38_RETRAIN;
 			fp->status = V22_STATUS_0B;
-			fp->hdx->r3c = 0;
+			fp->hdx->carrier_loss_blocks = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "Carrier back during carrier_loss_time "
@@ -218,9 +218,9 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 		return;
 	}
 
-	fp->hdx->r3c++;
-	elapsed = (short)(fp->hdx->r3c * V22_BLOCK_MS);
-	if (fp->params.r18 < elapsed) {
+	fp->hdx->carrier_loss_blocks++;
+	elapsed = (short)(fp->hdx->carrier_loss_blocks * V22_BLOCK_MS);
+	if (fp->params.carrier_loss_ms < elapsed) {
 		fp->status = V22_MSG_NO_CARRIER;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_MSG_NO_CARRIER3\n");
@@ -231,7 +231,7 @@ connect_2400(struct v22fp *fp, unsigned short *txsym, short *txout,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V22_MSG_NO_CARRIER won't be reported "
 				     "(carrier_loss_time %d of %d ms)",
-				     (int)elapsed, (int)fp->params.r18);
+				     (int)elapsed, (int)fp->params.carrier_loss_ms);
 }
 
 /* ------------------------------------------------------------------------ */
@@ -247,7 +247,7 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 
 	fp->status = V22_STATUS_01;
 
-	switch (fp->hdx->r0c) {
+	switch (fp->hdx->connect_substate) {
 	case V22_NODE_1200_12:
 		/*
 		 * The latching node: `r10` takes the first verdict and the
@@ -263,21 +263,21 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 		*rxcount = nsym;
 		DescrambleDataV22(fp, rxsym, nsym);
 
-		if (fp->hdx->r10 == 0)
-			fp->hdx->r10 = RxTrained1200((const short *)rxsym,
+		if (fp->hdx->trained == 0)
+			fp->hdx->trained = RxTrained1200((const short *)rxsym,
 						     rxcount);
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		now = (unsigned int)ReadGTimer(fp);
 		if (now > V22_NODE_1200_12_MS) {
-			if (fp->hdx->r10 == 1) {
+			if (fp->hdx->trained == 1) {
 				SetAdaptEqV22(fp, 3);
 				fp->flags |= V22FP_FLAGS_CONNECT;
 				fp->status = V22_STATUS_04;
 			} else {
 				fp->hdx->gtimer = 0;
-				fp->hdx->r0c = V22_NODE_1200_13;
+				fp->hdx->connect_substate = V22_NODE_1200_13;
 			}
 		}
 		break;
@@ -311,7 +311,7 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 
 		now = (unsigned int)ReadGTimer(fp);
-		if (now > (unsigned int)fp->hdx->r04) {
+		if (now > (unsigned int)fp->hdx->node_deadline) {
 			fp->flags |= V22FP_FLAGS_TIMEOUT;
 			fp->status = V22_STATUS_18;
 		}
@@ -328,9 +328,9 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 	if (CarrierDetect(fp))
 		return;
 
-	fp->hdx->r3c++;
-	elapsed = (short)(fp->hdx->r3c * V22_BLOCK_MS);
-	if (fp->params.r18 < elapsed) {
+	fp->hdx->carrier_loss_blocks++;
+	elapsed = (short)(fp->hdx->carrier_loss_blocks * V22_BLOCK_MS);
+	if (fp->params.carrier_loss_ms < elapsed) {
 		fp->status = V22_MSG_NO_CARRIER;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V22_MSG_NO_CARRIER4\n");
@@ -341,5 +341,5 @@ connect_1200(struct v22fp *fp, unsigned short *txsym, short *txout,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("V22_MSG_NO_CARRIER won't be reported "
 				     "(carrier_loss_time %d of %d ms)",
-				     (int)elapsed, (int)fp->params.r18);
+				     (int)elapsed, (int)fp->params.carrier_loss_ms);
 }

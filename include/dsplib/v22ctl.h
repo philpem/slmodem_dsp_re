@@ -22,7 +22,7 @@
  * WHAT `ScramblerOn` AND `DescramblerOn` SETTLE, AND WHAT THIS FILE DOES NOT
  * DO ABOUT IT
  *
- * `ScramblerOn` returns `dsp->r18` and `DescramblerOn` returns `dsp->r1c`,
+ * `ScramblerOn` returns `dsp->scrambler_on` and `DescramblerOn` returns `dsp->descrambler_on`,
  * and `V22FP_control` sets exactly those two from bits 0 and 1 of its control
  * byte.  Two accessors whose names say what they answer, reading two fields
  * that a third function sets from two adjacent bits, is the "a caller or
@@ -61,8 +61,8 @@ struct v22fp_ctl {
  * `flags_0c`.  Four single bits, each landing on a field the constructor also
  * writes, plus one that goes back into the parameter block.
  */
-#define V22_CTL_SCRAMBLER	(1 << 0)	/* -> dsp->r18, ScramblerOn   */
-#define V22_CTL_DESCRAMBLER	(1 << 1)	/* -> dsp->r1c, DescramblerOn */
+#define V22_CTL_SCRAMBLER	(1 << 0)	/* -> dsp->scrambler_on, ScramblerOn   */
+#define V22_CTL_DESCRAMBLER	(1 << 1)	/* -> dsp->descrambler_on, DescramblerOn */
 #define V22_CTL_EQ_THIRD	(1 << 2)	/* -> dsp->r20                */
 /*
  * INVERTED: `dsp->agc.f18` is set to 1 when this bit is CLEAR.  `fpm_agc.h`
@@ -83,15 +83,15 @@ struct v22fp_ctl {
 
 /*
  * `flags_0d` carries one flag and one two-bit field, and they are checked in
- * that order.  Both write the same PAIR of half-duplex words -- `hdx->r0e`
- * and `hdx->r0c` -- so the second overwrites the first when both apply.
+ * that order.  Both write the same PAIR of half-duplex words -- `hdx->protocol`
+ * and `hdx->connect_substate` -- so the second overwrites the first when both apply.
  *
  * The two-bit field is bits 7:6 and only the value 2 does anything; the
  * object shifts the whole byte right by six and compares, so bit 7 set with
  * bit 6 clear is the case that fires.  A width and a shift rather than a flag
  * name, because it is not a single bit.
  *
- * WHAT THE TWO VALUES SELECT IS SETTLED, and not by this function.  `hdx->r0e`
+ * WHAT THE TWO VALUES SELECT IS SETTLED, and not by this function.  `hdx->protocol`
  * is the index `V22FP_modem` uses into `V22_PROTOCOL`, a seven-entry table of
  * the seven V.22 protocol handlers; the relocations name them, so 6 is
  * `v22_retrain` and 4 is `v22_org_rmloop2` (finding F8529).  So this byte's

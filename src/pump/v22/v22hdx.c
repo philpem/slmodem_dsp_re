@@ -65,7 +65,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 	fp->status = 2;
 
-	switch (fp->hdx->r0c) {
+	switch (fp->hdx->connect_substate) {
 	case 0:
 		/*
 		 * Send scrambled ones at whatever rate is current and wait for
@@ -90,7 +90,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		if (fp->hdx->r08 != 0 && added == 0) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0c = 1;
+			fp->hdx->connect_substate = 1;
 			SetAdaptEqV22(fp, 2);
 		}
 
@@ -99,8 +99,8 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 			SetTxRate(fp, V22_RATE_2400);
 			SetRxRate(fp, V22_RATE_2400);
 			SetAdaptEqV22(fp, 3);
-			fp->hdx->r0e = 0;
-			fp->hdx->r0c = 0;
+			fp->hdx->protocol = 0;
+			fp->hdx->connect_substate = 0;
 		}
 		break;
 
@@ -116,7 +116,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		fp->hdx->gtimer = 0;
 		fp->hdx->r08 = 0;
 		fp->hdx->r0a = 0;
-		fp->hdx->r0c = 2;
+		fp->hdx->connect_substate = 2;
 		ResetRx(fp);
 		SetTxRate(fp, V22_RATE_1200);
 		SetRxRate(fp, V22_RATE_1200);
@@ -149,7 +149,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_S1)
-			fp->hdx->r0c =
+			fp->hdx->connect_substate =
 				(short)(3 + (V22_HDX_R38(fp->hdx) != 1));
 		break;
 
@@ -175,7 +175,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		if (fp->hdx->r08 != 0 && added == 0) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0c = 4;
+			fp->hdx->connect_substate = 4;
 			SetAdaptEqV22(fp, 2);
 		}
 
@@ -201,7 +201,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_ONES1200) {
 			SetRxRate(fp, V22_RATE_2400);
-			fp->hdx->r0c = 5;
+			fp->hdx->connect_substate = 5;
 		}
 		break;
 
@@ -221,7 +221,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_DESCR1200) {
 			SetTxRate(fp, V22_RATE_2400);
-			fp->hdx->r0c = 6;
+			fp->hdx->connect_substate = 6;
 		}
 		break;
 
@@ -238,7 +238,7 @@ v22_retrain(struct v22fp *fp, unsigned short *txdata, short *txout,
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
 		if ((unsigned int)ReadGTimer(fp) > V22_RETRAIN_T_ONES2400) {
 			SetAdaptEqV22(fp, 3);
-			fp->hdx->r0c = 7;
+			fp->hdx->connect_substate = 7;
 		}
 		break;
 
@@ -289,7 +289,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 	fp->r1e[0] |= 0x02;
 	fp->status = 1;
 
-	switch (fp->hdx->r0c) {
+	switch (fp->hdx->connect_substate) {
 	case 0:
 		/*
 		 * Entry: clear the clock, the pattern timer and the "equaliser
@@ -298,7 +298,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		 */
 		fp->hdx->gtimer = 0;
 		fp->hdx->r08 = 0;
-		fp->hdx->r10 = 0;
+		fp->hdx->trained = 0;
 		SetAdaptEqV22(fp, 1);
 
 		MakeTxData((short *)txdata, (const short *)txcount,
@@ -313,7 +313,7 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 				fp->params.bps2);
 
 		RxClampV22(fp, rxin, (short *)rxsym, (short *)rxcount);
-		fp->hdx->r0c = 1;
+		fp->hdx->connect_substate = 1;
 		break;
 
 	case 1:
@@ -338,23 +338,23 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 		if ((unsigned short)fp->hdx->r08 > V22_RMLOOP2_PATTERN_MS) {
 			fp->hdx->gtimer = 0;
 			fp->hdx->r08 = 0;
-			fp->hdx->r0c = 2;
+			fp->hdx->connect_substate = 2;
 			if (ack == 0) {
-				fp->hdx->r10 = 1;
+				fp->hdx->trained = 1;
 				SetAdaptEqV22(fp, 3);
 			}
 		}
 		if ((unsigned int)ReadGTimer(fp) > V22_RMLOOP2_TIMEOUT_MS) {
 			SetAdaptEqV22(fp, 3);
-			fp->hdx->r0e = 0;
-			fp->hdx->r0c = 0;
+			fp->hdx->protocol = 0;
+			fp->hdx->connect_substate = 0;
 		}
 		break;
 
 	case 2:
 		/*
 		 * Looped: send SCRAMBLED ones and descramble what comes back,
-		 * which is the loop closing.  `hdx->r10` remembers that the
+		 * which is the loop closing.  `hdx->trained` remembers that the
 		 * equaliser has already been told to adapt, so the
 		 * acknowledgement is only looked for until it has been.
 		 *
@@ -369,11 +369,11 @@ v22_org_rmloop2(struct v22fp *fp, unsigned short *txdata, short *txout,
 
 		*rxcount = DemodDataV22(fp, rxin, rxsym, *rxcount);
 		if (*rxcount != 0) {
-			if (fp->hdx->r10 == 0
+			if (fp->hdx->trained == 0
 			    && Detect_Rmloop2_ACK(
 				       rxsym, (const unsigned short *)rxcount,
 				       fp->params.bps2) == 0) {
-				fp->hdx->r10 = 1;
+				fp->hdx->trained = 1;
 				SetAdaptEqV22(fp, 3);
 			}
 			DescrambleDataV22(fp, rxsym, *rxcount);

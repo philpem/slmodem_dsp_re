@@ -19,11 +19,11 @@
  *     `V22_FSE_receive`'s loop body never runs and `fse.mse` survives the
  *     call; `GetSignalQuality` inside `v22_data` then reports exactly the
  *     value the test poked, and both arms of the retrain-level comparison
- *     become reachable by assignment.  `hdx->r08`, `hdx->r3c` and
+ *     become reachable by assignment.  `hdx->r08`, `hdx->carrier_loss_blocks` and
  *     `hdx->gtimer` are the handlers' own state and are poked the same way.
  *     Three of those pokes carry values a working modem never reaches, and
  *     they are here on purpose: every comparison against `hdx->r08`,
- *     `hdx->r3c * 20` and `ReadGTimer`'s return is UNSIGNED in the object,
+ *     `hdx->carrier_loss_blocks * 20` and `ReadGTimer`'s return is UNSIGNED in the object,
  *     and a negative input is the only thing that tells that reading apart
  *     from a signed one.  Without them four otherwise-correct sign mutants
  *     survive.
@@ -525,9 +525,9 @@ static long saw_loss_reported, saw_loss_pending;
 static long saw_debug_lines;
 
 /*
- * The quiet sweep.  `hdx->r0e` is left at what `V22FP_create` chose and the
+ * The quiet sweep.  `hdx->protocol` is left at what `V22FP_create` chose and the
  * input is silence, so `DemodDataV22` takes its disconnect return; that is
- * what makes `fse.mse`, `hdx->r08`, `hdx->r3c` and `hdx->gtimer` pokeable
+ * what makes `fse.mse`, `hdx->r08`, `hdx->carrier_loss_blocks` and `hdx->gtimer` pokeable
  * inputs rather than callee outputs.
  */
 static int
@@ -537,7 +537,7 @@ run_data_quiet(void)
 	/* -40 is the entry whose value after the step has bit 15 set. */
 	static const short r08s[] = { -40, 0, 100, 2980, 3000 };
 	/*
-	 * The negative is not a modem state -- `hdx->r3c` only ever counts
+	 * The negative is not a modem state -- `hdx->carrier_loss_blocks` only ever counts
 	 * up -- but the bit 11 arm's comparison against `params.r08` is
 	 * UNSIGNED in the object (`ja`), and a negative product is the only
 	 * input that tells that reading apart from a signed one.
@@ -572,15 +572,15 @@ run_data_quiet(void)
 			b->dsp->fse.mse = mses[mi];
 			a->hdx->r08 = r08s[ri];
 			b->hdx->r08 = r08s[ri];
-			a->hdx->r3c = r3cs[ci];
-			b->hdx->r3c = r3cs[ci];
+			a->hdx->carrier_loss_blocks = r3cs[ci];
+			b->hdx->carrier_loss_blocks = r3cs[ci];
 			a->hdx->gtimer = 0;
 			b->hdx->gtimer = 0;
 			/* The three enable words behind st.flags 0..2. */
-			a->dsp->r18 = (en >> 0) & 1;
-			b->dsp->r18 = (en >> 0) & 1;
-			a->dsp->r1c = (en >> 1) & 1;
-			b->dsp->r1c = (en >> 1) & 1;
+			a->dsp->scrambler_on = (en >> 0) & 1;
+			b->dsp->scrambler_on = (en >> 0) & 1;
+			a->dsp->descrambler_on = (en >> 1) & 1;
+			b->dsp->descrambler_on = (en >> 1) & 1;
 			a->dsp->r20 = (en >> 2) & 1;
 			b->dsp->r20 = (en >> 2) & 1;
 			/*
@@ -623,7 +623,7 @@ run_data_quiet(void)
 			} else {
 				saw_no_bit11++;
 			}
-			if (a->dsp->r18 & 1)
+			if (a->dsp->scrambler_on & 1)
 				saw_scramble++;
 			else
 				saw_no_scramble++;
@@ -654,10 +654,10 @@ run_data_quiet(void)
 				saw_loss_reported++;
 			/*
 			 * The "won't be reported" arm: the loss timer has
-			 * started but has not reached `params.r18` yet, so
+			 * started but has not reached `params.carrier_loss_ms` yet, so
 			 * the block ends quiet with a non-zero count.
 			 */
-			if (a->hdx->r3c > 0 && a->status == 0
+			if (a->hdx->carrier_loss_blocks > 0 && a->status == 0
 			    && (a->params.flags & V22_PARAMS_BIT11) == 0)
 				saw_loss_pending++;
 			tag++;
@@ -672,7 +672,7 @@ run_data_quiet(void)
 }
 
 /*
- * The loud sweep.  `hdx->r0e` is forced non-zero so `DemodDataV22` skips its
+ * The loud sweep.  `hdx->protocol` is forced non-zero so `DemodDataV22` skips its
  * disconnect return and runs the whole chain, and the test slicer supplies
  * the symbol stream.  This is the only pass that reaches `Detect_Retrain`'s
  * firing arm, the descrambler, and the carrier-back retrain.
@@ -715,16 +715,16 @@ run_data_loud(void)
 				set_pattern(p_zero, 1);
 
 			/* Non-zero: skip DemodDataV22's disconnect return. */
-			a->hdx->r0e = 1;
-			b->hdx->r0e = 1;
-			a->hdx->r3c = r3cs[ci];
-			b->hdx->r3c = r3cs[ci];
+			a->hdx->protocol = 1;
+			b->hdx->protocol = 1;
+			a->hdx->carrier_loss_blocks = r3cs[ci];
+			b->hdx->carrier_loss_blocks = r3cs[ci];
 			a->dsp->fse.decision = test_decision;
 			b->dsp->fse.decision = test_decision;
-			a->dsp->r18 = (en >> 0) & 1;
-			b->dsp->r18 = (en >> 0) & 1;
-			a->dsp->r1c = (en >> 1) & 1;
-			b->dsp->r1c = (en >> 1) & 1;
+			a->dsp->scrambler_on = (en >> 0) & 1;
+			b->dsp->scrambler_on = (en >> 0) & 1;
+			a->dsp->descrambler_on = (en >> 1) & 1;
+			b->dsp->descrambler_on = (en >> 1) & 1;
 			a->dsp->r20 = (en >> 2) & 1;
 			b->dsp->r20 = (en >> 2) & 1;
 			/*
@@ -772,11 +772,11 @@ run_data_loud(void)
 				saw_retrain_req++;
 			if (a->status == V22_ST_RETRAIN && r3cs[ci] > 14)
 				saw_carrier_back++;
-			if (a->dsp->r1c & 1)
+			if (a->dsp->descrambler_on & 1)
 				saw_descramble++;
 			else
 				saw_no_descramble++;
-			if (a->hdx->r3c > 0 && a->status == 0)
+			if (a->hdx->carrier_loss_blocks > 0 && a->status == 0)
 				saw_loss_pending++;
 			if (a->status == V22_ST_NO_CARRIER)
 				saw_loss_reported++;
@@ -863,22 +863,22 @@ run_rmloop2(void)
 			else
 				set_pattern(p_zero, 1);
 
-			a->hdx->r0c = pre_r0c;
-			b->hdx->r0c = pre_r0c;
+			a->hdx->connect_substate = pre_r0c;
+			b->hdx->connect_substate = pre_r0c;
 			a->hdx->gtimer = gtimers[gi];
 			b->hdx->gtimer = gtimers[gi];
 			a->hdx->r08 = r08s[ri];
 			b->hdx->r08 = r08s[ri];
-			a->hdx->r10 = 0;
-			b->hdx->r10 = 0;
+			a->hdx->trained = 0;
+			b->hdx->trained = 0;
 			/*
 			 * Non-zero so the loud pass reaches the equaliser;
 			 * the quiet pass takes the disconnect return either
 			 * way, because silence fails the level check when the
 			 * check runs and produces no symbols when it does not.
 			 */
-			a->hdx->r0e = loud ? 1 : 0;
-			b->hdx->r0e = loud ? 1 : 0;
+			a->hdx->protocol = loud ? 1 : 0;
+			b->hdx->protocol = loud ? 1 : 0;
 			a->dsp->fse.decision = test_decision;
 			b->dsp->fse.decision = test_decision;
 			a->dsp->r20 = (en >> 2) & 1;
@@ -923,12 +923,12 @@ run_rmloop2(void)
 			if (a->status == V22_ST_08)
 				saw_rm_loss_expired++;
 			if (pre_r0c == V22_RMLOOP2_DETECT
-			    && a->hdx->r0c == V22_RMLOOP2_ANSWER)
+			    && a->hdx->connect_substate == V22_RMLOOP2_ANSWER)
 				saw_rm_transition++;
 			if (pre_r0c == V22_RMLOOP2_DETECT
-			    && a->hdx->r0c == V22_RMLOOP2_DETECT)
+			    && a->hdx->connect_substate == V22_RMLOOP2_DETECT)
 				saw_rm_no_transition++;
-			if (pre_r0c == V22_RMLOOP2_DETECT && a->hdx->r10)
+			if (pre_r0c == V22_RMLOOP2_DETECT && a->hdx->trained)
 				saw_rm_detect_hit++;
 			if (pre_r0c == V22_RMLOOP2_LOOP) {
 				if (a->dsp->sre.active)

@@ -7,7 +7,11 @@
  *
  * Reconstructed from dsplibs.o:
  *
- *   v22_delete  .text 0x0050e0   72 bytes
+ *   v22_create   .text 0x004fb0  300 bytes, LOCAL
+ *   v22_delete   .text 0x0050e0   72 bytes, LOCAL
+ *   v22_process  .text 0x005130  557 bytes, LOCAL
+ *   dp_v22_init  .text 0x005360   72 bytes
+ *   dp_v22_exit  .text 0x0053b0   70 bytes
  *
  * ---------------------------------------------------------------------------
  * THE LAYOUT IS COMPLETE, AND THE ARITHMETIC IS WHAT SAYS SO
@@ -115,10 +119,38 @@ struct v22_dp {
 #define V22_DP_ID_BELL212	212
 
 /*
- * Tear one down.  Takes the `struct dp *` the core holds and reaches the
- * object back through the wrapper rather than casting directly -- see the
- * note in v22.c, which is `b103_delete`'s note too.
+ * The number of data words fetched, and handed to the modulation, per block.
+ * A literal 12 in the object at three sites: the "carry no data" arm of
+ * `v22_process` passes it straight through without fetching anything, and
+ * both connect arms install it as `tx_bits_wanted`.  Twelve words in a 20 ms
+ * block is 600 baud, which is V.22's symbol rate.
  */
-int v22_delete(struct dp *dp);
+#define V22_WORDS_PER_BLOCK	12
+
+/*
+ * Bits per data word, and the line rate reported to the core, for each of the
+ * two connect codes.  Both pairs are literals in `v22_process`.
+ */
+#define V22_BITS_PER_WORD_1200	2
+#define V22_BITS_PER_WORD_2400	4
+#define V22_LINE_RATE_1200	1200
+#define V22_LINE_RATE_2400	2400
+
+/*
+ * `V22FP_modem`'s status byte for the 1200 connect.  `v22conn.h` names 3 from
+ * the author's own "V22_MSG_CONNECT_2400 In NODE_2400C" strings; 4 has no
+ * string, and what names it is `v22_process`'s own arm -- two bits per word
+ * and 1200 bit/s each way, beside the 2400 arm for 3.  That is evidence class
+ * 2, a caller that types it, and not usage inference.  Finding F8538.
+ */
+#define V22_MSG_CONNECT_1200	4
+
+/*
+ * Register and deregister the three ids above.  The only two symbols this
+ * module exports: `v22_create`, `v22_delete` and `v22_process` are all
+ * file-static in the object and are reached through what these register.
+ */
+int dp_v22_init(void);
+void dp_v22_exit(void);
 
 #endif /* DSPLIB_V22_H */

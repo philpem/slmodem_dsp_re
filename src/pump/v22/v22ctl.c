@@ -28,8 +28,8 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 * the object shifts the loaded byte for bit 1 and masks the original
 	 * for bit 0.
 	 */
-	fp->dsp->r1c = (ctl->flags_0c >> 1) & 1;
-	fp->dsp->r18 = ctl->flags_0c & 1;
+	fp->dsp->descrambler_on = (ctl->flags_0c >> 1) & 1;
+	fp->dsp->scrambler_on = ctl->flags_0c & 1;
 
 	/*
 	 * The half-duplex pair, twice over.  The flag is tested first and the
@@ -38,12 +38,12 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 	 * observable, which is why it is not tidied into an if/else.
 	 */
 	if (ctl->flags_0d & V22_CTL_RETRAIN) {
-		fp->hdx->r0e = V22_PROTOCOL_RETRAIN;
-		fp->hdx->r0c = 1;
+		fp->hdx->protocol = V22_PROTOCOL_RETRAIN;
+		fp->hdx->connect_substate = 1;
 	}
 	if ((ctl->flags_0d >> V22_CTL_HDX_SHIFT) == V22_CTL_HDX_ORG_RMLOOP2) {
-		fp->hdx->r0e = V22_PROTOCOL_ORG_RMLOOP2;
-		fp->hdx->r0c = 0;
+		fp->hdx->protocol = V22_PROTOCOL_ORG_RMLOOP2;
+		fp->hdx->connect_substate = 0;
 	}
 
 	fp->dsp->r20 = (ctl->flags_0c >> 2) & 1;
@@ -73,11 +73,11 @@ V22FP_control(struct v22fp *fp, const struct v22fp_ctl *ctl)
 int
 ScramblerOn(struct v22fp *fp)
 {
-	return fp->dsp->r18;
+	return fp->dsp->scrambler_on;
 }
 
 int
 DescramblerOn(struct v22fp *fp)
 {
-	return fp->dsp->r1c;
+	return fp->dsp->descrambler_on;
 }

@@ -32,7 +32,7 @@
  *     template there is already holds 1.
  *   - The mask widths in the flags patch (`& 0xf3`, `& 0xfd`) are invisible:
  *     the bits they clear beyond the three being set are already zero.
- *   - `dsp->r18`, `r1c` and `r20` read bits 0, 1 and 2 of `params.flags`, and
+ *   - `dsp->scrambler_on`, `r1c` and `r20` read bits 0, 1 and 2 of `params.flags`, and
  *     create patches only bits 9, 10 and 11 -- so those three always carry the
  *     template's 1, 1, 0 and NO configuration can vary them.  With the
  *     template at 0x65b, bits 0, 1, 3, 4 and 6 all read 1 and bits 2, 5, 7 and
@@ -618,10 +618,10 @@ main(void)
 			r = (struct v22fp *)ref_V22FP_create(0, &c);
 			diff_eq_int("f08 reaches params.r08 whole",
 				    r->params.r08, 0x12345678, 0);
-			diff_eq_int("f08 reaches hdx.r04 too",
-				    r->hdx->r04, 0x12345678, 0);
-			diff_eq_int("f10 is TRUNCATED into params.r18",
-				    (unsigned short)r->params.r18, 0x2345, 0);
+			diff_eq_int("f08 reaches hdx.node_deadline too",
+				    r->hdx->node_deadline, 0x12345678, 0);
+			diff_eq_int("f10 is TRUNCATED into params.carrier_loss_ms",
+				    (unsigned short)r->params.carrier_loss_ms, 0x2345, 0);
 			diff_eq_int("and nothing lands in params.r1a",
 				    r->params.r1a, 0, 0);
 			ref_V22FP_delete(r);
@@ -702,7 +702,7 @@ main(void)
 	/*
 	 * 4. f14 bit 0 has a SECOND consequence, and it is the one that pins
 	 *    the bit to position 11 rather than a neighbour: it forces
-	 *    hdx.r0e to zero whatever the mode selected.  Checked directly
+	 *    hdx.protocol to zero whatever the mode selected.  Checked directly
 	 *    rather than through a hash, because the mechanism is the point.
 	 */
 	diff_begin("V22FP_create: flags bit 11 overrides every mode");
@@ -717,7 +717,7 @@ main(void)
 			c.mode = modes[k];
 			harness_alloc_reset();
 			r = (struct v22fp *)ref_V22FP_create(0, &c);
-			diff_eq_int("hdx.r0e with the bit clear", r->hdx->r0e,
+			diff_eq_int("hdx.protocol with the bit clear", r->hdx->protocol,
 				    want[k], k);
 			diff_eq_int("params.flags bit 11 is clear",
 				    (r->params.flags >> 11) & 1, 0, k);
@@ -726,7 +726,7 @@ main(void)
 			c.f14 = 1;
 			harness_alloc_reset();
 			r = (struct v22fp *)ref_V22FP_create(0, &c);
-			diff_eq_int("hdx.r0e with the bit set", r->hdx->r0e, 0,
+			diff_eq_int("hdx.protocol with the bit set", r->hdx->protocol, 0,
 				    k);
 			diff_eq_int("params.flags bit 11 is set",
 				    (r->params.flags >> 11) & 1, 1, k);

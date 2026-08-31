@@ -21,11 +21,11 @@
  * t_v22conn.c already make; the comparison is unaffected because the two sides
  * start each block from the same state.
  *
- *   1. `hdx->r0c` selects the node, so each arm can be entered without walking
+ *   1. `hdx->connect_substate` selects the node, so each arm can be entered without walking
  *      the whole ladder.  Values with no case fall through to the epilogue
  *      with nothing but the status byte written.
  *
- *   2. `hdx->gtimer`, `hdx->r04`, `hdx->r08`, `hdx->r0a`, `hdx->r2c` and
+ *   2. `hdx->gtimer`, `hdx->node_deadline`, `hdx->r08`, `hdx->r0a`, `hdx->r2c` and
  *      `hdx->r32` are the counters the arms compare against.  Poking them per
  *      block -- the `repoke` column -- makes each comparison land exactly
  *      where the probe wants it.  NOTE that `hdx->gtimer` only ever presents
@@ -65,7 +65,7 @@
  *      cancel both tap terms; `SetRxRate` recomputes the pair from the taps,
  *      so it is re-applied every block.  The `descram` column picks.
  *
- *   7. `hdx->r0e` IS WHAT MAKES `DemodDataV22` RETURN ZERO.  Its disconnect
+ *   7. `hdx->protocol` IS WHAT MAKES `DemodDataV22` RETURN ZERO.  Its disconnect
  *      check runs only while `r0e` is 0, and then a block whose `FPM_rms` is
  *      below `params.disconnect_thresh` returns no symbols at all.  That is
  *      the only lever on the `*rxcount != 0` test, whose operand is the
@@ -393,14 +393,14 @@ struct scenario {
 	int mode;		/* V22FP_create mode                        */
 	int rate;		/* V22FP_create rate: 0 -> 2400, 1 -> 1200  */
 	int f0c;		/* -> params.flags bit 10 -> st.flags2 bit 0*/
-	short node;		/* hdx->r0c poked before the first block    */
+	short node;		/* hdx->connect_substate poked before the first block    */
 	int gtimer;		/* hdx->gtimer, or KEEP                     */
-	int r04;		/* hdx->r04, the give-up deadline           */
+	int node_deadline;	/* hdx->node_deadline, the give-up one     */
 	int r08;		/* hdx->r08, or KEEP                        */
 	int r0a;		/* hdx->r0a, or KEEP                        */
 	int r2c;		/* hdx->r2c, or KEEP                        */
 	int r32;		/* hdx->r32, or KEEP                        */
-	int r0e;		/* hdx->r0e, or KEEP                        */
+	int protocol;		/* hdx->protocol, or KEEP                  */
 	int bps2;		/* params.bps2, or 0 to leave it            */
 	int repoke;		/* re-apply the counters every block        */
 	int force;		/* forced symbol, or -1 for the real slicer */
@@ -726,8 +726,8 @@ poke_counters(struct v22fp *fp, const struct scenario *s)
 		fp->hdx->r2c = s->r2c;
 	if (s->r32 != KEEP)
 		fp->hdx->r32 = (short)s->r32;
-	if (s->r0e != KEEP)
-		fp->hdx->r0e = (short)s->r0e;
+	if (s->protocol != KEEP)
+		fp->hdx->protocol = (short)s->protocol;
 }
 
 static void
@@ -749,14 +749,14 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 
 	switch (node_before) {
 	case V22_ANS_NODE_0:
-		if (a->hdx->r0c == V22_ANS_NODE_1)
+		if (a->hdx->connect_substate == V22_ANS_NODE_1)
 			saw_n0_txnop++;
-		else if (a->hdx->r0c == V22_ANS_NODE_3)
+		else if (a->hdx->connect_substate == V22_ANS_NODE_3)
 			saw_n0_data++;
 		break;
 
 	case V22_ANS_NODE_1:
-		if (a->hdx->r0c == V22_ANS_NODE_SILENCE_AFTER_2100)
+		if (a->hdx->connect_substate == V22_ANS_NODE_SILENCE_AFTER_2100)
 			saw_n1_done++;
 		else
 			saw_n1_wait++;
@@ -768,9 +768,9 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 		else
 			saw_n3_notone++;
 
-		if (a->hdx->r0c == V22_ANS_NODE_4)
+		if (a->hdx->connect_substate == V22_ANS_NODE_4)
 			saw_n3_v22bis++;
-		else if (a->hdx->r0c == V22_NODE_1200_12)
+		else if (a->hdx->connect_substate == V22_NODE_1200_12)
 			saw_n3_v22++;
 		else if (status_after == V22_MSG_ERROR5)
 			saw_n3_error5++;
@@ -781,7 +781,7 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 		 * The counters are only readable when no verdict fired -- both
 		 * verdicts zero the pair on the way out.
 		 */
-		if (a->hdx->r0c == node_before
+		if (a->hdx->connect_substate == node_before
 		    && status_after != V22_MSG_ERROR5) {
 			short r08 = a->hdx->r08;
 			short r0a = a->hdx->r0a;
@@ -808,7 +808,7 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 		break;
 
 	case V22_ANS_NODE_4:
-		if (a->hdx->r0c == V22_NODE_2400A)
+		if (a->hdx->connect_substate == V22_NODE_2400A)
 			saw_n4_done++;
 		else
 			saw_n4_wait++;
@@ -827,7 +827,7 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 		break;
 
 	case V22_ANS_NODE_SILENCE_AFTER_2100:
-		if (a->hdx->r0c == V22_ANS_NODE_3)
+		if (a->hdx->connect_substate == V22_ANS_NODE_3)
 			saw_silence_done++;
 		else
 			saw_silence_tick++;
@@ -835,7 +835,7 @@ cover_answer(struct v22fp *a, short node_before, short r08_before,
 
 	default:
 		saw_default[0]++;
-		diff_eq_int("no-case arm left r0c alone", a->hdx->r0c,
+		diff_eq_int("no-case arm left connect_substate alone", a->hdx->connect_substate,
 			    node_before, tag);
 		diff_eq_int("no-case arm set status", a->status,
 			    V22_STATUS_01, tag);
@@ -851,12 +851,12 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 
 	switch (node_before) {
 	case V22_ORG_NODE_0:
-		if (a->hdx->r0c == V22_ORG_NODE_1)
+		if (a->hdx->connect_substate == V22_ORG_NODE_1)
 			saw_o_n0++;
 		break;
 
 	case V22_ORG_NODE_1:
-		if (a->hdx->r0c == V22_ORG_NODE_3)
+		if (a->hdx->connect_substate == V22_ORG_NODE_3)
 			saw_o_n1_det++;
 		else
 			saw_o_n1_wait++;
@@ -870,9 +870,9 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 		else
 			saw_o_n3_nosym++;
 
-		if (a->hdx->r0c == V22_ORG_NODE_4) {
+		if (a->hdx->connect_substate == V22_ORG_NODE_4) {
 			saw_o_n3_done++;
-			if (a->hdx->r34 != r34_before)
+			if (a->hdx->rx_shift != r34_before)
 				saw_o_n3_mean_hi++;
 			else
 				saw_o_n3_mean_lo++;
@@ -884,14 +884,14 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 		break;
 
 	case V22_ORG_NODE_4:
-		if (a->hdx->r0c == V22_ORG_NODE_5)
+		if (a->hdx->connect_substate == V22_ORG_NODE_5)
 			saw_o_n4_done++;
 		else
 			saw_o_n4_wait++;
 		break;
 
 	case V22_ORG_NODE_5:
-		if (a->hdx->r0c == V22_ORG_NODE_6)
+		if (a->hdx->connect_substate == V22_ORG_NODE_6)
 			saw_o_n5_done++;
 		else
 			saw_o_n5_wait++;
@@ -914,16 +914,16 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 		break;
 
 	case V22_ORG_NODE_6:
-		if (a->hdx->r0c == V22_NODE_2400A)
+		if (a->hdx->connect_substate == V22_NODE_2400A)
 			saw_o_n6_v22bis++;
-		else if (a->hdx->r0c == V22_NODE_1200_12)
+		else if (a->hdx->connect_substate == V22_NODE_1200_12)
 			saw_o_n6_v22++;
 		else if (status_after == V22_MSG_ERROR4)
 			saw_o_n6_error4++;
 		else
 			saw_o_n6_nothing++;
 
-		if (a->hdx->r0c == node_before
+		if (a->hdx->connect_substate == node_before
 		    && status_after != V22_MSG_ERROR4) {
 			short r08 = a->hdx->r08;
 			short r0a = a->hdx->r0a;
@@ -957,7 +957,7 @@ cover_originate(struct v22fp *a, short node_before, short r08_before,
 
 	default:
 		saw_default[1]++;
-		diff_eq_int("no-case arm left r0c alone", a->hdx->r0c,
+		diff_eq_int("no-case arm left connect_substate alone", a->hdx->connect_substate,
 			    node_before, tag);
 		diff_eq_int("no-case arm set status", a->status,
 			    V22_STATUS_01, tag);
@@ -981,10 +981,10 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 	unsigned short tc_a, tc_b, rc_a, rc_b;
 	int blk;
 
-	a->hdx->r0c = s->node;
-	b->hdx->r0c = s->node;
-	a->hdx->r04 = s->r04;
-	b->hdx->r04 = s->r04;
+	a->hdx->connect_substate = s->node;
+	b->hdx->connect_substate = s->node;
+	a->hdx->node_deadline = s->node_deadline;
+	b->hdx->node_deadline = s->node_deadline;
 	poke_counters(a, s);
 	poke_counters(b, s);
 	if (s->bps2 != 0) {
@@ -1038,11 +1038,11 @@ run_scenario(const struct scenario *s, int which, long *tagp)
 		tc_a = tc_b = TXSYMS;
 		rc_a = rc_b = BLOCK;
 
-		node_before = a->hdx->r0c;
+		node_before = a->hdx->connect_substate;
 		r08_before = a->hdx->r08;
 		r0a_before = a->hdx->r0a;
 		r32_before = a->hdx->r32;
-		r34_before = a->hdx->r34;
+		r34_before = a->hdx->rx_shift;
 		gtimer_before = a->hdx->gtimer;
 		note_node(which, node_before);
 

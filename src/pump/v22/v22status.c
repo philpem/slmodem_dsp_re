@@ -16,7 +16,7 @@
 
 /*
  * LOCAL in the object, so `static` here.  Seven entries, indexed by
- * `hdx->r0e` with no bounds check; see the header on what the values are not
+ * `hdx->protocol` with no bounds check; see the header on what the values are not
  * known to mean.
  */
 static const short PROTOCOL[7] = {
@@ -28,7 +28,7 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 {
 	int err;
 
-	st->protocol = PROTOCOL[fp->hdx->r0e];
+	st->protocol = PROTOCOL[fp->hdx->protocol];
 
 	st->tx_bps = fp->dsp->r28 != 0 ? V22_STATUS_BPS_2400
 				       : V22_STATUS_BPS_1200;
@@ -57,9 +57,9 @@ V22_status(struct v22fp *fp, struct v22_status *st)
 
 	/* One bit at a time, whole byte stored each time; see the header. */
 	st->flags = (unsigned char)((st->flags & ~V22_STATUS_SCRAMBLER)
-				    | (fp->dsp->r18 & 1));
+				    | (fp->dsp->scrambler_on & 1));
 	st->flags = (unsigned char)((st->flags & ~V22_STATUS_DESCRAMBLER)
-				    | ((fp->dsp->r1c & 1) << 1));
+				    | ((fp->dsp->descrambler_on & 1) << 1));
 	st->flags = (unsigned char)((st->flags & ~V22_STATUS_R20)
 				    | ((fp->dsp->r20 & 1) << 2));
 	st->flags = (unsigned char)((st->flags & ~V22_STATUS_R00_OFF)
