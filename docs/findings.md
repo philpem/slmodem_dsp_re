@@ -101158,3 +101158,255 @@ rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
 `cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
 `test/mutations/` for it; passing `make phase` proves nothing here, because a
 descriptor that no longer matches is not an error.
+
+### F8970. The SGD object model re-derived: F8495 HOLDS ENTIRELY, and F8497's doubt about it was misplaced
+
+F8497 withdrew the SGD engine and ruled that F8495's "0x5c bytes, a 13-dword
+config copy" must be "treated as UNCONFIRMED for the status half of the
+object". Re-read from `dis.py` over all nine symbols, every claim in F8495 is
+correct and nothing in the layout needed changing. The confirmed model, which
+`include/dsplib/sgd.h` now carries:
+
+    +0x00  short  sym_bits        bits per symbol
+    +0x02  short  hist_len        receive history, in symbols
+    +0x04  short  hist_extra      extra symbols in the ALLOCATION only
+    +0x06  short  (never read)
+    +0x08  ptr    gen.seq         }
+    +0x0c  u16    gen.seq_len     } the six dwords SGD_control's
+    +0x10  int    gen.seq_enable  } FIRST pointer replaces
+    +0x14  u16    gen.idle_sym    }
+    +0x18  u16    gen.data_word   }
+    +0x1c  u16    gen.word_syms   }
+    +0x20  ptr    det.ref         }
+    +0x24  u16    det.ref_len     } the five dwords SGD_control's
+    +0x26  short  det.ref_margin  } SECOND pointer replaces
+    +0x28  int    det.pat_match   }
+    +0x2c  int    det.pat_mask    }
+    +0x30  int    det.pat_out_mask}
+    +0x34  int    status.seq_found   }
+    +0x38  ptr    status.det_at      } the 24 bytes SGD_status
+    +0x3c  short  status.quality     } copies out, and the two
+    +0x3e         (never written)    } holes that ride out with
+    +0x40  int    status.pat_found   } them
+    +0x44  int    status.pat_data    }
+    +0x48  u16    status.seq_reps    }
+    +0x4a         (never written)    }
+    +0x4c  u16    seq_pos
+    +0x4e  short  word_left
+    +0x50  ptr    hist
+    +0x54  short  hist_span       hist_len + ref_len - 1
+    +0x56  short  thresh          sym_bits*ref_len*(0x4000-ref_margin)
+    +0x58  int    pat_sr
+
+**`det_at` at +0x38 IS a pointer into `hist`, and the object says so in one
+instruction.** At 0x9f655 `lea (%edx,%eax,2),%edi` with `%edx` the buffer
+base saved at 0x9f54a and `%eax` the window base plus the winning index;
+0x9f658 stores it. There was never a second reading available.
+
+The layout was verified end to end by an INJECTION rather than by reading:
+swapping `det_at` and `quality` inside `struct sgd_status` -- 24 bytes either
+way, so no size assertion moves -- fails 2,504 of 57,582 checks with
+`det_at offset got -1, reference -833329408`. See F8973. (2026-08-31)
+
+
+### F8971. F8497's `det_at` failure was an UNINITIALISED LOCAL, not a mis-modelled field -- and the two reported numbers prove it arithmetically
+
+Recorded separately from F8970 because it is the transferable part, and
+because the proof is available even though the code and the test that
+produced it are both gone.
+
+`SGD_sequence_det` writes its best-alignment index only inside the
+improvement test at 0x9f610, and the search loop is skipped entirely for
+n <= 0. The threshold gate does not stop it: `best` is still 0xffff and the
+compare at 0x9f635 is a SIGNED 16-bit one, so it reads as -1 and passes for
+every non-negative `thresh`. The uninitialised slot is then used TWICE, at
+two different widths -- as 32 bits to compute `det_at` (0x9f647), and as 16
+bits as the return value (0x9f675). That is deviation D1060.
+
+**THE TWO NUMBERS F8497 RECORDED ARE THE SAME STACK SLOT, AND THEY CLOSE TO
+THE BYTE.** It reported
+
+    det_at offset  got 20, reference -6181684
+    sequence_det return  got 0,  reference -21320
+
+Let the reference's uninitialised 32-bit slot be X and its window base be
+`base = hist_len - n`. Then the object computes `det_at - hist == base + X`
+and returns `(short)X`. Solving:
+
+    base = 20,  X = -6181704
+    20 + (-6181704)            == -6181684   the reported offset
+    low 16 bits of -6181704    == -21320     the reported return
+
+Both reported values fall out of ONE unknown, exactly, with no slack. And the
+`got` column agrees: "ours lands at word 20" is `base + 0`, the same base with
+a best index of zero.
+
+**A LAYOUT ERROR CANNOT PRODUCE THE SECOND LINE AT ALL.** Reading a field at
+the wrong offset changes what the TEST sees; it cannot change what the blob
+puts in `%eax`. A correct `SGD_sequence_det` returns an index in [0, n) or
+-1, never -21320. So the reference genuinely took the uninitialised path, and
+F8497's two structural hypotheses -- "`buf` is not where F8495 put it" and
+"`det_at` is not a pointer into `buf`" -- are both excluded by its own second
+line, which it did not use.
+
+**The diagnosis that was reached instead was reasonable and wrong.** A
+pointer 12 MB outside a fifty-symbol buffer is the classic signature of a
+field read at the wrong offset. What was missing from the list of candidates
+is the third possibility: THE OBJECT IS COMPUTING THE POINTER CORRECTLY FROM
+A NUMBER NOBODY WROTE.
+
+**The discriminator, for next time.** A wrong field offset is wrong on every
+call and wrong the same way, and shows in FIELDS ONLY. An uninitialised local
+correlates with an INPUT, and can reach a RETURN VALUE -- which no layout
+error can. Check whether anything outside the compared object moved before
+concluding the object is mis-modelled. The counts said so too: 96 of 3,603 is
+2.7% of checks, where the layout injection in F8970 fails 4.3% and does so on
+every configuration.
+
+**And it is silent, which is why it survived.** A probe run against the blob
+alone at n = 0 -- `t_sgdprobe`, written for this and not committed -- came
+back `return 0, seq_found 1, det_at - hist 50, quality 1`: the slot happened
+to hold zero in that build, and the answer is entirely plausible. Nothing
+about the fault is visible from one side. It takes two builds to see it,
+which is the differential tier's whole argument arriving in miniature.
+
+**The withdrawal was still the right call.** The rule is that nothing
+wrong-but-plausible is committed, and an agent that cannot explain a failure
+has not established which of the two it has. (2026-08-31)
+
+
+### F8972. `SGD_status` is a struct assignment out and six field stores back, and that asymmetry is what models the object
+
+`SGD_status` (0x9f9b0) is six dword load/store pairs from +0x34 followed by
+six clears -- four `movl $0` and TWO `movw $0`, at +0x3c and +0x48. Nothing
+else in the nine symbols ever writes +0x3e or +0x4a: `SGD_create`,
+`SGD_control`, `SGD_sequence_det` and `SGD_sequence_gen` all touch those two
+fields 16 bits at a time.
+
+The source shape that produces exactly this is a nested `struct sgd_status`
+of 24 bytes with two 2-byte holes, copied out with `*out = s->status;` (GCC
+emits six dword pairs for a 24-byte assignment, below its `rep movsl`
+threshold) and cleared field by field. So the holes are REAL FIELDS of the
+interface, not padding an implementation may do as it likes with: a caller
+reading a status block gets two words of whatever the allocator left in the
+object, on every call, for ever.
+
+**It is also a constraint on any test of this family.** Both sides' objects
+must see the same allocator fill or two of the six status dwords differ for
+reasons neither implementation owns. `t_faxsgd` gets that free from the
+harness's `sysdep_malloc`, which fills with `HARNESS_MALLOC_FILL`, and
+memsets a caller-supplied object to the same byte on both sides. This is
+harness.h's own stated reason for the fill ("makes a constructor that leaves
+a field uninitialised comparable") arriving as a load-bearing requirement
+rather than a convenience. (2026-08-31)
+
+
+### F8973. What `t_faxsgd` measures, and the two rituals it was validated by
+
+Rebuilt from F8497's description, the file itself being lost. 57,582 checks
+over seven suites; `make one`-green, NOT period-gated (the parent owns that).
+
+**The offset comparison, which is the asset F8497 said it was.** `det_at` is
+compared as `status.det_at - hist` on each side rather than by value. Shown
+to fire: swapping `det_at` and `quality` inside `struct sgd_status`, with the
+offset annotations edited to match so that `make offsets` cannot see it,
+fails 2,504 of 57,582 checks and prints
+
+    t_faxsgd.c:131: det_at offset, input 1  got -1, reference -833329408
+
+which names the field and the magnitude. `SGD_correlate` stays PASS through
+that injection -- it is the one function that touches no object -- which is
+the anti-vacuity half of the demonstration: the failure is the layout and not
+a blanket break.
+
+**`make offsets` caught the FIRST attempt at that injection**, before the
+test ran, because the swap left the `/* +0xNN */` annotations disagreeing
+with the DWARF. Worth knowing that the tree has that gate and that it is
+independent of the differential tier: 1,808 annotations checked, 13
+mismatches reported, exit non-zero. It also means an offset comment in a
+header is not prose here, unlike a `.text` banner before `bannercheck.py`.
+
+**The four things the fixture has to arrange**, each a way to get a green run
+that means nothing, and each a deviation in its own right:
+
+- every symbol is masked to a byte, or `FPM_xor_table`'s 16-bit index leaves
+  the 256-entry table (F8494) and the two sides read two different
+  neighbours. D955/F8587's unplanted subscript exactly;
+- `hist_extra == ref_len` in every configuration, or the constructor overruns
+  its own allocation (D1061);
+- `n >= 1` into `SGD_sequence_det`, or it reads an uninitialised local
+  (D1060), and `n <= hist_len`, or the window base wraps (D1063);
+- `1 <= sym_bits <= 15`, or `SGD_pattern_det` never terminates (D1062).
+
+**Seventeen hand injections into `src/fax/sgd.c`, 16 caught.** Run by hand
+rather than registered, because a suite that cannot be recorded reads MISSING
+to `mutsnap.py --check` and fails the gate, and the snapshot is 0 current /
+228 stale (F8846). Caught: both `SGD_correlate` mutants, four of five in
+`SGD_sequence_det` (tie-break direction, threshold signedness, `det_at`
+losing its window base), both `SGD_sequence_gen` state mutants, the
+`SGD_symbol_gen` wrap target, both `SGD_create` derivations, both
+`SGD_pattern_det` ones, both halves of `SGD_control`'s asymmetry, and both
+`SGD_status` ones -- including zeroing the two holes F8972 says must ride out
+untouched.
+
+**The one survivor is EQUIVALENT, and provably so rather than by assertion.**
+Removing the early exit on an exact match (`if (acc == 0) break;`) cannot
+change any output: the improvement test is `acc < best` STRICTLY, and `acc`
+is a sum of popcounts so 0 is its minimum, so no later alignment can displace
+a zero-distance winner. Only the iteration count changes and nothing observes
+it. A test cannot separate it and should not be expected to. (2026-08-31)
+
+
+### F8974. SGD_CFG's two table pointers are PLACEHOLDERS, and the default configuration is not a usable one
+
+`SGD_CFG` (.data 0x80e0, 52 bytes) carries two `R_386_32` relocations, at
++0x08 and +0x20, and both name `FPM_xor_table` -- the popcount table
+(F8494), which is not a symbol alphabet and cannot be one. So the object's
+default configuration ships with its sequence pointer and its reference
+pointer both aimed at a table that means something else, and
+`SGD_create(x, 0)` is only a usable construction because every caller
+replaces both halves through `SGD_control` before generating or detecting
+anything.
+
+The rest of it: `sym_bits` 8, `hist_len` 50, `hist_extra` 1, `seq_len` 1,
+`seq_enable` 0, `idle_sym` 0, `data_word` 0, `word_syms` 1, `ref_len` 1,
+`ref_margin` 0x2000, and all three pattern words 0. `hist_extra == ref_len`,
+which is D1061's invariant held by hand.
+
+Reconstructed in `src/fax/sgd.c` pointing at OUR `FPM_xor_table`, so the two
+instances hold two legitimately different addresses. `t_faxsgd` compares them
+by what they POINT AT -- ours against `FPM_xor_table`, the blob's against
+`ref_FPM_xor_table` -- and compares the other nineteen fields one at a time,
+rather than excluding the pointers and comparing the struct. An excluded
+field is a field no check covers. (2026-08-31)
+
+
+### F8975. `SGD_control`'s request is the configuration's own two tail halves, and the object's field grouping is derived rather than chosen
+
+`SGD_control` (0x9f8c0) takes a pointer to two pointers. The first, if
+non-null, is copied as six dwords into object +0x08..+0x1f; the second, as
+five dwords into +0x20..+0x33. +0x00..+0x07 -- `sym_bits`, `hist_len`,
+`hist_extra` -- is settable only at construction.
+
+So the 13-dword configuration is not one flat block that a header may carve
+up to taste: the object itself divides it 2 / 6 / 5, and the two settable
+groups are separately-addressable structs because `SGD_control` takes their
+addresses. `struct sgd_gen_cfg` and `struct sgd_det_cfg` in
+`include/dsplib/sgd.h` are those two, and `struct sgd_cfg` is the whole,
+which is what `SGD_create`'s `rep movsl $0xd` copies as a single struct
+assignment.
+
+**The two halves are NOT symmetric in what they re-arm**, and the asymmetry
+is the interface's meaning rather than an oversight:
+
+- the generator half resets `seq_pos`, `status.seq_reps` and `word_left`;
+- the detector half re-derives `hist_span` and `thresh`, re-zeroes the
+  history, and clears five of the six status fields -- every one EXCEPT
+  `status.seq_reps`.
+
+So a detector-only control leaves the generator's completion count standing,
+which is what lets a caller re-point the detector part-way through a
+transmission without telling the transmitter its sequence has restarted.
+Reading it the other way round -- "the clear list is just create's, minus the
+allocation" -- is right about the code and misses that one omission, which is
+the only thing separating the two lists. (2026-08-31)

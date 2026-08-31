@@ -10324,3 +10324,154 @@ string and sets `dle_can = 1`; it reads no element of `arg` (0xac531-0xac545).
 tidied, because zeroing it would be a store the object does not make and would
 show in a codegen comparison. `t_voiceapi` drives ABORT at both debug levels
 and over six `tone_duration` values and compares the full object each time.
+
+## D1060 🐛 `SGD_sequence_det` returns and dereferences an UNINITIALISED local when its search loop does not run
+
+This is the whole of finding F8497's failure, and it was read as a layout
+error for a year of tree-time.
+
+`SGD_sequence_det` (0x9f520) keeps the index of the best alignment in a stack
+slot at `0x10(%esp)`, and the only write to it is inside the improvement test
+at 0x9f610 -- taken when the running Hamming distance beats the best so far,
+which starts at 0xffff. The search loop is guarded by `cmp 0x18(%esp),%ebp ;
+jge` with `%ebp` zero, so **for n <= 0 the loop body never executes and the
+slot is never written.**
+
+The function then does NOT bail out. `best` is still 0xffff, the threshold
+test at 0x9f635 is a SIGNED 16-bit compare -- `cmp %bp,0x56(%ecx) ; jl` -- so
+it reads 0xffff as -1 and passes for every non-negative `thresh`. The accept
+arm therefore runs on garbage:
+
+    9f647:  mov    0x10(%esp),%ebx        <- uninitialised, read as 32 bits
+    9f655:  lea    (%edx,%eax,2),%edi     <- hist + 2*(base + garbage)
+    9f658:  mov    %edi,0x38(%ecx)        <- status.det_at
+    ...
+    9f675:  movswl 0x10(%esp),%eax        <- returned, read as 16 bits
+
+So one uninitialised slot reaches the caller twice, at two different widths.
+`status.seq_found` is set to 1 as well, so a caller cannot tell this apart
+from a real detection.
+
+**Why it produced the numbers it did, exactly.** Wave 1's test reported
+`det_at offset got 20, reference -6181684` and
+`sequence_det return got 0, reference -21320`. Both fall out of ONE unknown:
+with the slot holding X and the window base `hist_len - n` equal to 20,
+
+    20 + (-6181704)         == -6181684    the reported offset
+    low 16 bits of -6181704 == -21320      the reported return
+
+with no slack in either. See F8971 for why that excludes a layout error
+outright -- reading a field at the wrong offset cannot change what the blob
+puts in `%eax`. What made it look like one is that -6181684 SYMBOLS is 12 MB,
+and a mis-modelled field is the obvious way to get a wild pointer out of a
+fifty-symbol buffer. It is not the only way.
+
+**It is silent from one side.** A probe against the blob alone at n = 0 came
+back `return 0, seq_found 1, det_at - hist 50, quality 1` -- the slot happened
+to hold zero in that build, and every value is plausible. Only a second build
+makes it visible.
+
+**Status:** reproduced. `int best_i;` is left uninitialised in
+`src/fax/sgd.c` because the object leaves it uninitialised, and GCC's
+`-Wmaybe-uninitialized` fires on it, correctly. Initialising it would be a
+behavioural change on a path the object reaches, and it is not clear what
+value would be right: 0 and -1 are both defensible and the object commits to
+neither.
+
+**No differential test can cover the arm**, for the same reason D961's cannot:
+the two sides read two different stack slots and there is no equivalence to
+assert. `t_faxsgd` drives n >= 1 everywhere and says so at each call site,
+which is the honest move -- not a scoped-away failure but an input the
+comparison is undefined over.
+
+Whether a caller can reach it is unknown: every `SGD_sequence_det` caller is
+unwritten fax. n is the count of newly received symbols, so a caller polling
+with nothing to offer would reach it.
+
+
+## D1061 🐛 The SGD history buffer is SIZED from `hist_extra` and ZEROED from `ref_len`
+
+`SGD_create` allocates `2*(hist_len+hist_extra)-2` bytes -- that is
+`hist_len+hist_extra-1` symbols -- and then zeroes `hist_len+ref_len-1`
+symbols through the result. The two spans are equal only when
+`hist_extra == ref_len`, and the constructor overruns its own allocation by
+`ref_len-hist_extra` symbols whenever the reference sequence is longer.
+
+`SGD_control`'s detector half is sharper still: it re-derives `hist_span`
+from the NEW `ref_len` and re-zeroes, and `hist_extra` is not in the five
+dwords it can set -- so a control that raises `ref_len` above the constructed
+`hist_extra` overruns a buffer it has no way to resize, and every subsequent
+`SGD_sequence_det` slides over the overrun span as well.
+
+The blob's own `SGD_CFG` has `hist_extra == ref_len == 1`, which is the
+relation that makes the two agree, so this is presumably a real invariant the
+author kept by hand rather than a live fault.
+
+**Status:** reproduced. `t_faxsgd` keeps `hist_extra == ref_len` in every one
+of its eight configurations and clamps a control's `ref_len` to the
+constructed `hist_extra`, so the tested domain is the one the object is
+correct over. This is a case where the fixture's constraint IS the finding.
+
+
+## D1062 🐛 `SGD_pattern_det`'s bit mask is a signed short shifted ARITHMETICALLY, so 16 bits per symbol never terminates
+
+The mask is built as `1 << (sym_bits-1)` in 32 bits, stored to a stack slot
+and reloaded with `movswl 0x4(%esp),%edx` -- a signed short. The inner loop
+walks it with `sar $1,%edx` and exits on zero.
+
+For `sym_bits` in 1..15 the mask is a positive power of two and the loop runs
+`sym_bits` times. For `sym_bits == 16` the mask is `(short)0x8000` = -32768,
+`sar` walks it -32768, -16384, ... -1, and -1 stays -1: the loop never
+terminates and `SGD_pattern_det` hangs.
+
+`sym_bits == 0` is harmless by accident rather than by design: `shl` with
+`%cl` = 0xff is masked to 31 by the hardware, the low half of the 32-bit
+result is zero, and the reloaded short is zero, so the loop is skipped
+entirely and every symbol is counted without a bit being examined.
+
+**Status:** reproduced. `t_faxsgd` keeps `sym_bits` in 1..15 -- both sides
+would hang identically and a hang is not a comparison.
+
+
+## D1063 🐛 `SGD_sequence_det`'s window base is truncated to an UNSIGNED short
+
+The first alignment is at `hist_len - n`, computed as
+`movzwl 0x2(%edx),%ebx ; sub %esi,%ebx ; movzwl %bx,%ecx` -- so for
+`n > hist_len` the difference wraps and the base becomes just under 65536.
+Every alignment then indexes the history 128 KB past its end, and
+`status.det_at` is set to an address there.
+
+It compounds with the sliding step above it, whose length is
+`(unsigned short)(hist_span - n)` and wraps the same way, so `n > hist_span`
+copies about 65535 symbols through the buffer before the search even starts.
+
+**Status:** reproduced. `t_faxsgd` clamps `n` to `hist_len`; beyond it both
+sides walk off the same end of two different heaps and the comparison is
+meaningless before it is unsafe.
+
+
+## D1064 🐛 `SGD_correlate`'s scale is `1/(p[0]*n)` in INTEGER arithmetic, so the function answers a constant and the accumulation is dead
+
+    9f85b:  mov    $0x1,%eax
+    9f860:  cltd
+    9f861:  imul   %ecx,%ebp        <- p[0] * n
+    9f868:  idiv   %ebp             <- 1 / (p[0]*n)
+
+`eax` and `ebp` are both plain 32-bit integers and there is no scaling shift
+anywhere in the function, so the quotient is 1 when `p[0]*n == 1`, -1 when it
+is -1, and **zero for every other magnitude**. The return is
+`1 - distance*scale`, so for any configuration with more than one symbol, or
+any scale factor other than +/-1, the function answers a constant 1 whatever
+the two sequences contain -- and the Hamming-distance loop above it, table
+lookup and all, has no effect on the result.
+
+When `p[0]*n == 0` the `idiv` faults.
+
+This reads like a fixed-point reciprocal whose shift was lost: `1/(p*n)` in
+Q14 or Q15 would be the natural thing to write here and would make the
+function do what its name says.
+
+**Status:** reproduced exactly, because both the constant and the fault are
+observable and neither is ours to remove. `t_faxsgd` drives the +/-1 cases
+where the accumulation IS live as well as the degenerate ones, and never
+drives `p[0]*n == 0`.
