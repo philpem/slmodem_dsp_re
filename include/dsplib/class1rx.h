@@ -3,14 +3,19 @@
  *
  * The `class1rx.c` span is 2,495 bytes and five symbols:
  *
- *   _init_receiver         .text 0x0941a0  1583   NOT written (343 unwritten)
  *   init_vmi_v17rx         .text 0x093e80   308   written
- *   init_vmi_v27rx         .text 0x0940b0   230   written
  *   init_vmi_v29rx         .text 0x093fc0   225   written
- *   _delete_data_rx_modem  .text 0x094150   149   NOT written (16 unwritten)
+ *   init_vmi_v27rx         .text 0x0940b0   230   written
+ *   _delete_data_rx_modem  .text 0x0941a0   149   NOT written (16 unwritten)
+ *   _init_receiver         .text 0x094240  1583   NOT written (336 unwritten)
+ *
+ * The order above is the object's, taken from `nm -S` and not from a span
+ * listing: `_delete_data_rx_modem` comes BEFORE `_init_receiver`, and the two
+ * addresses this file first carried were both wrong (F8535's defect, caught by
+ * `bannercheck.py` -- 461 of 463 banners agreed and these two did not).
  *
  * ALL THREE ARE `t` IN THE OBJECT -- file-local -- AND ARE GLOBAL HERE.  Only
- * `_init_receiver` calls them, and it is 343 unwritten symbols away, so a
+ * `_init_receiver` calls them, and it is 336 unwritten symbols away, so a
  * `static` spelling would be a function this tree could neither reach nor
  * test.  This is wave 2's `v22_delete` again, and it is deviation D1081: the
  * storage class is ours, not the author's, and the pass that writes

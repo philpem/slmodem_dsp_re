@@ -10,9 +10,9 @@
  * They are written in the object's own emission order, which is v17, v29,
  * v27 and not the numeric one.
  *
- * `_init_receiver` (0x0941a0, 1,583 bytes) and `_delete_data_rx_modem`
- * (0x094150, 149) are the rest of the span and are NOT here: the first still
- * needs 343 unwritten symbols and the second 16, and a reference from `src/`
+ * `_delete_data_rx_modem` (0x0941a0, 149 bytes) and `_init_receiver`
+ * (0x094240, 1,583) are the rest of the span and are NOT here: the first still
+ * needs 16 unwritten symbols and the second 336, and a reference from `src/`
  * to an unwritten blob symbol fails the whole suite at link (F8492, F8493).
  *
  * Read `class1rx.h` for the shape the three share, for why they are global
