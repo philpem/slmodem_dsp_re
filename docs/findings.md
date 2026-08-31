@@ -100192,3 +100192,330 @@ inside `detector_create` itself, so it must be written WITH its reader
 (F8772's argument for `silence_level_table`, F8781 for this one, and F8781
 records its twelve words). `detector_progress` needs five data symbols.
 Everything else is blocked on those two and on each other.
+
+### F8800. The detector closure, written: two functions, seven file-local data symbols, and why the data was the blocker
+
+*2026-08-31.* `detector_create` (0xad480, 411 bytes) and `detector_progress`
+(0xad6e0, 814 bytes) into `src/service/detector.c`, with `status`
+(`.data` 0x8200), `tone_char` (0x8210), `tone_integration_threshold` (0x8214),
+`tone` (0x821c), `TONEamode_CFG` (0x8240), `enable` (`.rodata` 0xeecc) and
+`lookup_table` (0xeedc). All nine names are the blob's own.
+
+**THE BLOCKER WAS NEVER THE CALL GRAPH.** Every callee -- `create_dtmf`,
+`TONE_create`, `TONE_detect`, `dtmf_progress`, `cadence_create`,
+`cadence_progress`, `_status` -- has been written for some time. What blocked
+these two was the DATA: seven LOCAL symbols whose only reader in the whole
+1.2 MB is one of these two functions, which is the case F8772 declined
+`silence_level_table` on and F8781 declined `TONEamode_CFG` on. A `static`
+goes in the translation unit of its reader, so the data could not land until
+the reader did, and the reader could not be written without the data.
+
+**WHAT THE TABLES ARE.** Four tones -- 1300, 1100, 2100 and 2225 Hz -- each
+with an `enable` bit (2, 4, 8, 0x10), an integration threshold (25, 21, 12,
+25), an in-stream letter (`'e'`, `'c'`, `'a'`, `'f'`) and a status code
+(3, 4, 5, 6). The cadence arm's own letters are the immediates 0x62 `'b'` and
+0x64 `'d'` with codes 1 and 2, so the six events number 1..6 without a gap and
+the letter/code pairs are two spellings of one table. `lookup_table` is
+"147*2580369#ABCD", which is `low + 4 * high` over the DTMF plan in the order
+`dtmf_test` reports it.
+
+The span label is `Beepgen.c` and that is a LAYOUT label: this is voice-service
+code, `voice_create` is the only caller of `detector_create` in the object, and
+`struct detector` is `struct voice`'s +0x01c.
+
+Proved by `t_detector`.
+
+### F8801. The cadence arm's float-to-short scale is 16000, not full scale
+
+*2026-08-31.* `.rodata.cst4` 0x504, read at 0xad75d and again at 0xad7a0, is
+`0x467a0000` = **16000.0f**. It is easy to assume 32767 here and it is not
+that: a full-scale float sample reaches half of `short`'s range before the
+cadence detectors ever see it, so every envelope, threshold and
+`Get_Detection_Threshold_Table` value the cadence path works with is 6 dB down
+on what the same code would see fed from `zFLTUTL_Float2Linear`.
+
+The conversion is `(short)(samples[i] * 16000.0f)` written twice, once per
+cadence, and the object recomputes it rather than reusing the first result --
+`cadence_progress` may write through `samples`, so the compiler cannot hoist
+it and neither should the source.
+
+### F8802. `TONEamode_CFG`'s NULL `fir_proto` is patched from `TONE_CFG` before use, which closes F8781's D995 worry
+
+*2026-08-31.* F8781 recorded `TONEamode_CFG` as holding a NULL `fir_proto`
+with `fir_len` 53 and flagged it against D995 -- `TONE_create`'s FIR loop runs
+whenever the object was allocated, so a NULL prototype with a positive length
+would be a wild READ of 53 floats.
+
+It never happens. `detector_create` copies the config to a stack local
+(`rep movsl`, `$0xc` words, 0xad4bb) and immediately overwrites +0x1c from the
+GLOBAL `TONE_CFG`:
+
+    ad4c0:  8b 0d 1c 00 00 00    mov    0x1c,%ecx    <== R_386_32 TONE_CFG
+    ad4c6:  89 4c 24 4c          mov    %ecx,0x4c(%esp)
+
+0x4c - 0x30 is +0x1c, which `fdspkrnl.h` names `fir_proto`. So the four
+detector resonators share the 2100 Hz answer tone's 53-tap prototype -- the
+float `ToneLPF` at `.data` 0x8400 -- and only `freq` differs between them.
+`TONEamode_CFG` is the ONLY config in the object with a NULL there, and the
+only code that reads it repairs it first. D995 stands as written for a caller
+who supplies its own config; it has no reachable instance here.
+
+### F8803. `detector_create`'s third argument is the S-register getter, and its result is used UNSIGNED
+
+*2026-08-31.* The callback at 0x88(%esp) is called once, as `f(modem, 0x49)`
+(0xad522). 73 is `SREG_VOICE_DIALTONE_DETECT_DELAY`, and the chain that types
+it is `VOICE_create` -> `struct beepgen_config` -> `voice_create` ->
+`detector_create`, with `vce_get_sreg` at the far end. That is evidence class
+2 and it is what lets `+0x30` be named `dialtone_detect_delay` rather than
+left as `int_0030`.
+
+**THE ARITHMETIC IS `r * 50 / 4` AND THE OBJECT SAYS WHICH SPELLING:**
+
+    ad529:  8d 1c 80             lea    (%eax,%eax,4),%ebx     ; *5
+    ad52c:  8d 34 9b             lea    (%ebx,%ebx,4),%esi     ; *25
+    ad52f:  01 f6                add    %esi,%esi              ; *50
+    ad531:  c1 ee 02             shr    $0x2,%esi              ; /4, UNSIGNED
+
+`shr` and not `sar`, so the multiplicand is unsigned -- which is why the
+function-pointer type in `detector.h` returns `unsigned int`, matching the
+shape `silence_create` already takes. `* 25 / 2` would have produced one `lea`
+fewer and `shr $1`, and `* 12` no shift at all; the test sweeps 0, 1, 3, 7, 30
+and 255 against the blob, where those three spellings disagree.
+
+12.5 per second is one per 640 samples at 8 kHz, which is the order of the
+dial-tone cadence's own verdict interval -- but **nothing in the 1.2 MB reads
+this field back**, so that is arithmetic and not evidence, and `detector.h`
+says so.
+
+### F8804. The tone report fires when the counter PASSES the threshold, and it then fires on EVERY block after that
+
+*2026-08-31.* Two things about `detector_progress`'s tone arm, and both are
+easy to get subtly wrong.
+
+**The comparison is unsigned and its sense is "skip while threshold >= count":**
+
+    ad85d:  0f b7 44 5e 24       movzwl 0x24(%esi,%ebx,2),%eax
+    ad862:  40                   inc    %eax
+    ad868:  66 39 84 1b 14 82 00 cmp    %ax,0x8214(%ebx,%ebx,1)
+    ad870:  73 23                jae    ad895
+
+`cmp %ax,mem` computes `mem - ax`, and `jae` takes CF=0, i.e. `threshold >=
+counter`. So the report needs `counter > threshold` and the first report lands
+on the threshold's value PLUS ONE -- block 26, 22, 13 and 26 for the four
+tones. `t_detector` asserts that number per tone, which is also what pins the
+subscript: the four thresholds differ, so a swapped index moves it.
+
+**And the counter is not cleared by reporting.** Only a non-zero `TONE_detect`
+verdict clears it (0xad916). Once a tone has passed its threshold it reports on
+every subsequent block for as long as the condition holds, so a long run of
+non-tone signal produces one line per block and not one line. Reproduced; it is
+the object's behaviour and not a defect in the reconstruction.
+
+### F8805. The DTMF arm advances the caller's cursor and the other two arms do not, so tone and cadence events overwrite each other
+
+*2026-08-31.* In DETECTOR_OUTPUT_IN_STREAM mode `detector_progress` has three
+places that append two bytes, and they do not agree about the cursor.
+
+The DTMF arm writes them inline -- `*outlen += 2; out[0] = 0x10; out[1] = c;`
+-- and then **advances its own copy of `out` by two** (0xad907, stored back to
+0x3c(%esp) at 0xad90a), so a later arm in the same block writes after it.
+
+The tone arm and both cadence arms call `_status(out, outlen, code)`, which
+does the same three stores and does NOT advance anything. So two tone reports
+in one block write the same two bytes twice while `*outlen` grows by four, and
+the caller is left with two bytes of whatever the buffer held. That is the
+object's shape, not a transcription slip: `voicedp.c`'s own call site spells
+the correct idiom, `_status(out + *countp, countp, 3)`, which is what makes
+the difference deliberate enough to record rather than assume.
+
+The DTMF arm is also NOT `_status` inlined, though its three stores are that
+function's in that order: `_status` prints "DLE %d" under
+`dsplibs_debug_level > 1` and the DTMF arm has no such line, only the one
+debug gate at 0xad8e3.
+
+`t_detector` compares the whole output buffer after every block, so the
+overwrite is asserted rather than merely tolerated.
+
+### F8806. The "false dtmf detect" arm is unreachable, and that is measured on the blob rather than argued from a header
+
+*2026-08-31.* `detector_progress` guards its emit path with `if (c < 0)`,
+where `c` is `-1` when `r` is outside 0..15 and `lookup_table[r]` otherwise
+(0xad8c5). The arm prints "false dtmf detect %d" with the INDEX, not the
+character.
+
+It cannot fire. `dtmf_progress` returns `dtmf_test`'s verdict, which is
+`low + 4 * high` over two groups of four, or -1, or -2 -- and -1 and -2 have
+already been filtered out by the range test above it. Every one of the sixteen
+`lookup_table` entries is a printable ASCII character, so `c >= 0` always.
+
+`t_detector` does not take that from `dtmf.h`: `probe_false_dtmf()` drives the
+BLOB's `dtmf_progress` over all sixteen tone pairs, asserts the result is in
+-2..15 on every call, and asserts all sixteen indices were actually seen so the
+bound is not vacuous. The arm's coverage counter is then asserted at ZERO, so
+a future change that makes it reachable fails here rather than passing quietly.
+
+### F8807. The "extra i++" on the dial-tone arm is tail duplication, not a semantic double increment
+
+*2026-08-31.* `detector_progress`'s cadence loop appears to increment `i` twice
+on the dial-detected path: 0xad82b and 0xad961 both do `inc %ebx` inside the
+"dial detected" arms, where the fall-through path increments at 0xad7d6.
+
+Reading the edges settles it. Each of those arms does its own
+`cmp %ebx,%edi` and jumps to the loop's own back-edge test (0xad744 /
+0xad7d9), so all three paths execute exactly ONE increment before the
+condition is re-tested. GCC duplicated the loop tail into both arms; the
+source is an ordinary `for (i = 0; i < count; i++)` with two independent `if`
+bodies.
+
+This is worth recording because the wrong reading is behaviourally different
+-- it would drop every second sample after the first dial-tone detection --
+and it survives a single-block fixture perfectly.
+
+### F8808. The DTMF arm is an `if`, not a drain loop, and the jump target is what says so
+
+*2026-08-31.* The gate at 0xad6fd/0xad700 branches to 0xad89d when
+`enable & 1` is set, and every exit from that block jumps to **0xad706** --
+the instruction AFTER the branch, not the branch itself. So the arm runs once
+per call.
+
+It reads like a loop because 0xad90e reloads `d->enable` immediately before
+the jump. That reload is not a loop condition: `d->enable` is re-read from
+memory at all of its uses (0xad6fa, 0xad895, 0xad90e, 0xad916 and 0xad9c9),
+because a call to `dtmf_progress`, `TONE_detect` or `_status` may alias the
+field. The source holds no local copy of it, and reproducing it as one would
+be a behavioural change a caller could observe.
+
+There is also nothing to drain: `dtmf_progress` already walks every sample of
+the block and returns the last digit it settled.
+
+### F8809. `TONE_detect` and `cadence_progress` are CALLED as if they returned `short`, while this tree declares both `int`
+
+*2026-08-31.* Two call sites in `detector_progress` narrow their callee's
+result to sixteen bits before testing it:
+
+    ad854:  66 85 c0             test   %ax,%ax          ; TONE_detect
+    ad78e:  98                   cwtl                    ; cadence_progress
+    ad78f:  66 48                dec    %ax
+    ad791:  74 5d                je     ...
+
+`test %ax,%ax` and `cwtl; dec %ax` are what a compiler emits for a `short`
+return, not an `int` one. `fdspkrnl.h` declares `int TONE_detect(...)` and
+`cadence.h` declares `int cadence_progress(...)`, both from their own
+definitions, and both return only 0, 1, 2 or 7 -- so the two readings agree
+over every value either function can produce and no differential test can
+separate them.
+
+**Recorded, and NOT acted on.** Retyping either would change the codegen of
+`src/service/fdspkrnl.c` and `src/callprog/cadence.c`, which are settled
+against the object on their own account; the honest move is to leave the
+declarations where the definitions put them and hand this to a codegen pass
+that can measure both arms under the period compiler. It is the same class of
+observation as F613 -- a forced encoding that behaviour cannot see -- with the
+difference that here the fix is not local to the function being written.
+
+### F8810. `struct detector`'s remaining fields, and which of them earned a name
+
+*2026-08-31.* The 0x34-0x24 region `detector.h` carried as `pad_0024` is now
+three things, and three fields elsewhere were renamed or retyped:
+
+- **+0x24 `tone_integration[4]`**, `unsigned short` (`movzwl` at 0xad85d,
+  unsigned compare at 0xad870). Named from the author's own
+  `tone_integration_threshold`, which is the symbol it is compared against.
+- **+0x2c `int_002c`**, written 0 by `detector_create` and read by NOTHING in
+  the object. Modelled, unnamed -- the four-state rule's `type_NNNN`.
+- **+0x30 `dialtone_detect_delay`**, from F8803's chain to `vce_get_sreg`.
+- **+0x00 `enable`** retyped `short` -> `unsigned short`. The object loads it
+  `movzwl` at every site. This is a 614-class dead extension at all of them
+  (the masks are all under 0x40) and it changes no behaviour for any value the
+  field can hold, so it is a codegen claim and is flagged as one.
+- **+0x04 `ptr_0004` -> `dtmf`**, typed `struct dtmf *`: `create_dtmf`
+  returns into it (0xad4bd), `dtmf_progress` is handed it (0xad8b1), and
+  `detector_progress` reads `->held` (+0x90) through it at 0xad709.
+- **+0x0c and +0x10 -> `cadence_busy` and `cadence_dial`**, from the object's
+  own format strings "busy detected by cadence\n" (`.rodata.str1.1` 0x5105)
+  and "dial detected by cadence\n" (0x511f) -- evidence class 1 -- and
+  confirmed independently by the `cadence_setup.tone` each is created with,
+  `CADENCE_TONE_BUSY` (0) and `CADENCE_TONE_DIAL` (1).
+- **+0x08 `cadence_0008` stays neutral.** `detector_create` zeroes it on the
+  allocating path and nothing ever builds it; `detector_delete`'s NULL guard
+  is the only code that looks at it. Nothing names it, so nothing names it.
+
+The two renames reach `src/service/beepgen.c`'s `detector_delete`,
+`test/unit/t_voicedpdel.c` and the three anchors in
+`test/mutations/voicedpdel.json` that quote that function's text; all four
+were updated together and `mutsnap.py --check` is unchanged at 228 stale, 0
+missing, exit 0.
+
+### F8811. The detector's own six-event vocabulary is one table spelled two ways
+
+*2026-08-31.* `detector_progress` reports the same six events through two
+alternative channels, chosen by `output_mode`, and the object carries the two
+spellings as separate data:
+
+    event       letter                    status code
+    busy        0x62 'b'  (immediate)     1  (immediate)
+    dial tone   0x64 'd'  (immediate)     2  (immediate)
+    1300 Hz     tone_char[0] 'e'          status[0] 3
+    1100 Hz     tone_char[1] 'c'          status[1] 4
+    2100 Hz     tone_char[2] 'a'          status[2] 5
+    2225 Hz     tone_char[3] 'f'          status[3] 6
+
+The DTMF arm is outside this scheme entirely: it emits the digit character and
+has no status-mode form, so a detector in DETECTOR_OUTPUT_STATUS mode reports
+DTMF nowhere and returns 0 for it.
+
+The letters are the IS-101 voice-mode shielded event codes and 'b'/'d' belong
+to the same set, which is a strong reading of what the table IS -- but it is an
+outside-the-object reading, so `detector.h` records the correspondence and does
+not derive the names from it. What the object itself establishes is only that
+the letter and the code are alternatives for one event.
+
+### F8812. Four fixture defects the detector's mutation run found, and every one of them let a WRONG source pass a green suite
+
+*2026-08-31.* `t_detector` was green over about 1.86 M checks before any
+mutation was applied, and an ad-hoc 44-mutation set then caught 37. The six it
+missed were not exotic: each was a claim the suite looked like it was testing
+and was not. They are recorded because the SHAPE recurs, not because these
+particular six matter.
+
+**1. AN ARM THAT RUNS LATER OVERWRITES THE ARM YOU ARE TESTING.** The fixture
+forced both cadence detectors into "always detect" in EVERY run, including the
+tone runs. The dial arm runs last and assigns `ret = 2`, so the tone arm's
+`ret = status[i]` was clobbered in every block of every status-mode run --
+`status[]` could be rotated, or replaced outright by `ret = 99`, and 1.86 M
+checks still passed. The two cadences are now forced separately, and the
+busy-only run is what makes `ret = 1` distinguishable from `ret = 2` at all.
+
+**2. A FIELD THAT IS ZERO AT EVERY BLOCK BOUNDARY OBSERVES NOTHING.**
+`cmp_cadence` compared five hand-picked fields of the `toneiir` underneath,
+one of them `env_band` -- which `toneiir_progress` RESETS at every verdict.
+The block length was a whole number of verdict intervals, so it was zero on
+both sides always. Consequence: the sample handed to `cadence_progress` was
+not compared at ALL. Injecting 32767 for the object's 16000, and `samples[0]`
+for `samples[i]`, both passed. The whole 168-byte object is now compared
+word by word, and `env_prev` -- the field that carries a level across the
+reset -- is what catches both.
+
+**3. A PLANTED FIELD DOES NOT SURVIVE THE CALL THAT REWRITES IT.** The
+`dtmf->held` run planted 1 and left the DTMF bit enabled; `dtmf_progress` runs
+first and rewrites `held`, so from block 1 the gate was open and the run
+measured nothing. Fixed by clearing the DTMF bit for that run, and by reading
+the gate's value back from the OBJECT rather than from the fixture's argument.
+
+**4. A RANGE BOUND NEEDS ITS ENDPOINT, AND A CURSOR NEEDS A SECOND WRITER.**
+One DTMF digit was driven (index 9), so narrowing the object's `r > 15` to
+`r > 14` changed nothing; the sequence now includes index 15. And the DTMF
+arm's `out += 2` (F8805) is invisible unless something else writes into the
+same block, so one run now drives a digit and a cadence event together.
+
+**ONE MUTANT IS GENUINELY EQUIVALENT AND IS RECORDED AS SUCH**, rather than
+chased: `cadence_create`'s `extra` on the BUSY call. `extra` does two things
+in `cadence_create` -- it clears `continuous`, which is already 0 for busy,
+and it scales `cfg.duration_ms = (extra + 1) * c->validation`, where
+`validation` is 0 for every tone but dial. So 2 and 0 build the same object.
+The mutation was moved to the DIAL call, where it is caught.
+
+**FINAL: 44 of 44 usable mutations caught, 0 uncaught, 0 equivalent left in
+the set.** The set is NOT registered in `test/mutations/` -- the snapshot
+re-record is deferred tree-wide, and a registered-but-unrecorded suite reads
+MISSING to `mutsnap.py --check` and fails the gate (findings F6000-F6002).

@@ -10092,3 +10092,39 @@ entry.
 **Status:** measured, and reproduced exactly. The arm is written as the object
 has it and the test asserts that it does not fire, which is the honest form of
 a coverage claim about unreachable code.
+
+## D1000 ⚠ `detector_create` hands `cadence_create` an UNINITIALISED word, and `cadence->f27c` takes whatever was on the stack
+
+*2026-08-31.* `detector_create` (0xad480) builds a `struct cadence_setup` on
+its own stack and writes exactly FIVE of its seven words before passing its
+address twice:
+
+    ad55a:  89 4c 24 10    mov %ecx,0x10(%esp)   ; w0  = 50
+    ad577:  89 54 24 14    mov %edx,0x14(%esp)   ; w1  = 50
+    ad58e:  89 44 24 18    mov %eax,0x18(%esp)   ; w2  = 3
+    ad582:  89 74 24 20    mov %esi,0x20(%esp)   ; tone = BUSY, then DIAL
+    ad57e:  89 5c 24 28    mov %ebx,0x28(%esp)   ; w6  = 0
+
+`+0x1c` (`w3`) and `+0x24` (`w5`) are never written, at either call. `w5` is
+read by nothing, but `cadence_create` does `c->f27c = s->w3`
+(`src/callprog/cadence.c`), so **both cadence objects take an uninitialised
+stack word into `+0x27c`** -- and the two calls share the block, so the second
+inherits whatever the first left there.
+
+**IT IS INERT, AND THAT IS MEASURED RATHER THAN ASSUMED.** A reverse scan for
+readers of `cadence +0x27c` finds one writer and no reader anywhere in the
+1.2 MB; `cadence_progress`, `cadence_reset` and `cadence_delete` all ignore it.
+So the value cannot reach any output.
+
+**WHAT IT COSTS THE TEST.** Our stack frame is not the blob's, so the two
+sides disagree on that one word and on nothing else. `t_detector`'s
+`cmp_cadence` skips `offsetof(struct cadence, f27c)` explicitly and compares
+every other word of the 732-byte object -- which is the "a loop is still right
+where some region must be skipped" case, with the difference recorded here
+rather than papered over. It is NOT skipped for being awkward: it is skipped
+because the object's own value there is not a function of the object's inputs.
+
+**Status:** reproduced exactly. The source leaves `s` partially initialised
+because the object does, and zeroing it would be a different function -- five
+stores in the object, seven in a `memset`ed version, and the two are
+distinguishable by codegen even though no test can tell them apart.
