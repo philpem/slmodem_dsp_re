@@ -101482,6 +101482,13 @@ the apparatus and not the analysis.
   - three more call sites for the extra-argument pattern (F8870);
   - and what a delete test cannot see through this harness (F8871).
 
+**And one that is about the apparatus rather than about V.27ter**: finding
+F8873a, which is why five of the eight finding numbers this batch's brief
+cited could dangle without `make refs` noticing. It is numbered with a suffix
+because this batch's block was already spent; the reference you are reading is
+also the check that the suffixed heading resolves, since `refcheck` would call
+it dangling if it did not.
+
 **What the period gate should watch.** None of this has been through GCC 3.4.2
 -- the worktree it was written in has no docker -- and `make one` is GCC 14,
 which has hidden a real defect in this tree before (F8607). The sites to look
@@ -101493,3 +101500,95 @@ accumulated count, narrowed the same way once per iteration; and
 SEPARATELY and summed afterwards. There is no floating point anywhere in this
 batch, so none of the x87 or NaN causes behind `tools/gccdiverge.json` can
 apply to it.
+
+## F8873a. `refcheck` only resolves a finding citation that carries the WORD, so a bare `F8607` in a comment is not checked at all -- and it does not appear in the denominator either
+
+**Numbered `8873a` and not `8874`, deliberately.** This wave assigned F8862-F8873
+to the V.27ter batch and F8886 onwards to the V.21 one; 8874-8885 is the gap
+between them and is very likely a third agent's block, so taking it would be a
+guess. A suffixed number is inside the range already granted, cannot collide
+with anybody's block, and is a spelling both `FINDING_HEAD` and `FINDING_REF`
+already accept (`F?(\d+[a-z]?)`). Measured before choosing: 36 branches
+scanned, 2,127 distinct finding numbers, highest anywhere 8975, and no `8873a`
+existed.
+
+**How it was found.** The V.27ter brief cited eight finding numbers. Five of
+them did not exist in the tree the work started in -- F8492, F8493, F8587,
+F8607 and F8790, plus D955 and D956 -- because the worktree was 106 commits
+behind master and the brief had been written against a newer tree. `make refs`
+flagged exactly two of the seven: F8790 and D955. The other five were silent.
+
+That asymmetry is not about staleness. It is about SPELLING.
+
+**The mechanism**, from `tools/refcheck.py`:
+
+    _EM = r"[\s*_`]*"
+    FINDING_REF = re.compile(
+        r"\bfindings?" + _EM + r"\s" + _EM +
+        r"(F?\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM + r"F?\d+[a-z]?)*)", re.I)
+    DEV_REF = re.compile(r"\bD(\d+[a-z]?)\b")
+
+`FINDING_REF` requires the literal word `finding` or `findings` immediately in
+front of the number. `DEV_REF` requires nothing at all. So `D955` is a
+reference and `F8607` is not, and the two flagged citations were flagged only
+because one happened to be a deviation and the other happened to be written
+out longhand.
+
+**THE INJECTION RITUAL, because an observation about a checker is worth
+nothing until the checker has been watched failing to fire** (F134's argument,
+and the reason `extcheck` printed "(none)" through four broken versions). One
+comment line, injected into `test/unit/t_v27fax.c` and removed again, with the
+file verified byte-identical afterwards by SHA-256:
+
+    injected                    exit   references   dangling
+    (nothing)                      0        8404           0
+    /* Fnnnnn */                   0        8404           0
+    /* finding Fnnnnn */           1        8405           1
+    /* Dnnnnn */                   1        8405           1
+    /* deviation Dnnnnn */         1        8405           1
+
+`nnnnn` was 99999, a number no heading defines, and it is spelled with
+letters HERE because the first draft of this table used the digits and
+`make refs` promptly reported three dangling references against the write-up
+itself -- the probe reproducing itself in the record. That is not a curiosity:
+it is the same tool behaving correctly on three of the five forms and
+invisibly on the other two, demonstrated a second time by accident, in a
+document whose only content is prose about citations.
+
+**AND THE DENOMINATOR IS THE POINT, not the exit code.** A bare `F99999` does
+not merely fail to resolve -- the count stays at 8404, so it was never
+COUNTED. It is not a reference the tool checked and accepted; it is text the
+tool never saw. That is the difference between a check that passes and a check
+that does not exist, which is F2400's distinction and F3100's ("a detector
+must report its denominator") arriving at `refcheck` itself. The tool prints
+its denominator faithfully and the denominator is honestly computed; what it
+cannot say is how many citations a human would recognise that it did not.
+
+**The consequence, plainly.** A source comment or a finding body that cites a
+finding in bare form is UNCHECKED. A wrong number, a number that never
+existed, or one that was renumbered out from under it survives every gate in
+this tree for ever, and `make refs` stays green. The cheap fix belongs to the
+author and costs one word: write `finding F8607`, not `F8607`, and the
+citation becomes checkable. Everything in `src/fax/v27.c`,
+`include/dsplib/v27fax.h` and `test/unit/t_v27fax.c` was rewritten to the
+longhand form for this reason.
+
+**Two things this is NOT.** It is not the deliberate exclusion the file argues
+for immediately above the regex: a bare `(651)` in parentheses is invisible on
+purpose, because three digits in brackets are a byte count or a coefficient
+far more often than a citation (finding F543 lists the rows that would be
+corrupted by reading them as references). That exclusion is defensible and the
+`F` prefix exists precisely so a future sweep can be safer than it. And it is
+not a defect report against `tools/refcheck.py` -- the tool was not changed,
+because changing a gate's sensitivity in the middle of a wave would invalidate
+every green run in it, this one included.
+
+**The open question, named and not answered here.** `F8607` is a far more
+distinctive token than `651`: the prefix is exactly what finding F7833 and
+finding F543 introduced so that a citation could be told from a coefficient.
+Whether `FINDING_REF` should therefore accept a prefixed number without the
+keyword -- and what the one-off cost would be in newly-dangling references
+across 2,127 findings' worth of prose -- is a decision for whoever owns the
+tool. It should be measured before it is argued: run the looser pattern over
+the tree and count what goes red, because the answer is a number and not an
+opinion.

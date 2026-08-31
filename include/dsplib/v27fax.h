@@ -392,7 +392,8 @@ int CarrierDetectV27(void *modem);
  * block is the caller's and no reconstructed function allocates it.  Named
  * constants say exactly what is known and no more.  A parallel V.21 pass has
  * reached the same block from the other side; whoever merges the two should
- * reconcile the spellings rather than let a fourth accumulate.  F8872.
+ * reconcile the spellings rather than let a fourth accumulate.  See finding
+ * F8872.
  *
  * THE RATE FIELD IS RANK 1 AS WELL AS RANK 2.  `V21TX_status` does not copy
  * +0x02 from anywhere -- it stores the literal `movw $0x12c,0x2(%edx)` at
