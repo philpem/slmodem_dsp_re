@@ -1,0 +1,115 @@
+[
+ {
+  "note": "src/service/voice.c's vce_* / STRM_VCE_* group against build/test/t_vce.  The register sweep covers every number 0..300 against fourteen sensitivities and five periods, both delays are compared against a distinct seed AND against the object's constants, and the transcript is taken at levels 0, 1 and 2 -- so each mutation below moves a compared value or a printed line."
+ },
+ {
+  "label": "the flash timer answers 21",
+  "find": "\t\treturn VCE_FLASH_TIMER;",
+  "replace": "\t\treturn VCE_FLASH_TIMER + 1;"
+ },
+ {
+  "label": "the handset gain answers 18",
+  "find": "\t\treturn VCE_HANDSET_GAIN;",
+  "replace": "\t\treturn VCE_HANDSET_GAIN - 1;"
+ },
+ {
+  "label": "the dial-tone detect delay answers 4",
+  "find": "\t\treturn VCE_DIALTONE_DETECT_DELAY;",
+  "replace": "\t\treturn VCE_DIALTONE_DETECT_DELAY + 1;"
+ },
+ {
+  "label": "the sensitivity is banded by 32 rather than 64",
+  "find": "\t\tlevel = vi->silence_detect_sensitivity\n\t\t\t>> VCE_SILENCE_LEVEL_SHIFT;",
+  "replace": "\t\tlevel = vi->silence_detect_sensitivity\n\t\t\t>> (VCE_SILENCE_LEVEL_SHIFT - 1);"
+ },
+ {
+  "label": "a non-zero sensitivity under 64 reports level 0",
+  "find": "\t\tif (level == 0)\n\t\t\treturn vi->silence_detect_sensitivity != 0;",
+  "replace": "\t\tif (level == 0)\n\t\t\treturn 0;"
+ },
+ {
+  "label": "the sensitivity saturates one step late",
+  "find": "\t\tif (level > VCE_SILENCE_LEVEL_MAX)",
+  "replace": "\t\tif (level > VCE_SILENCE_LEVEL_MAX + 1)"
+ },
+ {
+  "label": "the saturated sensitivity is 2",
+  "find": "\t\t\treturn VCE_SILENCE_LEVEL_MAX;",
+  "replace": "\t\t\treturn VCE_SILENCE_LEVEL_MAX - 1;"
+ },
+ {
+  "label": "S83 answers the sensitivity instead of the period",
+  "find": "\t\treturn vi->silence_detect_period;",
+  "replace": "\t\treturn vi->silence_detect_sensitivity;"
+ },
+ {
+  "label": "the two gain registers answer tx_gain",
+  "find": "\t\treturn vi->rx_gain;",
+  "replace": "\t\treturn vi->tx_gain;"
+ },
+ {
+  "label": "S139 falls through to the default answer",
+  "find": "\tcase SREG_MIC_GAIN:\n\tcase SREG_LINE_RECORD_GAIN:\n\t\treturn vi->rx_gain;",
+  "replace": "\tcase SREG_MIC_GAIN:\n\t\treturn vi->rx_gain;"
+ },
+ {
+  "label": "an unknown register answers 1",
+  "find": "\t}\n\treturn 0;\n}",
+  "replace": "\t}\n\treturn 1;\n}"
+ },
+ {
+  "label": "the block is fetched under MDMPRM_DSPINFO",
+  "find": "modem_get_param(modem, MDMPRM_VOICEINFO)",
+  "replace": "modem_get_param(modem, MDMPRM_DSPINFO)"
+ },
+ {
+  "label": "the far echo delay is 52",
+  "find": "\t*psFarEchoDelay = STRM_VCE_FAR_ECHO_DELAY;",
+  "replace": "\t*psFarEchoDelay = STRM_VCE_FAR_ECHO_DELAY + 1;"
+ },
+ {
+  "label": "the near echo delay is 370",
+  "find": "\t*psNearEchoDelay = STRM_VCE_NEAR_ECHO_DELAY;",
+  "replace": "\t*psNearEchoDelay = STRM_VCE_NEAR_ECHO_DELAY + 1;"
+ },
+ {
+  "label": "the two delays are written to each other's pointer",
+  "find": "\t*psFarEchoDelay = STRM_VCE_FAR_ECHO_DELAY;\n\t*psNearEchoDelay = STRM_VCE_NEAR_ECHO_DELAY;",
+  "replace": "\t*psNearEchoDelay = STRM_VCE_FAR_ECHO_DELAY;\n\t*psFarEchoDelay = STRM_VCE_NEAR_ECHO_DELAY;"
+ },
+ {
+  "label": "the delays are reported before they are written, not after",
+  "find": "\t*psFarEchoDelay = STRM_VCE_FAR_ECHO_DELAY;\n\t*psNearEchoDelay = STRM_VCE_NEAR_ECHO_DELAY;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \\n\",\n\t\t    *psFarEchoDelay, *psNearEchoDelay);",
+  "replace": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \\n\",\n\t\t    *psFarEchoDelay, *psNearEchoDelay);\n\n\t*psFarEchoDelay = STRM_VCE_FAR_ECHO_DELAY;\n\t*psNearEchoDelay = STRM_VCE_NEAR_ECHO_DELAY;"
+ },
+ {
+  "label": "the \"new\" line is not printed at all",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\n\t\t    \"voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \\n\",\n\t\t    *psFarEchoDelay, *psNearEchoDelay);",
+  "replace": "\tif (0)\n\t\tdsplibs_debug_printf(\n\t\t    \"voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \\n\",\n\t\t    *psFarEchoDelay, *psNearEchoDelay);"
+ },
+ {
+  "label": "the \"old\" line prints the two delays the other way round",
+  "find": "\t\t    \"voice: StrmVCE old: *psFarEchoDelay %d ,*psNearEchoDelay %d \\n\",\n\t\t    *psFarEchoDelay, *psNearEchoDelay);",
+  "replace": "\t\t    \"voice: StrmVCE old: *psFarEchoDelay %d ,*psNearEchoDelay %d \\n\",\n\t\t    *psNearEchoDelay, *psFarEchoDelay);"
+ },
+ {
+  "label": "vce_hook_on announces itself as vce_hook_off",
+  "find": "dsplibs_debug_printf(\"voice: vce_hook_on (%p)...\\n\", p);",
+  "replace": "dsplibs_debug_printf(\"voice: vce_hook_off (%p)...\\n\", p);"
+ },
+ {
+  "label": "vce_hook_on's gate fires at level 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"voice: vce_hook_on (%p)...\\n\", p);",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"voice: vce_hook_on (%p)...\\n\", p);"
+ },
+ {
+  "label": "vce_hook_off's gate fires at level 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"voice: vce_hook_off (%p)...\\n\", p);",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"voice: vce_hook_off (%p)...\\n\", p);"
+ },
+ {
+  "label": "the hooks print their argument as an integer",
+  "find": "dsplibs_debug_printf(\"voice: vce_hook_off (%p)...\\n\", p);",
+  "replace": "dsplibs_debug_printf(\"voice: vce_hook_off (%d)...\\n\", (int)(size_t)p);"
+ }
+]

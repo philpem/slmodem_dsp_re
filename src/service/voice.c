@@ -9,8 +9,24 @@
  *     0x2350 RD_ring_details     0x2740 RingDetector_Process
  *     0x2360 RingDetector_Delete
  *
- * The rest of the TU (`VOICE_*`, `vce_*`) joins it here as it is written; it
- * is blocked today on the FDSP kernel and the beep generator.
+ * ...and, at the END of the file, four more of the span's symbols:
+ *
+ *     0x0600 vce_hook_on        0x0660 vce_get_sreg
+ *     0x0630 vce_hook_off       0x13b0 STRM_VCE_GetFDSPEnvironmentalParams
+ *
+ * THEY ARE OUT OF EMISSION ORDER ON PURPOSE, and that is a deviation from
+ * this tree's usual rule, so it is written down rather than left to be
+ * discovered.  All four precede `RD_create` in the object -- the first three
+ * are the span's first three symbols -- so faithful order would put them at
+ * the top of this file.  They are appended instead because emission order is
+ * a register-allocation carrier (CLAUDE.md's lever 2), the ring detector
+ * above was measured in its current position, and this session has no period
+ * compiler with which to re-measure it after a move.  Whoever next runs
+ * `byteident.py` over this file should try the faithful order and keep it if
+ * nothing above regresses.  Finding F8773.
+ *
+ * The rest of the TU (`VOICE_*`) joins it here as it is written; it is
+ * blocked today on the FDSP kernel and the beep generator.
  *
  * WHAT THE DETECTOR IS.  A hysteretic zero-crossing counter run over the
  * incoming 16-bit samples.  `RD_create` picks a threshold from the codec type
@@ -37,6 +53,7 @@
  */
 
 #include "dsplib/ringdet.h"
+#include "dsplib/vce.h"
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/modem_params.h"
@@ -499,4 +516,113 @@ RingDetector_Process(struct ring_detector *s, short *in, unsigned int count)
 	}
 	s->ring_reported = s->ring_active;
 	return ret;
+}
+
+/* ------------------------------------------------------------------ *
+ * The `vce_*` / `STRM_VCE_*` group.  See the note at the top of the   *
+ * file about why these sit here and not before `RD_create`.           *
+ * ------------------------------------------------------------------ */
+
+/*
+ * Off-hook and on-hook notifications.  Both are pure diagnostics in this
+ * object: the whole body is the `> 1` gate and one printf, and the argument
+ * is printed with `%p` and otherwise untouched, so nothing observable happens
+ * at level 0 or 1.  Kept for the reason debug.h gives -- the call site is the
+ * author's annotation, and a reconstruction that dropped it would differ in
+ * control flow from the object even where the output agreed.
+ */
+void
+vce_hook_on(void *p)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("voice: vce_hook_on (%p)...\n", p);
+}
+
+void
+vce_hook_off(void *p)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("voice: vce_hook_off (%p)...\n", p);
+}
+
+/*
+ * The voice service's own S-register reader.
+ *
+ * slmodemd has a `modem_get_sreg`, and this is NOT a call into it: the object
+ * fetches `struct voice_info` under MDMPRM_VOICEINFO and answers seven
+ * register numbers out of that block and out of three built-in constants.
+ * Everything else reads back 0, including every register the host would have
+ * had a value for.
+ *
+ * The seven, and where each answer comes from:
+ *
+ *   S24  flash timer                     20, constant
+ *   S72  handset gain                    19, constant
+ *   S73  voice dial-tone detect delay     3, constant (seconds)
+ *   S82  #VSS silence sensitivity        voice_info.silence_detect_sensitivity,
+ *                                        reduced to a 0..3 level
+ *   S83  #VSP silence period             voice_info.silence_detect_period
+ *   S138 mic gain                        voice_info.rx_gain
+ *   S139 line record gain                voice_info.rx_gain
+ *
+ * The block is fetched BEFORE the switch, unconditionally, so the three
+ * constant answers still cost a `modem_get_param` call -- which is visible in
+ * the object (the call is the first thing the function does) and is worth
+ * preserving because a caller's parameter log can see it.
+ */
+int
+vce_get_sreg(void *modem, unsigned int num)
+{
+	struct voice_info *vi;
+	unsigned int level;
+
+	vi = (struct voice_info *)modem_get_param(modem, MDMPRM_VOICEINFO);
+
+	switch (num) {
+	case SREG_FLASH_TIMER:
+		return VCE_FLASH_TIMER;
+	case SREG_HANDSET_GANE:
+		return VCE_HANDSET_GAIN;
+	case SREG_VOICE_DIALTONE_DETECT_DELAY:
+		return VCE_DIALTONE_DETECT_DELAY;
+	case SREG_SILENCE_DETECT_SENSITIVITY:
+		level = vi->silence_detect_sensitivity
+			>> VCE_SILENCE_LEVEL_SHIFT;
+		if (level == 0)
+			return vi->silence_detect_sensitivity != 0;
+		if (level > VCE_SILENCE_LEVEL_MAX)
+			return VCE_SILENCE_LEVEL_MAX;
+		return level;
+	case SREG_SILENCE_DETECT_DURATION:
+		return vi->silence_detect_period;
+	case SREG_MIC_GAIN:
+	case SREG_LINE_RECORD_GAIN:
+		return vi->rx_gain;
+	}
+	return 0;
+}
+
+/*
+ * The FDSP environment the voice stream runs in: two echo delays, in
+ * samples, WRITTEN not read.  Both are constants in this object -- 51 and
+ * 369 -- and the incoming values are only ever printed, which is what makes
+ * the two debug lines ("old:" before, "new:" after) the whole evidence for
+ * the argument names.  A caller therefore cannot influence the answer.
+ */
+void
+STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
+				    short *psNearEchoDelay)
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "voice: StrmVCE old: *psFarEchoDelay %d ,*psNearEchoDelay %d \n",
+		    *psFarEchoDelay, *psNearEchoDelay);
+
+	*psFarEchoDelay = STRM_VCE_FAR_ECHO_DELAY;
+	*psNearEchoDelay = STRM_VCE_NEAR_ECHO_DELAY;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+		    "voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \n",
+		    *psFarEchoDelay, *psNearEchoDelay);
 }

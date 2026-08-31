@@ -908,6 +908,22 @@
     "timeout code 13 is a second, not no-limit": "caught"
    }
   },
+  "mtktab": {
+   "key": "edb065cfb2deade6667a8f4cc2a3f6c1d7825bb3bcf9d2e3cfbc236a95a76f55",
+   "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "MTK_atan_table's first entry": "caught",
+    "MTK_atan_table's last entry": "caught",
+    "MTK_cos_sign's fourth quadrant is negative": "caught",
+    "MTK_cos_table's end point is not 0": "caught",
+    "MTK_cos_table's first entry is not 1": "caught",
+    "MTK_sin_sign's third quadrant is positive": "caught",
+    "MTK_sin_table's end point is not 1": "caught",
+    "MTK_sin_table's first entry": "caught",
+    "MTK_xor_table's first row loses a bit": "caught",
+    "MTK_xor_table's last entry is not 8": "caught"
+   }
+  },
   "notch": {
    "key": "d8ceedb583aca3fff5606db3c548e3fad3f2bdf17442b7ad7142f8bda1b48235",
    "summary": "8 mutations: 8 caught (8 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1066,7 +1082,7 @@
    }
   },
   "ringdet": {
-   "key": "4f67fa675c49cac5d0ed3ca997e2c883bcdba5ba0df479e77a4bf42ea1498023",
+   "key": "0332c8698278bed0c82e98efaa41c1cdc787d6d8a29eb5a8f4c2be115a3171d2",
    "summary": "41 mutations: 41 caught (41 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "GetLastRing returns the two values swapped": "caught",
@@ -10167,6 +10183,54 @@
     "the zeros are scaled like the poles": "caught",
     "trellisType comes from extendEu": "caught",
     "zero prints as positive": "caught"
+   }
+  },
+  "vce": {
+   "key": "9b4fc6f845d554318827a2315b4414a6895cbc8fe7ae70c15ecb48840fd7131b",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "S139 falls through to the default answer": "caught",
+    "S83 answers the sensitivity instead of the period": "caught",
+    "a non-zero sensitivity under 64 reports level 0": "caught",
+    "an unknown register answers 1": "caught",
+    "the \"new\" line is not printed at all": "caught",
+    "the \"old\" line prints the two delays the other way round": "caught",
+    "the block is fetched under MDMPRM_DSPINFO": "caught",
+    "the delays are reported before they are written, not after": "caught",
+    "the dial-tone detect delay answers 4": "caught",
+    "the far echo delay is 52": "caught",
+    "the flash timer answers 21": "caught",
+    "the handset gain answers 18": "caught",
+    "the hooks print their argument as an integer": "caught",
+    "the near echo delay is 370": "caught",
+    "the saturated sensitivity is 2": "caught",
+    "the sensitivity is banded by 32 rather than 64": "caught",
+    "the sensitivity saturates one step late": "caught",
+    "the two delays are written to each other's pointer": "caught",
+    "the two gain registers answer tx_gain": "caught",
+    "vce_hook_off's gate fires at level 1": "caught",
+    "vce_hook_on announces itself as vce_hook_off": "caught",
+    "vce_hook_on's gate fires at level 1": "caught"
+   }
+  },
+  "vcedle": {
+   "key": "7fa75226d56506cccaf7cd3e1c478994ade5b879abd55bd0c347444f0628ceb2",
+   "summary": "14 mutations: 14 caught (14 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "CAN is recognised as 0x19": "caught",
+    "CAN returns 8": "caught",
+    "CAN sets the ETX flag": "caught",
+    "ETX and CAN announce each other": "caught",
+    "ETX is recognised as 0x04": "caught",
+    "ETX returns 1": "caught",
+    "ETX sets the CAN flag": "caught",
+    "an unknown command returns 9": "caught",
+    "the CAN gate fires at level 1": "caught",
+    "the ETX arm falls through to CAN": "caught",
+    "the ETX flag is set to 2": "caught",
+    "the command byte is printed without its sign extension": "caught",
+    "the unknown-command gate fires at level 1": "caught",
+    "the unknown-command line prints decimal": "caught"
    }
   },
   "vparser": {

@@ -871,5 +871,17 @@
  "dpinit": [
   "src/core/dp_init.c",
   "build/test/t_dpinit"
+ ],
+ "vce": [
+  "src/service/voice.c",
+  "build/test/t_vce"
+ ],
+ "vcedle": [
+  "src/service/voicecmd.c",
+  "build/test/t_vcedle"
+ ],
+ "mtktab": [
+  "src/service/mtk_tables.c",
+  "build/test/t_mtktab"
  ]
 }
