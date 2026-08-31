@@ -98866,3 +98866,51 @@ Neither arm can be driven from a fixture: the harness allocator does not
 fail on request, so `t_fdspksil` records the check rather than testing it,
 and the mutation set carries a NOT-here note instead of a mutant that would
 read NOT CAUGHT while modelling nothing.
+
+### F8746. Voice is a strict three-layer pipeline, and the layering is what makes it parallelisable — measured, so it need not be re-derived
+
+*2026-08-31.* At `852cb72c` (the ring detector landed, nothing else of voice
+written) `tools/service.py --list other` reported 59 symbols / 21,741 bytes
+for "voice / Caller ID / ring detect only". Ten of those are Caller ID
+(`cid_modem` 1,487, `data_formatted_output` 1,310, `cid_progress` 992,
+`reset_cid` 517, `cid_create` 204, `create_cid` 183, `cid_get_strings` 145,
+`data_unformatted_output` 117, `cid_freq_sampl` 107, `cid_delete` 86 —
+5,148 bytes). **Voice itself was therefore 49 symbols / 16,593 bytes reached
+by an entry point, plus `voice_set_online` (47) and `voice_set_duplex` (45)
+in the no-entry-point bucket: 51 symbols / 16,685 bytes.**
+
+`readyqueue.py` per span shows it is not a flat list but three layers, and
+almost nothing crosses a layer boundary sideways:
+
+| layer | what | bytes |
+|---|---|--:|
+| 1 | the leaves: `FIFO8_*`, `silence_{create,delete,is_more_then}`, `TONE_{detect,delete}`, `_status`, `FDSP_Kernel_{InitObj,SetInternalBeepInProgress}`, `beepgen_*`, `create_dtmf`, `FDSP_DP_Run`, `detector_set_*`, `vce_*`, `STRM_VCE_GetFDSPEnvironmentalParams`, `voice_dle_command`, the MTK tables | ~4,700 |
+| 2 | the per-block path: `silence_progress`, `MTK_phasor`, `TONE_create`, `detector_{create,progress,delete}`, `FDSP_DP_{Create,Delete}`, `voice_{rx,tx,duplex,set_rx,set_tx,online}`, `voice_set_{online,duplex}` | ~6,300 |
+| 3 | the service faces: `VOICE_{create,delete,command,process}` and `voice_{create,command,modem,delete}` | ~5,700 |
+
+**Layer 1 has no internal edges at all**, which is the fact worth recording:
+its four spans (`voice.c#3 +3`, `Fdspkrnl.c +13`, `Beepgen.c +3` and the
+voice share of `class1tx.c +94`) were taken by four agents at once with no
+coordination beyond a file-ownership split, and merged with conflicts only in
+`docs/findings.md`, `docs/deviations.md` and the two mutation JSONs — never in
+`src/`. Layer 2 then opened in one step: `voice_online` went from "needs 2" to
+READY the moment `beepgen_sample` and
+`FDSP_Kernel_SetInternalBeepInProgress` landed, and `voice_rx` and
+`voice_set_rx` from "needs 5" to "needs `silence_progress`".
+
+**THE SPAN LABELS MISLEAD HERE MORE THAN USUAL, and CLAUDE.md's rule is not
+enough on its own.** "Do not read a span name as a module name" was written
+for V.32, where a span named `V32mod.c` held V.22. Voice is the same defect in
+a worse place: **six voice symbols sit in a span labelled `class1tx.c +94`**,
+which is the FAX span — the largest thing left in the object and deliberately
+LAST. `voice_command` (802), `voice_create` (642), `voice_online` (508),
+`voice_modem` (338), `voice_dle_command` (196) and `voice_delete` (181), 2,667
+bytes, are voice and not fax, and a pass that took "fax is last" to mean "skip
+`class1tx.c +94`" would leave 16% of voice permanently unscheduled. File
+layout is ours; they belong in `src/service/`, and each such file's banner
+names the span it came from so the next reader is not surprised twice.
+
+**`service.py`'s `other` bucket does not separate the three services**, so the
+Caller ID subtraction above is by name and by hand. That is fine for a
+scheduling figure and is not evidence; `tools/closure.py` from the three entry
+point sets is what would settle it if a sharper number is ever needed.
