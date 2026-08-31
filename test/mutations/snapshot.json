@@ -455,8 +455,8 @@
    }
   },
   "fdspksil": {
-   "key": "99022dd2bad1375baa0df8a81425d3b4f4ce564778876ed229e544b96b921d21",
-   "summary": "32 mutations: 32 caught (32 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "key": "ae0de10698c7861e94512027ea0a7d789fdbab82286216194cfdec7080e0af2b",
+   "summary": "35 mutations: 35 caught (35 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
    "verdicts": {
     "_status advances the length by one": "caught",
     "_status escapes with 0x11 rather than DLE": "caught",
@@ -467,6 +467,9 @@
     "a loud block does not raise the signal flag": "caught",
     "a loud block does not restart the run counter": "caught",
     "a zero level setting is not treated as disabled": "caught",
+    "silence level 1 is one ULP high": "caught",
+    "silence level 2 is one ULP low": "caught",
+    "silence level 3 is one ULP high": "caught",
     "silence_create does not keep the callback's context": "caught",
     "silence_create leaves the block cursor alone": "caught",
     "silence_create leaves the energy accumulator alone": "caught",

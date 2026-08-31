@@ -98946,3 +98946,60 @@ must not chase the modern compiler.
 The difference is confined to the debug line: the value only reaches
 `s->count > level`, and both readings are negative, so the run always
 escapes on the first silent block either way.
+
+### F8747. `silence_level_table` prints as 2699, 7500 and 24299, its comment said 2700/7500/24300, and only ONE ULP direction per row is catchable at all
+
+*2026-08-31.* Two results, from re-reading a function another agent had
+already written and passed. Both were found by an INDEPENDENT SECOND READ of
+the same 623 bytes, which is the only cross-check a single-author
+reconstruction ever gets, and the second result contradicts that read as well.
+
+**THE COMMENT WAS WRONG IN TWO OF THREE FIGURES.** `silence.c`'s table header
+said the three live rows turn back into "2700, 7500 and 24300" through
+`SILENCE_FULLSCALE2`. The object loads both operands with `flds` and
+multiplies at x87 EXTENDED precision (0xb052e-0xb053c), so the product of two
+24-bit mantissas is EXACT in a 64-bit one, and 0xb054b then sets
+round-toward-zero with `or $0xc00` before `fistpl`. Truncating the exact
+products
+
+    2699.999989941716    7500.000216186047    24299.999177098274
+
+gives **2699, 7500, 24299**. Round each product to a `float` first -- which is
+what a compile-time fold in `float` does, and what a reader does in their head
+-- and you get the round numbers the comment claimed. Both sides of the
+differential print whichever it is, so nothing in the suite could ever fail on
+it: findings F6100 and F6103's shape exactly, in a comment written three hours
+earlier.
+
+**AND THE TABLE ITSELF WAS COVERED BY NOTHING.** `fdspksil.json` reached it
+only through "the threshold test runs the wrong way round", which moves the
+COMPARISON and leaves the four words untouched -- so a mistyped digit in any
+row was untested. Three one-ULP mutants now cover it and are caught.
+
+**THE INTERESTING PART IS WHICH ONES.** The obvious expectation is six mutants,
+one per row per direction. Registering all six gives three permanent NOT CAUGHT
+rows, and the reason is that **the threshold branch catches none of the six.**
+The value reaching `acc > silence_level_table[lvl]` is always a block sum times
+0.00125; that map steps by about 1.28 ULP and therefore SKIPS floats, so a
+one-ULP move of the threshold has no preimage on either side and no input the
+function accepts can land in the gap. Every catch is the DEBUG LINE instead,
+and only where the one-ULP step crosses an INTEGER in the truncation above.
+Rows 1 and 3 sit just below an integer, so only a step UP crosses it; row 2
+sits just above one, so only a step DOWN does. One direction per row, and
+which direction is a property of the constant rather than of the code.
+
+**THE SECOND READ GOT THAT PART WRONG TOO, AND THAT IS THE POINT.** It reported
+rows 1 and 3 catchable in both directions with row 2 high as the single gap.
+Running the suite says the opposite: rows 1 and 3 are catchable UP only, row 2
+DOWN only. An analytical argument about which mutants a test can distinguish
+is a hypothesis, and `mutate.py` is the measurement -- the same relationship
+`extcheck.py` has to `dis.py` (finding F2402, one report in five real). Neither
+read was worthless and neither was authoritative; the run settled it.
+
+**What the second read DID settle, by agreeing:** the sixteen bytes
+(`bf800000 3628c2a3 36ea63aa 37bddaf7`) byte for byte, and that
+`silence_progress` is plain cdecl with all five arguments on the stack despite
+being `t`/LOCAL in the symbol table -- the prologue reads 0x30(%esp) upward
+after `sub $0x2c`. That is F8770's correction of F8462 confirmed a second time
+on a second function: **LOCAL predicts nothing about the calling convention;
+read the prologue.**
