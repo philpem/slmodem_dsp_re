@@ -19,8 +19,8 @@
  * pack_next_bit is driven as a stream -- the framer's whole point is what
  * carries between calls -- with bit values 0 and 1 plus the occasional 2
  * and -1, which state 0 must count as spaces and state 2 must smear into
- * high positions exactly as the object does.  f028 stays small (0..7): the
- * shift count in state 2 starts at f028, and a huge value would make the
+ * high positions exactly as the object does.  threshold stays small (0..7): the
+ * shift count in state 2 starts at threshold, and a huge value would make the
  * C shift undefined where the hardware masks by 31 -- unreachable from
  * create_cid's seed of 2 and untestable honestly.
  */
@@ -260,7 +260,7 @@ run_framer(void)
 	diff_begin("pack_next_bit");
 	for (stream = 0; stream < 12; stream++) {
 		fill(&a, (unsigned)sizeof(a));
-		a.f028 = (short)(stream % 8);
+		a.threshold = (short)(stream % 8);
 		a.pack_state = (short)((stream & 3) == 3 ? rnd() % 4 : 0);
 		a.pack_pos = (short)(rnd() % 8);
 		a.pack_len = (short)(rnd() % 16);

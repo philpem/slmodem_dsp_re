@@ -275,7 +275,7 @@ run_reset(void)
 	cmp_cid("create_cid on zeroed storage", &a, &b, 0);
 
 	diff_eq_int("create_cid seeds rate (%ld)", a.cid.rate, 8000, 0);
-	diff_eq_int("create_cid seeds f028 (%ld)", a.cid.f028, 2, 0);
+	diff_eq_int("create_cid seeds threshold (%ld)", a.cid.threshold, 2, 0);
 	diff_eq_int("create_cid seeds f02c (%ld)", a.cid.f02c, 9, 0);
 	diff_eq_int("reset_cid sizes the history (%ld)",
 		    a.cid.mrf.history_len, 10, 0);
@@ -319,7 +319,7 @@ run_reset(void)
 	ref_reset_cid(&b.cid);
 	cmp_cid("reset_cid over a dirty object", &a, &b, 2);
 	diff_eq_int("reset_cid keeps rate (%ld)", a.cid.rate, b.cid.rate, 2);
-	diff_eq_int("reset_cid keeps f028 (%ld)", a.cid.f028, b.cid.f028, 2);
+	diff_eq_int("reset_cid keeps threshold (%ld)", a.cid.threshold, b.cid.threshold, 2);
 	diff_eq_int("reset_cid keeps f02c (%ld)", a.cid.f02c, b.cid.f02c, 2);
 	diff_eq_int("reset_cid cleared pack_len (%ld)", a.cid.pack_len, 0, 2);
 	diff_eq_int("reset_cid cleared data[119] (%ld)", a.cid.data[119], 0,
@@ -699,8 +699,8 @@ run_modem(short rate, double fs)
 			sb.cid.pack_pos = sa.cid.pack_pos;
 			sa.cid.pack_state = (short)(k % 4);
 			sb.cid.pack_state = sa.cid.pack_state;
-			sa.cid.f028 = (short)(k % 5);
-			sb.cid.f028 = sa.cid.f028;
+			sa.cid.threshold = (short)(k % 5);
+			sb.cid.threshold = sa.cid.threshold;
 			sa.cid.f02c = 9;
 			sb.cid.f02c = 9;
 

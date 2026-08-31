@@ -286,7 +286,7 @@ cid_threshold(struct cid_modem *ctx, int thr)
 	if (ctx->mode != 0)
 		ctx->dtmf->sens = (short)thr;
 	if (ctx->mode != 1)
-		ctx->fsk->f028 = (short)thr;
+		ctx->fsk->threshold = (short)thr;
 }
 
 void

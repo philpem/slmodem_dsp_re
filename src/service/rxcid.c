@@ -73,7 +73,7 @@ static const short V23_MRF_FILT[90] = {
  *
  * Everything the DSP accumulates is cleared and the resampler is
  * (re-)configured; the three settings `create_cid` and the CID service write
- * -- `rate`, `f028` and `f02c` -- survive, which is what makes this usable as
+ * -- `rate`, `threshold` and `f02c` -- survive, which is what makes this usable as
  * `cid_reset`'s reset as well as part of construction.
  *
  * THE `fresh` ARGUMENT IS THE HISTORY POINTER ITSELF.  FPM_MRF_init allocates
@@ -203,18 +203,18 @@ create_cid(struct cid *cid)
 	reset_cid(cid);
 
 	cid->rate = CID_RATE_8000;
-	cid->f028 = 2;
+	cid->threshold = 2;
 	cid->f02c = 9;
 
 	/*
-	 * The object's own words, and what settles `f028`: it is the
-	 * "Threshold".  The name is not changed here because src/service/cid.c
-	 * and t_cidsvc name the field; finding F8710 records the evidence.
+	 * The object's own words, and what NAMED `threshold`: this line calls
+	 * it the "Threshold", which is evidence rule 1 and is why the field is
+	 * not an `fNNNN` any more.  Finding F8710.
 	 *
 	 * `rate` is re-loaded with `movzwl`, so it is read unsigned here as it
 	 * is everywhere else.  The second `%d` is a materialised constant 2 in
-	 * the object, so which of `cid->f028`, a local or a literal the author
-	 * wrote is not recoverable -- written the plain way, exactly as
+	 * the object, so which of `cid->threshold`, a local or a literal the
+	 * author wrote is not recoverable -- written the plain way, exactly as
 	 * create_cid_dtmf's 0 is.
 	 */
 	if (DSPLIB_DEBUG_ON())
@@ -235,10 +235,10 @@ create_cid(struct cid *cid)
  *      counts as space, including values above 1) steps mark_bal up, a
  *      space steps it down; sixteen net marks arm state 3 and clear the
  *      accumulator.
- *   3  channel seizure.  A run of f028 + 1 consecutive spaces enters the
- *      byte collector -- but the object BACKDATES pack_pos to f028 rather
+ *   3  channel seizure.  A run of threshold + 1 consecutive spaces enters the
+ *      byte collector -- but the object BACKDATES pack_pos to threshold rather
  *      than clearing it, so the first byte's bits land at positions
- *      f028..7 and the low positions keep whatever state 0 left in the
+ *      threshold..7 and the low positions keep whatever state 0 left in the
  *      accumulator (state 0 cleared it, so zeros).  Kept exactly; see the
  *      deviations note D954.
  *   1  between bytes: wait for a start bit (space), then clear and collect.
@@ -257,8 +257,8 @@ pack_next_bit(short bit, struct cid *cid)
 {
 	unsigned short limit = 0;
 
-	if (cid->f028)
-		limit = (unsigned short)cid->f028;
+	if (cid->threshold)
+		limit = (unsigned short)cid->threshold;
 
 	if (cid->pack_state == 0) {
 		if (bit == 1)

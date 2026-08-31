@@ -114,7 +114,7 @@ struct cid_modem {
 
 /*
  * Set the detector thresholds on whichever receivers the mode says exist:
- * the DTMF receiver's `sens` (modes 1 and 5) and the FSK receiver's f028
+ * the DTMF receiver's `sens` (modes 1 and 5) and the FSK receiver's threshold
  * (modes 0 and 5).  `thr` arrives as an int and is stored as a short, which
  * is the object's own truncation.
  */

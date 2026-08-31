@@ -60,9 +60,14 @@ struct cid {
 	 * stops a second reset leaking the buffer.
 	 */
 	struct fpm_mrf mrf;		/* +0x00c 9:10, 8000 Hz -> 7200 Hz  */
-	short f028;			/* +0x028 create_cid puts 2 here;
-					 *        the object's own debug text
-					 *        calls it the "Threshold"   */
+	/*
+	 * NAMED FROM THE AUTHOR'S OWN WORDS, evidence rule 1: `create_cid`
+	 * prints "FSK CID  Setting  Fs = %d   Threshold = %d !" with this
+	 * field's seed as the second value (.rodata.str1.4 + 0x116a8).  It
+	 * doubles as `pack_next_bit`'s channel-seizure run length, which is
+	 * the object's own reuse and not two fields.  Finding F8710.
+	 */
+	short threshold;		/* +0x028 create_cid puts 2 here    */
 	short rate;			/* +0x02a 8000 or 9600, the LINE    */
 	short f02c;			/* +0x02c create_cid puts 9 here;
 					 *        cid_modem's confidence step*/
@@ -158,22 +163,23 @@ short CID_MTD_detect(const short *samples, short count, struct cid *cid);
  * the BIT first, the object second.
  *
  * State 0 hunts carrier on a mark/space balance counter; more than 15 net
- * marks arms state 3, which waits for f028 + 1 consecutive spaces...
- * except that the object then backdates the run to f028 and enters state 2
- * directly, so the byte collector starts at bit position f028 rather than
+ * marks arms state 3, which waits for threshold + 1 consecutive spaces...
+ * except that the object then backdates the run to threshold and enters state 2
+ * directly, so the byte collector starts at bit position threshold rather than
  * 0.  State 1 waits for a start bit (a 0); state 2 shifts eight bits
  * LSB-first into pack_acc and appends the byte to `data`.  Nothing bounds
  * pack_len against sizeof(data) -- that is the object's own shape, and
  * cid_modem is what must keep the message short.
  *
- * f028 doubles as the framer's run length here and as the FSK threshold
- * cid_threshold stores; create_cid seeds it with 2.
+ * `threshold` doubles as the framer's channel-seizure run length here and as
+ * the slicer threshold `cid_threshold` stores; create_cid seeds it with 2.
+ * The name is the author's -- see the field's comment above.
  */
 void pack_next_bit(short bit, struct cid *cid);
 
 /*
  * Put the receiver back to the state a new one is in, and configure the 9:10
- * resampler from Rxcid.c's own static filter.  `rate`, `f028` and `f02c` are
+ * resampler from Rxcid.c's own static filter.  `rate`, `threshold` and `f02c` are
  * the caller's and survive; everything else is cleared.
  *
  * FPM_MRF_init is asked to allocate only when `mrf.history` is still NULL, so
@@ -183,7 +189,7 @@ void reset_cid(struct cid *cid);
 
 /*
  * Construct one.  NULL allocates 0x160 bytes; anything else is the caller's
- * storage.  Returns the object either way.  Seeds `rate` with 8000, `f028`
+ * storage.  Returns the object either way.  Seeds `rate` with 8000, `threshold`
  * with 2 and `f02c` with 9, all AFTER the reset.
  */
 struct cid *create_cid(struct cid *cid);
