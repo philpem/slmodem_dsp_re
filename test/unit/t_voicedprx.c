@@ -195,8 +195,14 @@ pair_arm(int out_format, unsigned short marker_period, long tag)
 	 */
 	P.a.cfg.modem = &modem_cookie;
 	P.b.cfg.modem = &modem_cookie;
-	P.a.cfg.fn_04 = (void (*)(void *))query;
-	P.b.cfg.fn_04 = (void (*)(void *))query;
+	/*
+	 * The cast this used to carry is gone: `voice_ctx.cfg` is a
+	 * `struct voice_config` since finding F8813, and its `fn_04` is
+	 * declared with the S-register getter's real signature, which is what
+	 * `query` already has.
+	 */
+	P.a.cfg.fn_04 = query;
+	P.b.cfg.fn_04 = query;
 	P.a.out_format = out_format;
 	P.b.out_format = out_format;
 	P.a.marker_period = marker_period;

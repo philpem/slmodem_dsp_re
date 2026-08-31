@@ -340,15 +340,15 @@ detector_delete(struct detector *d)
 {
 	int i;
 
-	sysdep_free(d->ptr_0004);
+	sysdep_free(d->dtmf);
 	for (i = 0; i <= 3; i++)
 		TONE_delete(d->tone[i]);
 	if (d->cadence_0008 != NULL)
 		cadence_delete(d->cadence_0008);
-	if (d->cadence_000c != NULL)
-		cadence_delete(d->cadence_000c);
-	if (d->cadence_0010 != NULL)
-		cadence_delete(d->cadence_0010);
+	if (d->cadence_busy != NULL)
+		cadence_delete(d->cadence_busy);
+	if (d->cadence_dial != NULL)
+		cadence_delete(d->cadence_dial);
 	sysdep_free(d);
 }
 

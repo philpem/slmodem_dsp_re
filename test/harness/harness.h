@@ -147,6 +147,30 @@ extern struct tty_log harness_tty_ref;
 void harness_tty_reset(void);
 
 /*
+ * The OTHER direction, which had no implementation at all until VOICE_process
+ * arrived: `modem_recv_from_tty` existed only as a `ref_` alias that called
+ * `unexpected()`, so nothing that reads from the host could be tested on both
+ * sides.
+ *
+ * One scripted buffer and TWO CURSORS, for exactly the reason `struct
+ * modem_shim` has two: a shared cursor would have each side consuming the
+ * other's bytes and neither seeing the whole script.  `short_by` makes a call
+ * return fewer bytes than asked for without shortening the script, which is
+ * how the "host sent one byte" edge is reached.  A side with no script reads
+ * zero, which is the idle host.
+ */
+struct tty_in {
+	const unsigned char *script;
+	int script_len;
+	int pos;		/* this side's cursor                */
+	int calls;		/* modem_recv_from_tty calls         */
+	int bytes;		/* bytes actually handed over        */
+};
+extern struct tty_in harness_ttyin_ours;
+extern struct tty_in harness_ttyin_ref;
+void harness_ttyin_reset(const unsigned char *script, int len);
+
+/*
  * Allocation bookkeeping, so a test can assert that create/delete balance.
  * `bad_free` counts frees of pointers the allocator never handed out --
  * double frees and wild pointers -- which are swallowed rather than passed to

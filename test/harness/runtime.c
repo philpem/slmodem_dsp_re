@@ -810,8 +810,51 @@ modem_send_to_tty(void *m, const void *buf, int n)
 int ref_modem_send_to_tty(void *m, const void *buf, int n)
 { (void)m; return tty_add(&harness_tty_ref, buf, n); }
 
+/*
+ * The host's input pipe.  See harness.h for why there are two cursors over
+ * one script.  This replaced an `unexpected()` abort when VOICE_process
+ * arrived: that function reads from the host in two of its four states, so
+ * the abort made those two states untestable rather than unreached.
+ */
+struct tty_in harness_ttyin_ours;
+struct tty_in harness_ttyin_ref;
+
+void
+harness_ttyin_reset(const unsigned char *script, int len)
+{
+	memset(&harness_ttyin_ours, 0, sizeof(harness_ttyin_ours));
+	memset(&harness_ttyin_ref, 0, sizeof(harness_ttyin_ref));
+	harness_ttyin_ours.script = script;
+	harness_ttyin_ours.script_len = script != NULL ? len : 0;
+	harness_ttyin_ref.script = script;
+	harness_ttyin_ref.script_len = script != NULL ? len : 0;
+}
+
+static int
+ttyin_take(struct tty_in *in, void *buf, int n)
+{
+	int left = in->script_len - in->pos;
+	int take = 0;
+
+	in->calls++;
+	if (n > 0 && left > 0) {
+		take = n < left ? n : left;
+		memcpy(buf, in->script + in->pos, take);
+		in->pos += take;
+		in->bytes += take;
+	}
+	return take;
+}
+
+int
+modem_recv_from_tty(void *m, void *buf, int n)
+{
+	(void)m;
+	return ttyin_take(&harness_ttyin_ours, buf, n);
+}
+
 int ref_modem_recv_from_tty(void *m, void *buf, int n)
-{ (void)m; (void)buf; (void)n; unexpected("modem_recv_from_tty"); return 0; }
+{ (void)m; return ttyin_take(&harness_ttyin_ref, buf, n); }
 
 /*
  * Datapump registry.  Each side records into its own log; see harness.h.

@@ -4,13 +4,13 @@
  },
  {
   "label": "the +0x04 block is leaked",
-  "find": "\tsysdep_free(d->ptr_0004);\n\tfor (i = 0; i <= 3; i++)",
+  "find": "\tsysdep_free(d->dtmf);\n\tfor (i = 0; i <= 3; i++)",
   "replace": "\tfor (i = 0; i <= 3; i++)"
  },
  {
   "label": "the +0x04 block is freed twice",
-  "find": "\tsysdep_free(d->ptr_0004);\n\tfor",
-  "replace": "\tsysdep_free(d->ptr_0004);\n\tsysdep_free(d->ptr_0004);\n\tfor"
+  "find": "\tsysdep_free(d->dtmf);\n\tfor",
+  "replace": "\tsysdep_free(d->dtmf);\n\tsysdep_free(d->dtmf);\n\tfor"
  },
  {
   "label": "only three of the four tones are deleted",
@@ -34,17 +34,17 @@
  },
  {
   "label": "the second cadence is deleted twice and the third not at all",
-  "find": "\tif (d->cadence_0010 != NULL)\n\t\tcadence_delete(d->cadence_0010);",
-  "replace": "\tif (d->cadence_000c != NULL)\n\t\tcadence_delete(d->cadence_000c);"
+  "find": "\tif (d->cadence_dial != NULL)\n\t\tcadence_delete(d->cadence_dial);",
+  "replace": "\tif (d->cadence_busy != NULL)\n\t\tcadence_delete(d->cadence_busy);"
  },
  {
   "label": "the third cadence is leaked",
-  "find": "\tif (d->cadence_0010 != NULL)\n\t\tcadence_delete(d->cadence_0010);\n\tsysdep_free(d);",
+  "find": "\tif (d->cadence_dial != NULL)\n\t\tcadence_delete(d->cadence_dial);\n\tsysdep_free(d);",
   "replace": "\tsysdep_free(d);"
  },
  {
   "label": "the detector itself is leaked",
-  "find": "\t\tcadence_delete(d->cadence_0010);\n\tsysdep_free(d);",
-  "replace": "\t\tcadence_delete(d->cadence_0010);"
+  "find": "\t\tcadence_delete(d->cadence_dial);\n\tsysdep_free(d);",
+  "replace": "\t\tcadence_delete(d->cadence_dial);"
  }
 ]

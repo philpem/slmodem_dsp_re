@@ -9,24 +9,31 @@
  *     0x2350 RD_ring_details     0x2740 RingDetector_Process
  *     0x2360 RingDetector_Delete
  *
- * ...and, at the END of the file, four more of the span's symbols:
+ * ...and, at the END of the file, the other eight of the span's symbols, in
+ * the object's own order among themselves:
  *
- *     0x0600 vce_hook_on        0x0660 vce_get_sreg
- *     0x0630 vce_hook_off       0x13b0 STRM_VCE_GetFDSPEnvironmentalParams
+ *     0x0600 vce_hook_on        0x0910 VOICE_delete
+ *     0x0630 vce_hook_off       0x09a0 VOICE_command
+ *     0x0660 vce_get_sreg       0x0bd0 VOICE_process
+ *     0x0720 VOICE_create       0x13b0 STRM_VCE_GetFDSPEnvironmentalParams
  *
- * THEY ARE OUT OF EMISSION ORDER ON PURPOSE, and that is a deviation from
- * this tree's usual rule, so it is written down rather than left to be
- * discovered.  All four precede `RD_create` in the object -- the first three
- * are the span's first three symbols -- so faithful order would put them at
- * the top of this file.  They are appended instead because emission order is
- * a register-allocation carrier (CLAUDE.md's lever 2), the ring detector
- * above was measured in its current position, and this session has no period
- * compiler with which to re-measure it after a move.  Whoever next runs
- * `byteident.py` over this file should try the faithful order and keep it if
- * nothing above regresses.  Finding F8773.
+ * THAT GROUP IS OUT OF EMISSION ORDER RELATIVE TO THE RING DETECTOR, on
+ * purpose, and that is a deviation from this tree's usual rule, so it is
+ * written down rather than left to be discovered.  All eight precede
+ * `RD_create` in the object -- the first three are the span's first three
+ * symbols -- so faithful order would put the whole group at the top of this
+ * file.  It is appended instead because emission order is a register-
+ * allocation carrier (CLAUDE.md's lever 2), the ring detector above was
+ * measured in its current position, and neither the session that wrote the
+ * `vce_*` half nor the one that wrote the `VOICE_*` half had a period
+ * compiler with which to re-measure it after a move.  The eight are at least
+ * in the right order among THEMSELVES, which is all that can be settled
+ * without the measurement.  Whoever next runs `byteident.py` over this file
+ * should try the faithful order and keep it if nothing above regresses.
+ * Findings F8773 and F8835.
  *
- * The rest of the TU (`VOICE_*`) joins it here as it is written; it is
- * blocked today on the FDSP kernel and the beep generator.
+ * The TU is now complete for voice: nothing in the `voice.c#1..#3` spans is
+ * unwritten.
  *
  * WHAT THE DETECTOR IS.  A hysteretic zero-crossing counter run over the
  * incoming 16-bit samples.  `RD_create` picks a threshold from the codec type
@@ -55,8 +62,41 @@
 #include "dsplib/ringdet.h"
 #include "dsplib/vce.h"
 #include "dsplib/debug.h"
+#include "dsplib/fixedrc.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/modem_params.h"
+#include "dsplib/voice.h"
+
+/*
+ * `struct vce_ring` holds no pointers, so its 0x310 bytes are the same claim
+ * off ILP32 and can be asserted outright.  `struct vce` holds five, so
+ * `sizeof == 0x1484` is NOT portable and is not written: what is asserted here
+ * is the pointer-free part of the layout -- the span from the first buffer to
+ * the first ring, and the gap between the two rings -- and the literal 0x1484
+ * is held by t_voiceapi, which compares `harness_alloc_reqsize` on the 32-bit
+ * differential build.  That is the same division `struct rd` above makes, and
+ * for the same reason: a `__SIZEOF_POINTER__` guard would read `#if 0` under
+ * the period compiler and delete the assertion silently
+ * (docs/method/compilers.md).
+ */
+typedef char vce_ring_size_check[sizeof(struct vce_ring) == 0x310 ? 1 : -1];
+typedef char vce_buffers_check[
+    offsetof(struct vce, out_ring) - offsetof(struct vce, host_in)
+	== 0x0e64 - 0x0020 ? 1 : -1];
+typedef char vce_rings_check[
+    offsetof(struct vce, in_ring) - offsetof(struct vce, out_ring)
+	== 0x310 ? 1 : -1];
+
+/*
+ * The host's two byte pipes.  They are slmodemd's, not this object's, and
+ * they are declared here for the same reason src/service/cid.c declares
+ * `modem_send_to_tty` locally: there is no dsplib header that owns them.
+ * Both signatures are slmodemd's own (`modem.c`, `modem_read`/`modem_write`
+ * paths), and the object agrees -- each is called with three arguments and
+ * each result is used as a 32-bit signed count.
+ */
+extern int modem_recv_from_tty(void *m, void *buf, int n);
+extern int modem_send_to_tty(void *m, const void *buf, int n);
 
 typedef char ring_detector_size_check[
     sizeof(struct ring_detector) == 0x54 ? 1 : -1];
@@ -600,6 +640,629 @@ vce_get_sreg(void *modem, unsigned int num)
 		return vi->rx_gain;
 	}
 	return 0;
+}
+
+/*
+ * Build the VOICE service: the 0x1484-byte object, the two rate converters
+ * the line rate needs, and the voice service core underneath it.
+ *
+ * THE RESAMPLER PAIR IS TWO INDEPENDENT TESTS, NOT ONE, and that is what the
+ * object does rather than a paraphrase of it: 8000 jumps over both creations
+ * (0x76c) and everything else runs two separate `9600? 48000?` ladders, one
+ * per direction, storing each result before either is checked.  Written as a
+ * single switch it would not produce the object's two `cmp $0x2580` /
+ * `cmp $0xbb80` pairs.
+ *
+ * THE CONFIG BLOCK IS THE CLASS-2 EVIDENCE FOR `voice_config.fn_04`.  The
+ * three function pointers are `R_386_32` relocations against `.text` at
+ * 0x7e4, 0x7eb and 0x7f0 with targets 0x600, 0x630 and 0x660 -- vce_hook_on,
+ * vce_hook_off and vce_get_sreg -- and the slot each lands in is fixed by the
+ * store offsets (0x24 -> +0x04, 0x28 -> +0x08, 0x2c -> +0x0c).  So +0x04 is
+ * the S-register getter, which is what voice.h's rotation note concluded from
+ * the other end.  All three are `t` in the object and external here (F8770);
+ * a stored function pointer pins the symbol at link exactly as a call does
+ * (F8493), which is why this file must define all three.
+ *
+ * The failure arm cannot be reached from a fixture -- the only way out of it
+ * is a failed `sysdep_malloc` inside `voice_create`, and the harness
+ * allocator cannot be made to fail.  What CAN be reached, and is, is the
+ * unsupported-rate path: any rate that is not one of the three leaves both
+ * converters NULL and takes the same teardown.  F8822's shape, one rung down.
+ */
+void *
+VOICE_create(void *modem, unsigned int rate)
+{
+	struct vce *v;
+	struct voice_config cfg;
+	struct rc *rc_in, *rc_out;
+	int arg[3];
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("voice: VOICE_create...\n");
+
+	v = (struct vce *)sysdep_malloc(sizeof *v);
+	if (!v)
+		return 0;
+	sysdep_memset(v, 0, sizeof *v);
+	v->modem = modem;
+
+	if (rate != VCE_RATE_8000) {
+		rc_in = 0;
+		if (rate == VCE_RATE_9600)
+			rc_in = RcFixed_Create(VCE_RC_MODE_9600_IN);
+		else if (rate == VCE_RATE_48000)
+			rc_in = RcFixed_Create(VCE_RC_MODE_48000_IN);
+		v->rc_in = rc_in;
+
+		rc_out = 0;
+		if (rate == VCE_RATE_9600)
+			rc_out = RcFixed_Create(VCE_RC_MODE_9600_OUT);
+		else if (rate == VCE_RATE_48000)
+			rc_out = RcFixed_Create(VCE_RC_MODE_48000_OUT);
+		v->rc_out = rc_out;
+
+		if (!rc_in || !rc_out)
+			goto fail;
+	}
+
+	v->state = VOICE_STATE_COMMAND;
+	v->info = (struct voice_info *)modem_get_param(modem,
+						       MDMPRM_VOICEINFO);
+
+	cfg.modem = modem;
+	cfg.fn_04 = (unsigned int (*)(void *, int))vce_get_sreg;
+	cfg.fn_08 = vce_hook_on;
+	cfg.fn_0c = vce_hook_off;
+
+	/*
+	 * The output ring starts a whole block ahead of the input one -- its
+	 * count is primed with `block` and its `blk` selects the SECOND half,
+	 * so the first resample writes the half the drain is not reading.
+	 * That is the double buffer's phase, set once, here.
+	 */
+	v->block = rate * VCE_BLOCK_REF_SAMPLES / VCE_BLOCK_REF_RATE;
+	v->out_ring.count = (int)v->block;
+	v->out_ring.blk = v->block;
+
+	v->voice = voice_create(&cfg);
+	if (!v->voice)
+		goto fail;
+
+	/*
+	 * Two commands into the freshly built core, through one argument
+	 * block.  The first is VLS with 0, which is `out_format = 0` -- the
+	 * same value the memset already left there.  The second asks for MODE
+	 * 4, which is not one of the four modes `voice_command` knows, so it
+	 * falls into that switch's default and the only thing it achieves is
+	 * `beep_done = 1`.  Deviation D1024.
+	 */
+	arg[0] = 0;
+	voice_command(v->voice, VOICE_VLS_COMMAND, arg);
+	arg[0] = 4;
+	voice_command(v->voice, VOICE_SET_MODE_COMMAND, arg);
+
+	return v;
+
+fail:
+	if (v->rc_in)
+		RcFixed_Delete(v->rc_in);
+	if (v->rc_out)
+		RcFixed_Delete(v->rc_out);
+	sysdep_free(v);
+	return 0;
+}
+
+/*
+ * Tear it down.  No NULL check on `obj` -- the object dereferences it two
+ * instructions in, at 0x921, so a NULL handle faults here rather than being
+ * ignored.  Every field it frees IS guarded.
+ *
+ * The object has two `jmp sysdep_free` exits, at 0x93e and 0x990, and there
+ * is nothing to spell for that: GCC duplicates the whole body along the debug
+ * and non-debug edges of the leading `if`, so the trailing tail call comes out
+ * twice.  One `sysdep_free(v);` here produces both.
+ */
+void
+VOICE_delete(void *obj)
+{
+	struct vce *v = (struct vce *)obj;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("voice: VOICE_delete...\n");
+
+	if (v->voice)
+		voice_delete(v->voice);
+	if (v->rc_in)
+		RcFixed_Delete(v->rc_in);
+	if (v->rc_out)
+		RcFixed_Delete(v->rc_out);
+	sysdep_free(v);
+}
+
+/*
+ * The host's command interface: eight `enum VOICE_CMD` opcodes translated
+ * into the four `voice_command` opcodes underneath, with the tone parameters
+ * fetched out of `struct voice_info` on the way.
+ *
+ * SEVEN ARMS CONVERGE ON ONE TAIL, at 0x9ec: call `voice_command` with the
+ * translated opcode and the shared argument block, and answer whatever it
+ * answered.  Only the refusal leaves early.
+ *
+ * `host_count = 0` IS NOT PART OF THAT TAIL, and reading it as part of it is
+ * the mistake this function invites.  The store is at 0x9e0 and the join is
+ * FOUR INSTRUCTIONS LATER at 0x9ec, so only the four state arms -- the ones
+ * that fall into 0x9e0 -- clear the field; BEEP, DTMF and ABORT jump straight
+ * to 0x9ec, and so does every refusal.  The four copies below are what the
+ * compiler cross-jumped into that single store.  No return value can tell the
+ * two readings apart; t_voiceapi's whole-object comparison can, and did.
+ * Finding F8837.
+ *
+ * THREE THINGS HERE ARE FAITHFUL AND LOOK WRONG.
+ *
+ *   - Opcode 3 is inside the accepted range and reports itself unknown.  It
+ *     is the host's VOICE_CMD_STATE_DUPLEX and this object has no arm for it;
+ *     its jump-table slot is the out-of-range label.  Deviation D1021.
+ *   - VOICE_CMD_ABORT passes the argument block UNINITIALISED.  Nothing on
+ *     that path writes it and `voice_command`'s VOICE_ABORT_COMMAND arm reads
+ *     no argument, so it is harmless -- but it is what the object does and it
+ *     is not tidied here.  Deviation D1025.
+ *   - Each tone parameter is computed TWICE where the debug line prints it,
+ *     once for the printf and once for the argument block.  That is the
+ *     compiler rematerialising across the call, not two source expressions;
+ *     `info->tone_duration / 10` is written once per arm below.
+ *
+ * The divide is UNSIGNED -- `mul $0xcccccccd` / `shr $3` at 0xa91 and 0xae3 --
+ * which is what `struct voice_info`'s `unsigned` members give for free.
+ */
+int
+VOICE_command(void *obj, unsigned int cmd)
+{
+	struct vce *v = (struct vce *)obj;
+	struct voice_info *info;
+	unsigned int dur;
+	int arg[3];
+	int op;
+
+	if (!v)
+		return -1;
+
+	info = v->info;
+
+	switch (cmd) {
+	case VOICE_CMD_STATE_COMMAND:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_SET_MODE: COMMAND\n");
+		arg[0] = VOICE_MODE_ONLINE;
+		v->host_count = 0;
+		op = VOICE_SET_MODE_COMMAND;
+		break;
+
+	case VOICE_CMD_STATE_RX:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_SET_MODE: RX\n");
+		arg[0] = VOICE_MODE_RX;
+		v->host_count = 0;
+		op = VOICE_SET_MODE_COMMAND;
+		break;
+
+	case VOICE_CMD_STATE_TX:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_SET_MODE: TX\n");
+		arg[0] = VOICE_MODE_TX;
+		v->host_count = 0;
+		op = VOICE_SET_MODE_COMMAND;
+		break;
+
+	case VOICE_CMD_STATE_SPEAKER:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_SET_MODE: SPEAKER\n");
+		arg[0] = VOICE_MODE_DUPLEX;
+		v->host_count = 0;
+		op = VOICE_SET_MODE_COMMAND;
+		break;
+
+	case VOICE_CMD_BEEP:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_BEEP, %d %d %d\n",
+			    info->tone1_freq, info->tone2_freq,
+			    info->tone_duration / 10);
+		arg[0] = info->tone1_freq;
+		arg[1] = info->tone2_freq;
+		arg[2] = info->tone_duration / 10;
+		op = VOICE_BEEP_COMMAND;
+		break;
+
+	case VOICE_CMD_DTMF:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: VOICE_CMD_DTMF, %d %d\n",
+			    info->dtmf_symbol, info->tone_duration / 10);
+		arg[0] = info->dtmf_symbol;
+		/*
+		 * A duration under 10 ms would round to nothing, so it is
+		 * floored at one unit -- and only the ARGUMENT is floored;
+		 * the debug line above prints the raw quotient.
+		 */
+		dur = info->tone_duration / 10;
+		if (dur == 0)
+			dur = 1;
+		arg[1] = (int)dur;
+		op = VOICE_DTMF_COMMAND;
+		break;
+
+	case VOICE_CMD_ABORT:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("voice: VCE: VOICE_CMD_ABORT\n");
+		op = VOICE_ABORT_COMMAND;
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+			    "voice: VCE: Unknown command %u\n", cmd);
+		return -1;
+	}
+
+	return voice_command(v->voice, op, arg);
+}
+
+/*
+ * One buffer of line audio through the voice service.
+ *
+ * THE SHAPE.  An outer loop that takes the caller's buffers a block at a
+ * time, an inner loop that moves samples between those buffers and the two
+ * rate-conversion rings a memcpy at a time, and -- whenever the input ring
+ * has a whole block -- the actual work: resample in, scale to float, exchange
+ * host bytes, run `voice_modem`, act on the message it answers, scale back
+ * and resample out.
+ *
+ * WHY THE INNER LOOP CLAMPS THREE TIMES.  `n` may not exceed the block, what
+ * the caller still has, or the distance from either ring's cursor to the end
+ * of its 2*block window -- the last two because a memcpy must not straddle
+ * the wrap.  All three comparisons are UNSIGNED in the object and are
+ * unsigned here for the same reason: `block` is an unsigned member, so it
+ * converts everything it meets.
+ *
+ * THE OUTER LOOP ADVANCES THE CALLER'S POINTERS BY HALF WHAT IT CONSUMED.
+ * The inner loop moves `2 * n` BYTES per step and advances its own copies by
+ * `2 * n`; the outer step at 0xf69-0xf7b adds `chunk` -- not `2 * chunk` --
+ * to `in` and `out`, which are `void *` in the host's own prototype and so
+ * take byte arithmetic.  Every iteration after the first therefore re-reads
+ * and re-writes the second half of the block it just handled.  It is a defect
+ * in the original, it is reproduced rather than repaired, and it is reachable
+ * at every rate: the outer loop runs twice as soon as `count` exceeds the
+ * block, which is 160 samples at 8 kHz.  Deviation D1020.
+ *
+ * THE 8 kHz CASE MOVES NO AUDIO AT ALL.  At the pump's own rate `VOICE_create`
+ * builds neither converter, and `RcFixed_Resample` on a NULL handle stores 0
+ * through `out_count` and returns -- so `rlen` is 0, both scaling loops are
+ * empty and the output ring is never written.  The host I/O and the whole
+ * message machine still run.  Deviation D1022.
+ */
+int
+VOICE_process(void *obj, void *in, void *out, int count)
+{
+	struct vce *v = (struct vce *)obj;
+	int ret = 0;
+
+	while (count > 0) {
+		unsigned char *rx = (unsigned char *)in;
+		unsigned char *tx = (unsigned char *)out;
+		int chunk = count;
+		int pending = 0;
+		int remaining;
+
+		/*
+		 * The three casts in this function are written rather than
+		 * left implicit.  Each names the conversion the language
+		 * performs anyway -- `block`, `wr` and `rd` are unsigned
+		 * members, so every comparison against them is unsigned, and
+		 * the object encodes exactly that (`jbe` at 0xc1a, 0xcb9 and
+		 * `jb` at 0xd32).  A cast to the type the usual arithmetic
+		 * conversions already produce cannot move code generation; it
+		 * is here so the unsignedness is visible to a reader and is
+		 * not "corrected" by someone reading a signed count.
+		 */
+		if ((unsigned int)chunk > v->block)
+			chunk = (int)v->block;
+		remaining = chunk;
+
+		while (remaining > 0) {
+			unsigned int n = v->block;
+
+			if (n > (unsigned int)remaining)
+				n = (unsigned int)remaining;
+			if (n > 2 * v->block - v->in_ring.wr)
+				n = 2 * v->block - v->in_ring.wr;
+			if (n > 2 * v->block - v->out_ring.rd)
+				n = 2 * v->block - v->out_ring.rd;
+
+			sysdep_memcpy(&v->in_ring.data[v->in_ring.wr], rx,
+				      2 * n);
+			rx += 2 * n;
+			v->in_ring.count += (int)n;
+			v->in_ring.wr = (v->in_ring.wr + n) % (2 * v->block);
+
+			if ((unsigned int)v->in_ring.count >= v->block) {
+				int rlen = VCE_BLOCK_REF_SAMPLES;
+				int outlen;
+				int msg, code, i;
+				unsigned short hostcount, blkcount;
+
+				RcFixed_Resample(v->rc_in,
+						 &v->in_ring.data[v->in_ring.blk],
+						 (int)v->block, v->lin, &rlen);
+
+				for (i = 0; i < rlen; i++)
+					v->from_line[i] =
+					    v->lin[i] * VCE_LINE_IN_SCALE;
+
+				blkcount = VCE_BLOCK_REF_SAMPLES;
+
+				/*
+				 * Playback pulls whatever the host still owes
+				 * us; recording pulls a block only to watch
+				 * for <DLE>'!'.  The two are separate tests
+				 * and the object runs both.
+				 */
+				hostcount = (v->state == VOICE_STATE_TX)
+					    ? (unsigned short)v->host_count : 0;
+				if (hostcount != 0)
+					hostcount = (unsigned short)
+					    modem_recv_from_tty(v->modem,
+								v->host_in,
+								v->host_count);
+				if (v->state == VOICE_STATE_RX) {
+					int got = modem_recv_from_tty(
+					    v->modem, v->host_in,
+					    VCE_BLOCK_REF_SAMPLES);
+
+					if (got > 1) {
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: input in RX mode: %d (%d,%d)\n",
+							    got, v->host_in[0],
+							    v->host_in[1]);
+						if (*(const short *)v->host_in
+						    == VCE_HOST_ABORT_WORD)
+							VOICE_command(v,
+							    VOICE_CMD_ABORT);
+					}
+				}
+
+				msg = voice_modem(v->voice,
+						  (short *)v->host_in,
+						  v->to_line, v->from_line,
+						  (short *)v->host_out,
+						  &hostcount, &blkcount);
+
+				if (v->state == VOICE_STATE_RX
+				    && blkcount != 0)
+					modem_send_to_tty(v->modem,
+							  v->host_out,
+							  blkcount);
+
+				v->host_count = hostcount;
+				code = 0;
+
+				/*
+				 * Only a CHANGE of message is acted on, which
+				 * is what makes the report characters fire
+				 * once per event rather than once per block.
+				 */
+				if (v->last_message != msg) {
+					switch (msg) {
+					case VOICE_NO_MESSAGE:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: VOICE_NO_MESSAGE\n");
+						break;
+
+					case VOICE_OK:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_OK\n");
+						code = VOICE_STATUS_OK;
+						v->state = VOICE_STATE_COMMAND;
+						break;
+
+					case VOICE_START_ONLINE:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: VOICE_START_ONLINE\n");
+						v->state = VOICE_STATE_COMMAND;
+						code = VOICE_STATUS_OK;
+						break;
+
+					case VOICE_START_TX:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_START_TX\n");
+						v->state = VOICE_STATE_TX;
+						code = VOICE_STATUS_CONNECT;
+						v->host_count =
+						    VCE_BLOCK_REF_SAMPLES;
+						break;
+
+					case VOICE_START_RX:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_START_RX\n");
+						v->state = VOICE_STATE_RX;
+						code = VOICE_STATUS_CONNECT;
+						break;
+
+					case VOICE_START_DUPLEX:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_START_DUPLEX\n");
+						v->state = VOICE_STATE_DUPLEX;
+						code = VOICE_STATUS_CONNECT;
+						break;
+
+					case VOICE_PURGE:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_PURGE\n");
+						break;
+
+					case VOICE_ERROR:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_ERROR\n");
+						code = VOICE_STATUS_ERROR;
+						v->state = VOICE_STATE_COMMAND;
+						break;
+
+					case VOICE_START_ONLINE_AFTER_ABORT:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: VOICE_START_ONLINE_AFTER_ABORT(1)\n");
+						v->state = VOICE_STATE_COMMAND;
+						code = VOICE_STATUS_OK;
+						break;
+
+					case VOICE_CANCEL:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE:VOICE_CANCEL\n");
+						break;
+
+					case VOICE_BUSY: {
+						unsigned char rep[2] = {
+							VOICE_DLE
+						};
+
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: BUSY\n");
+						rep[1] = VOICE_REPORT_BUSY;
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: report char: '%c' (%d)\n",
+							    rep[1], rep[1]);
+						modem_send_to_tty(v->modem,
+								  rep, 2);
+						break;
+					}
+
+					case VOICE_DIALTONE: {
+						unsigned char rep[2] = {
+							VOICE_DLE
+						};
+
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: DIALTONE\n");
+						rep[1] = VOICE_REPORT_DIALTONE;
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: report char: '%c' (%d)\n",
+							    rep[1], rep[1]);
+						modem_send_to_tty(v->modem,
+								  rep, 2);
+						break;
+					}
+
+					case VOICE_FAX_TONE: {
+						unsigned char rep[2] = {
+							VOICE_DLE
+						};
+
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: FAX Tone\n");
+						rep[1] = VOICE_REPORT_FAX_TONE;
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: report char: '%c' (%d)\n",
+							    rep[1], rep[1]);
+						modem_send_to_tty(v->modem,
+								  rep, 2);
+						break;
+					}
+
+					case VOICE_UNDERRUN: {
+						unsigned char rep[2] = {
+							VOICE_DLE
+						};
+
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRM_VCE: Underrun\n");
+						rep[1] = VOICE_REPORT_UNDERRUN;
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: report char: '%c' (%d)\n",
+							    rep[1], rep[1]);
+						modem_send_to_tty(v->modem,
+								  rep, 2);
+						break;
+					}
+
+					default:
+						/*
+						 * Shares VOICE_ERROR's whole
+						 * effect -- 0xf9d falls into
+						 * 0xe79 -- and only the line
+						 * it prints is its own.
+						 */
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "voice: STRMVCE Monitor: Unknown message %d\n",
+							    msg);
+						code = VOICE_STATUS_ERROR;
+						v->state = VOICE_STATE_COMMAND;
+						break;
+					}
+					v->last_message = msg;
+				}
+
+				for (i = 0; i < rlen; i++)
+					v->lin[i] = (short)(v->to_line[i]
+						    * VCE_LINE_OUT_SCALE);
+
+				outlen = (int)v->block;
+				RcFixed_Resample(v->rc_out, v->lin, rlen,
+						 &v->out_ring.data[v->out_ring.blk],
+						 &outlen);
+
+				if (code != 0)
+					pending = code;
+
+				/*
+				 * Retire the block from one ring, hand it to
+				 * the other, and flip both halves.
+				 */
+				v->in_ring.count -= (int)v->block;
+				v->in_ring.blk = v->in_ring.blk ? 0 : v->block;
+				v->out_ring.count += (int)v->block;
+				v->out_ring.blk = v->out_ring.blk ? 0
+						  : v->block;
+			}
+
+			sysdep_memcpy(tx, &v->out_ring.data[v->out_ring.rd],
+				      2 * n);
+			tx += 2 * n;
+			remaining -= (int)n;
+			v->out_ring.count -= (int)n;
+			v->out_ring.rd = (v->out_ring.rd + n) % (2 * v->block);
+		}
+
+		if (pending != 0)
+			ret = pending;
+
+		count -= chunk;
+		in = (unsigned char *)in + chunk;
+		out = (unsigned char *)out + chunk;
+	}
+
+	return ret;
 }
 
 /*

@@ -77,7 +77,7 @@ build(struct graph *g, unsigned cads, unsigned firs)
 	g->d = take(g, sizeof(struct detector));
 	if (g->d == 0)
 		return 0;
-	g->d->ptr_0004 = take(g, 24);
+	g->d->dtmf = take(g, 24);
 
 	for (i = 0; i < 4; i++) {
 		struct fdsp_tone *t = take(g, sizeof(struct fdsp_tone));
@@ -97,8 +97,8 @@ build(struct graph *g, unsigned cads, unsigned firs)
 	}
 
 	slot[0] = &g->d->cadence_0008;
-	slot[1] = &g->d->cadence_000c;
-	slot[2] = &g->d->cadence_0010;
+	slot[1] = &g->d->cadence_busy;
+	slot[2] = &g->d->cadence_dial;
 	for (i = 0; i < 3; i++) {
 		if (cads & (1u << i)) {
 			struct cadence *c = take(g, sizeof(struct cadence));
