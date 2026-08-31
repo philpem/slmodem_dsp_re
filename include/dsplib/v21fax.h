@@ -174,6 +174,20 @@ struct v21_rx_hdx {
 					 *       tested `jle` on the low 16
 					 *       bits, so the two readings
 					 *       agree over the whole range */
+	unsigned short	ones_run;	/* +0x0c length of the current run of
+					 *       non-zero demodulated units.
+					 *       Only RxHdxStartV21 touches it;
+					 *       V21RX_create zeroes it with a
+					 *       `movw` at 0x098ef6, which is
+					 *       what fixes the width.        */
+	unsigned short	mark_seq;	/* +0x0e how many times `ones_run`
+					 *       stood at exactly 6 and the
+					 *       next unit was zero.  Zeroed by
+					 *       `movw` at 0x098efc; read only
+					 *       by RxHdxStartV21's `cmpw $0x4`
+					 *       at 0x0a1f2b.  See the header
+					 *       note on RxHdxStartV21 for what
+					 *       is measured and what is not. */
 };
 
 /*
@@ -294,6 +308,17 @@ struct v21_rx_hdx {
  * is why the call site below narrows before comparing.
  */
 #define V21RX_SNR_THRESHOLD	5
+
+/*
+ * `RxHdxStartV21`'s two constants, both read straight off its instructions.
+ *
+ * V21RX_MARK_RUN is the `cmpw $0x6,0xc(%ecx)` at 0x0a1ee0 -- the run length at
+ * which the NEXT zero unit counts as a sequence.  V21RX_MARK_SEQ_THRESHOLD is
+ * the `cmpw $0x4,0xe(%edx)` at 0x0a1f2b, taken with `jle`, so the state
+ * advances on the FIFTH sequence and not the fourth.
+ */
+#define V21RX_MARK_RUN			6
+#define V21RX_MARK_SEQ_THRESHOLD	4
 
 /* ------------------------------------------------------------------------ */
 /* The status report                                                        */
@@ -535,5 +560,40 @@ short RxHdxErrorV21(void *modem, short *in, short *out, short *count);
 short RxHdxIdleV21(void *modem, short *in, short *out, short *count);
 short RxHdxWaitV21(void *modem, short *in, short *out, short *count);
 short RxHdxDataV21(void *modem, short *in, short *out, short *count);
+
+/*
+ * The fifth state, and the one `V21RX_create` installs: `movl
+ * $RxHdxStartV21,0x4(%eax)` at 0x098ee1, with `state` and all three counters
+ * zeroed around it.  So START is where every receiver begins.
+ *
+ * WHAT IT COUNTS, STATED AS THE INSTRUCTIONS STATE IT.  After demodulating
+ * the block it walks the demodulated units and maintains `hdx->ones_run` as
+ * the length of the current run of non-zero ones; each time that run stands
+ * at exactly 6 and the next unit is zero, `hdx->mark_seq` is incremented.
+ * The state advances only once `mark_seq` exceeds 4 AND `CarrierDetectV21`
+ * answers.
+ *
+ * SIX ONES FOLLOWED BY A ZERO IS THE HDLC FLAG 0x7e, and five of them is a
+ * preamble -- but that identification is USAGE INFERENCE and nothing in the
+ * object says it.  There is no format string for either field and no other
+ * referent to type them, so the names above describe the arithmetic and the
+ * interpretation is left in this comment where a later reader can weigh it.
+ * Finding F9090.
+ */
+short RxHdxStartV21(void *modem, short *in, short *out, short *count);
+
+/*
+ * Advance the receive state machine one step.
+ *
+ * The object carries this block four times: once out of line under this name
+ * at 0x0a1d60, and three more times inlined into `RxHdxStartV21`,
+ * `RxHdxWaitV21` and `RxHdxDataV21`, instruction for instruction.  That is
+ * what GCC 3.4.2 at `-O3` does with an externally visible function whose body
+ * it can see, so the author wrote one function and four copies came out.
+ * Finding F8898 recorded it while the symbol was still `static` here for want
+ * of its third caller; `RxHdxStartV21` is that caller and the symbol is now
+ * claimed.
+ */
+void RxNextStateV21(void *modem);
 
 #endif /* DSPLIB_V21FAX_H */

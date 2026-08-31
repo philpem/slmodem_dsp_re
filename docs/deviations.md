@@ -11154,3 +11154,49 @@ not a recovered one.
 abandoned them. `t_class1handlers` drives both outcomes and asserts each
 fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
 are all ones for the give-up, and one with a zero among them for the lock.
+
+## D1090 ⚠ `RxHdxStartV21` throws away every unit it demodulated
+
+The start state returns a literal zero on all four of its exits -- the common
+epilogue at 0x0a1f80 is `add $0x1c,%esp` / `xor %eax,%eax` / four pops /
+`ret`, and nothing else returns. The count `DemodDataV21` gave it is used for
+the walk that maintains `ones_run` and `mark_seq`, and is then dropped.
+
+Its three siblings do not do this. `RxHdxWaitV21` returns the count on the
+block where the countdown expires and `RxHdxDataV21` returns it on every
+block it demodulates; both feed `V21RX_modem`'s running total, which is what
+the caller gets back in `*count`.
+
+So the units a receiver demodulates while it is still looking for its opening
+sequence are never delivered. Whether that is a defect depends on whether the
+author meant those units to be data -- the walk consumes them as a preamble
+search, which is a reading that makes the zero correct, and nothing in the
+object settles it.
+
+**Status:** reproduced. `t_v21hdx` compares the return on every block of
+every start stream and asserts from the reference's own run that the walk
+was driven on a non-empty block (`start_walked`), so the zero is checked
+against blocks that really did produce units rather than against empty ones.
+
+## D1097 ⚠ the two V.29 status reports read backwards from how they behave
+
+`V29TX_status` clears the low two bits of the report's +0x14 and then
+ASSIGNS the whole byte four statements later, so the clears are dead and
+every other bit the caller had is lost. That is D1035.
+
+`V29RX_status` reads like the careful one -- a sequence of read-modify-writes
+that clears three bits, sets two and assigns three -- and behaves like the
+blunt one, because between them those eight operations determine all eight
+bits. The byte's prior value contributes nothing to the result.
+
+So a reader comparing the two functions gets the sense backwards in both
+directions. Neither is a defect on its own; what is worth recording is that
+the SHAPE of each is not a guide to what it does, which is why the check in
+`t_v29fax.c` compares the resulting bytes rather than reasoning about the
+statements.
+
+**Status:** both reproduced exactly, including the dead read and the four
+intermediate stores, which are observable only where the report overlaps the
+instance. `t_v29fax` drives that overlap on half its `V29RX_status` trials
+rather than assuming it away, and asserts the count of overlaid trials from
+the run.

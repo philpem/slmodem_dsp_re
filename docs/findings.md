@@ -103949,3 +103949,162 @@ fine.
 
 Shown to fire: a detached worktree at `c1ca61af` reports "140 commit(s)
 behind"; the up-to-date tree is silent.  (2026-08-31)
+
+## F9090. `RxHdxStartV21` counts runs of six non-zero units and the fifth of them opens the machine -- what is measured, and what is only inferred
+
+*2026-08-31.* The start state is the handler `V21RX_create` installs
+(`movl $RxHdxStartV21,0x4(%eax)` at 0x098ee1, with `state`, `countdown` and
+both new counters zeroed around it at 0x098ee8..0x098efc), so every V.21
+receiver begins here.
+
+**WHAT THE INSTRUCTIONS SAY.** After demodulating the block it walks the
+demodulated units at 0x0a1ee0..0x0a1f0e:
+
+    hdx + 0x0c   the length of the current run of non-zero units
+    hdx + 0x0e   how many times that run stood at exactly 6 and the next
+                 unit was zero
+
+The walk has three outcomes and the object reaches the common store from two
+places, which is what makes the ordering readable rather than assumed: at
+`0x0c == 6` with a zero unit it increments `0x0e` at 0x0a1f9c and falls into
+the store that puts zero in `0x0c`; at `0x0c == 6` with a non-zero unit it
+jumps to 0x0a1ef7 and stores `0x0c + 1`, leaving `0x0e` alone; otherwise the
+store is `unit ? 0x0c + 1 : 0`.
+
+Then, and only then, `V21RX_FLAG_CARRIER` is cleared, `CarrierDetectV21` is
+called, and the state advances if and only if the detector answers AND
+`cmpw $0x4,0xe(%edx)` at 0x0a1f2b does not take its `jle`. So the advance
+happens on the FIFTH sequence, not the fourth, and the test is SIGNED over
+sixteen bits -- 0x8000 in that field does not advance.
+
+**BOTH LOOP VARIABLES ARE SIXTEEN BITS AND IT IS FORCED**, not the free kind
+of extension: the count is decremented `lea -0x1(%esi),%eax` / `movzwl
+%ax,%esi` and the index incremented `lea 0x1(%edi),%ebx` / `movzwl %bx,%edi`
+at 0x0a1f00..0x0a1f0b, and both feed the next iteration.
+
+**WHAT IS NOT MEASURED.** Six ones followed by a zero is the HDLC flag 0x7e
+and five flags is a preamble, which is exactly what a V.21 fax control
+channel would wait for -- but nothing in the object says so. There is no
+format string for either field, no other referent to type them, and
+`V21RX_create` only zeroes them. So the fields are named for the arithmetic
+(`ones_run`, `mark_seq`) and the interpretation lives in a comment where a
+later reader can weigh it, which is CLAUDE.md's rule that a wrong name is
+worse than a neutral one. This is USAGE INFERENCE, the weakest class, and it
+is labelled as such at both the header and the source.
+
+The return is a literal zero on every path (0x0a1f83), so the units this
+handler produced are reported to `V21RX_modem` as none -- deviation D1090.
+
+## F9091. `RxNextStateV21` is claimed, and the third caller finding F8898 was waiting for is `RxHdxStartV21`
+
+*2026-08-31.* F8898 reconstructed the body of `RxNextStateV21` in order to
+write `RxHdxWaitV21` and `RxHdxDataV21`, whose copies of it are inlined, and
+left it `static v21rx_next_state` for two stated reasons: its third caller
+was not reconstructed, and a `static` carrying a blob symbol's name would be
+counted as written by every tool that globs `build/repro`, which would be a
+false coverage claim. It said plainly that making it global and giving it the
+object's name was the whole of what claiming it would take.
+
+That is what happened. `RxHdxStartV21` is the third caller, its inlined copy
+at 0x0a1f3c..0x0a2098 is the same instructions in the same order as the
+out-of-line one at 0x0a1d60, and the symbol is now global under its own name
+with no change to its body.
+
+**THE OUT-OF-LINE SYMBOL IS DRIVEN DIRECTLY, which the inlined copies do not
+do for it.** `t_v21hdx.c` gained a `CALL_NEXT` case that calls
+`ref_RxNextStateV21` and `RxNextStateV21` on the two handles and compares
+everything, over all five named states and two states the object does not
+name, so the default arm is entered from outside a handler as well as from
+inside one. Driving it only through the three callers would have tested three
+copies of the body and never the symbol the tree is claiming.
+
+## F9130. `V29RX_status` reads its own flags byte and every bit of it is dead -- the read and the four stores are ALIASING, and only that
+
+*2026-09-01.* `V29RX_status` (0x0a45f0, 190 bytes) is the receiver's half of
+the report block `V29TX_status` fills from the transmitter, and it is not a
+mirror of it. Four differences, all read off the instructions:
+
+| | transmit | receive |
+|---|---|---|
+| handle read | `tx` (`obj + 0x14`) | the instance itself |
+| bit rate lands in | +0x02 and +0x10 | +0x04 and +0x12 |
+| the zeroed gap short | +0x0c | +0x0e |
+| stores to the flags byte | two | four |
+
+**THE FOUR STORES ARE FORCED BY ALIASING.** They land at 0x0a4657, 0x0a466f,
+0x0a4685 and 0x0a46a2, and each one sits immediately before a load through
+the instance pointer -- `mov 0x50(%esi),%edx` at 0x0a465c, again at 0x0a4672,
+again at 0x0a4688. `status` and `modem` are unrelated parameters and the
+compiler cannot prove them disjoint, so each partial value has to reach
+memory before the next load can be made. A compiler that could prove them
+disjoint would have emitted one store, and the source would look no
+different.
+
+**AND THE VALUE IT READS AT 0x0a464e IS DEAD.** All EIGHT bits of the byte
+are determined before the function returns: 0, 2 and 7 cleared, 4 and 6 set,
+and 1, 3 and 5 assigned from fields (`rx + 0x0018` bit 0, `rx + 0x0000 == 0`
+and `rx + 0x0020 == 0` respectively). So the caller's byte contributes
+nothing to the result -- the read exists only because it is the source of the
+three intermediate values the stores above put in memory.
+
+That is the exact opposite of `V29TX_status`, which reads as an assignment
+after two pointless clears and is a deviation for losing the caller's bits
+(D1035). This one reads as a merge and behaves as an assignment. Recorded as
+D1097 because a reader who checks one against the other will get the sense
+backwards; the pair is the reason to write it down rather than either alone.
+
+**AND THE STORE SEQUENCE IS NOT DIRECTLY TESTABLE, WHICH IS SAID HERE RATHER
+THAN PAPERED OVER.** `t_v29fax` overlays the report on the instance on half
+its trials -- the only arrangement under which an intermediate value could
+reach a later load at all -- and it still cannot separate four stores from
+one. The reason is specific: every intermediate value goes to the report's
++0x14, and no load in this function reads the instance at +0x14. An overlay
+that DID put +0x14 under a field read later would have to put it under the
+receive-block pointer at +0x50, and both sides would then dereference a
+corrupted pointer, which measures nothing and crashes. So the four stores are
+recorded as FORCED BY THE INSTRUCTIONS and the overlay is recorded as arm
+coverage -- "the overlapping case ran and the two sides agreed" -- not as a
+separation. Counting it as one would be the decoration F134 warns about.
+
+**BIT 15 OF THE STATUS WORD IS TESTED AS A BYTE**, `testb $0x80,0x19(%esi)`
+at 0x0a461d, which is GCC's narrowing of `& 0x8000` on the `int` at +0x18 --
+exactly as `V29RX_modem`'s `andb $0xfd,0x19` is its narrowing of `&= ~0x200`,
+and the word is spelled as the `int` it is at both sites. Its complement is
+the reported `quality`, so a set bit is quality zero. That is the same shape
+and the same reported field as V.21's `V21RX_FLAG_LOW_SNR` (F8896) -- a
+corroboration, not the derivation, and the seven flag bits keep neutral names
+because no format string prints any of them and nothing else in the 1.2 MB
+reads them.
+
+## F9131. The V.29 scrambler pair is a fourth site for F8120's "no intermediate local", and the relocation is what picks `SDM_*` over `FPM_SDM_*`
+
+*2026-09-01.* `ScrambleDataV29` (0x0a6560, 28 bytes) and `DescrambleDataV29`
+(0x0a6180, 30 bytes) are two instructions and a tail jump each: widen the
+count, add a constant to a block pointer, jump. What they establish is the
+two offsets -- `V29_OBJ_TX + 0x1c` for the transmit state and
+`V29_OBJ_RX + 0x4f3c` for the receive one -- and each reaches a DIFFERENT
+block, which is what pairs them with their names independently of the names.
+
+**THE TWO-BYTE SIZE DIFFERENCE IS THE DISPLACEMENT AND NOT THE SOURCE.**
+`add $0x1c,%eax` takes an eight-bit displacement and `add $0x4f3c,%eax` does
+not; the two functions are otherwise identical.
+
+**NO INTERMEDIATE LOCAL, AT A FOURTH SITE.** F8120 enumerated seven spellings
+of `ScrambleDataV22`/`DescrambleDataV22` and found exactly one that
+reproduces them: the sub-object computed inline with no local. With a local,
+GCC puts the pointer in `%edx` and pays the six-byte `add $imm32,%edx`;
+without it the pointer lands in `%eax` and takes the five-byte short form,
+which is what the object has at 0x0a6190 and 0x0a656d. The same evidence in
+the same form, at two more call sites.
+
+**THEY JUMP TO `SDM_*`, NOT TO `FPM_SDM_*`.** The two families are byte for
+byte the same code at two addresses (`include/dsplib/sdm.h`), so which one a
+call site names cannot be settled by which would work -- only the relocation
+says, and 0x0a6199 carries `R_386_PC32 SDM_descrambler` and 0x0a6577
+`R_386_PC32 SDM_scrambler`.
+
+The test seeds the two `fpm_sdm` states to different values and asserts, from
+the reference's own run, that each wrapper advanced its own and left the
+other's alone. Reaching the wrong block would otherwise be invisible: both
+are inside the same pseudorandom fill and both produce a plausible bit
+stream.
