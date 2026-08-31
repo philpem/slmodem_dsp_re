@@ -246,10 +246,15 @@ run_carrier(void)
 			/* WRONG READING: the pair one field low. */
 			if ((ra.dsp.int_0000 & ra.dsp.int_0004) != got_a)
 				cd_low_sep++;
-			/* WRONG READING: the pair one field high. */
+			/*
+			 * WRONG READING: the pair one field high.  The int at
+			 * +0x0c is now the head of `struct fpm_agc`, which
+			 * `DemodDataV21` typed; the probe still reads the same
+			 * four bytes at the same offset.
+			 */
 			if ((ra.dsp.int_0008
 			     & *(const int *)(const void *)
-				     &ra.dsp.unmapped_000c[0]) != got_a)
+				     &ra.dsp.agc) != got_a)
 				cd_high_sep++;
 			/* WRONG READING: OR rather than AND. */
 			if ((cd_values[i] | cd_values[j]) != got_a)

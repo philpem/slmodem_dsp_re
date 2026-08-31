@@ -101368,3 +101368,215 @@ had not already been written would have been a gap.
 The other 27 span all seven functions and include the six frees of
 `V21RX_delete` individually, the mixed-signedness cursor read, the mute and
 its restore, and the resampler fed the bit count rather than the sample count.
+
+## F8894. The 0x2c-byte hole in V.21's receive DSP block is a `struct fpm_agc`, and `DemodDataV21` is what says so
+
+*2026-08-31.* `v21fax.h` left `dsp + 0x0c .. 0x37` unmodelled and wrote down
+that it was "the right size for a `struct fpm_agc`" while refusing to name it
+on that basis, because size alone is a coincidence and not a measurement
+(F8888). `DemodDataV21` settles it.
+
+At 0x0a5764 the object loads the DSP block, adds 0x0c, and hands the result
+to `FPM_AGC_agc`:
+
+```
+   a5764:	8b 47 50             	mov    0x50(%edi),%eax
+   a5767:	83 c0 0c             	add    $0xc,%eax
+   a576a:	89 04 24             	mov    %eax,(%esp)
+   a576d:	e8 fc ff ff ff       	call   <== R_386_PC32 FPM_AGC_agc
+```
+
+That is CLAUDE.md's second-strongest evidence class -- a callee that types its
+argument -- and `sizeof(struct fpm_agc)` is 0x2c, which is exactly the span.
+The receive block is now gapless end to end with no unmodelled bytes at all:
+`int_0000`, `int_0004`, `int_0008`, `agc` at +0x0c, `mrf` at +0x38, `fsd` at
++0x54, `mtd` at +0x8c, `mag` at +0x90, sizeof 0x94.
+
+The rename cost `t_v21fax.c` one line: its "the pair one field high" probe read
+the int at +0x0c through `unmapped_000c[0]` and now reads the same four bytes
+through `&dsp.agc`. Nothing else in that test moved and it stays green.
+
+`mag` at +0x90 also gains a second use here. `GetSNRV21` rectifies the
+demodulator's trace into it, which is where the name came from; `DemodDataV21`
+hands it to `FPM_MRF_filter` as the OUTPUT and to `FPM_FSD_demodulate` as the
+INPUT, so it is the receive chain's shared intermediate, exactly as
+`v21_tx_dsp`'s `scratch` is the transmit chain's. The name is left alone
+because `t_v21fax.c` is green on it, but it is a scratch buffer.
+
+## F8895. `DemodDataV21` calls `FPM_AGC_agc` with four arguments and uses its return, and this is the third site with that shape
+
+*2026-08-31.* `FPM_AGC_agc` takes three arguments and returns `void`. The
+object's `DemodDataV21` gives it four -- the fourth a constant 1 -- and then
+stores the value left in `%eax` into `dsp + 0x04`:
+
+```
+   a5754:	89 54 24 0c          	mov    %edx,0xc(%esp)      # the dead 1
+   ...
+   a5772:	8b 57 50             	mov    0x50(%edi),%edx
+   a5778:	89 42 04             	mov    %eax,0x4(%edx)
+```
+
+`src/pump/v22/v22data.c` and `src/pump/v23/bwchdem.c` already record the same
+extra argument at their own call sites, so this is the third occurrence and
+not a novelty; the natural reading is a call made through a declaration that
+did not match the definition, which C89 permits silently. The argument has no
+observable effect and is not reproduced.
+
+The RETURN is reproduced, and `bwchdem.c` is what says how: `FPM_AGC_agc`'s
+single exit leaves in `%eax` the same value its last store put in
+`agc->signal` (0x0a6887 `movzbl %dl,%eax`, 0x0a688a `mov %eax,0x1c(%edi)`),
+so the field is read out of the state instead of a return value the function
+never promised.
+
+**What this settles about the two ints `CarrierDetectV21` ANDs.** `dsp + 0x04`
+takes `agc.signal`; `dsp + 0x08` is set to 1 and then to 0 if
+`FPM_MTD_detect` returned anything other than `FPM_MTD_ABSENT`. `struct
+b103_dsp` has `rx_energy` and `rx_tone` at those exact offsets and
+`b103fp.c:259` assigns `dsp->rx_energy = dsp->agc.signal` -- so the parallel
+NAMES the first of the pair correctly and MIS-NAMES the second, because
+B.103's `rx_tone` is 1 when a tone is present and this field is 0 then. They
+keep their neutral names rather than take a half-right pair; the derivation
+above is the record and a later pass can name both together.
+
+## F8896. V.21's receive flag byte, all four live bits, enumerated
+
+*2026-08-31.* F8889 enumerated bit 1 and named the other three as future
+work. The four receive-path symbols are now written, which puts every writer
+of `rx + 0x19` and `rx + 0x1a` in one file. The enumeration, over the whole
+object:
+
+| bit | set at | cleared at | read by |
+|---|---|---|---|
+| 0x01 DATA | 0x0a1dc6, 0x0a1fce, 0x0a21d7, 0x0a2351 | the four IDLE transitions and the four default arms | nothing |
+| 0x02 ERROR | 0x0a1ccc and the four default arms | `V21RX_modem`, every block | nothing |
+| 0x20 CARRIER | after a true `CarrierDetectV21` in `RxHdxIdleV21`, `RxHdxWaitV21` and `RxHdxStartV21`; unconditionally on entry to `RxHdxDataV21` | before each of those calls, and on `RxHdxDataV21`'s carrier-gone arm | nothing |
+| 0x80 LOW_SNR | 0x0a22cd, when `GetSNRV21() <= 5` | 0x0a22bb, immediately before | `V21RX_status` at 0x0a2487 |
+| 0x1a bit 0 IDLE | the four IDLE transitions | the four default arms | nothing |
+
+Three of the five are named from the transition they accompany, which is the
+same class of evidence F8889 used for ERROR: the SET sites are exactly the
+sites that install `RxHdxDataV21` or `RxHdxIdleV21`, functions the object
+names itself. CARRIER and LOW_SNR are stronger than that -- each is written
+from the answer of a named function on the line above, and LOW_SNR is the only
+one with a reader, `V21RX_status`, where a set bit makes the reported
+`quality` zero. So both ends of that one are measured.
+
+**DATA is not "the data handler is installed".** The transition out of DATA
+into WAIT (`RxHdxDataV21`'s own case 0) leaves the bit set, so it reads as
+"the data state has been entered and has not ended". Naming it after the
+handler would have been wrong in exactly the way a plausible name is hard to
+falsify.
+
+`V21RX_create` seeds the byte with `orb $0x50`. Bits 4 and 6 are written
+there and touched nowhere else in the object, so they stay unnamed.
+
+## F8897. V.21's receive states are named by the object's own strings, and the fourth and fifth follow from a rule the object forces
+
+*2026-08-31.* The state-advance block prints a name for the state it is
+leaving, out of `.rodata.str1.1`:
+
+```
+0x4b03 'V21RX_DEFAULT, %d\n'
+0x4b16 'V21RX_STATE_WAIT\n'
+0x4b28 'V21RX_STATE_DATA\n'
+0x4b3a 'V21RX_STATE_START\n'
+```
+
+`tools/relocscan.py`'s idiom is what pairs them with the sites: the reference
+is an `R_386_32` against the section symbol with the offset as an inline
+addend (F604), so the case arm for `hdx->state == 0` prints "START", 1 prints
+"WAIT" and 2 prints "DATA". That is the author's own text and it fixes three
+of the five values.
+
+3 and 4 have no string, and they are not named from a parallel. The object
+makes one rule forced: **the arm for state N installs the handler whose name
+is state N+1's.** START installs `RxHdxWaitV21` and writes 1; WAIT installs
+`RxHdxDataV21` and writes 2; DATA installs `RxHdxIdleV21` and writes 3. The
+rule closes over all four `RxHdx*V21` handlers the object defines, so 3 is
+IDLE. 4 is what `RxHdxWaitV21` writes at 0x0a211f beside
+`hdx->handler = RxHdxErrorV21` at 0x0a2118, by the same pairing.
+
+The status byte at `rx + 0x18` takes seven values and NOTHING IN THE OBJECT
+READS ANY OF THEM, so those constants are named for the site that writes them
+and no more than that -- except DEFAULT, which is the author's word from the
+string above.
+
+## F8898. The V.21 receive data path: five symbols, 1,215 bytes, one indivisible unit, and `RxNextStateV21` inlined three times inside it
+
+*2026-08-31.* `RxHdxErrorV21`, `RxHdxIdleV21`, `RxHdxWaitV21`,
+`RxHdxDataV21` and `DemodDataV21` are written and differentially tested
+against the blob in `test/unit/t_v21hdx.c`.
+
+**They are one indivisible unit and the reason is a DATA relocation.**
+`DemodDataV21` at 0x0a57a3 compares the half-duplex handler slot against the
+ADDRESS of `RxHdxDataV21` -- `cmpl $0x0,0x4(%ecx)` carrying `R_386_32
+RxHdxDataV21` -- and the four handlers call `DemodDataV21`. Under findings
+F8492 and F8493 a reference from `src/` to a symbol the tree has not written
+is an undefined reference that fails every test binary, so no proper subset of
+the five links. That relocation appears in no call graph.
+
+**What the differential fixture had to get right, and it is not the usual
+list.** Two of them are new here:
+
+- *the handler slot cannot be compared as a pointer.* The blob's
+  `RxHdxWaitV21` stores the address of `ref_RxHdxErrorV21` and ours stores
+  ours, so a byte comparison of the half-duplex block reports a difference on
+  every trial that advances the state. The test maps both families onto small
+  integers and compares those, which is a stronger check than skipping the
+  field: it says the two sides chose the same handler, not merely that they
+  both wrote something.
+- *`DemodDataV21`'s squelch arm compares against `RxHdxDataV21` itself*, so
+  the fixture must plant `ref_RxHdxDataV21` on the blob's side and
+  `RxHdxDataV21` on ours for the "installed" case, and the same third
+  function on both sides for the "not installed" case. Planting one pointer
+  on both sides would have made the two runs disagree for a reason that is
+  not a defect.
+
+D955 and finding F8587 apply as usual and harder than usual: `DemodDataV21`
+drives an AGC, a multi-tone detector, a polyphase resampler and an FSK
+demodulator, all of which index arrays out of fields the fixture must plant,
+and all of which carry state between calls. Every check is run over a stream
+of blocks rather than one, which is finding F8790's rule.
+
+**And the three tone-detector verdicts were DERIVED, not searched for.** The
+carrier arms need `FPM_MTD_detect` to answer `FPM_MTD_ABSENT`, and every
+obvious input -- noise, a sine anywhere in voiceband -- answers `PRESENT`
+instead, so the first run had four counters at zero. Simulating the
+detector's fixed-point arithmetic over Bell 103's own coefficient bank found
+the shape that reaches it: a full-rate alternation, which both bandpasses
+reject. Silence gives `NOSIGNAL`, noise gives `PRESENT`, the alternation
+gives `ABSENT`, and one shape alternating the last two flips the verdict
+inside a single stream. Choosing inputs until the counters come up non-zero
+would have been fitting; this is the same distinction finding F7782 draws for
+codegen.
+
+**`RxHdxDataV21` needs the carrier PLANTED and the others do not.** It tests
+`CarrierDetectV21` BEFORE it demodulates, and the two ints that answer are
+written by the demodulate -- so a fixture that starts them at zero takes the
+advance arm on block 0 and can never reach the demodulating arm again, in a
+way that looks like a passing test with two silent counters.
+
+### `RxNextStateV21` is inlined three times
+
+`RxNextStateV21` (0x0a1d60, 290 bytes) is a global symbol whose
+body is also present, instruction for instruction, inside `RxHdxStartV21`,
+`RxHdxWaitV21` and `RxHdxDataV21`. Three inlined copies plus one out-of-line
+one is what GCC 3.4.2 at `-O3` does with an externally-visible function it can
+see the body of, so the author wrote one function and four copies came out.
+
+That has a consequence for scheduling that is worth writing down: **the
+closure tool cannot see it.** `closure.py DemodDataV21` reports eleven symbols
+and does not include `RxNextStateV21`, because the inlined copies make no call
+and the out-of-line copy is reached from nothing that was in scope. The
+symbol looked unrelated to this pass and its entire body had to be
+reconstructed to write two of the five symbols in it.
+
+It is `static v21rx_next_state` here rather than the object's name, for two
+reasons and neither is a doubt about the derivation. Its third caller,
+`RxHdxStartV21`, is not reconstructed, so the out-of-line symbol would stand
+with one of its three referents missing; and a `static` function carrying a
+blob symbol's name would be counted as written by every tool that globs
+defined symbols out of `build/repro`, which would be a false coverage claim.
+**Making it global and giving it the object's name is the whole of what
+claiming the symbol would take** -- the body is derived, and the differential
+test drives all five of its arms through the two callers.
