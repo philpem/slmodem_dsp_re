@@ -10325,9 +10325,16 @@ tidied, because zeroing it would be a store the object does not make and would
 show in a codegen comparison. `t_voiceapi` drives ABORT at both debug levels
 and over six `tone_duration` values and compares the full object each time.
 
-## D1037 ⚠ `V21TX_status` ASSIGNS the report's flag byte over its own clear
+## D1037 ⚠ every `*TX_status` ASSIGNS the report's flag byte over its own clear
 
-*2026-08-31.* Three of the four `*TX_status` functions -- V.21, V.17 and
+*2026-08-31.* **CORRECTED 2026-08-31, and the correction is the point of the
+entry.** This first read "three of the four" and named `V27TX_status` as the
+member that merges instead. It does not; ALL FOUR assign, and the fourth was
+misread. The corrected reading is at the foot of this entry, and the wrong one
+is left visible here because it had already been sent to another agent as
+evidence.
+
+Three of the four `*TX_status` functions -- V.21, V.17 and
 V.29 -- clear bits 0 and 1 of the report's `+0x14`, clear bit 0 of `+0x15`,
 and then STORE `tx->flags10 & 0x04` over `+0x14` outright:
 
@@ -10339,17 +10346,47 @@ and then STORE `tx->flags10 & 0x04` over `+0x14` outright:
     a2c57   mov    %al,0x14(%edx)      store, not merge
 
 So the read-modify-write four instructions earlier is dead, and every bit the
-caller had in that byte other than bit 2 is lost. `V27TX_status` is the one
-that does not do this: it ORs bit 0 in first and keeps it (`and $0x1,%al;
-or %dl,%al`), so V.27's report carries two bits where the others carry one.
+caller had in that byte other than bit 2 is lost.
+
+**AND `V27TX_status` IS THE SAME, NOT THE EXCEPTION.** It was read here as
+merging because it opens with an `or`, and the instruction that settles it is
+three later:
+
+    a3f19   movzbl 0x14(%ecx),%eax     read the caller's flags
+    a3f1d   or     $0x1,%al            caller | 1
+    a3f1f   mov    %al,%dl
+    a3f21   and    $0xfd,%dl
+    a3f24   and    $0x1,%al            <-- %al is now the CONSTANT 1
+    a3f26   mov    %dl,0x14(%ecx)      ...a second dead store
+    a3f29   movzbl 0x10(%ebx),%edx
+    a3f31   and    $0x4,%dl
+    a3f34   or     %dl,%al             1 | (p[0x10] & 4)
+    a3f36   mov    %al,0x14(%ecx)      store, not merge
+
+The `and $0x1` is applied to the ALREADY-MERGED value, so `%al` is 1 whatever
+the caller held: bits 1..7 are destroyed exactly as in the other three, and
+V.27 carries a second dead read-modify-write on top of the first. What is true
+of V.27 and not of its siblings is only that bit 0 comes out SET
+unconditionally, so its report carries two live bits where the others carry
+one. The `or $0x1` is therefore more evidence for this entry's reading rather
+than a counterexample to it: a bit the author wanted set, written in the merge
+idiom, inside a statement that throws the merge away.
 
 **Status:** reproduced. `t_v21fax` hands in a status block whose flag byte is
 0xff and compares the whole block afterwards; the `|=` reading is one of its
 named wrong readings and its separating count is asserted non-zero from the
 run, so the assignment is measured rather than assumed -- and injecting `|=`
 into `src/` fails 24 of that test's 3,414 checks. `struct v22_status` and
-`struct v32_status`
-describe the same host-facing block, and neither of their fillers does this.
+`struct v32_status` describe the same host-facing block, and neither of their
+fillers does this.
+
+**HOW THE ERROR HAPPENED, because it is the reusable part.** The first reading
+stopped at the two instructions that matched the expected shape (`or $0x1`
+and a store) and did not follow `%al` to the end of its live range. A partial
+trace of a register is how a dead store reads as a live one, and this entry is
+about dead stores. It was caught by another agent re-deriving the same
+function from the object rather than from this entry -- which is the reason a
+finding names its addresses.
 
 ## D1038 ⚠ `GetSNRV21` runs a second loop with no body and returns a literal 0
 

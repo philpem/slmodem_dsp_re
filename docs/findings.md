@@ -101368,3 +101368,57 @@ had not already been written would have been a gap.
 The other 27 span all seven functions and include the six frees of
 `V21RX_delete` individually, the mixed-signedness cursor read, the mute and
 its restore, and the resampler fed the bit count rather than the sample count.
+
+## F8899. `refcheck.py` does not see a BARE `F####` in a comment, so a dangling finding citation in source passes the gate
+
+*2026-08-31.* Measured with the injection ritual on the checker itself, in a
+worktree at master, one line appended to `src/fax/v21.c` and removed again
+each time:
+
+    /* bare form:        F<NNNNN> */             refcheck GREEN, exit 0
+    /* keyword form:     finding F<NNNNN> */     refcheck RED, non-zero
+    /* bare deviation:   D<NNNNN> */             refcheck RED, non-zero
+
+`<NNNNN>` stands for a five-digit number no heading claims; the run used five
+nines. The digits are held back HERE because writing them out gave this entry
+two dangling references of its own the moment it was appended -- `refcheck`
+went from 0 to 2 -- which is the cheapest possible demonstration that the two
+spellings it DOES resolve are resolved, and that a finding is scanned exactly
+like any other file.
+
+The mechanism is in the tool's own regexes. `FINDING_REF` requires the literal
+word `finding` or `findings` immediately before the number:
+
+    FINDING_REF = re.compile(r"\bfindings?" + _EM + r"\s" + _EM +
+                             r"(F?\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM +
+                             r"F?\d+[a-z]?)*)", re.I)
+    DEV_REF     = re.compile(r"\bD(\d+[a-z]?)\b")
+
+so a bare `F8607` is not a reference at all as far as the gate is concerned,
+while a bare `D955` is. **The consequence is that a wrong or dangling F-number
+written bare into a source comment survives every gate this tree has**, and
+the cheap fix for an author is to spell it `finding F8607`, which is what makes
+it checkable. `make phase` cannot tell the two spellings apart today.
+
+**IT IS NOT THE SAME AS THE EXCLUSION THE TOOL ARGUES FOR.** The comment above
+the regex defends dropping a bare `(651)` in parentheses, on the ground that
+three digits in brackets are a byte count or a table value far more often than
+a citation -- finding F543 lists the coefficient rows that reading would
+corrupt. That is sound. It says nothing about a token as distinctive as
+`F8607`, and no argument for requiring the keyword there is recorded anywhere.
+
+**HOW IT WAS FOUND, and this is the part worth keeping.** Three agents in this
+wave were given worktrees 106 commits stale. Two of them wrote brief-supplied
+citations into source comments and got different answers from `refcheck`: it
+flagged `F8790` and `D955` and stayed silent on `F8587`, `F8607`, `F8492` and
+`F8493`. The natural conclusion -- and one agent drew it -- is that some of the
+numbers are fictional and others are not. They were all equally absent from
+that tree; what differed was how each had been SPELLED. So the tool reported a
+pattern that looked like a property of the findings and was a property of the
+prose, which is F2400's shape with `refcheck` as the victim: the detector was
+quiet because of the spelling, not because anything resolved.
+
+Whether the regex should change is a decision for whoever owns the tool and is
+deliberately not answered here; widening it has to survive F543's rows.
+`tools/refcheck.py` was NOT edited, because changing a gate's sensitivity in
+the middle of a wave invalidates every green run in it.
