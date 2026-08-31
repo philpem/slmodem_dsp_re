@@ -40,43 +40,41 @@
  *     defect.
  *
  * ---------------------------------------------------------------------------
- * EVERY CHECK IS BUILT AROUND A NAMED WRONG READING, and the number of trials
- * that SEPARATE it is counted FROM THE RUN and asserted non-zero at the end
- * (finding F134).  A zero there means the check above it is decoration.  The
- * wrong readings, in order:
+ * THE CLOSING ASSERTIONS ARE COUNTED FROM THE RUN, and every one of them is
+ * asserted non-zero (finding F134).  A zero there means the check above it is
+ * decoration.  They are TWO kinds and the difference matters:
  *
- *   DemodDataV21
- *       - the AGC given `dsp + 0x08` or `dsp + 0x10` rather than `dsp + 0x0c`.
- *         Separated by construction: the block is brought up at +0x0c, so a
- *         shifted read finds a config that is not one.  Reproduced here as a
- *         PREDICTION about the two ints, which the blob's own answer settles.
- *       - `dsp->int_0004` taken from anything but the agc's `signal`.
- *       - `dsp->int_0008` left at 1 when the detector fires, or set from the
- *         verdict rather than from `verdict == FPM_MTD_ABSENT`.
- *       - the squelch loop run when the DATA handler IS installed, or not run
- *         when it is not.
- *       - the resampler's output taken as the demodulator's sample count
- *         rather than the block's own `count`.
+ *   ARM COVERAGE -- "the blob took this branch at least once".  A branch no
+ *     trial reaches agrees with any reconstruction of it, so these are what
+ *     make the differential comparisons above mean anything.  Every arm of
+ *     every one of the five is on the list, including all five arms of the
+ *     inlined state advance (`adv_seen[]`), the tone detector's three
+ *     verdicts, the carrier present and absent, and both gates of
+ *     `RxHdxDataV21`.
  *
- *   RxHdxErrorV21
- *       - the error bit not raised; the count not zeroed.
+ *   SEPARATION -- "a NAMED wrong reading answered differently from the blob
+ *     on this trial", read out of what the blob itself did:
+ *       - `dsp->int_0004` taken from the agc's `f18` -- its neighbour, which
+ *         init sets to 1 and `agc()` never touches -- rather than `signal`.
+ *       - `dsp->int_0008` taken as the detector's verdict rather than as
+ *         `verdict == FPM_MTD_ABSENT`.  Separated on every block the detector
+ *         fires, where the verdict is 1 or 2 and the field is 0.
+ *       - the squelch loop run on the wrong arm of the handler comparison.
+ *       - the demodulator fed the block's own count rather than the
+ *         resampler's output count.  The converter is 3:10 here, so those are
+ *         36 and 10 and `fsd.last_count` tells them apart.
+ *       - `RxHdxErrorV21` not raising the error bit, or not consuming the
+ *         count.
+ *       - `RxHdxWaitV21` testing the countdown before the decrement rather
+ *         than after, and its carrier-gone arm returning the bit count
+ *         rather than zero.
+ *       - `RxHdxDataV21` ignoring `hdx->int_0000`.
  *
- *   RxHdxIdleV21
- *       - the carrier bit assigned from `CarrierDetectV21` rather than
- *         cleared-then-set, which differ only in that the object's spelling
- *         leaves the bit clear when the call answers zero.  Both readings are
- *         driven, and the check that separates them is the status byte order.
- *       - the status byte written before the demodulate rather than after.
- *
- *   RxHdxWaitV21
- *       - the countdown tested `> 0` after the decrement rather than before.
- *       - the carrier-gone arm returning the bit count rather than zero.
- *       - the state advance run on the carrier-gone arm.
- *
- *   RxHdxDataV21
- *       - the carrier bit assigned rather than raised-then-lowered.
- *       - `hdx->int_0000` not consulted.
- *       - the SNR bit raised on `< 5` rather than `<= 5`.
+ * AND THE WHOLE SET WAS SHOWN TO FIRE.  Twenty defects were injected into
+ * `src/fax/v21.c` one at a time -- one per arm of the state advance, one per
+ * flag, the two handler comparisons, the countdown, the two gates and the
+ * resampler's count -- and the tree rebuilt against each.  The numbers are in
+ * finding F8898.
  */
 
 #include <string.h>

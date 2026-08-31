@@ -101556,6 +101556,32 @@ written by the demodulate -- so a fixture that starts them at zero takes the
 advance arm on block 0 and can never reach the demodulating arm again, in a
 way that looks like a passing test with two silent counters.
 
+**The injection numbers: 20 defects, 19 caught, 1 survived, 0 unusable.** No
+mutation suite is registered -- the tree-wide snapshot is 0 current / 228
+stale, and a registered suite that cannot be recorded reads MISSING to
+`mutsnap.py --check` -- so the set was applied to `src/fax/v21.c` by hand, one
+at a time, with the tree rebuilt against each and restored after. It covers
+one defect per arm of the state advance, one per flag bit, both handler
+comparisons, the countdown in two spellings, both of `RxHdxDataV21`'s gates,
+the detector verdict, the squelch arm and the resampler's sample count.
+
+**The one survivor was PREDICTED and is equivalent by construction.**
+Deleting `RxHdxDataV21`'s `flags &= ~V21RX_FLAG_LOW_SNR` changes nothing,
+because the next statement raises that bit whenever `GetSNRV21` answers at
+most 5 and D1038 is that `GetSNRV21` returns a literal 0 -- so the bit is set
+unconditionally on that arm and the clear before it can never be observed.
+The clear-then-set is in the source because the object's instructions are
+`andb $0x7f` at 0x0a22bb and `orb $0x80` at 0x0a22cd with the call between
+them, which is the only evidence for it and is enough. Same shape as finding
+F8893's two survivors: a survivor whose deviation is already written is a
+confirmation, not a gap.
+
+**And the same reasoning reaches a host-visible field.** D1038 says
+`GetSNRV21` computes no ratio; `RxHdxDataV21` therefore raises LOW_SNR on
+every block the data state demodulates, and `V21RX_status` at 0x0a2487 turns
+that bit into `quality = 0`. So V.21's reported receive quality is zero for
+the life of every connection. D1038's entry should say so.
+
 ### `RxNextStateV21` is inlined three times
 
 `RxNextStateV21` (0x0a1d60, 290 bytes) is a global symbol whose
