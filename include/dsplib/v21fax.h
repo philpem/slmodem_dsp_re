@@ -342,8 +342,23 @@ int V21RX_modem(void *modem, short *in, short *out, short *count);
  *
  * Frees the demodulator's and converter's buffers, the tone detector, the
  * magnitude buffer, the DSP block, the half-duplex context and the handle,
- * in that order, with NO NULL GUARD anywhere and no check that the caller
- * supplied the handle rather than the constructor.  See D1039.
+ * with NO NULL GUARD anywhere and no check that the caller supplied the
+ * handle rather than the constructor.  See D1039.
+ *
+ * THE ORDER ABOVE IS READ FROM THE OBJECT'S CALL SEQUENCE (0x099284 through
+ * the tail call at 0x0992e6) AND IS NOT VERIFIED BY ANY TEST.  It is stated
+ * because the disassembly states it, and the distinction matters: `t_v21fax`
+ * compares a LIVENESS VECTOR over the ten allocations, and a liveness vector
+ * is a SET.  Both sides call the same `sysdep_free` and the harness records
+ * no sequence, so two implementations that free the same blocks in different
+ * orders are indistinguishable to it.  A parallel V.29 pass measured exactly
+ * that -- a hand mutation swapping two frees was the one survivor of its
+ * set -- so this is a bound on the technique, not a suspicion about it.
+ *
+ * Nothing here depends on the order being right: every callee takes one
+ * pointer, none reads another's block, and the handle is released last on
+ * both readings.  A free LOG in the harness would close it for every delete
+ * function in the tree at once, and is not this file's to add.
  */
 void V21RX_delete(void *modem);
 
