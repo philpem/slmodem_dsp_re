@@ -97436,6 +97436,28 @@ addresses and always will", and unlike F8538's rejected exclusion it does not
 MOVE when you move it -- 100 is `nm`'s number, not a number chosen to make a
 case pass.
 
+**AND IT IS PROBABLY WHAT F8538 DECLINED ON, WHICH WOULD MEAN THAT WAVE'S CODE
+WAS NEVER WRONG.** F8602 reasoned that with the return, both counts, the
+transmit block, the structs and the heap all agreeing, "the only step left that
+can differ is the copy-out itself -- its bound, or the buffer it reads from".
+That was right, and the answer is its BOUND. Now put F8538's symptom beside
+this mechanism: ours holding `V22_CLAMP_VALUE` -- 15, which is exactly what
+`RxClampV22` leaves in the first twelve entries of `rx_out_internal` -- where
+the reference held 0, with every other observable agreeing. An unbounded
+copy-out from a too-small destination scatters those 15s into whichever test
+array the linker put next, on one side and not necessarily the other; and
+"exclude the failing entry and the next one fails" is what damage that moves
+with layout looks like. Every element of that report is accounted for.
+
+**It cannot be established**, because that code was never committed and is not
+in the tree, and this is inference from a symptom rather than a measurement of
+their binary. But it is the first explanation that needs no defect in `src/` at
+all, and the honest reading is that F8538 may have declined correct code
+because its test handed the object a buffer the object does not promise to stay
+inside. The lesson is not "commit it anyway" -- declining was right on the
+evidence they had -- it is that **when every observable but one agrees, suspect
+the apparatus's buffers before the reconstruction's logic.**
+
 **THE SERVICE-SIDE COROLLARY IS A LATENT HEAP OVERFLOW IN THE ORIGINAL.**
 `v22_process` hands `self->rx_bits`, which is `int[100]` and the LAST member of
 the `sysdep_malloc`'d `struct v22_dp`, with `count` = 160. If any reachable
