@@ -1,0 +1,78 @@
+[
+ {
+  "note": "src/service/silence.c against build/test/t_fdspksil.  The claims: _status's escape byte, its code byte and its two-byte advance; silence_is_more_then's scale, its truncation and the direction of its comparison; and which fields silence_create writes."
+ },
+ {
+  "label": "_status escapes with 0x11 rather than DLE",
+  "find": "\tout[0] = 0x10;",
+  "replace": "\tout[0] = 0x11;"
+ },
+ {
+  "label": "_status writes the code first and the escape second",
+  "find": "\tout[0] = 0x10;\n\tout[1] = code;",
+  "replace": "\tout[0] = code;\n\tout[1] = 0x10;"
+ },
+ {
+  "label": "_status advances the length by one",
+  "find": "\t*len += 2;",
+  "replace": "\t*len += 1;"
+ },
+ {
+  "label": "_status sets the length rather than advancing it",
+  "find": "\t*len += 2;\n\tout[0] = 0x10;",
+  "replace": "\t*len = 2;\n\tout[0] = 0x10;"
+ },
+ {
+  "label": "_status's debug gate fires at level 1",
+  "find": "\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"DLE %d\\n\", code);",
+  "replace": "\tif (dsplibs_debug_level > 0)\n\t\tdsplibs_debug_printf(\"DLE %d\\n\", code);"
+ },
+ {
+  "label": "_status prints the code unsigned",
+  "find": "\t\tdsplibs_debug_printf(\"DLE %d\\n\", code);",
+  "replace": "\t\tdsplibs_debug_printf(\"DLE %d\\n\", (unsigned char)code);"
+ },
+ {
+  "label": "the silence scale is 8 per millisecond rather than 10",
+  "find": "\treturn s->count > (int)(10.0f * ms);",
+  "replace": "\treturn s->count > (int)(8.0f * ms);"
+ },
+ {
+  "label": "the silence comparison admits the boundary",
+  "find": "\treturn s->count > (int)(10.0f * ms);",
+  "replace": "\treturn s->count >= (int)(10.0f * ms);"
+ },
+ {
+  "label": "the silence threshold rounds rather than truncating",
+  "find": "\treturn s->count > (int)(10.0f * ms);\n}",
+  "replace": "\treturn s->count > (int)(10.0f * ms + 0.5f);\n}"
+ },
+ {
+  "label": "silence_create stores its two arguments the other way round",
+  "find": "\ts->int_00 = a;\n\ts->int_04 = b;",
+  "replace": "\ts->int_00 = b;\n\ts->int_04 = a;"
+ },
+ {
+  "label": "silence_create leaves the run length at one",
+  "find": "\ts->count = 0;\n\ts->short_0a = 0;",
+  "replace": "\ts->count = 1;\n\ts->short_0a = 0;"
+ },
+ {
+  "label": "silence_create misses the short at +0x0c",
+  "find": "\ts->short_0c = 0;\n\ts->int_10 = 0;",
+  "replace": "\ts->int_10 = 0;"
+ },
+ {
+  "label": "silence_create misses the int at +0x10",
+  "find": "\ts->short_0c = 0;\n\ts->int_10 = 0;\n\treturn s;",
+  "replace": "\ts->short_0c = 0;\n\treturn s;"
+ },
+ {
+  "label": "silence_delete keeps the object",
+  "find": "\tsysdep_free(s);",
+  "replace": "\t(void)s;"
+ },
+ {
+  "note": "NOT here: removing silence_create's `if (s == 0) return 0` after the allocation.  The harness allocator never fails on request, so the arm is unreachable from any fixture and the mutant would read NOT CAUGHT while modelling nothing -- see t_fdspksil.c's header.  It is carried by the disassembly at 0xb03f8 (`xor %eax,%eax; test %edx,%edx; jne`), which is also what distinguishes silence_create from FIFO8_create, whose allocation is NOT checked."
+ }
+]

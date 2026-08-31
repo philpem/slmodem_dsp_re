@@ -9540,3 +9540,47 @@ so whether the caller looks at it cannot be established here. Reproduced
 faithfully in `src/service/voicecmd.c`; `t_vcedle` sweeps all 256 byte values
 and compares the whole 1,868-byte context, so the difference between the two
 arms is proved even though the return values agree.
+## D980 ⚠ `FIFO8_create` dereferences its allocation without checking it, and clears a ring it did not allocate
+
+Two things in one function, both the object's (0xaef30) and both reproduced
+in `src/service/fifo8.c`:
+
+- On the `f == NULL` path it calls `sysdep_malloc` for the 0x14-byte object
+  and stores the ring pointer into it at once (`mov %eax,%ebx` then
+  `mov %eax,0x8(%ebx)`), so an out-of-memory is a null dereference. Its
+  neighbour `silence_create`, forty bytes away, DOES check -- see F8754.
+- On the caller-supplied path it does not allocate the ring at all, and
+  then clears `cfg.size` bytes through `f->buf`. A caller that supplies the
+  struct must supply the buffer with it, and one that supplies a `cfg.size`
+  larger than the buffer it planted overruns.
+
+**Status:** unmeasured for reachability. Every reconstructed caller of
+`FIFO8_create` is still unwritten (`voice_set_rx`, `voice_set_tx`), so
+whether either path is ever taken with a NULL result or a mismatched size is
+theirs to settle. `t_fdspkfifo` drives both paths with correct inputs.
+
+## D981 ⚠ `FIFO8_read` returns the bytes it took from the RING, not the bytes it wrote
+
+The destination is always filled to the caller's `n`: what the ring did not
+supply is padded with `cfg.fill` (F8752). The return value counts only the
+first part, so `n - ret` bytes of the output are manufactured and the caller
+cannot tell them from data by the return value alone.
+
+**Status:** unmeasured, and probably intended -- the pad byte is a
+per-FIFO parameter, which is not something an accident carries. Recorded
+because a caller written from the return value would be wrong, and the
+callers are not written yet.
+
+## D982 ⚠ `silence_is_more_then`'s scale is 10 per unit, and nothing reconstructed says which unit
+
+The comparison is `s->count > (int)(10.0f * ms)`, with the multiply done at
+x87 precision and the truncation toward zero (`fldcw` with RC=11 at
+0xb0360). At the 8 kHz this object works at, "ms" would want 8 per
+millisecond, not 10 -- so either `count` does not tick per sample, or the
+argument is not milliseconds. The blob's own name for the function says
+"more then", and nothing else in it says more.
+
+**Status:** unmeasured. `silence_progress` (0xb0420) is the only writer of
+`count` and it is not reconstructed -- it needs the LOCAL `.data` table at
+0x84d4 that the blob calls `silence_level_table`. That function settles the
+unit and this entry should be revisited with it.

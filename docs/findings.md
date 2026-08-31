@@ -98731,3 +98731,138 @@ what is established is the store and the author's word for the command that
 causes it; what consumes either flag is unwritten and so unknown. 9 has no
 name in the object or in slmodemd's `VOICE_STATUS_*` / `VOICE_CMD_*`, whose
 values do not reach it, so it stays a number.
+### F8750. `FDSP_Kernel_InitObj`'s LMS step is one ULP BELOW `0.032f`, and the tidy literal fails the differential test
+
+*2026-08-31.* The object sets chan_a's step with
+
+    aeb13:	b8 6e 12 03 3d       	mov    $0x3d03126e,%eax
+    aeb1d:	89 83 8c 16 00 00    	mov    %eax,0x168c(%ebx)
+
+and `include/dsplib/fdspkrnl.h` had recorded that constant as "0.032f" since
+the span was first read. **It is not.** `0.032` lands at 0.592 of the way
+between two floats, so correct rounding goes UP: `fl(0.032)` is `0x3d03126f`
+= 0.03200000151991844, and the object's word is `0x3d03126e` =
+0.031999997794628143310546875, one ULP below. Whatever produced it truncated
+the mantissa rather than rounding it.
+
+**It is not cosmetic and no reading of the disassembly alone would have caught
+it.** Writing `a->mu = 0.032f;` compiles, looks right, and fails
+`t_fdspkrnl` at `mu 120  got 0.0320000015, reference 0.0319999978  (1 ULP)` --
+the step feeds every tap update in `EchoCanceler`, so the two sides' filters
+diverge from the first adapting block. The differential tier found it on the
+first run; the header's comment had been wrong for as long as it existed.
+
+`src/service/fdspkrnl.c` now spells the constant as the float's exact value,
+`0.031999997794628143310546875f`, which every correctly-rounding compiler must
+reproduce bit for bit. `0.0319999978f` also works on GCC 14 and was declined:
+nine significant digits round-trip a float only if the compiler's
+decimal-to-binary conversion is correctly rounded, which is the very
+assumption this constant proves the ORIGINAL compiler did not satisfy.
+
+**The general form.** A constant read as a 32-bit `mov` immediate is exact
+evidence; the decimal you would write for it is a guess, and the guess is
+wrong whenever the author's toolchain rounded differently from yours. Spell
+the object's word, not your reading of it.
+
+### F8751. `FIFO8`'s parameters are a STRUCT, and the object copies them as one -- which is what names the type
+
+*2026-08-31.* `FIFO8_create` reads its second argument as
+
+    aef40:	8b 10                	mov    (%eax),%edx
+    aef46:	0f b7 40 04          	movzwl 0x4(%eax),%eax
+
+and later writes the same six bytes into the ring with `mov %edx,(%ebx)`
+and `mov %dx,0x4(%ebx)`. A four-byte load plus a two-byte load, and the
+same pair on the way out, is GCC's **structure assignment of a six-byte
+object**, not three field copies -- three shorts copied individually would
+be three `movzwl`/`movw` pairs. So the ring's first six bytes are a nested
+struct of the parameters, and `src/service/fifo8.c` spells it that way.
+
+The blob agrees by name: the default instance it reads when the argument is
+NULL is a LOCAL `.data` object at 0x83a0 called **`FIFO_CFG`** -- the
+author's own name, in the same family as `TONE_CFG` (0x83c0), `MTDv22_CFG`
+and `AGCv23_CFG`. Its three shorts are `{ 0, 300, 0 }`: a 300-byte ring
+padded with zero. `t_fdspkfifo`'s `cfg == NULL` arm is the only thing that
+compares our copy of those values against the blob's, because a LOCAL data
+object has no `ref_` name to read.
+
+The leading short is never read by any of the four FIFO8 functions and keeps
+a neutral name.
+
+### F8752. `FIFO8_read` PADS, and that is the only reason a caller can trust its output length
+
+*2026-08-31.* `FIFO8_read(f, dst, n)` copies `min(count, n)` bytes out of
+the ring and then writes `n - min(count, n)` more, each of them `cfg.fill`:
+
+    af060:	0f b7 47 04          	movzwl 0x4(%edi),%eax
+    af064:	88 01                	mov    %al,(%ecx)
+
+-- the pad byte re-read from the object on every pass, because the
+destination may be the object. The RETURN value is the number that came out
+of the RING, so a caller that reads it as "bytes written" is wrong by the
+pad; the destination is always exactly `n` bytes long.
+
+`FIFO8_write` has no matching behaviour: it clips to the free room and
+returns what it took, and a full ring takes nothing. So the pair is
+asymmetric on purpose -- the read side feeds something that must have a
+sample every period (the voice path) and the write side must not overrun.
+
+### F8753. `TONE_detect` is TONE_filter's FIR plus TONE_kill's biquad, and that is what names five fields of the tone object
+
+*2026-08-31.* `TONE_detect` (0xaf9f0, 422 bytes) has no format string and no
+typed callee, so nothing above evidence class 3 was available for its
+fields. What settles five of them is that its arithmetic is another
+reconstructed function's, instruction for instruction:
+
+    w  = c[1]*z2 + x + c[2]*z1
+    y  = c[0]*z2 + w + z1
+    z1 = z2 ; z2 = w
+
+is exactly `TONE_kill`'s already-verified shape, with `x` the FIR output,
+`c[0..2]` read INLINE from +0x48/+0x4c/+0x50 rather than through a pointer,
+and the state at +0x54/+0x58. So those five are `det_coef[3]`, `det_z1` and
+`det_z2` -- the roles come from the identity, not from the way they read.
+
+The two smoothed powers are then
+
+    e_res = e_res*0.95 + (fir^2 - biquad^2)*(1 - 0.95)
+    e_tot = e_tot*0.95 + fir^2          *(1 - 0.95)
+
+and **both constants are DOUBLES, one of which is not 0.05**: the object's
+second word is 0.050000000000000044, exactly `fl(1.0 - 0.95)`. That is a
+compile-time fold of the complement, so the author wrote one pole and
+derived the other, and `TONE_DETECT_POLE` reproduces the fold rather than
+the value.
+
+`e_res` and `e_tot` are `float` locals and the object proves it: each is
+spilled to a 4-byte slot and reloaded once per pass (0xafb1d and 0xafb35),
+which is a narrowing a wider local would not do.
+
+The verdict is three-way -- 2 below the power floor at +0x14, then
+`e_tot * (+0x0c) >= e_res` -- and +0x0c and +0x14 keep neutral names,
+because "a ratio" and "a floor" is all the code says about them.
+
+### F8754. `silence_create` checks its allocation and `FIFO8_create` does not, in the same span
+
+*2026-08-31.* Two creators forty bytes apart in the blob, both taking an
+optional caller-supplied object and allocating when handed NULL:
+
+    b03f1:	call   sysdep_malloc
+    b03f6:	89 c2  mov %eax,%edx
+    b03f8:	31 c0  xor %eax,%eax
+    b03fa:	85 d2  test %edx,%edx
+    b03fc:	75 bf  jne  ...            <- silence_create returns NULL on failure
+
+    aefb6:	call   sysdep_malloc
+    aefbb:	89 c3  mov %eax,%ebx
+    aefbd:	0f b7 44 24 12  movzwl ... <- FIFO8_create dereferences it at once
+
+`FIFO8_create` stores the ring pointer straight into the block it has just
+been handed, so an out-of-memory there is a null dereference. Neither
+behaviour is a defect this project may repair -- the reconstruction is of
+what the object does -- and both are written as the object has them.
+
+Neither arm can be driven from a fixture: the harness allocator does not
+fail on request, so `t_fdspksil` records the check rather than testing it,
+and the mutation set carries a NOT-here note instead of a mutant that would
+read NOT CAUGHT while modelling nothing.

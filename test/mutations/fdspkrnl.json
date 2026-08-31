@@ -90,14 +90,14 @@
  },
  {
   "label": "the FIR ring wraps to slot 1, not slot 0",
-  "find": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;",
-  "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;",
+  "find": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;\n\t\tdly[idx] = *buf;",
+  "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;\n\t\tdly[idx] = *buf;",
   "note": "wrapping past the end instead (<=) would write dly[len], outside the ring, so the off-by-one is probed from the safe side."
  },
  {
   "label": "the FIR's wrapped half double-counts the newest tap",
-  "find": "\t\tfor (j = len - 1; j > idx; j--)\n\t\t\tacc += *c++ * dly[j];",
-  "replace": "\t\tfor (j = len - 1; j >= idx; j--)\n\t\t\tacc += *c++ * dly[j];"
+  "find": "\t\tfor (j = len - 1; j > idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\t\t*buf++ = acc;",
+  "replace": "\t\tfor (j = len - 1; j >= idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\t\t*buf++ = acc;"
  },
  {
   "note": "NOT here: reassociating the biquad's feed sum.  The first attempt (`*buf + c[1]*z2 + c[2]*z1`) merely COMMUTES the first addition, which is exact -- an equivalent mutant, withdrawn.  A true reassociation (`c[1]*z2 + (*buf + c[2]*z1)`) is then shielded the same way as the reciprocal tails in the beepgen file: extended-precision intermediates make the ordering difference ~2^-64 relative, invisible after the narrowing store for any same-scale input.  The source order matches the object's fadd sequence and is carried by the disassembly."
@@ -111,5 +111,161 @@
   "label": "the float memset stops one short",
   "find": "\tfor (i = 0; i < n; i++)\n\t\tbuf[i] = v;",
   "replace": "\tfor (i = 0; i + 1 < n; i++)\n\t\tbuf[i] = v;"
+ },
+ {
+  "note": "FDSP_Kernel_SetInternalBeepInProgress, FDSP_Kernel_InitObj, TONE_delete and TONE_detect.  The claims: the beep flag's value and its message arm; every region InitObj clears and every default it sets, including the LMS step's exact word (F8750); TONE_delete's guard and its five frees; and TONE_detect's FIR, its biquad, its two smoothed powers and its three-way verdict."
+ },
+ {
+  "label": "the beep flag is forced to one rather than taking the argument",
+  "find": "\tbInternalBeepInProgress = on;",
+  "replace": "\tbInternalBeepInProgress = on != 0;"
+ },
+ {
+  "label": "the beep message names the wrong arm",
+  "find": "\t\tdsplibs_debug_printf(\"Internal Beep %s \\n\", on ? \"ON\" : \"OFF\");",
+  "replace": "\t\tdsplibs_debug_printf(\"Internal Beep %s \\n\", on ? \"OFF\" : \"ON\");"
+ },
+ {
+  "label": "the beep message's gate fires at level 1",
+  "find": "\tbInternalBeepInProgress = on;\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tbInternalBeepInProgress = on;\n\tif (dsplibs_debug_level > 0)"
+ },
+ {
+  "label": "InitObj's LMS step is the tidy 0.032f",
+  "find": "\ta->mu = FDSP_CHAN_A_MU;",
+  "replace": "\ta->mu = 0.032f;"
+ },
+ {
+  "label": "InitObj gives chan_b a step too",
+  "find": "\tb->mu = 0.0f;",
+  "replace": "\tb->mu = FDSP_CHAN_A_MU;"
+ },
+ {
+  "label": "InitObj's tap counts are the other way round",
+  "find": "\tk->ntaps_a = 80;\n\tk->ntaps_b = 40;",
+  "replace": "\tk->ntaps_a = 40;\n\tk->ntaps_b = 80;"
+ },
+ {
+  "label": "InitObj leaves the kernel's leading int at 1",
+  "find": "\tk->int_00 = 2;",
+  "replace": "\tk->int_00 = 1;"
+ },
+ {
+  "label": "InitObj clears only the first buffer array",
+  "find": "\t\tp->short_0000[i] = 0;\n\t\tp->short_0fa0[i] = 0;",
+  "replace": "\t\tp->short_0000[i] = 0;"
+ },
+ {
+  "label": "InitObj's buffer loop stops one entry short",
+  "find": "\tfor (i = 0; i < 2000; i++) {",
+  "replace": "\tfor (i = 0; i + 1 < 2000; i++) {"
+ },
+ {
+  "label": "InitObj misses the last of the three buffer ints",
+  "find": "\tp->int_2714 = 0;\n\tp->int_2718 = 0;",
+  "replace": "\tp->int_2714 = 0;"
+ },
+ {
+  "label": "InitObj leaves chan_a's energy ring index alone",
+  "find": "\ta = k->chan_a;\n\ta->energy_idx = 0;",
+  "replace": "\ta = k->chan_a;"
+ },
+ {
+  "label": "InitObj clears chan_b's taps to the tap count, not 240",
+  "find": "\tfor (i = 0; i < 240; i++)\n\t\tb->coef[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i < (unsigned int)k->ntaps_b; i++)\n\t\tb->coef[i] = 0.0f;"
+ },
+ {
+  "label": "InitObj clears chan_a's delay line one block short",
+  "find": "\tfor (i = 0; i < FDSP_DLY; i++)\n\t\ta->dly[i] = 0.0f;",
+  "replace": "\tfor (i = 0; i + FDSP_BLOCK < FDSP_DLY; i++)\n\t\ta->dly[i] = 0.0f;"
+ },
+ {
+  "label": "InitObj leaves the saturation countdown running",
+  "find": "\tk->saturation = 0;\n\tp->int_2710 = 0;",
+  "replace": "\tp->int_2710 = 0;"
+ },
+ {
+  "label": "TONE_delete frees the hanging blocks on a zero-length filter too",
+  "find": "\tif (t->fir_len > 0) {",
+  "replace": "\tif (t->fir_len >= 0) {"
+ },
+ {
+  "label": "TONE_delete leaks the FIR delay line",
+  "find": "\t\tsysdep_free(t->fir_dly);\n\t\tsysdep_free(t->fir_coef);",
+  "replace": "\t\tsysdep_free(t->fir_coef);"
+ },
+ {
+  "label": "TONE_delete leaks the object itself",
+  "find": "\t}\n\tsysdep_free(t);\n}",
+  "replace": "\t}\n}"
+ },
+ {
+  "label": "TONE_detect's ring wraps to slot 1, not slot 0",
+  "find": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 0;\n\t\tdly[idx] = *buf++;",
+  "replace": "\t\tidx = (short)(idx + 1) < len ? (short)(idx + 1) : 1;\n\t\tdly[idx] = *buf++;"
+ },
+ {
+  "label": "TONE_detect's wrapped half double-counts the newest tap",
+  "find": "\t\tfor (j = len - 1; j > idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\n\t\tw =",
+  "replace": "\t\tfor (j = len - 1; j >= idx; j--)\n\t\t\tacc += *c++ * dly[j];\n\n\t\tw ="
+ },
+ {
+  "label": "TONE_detect restarts the coefficient walk mid-block",
+  "find": "\t\tconst float *c = coef;\n\t\tfloat acc = 0.0f;",
+  "replace": "\t\tconst float *c = coef + 1;\n\t\tfloat acc = 0.0f;"
+ },
+ {
+  "label": "TONE_detect's biquad loses its unit delay",
+  "find": "\t\tt->det_z1 = t->det_z2;\n\t\tt->det_z2 = w;",
+  "replace": "\t\tt->det_z1 = w;\n\t\tt->det_z2 = w;"
+ },
+ {
+  "label": "TONE_detect's output tap uses the feedback coefficient",
+  "find": "\t\ty = t->det_coef[0] * t->det_z2 + w + t->det_z1;",
+  "replace": "\t\ty = t->det_coef[1] * t->det_z2 + w + t->det_z1;"
+ },
+ {
+  "label": "TONE_detect's biquad feeds back the wrong state",
+  "find": "\t\tw = t->det_coef[1] * t->det_z2 + acc +\n\t\t    t->det_coef[2] * t->det_z1;",
+  "replace": "\t\tw = t->det_coef[1] * t->det_z1 + acc +\n\t\t    t->det_coef[2] * t->det_z2;"
+ },
+ {
+  "label": "the residual power is the sum of the squares, not the difference",
+  "find": "\t\t\t(acc * acc - y * y) * (1 - TONE_DETECT_POLE);",
+  "replace": "\t\t\t(acc * acc + y * y) * (1 - TONE_DETECT_POLE);"
+ },
+ {
+  "label": "the total power follows the biquad rather than the FIR",
+  "find": "\t\t\tacc * acc * (1 - TONE_DETECT_POLE);",
+  "replace": "\t\t\ty * y * (1 - TONE_DETECT_POLE);"
+ },
+ {
+  "label": "the smoothing pole is 0.9",
+  "find": "#define TONE_DETECT_POLE\t0.95",
+  "replace": "#define TONE_DETECT_POLE\t0.9"
+ },
+ {
+  "label": "the residual clamp keeps the negative half instead",
+  "find": "\tif (0.0f > e_res)\n\t\te_res = 0.0f;",
+  "replace": "\tif (0.0f < e_res)\n\t\te_res = 0.0f;"
+ },
+ {
+  "label": "the quiet verdict is returned above the floor rather than below it",
+  "find": "\tif (e_tot < t->float_0014)\n\t\treturn 2;",
+  "replace": "\tif (e_tot > t->float_0014)\n\t\treturn 2;"
+ },
+ {
+  "label": "the ratio scales the residual rather than the total",
+  "find": "\treturn e_tot * t->float_000c >= e_res;",
+  "replace": "\treturn e_res * t->float_000c >= e_tot;"
+ },
+ {
+  "label": "TONE_detect does not write the ring index back",
+  "find": "\tt->fir_idx = idx;\n\n\tif (0.0f > e_res)",
+  "replace": "\tif (0.0f > e_res)"
+ },
+ {
+  "note": "NOT here: narrowing e_res and e_tot to double, or widening them.  The object spills each to a 4-byte slot and reloads it once per pass, which is what fixes them as `float` locals -- a wider local removes the narrowing and the difference then rides on the x87's extended intermediates, which is a codegen claim the mutation tier cannot judge.  It is carried by the two `fstps 0x14(%esp)` / `flds 0x14(%esp)` pairs at 0xafb1d and 0xafb35."
  }
 ]

@@ -279,13 +279,6 @@ MTK_phasor(void *p)
 	ref_MTK_phasor(p);
 }
 
-void ref_FDSP_Kernel_InitObj(void *k);
-void
-FDSP_Kernel_InitObj(void *k)
-{
-	ref_FDSP_Kernel_InitObj(k);
-}
-
 void *
 sysdep_memset(void *dst, int c, size_t n)
 {
