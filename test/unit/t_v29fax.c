@@ -98,7 +98,17 @@
  *         over sixty consecutive blocks with the state carried across, which
  *         is the only shape that can see it.
  *
- * DemodDataV29 is NOT covered here and is not reconstructed; see the report.
+ *   DemodDataV29
+ *       - the eleven readings in `dem_defect`, driven over EIGHT consecutive
+ *         blocks per trial because the resampler, the recoverer and the
+ *         equaliser all carry history and a one-block fixture cannot see a
+ *         stage fed from the wrong buffer (F8790's rule).
+ *       - THE THREE ENABLE WORDS ARE SEEDED SO THAT ONE OF THEM HAS BIT 0
+ *         CLEAR.  `agc.signal` is 0 or 1, so `signal & word` can only be 0 or
+ *         `word & 1`; with all three words odd, transposing two of them is
+ *         invisible.  F8885.
+ *       - one of the three stimulus levels is SILENCE, which is the only one
+ *         that makes `agc.signal` itself observable.
  */
 
 #include <string.h>
@@ -110,7 +120,10 @@
 
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_smc.h"
 #include "dsplib/sysdep.h"
 
@@ -156,6 +169,37 @@ typedef int (*agc_int_fn)(struct fpm_agc *agc, short *samples,
 
 extern const struct fpm_agc_cfg AGCv22_CFG;
 
+extern unsigned short ref_DemodDataV29(void *modem, short *in,
+				       unsigned short *out, unsigned short count);
+extern void  ref_FPM_MRF_init(struct fpm_mrf *state,
+			      const struct fpm_mrf_cfg *cfg, int fresh);
+extern void  ref_FPM_MRF_free(struct fpm_mrf *state);
+extern short ref_FPM_MRF_filter(struct fpm_mrf *state, const short *in,
+				short *out, short count);
+extern void  ref_FPM_SRE_init(struct fpm_sre *sre,
+			      const struct fpm_sre_cfg *cfg, int fresh);
+extern void  ref_FPM_SRE_free(struct fpm_sre *sre);
+extern unsigned short ref_FPM_SRE_recover(struct fpm_sre *sre, const short *in,
+					  short *out, short count);
+extern void  ref_FPM_FSE_init(struct fpm_fse *state,
+			      const struct fpm_fse_cfg *cfg, int fresh);
+extern void  ref_FPM_FSE_free(struct fpm_fse *state);
+extern unsigned short ref_FPM_FSE_receive(struct fpm_fse *state,
+					  const short *in, unsigned short *out,
+					  unsigned short count);
+extern void  ref_FPM_TONE_kill(void *state, short *samples, short count);
+extern void  ref_FPM_TONE_delete(void *state);
+
+/*
+ * THE TWO "DEFAULT" CONFIGURATIONS ARE NOT USABLE AND THAT IS THE LIBRARY'S
+ * OWN DOING.  `FPM_MRF_CFG` is 9:10 with a NULL coefficient pointer -- a
+ * template, not a filter -- and `FPM_SRE_CFG`'s six table pointers are all
+ * zero in the object.  The V.32 instances are the real ones and are what the
+ * demodulator fixture uses.
+ */
+extern const struct fpm_mrf_cfg MRFv32_CFG;
+extern const struct fpm_sre_cfg SREv32_CFG;
+
 /* --------------------------------------------------------------------- */
 /* The fixture                                                           */
 
@@ -182,6 +226,11 @@ struct fix {
 };
 
 static struct fix fa, fb, fc;
+
+#define RX_AGC_OF(f)	((struct fpm_agc *)(void *)((f)->rx + V29RX_AGC))
+#define RX_MRF_OF(f)	((struct fpm_mrf *)(void *)((f)->rx + V29RX_MRF))
+#define RX_SRE_OF(f)	((struct fpm_sre *)(void *)((f)->rx + V29RX_SRE))
+#define RX_FSE_OF(f)	((struct fpm_fse *)(void *)((f)->rx + V29RX_FSE))
 
 static unsigned rng_state;
 
@@ -1685,6 +1734,455 @@ run_agc_identity(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* DemodDataV29                                                          */
+
+/*
+ * THE ONLY SYMBOL HERE THAT NEEDS A LIVE DSP CHAIN, and the fixture is most of
+ * the work.  `DemodDataV29` calls, in order, `FPM_AGC_agc`, `FPM_TONE_kill`,
+ * `FPM_MTD_detect`, `FPM_MRF_filter`, `FPM_SRE_recover` and `FPM_FSE_receive`,
+ * so a trial needs six constructed objects at their real offsets inside the
+ * receiver's block and three scratch buffers big enough for what they produce.
+ *
+ * D955's rule is the reason none of them may be faked: this is table-lookup
+ * code, and a field left unplanted that is used as a SUBSCRIPT cannot be caught
+ * by a blob-against-blob dry run -- both sides read the same wild index and
+ * agree, and only a segfault is left to chance.  Every one of the six is
+ * constructed by the BLOB's own `_init`, on both sides, so the states are
+ * identical bytes and any difference the test sees belongs to this file.
+ *
+ * F8790's rule is why each trial is EIGHT consecutive blocks with the state
+ * carried across: the MRF, the SRE and the FSE all hold history, and a
+ * one-block fixture cannot see a swapped weight or a buffer used for the wrong
+ * stage.
+ */
+
+#define DEM_BUF		4096
+#define DEM_BLOCKS	8
+#define DEM_TAPS	16
+#define DEM_CLK		8
+
+static short dem_icoff[DEM_TAPS], dem_qcoff[DEM_TAPS];
+static short dem_clk[DEM_CLK], dem_k1[3], dem_k2[3];
+static struct fpm_fse_cfg dem_fse_cfg;
+
+static short dem_mrf_a[DEM_BUF], dem_mrf_b[DEM_BUF], dem_mrf_c[DEM_BUF];
+static short dem_sre_a[DEM_BUF], dem_sre_b[DEM_BUF], dem_sre_c[DEM_BUF];
+static short dem_det_a[DEM_BUF], dem_det_b[DEM_BUF], dem_det_c[DEM_BUF];
+static unsigned short dem_out_a[DEM_BUF], dem_out_b[DEM_BUF];
+static short dem_in[DEM_BUF], dem_work[DEM_BUF];
+
+static short dem_slice_perr, dem_slice_mag;
+
+static unsigned short
+dem_slicer(struct fpm_fse *state, short *angle, short *mag)
+{
+	short a = *angle;
+
+	(void)state;
+	*angle = (short)(a - dem_slice_perr);
+	*mag = dem_slice_mag;
+	return (unsigned short)a;
+}
+
+static void
+dem_tables(void)
+{
+	int i;
+
+	for (i = 0; i < DEM_TAPS; i++) {
+		int v = ((i * 7919 + 1301) & 0x3fff) - 8192;
+
+		dem_icoff[i] = (short)(v | 1);
+		dem_qcoff[i] = (short)(-3 * v + 5 * i + 7);
+	}
+	for (i = 0; i < DEM_CLK; i++)
+		dem_clk[i] = (short)(i * 4096 + 137);
+	dem_k1[0] = 602; dem_k1[1] = 3050; dem_k1[2] = 766;
+	dem_k2[0] = 0;   dem_k2[1] = 18;   dem_k2[2] = 1;
+	dem_slice_perr = 311;
+	dem_slice_mag = 1777;
+
+	memset(&dem_fse_cfg, 0, sizeof(dem_fse_cfg));
+	dem_fse_cfg.block = 2048;
+	dem_fse_cfg.interp = 3;
+	dem_fse_cfg.icoff = dem_icoff;
+	dem_fse_cfg.qcoff = dem_qcoff;
+	dem_fse_cfg.taps = DEM_TAPS;
+	dem_fse_cfg.mu[0] = 2620;
+	dem_fse_cfg.mu[1] = 393;
+	dem_fse_cfg.mu[2] = 97;
+	dem_fse_cfg.clk = dem_clk;
+	dem_fse_cfg.clk_mod = DEM_CLK;
+	dem_fse_cfg.clk_inc = 4096;
+	dem_fse_cfg.train_sym = 4;
+	dem_fse_cfg.err_hi = 6536;
+	dem_fse_cfg.err_lo = 1638;
+	dem_fse_cfg.pll_k1 = dem_k1;
+	dem_fse_cfg.pll_k2 = dem_k2;
+	dem_fse_cfg.decision = dem_slicer;
+}
+
+/*
+ * The pointer fields the two sides cannot agree on, because each side's `_init`
+ * allocated its own.  Everything else in the block IS compared, including the
+ * FSE's two scatter logs.
+ */
+static int
+skip_rx_demod(int off)
+{
+	if (skip_rx(off))
+		return 1;
+	if (off >= V29RX_MRF + 0x18 && off < V29RX_MRF + 0x1c)
+		return 1;			/* fpm_mrf::history          */
+	if (off >= V29RX_SRE + 0x50 && off < V29RX_SRE + 0x5c)
+		return 1;			/* coeff, hist, clk          */
+	if (off >= V29RX_SRE + 0x74 && off < V29RX_SRE + 0x78)
+		return 1;			/* rms_buf                   */
+	if (off >= V29RX_FSE + 0x54 && off < V29RX_FSE + 0x5c)
+		return 1;			/* out_i, out_q              */
+	if (off >= V29RX_FSE + 0x60 && off < V29RX_FSE + 0x6c)
+		return 1;			/* icoeff, qcoeff, hist      */
+	return 0;
+}
+
+struct dem_setup {
+	short	gate_14;	/* non-zero skips the tone pre-pass        */
+	int	mtd_absent;	/* the pre-pass detector's forced verdict  */
+	int	enables;	/* which shape of the three enable words   */
+};
+
+/*
+ * THE THREE ENABLE WORDS MUST DIFFER IN BIT 0 AND NOWHERE ELSE MATTERS.
+ *
+ * `agc.signal` is a `setg` result, so it is 0 or 1 and never anything else --
+ * which means `signal & word` can only ever be 0 or `word & 1`.  The first
+ * version of this fixture seeded the three words 0x0f, 0x33 and 0x55, all of
+ * which have bit 0 set, so all three products were the SAME value and
+ * transposing two of them changed nothing at all.  Two named wrong readings
+ * reported a separating count of zero and that is what said so.
+ *
+ * Two shapes, each with one word bit-0-clear and the others set, so every
+ * pairing of source and destination is distinguishable in at least one.
+ */
+static const int dem_enable[2][3] = {
+	{ 0x0e, 0x33, 0x54 },		/* adapt off, pll on,  lms off */
+	{ 0x33, 0x54, 0x0f }		/* adapt on,  pll off, lms on  */
+};
+
+static void
+dem_build(struct fix *f, unsigned seed, const struct dem_setup *u,
+	  short *mrfbuf, short *srebuf, short *detbuf)
+{
+	fixture(f, seed);
+
+	put_ptr(f->rx, V29RX_BUF_MRF, mrfbuf);
+	put_ptr(f->rx, V29RX_BUF_SRE, srebuf);
+	put_ptr(f->det, V29DET_BUF, detbuf);
+	memset(mrfbuf, 0, DEM_BUF * sizeof(short));
+	memset(srebuf, 0, DEM_BUF * sizeof(short));
+	memset(detbuf, 0, DEM_BUF * sizeof(short));
+
+	ref_FPM_AGC_init(RX_AGC_OF(f), &AGCv22_CFG, 1);
+	ref_FPM_MRF_init(RX_MRF_OF(f), &MRFv32_CFG, 1);
+	ref_FPM_SRE_init(RX_SRE_OF(f), &SREv32_CFG, 1);
+	ref_FPM_FSE_init(RX_FSE_OF(f), &dem_fse_cfg, 1);
+
+	put_ptr(f->det, V29DET_MTD,
+		ref_FPM_MTD_create(0, u->mtd_absent ? &mtd_absent_cfg
+						    : &mtd_nosignal_cfg));
+	put_ptr(f->det, V29DET_TONE, ref_FPM_TONE_create(0, 0));
+
+	put_short(f->det, V29DET_GATE_14, u->gate_14);
+	put_int(f->rx, V29RX_INT_0004, dem_enable[u->enables][0]);
+	put_int(f->rx, V29RX_INT_0008, dem_enable[u->enables][1]);
+	put_int(f->rx, V29RX_INT_0020, dem_enable[u->enables][2]);
+}
+
+static void
+dem_free(struct fix *f)
+{
+	ref_FPM_MRF_free(RX_MRF_OF(f));
+	ref_FPM_SRE_free(RX_SRE_OF(f));
+	ref_FPM_FSE_free(RX_FSE_OF(f));
+	ref_FPM_MTD_delete((struct fpm_mtd *)get_ptr(f->det, V29DET_MTD));
+	ref_FPM_TONE_delete(get_ptr(f->det, V29DET_TONE));
+}
+
+/* The named wrong readings, one changed thing each. */
+enum dem_defect {
+	M_NONE = 0,
+	M_NO_HALVE,		/* the pre-pass copies without the >> 1     */
+	M_HALVE_UNSIGNED,	/* the >> 1 taken on an unsigned value      */
+	M_KILL_INPUT,		/* the notch applied to `in`, not the copy  */
+	M_NO_ABANDON,		/* a tone detection does not abandon        */
+	M_SRE_FROM_INPUT,	/* the recoverer fed `in` instead of the
+				 * resampler's output                       */
+	M_FSE_FROM_MRF,		/* the equaliser fed the resampler's buffer */
+	M_FSE_COUNT,		/* the equaliser given the resampler's count */
+	M_ADAPT_SOURCE,		/* sre.adapt taken from the wrong enable    */
+	M_TILT_NOT_CLEARED,	/* fse.tilt_on left alone                   */
+	M_LMS_SOURCE,		/* fse.lms_on and fse.pll_on transposed     */
+	M_SIGNAL_ONE,		/* the carrier bit forced to 1              */
+	M_MAX
+};
+
+/* The object's own sequence, with one reading changed. */
+static unsigned short
+drive_demod(struct fix *f, short *in, unsigned short *out, unsigned short count,
+	    enum dem_defect d)
+{
+	unsigned char *rx = f->rx;
+	unsigned char *det = f->det;
+	int signal;
+	unsigned short n;
+
+	ref_FPM_AGC_agc(RX_AGC_OF(f), in, count);
+	signal = RX_AGC_OF(f)->signal;
+	if (d == M_SIGNAL_ONE)
+		signal = 1;
+
+	if (get_short(det, V29DET_GATE_14) == 0) {
+		short *buf = (short *)get_ptr(det, V29DET_BUF);
+		unsigned short i;
+
+		for (i = 0; i < count; i++) {
+			if (d == M_NO_HALVE)
+				buf[i] = in[i];
+			else if (d == M_HALVE_UNSIGNED)
+				buf[i] = (short)((unsigned short)in[i] >> 1);
+			else
+				buf[i] = (short)(in[i] >> 1);
+		}
+
+		ref_FPM_TONE_kill(get_ptr(det, V29DET_TONE),
+				  (d == M_KILL_INPUT) ? in : buf,
+				  (short)count);
+
+		if (ref_FPM_MTD_detect((struct fpm_mtd *)
+					get_ptr(det, V29DET_MTD),
+				       buf, (short)count) != 0
+		    && d != M_NO_ABANDON)
+			return 0;
+	}
+
+	n = (unsigned short)ref_FPM_MRF_filter(RX_MRF_OF(f), in,
+					       (short *)get_ptr(rx,
+							V29RX_BUF_MRF),
+					       (short)count);
+
+	*(int *)(void *)(rx + V29RX_SRE_ADAPT) = signal
+		& get_int(rx, (d == M_ADAPT_SOURCE) ? V29RX_INT_0008
+						    : V29RX_INT_0004);
+
+	{
+		const short *src = (d == M_SRE_FROM_INPUT)
+				   ? (const short *)in
+				   : (const short *)get_ptr(rx, V29RX_BUF_MRF);
+
+		n = ref_FPM_SRE_recover(RX_SRE_OF(f), src,
+					(short *)get_ptr(rx, V29RX_BUF_SRE),
+					(short)n);
+	}
+
+	if (d != M_TILT_NOT_CLEARED)
+		*(int *)(void *)(rx + V29RX_FSE_TILT_ON) = 0;
+	*(int *)(void *)(rx + V29RX_FSE_PLL_ON) = signal
+		& get_int(rx, (d == M_LMS_SOURCE) ? V29RX_INT_0020
+						  : V29RX_INT_0008);
+	*(int *)(void *)(rx + V29RX_FSE_LMS_ON) = signal
+		& get_int(rx, (d == M_LMS_SOURCE) ? V29RX_INT_0008
+						  : V29RX_INT_0020);
+
+	return ref_FPM_FSE_receive(RX_FSE_OF(f),
+				   (const short *)get_ptr(rx,
+					(d == M_FSE_FROM_MRF) ? V29RX_BUF_MRF
+							      : V29RX_BUF_SRE),
+				   out,
+				   (d == M_FSE_COUNT)
+					? (unsigned short)count : n);
+}
+
+static long dem_sep[16], dem_paths[6];
+
+/*
+ * THREE LEVELS, AND THE SILENT ONE IS NOT DECORATION.  `agc.signal` is the
+ * gain control's own "more than half the blocks were above the gate", and on
+ * both noise levels this fixture first used it came back 1 every time -- so
+ * `signal & word` and `1 & word` were the same number and the wrong reading
+ * that forces the carrier bit to 1 separated nothing.  A silent block is the
+ * only stimulus that makes the bit itself observable.
+ */
+static void
+dem_signal(unsigned seed, int level)
+{
+	int i;
+
+	rng_seed(seed);
+	for (i = 0; i < DEM_BUF; i++) {
+		int v = (int)(rng_next() % 4001u) - 2000;
+
+		dem_in[i] = (short)(level == 0 ? 0
+				    : level == 1 ? v / 8
+						 : v * 8);
+	}
+}
+
+/*
+ * A trial: DEM_BLOCKS consecutive blocks through both sides, compared after
+ * every one.  The defect drives replay the WHOLE sequence from a fresh fixture,
+ * so a reading that only diverges after the state has built up is still caught.
+ */
+static void
+run_demod_one(unsigned seed, const struct dem_setup *u, int level,
+	      unsigned short count, long where)
+{
+	unsigned long marka = 0, markc;
+	int blk, d, i;
+
+	dem_signal(seed ^ 0x0b10cced, level);
+
+	dem_build(&fa, seed, u, dem_mrf_a, dem_sre_a, dem_det_a);
+	dem_build(&fb, seed, u, dem_mrf_b, dem_sre_b, dem_det_b);
+
+	for (blk = 0; blk < DEM_BLOCKS; blk++) {
+		unsigned short ra, rb;
+		long id = where * 100 + blk;
+
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_out_a[i] = dem_out_b[i] = 0xbeef;
+			dem_work[i] = dem_in[i];
+		}
+		ra = ref_DemodDataV29(fa.obj, dem_work, dem_out_a, count);
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = dem_in[i];
+		rb = DemodDataV29(fb.obj, dem_work, dem_out_b, count);
+
+		diff_eq_int("at %ld: DemodDataV29 returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: the return fits the buffer", ra < DEM_BUF,
+			    1, id);
+		if (ra >= DEM_BUF)
+			return;
+		for (i = 0; i < (int)ra; i++)
+			diff_eq_int("word %ld", (long)dem_out_b[i],
+				    (long)dem_out_a[i], i);
+		diff_eq_int("at %ld: nothing past the returned count",
+			    dem_out_a[ra] == 0xbeef, 1, id);
+		diff_eq_int("at %ld: first differing receiver byte",
+			    blk_first_diff(fb.rx, fa.rx, RX_SIZE,
+					   skip_rx_demod), -1, id);
+		diff_eq_int("at %ld: first differing detector byte",
+			    blk_first_diff(fb.det, fa.det, DET_SIZE, skip_det),
+			    -1, id);
+		diff_eq_int("at %ld: the resampler's buffer",
+			    blk_first_diff((unsigned char *)dem_mrf_b,
+					   (unsigned char *)dem_mrf_a,
+					   DEM_BUF * 2, 0), -1, id);
+		diff_eq_int("at %ld: the recoverer's buffer",
+			    blk_first_diff((unsigned char *)dem_sre_b,
+					   (unsigned char *)dem_sre_a,
+					   DEM_BUF * 2, 0), -1, id);
+		diff_eq_int("at %ld: the pre-pass buffer",
+			    blk_first_diff((unsigned char *)dem_det_b,
+					   (unsigned char *)dem_det_a,
+					   DEM_BUF * 2, 0), -1, id);
+
+		/*
+		 * THE MARK CARRIES THE FLAG WORDS AS WELL AS THE OUTPUT, and
+		 * that is not tidiness: `sre.adapt`, `fse.pll_on`,
+		 * `fse.lms_on` and `fse.tilt_on` do not reach the samples at
+		 * all on a single block, so four named wrong readings about
+		 * them separated nothing until they were folded in here.
+		 */
+		marka = marka * 1000003u + ra;
+		for (i = 0; i < (int)ra; i++)
+			marka = marka * 31u + dem_out_a[i];
+		marka = marka * 131u + (unsigned long)
+				get_int(fa.rx, V29RX_SRE_ADAPT);
+		marka = marka * 131u + (unsigned long)
+				get_int(fa.rx, V29RX_FSE_PLL_ON);
+		marka = marka * 131u + (unsigned long)
+				get_int(fa.rx, V29RX_FSE_LMS_ON);
+		marka = marka * 131u + (unsigned long)
+				get_int(fa.rx, V29RX_FSE_TILT_ON);
+
+		if (ra == 0)
+			dem_paths[0]++;
+		else
+			dem_paths[1]++;
+		if (u->gate_14 == 0)
+			dem_paths[2]++;
+		else
+			dem_paths[3]++;
+		if (get_int(fa.rx, V29RX_FSE_LMS_ON) != 0)
+			dem_paths[4]++;
+		if (get_int(fa.rx, V29RX_SRE_ADAPT) != 0)
+			dem_paths[5]++;
+	}
+
+	dem_free(&fa);
+	dem_free(&fb);
+
+	for (d = 1; d < (int)M_MAX; d++) {
+		dem_build(&fc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+		markc = 0;
+		for (blk = 0; blk < DEM_BLOCKS; blk++) {
+			unsigned short rc;
+
+			for (i = 0; i < DEM_BUF; i++) {
+				dem_out_b[i] = 0xbeef;
+				dem_work[i] = dem_in[i];
+			}
+			rc = drive_demod(&fc, dem_work, dem_out_b, count,
+					 (enum dem_defect)d);
+			markc = markc * 1000003u + rc;
+			if (rc < DEM_BUF)
+				for (i = 0; i < (int)rc; i++)
+					markc = markc * 31u + dem_out_b[i];
+			markc = markc * 131u + (unsigned long)
+					get_int(fc.rx, V29RX_SRE_ADAPT);
+			markc = markc * 131u + (unsigned long)
+					get_int(fc.rx, V29RX_FSE_PLL_ON);
+			markc = markc * 131u + (unsigned long)
+					get_int(fc.rx, V29RX_FSE_LMS_ON);
+			markc = markc * 131u + (unsigned long)
+					get_int(fc.rx, V29RX_FSE_TILT_ON);
+		}
+		if (markc != marka)
+			dem_sep[d]++;
+		dem_free(&fc);
+	}
+}
+
+static int
+run_demod(void)
+{
+	static const unsigned short counts[] = { 32, 160, 700 };
+	int gate, absent, enables, level, c;
+	long where = 0;
+
+	dem_tables();
+	diff_begin("DemodDataV29");
+
+	for (gate = 0; gate < 2; gate++)
+	for (absent = 0; absent < 2; absent++)
+	for (enables = 0; enables < 2; enables++)
+	for (level = 0; level < 3; level++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		struct dem_setup u;
+
+		u.gate_14 = (short)gate;
+		u.mtd_absent = absent;
+		u.enables = enables;
+		run_demod_one(0x0de70000u + (unsigned)where, &u, level,
+			      counts[c], where);
+		where++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -1702,6 +2200,7 @@ main(void)
 	rc |= run_delete();
 	rc |= run_quality();
 	rc |= run_dcd();
+	rc |= run_demod();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -1773,6 +2272,12 @@ main(void)
 	for (d = 0; d < 8; d++)
 		diff_eq_int("carrier-detect path %ld was reached",
 			    dcd_paths[d] > 0, 1, d);
+	for (d = 1; d < (int)M_MAX; d++)
+		diff_eq_int("demodulator wrong reading %ld separates",
+			    dem_sep[d] > 0, 1, d);
+	for (d = 0; d < 6; d++)
+		diff_eq_int("demodulator path %ld was reached",
+			    dem_paths[d] > 0, 1, d);
 
 	rc |= diff_end();
 

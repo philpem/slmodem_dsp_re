@@ -239,21 +239,86 @@ V29TX_status(void *tx, void *status)
 
 /*
  * ---------------------------------------------------------------------------
- * DemodDataV29 -- .text 0x0a5ff0, 398 bytes -- IS DELIBERATELY ABSENT.
+ * DemodDataV29 -- .text 0x0a5ff0, 398 bytes.
  *
- * It is decoded, not skipped: findings F8874, F8875 and F8879 are all readings
- * taken from it, and F8883 carries the whole call sequence, the argument types
- * and the two type decisions that are forced.  What it does not have is a
- * differential test, because a trial needs a live AGC, TONE, MTD, MRF, SRE and
- * FSE, four of them with mutually consistent buffer sizes, and the FSE has no
- * configuration template anywhere in the tree.  D955's rule bites hardest
- * exactly here -- this is table-lookup code, and an unplanted field used as a
- * SUBSCRIPT cannot be caught by a blob-against-blob run, because both sides
- * read the same wild index and agree.
+ * One block through the receive chain: gain control, an optional tone pre-pass,
+ * resample, symbol recovery, equalise and slice.
  *
- * CLAUDE.md's rule is that a function which cannot be made to pass is left out
- * and the attempt recorded, so it is left out and the attempt is F8883.
+ * THE PRE-PASS ABANDONS THE WHOLE CALL.  While the detection block's +0x14 is
+ * zero the demodulator halves the input into a scratch buffer, notches a tone
+ * out of it and asks the tone detector whether it fired -- and if it did, it
+ * returns zero without touching the resampler, the recoverer or the equaliser.
+ * The AGC has already run by then and its effect on the caller's buffer stands.
+ *
+ * THE TWO LOOP COUNTERS IN THIS FILE ARE DIFFERENT TYPES AND THAT IS FORCED.
+ * Here the halving loop compares `cmp %di,%dx` with `jb` -- 16 bits, unsigned
+ * -- so the index is an `unsigned short`.  In `DataCarrierDetectV29` the copy
+ * loop compares `cmp %esi,%edx` with `jl` after a `movswl` -- 32 bits, signed
+ * -- so that index is a `short` widened to int.  Two loops over the same
+ * `count`, written by the same author, spelled differently; neither reading can
+ * be carried to the other.  Finding F8879.
+ *
+ * THE CARRIER BIT COMES FROM THE FIELD, NOT FROM `%eax`.  See the note at the
+ * top of this file, finding F8875 and deviation D1036.
  */
+unsigned short
+DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
+{
+	int signal;
+	unsigned short n;
+	void *rx;
+
+	FPM_AGC_agc(RX_AGC(RX(modem)), in, count);
+	/* Not the object's `%eax`; the same value.  D1036. */
+	signal = RX_AGC(RX(modem))->signal;
+
+	if (FIELD_SHORT(DET(modem), V29DET_GATE_14) == 0) {
+		short *buf = (short *)FIELD_PTR(DET(modem), V29DET_BUF);
+		unsigned short i;
+
+		for (i = 0; i < count; i++)
+			buf[i] = (short)(in[i] >> 1);
+
+		FPM_TONE_kill((struct fpm_tone *)
+				FIELD_PTR(DET(modem), V29DET_TONE),
+			      (short *)FIELD_PTR(DET(modem), V29DET_BUF),
+			      (short)count);
+
+		if (FPM_MTD_detect((struct fpm_mtd *)
+					FIELD_PTR(DET(modem), V29DET_MTD),
+				   (const short *)
+					FIELD_PTR(DET(modem), V29DET_BUF),
+				   (short)count) != 0)
+			return 0;
+	}
+
+	n = (unsigned short)FPM_MRF_filter(
+			RX_MRF(RX(modem)),
+			in,
+			(short *)FIELD_PTR(RX(modem), V29RX_BUF_MRF),
+			(short)count);
+
+	rx = RX(modem);
+	RX_SRE(rx)->adapt = signal & FIELD_INT(rx, V29RX_INT_0004);
+
+	n = FPM_SRE_recover(RX_SRE(RX(modem)),
+			    (const short *)FIELD_PTR(RX(modem), V29RX_BUF_MRF),
+			    (short *)FIELD_PTR(RX(modem), V29RX_BUF_SRE),
+			    (short)n);
+
+	if (n > V29RX_SRE_MAX && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("ERROR: SRE buffer violation(%d)", n);
+
+	rx = RX(modem);
+	RX_FSE(rx)->tilt_on = 0;
+	RX_FSE(rx)->pll_on = signal & FIELD_INT(rx, V29RX_INT_0008);
+	RX_FSE(rx)->lms_on = signal & FIELD_INT(rx, V29RX_INT_0020);
+
+	return FPM_FSE_receive(RX_FSE(RX(modem)),
+			       (const short *)
+				FIELD_PTR(RX(modem), V29RX_BUF_SRE),
+			       out, n);
+}
 
 /*
  * ---------------------------------------------------------------------------

@@ -101245,8 +101245,8 @@ the same way: the caller's header for `FPM_AGC_agc` was
 `int FPM_AGC_agc(agc, samples, count, flag)` and the definition had already lost
 both the flag and the return.
 
-`DemodDataV29` is not committed in this pass (F8883), but the reading is settled
-and the replacement spelling is `RX_AGC(rx)->signal` -- identical on every path,
+`DemodDataV29` was held back one commit for want of a fixture (F8883) and then
+landed (F8885); the replacement spelling is `RX_AGC(rx)->signal` -- identical on every path,
 and the only spelling available, because a second prototype disagreeing with
 `fpm_agc.h` would be "one type, one home" in its function-prototype form.
 `test/unit/t_v29fax.c` MEASURES the identity rather than believing it:
@@ -101422,6 +101422,19 @@ The three embedded FPM states are zeroed before the run so their `_free`
 functions release null pointers, which `free_null` counts; that the object calls
 them at all is itself compared.
 
+**WHAT THIS SHAPE CANNOT SEE IS THE ORDER, AND A MUTATION RUN SAYS SO.** A
+hand-run set of 23 mutations over `src/fax/v29.c` -- not registered as a suite,
+per this pass's brief -- came back 21 caught of 22 usable, and the one that got
+through was "the FSE and the SRE freed in the other order". A liveness vector
+is a SET, and both sides call the same `sysdep_free`, so nothing in the harness
+records the sequence. `harness_alloc_ordinal` cannot help: it reports where a
+pointer came from, not when it went. Recovering the order would need either a
+free log in `test/harness/runtime.c` or a reliance on the allocator's LIFO
+recycling, and F1353 rules the second one out explicitly. So the ORDER of the
+ten releases is recorded in `v29fax.h` from the disassembly and is not under
+test; a future free log in the harness would close it for every delete function
+in the tree at once.
+
 
 ### F8882. Three separating counts read zero because the tone detector never returned ABSENT, and no stimulus sweep could have fixed it
 
@@ -101471,6 +101484,13 @@ accepts either direction of a branch covers neither.
 
 
 ### F8883. `DemodDataV29` is read, written and NOT committed: its fixture needs six live DSP objects and the other ten symbols did not
+
+**SUPERSEDED WITHIN THE SAME PASS: `DemodDataV29` LANDED IN THE NEXT COMMIT.**
+The fixture described below was built and the function is now in
+`src/fax/v29.c` with 36,134 differential checks behind it. F8885 records what
+building it cost and the three separating counts that read zero along the way.
+Everything below is still an accurate account of WHY it was held back at the
+previous commit, and the call sequence it sets out is the one that was written.
 
 `DemodDataV29` (0x0a5ff0, 398 bytes) is the one symbol of this pass's eleven
 that is not in `src/fax/v29.c`. It is fully decoded -- F8874, F8875 and F8879
@@ -101543,3 +101563,55 @@ Two failure modes follow from it and both nearly happened here:
 setup, it names the problem exactly, and it costs nothing when the tree is
 fresh. Nothing else here would have found it: the tree built, the whole suite
 passed, and `refcheck.py` only ever runs against the same stale `docs/`.
+
+
+### F8885. `DemodDataV29` landed, and three more separating counts read zero -- all of them because a value that can only be 0 or 1 was ANDed with words that all had bit 0 set
+
+F8883 held `DemodDataV29` back for want of a fixture. The fixture was built and
+the function is committed: 36,134 differential checks over 96 trials, each one
+EIGHT consecutive blocks with the state carried across, and eleven named wrong
+readings each with a non-zero separating count.
+
+**WHAT THE FIXTURE ACTUALLY NEEDED**, for the next person who has to build one:
+
+- Six constructed objects at their real offsets in the receiver's block --
+  `fpm_agc` at +0x64, `fpm_mrf` at +0x48, `fpm_sre` at +0x90, `fpm_fse` at
+  +0x120, and an `fpm_mtd` and an `fpm_tone` behind the detection block's +0x00
+  and +0x04. Every one is constructed by the BLOB's own `_init` on both sides,
+  so the states are identical bytes and any difference belongs to `src/`.
+- **THE TWO "DEFAULT" CONFIGURATIONS ARE UNUSABLE AND THE LIBRARY SAYS SO.**
+  `FPM_MRF_CFG` is 9:10 with a NULL coefficient pointer -- `src/dsp/fpm_mrf.c`'s
+  own comment calls it a template, not a filter -- and `FPM_SRE_CFG`'s six table
+  pointers are all zero in the object. `MRFv32_CFG` and `SREv32_CFG` are the
+  real instances and are what the fixture uses. Reaching for the name with
+  `FPM_` in it costs a link error at best and a null dereference at worst.
+- The FSE has no configuration template at all; `t_fpm_fse_recv.c` builds its
+  own and this fixture copies that shape, slicer included.
+- Comparing the receiver's block means skipping five pointer FIELDS the two
+  sides' `_init` calls allocated separately -- `fpm_mrf::history`, the SRE's
+  `coeff`/`hist`/`clk` and `rms_buf`, and the FSE's `out_i`/`out_q`/`icoeff`/
+  `qcoeff`/`hist`. Everything else is compared, including both scatter logs.
+
+**AND THEN THE SEPARATING COUNTS DID THE JOB AGAIN**, which is the part worth
+recording. Three of the eleven wrong readings came back zero on the first run
+and a fourth on the second, and all four were the same defect in the FIXTURE:
+
+- `sre.adapt`, `fse.pll_on` and `fse.lms_on` are written as
+  `signal & enable_word`, and `agc.signal` is a `setg` result -- so it is 0 or
+  1 and nothing else. The fixture seeded the three enable words 0x0f, 0x33 and
+  0x55, ALL OF WHICH HAVE BIT 0 SET, so all three products were the same value
+  and transposing two of them, or taking one from the wrong word, changed
+  nothing at all. Two readings separated only once the words were reseeded so
+  that one of the three has bit 0 CLEAR.
+- The three flag words do not reach the output samples on any block, so folding
+  only the returns and the output into the trial's checksum left every reading
+  about them invisible. They are folded in now.
+- With both noise levels the fixture generated, `agc.signal` came back 1 on
+  every block, so "the carrier bit forced to 1" was the same as the truth. A
+  SILENT block is the only stimulus that makes the bit itself observable, and
+  adding one closed the last count.
+
+**THE PATTERN ACROSS F8882 AND THIS ONE IS ONE SENTENCE**: every separating
+count that read zero did so because the fixture could not distinguish two
+values, not because the wrong reading was implausible. The counts are cheap,
+they fire on the first run, and nothing else in the tree would have said a word.

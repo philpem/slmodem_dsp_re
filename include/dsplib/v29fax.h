@@ -497,18 +497,16 @@ void V29RX_delete(void *modem);
 int V29RX_modem(void *modem, short *in, short *out, unsigned short *count);
 
 /*
- * `DemodDataV29` (0x0a5ff0, 398 bytes) IS NOT DECLARED HERE, because it is not
- * defined in `src/fax/v29.c`.  It is decoded -- finding F8883 carries the call
- * sequence, the argument types and the two forced type decisions -- and left
- * out for want of a fixture, not for want of a reading.  Its signature, when
- * it lands, is
+ * One block through the receiver: AGC, an optional tone pre-pass, resample,
+ * symbol recovery, equalise and slice.  Returns the number of data words
+ * written to `out`, or ZERO if the tone pre-pass fired -- in which case
+ * nothing after the pre-pass ran at all.
  *
- *     unsigned short DemodDataV29(void *modem, short *in, unsigned short *out,
- *                                 unsigned short count);
- *
- * with `in` modified IN PLACE by the AGC and `out` typed by
- * `FPM_FSE_receive`'s own second parameter.
+ * `in` IS MODIFIED IN PLACE by the AGC, which is why it is not `const`.
+ * `out` is `unsigned short *` because `FPM_FSE_receive`'s second buffer is.
  */
+unsigned short DemodDataV29(void *modem, short *in, unsigned short *out,
+			    unsigned short count);
 
 /*
  * Decide whether a data carrier is present in this block.

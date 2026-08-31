@@ -10384,9 +10384,9 @@ the field instead is exactly equivalent.
 
 **NOT reproduced, because it cannot be**: `include/dsplib/fpm_agc.h` declares
 `FPM_AGC_agc` correctly and a second, disagreeing prototype in `src/` would be
-"one type, one home" in its function-prototype form. Where `DemodDataV29` lands
-it will read `RX_AGC(rx)->signal`, and `test/unit/t_v29fax.c`'s
-`run_agc_identity` asserts the two are the same value -- through an
+"one type, one home" in its function-prototype form. `DemodDataV29` reads
+`RX_AGC(rx)->signal` instead, and `test/unit/t_v29fax.c`'s `run_agc_identity`
+asserts the two are the same value -- through an
 `int`-returning cast of the blob's own `ref_FPM_AGC_agc`, over twelve trials
 including empty and all-silent blocks -- so the equivalence this substitution
 rests on is measured on every run rather than believed once.
