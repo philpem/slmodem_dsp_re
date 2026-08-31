@@ -9460,3 +9460,25 @@ argument is not milliseconds. The blob's own name for the function says
 `count` and it is not reconstructed -- it needs the LOCAL `.data` table at
 0x84d4 that the blob calls `silence_level_table`. That function settles the
 unit and this entry should be revisited with it.
+
+## D983 ⚠ `silence_progress` writes every escape at `out[0]`, and advances only the LENGTH
+
+Each silence decision the call completes appends two bytes -- `0x10` then
+`q` or `s` -- and adds 2 to `*len`, but the destination pointer is reloaded
+from the stack each time (`mov 0x3c(%esp),%eax; movb $0x10,(%eax)` at
+0xb0613 and 0xb0652) and never advanced. A buffer long enough to complete
+two blocks -- 1600 samples, 200 ms -- can therefore report four bytes of
+length while only two bytes were written, the second decision having
+overwritten the first.
+
+The same shape is in `_status` itself, which is the right place for it:
+`_status` is a leaf that writes where it is told. What is missing is the
+caller advancing `out` between its two uses.
+
+**Status:** unmeasured for reachability. `voice_rx` is the only caller and
+is not reconstructed, so whether it ever hands `silence_progress` more than
+one block's worth of samples at a time is its to settle -- at the object's
+own 160-sample service interval it cannot, and the overwrite needs a call of
+at least 1600 samples. `t_fdspksil` drives 1700-sample calls and compares
+the buffer and the length against the blob, so the behaviour is reproduced
+whatever it turns out to mean.
