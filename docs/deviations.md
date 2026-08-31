@@ -9670,3 +9670,33 @@ it is the reading that stays exact on a narrowing FPU and so needs no
 divergence declared; that is a choice recorded, not a fact derived. A
 mutation that drops or narrows the cast will read NOT CAUGHT and should be a
 note rather than a registered mutant.
+
+## D995 🐛 `TONE_create` writes seven floats through two pointers it did not set, whenever it allocates the object and `fir_len` is not positive
+
+*2026-08-31.* The four heap blocks are allocated behind ONE gate at
+0xaf6d9 -- `test %edx,%eax` over `setne` on "this call allocated the
+object" and `setg` on "fir_len > 0" -- so a non-positive length skips all
+four. The tail of the function then runs unconditionally:
+
+    af7fe:  mov %eax,0x4(%edx)     edx = t->ptr_01b4, five floats
+    af80a:  ...
+    af81c:  movl $0x0,(%edi)       edi = t->ptr_01b8, two floats
+
+Nothing between the gate and those stores sets either pointer, and the
+48-byte configuration copy does not reach +0x1b4 either. So when the object
+was freshly allocated the two pointers hold whatever `sysdep_malloc` left
+there, and the object writes 20 and 8 bytes through them.
+
+It is not the same as the FIR loop, which is bounded by the same `fir_len`
+and simply does not run.
+
+**Status:** MEASURED, and it is what stopped a fixture rather than a
+theory. `t_tonecreate` drives the allocating path only with a positive
+`fir_len`; the first version of that sweep included -1 and 0 and
+segmentation-faulted on both sides. The supplied-storage sweep covers a
+non-positive length with real buffers planted, so the arm is tested -- it
+is only the allocating combination that cannot be.
+
+Whether any caller reaches it is unmeasured: `TONE_create`'s reconstructed
+callers are none, and `detector_create` (0xad480, unwritten) passes
+`TONEamode_CFG`, whose `fir_len` is 53 and therefore positive.

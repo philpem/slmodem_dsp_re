@@ -99068,3 +99068,66 @@ interop one is not mentioned by F8463 or F8772 and is only reachable through
 passed because the oscillator under it was the blob's; it is ours now and
 `t_fdspkrnl` is still green at 1,416 checks for that section and 45,905
 across the binary.
+
+### F8781. `TONE_create` is a 2100 Hz answer-tone builder, and its allocation gate has TWO conditions rather than one
+
+*2026-08-31.* 521 bytes at 0xaf690, `src/service/fdspkrnl.c`, with
+`TONE_CFG` (`.data` 0x83c0, 48 bytes) and the `ToneLPF` it points at
+(`.data` 0x8400, 212 bytes). Proved by `t_tonecreate` at 86,136 checks,
+mutation set 33 of 33 caught.
+
+**THE CONFIGURATION IS A SEPARATE 48-BYTE TYPE AND THE OBJECT SAYS SO.**
+`rep movsl` with `$0xc` in `%ecx` at 0xaf6c5 copies twelve words from `cfg`
+over the head of a 0x1c8-byte tone object, and both configs in `.data` are
+0x30 bytes. So the author cannot have declared them as whole tone objects,
+and `struct fdsp_tone_cfg` is a real type rather than a convenience;
+`fdspkrnl.c` asserts its eight named fields against `struct fdsp_tone`'s
+offsets so the two layouts cannot drift apart silently.
+
+**THE GATE IS `test %edx,%eax` OVER TWO `set` RESULTS** (0xaf6d9): `setne`
+on "this call allocated the object" and `setg` on "fir_len > 0". Three of
+the four combinations skip all four `sysdep_malloc` calls, and the FIR loop
+and the biquad stores still run -- which is deviation D995, a wild write of
+seven floats whenever the object was allocated and the length was not
+positive. Reading the gate as one condition invents a function that cannot
+fault.
+
+**WHAT THE COEFFICIENTS ARE.** The detector's three are a resonator at the
+tone frequency with the configured pole radius:
+
+    det_coef[0] = -2 cos(w)        det_coef[1] = 2 r cos(w)
+    det_coef[2] = -r*r             w = 2*pi*freq/8000, r = +0x018
+
+which is what names +0x018 `pole_radius`, and `iir_coef` (+0x1bc) is set to
+point at `det_coef` itself rather than at the 20-byte block -- the two
+filters share one coefficient triple. The 20-byte block is a different
+filter entirely: a 60 Hz notch with poles at radius 0.96, built from a
+SECOND phasor at 0.04712389f (2*pi*60/8000) as
+`{-0.96*0.96, 1, 1.92 cos, -2 cos, 1}`. Only that second phasor is zeroed by
+the `rep stos` at entry; the tone's has both its fields written.
+
+**2*pi/8000 IS TYPED SHORT HERE TOO.** `.rodata.cst8` 0x1c0 is
+0.0007853981633975, three digits short of the nearest double, which is the
+same habit as `MTK_phasor`'s 6.28318530718 (finding F8780) in the function
+next door.
+
+**`ToneLPF` IS TWO DIFFERENT ARRAYS AND NEITHER GETS A `ref_` ALIAS.** The
+blob defines the name twice, both LOCAL: `r` at 0xd040, 53 shorts, the
+fixed-point pump's, already in `src/dsp/fpm_tone_cfg.c`; and `d` at 0x8400,
+53 floats, this one. They are the same filter at different quantisations
+rather than a copy -- the float peak is 0.0418356508 and the short peak is
+1370, and 0.0418356508 * 32768 is 1370.9. Because the name is used by two
+translation units, `symmap.py` refuses to globalize either, so the test
+reaches the float one through `ref_TONE_CFG.fir_proto` -- the blob's own
+pointer to its own array, which is a direct comparison and not a lookup.
+
+**`TONEamode_CFG` IS DECLINED, and the reason is ownership.** It is 48 bytes
+at `.data` 0x8240, `d` and not `D`, and the only relocation anywhere in the
+1.2 MB that names it is at 0xad4a3, inside `detector_create` (0xad480) --
+which needs `detector.h` and belongs to another agent's wave. A `static`
+whose one reader lives in someone else's translation unit is exactly the
+case F8772 declined `silence_level_table` on, and the answer is the same:
+write it with its reader. Its contents are 980 Hz, amp 0.353599995,
+duration 0 (endless), 0.75, 0.01, 0.000199999995, pole radius 0.9375, a
+NULL `fir_proto`, fir_len 53, and three zero words -- and that NULL with a
+positive length is worth checking against D995 when someone does write it.
