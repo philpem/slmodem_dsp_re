@@ -101105,3 +101105,36 @@ a pair of rate converters, and only `VOICE_process` has real work in it -- two
 nested loops, two rate-conversion rings and a fourteen-way message dispatch.
 Five of the six deviations recorded against them (D1020-D1025) are in that one
 function or in the object it builds.
+
+### F8846. The voice wave took `mutsnap.py` from 1 current to 0, and the cause is a file gaining functions rather than anything going wrong
+
+*2026-08-31.* `docs/remaining.md` records the mutation snapshot as **1 current,
+227 stale, 0 never recorded, of 228 registered**, the one current entry being
+`ringdet` (41 mutations, 41 caught), recorded complete just before the full
+re-record was deferred. After this wave it reads **0 current, 228 stale, 0
+never recorded, of 228 registered.**
+
+**Nothing regressed.** `ringdet` still reports 41 of 41 caught; it went stale
+because `src/service/voice.c` -- the `voice.c#3` translation unit, which holds
+`RD_*`/`RingDetector_*` -- gained `VOICE_create`, `VOICE_delete`,
+`VOICE_command` and `VOICE_process`, and staleness is a property of the FILE
+the suite mutates, not of the suite's own result. Two of this wave's three
+commits changed a file some existing suite mutates, so the same would have
+happened to any of them.
+
+**The gate is unaffected and this is why it matters to say so.** `mutsnap.py
+--check` fails on MISSING, not on stale, and the count of never-recorded
+suites is still 0 -- all three agents were briefed not to register a suite
+they could not record, and none did. What is lost is the last current
+baseline, so the deferred re-record (`docs/remaining.md`'s own section, with
+its three preconditions) is now the only way back to a non-zero `current`.
+
+**And two of the three commits had to edit `test/mutations/*.json`
+DESCRIPTORS**, which is a different thing again from a snapshot: a `find`
+string that quotes a field name stops matching the moment the field is
+renamed, and the mutation then silently stops applying -- F134's dead detector
+with a mutation as the victim. `voicedpdel.json` needed six descriptors
+rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
+`cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
+`test/mutations/` for it; passing `make phase` proves nothing here, because a
+descriptor that no longer matches is not an error.
