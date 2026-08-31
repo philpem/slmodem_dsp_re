@@ -98473,12 +98473,72 @@ Sixteen bytes at `.data` 0x84d4, which as four floats are
     -1.0f, 2.5147244e-06f, 6.9853459e-06f, 2.2632519e-05f
 
 (raw words `bf800000 3628c2a3 36ea63aa 37bddaf7`). The first entry is a
-sentinel and the other three ascend by roughly 2.8x, which is what a table of
-energy thresholds indexed by a 0..3 sensitivity LEVEL looks like -- and F8771
-has just established that `vce_get_sreg` reports exactly such a level, 0..3,
-for `SREG_SILENCE_DETECT_SENSITIVITY`. That is a reading, not a derivation;
-`silence_progress` is what settles it, and **the table belongs in whichever
-file gets `silence_progress`, spelled `static`.**
+placeholder for what follows, and the other three ascend by roughly 2.8x,
+which is what a table of energy thresholds indexed by a 0..3 sensitivity
+LEVEL looks like -- and F8771 has just established that `vce_get_sreg`
+reports exactly such a level, 0..3, for `SREG_SILENCE_DETECT_SENSITIVITY`.
+That is a reading, not a derivation; `silence_progress` is what settles it,
+and **the table belongs in whichever file gets `silence_progress`, spelled
+`static`.**
+
+**AND `MTK_phasor` IS DECLINED FOR AN OWNERSHIP REASON, NOT A TECHNICAL ONE
+-- SO THE WHOLE DECODE IS WRITTEN OUT HERE.** It is 271 bytes at 0xb0690 and
+it is no longer blocked on anything: the six tables above are its only
+unwritten referents and they have landed. What stops it is that writing it
+costs two files this agent does not own in a parallel wave --
+`test/harness/runtime.c`, which defines an unprefixed `MTK_phasor`
+forwarding to `ref_MTK_phasor` (F8463) and would collide at link, and
+`include/dsplib/fdspkrnl.h`, whose `struct mtk_phasor` and "Still the blob's"
+comment would both need revisiting -- and that `TONE_generate`'s existing
+test compares a `TONE_generate` whose oscillator IS the blob's, so a
+reconstruction that is not bit-identical breaks somebody else's green test
+rather than its own.
+
+Read off `dis.py`, with every `DE`-encoding taken from the bytes and not the
+AT&T mnemonic (F245): `de e9` at 0xb071e is FSUBP, `de ca` at 0xb0760 is
+FMULP `st(2)`, `de c1` at 0xb0762 is FADDP.
+
+    x = fmodf(p->phase, 6.28318530718);   /* fprem against a FLOAT 2pi */
+    if (x < 0.0f)
+            x = x + 6.28318530718;        /* the DOUBLE literal, renarrowed */
+    p->phase = x;                         /* stored once, after the merge */
+
+    y = x * 162.97466172610083;           /* DOUBLE constant, narrowed to float */
+    n = (short)y;                         /* fist m16, round-to-zero */
+    q = n >> 8;                           /* arithmetic; indexes the sign vectors */
+    frac = y - n;                         /* kept at 80 bits, never narrowed */
+    if (n & 0x100) {
+            frac = 1.0f - frac;
+            n = ~n;                       /* `not %eax` before the mask */
+    }
+    i = n & 0xff;
+
+    p->out_04 = MTK_cos_table[i]
+                + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;
+    p->out_04 = p->out_04 * MTK_cos_sign[q];
+    p->out_08 = MTK_sin_table[i]
+                + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;
+    p->out_08 = p->out_08 * MTK_sin_sign[q];
+
+    s = x + p->step;                      /* fadds +0x0c, in extended */
+    if (s >= 3.141592653589793)           /* fcoml against a DOUBLE pi */
+            s = s - 6.28318530718;
+    p->phase = s;
+
+162.97466172610083 is 512/pi to a float's worth of digits, which is what
+makes `q` the quadrant and `i` the 0..255 index into a 257-entry quarter
+wave. **Each output is written TWICE**, unsigned then signed -- that is not a
+transcription slip, it is two statements in the source: GCC's `fsts` narrows
+the stored copy and then multiplies the 80-bit value it still holds, which a
+single `interp * sign` statement would not emit.
+
+**THE PART TO EXPECT TROUBLE FROM is `frac`**, which the object keeps at 80
+bits from the `fsubp` all the way through both interpolations. That is
+exactly the shape behind `t_v90equproc` and `t_psd` in `tools/gccdiverge.json`
+-- the modern compiler keeps intermediates the object also kept, but narrows
+and widens at different points -- so whoever writes it should expect the
+period tier to be the one that decides, and should not touch `src/` to make
+GCC 14 agree.
 
 ### F8773. Four `voice.c#3` symbols are appended out of emission order, on purpose, and the reason is that this session could not measure the alternative
 
