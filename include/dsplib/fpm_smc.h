@@ -46,6 +46,13 @@ struct fpm_smc_cfg {
 	 * +0x00 is 1 in SMCv22_CFG and is not read by any fpm_smc function.
 	 * Whether it is one int or two shorts is not decidable from this TU:
 	 * nothing loads it.
+	 *
+	 * IT IS DECIDABLE FROM ANOTHER ONE.  `SMC_encoder` loads it whole,
+	 * `mov (%edx),%eax` at 0x9faf6, so it is one int; non-zero selects the
+	 * symbol-index output V.22 uses and zero selects the complex output
+	 * V.29 uses.  Not renamed here only because `src/pump/v22/v22txtab.c`
+	 * spells `f00` and that file was outside the pass that measured this.
+	 * See include/dsplib/smc.h and finding F8903.
 	 */
 	int f00;		/* +0x00                                     */
 	/*
@@ -72,8 +79,19 @@ struct fpm_smc_cfg {
 	 */
 	const short *imap;	/* +0x18                                     */
 	const short *qmap;	/* +0x1c                                     */
-	int f20;		/* +0x20 zero in SMCv22_CFG, never read here */
-	int f24;		/* +0x24 zero in SMCv22_CFG, never read here */
+	/*
+	 * The carrier phasor, indexed by `acc`.  Zero in SMCv22_CFG and never
+	 * read by an `FPM_SMC_*` function -- but read by `SMC_encoder`, the
+	 * fax pumps' copy, which multiplies a constellation point by
+	 * `cosine[acc] + j*sine[acc]` when `f00` is clear.  Named from the
+	 * author's own symbols: V29TX_create stores V29TX_SMC_COSINE at +0x20
+	 * and V29TX_SMC_SINE at +0x24 (0x9bc89 and 0x9bcae).  They are
+	 * relocated POINTERS, not ints; an int16 dump reads them as zeroes,
+	 * and modelling them as `int` cannot survive a 64-bit build.
+	 * See include/dsplib/smc.h and finding F8903.
+	 */
+	const short *cosine;	/* +0x20                                     */
+	const short *sine;	/* +0x24                                     */
 	int f28;		/* +0x28 zero in SMCv22_CFG, never read here */
 };
 

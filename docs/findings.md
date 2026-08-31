@@ -103012,3 +103012,790 @@ Whether the regex should change is a decision for whoever owns the tool and is
 deliberately not answered here; widening it has to survive F543's rows.
 `tools/refcheck.py` was NOT edited, because changing a gate's sensitivity in
 the middle of a wave invalidates every green run in it.
+### F8900. `SDM_*` and `SMC_init` are BYTE-FOR-BYTE their `FPM_*` twins -- the fax pumps carry a second copy of the generic module
+
+*2026-08-31.* Four of the seven symbols scheduled for this pass turned out to
+be code this tree had already written, compiled a second time under a shorter
+name. Measured, by lifting the `.text` bytes at both addresses and comparing
+them, not by comparing sizes:
+
+| fax copy | address | generic copy | address | bytes | differing |
+|---|---|---|---|--:|--:|
+| `SDM_scrambler` | 0x09f150 | `FPM_SDM_scrambler` | 0x0a9a10 | 146 | **0** |
+| `SDM_descrambler` | 0x09f1f0 | `FPM_SDM_descrambler` | 0x0a9ab0 | 167 | **0** |
+| `SDM_init` | 0x09f2a0 | `FPM_SDM_init` | 0x0a9b60 | 86 | **0** |
+| `SMC_init` | 0x09fc80 | `FPM_SMC_init` | 0x0a9d30 | 53 | **0** |
+
+Not "the same shape" and not "the same instructions" -- the same bytes, in the
+same order, at two addresses. So the source is `src/dsp/fpm_sdm.c` and
+`src/dsp/fpm_smc.c`'s, and `src/fax/sdm.c` and `src/fax/smc.c` are the same
+text with the names shortened.
+
+**Two consequences worth having written down.** The first is that the STRUCTS
+are settled without a byte of new derivation: identical code operates on
+identical layouts, so `struct fpm_sdm`, `struct fpm_smc`, `struct fpm_smc_cfg`
+and `struct fpm_smc_ring` are what these functions take, and "one type, one
+home" is satisfied by including the existing headers rather than by writing
+new ones. `V29TX_create` fills the same forty-four bytes `SMCv22_CFG`
+declares, field for field, which is the independent confirmation.
+
+The second is that the comments were NOT copied. The derivations live once, in
+`include/dsplib/fpm_sdm.h` and `include/dsplib/fpm_smc.h`; duplicating them
+would give the tree two copies of an argument to keep in step, which is the
+`V90Parameters` failure in prose rather than in a struct.
+
+`SMC_encoder` is the exception and is **not** a copy: 609 bytes against
+`FPM_SMC_encoder`'s 367, and the extra 242 are a second output form. F8903.
+
+### F8901. V.27ter's scrambler and descrambler carry `inverting` differently, and the difference is real rather than a reading error
+
+*2026-08-31.* `struct sdmv27` carries two one-bit flags, `pending` at +0x0a and
+`inverting` at +0x0c. Both bit-at-a-time loops assign `inverting = pending`
+exactly once per bit. **The scrambler does it at the TOP of the loop body
+(0x9aa21) and the descrambler at the BOTTOM (0x9ac6a), on the back edge.**
+
+That is not a difference the compiler can have introduced. The descrambler's
+slow path is entered at 0x9ac58 with `movswl 0x18(%esp),%edi; jmp 0x9ac6e` --
+the loop test -- and there is no copy in the preheader, so its FIRST bit uses
+the `inverting` it was handed, while the scrambler's first bit overwrites that
+value with `pending` before reading it.
+
+**THE FIRST DRAFT OF THIS FINDING SAID THE DIFFERENCE WAS UNREACHABLE, AND AN
+INJECTION REFUTED IT ON THE FIRST CASE.** The reasoning was that `pending` is
+set only by the threshold arm and cleared by the next bit, so the pair is
+(0,0) at every call boundary but one -- which is true -- and that the two
+spellings therefore agree over everything the object produces, which is false.
+Giving the SCRAMBLER the descrambler's placement fails **1,994 of `t_sdmv27`'s
+first 7,179 checks**, and it fails in all six configurations.
+
+**Each spelling is self-consistent with the state its own function leaves, and
+that is the whole of it.** After a threshold the scrambler exits with
+(pending 1, inverting 0) and the descrambler with (pending 1, inverting 1).
+The scrambler's next call reads `pending` because its assignment is at the
+top; the descrambler's reads `inverting` because it was assigned on the way
+out. Both invert exactly one bit. Swap the placements and the scrambler stops
+inverting after a threshold, because the state it left has the flag in the
+other field.
+
+So the two are not a stylistic variation and neither may be tidied into the
+other. What IS unreachable is the pair (pending 0, inverting 1), which no run
+produces; `t_sdmv27`'s `run_seeded_flags` drives all four combinations across
+five run counters in both directions -- 80 seeded single-word calls -- to
+cover it, and 32 of those 80 also fail under the injection.
+
+**The transferable part is the method, not the flag.** "Unreachable in
+service" is a claim about the state space and it is testable by injection;
+this one was written from a correct argument about `pending` and an unexamined
+assumption that the exit states matched. The injection cost one rebuild.
+
+### F8902. The V.27ter polynomial, its guard, and where each number comes from
+
+*2026-08-31.* Nothing about `SDMv27_*` is configurable except `nbits`: the
+taps are literal shift amounts in the code.
+
+**The polynomial.** The register is shifted up by `nbits` and the two feedback
+terms are that value shifted right by 6 (0x9a94b) and by 7 (0x9a94e); the
+descrambler uses the same two (0x9aba0, 0x9ab9b). The register holds the
+scrambled bits with bit 0 the most recent, so after `reg <<= nbits` its bit p
+is D[n-p] for the bit about to be produced, and the two terms are D[n-6] and
+D[n-7]:
+
+    D[n] = data[n] ^ D[n-6] ^ D[n-7]
+
+which is ITU-T V.27ter's 1 + x^-6 + x^-7. **The standard is corroboration; the
+derivation is from the object**, and the reading is checked in the differential
+test by round-tripping and by comparing the register after every single word.
+
+**The guard.** For each bit the object forms `(broadcast(D[n]) ^ reg) & 0x1300`
+and compares it with 0x1300 -- bits 8, 9 and 12, so D[n] differing from
+D[n-8], D[n-9] AND D[n-12] at once. It counts consecutive bits where that does
+NOT hold, and at 0x21 = 33 it clears the counter and sets `pending`, which
+inverts exactly one following bit. The whole-word path takes the same three
+taps word-parallel and needs no threshold test, because its entry condition
+`run < 33 - nbits` bounds the counter at 32 after the walk.
+
+**The seed is 60** (`movw $0x3c, 0x6(%eax)` in `SDMv27_init`) and is not
+derived from anything else here.
+
+**`SDMv27_init` does not compute the mask.** It branches on `nbits == 2` and
+stores 3/~3 or 7/~7 as constants; there is no shift anywhere in its 89 bytes.
+Only 2 and 3 are reachable through `V27TX_SDM_NUM_BITS`, and everything else
+lands in the second arm -- which is why the synthetic 4-, 8- and 16-bit cases
+in `t_sdmv27` all carry a mask of 7 and both sides agree that they do.
+
+### F8903. `fpm_smc_cfg`'s `f00`, `f20` and `f24` ARE read -- by `SMC_encoder`, and two of them are named by the author
+
+*2026-08-31.* `include/dsplib/fpm_smc.h` recorded three fields as never read,
+which was true of the translation unit it was derived from and false of the
+object. `SMC_encoder` (0x09fa10, 609 bytes) reads all three, and that is the
+whole of the 242 bytes by which it exceeds `FPM_SMC_encoder`.
+
+**`f00` selects the OUTPUT FORM**, loaded whole with `mov (%edx),%eax` at
+0x9faf6 -- so it is one int, which the earlier note said was not decidable.
+Non-zero gives the index form `FPM_SMC_encoder` always uses: the carrier
+rotation is added into the symbol index, wrapped by one conditional subtract,
+and stored to `ring->sym[widx]`. Zero gives a COMPLEX form:
+
+    i = (imap[k]*cosine[a] >> 15) - (qmap[k]*sine[a] >> 15)
+    q = (qmap[k]*cosine[a] >> 15) + (imap[k]*sine[a] >> 15)
+
+-- one Q15 complex multiply of the constellation point by the carrier phasor,
+into `ring->i[widx]` and `ring->q[widx]`. `ring->sym` is not written and the
+rotated index is not computed. Everything after that is common to both.
+
+**`f20` and `f24` are the phasor, and they are named in the object's own
+symbol table.** `V29TX_create` builds its forty-four byte config on the stack
+and stores five relocated pointers into it:
+
+    +0x14 V29TX_SMC_PMAP  (0x9bc4f)   +0x18 V29TX_SMC_IMAP   (0x9bc54)
+    +0x1c V29TX_SMC_QMAP  (0x9bc33)   +0x20 V29TX_SMC_COSINE (0x9bc89)
+    +0x24 V29TX_SMC_SINE  (0x9bcae)
+
+So +0x20 is a cosine table and +0x24 a sine table, indexed by `acc`, and
+`imap`/`qmap` were already named right. They are **relocated pointers, not
+ints** -- an int16 dump reads them as zeroes, and the `int` they were modelled
+as cannot hold a pointer in the 64-bit build. Retyped to `const short *` and
+renamed `cosine`/`sine`; the 32-bit layout does not move.
+
+**`f00` KEEPS ITS NAME**, and that is a scope decision rather than a judgement.
+`src/pump/v22/v22txtab.c` spells `f00` and was outside this pass's writable
+set; renaming one of two spellings is worse than renaming neither. The rename
+is mechanical and is left for whoever may edit both. That file's comment
+"f20, f24 and f28 are zero" is now stale in its field names while remaining
+true in its claim.
+
+**What V.29 sets.** `rot_step` 0x11 and `rot_mod` 0x18 -- 17 steps of 24, which
+is 1700 Hz over 2400 baud exactly -- `direct` 1, `qmask` 7, `pmask` 7, `amask`
+8 or 0 by rate, and `f00` cleared, so V.29 runs the complex form and V.22 the
+index form. **The table sizes agree with that independently**: `nm -S` gives
+`V29TX_SMC_COSINE` and `V29TX_SMC_SINE` 48 bytes each, which is 24 shorts
+against a `rot_mod` of 24, and `V29TX_SMC_IMAP`/`QMAP` 32 bytes each, 16
+entries against a 4-bit index. Neither number was used to derive the reading;
+both would have contradicted it.
+
+### F8904. `SDM_CFG`'s contents are not the fax scrambler, and every caller overwrites them
+
+*2026-08-31.* `SDM_CFG` is six bytes in `.data` -- writable, unlike
+`SDMv22_CFG`, which is in `.rodata` -- holding `{ nbits 4, tap1 5, tap2 23 }`.
+Taps of 5 and 23 are not a polynomial any of V.17, V.27ter or V.29 specifies,
+and the reason is that nothing runs them: every caller copies the object into a
+local and then writes all three fields.
+
+    V17RX_create  0x976a8   nbits = <field> + 3, tap1 = 0x12, tap2 = 0x17
+    V29TX_create  0x9bc28   nbits = <rate> + 3,  tap1 = 0x12, tap2 = 0x17
+
+0x12 with 0x17 is 18 and 23, which is ITU-T V.29 section 5.2's scrambler
+1 + x^-18 + x^-23, shared by V.17 and V.33. `V17TX_create`, `V29RX_create` and
+`SetTxModeV17` also reference the table and were not traced instruction by
+instruction.
+
+The six bytes are reproduced because they are six bytes of the object's
+`.data`. **A test that asserted they were the fax polynomial would be
+asserting the wrong thing**, which is why `t_faxsdm` compares them to the
+blob's copy and says in its own text that they are a default nothing runs.
+
+### F8905. `run += b; run *= b;` is TWO truncations to sixteen bits, and `run = (run + b) * b` is a different function
+
+*2026-08-31.* Both V.27ter paths advance the guard's run counter with the
+idiom "increment if the bit is set, otherwise reset". The object spells it as
+
+    lea  (%edi,%eax,1),%esi     ; run + b
+    movzwl %si,%edx             ; narrow to sixteen bits
+    imul %eax,%edx              ; * b
+    movzwl %dx,%edi             ; narrow again
+
+-- the sum is narrowed BEFORE the multiply. Written in C as
+`run = (run + b) * b` with `unsigned short run`, the promotion carries the sum
+at 32 bits and only the assignment narrows. Written as two statements,
+`run += b; run *= b;`, each assignment narrows and the object is reproduced.
+The two agree over every value `run` can hold and differ in what the compiler
+emits, which is the forced half of the codegen rule rather than the free half.
+
+It costs nothing to get right and no differential test can distinguish the two,
+which is exactly the shape of defect this tree keeps finding by reading the
+instruction rather than the intent. The idiom appears four times -- both
+directions, both paths.
+
+### F8906. `pending = ok * pending` is provably always zero, and is written anyway
+
+*2026-08-31.* The bit path's last arithmetic before the threshold test is
+`imul` of the guard's `ok` flag with `pending` (0x9aa88 in the scrambler,
+0x9acf7 in the descrambler). `ok` is `~(alldiff | inverting) & 1` and
+`inverting` is `pending`, so `ok` is zero whenever `pending` is one and the
+product is zero for every input. The only way `pending` becomes one is the
+`run == 33` arm two instructions later.
+
+GCC did not fold it because both operands reach the expression through memory
+with no range information. It is reproduced because the object multiplies; a
+source that wrote `pending = 0` would behave identically and would not be what
+the author wrote. Recorded so that the next reader does not "simplify" it and
+then have to re-derive why the object has an `imul` there.
+### F8970. The SGD object model re-derived: F8495 HOLDS ENTIRELY, and F8497's doubt about it was misplaced
+
+F8497 withdrew the SGD engine and ruled that F8495's "0x5c bytes, a 13-dword
+config copy" must be "treated as UNCONFIRMED for the status half of the
+object". Re-read from `dis.py` over all nine symbols, every claim in F8495 is
+correct and nothing in the layout needed changing. The confirmed model, which
+`include/dsplib/sgd.h` now carries:
+
+    +0x00  short  sym_bits        bits per symbol
+    +0x02  short  hist_len        receive history, in symbols
+    +0x04  short  hist_extra      extra symbols in the ALLOCATION only
+    +0x06  short  (never read)
+    +0x08  ptr    gen.seq         }
+    +0x0c  u16    gen.seq_len     } the six dwords SGD_control's
+    +0x10  int    gen.seq_enable  } FIRST pointer replaces
+    +0x14  u16    gen.idle_sym    }
+    +0x18  u16    gen.data_word   }
+    +0x1c  u16    gen.word_syms   }
+    +0x20  ptr    det.ref         }
+    +0x24  u16    det.ref_len     } the five dwords SGD_control's
+    +0x26  short  det.ref_margin  } SECOND pointer replaces
+    +0x28  int    det.pat_match   }
+    +0x2c  int    det.pat_mask    }
+    +0x30  int    det.pat_out_mask}
+    +0x34  int    status.seq_found   }
+    +0x38  ptr    status.det_at      } the 24 bytes SGD_status
+    +0x3c  short  status.quality     } copies out, and the two
+    +0x3e         (never written)    } holes that ride out with
+    +0x40  int    status.pat_found   } them
+    +0x44  int    status.pat_data    }
+    +0x48  u16    status.seq_reps    }
+    +0x4a         (never written)    }
+    +0x4c  u16    seq_pos
+    +0x4e  short  word_left
+    +0x50  ptr    hist
+    +0x54  short  hist_span       hist_len + ref_len - 1
+    +0x56  short  thresh          sym_bits*ref_len*(0x4000-ref_margin)
+    +0x58  int    pat_sr
+
+**`det_at` at +0x38 IS a pointer into `hist`, and the object says so in one
+instruction.** At 0x9f655 `lea (%edx,%eax,2),%edi` with `%edx` the buffer
+base saved at 0x9f54a and `%eax` the window base plus the winning index;
+0x9f658 stores it. There was never a second reading available.
+
+The layout was verified end to end by an INJECTION rather than by reading:
+swapping `det_at` and `quality` inside `struct sgd_status` -- 24 bytes either
+way, so no size assertion moves -- fails 2,504 of 57,582 checks with
+`det_at offset got -1, reference -833329408`. See F8973. (2026-08-31)
+
+
+### F8971. F8497's `det_at` failure was an UNINITIALISED LOCAL, not a mis-modelled field -- and the two reported numbers prove it arithmetically
+
+Recorded separately from F8970 because it is the transferable part, and
+because the proof is available even though the code and the test that
+produced it are both gone.
+
+`SGD_sequence_det` writes its best-alignment index only inside the
+improvement test at 0x9f610, and the search loop is skipped entirely for
+n <= 0. The threshold gate does not stop it: `best` is still 0xffff and the
+compare at 0x9f635 is a SIGNED 16-bit one, so it reads as -1 and passes for
+every non-negative `thresh`. The uninitialised slot is then used TWICE, at
+two different widths -- as 32 bits to compute `det_at` (0x9f647), and as 16
+bits as the return value (0x9f675). That is deviation D1060.
+
+**THE TWO NUMBERS F8497 RECORDED ARE THE SAME STACK SLOT, AND THEY CLOSE TO
+THE BYTE.** It reported
+
+    det_at offset  got 20, reference -6181684
+    sequence_det return  got 0,  reference -21320
+
+Let the reference's uninitialised 32-bit slot be X and its window base be
+`base = hist_len - n`. Then the object computes `det_at - hist == base + X`
+and returns `(short)X`. Solving:
+
+    base = 20,  X = -6181704
+    20 + (-6181704)            == -6181684   the reported offset
+    low 16 bits of -6181704    == -21320     the reported return
+
+Both reported values fall out of ONE unknown, exactly, with no slack. And the
+`got` column agrees: "ours lands at word 20" is `base + 0`, the same base with
+a best index of zero.
+
+**A LAYOUT ERROR CANNOT PRODUCE THE SECOND LINE AT ALL.** Reading a field at
+the wrong offset changes what the TEST sees; it cannot change what the blob
+puts in `%eax`. A correct `SGD_sequence_det` returns an index in [0, n) or
+-1, never -21320. So the reference genuinely took the uninitialised path, and
+F8497's two structural hypotheses -- "`buf` is not where F8495 put it" and
+"`det_at` is not a pointer into `buf`" -- are both excluded by its own second
+line, which it did not use.
+
+**The diagnosis that was reached instead was reasonable and wrong.** A
+pointer 12 MB outside a fifty-symbol buffer is the classic signature of a
+field read at the wrong offset. What was missing from the list of candidates
+is the third possibility: THE OBJECT IS COMPUTING THE POINTER CORRECTLY FROM
+A NUMBER NOBODY WROTE.
+
+**The discriminator, for next time.** A wrong field offset is wrong on every
+call and wrong the same way, and shows in FIELDS ONLY. An uninitialised local
+correlates with an INPUT, and can reach a RETURN VALUE -- which no layout
+error can. Check whether anything outside the compared object moved before
+concluding the object is mis-modelled. The counts said so too: 96 of 3,603 is
+2.7% of checks, where the layout injection in F8970 fails 4.3% and does so on
+every configuration.
+
+**And it is silent, which is why it survived.** A probe run against the blob
+alone at n = 0 -- `t_sgdprobe`, written for this and not committed -- came
+back `return 0, seq_found 1, det_at - hist 50, quality 1`: the slot happened
+to hold zero in that build, and the answer is entirely plausible. Nothing
+about the fault is visible from one side. It takes two builds to see it,
+which is the differential tier's whole argument arriving in miniature.
+
+**The withdrawal was still the right call.** The rule is that nothing
+wrong-but-plausible is committed, and an agent that cannot explain a failure
+has not established which of the two it has. (2026-08-31)
+
+
+### F8972. `SGD_status` is a struct assignment out and six field stores back, and that asymmetry is what models the object
+
+`SGD_status` (0x9f9b0) is six dword load/store pairs from +0x34 followed by
+six clears -- four `movl $0` and TWO `movw $0`, at +0x3c and +0x48. Nothing
+else in the nine symbols ever writes +0x3e or +0x4a: `SGD_create`,
+`SGD_control`, `SGD_sequence_det` and `SGD_sequence_gen` all touch those two
+fields 16 bits at a time.
+
+The source shape that produces exactly this is a nested `struct sgd_status`
+of 24 bytes with two 2-byte holes, copied out with `*out = s->status;` (GCC
+emits six dword pairs for a 24-byte assignment, below its `rep movsl`
+threshold) and cleared field by field. So the holes are REAL FIELDS of the
+interface, not padding an implementation may do as it likes with: a caller
+reading a status block gets two words of whatever the allocator left in the
+object, on every call, for ever.
+
+**It is also a constraint on any test of this family.** Both sides' objects
+must see the same allocator fill or two of the six status dwords differ for
+reasons neither implementation owns. `t_faxsgd` gets that free from the
+harness's `sysdep_malloc`, which fills with `HARNESS_MALLOC_FILL`, and
+memsets a caller-supplied object to the same byte on both sides. This is
+harness.h's own stated reason for the fill ("makes a constructor that leaves
+a field uninitialised comparable") arriving as a load-bearing requirement
+rather than a convenience. (2026-08-31)
+
+
+### F8973. What `t_faxsgd` measures, and the two rituals it was validated by
+
+Rebuilt from F8497's description, the file itself being lost. 57,582 checks
+over seven suites; `make one`-green, NOT period-gated (the parent owns that).
+
+**The offset comparison, which is the asset F8497 said it was.** `det_at` is
+compared as `status.det_at - hist` on each side rather than by value. Shown
+to fire: swapping `det_at` and `quality` inside `struct sgd_status`, with the
+offset annotations edited to match so that `make offsets` cannot see it,
+fails 2,504 of 57,582 checks and prints
+
+    t_faxsgd.c:131: det_at offset, input 1  got -1, reference -833329408
+
+which names the field and the magnitude. `SGD_correlate` stays PASS through
+that injection -- it is the one function that touches no object -- which is
+the anti-vacuity half of the demonstration: the failure is the layout and not
+a blanket break.
+
+**`make offsets` caught the FIRST attempt at that injection**, before the
+test ran, because the swap left the `/* +0xNN */` annotations disagreeing
+with the DWARF. Worth knowing that the tree has that gate and that it is
+independent of the differential tier: 1,808 annotations checked, 13
+mismatches reported, exit non-zero. It also means an offset comment in a
+header is not prose here, unlike a `.text` banner before `bannercheck.py`.
+
+**The four things the fixture has to arrange**, each a way to get a green run
+that means nothing, and each a deviation in its own right:
+
+- every symbol is masked to a byte, or `FPM_xor_table`'s 16-bit index leaves
+  the 256-entry table (F8494) and the two sides read two different
+  neighbours. D955/F8587's unplanted subscript exactly;
+- `hist_extra == ref_len` in every configuration, or the constructor overruns
+  its own allocation (D1061);
+- `n >= 1` into `SGD_sequence_det`, or it reads an uninitialised local
+  (D1060), and `n <= hist_len`, or the window base wraps (D1063);
+- `1 <= sym_bits <= 15`, or `SGD_pattern_det` never terminates (D1062).
+
+**Seventeen hand injections into `src/fax/sgd.c`, 16 caught.** Run by hand
+rather than registered, because a suite that cannot be recorded reads MISSING
+to `mutsnap.py --check` and fails the gate, and the snapshot is 0 current /
+228 stale (F8846). Caught: both `SGD_correlate` mutants, four of five in
+`SGD_sequence_det` (tie-break direction, threshold signedness, `det_at`
+losing its window base), both `SGD_sequence_gen` state mutants, the
+`SGD_symbol_gen` wrap target, both `SGD_create` derivations, both
+`SGD_pattern_det` ones, both halves of `SGD_control`'s asymmetry, and both
+`SGD_status` ones -- including zeroing the two holes F8972 says must ride out
+untouched.
+
+**The one survivor is EQUIVALENT, and provably so rather than by assertion.**
+Removing the early exit on an exact match (`if (acc == 0) break;`) cannot
+change any output: the improvement test is `acc < best` STRICTLY, and `acc`
+is a sum of popcounts so 0 is its minimum, so no later alignment can displace
+a zero-distance winner. Only the iteration count changes and nothing observes
+it. A test cannot separate it and should not be expected to. (2026-08-31)
+
+
+### F8974. SGD_CFG's two table pointers are PLACEHOLDERS, and the default configuration is not a usable one
+
+`SGD_CFG` (.data 0x80e0, 52 bytes) carries two `R_386_32` relocations, at
++0x08 and +0x20, and both name `FPM_xor_table` -- the popcount table
+(F8494), which is not a symbol alphabet and cannot be one. So the object's
+default configuration ships with its sequence pointer and its reference
+pointer both aimed at a table that means something else, and
+`SGD_create(x, 0)` is only a usable construction because every caller
+replaces both halves through `SGD_control` before generating or detecting
+anything.
+
+The rest of it: `sym_bits` 8, `hist_len` 50, `hist_extra` 1, `seq_len` 1,
+`seq_enable` 0, `idle_sym` 0, `data_word` 0, `word_syms` 1, `ref_len` 1,
+`ref_margin` 0x2000, and all three pattern words 0. `hist_extra == ref_len`,
+which is D1061's invariant held by hand.
+
+Reconstructed in `src/fax/sgd.c` pointing at OUR `FPM_xor_table`, so the two
+instances hold two legitimately different addresses. `t_faxsgd` compares them
+by what they POINT AT -- ours against `FPM_xor_table`, the blob's against
+`ref_FPM_xor_table` -- and compares the other nineteen fields one at a time,
+rather than excluding the pointers and comparing the struct. An excluded
+field is a field no check covers. (2026-08-31)
+
+
+### F8975. `SGD_control`'s request is the configuration's own two tail halves, and the object's field grouping is derived rather than chosen
+
+`SGD_control` (0x9f8c0) takes a pointer to two pointers. The first, if
+non-null, is copied as six dwords into object +0x08..+0x1f; the second, as
+five dwords into +0x20..+0x33. +0x00..+0x07 -- `sym_bits`, `hist_len`,
+`hist_extra` -- is settable only at construction.
+
+So the 13-dword configuration is not one flat block that a header may carve
+up to taste: the object itself divides it 2 / 6 / 5, and the two settable
+groups are separately-addressable structs because `SGD_control` takes their
+addresses. `struct sgd_gen_cfg` and `struct sgd_det_cfg` in
+`include/dsplib/sgd.h` are those two, and `struct sgd_cfg` is the whole,
+which is what `SGD_create`'s `rep movsl $0xd` copies as a single struct
+assignment.
+
+**The two halves are NOT symmetric in what they re-arm**, and the asymmetry
+is the interface's meaning rather than an oversight:
+
+- the generator half resets `seq_pos`, `status.seq_reps` and `word_left`;
+- the detector half re-derives `hist_span` and `thresh`, re-zeroes the
+  history, and clears five of the six status fields -- every one EXCEPT
+  `status.seq_reps`.
+
+So a detector-only control leaves the generator's completion count standing,
+which is what lets a caller re-point the detector part-way through a
+transmission without telling the transmitter its sequence has restarted.
+Reading it the other way round -- "the clear list is just create's, minus the
+allocation" -- is right about the code and misses that one omission, which is
+the only thing separating the two lists. (2026-08-31)
+## F8930. The Class 1 FIFO holds SIXTEEN-BIT elements, not bytes, and `FIFO_create` is what says so
+
+`faxfifo.h` had modelled two fields and called the capacity "bytes". It is
+elements, and the evidence is in `FIFO_create` (0x096bb0), which this batch
+read for the layout without writing the function:
+
+    96c2e:  c7 04 24 14 00 00 00   movl   $0x14,(%esp)
+    96c35:  e8 ...                 call   sysdep_malloc
+    96c3c:  0f b7 44 24 12         movzwl 0x12(%esp),%eax
+    96c41:  01 c0                  add    %eax,%eax
+    96c46:  e8 ...                 call   sysdep_malloc
+
+0x14 for the object -- so it is twenty bytes, which fixes the layout at
++0x00..+0x13 -- and `size * 2` for the buffer. Every access in `FIFO_read`
+and `FIFO_write` then scales by two (`mov %ax,(%edi,%ecx,2)`), so `size`,
+`count`, `rd` and `wr` are all counted in 16-bit elements.
+
+The other thing `FIFO_create` settles is that +0x00 and +0x02 are one aligned
+pair: it copies six bytes of configuration as ONE 32-bit store to +0x00 plus
+one 16-bit store to +0x04, which is what a six-byte struct assignment
+compiles to. So +0x00 is a short, not two bytes of padding, even though no
+reconstructed function reads it.
+
+**`FIFO_create` itself is BLOCKED and stays blocked.** It reads the default
+configuration `FIFO_CFG` when its argument is null, and `FIFO_CFG` is an
+unwritten data symbol -- naming it from `src/` fails every binary at link
+(F8492, F8493). It becomes writable the moment that symbol lands.
+
+## F8931. `FIFO_read` always writes `count` elements, and pads the shortfall from a configured value
+
+The second loop is the one to notice:
+
+    96cd8:  8b 44 24 08     mov    0x8(%esp),%eax      ; count - take
+    96ce0:  0f b7 77 04     movzwl 0x4(%edi),%esi      ; f->fill
+    96ce7:  66 89 31        mov    %si,(%ecx)
+
+so a caller asking for 100 elements from a FIFO holding 3 gets 3 real ones
+and 97 copies of the field at +0x04, and the RETURN VALUE is 3. The
+destination must therefore be sized from the REQUEST, never from the
+occupancy or the return.
+
+That is F8607/D956's shape exactly -- an unbounded copy-out into a
+destination sized from the wrong quantity -- with the difference that here the
+object bounds the write and the hazard is only in the caller's arithmetic. It
+is called out in `faxfifo.h` so the fax phase's callers can be checked against
+it as they land, and `t_faxframing` sizes its destinations from the largest
+count any case passes plus a guard region it compares.
+
+The fill field is named from usage inference and nothing stronger: it is
+written only by `FIFO_create`, out of the configuration, and read only here.
+
+## F8932. The Class 1 FCS is CRC-16-CCITT, 0x1021, MSB-first, seeded 0xFFFF and complemented -- derived, then checked exhaustively against an independent model
+
+`faxvmi_gen_fcs16` (0x096780) uses no table. Two nibble steps per element,
+and each step is
+
+    t = ((octet << k) ^ fcs) & 0xf000        k = 8, then 12
+    fcs = (((fcs ^ (t >> 11)) << 4) ^ t) | (t >> 12)
+
+Write n = t >> 12, so t = n << 12. Then (t >> 11) << 4 is n << 5, and the
+step is
+
+    fcs = (fcs << 4) ^ (n << 12) ^ (n << 5) ^ n
+
+and (n << 12) ^ (n << 5) ^ n is n * 0x1021 with the x^16 term dropped. So the
+generator is **x^16 + x^12 + x^5 + 1 = 0x1021**, fed most significant nibble
+first, with no reflection anywhere. `mov $0xffff,%ebx` at 0x096787 is the
+seed and `not %ebx` at 0x0967e3 is the final complement.
+
+k = 8 selects bits 7..4 of the element and k = 12 selects bits 3..0, so only
+the low byte of each 16-bit element reaches the register and the upper byte is
+ignored.
+
+**The bit order HDLC wants is arranged OUTSIDE this function**, by
+`faxvmi_byte_reverse`, which is why an unreflected 0x1021 is the right
+polynomial here and not the reflected 0x8408 that a bare "HDLC FCS" would
+suggest. `getbit` in `src/pump/v34/v34hshak.c` computes the same polynomial
+the same way for V.34's CRC, and `v8_crc` for V.8's.
+
+**Checked rather than asserted.** `t_faxframing` carries `crc_bitwise`, a
+one-bit-at-a-time model that shares no code and no shape with the nibble
+form, and compares it against the BLOB over all 65,536 one-element frames and
+all 65,536 two-element frames whose first element sweeps the whole alphabet --
+so the register entering the second step takes 65,536 values and the state is
+swept as well as the input. 131,072 agreements, counted from the run and
+asserted as a number, not as a boolean.
+
+## F8933. The framing walks count down to zero on a sixteen-bit counter, and the injection ritual found one equivalent mutant and no gaps
+
+Ten hand-injected defects over `fifo.c` and `faxvmi.c`, each built and run
+under `make one`:
+
+    caught  FIFO_read wrap off by one        (>= size  ->  > size)
+    caught  FIFO_write wrap off by one
+    caught  FIFO_read occupancy update       (count -= take  ->  -= 0)
+    caught  FCS x^5 term                     (t >> 11  ->  t >> 10)
+    caught  FCS nibble mask                  (0xf000  ->  0xe000)
+    caught  FCS seed                         (0xffff  ->  0xfffe)
+    caught  FCS final complement             (~fcs  ->  fcs)
+    caught  byte_reverse bit count           (bit >= 0  ->  bit > 0)
+    caught  frame_reverse stride             (buf += len  ->  len + 1)
+    EQUIV   FIFO_write clamp                 (put > avail  ->  put >= avail)
+
+The tenth is genuinely equivalent, not a hole: when `put == avail` the
+assignment it guards is a no-op, so no input can separate the two spellings.
+Recorded because "one not caught" in a mutation column is otherwise
+indistinguishable from a missing check, and `mutate.py` cannot tell them
+apart either.
+
+**AND THE RITUAL ITSELF NEARLY LIED.** Restoring each file with `mv
+file.bak file` puts back the BACKUP's mtime, which is older than the mutated
+write, so `make` declares the binary up to date and re-runs the LAST mutant
+against the restored source. The closing "restore is clean" check therefore
+reported a red tree over correct code. `touch` the sources after any restore
+that does not go through git -- this is F134's dead detector with the
+timestamp as the mechanism.
+
+## F8934. The Class 1 state handlers take NINE arguments, and `fax_class1_progress`'s marshalling is what says so
+
+`class1_state_functions` is a `0x4c`-byte COMMON array -- nineteen slots --
+filled by `fax_class1_create`, and `fax_class1_progress` dispatches through it
+at 0x0937f8 with `call *class1_state_functions(,%edx,4)`. The nine slots it
+fills first, at 0x0937bd..0x0937f5, are the signature:
+
+    (%esp)   the session          0x14(%esp)  &a local copy of the rx count
+    0x04     the received block   0x18        the transmit count, by pointer
+    0x08     the block to send    0x1c        a 32-bit word
+    0x0c     a 32-bit word        0x20        a 32-bit word, read and written
+    0x10     a 32-bit word
+
+Three of the nine are read by none of the four handlers reconstructed here, so
+only their WIDTH is established and `class1.h` says so rather than guessing a
+type.
+
+**Two of them are named by the object's own words.** The transmit count is
+`TxSmpCnt`: `fax_class1_progress` follows the dispatch with
+
+    9389b:  8b 5c 24 58     mov    0x58(%esp),%ebx
+    9389f:  81 3b a0 00 00  cmpl   $0xa0,(%ebx)
+    938a5:  74 0d           je     938b4
+      ... "ERROR: TxSmpCnt != 160 !!!\n"
+
+so a handler that leaves anything but 160 there is a diagnosed error, which
+is also where `CLASS1_BLOCK_SAMPLES` comes from.
+
+**And the RX COUNT IS A COPY.** `fax_class1_progress` loads `*arg5` into a
+local at 0x0936d7 and passes `&local`, so a handler writing through that
+pointer does not reach `progress`'s caller. Nothing here writes it, but the
+next handler that does must not be read as an out-parameter.
+
+## F8935. `states_names` and `status_names` are the author's names for nineteen states and eleven results
+
+`.rodata 0x9360` is twenty `{int, char *}` pairs and `.rodata 0x9300` is
+eleven, and `fax_class1_progress` searches the first at 0x093826 to log a
+transition. They are the strongest class of evidence this tree recognises --
+the author's own words for the values -- and they are now in `class1.h`
+verbatim, `RECIEVE_SILENCE_STATE`'s spelling included:
+
+    0 T30_SILENCE_BEFORE_PREAMBLE  7  HDLC_EMULATE_RECEIVE  14 ANSWER_TONE
+    1 T30_PREAMBLE                 8  IDLE                  15 SEND_SILENCE
+    2 SEND_HDLC_BUFFER             9  TX_SCRAMBLED_ONES     16 RECIEVE_SILENCE
+    3 SEND_HDLC_BETWEEN_BUFFER     10 TX_DATA               17 CHDLCTX_OFF
+    4 HDLC_RECEIVE_LOOK_CARRIER    11 TX_NULLS              18 TX_SILENCE_
+    5 HDLC_RECEIVE                 12 RX_LOOK_CARRIER          BEFORE_SCRM_ONES
+    6 HDLC_RECEIVE_BETWEEN_BUFFERS 13 RX_DATA               19 MAX_STATES
+
+    0 FAX_CLASS1_NO_MESSAGE        4 ..ERROR_NO_CARRIER      8 ..NO_CARRIER_
+    1 FAX_CLASS1_OK                5 ..ERROR_ON_HOOK            NO_MESSAGE
+    2 FAX_CLASS1_ERROR             6 ..CONNECT               9 ..OTHER_CARRIER
+    3 FAX_CLASS1_OK_NO_CARRIER     7 ..NO_CARRIER           10 ..ACCEPT_RATE
+
+**That names a field, not just constants.** `fax_class1_progress` RETURNS
+`ctx->+0x122c` (0x093a43: it loads that field and leaves it in `eax`), and the
+values the two silence states write into it are 3 and 0 -- `OK_NO_CARRIER`
+when the silence expires or is abandoned, `NO_MESSAGE` when energy appears.
+Both readings are coherent, so `+0x122c` is `status`.
+
+The nineteen against `class1_state_functions`'s nineteen slots also settles
+that 19 is the COUNT and not a state.
+
+## F8936. `+0x12bc` is `energy` because the object prints it under that name, and the threshold is 100
+
+`_recieve_silence_state` stores `FPM_rms`'s answer into `+0x12bc` and then
+prints exactly that value:
+
+    "Energy %d > silence treshold\n"        .rodata.str1.1 0x40f2
+    "Energy %d < silence treshold...\n"     .rodata.str1.4 0x11784
+    "Abort waiting for silence!"            .rodata.str1.1 0x4110
+
+The author's spellings, kept. That is evidence class 1 for the field's name
+and for `CLASS1_SILENCE_THRESHOLD`'s, and the constant is `cmp $0x64,%ax` --
+a SIGNED sixteen-bit compare, so a negative energy would count as silence.
+`FPM_rms` cannot return one, and the test is written as the object has it
+rather than as it would need to be if it could.
+
+The counter the state runs against `countdown` is `+0x12b8`, and its compare
+is `jae` -- UNSIGNED -- which is why `silence_blocks` is an `unsigned int`
+while `countdown`, which `_recieve_silence_state_init` fills from a SIGNED
+divide, is an `int`.
+
+## F8937. Both host-link input paths keep their DLE escape in ONE field, and the escape survives across calls
+
+`_handle_data_input` (0x09eb60) and `_handle_hdlc_input` (0x09ed00) are
+separate functions doing the same unstuffing, and both use `ctx->+0x124c` for
+"a DLE has been seen". So a block that ends on a bare DLE arms the escape for
+the NEXT block, and a session that interleaves the two paths shares one
+escape state between them.
+
+They differ in three ways, and each difference is the point of having two
+functions:
+
+- the data path's write cursor is a local starting at zero; the HDLC path's
+  is the SESSION's `+0x1250`, so a frame accumulates across calls and the
+  caller's destination is the whole frame's, not one block's;
+- the data path treats DLE ETX as END OF SESSION -- it latches `+0x12b0` and
+  every later call returns immediately with a count of zero -- while the HDLC
+  path treats it as END OF FRAME, doing exactly the two stores
+  `_handle_hdlc_input_close` does and returning 1;
+- the data path logs a DLE that reached the escape arm ("CLASS1: DLE %1X in
+  data\n", at debug level 3 and above); the HDLC path silently drops the
+  same byte.
+
+**The two stores at end of frame are the same two.** `_handle_hdlc_input`'s
+DLE ETX arm and `_handle_hdlc_input_close` both write `f1250 - 1` into
+`+0x000` and set `f1224` when `flags004` bit 4 is on. That the pair appears
+twice, and nowhere else, is what makes the bit worth a name -- and also all
+that is known about it, so `CLASS1_FLAG_FRAME_END_LATCH` records the site and
+claims nothing about what configures it.
+
+## F8938. `_handle_data_output` recovers each octet by an eight-bit start-bit search, and locks the alignment for the carrier
+
+The transmit direction is not a mirror of the receive one. Each element
+contributes its LOW BYTE to the top of a 32-bit window whose lower three bytes
+are the previous three (`ctx->+0x12a0`, and `window >> 8` goes back into it),
+and the octet is extracted through a mask and a shift held in the session.
+
+While `+0x129c` is clear, those two are re-initialised to 0xff0000 and 16 and
+then walked upward until the window has a ZERO bit -- the start bit -- with
+eight tried before the search gives up. On success the flag is set and the
+mask and shift are FROZEN, so the search costs one attempt per carrier rather
+than one per octet.
+
+**The recovered octet's least significant bit is the start bit itself.** The
+mask is `0xff0000 << k` and the shift `16 + k` for the same `k`, so the eight
+bits taken begin AT the zero the search stopped on. That is the object's
+arrangement, checked against the instructions twice because it reads like a
+transcription error, and it is reproduced.
+
+On the give-up path the octet is 0xff, the flag is NOT set, and the mask and
+shift are left where the search abandoned them -- 0xff000000 and 24 -- for the
+next element to re-initialise. Recorded as D1056 because nothing reads them in
+between and the effect is therefore invisible from here.
+
+Then the ordinary DLE stuffing: a recovered 0x10 is written twice, and the
+`terminate` argument appends DLE ETX. So the destination holds up to
+`2 * count + 2` bytes, which `class1tx.h` states because sizing it from
+`count` is F8607/D956's defect.
+
+## F8939. The byte counts in this pass's first commit message are wrong, and the right ones are here
+
+`ea2704af`'s message says "1,177 blob bytes" for the six symbols it writes.
+The true total is **712**:
+
+    FIFO_read              176      faxvmi_gen_fcs16       108
+    FIFO_write             152      faxvmi_byte_reverse     93
+    FIFO_delete             32      faxvmi_frame_reverse   151
+
+`1023980a`'s 1,306 is right (3 + 72 + 64 + 274 + 79 + 321 + 238 + 255), so the
+pass's total over fourteen symbols is **2,018 bytes**, not 2,483.
+
+Recorded rather than rewritten: the commit is already on the branch and
+amending it would rewrite a hash another session may have read. This is
+F6100's rule applied to a commit message -- a stale count with no gate behind
+it is a defect, and the fix is to correct it where it will be read.
+
+**A count in a commit message is not checked by anything.** `bannercheck.py`
+checks the per-symbol banners in `src/`, which were right; nothing sums them.
+
+## F8940. The injection ritual over the Class 1 handlers found TWO real gaps, and both are now closed
+
+Sixteen hand-injected defects over `src/fax/class1.c` and
+`src/fax/class1tx.c`, each built and run against the blob. Fourteen were
+caught on the first pass. The two that were not are the interesting ones,
+because neither was an equivalent mutant:
+
+- **`ctx->energy > 100` -> `>= 100`.** The two spellings differ on exactly
+  one input -- an energy of 100 -- and the fixture's blocks were a loud ramp
+  and silence, so nothing landed on it. Closed by SEARCHING for the input
+  rather than computing it: `FPM_rms` is already reconstructed and tested, so
+  the test sweeps a constant amplitude until its RMS is 100 and then drives
+  that block differentially. What the search produced is checked against the
+  REFERENCE's own `energy` afterwards, so a search that found the wrong block
+  fails a denominator instead of testing nothing.
+- **`out > 0x7ff` -> `out > 0x800`.** D1055's padding limit is on the OUTPUT
+  INDEX, so no input under 2,048 elements can reach it and every case in the
+  fixture was 64 bytes. Closed with one deliberate case: 2,040 literal bytes
+  then DLE ETX, a destination sized for the 2,049 a wrong limit would write,
+  and an assertion that the reference stopped at 2,048.
+
+Both mutants are caught now, and so is `>=` in the other direction.
+
+**THE LESSON IS ABOUT WHAT A RANDOM FIXTURE CANNOT REACH.** Both gaps are
+boundary values that no amount of random or shaped input finds by accident:
+one is a single point in a 65,536-wide range, the other needs an input
+thirty-two times larger than anything the fixture was built for. A coverage
+counter would have reported both arms as covered, because both arms DID run --
+just never at the boundary. Only the mutation told the difference.
+
+**AND THE RITUAL'S OWN COST HAD TO BE FIXED FIRST.** Driving it through
+`make one` took about ten minutes per mutant on a box with four other agents
+building: the wall clock was dominated by the `refs`, `banners`, `offsets` and
+`mutsnap` gate, which re-runs in full for every mutant and says nothing about
+it. `make build/test/<name>` followed by running the binary is the same
+verdict in well under a minute. Two runs were abandoned mid-flight before this
+was measured; that is why the shape is written down.
+
+Findings F8933 records the first batch's ten (nine caught, one provably
+equivalent) and the timestamp trap that made its closing check lie.

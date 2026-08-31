@@ -10736,3 +10736,421 @@ throws the merge away.
 None of the other three is in this batch and none is reconstructed, so this is
 corroboration for the shape and a lead for whoever takes them -- not a claim
 about their behaviour, which only their own differential tests can settle.
+## D1040 ⚠ V.27ter's `pending = ok * pending` can never be non-zero
+
+The bit path multiplies the guard's `ok` flag by `pending` and stores the
+result back into `pending` (0x9aa88 scrambler, 0x9acf7 descrambler). `ok` is
+`~(alldiff | inverting) & 1` and `inverting` was assigned from `pending`, so
+the two are never both one and the product is always zero. `pending` is set
+only by the `run == 33` arm immediately below it.
+
+**Status:** reproduced, not simplified. It is dead arithmetic in the ORIGINAL,
+not a misreading -- the `imul` is there, and a source that wrote `pending = 0`
+would emit a different instruction. `t_sdmv27` seeds `pending` and `inverting`
+apart in all four combinations and both directions, which is the only way to
+reach the multiply with a non-zero left operand, and both sides agree.
+Finding F8906.
+
+## D1041 ⚠ V.27ter's scrambler discards the `inverting` it is handed
+
+`SDMv27_scrambler` assigns `inverting = pending` at the top of each bit, so
+whatever `inverting` a caller left in the object is overwritten before it is
+read. `SDMv27_descrambler` assigns it on the back edge instead, so its first
+bit does read the incoming value.
+
+**Status:** reproduced in both directions as written, and NOT interchangeable.
+Each placement is self-consistent with the exit state its own function leaves
+-- (pending 1, inverting 0) for the scrambler, (1, 1) for the descrambler --
+so each inverts exactly one bit on the call after a threshold. Giving the
+scrambler the descrambler's placement fails 1,994 of `t_sdmv27`'s first 7,179
+checks. What is unreachable is only the pair (pending 0, inverting 1), which
+`run_seeded_flags` drives by hand. Finding F8901, which records that the first
+draft of this entry claimed the difference was unreachable and an injection
+refuted it.
+
+## D1042 ⚠ `SMC_encoder` indexes four tables with values nothing bounds
+
+In its complex form the encoder reads `imap[index]` and `qmap[index]` with
+`index` built from the data word and the running quadrant, and `cosine[acc]`
+and `sine[acc]` with the carrier accumulator. None of the four is bounds
+checked, and neither `index` nor `acc` is clamped: `acc` is wrapped by a
+single conditional subtract, so a seeded value at or above `2 * rot_mod`
+stays out of range, and a negative `quad` (reachable through `pmask` 0xffff,
+which V.29 does not use) indexes backwards.
+
+It is the same shape as the index form's documented `widx` overrun and the
+same shape as `fpm_smc.h`'s note on the wraps; it is recorded separately
+because the complex form dereferences FOUR pointers rather than storing to
+one, so a wild index reads as well as writes.
+
+**Status:** reproduced. Not reachable from the object's own configs --
+`V29TX_create` sets `rot_mod` 24 against a 32-entry phasor and `pmask` 7
+against 16-entry maps -- so `t_faxsmc` drives the out-of-range cases only
+where both sides read the same over-sized table, which is what keeps the
+comparison meaningful rather than reading two different pieces of rubbish
+(D955's rule, applied to a test's own fixture).
+
+## D1043 🐛 `SDMv27_init` faults on the null config it means to default
+
+`SDMv27_init` (0x9a830) reads `cfg->nbits` twice and guards only the first.
+The null arm is out of line at 0x9a880 --
+
+    9a838:  test   %ecx,%ecx
+    9a83a:  je     9a880
+    9a83c:  movzwl (%ecx),%edx
+    9a83f:  mov    %dx,(%eax)          <- sdm->nbits
+    ...
+    9a85a:  cmpw   $0x2,(%ecx)         <- cfg->nbits AGAIN, %ecx still NULL
+    ...
+    9a880:  movzwl SDMv27_CFG,%edx
+    9a887:  jmp    9a83f
+
+-- and it loads the default VALUE and jumps back into the common path with the
+caller's null pointer still in `%ecx`. Five stores later the mask branch
+dereferences it. So the defaulting the function plainly intends works for
+`nbits` and then faults three instructions after it would have mattered.
+
+Found by running it: `t_sdmv27` drove `SDMv27_init(s, NULL)` on both sides and
+the binary segfaulted with no output, which is the same way D1022 was found.
+
+**Status:** reproduced. `src/fax/sdmv27.c` guards one read and not the other,
+which is what the object does; a source that wrote `if (cfg == 0) cfg =
+&SDMv27_CFG;` would use the corrected pointer at both sites and would not be
+the object.
+
+**Unreachable in service.** Both callers pass a stack local --
+`SetScramblerV27` at 0xa5ecd (`lea 0x12(%esp),%edx`) and `V27RX_create` at
+0x99cde -- so nothing in the object ever takes the arm. `SDMv27_CFG` is
+therefore referenced by `SDMv27_init` and read by nobody; it is reproduced as
+two bytes of `.data`, not as a working default.
+
+**No differential test can cover it**, for D961's reason: both sides fault
+identically and a fault is not a comparison. `t_sdmv27` asserts the
+precondition -- a config pointer is required -- and says why at the call site
+rather than pretending to cover it.
+## D1060 🐛 `SGD_sequence_det` returns and dereferences an UNINITIALISED local when its search loop does not run
+
+This is the whole of finding F8497's failure, and it was read as a layout
+error for a year of tree-time.
+
+`SGD_sequence_det` (0x9f520) keeps the index of the best alignment in a stack
+slot at `0x10(%esp)`, and the only write to it is inside the improvement test
+at 0x9f610 -- taken when the running Hamming distance beats the best so far,
+which starts at 0xffff. The search loop is guarded by `cmp 0x18(%esp),%ebp ;
+jge` with `%ebp` zero, so **for n <= 0 the loop body never executes and the
+slot is never written.**
+
+The function then does NOT bail out. `best` is still 0xffff, the threshold
+test at 0x9f635 is a SIGNED 16-bit compare -- `cmp %bp,0x56(%ecx) ; jl` -- so
+it reads 0xffff as -1 and passes for every non-negative `thresh`. The accept
+arm therefore runs on garbage:
+
+    9f647:  mov    0x10(%esp),%ebx        <- uninitialised, read as 32 bits
+    9f655:  lea    (%edx,%eax,2),%edi     <- hist + 2*(base + garbage)
+    9f658:  mov    %edi,0x38(%ecx)        <- status.det_at
+    ...
+    9f675:  movswl 0x10(%esp),%eax        <- returned, read as 16 bits
+
+So one uninitialised slot reaches the caller twice, at two different widths.
+`status.seq_found` is set to 1 as well, so a caller cannot tell this apart
+from a real detection.
+
+**Why it produced the numbers it did, exactly.** Wave 1's test reported
+`det_at offset got 20, reference -6181684` and
+`sequence_det return got 0, reference -21320`. Both fall out of ONE unknown:
+with the slot holding X and the window base `hist_len - n` equal to 20,
+
+    20 + (-6181704)         == -6181684    the reported offset
+    low 16 bits of -6181704 == -21320      the reported return
+
+with no slack in either. See F8971 for why that excludes a layout error
+outright -- reading a field at the wrong offset cannot change what the blob
+puts in `%eax`. What made it look like one is that -6181684 SYMBOLS is 12 MB,
+and a mis-modelled field is the obvious way to get a wild pointer out of a
+fifty-symbol buffer. It is not the only way.
+
+**It is silent from one side.** A probe against the blob alone at n = 0 came
+back `return 0, seq_found 1, det_at - hist 50, quality 1` -- the slot happened
+to hold zero in that build, and every value is plausible. Only a second build
+makes it visible.
+
+**Status:** reproduced. `int best_i;` is left uninitialised in
+`src/fax/sgd.c` because the object leaves it uninitialised, and GCC's
+`-Wmaybe-uninitialized` fires on it, correctly. Initialising it would be a
+behavioural change on a path the object reaches, and it is not clear what
+value would be right: 0 and -1 are both defensible and the object commits to
+neither.
+
+**No differential test can cover the arm**, for the same reason D961's cannot:
+the two sides read two different stack slots and there is no equivalence to
+assert. `t_faxsgd` drives n >= 1 everywhere and says so at each call site,
+which is the honest move -- not a scoped-away failure but an input the
+comparison is undefined over.
+
+Whether a caller can reach it is unknown: every `SGD_sequence_det` caller is
+unwritten fax. n is the count of newly received symbols, so a caller polling
+with nothing to offer would reach it.
+
+
+## D1061 🐛 The SGD history buffer is SIZED from `hist_extra` and ZEROED from `ref_len`
+
+`SGD_create` allocates `2*(hist_len+hist_extra)-2` bytes -- that is
+`hist_len+hist_extra-1` symbols -- and then zeroes `hist_len+ref_len-1`
+symbols through the result. The two spans are equal only when
+`hist_extra == ref_len`, and the constructor overruns its own allocation by
+`ref_len-hist_extra` symbols whenever the reference sequence is longer.
+
+`SGD_control`'s detector half is sharper still: it re-derives `hist_span`
+from the NEW `ref_len` and re-zeroes, and `hist_extra` is not in the five
+dwords it can set -- so a control that raises `ref_len` above the constructed
+`hist_extra` overruns a buffer it has no way to resize, and every subsequent
+`SGD_sequence_det` slides over the overrun span as well.
+
+The blob's own `SGD_CFG` has `hist_extra == ref_len == 1`, which is the
+relation that makes the two agree, so this is presumably a real invariant the
+author kept by hand rather than a live fault.
+
+**Status:** reproduced. `t_faxsgd` keeps `hist_extra == ref_len` in every one
+of its eight configurations and clamps a control's `ref_len` to the
+constructed `hist_extra`, so the tested domain is the one the object is
+correct over. This is a case where the fixture's constraint IS the finding.
+
+
+## D1062 🐛 `SGD_pattern_det`'s bit mask is a signed short shifted ARITHMETICALLY, so 16 bits per symbol never terminates
+
+The mask is built as `1 << (sym_bits-1)` in 32 bits, stored to a stack slot
+and reloaded with `movswl 0x4(%esp),%edx` -- a signed short. The inner loop
+walks it with `sar $1,%edx` and exits on zero.
+
+For `sym_bits` in 1..15 the mask is a positive power of two and the loop runs
+`sym_bits` times. For `sym_bits == 16` the mask is `(short)0x8000` = -32768,
+`sar` walks it -32768, -16384, ... -1, and -1 stays -1: the loop never
+terminates and `SGD_pattern_det` hangs.
+
+`sym_bits == 0` is harmless by accident rather than by design: `shl` with
+`%cl` = 0xff is masked to 31 by the hardware, the low half of the 32-bit
+result is zero, and the reloaded short is zero, so the loop is skipped
+entirely and every symbol is counted without a bit being examined.
+
+**Status:** reproduced. `t_faxsgd` keeps `sym_bits` in 1..15 -- both sides
+would hang identically and a hang is not a comparison.
+
+
+## D1063 🐛 `SGD_sequence_det`'s window base is truncated to an UNSIGNED short
+
+The first alignment is at `hist_len - n`, computed as
+`movzwl 0x2(%edx),%ebx ; sub %esi,%ebx ; movzwl %bx,%ecx` -- so for
+`n > hist_len` the difference wraps and the base becomes just under 65536.
+Every alignment then indexes the history 128 KB past its end, and
+`status.det_at` is set to an address there.
+
+It compounds with the sliding step above it, whose length is
+`(unsigned short)(hist_span - n)` and wraps the same way, so `n > hist_span`
+copies about 65535 symbols through the buffer before the search even starts.
+
+**Status:** reproduced. `t_faxsgd` clamps `n` to `hist_len`; beyond it both
+sides walk off the same end of two different heaps and the comparison is
+meaningless before it is unsafe.
+
+
+## D1064 🐛 `SGD_correlate`'s scale is `1/(p[0]*n)` in INTEGER arithmetic, so the function answers a constant and the accumulation is dead
+
+    9f85b:  mov    $0x1,%eax
+    9f860:  cltd
+    9f861:  imul   %ecx,%ebp        <- p[0] * n
+    9f868:  idiv   %ebp             <- 1 / (p[0]*n)
+
+`eax` and `ebp` are both plain 32-bit integers and there is no scaling shift
+anywhere in the function, so the quotient is 1 when `p[0]*n == 1`, -1 when it
+is -1, and **zero for every other magnitude**. The return is
+`1 - distance*scale`, so for any configuration with more than one symbol, or
+any scale factor other than +/-1, the function answers a constant 1 whatever
+the two sequences contain -- and the Hamming-distance loop above it, table
+lookup and all, has no effect on the result.
+
+When `p[0]*n == 0` the `idiv` faults.
+
+This reads like a fixed-point reciprocal whose shift was lost: `1/(p*n)` in
+Q14 or Q15 would be the natural thing to write here and would make the
+function do what its name says.
+
+**Status:** reproduced exactly, because both the constant and the fault are
+observable and neither is ours to remove. `t_faxsgd` drives the +/-1 cases
+where the accumulation IS live as well as the degenerate ones, and never
+drives `p[0]*n == 0`.
+## D1050 ⚠ `size` is read signed by `FIFO_full_test` and unsigned by the transfers
+
+One field, two readings, both the object's.
+
+`FIFO_full_test` (0x096dd0) divides by `f->size` with `idiv`, so a negative
+capacity divides and the quotient's sign is what the threshold sees --
+faxfifo.h's note about a negative size flipping the wrapped numerator back
+over the threshold depends on exactly that.
+
+`FIFO_read` (0x096cf0) and `FIFO_write` (0x096d6c) wrap their cursors with a
+sixteen-bit UNSIGNED compare instead:
+
+    96cc1:  66 3b 54 24 04   cmp  0x4(%esp),%dx
+    96cc6:  89 d0            mov  %edx,%eax
+    96cc8:  72 02            jb   96ccc
+
+`jb`, not `jl`, on a 16-bit operand -- so a size of -1 is 65535 here and -1
+there. A caller cannot see both readings at once, because a FIFO whose size is
+negative has a buffer `sysdep_malloc` was asked for a negative number of bytes
+for, and `FIFO_create` never builds one.
+
+**Status:** reproduced. `fifo.c` reads the field into an `unsigned short`
+local in the transfers and leaves `FIFO_full_test`'s signed divide alone; this
+is finding F614's "one field, both extensions" with the two sites in different
+functions. `t_faxframing` drives the transfers with a positive size only,
+because a negative one makes `buf[rd]` a wild subscript that F8587 says both
+sides would agree on while proving nothing; `t_class1leaves` keeps the signed
+sizes, where they are the point.
+
+## D1051 ⚠ `FIFO_write`'s free space is a sixteen-bit subtraction and wraps
+
+`FIFO_write` computes the space left as
+
+    96d28:  0f b7 55 02      movzwl 0x2(%ebp),%edx     ; size
+    96d32:  0f b7 57 0c      movzwl 0xc(%edi),%edx     ; count
+    96d36:  29 d6            sub    %edx,%esi
+    96d38:  0f b7 c6         movzwl %si,%eax
+
+so an occupancy already PAST the capacity reports `65536 - (count - size)`
+free rather than none, and the write proceeds. With the cursors in range the
+walk still stays inside the buffer -- it wraps at `size` on every step -- so
+nothing is corrupted; what is wrong is `count`, which grows further past
+`size` on each such call and never recovers.
+
+It is unreachable through `FIFO_create` plus these three entry points alone:
+create zeroes the occupancy, write clamps and read only subtracts what it
+found. It needs a caller that writes `count` itself.
+
+**Status:** reproduced, and driven deliberately -- `t_faxframing`'s
+`run_fifo_write_wrap` plants `count = size + 1` and asserts the wrap FIRED
+(the reference returned 8 of 8 requested) rather than assuming it did.
+
+## D1052 ⚠ the framing walks count down to zero, so a negative count is a long walk
+
+`faxvmi_gen_fcs16`, `faxvmi_byte_reverse` and `faxvmi_frame_reverse` all
+carry their loop counter as a sixteen-bit value and continue while it is
+non-zero:
+
+    967d9:  8d 47 ff         lea    -0x1(%edi),%eax
+    967dc:  0f bf f8         movswl %ax,%edi
+    967df:  66 40            inc    %ax
+    967e1:  75 b1            jne    96794
+
+so `count == -1` runs 65,535 times rather than none, walking 128 KB past the
+buffer. `faxvmi_frame_reverse` has the same shape twice over -- once for the
+frame count and once for each frame's length element, which it reads out of
+the buffer, so a corrupt length is a walk of the same kind.
+
+**Status:** reproduced (`for (i = count; i != 0; i--)` is the object's loop,
+not `i > 0`), and NOT driven: a test that passed a negative count would read
+and write far outside any fixture on both sides at once, which F8587 says
+would agree and prove nothing, with a segfault the only other outcome.
+Recorded so the fax phase's callers can be checked against it when they land.
+
+## D1053 ⚠ three Class 1 state handlers are file-local in the object and global here
+
+`_send_silence_state` (0x092c00), `_recieve_silence_state` (0x092c40) and
+`_idle_state` (0x092dd0) are `t` in the symbol table, not `T`. Nothing calls
+them by name: `fax_class1_create` stores their addresses into
+`class1_state_functions`, and because they are local the store is an
+`R_386_32` against the SECTION symbol with the address as an inline addend --
+
+    .text+0x092ef4 -> .text:0x092dd0        (_idle_state)
+    .text+0x092f40 -> .text:0x092c00        (_send_silence_state)
+
+-- so they appear in no call graph and under no name, and `objdump -r | grep
+_idle_state` finds nothing at all. Only `_idle_state_init` of the four is
+global.
+
+Our copies are global. That is the same divergence `getbit` and
+`ApplyBulkDelay` carry in `src/pump/v34/v34hshak.c` and for the same reason:
+`symmap.py`'s two-pass objcopy promotes a local before renaming it, so
+`ref__idle_state` exists and the handler can be driven directly instead of
+through `fax_class1_progress`, which is 1,145 unwritten bytes (F221, F227).
+
+**Status:** reproduced everywhere it can be. The alternative -- `static` in
+`src/fax/class1.c` -- would match the object's storage class and make the
+functions untestable until `fax_class1_progress` lands, which is the trade
+F227 already settled the other way. It is recorded rather than hidden because
+a `nm` diff of our object against the blob's will show three symbols promoted,
+and that must not read as a defect. Revisit when `fax_class1_progress` is
+written: at that point `static` costs nothing and should be taken.
+
+## D1054 ⚠ `_handle_data_input` latches the block's last byte before it knows the block will be consumed
+
+The very first thing the function does after the closed-session early return
+is
+
+    9eb7f:  8b 54 24 2c     mov    0x2c(%esp),%edx      ; count
+    9eb83:  8b 02           mov    (%edx),%eax
+    9eb85:  85 c0           test   %eax,%eax
+    9eb87:  7e 0d           jle    9eb96
+    9eb89:  0f b6 4c 28 ff  movzbl -0x1(%eax,%ebp,1),%ecx
+    9eb8e:  89 8f 38 12 00  mov    %ecx,0x1238(%edi)
+
+-- `ctx->last_in_byte = src[*count - 1]`, before the unstuffing loop runs.
+So the field records the last byte of the block the caller OFFERED, and not
+the last byte the function consumed: when the loop stops early at DLE ETX,
+everything after the ETX is discarded and `last_in_byte` still holds a byte
+from inside the discarded tail. It is also written on a call that consumes
+nothing else at all.
+
+**Status:** reproduced, and pinned -- `t_class1handlers` compares the whole
+`struct fax_class1` after every call and its streams put a byte after the
+DLE ETX for exactly this reason. Nothing in the object reads the field, so
+whether it is a defect cannot be settled here; what is recorded is that the
+value is the block's, not the frame's.
+
+## D1055 ⚠ the DLE ETX padding is bounded by the OUTPUT INDEX, not by the destination
+
+After DLE ETX, `_handle_data_input` appends twenty zero elements:
+
+    9ec65:  b8 13 00 00 00  mov    $0x13,%eax
+    9ec70:  81 fe ff 07 00  cmp    $0x7ff,%esi
+    9ec76:  7f 0b           jg     9ec83
+    9ec7c:  66 c7 04 77 00  movw   $0x0,(%edi,%esi,2)
+
+The guard is `out > 0x7ff`, a limit on the number of elements ALREADY
+written -- so it protects a destination of 2,048 elements and nothing
+smaller. A caller that sized `dst` from `*count`, which is the natural
+reading of an in/out length, is overrun by up to twenty elements, and the
+guard cannot see it.
+
+That is F8607/D956's shape again: a copy-out whose bound comes from the wrong
+quantity. Here the bound at least exists, which is why this is recorded
+separately rather than as another instance.
+
+**Status:** reproduced, with the constant as the object has it.
+`t_class1handlers` sizes its destination `IN_MAX + 20 + GUARD` and compares
+the guard region, so an off-by-one in the padding is a failure and not a
+corruption. `class1tx.h` states the requirement so the fax phase's callers
+can be checked against it as they land.
+
+## D1056 ⚠ a failed start-bit search leaves the alignment half-moved for the next element
+
+`_handle_data_output`'s search walks `async_mask` and `async_shift` upward
+looking for a zero bit, and gives up after eight:
+
+    9ee8f:  83 f9 07        cmp    $0x7,%ecx
+    9ee92:  7f 31           jg     9eec5                ; give up
+
+The give-up path goes straight to the common emit, so it does NOT set
+`async_locked` -- correctly, the alignment was never found -- but it also
+does not restore `async_mask` and `async_shift`, which the search left at
+0xff000000 and 24. They are re-initialised to 0xff0000 and 16 at the top of
+the next unlocked element, so nothing reads the abandoned values and the
+effect is invisible.
+
+It becomes visible only if the caller reads either field between blocks. The
+octet emitted for that element is 0xff, which is the initialised value and
+not a recovered one.
+
+**Status:** reproduced exactly, including the fields left where the search
+abandoned them. `t_class1handlers` drives both outcomes and asserts each
+fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
+are all ones for the give-up, and one with a zero among them for the lock.

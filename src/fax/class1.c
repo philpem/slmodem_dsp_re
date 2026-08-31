@@ -5,6 +5,10 @@
  * four `t` statics start at 0x092c00 and its first global, `_put_silence`,
  * at 0x092b70):
  *
+ *   _send_silence_state           .text 0x092c00    64
+ *   _recieve_silence_state        .text 0x092c40   274
+ *   _idle_state_init              .text 0x092dc0     3
+ *   _idle_state                   .text 0x092dd0    72
  *   _send_silence_state_init      .text 0x092b90    42
  *   _recieve_silence_state_init   .text 0x092bc0    59
  *   fax_class1_info               .text 0x093690    56
@@ -25,6 +29,8 @@
  */
 
 #include "dsplib/class1.h"
+#include "dsplib/debug.h"
+#include "dsplib/fpm.h"
 
 /*
  * Both silence inits: install the state number and arm the countdown with
@@ -41,7 +47,7 @@ _send_silence_state_init(struct fax_class1 *ctx, int samples)
 {
 	int half = samples / 2;
 
-	ctx->state = CLASS1_STATE_SEND_SILENCE;
+	ctx->state = CLASS1_SEND_SILENCE_STATE;
 	if (half == 0)
 		half = 1;
 	ctx->countdown = half;
@@ -53,9 +59,9 @@ _recieve_silence_state_init(struct fax_class1 *ctx, int samples)
 {
 	int half;
 
-	ctx->state = CLASS1_STATE_RECV_SILENCE;
-	ctx->f12b8 = 0;
-	ctx->f12bc = 0;
+	ctx->state = CLASS1_RECIEVE_SILENCE_STATE;
+	ctx->silence_blocks = 0;
+	ctx->energy = 0;
 	half = samples / 2;
 	if (half == 0)
 		half = 1;
@@ -150,4 +156,139 @@ _set_modem_rate(int code, int *mod, int *rate)
 		*rate = 0x960;
 		*mod = 0;
 	}
+}
+
+/*
+ * ------------------------------------------------------------------
+ * Three of the nineteen state handlers.
+ *
+ *   _send_silence_state       .text 0x092c00    64
+ *   _recieve_silence_state    .text 0x092c40   274
+ *   _idle_state               .text 0x092dd0    72
+ *   _idle_state_init          .text 0x092dc0     3
+ *
+ * THE FIRST THREE ARE FILE-LOCAL IN THE OBJECT and are global here.  Nothing
+ * calls them by name: `fax_class1_create` stores their addresses into
+ * `class1_state_functions`, which shows up as an `R_386_32` against the
+ * SECTION symbol with the address as an inline addend
+ * (`.text+0x092ef4 -> .text:0x092dd0`) and so appears in no call graph and
+ * under no name.  `getbit` and `ApplyBulkDelay` in `src/pump/v34/v34hshak.c`
+ * are the precedent for writing a file-local as a global so that its
+ * `ref_` alias can be driven directly (F221, F227); the storage class is a
+ * knowing divergence and is recorded as D1053.
+ *
+ * The handler contract is nine arguments -- see class1.h, which says which
+ * of them are established and which are only established as WIDTHS.
+ */
+
+int
+_idle_state_init(struct fax_class1 *ctx)
+{
+	(void)ctx;
+	return 0;
+}
+
+/*
+ * The object emits two loops here, the second with 160 as an immediate, which
+ * is what jump threading makes of one loop over a variable the compiler has
+ * just pinned to 160 on that path.  Written as the one loop.
+ */
+int
+_idle_state(struct fax_class1 *ctx, const short *rx, short *tx,
+	    int word3, int word4, int *rx_count, int *tx_count,
+	    int word7, int *word8)
+{
+	int n = *rx_count;
+	int i;
+
+	(void)ctx;
+	(void)rx;
+	(void)word3;
+	(void)word4;
+	(void)word7;
+	(void)word8;
+
+	if (n <= 0)
+		n = CLASS1_BLOCK_SAMPLES;
+	for (i = 0; i < n; i++)
+		tx[i] = 0;
+	*tx_count = n;
+	return 0;
+}
+
+int
+_send_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		    int word3, int word4, int *rx_count, int *tx_count,
+		    int word7, int *word8)
+{
+	int i;
+
+	(void)rx;
+	(void)word3;
+	(void)word4;
+	(void)rx_count;
+	(void)word7;
+	(void)word8;
+
+	ctx->countdown--;
+	for (i = 0; i < CLASS1_BLOCK_SAMPLES; i++)
+		tx[i] = 0;
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+	if (ctx->countdown == 0)
+		ctx->status = FAX_CLASS1_OK_NO_CARRIER;
+	return 0;
+}
+
+/*
+ * `*word8` is read into a register before the transmit loop in the object.
+ * That is the compiler's doing rather than the author's -- `tx` is `short *`
+ * and `word8` is `int *`, so strict aliasing lets the load move -- and the
+ * read is written where a human puts it, at the test.
+ *
+ * The threshold compare is SIGNED and sixteen-bit (`cmp $0x64,%ax; jle`), so
+ * it is on the `short` the RMS was stored into; the silence-block compare
+ * against `countdown` is UNSIGNED (`jae`), which is why `silence_blocks` is
+ * an `unsigned int` in class1.h and the cast below is written out.
+ */
+int
+_recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		       int word3, int word4, int *rx_count, int *tx_count,
+		       int word7, int *word8)
+{
+	int i;
+
+	(void)word3;
+	(void)word4;
+	(void)word7;
+
+	for (i = 0; i < CLASS1_BLOCK_SAMPLES; i++)
+		tx[i] = 0;
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+	ctx->energy = FPM_rms(rx, (unsigned short)*rx_count);
+
+	if (*word8 != 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("Abort waiting for silence!");
+		ctx->status = FAX_CLASS1_OK_NO_CARRIER;
+		ctx->state = CLASS1_IDLE_STATE;
+		return 0;
+	}
+	if (ctx->energy > CLASS1_SILENCE_THRESHOLD) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("Energy %d > silence treshold\n",
+					     ctx->energy);
+		ctx->silence_blocks = 0;
+		ctx->status = FAX_CLASS1_NO_MESSAGE;
+		*word8 = 5;
+		return 0;
+	}
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("Energy %d < silence treshold...\n",
+				     ctx->energy);
+	ctx->silence_blocks++;
+	if (ctx->silence_blocks >= (unsigned int)ctx->countdown) {
+		ctx->status = FAX_CLASS1_OK_NO_CARRIER;
+		ctx->state = CLASS1_IDLE_STATE;
+	}
+	return 0;
 }
