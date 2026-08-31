@@ -98914,3 +98914,35 @@ names the span it came from so the next reader is not surprised twice.
 Caller ID subtraction above is by name and by hand. That is fine for a
 scheduling figure and is not evidence; `tools/closure.py` from the three entry
 point sets is what would settle it if a sharper number is ever needed.
+### F8755. `silence_progress` converts a setting through the x87 as unsigned, and GCC 14 folds the conversion the object performs
+
+*2026-08-31.* At 0xb05a3 the object takes the answer to its second settings
+query and does
+
+    b05a3:	55                   	push   %ebp        (zero)
+    b05a4:	50                   	push   %eax
+    b05a5:	df 2c 24             	fildll (%esp)
+    ...
+    b05c2:	db 5c 24 10          	fistpl 0x10(%esp)   (RC = toward zero)
+
+-- a 32-bit value zero-extended to 64 bits, converted to floating point, and
+truncated back to `int`. That is `(int)(double)(unsigned int)v`; a plain
+`(int)v` needs neither instruction, so the cast chain is carried by the
+disassembly and `src/service/silence.c` spells it.
+
+**It cannot be probed from the modern side.** For `v < 2^31` the chain and a
+plain cast agree exactly. For `v >= 2^31` the double is out of `int` range,
+which C leaves undefined: the x87 answers `0x80000000` and **GCC 14 folds
+the whole chain to `(int)v`** -- measured, `(int)(double)0xffffff00u` gives
+-256 on GCC 14 at `-O2 -mfpmath=387` and the blob gives -2147483648.
+
+So `t_fdspksil` sweeps the setting only to `0x7fffffff`. Driving it past
+that would compare two compilers' treatment of undefined behaviour and
+report it as a defect in `src/`, which is the failure mode CLAUDE.md's
+"never edit `src/` to make the modern tier green" rule exists to stop --
+here in its other direction, where the test rather than the source is what
+must not chase the modern compiler.
+
+The difference is confined to the debug line: the value only reaches
+`s->count > level`, and both readings are negative, so the run always
+escapes on the first silent block either way.

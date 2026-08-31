@@ -1,6 +1,6 @@
 [
  {
-  "note": "src/service/silence.c against build/test/t_fdspksil.  The claims: _status's escape byte, its code byte and its two-byte advance; silence_is_more_then's scale, its truncation and the direction of its comparison; and which fields silence_create writes."
+  "note": "src/service/silence.c against build/test/t_fdspksil.  The claims: _status's escape byte, its code byte and its two-byte advance; silence_is_more_then's scale, its truncation and the direction of its comparison; which fields silence_create writes; and silence_progress's block length, its mean, its three thresholds, the disabling settings, the run counter and which of `q` and `s` each arm emits."
  },
  {
   "label": "_status escapes with 0x11 rather than DLE",
@@ -33,39 +33,44 @@
   "replace": "\t\tdsplibs_debug_printf(\"DLE %d\\n\", (unsigned char)code);"
  },
  {
-  "label": "the silence scale is 8 per millisecond rather than 10",
-  "find": "\treturn s->count > (int)(10.0f * ms);",
-  "replace": "\treturn s->count > (int)(8.0f * ms);"
+  "label": "the silence scale is 8 per unit rather than 10",
+  "find": "\treturn s->count > (int)(10.0f * t);",
+  "replace": "\treturn s->count > (int)(8.0f * t);"
  },
  {
   "label": "the silence comparison admits the boundary",
-  "find": "\treturn s->count > (int)(10.0f * ms);",
-  "replace": "\treturn s->count >= (int)(10.0f * ms);"
+  "find": "\treturn s->count > (int)(10.0f * t);",
+  "replace": "\treturn s->count >= (int)(10.0f * t);"
  },
  {
   "label": "the silence threshold rounds rather than truncating",
-  "find": "\treturn s->count > (int)(10.0f * ms);\n}",
-  "replace": "\treturn s->count > (int)(10.0f * ms + 0.5f);\n}"
+  "find": "\treturn s->count > (int)(10.0f * t);\n}",
+  "replace": "\treturn s->count > (int)(10.0f * t + 0.5f);\n}"
  },
  {
-  "label": "silence_create stores its two arguments the other way round",
-  "find": "\ts->int_00 = a;\n\ts->int_04 = b;",
-  "replace": "\ts->int_00 = b;\n\ts->int_04 = a;"
+  "label": "silence_create does not keep the callback's context",
+  "find": "\ts->obj = obj;\n\ts->query = query;",
+  "replace": "\ts->query = query;"
  },
  {
-  "label": "silence_create leaves the run length at one",
-  "find": "\ts->count = 0;\n\ts->short_0a = 0;",
-  "replace": "\ts->count = 1;\n\ts->short_0a = 0;"
+  "label": "silence_create leaves the run counter at one",
+  "find": "\ts->count = 0;\n\ts->nsamp = 0;",
+  "replace": "\ts->count = 1;\n\ts->nsamp = 0;"
  },
  {
-  "label": "silence_create misses the short at +0x0c",
-  "find": "\ts->short_0c = 0;\n\ts->int_10 = 0;",
-  "replace": "\ts->int_10 = 0;"
+  "label": "silence_create leaves the block cursor alone",
+  "find": "\ts->count = 0;\n\ts->nsamp = 0;\n\ts->saw_signal = 0;",
+  "replace": "\ts->count = 0;\n\ts->saw_signal = 0;"
  },
  {
-  "label": "silence_create misses the int at +0x10",
-  "find": "\ts->short_0c = 0;\n\ts->int_10 = 0;\n\treturn s;",
-  "replace": "\ts->short_0c = 0;\n\treturn s;"
+  "label": "silence_create starts with the signal flag already up",
+  "find": "\ts->saw_signal = 0;\n\ts->energy = 0.0f;",
+  "replace": "\ts->saw_signal = 1;\n\ts->energy = 0.0f;"
+ },
+ {
+  "label": "silence_create leaves the energy accumulator alone",
+  "find": "\ts->saw_signal = 0;\n\ts->energy = 0.0f;\n\treturn s;",
+  "replace": "\ts->saw_signal = 0;\n\treturn s;"
  },
  {
   "label": "silence_delete keeps the object",
@@ -73,6 +78,97 @@
   "replace": "\t(void)s;"
  },
  {
+  "label": "the middle threshold is louder than the object's",
+  "find": "\t0.0000069853458626312203705310821533203125f,",
+  "replace": "\t0.0000079853458626312203705310821533203125f,"
+ },
+ {
+  "label": "the analysis block is half as long",
+  "find": "#define SILENCE_BLOCK\t\t800.0f",
+  "replace": "#define SILENCE_BLOCK\t\t400.0f"
+ },
+ {
+  "label": "the mean divides by 400 rather than 800",
+  "find": "#define SILENCE_BLOCK_RECIP\t0.00125",
+  "replace": "#define SILENCE_BLOCK_RECIP\t0.0025"
+ },
+ {
+  "label": "the debug line's full scale is 32768 rather than 32767",
+  "find": "#define SILENCE_FULLSCALE2\t(32767.0f * 32767.0f)",
+  "replace": "#define SILENCE_FULLSCALE2\t(32768.0f * 32768.0f)"
+ },
+ {
+  "label": "a zero level setting is not treated as disabled",
+  "find": "\tif (lvl > 3 || lvl == 0)\n\t\treturn;",
+  "replace": "\tif (lvl > 3)\n\t\treturn;"
+ },
+ {
+  "label": "the level setting is read as a full word, not sixteen bits",
+  "find": "\tlvl = (unsigned short)s->query(s->obj, SILENCE_PARAM_LEVEL);\n\tif (lvl > 3 || lvl == 0)",
+  "replace": "\tlvl = (unsigned short)(s->query(s->obj, SILENCE_PARAM_LEVEL) & 0xffffu);\n\tif (s->query(s->obj, SILENCE_PARAM_LEVEL) > 3\n\t    || lvl == 0)"
+ },
+ {
+  "label": "the block completes one sample early",
+  "find": "\t\tif (s->nsamp < SILENCE_BLOCK) {",
+  "replace": "\t\tif (s->nsamp <= SILENCE_BLOCK) {"
+ },
+ {
+  "label": "the energy is the sum of the samples, not of their squares",
+  "find": "\t\tacc = acc + buf[i] * buf[i];",
+  "replace": "\t\tacc = acc + buf[i];"
+ },
+ {
+  "label": "the threshold test runs the wrong way round",
+  "find": "\t\tif (acc > silence_level_table[lvl]) {",
+  "replace": "\t\tif (acc < silence_level_table[lvl]) {"
+ },
+ {
+  "label": "a loud block does not restart the run counter",
+  "find": "\t\t\ts->count = 0;\n\t\t\ts->saw_signal = 1;",
+  "replace": "\t\t\ts->saw_signal = 1;"
+ },
+ {
+  "label": "a loud block does not raise the signal flag",
+  "find": "\t\t\ts->saw_signal = 1;",
+  "replace": "\t\t\ts->saw_signal = 0;"
+ },
+ {
+  "label": "the time setting is read once instead of per silent block",
+  "find": "\t\t\tlevel = (int)(double)s->query(s->obj,\n\t\t\t\t\t\t      SILENCE_PARAM_TIME);\n\t\t\ts->count++;",
+  "replace": "\t\t\tlevel = (int)(double)s->query(s->obj,\n\t\t\t\t\t\t      SILENCE_PARAM_TIME);\n\t\t\tlevel = (int)(double)s->query(s->obj,\n\t\t\t\t\t\t      SILENCE_PARAM_TIME);\n\t\t\ts->count++;"
+ },
+ {
+  "note": "NOT here: replacing the TIME answer's `(int)(double)` chain with a plain `(int)`.  It was written, run and WITHDRAWN as uncatchable: the two spellings agree exactly for every answer below 2^31, and above it the conversion is undefined in C -- the x87 answers 0x80000000 and GCC 14 folds the chain away entirely (finding F8755).  A mutant that can only be caught by probing undefined behaviour is not a claim this suite can hold.  The chain is carried by the disassembly at 0xb05a3 (`fildll` on a zero-extended doubleword) and 0xb05c2 (a truncating `fistpl`)."
+ },
+ {
+  "label": "the escape fires on the block that reaches the setting",
+  "find": "\t\t\tif (s->count > level) {",
+  "replace": "\t\t\tif (s->count >= level) {"
+ },
+ {
+  "label": "the run counter is not restarted after an escape",
+  "find": "\t\t\t\ts->count = 0;\n\t\t\t\tif (s->saw_signal)",
+  "replace": "\t\t\t\tif (s->saw_signal)"
+ },
+ {
+  "label": "the two escape codes are the other way round",
+  "find": "\t\t\t\t\t_status(out, len, 0x71);\n\t\t\t\telse\n\t\t\t\t\t_status(out, len, 0x73);",
+  "replace": "\t\t\t\t\t_status(out, len, 0x73);\n\t\t\t\telse\n\t\t\t\t\t_status(out, len, 0x71);"
+ },
+ {
+  "label": "the block cursor is not restarted",
+  "find": "\t\ts->nsamp = 0;\n\t\tacc = 0.0f;",
+  "replace": "\t\tacc = 0.0f;"
+ },
+ {
+  "label": "the energy accumulator carries into the next block",
+  "find": "\t\ts->nsamp = 0;\n\t\tacc = 0.0f;\n\t\ts->energy = acc;",
+  "replace": "\t\ts->nsamp = 0;\n\t\ts->energy = acc;"
+ },
+ {
   "note": "NOT here: removing silence_create's `if (s == 0) return 0` after the allocation.  The harness allocator never fails on request, so the arm is unreachable from any fixture and the mutant would read NOT CAUGHT while modelling nothing -- see t_fdspksil.c's header.  It is carried by the disassembly at 0xb03f8 (`xor %eax,%eax; test %edx,%edx; jne`), which is also what distinguishes silence_create from FIFO8_create, whose allocation is NOT checked."
+ },
+ {
+  "note": "NOT here: advancing `out` between silence_progress's two escapes.  That is deviation D983 -- the object does NOT advance it, and a mutant that fixed the overwrite would be testing our opinion of the bug rather than the object's behaviour.  The 1700-sample calls in t_fdspksil compare the whole destination buffer against the blob's, so the overwrite is reproduced and would be caught if it stopped being."
  }
 ]
