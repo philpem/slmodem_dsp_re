@@ -101386,6 +101386,33 @@ went from 0 to 2 -- which is the cheapest possible demonstration that the two
 spellings it DOES resolve are resolved, and that a finding is scanned exactly
 like any other file.
 
+**AND THE DENOMINATOR DOES NOT MOVE, WHICH IS THE STRONGEST FORM OF THIS.**
+Re-run reading the reference COUNT rather than the exit status, file restored
+and checked byte-identical by `sha256sum` afterwards:
+
+    (nothing added)                 8415 references checked, 0 dangling
+    /* F<NNNNN> */                  8415 references checked, 0 dangling
+    /* finding F<NNNNN> */          8416 references checked, 1 dangling
+
+A bare F-number does not fail to resolve. **It was never counted**: 8415 stays
+8415, so it is not a reference the tool checked and accepted, it is text the
+tool never saw. That distinction is the whole of F2400 and F3100 -- a detector
+must report its denominator -- arriving at `refcheck` itself. The tool computes
+its denominator honestly and prints it faithfully; what it cannot tell anyone
+is how many citations a human would recognise that it did not.
+
+**THIS IS RECORDED TWICE, DELIBERATELY AND ONCE TOO OFTEN.** A sibling agent
+reconstructing V.27 in this same wave found the same defect independently and
+wrote it up in its own block with the denominator table above -- which it
+measured first, and from which the paragraph above is a re-derivation on this
+branch rather than a relay. Neither branch could cite the other without
+creating exactly the dangling reference this entry is about, which is why both
+exist. **At merge time these two should become one**, and the surviving entry
+should be the one carrying the denominator measurement. The duplication is
+named here rather than left for a reader to notice, because two findings on
+one fact is the same defect as two definitions of one symbol and nothing in
+the tree gates against it.
+
 The mechanism is in the tool's own regexes. `FINDING_REF` requires the literal
 word `finding` or `findings` immediately before the number:
 
