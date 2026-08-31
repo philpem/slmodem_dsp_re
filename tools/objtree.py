@@ -183,6 +183,60 @@ def provenance(d, objs, build=BUILD, tool=None, stream=sys.stderr):
         stream.write("%s: WARNING -- a source under src/ is NEWER than every\n"
                      "  object in %s/, so this answer is STALE.\n"
                      "  %s\n" % (_tool(tool), d, ADVICE))
+    behind(tool=tool, stream=stream)
+
+
+def behind(tool=None, stream=sys.stderr):
+    """Warn when this working tree is behind the integration branch.
+
+    WHY A GIT CHECK LIVES IN THE OBJECT-TREE MODULE.  The seven tools that go
+    through here all answer one question -- WHICH SYMBOLS ARE ALREADY WRITTEN
+    -- and they answer it from the tree they are standing in.  An agent
+    worktree branched from an old commit answers it about a project that no
+    longer exists, and every symptom reads as a fact about the CODE rather
+    than about the checkout: a citation resolves to nothing, a header is
+    missing, a symbol looks unwritten.
+
+    MEASURED, not hypothetical.  In the fax wave of 2026-08-31 three of four
+    agent worktrees came up at `c1ca61af`, 106 commits behind, and one agent
+    reported its brief's citations as "fictional" -- a true statement about
+    its worktree and a false one about the tree.  The danger is not the
+    confusion, it is that "is this already written?" was being answered
+    against a tree missing 106 commits, which is the question whose wrong
+    answer put two definitions of one symbol into a merge and failed 293 of
+    293 binaries at link.
+
+    A WARNING AND NOT A REFUSAL, for the reason the two above are: a
+    legitimately detached checkout, a bisect, or a branch that has diverged on
+    purpose all read as behind, and making it fatal would stop work that is
+    fine.  It is said loudly and the human decides.
+    """
+    import subprocess
+
+    def git(*a):
+        try:
+            r = subprocess.run(("git",) + a, capture_output=True, text=True)
+        except OSError:
+            return None
+        return r.stdout.strip() if r.returncode == 0 else None
+
+    if git("rev-parse", "--git-dir") is None:
+        return
+    ref = None
+    for cand in ("master", "main"):
+        if git("rev-parse", "--verify", "--quiet", cand):
+            ref = cand
+            break
+    if ref is None:
+        return
+    n = git("rev-list", "--count", "HEAD..%s" % ref)
+    if not n or not n.isdigit() or int(n) == 0:
+        return
+    stream.write("%s: WARNING -- this working tree is %s commit(s) behind\n"
+                 "  `%s`, so \"which symbols are already written\" is being\n"
+                 "  answered about an older project.  Two agents once wrote\n"
+                 "  the same four symbols this way.  `git merge %s` first,\n"
+                 "  then re-measure.\n" % (_tool(tool), n, ref, ref))
 
 
 def read(what, build=BUILD, tool=None, stream=sys.stderr):

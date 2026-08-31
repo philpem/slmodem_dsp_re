@@ -157,6 +157,24 @@ _EM = r"[\s*_`]*"
 FINDING_REF = re.compile(
     r"\bfindings?" + _EM + r"\s" + _EM +
     r"(F?\d+[a-z]?(?:\s*(?:,|and)\s*" + _EM + r"F?\d+[a-z]?)*)", re.I)
+#
+# A PREFIXED F-NUMBER IS A CITATION WITHOUT THE KEYWORD, and until 2026-08-31
+# this file could not see one.  `FINDING_REF` above requires the literal word
+# `finding`/`findings`, so `F8607` in a comment was not a reference that failed
+# to resolve -- it was never COUNTED.  Injection measured it: adding
+# `/* F9nnnn */` left the total at 8404 and the dangling count at 0, where the
+# longhand and the `D` form both moved the total to 8405 and reported one
+# dangling.  That is F2400's distinction arriving at the checker itself, and it
+# meant a wrong F-number in source survived every gate for ever.
+#
+# The bare-`(651)` exclusion the comment above defends is untouched: this
+# requires the `F`, exactly as `DEV_REF` requires the `D`.
+#
+FINDING_REF_BARE = re.compile(r"\bF(\d+[a-z]?)\b")
+# The far end of "F8210-F8224" or "F7980 to F7999": a block name, not
+# a citation.  Group 2 is the span that must be ignored.
+FINDING_RANGE = re.compile(
+    r"\bF\d+[a-z]?\s*(?:[-\u2010-\u2015]|to|through)\s*(F?(\d+[a-z]?))\b", re.I)
 DEV_REF = re.compile(r"\bD(\d+[a-z]?)\b")
 DEV_REF_TAG = re.compile(r"\b(D-[A-Z][A-Z0-9]*-\d+)\b")
 
@@ -276,6 +294,38 @@ def refs_in(path, text):
             at = m.start(1) + nm.start()
             found.append(("finding", nm.group(0), lines[at],
                           ctx(m.start(), m.end())))
+    #
+    # The bare `Fnnnn` form, which until 2026-08-31 was invisible.  Spans
+    # already claimed by the longhand above are skipped, so `finding F8607`
+    # is counted once and not twice.
+    #
+    longhand = [m.span(1) for m in FINDING_REF.finditer(flat)]
+    ranges = [m.span(1) for m in FINDING_RANGE.finditer(flat)]
+    for m in FINDING_REF_BARE.finditer(flat):
+        if any(a <= m.start() < b for a, b in longhand):
+            continue
+        #
+        # THE THREE FALSE POSITIVES THIS FORM HAS AND THE LONGHAND DOES NOT,
+        # all measured on this tree rather than imagined: it reported 28
+        # dangling references and every one was one of these.
+        #
+        #  - A RANGE ENDPOINT.  "F8210-F8224" and "F7980 to F7999" name a
+        #    BLOCK, and the far end is deliberately not a heading.  Fourteen
+        #    of the 28.
+        #  - A NUMBER TOO SMALL OR TOO LARGE TO BE A FINDING.  `F0` is a field
+        #    name in Scrambler.h, `F2a`/`F9a` are headings in the method docs
+        #    under their own scheme, and `F43568` is somebody else's bug
+        #    number.  Findings here run in the hundreds to low thousands.
+        #  - Its own documentation.  A comment TEACHING this rule contains
+        #    example numbers, which is finding F540's shape and bit twice.
+        #
+        if any(a <= m.start() < b for a, b in ranges):
+            continue
+        digits = m.group(1).rstrip("abcdefghijklmnopqrstuvwxyz")
+        if not digits or not (100 <= int(digits) <= 9999):
+            continue
+        found.append(("finding", m.group(1), lines[m.start()],
+                      ctx(m.start(), m.end())))
     masked = [m.span() for m in ABI_VARIANT.finditer(flat)]
     for m in DEV_REF.finditer(flat):
         if any(a <= m.start() < b for a, b in masked):

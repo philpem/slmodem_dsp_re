@@ -89231,7 +89231,7 @@ reads high and looks like evidence. `grep -c 'warning:.*sized-deallocation'`.
 *Reserved block: **F7920-F7924**.  Every ref this repository knows --
 `refs/heads`, `refs/remotes` and `refs/tags` -- was swept for its highest
 `### <n>.` heading and all of them stand at **F7883**, with nothing anywhere
-above it.  The block starts at F7920 rather than F7884 because CLAUDE.md asks
+above it.  The block starts at F7920 rather than at 7884 because CLAUDE.md asks
 for a gap and sibling worktrees write concurrently.*
 
 F7775 measured that inlining `reset`'s three `n = X + 8` loop bounds into their
@@ -103883,3 +103883,69 @@ _IONBF, 0)` at the top of `main` is what made the crash visible, and it is the
 first thing to add when a period binary dies silently. This is the same trap
 recorded in the V.32 pass (F8587's segfault appearing in the wrong arm).
 (2026-08-31)
+
+### F9002. `refcheck` could not see a bare `Fnnnn`, and the naive fix reports 28 false positives
+
+`FINDING_REF` requires the literal word `finding`/`findings` before the
+number; `DEV_REF` matches a bare `D\d+`. So `D955` in a comment was a checked
+reference and `F8607` was not — **not a reference that failed to resolve, but
+one that was never COUNTED.** Measured by injection: `/* F9nnnn */` left the
+total at 8,404 and the dangling count at 0, where the longhand and the `D`
+form both moved the total to 8,405 and reported one dangling. That is F2400's
+distinction arriving at the checker itself, and it meant a wrong F-number in a
+source comment survived every gate for ever.
+
+**THE OBVIOUS FIX IS WRONG, AND MEASURING IS WHAT SHOWED IT.** Adding a bare
+`\bF(\d+[a-z]?)\b` raised the reference count from 8,639 to 11,992 and reported
+**28 dangling — every one a false positive**, in four kinds:
+
+- **Range endpoints**, fourteen of them: `F8210-F8224`, `F7980 to F7999`,
+  `F8700–F8799`. The far end names a BLOCK and is deliberately not a heading.
+- **Numbers outside the finding space**: `F0` is a field name in
+  `Scrambler.h`, `F43568` is somebody else's bug number.
+- **Alternate-numbering headings** in the method docs — `F2a`, `F9a`, `F3b`
+  are real headings under their own scheme, not findings.
+- **Its own documentation.** The comment TEACHING the rule contained example
+  numbers and reported itself, twice, which is F540's shape.
+
+The pattern that ships skips a span already claimed by the longhand, skips the
+far end of a range (`FINDING_RANGE`), and requires `100 <= n <= 9999`. On this
+tree that is **11,684 references, 0 dangling — 3,045 citations checked that
+never were.** One source line was reworded rather than special-cased: prose
+saying a block "starts at F7920 rather than F7nnn" was naming a NUMBER, not
+citing a finding, and now says so.
+
+Shown to fire, per F134: a bare in-range `F`-number appended to
+`src/dsp/fpm_xor.c` as a comment is
+caught, the denominator moves 11,684 -> 11,685, exit 1; restored, the file is
+byte-identical by SHA-256 and exit is 0.
+
+**Deliberately not done mid-wave.** The agent that found this declined to
+change the tool while its own wave was green under the old sensitivity, on the
+ground that altering a gate invalidates every run made under it. That was
+right, and this landed after the wave closed.  (2026-08-31)
+
+### F9003. A worktree behind the integration branch answers "is this written?" about a different project, and `objtree` now says so
+
+Three of four agent worktrees in the 2026-08-31 fax wave came up at
+`c1ca61af`, **106 commits behind master**, rather than at the commit their
+briefs were measured against. Their trees lacked `v22status.h`,
+`v32fpstat.h`, `bannercheck.py` and every finding waves 2-5 added, and one
+agent reported its brief's citations as "fictional" — a true statement about
+its worktree and a false one about the tree.
+
+**The confusion is not the danger.** The seven tools behind `objtree` all
+answer one question, WHICH SYMBOLS ARE ALREADY WRITTEN, from the tree they
+stand in — and that is the question whose wrong answer put two definitions of
+one symbol into a wave-2 merge and failed **293 of 293 binaries** at link.
+Every symptom of a stale checkout reads as a fact about the CODE: a citation
+resolves to nothing, a header is missing, a symbol looks unwritten.
+
+`objtree.behind()` now runs beside the PARTIAL and STALE object-tree checks
+and warns with the count and the fix. It is a WARNING, not a refusal, for the
+same reason those two are: a detached checkout, a bisect, or a deliberately
+diverged branch all read as behind, and a refusal would stop work that is
+fine.
+
+Shown to fire: a detached worktree at `c1ca61af` reports "140 commit(s)
+behind"; the up-to-date tree is silent.  (2026-08-31)
