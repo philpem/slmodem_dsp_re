@@ -903,5 +903,17 @@
  "fdspdp": [
   "src/service/fdspkrnl.c",
   "build/test/t_fdspdp"
+ ],
+ "voicedp": [
+  "src/service/voicedp.c",
+  "build/test/t_voicedp"
+ ],
+ "voicedptx": [
+  "src/service/voicedp.c",
+  "build/test/t_voicedptx"
+ ],
+ "voicedpdel": [
+  "src/service/beepgen.c",
+  "build/test/t_voicedpdel"
  ]
 }

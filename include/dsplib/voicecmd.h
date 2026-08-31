@@ -49,22 +49,23 @@ extern "C" {
 #define VOICE_DLE_CAN_STATUS	9
 
 /*
- * The voice service's context, modelled ONLY as far as `voice_dle_command`
- * sees it: two `int` flags 0x744 and 0x748 into an object whose size and
- * remaining layout are unknown.  Nothing else in this tree reaches it yet.
+ * The voice service's context.  IT USED TO BE DEFINED HERE, modelled only as
+ * far as `voice_dle_command` could see it -- a 0x744-byte pad and the two int
+ * flags below.  `voice_online`, `voice_duplex` and `voice_tx` reach a dozen
+ * more fields and `voice_create` settles the size at 0x7dc, so the definition
+ * moved to its own home in `dsplib/voice.h` (finding F8785).  The two flags
+ * `voice_dle_command` writes keep their names and their offsets there:
  *
- * The FIELD NAMES ARE USAGE INFERENCE, the weakest of CLAUDE.md's three
- * grades, and are recorded as such: what is established is that the object
- * stores 1 at +0x744 on the ETX path and 1 at +0x748 on the CAN path, and
- * that the author's printf on each of those paths names the command.  What
- * consumes either flag is not written and so is not known -- `VOICE_process`
- * is the obvious candidate and is unreconstructed.
+ *   +0x744  dle_etx   set to 1 by <DLE><ETX>
+ *   +0x748  dle_can   set to 1 by <DLE><CAN>
+ *
+ * Both are STILL usage inference, the weakest of CLAUDE.md's three grades:
+ * what is established is the store and the author's printf beside it.
+ * `voice_tx` is the first reconstructed reader of either -- it suppresses its
+ * "not enough data" report once `dle_etx` is up -- and that is consistent
+ * with the name without proving it.
  */
-struct voice_ctx {
-	unsigned char	pad_0000[0x744];
-	int		dle_etx;	/* +0x744 set to 1 by <DLE><ETX> */
-	int		dle_can;	/* +0x748 set to 1 by <DLE><CAN> */
-};
+#include "dsplib/voice.h"
 
 int voice_dle_command(struct voice_ctx *v, signed char cmd);
 

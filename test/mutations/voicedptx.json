@@ -1,0 +1,190 @@
+[
+ {
+  "note": "src/service/voicedp.c against build/test/t_voicedptx.  Only voice_tx is mutated here; the other four symbols of the file have their claims in voicedp.json, because t_voicedptx never calls them."
+ },
+ {
+  "label": "the 8 kHz read length is the 7200 one",
+  "find": "#define VOICE_TX_READ_8000\t160",
+  "replace": "#define VOICE_TX_READ_8000\t144"
+ },
+ {
+  "label": "the 7200 and 11025 read lengths are swapped",
+  "find": "\t\tnread = (v->rate_bits.s.rate == 7200) ? VOICE_TX_READ_7200\n\t\t\t\t\t\t      : VOICE_TX_READ_OTHER;",
+  "replace": "\t\tnread = (v->rate_bits.s.rate == 7200) ? VOICE_TX_READ_OTHER\n\t\t\t\t\t\t      : VOICE_TX_READ_7200;"
+ },
+ {
+  "label": "the working buffer is chosen on the wrong side of the rate test",
+  "find": "\tif (v->rate_bits.s.rate != 8000) {\n\t\tflt = v->flt;",
+  "replace": "\tif (v->rate_bits.s.rate == 8000) {\n\t\tflt = v->flt;"
+ },
+ {
+  "label": "a linear output does not divert to the working buffer",
+  "find": "\tif (VOICE_OUT_IS_LINEAR(v))\n\t\tflt = v->flt;\n\n\twhile (i < *hostcount) {",
+  "replace": "\n\twhile (i < *hostcount) {"
+ },
+ {
+  "label": "the scan un-escapes on the wrong byte",
+  "find": "\t\tif (c == VOICE_DLE) {\n\t\t\ti++;",
+  "replace": "\t\tif (c != VOICE_DLE) {\n\t\t\ti++;"
+ },
+ {
+  "label": "a doubled DLE is treated as a command and a command as a literal",
+  "find": "\t\t\tif (c != VOICE_DLE) {",
+  "replace": "\t\t\tif (c == VOICE_DLE) {"
+ },
+ {
+  "label": "the command byte is passed unsigned",
+  "find": "\t\t\t\tret = voice_dle_command(v, (signed char)c);",
+  "replace": "\t\t\t\tret = voice_dle_command(v, (signed char)(c ^ 1));"
+ },
+ {
+  "label": "a dispatched command's answer is thrown away",
+  "find": "\t\t\t\tret = voice_dle_command(v, (signed char)c);\n\t\t\t\ti++;",
+  "replace": "\t\t\t\t(void)voice_dle_command(v, (signed char)c);\n\t\t\t\ti++;"
+ },
+ {
+  "label": "a command byte is copied into the staging area as well",
+  "find": "\t\t\t\tret = voice_dle_command(v, (signed char)c);\n\t\t\t\ti++;\n\t\t\t\tcontinue;",
+  "replace": "\t\t\t\tret = voice_dle_command(v, (signed char)c);\n\t\t\t\ti++;"
+ },
+ {
+  "label": "the staging cursor advances with the input cursor",
+  "find": "\t\tv->stage[j] = c;\n\t\ti++;\n\t\tj++;",
+  "replace": "\t\tv->stage[j] = c;\n\t\ti++;\n\t\tj = i;"
+ },
+ {
+  "label": "the FIFO is written with the input length rather than the un-escaped one",
+  "find": "\tFIFO8_write(v->fifo, v->stage, j);",
+  "replace": "\tFIFO8_write(v->fifo, v->stage, i);"
+ },
+ {
+  "label": "the 8-bit 8000 threshold is inclusive",
+  "find": "\tcase VOICE_FMT_8BIT_8000:\n\t\tenough = fill > 0x9f;",
+  "replace": "\tcase VOICE_FMT_8BIT_8000:\n\t\tenough = fill >= 0x9f;"
+ },
+ {
+  "label": "the 8-bit 11025 threshold is the 7200 one",
+  "find": "\tcase VOICE_FMT_8BIT_11025:\n\t\tenough = fill > 0xdb;",
+  "replace": "\tcase VOICE_FMT_8BIT_11025:\n\t\tenough = fill > 0x8f;"
+ },
+ {
+  "label": "the 4-bit 8000 threshold is the 8-bit one",
+  "find": "\tcase VOICE_FMT_4BIT_8000:\n\t\tenough = fill > 0x4f;",
+  "replace": "\tcase VOICE_FMT_4BIT_8000:\n\t\tenough = fill > 0x9f;"
+ },
+ {
+  "label": "an unknown format produces a block instead of an underrun",
+  "find": "\tdefault:\n\t\tbreak;\n\t}\n\n\tif (enough) {",
+  "replace": "\tdefault:\n\t\tenough = 1;\n\t\tbreak;\n\t}\n\n\tif (enough) {"
+ },
+ {
+  "label": "the mean accumulates the raw byte rather than the scaled one",
+  "find": "\t\t\tsum += v->stage[k] * VOICE_TX_BYTE_SCALE;",
+  "replace": "\t\t\tsum += v->stage[k];"
+ },
+ {
+  "label": "the mean is taken over the requested length, not the length read",
+  "find": "\t\tmean = sum / (int)n;",
+  "replace": "\t\tmean = sum / (int)nread;"
+ },
+ {
+  "label": "the linear arm scales the mean by the wrong power of two",
+  "find": "\t\t\tfloat offset = mean * 64.0f;",
+  "replace": "\t\t\tfloat offset = mean * 32.0f;"
+ },
+ {
+  "label": "the linear arm adds the mean instead of removing it",
+  "find": "\t\t\t\tflt[k] = v->stage[k] - offset;",
+  "replace": "\t\t\t\tflt[k] = v->stage[k] + offset;"
+ },
+ {
+  "label": "the float arm adds the mean instead of removing it",
+  "find": "\t\t\t\tflt[k] = v->stage[k] * VOICE_TX_BYTE_SCALE\n\t\t\t\t\t - mean;",
+  "replace": "\t\t\t\tflt[k] = v->stage[k] * VOICE_TX_BYTE_SCALE\n\t\t\t\t\t + mean;"
+ },
+ {
+  "label": "the output scale is chosen on 4 bits per sample rather than 8",
+  "find": "\t\t\tfloat scale = (v->rate_bits.s.bits == 8)",
+  "replace": "\t\t\tfloat scale = (v->rate_bits.s.bits == 4)"
+ },
+ {
+  "label": "the 8-bit output scale is the other one",
+  "find": "#define VOICE_TX_SCALE_8BIT\t260.0f",
+  "replace": "#define VOICE_TX_SCALE_8BIT\t30000.0f"
+ },
+ {
+  "label": "the linear conversion runs over the samples read rather than the block",
+  "find": "\t\t\tfor (k = 0; k < *countp; k++)\n\t\t\t\ttx_lin[k] = (short)(int)(flt[k] * scale);",
+  "replace": "\t\t\tfor (k = 0; k < n; k++)\n\t\t\t\ttx_lin[k] = (short)(int)(flt[k] * scale);"
+ },
+ {
+  "label": "the underrun latch is cleared on the short path instead of the good one",
+  "find": "\t\tv->underrun = 0;\n\t\t/* D996",
+  "replace": "\t\t/* D996"
+ },
+ {
+  "label": "the underrun report's two guards are ORed rather than ANDed",
+  "find": "\t\tif (v->underrun == 0 && v->dle_etx == 0) {",
+  "replace": "\t\tif (v->underrun == 0 || v->dle_etx == 0) {"
+ },
+ {
+  "label": "the underrun report reads dle_can instead of dle_etx",
+  "find": "\t\tif (v->underrun == 0 && v->dle_etx == 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\t\tif (v->underrun == 0 && v->dle_can == 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "the underrun latch is never set, so the report repeats",
+  "find": "\t\t\tret = VOICE_TX_UNDERRUN_STATUS;\n\t\t\tv->underrun = 1;",
+  "replace": "\t\t\tret = VOICE_TX_UNDERRUN_STATUS;"
+ },
+ {
+  "label": "the underrun status is not 13",
+  "find": "#define VOICE_TX_UNDERRUN_STATUS\t13",
+  "replace": "#define VOICE_TX_UNDERRUN_STATUS\t12"
+ },
+ {
+  "label": "D999 is repaired: the float fill follows the block length",
+  "find": "\t\t\tfor (k = 0; k < VOICE_TX_FLT_FILL; k++)\n\t\t\t\trx_flt[k] = 0.0f;",
+  "replace": "\t\t\tfor (k = 0; k < *countp; k++)\n\t\t\t\trx_flt[k] = 0.0f;"
+ },
+ {
+  "label": "D999 the other way: the linear fill is the fixed 160",
+  "find": "\t\t\tfor (k = 0; k < *countp; k++)\n\t\t\t\ttx_lin[k] = 0;",
+  "replace": "\t\t\tfor (k = 0; k < VOICE_TX_FLT_FILL; k++)\n\t\t\t\ttx_lin[k] = 0;"
+ },
+ {
+  "label": "the short-data fill writes to the working buffer, not the caller's",
+  "find": "\t\t\tfor (k = 0; k < VOICE_TX_FLT_FILL; k++)\n\t\t\t\trx_flt[k] = 0.0f;\n\t\t}",
+  "replace": "\t\t\tfor (k = 0; k < VOICE_TX_FLT_FILL; k++)\n\t\t\t\tflt[k] = 0.0f;\n\t\t}"
+ },
+ {
+  "label": "the room reported back is off by one",
+  "find": "\troom = (short)(VOICE_TX_HOST_ROOM - (int)v->fifo->count);",
+  "replace": "\troom = (short)(VOICE_TX_HOST_ROOM + 1 - (int)v->fifo->count);"
+ },
+ {
+  "label": "the room is not floored at zero",
+  "find": "\tif (room < 0)\n\t\troom = 0;",
+  "replace": "\tif (room < -100000)\n\t\troom = 0;"
+ },
+ {
+  "label": "voice_tx leaves the sample count alone",
+  "find": "\t*hostcount = (unsigned short)room;\n\t*countp = 0;",
+  "replace": "\t*hostcount = (unsigned short)room;"
+ },
+ {
+  "label": "voice_tx writes the room into the sample count",
+  "find": "\t*hostcount = (unsigned short)room;\n\t*countp = 0;\n",
+  "replace": "\t*countp = (unsigned short)room;\n\t*hostcount = 0;\n"
+ },
+ {
+  "label": "voice_tx answers the duplex code on a mode mismatch",
+  "find": "#define VOICE_TX_MODE_STATUS\t\t3",
+  "replace": "#define VOICE_TX_MODE_STATUS\t\t5"
+ },
+ {
+  "label": "voice_tx's mode test is inverted",
+  "find": "\tif (v->int_0014 != v->mode)\n\t\tret = VOICE_TX_MODE_STATUS;",
+  "replace": "\tif (v->int_0014 == v->mode)\n\t\tret = VOICE_TX_MODE_STATUS;"
+ }
+]

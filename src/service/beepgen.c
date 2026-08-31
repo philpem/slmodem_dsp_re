@@ -17,9 +17,11 @@
 #include <math.h>
 
 #include "dsplib/beepgen.h"
+#include "dsplib/cadence.h"
 #include "dsplib/debug.h"
 #include "dsplib/detector.h"
 #include "dsplib/dtmf.h"
+#include "dsplib/fdspkrnl.h"
 #include "dsplib/modem_params.h"
 #include "dsplib/sysdep.h"
 
@@ -324,6 +326,33 @@ beepgen_sample(struct beepgen *bg, float *out)
 #endif
 
 /*
+ * detector_delete, 0xad620.  Tears the object down in the object's own order:
+ * the +0x04 block, then all four tones, then whichever cadences exist, then
+ * the detector.
+ *
+ * NEITHER the +0x04 block NOR any of the four tone pointers is guarded, and
+ * the three cadences are -- that asymmetry is the object's and is why the
+ * loop and the three tests are spelled differently here.  The loop bound is
+ * `<= 3` because the object's is `cmp $0x3,%ebx; jle`, on a signed counter.
+ */
+void
+detector_delete(struct detector *d)
+{
+	int i;
+
+	sysdep_free(d->ptr_0004);
+	for (i = 0; i <= 3; i++)
+		TONE_delete(d->tone[i]);
+	if (d->cadence_0008 != NULL)
+		cadence_delete(d->cadence_0008);
+	if (d->cadence_000c != NULL)
+		cadence_delete(d->cadence_000c);
+	if (d->cadence_0010 != NULL)
+		cadence_delete(d->cadence_0010);
+	sysdep_free(d);
+}
+
+/*
  * The three detector setters, 0xad6b0-0xad6d0.  Each is a single store and
  * nothing here reads the value back; see detector.h for what is and is not
  * established about the object.
@@ -602,16 +631,18 @@ FindCorrelation(short *pattern, short *sig, unsigned int *posp,
  *
  * The count is loaded with `movzwl`, so the pointee is an unsigned short and
  * not a short (finding F613's forced case); the sixth argument's slot is
- * never read.
+ * never read here.  Its TYPE comes from `voice_online`, a sibling with this
+ * signature slot for slot which does write it -- see beepgen.h, finding F8786
+ * and deviation D986.
  */
 int
 FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt, float *tx_flt,
-	    short *tx_lin, void *unused, unsigned short *countp)
+	    short *tx_lin, unsigned short *hostcount, unsigned short *countp)
 {
 	int n = *countp;
 	int i;
 
-	(void)unused;
+	(void)hostcount;
 	for (i = 0; i < n; i++)
 		rx_flt[i] = rx_lin[i] * (1.0f / 32000.0f);
 	for (i = 0; i < n; i++)

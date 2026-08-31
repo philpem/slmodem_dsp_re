@@ -70,7 +70,8 @@ extern void ref_detector_set_output_status(struct detector *d);
 extern void ref_detector_set_output_in_stream(struct detector *d);
 extern struct dtmf *ref_create_dtmf(struct dtmf *d);
 extern int ref_FDSP_DP_Run(int *status, short *rx_lin, float *rx_flt,
-			   float *tx_flt, short *tx_lin, void *unused,
+			   float *tx_flt, short *tx_lin,
+			   unsigned short *hostcount,
 			   unsigned short *countp);
 
 /*
@@ -1049,7 +1050,13 @@ main(void)
 		unsigned int ci, j;
 		unsigned short cnt;
 		int status_a, status_b, ra, rb;
-		int spare_a, spare_b;
+		/*
+		 * The sixth argument, which this function never loads.  It
+		 * was a `void *` here until `voice_online` typed it -- finding
+		 * F8786 and D986 -- so it is now the `unsigned short *` it
+		 * really is, planted with a value neither side may disturb.
+		 */
+		unsigned short spare_a, spare_b;
 
 		for (ci = 0; ci < sizeof(counts) / sizeof(counts[0]); ci++) {
 			for (j = 0; j < 200; j++) {
@@ -1066,8 +1073,8 @@ main(void)
 			cnt = counts[ci];
 			status_a = 0x55;
 			status_b = 0x55;
-			spare_a = 0;
-			spare_b = 0;
+			spare_a = 0x1234;
+			spare_b = 0x1234;
 			ra = ref_FDSP_DP_Run(&status_a, rx_lin, rx_flt_a,
 					     tx_flt, tx_lin_a, &spare_a,
 					     &cnt);
@@ -1078,8 +1085,10 @@ main(void)
 				    (long)cnt);
 			diff_eq_int("count untouched %ld", (long)cnt,
 				    (long)counts[ci], (long)counts[ci]);
-			diff_eq_int("spare untouched %ld", spare_b, 0,
+			diff_eq_int("hostcount untouched %ld", spare_b, spare_a,
 				    (long)cnt);
+			diff_eq_int("hostcount is still 0x1234 %ld", spare_b,
+				    0x1234, (long)cnt);
 			for (j = 0; j < 200; j++) {
 				diff_eq_float("rx[%ld]", rx_flt_b[j],
 					      rx_flt_a[j], (long)j);
