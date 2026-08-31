@@ -70,8 +70,14 @@ struct beepgen {
 	 * the only site that does.  The other two are neutral names --
 	 * `fn_011c` fires when a -1 (start-marker) tone BECOMES CURRENT,
 	 * which is the symmetric position, but nothing in the object says
-	 * what it is for; `fn_0124` supplies the marker's duration and its
-	 * 24 is unexplained (see beepgen_start_dtmf).
+	 * what it is for.
+	 *
+	 * `fn_0124` SUPPLIES THE MARKER'S DURATION AND ITS 24 IS NO LONGER
+	 * UNEXPLAINED.  `voice_create` puts the voice config's S-register
+	 * getter in this slot (finding F8813), so the call is
+	 * `vce_get_sreg(modem, SREG_FLASH_TIMER)` -- 24 is that register's
+	 * number in dsplib/vce.h and in slmodemd's own `modem_defs.h`, and
+	 * the answer is VCE_FLASH_TIMER.  Finding F8814.
 	 */
 	void	(*fn_011c)(void *modem);		/* +0x11c */
 	void	(*hook_on_proc)(void *modem);		/* +0x120 */
@@ -84,11 +90,17 @@ struct beepgen {
 };
 
 /*
- * What `beepgen_create` reads.  Sixteen bytes, and `voice_create` (not
- * reconstructed) passes its OWN first argument through unchanged, so this
- * is the voice service's configuration seen from the beep generator's end.
- * If a voice reconstruction needs the same block it must include this
- * header rather than spell the type again.
+ * What `beepgen_create` reads.  Sixteen bytes.
+ *
+ * THIS PARAGRAPH USED TO SAY `voice_create` PASSES ITS OWN FIRST ARGUMENT
+ * THROUGH UNCHANGED, AND IT DOES NOT.  With `voice_create` written
+ * (src/service/voicesvc.c) the object is explicit: it builds a SEPARATE
+ * 16-byte local and rotates three of the four words into it, so
+ * `struct voice_config` (dsplib/voice.h) and this type are two different
+ * types that share a size.  In particular THIS `fn_04` is not the voice
+ * config's -- it takes the voice config's `fn_08` -- and the S-register
+ * getter lands in `fn_0c` below, which is why that slot is the one with a
+ * two-argument signature.  Findings F8813 and F8814.
  */
 struct beepgen_config {
 	void	*modem;			/* +0x00 */

@@ -100519,3 +100519,327 @@ The mutation was moved to the DIAL call, where it is caught.
 the set.** The set is NOT registered in `test/mutations/` -- the snapshot
 re-record is deferred tree-wide, and a registered-but-unrecorded suite reads
 MISSING to `mutsnap.py --check` and fails the gate (findings F6000-F6002).
+
+### F8813. `voice_create`'s "four dead locals" are a `struct beepgen_config` built by ROTATING the voice config, and the `lea` is what proves it
+
+*2026-08-31.* The four words `voice_create` writes to `0x20(%esp)` before it
+allocates anything (0xac230-0xac24e) read as dead stores, and one earlier
+reading of this function recorded them as GCC hoisting or as four unused
+locals. They are neither. **0xac29f is `lea 0x20(%esp),%esi` and `%esi` is
+`beepgen_create`'s second argument at 0xac2c9**, so those sixteen bytes are an
+addressable object that is passed on. There is nothing left to decide: an
+addressable local handed to a callee is not dead.
+
+**AND IT IS NOT A COPY, IT IS A ROTATION.** Three of the four words change
+slot:
+
+    ac230:  mov 0x8(%esi),%ebx      ac236:  mov %ebx,0x24(%esp)   +0x08 -> +0x04
+    ac233:  mov 0x4(%esi),%edx      ac23d:  mov %edx,0x2c(%esp)   +0x04 -> +0x0c
+    ac23a:  mov 0xc(%esi),%ecx      ac241:  mov %ecx,0x28(%esp)   +0x0c -> +0x08
+    ac245:  mov (%esi),%eax         ac24e:  mov %eax,0x20(%esp)   +0x00 -> +0x00
+
+Composed with `beepgen_create`'s own copy (0xacd45-0xacd61: cfg+0x04 to
+bg+0x11c, cfg+0x08 to bg+0x120, cfg+0x0c to bg+0x124), the voice config's
+`fn_08` becomes `beepgen.fn_011c`, its `fn_0c` becomes `hook_on_proc`, and its
+`fn_04` becomes `fn_0124`.
+
+**SO `voice_ctx` +0x000 IS NOT A `struct beepgen_config`**, which is what
+`voice.h` and `beepgen.h` both said until now, and `struct voice_config` is
+now defined in voice.h with those comments corrected in both files. The
+separate copy at 0xac27a-0xac295 -- the one that fills `v->cfg` -- is
+straight, so the two blocks are genuinely two types of the same size.
+
+The loads for the local happen BEFORE `sysdep_malloc`, and that is source
+order rather than scheduling: GCC cannot hoist a load of `*cfg` across an
+opaque call. `t_voicesvc` asserts the rotation from both sides -- the three
+callbacks are the test's own functions, so the slot each landed in is compared
+by address.
+
+### F8814. The rotation is what settles `fn_04`, and it explains `beepgen_start_dtmf`'s 24
+
+*2026-08-31.* F8766 recorded `beepgen_config.fn_0124` as "supplies the
+marker's duration, and its 24 is unexplained". F8813's rotation explains it.
+
+The slot `fn_0124` is fed from the VOICE config's `+0x04`, and `+0x04` is the
+S-register getter: `detector_create` (0xac2f8) and `silence_create` (0xac337)
+are both handed it as their third argument, `voicedp.c` reads the three
+receive gains through it, and F8803 already traced the chain to
+`vce_get_sreg`. So `beepgen_start_dtmf`'s `bg->fn_0124(bg->modem, 24)` is
+`vce_get_sreg(modem, SREG_FLASH_TIMER)` -- 24 is that register's number in
+`vce.h` and in slmodemd's own `modem_defs.h` -- and the answer is
+`VCE_FLASH_TIMER`, 20. The '!' start marker's duration is the flash timer.
+
+**AND IT DISSOLVES A CLASH THREE FILES HAD BEEN WORKING AROUND.** The detector
+pass reported that `beepgen_config.fn_04` is declared `void (*)(void *)` while
+three places call the same field with two arguments and use the result --
+`detector_create`, `voicedp.c:343`'s cast, and `voice.h`'s own comment on the
+receive gains -- and asked whether the declaration was wrong. It is not:
+`beepgen_config.fn_04` is a one-argument callback and always was, and the
+three two-argument users were all reading the VOICE config's `+0x04`, which is
+a different field of a different struct. No declaration in `beepgen.h`
+changed; two of its comments did.
+
+**WHAT DOES NEED A CAST IS THE RESULT TYPE, AND IT IS ONE SITE.** Three
+readings of `vce_get_sreg`'s return coexist in the tree -- `unsigned int` from
+F8803's `shr` (detector.h's `detector_sreg_fn`, and `silence_create`'s third
+parameter), `int` from `beepgen_config.fn_0c`, and
+`int (*)(void *, unsigned int)` from `vce.h`'s own declaration of the function
+-- and no single spelling satisfies all three. `voice_config.fn_04` takes the
+two-of-three one and `voice_create` casts once, into the beepgen config.
+Recorded rather than papered over: the cast reconciles two readings of one
+function, and is not a silenced diagnostic.
+
+### F8815. Three calls this file makes are INLINED in the object, and all three are provably the callee's own text
+
+*2026-08-31.* `voice_command`'s mode arms 2 and 3 (0xac780 and 0xac7a9),
+`voice_modem`'s DLE-reset block (0xac8e0), and `voice_modem`'s status tail all
+have no `call` in the object. They are not open-coded: they are
+`voice_set_online` (0xabef0, 47 bytes), `voice_set_duplex` (0xabf20, 45) and
+`_handle_status` (0xac7d0, 44) inlined by `-O3`'s `-finline-functions`, and
+all three are in the same translation unit there.
+
+The proof for the first two is instruction for instruction. `voice_set_online`
+is `movzwl 0x762(%ecx),%edx; movl $0x2,0x10(%ecx);
+movl $voice_online,0x20(%ecx)` and then `detector_set_enable(d, %edx)`;
+0xac780 and 0xac8e0 are that sequence with a different register allocation and
+nothing else, including the ORDER -- the enable word is loaded before `mode`
+is written at all three sites. `voice_set_duplex` is the same shape with 3,
+`voice_duplex` and the immediate 0x24, and 0xac7a9 is it.
+
+**OURS ARE CALLS AND THAT IS OUR FACTORING, NOT THE AUTHOR'S.**
+`voice_set_online` and `voice_set_duplex` live in `src/service/voicedp.c` and
+`_handle_status` in `src/voice/voice.c`, so the period compiler cannot see
+their bodies from `voicesvc.c` and will emit three calls the object does not
+have. The SOURCE is the object's either way; the difference is where this tree
+put the callees, and it is named here so a codegen pass does not read it as a
+defect in `voicesvc.c`. Closing it means moving those functions into this
+translation unit, which is a larger question than this pass.
+
+### F8816. `voice_command`'s opcodes 7 and 8 are TIME_MARK and VLS in that order, and the jump table is the only authority
+
+*2026-08-31.* The eleven-entry table at `.rodata` 0xed80, read with pyelftools
+rather than off a disassembly listing:
+
+    0 -> ac66e   1 -> ac4d6   2 -> ac639   3 -> ac5b4   4 -> ac500
+    5 -> ac5f3   6 -> ac5d8   7 -> ac61e   8 -> ac59a   9 -> ac57d
+    10 -> ac532
+
+0xac61e prints `.rodata.str1.1` 0x4fdd, "VOICE_TIME_MARK_COMMAND %d", and
+stores sixteen bits at +0x764 (`marker_period`). 0xac59a prints 0x500e,
+"VOICE_VLS_COMMAND %d", and stores thirty-two bits at +0x74c (`out_format`).
+So **7 is TIME_MARK and 8 is VLS**, and a brief written for this pass had the
+two descriptions crossed against the same table it quoted.
+
+Worth recording because the crossing is nearly invisible: both arms print,
+both store, both return 0, and the only thing separating them is that the two
+fields are different WIDTHS at different offsets. A test that drove each
+opcode and checked "the field this trial expected to move" would have agreed
+with the crossed reading. `t_voicesvc` compares the WHOLE context after every
+call, which is what makes the table and the test say the same thing.
+
+Entry 4 is 0xac500, the `ret = 7` tail: the table's default label. The object
+has no arm for opcode 4, and `voice.h` gives it no name.
+
+### F8817. `voice_ctx.dp` is a `struct fdsp_kernel *` and is spelled `void *`, because one declaration elsewhere is still behind
+
+*2026-08-31.* `voice_create` fills +0x034 from `FDSP_DP_Create` (0xac2c1) and
+`voice_delete` hands it to `FDSP_DP_Delete` (0xac1f3), so the field's type is
+`struct fdsp_kernel *` at both ends. `voice.h` had it as `int *`.
+
+It is spelled `void *` rather than the true type because `FDSP_DP_Run`
+(declared in beepgen.h, defined in src/service/beepgen.c) declares the SAME
+object `int *status` -- that function's only use of it is to store 2 into the
+kernel's `int_00` -- and `voicedp.c:697` passes this field straight into it.
+`void *` is the one spelling both call sites accept without a cast; `int *`
+needed two casts inside `voicesvc.c`, and `struct fdsp_kernel *` would need
+one in a file this pass does not own. When `FDSP_DP_Run`'s first parameter is
+retyped this becomes `struct fdsp_kernel *` and the note goes away.
+
+### F8818. `voice_command`'s shape: one `ret`, a default of 7, and a debug line before the range check
+
+*2026-08-31.* The function reads as eleven independent arms and is one
+variable. 0xac4a7 is `xor %ebp,%ebp` before anything else, 0xac500 is
+`mov $0x7,%ebp`, and every arm reaches 0xac505's `mov %ebp,%eax` -- so the
+source is `int ret = 0; switch (...) { ... default: ret = 7; } return ret;`,
+and the two mode-gate refusals set that same variable rather than returning
+early.
+
+Three details a straightforward rewrite gets wrong:
+
+- **The debug line comes BEFORE the range check** (0xac4a9 against 0xac4ca),
+  so an out-of-range opcode still names itself in the log.
+- **The two gated arms each carry their OWN copy of the gate.** 0xac4d6 tests
+  `(unsigned)(mode - 2) <= 1` for DTMF and 0xac66e tests it again for beep;
+  only the refusal at 0xac4e5 is shared. A single gate hoisted above the
+  switch would be a different function.
+- **`VOICE_RESET_DUPLEX_COMMAND`'s debug line comes AFTER its work**, alone
+  among the arms: 0xac563 tests the level, 0xac56a stores the new kernel, and
+  0xac56f prints. Every other arm prints first.
+
+### F8819. `out_format`'s writer is the VLS command, which is stronger evidence than its readers were
+
+*2026-08-31.* `voice.h` typed +0x74c from its READS -- every reconstructed use
+is `(unsigned)(out_format - 1) <= 1`, so 1 and 2 select 16-bit linear -- and
+graded that as usage inference. The only WRITER in the object is now
+reconstructed: `voice_command`'s case 8 prints "VOICE_VLS_COMMAND %d" and
+stores that word whole (0xac5a7-0xac5af).
+
+The name stays `out_format`, because the READS are still what say what the
+field selects and the object nowhere expands "VLS". What the header now
+records is that the value is the host's VLS argument, passed through unchanged
+and unvalidated -- any int can be stored, and everything outside {1, 2} means
+"float" to the three readers. The two comments are reconciled rather than one
+overwriting the other.
+
+### F8820. `voice_modem`'s output-mode test is the opposite way round from the obvious reading, and its buffer arithmetic is in BYTES
+
+*2026-08-31.* Two things in a 338-byte function that a plausible rewrite gets
+backwards, and neither is caught by a single-block fixture.
+
+**THE MODE TEST.** 0xac81a is `cmpl $0x3,0x10(%ebx)` and 0xac826 is
+`je 0xac928`, and 0xac928 calls `detector_set_output_status`. So DUPLEX takes
+the STATUS arm and every other mode takes IN_STREAM -- the reverse of "duplex
+is the one that streams events". Written the other way round it passes any
+fixture whose detector never fires, which is every fixture built from
+broadband noise: the tone counters integrate the ZEROS `TONE_detect` returns
+when the tone IS present, so noise keeps every counter at zero and nothing is
+ever emitted. `t_voicesvc` drives an actual 2100 Hz tone for that reason.
+
+**THE ARITHMETIC.** 0xac877 is `add %ebp,%edx`, not `lea (%ebp,%edx,2)`, where
+`%edx` is the detector's byte count and `%ebp` is `voice_modem`'s fifth
+argument. That argument is `short *tx_lin` in the handler signature and an
+`unsigned char *` to `detector_progress`, and the advance is in BYTES. Ours
+casts once through a local `unsigned char *out`, so both uses read from one
+spelling.
+
+**AND THE SEVENTH ARGUMENT THE HANDLER RECEIVES IS A LOCAL** (0xac86b,
+`lea 0x28(%esp)`), holding the count the block arrived with. The handler
+writes back into that local; `voice_modem` then adds the detector's byte count
+and stores the sum through the CALLER's pointer (0xac8a8). `t_voicesvc`
+installs its own handler and asserts the pointer is not the caller's, on both
+sides.
+
+### F8821. The three-mask word in `VOICE_DETECTOR_ENABLE_COMMAND` is a forced spelling, and the top byte is the one that says so
+
+*2026-08-31.* Case 5 unpacks one `int` into three fields, and the object's
+encoding fixes the source exactly:
+
+    ac5f5:  0f b6 f1           movzbl %cl,%esi        -> +0x75e
+    ac5f8:  0f b6 dd           movzbl %ch,%ebx        -> +0x760
+    ac602:  c1 f9 10           sar    $0x10,%ecx
+    ac605:  81 e1 ff 00 00 00  and    $0xff,%ecx      -> +0x762
+
+`sar` and not `shr`, so the shifted value is a SIGNED `int`; and the `and`
+that follows means the source masks after shifting rather than relying on a
+narrowing store. `(w >> 16) & 0xff` on a signed `w` is the only one of the
+obvious spellings that produces both instructions -- an `unsigned` `w` gives
+`shr` and no mask, and `(unsigned char)(w >> 16)` gives a `movzbl` on the
+third byte the way the first two do.
+
+**AND NO DIFFERENTIAL TEST CAN EVER SEE IT, WHICH WAS MEASURED RATHER THAN
+ASSUMED.** A mutation replacing `(arg[0] >> 16) & 0xff` with
+`((unsigned)arg[0] >> 16) & 0xff` runs UNCAUGHT through 269,670 checks,
+including 0x80402010 and 0xffffffff -- and it must, because the `& 0xff`
+discards exactly the bits the two shifts disagree about. The two spellings are
+behaviourally identical over the whole `int` domain. So this is a 613-class
+finding: a FORCED encoding that only the codegen tier can grade, and the
+mutation is recorded as equivalent rather than chased. The first pass at this
+finding claimed the test distinguished them, and it does not.
+
+This arm has no debug line of its own, which is also forced: 0xac5f3 is the
+table target and the first instruction there is the load of `arg[0]`.
+
+### F8822. What `t_voicesvc` measures, and the one path it cannot reach
+
+*2026-08-31.* 269,670 checks over five groups, all green under `make one`
+(GCC 14, 32-bit; NOT period-gated by this pass):
+
+    voice_create           773 checks    2 debug levels + the NULL config
+    voice_delete            96 checks    all 32 pointer shapes
+    voice_command       49,848 checks    14 opcodes x 4 modes x 2 beep
+                                         states, + 15 targeted values
+    voice_modem        218,910 checks    12 trials x 48 blocks
+    coverage                43 checks    every count taken FROM THE RUN
+
+**49 MUTATIONS RUN BY HAND, 47 CAUGHT, 2 EQUIVALENT AND PROVED SO.** The set
+is NOT registered in `test/mutations/` -- the snapshot re-record is deferred
+tree-wide and a registered-but-unrecorded suite reads MISSING to
+`mutsnap.py --check` (F6000-F6002). Six of the 47 were caught only after the
+fixture was strengthened, and each says something about what a weaker fixture
+misses:
+
+- **`beep_done` had to be planted at BOTH values.** `voice_create` leaves it
+  at 1 and three command arms write 1 into it, so deleting those stores was
+  invisible. Every command trial now runs at 0 and at 1.
+- **The DLE flags had to be raised ONE AT A TIME.** The first fixture set
+  `dle_etx` and `dle_can` together, which makes `||` and `&&` agree; three
+  trials now raise ETX alone, CAN alone and both.
+- **VLS needed a value wider than a short.** Every earlier argument fitted in
+  16 bits, so `out_format = (short)arg[0]` passed.
+- **The two echo delays needed the TRANSCRIPT.** Handing them to
+  `FDSP_DP_Create` swapped changes no field this test compares -- it changes
+  `chan_a->offset` and `chan_b->offset` inside the kernel -- but that
+  function prints both, so comparing the filtered create transcript catches
+  it.
+- **`voice_delete`'s `%lX` argument needed a self-check.** The two sides
+  necessarily print different pointers, so the transcripts cannot be
+  compared; each side is now matched against its OWN context address.
+
+The two equivalent ones are recorded rather than chased: `((unsigned)arg[0] >>
+16) & 0xff` for `(arg[0] >> 16) & 0xff` (F8821 -- the mask discards the bits
+the shifts disagree about), and passing the local copy of the sample count to
+`detector_progress` instead of re-reading `*countp` (nothing writes it in
+between). Both are FORCED ENCODINGS the object settles and behaviour cannot.
+
+**NOTHING IS HAND-PLANTED.** Every `struct voice_ctx` comes from
+`voice_create` or `ref_voice_create`, which is the only fixture shape D955 and
+F8587's hazard cannot apply to: a constructor cannot forget a field it sets
+itself. The delete sweep subtracts from a complete graph -- freeing the
+sub-object first, then NULLing the slot -- rather than adding to an empty one.
+
+**AND THE HAZARD STILL FIRED, ONE LEVEL DOWN.** `voice_create` reaches
+`cadence_create` through `detector_create`, and that function turns
+`GetDialToneDetectionThreshold` into a SUBSCRIPT --
+`Get_Detection_Threshold_Table(level_fix)`. The harness's unforced parameter
+answer is `0x5A000000 + param * 7`, whose low sixteen bits are a wild index,
+and the two sides read different entries: `cadence.threshold` came out 7 on
+ours and 0 on the blob's. It was found only because the comparison walks both
+cadence objects word by word; the context, the detector, the beep generator,
+the FIFO and the silence detector all compared clean. The fixture now calls
+t_detector's own `set_params()`, so both tests drive the same country. **An
+unplanted subscript two calls below the function under test is still an
+unplanted subscript**, and "the constructor built it" does not reach that far
+down.
+
+**THE PATH IT CANNOT REACH** is `voice_create`'s teardown, both entries
+(0xac3e1 and 0xac420). The only way any of the five constructors returns 0 is
+a failed `sysdep_malloc`, and the harness allocator has no failure injection.
+The arms are transcribed from the object and are NOT covered; the nearest
+proxy is `voice_delete`'s own 32-shape sweep, which drives the same five
+guards in the same order over the same sub-objects.
+
+**ONE DEBUG LINE IS EXCLUDED FROM THE TRANSCRIPT COMPARISON AND IT IS THE
+OBJECT'S DOING.** `STRM_VCE_GetFDSPEnvironmentalParams` prints its two output
+words BEFORE writing them (deviation D991), so "voice: StrmVCE old:" reports
+each side's own stack -- -31248/2412 against 2052/-24112, and both are
+correct. The line is filtered from both transcripts and the filter's hit count
+is asserted non-zero, so a filter that matched everything would read as zero
+rather than as a clean pass. Every other line is compared in full, including
+`FDSP_DP_Create`'s two and all six `VOICE_*_COMMAND` ones.
+
+### F8823. `voice_delete`'s free order is witnessed twice, and its last call is a tail call
+
+*2026-08-31.* beepgen, detector, fifo, silence, dp, self -- and each of the
+five guarded. The order is not read off one function: `voice_create`'s own
+failure path (0xac3e1) frees the same five in the same order with the same
+guards, which is a second witness inside the same object.
+
+`sysdep_free` is a TAIL CALL at both of `voice_delete`'s exits (0xac18c and
+0xac200 are `jmp` off a restored stack), so the object's last statement is a
+call with no `return` after it. The C for that is an ordinary trailing
+`sysdep_free(v);` in a `void` function; there is nothing to spell differently,
+and the tail call is the compiler's.
+
+`voice_delete` does NOT guard `v` itself -- it dereferences +0x18 before
+anything else -- so a NULL context faults. That is the object's, and it is
+left alone.

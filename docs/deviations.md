@@ -10128,3 +10128,58 @@ because the object's own value there is not a function of the object's inputs.
 because the object does, and zeroing it would be a different function -- five
 stores in the object, seven in a `memset`ed version, and the two are
 distinguishable by codegen even though no test can tell them apart.
+
+## D1010 ⚠ `VOICE_OUTPUT_TRANSMIT_LEVEL_COMMAND` accepts a level, prints it, and stores it nowhere
+
+`voice_command`'s opcode 3 (jump-table entry 0xac5b4) is four instructions
+long once the debug gate is taken out: it tests `dsplibs_debug_level > 1`,
+loads `arg[0]`, calls `dsplibs_debug_printf` with
+"VOICE_OUTPUT_TRANSMIT_LEVEL_COMMAND %d" (`.rodata.str1.4` 0x12e68) and joins
+the common tail with `ret` still 0. **There is no store on that path at all**
+-- not to `voice_ctx`, not through any of the five sub-objects, not to a
+global -- and at the shipping debug level of 0 it does not even print, so the
+whole arm is `return 0`.
+
+So a host that sets the transmit level gets the same answer as one that does
+not, and nothing downstream can tell. Every other opcode that takes a value
+stores it: 6 to `playback_volume`, 7 to `marker_period`, 8 to `out_format`,
+5 to the three detector masks.
+
+**Status:** reproduced exactly, and asserted rather than assumed --
+`t_voicesvc` drives opcode 3 with four different mode values and compares the
+whole 0x7dc-byte context, the beep generator, the detector, both cadences, the
+FIFO and the silence detector against the blob's afterwards. Nothing moves on
+either side. Whether the object is missing a store or the level is applied
+somewhere this tree has not reached is not decidable from the 1.2 MB: no other
+function references that string and no unwritten symbol reads a field the
+value could have been stored in.
+
+## D1011 ⚠ `voice_modem` discards three of the six event codes the detector can return
+
+`detector_progress` answers six distinct codes in DETECTOR_OUTPUT_STATUS mode
+-- 1 busy, 2 dial, 3 for 1300 Hz, 4 for 1100 Hz, 5 for 2100 Hz and 6 for
+2225 Hz (detector.h's table, and `status[]` at `.data` 0x8200). `voice_modem`
+then maps its result through `_handle_status`, which tests **1, 2 and 4 only**
+and answers the handler's own return for anything else.
+
+    1 -> 10     busy
+    2 -> 11     dial tone
+    4 -> 12     1100 Hz
+    3, 5, 6     discarded; the caller sees the handler's value
+
+Status mode is reached only in duplex (`mode == 3`), so this affects the
+duplex path alone: in every other mode the detector appends its events to the
+byte stream instead and returns 0, and nothing is lost. In duplex, a 1300 Hz,
+2100 Hz or 2225 Hz detection is computed, printed at debug level, and thrown
+away.
+
+**Status:** reproduced exactly, and measured rather than argued.
+`t_voicesvc` runs four 48-block duplex trials with one tone enabled in each,
+feeding that tone so its integration counter passes its threshold, and asserts
+the last block's return: 42 (the installed handler's own value) for 1300,
+2100 and 2225, and 12 for 1100. Two further trials force the busy and dial
+cadences and get 10 and 11. All six codes are therefore produced by the
+detector in the run, and three of them are observed to vanish. Whether that
+is deliberate -- 1100 Hz is the calling-tone frequency and the other three are
+answer/fax tones a voice call has no use for -- is not established by
+anything in the object.

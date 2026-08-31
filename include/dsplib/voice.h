@@ -36,6 +36,42 @@ struct fifo8;
 struct silence;
 
 /*
+ * `struct voice_config` -- the sixteen-byte host block `voice_create` is
+ * handed, and which lives at `voice_ctx` +0x000.
+ *
+ * IT IS NOT A `struct beepgen_config`, and this header used to say it was.
+ * `voice_create` builds a SEPARATE 16-byte local for `beepgen_create` and
+ * ROTATES three of the four words on the way in (0xac230-0xac24e against
+ * 0xac29f):
+ *
+ *	voice_config		beepgen_config		struct beepgen
+ *	+0x00 modem	  ->	+0x00 modem	  ->	+0x000 modem
+ *	+0x08 fn_08	  ->	+0x04 fn_04	  ->	+0x11c fn_011c
+ *	+0x0c fn_0c	  ->	+0x08 fn_08	  ->	+0x120 hook_on_proc
+ *	+0x04 fn_04	  ->	+0x0c fn_0c	  ->	+0x124 fn_0124
+ *
+ * so the two blocks are different types that happen to share a size.  That
+ * rotation is what SETTLES the +0x04 slot: it is the S-register getter --
+ * `detector_create` (0xac2f8) and `silence_create` (0xac337) both take it as
+ * their third argument, `voicedp.c` reads the receive gains through it, and
+ * `beepgen`'s `fn_0124` -- which is the slot it lands in -- is called as
+ * `f(modem, 24)`, i.e. `vce_get_sreg(modem, SREG_FLASH_TIMER)`.  Findings
+ * F8813 and F8814.
+ *
+ * The three names stay as `voicedp.c` already spells them; only the TYPES and
+ * the derivations are new.  `fn_04` is spelled the way `detector.h`'s
+ * `detector_sreg_fn` and `silence_create`'s third parameter are spelled --
+ * `unsigned int` result, from the `shr` at 0xad531 (F8803).
+ */
+struct voice_config {
+	void		*modem;			/* +0x00 host handle       */
+	unsigned int	(*fn_04)(void *modem, int num);
+						/* +0x04 vce_get_sreg      */
+	void		(*fn_08)(void *modem);	/* +0x08 -> beepgen fn_011c */
+	void		(*fn_0c)(void *modem);	/* +0x0c -> hook_on_proc   */
+};
+
+/*
  * What goes in `voice_ctx.handler` at +0x20.  The shape is the one
  * `FDSP_DP_Run` has (see beepgen.h), which is what `voice_duplex` proves: it
  * forwards arguments 1..6 of its own signature to that function unchanged,
@@ -95,10 +131,11 @@ union voice_rate_bits {
  */
 struct voice_ctx {
 	/*
-	 * +0x000  The sixteen-byte host block, copied in whole and handed on
-	 * to `beepgen_create`; that call is what types it (beepgen.h).
+	 * +0x000  The sixteen-byte host block, copied in whole by
+	 * `voice_create` (0xac27a-0xac295) and NOT what `beepgen_create` is
+	 * handed -- see `struct voice_config` above for the rotation.
 	 */
-	struct beepgen_config	cfg;
+	struct voice_config	cfg;
 
 	/*
 	 * +0x010  The service mode.  `voice_set_online` writes 2 and
@@ -121,9 +158,23 @@ struct voice_ctx {
 	struct fifo8		*fifo;		/* +0x024 FIFO8_create     */
 	struct silence		*silence;	/* +0x028 silence_create   */
 	unsigned char		pad_002c[0x034 - 0x02c];
-	int			*dp;		/* +0x034 FDSP_DP_Create,
-						 *        FDSP_DP_Run's
-						 *        first argument   */
+
+	/*
+	 * +0x034  The datapump kernel.  `voice_create` fills it from
+	 * `FDSP_DP_Create` (0xac2c1) and `voice_delete` hands it to
+	 * `FDSP_DP_Delete` (0xac1f3), so its TRUE type is
+	 * `struct fdsp_kernel *`.
+	 *
+	 * IT IS SPELLED `void *` BECAUSE ONE DECLARATION IN ANOTHER FILE IS
+	 * STILL BEHIND.  `FDSP_DP_Run` (beepgen.h, defined in
+	 * src/service/beepgen.c) declares the same object `int *status`,
+	 * because that function's only use of it is to store 2 into the
+	 * kernel's `int_00`, and `voicedp.c` passes this field straight into
+	 * it.  `void *` is the one spelling both call sites accept without a
+	 * cast; when `FDSP_DP_Run`'s parameter is retyped this becomes
+	 * `struct fdsp_kernel *`.  Finding F8817.
+	 */
+	void			*dp;		/* +0x034 struct fdsp_kernel * */
 
 	/*
 	 * +0x038  The byte staging area between the host and the FIFO.
@@ -159,15 +210,36 @@ struct voice_ctx {
 	int			dle_can;	/* +0x748 <DLE><CAN> seen  */
 
 	/*
-	 * +0x74c  Output format selector.  Every reconstructed use is the
+	 * +0x74c  Output format selector.  Every reconstructed READ is the
 	 * same test, `(unsigned)(out_format - 1) <= 1`: 1 and 2 send 16-bit
 	 * linear to `tx_lin`, anything else sends float.  `voice_create`
-	 * starts it at 0.  What 1 and 2 mean apart from each other is not
-	 * established.
+	 * starts it at 0.  What 1 and 2 mean apart from each other is still
+	 * not established.
+	 *
+	 * WHAT IS NOW ESTABLISHED IS WHO WRITES IT, and it is stronger
+	 * evidence than the reads were: the only writer in the object is
+	 * `voice_command`'s case 8, which prints "VOICE_VLS_COMMAND %d"
+	 * (.rodata.str1.1 0x500e) and stores that word here whole
+	 * (0xac5a7-0xac5af).  So this field is the argument of the host's
+	 * VLS command and the name stays `out_format` only because the
+	 * READS are what say what it selects; the object does not say what
+	 * "VLS" expands to and neither does this header.  Finding F8819.
 	 */
 	int			out_format;
 
-	unsigned char		pad_0750[0x756 - 0x750];
+	unsigned char		pad_0750[0x754 - 0x750];
+
+	/*
+	 * +0x754  The playback volume, from the author's own format string:
+	 * `voice_command`'s case 6 prints "VOICE_PLAYBACK_VOLUME_COMMAND %d"
+	 * and then stores the low sixteen bits of the same word here
+	 * (0xac5e5-0xac5ee).  That is evidence class 1 for the NAME.
+	 *
+	 * NOTHING IN THE 1.2 MB READS IT BACK, so the signedness is not
+	 * established and neither is the unit; `short` is the store's width
+	 * and no more than that.
+	 */
+	short			playback_volume;
 
 	/*
 	 * +0x756  The receive path's arm.  `voice_set_rx` sets it to 1 beside
@@ -303,6 +375,78 @@ void voice_set_online(struct voice_ctx *v);
 void voice_set_duplex(struct voice_ctx *v);
 void voice_set_rx(struct voice_ctx *v);
 void voice_set_tx(struct voice_ctx *v);
+
+/*
+ * The four values of `mode`.
+ *
+ * ONLINE and DUPLEX are the author's own words: `voice_command` refuses the
+ * beep and DTMF commands outside `(unsigned)(mode - 2) <= 1` and prints
+ * "modem not in online or duplex" (.rodata.str1.4 0x12e48) when it does.
+ * That is evidence class 1, and it also fixes which of the two is which --
+ * `voice_set_online` writes 2 and installs `voice_online`,
+ * `voice_set_duplex` writes 3 and installs `voice_duplex`.
+ *
+ * 0 and 1 are `voice_set_rx`'s and `voice_set_tx`'s, from the same pairing in
+ * voicedp.c; nothing in the object names those two, so they are usage.
+ */
+#define VOICE_MODE_RX		0
+#define VOICE_MODE_TX		1
+#define VOICE_MODE_ONLINE	2
+#define VOICE_MODE_DUPLEX	3
+
+/*
+ * `voice_command`'s opcodes.  The switch is dense 0..10 with a jump table at
+ * .rodata 0xed80, and ANYTHING ELSE -- including 4, whose table slot is the
+ * default label -- returns 7.
+ *
+ * SIX OF THE ELEVEN WEAR THE AUTHOR'S OWN NAME.  Their arms print a format
+ * string that is the constant's identifier followed by its argument, so the
+ * spelling below is transcribed, not invented (evidence class 1):
+ *
+ *	 3  .rodata.str1.4 0x12e68  "VOICE_OUTPUT_TRANSMIT_LEVEL_COMMAND %d"
+ *	 6  .rodata.str1.4 0x12e90  "VOICE_PLAYBACK_VOLUME_COMMAND %d"
+ *	 7  .rodata.str1.1 0x04fdd  "VOICE_TIME_MARK_COMMAND %d"
+ *	 8  .rodata.str1.1 0x0500e  "VOICE_VLS_COMMAND %d"
+ *	 9  .rodata.str1.1 0x04ff9  "VOICE_ABORT_COMMAND"
+ *	10  .rodata.str1.1 0x04fc1  "VOICE_RESET_DUPLEX_COMMAND"
+ *
+ * The other five arms print nothing that names them, so 0, 1, 2 and 5 are
+ * named from what they DO -- `beepgen_start_beep`, `beepgen_start_dtmf`, the
+ * four mode setters and the three `detector_enable*` masks -- which is usage
+ * inference, the weakest grade.  4 gets no name at all: the object has no arm
+ * for it, only a table slot pointing at the default.
+ */
+#define VOICE_BEEP_COMMAND			0	/* usage        */
+#define VOICE_DTMF_COMMAND			1	/* usage        */
+#define VOICE_SET_MODE_COMMAND			2	/* usage        */
+#define VOICE_OUTPUT_TRANSMIT_LEVEL_COMMAND	3
+/*      (4 is not an opcode -- its table slot is the default label)    */
+#define VOICE_DETECTOR_ENABLE_COMMAND		5	/* usage        */
+#define VOICE_PLAYBACK_VOLUME_COMMAND		6
+#define VOICE_TIME_MARK_COMMAND			7
+#define VOICE_VLS_COMMAND			8
+#define VOICE_ABORT_COMMAND			9
+#define VOICE_RESET_DUPLEX_COMMAND		10
+
+/* The largest opcode the switch accepts; `cmp $0xa,%ebx; ja` at 0xac4ca. */
+#define VOICE_COMMAND_MAX			10
+
+/*
+ * The voice service itself.  See src/service/voicesvc.c.
+ *
+ * `voice_command`'s `arg` is read as three 32-bit words, at (%esi), 0x4(%esi)
+ * and 0x8(%esi); only VOICE_BEEP_COMMAND reads all three, most read one, and
+ * VOICE_RESET_DUPLEX_COMMAND reads none.  It returns 0 when the command was
+ * acted on and 7 when it was not -- an unknown opcode, or the beep/DTMF mode
+ * gate refusing.  Neither number is named by anything in the object, so both
+ * stay literal, exactly as the handlers' 1..13 do.
+ */
+struct voice_ctx *voice_create(const struct voice_config *cfg);
+void voice_delete(struct voice_ctx *v);
+int voice_command(struct voice_ctx *v, int cmd, int *arg);
+int voice_modem(struct voice_ctx *v, short *rx_lin, float *rx_flt,
+		float *tx_flt, short *tx_lin, unsigned short *hostcount,
+		unsigned short *countp);
 
 #ifdef __cplusplus
 }
