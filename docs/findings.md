@@ -101159,6 +101159,462 @@ rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
 `test/mutations/` for it; passing `make phase` proves nothing here, because a
 descriptor that no longer matches is not an error.
 
+### F8874. Eight of the V.29 receiver block's "anonymous ints" are fields of sub-objects the tree had already modelled, and the SIZES are what made them readable
+
+`V29RX_create` is not reconstructed, so the receiver's block has no struct and
+every offset `src/fax/v29.c` reaches is a named constant. The first draft of
+`include/dsplib/v29fax.h` therefore had eleven `V29RX_INT_xxxx` constants:
+neutral names for fields nothing could type.
+
+Four sub-objects inside that block ARE typed, because a callee types them:
+
+    rx + 0x48   struct fpm_mrf    FPM_MRF_filter  / FPM_MRF_free
+    rx + 0x64   struct fpm_agc    FPM_AGC_agc
+    rx + 0x90   struct fpm_sre    FPM_SRE_recover / FPM_SRE_free
+    rx + 0x120  struct fpm_fse    FPM_FSE_receive / FPM_FSE_free
+
+and each of those has a MEASURED size -- `src/dsp/fpm_sre.c` asserts
+`sizeof(struct fpm_sre) == 0x90`, `fpm_agc.h` is 0x2c, `fpm_fse.h`'s last
+member is `diag2_n` at +0x4e14 so the FSE is 0x4e18. Adding the size to the
+base turns eight of the eleven "anonymous ints" into named fields:
+
+    rx + 0x80  = agc + 0x1c  fpm_agc::signal
+    rx + 0xd0  = sre + 0x40  fpm_sre::active
+    rx + 0xd8  = sre + 0x48  fpm_sre::adapt
+    rx + 0x160 = fse + 0x40  fpm_fse::lms_force
+    rx + 0x164 = fse + 0x44  fpm_fse::pll_on
+    rx + 0x168 = fse + 0x48  fpm_fse::tilt_on
+    rx + 0x16c = fse + 0x4c  fpm_fse::lms_on
+    rx + 0x172 = fse + 0x52  fpm_fse::mse
+
+**AND EVERY ONE OF THEM READS BACK AS THE FUNCTION THAT TOUCHES IT**, which is
+what makes this a derivation and not arithmetic:
+
+- `CarrierDetectV29` is `sre.active & agc.signal`. `fpm_sre.h` calls `active`
+  "the squelch let the PLL run" and `fpm_agc.h` calls `signal` "more than half
+  the blocks in the last call were above the gate". V.29's carrier detect is
+  two independent modules' own verdicts ANDed together, and it has no
+  measurement of its own at all.
+- `DemodDataV29` writes `sre.adapt`, `fse.pll_on` and `fse.lms_on` from that
+  same carrier bit ANDed with three configuration words, and clears
+  `fse.tilt_on` on every block. `fpm_sre.h` says of `adapt` that it is "set by
+  init, never written by recover" and is the CALLER's enable -- this is that
+  caller, and it is the only one reconstructed anywhere.
+- `mse` is what the author's own `.rodata` calls the DECODER ERROR:
+  `"V29 Decoder error too big... no carrier\n"` (.rodata.str1.4 + 0x12d88) and
+  `"V29 Dec error too big... unreliable data\n"` (+ 0x12db4), both gated on it
+  exceeding 0x3fff. Evidence rank 1 landing on the same offset as rank 2.
+- `GetSNRV29` is `14 - mse`: an SNR index read straight off the equaliser's
+  error. (V.17's constant is 13. That is the whole difference between the two
+  functions.)
+
+**THE GENERAL POINT, and it is the reusable part.** A `void *` instance with
+named offsets is the right ruling where nothing types the block -- but the
+ruling is about the BLOCK, not about every field in it. Before writing a
+neutral name, add each modelled sub-object's base to its size and check whether
+the offset falls inside one. Three of the four sizes here are asserted in
+`src/`, so the check is a subtraction and cannot be wrong.
+
+Three constants survive as genuinely neutral: rx + 0x04, + 0x08 and + 0x20, the
+three configuration words ANDed with the carrier bit. They are below rx + 0x48
+and no sub-object covers them.
+
+
+### F8875. `DemodDataV29` uses the return value of a function that returns nothing, and what it gets is `agc->signal`
+
+`DemodDataV29` (0x0a5ff0) calls `FPM_AGC_agc` and then uses `%eax` three times,
+ANDing it with three configuration words. `FPM_AGC_agc` is `void` and takes
+THREE arguments -- measured, not assumed: the object reads 0x50, 0x54 and 0x58
+of its frame and never 0x5c, and `include/dsplib/fpm_agc.h` declares it
+accordingly. So the translation unit that compiled `DemodDataV29` declared it
+as returning `int`, and the one that compiled `FPM_AGC_agc` returned nothing.
+
+It works, and it works for a reason that is a property of the OBJECT rather
+than of C. `FPM_AGC_agc` has exactly one `ret`; every path funnels through the
+same epilogue; and the two instructions before it are
+
+    a6884:  0f b6 c2    movzbl %dl,%eax
+    a6887:  89 47 1c    mov    %eax,0x1c(%edi)
+
+-- the store to `agc->signal` itself. So `%eax` holds `signal` on every return,
+and `DemodDataV29` is reading that field through the register.
+
+**THE SAME CALL SITE PASSES A FOURTH ARGUMENT TOO** (a literal 1 at
+`0x0c(%esp)`), which the callee never loads. Both halves of the mismatch point
+the same way: the caller's header for `FPM_AGC_agc` was
+`int FPM_AGC_agc(agc, samples, count, flag)` and the definition had already lost
+both the flag and the return.
+
+`DemodDataV29` was held back one commit for want of a fixture (F8883) and then
+landed (F8885); the replacement spelling is `RX_AGC(rx)->signal` -- identical on every path,
+and the only spelling available, because a second prototype disagreeing with
+`fpm_agc.h` would be "one type, one home" in its function-prototype form.
+`test/unit/t_v29fax.c` MEASURES the identity rather than believing it:
+`run_agc_identity` calls the blob's `ref_FPM_AGC_agc` through an `int`-returning
+pointer and asserts the result equals `agc.signal` over twelve trials including
+empty and silent blocks. Deviation D1036.
+
+
+### F8876. Three `_free` calls in `V29RX_delete` are given a second argument that no callee loads, exactly as `B103FP_delete`'s are
+
+`V29RX_delete` (0x09b590) writes a literal 1 to `0x4(%esp)` before each of
+`FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`. All three take one argument
+and none reads a second frame slot, so it is dead stack setup -- presumably left
+from a version where they took a `fresh` flag like their `_init` counterparts
+do.
+
+`src/pump/b103/b103fp.c` records the identical pattern at `FPM_FSD_free` and two
+`FPM_MRF_free` calls and does not reproduce it, on the ground that an argument
+the callee never loads has no observable effect. `src/fax/v29.c` follows that
+ruling rather than re-deciding it. This finding exists so the next reader of the
+disassembly does not think three arguments went missing.
+
+
+### F8877. `V29RX_modem` extends ONE memory location two different ways in one loop, and that is what decides the types
+
+`V29RX_modem` (0x0a3f50) reads `*count` once before the demodulator slot and
+once after it, and the two loads' 32-bit results are both USED:
+
+    a3f80:  0f bf d9    movswl %cx,%ebx     the value taken BEFORE the call
+    a3fa1:  0f b7 d1    movzwl %cx,%edx     the value read back AFTER it
+    a3fa4:  29 d3       sub    %edx,%ebx
+    a3fad:  8d 3c 5f    lea    (%edi,%ebx,2),%edi
+
+One location, one call between the reads, a signed extension on one and an
+unsigned extension on the other, and the difference used as a scaled index -- so
+this is CLAUDE.md's FORCED case on both sides at once. A single declared type
+cannot produce it. The spelling that does is
+
+    int V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
+    ...
+        short avail = (short)*count;        /* movswl when widened */
+        ...
+        in += avail - *count;               /* movzwl on the reload */
+
+i.e. the pointer is to `unsigned short` and the saved copy is a `short` local.
+Everything else about the loop -- the 16-bit `test %cx,%cx`, the 16-bit store of
+the running total -- is consistent with both readings and settles nothing.
+
+**AND THE LOOP IS A `do`, WHICH IS ALSO FORCED**: there is no test between the
+status-word clear at 0xa3f6d and the loop head at 0xa3f80, only eleven bytes of
+`-falign-loops` padding that `tools/dis.py` filters out of its listing. Entered
+with `*count` already zero, the object dispatches the slot once. `t_v29fax.c`
+separates that by construction -- it runs one trial with a zero count and
+asserts the slot's call log shows exactly one call.
+
+**WHAT IS NOT CLAIMED**: the running total is a `short`, re-narrowed with `cwtl`
+on every iteration, and NOTHING can separate that from an `int` accumulator. The
+only place it is ever read is a 16-bit store into `*count`, so both readings
+leave the same sixteen bits. The test drives a script producing 40,003 samples
+in three calls to reach the corner and counts it as path coverage, not as a
+verdict.
+
+The status word is the same shape of reading one level down: `andb $0xfd,
+0x19(%eax)` is GCC's narrowing of `&= ~0x200` on the `int` at +0x18, which the
+function returns whole after the loop.
+
+
+### F8878. `V29TX_status`'s dead store to the report's +0x14 is not dead, and the reason is the aliasing the C standard gives two unrelated parameters
+
+`V29TX_status` (0x0a5030) does this:
+
+    a5078:  movzbl 0x14(%edx),%eax     /* the report */
+    a507c:  and    $0xfc,%al
+    a507e:  mov    %al,0x14(%edx)      <- store A
+    a5081:  movzbl 0x10(%ecx),%eax     /* the handle */
+    a5085:  andb   $0xfe,0x15(%edx)
+    a5089:  and    $0x4,%al
+    a508b:  mov    %al,0x14(%edx)      <- store B, same address
+
+Store B overwrites store A completely, and a reader expects the compiler to have
+removed A. It could not: the load of `handle + 0x10` sits BETWEEN them, `handle`
+and `report` are unrelated parameters, and a caller passing
+`report = handle + 0x0c` would see store A in what store B stores. So the
+object's own code proves the compiler had to keep it, and `src/fax/v29.c`
+reproduces it through `unsigned char` lvalues, which alias everything and give
+the modern compiler the same reason.
+
+`V17TX_status` (0x0a1bd0) writes byte for byte the same sequence plus one extra
+`int` copy at +0x18 -- a second, independent statement that this is the author's
+source and not an artefact of one compilation.
+
+**THE OVERLAP TRIAL IS NOT RUN, AND THAT IS DELIBERATE.** The only stimulus that
+separates the two readings is a pair of overlapping pointers, and what such a
+trial would then measure is STATEMENT ORDER, which is a codegen-tier question
+this differential test cannot settle. Declared in the test's header comment
+rather than counted. What IS counted is the store itself being an ASSIGNMENT
+rather than a merge -- deviation D1035.
+
+
+### F8879. Two loops over the same `count` in one V.29 file, one `unsigned short` and one `short`, and both are forced
+
+`DemodDataV29`'s halving loop:
+
+    a6037:  66 39 fa    cmp %di,%dx      16 bits
+    a603a:  73 1a       jae ...          UNSIGNED
+    a604e:  0f b7 d0    movzwl %ax,%edx  the index is an unsigned short
+
+`DataCarrierDetectV29`'s copy loop, over the same parameter:
+
+    a6277:  39 f2       cmp %esi,%edx    32 bits
+    a6279:  7d 18       jge ...          SIGNED
+    a628c:  0f bf d0    movswl %ax,%edx  the index is a short widened to int
+
+Same author, same file, same quantity, two spellings. Neither reading can be
+carried to the other and neither is free: the comparison WIDTH and the branch's
+signedness are both encoded. Recorded because the natural instinct on finding
+one of them is to make the other match.
+
+
+### F8880. `SetEncoderV29` writes `fpm_smc_cfg::direct`, and the transmitter block's existing model is what says so
+
+`SetEncoderV29` (0x0a6590) writes 0 or 1 into `(modem + 0x24) + 0x38` and writes
+NOTHING for any other argument -- it tests for 0, tests for 1, and returns.
+`include/dsplib/v29data.h` already models the block at modem + 0x24:
+`struct fpm_smc` is at +0x34, confirmed by `V29TX_create` calling `SMC_init`
+there, and `fpm_smc.h` puts `cfg.direct` at that structure's +0x04. So +0x38 is
+that field and there is nothing to choose between.
+
+`fpm_smc.h` describes `direct` as "take the quadrant straight out of the data
+word instead of accumulating pmap increments" -- differential encoding off. So
+`SetEncoderV29(m, 0)` selects the differential coder and `(m, 1)` the absolute
+one, and the function's name is the author's word for exactly that.
+
+The argument is loaded `movswl` and the 32-bit result is compared and
+decremented, so `short` is FORCED. `t_v29fax.c` turns that from a codegen note
+into a measurement: it calls both sides through an `int`-taking function pointer
+with 0x10000, whose low half is zero. The narrowing reading writes 0; a 32-bit
+reading writes nothing. The blob writes 0.
+
+`src/fax/v29.c` spells it `V29TX(modem)->smc.cfg.direct`, which reaches through
+`v29data.h`'s existing struct rather than adding a fourth statement of the same
+layout, and `v29.c` carries an offset assertion tying the two together.
+
+
+### F8881. What a delete test can actually check, and how to check it with the allocator the harness already has
+
+`V29RX_delete` releases ten sub-objects and then the block that holds them and
+then the instance. "It did not crash" is decoration; what is checkable is WHICH
+pointers were released.
+
+`test/unit/t_v29fax.c` does it with two facilities that were already there:
+
+- The three BLOCKS (the receiver's, the detector's and the instance) are STATIC
+  ARRAYS. `sysdep_free` in `test/harness/runtime.c` counts a pointer the
+  allocator never handed out in `bad_free` and SWALLOWS it rather than passing
+  it to `free()`, so the object's frees of them are counted and the fixture
+  survives to be compared afterwards. The test asserts the count is exactly
+  three: a dropped free of any of them makes it two.
+- The seven things that ARE allocated -- four buffers from `sysdep_malloc` and
+  three sub-objects from `FPM_MTD_create` / `FPM_TONE_create` -- are probed one
+  at a time with `harness_alloc_ordinal`, which reports 0 for a pointer that is
+  no longer live. Both sides' seven-bit liveness vectors are compared, and the
+  blob's is separately asserted to be all zeros, because two implementations
+  that both leak everything would otherwise agree.
+
+A wrong offset reads a pseudorandom pointer out of the block instead: that lands
+in `bad_free` AND leaves the right pointer live, so both halves of the vector
+move. Twenty-eight checks over two seeds, and the injection ritual confirms it:
+replacing `V29RX_BUF_SRE` with `V29RX_BUF_MRF` in the first free -- a dropped
+free that leaves no trace in any return value -- fails the suite.
+
+The three embedded FPM states are zeroed before the run so their `_free`
+functions release null pointers, which `free_null` counts; that the object calls
+them at all is itself compared.
+
+**WHAT THIS SHAPE CANNOT SEE IS THE ORDER, AND A MUTATION RUN SAYS SO.** A
+hand-run set of 23 mutations over `src/fax/v29.c` -- not registered as a suite,
+per this pass's brief -- came back 21 caught of 22 usable, and the one that got
+through was "the FSE and the SRE freed in the other order". A liveness vector
+is a SET, and both sides call the same `sysdep_free`, so nothing in the harness
+records the sequence. `harness_alloc_ordinal` cannot help: it reports where a
+pointer came from, not when it went. Recovering the order would need either a
+free log in `test/harness/runtime.c` or a reliance on the allocator's LIFO
+recycling, and F1353 rules the second one out explicitly. So the ORDER of the
+ten releases is recorded in `v29fax.h` from the disassembly and is not under
+test; a future free log in the harness would close it for every delete function
+in the tree at once.
+
+
+### F8882. Three separating counts read zero because the tone detector never returned ABSENT, and no stimulus sweep could have fixed it
+
+`t_v29fax.c` asserts a non-zero separating count for every named wrong reading
+(F3052's rule). On its first run three of them reported zero: the V.21 threshold
+read as 0x500 rather than 0x4ff, the V.21 hit reported as 1 rather than 0, and
+the energy-drop constant read as 0x4000 rather than 0x32fe.
+
+The first two had one cause. `DataCarrierDetectV29` only ACCUMULATES V.21
+samples when `FPM_MTD_detect` returns zero; any other verdict resets the
+counter. Over 2,592 trials with four stimuli -- quiet noise, loud noise,
+mid-level noise and a 3 kHz tone -- the detector never once returned zero, so the
+branch that can reach the 0x4ff threshold was never entered and both readings
+were evaluated against a path the test did not exercise. **Adding stimuli did
+not help and could not**: which verdict a resonator bank produces is a property
+of its coefficients, not of the signal alone, and the test was using the
+library's built-in configuration.
+
+`fpm_mtd.h` makes the verdict a function of two configuration words instead:
+NOSIGNAL when the wideband energy is below `min_level`, PRESENT when the
+out-of-band share is at or below `ratio` of it, ABSENT otherwise. A NEGATIVE
+`ratio` puts the threshold below zero and `out_of_band` is clamped at or above
+zero, so ABSENT is forced; a `min_level` of 0x7fff forces NOSIGNAL, the energy
+being a `short`. The test now builds the detector with its own configuration and
+drives both branches deterministically. Both sides get the same configuration,
+so this steers the FIXTURE and not the answer.
+
+The third had a different cause and the same shape. The two candidate drop gates
+are 0x32fe/32768 and 0x4000/32768 of a reference, which differ by 25%, so they
+separate only when the block's RMS lands between them. Every stimulus the test
+could generate was either far above both gates or far below both. The fix is to
+derive the REFERENCE from the block instead of guessing the block: setting it to
+2.2 x the measured RMS puts the true gate just below and both wrong ones just
+above, which separates the `>> 14` reading for free as well.
+
+**THE LESSON IS THE COUNT, NOT THE FIX.** All three wrong readings were named,
+coded and believed tested; the assertion that each one SEPARATED is the only
+thing that said otherwise, and it said so on the first run. Without it the test
+would have reported 41,000 passing checks over a function two of whose branches
+it never entered.
+
+A fourth zero came out of the same run and is worth recording separately: the
+path counter for "the V.21 sample count changed" was written as `!=` and passed,
+because a RESET to zero is also a change. Rewritten as `>` it failed, which is
+what exposed the ABSENT problem in the first place. A coverage counter that
+accepts either direction of a branch covers neither.
+
+
+### F8883. `DemodDataV29` is read, written and NOT committed: its fixture needs six live DSP objects and the other ten symbols did not
+
+**SUPERSEDED WITHIN THE SAME PASS: `DemodDataV29` LANDED IN THE NEXT COMMIT.**
+The fixture described below was built and the function is now in
+`src/fax/v29.c` with 36,134 differential checks behind it. F8885 records what
+building it cost and the three separating counts that read zero along the way.
+Everything below is still an accurate account of WHY it was held back at the
+previous commit, and the call sequence it sets out is the one that was written.
+
+`DemodDataV29` (0x0a5ff0, 398 bytes) is the one symbol of this pass's eleven
+that is not in `src/fax/v29.c`. It is fully decoded -- F8874, F8875 and F8879
+are all readings taken from it -- and it is left out under CLAUDE.md's rule
+rather than committed untested.
+
+The reason is the fixture and nothing else. The other ten symbols need at most
+two constructed sub-objects; `DemodDataV29` calls, in order, `FPM_AGC_agc`,
+`FPM_TONE_kill`, `FPM_MTD_detect`, `FPM_MRF_filter`, `FPM_SRE_recover` and
+`FPM_FSE_receive`, so a differential trial needs a live AGC, TONE, MTD, MRF, SRE
+and FSE, four of them with mutually consistent buffer sizes, and the FSE has no
+configuration template in the tree (`t_fpm_fse_recv.c` builds its own). D955's
+rule applies with force here: this is table-lookup code, and a field left
+unplanted that is used as a SUBSCRIPT cannot be caught by a blob-against-blob
+dry run, because both sides read the same wild index and agree.
+
+What is already settled for whoever picks it up:
+
+    FPM_AGC_agc(rx + 0x64, in, count)              in is modified IN PLACE
+    signal = rx.agc.signal                         see F8875
+    if (det->f14 == 0) {
+        for (unsigned short i = 0; i < count; i++)  buf[i] = in[i] >> 1;
+        FPM_TONE_kill(det->f04, det->f18, (short)count);
+        if (FPM_MTD_detect(det->f00, det->f18, (short)count) != 0)
+            return 0;                              the WHOLE call is abandoned
+    }
+    n = FPM_MRF_filter(rx + 0x48, in, rx->f4f54, count);
+    rx.sre.adapt   = signal & rx->f0004;
+    n = FPM_SRE_recover(rx + 0x90, rx->f4f54, rx->f4f58, n);
+    if (n > 0xa4) DEBUG("ERROR: SRE buffer violation(%d)", n);
+    rx.fse.tilt_on = 0;
+    rx.fse.pll_on  = signal & rx->f0008;
+    rx.fse.lms_on  = signal & rx->f0020;
+    return FPM_FSE_receive(rx + 0x120, rx->f4f58, out, n);
+
+`out` is `unsigned short *`, from `FPM_FSE_receive`'s own signature, and every
+instance pointer above is RE-READ from the modem object after each call --
+forced, because a call clobbers memory the compiler cannot see through.
+
+
+### F8884. A worktree branched from a commit its brief did not name, and every citation in that brief resolved to nothing
+
+This pass's brief said the worktree was branched from `6ee3e861`, "= master",
+and that all readiness had been measured there. It was branched from `c1ca61af`,
+and `master` was 106 commits ahead of it.
+
+The symptom is not "some files are missing". It is that **the brief's own
+evidence base was absent**: findings F8492, F8493, F8587, F8607 and F8790 and
+deviations D955 and D956 were all cited as established and none of them existed
+in this tree's `docs/`. Nor did `tools/bannercheck.py`, which the brief said to
+run before every commit, nor `include/dsplib/v22status.h`, which turned out to
+carry rank-2 names for six of the fields this pass was modelling neutrally.
+
+Two failure modes follow from it and both nearly happened here:
+
+- **Writing up the missing citations as a finding of fact.** A parallel agent
+  did exactly that. "Seven citations resolve to nothing" is not a fact about the
+  project; it is a fact about a stale worktree, and it would have gone into the
+  record as the former.
+- **Scoping against the wrong tree.** Readiness is measured against what is
+  WRITTEN. A symbol another wave had already written would read as unwritten
+  from 106 commits back, and two agents reconstructing one symbol is two
+  definitions at link time. This was checked after the merge -- `git grep` over
+  `master` for all eleven names finds nothing under `src/`, `include/` or
+  `test/` -- but it was checked because a sibling agent said to, not because
+  anything in the workflow would have caught it.
+
+**THE CHEAP GUARD IS ONE COMMAND AND IT SHOULD BE THE FIRST ONE**:
+`git merge-base HEAD master` must equal `git rev-parse master`. It takes no
+setup, it names the problem exactly, and it costs nothing when the tree is
+fresh. Nothing else here would have found it: the tree built, the whole suite
+passed, and `refcheck.py` only ever runs against the same stale `docs/`.
+
+
+### F8885. `DemodDataV29` landed, and three more separating counts read zero -- all of them because a value that can only be 0 or 1 was ANDed with words that all had bit 0 set
+
+F8883 held `DemodDataV29` back for want of a fixture. The fixture was built and
+the function is committed: 36,134 differential checks over 96 trials, each one
+EIGHT consecutive blocks with the state carried across, and eleven named wrong
+readings each with a non-zero separating count.
+
+**WHAT THE FIXTURE ACTUALLY NEEDED**, for the next person who has to build one:
+
+- Six constructed objects at their real offsets in the receiver's block --
+  `fpm_agc` at +0x64, `fpm_mrf` at +0x48, `fpm_sre` at +0x90, `fpm_fse` at
+  +0x120, and an `fpm_mtd` and an `fpm_tone` behind the detection block's +0x00
+  and +0x04. Every one is constructed by the BLOB's own `_init` on both sides,
+  so the states are identical bytes and any difference belongs to `src/`.
+- **THE TWO "DEFAULT" CONFIGURATIONS ARE UNUSABLE AND THE LIBRARY SAYS SO.**
+  `FPM_MRF_CFG` is 9:10 with a NULL coefficient pointer -- `src/dsp/fpm_mrf.c`'s
+  own comment calls it a template, not a filter -- and `FPM_SRE_CFG`'s six table
+  pointers are all zero in the object. `MRFv32_CFG` and `SREv32_CFG` are the
+  real instances and are what the fixture uses. Reaching for the name with
+  `FPM_` in it costs a link error at best and a null dereference at worst.
+- The FSE has no configuration template at all; `t_fpm_fse_recv.c` builds its
+  own and this fixture copies that shape, slicer included.
+- Comparing the receiver's block means skipping five pointer FIELDS the two
+  sides' `_init` calls allocated separately -- `fpm_mrf::history`, the SRE's
+  `coeff`/`hist`/`clk` and `rms_buf`, and the FSE's `out_i`/`out_q`/`icoeff`/
+  `qcoeff`/`hist`. Everything else is compared, including both scatter logs.
+
+**AND THEN THE SEPARATING COUNTS DID THE JOB AGAIN**, which is the part worth
+recording. Three of the eleven wrong readings came back zero on the first run
+and a fourth on the second, and all four were the same defect in the FIXTURE:
+
+- `sre.adapt`, `fse.pll_on` and `fse.lms_on` are written as
+  `signal & enable_word`, and `agc.signal` is a `setg` result -- so it is 0 or
+  1 and nothing else. The fixture seeded the three enable words 0x0f, 0x33 and
+  0x55, ALL OF WHICH HAVE BIT 0 SET, so all three products were the same value
+  and transposing two of them, or taking one from the wrong word, changed
+  nothing at all. Two readings separated only once the words were reseeded so
+  that one of the three has bit 0 CLEAR.
+- The three flag words do not reach the output samples on any block, so folding
+  only the returns and the output into the trial's checksum left every reading
+  about them invisible. They are folded in now.
+- With both noise levels the fixture generated, `agc.signal` came back 1 on
+  every block, so "the carrier bit forced to 1" was the same as the truth. A
+  SILENT block is the only stimulus that makes the bit itself observable, and
+  adding one closed the last count.
+
+**THE PATTERN ACROSS F8882 AND THIS ONE IS ONE SENTENCE**: every separating
+count that read zero did so because the fixture could not distinguish two
+values, not because the wrong reading was implausible. The counts are cheap,
+they fire on the first run, and nothing else in the tree would have said a word.
 ## F8886. The fax `*TX_status` block is `struct v22_status` and `struct v32_status`, a third time
 
 *2026-08-31.* `V21TX_status` fills a caller-owned block at +0x00 (a protocol
