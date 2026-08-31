@@ -95291,9 +95291,29 @@ The test is kept in the record because it is the asset: a detector that
 compares `det_at` as an OFFSET rather than as a pointer value is what turned
 an invisible layout error into a 96-check failure.  Rewriting it as a byte
 compare of the object would have reported one differing run and said nothing
-about which field was wrong.  Whoever takes the fax phase should restore
-`t_faxsgd.c` FIRST, from this commit's parent, and make it pass before
-trusting any SGD reconstruction.  (2026-08-30)
+about which field was wrong.
+
+**CORRECTION, 2026-08-31: `t_faxsgd.c` IS NOT RECOVERABLE, AND THE SENTENCE
+THIS REPLACES WAS WRONG.**  It told the fax phase to restore the file "from
+this commit's parent".  The file was never committed -- it existed only as an
+UNTRACKED file in the withdrawing agent's worktree, and the withdrawal deleted
+it rather than preserving it.  Checked before writing this: no commit on any
+branch touches the path, no reachable tree contains it, `git fsck
+--lost-found` holds no matching blob, and the worktree is gone.  It is lost.
+
+That is a defect in HOW the withdrawal was done, not in the decision to
+withdraw.  **The rule it establishes: when work is withdrawn for failing its
+test, COMMIT IT FIRST -- on a side branch, or as a dead file -- and only then
+remove it, so the test survives its subject.**  A finding that promises a
+recovery path must name one that exists; this one sent a future reader into an
+empty tree, which is the "a wrong name is believed by every future reader"
+failure applied to a procedure instead of a name.
+
+What DOES survive is this finding's description of the test, which is enough
+to rebuild it: drive the blob's own object pair, compare `status.det_at` as an
+OFFSET from `buf` rather than as a pointer value, and compare the whole
+0x5c-byte object after every step.  The fax phase must write that test again
+before trusting any SGD reconstruction.  (2026-08-30, corrected 2026-08-31)
 ### F8430. The `VPcmV34Main.cpp +72` leaf batch has NO derivation record, and this is the note saying so
 
 All 67 no-entry-point leaves of the `VPcmV34Main.cpp +72` span are written
