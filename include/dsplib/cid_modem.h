@@ -53,6 +53,16 @@ void cid_threshold(struct cid_modem *ctx, int thr);
 void cid_value(struct cid_modem *ctx, int v);
 
 /*
+ * Retune both receivers to a new LINE rate.  Same mode gating as
+ * cid_threshold: the DTMF receiver's `rate` for modes 1 and 5, the FSK
+ * receiver's for modes 0 and 5.  `rate` arrives as an int and is stored as a
+ * short on both sides, which is the object's own truncation.
+ *
+ * See src/service/cid.c for what it does to the FSK receiver's f02c.
+ */
+void cid_freq_sampl(struct cid_modem *ctx, int rate);
+
+/*
  * ---------------------------------------------------------------------------
  * The two TLV walkers cid_get_strings drives, and Data.c's hex dumper.
  *
@@ -82,5 +92,22 @@ int _look_for_other_than(const char *buf, short start, int except);
  * object does -- not on the output length.
  */
 void data_raw(const char *buf, char *out);
+
+/*
+ * The two renderers `cid_get_strings` picks between, both taking the FSK
+ * receiver and the 0x258-byte scratch at `cid_modem + 0x008`.  The message is
+ * `cid->data` and `cid->pack_len` says whether there is one; both produce a
+ * run of NUL-terminated fields, which is the shape `CID_process` walks.
+ *
+ * `data_unformatted_output` is one inlined `data_raw` over the whole message.
+ *
+ * `data_formatted_output` writes `LABEL = value` fields -- DATE, TIME, NMBR
+ * and, for a multiple-data-message frame, NAME and one MESG per leftover
+ * tag.  It writes NOTHING when `pack_len` is zero, and 600 bytes is the
+ * object's own budget for it.  See src/service/data.c for the four places it
+ * runs past what a careful reading would allow, all of them reproduced.
+ */
+void data_unformatted_output(struct cid *cid, char *out);
+void data_formatted_output(struct cid *cid, char *out);
 
 #endif /* DSPLIB_CID_MODEM_H */

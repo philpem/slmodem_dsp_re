@@ -28,18 +28,18 @@
  * and TLV walkers, written in the same wave from the V32mod.c span:
  * Reconstructed from dsplibs.o cid.c (finding F1410 for the TU map):
  *
+ *   cid_freq_sampl        .text 0x08fd60   107
  *   cid_threshold         .text 0x08fdd0    40
  *   cid_value             .text 0x08fe00    15
  *   _look_for             .text 0x0903c0    72
  *   _look_for_other_than  .text 0x090410    88
  *
- * All four are exported API with no internal referrer (finding F8320's
- * bucket), written here on their own merit.  The rest of the TU --
- * cid_reset, cid_freq_sampl, cid_create, cid_delete, cid_progress,
- * cid_get_strings -- waits for the CID service pass: cid_reset alone was in
- * this batch's scope but calls the unreconstructed `reset_cid` (Rxcid.c),
- * and this tree links no scaffold, so it is left out rather than written
- * half-connected.  See docs/findings.md F8492.
+ * The four leaves were exported API with no internal referrer (finding
+ * F8320's bucket), written on their own merit; `cid_freq_sampl` came with the
+ * CID service pass and calls nothing.  The rest of the TU -- cid_reset,
+ * cid_create, cid_delete, cid_progress, cid_get_strings -- is written as the
+ * receiver underneath it lands.  See docs/findings.md F8492 for why the
+ * link constraint, not difficulty, is what orders this file.
  *
  * See include/dsplib/cid_modem.h for the object and the mode encoding.
  */
@@ -72,7 +72,6 @@ extern int modem_send_to_tty(void *m, const void *buf, int n);
 extern void *cid_create(void *m, unsigned cid_val, int w)
 	DSPLIB_CID_UNWRITTEN;
 extern void cid_delete(void *cid) DSPLIB_CID_UNWRITTEN;
-extern void cid_freq_sampl(void *cid, int rate) DSPLIB_CID_UNWRITTEN;
 extern short cid_progress(void *cid, short *in, int what, short *count)
 	DSPLIB_CID_UNWRITTEN;
 extern char *cid_get_strings(void *cid) DSPLIB_CID_UNWRITTEN;
@@ -86,6 +85,14 @@ extern char *cid_get_strings(void *cid) DSPLIB_CID_UNWRITTEN;
  * walks a longer buffer in chunks of it.
  */
 #define CID_CHUNK	192
+
+/*
+ * What `cid_freq_sampl` puts back into the FSK receiver's f02c, and what
+ * `create_cid` seeds it with.  Usage inference only -- the object has no
+ * string and no other caller that types it, and the value is the same 9 down
+ * all three of cid_freq_sampl's arms.
+ */
+#define CID_F02C_RESET	9
 
 struct CID {
 	void *modem;		/* +0x0 slmodemd's struct modem       */
@@ -193,6 +200,41 @@ CID_process(void *cidp, void *in, int count)
 	return ret;
 }
 
+
+/*
+ * Retune both receivers.  The mode gating is cid_threshold's -- `!= 0` reaches
+ * the DTMF receiver, `!= 1` the FSK one -- and `rate` is stored as a short on
+ * both sides, which is the object's own truncation of the int argument.
+ *
+ * THE THREE STORES OF 9 ARE THE OBJECT'S.  It writes `movw $0x9,0x2c(...)`
+ * three times over, into the FSK receiver's f02c, from three separate tests:
+ * mode 0 with rate 9600, mode 0 with rate 8000, and mode > 1 for any rate.
+ * The first two are if-converted in the object -- one `sete` for `mode == 0`,
+ * reused, ANDed against a second `sete` per rate -- so they are two
+ * statements sharing a condition and not one test of a rate pair.  The value
+ * is 9 in all three, which is also what create_cid seeds f02c with, so the
+ * net effect over the modes and rates this service uses is to put it back.
+ * Kept as three because that is what the object encodes; nothing here reads
+ * a rate-dependent value into it.
+ *
+ * Mode 1 touches the FSK receiver not at all, which is why the pointer may be
+ * null there: every f02c store is under `mode == 0` or `mode > 1`.
+ */
+void
+cid_freq_sampl(struct cid_modem *ctx, int rate)
+{
+	if (ctx->mode != 0)
+		ctx->dtmf->rate = (short)rate;
+	if (ctx->mode != 1)
+		ctx->fsk->rate = (short)rate;
+
+	if (ctx->mode == 0 && rate == CID_RATE_9600)
+		ctx->fsk->f02c = CID_F02C_RESET;
+	if (ctx->mode == 0 && rate == CID_RATE_8000)
+		ctx->fsk->f02c = CID_F02C_RESET;
+	if (ctx->mode > 1)
+		ctx->fsk->f02c = CID_F02C_RESET;
+}
 
 /*
  * Both writes are gated on the mode, with the same two tests cid_create and

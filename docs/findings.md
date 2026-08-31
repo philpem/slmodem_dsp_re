@@ -98176,3 +98176,50 @@ period gate, and every arm a live machine visits sets the count. Recorded
 because it is the original's, because it is one poked sub-state away, and
 because it is the reason this test needed a buffer four times the size of the
 one a reasonable reading would have given it.
+
+## F8730. `cid_freq_sampl` writes 9 into the FSK receiver's f02c three separate times, from three separate tests, and the value never varies
+
+*2026-08-31.* `cid_freq_sampl` (`.text` 0x08fd60, 107 bytes) is the Caller ID
+service's rate setter. Two of its four statements are the mode gating
+`cid_threshold` already uses -- `mode != 0` reaches the DTMF receiver's `rate`
+at +0x33c, `mode != 1` reaches the FSK receiver's at +0x2a -- and the argument
+is an `int` stored as a `short` on both sides.
+
+The other three are the interesting part. The object emits `movw $0x9,0x2c(reg)`
+**three times**, into `struct cid`'s `f02c`, under three different conditions:
+
+    8fd89  xor %ecx,%ecx / test %edx,%edx / sete %cl      ecx = (mode == 0)
+    8fd90  cmp $0x2580,%ebx / sete %al                    eax = (rate == 9600)
+    8fd99  test %ecx,%eax / je ...  -> movw $0x9,0x2c
+    8fda6  cmp $0x1f40,%ebx / sete %bl                    ebx = (rate == 8000)
+    8fdaf  test %ecx,%ebx / je ...  -> movw $0x9,0x2c
+    8fdbc  dec %edx / jle ...       -> movw $0x9,0x2c     mode > 1
+
+The `mode == 0` predicate is computed ONCE, into `%ecx`, and reused for both
+rate tests; the `mode > 1` arm is a plain compare on the same register. That
+is what a compiler does to two statements sharing an outer condition, not to
+one test of a rate pair -- so the source is three `if`s and not one, and the
+reconstruction keeps them as three.
+
+**The value is 9 in all three, and 9 is also what `create_cid` seeds `f02c`
+with** (`include/dsplib/cid.h`, from the CID leaf batch). So over the modes and
+rates this service actually uses, the function's whole effect on `f02c` is to
+put it back where it started. Nothing in the object reads a rate-dependent
+value into it, and no format string names it, so `CID_F02C_RESET` is defined
+in `src/service/cid.c` as usage inference and the field keeps its `f02c` name.
+
+**The gating is also what makes the null pointer safe.** Mode 1 builds no FSK
+receiver, and every one of the five stores above is under `mode != 1`,
+`mode == 0` or `mode > 1`; mode 1 touches the FSK side not at all. The mirror
+holds for mode 0 and the DTMF side.
+
+`t_cidsvc` drives all ten modes against thirteen rates, 546 checks, and
+compares the whole of `struct cid_modem`, `struct dtmf_rx` and `struct cid`
+rather than the three fields the function writes. The two receiver pointers
+are zeroed in a copy before the comparison, since they hold different
+addresses on the two sides by construction. Two of the rates are 0x12580 and
+0x11f40 -- 9600 and 8000 in the low sixteen bits and neither as an `int` --
+which is what separates the stored width from the compared one; a test using
+only in-range rates passes with the `short` cast deleted. Seven anti-vacuity
+counters, all read off the REFERENCE side (finding F134), assert that each of
+the five stores fired and that both gates were seen shut.

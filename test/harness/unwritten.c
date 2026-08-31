@@ -36,7 +36,6 @@
 
 extern void *ref_cid_create(void *m, unsigned cid_val, int w);
 extern void ref_cid_delete(void *cid);
-extern void ref_cid_freq_sampl(void *cid, int rate);
 extern short ref_cid_progress(void *cid, short *in, int what, short *count);
 extern char *ref_cid_get_strings(void *cid);
 
@@ -52,11 +51,11 @@ cid_delete(void *cid)
 	ref_cid_delete(cid);
 }
 
-void
-cid_freq_sampl(void *cid, int rate)
-{
-	ref_cid_freq_sampl(cid, rate);
-}
+/*
+ * `cid_freq_sampl`'s bridge is GONE: src/service/cid.c defines it, and the
+ * "WHEN A BRIDGED SYMBOL IS RECONSTRUCTED" paragraph above is what happened.
+ * t_cidsvc drives it straight against ref_cid_freq_sampl with no split.
+ */
 
 short
 cid_progress(void *cid, short *in, int what, short *count)
