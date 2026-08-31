@@ -103799,3 +103799,38 @@ was measured; that is why the shape is written down.
 
 Findings F8933 records the first batch's ten (nine caught, one provably
 equivalent) and the timestamp trap that made its closing check lie.
+
+### F9000. A typedef-based offset assertion named after the FIELD collides, and only the period compiler says so
+
+`src/fax/v21.c`'s `V21_ASSERT_OFF` built its checking typedef as
+`v21_off_##field`, which is unique only while no two structures in the file
+share a field name. Two of them do -- `mrf` is a member of both
+`struct v21_tx_dsp` and `struct v21_rx_dsp` -- so the file contained two
+typedefs of one name.
+
+**GCC 14 accepted it in silence.** C11 permits a typedef to be redefined
+identically, and both expansions are `typedef char v21_off_mrf[1]`, so the
+modern build compiled clean and every `make one` run was green. **GCC 3.4.2
+rejects it**, and `make period` did not compile the translation unit at all:
+
+    src/fax/v21.c:529: error: redefinition of typedef 'v21_off_mrf'
+    src/fax/v21.c:523: error: previous declaration of 'v21_off_mrf' was here
+    period: 1 translation units FAILED TO COMPILE
+
+This is the fourth distinct thing in this project that the modern compiler hid
+from `make one` and the period compiler caught -- after the V.22 lifecycle's
+buffer overrun (F8607), the `t_v34rx.c` implicit declaration, and the general
+case in `docs/remaining.md`. It is worth noting what makes this one different:
+the other three were BEHAVIOUR. This one would not build, which is the loudest
+possible failure, and it still reached a merged tree because the only compiler
+that objects is the one no agent can run.
+
+**Fixed by discriminating on `__LINE__` rather than by renaming the one
+colliding field**, because renaming fixes today's collision and the macro
+brings it back with the next added field. A typedef emits no code, so this
+cannot move `compare.py`. The tree's other spelling of the same idea --
+`v22.c`'s `V22_ASSERT_OFF(tag, type, field, want)` -- takes an explicit tag and
+is equally safe; either is fine, naming after the field alone is not.
+
+`tools/assertlive.py` still reports the guard live, so the assertions are
+being compiled and not silently skipped.  (2026-08-31)

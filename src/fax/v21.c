@@ -515,8 +515,19 @@ TxNoCarrierV21(void *modem, const unsigned short *bits, short *out,
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 
+/*
+ * THE TYPEDEF NAME CARRIES `__LINE__`, AND THAT IS NOT DECORATION.  Naming it
+ * after the FIELD alone collides the moment two structures here share a field
+ * name, and two of them do: `mrf` is in both `v21_tx_dsp` and `v21_rx_dsp`.
+ * GCC 14 accepts an identical typedef redefinition (C11 permits it) and said
+ * nothing; GCC 3.4.2 rejects it outright, so `make period` -- the tier that
+ * decides -- would not compile this file at all.  A discriminator that cannot
+ * repeat is what keeps the next added field from bringing it back.
+ */
+#define V21_CAT2(a, b)	a##b
+#define V21_CAT(a, b)	V21_CAT2(a, b)
 #define V21_ASSERT_OFF(type, field, off) \
-	typedef char v21_off_##field[ \
+	typedef char V21_CAT(v21_off_line_, __LINE__)[ \
 		((int)__builtin_offsetof(type, field) == (off)) ? 1 : -1]
 
 V21_ASSERT_OFF(struct v21_tx_dsp, fsm, 0x00);
