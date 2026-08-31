@@ -903,5 +903,9 @@
  "voicedpdel": [
   "src/service/beepgen.c",
   "build/test/t_voicedpdel"
+ ],
+ "voicedprx": [
+  "src/service/voicedp.c",
+  "build/test/t_voicedprx"
  ]
 }

@@ -99108,3 +99108,142 @@ was checked rather than assumed.
 `detector_delete` (0xad620) is GLOBAL too and reads `0x10(%esp)` into `%esi`
 at 0xad627, same answer.
 
+
+### F8788. `beepgen_config`'s second slot is the host's SETTINGS CALLBACK, and beepgen calls it with the wrong number of arguments
+
+*2026-08-31.* `include/dsplib/beepgen.h` types the sixteen-byte host block's
++0x04 as `void (*fn_04)(void *modem)`, because the only reconstructed use was
+`beepgen_start_beep`'s, which calls the copy at `beepgen` +0x11c with one
+argument and ignores any result. Two sites in `voice_set_rx` (0xaf190) say
+what it actually is.
+
+**It is passed to `silence_create` as that function's `query`:**
+
+    af1c8:	8b 4b 04             	mov    0x4(%ebx),%ecx    <- cfg.fn_04
+    af1cb:	89 4c 24 08          	mov    %ecx,0x8(%esp)    <- arg 3
+    af1db:	call   silence_create
+
+and `silence.h` -- written from `silence_progress`, independently -- types
+that parameter `unsigned int (*)(void *obj, int what)`.
+
+**And it is CALLED here, with two arguments, for an unsigned answer:**
+
+    af226:	b9 48 00 00 00       	mov    $0x48,%ecx
+    af237:	89 4c 24 04          	mov    %ecx,0x4(%esp)    <- arg 2
+    af23b:	8b 03                	mov    (%ebx),%eax       <- cfg.modem
+    af240:	ff 53 04             	call   *0x4(%ebx)
+    af243:	31 d2                	xor    %edx,%edx
+    af24a:	52                   	push   %edx
+    af24b:	50                   	push   %eax
+    af24c:	df 2c 24             	fildll (%esp)            <- (float)(unsigned)
+
+`push 0; push %eax; fildll` is GCC's unsigned-32-to-float sequence, so the
+return type is `unsigned int` and not `int`. Three such calls, at +0x48,
++0x8a and +0x8b, each scaled by 1/128 into a per-format receive gain.
+
+So the slot is `unsigned int (*)(void *, int)`, and `beepgen_start_beep`'s
+one-argument call of the same function pointer reads a stack word the caller
+never wrote. **That is the object's, and it is cdecl, so it does not corrupt
+anything** -- the callee simply sees rubbish where its `what` should be.
+
+`beepgen.h` IS NOT CHANGED BY THIS FINDING, deliberately. Retyping the field
+would need a cast at `beepgen_create`'s copy and another at the call, on two
+functions already measured, to buy a comment; `voicedp.c` casts at its own
+call site instead and points here. Whoever next touches `beepgen_start_beep`
+should decide it with `byteident.py` rather than from this paragraph.
+
+### F8789. `voice_rx` reads `*countp` as a SIGNED short once and as an unsigned short everywhere else
+
+*2026-08-31.* The first load is the odd one:
+
+    af2ed:	0f bf 02             	movswl (%edx),%eax       <- sign-extended
+    af2fa:	0f b7 d8             	movzwl %ax,%ebx          <- and back down
+
+and every later read of the same address is `movzwl` (0xaf3bd, 0xaf606,
+0xaf510). The sign-extended value is used for exactly one thing: it is
+`silence_progress`'s third argument, and `silence.h` declares that parameter
+`short`.
+
+That is F613's forced case and it settles the source rather than leaving a
+choice: `short n = *countp;` where `countp` is the handlers' shared
+`unsigned short *`, with `(unsigned short)n` for the loop bounds. The two
+readings agree over every value below 32768, which is every value the object
+can produce, so no test can separate them -- the disassembly is the only
+evidence and it is unambiguous.
+
+The dead `jle` at 0xaf30e is the corroboration: the compiler emitted a
+`<= 0` guard on a value it had just zero-extended and already tested against
+zero, which is what a signed promotion of an unsigned short looks like.
+
+### F8790. `voice_rx`'s DC smoothing keeps 99% of the OLD estimate, and reading it the other way round survives every check but the second block
+
+*2026-08-31.* The fold is six x87 instructions and two `.rodata.cst8`
+doubles:
+
+    af5d1:	dd 05 b8 01 00 00    	fldl   0x1b8      <- onto the block mean
+    af5d7:	dd 05 b0 01 00 00    	fldl   0x1b0      <- onto the stored dc
+    af5dd:	d8 8f cc 07 00 00    	fmuls  0x7cc(%edi)
+    af5e3:	d9 c9                	fxch   %st(1)
+    af5e5:	de ca                	fmulp  %st,%st(2)
+    af5e7:	de c1                	faddp  %st,%st(1)
+
+and the section holds them in the order 0.99, 0.01:
+
+     01b0 ae47e17a 14aeef3f 7b14ae47 e17a843f
+
+So 0x1b0 is 0.99 and it is the one `fmuls 0x7cc` applies -- to the STORED
+estimate -- while 0x1b8's 0.01 travels down the stack to the block mean. The
+result is `dc = dc * 0.99 + mean * 0.01`: a 100-block time constant, which is
+also the only reading that makes physical sense for a DC tracker.
+
+**This reconstruction had it backwards and nothing structural caught it.**
+`mean * 0.99 + dc * 0.01` has the same instruction sequence, the same
+constants, the same register pressure and the same everything a codegen
+comparison can see; it is a different function only in what it computes. The
+first block of any sequence is the SEED path, which does not use either
+weight, so a fixture that ran one block per context would have passed --
+`t_voicedprx` runs four, and the mismatch appears on the second, in the low
+sixteen bits of `+0x7cc`.
+
+Two lessons, and the second is the one worth keeping:
+
+- **Read a constant's ADDRESS out of the section dump, not out of the order
+  it is loaded in.** The object pushes 0x1b8 first precisely so that it ends
+  up deepest; "first loaded" and "first operand" are opposites here.
+- **A stateful estimator needs a MULTI-BLOCK fixture.** One call per context
+  exercises the seed and nothing else, and every recursive filter in this
+  object has that shape. The rule is the same one D955/F8587 makes about
+  planting a subscript: the fixture has to reach the state, not just the
+  code.
+
+### F8791. The `>> 2` in `voice_rx` costs two bits of u-law range and makes its own DLE shield unreachable
+
+*2026-08-31.* The receive loop converts a float to a 16-bit integer and then
+shifts it right by two before encoding:
+
+    af410:	d8 0d 54 05 00 00    	fmuls  0x554          <- 32767.0f
+    af424:	df 5c 24 32          	fistps 0x32(%esp)
+    af42c:	0f b7 44 24 32       	movzwl 0x32(%esp),%eax
+    af431:	98                   	cwtl
+    af432:	c1 f8 02             	sar    $0x2,%eax
+    af438:	call   linear2ulaw
+
+so a full-scale float reaches `linear2ulaw` as +/-8191 rather than +/-32767 --
+12 bits into a coder built for 14. That is a scaling choice and this project
+does not second-guess it.
+
+What it also does is make the DLE shield forty instructions later dead, and
+that is measurable rather than arguable. An exhaustive sweep of
+`linear2ulaw` over its whole 16-bit domain finds 0x10 for exactly 512 inputs,
+the contiguous run -16251..-15740; over the reachable [-8192, 8191] it
+produces no code below 0x1f at all. Deviation D984 records the shield;
+`t_voicedprx` carries the sweep, asserts the absence, and separately asserts
+that `linear2ulaw(-16250)` IS 0x10 -- because an absence measured with a
+broken call looks the same as an absence.
+
+**The general point is about coverage claims.** The fixture's first version
+asserted that the doubling HAD fired, which is the normal way to keep a
+mutation set honest, and it failed on every input because the arm cannot fire.
+The right answer was not to hunt for an input; it was to prove there is none
+and assert that instead. A coverage counter that can never move is F134's
+dead detector wearing the opposite sign.

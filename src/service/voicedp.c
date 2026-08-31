@@ -7,6 +7,8 @@
  *     0xabef0  voice_set_online    47    class1tx.c +94
  *     0xabf20  voice_set_duplex    45    class1tx.c +94
  *     0xabf50  voice_online       508    class1tx.c +94
+ *     0xaf190  voice_set_rx       305    Fdspkrnl.c +13
+ *     0xaf2d0  voice_rx           949    Fdspkrnl.c +13
  *     0xafd60  voice_tx          1150    Fdspkrnl.c +13
  *     0xb01e0  voice_duplex       251    Fdspkrnl.c +13
  *
@@ -31,6 +33,10 @@
  *                  then converts a mean-removed block out of the FIFO into
  *                  `rx_flt`/`tx_lin`.  Returns 13 when the FIFO is short,
  *                  3 on a mode mismatch.
+ *   voice_rx       removes the block's DC, scales it, converts it to escaped
+ *                  u-law in `tx_lin` and lets the silence detector append to
+ *                  that.  Returns 8 when the stream closes, 7 on an over-long
+ *                  block, 4 on a mode mismatch.
  *   voice_duplex   runs `FDSP_DP_Run` over the whole block and then overlays
  *                  the beep on the receive side.  Returns 1, 5 as above.
  *
@@ -40,8 +46,8 @@
  * `rx_lin` and writes back how much room the FIFO now has; `voice_online`
  * writes it and never reads it.
  *
- * All five are GLOBAL in the blob, so all five are plain cdecl -- there is no
- * regparm question here.  Finding F8770's hazard is about LOCAL symbols and
+ * All seven are GLOBAL in the blob, so all seven are plain cdecl -- there is
+ * no regparm question here.  Finding F8770's hazard is about LOCAL symbols and
  * the prologues confirm it: each of these reads its arguments off the stack.
  */
 
@@ -50,6 +56,8 @@
 #include "dsplib/detector.h"
 #include "dsplib/fdspkrnl.h"
 #include "dsplib/fifo8.h"
+#include "dsplib/pcm.h"
+#include "dsplib/silence.h"
 #include "dsplib/voice.h"
 #include "dsplib/voicecmd.h"
 
@@ -77,9 +85,18 @@ VOICE_ASSERT_OFF(beep_done, 0x740);
 VOICE_ASSERT_OFF(dle_etx, 0x744);
 VOICE_ASSERT_OFF(dle_can, 0x748);
 VOICE_ASSERT_OFF(out_format, 0x74c);
+VOICE_ASSERT_OFF(rx_armed, 0x756);
 VOICE_ASSERT_OFF(rate_bits, 0x758);
 VOICE_ASSERT_OFF(underrun, 0x75c);
+VOICE_ASSERT_OFF(detector_enable_rx, 0x760);
 VOICE_ASSERT_OFF(detector_enable, 0x762);
+VOICE_ASSERT_OFF(marker_period, 0x764);
+VOICE_ASSERT_OFF(marker_countdown, 0x766);
+VOICE_ASSERT_OFF(dc_init, 0x7c8);
+VOICE_ASSERT_OFF(dc, 0x7cc);
+VOICE_ASSERT_OFF(gain_fmt1, 0x7d0);
+VOICE_ASSERT_OFF(gain_other, 0x7d4);
+VOICE_ASSERT_OFF(gain_fmt3, 0x7d8);
 
 typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 
@@ -159,7 +176,57 @@ typedef char voice_ctx_size[(sizeof(struct voice_ctx) == 0x7dc) ? 1 : -1];
 /* The nonzero code each handler returns when `int_0014` differs from `mode`. */
 #define VOICE_ONLINE_MODE_STATUS	2
 #define VOICE_TX_MODE_STATUS		3
+#define VOICE_RX_MODE_STATUS		4
 #define VOICE_DUPLEX_MODE_STATUS	5
+
+/*
+ * `voice_rx`'s two other answers: 8 when the block ends the stream with
+ * <DLE><ETX>, and 7 when the caller asked for more samples than the working
+ * buffer's fixed 200.  The object has names for neither.
+ */
+#define VOICE_RX_ETX_STATUS		8
+#define VOICE_RX_TOO_MANY_STATUS	7
+
+/*
+ * The most samples `voice_rx` will convert through the context's own float
+ * buffer.  It is a hard immediate (`cmp $0xc8,%dx`), and only the two 16-bit
+ * arms test it -- the float arm converts in the caller's buffer and is not
+ * bounded at all.
+ */
+#define VOICE_RX_MAX_SAMPLES		200
+
+/* Samples per unit of `marker_period` -- 100 ms at 8 kHz. */
+#define VOICE_RX_MARKER_UNIT		800
+
+/*
+ * Receive scaling, both halves of it.  The host's answer is divided by 128
+ * once, in `voice_set_rx`; the two 16-bit arms then divide by 32767 as well,
+ * on every block.  `0x38000100` is the float nearest 1/32767, which is what
+ * fixes the second: the object MULTIPLIES, so the reciprocal is a constant
+ * expression in the source rather than a division the compiler folded --
+ * GCC will not turn `/ 32767.0f` into a multiply without fast math.
+ */
+#define VOICE_RX_PARAM_SCALE		(1.0f / 128.0f)
+#define VOICE_RX_LINEAR_SCALE		(1.0f / 32767.0f)
+
+/* The full scale `voice_rx` converts back through on the way to u-law. */
+#define VOICE_RX_FULL_SCALE		32767.0f
+
+/*
+ * The DC estimate's smoothing, and the argument `voice_rx` hands
+ * `silence_is_more_then` -- 0.8 seconds (silence.h settles the unit).  The
+ * first two are `double` literals in the object's arithmetic; the third is a
+ * float in `.rodata.cst4`.
+ *
+ * WHICH WEIGHT GOES ON WHICH TERM IS `.rodata.cst8`'s TO SAY, and it is easy
+ * to get backwards -- this reconstruction did, and the test caught it at the
+ * second block of every sequence.  0x1b0 is 0.99 and 0x1b8 is 0.01, the
+ * object loads 0x1b8 FIRST (so it ends up on the block mean) and 0x1b0 second
+ * (so it ends up on the stored estimate).  99% old, 1% new.  Finding F8790.
+ */
+#define VOICE_RX_DC_KEEP		0.99
+#define VOICE_RX_DC_FOLD		0.01
+#define VOICE_RX_SILENCE_SECONDS	0.8f
 
 /*
  * Go online: mode 2, the beep-only handler, and the detector enabled with
@@ -247,6 +314,183 @@ voice_online(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
 
 	if (v->int_0014 != v->mode && v->int_0014 != 0)
 		ret = VOICE_ONLINE_MODE_STATUS;
+	return ret;
+}
+
+/*
+ * Go into receive: mode 0, the receive handler, the receive detector mask, a
+ * re-created silence detector, a fresh marker countdown and three gains read
+ * from the host.
+ *
+ * `silence_create`'s RESULT IS DISCARDED.  The object calls it with the
+ * pointer `voice_create` already stored and never stores what comes back --
+ * harmless while that pointer is non-NULL, since the callee initialises in
+ * place and returns its argument, and a leak if it ever is.  Deviation D988.
+ *
+ * `cfg.fn_04` IS THE HOST'S SETTINGS CALLBACK, and this function is what
+ * shows it.  `beepgen.h` types that slot `void (*)(void *modem)` from the one
+ * place `beepgen_start_beep` calls it; here it is called with TWO arguments
+ * and its unsigned answer converted to float, and it is also what
+ * `silence_create` is handed as its `query`.  Finding F8788; the cast below
+ * is that finding and not a convenience.
+ */
+void
+voice_set_rx(struct voice_ctx *v)
+{
+	unsigned int (*query)(void *obj, int what) =
+	    (unsigned int (*)(void *, int))v->cfg.fn_04;
+
+	v->rx_armed = 1;
+	v->mode = 0;
+	v->handler = voice_rx;
+	detector_set_enable(v->detector, (short)v->detector_enable_rx);
+	silence_create(v->silence, v->cfg.modem, query);
+	v->marker_countdown = (unsigned short)(v->marker_period
+					       * VOICE_RX_MARKER_UNIT);
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Sample rate 8000\n");
+
+	v->rate_bits.s.rate = 8000;
+	v->rate_bits.s.bits = 8;
+	v->dc = 0.0f;
+	v->dc_init = 1;
+	v->gain_fmt1 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)
+		       * VOICE_RX_PARAM_SCALE;
+	v->gain_fmt3 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)
+		       * VOICE_RX_PARAM_SCALE;
+	v->gain_other = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)
+			* VOICE_RX_PARAM_SCALE;
+}
+
+/*
+ * The receive block handler: line samples in, an escaped u-law byte stream
+ * out.
+ *
+ * Four stages.  (1) The mean of the incoming float block folds into a running
+ * DC estimate at one part in a hundred, and that estimate is subtracted from
+ * every sample.  (2) The block is scaled by the gain its output format
+ * selects -- formats 1 and 3 convert from `rx_lin` into the context's own
+ * float buffer, everything else scales the caller's `tx_flt` in place.
+ * (3) Each sample becomes a u-law byte in `tx_lin`, with a literal DLE
+ * doubled and a periodic <DLE>'T' marker inserted.  (4) `silence_progress`
+ * appends its own escapes after them, and a pending <DLE><CAN> closes the
+ * stream with <DLE><ETX>.
+ *
+ * `rx_flt` is never read.  `tx_lin` is a BYTE stream here, whatever the
+ * handler signature calls it, and `tx_flt` is both the input block and, in
+ * the float arm, the working buffer.
+ *
+ * NOTE THE ASYMMETRY OF THE 200-SAMPLE BOUND: formats 1 and 3 refuse a
+ * longer block outright (answer 7), and the float arm neither tests nor
+ * needs it, because it works in the caller's buffer.
+ */
+int
+voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt, float *tx_flt,
+	 short *tx_lin, unsigned short *hostcount, unsigned short *countp)
+{
+	unsigned char *out = (unsigned char *)tx_lin;
+	float *flt = v->flt;
+	float sum = 0.0f;
+	short n = *countp;
+	unsigned short have = (unsigned short)n;
+	unsigned short i;
+	unsigned short j = 0;
+	int k;
+	int ret = 0;
+
+	(void)rx_flt;
+
+	if (have != 0) {
+		float dc;
+
+		for (k = 0; k < have; k++)
+			sum += tx_flt[k];
+		dc = sum / have;
+		if (v->dc_init)
+			v->dc_init = 0;
+		else
+			dc = dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP;
+		v->dc = dc;
+		for (k = 0; k < have; k++)
+			tx_flt[k] -= v->dc;
+	}
+
+	/*
+	 * D989: the answer is thrown away.  `silence_is_more_then` reads the
+	 * detector and returns a verdict; the object calls it here -- on both
+	 * the empty-block and the non-empty path -- and uses neither result.
+	 */
+	(void)silence_is_more_then(v->silence, VOICE_RX_SILENCE_SECONDS);
+
+	if (v->rx_armed != 1) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("RX WAIT ABORT\n");
+		*countp = 0;
+	} else {
+		float gain;
+
+		if (v->out_format == 3 || v->out_format == 1) {
+			gain = VOICE_RX_LINEAR_SCALE
+			       * (v->out_format == 1 ? v->gain_fmt1
+						     : v->gain_fmt3);
+			if (*countp > VOICE_RX_MAX_SAMPLES) {
+				if (DSPLIB_DEBUG_ON())
+					dsplibs_debug_printf(
+					  "rx buffer greater than internal\n");
+				return VOICE_RX_TOO_MANY_STATUS;
+			}
+			for (i = 0; i < *countp; i++)
+				v->flt[i] = rx_lin[i] * gain;
+		} else {
+			gain = v->gain_other;
+			flt = tx_flt;
+			for (i = 0; i < *countp; i++)
+				tx_flt[i] *= gain;
+		}
+
+		for (i = 0; i < have; i++) {
+			unsigned char b;
+
+			b = linear2ulaw((short)(flt[i] * VOICE_RX_FULL_SCALE)
+					>> 2);
+			out[j] = b;
+			if (b == VOICE_DLE) {
+				j++;
+				out[j] = VOICE_DLE;
+			}
+			j++;
+			if (v->marker_period != 0) {
+				v->marker_countdown--;
+				if (v->marker_countdown == 0) {
+					out[j] = VOICE_DLE;
+					out[j + 1] = VOICE_DLE_MARK;
+					j = (unsigned short)(j + 2);
+					v->marker_countdown =
+					    (unsigned short)
+					    (v->marker_period
+					     * VOICE_RX_MARKER_UNIT);
+				}
+			}
+		}
+
+		*countp = j;
+		silence_progress(v->silence, flt, n, out + j, countp);
+
+		if (v->dle_can) {
+			if (DSPLIB_DEBUG_ON())
+				dsplibs_debug_printf(
+				    "****** Send DLE ETX\n");
+			_status(out + *countp, countp, 3);
+			v->rx_armed = 0;
+			detector_set_enable(v->detector, 0);
+			ret = VOICE_RX_ETX_STATUS;
+		}
+	}
+
+	*hostcount = 0;
+	if (v->int_0014 != v->mode)
+		ret = VOICE_RX_MODE_STATUS;
 	return ret;
 }
 

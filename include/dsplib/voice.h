@@ -33,6 +33,7 @@ extern "C" {
 struct voice_ctx;
 struct detector;
 struct fifo8;
+struct silence;
 
 /*
  * What goes in `voice_ctx.handler` at +0x20.  The shape is the one
@@ -118,7 +119,7 @@ struct voice_ctx {
 	voice_handler_fn	handler;	/* +0x020 voice_online at
 						 *        creation         */
 	struct fifo8		*fifo;		/* +0x024 FIFO8_create     */
-	void			*silence;	/* +0x028 silence_create   */
+	struct silence		*silence;	/* +0x028 silence_create   */
 	unsigned char		pad_002c[0x034 - 0x02c];
 	int			*dp;		/* +0x034 FDSP_DP_Create,
 						 *        FDSP_DP_Run's
@@ -166,7 +167,16 @@ struct voice_ctx {
 	 */
 	int			out_format;
 
-	unsigned char		pad_0750[0x758 - 0x750];
+	unsigned char		pad_0750[0x756 - 0x750];
+
+	/*
+	 * +0x756  The receive path's arm.  `voice_set_rx` sets it to 1 beside
+	 * the handler it installs; `voice_rx` does nothing at all unless it
+	 * reads exactly 1 (it prints "RX WAIT ABORT" and gives up), and
+	 * clears it on the block that sends <DLE><ETX>.
+	 */
+	short			rx_armed;
+
 	union voice_rate_bits	rate_bits;	/* +0x758                  */
 
 	/*
@@ -177,7 +187,13 @@ struct voice_ctx {
 	short			underrun;
 
 	short			short_075e;	/* +0x75e create writes 0x3f */
-	short			short_0760;	/* +0x760 create writes 0x3f */
+
+	/*
+	 * +0x760  The receive path's detector mask, typed by the callee
+	 * `voice_set_rx` hands it to, exactly as `detector_enable` below is
+	 * typed by `voice_set_online`.  `voice_create` starts it at 0x3f.
+	 */
+	unsigned short		detector_enable_rx;
 
 	/*
 	 * +0x762  The word `voice_set_online` hands to `detector_set_enable`;
@@ -186,8 +202,47 @@ struct voice_ctx {
 	 */
 	unsigned short		detector_enable;
 
-	short			short_0764;	/* +0x764 create writes 0    */
-	unsigned char		pad_0766[0x7dc - 0x766];
+	/*
+	 * +0x764  How often `voice_rx` emits its <DLE>'T' marker, in units of
+	 * 800 samples -- 100 ms at this object's 8 kHz.  Both `voice_set_rx`
+	 * and `voice_rx` reload +0x766 with `marker_period * 800` and count
+	 * it down one per output sample; a zero here disables the marker
+	 * outright.  `voice_create` starts it at 0, so the marker is off
+	 * until something sets it.
+	 *
+	 * +0x766  That countdown.
+	 */
+	unsigned short		marker_period;
+	unsigned short		marker_countdown;
+
+	unsigned char		pad_0768[0x7c8 - 0x768];
+
+	/*
+	 * +0x7c8  Seed the DC estimate rather than smooth it.  `voice_set_rx`
+	 * sets it to 1 and `voice_rx` clears it on the first block it sees,
+	 * taking that block's mean whole; every later block folds in at one
+	 * part in a hundred.
+	 *
+	 * +0x7cc  The DC estimate itself, subtracted from every receive
+	 * sample.
+	 */
+	int			dc_init;
+	float			dc;
+
+	/*
+	 * +0x7d0 / +0x7d8 / +0x7d4  The receive gain, one per output format,
+	 * each read from the host through `cfg.fn_04` at +0x48, +0x8a and
+	 * +0x8b and scaled by 1/128.  `voice_rx` picks `fmt1` for format 1,
+	 * `fmt3` for format 3 and `other` for everything else, which is what
+	 * names them -- nothing in the object names the three parameters.
+	 *
+	 * The two 16-bit formats additionally divide by 32767 on the way in;
+	 * the `other` arm does not.  That asymmetry is the object's.
+	 */
+	float			gain_fmt1;
+	float			gain_other;
+	float			gain_fmt3;
+	/* 0x7dc bytes in total -- voice_create's allocation size. */
 };
 
 /*
@@ -196,6 +251,24 @@ struct voice_ctx {
  * `voice_dle_command` and is not copied through.
  */
 #define VOICE_DLE	0x10
+
+/*
+ * The byte `voice_rx` shields with a DLE every `marker_period` blocks of 800
+ * samples.  Nothing in the object says what the host makes of it; the letter
+ * is the object's own immediate (`movb $0x54,...` at 0xaf47d).
+ */
+#define VOICE_DLE_MARK	'T'
+
+/*
+ * The three settings `voice_set_rx` reads through `cfg.fn_04`.  They are not
+ * in `modem_params.h`, which stops at 63 plus one outlier -- the same
+ * position `silence.h` is in with its own 0x52 and 0x53, and the same answer:
+ * the numbers are the object's and the names say what the answers are USED
+ * for, which is all the object establishes.
+ */
+#define VOICE_PARAM_RX_GAIN_FMT1	0x48
+#define VOICE_PARAM_RX_GAIN_FMT3	0x8a
+#define VOICE_PARAM_RX_GAIN_OTHER	0x8b
 
 /*
  * Map a DLE event code to a status code: 1 -> 10, 2 -> 11, 4 -> 12, and
@@ -217,9 +290,13 @@ int voice_tx(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 int voice_duplex(struct voice_ctx *v, short *rx_lin, float *rx_flt,
 		 float *tx_flt, short *tx_lin, unsigned short *hostcount,
 		 unsigned short *countp);
+int voice_rx(struct voice_ctx *v, short *rx_lin, float *rx_flt,
+	     float *tx_flt, short *tx_lin, unsigned short *hostcount,
+	     unsigned short *countp);
 
 void voice_set_online(struct voice_ctx *v);
 void voice_set_duplex(struct voice_ctx *v);
+void voice_set_rx(struct voice_ctx *v);
 
 #ifdef __cplusplus
 }

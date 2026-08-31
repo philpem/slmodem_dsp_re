@@ -1,0 +1,210 @@
+[
+ {
+  "note": "src/service/voicedp.c against build/test/t_voicedprx.  Only voice_rx and voice_set_rx are mutated here; the other five symbols of the file have their claims in voicedp.json and voicedptx.json, whose binaries never call these two."
+ },
+ {
+  "label": "voice_set_rx installs the online handler",
+  "find": "\tv->mode = 0;\n\tv->handler = voice_rx;",
+  "replace": "\tv->mode = 0;\n\tv->handler = voice_online;"
+ },
+ {
+  "label": "voice_set_rx writes the duplex mode",
+  "find": "\tv->rx_armed = 1;\n\tv->mode = 0;",
+  "replace": "\tv->rx_armed = 1;\n\tv->mode = 3;"
+ },
+ {
+  "label": "voice_set_rx does not arm the path",
+  "find": "\tv->rx_armed = 1;\n\tv->mode = 0;\n\tv->handler = voice_rx;",
+  "replace": "\tv->mode = 0;\n\tv->handler = voice_rx;"
+ },
+ {
+  "label": "voice_set_rx uses the online detector mask",
+  "find": "\tdetector_set_enable(v->detector, (short)v->detector_enable_rx);",
+  "replace": "\tdetector_set_enable(v->detector, (short)v->detector_enable);"
+ },
+ {
+  "label": "voice_set_rx hands the silence detector the wrong handle",
+  "find": "\tsilence_create(v->silence, v->cfg.modem, query);",
+  "replace": "\tsilence_create(v->silence, v->silence, query);"
+ },
+ {
+  "label": "the marker countdown is loaded in blocks rather than in samples",
+  "find": "\tv->marker_countdown = (unsigned short)(v->marker_period\n\t\t\t\t\t       * VOICE_RX_MARKER_UNIT);\n\n\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tv->marker_countdown = v->marker_period;\n\n\tif (DSPLIB_DEBUG_ON())"
+ },
+ {
+  "label": "voice_set_rx writes a 7200 Hz format",
+  "find": "\tv->rate_bits.s.rate = 8000;\n\tv->rate_bits.s.bits = 8;",
+  "replace": "\tv->rate_bits.s.rate = 7200;\n\tv->rate_bits.s.bits = 8;"
+ },
+ {
+  "label": "voice_set_rx does not seed the DC estimate",
+  "find": "\tv->dc = 0.0f;\n\tv->dc_init = 1;",
+  "replace": "\tv->dc = 0.0f;\n\tv->dc_init = 0;"
+ },
+ {
+  "label": "the fmt1 and fmt3 gains are read from each other's parameter",
+  "find": "\tv->gain_fmt1 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT1)\n\t\t       * VOICE_RX_PARAM_SCALE;",
+  "replace": "\tv->gain_fmt1 = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_FMT3)\n\t\t       * VOICE_RX_PARAM_SCALE;"
+ },
+ {
+  "label": "the parameter scale is 1/256 rather than 1/128",
+  "find": "#define VOICE_RX_PARAM_SCALE\t\t(1.0f / 128.0f)",
+  "replace": "#define VOICE_RX_PARAM_SCALE\t\t(1.0f / 256.0f)"
+ },
+ {
+  "label": "the host's answer is read as signed",
+  "find": "\tv->gain_other = query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)\n\t\t\t* VOICE_RX_PARAM_SCALE;",
+  "replace": "\tv->gain_other = (int)query(v->cfg.modem, VOICE_PARAM_RX_GAIN_OTHER)\n\t\t\t* VOICE_RX_PARAM_SCALE;"
+ },
+ {
+  "label": "voice_rx sums the wrong buffer",
+  "find": "\t\tfor (k = 0; k < have; k++)\n\t\t\tsum += tx_flt[k];",
+  "replace": "\t\tfor (k = 0; k < have; k++)\n\t\t\tsum += rx_flt[k];"
+ },
+ {
+  "label": "the block mean is a sum",
+  "find": "\t\tdc = sum / have;",
+  "replace": "\t\tdc = sum;"
+ },
+ {
+  "label": "F8790's weights are swapped: 1% of the old estimate, 99% of the new",
+  "find": "\t\t\tdc = dc * VOICE_RX_DC_FOLD + v->dc * VOICE_RX_DC_KEEP;",
+  "replace": "\t\t\tdc = dc * VOICE_RX_DC_KEEP + v->dc * VOICE_RX_DC_FOLD;"
+ },
+ {
+  "label": "the DC estimate is seeded on every block, never folded",
+  "find": "\t\tif (v->dc_init)\n\t\t\tv->dc_init = 0;\n\t\telse",
+  "replace": "\t\tif (1)\n\t\t\tv->dc_init = 0;\n\t\telse"
+ },
+ {
+  "label": "the seed flag is never cleared, so the estimate never folds",
+  "find": "\t\tif (v->dc_init)\n\t\t\tv->dc_init = 0;",
+  "replace": "\t\tif (v->dc_init)\n\t\t\tv->dc_init = 1;"
+ },
+ {
+  "label": "the DC estimate is added rather than removed",
+  "find": "\t\tfor (k = 0; k < have; k++)\n\t\t\ttx_flt[k] -= v->dc;",
+  "replace": "\t\tfor (k = 0; k < have; k++)\n\t\t\ttx_flt[k] += v->dc;"
+ },
+ {
+  "label": "the arm test accepts anything non-zero rather than exactly 1",
+  "find": "\tif (v->rx_armed != 1) {",
+  "replace": "\tif (v->rx_armed == 0) {"
+ },
+ {
+  "label": "the abort path leaves the byte count alone",
+  "find": "\t\t\tdsplibs_debug_printf(\"RX WAIT ABORT\\n\");\n\t\t*countp = 0;",
+  "replace": "\t\t\tdsplibs_debug_printf(\"RX WAIT ABORT\\n\");"
+ },
+ {
+  "label": "format 2 joins the two 16-bit arms",
+  "find": "\t\tif (v->out_format == 3 || v->out_format == 1) {",
+  "replace": "\t\tif (v->out_format == 3 || v->out_format == 2) {"
+ },
+ {
+  "label": "the fmt1 and fmt3 gains are used for each other's format",
+  "find": "\t\t\t       * (v->out_format == 1 ? v->gain_fmt1\n\t\t\t\t\t\t     : v->gain_fmt3);",
+  "replace": "\t\t\t       * (v->out_format == 1 ? v->gain_fmt3\n\t\t\t\t\t\t     : v->gain_fmt1);"
+ },
+ {
+  "label": "the 16-bit arms do not divide by 32767",
+  "find": "\t\t\tgain = VOICE_RX_LINEAR_SCALE\n\t\t\t       * (v->out_format == 1 ? v->gain_fmt1",
+  "replace": "\t\t\tgain = 1.0f\n\t\t\t       * (v->out_format == 1 ? v->gain_fmt1"
+ },
+ {
+  "label": "the block-length bound is off by one",
+  "find": "\t\t\tif (*countp > VOICE_RX_MAX_SAMPLES) {",
+  "replace": "\t\t\tif (*countp > VOICE_RX_MAX_SAMPLES + 1) {"
+ },
+ {
+  "label": "an over-long block answers 0 instead of 7",
+  "find": "\t\t\t\treturn VOICE_RX_TOO_MANY_STATUS;",
+  "replace": "\t\t\t\treturn 0;"
+ },
+ {
+  "label": "the 16-bit arm converts into the caller's buffer",
+  "find": "\t\t\tfor (i = 0; i < *countp; i++)\n\t\t\t\tv->flt[i] = rx_lin[i] * gain;",
+  "replace": "\t\t\tfor (i = 0; i < *countp; i++)\n\t\t\t\ttx_flt[i] = rx_lin[i] * gain;"
+ },
+ {
+  "label": "the float arm keeps the context's buffer instead of the caller's",
+  "find": "\t\t\tgain = v->gain_other;\n\t\t\tflt = tx_flt;",
+  "replace": "\t\t\tgain = v->gain_other;"
+ },
+ {
+  "label": "the float arm uses the fmt1 gain",
+  "find": "\t\t\tgain = v->gain_other;\n\t\t\tflt = tx_flt;\n\t\t\tfor (i = 0; i < *countp; i++)",
+  "replace": "\t\t\tgain = v->gain_fmt1;\n\t\t\tflt = tx_flt;\n\t\t\tfor (i = 0; i < *countp; i++)"
+ },
+ {
+  "label": "the u-law loop runs over the reloaded count rather than the entry one",
+  "find": "\t\tfor (i = 0; i < have; i++) {\n\t\t\tunsigned char b;",
+  "replace": "\t\tfor (i = 0; i < have - 1u; i++) {\n\t\t\tunsigned char b;"
+ },
+ {
+  "label": "the u-law conversion drops the shift",
+  "find": "\t\t\tb = linear2ulaw((short)(flt[i] * VOICE_RX_FULL_SCALE)\n\t\t\t\t\t>> 2);",
+  "replace": "\t\t\tb = linear2ulaw((short)(flt[i] * VOICE_RX_FULL_SCALE));"
+ },
+ {
+  "label": "the u-law conversion scales by 32768 rather than 32767",
+  "find": "#define VOICE_RX_FULL_SCALE\t\t32767.0f",
+  "replace": "#define VOICE_RX_FULL_SCALE\t\t32768.0f"
+ },
+ {
+  "label": "the marker fires on every sample",
+  "find": "\t\t\tif (v->marker_period != 0) {\n\t\t\t\tv->marker_countdown--;",
+  "replace": "\t\t\tif (v->marker_period != 0) {\n\t\t\t\tv->marker_countdown = 1;\n\t\t\t\tv->marker_countdown--;"
+ },
+ {
+  "label": "the marker is emitted whatever the period",
+  "find": "\t\t\tif (v->marker_period != 0) {",
+  "replace": "\t\t\tif (v->marker_period == 0 || 1) {"
+ },
+ {
+  "label": "the marker byte is not shielded",
+  "find": "\t\t\t\t\tout[j] = VOICE_DLE;\n\t\t\t\t\tout[j + 1] = VOICE_DLE_MARK;",
+  "replace": "\t\t\t\t\tout[j] = VOICE_DLE_MARK;\n\t\t\t\t\tout[j + 1] = VOICE_DLE;"
+ },
+ {
+  "label": "the marker countdown is not reloaded",
+  "find": "\t\t\t\t\tv->marker_countdown =\n\t\t\t\t\t    (unsigned short)\n\t\t\t\t\t    (v->marker_period\n\t\t\t\t\t     * VOICE_RX_MARKER_UNIT);",
+  "replace": "\t\t\t\t\tv->marker_countdown = 0;"
+ },
+ {
+  "label": "the byte count is not published before silence_progress",
+  "find": "\t\t*countp = j;\n\t\tsilence_progress(v->silence, flt, n, out + j, countp);",
+  "replace": "\t\tsilence_progress(v->silence, flt, n, out + j, countp);\n\t\t*countp = j;"
+ },
+ {
+  "label": "silence_progress is given the whole buffer rather than the tail",
+  "find": "\t\tsilence_progress(v->silence, flt, n, out + j, countp);",
+  "replace": "\t\tsilence_progress(v->silence, flt, n, out, countp);"
+ },
+ {
+  "label": "the stream close reads the wrong DLE flag",
+  "find": "\t\tif (v->dle_can) {",
+  "replace": "\t\tif (v->dle_etx) {"
+ },
+ {
+  "label": "the stream close leaves the path armed",
+  "find": "\t\t\tv->rx_armed = 0;\n\t\t\tdetector_set_enable(v->detector, 0);",
+  "replace": "\t\t\tdetector_set_enable(v->detector, 0);"
+ },
+ {
+  "label": "the stream close appends the wrong status code",
+  "find": "\t\t\t_status(out + *countp, countp, 3);",
+  "replace": "\t\t\t_status(out + *countp, countp, 4);"
+ },
+ {
+  "label": "voice_rx answers the duplex code on a mode mismatch",
+  "find": "#define VOICE_RX_MODE_STATUS\t\t4",
+  "replace": "#define VOICE_RX_MODE_STATUS\t\t5"
+ },
+ {
+  "label": "voice_rx leaves the host byte count alone",
+  "find": "\t*hostcount = 0;\n\tif (v->int_0014 != v->mode)\n\t\tret = VOICE_RX_MODE_STATUS;",
+  "replace": "\tif (v->int_0014 != v->mode)\n\t\tret = VOICE_RX_MODE_STATUS;"
+ }
+]

@@ -9712,3 +9712,84 @@ everywhere else: at 11025 a float block is left with its tail unwritten, and a
 **Status:** unmeasured. Both arms are reproduced as written and `t_voicedptx`
 drives `*countp` above and below 160 in both formats, so the divergence is
 under test even though nothing here says which arm the author meant.
+
+## D988 ⚠ `voice_set_rx` calls `silence_create` on the pointer it already has and throws the result away
+
+*2026-08-31.* `voice_create` stores `silence_create`'s result at +0x28.
+`voice_set_rx` (0xaf190) then calls it AGAIN, on that same pointer, and does
+not store what comes back:
+
+    af1d5:	8b 43 28             	mov    0x28(%ebx),%eax
+    af1d8:	89 04 24             	mov    %eax,(%esp)
+    af1db:	call   silence_create
+    af1e0:	0f b7 8b 64 07 00 00 	movzwl 0x764(%ebx),%ecx   <- %eax dropped
+
+`silence_create` initialises the object it is handed and returns it, so on
+every path this tree can construct the call is a re-initialisation and the
+dropped return is the same pointer. The one shape in which it matters is a
+NULL +0x28: the callee then ALLOCATES, initialises, returns -- and the
+allocation is lost, with the field still NULL for `voice_rx` to dereference.
+
+Compare `voice_create`, which stores every constructor's result and checks it.
+
+**Status:** unmeasured for reachability. +0x28 is NULL only if
+`voice_create`'s own `silence_create` failed, and that path frees the whole
+context and returns NULL rather than reaching a setter -- so on the object's
+own call graph the leak cannot happen. Reproduced as written;
+`t_voicedprx` calls the setter twice over one detector and compares the
+object both times.
+
+## D989 ⚠ `voice_rx` calls `silence_is_more_then` twice and uses neither answer
+
+*2026-08-31.* Both entries into the body reach the same call and neither
+looks at `%eax`:
+
+    af370:	call   silence_is_more_then
+    af375:	66 83 bf 56 07 00 00 	cmpw   $0x1,0x756(%edi)   <- %eax dropped
+
+    af581:	call   silence_is_more_then
+    af586:	66 83 bf 56 07 00 00 	cmpw   $0x1,0x756(%edi)   <- %eax dropped
+
+`silence_is_more_then` is `s->count > (int)(10.0f * t)` and touches nothing,
+so the call has no effect at all: it is dead in the strict sense, not merely
+ignored. The argument is 0.8f, and silence.h settles the unit as seconds.
+
+The natural reading is that a decision on the silent run was meant to be made
+here and is made somewhere else instead -- `silence_progress`, called forty
+instructions later, appends its own escapes on its own counter. Nothing in
+the object says that, so it is not written down as if it did.
+
+**Status:** faithful and inert. It is reproduced as a call whose value is
+discarded, and `t_voicedprx` drives blocks either side of the 0.8 s boundary
+to show the answer does not change anything.
+
+## D984 ⚠ `voice_rx`'s DLE shield is dead code: no sample it can produce encodes as 0x10
+
+*2026-08-31.* `voice_rx` (0xaf2d0) doubles a u-law byte that comes out equal
+to DLE, which is the correct thing to do to a byte stream that uses DLE as an
+escape:
+
+    af441:	3c 10                	cmp    $0x10,%al
+    af443:	88 44 15 00          	mov    %al,0x0(%ebp,%edx,1)
+    af447:	0f 84 d9 01 00 00    	je     af626
+
+The branch can never be taken. What the encoder is handed is
+
+    af424:	df 5c 24 32          	fistps 0x32(%esp)     <- a SHORT
+    af431:	98                   	cwtl
+    af432:	c1 f8 02             	sar    $0x2,%eax      <- and then >> 2
+
+so the argument lies in [-8192, 8191] whatever the input floats are, and over
+that whole domain `linear2ulaw` returns 0x10 for nothing: its 512 preimages of
+0x10 are the run -16251..-15740, and the only code below 0x20 it can produce
+from a value in range is 0x1f. Measured by exhaustive sweep, not argued;
+`t_voicedprx` carries the sweep and prints its denominator.
+
+The shield is therefore correct and inert. What it suggests is that the same
+loop once ran at a different scale -- `>> 2` is a 12-bit conversion where u-law
+expects 14 -- but the object says nothing about that and neither does this
+entry.
+
+**Status:** measured, and reproduced exactly. The arm is written as the object
+has it and the test asserts that it does not fire, which is the honest form of
+a coverage claim about unreachable code.
