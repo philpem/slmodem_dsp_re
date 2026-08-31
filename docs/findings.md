@@ -97369,9 +97369,82 @@ the transmit block, ours writes zeros over it, under GCC 3.4.2 and not under
 GCC 14. `TxNOP` is the only thing in the tree that writes 160 zeros there, and
 it is called from `v22loop.c` and `v22org.c` only -- which does not cover
 states 4 and 5, so either more than one mechanism is in play or the zeros come
-from somewhere else. **That is where the next probe goes**, and it needs the
-period tier: the instrumented per-case map (F8607) run under `make period`,
-which names the arm and says whether the RETURN, the counts and the structs
-diverge in those cases too. The 10-line cap on the first run means only
-transmit samples were ever visible, and a struct or region difference in the
-same cases would have been suppressed unseen.
+from somewhere else. **It was somewhere else: F8609 is the answer, and it is
+not `TxNOP`.**
+
+### F8609. `V22FP_modem`'s copy-out is UNBOUNDED, and a handler arm that never touches `*rxcount` makes it copy the input SAMPLE count out of a 100-entry buffer
+
+The loop at 0x888a7 is
+
+    for (i = 0; i < *n_rx; i++) rx_bits[i] = rx_out_internal[i];
+
+and `*n_rx` is its ONLY bound -- there is no `cmp $0x64` anywhere in
+`V22FP_modem`, unlike `v22_process`, which does clamp and whose format string
+calls the value `rx_len`. The count goes IN as the input SAMPLE count and is
+supposed to come back as a SYMBOL count; `rx_out_internal` is 100 entries
+(`nm`: 0xc8 bytes at `.bss` 0x480) and a 20 ms block is 160 samples.
+
+**So any handler arm that returns without setting `*rxcount` leaves 160 there,
+and the copy-out reads sixty entries past the end of `rx_out_internal` and
+writes sixty past the end of the caller's array.** Nineteen of `t_v22modem`'s
+fifty-six poked states do exactly that -- the high sub-states of states 1 to 5,
+each one an arm off the end of that handler's own dispatch, `v22_local_loop`'s
+being a literal `default: break;` with nothing in it.
+
+**IT IS THE OBJECT'S BEHAVIOUR, NOT OURS, AND THE NUMBER IS EXACT.** Counting
+the entries each side actually wrote, over all fifty-six cases:
+
+    36 cases   both sides wrote 12 entries
+     1 case    both sides wrote 13
+    19 cases   both sides wrote 160        <- 60 past rx_out_internal's 100
+
+160 is the input sample count handed in, unchanged, and 160 - 100 = 60 is the
+overrun. The blob does it identically, which is what says this is reproduced
+rather than introduced -- and a sixteen-element guard past every buffer is
+clean on all fifty-six once the destination is sized for it.
+
+**A CAUTION ABOUT THE INSTRUMENTATION ITSELF, because it nearly inverted this
+conclusion.** The first version of that `printf` had two arguments in the wrong
+order against its format, and it rendered as `over 60/0` -- which reads as "the
+reference does not overrun", i.e. as a defect in ours rather than a faithful
+reproduction. The numbers were real and the LABELS were wrong. A diagnostic
+added to settle a question is apparatus like any other and gets the same
+treatment: check it against a case whose answer you already know before
+believing what it says about one you do not.
+
+**AND IT IS WHY A COMPILER DECIDED THE VERDICT (F8608).** The test declared
+`int rx_a[100]`, so both sides' sixty-int overruns landed 240 bytes outside the
+array, in whatever the compiler had put next. GCC 14's `.bss` layout absorbed
+them harmlessly and the test passed; GCC 3.4.2's put the TRANSMIT buffer in the
+way, so our side's overrun wrote zeros over `out_a` before `V22FP_modem`'s gain
+loop scaled it -- giving `ours 0, reference 5205`, where 5205 is the untouched
+poison scaled by the gain. Every observable of F8608's report follows from
+that one sentence, and nothing in `src/` is wrong.
+
+**The fix is sizing, not scoping.** The destination is now `4 * FRAG` ints with
+the guard past it, which is what the API can demand rather than what a
+well-behaved handler happens to return; the guards stay and are asserted, so
+the next overrun is a named failure instead of a compiler-dependent verdict.
+The comparison covers the 100 entries backed by real `rx_out_internal` storage.
+**Entries at index 100 and above are compared by nothing, and that exclusion is
+provable rather than convenient**: they are the object's own out-of-bounds
+READ, so their value is whatever its `.bss` neighbour holds -- 0x548..0x560 is
+padding and 0x560 is `rx_in_internal` in the blob, and something else in any
+other object. Two different objects have two different neighbours, necessarily
+and for ever. That is CLAUDE.md's "two heap pointers hold two different
+addresses and always will", and unlike F8538's rejected exclusion it does not
+MOVE when you move it -- 100 is `nm`'s number, not a number chosen to make a
+case pass.
+
+**THE SERVICE-SIDE COROLLARY IS A LATENT HEAP OVERFLOW IN THE ORIGINAL.**
+`v22_process` hands `self->rx_bits`, which is `int[100]` and the LAST member of
+the `sysdep_malloc`'d `struct v22_dp`, with `count` = 160. If any reachable
+handler arm ever returned without setting `*rxcount`, `V22FP_modem` would write
+sixty ints past the end of that allocation -- and `v22_process`'s own clamp
+cannot help, because it runs on the value AFTER `V22FP_modem` has already
+copied and, for a non-zero status, zeroed it. Nothing reaches it in service:
+`t_v22dp` drives a full cross-connected handshake for 400 blocks and passes the
+period gate, and every arm a live machine visits sets the count. Recorded
+because it is the original's, because it is one poked sub-state away, and
+because it is the reason this test needed a buffer four times the size of the
+one a reasonable reading would have given it.

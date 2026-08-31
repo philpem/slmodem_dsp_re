@@ -334,10 +334,74 @@ compare_graphs_named(const char *what, struct v22fp *mine,
 #define FRAG	160
 #define WORDS	12
 
+/*
+ * GUARD ELEMENTS PAST EVERY BUFFER THE CALL WRITES.  `V22FP_modem` scales
+ * exactly V22_TX_BLOCK transmit samples and copies exactly `*n_rx` receive
+ * words, so nothing may touch the tail; the two `.bss` staging buffers are
+ * laid out differently in our object and in the blob's, so an overrun lands
+ * somewhere different on each side and would read as a divergence with no
+ * cause visible in the source.  Poisoned with the rest and counted after
+ * every call, on both sides.
+ */
+#define GUARD	16
+
+/*
+ * ---------------------------------------------------------------------------
+ * THE RECEIVE DESTINATION IS FOUR TIMES THE INPUT BLOCK, AND THAT IS NOT
+ * SLACK -- IT IS WHAT THE OBJECT'S OWN COPY-OUT CAN DEMAND (finding F8609).
+ *
+ * `V22FP_modem`'s copy-out is `for (i = 0; i < *n_rx; i++) rx_bits[i] = ...`
+ * with NO clamp -- the object's loop at 0x888a7 re-reads `*prxcount` and
+ * compares, and there is no `cmp $0x64` anywhere in it.  `*n_rx` goes IN as
+ * the input SAMPLE count and is supposed to come back as a SYMBOL count, so
+ * a handler arm that returns without touching it leaves 160 there and the
+ * copy-out writes 160 ints.
+ *
+ * Nineteen of the fifty-six cases below do exactly that, on both sides, and
+ * with `int rx[100]` the two overruns landed 240 bytes outside the array --
+ * in whatever the compiler happened to put next.  That is how a compiler
+ * came to decide this test's verdict.
+ */
+#define RXBUF	(4 * FRAG)
+
+/*
+ * How much of the destination is backed by real storage in the object.
+ * `rx_out_internal` is 100 entries (`nm`: 0xc8 bytes at .bss 0x480), so
+ * anything the copy-out writes at index 100 or above came from a read PAST
+ * that array, and its value is whatever the `.bss` neighbour holds.  Two
+ * different objects have two different neighbours, necessarily and for ever,
+ * so those entries are compared by nothing -- the same rule CLAUDE.md gives
+ * for two heap pointers that hold two different addresses.
+ */
+#define RXOUT_ENTRIES	100
+
 static int tx_a[100], tx_b[100];
-static int rx_a[100], rx_b[100];
-static short out_a[FRAG], out_b[FRAG];
-static short in_samples[FRAG];
+static int rx_a[RXBUF + GUARD], rx_b[RXBUF + GUARD];
+static short out_a[FRAG + GUARD], out_b[FRAG + GUARD];
+static short in_samples[FRAG + GUARD];
+
+/* How many of the GUARD elements past `n` are no longer the poison. */
+static int
+guard_short(const short *p, int n, short poison)
+{
+	int i, bad = 0;
+
+	for (i = n; i < n + GUARD; i++)
+		if (p[i] != poison)
+			bad++;
+	return bad;
+}
+
+static int
+guard_int(const int *p, int n, int poison)
+{
+	int i, bad = 0;
+
+	for (i = n; i < n + GUARD; i++)
+		if (p[i] != poison)
+			bad++;
+	return bad;
+}
 
 static void
 build_input(int seed)
@@ -349,6 +413,9 @@ build_input(int seed)
 		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xB400u);
 		in_samples[i] = (short)((int)(lfsr & 0x1fffu) - 4096);
 	}
+	/* The input's own guard, repoisoned with the samples it follows. */
+	for (i = FRAG; i < FRAG + GUARD; i++)
+		in_samples[i] = 0x2d2d;
 	for (i = 0; i < 100; i++) {
 		lfsr = (lfsr >> 1) ^ (-(int)(lfsr & 1u) & 0xB400u);
 		tx_a[i] = tx_b[i] = (int)(lfsr & 0x0fu);
@@ -363,7 +430,7 @@ main(void)
 	int rc = 0;
 	int state, sub, i;
 	int cases = 0;
-	int txdiff, rxdiff, first_tx;
+	int txdiff, rxdiff, first_tx, over_a, over_b;
 	char lbl[80];
 
 	memset(&cfg, 0, sizeof(cfg));
@@ -426,9 +493,23 @@ main(void)
 					txdiff++;
 				}
 			rxdiff = 0;
-			for (i = 0; i < 100; i++)
+			for (i = 0; i < RXOUT_ENTRIES; i++)
 				if (rx_a[i] != rx_b[i])
 					rxdiff++;
+			/*
+			 * How far past `rx_out_internal`'s hundred entries the
+			 * object's own copy-out ran.  This is the measurement
+			 * behind F8609: an untouched `*rxcount` is still the
+			 * INPUT SAMPLE COUNT, so the expected reading is
+			 * 160 - 100 = 60, on both sides.
+			 */
+			over_a = over_b = 0;
+			for (i = 0; i < RXBUF; i++) {
+				if (rx_a[i] != 0x5a5a5a5a)
+					over_a++;
+				if (rx_b[i] != 0x5a5a5a5a)
+					over_b++;
+			}
 			/*
 			 * `tx[0]` is printed on BOTH sides whether or not
 			 * they differ, and it is the measurement that says
@@ -442,15 +523,33 @@ main(void)
 			 */
 			printf("  st %d sub %d: ret %d/%d n_tx %d/%d "
 			       "n_rx %d/%d fpst %u/%u tx[0] %d/%d "
+			       "guard tx %d/%d rx %d/%d in %d wrote %d/%d "
 			       "alloc live %d bad %d ovf %d  txdiff %d "
 			       "(first %d: %d/%d) rxdiff %d\n",
 			       state, sub, ra, rb, na_tx, nb_tx, na_rx, nb_rx,
 			       (unsigned)fa->status, (unsigned)fb->status,
-			       out_a[0], out_b[0], harness_alloc.live,
+			       out_a[0], out_b[0],
+			       guard_short(out_a, FRAG, 0x3333),
+			       guard_short(out_b, FRAG, 0x3333),
+			       guard_int(rx_a, RXBUF, 0x5a5a5a5a),
+			       guard_int(rx_b, RXBUF, 0x5a5a5a5a),
+			       guard_short(in_samples, FRAG, 0x2d2d),
+			       over_a, over_b,
+			       harness_alloc.live,
 			       harness_alloc.bad_free, harness_alloc.overflow,
 			       txdiff, first_tx,
 			       first_tx < 0 ? 0 : out_a[first_tx],
 			       first_tx < 0 ? 0 : out_b[first_tx], rxdiff);
+
+			diff_eq_int("st %ld: nothing wrote past the tx block",
+				    guard_short(out_a, FRAG, 0x3333)
+				    + guard_short(out_b, FRAG, 0x3333), 0, tag);
+			diff_eq_int("st %ld: nothing wrote past the rx array",
+				    guard_int(rx_a, RXBUF, 0x5a5a5a5a)
+				    + guard_int(rx_b, RXBUF, 0x5a5a5a5a), 0, tag);
+			diff_eq_int("st %ld: nothing wrote past the input",
+				    guard_short(in_samples, FRAG, 0x2d2d), 0,
+				    tag);
 
 			snprintf(lbl, sizeof(lbl),
 				 "st %d sub %d: return (%%ld)", state, sub);
@@ -476,7 +575,7 @@ main(void)
 			 */
 			snprintf(lbl, sizeof(lbl),
 				 "st %d sub %d: rx word[%%ld]", state, sub);
-			for (i = 0; i < 100; i++)
+			for (i = 0; i < RXOUT_ENTRIES; i++)
 				diff_eq_int(lbl, rx_a[i], rx_b[i], i);
 
 			snprintf(lbl, sizeof(lbl), "st %d sub %d", state, sub);
