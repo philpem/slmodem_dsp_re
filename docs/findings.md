@@ -99435,17 +99435,21 @@ dead detector wearing the opposite sign.
 *2026-08-31.* F8746 measured voice as 51 symbols / 16,685 bytes over three
 layers at the ring-detect commit. It now stands at **10 symbols / 6,378
 bytes**, and the ring detector's own 8 symbols / 2,061 bytes went with it.
-Six agents, five worktrees, one merge conflict in `src/` — none.
+Six agents, five worktrees, and no merge conflict in `src/` at all.
+The mutant total is read from `snapshot.json`, not summed from the agents'
+reports: 444 of 444 across fifteen suites, 0 NOT CAUGHT and 0 never
+recorded. It is three higher than the agents between them claimed, because
+F8747 added three to `fdspksil` after the fact.
 
 | wave | symbols | bytes | mutants |
 |---|--:|--:|--:|
 | ring detect (`voice.c#3`, `RD_*` + `RingDetector_*`) | 8 | 2,061 | 41/41 |
-| `Fdspkrnl.c +13` leaves + `silence_progress` | 13 | 2,304 | 98/98 |
+| `Fdspkrnl.c +13` leaves + `silence_progress` | 13 | 2,304 | 101/101 |
 | `Beepgen.c +3` generators | 10 | 2,306 | 64/64 |
 | `vce_*`, `voice_dle_command`, the MTK tables | 5 + tables | 616 + 3,628 data | 46/46 |
 | `MTK_phasor`, `TONE_create`, `FDSP_DP_*` | 6 + tables | 1,599 + 268 data | 74/74 |
 | the per-block path, `voice_online` … `voice_set_tx` | 9 | 3,631 | 118/118 |
-| per-wave rows as reported | 51 | 12,517 | **441/441** |
+| per-wave rows as reported | 51 | 12,517 | **444/444** |
 | **`service.py`'s measured delta** | **49** | **12,368** | |
 
 **QUOTE THE DELTA, NOT THE SUM.** The two figures differ by 2 symbols and 149
