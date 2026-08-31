@@ -1,0 +1,141 @@
+/*
+ * faxcfg.h -- Class 1 fax: the four configuration tables the receive-side
+ *             VMI constructors initialise themselves from.
+ *
+ *   FAXVMI_CFG   .rodata 0x009490   24   struct faxvmi_cfg   (const)
+ *   V17RX_CFG    .data   0x0079a0   40   struct v17rx_cfg
+ *   V27RX_CFG    .data   0x007b94   28   struct v27rx_cfg
+ *   V29RX_CFG    .data   0x007df0   24   struct v29rx_cfg
+ *
+ * THE THREE MODEM TABLES ARE THREE TYPES, NOT ONE.  Their sizes are 40, 28
+ * and 24 and each is the exact argument `sysdep_malloc` is given in the
+ * matching `init_vmi_*` -- 0x28, 0x1c, 0x18 -- and the exact number of dwords
+ * the matching `v??rx_create` copies onto its stack before calling
+ * `V??RX_create`.  Two independent readings of the same number, so the sizes
+ * are measured rather than assumed, and a shared type would be wrong for two
+ * of the three.
+ *
+ * NONE OF THE FOUR CONTAINS A POINTER IN THE OBJECT.  Checked with a
+ * relocation sweep over each symbol's own byte range, which is the question
+ * `relocscan.py --range` does NOT answer (that one is "who points AT it").
+ * Zero relocations inside all four, so every dword here is a literal.  The
+ * neighbouring `AGCv17_CFG`/`AGCv27_CFG`/`AGCv29_CFG` are the opposite case,
+ * two relocations each at +0x0c and +0x10, and are not written here.
+ *
+ * WHAT IS NAMED AND WHY.  Only two fields have evidence:
+ *
+ *   - `slot`, +0x0e of `struct faxvmi_cfg`.  `faxvmi.h` derives the slot map
+ *     from `vxx_message`'s relocations -- 5 v21tx, 6 v21rx, 7 v27tx, 8 v27rx,
+ *     9 v29tx, 10 v29rx, 11 v17tx, 12 v17rx -- and the three `init_vmi_*rx`
+ *     reconstructed in `class1rx.c` write exactly 12, 8 and 10 there.  The
+ *     agreement is complete and is not a coincidence of three numbers.
+ *   - `bit_rate`, +0x04 of each modem table.  `v17rx_create` compares it
+ *     against 0x3840, 0x2ee0 and 0x2580; `v27rx_create` against 0x960;
+ *     `v29rx_create` against 0x1c20.  Those are 14400/12000/9600,
+ *     2400 and 7200 -- the bit rates V.17, V.27ter and V.29 define, and
+ *     nothing else -- and the field is what `init_vmi_*rx` overwrites with
+ *     its own second argument.  Evidence rank 3 (usage), but the constants
+ *     are the recommendations' own.
+ *
+ * Everything else keeps a `type_NNNN` name.  The values are known and their
+ * meaning is not: +0x00 is 1 in all three, +0x08 is 60000 in all three, and
+ * `struct faxvmi_cfg` holds 128, 50, 128 at +0x08, +0x0a and +0x0c which the
+ * constructors then replace with 320, 165 and 0.  Naming those from their
+ * values would be a guess, and a wrong name is worse than a padded one.
+ *
+ * THE SIGN OF `bit_rate` IS NOT ESTABLISHED.  Every comparison the object
+ * makes on it is an equality (`cmpw` then `sete`/`setne`), which carries no
+ * sign, and every value it holds is below 32768.  `short` here is a choice,
+ * recorded as one.
+ *
+ * WHY `struct faxvmi_cfg` IS A SEPARATE TYPE FROM `struct faxvmi`.  The
+ * object's `struct faxvmi` is at least 0x2c bytes -- `faxvmi.h` has the
+ * wrapped handle at +0x28 -- and `FAXVMI_CFG` is 24.  What the constructors
+ * do is copy those 24 bytes over the HEAD of a `struct faxvmi` and then
+ * overwrite six of its fields, so the config is the struct's leading
+ * sub-object.  Modelling that as an embedded member would mean editing
+ * `faxvmi.h`, which belongs to another strand of this wave; the two should be
+ * unified once both halves are written, and until then the `init_vmi_*rx`
+ * parameter is spelled `struct faxvmi_cfg *`.
+ */
+
+#ifndef DSPLIB_FAXCFG_H
+#define DSPLIB_FAXCFG_H
+
+/*
+ * The head of a `struct faxvmi`, and the whole of `FAXVMI_CFG`.
+ *
+ * The widths are the constructors' own stores: +0x00, +0x08, +0x0a, +0x0c
+ * and +0x0e are written with `movw`, +0x04 with `movl`, and +0x10 and +0x14
+ * with a 32-bit `mov` of a pointer value.  +0x02 is never written by anything
+ * reconstructed here and is 16 bits by subtraction.
+ */
+struct faxvmi_cfg {
+	short		short_0000;	/* +0x00  0 in the table, set to 0   */
+	short		short_0002;	/* +0x02  never written              */
+	int		int_0004;	/* +0x04  0 in the table, set to 1   */
+	short		short_0008;	/* +0x08  128 -> 320                 */
+	short		short_000a;	/* +0x0a   50 -> 165                 */
+	short		short_000c;	/* +0x0c  128 -> 0                   */
+	short		slot;		/* +0x0e  index into the vxx tables  */
+	void	       *modem_cfg;	/* +0x10  the allocated modem table  */
+	void	       *ptr_0014;	/* +0x14  the constructor's 4th arg  */
+};
+
+/*
+ * V.17 receive.  40 bytes.  `init_vmi_v17rx` copies the table over a fresh
+ * `sysdep_malloc(0x28)` and then sets `bit_rate`, clears +0x14, and installs
+ * three further allocations of 0x62, 0x62 and 2 bytes at +0x18, +0x1c and
+ * +0x20.  Those three are pointers BECAUSE a malloc result is stored in them,
+ * which is a fact about the store and not about the table -- in the table
+ * itself all three are zero.
+ */
+struct v17rx_cfg {
+	int		int_0000;	/* +0x00  1                          */
+	short		bit_rate;	/* +0x04  14400                      */
+	short		short_0006;	/* +0x06  0                          */
+	int		int_0008;	/* +0x08  60000                      */
+	int		int_000c;	/* +0x0c  0                          */
+	int		int_0010;	/* +0x10  0                          */
+	int		int_0014;	/* +0x14  0, cleared again on init   */
+	void	       *ptr_0018;	/* +0x18  init: sysdep_malloc(0x62)  */
+	void	       *ptr_001c;	/* +0x1c  init: sysdep_malloc(0x62)  */
+	void	       *ptr_0020;	/* +0x20  init: sysdep_malloc(2)     */
+	void	       *ptr_0024;	/* +0x24  init: the 4th argument     */
+};
+
+/* V.27ter receive.  28 bytes; the same prefix, four fewer fields. */
+struct v27rx_cfg {
+	int		int_0000;	/* +0x00  1                          */
+	short		bit_rate;	/* +0x04  4800                       */
+	short		short_0006;	/* +0x06  0                          */
+	int		int_0008;	/* +0x08  60000                      */
+	int		int_000c;	/* +0x0c  0                          */
+	int		int_0010;	/* +0x10  0                          */
+	int		int_0014;	/* +0x14  0                          */
+	void	       *ptr_0018;	/* +0x18  init: the 4th argument     */
+};
+
+/* V.29 receive.  24 bytes. */
+struct v29rx_cfg {
+	int		int_0000;	/* +0x00  1                          */
+	short		bit_rate;	/* +0x04  9600                       */
+	short		short_0006;	/* +0x06  0                          */
+	int		int_0008;	/* +0x08  60000                      */
+	int		int_000c;	/* +0x0c  0                          */
+	int		int_0010;	/* +0x10  0                          */
+	void	       *ptr_0014;	/* +0x14  init: the 4th argument     */
+};
+
+/*
+ * `FAXVMI_CFG` is `R` in the object -- global and in `.rodata` -- and the
+ * other three are `D`, global and writable, even though nothing in the 1.2 MB
+ * writes them.  The storage classes are the object's and are asserted by
+ * `t_faxcfg.c` through the sections they land in.
+ */
+extern const struct faxvmi_cfg FAXVMI_CFG;
+extern struct v17rx_cfg V17RX_CFG;
+extern struct v27rx_cfg V27RX_CFG;
+extern struct v29rx_cfg V29RX_CFG;
+
+#endif /* DSPLIB_FAXCFG_H */
