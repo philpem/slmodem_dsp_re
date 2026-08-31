@@ -376,6 +376,34 @@
     "the tone/raw comparison is the other way round": "caught"
    }
   },
+  "fdspdp": {
+   "key": "94cb53c9c4e949f045580da0ca02633baa5bb003d70444b276502c2eed0cf6cd",
+   "summary": "22 mutations: 22 caught (22 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "FDSP_DP_Delete clears the global for a NULL kernel too": "caught",
+    "FDSP_DP_Delete does not clear the global": "caught",
+    "FDSP_DP_Delete leaves chan_a's taps": "caught",
+    "FDSP_DP_Delete leaves chan_b": "caught",
+    "FDSP_DP_Delete leaves the buffer block": "caught",
+    "FDSP_DP_Delete leaves the kernel itself": "caught",
+    "chan_a gets 120 taps rather than 240": "caught",
+    "chan_b is allocated as a kernel": "caught",
+    "int_00 is decided by the TX delay": "caught",
+    "int_00 is left as InitObj set it": "caught",
+    "int_00 treats zero as negative": "caught",
+    "int_00's two answers are the other way round": "caught",
+    "the buffer block is allocated as a channel": "caught",
+    "the correlation counter is not cleared": "caught",
+    "the correlation counter is set to one": "caught",
+    "the delays are applied on the re-initialising path as well": "caught",
+    "the entry line prints the two delays the other way round": "caught",
+    "the global is not published": "caught",
+    "the kernel is allocated four bytes short": "caught",
+    "the kernel is not initialised": "caught",
+    "the re-initialisation line is printed on both paths": "caught",
+    "the two delays land on the other channel each": "caught"
+   }
+  },
   "fdspkfifo": {
    "key": "ac9d978cc309d1a488aecb627c290c2a1de9676931247b8453e903fd36814afb",
    "summary": "16 mutations: 16 caught (16 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1001,6 +1029,31 @@
     "timeout code 13 is a second, not no-limit": "caught"
    }
   },
+  "mtkphasor": {
+   "key": "5ff5ca4f5af59a8b1e99713a977ec6a6a0f06cc204151469bbbdb8772cd75dcb",
+   "summary": "19 mutations: 19 caught (19 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "the advance is taken from the unreduced phase": "caught",
+    "the advance wraps at 2*pi rather than at pi": "caught",
+    "the advanced phase is not stored": "caught",
+    "the correction adds the float 2*pi rather than the double": "caught",
+    "the cosine output takes the sine sign vector": "caught",
+    "the fold is selected by bit 9 rather than bit 8": "caught",
+    "the fold negates the fraction rather than reversing it": "caught",
+    "the fold negates the index rather than complementing it": "caught",
+    "the fraction is taken the other way round": "caught",
+    "the index keeps only seven bits": "caught",
+    "the interpolation's difference runs backwards": "caught",
+    "the quadrant comes from bit 7 rather than bit 8": "caught",
+    "the reduction corrects a zero as well as a negative": "caught",
+    "the reduction uses the double 2*pi rather than the float one": "caught",
+    "the scale is 256/pi rather than 512/pi": "caught",
+    "the scaled angle rounds rather than truncating": "caught",
+    "the sine output reads the cosine table": "caught",
+    "the two outputs are written to each other's field": "caught",
+    "the wrap adds 2*pi rather than subtracting it": "caught"
+   }
+  },
   "mtktab": {
    "key": "edb065cfb2deade6667a8f4cc2a3f6c1d7825bb3bcf9d2e3cfbc236a95a76f55",
    "summary": "10 mutations: 10 caught (10 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
@@ -1261,6 +1314,45 @@
     "reset: the fill stops one short of pInitTap2": "caught",
     "reset: two bits of the argument reach the buffer": "caught",
     "resetHistoryIndexes: pTap1 goes to pInitOut": "caught"
+   }
+  },
+  "tonecreate": {
+   "key": "76e18481478c83e797fff09b31c2fa189f7b09b5b2e0c466fb41f307dbbab34e",
+   "summary": "33 mutations: 33 caught (33 by test, 0 by strings), 0 NOT caught, 0 unusable, 0 equivalent, 0 MIScounted",
+   "verdicts": {
+    "TONE_CFG claims 52 taps": "caught",
+    "TONE_CFG's duration is 45 ms rather than 450": "caught",
+    "TONE_CFG's tone is 2000 Hz rather than 2100": "caught",
+    "ToneLPF's first tap loses its sign": "caught",
+    "ToneLPF's peak tap is one ULP low": "caught",
+    "a NULL configuration is not replaced by the default": "caught",
+    "iir_coef points at the resonator's second coefficient": "caught",
+    "the FIR blocks are allocated in shorts rather than floats": "caught",
+    "the FIR taps advance by nothing": "caught",
+    "the FIR taps are modulated by the sine rather than the cosine": "caught",
+    "the FIR taps are not doubled": "caught",
+    "the biquad block is 16 bytes rather than 20": "caught",
+    "the biquad state block is 4 bytes rather than 8": "caught",
+    "the cleared block is one word short": "caught",
+    "the configuration copy stops four bytes short": "caught",
+    "the delay line is not cleared with the taps": "caught",
+    "the gate opens whenever the length is positive, allocated or not": "caught",
+    "the notch is at 120 Hz rather than 60": "caught",
+    "the notch's feedback gain is 2 rather than 2*0.96": "caught",
+    "the notch's last coefficient is left at zero": "caught",
+    "the notch's pole term loses its sign": "caught",
+    "the notch's state is not cleared": "caught",
+    "the notch's zero term loses its sign": "caught",
+    "the object is allocated four bytes short": "caught",
+    "the object keeps the reduced angle as its phase": "caught",
+    "the oscillator advances before its first sample": "caught",
+    "the oscillator is stepped after the tap rather than before it": "caught",
+    "the phase scale is 2*pi/4000 rather than 2*pi/8000": "caught",
+    "the resonator's first coefficient loses its sign": "caught",
+    "the resonator's second coefficient loses its sign": "caught",
+    "the resonator's second coefficient uses the radius squared": "caught",
+    "the resonator's third coefficient loses its sign": "caught",
+    "the step is taken from the cosine rather than the angle": "caught"
    }
   },
   "v17data": {

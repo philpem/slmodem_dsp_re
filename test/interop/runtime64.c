@@ -84,7 +84,6 @@ long modem_get_sreg(void *m, unsigned n) { (void)m; (void)n; return 0; }
  * interop test enters the voice path, so reaching one here is a test bug
  * and aborts rather than returning something plausible.
  */
-void MTK_phasor(void *p) { (void)p; abort(); }
 void FDSP_Kernel_InitObj(void *k) { (void)k; abort(); }
 
 /*

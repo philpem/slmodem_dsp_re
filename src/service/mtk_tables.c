@@ -46,9 +46,14 @@
  * whole derivation of that table, and the name is the author's word for a
  * parity/Hamming-weight lookup.
  *
- * These are DATA ONLY.  `MTK_phasor` itself is not reconstructed yet, so
- * nothing in `src/` reads them; they are global, so they are emitted anyway,
- * and `t_mtktab` proves every byte of all six against the blob's own copies.
+ * These are DATA ONLY, and `MTK_phasor` -- which was unwritten when this file
+ * landed and is the reason the sentence here used to say so -- is now
+ * reconstructed in `src/service/mtk.c`.  So the sine pair and both sign
+ * vectors have a reader in `src/` again; `MTK_atan_table` and
+ * `MTK_xor_table` still do not, and are emitted because they are global.
+ * `t_mtktab` proves every byte of all six against the blob's own copies
+ * whatever reads them, which is why this file did not have to wait for that
+ * function and does not now depend on it.
  */
 
 #include "dsplib/mtk.h"

@@ -892,6 +892,18 @@
   "src/service/mtk_tables.c",
   "build/test/t_mtktab"
  ],
+ "mtkphasor": [
+  "src/service/mtk.c",
+  "build/test/t_mtkphasor"
+ ],
+ "tonecreate": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_tonecreate"
+ ],
+ "fdspdp": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_fdspdp"
+ ],
  "voicedp": [
   "src/service/voicedp.c",
   "build/test/t_voicedp"

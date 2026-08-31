@@ -99003,6 +99003,188 @@ being `t`/LOCAL in the symbol table -- the prologue reads 0x30(%esp) upward
 after `sub $0x2c`. That is F8770's correction of F8462 confirmed a second time
 on a second function: **LOCAL predicts nothing about the calling convention;
 read the prologue.**
+### F8780. `MTK_phasor` reconstructed: a quarter-wave oscillator whose two spellings of 2*pi are not the same number
+
+*2026-08-31.* 271 bytes at 0xb0690, `src/service/mtk.c`, proved by
+`t_mtkphasor` at 189,701 checks with a 19-mutant set at 19 caught. Finding
+F8772 wrote the decode out when it declined the function; this confirms it
+against `tools/dis.py` line by line and adds what the decode did not settle.
+
+**THE TWO 2*PI CONSTANTS ARE DIFFERENT NUMBERS AND BOTH ARE THE AUTHOR'S.**
+
+    .rodata.cst4 0x57c   6.2831854820251465   the FLOAT, the fmodf modulus
+    .rodata.cst8 0x1f8   6.28318530718        a DOUBLE, eleven decimals
+    .rodata.cst8 0x208   3.141592653589793    the double NEAREST pi
+
+0x1f8 is *not* the double nearest 2*pi -- 0x182d4454fb211940 is; the object
+has 0xea2e4454fb211940, which is what a typed `6.28318530718` gives. 0x208
+*is* the double nearest pi. So the author typed a truncated 2*pi and a full
+pi in the same function, and `TONE_generate` carries the same truncated one.
+The float at 0x57c cannot take sides: the float nearest 6.28318530718 and
+the float nearest 2*pi are the same float.
+
+That mismatch is not cosmetic. It is what makes deviation D993: the
+reduction is against the LARGER constant and the correction adds the
+SMALLER, so a phase in `[-6.357343096397017e-08, 0)` comes back rounded up
+to the float 2*pi, scales to 1024.0000038, and indexes `MTK_cos_sign[4]`.
+
+**`fprem` IS THE ONLY ONE IN THE OBJECT, and no `fmod` symbol is defined or
+referenced anywhere in the 1.2 MB.** That is F8762's argument for `fsin` and
+`fcos`, and it says the original's build expanded the remainder inline. No
+pragma is set here, and the reason is measured rather than assumed: GCC 14
+at `-O3 -mfpmath=387` already emits the `fprem` loop for `fmodf` with an
+out-of-line fallback, so the only thing a
+`#pragma GCC optimize("unsafe-math-optimizations")` would buy is a
+period-compiler mnemonic, at the price of licensing reassociation across an
+interpolation the differential tier is currently exact on.
+
+**THREE MUTANTS THE DIFFERENTIAL TIER PROVABLY CANNOT SEE**, all recorded as
+NOT-here notes rather than left to read NOT CAUGHT:
+
+- The first `p->phase = x` is dead in the object too -- both exits store the
+  advanced angle over it.
+- `(short)y` versus `(int)y` agree over the whole reachable domain, because
+  the reduction bounds y below 1024. The sixteen bits are `fists` and
+  `cwtl`, which is codegen evidence.
+- `s >= pi` versus `s > pi` differ only at exactly the double pi, and no
+  pair of floats sums to it: pi is M * 2^-51, so a float partner would need
+  to be within 2^-28 of it and the float spacing there is 2.4e-07.
+
+A fourth is the one F8772 predicted trouble from. The object applies each
+sign to the 80-bit value the register still holds (`fsts`, `fmuls`,
+`fstps`), which is why the source is two statements per output; under
+`-mfpmath=387` -- both builds here -- GCC keeps the wide value for the
+one-statement spelling too, so that claim is `compare.py`'s and not a
+mutation set's.
+
+**TWO FORWARDERS WERE DELETED, and the second one is easy to miss.**
+`test/harness/runtime.c` defined an unprefixed `MTK_phasor` forwarding to
+`ref_MTK_phasor` (F8463) and `test/interop/runtime64.c` defined an aborting
+stub of the same name; both collide with `src/` now and both are gone. The
+interop one is not mentioned by F8463 or F8772 and is only reachable through
+`make phase`, so a `make one`-only session would not have found it.
+
+**AND THE HAZARD F8772 NAMED IS CLEARED.** `TONE_generate`'s existing test
+passed because the oscillator under it was the blob's; it is ours now and
+`t_fdspkrnl` is still green at 1,416 checks for that section and 45,905
+across the binary.
+
+### F8781. `TONE_create` is a 2100 Hz answer-tone builder, and its allocation gate has TWO conditions rather than one
+
+*2026-08-31.* 521 bytes at 0xaf690, `src/service/fdspkrnl.c`, with
+`TONE_CFG` (`.data` 0x83c0, 48 bytes) and the `ToneLPF` it points at
+(`.data` 0x8400, 212 bytes). Proved by `t_tonecreate` at 86,136 checks,
+mutation set 33 of 33 caught.
+
+**THE CONFIGURATION IS A SEPARATE 48-BYTE TYPE AND THE OBJECT SAYS SO.**
+`rep movsl` with `$0xc` in `%ecx` at 0xaf6c5 copies twelve words from `cfg`
+over the head of a 0x1c8-byte tone object, and both configs in `.data` are
+0x30 bytes. So the author cannot have declared them as whole tone objects,
+and `struct fdsp_tone_cfg` is a real type rather than a convenience;
+`fdspkrnl.c` asserts its eight named fields against `struct fdsp_tone`'s
+offsets so the two layouts cannot drift apart silently.
+
+**THE GATE IS `test %edx,%eax` OVER TWO `set` RESULTS** (0xaf6d9): `setne`
+on "this call allocated the object" and `setg` on "fir_len > 0". Three of
+the four combinations skip all four `sysdep_malloc` calls, and the FIR loop
+and the biquad stores still run -- which is deviation D995, a wild write of
+seven floats whenever the object was allocated and the length was not
+positive. Reading the gate as one condition invents a function that cannot
+fault.
+
+**WHAT THE COEFFICIENTS ARE.** The detector's three are a resonator at the
+tone frequency with the configured pole radius:
+
+    det_coef[0] = -2 cos(w)        det_coef[1] = 2 r cos(w)
+    det_coef[2] = -r*r             w = 2*pi*freq/8000, r = +0x018
+
+which is what names +0x018 `pole_radius`, and `iir_coef` (+0x1bc) is set to
+point at `det_coef` itself rather than at the 20-byte block -- the two
+filters share one coefficient triple. The 20-byte block is a different
+filter entirely: a 60 Hz notch with poles at radius 0.96, built from a
+SECOND phasor at 0.04712389f (2*pi*60/8000) as
+`{-0.96*0.96, 1, 1.92 cos, -2 cos, 1}`. Only that second phasor is zeroed by
+the `rep stos` at entry; the tone's has both its fields written.
+
+**2*pi/8000 IS TYPED SHORT HERE TOO.** `.rodata.cst8` 0x1c0 is
+0.0007853981633975, three digits short of the nearest double, which is the
+same habit as `MTK_phasor`'s 6.28318530718 (finding F8780) in the function
+next door.
+
+**`ToneLPF` IS TWO DIFFERENT ARRAYS AND NEITHER GETS A `ref_` ALIAS.** The
+blob defines the name twice, both LOCAL: `r` at 0xd040, 53 shorts, the
+fixed-point pump's, already in `src/dsp/fpm_tone_cfg.c`; and `d` at 0x8400,
+53 floats, this one. They are the same filter at different quantisations
+rather than a copy -- the float peak is 0.0418356508 and the short peak is
+1370, and 0.0418356508 * 32768 is 1370.9. Because the name is used by two
+translation units, `symmap.py` refuses to globalize either, so the test
+reaches the float one through `ref_TONE_CFG.fir_proto` -- the blob's own
+pointer to its own array, which is a direct comparison and not a lookup.
+
+**`TONEamode_CFG` IS DECLINED, and the reason is ownership.** It is 48 bytes
+at `.data` 0x8240, `d` and not `D`, and the only relocation anywhere in the
+1.2 MB that names it is at 0xad4a3, inside `detector_create` (0xad480) --
+which needs `detector.h` and belongs to another agent's wave. A `static`
+whose one reader lives in someone else's translation unit is exactly the
+case F8772 declined `silence_level_table` on, and the answer is the same:
+write it with its reader. Its contents are 980 Hz, amp 0.353599995,
+duration 0 (endless), 0.75, 0.01, 0.000199999995, pole radius 0.9375, a
+NULL `fir_proto`, fir_len 53, and three zero words -- and that NULL with a
+positive length is worth checking against D995 when someone does write it.
+
+### F8782. `FDSP_DP_Create` and `FDSP_DP_Delete`: the kernel's constructor names its own two arguments, and both functions dereference a channel before they test it
+
+*2026-08-31.* 650 bytes at 0xae5c0 and 157 at 0xae520, both written into
+`src/service/fdspkrnl.c` with the two `.bss` words they touch. Proved by
+`t_fdspdp` at 24,580 checks, mutation set 22 of 22 caught.
+
+**THE ARGUMENTS ARE NAMED BY THE OBJECT'S OWN FORMAT STRING**, which is
+evidence order 1 and is why they are not `a` and `b`:
+`"ver 120 sRxSamplesDelay %d ,sTxSamplesDelay %d \n"` at `.rodata.str1.4`
+0x12f30. The RX delay is stored into `chan_a->offset` and the TX delay into
+`chan_b->offset` (0xae6c2), so the string also settles which channel is
+which direction -- something four already-reconstructed functions in the
+same file could not say.
+
+**BOTH ARE `short`** (`movswl` at 0xae5de and 0xae5e3), and `int_00` is
+`(sRxSamplesDelay >= 0) ? 2 : 0` written branchlessly as
+`sar $0x1f; not; and $0x2`. It lands on the field `FDSP_Kernel_InitObj` has
+just set to 2, so the only thing this function can do to it is clear it, and
+only a NEGATIVE rx delay does.
+
+**THE TWO `offset` STORES ARE INSIDE THE ALLOCATING ARM.** A caller handing
+in an existing kernel gets it re-initialised and keeps its old offsets --
+`t_fdspdp` asserts that directly, because a reader who moved the two stores
+out of the `if` would pass every other check in the file.
+
+**AND BOTH FUNCTIONS READ THROUGH A CHANNEL POINTER BEFORE TESTING IT.**
+`FDSP_DP_Delete` does `mov 0x14(%ebx),%eax; mov 0x1680(%eax),%edx` at
+0xae533 and only asks whether `chan_a` was NULL at 0xae540; `chan_b` is the
+same three instructions later. `FDSP_DP_Create` stores both offsets through
+`chan_a` and `chan_b` at 0xae6c2 BEFORE it tests whether the allocation
+chain succeeded. So the NULL tests in `Delete` guard `sysdep_free` and
+nothing else, and the only caller that can produce a kernel with a missing
+channel is `Create`'s own out-of-memory path -- which the harness allocator
+cannot drive, so all three sites are recorded at their definitions rather
+than tested. This wave's deviation numbers (D993-D995) are spent; the row
+these want is the next block's.
+
+**`uCorrelationReportsNo` IS WRITE-ONLY IN THE WHOLE OBJECT.** A reverse
+scan of `.bss` 0x8e8 finds exactly one relocation against it, the store at
+0xae61d. Its name is the author's and nothing in the 1.2 MB reads it back,
+so nothing here says what it counts.
+
+**Both globals are external in `src/` and `b` in the blob**, which is the
+trade `bInternalBeepInProgress` in the same file already makes: a `static`
+cannot be compared against the blob's copy, and `symmap.py` renames the
+blob's so the two sides keep their own.
+
+**Two mutants are NOT-here notes.** The three pointer-clearing stores at
+0xae729 are overwritten by the allocations that follow on every path the
+harness can produce, and the ORDER of the two channel allocations (chan_b
+first, then chan_a) and of the two tap allocations is invisible because each
+pair is the same size -- the books are identical either way. Both are read
+from the disassembly and written down instead.
 
 ### F8785. `struct voice_ctx` gets a home, a size, and eighteen fields it did not have
 
