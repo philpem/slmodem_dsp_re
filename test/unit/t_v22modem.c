@@ -280,9 +280,16 @@ dec_id(v22_fse_decision d)
 	return 0;
 }
 
+/*
+ * `what` names the CASE.  Without it a struct or region difference reports
+ * only which field moved, over fifty-six starting states that share one
+ * `diff_begin` group and a ten-line cap between them.
+ */
 static void
-compare_graphs(struct v22fp *mine, struct v22fp *theirs, long tag)
+compare_graphs_named(const char *what, struct v22fp *mine,
+		     struct v22fp *theirs, long tag)
 {
+	char lbl[96];
 	struct region ra[MAX_REGIONS];
 	struct region rb[MAX_REGIONS];
 	struct v22fp oa = blank_obj(mine);
@@ -295,23 +302,33 @@ compare_graphs(struct v22fp *mine, struct v22fp *theirs, long tag)
 	struct fpm_tone tb = blank_tone(theirs->hdx->tone);
 	int n, m, i;
 
-	diff_eq_obj("object", struct v22fp, &oa, &ob, tag);
-	diff_eq_obj("hdx", struct v22fp_hdx, &ha, &hb, tag);
-	diff_eq_obj("dsp", struct v22fp_dsp, &da, &db, tag);
-	diff_eq_obj("tone", struct fpm_tone, &ta, &tb, tag);
+	snprintf(lbl, sizeof(lbl), "%s object", what);
+	diff_eq_obj(lbl, struct v22fp, &oa, &ob, tag);
+	snprintf(lbl, sizeof(lbl), "%s hdx", what);
+	diff_eq_obj(lbl, struct v22fp_hdx, &ha, &hb, tag);
+	snprintf(lbl, sizeof(lbl), "%s dsp", what);
+	diff_eq_obj(lbl, struct v22fp_dsp, &da, &db, tag);
+	snprintf(lbl, sizeof(lbl), "%s tone", what);
+	diff_eq_obj(lbl, struct fpm_tone, &ta, &tb, tag);
 
-	diff_eq_int("pps.imap identity", map_id(mine->dsp->pps.imap),
+	snprintf(lbl, sizeof(lbl), "%s pps.imap identity (%%ld)", what);
+	diff_eq_int(lbl, map_id(mine->dsp->pps.imap),
 		    map_id(theirs->dsp->pps.imap), tag);
-	diff_eq_int("pps.qmap identity", map_id(mine->dsp->pps.qmap),
+	snprintf(lbl, sizeof(lbl), "%s pps.qmap identity (%%ld)", what);
+	diff_eq_int(lbl, map_id(mine->dsp->pps.qmap),
 		    map_id(theirs->dsp->pps.qmap), tag);
-	diff_eq_int("fse.decision identity", dec_id(mine->dsp->fse.decision),
+	snprintf(lbl, sizeof(lbl), "%s fse.decision identity (%%ld)", what);
+	diff_eq_int(lbl, dec_id(mine->dsp->fse.decision),
 		    dec_id(theirs->dsp->fse.decision), tag);
 
 	n = regions_of(mine, ra);
 	m = regions_of(theirs, rb);
-	diff_eq_int("same region count", n, m, tag);
-	for (i = 0; i < n && i < m; i++)
-		cmp_raw(ra[i].name, ra[i].p, rb[i].p, ra[i].n, tag);
+	snprintf(lbl, sizeof(lbl), "%s same region count (%%ld)", what);
+	diff_eq_int(lbl, n, m, tag);
+	for (i = 0; i < n && i < m; i++) {
+		snprintf(lbl, sizeof(lbl), "%s %s", what, ra[i].name);
+		cmp_raw(lbl, ra[i].p, rb[i].p, ra[i].n, tag);
+	}
 }
 
 #define FRAG	160
@@ -346,6 +363,8 @@ main(void)
 	int rc = 0;
 	int state, sub, i;
 	int cases = 0;
+	int txdiff, rxdiff, first_tx;
+	char lbl[80];
 
 	memset(&cfg, 0, sizeof(cfg));
 	cfg.mode = 0;
@@ -389,13 +408,64 @@ main(void)
 			ra = V22FP_modem(fa, tx_a, out_a, in_samples, rx_a,
 					 &na_tx, &na_rx);
 
-			diff_eq_int("state %ld: return", ra, rb, tag);
-			diff_eq_int("state %ld: n_tx", na_tx, nb_tx, tag);
-			diff_eq_int("state %ld: n_rx", na_rx, nb_rx, tag);
-
+			/*
+			 * A PER-CASE SUMMARY LINE, PRINTED WHATEVER HAPPENS.
+			 * `diff_eq_int` caps its report at ten lines per
+			 * group, so on a wide failure the log names ten
+			 * sample indices and NOT ONE of the fifty-six cases
+			 * they came from -- which is exactly what the first
+			 * period run produced (finding F8607).  This costs 56
+			 * lines and turns "3,192 checks failed" into a map.
+			 */
+			txdiff = 0;
+			first_tx = -1;
 			for (i = 0; i < FRAG; i++)
-				diff_eq_int("tx sample[%ld]", out_a[i],
-					    out_b[i], i);
+				if (out_a[i] != out_b[i]) {
+					if (first_tx < 0)
+						first_tx = i;
+					txdiff++;
+				}
+			rxdiff = 0;
+			for (i = 0; i < 100; i++)
+				if (rx_a[i] != rx_b[i])
+					rxdiff++;
+			/*
+			 * `tx[0]` is printed on BOTH sides whether or not
+			 * they differ, and it is the measurement that says
+			 * WHICH side moved when a compiler changes: 5205 is
+			 * the untouched poison scaled by the gain
+			 * (`(0x3333 * 13014) >> 15`), so a case reading
+			 * 5205/5205 is one where NEITHER handler wrote the
+			 * transmit block.  The blob is fixed code, so if the
+			 * REFERENCE column ever moves between two builds of
+			 * ours, what changed is the input we hand it.
+			 */
+			printf("  st %d sub %d: ret %d/%d n_tx %d/%d "
+			       "n_rx %d/%d fpst %u/%u tx[0] %d/%d "
+			       "alloc live %d bad %d ovf %d  txdiff %d "
+			       "(first %d: %d/%d) rxdiff %d\n",
+			       state, sub, ra, rb, na_tx, nb_tx, na_rx, nb_rx,
+			       (unsigned)fa->status, (unsigned)fb->status,
+			       out_a[0], out_b[0], harness_alloc.live,
+			       harness_alloc.bad_free, harness_alloc.overflow,
+			       txdiff, first_tx,
+			       first_tx < 0 ? 0 : out_a[first_tx],
+			       first_tx < 0 ? 0 : out_b[first_tx], rxdiff);
+
+			snprintf(lbl, sizeof(lbl),
+				 "st %d sub %d: return (%%ld)", state, sub);
+			diff_eq_int(lbl, ra, rb, tag);
+			snprintf(lbl, sizeof(lbl),
+				 "st %d sub %d: n_tx (%%ld)", state, sub);
+			diff_eq_int(lbl, na_tx, nb_tx, tag);
+			snprintf(lbl, sizeof(lbl),
+				 "st %d sub %d: n_rx (%%ld)", state, sub);
+			diff_eq_int(lbl, na_rx, nb_rx, tag);
+
+			snprintf(lbl, sizeof(lbl),
+				 "st %d sub %d: tx sample[%%ld]", state, sub);
+			for (i = 0; i < FRAG; i++)
+				diff_eq_int(lbl, out_a[i], out_b[i], i);
 			/*
 			 * The WHOLE receive array, not the first `*n_rx`
 			 * entries: the count is forced to zero for any status
@@ -404,11 +474,13 @@ main(void)
 			 * channel F8538 called "a channel the test cannot
 			 * see".
 			 */
+			snprintf(lbl, sizeof(lbl),
+				 "st %d sub %d: rx word[%%ld]", state, sub);
 			for (i = 0; i < 100; i++)
-				diff_eq_int("rx word[%ld]", rx_a[i], rx_b[i],
-					    i);
+				diff_eq_int(lbl, rx_a[i], rx_b[i], i);
 
-			compare_graphs(fa, fb, tag);
+			snprintf(lbl, sizeof(lbl), "st %d sub %d", state, sub);
+			compare_graphs_named(lbl, fa, fb, tag);
 			cases++;
 		}
 	}

@@ -97149,6 +97149,32 @@ exactly that pattern, because every entry is then wrong and removing one only
 exposes the next. The reading was right; the shape it points at is a defect
 that is uniform across the table, not one specific to an entry.
 
+**RETRACTED IN PART, THE SAME DAY, AND THE RETRACTION IS THE FINDING (F8608).**
+Both injections above were run under `make one`, i.e. GCC 14 -- and GCC 14 is
+the compiler that HIDES this test's real divergence. Under `make period` the
+same tree fails `t_v22modem` in the TRANSMIT SAMPLES, which is precisely the
+observable the second bullet used as its discriminator. So:
+
+  - "a permuted `V22_PROTOCOL` diverges the transmit samples, and F8538 said
+    they agreed" **is not an elimination.** F8538's transmit-sample agreement
+    was, on the evidence available, also a `make one` measurement, and this
+    tree has now measured that transmit samples can agree under GCC 14 in
+    exactly these poked states while diverging under GCC 3.4.2. A permuted
+    table is back among the live hypotheses for that attempt.
+  - What still holds without any compiler behind it is that THIS wave's table
+    is right: its order is read off seven `R_386_32` relocations at
+    `.rodata` + 0x8544 naming the seven handlers, which is the object and not
+    an inference.
+  - The first bullet's elimination survives, because its discriminator is a
+    POLARITY (which side holds the poison) rather than a value, and a polarity
+    cannot be reversed by a code generator.
+
+**The general lesson, and it is the one CLAUDE.md's "Gate on `make period`"
+section already states from the other direction:** an elimination is only as
+good as the tier it was measured on, and a GREEN modern tier is not evidence
+about the code. Every "X is ruled out because observable Y agreed" needs the
+compiler named beside it, exactly as `compare.py`'s numbers do.
+
 ### F8603. `v22_create`, `v22_delete` and `v22_process` are file-static, and the already-committed `v22_delete` was not
 
 `nm` shows a lower-case `t` for all three and an upper-case `T` for
@@ -97265,3 +97291,87 @@ nothing checks.
 Fixed here, since `v22.c` is this wave's file. `tools/assertlive.py` now counts
 1,711 assertions that exist only at 32 bits (was 1,710) and `make check64`
 reports clean in both configurations.
+
+### F8607. A `diff_begin` group's ten-line cap made a 3,192-check failure unattributable, and the fix is a per-case line the cap cannot reach
+
+`t_v22modem.c` drives fifty-six starting states inside ONE `diff_begin` group.
+When the period tier failed it, the report was ten lines naming ten SAMPLE
+INDICES and not one of the fifty-six cases they came from:
+
+    test/unit/t_v22modem.c:398: tx sample[8]  got 0, reference 5205
+    FAIL V22FP_modem over every V22_PROTOCOL state 3192/16745 checks failed
+
+Three thousand failures, and nothing in the output says which state, which
+sub-state, or how many cases were involved. The label carried the array index
+because that is what varies INSIDE a case; what varies BETWEEN cases was in a
+loop variable the label never saw.
+
+Two fixes, and the second is the one that generalises:
+
+  - every label now names the case -- `st 4 sub 2: tx sample[%ld]` -- built
+    with `snprintf`, including the labels `compare_graphs` passes to
+    `diff_eq_obj` and `cmp_raw`;
+  - **a `printf` summary line per case, which no cap can suppress**: the two
+    returns, both counts on both sides, both status bytes, the number of
+    differing transmit samples with the first index and its two values, and the
+    number of differing receive words. Fifty-six lines, and they turn "3,192
+    checks failed" into a map of which states diverge and by how much.
+
+**The general rule: a group whose members are CASES needs the case in the
+label, or its cap destroys exactly the information the failure is about.** The
+tree already knows a detector must report its denominator (F134, F2401); this
+is the same argument about which of many inputs the denominator covers. A test
+that sweeps a domain should print one line per point of that domain
+unconditionally, because the cap exists for the flood and the map is not the
+flood.
+
+The arithmetic in that first report is itself worth keeping, because it
+identifies the failure without any further instrumentation: the reference's
+5205 is the TEST'S OWN POISON scaled by the transmit gain --
+`(0x3333 * 13014) >> 15 == 5205` -- so the blob's handler wrote nothing to
+those samples and ours wrote zeros over them.
+
+### F8608. The V.22 lifecycle FAILS the period gate, and the compiler is the whole variable: GCC 14 is green at `-O2` AND at the period flag set
+
+`make period` reports `t_v22modem` FAIL, 3,192 of 16,745 checks, `period
+differential: 294 passed, 1 failed`. `make one` is green. The first thing to
+establish was whether that is an OPTIMISATION difference this tree could
+reproduce locally, and it is not:
+
+    make one T=t_v22modem                                   PASS
+    make one T=t_v22modem CFLAGS="... -O3 -march=i386 -mtune=i686
+        -mno-ieee-fp -frename-registers -fomit-frame-pointer
+        -maccumulate-outgoing-args"                         PASS
+
+So GCC 14 given the period compiler's own flags still cannot see it. The
+variable is the compiler itself, which puts the defect in the class of things
+a code generator is free to change: an uninitialised local, a strict-aliasing
+assumption, or stack layout.
+
+**THE POPULATION IS IDENTIFIED, AND IT IS EXACTLY THE CASES WHERE NEITHER SIDE
+WRITES THE TRANSMIT BLOCK.** With `tx[0]` printed unconditionally on both
+sides, the GCC-14 map shows **nineteen of the fifty-six cases reading
+5205/5205** -- the untouched poison, on both sides:
+
+    state 1 (v22_originate)   sub 2, 7
+    state 2 (v22_answer)      sub 2, 5, 6, 7
+    state 3 (v22_local_loop)  sub 4, 5, 6, 7
+    state 4 (v22_org_rmloop2) sub 3, 4, 5, 6, 7
+    state 5 (v22_ans_rmloop2) sub 4, 5, 6, 7
+
+and 19 x 160 = 3,040 of the period tier's 3,192 failing checks. Every one is a
+HIGH sub-state -- an arm off the end of that handler's own dispatch, reachable
+only by poking `hdx->connect_substate` -- and states 0 (`v22_data`) and 6
+(`v22_retrain`) contribute none.
+
+So the failing behaviour is: on arms where the blob's handler writes NOTHING to
+the transmit block, ours writes zeros over it, under GCC 3.4.2 and not under
+GCC 14. `TxNOP` is the only thing in the tree that writes 160 zeros there, and
+it is called from `v22loop.c` and `v22org.c` only -- which does not cover
+states 4 and 5, so either more than one mechanism is in play or the zeros come
+from somewhere else. **That is where the next probe goes**, and it needs the
+period tier: the instrumented per-case map (F8607) run under `make period`,
+which names the arm and says whether the RETURN, the counts and the structs
+diverge in those cases too. The 10-line cap on the first run means only
+transmit samples were ever visible, and a struct or region difference in the
+same cases would have been suppressed unseen.
