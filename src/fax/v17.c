@@ -8,10 +8,9 @@
  *   SeedScramblerV17  .text 0x0a09f0   15
  *   SetEncoderV17     .text 0x0a0a00   90
  *   V17TX_status      .text 0x0a1bd0  106
- *   CarrierDetectV17  .text 0x0a5260  121
- *   DataCarrierDetectV17
- *                     .text 0x0a52e0  625
- *   QualityDetectV17  .text 0x0a5560  266
+ *   CarrierDetectV17      .text 0x0a5260  121
+ *   DataCarrierDetectV17  .text 0x0a52e0  625
+ *   QualityDetectV17      .text 0x0a5560  266
  *   EpochDetectV17    .text 0x0a5670   22
  *   GetSNRV17         .text 0x0a5690   23
  *   StoreCoefV17      .text 0x0a56b0   81
@@ -145,37 +144,40 @@ SetEncoderV17(void *modem, short which, short arg)
 /* --------------------------------------------------------------------- */
 
 int
-V17TX_status(void *params, void *status)
+V17TX_status(void *params, struct v17_status *status)
 {
 	unsigned char *p;
-	unsigned char *s;
 
 	if (status == 0)
 		return 0;
 
+	/*
+	 * `params` stays a byte pointer: it is an unidentified block (see
+	 * v17fax.h), and it is also what keeps the dead store below alive,
+	 * since a character type may alias anything.
+	 */
 	p = (unsigned char *)params;
-	s = (unsigned char *)status;
 
-	AT_US(s, 0x00) = AT_US(p, 0x00);
-	AT_US(s, 0x02) = AT_US(p, 0x02);
-	AT_S(s, 0x04) = 0;
-	AT_S(s, 0x06) = 0;
-	AT_S(s, 0x08) = 0;
-	AT_S(s, 0x0a) = 0;
-	AT_S(s, 0x0c) = 0;
-	AT_US(s, 0x10) = AT_US(p, 0x02);
-	AT_S(s, 0x12) = 0;
+	status->protocol = (short)AT_US(p, 0x00);
+	status->tx_bps = (short)AT_US(p, 0x02);
+	status->rx_bps = 0;
+	status->short_06 = 0;
+	status->short_08 = 0;
+	status->short_0a = 0;
+	status->short_0c = 0;
+	status->short_10 = (short)AT_US(p, 0x02);
+	status->short_12 = 0;
 
 	/*
-	 * The first of these two writes to +0x14 is dead and is the object's;
-	 * see v17fax.h.  It stays because the load of `p[0x10]` sits between
-	 * them and may alias.
+	 * The first of these two writes to `flags` is dead and is the
+	 * object's; see v17fax.h and D1032.  It stays because the load of
+	 * `p[0x10]` sits between them and may alias.
 	 */
-	s[0x14] &= (unsigned char)0xfc;
-	s[0x15] &= (unsigned char)0xfe;
-	s[0x14] = (unsigned char)(p[0x10] & 0x04);
+	status->flags &= (unsigned char)~V17_STATUS_FLAGS_CLEAR;
+	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
+	status->flags = (unsigned char)(p[0x10] & V17_STATUS_FLAG_04);
 
-	AT_I(s, 0x18) = AT_I(p, 0x18);
+	status->int_18 = AT_I(p, 0x18);
 
 	return 1;
 }

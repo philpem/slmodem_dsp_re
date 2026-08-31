@@ -1,0 +1,123 @@
+[
+ {
+  "note": "The MOH retrain-request detector's claims."
+ },
+ {
+  "note": ""
+ },
+ {
+  "note": "Every entry is a decision t_mohdet can see: the notch arithmetic and its"
+ },
+ {
+  "note": "per-term short truncation, the rounding constants, the block length, the"
+ },
+ {
+  "note": "three detection thresholds, the reset semantics of a completed block,"
+ },
+ {
+  "note": "the trigger count, both coefficient sets, and the timeout ladder's"
+ },
+ {
+  "note": "anchors.  The state is 32 self-contained bytes compared whole after"
+ },
+ {
+  "note": "every call, so most of these die on the first diff_eq_obj they touch."
+ },
+ {
+  "label": "the y1 term's rounding is dropped",
+  "find": "det->y1 * a1 + 0x2000",
+  "replace": "det->y1 * a1 + 0"
+ },
+ {
+  "label": "the y2 term adds instead of subtracting",
+  "find": "\t\t\t    - (short)((det->y2 * a2 + 0x2000) >> 14)",
+  "replace": "\t\t\t    + (short)((det->y2 * a2 + 0x2000) >> 14)"
+ },
+ {
+  "label": "the x1 product keeps 32 bits instead of truncating to short",
+  "find": "\t\t\t    - (short)((det->x1 * b1 + 0x2000) >> 14)",
+  "replace": "\t\t\t    - ((det->x1 * b1 + 0x2000) >> 14)",
+  "equivalent": true,
+  "why": "A CODEGEN CLAIM, NOT A BEHAVIOURAL ONE. The product does overflow a short (x1 at full range times b1=23170 reaches 46341), but a wrapped term differs from its unwrapped self by a multiple of 65536 and the whole sum is narrowed to short on assignment, which absorbs it -- the two spellings agree on EVERY input by construction. The inner cast buys the object's own movswl at 0x6029; the claim is held by the codegen tier. Same argument as fpmiirblock.json's equivalent entry and finding F8322."
+ },
+ {
+  "label": "the x history is updated with the output, not the input",
+  "find": "\t\tdet->x1 = x;",
+  "replace": "\t\tdet->x1 = y;"
+ },
+ {
+  "label": "the input energy rounds without +32",
+  "find": "(x * x + 32) >> 6",
+  "replace": "(x * x + 0) >> 6"
+ },
+ {
+  "label": "the output energy is shifted one more",
+  "find": "(y * y + 32) >> 6",
+  "replace": "(y * y + 32) >> 7"
+ },
+ {
+  "label": "the block is 32 samples",
+  "find": "if (cnt == 64) {",
+  "replace": "if (cnt == 32) {"
+ },
+ {
+  "label": "the ratio shift is 3, not NOTCH_IN_OUT_RATIO_SHIFT",
+  "find": "(energyInp >> NOTCH_IN_OUT_RATIO_SHIFT) > energyOut\n",
+  "replace": "(energyInp >> 3) > energyOut\n"
+ },
+ {
+  "label": "the input-energy floor is tenfold lower",
+  "find": "&& energyInp > 150000",
+  "replace": "&& energyInp > 15000"
+ },
+ {
+  "label": "the output-energy ceiling is tenfold higher",
+  "find": "&& energyOut < 2250000",
+  "replace": "&& energyOut < 22500000"
+ },
+ {
+  "label": "a failed block keeps the signal count",
+  "find": "\t\t\t\tdet->notchDetectSigCnt = 0;",
+  "replace": "\t\t\t\t;"
+ },
+ {
+  "label": "a completed block keeps its accumulators",
+  "find": "\t\t\tdet->energyInp = 0;\n\t\t\tdet->energyOut = 0;\n\t\t\tdet->nsamples = 0;",
+  "replace": "\t\t\t;"
+ },
+ {
+  "label": "the trigger is 50 detections",
+  "find": "if (det->notchDetectSigCnt > 5)",
+  "replace": "if (det->notchDetectSigCnt > 50)"
+ },
+ {
+  "label": "the 0x66 set gets the 0x65 b1",
+  "find": "\t\tdet->b1_q14 = 0x5a82;",
+  "replace": "\t\tdet->b1_q14 = 0;"
+ },
+ {
+  "label": "the Fs/4 set's a2 is one off",
+  "find": "\t\tdet->a2_q14 = 0x39c3;\n\t} else if (which == 0x66) {",
+  "replace": "\t\tdet->a2_q14 = 0x39c4;\n\t} else if (which == 0x66) {"
+ },
+ {
+  "label": "selector 0x64 answers as 0x65",
+  "find": "\tif (which == 0x65) {",
+  "replace": "\tif (which == 0x65 || which == 0x64) {"
+ },
+ {
+  "label": "timeout code 12 is 96 seconds",
+  "find": "\tcase 12:\n\t\treturn 960;",
+  "replace": "\tcase 12:\n\t\treturn 96;"
+ },
+ {
+  "label": "timeout code 13 is a second, not no-limit",
+  "find": "\tcase 13:\n\t\treturn -1;",
+  "replace": "\tcase 13:\n\t\treturn 1;"
+ },
+ {
+  "label": "an out-of-range code answers -1",
+  "find": "\tdefault:\n\t\treturn 0;",
+  "replace": "\tdefault:\n\t\treturn -1;"
+ }
+]

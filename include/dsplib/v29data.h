@@ -122,4 +122,26 @@ struct v29tx {
 unsigned short TxNoCarrierV29(void *modem, const unsigned short *data,
 			      short *out, unsigned short count);
 
+/*
+ * ---------------------------------------------------------------------------
+ * The equaliser-training generator, and the OTHER block.
+ *
+ * `GenEQTrnSequenceV29` reaches the modem object's +0x20 -- not the +0x24
+ * transmitter block above -- and touches exactly one short of it, a 7-bit
+ * LFSR at +0x18.  That block is otherwise unmodelled, so per this header's
+ * own ruling it gets offset constants and a `void *`, not a struct with a
+ * speculative tail.
+ */
+#define V29TX_OBJ_SCRAM		0x20	/* the block holding the LFSR       */
+#define V29SCRAM_SR		0x18	/* short: the 7-bit shift register  */
+
+/*
+ * Emit `n` symbols of the V.29 equaliser-training sequence: each step
+ * feeds back bit0 XOR bit1 into the top of a 7-bit register and answers
+ * symbol 0xb for a 1 bit, 0 for a 0 bit.  The register persists in the
+ * object, so successive calls continue the sequence.  `n` is read
+ * zero-extended from a 16-bit slot, hence its type.
+ */
+void GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n);
+
 #endif /* DSPLIB_V29DATA_H */

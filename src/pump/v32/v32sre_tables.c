@@ -86,3 +86,48 @@ short SREv32_xCLOCK[3] = {
 short SREv32_yCLOCK[3] = {
 	0, 14189, -14189,
 };
+
+/*
+ * SREv32_CFG -- .rodata 0x007020, 56 bytes, GLOBAL.
+ *
+ * THE HEADER COMMENT ABOVE SAYS THIS TABLE IS NOT HERE, AND THAT IS NOW OUT
+ * OF DATE.  Finding F1615 declined it because "its field boundaries cannot be
+ * settled until FPM_SRE_recover is read, and a byte comparison would pass for
+ * every wrong reading of them alike".  `FPM_SRE_recover` has since been read
+ * and `struct fpm_sre_cfg` in `include/dsplib/fpm_sre.h` names all eighteen
+ * fields, so the boundaries are settled by the code that consumes them rather
+ * than by this table's own bytes.  Writing it as a struct initialiser is
+ * therefore a reading and not a byte copy: every value below lands in a field
+ * the SRE block dereferences by name.  Finding F8561.
+ *
+ * V32OrgNextState (82f9e) loads its address and hands it to `FPM_SRE_init`,
+ * which is what makes it a prerequisite of the half-duplex machine.
+ *
+ * The six pointers are relocations and read ZERO out of the file -- unlike
+ * the built-in `FPM_SRE_CFG`, whose six really are null and are patched in by
+ * its caller, V.32's config carries its tables directly.
+ */
+const struct fpm_sre_cfg SREv32_CFG = {
+	3,			/* +0x00 clock_len   three-phase 2400 baud   */
+	3,			/* +0x02 groups_acq                          */
+	16,			/* +0x04 groups_trk                          */
+	70,			/* +0x06 settle                              */
+	8192,			/* +0x08 acc_down    mode 2 -> 1, >> 15      */
+	16384,			/* +0x0a acc_up      mode 1 -> 2, >> 12      */
+	180,			/* +0x0c coeffs      SREv32_COFFS is 181     */
+	0,			/* +0x0e pad0e                               */
+	SREv32_COFFS,		/* +0x10 proto                               */
+	SREv32_XB_COFFS,	/* +0x14 disc                                */
+	SREv32_xCLOCK,		/* +0x18 xclock                              */
+	SREv32_yCLOCK,		/* +0x1c yclock                              */
+	SREv32_PLL_K1,		/* +0x20 pll_k1                              */
+	SREv32_PLL_K2,		/* +0x24 pll_k2                              */
+	2,			/* +0x28 mag_hi                              */
+	1,			/* +0x2a mag_lo                              */
+	9830,			/* +0x2c err_hi      >> 3 = 1228             */
+	200,			/* +0x2e err_lo      >> 3 =   25             */
+	1500,			/* +0x30 rms_min                             */
+	9,			/* +0x32 rms_len                             */
+	0,			/* +0x34 pad34                               */
+	0			/* +0x36 pad36                               */
+};

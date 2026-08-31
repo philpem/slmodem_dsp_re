@@ -32,7 +32,8 @@ CFLAGS="$FLAGS -std=gnu99"
 CXXFLAGS="$FLAGS -fno-exceptions -fno-rtti"
 
 HARNESS="test/harness/harness.c test/harness/runtime.c
-         test/harness/fakedp.c test/harness/v34hsstep.c"
+         test/harness/fakedp.c test/harness/v34hsstep.c
+         test/harness/unwritten.c"
 
 obj() { echo "$OUT/$(echo "$1" | tr / _ | sed 's/\.[^.]*$//').o"; }
 

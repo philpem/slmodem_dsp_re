@@ -12,6 +12,10 @@
   "src/dsp/ANSamToneDetector.cpp",
   "build/test/t_gtonedet"
  ],
+ "beepgen": [
+  "src/service/beepgen.c",
+  "build/test/t_beepgen"
+ ],
  "cadence": [
   "src/callprog/cadence.c",
   "build/test/t_cadence"
@@ -71,6 +75,18 @@
  "fpmmtd": [
   "src/dsp/fpm_mtd.c",
   "build/test/t_fpm_mtd"
+ ],
+ "fdspkfifo": [
+  "src/service/fifo8.c",
+  "build/test/t_fdspkfifo"
+ ],
+ "fdspkrnl": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_fdspkrnl"
+ ],
+ "fdspksil": [
+  "src/service/silence.c",
+  "build/test/t_fdspksil"
  ],
  "fpmmtdlayout": [
   "src/dsp/fpm_mtd.c",
@@ -139,6 +155,10 @@
  "resamplerto": [
   "src/pump/v90/ResamplerTimingOffset.cpp",
   "build/test/t_resampler"
+ ],
+ "ringdet": [
+  "src/service/voice.c",
+  "build/test/t_ringdet"
  ],
  "scrambler": [
   "include/dsplib/Scrambler.h",
@@ -847,5 +867,57 @@
  "vpcmxfterm": [
   "src/pump/v90/VPcmXfTerm.cpp",
   "build/test/t_v90demod"
+ ],
+ "mohdet": [
+  "src/pump/v90/mohdet.cpp",
+  "build/test/t_mohdet"
+ ],
+ "cidwrap": [
+  "src/service/cid.c",
+  "build/test/t_cid"
+ ],
+ "dpinit": [
+  "src/core/dp_init.c",
+  "build/test/t_dpinit"
+ ],
+ "vce": [
+  "src/service/voice.c",
+  "build/test/t_vce"
+ ],
+ "vcedle": [
+  "src/service/voicecmd.c",
+  "build/test/t_vcedle"
+ ],
+ "mtktab": [
+  "src/service/mtk_tables.c",
+  "build/test/t_mtktab"
+ ],
+ "mtkphasor": [
+  "src/service/mtk.c",
+  "build/test/t_mtkphasor"
+ ],
+ "tonecreate": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_tonecreate"
+ ],
+ "fdspdp": [
+  "src/service/fdspkrnl.c",
+  "build/test/t_fdspdp"
+ ],
+ "voicedp": [
+  "src/service/voicedp.c",
+  "build/test/t_voicedp"
+ ],
+ "voicedptx": [
+  "src/service/voicedp.c",
+  "build/test/t_voicedptx"
+ ],
+ "voicedpdel": [
+  "src/service/beepgen.c",
+  "build/test/t_voicedpdel"
+ ],
+ "voicedprx": [
+  "src/service/voicedp.c",
+  "build/test/t_voicedprx"
  ]
 }

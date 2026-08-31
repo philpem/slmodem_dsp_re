@@ -243,15 +243,45 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 }
 
 /*
- * `VPCMXF_Delete` is `if (p) { p->~VPcmFloModem(); sysdep_free(p); }` and the
- * object proves it is exactly that rather than six hand-written calls:
- * `_ZN12VPcmFloModemD1Ev` at 0xd0a0 is the SAME six calls in the same order,
- * 0x61 bytes of it, and it exists as a symbol because an implicitly-declared
- * destructor is implicitly inline -- GCC emits an out-of-line copy and still
- * inlines it at a call site.  So one source statement produces both.
+ * ===========================================================================
+ * The destructor -- D2 at 0xd030 and D1 at 0xd0a0, 97 bytes each.
+ * ===========================================================================
  *
- * A hand-written sequence here would give us a function with no
- * `~VPcmFloModem` behind it and the blob's 0xd0a0 unaccounted for.
+ * USER-DECLARED NOW, AND THE BLOB IS WHY.  This tree used to leave it
+ * implicit, and the comment below the definition explained `VPCMXF_Delete`
+ * on that basis -- but an implicit destructor is implicitly INLINE, and GCC
+ * 3.4 emits NO out-of-line copy of one (t_vpcmctor.cpp measured exactly
+ * that: no `_ZN12VPcmFloModemD` anywhere in our build).  The blob HAS both
+ * symbols, 97 bytes each, so the original DECLARED its destructor; the
+ * VPcmV34Main leaf pass claims the pair.
+ *
+ * The body is empty; the 97 bytes are the six member destructions the
+ * compiler generates, in reverse declaration order -- `entFilt`
+ * (GenericIIR<float, double> at +0x7f28), `sineWave` (+0x6f9c), `ansam`
+ * (+0x6f5c), `echoCanceller` (+0x6bd0), `v92modem` (+0x6124), `modem`
+ * (+0x1758) -- which is EXACTLY the blob's six calls in the blob's order.
+ * That agreement is the header's member modelling paying off: the six
+ * embedded objects are declared with their real types, so `{}` IS the
+ * original's destructor, whatever its body said.
+ *
+ * IT IS DEFINED IN THIS FILE AND NOT IN VPcmFloModem.cpp, because the TU is
+ * a codegen carrier: the blob's `VPCMXF_Delete` INLINES the destructor (six
+ * member-destructor relocations at 0xf6d5..0xf71b, no `D1` among them),
+ * which GCC only does for a same-TU definition -- exactly the relationship
+ * the original had, with both in VPcmV34Main.cpp.  Defined elsewhere,
+ * `VPCMXF_Delete` becomes one `call _ZN12VPcmFloModemD1Ev`: identical
+ * behaviour, the wrong six instructions.
+ */
+VPcmFloModem::~VPcmFloModem()
+{
+}
+
+/*
+ * `VPCMXF_Delete` is `if (p) { p->~VPcmFloModem(); sysdep_free(p); }`, and
+ * `_ZN12VPcmFloModemD1Ev` at 0xd0a0 is the SAME six calls in the same order,
+ * 0x61 bytes of it -- the destructor defined above, inlined here and emitted
+ * out of line, one source statement producing both.  A hand-written sequence
+ * here would give us a function with no `~VPcmFloModem` behind it.
  */
 extern "C" void
 VPCMXF_Delete(VPcmFloModem *self)

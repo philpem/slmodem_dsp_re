@@ -67,6 +67,14 @@ void FPM_atan(short y, short x, short *angle);
 extern const short FPM_atan_table[FPM_ATAN_TABLE];
 
 /*
+ * Popcount of the byte index -- consumers XOR two words and read the
+ * Hamming distance out.  256 entries, and its consumers can index it with
+ * 16-bit values; see src/dsp/fpm_xor.c for what that means and for the
+ * verification against the blob.
+ */
+extern const short FPM_xor_table[256];
+
+/*
  * Base-10 logarithm of `mantissa * 2^-exponent`, result in Q12.
  *
  * The mantissa is normalised internally, so the exponent is whatever the

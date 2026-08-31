@@ -64,6 +64,73 @@
 struct fpm_sdm;
 
 /* ------------------------------------------------------------------------ */
+/* The status block                                                         */
+
+/*
+ * What `V17TX_status` fills, and it is a SHARED block: `v22status.h`'s
+ * `struct v22_status` and `v32fpstat.h`'s `struct v32_status` model the same
+ * layout for their own datapumps, field for field, and both were derived from
+ * their own disassembly with nothing to do with V.17.
+ *
+ * THE V.17 WRITE SET MATCHES THAT LAYOUT EXACTLY, INCLUDING WHAT IT SKIPS.
+ * `V17TX_status` writes +0x00, +0x02, +0x04, +0x06, +0x08, +0x0a, +0x0c,
+ * +0x10, +0x12, +0x14, +0x15 and +0x18, and leaves +0x0e and +0x16 alone --
+ * and +0x16 is the one field `v32_status` itself annotates "not written". A
+ * reading that walked the block in even steps would have written +0x0e; the
+ * object steps over it.
+ *
+ * +0x02 IS A BIT RATE, AND THAT IS MEASURED HERE RATHER THAN BORROWED.
+ * `V21TX_status` (0xa2c00) stores the literal `$0x12c` -- 300 -- into +0x02,
+ * and V.21 is a 300 bit/s modem. `v22_status` independently calls the same
+ * offset 1200-or-2400 and `v32_status` calls it `RATEv32[...] bit/s`. Three
+ * modules, three derivations, one meaning.
+ *
+ * THREE SPELLINGS OF ONE BLOCK IS A PROBLEM AND THIS ADDS A FOURTH, KNOWINGLY.
+ * "One type, one home" is about a type having one DEFINITION, and these are
+ * four differently-named types, so no gate fires -- but they are one thing and
+ * they should end up as one. Unifying them is not this batch's to do: it
+ * touches two headers this batch does not own and a third module's tests. The
+ * names below are deliberately the ones `v22_status` and `v32_status` already
+ * use wherever the two agree, so that a later unification is a rename and not
+ * a re-derivation. Where they DISAGREE (+0x06, +0x08, +0x0c, +0x10, +0x12) the
+ * neutral offset name is kept, because V.17 writes a constant zero to every
+ * one of them and so has no evidence of its own to break the tie.
+ *
+ * The field widths are the object's: +0x14 and +0x15 are BYTES, written with
+ * `movzbl`/`andb`/`mov %al`, and +0x18 is an `int` copied 32 bits at a time.
+ */
+struct v17_status {
+	short protocol;		/* +0x00 <- params + 0x00                    */
+	short tx_bps;		/* +0x02 <- params + 0x02; see above         */
+	short rx_bps;		/* +0x04 always 0 here                       */
+	short short_06;		/* +0x06 always 0 here                       */
+	short short_08;		/* +0x08 always 0 here                       */
+	short short_0a;		/* +0x0a always 0 here                       */
+	short short_0c;		/* +0x0c always 0 here                       */
+	short short_0e;		/* +0x0e NOT WRITTEN -- the object steps over
+				 *       it, and v32_status zeroes it        */
+	short short_10;		/* +0x10 <- params + 0x02, read a second time */
+	short short_12;		/* +0x12 always 0 here                       */
+	unsigned char flags;	/* +0x14 ASSIGNED, not merged; see D1032     */
+	unsigned char flags1;	/* +0x15 bit 0 cleared, bits 1..7 preserved  */
+	short short_16;		/* +0x16 NOT WRITTEN                         */
+	int int_18;		/* +0x18 <- params + 0x18                    */
+};
+
+/*
+ * The one bit of `params + 0x10` that reaches `flags`.  Named by its VALUE per
+ * CLAUDE.md; what it INDICATES is not established, and neither `v22_status`
+ * nor `v32_status` names their equivalent either.
+ */
+#define V17_STATUS_FLAG_04	0x04
+
+/* The two bits `flags` is masked of before being overwritten anyway. */
+#define V17_STATUS_FLAGS_CLEAR	0x03
+
+/* The one bit `flags1` is cleared of, and which is genuinely a mask. */
+#define V17_STATUS_FLAGS1_CLEAR	0x01
+
+/* ------------------------------------------------------------------------ */
 /* The TRANSMIT instance -- offsets shared with v17data.h                    */
 
 /*
@@ -474,13 +541,19 @@ void SetEncoderV17(void *modem, short which, short arg);
  * Returns 1 when `status` is non-NULL and 0 when it is NULL, and the NULL
  * case does nothing else -- so this is the object's own guard, not ours.
  *
- * NEITHER BLOCK IS IDENTIFIED.  `params` is read at +0x00, +0x02, +0x10 and
- * +0x18 and `status` is written at ten offsets, and nothing reconstructed
- * names either type.  It is worth recording that +0x10 of `params` is the
- * same offset `V17TX_create` takes a rate index from (`v17data.h`,
- * `V17TX_OBJ_PARAMS`), and that this function reads only the LOW BYTE of it
- * and only bit 2; whether the two are the same block is NOT established and
- * the coincidence is recorded rather than acted on.
+ * THE SECOND BLOCK IS `struct v17_status`, above.  THE FIRST IS NOT
+ * IDENTIFIED: `params` is read at +0x00, +0x02, +0x10 and +0x18, and the two
+ * candidates -- the transmitter's private block at `V17TX_OBJ_FP` and the
+ * parameter block at `V17TX_OBJ_PARAMS` -- both have room for all four and
+ * neither is contradicted.  `v22status.h` declares its equivalent as taking
+ * the DATAPUMP (`struct v22fp *`), which is a hint and not a derivation, so
+ * the parameter stays `void *`.
+ *
+ * It is worth recording that +0x10 of `params` is the same offset
+ * `V17TX_create` takes a rate index from (`v17data.h`, `V17TX_OBJ_PARAMS`),
+ * and that this function reads only the LOW BYTE of it and only bit 2;
+ * whether the two are the same block is NOT established and the coincidence is
+ * recorded rather than acted on.
  *
  * THE DEAD STORE IS THE OBJECT'S.  `status + 0x14` is cleared of its low two
  * bits and then overwritten outright a few instructions later.  It survives
@@ -489,20 +562,9 @@ void SetEncoderV17(void *modem, short which, short arg);
  * `unsigned char *`.  Removing it would be tidier and would stop being the
  * object.  The consequence -- the caller's bits 2..7 of that byte are
  * DESTROYED, while +0x15 four instructions away carefully preserves its own --
- * is deviation D1032.
- *
- * A LEAD THAT IS NOT EVIDENCE HERE, and is recorded as a lead: a parallel
- * reconstruction pass reports that this same 0x1c-byte block is already
- * modelled as `struct v22_status` and `struct v32_status`, with +0x00 a
- * protocol word, +0x02 and +0x04 bit rates, +0x06 a quality, +0x08 an SNR,
- * +0x14 and +0x15 flag bytes and +0x18 an int -- which would be rank-2
- * evidence for naming every field above.  NEITHER HEADER EXISTS ON THIS
- * BRANCH, so nothing here is named from it and nothing here cites it.  Anyone
- * merging the two passes should check `nm -S`, read those headers, and name
- * these offsets then; four spellings of one block is the thing to avoid, and
- * "one type, one home" is the rule that will decide it.
+ * is deviation D1032, and three sibling functions do the same thing.
  */
-int V17TX_status(void *params, void *status);
+int V17TX_status(void *params, struct v17_status *status);
 
 /*
  * Report whether a carrier is present.

@@ -1,0 +1,121 @@
+[
+ {
+  "note": "src/service/fdspkrnl.c against build/test/t_fdspdp.  The claims: the six allocation sizes and that all six happen, which delay lands on which channel and that both only land on the allocating path, the int_00 decision and which argument it reads, the two globals, that InitObj runs, which blocks FDSP_DP_Delete frees, and that a NULL kernel leaves the global alone."
+ },
+ {
+  "label": "FDSP_DP_Delete leaves the buffer block",
+  "find": "\tif (k->buffers != 0)\n\t\tsysdep_free(k->buffers);",
+  "replace": "\tif (k->buffers == 0)\n\t\tsysdep_free(k->buffers);"
+ },
+ {
+  "label": "FDSP_DP_Delete leaves chan_a's taps",
+  "find": "\tif (k->chan_a->coef != 0)\n\t\tsysdep_free(k->chan_a->coef);",
+  "replace": "\tif (k->chan_a->coef == 0)\n\t\tsysdep_free(k->chan_a->coef);"
+ },
+ {
+  "label": "FDSP_DP_Delete leaves chan_b",
+  "find": "\tif (k->chan_b != 0)\n\t\tsysdep_free(k->chan_b);",
+  "replace": "\tif (k->chan_b == 0)\n\t\tsysdep_free(k->chan_b);"
+ },
+ {
+  "label": "FDSP_DP_Delete leaves the kernel itself",
+  "find": "\tsysdep_free(k);\n\tpGlobalFDSPObj = 0;",
+  "replace": "\tpGlobalFDSPObj = 0;"
+ },
+ {
+  "label": "FDSP_DP_Delete does not clear the global",
+  "find": "\tsysdep_free(k);\n\tpGlobalFDSPObj = 0;",
+  "replace": "\tsysdep_free(k);"
+ },
+ {
+  "label": "FDSP_DP_Delete clears the global for a NULL kernel too",
+  "find": "\tif (k == 0)\n\t\treturn;\n\tif (k->buffers != 0)",
+  "replace": "\tif (k == 0) {\n\t\tpGlobalFDSPObj = 0;\n\t\treturn;\n\t}\n\tif (k->buffers != 0)"
+ },
+ {
+  "label": "the kernel is allocated four bytes short",
+  "find": "\t\tk = (struct fdsp_kernel *)sysdep_malloc(sizeof(*k));",
+  "replace": "\t\tk = (struct fdsp_kernel *)sysdep_malloc(sizeof(*k) - 4);"
+ },
+ {
+  "label": "the buffer block is allocated as a channel",
+  "find": "\t\t\tk->buffers = (struct fdsp_buffers *)\n\t\t\t\t     sysdep_malloc(sizeof(*k->buffers));",
+  "replace": "\t\t\tk->buffers = (struct fdsp_buffers *)\n\t\t\t\t     sysdep_malloc(sizeof(struct fdsp_channel));"
+ },
+ {
+  "label": "chan_b is allocated as a kernel",
+  "find": "\t\t\tk->chan_b = (struct fdsp_channel *)\n\t\t\t\t    sysdep_malloc(sizeof(*k->chan_b));",
+  "replace": "\t\t\tk->chan_b = (struct fdsp_channel *)\n\t\t\t\t    sysdep_malloc(sizeof(struct fdsp_kernel));"
+ },
+ {
+  "label": "chan_a gets 120 taps rather than 240",
+  "find": "\t\t\tk->chan_a->coef = (float *)\n\t\t\t\t\t  sysdep_malloc(240 * sizeof(float));",
+  "replace": "\t\t\tk->chan_a->coef = (float *)\n\t\t\t\t\t  sysdep_malloc(120 * sizeof(float));"
+ },
+ {
+  "label": "the two delays land on the other channel each",
+  "find": "\t\tk->chan_a->offset = sRxSamplesDelay;\n\t\tk->chan_b->offset = sTxSamplesDelay;",
+  "replace": "\t\tk->chan_a->offset = sTxSamplesDelay;\n\t\tk->chan_b->offset = sRxSamplesDelay;"
+ },
+ {
+  "label": "the delays are applied on the re-initialising path as well",
+  "find": "\t\tk->chan_a->offset = sRxSamplesDelay;\n\t\tk->chan_b->offset = sTxSamplesDelay;\n\t\tif (!ok) {",
+  "replace": "\t\tif (!ok) {"
+ },
+ {
+  "label": "int_00 is decided by the TX delay",
+  "find": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tk->int_00 = (sTxSamplesDelay >= 0) ? 2 : 0;"
+ },
+ {
+  "label": "int_00 treats zero as negative",
+  "find": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tk->int_00 = (sRxSamplesDelay > 0) ? 2 : 0;"
+ },
+ {
+  "label": "int_00's two answers are the other way round",
+  "find": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 0 : 2;"
+ },
+ {
+  "label": "int_00 is left as InitObj set it",
+  "find": "\t\tFDSP_Kernel_InitObj(k);\n\t\tk->int_00 = (sRxSamplesDelay >= 0) ? 2 : 0;",
+  "replace": "\t\tFDSP_Kernel_InitObj(k);"
+ },
+ {
+  "label": "the kernel is not initialised",
+  "find": "\t\tFDSP_Kernel_InitObj(k);\n\t\tk->int_00",
+  "replace": "\t\tk->int_00"
+ },
+ {
+  "label": "the global is not published",
+  "find": "\tpGlobalFDSPObj = k;\n\tuCorrelationReportsNo = 0;",
+  "replace": "\tuCorrelationReportsNo = 0;"
+ },
+ {
+  "label": "the correlation counter is not cleared",
+  "find": "\tpGlobalFDSPObj = k;\n\tuCorrelationReportsNo = 0;",
+  "replace": "\tpGlobalFDSPObj = k;"
+ },
+ {
+  "label": "the correlation counter is set to one",
+  "find": "\tuCorrelationReportsNo = 0;\n\treturn k;",
+  "replace": "\tuCorrelationReportsNo = 1;\n\treturn k;"
+ },
+ {
+  "label": "the entry line prints the two delays the other way round",
+  "find": "\t\t\t\t     sRxSamplesDelay, sTxSamplesDelay);",
+  "replace": "\t\t\t\t     sTxSamplesDelay, sRxSamplesDelay);"
+ },
+ {
+  "label": "the re-initialisation line is printed on both paths",
+  "find": "\t} else if (DSPLIB_DEBUG_ON()) {\n\t\tdsplibs_debug_printf(\"Reinitialization requested: \\n\");\n\t}",
+  "replace": "\t}\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"Reinitialization requested: \\n\");"
+ },
+ {
+  "note": "NOT here: dropping the three `k->chan_b = 0; k->chan_a = 0; k->buffers = 0;` stores.  They exist in the object (0xae729) and are what makes a partially built kernel safe to hand to the cleanup, but every one of them is overwritten by the allocation that follows on the only path the harness allocator can produce -- it never fails -- so the mutant is dead code removal and would read NOT CAUGHT while modelling nothing."
+ },
+ {
+  "note": "NOT here: swapping the ORDER of the two channel allocations, or of the two tap allocations.  Both pairs are the same size as each other, so the allocator's books are identical either way and no fixture can see the difference.  The object allocates chan_b before chan_a and chan_b's taps before chan_a's, which is read from 0xae7ba/0xae76e and 0xae743/0xae78f and is recorded here rather than tested."
+ }
+]

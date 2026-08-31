@@ -100,6 +100,15 @@
 #define V92CP_GROUPS	6
 #define V92CP_MASKS	8
 
+/*
+ * float2Bits(float, unsigned char *, int) -- 0x4ec00, the free function that
+ * shares this class's translation unit: the greedy `fltTable_2`/`fltTable_1`
+ * expansion standalone, one byte per bit.  The `Psi` sibling in V90CPpck.h
+ * packs shorts against the other table pair; the two overload cleanly.
+ * Nothing in the object calls this one.
+ */
+void float2Bits(float f, unsigned char *bits, int mode);
+
 class V92CP {
 public:
 	/*

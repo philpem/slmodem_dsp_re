@@ -163,6 +163,24 @@ V92Precoder::~V92Precoder()
 }
 
 /*
+ * reset() -- 0x56d80, 87 bytes, immediately BEFORE reset(V92MappingParams *)
+ * in the blob as here.  "reset 2" in its own words, against the other's
+ * "reset 1 (with cfg)": no configuration, just both filters cleared.  The
+ * object duplicates the two `FloatFIR::reset` calls into each arm of the
+ * debug test with the second as a sibling `jmp`; one gated print and two
+ * calls is the source both arms are copies of.
+ */
+void
+V92Precoder::reset()
+{
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V92Precoder: reset 2 called\r\n");
+
+	fir1->reset();
+	fir2->reset();
+}
+
+/*
  * Refill the object from the parameter block: twenty-five words copied, one
  * pointer taken into the block, and the two carried samples zeroed.  The two
  * filters at +0x68 and +0x6c are the only fields below +0x78 this does NOT

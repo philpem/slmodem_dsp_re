@@ -45,6 +45,28 @@ struct v32_sdm {
 	short tap2;		/* +0x16 second feedback tap, a right shift */
 };
 
+/*
+ * The three tables `V32FP_recreate` seeds a `struct v32_sdm` from, and THE
+ * WAY IT USES THEM IS WHAT SETTLES THEIR SHAPE.  `src/pump/v32/
+ * v32scram_tables.c` used to say all three were unreferenced and that
+ * therefore only their element WIDTH could be established; that was wrong,
+ * and V32FP_recreate is the referrer (finding F8655).
+ *
+ *   SDMv32_CFG   a three-word TEMPLATE for the first six bytes of a
+ *                `struct v32_sdm` -- `group`, then the two ABSOLUTE tap
+ *                positions v32fpctl.h names V32_SDM_TAP1_POS and
+ *                V32_SDM_TAP2_POS.  Entries 0 and 1 are overwritten on every
+ *                path; only entry 2, the 23, survives, and it lands in
+ *                `tap2_pos`.
+ *   SDMv32_GPC   the TRANSMIT first tap position, indexed by the half-duplex
+ *   SDMv32_GPA   mode; the RECEIVE one, indexed the same way.  0, 1 and 2 are
+ *                the three modes `V32FP_recreate` can install, so at least
+ *                three of the four entries are reachable.
+ */
+extern const short SDMv32_GPA[4];
+extern const short SDMv32_GPC[4];
+extern const short SDMv32_CFG[3];
+
 /* Both work in place over `count` 16-bit words and update `reg`. */
 void SDMv32_scrambler(struct v32_sdm *sdm, short *buf, unsigned short count);
 void SDMv32_descrambler(struct v32_sdm *sdm, short *buf, unsigned short count);

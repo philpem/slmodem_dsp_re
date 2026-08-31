@@ -19,6 +19,7 @@ extern "C" {
 
 struct fpm_agc_cfg;
 struct fpm_mrf_cfg;
+struct fpm_pps_cfg;
 
 /* Q15 smoother pairs: [0] acquisition, [1] tracking.  Both configs use [0]. */
 extern short AGC_DEF_ALPHA[2];
@@ -29,6 +30,17 @@ extern struct fpm_agc_cfg AGCv32Prc_CFG;	/* 40-sample blocks, ref 10000 */
 
 extern const short MRFv32_COFFS[360];		/* 9 branches x 40 taps        */
 extern const struct fpm_mrf_cfg MRFv32_CFG;	/* 8000 -> 7200 Hz             */
+
+/*
+ * The transmit pulse shaper: 10 phases of 12 taps, driven from the symbol
+ * ring through the 16-point constellation maps.  Both coefficient tables are
+ * 120 entries and `PPSv32_CFG::coeffs` says so; `ICOFFS` is symmetric about
+ * its centre and `QCOFFS` anti-symmetric, which is the I/Q pair of one
+ * passband filter.
+ */
+extern const short PPSv32_ICOFFS[120];
+extern const short PPSv32_QCOFFS[120];
+extern const struct fpm_pps_cfg PPSv32_CFG;
 
 #ifdef __cplusplus
 }

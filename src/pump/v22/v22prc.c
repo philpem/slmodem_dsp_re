@@ -8,12 +8,20 @@
  *   RxClampV22      .text 0x08c370   44    |  the 0x8bd50..0x8c5a0 block,
  *   ReadGTimer      .text 0x08c3a0   15    |  with MakeTxData and the
  *   RxTrained1200   .text 0x08be20   63    |  Detect_* family
- *   RxTrained2400   .text 0x08be60  143   /
+ *   RxTrained2400   .text 0x08be60  136   /
  *
  *   TxClockSync     .text 0x08e610   22   \
  *   CarrierDetect   .text 0x08e630   14    |  the 0x8e120..0x8e669 block,
  *   SignalDetect    .text 0x08e640   14    |  after DemodDataV22
  *   GetSignalQuality .text 0x08e650  25   /
+ *
+ * plus, from the 2026-08-30 no-entry-point leaf batch (finding F8320's
+ * bucket -- exported API nothing in the object calls), three more of the
+ * same shape from the same two neighbourhoods:
+ *
+ *   V22FP_control   .text 0x08c3b0  145      after ReadGTimer
+ *   ScramblerOn     .text 0x08e670   11   \  after GetSignalQuality
+ *   DescramblerOn   .text 0x08e680   11   /
  *
  * `tools/tumap.py` puts thirteen V.22 translation units in one shared
  * bracket, so it cannot say which of `V22.c`, `v22prc.c` and `v22stc.c` each
@@ -50,6 +58,7 @@
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 #define FIELD_SHORT(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
 #define FIELD_USHORT(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
+#define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
 /*
  * One block of the datapump is 20 ms, so the shared clock is in
@@ -227,3 +236,11 @@ TxClockSync(void *modem)
 
 	FIELD_SHORT(fp, V22FP_TX_CLOCK) = (short)(baud * 3);
 }
+
+/*
+ * V22FP_control, ScramblerOn and DescramblerOn were reconstructed here first,
+ * against `void *modem`, and again in `v22ctl.c` against the modelled
+ * `struct v22fp`.  Both passed their differential tests -- they are the same
+ * three functions -- so the typed pair is what the tree keeps, and this file
+ * declares nothing about them.  `v22ctl.c` is their one home.
+ */

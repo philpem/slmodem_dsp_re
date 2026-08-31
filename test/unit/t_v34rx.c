@@ -26,6 +26,12 @@ extern void ref_updateAlpha(short *a, int e, int d, int g, int dec,
 			    const char *t);
 extern int ref_V34descrambler(void *s, short bits, short nbits);
 extern void ref_txinit(void *obj);
+/*
+ * Was called without a declaration, which C90 tolerated and GCC 14 rejects
+ * (-Wimplicit-function-declaration became an error).  `T` in the blob, so
+ * the ordinary convention, same as our v34filt.h declaration.
+ */
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern int ref_agcadapt(void *a);
 extern void ref_rxtiminginit(void *obj);
 extern void ref_rxinit(void *obj);
@@ -34,6 +40,7 @@ extern void ref_V34agc(void *rx);
 extern void ref_rxtiming(void *obj);
 extern void ref_txrxdmainit(short *dst, const short *src);
 extern void ref_V34SetupDemodulator(void *obj, short baud, short carrier);
+extern void ref_V34InitializeImplementationSpecific(void *obj);
 extern void ref_v34FreezeEcho(void *obj);
 extern int ref_adaptecho(void *obj);
 extern int ref_modem_serrint(void *obj);

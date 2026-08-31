@@ -73,6 +73,25 @@ int ref_generateSymbol(void *self)
 	asm("ref__ZN18V92Phase3Modulator14generateSymbolEv");
 
 /*
+ * The six leaf methods the VPcmV34Main leaf pass claimed -- the standalone
+ * copies of the bodies `generateSymbol` inlines, so this fixture already
+ * stands up everything they touch.  `int` is measured off the standalone
+ * bodies (each widens a short into %eax itself).
+ */
+int ref_generateRu(void *self)
+	asm("ref__ZN18V92Phase3Modulator10generateRuEv");
+int ref_generateRuNot(void *self)
+	asm("ref__ZN18V92Phase3Modulator13generateRuNotEv");
+int ref_genereteSu(void *self)
+	asm("ref__ZN18V92Phase3Modulator10genereteSuEv");
+int ref_genereteSuNot(void *self)
+	asm("ref__ZN18V92Phase3Modulator13genereteSuNotEv");
+int ref_generateJa(void *self)
+	asm("ref__ZN18V92Phase3Modulator10generateJaEv");
+int ref_generateTRN1u(void *self)
+	asm("ref__ZN18V92Phase3Modulator13generateTRN1uEv");
+
+/*
  * Six arguments after `this`, all by value on the stack.  The enum is
  * declared `int` here rather than by its own name because an extern "C"
  * prototype only has to describe the ABI, and it is int-sized.  The leading
@@ -1286,6 +1305,79 @@ run_exits(void)
 	return diff_end();
 }
 
+/*
+ * The six leaf methods, driven directly with `prepare`'s state -- the same
+ * scrambler placement, Ja vector and levels the pump gets -- and compared
+ * the way `drive` compares a pump call.  `symbolCount` sweeps across the
+ * % 6 phases, both sides of `generateJa`'s 24-symbol threshold, and 0
+ * (whose (0 - 1u) wrap is defined unsigned arithmetic on both sides).
+ */
+static int
+run_leaves(void)
+{
+	static const unsigned int counts[] = { 0u, 1u, 3u, 5u, 6u, 7u, 24u,
+					       25u, 26u, 60u, 121u };
+	long tag = 800000L;
+	int trial, ci, m;
+	int nonzero = 0, negative = 0, zero = 0;
+
+	diff_begin("the six V92Phase3Modulator leaves");
+
+	for (trial = 0; trial < 12; trial++)
+	    for (ci = 0; ci < (int)(sizeof counts / sizeof counts[0]); ci++)
+		for (m = 0; m < 6; m++) {
+			int a = 0, b = 0;
+
+			prepare(trial, trial % 4, 0u, counts[ci], 0);
+
+			switch (m) {
+			case 0:
+				a = ours.o.generateRu();
+				b = ref_generateRu(&theirs.o);
+				break;
+			case 1:
+				a = ours.o.generateRuNot();
+				b = ref_generateRuNot(&theirs.o);
+				break;
+			case 2:
+				a = ours.o.genereteSu();
+				b = ref_genereteSu(&theirs.o);
+				break;
+			case 3:
+				a = ours.o.genereteSuNot();
+				b = ref_genereteSuNot(&theirs.o);
+				break;
+			case 4:
+				a = ours.o.generateJa();
+				b = ref_generateJa(&theirs.o);
+				break;
+			default:
+				a = ours.o.generateTRN1u();
+				b = ref_generateTRN1u(&theirs.o);
+				break;
+			}
+
+			diff_eq_int("the leaf returned (case %ld)", a, b,
+				    tag);
+			compare_object("after the leaf", tag);
+			scr_compare(tag);
+
+			if (a > 0)
+				nonzero = 1;
+			if (a < 0)
+				negative = 1;
+			if (a == 0 && (m == 2 || m == 3))
+				zero = 1;
+			tag++;
+		}
+
+	diff_eq_int("a positive level was produced", nonzero, 1, 0);
+	diff_eq_int("a negative level was produced", negative, 1, 0);
+	diff_eq_int("an Su silence was produced", zero, 1, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -1297,6 +1389,7 @@ main(void)
 	rc |= run_diagnostics();
 	rc |= run_ctor_dtor();
 	rc |= run_exits();
+	rc |= run_leaves();
 
 	return rc;
 }

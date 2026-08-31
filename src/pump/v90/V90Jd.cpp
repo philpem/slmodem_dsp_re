@@ -42,6 +42,60 @@ typedef char v90jd_size[(sizeof(V90Jd) == 0x90) ? 1 : -1];
 
 /*
  * ===========================================================================
+ * THE FOUR SETTERS, 0x1e700..0x1e95f, three of them here ahead of the
+ * constructor because that is the blob's own emission order for this TU --
+ * `setMaxLookahead` (0x1e700), `setConstelSize` (0x1e720) and `setRatesMask`
+ * (0x1e740) come BEFORE `C2` (0x1e790), and `resetCrc` (0x1e940) sits between
+ * `getMaxLookahead` (0x1e920) and `packData` (0x1e960).  Emission order is a
+ * register-allocation carrier (finding F7796), so the file keeps it.
+ *
+ * Each writes the same framed layout the constructor writes, at the same
+ * offsets, one field per method: they are the mutators the constructor is
+ * the composition of.  Every store is a `setne`/`mov %cl` byte store in the
+ * object; none of them reads anything back.
+ * ===========================================================================
+ */
+
+/*
+ * 0x1e700, 26 bytes.  The pair at `bits[49]`/`bits[50]` (+0x33/+0x34), low
+ * bit first -- the same order `getMaxLookahead` reads its unframed pair in.
+ */
+void
+V90Jd::setMaxLookahead(unsigned char v)
+{
+	bits[49] = (unsigned char)(v & 1);
+	bits[50] = (unsigned char)((v >> 1) & 1);
+}
+
+/* 0x1e720, 19 bytes.  Two bytes stored whole, `bits[47]` and `bits[48]`. */
+void
+V90Jd::setConstelSize(unsigned char first, unsigned char second)
+{
+	bits[47] = first;
+	bits[48] = second;
+}
+
+/*
+ * 0x1e740, 71 bytes.  The 28-bit rate mask into the two framed groups the
+ * constructor writes -- bits 0..15 to `bits[18..33]`, bits 16..27 to
+ * `bits[35..46]` -- skipping the framing byte at `bits[34]`.  `sar` in the
+ * object, so the parameter is signed, and both counters are `jle`: `int`,
+ * as in the constructor (see the block comment below).
+ */
+void
+V90Jd::setRatesMask(int mask)
+{
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		bits[18 + i] = (unsigned char)(((mask >> i) & 1) != 0);
+
+	for (i = 0; i <= 11; i++)
+		bits[35 + i] = (unsigned char)(((mask >> (16 + i)) & 1) != 0);
+}
+
+/*
+ * ===========================================================================
  * The constructor, 0x1e790, and it is where the header's bit map comes from.
  *
  * Five fields of V90Parameters, and the author's own names for all five
@@ -183,6 +237,21 @@ unsigned char
 V90Jd::getMaxLookahead()
 {
 	return (unsigned char)((bits[30] & 1) + ((bits[31] & 1) << 1));
+}
+
+/*
+ * 0x1e940, 32 bytes: the CRC register to all ones.  The identical loop is
+ * inlined into the constructor at 0x1e9a0 (the file comment below has the
+ * byte-for-byte claim); this is the out-of-line copy, claimed at last.
+ * `jle` against 15, so the counter is `int` here too.
+ */
+void
+V90Jd::resetCrc()
+{
+	int i;
+
+	for (i = 0; i <= 15; i++)
+		crc[i] = 1;
 }
 
 /*

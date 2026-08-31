@@ -175,6 +175,21 @@ void V32TxHdxModem(void *modem, short *data, short *out, short *nsamples);
 void V32RxHdxModem(void *modem, short *in, unsigned short *out,
 		   unsigned short *count);
 
+/*
+ * One block of the half-duplex handshake, and the two drivers' ONLY caller:
+ * clear an event bit, copy `txdata` into the context's own buffer, run the
+ * receive state once, then tail-call the transmit driver on the buffer.
+ *
+ * The seven arguments ALTERNATE between the two callees rather than grouping,
+ * which is what the object's six spills at 82b17..82b2a encode; the order
+ * here is read off those and off the two calls, which is grade-2 evidence
+ * (a callee that types it) because nothing calling this function is written.
+ * See `src/pump/v32/v32hshake.c`.
+ */
+void v32_handshake(void *modem, unsigned short *txdata, short *txout,
+		   short *rxin, unsigned short *rxout, short *nsamples,
+		   unsigned short *rxcount);
+
 #ifdef __cplusplus
 }
 #endif

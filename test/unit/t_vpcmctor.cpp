@@ -6,26 +6,25 @@
  * (0xfcf0, 495 bytes) and `VPCMXF_Delete` (0xf6c0, 109 bytes).
  *
  * ===========================================================================
- * OUR BUILD HAS NO `_ZN12VPcmFloModemD1Ev`, AND THAT IS NOT A CHOICE
+ * OUR BUILD HAS `_ZN12VPcmFloModemD1Ev` NOW, AND THE BLOB IS WHY
  * ===========================================================================
  *
- * The destructor is implicitly declared -- six member destructions in reverse
- * declaration order and nothing else -- so it is implicitly inline, and GCC
- * inlines it at its ONE call site (`VPCMXF_Delete`) and emits no out-of-line
- * copy.  Measured: `nm -g build/src/pump/v90/VPcmXfCreate.o` shows six
- * undefined member destructors and no `_ZN12VPcmFloModemD`, and no object
- * under build/src/ defines either symbol.  The blob HAS both, at 0xd0a0 and
- * 0xd030.
+ * This block used to explain the opposite: the destructor was left implicit,
+ * an implicit destructor is implicitly inline, GCC emitted no out-of-line
+ * copy, and this file compared our INLINED destructor (through
+ * `VPCMXF_Delete`) against the blob's out-of-line `D1`/`D2` -- refusing to
+ * "declare a destructor in the source to make a symbol appear".  That very
+ * measurement is what overturned the premise: the blob HAS both symbols, 97
+ * bytes each, and an implicit destructor produces neither -- so the ORIGINAL
+ * declared its destructor, and declaring ours is reconstruction rather than
+ * test-driven code.  The VPcmV34Main leaf pass defines it (empty body) in
+ * src/pump/v90/VPcmXfCreate.cpp, the TU whose `VPCMXF_Delete` the blob shows
+ * inlining it -- so the inlined copy under `run_ctor`'s trials and the two
+ * out-of-line symbols are all one definition, as in the original.
  *
- * So there is no "our D1" to call by symbol and this file does not pretend
- * there is.  What it does instead is compare OUR INLINED destructor, reached
- * through `VPCMXF_Delete`, against the blob's OUT-OF-LINE `D1` and `D2` --
- * `run_dtor_symbols` runs `ref__ZN12VPcmFloModemD1Ev` on the blob's side and
- * our `VPCMXF_Delete` minus its own free on ours, so all three of the blob's
- * spellings are driven and each is compared against the only spelling we have.
- * That is a weaker statement than symbol-against-symbol and it is the true
- * one; the alternative would have been to declare a destructor in the source
- * to make a symbol appear, which would be writing code to suit a test.
+ * `run_dtor_symbols` is therefore symbol against symbol now: our `D1` (and
+ * `D2`) against the blob's, each followed by the explicit `sysdep_free`
+ * `VPCMXF_Delete` would have done, with the release sets compared as before.
  *
  * ===========================================================================
  * THE SLOTS ARE DISCOVERED, NOT LISTED
@@ -127,7 +126,9 @@ void ref_flo_ctor2(void *self, void *v34Obj, unsigned int side,
 	asm("ref__ZN12VPcmFloModemC2EPv12V90ModemSideP19_tagModemParametersj20"
 	    "V90ComputationalMode20V92ComputationalMode");
 
-/* The blob's out-of-line destructors.  Ours has no symbol; see the header. */
+/* The out-of-line destructors, both sides; see the header. */
+void our_flo_dtor1(void *self) asm("_ZN12VPcmFloModemD1Ev");
+void our_flo_dtor2(void *self) asm("_ZN12VPcmFloModemD2Ev");
 void ref_flo_dtor1(void *self) asm("ref__ZN12VPcmFloModemD1Ev");
 void ref_flo_dtor2(void *self) asm("ref__ZN12VPcmFloModemD2Ev");
 
@@ -1423,16 +1424,16 @@ run_delete_null(void)
  * THE BLOB'S TWO DESTRUCTOR SYMBOLS AGAINST OUR INLINED ONE
  * ===========================================================================
  *
- * Ours exists only inside `VPCMXF_Delete`, so this pass compares the two by
- * what they RELEASE: both sides build an identical modem, ours is destroyed
- * through `VPCMXF_Delete` (destructor plus one free of the object) and the
- * blob's through `D1` or `D2` followed by an explicit `sysdep_free`, and the
- * allocator counters are compared with that one free accounted for.  If our
- * inlined destructor released a different set of blocks the live count would
- * not reach zero on one side and would on the other.
+ * Symbol against symbol, since our `D1`/`D2` exist (see the header): both
+ * sides build an identical modem, each side's destructor symbol runs on its
+ * own heap copy followed by the explicit `sysdep_free` `VPCMXF_Delete` would
+ * have done, and the release sets are compared.  If either destructor
+ * released a different set of blocks the live count would not reach zero on
+ * one side and would on the other.
  */
 static int
-run_dtor_symbols(const char *name, void (*ref_dtor)(void *))
+run_dtor_symbols(const char *name, void (*our_dtor)(void *),
+		 void (*ref_dtor)(void *))
 {
 	int trial, released = 0;
 
@@ -1457,7 +1458,8 @@ run_dtor_symbols(const char *name, void (*ref_dtor)(void *))
 
 		a_frees = harness_alloc.frees;
 		a_null = harness_alloc.free_null;
-		VPCMXF_Delete(pa);
+		our_dtor(pa);
+		sysdep_free(pa);		/* the free VPCMXF_Delete does */
 		a_frees = harness_alloc.frees - a_frees;
 		a_null = harness_alloc.free_null - a_null;
 		live_a = harness_alloc.live;
@@ -1583,10 +1585,10 @@ main(void)
 	rc |= run_ctor("VPcmFloModem::VPcmFloModem (C2)", flo_ctor2,
 		       ref_flo_ctor2, 0);
 
-	rc |= run_dtor_symbols("~VPcmFloModem (blob D1) against ours inlined",
-			       ref_flo_dtor1);
-	rc |= run_dtor_symbols("~VPcmFloModem (blob D2) against ours inlined",
-			       ref_flo_dtor2);
+	rc |= run_dtor_symbols("~VPcmFloModem (D1 against blob D1)",
+			       our_flo_dtor1, ref_flo_dtor1);
+	rc |= run_dtor_symbols("~VPcmFloModem (D2 against blob D2)",
+			       our_flo_dtor2, ref_flo_dtor2);
 
 	rc |= run_create("VPCMXF_Create against the blob's");
 	rc |= run_delete_null();

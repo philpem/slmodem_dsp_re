@@ -253,6 +253,31 @@ sysdep_memcpy(void *dst, const void *src, size_t n)
 	return memcpy(dst, src, n);
 }
 
+/*
+ * Blob-resolved callees.
+ *
+ * Reconstructed code may call a blob function that is not reconstructed
+ * yet.  dsplibs_ref.o renames every symbol the blob DEFINES to ref_*, so
+ * such a call would go undefined at link time; a forwarder here hands the
+ * reconstruction the blob's own implementation -- which is exactly what the
+ * eventual reconstruction must be differentially identical to, so nothing
+ * is presumed that the tests do not enforce later.
+ *
+ * The sharing argument is the SHARED/STATEFUL split at the top of this
+ * file: a forwarder may only be added for a callee that writes nothing but
+ * its argument (read from the disassembly), so one copy serving both sides
+ * carries no state across the comparison.  A stateful callee must NOT be
+ * added here; it belongs to the renamed side with a driven ref_ shim.
+ *
+ * When one of these is reconstructed in src/, this forwarder collides with
+ * the new definition at link time and is deleted -- a loud removal.
+ *
+ * `MTK_phasor` was the last one and its removal is that loud removal:
+ * `src/service/mtk.c` defines it now, and `FDSP_Kernel_InitObj`'s went the
+ * same way in commit 9109caa0.  The section is kept, empty, because the
+ * argument above is what the next one has to satisfy.
+ */
+
 void *
 sysdep_memset(void *dst, int c, size_t n)
 {
@@ -743,11 +768,93 @@ modem_get_sreg(void *m, unsigned sreg)
 long ref_modem_get_sreg(void *m, unsigned sreg)
 { return modem_get_sreg(m, sreg); }
 
+/*
+ * TTY capture, one transcript a side; harness.h says why `len` keeps
+ * counting past the cap.  slmodemd's own modem_send_to_tty forwards to
+ * modem_put_chars and returns its count, so returning `n` is the success
+ * shape of the real host.  This replaced an `unexpected()` abort when
+ * CID_process arrived: that function's whole point is to write here.
+ */
+struct tty_log harness_tty_ours;
+struct tty_log harness_tty_ref;
+
+void
+harness_tty_reset(void)
+{
+	memset(&harness_tty_ours, 0, sizeof(harness_tty_ours));
+	memset(&harness_tty_ref, 0, sizeof(harness_tty_ref));
+}
+
+static int
+tty_add(struct tty_log *log, const void *buf, int n)
+{
+	if (n > 0) {
+		int room = HARNESS_TTY_MAX - log->len;
+
+		if (room > 0)
+			memcpy(log->data + log->len,
+			       buf, n < room ? n : room);
+		log->len += n;
+	}
+	log->calls++;
+	return n;
+}
+
+int
+modem_send_to_tty(void *m, const void *buf, int n)
+{
+	(void)m;
+	return tty_add(&harness_tty_ours, buf, n);
+}
+
 int ref_modem_send_to_tty(void *m, const void *buf, int n)
-{ (void)m; (void)buf; (void)n; unexpected("modem_send_to_tty"); return 0; }
+{ (void)m; return tty_add(&harness_tty_ref, buf, n); }
+
+/*
+ * The host's input pipe.  See harness.h for why there are two cursors over
+ * one script.  This replaced an `unexpected()` abort when VOICE_process
+ * arrived: that function reads from the host in two of its four states, so
+ * the abort made those two states untestable rather than unreached.
+ */
+struct tty_in harness_ttyin_ours;
+struct tty_in harness_ttyin_ref;
+
+void
+harness_ttyin_reset(const unsigned char *script, int len)
+{
+	memset(&harness_ttyin_ours, 0, sizeof(harness_ttyin_ours));
+	memset(&harness_ttyin_ref, 0, sizeof(harness_ttyin_ref));
+	harness_ttyin_ours.script = script;
+	harness_ttyin_ours.script_len = script != NULL ? len : 0;
+	harness_ttyin_ref.script = script;
+	harness_ttyin_ref.script_len = script != NULL ? len : 0;
+}
+
+static int
+ttyin_take(struct tty_in *in, void *buf, int n)
+{
+	int left = in->script_len - in->pos;
+	int take = 0;
+
+	in->calls++;
+	if (n > 0 && left > 0) {
+		take = n < left ? n : left;
+		memcpy(buf, in->script + in->pos, take);
+		in->pos += take;
+		in->bytes += take;
+	}
+	return take;
+}
+
+int
+modem_recv_from_tty(void *m, void *buf, int n)
+{
+	(void)m;
+	return ttyin_take(&harness_ttyin_ours, buf, n);
+}
 
 int ref_modem_recv_from_tty(void *m, void *buf, int n)
-{ (void)m; (void)buf; (void)n; unexpected("modem_recv_from_tty"); return 0; }
+{ (void)m; return ttyin_take(&harness_ttyin_ref, buf, n); }
 
 /*
  * Datapump registry.  Each side records into its own log; see harness.h.

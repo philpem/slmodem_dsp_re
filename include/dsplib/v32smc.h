@@ -21,6 +21,28 @@ extern "C" {
 #endif
 
 /*
+ * The coder's TEMPLATE, and it is only four bytes long.
+ *
+ * `V32FP_recreate` loads `SMCv32_CFG` as one dword (7e9db), replaces its low
+ * half with `fp + 0x28 != 0`, and stores the result to fp + 0x48 -- which is
+ * `struct v32_smc` below, and which the same function then goes on to fill
+ * field by field from +0x04 upwards.  So the template covers exactly the two
+ * shorts named here and the object's four `.bss` bytes are its whole extent.
+ *
+ * It is a separate type rather than a `struct v32_smc` because the object
+ * sizes it at four bytes; a 22-byte template read as a dword would be a claim
+ * the symbol table contradicts.  Both members are zero -- it is `.bss` -- so
+ * the low one is overwritten before it is ever read and only `pad02` survives
+ * the copy.
+ */
+struct v32_smc_cfg {
+	short mode;		/* +0x00 replaced on every path              */
+	short pad02;		/* +0x02                                     */
+};
+
+extern struct v32_smc_cfg SMCv32_CFG;	/* .bss 0x000188, 4 bytes, GLOBAL   */
+
+/*
  * The coder state.  `mode` is both the arm selector and the tag that ends up
  * in the high byte of every symbol; `state` is indexed BY it, so the three
  * modes carry independent differential accumulators.

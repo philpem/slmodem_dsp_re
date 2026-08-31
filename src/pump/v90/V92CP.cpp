@@ -345,6 +345,65 @@ float fltTable_1[7] = {
 
 /*
  * ===========================================================================
+ * float2Bits(float, unsigned char *, int) -- .text+0x4ec00, 125 bytes.
+ *
+ * The greedy expansion `infoToBits` inlines four times over, standalone and
+ * over ONE BYTE PER BIT: mode 0 is the Q3.13 magnitude against `fltTable_2`,
+ * written `bits[15]` down to `bits[0]`; mode 1 is the Q1.6 form -- sign to
+ * `bits[7]` (`setb` off an fcom against .rodata's 0.0f, so 1 means
+ * negative), magnitude against `fltTable_1` into `bits[6]` down to
+ * `bits[0]`.  Any other mode returns having written nothing.
+ *
+ * IT IS THE `Phi` FLOAT2BITS, `_Z10float2BitsfPhi` -- V90CPpck.h's note on
+ * the two-symbol family names both: the `Psi` sibling at 0x3be30 packs
+ * SHORTS and reads the unsuffixed tables, this one packs BYTES and reads
+ * `fltTable_2`/`fltTable_1` above, which is what places it in this TU (the
+ * blob has it two symbols after `getBitVector`, amid the class it serves).
+ * Nothing in the object calls it.
+ *
+ * The loop shape is `infoToBits`'s exactly -- walk the table forward, walk
+ * the pointer backward, subtract the weight of every bit taken -- and the
+ * comparison is `fltTable[i] > x` with the SUBTRACTION on the else arm
+ * (`de e9`, FSUBP by F245's reading: x -= table[i]).
+ * ===========================================================================
+ */
+void
+float2Bits(float f, unsigned char *bits, int mode)
+{
+	float x;
+	unsigned char *p;
+	int i;
+
+	if (mode == 0) {
+		x = (float)fabs(f);
+		p = &bits[15];
+		for (i = 0; i <= 15; i++) {
+			if (fltTable_2[i] > x) {
+				*p = 0;
+			} else {
+				*p = 1;
+				x -= fltTable_2[i];
+			}
+			p--;
+		}
+	} else if (mode == 1) {
+		bits[7] = (unsigned char)(f < 0.0f);
+		x = (float)fabs(f);
+		p = &bits[6];
+		for (i = 0; i <= 6; i++) {
+			if (fltTable_1[i] > x) {
+				*p = 0;
+			} else {
+				*p = 1;
+				x -= fltTable_1[i];
+			}
+			p--;
+		}
+	}
+}
+
+/*
+ * ===========================================================================
  * V92CP::infoToBits (.text+0x4ec80, 1,916 bytes)
  *
  * The transmit half of the class: the message fields at +0x000..+0x103 become

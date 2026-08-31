@@ -1,0 +1,112 @@
+[
+ {
+  "note": "src/service/mtk.c against build/test/t_mtkphasor.  The claims: which of the two 2*pi constants each of the three sites uses, the direction of the reduction's sign test, the 512/pi scale and the 16-bit truncation that follows it, which bit selects the fold and what the fold does to the fraction and the index, which table and which sign vector each output comes from, the direction of the interpolation's difference, and where the advance wraps."
+ },
+ {
+  "label": "the reduction uses the double 2*pi rather than the float one",
+  "find": "\tx = fmodf(p->phase, 6.28318530718f);",
+  "replace": "\tx = (float)fmod((double)p->phase, 6.28318530718);"
+ },
+ {
+  "label": "the correction adds the float 2*pi rather than the double",
+  "find": "\t\tx = x + 6.28318530718;",
+  "replace": "\t\tx = x + 6.28318530718f;"
+ },
+ {
+  "label": "the reduction corrects a zero as well as a negative",
+  "find": "\tif (x < 0.0f)",
+  "replace": "\tif (x <= 0.0f)"
+ },
+ {
+  "note": "NOT here: removing the first `p->phase = x`.  The object has that store (`fsts (%ecx)` at 0xb06db) and it is what says the source assigns the reduced angle before the lookups -- but BOTH exits store the advanced angle over it (0xb0789 and 0xb0792), so no caller can observe the first one.  The mutant is equivalent and would read NOT CAUGHT while modelling nothing."
+ },
+ {
+  "label": "the scale is 256/pi rather than 512/pi",
+  "find": "\ty = x * 162.97466172610083;",
+  "replace": "\ty = x * 81.487330863050415;"
+ },
+ {
+  "note": "NOT here: widening `(short)y` to `(int)y`.  The width is forced by the object -- `fists` writes sixteen bits and `cwtl` sign-extends them -- but that is CODEGEN evidence, not behaviour: after the reduction x is below the float 2*pi, so y is below 1024 and the two casts agree over the whole reachable domain.  They part only above 32767, which would need an x above 201 radians."
+ },
+ {
+  "label": "the scaled angle rounds rather than truncating",
+  "find": "\tn = (short)y;",
+  "replace": "\tn = (short)(y + 0.5f);"
+ },
+ {
+  "label": "the quadrant comes from bit 7 rather than bit 8",
+  "find": "\tquadrant = n >> 8;",
+  "replace": "\tquadrant = n >> 7;"
+ },
+ {
+  "label": "the fraction is taken the other way round",
+  "find": "\tfrac = y - n;",
+  "replace": "\tfrac = n - y;"
+ },
+ {
+  "label": "the fold is selected by bit 9 rather than bit 8",
+  "find": "\tif (n & 0x100) {",
+  "replace": "\tif (n & 0x200) {"
+ },
+ {
+  "label": "the fold negates the fraction rather than reversing it",
+  "find": "\t\tfrac = 1.0f - frac;",
+  "replace": "\t\tfrac = -frac;"
+ },
+ {
+  "label": "the fold negates the index rather than complementing it",
+  "find": "\t\tn = ~n;",
+  "replace": "\t\tn = -n;"
+ },
+ {
+  "label": "the index keeps only seven bits",
+  "find": "\ti = n & 0xff;",
+  "replace": "\ti = n & 0x7f;"
+ },
+ {
+  "label": "the interpolation's difference runs backwards",
+  "find": "\t\t    + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;",
+  "replace": "\t\t    + (MTK_cos_table[i] - MTK_cos_table[i + 1]) * frac;"
+ },
+ {
+  "label": "the cosine output takes the sine sign vector",
+  "find": "\tp->out_04 = p->out_04 * MTK_cos_sign[quadrant];",
+  "replace": "\tp->out_04 = p->out_04 * MTK_sin_sign[quadrant];"
+ },
+ {
+  "label": "the sine output reads the cosine table",
+  "find": "\tp->out_08 = MTK_sin_table[i]\n\t\t    + (MTK_sin_table[i + 1] - MTK_sin_table[i]) * frac;",
+  "replace": "\tp->out_08 = MTK_cos_table[i]\n\t\t    + (MTK_cos_table[i + 1] - MTK_cos_table[i]) * frac;"
+ },
+ {
+  "label": "the two outputs are written to each other's field",
+  "find": "\tp->out_08 = p->out_08 * MTK_sin_sign[quadrant];",
+  "replace": "\tp->out_04 = p->out_08 * MTK_sin_sign[quadrant];"
+ },
+ {
+  "label": "the advance is taken from the unreduced phase",
+  "find": "\ts = x + p->step;",
+  "replace": "\ts = p->phase + p->step + 0.0009765625f;"
+ },
+ {
+  "note": "NOT here: weakening `s >= pi` to `s > pi`.  The two differ only when the advance lands EXACTLY on the double 3.141592653589793, and no input can put it there.  `s` is the exact x87 sum of two floats, and the double pi is M * 2^-51; for floats a and b with a + b == pi, b's lowest bit would have to sit inside a float's twenty-four, which needs |b| <= 2^-28, so `a` would have to be within 3.7e-09 of pi -- and the float spacing there is 2.4e-07, with the nearest float 8.7e-08 away.  No such pair exists, searched as well as argued."
+ },
+ {
+  "label": "the advance wraps at 2*pi rather than at pi",
+  "find": "\tif (s >= 3.141592653589793)",
+  "replace": "\tif (s >= 6.28318530718)"
+ },
+ {
+  "label": "the wrap adds 2*pi rather than subtracting it",
+  "find": "\t\ts = s - 6.28318530718;",
+  "replace": "\t\ts = s + 6.28318530718;"
+ },
+ {
+  "label": "the advanced phase is not stored",
+  "find": "\t\ts = s - 6.28318530718;\n\tp->phase = s;",
+  "replace": "\t\ts = s - 6.28318530718;"
+ },
+ {
+  "note": "NOT here: collapsing the two statements per output into one.  The object applies the sign to the value still in the register -- `fsts` stores the interpolation, `fmuls` scales the 80-bit copy, `fstps` stores that -- which is why the reconstruction is two statements.  Under -mfpmath=387, which is what BOTH builds here use, GCC keeps the 80-bit value for the one-statement spelling too, so the differential tier cannot separate them and the mutant reads NOT CAUGHT while modelling nothing.  It is a codegen claim and belongs to `compare.py`."
+ }
+]

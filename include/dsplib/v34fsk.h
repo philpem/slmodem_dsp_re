@@ -341,7 +341,23 @@ struct v34_object {
 	 * switched off".  Nothing here sets it.
 	 */
 	short fsk_inhibit;				/* +0x402 */
-	unsigned char unmapped_0404[0xe74 - 0x404];
+	unsigned char unmapped_0404[0x49c - 0x404];
+	/*
+	 * +0x049c and +0x04a0, named from the object's OWN EXPORTED ACCESSORS
+	 * `getTimingOffset` (0x71b0) and `getTimingPhase` (0x71c0) -- eleven
+	 * bytes each, `mov 0x49c(%eax),%eax` / `mov 0x4a0(%eax),%eax` on the
+	 * argument, sitting in .text between `VPcmV34GetSNR` and
+	 * `VPcmV34GetCleanedSamples` where every neighbour takes a
+	 * `tagV34Object *`.  The symbol names are the author's words, the
+	 * same class of evidence as a format string; what the fields MEAN
+	 * beyond that is not claimed, because the two accessors are the only
+	 * readers anywhere in the 1.2 MB (they are in the no-entry-point
+	 * bucket -- exported API with no internal caller) and no writer has
+	 * been traced to them.
+	 */
+	int timing_offset;				/* +0x049c */
+	int timing_phase;				/* +0x04a0 */
+	unsigned char unmapped_04a4[0xe74 - 0x4a4];
 	/* The descrambler's shift register; see `struct v34_descrambler`. */
 	struct v34_descrambler descrambler;		/* +0x0e74 */
 	unsigned char unmapped_0e84[0x2074 - 0xe84];

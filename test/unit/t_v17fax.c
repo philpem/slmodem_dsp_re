@@ -83,7 +83,7 @@
  *         it at 0x8000, where a signed reading SMOOTHS and an unsigned one
  *         returns untouched: the two leave different memory behind, so this
  *         one is a measurement and not a codegen note.
- *       - the two smoothing weights swapped.  Finding F8860: invisible to
+ *       - the two smoothing weights swapped.  Finding F8790: invisible to
  *         every codegen check AND to any one-block fixture, so the counter is
  *         driven over 60 consecutive blocks with the error moving on each.
  *       - the round-to-nearest term dropped.
@@ -117,7 +117,7 @@ extern int ref_V17RX_modem(void *modem, short *in, short *out,
 			   unsigned short *count);
 extern void ref_SeedScramblerV17(void *modem, unsigned int seed);
 extern void ref_SetEncoderV17(void *modem, short which, short arg);
-extern int ref_V17TX_status(void *params, void *status);
+extern int ref_V17TX_status(void *params, struct v17_status *status);
 extern int ref_CarrierDetectV17(void *modem);
 extern short ref_QualityDetectV17(void *modem);
 extern int ref_EpochDetectV17(void *modem);
@@ -678,9 +678,23 @@ run_txstatus(void)
 		 */
 		ma.sta[0x14] = mb.sta[0x14] = 0xff;
 		ma.sta[0x15] = mb.sta[0x15] = 0xff;
+		/*
+		 * The block is `struct v17_status` and `sta` is the byte array
+		 * it lives in, so the layout is asserted rather than assumed:
+		 * a struct that had grown a member or lost its packing would
+		 * put every offset below somewhere else.
+		 */
+		diff_eq_int("at %ld: the status struct is 0x1c bytes",
+			    (long)sizeof(struct v17_status), 0x1c, where);
+		diff_eq_int("at %ld: flags lands at +0x14",
+			    (long)((char *)&((struct v17_status *)0)->flags
+				   - (char *)0), 0x14, where);
+		diff_eq_int("at %ld: int_18 lands at +0x18",
+			    (long)((char *)&((struct v17_status *)0)->int_18
+				   - (char *)0), 0x18, where);
 
-		ra = ref_V17TX_status(ma.prm, ma.sta);
-		rb = V17TX_status(mb.prm, mb.sta);
+		ra = ref_V17TX_status(ma.prm, (struct v17_status *)(void *)ma.sta);
+		rb = V17TX_status(mb.prm, (struct v17_status *)(void *)mb.sta);
 		diff_eq_int("at %ld: status returned", (long)rb, (long)ra,
 			    where);
 		diff_eq_int("at %ld: status reported filled", ra, 1, where);
@@ -735,8 +749,8 @@ run_txstatus(void)
 		/* The NULL case: it must do nothing and report nothing. */
 		fixture(&ma, seed);
 		fixture(&mb, seed);
-		ra = ref_V17TX_status(ma.prm, (void *)0);
-		rb = V17TX_status(mb.prm, (void *)0);
+		ra = ref_V17TX_status(ma.prm, (struct v17_status *)0);
+		rb = V17TX_status(mb.prm, (struct v17_status *)0);
 		diff_eq_int("at %ld: NULL status returned", (long)rb, (long)ra,
 			    where);
 		diff_eq_int("at %ld: NULL status reported empty", ra, 0, where);
@@ -1308,7 +1322,7 @@ dcd_state(struct fix *f, short mode, short latch, short offband, int gate,
  * A multi-block run.  Everything this function keeps -- the counter, the
  * latch, the energy reference and its phase, the AGC's gain and the
  * detector's resonators -- carries across calls, so a one-block fixture would
- * measure almost none of it (finding F8860).
+ * measure almost none of it (finding F8790).
  */
 static void
 run_dcd_seq(unsigned seed, short mode, short latch, short offband, int gate,
@@ -1637,7 +1651,7 @@ qd_differs(const struct fix *w)
 }
 
 /*
- * A multi-block run.  Finding F8860: a swapped smoothing weight is invisible
+ * A multi-block run.  Finding F8790: a swapped smoothing weight is invisible
  * to any single-block fixture, so the counter is driven from `start` through
  * `blocks` consecutive calls with the error moving on every one.
  */

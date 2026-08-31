@@ -89,6 +89,14 @@ int dtmf_test(const float *e, float total, short mode);
 void dtmf_set_easy(struct dtmf *d);
 
 /*
+ * Allocate (when `d` is NULL) and initialise one receiver: every state word
+ * zero, `hist` all -1, `digit` -1.  Reconstructed in src/service/beepgen.c,
+ * which is the file this tree gives the `Beepgen.c` span's leftovers and
+ * where 0xadef0 falls in address order; the prototype belongs here.
+ */
+struct dtmf *create_dtmf(struct dtmf *d);
+
+/*
  * The notch banks.  Four floats per tone, eight tones, in the order
  * 697 770 852 941 1209 1336 1477 1633 Hz -- see notch.h for what the four
  * mean and docs/coefficients.md for the design.

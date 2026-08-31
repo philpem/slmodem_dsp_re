@@ -1,10 +1,21 @@
 /*
- * t_v90p4seq.cpp -- differential test of the three callerless phase 4 message
+ * t_v90p4seq.cpp -- differential test of the six callerless phase 4 symbol
  * sources:
  *
  *     V90Phase4Modulator::generateMP()      .text+0x2dbd0   167 bytes
  *     V90Phase4Modulator::generateCPd()     .text+0x2e540   167 bytes
  *     V90Phase4Modulator::generateSUVd()    .text+0x2e5f0   167 bytes
+ *
+ * and, since the VPcmV34Main leaf pass, the training half of the family:
+ *
+ *     V90Phase4Modulator::generateB1d()     .text+0x2d9f0   149 bytes
+ *     V90Phase4Modulator::generateTRN2d()   .text+0x2da90   149 bytes
+ *     V90Phase4Modulator::generateEd()      .text+0x2db30   149 bytes
+ *
+ * The training three scramble GENERATED bits -- ones for B1d/TRN2d, zeros
+ * for Ed -- so they read neither (pointer, length) field pair; B1d and
+ * TRN2d are byte-identical siblings the way CPd and SUVd are, and
+ * `run_discriminate_train` holds them to it.
  *
  * `readelf -r ref/slmodemd/dsplibs.o` finds ZERO relocations of any type
  * naming any of the three, against 43 naming
@@ -183,6 +194,20 @@ short ref_p4m_generateCPd(void *self)
 	asm("ref__ZN18V90Phase4Modulator11generateCPdEv");
 short ref_p4m_generateSUVd(void *self)
 	asm("ref__ZN18V90Phase4Modulator12generateSUVdEv");
+
+/*
+ * ... and the three TRAINING sources the VPcmV34Main leaf pass added, the
+ * other half of the same family: the scrambler's input is generated
+ * (constant ones for B1d and TRN2d, zeros for Ed) instead of fetched, so
+ * they read neither bit-vector field and this fixture already stands up
+ * everything they touch.
+ */
+short ref_p4m_generateB1d(void *self)
+	asm("ref__ZN18V90Phase4Modulator11generateB1dEv");
+short ref_p4m_generateTRN2d(void *self)
+	asm("ref__ZN18V90Phase4Modulator13generateTRN2dEv");
+short ref_p4m_generateEd(void *self)
+	asm("ref__ZN18V90Phase4Modulator10generateEdEv");
 }
 
 /* ------------------------------------------------------------- the storage */
@@ -655,6 +680,9 @@ typedef short (*reffn)(void *);
 static short our_mp(V90Phase4Modulator *m)	{ return m->generateMP(); }
 static short our_cpd(V90Phase4Modulator *m)	{ return m->generateCPd(); }
 static short our_suvd(V90Phase4Modulator *m)	{ return m->generateSUVd(); }
+static short our_b1d(V90Phase4Modulator *m)	{ return m->generateB1d(); }
+static short our_trn2d(V90Phase4Modulator *m)	{ return m->generateTRN2d(); }
+static short our_ed(V90Phase4Modulator *m)	{ return m->generateEd(); }
 
 struct arm {
 	const char	*name;
@@ -665,10 +693,16 @@ struct arm {
 static const struct arm arms[] = {
 	{ "generateMP",		our_mp,		ref_p4m_generateMP },
 	{ "generateCPd",	our_cpd,	ref_p4m_generateCPd },
-	{ "generateSUVd",	our_suvd,	ref_p4m_generateSUVd }
+	{ "generateSUVd",	our_suvd,	ref_p4m_generateSUVd },
+	/* The training half; only the first NARMS rows join the message
+	 * discrimination, whose assertions are specific to those three. */
+	{ "generateB1d",	our_b1d,	ref_p4m_generateB1d },
+	{ "generateTRN2d",	our_trn2d,	ref_p4m_generateTRN2d },
+	{ "generateEd",		our_ed,		ref_p4m_generateEd }
 };
 
-#define NARMS		((int)(sizeof arms / sizeof arms[0]))
+#define NARMS		3
+#define NARMS_ALL	((int)(sizeof arms / sizeof arms[0]))
 
 /* `symbolsDone` on entry.  0 takes the scrambling arm; the rest do not. */
 static const unsigned int dones[] = { 0u, 1u, 3u };
@@ -853,9 +887,9 @@ run_trials(void)
 	long tag = 910000L;
 	int a, c, d, p, lvl;
 
-	diff_begin("V90Phase4Modulator::generate{MP,CPd,SUVd}");
+	diff_begin("V90Phase4Modulator::generate{MP,CPd,SUVd,B1d,TRN2d,Ed}");
 
-	for (a = 0; a < NARMS; a++)
+	for (a = 0; a < NARMS_ALL; a++)
 		for (c = 0; c < NCASES; c++)
 			for (d = 0; d < NDONES; d++)
 				for (p = 0; p < 2; p++)
@@ -980,6 +1014,69 @@ run_discriminate(void)
 	return diff_end();
 }
 
+/*
+ * The same move for the training trio: `generateB1d` and `generateTRN2d`
+ * are BYTE-IDENTICAL in the blob (all 149 bytes) and may never differ;
+ * `generateEd` scrambles zeros where they scramble ones, so it must differ
+ * from both on every scrambling-arm configuration and on none of the
+ * zero-arm ones.
+ */
+static int
+run_discriminate_train(void)
+{
+	long tag = 940000L;
+	int c, d, p;
+	int nzTrials = 0, zTrials = 0;
+	int b1dVsTrn2dAny = 0;
+	int b1dVsEdNZ = 0, b1dVsEdZ = 0;
+
+	diff_begin("the training three are two bodies");
+
+	for (c = 0; c < NCASES; c++)
+		for (d = 0; d < NDONES; d++)
+			for (p = 0; p < 2; p++) {
+				unsigned long h[3];
+				short rc[3];
+				int a;
+				int nz = (dones[d] == 0u);
+
+				for (a = 0; a < 3; a++)
+					h[a] = one(NARMS + a, &cases[c],
+						   dones[d],
+						   (unsigned char)p, 0u,
+						   tag, tag + a, &rc[a]);
+
+				if (nz)
+					nzTrials++;
+				else
+					zTrials++;
+
+				if (h[0] != h[1] || rc[0] != rc[1])
+					b1dVsTrn2dAny++;
+				if (h[0] != h[2] || rc[0] != rc[2]) {
+					if (nz)
+						b1dVsEdNZ++;
+					else
+						b1dVsEdZ++;
+				}
+				tag += 3;
+			}
+
+	diff_eq_int("scrambling-arm configurations (%ld)", nzTrials,
+		    NCASES * 2, 0);
+	diff_eq_int("zero-arm configurations (%ld)", zTrials,
+		    NCASES * 2 * (NDONES - 1), 0);
+	diff_eq_int("generateB1d and generateTRN2d never differ (%ld)",
+		    b1dVsTrn2dAny, 0, 0);
+	diff_eq_int("generateB1d differs from generateEd on EVERY"
+		    " scrambling-arm configuration (%ld)", b1dVsEdNZ,
+		    nzTrials, nzTrials);
+	diff_eq_int("and agrees with it on the zero arm (%ld)", b1dVsEdZ, 0,
+		    0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -995,6 +1092,7 @@ main(void)
 	rc |= run_config();
 	rc |= run_trials();
 	rc |= run_discriminate();
+	rc |= run_discriminate_train();
 
 	return rc;
 }

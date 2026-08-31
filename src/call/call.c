@@ -25,6 +25,7 @@
 
 extern long modem_get_sreg(void *modem, unsigned int num);
 extern int modem_dp_register(int id, void *op);
+extern void modem_dp_deregister(int id, void *op);
 
 /* The rate the supervisor works at; anything else needs resampling. */
 #define CALL_NATIVE_RATE	8000
@@ -330,4 +331,11 @@ void
 dp_call_init(void)
 {
 	modem_dp_register(DP_CALL, &call_op);
+}
+
+/* `dp_call_exit` -- 0x31e0, 28 bytes: the one id back out again. */
+void
+dp_call_exit(void)
+{
+	modem_dp_deregister(DP_CALL, &call_op);
 }
