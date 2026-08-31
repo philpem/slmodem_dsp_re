@@ -101158,3 +101158,222 @@ rewritten for `ptr_0004` -> `dtmf` and `cadence_000c`/`cadence_0010` ->
 `cadence_busy`/`cadence_dial`. Anyone renaming a field must grep
 `test/mutations/` for it; passing `make phase` proves nothing here, because a
 descriptor that no longer matches is not an error.
+
+### F8900. `SDM_*` and `SMC_init` are BYTE-FOR-BYTE their `FPM_*` twins -- the fax pumps carry a second copy of the generic module
+
+*2026-08-31.* Four of the seven symbols scheduled for this pass turned out to
+be code this tree had already written, compiled a second time under a shorter
+name. Measured, by lifting the `.text` bytes at both addresses and comparing
+them, not by comparing sizes:
+
+| fax copy | address | generic copy | address | bytes | differing |
+|---|---|---|---|--:|--:|
+| `SDM_scrambler` | 0x09f150 | `FPM_SDM_scrambler` | 0x0a9a10 | 146 | **0** |
+| `SDM_descrambler` | 0x09f1f0 | `FPM_SDM_descrambler` | 0x0a9ab0 | 167 | **0** |
+| `SDM_init` | 0x09f2a0 | `FPM_SDM_init` | 0x0a9b60 | 86 | **0** |
+| `SMC_init` | 0x09fc80 | `FPM_SMC_init` | 0x0a9d30 | 53 | **0** |
+
+Not "the same shape" and not "the same instructions" -- the same bytes, in the
+same order, at two addresses. So the source is `src/dsp/fpm_sdm.c` and
+`src/dsp/fpm_smc.c`'s, and `src/fax/sdm.c` and `src/fax/smc.c` are the same
+text with the names shortened.
+
+**Two consequences worth having written down.** The first is that the STRUCTS
+are settled without a byte of new derivation: identical code operates on
+identical layouts, so `struct fpm_sdm`, `struct fpm_smc`, `struct fpm_smc_cfg`
+and `struct fpm_smc_ring` are what these functions take, and "one type, one
+home" is satisfied by including the existing headers rather than by writing
+new ones. `V29TX_create` fills the same forty-four bytes `SMCv22_CFG`
+declares, field for field, which is the independent confirmation.
+
+The second is that the comments were NOT copied. The derivations live once, in
+`include/dsplib/fpm_sdm.h` and `include/dsplib/fpm_smc.h`; duplicating them
+would give the tree two copies of an argument to keep in step, which is the
+`V90Parameters` failure in prose rather than in a struct.
+
+`SMC_encoder` is the exception and is **not** a copy: 609 bytes against
+`FPM_SMC_encoder`'s 367, and the extra 242 are a second output form. F8903.
+
+### F8901. V.27ter's scrambler and descrambler carry `inverting` differently, and the difference is real rather than a reading error
+
+*2026-08-31.* `struct sdmv27` carries two one-bit flags, `pending` at +0x0a and
+`inverting` at +0x0c. Both bit-at-a-time loops assign `inverting = pending`
+exactly once per bit. **The scrambler does it at the TOP of the loop body
+(0x9aa21) and the descrambler at the BOTTOM (0x9ac6a), on the back edge.**
+
+That is not a difference the compiler can have introduced. The descrambler's
+slow path is entered at 0x9ac58 with `movswl 0x18(%esp),%edi; jmp 0x9ac6e` --
+the loop test -- and there is no copy in the preheader, so its FIRST bit uses
+the `inverting` it was handed, while the scrambler's first bit overwrites that
+value with `pending` before reading it.
+
+**THE FIRST DRAFT OF THIS FINDING SAID THE DIFFERENCE WAS UNREACHABLE, AND AN
+INJECTION REFUTED IT ON THE FIRST CASE.** The reasoning was that `pending` is
+set only by the threshold arm and cleared by the next bit, so the pair is
+(0,0) at every call boundary but one -- which is true -- and that the two
+spellings therefore agree over everything the object produces, which is false.
+Giving the SCRAMBLER the descrambler's placement fails **1,994 of `t_sdmv27`'s
+first 7,179 checks**, and it fails in all six configurations.
+
+**Each spelling is self-consistent with the state its own function leaves, and
+that is the whole of it.** After a threshold the scrambler exits with
+(pending 1, inverting 0) and the descrambler with (pending 1, inverting 1).
+The scrambler's next call reads `pending` because its assignment is at the
+top; the descrambler's reads `inverting` because it was assigned on the way
+out. Both invert exactly one bit. Swap the placements and the scrambler stops
+inverting after a threshold, because the state it left has the flag in the
+other field.
+
+So the two are not a stylistic variation and neither may be tidied into the
+other. What IS unreachable is the pair (pending 0, inverting 1), which no run
+produces; `t_sdmv27`'s `run_seeded_flags` drives all four combinations across
+five run counters in both directions -- 80 seeded single-word calls -- to
+cover it, and 32 of those 80 also fail under the injection.
+
+**The transferable part is the method, not the flag.** "Unreachable in
+service" is a claim about the state space and it is testable by injection;
+this one was written from a correct argument about `pending` and an unexamined
+assumption that the exit states matched. The injection cost one rebuild.
+
+### F8902. The V.27ter polynomial, its guard, and where each number comes from
+
+*2026-08-31.* Nothing about `SDMv27_*` is configurable except `nbits`: the
+taps are literal shift amounts in the code.
+
+**The polynomial.** The register is shifted up by `nbits` and the two feedback
+terms are that value shifted right by 6 (0x9a94b) and by 7 (0x9a94e); the
+descrambler uses the same two (0x9aba0, 0x9ab9b). The register holds the
+scrambled bits with bit 0 the most recent, so after `reg <<= nbits` its bit p
+is D[n-p] for the bit about to be produced, and the two terms are D[n-6] and
+D[n-7]:
+
+    D[n] = data[n] ^ D[n-6] ^ D[n-7]
+
+which is ITU-T V.27ter's 1 + x^-6 + x^-7. **The standard is corroboration; the
+derivation is from the object**, and the reading is checked in the differential
+test by round-tripping and by comparing the register after every single word.
+
+**The guard.** For each bit the object forms `(broadcast(D[n]) ^ reg) & 0x1300`
+and compares it with 0x1300 -- bits 8, 9 and 12, so D[n] differing from
+D[n-8], D[n-9] AND D[n-12] at once. It counts consecutive bits where that does
+NOT hold, and at 0x21 = 33 it clears the counter and sets `pending`, which
+inverts exactly one following bit. The whole-word path takes the same three
+taps word-parallel and needs no threshold test, because its entry condition
+`run < 33 - nbits` bounds the counter at 32 after the walk.
+
+**The seed is 60** (`movw $0x3c, 0x6(%eax)` in `SDMv27_init`) and is not
+derived from anything else here.
+
+**`SDMv27_init` does not compute the mask.** It branches on `nbits == 2` and
+stores 3/~3 or 7/~7 as constants; there is no shift anywhere in its 89 bytes.
+Only 2 and 3 are reachable through `V27TX_SDM_NUM_BITS`, and everything else
+lands in the second arm -- which is why the synthetic 4-, 8- and 16-bit cases
+in `t_sdmv27` all carry a mask of 7 and both sides agree that they do.
+
+### F8903. `fpm_smc_cfg`'s `f00`, `f20` and `f24` ARE read -- by `SMC_encoder`, and two of them are named by the author
+
+*2026-08-31.* `include/dsplib/fpm_smc.h` recorded three fields as never read,
+which was true of the translation unit it was derived from and false of the
+object. `SMC_encoder` (0x09fa10, 609 bytes) reads all three, and that is the
+whole of the 242 bytes by which it exceeds `FPM_SMC_encoder`.
+
+**`f00` selects the OUTPUT FORM**, loaded whole with `mov (%edx),%eax` at
+0x9faf6 -- so it is one int, which the earlier note said was not decidable.
+Non-zero gives the index form `FPM_SMC_encoder` always uses: the carrier
+rotation is added into the symbol index, wrapped by one conditional subtract,
+and stored to `ring->sym[widx]`. Zero gives a COMPLEX form:
+
+    i = (imap[k]*cosine[a] >> 15) - (qmap[k]*sine[a] >> 15)
+    q = (qmap[k]*cosine[a] >> 15) + (imap[k]*sine[a] >> 15)
+
+-- one Q15 complex multiply of the constellation point by the carrier phasor,
+into `ring->i[widx]` and `ring->q[widx]`. `ring->sym` is not written and the
+rotated index is not computed. Everything after that is common to both.
+
+**`f20` and `f24` are the phasor, and they are named in the object's own
+symbol table.** `V29TX_create` builds its forty-four byte config on the stack
+and stores five relocated pointers into it:
+
+    +0x14 V29TX_SMC_PMAP  (0x9bc4f)   +0x18 V29TX_SMC_IMAP   (0x9bc54)
+    +0x1c V29TX_SMC_QMAP  (0x9bc33)   +0x20 V29TX_SMC_COSINE (0x9bc89)
+    +0x24 V29TX_SMC_SINE  (0x9bcae)
+
+So +0x20 is a cosine table and +0x24 a sine table, indexed by `acc`, and
+`imap`/`qmap` were already named right. They are **relocated pointers, not
+ints** -- an int16 dump reads them as zeroes, and the `int` they were modelled
+as cannot hold a pointer in the 64-bit build. Retyped to `const short *` and
+renamed `cosine`/`sine`; the 32-bit layout does not move.
+
+**`f00` KEEPS ITS NAME**, and that is a scope decision rather than a judgement.
+`src/pump/v22/v22txtab.c` spells `f00` and was outside this pass's writable
+set; renaming one of two spellings is worse than renaming neither. The rename
+is mechanical and is left for whoever may edit both. That file's comment
+"f20, f24 and f28 are zero" is now stale in its field names while remaining
+true in its claim.
+
+**What V.29 sets.** `rot_step` 0x11 and `rot_mod` 0x18 -- 17 steps of 24, which
+is 1700 Hz over 2400 baud exactly -- `direct` 1, `qmask` 7, `pmask` 7, `amask`
+8 or 0 by rate, and `f00` cleared, so V.29 runs the complex form and V.22 the
+index form. **The table sizes agree with that independently**: `nm -S` gives
+`V29TX_SMC_COSINE` and `V29TX_SMC_SINE` 48 bytes each, which is 24 shorts
+against a `rot_mod` of 24, and `V29TX_SMC_IMAP`/`QMAP` 32 bytes each, 16
+entries against a 4-bit index. Neither number was used to derive the reading;
+both would have contradicted it.
+
+### F8904. `SDM_CFG`'s contents are not the fax scrambler, and every caller overwrites them
+
+*2026-08-31.* `SDM_CFG` is six bytes in `.data` -- writable, unlike
+`SDMv22_CFG`, which is in `.rodata` -- holding `{ nbits 4, tap1 5, tap2 23 }`.
+Taps of 5 and 23 are not a polynomial any of V.17, V.27ter or V.29 specifies,
+and the reason is that nothing runs them: every caller copies the object into a
+local and then writes all three fields.
+
+    V17RX_create  0x976a8   nbits = <field> + 3, tap1 = 0x12, tap2 = 0x17
+    V29TX_create  0x9bc28   nbits = <rate> + 3,  tap1 = 0x12, tap2 = 0x17
+
+0x12 with 0x17 is 18 and 23, which is ITU-T V.29 section 5.2's scrambler
+1 + x^-18 + x^-23, shared by V.17 and V.33. `V17TX_create`, `V29RX_create` and
+`SetTxModeV17` also reference the table and were not traced instruction by
+instruction.
+
+The six bytes are reproduced because they are six bytes of the object's
+`.data`. **A test that asserted they were the fax polynomial would be
+asserting the wrong thing**, which is why `t_faxsdm` compares them to the
+blob's copy and says in its own text that they are a default nothing runs.
+
+### F8905. `run += b; run *= b;` is TWO truncations to sixteen bits, and `run = (run + b) * b` is a different function
+
+*2026-08-31.* Both V.27ter paths advance the guard's run counter with the
+idiom "increment if the bit is set, otherwise reset". The object spells it as
+
+    lea  (%edi,%eax,1),%esi     ; run + b
+    movzwl %si,%edx             ; narrow to sixteen bits
+    imul %eax,%edx              ; * b
+    movzwl %dx,%edi             ; narrow again
+
+-- the sum is narrowed BEFORE the multiply. Written in C as
+`run = (run + b) * b` with `unsigned short run`, the promotion carries the sum
+at 32 bits and only the assignment narrows. Written as two statements,
+`run += b; run *= b;`, each assignment narrows and the object is reproduced.
+The two agree over every value `run` can hold and differ in what the compiler
+emits, which is the forced half of the codegen rule rather than the free half.
+
+It costs nothing to get right and no differential test can distinguish the two,
+which is exactly the shape of defect this tree keeps finding by reading the
+instruction rather than the intent. The idiom appears four times -- both
+directions, both paths.
+
+### F8906. `pending = ok * pending` is provably always zero, and is written anyway
+
+*2026-08-31.* The bit path's last arithmetic before the threshold test is
+`imul` of the guard's `ok` flag with `pending` (0x9aa88 in the scrambler,
+0x9acf7 in the descrambler). `ok` is `~(alldiff | inverting) & 1` and
+`inverting` is `pending`, so `ok` is zero whenever `pending` is one and the
+product is zero for every input. The only way `pending` becomes one is the
+`run == 33` arm two instructions later.
+
+GCC did not fold it because both operands reach the expression through memory
+with no range information. It is reproduced because the object multiplies; a
+source that wrote `pending = 0` would behave identically and would not be what
+the author wrote. Recorded so that the next reader does not "simplify" it and
+then have to re-derive why the object has an `imul` there.

@@ -75,7 +75,7 @@ const struct fpm_smc_cfg SMCv22_CFG = {
 	.pmap = SMCv22_PMAP,
 	.imap = SMCv22_IMAP_1200BPS,
 	.qmap = SMCv22_QMAP_1200BPS
-	/* f20, f24 and f28 are zero */
+	/* cosine, sine and f28 are all zero (f20/f24 renamed, F8903) */
 };
 
 /* V.22 1200 bit/s: (3,1) and its three 90-degree rotations, each replicated
