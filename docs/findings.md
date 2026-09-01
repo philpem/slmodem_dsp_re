@@ -107256,3 +107256,233 @@ is measured rather than granted: written as an exact equality it FIRED on six
 of thirty-two entries, the two base-block points at exactly 90 degrees being
 truncated to 8191 where the rotated blocks land on 16384, 24576 and 0.
 (2026-09-01)
+
+## F9410. The V.17 slicers' `cfg.owner` is the receiver state's bytes 0x2c..0x98, and the fit is exact at both ends
+
+*2026-09-01.* The seven `FAX_FSE_decision_*` / `FSE_*` functions all reach
+their state through `state->cfg.owner`, and F9400 left that block unmodelled.
+It is now `struct v17_dec` in `include/dsplib/v17dec.h`, 0x6c bytes, and WHERE
+it sits is read off `V17RX_create` rather than guessed:
+
+- at .text 0x974c7 that function computes `rx_state + 0x170` for
+  `FPM_FSE_init`'s first argument, and `v17fax.h` independently calls 0x170
+  `V17RXS_FSE`. So `rx_state` is identified;
+- at 0x974a1 and 0x974ff it computes `rx_state + 0x2c`, stores it as
+  `cfg.owner`, and writes +0x5a, +0x60, +0x64, +0x66 and +0x68 through it.
+
+**Both ends close, and neither was fitted.** `v17fax.h`'s `V17RXS_PTR_0030` is
+a pointer the state owns and hands to `sysdep_free`; it is `struct vtb`'s first
+member `paths`, because all four rate slicers pass `owner + 4` to
+`VTB_decoder` and `sizeof(struct vtb)` is 0x38 (F3210), so the decoder occupies
+0x30..0x67 and the next thing the object writes is at 0x68. At the far end
+`v17fax.h`'s `V17RXS_MRF` is 0x98, and 0x2c + 0x6c is 0x98 exactly.
+`t_v17slicer.c` asserts both, and every named offset between them.
+
+`V17RX_create` is NOT reconstructed, so this is not that object's type and
+must become it when it is -- the same ruling `v32dec.h` makes about
+`struct v32_dec`. The field names are the V.32 ones wherever the two protocols
+do the same thing, so that the later unification is a rename.
+
+**The one thing all six rate and bridge slicers share is three instructions,
+not V.32's `fse_quality`.** `+0x68` is a symbol counter that is never zeroed
+and that does not wrap to zero: five of the six replace 0x8000 with 0x4000 on
+the way past (0x9852f, 0x9810b, 0x98410, 0x97ef2, 0x98618, 0x989d0), so after
+the first 32768 symbols it cycles through the top half of the range only. What
+it is FOR is not established and the header says so. `FAX_FSE_decision_AB` is
+the exception -- see D1202.
+
+## F9411. V.17's 128-point region tree cuts ONE HIGHER than V.32bis' in seven places, and each is one value wide
+
+*2026-09-01.* `FAX_FSE_decision_128pt` (0x97c40, 910 bytes) is V.32bis'
+`FSE_decision_128pt` in shape -- the same rotation, the same ten search leaves,
+the same two leaves that skip the search, the same tie-break literals -- and
+seven of its thresholds are not the same number. Reading `v32fse.c` across is
+the likeliest mistake available here, so this is the list with the object's own
+encoding beside each:
+
+| here | V.32bis' copy | address | differs at |
+|---|---|---|---|
+| `ri > 0x16a1` | `ri > 0x16a0` | 0x97cfc | `ri == 0x16a1` |
+| `rq < 0x16a2 ? 0x1c : 0x18` | `rq <= 0x16a0 ? 0x1c : 0x18` | 0x97f98 `setl` | `rq == 0x16a1` |
+| `ri <= 0x3892` | `ri <= 0x3891` | 0x97d29 | `ri == 0x3892` |
+| `rq > 0x3892 -> 0x0e` | `rq > 0x3891 -> 0x0e` | 0x97fb0 | `rq == 0x3892` |
+| `rq <= 0x3891 -> 0x1a` | `rq < 0x3891 -> 0x1a` | 0x97d34 | `rq == 0x3891` |
+| `rq > 0x16a0 ? 0x10 : 0x14` | `rq <= 0x169f ? 0x14 : 0x10` | 0x97ed5 | `rq == 0x16a0` |
+| `rq <= 0x16a0 ? 0x08 : 0x04` | `rq <= 0x169f ? 0x08 : 0x04` | 0x97e42 `setle` | `rq == 0x16a0` |
+
+The spellings are the object's and not a normalisation of them: 0x97f98 is
+`cmp $0x16a2` with `setl` where 0x97e42 is `cmp $0x16a0` with `setle`, and both
+are inside this one function.
+
+**Everything else in the family DID transfer, and that was checked rather than
+assumed.** `_64pt`'s sixteen-cell tree is V.32's unchanged, including its own
+asymmetry -- `i > 0x2000` and `i <= -0x2000` against `q > 0x1fff` and
+`q >= -0x2000`, so (8192, 8192) is inner in I and outer in Q. `_32pt`'s three
+bands are V.32's unchanged at 0x16a0, 0x2d41 and 0x2d40. The metrics and their
+shifts are identical throughout: 16 and 16 in `_16pt`, 15 and 15 in `_32pt`'s
+tie-break, 13 and 13 in `_64pt` and `_128pt`, and 15 then 16 -- the lopsided
+pair V.32 records as D301 -- in `FSE_Bridge_det`.
+
+## F9412. `FAX_FSE_decision_16pt` is V.32's `_16Tpt`, not its `_16pt`, and D302 does not transfer
+
+*2026-09-01.* The name collides and the code does not. V.32bis has two
+sixteen-point slicers: `FSE_decision_16pt`, which reports four differentially
+encoded bits and carries D302, and `FSE_decision_16Tpt`, which is the TRELLIS
+one and tails into `VTB_decoder`. V.17's single `FAX_FSE_decision_16pt` is the
+second: it ends `call VTB_decoder` at 0x9851d and returns what the decoder
+wrote through a stack local, and it has no differential half at all.
+
+So D302 -- the `sar $1` where `sar $0xd` belongs, which reads thousands of
+entries past a three-entry table -- is NOT here: 0x984e2 is `sar $0xd` and the
+index into `DECv17_MAG7200` is 0..2 over the whole constellation. F9400 had
+already recorded this from the table's side; this is the consumer's side of the
+same check. `t_v17slicer.c` drives the injection: putting `>> 1` back fails 72
+of 19,660 checks on the ring layer and 128 of 34,961 on the point layer.
+
+## F9413. `FSEv17_decision` is four function pointers, and the rate order comes from the CONSUMERS and not from the addresses
+
+*2026-09-01.* `.rodata` 0x9864, 16 bytes. Read as data those bytes are eight
+plausible small integers with nothing to say they are addresses; the object
+carries an `R_386_32` against `FAX_FSE_decision_16pt`, `_32pt`, `_64pt` and
+`_128pt` at +0x0, +0x4, +0x8 and +0xc, which is what `tools/dis.py` exists to
+show. It is the trap CLAUDE.md names, and the layout makes the second-order
+version of it available too: the four targets run the OTHER WAY in `.text`
+(0x97c40 for `_128pt`, 0x98420 for `_16pt`), so ordering the table by address
+gives the reverse of the truth.
+
+The order is fixed by the two readers instead. `FSE_Bridge_det` (0x98566) and
+`FSE_decision_eqtrn` (0x9894a) both index it with `v17_dec::rate`, which
+`V17RX_create` sets at 0x9750e from the control block's +0x0c, and the four
+constellations are 16, 32, 64 and 128 points for 7200, 9600, 12000 and 14400
+bit/s.
+
+**It could not be written until all four functions existed**, which is the
+stored-function-pointer half of F8493: the table pins four symbols at link with
+no call anywhere in the graph.
+
+## F9414. The V.17 handshake is a function-pointer machine with a short arm and a long arm
+
+*2026-09-01.* Three slicers, and each installs its successor in
+`state->cfg.decision`:
+
+```
+    FAX_FSE_decision_AB  --(the phase alternation opens up)--> eqtrn
+    FSE_decision_eqtrn   --(0x25 symbols, short training)-->   FSEv17_decision[rate]
+    FSE_decision_eqtrn   --(0xb9f symbols, long training)-->   FSE_Bridge_det
+    FSE_Bridge_det       --(0x3e symbols)-->                   FSEv17_decision[rate]
+```
+
+**`v17_dec::short_train` (+0x60) is named from those two limits and from
+nothing else.** `FSE_decision_eqtrn` selects between them branchlessly at
+0x988ed -- `cmp $0x1` / `sbb` / `and $0xb7a` / `lea 0x25` -- and then at
+0x9893f uses the same field to choose which of the two successors to install.
+0x25 against 0xb9f is a factor of eighty; which of the two is the SHORT path
+needs no knowledge from outside the object. It also gates AB's early `pll_on`
+at 0x986ca.
+
+**`FSE_decision_eqtrn` is V.32bis' `FSE_decision_trn` with the tap fixed.**
+V.32 computes `(((sr >> m->scram_tap) ^ 3) ^ (sr >> 21)) & 3` and shifts the
+register left by two; V.17 does the same with the tap as the constant 16
+(0x98902 `sar $0x10`, 0x98908 `shr $0x15`). Two protocols, one generator,
+derived separately. The `sar` is what makes `scram` a SIGNED field: an
+`unsigned` operand would have given `shr` there too.
+
+**`FSE_Bridge_det` returns a constant zero.** `xor %eax,%eax` at 0x985f8 with
+nothing writing `%eax` after it, so its decided point reaches the caller only
+through `*angle` -- the carrier PLL's error term -- and never as data.
+
+**AB's angle index and its returned symbol are two different numbers**, which
+V.32's copy of that function does not prepare you for: there they are one value
+put through a differential map. Here they are two immediates per arm and the
+pairings are A -> (1, 3), B -> (2, 2), handover -> (3, 0).
+
+## F9415. AB's exit threshold is four thirds in Q14, where V.32bis' is a real divide by three
+
+*2026-09-01.* Both functions leave the AB segment when the last three symbols
+have moved further apart than four thirds of the two magnitude accumulators'
+mean square. They do not compute it the same way.
+
+    V.32   0x8135b   shl $0x2 ; imul $0x55555556 ; ...     (4*x)/3, exact
+    V.17   0x98768   imul $0x5555,%eax,%eax ; sar $0xe     (x*21845) >> 14
+
+21845 is 0x5555 and 4/3 in Q14 is 21845.33, so V.17's rounds towards minus
+infinity where V.32's truncates towards zero, and the two differ by one over
+part of the range. The operand differs too: V.17 shifts the sum of squares by
+15 (0x98764) where V.32 shifts by 13.
+
+**Nothing that samples can tell 21845 from 21846.** They agree unless
+`e/16384` crosses an integer AND `sum` lands exactly between the two
+thresholds, so `t_v17slicer.c` finds the crossing with a binary search on the
+BLOB and then sweeps the QUADRATURE difference through it -- the in-phase one
+moves `sum` by two at a time at these magnitudes and would step over the
+threshold. See F9417 for why that layer exists at all.
+
+## F9416. `_128pt`'s `best` is UNINITIALISED in the object, and the index clamp is the author's guard for it
+
+*2026-09-01.* `FAX_FSE_decision_128pt` ends with a range test its own region
+tree makes unreachable:
+
+```
+  97db6:  shl  $0x5,%edi          ; n = best + 32*rot
+  97dbe:  cmp  $0x7f,%cx
+  97dc2:  jbe  97dd3
+  97dc4:  cmpl $0x1,dsplibs_debug_level
+  97dcb:  ja   97f73              ; "...Index fault %d, changed to 0\n"
+  97dd1:  xor  %ecx,%ecx          ; n = 0
+```
+
+`best` is at most 0x1f and `rot` at most 3, so `n` is at most 127 on every
+input -- `t_v17slicer.c` asserts that over its whole scan and reports the
+denominator rather than merely observing that the arm never fired. The guard is
+there because `best` IS NOT INITIALISED. The prologue has exactly two zeroing
+stores, 0x97c50 for `base` and 0x97c60 for `amb`, where V.32's copy of the same
+function has three; the search loop assigns `best` unless all four candidates
+score exactly 0x7fff, and the clamp is what happens if they do.
+
+Counting the zeroing stores is what settles it, not the absence of an obvious
+one: register allocation could have kept an initialised `best` anywhere, but a
+stack slot that is READ at 0x97db2 and never written before the loop cannot
+have been.
+
+We initialise it, which is D1201. The string is the author's own words --
+`.rodata.str1.4` 0x11da0 -- and it is the only format string these seven
+functions reach.
+
+## F9417. The V.17 slicer test was green on its first run and two of twelve injections walked straight past it
+
+*2026-09-01.* `t_v17slicer.c` passed 2,777,912 checks the first time it was
+built, over seven layers with per-leaf coverage assertions on every region
+tree. The injection ritual then put twelve single-value defects into
+`src/fax/v17dec.c`, one at a time. **Ten went red and two did not**, and both
+escapes are worth recording because neither is a missing layer -- both are a
+layer whose DENOMINATOR was aggregate where it needed to be per case.
+
+**The first escape: V.32bis' `rq < 0x3891` restored, F9411's fifth row.** The
+threshold layer scanned a lattice for inputs the V.17 and V.32 oracles disagree
+about, drove 240 of them, and asserted `found >= 7`. It found 240 and covered
+six of the seven lines. The seventh needs `rq == 0x3891` under `ri > 0x3892`,
+whose first occurrence is at (i, q) = (-12219, -32700) -- a radius of 34900 in
+the received frame, outside the +-18000 window that version scanned. **An
+aggregate count of 240 hid a zero.** The layer is now per line and each of the
+seven reports its own denominator.
+
+**The second escape: AB's 21845 changed to 21846.** F9415's constant, and the
+walks cannot separate the two because they agree except where two conditions
+coincide. The fix is the swept crossing described there.
+
+**What that says about the other ten is the part worth keeping.** The ten that
+were caught include four the walks caught incidentally, with tens of thousands
+of failing checks each; the two that escaped are precisely the two where the
+layer AIMED at them reported a number rather than a per-case verdict. F134's
+rule is usually quoted as "a detector must report its denominator"; these two
+are the sharper form -- **a denominator that is a SUM is not a denominator**,
+because it cannot distinguish six of seven from seven of seven.
+
+Both were re-run after the fix and both go red. The full ritual, in order:
+`_128pt ri > 0x16a1 -> 0x16a0` RED, `rq <= 0x3891 -> < 0x3891` RED (was GREEN),
+`rq < 0x16a2 -> <= 0x16a0` RED, `_16pt >> 13 -> >> 1` RED,
+`_64pt q >= -0x2000 -> q > -0x2000` RED, `FSE_EQTRN_SHORT 0x25 -> 0x26` RED,
+`FSE_BRIDGE_SYMBOLS 0x3e -> 0x3f` RED, `21845 -> 21846` RED (was GREEN),
+`fse_tick wrap 0x4000 -> 0` RED, `AB given fse_tick` RED,
+`FSEv17_decision[1] and [2] transposed` RED, `eqtrn tap 16 -> 17` RED, AB's
+threshold replaced by V.32's `(4*e)/3` RED, and the restored tree GREEN.

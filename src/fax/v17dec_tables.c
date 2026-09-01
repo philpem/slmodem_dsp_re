@@ -3,6 +3,7 @@
  *                    angle tables, as `FAX_FSE_decision_*` index them.
  *
  * Reconstructed from dsplibs.o:
+ *   FSEv17_decision        .rodata  0x09864    16
  *   DECv17_MAP_BRIDGE      .rodata  0x09874     8
  *   DECv17_MAP_TRN         .rodata  0x0987c     8
  *   DECv17_ANGL4800        .rodata  0x09884     8
@@ -74,6 +75,30 @@
  */
 
 #include "dsplib/v17dec.h"
+
+/* FSEv17_decision  .rodata 0x09864  16 bytes.
+ * FOUR FUNCTION POINTERS, NOT `short[8]`, and the object says so: it carries
+ * an `R_386_32` against `FAX_FSE_decision_16pt`, `_32pt`, `_64pt` and `_128pt`
+ * at +0x0, +0x4, +0x8 and +0xc.  A value dump of those sixteen bytes gives
+ * eight plausible small integers and no hint that they are addresses, which is
+ * the mistake `tools/dis.py` exists to prevent.
+ *
+ * The order is the RATE order.  It is not read off the addresses -- which run
+ * the other way, 128pt lowest -- but off the two consumers: `FSE_Bridge_det`
+ * and `FSE_decision_eqtrn` both index it with `v17_dec::rate`, which
+ * `V17RX_create` derives from the negotiated bit rate, and the four
+ * constellations are 16, 32, 64 and 128 points for 7200, 9600, 12000 and
+ * 14400 bit/s.
+ *
+ * IT IS `.rodata`, so it is const -- which also says the table itself is never
+ * patched and every handover goes through `cfg.decision` instead.
+ */
+const fpm_fse_decision FSEv17_decision[4] = {
+	FAX_FSE_decision_16pt,		/*  7200 bit/s,  16 points */
+	FAX_FSE_decision_32pt,		/*  9600 bit/s,  32 points */
+	FAX_FSE_decision_64pt,		/* 12000 bit/s,  64 points */
+	FAX_FSE_decision_128pt		/* 14400 bit/s, 128 points */
+};
 
 /* DECv17_MAP_BRIDGE  .rodata 0x09874  8 bytes.
  * Dead in the object -- nothing references it.  See the file banner.

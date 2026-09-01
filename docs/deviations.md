@@ -11801,3 +11801,87 @@ the blob's side anyway, so the comparison is entry by entry.
 the difference except `nm`. It should be made `static` in the same commit that
 writes `FAXVMI_process`, which is when it acquires a reader.
 `test/unit/t_faxpack.c` compares all nine entries against `ref_vmi_*`.
+
+## D1200 🐛 `FAX_FSE_decision_128pt`'s fourth literal I coordinate is one greater than the table entry it means
+
+`FAX_FSE_decision_128pt` names four I coordinates as immediates rather than
+reading them from `DECv17_ANA_IMAP128`, in the two leaves where the region tree
+cannot separate the point and it decides between one specific PAIR by squared
+distance. Three of them agree with the table exactly:
+
+    0x2799 = 10137   DECv17_ANA_IMAP128[14] = 10137   0x97d62
+    0x2799 = 10137   DECv17_ANA_IMAP128[15] = 10137   0x97e77
+    0x32e9 = 13033   DECv17_ANA_IMAP128[24] = 13033   0x97ea3
+    0x3e3a = 15930   DECv17_ANA_IMAP128[26] = 15929   0x97d8c
+
+The fourth does not. The consequence is a distance to point 26 computed one
+unit too far in I, which can flip the outer tie-break at the margin; the
+in-band effect is a single wrong decision on a set of inputs one value wide.
+
+The one-off is also what PROVES they are literals in the source rather than a
+compiler's fold of the const table, since a fold cannot disagree with the thing
+it folded.
+
+**This is V.32bis' D371 in V.17's copy of the same function**, with the same
+three-agree-one-disagrees pattern at the same four indices, and V.32's entry
+records the identical arithmetic against `DECv32_ANA_IMAP128`. The two were
+derived separately.
+
+**Status:** reproduced. `src/fax/v17dec.c` writes 0x3e3a as the object does.
+`test/unit/t_v17slicer.c` asserts `DECv17_ANA_IMAP128[26] + 1 == 0x3e3a`, so if
+the table were ever "corrected" the deviation would become wrong and the test
+says so.
+
+## D1201 ⚠ `FAX_FSE_decision_128pt` reads `best` uninitialised, and we initialise it
+
+The object's prologue has exactly TWO zeroing stores -- 0x97c50 for `base` and
+0x97c60 for `amb` -- where V.32bis' copy of the same function has three. The
+third, `best`, is a stack slot at 0x40(%esp) that is READ at 0x97db2 and
+written only inside the search loop and the two ambiguity arms. The loop
+assigns it unless all four candidates score exactly 0x7fff, so on that one path
+the function indexes `DECv17_MAG14400` and `DECv17_ANGL14400` with whatever was
+on the stack.
+
+**The author knew.** The index clamp and the `"Index fault %d, changed to 0"`
+report immediately afterwards (0x97dbe onwards) exist for no other reason: the
+region tree bounds `best + 32*rot` at 127 on every reachable input, so the
+guard is unreachable UNLESS `best` is garbage. See F9416.
+
+**We write `short best = 0;`.** An uninitialised read is undefined behaviour
+and this tree does not put that in `src/`; it would also read OUR stack rather
+than the object's, so it is not reproducible in any useful sense. The
+difference is confined to the case where four squared-distance metrics are
+simultaneously exactly 0x7fff -- four equations in two unknowns, inside a
+region cell -- which no input in `t_v17slicer.c`'s scan reaches.
+
+**Status:** NOT reproduced, deliberately, and unmeasured as to reachability.
+`test/unit/t_v17slicer.c` asserts the clamp's bound over its whole scan and
+reports the denominator, so what is measured is that the guard never fires --
+not that it cannot.
+
+## D1202 ⚠ `FAX_FSE_decision_AB` increments the symbol counter without the wrap test its five siblings have
+
+`v17_dec::sym_count` (+0x68) is incremented once per symbol by every V.17
+slicer. Five of the six replace 0x8000 with 0x4000 on the way past --
+`FAX_FSE_decision_16pt` at 0x9852f, `_32pt` at 0x98410, `_64pt` at 0x9810b,
+`_128pt` at 0x97ef2, `FSE_Bridge_det` at 0x98618 and `FSE_decision_eqtrn` at
+0x989d0. `FAX_FSE_decision_AB` does not: 0x98651 is `movzwl`, `inc`, `mov` with
+no `cmp $0x8000` anywhere in the function.
+
+So a receiver that spent 32768 symbols in the AB segment would leave it with
+`sym_count` at 0x8000 and the counter would then never be pulled back, since
+every later slicer only tests for equality with 0x8000 and not for the range
+above it.
+
+It cannot matter as the object is used: AB is the first segment and leaves
+after 0xc8 symbols by `count`, so 0x8000 symbols of it does not happen. It is
+recorded because it is an asymmetry in six copies of three instructions and
+because tidying it would be a change to the object's behaviour on a path
+nothing measures.
+
+**Status:** reproduced. `src/fax/v17dec.c` gives AB the plain increment and the
+other five `fse_tick`. `test/unit/t_v17slicer.c` plants `sym_count` at nine
+values including 0x7fff, 0x8000 and 0xffff and drives all seven functions
+through each, and asserts the asymmetry directly off the BLOB's object: a rate
+slicer takes 0x7fff to 0x4000 and AB takes it to 0x8000. Giving AB the wrap
+fails 2 checks of 17,748.
