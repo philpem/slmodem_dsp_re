@@ -11211,3 +11211,55 @@ not claimed by any check here: what such a check would measure is STATEMENT
 ORDER, a codegen-tier question this test is not equipped to settle. What IS
 asserted is the settled value, which F9101's derivation makes exact rather than
 relative.
+## D1080 ⚠ the four receive-side fax configuration tables live in a table file, not in their modules' translation units
+
+`FAXVMI_CFG`, `V17RX_CFG`, `V27RX_CFG` and `V29RX_CFG` are defined in
+`src/fax/faxcfg.c`. The object almost certainly put three of them somewhere
+else: `V17RX_CFG` sits in `.data` at 0x79a0, between `V17RX_CTL` (0x7988) and
+`V17TX_CFG` (0x7a40), which is the V.17 module's own uninterrupted run of data
+symbols, and `V27RX_CFG` and `V29RX_CFG` sit the same way inside V.27ter's and
+V.29's runs. `FAXVMI_CFG` is the one with a plausible claim to a shared home,
+being the table all six `init_vmi_*` constructors read.
+
+They are here because `class1rx.c` cannot link without them (F8492, F8493) and
+because `src/fax/v17.c`, `v27.c` and `v29.c` belonged to other strands of the
+same wave, which a table added underneath them would have collided with.
+
+**What it costs is nothing measurable and one thing that is not.** A data
+symbol's bytes, size, section and binding do not depend on which translation
+unit defines it -- `nm -S` on `build/repro/fax/faxcfg.o` gives `R` 0x18,
+`D` 0x28, `D` 0x1c, `D` 0x18, matching the blob symbol for symbol -- so the
+differential tier cannot see this and neither can `byteident.py`, which does
+not compare data. What it does affect is `.data` LAYOUT: the object's order
+within a section follows emission order within a translation unit, so a later
+pass that wants the data sections to line up will have to move these.
+
+**Status:** deliberate, and cheap to undo. Move each of the three modem tables
+into the file that ends up holding its `V??RX_create`, and `FAXVMI_CFG` into
+whichever file holds the six `init_vmi_*` once the transmit half lands. Nothing
+but an include changes; `t_faxcfg.c` names the symbols and not the file.
+
+## D1081 ⚠ the three `init_vmi_*rx` constructors are file-local in the object and global here
+
+`nm` gives `t init_vmi_v17rx`, `t init_vmi_v27rx`, `t init_vmi_v29rx` -- all
+three are `static` in the original, and their only caller is `_init_receiver`
+in the same translation unit.
+
+`_init_receiver` needs 343 unwritten symbols, so it is not going to be written
+for a long time. A `static` spelling here would therefore be three functions
+with no caller in the tree: the compiler would warn, the differential tier
+could not reach them, and the reconstruction would be unverifiable for as long
+as it took `_init_receiver` to arrive. They are global instead, and
+`t_faxcfg.c` drives all three against `ref_init_vmi_*rx`.
+
+This is D1053's move -- three Class 1 state handlers, same reasoning -- and
+wave 2's `v22_delete` before that. The pattern is now common enough to be
+worth stating as a rule: **a file-local blob function whose only caller is
+unwritten is made global, tested, and marked for restoration**, because the
+alternative is to leave it unwritten or to commit it untested, and both are
+worse.
+
+**Status:** ours, not the author's, and marked in `class1rx.h`. The pass that
+writes `_init_receiver` should take all three back to `static` in the same
+commit -- at which point the test must reach them another way or be retired
+in favour of driving `_init_receiver` itself.
