@@ -11536,3 +11536,50 @@ has them, with the missing `mask = 1` marked rather than supplied.
 `zero_run_send` with a run length of 0..3, short enough that the ending arm is
 reached inside the block -- and counts the cases where the reference's own
 `zero_run_send` came back cleared, asserting that count is not zero.
+
+## D1121 ⚠ `faxvmi_hdlc_frame`'s trace walks the ring from an UNWRAPPED `rd + 1`
+
+Both of the loops in `faxvmi_hdlc_frame`'s preamble start at `rd + 1` without
+putting that first index through the wrap the loop body applies to every
+later one:
+
+    95bba:  movzwl 0x6(%esi),%eax    ; rd
+    95bbe:  lea    0x1(%eax),%ebx    ; i = rd + 1  -- no wrap
+    95bd5:  movzwl 0x8(%esi),%edx    ; and the body's wrap is
+    95bc3:  ... setg/neg/and ...     ;   i = (fifo_size > i+1) ? i+1 : 0
+
+and the three-octet copy at 0x95c2a does exactly the same. So with
+`rd == fifo_size - 1` the first element read is `fifo[fifo_size]`, one past
+the ring, and the second read wraps correctly to `fifo[0]`. Every later index
+is in range.
+
+The read is the only consequence: the value goes to `dsplibs_debug_printf` in
+the first loop and into a three-byte local in the second, and neither feeds
+anything the object acts on -- the second's only consumer is the frame name
+in another trace line. **The bit engine below is unaffected**, because it
+re-reads `framer->rd` and applies the wrap on every fetch (0x95dd8, 0x95e20).
+
+**Status:** reproduced. `src/fax/faxvmi.c` starts both loops at
+`(unsigned int)fr->rd + 1` with the wrap only in the body, as the object has
+it. `t_faxpack` sizes the ring array with a guard region past `fifo_size` and
+compares it, and drives `rd == fifo_size - 1` deliberately, so the one-past
+read happens on both sides over identical bytes and the guard proves neither
+side wrote there.
+
+## D1122 ⚠ `vmi_pack`, `vmi_unpack` and `vmi_reverse` are file-local in the object and global here
+
+The three framing tables are `r` in `nm`, not `R` -- file-local `.rodata` at
+0x94a8, 0x94b4 and 0x94c0. Ours are global.
+
+The reason is the same as D1081's and is a property of what is written rather
+than a preference: their only reader in the object is `FAXVMI_process`, which
+this tree has not reconstructed. A `static const` array with no referent in
+its translation unit is discarded by the compiler at any optimisation level,
+so the definition would not reach the object file and could not be compared
+against the blob's copy at all. Global keeps it, and `symmap.py` globalises
+the blob's side anyway, so the comparison is entry by entry.
+
+**Status:** reproduced as a storage class, not as behaviour; nothing observes
+the difference except `nm`. It should be made `static` in the same commit that
+writes `FAXVMI_process`, which is when it acquires a reader.
+`test/unit/t_faxpack.c` compares all nine entries against `ref_vmi_*`.

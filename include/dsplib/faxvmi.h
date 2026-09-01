@@ -231,14 +231,35 @@ struct faxvmi_framer {
 					 * sysdep_malloc(cfg->frame_size * 2)
 					 * -- one octet per 16-bit element  */
 	unsigned short frame_size;	/* +0x44 its capacity, in elements  */
-	unsigned short short_0046;	/* +0x46 create and control zero it */
+	short pack_frame_left;		/* +0x46 octets of the frame
+					 * `faxvmi_hdlc_frame` is transmitting
+					 * that are still in the ring.  Zero
+					 * means the next element is a LENGTH
+					 * and a fresh frame starts; non-zero
+					 * means it is a data octet and this
+					 * counts down.  SIGNED: the object
+					 * loads it with `movswl` (0x95b7f) and
+					 * stores sixteen bits (0x95d81), and
+					 * the length it is loaded FROM is read
+					 * `movswl` too (0x95de5).  create and
+					 * control zero it                   */
 	short frame_len;		/* +0x48 octets assembled so far    */
 	unsigned short flags_wanted;	/* +0x4a opening flags still to be
 					 * seen before octets are kept;
 					 * create and control both set it to
 					 * 2 and each closing flag decrements
 					 * it while it is nonzero           */
-	int int_004c;			/* +0x4c create and control: 1      */
+	int pack_flagging;		/* +0x4c non-zero while
+					 * `faxvmi_hdlc_frame`'s source is a
+					 * FLAG rather than frame data -- the
+					 * three-flag preamble, or the single
+					 * flag an empty ring sends.  It gates
+					 * the zero insertion and nothing else,
+					 * which is what makes flags
+					 * transparent: five ones inside data
+					 * are stuffed, five ones inside 0x7E
+					 * are not.  create and control set it
+					 * to 1                              */
 	short ones;			/* +0x50 the run of consecutive one
 					 * bits: 5 destuffs the next zero,
 					 * 6 is a flag                     */
@@ -431,6 +452,24 @@ int faxvmi_simp_pack(struct faxvmi *vmi, unsigned short *src, short count);
  */
 int faxvmi_asyc_pack(struct faxvmi *vmi, unsigned short *src, short count);
 
+/*
+ * HDLC framing: three flag octets, then the frame, with a zero inserted after
+ * every five consecutive one bits of DATA.  What comes out of the ring is
+ * what `faxvmi_write_frame` put in -- one length element, then that many
+ * octets, then two FCS octets -- so `framer->pack_frame_left` is what says
+ * whether the next element is a length or an octet.  An empty ring sends one
+ * flag and raises `vmi->underrun`; flags are the idle pattern, so that is not
+ * a stall.
+ */
+int faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count);
+
+/*
+ * The HDLC flag, `0111 1110`, and the run of ones that forces a stuffed zero
+ * inside data.  The object holds three flags at once for a frame preamble.
+ */
+#define FAXVMI_HDLC_FLAG	0x7e
+#define FAXVMI_HDLC_FLAG3	0x7e7e7e
+
 /* --------------------------------------------------------------------- */
 /* The unpackers: `vmi_unpack[mode]`.                                     */
 
@@ -559,5 +598,26 @@ void faxvmi_byte_reverse(unsigned short *buf, short count);
  * over its data.  The length element itself is NOT reversed.
  */
 void faxvmi_frame_reverse(unsigned short *buf, short count);
+
+/* --------------------------------------------------------------------- */
+/*
+ * THE THREE DISPATCH TABLES, indexed by `vmi->mode`.  They carry the AUTHOR'S
+ * OWN NAMES in the object's symbol table -- `vmi_unpack` at .rodata 0x94a8,
+ * `vmi_pack` at 0x94b4, `vmi_reverse` at 0x94c0, three entries each -- and
+ * their contents are read from the relocations at those addresses, not
+ * guessed.  They are `const` because the object puts them in `.rodata`, and
+ * file-local there; `symmap.py` globalises them, so they are comparable
+ * against the blob entry by entry.
+ *
+ * The pack and unpack forms take a `struct faxvmi *`; the reverse form takes
+ * a bare buffer.  Two different shapes, so two typedefs.
+ */
+typedef int (*faxvmi_frame_fn)(struct faxvmi *vmi, unsigned short *buf,
+			       short count);
+typedef void (*faxvmi_reverse_fn)(unsigned short *buf, short count);
+
+extern faxvmi_frame_fn const vmi_pack[3];
+extern faxvmi_frame_fn const vmi_unpack[3];
+extern faxvmi_reverse_fn const vmi_reverse[3];
 
 #endif /* DSPLIB_FAXVMI_H */

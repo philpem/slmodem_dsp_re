@@ -105573,3 +105573,194 @@ fifteen minutes, so progress had to be inferred from the mtimes of the test
 binaries. Harmless here because the script completed, and recorded because it
 is the third time this exact pipe has hidden a running job's output in this
 tree.  (2026-09-01)
+
+### F9202. `faxvmi_hdlc_frame` is the packer the other two are simple cases of, and two framer fields are what drive it
+
+The third packer turns the ring's LENGTH-PREFIXED contents -- exactly what
+`faxvmi_write_frame` puts there -- into a flag-delimited, zero-stuffed bit
+stream. Its refill has three arms and `framer->pack_frame_left` (+0x46) is the
+selector:
+
+    left == 0, ring has data   the element is a LENGTH.  Take it (`movswl`,
+                               0x95de5), and send THREE flag octets before any
+                               of the frame: word 0x7E7E7E, mask 0x800000
+    left != 0                  the element is a data octet (`movzwl`,
+                               0x95e2d).  word = the octet, mask 0x80, and
+                               `pack_frame_left` counts down
+    ring empty                 one flag octet, word 0x7E and mask 0x80, and
+                               `vmi->underrun` goes to 1 (0x95cd8)
+
+`framer->pack_flagging` (+0x4c) is set on both flag arms and cleared on the
+data arm, and gates the zero insertion and nothing else -- which is what makes
+flags transparent, because a flag is five consecutive ones and would otherwise
+be stuffed.
+
+**THE MASK IS 32 BITS HERE AND ONLY HERE.** The other two packers hold it in
+an `unsigned short` and load it `movzwl`; this one loads and stores the whole
+dword (0x95b4c and 0x95d60) because 0x800000 does not fit in sixteen. That is
+what makes `framer->pack_mask` an `unsigned int` in the header rather than a
+short with a wide store -- the same field, read two ways by two functions,
+and only one of them needs the width.
+
+The epilogue is the other two packers' exactly: save the four engine fields,
+call `faxvmi_write_frame` a second time with what the first call left,
+subtract, store `framer->residue`, return `link->pack_count` re-read from the
+link object.  (2026-09-01)
+
+### F9203. The zero insertion CLEARS THE BIT IN THE SOURCE and does not advance the mask, which reads like a lost bit and is not
+
+The stuffing arm at 0x95d0a is three instructions and no mask shift:
+
+    95d0a:  mov  %ebp,%ecx        ; the mask
+    95d0c:  not  %ecx
+    95d0e:  and  %ecx,0x3c(%esp)  ; word &= ~mask
+                                  ; and NO `shr $1,%ebp`
+
+against the ordinary path at 0x95dc2, which is `shr $1,%ebp` alone. So the
+same bit POSITION is emitted twice -- once with its real value, then again
+with the source bit forced to zero -- and only then does the mask move on.
+
+**It looks like the original bit is destroyed and it is not.** Trace 0xFF with
+mask 0x80: bits 7..3 go out as five ones, the fifth of them making
+`acc & 0x1f == 0x1f`; the stuffing arm clears bit 3 of `word` and leaves the
+mask at 0x08; the next pass emits that position again, now a zero; the run is
+broken, so the mask advances to 0x04 and bits 2..0 follow. Nine bits out for
+eight in, with all eight data bits present and one zero inserted after the
+five ones. That is HDLC's rule exactly.
+
+The bit counter increments on BOTH paths, so the stuffed zero occupies an
+output bit slot like any other. Recorded because the arm is easy to read as a
+defect and to "fix", and a fix would break the framing while passing nothing.
+The mutation that gates it the other way round is caught (F9208).  (2026-09-01)
+
+### F9204. `GetT30FrameNameByID` carries thirty-six of the author's own frame names, and its caller is a trace line
+
+Two small functions between the FIFO cluster and the modulation wrappers,
+reached only from `faxvmi_hdlc_frame`'s debug path:
+
+    GetT30FrameNameByID     .text 0x096e00   76
+    GetT30FrameIDFromBuffer .text 0x096e50   84
+    FrameNames              .rodata 0x9660  288   36 {int, char *} pairs
+
+`GetT30FrameIDFromBuffer` takes the frame's first three octets -- address,
+control, FCF -- as three separate byte arguments, `cmpb` on the first and
+`movzbl` on the other two, and not a buffer whatever the name says. An address
+other than 0xFF answers 0xFF and nothing else is looked at; a control octet of
+0x03 or 0x13 means the FCF is bit-reversed through `aReversedCharsArray`; any
+other control means the FCF stands and 0x8000 is OR'd in. Both arms then share
+the `> 0x84` test and the `& 0x7f` that drops T.30's final-frame bit -- the
+reversed arm jumps INTO the middle of the other one at 0x96e8a, so the mask is
+not duplicated.
+
+The 0x8000 is stripped by the only caller (`and $0xffff7fff` at 0x95c7b), so
+nothing in the object ever sees it; it is described by what sets it rather
+than named.
+
+`GetT30FrameNameByID` is a linear search of all thirty-six followed by
+`sysdep_sprintf` into a 64-byte function-static -- `Buffer.0` at `.bss` 0x880,
+which is GCC's spelling for a static inside a function -- with the author's
+format `"Unknown frame (ID=0x%02x)"`. The names are his words, expansions and
+all: "DIS - Digital Identification Signal", "PRI_EOM - Procedure
+Interrupt-End Of Message", and the five that carry no expansion at all (RTN,
+PIN, NSS, CRP, DTC). The caller prints them as
+`"FCL1: FRAME TRANSMITTED (%s)"`.  (2026-09-01)
+
+### F9205. `aReversedCharsArray` IS bit reversal, checked over all 256 entries, and it lives in `class1tx.c` by a 4-to-1 argument
+
+The 256-byte `.rodata` table at 0xba40 satisfies `t[i] == bitreverse8(i)` for
+every one of its entries -- computed and compared, not eyeballed -- and the
+test compares all 256 against `ref_aReversedCharsArray` as well, so the source
+carries the bytes rather than a loop because the object carries bytes.
+
+**Where it belongs is an inference and the finding says so.** Five relocations
+name it: one from `GetT30FrameIDFromBuffer` at 0x96e9e and FOUR from
+`cTOOLS_handle_hdlc_output` at 0x9f029, 0x9f051, 0x9f066 and 0x9f08a. That
+second function is at 0x9ef10, inside `class1tx.c`'s span, and the table's
+`.rodata` address is far past the FAXVMI/FIFO cluster's 0x9490-0x9660. Neither
+argument settles it alone; together they put the definition in
+`src/fax/class1tx.c` and leave `src/fax/t30frame.c` -- whose one reference is
+the minority -- declaring it. Being GLOBAL in the object (`R`), it is one of
+the few tables that can be compared against a `ref_` alias directly.
+(2026-09-01)
+
+### F9206. The three dispatch tables are written, and what is left of FAXVMI is the five entry points
+
+`vmi_unpack` (0x94a8), `vmi_pack` (0x94b4) and `vmi_reverse` (0x94c0) were
+blocked by the link constraint while any entry was unwritten; `vmi_pack`'s
+third entry was the last one, and `faxvmi_hdlc_frame` landing releases all
+three. Their contents are read from the relocations at those nine addresses,
+not inferred from the names, and the test compares each of ours against the
+matching `ref_` function and checks the blob's own tables have the same
+distinctness pattern (reverse's first two entries equal, everything else
+distinct).
+
+**What `src/fax/faxvmi.c` still does not have is exactly five symbols** --
+`FAXVMI_create`, `_delete`, `_process`, `_status` and `_control`, all of them
+read in full as evidence for the layout. The module is otherwise complete:
+three packers, three unpackers, three buffer walks, two ring writers,
+`FAXVMI_message` and four tables.  (2026-09-01)
+
+### F9207. A test defect that looked exactly like a defect in the packer, and D1071 is what named it
+
+`t_faxpack`'s first HDLC group failed 616 of 19,505 checks, with the ring's
+own contents differing between the two sides and the bit engine's mask a shift
+apart. Nothing about that reads as a fixture problem.
+
+The cause was the SOURCE buffer. `faxvmi_hdlc_frame` hands the caller's
+buffer straight to `faxvmi_write_frame`, which reads it as length-prefixed
+frames -- and D1071 already records that a NEGATIVE length passes the object's
+signed fit test and then runs the FCS walk over 65,000 elements neither side
+owns. The fixture was filling the source with random bytes, so both sides
+walked memory past their own arrays, read different rubbish, computed
+different FCS values and wrote them into their rings. Every downstream
+difference followed from that.
+
+Building the source as well-formed frames made all 19,505 checks pass with no
+change to `src/`. **The deviation register is what turns a confusing failure
+into a five-minute one** -- D1071's "the inputs that would separate them are
+the ones a differential test cannot safely present" is the same sentence read
+from the caller's side. Recorded because the first instinct was to re-read the
+disassembly.  (2026-09-01)
+
+### F9208. The second injection ritual: 16 defects, 16 caught, and the closing self-check earned its place
+
+Every mutant applied to `src/`, built with `make one` and run against the
+blob. Eight on `faxvmi_hdlc_frame`, two on the dispatch tables, five on the
+T.30 namer and one on the reversal table:
+
+    caught  hdlc: two preamble flags instead of three
+    caught  hdlc: the preamble mask starts at 0x400000
+    caught  hdlc: stuffing gated on `flagging != 0` -- F9203's arm
+    caught  hdlc: stuffs after six ones instead of five
+    caught  hdlc: the frame length is read one too long
+    caught  hdlc: the idle flag is not marked as a flag
+    caught  hdlc: `pack_frame_left` not carried across the return
+    caught  hdlc: the trace walk wraps one element early (D1121's shape)
+    caught  vmi_pack[2] is the wrong packer
+    caught  vmi_reverse[1] is the frame form, not the byte form
+    caught  T30: the reversed control arm does not reverse
+    caught  T30: the `> 0x84` threshold is one high
+    caught  T30: the marker bit is 0x4000
+    caught  T30: the name search stops one entry short
+    caught  T30: one table identifier changed
+    caught  aReversedCharsArray: one byte changed
+
+**16 mutants, 16 caught, 0 not caught, 0 unusable.**
+
+**AND THE SCRIPT'S CLOSING "does the restored tree still build" CHECK CAME
+BACK FALSE**, which is the part worth recording. It was not the restore -- the
+two source files came back byte for byte -- it was `docs/findings.md`. F9203
+had been written during the run and cited "the mutation ... is caught
+(F9208)", a forward reference to the finding that only exists because the run
+finished, so `refcheck.py` failed the `refs` target and `make one` exited
+non-zero on an unmutated tree.
+
+That is harmless here and would NOT have been if it had happened one step
+earlier: `mutate.py` judges a mutant caught by a non-zero exit, so a tree that
+exits non-zero unmutated scores every mutant as caught and the whole run reads
+as a perfect result. It is findings F2157 and F3002's argument arriving from a
+new direction -- a gate failing for a reason unrelated to the code makes a
+mutation column meaningless -- and the only reason it was visible is that the
+script re-runs the suite on the restored tree at the end and prints the
+verdict. Keep that line in any script of this shape, and write the finding
+that a source comment cites BEFORE running anything.  (2026-09-01)

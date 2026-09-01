@@ -45,6 +45,14 @@ void v29tx_message(void *handle, int code, char **out);
 /* The null modem's: no table, *out = NULL for every code. */
 void null_message(void *handle, int code, char **out);
 
+/*
+ * Entry `i` is `i` with its eight bits reversed.  `.rodata` 0xba40, global,
+ * and defined in `class1tx.c` -- see the comment there for why that file and
+ * not `t30frame.c`, whose `GetT30FrameIDFromBuffer` is the one reference out
+ * of five that is not in this span.
+ */
+extern const unsigned char aReversedCharsArray[256];
+
 /* Clear the session countdown; the tx-nulls state runs until told. */
 int _init_tx_nulls_state(struct fax_class1 *ctx);
 

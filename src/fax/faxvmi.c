@@ -7,6 +7,7 @@
  *   FAXVMI_message        .text 0x0957b0     55
  *   faxvmi_asyc_pack      .text 0x0957f0    436
  *   faxvmi_asyc_unpack    .text 0x0959b0    349
+ *   faxvmi_hdlc_frame     .text 0x095b10    928
  *   faxvmi_hdlc_unframe   .text 0x095eb0   1577
  *   faxvmi_simp_pack      .text 0x0964e0    401
  *   faxvmi_simp_unpack    .text 0x096680    243
@@ -15,15 +16,17 @@
  *   faxvmi_frame_reverse  .text 0x096850    151
  *   faxvmi_write_fifo     .text 0x0968f0    157
  *   faxvmi_write_frame    .text 0x096990    542
+ *   vmi_unpack            .rodata 0x94a8     12  (3 slots)
+ *   vmi_pack              .rodata 0x94b4     12  (3 slots)
+ *   vmi_reverse           .rodata 0x94c0     12  (3 slots)
  *   vxx_message           .rodata 0x94e0     52  (13 slots)
  *
  * NOT written, and read only as evidence: FAXVMI_create (0x095120),
  * _delete (0x0953f0), _process (0x095470), _status (0x0955c0), _control
- * (0x095650) and the third packer faxvmi_hdlc_frame (0x095b10).  The three
- * dispatch tables `vmi_pack`, `vmi_unpack` and `vmi_reverse` belong to that
- * half and are not written either -- `vmi_pack`'s third entry is
- * `faxvmi_hdlc_frame`, and naming a table entry that does not exist yet is
- * the link constraint, F8492/F8493.  So the table waits on ONE symbol now.
+ * (0x095650).  The three dispatch tables `vmi_pack`, `vmi_unpack` and
+ * `vmi_reverse` ARE written, below: every entry of all three now exists, so
+ * the link constraint F8492/F8493 no longer blocks them.  They are the last
+ * of this module that is not the five entry points.
  *
  * THE FUNCTIONS HERE ARE ONE UNIT, and that is why they came together: every
  * one of them goes through `vmi->framer`, a single 88-byte object that is a
@@ -48,6 +51,7 @@
 #include "dsplib/class1tx.h"
 #include "dsplib/debug.h"
 #include "dsplib/faxvmi.h"
+#include "dsplib/t30frame.h"
 
 /*
  * The three sizes are not inferred: FAXVMI_create asks `sysdep_malloc` for
@@ -104,9 +108,10 @@ FRAMER_ASSERT_OFF(zero_run_send, 0x38);
 FRAMER_ASSERT_OFF(zero_run_seen, 0x3c);
 FRAMER_ASSERT_OFF(frame, 0x40);
 FRAMER_ASSERT_OFF(frame_size, 0x44);
+FRAMER_ASSERT_OFF(pack_frame_left, 0x46);
 FRAMER_ASSERT_OFF(frame_len, 0x48);
 FRAMER_ASSERT_OFF(flags_wanted, 0x4a);
-FRAMER_ASSERT_OFF(int_004c, 0x4c);
+FRAMER_ASSERT_OFF(pack_flagging, 0x4c);
 FRAMER_ASSERT_OFF(ones, 0x50);
 FRAMER_ASSERT_OFF(in_frame, 0x54);
 typedef char faxvmi_framer_size[(sizeof(struct faxvmi_framer) == 0x58)
@@ -121,6 +126,35 @@ LINK_ASSERT_OFF(int_0014, 0x14);
 typedef char faxvmi_link_size[(sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
 
 #endif
+
+/*
+ * The three framing tables, in the object's own `.rodata` order -- unpack at
+ * 0x94a8, pack at 0x94b4, reverse at 0x94c0, immediately before
+ * `vxx_message` at 0x94e0.  Every entry is read from the relocation at its
+ * address; none is inferred from the function names.
+ *
+ * THEY ARE FILE-LOCAL IN THE OBJECT (`r`, not `R`) AND GLOBAL HERE -- D1122.
+ * The only reader is `FAXVMI_process`, which this tree has not written, so a
+ * `static` copy would have no referent and the compiler would discard it,
+ * taking the comparison against the blob with it.  Same shape as D1081.
+ */
+faxvmi_frame_fn const vmi_unpack[3] = {
+	faxvmi_simp_unpack,
+	faxvmi_asyc_unpack,
+	faxvmi_hdlc_unframe,
+};
+
+faxvmi_frame_fn const vmi_pack[3] = {
+	faxvmi_simp_pack,
+	faxvmi_asyc_pack,
+	faxvmi_hdlc_frame,
+};
+
+faxvmi_reverse_fn const vmi_reverse[3] = {
+	faxvmi_byte_reverse,
+	faxvmi_byte_reverse,
+	faxvmi_frame_reverse,
+};
 
 faxvmi_message_fn const vxx_message[13] = {
 	null_message,
@@ -340,6 +374,168 @@ faxvmi_asyc_unpack(struct faxvmi *vmi, unsigned short *dst, short count)
 	fr->unpack_bit = bit;
 	vmi->overflow = overflow;
 	return nout;
+}
+
+/*
+ * HDLC framing on the way OUT, and it is the packer the other two are simple
+ * cases of.
+ *
+ * WHAT COMES OUT OF THE RING IS LENGTH-PREFIXED, which is exactly what
+ * `faxvmi_write_frame` puts in: one element of length, then that many octets,
+ * then the two FCS octets it appended.  So the refill has three states and
+ * `framer->pack_frame_left` is what selects between them:
+ *
+ *   left == 0, ring has data   the element is a LENGTH.  Take it, and send
+ *                              THREE flag octets -- word 0x7E7E7E, mask
+ *                              0x800000, twenty-four bits -- before any of the
+ *                              frame.  `pack_flagging` goes to 1.
+ *   left != 0                  the element is a data octet.  Word is the
+ *                              octet, mask 0x80, `pack_flagging` goes to 0,
+ *                              and `pack_frame_left` counts down.
+ *   ring empty                 one flag octet, 0x7E with mask 0x80, and
+ *                              `vmi->underrun` goes to 1.  That is the idle
+ *                              pattern, not a fault report.
+ *
+ * ZERO INSERTION IS GATED ON `pack_flagging`, which is what makes the flags
+ * transparent: when five consecutive ones have been shifted into the
+ * accumulator and the source is NOT a flag, the object clears the current bit
+ * IN `pack_word` and does NOT advance the mask, so the same bit position is
+ * emitted again -- as a zero -- on the next pass.  The accumulator therefore
+ * receives the stuffed zero and the octet's remaining bits follow it.
+ *
+ * THE MASK IS 32 BITS HERE AND ONLY HERE.  The other two packers hold it in
+ * an `unsigned short`, and their loads are `movzwl`; this one loads and
+ * stores the whole dword (0x95b4c and 0x95d60), because 0x800000 does not fit
+ * in sixteen bits.  That is what makes `pack_mask` an `unsigned int` rather
+ * than a short with a wide store.
+ *
+ * THE DEBUG PREAMBLE IS NOT ALL DEBUG.  When `count` is non-zero the object
+ * walks the ring from `rd + 1` to `wr` and copies three octets out of it
+ * WHATEVER the debug level is; only the printing is guarded.  It is written
+ * that way here because that is what is there, and because the walk reads
+ * `fifo[rd + 1]` without wrapping that first index -- D1121.
+ */
+int
+faxvmi_hdlc_frame(struct faxvmi *vmi, unsigned short *src, short count)
+{
+	struct faxvmi_framer *fr;
+	struct faxvmi_link *lk;
+	unsigned short *out;
+	unsigned int word, acc, mask, elem_mask;
+	unsigned short bit, width;
+	short n, nleft, left;
+	int flagging;
+
+	left = (short)(count - faxvmi_write_frame(vmi, &src, count));
+
+	fr = vmi->framer;
+	lk = vmi->link;
+	word = fr->pack_word;
+	mask = fr->pack_mask;
+	acc = fr->pack_acc;
+	bit = fr->pack_bit;
+	n = lk->pack_count;
+	out = lk->buf;
+	width = lk->pack_width;
+	elem_mask = (1u << width) - 1;
+	nleft = fr->pack_frame_left;
+	flagging = fr->pack_flagging;
+
+	if (count != 0) {
+		unsigned short len = fr->fifo[fr->rd];
+		unsigned int i;
+
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "HDLC Transmitted Frame (Length = %d, iR = %d,"
+			    " iW = %d): \n", len, fr->rd, fr->wr);
+
+		/* D1121: `rd + 1` is not wrapped before the first read */
+		i = (unsigned int)fr->rd + 1;
+		while (i != (unsigned int)fr->wr) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf("%02X,", fr->fifo[i]);
+			i = ((int)fr->fifo_size > (int)(i + 1)) ? i + 1 : 0;
+		}
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("\n");
+
+		if (len > 2) {
+			unsigned char hdr[3];
+			int k;
+
+			hdr[0] = hdr[1] = hdr[2] = 0;
+			i = (unsigned int)fr->rd + 1;
+			for (k = 0; k <= 2; k++) {
+				hdr[k] = (unsigned char)fr->fifo[i];
+				i = ((int)fr->fifo_size > (int)(i + 1))
+				    ? i + 1 : 0;
+			}
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "FCL1: FRAME TRANSMITTED (%s)\n",
+				    GetT30FrameNameByID(
+					GetT30FrameIDFromBuffer(hdr[0], hdr[1],
+								hdr[2])
+					& 0xffff7fff));
+		}
+	}
+
+	while (n != 0) {
+		unsigned int b;
+
+		if (mask == 0) {
+			if (fr->count != 0) {
+				unsigned short rd = fr->rd;
+
+				if (nleft != 0) {
+					word = fr->fifo[rd];
+					mask = 0x80;
+					flagging = 0;
+					nleft = (short)(nleft - 1);
+				} else {
+					nleft = (short)fr->fifo[rd];
+					word = 0x7e7e7e;
+					mask = 0x800000;
+					flagging = 1;
+				}
+				fr->rd = (unsigned short)(rd + 1);
+				fr->count = (unsigned short)(fr->count - 1);
+				if (fr->rd >= fr->fifo_size)
+					fr->rd = 0;
+			} else {
+				word = 0x7e;
+				mask = 0x80;
+				flagging = 1;
+				vmi->underrun = 1;
+			}
+		}
+		b = (word & mask) != 0;
+		acc = (acc << 1) | b;
+		/* `&`, not `&&`: the object computes both with `sete` and
+		 * ANDs the results (0x95cf5..0x95d02) */
+		if ((flagging == 0) & ((acc & 0x1f) == 0x1f))
+			word &= ~mask;	/* the stuffed zero: same bit again */
+		else
+			mask >>= 1;
+		bit = (unsigned short)(bit + 1);
+		if (bit == width) {
+			bit = 0;
+			*out++ = (unsigned short)(acc & elem_mask);
+			n = (short)(n - 1);
+		}
+	}
+
+	fr->pack_mask = mask;
+	fr->pack_acc = acc;
+	fr->pack_word = word;
+	fr->pack_frame_left = nleft;
+	fr->pack_flagging = flagging;
+	fr->pack_bit = bit;
+
+	left = (short)(left - faxvmi_write_frame(vmi, &src, left));
+	vmi->framer->residue = left;
+	return vmi->link->pack_count;
 }
 
 /*

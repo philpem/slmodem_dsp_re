@@ -191,11 +191,13 @@ compare(const char *what, long tag)
 	long a_zero_run_seen = fra.zero_run_seen;
 	long b_zero_run_seen = frb.zero_run_seen;
 	long a_frame_size = fra.frame_size, b_frame_size = frb.frame_size;
-	long a_short_0046 = fra.short_0046, b_short_0046 = frb.short_0046;
+	long a_pack_frame_left = fra.pack_frame_left;
+	long b_pack_frame_left = frb.pack_frame_left;
 	long a_frame_len = fra.frame_len, b_frame_len = frb.frame_len;
 	long a_flags_wanted = fra.flags_wanted;
 	long b_flags_wanted = frb.flags_wanted;
-	long a_int_004c = fra.int_004c, b_int_004c = frb.int_004c;
+	long a_pack_flagging = fra.pack_flagging;
+	long b_pack_flagging = frb.pack_flagging;
 	long a_ones = fra.ones, b_ones = frb.ones;
 	long a_in_frame = fra.in_frame, b_in_frame = frb.in_frame;
 
@@ -219,10 +221,10 @@ compare(const char *what, long tag)
 	CMP(zero_run_send);
 	CMP(zero_run_seen);
 	CMP(frame_size);
-	CMP(short_0046);
+	CMP(pack_frame_left);
 	CMP(frame_len);
 	CMP(flags_wanted);
-	CMP(int_004c);
+	CMP(pack_flagging);
 	CMP(ones);
 	CMP(in_frame);
 #undef CMP

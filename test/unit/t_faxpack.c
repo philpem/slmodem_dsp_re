@@ -1,8 +1,10 @@
 /*
- * t_faxpack.c -- differential test of the Class 1 fax VMI's PACK side:
- * faxvmi_simp_pack and faxvmi_asyc_pack.
+ * t_faxpack.c -- differential test of the Class 1 fax VMI's PACK side: all
+ * three of faxvmi_simp_pack, faxvmi_asyc_pack and faxvmi_hdlc_frame, the
+ * three dispatch tables they complete, and the T.30 frame namer the third
+ * one's trace line reaches.
  *
- * THE TWO SHARE ONE OBJECT with the unpackers and with the ring writers, so
+ * THEY SHARE ONE OBJECT with the unpackers and with the ring writers, so
  * this fixture is `t_faxunframe.c`'s built the other way round.  What the
  * packers touch is the ring (+0x00..+0x0d), the PACK bit engine
  * (+0x10..+0x1c), the async break pair (+0x34/+0x38), `vmi->underrun` and
@@ -35,6 +37,15 @@
  * That is the object's behaviour and not a defect; it is simply not what this
  * test is for.
  *
+ * THE SOURCE BUFFER IS BUILT, NOT RANDOM, for the HDLC group, and that is a
+ * correctness requirement rather than a convenience: faxvmi_hdlc_frame hands
+ * it to faxvmi_write_frame, which reads it as length-prefixed frames, and
+ * D1071 records that a NEGATIVE length passes the object's signed fit test
+ * and then walks 65,000 elements neither side owns.  A random fill there made
+ * both sides read different rubbish and disagree about the ring -- which is
+ * what the first version of this file did, and the failure looked exactly
+ * like a defect in the packer.
+ *
  * MULTI-CALL IS NOT A NICETY HERE -- F9022.  A fixture that re-plants before
  * every call tests the framer's SAVE without its RESTORE, and the pack engine
  * carries mask, word, acc and bit across a return exactly as the unpack one
@@ -50,10 +61,20 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/class1tx.h"
+#include "dsplib/debug.h"
 #include "dsplib/faxvmi.h"
+#include "dsplib/t30frame.h"
 
+extern unsigned int ref_dsplibs_debug_level;
 extern int ref_faxvmi_simp_pack(void *vmi, unsigned short *src, short count);
 extern int ref_faxvmi_asyc_pack(void *vmi, unsigned short *src, short count);
+extern int ref_faxvmi_hdlc_frame(void *vmi, unsigned short *src, short count);
+extern int ref_GetT30FrameIDFromBuffer(unsigned char a, unsigned char b,
+				       unsigned char c);
+extern char *ref_GetT30FrameNameByID(int id);
+extern const unsigned char ref_aReversedCharsArray[256];
+extern void *ref_vmi_pack[3], *ref_vmi_unpack[3], *ref_vmi_reverse[3];
 
 /* ------------------------------------------------------------------ */
 
@@ -176,11 +197,13 @@ compare(const char *what, long tag)
 	long a_zero_run_seen = fra.zero_run_seen;
 	long b_zero_run_seen = frb.zero_run_seen;
 	long a_frame_size = fra.frame_size, b_frame_size = frb.frame_size;
-	long a_short_0046 = fra.short_0046, b_short_0046 = frb.short_0046;
+	long a_pack_frame_left = fra.pack_frame_left;
+	long b_pack_frame_left = frb.pack_frame_left;
 	long a_frame_len = fra.frame_len, b_frame_len = frb.frame_len;
 	long a_flags_wanted = fra.flags_wanted;
 	long b_flags_wanted = frb.flags_wanted;
-	long a_int_004c = fra.int_004c, b_int_004c = frb.int_004c;
+	long a_pack_flagging = fra.pack_flagging;
+	long b_pack_flagging = frb.pack_flagging;
 	long a_ones = fra.ones, b_ones = frb.ones;
 	long a_in_frame = fra.in_frame, b_in_frame = frb.in_frame;
 
@@ -204,10 +227,10 @@ compare(const char *what, long tag)
 	CMP(zero_run_send);
 	CMP(zero_run_seen);
 	CMP(frame_size);
-	CMP(short_0046);
+	CMP(pack_frame_left);
 	CMP(frame_len);
 	CMP(flags_wanted);
-	CMP(int_004c);
+	CMP(pack_flagging);
 	CMP(ones);
 	CMP(in_frame);
 #undef CMP
@@ -484,6 +507,283 @@ run_multicall(void)
 
 /* ------------------------------------------------------------------ */
 
+/* ------------------------------------------------------------------ */
+/* faxvmi_hdlc_frame                                                   */
+
+static int hdlc_underran, hdlc_frames, hdlc_data, hdlc_stuffed, hdlc_edge;
+
+/*
+ * The ring is loaded with well-formed length-prefixed frames, because a
+ * random fill almost never gives `pack_frame_left` a plausible length and the
+ * data arm would then hardly run.  A quarter of the cases are left random so
+ * that the arms a malformed ring reaches are compared too.
+ */
+/*
+ * `faxvmi_hdlc_frame` hands the caller's buffer to `faxvmi_write_frame`,
+ * which reads it as LENGTH-PREFIXED FRAMES.  A random fill there is not a
+ * harder test, it is an INVALID one: D1071 records that a negative length
+ * passes the object's signed fit test and then walks 65,000 elements of
+ * memory neither side owns, so the two sides read different rubbish and
+ * disagree for a reason that is not about this code.  So the source is built.
+ */
+static void
+build_src_frames(int frames, int maxlen)
+{
+	unsigned i = 0;
+	int f;
+
+	for (f = 0; f < frames && i + (unsigned)maxlen + 2 < SRCMAX; f++) {
+		unsigned short len = (unsigned short)(1 + rnd() % maxlen);
+		unsigned short k;
+
+		srca[i++] = len;
+		for (k = 0; k < len; k++)
+			srca[i++] = (unsigned short)(rnd() % 3 == 0 ? 0xff
+				    : (rnd() % 3 == 0 ? 0x7e : rnd() & 0xff));
+	}
+	while (i < SRCMAX)
+		srca[i++] = 0;
+	memcpy(srcb, srca, sizeof(srca));
+}
+
+static void
+load_frames(unsigned short wr, unsigned short *occ_out)
+{
+	unsigned short occ = 0;
+	unsigned short w = wr;
+
+	while (occ + 6 < FIFOCAP) {
+		unsigned short len = (unsigned short)(1 + rnd() % 5);
+		unsigned short k;
+
+		fifoa[w] = len;
+		w = (unsigned short)((w + 1) % FIFOCAP);
+		occ++;
+		for (k = 0; k < len; k++) {
+			/* 0xff and 0x7e drive the stuffer and the flag run */
+			fifoa[w] = (unsigned short)(rnd() % 3 == 0 ? 0xff
+				   : (rnd() % 3 == 0 ? 0x7e : rnd() & 0xff));
+			w = (unsigned short)((w + 1) % FIFOCAP);
+			occ++;
+		}
+	}
+	*occ_out = occ;
+}
+
+static int
+run_hdlc(void)
+{
+	unsigned t;
+
+	diff_begin("faxvmi_hdlc_frame");
+	for (t = 0; t < 500; t++) {
+		unsigned short width = (unsigned short)(1 + rnd() % MAXWIDTH);
+		short pack_count = (short)(rnd() % (PACKMAX + 1));
+		unsigned short rd = (unsigned short)(rnd() % FIFOCAP);
+		unsigned short wr = (unsigned short)(rnd() % FIFOCAP);
+		unsigned short occ = 0;
+		short count = (short)(rnd() % 5);
+		short nleft = 0;
+		int flagging = (int)(rnd() % 2);
+		int ra, rb;
+		long tag = (long)t;
+
+		/* D1121: drive rd == fifo_size - 1 every so often */
+		if (t % 8 == 1)
+			rd = FIFOCAP - 1;
+		if (t % 4 == 0) {
+			count = 0;			/* the idle arm */
+			wr = rd;
+		} else {
+			wr = rd;
+			nleft = (short)(t % 3 == 0 ? 0 : 1 + rnd() % 3);
+		}
+
+		plant(0, (unsigned short)(rnd() % width), width, pack_count,
+		      rd, wr, occ, 0, 0);
+		if (t % 4 != 0) {
+			load_frames(wr, &occ);
+			fra.count = frb.count = occ;
+			fra.wr = frb.wr =
+			    (unsigned short)((rd + occ) % FIFOCAP);
+		}
+		fra.pack_frame_left = frb.pack_frame_left = nleft;
+		fra.pack_flagging = frb.pack_flagging = flagging;
+		build_src_frames((int)count + 1, 4);
+		memcpy(fifob, fifoa, sizeof(fifoa));
+
+		ra = ref_faxvmi_hdlc_frame(&va, srca, count);
+		rb = faxvmi_hdlc_frame(&vb, srcb, count);
+
+		diff_eq_int("hdlc return (%ld)", (long)rb, (long)ra, tag);
+		compare("hdlc", tag);
+
+		if (va.underrun)
+			hdlc_underran++;
+		if (fra.pack_frame_left != nleft)
+			hdlc_frames++;
+		if (fra.rd != rd)
+			hdlc_data++;
+		if (fra.pack_flagging != flagging)
+			hdlc_stuffed++;
+		if (rd == FIFOCAP - 1 && count != 0)
+			hdlc_edge++;
+	}
+	diff_eq_int("hdlc: the ring ran dry, flags went out (%ld)",
+		    hdlc_underran > 0, 1, (long)hdlc_underran);
+	diff_eq_int("hdlc: pack_frame_left moved (%ld)", hdlc_frames > 0, 1,
+		    (long)hdlc_frames);
+	diff_eq_int("hdlc: elements came out of the ring (%ld)",
+		    hdlc_data > 0, 1, (long)hdlc_data);
+	diff_eq_int("hdlc: pack_flagging changed state (%ld)",
+		    hdlc_stuffed > 0, 1, (long)hdlc_stuffed);
+	diff_eq_int("hdlc: D1121's unwrapped rd+1 was reached (%ld)",
+		    hdlc_edge > 0, 1, (long)hdlc_edge);
+	return diff_end();
+}
+
+/*
+ * The trace path.  `faxvmi_hdlc_frame` reaches GetT30FrameIDFromBuffer and
+ * GetT30FrameNameByID only above debug level 1, so the level is raised for
+ * one group; the two are ALSO driven directly, over every control octet and
+ * a sweep of identifiers, because the frames a ring happens to hold reach
+ * only a few of the table's thirty-six entries.
+ */
+static int
+run_hdlc_traced(void)
+{
+	unsigned t;
+
+	diff_begin("faxvmi_hdlc_frame with the trace path live");
+	for (t = 0; t < 60; t++) {
+		unsigned short width = (unsigned short)(1 + rnd() % MAXWIDTH);
+		short pack_count = (short)(1 + rnd() % 8);
+		unsigned short rd = (unsigned short)(rnd() % FIFOCAP);
+		unsigned short occ = 0, wr = rd;
+		short count = (short)(rnd() % 4);
+		int ra, rb;
+		long tag = (long)t;
+
+		plant(0, 0, width, pack_count, rd, wr, occ, 0, 0);
+		load_frames(wr, &occ);
+		fra.count = frb.count = occ;
+		fra.wr = frb.wr = (unsigned short)((rd + occ) % FIFOCAP);
+		fra.pack_frame_left = frb.pack_frame_left = 0;
+		fra.pack_flagging = frb.pack_flagging = 1;
+		build_src_frames((int)count + 1, 4);
+		memcpy(fifob, fifoa, sizeof(fifoa));
+
+		ra = ref_faxvmi_hdlc_frame(&va, srca, count);
+		rb = faxvmi_hdlc_frame(&vb, srcb, count);
+		diff_eq_int("hdlc traced return (%ld)", (long)rb, (long)ra,
+			    tag);
+		compare("hdlc traced", tag);
+	}
+	return diff_end();
+}
+
+static int
+run_t30(void)
+{
+	unsigned t;
+	int i;
+
+	diff_begin("the T.30 frame namer and its tables");
+
+	for (i = 0; i < 256; i++)
+		diff_eq_int("aReversedCharsArray[%ld]",
+			    (long)aReversedCharsArray[i],
+			    (long)ref_aReversedCharsArray[i], (long)i);
+
+	for (t = 0; t < 3000; t++) {
+		unsigned char a = (unsigned char)(t % 7 == 0 ? rnd() & 0xff
+						  : 0xff);
+		unsigned char b = (unsigned char)(t % 3 == 0 ? 0x03
+				  : (t % 3 == 1 ? 0x13 : rnd() & 0xff));
+		unsigned char c = (unsigned char)(rnd() & 0xff);
+		int ida, idb;
+
+		ida = ref_GetT30FrameIDFromBuffer(a, b, c);
+		idb = GetT30FrameIDFromBuffer(a, b, c);
+		diff_eq_int("GetT30FrameIDFromBuffer (%ld)", (long)idb,
+			    (long)ida, (long)t);
+	}
+
+	/*
+	 * Names are compared as STRINGS, not as addresses: ours point into our
+	 * .rodata and the reference's into the relocated blob.  The sweep
+	 * covers every identifier a byte can hold plus the two the caller's
+	 * mask can leave above it, so every table entry and the fallback are
+	 * both reached.
+	 */
+	for (i = -2; i < 0x10002; i++) {
+		char *na = ref_GetT30FrameNameByID(i);
+		char *nb = GetT30FrameNameByID(i);
+
+		if (i > 0x120 && i < 0xfffe)
+			continue;
+		diff_eq_int("GetT30FrameNameByID(%ld) non-NULL",
+			    na != NULL && nb != NULL, 1, (long)i);
+		if (na == NULL || nb == NULL)
+			continue;
+		diff_eq_int("GetT30FrameNameByID(%ld) text", strcmp(na, nb), 0,
+			    (long)i);
+	}
+
+	/* The three dispatch tables, entry by entry, by target address. */
+	diff_eq_int("vmi_unpack[0] (%ld)",
+		    (long)(vmi_unpack[0] == faxvmi_simp_unpack), 1, 0);
+	diff_eq_int("vmi_unpack[1] (%ld)",
+		    (long)(vmi_unpack[1] == faxvmi_asyc_unpack), 1, 1);
+	diff_eq_int("vmi_unpack[2] (%ld)",
+		    (long)(vmi_unpack[2] == faxvmi_hdlc_unframe), 1, 2);
+	diff_eq_int("vmi_pack[0] (%ld)",
+		    (long)(vmi_pack[0] == faxvmi_simp_pack), 1, 0);
+	diff_eq_int("vmi_pack[1] (%ld)",
+		    (long)(vmi_pack[1] == faxvmi_asyc_pack), 1, 1);
+	diff_eq_int("vmi_pack[2] (%ld)",
+		    (long)(vmi_pack[2] == faxvmi_hdlc_frame), 1, 2);
+	diff_eq_int("vmi_reverse[0] (%ld)",
+		    (long)(vmi_reverse[0] == faxvmi_byte_reverse), 1, 0);
+	diff_eq_int("vmi_reverse[1] (%ld)",
+		    (long)(vmi_reverse[1] == faxvmi_byte_reverse), 1, 1);
+	diff_eq_int("vmi_reverse[2] (%ld)",
+		    (long)(vmi_reverse[2] == faxvmi_frame_reverse), 1, 2);
+
+	/*
+	 * And the same nine against the BLOB's tables, which is the check that
+	 * matters: each of ours must select the slot whose reference entry is
+	 * the corresponding ref_ function.  Addresses differ between the two
+	 * sides, so what is compared is the INDEX at which each side's table
+	 * holds its own copy of a given routine -- here, that all three tables
+	 * have their entries in the same order by construction, and that the
+	 * blob's are distinct where ours are distinct and equal where ours are
+	 * equal.
+	 */
+	diff_eq_int("ref_vmi_reverse: [0] == [1] (%ld)",
+		    (long)(ref_vmi_reverse[0] == ref_vmi_reverse[1]), 1, 0);
+	diff_eq_int("ref_vmi_reverse: [2] differs (%ld)",
+		    (long)(ref_vmi_reverse[2] != ref_vmi_reverse[0]), 1, 2);
+	diff_eq_int("ref_vmi_pack: three distinct entries (%ld)",
+		    (long)(ref_vmi_pack[0] != ref_vmi_pack[1]
+			   && ref_vmi_pack[1] != ref_vmi_pack[2]
+			   && ref_vmi_pack[0] != ref_vmi_pack[2]), 1, 0);
+	diff_eq_int("ref_vmi_unpack: three distinct entries (%ld)",
+		    (long)(ref_vmi_unpack[0] != ref_vmi_unpack[1]
+			   && ref_vmi_unpack[1] != ref_vmi_unpack[2]
+			   && ref_vmi_unpack[0] != ref_vmi_unpack[2]), 1, 0);
+	diff_eq_int("ref_vmi_pack[0] is ref_faxvmi_simp_pack (%ld)",
+		    (long)(ref_vmi_pack[0] == (void *)ref_faxvmi_simp_pack),
+		    1, 0);
+	diff_eq_int("ref_vmi_pack[1] is ref_faxvmi_asyc_pack (%ld)",
+		    (long)(ref_vmi_pack[1] == (void *)ref_faxvmi_asyc_pack),
+		    1, 1);
+	diff_eq_int("ref_vmi_pack[2] is ref_faxvmi_hdlc_frame (%ld)",
+		    (long)(ref_vmi_pack[2] == (void *)ref_faxvmi_hdlc_frame),
+		    1, 2);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -492,6 +792,13 @@ main(void)
 	bad |= run_simp();
 	bad |= run_asyc();
 	bad |= run_multicall();
+	bad |= run_hdlc();
+
+	dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+	bad |= run_hdlc_traced();
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	bad |= run_t30();
 
 	return bad;
 }
