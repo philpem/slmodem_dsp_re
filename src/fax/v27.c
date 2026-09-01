@@ -12,6 +12,11 @@
  *   V27RX_modem          .text 0x0a2c60  127
  *   RxHdxDataV27         .text 0x0a2ce0  226
  *   RxHdxErrorV27        .text 0x0a2dd0   59
+ *   RxNextStateV27       .text 0x0a2e10  518
+ *   RxHdxIdleV27         .text 0x0a3020  132
+ *   RxHdxPrtcolV27       .text 0x0a30b0  224
+ *   RxHdxEpochDetV27     .text 0x0a3190  156
+ *   RxHdxStartV27        .text 0x0a3230  101
  *   V27RX_status         .text 0x0a3320   11
  *   V27TX_status         .text 0x0a3ed0  118
  *   DemodDataV27         .text 0x0a5950  331
@@ -30,6 +35,29 @@
  * that is not the state machine itself -- and not because a translation unit
  * has been established.  `include/dsplib/v27fax.h` carries the offset
  * evidence.
+ *
+ * ---------------------------------------------------------------------------
+ * THE FIVE RECEIVE-MACHINE SYMBOLS ARE ONE INDIVISIBLE UNIT
+ *
+ * A relocation probe over the whole 1.2 MB (`objdump -r`, both `R_386_32` and
+ * `R_386_PC32`) finds exactly twelve edges naming any of them:
+ * `RxNextStateV27` STORES the addresses of `RxHdxEpochDetV27`,
+ * `RxHdxPrtcolV27`, `RxHdxIdleV27` and `RxHdxDataV27` in its transition arms,
+ * and each of `RxHdxStartV27`, `RxHdxIdleV27`, `RxHdxPrtcolV27` and
+ * `RxHdxEpochDetV27` CALLS `RxNextStateV27` back.  That is a cycle, and under
+ * findings F8492/F8493 a reference from `src/` to a symbol this tree has not
+ * written is an undefined reference that fails every test binary -- for a
+ * stored function pointer exactly as for a call.  So no proper subset of the
+ * five links, and they were written together.
+ *
+ * `DemodDataV27` carries NO relocation against any `RxHdx*`, which is where
+ * V.27ter differs from V.21: `DemodDataV21` does, so V.21's unit was five with
+ * the demodulator inside it and V.27ter's is five with the demodulator
+ * outside.
+ *
+ * The five are laid out below in the object's own address order, which is the
+ * one lever this tree has on register allocation across a translation unit
+ * (finding F7796).  It is not a claim that the author had them in one file.
  *
  * ---------------------------------------------------------------------------
  * THE AGC'S RETURN VALUE, WHICH IS NOT ONE
@@ -104,6 +132,9 @@
 #define FIELD_US(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
 #define FIELD_I(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
 
+/* The half-duplex machine's current handler, at sh + V27SH_STATE. */
+#define SH_HANDLER(sh)	(*(v27_rx_state_fn *)(void *)FIELD((sh), V27SH_STATE))
+
 #define RX_AGC(rx)	((struct fpm_agc *)(void *)FIELD((rx), V27RX_AGC))
 #define RX_MRF(rx)	((struct fpm_mrf *)(void *)FIELD((rx), V27RX_MRF))
 #define RX_SRE(rx)	((struct fpm_sre *)(void *)FIELD((rx), V27RX_SRE))
@@ -160,7 +191,7 @@ V27RX_delete(void *modem)
 /* ------------------------------------------------------------------ */
 
 /*
- * V27RX_epoch_det -- .text 0x099fe0, 303 bytes.
+ * V27RX_epoch_det .text 0x099fe0, 303 bytes.
  *
  * The equaliser's FIRST slicer, and the one `V27RX_create` installs.  It
  * decides nothing: `angle` and `mag` are never read or written, the return is
@@ -545,7 +576,7 @@ V27RX_modem(void *modem, short *in, short *out, unsigned short *count)
 /* ------------------------------------------------------------------ */
 
 /*
- * RxHdxDataV27 -- .text 0x0a2ce0, 226 bytes.
+ * RxHdxDataV27 .text 0x0a2ce0, 226 bytes.
  *
  * The DATA state of the receive machine.  See v27fax.h for the flag-bit
  * enumeration and for `V27SH_INT_0004`.
@@ -605,7 +636,7 @@ RxHdxDataV27(void *modem, short *in, short *out, unsigned short *count)
 /* ------------------------------------------------------------------ */
 
 /*
- * RxHdxErrorV27 -- .text 0x0a2dd0, 59 bytes.
+ * RxHdxErrorV27 .text 0x0a2dd0, 59 bytes.
  *
  * The ERROR state: raise the flag, demodulate anyway so the filters keep their
  * history, and consume the block.  `DemodDataV27`'s return is DISCARDED.
@@ -616,6 +647,372 @@ RxHdxErrorV27(void *modem, short *in, short *out, unsigned short *count)
 	*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_ERROR;
 
 	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	return 0;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxNextStateV27 .text 0x0a2e10, 518 bytes.
+ *
+ * The transition table of the half-duplex receive machine, and the only thing
+ * in the object that writes `V27SH_STATE`, `V27SH_RX_STATE` or
+ * `V27SH_COUNTDOWN` outside `V27RX_create`.
+ *
+ * THE STATE NAMES ARE THE AUTHOR'S OWN AND SO ARE THEIR NUMBERS.  The switch
+ * goes through the jump table at `.rodata:0xc31c`, whose five entries are
+ * 0x0a2e7a, 0x0a2ea7, 0x0a2ed9, 0x0a2f17 and 0x0a2f4b in that order, and each
+ * of those five arms opens by printing its own name out of `.rodata.str1.1`.
+ * So the pairing of NAME to NUMBER is read off the table and the strings
+ * together, not guessed from the order the handlers run in.  See v27fax.h at
+ * `V27SH_RX_STATE`, and finding F9300.
+ *
+ * EVERY ARM WRITES BOTH FLAG BITS, ALWAYS OPPOSITE WAYS.  Four arms clear
+ * `V27_STATUS_FLAG2_IDLE` and clear `V27_STATUS_FLAG_DATA`; the two that hand
+ * over to `RxHdxDataV27` clear IDLE and SET DATA; the one that hands over to
+ * `RxHdxIdleV27` does the reverse.  That is what makes the two bits a pair
+ * rather than two independent flags.
+ *
+ * THE ONLY ARM THAT TOUCHES THE DSP IS EPOCH_DET -> PROTOCOL, and what it does
+ * there is step the AGC's two smoother coefficients on by one `short` each:
+ * `addl $0x2,0x74(%eax)` and `addl $0x2,0x78(%eax)`, where `%eax` is the
+ * receive block, 0x74 is `V27RX_AGC + offsetof(struct fpm_agc_cfg, alpha)` and
+ * 0x78 is the same for `beta`.  Both are POINTERS -- `fpm_agc.h` says so, and
+ * `AGCv27_CFG` supplies them by address -- so 2 is one element and not a
+ * magnitude.  The PROTOCOL -> DATA arm then freezes the gain outright.
+ * Finding F9303.
+ *
+ * THE DEFAULT ARM INSTALLS NOTHING.  It leaves the handler and the state
+ * number alone, so a machine that reaches `V27RX_STATE_ERROR` and is advanced
+ * from there stays in `RxHdxErrorV27` for ever; all the arm does is report
+ * `V27_STATUS_DEFAULT` and rewrite the flags.
+ *
+ * IT RETURNS NOTHING.  All four callers discard `%eax` and the arms leave
+ * different values in it, so there is no return to reproduce.
+ */
+void
+RxNextStateV27(void *modem)
+{
+	void *sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+	void *rx;
+	unsigned short blocks;
+	unsigned char flags;
+	int state = FIELD_S(sh, V27SH_RX_STATE);
+
+	switch (state) {
+	case V27RX_STATE_START:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27RX_STATE_START\n");
+		FIELD_US(sh, V27SH_COUNTDOWN) = V27SH_EPOCH_DET_BLOCKS;
+		SH_HANDLER(sh) = RxHdxEpochDetV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_EPOCH_DET;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS2) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG_DATA;
+		break;
+
+	case V27RX_STATE_EPOCH_DET:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27RX_STATE_EPOCH_DET\n");
+		/*
+		 * Four countdowns, one selector each.  The object spells the
+		 * short pair branchlessly (`setne` on `rate == 1` then `inc`,
+		 * 0x0a2f81) and the long pair as a two-constant `?:`
+		 * (0x0a2ebf); both are GCC's own forms of what is written
+		 * here, and the four values differ so the two spellings
+		 * cannot be confused for one another.
+		 */
+		if (FIELD_S(sh, V27SH_TRAIN_LONG) == 0)
+			blocks = FIELD_S(sh, V27SH_RATE) == V27SH_RATE_4800
+			       ? V27SH_PROTOCOL_SHORT_4800
+			       : V27SH_PROTOCOL_SHORT_2400;
+		else
+			blocks = FIELD_S(sh, V27SH_RATE) == V27SH_RATE_4800
+			       ? V27SH_PROTOCOL_LONG_4800
+			       : V27SH_PROTOCOL_LONG_2400;
+		FIELD_US(sh, V27SH_COUNTDOWN) = blocks;
+
+		rx = FIELD_PTR(modem, V27_OBJ_RX);
+		SH_HANDLER(sh) = RxHdxPrtcolV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_PROTOCOL;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS2) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG_DATA;
+		/* One `short` along each, not two of anything.  F9303. */
+		RX_AGC(rx)->cfg.alpha++;
+		RX_AGC(rx)->cfg.beta++;
+		break;
+
+	case V27RX_STATE_PROTOCOL:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27RX_STATE_PROTOCOL\n");
+		FPM_AGC_Freeze(RX_AGC(FIELD_PTR(modem, V27_OBJ_RX)));
+		/* Re-read across the call; the object does (0x0a2ef4). */
+		sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+		FIELD_US(sh, V27SH_COUNTDOWN) = 0;
+		SH_HANDLER(sh) = RxHdxDataV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_DATA;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_DATA;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS2) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
+		break;
+
+	case V27RX_STATE_DATA:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27RX_STATE_DATA\n");
+		SH_HANDLER(sh) = RxHdxIdleV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_IDLE;
+		FIELD_US(sh, V27SH_COUNTDOWN) = 0;
+		/*
+		 * The gate `RxHdxDataV27` refuses to demodulate through.
+		 * Nothing in the object SETS it, and this is the only thing
+		 * that clears it -- exactly as `RxNextStateV21` clears
+		 * `hdx->int_0000` on the same transition.
+		 */
+		FIELD_I(sh, V27SH_INT_0004) = 0;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS2) |= V27_STATUS_FLAG2_IDLE;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG_DATA;
+		break;
+
+	case V27RX_STATE_IDLE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27RX_STATE_IDLE\n");
+		SH_HANDLER(sh) = RxHdxDataV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_DATA;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_DATA;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS2) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
+		*FIELD(modem, V27_OBJ_STATUS) = (unsigned char)
+			(FIELD_S(sh, V27SH_RATE) == V27SH_RATE_2400
+			 ? V27_STATUS_ENTER_DATA_2400
+			 : V27_STATUS_ENTER_DATA_4800);
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27RX_DEFAULT, %d\n", state);
+		flags = *FIELD(modem, V27_OBJ_STATUS_FLAGS);
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS2) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG2_IDLE;
+		*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_DEFAULT;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) = (unsigned char)
+			((flags | V27_STATUS_FLAG_ERROR)
+			 & (unsigned char)~(unsigned char)
+				(V27_STATUS_FLAG_CARRIER | V27_STATUS_FLAG_DATA));
+		break;
+	}
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxHdxIdleV27 .text 0x0a3020, 132 bytes.
+ *
+ * The IDLE state.  It keeps demodulating -- the filters have to keep their
+ * history -- reports `V27_STATUS_IDLE` every block, and goes back to DATA once
+ * the carrier is up AND the equaliser's error has come back below
+ * `V27RX_MSE_IDLE_OK`.
+ *
+ * THE RESTART TEST READS THE FLAG BYTE, NOT THE CALL.  The object clears
+ * `V27_STATUS_FLAG_CARRIER`, calls `CarrierDetectV27`, raises the flag again
+ * if it answered, and then tests the FLAG (`testb $0x20,0x1d(%esi)` at
+ * 0x0a3069) rather than the value it just computed.  The two agree here
+ * because nothing between them writes the byte, and the object's spelling is
+ * what is reproduced.  `RxHdxIdleV21` does the clear-call-set half the same
+ * way and has no second half.
+ *
+ * THE DEBUG PRINT IS AFTER THE TRANSITION, not before it, which is the reverse
+ * of `RxNextStateV27`'s five arms -- and it is the author's own words for what
+ * just happened: "Decision error is small back to DATA mode !!!\n", from
+ * `.rodata.str1.4 + 0x12b9c`.
+ */
+short
+RxHdxIdleV27(void *modem, short *in, short *out, unsigned short *count)
+{
+	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+		(unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER;
+	*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_IDLE;
+
+	if (CarrierDetectV27(modem))
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_CARRIER;
+
+	if ((*FIELD(modem, V27_OBJ_STATUS_FLAGS) & V27_STATUS_FLAG_CARRIER)
+	    && RX_FSE(FIELD_PTR(modem, V27_OBJ_RX))->mse <= V27RX_MSE_IDLE_OK) {
+		RxNextStateV27(modem);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("Decision error is small back to"
+					     " DATA mode !!!\n");
+	}
+
+	return 0;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxHdxPrtcolV27 .text 0x0a30b0, 224 bytes.
+ *
+ * The PROTOCOL state: the equaliser is trained, so the block is demodulated
+ * AND descrambled, and the machine sits here for `V27SH_COUNTDOWN` blocks
+ * before handing over to `RxHdxDataV27`.
+ *
+ * IT IS THE ONLY HANDLER OF THE FIVE THAT REPORTS A NON-ZERO SAMPLE COUNT, and
+ * only on the block that hands over: `movswl %bp,%eax` at 0x0a3179 against a
+ * literal zero on both other paths.  So everything it descrambled before the
+ * countdown expired is thrown away by `V27RX_modem`, and the last block's
+ * worth is not.  That asymmetry is the object's and is not obviously
+ * intentional; it is reproduced because it is there.  Deviation D1160.
+ *
+ * THE COUNTDOWN IS DECREMENTED UNSIGNED AND TESTED SIGNED -- `movzwl`, `dec`,
+ * `test %cx,%cx`, `jle` -- so a countdown of zero on entry wraps to 0xffff and
+ * hands over immediately rather than counting 65535 blocks.  Both readings are
+ * reproduced; see v27fax.h at `V27SH_COUNTDOWN`.
+ *
+ * THE `DescrambleDataV27` WIDENING IS THE SAME DECLARED DIFFERENCE
+ * `RxHdxDataV27` CARRIES: the object widens `n` with `movzwl` and this tree's
+ * `DescrambleDataV27` takes a `short`, so the implicit conversion widens with
+ * `movswl` instead.  Behaviourally identical for every `n`.  F9237, D1140.
+ */
+short
+RxHdxPrtcolV27(void *modem, short *in, short *out, unsigned short *count)
+{
+	void *sh;
+	unsigned short n;
+	unsigned short left;
+
+	n = DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV27(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	if (CarrierDetectV27(modem) == 0) {
+		unsigned char flags;
+
+		sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+		SH_HANDLER(sh) = RxHdxErrorV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_ERROR;
+		flags = *FIELD(modem, V27_OBJ_STATUS_FLAGS);
+		*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_ERROR;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) = (unsigned char)
+			((flags | V27_STATUS_FLAG_ERROR)
+			 & (unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER);
+		return 0;
+	}
+
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_CARRIER;
+	sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+	*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_TRAINING;
+
+	left = (unsigned short)(FIELD_US(sh, V27SH_COUNTDOWN) - 1);
+	FIELD_US(sh, V27SH_COUNTDOWN) = left;
+	if ((short)left > 0)
+		return 0;
+
+	*FIELD(modem, V27_OBJ_STATUS) = (unsigned char)
+		(FIELD_S(sh, V27SH_RATE) == V27SH_RATE_2400
+		 ? V27_STATUS_ENTER_DATA_2400
+		 : V27_STATUS_ENTER_DATA_4800);
+	RxNextStateV27(modem);
+
+	return (short)n;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxHdxEpochDetV27 .text 0x0a3190, 156 bytes.
+ *
+ * The EPOCH_DET state.  It is `RxHdxPrtcolV27` without the descramble, without
+ * the sample count and without the status handover, plus one extra way out:
+ * `EpochDetectV27` can advance the machine before the countdown does.
+ *
+ * THE TWO EXITS ARE `||`, NOT `&&`, AND THE ORDER MATTERS.  The object
+ * decrements the countdown FIRST, unconditionally, and only calls
+ * `EpochDetectV27` when what is left is still positive (0x0a31e4).  So the
+ * detector is not consulted on the block that exhausts the countdown, and the
+ * countdown advances the machine whether or not the epoch was ever found.
+ *
+ * `EpochDetectV27` IS TESTED IN SIXTEEN BITS (`test %ax,%ax` at 0x0a31ee)
+ * although it is declared to return `int` here and returns 0 or 1.  The cast
+ * below is what the object encodes and it cannot separate any value that
+ * function can produce.
+ */
+short
+RxHdxEpochDetV27(void *modem, short *in, short *out, unsigned short *count)
+{
+	void *sh;
+	unsigned short left;
+
+	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	if (CarrierDetectV27(modem) == 0) {
+		unsigned char flags;
+
+		sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+		SH_HANDLER(sh) = RxHdxErrorV27;
+		FIELD_S(sh, V27SH_RX_STATE) = V27RX_STATE_ERROR;
+		flags = *FIELD(modem, V27_OBJ_STATUS_FLAGS);
+		*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_ERROR;
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) = (unsigned char)
+			((flags | V27_STATUS_FLAG_ERROR)
+			 & (unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER);
+		return 0;
+	}
+
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_CARRIER;
+	sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+	*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_TRAINING;
+
+	left = (unsigned short)(FIELD_US(sh, V27SH_COUNTDOWN) - 1);
+	FIELD_US(sh, V27SH_COUNTDOWN) = left;
+	if ((short)left > 0 && (short)EpochDetectV27(modem) == 0)
+		return 0;
+
+	RxNextStateV27(modem);
+
+	return 0;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxHdxStartV27 .text 0x0a3230, 101 bytes.
+ *
+ * The START state, and the one `V27RX_create` installs (0x0996f9).  It is the
+ * smallest of the five: lower the carrier flag, report `V27_STATUS_START`,
+ * demodulate, and advance as soon as `CarrierDetectV27` answers.
+ *
+ * THE FLAG IS LOWERED AND NEVER RAISED HERE.  Unlike `RxHdxIdleV27`, which
+ * clears it and then puts it back from the same call, this handler only ever
+ * clears it -- the arm that finds a carrier goes straight to
+ * `RxNextStateV27`, whose START arm does not touch that bit either.  So the
+ * carrier flag stays down until `RxHdxEpochDetV27` raises it on the next
+ * block.
+ *
+ * `*count` IS ZEROED AFTER THE BRANCH ON BOTH PATHS (0x0a3270 and 0x0a3288),
+ * so `RxNextStateV27` runs while the caller's count still holds the block
+ * length.  Nothing on that path reads it; the ordering is the object's.
+ */
+short
+RxHdxStartV27(void *modem, short *in, short *out, unsigned short *count)
+{
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+		(unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER;
+	*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_START;
+
+	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+
+	if (CarrierDetectV27(modem))
+		RxNextStateV27(modem);
+
 	*count = 0;
 
 	return 0;
@@ -729,7 +1126,13 @@ DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
 	signal = RX_AGC(FIELD_PTR(modem, V27_OBJ_RX))->signal;
 
 	sh = FIELD_PTR(modem, V27_OBJ_SHARED);
-	if (FIELD_US(sh, V27SH_SKIP_TONE) == 0) {
+	/*
+	 * "the machine is still in START".  The object compares the field
+	 * against zero in memory (`cmpw $0x0,0x10(%edx)` at 0x0a5994), so it
+	 * does not say which extension the author's declaration carried and
+	 * this site is unchanged by the rename.  See v27fax.h and F9300.
+	 */
+	if (FIELD_S(sh, V27SH_RX_STATE) == V27RX_STATE_START) {
 		if (FPM_MTD_detect((struct fpm_mtd *)FIELD_PTR(sh, V27SH_MTD),
 				   in, (short)count) != 0)
 			return 0;

@@ -11801,3 +11801,106 @@ the blob's side anyway, so the comparison is entry by entry.
 the difference except `nm`. It should be made `static` in the same commit that
 writes `FAXVMI_process`, which is when it acquires a reader.
 `test/unit/t_faxpack.c` compares all nine entries against `ref_vmi_*`.
+
+## D1160 `RxHdxPrtcolV27` reports a sample count on exactly one block and zero on every other
+
+`RxHdxPrtcolV27` demodulates and descrambles a block on every call, but the
+value it returns to `V27RX_modem` -- which is what advances the caller's output
+pointer and what `V27RX_modem` accumulates into `*count` -- is a literal zero on
+both of its other paths (0x0a312b) and the demodulator's own count only on the
+block where `V27SH_COUNTDOWN` reaches zero (`movswl %bp,%eax` at 0x0a3179).
+
+So everything the PROTOCOL state descrambled before the countdown expired is
+thrown away by the caller, and the last block's worth is not. `RxHdxDataV27` --
+the state it hands over to -- reports its count on every block, so this is not
+the family's habit; and `RxHdxEpochDetV27`, which is otherwise the same
+function without the descramble, returns zero on all three of its paths.
+
+Whether that is deliberate (the protocol phase's output is training data and
+only the tail is real) or an oversight is not established, and nothing in the
+object reads it either way.
+
+**Status:** reproduced. `src/fax/v27.c` returns `(short)n` on the handover path
+and a literal 0 on the other two, and `t_v27fax.c`'s section 18 drives all
+three paths and compares the return against `ref_RxHdxPrtcolV27`'s on each
+block, so the asymmetry is measured rather than asserted. Two of the section's
+variants are this deviation's two opposites -- `SH_PRTCOL_RET_ZERO` returns
+zero on the handover and `SH_PRTCOL_RET_ALWAYS` returns the count on every
+block -- and both separate.
+
+## D1170 `V29RX_epoch_det` advances the shared symbol counter WITHOUT the saturation the other two slicers apply
+
+`V29DEC_SYM_COUNT` is one field written by all three of V.29's slicers, and
+two of them guard it. `V29RX_decision` (0x9b8fe..0x9b90d) and `V29RX_eq_train`
+(0x9b81a..0x9b82d) each load it, increment, compare the result against
+`V29DEC_SYM_COUNT_WRAP` (0x8000) and store `V29DEC_SYM_COUNT_RESTART` (0x4000)
+instead when it would reach it -- so as an `unsigned short` it never wraps to
+zero and, read back as a `short` by `DataCarrierDetectV29`, it never goes
+negative.
+
+`V29RX_epoch_det` does not. Its three instructions at 0x9b68c are `movzwl` /
+`inc` / 16-bit store and there is no compare anywhere in the function's 413
+bytes, so a receiver held in the epoch-detect stage for 32768 symbols carries a
+counter straight through 0x8000 and out the other side.
+
+It cannot be reached on a working modem -- the epoch detector hands over long
+before, and its own `V29DEC_TRAIN_COUNT` would have wrapped first -- but it is
+a real asymmetry between three functions that were plainly written together,
+and it is the only field of the decoder block the three disagree about.
+
+**Status:** reproduced. `src/fax/v29.c` writes the saturating form in two
+functions and the plain increment in the third, and `test/unit/t_v29hdx.c`
+seeds the counter at 0x7fff on all three and compares the field afterwards, so
+the difference is measured rather than asserted.
+
+## D1171 `V29RX_decision` shifts the in-phase and quadrature squared errors by DIFFERENT amounts
+
+The slicer's distance metric is formed one point at a time and the two halves
+are not treated alike. At 0x9b977 and 0x9b97a, in consecutive instructions:
+
+    c1 fa 0f    sar $0xf,%edx      (i - IMAP[k])^2  >> 15
+    c1 f8 10    sar $0x10,%eax     (q - QMAP[k])^2  >> 16
+    01 c2       add %eax,%edx
+
+so the quadrature error enters the comparison at half the weight of the
+in-phase error. It is not a compiler artefact: the two shifts are on separate
+registers holding separate products, and both results are added into the value
+that is narrowed to `short` and compared against `best`.
+
+It is not free either. `V29RX_DEC_IMAP` and `_QMAP` are the same constellation
+seen on two axes -- `src/fax/v29cfg.c` derives both from V.29 Table 1's own
+amplitudes -- so an equal-weight metric would be the Euclidean one and this is
+a deliberately tilted one, or a slip. Nothing in the object says which:
+`V27RX_decision` has no counterpart to compare against (it searches an angle
+table, not a map), and no format string mentions either shift.
+
+**Status:** reproduced exactly as encoded, and NOT explained. `src/fax/v29.c`
+writes `((di * di) >> 15) + ((dq * dq) >> 16)` with the asymmetry called out in
+the comment, and `test/unit/t_v29hdx.c` drives samples that separate it from
+the symmetric `>> 15` and `>> 16` readings -- both of which choose a different
+constellation point on some trials -- so the shift pair is measured against the
+blob and not assumed.
+
+## D1172 `RxHdxEpochDetV29` tests `EpochDetectV29`'s result sixteen bits wide, where the callee returns an `int`
+
+`EpochDetectV29` is `int` -- `v29fax.h` declares it so, and the object's own
+epilogue leaves a full 32-bit 0 or 1 in `%eax`. Its one caller tests `%ax`:
+`test %ax,%ax` at 0x0a44ce, three bytes with the operand-size prefix where two
+would have done.
+
+That is evidence the CALLING translation unit declared the function returning
+`short`, which the defining one did not -- the same two-prototypes-for-one-
+function shape `FPM_AGC_agc` has at four sites (F8875, F9116, D1035, D1094) and
+`RxHdxDataV29` has for `DataCarrierDetectV29` and `QualityDetectV29` (F9257).
+
+**It is not reproducible as a declaration.** `EpochDetectV29` and
+`RxHdxEpochDetV29` are both in `src/fax/v29.c`, so one translation unit sees
+one declaration, and `v29fax.h` is the single home for it (CLAUDE.md's one
+type, one home, applied to a prototype). Declaring it `short` there would move
+`EpochDetectV29`'s own definition and every other caller.
+
+**Status:** reproduced as a narrowing CAST at the call site --
+`(short)EpochDetectV29(modem) == 0` -- which is what `RxHdxDataV29` already
+does for its two and produces the same `test %ax,%ax`. The two readings agree
+over every value the function can return, which is 0 or 1, so nothing
+observable turns on it; `test/unit/t_v29hdx.c` drives both.

@@ -107188,3 +107188,262 @@ question and it is now settled: F8320 records that the probe was "two scripts
 of about forty lines each over `closure.build_graph()`", not `relocscan`, so
 the leaf argument never rested on this tool. Anyone who DID use `relocscan` for
 a reachability question before today should re-measure.  (2026-09-01)
+
+### F9300. V.27ter's receive state machine: the five states, and the author's own names for them
+
+The five symbols `RxNextStateV27`, `RxHdxStartV27`, `RxHdxEpochDetV27`,
+`RxHdxPrtcolV27` and `RxHdxIdleV27` (3,341 bytes of `.text` between them, with
+the already-written `RxHdxDataV27` and `RxHdxErrorV27`) are one indivisible
+link unit and were written together. A relocation probe over the whole 1.2 MB,
+both `R_386_32` and `R_386_PC32`, finds exactly twelve edges naming any of
+them: `RxNextStateV27` STORES four handler addresses in its transition arms
+(0x0a2e90, 0x0a2f00, 0x0a2f27, 0x0a2f5b, 0x0a2f96) and the other four CALL it
+back (0x0a3089, 0x0a3175, 0x0a31f7, 0x0a3284). Under F8492/F8493 a stored
+function pointer pins a symbol at link exactly as a call does, so no proper
+subset of the five links.
+
+**THE STATE NAMES AND THEIR NUMBERS ARE BOTH THE AUTHOR'S, AND THEY COME FROM
+TWO INDEPENDENT PLACES THAT AGREE.** `RxNextStateV27` switches on
+`movswl 0x10(%edx),%eax` through the jump table at `.rodata:0xc31c`, whose five
+entries are 0x0a2e7a, 0x0a2ea7, 0x0a2ed9, 0x0a2f17, 0x0a2f4b in that order --
+read with `objdump -r --section=.rodata`, never off a byte dump, because the
+entries are relocations. Each arm opens by printing its own name out of
+`.rodata.str1.1`:
+
+    0  0x4bc1  "V27RX_STATE_START\n"
+    1  0x4baa  "V27RX_STATE_EPOCH_DET\n"
+    2  0x4bf8  "V27RX_STATE_PROTOCOL\n"
+    3  0x4be6  "V27RX_STATE_DATA\n"
+    4  0x4bd4  "V27RX_STATE_IDLE\n"
+       0x4b97  "V27RX_DEFAULT, %d\n"
+
+and each arm then stores the NEXT state's number beside the NEXT state's
+handler, which pairs 1 with `RxHdxEpochDetV27`, 2 with `RxHdxPrtcolV27`, 3 with
+`RxHdxDataV27` and 4 with `RxHdxIdleV27` independently of the strings.
+`V27RX_create` stores 0 with `RxHdxStartV27` (0x0996ed, 0x0996f9). Evidence
+rank 1 and rank 2 agreeing without either being derived from the other.
+
+**SO `V27SH_SKIP_TONE` IS RETIRED AND THE FIELD IS `V27SH_RX_STATE`.** F9235
+had recorded it as "almost certainly the receive state number", named for its
+one READER (`DemodDataV27` skips its tone test while it is zero) and left
+neutral because none of its writers was reconstructed. All of them now are.
+`DemodDataV27`'s test reads as "the machine is still in START", and that site's
+codegen cannot move for the rename: the object compares the field against zero
+in memory (`cmpw $0x0,0x10(%edx)`), so it does not encode an extension either
+way.
+
+State 5 is NOT the author's. `RxHdxPrtcolV27` and `RxHdxEpochDetV27` store it
+beside the store that installs `RxHdxErrorV27` and `RxNextStateV27` has no arm
+for it, so the name `V27RX_STATE_ERROR` is the handler's and nothing more --
+and a machine advanced out of it takes the default arm, which installs no
+handler at all and therefore leaves it in `RxHdxErrorV27` for ever.  (2026-09-01)
+
+### F9301. V.27ter's shared block carries the RATE and the TRAINING LENGTH, and `V27RX_create` types both
+
+Two fields of the block at `V27_OBJ_SHARED` were unmodelled while the state
+machine was unwritten. Both are settled, and the strongest evidence for each is
+in `V27RX_create` rather than in the machine.
+
+**+0x08 IS THE BIT RATE, AS AN INDEX, AND THE TWO NUMBERS ARE THE AUTHOR'S.**
+`V27RX_create` reads the caller's `modem + 0x04` signed and compares it against
+two literals before it writes this field (0x99794..0x997ae): `0x960` == 2400
+stores 0 (0x99ecd), `0x12c0` == 4800 stores 1 (0x99ed8), and anything else
+stores 1 AND puts the status byte to `V27_STATUS_DEFAULT` with
+`V27_STATUS_FLAG_ERROR` raised. 2400 and 4800 bit/s are V.27ter's two rates to
+the digit. Everything else that reads the field agrees: it indexes
+`V27_MTD_COEFF_2400`/`_4800`, `V27RX_MRF_*`, `V27RX_SRE_*`, `V27RX_FSE_*`,
+`V27RX_DEC_PMAP`, `V27RX_DEC_LAST_PHASE` and `V27RX_DEC_PHS_MASK`, and
+`V27DEC_EIGHT_PHASE` is `rate == 1` -- eight phases at 4800 and four at 2400,
+which is the recommendation's own constellation.
+
+**+0x0a SELECTS LONG TRAINING OVER SHORT.** `V27RX_create` sets it from
+`cmpl $0x0,0x14(%ebp)` / `sete` at 0x996e9, so it is raised when the caller's
+`modem + 0x14` is ZERO. It has exactly two readers and they make the same
+choice: `V27RX_create` at 0x99c61 sets `V27DEC_TRAIN_SHORT` to `+0x0a == 0`
+(which is what puts the equaliser on 50 symbols rather than 1000 and
+`V27RX_epoch_det` on 10 rather than 40), and `RxNextStateV27`'s EPOCH_DET arm
+uses it to pick the PROTOCOL state's countdown -- 1 or 2 blocks when clear, 33
+or 45 when set. The word "training" is the author's, from `V27RX_eq_train` and
+from `V27DEC_TRAIN_SHORT`'s own derivation. WHAT `modem + 0x14` MEANS TO THE
+CALLER IS STILL NOT ESTABLISHED and neither the name nor the header claims it.
+
+**AND THE FOUR COUNTDOWNS CORROBORATE THE RATE READING WITHOUT BEING EVIDENCE
+FOR IT.** The long pair is 45 blocks at 2400 and 33 at 4800; V.27ter's
+long-train segment 3 is 1458 symbols at 2400 and 1074 at 4800, and 1458/1074 is
+1.357 against 45/33's 1.364. That is usage inference and is recorded as such --
+it is NOT what the name rests on, which is the 0x960/0x12c0 comparison above.
+Nothing here establishes the block length, so the ratio is all it can be.  (2026-09-01)
+
+### F9302. V.27ter's status byte has eight values, not six, and the last two are one site-pair and one selector
+
+`v27fax.h` listed six values of the byte at `V27_OBJ_STATUS` with the note
+"for whoever writes the other handlers". Writing them adds two and settles what
+separates the pair:
+
+    0  RxHdxDataV27, every block                        V27_STATUS_DATA
+    1  RxHdxPrtcolV27, RxHdxEpochDetV27, carrier up     V27_STATUS_TRAINING
+    2  RxHdxStartV27, every block                       V27_STATUS_START
+    3  RxNextStateV27 default; V27RX_create on error    V27_STATUS_DEFAULT
+    4  the same two handlers, carrier lost              V27_STATUS_ERROR
+    5  RxHdxIdleV27, every block                        V27_STATUS_IDLE
+    6  the two handovers into DATA, at 2400             V27_STATUS_ENTER_DATA_2400
+    7  the same two handovers, at 4800                  V27_STATUS_ENTER_DATA_4800
+
+Nothing in the object READS any of them -- the byte leaves through the word
+`V27RX_modem` returns -- so every name is the site that writes it and no more.
+
+6 and 7 are computed at two sites with one idiom: `RxHdxPrtcolV27`'s
+countdown-expiry arm (0x0a3161) and `RxNextStateV27`'s IDLE arm (0x0a2f6d) both
+do `movzwl V27SH_RATE` / `cmp $0x1,%cx` / `sbb` / `add $0x7`, which is
+`rate < 1 ? 6 : 7`, and both are immediately followed by the transition that
+installs `RxHdxDataV27`. So the pair reports the rate the machine is about to
+carry data at, and the 2400/4800 in the names is F9301's, not this finding's.
+
+V.21's byte carries 0, 3, 4 and 5 in exactly these four roles (`v21fax.h`),
+which corroborates those four and says nothing about 1, 2, 6 or 7 -- V.21 has
+no EPOCH_DET or PROTOCOL state and its 1, 2 and 6 are START, WAIT and TIMEOUT.
+The numbering is per modem and was not assumed to be shared.
+
+**AND THE SECOND FLAGS BYTE IS NEW WITH IT.** `V27_OBJ_STATUS_FLAGS2` at +0x1e
+is byte 2 of the same word (`V27RX_create` zeroes all four with one
+`movl $0x0,0x1c(%ebp)` at 0x99d0d), and its bit 0 is the exact complement of
+`V27_STATUS_FLAG_DATA`: all six arms of `RxNextStateV27` write both, and never
+the same way. The DATA -> IDLE arm sets IDLE and clears DATA; the five others
+do the reverse. Nothing outside the machine touches either bit and nothing
+reads them. `V21RX_FLAG1_IDLE` and `V21RX_FLAG_DATA` are the same two bits of
+the same machine with the same six sites, which is a corroboration and not the
+derivation.  (2026-09-01)
+
+### F9303. `RxNextStateV27` steps the AGC's smoother coefficients on by one element, and it is the only place in the object that does
+
+The EPOCH_DET -> PROTOCOL arm ends with `addl $0x2,0x74(%eax)` and
+`addl $0x2,0x78(%eax)` at 0x0a2fa8 and 0x0a2fac, where `%eax` is the receive
+block. `v27fax.h`'s tiling puts `struct fpm_agc` at rx + 0x68, so 0x74 is
+`fpm_agc_cfg::alpha` and 0x78 is `fpm_agc_cfg::beta` -- and `fpm_agc.h` records
+that BOTH ARE POINTERS, supplied by address out of `AGCv27_CFG` (its own
+comment: "MIXED STRUCT: +0x0c and +0x10 are POINTERS"). So the 2 is one `short`
+and not a magnitude: the arm advances each coefficient to the next entry of its
+table, which retunes the gain smoother for the protocol phase.
+
+**READING IT AS ARITHMETIC WOULD HAVE BEEN SILENTLY WRONG** -- "add 2 to the
+feedback coefficient" is a plausible sentence about a Q15 smoother and produces
+a completely different modem. What rules it out is the declared type of the
+field, which comes from `fpm_agc.h` and from `FPM_AGC_agc` dereferencing both,
+not from anything in V.27ter.
+
+The next arm, PROTOCOL -> DATA, calls `FPM_AGC_Freeze(rx + 0x68)`, which is the
+same sub-object by the same arithmetic and is the only other DSP-touching thing
+any arm does. Together the two say the gain loop is retuned when protocol
+starts and frozen when data starts.  (2026-09-01)
+
+### F9320. V.29's receive state numbering read off the jump table at `.rodata + 0xc35c`, and `V29DET_GATE_14` upgraded to the state number
+
+`RxNextStateV29` dispatches on `movswl 0x14(%edx),%eax` where `%edx` is the
+detection block (`modem + 0x4c`), bounds it with `cmp $0x4` / `ja` and jumps
+through `0xc35c(,%eax,4)`. The table's five words are `R_386_32` relocations
+against the `.text` section symbol with the arm address as the inline addend --
+so a byte dump of the range reads as five plausible small integers and says
+nothing, and it has to be read the way `relocscan.py`'s own help describes.
+The five, in index order, are 0x0a416a, 0x0a4197, 0x0a41cf, 0x0a420d and
+0x0a4241, and each arm prints exactly one `.rodata.str1.1` string:
+
+    0  0x4d03 "V29RX_STATE_START"      installs RxHdxEpochDetV29, stores 1
+    1  0x4d50 "V29RX_STATE_EPOCH_DET"  installs RxHdxPrtcolV29,   stores 2
+    2  0x4d3a "V29RX_STATE_PROTOCOL"   installs RxHdxDataV29,     stores 3
+    3  0x4d28 "V29RX_STATE_DATA"       installs RxHdxIdleV29,     stores 4
+    4  0x4d16 "V29RX_STATE_IDLE"       installs RxHdxDataV29,     stores 3
+
+**THE MAPPING IS FIXED BY A CONSISTENCY CHECK AND NOT BY THE STRING ALONE.**
+The string could in principle name the state being ENTERED rather than the one
+being left. It does not, and the handler is what proves it: every arm's stored
+number is paired with the handler of that number's own state, so arm 0 leaving
+START installs EPOCH_DET's handler and stores 1. Read the other way round the
+pairing fails at all five arms.
+
+`v29fax.h` had recorded these five strings and said explicitly that which value
+goes with which was not read off "because that needs the jump table at .rodata
++ 0xc35c and this pass did not need it". It is now read off.
+
+**AND THE FIELD IT SWITCHES ON IS `V29DET_GATE_14`**, which the header carried
+neutrally as "the gate on `DemodDataV29`'s pre-pass". It is the receive state
+number: `RxHdxPrtcolV29` and `RxHdxEpochDetV29` store 5 into it beside the
+store that installs `RxHdxErrorV29`, `V29RX_create` seeds it, and no other
+function in the object writes it. So `DemodDataV29`'s pre-pass gate reads "the
+machine is still in START". Renamed `V29DET_STATE`, and `V29DET_DEMOD` /
+`v29_demod_fn` renamed `V29DET_HANDLER` / `v29_rx_state_fn` for the same
+reason: every store into that slot in the whole object is a `RxHdx*V29`.
+
+`v27fax.h`'s `V27SH_SKIP_TONE` says of the identical field of the identical
+machine that it is "ALMOST CERTAINLY THE RECEIVE STATE NUMBER" (F9235). A
+V.27ter pass running in parallel reached the same conclusion from V.27ter's own
+table at `.rodata:0xc31c` with the same numbering; the two readings are
+independent, and this one is derived from V.29's table and not from that report.
+
+**THE STATE NUMBER AND THE STATUS BYTE ARE TWO DIFFERENT SMALL-INTEGER SETS
+AND MUST NOT BE CONFLATED.** `V29_OBJ_STATUS_B0` also takes values 0..7 and its
+ordering is different (0 Data, 1 the two training states on entry, 2 Start, 3
+the default arm, 4 the two training states' error arm, 5 Idle, and 6/7 the
+`V29DET_SHORT_000C` pair this pass added). They are kept as two named sets in
+`v29fax.h`.  (2026-09-01)
+
+### F9321. V.29's decoder block is `rx + 0x28`, which settles `V29RX_SHORT_0046`
+
+`V29RX_create` builds the equaliser's configuration on the stack and fills its
+`owner` slot with `rx + 0x28`: `mov 0x50(%ebp),%esi` at 0x9b1c6 loads the
+receive block, `add $0x28,%esi` at 0x9b1d6 advances it, and the result goes to
+`0x5c(%esp)` -- which is `0x30(%esp)` (the `fpm_fse_cfg` local) plus 0x2c, the
+`owner` field. `cfg.decision` is filled from the same local at `0x60(%esp)`
+with `V29RX_epoch_det`.
+
+That fixes every `V29DEC_*` offset against the receive block, and one of them
+lands on a constant this header already had: `V29DEC_SYM_COUNT` is dec + 0x1e,
+so it is rx + 0x46 -- `V29RX_SHORT_0046`, the short `DataCarrierDetectV29`
+compares against 999 and which nothing was known to write. All three slicers
+advance it and `DataCarrierDetectV29` is its only reader, which is
+`V27RX_DEC_SETTLED`'s shape exactly.
+
+The block runs dec + 0x00 .. dec + 0x1f and `V29RX_MRF` is rx + 0x48, so the
+thirty-two bytes tile the gap with nothing over.  (2026-09-01)
+
+### F9322. V.29's slicer chain is V.27ter's three stages and NOT V.27ter's block, and five of V.27's twelve decoder fields have no counterpart
+
+The chain matches: `V29RX_create` installs `V29RX_epoch_det`, which installs
+`V29RX_eq_train`, which installs `V29RX_decision`, one `R_386_32` each and
+never backwards. The state does not.
+
+    V.27ter                          V.29
+    dec+0x00..0x0b  (I,Q) history    dec+0x00,0x02  TWO leaky averages
+    dec+0x0c  eight_phase            dec+0x04..0x0f (I,Q) history
+    dec+0x10  train_short            dec+0x10  sixteen_point
+    dec+0x14  phase_mask             dec+0x14  last phase index
+    dec+0x16  last phase index       dec+0x16  training LFSR
+    dec+0x18  pmap POINTER           dec+0x18  train count
+    dec+0x1c  train count            dec+0x1c  previous angle
+    dec+0x1e  ONE leaky average      dec+0x1e  sym count
+    dec+0x20  angles POINTER
+    dec+0x24  angle_prev
+    dec+0x26  sym count
+
+V.29 has no `train_short` (both of V.27's selectable pair lengths are literals
+here: `V29_EPOCH_SETTLE` 0x80 and `V29_TRAIN_SYMS` 0x17e), no `phase_mask`, and
+no `pmap`/`angles` POINTERS -- `V29RX_decision` names `V29RX_DEC_PMAP`,
+`_ANGLE`, `_MAG`, `_IMAP` and `_QMAP` directly, five `R_386_32` relocations
+against the tables themselves.
+
+**THREE DIFFERENCES THAT WOULD BE SILENTLY WRONG IF TRANSFERRED:**
+
+- **The interface is not the same.** `V27RX_epoch_det` ignores both `short *`
+  arguments. `V29RX_epoch_det` READS `*mag` -- it is the energy that feeds the
+  leaky average -- and WRITES `*angle`, choosing `V29RX_DEC_ANGLE[4]` or `[7]`
+  by which half of the circle the phase advance fell in.
+- **The trigger constant is 2, not 4** (`add %edx,%edx` at 0x9b787), and the
+  threshold is formed from BOTH averages as `(a*a + b*b) >> 15` rather than
+  from one.
+- **`V29RX_eq_train` is a generator, not a slicer.** It never reads `out_i`,
+  `out_q` or `n_out`; it steps a seven-bit right-shifting LFSR whose incoming
+  bit is the XOR of the two it is losing (`shl $6`/`and $0x80` and
+  `and $1`/`shl $7`, `xor`, `or`, LOGICAL `shr $1`, `and $0x7f`), and bit 0 of
+  that register picks constellation point 0 or point 3/11. V.27ter's training
+  slicer instead advances the previous decision by half the constellation when
+  the measured phase moved more than a quarter turn. Same role, different
+  mechanism, and neither derivation transfers.  (2026-09-01)
