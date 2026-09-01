@@ -107188,3 +107188,71 @@ question and it is now settled: F8320 records that the probe was "two scripts
 of about forty lines each over `closure.build_graph()`", not `relocscan`, so
 the leaf argument never rested on this tool. Anyone who DID use `relocscan` for
 a reachability question before today should re-measure.  (2026-09-01)
+
+## F9400. V.17's twenty-two slicer tables, and the cross-check is nineteen of twenty-two -- the three that DIFFER are what makes it evidence
+
+*2026-09-01.* `V17RX_create` (.text 0x96eb0, 3,201 bytes) is the largest
+unwritten fax symbol. F9170 wrote the twenty-four CONFIGURATION tables it
+references directly and left its call closure blocked; this pass writes the
+twenty-two SLICER tables one level further down -- the constellation,
+magnitude and angle banks `FAX_FSE_decision_16pt`, `_32pt`, `_64pt`,
+`_128pt`, `FSE_Bridge_det` and `FSE_decision_eqtrn` index. 1,600 bytes, all in
+`.rodata`, all `const short`, in `src/fax/v17dec_tables.c`.
+
+**The element type has two independent readings, and they agree.**
+
+- **The load is sixteen bits at scale one.** Every reference in the object is
+  `movzwl 0x0(%reg,%reg,1)` or `movswl 0x0(%reg,%reg,1)` -- the index register
+  appears twice with scale 1, which is `2*i`, and the load is a word. That is
+  F613's forced column: the compiler had no freedom about the width. Both
+  extensions appear on the SAME table (`DECv17_IMAP16` is `movzwl` at 0x98470
+  and `movswl` at 0x984ba), which is F7803 -- the extension follows the
+  declared type of the LOCAL -- and not a disagreement about the array.
+- **Nineteen of the twenty-two are byte-identical to V.32bis' own**, which
+  this tree extracted separately, from different addresses in a different
+  section, and already drives through V.32's slicers.
+
+**AND THE THREE THAT ARE NOT IDENTICAL ARE THE POINT OF SAYING SO.** A
+cross-check coming out 22 of 22 would be reporting that V.17 and V.32bis share
+a translation unit, which they do not, and it would pass unchanged if someone
+pasted V.32's numbers over V.17's. The three that differ are:
+
+    DECv17_MAP_TRN     { 3, 0, 2, 1 }   V.32's DECv32_MAP_TRN  { 1, 2, 0, 3 }
+    DECv17_ANGL4800    { 9870, 18062, 26254, 1678 }
+                       V.32's DECv32_ANGL1200 { 9869, 18061, 26253, 1678 }
+    DECv17_MAP_BRIDGE  { 1, 0, 2, 3 }   V.32bis has no such table
+
+`DECv17_ANGL4800`'s first three entries are each exactly ONE greater than
+V.32's and the fourth is equal. Recorded as an observation and NOT explained:
+nothing in the object says why, and a rounding story that fits three of four
+values is not evidence. `t_v17dec.c` asserts the +1 and the equality
+element by element, so the relation is pinned even though its cause is not.
+
+**The naming maps by BIT RATE, not by constellation size.** V.17's 7200 bit/s
+uses the sixteen-point constellation V.32bis calls 9600, and V.17's 4800 bit/s
+handshake set is V.32's 1200. `9600T`, `12000` and `14400` coincide. Both
+spellings are the object's own.
+
+**V.17 does NOT carry V.32's D302, and that was checked rather than assumed.**
+`FSE_decision_16pt` shifts by 1 where it should shift by 13 and reads
+thousands of entries past the end of the three-entry `DECv32_MAG9600`.
+`FAX_FSE_decision_16pt` shifts by 13 (`sar $0xd` at 0x984e2) and indexes
+`DECv17_MAG7200` at `-0x2(%ebp,%ebp,1)`, i.e. `((|I|+|Q|)>>13) - 1`, which is
+0..2 over the whole constellation. Same table contents, same three-entry
+length, different code. The two functions are otherwise the same shape and
+assuming the defect transferred would have been the easy mistake.
+
+**`DECv17_MAP_BRIDGE` is DEAD in the object.** `relocscan.py --into` over the
+whole 1.2 MB, with F9280's fix that resolves relocations naming their target,
+reports it unreferenced. Written anyway -- it is a global the object defines,
+it costs eight bytes, and nothing can link against it wrongly.
+
+`t_v17dec.c` is FOUR layers, 792 checks green, and its fifth is absent for a
+stated reason rather than forgotten: the six consumers are not reconstructed
+yet, so a USE layer would drive the blob against itself. It was shown to
+reject -- perturbing `DECv17_ANGL7200[2]` by one fails both the value layer
+and the V.32bis identity layer -- and the +-1 tolerance on the rotation check
+is measured rather than granted: written as an exact equality it FIRED on six
+of thirty-two entries, the two base-block points at exactly 90 degrees being
+truncated to 8191 where the rotated blocks land on 16384, 24576 and 0.
+(2026-09-01)
