@@ -5,84 +5,61 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `e1604049`, 2026-08-31:
+Measured at `1bb8db5a` (wave 5 merging), 2026-09-01:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 86.8%  (637,908 bytes / 1,554 symbols)   was 76.6% / 1,296
-remaining  96,697 bytes /   295 symbols
-  DATA MODES             0 sym        0 B   COMPLETE
-  voice / CID / ring     0 sym        0 B   COMPLETE
-  fax only             283 sym   78,331 B   <-- 96% of the remaining BYTES
-  no-entry-point leaves 12 sym    2,957 B
+translated 93.0%  (682,970 bytes / 1,741 symbols)   was 76.6% / 1,296
+remaining  51,635 bytes /   120 symbols
+  fax only              104 sym   34,898 B   <-- 96% of what remains
+  no-entry-point leaves   4 sym    1,328 B
 ```
 
-## EVERYTHING EXCEPT FAX IS DONE
+**Fax fell from 168 to 104 symbols this pass** (waves 4-5): both wave-4
+constructors and wave 5's chokepoint clearance. Merged master is period-green;
+final gate for wave 5 in progress at commit time -- see the wave-5 section
+below for the confirmed number.
 
-Data modes, Caller ID, ring detect and voice all report **0 symbols, 0 bytes**
-from `service.py`. Merged master is period-green at **319 passed, 0 failed**,
-with `onedef`, `banners` (376/376), `check64` and `refcheck` clean.
+## A correction that overturns three findings: `FIFO_CFG` was never actually
+## blocked, and the reasoning that said it was applies to fewer of F9058's
+## thirteen ambiguous names than it looked like
 
-What is left is fax — 283 symbols, 78,331 bytes — and 12 no-entry-point leaves
-of 2,957 bytes, **9 of which are F8492's link-blocked set and unblock as their
-fax referents land.** So the leaves are not a separate phase; they come free
-with fax.
+**F9020, F9199 and F9356 all declined `FIFO_CFG` on the belief that writing it
+in `src/` would be a MULTIPLE DEFINITION at link** — the blob defines the name
+twice (a file-local `d` at `.data` 0x83a0 holding {0,300,0}, a global `R` at
+`.rodata` 0x9654 holding {0,100,0}), and the reasoning was that `symmap.py`
+gives an ambiguous name no `ref_` alias, so the blob's own global copy would
+still be called plain `FIFO_CFG` and collide with a new `src/` definition of
+the same name.
 
-## THE DECISION TO DO FAX, TAKEN 2026-08-31
+**That reasoning does not survive checking the built object.** `symmap.py`'s
+dedup logic (verified by reading the tool, not by trusting the finding)
+refuses to rename a name only when it is AMBIGUOUS AMONG LOCAL SYMBOLS — two
+static definitions in two different translation units, where a rename would
+pick one at random. `FIFO_CFG` is not that shape: it is one local copy and one
+copy that is ALREADY GLOBAL, and the already-global one is unaffected by the
+local name sharing its string. `objcopy --redefine-syms` confirmed this
+empirically against the real `build/dsplibs_ref.o` — `nm` after the rename
+shows BOTH survive as `ref_FIFO_CFG`, one `d` (still local, still TU-scoped,
+invisible to external linking) and one `R` (global, externally bindable). A
+`src/` definition of `FIFO_CFG` collides with neither, and an external
+reference to `ref_FIFO_CFG` can only bind to the global one — proven with a
+wrong-copy injection test (planting the LOCAL copy's value, 300, and watching
+the test fail on exactly that number) and confirmed **under the period
+compiler itself**, not just GCC 14. See finding F9500 for the full derivation.
 
-**Fax is no longer last, and this is the reason changing rather than the plan
-drifting.** README's order and CLAUDE.md both put fax last, and CLAUDE.md is
-explicit that the ground was **VALUE, NOT DIFFICULTY**: it is 283 symbols and
-78,331 bytes, larger than everything else remaining put together, and SpanDSP
-already implements Class 1 fax in the open-source world, so the marginal worth
-of reconstructing it is lower than for anything else here.
+**What this does NOT say: F9058's general point still stands for the other
+twelve.** Some of the thirteen duplicated names ARE genuinely local-vs-local —
+`AGCv23_CFG` at two different `.rodata` addresses with different contents is
+the example F9058 itself gives — and those really cannot be renamed
+unambiguously. `FIFO_CFG`'s local+global shape was the one case among the
+thirteen that got the wrong ruling. **Before declining any of the other twelve
+on this ground, check which shape it is** — `nm --defined-only` on the blob
+and read the case count, do not assume the whole bucket behaves like
+`FIFO_CFG` or like `AGCv23_CFG`.
 
-That reasoning is still true. What changed is the GOAL. The objective has moved
-from "cover the data modes and the services" -- which is now **done**, all of
-it -- to **completing the object**. Under the new goal fax is not low-value; it
-is the only thing between the tree and a finished reconstruction. Decided
-deliberately, and it should be changed back the same way.
-
-**THE STATED REASON FOR GOING NOW WAS WRONG, AND THE CORRECT ONE IS SIZE.** The
-proposal was that voice depends on part of fax. It does not:
-`closure.py` over voice's ten remaining symbols returns **17 symbols / 6,502
-bytes, every one of them voice's own** (ten call, five data, two rodata). What
-is true is that six voice symbols SIT IN the span labelled `class1tx.c +94`,
-which is the fax span -- and that is the span-is-not-a-module trap this file
-opens with, the same one that made the first V.32 estimate wrong in both
-directions (F8160). **There is no ordering constraint between voice and fax.**
-Fax is next because it is 76% of what is left, not because anything waits on it.
-
-### What fax looks like, measured rather than quoted
-
-| span | bytes |
-|---|--:|
-| `class1tx.c +94` | 68,409 |
-| `class1.c` | 4,146 |
-| `voice.c#3 +3` | 3,253 |
-| `class1rx.c` | 2,495 |
-| `V32mod.c +39` | 28 |
-
-**83 symbols are startable today -- 14,080 bytes with no unwritten dependency**,
-and they fall into families that parallelise cleanly rather than one monolith:
-the three demodulators (`DemodDataV17`/`V27`/`V29`), their carrier and quality
-detectors (`DataCarrierDetect*`, `QualityDetect*`), the V.27 scrambler pair,
-`SMC_encoder`, the SGD sequence engine, and the FAXVMI framing layer.
-`class1rx.c` has **0** ready, so it is downstream of the rest.
-
-### Two things the fax phase inherits
-
-- **RESTORE `test/unit/t_faxsgd.c` FROM `9b1739ee^` BEFORE ATTEMPTING SGD.**
-  Wave 1 wrote the SGD engine, failed 96 of 3,603 checks under the period
-  compiler with `det_at` landing megabytes outside the object's own buffer, and
-  WITHDREW it rather than commit a structural error. F8497 says plainly that the
-  TEST is the asset: it compares `det_at` as an OFFSET rather than a pointer
-  value, which is what turned an invisible layout error into a 96-check failure.
-  A byte compare of the object would have reported one differing run and named
-  no field.
-- **The 12 remaining leaves are mostly in these same files**, and 9 of them are
-  F8492's link-blocked set. They unblock as their fax referents land, so they
-  come free with this phase rather than needing a pass of their own.
+This landed as the FIFO chokepoint in wave 5 (below) and unblocked all four TX
+constructors' `FIFO_CFG`/`FIFO_create` dependency in one move.
 
 ## The order
 
@@ -599,3 +576,46 @@ Two related traps, both seen this session:
 - **A build that ran out of space mid-link is not a failed build, it is an
   UNKNOWN one.** Check a gate log for `no space left`/`write error` before
   reading its verdict, and re-run rather than trusting it.
+
+## Wave 5 — the FIFO chokepoint, the 48-symbol adapter module, V.17 transmit start
+
+Three agents on disjoint files rather than three parallel attempts at the same
+wall, because one shared blocker (`FIFO_CFG`) sat behind all four TX
+constructors. Merges: FIFO chokepoint `1bb8db5a`'s parent, adapter module and
+V.17 transmit folded into the same merge sequence. All three gated
+period-green individually (345, 344, 343 passed / 0 failed); final merged-tree
+gate confirms below.
+
+| agent | delivered |
+|---|---|
+| FIFO chokepoint | `FIFO_CFG`, `FIFO_create`, `V21TX_create` + V.21's whole transmit half-duplex machine (`TxNextStateV21`, `TxHdxStartV21`, `TxHdxIdleV21`, `TxHdxDataV21`) — ~2,450 bytes. **Corrected F9058/F9199/F9356** (above) |
+| 48-symbol adapter module | 27 of 40 remaining lowercase forwarders, new `src/fax/faxadapt.c`, one TU in the object's own address order (F9271's ruling followed) |
+| V.17 transmit | `SetTxModeV17`, `V17TX_SYM_SIZE`, `SMCv17_CFG` — small but disciplined: declined the rest rather than reach into files it didn't own |
+
+### What this wave established
+
+- **The `FIFO_CFG` correction, above — the wave's main result.**
+- **V.21's transmit five are one indivisible unit**, exactly like its receive
+  five: `TxNextStateV21` stores handler addresses for all four `TxHdx*`
+  states, all four tail-call back into it. No proper subset links
+  (F8492/F8493). This differs from V.27/V.29's RECEIVE side, which was NOT one
+  unit — indivisibility is decided per machine, not assumed from a sibling.
+- **The adapter module's `pack_width`/`unpack_width` split is now
+  cross-confirmed**: all four RX creates write only `unpack_width`, matching
+  the split `faxvmi.h` already named from the packer/unpacker work.
+- **A live mutation is now standard practice for a state machine**: the FIFO
+  agent swapped which handler `V21TX_STATE_START` installs and watched
+  `t_v21txcreate` fail 82 of 155 checks before reverting — the equivalent of
+  F134's ritual applied to a dispatch table rather than a data value.
+
+### What's left, measured
+
+Fax is **104 symbols / 34,898 bytes** — 96% of everything remaining in the
+object. The V.17/V.21 transmit chains are open (V.21's constructor still needs
+`V17TX_CFG`, `FPM_PPS_CFG`, `PPSv17_*`, the `SMCv17_*` encoder family — a
+closed, self-contained batch of 4 functions + 3 tables the V.17 agent
+identified but declined to rush, ~792 bytes); V.27/V.29 transmit are
+essentially untouched; the remaining 13 adapter symbols are blocked on those
+constructors and `*_control` functions; `_init_receiver`/`_init_transmitter`
+(1,583 / 1,326 B) are last, each needing >140 symbols and are the natural
+closing item once everything else lands.
