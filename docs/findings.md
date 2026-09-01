@@ -105951,3 +105951,59 @@ confirmed; its "30 tables" is superseded by F9150's 56. Both belong to the
 unwritten `src/fax/v27.c`, so V.27ter's constructor is now in exactly the state
 F9140 left V.29's in: blocked on its own module's two functions and on nothing
 else. (2026-09-01)
+
+## F9148. `relocscan.py --into` and `--at` DISCARD every relocation that names its target, so they answer a much narrower question than their own help text -- 41 referrers reported as "unreferenced"
+
+*2026-09-01.* While deciding whether four leftover fax data symbols were worth
+writing, `relocscan.py --into FAXVMI_CTL` reported
+
+    .rodata    0x009478  FAXVMI_CTL             size 24    unreferenced
+
+and `--at .rodata:0x9478` reported "(nothing points there)". **`FAXVMI_CTL` has
+41 relocations pointing at it.** `V29RX_CTL` has 4, `FAXVMI_STS` 13,
+`DECv17_ANGL4800` 4 and `DECv17_MAP_TRN` 2 -- all reported unreferenced, and
+all plainly visible in `tools/dis.py`'s output for their readers.
+
+**THE CAUSE IS ONE LINE, AND IT IS NOT WHAT IT LOOKS LIKE.** The first
+hypothesis here was that the tool skips `.rel.text`; that is WRONG and was
+withdrawn after reading the source. `read_relocs` walks every relocation
+section, and then:
+
+    if not sym.startswith("."):
+        out.append((cur, off, sym, None))     # named target -> value None
+        continue
+    ...
+    out.append((cur, off, sym, <addend read from the section bytes>))
+
+and `main` does
+
+    resolved = [r for r in relocs if r[3] is not None]
+
+so **every relocation against a NAMED symbol is dropped**, and `--into`,
+`--at` and `--range` all run on `resolved` alone. The tool answers "which
+SECTION-RELATIVE references land here", not "what points at this".
+
+**Which is why its documented use is sound and its obvious use is not.**
+F604's case -- "who references this string" -- is section-relative by
+construction, because a string reference is an `R_386_32` against the SECTION
+symbol with the offset as an inline addend. That is the case the tool was built
+for and it works. A reference to a named global is the OTHER case, and it is
+invisible. The two are exact complements: `DEF_COEFS` has no relocation naming
+it anywhere and IS found by `relocscan` (via `.data` + addend), while
+`FAXVMI_CTL` is named by all 41 of its referrers and is found by none of it.
+
+**The fix is to keep the named ones**: resolve `(sym, addend)` against the
+symbol table instead of dropping them, and print the denominator of BOTH
+classes rather than only "N against a section symbol". Not made here -- this
+pass owns tables, and `tools/` is shared with other live sessions -- but it is
+a one-function change.
+
+**AND IT BEARS ON A SCHEDULING CLAIM, WITHOUT SETTLING IT.** CLAUDE.md's
+"leaves before FAX" paragraph rests on a reverse-edge probe finding "129 of 139
+symbols have no relocation anywhere in the 1.2 MB pointing at them". Nothing
+here says which tool ran that probe, and this finding does NOT retract it --
+but if it was `relocscan`, the reading would be "no section-relative referrer",
+which is a different and much weaker statement. Anyone re-using that number
+should re-measure with a probe that counts both classes; a scan over
+`readelf -rW` grouped by target name takes about fifteen lines and is what was
+used above. (2026-09-01)
