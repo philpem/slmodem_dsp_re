@@ -1,12 +1,13 @@
 /*
- * v27fax.h -- ITU-T V.27ter (fax): the receiver's primitives, and the
- * transmitter's status filler.
+ * v27fax.h -- ITU-T V.27ter (fax): the receiver's primitives, the two
+ * transmit-chain drivers, and both lifecycles.
  *
- * Eleven functions sit directly on the FPM layer here.  Ten of them reach
+ * Sixteen functions sit directly on the FPM layer here.  Most of them reach
  * into the V.27ter modem instance, pick a sub-object out of it, and either
  * hand that sub-object to the module that owns it or read one field back out;
- * one is the equaliser's slicer, and one is a constant.  The last two --
- * `DemodDataV27` -- is not reconstructed yet and is marked below.
+ * two are equaliser slicers, two drive a whole chain end to end, one is a
+ * constant, and two are one-line wrappers around the V.27ter scrambler
+ * module.
  *
  *   GetSNRV27             a constant
  *   V27RX_status          "did the caller supply somewhere to write"
@@ -15,12 +16,17 @@
  *   V27TX_status          fill a status block from the transmitter's
  *   V27RX_modem           drive the half-duplex receive state handler
  *   V27RX_delete          release the receiver
+ *   V27TX_delete          release the transmitter
+ *   ModDataV27            encode to symbols, then pulse-shape to samples
  *   V27RX_decision        the equaliser's slicer: nearest DPSK phase
+ *   V27RX_eq_train        the equaliser's TRAINING slicer, and the handover
  *   QualityDetectV27      smooth the equaliser's MSE and grade it
  *   DataCarrierDetectV27  carrier up/down, and the V.21 escape
- *   DemodDataV27          AGC -> resample -> symbol recovery -> equalise  [-]
+ *   DemodDataV27          AGC -> resample -> symbol recovery -> equalise
+ *   ScrambleDataV27       the transmitter's scrambler, by one indirection
+ *   DescrambleDataV27     the receiver's descrambler, by one indirection
  *
- * `tools/service.py` puts all eleven on the FAX side.
+ * `tools/service.py` puts all of them on the FAX side.
  *
  * ---------------------------------------------------------------------------
  * THE INSTANCE IS NOT MODELLED, and this header follows the ruling
@@ -107,6 +113,33 @@ struct fpm_fse;
 #define V27_OBJ_RX		0x54	/* the receiver block            */
 
 /*
+ * The transmitter block.
+ *
+ * NAMED BY WHAT ITS CONTENTS ARE, not by position.  `V27TX_delete` releases
+ * `*(modem + 0x28) + 0x5c` through `FPM_PPS_free` and `ModDataV27` hands
+ * `*(modem + 0x28) + 0x2c` to `SMC_encoder` and `*(modem + 0x28) + 0x5c` to
+ * `FPM_PPS_filter` -- a symbol-mapping encoder and a pulse-shaping filter,
+ * which is the transmit chain and nothing else.  `ScrambleDataV27` takes its
+ * scrambler out of the same block; the DEscrambler comes out of V27_OBJ_RX.
+ */
+#define V27_OBJ_TX		0x28	/* the transmitter block         */
+
+/*
+ * The block that holds the transmit data source: a byte FIFO and an `sgd`.
+ *
+ * TYPED BY ITS TWO MEMBERS AND BY NOTHING ELSE.  `V27TX_delete` hands +0x00
+ * to `FIFO_delete` and +0x04 to `SGD_delete`, so those two fields are
+ * `struct fax_fifo *` and `struct sgd *` because the functions that read them
+ * say so.  That the BLOCK belongs to the transmit side is inference from the
+ * only reconstructed function that reaches it being `V27TX_delete`;
+ * `V27RX_delete` does not free it, so the two deletes do not overlap.  Its
+ * extent is not established -- nothing reconstructed reads past +0x07.
+ */
+#define V27_OBJ_TXDATA		0x24
+#define V27TXD_FIFO		0x00	/* struct fax_fifo * */
+#define V27TXD_SGD		0x04	/* struct sgd *      */
+
+/*
  * The status word `V27RX_modem` returns, and the flags byte inside it.
  *
  * ONE 32-BIT WORD, NOT TWO FIELDS: `V27RX_create` zeroes all four bytes at
@@ -150,6 +183,48 @@ struct fpm_fse;
 
 /* The decoder block; see the header comment. */
 #define V27RX_DEC		0x14
+
+/*
+ * The receiver's `struct sdmv27`, and the transmitter's.
+ *
+ * TYPED BY THE CALLEE and by nothing else: `DescrambleDataV27` hands
+ * `rx + 0x3c` to `SDMv27_descrambler` and `ScrambleDataV27` hands
+ * `tx + 0x1c` to `SDMv27_scrambler`, so both regions are `struct sdmv27`
+ * because the function that reads them says so.  `sizeof(struct sdmv27)` is
+ * 14 and the decoder block's last field ends at rx + 0x3a, so the receiver's
+ * copy tiles 0x3c..0x4a and leaves nothing over before `V27RX_MRF` at 0x4c.
+ */
+#define V27RX_SDM		0x3c	/* struct sdmv27, the descrambler  */
+#define V27TX_SDM		0x1c	/* struct sdmv27, the scrambler    */
+
+/*
+ * THE TRANSMITTER BLOCK TILES EXACTLY, the same way the receiver's does, and
+ * that is what closes it rather than a plausible-looking list of offsets.
+ * Three of the four regions are TYPED BY A CALLEE -- `ModDataV27` hands +0x2c
+ * to `SMC_encoder` and +0x5c to `FPM_PPS_filter`, `V27TX_delete` hands +0x5c
+ * to `FPM_PPS_free`, and both of `ModDataV27`'s calls take +0x08 as their
+ * `struct fpm_smc_ring *` (the encoder's destination and the shaper's source
+ * in one call pair).  `ScrambleDataV27` types the fourth.  Then:
+ *
+ *     0x08 + sizeof(struct fpm_smc_ring) == 0x08 + 0x14 == 0x1c   the sdmv27
+ *     0x1c + sizeof(struct sdmv27)       == 0x1c + 0x0e == 0x2a -> 0x2c  smc
+ *     0x2c + sizeof(struct fpm_smc)      == 0x2c + 0x30 == 0x5c   the shaper
+ *     0x5c + sizeof(struct fpm_pps)      == 0x5c + 0x38 == 0x94
+ *
+ * -- four modules with one two-byte alignment gap and no overlap.  Finding
+ * F9121.
+ *
+ * THAT ARITHMETIC IS WHAT IDENTIFIES tx + 0x10, and the first reading of it
+ * was WRONG.  `V27TX_delete` frees `*(int *)(tx + 0x10)` and the obvious
+ * reading is a scratch allocation of the transmitter's own -- but 0x10 is
+ * 0x08 + 0x08, which is `fpm_smc_ring::sym`, the symbol-index buffer the
+ * encoder writes and the shaper reads.  There is no room for a field of its
+ * own there.  So the delete releases the RING's buffer, and the reconstruction
+ * spells it that way.
+ */
+#define V27TX_RING		0x08	/* struct fpm_smc_ring */
+#define V27TX_SMC		0x2c	/* struct fpm_smc      */
+#define V27TX_PPS		0x5c	/* struct fpm_pps      */
 
 /* The four embedded FPM modules.  They tile 0x4c..0x4f3c exactly. */
 #define V27RX_MRF		0x4c	/* struct fpm_mrf   */
@@ -220,6 +295,21 @@ struct fpm_fse;
  */
 #define V27RX_DEC_SETTLED	0x5db
 
+/*
+ * The largest symbol count `DemodDataV27` will accept from the symbol
+ * recoverer without complaining, and the author's own words for what a larger
+ * one is: `.rodata.str1.4 + 0x12ca0` is "ERROR: SRE buffer violation(%d)".
+ *
+ * The test is `> 0xa4`, unsigned and 16-bit (`cmp $0xa4,%bx` / `ja`).  That
+ * the buffer named is `V27RX_BUF_B` is INFERENCE and not measured: it is the
+ * destination `FPM_SRE_recover` was given, and nothing reconstructed
+ * allocates it.  V.29's demodulator carries the identical
+ * check against the identical string, which is why the constant is stated per
+ * modem rather than shared: nothing establishes that the two buffers are the
+ * same size, only that the two messages are the same message.
+ */
+#define V27RX_SRE_MAX		0xa4
+
 /* ------------------------------------------------------------------ */
 /* The decoder block, at rx + V27RX_DEC (and at fse->cfg.owner)          */
 
@@ -237,6 +327,27 @@ struct fpm_fse;
 #define V27DEC_EIGHT_PHASE	0x0c	/* int    */
 
 /*
+ * Which of two equaliser training lengths `V27RX_eq_train` waits out.
+ *
+ * NON-ZERO SELECTS THE SHORT ONE.  The object computes
+ * `cmp $0x1,%esi; sbb %edi,%edi; and $0x3b6,%edi; add $0x32,%edi` -- GCC's
+ * branchless two-constant conditional again -- so the limit is 0x32 when the
+ * field is non-zero and 0x32 + 0x3b6 == 0x3e8 when it is zero.
+ *
+ * `V27RX_create` fills it at 99c8d with `sete %dl` on `cmpw $0x0,0xa(%ebx)`,
+ * a 32-bit store, which is what makes it an `int` rather than a flag byte.
+ * WHAT `params->f0a` MEANS IS NOT ESTABLISHED and this header does not guess:
+ * what is established is that one value of it costs fifty symbols of training
+ * and the other a thousand.  The word "training" is the AUTHOR'S -- the
+ * function reading this field is called `V27RX_eq_train` -- and not ours.
+ */
+#define V27DEC_TRAIN_SHORT	0x10	/* int    */
+
+/* The two limits above, in symbols. */
+#define V27DEC_TRAIN_SYMS_SHORT	0x32
+#define V27DEC_TRAIN_SYMS_LONG	0x3e8
+
+/*
  * The phase index mask, `V27RX_DEC_PHS_MASK[rate]`.  3 or 7 for the two
  * table lengths above; the object never assumes that and neither does this.
  */
@@ -248,8 +359,32 @@ struct fpm_fse;
 /* `V27RX_DEC_PMAP[rate]`: the bits each phase STEP carries. */
 #define V27DEC_PMAP		0x18	/* const short * */
 
+/*
+ * Symbols `V27RX_eq_train` has taken, and it is a SEPARATE counter from
+ * `V27DEC_SYM_COUNT` below: this one is zeroed by `V27RX_create` (99c77,
+ * `movw $0x0,0x30(%ecx)`, which is dec + 0x1c) and only ever incremented by
+ * the training slicer, while `V27DEC_SYM_COUNT` is advanced by both slicers
+ * and saturates.  Nothing reconstructed resets this one.
+ */
+#define V27DEC_TRAIN_COUNT	0x1c	/* unsigned short */
+
 /* `V27RX_DEC_LAST_PHASE[rate]`: the phase angle of each index. */
 #define V27DEC_ANGLES		0x20	/* const short * */
+
+/*
+ * The constellation angle the previous decision produced -- `angles[last]`,
+ * stored by `V27RX_eq_train` on its way out and subtracted from the next
+ * measured angle on its way in.
+ *
+ * IT IS NOT `V27DEC_LAST` SPELLED TWICE.  `V27DEC_LAST` is the phase INDEX
+ * and this is the ANGLE that index selects; the training slicer writes both
+ * on the same pass, from the same table load, to two different offsets.
+ * `V27RX_create` zeroes it at 99c83 (`movw $0x0,0x38(%ecx)`, dec + 0x24).
+ *
+ * `V27RX_decision` does not read or write it -- it subtracts
+ * `angles[dec->last]` afresh -- so the two slicers do not share this state.
+ */
+#define V27DEC_ANGLE_PREV	0x24	/* short */
 
 /*
  * Decisions taken, saturating.  `V27RX_decision` increments it and, when the
@@ -276,6 +411,18 @@ struct fpm_fse;
  * negative and subtracting 0x8000 when it exceeds 0x8000.
  */
 #define V27DEC_PHASE_FULL	0x8000
+
+/*
+ * Half and a quarter of that, both used by `V27RX_eq_train` alone.
+ *
+ * It folds the phase difference into [-0x4000, +0x4000] -- half a revolution
+ * either side, where `V27RX_decision` folds into [0, 0x8000] -- and then
+ * advances the reference only when what is left EXCEEDS a quarter of a
+ * revolution.  Written as fractions of `V27DEC_PHASE_FULL` because that is
+ * what they are; the object holds them folded to 0x4000 and 0x2000.
+ */
+#define V27DEC_HALF_TURN	(V27DEC_PHASE_FULL / 2)
+#define V27DEC_QUARTER_TURN	(V27DEC_PHASE_FULL / 4)
 
 /* ------------------------------------------------------------------ */
 /* The shared block, at *(void **)(obj + V27_OBJ_SHARED)                */
@@ -531,11 +678,89 @@ short QualityDetectV27(void *modem);
 short DataCarrierDetectV27(void *modem, short *samples, unsigned short count);
 
 /*
- * `DemodDataV27` IS NOT DECLARED HERE, because it is not written yet.  It
- * drives all four embedded modules end to end, so a differential test for it
- * needs the receiver's whole FPM chain configured rather than merely planted;
- * the offsets and constants it needs are all above, which is why they are
- * stated here rather than deferred with the code.
+ * The equaliser's TRAINING slicer, and the only thing that installs the
+ * running one.
+ *
+ * Same signature as `V27RX_decision` because it fills the same slot -- it is
+ * an `fpm_fse_decision`, and the object proves it by storing `V27RX_decision`
+ * into `state->cfg.decision` from inside it.  What it decides is much less:
+ * the transmitted training symbol alternates between two constellation points
+ * half a revolution apart, so all it has to do is notice when the measured
+ * angle is more than a quarter of a revolution from the reference and advance
+ * the reference by half the constellation.  It returns 0xffff on every path,
+ * which is not a symbol; whoever reads the equaliser's output during training
+ * is expected to discard it.
+ *
+ * IT ALSO DRIVES THE HANDOVER.  Every call clears `fpm_fse::mu_sel`, and the
+ * call on which its own symbol counter reaches `V27DEC_TRAIN_SYMS_SHORT` or
+ * `..._LONG` clears `fpm_fse::lms_force`, sets `mu_sel` to 1 -- the next LMS
+ * step size in `cfg.mu[]` -- and replaces itself in `cfg.decision` with
+ * `V27RX_decision`.  So the equaliser trains with one gain and runs with
+ * another, and this function is what switches it.
  */
+unsigned short V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag);
+
+/*
+ * One block through the receive chain: gain control, an optional tone test,
+ * resample, symbol recovery, equalise and slice.
+ *
+ * THE STRUCTURAL DIFFERENCE FROM V.17 AND V.29 IS THE TONE TEST, and it is
+ * the object's rather than an omission here.  Both of those copy the block
+ * into a scratch buffer, notch a tone out of the copy with `FPM_TONE_kill`
+ * and run the detector over that; V.27ter has NO copy loop, NO `FPM_TONE_kill`
+ * and hands `FPM_MTD_detect` the CALLER's buffer directly -- which is also
+ * the buffer `FPM_AGC_agc` has just rewritten in place.  Finding F9115.
+ *
+ * A detection abandons the call: it returns 0 without touching the resampler,
+ * the recoverer or the equaliser, and the gain control's effect on the
+ * caller's samples stands.
+ *
+ * `bits` IS `unsigned short *` BY THE CALLEE, not by the object: the argument
+ * is passed straight through to `FPM_FSE_receive`, whose fourth parameter is
+ * `unsigned short *out`.  Nothing in this function reads it.
+ */
+unsigned short DemodDataV27(void *modem, short *in, unsigned short *bits,
+			    unsigned short count);
+
+/*
+ * The scrambler pair, one indirection each and a tail call.
+ *
+ * `count` IS SIGNED HERE and that is forced: both widen it with `movswl`
+ * before handing it on, where the V.17 and V.29 wrappers around the generic
+ * scrambler module use `movzwl`.  `sdmv27.h` records what the module makes of
+ * a negative one, which is not an early exit.
+ */
+/*
+ * Release the transmitter.
+ *
+ * Seven calls in one fixed order: the pulse-shaping filter's two histories
+ * through `FPM_PPS_free`, the symbol ring's buffer, the transmitter block, the
+ * data source's FIFO and its `sgd` through their own deletes, the data-source
+ * block, and the instance.  The instance pointer is kept in a
+ * register throughout and the two BLOCK pointers are re-read before every use,
+ * which is what the object encodes.
+ *
+ * THE `FPM_PPS_free` CALL IS PASSED A SECOND ARGUMENT, the constant 1, which
+ * it does not have -- `V27RX_delete`'s three `_free` calls again, and F8870's
+ * pattern.  Not reproduced; cdecl makes it harmless.
+ */
+void V27TX_delete(void *modem);
+
+/*
+ * One block through the transmit chain: map `count` data words to symbols in
+ * the ring, then shape the ring into samples.  Two calls and nothing else --
+ * the ring is both the encoder's destination and the shaper's source, and the
+ * return is the shaper's sample count zero-extended from sixteen bits.
+ *
+ * `count` is the SAME `count` for both, which is not obvious: `SMC_encoder`
+ * consumes data WORDS and `FPM_PPS_filter` consumes SYMBOLS, and the object
+ * passes the caller's number to each.  It is the ring's own cursors that keep
+ * the two in step.
+ */
+unsigned short ModDataV27(void *modem, const unsigned short *bits,
+			  short *samples, unsigned short count);
+
+void ScrambleDataV27(void *modem, unsigned short *data, short count);
+void DescrambleDataV27(void *modem, unsigned short *data, short count);
 
 #endif /* DSPLIB_V27FAX_H */

@@ -11154,3 +11154,30 @@ not a recovered one.
 abandoned them. `t_class1handlers` drives both outcomes and asserts each
 fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
 are all ones for the give-up, and one with a zero among them for the lock.
+
+## D1094 🐛 `DemodDataV27` reads a return value from a `void` function, exactly as `DemodDataV29` does
+
+`DemodDataV27` (0x0a5950) pushes four arguments to `FPM_AGC_agc` and then uses
+`%eax` as the carrier bit, ANDing it into `fpm_sre::adapt`, `fpm_fse::lms_on`
+and `fpm_fse::pll_on`. `FPM_AGC_agc` returns `void` and takes three arguments,
+so the calling translation unit's prototype disagreed with the definition in
+both directions at once (F9116, and F8875 for the V.29 instance).
+
+It is undefined behaviour that happens to be correct, and what makes it
+correct is a property of the compiled object rather than of the source:
+`FPM_AGC_agc` has one `ret`, every path funnels through the same epilogue, and
+the two instructions before it are `movzbl %dl,%eax` / `mov %eax,0x1c(%edi)` --
+the store to `agc->signal`. The register holds that field on every return.
+
+**NOT reproduced, because it cannot be**: `include/dsplib/fpm_agc.h` declares
+`FPM_AGC_agc` correctly, and a second disagreeing prototype inside `src/`
+would be "one type, one home" in its function-prototype form. `src/fax/v27.c`
+reads `RX_AGC(rx)->signal` instead.
+
+**The substitution is MEASURED on every run and not argued once.**
+`test/unit/t_v27fax.c` declares the blob's own `ref_FPM_AGC_agc` a second time
+through a function-pointer cast that returns `int`, calls it that way inside
+the demodulator's own model, and asserts the returned value equals
+`agc.signal` -- over silent, quiet and loud blocks, which is what makes the
+bit take both of its values. The cost of the substitution is one extra load of
+`rx + 0x84` in our code, which no test can see and `compare.py` can.

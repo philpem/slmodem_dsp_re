@@ -67,6 +67,12 @@
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 #include "dsplib/b103fp.h"
+#include "dsplib/faxfifo.h"
+#include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_smc.h"
+#include "dsplib/sdmv27.h"
+#include "dsplib/sgd.h"
+#include "dsplib/smc.h"
 
 extern short ref_GetSNRV27(void *modem);
 extern int ref_V27RX_status(void *rx, void *status);
@@ -76,11 +82,70 @@ extern int ref_V27TX_status(const void *tx, void *status);
 extern int ref_V27RX_modem(void *modem, short *in, short *out,
 			   unsigned short *count);
 extern void ref_V27RX_delete(void *modem);
+extern void ref_V27TX_delete(void *modem);
+extern unsigned short ref_ModDataV27(void *modem, const unsigned short *bits,
+				     short *samples, unsigned short count);
+extern void ref_SMC_init(struct fpm_smc *smc, const struct fpm_smc_cfg *cfg);
+extern void ref_SMC_encoder(struct fpm_smc *smc, struct fpm_smc_ring *ring,
+			    const unsigned short *data, unsigned short count);
+extern void ref_FPM_PPS_init(struct fpm_pps *state,
+			     const struct fpm_pps_cfg *cfg, int fresh);
+extern void ref_FPM_PPS_free(struct fpm_pps *state);
+extern unsigned short ref_FPM_PPS_filter(struct fpm_pps *state,
+					 struct fpm_smc_ring *src, short *out,
+					 unsigned short count);
+extern const struct fpm_pps_cfg PPSv32_CFG;
 extern unsigned short ref_V27RX_decision(struct fpm_fse *state, short *angle,
 					 short *mag);
 extern short ref_QualityDetectV27(void *modem);
 extern short ref_DataCarrierDetectV27(void *modem, short *samples,
 				      unsigned short count);
+
+extern unsigned short ref_V27RX_eq_train(struct fpm_fse *state, short *angle,
+					 short *mag);
+extern unsigned short ref_DemodDataV27(void *modem, short *in,
+				       unsigned short *bits,
+				       unsigned short count);
+extern void ref_ScrambleDataV27(void *modem, unsigned short *data, short n);
+extern void ref_DescrambleDataV27(void *modem, unsigned short *data, short n);
+
+/*
+ * The blob's own module constructors, used to build the demodulator fixture on
+ * BOTH sides -- D955's rule: a sub-object planted rather than constructed
+ * leaves every field it uses as a SUBSCRIPT wild, and a blob-against-blob dry
+ * run cannot catch that because both sides read the same wild index.
+ */
+extern void ref_FPM_AGC_init(struct fpm_agc *agc,
+			     const struct fpm_agc_cfg *cfg, int fresh);
+extern void ref_FPM_AGC_agc(struct fpm_agc *agc, short *samples,
+			    unsigned short count);
+extern void ref_FPM_MRF_init(struct fpm_mrf *state,
+			     const struct fpm_mrf_cfg *cfg, int fresh);
+extern void ref_FPM_MRF_free(struct fpm_mrf *state);
+extern short ref_FPM_MRF_filter(struct fpm_mrf *state, const short *in,
+				short *out, short count);
+extern void ref_FPM_SRE_init(struct fpm_sre *sre,
+			     const struct fpm_sre_cfg *cfg, int fresh);
+extern void ref_FPM_SRE_free(struct fpm_sre *sre);
+extern unsigned short ref_FPM_SRE_recover(struct fpm_sre *sre, const short *in,
+					  short *out, short count);
+extern void ref_FPM_FSE_init(struct fpm_fse *state,
+			     const struct fpm_fse_cfg *cfg, int fresh);
+extern void ref_FPM_FSE_free(struct fpm_fse *state);
+extern unsigned short ref_FPM_FSE_receive(struct fpm_fse *state,
+					  const short *in, unsigned short *out,
+					  unsigned short count);
+extern short ref_FPM_MTD_detect(struct fpm_mtd *state, const short *samples,
+				short count);
+
+/*
+ * The V.32 module configurations, which are the ones with real tables behind
+ * them: `FPM_MRF_CFG` and `FPM_SRE_CFG` are templates whose pointer fields are
+ * zero in the object.  What they are TUNED for does not matter here -- the two
+ * sides run the same filter over the same samples -- but they must be real.
+ */
+extern const struct fpm_mrf_cfg MRFv32_CFG;
+extern const struct fpm_sre_cfg SREv32_CFG;
 
 extern unsigned int ref_dsplibs_debug_level;
 
@@ -88,6 +153,7 @@ extern unsigned int ref_dsplibs_debug_level;
 
 #define OBJ_SIZE	0x60
 #define SH_SIZE		0x60
+#define TX_SIZE		0xa0
 #define RX_SIZE		0x4f60
 
 #define NTBL		16	/* phase / pmap table entries, 4x the widest
@@ -113,6 +179,7 @@ struct v27_fixture {
 	short		acc_b[MTD_TONES * 2];
 	struct fpm_mtd	mtd_a;
 	struct fpm_mtd	mtd_b;
+	unsigned char	tx[TX_SIZE];
 	unsigned char	rx[RX_SIZE];
 	double		align;
 };
@@ -2183,6 +2250,1779 @@ sep_report(void)
 	return diff_end();
 }
 
+/* --------------------------------------------------------------------- */
+/* 11.  V27RX_eq_train                                                    */
+/*
+ * The TRAINING slicer, and the only thing in the object that installs the
+ * running one.  It is pure state -- no FPM module is called -- so the fixture
+ * is the decision fixture with five more fields planted, and the interesting
+ * content is entirely in WHICH field and WHICH comparison.
+ *
+ * IT IS RUN AS A SEQUENCE, never as one call (finding F8790).  Three separate
+ * pieces of state are carried between calls -- the saturating symbol counter,
+ * the training counter and the previous constellation angle -- and the
+ * handover fires on exactly one call of the sequence, so a one-call fixture
+ * could not see the handover at all and could not see the counters accumulate.
+ *
+ * THE FUNCTION POINTER IT INSTALLS CANNOT BE COMPARED AS A BYTE PATTERN: the
+ * blob installs `ref_V27RX_decision` and the reconstruction installs
+ * `V27RX_decision`, and those are two different addresses of the same
+ * function.  So each side's `cfg.decision` is read back into a three-valued
+ * verdict -- untouched, the right slicer, something else -- the verdicts are
+ * compared, and the field is restored to a sentinel before the fixtures are
+ * memcmp'd.  A test that skipped those four bytes instead would pass on a
+ * reconstruction that installed the wrong function.
+ *
+ * Variants:
+ * `>` VERSUS `>=` ON EITHER FOLD IS AN EQUIVALENT MUTANT, and that was
+ * measured rather than assumed: both were written, both reported a separating
+ * count of ZERO, and the reason is that the folded difference is used for
+ * NOTHING but its magnitude.  At exactly +/- half a turn the fold negates it,
+ * so |d| is unchanged and no observable moves.  The strictness of those two
+ * comparisons is settled by the disassembly alone (F9119) and this test does
+ * not pretend to cover it; what it DOES cover is the folds themselves, which
+ * are observable because folding can carry |d| below the advance threshold.
+ *
+ * Variants:
+ *   0  the reading this reconstruction claims
+ *   1  the high fold omitted
+ *   2  the low fold omitted
+ *   3  the advance taken at >= a quarter turn rather than >
+ *   4  the step the whole constellation rather than half of it
+ *   5  the phase mask applied before the step is added rather than after
+ *   6  `angle_prev` given the phase INDEX rather than the angle
+ *   7  `angle_prev` not stored at all
+ *   8  the two training lengths transposed
+ *   9  the handover at > the limit rather than >=
+ *  10  the training counter not written back
+ *  11  `mu_sel` not cleared on every call
+ *  12  the symbol counter not saturated
+ *  13  the fold done in 32 bits, without narrowing to `short`
+ */
+#define EQ_VARIANTS	14
+#define EQ_BLOCKS	72
+
+enum eq_defect {
+	E_NONE = 0,
+	E_FOLD_HIGH_NONE,
+	E_FOLD_LOW_NONE,
+	E_TOL_GE,
+	E_STEP_FULL,
+	E_MASK_ORDER,
+	E_PREV_IS_INDEX,
+	E_PREV_NOT_STORED,
+	E_LIMIT_SWAPPED,
+	E_LIMIT_GT,
+	E_COUNT_NOT_STORED,
+	E_MU_NOT_CLEARED,
+	E_NO_SATURATE,
+	E_DIFF_INT
+};
+
+static long eq_sep[EQ_VARIANTS];
+static long eq_handover_trials;	/* the handover fired, FROM THE REFERENCE  */
+static long eq_advance_trials;	/* the reference advanced its reference    */
+static long eq_hold_trials;	/* ... and left it alone                   */
+static long eq_saturate_trials;	/* the symbol counter wrapped to half scale */
+
+/*
+ * The value `cfg.decision` starts every trial holding.  It is a real function
+ * so that a fixture handed to a live equaliser would not fault; nothing calls
+ * it here.
+ */
+static unsigned short
+eq_sentinel_fn(struct fpm_fse *state, short *angle, short *mag)
+{
+	(void)state;
+	(void)angle;
+	(void)mag;
+	return 0;
+}
+
+struct eq_setup {
+	int		eight_phase;	/* dec + V27DEC_EIGHT_PHASE       */
+	unsigned short	mask;		/* dec + V27DEC_PHASE_MASK        */
+	int		train_short;	/* dec + V27DEC_TRAIN_SHORT       */
+	unsigned short	count0;		/* dec + V27DEC_TRAIN_COUNT       */
+	unsigned short	sym0;		/* dec + V27DEC_SYM_COUNT         */
+	short		prev0;		/* dec + V27DEC_ANGLE_PREV        */
+	short		last0;		/* dec + V27DEC_LAST              */
+	short		taps;		/* fse.cfg.taps                   */
+};
+
+/*
+ * The measured angles a trial feeds in, one per call.  They sweep the whole
+ * signed range AND land exactly on both fold thresholds and on the advance
+ * threshold, because all three comparisons in this function are strict on one
+ * side and the boundary is the only input that separates `>` from `>=`.
+ */
+static short eq_angle[EQ_BLOCKS];
+
+static void
+eq_angles(struct v27_fixture *f, const struct eq_setup *u, unsigned seed)
+{
+	int i;
+	short base;
+
+	rng_seed(seed);
+	base = FXS(DEC(f), V27DEC_ANGLE_PREV);
+	for (i = 0; i < EQ_BLOCKS; i++) {
+		int d;
+
+		switch (i % 9) {
+		case 0:	d =  V27DEC_HALF_TURN;		break;
+		case 1:	d =  V27DEC_HALF_TURN + 1;	break;
+		case 2:	d = -V27DEC_HALF_TURN;		break;
+		case 3:	d = -V27DEC_HALF_TURN - 1;	break;
+		case 4:	d =  V27DEC_QUARTER_TURN;	break;
+		case 5:	d = -V27DEC_QUARTER_TURN;	break;
+		case 6:	d =  V27DEC_QUARTER_TURN + 1;	break;
+		default:
+			d = (int)(rng_next() % 65536u) - 32768;
+			break;
+		}
+		eq_angle[i] = (short)(base + d);
+	}
+	(void)u;
+}
+
+static void
+eq_build(struct v27_fixture *f, unsigned seed, const struct eq_setup *u)
+{
+	fx_build(f, seed);
+
+	FXI(DEC(f), V27DEC_EIGHT_PHASE) = u->eight_phase;
+	FXU(DEC(f), V27DEC_PHASE_MASK) = u->mask;
+	FXI(DEC(f), V27DEC_TRAIN_SHORT) = u->train_short;
+	FXU(DEC(f), V27DEC_TRAIN_COUNT) = u->count0;
+	FXU(DEC(f), V27DEC_SYM_COUNT) = u->sym0;
+	FXS(DEC(f), V27DEC_ANGLE_PREV) = u->prev0;
+	FXS(DEC(f), V27DEC_LAST) = u->last0;
+
+	fx_fse(f)->cfg.taps = u->taps;
+	fx_fse(f)->cfg.decision = eq_sentinel_fn;
+	fx_fse(f)->mu_sel = 3;
+	fx_fse(f)->lms_force = 0x5a5a5a5a;
+}
+
+/* Untouched, the right slicer, or something else entirely. */
+static int
+eq_verdict(fpm_fse_decision got, fpm_fse_decision want)
+{
+	if (got == eq_sentinel_fn)
+		return 0;
+	if (got == want)
+		return 1;
+	return 2;
+}
+
+/* The object's own sequence, with one reading changed. */
+static unsigned short
+eq_model(int v, struct v27_fixture *f, short *angle, short *mag)
+{
+	void *dec = DEC(f);
+	struct fpm_fse *state = fx_fse(f);
+	const short *tbl = (const short *)FXP(dec, V27DEC_ANGLES);
+	unsigned short count;
+	short step, a, limit, i;
+	int d, err;
+
+	count = (unsigned short)(FXU(dec, V27DEC_SYM_COUNT) + 1);
+	if (v != E_NO_SATURATE && count == V27DEC_PHASE_FULL)
+		FXU(dec, V27DEC_SYM_COUNT) = V27DEC_PHASE_FULL / 2;
+	else
+		FXU(dec, V27DEC_SYM_COUNT) = count;
+
+	step = (short)(FXI(dec, V27DEC_EIGHT_PHASE) ? 4 : 2);
+	if (v == E_STEP_FULL)
+		step = (short)(step * 2);
+
+	d = *angle - FXS(dec, V27DEC_ANGLE_PREV);
+	if (v != E_DIFF_INT)
+		d = (short)d;
+	if (v != E_FOLD_HIGH_NONE && d > V27DEC_HALF_TURN) {
+		d += V27DEC_PHASE_FULL;
+		if (v != E_DIFF_INT)
+			d = (short)d;
+	}
+	if (v != E_FOLD_LOW_NONE && d < -V27DEC_HALF_TURN) {
+		d -= V27DEC_PHASE_FULL;
+		if (v != E_DIFF_INT)
+			d = (short)d;
+	}
+
+	*mag = V27DEC_MAG;
+
+	err = d < 0 ? -d : d;
+	if (v == E_TOL_GE ? err >= V27DEC_QUARTER_TURN
+			  : err > V27DEC_QUARTER_TURN) {
+		short last = FXS(dec, V27DEC_LAST);
+		unsigned short mask = FXU(dec, V27DEC_PHASE_MASK);
+
+		FXS(dec, V27DEC_LAST) = (short)
+			(v == E_MASK_ORDER ? (last & mask) + step
+					   : (last + step) & mask);
+	}
+
+	a = tbl[FXS(dec, V27DEC_LAST)];
+	if (FXI(dec, V27DEC_TRAIN_SHORT))
+		limit = (short)(v == E_LIMIT_SWAPPED ? V27DEC_TRAIN_SYMS_LONG
+						     : V27DEC_TRAIN_SYMS_SHORT);
+	else
+		limit = (short)(v == E_LIMIT_SWAPPED ? V27DEC_TRAIN_SYMS_SHORT
+						     : V27DEC_TRAIN_SYMS_LONG);
+	*angle = a;
+	if (v == E_PREV_IS_INDEX)
+		FXS(dec, V27DEC_ANGLE_PREV) = FXS(dec, V27DEC_LAST);
+	else if (v != E_PREV_NOT_STORED)
+		FXS(dec, V27DEC_ANGLE_PREV) = a;
+
+	if (v != E_COUNT_NOT_STORED)
+		FXU(dec, V27DEC_TRAIN_COUNT) =
+			(unsigned short)(FXU(dec, V27DEC_TRAIN_COUNT) + 1);
+
+	if (v != E_MU_NOT_CLEARED)
+		state->mu_sel = 0;
+
+	if (v == E_LIMIT_GT ? FXS(dec, V27DEC_TRAIN_COUNT) > limit
+			    : FXS(dec, V27DEC_TRAIN_COUNT) >= limit) {
+		for (i = 0; i < state->cfg.taps; i = (short)(i + 1)) {
+			/* No body in the object.  F9117. */
+		}
+		state->lms_force = 0;
+		state->mu_sel = 1;
+		state->cfg.decision = V27RX_decision;
+	}
+
+	return 0xffff;
+}
+
+/* Everything one call of the sequence made observable, folded into a word. */
+static unsigned long
+eq_mark(unsigned long m, struct v27_fixture *f, unsigned short ret, short ang,
+	short mag, int installed)
+{
+	void *dec = DEC(f);
+
+	m = m * 1000003u + ret;
+	m = m * 31u + (unsigned short)ang;
+	m = m * 31u + (unsigned short)mag;
+	m = m * 31u + FXU(dec, V27DEC_SYM_COUNT);
+	m = m * 31u + FXU(dec, V27DEC_TRAIN_COUNT);
+	m = m * 31u + (unsigned short)FXS(dec, V27DEC_LAST);
+	m = m * 31u + (unsigned short)FXS(dec, V27DEC_ANGLE_PREV);
+	m = m * 31u + (unsigned short)fx_fse(f)->mu_sel;
+	m = m * 131u + (unsigned long)(unsigned int)fx_fse(f)->lms_force;
+	m = m * 31u + (unsigned)installed;
+	return m;
+}
+
+static void
+run_eq_one(unsigned seed, const struct eq_setup *u, long tag)
+{
+	static struct v27_fixture model;
+	unsigned long marka = 0, markc;
+	short ang_ref[EQ_BLOCKS], mag_ref[EQ_BLOCKS];
+	unsigned short ret_ref[EQ_BLOCKS];
+	int inst_ref[EQ_BLOCKS];
+	int v, i;
+
+	eq_build(&pristine, seed, u);
+	eq_angles(&pristine, u, seed ^ 0xa17ea51u);
+
+	/* The blob. */
+	work = pristine;
+	for (i = 0; i < EQ_BLOCKS; i++) {
+		short a = eq_angle[i], m = (short)0x7abc;
+		short before = FXS(DEC(&work), V27DEC_LAST);
+		unsigned short sym = FXU(DEC(&work), V27DEC_SYM_COUNT);
+
+		ret_ref[i] = ref_V27RX_eq_train(fx_fse(&work), &a, &m);
+		ang_ref[i] = a;
+		mag_ref[i] = m;
+		inst_ref[i] = eq_verdict(fx_fse(&work)->cfg.decision,
+					 (fpm_fse_decision)ref_V27RX_decision);
+		if (inst_ref[i] == 1) {
+			eq_handover_trials++;
+			fx_fse(&work)->cfg.decision = eq_sentinel_fn;
+		}
+		if (FXS(DEC(&work), V27DEC_LAST) != before)
+			eq_advance_trials++;
+		else
+			eq_hold_trials++;
+		if (sym == V27DEC_PHASE_FULL - 1)
+			eq_saturate_trials++;
+		marka = eq_mark(marka, &work, ret_ref[i], a, m, inst_ref[i]);
+	}
+	snap = work;
+
+	/* Ours, on the same addresses. */
+	work = pristine;
+	for (i = 0; i < EQ_BLOCKS; i++) {
+		short a = eq_angle[i], m = (short)0x7abc;
+		int inst;
+
+		diff_eq_int("V27RX_eq_train returned (%ld)",
+			    (long)V27RX_eq_train(fx_fse(&work), &a, &m),
+			    (long)ret_ref[i], tag * 1000 + i);
+		diff_eq_int("V27RX_eq_train angle (%ld)", (long)a,
+			    (long)ang_ref[i], tag * 1000 + i);
+		diff_eq_int("V27RX_eq_train mag (%ld)", (long)m,
+			    (long)mag_ref[i], tag * 1000 + i);
+		inst = eq_verdict(fx_fse(&work)->cfg.decision, V27RX_decision);
+		diff_eq_int("V27RX_eq_train installed (%ld)", (long)inst,
+			    (long)inst_ref[i], tag * 1000 + i);
+		if (inst == 1)
+			fx_fse(&work)->cfg.decision = eq_sentinel_fn;
+	}
+	diff_eq_obj("V27RX_eq_train state", struct v27_fixture, &work, &snap,
+		    tag);
+
+	/* The named wrong readings, replayed from a fresh fixture each. */
+	for (v = 0; v < EQ_VARIANTS; v++) {
+		model = pristine;
+		markc = 0;
+		for (i = 0; i < EQ_BLOCKS; i++) {
+			short a = eq_angle[i], m = (short)0x7abc;
+			unsigned short r = eq_model(v, &model, &a, &m);
+			int inst = eq_verdict(fx_fse(&model)->cfg.decision,
+					      V27RX_decision);
+
+			if (inst == 1)
+				fx_fse(&model)->cfg.decision = eq_sentinel_fn;
+			markc = eq_mark(markc, &model, r, a, m, inst);
+		}
+		if (v == 0)
+			diff_eq_int("V27RX_eq_train model (%ld)",
+				    markc == marka, 1, tag);
+		else if (markc != marka)
+			eq_sep[v]++;
+	}
+}
+
+static int
+run_eq_train(void)
+{
+	static const struct eq_setup setups[] = {
+		/* eight mask short count0 sym0    prev0   last0 taps */
+		{ 0, 3, 1,      0,      0,      0,      0,    12 },
+		{ 1, 7, 1,      0,      0,      0,      3,     8 },
+		{ 0, 3, 0,  0x3e0,      0,  0x1234,     1,    16 },
+		{ 1, 7, 0,  0x3e5, 0x7fc0, -0x4000,     6,     4 },
+		{ 0, 3, 1,   0x2e,      3,  0x7fff,     2,     1 },
+		{ 1, 7, 1,   0x31, 0xfffe, -0x7fff,     5,    31 },
+		{ 0, 3, 0,      0,      0,  0x4000,     0,     0 },
+		{ 1, 7, 1,      0, 0x7ffe,  0x2000,     7,     6 }
+	};
+	int s, style;
+	long tag = 0;
+
+	diff_begin("V27RX_eq_train");
+
+	for (style = 0; style < 3; style++) {
+		fx_table_style = style;
+		for (s = 0; s < (int)(sizeof(setups) / sizeof(setups[0])); s++) {
+			run_eq_one(0xe9000000u + (unsigned)tag, &setups[s],
+				   tag);
+			tag++;
+		}
+	}
+	fx_table_style = 0;
+
+	diff_eq_int("V27RX_eq_train handed over (%ld)", eq_handover_trials > 0,
+		    1, eq_handover_trials);
+	diff_eq_int("V27RX_eq_train advanced the reference (%ld)",
+		    eq_advance_trials > 0, 1, eq_advance_trials);
+	diff_eq_int("V27RX_eq_train held the reference (%ld)",
+		    eq_hold_trials > 0, 1, eq_hold_trials);
+	diff_eq_int("V27RX_eq_train saturated the symbol counter (%ld)",
+		    eq_saturate_trials > 0, 1, eq_saturate_trials);
+	for (s = 1; s < EQ_VARIANTS; s++)
+		diff_eq_int("eq_train wrong reading %ld separates",
+			    eq_sep[s] > 0, 1, s);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* 12.  ScrambleDataV27 and DescrambleDataV27                             */
+/*
+ * Two one-line wrappers, and the only things that can be wrong about either
+ * are WHICH block of the instance it takes and WHICH offset inside it -- so
+ * the fixture puts a live, differently-seeded `struct sdmv27` at all four
+ * combinations of the two blocks and the two offsets.  A wrong reading then
+ * lands on a plausible scrambler and returns a wrong answer, rather than
+ * faulting on random bytes and being caught for the wrong reason.
+ *
+ * `count` IS SIGNED in both wrappers (`movswl`, F9118) and that is recorded
+ * rather than measured here: the module's parameter is a `short`, so the
+ * widening the wrapper chooses is not observable through it.  What IS
+ * measured is that a large count walks the register the same number of times
+ * on both sides.
+ */
+#define SC_WORDS	24
+#define SC_BLOCKS	6
+#define SC_VARIANTS	6
+
+enum sc_defect {
+	C_NONE = 0,
+	C_TX_FROM_RX,		/* the scrambler's block taken from RX      */
+	C_RX_FROM_TX,		/* the descrambler's block taken from TX    */
+	C_TX_AT_RX_OFF,		/* the scrambler at +0x3c inside TX         */
+	C_RX_AT_TX_OFF,		/* the descrambler at +0x1c inside RX       */
+	C_FN_SWAPPED		/* each wrapper calls the other's module    */
+};
+
+static long sc_sep[SC_VARIANTS];
+static long sc_invert_trials;	/* the guard inverted a bit, either side   */
+static long sc_run_trials;	/* the guard's run counter was non-zero    */
+
+static unsigned short sc_data[SC_WORDS];
+static unsigned short sc_data_ref[SC_BLOCKS][SC_WORDS];
+
+#define SC_TXA(f)	((struct sdmv27 *)(void *)FX((f)->tx, V27TX_SDM))
+#define SC_TXB(f)	((struct sdmv27 *)(void *)FX((f)->tx, V27RX_SDM))
+#define SC_RXA(f)	((struct sdmv27 *)(void *)FX((f)->rx, V27RX_SDM))
+#define SC_RXB(f)	((struct sdmv27 *)(void *)FX((f)->rx, V27TX_SDM))
+
+static void
+sc_build(struct v27_fixture *f, unsigned seed)
+{
+	static struct sdmv27_cfg cfg3, cfg2;
+
+	fx_build(f, seed);
+	FXP(f->obj, V27_OBJ_TX) = work.tx;
+
+	cfg3.nbits = 3;
+	cfg2.nbits = 2;
+
+	/*
+	 * Four live scramblers, so a wrong block or a wrong offset produces a
+	 * WRONG ANSWER rather than a fault.  They are seeded differently by
+	 * hand after init, because init gives every one of them the same
+	 * register and the four would then be indistinguishable.
+	 */
+	SDMv27_init(SC_TXA(f), &cfg3);
+	SDMv27_init(SC_TXB(f), &cfg2);
+	SDMv27_init(SC_RXA(f), &cfg3);
+	SDMv27_init(SC_RXB(f), &cfg2);
+
+	SC_TXA(f)->reg = 0x0135;
+	SC_TXB(f)->reg = 0x1eca;
+	SC_RXA(f)->reg = 0x0ace;
+	SC_RXB(f)->reg = 0x1357;
+	SC_TXA(f)->run = 7;
+	SC_TXB(f)->run = 19;
+	SC_RXA(f)->run = 30;
+	SC_RXB(f)->run = 2;
+}
+
+static void
+sc_model(int v, struct v27_fixture *f, int descramble, unsigned short *data,
+	 short count)
+{
+	struct sdmv27 *sdm;
+
+	if (descramble)
+		sdm = (v == C_RX_FROM_TX) ? SC_TXA(f)
+		    : (v == C_RX_AT_TX_OFF) ? SC_RXB(f)
+					    : SC_RXA(f);
+	else
+		sdm = (v == C_TX_FROM_RX) ? SC_RXA(f)
+		    : (v == C_TX_AT_RX_OFF) ? SC_TXB(f)
+					    : SC_TXA(f);
+
+	if (v == C_FN_SWAPPED)
+		descramble = !descramble;
+
+	if (descramble)
+		SDMv27_descrambler(sdm, data, count);
+	else
+		SDMv27_scrambler(sdm, data, count);
+}
+
+static unsigned long
+sc_mark(unsigned long m, struct v27_fixture *f, const unsigned short *data,
+	int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+		m = m * 1000003u + data[i];
+	m = m * 131u + SC_TXA(f)->reg;
+	m = m * 131u + SC_TXB(f)->reg;
+	m = m * 131u + SC_RXA(f)->reg;
+	m = m * 131u + SC_RXB(f)->reg;
+	m = m * 31u + SC_TXA(f)->run;
+	m = m * 31u + SC_RXA(f)->run;
+	m = m * 31u + SC_TXA(f)->pending;
+	m = m * 31u + SC_RXA(f)->pending;
+	m = m * 31u + SC_TXA(f)->inverting;
+	m = m * 31u + SC_RXA(f)->inverting;
+	return m;
+}
+
+static void
+run_sc_one(unsigned seed, short count, long tag)
+{
+	static struct v27_fixture model;
+	unsigned long marka = 0, markc;
+	int v, b, i, n;
+
+	n = count > 0 && count < SC_WORDS ? count : SC_WORDS;
+
+	sc_build(&pristine, seed);
+
+	work = pristine;
+	for (b = 0; b < SC_BLOCKS; b++) {
+		rng_seed(seed + (unsigned)b * 7919u);
+		for (i = 0; i < SC_WORDS; i++)
+			sc_data[i] = (unsigned short)(rng_next() & 7u);
+
+		ref_ScrambleDataV27(work.obj, sc_data, count);
+		marka = sc_mark(marka, &work, sc_data, n);
+		for (i = 0; i < SC_WORDS; i++)
+			sc_data_ref[b][i] = sc_data[i];
+		ref_DescrambleDataV27(work.obj, sc_data, count);
+		marka = sc_mark(marka, &work, sc_data, n);
+
+		if (SC_TXA(&work)->inverting || SC_RXA(&work)->inverting)
+			sc_invert_trials++;
+		if (SC_TXA(&work)->run != 0)
+			sc_run_trials++;
+	}
+	snap = work;
+
+	work = pristine;
+	for (b = 0; b < SC_BLOCKS; b++) {
+		rng_seed(seed + (unsigned)b * 7919u);
+		for (i = 0; i < SC_WORDS; i++)
+			sc_data[i] = (unsigned short)(rng_next() & 7u);
+
+		ScrambleDataV27(work.obj, sc_data, count);
+		for (i = 0; i < n; i++)
+			diff_eq_int("scrambled word %ld", (long)sc_data[i],
+				    (long)sc_data_ref[b][i],
+				    tag * 1000 + b * 100 + i);
+		DescrambleDataV27(work.obj, sc_data, count);
+	}
+	diff_eq_obj("Scramble/DescrambleDataV27 state", struct v27_fixture,
+		    &work, &snap, tag);
+
+	for (v = 0; v < SC_VARIANTS; v++) {
+		model = pristine;
+		markc = 0;
+		for (b = 0; b < SC_BLOCKS; b++) {
+			rng_seed(seed + (unsigned)b * 7919u);
+			for (i = 0; i < SC_WORDS; i++)
+				sc_data[i] = (unsigned short)(rng_next() & 7u);
+
+			sc_model(v, &model, 0, sc_data, count);
+			markc = sc_mark(markc, &model, sc_data, n);
+			sc_model(v, &model, 1, sc_data, count);
+			markc = sc_mark(markc, &model, sc_data, n);
+		}
+		if (v == 0)
+			diff_eq_int("Scramble/DescrambleDataV27 model (%ld)",
+				    markc == marka, 1, tag);
+		else if (markc != marka)
+			sc_sep[v]++;
+	}
+}
+
+static int
+run_scramble(void)
+{
+	static const short counts[] = { 1, 3, 8, SC_WORDS };
+	int c;
+	long tag = 0;
+
+	diff_begin("Scramble/DescrambleDataV27");
+
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		run_sc_one(0x5c000000u + (unsigned)tag, counts[c], tag);
+		tag++;
+	}
+
+	diff_eq_int("the scrambler's guard inverted a bit (%ld)",
+		    sc_invert_trials > 0, 1, sc_invert_trials);
+	diff_eq_int("the scrambler's guard run was live (%ld)",
+		    sc_run_trials > 0, 1, sc_run_trials);
+	for (c = 1; c < SC_VARIANTS; c++)
+		diff_eq_int("scrambler wrong reading %ld separates",
+			    sc_sep[c] > 0, 1, c);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* 13.  DemodDataV27                                                      */
+/*
+ * THE ONLY SYMBOL HERE THAT NEEDS A LIVE DSP CHAIN.  `DemodDataV27` calls,
+ * in order, `FPM_AGC_agc`, `FPM_MTD_detect`, `FPM_MRF_filter`,
+ * `FPM_SRE_recover` and `FPM_FSE_receive`, so a trial needs five constructed
+ * objects at their real offsets inside the receiver's block and two scratch
+ * buffers big enough for what they produce.
+ *
+ * D955's rule is why none of them may be faked: this is table-driven code and
+ * a field left unplanted that is used as a SUBSCRIPT cannot be caught by a
+ * blob-against-blob dry run -- both sides read the same wild index and agree.
+ * Every one of the five is constructed by the BLOB's own `_init` on BOTH
+ * sides, so the states are identical bytes and any difference belongs here.
+ *
+ * F8790's rule is why each trial is eight consecutive blocks with the state
+ * carried across: the resampler, the recoverer and the equaliser all hold
+ * history.
+ *
+ * THE FIXTURE IS A PAIR, NOT ONE COPY RESTORED.  `FPM_MRF_init`,
+ * `FPM_SRE_init` and `FPM_FSE_init` allocate, so the two sides cannot share
+ * addresses; the pointer fields they plant are the only bytes the comparison
+ * skips and they are named one at a time below.
+ *
+ * THE V.29 SHAPE IS ONE OF THE NAMED WRONG READINGS.  V.17 and V.29 copy the
+ * block, halve it, notch it and hand the COPY to the detector; V.27ter hands
+ * over the caller's own buffer (F9115).  `D_MTD_COPY` is that reading, so the
+ * structural claim this reconstruction makes is tested rather than asserted.
+ */
+#define DEM_BUF		2048
+#define DEM_BLOCKS	8
+#define DEM_TAPS	16
+#define DEM_CLK		8
+#define DEM_VARIANTS	12
+
+enum dem_defect {
+	D_NONE = 0,
+	D_MTD_COPY,		/* the V.17/V.29 halved-copy pre-pass       */
+	D_NO_ABANDON,		/* a detection does not abandon the call    */
+	D_TONE_ALWAYS,		/* the skip-tone gate ignored               */
+	D_SRE_FROM_INPUT,	/* the recoverer fed `in`                   */
+	D_MRF_TO_BUFB,		/* the resampler writes the wrong buffer    */
+	D_FSE_FROM_BUFA,	/* the equaliser fed the resampler's buffer */
+	D_FSE_COUNT,		/* the equaliser given the resampler's count */
+	D_ADAPT_SOURCE,		/* sre.adapt taken from the wrong enable    */
+	D_TILT_NOT_CLEARED,	/* fse.tilt_on left alone                   */
+	D_LMS_PLL_SWAPPED,	/* fse.lms_on and fse.pll_on transposed     */
+	D_SIGNAL_ONE		/* the carrier bit forced to 1              */
+};
+
+struct dem_fix {
+	unsigned char	obj[OBJ_SIZE];
+	unsigned char	sh[SH_SIZE];
+	short		bufa[DEM_BUF];
+	short		bufb[DEM_BUF];
+	short		shbuf[DEM_BUF];
+	short		acc[MTD_TONES * 2];
+	struct fpm_mtd	mtd;
+	unsigned char	rx[RX_SIZE];
+	double		align;
+};
+
+static struct dem_fix dfa, dfb, dfc;
+
+static short dem_icoff[DEM_TAPS], dem_qcoff[DEM_TAPS];
+static short dem_clk[DEM_CLK], dem_k1[3], dem_k2[3];
+static struct fpm_fse_cfg dem_fse_cfg;
+static struct fpm_mtd_cfg dem_mtd_fire, dem_mtd_quiet;
+
+static short dem_in[DEM_BUF], dem_work[DEM_BUF], dem_work_ref[DEM_BUF];
+
+/* What `sre.adapt` holds if nothing wrote it; see the note in run_demod_one. */
+#define DEM_ADAPT_SENTINEL	0x5eed5eed
+static unsigned short dem_out_a[DEM_BUF], dem_out_b[DEM_BUF];
+
+static long dem_sep[DEM_VARIANTS];
+static long dem_agc_ident;	/* trials proving %eax == agc.signal        */
+static long dem_abandon_trials;	/* the tone test abandoned the call         */
+static long dem_run_trials;	/* ... and did not                          */
+static long dem_skip_trials;	/* the tone test was skipped entirely       */
+static long dem_signal0_trials;	/* the carrier bit came back 0              */
+static long dem_signal1_trials;	/* ... and 1                                */
+static long dem_violation_trials;/* the SRE buffer violation was printed    */
+static int  dem_capture;	/* compare the two transcripts this trial   */
+static long dem_lms_trials;	/* fse.lms_on came out non-zero             */
+static long dem_adapt_trials;	/* sre.adapt came out non-zero              */
+
+/*
+ * WHY THE WHOLE TRANSCRIPT CANNOT BE COMPARED, and it is the apparatus and
+ * not the code (F9120).  `FPM_FSE_receive`'s "Decoder Error" report is gated
+ * on a counter that lives OUTSIDE `struct fpm_fse` -- one static per side --
+ * and this trial replays the blob's modules many more times than the
+ * reconstruction's, so the two statics are far out of step by the time the
+ * debug arm runs.  A whole-transcript `strcmp` therefore measures how often
+ * each side has been called, not what `DemodDataV27` printed.
+ *
+ * So the comparison is narrowed to THIS function's own line, extracted by its
+ * prefix.  The blob's format string is `.rodata.str1.4 + 0x12ca0`, which is
+ * "ERROR: SRE buffer violation(%d)" with no newline, so successive reports run
+ * together and the extractor has to close on the ')'.
+ */
+#define DEM_REPORT	"ERROR: SRE buffer violation("
+
+static int
+dem_reports(const char *src, char *dst, int cap)
+{
+	int n = 0, len = 0;
+	size_t k = strlen(DEM_REPORT);
+
+	while (*src != '\0') {
+		if (strncmp(src, DEM_REPORT, k) == 0) {
+			n++;
+			while (*src != '\0' && *src != ')') {
+				if (len + 1 < cap)
+					dst[len++] = *src;
+				src++;
+			}
+			continue;
+		}
+		src++;
+	}
+	if (cap > 0)
+		dst[len < cap ? len : cap - 1] = '\0';
+	return n;
+}
+
+static char dem_rep_a[512], dem_rep_b[512];
+
+static short dem_slice_perr, dem_slice_mag;
+
+static unsigned short
+dem_slicer(struct fpm_fse *state, short *angle, short *mag)
+{
+	short a = *angle;
+
+	(void)state;
+	*angle = (short)(a - dem_slice_perr);
+	*mag = dem_slice_mag;
+	return (unsigned short)a;
+}
+
+static void
+dem_tables(void)
+{
+	int i;
+
+	for (i = 0; i < DEM_TAPS; i++) {
+		int v = ((i * 7919 + 1301) & 0x3fff) - 8192;
+
+		dem_icoff[i] = (short)(v | 1);
+		dem_qcoff[i] = (short)(-3 * v + 5 * i + 7);
+	}
+	for (i = 0; i < DEM_CLK; i++)
+		dem_clk[i] = (short)(i * 4096 + 137);
+	dem_k1[0] = 602; dem_k1[1] = 3050; dem_k1[2] = 766;
+	dem_k2[0] = 0;   dem_k2[1] = 18;   dem_k2[2] = 1;
+	dem_slice_perr = 311;
+	dem_slice_mag = 1777;
+
+	memset(&dem_fse_cfg, 0, sizeof(dem_fse_cfg));
+	dem_fse_cfg.block = DEM_BUF;
+	dem_fse_cfg.interp = 3;
+	dem_fse_cfg.icoff = dem_icoff;
+	dem_fse_cfg.qcoff = dem_qcoff;
+	dem_fse_cfg.taps = DEM_TAPS;
+	dem_fse_cfg.mu[0] = 2620;
+	dem_fse_cfg.mu[1] = 393;
+	dem_fse_cfg.mu[2] = 97;
+	dem_fse_cfg.clk = dem_clk;
+	dem_fse_cfg.clk_mod = DEM_CLK;
+	dem_fse_cfg.clk_inc = 4096;
+	dem_fse_cfg.train_sym = 4;
+	dem_fse_cfg.err_hi = 6536;
+	dem_fse_cfg.err_lo = 1638;
+	dem_fse_cfg.pll_k1 = dem_k1;
+	dem_fse_cfg.pll_k2 = dem_k2;
+	dem_fse_cfg.decision = dem_slicer;
+
+	/*
+	 * Two detectors over the SAME real biquad bank: one whose ratio and
+	 * minimum level make it fire on anything, one whose minimum level
+	 * makes it fire on nothing.  The bank has to be real -- a null
+	 * `cfg.coeff` is a fault inside `FPM_iir_filt`, not a wrong answer.
+	 */
+	dem_mtd_fire = dcd_mtd_cfg;
+	dem_mtd_fire.ratio = -1;
+	dem_mtd_fire.min_level = 0;
+	dem_mtd_quiet = dcd_mtd_cfg;
+	dem_mtd_quiet.min_level = (short)0x7fff;
+}
+
+/*
+ * THE THREE ENABLE WORDS MUST DIFFER IN BIT 0 AND NOWHERE ELSE MATTERS.
+ * `agc.signal` is a `setg` result, so it is 0 or 1 and `signal & word` can
+ * only be 0 or `word & 1`.  Two shapes, each with one word bit-0-clear, so
+ * every pairing of source and destination is distinguishable in one of them.
+ */
+static const int dem_enable[2][3] = {
+	{ 0x0e, 0x33, 0x54 },		/* adapt off, pll on,  lms off */
+	{ 0x33, 0x54, 0x0f }		/* adapt on,  pll off, lms on  */
+};
+
+struct dem_setup {
+	unsigned short	skip_tone;	/* non-zero skips the tone test    */
+	int		mtd_fires;
+	int		enables;
+};
+
+static int
+dem_skip_rx(int off)
+{
+	if (off >= V27RX_BUF_A && off < V27RX_BUF_B + 4)
+		return 1;
+	if (off >= V27RX_MRF + 0x18 && off < V27RX_MRF + 0x1c)
+		return 1;			/* fpm_mrf::history          */
+	if (off >= V27RX_SRE + 0x50 && off < V27RX_SRE + 0x5c)
+		return 1;			/* coeff, hist, clk          */
+	if (off >= V27RX_SRE + 0x74 && off < V27RX_SRE + 0x78)
+		return 1;			/* rms_buf                   */
+	if (off >= V27RX_FSE + 0x54 && off < V27RX_FSE + 0x5c)
+		return 1;			/* out_i, out_q              */
+	if (off >= V27RX_FSE + 0x60 && off < V27RX_FSE + 0x6c)
+		return 1;			/* icoeff, qcoeff, hist      */
+	return 0;
+}
+
+static int
+dem_skip_mtd(int off)
+{
+	return off >= 0x0c && off < 0x10;	/* fpm_mtd::acc */
+}
+
+static int
+dem_skip_sh(int off)
+{
+	if (off >= V27SH_MTD && off < V27SH_MTD + 4)
+		return 1;
+	if (off >= V27SH_BUF && off < V27SH_BUF + 4)
+		return 1;
+	return 0;
+}
+
+static int
+dem_skip_obj(int off)
+{
+	if (off >= V27_OBJ_SHARED && off < V27_OBJ_RX + 4)
+		return 1;
+	return 0;
+}
+
+static long
+dem_first_diff(const unsigned char *a, const unsigned char *b, int n,
+	       int (*skip)(int))
+{
+	int i;
+
+	for (i = 0; i < n; i++) {
+		if (skip != 0 && skip(i))
+			continue;
+		if (a[i] != b[i])
+			return i;
+	}
+	return -1;
+}
+
+static void
+dem_build(struct dem_fix *f, unsigned seed, const struct dem_setup *u)
+{
+	int i;
+
+	memset(f, 0, sizeof(*f));
+	rng_seed(seed);
+	rng_fill(f->obj, OBJ_SIZE);
+	rng_fill(f->sh, SH_SIZE);
+	rng_fill(f->rx, RX_SIZE);
+	for (i = 0; i < DEM_BUF; i++) {
+		f->bufa[i] = (short)(rng_next() & 0x7fff);
+		f->bufb[i] = (short)(rng_next() & 0x7fff);
+		f->shbuf[i] = (short)(rng_next() & 0x7fff);
+	}
+
+	*(void **)(void *)(f->obj + V27_OBJ_SHARED) = f->sh;
+	*(void **)(void *)(f->obj + V27_OBJ_RX) = f->rx;
+	*(void **)(void *)(f->rx + V27RX_BUF_A) = f->bufa;
+	*(void **)(void *)(f->rx + V27RX_BUF_B) = f->bufb;
+	*(void **)(void *)(f->sh + V27SH_BUF) = f->shbuf;
+
+	for (i = 0; i < MTD_TONES * 2; i++)
+		f->acc[i] = 0;
+	f->mtd.cfg = u->mtd_fires ? dem_mtd_fire : dem_mtd_quiet;
+	f->mtd.acc = f->acc;
+	f->mtd.dc_state[0] = 0;
+	f->mtd.dc_state[1] = 0;
+	f->mtd.out_of_band = 0;
+	f->mtd.wideband = 0;
+	*(void **)(void *)(f->sh + V27SH_MTD) = &f->mtd;
+	*(unsigned short *)(void *)(f->sh + V27SH_SKIP_TONE) = u->skip_tone;
+
+	ref_FPM_AGC_init((struct fpm_agc *)(void *)(f->rx + V27RX_AGC),
+			 &dcd_agc_cfg, 1);
+	ref_FPM_MRF_init((struct fpm_mrf *)(void *)(f->rx + V27RX_MRF),
+			 &MRFv32_CFG, 1);
+	ref_FPM_SRE_init((struct fpm_sre *)(void *)(f->rx + V27RX_SRE),
+			 &SREv32_CFG, 1);
+	ref_FPM_FSE_init((struct fpm_fse *)(void *)(f->rx + V27RX_FSE),
+			 &dem_fse_cfg, 1);
+
+	*(int *)(void *)(f->rx + V27RX_EN_SRE_ADAPT) = dem_enable[u->enables][0];
+	*(int *)(void *)(f->rx + V27RX_EN_FSE_PLL) = dem_enable[u->enables][1];
+	*(int *)(void *)(f->rx + V27RX_EN_FSE_LMS) = dem_enable[u->enables][2];
+}
+
+static void
+dem_free(struct dem_fix *f)
+{
+	ref_FPM_MRF_free((struct fpm_mrf *)(void *)(f->rx + V27RX_MRF));
+	ref_FPM_SRE_free((struct fpm_sre *)(void *)(f->rx + V27RX_SRE));
+	ref_FPM_FSE_free((struct fpm_fse *)(void *)(f->rx + V27RX_FSE));
+}
+
+static struct fpm_agc *
+dem_agc(struct dem_fix *f)
+{
+	return (struct fpm_agc *)(void *)(f->rx + V27RX_AGC);
+}
+
+static struct fpm_fse *
+dem_fse(struct dem_fix *f)
+{
+	return (struct fpm_fse *)(void *)(f->rx + V27RX_FSE);
+}
+
+static struct fpm_sre *
+dem_sre(struct dem_fix *f)
+{
+	return (struct fpm_sre *)(void *)(f->rx + V27RX_SRE);
+}
+
+/* The object's own sequence, with one reading changed. */
+static unsigned short
+drive_demod(int v, struct dem_fix *f, short *in, unsigned short *bits,
+	    unsigned short count)
+{
+	unsigned char *rx = f->rx;
+	unsigned char *sh = f->sh;
+	int signal;
+	unsigned short n, m;
+
+	/*
+	 * THE IDENTITY BEHIND D1094 IS NOT RE-MEASURED HERE, DELIBERATELY.
+	 * The apparatus that would measure it -- calling the blob's `void`
+	 * `FPM_AGC_agc` through a cast that returns `int`, which is what the
+	 * object's own call site did -- is `t_v29fax.c`'s `run_agc_identity`,
+	 * and that is WITHDRAWN under F9001 because it segfaults under the
+	 * period compiler for a reason nobody has established.  Reinstating
+	 * the same construct in a second file would reinstate the same
+	 * unexplained fault, so this model reads the field exactly as `src/`
+	 * does and D1094 records that the equivalence rests on the argument
+	 * about `FPM_AGC_agc`'s single epilogue rather than on a measurement
+	 * here.
+	 */
+	ref_FPM_AGC_agc(dem_agc(f), in, count);
+	signal = dem_agc(f)->signal;
+	dem_agc_ident++;
+	if (v == D_SIGNAL_ONE)
+		signal = 1;
+
+	if (*(unsigned short *)(void *)(sh + V27SH_SKIP_TONE) == 0
+	    || v == D_TONE_ALWAYS) {
+		const short *probe = in;
+
+		if (v == D_MTD_COPY) {
+			short *buf = (short *)
+				*(void **)(void *)(sh + V27SH_BUF);
+			unsigned short i;
+
+			for (i = 0; i < count; i++)
+				buf[i] = (short)(in[i] >> 1);
+			probe = buf;
+		}
+		if (ref_FPM_MTD_detect((struct fpm_mtd *)
+					*(void **)(void *)(sh + V27SH_MTD),
+				       probe, (short)count) != 0
+		    && v != D_NO_ABANDON)
+			return 0;
+	}
+
+	n = (unsigned short)ref_FPM_MRF_filter(
+			(struct fpm_mrf *)(void *)(rx + V27RX_MRF), in,
+			(short *)*(void **)(void *)
+				(rx + (v == D_MRF_TO_BUFB ? V27RX_BUF_B
+							  : V27RX_BUF_A)),
+			(short)count);
+
+	dem_sre(f)->adapt = signal & *(int *)(void *)
+		(rx + (v == D_ADAPT_SOURCE ? V27RX_EN_FSE_PLL
+					   : V27RX_EN_SRE_ADAPT));
+
+	m = ref_FPM_SRE_recover(dem_sre(f),
+			(const short *)(v == D_SRE_FROM_INPUT ? (void *)in
+				: *(void **)(void *)(rx + V27RX_BUF_A)),
+			(short *)*(void **)(void *)(rx + V27RX_BUF_B),
+			(short)n);
+
+	if (v != D_TILT_NOT_CLEARED)
+		dem_fse(f)->tilt_on = 0;
+	dem_fse(f)->lms_on = signal & *(int *)(void *)
+		(rx + (v == D_LMS_PLL_SWAPPED ? V27RX_EN_FSE_PLL
+					      : V27RX_EN_FSE_LMS));
+	dem_fse(f)->pll_on = signal & *(int *)(void *)
+		(rx + (v == D_LMS_PLL_SWAPPED ? V27RX_EN_FSE_LMS
+					      : V27RX_EN_FSE_PLL));
+
+	return ref_FPM_FSE_receive(dem_fse(f),
+			(const short *)*(void **)(void *)
+				(rx + (v == D_FSE_FROM_BUFA ? V27RX_BUF_A
+							    : V27RX_BUF_B)),
+			bits, v == D_FSE_COUNT ? n : m);
+}
+
+static void
+dem_signal(unsigned seed, int level)
+{
+	int i;
+
+	rng_seed(seed);
+	for (i = 0; i < DEM_BUF; i++) {
+		int v = (int)(rng_next() % 4001u) - 2000;
+
+		dem_in[i] = (short)(level == 0 ? 0
+				    : level == 1 ? v / 8
+						 : v * 8);
+	}
+}
+
+static void
+run_demod_one(unsigned seed, const struct dem_setup *u, int level,
+	      unsigned short count, long where)
+{
+	unsigned long marka = 0, markc;
+	int blk, v, i;
+
+	dem_signal(seed ^ 0x0b10cced, level);
+
+	dem_build(&dfa, seed, u);
+	dem_build(&dfb, seed, u);
+
+	for (blk = 0; blk < DEM_BLOCKS; blk++) {
+		unsigned short ra, rb;
+		long id = where * 100 + blk;
+
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_out_a[i] = dem_out_b[i] = 0xbeef;
+			dem_work[i] = dem_in[i];
+		}
+		/*
+		 * The sentinel is planted on EVERY side of every block, so it
+		 * is not a perturbation of one of them: `sre.adapt` is written
+		 * before it is read on every path that reaches the recoverer,
+		 * so what survives is exactly the abandoning path.  Read FROM
+		 * THE REFERENCE, which is F134's rule.
+		 */
+		dem_sre(&dfa)->adapt = DEM_ADAPT_SENTINEL;
+		dem_sre(&dfb)->adapt = DEM_ADAPT_SENTINEL;
+		if (dem_capture)
+			dsplib_debug_capture_reset();
+		ra = ref_DemodDataV27(dfa.obj, dem_work, dem_out_a, count);
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_work_ref[i] = dem_work[i];
+			dem_work[i] = dem_in[i];
+		}
+		rb = DemodDataV27(dfb.obj, dem_work, dem_out_b, count);
+
+		if (dem_capture) {
+			int na = dem_reports(dsplib_debug_capture_text(1),
+					     dem_rep_a, (int)sizeof dem_rep_a);
+			int nb = dem_reports(dsplib_debug_capture_text(0),
+					     dem_rep_b, (int)sizeof dem_rep_b);
+
+			diff_eq_int("at %ld: DemodDataV27 report count",
+				    (long)nb, (long)na, id);
+			diff_eq_int("at %ld: DemodDataV27 report text",
+				    strcmp(dem_rep_b, dem_rep_a) == 0, 1, id);
+			dem_violation_trials += na;
+		}
+		diff_eq_int("at %ld: DemodDataV27 returned", (long)rb,
+			    (long)ra, id);
+		diff_eq_int("at %ld: the return fits the buffer",
+			    ra < DEM_BUF, 1, id);
+		if (ra >= DEM_BUF)
+			break;
+		for (i = 0; i < (int)ra; i++)
+			diff_eq_int("word %ld", (long)dem_out_b[i],
+				    (long)dem_out_a[i], i);
+		diff_eq_int("at %ld: nothing past the returned count",
+			    dem_out_a[ra] == 0xbeef, 1, id);
+		diff_eq_int("at %ld: first differing receiver byte",
+			    dem_first_diff(dfb.rx, dfa.rx, RX_SIZE,
+					   dem_skip_rx), -1, id);
+		diff_eq_int("at %ld: first differing shared byte",
+			    dem_first_diff(dfb.sh, dfa.sh, SH_SIZE,
+					   dem_skip_sh), -1, id);
+		diff_eq_int("at %ld: first differing instance byte",
+			    dem_first_diff(dfb.obj, dfa.obj, OBJ_SIZE,
+					   dem_skip_obj), -1, id);
+		diff_eq_int("at %ld: the tone detector",
+			    dem_first_diff((unsigned char *)&dfb.mtd,
+					   (unsigned char *)&dfa.mtd,
+					   (int)sizeof dfa.mtd, dem_skip_mtd),
+			    -1, id);
+		diff_eq_int("at %ld: the tone detector's accumulators",
+			    dem_first_diff((unsigned char *)dfb.acc,
+					   (unsigned char *)dfa.acc,
+					   (int)sizeof dfa.acc, 0), -1, id);
+		diff_eq_int("at %ld: the resampler's buffer",
+			    dem_first_diff((unsigned char *)dfb.bufa,
+					   (unsigned char *)dfa.bufa,
+					   DEM_BUF * 2, 0), -1, id);
+		diff_eq_int("at %ld: the recoverer's buffer",
+			    dem_first_diff((unsigned char *)dfb.bufb,
+					   (unsigned char *)dfa.bufb,
+					   DEM_BUF * 2, 0), -1, id);
+		diff_eq_int("at %ld: the shared buffer, which V.27ter never"
+			    " writes",
+			    dem_first_diff((unsigned char *)dfb.shbuf,
+					   (unsigned char *)dfa.shbuf,
+					   DEM_BUF * 2, 0), -1, id);
+		diff_eq_int("at %ld: the caller's samples, rewritten in place"
+			    " by the gain control",
+			    dem_first_diff((unsigned char *)dem_work,
+					   (unsigned char *)dem_work_ref,
+					   DEM_BUF * 2, 0), -1, id);
+
+		/*
+		 * The mark carries the three flag words as well as the output:
+		 * `sre.adapt`, `fse.pll_on`, `fse.lms_on` and `fse.tilt_on` do
+		 * not reach the samples on a single block, so four of the
+		 * named wrong readings separate nothing without them.
+		 */
+		marka = marka * 1000003u + ra;
+		for (i = 0; i < (int)ra; i++)
+			marka = marka * 31u + dem_out_a[i];
+		marka = marka * 131u + (unsigned long)(unsigned)
+				dem_sre(&dfa)->adapt;
+		marka = marka * 131u + (unsigned long)(unsigned)
+				dem_fse(&dfa)->pll_on;
+		marka = marka * 131u + (unsigned long)(unsigned)
+				dem_fse(&dfa)->lms_on;
+		marka = marka * 131u + (unsigned long)(unsigned)
+				dem_fse(&dfa)->tilt_on;
+		for (i = 0; i < DEM_BUF; i++)
+			marka = marka * 31u + (unsigned short)dfa.bufa[i];
+		for (i = 0; i < DEM_BUF; i++)
+			marka = marka * 31u + (unsigned short)dfa.bufb[i];
+		for (i = 0; i < DEM_BUF; i++)
+			marka = marka * 31u + (unsigned short)dfa.shbuf[i];
+
+		if (u->skip_tone != 0)
+			dem_skip_trials++;
+		else if (dem_sre(&dfa)->adapt == DEM_ADAPT_SENTINEL)
+			dem_abandon_trials++;
+		else
+			dem_run_trials++;
+		if (dem_agc(&dfa)->signal == 0)
+			dem_signal0_trials++;
+		else
+			dem_signal1_trials++;
+		if (dem_fse(&dfa)->lms_on != 0)
+			dem_lms_trials++;
+		if (dem_sre(&dfa)->adapt != 0)
+			dem_adapt_trials++;
+	}
+
+	dem_free(&dfa);
+	dem_free(&dfb);
+
+	/*
+	 * The variant replay runs the BLOB's modules only, so it would fill
+	 * side 1's transcript and none of side 0's.  Capture is off for it.
+	 */
+	dsplib_debug_capture_on = 0;
+	for (v = 0; v < DEM_VARIANTS; v++) {
+		dem_build(&dfc, seed, u);
+		markc = 0;
+		for (blk = 0; blk < DEM_BLOCKS; blk++) {
+			unsigned short rc;
+
+			for (i = 0; i < DEM_BUF; i++) {
+				dem_out_b[i] = 0xbeef;
+				dem_work[i] = dem_in[i];
+			}
+			dem_sre(&dfc)->adapt = DEM_ADAPT_SENTINEL;
+			rc = drive_demod(v, &dfc, dem_work, dem_out_b, count);
+			markc = markc * 1000003u + rc;
+			if (rc < DEM_BUF)
+				for (i = 0; i < (int)rc; i++)
+					markc = markc * 31u + dem_out_b[i];
+			markc = markc * 131u + (unsigned long)(unsigned)
+					dem_sre(&dfc)->adapt;
+			markc = markc * 131u + (unsigned long)(unsigned)
+					dem_fse(&dfc)->pll_on;
+			markc = markc * 131u + (unsigned long)(unsigned)
+					dem_fse(&dfc)->lms_on;
+			markc = markc * 131u + (unsigned long)(unsigned)
+					dem_fse(&dfc)->tilt_on;
+			for (i = 0; i < DEM_BUF; i++)
+				markc = markc * 31u +
+					(unsigned short)dfc.bufa[i];
+			for (i = 0; i < DEM_BUF; i++)
+				markc = markc * 31u +
+					(unsigned short)dfc.bufb[i];
+			for (i = 0; i < DEM_BUF; i++)
+				markc = markc * 31u +
+					(unsigned short)dfc.shbuf[i];
+		}
+		if (v == 0)
+			diff_eq_int("DemodDataV27 model (%ld)", markc == marka,
+				    1, where);
+		else if (markc != marka)
+			dem_sep[v]++;
+		dem_free(&dfc);
+	}
+	dsplib_debug_capture_on = dem_capture;
+}
+
+static int
+run_demod(void)
+{
+	static const unsigned short counts[] = { 32, 160, 700 };
+	int gate, fires, enables, level, c, v;
+	long where = 0;
+
+	dcd_cfg_init();
+	dem_tables();
+	diff_begin("DemodDataV27");
+
+	for (gate = 0; gate < 2; gate++)
+	for (fires = 0; fires < 2; fires++)
+	for (enables = 0; enables < 2; enables++)
+	for (level = 0; level < 3; level++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		struct dem_setup u;
+
+		u.skip_tone = (unsigned short)(gate ? 0x1234 : 0);
+		u.mtd_fires = fires;
+		u.enables = enables;
+		run_demod_one(0x0de70000u + (unsigned)where, &u, level,
+			      counts[c], where);
+		where++;
+	}
+
+	/*
+	 * The debug arm, run separately: the "SRE buffer violation" report is
+	 * the only output of the threshold at 0xa4, and it exists only above
+	 * debug level 1.
+	 */
+	{
+		struct dem_setup u;
+
+		u.skip_tone = 0x1234;
+		u.mtd_fires = 0;
+		u.enables = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 2;
+		dem_capture = 1;
+		dsplib_debug_capture_on = 1;
+		run_demod_one(0x0de7dbeeu, &u, 2, 700, where++);
+		dsplib_debug_capture_on = 0;
+		dem_capture = 0;
+		dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+		diff_eq_int("DemodDataV27 reported an SRE buffer violation"
+			    " (%ld)", dem_violation_trials > 0, 1,
+			    dem_violation_trials);
+	}
+
+	diff_eq_int("DemodDataV27 measured the AGC identity (%ld)",
+		    dem_agc_ident > 0, 1, dem_agc_ident);
+	diff_eq_int("DemodDataV27 abandoned on a tone (%ld)",
+		    dem_abandon_trials > 0, 1, dem_abandon_trials);
+	diff_eq_int("DemodDataV27 ran the whole chain (%ld)",
+		    dem_run_trials > 0, 1, dem_run_trials);
+	diff_eq_int("DemodDataV27 skipped the tone test (%ld)",
+		    dem_skip_trials > 0, 1, dem_skip_trials);
+	diff_eq_int("the carrier bit was 0 (%ld)", dem_signal0_trials > 0, 1,
+		    dem_signal0_trials);
+	diff_eq_int("the carrier bit was 1 (%ld)", dem_signal1_trials > 0, 1,
+		    dem_signal1_trials);
+	diff_eq_int("fse.lms_on came out set (%ld)", dem_lms_trials > 0, 1,
+		    dem_lms_trials);
+	diff_eq_int("sre.adapt came out set (%ld)", dem_adapt_trials > 0, 1,
+		    dem_adapt_trials);
+	for (v = 1; v < DEM_VARIANTS; v++)
+		diff_eq_int("demodulator wrong reading %ld separates",
+			    dem_sep[v] > 0, 1, v);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* 14.  V27TX_delete                                                      */
+/*
+ * The same shape as `V27RX_delete` and with the same limitation stated in the
+ * file header: the harness's allocator records what is LIVE, not the sequence
+ * of frees, so the ORDER is taken from the disassembly alone.  What is checked
+ * is the SET of pointers released, the multiplicity, that nothing unknown was
+ * freed, and that six named wrong readings each change one of those.
+ *
+ * The three sub-deletes are the blob's own -- `FPM_PPS_free`, `FIFO_delete`
+ * and `SGD_delete` -- reached through this reconstruction, so what this test
+ * measures about them is only that the right pointer arrived.
+ */
+#define TXDEL_PTRS	10
+#define TXBLK_SIZE	0xa0
+
+struct txdel_build {
+	void	*modem;
+	void	*tx;
+	void	*src;
+	void	*ptr[TXDEL_PTRS];
+	int	nptr;
+};
+
+static void *
+txdel_alloc(struct txdel_build *b, unsigned size)
+{
+	void *p = sysdep_malloc(size);
+
+	if (b->nptr < TXDEL_PTRS)
+		b->ptr[b->nptr++] = p;
+	return p;
+}
+
+static void
+txdel_build(struct txdel_build *b)
+{
+	struct fpm_pps *pps;
+	struct fax_fifo *fifo;
+	struct sgd *sgd;
+	int i;
+
+	b->nptr = 0;
+
+	b->modem = txdel_alloc(b, OBJ_SIZE);
+	memset(b->modem, 0, OBJ_SIZE);
+	b->tx = txdel_alloc(b, TXBLK_SIZE);
+	memset(b->tx, 0, TXBLK_SIZE);
+	b->src = txdel_alloc(b, 0x20);
+	memset(b->src, 0, 0x20);
+
+	FXP(b->modem, V27_OBJ_TX) = b->tx;
+	FXP(b->modem, V27_OBJ_TXDATA) = b->src;
+
+	pps = (struct fpm_pps *)(void *)FX(b->tx, V27TX_PPS);
+	pps->hist_i = (short *)txdel_alloc(b, 62);
+	pps->hist_q = (short *)txdel_alloc(b, 64);
+
+	((struct fpm_smc_ring *)(void *)FX(b->tx, V27TX_RING))->sym =
+			(short *)txdel_alloc(b, 66);
+
+	fifo = (struct fax_fifo *)txdel_alloc(b, sizeof(struct fax_fifo));
+	memset(fifo, 0, sizeof(*fifo));
+	fifo->buf = (unsigned short *)txdel_alloc(b, 68);
+	FXP(b->src, V27TXD_FIFO) = fifo;
+
+	sgd = (struct sgd *)txdel_alloc(b, sizeof(struct sgd));
+	memset(sgd, 0, sizeof(*sgd));
+	sgd->hist = (unsigned short *)txdel_alloc(b, 70);
+	FXP(b->src, V27TXD_SGD) = sgd;
+
+	for (i = 0; i < b->nptr; i++) {
+		if (b->ptr[i] == 0)
+			diff_eq_int("tx delete fixture allocated (%ld)", 0, 1,
+				    (long)i);
+	}
+	if (b->nptr != TXDEL_PTRS)
+		diff_eq_int("tx delete fixture planted every pointer (%ld)",
+			    b->nptr, TXDEL_PTRS, 0);
+}
+
+static unsigned long
+txdel_live(const struct txdel_build *b)
+{
+	unsigned long m = 0;
+	int i;
+
+	for (i = 0; i < b->nptr; i++)
+		if (harness_alloc_ordinal(b->ptr[i]) != 0)
+			m |= 1UL << i;
+	return m;
+}
+
+static long txdel_sep[7];
+
+static int
+run_txdelete(void)
+{
+	struct txdel_build b;
+	unsigned long live_ref, live_ours, live_bad;
+	int frees_ref, bad_ref, frees_ours, bad_ours;
+	int v;
+
+	diff_begin("V27TX_delete");
+
+	harness_alloc_reset();
+	txdel_build(&b);
+	frees_ref = harness_alloc.frees;
+	bad_ref = harness_alloc.bad_free;
+	ref_V27TX_delete(b.modem);
+	live_ref = txdel_live(&b);
+	frees_ref = harness_alloc.frees - frees_ref;
+	bad_ref = harness_alloc.bad_free - bad_ref;
+
+	diff_eq_int("the blob released everything (%ld)", (long)live_ref, 0, 0);
+	diff_eq_int("the blob freed each pointer once (%ld)", frees_ref,
+		    TXDEL_PTRS, 0);
+	diff_eq_int("the blob freed nothing unknown (%ld)", bad_ref, 0, 0);
+
+	harness_alloc_reset();
+	txdel_build(&b);
+	frees_ours = harness_alloc.frees;
+	bad_ours = harness_alloc.bad_free;
+	V27TX_delete(b.modem);
+	live_ours = txdel_live(&b);
+	frees_ours = harness_alloc.frees - frees_ours;
+	bad_ours = harness_alloc.bad_free - bad_ours;
+
+	diff_eq_int("V27TX_delete live set (%ld)", (long)live_ours,
+		    (long)live_ref, 0);
+	diff_eq_int("V27TX_delete free count (%ld)", frees_ours, frees_ref, 0);
+	diff_eq_int("V27TX_delete bad frees (%ld)", bad_ours, bad_ref, 0);
+	diff_eq_int("V27TX_delete left nothing live (%ld)", harness_alloc.live,
+		    0, 0);
+
+	/*
+	 *   1  the symbol ring's buffer not released
+	 *   2  the transmitter block not released
+	 *   3  the data-source block not released
+	 *   4  the FIFO released and the `sgd` left alone
+	 *   5  the instance itself not released
+	 *   6  the pulse shaper's two histories not released
+	 */
+	for (v = 1; v <= 6; v++) {
+		int f0, bf0;
+
+		harness_alloc_reset();
+		txdel_build(&b);
+		f0 = harness_alloc.frees;
+		bf0 = harness_alloc.bad_free;
+
+		if (v != 6)
+			FPM_PPS_free((struct fpm_pps *)(void *)
+					FX(b.tx, V27TX_PPS));
+		if (v != 1)
+			sysdep_free(((struct fpm_smc_ring *)(void *)
+					FX(b.tx, V27TX_RING))->sym);
+		if (v != 2)
+			sysdep_free(b.tx);
+		FIFO_delete((struct fax_fifo *)FXP(b.src, V27TXD_FIFO));
+		if (v != 4)
+			SGD_delete((struct sgd *)FXP(b.src, V27TXD_SGD));
+		if (v != 3)
+			sysdep_free(b.src);
+		if (v != 5)
+			sysdep_free(b.modem);
+
+		live_bad = txdel_live(&b);
+		if (live_bad != live_ref
+		    || harness_alloc.frees - f0 != frees_ref
+		    || harness_alloc.bad_free - bf0 != bad_ref)
+			txdel_sep[v]++;
+
+		harness_alloc_reset();
+	}
+
+	for (v = 1; v <= 6; v++)
+		diff_eq_int("V27TX_delete wrong reading %ld separates",
+			    txdel_sep[v] > 0, 1, v);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* 15.  ModDataV27                                                        */
+/*
+ * Two calls over one shared ring, so what can be wrong is WHICH ring each end
+ * of the pair is given and WHICH count.  The fixture therefore carries a
+ * SECOND, differently-seeded ring with its own three buffers: a wrong reading
+ * then writes or reads a live ring and produces a wrong answer, rather than
+ * building a pointer out of two cursors and faulting.
+ *
+ * Both modules are constructed by the BLOB's own `_init` on both sides
+ * (D955), and each trial is MOD_BLOCKS consecutive blocks because the ring's
+ * two cursors, the shaper's phase and both its histories carry across (F8790).
+ *
+ * Variants:
+ *   0  the reading this reconstruction claims
+ *   1  the encoder writes the other ring
+ *   2  the shaper reads the other ring
+ *   3  the shaper given one symbol fewer
+ *   4  the two calls in the other order
+ *   5  the encoder not called at all
+ */
+#define MOD_RING	64
+#define MOD_BUF		1024
+#define MOD_BLOCKS	8
+#define MOD_VARIANTS	6
+
+struct mod_fix {
+	unsigned char		obj[OBJ_SIZE];
+	unsigned char		tx[TXBLK_SIZE];
+	short			ri[MOD_RING], rq[MOD_RING], rs[MOD_RING];
+	short			ai[MOD_RING], aq[MOD_RING], as[MOD_RING];
+	struct fpm_smc_ring	alt;
+	double			align;
+};
+
+static struct mod_fix mfa, mfb, mfc;
+
+static unsigned short mod_bits[MOD_BUF];
+static short mod_out_a[MOD_BUF], mod_out_b[MOD_BUF];
+
+static long mod_sep[MOD_VARIANTS];
+static long mod_wrap_trials;	/* the ring's write cursor wrapped         */
+static long mod_out_trials;	/* the shaper produced something           */
+
+static struct fpm_smc_ring *
+mod_ring(struct mod_fix *f)
+{
+	return (struct fpm_smc_ring *)(void *)FX(f->tx, V27TX_RING);
+}
+
+static struct fpm_smc *
+mod_smc(struct mod_fix *f)
+{
+	return (struct fpm_smc *)(void *)FX(f->tx, V27TX_SMC);
+}
+
+static struct fpm_pps *
+mod_pps(struct mod_fix *f)
+{
+	return (struct fpm_pps *)(void *)FX(f->tx, V27TX_PPS);
+}
+
+/*
+ * The bytes a comparison must skip, and only those: the ring's three buffer
+ * pointers, which are per-fixture addresses, and the shaper's two histories,
+ * which each side's `FPM_PPS_init` allocated for itself.  The buffers those
+ * pointers name ARE compared, one array at a time, below.
+ */
+static int
+mod_skip_tx(int off)
+{
+	if (off >= V27TX_RING && off < V27TX_RING + 0x0c)
+		return 1;
+	return off >= V27TX_PPS + 0x30 && off < V27TX_PPS + 0x38;
+}
+
+static int
+mod_skip_obj(int off)
+{
+	return off >= V27_OBJ_TX && off < V27_OBJ_TX + 4;
+}
+
+static void
+mod_ring_init(struct fpm_smc_ring *r, short *i, short *q, short *sym)
+{
+	r->i = i;
+	r->q = q;
+	r->sym = sym;
+	r->widx = 0;
+	r->ridx = 0;
+	r->len = MOD_RING;
+}
+
+static void
+mod_build(struct mod_fix *f, unsigned seed)
+{
+	int i;
+
+	memset(f, 0, sizeof(*f));
+	rng_seed(seed);
+	rng_fill(f->obj, OBJ_SIZE);
+	rng_fill(f->tx, TXBLK_SIZE);
+	for (i = 0; i < MOD_RING; i++) {
+		f->ri[i] = (short)rng_next();
+		f->rq[i] = (short)rng_next();
+		f->rs[i] = (short)(rng_next() & 3u);
+		f->ai[i] = (short)rng_next();
+		f->aq[i] = (short)rng_next();
+		f->as[i] = (short)(rng_next() & 3u);
+	}
+
+	FXP(f->obj, V27_OBJ_TX) = f->tx;
+	mod_ring_init(mod_ring(f), f->ri, f->rq, f->rs);
+	mod_ring_init(&f->alt, f->ai, f->aq, f->as);
+
+	ref_SMC_init(mod_smc(f), &SMC_CFG);
+	ref_FPM_PPS_init(mod_pps(f), &PPSv32_CFG, 1);
+}
+
+static void
+mod_free(struct mod_fix *f)
+{
+	ref_FPM_PPS_free(mod_pps(f));
+}
+
+/* The object's own pair, with one reading changed. */
+static unsigned short
+mod_model(int v, struct mod_fix *f, const unsigned short *bits, short *out,
+	  unsigned short count)
+{
+	struct fpm_smc_ring *enc = (v == 1) ? &f->alt : mod_ring(f);
+	struct fpm_smc_ring *shp = (v == 2) ? &f->alt : mod_ring(f);
+	unsigned short n = (v == 3) ? (unsigned short)(count - 1) : count;
+	unsigned short r;
+
+	if (v == 4) {
+		r = ref_FPM_PPS_filter(mod_pps(f), shp, out, n);
+		ref_SMC_encoder(mod_smc(f), enc, bits, count);
+		return r;
+	}
+	if (v != 5)
+		ref_SMC_encoder(mod_smc(f), enc, bits, count);
+	return ref_FPM_PPS_filter(mod_pps(f), shp, out, n);
+}
+
+static unsigned long
+mod_mark(unsigned long m, struct mod_fix *f, const short *out, int n,
+	 unsigned short ret)
+{
+	int i;
+
+	m = m * 1000003u + ret;
+	for (i = 0; i < n; i++)
+		m = m * 31u + (unsigned short)out[i];
+	for (i = 0; i < MOD_RING; i++) {
+		m = m * 31u + (unsigned short)f->ri[i];
+		m = m * 31u + (unsigned short)f->rq[i];
+		m = m * 31u + (unsigned short)f->rs[i];
+		m = m * 31u + (unsigned short)f->ai[i];
+		m = m * 31u + (unsigned short)f->aq[i];
+		m = m * 31u + (unsigned short)f->as[i];
+	}
+	m = m * 131u + (unsigned short)mod_ring(f)->widx;
+	m = m * 131u + (unsigned short)mod_ring(f)->ridx;
+	m = m * 131u + (unsigned short)f->alt.widx;
+	m = m * 131u + (unsigned short)f->alt.ridx;
+	m = m * 131u + (unsigned short)mod_pps(f)->phase;
+	m = m * 131u + (unsigned short)mod_pps(f)->widx;
+	m = m * 131u + (unsigned short)mod_pps(f)->need;
+	return m;
+}
+
+static void
+run_mod_one(unsigned seed, unsigned short count, long tag)
+{
+	unsigned long marka = 0, markc;
+	int blk, v, i;
+
+	mod_build(&mfa, seed);
+	mod_build(&mfb, seed);
+
+	for (blk = 0; blk < MOD_BLOCKS; blk++) {
+		unsigned short ra, rb;
+		long id = tag * 100 + blk;
+		short widx0 = mod_ring(&mfa)->widx;
+
+		rng_seed(seed + (unsigned)blk * 104729u);
+		for (i = 0; i < MOD_BUF; i++) {
+			mod_bits[i] = (unsigned short)(rng_next() & 7u);
+			mod_out_a[i] = mod_out_b[i] = (short)0x5ead;
+		}
+
+		ra = ref_ModDataV27(mfa.obj, mod_bits, mod_out_a, count);
+		rb = ModDataV27(mfb.obj, mod_bits, mod_out_b, count);
+
+		diff_eq_int("at %ld: ModDataV27 returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: the return fits the buffer", ra < MOD_BUF,
+			    1, id);
+		if (ra >= MOD_BUF)
+			break;
+		for (i = 0; i < (int)ra; i++)
+			diff_eq_int("sample %ld", (long)mod_out_b[i],
+				    (long)mod_out_a[i], i);
+		diff_eq_int("at %ld: nothing past the returned count",
+			    mod_out_a[ra] == (short)0x5ead, 1, id);
+		diff_eq_int("at %ld: first differing transmitter byte",
+			    dem_first_diff(mfb.tx, mfa.tx, TXBLK_SIZE,
+					   mod_skip_tx), -1, id);
+		diff_eq_int("at %ld: first differing instance byte",
+			    dem_first_diff(mfb.obj, mfa.obj, OBJ_SIZE,
+					   mod_skip_obj), -1, id);
+		diff_eq_int("at %ld: the symbol ring",
+			    dem_first_diff((unsigned char *)mfb.rs,
+					   (unsigned char *)mfa.rs,
+					   MOD_RING * 2, 0), -1, id);
+		diff_eq_int("at %ld: the ring's I rail",
+			    dem_first_diff((unsigned char *)mfb.ri,
+					   (unsigned char *)mfa.ri,
+					   MOD_RING * 2, 0), -1, id);
+		diff_eq_int("at %ld: the ring's Q rail",
+			    dem_first_diff((unsigned char *)mfb.rq,
+					   (unsigned char *)mfa.rq,
+					   MOD_RING * 2, 0), -1, id);
+		diff_eq_int("at %ld: the decoy ring, which nothing may touch",
+			    dem_first_diff((unsigned char *)mfb.as,
+					   (unsigned char *)mfa.as,
+					   MOD_RING * 2, 0), -1, id);
+
+		if (mod_ring(&mfa)->widx < widx0)
+			mod_wrap_trials++;
+		if (ra > 0)
+			mod_out_trials++;
+		marka = mod_mark(marka, &mfa, mod_out_a, (int)ra, ra);
+	}
+
+	mod_free(&mfa);
+	mod_free(&mfb);
+
+	for (v = 0; v < MOD_VARIANTS; v++) {
+		mod_build(&mfc, seed);
+		markc = 0;
+		for (blk = 0; blk < MOD_BLOCKS; blk++) {
+			unsigned short rc;
+
+			rng_seed(seed + (unsigned)blk * 104729u);
+			for (i = 0; i < MOD_BUF; i++) {
+				mod_bits[i] = (unsigned short)(rng_next() & 7u);
+				mod_out_b[i] = (short)0x5ead;
+			}
+			rc = mod_model(v, &mfc, mod_bits, mod_out_b, count);
+			markc = mod_mark(markc, &mfc, mod_out_b,
+					 rc < MOD_BUF ? (int)rc : 0, rc);
+		}
+		if (v == 0)
+			diff_eq_int("ModDataV27 model (%ld)", markc == marka, 1,
+				    tag);
+		else if (markc != marka)
+			mod_sep[v]++;
+		mod_free(&mfc);
+	}
+}
+
+static int
+run_moddata(void)
+{
+	static const unsigned short counts[] = { 1, 4, 16, 40 };
+	int c, v;
+	long tag = 0;
+
+	diff_begin("ModDataV27");
+
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		run_mod_one(0x0d27f000u + (unsigned)tag, counts[c], tag);
+		tag++;
+	}
+
+	diff_eq_int("ModDataV27 wrapped the ring's write cursor (%ld)",
+		    mod_wrap_trials > 0, 1, mod_wrap_trials);
+	diff_eq_int("ModDataV27 produced samples (%ld)", mod_out_trials > 0, 1,
+		    mod_out_trials);
+	for (v = 1; v < MOD_VARIANTS; v++)
+		diff_eq_int("ModDataV27 wrong reading %ld separates",
+			    mod_sep[v] > 0, 1, v);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -2197,6 +4037,11 @@ main(void)
 	rc |= run_modem();
 	rc |= run_delete();
 	rc |= run_dcd();
+	rc |= run_eq_train();
+	rc |= run_scramble();
+	rc |= run_demod();
+	rc |= run_txdelete();
+	rc |= run_moddata();
 	rc |= sep_report();
 
 	return rc;

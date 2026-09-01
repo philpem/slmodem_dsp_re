@@ -103949,3 +103949,231 @@ fine.
 
 Shown to fire: a detached worktree at `c1ca61af` reports "140 commit(s)
 behind"; the up-to-date tree is silent.  (2026-08-31)
+
+### F9115. V.27ter's demodulator hands the tone detector the CALLER's buffer -- no copy and no notch, where V.17 and V.29 have both
+
+`DemodDataV17`, `DemodDataV29` and `DemodDataV27` are the same six-stage
+receive chain, and the tone pre-pass is the one stage where they are not the
+same code.
+
+V.29's (0x0a5ff0) copies the block into the detection block's scratch buffer,
+halving each sample, runs `FPM_TONE_kill` over the COPY and hands the copy to
+`FPM_MTD_detect`. V.17's does the same thing.
+
+V.27ter's (0x0a5950) does neither. Its 331 bytes contain **no loop at all** --
+the only backward branch is the `jmp` that rejoins after the debug print -- and
+**no `FPM_TONE_kill` relocation**; there are eight relocations in the range and
+they name `FPM_AGC_agc`, `FPM_MTD_detect`, `FPM_MRF_filter`, `FPM_SRE_recover`,
+`FPM_FSE_receive`, `dsplibs_debug_level`, `.rodata.str1.4` and
+`dsplibs_debug_printf`. The detector is given `in`, the caller's own buffer, at
+0x0a599b -- and by then that buffer is what `FPM_AGC_agc` has rewritten in
+place, so the detector runs on gain-controlled samples rather than on a halved
+copy.
+
+The shared block still HAS a scratch buffer at +0x1c and still uses it:
+`DataCarrierDetectV27` copies into it, gain-controls the copy and runs the
+V.21 detector over that. So the buffer is not unused, and this is not a
+demodulator that was written before the buffer existed.
+
+**Checked against the bytes rather than inferred from the size**, because it
+is the structural difference between the three and a reader who assumes the
+family is uniform writes a copy loop that no test can fail on: the copy would
+be into a buffer nothing downstream reads, and the detector would see the same
+samples either way only if the halving were also omitted.  (2026-09-01)
+
+### F9116. `DemodDataV27` is the fourth site to call `FPM_AGC_agc` with an argument it does not have and read a result it does not return
+
+At 0x0a5975 the object stores the literal 1 into `0xc(%esp)` -- a fourth
+argument -- and at 0x0a5992 it takes `%eax` as the carrier bit and ANDs it into
+three of the receiver's enable words. `FPM_AGC_agc` is `void` and takes three
+arguments.
+
+That is F8875's shape exactly, and the same argument closes it: the function
+has one `ret`, every path funnels through it, and the two instructions before
+it store `agc->signal`. So the reconstruction reads the field.
+
+**The four sites are `v22data.c`, `bwchdem.c`, `DemodDataV29` and this one**,
+and the extra argument also appears at `V27RX_delete`'s three `FPM_*_free`
+calls (F8870). One prototype in one header, wrong in both directions, was
+included by several translation units -- which is what a private header that
+was not kept in step with its module looks like from the object.
+
+Recorded as D1094, and `t_v27fax.c` MEASURES the identity rather than
+believing it: it declares `ref_FPM_AGC_agc` as returning `int` and asserts the
+returned value equals `agc.signal` on every demodulator trial, so a blob that
+ever broke the equivalence would fail rather than pass quietly.  (2026-09-01)
+
+### F9117. `V27RX_eq_train` contains a counted loop with no body, and there is no preimage to recover
+
+At the handover, before it clears `lms_force` and installs `V27RX_decision`,
+the object runs
+
+    9a1ce:  movzwl 0xc(%ebx),%edx        ; state->cfg.taps
+    9a1d2:  xor    %eax,%eax             ; i = 0
+    9a1d4:  cmp    $0x0,%dx
+    9a1d8:  jmp    9a1e5
+    9a1e0:  inc    %eax
+    9a1e1:  cwtl                         ; i is a short
+    9a1e2:  cmp    %ax,%dx
+    9a1e5:  jg     9a1e0
+
+and falls straight through to `movl $0x0,0x40(%ebx)`. `%eax` is dead at the
+exit. The bound is hoisted, the induction variable is a `short`, and the body
+is empty.
+
+**Whatever the author wrote there emitted no instructions**, so the candidate
+space is not a small finite family and the fit-versus-recovery rule (F7782)
+says this is not recoverable: a loop over `cfg.taps` accumulating into an
+unused local, a loop whose body was `#if`-ed out, and a deliberately empty
+loop all compile to this and nothing separates them. The obvious guess -- that
+it re-seeds the equaliser's coefficients from `cfg.icoff`/`cfg.qcoff` -- is
+REFUTED rather than merely unproven, because those stores would have to appear
+and none do.
+
+Reproduced as an empty loop, for the control flow and for nothing else. It is
+not observable, so no test can cover it and none pretends to; GCC 14 deletes
+it and GCC 3.4.2 emits it, which is why it is recorded here rather than
+defended in a comment alone.  (2026-09-01)
+
+### F9118. V.27ter's two scrambler wrappers sign-extend their count where V.17's and V.29's zero-extend it, and the difference cannot be observed through the callee
+
+`ScrambleDataV27` (0x0a5e70) and `DescrambleDataV27` (0x0a5aa0) are 28 bytes
+each and identical but for two constants:
+
+    a5e70:  movswl 0xc(%esp),%ecx        ; count, SIGN-extended
+    a5e75:  mov    0x4(%esp),%edx        ; modem
+    a5e79:  mov    %ecx,0xc(%esp)
+    a5e7d:  mov    0x28(%edx),%eax       ; the TRANSMITTER block
+    a5e80:  add    $0x1c,%eax
+    a5e83:  mov    %eax,0x4(%esp)
+    a5e87:  jmp    SDMv27_scrambler
+
+The descrambler takes `0x54(%edx)` -- the RECEIVER block -- and `+0x3c`. So
+the scrambler state lives in the transmitter's block and the descrambler's in
+the receiver's, at two different offsets, and neither wrapper does anything
+else.
+
+The wrappers around the GENERIC scrambler module in `v17data.c` and
+`v29data.c` widen their count with `movzwl`. `SDMv27_scrambler` takes a
+`short`, so **the widening the wrapper chooses is not observable through it**
+-- the callee reads sixteen bits either way. It is recorded because it is
+forced (the caller's own parameter must be a `short` for GCC to emit
+`movswl` on it) and because `sdmv27.h` already records what the module makes
+of a negative count, which is not an early exit: the loop is
+`while (count--)`, so it wraps and runs tens of thousands of words.
+
+`t_v27fax.c` therefore does not try to separate the two widenings and says so.
+What it DOES separate is the four block/offset combinations, by planting a
+live, differently-seeded `struct sdmv27` at each of them -- so a wrapper
+reading the wrong block or the wrong offset gets a plausible scrambler and a
+wrong answer rather than a fault.  (2026-09-01)
+
+### F9119. `V27RX_eq_train`'s two fold comparisons are strict on one side and equal on the other, and NO test can ever settle which -- the folded difference is used only for its magnitude
+
+The training slicer folds the phase difference into half a turn either side:
+
+    9a14b:  cmp    $0x4000,%dx
+    9a150:  jle    9a15b                  ; skip unless d >  +0x4000
+    9a152:  lea    0x8000(%edx),%eax
+    ...
+    9a15b:  cmp    $0xc000,%dx
+    9a160:  jge    9a16b                  ; skip unless d <  -0x4000
+
+so the high test is `>` and the low test is `<`, and exactly +0x4000 folds
+while exactly -0x4000 does not -- an asymmetry that reads like a defect.
+
+**It is not observable, and that was MEASURED and not argued.** Both
+`>=` variants were written into `t_v27fax.c`'s model, run over a fixture whose
+angle sequence lands on both boundaries by construction, and both reported a
+separating count of **zero**. The reason is that `d` reaches exactly one
+consumer -- `err = |d|`, tested against a quarter turn -- and folding by a
+half turn at exactly a half turn NEGATES `d`, leaving `|d|` alone. Every
+observable of the function is identical.
+
+So the two strictnesses are settled by the disassembly and by nothing else,
+which is the honest statement, and the test now carries two variants that ARE
+observable in their place: the folds themselves OMITTED. Those separate,
+because folding can carry `|d|` from above the advance threshold to below it
+(0x7000 folds to -0x1000).
+
+**The general shape is worth carrying.** A comparison whose operand feeds only
+an absolute value is boundary-blind at the point where the fold is its own
+negation, and a wrong-reading variant aimed at the boundary reports zero and
+looks like a hole in the fixture. It is not a hole; the fixture is right and
+the mutant is equivalent. F134's rule says a zero separating count is a
+failure -- this is the case where the correct response is to REPLACE the
+variant rather than to strengthen the stimulus, and to say in the record that
+the property is unreachable.  (2026-09-01)
+
+### F9120. A callee's out-of-band static counter makes a whole-transcript comparison measure the apparatus, not the code
+
+`t_v27fax`'s demodulator trial compares the two sides' debug transcripts, and
+two of eight blocks disagreed -- on one block the reconstruction printed
+`Decoder Error = 16525` and the blob printed nothing, on another the reverse.
+Every numeric observable agreed on both: the return, every output word, the
+whole 20,320-byte receiver block, both scratch buffers, and
+`DemodDataV27`'s OWN report, `ERROR: SRE buffer violation(630)`, which was
+byte-identical.
+
+The cause is in `FPM_FSE_receive`, not in either demodulator. Its
+"Decoder Error" report is gated on a counter that lives **outside**
+`struct fpm_fse` -- one static per side -- and the trial replays the BLOB's
+modules 96 extra times per case for the wrong-reading variants and the
+reconstruction's not at all. By the debug arm the two statics are hundreds of
+calls apart, so a whole-transcript `strcmp` was reporting how often each side
+had been CALLED.
+
+**A state that a fixture cannot snapshot is a state a differential test cannot
+carry**, and this is the general form: `diff_eq_obj` over the instance is
+blind to it by construction, so it fails only where the transcript is the
+observable. The two candidate fixes are not equal --
+
+- narrow the comparison to the output of the function UNDER TEST, which is
+  what was done: the report is extracted by its prefix and both the count and
+  the text are compared, so the threshold at 0xa4 and the `%d` argument are
+  still measured; or
+- drive both sides the same number of times, which would mean replaying every
+  wrong reading through the reconstruction as well and would make the model a
+  copy of `src/` rather than an independent statement of it.
+
+The first keeps the model independent. What it gives up is `FPM_FSE_receive`'s
+own diagnostic path, which belongs to `t_fpmfse` and not here.  (2026-09-01)
+
+### F9121. The V.27ter transmitter block tiles exactly like the receiver's, and the tiling REFUTED the obvious reading of `tx + 0x10`
+
+`V27TX_delete` frees `*(int *)(tx + 0x10)` and the obvious reading is a scratch
+allocation of the transmitter's own -- which is how it was first written here.
+It is wrong, and the arithmetic that settles it is `v27fax.h`'s own method
+applied to the other block.
+
+Three of the four regions are typed by a CALLEE and the fourth by the module
+that owns it:
+
+    tx + 0x08   struct fpm_smc_ring   ModDataV27's 2nd argument to BOTH calls
+    tx + 0x1c   struct sdmv27         ScrambleDataV27
+    tx + 0x2c   struct fpm_smc        SMC_encoder
+    tx + 0x5c   struct fpm_pps        FPM_PPS_filter and FPM_PPS_free
+
+and their sizes close the block:
+
+    0x08 + 0x14 == 0x1c     sizeof(struct fpm_smc_ring)
+    0x1c + 0x0e == 0x2a     sizeof(struct sdmv27), aligned up to 0x2c
+    0x2c + 0x30 == 0x5c     sizeof(struct fpm_smc)
+    0x5c + 0x38 == 0x94     sizeof(struct fpm_pps)
+
+One two-byte alignment gap, no overlap, and **no room for a field at 0x10**:
+0x10 is `V27TX_RING + offsetof(struct fpm_smc_ring, sym)`, the symbol-index
+buffer the encoder writes and the shaper reads. So the delete releases the
+RING's buffer, and `src/fax/v27.c` spells it `ring->sym` rather than an opaque
+`FIELD_PTR(tx, 0x10)`.
+
+**Both spellings free the same address, so no test can tell them apart** --
+this is the class of error the naming rules exist for, a wrong name believed by
+every future reader with nothing able to fail on it. What caught it was
+building the block's map to write `ModDataV27` and finding two names for one
+offset; the same method had already closed the receiver's four modules, and
+neither was available before the transmit-side functions were read.
+
+`t_v27fax.c` plants the ring's `sym` through the structure, so the test would
+now fail if the field moved -- but it agreed with the wrong spelling too, and
+that is the point.  (2026-09-01)
