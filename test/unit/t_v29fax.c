@@ -124,6 +124,7 @@
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sre.h"
+#include "dsplib/fpm_sdm.h"
 #include "dsplib/fpm_smc.h"
 #include "dsplib/sysdep.h"
 
@@ -136,6 +137,11 @@ extern short ref_GetSNRV29(void *modem);
 extern void  ref_SeedScramblerV29(void *modem, int seed);
 extern void  ref_SetEncoderV29(void *modem, short which);
 extern int   ref_V29TX_status(void *tx, void *status);
+extern int   ref_V29RX_status(void *modem, void *status);
+extern void  ref_ScrambleDataV29(void *modem, unsigned short *data,
+				 unsigned short count);
+extern void  ref_DescrambleDataV29(void *modem, unsigned short *data,
+				   unsigned short count);
 extern void  ref_V29RX_delete(void *modem);
 extern int   ref_V29RX_modem(void *modem, short *in, short *out,
 			     unsigned short *count);
@@ -188,6 +194,8 @@ extern unsigned short ref_FPM_FSE_receive(struct fpm_fse *state,
 					  const short *in, unsigned short *out,
 					  unsigned short count);
 extern void  ref_FPM_TONE_kill(void *state, short *samples, short count);
+extern void  ref_FPM_SDM_init(struct fpm_sdm *sdm,
+			      const struct fpm_sdm_cfg *cfg);
 extern void  ref_FPM_TONE_delete(void *state);
 
 /*
@@ -735,6 +743,304 @@ run_status(void)
 		diff_eq_int("a null status returns zero", ra, 0, 0);
 		compare_state(&fa, &fb, 0);
 		st_null_trials++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* V29RX_status                                                          */
+
+/*
+ * The receiver's half of the report.  It is not a mirror of the transmit one
+ * and the checks below are built around the four ways it differs: which
+ * handle it reads, which slots take the bit rate, that it writes +0x0e and
+ * not +0x0c, and that its flags byte is rewritten four times.
+ *
+ * THE STATUS BLOCK IS OVERLAID ON THE INSTANCE IN HALF THE TRIALS, which is
+ * the only arrangement that can observe the intermediate stores at all: the
+ * object flushes +0x14 before each load through `modem`, and a disjoint
+ * report cannot tell that from one store at the end.  The overlay is placed
+ * so that the report's +0x14 lands on the instance's +0x14 -- a byte
+ * `V29RX_status` neither reads nor writes through `modem`, so both sides see
+ * the same sequence and any difference is the code's.
+ */
+static long rxst_bps_sep, rxst_q0, rxst_q1, rxst_b1_0, rxst_b1_1;
+static long rxst_b3_0, rxst_b3_1, rxst_b5_0, rxst_b5_1;
+static long rxst_gap_sep, rxst_alias_sep, rxst_null_trials;
+
+static int
+run_rxstatus(void)
+{
+	int i;
+
+	diff_begin("V29RX_status");
+
+	for (i = 0; i < 40; i++) {
+		int ra, rb, k;
+		int overlay = (i & 1);
+		unsigned char *da, *db;
+		long where = 1000 + i;
+
+		fixture(&fa, 0x5a000000u + (unsigned)i);
+		fixture(&fb, 0x5a000000u + (unsigned)i);
+
+		/*
+		 * The three fields the flags byte is assigned from, driven
+		 * BOTH ways rather than left to the pseudorandom fill: two of
+		 * the three are `!= 0` tests over a whole 32-bit word, which
+		 * a random fill answers the same way every time.
+		 */
+		fa.rx[V29RX_FLAGS_0018] = fb.rx[V29RX_FLAGS_0018] =
+			(unsigned char)((i & 2) ? 0xff : 0xfe);
+		put_int(fa.rx, V29RX_INT_0000, (i & 4) ? 0 : 0x00c0ffee);
+		put_int(fb.rx, V29RX_INT_0000, (i & 4) ? 0 : 0x00c0ffee);
+		put_int(fa.rx, V29RX_INT_0020, (i & 8) ? 0 : 0x0badf00d);
+		put_int(fb.rx, V29RX_INT_0020, (i & 8) ? 0 : 0x0badf00d);
+
+		/* Bit 15 of the status word, both ways. */
+		put_int(fa.obj, V29_OBJ_STATUS,
+			(i & 16) ? 0x00008000 : 0x00004000);
+		put_int(fb.obj, V29_OBJ_STATUS,
+			(i & 16) ? 0x00008000 : 0x00004000);
+
+		/* The protocol and the bit rate, made to differ. */
+		put_short(fa.obj, V29_OBJ_PROTOCOL, (short)(0x0100 + i));
+		put_short(fb.obj, V29_OBJ_PROTOCOL, (short)(0x0100 + i));
+		put_short(fa.obj, V29_OBJ_BITRATE, (short)(9600 - i));
+		put_short(fb.obj, V29_OBJ_BITRATE, (short)(9600 - i));
+
+		if (overlay) {
+			/*
+			 * The report IS the instance's own bytes.  OBJ_SIZE is
+			 * 0x60 and STAT_SIZE is 0x20, so +0x00..+0x1f of the
+			 * report sits over +0x00..+0x1f of the instance --
+			 * which includes the protocol, the bit rate and the
+			 * status word this function reads.  That is the point:
+			 * a wrong store order changes what the LATER loads
+			 * see.
+			 */
+			da = fa.obj;
+			db = fb.obj;
+		} else {
+			rng_seed(0x2718281u + (unsigned)i);
+			for (k = 0; k < STAT_SIZE; k++)
+				sta[k] = stb[k] = (unsigned char)rng_next();
+			if ((i & 32) == 0)
+				sta[V29STAT_FLAGS] = stb[V29STAT_FLAGS] = 0xff;
+			da = sta;
+			db = stb;
+		}
+
+		ra = ref_V29RX_status(fa.obj, da);
+		rb = V29RX_status(fb.obj, db);
+
+		diff_eq_int("at %ld: V29RX_status returned", rb, ra, where);
+		if (!overlay)
+			diff_eq_int("at %ld: first differing report byte",
+				    blk_first_diff(stb, sta, STAT_SIZE, 0), -1,
+				    where);
+		compare_state(&fa, &fb, where);
+
+		/* ARM COVERAGE, taken from what the REFERENCE left behind. */
+		if (get_short(da, 0x06) != 0)
+			rxst_q1++;
+		else
+			rxst_q0++;
+		if ((da[V29STAT_FLAGS] & V29STAT_BIT1) != 0)
+			rxst_b1_1++;
+		else
+			rxst_b1_0++;
+		if ((da[V29STAT_FLAGS] & V29STAT_BIT3) != 0)
+			rxst_b3_1++;
+		else
+			rxst_b3_0++;
+		if ((da[V29STAT_FLAGS] & V29STAT_BIT5) != 0)
+			rxst_b5_1++;
+		else
+			rxst_b5_0++;
+		if (overlay)
+			rxst_alias_sep++;
+
+		/*
+		 * WRONG READING: the bit rate taken from the instance's +0x00
+		 * rather than its +0x04.  Separated whenever the two differ,
+		 * which the seeding above guarantees.
+		 */
+		if (!overlay
+		    && get_short(da, V29STAT_ZERO_LO)
+		       != get_short(fa.obj, V29_OBJ_PROTOCOL))
+			rxst_bps_sep++;
+		/*
+		 * WRONG READING: +0x0c zeroed instead of +0x0e.  The object
+		 * leaves +0x0c exactly as the caller had it.
+		 */
+		if (!overlay && get_short(da, 0x0c) != 0)
+			rxst_gap_sep++;
+	}
+
+	/* The null report. */
+	{
+		int ra, rb;
+
+		fixture(&fa, 0x13572468u);
+		fixture(&fb, 0x13572468u);
+		ra = ref_V29RX_status(fa.obj, 0);
+		rb = V29RX_status(fb.obj, 0);
+		diff_eq_int("a null report returns %ld", rb, ra, (long)ra);
+		diff_eq_int("a null report returns zero", ra, 0, 0);
+		compare_state(&fa, &fb, 0);
+		rxst_null_trials++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* ScrambleDataV29 and DescrambleDataV29                                 */
+
+/*
+ * Two wrappers over `SDM_scrambler` / `SDM_descrambler`.  What they establish
+ * is WHICH sub-object each picks, so the test's whole job is to prove the
+ * offset: the two `fpm_sdm` states are seeded DIFFERENTLY, and a wrapper that
+ * reached the other one -- or the other block -- would produce a different
+ * bit stream and leave a different state behind.
+ */
+static long scr_bits_sep, scr_state_sep, scr_wrong_off_sep, scr_zero_trials;
+
+#define SCR_N	48
+
+static unsigned short scr_a[SCR_N], scr_b[SCR_N], scr_in[SCR_N];
+
+/*
+ * Bring both `fpm_sdm` states up with the BLOB's own init, with DIFFERENT
+ * configurations and different registers.
+ *
+ * The pseudorandom fill leaves both states with a nonsense configuration -- a
+ * negative `nbits`, or a tap below it -- under which the module's shifts have
+ * no defined meaning and the two sides could agree on nothing useful.  The
+ * configurations DIFFER because that is what makes reaching the wrong state
+ * observable at all: with the same config and the same register a crossed
+ * offset would produce the same bit stream and the check would be decoration
+ * (finding F134).
+ */
+static void
+scr_seed_sdm(struct fix *f)
+{
+	struct fpm_sdm_cfg cfg;
+	struct fpm_sdm *tx = (struct fpm_sdm *)(void *)(f->tx + V29TX_SDM);
+	struct fpm_sdm *rx = (struct fpm_sdm *)(void *)(f->rx + V29RX_SDM);
+
+	cfg.nbits = 4;
+	cfg.tap1 = 14;
+	cfg.tap2 = 17;
+	ref_FPM_SDM_init(tx, &cfg);
+	tx->reg = 0x0002468au;
+
+	cfg.nbits = 2;
+	cfg.tap1 = 9;
+	cfg.tap2 = 11;
+	ref_FPM_SDM_init(rx, &cfg);
+	rx->reg = 0x0001357bu;
+}
+
+static unsigned
+scr_reg(unsigned char *blk, int off)
+{
+	return ((struct fpm_sdm *)(void *)(blk + off))->reg;
+}
+
+static int
+run_scramblers(void)
+{
+	int i;
+
+	diff_begin("ScrambleDataV29 / DescrambleDataV29");
+
+	for (i = 0; i < 24; i++) {
+		int k, tx = (i & 1);
+		unsigned short n = (unsigned short)((i * 7) % SCR_N);
+		unsigned tx_reg, rx_reg;
+		long where = 2000 + i;
+
+		fixture(&fa, 0x6c000000u + (unsigned)i);
+		fixture(&fb, 0x6c000000u + (unsigned)i);
+		scr_seed_sdm(&fa);
+		scr_seed_sdm(&fb);
+		tx_reg = scr_reg(fa.tx, V29TX_SDM);
+		rx_reg = scr_reg(fa.rx, V29RX_SDM);
+
+		rng_seed(0x0defacedu + (unsigned)i);
+		for (k = 0; k < SCR_N; k++) {
+			scr_in[k] = (unsigned short)(rng_next() & 0x0f);
+			scr_a[k] = scr_b[k] = scr_in[k];
+		}
+
+		if (tx) {
+			ref_ScrambleDataV29(fa.obj, scr_a, n);
+			ScrambleDataV29(fb.obj, scr_b, n);
+		} else {
+			ref_DescrambleDataV29(fa.obj, scr_a, n);
+			DescrambleDataV29(fb.obj, scr_b, n);
+		}
+
+		for (k = 0; k < SCR_N; k++)
+			diff_eq_int("bits[%ld]", (long)scr_b[k], (long)scr_a[k],
+				    k);
+		compare_state(&fa, &fb, where);
+
+		/*
+		 * ARM COVERAGE and the named wrong reading, read out of what
+		 * the REFERENCE did.
+		 */
+		if (n > 0) {
+			int moved = 0;
+			int own_moved, other_same;
+
+			for (k = 0; k < n; k++)
+				if (scr_a[k] != scr_in[k])
+					moved = 1;
+			if (moved)
+				scr_bits_sep++;
+
+			own_moved = tx
+				? (scr_reg(fa.tx, V29TX_SDM) != tx_reg)
+				: (scr_reg(fa.rx, V29RX_SDM) != rx_reg);
+			other_same = tx
+				? (scr_reg(fa.rx, V29RX_SDM) == rx_reg)
+				: (scr_reg(fa.tx, V29TX_SDM) == tx_reg);
+			if (own_moved)
+				scr_state_sep++;
+			/*
+			 * WRONG READING: the OTHER block's scrambler.  The two
+			 * states carry different configurations and different
+			 * registers, so a crossed offset moves the wrong one
+			 * and produces a different stream.
+			 */
+			if (own_moved && other_same)
+				scr_wrong_off_sep++;
+		}
+	}
+
+	/* A zero count, on both entry points. */
+	{
+		int k;
+
+		fixture(&fa, 0x0a0b0c0du);
+		fixture(&fb, 0x0a0b0c0du);
+		scr_seed_sdm(&fa);
+		scr_seed_sdm(&fb);
+		for (k = 0; k < SCR_N; k++)
+			scr_a[k] = scr_b[k] = (unsigned short)k;
+		ref_ScrambleDataV29(fa.obj, scr_a, 0);
+		ScrambleDataV29(fb.obj, scr_b, 0);
+		ref_DescrambleDataV29(fa.obj, scr_a, 0);
+		DescrambleDataV29(fb.obj, scr_b, 0);
+		for (k = 0; k < SCR_N; k++)
+			diff_eq_int("zero-count bits[%ld]", (long)scr_b[k],
+				    (long)scr_a[k], k);
+		compare_state(&fa, &fb, 2999);
+		scr_zero_trials++;
 	}
 
 	return diff_end();
@@ -2203,6 +2509,8 @@ main(void)
 	rc |= run_accessors();
 	rc |= run_tx_accessors();
 	rc |= run_status();
+	rc |= run_rxstatus();
+	rc |= run_scramblers();
 	rc |= run_modem();
 	rc |= run_delete();
 	rc |= run_quality();
@@ -2252,6 +2560,37 @@ main(void)
 		    st_assign_sep > 0, 1, st_assign_sep);
 	diff_eq_int("the null destination was exercised (%ld)",
 		    st_null_trials > 0, 1, st_null_trials);
+
+	diff_eq_int("RX quality was reported one (%ld)", rxst_q1 > 0, 1,
+		    rxst_q1);
+	diff_eq_int("RX quality was reported zero (%ld)", rxst_q0 > 0, 1,
+		    rxst_q0);
+	diff_eq_int("report bit 1 was set (%ld)", rxst_b1_1 > 0, 1, rxst_b1_1);
+	diff_eq_int("report bit 1 was clear (%ld)", rxst_b1_0 > 0, 1,
+		    rxst_b1_0);
+	diff_eq_int("report bit 3 was set (%ld)", rxst_b3_1 > 0, 1, rxst_b3_1);
+	diff_eq_int("report bit 3 was clear (%ld)", rxst_b3_0 > 0, 1,
+		    rxst_b3_0);
+	diff_eq_int("report bit 5 was set (%ld)", rxst_b5_1 > 0, 1, rxst_b5_1);
+	diff_eq_int("report bit 5 was clear (%ld)", rxst_b5_0 > 0, 1,
+		    rxst_b5_0);
+	diff_eq_int("the RX bit rate separates from the protocol (%ld)",
+		    rxst_bps_sep > 0, 1, rxst_bps_sep);
+	diff_eq_int("+0x0c was left alone where +0x0e was zeroed (%ld)",
+		    rxst_gap_sep > 0, 1, rxst_gap_sep);
+	diff_eq_int("the report was overlaid on the instance (%ld)",
+		    rxst_alias_sep > 0, 1, rxst_alias_sep);
+	diff_eq_int("the RX null report was exercised (%ld)",
+		    rxst_null_trials > 0, 1, rxst_null_trials);
+
+	diff_eq_int("a scrambler moved bits or state (%ld)", scr_bits_sep > 0,
+		    1, scr_bits_sep);
+	diff_eq_int("a scrambler advanced its own state (%ld)",
+		    scr_state_sep > 0, 1, scr_state_sep);
+	diff_eq_int("each scrambler left the other's state alone (%ld)",
+		    scr_wrong_off_sep > 0, 1, scr_wrong_off_sep);
+	diff_eq_int("a zero count was exercised (%ld)", scr_zero_trials > 0, 1,
+		    scr_zero_trials);
 	diff_eq_int("the do-while was exercised (%ld)", mdm_dowhile_sep > 0, 1,
 		    mdm_dowhile_sep);
 	diff_eq_int("in and out advancing differently separates (%ld)",

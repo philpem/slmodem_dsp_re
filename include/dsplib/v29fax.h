@@ -138,6 +138,26 @@ struct fpm_tone;
  */
 #define V29_OBJ_STATUS		0x18
 #define V29_STATUS_0200		0x0200
+/*
+ * Bit 15 of the same word, and the ONE bit of it anything reads.
+ * `V29RX_status` tests it as `testb $0x80,0x19(%esi)` at 0x0a461d and reports
+ * its COMPLEMENT as the report's `quality`, so a set bit is quality zero.
+ * That is the same shape and the same reported field as V.21's
+ * `V21RX_FLAG_LOW_SNR` (finding F8896), which is a corroboration and not the
+ * derivation: nothing here names it and the neutral spelling stays.
+ */
+#define V29_STATUS_8000		0x8000
+
+/*
+ * Two shorts at the very front of the handle, both read by `V29RX_status`
+ * only.  +0x00 goes to the report's `protocol` and +0x04 goes to BOTH its
+ * +0x04 and its +0x12 -- from two separate loads, 0x0a4615 and 0x0a4646, so
+ * they are two statements and not one value used twice.  `V29TX_status` does
+ * the same thing with the transmitter's `V29TXS_BITRATE`, which is why +0x04
+ * is read as a bit rate here.
+ */
+#define V29_OBJ_PROTOCOL	0x00
+#define V29_OBJ_BITRATE		0x04
 
 /* --- the transmit handle: SeedScramblerV29 and SetEncoderV29 ------------- */
 
@@ -149,6 +169,13 @@ struct fpm_tone;
  * in.
  */
 #define V29_OBJ_TX		0x24
+
+/*
+ * The transmit block's scrambler, `struct fpm_sdm`.  `ScrambleDataV29` is
+ * `add $0x1c,%eax` on the block pointer and a `jmp SDM_scrambler`, so the
+ * offset is the whole of what that function establishes.
+ */
+#define V29TX_SDM		0x1c
 
 /*
  * The carrier/tone detection block.  `V29RX_modem` calls through its +0x10,
@@ -217,6 +244,19 @@ struct fpm_tone;
 #define V29RX_INT_0004		0x0004
 #define V29RX_INT_0008		0x0008
 #define V29RX_INT_0020		0x0020
+
+/*
+ * Two more of the receive block's own words, reached only by `V29RX_status`.
+ *
+ * +0x0000 is loaded 32 bits wide (`mov (%ecx),%edx` at 0x0a4675) and tested
+ * against zero; +0x0018 is loaded as a BYTE (`movzbl 0x18(%edx),%ecx` at
+ * 0x0a465f) and only its bit 0 is used.  The two widths are what say these
+ * are two different fields and not one, and neither has a name anywhere in
+ * the object.
+ */
+#define V29RX_INT_0000		0x0000
+#define V29RX_FLAGS_0018	0x0018
+#define V29RX_0018_BIT0		0x01
 #define V29RX_SRE_ADAPT		0x00d8	/* struct fpm_sre + 0x48             */
 #define V29RX_FSE_PLL_ON	0x0164	/* struct fpm_fse + 0x44             */
 #define V29RX_FSE_LMS_ON	0x016c	/* struct fpm_fse + 0x4c             */
@@ -284,6 +324,14 @@ struct fpm_tone;
 #define V29RX_FSE_MSE		0x0172	/* struct fpm_fse + 0x52             */
 
 /* The MRF's output and the SRE's input; `count` shorts, freed by delete. */
+/*
+ * The receive block's descrambler, `struct fpm_sdm`, from
+ * `DescrambleDataV29`'s `add $0x4f3c,%eax`.  It sits BELOW the two buffer
+ * pointers, which is what says the 0x4f00 region is a run of members of this
+ * block rather than a separate allocation.
+ */
+#define V29RX_SDM		0x4f3c
+
 #define V29RX_BUF_MRF		0x4f54	/* short *                           */
 /* The SRE's output and the FSE's input; likewise. */
 #define V29RX_BUF_SRE		0x4f58	/* short *                           */
@@ -393,6 +441,39 @@ struct fpm_tone;
 #define V29STAT_FLAGS2_BIT0	0x01	/* the one bit  +0x15 is cleared of  */
 
 /*
+ * A tenth short, written 0 by `V29RX_status` (0x0a463a) and by nothing else.
+ * `V29TX_status` writes +0x0c and leaves this one alone, and `V29RX_status`
+ * writes this one and leaves +0x0c alone, so the two are separate fields and
+ * both exist.  `v21fax.h` says the same of the identically laid-out block.
+ */
+#define V29STAT_SHORT_0E	0x0e
+
+/*
+ * The report's flags byte, bit by bit, NEUTRALLY NAMED.
+ *
+ * ALL EIGHT are determined by `V29RX_status`, so its read of the byte carries
+ * no value into the result; see D1097.
+ *
+ * `V29RX_status` touches seven of the eight and the object gives no name to
+ * any of them -- no format string prints them and no other function in the
+ * 1.2 MB reads them -- so these are bit positions and nothing more.  Two are
+ * set unconditionally (4 and 6), two are cleared unconditionally (2 and 7),
+ * one is cleared and not set again (0), and two are assigned from a field
+ * (1 from the receive block's +0x0018 bit 0, 5 from `+0x0020 == 0`).  Naming
+ * any of them from that would be usage inference over a single site, which
+ * CLAUDE.md ranks below leaving it neutral.  `v21fax.h`'s
+ * `V21_STATUS_BIT0..2` is the same decision on the same block.
+ */
+#define V29STAT_BIT0		0x01
+#define V29STAT_BIT1		0x02
+#define V29STAT_BIT2		0x04
+#define V29STAT_BIT3		0x08
+#define V29STAT_BIT4		0x10
+#define V29STAT_BIT5		0x20
+#define V29STAT_BIT6		0x40
+#define V29STAT_BIT7		0x80
+
+/*
  * The handle `v29tx_status` passes: the modem's +0x14, NOT its +0x24 -- so it
  * is not the transmitter's private block either, and it is a third thing this
  * file reaches without being able to say what owns it.
@@ -466,6 +547,37 @@ void SetEncoderV29(void *modem, short which);
  * one to fill: 0 for a null pointer, 1 otherwise.  Nothing else is checked.
  */
 int V29TX_status(void *tx, void *status);
+
+/*
+ * The receiver's half of the same report, and NOT a mirror of it.
+ *
+ * It reads the RECEIVE handle rather than the transmit one, puts the bit rate
+ * in +0x04 and +0x12 where the transmit side puts it in +0x02 and +0x10,
+ * writes +0x0e where the transmit side writes +0x0c, and rewrites the flags
+ * byte four times where the transmit side rewrites it twice.  Same return
+ * convention: 0 for a null report, 1 otherwise, and nothing else is checked.
+ *
+ * THE FOUR STORES TO +0x14 ARE FORCED AND NOT AN ARTEFACT.  Each is flushed
+ * before the next load through the receive handle, at 0x0a4657, 0x0a466f,
+ * 0x0a4685 and 0x0a46a2, because `status` and `modem` are unrelated
+ * parameters and may overlap -- the same argument `V29TX_status` records for
+ * its two, and finding F8878's.  The byte's PRIOR VALUE is dead: all eight
+ * bits are determined before the function returns.  See F9130 and D1097.
+ */
+int V29RX_status(void *modem, void *status);
+
+/*
+ * The scrambler pair, two instructions and a tail jump each.
+ *
+ * The transmit one takes `struct fpm_sdm` at the TRANSMIT block's +0x1c
+ * (`obj + 0x24`, `V29_OBJ_TX`) and the receive one takes the one at the
+ * RECEIVE block's +0x4f3c (`obj + 0x50`, `V29_OBJ_RX`), so the pairing is
+ * confirmed by which block each reaches and not by the names.  They jump to
+ * `SDM_scrambler` and `SDM_descrambler` -- `src/fax/sdm.c`'s copies, byte for
+ * byte the same code as the `FPM_SDM_*` pair -- and not to the `FPM_` ones.
+ */
+void ScrambleDataV29(void *modem, unsigned short *data, unsigned short count);
+void DescrambleDataV29(void *modem, unsigned short *data, unsigned short count);
 
 /*
  * Release the receiver: nine sub-objects, in the order above, then the
