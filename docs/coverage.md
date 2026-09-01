@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##############################....]  89.5%    657666 bytes, 1656 symbols
-  tested      [##################################] 100.0%    657521 bytes, 1652 of 1656 that can be
+  translated  [###############################...]  90.0%    661500 bytes, 1676 symbols
+  tested      [##################################]  99.4%    657521 bytes, 1652 of 1676 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,8 +17,28 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 39 of ours (15912 bytes).
 
   translated, alias exists, and NOT tested:
+    faxvmi_hdlc_frame                               928 bytes
+    faxvmi_asyc_pack                                436 bytes
+    faxvmi_simp_pack                                401 bytes
+    V27RX_epoch_det                                 303 bytes
+    RxHdxDataV29                                    226 bytes
+    RxHdxDataV27                                    226 bytes
+    RxHdxDataV17                                    226 bytes
+    V29TX_modem                                     182 bytes
+    V21TX_modem                                     182 bytes
+    V29TX_delete                                    135 bytes
+    V21TX_delete                                    104 bytes
     GenEQTrnSequenceV29                              99 bytes
+    ModDataV29                                       89 bytes
+    GetT30FrameIDFromBuffer                          84 bytes
+    GetT30FrameNameByID                              76 bytes
+    RxHdxErrorV29                                    59 bytes
+    RxHdxErrorV27                                    59 bytes
+    RxHdxErrorV17                                    59 bytes
     _handle_status                                   44 bytes
+    cTOOLS_handle_data_output_reset                  24 bytes
+    _handle_hdlc_input_open                          18 bytes
+    _send_hdlc_between_buffer_state_init             17 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
 
@@ -83,7 +103,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                 51739 bytes   179 symbols
+    class1tx.c +94                                 47905 bytes   159 symbols
     class1.c                                        3883 bytes     6 symbols
     voice.c#3 +3                                    3253 bytes     4 symbols
     class1rx.c                                      1732 bytes     2 symbols

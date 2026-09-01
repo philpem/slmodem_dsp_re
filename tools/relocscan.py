@@ -114,9 +114,48 @@ def main():
     args = ap.parse_args()
 
     relocs = read_relocs(args.obj)
-    resolved = [r for r in relocs if r[3] is not None]
-    print("# %d R_386_32 relocations, %d against a section symbol"
-          % (len(relocs), len(resolved)))
+
+    #
+    # A RELOCATION THAT NAMES ITS TARGET RESOLVES TO THAT SYMBOL'S ADDRESS,
+    # and until 2026-09-01 every one of them was DISCARDED here.
+    #
+    # `read_relocs` returns `None` for the target address of a named
+    # relocation, because there is no addend to read out of the section --
+    # the target IS the symbol.  `main` then kept only the entries whose
+    # address had been resolved, which silently threw away the entire named
+    # half of the object's references.  `FAXVMI_CTL` has 41 relocations
+    # pointing at it and reported `unreferenced`; `V29RX_CTL` 4, `FAXVMI_STS`
+    # 13, `DECv17_ANGL4800` 4, `DECv17_MAP_TRN` 2, all the same (F9148).
+    #
+    # That is worse than a wrong number.  "unreferenced" is exactly the
+    # verdict someone asks this tool for when deciding whether a symbol is
+    # dead, and a global with 41 referrers answering "nobody points at me" is
+    # a clean, plausible and wrong answer -- F2400's shape, in a triage aid.
+    #
+    # The fix is to look the name up in the symbol table.  A file-static name
+    # can appear at several addresses, and `data_objects` keeps every one on
+    # purpose, so a name that is ambiguous is left UNRESOLVED rather than
+    # attributed to a guess: reporting it against the wrong copy would be the
+    # failure this comment exists to end, wearing a different hat.
+    #
+    byname = {}
+    for sec, addr, _size, name in data_objects(args.obj):
+        byname.setdefault(name, set()).add((sec, addr))
+    named = 0
+    fixed = []
+    for fsec, foff, sym, taddr in relocs:
+        if taddr is not None:
+            fixed.append((fsec, foff, sym, taddr))
+            continue
+        where = byname.get(sym)
+        if where and len(where) == 1:
+            tsec, addr = next(iter(where))
+            fixed.append((fsec, foff, tsec, addr))
+            named += 1
+    resolved = fixed
+    print("# %d R_386_32 relocations, %d resolved "
+          "(%d against a section symbol, %d by name)"
+          % (len(relocs), len(resolved), len(resolved) - named, named))
 
     if args.into:
         objs = data_objects(args.obj, args.into)

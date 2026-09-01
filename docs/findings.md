@@ -107150,3 +107150,41 @@ mutation column meaningless -- and the only reason it was visible is that the
 script re-runs the suite on the restored tree at the end and prints the
 verdict. Keep that line in any script of this shape, and write the finding
 that a source comment cites BEFORE running anything.  (2026-09-01)
+
+### F9280. `relocscan.py` now resolves a named relocation, and half its "unreferenced" verdicts were wrong
+
+F9148 measured the defect; this is the fix and what it changed. `read_relocs`
+returns `None` for the target address of a relocation that NAMES its target --
+there is no addend to read out of the section, because the target *is* the
+symbol -- and `main` then kept only the entries whose address had been
+resolved. The entire named half of the object's references was discarded
+before any question was asked of it.
+
+**MEASURED, over one sample of 166 OBJECT symbols: the old tool called 83 of
+them "unreferenced". The fixed tool calls 4.** The five cases F9148 named come
+back exactly as it counted them by hand -- `FAXVMI_CTL` 41, `FAXVMI_STS` 13,
+`V29RX_CTL` 4, `DECv17_ANGL4800` 4, `DECv17_MAP_TRN` 2. Of 10,514 relocations,
+8,353 now resolve: 6,794 against a section symbol and **1,559 by name** that
+were previously thrown away.
+
+**Why this was worse than a wrong number.** "unreferenced" is precisely the
+verdict someone asks this tool for when deciding whether a symbol is dead, and
+a global with 41 referrers answering "nobody points at me" is clean, plausible
+and wrong -- F2400's shape in a triage aid. The header line now prints both
+denominators, section-resolved and name-resolved, so a future reader can see
+which half is answering.
+
+**An ambiguous name is left UNRESOLVED rather than attributed.** A file-static
+name appears at several addresses -- `data_objects` keeps every one on purpose,
+and F9058 records that the blob defines thirteen names twice. Resolving such a
+name to one of its copies would be the same failure wearing a different hat, so
+those relocations are dropped, exactly as before.
+
+**WHAT THIS DOES NOT DISTURB.** The documented string use is section-relative
+(`--at .rodata.str1.1:0xNNNN`), so it never went through the discarded path;
+re-checked and unchanged. **And it does NOT undermine CLAUDE.md's "129 of 139
+have no relocation anywhere pointing at them."** F9148 raised that as an open
+question and it is now settled: F8320 records that the probe was "two scripts
+of about forty lines each over `closure.build_graph()`", not `relocscan`, so
+the leaf argument never rested on this tool. Anyone who DID use `relocscan` for
+a reachability question before today should re-measure.  (2026-09-01)
