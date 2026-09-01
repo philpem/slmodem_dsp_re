@@ -2,11 +2,28 @@
  * v17dec.h -- the V.17 fax receiver's slicer tables and its four
  *             constellation decision functions.
  *
- * WHAT THIS IS.  `V17RX_create` installs a slicer into the fractionally
- * spaced equaliser as `fse.decision`, and which one it installs depends on
- * the negotiated bit rate.  The four rate-specific slicers and the two
- * handshake ones live in `src/fax/v17dec.c`; the constellation, magnitude and
- * angle tables they index live in `src/fax/v17dec_tables.c`.
+ * WHAT THIS IS.  Six slicers for the fractionally spaced equaliser's
+ * `fse.decision` slot -- four rate-specific and two for the handshake -- in
+ * `src/fax/v17dec.c`, and the constellation, magnitude and angle tables they
+ * index, in `src/fax/v17dec_tables.c`.
+ *
+ * **`V17RX_create` INSTALLS `FAX_FSE_decision_AB`, UNCONDITIONALLY, AND DOES
+ * NOT CHOOSE BY BIT RATE.**  This paragraph said the opposite until
+ * `V17RX_create` was reconstructed and could be read: its 3,201 bytes contain
+ * no relocation against `FSEv17_decision` at all, and the single store into
+ * `fpm_fse_cfg::decision` is at .text 0x974e4, outside every rate arm.  The
+ * rate-specific four are reached later and from elsewhere --
+ * `FSEv17_decision`'s only two referrers in the whole 1.2 MB are
+ * `FSE_Bridge_det+0x29` and `FSE_decision_eqtrn+0x6d`, which is the handshake
+ * handing over to the data slicer once the rate is settled.  What
+ * `V17RX_create` DOES switch on the rate is the Viterbi decoder's
+ * constellation (`struct vtb` at state +0x30) and one quality threshold.
+ * Finding F9473.
+ *
+ * It is the shelf-life rule this tree states for its own paragraphs: the
+ * claim was a reasonable reading of a table of four function pointers, it was
+ * written while the only function that could refute it was unwritten, and
+ * nothing could fail on it until then.
  *
  * WHY THE TABLES ARE `short`, TWICE OVER.
  *

@@ -108388,3 +108388,35 @@ stores at 0x097140 and 0x097144 are dead by construction (D1220): removing
 them entirely leaves every check green, and no test in this tree can ever be
 made to see them. It is recorded as a deviation and not as coverage.
 (2026-09-01)
+
+## F9479. `v17dec.h` claimed `V17RX_create` chooses its slicer by bit rate, and the function it described refutes it -- corrected once it was written
+
+*2026-09-01.* `include/dsplib/v17dec.h`'s opening paragraph said "`V17RX_create`
+installs a slicer into the fractionally spaced equaliser as `fse.decision`, and
+which one it installs depends on the negotiated bit rate." It does not.
+
+**Measured, three ways.** `V17RX_create`'s 3,201 bytes contain **no relocation
+against `FSEv17_decision`** -- the inner-relocation sweep over .text
+0x96eb0..0x97b30 returns zero hits for that name. The single store into
+`fpm_fse_cfg::decision` is at .text 0x974e4, and it stores
+`&FAX_FSE_decision_AB` from the load at 0x974d4, outside every rate arm. And
+`relocscan.py --into FSEv17_decision` over the whole 1.2 MB, with F9280's fix
+that resolves relocations naming their target, finds exactly two referrers,
+both at `[+0]`: `FSE_Bridge_det+0x29` and `FSE_decision_eqtrn+0x6d`. That is
+the handshake handing over to the data slicer once the rate is settled, not the
+constructor selecting one.
+
+What `V17RX_create` DOES switch on the rate is the Viterbi decoder's
+constellation -- `struct vtb` at state +0x30, four arms at 0x975bf / 0x97a27 /
+0x97a6b / 0x97ad0 -- and one quality threshold at 0x4fb0. Two switches, neither
+of them the slicer.
+
+**The interesting part is not the error but its shelf-life.** The claim was a
+reasonable reading of a sixteen-byte table of four function pointers, it was
+written while the only function that could refute it was unwritten, and
+**nothing could fail on it until then**: no test compiles a header comment, and
+the batch that wrote the paragraph had no way to check it. This is F6100 and
+F6103 a fourth time, and CLAUDE.md's own rule -- when a paragraph states a
+COUNT or a live fact, check it against the tool before repeating it -- applied
+to a header this project wrote four hours earlier rather than to an inherited
+one. Corrected in place, with the measurement beside it. (2026-09-01)
