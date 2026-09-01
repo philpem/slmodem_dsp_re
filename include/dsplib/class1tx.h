@@ -49,6 +49,12 @@ void null_message(void *handle, int code, char **out);
 int _init_tx_nulls_state(struct fax_class1 *ctx);
 
 /*
+ * Set the HDLC frame write cursor to ONE, leaving element zero of the
+ * caller's buffer free for the length the close reports.  Returns 0.
+ */
+int _handle_hdlc_input_open(struct fax_class1 *ctx);
+
+/*
  * Note the count of what was received into +0x000 (f1250 - 1) and, when
  * flags004 bit 4 is set, latch f1224.  Returns 0.
  */
@@ -56,6 +62,12 @@ int _handle_hdlc_input_close(struct fax_class1 *ctx);
 
 /* Clear the session countdown, after one log line.  Returns 0. */
 int _hdlc_receive_state_init(struct fax_class1 *ctx);
+
+/*
+ * Clear the session countdown and open an HDLC frame -- a tail call to
+ * `_handle_hdlc_input_open`, so it returns that function's 0.
+ */
+int _send_hdlc_between_buffer_state_init(struct fax_class1 *ctx);
 
 /*
  * THE HOST LINK IS DLE-STUFFED BYTES ONE WAY AND 16-BIT ELEMENTS THE OTHER.
@@ -92,6 +104,12 @@ int _handle_hdlc_input(struct fax_class1 *ctx, const unsigned char *src,
  * and append DLE ETX when `terminate` is set.  Returns the byte count, which
  * can reach `2 * count + 2`.
  */
+/*
+ * Unlock `_handle_data_output`'s start-bit search: `async_locked` to 0 and
+ * `async_window` to -1.  The shift and mask are left where they are.
+ */
+void cTOOLS_handle_data_output_reset(struct fax_class1 *ctx);
+
 int _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
 			unsigned char *dst, int count, int terminate);
 

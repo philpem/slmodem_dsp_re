@@ -36,6 +36,9 @@ extern int ref__sym_size(int rate);
 extern void ref__set_modem_rate(int code, int *mod, int *rate);
 extern int ref__init_tx_nulls_state(void *ctx);
 extern int ref__handle_hdlc_input_close(void *ctx);
+extern int ref__handle_hdlc_input_open(void *ctx);
+extern int ref__send_hdlc_between_buffer_state_init(void *ctx);
+extern void ref_cTOOLS_handle_data_output_reset(void *ctx);
 extern void ref_null_message(void *handle, int code, char **out);
 extern void ref_v17rx_message(void *handle, int code, char **out);
 extern void ref_v17tx_message(void *handle, int code, char **out);
@@ -157,6 +160,41 @@ run_class1(void)
 		rb = _handle_hdlc_input_close(&ctx_b);
 		diff_eq_int("hdlc_close return (%ld)", rb, ra, (long)i);
 		ccompare("hdlc_close", (long)i);
+
+		cfresh();
+		ra = ref__handle_hdlc_input_open(&ctx_a);
+		rb = _handle_hdlc_input_open(&ctx_b);
+		diff_eq_int("hdlc_open return (%ld)", rb, ra, (long)i);
+		ccompare("hdlc_open", (long)i);
+		/*
+		 * From the REFERENCE's own state, not from the source: the
+		 * frame cursor really is left at one, which is what leaves
+		 * element zero of the caller's buffer for the length.
+		 */
+		diff_eq_int("hdlc_open: the object armed f1250 to one (%ld)",
+			    (long)ctx_a.f1250, 1, (long)i);
+
+		cfresh();
+		ra = ref__send_hdlc_between_buffer_state_init(&ctx_a);
+		rb = _send_hdlc_between_buffer_state_init(&ctx_b);
+		diff_eq_int("between_buffer_init return (%ld)", rb, ra,
+			    (long)i);
+		ccompare("between_buffer_init", (long)i);
+
+		cfresh();
+		ref_cTOOLS_handle_data_output_reset(&ctx_a);
+		cTOOLS_handle_data_output_reset(&ctx_b);
+		ccompare("data_output_reset", (long)i);
+		/*
+		 * And the two fields it does NOT touch, again from the
+		 * reference: `async_shift` and `async_mask` come back holding
+		 * the random fill, so a reset that cleared them would fail
+		 * here even though every byte still matched our side.
+		 */
+		diff_eq_int("data_output_reset: async_locked cleared (%ld)",
+			    (long)ctx_a.async_locked, 0, (long)i);
+		diff_eq_int("data_output_reset: async_window is -1 (%ld)",
+			    (long)(int)ctx_a.async_window, -1L, (long)i);
 
 		diff_eq_int("GetConstalation (%ld)",
 			    fax_class1_GetConstalation(&ctx_b),

@@ -105287,3 +105287,289 @@ neither was available before the transmit-side functions were read.
 `t_v27fax.c` plants the ring's `sym` through the structure, so the test would
 now fail if the field moved -- but it agreed with the wrong spelling too, and
 that is the point.  (2026-09-01)
+
+### F9190. The framer carries TWO bit engines, and their mirror is what the packers decode
+
+`struct faxvmi_framer` looked like "a ring, an unpacker and an HDLC receiver"
+while only the unpackers had been read. Reading `faxvmi_simp_pack`,
+`faxvmi_asyc_pack` and `faxvmi_hdlc_frame` closes it: +0x10..+0x1c is a SECOND
+four-field bit engine, used only by the packers, and it mirrors +0x20..+0x2c
+field for field.
+
+`FAXVMI_create` is the proof rather than the resemblance. At 0x951d7..0x95201
+it initialises the two quartets with the same four values in the same order:
+
+    +0x10 = 0    +0x14 = -1    +0x18 = -1    +0x1c = 0 (word store)
+    +0x20 = 0    +0x24 = -1    +0x28 = -1    +0x2c = 0 (the dword read
+                                                        back from +0x1c)
+
+and every packer reads +0x10 with `movzwl` and stores it back with `movl`,
+which is finding F9012's load/store asymmetry on the other half of the object.
+So `mask`, `word`, `acc` and `bit` are now `unpack_mask`, `unpack_word`,
+`unpack_acc`, `unpack_bit`, and the new four are `pack_*`. The rename is a
+compile-time substitution and moves no code.  (2026-09-01)
+
+### F9191. `framer->rd` is the ring's READ cursor, and the packers are what read it
+
+`+0x06` was recorded as "create and control zero it; nothing reconstructed
+reads it". All three packers read it, and they use it exactly as the writers
+use `wr` at +0x08 -- take `fifo[rd]`, store `rd + 1` back, wrap to zero when
+that reaches `fifo_size`, and drop `count` by one:
+
+    96640:  movzwl 0x6(%ebx),%eax     ; rd
+    96644:  mov    (%ebx),%edx        ; fifo
+    96646:  lea    0x1(%eax),%ecx
+    96649:  mov    %cx,0x6(%ebx)      ; rd = rd + 1
+    9664d:  movzwl (%edx,%eax,2),%edx ; the element, at the OLD rd
+    96651:  cmp    %cx,0x4(%ebx)      ; against fifo_size, unsigned
+    9665c:  mov    %dx,0xa(%ebx)      ; count = count - 1
+    96660:  ja     ...                ; no wrap
+    96666:  movw   $0x0,0x6(%ebx)     ; wrap
+
+`faxvmi_asyc_pack` (0x95916) and `faxvmi_hdlc_frame` (0x95dd8, 0x95e20) do the
+same.
+
+**AND IT IS NOT USAGE INFERENCE AFTER ALL -- THE AUTHOR NAMES BOTH CURSORS IN
+A FORMAT STRING.** `faxvmi_hdlc_frame`'s debug line at 0x95e72 is
+
+    "HDLC Transmitted Frame (Length = %d, iR = %d, iW = %d): \n"
+
+and its three arguments, marshalled at 0x95e62..0x95e81, are the length
+element, `movzwl 0x6(%esi)` and `movzwl 0x8(%esi)` -- in that order. So +0x06
+is `iR` and +0x08 is `iW` in the author's own words, which is this tree's
+evidence class 1 and settles both fields rather than one. `wr` had been named
+from use as well; this is the confirmation neither had.  (2026-09-01)
+
+### F9192. `framer->residue` is what the packer could not get into the ring
+
+`+0x0c` was "create zeroes it; status copies it to the record's +0x04 and
+process makes it a status bit". What WRITES it is now known: every packer
+calls `faxvmi_write_fifo` twice -- once on entry with the whole request, once
+after the bit loop with what is left -- subtracts each return from the count,
+and stores the balance here as its last act:
+
+    9650e:  call faxvmi_write_fifo    ; the whole `count`
+    96513:  sub  %eax,%ebp            ; left = count - written
+    96618:  call faxvmi_write_fifo    ; `left`, from the advanced cursor
+    9661d:  sub  %eax,0xc(%esp)
+    96631:  mov  %ebx,0xc(%esi)       ; framer->residue = (short)left
+
+`faxvmi_asyc_pack` at 0x95995 and `faxvmi_hdlc_frame` at 0x95db3 are
+identical. The truncation is the object's: the value is narrowed to a `short`
+before the 32-bit store, twice.  (2026-09-01)
+
+### F9193. `framer`'s +0x34/+0x38 pair sends a run of zero bits, and it keeps the receive side's neutral name
+
+`FAXVMI_control` copies the control record's +0x08 to +0x34 and its +0x04 to
++0x38, so both are requests from outside; nothing reconstructed read them
+until now. `faxvmi_asyc_pack`'s refill has four arms and two of them are this
+pair: while +0x38 is non-zero it emits ONE ZERO BIT per refill and counts
++0x34 down (0x9587c..0x95895, `mask = 1`, `word = 0`), and when the count
+reaches zero it clears +0x38 (0x95904).
+
+A sustained run of zero bits in asynchronous framing is what a BREAK is, and
+saying so would be one step past the evidence -- exactly the step finding
+F9018 declined for the receive side's `zero_run_seen`. So the names are
+`zero_run_bits` and `zero_run_send`, which say what the fields do and match
+the field the receiver already has.  (2026-09-01)
+
+### F9194. `link->rx` is not a receive buffer: the packers WRITE it, and the name is retired
+
+`struct faxvmi_link`'s +0x04 was named `rx` because all three unpackers take
+their input elements from it. All three packers write their OUTPUT elements
+into it -- `mov 0x4(%eax),%edi` at 0x9652a with `eax` holding `vmi->link`,
+then `mov %cx,(%edi)` / `add $0x2,%edi` per element -- so it is the element
+buffer shared with the modulation in whichever direction that slot runs. One
+faxvmi instance wraps one modulation and a slot is either transmit or receive
+(5 v21tx, 6 v21rx, ...), so an instance only ever uses it one way round, which
+is why the receive-only reading survived as long as it did. Renamed `buf`.
+
+**AND THE TWO WIDTHS ARE TWO FIELDS.** The packers take their bits-per-element
+from +0x0e (`movzwl 0xe(%eax)`, 0x95839 and 0x96538) and the unpackers theirs
+from +0x10; both are sixteen-bit loads four bytes apart, so this is not one
+field read twice. +0x0c is a third, `movswl`, and it is the number of elements
+a packer produces per call -- counted down in a local, never written back, and
+re-read from the object as `faxvmi_asyc_pack`'s return value. They are
+`pack_width`, `unpack_width` and `pack_count`; `FAXVMI_create` writes none of
+them, so `vxx_create` is what fills them and this file does not know with
+what.  (2026-09-01)
+
+### F9195. The VMI's +0x18 is the transmit-queue UNDERRUN, settled by the packers, and one of its five "known sites" was a misreading
+
+The field kept a neutral name over what was recorded as five sites, none
+better than a guess. The packers give it a SET site that is not a guess: all
+three raise it on the one arm where the bit engine wanted another source
+element and `framer->count` was zero, and each transmits fill instead --
+
+    9658d  movl $0x1,0x18(%ecx)   faxvmi_simp_pack, and `word` becomes 0
+    958fb  movl $0x1,0x18(%ebp)   faxvmi_asyc_pack, and `word`/`mask` become
+                                  1/1, so the bit sent is a MARK
+    95cd8  movl $0x1,0x18(%ecx)   faxvmi_hdlc_frame
+
+-- against `faxvmi_write_fifo` and `faxvmi_write_frame`, which clear it when a
+whole request is absorbed (D1070), and `FAXVMI_create`, which sets it to 1
+because nothing has been written yet. Seven sites, one reading. Renamed
+`underrun`.
+
+**The author's own phrase for the condition is in the object**, though not as
+a format string over this field: message code 8 of every transmit
+modulation's table is "ERROR: Transmit Input Queue Under-run" (code 9 is
+"Over-run"), and the ring these packers drain IS the transmit input queue.
+That is why the word is the object's rather than ours.
+
+**AND ONE OF THE FIVE SITES WAS WRONG.** `faxvmi.h` recorded that
+`FAXVMI_status` "passes it to vxx_status as the request and only calls that
+entry point while it is nonzero". It does not. `FAXVMI_status`'s frame is
+`sub $0x1c` so 0x20(%esp) is the vmi and 0x24(%esp) the status RECORD; `%ebx`
+holds the record, and the `mov 0x18(%ebx),%eax` at 0x955e2 that gates the
+dispatch reads the RECORD's +0x18, an input field the caller fills. What the
+function does with the vmi's own +0x18 is copy it OUT, to the record's +0x08
+(0x955ff). The correction removes the one site that did not fit the reading
+the other six give.  (2026-09-01)
+
+### F9196. `faxvmi_simp_pack` returns the count of elements built BEFORE the ring first ran dry, and the latch is a value not a branch
+
+The object keeps a 0/1 value in a stack slot, sets it to 1 before the first
+`faxvmi_write_fifo` (0x964fb), sets it to zero on the ring-empty arm ALONE
+(0x96589), and ADDS it to the running count at every emitted element:
+
+    965b5:  mov 0x14(%esp),%ebp    ; nout
+    965b9:  mov 0x10(%esp),%eax    ; the latch
+    965c5:  add %ebp,%eax
+    965c7:  cwtl
+    965c8:  mov %eax,0x14(%esp)
+
+so the return stops advancing for the rest of the call while the block is
+still filled to `pack_count`. Two things make this the reconstruction rather
+than a spelling: a `nout++` under a test would compile to a branch, and the
+two readings diverge the moment the ring refills after a gap -- which cannot
+happen here, because nothing ever sets the latch back to 1.
+
+`faxvmi_asyc_pack` has no such latch and returns `link->pack_count`
+unconditionally, re-read from the object after the trailing write (0x95998).
+The two packers really do differ in what they answer.  (2026-09-01)
+
+### F9197. The async character is ten bits and the object builds it in three instructions
+
+`faxvmi_asyc_pack`'s ring arm turns the octet into the whole character before
+any of it is shifted out:
+
+    9593a:  add %edx,%edx             ; octet << 1
+    9593c:  or  $0x1,%edx             ; the STOP bit, at bit 0
+    95943:  mov $0x200,%edx           ; mask -- bit 9 goes first
+    95948:  andl $0xfffffdff,0x14(%esp) ; the START bit, forced to 0 at bit 9
+
+The mask walks 0x200 down to 1, so the emitted order is start, then the eight
+data bits most significant first, then stop. The `and` is a separate
+instruction against the stack slot and is written as a separate term here; it
+matters because the octet is a sixteen-bit element and a value above 0xff
+would otherwise leave a one in bit 9.
+
+The bit order being MSB-first is not a contradiction of async serial's
+LSB-first convention: `vmi_reverse` reverses each octet outside this
+function.  (2026-09-01)
+
+### F9198. `_handle_hdlc_input_open` unblocked `_send_hdlc_between_buffer_state_init`, which is the link constraint working the right way round
+
+The leaf pass left `_send_hdlc_between_buffer_state_init` (0x9e450, 17 bytes)
+out because it tail-calls `_handle_hdlc_input_open`, which nothing had
+written; findings F8492/F8493's rule made it BLOCKED rather than hard.
+Writing the callee here -- five instructions, `f1250 = 1`, `return 0` --
+unblocked it and both are now in.
+
+The cursor's value is what names it: `_handle_hdlc_input` writes the first
+octet at `dst[1]` and both it and `_handle_hdlc_input_close` report
+`f1250 - 1` as the length, so element zero is the length slot and the frame
+comes out length-prefixed -- the same layout `faxvmi_frame_reverse` and
+`faxvmi_write_frame` walk.
+
+`cTOOLS_handle_data_output_reset` (0x9edf0, 24 bytes) came with them:
+`async_locked = 0`, `async_window = -1`, and NOT `async_shift` or
+`async_mask`, which `_handle_data_output` recomputes on the call that locks.
+It is declared `void` on positive evidence rather than convenience --
+`_handle_hdlc_input_open` ends `xor %eax,%eax; ret`, a deliberate `return 0`,
+and this one does not zero `%eax` at all, so what is left in it is the
+argument the addressing put there.  (2026-09-01)
+
+### F9199. `FIFO_create` is DECLINED AGAIN, and only one of F9020's two reasons has moved
+
+Re-checked at this wave's commit rather than quoted. Finding F9020 declined it
+for coordination (five other translation units reference `FIFO_CFG`) and
+because `FIFO_CFG` has no `ref_` alias at all -- the blob defines the name
+twice, a file-local `d` at `.data` 0x83a0 and a global `R` at `.rodata`
+0x9654, and `symmap.py` declines to globalise a duplicated local name
+(F9058).
+
+**The second reason is the one that binds, and it is worse than "no alias".**
+Because the name is not renamed, the blob's global `FIFO_CFG` is still called
+`FIFO_CFG` in every test binary. A definition of it in `src/` would be a
+second definition of a symbol that is already there, which is the wave-2 merge
+defect arriving at link: `multiple definition`, every binary. So the table
+cannot be written from this branch whatever the coordination looks like.
+
+Testing it through a CONSUMER is what F9020 left open, and there is no
+consumer to use: `V17TX_create`, `V21TX_create`, `V27TX_create`,
+`V29TX_create` and `_tx_scrambled_ones_init` are all unwritten, and
+`readyqueue.py` at this commit puts `FIFO_create` in the BLOCKED column
+needing exactly one thing, `FIFO_CFG`. What is left of the derivation is
+already in F9020 and nothing here changes it: the six bytes are
+`00 00 64 00 00 00`.  (2026-09-01)
+
+### F9200. The pack engine carries its SOURCE position across a call and never its ELEMENT position, and a dead anti-vacuity counter is what showed it
+
+`t_faxpack`'s multi-call group was written with the same two counters
+`t_faxunframe` uses -- "a call resumed mid-source" (`pack_mask` non-zero on
+entry) and "a call resumed mid-element" (`pack_bit` non-zero on entry). The
+first fired 300-odd times. The second fired **zero times**, and the suite went
+red on its own anti-vacuity assertion rather than on a comparison, which is
+exactly what that assertion is for.
+
+It is not a fixture defect. `pack_bit` is only ever incremented, and the ONLY
+statement that decrements the output counter `n` sits inside the `bit == width`
+arm, which also sets `bit = 0`. So a loop that exits with `n == 0` exits
+immediately after an emit, and an emit always leaves `pack_bit` at zero. With
+a non-zero `pack_count` the field is therefore zero at every return, whatever
+happened during the call -- and with `pack_count == 0` the loop does not run
+and the field is untouched. There is no reachable state in which it carries a
+partial element across a call boundary.
+
+The counter is now an ASSERTION instead: with `pack_count > 0`, the test
+requires the REFERENCE to have left `pack_bit` at zero, so if the object ever
+did carry one the test would say so. Both packers behave this way; the
+unpackers do not, because their loop ends when the INPUT runs out rather than
+when an output element completes, which is why the same counter is live in
+`t_faxunframe` and dead here.  (2026-09-01)
+
+### F9201. The injection ritual over the pack side: 12 defects, 12 caught, and the pipe-to-`tail` trap caught again
+
+Every mutant applied to `src/`, built with `make one` and run against the
+blob. Nine on `src/fax/faxvmi.c` and three on `src/fax/class1tx.c`:
+
+    caught  simp: source mask starts at 0x40 instead of 0x80
+    caught  simp: the `real` latch never clears (F9196's whole point)
+    caught  simp: `vmi->underrun` not raised on the empty ring
+    caught  asyc: the read cursor wraps one element late
+    caught  asyc: the start bit is not forced (the `& ~0x200` dropped)
+    caught  asyc: D1120 "repaired" -- a mark bit where the object sends a space
+    caught  simp: `framer->residue` stored as zero
+    caught  asyc: returns 0 instead of `link->pack_count`
+    caught  asyc: `pack_mask` not saved across the return
+    caught  `_handle_hdlc_input_open` arms the cursor to zero, not one
+    caught  `cTOOLS_handle_data_output_reset` clears the window instead of -1
+    caught  `_send_hdlc_between_buffer_state_init` sets `countdown` to one
+
+**12 mutants, 12 caught, 0 not caught, 0 unusable**, and the restored tree
+rebuilds green -- checked by rebuilding, not assumed. The `asyc: pack_mask not
+saved` mutant is the one the multi-call group exists for, and it is the same
+shape as F9022's survivor: a fixture that re-plants before each call cannot
+see it.
+
+**The script wrote a pristine copy to disk BEFORE mutating and restored in a
+`finally`**, per F9022's own account of the run that left `faxvmi.c` holding
+mutant seventeen with no copy anywhere. That part held. What did NOT hold is
+the other half of the same lesson: the run was launched with its output piped
+to `tail -25`, which buffered every verdict and printed nothing for the whole
+fifteen minutes, so progress had to be inferred from the mtimes of the test
+binaries. Harmless here because the script completed, and recorded because it
+is the third time this exact pipe has hidden a running job's output in this
+tree.  (2026-09-01)

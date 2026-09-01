@@ -10,19 +10,24 @@
  *   v29tx_message / v29rx_message   .text 0x09cad0 / 0x09cad0   39 each
  *   _init_tx_nulls_state            .text 0x09cf60              15
  *   _hdlc_receive_state_init        .text 0x09d880              79
+ *   _send_hdlc_between_buffer_state_init .text 0x09e450         17
  *   _handle_data_input              .text 0x09eb60             321
+ *   _handle_hdlc_input_open         .text 0x09ecb0              18
  *   _handle_hdlc_input_close        .text 0x09ecd0              34
  *   _handle_hdlc_input              .text 0x09ed00             238
+ *   cTOOLS_handle_data_output_reset .text 0x09edf0              24
  *   _handle_data_output             .text 0x09ee10             255
  *   null_message                    .text 0x09f140              11
  *
  * and the eight `.data` tables the reporters index.  Everything here is
  * finding F8320's no-entry-point bucket -- this is not the fax phase.
- * `_send_hdlc_between_buffer_state_init` (0x09e450) was in scope and is
- * left out: it tail-calls the unreconstructed `_handle_hdlc_input_open`
- * (F215: no scaffold).  So are `cHDLCtx_off_init` (calls FAXVMI_control)
- * and the V21 next-state pair, which store six unreconstructed handler
- * addresses.  Findings F8492/F8493.
+ * `_send_hdlc_between_buffer_state_init` (0x09e450) was left out of the leaf
+ * pass because it tail-calls the then-unreconstructed
+ * `_handle_hdlc_input_open` (F215: no scaffold).  Writing that callee here
+ * unblocked it and both are now in, which is the link constraint working the
+ * way round it is supposed to -- F9198.  `cHDLCtx_off_init` (calls
+ * FAXVMI_control) and the V21 next-state pair, which store six
+ * unreconstructed handler addresses, are still out.  Findings F8492/F8493.
  *
  * THE STRINGS ARE THE AUTHOR'S, byte for byte: "Protocal", "Transmition"
  * and V29TX's "7600 bps" are the object's spellings, and fixing them would
@@ -186,6 +191,18 @@ _hdlc_receive_state_init(struct fax_class1 *ctx)
 }
 
 /*
+ * Clear the countdown and open a frame.  The object TAIL-CALLS
+ * `_handle_hdlc_input_open` (`jmp`, 0x9e45c), so this returns whatever that
+ * returns, which is 0.
+ */
+int
+_send_hdlc_between_buffer_state_init(struct fax_class1 *ctx)
+{
+	ctx->countdown = 0;
+	return _handle_hdlc_input_open(ctx);
+}
+
+/*
  * A file-static the object increments once per byte examined and NEVER READS
  * -- `temp.0` at .bss+0x8c4, four bytes, with exactly one relocation against
  * it in the whole 1.2 MB (the `incl` at 0x09ebd5).  Kept because it is the
@@ -258,6 +275,21 @@ _handle_data_input(struct fax_class1 *ctx, const unsigned char *src,
 		out++;
 	}
 	*count = out;
+	return 0;
+}
+
+/*
+ * Arm the frame cursor at ONE, not zero.  `_handle_hdlc_input` writes the
+ * first octet at `dst[1]` and both it and `_handle_hdlc_input_close` report
+ * `f1250 - 1` as the length, so element zero is the length slot the frame is
+ * eventually length-prefixed with -- the same layout `faxvmi_frame_reverse`
+ * and `faxvmi_write_frame` walk.  Five instructions, and it touches nothing
+ * else.
+ */
+int
+_handle_hdlc_input_open(struct fax_class1 *ctx)
+{
+	ctx->f1250 = 1;
 	return 0;
 }
 
@@ -354,6 +386,21 @@ _handle_hdlc_input(struct fax_class1 *ctx, const unsigned char *src,
  * `2 * count + 2` bytes -- sized from the COUNT, never from `count`
  * (F8607/D956's shape).
  */
+/*
+ * Drop the start-bit search back to "not locked yet".  `async_locked` goes to
+ * zero and `async_window` to -1, which is the all-ones history the search
+ * wants before the first element arrives; `async_shift` and `async_mask` are
+ * NOT touched, because `_handle_data_output` recomputes both on the call that
+ * locks.  Void: the object leaves eax holding the argument and no caller can
+ * be relying on that.
+ */
+void
+cTOOLS_handle_data_output_reset(struct fax_class1 *ctx)
+{
+	ctx->async_locked = 0;
+	ctx->async_window = 0xffffffffu;
+}
+
 int
 _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
 		    unsigned char *dst, int count, int terminate)

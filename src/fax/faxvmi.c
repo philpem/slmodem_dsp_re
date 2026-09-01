@@ -5,8 +5,10 @@
  * 0x095120..0x096bad).  Written here, in the object's own emission order:
  *
  *   FAXVMI_message        .text 0x0957b0     55
+ *   faxvmi_asyc_pack      .text 0x0957f0    436
  *   faxvmi_asyc_unpack    .text 0x0959b0    349
  *   faxvmi_hdlc_unframe   .text 0x095eb0   1577
+ *   faxvmi_simp_pack      .text 0x0964e0    401
  *   faxvmi_simp_unpack    .text 0x096680    243
  *   faxvmi_gen_fcs16      .text 0x096780    108
  *   faxvmi_byte_reverse   .text 0x0967f0     93
@@ -17,17 +19,28 @@
  *
  * NOT written, and read only as evidence: FAXVMI_create (0x095120),
  * _delete (0x0953f0), _process (0x095470), _status (0x0955c0), _control
- * (0x095650), and the three packers faxvmi_asyc_pack (0x0957f0),
- * faxvmi_hdlc_frame (0x095b10) and faxvmi_simp_pack (0x0964e0).  The three
+ * (0x095650) and the third packer faxvmi_hdlc_frame (0x095b10).  The three
  * dispatch tables `vmi_pack`, `vmi_unpack` and `vmi_reverse` belong to that
- * half and are not written either -- naming a table entry that does not
- * exist yet is the link constraint, F8492/F8493.
+ * half and are not written either -- `vmi_pack`'s third entry is
+ * `faxvmi_hdlc_frame`, and naming a table entry that does not exist yet is
+ * the link constraint, F8492/F8493.  So the table waits on ONE symbol now.
  *
- * THE FIVE FUNCTIONS THIS BATCH ADDS ARE ONE UNIT, and that is why they came
- * together: every one of them goes through `vmi->framer`, a single 88-byte
- * object that is a ring, a bit-level unpacker and an HDLC receiver at once.
- * Half-modelling it would have put a guessed layout under all five.  See
- * `faxvmi.h` for the model and the evidence per field.
+ * THE FUNCTIONS HERE ARE ONE UNIT, and that is why they came together: every
+ * one of them goes through `vmi->framer`, a single 88-byte object that is a
+ * ring, two bit engines and an HDLC receiver at once.  Half-modelling it
+ * would have put a guessed layout under all of them.  See `faxvmi.h` for the
+ * model and the evidence per field.
+ *
+ * THE PACKERS ARE NOT THE UNPACKERS RUN BACKWARDS, and the shapes that differ
+ * are worth stating once here rather than twice below:
+ *
+ *   - the caller's buffer is not read by the packer at all.  It goes to
+ *     `faxvmi_write_fifo`, which is called TWICE -- once before the bit loop
+ *     and once after -- and the ring is the only path between them.
+ *   - the output length is `link->pack_count` and nothing else.  A starved
+ *     ring is padded with fill, never short-blocked.
+ *   - the bit engine is the framer's SECOND quartet, +0x10..+0x1c, whose
+ *     four fields mirror the unpackers' +0x20..+0x2c one for one.
  */
 
 #include <stddef.h>
@@ -64,7 +77,7 @@ VMI_ASSERT_OFF(fifo_size, 0x08);
 VMI_ASSERT_OFF(max_frame, 0x0a);
 VMI_ASSERT_OFF(frame_size, 0x0c);
 VMI_ASSERT_OFF(slot, 0x0e);
-VMI_ASSERT_OFF(int_0018, 0x18);
+VMI_ASSERT_OFF(underrun, 0x18);
 VMI_ASSERT_OFF(overflow, 0x1c);
 VMI_ASSERT_OFF(status, 0x20);
 VMI_ASSERT_OFF(framer, 0x24);
@@ -73,16 +86,21 @@ typedef char faxvmi_size[(sizeof(struct faxvmi) == 0x2c) ? 1 : -1];
 
 FRAMER_ASSERT_OFF(fifo, 0x00);
 FRAMER_ASSERT_OFF(fifo_size, 0x04);
+FRAMER_ASSERT_OFF(rd, 0x06);
 FRAMER_ASSERT_OFF(wr, 0x08);
 FRAMER_ASSERT_OFF(count, 0x0a);
-FRAMER_ASSERT_OFF(int_000c, 0x0c);
-FRAMER_ASSERT_OFF(mask, 0x20);
-FRAMER_ASSERT_OFF(word, 0x24);
-FRAMER_ASSERT_OFF(acc, 0x28);
-FRAMER_ASSERT_OFF(bit, 0x2c);
+FRAMER_ASSERT_OFF(residue, 0x0c);
+FRAMER_ASSERT_OFF(pack_mask, 0x10);
+FRAMER_ASSERT_OFF(pack_word, 0x14);
+FRAMER_ASSERT_OFF(pack_acc, 0x18);
+FRAMER_ASSERT_OFF(pack_bit, 0x1c);
+FRAMER_ASSERT_OFF(unpack_mask, 0x20);
+FRAMER_ASSERT_OFF(unpack_word, 0x24);
+FRAMER_ASSERT_OFF(unpack_acc, 0x28);
+FRAMER_ASSERT_OFF(unpack_bit, 0x2c);
 FRAMER_ASSERT_OFF(async_hunt, 0x30);
-FRAMER_ASSERT_OFF(short_0034, 0x34);
-FRAMER_ASSERT_OFF(int_0038, 0x38);
+FRAMER_ASSERT_OFF(zero_run_bits, 0x34);
+FRAMER_ASSERT_OFF(zero_run_send, 0x38);
 FRAMER_ASSERT_OFF(zero_run_seen, 0x3c);
 FRAMER_ASSERT_OFF(frame, 0x40);
 FRAMER_ASSERT_OFF(frame_size, 0x44);
@@ -95,8 +113,10 @@ typedef char faxvmi_framer_size[(sizeof(struct faxvmi_framer) == 0x58)
 				? 1 : -1];
 
 LINK_ASSERT_OFF(ptr_0000, 0x00);
-LINK_ASSERT_OFF(rx, 0x04);
-LINK_ASSERT_OFF(width, 0x10);
+LINK_ASSERT_OFF(buf, 0x04);
+LINK_ASSERT_OFF(pack_count, 0x0c);
+LINK_ASSERT_OFF(pack_width, 0x0e);
+LINK_ASSERT_OFF(unpack_width, 0x10);
 LINK_ASSERT_OFF(int_0014, 0x14);
 typedef char faxvmi_link_size[(sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
 
@@ -135,6 +155,103 @@ FAXVMI_message(struct faxvmi *vmi, unsigned char code)
 }
 
 /*
+ * Asynchronous framing on the way OUT: each octet from the ring becomes a
+ * ten-bit character.
+ *
+ *	word = ((octet << 1) | 1) & ~0x200,	mask = 0x200
+ *
+ * so the first bit shifted out is bit 9, forced to ZERO by the AND -- the
+ * start bit; then the octet's eight bits, most significant first; then bit 0,
+ * set by the OR -- the stop bit.  The `& ~0x200` is a separate instruction in
+ * the object (0x95948) and is written as one here.
+ *
+ * THE REFILL HAS FOUR ARMS AND ONLY TWO OF THEM SET A MASK OF 1.  A zero-bit
+ * run in progress emits one zero bit; the run's LAST refill clears
+ * `zero_run_send`, sets `pack_word` to 1 and LEAVES THE MASK AT ZERO, so the
+ * bit it emits is a space rather than the mark the assignment reads as --
+ * D1120, reproduced.  An empty ring emits a single mark bit and raises
+ * `vmi->underrun`.
+ *
+ * `pack_count` output elements are always produced, and that count is what is
+ * returned -- re-read from the link object after the trailing write, not from
+ * the local the loop counted down.
+ */
+int
+faxvmi_asyc_pack(struct faxvmi *vmi, unsigned short *src, short count)
+{
+	struct faxvmi_framer *fr;
+	struct faxvmi_link *lk;
+	unsigned short *out;
+	unsigned int word, acc, elem_mask;
+	unsigned short mask, bit, width;
+	short n, left;
+
+	left = (short)(count - faxvmi_write_fifo(vmi, &src, count));
+
+	lk = vmi->link;
+	fr = vmi->framer;
+	out = lk->buf;
+	word = fr->pack_word;
+	mask = (unsigned short)fr->pack_mask;
+	n = lk->pack_count;
+	width = lk->pack_width;
+	bit = fr->pack_bit;
+	acc = fr->pack_acc;
+	elem_mask = (1u << width) - 1;
+
+	while (n != 0) {
+		unsigned int b;
+
+		if (mask == 0) {
+			if (fr->zero_run_send != 0) {
+				if (fr->zero_run_bits != 0) {
+					fr->zero_run_bits = (unsigned short)
+					    (fr->zero_run_bits - 1);
+					word = 0;
+					mask = 1;
+				} else {
+					/* D1120: no mask, so a space */
+					fr->zero_run_send = 0;
+					word = 1;
+				}
+			} else if (fr->count != 0) {
+				unsigned short rd = fr->rd;
+				unsigned int v = fr->fifo[rd];
+
+				fr->rd = (unsigned short)(rd + 1);
+				fr->count = (unsigned short)(fr->count - 1);
+				if (fr->rd >= fr->fifo_size)
+					fr->rd = 0;
+				word = ((v << 1) | 1) & 0xfffffdffu;
+				mask = 0x200;
+			} else {
+				word = 1;
+				mask = 1;
+				vmi->underrun = 1;
+			}
+		}
+		b = (word & mask) != 0;
+		acc = (acc << 1) | b;
+		bit = (unsigned short)(bit + 1);
+		mask = (unsigned short)(mask >> 1);
+		if (bit == width) {
+			*out++ = (unsigned short)(acc & elem_mask);
+			n = (short)(n - 1);
+			bit = 0;
+		}
+	}
+
+	fr->pack_bit = bit;
+	fr->pack_mask = mask;
+	fr->pack_acc = acc;
+	fr->pack_word = word;
+
+	left = (short)(left - faxvmi_write_fifo(vmi, &src, left));
+	vmi->framer->residue = left;
+	return vmi->link->pack_count;
+}
+
+/*
  * ============================ the unpackers ============================
  *
  * All three share a preamble and a postamble, and they are written out in
@@ -143,7 +260,7 @@ FAXVMI_message(struct faxvmi *vmi, unsigned char code)
  * move three functions' code generation at once.
  *
  * The preamble takes the framer's bit position into locals; the postamble
- * puts it back.  `vmi->link->rx` is re-read every call and the advanced
+ * puts it back.  `vmi->link->buf` is re-read every call and the advanced
  * cursor is DISCARDED -- see faxvmi.h.
  */
 
@@ -166,12 +283,12 @@ faxvmi_asyc_unpack(struct faxvmi *vmi, unsigned short *dst, short count)
 {
 	struct faxvmi_framer *fr = vmi->framer;
 	struct faxvmi_link *lk = vmi->link;
-	unsigned int word = fr->word;
-	unsigned short bit = fr->bit;
-	unsigned short mask = fr->mask;
-	unsigned int acc = fr->acc;
-	unsigned short *src = lk->rx;
-	unsigned int top = 1u << (lk->width - 1);
+	unsigned int word = fr->unpack_word;
+	unsigned short bit = fr->unpack_bit;
+	unsigned short mask = fr->unpack_mask;
+	unsigned int acc = fr->unpack_acc;
+	unsigned short *src = lk->buf;
+	unsigned int top = 1u << (lk->unpack_width - 1);
 	int hunt = fr->async_hunt;
 	int zero_run = 0;
 	int overflow = 0;
@@ -216,11 +333,11 @@ faxvmi_asyc_unpack(struct faxvmi *vmi, unsigned short *dst, short count)
 	}
 
 	fr->async_hunt = hunt;
-	fr->mask = mask;
-	fr->acc = acc;
+	fr->unpack_mask = mask;
+	fr->unpack_acc = acc;
 	fr->zero_run_seen = zero_run;
-	fr->word = word;
-	fr->bit = bit;
+	fr->unpack_word = word;
+	fr->unpack_bit = bit;
 	vmi->overflow = overflow;
 	return nout;
 }
@@ -253,12 +370,12 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 {
 	struct faxvmi_framer *fr = vmi->framer;
 	struct faxvmi_link *lk = vmi->link;
-	unsigned int word = fr->word;
-	unsigned int acc = fr->acc;
-	unsigned short mask = fr->mask;
-	unsigned short bit = fr->bit;
-	unsigned short *src = lk->rx;
-	unsigned int top = 1u << (lk->width - 1);
+	unsigned int word = fr->unpack_word;
+	unsigned int acc = fr->unpack_acc;
+	unsigned short mask = fr->unpack_mask;
+	unsigned short bit = fr->unpack_bit;
+	unsigned short *src = lk->buf;
+	unsigned int top = 1u << (lk->unpack_width - 1);
 	short flen = fr->frame_len;
 	short ones = fr->ones;
 	short nframes = 0;
@@ -458,14 +575,94 @@ faxvmi_hdlc_unframe(struct faxvmi *vmi, unsigned short *dst, short count)
 			ones = 0;
 	}
 
-	fr->mask = mask;
-	fr->bit = bit;
-	fr->word = word;
+	fr->unpack_mask = mask;
+	fr->unpack_bit = bit;
+	fr->unpack_word = word;
 	fr->frame_len = flen;
-	fr->acc = acc;
+	fr->unpack_acc = acc;
 	fr->ones = ones;
 	vmi->overflow = overflow;
 	return nframes;
+}
+
+/*
+ * Simple framing on the way OUT: no framing.  Each ring element is shifted
+ * out from bit 7 down, so the octet's most significant bit goes first, and an
+ * empty ring contributes a zero octet.
+ *
+ * `real` IS NOT A SPELLING CHOICE.  The object holds a 0/1 value in a slot,
+ * initialises it to 1, sets it to zero on the ring-empty arm ALONE, and ADDS
+ * it to the running count at every emitted element (0x964fb, 0x96589,
+ * 0x965c5).  So the return counts the elements produced before the ring first
+ * ran dry and stops advancing for the rest of the call, while the block
+ * itself is still filled to `pack_count`.  A `nout++` guarded by a test would
+ * compile to a branch, which is not what is there; the two also disagree
+ * whenever the ring refills after a gap, which the object never lets happen
+ * because the flag is never set back to 1.
+ */
+int
+faxvmi_simp_pack(struct faxvmi *vmi, unsigned short *src, short count)
+{
+	struct faxvmi_framer *fr;
+	struct faxvmi_link *lk;
+	unsigned short *out;
+	unsigned int word, acc, elem_mask;
+	unsigned short mask, bit, width;
+	short n, nout = 0, left;
+	short real = 1;
+
+	left = (short)(count - faxvmi_write_fifo(vmi, &src, count));
+
+	fr = vmi->framer;
+	lk = vmi->link;
+	mask = (unsigned short)fr->pack_mask;
+	out = lk->buf;
+	acc = fr->pack_acc;
+	n = lk->pack_count;
+	width = lk->pack_width;
+	word = fr->pack_word;
+	bit = fr->pack_bit;
+	elem_mask = (1u << width) - 1;
+
+	while (n != 0) {
+		unsigned int b;
+
+		if (mask == 0) {
+			if (fr->count != 0) {
+				unsigned short rd = fr->rd;
+
+				word = fr->fifo[rd];
+				fr->rd = (unsigned short)(rd + 1);
+				fr->count = (unsigned short)(fr->count - 1);
+				if (fr->rd >= fr->fifo_size)
+					fr->rd = 0;
+			} else {
+				word = 0;
+				real = 0;
+				vmi->underrun = 1;
+			}
+			mask = 0x80;
+		}
+		b = (word & mask) != 0;
+		acc = (acc << 1) | b;
+		bit = (unsigned short)(bit + 1);
+		mask = (unsigned short)(mask >> 1);
+		if (bit == width) {
+			nout = (short)(nout + real);
+			*out++ = (unsigned short)(acc & elem_mask);
+			bit = 0;
+			n = (short)(n - 1);
+		}
+	}
+
+	fr->pack_mask = mask;
+	fr->pack_acc = acc;
+	fr->pack_bit = bit;
+	fr->pack_word = word;
+
+	left = (short)(left - faxvmi_write_fifo(vmi, &src, left));
+	vmi->framer->residue = left;
+	return nout;
 }
 
 /*
@@ -477,12 +674,12 @@ faxvmi_simp_unpack(struct faxvmi *vmi, unsigned short *dst, short count)
 {
 	struct faxvmi_framer *fr = vmi->framer;
 	struct faxvmi_link *lk = vmi->link;
-	unsigned short mask = fr->mask;
-	unsigned short *src = lk->rx;
-	unsigned int word = fr->word;
-	unsigned short bit = fr->bit;
-	unsigned int top = 1u << (lk->width - 1);
-	unsigned int acc = fr->acc;
+	unsigned short mask = fr->unpack_mask;
+	unsigned short *src = lk->buf;
+	unsigned int word = fr->unpack_word;
+	unsigned short bit = fr->unpack_bit;
+	unsigned int top = 1u << (lk->unpack_width - 1);
+	unsigned int acc = fr->unpack_acc;
 	int overflow = 0;
 	short nout = 0;
 	short left = count;
@@ -510,10 +707,10 @@ faxvmi_simp_unpack(struct faxvmi *vmi, unsigned short *dst, short count)
 		nout = (short)(nout + 1);
 	}
 
-	fr->mask = mask;
-	fr->bit = bit;
-	fr->word = word;
-	fr->acc = acc;
+	fr->unpack_mask = mask;
+	fr->unpack_bit = bit;
+	fr->unpack_word = word;
+	fr->unpack_acc = acc;
 	vmi->overflow = overflow;
 	return nout;
 }
@@ -595,12 +792,12 @@ faxvmi_frame_reverse(unsigned short *buf, short count)
  * ========================== the ring writers ==========================
  *
  * THE `taken` FLAG IS NOT A SPELLING CHOICE.  The object loads
- * `vmi->int_0018` into a register BEFORE the loop, sets that register to zero
+ * `vmi->underrun` into a register BEFORE the loop, sets that register to zero
  * inside it, and stores it at the loop's NORMAL exit -- 0x968f6 loads,
  * 0x96961 zeroes, 0x96978 stores -- while the ring-full path returns without
  * passing the store at all.  So the field is cleared when the whole request
  * was accepted, left ALONE when the ring filled part-way, and re-stored
- * unchanged when the count was zero.  A `vmi->int_0018 = 0;` inside the loop
+ * unchanged when the count was zero.  A `vmi->underrun = 0;` inside the loop
  * body would agree on the first case and disagree on the second, which is a
  * behavioural difference and not a codegen one.  D1070.
  */
@@ -610,7 +807,7 @@ faxvmi_write_fifo(struct faxvmi *vmi, unsigned short **src, short count)
 {
 	struct faxvmi_framer *fr = vmi->framer;
 	unsigned short *p = *src;
-	int taken = vmi->int_0018;
+	int taken = vmi->underrun;
 	short n = 0;
 	short i;
 
@@ -629,7 +826,7 @@ faxvmi_write_fifo(struct faxvmi *vmi, unsigned short **src, short count)
 	}
 
 	*src = p;
-	vmi->int_0018 = taken;
+	vmi->underrun = taken;
 	return n;
 }
 
@@ -673,7 +870,7 @@ faxvmi_write_frame(struct faxvmi *vmi, unsigned short **src, short count)
 
 		fcs = (unsigned short)faxvmi_gen_fcs16(p, len);
 
-		taken = vmi->int_0018;
+		taken = vmi->underrun;
 		for (j = len; j != 0; j--) {
 			if (fr->count >= fr->fifo_size)
 				goto put_fcs;
@@ -684,7 +881,7 @@ faxvmi_write_frame(struct faxvmi *vmi, unsigned short **src, short count)
 			fr->count = (unsigned short)(fr->count + 1);
 			taken = 0;
 		}
-		vmi->int_0018 = taken;
+		vmi->underrun = taken;
 
 	put_fcs:
 		fr->fifo[fr->wr] = (unsigned short)(fcs >> 8);
