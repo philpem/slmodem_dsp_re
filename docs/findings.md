@@ -105747,3 +105747,207 @@ Two are not:
 **Its data closure is empty**, which is what this pass was for, and F9145's
 forecast for V.17 is met exactly. Neither of the two has unwritten data behind
 it that this pass could see. (2026-09-01)
+
+## F9150. The V.27ter receiver's data closure is 56 symbols in THREE shapes, and eleven of them are `short[2]` because of the LOAD, not because of the byte count
+
+*2026-09-01.* `V27RX_create` (0x99660, 2,210 bytes) is blocked on data, and
+F9145 counted the blockers at "30 tables". The true set, swept from `nm -S` and
+from the constructor's own relocations, is **fifty-six** symbols, and they come
+in three shapes that have to be told apart before anything can be typed:
+
+- **Fourteen SELECTORS**, eight bytes each, which are TWO POINTERS. The inner
+  relocation sweep -- the relocations whose offset falls inside the symbol's
+  own byte range, shown firing on `AGCb103_CFG` first (F9050) -- finds
+  `R_386_32` at +0x00 and +0x04 of every one of them, against two NAMED
+  GLOBALS. Read as `short[4]` each would have given four plausible small
+  integers.
+- **Twenty-eight TARGETS**, `..._2400` and `..._4800`, which are what those
+  twenty-eight relocations point at. Both halves of every pair had to be
+  written or nothing links (F8492/F8493).
+- **Eleven PER-RATE SCALARS**, four bytes each. Four bytes with everything
+  else in the module indexed by rate SUGGESTS `short[2]`, and the suggestion is
+  not the evidence. `V27RX_create` reads each one with
+  `movzwl base(%reg,%reg,1)` -- a SIXTEEN-BIT load at `base + 2*index` -- so
+  there are two 16-bit elements and not one 32-bit one. That is forced
+  encoding, F613's column.
+
+Plus `AGCv27_CFG` and the two `V27_MTD_COEFF_*` banks, which the object selects
+with a branch (`cmpw $0x1,0x8(%ebx)` at 997e7) rather than a subscript.
+
+**F9140's method transferred intact and every one of them agreed.** Each
+table's element count is in the object twice -- `st_size`, and the length the
+constructor stores beside the pointer -- and here the second reading is itself
+one of the eleven scalars:
+
+| table | `st_size` | the count the constructor writes |
+|---|--:|---|
+| `V27RX_FSE_IFILT/QFILT_2400` | 194 | `fse.taps` = `FSE_FILT_LEN[0]` = 97 |
+| `V27RX_FSE_IFILT/QFILT_4800` | 162 | `fse.taps` = `FSE_FILT_LEN[1]` = 81 |
+| `V27RX_CRR_TABLE_2400` / `_4800` | 8 / 80 | `fse.clk_mod` = 4 / 40 |
+| `V27RX_MRF_FILT_2400` / `_4800` | 540 / 72 | `mrf.taps` = 270 / 36 |
+| `V27RX_SRE_FILT_2400` / `_4800` | 542 / 402 | `sre.coeffs` = 270 / 200, +1 |
+| `V27RX_XCLOCK/YCLOCK_2400` | 12 | `sre.clock_len` = `SAMP_PER_BAUD[0]` = 6 |
+| `V27RX_XCLOCK/YCLOCK_4800` | 10 | `sre.clock_len` = `SAMP_PER_BAUD[1]` = 5 |
+| `V27RX_XB_COFFS_*` | 22 | `FPM_SRE_DISC` = 11 |
+| `V27RX_SRE_PLLK1/K2_*` | 6 | `FPM_SRE_MODES` = 3 |
+| `V27RX_DEC_PMAP_2400` / `_4800` | 8 / 16 | `DEC_PHS_MASK` + 1 = 4 / 8 |
+| `V27_MTD_COEFF_*` | 20 | `mtd.tones` = 2, five shorts a section |
+
+`V27RX_XB_COFFS_2400` and `_4800` being 22 bytes gives `FPM_SRE_DISC` a THIRD
+independent witness after V.32's and V.29's.
+
+**`V27RX_SAMP_PER_BAUD` is loaded BOTH ways and that is F7803, not a defect.**
+`movzwl` at 9993c and 99acd, `movswl` at 99a18, all three on the same symbol.
+The extension follows the declared type of the LOCAL and not of the array, so
+`short` is what is written; the two readings agree over 6 and 5. F614 is still
+right that the FIELD's type is not what varies.
+
+**One reading is worth stating because it looks like an error.** At 4800 bit/s
+`V27RX_MRF_UP` and `V27RX_MRF_DOWN` are both 1: the "resampler" is configured
+for no rate change at all and its 36 taps are a plain 8 kHz band filter. The
+`fpm_mrf` block is being used as a filter, not as a converter, and the 1/1 is
+the object's. (2026-09-01)
+
+## F9151. The V.27ter rate index is 0 for 2400 bit/s and 1 for 4800, and the evidence is two decimal bit rates and not the symbol names
+
+*2026-09-01.* Fourteen selectors and eleven scalars in `src/fax/v27cfg.c` are
+subscripted by one index, so which value means which rate decides every table
+in the file -- and the `_2400`/`_4800` suffixes are the author's labels, which
+is exactly the kind of thing this tree does not take as evidence.
+
+`V27RX_create` settles it at 99794. It loads the modem's own +0x04 with
+`movswl`, and:
+
+    cmp $0x960,%eax   je -> movw $0x0,0x8(%ebx)      0x960  = 2400
+    cmp $0x12c0,%eax  je -> movw $0x1,0x8(%ebx)      0x12c0 = 4800
+    (neither)            -> movw $0x1,0x8(%ebx), and an error status
+
+2400 and 4800 in decimal are V.27ter's two bit rates as the Recommendation
+defines them, so the field being compared is a bit rate and the index it
+produces is 0 for the lower and 1 for the higher. Every later
+`movswl 0x8(%ecx)` in the constructor is that index.
+
+**A second, independent witness in the same function.** At 997e7 the tone
+detector's bank is chosen by `cmpw $0x1,0x8(%ebx)` with the EQUAL arm keeping
+`V27_MTD_COEFF_4800` -- a branch rather than a subscript, and the only place in
+the module where the rate is one. It agrees.
+
+**And a third that does not involve the constructor's rate word at all.**
+`V27RX_decision` takes four phases or eight on the decoder's `eight_phase`,
+which `V27RX_create` fills with `params->f8 == 1`; `V27RX_DEC_PHS_MASK` is
+`{3, 7}` and `V27RX_DEC_PMAP_2400` has four entries against `_4800`'s eight.
+Four phases carry two bits and eight carry three, which at 1200 and 1600 baud
+is 2400 and 4800 bit/s. (2026-09-01)
+
+## F9152. V.27ter's carrier is 1800 Hz at BOTH rates, computed out of five tables that were read separately -- and the equaliser's zero pattern is the same fact seen twice
+
+*2026-09-01.* This is F9141 for V.27ter, and it is stronger, because the
+arithmetic has to close TWICE over two different sets of numbers.
+
+`V27RX_CRR_TABLE_2400[i]` is `round(i * 32768 / 4)` for all 4 entries and
+`..._4800[i]` is `round(i * 32768 / 40)` for all 40 -- one full turn of phase
+in Q16. The constructor installs each as `fpm_fse_cfg::clk` with `clk_mod`
+from `V27RX_CRR_TABLE_LEN` and `clk_inc` from `V27RX_CRR_ADJUST`, behind a
+resampler configured from `V27RX_MRF_UP` and `V27RX_MRF_DOWN`:
+
+    2400 bit/s:  8000 * 9/10 = 7200 Hz,  7200 * 1 / 4  = 1800 Hz
+    4800 bit/s:  8000 * 1/1  = 8000 Hz,  8000 * 9 / 40 = 1800 Hz
+
+1800 Hz is V.27ter's carrier for both rates. The symbol rates fall out of the
+same three numbers with `V27RX_SAMP_PER_BAUD`: 7200/6 is 1200 baud and 8000/5
+is 1600, which at four and eight phases is 2400 and 4800 bit/s.
+
+**THE EQUALISER'S ZERO PATTERN IS THE SAME FACT AND IT IS THE SHARPER TEST.**
+Each rail is a real prototype times a cosine or a sine at the carrier, so it is
+zero exactly where its own trigonometric factor is, and the ratio predicts
+where:
+
+| rate | carrier / sample rate | I rail zero at | Q rail zero at |
+|---|---|---|---|
+| 2400 | 1800/7200 = 1/4 | `n` odd | `n` even |
+| 4800 | 1800/8000 = 9/40 | `n == 10` (mod 20) | `n == 0` (mod 20) |
+
+All four hold over 97 and 81 taps with **no exception in either direction**,
+which is why `t_v27cfg.c` asserts them as IF AND ONLY IF rather than as "these
+taps are zero": a rail with one extra zero fails. The 4800 case is the one that
+could not be a coincidence -- four zeros in eighty-one places, at exactly the
+four positions where `9n` is congruent to 10 modulo 20.
+
+Recorded as EVIDENCE FOR A TYPE, not as a generator, exactly as F9141 was.
+`docs/fastpass.md` defers coefficient derivations to the 8 kHz retarget and a
+byte-exact copy is byte-exact; what a byte copy cannot give is the stride, and
+this is where the stride came from -- twice, for two different rates, over five
+tables that were extracted independently of one another. (2026-09-01)
+
+## F9153. A SWAPPED SELECTOR HAS PERFECTLY CORRECT BYTES, and a byte comparison cannot see it -- the wiring check is what catches it
+
+*2026-09-01.* Every table in `src/fax/v27cfg.c` can be byte-exact while the
+receiver is still wrong, because fourteen of the fifty-six symbols are two
+POINTERS and a pointer's value can never be compared against the blob's. If
+`V27RX_MRF_FILT[0]` holds the 4800 filter and `[1]` the 2400 one, all 306
+coefficients still match `ref_` element for element and every `sizeof` still
+matches `nm -S`.
+
+`t_v27cfg.c` closes it from both ends:
+
+- **ours by POINTER IDENTITY** -- `V27RX_MRF_FILT[0] == V27RX_MRF_FILT_2400`,
+  which is a claim about our own wiring and needs no blob;
+- **the blob's by CONTENT** -- `cmp_shorts(ref_V27RX_MRF_FILT[0],
+  V27RX_MRF_FILT_2400, 270)`, which is the only claim a differential test can
+  make about an address and is the claim that matters.
+
+**Shown to fire, and the failure profile is the point (F134).** Swapping the
+two entries of `V27RX_MRF_FILT` in `src/` and rebuilding:
+
+    PASS  sizes against the object's symbol table       123 checks
+    FAIL  table values against the blob                 1/99 checks failed
+    PASS  the comparison rejects a perturbed table     1353 checks
+    PASS  the shape of the values                       448 checks
+    ...
+    FAIL  V27RX_MRF_FILT through FPM_MRF_init          2/20 checks failed
+
+Layer 1 is blind to it, layer 3's perturbation detector is blind to it, layer 4
+is blind to it, and the ONE check in layer 2 that sees it is the wiring one.
+Layer 5 sees it as well, because `FPM_MRF_init` copies THROUGH the pointer --
+which is the argument for building the configuration the constructor's way
+rather than asserting on the tables alone.
+
+**The complementary injection was run too**, because a test can be strong on
+one axis and vacuous on another: changing `V27RX_SAMP_PER_BAUD[0]` from 6 to 5
+fails two checks in layer 1, one in layer 2 and one in layer 4, and NONE in
+layer 5 -- which is by construction, since layer 5 must hand both inits the
+same buffer lengths or it compares buffers of different sizes. The two
+injections together say which layer owns which class of defect. (2026-09-01)
+
+## F9154. What `V27RX_create` still needs after this pass: two text symbols, no data
+
+*2026-09-01.* Its direct references were re-enumerated from `tools/dis.py` --
+both `R_386_PC32` calls and `R_386_32` stored pointers, the F8492/F8493 pair --
+and classified against `nm --defined-only` over the built object tree.
+
+**Data: nothing.** All fifty-six of the symbols above are written, and the
+other data it names -- `V27RX_CFG`, `SDMv27_CFG`, `V21_CHAN2_MTD_COEFF`,
+`FPM_MTD_CFG`, `FPM_MRF_CFG`, `FPM_SRE_CFG` and `FPM_FSE_CFG` -- was already
+written. `dsplibs_debug_level` is `U` in the blob, so it is not a
+reconstruction target at all; the harness provides it.
+
+**Text: two symbols, both stored as POINTERS rather than called**, which is
+precisely the class F8493 exists to warn about -- neither appears in a call
+graph:
+
+| symbol | bytes | where the constructor stores it |
+|---|--:|---|
+| `RxHdxStartV27` | 101 | shared + 0x0c, the state handler, at 996f9 |
+| `V27RX_epoch_det` | 303 | `fpm_fse_cfg::decision`, at 99b6c/99b96 |
+
+Every blob function it CALLS is written: `FPM_MTD_create`, `FPM_AGC_init`,
+`FPM_MRF_init`, `FPM_SRE_init`, `FPM_FSE_init` and `SDMv27_init`. Its other
+two callees, `sysdep_malloc` and `dsplibs_debug_printf`, are `U` in the object
+-- host services rather than reconstruction targets -- and `test/harness/`
+supplies both.
+
+F9145 named those same two symbols for V.27ter and that half of its table is
+confirmed; its "30 tables" is superseded by F9150's 56. Both belong to the
+unwritten `src/fax/v27.c`, so V.27ter's constructor is now in exactly the state
+F9140 left V.29's in: blocked on its own module's two functions and on nothing
+else. (2026-09-01)

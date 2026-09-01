@@ -11546,6 +11546,20 @@ latent rather than active.
 it is a behaviour change on a path with no coverage, so it wants its own
 differential test rather than a drive-by edit. *unmeasured.*
 
+## D1102 ⚠ the V.27ter receiver's tables are in `src/fax/v27cfg.c`, not in the file that holds `V27RX_create`
+
+The fifty-six symbols `AGCv27_CFG`, `V27RX_MRF_FILT_2400` and the rest sit in
+`.data` and `.rodata` runs that also hold `V27RX_CFG`, `V27RX_CTL` and
+`V27RX_MESG`, so the author's translation unit was almost certainly the one
+holding `V27RX_create` itself. They are in a file of their own because
+`src/fax/v27.c` is not written and a table is worth nothing until something
+can link against it.
+
+A data symbol's bytes do not depend on its translation unit, so moving them is
+free and it cannot be measured. This is D1100 one modulation on, and the same
+resolution: record it rather than pretend the layout is settled.
+*unmeasured, and unmeasurable by any tier here.*
+
 ## D1110 ⚠ the V.17 receiver's tables are in `src/fax/v17cfg.c`, not in the file that holds `V17RX_create`
 
 The twenty-four symbols `AGCv17_CFG`, `MRFv17_COFFS`, the eight
