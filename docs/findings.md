@@ -107188,3 +107188,172 @@ question and it is now settled: F8320 records that the probe was "two scripts
 of about forty lines each over `closure.build_graph()`", not `relocscan`, so
 the leaf argument never rested on this tool. Anyone who DID use `relocscan` for
 a reachability question before today should re-measure.  (2026-09-01)
+
+## F9350. The V.21 tone-detector banks ARE resonators at the Recommendation's own four frequencies -- twenty coefficients from four published numbers
+
+*2026-09-01.* `V21_CHAN1_MTD_COEFF` (.data 0x7a74, 20 bytes) and
+`V21_CHAN2_MTD_COEFF` (.data 0x7a60, 20 bytes) are each two sections of five
+shorts, which is what `mtd.tones = 2` over 20 bytes fixes. That much was
+already recorded, in `fpm_mtd_cfg.c` and in F9140. What is new is that the
+numbers are DERIVABLE, and the derivation is what fixes the element type and
+the stride independently of `st_size`.
+
+Every section has the form
+
+    { -r^2, 1.0, 2*r*cos(w), -2*cos(w), 1.0 }    in Q14
+
+with `r = 0.9` and `w = 2*pi*f/8000`. Rounding that expression to integers
+reproduces **all twenty entries of both banks exactly**:
+
+| bank | section | f | got | predicted |
+|---|---|--:|---|---|
+| CHAN1 | 0 | 980 | -13271, 16384, 21178, -23532, 16384 | identical |
+| CHAN1 | 1 | 1180 | -13271, 16384, 17707, -19675, 16384 | identical |
+| CHAN2 | 0 | 1650 | -13271, 16384, 8005, -8895, 16384 | identical |
+| CHAN2 | 1 | 1850 | -13271, 16384, 3466, -3851, 16384 | identical |
+
+980 and 1180 Hz are V.21 channel 1's mark and space; 1650 and 1850 Hz are
+channel 2's. Four published numbers, twenty coefficients, no residual.
+
+**This is evidence for a TYPE, not a generator**, and it is the same move
+F9141 made for `V29RX_CRR_TABLE`. `docs/fastpass.md` defers coefficient
+derivations to the 8 kHz retarget and a byte-exact copy is byte-exact; what a
+byte copy cannot give is the STRIDE, and a reading that made these anything
+but shorts in Q14 five to a section would not produce those four frequencies.
+It also fixes the MTD's sample rate at 8000 Hz, which is the rate BEFORE the
+resampler -- the tone detector is fed the 8 kHz input, not the 7200 Hz the
+`fpm_mrf` block produces.
+
+**It closes over a table this pass did not write.** `V21_CHAN2_MTD_COEFF` was
+written by F9140's V.29 pass, from bytes alone, and it satisfies the same
+identity at the two frequencies it must. So the derivation is checked on ten
+entries that were not fitted to it.
+
+`t_v21cfg.c` asserts the identity over all twenty entries. **The comparison
+allows +/-1 deliberately**: all twenty are exact and the tightest margin from
+a rounding boundary is 0.0346, far outside anything two libm implementations
+disagree by, but the file is compiled by two compilers against two C libraries
+and `cos` is correctly rounded by neither standard. A unit of slack cannot
+weaken the claim, which is about the scaling and the stride -- a wrong Q, a
+wrong `r` or a wrong section length is out by thousands. Layer 2 pins every
+byte against the blob exactly, so nothing is lost. The perturbation ritual was
+run: 21178 moved to 21180 fails this suite and two others. (2026-09-01)
+
+## F9351. `V21RX_CFG` is a FOURTH type in `faxcfg.h`'s family, and a 16-bit compare is what proves it
+
+*2026-09-01.* F9147 left this open: `V21RX_CFG` (.data 0x7ab4) is 24 bytes,
+exactly `V29RX_CFG`'s size, and its dwords read [1, 300, 60000, 0, 0, 0]
+against V.29's [1, 9600, 60000, 0, 0, 0]. On size and on values it looks like
+the same type with a different bit rate, and `faxcfg.h`'s own argument for
+three types -- their sizes are 40, 28 and 24, each matching its `sysdep_malloc`
+argument -- does not reach this case at all.
+
+**The separator is a forced encoding.** `V21RX_create` tests the field at
++0x00 twice, at 0x098fc7 and 0x099043, and both are `cmpw $0x0,(%esi)`. A
+16-bit compare is not a narrowing the compiler may apply to an `int`: an `int`
+holding 0x10000 is non-zero while its low half is zero, so `cmpl` or a
+`testl` is forced for an `int` and `cmpw` for a `short`. `V29RX_CFG`'s +0x00
+is `int_0000`, read and written 32 bits wide. Two different widths at one
+offset is two types, on CLAUDE.md's rule to act on what the compiler was
+FORCED to encode.
+
+So `struct v21rx_cfg` is defined in `include/dsplib/v21cfg.h` with a `short`
+at +0x00 and a second `short` beside it, and the remaining fields keep
+`faxcfg.h`'s spelling.
+
+**What the field DOES is established, which is why it is named.** Both tests
+select channel 2's tables when it is non-zero and channel 1's when it is zero:
+`V21RX_CHAN2_INTRP` against `V21RX_CHAN1_INTRP` for the discriminator FIR at
+0x098fd8/0x0990fb, and `V21_CHAN2_MTD_COEFF` against `V21_CHAN1_MTD_COEFF` for
+the tone detector at 0x099026/0x099049. Both arms also set `fsd.delay`, 5 for
+channel 1 and 3 for channel 2. It is spelled `chan2`. The table ships 1, so
+the built-in default is the ANSWERING side -- 1650/1850 Hz -- which is what a
+fax receiver wants.
+
+Its SIGN is not established, exactly as for `faxcfg.h`'s `bit_rate`: every
+comparison the object makes on it is against zero, which carries no sign, and
+the only value it holds is 1. (2026-09-01)
+
+## F9352. The inner-relocation sweep reported "no pointers" on a symbol that has two, because `readelf -r` names a section and this object has 149 of them
+
+*2026-09-01.* F9140 established the sweep that answers "what pointers does
+this symbol CONTAIN" -- the relocations whose `r_offset` falls inside the
+symbol's own byte range, which is the opposite of `relocscan.py --range`'s
+question (F9050). Re-implementing it for the V.21 tables reproduced a dead
+detector of exactly F134's shape, and it is worth recording because the
+obvious implementation is the broken one.
+
+`readelf -rW` heads each block with `Relocation section '.rel.data'` and gives
+the target only by NAME. `dsplibs.o` has 149 sections and repeats `.rodata`
+and `.data` dozens of times over, so keying the parsed relocations on that
+name attributes them to the wrong section. The first version of the sweep did
+that and reported **"(no inner relocations)" for `AGCb103_CFG`**, a symbol
+F9140 had already measured as having two, at +0x0c and +0x10.
+
+It was caught only because the run began with two known positives rather than
+with the symbols being investigated. Had it started on the V.21 tables it
+would have printed a clean, plausible and wrong answer for all ten, and
+`AGCv21_CFG`'s two pointers -- the ones that make `AGC_DEF_ALPHA_v21` and
+`AGC_DEF_BETA_v21` link blockers under F8492/F8493 -- would have been missed
+entirely.
+
+The fix is to parse the ELF section headers directly and key relocations on
+`sh_info`, the target section INDEX, which is unambiguous. With that, both
+controls fire: `AGCb103_CFG` at +0x0c and +0x10 to `AGC_DEF_ALPHA`/`_BETA`,
+and `FPM_MTD_CFG` at +0x00 to `DEF_COEFS`, both matching F9140 exactly.
+
+**The general rule, for the next person who writes one of these:** any tool
+reading this object's relocations or sections by NAME is wrong, and it fails
+silently in the direction of "nothing found". `tools/dis.py` and
+`tools/relocscan.py` already do the right thing; a one-off script is where
+this reappears. (2026-09-01)
+
+## F9353. Nine V.21 tables and `FPM_FSD_CFG`, and `V21RX_create`'s data blocker is now empty
+
+*2026-09-01.* F9147 measured `V21RX_create` (0x098e70, 1,011 bytes) as blocked
+on eight tables and on nothing else, its one text dependency `RxHdxStartV21`
+being already written. This pass wrote them, plus the two pointer targets
+inside `AGCv21_CFG` that F9147 flagged, for ten symbols and 934 bytes:
+
+| symbol | where | bytes | type |
+|---|---|--:|---|
+| `AGCv21_CFG` | .rodata 0xa0e4 | 24 | `struct fpm_agc_cfg` |
+| `AGC_DEF_ALPHA_v21` | .rodata 0xa100 | 4 | `short[2]` |
+| `AGC_DEF_BETA_v21` | .rodata 0xa0fc | 4 | `short[2]` |
+| `V21RX_IIR_LPF` | .rodata 0xa088 | 30 | `short[15]` |
+| `V21RX_CHAN2_INTRP` | .rodata 0xa0a6 | 30 | `short[15]` |
+| `V21RX_CHAN1_INTRP` | .rodata 0xa0c4 | 30 | `short[15]` |
+| `V21_MRF_FILT` | .rodata 0xc000 | 720 | `short[360]` |
+| `V21_CHAN1_MTD_COEFF` | .data 0x7a74 | 20 | `short[10]` |
+| `V21RX_CFG` | .data 0x7ab4 | 24 | `struct v21rx_cfg` |
+| `FPM_FSD_CFG` | .data 0x812c | 28 | `struct fpm_fsd_cfg` |
+
+**Every element count has the two independent readings F9140 requires**, once
+as `st_size` and once as the length `V21RX_create` stores beside the pointer:
+`fsd.fir_taps` = 15 for the two interpolators (0x098ffc), `fsd.iir_len` = 3 at
+five shorts a section for the lowpass (0x09900d), `mrf.taps` = 0x168 = 360 for
+the resampler (0x098f50), and `mtd.tones` = 2 at five shorts a section for the
+detector bank (0x099060). The two AGC arrays get their second reading from
+their values instead -- both elements sum to 32768, unity DC gain in Q15 --
+and F9350 gives the MTD bank a third.
+
+**The inner-relocation sweep found pointers in exactly one of the ten**,
+`AGCv21_CFG` at +0x0c and +0x10, which is what F9147 predicted and what made
+the two `AGC_DEF_*_v21` arrays link blockers. It was validated on two known
+positives first; F9352 is why that mattered.
+
+**`FPM_FSD_CFG` is the library built-in and was NOT in F9147's count as a V.21
+table.** It belongs beside `FPM_FSE_CFG` and `FPM_SRE_CFG` in `src/dsp/`, and
+it is now in `src/dsp/fpm_fsd_cfg.c`. It is `FPM_MTD_CFG`'s situation over
+again -- a `_data` stub already existed under a name the object does not have
+-- with the difference that these two are byte-identical, so unlike D1101
+there is no divergence, only a duplicate symbol. D1180, and `t_v21cfg.c`
+measures the equality rather than assuming it.
+
+`V21RX_CFG`'s remaining question, whether it is a fourth TYPE or a reuse of
+`struct v29rx_cfg`, is answered in F9351.
+
+**`V21RX_create`'s data closure is now empty**, and `V21TX_create` (0x0992f0,
+757 bytes) is the next V.21 constructor; its own table `V21TX_CFG` (.data
+0x7af8, 28 bytes) is still unwritten. `t_v21cfg.c` is 812 checks over nine
+suites, green under `make one`. (2026-09-01)

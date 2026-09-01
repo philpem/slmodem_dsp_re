@@ -57,8 +57,19 @@ void FPM_FSD_init(struct fpm_fsd *state, const struct fpm_fsd_cfg *cfg,
 		  int fresh);
 void FPM_FSD_free(struct fpm_fsd *state);
 
-/* The library default: no filters, but Bell 103's scalars throughout. */
+/*
+ * The library default: no filters, but Bell 103's scalars throughout.
+ *
+ * TWO SYMBOLS, ONE TABLE, AND ONLY THE SECOND IS THE OBJECT'S.  `FPM_FSD_CFG`
+ * is the blob's own name for this, `D` at .data:0x812c; `FPM_FSD_CFG_data` is
+ * a stub written before anything referenced the real one, and its only reader
+ * is `src/pump/b103/b103fp.c`.  The two hold identical values -- `t_v21cfg.c`
+ * checks that field for field -- and differ only in storage class.  Deleting
+ * the stub and pointing its one reader here is D1180's fix; see
+ * `src/dsp/fpm_fsd_cfg.c` for why this pass did not make it.
+ */
 extern const struct fpm_fsd_cfg FPM_FSD_CFG_data;
+extern struct fpm_fsd_cfg FPM_FSD_CFG;
 
 /*
  * Demodulate `count` samples, appending bits to `bits_out` as they complete.
