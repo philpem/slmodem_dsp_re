@@ -126,7 +126,7 @@ extern const short DECv17_MAG14400[128];
 
 /*
  * This is `fpm_fse_cfg::owner`, and WHERE it is comes out of `V17RX_create`
- * rather than out of a guess.  At .text 0x974c7 that function computes
+ * rather than out of a guess.  `V17RX_create` at 0x974c7 computes
  * `rx_state + 0x170` for `FPM_FSE_init`'s first argument -- which is
  * `V17RXS_FSE`, `v17fax.h`'s own offset for the equaliser -- and at 0x974a1
  * and 0x974ff it computes `rx_state + 0x2c` and stores it as `cfg.owner` and
