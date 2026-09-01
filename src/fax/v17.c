@@ -4,6 +4,7 @@
  *
  * Reconstructed from dsplibs.o:
  *
+ *   V17RX_create      .text 0x096eb0 3201
  *   V17RX_delete      .text 0x097b40  251
  *   V17TX_delete      .text 0x098e00  107
  *   V17RX_modem       .text 0x09ff80  127
@@ -73,9 +74,12 @@
  * same thing for the same reason.
  */
 
+#include <string.h>
+
 #include "dsplib/v17fax.h"
 
 #include "dsplib/debug.h"
+#include "dsplib/faxcfg.h"
 #include "dsplib/faxfifo.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
@@ -89,6 +93,9 @@
 #include "dsplib/sdm.h"
 #include "dsplib/sgd.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/v17cfg.h"
+#include "dsplib/v17dec.h"
+#include "dsplib/vtb.h"
 
 /* The instances are not modelled; see v17fax.h.  These are the only accessors. */
 #define FIELD(obj, off)		((unsigned char *)(obj) + (off))
@@ -119,6 +126,590 @@
 #define RXS_AGC(rxs)	((struct fpm_agc *)(void *)FIELD((rxs), V17RXS_AGC))
 #define RXS_SRE(rxs)	((struct fpm_sre *)(void *)FIELD((rxs), V17RXS_SRE))
 #define RXS_FSE(rxs)	((struct fpm_fse *)(void *)FIELD((rxs), V17RXS_FSE))
+
+/*
+ * The slicers' view of the receiver state, `fpm_fse_cfg::owner`.  `v17dec.h`
+ * derives its base as `V17RX_OBJ_STATE + 0x2c` from this function's own
+ * `lea 0x2c(%ebp)` at 0x0974a1, and `V17RXS_SGD` is that struct's first
+ * member -- so the two names are one address and this is the writer of both.
+ */
+#define RXS_DEC(rxs)	((struct v17_dec *)(void *)FIELD((rxs), V17RXS_SGD))
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * V17RX_create -- .text 0x096eb0, 3,201 bytes.
+ *
+ * The largest function in the object's fax half, and the writer of every
+ * field `v17fax.h`, `v17cfg.h` and `v17dec.h` describe as "planted at
+ * construction".  It allocates the instance and its two sub-blocks, builds
+ * seven DSP configurations on its stack by copying the library's built-in and
+ * patching it, and hands each to its module.
+ *
+ * ---------------------------------------------------------------------------
+ * THE INSTANCE'S HEAD IS A `struct v17rx_cfg`, AND THAT IS A STRUCT
+ * ASSIGNMENT AND NOT TEN COPIED WORDS
+ *
+ * At 0x096ef5 the object copies ten dwords from the second argument to the
+ * instance, and at 0x097948 the same ten from `V17RX_CFG` when that argument
+ * is NULL -- interleaved load/store pairs over rotating registers, which is
+ * GCC's expansion of a 40-byte struct assignment.  Forty bytes is exactly
+ * `sizeof(struct v17rx_cfg)`, exactly what `init_vmi_v17rx` allocates
+ * (`faxcfg.h`), and the field boundaries agree one for one with what this
+ * function then reads back:
+ *
+ *     +0x04 bit_rate   -> the rate switch at 0x097113, `movswl`
+ *     +0x14 int_0014   -> `V17RXC_INT_0010` at 0x09709c
+ *     +0x18 ptr_0018   -> `fpm_fse_cfg::icoff`  = `V17RX_OBJ_COEFSAVE0`
+ *     +0x1c ptr_001c   -> `fpm_fse_cfg::qcoff`  = `V17RX_OBJ_COEFSAVE1`
+ *     +0x24 ptr_0024   -> three configurations' tail context slot
+ *
+ * So the second parameter is typed by the object rather than by us, and the
+ * three pointers `init_vmi_v17rx` fills with `sysdep_malloc(0x62)`, `(0x62)`
+ * and `(2)` are the two 49-entry coefficient saves and the one-short rate
+ * save `StoreCoefV17` writes.  Finding F9470.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO "FRESH" FLAGS ARE NOT THE SAME FLAG, AND ONE OF THEM IS WRONG
+ *
+ * `owned` (the object's `0x2c(%esp)`) is set only when THIS CALL allocated the
+ * instance; `ctl_fresh` (its `%ebp`, live 0x096f3d..0x0970f2) only when this
+ * call allocated the CONTROL BLOCK.  `FPM_AGC_init` #1 gets `ctl_fresh`, which
+ * is right.  `FPM_MRF_init`, `FPM_AGC_init` #2, `FPM_SRE_init` and
+ * `FPM_FSE_init` all get `owned` -- and the block they are initialising is the
+ * DEMODULATOR STATE, whose own allocation is guarded on
+ * `V17RX_OBJ_STATE == NULL` and not on `owned` at all.  Deviation D1221; the
+ * wild write and the garbage handle that follow from the same premise are
+ * D1222.
+ *
+ * ---------------------------------------------------------------------------
+ * `FPM_TONE_CFG` IS SPELLED `FPM_TONE_CFG_data` HERE, AND THAT IS THE TREE'S
+ * SPLIT AND NOT A SECOND TABLE
+ *
+ * The object's `FPM_TONE_CFG` is the 36-byte structure itself (`R` at .rodata
+ * 0xd000, `st_size` 0x24), and this function copies all nine of its dwords.
+ * `src/dsp/fpm_tone_cfg.c` names those bytes `FPM_TONE_CFG_data` and keeps
+ * `FPM_TONE_CFG` as a `const short *const` pointing at them, which every other
+ * caller in the tree already works round the same way (`b103fp.c`,
+ * `v22fp.c`, `v23rx.c`, `fpm_fsm.c`).  `t_v17rxcreate.c` compares
+ * `FPM_TONE_CFG_data` against `ref_FPM_TONE_CFG` byte for byte rather than
+ * assuming it.
+ *
+ * ---------------------------------------------------------------------------
+ * `fpm_sre_cfg` + 0x34 IS ONE 32-BIT FIELD AND THE HEADER MODELS TWO SHORTS
+ *
+ * 0x097265 is `mov %ecx,0xf4(%esp)`, a DWORD store of the instance's +0x24
+ * into the recoverer configuration's +0x34 -- the same slot `fpm_mrf_cfg`
+ * spells `aux` and `fpm_fse_cfg` spells `reserved34`, all three filled from
+ * one value.  `fpm_sre.h` calls it `pad34`/`pad36`, which is a defect in the
+ * tree's model rather than in the object; it is NOT corrected here, because
+ * `src/pump/v32/v32fprecr.c` initialises the same struct positionally and is
+ * not this pass's to edit.  The slot is written through `memcpy` for exactly
+ * the reason that file gives -- the object's single 32-bit store without a
+ * strict-aliasing pun -- and finding F9475 records the rename as still owed.
+ *
+ * ---------------------------------------------------------------------------
+ * WHAT THE SHORT-RETRAIN FLAG DOES, RECORDED AS AN INFERENCE
+ *
+ * `V17RXC_INT_0010` -- copied here from the instance's +0x14, which the
+ * caller's parameter block supplied -- governs five things at once: the
+ * recoverer's `settle` (48 against 85), the equaliser's `train_sym` (256
+ * against 1500), both loops' proportional-gain tables (the `_S` pair against
+ * the plain pair), and whether the equaliser starts from the caller's saved
+ * coefficients or from `FSEv17_ICOFF`/`FSEv17_QCOFF`.  `StoreCoefV17` fills
+ * those same two saved arrays.  That reads as a short retrain and it is
+ * recorded as a derivation only: no format string and no callee names it, so
+ * the field keeps its neutral name.  Finding F9477.
+ *
+ * ---------------------------------------------------------------------------
+ * NO ERROR PATH EXISTS.  Eight `sysdep_malloc` calls, none checked, and one
+ * `ret` at 0x097820 that every path reaches; the return is the instance
+ * pointer and there is no way to report failure.  Deviation D1223.
+ */
+void *
+V17RX_create(void *modem, const struct v17rx_cfg *params)
+{
+	struct fpm_mtd_cfg mtdcfg;
+	struct fpm_tone_cfg tonecfg;
+	struct fpm_mrf_cfg mrfcfg;
+	struct fpm_sre_cfg srecfg;
+	struct fpm_fse_cfg fsecfg;
+	struct sgd_cfg sgdcfg;
+	struct fpm_sdm_cfg sdmcfg;
+	struct vtb *v;
+	short *mrfbuf;
+	short *srebuf;
+	void *aux;
+	short rate;
+	int owned;
+	int ctl_fresh;
+	int i;
+
+	owned = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.17 RX Create ");
+
+	if (modem == NULL) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+		modem = sysdep_malloc(0x64);
+		FIELD_PTR(modem, V17RX_OBJ_CTL) = NULL;
+		FIELD_PTR(modem, V17RX_OBJ_STATE) = NULL;
+		owned = 1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\n");
+
+	/* See the head of this function: 40 bytes, one struct assignment. */
+	if (params != NULL)
+		*(struct v17rx_cfg *)modem = *params;
+	else
+		*(struct v17rx_cfg *)modem = V17RX_CFG;
+
+	/* ---- the control block ---------------------------------------- */
+
+	ctl_fresh = 0;
+	if (CTL(modem) == NULL) {
+		FIELD_PTR(modem, V17RX_OBJ_CTL) = sysdep_malloc(0x5c);
+		/*
+		 * Three handles and nothing else.  The other 0x4c bytes of the
+		 * block keep whatever the allocator left until the code below
+		 * writes them, which is why `t_v17rxcreate.c` compares the
+		 * whole 0x5c under the harness's 0xa5 fill.
+		 */
+		FIELD_PTR(CTL(modem), V17RXC_MTD) = NULL;
+		FIELD_PTR(CTL(modem), V17RXC_TONE) = NULL;
+		FIELD_PTR(CTL(modem), V17RXC_SCRATCH) = sysdep_malloc(0x140);
+		FIELD_PTR(CTL(modem), V17RXC_BUF2) = sysdep_malloc(0x140);
+		FIELD_PTR(CTL(modem), V17RXC_MTD2) = NULL;
+		ctl_fresh = 1;
+	}
+
+	/*
+	 * The V.17 tone detector.  `FPM_MTD_create` reuses a non-NULL state,
+	 * which is what makes handing it the field it is about to overwrite
+	 * the module's documented contract rather than a defect.
+	 */
+	mtdcfg = FPM_MTD_CFG;
+	mtdcfg.coeff = V17_MTD_COEFF;
+	mtdcfg.tones = 2;
+	mtdcfg.ratio = 0x4ccd;
+	mtdcfg.min_level = 100;
+	FIELD_PTR(CTL(modem), V17RXC_MTD) = FPM_MTD_create(
+		(struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD), &mtdcfg);
+
+	/*
+	 * The notch the demodulator's pre-pass runs, retuned from the built-in
+	 * V.25 answer tone to V.17's own 1800 Hz carrier and otherwise copied
+	 * whole.
+	 */
+	tonecfg = FPM_TONE_CFG_data;
+	tonecfg.freq = 1800;
+	FIELD_PTR(CTL(modem), V17RXC_TONE) = FPM_TONE_create(
+		(struct fpm_tone *)FIELD_PTR(CTL(modem), V17RXC_TONE),
+		&tonecfg);
+
+	AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_START;
+	AT_S(CTL(modem), V17RXC_COUNTDOWN) = 0;
+	AT_I(CTL(modem), V17RXC_INT_0008) = 0;
+	CTL_PROCESS(modem) = RxHdxStartV17;
+	AT_I(CTL(modem), V17RXC_INT_0010) =
+		((const struct v17rx_cfg *)modem)->int_0014;
+
+	/*
+	 * The SECOND detector, and its band is V.21 CHANNEL 2 -- not V.17's.
+	 * `v17fax.h` left `V17RXC_OFFBAND`'s band open because this function
+	 * was the only thing that could settle it; the coefficient bank is
+	 * `V21_CHAN2_MTD_COEFF` and the level floor is three times the first
+	 * detector's.  Finding F9471.
+	 */
+	mtdcfg = FPM_MTD_CFG;
+	mtdcfg.coeff = V21_CHAN2_MTD_COEFF;
+	mtdcfg.tones = 2;
+	mtdcfg.ratio = 0x4ccd;
+	mtdcfg.min_level = 300;
+	FIELD_PTR(CTL(modem), V17RXC_MTD2) = FPM_MTD_create(
+		(struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD2), &mtdcfg);
+
+	/* The only init in the function given the flag that is about it. */
+	FPM_AGC_init((struct fpm_agc *)(void *)FIELD(CTL(modem), V17RXC_AGC),
+		     &AGCv17_CFG, ctl_fresh);
+
+	AT_S(CTL(modem), V17RXC_OFFBAND) = 0;
+	AT_S(CTL(modem), V17RXC_SHORT_002E) = 0;
+
+	/*
+	 * The bit rate to the four-value code, and the two DEAD STORES on the
+	 * arm that does not recognise it: 0x097140 and 0x097144 report an
+	 * unknown rate through `V17RX_OBJ_RESULT`, and 0x0977a5 further down
+	 * this same function clears all four bytes of that word before any
+	 * caller can see it.  Deviation D1220, reproduced.
+	 */
+	switch (AT_S(modem, V17RX_OBJ_RX_BPS)) {
+	case 7200:
+		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_7200;
+		break;
+	case 9600:
+		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_9600;
+		break;
+	case 12000:
+		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_12000;
+		break;
+	case 14400:
+		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_14400;
+		break;
+	default:
+		AT_US(CTL(modem), V17RXC_RATE_CODE) = V17RX_RATE_14400;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_DEFAULT;
+		break;
+	}
+
+	/* ---- the demodulator state ------------------------------------ */
+
+	/*
+	 * One value into three configurations' tail slots, which is F8651's
+	 * shape in a second modem: `fpm_mrf_cfg::aux`, `fpm_sre_cfg` + 0x34
+	 * and `fpm_fse_cfg::reserved34`.  What it MEANS is not established
+	 * here either.
+	 */
+	aux = ((const struct v17rx_cfg *)modem)->ptr_0024;
+
+	if (RXS(modem) == NULL) {
+		FIELD_PTR(modem, V17RX_OBJ_STATE) = sysdep_malloc(0x4fbc);
+		/*
+		 * NOTHING IS CLEARED HERE.  20,412 bytes of allocator fill,
+		 * and the writes below do not cover all of it -- see the
+		 * tiling note in v17fax.h for which spans stay untouched.
+		 */
+		FIELD_PTR(RXS(modem), V17RXS_BUF_MRF) = sysdep_malloc(0x140);
+		FIELD_PTR(RXS(modem), V17RXS_BUF_SRE) =
+			sysdep_malloc(V17RXS_SRE_MAX * (int)sizeof(short));
+	}
+
+	/*
+	 * 8000 -> 7200 Hz: nine branches, decimate ten, 360 taps over
+	 * `MRFv17_COFFS`.  7200 is three samples a symbol at 2400 baud.
+	 */
+	mrfcfg = FPM_MRF_CFG;
+	mrfcfg.branches = 9;
+	mrfcfg.decimate = 10;
+	mrfcfg.coeff = MRFv17_COFFS;
+	mrfcfg.taps = 0x168;
+	mrfcfg.aux = aux;
+	FPM_MRF_init(RXS_MRF(RXS(modem)), &mrfcfg, owned);
+
+	FPM_AGC_init(RXS_AGC(RXS(modem)), &AGCv17_CFG, owned);
+
+	/* ---- symbol-timing recovery ----------------------------------- */
+
+	srecfg = FPM_SRE_CFG;
+	srecfg.clock_len = 3;
+	srecfg.groups_acq = 3;
+	srecfg.groups_trk = 0x10;
+	srecfg.acc_down = 0x2000;
+	srecfg.acc_up = 0x4000;
+	srecfg.coeffs = 0xb4;
+	srecfg.proto = SREv17_COFFS;
+	srecfg.disc = SREv17_XB_COFFS;
+	srecfg.xclock = SREv17_xCLOCK;
+	srecfg.yclock = SREv17_yCLOCK;
+	srecfg.pll_k2 = SREv17_PLL_K2;
+	if (AT_I(CTL(modem), V17RXC_INT_0010) != 0) {
+		srecfg.settle = 0x30;
+		srecfg.pll_k1 = SREv17_PLL_K1_S;
+	} else {
+		srecfg.settle = 0x55;
+		srecfg.pll_k1 = SREv17_PLL_K1;
+	}
+	srecfg.mag_hi = 2;
+	srecfg.mag_lo = 1;
+	srecfg.err_hi = 0x2666;
+	srecfg.err_lo = 0xc8;
+	/*
+	 * The level gate's threshold is a SIXTH of the gain control's own
+	 * reference, read back out of the AGC the call above has just
+	 * configured -- `movswl 0xb4(%edx)` at 0x097334 is
+	 * `V17RXS_AGC` + `offsetof(struct fpm_agc, cfg.ref_level)`, and the
+	 * `imul $0x2aaaaaab` / `sub` pair is a signed divide by six.
+	 */
+	srecfg.rms_min = (short)(RXS_AGC(RXS(modem))->cfg.ref_level / 6);
+	srecfg.rms_len = 9;
+	/* fpm_sre_cfg + 0x34; see the head of this function and F9475. */
+	memcpy(&srecfg.pad34, &aux,
+	       sizeof srecfg.pad34 + sizeof srecfg.pad36);
+	FPM_SRE_init(RXS_SRE(RXS(modem)), &srecfg, owned);
+
+	/*
+	 * The four ppm-meter parameters `FPM_SRE_init` never writes, which
+	 * `fpm_sre.h` says a caller has to fill.  `ppm_scale` is ppm per
+	 * slipped sample at this loop's own output rate: `clock_len` points
+	 * per symbol at 9600 symbols a second, so 10^6 / 28800 = 34.
+	 */
+	RXS_SRE(RXS(modem))->ppm_step = 0x30;
+	RXS_SRE(RXS(modem))->ppm_period = 0x2580;
+	RXS_SRE(RXS(modem))->ppm_n_max = 0x68;
+	RXS_SRE(RXS(modem))->ppm_scale =
+		(short)(1000000 / (srecfg.clock_len * 0x2580));
+
+	/* ---- the equaliser and its slicer ----------------------------- */
+
+	fsecfg = FPM_FSE_CFG;
+	fsecfg.block = 0x90;
+	fsecfg.interp = 3;
+	if (AT_I(CTL(modem), V17RXC_INT_0010) != 0) {
+		fsecfg.icoff = (const short *)
+			FIELD_PTR(modem, V17RX_OBJ_COEFSAVE0);
+		fsecfg.qcoff = (const short *)
+			FIELD_PTR(modem, V17RX_OBJ_COEFSAVE1);
+		fsecfg.pll_k1 = CRRv17_PLL_K1_S;
+		fsecfg.train_sym = 0x100;
+	} else {
+		fsecfg.icoff = FSEv17_ICOFF;
+		fsecfg.qcoff = FSEv17_QCOFF;
+		fsecfg.pll_k1 = CRRv17_PLL_K1;
+		fsecfg.train_sym = 0x5dc;
+	}
+	fsecfg.taps = V17_COEF_N;
+	fsecfg.mu[0] = 0;
+	fsecfg.mu[1] = 0;
+	fsecfg.clk = CRRv17_CLK;
+	fsecfg.clk_mod = 4;
+	fsecfg.clk_inc = 1;
+	fsecfg.err_hi = 0x199a;
+	fsecfg.err_lo = 0x666;
+	fsecfg.pll_k2 = CRRv17_PLL_K2;
+	fsecfg.owner = RXS_DEC(RXS(modem));
+	/*
+	 * THE SLICER IS `FAX_FSE_decision_AB` AND IT IS NOT PER RATE.  This
+	 * function carries no relocation against `FSEv17_decision` at all --
+	 * that table is reached only from `FSE_Bridge_det` and
+	 * `FSE_decision_eqtrn`, which is the handshake handing over to the
+	 * rate slicer once training ends.  What the constructor installs is
+	 * the first segment of the handshake, unconditionally.  Finding F9473.
+	 */
+	fsecfg.decision = FAX_FSE_decision_AB;
+	fsecfg.reserved34 = aux;
+	FPM_FSE_init(RXS_FSE(RXS(modem)), &fsecfg, owned);
+
+	/* ---- the slicers' own state ----------------------------------- */
+
+	rate = AT_S(CTL(modem), V17RXC_RATE_CODE);
+	RXS_DEC(RXS(modem))->sym_count = 0;
+	RXS_DEC(RXS(modem))->short_0066 = 3;
+	RXS_DEC(RXS(modem))->rate = rate;
+	RXS_DEC(RXS(modem))->short_train = AT_I(CTL(modem), V17RXC_INT_0010);
+	RXS_DEC(RXS(modem))->count = 0;
+	RXS_DEC(RXS(modem))->scram = 0;
+	RXS_DEC(RXS(modem))->ang_prev = 0;
+	RXS_DEC(RXS(modem))->eqm_a = 0;
+	RXS_DEC(RXS(modem))->eqm_b = 0;
+	RXS_DEC(RXS(modem))->int_0050 = 0;
+	/*
+	 * `movl $0x0,0x54(%ebp)` -- four bytes of the six `v17dec.h` carries
+	 * as `pad54`, so the two at +0x58 stay as the allocator left them.
+	 * Written through the array because that header is not this pass's to
+	 * edit and a wider member would be a claim about bytes the object
+	 * does not touch.
+	 */
+	memset(RXS_DEC(RXS(modem))->pad54, 0, 4);
+	/*
+	 * `sym_i`, `sym_q`, `sym_i1`, `sym_q1`, `sym_i2`, `sym_q2` -- six
+	 * contiguous shorts from +0x3e, cleared by one loop (0x097550,
+	 * `cmp $0x5`) rather than one at a time.
+	 */
+	for (i = 0; (short)i <= 5; i++)
+		(&RXS_DEC(RXS(modem))->sym_i)[i] = 0;
+
+	/*
+	 * `VTBv32_init`'s body, INLINED, with only the switch's case values
+	 * changed: 0x097563..0x09760d is that function instruction for
+	 * instruction (compare `src/pump/v32/v32vtb.c`, .text 0x07e700).  The
+	 * survivor ring is allocated on `owned` -- the wrong flag again, and
+	 * the reason the zeroing loop below can walk an uninitialised pointer.
+	 * D1222.
+	 */
+	v = (struct vtb *)(void *)RXS_DEC(RXS(modem))->vtb;
+	if (owned)
+		v->paths = (struct vtb_path *)sysdep_malloc(
+			16 * 8 * sizeof(struct vtb_path));
+	for (i = 0; (short)i <= 0x7f; i++) {
+		v->paths[i].surv = 0;
+		v->paths[i].sym = 0;
+	}
+
+	v->ring = 0;
+	v->prev = 0;
+	v->depth = 0x10;
+
+	switch (rate) {
+	case V17RX_RATE_7200:
+		v->nsub = 1;
+		v->imap = VTBv17_IMAP16T;
+		v->qmap = VTBv17_QMAP16T;
+		v->bound = VTB_BOUND_7200;
+		v->region = VTB_REGION_7200;
+		v->grid = 2;
+		v->mask = 0x7;
+		break;
+	case V17RX_RATE_9600:
+		v->nsub = 2;
+		v->imap = VTBv17_IMAP32;
+		v->qmap = VTBv17_QMAP32;
+		v->bound = VTB_BOUND_9600;
+		v->region = VTB_REGION_9600;
+		v->grid = 4;
+		v->mask = 0xf;
+		break;
+	case V17RX_RATE_12000:
+		v->nsub = 3;
+		v->imap = VTBv17_IMAP64;
+		v->qmap = VTBv17_QMAP64;
+		v->bound = VTB_BOUND_12000;
+		v->region = VTB_REGION_12000;
+		v->grid = 6;
+		v->mask = 0x1f;
+		break;
+	default:
+		v->nsub = 4;
+		v->imap = VTBv17_IMAP128;
+		v->qmap = VTBv17_QMAP128;
+		v->bound = VTB_BOUND_14400;
+		v->region = VTB_REGION_14400;
+		v->grid = 8;
+		v->mask = 0x3f;
+		break;
+	}
+
+	v->metric[0] = 0;
+	v->shift = (short)v->nsub;
+
+	for (i = 1; (short)i <= 7; i++)
+		v->metric[i] = 0;
+
+	/* ---- the training-sequence engine ----------------------------- */
+
+	if (owned)
+		FIELD_PTR(RXS(modem), V17RXS_SGD) = NULL;
+
+	sgdcfg = SGD_CFG;
+	sgdcfg.sym_bits = 2;
+	sgdcfg.det.ref_margin = 0x2000;
+	sgdcfg.det.pat_match = 0x111;
+	sgdcfg.det.pat_mask = 0xffff;
+	FIELD_PTR(RXS(modem), V17RXS_SGD) = SGD_create(
+		(struct sgd *)FIELD_PTR(RXS(modem), V17RXS_SGD), &sgdcfg);
+
+	/*
+	 * The descrambler: V.17's own 1 + x^-18 + x^-23, over a word carrying
+	 * one symbol's worth of bits.  Every one of `SDM_CFG`'s three shorts
+	 * is overwritten, which is deviation D1224 and is what fixes the
+	 * source's shape as a copy plus three assignments.
+	 */
+	sdmcfg = SDM_CFG;
+	sdmcfg.nbits = (short)(AT_US(CTL(modem), V17RXC_RATE_CODE) + 3);
+	sdmcfg.tap1 = 0x12;
+	sdmcfg.tap2 = 0x17;
+	SDM_init((struct fpm_sdm *)(void *)FIELD(RXS(modem), V17RXS_SDM),
+		 &sdmcfg);
+
+	/*
+	 * 160 entries of each chained buffer.  `V17RXS_BUF_MRF` is exactly
+	 * that long; `V17RXS_BUF_SRE` is `V17RXS_SRE_MAX` = 164, so its top
+	 * four entries keep the allocator's fill.  Deviation D1225.
+	 */
+	mrfbuf = (short *)FIELD_PTR(RXS(modem), V17RXS_BUF_MRF);
+	srebuf = (short *)FIELD_PTR(RXS(modem), V17RXS_BUF_SRE);
+	for (i = 0; (short)i <= 0x9f; i++) {
+		mrfbuf[i] = 0;
+		srebuf[i] = 0;
+	}
+
+	AT_S(RXS(modem), V17RXS_QCOUNT) = 0;
+	AT_S(RXS(modem), V17RXS_QAVG) = 0;
+	AT_S(RXS(modem), V17RXS_SHORT_4FB2) = 0;
+
+	/*
+	 * The quality threshold `QualityDetectV17` judges its smoothed
+	 * decoder error against on block 0x32, one value per rate.  There is
+	 * no default arm: a code outside 0..3 leaves the field as the
+	 * allocator left it, which `V17RXC_RATE_CODE`'s own writer above
+	 * makes unreachable.
+	 */
+	switch (AT_S(CTL(modem), V17RXC_RATE_CODE)) {
+	case V17RX_RATE_7200:
+		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0xa28;
+		break;
+	case V17RX_RATE_9600:
+		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0x514;
+		break;
+	case V17RX_RATE_12000:
+		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0x341;
+		break;
+	case V17RX_RATE_14400:
+		AT_S(RXS(modem), V17RXS_SHORT_4FB0) = 0x1c2;
+		break;
+	}
+
+	AT_I(RXS(modem), V17RXS_INT_0000) = 1;
+	AT_I(RXS(modem), V17RXS_INT_0004) = 1;
+	AT_I(RXS(modem), V17RXS_INT_0008) = 1;
+	AT_I(RXS(modem), V17RXS_INT_000C) = 0;
+	AT_I(RXS(modem), V17RXS_INT_0010) = 1;
+	AT_I(RXS(modem), V17RXS_INT_0014) = 0;
+	AT_I(RXS(modem), V17RXS_INT_0018) = 1;
+	/*
+	 * A FULL `int`, and that is what settles the width `v17fax.h` had to
+	 * guess: `V17RX_status` reads bit 0 of the byte and this writes
+	 * `movl $0x1` over all four.  Finding F9474.
+	 */
+	AT_I(RXS(modem), V17RXS_INT_001C) = 1;
+	AT_I(RXS(modem), V17RXS_INT_0020) = 0;
+	AT_US(RXS(modem), V17RXS_RATE_CODE) =
+		AT_US(CTL(modem), V17RXC_RATE_CODE);
+	AT_I(RXS(modem), V17RXS_INT_0028) = 0;
+	AT_S(RXS(modem), V17RXS_SHORT_4FB4) = 1;
+	AT_S(RXS(modem), V17RXS_RMS_REF) = 0;
+	AT_S(RXS(modem), V17RXS_RMS_PHASE) = 0;
+
+	/* ---- what the instance hands back to its caller --------------- */
+
+	/*
+	 * The result word, cleared and then rebuilt: this is where the two
+	 * dead stores on the unrecognised-rate arm go, and where bits 4 and 6
+	 * of `V17RX_OBJ_RESULT_B1` -- which nothing else in the object writes
+	 * and nothing at all reads -- are set.  Finding F9473.
+	 */
+	AT_I(modem, V17RX_OBJ_RESULT) = 0;
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_BIT4 | V17RX_FLAG_BIT6;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_START;
+
+	/*
+	 * Six handles copied out of the equaliser the call above has just
+	 * built, and six fields cleared.  All six sources are `struct fpm_fse`
+	 * members, which is what types them -- rank 2 and not usage
+	 * inference.  The six zeroed at +0x44..+0x58 have no evidence of role
+	 * anywhere and are left unnamed.  Finding F9476.
+	 */
+	FIELD_PTR(modem, V17RX_OBJ_OUT_I) = RXS_FSE(RXS(modem))->out_i;
+	FIELD_PTR(modem, V17RX_OBJ_OUT_Q) = RXS_FSE(RXS(modem))->out_q;
+	FIELD_PTR(modem, V17RX_OBJ_N_OUT) = &RXS_FSE(RXS(modem))->n_out;
+	FIELD_PTR(modem, V17RX_OBJ_ICOEFF) = RXS_FSE(RXS(modem))->icoeff;
+	FIELD_PTR(modem, V17RX_OBJ_QCOEFF) = RXS_FSE(RXS(modem))->qcoeff;
+	AT_US(modem, V17RX_OBJ_TAPS) = (unsigned short)
+		RXS_FSE(RXS(modem))->cfg.taps;
+
+	AT_I(modem, V17RX_OBJ_INT_0044) = 0;
+	AT_I(modem, V17RX_OBJ_INT_0048) = 0;
+	AT_S(modem, V17RX_OBJ_SHORT_004C) = 0;
+	AT_I(modem, V17RX_OBJ_INT_0050) = 0;
+	AT_I(modem, V17RX_OBJ_INT_0054) = 0;
+	AT_S(modem, V17RX_OBJ_SHORT_0058) = 0;
+
+	return modem;
+}
 
 /* --------------------------------------------------------------------- */
 

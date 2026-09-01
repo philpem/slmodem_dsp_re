@@ -108119,3 +108119,272 @@ same applies to every other file quoted into a brief.
 Cheap to get right and it inverts the finding: what looked like documentation
 drift was a correctly-maintained document being compared against a stale
 transcript of itself. (2026-09-01)
+
+## F9470. The V.17 receive instance's head IS a `struct v17rx_cfg`, and that types `V17RX_create`'s second argument
+
+*2026-09-01.* `V17RX_create` (.text 0x096eb0, 3,201 bytes) begins by copying
+forty bytes over the instance: ten interleaved load/store dword pairs from its
+second argument at 0x096ef5, or the same ten from `V17RX_CFG` at 0x097948 when
+that argument is NULL. Ten dwords in rotating registers with the store
+following each load is GCC's expansion of a small struct assignment, not a
+loop and not ten separate copies.
+
+Forty is `sizeof(struct v17rx_cfg)` -- `faxcfg.h`'s type, derived from
+`init_vmi_v17rx`'s `sysdep_malloc(0x28)` and from the dword count
+`v17rx_create` pushes, two independent readings that were already known to
+agree. So the SECOND argument is that type and the instance's own head is a
+copy of it.
+
+**Every field the constructor then reads back agrees, which is the check that
+makes this more than an arithmetic coincidence.**
+
+    +0x04  bit_rate    the rate switch at 0x097113, `movswl`; = V17RX_OBJ_RX_BPS
+    +0x14  int_0014    -> V17RXC_INT_0010 at 0x09709c, 32 bits both ends
+    +0x18  ptr_0018    -> fpm_fse_cfg::icoff  at 0x09742e; = V17RX_OBJ_COEFSAVE0
+    +0x1c  ptr_001c    -> fpm_fse_cfg::qcoff  at 0x09743f; = V17RX_OBJ_COEFSAVE1
+    +0x24  ptr_0024    -> fpm_mrf_cfg::aux, fpm_sre_cfg + 0x34,
+                          fpm_fse_cfg::reserved34
+
+and the three pointers `init_vmi_v17rx` fills with `sysdep_malloc(0x62)`,
+`(0x62)` and `(2)` are exactly the two 49-entry (`V17_COEF_N`) coefficient
+saves and the one-short rate save that `StoreCoefV17` and `Restore_rateV17`
+write through `V17RX_OBJ_COEFSAVE0/_1` and `V17RX_OBJ_RATESAVE`. 49 shorts is
+98 bytes, which is 0x62.
+
+**What it does NOT settle.** `faxcfg.h` keeps `int_0014` and `ptr_0024`
+neutral, and this finding does not rename them: knowing which struct they
+belong to is not knowing what they mean. V.21's equivalent table calls its
++0x24 `aux`, which is a hint from a sibling and not a derivation.
+
+`v17fax.h`'s `V17RX_OBJ_*` offsets and `struct v17rx_cfg`'s members are two
+spellings of one layout, and both are kept: the offsets are what
+`t_v17fax.c` and `t_v17rxstate.c` reach a block they model as bytes, and the
+struct is what the constructor's own copy needs. (2026-09-01)
+
+## F9471. `V17RX_create` settles two questions `v17fax.h` recorded as open: the dispatch seed and the second detector's band
+
+*2026-09-01.* Both were left open in that header for the same stated reason --
+"`V17RX_create` is not reconstructed" -- and both are answered by one function.
+
+**`V17RXC_PROCESS`'s seed is `RxHdxStartV17`.** The header's comment said
+"`call *0x14(%eax)` carries no relocation, so this is a table entry planted at
+construction and NOT a symbol reference -- nothing in this batch can say which
+function lands here." The PLANT does carry one: 0x097083 is
+`movl $0x0,0x14(%ebx)` with an `R_386_32` against `RxHdxStartV17`, fifteen
+bytes after the `movw $0x0,0x18(%ebx)` that writes `V17RX_STATE_START` into
+`V17RXC_STATE`. State and handler are installed together, which is what
+`RxNextStateV17` does on every one of its arms, so the two writers agree.
+
+**`V17RXC_OFFBAND`'s band is V.21 channel 2, not V.17's.** That comment ended
+"Whether that band is V.17's or V.21's depends on the config `V17RX_create`
+gives the detector". It gives it `V21_CHAN2_MTD_COEFF` -- `faxcfg.h`'s
+two-section bank at .data 0x7a74, shared by all three fax receiver
+constructors -- loaded at 0x09709f, with `tones = 2`, `ratio = 0x4ccd` and
+`min_level = 0x12c`. The FIRST detector, at `V17RXC_MTD`, gets
+`V17_MTD_COEFF` and `min_level = 0x64` from the same stack slot rebuilt.
+
+So the counter's own "V17: V21 Carrier detected" message and the configuration
+name the same band from two independent directions. The field keeps its
+neutral name because what it counts is still the ABSENCE of that band and not
+the tone, which is the distinction that comment was written to preserve.
+(2026-09-01)
+
+## F9472. `V17RXS_SRE_MAX` is the buffer's length, confirmed by the allocation, and four of its entries are never written
+
+*2026-09-01.* `v17fax.h` recorded 0xa4 as "the number the object compares
+against" and said it was "not a buffer size this batch can confirm". The
+constructor confirms it: 0x0978d1 is `sysdep_malloc(0x148)` and the result is
+stored at `V17RXS_BUF_SRE`. 0x148 is 328 bytes, which is 164 `short`, which is
+0xa4. The guard `DemodDataV17` applies and the allocation it guards are the
+same number read two ways.
+
+The clearing loop at 0x0976d0 runs `cmp $0x9f` / `jle`, so it zeroes 160
+entries of BOTH chained buffers. `V17RXS_BUF_MRF` is `sysdep_malloc(0x140)` =
+160 shorts exactly; `V17RXS_BUF_SRE` is four longer and its top four entries
+keep whatever the allocator left. That is deviation D1225, and
+`t_v17rxcreate.c` measures it -- 160 zero entries and 4 non-zero under the
+harness's fill -- rather than asserting it. (2026-09-01)
+
+## F9473. Two more bits of `V17RX_OBJ_RESULT_B1`, and the slicer `V17RX_create` installs is not a rate slicer
+
+*2026-09-01.* Two corrections to `v17fax.h`, both from the same function's
+tail.
+
+**Bits 0x10 and 0x40 are written, and the header said 0x40 was not.** Its
+enumeration of the flag byte ended "Bits 0x04, 0x08 and 0x40 are touched by
+nothing in the object." `V17RX_create` finishes with `movl $0x0,0x28(%ebp)` at
+0x0977a5, `orb $0x50,0x29(%ebp)` at 0x0977ab and `movb $0x2,0x28(%ebp)` at
+0x0977b5 -- so the instance is delivered with bits 4 and 6 SET. Nothing in the
+object reads either, and nothing else writes them, so they are named by VALUE
+(`V17RX_FLAG_BIT4`, `V17RX_FLAG_BIT6`) and no meaning is claimed.
+`v21fax.h`'s `V21RX_FLAG_BIT4`/`_BIT6` are the same two bits set by the same
+shape in the sibling constructor, which corroborates and is not the
+derivation.
+
+**THE INSTALLED SLICER IS `FAX_FSE_decision_AB`, UNCONDITIONALLY, and it was
+natural to expect a per-rate one.** `v17dec.h` says "`V17RX_create` installs a
+slicer into the fractionally spaced equaliser as `fse.decision`, and which one
+it installs depends on the negotiated bit rate". It does not. The function's
+92 relocations contain NO reference to `FSEv17_decision`, and that table's only
+two referrers in the 1.2 MB are `FSE_Bridge_det+0x29` and
+`FSE_decision_eqtrn+0x6d`. What 0x0974d4 loads is `FAX_FSE_decision_AB`, on
+every path, and the rate reaches the slicer chain through `struct v17_dec`'s
+`rate` field instead -- written at 0x09750e from `V17RXC_RATE_CODE`, which is
+what `FSE_Bridge_det` and `FSE_decision_eqtrn` index the table with.
+
+So the rate selects the slicer, but the HANDSHAKE does the selecting when
+training ends, not the constructor. `v17dec.h` is not corrected here because
+that header is not this pass's to edit; the correction is recorded in
+`src/fax/v17.c` beside the store and here. (2026-09-01)
+
+## F9474. `V17RXS_BYTE_001C` is an `int`, and the byte reading came from an unforced narrowing
+
+*2026-09-01.* The field was named from `V17RX_status`, its only reader, which
+loads it `movzbl` and keeps bit 0. That instruction was FREE: only one bit of
+the result survives, so the compiler was under no obligation to load four
+bytes and the narrow load says nothing about the declared type -- CLAUDE.md's
+"act on what the compiler was forced to encode" applied in the direction that
+finds nothing.
+
+`V17RX_create` writes it `movl $0x1,0x1c(%edx)` at 0x097786, all four bytes,
+in the middle of a run of six other `movl` to +0x00, +0x04, +0x08, +0x0c,
++0x10, +0x14, +0x18, +0x20 and +0x28. A `char` field in that position would
+give a `movb` as it does at `V17RX_OBJ_RESULT`, where the object really does
+write a byte inside a word. So the field is an `int` and the write set of the
+whole head is eleven fields, ten `int` and one `unsigned short`.
+
+`V17RXS_INT_001C` is the name; `V17RXS_BYTE_001C` is kept as an alias because
+`t_v17fax.c` spells it that way and `V17RXS_001C_BIT0` is still what the
+reader takes. (2026-09-01)
+
+## F9475. `fpm_sre_cfg` + 0x34 is ONE 32-bit field in three modems, and the tree models it as two shorts in all three
+
+*2026-09-01.* F8651 recorded V.32's +0x24 reaching six configuration tail
+slots under six spellings and noted that two of the six had no member to
+assign, `fpm_sre_cfg`'s `pad34`/`pad36` being one. `V17RX_create` is the
+second modem to fill the same slot the same way: 0x097265 is
+`mov %ecx,0xf4(%esp)`, a DWORD store of the instance's +0x24 into the
+recoverer configuration's +0x34, beside `fpm_mrf_cfg::aux` at 0x09719e and
+`fpm_fse_cfg::reserved34` at 0x097404 taking the identical value.
+
+So the field is 32 bits wide and the two-`short` model is a defect in the
+TREE, not in the object -- and it is now attested by two independent modems
+rather than one.
+
+**IT IS STILL NOT CORRECTED, and the reason is ownership rather than doubt.**
+`src/pump/v32/v32fprecr.c` and the positional initialisers in
+`src/dsp/fpm_sre_cfg.c` and `src/pump/v32/v32sre_tables.c` all name `pad34`
+and `pad36` as members, and `t_v29cfg.c` and `t_v32hdxtab.c` compare them by
+name; a pass fenced off `src/pump/` cannot make that change coherently.
+`src/fax/v17.c` therefore does what `v32fprecr.c` already does -- one
+`memcpy` into `&cfg.pad34`, four bytes, no strict-aliasing pun -- and the
+rename stays owed. Doing it is a one-commit change across five files and one
+header, and the two call sites already agree on what it should become.
+(2026-09-01)
+
+## F9476. Twelve fields at the tail of the V.17 receive instance, six of them typed by the equaliser they are copied out of
+
+*2026-09-01.* `V17RX_create`'s last block (0x0977a2..0x097815) writes twelve
+fields the object's other twenty-seven V.17 symbols never touch. Six are
+copies out of the `struct fpm_fse` the call before them built, and are TYPED
+BY THAT STRUCT -- CLAUDE.md's rank 2, a callee that types it, and not usage
+inference, because `fpm_fse.h` models every one of them from
+`FPM_FSE_receive`'s and `FPM_FSE_init`'s own disassembly:
+
+    +0x2c <- fse.out_i      (state + 0x1c4)   short *
+    +0x30 <- fse.out_q      (state + 0x1c8)   short *
+    +0x34 <- &fse.n_out     (state + 0x1ce)   unsigned short *, by `lea`
+    +0x38 <- fse.icoeff     (state + 0x1d0)   short *, and = V17RXS_COEF0
+    +0x3c <- fse.qcoeff     (state + 0x1d4)   short *, and = V17RXS_COEF1
+    +0x40 <- fse.cfg.taps   (state + 0x17c)   49 = V17_COEF_N
+
+The instance therefore PUBLISHES the equaliser's two output buffers, the count
+they are filled to, its two live coefficient arrays and their length. That
++0x38 and +0x3c are the same two arrays `StoreCoefV17` reads through
+`V17RXS_COEF0`/`_COEF1` is a second, independent confirmation of both offsets.
+
+**The other six are named by their offset and nothing else.** +0x44, +0x48,
++0x50 and +0x54 are `movl $0`; +0x4c and +0x58 are `movw $0`. Every one is a
+constant zero written once and read by nothing anywhere in the 1.2 MB, so
+there is no second end to measure against and no name to give beyond the
+offset and the width. +0x42, +0x4e and +0x5a are never written at all, which
+is why the widths above are not a partition of the space.
+
+The `movzwl` on `cfg.taps` is a dead extension -- only `%bx` is stored -- and
+follows the declared type of the LOCAL (F7803), not of the `short` field.
+(2026-09-01)
+
+## F9477. One flag in the V.17 receiver governs five things at once, and it reads as a short retrain -- recorded as an inference
+
+*2026-09-01.* `V17RXC_INT_0010`, copied by `V17RX_create` from the instance's
++0x14 which the caller's parameter block supplied, is tested three times in
+that function and selects five different things:
+
+    flag non-zero                        flag zero
+    ---------------------------------    --------------------------------
+    sre.settle    = 48                   = 85
+    sre.pll_k1    = SREv17_PLL_K1_S      = SREv17_PLL_K1
+    fse.train_sym = 256                  = 1500
+    fse.pll_k1    = CRRv17_PLL_K1_S      = CRRv17_PLL_K1
+    fse.icoff/qcoff = the instance's     = FSEv17_ICOFF / FSEv17_QCOFF
+                    +0x18 / +0x1c
+
+and the integral gains (`*_PLL_K2`) are shared between the two, which is why
+the object carries two K1 arrays and one K2 for each loop.
+
+The two arrays the non-zero arm starts the equaliser from are the same two
+`StoreCoefV17` fills, 49 entries each. So the flag says: settle faster, train
+for a sixth as long, use the tighter proportional gains, and start from
+coefficients a previous connection left behind. That is what a short retrain
+is.
+
+**IT IS NOT SPELLED AS A FIELD NAME AND SHOULD NOT BE.** No format string
+prints it, no callee types it, and the only other reader is
+`struct v17_dec::short_train` -- whose own name in `v17dec.h` was read off the
+two branches IT gates, which is the same class of evidence and not a second
+one. CLAUDE.md: a wrong name is believed by every future reader and no test
+can fail on it. The derivation is written here and in the two headers'
+comments; the field keeps its offset name.
+
+Worth recording beside it: the two SRE tables hold IDENTICAL values (2336,
+3049, 3049) at two different addresses, so for the timing loop the flag
+changes only `settle`. The two carrier tables differ in gear 0 alone, 602
+against 10347. (2026-09-01)
+
+## F9478. `V17RX_create`'s test was green on its first complete run, and the injections are what say whether that means anything
+
+*2026-09-01.* F9417 and F9446 are the same story twice in this wave, so the
+ritual was run again before the commit rather than after it: reintroduce a
+known defect one at a time, watch the suite go red, restore, watch it go
+green.
+
+Twelve single-value injections into `src/fax/v17.c`, each restored before the
+next, each rebuilt and re-run:
+
+  1. `mtdcfg.min_level = 100` -> 101 (the V.17 detector's floor)
+  2. `mtdcfg.min_level = 300` -> 299 (the V.21 channel-2 detector's floor)
+  3. `tonecfg.freq = 1800` -> 2100 (leave the built-in in place)
+  4. `mrfcfg.taps = 0x168` -> 0x167
+  5. `srecfg.rms_min = ref_level / 6` -> `/ 5`
+  6. `srecfg.settle` arms transposed (48 <-> 85)
+  7. `ppm_scale = 1e6 / (clock_len * 9600)` -> `/ (clock_len * 4800)`
+  8. `fsecfg.train_sym` arms transposed (256 <-> 1500)
+  9. `fsecfg.taps = V17_COEF_N` -> 48
+ 10. `sdmcfg.nbits = rate + 3` -> `rate + 4`
+ 11. the 12000 quality threshold 0x341 -> 0x340
+ 12. `v->mask` for 9600, 0x0f -> 0x1f (a subscript, not a dereference)
+
+The count that matters is in the commit message and in this finding's own
+tally rather than in an intention: **twelve run, twelve red.** The two worth
+naming are 11 and 12, because neither changes a byte any caller of the
+constructor dereferences -- 0x4fb0 is read once, fifty blocks into a
+connection, by `QualityDetectV17`, and `mask` is a subscript `VTB_decoder`
+applies. Both are caught by the whole-block comparison and neither by any
+functional check the test makes. That is D955's argument coming out the right
+way for once.
+
+**And one thing the sweep cannot reach.** The unrecognised-rate arm's two
+stores at 0x097140 and 0x097144 are dead by construction (D1220): removing
+them entirely leaves every check green, and no test in this tree can ever be
+made to see them. It is recorded as a deviation and not as coverage.
+(2026-09-01)

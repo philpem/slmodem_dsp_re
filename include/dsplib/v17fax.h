@@ -65,6 +65,7 @@ struct fax_fifo;
 struct fpm_pps;
 struct fpm_sdm;
 struct sgd;
+struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
 
 /* ------------------------------------------------------------------------ */
 /* The status block                                                         */
@@ -368,7 +369,12 @@ struct v17_status {
  *   `GetSNRV17`.  READ by `testb $0x80` at 0x0a093d in `V17RX_status`, where
  *   a SET bit makes the reported +0x06 zero.  Both ends measured.
  *
- * Bits 0x04, 0x08 and 0x40 are touched by nothing in the object.
+ * Bits 0x04 and 0x08 are touched by nothing in the object.  BITS 0x10 AND
+ * 0x40 ARE, and the line that put 0x40 in the untouched set is withdrawn:
+ * `V17RX_create` sets both, once, in the `orb $0x50,0x29(%ebp)` at 0x0977ab
+ * that follows its clearing of the whole word.  Nothing anywhere READS
+ * either, and nothing else writes them, so they are named BY VALUE and
+ * nothing more -- see `V17RX_FLAG_BIT4` below.  Finding F9473.
  *
  * THE TWO ERROR MASKS ARE NOT THE SAME, AND THE DIFFERENCE IS THE DATA BIT.
  *   `RxNextStateV17`'s default arm is `or $0x2` then `and $0xde`, which clears
@@ -393,6 +399,15 @@ struct v17_status {
 #define V17RX_FLAG_CARRIER	(1 << 5)
 #define V17RX_FLAG_LOW_SNR	(1 << 7)
 #define V17RX_FLAG_DATA		(1 << 0)
+
+/*
+ * The two `V17RX_create` sets and no reader has.  NAMED BY VALUE, per
+ * CLAUDE.md, and deliberately: their only write is one `orb` immediate that
+ * carries no evidence about what either indicates, and the whole object
+ * contains no read.  Do not promote them to a meaning.
+ */
+#define V17RX_FLAG_BIT4		(1 << 4)
+#define V17RX_FLAG_BIT6		(1 << 6)
 
 /*
  * BYTE 2 OF THE SAME WORD, AND ITS ONE BIT.  Both are named BY VALUE and the
@@ -475,6 +490,45 @@ struct v17_status {
  */
 #define V17RX_OBJ_PROTOCOL	0x00
 #define V17RX_OBJ_RX_BPS	0x04
+
+/*
+ * TWELVE FIELDS `V17RX_create` WRITES LAST, SIX OF THEM OUT OF THE EQUALISER.
+ *
+ * The constructor's final block (0x0977a2..0x097815) copies six handles from
+ * the `struct fpm_fse` it has just built and zeroes six more slots.  The six
+ * copies are TYPED BY THE STRUCT THEY COME OUT OF, which is CLAUDE.md's
+ * rank 2 and not usage inference -- `fpm_fse.h` models every one of them
+ * independently of anything here:
+ *
+ *     +0x2c <- fse.out_i        short *,  one entry per symbol per call
+ *     +0x30 <- fse.out_q        short *
+ *     +0x34 <- &fse.n_out       unsigned short *, the count itself
+ *     +0x38 <- fse.icoeff       short *,  and it is `V17RXS_COEF0`
+ *     +0x3c <- fse.qcoeff       short *,  and it is `V17RXS_COEF1`
+ *     +0x40 <- fse.cfg.taps     unsigned short, 49 = `V17_COEF_N`
+ *
+ * So the instance publishes the equaliser's output buffers, their length and
+ * its two live coefficient arrays to whatever holds the instance.  The
+ * `movzwl` on the last is a dead extension and follows the local's declared
+ * type (finding F7803), not the `short` field's.
+ *
+ * THE OTHER SIX HAVE NO EVIDENCE OF ROLE AND ARE NOT NAMED.  Every one is a
+ * constant zero written once and read by nothing in the 1.2 MB.  The widths
+ * are the object's: `movl` at +0x44, +0x48, +0x50 and +0x54, `movw` at +0x4c
+ * and +0x58.  +0x42, +0x4e and +0x5a are never written at all.  Finding F9476.
+ */
+#define V17RX_OBJ_OUT_I		0x2c
+#define V17RX_OBJ_OUT_Q		0x30
+#define V17RX_OBJ_N_OUT		0x34
+#define V17RX_OBJ_ICOEFF	0x38
+#define V17RX_OBJ_QCOEFF	0x3c
+#define V17RX_OBJ_TAPS		0x40
+#define V17RX_OBJ_INT_0044	0x44
+#define V17RX_OBJ_INT_0048	0x48
+#define V17RX_OBJ_SHORT_004C	0x4c
+#define V17RX_OBJ_INT_0050	0x50
+#define V17RX_OBJ_INT_0054	0x54
+#define V17RX_OBJ_SHORT_0058	0x58
 
 /*
  * The receiver's two sub-blocks.  Both are POINTERS the instance holds.
@@ -566,8 +620,14 @@ struct v17_status {
 /*
  * A dispatch slot: `V17RX_modem` calls `*(fn *)(ctl + 0x14)` with its own
  * four arguments unchanged.  `call *0x14(%eax)` carries no relocation, so
- * this is a table entry planted at construction and NOT a symbol reference --
- * nothing in this batch can say which function lands here.
+ * this is a table entry planted at construction and NOT a symbol reference.
+ *
+ * THE SEED IS `RxHdxStartV17`, AND THE LINE THAT SAID NOTHING COULD SAY SO IS
+ * WITHDRAWN.  `V17RX_create` is the planter: `movl $RxHdxStartV17,0x14(%ebx)`
+ * at 0x097083, carrying an `R_386_32` against that symbol, beside the
+ * `V17RX_STATE_START` it writes into `V17RXC_STATE` fifteen bytes earlier.
+ * `RxNextStateV17` is the only other writer and it agrees -- state and handler
+ * are installed together on every one of its arms.  Finding F9471.
  */
 #define V17RXC_PROCESS		0x14
 
@@ -687,9 +747,18 @@ struct v17_status {
  * So what crossing 0x4ff means is 1,280 consecutive samples -- 160 ms at
  * 8 kHz -- of energy on the line that is NOT the band this detector watches,
  * which is a coherent reason to conclude something else has taken the
- * channel.  Whether that band is V.17's or V.21's depends on the config
- * `V17RX_create` gives the detector, and `V17RX_create` is not reconstructed,
- * so the name stays with what the verdict says rather than with the message.
+ * channel.
+ *
+ * AND THE BAND IS V.21 CHANNEL 2, WHICH SETTLES THE QUESTION THIS COMMENT
+ * LEFT OPEN.  `V17RX_create` is reconstructed and is what configures this
+ * detector: at 0x09709f it loads `V21_CHAN2_MTD_COEFF` -- `faxcfg.h`'s
+ * two-section bank, shared by all three fax receiver constructors -- into
+ * `fpm_mtd_cfg::coeff`, with `min_level` 300 where the FIRST detector, the
+ * V.17 one at `V17RXC_MTD`, gets `V17_MTD_COEFF` and 100.  So the message the
+ * counter hangs off ("V17: V21 Carrier detected") names the same band the
+ * configuration does, from two independent directions.  The neutral field
+ * name is kept because what the counter counts is still absence and not the
+ * tone.  Finding F9471.
  */
 #define V17RXC_MTD2		0x24
 #define V17RXC_BUF2		0x28
@@ -743,10 +812,48 @@ struct v17_status {
  *
  * The two ints are reported INVERTED (`sete` on a 32-bit test), the byte is
  * reported straight and only its bit 0 is read.
+ *
+ * `V17RXS_BYTE_001C` IS AN `int`, AND `V17RX_create` IS WHAT SETTLES IT.  The
+ * name came from `V17RX_status`, which reads bit 0 through a `movzbl` -- an
+ * unforced narrowing, since only one bit of the result survives.  The
+ * constructor writes the field with `movl $0x1,0x1c(%edx)` at 0x097786, all
+ * four bytes, exactly as it writes its six int neighbours.  `V17RXS_INT_001C`
+ * is the field and the old name is kept as an ALIAS because `t_v17fax.c`
+ * spells it that way; `V17RXS_001C_BIT0` is still the bit the reader takes.
+ * Finding F9474.
  */
 #define V17RXS_INT_0000		0x00
-#define V17RXS_BYTE_001C	0x1c
+#define V17RXS_INT_001C		0x1c
+#define V17RXS_BYTE_001C	V17RXS_INT_001C
 #define V17RXS_001C_BIT0	0x01
+
+/*
+ * THE REST OF THE HEAD, AND EVERY ONE OF THEM IS `V17RX_create`'s ALONE.
+ *
+ * The constructor writes eleven fields at 0x097730..0x09779b and nothing
+ * reconstructed reads any of the six below.  All six are NEUTRAL: what is
+ * established is the width, the constant and the writer, and nothing else.
+ * The widths are the object's own -- five `movl` and one `movw`.
+ *
+ *     +0x0c  int             0
+ *     +0x14  int             0
+ *     +0x18  int             1
+ *     +0x20  int             0
+ *     +0x24  unsigned short  a copy of V17RXC_RATE_CODE
+ *     +0x28  int             0
+ *
+ * `V17RXS_RATE_CODE` IS THE ONE THAT CARRIES A REAL NAME, and it is rank 2
+ * rather than usage inference: the constructor loads `V17RXC_RATE_CODE`
+ * `movzwl` at 0x097754 and stores its low half here, so the field IS that
+ * code and the name says only that.  What a reader of it would do with it is
+ * not established, because there is no reader.
+ */
+#define V17RXS_INT_000C		0x0c
+#define V17RXS_INT_0014		0x14
+#define V17RXS_INT_0018		0x18
+#define V17RXS_INT_0020		0x20
+#define V17RXS_RATE_CODE	0x24
+#define V17RXS_INT_0028		0x28
 
 /*
  * Two more pointers the demodulator state owns, both from `V17RX_delete` and
@@ -783,9 +890,13 @@ struct v17_status {
 /*
  * The recoverer's output bound, from the object's own `cmp $0xa4` / `jbe`, and
  * the count `DemodDataV17` reports through the author's own
- * "ERROR: SRE buffer violation!(%d)" when it is EXCEEDED.  Not a buffer size
- * this batch can confirm -- `V17RX_create` is not reconstructed -- only the
- * number the object compares against.
+ * "ERROR: SRE buffer violation!(%d)" when it is EXCEEDED.
+ *
+ * IT IS THE BUFFER SIZE, AND THAT IS NOW CONFIRMED RATHER THAN BOUNDED.
+ * `V17RX_create` allocates `V17RXS_BUF_SRE` with `sysdep_malloc(0x148)` at
+ * 0x0978d1 -- 328 bytes, exactly 0xa4 `short` -- so the guard and the
+ * allocation are the same number read two ways.  The constructor then zeroes
+ * only the first 160 of the 164, which is deviation D1225.  Finding F9472.
  */
 #define V17RXS_SRE_MAX		0xa4
 
@@ -1054,6 +1165,30 @@ short RxHdxErrorV17(void *modem, short *in, short *out, unsigned short *count);
  * expression came from; see the derivation in `src/fax/v17.c`.
  */
 short RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * Build the receive instance, its control block and its 20 KB demodulator
+ * state, and return the instance.
+ *
+ * `modem` NULL allocates the 0x64-byte instance; a caller-supplied one is
+ * reused, and so are its two sub-blocks if their pointers are non-NULL.
+ * `params` NULL takes the library's `V17RX_CFG`.
+ *
+ * THE SECOND ARGUMENT IS `struct v17rx_cfg *` BECAUSE THE OBJECT COPIES ONE.
+ * At 0x096ef5 and 0x097948 it copies forty bytes -- `sizeof(struct
+ * v17rx_cfg)`, and the same forty `init_vmi_v17rx` allocates -- over the head
+ * of the instance, as an interleaved load/store struct assignment.  Every
+ * field this function then reads back lines up: +0x04 is `bit_rate` and is
+ * `V17RX_OBJ_RX_BPS`, +0x18 and +0x1c are the two `sysdep_malloc(0x62)`
+ * pointers and are `V17RX_OBJ_COEFSAVE0`/`_1`, +0x20 is the
+ * `sysdep_malloc(2)` one and is `V17RX_OBJ_RATESAVE`.  So the instance's own
+ * head IS that struct, and this signature is the object's rather than ours.
+ * Finding F9470.
+ *
+ * IT CANNOT FAIL AND IT CANNOT REPORT FAILURE: eight allocations, none
+ * checked, one `ret`, and the return is always the instance.  D1223.
+ */
+void *V17RX_create(void *modem, const struct v17rx_cfg *params);
 
 /*
  * Tear the receive instance down.

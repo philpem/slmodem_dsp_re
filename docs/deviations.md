@@ -12120,3 +12120,148 @@ in `src/fax/faxcfg.c`, because all three fax receivers reference that one,
 and only V.21 references this one. So the pair is split across two files in the
 reconstruction and is contiguous in the object, at .data 0x7a60 and 0x7a74.
 *unmeasured, and unmeasurable by any tier here.*
+
+## D1220 ⚠ `V17RX_create`'s unrecognised-rate report is overwritten before it can be read
+
+The bit-rate switch at 0x097113 has no case for anything but 7200, 9600,
+12000 and 14400. Its default arm at 0x097133 writes the 14400 rate code and
+then reports the fault: `orb $0x2,0x29(%ebp)` sets `V17RX_FLAG_ERROR` and
+`movb $0x3,0x28(%ebp)` writes `V17RX_STATUS_DEFAULT` into
+`V17RX_OBJ_RESULT`.
+
+Neither can be observed. Every path from 0x097148 reaches the function's
+single `ret` at 0x097820 through 0x0977a5, which is `movl $0x0,0x28(%ebp)` --
+all four bytes of the result word, the flag byte included -- immediately
+followed by `orb $0x50,0x29` and `movb $0x2,0x28`. So an instance built with
+an unrecognised bit rate is delivered with exactly the same result word as one
+built with 14400, and the only surviving trace of the fault is that the rate
+code says 14400 when the caller asked for 4800.
+
+**Status:** reproduced. `t_v17rxcreate.c` drives four unrecognised rates
+(4800, 0, 2400 and 32000) and asserts that all four produce the 14400 code and
+the same status byte and flag byte as a recognised 14400 does. *measured: the
+stores are unobservable by construction -- deleting both leaves the whole
+suite green, which is why this is a deviation and not a coverage gap.
+Finding F9478.*
+
+## D1221 ⚠ Three of `V17RX_create`'s four state-side `*_init` calls are told whether the WRONG object was freshly allocated
+
+The constructor carries two independent "this call allocated it" flags. The
+object's `0x2c(%esp)` is set only when the INSTANCE was allocated here
+(0x0979ff), and its `%ebp` -- live 0x096f3d..0x0970f2 -- only when the CONTROL
+BLOCK was (0x097911).
+
+`FPM_AGC_init` #1, on the control block's own AGC, is given `%ebp` at
+0x0970f2. That is right.
+
+`FPM_MRF_init` (0x0971be), `FPM_AGC_init` #2 (0x0971ff), `FPM_SRE_init`
+(0x097353) and `FPM_FSE_init` (0x0974ab) are all given `0x2c(%esp)` -- and
+every one of them is initialising part of the DEMODULATOR STATE, whose own
+allocation is guarded on `V17RX_OBJ_STATE == NULL` at 0x097162 and not on that
+flag at all.
+
+The two coincide on the only path anyone takes, because 0x0979f3 clears
+`obj + 0x60` on the allocate-instance path, so an instance this function built
+always has both true together. They come apart for a CALLER-SUPPLIED instance
+whose state pointer is NULL -- an entry the object explicitly supports, since
+0x097162 exists to serve it. There the state block is fresh uninitialised
+`sysdep_malloc` and `fresh` is 0, so all four modules take their RE-INIT
+paths: `FPM_MRF_init` inspects an existing history buffer, `FPM_SRE_init`
+compares an existing `taps` and may free four buffers, `FPM_FSE_init` frees
+five unconditionally. Every one of those pointers is allocator fill.
+
+`FPM_AGC_init` has no buffers, so the second of the four is harmless in
+practice; the other three are not.
+
+**Status:** reproduced -- all four calls pass the flag the object passes.
+`t_v17rxcreate.c` observes the flag from outside on the re-initialisation
+path, where it is 0 and the survivor ring and the `SGD` must therefore be
+reused rather than replaced. The crashing case is D1222 and is not run.
+*unmeasured for its consequences: reaching them means running the object into
+an allocator-fill free, which is D1222's territory.*
+
+## D1222 🐛 With a caller-supplied instance and a fresh state block, `V17RX_create` writes 512 bytes through an uninitialised pointer
+
+Same premise as D1221, and this one is a wild write rather than a suspicious
+argument.
+
+At 0x097568 the survivor ring's `sysdep_malloc(0x200)` is guarded on the
+INSTANCE-allocated flag. When it is clear the malloc is skipped, and 0x09756e
+loads `struct vtb::paths` from the state block at +0x30 and the loop at
+0x097580..0x097593 writes 128 four-byte nodes -- 512 bytes of zero -- through
+whatever that load returned. On a caller-supplied instance whose state pointer
+was NULL, the state block was allocated eleven instructions earlier by
+0x09789d and has never been written, so the pointer is allocator fill.
+
+The same premise produces a second one immediately after: 0x097615 skips the
+`movl $0x0,0x0(%ebp)` that would have NULLed `V17RXS_SGD`, and 0x097645 hands
+that uninitialised word to `SGD_create` at 0x097661 as the object to reuse.
+
+Both are unreachable from an instance this function allocated, because
+0x0979f3 clears the state pointer and the two flags then agree.
+
+**Status:** reproduced, and DELIBERATELY NOT DRIVEN. `t_v17rxcreate.c` says so
+in its own header: the shape that reaches it segfaults identically on both
+sides, so the caller-supplied path is entered only with an instance the test
+built a moment earlier -- which is what a retrain does and what the object
+supports. *unmeasured: measuring it means running the fault.*
+
+## D1223 ⚠ `V17RX_create` makes eight unchecked allocations and cannot report failure
+
+`sysdep_malloc` is called at 0x0979db (the 0x64 instance), 0x0978e8 (the 0x5c
+control block), 0x097906 and 0x09791d (two 0x140 buffers), 0x09789d (the
+0x4fbc state block), 0x0978b5 (0x140), 0x0978d1 (0x148) and 0x097a1a (0x200).
+No return value is tested. The instance's is stored at 0x0979e0 and
+dereferenced two instructions later by 0x0979ec.
+
+The function has one `ret`, at 0x097820, and the value returned is the
+instance pointer loaded at 0x097771 -- so a NULL from the first allocation is
+returned to the caller as if it were an object, and a NULL from any of the
+other seven is stored in a field the receiver will dereference on its first
+block. There is no `sysdep_free` and no `FPM_*_free` anywhere in the 3,201
+bytes, so there is no cleanup path either.
+
+`V21RX_create`, `V27RX_create` and `V29RX_create` are the same shape.
+
+**Status:** reproduced. *unmeasured: the harness's allocator does not fail, and
+making it fail would be testing the allocator.*
+
+## D1224 ⚠ `V17RX_create` loads all six bytes of `SDM_CFG` and overwrites all six
+
+0x097670 copies `SDM_CFG`'s first dword to the stack and 0x097676 and
+0x097684 then write `tap2` and `tap1` as 16-bit immediates, with `nbits`
+written at 0x097699 from the rate code plus three. Every one of the three
+shorts the built-in carries -- `{ 4, 5, 23 }` -- is replaced, so the copy
+contributes nothing.
+
+It is not a defect in behaviour; it is recorded because it CONSTRAINS THE
+SOURCE. GCC eliminated the +0x04 word of the copy, whose only field is fully
+overwritten by one store of the same width, and kept the +0x00 dword, which is
+overwritten by two 16-bit stores it could not prove exhaustive. That pattern
+only arises from a struct assignment followed by three field assignments, and
+it is why `src/fax/v17.c` spells it that way rather than as three
+initialisers. `sdm.h` already records the same shape in `V29TX_create`.
+
+**Status:** reproduced. *measured: the six bytes the object writes are the six
+bytes ours writes, over thirteen configurations and both construction paths.*
+
+## D1225 ⚠ Four of `V17RXS_BUF_SRE`'s 164 entries are never initialised
+
+0x0978d1 allocates the recoverer's output buffer with `sysdep_malloc(0x148)`
+-- 328 bytes, 164 `short`, which is `V17RXS_SRE_MAX` and is the bound
+`DemodDataV17` reports "ERROR: SRE buffer violation!(%d)" against.
+
+The clearing loop at 0x0976d0 zeroes `cmp $0x9f` / `jle`, so 160 entries, of
+BOTH that buffer and `V17RXS_BUF_MRF`. The MRF buffer is `sysdep_malloc(0x140)`
+= 160 shorts exactly, so it is fully cleared; the SRE one is four longer and
+its top four entries hold allocator fill until something writes them.
+
+Not out of bounds, and not reachable by the loop that fills it either --
+`FPM_SRE_recover` writes as many entries as it produced and `DemodDataV17`
+reads exactly that many. But a differential comparison of the buffer sees
+them, which is why the harness's fixed `HARNESS_MALLOC_FILL` is what makes the
+comparison meaningful rather than a comparison of two heaps.
+
+**Status:** reproduced. `t_v17rxcreate.c` counts the zeroed and non-zeroed
+entries and asserts 160 and 4 rather than asserting the loop bound.
+*measured, over thirteen configurations.*
