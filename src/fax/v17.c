@@ -4,10 +4,15 @@
  *
  * Reconstructed from dsplibs.o:
  *
+ *   V17RX_delete      .text 0x097b40  251
  *   V17RX_modem       .text 0x09ff80  127
+ *   V17RX_status      .text 0x0a0910  190
+ *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
  *   SetEncoderV17     .text 0x0a0a00   90
  *   V17TX_status      .text 0x0a1bd0  106
+ *   DemodDataV17      .text 0x0a50a0  415
+ *   DescrambleDataV17 .text 0x0a5240   30
  *   CarrierDetectV17      .text 0x0a5260  121
  *   DataCarrierDetectV17  .text 0x0a52e0  625
  *   QualityDetectV17      .text 0x0a5560  266
@@ -44,6 +49,17 @@
  * v17fax.h and finding F8854.  It only ever holds 0 or 1, so on any state a
  * real receiver can reach the two readings agree; the width is followed
  * because the object was not free to choose it, not because it is reachable.
+ *
+ * ---------------------------------------------------------------------------
+ * THE RELOADS ARE FORCED, SO THEY ARE WRITTEN AS RELOADS
+ *
+ * Every function below that calls anything re-reads `V17RX_OBJ_CTL` or
+ * `V17RX_OBJ_STATE` after the call rather than keeping it in a register.  That
+ * is not a style: a call clobbers memory the compiler cannot see through, so a
+ * source that read the field once could not have produced it.  The `CTL()` and
+ * `RXS()` macros therefore expand at each use, and the object's reload pattern
+ * comes out of the C rather than being imitated.  `src/fax/v29.c` records the
+ * same thing for the same reason.
  */
 
 #include "dsplib/v17fax.h"
@@ -51,8 +67,15 @@
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sdm.h"
+#include "dsplib/fpm_sre.h"
+#include "dsplib/fpm_tone.h"
+#include "dsplib/sdm.h"
+#include "dsplib/sgd.h"
+#include "dsplib/sysdep.h"
 
 /* The instances are not modelled; see v17fax.h.  These are the only accessors. */
 #define FIELD(obj, off)		((unsigned char *)(obj) + (off))
@@ -61,6 +84,50 @@
 #define AT_S(p, off)		(*(short *)(void *)FIELD((p), (off)))
 #define AT_US(p, off)		(*(unsigned short *)(void *)FIELD((p), (off)))
 #define AT_I(p, off)		(*(int *)(void *)FIELD((p), (off)))
+#define AT_B(p, off)		(*(unsigned char *)FIELD((p), (off)))
+
+#define CTL(modem)		FIELD_PTR((modem), V17RX_OBJ_CTL)
+#define RXS(modem)		FIELD_PTR((modem), V17RX_OBJ_STATE)
+
+/*
+ * The four FPM objects the receive chain runs, reached the long way round
+ * because the block they tile is not modelled.  See F8854 for the tiling and
+ * v17fax.h for each offset's evidence.
+ */
+#define RXS_MRF(rxs)	((struct fpm_mrf *)(void *)FIELD((rxs), V17RXS_MRF))
+#define RXS_AGC(rxs)	((struct fpm_agc *)(void *)FIELD((rxs), V17RXS_AGC))
+#define RXS_SRE(rxs)	((struct fpm_sre *)(void *)FIELD((rxs), V17RXS_SRE))
+#define RXS_FSE(rxs)	((struct fpm_fse *)(void *)FIELD((rxs), V17RXS_FSE))
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * V17RX_delete -- .text 0x097b40, 251 bytes.  See v17fax.h for the order and
+ * for why the object's literal 1 in the second argument slot is not here.
+ */
+void
+V17RX_delete(void *modem)
+{
+	SGD_delete((struct sgd *)FIELD_PTR(RXS(modem), V17RXS_SGD));
+	sysdep_free(FIELD_PTR(RXS(modem), V17RXS_PTR_0030));
+
+	FPM_FSE_free(RXS_FSE(RXS(modem)));
+	FPM_SRE_free(RXS_SRE(RXS(modem)));
+	FPM_MRF_free(RXS_MRF(RXS(modem)));
+
+	sysdep_free(FIELD_PTR(RXS(modem), V17RXS_BUF_SRE));
+	sysdep_free(FIELD_PTR(RXS(modem), V17RXS_BUF_MRF));
+	sysdep_free(RXS(modem));
+
+	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD));
+	FPM_TONE_delete((struct fpm_tone *)FIELD_PTR(CTL(modem), V17RXC_TONE));
+	sysdep_free(FIELD_PTR(CTL(modem), V17RXC_SCRATCH));
+	sysdep_free(FIELD_PTR(CTL(modem), V17RXC_BUF2));
+	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD2));
+	sysdep_free(CTL(modem));
+
+	sysdep_free(modem);
+}
 
 /* --------------------------------------------------------------------- */
 
@@ -100,6 +167,88 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	*count = (unsigned short)total;
 
 	return AT_I(modem, V17RX_OBJ_RESULT);
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * V17RX_status -- .text 0x0a0910, 190 bytes.
+ *
+ * THE FLAGS BYTE IS FOUR STORES AND THE VALUE IT SETTLES ON IS DETERMINISTIC.
+ * Reading the object's chain from the incoming byte `b`, with `x` for the
+ * three state bits:
+ *
+ *     store 1  b & 0xfe
+ *     store 2  ((b & 0xfc) | x1) & 0xfb          =  (b & 0xf8) | x1
+ *     store 3  (((b & 0xf8) & 0xf3) | x3) | 0x10 = ((b & 0xf0) | x1 | x3 | 0x10)
+ *     store 4  ((... & 0xdf) | x5 | 0x40) & 0x7f
+ *
+ * -- and the last line leaves `(b & 0x50) | x1 | x3 | x5 | 0x10 | 0x40`, in
+ * which bits 4 and 6 of `b` are re-set by the two constants anyway.  So the
+ * result is `0x50 | x1 | x3 | x5` and NOTHING of the caller's byte survives.
+ * The three intermediate stores are the object's and are kept: each is
+ * separated from the next by a load of `V17RX_OBJ_STATE`, which is reached
+ * through a character type and may alias the status block, so a source that
+ * assigned once could not have produced them.  They are observable only to a
+ * caller that overlaps its two arguments, which is what deviation D1092
+ * records.
+ */
+int
+V17RX_status(void *modem, struct v17_status *status)
+{
+	unsigned char *rx;
+
+	if (status == 0)
+		return 0;
+
+	/*
+	 * `modem` stays a byte pointer for the same reason `V17TX_status`'s
+	 * `params` does: it is an unmodelled block, and it is what keeps the
+	 * stores above from being merged.
+	 */
+	rx = (unsigned char *)modem;
+
+	status->protocol = (short)AT_US(rx, V17RX_OBJ_PROTOCOL);
+	status->tx_bps = 0;
+	status->rx_bps = (short)AT_US(rx, V17RX_OBJ_RX_BPS);
+	status->short_06 = (short)
+		((rx[V17RX_OBJ_RESULT_B1] & V17RX_RESULT_B1_BIT7) == 0);
+	status->snr = GetSNRV17(modem);
+	status->short_0a = 0;
+	status->short_0e = 0;
+	status->short_10 = 0;
+	status->short_12 = (short)AT_US(rx, V17RX_OBJ_RX_BPS);
+
+	status->flags &= (unsigned char)~V17_STATUS_FLAG_01;
+	status->flags = (unsigned char)
+		((status->flags & ~V17_STATUS_FLAG_02)
+		 | ((AT_B(RXS(modem), V17RXS_BYTE_001C) & V17RXS_001C_BIT0)
+		    << 1));
+	status->flags &= (unsigned char)~V17_STATUS_FLAG_04;
+	status->flags = (unsigned char)
+		((status->flags & ~V17_STATUS_FLAG_08)
+		 | ((AT_I(RXS(modem), V17RXS_INT_0000) == 0) << 3));
+	status->flags |= V17_STATUS_FLAG_10;
+	status->flags1 &= (unsigned char)~V17_STATUS_FLAGS1_CLEAR;
+	status->flags = (unsigned char)
+		((status->flags & ~V17_STATUS_FLAG_20)
+		 | ((AT_I(RXS(modem), V17RXS_INT_0010) == 0) << 5));
+	status->flags |= V17_STATUS_FLAG_40;
+	status->flags &= (unsigned char)~V17_STATUS_FLAG_80;
+
+	return 1;
+}
+
+/* --------------------------------------------------------------------- */
+
+void
+ScrambleDataV17(void *modem, unsigned short *data, unsigned short count)
+{
+	void *fp;
+
+	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
+	SDM_scrambler((struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM), data,
+		      count);
 }
 
 /* --------------------------------------------------------------------- */
@@ -162,7 +311,7 @@ V17TX_status(void *params, struct v17_status *status)
 	status->tx_bps = (short)AT_US(p, 0x02);
 	status->rx_bps = 0;
 	status->short_06 = 0;
-	status->short_08 = 0;
+	status->snr = 0;
 	status->short_0a = 0;
 	status->short_0c = 0;
 	status->short_10 = (short)AT_US(p, 0x02);
@@ -180,6 +329,88 @@ V17TX_status(void *params, struct v17_status *status)
 	status->int_18 = AT_I(p, 0x18);
 
 	return 1;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * DemodDataV17 -- .text 0x0a50a0, 415 bytes.  See v17fax.h for the shape, for
+ * why the pre-pass copy does NOT halve where `DemodDataV29`'s does, and for
+ * where `signal` comes from.
+ *
+ * THE STORE ORDER OF THE THREE EQUALISER ENABLES IS THE OBJECT'S.  `tilt_on`
+ * is written first (0x0a51dd), then `pll_on` (0x0a51f0), then `lms_on`
+ * (0x0a51fa) -- the same three fields in the same order as `DemodDataV29`.
+ */
+unsigned short
+DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
+{
+	int signal;
+	unsigned short n;
+	unsigned char *rxs;
+
+	FPM_AGC_agc(RXS_AGC(RXS(modem)), in, count);
+	/* Not the object's `%eax`; the same value.  D1091. */
+	signal = RXS_AGC(RXS(modem))->signal;
+
+	if (AT_S(CTL(modem), V17RXC_SHORT_0018) == 0) {
+		short *buf = (short *)FIELD_PTR(CTL(modem), V17RXC_SCRATCH);
+		unsigned short i;
+
+		/* No `>> 1` here.  F9103. */
+		for (i = 0; i < count; i++)
+			buf[i] = in[i];
+
+		FPM_TONE_kill((struct fpm_tone *)
+				FIELD_PTR(CTL(modem), V17RXC_TONE),
+			      (short *)FIELD_PTR(CTL(modem), V17RXC_SCRATCH),
+			      (short)count);
+
+		if (FPM_MTD_detect((struct fpm_mtd *)
+					FIELD_PTR(CTL(modem), V17RXC_MTD),
+				   (const short *)
+					FIELD_PTR(CTL(modem), V17RXC_SCRATCH),
+				   (short)count) != 0)
+			return 0;
+	}
+
+	n = (unsigned short)FPM_MRF_filter(
+			RXS_MRF(RXS(modem)),
+			in,
+			(short *)FIELD_PTR(RXS(modem), V17RXS_BUF_MRF),
+			(short)count);
+
+	rxs = RXS(modem);
+	RXS_SRE(rxs)->adapt = signal & AT_I(rxs, V17RXS_INT_0004);
+
+	n = FPM_SRE_recover(RXS_SRE(RXS(modem)),
+			    (const short *)
+				FIELD_PTR(RXS(modem), V17RXS_BUF_MRF),
+			    (short *)FIELD_PTR(RXS(modem), V17RXS_BUF_SRE),
+			    (short)n);
+
+	if (n > V17RXS_SRE_MAX && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("ERROR: SRE buffer violation!(%d)", n);
+
+	rxs = RXS(modem);
+	RXS_FSE(rxs)->tilt_on = 0;
+	RXS_FSE(rxs)->pll_on = signal & AT_I(rxs, V17RXS_INT_0008);
+	RXS_FSE(rxs)->lms_on = signal & AT_I(rxs, V17RXS_INT_0010);
+
+	return FPM_FSE_receive(RXS_FSE(RXS(modem)),
+			       (const short *)
+				FIELD_PTR(RXS(modem), V17RXS_BUF_SRE),
+			       bits, n);
+}
+
+/* --------------------------------------------------------------------- */
+
+void
+DescrambleDataV17(void *modem, unsigned short *data, unsigned short count)
+{
+	SDM_descrambler((struct fpm_sdm *)(void *)
+				FIELD(RXS(modem), V17RXS_SDM),
+			data, count);
 }
 
 /* --------------------------------------------------------------------- */

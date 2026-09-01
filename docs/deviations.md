@@ -11154,3 +11154,60 @@ not a recovered one.
 abandoned them. `t_class1handlers` drives both outcomes and asserts each
 fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
 are all ones for the give-up, and one with a zero among them for the lock.
+
+## D1091 ⚠ `DemodDataV17` uses `%eax` from a `void` function, and this reads the field it happens to hold
+
+`FPM_AGC_agc` returns nothing. `include/dsplib/fpm_agc.h` declares it `void`
+and that is measured, not assumed: the object's definition reads frame slots
+0x50, 0x54 and 0x58 and never 0x5c, so it takes three arguments, and it has no
+`ret` that sets `%eax` on purpose.
+
+`DemodDataV17` calls it and then uses `%eax`:
+
+    a50d0:  e8 fc ff ff ff    call   FPM_AGC_agc
+    a50d5:  89 44 24 18       mov    %eax,0x18(%esp)
+
+and 0x18(%esp) is the value later ANDed into `sre.adapt`, `fse.pll_on` and
+`fse.lms_on`. So the calling translation unit declared the function as
+returning `int` while the defining one returned nothing, and what `%eax` holds
+is whatever the definition left there.
+
+**What it leaves there is `agc->signal`**, and that is a property of the object
+rather than of C: `FPM_AGC_agc` has exactly one `ret`, every path funnels
+through the same epilogue, and the two instructions before it are
+`movzbl %dl,%eax` / `mov %eax,0x1c(%edi)` -- the store to `signal` itself.
+
+**Status:** the field is read instead. This file cannot spell what the object
+spells, because `fpm_agc.h` is right and a second prototype disagreeing with it
+would be "one type, one home" in its function-prototype form. `DemodDataV29`
+and two other sites are the same shape and D1035 is where that was first
+recorded; this is the fourth.
+
+`t_v17fax.c` MEASURES the identity rather than believing it. `dem_agc_identity`
+casts `ref_FPM_AGC_agc` to a pointer returning `int`, drives the AGC the
+demodulator itself uses with the stimuli the demodulator sees, and asserts the
+return equals `agc.signal` on every block -- with the number of blocks checked
+asserted non-zero at the end. It runs INSIDE the demodulator fixture and not in
+a local of its own, which is the one thing `t_v29fax.c`'s withdrawn
+`run_agc_identity` did differently (F9001).
+
+## D1092 ⚠ `V17RX_status` stores the flags byte four times and only the last one is a value
+
+The object writes `status + 0x14` at 0x0a0977, 0x0a098f, 0x0a09a5 and 0x0a09c2.
+The first three are dead in every ordinary sense: F9101 works the chain out and
+the byte the caller sees is `0x50 | x1 | x3 | x5`, in which nothing of the
+incoming byte and nothing of the first three stores survives.
+
+They exist because the object reaches `V17RX_OBJ_STATE` through a character
+pointer between each pair of them, which may alias the status block, so the
+compiler must flush the byte before every load and cannot merge the four
+statements into one.
+
+**Status:** reproduced, as four statements, for exactly that reason -- a source
+that assigned once would not produce them and would not be the object. What
+they are observable to is a caller that passes overlapping pointers, which is
+the same shape as `V17TX_status`'s single dead store (D1032) and, like it, is
+not claimed by any check here: what such a check would measure is STATEMENT
+ORDER, a codegen-tier question this test is not equipped to settle. What IS
+asserted is the settled value, which F9101's derivation makes exact rather than
+relative.

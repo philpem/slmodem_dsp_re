@@ -110,11 +110,64 @@
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_fse.h"
+#include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_sdm.h"
+#include "dsplib/fpm_sre.h"
+#include "dsplib/sdm.h"
+#include "dsplib/sgd.h"
+#include "dsplib/sysdep.h"
 
 extern int ref_V17RX_modem(void *modem, short *in, short *out,
 			   unsigned short *count);
+extern void ref_V17RX_delete(void *modem);
+extern int ref_V17RX_status(void *modem, struct v17_status *status);
+extern void ref_ScrambleDataV17(void *modem, unsigned short *data,
+				unsigned short count);
+extern void ref_DescrambleDataV17(void *modem, unsigned short *data,
+				  unsigned short count);
+extern unsigned short ref_DemodDataV17(void *modem, short *in,
+				       unsigned short *bits,
+				       unsigned short count);
+
+extern void ref_SDM_init(struct fpm_sdm *sdm, const struct fpm_sdm_cfg *cfg);
+extern void ref_SDM_scrambler(struct fpm_sdm *sdm, unsigned short *data,
+			      unsigned short count);
+extern void ref_SDM_descrambler(struct fpm_sdm *sdm, unsigned short *data,
+				unsigned short count);
+
+extern struct sgd *ref_SGD_create(struct sgd *s, const struct sgd_cfg *cfg);
+
+extern void *ref_FPM_TONE_create(void *state, const void *cfg);
+extern void ref_FPM_TONE_kill(void *state, short *samples, short count);
+extern void ref_FPM_TONE_delete(void *state);
+extern void ref_FPM_MTD_delete(struct fpm_mtd *state);
+
+extern void ref_FPM_MRF_init(struct fpm_mrf *state,
+			     const struct fpm_mrf_cfg *cfg, int fresh);
+extern void ref_FPM_MRF_free(struct fpm_mrf *state);
+extern short ref_FPM_MRF_filter(struct fpm_mrf *state, const short *in,
+				short *out, short count);
+extern void ref_FPM_SRE_init(struct fpm_sre *sre, const struct fpm_sre_cfg *cfg,
+			     int fresh);
+extern void ref_FPM_SRE_free(struct fpm_sre *sre);
+extern unsigned short ref_FPM_SRE_recover(struct fpm_sre *sre, const short *in,
+					  short *out, short count);
+extern void ref_FPM_FSE_init(struct fpm_fse *state,
+			     const struct fpm_fse_cfg *cfg, int fresh);
+extern void ref_FPM_FSE_free(struct fpm_fse *state);
+extern unsigned short ref_FPM_FSE_receive(struct fpm_fse *state,
+					  const short *in, unsigned short *out,
+					  unsigned short count);
+
+/*
+ * The two "default" configurations are templates and not filters -- see the
+ * note in `t_v29fax.c`.  The V.32 instances are the real ones and are what the
+ * demodulator fixture uses.
+ */
+extern const struct fpm_mrf_cfg MRFv32_CFG;
+extern const struct fpm_sre_cfg SREv32_CFG;
 extern void ref_SeedScramblerV17(void *modem, unsigned int seed);
 extern void ref_SetEncoderV17(void *modem, short which, short arg);
 extern int ref_V17TX_status(void *params, struct v17_status *status);
@@ -186,6 +239,26 @@ rng_next(void)
 	rng_state ^= rng_state >> 17;
 	rng_state ^= rng_state << 5;
 	return rng_state;
+}
+
+/*
+ * A SEED THAT ACTUALLY MOVES EVERY BIT.
+ *
+ * `rng_next` is xorshift32, which is LINEAR over GF(2): every bit of the byte
+ * `fixture()` writes at a fixed offset is a fixed XOR of the seed's bits.
+ * Seeding a sweep with `base + where` for a small `where` therefore varies
+ * only the seed's low five bits, and any bit of any byte whose linear form
+ * does not involve one of those five is CONSTANT over the whole sweep.
+ *
+ * That is not a theoretical worry: it is how `run_rxstatus`'s "0x80 not forced
+ * clear" reading reported a separating count of zero over 24 trials that
+ * looked pseudorandom.  Bit 7 of the status byte the fixture laid down was 0
+ * on all 24.  Finding F9105.
+ */
+static unsigned
+spread(unsigned base, long where)
+{
+	return base ^ ((unsigned)where * 0x9e3779b9u);
 }
 
 struct fix {
@@ -1907,16 +1980,1015 @@ run_accessors(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* V17RX_status                                                          */
+
+/*
+ * A REPORTER WITH NO ARITHMETIC, so what can be wrong is WHICH FIELD and WHICH
+ * WAY ROUND, and every check below is built around a named wrong reading whose
+ * separating count is asserted non-zero at the end.
+ *
+ * TWO OF THE READINGS NEEDED THE FIXTURE CHANGED TO SEPARATE AT ALL.  The
+ * flags byte's bits 3 and 5 are `sete` on two state ints, and a pseudorandom
+ * int is non-zero every time -- so with the blocks left as `fixture()` fills
+ * them, taking bit 5 from the wrong offset produced the same 0 as taking it
+ * from the right one and the count read zero.  The sweep therefore drives all
+ * four combinations of (`V17RXS_INT_0000`, `V17RXS_INT_0010`) being zero, and
+ * plants the OPPOSITE value at the neighbouring offset a wrong reading would
+ * pick up.  Finding F9104.
+ */
+enum rxs_defect {
+	S_NONE = 0,
+	S_SNR_ZERO,		/* +0x08 zeroed, which is V17TX_status's    */
+	S_06_NOT_INV,		/* +0x06 not inverted                       */
+	S_06_BIT0,		/* +0x06 from bit 0 of the result byte      */
+	S_RXBPS_02,		/* +0x04 taken from the instance's +0x02    */
+	S_12_ZERO,		/* +0x12 zeroed rather than copied          */
+	S_0C_WRITTEN,		/* +0x0c zeroed, which the object skips     */
+	S_18_WRITTEN,		/* +0x18 written, which the object skips    */
+	S_1C_BIT1,		/* the state byte's bit 1, not its bit 0    */
+	S_0000_NOT_INV,		/* flags bit 3 not inverted                 */
+	S_0010_OFF,		/* flags bit 5 from the state's +0x0c       */
+	S_NO_10,		/* 0x10 not forced set                      */
+	S_NO_40,		/* 0x40 not forced set                      */
+	S_NO_80,		/* 0x80 not forced clear                    */
+	S_15_ALL,		/* +0x15 cleared outright, not bit 0        */
+	S_MAX
+};
+
+static long rxs_sep[S_MAX];
+static long rxs_null_sep;
+static long rxs_paths[4];
+
+/* The object's own sequence, with one reading changed. */
+static int
+drive_rxstatus(struct fix *f, enum rxs_defect d)
+{
+	struct v17_status *status = (struct v17_status *)(void *)f->sta;
+	unsigned char *rx = f->robj;
+	unsigned char *rxs;
+	int bit;
+
+	status->protocol = (short)get_us(rx, V17RX_OBJ_PROTOCOL);
+	status->tx_bps = 0;
+	status->rx_bps = (short)get_us(rx, (d == S_RXBPS_02)
+					   ? 0x02 : V17RX_OBJ_RX_BPS);
+	bit = (d == S_06_BIT0) ? 0x01 : V17RX_RESULT_B1_BIT7;
+	status->short_06 = (short)((d == S_06_NOT_INV)
+				   ? ((rx[V17RX_OBJ_RESULT_B1] & bit) != 0)
+				   : ((rx[V17RX_OBJ_RESULT_B1] & bit) == 0));
+	status->snr = (d == S_SNR_ZERO) ? 0 : ref_GetSNRV17(f->robj);
+	status->short_0a = 0;
+	if (d == S_0C_WRITTEN)
+		status->short_0c = 0;
+	if (d == S_18_WRITTEN)
+		status->int_18 = get_i(rx, 0x18);
+	status->short_0e = 0;
+	status->short_10 = 0;
+	status->short_12 = (d == S_12_ZERO)
+			   ? 0 : (short)get_us(rx, V17RX_OBJ_RX_BPS);
+
+	rxs = (unsigned char *)get_ptr(rx, V17RX_OBJ_STATE);
+	status->flags &= (unsigned char)~V17_STATUS_FLAG_01;
+	status->flags = (unsigned char)
+		((status->flags & ~V17_STATUS_FLAG_02)
+		 | ((rxs[V17RXS_BYTE_001C] & ((d == S_1C_BIT1) ? 2 : 1))
+		    ? 2 : 0));
+	status->flags &= (unsigned char)~V17_STATUS_FLAG_04;
+	status->flags = (unsigned char)
+		((status->flags & ~V17_STATUS_FLAG_08)
+		 | (((d == S_0000_NOT_INV)
+		     ? (get_i(rxs, V17RXS_INT_0000) != 0)
+		     : (get_i(rxs, V17RXS_INT_0000) == 0)) << 3));
+	if (d != S_NO_10)
+		status->flags |= V17_STATUS_FLAG_10;
+	status->flags1 &= (unsigned char)
+		(d == S_15_ALL ? 0x00 : ~V17_STATUS_FLAGS1_CLEAR);
+	status->flags = (unsigned char)
+		((status->flags & ~V17_STATUS_FLAG_20)
+		 | ((get_i(rxs, (d == S_0010_OFF) ? 0x0c : V17RXS_INT_0010)
+		     == 0) << 5));
+	if (d != S_NO_40)
+		status->flags |= V17_STATUS_FLAG_40;
+	if (d != S_NO_80)
+		status->flags &= (unsigned char)~V17_STATUS_FLAG_80;
+
+	return 1;
+}
+
+static unsigned long
+rxs_mark(const struct fix *f, int ret)
+{
+	unsigned long m = (unsigned long)ret;
+	int i;
+
+	for (i = 0; i < STA_SIZE; i++)
+		m = m * 131u + f->sta[i];
+	return m;
+}
+
+/*
+ * `zero_sel` names which of the two state ints the flags byte tests are zero
+ * on this trial; the neighbour a wrong reading would pick up is planted with
+ * the complement, so an offset that is wrong by four bytes reports a different
+ * bit.
+ */
+static void
+rxstatus_state(struct fix *f, int zero_sel)
+{
+	put_i(f->rxs, V17RXS_INT_0000, (zero_sel & 1) ? 0 : 0x51ee7);
+	put_i(f->rxs, V17RXS_INT_0010, (zero_sel & 2) ? 0 : 0x0d15c);
+	put_i(f->rxs, 0x0c, (zero_sel & 2) ? 0x0d15c : 0);
+}
+
+static int
+run_rxstatus(void)
+{
+	long where = 0;
+	int zero_sel, trial, d;
+
+	diff_begin("V17RX_status");
+
+	for (zero_sel = 0; zero_sel < 4; zero_sel++)
+	for (trial = 0; trial < 6; trial++) {
+		unsigned seed = spread(0x0517a700u, where);
+		unsigned long marka, markc;
+		int ra, rb;
+
+		fixture(&ma, seed);
+		fixture(&mb, seed);
+		rxstatus_state(&ma, zero_sel);
+		rxstatus_state(&mb, zero_sel);
+
+		ra = ref_V17RX_status(ma.robj, (struct v17_status *)
+					       (void *)ma.sta);
+		rb = V17RX_status(mb.robj, (struct v17_status *)
+					   (void *)mb.sta);
+
+		diff_eq_int("at %ld: V17RX_status returned", (long)rb,
+			    (long)ra, where);
+		compare_all(&ma, &mb, where);
+
+		if (ma.sta[0x14] & V17_STATUS_FLAG_02)
+			rxs_paths[0]++;
+		else
+			rxs_paths[1]++;
+		if (ma.sta[0x14] & V17_STATUS_FLAG_08)
+			rxs_paths[2]++;
+		if (ma.sta[0x14] & V17_STATUS_FLAG_20)
+			rxs_paths[3]++;
+
+		marka = rxs_mark(&ma, ra);
+		for (d = 1; d < (int)S_MAX; d++) {
+			fixture(&mc, seed);
+			rxstatus_state(&mc, zero_sel);
+			markc = rxs_mark(&mc, drive_rxstatus(&mc,
+						(enum rxs_defect)d));
+			if (markc != marka)
+				rxs_sep[d]++;
+		}
+
+		/* The NULL guard, separated by construction. */
+		fixture(&ma, seed);
+		fixture(&mb, seed);
+		ra = ref_V17RX_status(ma.robj, 0);
+		rb = V17RX_status(mb.robj, 0);
+		diff_eq_int("at %ld: the NULL guard returned", (long)rb,
+			    (long)ra, where);
+		diff_eq_int("at %ld: the NULL guard returned 0", (long)ra, 0,
+			    where);
+		compare_all(&ma, &mb, where);
+		if (ra == 0)
+			rxs_null_sep++;
+
+		where++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* ScrambleDataV17 and DescrambleDataV17                                 */
+
+/*
+ * TWO ADAPTERS ONTO ONE PAIR OF PRIMITIVES, and what a wrong reading gets
+ * wrong is the OBJECT they reach: the scrambler is at `V17FP_SDM` in the
+ * transmitter's private block and the descrambler is at `V17RXS_SDM`, 0x4f8c
+ * into the receiver's demodulator state.  So the fixture builds FOUR live
+ * `struct fpm_sdm`, each with its own shift register -- the two right ones and
+ * one decoy beside each -- and every named wrong reading picks up one of the
+ * other three.
+ *
+ * THE DECOYS ARE A WHOLE `sizeof(struct fpm_sdm)` AWAY, NOT FOUR BYTES, AND
+ * THAT IS DELIBERATE.  0x18 is the struct's size, so a decoy at +/-4 would
+ * OVERLAP the real object and the second `SDM_init` would overwrite the first
+ * one's `tap2` with the second one's `nbits` -- corrupting the object under
+ * test rather than providing an alternative to it.  The check this buys is
+ * "the right one of two valid objects in the right block", which is what an
+ * offset error would get wrong; it is not a claim that +/-4 was tried.
+ *
+ * F8790's rule applies even here: the register is the whole state, so a run
+ * that scrambled one block would agree with a run that scrambled the wrong
+ * object's first block.  Each trial drives SIX consecutive blocks.
+ */
+#define SCR_WORDS	64
+#define SCR_BLOCKS	6
+#define SCR_FP_DECOY	0x34		/* V17FP_SDM + sizeof(struct fpm_sdm) */
+#define SCR_RXS_DECOY	0x4f74		/* V17RXS_SDM - sizeof(struct fpm_sdm) */
+
+static unsigned short scr_a[SCR_WORDS], scr_b[SCR_WORDS], scr_c[SCR_WORDS];
+static unsigned short scr_in[SCR_WORDS];
+
+enum scr_defect {
+	C_NONE = 0,
+	C_TX_DECOY,		/* the scrambler one struct further on      */
+	C_TX_ON_STATE,		/* the scrambler read from the RX state     */
+	C_TX_DESCRAMBLES,	/* the scrambler calls SDM_descrambler      */
+	C_RX_DECOY,		/* the descrambler one struct earlier       */
+	C_RX_ON_FP,		/* the descrambler read from the TX block   */
+	C_RX_SCRAMBLES,		/* the descrambler calls SDM_scrambler      */
+	C_MAX
+};
+
+static long scr_sep[C_MAX];
+static long scr_words_moved;
+
+static void
+scr_one(unsigned char *block, int off, const struct fpm_sdm_cfg *cfg,
+	unsigned int reg)
+{
+	struct fpm_sdm *s = (struct fpm_sdm *)(void *)(block + off);
+
+	ref_SDM_init(s, cfg);
+	s->reg = reg;			/* no two alike, so none can agree */
+}
+
+static void
+scr_build(struct fix *f, unsigned seed)
+{
+	struct fpm_sdm_cfg cfg;
+
+	fixture(f, seed);
+
+	/*
+	 * V.17's own polynomial, from `sdm.h`: every caller patches SDM_CFG's
+	 * nbits and sets the taps to 0x12 and 0x17.
+	 */
+	cfg.nbits = 8;
+	cfg.tap1 = 0x12;
+	cfg.tap2 = 0x17;
+
+	scr_one(f->fp, V17FP_SDM, &cfg, 0x1111u);
+	scr_one(f->fp, SCR_FP_DECOY, &cfg, 0x2222u);
+	scr_one(f->rxs, V17RXS_SDM, &cfg, 0x3333u);
+	scr_one(f->rxs, SCR_RXS_DECOY, &cfg, 0x4444u);
+}
+
+static void
+drive_scr(struct fix *f, unsigned short *data, unsigned short n, int descr,
+	  enum scr_defect d)
+{
+	/*
+	 * TWO INSTANCES, AND THIS IS WHERE F8850 BITES.  The scrambler hangs
+	 * off the TRANSMIT instance's `V17TX_OBJ_FP` and the descrambler off
+	 * the RECEIVE instance's `V17RX_OBJ_STATE` -- which are offsets 0x28
+	 * and 0x60 of two different structs.  Reading both from one instance
+	 * takes 0x28 of the receive one, which is `V17RX_OBJ_RESULT`, an int
+	 * and not a pointer.
+	 */
+	unsigned char *fp = (unsigned char *)get_ptr(f->tobj, V17TX_OBJ_FP);
+	unsigned char *rxs = (unsigned char *)get_ptr(f->robj,
+						      V17RX_OBJ_STATE);
+	struct fpm_sdm *s;
+
+	if (!descr) {
+		s = (d == C_TX_DECOY)
+			? (struct fpm_sdm *)(void *)(fp + SCR_FP_DECOY)
+			: (d == C_TX_ON_STATE)
+			? (struct fpm_sdm *)(void *)(rxs + V17RXS_SDM)
+			: (struct fpm_sdm *)(void *)(fp + V17FP_SDM);
+		if (d == C_TX_DESCRAMBLES)
+			ref_SDM_descrambler(s, data, n);
+		else
+			ref_SDM_scrambler(s, data, n);
+	} else {
+		s = (d == C_RX_DECOY)
+			? (struct fpm_sdm *)(void *)(rxs + SCR_RXS_DECOY)
+			: (d == C_RX_ON_FP)
+			? (struct fpm_sdm *)(void *)(fp + V17FP_SDM)
+			: (struct fpm_sdm *)(void *)(rxs + V17RXS_SDM);
+		if (d == C_RX_SCRAMBLES)
+			ref_SDM_scrambler(s, data, n);
+		else
+			ref_SDM_descrambler(s, data, n);
+	}
+}
+
+static int
+run_scramble(void)
+{
+	static const unsigned short counts[] = { 1, 5, 32, SCR_WORDS };
+	int descr, c, blk, d, i;
+	long where = 0;
+
+	diff_begin("ScrambleDataV17 / DescrambleDataV17");
+
+	for (descr = 0; descr < 2; descr++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		unsigned seed = spread(0x05c12b00u, where);
+		unsigned short n = counts[c];
+		unsigned long marka = 0, markc;
+
+		scr_build(&ma, seed);
+		scr_build(&mb, seed);
+
+		rng_seed(seed ^ 0xd1eu);
+		for (i = 0; i < SCR_WORDS; i++)
+			scr_in[i] = (unsigned short)rng_next();
+
+		for (blk = 0; blk < SCR_BLOCKS; blk++) {
+			long id = where * 100 + blk;
+
+			for (i = 0; i < SCR_WORDS; i++)
+				scr_a[i] = scr_b[i] = (unsigned short)
+					(scr_in[i] + (unsigned)blk);
+
+			if (descr) {
+				ref_DescrambleDataV17(ma.robj, scr_a, n);
+				DescrambleDataV17(mb.robj, scr_b, n);
+			} else {
+				ref_ScrambleDataV17(ma.tobj, scr_a, n);
+				ScrambleDataV17(mb.tobj, scr_b, n);
+			}
+
+			for (i = 0; i < SCR_WORDS; i++) {
+				diff_eq_int("at %ld: word", (long)scr_b[i],
+					    (long)scr_a[i], id);
+				if (scr_a[i] != (unsigned short)
+						(scr_in[i] + (unsigned)blk))
+					scr_words_moved++;
+			}
+			compare_all(&ma, &mb, id);
+
+			marka = marka * 1000003u + n;
+			for (i = 0; i < SCR_WORDS; i++)
+				marka = marka * 31u + scr_a[i];
+		}
+
+		for (d = 1; d < (int)C_MAX; d++) {
+			scr_build(&mc, seed);
+			markc = 0;
+			for (blk = 0; blk < SCR_BLOCKS; blk++) {
+				for (i = 0; i < SCR_WORDS; i++)
+					scr_c[i] = (unsigned short)
+						(scr_in[i] + (unsigned)blk);
+				drive_scr(&mc, scr_c, n, descr,
+					  (enum scr_defect)d);
+				markc = markc * 1000003u + n;
+				for (i = 0; i < SCR_WORDS; i++)
+					markc = markc * 31u + scr_c[i];
+			}
+			if (markc != marka)
+				scr_sep[d]++;
+		}
+
+		where++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* V17RX_delete                                                          */
+
+/*
+ * WHAT A DELETE TEST CAN ACTUALLY CHECK is which pointers were released, and
+ * `t_v29fax.c`'s `V29RX_delete` block is the shape this follows.
+ *
+ * The three BLOCKS -- the instance, the control block and the demodulator
+ * state -- are members of a static fixture, so the object's frees of them
+ * reach `sysdep_free` as pointers the allocator never handed out: they land in
+ * `bad_free` and are counted rather than destroying the fixture.  The TEN
+ * things that ARE allocated are probed one at a time with
+ * `harness_alloc_ordinal`, which reports 0 for a pointer no longer live.
+ *
+ * The three embedded FPM states are zeroed so their `_free` functions release
+ * null pointers and land in `free_null` rather than chasing the block's
+ * pseudorandom filler.  That the object calls them AT ALL is what `free_null`
+ * counts.
+ */
+#define N_PROBE		10
+#define DEL_BUF		256
+
+static void
+delete_build(struct fix *f, unsigned seed, void *probe[N_PROBE])
+{
+	struct sgd *s;
+
+	fixture(f, seed);
+
+	s = ref_SGD_create(0, 0);
+	put_ptr(f->rxs, V17RXS_SGD, s);
+	put_ptr(f->rxs, V17RXS_PTR_0030, sysdep_malloc(DEL_BUF));
+	put_ptr(f->rxs, V17RXS_BUF_MRF, sysdep_malloc(DEL_BUF));
+	put_ptr(f->rxs, V17RXS_BUF_SRE, sysdep_malloc(DEL_BUF));
+
+	memset(f->rxs + V17RXS_MRF, 0, 0x1c);
+	memset(f->rxs + V17RXS_SRE, 0, 0x90);
+	memset(f->rxs + V17RXS_FSE, 0, 0x4e18);
+
+	put_ptr(f->ctl, V17RXC_MTD, ref_FPM_MTD_create(0, 0));
+	put_ptr(f->ctl, V17RXC_TONE, ref_FPM_TONE_create(0, 0));
+	put_ptr(f->ctl, V17RXC_SCRATCH, sysdep_malloc(DEL_BUF));
+	put_ptr(f->ctl, V17RXC_BUF2, sysdep_malloc(DEL_BUF));
+	put_ptr(f->ctl, V17RXC_MTD2, ref_FPM_MTD_create(0, 0));
+
+	probe[0] = s;
+	probe[1] = s->hist;
+	probe[2] = get_ptr(f->rxs, V17RXS_PTR_0030);
+	probe[3] = get_ptr(f->rxs, V17RXS_BUF_MRF);
+	probe[4] = get_ptr(f->rxs, V17RXS_BUF_SRE);
+	probe[5] = get_ptr(f->ctl, V17RXC_MTD);
+	probe[6] = get_ptr(f->ctl, V17RXC_TONE);
+	probe[7] = get_ptr(f->ctl, V17RXC_SCRATCH);
+	probe[8] = get_ptr(f->ctl, V17RXC_BUF2);
+	probe[9] = get_ptr(f->ctl, V17RXC_MTD2);
+}
+
+static long del_released, del_probes;
+
+static int
+run_rxdelete(void)
+{
+	void *pa[N_PROBE], *pb[N_PROBE];
+	int liva[N_PROBE], livb[N_PROBE];
+	struct alloc_log before, mid, after;
+	int i, s, sum;
+	static const unsigned seeds[] = { 0x0de1e7a0u, 0x0de1e7a1u };
+
+	diff_begin("V17RX_delete");
+
+	for (s = 0; s < (int)(sizeof(seeds) / sizeof(seeds[0])); s++) {
+		delete_build(&ma, seeds[s], pa);
+		before = harness_alloc;
+		ref_V17RX_delete(ma.robj);
+		mid = harness_alloc;
+		for (i = 0; i < N_PROBE; i++)
+			liva[i] = harness_alloc_ordinal(pa[i]) != 0;
+
+		delete_build(&mb, seeds[s], pb);
+		V17RX_delete(mb.robj);
+		after = harness_alloc;
+		for (i = 0; i < N_PROBE; i++)
+			livb[i] = harness_alloc_ordinal(pb[i]) != 0;
+
+		sum = 0;
+		for (i = 0; i < N_PROBE; i++) {
+			diff_eq_int("probe %ld still live", livb[i], liva[i],
+				    i);
+			sum += liva[i];
+			del_probes++;
+			if (liva[i] == 0)
+				del_released++;
+		}
+		diff_eq_int("seed %ld: everything the delete owns was released",
+			    sum, 0, s);
+
+		diff_eq_int("seed %ld: frees", after.frees - mid.frees,
+			    mid.frees - before.frees, s);
+		diff_eq_int("seed %ld: null frees",
+			    after.free_null - mid.free_null,
+			    mid.free_null - before.free_null, s);
+		diff_eq_int("seed %ld: unknown frees",
+			    after.bad_free - mid.bad_free,
+			    mid.bad_free - before.bad_free, s);
+		diff_eq_int("seed %ld: the three FPM states were freed",
+			    (mid.free_null - before.free_null) > 0, 1, s);
+		diff_eq_int("seed %ld: the three static blocks were freed",
+			    (mid.bad_free - before.bad_free) > 0, 1, s);
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* DemodDataV17                                                          */
+
+/*
+ * THE ONLY SYMBOL HERE THAT NEEDS A LIVE DSP CHAIN, and the fixture is most of
+ * the work.  `DemodDataV17` calls, in order, `FPM_AGC_agc`, `FPM_TONE_kill`,
+ * `FPM_MTD_detect`, `FPM_MRF_filter`, `FPM_SRE_recover` and `FPM_FSE_receive`,
+ * so a trial needs six constructed objects at their real offsets inside the
+ * demodulator state and three scratch buffers big enough for what they
+ * produce.
+ *
+ * D955's rule is why none of them may be faked: this is table-lookup code, and
+ * a field left unplanted that is used as a SUBSCRIPT cannot be caught by a
+ * blob-against-blob dry run -- both sides read the same wild index and agree.
+ * Every one of the six is constructed by the BLOB's own `_init` or `_create`,
+ * on both sides, so the states are identical bytes and any difference the test
+ * sees belongs to `src/fax/v17.c`.
+ *
+ * F8790's rule is why each trial is EIGHT consecutive blocks with the state
+ * carried across: the MRF, the SRE and the FSE all hold history, and a
+ * one-block fixture cannot see a swapped weight or a buffer used for the wrong
+ * stage.
+ *
+ * THE THREE ENABLE WORDS ARE SEEDED SO THAT ONE OF THEM HAS BIT 0 CLEAR.
+ * `agc.signal` is 0 or 1, so `signal & word` can only be 0 or `word & 1`; with
+ * all three words odd, transposing two of them is invisible.  F8885, borrowed
+ * whole from `t_v29fax.c`, which measured it.
+ */
+#define DEM_BUF		4096
+#define DEM_BLOCKS	8
+#define DEM_TAPS	16
+#define DEM_CLK		8
+
+static short dem_icoff[DEM_TAPS], dem_qcoff[DEM_TAPS];
+static short dem_clk[DEM_CLK], dem_k1[3], dem_k2[3];
+static struct fpm_fse_cfg dem_fse_cfg;
+
+static short dem_mrf_a[DEM_BUF], dem_mrf_b[DEM_BUF], dem_mrf_c[DEM_BUF];
+static short dem_sre_a[DEM_BUF], dem_sre_b[DEM_BUF], dem_sre_c[DEM_BUF];
+static short dem_det_a[DEM_BUF], dem_det_b[DEM_BUF], dem_det_c[DEM_BUF];
+static unsigned short dem_out_a[DEM_BUF], dem_out_b[DEM_BUF];
+static short dem_in[DEM_BUF], dem_work[DEM_BUF];
+
+static short dem_slice_perr, dem_slice_mag;
+
+static unsigned short
+dem_slicer(struct fpm_fse *state, short *angle, short *mag)
+{
+	short a = *angle;
+
+	(void)state;
+	*angle = (short)(a - dem_slice_perr);
+	*mag = dem_slice_mag;
+	return (unsigned short)a;
+}
+
+static void
+dem_tables(void)
+{
+	int i;
+
+	for (i = 0; i < DEM_TAPS; i++) {
+		int v = ((i * 7919 + 1301) & 0x3fff) - 8192;
+
+		dem_icoff[i] = (short)(v | 1);
+		dem_qcoff[i] = (short)(-3 * v + 5 * i + 7);
+	}
+	for (i = 0; i < DEM_CLK; i++)
+		dem_clk[i] = (short)(i * 4096 + 137);
+	dem_k1[0] = 602; dem_k1[1] = 3050; dem_k1[2] = 766;
+	dem_k2[0] = 0;   dem_k2[1] = 18;   dem_k2[2] = 1;
+	dem_slice_perr = 311;
+	dem_slice_mag = 1777;
+
+	memset(&dem_fse_cfg, 0, sizeof(dem_fse_cfg));
+	dem_fse_cfg.block = 2048;
+	dem_fse_cfg.interp = 3;
+	dem_fse_cfg.icoff = dem_icoff;
+	dem_fse_cfg.qcoff = dem_qcoff;
+	dem_fse_cfg.taps = DEM_TAPS;
+	dem_fse_cfg.mu[0] = 2620;
+	dem_fse_cfg.mu[1] = 393;
+	dem_fse_cfg.mu[2] = 97;
+	dem_fse_cfg.clk = dem_clk;
+	dem_fse_cfg.clk_mod = DEM_CLK;
+	dem_fse_cfg.clk_inc = 4096;
+	dem_fse_cfg.train_sym = 4;
+	dem_fse_cfg.err_hi = 6536;
+	dem_fse_cfg.err_lo = 1638;
+	dem_fse_cfg.pll_k1 = dem_k1;
+	dem_fse_cfg.pll_k2 = dem_k2;
+	dem_fse_cfg.decision = dem_slicer;
+}
+
+/*
+ * The pointer fields the two sides cannot agree on, because each side's own
+ * `_init` allocated them.  Everything else in twenty kilobytes IS compared,
+ * including the equaliser's two scatter logs.
+ */
+static long
+rxs_diff_demod(const struct fix *a, const struct fix *b)
+{
+	int i;
+
+	for (i = 0; i < RXS_SIZE; i++) {
+		if (i >= V17RXS_COEF0 && i < V17RXS_COEF1 + 4)
+			continue;
+		if (i >= V17RXS_MRF + 0x18 && i < V17RXS_MRF + 0x1c)
+			continue;		/* fpm_mrf::history        */
+		if (i >= V17RXS_SRE + 0x50 && i < V17RXS_SRE + 0x5c)
+			continue;		/* coeff, hist, clk        */
+		if (i >= V17RXS_SRE + 0x74 && i < V17RXS_SRE + 0x78)
+			continue;		/* rms_buf                 */
+		if (i >= V17RXS_FSE + 0x54 && i < V17RXS_FSE + 0x5c)
+			continue;		/* out_i, out_q            */
+		if (i >= V17RXS_FSE + 0x60 && i < V17RXS_FSE + 0x6c)
+			continue;		/* icoeff, qcoeff, hist    */
+		if (i >= V17RXS_BUF_MRF && i < V17RXS_BUF_SRE + 4)
+			continue;		/* the two chained buffers */
+		if (a->rxs[i] != b->rxs[i])
+			return i;
+	}
+	return -1;
+}
+
+static long
+ctl_diff_demod(const struct fix *a, const struct fix *b)
+{
+	int i;
+
+	for (i = 0; i < CTL_SIZE; i++) {
+		if (i < V17RXC_TONE + 4)
+			continue;		/* the MTD and the notch   */
+		if (i >= V17RXC_PROCESS && i < V17RXC_PROCESS + 4)
+			continue;
+		if (i >= V17RXC_SCRATCH && i < V17RXC_SCRATCH + 4)
+			continue;
+		if (i >= V17RXC_MTD2 && i < V17RXC_BUF2 + 4)
+			continue;
+		if (a->ctl[i] != b->ctl[i])
+			return i;
+	}
+	return -1;
+}
+
+struct dem_setup {
+	short	gate_18;	/* non-zero skips the tone pre-pass        */
+	int	tone;		/* index into dtones[], the pre-pass input */
+	int	enables;	/* which shape of the three enable words   */
+};
+
+static const int dem_enable[2][3] = {
+	{ 0x0e, 0x33, 0x54 },		/* adapt off, pll on,  lms off */
+	{ 0x33, 0x54, 0x0f }		/* adapt on,  pll off, lms on  */
+};
+
+static void
+dem_build(struct fix *f, unsigned seed, const struct dem_setup *u,
+	  short *mrfbuf, short *srebuf, short *detbuf)
+{
+	fixture(f, seed);
+
+	put_ptr(f->rxs, V17RXS_BUF_MRF, mrfbuf);
+	put_ptr(f->rxs, V17RXS_BUF_SRE, srebuf);
+	put_ptr(f->ctl, V17RXC_SCRATCH, detbuf);
+	memset(mrfbuf, 0, DEM_BUF * sizeof(short));
+	memset(srebuf, 0, DEM_BUF * sizeof(short));
+	memset(detbuf, 0, DEM_BUF * sizeof(short));
+
+	ref_FPM_AGC_init((struct fpm_agc *)(void *)(f->rxs + V17RXS_AGC),
+			 &ref_AGCv17_CFG, 1);
+	ref_FPM_MRF_init((struct fpm_mrf *)(void *)(f->rxs + V17RXS_MRF),
+			 &MRFv32_CFG, 1);
+	ref_FPM_SRE_init((struct fpm_sre *)(void *)(f->rxs + V17RXS_SRE),
+			 &SREv32_CFG, 1);
+	ref_FPM_FSE_init((struct fpm_fse *)(void *)(f->rxs + V17RXS_FSE),
+			 &dem_fse_cfg, 1);
+
+	put_ptr(f->ctl, V17RXC_MTD, ref_FPM_MTD_create(0, &ref_MTDv22_CFG));
+	put_ptr(f->ctl, V17RXC_TONE, ref_FPM_TONE_create(0, 0));
+
+	put_s(f->ctl, V17RXC_SHORT_0018, u->gate_18);
+	put_i(f->rxs, V17RXS_INT_0004, dem_enable[u->enables][0]);
+	put_i(f->rxs, V17RXS_INT_0008, dem_enable[u->enables][1]);
+	put_i(f->rxs, V17RXS_INT_0010, dem_enable[u->enables][2]);
+}
+
+static void
+dem_free(struct fix *f)
+{
+	ref_FPM_MRF_free((struct fpm_mrf *)(void *)(f->rxs + V17RXS_MRF));
+	ref_FPM_SRE_free((struct fpm_sre *)(void *)(f->rxs + V17RXS_SRE));
+	ref_FPM_FSE_free((struct fpm_fse *)(void *)(f->rxs + V17RXS_FSE));
+	ref_FPM_MTD_delete((struct fpm_mtd *)get_ptr(f->ctl, V17RXC_MTD));
+	ref_FPM_TONE_delete(get_ptr(f->ctl, V17RXC_TONE));
+}
+
+/* The named wrong readings, one changed thing each. */
+enum dem_defect {
+	M_NONE = 0,
+	M_HALVE,		/* the pre-pass copies with a >> 1.  F9103  */
+	M_KILL_INPUT,		/* the notch applied to `in`, not the copy  */
+	M_DETECT_INPUT,		/* the detector fed `in`, not the copy      */
+	M_NO_ABANDON,		/* a tone detection does not abandon        */
+	M_GATE_INVERTED,	/* the pre-pass runs when the gate is set   */
+	M_SRE_FROM_INPUT,	/* the recoverer fed `in`                   */
+	M_FSE_FROM_MRF,		/* the equaliser fed the resampler's buffer */
+	M_FSE_COUNT,		/* the equaliser given the resampler's count */
+	M_ADAPT_SOURCE,		/* sre.adapt taken from the wrong enable    */
+	M_TILT_NOT_CLEARED,	/* fse.tilt_on left alone                   */
+	M_LMS_SOURCE,		/* fse.lms_on and fse.pll_on transposed     */
+	M_SIGNAL_ONE,		/* the carrier bit forced to 1              */
+	M_MAX
+};
+
+/* The object's own sequence, with one reading changed. */
+static unsigned short
+drive_demod(struct fix *f, short *in, unsigned short *out, unsigned short count,
+	    enum dem_defect d)
+{
+	unsigned char *rxs = f->rxs;
+	unsigned char *ctl = f->ctl;
+	int signal;
+	unsigned short n;
+	int gate = (get_s(ctl, V17RXC_SHORT_0018) == 0);
+
+	ref_FPM_AGC_agc((struct fpm_agc *)(void *)(rxs + V17RXS_AGC), in,
+			count);
+	signal = ((struct fpm_agc *)(void *)(rxs + V17RXS_AGC))->signal;
+	if (d == M_SIGNAL_ONE)
+		signal = 1;
+
+	if (d == M_GATE_INVERTED)
+		gate = !gate;
+
+	if (gate) {
+		short *buf = (short *)get_ptr(ctl, V17RXC_SCRATCH);
+		unsigned short i;
+
+		for (i = 0; i < count; i++) {
+			if (d == M_HALVE)
+				buf[i] = (short)(in[i] >> 1);
+			else
+				buf[i] = in[i];
+		}
+
+		ref_FPM_TONE_kill(get_ptr(ctl, V17RXC_TONE),
+				  (d == M_KILL_INPUT) ? in : buf,
+				  (short)count);
+
+		if (ref_FPM_MTD_detect((struct fpm_mtd *)
+					get_ptr(ctl, V17RXC_MTD),
+				       (d == M_DETECT_INPUT) ? in : buf,
+				       (short)count) != 0
+		    && d != M_NO_ABANDON)
+			return 0;
+	}
+
+	n = (unsigned short)ref_FPM_MRF_filter(
+			(struct fpm_mrf *)(void *)(rxs + V17RXS_MRF), in,
+			(short *)get_ptr(rxs, V17RXS_BUF_MRF), (short)count);
+
+	put_i(rxs, V17RXS_SRE_ADAPT,
+	      signal & get_i(rxs, (d == M_ADAPT_SOURCE) ? V17RXS_INT_0008
+							: V17RXS_INT_0004));
+
+	n = ref_FPM_SRE_recover((struct fpm_sre *)(void *)(rxs + V17RXS_SRE),
+				(d == M_SRE_FROM_INPUT)
+					? (const short *)in
+					: (const short *)get_ptr(rxs,
+							V17RXS_BUF_MRF),
+				(short *)get_ptr(rxs, V17RXS_BUF_SRE),
+				(short)n);
+
+	if (d != M_TILT_NOT_CLEARED)
+		put_i(rxs, V17RXS_FSE_TILT_ON, 0);
+	put_i(rxs, V17RXS_FSE_PLL_ON,
+	      signal & get_i(rxs, (d == M_LMS_SOURCE) ? V17RXS_INT_0010
+						      : V17RXS_INT_0008));
+	put_i(rxs, V17RXS_FSE_LMS_ON,
+	      signal & get_i(rxs, (d == M_LMS_SOURCE) ? V17RXS_INT_0008
+						      : V17RXS_INT_0010));
+
+	return ref_FPM_FSE_receive(
+			(struct fpm_fse *)(void *)(rxs + V17RXS_FSE),
+			(const short *)get_ptr(rxs,
+				(d == M_FSE_FROM_MRF) ? V17RXS_BUF_MRF
+						      : V17RXS_BUF_SRE),
+			out, (d == M_FSE_COUNT) ? count : n);
+}
+
+static long dem_sep[M_MAX], dem_paths[6], dem_agc_checked;
+
+/*
+ * A trial: DEM_BLOCKS consecutive blocks through both sides, compared after
+ * every one.  The defect replays the WHOLE sequence from a fresh fixture, so a
+ * reading that only diverges once the state has built up is still caught.
+ */
+static void
+run_demod_one(unsigned seed, const struct dem_setup *u, unsigned short count,
+	      long where)
+{
+	unsigned long marka = 0, markc;
+	int blk, d, i;
+
+	dem_build(&ma, seed, u, dem_mrf_a, dem_sre_a, dem_det_a);
+	dem_build(&mb, seed, u, dem_mrf_b, dem_sre_b, dem_det_b);
+
+	tone_phase = 0.0;
+	for (blk = 0; blk < DEM_BLOCKS; blk++) {
+		unsigned short ra, rb;
+		long id = where * 100 + blk;
+
+		fill_tone((int)count, dtones[u->tone].hz, dtones[u->tone].amp);
+		for (i = 0; i < DEM_BUF; i++)
+			dem_in[i] = (i < (int)count) ? tone_in[i] : 0;
+
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_out_a[i] = dem_out_b[i] = 0xbeef;
+			dem_work[i] = dem_in[i];
+		}
+		ra = ref_DemodDataV17(ma.robj, dem_work, dem_out_a, count);
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = dem_in[i];
+		rb = DemodDataV17(mb.robj, dem_work, dem_out_b, count);
+
+		diff_eq_int("at %ld: DemodDataV17 returned", (long)rb,
+			    (long)ra, id);
+		diff_eq_int("at %ld: the return fits the buffer",
+			    ra < DEM_BUF, 1, id);
+		if (ra >= DEM_BUF)
+			return;
+		for (i = 0; i < (int)ra; i++)
+			diff_eq_int("word %ld", (long)dem_out_b[i],
+				    (long)dem_out_a[i], i);
+		diff_eq_int("at %ld: nothing past the returned count",
+			    dem_out_a[ra] == 0xbeef, 1, id);
+		diff_eq_int("at %ld: first differing receive-instance byte",
+			    robj_diff(&mb, &ma), -1, id);
+		diff_eq_int("at %ld: first differing control-block byte",
+			    ctl_diff_demod(&mb, &ma), -1, id);
+		diff_eq_int("at %ld: first differing demodulator-state byte",
+			    rxs_diff_demod(&mb, &ma), -1, id);
+		diff_eq_int("at %ld: the resampler's buffer",
+			    first_diff((const unsigned char *)dem_mrf_b,
+				       (const unsigned char *)dem_mrf_a,
+				       DEM_BUF * 2), -1, id);
+		diff_eq_int("at %ld: the recoverer's buffer",
+			    first_diff((const unsigned char *)dem_sre_b,
+				       (const unsigned char *)dem_sre_a,
+				       DEM_BUF * 2), -1, id);
+		diff_eq_int("at %ld: the pre-pass buffer",
+			    first_diff((const unsigned char *)dem_det_b,
+				       (const unsigned char *)dem_det_a,
+				       DEM_BUF * 2), -1, id);
+
+		/*
+		 * THE MARK CARRIES THE FLAG WORDS AS WELL AS THE OUTPUT.  On a
+		 * single block `sre.adapt`, `fse.pll_on`, `fse.lms_on` and
+		 * `fse.tilt_on` do not reach the samples at all, so four named
+		 * wrong readings about them separate nothing unless the mark
+		 * folds them in -- which is what `t_v29fax.c` measured.
+		 */
+		marka = marka * 1000003u + ra;
+		for (i = 0; i < (int)ra; i++)
+			marka = marka * 31u + dem_out_a[i];
+		marka = marka * 131u
+			+ (unsigned long)get_i(ma.rxs, V17RXS_SRE_ADAPT);
+		marka = marka * 131u
+			+ (unsigned long)get_i(ma.rxs, V17RXS_FSE_PLL_ON);
+		marka = marka * 131u
+			+ (unsigned long)get_i(ma.rxs, V17RXS_FSE_LMS_ON);
+		marka = marka * 131u
+			+ (unsigned long)get_i(ma.rxs, V17RXS_FSE_TILT_ON);
+
+		if (ra == 0)
+			dem_paths[0]++;
+		else
+			dem_paths[1]++;
+		if (u->gate_18 == 0)
+			dem_paths[2]++;
+		else
+			dem_paths[3]++;
+		if (get_i(ma.rxs, V17RXS_FSE_LMS_ON) != 0)
+			dem_paths[4]++;
+		if (get_i(ma.rxs, V17RXS_SRE_ADAPT) != 0)
+			dem_paths[5]++;
+	}
+
+	dem_free(&ma);
+	dem_free(&mb);
+
+	for (d = 1; d < (int)M_MAX; d++) {
+		dem_build(&mc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+		markc = 0;
+		tone_phase = 0.0;
+		for (blk = 0; blk < DEM_BLOCKS; blk++) {
+			unsigned short rc;
+
+			fill_tone((int)count, dtones[u->tone].hz,
+				  dtones[u->tone].amp);
+			for (i = 0; i < DEM_BUF; i++) {
+				dem_out_b[i] = 0xbeef;
+				dem_work[i] = (i < (int)count) ? tone_in[i] : 0;
+			}
+			rc = drive_demod(&mc, dem_work, dem_out_b, count,
+					 (enum dem_defect)d);
+			markc = markc * 1000003u + rc;
+			if (rc < DEM_BUF)
+				for (i = 0; i < (int)rc; i++)
+					markc = markc * 31u + dem_out_b[i];
+			markc = markc * 131u
+				+ (unsigned long)get_i(mc.rxs,
+						V17RXS_SRE_ADAPT);
+			markc = markc * 131u
+				+ (unsigned long)get_i(mc.rxs,
+						V17RXS_FSE_PLL_ON);
+			markc = markc * 131u
+				+ (unsigned long)get_i(mc.rxs,
+						V17RXS_FSE_LMS_ON);
+			markc = markc * 131u
+				+ (unsigned long)get_i(mc.rxs,
+						V17RXS_FSE_TILT_ON);
+		}
+		if (markc != marka)
+			dem_sep[d]++;
+		dem_free(&mc);
+	}
+}
+
+/*
+ * THE AGC'S `%eax` IS `agc->signal`, MEASURED AND NOT BELIEVED.
+ *
+ * `src/fax/v17.c` reads the field where the object uses the register
+ * `FPM_AGC_agc` happens to leave that store in.  That is deviation D1091, and
+ * it is only correct while the identity holds -- so it is asserted here, over
+ * a live AGC driven with the same stimuli the demodulator sees, by calling the
+ * blob's `void` function through a pointer that returns `int`.
+ *
+ * This is NOT `t_v29fax.c`'s withdrawn `run_agc_identity` (F9001): that one
+ * built its own AGC in a local and segfaulted under the period compiler for
+ * reasons nobody established.  This runs inside the demodulator fixture, on
+ * the AGC the demodulator itself uses, and takes the reading the demodulator
+ * takes.
+ */
+typedef int (*agc_int_fn)(struct fpm_agc *agc, short *samples,
+			  unsigned short count);
+
+static void
+dem_agc_identity(unsigned seed, const struct dem_setup *u, unsigned short count)
+{
+	agc_int_fn f = (agc_int_fn)ref_FPM_AGC_agc;
+	struct fpm_agc *agc;
+	int blk, i, r;
+
+	dem_build(&mc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+	agc = (struct fpm_agc *)(void *)(mc.rxs + V17RXS_AGC);
+
+	tone_phase = 0.0;
+	for (blk = 0; blk < DEM_BLOCKS; blk++) {
+		fill_tone((int)count, dtones[u->tone].hz, dtones[u->tone].amp);
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = (i < (int)count) ? tone_in[i] : 0;
+		r = f(agc, dem_work, count);
+		diff_eq_int("block %ld: FPM_AGC_agc's %%eax is agc->signal",
+			    (long)r, (long)agc->signal, blk);
+		dem_agc_checked++;
+	}
+	dem_free(&mc);
+}
+
+static int
+run_demod(void)
+{
+	static const unsigned short counts[] = { 32, 160, 512 };
+	int gate, tone, enables, c;
+	long where = 0;
+
+	dem_tables();
+	diff_begin("DemodDataV17");
+
+	for (gate = 0; gate < 2; gate++)
+	for (tone = 0; tone < NDTONE; tone++)
+	for (enables = 0; enables < 2; enables++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		struct dem_setup u;
+
+		u.gate_18 = (short)gate;
+		u.tone = tone;
+		u.enables = enables;
+		run_demod_one(spread(0x0de70000u, where), &u, counts[c],
+			      where);
+		if (where < 4)
+			dem_agc_identity(spread(0x0a9c0000u, where), &u,
+					 counts[c]);
+		where++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
 {
 	int rc = 0;
+	int i;
+
+	harness_alloc_reset();
 
 	rc |= run_seed();
 	rc |= run_setenc();
 	rc |= run_txstatus();
 	rc |= run_rxm();
+	rc |= run_rxstatus();
+	rc |= run_scramble();
+	rc |= run_rxdelete();
+	rc |= run_demod();
 	rc |= run_cd();
 	rc |= run_dcd();
 	rc |= run_qd();
@@ -2051,6 +3123,40 @@ main(void)
 
 	diff_eq_int("some diagnostics were printed (%ld)", dbg_lines_seen > 0,
 		    1, dbg_lines_seen);
+
+	/*
+	 * The four new blocks, each reading its own counters.  A named wrong
+	 * reading with a zero count is a check that measured nothing, so each
+	 * is asserted rather than reported.
+	 */
+	for (i = 1; i < (int)S_MAX; i++)
+		diff_eq_int("V17RX_status wrong reading %ld separates",
+			    rxs_sep[i] > 0, 1, i);
+	diff_eq_int("V17RX_status's NULL guard was exercised (%ld)",
+		    rxs_null_sep > 0, 1, rxs_null_sep);
+	for (i = 0; i < 4; i++)
+		diff_eq_int("V17RX_status flag path %ld was reached",
+			    rxs_paths[i] > 0, 1, i);
+
+	for (i = 1; i < (int)C_MAX; i++)
+		diff_eq_int("the scrambler's wrong reading %ld separates",
+			    scr_sep[i] > 0, 1, i);
+	diff_eq_int("the scramblers moved some words (%ld)",
+		    scr_words_moved > 0, 1, scr_words_moved);
+
+	diff_eq_int("V17RX_delete probes taken (%ld)", del_probes > 0, 1,
+		    del_probes);
+	diff_eq_int("V17RX_delete released every probe (%ld of %ld)",
+		    del_released, del_probes, del_probes);
+
+	for (i = 1; i < (int)M_MAX; i++)
+		diff_eq_int("DemodDataV17 wrong reading %ld separates",
+			    dem_sep[i] > 0, 1, i);
+	for (i = 0; i < 6; i++)
+		diff_eq_int("DemodDataV17 path %ld was reached",
+			    dem_paths[i] > 0, 1, i);
+	diff_eq_int("the AGC identity was measured (%ld)",
+		    dem_agc_checked > 0, 1, dem_agc_checked);
 
 	rc |= diff_end();
 	return rc;

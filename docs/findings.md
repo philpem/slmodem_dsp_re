@@ -103949,3 +103949,176 @@ fine.
 
 Shown to fire: a detached worktree at `c1ca61af` reports "140 commit(s)
 behind"; the up-to-date tree is silent.  (2026-08-31)
+
+### F9100. The fax status block's +0x08 is the SNR, and `V17RX_status` is what settles it
+
+`struct v17_status`'s +0x08 was `short_08` because the only V.17 writer known
+was `V17TX_status`, which stores a constant zero there. `V17RX_status` stores
+`GetSNRV17`'s return and nothing else.
+
+`GetSNRV17` is the author's own function name for `13 - V17RXS_DEC_ERROR`, and
+`V17RXS_DEC_ERROR` is itself named from two of the author's format strings
+("V17 Decoder error too big... no carrier", "V17 Dec error too big...
+unreliable data"). So the value that lands in +0x08 is a signal-to-noise
+estimate by the author's own words, twice removed and no further.
+
+`v32fpstat.h` independently calls the same offset `snr`, derived from
+`V32FP_status`'s disassembly with nothing to do with V.17. Two modules, two
+derivations, one meaning -- which is the shape v17fax.h's own note demanded
+before any of the five contested offsets could be named.
+
+`v22status.h` calls +0x08 `short_08` and glosses it "written 0, read by
+nothing", so it does not DISAGREE; it simply has no evidence. +0x06 stays
+neutral for the opposite reason: `v22_status` calls it `quality` and describes
+a number counting DOWN from 2048, and `V17RX_status` writes a 0 or a 1 there,
+which does not fit that reading. One offset moved, one did not, and the
+difference is which way the third module's evidence points.  (2026-09-01)
+
+### F9101. `V17RX_status`'s flags byte is four stores and the caller's byte does not survive any of them
+
+The object builds `status + 0x14` over four `mov %al` stores separated by
+three loads of `V17RX_OBJ_STATE`. It looks like a read-modify-write chain that
+preserves what the caller had. It does not.
+
+Reading it out with `b` for the incoming byte and `x1`, `x3`, `x5` for the
+three state bits:
+
+    store 1   b & 0xfe
+    store 2   ((b & 0xfc) | x1) & 0xfb            =  (b & 0xf8) | x1
+    store 3   (((b & 0xf8) & 0xf3) | x3) | 0x10   =  (b & 0xf0) | x1 | x3 | 0x10
+    store 4   ((that & 0xdf) | x5 | 0x40) & 0x7f
+
+and the last line leaves `(b & 0x50) | x1 | x3 | x5 | 0x10 | 0x40`. Bits 4 and
+6 are the only ones of `b` that reach it, and both are forced set by the two
+constants anyway -- so the result is `0x50 | x1 | x3 | x5` and depends on the
+caller's byte not at all.
+
+**Why that matters and is not trivia.** It is what makes the three
+intermediate stores unobservable except to a caller whose two arguments
+overlap, which is deviation D1092; and it is what let the test assert an exact
+value for the byte instead of a relation to what was there before. The four
+stores are still written as four statements, because each is separated from
+the next by a load through a character type that may alias the status block and
+a source that assigned once could not have produced them.
+
+The neighbouring `status + 0x15` is the opposite case and is left alone here:
+one bit is cleared and the other seven are genuinely preserved.  (2026-09-01)
+
+### F9102. Four "neutral" offsets in the V.17 receiver state are fields of two modelled structs, and F8854's tiling is the proof
+
+`v17fax.h` carried `V17RXS_INT_0128`, `_01B4`, `_01B8` and `_01BC` as modelled
+but unnamed ints, on the ground that `DemodDataV17`'s plumbing was established
+and their meaning was not. The tiling F8854 already measured settles them
+without any new evidence:
+
+    0x128 - V17RXS_SRE (0xe0)  = 0x48   struct fpm_sre::adapt
+    0x1b4 - V17RXS_FSE (0x170) = 0x44   struct fpm_fse::pll_on
+    0x1b8 - V17RXS_FSE         = 0x48   struct fpm_fse::tilt_on
+    0x1bc - V17RXS_FSE         = 0x4c   struct fpm_fse::lms_on
+
+`fpm_sre.h` and `fpm_fse.h` model all four from their own disassembly and
+describe every one of them as the CALLER's enable for a stage of the loop.
+`DemodDataV17` is that caller, and what it writes them with is
+`agc->signal & <an enable word>` -- exactly an enable. So these were never
+unnamed fields of an unmodelled block; they were named fields of a modelled one
+reached the long way round, and `src/fax/v17.c` now reaches them as members.
+
+`src/fax/v29.c` had already done this for the same four fields of the V.29
+receiver, which is why the V.17 spelling looked wrong beside it rather than
+merely unfinished. The offsets are kept as `V17RXS_SRE_ADAPT`,
+`V17RXS_FSE_PLL_ON`, `V17RXS_FSE_TILT_ON` and `V17RXS_FSE_LMS_ON` because the
+test has to find the same bytes without the struct.  (2026-09-01)
+
+### F9103. `DemodDataV17`'s pre-pass copies; `DemodDataV29`'s HALVES. The two functions are otherwise the same shape
+
+The two demodulators are the same six calls in the same order with the same
+abandon-on-detect, and the temptation is to write one from the other. The
+copy loop is where that fails.
+
+`DemodDataV29`, 0x0a6040:
+
+    a6040  0f bf 5c 55 00   movswl 0x0(%ebp,%edx,2),%ebx
+    a6045  8d 42 01         lea    0x1(%edx),%eax
+    a6048  d1 fb            sar    $1,%ebx
+    a604a  66 89 1c 51      mov    %bx,(%ecx,%edx,2)
+
+`DemodDataV17`, 0x0a5100:
+
+    a5100  0f b7 5c 55 00   movzwl 0x0(%ebp,%edx,2),%ebx
+    a5105  8d 42 01         lea    0x1(%edx),%eax
+    a5108  66 89 1c 51      mov    %bx,(%ecx,%edx,2)
+
+Same three-instruction shape, same index arithmetic, one `sar` present in the
+one and absent in the other.
+
+No shift, and the load's extension is the other one -- which is 614's free case
+here, since only `%bx` is stored, and follows the declared type of the local
+rather than the field's.
+
+**It is not observable in the pre-pass's own verdict most of the time**, which
+is why it is written down. The copy feeds `FPM_TONE_kill` and then
+`FPM_MTD_detect`, and halving a block scales its energy by exactly one half --
+so the detector's RATIO test between bands is unmoved and only its absolute
+`min_level` gate can see the difference. A fixture driven at one comfortable
+level would report the two readings as identical. `t_v17fax.c` names the
+halving reading `M_HALVE` and drives it over the six stimuli of `dtones[]`,
+which span three amplitudes at the ABSENT frequency, one PRESENT frequency, one
+low-amplitude in-band tone, and silence -- and the separating count is asserted
+non-zero, so if some future change left the halving invisible the test would
+say so rather than passing quietly.  (2026-09-01)
+
+### F9104. A `sete` on a pseudorandom int is never zero, so two flag-bit readings separated nothing until the fixture planted zeros
+
+`V17RX_status` turns two 32-bit state fields into single bits with `sete` --
+the bit is set when the field is ZERO. The first version of `t_v17fax.c`'s
+block for it drove those fields as `fixture()` left them, which is
+pseudorandom, and a pseudorandom int is non-zero on every trial.
+
+So both bits read 0 every time, and the two named wrong readings that took a
+bit from the WRONG OFFSET produced 0 as well. Their separating counts were
+zero and the checks above them were decoration, exactly as F3052's rule says.
+
+The fix is not "more trials". It is a sweep over the four combinations of the
+two fields being zero, with the neighbouring offset a wrong reading would pick
+up planted with the COMPLEMENT of whatever the right one holds -- so an offset
+wrong by four bytes reports the opposite bit rather than the same one.
+
+**The general shape, which is worth more than the instance.** A random fixture
+separates a wrong FIELD; it does not separate a wrong PREDICATE ON a field
+whose predicate is almost always false. `sete`, `setne`, `test`-against-a-mask
+and any comparison against a constant a random value never reaches are all in
+that class, and each needs its answer driven both ways by construction. F8885
+is the same lesson in its bit-0 form.  (2026-09-01)
+
+### F9105. Consecutive seeds into an xorshift make a fixed byte's bit 7 CONSTANT, and a named wrong reading reported zero because of it
+
+`t_v17fax.c`'s `fixture()` fills every block with `(unsigned char)rng_next()`
+and `rng_next` is xorshift32. That generator is LINEAR over GF(2): the byte it
+writes at a fixed offset is a fixed matrix applied to the seed, so every bit of
+that byte is a fixed XOR of the seed's bits.
+
+A sweep seeded `base + where` with `where` running 0..23 varies only the
+seed's low five bits. Any output bit whose linear form does not involve one of
+those five is then the SAME on every trial of the sweep.
+
+That is what happened. `V17RX_status`'s "0x80 not forced clear" reading is
+observable exactly when the incoming byte at `status + 0x14` has bit 7 set; the
+fixture laid down bit 7 CLEAR on all 24 trials, so the reading separated
+nothing and its count read zero. The bytes looked pseudorandom -- 0x08, 0x0f,
+0x1b, 0x1c, 0x28, ... -- and every one of them was under 0x80.
+
+**The fix is not more trials.** Twenty-four thousand consecutive seeds would
+have varied fifteen bits and left the same bit constant if its form missed
+them. `spread(base, where)` XORs in `where * 0x9e3779b9`, which puts a
+different pattern into all 32 seed bits for every `where`, and the reading then
+separates.
+
+**What generalises.** Any test that sweeps `base + i` into a linear generator
+and then asserts something about ONE BIT of ONE BYTE is exposed to this, and
+the symptom is a separating count of zero on a check that looks fine. F9104 is
+the neighbouring failure with a different cause -- a predicate a random value
+never satisfies -- and the two together are why every named reading in this
+file has its count asserted rather than reported. The three sweeps added in
+this batch use `spread`; the older ones in the file were left alone because
+their counts are non-zero and churning a green fixture measures nothing.
+(2026-09-01)

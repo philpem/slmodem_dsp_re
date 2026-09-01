@@ -103,8 +103,17 @@ struct v17_status {
 	short protocol;		/* +0x00 <- params + 0x00                    */
 	short tx_bps;		/* +0x02 <- params + 0x02; see above         */
 	short rx_bps;		/* +0x04 always 0 here                       */
-	short short_06;		/* +0x06 always 0 here                       */
-	short short_08;		/* +0x08 always 0 here                       */
+	short short_06;		/* +0x06 0 from V17TX_status; see below      */
+	/*
+	 * +0x08 IS THE SNR, AND `V17RX_status` IS WHAT ESTABLISHES IT.  It
+	 * stores `GetSNRV17`'s return here and nothing else, and `GetSNRV17`
+	 * is the author's own function name for `13 - V17RXS_DEC_ERROR`.
+	 * `v32_status` calls the same offset `snr` from its own disassembly,
+	 * so two modules agree and neither derivation used the other.  It was
+	 * `short_08` while `V17TX_status`, which writes a constant zero here,
+	 * was the only V.17 writer known.  Finding F9100.
+	 */
+	short snr;		/* +0x08 <- GetSNRV17; 0 from V17TX_status  */
 	short short_0a;		/* +0x0a always 0 here                       */
 	short short_0c;		/* +0x0c always 0 here                       */
 	short short_0e;		/* +0x0e NOT WRITTEN -- the object steps over
@@ -129,6 +138,33 @@ struct v17_status {
 
 /* The one bit `flags1` is cleared of, and which is genuinely a mask. */
 #define V17_STATUS_FLAGS1_CLEAR	0x01
+
+/*
+ * The rest of `flags`, from `V17RX_status`, which is the ONLY function in this
+ * batch that builds the whole byte rather than assigning it.
+ *
+ * NAMED BY VALUE AND NOTHING MORE, per CLAUDE.md.  What each bit indicates is
+ * NOT established: three of the six are read-modify-writes of state fields
+ * whose own meaning is unknown (`V17RXS_BYTE_001C` bit 0, and whether
+ * `V17RXS_INT_0000` and `V17RXS_INT_0010` are zero), and the other three --
+ * 0x10 set, 0x40 set, 0x80 cleared -- are unconditional constants with nothing
+ * behind them to name.  `V17_STATUS_FLAG_04` above is the one bit both this
+ * function and `V17TX_status` touch, and even there the two disagree about
+ * what it should end up as.
+ *
+ * THE WHOLE BYTE IS DETERMINISTIC AND THAT IS MEASURED, not deduced from the
+ * masks looking exhaustive: the object's chain leaves
+ * `0x50 | bit1 | bit3 | bit5`, so the caller's incoming bits 4 and 6 survive
+ * only by being re-set and every other incoming bit is overwritten.  See the
+ * derivation in `src/fax/v17.c`.  Finding F9101.
+ */
+#define V17_STATUS_FLAG_01	0x01
+#define V17_STATUS_FLAG_02	0x02
+#define V17_STATUS_FLAG_08	0x08
+#define V17_STATUS_FLAG_10	0x10
+#define V17_STATUS_FLAG_20	0x20
+#define V17_STATUS_FLAG_40	0x40
+#define V17_STATUS_FLAG_80	0x80
 
 /* ------------------------------------------------------------------------ */
 /* The TRANSMIT instance -- offsets shared with v17data.h                    */
@@ -210,6 +246,35 @@ struct v17_status {
 #define V17RX_OBJ_RESULT	0x28
 #define V17RX_OBJ_RESULT_B1	0x29
 #define V17RX_RESULT_B1_BIT1	0x02
+
+/*
+ * A second bit of the same byte, and the only OTHER thing in this batch that
+ * reads it: `V17RX_status` reports `(byte & 0x80) == 0` -- inverted -- into the
+ * status block's +0x06.  Named by value, like its neighbour; the INVERSION is
+ * the object's `sete` after a `testb`, so the field is true when the bit is
+ * CLEAR and that is not a transcription slip.
+ */
+#define V17RX_RESULT_B1_BIT7	0x80
+
+/*
+ * The two shorts `V17RX_status` copies out of the receive instance, and this
+ * is the only function that reads either.
+ *
+ * NAMED BY THEIR DESTINATION, WHICH IS CLAUDE.md's RANK 2 AND NOT USAGE
+ * INFERENCE: +0x00 lands in `struct v17_status::protocol` and +0x04 in
+ * `::rx_bps`, and both of those fields carry their names from `v22_status` and
+ * `v32_status`, each derived from its own disassembly with nothing to do with
+ * V.17.  `V17TX_status` puts the TRANSMIT rate in +0x02 and zero in +0x04;
+ * this function does the mirror image -- zero in +0x02 and a rate in +0x04 --
+ * which is exactly what a receiver-side reporter should do and is the second
+ * thing that fits.
+ *
+ * +0x04 IS ALSO WRITTEN TO THE STATUS BLOCK'S +0x12, a second time and
+ * unchanged.  That offset stays neutral: two modules disagree about it and
+ * nothing here breaks the tie.
+ */
+#define V17RX_OBJ_PROTOCOL	0x00
+#define V17RX_OBJ_RX_BPS	0x04
 
 /*
  * The receiver's two sub-blocks.  Both are POINTERS the instance holds.
@@ -304,21 +369,89 @@ struct v17_status {
 
 /*
  * Three ints ANDed with the AGC's signal flag and stored elsewhere in the
- * same block, and the three destinations.  All six are neutral: what is
- * established is the plumbing, not the meaning.
+ * same block, and the three destinations.
  *
- * `+0x1b4`, `+0x1b8` and `+0x1bc` sit immediately above `V17RXS_EPOCH`, and
- * `+0x128` immediately above `V17RXS_0120`, which is consistent with two
- * small int arrays -- but nothing read here proves either is one, so they are
- * spelled as separate fields.
+ * THE THREE SOURCES ARE NEUTRAL: what is established is the plumbing, not the
+ * meaning.  They sit immediately above `V17RXS_INT_0000`, which is consistent
+ * with a small int array -- but nothing read here proves it is one, so they
+ * are spelled as separate fields.
+ *
+ * THE FOUR DESTINATIONS ARE NOT NEUTRAL ANY MORE, and the tiling in F8854 is
+ * why.  `V17RXS_SRE` is 0xe0 and `V17RXS_FSE` is 0x170, so
+ *
+ *     0x128 - 0xe0  = 0x48   struct fpm_sre::adapt
+ *     0x1b4 - 0x170 = 0x44   struct fpm_fse::pll_on
+ *     0x1b8 - 0x170 = 0x48   struct fpm_fse::tilt_on
+ *     0x1bc - 0x170 = 0x4c   struct fpm_fse::lms_on
+ *
+ * -- four fields of two structs `fpm_sre.h` and `fpm_fse.h` model
+ * independently, all four of which those headers describe as the CALLER's
+ * enable for a stage of the loop.  `DemodDataV17` is that caller and this is
+ * what it writes them with, so `src/fax/v17.c` reaches them as struct members
+ * and not through these offsets.  The offsets stay for the test, which has to
+ * find the same bytes without the struct.  Finding F9102.
  */
 #define V17RXS_INT_0004		0x04
 #define V17RXS_INT_0008		0x08
 #define V17RXS_INT_0010		0x10
-#define V17RXS_INT_0128		0x128
-#define V17RXS_INT_01B4		0x1b4
-#define V17RXS_INT_01B8		0x1b8
-#define V17RXS_INT_01BC		0x1bc
+#define V17RXS_SRE_ADAPT	0x128	/* struct fpm_sre + 0x48             */
+#define V17RXS_FSE_PLL_ON	0x1b4	/* struct fpm_fse + 0x44             */
+#define V17RXS_FSE_TILT_ON	0x1b8	/* struct fpm_fse + 0x48             */
+#define V17RXS_FSE_LMS_ON	0x1bc	/* struct fpm_fse + 0x4c             */
+
+/*
+ * The three state fields `V17RX_status` reports, and nothing else in this
+ * batch touches any of them.  All three are NEUTRAL -- the function turns each
+ * into one bit of a flags byte whose bits are themselves unnamed, so nothing
+ * establishes what any of them indicates.
+ *
+ * The two ints are reported INVERTED (`sete` on a 32-bit test), the byte is
+ * reported straight and only its bit 0 is read.
+ */
+#define V17RXS_INT_0000		0x00
+#define V17RXS_BYTE_001C	0x1c
+#define V17RXS_001C_BIT0	0x01
+
+/*
+ * Two more pointers the demodulator state owns, both from `V17RX_delete` and
+ * both reached by nothing else read here.
+ *
+ * `V17RXS_SGD` is `struct sgd *`, TYPED BY ITS CALLEE -- it is `SGD_delete`'s
+ * only argument, which is CLAUDE.md's rank 2.  `V17RXS_PTR_0030` goes to
+ * `sysdep_free` and so is neutral in every way except that it is a pointer the
+ * state owns; `sysdep_free` types nothing.
+ */
+#define V17RXS_SGD		0x2c
+#define V17RXS_PTR_0030		0x30
+
+/*
+ * The descrambler, `DescrambleDataV17`'s only subject.
+ *
+ * `struct fpm_sdm *`, typed by its callee: the function adds 0x4f8c to the
+ * state pointer and tail-jumps to `SDM_descrambler`, whose first argument is
+ * that type.
+ *
+ * AND IT TILES, WHICH IS A SECOND CONFIRMATION OF THE OFFSET.
+ * `sizeof(struct fpm_sdm)` is 0x18 -- from `fpm_sdm.h`, derived from the SDM
+ * functions and nothing to do with V.17 -- and 0x4f8c + 0x18 is 0x4fa4, which
+ * is `V17RXS_BUF_MRF` exactly.  The equaliser ends at 0x170 + 0x4e18 = 0x4f88,
+ * so the four bytes at 0x4f88 are the only gap in the whole tail and they are
+ * BELOW this object, not above it.
+ *
+ * THE SCRAMBLER IS NOT HERE.  `ScrambleDataV17` reaches `V17FP_SDM` in the
+ * TRANSMITTER's private block instead, which is the two-instances split of
+ * F8850 showing up a third time.
+ */
+#define V17RXS_SDM		0x4f8c
+
+/*
+ * The recoverer's output bound, from the object's own `cmp $0xa4` / `jbe`, and
+ * the count `DemodDataV17` reports through the author's own
+ * "ERROR: SRE buffer violation!(%d)" when it is EXCEEDED.  Not a buffer size
+ * this batch can confirm -- `V17RX_create` is not reconstructed -- only the
+ * number the object compares against.
+ */
+#define V17RXS_SRE_MAX		0xa4
 
 /*
  * The four FPM objects the receive chain runs, every one typed by the
@@ -512,6 +645,93 @@ typedef short (*v17rx_process_fn)(void *modem, short *in, short *out,
  * `V17RX_RESULT_B1_BIT1` in the word it will later return.
  */
 int V17RX_modem(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * Tear the receive instance down.
+ *
+ * FIFTEEN RELEASES IN ONE FUNCTION, and the order is the object's: the
+ * demodulator state's own sub-objects first (an `SGD`, a pointer at
+ * `V17RXS_PTR_0030`, the equaliser, the recoverer, the resampler, the two
+ * chained buffers and then the state block itself), then the control block's
+ * (both tone detectors, the notch, both scratch buffers and then the control
+ * block), and the instance last as a sibling `jmp`.
+ *
+ * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED.  The object
+ * plants one before `FPM_FSE_free`, `FPM_SRE_free` and `FPM_MRF_free`, all
+ * three of which take a single argument and none of which reads a frame slot
+ * past the first.  `V29RX_delete` and `B103FP_delete` carry the identical
+ * pattern for the identical reason -- finding F8876 -- so there is nothing to
+ * reproduce.
+ */
+void V17RX_delete(void *modem);
+
+/*
+ * Fill a status block from the RECEIVE instance, or report that there was
+ * nothing to fill.
+ *
+ * The same NULL guard and the same return convention as `V17TX_status`, and
+ * the same block -- but a different write set and a different second half.
+ * It writes +0x00, +0x02, +0x04, +0x06, +0x08, +0x0a, +0x0e, +0x10, +0x12,
+ * +0x14 and +0x15, and leaves +0x0c, +0x16 and +0x18 alone; `V17TX_status`
+ * writes +0x0c and +0x18 and skips +0x0e.  The two agree on skipping +0x16,
+ * which is the field `v32_status` itself annotates "not written", so a third
+ * derivation lands on the same gap.
+ *
+ * WHERE `V17TX_status` ASSIGNS `flags`, THIS BUILDS IT, one bit at a time,
+ * over four stores.  Each store is separated from the next by a load of
+ * `V17RX_OBJ_STATE` that may alias it, which is why the object emits four
+ * rather than one -- see the derivation in `src/fax/v17.c`.  The result is
+ * still deterministic, so the intermediate stores are observable only through
+ * an aliasing caller and this batch does not claim them.
+ */
+int V17RX_status(void *modem, struct v17_status *status);
+
+/*
+ * Scramble `count` words in place, through the TRANSMITTER's scrambler.
+ *
+ * A two-instruction adapter and a tail `jmp` to `SDM_scrambler`: it replaces
+ * its own first argument with `V17TX_OBJ_FP` + `V17FP_SDM` and re-writes its
+ * third with the same value zero-extended, then falls into the callee.  The
+ * data pointer is passed straight through.
+ */
+void ScrambleDataV17(void *modem, unsigned short *data, unsigned short count);
+
+/*
+ * The mirror image, through the RECEIVER's descrambler at `V17RXS_SDM`.
+ *
+ * NOT THE SAME OBJECT AS THE SCRAMBLER'S, and not on the same instance: this
+ * one reaches `V17RX_OBJ_STATE` + 0x4f8c and the other reaches
+ * `V17TX_OBJ_FP` + 0x1c.  See F8850 for why that is two instances and not one.
+ */
+void DescrambleDataV17(void *modem, unsigned short *data,
+		       unsigned short count);
+
+/*
+ * One block through the receive chain: gain control, an optional tone
+ * pre-pass, resample, recover the symbol timing, equalise and slice.
+ *
+ * THE PRE-PASS ABANDONS THE WHOLE CALL, exactly as `DemodDataV29`'s does.
+ * While `V17RXC_SHORT_0018` is zero the input is copied into
+ * `V17RXC_SCRATCH`, a tone is notched out of the copy and the tone detector is
+ * asked whether it fired; if it did, the function returns zero without
+ * touching the resampler, the recoverer or the equaliser.  The gain control
+ * has already run over the CALLER's buffer by then and its effect stands.
+ *
+ * AND THE COPY DOES NOT HALVE.  `DemodDataV29`'s equivalent loop is
+ * `buf[i] = in[i] >> 1`; this one is a plain 16-bit move, `movzwl` into `%bx`
+ * and `mov %bx` out, with no shift anywhere in the block.  The two functions
+ * are otherwise the same shape, which is exactly why this is written down.
+ * Finding F9103.
+ *
+ * `signal` IS THE AGC's OWN FIELD, NOT ITS `%eax`.  The object calls
+ * `FPM_AGC_agc` -- which is `void` -- and then uses `%eax`, which holds
+ * `agc->signal` because that function's last store before its single `ret` is
+ * to that field.  This is the same site shape as `DemodDataV29`'s; F8875 and
+ * D1035 carry the argument, `t_v17fax.c` measures the identity rather than
+ * believing it, and D1091 records it for this function.
+ */
+unsigned short DemodDataV17(void *modem, short *in, unsigned short *bits,
+			    unsigned short count);
 
 /*
  * Load the scrambler's shift register.  See `V17FP_SDM`: this is
