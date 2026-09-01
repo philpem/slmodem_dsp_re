@@ -107506,3 +107506,82 @@ route. Two independent readings of the same two numbers.
 [1, 300, 60000, 0, 0, 0]: 28 bytes rather than 24, and 60000 at +0x0c rather
 than +0x08. So it is a fifth type in `faxcfg.h`'s family and not the
 transmitter's copy of the fourth. Not settled further here. (2026-09-01)
+
+## F9357. `make test` DOES allow-list and `make period` does not, and a `timeout`-killed tier looks exactly like a green one if you read the tail
+
+*2026-09-01.* Two mistakes in one commit message, both about the same run, and
+both worth a finding because each has been made before in this tree.
+
+**THE ALLOW-LIST ASYMMETRY, WHICH IS EASY TO GET BACKWARDS.** CLAUDE.md says
+"`make period` has no allow-list and is not getting one", and that sentence is
+about `period` ALONE. `make test` is the other way round: its `run-%` rule is
+`$(PYTHON) tools/gccdiverge.py $* ./$<`, so every binary in the modern tier
+goes through the register, and a binary whose only failing checks are declared
+still prints its `FAIL` line and still exits 0. A commit message here claimed
+the opposite -- that `make test` does not allow-list -- which would have made
+thirteen printed failures read as thirteen real ones.
+
+So the two tiers are:
+
+    make test    modern GCC, gccdiverge.py excuses DECLARED CHECKS
+    make period  GCC 3.4.2, no allow-list, and the tier that decides
+
+and the `FAIL` lines a modern run prints are diagnostic output, not the
+verdict. Read the EXIT CODE, and on this machine prefer `period` outright:
+the host is GCC 14 and the register was calibrated against GCC 13, which is
+`docs/remaining.md`'s own reason for gating on period alone.
+
+**AND THE RUN THAT PRODUCED THOSE LINES HAD BEEN KILLED.** It was started as
+`timeout 3000 make -j4 test`, and `timeout` returns 124 when it fires. The
+tail of the log showed ordinary `PASS` lines, the failure set was exactly the
+declared thirteen, and the count -- 4,900 -- was plausible, so it was reported
+as "green under the whole modern tier". It was a truncated run with the slow
+V.90 tests still outstanding. A re-run reached the same 4,900 and was still
+going.
+
+**That is F2400 and F3100's shape with a wall clock in place of an empty
+directory**: a measurement that stopped early, reporting a clean, plausible and
+wrong number, with nothing in the output saying it had stopped. The exit code
+was the only witness and it was in a file nobody had opened. Two habits follow
+-- never wrap a gate in a `timeout` you are then going to quote, and read the
+exit status before the log.
+
+**What actually carried the claim was a targeted sweep, not the tier.** The
+pass edited two SHARED headers, `fpm_fsd.h` and `v21fax.h`, and the question
+was whether anything downstream broke. Running the seventeen already-built
+binaries reachable from those two headers -- `t_fpm_fsd`, the five V.21 ones,
+`t_b103create`, `t_b103fp`, four V.23, `t_cid`, `t_rxcid`, `t_class1leaves`,
+`t_v34hst3mid`, `t_faxcfg`, `t_v29cfg` -- answers it directly, in seconds, and
+does not depend on a forty-minute run finishing. The narrow measurement was
+both faster and sounder than the broad one. (2026-09-01)
+
+## F9358. The CLAUDE.md in an agent's PROMPT is a session-start snapshot, and after a merge the tree's copy is the newer one
+
+*2026-09-01.* CLAUDE.md warns that a rules file "has the same shelf-life
+problem as a comment and no gate behind it", and tells the reader to check any
+COUNT it states against the tool. This pass did that, found a discrepancy, and
+reported the wrong half of it.
+
+The context injected at session start carried CLAUDE.md's gccdiverge paragraph
+reading "**seven entries today, twelve checks**". `tools/gccdiverge.py --list`
+reports EIGHT entries carrying THIRTEEN checks. The conclusion drawn was that
+CLAUDE.md had drifted and wanted a correction by whoever owns it.
+
+**The file on disk already said eight and thirteen.** Commit `6bfebf10`,
+"docs: period is the gate for the leaf wave; correct CLAUDE.md's diverge
+count", had fixed it earlier in the same session, and it is an ancestor of this
+branch's HEAD -- the branch had merged master and was measured 0 behind. So
+the tree was right, the tool was right, they agreed, and the only stale copy
+was the one in the agent's own context window.
+
+**The general rule, which the existing shelf-life paragraph does not cover.**
+A long-running agent that merges master ends up with a CLAUDE.md on disk that
+is NEWER than the CLAUDE.md in its prompt. The prompt copy is a snapshot from
+before the merge and cannot update itself. So when a rules file's claim is
+being checked -- which is the thing CLAUDE.md explicitly asks for -- the check
+must read the FILE, with `grep` or `Read`, not the paragraph in context. The
+same applies to every other file quoted into a brief.
+
+Cheap to get right and it inverts the finding: what looked like documentation
+drift was a correctly-maintained document being compared against a stale
+transcript of itself. (2026-09-01)
