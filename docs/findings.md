@@ -105955,3 +105955,722 @@ about linking and not about factoring, and `readyqueue.py` has never claimed
 otherwise. This is CLAUDE.md's "a span name is not a module name" with the
 polarity reversed: here the addresses are the evidence and the plausible module
 boundary is the trap.  (2026-09-01)
+## F9140. The V.29 receiver's tables are eighteen symbols, and the element type comes from the CONSUMER's length field and not from `st_size`
+
+*2026-09-01.* `V29RX_create` (0x9ad40, 2,127 bytes) is the largest unwritten
+V.29 symbol and it is blocked on data, not on difficulty: of the 33 unwritten
+symbols in its closure, 23 are tables. This pass wrote the eighteen it
+references DIRECTLY -- fourteen V.29-specific, three library built-ins, and the
+V.21 bank all three fax receivers share.
+
+**The method that made this cheap, and it is transferable to V.27 and V.17.**
+`V29RX_create` does not call the DSP blocks with a static configuration. It
+copies the library's built-in onto its stack with a `rep movsl` and patches the
+tables and the LENGTHS in, so every table's element count is written down twice
+in the object: once as `st_size` and once as the length field the constructor
+stores beside the pointer. Both readings agree for all eighteen:
+
+| table | `st_size` | the count the constructor writes |
+|---|--:|---|
+| `V29RX_FSE_IFILT` / `QFILT` | 98 | `fse.taps` = 0x31 = 49 |
+| `V29RX_CRR_TABLE` | 144 | `fse.clk_mod` = 0x48 = 72 |
+| `V29RX_MRF_FILT` | 540 | `mrf.taps` = 0x10e = 270 |
+| `V29RX_SRE_FILT` | 362 | `sre.coeffs` = 0xb4 = 180, and `proto` holds one more |
+| `V29RX_XCLOCK` / `YCLOCK` | 6 | `sre.clock_len` = 3 |
+| `V29RX_XB_COFFS` | 22 | `FPM_SRE_DISC` = 11 |
+| `V29RX_SRE_PLLK1` / `K2` | 6 | `FPM_SRE_MODES` = 3 |
+| `V29RX_FSE_PLLK1` / `K2` | 6 | `fpm_fse_cfg`'s three gains |
+| `V29_MTD_COEFF` | 20 | `mtd.tones` = 2, five shorts a section |
+
+A byte count alone does not separate `short[49]` from `int[24]` and two spare
+bytes, and wave 1's SGD failure was a layout error rather than an arithmetic
+one, so the second reading is not a nicety. Every stride here is 2.
+
+**The relocation sweep is the other half and it was run on every one.**
+`relocscan.py --range` answers "who points AT this symbol"; the question a
+table poses is the opposite one, "what pointers does this symbol CONTAIN", and
+it is answered by taking the relocations whose offset falls inside the symbol's
+own byte range. Shown firing on `AGCb103_CFG` first -- two hits at +0x0c and
++0x10, which is what `src/pump/b103/b103_agc_cfg.c` already says is there --
+before any clean answer elsewhere was believed. Two of the eighteen contain
+pointers: `AGCv29_CFG` at +0x0c/+0x10, and `FPM_MTD_CFG` at +0x00. The other
+sixteen contain none, and `tabdump.py` renders the three addends as -19816,
+-19820 and -32324, every one of them a plausible Q15 coefficient.
+
+**What is left blocking `V29RX_create` after this pass is TWO TEXT SYMBOLS**,
+`RxHdxStartV29` (105 bytes) and `V29RX_epoch_det` (413), both of which belong
+to `src/fax/v29.c`. Its data closure is empty. (2026-09-01)
+
+## F9141. `V29RX_CRR_TABLE` is `round(i * 32768 / 72)`, and the arithmetic closes on V.29's own 1700 Hz carrier
+
+*2026-09-01.* All 72 entries of `V29RX_CRR_TABLE` satisfy
+`t[i] == round(i * 32768 / 72)`, checked as `(i * 65536 + 72) / 144` in
+integers over the whole table by `t_v29cfg.c`. It is one full turn of phase in
+Q16 divided into 72 steps.
+
+That matters beyond being a tidy fact, because it is what fixes the ELEMENT
+TYPE independently of the byte count. `V29RX_create` installs it as
+`fpm_fse_cfg::clk` with `clk_mod = 72` and `clk_inc = 17`, and the receiver
+runs at three samples per symbol at 2400 baud, which is 7200 Hz. Then
+
+    7200 Hz * 17 / 72 = 1700 Hz
+
+which is V.29's carrier frequency as the Recommendation defines it. A reading
+that made this table anything but 72 shorts of Q16 phase would not produce that
+number. The same closure holds for the resampler beside it: 9 branches,
+decimation 10, 270 taps is 8000 -> 7200 Hz at 30 taps a branch.
+
+Recorded as EVIDENCE FOR A TYPE, not as a generator. `docs/fastpass.md` defers
+coefficient derivations to the 8 kHz retarget and a byte-exact copy is
+byte-exact; what a byte copy cannot give is the stride, and this is where the
+stride came from. (2026-09-01)
+
+## F9142. `fpm_sre.h` said the built-in `settle` is 60, and the bytes say 48 -- the 60 is `coeffs`, six bytes further on
+
+*2026-09-01.* `struct fpm_sre_cfg`'s field comments in `include/dsplib/fpm_sre.h`
+quote the built-in instance's values, and `settle` was annotated `+0x06 60`.
+`FPM_SRE_CFG` at .rodata 0xc4e0 reads `4, 1, 24, 48, 1365, 16384, 60, ...`, so
++0x06 is 48 and the 60 is `coeffs` at +0x0c.
+
+Nothing depended on it -- no caller reconstructed today reads `settle` out of
+the built-in, and every one of them patches the config anyway -- which is
+precisely why it survived. It was written when `FPM_SRE_CFG` itself was
+unwritten, so there was no definition anywhere in `src/` for it to disagree
+with, and a comment has no gate behind it. Corrected in the header, and the
+value is now also asserted against `ref_FPM_SRE_CFG` on every run.
+
+This is F6100 and F6103 a third time: a comment stating a number the bytes do
+not hold, discovered only when something finally had to write the number down
+in code. The rule that catches it is the one CLAUDE.md states for its own
+paragraphs -- when a comment states a COUNT or a VALUE, check it against the
+tool before repeating it. (2026-09-01)
+
+## F9143. `FPM_MTD_CFG` was never written; `FPM_MTD_CFG_data` is a stub of it with a NULL `coeff`, and the difference is reachable
+
+*2026-09-01.* `src/dsp/fpm_mtd_cfg.c` has carried
+`const struct fpm_mtd_cfg FPM_MTD_CFG_data` since the Bell 103 work, with
+`.coeff = 0` and a comment saying the pointer target was left NULL because
+"Bell 103 never uses this default". The object's own symbol is `FPM_MTD_CFG`,
+`D` at .data 0x81b0, and it was NOT defined in `src/` at all -- the stub wears
+a different name.
+
+The reason for the stub was the link constraint (F8492): the bank it points at
+is `DEF_COEFS`, .data 0x81bc, and until something needed it there was nothing
+to write it for. The relocation sweep over `FPM_MTD_CFG`'s own twelve bytes
+finds one hit at +0x00 whose addend resolves to `DEF_COEFS`; `tabdump.py`
+renders that addend as -32324.
+
+`DEF_COEFS` is `d` -- LOCAL -- so it is file-static here, has no `ref_` alias,
+and is compared only through `FPM_MTD_CFG.coeff`. Its ten entries are all
+10000, which is not a filter; it is a placeholder bank, consistent with this
+being a default nothing configures.
+
+**The divergence is real and no test covers it.** The object's
+`FPM_MTD_create(state, NULL)` installs `DEF_COEFS`; ours installs NULL, because
+`fpm_mtd.c`'s NULL arm assigns `FPM_MTD_CFG_data`. Both tables now exist, which
+is a deviation and not a design -- D1101 -- and it is kept only because
+unifying them means editing `src/pump/b103/b103fp.c`, outside this pass's
+scope. (2026-09-01)
+
+## F9144. `AGC_DEF_ALPHA` and `AGC_DEF_BETA` are each defined SIX times in the blob, so the consumer is the only comparison available
+
+*2026-09-01.* F9058 names thirteen symbol names the blob defines twice, which
+denies them a `ref_` alias. `AGC_DEF_ALPHA` and `AGC_DEF_BETA` are two of them
+and they are worse than twice:
+
+    d 0x77bc  d 0x7810  r 0x9e10+0x1c  r 0xab10  r 0xb298  D 0x7664
+
+Six definitions of `AGC_DEF_ALPHA`, five LOCAL and one global, all four bytes.
+`AGC_DEF_BETA` is the same six. The three `r` copies are V.17's, V.27's and
+V.29's, sitting immediately after each modulation's `AGC*_CFG` in `.rodata`, so
+each fax modulation carries its own file-static pair -- exactly the shape
+`src/pump/b103/b103_agc_cfg.c` and `src/pump/v22/v22rxtab.c` already have.
+
+So V.29's pair is `static const short` in `src/fax/v29cfg.c`, there is nothing
+to compare it against BY NAME, and `t_v29cfg.c` compares it by dereferencing
+`AGCv29_CFG.alpha` and `.beta` against `ref_AGCv29_CFG`'s -- and then again
+through `FPM_AGC_init`, whose copied config carries the same two pointers.
+That is the general answer to F9058's case: where a name is ambiguous in the
+object, the consumer is the comparison, and here the consumer is also what the
+values are FOR. V.29's are `{16384, 29491}` and `{16384, 3277}`, different from
+Bell 103's and from V.22's, so a copy-paste between the three would have been
+caught by value. (2026-09-01)
+
+## F9145. What each `*RX_create` still needs, measured at this pass rather than estimated
+
+*2026-09-01.* The three fax receiver constructors are 7,538 bytes of `.text`
+behind a wall of data. Their DIRECT references were enumerated from
+`tools/dis.py` -- both `R_386_PC32` calls and `R_386_32` stored pointers, which
+is the F8492/F8493 pair -- and classified against `nm --defined-only` over the
+built object tree. After this pass:
+
+| constructor | bytes | data still missing | text still missing |
+|---|--:|--:|---|
+| `V29RX_create` | 2,127 | **0** | `RxHdxStartV29` (105), `V29RX_epoch_det` (413) |
+| `V27RX_create` | 2,210 | 30 tables | `RxHdxStartV27` (101), `V27RX_epoch_det` (303) |
+| `V17RX_create` | 3,201 | 26 tables | `RxHdxStartV17` (105), `FAX_FSE_decision_AB` (683) |
+
+The three share `FPM_FSE_CFG`, `FPM_SRE_CFG`, `FPM_MTD_CFG` and
+`V21_CHAN2_MTD_COEFF`, all four written here, so the shared blocker is gone for
+all three at once.
+
+**V.27's remaining set has a shape V.29's does not, and it is the trap this
+pass would have walked into.** Six of its "tables" are 8 bytes and live in
+`.data`: `V27RX_MRF_FILT`, `V27RX_SRE_FILT`, `V27RX_FSE_IFILT`,
+`V27RX_FSE_QFILT`, `V27RX_XB_COFFS` and `V27RX_CRR_TABLE`. Eight bytes is two
+POINTERS -- the 2400 and 4800 bit/s variants, which are the separate
+`*_2400`/`*_4800` symbols in `.rodata` -- so writing one of them requires
+writing both of its targets first, and reading it as `short[4]` would produce
+four plausible small integers. Nine of V.27's remaining names are four bytes
+and are scalars-in-`.data` selected the same way. Sweep the inner relocations
+before typing any of them. (2026-09-01)
+
+## F9146. The V.29 slicer's five tables ARE the Recommendation's constellation, scaled by 2048 -- four published numbers agreeing at once
+
+*2026-09-01.* `V29RX_decision` (0x9b8f0, 260 bytes) references five data
+symbols and nothing else unwritten, so those five are the whole of its
+blocker: `V29RX_DEC_IMAP`, `_QMAP`, `_ANGLE` and `_MAG` at 32 bytes each and
+`_PMAP` at 16.
+
+**The stride is the addressing mode, not an assumption.** Every one of the five
+is loaded as `movzwl TABLE(%reg,%reg,1)` -- the index doubled by the
+`(base,index,1)` form rather than scaled by an element size -- so the element
+is sixteen bits and the counts are 16, 16, 16, 16 and 8.
+
+**The search bound is 8 or 16 and the object computes it without a branch:**
+
+    cmp  $0x1,%ebp          ebp = the rate selector at rx+0x10
+    sbb  %esi,%esi          esi = -1 when it is zero, else 0
+    and  $0xfffffff8,%esi   esi = -8 or 0
+    lea  0x10(%esi),%ebp    ebp = 8 or 16
+
+So the slicer searches the first EIGHT points at the low rate and all sixteen
+at the high one -- three bits a symbol at 2400 baud is 7200 bit/s, four is
+9600 -- and that is why the maps are sixteen entries with the eight-point
+constellation first. Measured from the code; the layout alone would not say it.
+
+**And the values are ITU-T V.29's own.** The Recommendation gives amplitudes 3
+and 5 on the axes and sqrt(2) and 3*sqrt(2) on the diagonals. Multiply each by
+2048:
+
+    3 * 2048 = 6144        sqrt(2) * 2048 = 2896 (rounded from 2896.31)
+    5 * 2048 = 10240     3*sqrt(2) * 2048 = 8689 (rounded from 8689.94)
+
+and every entry of `_IMAP`, `_QMAP` and `_MAG` is one of those four with a
+sign. `t_v29cfg.c` reconstructs all sixteen points from the four amplitudes
+alone and asserts `_MAG` is the rounded radius `isqrt(I*I + Q*Q)`, which is
+what makes 2896 and 8689 derived rather than transcribed. `_ANGLE` is
+`k * 4096` for k in 0..7, twice -- 4096 counts per 45 degrees in a 32768-count
+turn, and the outer ring repeats the inner ring's angles because both rings sit
+at the same eight phases.
+
+`_PMAP` is indexed `(phase - prev_phase) & 7` and is the differential
+decoder's map. Asserted to be a PERMUTATION of 0..7 and not the identity: eight
+small integers is where a transcription slip hides, and a range check would not
+catch a repeat.
+
+**THE LOADS ARE `movzwl` AND THE VALUES ARE NEGATIVE, AND THAT IS NOT A
+CONTRADICTION.** Each load is followed by a subtraction and then a
+`movswl %dx,%edx` that discards the upper half, so this is F614's free case:
+`short` and `unsigned short` compile to the same bytes and behave identically.
+`short` is chosen because `_IMAP` holds -6144 and an amplitude is signed.
+Recorded as a CHOICE, not as a reading -- `extcheck.py` cannot separate these
+and F619's ruling that it needs real dataflow stands. (2026-09-01)
+
+## F9147. `V21RX_create` is 1,011 bytes blocked on EIGHT tables and on nothing else -- its one text dependency is already written
+
+*2026-09-01.* Measured while enumerating the fax receivers' data, and recorded
+rather than acted on because `src/fax/v21.c` belongs to another strand of this
+wave and a duplicate definition of one symbol fails every binary at link (the
+wave 2 defect). This is a scheduling fact for whoever owns V.21.
+
+`V21RX_create`'s direct references -- `R_386_PC32` calls and `R_386_32` stored
+pointers both, which is the F8492/F8493 pair -- classify against the built
+object tree as:
+
+    WRITTEN   FPM_AGC_init  FPM_FSD_init  FPM_MRF_init  FPM_MTD_create
+              FPM_MRF_CFG   FPM_MTD_CFG   V21_CHAN2_MTD_COEFF
+              RxHdxStartV21  (522 bytes, and the ONLY text dependency)
+
+    MISSING   AGCv21_CFG          .rodata 0x0a0e4   24   struct fpm_agc_cfg
+              FPM_FSD_CFG         .data   0x0812c   28   the library built-in
+              V21_CHAN1_MTD_COEFF .data   0x07a74   20
+              V21RX_CFG           .data   0x07ab4   24
+              V21_MRF_FILT        .rodata 0x0c000  720
+              V21RX_CHAN2_INTRP   .rodata 0x0a0a6   30
+              V21RX_CHAN1_INTRP   .rodata 0x0a0c4   30
+              V21RX_IIR_LPF       .rodata 0x0a088   30
+
+Eight tables, 906 bytes of data, and the 1,011-byte constructor falls out.
+`FPM_MTD_CFG` and `V21_CHAN2_MTD_COEFF` moved from that column to the first one
+in this pass, so two of its blockers are already gone.
+
+**Three things measured for whoever writes them.** The relocation sweep over
+each symbol's own byte range finds pointers in exactly one of the eight:
+`AGCv21_CFG` at +0x0c and +0x10. **Those two targets are NOT the file-static
+`AGC_DEF_ALPHA`/`AGC_DEF_BETA` this module family usually carries** -- they are
+`AGC_DEF_ALPHA_v21` and `AGC_DEF_BETA_v21`, .rodata 0xa100 and 0xa0fc, GLOBAL
+and uniquely named, so unlike V.17's, V.27's and V.29's they DO have a `ref_`
+alias and must be written as globals and compared by name. That is the F9144
+case inverted, and reading the family's pattern instead of the symbol table
+would have got it wrong in the safe-looking direction.
+
+`FPM_FSD_CFG` is the FSK demodulator's library built-in and belongs beside
+`FPM_FSE_CFG` and `FPM_SRE_CFG` in `src/dsp/`, not in a V.21 file.
+
+`V21RX_CFG` is 24 bytes and decodes field for field as `struct v29rx_cfg`'s
+shape -- `1` at +0x00, a bit rate of 300 at +0x04, 60000 at +0x08, then zeros
+-- so it is the fourth member of `faxcfg.c`'s family. Whether it is a fourth
+TYPE or a reuse of `struct v29rx_cfg` is not settled by the bytes; `faxcfg.h`'s
+existing argument separates the other three by SIZE and that argument does not
+reach this case. (2026-09-01)
+
+## F9170. The V.17 receiver's twenty-four tables, and every element type has two independent readings
+
+*2026-09-01.* `V17RX_create` (.text 0x96eb0, 3,201 bytes) is the largest
+unwritten fax symbol and it was blocked on data. This pass wrote the
+twenty-four tables it references directly: fourteen in `.rodata` (`R`) and ten
+in `.data` (`D`), 2,714 bytes in all.
+
+The method is F9140's, applied unchanged. `V17RX_create` copies each library
+built-in configuration onto its stack with a `rep movsl` and patches the tables
+AND the lengths in, so every count is written down twice in the object -- once
+as `st_size` and once as the length field the constructor stores beside the
+pointer. Both readings agree for all twenty-four:
+
+| table | `st_size` | the count the constructor writes |
+|---|--:|---|
+| `FSEv17_ICOFF` / `QCOFF` | 98 | `fse.taps` = 0x31 = 49, at .text 0x97446 |
+| `CRRv17_CLK` | 8 | `fse.clk_mod` = 4, at .text 0x97482 |
+| `CRRv17_PLL_K1` / `K1_S` / `K2` | 6 | `fpm_fse_cfg`'s three gains |
+| `MRFv17_COFFS` | 720 | `mrf.taps` = 0x168 = 360, at .text 0x971d5 |
+| `SREv17_COFFS` | 362 | `sre.coeffs` = 0xb4 = 180, at .text 0x972d6, and `proto` holds one more |
+| `SREv17_XB_COFFS` | 22 | `FPM_SRE_DISC` = 11 |
+| `SREv17_PLL_K1` / `K1_S` / `K2` | 6 | `FPM_SRE_MODES` = 3 |
+| `SREv17_xCLOCK` / `yCLOCK` | 6 | `sre.clock_len` = 3, at .text 0x9726f |
+| `V17_MTD_COEFF` | 20 | `mtd.tones` = 2, at .text 0x96f9c, five shorts a section |
+| `VTBv17_?MAP16T` / `32` / `64` / `128` | 34 / 66 / 130 / 258 | `vtb.nsub` 1/2/3/4, at .text 0x97ad0 / 0x97a27 / 0x97a6b / 0x975bf |
+
+Every stride here is 2. A byte count alone does not separate `short[49]` from
+`int[24]` and two spare bytes, and wave 1's SGD failure was a layout error
+rather than an arithmetic one, so the second reading is not a nicety.
+
+**The relocation sweep was run over all twenty-four and only ONE has inner
+pointers.** `relocscan.py --range` answers "who points AT this symbol"; the
+question a table poses is the opposite, "what pointers does this symbol
+CONTAIN", and it is answered by taking the relocations whose offset falls
+inside the symbol's own byte range. Shown firing on `AGCb103_CFG` first -- two
+hits at +0x0c and +0x10 (F9050) -- before any clean answer elsewhere was
+believed. `AGCv17_CFG` has those same two, reaching .rodata 0x9e2c and 0x9e28;
+the other twenty-three contain none, so V.17 does not have V.27ter's
+pointer-array trap (F9145).
+
+`t_v17cfg.c` is the five-layer test, 4,633 checks green, and it was shown to
+reject: perturbing one entry of `VTBv17_IMAP64` by one fails three separate
+layers -- the value comparison, the V.32bis identity, and the decoder driven
+over it. (2026-09-01)
+
+## F9171. `CRRv17_CLK` is four entries of `round(i * 32768 / 4)`, and the arithmetic closes on V.17's own 1800 Hz carrier
+
+*2026-09-01.* All four entries of `CRRv17_CLK` are `{0, 8192, 16384, 24576}`,
+which is `round(i * 32768 / 4)` exactly -- one full turn of phase in Q16
+divided into four steps.
+
+That matters beyond being tidy, because it is what fixes the ELEMENT TYPE
+independently of the byte count. `V17RX_create` installs it as
+`fpm_fse_cfg::clk` with `clk_mod = 4` and `clk_inc = 1`, and the receiver runs
+at three samples per symbol at 2400 baud, which is 7200 Hz. Then
+
+    7200 Hz * 1 / 4 = 1800 Hz
+
+which is V.17's carrier frequency as the Recommendation defines it. A reading
+that made this table anything but four shorts of Q16 phase would not produce
+that number.
+
+This is F9141's argument for V.29's 72-entry ramp, made again with four
+entries, and it is the same shape of evidence: the ramp is the only field in
+the configuration that carries a frequency, and it agrees with the published
+one. The resampler beside it closes the same way -- 9 branches, decimation 10,
+360 taps is 8000 -> 7200 Hz at 40 taps a branch, against V.29's 30.
+
+Recorded as EVIDENCE FOR A TYPE, not as a generator. (2026-09-01)
+
+## F9172. V.17's four trellis constellations ARE V.32bis' own, byte for byte, and each carries one spare entry the decoder cannot reach
+
+*2026-09-01.* The eight `VTBv17_?MAP*` tables have sizes 2N+2 where the
+matching `VTBv32_?MAP*` have 2N, for N = 16, 32, 64, 128. Two facts settle
+what that means, and neither is arithmetic on the size.
+
+**First, they are the same tables.** `VTBv17_IMAP16T[0..15]` is
+`VTBv32_IMAP16T[0..15]` entry for entry, and so are the other seven pairs --
+asserted in `t_v17cfg.c` rather than eyeballed, which links two table sets
+extracted in two different passes from two different addresses with no blob in
+between. `V17RX_create` also installs V.32's OWN `VTB_BOUND_*` and
+`VTB_REGION_*` symbols, unduplicated, and fills the shared `struct vtb` with
+`VTBv32_init`'s own arithmetic: `grid = 2 * nsub` and
+`mask = (1 << (nsub + 2)) - 1`, with `nsub` 1/2/3/4 for 7200/9600/12000/14400
+bit/s. So the fax receiver's trellis is V.32bis' trellis, as the
+Recommendation says, and the object duplicates only the constellation maps and
+not the region machinery.
+
+**Second, the extra entry is zero in all eight and is unreachable.**
+`VTB_decoder` indexes `imap[]`/`qmap[]` by a point index out of `bound[]`,
+which `nsub` bounds at N-1. So the DECODER fixes the count at N and the SYMBOL
+fixes it at N+1, and the arrays have to be declared N+1 or ours are two bytes
+short of the object's -- which no value comparison run over our own length
+could ever notice. That is eight live cases of the hazard layer 1 of these
+tests exists for, against V.29's one (`V29RX_SRE_FILT`).
+
+Why the author's arrays are N+1 is not recoverable from the object and is not
+claimed here. What is recorded is the size, the zero, and that nothing reads
+it. (2026-09-01)
+
+## F9173. V.17's `_S` gain arrays are not a bit rate: ONE flag selects them, and it swaps the equaliser coefficients and both settle counts at the same time
+
+*2026-09-01.* `CRRv17_PLL_K1_S` and `SREv17_PLL_K1_S` sit beside
+`CRRv17_PLL_K1` and `SREv17_PLL_K1`, and there are two K1 arrays where there is
+one K2 in each loop. The suffix is not decoded from the letter; the branch is
+read from `V17RX_create`.
+
+One flag governs all of it: the receiver object's +0x10, which the constructor
+copies from the modem's +0x14 at .text 0x9709c, which came from the caller's
+parameter block at .text 0x96f1b. It is tested twice, at .text 0x97293 for the
+timing loop and .text 0x97411 for the equaliser, and it selects:
+
+| | flag non-zero | flag zero |
+|---|---|---|
+| `fse.icoff` / `qcoff` | the CALLER's arrays, modem +0x18 / +0x1c | `FSEv17_ICOFF` / `FSEv17_QCOFF` |
+| `fse.pll_k1` | `CRRv17_PLL_K1_S` | `CRRv17_PLL_K1` |
+| `fse.train_sym` | 256 | 1500 |
+| `sre.pll_k1` | `SREv17_PLL_K1_S` | `SREv17_PLL_K1` |
+| `sre.settle` | 48 | 85 |
+
+So the `_S` arrays are the ones used when the caller hands the receiver a
+pre-loaded equaliser instead of a cold one, the integral gains are shared
+between the two cases -- which is why there is one `*_PLL_K2` each -- and the
+carrier loop's proportional gain differs in gear 0 alone, 602 against 10347, a
+factor of 17.
+
+**What the letter STANDS for is not written anywhere in the object and is not
+asserted.** The mechanism above is; that is what the header and
+`src/fax/v17cfg.c` record, and `t_v17cfg.c` drives `FPM_SRE_init` and
+`FPM_FSE_init` over both settings. The bit rate selects `vtb.nsub` and nothing
+else in this function, so reading `_S` as a rate would have been wrong.
+(2026-09-01)
+
+## F9174. `SREv17_PLL_K1` and `SREv17_PLL_K1_S` hold identical values at two addresses, and the timing loop's switch changes only `settle`
+
+*2026-09-01.* Both are `{2336, 3049, 3049}`. They are two distinct global
+symbols, .data 0x79ee and 0x79e2, six bytes each, and `V17RX_create` chooses
+between them on F9173's flag -- so the choice exists in the code and has no
+effect on the gains. What the flag actually changes for the timing loop is
+`sre.settle`, 48 against 85.
+
+The carrier pair is not like this: `CRRv17_PLL_K1` and `CRRv17_PLL_K1_S` differ
+in element 0.
+
+This is recorded because it is exactly the shape of a transcription slip --
+one array copied over its neighbour -- and the only thing that distinguishes
+the two readings is that the blob says so. `t_v17cfg.c` asserts the SRE pair
+equal and the carrier pair unequal, so a future edit to either half of either
+pair fails rather than passing quietly. (2026-09-01)
+
+## F9175. V.17's equaliser rails tile the taps two-spaced where V.29's are three-spaced, and both receivers run three samples per symbol
+
+*2026-09-01.* `FSEv17_QCOFF` is zero at every EVEN index of its 49 and
+`FSEv17_ICOFF` at every ODD one, so between them they cover all 49 taps and
+never overlap. The I rail is symmetric about tap 24 and the Q rail
+antisymmetric about it, which is the I/Q pair of one passband filter.
+
+V.29's equivalent pair is zero every THIRD tap (F9140's `t_v29cfg.c` records
+the exception at tap 24), and that reads naturally as "three samples per
+symbol, energy only at the symbol instants". **`V17RX_create` writes
+`fse.interp = 3` too**, at .text 0x973e4, so the spacing is NOT the
+interpolation factor and the natural reading of V.29's pattern does not
+generalise. Two receivers, the same interpolation, different zero patterns in
+their initial coefficient sets.
+
+Recorded so that nobody derives one modulation's rails from the other's, and
+because it is the second time in this wave a "tidier" reading of a zero
+pattern was the wrong one -- `t_v29cfg.c`'s own comment says the same about
+V.29's tap 24. (2026-09-01)
+
+## F9176. What `V17RX_create` still needs after the table pass: two text symbols, 788 bytes, and no data at all
+
+*2026-09-01.* Its DIRECT references were enumerated again from `tools/dis.py`
+-- both `R_386_PC32` calls and `R_386_32` stored pointers, which is the
+F8492/F8493 pair -- and classified against `nm --defined-only` over
+`build/repro`. Fifty-four distinct names. Fifty-two are written, or are
+runtime symbols the harness supplies (`sysdep_malloc`, `dsplibs_debug_printf`,
+`dsplibs_debug_level`).
+
+Two are not:
+
+| symbol | size | note |
+|---|--:|---|
+| `RxHdxStartV17` | 105 | stored as a handler pointer at .text 0x97083, never called -- F8493's case |
+| `FAX_FSE_decision_AB` | 683 | stored as `fse.decision` at .text 0x974d4 |
+
+**Its data closure is empty**, which is what this pass was for, and F9145's
+forecast for V.17 is met exactly. Neither of the two has unwritten data behind
+it that this pass could see. (2026-09-01)
+
+## F9150. The V.27ter receiver's data closure is 56 symbols in THREE shapes, and eleven of them are `short[2]` because of the LOAD, not because of the byte count
+
+*2026-09-01.* `V27RX_create` (0x99660, 2,210 bytes) is blocked on data, and
+F9145 counted the blockers at "30 tables". The true set, swept from `nm -S` and
+from the constructor's own relocations, is **fifty-six** symbols, and they come
+in three shapes that have to be told apart before anything can be typed:
+
+- **Fourteen SELECTORS**, eight bytes each, which are TWO POINTERS. The inner
+  relocation sweep -- the relocations whose offset falls inside the symbol's
+  own byte range, shown firing on `AGCb103_CFG` first (F9050) -- finds
+  `R_386_32` at +0x00 and +0x04 of every one of them, against two NAMED
+  GLOBALS. Read as `short[4]` each would have given four plausible small
+  integers.
+- **Twenty-eight TARGETS**, `..._2400` and `..._4800`, which are what those
+  twenty-eight relocations point at. Both halves of every pair had to be
+  written or nothing links (F8492/F8493).
+- **Eleven PER-RATE SCALARS**, four bytes each. Four bytes with everything
+  else in the module indexed by rate SUGGESTS `short[2]`, and the suggestion is
+  not the evidence. `V27RX_create` reads each one with
+  `movzwl base(%reg,%reg,1)` -- a SIXTEEN-BIT load at `base + 2*index` -- so
+  there are two 16-bit elements and not one 32-bit one. That is forced
+  encoding, F613's column.
+
+Plus `AGCv27_CFG` and the two `V27_MTD_COEFF_*` banks, which the object selects
+with a branch (`cmpw $0x1,0x8(%ebx)` at 997e7) rather than a subscript.
+
+**F9140's method transferred intact and every one of them agreed.** Each
+table's element count is in the object twice -- `st_size`, and the length the
+constructor stores beside the pointer -- and here the second reading is itself
+one of the eleven scalars:
+
+| table | `st_size` | the count the constructor writes |
+|---|--:|---|
+| `V27RX_FSE_IFILT/QFILT_2400` | 194 | `fse.taps` = `FSE_FILT_LEN[0]` = 97 |
+| `V27RX_FSE_IFILT/QFILT_4800` | 162 | `fse.taps` = `FSE_FILT_LEN[1]` = 81 |
+| `V27RX_CRR_TABLE_2400` / `_4800` | 8 / 80 | `fse.clk_mod` = 4 / 40 |
+| `V27RX_MRF_FILT_2400` / `_4800` | 540 / 72 | `mrf.taps` = 270 / 36 |
+| `V27RX_SRE_FILT_2400` / `_4800` | 542 / 402 | `sre.coeffs` = 270 / 200, +1 |
+| `V27RX_XCLOCK/YCLOCK_2400` | 12 | `sre.clock_len` = `SAMP_PER_BAUD[0]` = 6 |
+| `V27RX_XCLOCK/YCLOCK_4800` | 10 | `sre.clock_len` = `SAMP_PER_BAUD[1]` = 5 |
+| `V27RX_XB_COFFS_*` | 22 | `FPM_SRE_DISC` = 11 |
+| `V27RX_SRE_PLLK1/K2_*` | 6 | `FPM_SRE_MODES` = 3 |
+| `V27RX_DEC_PMAP_2400` / `_4800` | 8 / 16 | `DEC_PHS_MASK` + 1 = 4 / 8 |
+| `V27_MTD_COEFF_*` | 20 | `mtd.tones` = 2, five shorts a section |
+
+`V27RX_XB_COFFS_2400` and `_4800` being 22 bytes gives `FPM_SRE_DISC` a THIRD
+independent witness after V.32's and V.29's.
+
+**`V27RX_SAMP_PER_BAUD` is loaded BOTH ways and that is F7803, not a defect.**
+`movzwl` at 9993c and 99acd, `movswl` at 99a18, all three on the same symbol.
+The extension follows the declared type of the LOCAL and not of the array, so
+`short` is what is written; the two readings agree over 6 and 5. F614 is still
+right that the FIELD's type is not what varies.
+
+**One reading is worth stating because it looks like an error.** At 4800 bit/s
+`V27RX_MRF_UP` and `V27RX_MRF_DOWN` are both 1: the "resampler" is configured
+for no rate change at all and its 36 taps are a plain 8 kHz band filter. The
+`fpm_mrf` block is being used as a filter, not as a converter, and the 1/1 is
+the object's. (2026-09-01)
+
+## F9151. The V.27ter rate index is 0 for 2400 bit/s and 1 for 4800, and the evidence is two decimal bit rates and not the symbol names
+
+*2026-09-01.* Fourteen selectors and eleven scalars in `src/fax/v27cfg.c` are
+subscripted by one index, so which value means which rate decides every table
+in the file -- and the `_2400`/`_4800` suffixes are the author's labels, which
+is exactly the kind of thing this tree does not take as evidence.
+
+`V27RX_create` settles it at 99794. It loads the modem's own +0x04 with
+`movswl`, and:
+
+    cmp $0x960,%eax   je -> movw $0x0,0x8(%ebx)      0x960  = 2400
+    cmp $0x12c0,%eax  je -> movw $0x1,0x8(%ebx)      0x12c0 = 4800
+    (neither)            -> movw $0x1,0x8(%ebx), and an error status
+
+2400 and 4800 in decimal are V.27ter's two bit rates as the Recommendation
+defines them, so the field being compared is a bit rate and the index it
+produces is 0 for the lower and 1 for the higher. Every later
+`movswl 0x8(%ecx)` in the constructor is that index.
+
+**A second, independent witness in the same function.** At 997e7 the tone
+detector's bank is chosen by `cmpw $0x1,0x8(%ebx)` with the EQUAL arm keeping
+`V27_MTD_COEFF_4800` -- a branch rather than a subscript, and the only place in
+the module where the rate is one. It agrees.
+
+**And a third that does not involve the constructor's rate word at all.**
+`V27RX_decision` takes four phases or eight on the decoder's `eight_phase`,
+which `V27RX_create` fills with `params->f8 == 1`; `V27RX_DEC_PHS_MASK` is
+`{3, 7}` and `V27RX_DEC_PMAP_2400` has four entries against `_4800`'s eight.
+Four phases carry two bits and eight carry three, which at 1200 and 1600 baud
+is 2400 and 4800 bit/s. (2026-09-01)
+
+## F9152. V.27ter's carrier is 1800 Hz at BOTH rates, computed out of five tables that were read separately -- and the equaliser's zero pattern is the same fact seen twice
+
+*2026-09-01.* This is F9141 for V.27ter, and it is stronger, because the
+arithmetic has to close TWICE over two different sets of numbers.
+
+`V27RX_CRR_TABLE_2400[i]` is `round(i * 32768 / 4)` for all 4 entries and
+`..._4800[i]` is `round(i * 32768 / 40)` for all 40 -- one full turn of phase
+in Q16. The constructor installs each as `fpm_fse_cfg::clk` with `clk_mod`
+from `V27RX_CRR_TABLE_LEN` and `clk_inc` from `V27RX_CRR_ADJUST`, behind a
+resampler configured from `V27RX_MRF_UP` and `V27RX_MRF_DOWN`:
+
+    2400 bit/s:  8000 * 9/10 = 7200 Hz,  7200 * 1 / 4  = 1800 Hz
+    4800 bit/s:  8000 * 1/1  = 8000 Hz,  8000 * 9 / 40 = 1800 Hz
+
+1800 Hz is V.27ter's carrier for both rates. The symbol rates fall out of the
+same three numbers with `V27RX_SAMP_PER_BAUD`: 7200/6 is 1200 baud and 8000/5
+is 1600, which at four and eight phases is 2400 and 4800 bit/s.
+
+**THE EQUALISER'S ZERO PATTERN IS THE SAME FACT AND IT IS THE SHARPER TEST.**
+Each rail is a real prototype times a cosine or a sine at the carrier, so it is
+zero exactly where its own trigonometric factor is, and the ratio predicts
+where:
+
+| rate | carrier / sample rate | I rail zero at | Q rail zero at |
+|---|---|---|---|
+| 2400 | 1800/7200 = 1/4 | `n` odd | `n` even |
+| 4800 | 1800/8000 = 9/40 | `n == 10` (mod 20) | `n == 0` (mod 20) |
+
+All four hold over 97 and 81 taps with **no exception in either direction**,
+which is why `t_v27cfg.c` asserts them as IF AND ONLY IF rather than as "these
+taps are zero": a rail with one extra zero fails. The 4800 case is the one that
+could not be a coincidence -- four zeros in eighty-one places, at exactly the
+four positions where `9n` is congruent to 10 modulo 20.
+
+Recorded as EVIDENCE FOR A TYPE, not as a generator, exactly as F9141 was.
+`docs/fastpass.md` defers coefficient derivations to the 8 kHz retarget and a
+byte-exact copy is byte-exact; what a byte copy cannot give is the stride, and
+this is where the stride came from -- twice, for two different rates, over five
+tables that were extracted independently of one another. (2026-09-01)
+
+## F9153. A SWAPPED SELECTOR HAS PERFECTLY CORRECT BYTES, and a byte comparison cannot see it -- the wiring check is what catches it
+
+*2026-09-01.* Every table in `src/fax/v27cfg.c` can be byte-exact while the
+receiver is still wrong, because fourteen of the fifty-six symbols are two
+POINTERS and a pointer's value can never be compared against the blob's. If
+`V27RX_MRF_FILT[0]` holds the 4800 filter and `[1]` the 2400 one, all 306
+coefficients still match `ref_` element for element and every `sizeof` still
+matches `nm -S`.
+
+`t_v27cfg.c` closes it from both ends:
+
+- **ours by POINTER IDENTITY** -- `V27RX_MRF_FILT[0] == V27RX_MRF_FILT_2400`,
+  which is a claim about our own wiring and needs no blob;
+- **the blob's by CONTENT** -- `cmp_shorts(ref_V27RX_MRF_FILT[0],
+  V27RX_MRF_FILT_2400, 270)`, which is the only claim a differential test can
+  make about an address and is the claim that matters.
+
+**Shown to fire, and the failure profile is the point (F134).** Swapping the
+two entries of `V27RX_MRF_FILT` in `src/` and rebuilding:
+
+    PASS  sizes against the object's symbol table       123 checks
+    FAIL  table values against the blob                 1/99 checks failed
+    PASS  the comparison rejects a perturbed table     1353 checks
+    PASS  the shape of the values                       448 checks
+    ...
+    FAIL  V27RX_MRF_FILT through FPM_MRF_init          2/20 checks failed
+
+Layer 1 is blind to it, layer 3's perturbation detector is blind to it, layer 4
+is blind to it, and the ONE check in layer 2 that sees it is the wiring one.
+Layer 5 sees it as well, because `FPM_MRF_init` copies THROUGH the pointer --
+which is the argument for building the configuration the constructor's way
+rather than asserting on the tables alone.
+
+**The complementary injection was run too**, because a test can be strong on
+one axis and vacuous on another: changing `V27RX_SAMP_PER_BAUD[0]` from 6 to 5
+fails two checks in layer 1, one in layer 2 and one in layer 4, and NONE in
+layer 5 -- which is by construction, since layer 5 must hand both inits the
+same buffer lengths or it compares buffers of different sizes. The two
+injections together say which layer owns which class of defect. (2026-09-01)
+
+## F9154. What `V27RX_create` still needs after this pass: two text symbols, no data
+
+*2026-09-01.* Its direct references were re-enumerated from `tools/dis.py` --
+both `R_386_PC32` calls and `R_386_32` stored pointers, the F8492/F8493 pair --
+and classified against `nm --defined-only` over the built object tree.
+
+**Data: nothing.** All fifty-six of the symbols above are written, and the
+other data it names -- `V27RX_CFG`, `SDMv27_CFG`, `V21_CHAN2_MTD_COEFF`,
+`FPM_MTD_CFG`, `FPM_MRF_CFG`, `FPM_SRE_CFG` and `FPM_FSE_CFG` -- was already
+written. `dsplibs_debug_level` is `U` in the blob, so it is not a
+reconstruction target at all; the harness provides it.
+
+**Text: two symbols, both stored as POINTERS rather than called**, which is
+precisely the class F8493 exists to warn about -- neither appears in a call
+graph:
+
+| symbol | bytes | where the constructor stores it |
+|---|--:|---|
+| `RxHdxStartV27` | 101 | shared + 0x0c, the state handler, at 996f9 |
+| `V27RX_epoch_det` | 303 | `fpm_fse_cfg::decision`, at 99b6c/99b96 |
+
+Every blob function it CALLS is written: `FPM_MTD_create`, `FPM_AGC_init`,
+`FPM_MRF_init`, `FPM_SRE_init`, `FPM_FSE_init` and `SDMv27_init`. Its other
+two callees, `sysdep_malloc` and `dsplibs_debug_printf`, are `U` in the object
+-- host services rather than reconstruction targets -- and `test/harness/`
+supplies both.
+
+F9145 named those same two symbols for V.27ter and that half of its table is
+confirmed; its "30 tables" is superseded by F9150's 56. Both belong to the
+unwritten `src/fax/v27.c`, so V.27ter's constructor is now in exactly the state
+F9140 left V.29's in: blocked on its own module's two functions and on nothing
+else. (2026-09-01)
+
+## F9148. `relocscan.py --into` and `--at` DISCARD every relocation that names its target, so they answer a much narrower question than their own help text -- 41 referrers reported as "unreferenced"
+
+*2026-09-01.* While deciding whether four leftover fax data symbols were worth
+writing, `relocscan.py --into FAXVMI_CTL` reported
+
+    .rodata    0x009478  FAXVMI_CTL             size 24    unreferenced
+
+and `--at .rodata:0x9478` reported "(nothing points there)". **`FAXVMI_CTL` has
+41 relocations pointing at it.** `V29RX_CTL` has 4, `FAXVMI_STS` 13,
+`DECv17_ANGL4800` 4 and `DECv17_MAP_TRN` 2 -- all reported unreferenced, and
+all plainly visible in `tools/dis.py`'s output for their readers.
+
+**THE CAUSE IS ONE LINE, AND IT IS NOT WHAT IT LOOKS LIKE.** The first
+hypothesis here was that the tool skips `.rel.text`; that is WRONG and was
+withdrawn after reading the source. `read_relocs` walks every relocation
+section, and then:
+
+    if not sym.startswith("."):
+        out.append((cur, off, sym, None))     # named target -> value None
+        continue
+    ...
+    out.append((cur, off, sym, <addend read from the section bytes>))
+
+and `main` does
+
+    resolved = [r for r in relocs if r[3] is not None]
+
+so **every relocation against a NAMED symbol is dropped**, and `--into`,
+`--at` and `--range` all run on `resolved` alone. The tool answers "which
+SECTION-RELATIVE references land here", not "what points at this".
+
+**Which is why its documented use is sound and its obvious use is not.**
+F604's case -- "who references this string" -- is section-relative by
+construction, because a string reference is an `R_386_32` against the SECTION
+symbol with the offset as an inline addend. That is the case the tool was built
+for and it works. A reference to a named global is the OTHER case, and it is
+invisible. The two are exact complements: `DEF_COEFS` has no relocation naming
+it anywhere and IS found by `relocscan` (via `.data` + addend), while
+`FAXVMI_CTL` is named by all 41 of its referrers and is found by none of it.
+
+**The fix is to keep the named ones**: resolve `(sym, addend)` against the
+symbol table instead of dropping them, and print the denominator of BOTH
+classes rather than only "N against a section symbol". Not made here -- this
+pass owns tables, and `tools/` is shared with other live sessions -- but it is
+a one-function change.
+
+**AND IT BEARS ON A SCHEDULING CLAIM, WITHOUT SETTLING IT.** CLAUDE.md's
+"leaves before FAX" paragraph rests on a reverse-edge probe finding "129 of 139
+symbols have no relocation anywhere in the 1.2 MB pointing at them". Nothing
+here says which tool ran that probe, and this finding does NOT retract it --
+but if it was `relocscan`, the reading would be "no section-relative referrer",
+which is a different and much weaker statement. Anyone re-using that number
+should re-measure with a probe that counts both classes; a scan over
+`readelf -rW` grouped by target name takes about fifteen lines and is what was
+used above. (2026-09-01)

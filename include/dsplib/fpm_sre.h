@@ -106,8 +106,11 @@ struct fpm_sre_cfg {
 	short groups_acq;	/* +0x02  1   clock groups per PLL update in
 				 *            modes 0 and 1                  */
 	short groups_trk;	/* +0x04 24   ... and in mode 2              */
-	short settle;		/* +0x06 60   updates in mode 0 before the
-				 *            loop shifts to mode 1          */
+	short settle;		/* +0x06 48   updates in mode 0 before the
+				 *            loop shifts to mode 1.  This
+				 *            comment said 60, which is the
+				 *            value of `coeffs` six bytes on;
+				 *            the bytes say 48.  F9142.      */
 	/*
 	 * What the integrator is scaled by when the gear changes, so that its
 	 * resolution follows the update rate.  Down is Q15 and up is Q12; the
@@ -314,5 +317,13 @@ extern short SREv32_yCLOCK[3];
  * they are the eighteen above and it is now in `src/pump/v32/v32sre_tables.c`.
  */
 extern const struct fpm_sre_cfg SREv32_CFG;
+
+/*
+ * The library's built-in configuration, `R` at .rodata 0xc4e0 and therefore
+ * const -- unlike `FPM_FSE_CFG`, which the object puts in `.data`.  All six
+ * pointers are NULL; callers copy it onto the stack and patch them in.
+ * `src/dsp/fpm_sre_cfg.c`.
+ */
+extern const struct fpm_sre_cfg FPM_SRE_CFG;
 
 #endif /* DSPLIB_FPM_SRE_H */

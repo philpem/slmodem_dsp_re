@@ -58,6 +58,14 @@ void FPM_MTD_delete(struct fpm_mtd *state);
  */
 short FPM_MTD_detect(struct fpm_mtd *state, const short *samples, short count);
 
+/*
+ * `FPM_MTD_CFG_data` is a STUB with a NULL `coeff`; `FPM_MTD_CFG` is the
+ * object's own table, `D` at .data 0x81b0, whose `coeff` points at the
+ * file-static `DEF_COEFS`.  They differ in that one field and both exist
+ * today -- see D1101 at the top of `src/dsp/fpm_mtd_cfg.c` for why, and for
+ * what removing the stub would take.
+ */
 extern const struct fpm_mtd_cfg FPM_MTD_CFG_data;
+extern struct fpm_mtd_cfg FPM_MTD_CFG;
 
 #endif /* DSPLIB_FPM_MTD_H */

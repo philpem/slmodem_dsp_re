@@ -194,6 +194,13 @@ void FPM_FSE_init(struct fpm_fse *state, const struct fpm_fse_cfg *cfg,
 void FPM_FSE_free(struct fpm_fse *state);
 
 /*
+ * The library's built-in configuration, `D` at .data 0x8160 and therefore not
+ * const.  Every pointer in it is NULL: callers copy it onto the stack and
+ * patch the tables in.  `src/dsp/fpm_fse_cfg.c`.
+ */
+extern struct fpm_fse_cfg FPM_FSE_CFG;
+
+/*
  * Drain one of the two scatter logs into `out`, at most `max` points, and
  * report how many were copied.  `which` selects `diag` (0) or `diag2` (1);
  * anything else copies nothing and reports none.  The log it reads is emptied

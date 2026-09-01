@@ -11659,3 +11659,69 @@ indistinguishable to it -- `v21fax.h` already records this bound for
 both source files is read from the object's own call sequence and is stated,
 not tested. Nothing depends on it: every callee takes one pointer, none reads
 another's block, and the handle goes last on every reading.
+## D1100 ⚠ the V.29 receiver's tables are in `src/fax/v29cfg.c`, not in the file that holds `V29RX_create`
+
+`AGCv29_CFG`, `V29RX_MRF_FILT`, `V29RX_SRE_FILT` and the eleven others sit in
+`.data` and `.rodata` runs that also hold `V29RX_CFG`, `V29RX_CTL` and
+`V29RX_MESG`, so the author's translation unit was almost certainly the one
+holding `V29RX_create` itself. They are in a file of their own because
+`src/fax/v29.c` belongs to another strand of this wave and a table is worth
+nothing until something can link against it.
+
+`V21_CHAN2_MTD_COEFF` is in `src/fax/faxcfg.c` for a different reason: it is
+the one table all THREE fax receiver constructors share, so a per-modulation
+file would have had to pick one of the three arbitrarily.
+
+A data symbol's bytes do not depend on its translation unit, so moving either
+is free and neither can be measured. This is D1080's note one wave on, and the
+same resolution: record it rather than pretend the layout is settled.
+*unmeasured, and unmeasurable by any tier here.*
+
+## D1101 🐛 `FPM_MTD_CFG_data` and `FPM_MTD_CFG` are two objects where the blob has one, and the NULL-`cfg` path diverges
+
+`src/dsp/fpm_mtd_cfg.c` defines both. `FPM_MTD_CFG` is the object's own table,
+`D` at .data 0x81b0, whose `coeff` points at the file-static `DEF_COEFS`;
+`FPM_MTD_CFG_data` is a stub of it with `coeff` NULL, written when `DEF_COEFS`
+was unwritten and a reference to it could not link (F8492). They differ in
+exactly that one field. F9143.
+
+**The consequence is reachable and untested.** `FPM_MTD_create(state, NULL)`
+assigns `FPM_MTD_CFG_data`, so ours installs a NULL coefficient bank where the
+object installs `DEF_COEFS`. Nothing reconstructed calls it with a NULL `cfg`
+today -- `B103FP_create`, `bwchdem` and the V.23 path all copy the stub and
+patch `coeff` before use -- so no test covers the arm, and the divergence is
+latent rather than active.
+
+**Not fixed here, and the fix is small.** Delete the stub, point
+`src/dsp/fpm_mtd.c`'s NULL arm and `src/pump/b103/b103fp.c`'s copy at
+`FPM_MTD_CFG`. That touches `src/pump/`, which this pass was fenced from, and
+it is a behaviour change on a path with no coverage, so it wants its own
+differential test rather than a drive-by edit. *unmeasured.*
+
+## D1102 ⚠ the V.27ter receiver's tables are in `src/fax/v27cfg.c`, not in the file that holds `V27RX_create`
+
+The fifty-six symbols `AGCv27_CFG`, `V27RX_MRF_FILT_2400` and the rest sit in
+`.data` and `.rodata` runs that also hold `V27RX_CFG`, `V27RX_CTL` and
+`V27RX_MESG`, so the author's translation unit was almost certainly the one
+holding `V27RX_create` itself. They are in a file of their own because
+`src/fax/v27.c` is not written and a table is worth nothing until something
+can link against it.
+
+A data symbol's bytes do not depend on its translation unit, so moving them is
+free and it cannot be measured. This is D1100 one modulation on, and the same
+resolution: record it rather than pretend the layout is settled.
+*unmeasured, and unmeasurable by any tier here.*
+
+## D1110 ⚠ the V.17 receiver's tables are in `src/fax/v17cfg.c`, not in the file that holds `V17RX_create`
+
+The twenty-four symbols `AGCv17_CFG`, `MRFv17_COFFS`, the eight
+`VTBv17_?MAP*` and the rest sit in `.data` and `.rodata` runs that also hold
+`V17RX_CFG`, so the author's translation unit was almost certainly the one
+holding `V17RX_create` itself. They are in a file of their own because
+`src/fax/v17.c` does not hold that constructor yet and a table is worth
+nothing until something can link against it.
+
+A data symbol's bytes do not depend on its translation unit, so moving them is
+free and it cannot be measured. This is D1100 and D1102 a third time, and the
+same resolution: record it rather than pretend the layout is settled.
+*unmeasured, and unmeasurable by any tier here.*
