@@ -11950,3 +11950,43 @@ built by a caller doing it deliberately.
 `test/unit/t_v29fax.c` drives all four combinations of the two flags, including
 that one, and compares the whole receive and detection blocks against
 `ref_V29RX_create`'s afterwards.
+
+## D1161 `V27RX_create`'s unrecognised-bit-rate report is overwritten before it returns
+
+When the caller's `bit_rate` is neither 2400 nor 4800, `V27RX_create` treats the
+rate as 4800 and reports the fact: `orb $0x2,0x1d(%ebp)` raises
+`V27_STATUS_FLAG_ERROR` and `movb $0x3,0x1c(%ebp)` writes `V27_STATUS_DEFAULT`,
+both at 0x997b4.
+
+Then, on every path and 0x1550 bytes later, `movl $0x0,0x1c(%ebp)` at 0x99d0d
+clears all four bytes of that word, `orb $0x50,0x1d(%ebp)` seeds the flags and
+`movb $0x2,0x1c(%ebp)` writes `V27_STATUS_START`. So a caller that asks for
+9600 bit/s gets exactly the same status word as one that asks for 4800, and the
+only lasting effect of an unrecognised rate is that it is treated as 4800.
+
+Nothing in the object reads the status byte -- it leaves through the word
+`V27RX_modem` returns -- so this is not merely dead, it is unobservable from
+inside the library too.
+
+**Status:** reproduced, both stores. `t_v27fax.c`'s `crt_expect` models the
+status word WITHOUT the early write, and `CR_UNKNOWN_KEEPS_ERROR` -- the reading
+that believes it survives -- separates on both unknown-rate trials. So the
+deadness is measured rather than asserted.
+
+## D1162 `V27RX_create`'s 4800 bit/s AGC block length stores the value that is already there
+
+On the 4800 arm only, `V27RX_create` stores 0x28 into the live
+`fpm_agc_cfg::block_len` of the receive block's gain control (0x99ebf).
+`AGCv27_CFG.block_len` is 40, which is 0x28, and `FPM_AGC_init` copied it in
+four instructions earlier -- so the store is a no-op and both rates run on a
+40-sample measurement block.
+
+Finding F9307 has the enumeration. The store could equally be read as the
+author guarding against a future `AGCv27_CFG` with a different default; nothing
+in the object says which, and the reconstruction reproduces the store rather
+than deciding.
+
+**Status:** reproduced. `t_v27fax.c` asserts that the variant performing the
+store on BOTH arms separates ZERO of twelve trials, which is what says the store
+is invisible; a detector that could not fire would otherwise read as a passing
+check.

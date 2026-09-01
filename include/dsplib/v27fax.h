@@ -43,11 +43,42 @@
  * top of `src/fax/v27.c`.
  *
  * ---------------------------------------------------------------------------
- * THE INSTANCE IS NOT MODELLED, and this header follows the ruling
- * `include/dsplib/v17data.h` and `v22data.h` set out: `V27RX_create` -- 2,210
- * bytes that lay the instance out -- is not reconstructed, so naming its
- * fields now would mean guessing.  The parameter is `void *` and every offset
- * is a named constant below with the evidence beside it.
+ * "THE INSTANCE" WAS TWO OBJECTS ALL ALONG, AND `V27RX_create` IS WHAT SHOWS IT
+ *
+ * This header used to say the instance was not modelled because `V27RX_create`
+ * -- 2,210 bytes that lay it out -- was not reconstructed.  It is now, and the
+ * first thing it settles is that there is no single instance: the RECEIVE
+ * handle and the TRANSMIT handle are different allocations with different
+ * layouts, and reading them as one would have been silently wrong.
+ *
+ *   - `V27RX_create` allocates 0x58 bytes, stores the shared block at +0x50
+ *     and the receive block at +0x54, and fills +0x20..+0x34 with pointers
+ *     INTO the equaliser.  `V27RX_delete` frees +0x50, +0x54 and the handle.
+ *   - `V27TX_delete` frees `*(h + 0x28) + 0x5c` through `FPM_PPS_free` and
+ *     `*(h + 0x24)`'s FIFO and `sgd`; `ModDataV27` and `ScrambleDataV27` reach
+ *     the transmit chain through `*(h + 0x28)`.
+ *
+ * They cannot be the same handle.  On the receive one, +0x28 holds
+ * `&fse->n_out` and +0x24 holds `fse->out_q`, so `FPM_PPS_free` would be given
+ * a pointer into the middle of the equaliser -- and both deletes free the
+ * handle itself, which would be a double free.  So `V27_OBJ_TX`,
+ * `V27_OBJ_TXDATA` and the `V27TX_*` offsets below belong to the TRANSMIT
+ * handle, and `V27_OBJ_SHARED`, `V27_OBJ_RX`, `V27_OBJ_STATUS` and the
+ * `V27RXH_*` offsets to the RECEIVE one.  Finding F9304.
+ *
+ * THE RECEIVE HANDLE'S FIRST 28 BYTES ARE A `struct v27rx_cfg`.  `V27RX_create`
+ * copies the caller's config there wholesale -- seven dwords, or `V27RX_CFG`
+ * when the caller passes none -- and then reads three of its fields back:
+ * `bit_rate` decides `V27SH_RATE`, `int_0014` decides `V27SH_TRAIN_LONG`, and
+ * `ptr_0018` is handed to the resampler, the symbol recovery and the equaliser
+ * as their context pointer.  `faxcfg.h` had already modelled that structure
+ * from `init_vmi_v27rx`, which fills it and stores it in the VMI slot; this is
+ * the other end of the same object.
+ *
+ * The accessors below stay `void *` plus named offsets rather than becoming a
+ * `struct`, because every reconstructed V.27ter function already spells them
+ * that way and a rewrite would move code generation everywhere at once for no
+ * evidence.
  *
  * WHAT IS DIFFERENT HERE, AND IT IS THE STRONGEST EVIDENCE IN THIS FILE: the
  * receiver block is not opaque all the way down.  Four of the library's own
@@ -114,6 +145,7 @@
 #define DSPLIB_V27FAX_H
 
 struct fpm_fse;
+struct v27rx_cfg;
 
 /* ------------------------------------------------------------------ */
 /* The modem instance                                                  */
@@ -299,6 +331,59 @@ struct fpm_fse;
 #define V27_STATUS_IDLE			5
 #define V27_STATUS_ENTER_DATA_2400	6
 #define V27_STATUS_ENTER_DATA_4800	7
+
+/*
+ * THE RECEIVE HANDLE, +0x20 .. +0x54, and every one of these is written by
+ * `V27RX_create` and by nothing else in the object.
+ *
+ * FIVE OF THEM ARE A VIEW OF THE EQUALISER, taken once at the end of
+ * construction and never refreshed: `FPM_FSE_init` has just allocated those
+ * four buffers, so the pointers stay valid for the life of the object, and
+ * `n_out` is handed over BY ADDRESS rather than by value (`lea 0x182(%ebx)`
+ * at 0x99ce5, which is `V27RX_FSE + offsetof(struct fpm_fse, n_out)`).  What
+ * reads them is outside this object -- nothing reconstructed does -- so the
+ * name says which field of `struct fpm_fse` each one is and no more than that.
+ */
+#define V27RXH_EQ_OUT_I		0x20	/* fse->out_i                      */
+#define V27RXH_EQ_OUT_Q		0x24	/* fse->out_q                      */
+#define V27RXH_EQ_N_OUT		0x28	/* &fse->n_out, the ADDRESS        */
+#define V27RXH_EQ_ICOEFF	0x2c	/* fse->icoeff                     */
+#define V27RXH_EQ_QCOEFF	0x30	/* fse->qcoeff                     */
+#define V27RXH_EQ_TAPS		0x34	/* short: fse->cfg.taps            */
+
+/*
+ * The six `V27RX_create` zeroes and nothing else in the object touches.  Their
+ * WIDTHS are the object's -- three `movl` and two `movw` -- and their meanings
+ * are not established, so they are named by offset.
+ */
+#define V27RXH_ZERO_38		0x38	/* int   */
+#define V27RXH_ZERO_3C		0x3c	/* int   */
+#define V27RXH_ZERO_40		0x40	/* short */
+#define V27RXH_ZERO_44		0x44	/* int   */
+#define V27RXH_ZERO_48		0x48	/* int   */
+#define V27RXH_ZERO_4C		0x4c	/* short */
+
+/*
+ * `sysdep_malloc`'s three arguments, which are the only statement in the
+ * object about how big any of these are.  The handle's 0x58 covers +0x54 and
+ * its pointer with nothing over; the two scratch buffers are 160 and 164
+ * `short`, and `V27RX_create` zeroes the first 160 entries of each.
+ */
+#define V27RXH_SIZE		0x58
+#define V27RX_BLOCK_SIZE	0x4f58
+#define V27RX_BUF_A_BYTES	0x140
+#define V27RX_BUF_B_BYTES	0x148
+#define V27RX_BUF_ZERO		160	/* entries cleared in EACH buffer  */
+#define V27SH_SIZE		0x50
+#define V27SH_BUF_BYTES		0x140
+
+/*
+ * The two bits `V27RX_create`'s `orb $0x50,0x1d(%ebp)` raises (0x99d14).
+ * Nothing else in the object sets, clears or reads either, so this is the
+ * seed and not a flag pair -- naming the bits would be inventing two meanings
+ * out of one store.
+ */
+#define V27_STATUS_FLAGS_SEED	0x50
 
 /* ------------------------------------------------------------------ */
 /* The receiver block, at *(void **)(obj + V27_OBJ_RX)                  */
@@ -885,6 +970,86 @@ typedef short (*v27_rx_state_fn)(void *modem, short *in, short *out,
 				 unsigned short *count);
 
 /* ------------------------------------------------------------------ */
+/* What `V27RX_create` puts in the five configurations                  */
+/*
+ * EVERY ONE OF THESE IS A LITERAL IN THE OBJECT and none of them is read
+ * anywhere else, so the names below say which FIELD of which module's config
+ * the literal lands in -- which is measured, because `V27RX_create` copies the
+ * library's own `*_CFG` onto the stack and then patches named offsets of it.
+ * What the VALUES mean is the module's business and its header's; this one
+ * only records where V.27ter puts them.
+ *
+ * The rate-dependent ones are named `_2400` / `_4800` after `V27SH_RATE`.
+ */
+
+/* The V.21 control-channel detector, `V27SH_MTD_V21`. */
+#define V27_MTD_V21_TONES	2
+#define V27_MTD_V21_RATIO	0x4ccd
+#define V27_MTD_V21_MIN_LEVEL	300
+
+/* The data-channel detector, `V27SH_MTD`. */
+#define V27_MTD_TONES		2
+#define V27_MTD_RATIO		0x199a
+#define V27_MTD_MIN_LEVEL	100
+
+/*
+ * The gain control's measurement block at 4800 bit/s -- AND IT IS A NO-OP.
+ *
+ * `V27RX_create` stores it into the LIVE `fpm_agc_cfg::block_len` on the 4800
+ * arm only, four instructions after `FPM_AGC_init` copied the configuration in,
+ * and `AGCv27_CFG.block_len` is 40, which IS 0x28.  So the store puts back the
+ * value that is already there and both rates run on a 40-sample block.
+ * `t_v27fax.c` asserts that the variant doing it on BOTH arms separates
+ * nothing, which is what makes the deadness measured rather than argued.
+ * Finding F9307, deviation D1162.
+ */
+#define V27_AGC_BLOCK_4800	0x28
+
+/* `struct fpm_sre_cfg`, the scalars V.27ter overrides. */
+#define V27_SRE_GROUPS_ACQ	1
+#define V27_SRE_GROUPS_TRK	8
+#define V27_SRE_SETTLE		0x40
+#define V27_SRE_MAG_HI		2
+#define V27_SRE_MAG_LO		1
+#define V27_SRE_ERR_HI		0x3333
+#define V27_SRE_ERR_LO		0x199a
+/*
+ * `rms_min` is not a literal: it is `AGCv27_CFG.ref_level / 6`, read back out
+ * of the gain control this function has just initialised (`movswl 0x68(%edx)`
+ * at 0x999ee against the magic multiply 0x2aaaaaab, which is GCC's division by
+ * six).  `rms_len` is `3 * V27RX_SAMP_PER_BAUD[rate]`, three symbols' worth.
+ */
+#define V27_SRE_RMS_MIN_DIV	6
+#define V27_SRE_RMS_LEN_SYMS	3
+
+/* `struct fpm_sre_cfg`, the timing meter's four caller-supplied fields. */
+#define V27_SRE_PPM_STEP_2400	0x18
+#define V27_SRE_PPM_STEP_4800	0x20
+#define V27_SRE_PPM_UNIT	200	/* ppm_period = ppm_step * this    */
+#define V27_SRE_PPM_MILLION	1000000	/* ppm_scale and ppm_n_max divide it */
+
+/* `struct fpm_fse_cfg`, the scalars V.27ter overrides. */
+#define V27_FSE_BLOCK_2400	0x90
+#define V27_FSE_BLOCK_4800	0xa0
+#define V27_FSE_TRAIN_SYM	0x3e8
+#define V27_FSE_ERR_HI		0x2666
+#define V27_FSE_ERR_LO		0x8f6
+
+/* `V27RX_Q_LIMIT`, the only field of the quality smoother that depends on the
+ * rate.  Set on both arms and on NEITHER for a rate that is not 0 or 1 --
+ * which `V27SH_RATE`'s own two arms make unreachable. */
+#define V27RX_Q_LIMIT_2400	0x1b9e
+#define V27RX_Q_LIMIT_4800	0x0d27
+
+/*
+ * `struct sdmv27_cfg::nbits`, and it is the recommendation's own number: two
+ * bits per symbol on the four-phase 2400 bit/s constellation and three on the
+ * eight-phase 4800 one.  The object writes `3 - (rate == 0)`.
+ */
+#define V27_SDM_NBITS_2400	2
+#define V27_SDM_NBITS_4800	3
+
+/* ------------------------------------------------------------------ */
 /* The functions                                                       */
 
 /*
@@ -1041,6 +1206,31 @@ int V27RX_modem(void *modem, short *in, short *out, unsigned short *count);
  * ignored, cdecl makes it harmless, and it is not reproduced here.
  */
 void V27RX_delete(void *modem);
+
+/*
+ * Build the receiver: the handle, the shared block, the receive block, five
+ * module configurations and the decoder's own state.  Returns the handle.
+ *
+ * BOTH ARGUMENTS MAY BE NULL AND THE TWO NULLS MEAN DIFFERENT THINGS.  A null
+ * `modem` is allocated here (`V27RXH_SIZE`) with its two block pointers
+ * cleared, which is what makes the three "allocate if absent" tests below
+ * fire; a null `cfg` means `V27RX_CFG`, the library's own defaults.  Neither
+ * `sysdep_malloc` result is checked, here or in `V27RX_delete`.
+ *
+ * `fresh` IS TWO DIFFERENT FLAGS, and which one each module gets is the
+ * object's.  The AGC inside the SHARED block is initialised with "the shared
+ * block was allocated by this call"; the resampler, the AGC inside the RECEIVE
+ * block, the symbol recovery and the equaliser are all initialised with "the
+ * HANDLE was allocated by this call".  So re-creating over a live handle whose
+ * receive block was allocated elsewhere reuses those four modules' buffers,
+ * and the two flags are not interchangeable.
+ *
+ * IT DOES NOT CLEAR THE RECEIVE BLOCK.  Everything the reconstructed functions
+ * read is written here -- the three enables, the decoder's fourteen fields, the
+ * quality smoother, the energy-drop detector -- but the block comes from
+ * `sysdep_malloc` and the parts no module claims keep whatever was in the heap.
+ */
+void *V27RX_create(void *modem, const struct v27rx_cfg *cfg);
 
 /*
  * The equaliser's slicer: `fpm_fse_decision` for V.27ter.

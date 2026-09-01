@@ -58,6 +58,8 @@
 
 #include "harness.h"
 #include "dsplib/v27fax.h"
+#include "dsplib/v27cfg.h"
+#include "dsplib/faxcfg.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
@@ -5808,6 +5810,758 @@ run_smh(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* 19.  V27RX_create                                                      */
+/*
+ * The constructor, compared END TO END: both sides are asked to build a whole
+ * receiver from the same `struct v27rx_cfg` and the two results are compared
+ * byte for byte, with every field that HAS to differ skipped and compared by
+ * identity instead.
+ *
+ * SO THIS TEST IS BROADER THAN THE FUNCTION.  `V27RX_create` calls
+ * `FPM_MTD_create`, `FPM_AGC_init`, `FPM_MRF_init`, `FPM_SRE_init`,
+ * `FPM_FSE_init` and `SDMv27_init`, and each side calls ITS OWN -- there is no
+ * way to hand the blob's constructor our modules.  A difference anywhere in
+ * that chain lands here.  That is a feature and not a confound: all six are
+ * already written and have their own sections or their own binaries, so a
+ * failure here that is not in this function will be a failure there too.
+ *
+ * WHAT CANNOT BE COMPARED BY BYTES, and what replaces it:
+ *
+ *   handle +0x20..+0x33   five pointers INTO each side's own equaliser.
+ *                         Compared by identity against that side's `fse`.
+ *   handle +0x50, +0x54   the two blocks.  Compared through everything else.
+ *   shared +0x00, +0x18   each side's own `struct fpm_mtd`.  Their CONTENTS
+ *                         and their accumulator arrays are compared instead.
+ *   shared +0x0c          `RxHdxStartV27` against `ref_RxHdxStartV27`.
+ *   shared +0x1c          the V.21 scratch buffer, whose contents come
+ *                         straight from `sysdep_malloc` and are not written.
+ *   fse.cfg +0x2c, +0x30  `owner` is each side's own decoder block and
+ *                         `decision` each side's own `V27RX_epoch_det`.
+ *   the four modules'     already skipped by `dem_skip_rx`; the buffers
+ *   heap buffers          THEMSELVES are compared where init fills them.
+ *
+ * THE THREE CONTEXT POINTERS ARE COMPARED BY VALUE, not skipped, because both
+ * sides are given the same one: `cfg->ptr_0018` reaches `fpm_mrf_cfg::aux`,
+ * `fpm_fse_cfg::reserved34` and the four bytes `fpm_sre.h` calls
+ * `pad34`/`pad36`.  That third one is F9306's site and this is what measures
+ * it -- a `short`-at-a-time reading would put the halves elsewhere.
+ *
+ * AND THE DECISIONS ARE MODELLED SEPARATELY.  `crt_read` lifts 68 values out
+ * of a finished receiver and `crt_expect` recomputes them from the setup and
+ * the tables; the model is compared against the BLOB's object, and thirteen
+ * variants of it are shown to separate.  Reimplementing all 2,210 bytes would
+ * duplicate `src/fax/v27.c` line for line and measure nothing extra: every
+ * choice this function makes is a choice about one of those 68 values.
+ */
+extern void *ref_V27RX_create(void *modem, const struct v27rx_cfg *cfg);
+
+/*
+ * THE TABLES ARE TWO SETS, and that is the whole reason this section needs a
+ * table map.  `symmap.py` renames every symbol the blob DEFINES, data
+ * included, so `ref_V27RX_create` fills its configurations with pointers into
+ * `ref_V27RX_MRF_FILT` and ours with pointers into `V27RX_MRF_FILT` -- same
+ * bytes, different addresses.  Every such pointer is therefore skipped in the
+ * byte comparison and answered instead by "which of this side's two tables",
+ * which is the question the rate selection is actually about.
+ */
+extern const short *ref_V27RX_MRF_FILT[2];
+extern const short *ref_V27RX_SRE_FILT[2];
+extern const short *const ref_V27RX_XB_COFFS[2];
+extern short *ref_V27RX_XCLOCK[2];
+extern short *ref_V27RX_YCLOCK[2];
+extern short *ref_V27RX_SRE_PLLK1[2];
+extern short *ref_V27RX_SRE_PLLK2[2];
+extern const short *const ref_V27RX_FSE_IFILT[2];
+extern const short *const ref_V27RX_FSE_QFILT[2];
+extern short *ref_V27RX_CRR_TABLE[2];
+extern short *ref_V27RX_DEC_PMAP[2];
+extern short *ref_V27RX_DEC_LAST_PHASE[2];
+extern short ref_V27_MTD_COEFF_2400[10];
+extern short ref_V27_MTD_COEFF_4800[10];
+extern short ref_V21_CHAN2_MTD_COEFF[10];
+
+#define CRT_TABLES	13
+
+static const void *crt_tab[2][CRT_TABLES][2];
+static const void *crt_v21coef[2];
+
+static void
+crt_tables_init(void)
+{
+	crt_tab[0][0][0] = V27RX_MRF_FILT[0];
+	crt_tab[0][0][1] = V27RX_MRF_FILT[1];
+	crt_tab[0][1][0] = V27RX_SRE_FILT[0];
+	crt_tab[0][1][1] = V27RX_SRE_FILT[1];
+	crt_tab[0][2][0] = V27RX_XB_COFFS[0];
+	crt_tab[0][2][1] = V27RX_XB_COFFS[1];
+	crt_tab[0][3][0] = V27RX_XCLOCK[0];
+	crt_tab[0][3][1] = V27RX_XCLOCK[1];
+	crt_tab[0][4][0] = V27RX_YCLOCK[0];
+	crt_tab[0][4][1] = V27RX_YCLOCK[1];
+	crt_tab[0][5][0] = V27RX_SRE_PLLK1[0];
+	crt_tab[0][5][1] = V27RX_SRE_PLLK1[1];
+	crt_tab[0][6][0] = V27RX_SRE_PLLK2[0];
+	crt_tab[0][6][1] = V27RX_SRE_PLLK2[1];
+	crt_tab[0][7][0] = V27RX_FSE_IFILT[0];
+	crt_tab[0][7][1] = V27RX_FSE_IFILT[1];
+	crt_tab[0][8][0] = V27RX_FSE_QFILT[0];
+	crt_tab[0][8][1] = V27RX_FSE_QFILT[1];
+	crt_tab[0][9][0] = V27RX_CRR_TABLE[0];
+	crt_tab[0][9][1] = V27RX_CRR_TABLE[1];
+	crt_tab[0][10][0] = V27RX_DEC_PMAP[0];
+	crt_tab[0][10][1] = V27RX_DEC_PMAP[1];
+	crt_tab[0][11][0] = V27RX_DEC_LAST_PHASE[0];
+	crt_tab[0][11][1] = V27RX_DEC_LAST_PHASE[1];
+	crt_tab[0][12][0] = V27_MTD_COEFF_2400;
+	crt_tab[0][12][1] = V27_MTD_COEFF_4800;
+	crt_v21coef[0] = V21_CHAN2_MTD_COEFF;
+
+	crt_tab[1][0][0] = ref_V27RX_MRF_FILT[0];
+	crt_tab[1][0][1] = ref_V27RX_MRF_FILT[1];
+	crt_tab[1][1][0] = ref_V27RX_SRE_FILT[0];
+	crt_tab[1][1][1] = ref_V27RX_SRE_FILT[1];
+	crt_tab[1][2][0] = ref_V27RX_XB_COFFS[0];
+	crt_tab[1][2][1] = ref_V27RX_XB_COFFS[1];
+	crt_tab[1][3][0] = ref_V27RX_XCLOCK[0];
+	crt_tab[1][3][1] = ref_V27RX_XCLOCK[1];
+	crt_tab[1][4][0] = ref_V27RX_YCLOCK[0];
+	crt_tab[1][4][1] = ref_V27RX_YCLOCK[1];
+	crt_tab[1][5][0] = ref_V27RX_SRE_PLLK1[0];
+	crt_tab[1][5][1] = ref_V27RX_SRE_PLLK1[1];
+	crt_tab[1][6][0] = ref_V27RX_SRE_PLLK2[0];
+	crt_tab[1][6][1] = ref_V27RX_SRE_PLLK2[1];
+	crt_tab[1][7][0] = ref_V27RX_FSE_IFILT[0];
+	crt_tab[1][7][1] = ref_V27RX_FSE_IFILT[1];
+	crt_tab[1][8][0] = ref_V27RX_FSE_QFILT[0];
+	crt_tab[1][8][1] = ref_V27RX_FSE_QFILT[1];
+	crt_tab[1][9][0] = ref_V27RX_CRR_TABLE[0];
+	crt_tab[1][9][1] = ref_V27RX_CRR_TABLE[1];
+	crt_tab[1][10][0] = ref_V27RX_DEC_PMAP[0];
+	crt_tab[1][10][1] = ref_V27RX_DEC_PMAP[1];
+	crt_tab[1][11][0] = ref_V27RX_DEC_LAST_PHASE[0];
+	crt_tab[1][11][1] = ref_V27RX_DEC_LAST_PHASE[1];
+	crt_tab[1][12][0] = ref_V27_MTD_COEFF_2400;
+	crt_tab[1][12][1] = ref_V27_MTD_COEFF_4800;
+	crt_v21coef[1] = ref_V21_CHAN2_MTD_COEFF;
+}
+
+#define CRT_N		88
+
+struct crt_setup {
+	int		use_default;	/* pass a null `cfg`               */
+	short		bit_rate;
+	int		int_0014;
+	int		preallocate;	/* hand it a handle it must reuse  */
+};
+
+enum crt_defect {
+	CR_NONE = 0,
+	CR_RATE_SWAP,
+	CR_TRAIN_IGNORED,
+	CR_FSE_BLOCK_SWAP,
+	CR_PPM_STEP_SWAP,
+	CR_PPM_UNIT_100,
+	CR_QLIMIT_SWAP,
+	CR_NBITS_SWAP,
+	CR_AGC_BLOCK_ALWAYS,
+	CR_RMS_DIV_3,
+	CR_RMS_LEN_2,
+	CR_EIGHT_PHASE_INV,
+	CR_UNKNOWN_KEEPS_ERROR,
+	CR_MTD_RATIO_SWAP,
+	CR_DEFAULT_IS_2400,
+	CR_MAX
+};
+
+static long crt_sep[CR_MAX];
+static long crt_trials, crt_rate_seen[3], crt_train_seen[2], crt_default_seen;
+static long crt_prealloc_seen, crt_fields;
+
+/* One place for the context pointer, so both sides get the same value. */
+static int crt_aux_object;
+
+/*
+ * What `cfg->ptr_0018` was for THIS trial, which is not always
+ * `&crt_aux_object`: a null `cfg` means `V27RX_CFG`, whose own `ptr_0018` is
+ * zero.  Set by `crt_one` before it reads either side back, so the three
+ * "the context pointer arrived" fields stay a real check on the default path
+ * instead of quietly becoming "it is not the sentinel".
+ */
+static void *crt_aux_want;
+
+static int
+crt_which(const void *p, const void *a, const void *b)
+{
+	if (p == a)
+		return 0;
+	if (p == b)
+		return 1;
+	return -1;
+}
+
+static void
+crt_read(void *h, long *v, int is_ref)
+{
+	void *sh = FXP(h, V27_OBJ_SHARED);
+	void *rx = FXP(h, V27_OBJ_RX);
+	void *dec = FX(rx, V27RX_DEC);
+	struct fpm_agc *agc = (struct fpm_agc *)(void *)FX(rx, V27RX_AGC);
+	struct fpm_mrf *mrf = (struct fpm_mrf *)(void *)FX(rx, V27RX_MRF);
+	struct fpm_sre *sre = (struct fpm_sre *)(void *)FX(rx, V27RX_SRE);
+	struct fpm_fse *fse = (struct fpm_fse *)(void *)FX(rx, V27RX_FSE);
+	struct sdmv27 *sdm = (struct sdmv27 *)(void *)FX(rx, V27RX_SDM);
+	struct fpm_mtd *mtd = (struct fpm_mtd *)FXP(sh, V27SH_MTD);
+	struct fpm_mtd *m21 = (struct fpm_mtd *)FXP(sh, V27SH_MTD_V21);
+	void *aux = crt_aux_want;
+	int n = 0;
+
+#define T(k)	(crt_tab[is_ref][(k)])
+
+
+	v[n++] = FXS(sh, V27SH_RATE);
+	v[n++] = FXS(sh, V27SH_TRAIN_LONG);
+	v[n++] = FXS(sh, V27SH_RX_STATE);
+	v[n++] = FXU(sh, V27SH_COUNTDOWN);
+	v[n++] = FXI(sh, V27SH_INT_0004);
+	v[n++] = FXU(sh, V27SH_V21_SAMPLES);
+	v[n++] = FXS(sh, V27SH_V21_ARMED);
+	v[n++] = smh_id(*(v27_rx_state_fn *)(void *)FX(sh, V27SH_STATE),
+			is_ref);
+
+	v[n++] = agc->cfg.block_len;
+	v[n++] = agc->cfg.ref_level;
+	v[n++] = agc->cfg.acquire_level;
+
+	v[n++] = mrf->cfg.branches;
+	v[n++] = mrf->cfg.decimate;
+	v[n++] = mrf->cfg.taps;
+	v[n++] = crt_which(mrf->cfg.coeff, T(0)[0], T(0)[1]);
+	v[n++] = mrf->cfg.aux == aux;
+
+	v[n++] = sre->cfg.clock_len;
+	v[n++] = sre->cfg.groups_acq;
+	v[n++] = sre->cfg.groups_trk;
+	v[n++] = sre->cfg.settle;
+	v[n++] = sre->cfg.coeffs;
+	v[n++] = sre->cfg.mag_hi;
+	v[n++] = sre->cfg.mag_lo;
+	v[n++] = sre->cfg.err_hi;
+	v[n++] = sre->cfg.err_lo;
+	v[n++] = sre->cfg.rms_min;
+	v[n++] = sre->cfg.rms_len;
+	v[n++] = crt_which(sre->cfg.proto, T(1)[0], T(1)[1]);
+	v[n++] = crt_which(sre->cfg.disc, T(2)[0], T(2)[1]);
+	v[n++] = crt_which(sre->cfg.xclock, T(3)[0], T(3)[1]);
+	v[n++] = crt_which(sre->cfg.yclock, T(4)[0], T(4)[1]);
+	v[n++] = crt_which(sre->cfg.pll_k1, T(5)[0], T(5)[1]);
+	v[n++] = crt_which(sre->cfg.pll_k2, T(6)[0], T(6)[1]);
+	v[n++] = memcmp(&sre->cfg.pad34, &aux, sizeof aux) == 0;
+	v[n++] = sre->ppm_step;
+	v[n++] = sre->ppm_period;
+	v[n++] = sre->ppm_scale;
+	v[n++] = sre->ppm_n_max;
+
+	v[n++] = fse->cfg.block;
+	v[n++] = fse->cfg.interp;
+	v[n++] = fse->cfg.taps;
+	v[n++] = fse->cfg.mu[0];
+	v[n++] = fse->cfg.mu[1];
+	v[n++] = fse->cfg.clk_mod;
+	v[n++] = fse->cfg.clk_inc;
+	v[n++] = fse->cfg.train_sym;
+	v[n++] = fse->cfg.err_hi;
+	v[n++] = fse->cfg.err_lo;
+	v[n++] = crt_which(fse->cfg.icoff, T(7)[0], T(7)[1]);
+	v[n++] = crt_which(fse->cfg.qcoff, T(8)[0], T(8)[1]);
+	v[n++] = crt_which(fse->cfg.clk, T(9)[0], T(9)[1]);
+	v[n++] = fse->cfg.owner == dec;
+	v[n++] = fse->cfg.decision == (is_ref ? ref_V27RX_epoch_det
+					      : V27RX_epoch_det);
+	v[n++] = fse->cfg.reserved34 == aux;
+
+	v[n++] = FXU(rx, V27RX_Q_LIMIT);
+	v[n++] = FXS(rx, V27RX_Q_FLAG) | FXS(rx, V27RX_Q_ACC)
+		 | (short)FXU(rx, V27RX_Q_COUNT);
+	v[n++] = FXS(rx, V27RX_RMS_ON);
+	v[n++] = FXS(rx, V27RX_RMS_REF) | (short)FXU(rx, V27RX_RMS_COUNT);
+	v[n++] = sdm->nbits;
+
+	v[n++] = FXI(dec, V27DEC_EIGHT_PHASE);
+	v[n++] = FXU(dec, V27DEC_PHASE_MASK);
+	v[n++] = FXI(dec, V27DEC_TRAIN_SHORT);
+	v[n++] = FXS(dec, V27DEC_EPOCH_AVG);
+	v[n++] = crt_which(FXP(dec, V27DEC_PMAP), T(10)[0], T(10)[1]);
+	v[n++] = crt_which(FXP(dec, V27DEC_ANGLES), T(11)[0], T(11)[1]);
+
+	v[n++] = mtd->cfg.tones * 65536L + mtd->cfg.ratio;
+	v[n++] = mtd->cfg.min_level;
+	v[n++] = crt_which(mtd->cfg.coeff, T(12)[0], T(12)[1]);
+	v[n++] = m21->cfg.tones * 65536L + m21->cfg.ratio;
+	v[n++] = m21->cfg.min_level;
+	v[n++] = m21->cfg.coeff == crt_v21coef[is_ref];
+
+	v[n++] = ((unsigned char *)h)[V27_OBJ_STATUS] * 65536L
+		 + ((unsigned char *)h)[V27_OBJ_STATUS_FLAGS] * 256L
+		 + ((unsigned char *)h)[V27_OBJ_STATUS_FLAGS2];
+	v[n++] = FXI(rx, V27RX_EN_SRE_ADAPT) + 2 * FXI(rx, V27RX_EN_FSE_PLL)
+		 + 4 * FXI(rx, V27RX_EN_FSE_LMS);
+	v[n++] = FXU(h, V27RXH_EQ_TAPS);
+	v[n++] = (FXP(h, V27RXH_EQ_OUT_I) == fse->out_i)
+		 + 2 * (FXP(h, V27RXH_EQ_OUT_Q) == fse->out_q)
+		 + 4 * (FXP(h, V27RXH_EQ_N_OUT) == (void *)&fse->n_out)
+		 + 8 * (FXP(h, V27RXH_EQ_ICOEFF) == fse->icoeff)
+		 + 16 * (FXP(h, V27RXH_EQ_QCOEFF) == fse->qcoeff);
+	v[n++] = FXI(h, V27RXH_ZERO_38) | FXI(h, V27RXH_ZERO_3C)
+		 | FXI(h, V27RXH_ZERO_44) | FXI(h, V27RXH_ZERO_48)
+		 | FXS(h, V27RXH_ZERO_40) | FXS(h, V27RXH_ZERO_4C);
+
+	crt_fields = n;
+	while (n < CRT_N)
+		v[n++] = 0;
+#undef T
+}
+
+/* The same 68 values, recomputed from the setup, with one reading changed. */
+static void
+crt_expect(long *v, const struct crt_setup *u, int variant)
+{
+	short want = u->use_default ? V27RX_CFG.bit_rate : u->bit_rate;
+	int known = 1;
+	int r;
+	int train_long;
+	long period;
+	int n = 0;
+
+	if (variant == CR_DEFAULT_IS_2400 && u->use_default)
+		want = 2400;
+
+	if (want == 2400)
+		r = V27SH_RATE_2400;
+	else if (want == 4800)
+		r = V27SH_RATE_4800;
+	else {
+		r = V27SH_RATE_4800;
+		known = 0;
+	}
+	if (variant == CR_RATE_SWAP)
+		r = 1 - r;
+
+	train_long = (u->use_default ? V27RX_CFG.int_0014 : u->int_0014) == 0;
+
+	v[n++] = r;
+	v[n++] = train_long;
+	v[n++] = V27RX_STATE_START;
+	v[n++] = 0;
+	v[n++] = 0;
+	v[n++] = 0;
+	v[n++] = 0;
+	v[n++] = V27RX_STATE_START;
+
+	v[n++] = (r == V27SH_RATE_4800 || variant == CR_AGC_BLOCK_ALWAYS)
+	       ? V27_AGC_BLOCK_4800 : AGCv27_CFG.block_len;
+	v[n++] = AGCv27_CFG.ref_level;
+	v[n++] = AGCv27_CFG.acquire_level;
+
+	v[n++] = V27RX_MRF_UP[r];
+	v[n++] = V27RX_MRF_DOWN[r];
+	v[n++] = V27RX_MRF_FILT_LEN[r];
+	v[n++] = r;
+	v[n++] = 1;
+
+	v[n++] = V27RX_SAMP_PER_BAUD[r];
+	v[n++] = V27_SRE_GROUPS_ACQ;
+	v[n++] = V27_SRE_GROUPS_TRK;
+	v[n++] = V27_SRE_SETTLE;
+	v[n++] = V27RX_SRE_FILT_LEN[r];
+	v[n++] = V27_SRE_MAG_HI;
+	v[n++] = V27_SRE_MAG_LO;
+	v[n++] = V27_SRE_ERR_HI;
+	v[n++] = V27_SRE_ERR_LO;
+	v[n++] = (short)(AGCv27_CFG.ref_level
+			 / (variant == CR_RMS_DIV_3 ? 3
+						    : V27_SRE_RMS_MIN_DIV));
+	v[n++] = (short)((variant == CR_RMS_LEN_2 ? 2 : V27_SRE_RMS_LEN_SYMS)
+			 * V27RX_SAMP_PER_BAUD[r]);
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = 1;
+	{
+		int step = r == V27SH_RATE_2400 ? V27_SRE_PPM_STEP_2400
+						: V27_SRE_PPM_STEP_4800;
+		int unit = variant == CR_PPM_UNIT_100 ? 100 : V27_SRE_PPM_UNIT;
+
+		if (variant == CR_PPM_STEP_SWAP)
+			step = r == V27SH_RATE_2400 ? V27_SRE_PPM_STEP_4800
+						    : V27_SRE_PPM_STEP_2400;
+		period = (short)(step * unit);
+		v[n++] = step;
+		v[n++] = period;
+		v[n++] = (short)(V27_SRE_PPM_MILLION
+				 / (period * V27RX_SAMP_PER_BAUD[r]));
+		v[n++] = (short)(V27_SRE_PPM_MILLION / period);
+	}
+
+	if (variant == CR_FSE_BLOCK_SWAP)
+		v[n++] = r == V27SH_RATE_2400 ? V27_FSE_BLOCK_4800
+					      : V27_FSE_BLOCK_2400;
+	else
+		v[n++] = r == V27SH_RATE_2400 ? V27_FSE_BLOCK_2400
+					      : V27_FSE_BLOCK_4800;
+	v[n++] = V27RX_SAMP_PER_BAUD[r];
+	v[n++] = V27RX_FSE_FILT_LEN[r];
+	v[n++] = V27RX_FSE_MU_TRAIN[r];
+	v[n++] = V27RX_FSE_MU_TRACK[r];
+	v[n++] = V27RX_CRR_TABLE_LEN[r];
+	v[n++] = V27RX_CRR_ADJUST[r];
+	v[n++] = V27_FSE_TRAIN_SYM;
+	v[n++] = V27_FSE_ERR_HI;
+	v[n++] = V27_FSE_ERR_LO;
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = r;
+	v[n++] = 1;
+	v[n++] = 1;
+	v[n++] = 1;
+
+	if (variant == CR_QLIMIT_SWAP)
+		v[n++] = r == V27SH_RATE_2400 ? V27RX_Q_LIMIT_4800
+					      : V27RX_Q_LIMIT_2400;
+	else
+		v[n++] = r == V27SH_RATE_2400 ? V27RX_Q_LIMIT_2400
+					      : V27RX_Q_LIMIT_4800;
+	v[n++] = 0;
+	v[n++] = 1;
+	v[n++] = 0;
+	if (variant == CR_NBITS_SWAP)
+		v[n++] = r == V27SH_RATE_2400 ? V27_SDM_NBITS_4800
+					      : V27_SDM_NBITS_2400;
+	else
+		v[n++] = r == V27SH_RATE_2400 ? V27_SDM_NBITS_2400
+					      : V27_SDM_NBITS_4800;
+
+	if (variant == CR_EIGHT_PHASE_INV)
+		v[n++] = r != V27SH_RATE_4800;
+	else
+		v[n++] = r == V27SH_RATE_4800;
+	v[n++] = (unsigned short)V27RX_DEC_PHS_MASK[r];
+	if (variant == CR_TRAIN_IGNORED)
+		v[n++] = 1;
+	else
+		v[n++] = !train_long;
+	v[n++] = V27DEC_MAG;
+	v[n++] = r;
+	v[n++] = r;
+
+	if (variant == CR_MTD_RATIO_SWAP) {
+		v[n++] = V27_MTD_TONES * 65536L + V27_MTD_V21_RATIO;
+		v[n++] = V27_MTD_MIN_LEVEL;
+		v[n++] = r;
+		v[n++] = V27_MTD_V21_TONES * 65536L + V27_MTD_RATIO;
+	} else {
+		v[n++] = V27_MTD_TONES * 65536L + V27_MTD_RATIO;
+		v[n++] = V27_MTD_MIN_LEVEL;
+		v[n++] = r;
+		v[n++] = V27_MTD_V21_TONES * 65536L + V27_MTD_V21_RATIO;
+	}
+	v[n++] = V27_MTD_V21_MIN_LEVEL;
+	v[n++] = 1;
+
+	{
+		long status = V27_STATUS_START;
+		long flags = V27_STATUS_FLAGS_SEED;
+
+		/*
+		 * AND THE UNKNOWN-RATE REPORT IS DEAD, which is what this
+		 * variant measures.  `V27RX_create` raises
+		 * `V27_STATUS_FLAG_ERROR` and writes `V27_STATUS_DEFAULT` at
+		 * 0x997b4 when the caller's `bit_rate` is neither 2400 nor
+		 * 4800 -- and then, on every path, wipes all four bytes of the
+		 * word with one `movl $0x0,0x1c(%ebp)` at 0x99d0d before
+		 * seeding them again.  So the model below IGNORES `known`, and
+		 * `CR_UNKNOWN_KEEPS_ERROR` -- the reading that believes the
+		 * early write survives -- has to separate.  D1161.
+		 */
+		if (!known && variant == CR_UNKNOWN_KEEPS_ERROR) {
+			status = V27_STATUS_DEFAULT;
+			flags |= V27_STATUS_FLAG_ERROR;
+		}
+		v[n++] = status * 65536L + flags * 256L + 0;
+	}
+	v[n++] = 1 + 2 + 4;
+	v[n++] = (unsigned short)V27RX_FSE_FILT_LEN[r];
+	v[n++] = 1 + 2 + 4 + 8 + 16;
+	v[n++] = 0;
+
+	while (n < CRT_N)
+		v[n++] = 0;
+}
+
+static int
+crt_skip_obj(int off)
+{
+	if (off >= V27RXH_EQ_OUT_I && off < V27RXH_EQ_QCOEFF + 4)
+		return 1;
+	if (off >= V27_OBJ_SHARED && off < V27_OBJ_RX + 4)
+		return 1;
+	return 0;
+}
+
+static int
+crt_skip_sh(int off)
+{
+	if (off >= V27SH_MTD && off < V27SH_MTD + 4)
+		return 1;
+	if (off >= V27SH_STATE && off < V27SH_STATE + 4)
+		return 1;
+	if (off >= V27SH_MTD_V21 && off < V27SH_BUF + 4)
+		return 1;
+	/* fpm_agc_cfg::alpha and ::beta, into each side's AGCv27_CFG. */
+	if (off >= V27SH_AGC + 0x0c && off < V27SH_AGC + 0x14)
+		return 1;
+	return 0;
+}
+
+/*
+ * EVERY TABLE POINTER, because the two sides hold two copies of every table.
+ * What is deliberately NOT skipped is the three context pointers -- both sides
+ * are handed the same `crt_aux_object` -- and every scalar.
+ */
+static int
+crt_skip_rx(int off)
+{
+	if (off >= V27RX_MRF + 0x04 && off < V27RX_MRF + 0x08)
+		return 1;			/* mrf.cfg.coeff             */
+	if (off >= V27RX_AGC + 0x0c && off < V27RX_AGC + 0x14)
+		return 1;			/* agc.cfg.alpha, .beta      */
+	if (off >= V27RX_SRE + 0x10 && off < V27RX_SRE + 0x28)
+		return 1;			/* sre.cfg's six tables      */
+	if (off >= V27RX_FSE + 0x04 && off < V27RX_FSE + 0x0c)
+		return 1;			/* fse.cfg.icoff, .qcoff     */
+	if (off >= V27RX_FSE + 0x14 && off < V27RX_FSE + 0x18)
+		return 1;			/* fse.cfg.clk               */
+	if (off >= V27RX_FSE + 0x24 && off < V27RX_FSE + 0x34)
+		return 1;			/* pll_k1, pll_k2, owner,
+						 * decision                  */
+	if (off >= V27RX_DEC + V27DEC_PMAP && off < V27RX_DEC + V27DEC_PMAP + 4)
+		return 1;
+	if (off >= V27RX_DEC + V27DEC_ANGLES
+	    && off < V27RX_DEC + V27DEC_ANGLES + 4)
+		return 1;
+	return dem_skip_rx(off);
+}
+
+static int
+crt_skip_mtd(int off)
+{
+	if (off < 4)
+		return 1;			/* cfg.coeff                 */
+	return off >= 0x0c && off < 0x10;	/* fpm_mtd::acc              */
+}
+
+static void
+crt_one(const struct crt_setup *u, long tag)
+{
+	struct v27rx_cfg c;
+	unsigned char *pa = 0, *pb = 0;
+	void *ha, *hb;
+	void *sa, *sb;
+	void *ra, *rb;
+	struct fpm_fse *fa, *fb;
+	struct fpm_sre *qa, *qb;
+	struct fpm_mtd *ma, *mb;
+	long va[CRT_N], vb[CRT_N], ve[CRT_N];
+	int d, i;
+
+	c = V27RX_CFG;
+	c.bit_rate = u->bit_rate;
+	c.int_0014 = u->int_0014;
+	c.ptr_0018 = &crt_aux_object;
+	crt_aux_want = u->use_default ? V27RX_CFG.ptr_0018 : &crt_aux_object;
+
+	if (u->preallocate) {
+		/*
+		 * A HANDLE IT MUST REUSE, so the two `fresh` flags go to zero
+		 * and the four modules take their re-init paths.  Both block
+		 * pointers are cleared, which is what `V27RX_create` itself
+		 * does for a handle it allocated -- the reuse path this
+		 * reaches is the one where the HANDLE is old and the blocks
+		 * are new, which is the only combination a caller can set up
+		 * without knowing the layout.
+		 */
+		pa = (unsigned char *)sysdep_malloc(V27RXH_SIZE);
+		pb = (unsigned char *)sysdep_malloc(V27RXH_SIZE);
+		memset(pa, 0x5a, V27RXH_SIZE);
+		memset(pb, 0x5a, V27RXH_SIZE);
+		*(void **)(void *)(pa + V27_OBJ_SHARED) = 0;
+		*(void **)(void *)(pa + V27_OBJ_RX) = 0;
+		*(void **)(void *)(pb + V27_OBJ_SHARED) = 0;
+		*(void **)(void *)(pb + V27_OBJ_RX) = 0;
+	}
+
+	ha = ref_V27RX_create(pa, u->use_default ? 0 : &c);
+	hb = V27RX_create(pb, u->use_default ? 0 : &c);
+
+	if (u->preallocate)
+		diff_eq_int("at %ld: create returned the handle it was given",
+			    ha == (void *)pa && hb == (void *)pb, 1, tag);
+	else
+		diff_eq_int("at %ld: create allocated a handle",
+			    ha != 0 && hb != 0 && ha != hb, 1, tag);
+
+	sa = FXP(ha, V27_OBJ_SHARED);
+	sb = FXP(hb, V27_OBJ_SHARED);
+	ra = FXP(ha, V27_OBJ_RX);
+	rb = FXP(hb, V27_OBJ_RX);
+	fa = (struct fpm_fse *)(void *)FX(ra, V27RX_FSE);
+	fb = (struct fpm_fse *)(void *)FX(rb, V27RX_FSE);
+	qa = (struct fpm_sre *)(void *)FX(ra, V27RX_SRE);
+	qb = (struct fpm_sre *)(void *)FX(rb, V27RX_SRE);
+
+	diff_eq_int("at %ld: create, first differing handle byte",
+		    dem_first_diff((const unsigned char *)hb,
+				   (const unsigned char *)ha,
+				   V27RXH_SIZE, crt_skip_obj), -1, tag);
+	diff_eq_int("at %ld: create, first differing shared byte",
+		    dem_first_diff((const unsigned char *)sb,
+				   (const unsigned char *)sa,
+				   V27SH_SIZE, crt_skip_sh), -1, tag);
+	diff_eq_int("at %ld: create, first differing receive byte",
+		    dem_first_diff((const unsigned char *)rb,
+				   (const unsigned char *)ra,
+				   V27RX_BLOCK_SIZE, crt_skip_rx), -1, tag);
+
+	/* The two tone detectors, and the accumulators they own. */
+	ma = (struct fpm_mtd *)FXP(sa, V27SH_MTD);
+	mb = (struct fpm_mtd *)FXP(sb, V27SH_MTD);
+	diff_eq_int("at %ld: create, the data detector",
+		    dem_first_diff((const unsigned char *)mb,
+				   (const unsigned char *)ma,
+				   (int)sizeof *ma, crt_skip_mtd), -1, tag);
+	diff_eq_int("at %ld: create, the data detector's accumulators",
+		    dem_first_diff((const unsigned char *)mb->acc,
+				   (const unsigned char *)ma->acc,
+				   ma->cfg.tones * 2 * (int)sizeof(short), 0),
+		    -1, tag);
+	ma = (struct fpm_mtd *)FXP(sa, V27SH_MTD_V21);
+	mb = (struct fpm_mtd *)FXP(sb, V27SH_MTD_V21);
+	diff_eq_int("at %ld: create, the V.21 detector",
+		    dem_first_diff((const unsigned char *)mb,
+				   (const unsigned char *)ma,
+				   (int)sizeof *ma, crt_skip_mtd), -1, tag);
+	diff_eq_int("at %ld: create, the V.21 detector's accumulators",
+		    dem_first_diff((const unsigned char *)mb->acc,
+				   (const unsigned char *)ma->acc,
+				   ma->cfg.tones * 2 * (int)sizeof(short), 0),
+		    -1, tag);
+
+	/* The buffers the four modules own, where init filled them. */
+	diff_eq_int("at %ld: create, the equaliser's I coefficients",
+		    dem_first_diff((const unsigned char *)fb->icoeff,
+				   (const unsigned char *)fa->icoeff,
+				   fa->cfg.taps * (int)sizeof(short), 0), -1,
+		    tag);
+	diff_eq_int("at %ld: create, the equaliser's Q coefficients",
+		    dem_first_diff((const unsigned char *)fb->qcoeff,
+				   (const unsigned char *)fa->qcoeff,
+				   fa->cfg.taps * (int)sizeof(short), 0), -1,
+		    tag);
+	diff_eq_int("at %ld: create, the symbol recovery's coefficients",
+		    dem_first_diff((const unsigned char *)qb->coeff,
+				   (const unsigned char *)qa->coeff,
+				   qa->cfg.coeffs * (int)sizeof(short), 0), -1,
+		    tag);
+
+	/*
+	 * The two scratch buffers.  ONLY THE FIRST 160 ENTRIES ARE ZEROED and
+	 * `V27RX_BUF_B` is 164 long, so its last four bytes are whatever
+	 * `sysdep_malloc` returned and are deliberately not compared.
+	 */
+	for (i = 0; i < V27RX_BUF_ZERO; i++) {
+		if (((short *)FXP(ra, V27RX_BUF_A))[i] != 0
+		    || ((short *)FXP(rb, V27RX_BUF_A))[i] != 0
+		    || ((short *)FXP(ra, V27RX_BUF_B))[i] != 0
+		    || ((short *)FXP(rb, V27RX_BUF_B))[i] != 0)
+			break;
+	}
+	diff_eq_int("at %ld: create, both scratch buffers are cleared", i,
+		    V27RX_BUF_ZERO, tag);
+
+	crt_read(ha, va, 1);
+	crt_read(hb, vb, 0);
+	for (i = 0; i < CRT_N; i++)
+		if (va[i] != vb[i]) {
+			diff_eq_int("create, trial*1000+field %ld disagrees",
+				    vb[i], va[i], tag * 1000 + i);
+			break;
+		}
+	if (i == CRT_N)
+		diff_eq_int("at %ld: create, all fields agree", 1, 1, tag);
+
+	for (d = 0; d < (int)CR_MAX; d++) {
+		crt_expect(ve, u, d);
+		for (i = 0; i < CRT_N; i++)
+			if (ve[i] != va[i])
+				break;
+		if (d == CR_NONE)
+			diff_eq_int("V27RX_create model, first differing"
+				    " trial*1000+field %ld",
+				    i, CRT_N, (long)(tag * 1000 + i));
+		else if (i != CRT_N)
+			crt_sep[d]++;
+	}
+
+	{
+		short want = u->use_default ? V27RX_CFG.bit_rate : u->bit_rate;
+
+		crt_rate_seen[want == 2400 ? 0 : (want == 4800 ? 1 : 2)]++;
+	}
+	crt_trials++;
+	crt_train_seen[va[1] != 0]++;
+	if (u->use_default)
+		crt_default_seen++;
+	if (u->preallocate)
+		crt_prealloc_seen++;
+
+	ref_V27RX_delete(ha);
+	V27RX_delete(hb);
+}
+
+static int
+run_create(void)
+{
+	static const struct crt_setup setups[] = {
+	  /* dflt rate  int_0014 prealloc */
+	  {  0,  2400,  0,       0 },
+	  {  0,  2400,  1,       0 },
+	  {  0,  4800,  0,       0 },
+	  {  0,  4800,  1,       0 },
+	  {  0,  9600,  0,       0 },	/* unknown: the error arm      */
+	  {  0,     0,  1,       0 },	/* also unknown                */
+	  {  1,  2400,  0,       0 },	/* null cfg: V27RX_CFG's 4800  */
+	  {  0,  2400,  0,       1 },
+	  {  0,  4800,  1,       1 },
+	  {  1,     0,  0,       1 },
+	  {  0,  4800,  0,       1 },
+	  {  0,  2400,  1,       1 }
+	};
+	int s;
+	long tag = 0;
+
+	crt_tables_init();
+
+	diff_begin("V27RX_create");
+
+	for (s = 0; s < (int)(sizeof(setups) / sizeof(setups[0])); s++)
+		crt_one(&setups[s], tag++);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 static int
 sep_report(void)
@@ -5981,6 +6735,47 @@ sep_report(void)
 			    smh_hsep[i] > 0, 1,
 			    (long)(i * 100000 + smh_hsep[i]));
 
+
+	/* ---- V27RX_create, section 19 ----------------------------------- */
+
+	diff_eq_int("V27RX_create: trials (%ld)", crt_trials > 0, 1,
+		    crt_trials);
+	diff_eq_int("V27RX_create: fields compared per trial (%ld)",
+		    crt_fields > 60, 1, crt_fields);
+	for (i = 0; i < 3; i++)
+		diff_eq_int("V27RX_create: 2400, 4800 and an unknown rate all"
+			    " built (%ld)", crt_rate_seen[i] > 0, 1,
+			    (long)(i * 100000 + crt_rate_seen[i]));
+	for (i = 0; i < 2; i++)
+		diff_eq_int("V27RX_create: both training lengths built (%ld)",
+			    crt_train_seen[i] > 0, 1,
+			    (long)(i * 100000 + crt_train_seen[i]));
+	diff_eq_int("V27RX_create: a null config was used (%ld)",
+		    crt_default_seen > 0, 1, crt_default_seen);
+	diff_eq_int("V27RX_create: a caller-supplied handle was reused (%ld)",
+		    crt_prealloc_seen > 0, 1, crt_prealloc_seen);
+	for (i = 1; i < (int)CR_MAX; i++) {
+		/*
+		 * AND ONE THAT MUST NOT SEPARATE, asserted rather than left
+		 * out.  `V27RX_create` writes `V27_AGC_BLOCK_4800` into the
+		 * live gain control's `cfg.block_len` on the 4800 arm only --
+		 * and `AGCv27_CFG.block_len` is 40, which IS 0x28.  So the
+		 * store puts back the value the configuration already had and
+		 * nothing can observe whether it happened.  The variant that
+		 * does it on both arms is therefore not a detector, and this
+		 * asserts the zero instead of pretending it is one.  F9307,
+		 * D1162.
+		 */
+		if (i == (int)CR_AGC_BLOCK_ALWAYS) {
+			diff_eq_int("V27RX_create: the 4800 AGC block length"
+				    " separates nothing (%ld)", crt_sep[i], 0,
+				    crt_sep[i]);
+			continue;
+		}
+		diff_eq_int("V27RX_create variant separates (%ld)",
+			    crt_sep[i] > 0, 1, (long)(i * 100000 + crt_sep[i]));
+	}
+
 	for (i = 1; i <= 5; i++)
 		diff_eq_int("V27RX_delete variant separates (%ld)",
 			    del_sep[i] > 0, 1, (long)(i * 1000 + del_sep[i]));
@@ -6092,6 +6887,7 @@ main(void)
 	rc |= run_epoch();
 	rc |= run_hdx();
 	rc |= run_smh();
+	rc |= run_create();
 	rc |= sep_report();
 
 	return rc;

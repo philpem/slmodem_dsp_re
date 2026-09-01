@@ -107520,3 +107520,116 @@ over and none missing -- so the inference is now a reading. The `ppm_scale`
 expression is also what confirms the unit: microseconds per second divided by
 samples per interval is parts per million per slipped sample, which is what
 the debug line "TimingVxx: Timing Offset [ppm] = %d" prints.  (2026-09-01)
+
+### F9304. V.27ter's "modem instance" is TWO objects, and `V27RX_create` is what shows it
+
+`include/dsplib/v27fax.h` modelled one instance because every function that had
+been reconstructed took a `void *` called `modem` and read offsets out of it.
+Writing `V27RX_create` settles that the RECEIVE handle and the TRANSMIT handle
+are different allocations with different layouts, and that reading them as one
+would have been silently wrong in exactly the way a wrong name is.
+
+**The receive handle is 0x58 bytes** (`sysdep_malloc(0x58)` at 0x99e90). Its
+first 28 are a `struct v27rx_cfg` -- seven dwords copied wholesale from the
+caller's, or from `V27RX_CFG` when the caller passes none -- then the status
+word at +0x1c, five pointers INTO the equaliser at +0x20..+0x30, `fse->cfg.taps`
+at +0x34, six zeroed words, and the shared and receive blocks at +0x50 and
++0x54. `V27RX_delete` frees +0x50, +0x54 and the handle.
+
+**The transmit handle is something else.** `V27TX_delete` frees
+`*(h + 0x28) + 0x5c` through `FPM_PPS_free` and `*(h + 0x24)`'s FIFO and `sgd`;
+`ModDataV27` and `ScrambleDataV27` reach the transmit chain through
+`*(h + 0x28)`. On the RECEIVE handle +0x28 holds `&fse->n_out` and +0x24 holds
+`fse->out_q`, so `FPM_PPS_free` would be handed a pointer into the middle of the
+equaliser -- and both deletes free the handle itself, which on one object would
+be a double free. Two independent arguments, either one sufficient.
+
+**AND `faxcfg.h` HAD ALREADY MODELLED THE HEAD OF IT FROM THE OTHER END.**
+`init_vmi_v27rx` allocates a `struct v27rx_cfg`, fills `bit_rate` and
+`ptr_0018` and hands it to the VMI slot; `V27RX_create` is what receives it and
+copies it into the handle. Three of its fields are then read back: `bit_rate`
+decides `V27SH_RATE`, `int_0014` decides `V27SH_TRAIN_LONG`, and `ptr_0018` is
+given to the resampler, the symbol recovery and the equaliser as their context
+pointer. So the structure was right and the only thing missing was that it is
+the handle's own prefix.
+
+The header now names the receive handle's fields `V27RXH_*` and says which
+object each existing name belongs to. Nothing was renamed, because every
+reconstructed V.27ter function already spells these as offsets and a rewrite
+would move code generation everywhere for no evidence.  (2026-09-01)
+
+### F9305. What `V27RX_create` says that nothing else in the object does
+
+Four things, each of which had been recorded as an open question somewhere:
+
+**1. `fpm_sre`'s timing meter has exactly one filler, and this is it.**
+`fpm_sre.h` records that `ppm_step`, `ppm_scale`, `ppm_period` and `ppm_n_max`
+"are read-only to both functions, so a caller has to fill them and an all-zero
+state divides by zero". `V27RX_create` fills all four, after `FPM_SRE_init` and
+not through the configuration: `ppm_step` is 0x18 at 2400 and 0x20 at 4800,
+`ppm_period` is `(short)(ppm_step * 200)`, `ppm_scale` is
+`1000000 / (ppm_period * clock_len)` and `ppm_n_max` is
+`1000000 / ppm_period`. The product is narrowed to `short` BEFORE both
+divisions (`movswl %di,%esi` at 0x99a67), and `clock_len` is read back out of
+the STACK configuration rather than out of the object.
+
+**2. `fpm_sre_cfg`'s `pad34`/`pad36` is a context POINTER.** See F9306.
+
+**3. `SDMv27_cfg::nbits` is the recommendation's own bits-per-symbol.** The
+object computes `3 - (rate == 0)`: two bits on the four-phase 2400 bit/s
+constellation and three on the eight-phase 4800 one. That is a third
+independent confirmation of F9151's rate index, after the 0x960/0x12c0
+comparison and the `V27_MTD_COEFF_4800` selection.
+
+**4. `V27RX_epoch_det` is installed as `cfg.decision` and `rx + 0x14` as
+`cfg.owner`**, four instructions before `FPM_FSE_init` (0x99b6c, 0x99b71).
+`v27fax.h` had already derived both from the reading end; this is the writing
+end, and the two agree.
+
+The function is otherwise three allocations and five stack configurations built
+by copying the library's own `*_CFG` template and patching named offsets of it
+-- which is what makes every one of its literals attributable to a FIELD rather
+than to an offset.  (2026-09-01)
+
+### F9306. `fpm_sre_cfg`'s `pad34`/`pad36` is one `void *` context pointer, and the header should say so
+
+`V27RX_create` gives the same value -- the caller's `cfg->ptr_0018` -- to three
+module configurations, with one 32-bit store each:
+
+    fpm_mrf_cfg::aux         +0x0c   (0x99864)   modelled as `void *`
+    fpm_fse_cfg::reserved34  +0x34   (0x99ab1)   modelled as `void *`
+    fpm_sre_cfg  ????        +0x34   (0x99919)   modelled as two `short`
+
+`fpm_sre.h` calls the third one `pad34` and `pad36` and says both are "0 in the
+built-in instance", which was true of everything that had been read until now.
+It is the same field in the same role as the other two, and the object states
+it with the same single `movl`.
+
+**IT IS NOT FIXED HERE, DELIBERATELY.** `fpm_sre.h` is another module's header
+and three sessions were live in this tree when this was written; renaming two
+members is the kind of change that breaks a file nobody is looking at.
+`src/fax/v27.c` stores the pointer with a four-byte `memcpy` -- one `movl` on
+both compilers, and no strict-aliasing violation, where the obvious
+`*(void **)&scfg.pad34` is one GCC 14 warns about. Whoever next owns
+`fpm_sre.h` should replace the two shorts with `void *aux`, at which point that
+`memcpy` becomes a plain assignment. `t_v27fax.c` compares the four bytes
+against the pointer it supplied, so the claim is measured either way.  (2026-09-01)
+
+### F9307. The 4800 bit/s AGC block-length override in `V27RX_create` is a no-op
+
+At 0x998f7 the object tests `V27SH_RATE == 1` and, on the 4800 arm only, stores
+0x28 into the LIVE gain control's `fpm_agc_cfg::block_len` (0x99ebf,
+`movw $0x28,0x72(%edi)` where `rx + 0x72` is `V27RX_AGC + 0x0a`). It is a
+post-init fix-up rather than a fifth stack configuration, which is what made it
+look like the one asymmetry worth checking.
+
+**`AGCv27_CFG.block_len` IS ALREADY 40, WHICH IS 0x28.** So the store puts back
+the value `FPM_AGC_init` copied in four instructions earlier and nothing in the
+object or out of it can observe whether it ran. `t_v27fax.c` measures this
+rather than asserting it: the variant that performs the store on BOTH rate arms
+separates zero of twelve trials, and that zero is asserted as a zero -- the same
+shape as F9233's unreachable SNR arm.
+
+The store is reproduced because it is there, and the deviation register carries
+it as D1162. What it is NOT is evidence that 2400 wants a different block
+length: nothing writes the field on that arm, so both rates run on 40.  (2026-09-01)
