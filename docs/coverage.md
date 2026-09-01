@@ -7,16 +7,19 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [##############################....]  88.6%    650802 bytes, 1629 symbols
-  tested      [##################################] 100.0%    650657 bytes, 1625 of 1629 that can be
+  translated  [##############################....]  88.7%    651565 bytes, 1632 symbols
+  tested      [##################################]  99.9%    650657 bytes, 1625 of 1632 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
   is what CAN be driven that way: everything with a `ref_` alias in
   build/dsplibs_ref.o, which since the Makefile globalizes first includes
-  the file-local symbols too -- 36 of ours (15149 bytes).
+  the file-local symbols too -- 39 of ours (15912 bytes).
 
   translated, alias exists, and NOT tested:
+    init_vmi_v17rx                                  308 bytes   (file-local)
+    init_vmi_v27rx                                  230 bytes   (file-local)
+    init_vmi_v29rx                                  225 bytes   (file-local)
     GenEQTrnSequenceV29                              99 bytes
     _handle_status                                   44 bytes
     _ZN5V92JdD2Ev                                     1 bytes
@@ -86,7 +89,7 @@ dsplibs.o reconstruction coverage
     class1tx.c +94                                 57840 bytes   203 symbols
     class1.c                                        3883 bytes     6 symbols
     voice.c#3 +3                                    3253 bytes     4 symbols
-    class1rx.c                                      2495 bytes     5 symbols
+    class1rx.c                                      1732 bytes     2 symbols
     v22.c                                            929 bytes     3 symbols
     Dialer.c +18                                     895 bytes     1 symbols
     V32mod.c +39                                      28 bytes     1 symbols

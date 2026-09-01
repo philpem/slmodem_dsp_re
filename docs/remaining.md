@@ -286,7 +286,15 @@ period compiler: first `conflicting types for 'V22FP_control'`, then
 after any multi-branch merge run a whole-tree duplicate sweep —
 
     for o in build/period/src_*.o; do nm --defined-only "$o" \
-        | awk -v f="$o" '$2 ~ /^[TD]$/ {print $3, f}'; done | sort | uniq -d -f0
+        | awk '$2 ~ /^[TD]$/ {print $3}'; done | sort | uniq -d
+
+**PRINT THE NAME ALONE AND COMPARE THE WHOLE OF IT.** The first version of
+this snippet printed `name file` and used `uniq -d -f0`, which compares a
+FIELD-SKIPPED, effectively truncated key: on long mangled C++ names it reported
+FOUR duplicates that were one symbol seen once, all inside a single object. A
+sweep whose false positives look exactly like the defect it hunts is worse than
+no sweep, because the one time it is right nobody will believe it. If you want
+the owning file too, find it in a second pass on the names this prints.
 
 — rather than chasing one `multiple definition` at a time, which is what this
 pass did for three rounds before doing the sweep. Fixed in `b5532c22` and
@@ -569,3 +577,25 @@ object's bytes rather than re-derived from the finding alone.
   Nothing is MISSING so the gate is unaffected. Six `voicedpdel.json` mutation
   DESCRIPTORS also needed rewriting for field renames: **a `find` string that
   quotes a renamed field stops matching silently.**
+
+## Disk is a real constraint on this machine, and it bit mid-wave
+
+The fax wave-2 agents ran the volume to **100% — 177 MB free of 35 G** — and one
+hit `No space left on device` during a build. The cause is not the source: a
+`build/` tree here is **1.5 to 2.3 GB**, because `build/test` holds ~330 test
+binaries each statically linked against a 1.2 MB object, and every agent
+worktree carries its own.
+
+**Reap merged worktrees promptly.** Five of them held 5.9 GB between them after
+their branches were already in master; removing them returned the volume to
+84%. The check before removing is `git merge-base --is-ancestor <branch>
+master`, never the worktree's age.
+
+Two related traps, both seen this session:
+
+- **The period shard trees are 1.1 GB EACH** and default to `/tmp`, which is a
+  1.9 GB tmpfs here — so one barely fits and two cannot. Set `TMPDIR` to real
+  disk for any mutation run (see the deferred re-record above).
+- **A build that ran out of space mid-link is not a failed build, it is an
+  UNKNOWN one.** Check a gate log for `no space left`/`write error` before
+  reading its verdict, and re-run rather than trusting it.
