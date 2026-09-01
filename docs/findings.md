@@ -108923,3 +108923,167 @@ reading V.27ter's onto V.21 would have scheduled a subset that cannot link at
 all. `tools/relocscan.py` is the tool for the data-reference half and was fixed
 the same day (F9280); `objdump -r` piped through a grep for the family's names
 is the cheap whole-object form and is what was used here.  (2026-09-01)
+
+## F9550. F9271's 48 adapters: 27 written, 8 already done elsewhere, 13 blocked -- and 40 more once the message functions are counted out
+
+F9271 named the 48-symbol run and declined to split it by modulation. This
+pass wrote the file: `src/fax/faxadapt.c` and `include/dsplib/faxadapt.h`,
+one translation unit, functions in the object's own address order.
+
+**The 48 were never 48 for this file.** Eight of them -- `v??tx_message` /
+`v??rx_message` for all four modulations -- were already written in
+`class1tx.c`'s `MESSAGE_FN` pass before this one started (finding F8320's leaf
+wave). So the scope here was the other 40: `create`, `delete`, `process`,
+`status`, `control`, two sides, four modulations.
+
+**Of those 40, `readyqueue.py` (2026-09-01, post `objtree.py` rebuild) put 27
+ready and 13 blocked**, and the 13 are named individually in `faxadapt.h`
+rather than repeated here since a shelf-life copy would drift the way
+CLAUDE.md's own V90Parameters paragraph warns about:
+
+- **4 `tx_create`** (all four modulations) -- every `V??TX_create` is
+  unwritten, and so is every `V??TX_CFG` data table it would copy from.
+- **8 `*_control`** (both sides, all four modulations) -- every
+  `V??TX_control`/`V??RX_control` is unwritten. `readyqueue.py` reports each
+  of the eight individually READY on its own closure (75-131 bytes), which is
+  F9271's "temptation" bullet playing out exactly as warned: the tool is
+  answering a linking question, not a factoring one, and scheduling any one
+  of the eight here would still leave the file's own address run split across
+  two waves for no reason but which agent got there first. Left for whoever
+  writes the first `V??_control`, since that symbol lands in `v17.c`/
+  `v21.c`/`v27.c`/`v29.c` and this batch does not own those files.
+- **1 `v27tx_process`** -- `V27TX_modem` is the only one of the four TX modems
+  still unwritten; `v17tx_process`/`v21tx_process`/`v29tx_process` are not
+  blocked because `V17TX_modem`/`V21TX_modem`/`V29TX_modem` already are.
+
+The 27 written are the 4 RX creates and, for both sides across all four
+modulations, `delete` (8), `status` (8) and `process` (7 of 8 -- the one
+exception is `v27tx_process` above).
+
+**AND THE LAYOUT PROVES A FIELD SPLIT THAT WAS ONLY NAMED BEFORE THIS PASS.**
+`struct faxvmi_link` (`faxvmi.h`) documents `pack_width` at +0x0e as what the
+PACKERS read and `unpack_width` at +0x10 as what the UNPACKERS read, from
+`faxvmi.c`'s own comment -- but nothing had yet exercised a `v??_create`
+adapter to check it against the object. All four RX creates write only
+`unpack_width` and leave `pack_width` untouched (V.17: 0, V.21/V.27/V.29:
+never even reached in the disassembly); the not-yet-written TX creates'
+disassembly (read for F9271, not written here) shows the mirror -- `pack_width`
+set, `unpack_width` left alone. Two independent readings -- the header's own
+naming and every RX create's own field selection -- agreeing on a field
+neither one could settle alone is evidence class 2, not an inference.
+
+**THE RATE-TO-WIDTH TABLE, PER MODULATION, READ OFF `dis.py` AND NOT GUESSED:**
+
+| modulation | rates | `unpack_width` |
+|---|---|---|
+| V.17 | 14400 / 12000 / 9600 / other | 6 / 5 / 4 / 3 |
+| V.21 | 300 (only) | 1, unconditionally |
+| V.27ter | 2400 / other (4800) | 2 / 3 |
+| V.29 | 7200 / other (9600) | 3 / 4 |
+
+`pack_count` is 0 on every RX create; V.17's own TX create (unwritten, but
+read) sets it to the constant 0x30 while V.21/V.27/V.29's leave it wherever
+the caller had it, which is a difference across modulations and not a
+mistake -- read directly, not carried forward as a rule.
+
+**`int_0014` IS `faxvmi_link`'s, NOT RENAMED HERE.** It holds the wrapped
+`V??_*` handle -- read as the "existing instance" argument every `create`
+passes and overwritten with what `create` returns, then forwarded unchanged
+by `delete`/`status`/`process` -- and `faxvmi.h` (a different strand of this
+wave) already spells it `int`. D1250 records why every read/write goes
+through `(void *)(long)`/`(int)(long)` rather than a direct cast, and why the
+field is not retyped here.
+
+(2026-09-01)
+
+## F9551. Every TX create's return value is garbage on at least one path, and that is how `void` was chosen for all 27
+
+None of the 27 adapters written here declare a return type the disassembly
+could not support literally: `delete` is `void` because the object's own
+`jmp` never sets up `eax`; `status` returns whatever `V??_status` returns,
+tail-called; `process` is `void`, matching the object's `ret` with no `eax`
+convention visible at the call sites that reach it. The one worth recording
+is `create`.
+
+`v17tx_create` (BLOCKED, not written, but disassembled for F9271 and again
+here) leaves `eax` holding the just-created HANDLE on its 14400 and 12000
+arms -- neither touches `eax` after the store to `dp+0x14` -- and leaves it
+holding a COMPUTED WIDTH VALUE (3 or 4) on the default arm, where
+`mov $0x4,%eax; sub %edx,%eax` overwrites it. A function whose return
+register holds two unrelated kinds of value depending on which branch ran,
+with no cast or reinterpretation at either site, is not returning anything a
+caller could use -- it is a `void` function whose compiler happened to leave
+`eax` as a side effect of the last arithmetic it did. `v17rx_create` (WRITTEN)
+shows the same shape: the 14400/12000 arms preserve `eax` from the
+`V17RX_create` call and the default arm clobbers it computing
+`unpack_width`.
+
+So all four `*rx_create` adapters here are declared `void`, matching what the
+object's own register discipline says about the four `*tx_create` ones it
+sits beside. This is usage inference (CLAUDE.md's weakest evidence class) and
+is recorded as such: nothing establishes that a caller reads the return slot,
+only that the object does not bother keeping one consistent value in it.
+(2026-09-01)
+
+## F9552. The TX side has no create, so its delete/status/process tests are fixtures built from ALREADY-PUBLIC offsets, not new reverse engineering, and the safety rule is "what gets dereferenced directly must be real"
+
+Testing `v17rx_create`'s siblings needed nothing invented: the adapter under
+test IS the legitimate way to build a real RX handle, so `run_rx_delete`,
+`run_rx_status` and `run_rx_process` in `test/unit/t_faxadapt.c` all just call
+it. The TX side has no create (F9550), so there is no legitimate handle --
+and the temptation, given a wide-and-shallow batch of similar adapters, is
+either to skip the TX side's own differential test or to wave a zeroed dummy
+handle at it and call that coverage. Both are the F134 hazard this batch was
+warned about by name.
+
+**What makes a fabricated handle SAFE is establishable without guessing,
+because the offsets are already public.** Reading `V17TX_delete`,
+`V21TX_delete`, `V27TX_delete`, `V29TX_delete` and everything they call
+(`FPM_PPS_free`, `FPM_FSM_delete`, `FPM_MRF_free`, `FPM_TONE_delete`,
+`SGD_delete`, `FIFO_delete`) turns up ONE rule, consistently, everywhere:
+
+- a pointer a callee DEREFERENCES DIRECTLY (`state->hist_q`, `s->hist`,
+  `f->buf`, the `state->cfg.len` `FPM_TONE_delete` reads with NO NULL GUARD)
+  must be a real, valid, big-enough address, or the process segfaults --
+  there is no interception on a raw C pointer read;
+- a pointer only ever HANDED to `sysdep_free` may be anything, including zero
+  or wild, because the harness's allocator "swallows" a free it does not
+  recognise instead of forwarding it to the real one (`harness.h`'s
+  `bad_free`/`free_null` counters exist for exactly this).
+
+So every fixture in `t_faxadapt.c` is zeroed except the handful of slots that
+are themselves pointers something dereferences one level down -- a real
+(zeroed) `struct sgd`, `struct fax_fifo`, `struct fpm_pps`-shaped region,
+`struct fpm_tone` (needed only for V.21's `FPM_FSM_delete` -> `FPM_TONE_delete`
+chain, the one link in the whole set that lacks a null guard) -- built from
+struct types and `V??TX_OBJ_*`/`V??TXP_*` offsets already public in
+`v17fax.h`/`v17data.h`/`v21fax.h`/`v27fax.h`/`v29fax.h`/`v29data.h`. Nothing
+here is a new derivation; it is an assembly of what other strands of this
+wave had already established and typed.
+
+**`V??TX_status` needed no sub-fixture at all** -- all four read their first
+argument's bytes directly with no `FIELD_PTR` indirection, so a single flat,
+pattern-filled buffer is enough, and the test compares the resulting
+`status`/`v17_status`/`v21_status` output byte-for-byte between ours and the
+blob's, not just "did it survive".
+
+**`V??TX_modem` calls through a function pointer at `V??TXP_PROCESS`, which a
+zeroed slot turns into a call through NULL.** Rather than reconstruct a real
+initial state machine (the per-modulation apparatus `t_v17fax.c`/`t_v21fax.c`/
+`t_v29fax.c` already carry for exactly that purpose, and duplicating it here
+would be re-deriving another strand's work for a batch whose own brief calls
+it "wide, shallow"), the TX process fixtures plant one shared PROBE function
+of the right type (`short (*)(void*, unsigned short*, short*, short*)`,
+identical across V.17/V.21/V.29) that records its four arguments and clears
+`*budget` so the loop exits after one call. That tests exactly what the
+adapter owns -- which formal parameter reaches which slot -- without any
+claim about `V??TX_modem`'s own DSP correctness, which is not this file's to
+re-prove. `V??TXP_INT_0008`/`INT_0004` is set to 1 in the same fixtures so
+`FIFO_write` is never reached, one fewer real object needed.
+
+**BOTH INJECTION TRIALS FIRED.** `pack_count` set to 1 instead of 0 in
+`v17rx_create` failed 6 of 48 checks in `run_rx_create`; swapping `out` and
+`count` in the call `v17tx_process` makes failed 2 of 30 checks in
+`run_tx_process`, one from each side of the probe comparison. Both reverted
+after confirming the FAIL, per CLAUDE.md's F134 rule -- a detector shown only
+passing is indistinguishable from a dead one. (2026-09-01)
