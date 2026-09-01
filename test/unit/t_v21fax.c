@@ -58,6 +58,7 @@
 extern int ref_CarrierDetectV21(void *modem);
 extern int ref_GetSNRV21(void *modem);
 extern int ref_V21TX_status(void *modem, struct v21_status *st);
+extern int ref_V21RX_status(void *modem, struct v21_status *st);
 
 /* --------------------------------------------------------------------- */
 
@@ -367,6 +368,171 @@ run_snr(void)
 	diff_begin("GetSNRV21");
 	for (i = 0; i < (int)(sizeof(counts) / sizeof(counts[0])); i++)
 		run_snr_one(counts[i], 0x0f1e2d3cu + (unsigned)i * 7919u);
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* V21RX_status                                                          */
+
+/*
+ * The receive half of the report, which is not the transmit one with the
+ * handle changed.  What has to be separated is every place the two differ:
+ * which slot takes the rate, that `snr` carries GetSNRV21's answer, that
+ * `quality` is the COMPLEMENT of the LOW_SNR bit, that +0x0e is zeroed and
+ * +0x0c is not, and the computed +0x12.
+ *
+ * `bit_samples` IS PLANTED NON-ZERO ON EVERY TRIAL.  `rx_fixture` zeroes the
+ * fsd's configuration, and +0x12 is an `idiv` by that field with no guard, so
+ * an unplanted fixture would take SIGFPE on both sides -- identically, and
+ * therefore invisibly to a differential comparison, which is why the
+ * precondition is asserted here rather than trusted.  See D1098.
+ */
+static long rxst_q0, rxst_q1, rxst_snr_sep, rxst_bps_sep, rxst_gap_sep;
+static long rxst_flags_sep, rxst_div_sep, rxst_null_trials, rxst_ret1;
+
+static struct rxfix sa, sb;
+static struct v21_status rsta, rstb;
+
+static void
+run_rxstatus_one(unsigned seed, short count, unsigned char flags,
+		 short bit_samples, short f22, unsigned char stflags)
+{
+	long where = (long)bit_samples * 1000 + (long)f22 * 10 + flags;
+	int got_a, got_b;
+	int i;
+
+	rx_fixture(&sa, seed, count);
+	rx_fixture(&sb, seed, count);
+	sa.obj[V21RX_OBJ_FLAGS] = sb.obj[V21RX_OBJ_FLAGS] = flags;
+	sa.dsp.fsd.cfg.bit_samples = sb.dsp.fsd.cfg.bit_samples = bit_samples;
+	sa.dsp.fsd.f22 = sb.dsp.fsd.f22 = f22;
+	*(unsigned short *)(void *)(sa.obj + V21RX_OBJ_PROTOCOL) =
+	*(unsigned short *)(void *)(sb.obj + V21RX_OBJ_PROTOCOL) =
+		(unsigned short)(0x4200u + (unsigned)flags);
+
+	/* THE PRECONDITION, asserted on both sides rather than assumed. */
+	diff_eq_int("at %ld: the divisor is non-zero",
+		    sa.dsp.fsd.cfg.bit_samples != 0, 1, where);
+
+	memset(&rsta, 0, sizeof(rsta));
+	memset(&rstb, 0, sizeof(rstb));
+	rng_seed(seed ^ 0x5eed5eedu);
+	for (i = 0; i < (int)sizeof(rsta); i++)
+		((unsigned char *)(void *)&rsta)[i] =
+		((unsigned char *)(void *)&rstb)[i] =
+			(unsigned char)rng_next();
+	rsta.flags = rstb.flags = stflags;
+	rsta.flags1 = rstb.flags1 = (unsigned char)(stflags ^ 0xffu);
+
+	got_a = ref_V21RX_status(sa.obj, &rsta);
+	got_b = V21RX_status(sb.obj, &rstb);
+
+	diff_eq_int("at %ld: return", (long)got_b, (long)got_a, where);
+	for (i = 0; i < (int)sizeof(rsta); i++)
+		diff_eq_int("rx status byte %ld",
+			    ((const unsigned char *)(const void *)&rstb)[i],
+			    ((const unsigned char *)(const void *)&rsta)[i],
+			    i);
+	diff_eq_int("at %ld: first differing DSP byte",
+		    dsp_first_diff(&sa, &sb), -1, where);
+	diff_eq_int("at %ld: first differing handle byte",
+		    rxobj_first_diff(&sa, &sb), -1, where);
+	for (i = 0; i < MAG_LEN; i++)
+		diff_eq_int("rx status mag[%ld]", sb.mag[i], sa.mag[i], i);
+
+	if (got_a == 1)
+		rxst_ret1++;
+
+	/* ARM COVERAGE, from what the REFERENCE left behind. */
+	if (rsta.quality != 0)
+		rxst_q1++;
+	else
+		rxst_q0++;
+
+	/*
+	 * WRONG READING: the rate written to `tx_bps` as the transmit side
+	 * does.  Separated on every trial, since the object writes 0 there
+	 * and 300 in `rx_bps`.
+	 */
+	if (rsta.tx_bps == 0 && rsta.rx_bps == V21_STATUS_BPS)
+		rxst_bps_sep++;
+	/*
+	 * WRONG READING: `snr` written 0, as `V21TX_status` does.  D1038 has
+	 * `GetSNRV21` returning a literal zero, so this can only separate on
+	 * the RETURN being copied at all -- which it cannot, and that is
+	 * recorded rather than papered over: the counter below is the number
+	 * of trials on which the two agree that the call was made, taken from
+	 * the fact that `mag` was rewritten by it.
+	 */
+	if (sa.mag[0] != MARK)
+		rxst_snr_sep++;
+	/* WRONG READING: +0x0c zeroed rather than +0x0e. */
+	if (rsta.short_0c != 0 && rsta.short_0e == 0)
+		rxst_gap_sep++;
+	/*
+	 * WRONG READING: the flags byte MERGED rather than stored as a
+	 * literal zero.  Separated whenever the caller had any bit set.
+	 */
+	if (stflags != 0 && rsta.flags == 0)
+		rxst_flags_sep++;
+	/*
+	 * WRONG READING: the quotient not doubled, or the constant wrong.
+	 * Separated whenever the computed field is not `rx_bps`, which the
+	 * odd `bit_samples` trials arrange.
+	 */
+	if (rsta.short_12 != V21_STATUS_BPS)
+		rxst_div_sep++;
+}
+
+static int
+run_rxstatus(void)
+{
+	static const short bs[] = { 8, 6, 16, 3, 5, 1, -8, 32767 };
+	static const short fx[] = { 4, 3, 8, 0, -1, 2 };
+	static const unsigned char fl[] = { 0x00, 0x80, 0xff, 0x7f };
+	static const unsigned char sf[] = { 0x00, 0xff, 0x5a };
+	int i, j, k;
+
+	diff_begin("V21RX_status");
+
+	for (i = 0; i < (int)(sizeof(bs) / sizeof(bs[0])); i++)
+		for (j = 0; j < (int)(sizeof(fx) / sizeof(fx[0])); j++)
+			for (k = 0; k < (int)(sizeof(fl) / sizeof(fl[0])); k++)
+				run_rxstatus_one(0x31000000u
+						 + (unsigned)(i * 97 + j * 7
+							      + k),
+						 (short)(8 + i),
+						 fl[k], bs[i], fx[j],
+						 sf[(i + j + k) % 3]);
+
+	/* The NULL destination: nothing written, zero returned. */
+	{
+		int got_a, got_b;
+		int i2;
+
+		rx_fixture(&sa, 0x4d4d4d4du, 12);
+		rx_fixture(&sb, 0x4d4d4d4du, 12);
+		sa.dsp.fsd.cfg.bit_samples = sb.dsp.fsd.cfg.bit_samples = 8;
+		got_a = ref_V21RX_status(sa.obj, 0);
+		got_b = V21RX_status(sb.obj, 0);
+		diff_eq_int("rx NULL destination: return", (long)got_b,
+			    (long)got_a, 0);
+		diff_eq_int("rx NULL destination: the blob returned 0",
+			    got_a == 0, 1, 0);
+		/*
+		 * `rxobj_first_diff` and not a raw loop: the handle carries
+		 * the fixture's OWN DSP pointer at +0x50, which is a
+		 * per-fixture address and differs on every trial.  Written as
+		 * a raw loop first, and byte 0x51 is what said so.
+		 */
+		i2 = 0;
+		diff_eq_int("rx NULL: first differing handle byte",
+			    rxobj_first_diff(&sa, &sb), -1, i2);
+		diff_eq_int("rx NULL: first differing DSP byte",
+			    dsp_first_diff(&sa, &sb), -1, 0);
+		rxst_null_trials++;
+	}
+
 	return diff_end();
 }
 
@@ -1211,6 +1377,7 @@ main(void)
 	rc |= run_carrier();
 	rc |= run_snr();
 	rc |= run_status();
+	rc |= run_rxstatus();
 	rc |= run_txdata();
 	rc |= run_rxmodem();
 	rc |= run_delete();
@@ -1251,6 +1418,23 @@ main(void)
 		    snr_abs_sep > 0, 1, snr_abs_sep);
 
 	diff_eq_int("V21TX_status returned 1 (%ld)", st_ret1 > 0, 1, st_ret1);
+
+	diff_eq_int("V21RX_status returned 1 (%ld)", rxst_ret1 > 0, 1,
+		    rxst_ret1);
+	diff_eq_int("rx quality came out one (%ld)", rxst_q1 > 0, 1, rxst_q1);
+	diff_eq_int("rx quality came out zero (%ld)", rxst_q0 > 0, 1, rxst_q0);
+	diff_eq_int("the rate went to rx_bps and not tx_bps (%ld)",
+		    rxst_bps_sep > 0, 1, rxst_bps_sep);
+	diff_eq_int("GetSNRV21 was actually called (%ld)", rxst_snr_sep > 0, 1,
+		    rxst_snr_sep);
+	diff_eq_int("+0x0c was left alone where +0x0e was zeroed (%ld)",
+		    rxst_gap_sep > 0, 1, rxst_gap_sep);
+	diff_eq_int("the rx flags byte being STORED separates (%ld)",
+		    rxst_flags_sep > 0, 1, rxst_flags_sep);
+	diff_eq_int("the computed +0x12 left the bit rate (%ld)",
+		    rxst_div_sep > 0, 1, rxst_div_sep);
+	diff_eq_int("the rx null destination was exercised (%ld)",
+		    rxst_null_trials > 0, 1, rxst_null_trials);
 	diff_eq_int("the protocol offset separates (%ld)", st_proto_sep > 0, 1,
 		    st_proto_sep);
 	diff_eq_int("the flag-byte offset separates (%ld)",

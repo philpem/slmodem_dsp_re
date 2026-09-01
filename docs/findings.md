@@ -104108,3 +104108,46 @@ the reference's own run, that each wrapper advanced its own and left the
 other's alone. Reaching the wrong block would otherwise be invisible: both
 are inside the same pseudorandom fill and both produce a plausible bit
 stream.
+
+## F9132. `V21RX_status` computes the bit rate a second time out of the demodulator's `f22` -- and `f22` has a reader after all
+
+*2026-09-01.* `V21RX_status` (0x0a2460, 132 bytes) fills the same report
+block `V21TX_status` does, from the RECEIVE handle, and differs from it in
+five places rather than one:
+
+| | transmit | receive |
+|---|---|---|
+| the rate goes to | `tx_bps` (+0x02) | `rx_bps` (+0x04) |
+| `snr` | a literal 0 | `GetSNRV21`'s answer |
+| `quality` | a literal 0 | the COMPLEMENT of V21RX_FLAG_LOW_SNR |
+| the zeroed gap short | +0x0c | +0x0e |
+| the flags byte | merged from the handle | stored as a literal 0 |
+
+**THE ONLY ARITHMETIC IN THE FUNCTION IS +0x12, AND IT IS THE RATE AGAIN.**
+0x0a24b3..0x0a24d7 is `movswl 0x76(%eax)`, `movswl 0x66(%eax)`, `add` the
+first to itself, `cltd`, `idiv`, `2 -` the quotient, `imul $0x12c`:
+
+    short_12 = (2 - 2 * fsd.f22 / fsd.cfg.bit_samples) * 300
+
+Both operands are in the fsd, under the DSP block's +0x54: +0x66 is
+`cfg.bit_samples` and +0x76 is `f22`. `FPM_FSD_init` sets `f22` to
+`bit_samples / 2`, so for an EVEN `bit_samples` the quotient is 1 and the
+field comes out at 300 -- the same number `rx_bps` gets from the literal
+0x12c four statements earlier, by a completely different route. For an odd
+one it does not: `bit_samples` 3 with `f22` 4 gives 0, and the test drives
+that.
+
+**AND THIS IS `f22`'S ONLY READER.** `include/dsplib/fpm_fsd.h` describes it
+as "set by init and then never read -- demodulate recomputes it", which is
+true of `FPM_FSD_demodulate` and is no longer true of the object: a function
+outside `fpm_fsd.c` reads it, and what it reads it for is to recover the bit
+rate without being told it. The comment is left alone here because
+`fpm_fsd.h` belongs to another module and three branches were live; it is
+flagged for whoever merges.
+
+**THE DIVIDE IS UNGUARDED** -- deviation D1098.
+
+The flags byte is stored as a LITERAL ZERO (`movb $0x0,0x14(%ebx)` at
+0x0a24bf), not merged, so unlike `V21TX_status` there is not even a
+pointless clear before it; and the `flags1` clear at 0x0a24bb is the one
+statement the two functions share.

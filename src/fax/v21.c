@@ -12,6 +12,7 @@
  *   RxHdxStartV21     .text 0x0a1e90   522
  *   RxHdxWaitV21      .text 0x0a20a0   440
  *   RxHdxDataV21      .text 0x0a2260   418
+ *   V21RX_status      .text 0x0a2460   132
  *   V21TX_status      .text 0x0a2c00    96
  *   DemodDataV21      .text 0x0a5740   217
  *   CarrierDetectV21  .text 0x0a5820    16
@@ -405,6 +406,58 @@ RxHdxDataV21(void *modem, short *in, short *out, short *count)
 }
 
 /*
+ * Fill the caller's status block from the RECEIVER.
+ *
+ * NOT a mirror of `V21TX_status`.  The rate goes in `rx_bps` and not
+ * `tx_bps`, `snr` carries what `GetSNRV21` answered rather than a literal
+ * zero, `quality` is the COMPLEMENT of V21RX_FLAG_LOW_SNR (`testb $0x80`
+ * followed by `sete`, 0x0a2487), +0x0e is zeroed where the transmit side
+ * zeroes +0x0c, and the flags byte is stored as a literal 0 rather than
+ * merged from the handle.
+ *
+ * `short_12` IS THE ONLY ARITHMETIC IN THE FUNCTION and it is a `cltd`/`idiv`
+ * over two SIGNED shorts loaded `movswl` (0x0a24b3 and 0x0a24b7), then
+ * `imul $0x12c`.  Both operands live in the fsd: +0x76 of the DSP block is
+ * `fsd.f22` and +0x66 is `fsd.cfg.bit_samples`, and `FPM_FSD_init` sets the
+ * first to half the second -- so for an even `bit_samples` the quotient is 1
+ * and the field comes out at 300, which is `rx_bps` again by a different
+ * route.  Finding F9132.
+ *
+ * THE DIVIDE HAS NO GUARD.  A receiver whose fsd was never configured has
+ * `bit_samples` zero and this faults; see docs/deviations.md D1098.  It is
+ * reproduced, and the test asserts the precondition on BOTH sides rather
+ * than driving it.
+ */
+int
+V21RX_status(void *modem, struct v21_status *st)
+{
+	short f22, bit_samples;
+
+	if (st == NULL)
+		return 0;
+
+	st->protocol = (short)*(unsigned short *)(void *)
+		((char *)modem + V21RX_OBJ_PROTOCOL);
+	st->tx_bps = 0;
+	st->rx_bps = V21_STATUS_BPS;
+	st->quality = (short)
+		((V21RX_FLAGS(modem) & V21RX_FLAG_LOW_SNR) == 0);
+	st->snr = (short)GetSNRV21(modem);
+	st->short_0a = 0;
+	st->short_0e = 0;
+	st->short_10 = 0;
+	st->flags1 &= (unsigned char)~V21_STATUS1_BIT0;
+	st->flags = 0;
+
+	f22 = V21RX_DSP(modem)->fsd.f22;
+	bit_samples = V21RX_DSP(modem)->fsd.cfg.bit_samples;
+	st->short_12 = (short)((2 - 2 * (int)f22 / (int)bit_samples)
+			       * V21_STATUS_BPS);
+
+	return 1;
+}
+
+/*
  * Fill the caller's status block.
  *
  * The last statement ASSIGNS the flags byte rather than merging into it, so
@@ -628,6 +681,7 @@ V21_ASSERT_OFF(struct v21_status, quality, 0x06);
 V21_ASSERT_OFF(struct v21_status, snr, 0x08);
 V21_ASSERT_OFF(struct v21_status, short_0a, 0x0a);
 V21_ASSERT_OFF(struct v21_status, short_0c, 0x0c);
+V21_ASSERT_OFF(struct v21_status, short_0e, 0x0e);
 V21_ASSERT_OFF(struct v21_status, short_10, 0x10);
 V21_ASSERT_OFF(struct v21_status, short_12, 0x12);
 V21_ASSERT_OFF(struct v21_status, flags, 0x14);

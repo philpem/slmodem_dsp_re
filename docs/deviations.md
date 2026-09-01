@@ -11200,3 +11200,32 @@ intermediate stores, which are observable only where the report overlaps the
 instance. `t_v29fax` drives that overlap on half its `V29RX_status` trials
 rather than assuming it away, and asserts the count of overlaid trials from
 the run.
+
+## D1098 ⚠ `V21RX_status` divides by the demodulator's `bit_samples` with no guard
+
+The report's +0x12 is
+
+    (2 - 2 * fsd.f22 / fsd.cfg.bit_samples) * 300
+
+and the object computes it with `cltd` / `idiv 0x66(%eax)` at 0x0a24c7 --
+a signed 32-bit divide by a field it does not test. A receiver whose fsd
+was never configured has `bit_samples` zero, and the call takes SIGFPE.
+
+Nothing this tree has reconstructed can produce that state: `V21RX_create`
+runs `FPM_FSD_init` with a real configuration before the handle is handed
+out. It is reachable only by a caller that builds a receiver by hand or
+reuses freed storage.
+
+The second operand can also make the result meaningless without faulting.
+`f22` is `bit_samples / 2` as init leaves it, so an EVEN `bit_samples` gives
+a quotient of 1 and a field of 300; an odd one gives 0 or more, and the field
+comes out at 0 or negative. That is arithmetic, not a fault, and it is
+reproduced.
+
+**Status:** reproduced, with no guard added. `t_v21fax` ASSERTS the
+precondition on both sides -- every trial plants a non-zero `bit_samples` and
+checks it before the call -- rather than driving the fault, because both
+sides would fault identically and a differential comparison would learn
+nothing from it. That is D1022's ruling applied again: where the object
+faults on a precondition, assert the precondition instead of pretending to
+cover the arm.

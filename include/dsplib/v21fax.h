@@ -198,6 +198,14 @@ struct v21_rx_hdx {
  * above it, read out together -- and it is why the word is spelled as a
  * `memcpy` in the source rather than as a cast.
  */
+/*
+ * The receiver's protocol word, read by `V21RX_status` alone
+ * (`movzwl (%esi),%ecx` at 0x0a2473) and copied to the report's +0x00.
+ * `V21TX_status` reads the transmitter's +0x00 for the same slot, so the
+ * two handles agree about where this lives.
+ */
+#define V21RX_OBJ_PROTOCOL	0x00
+
 #define V21RX_OBJ_STATUS	0x18
 #define V21RX_OBJ_FLAGS		0x19
 #define V21RX_OBJ_FLAGS1	0x1a
@@ -345,7 +353,8 @@ struct v21_status {
 	short		snr;		/* +0x08 written 0                  */
 	short		short_0a;	/* +0x0a written 0                  */
 	short		short_0c;	/* +0x0c written 0                  */
-	short		short_0e;	/* +0x0e NOT written                */
+	short		short_0e;	/* +0x0e written 0 by V21RX_status;
+					 *      NOT written by V21TX_status */
 	short		short_10;	/* +0x10 written 0                  */
 	short		short_12;	/* +0x12 written 0                  */
 	unsigned char	flags;		/* +0x14 see below                  */
@@ -556,6 +565,27 @@ unsigned short DemodDataV21(void *modem, short *in, short *bits,
  *         `hdx->int_0000` is clear, and reports the demodulator's SNR
  *         through V21RX_FLAG_LOW_SNR.  Otherwise it advances the state.
  */
+/*
+ * Fill a status report from the RECEIVER, and say whether there was one to
+ * fill: 0 for a null pointer, 1 otherwise.
+ *
+ * It is not `V21TX_status` with the handle changed.  It reports the rate in
+ * `rx_bps` rather than `tx_bps`, it calls `GetSNRV21` and puts the answer in
+ * `snr` where the transmit side writes a literal 0, it derives `quality`
+ * from V21RX_FLAG_LOW_SNR, it zeroes +0x0e rather than +0x0c, and its
+ * `flags` byte is written as a literal 0 rather than merged.
+ *
+ * `short_12` IS COMPUTED, and it is the only arithmetic in the function:
+ *
+ *     (2 - 2 * fsd.f22 / fsd.cfg.bit_samples) * V21_STATUS_BPS
+ *
+ * `f22` is `bit_samples / 2`, set by `FPM_FSD_init` -- so for an even
+ * `bit_samples` the quotient is 1 and the field comes out at 300, the same
+ * number `rx_bps` gets from a literal.  See F9132 and D1098: the divide is
+ * unguarded.
+ */
+int V21RX_status(void *modem, struct v21_status *st);
+
 short RxHdxErrorV21(void *modem, short *in, short *out, short *count);
 short RxHdxIdleV21(void *modem, short *in, short *out, short *count);
 short RxHdxWaitV21(void *modem, short *in, short *out, short *count);
