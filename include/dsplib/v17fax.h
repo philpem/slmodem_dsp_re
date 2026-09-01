@@ -338,9 +338,18 @@ struct v17_status {
  *   3), and by the four transitions that install `RxHdxErrorV17` --
  *   `RxHdxScramV17` 0x0a0548, `RxHdxBridgeV17`, `RxHdxPrtcolV17`,
  *   `RxHdxEpochDetV17`.  CLEARED by `V17RX_modem` alone, `andb $0xfd` at
- *   0x09ff9d, at the top of every block.  SEEDED set by `V17RX_create`.
+ *   0x09ff9d, at the top of every block.
  *   Nothing in the object READS it: it leaves through the returned word, and
  *   a caller that does not read that word each block loses the event.
+ *
+ *   IT IS NOT DELIVERED SET, AND THE LINE THAT SAID SO IS WITHDRAWN.  This
+ *   paragraph used to end "SEEDED set by `V17RX_create`", which read the
+ *   `orb $0x2,0x29(%ebp)` at 0x097140 and stopped there.  Further down its own
+ *   fall-through `V17RX_create` clears the WHOLE WORD -- `movl $0x0,0x28(%ebp)`
+ *   at 0x0977a4 -- and then finishes `orb $0x50,0x29(%ebp)` at 0x0977ab and
+ *   `movb $0x2,0x28(%ebp)` at 0x0977b5.  So on any path that reaches the
+ *   second group the instance is delivered with 0x28 = 2, 0x29 = 0x50 and
+ *   0x2a = 0, and ERROR is CLEAR.  Finding F9442.
  *
  * CARRIER (0x20) -- CLEARED and then SET AGAIN if and only if
  *   `CarrierDetectV17` answers non-zero, in `RxHdxIdleV17` (`andb $0xdf` at
@@ -359,13 +368,49 @@ struct v17_status {
  *   `GetSNRV17`.  READ by `testb $0x80` at 0x0a093d in `V17RX_status`, where
  *   a SET bit makes the reported +0x06 zero.  Both ends measured.
  *
- * Bits 0x04, 0x08 and 0x40 are touched by nothing in the object; 0x01 is the
- * DATA bit, set and cleared by `RxNextStateV17` alone, and it stays unnamed
- * here because this batch writes neither of that function's arms.
+ * Bits 0x04, 0x08 and 0x40 are touched by nothing in the object.
+ *
+ * THE TWO ERROR MASKS ARE NOT THE SAME, AND THE DIFFERENCE IS THE DATA BIT.
+ *   `RxNextStateV17`'s default arm is `or $0x2` then `and $0xde`, which clears
+ *   CARRIER *and* `V17RX_FLAG_DATA`; the four handlers' error arms are
+ *   `or $0x2` then `and $0xdf`, which clears CARRIER alone.  One instruction
+ *   apart and they read alike; `src/fax/v17.c` spells each site the way the
+ *   object spells it, and F9440 records what it cost to notice.
+ *
+ * DATA (0x01) -- NAMED NOW, AND IT WAS LEFT UNNAMED BECAUSE THE ONLY FUNCTION
+ *   THAT TOUCHES IT WAS UNWRITTEN.  `RxNextStateV17` is its only writer in the
+ *   whole object and it is written here, so the pattern can be enumerated
+ *   rather than sampled: the bit is SET on exactly the two transitions that
+ *   install `RxHdxDataV17` (`orb $0x1,0x29` at 0x0a02a8 leaving state SCRAM
+ *   and at 0x0a02ff leaving state IDLE) and CLEARED on every other transition
+ *   and by the default arm.  Set if and only if the handler just installed is
+ *   the DATA handler, which is what the name says and nothing more.  NOTHING
+ *   READS IT anywhere in the object; like ERROR it leaves through the returned
+ *   word.  `V21RX_FLAG_DATA` is the same bit of the same shape in `v21fax.h`,
+ *   which is a CORROBORATION and not the derivation.  Finding F9440.
  */
 #define V17RX_FLAG_ERROR	(1 << 1)
 #define V17RX_FLAG_CARRIER	(1 << 5)
 #define V17RX_FLAG_LOW_SNR	(1 << 7)
+#define V17RX_FLAG_DATA		(1 << 0)
+
+/*
+ * BYTE 2 OF THE SAME WORD, AND ITS ONE BIT.  Both are named BY VALUE and the
+ * role of NEITHER is established -- which is the whole point of writing them
+ * down this way.
+ *
+ * `RxNextStateV17` is the only function in the object that touches +0x2a.  It
+ * clears bit 0 on six of its seven transitions and on the default arm, SETS it
+ * on exactly one (state DATA -> state IDLE, `orb $0x1,0x2a` at 0x0a02d8), and
+ * skips it altogether on the SCRAM arm of state PROTOCOL.  Nothing anywhere
+ * reads it, and nothing writes any other bit of it, so there is no second end
+ * to measure against and no name to give it beyond its offset and its bit.
+ * The near-inverse of `V17RX_FLAG_DATA` is a TEMPTING reading and is declined:
+ * the two disagree on the PROTOCOL/SCRAM arm, which writes one and not the
+ * other, so they are not one flag spelled twice.  Findings F9441 and D1213.
+ */
+#define V17RX_OBJ_RESULT_B2	0x2a
+#define V17RX_RESULT_B2_BIT0	(1 << 0)
 
 /*
  * `RxHdxDataV17` raises `V17RX_FLAG_LOW_SNR` when `GetSNRV17` comes back at or
@@ -377,19 +422,39 @@ struct v17_status {
 #define V17RX_SNR_THRESHOLD	8
 
 /*
- * The STATUS BYTE at `V17RX_OBJ_RESULT`, and the one value this batch writes.
+ * The STATUS BYTE at `V17RX_OBJ_RESULT`, and all nine values it takes.
  *
- * NOTHING IN THE OBJECT READS ANY OF THE NINE VALUES -- the byte leaves
- * through the word `V17RX_modem` returns and nothing else -- so a name here
- * can only be the site that writes it, which is `v21fax.h`'s ruling for the
- * same field of the same shape.  The full write set, for whoever writes the
- * other handlers: 0 `RxHdxDataV17`; 1 `RxHdxScram/Bridge/Prtcol/EpochDetV17`
- * on entry; 2 `RxHdxStartV17`; 3 `RxNextStateV17`'s default arm and
- * `V17RX_create`; 4 the same four handlers' error arm; 5 `RxHdxIdleV17`;
- * 8 and 9 `RxHdxScramV17` and `RxNextStateV17`.  Only 0 is named, because
- * only 0 is written by anything reconstructed.
+ * NOTHING IN THE OBJECT READS ANY OF THEM -- the byte leaves through the word
+ * `V17RX_modem` returns and nothing else -- so a name here can only be the
+ * SITE that writes it, which is `v21fax.h`'s ruling for the same field of the
+ * same shape and is what the comments below give.  The write set is now
+ * COMPLETE, because every writer is reconstructed.
+ *
+ * THE LAST FOUR ARE THE RATE LADDER, AND THAT IS RANK-2 EVIDENCE RATHER THAN
+ * A GUESS.  `RxHdxScramV17` (0x0a0551) and `RxNextStateV17`'s IDLE arm
+ * (0x0a0303) both read `V17RXC_RATE_CODE` and write 9, 8, 7 or 6 from it, and
+ * `V17RX_create` is what puts the code there: it switches on
+ * `V17RX_OBJ_RX_BPS` at 0x097113 and stores 0 for 7200, 1 for 9600, 2 for
+ * 12000 and 3 for 14400 (and 3 for anything else).  So the ladder maps a bit
+ * rate to a status byte, one to one, and the names say which rate.  What the
+ * VALUES mean to a reader of the word is still not established -- see
+ * `V17RX_RATE_7200` below and finding F9443.
+ *
+ * `V17RX_STATUS_RATE_14400` is also the ladder's `else` arm (`cmp $0x2` /
+ * `sete` / `add $0x6`), so a rate code the object never writes lands there
+ * too.
  */
-#define V17RX_STATUS_DATA	0
+#define V17RX_STATUS_DATA	0	/* RxHdxDataV17, every block          */
+#define V17RX_STATUS_CARRIER	1	/* Scram/Bridge/Prtcol/EpochDet, the
+					 * carrier-present arm                */
+#define V17RX_STATUS_START	2	/* RxHdxStartV17; also V17RX_create   */
+#define V17RX_STATUS_DEFAULT	3	/* RxNextStateV17's default arm       */
+#define V17RX_STATUS_ERROR	4	/* the same four handlers' error arm  */
+#define V17RX_STATUS_IDLE	5	/* RxHdxIdleV17, every block          */
+#define V17RX_STATUS_RATE_14400	6
+#define V17RX_STATUS_RATE_12000	7
+#define V17RX_STATUS_RATE_9600	8
+#define V17RX_STATUS_RATE_7200	9
 
 /*
  * The two shorts `V17RX_status` copies out of the receive instance, and this
@@ -438,11 +503,20 @@ struct v17_status {
  * An int `RxHdxDataV17` requires to be ZERO before it will demodulate, and the
  * SECOND half of its gate: the carrier must be up AND this must be clear.
  *
- * NEUTRAL, and it is the one field in this header with exactly one reader and
- * no writer anywhere in the object -- nothing reconstructed and nothing
- * unreconstructed in the 44 V.17 symbols writes it, so what sets it is outside
- * what has been read.  It is an `int`: `mov 0x8(%ecx),%edx` then
- * `test %edx,%edx`, 32 bits at both ends.
+ * NEUTRAL.  It is an `int`: `mov 0x8(%ecx),%edx` then `test %edx,%edx`, 32
+ * bits at both ends.
+ *
+ * IT HAS THREE WRITERS, AND THE LINE THAT SAID IT HAD NONE IS WITHDRAWN.  This
+ * comment used to call it "the one field in this header with exactly one
+ * reader and no writer anywhere in the object", which was measured over the
+ * functions this header had at the time and reported as if it were measured
+ * over the object.  The writers are `RxNextStateV17`'s DATA arm
+ * (`movl $0x0,0x8(%edx)` at 0x0a02d1, on the transition into IDLE) and
+ * `V17RX_control`, which writes 0 at 0x0a089c and 1 at 0x0a08e0 from two bits
+ * of its own argument.  So the gate is cleared whenever the machine leaves
+ * DATA and is driven from outside by the control entry point; what it
+ * INDICATES is still not established, and the name stays neutral.  Finding
+ * F9442.
  *
  * IT IS NOT `V17RXS_INT_0008`, WHICH IS A DIFFERENT BLOCK.  `DemodDataV17`'s
  * `mov 0x8(%ebp),%eax` at 0x0a51e3 reads +0x08 of the DEMODULATOR STATE
@@ -453,9 +527,39 @@ struct v17_status {
 #define V17RXC_INT_0008		0x08
 
 /*
+ * THE RECEIVE BIT RATE, AS A FOUR-VALUE CODE.
+ *
+ * `V17RX_create` is what establishes it, and the derivation is rank 2 -- a
+ * writer that types the field -- rather than usage inference.  At 0x097113 it
+ * loads `V17RX_OBJ_RX_BPS` (`movswl 0x4(%esi),%eax`, the same field
+ * `V17RX_status` reports as `struct v17_status::rx_bps`) and switches on it:
+ *
+ *     0x1c20   7200 -> 0     (0x097b15)
+ *     0x2580   9600 -> 1     (0x097a08)
+ *     0x2ee0  12000 -> 2     (0x097b0a)
+ *     0x3840  14400 -> 3     (0x097837)
+ *     anything else -> 3     (0x097133)
+ *
+ * It has exactly two readers, `RxNextStateV17`'s IDLE arm and
+ * `RxHdxScramV17`'s expiry path, and both do nothing with it but pick one of
+ * `V17RX_STATUS_RATE_*`.  Both read it `movzwl`, so it is an `unsigned short`.
+ * Finding F9443.
+ */
+#define V17RXC_RATE_CODE	0x0c
+
+#define V17RX_RATE_7200		0
+#define V17RX_RATE_9600		1
+#define V17RX_RATE_12000	2
+#define V17RX_RATE_14400	3
+
+/*
  * An int `CarrierDetectV17` and `DataCarrierDetectV17` both require to be
  * non-zero before they will look at the decoder error at all.  Neutral: what
  * it indicates is not established, only that it gates the carrier verdict.
+ *
+ * `RxNextStateV17` reads it too, twice on one arm, and chooses BOTH the
+ * countdown seed and whether to call `Restore_rateV17` from it.  That does not
+ * type it either; see D1212 for why the second of the two reads is dead.
  */
 #define V17RXC_INT_0010		0x10
 
@@ -468,20 +572,89 @@ struct v17_status {
 #define V17RXC_PROCESS		0x14
 
 /*
- * A short `DemodDataV17` tests: non-zero skips the whole tone-kill and
- * tone-detect front end and goes straight to the resampler.  Neutral.
+ * THE RECEIVE STATE NUMBER, and the rename that F9235 deferred has happened.
  *
- * IT IS ALMOST CERTAINLY THE RECEIVE STATE NUMBER, and that is recorded rather
- * than acted on because this batch writes none of its writers.  Every writer
- * in the object is the receive state machine: `RxNextStateV17` stores 1, 2, 3,
- * 4, 5 and 6 into it in its six transition arms, the four handlers that
- * install `RxHdxErrorV17` store 7 beside that store, and `V17RX_create` stores
- * 0.  So `DemodDataV17`'s test is "the machine has left state 0", and the
- * neutral name above is kept only because renaming it belongs with the pass
- * that writes `RxNextStateV17`.  `V27SH_SKIP_TONE` in `v27fax.h` is the same
- * field of the same machine with the same evidence.  Finding F9235.
+ * That finding recorded the derivation and declined to act on it "because this
+ * batch writes none of its writers"; `RxNextStateV17` is below, so every
+ * writer is now reconstructed and the enumeration is complete.  The machine
+ * stores 1, 2, 3, 4, 5 and 6 into it in `RxNextStateV17`'s six transition
+ * arms, the four handlers that install `RxHdxErrorV17` store
+ * `V17RX_STATE_ERROR` beside that store, and `V17RX_create` stores
+ * `V17RX_STATE_START` at 0x097068.  `DemodDataV17`'s own test of it -- the one
+ * that used to be all this header had -- is therefore "the machine has left
+ * START", and it skips the tone-kill and tone-detect front end once it has.
+ *
+ * IT IS A SIGNED `short` AND THAT IS FORCED.  `RxNextStateV17` loads it
+ * `movswl` at 0x0a013b and feeds the 32-bit result to `cmp $0x6` / `ja`, which
+ * is UNSIGNED -- so a negative state takes the default arm rather than
+ * indexing the jump table backwards.  An `unsigned short` cannot produce that
+ * `movswl`; do not respell it.  `V27SH_SKIP_TONE` in `v27fax.h` is the same
+ * field of the same machine with the same evidence.  Findings F9235 and F9440.
+ *
+ * `V17RXC_SHORT_0018` IS KEPT AS AN ALIAS, and only because `t_v17fax.c` still
+ * spells it that way and is not this batch's file to edit.  New code uses
+ * `V17RXC_STATE`.
  */
-#define V17RXC_SHORT_0018	0x18
+#define V17RXC_STATE		0x18
+#define V17RXC_SHORT_0018	V17RXC_STATE
+
+/*
+ * BLOCKS REMAINING IN THIS STATE, and that is the whole of what is
+ * established.
+ *
+ * `RxNextStateV17` seeds it on every transition but one (5, 1, 62, 1, 1, 0 and
+ * 0; the IDLE arm does not write it at all, which is D1215), and each of
+ * `RxHdxScramV17`, `RxHdxBridgeV17`, `RxHdxPrtcolV17` and `RxHdxEpochDetV17`
+ * decrements it once per block and advances the machine when the decremented
+ * value is at or below zero.  So it counts BLOCKS and it counts DOWN; what any
+ * particular seed is FOR -- why the protocol state gets 62 blocks when the
+ * rate was not restored and 1 when it was -- is not established and no name
+ * here claims it.
+ *
+ * THE LOAD IS UNSIGNED AND THE TEST IS SIGNED, and both are the object's:
+ * `movzwl 0x1a(%edx),%ecx` / `dec %ecx` / `test %cx,%cx` / `mov %cx,0x1a(%edx)`
+ * / `jle`, at 0x0a0509 and its three copies.  The extension is dead -- only
+ * the low half is stored and tested -- so it follows the declared type of the
+ * LOCAL (finding F7803), and the `jle` is a signed 16-bit compare, so a seed of
+ * 0x8000 expires immediately rather than running for 32768 blocks.
+ * `v21fax.h`'s `struct v21_rx_hdx::countdown` is the same field of the same
+ * shape in a sibling modem, which corroborates and is not the derivation.
+ */
+#define V17RXC_COUNTDOWN	0x1a
+
+/*
+ * THE EIGHT STATES, AND SEVEN OF THE NAMES ARE THE AUTHOR'S OWN WORDS.
+ *
+ * `RxNextStateV17` prints the name of the state it is LEAVING at the top of
+ * each arm, gated on `dsplibs_debug_level > 1`, and the arms are the seven
+ * entries of a compiler-generated jump table at `.rodata` 0xc2d0, so the
+ * pairing of a value to a string is the table's and not a reading of it:
+ *
+ *     0  0x049bc  "V17RX_STATE_START\n"       arm at 0x0a019a
+ *     1  0x049a5  "V17RX_STATE_EPOCH_DET\n"   arm at 0x0a01c7
+ *     2  0x0497d  "V17RX_STATE_PROTOCOL\n"    arm at 0x0a0213
+ *     3  0x049f4  "V17RX_STATE_BRIDGE\n"      arm at 0x0a0247
+ *     4  0x049e1  "V17RX_STATE_SCRAM\n"       arm at 0x0a0270
+ *     5  0x049cf  "V17RX_STATE_DATA\n"        arm at 0x0a02b1
+ *     6  0x04993  "V17RX_STATE_IDLE\n"        arm at 0x0a02e5
+ *
+ * -- and the mapping is FORCED TWICE OVER, because each arm also installs the
+ * handler whose own blob symbol name matches the state it writes: state 1 goes
+ * with `RxHdxEpochDetV17`, 2 with `RxHdxPrtcolV17`, 3 with `RxHdxBridgeV17`, 4
+ * with `RxHdxScramV17`, 5 with `RxHdxDataV17` and 6 with `RxHdxIdleV17`.
+ *
+ * `V17RX_STATE_ERROR` IS THE ONE WITHOUT A STRING.  It has no case, so it
+ * falls to the default arm (D1211), and its name comes from the handler the
+ * four training states install beside it, `RxHdxErrorV17`.  Finding F9440.
+ */
+#define V17RX_STATE_START	0
+#define V17RX_STATE_EPOCH_DET	1
+#define V17RX_STATE_PROTOCOL	2
+#define V17RX_STATE_BRIDGE	3
+#define V17RX_STATE_SCRAM	4
+#define V17RX_STATE_DATA	5
+#define V17RX_STATE_IDLE	6
+#define V17RX_STATE_ERROR	7
 
 /* The scratch buffer `DemodDataV17` copies its input into.  `short *`. */
 #define V17RXC_SCRATCH		0x1c
@@ -702,6 +875,20 @@ struct v17_status {
  */
 #define V17RXS_DEC_ERROR	0x1c2
 #define V17RXS_DEC_ERROR_MAX	0x3fff
+
+/*
+ * The OTHER threshold on the same field, and the author names this one too.
+ *
+ * `RxHdxIdleV17` compares it `cmpw $0x1fff,0x1c2(%ebx)` / `jle` at 0x0a0462 --
+ * SIGNED and 16 bits wide -- and on the at-or-below arm it advances the machine
+ * and prints "Decision error is small back to DATA mode !!!"
+ * (`.rodata.str1.4` 0x12b6c).  So "small" is the author's word for this side of
+ * this constant, exactly as "too big" is his word for the other side of
+ * `V17RXS_DEC_ERROR_MAX`.  The two are not independent: 0x1fff is one less than
+ * half 0x3fff + 1, which is recorded as an observation and NOT used to name
+ * anything.
+ */
+#define V17RXS_DEC_ERROR_SMALL	0x1fff
 
 /*
  * `Restore_rateV17`'s other pair: it writes the short at +0x1f8 with the
@@ -1117,5 +1304,132 @@ void StoreCoefV17(void *modem);
  * restores the rate and not the coefficients, which is what its name says.
  */
 void Restore_rateV17(void *modem);
+
+/* ------------------------------------------------------------------------ */
+/* The half-duplex receive machine                                          */
+
+/*
+ * Advance the receive machine one state, and re-point the dispatch slot.
+ *
+ * A SEVEN-WAY SWITCH ON `V17RXC_STATE` WITH A COMPILER-GENERATED JUMP TABLE
+ * (`.rodata` 0xc2d0), so there is no table to reproduce: the arms are 0..6 and
+ * everything else -- including `V17RX_STATE_ERROR`, which has no arm of its own
+ * -- lands on the default.  Each arm prints the name of the state it is
+ * leaving, writes the next state, installs that state's handler in
+ * `V17RXC_PROCESS` and seeds `V17RXC_COUNTDOWN`.
+ *
+ * WHAT EACH ARM DOES BESIDES THAT, because none of it is uniform:
+ *
+ *   START      -> EPOCH_DET, 5 blocks.
+ *   EPOCH_DET  -> PROTOCOL.  Calls `Restore_rateV17` when `V17RXC_INT_0010` is
+ *                 set and takes 1 block if it did and 62 if it did not, and
+ *                 then STEPS THE GAIN CONTROL'S LEVEL SMOOTHER: `cfg.alpha`
+ *                 and `cfg.beta` are both advanced by one `short`
+ *                 (`addl $0x2` at 0x0a0200 and 0x0a0207), which takes
+ *                 `AGCv17_CFG`'s pair from {0x4000, 0x4000} to
+ *                 {0x7333, 0x0ccd} -- 0.5/0.5 to 0.9/0.1 in Q15, acquisition
+ *                 to tracking.  See D1216 for what a second visit would do.
+ *   PROTOCOL   -> SCRAM when `V17RXC_INT_0010` is set, else BRIDGE with a call
+ *                 to `StoreCoefV17`.  Both take 1 block.  The SCRAM arm is the
+ *                 one transition of the seven that does not touch
+ *                 `V17RX_OBJ_RESULT_B2` (D1213).
+ *   BRIDGE     -> SCRAM, 1 block.
+ *   SCRAM      -> DATA, 0 blocks, after `FPM_AGC_Freeze`.
+ *   DATA       -> IDLE, 0 blocks, and clears `V17RXC_INT_0008`.  UNREACHABLE
+ *                 in the object: see D1210.
+ *   IDLE       -> DATA, and it is the one arm that does NOT seed the countdown
+ *                 (D1215).  It reports the rate ladder instead.
+ *   default      Reports `V17RX_STATUS_DEFAULT` with the state as a `%d`,
+ *                installs nothing and does not change the state.
+ *
+ * `V17RX_FLAG_DATA` is set by exactly the two arms that install
+ * `RxHdxDataV17` and cleared by every other one, which is what names it.
+ */
+void RxNextStateV17(void *modem);
+
+/*
+ * The IDLE state: demodulate, drop the carrier flag, re-test it, and go back
+ * to DATA once the decoder error is small again.
+ *
+ * `DemodDataV17`'s RETURN IS DISCARDED and the function returns a literal zero
+ * on every path, so a block spent here produces no output words at all even
+ * though the equaliser ran.  The carrier flag is CLEARED and then set again if
+ * and only if `CarrierDetectV17` agrees, which is the same clear-then-set
+ * `RxHdxStartV17` does and is not what the three training handlers do.
+ *
+ * THE SECOND TEST RE-READS THE FLAG BYTE FROM MEMORY (`testb $0x20,0x29` at
+ * 0x0a0459) rather than reusing the verdict, and that is the compiler's, not a
+ * second question: the byte was just stored through a character type.
+ */
+short RxHdxIdleV17(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * The three TRAINING states, which are one function compiled three times and
+ * then one of the three with a tail on it.
+ *
+ * `RxHdxBridgeV17` AND `RxHdxPrtcolV17` ARE BYTE-FOR-BYTE IDENTICAL -- 210
+ * bytes each, the same six relocation targets in the same order, and a
+ * byte-by-byte compare of 0x0a05b0 and 0x0a0690 reports no differing offset at
+ * all.  They are one body the author wrote twice or a macro he expanded twice;
+ * nothing in the object distinguishes them and this header does not pretend
+ * otherwise.  Finding F9444.
+ *
+ * `RxHdxScramV17` IS THE SAME BODY PLUS ONE THING: on the expiry path, before
+ * the SNR test, it reads `V17RXC_RATE_CODE` and reports the matching
+ * `V17RX_STATUS_RATE_*` (0x0a0551..0x0a05a8).  The other two leave the status
+ * byte at `V17RX_STATUS_CARRIER`.  That is the ONLY difference and it is the
+ * only thing a test can use to tell the three apart, which is why
+ * `t_v17rxstate.c` drives a Bridge and a Prtcol expiry with a rate code Scram
+ * would have reacted to.
+ *
+ * All three: demodulate, descramble, consume the block, and then either
+ * install `RxHdxErrorV17` because the carrier has gone or count one block off
+ * `V17RXC_COUNTDOWN`.  THE RETURN IS `n` ONLY ON THE TRANSITION.  Every other
+ * path -- carrier lost, and countdown not yet expired -- returns a literal
+ * zero, so the words the descrambler just wrote are reported to `V17RX_modem`
+ * as none unless this was the last block of the state.  That is the object's
+ * (`xor %eax,%eax` at 0x0a051b against `movswl %bp,%eax` at 0x0a0578) and it
+ * is deviation D1214.
+ *
+ * `V17RX_FLAG_LOW_SNR` is SET here and never cleared; only `RxHdxDataV17`
+ * clears it.  D1217.
+ */
+short RxHdxScramV17(void *modem, short *in, short *out, unsigned short *count);
+short RxHdxBridgeV17(void *modem, short *in, short *out, unsigned short *count);
+short RxHdxPrtcolV17(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * The EPOCH_DET state: demodulate and wait for the epoch, or for the clock.
+ *
+ * The same head as the three above -- demodulate, consume, carrier or error --
+ * and then a SHORT-CIRCUIT OR that the object makes visible: `jle` at 0x0a07c4
+ * jumps PAST the `EpochDetectV17` call at 0x0a07c9, so an expired countdown
+ * advances the machine WITHOUT asking whether the epoch was found.  It does not
+ * descramble, it discards `DemodDataV17`'s return, it never touches
+ * `V17RX_FLAG_LOW_SNR` and it returns zero on every path.
+ *
+ * `EpochDetectV17`'S RETURN IS TESTED SIXTEEN BITS WIDE HERE (`test %ax,%ax` at
+ * 0x0a07ce) where `CarrierDetectV17`'s is tested at thirty-two, so this
+ * translation unit's prototype for it returned a `short`.  The two readings
+ * agree over 0 and 1, which is all that function can return, and this header's
+ * single `int` declaration is kept rather than split.  Finding F9445.
+ */
+short RxHdxEpochDetV17(void *modem, short *in, short *out,
+		       unsigned short *count);
+
+/*
+ * The START state, which is what `V17RX_create` installs (0x097083).
+ *
+ * THE ONLY HANDLER WITH NO ERROR ARM -- three relocations where the others have
+ * five or six.  It clears the carrier flag, reports `V17RX_STATUS_START`,
+ * demodulates the block and discards the result, and advances the machine if
+ * and only if a carrier appeared.  Nothing here can reach `RxHdxErrorV17`, so a
+ * receiver that never hears a carrier sits in START for ever.
+ *
+ * `*count = 0` IS EMITTED TWICE (0x0a0850 and 0x0a086c) and is one statement:
+ * the compiler tail-duplicated the trailing store into both arms of the
+ * carrier test.
+ */
+short RxHdxStartV17(void *modem, short *in, short *out, unsigned short *count);
 
 #endif /* DSPLIB_V17FAX_H */

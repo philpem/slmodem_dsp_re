@@ -11885,3 +11885,162 @@ values including 0x7fff, 0x8000 and 0xffff and drives all seven functions
 through each, and asserts the asymmetry directly off the BLOB's object: a rate
 slicer takes 0x7fff to 0x4000 and AB takes it to 0x8000. Giving AB the wrap
 fails 2 checks of 17,748.
+
+## D1210 ⚠ `RxNextStateV17`'s DATA arm is 52 bytes the machine cannot enter
+
+State `V17RX_STATE_DATA` has a jump-table entry (0xa02b1) and a complete arm:
+it installs `RxHdxIdleV17`, writes state IDLE, zeroes the countdown, clears
+`V17RXC_INT_0008` and sets `V17RX_OBJ_RESULT_B2` bit 0 -- the only place in the
+object that bit is ever set.
+
+Nothing can reach it. The state is DATA only while `RxHdxDataV17` is the
+installed handler, and `RxHdxDataV17` is one of exactly two handlers that never
+call `RxNextStateV17` -- the other being `RxHdxErrorV17`. The function's six
+referrers are 0xa0479 (`RxHdxIdleV17`), 0xa0574 (`RxHdxScramV17`), 0xa0679
+(`RxHdxBridgeV17`), 0xa0759 (`RxHdxPrtcolV17`), 0xa07d7 (`RxHdxEpochDetV17`)
+and 0xa0868 (`RxHdxStartV17`), and it is never stored as a function pointer, so
+that list is complete.
+
+So the transition DATA -> IDLE exists in the code and cannot happen, and the
+one write of `V17RX_OBJ_RESULT_B2` bit 0 goes with it. Whether the author meant
+`RxHdxDataV17` to advance the machine on some condition it does not test is not
+something the object answers.
+
+**Status:** reproduced. `src/fax/v17.c` writes the arm. `t_v17rxstate.c` drives
+it by planting the state directly, which is the only way in;
+`next_arm[V17RX_STATE_DATA]` is its denominator, and the walk's own state
+histogram shows the machine never reaching it on its own.
+
+## D1211 ⚠ `V17RX_STATE_ERROR` has no case and lands on the arm that reports "V17RX_DEFAULT"
+
+The jump table at `.rodata` 0xc2d0 has seven entries, for states 0..6, and the
+bound test is `cmp $0x6` / `ja`. State 7 is what the four training handlers
+write when they install `RxHdxErrorV17`, so it is a state the machine really
+enters -- and if anything ever called `RxNextStateV17` while it held, the
+default arm would run: print `"V17RX_DEFAULT: %d\n"` with 7, set
+`V17RX_FLAG_ERROR`, clear `V17RX_FLAG_CARRIER`, report `V17RX_STATUS_DEFAULT`
+and install nothing.
+
+Terminal either way. `RxHdxErrorV17` never calls the advance, so in the object
+the arm is only reachable through a state outside 0..7 -- which nothing writes.
+
+**Status:** reproduced. `t_v17rxstate.c` drives the default arm at 7, 8, 100,
+-1, -2, 0x0100 and 0x8000; the last three are also what checks the `movswl` /
+unsigned-`ja` pairing of F9440, since a reading that indexed the table with a
+signed negative would not land here at all.
+
+## D1212 ⚠ `RxNextStateV17` tests `V17RXC_INT_0010` twice on one arm and the second test cannot differ
+
+The EPOCH_DET arm reads the gate at 0xa01d4, calls `Restore_rateV17` if it is
+non-zero, and then reads it AGAIN at 0xa0340 to choose between a countdown of 1
+and one of 62. `Restore_rateV17` writes `V17RXS_RATE` and `V17RXS_SHORT_01F8`,
+both in the DEMODULATOR STATE, and touches the control block not at all -- so
+the second read can never disagree with the first, and the `jmp 0xa01df` at
+0xa034b (the 62 arm, reached only after the call) is dead code.
+
+The compiler had no choice: a call clobbers memory it cannot see through. On
+the arm where the call did NOT happen it proves the two tests equal and jumps
+straight to the 62 (the not-taken edge of 0xa01d9 goes to 0xa01df), which is
+what says the source really did read the field twice.
+
+**Status:** reproduced, as the two reads the source had. `src/fax/v17.c` writes
+`if (gate) Restore_rateV17(modem);` then `countdown = gate ? 1 : 62`, each
+reading through the `CTL()` macro. Not separately testable -- there is no input
+on which the two reads differ -- and the dead 62-after-a-call arm is
+unreachable by construction rather than by measurement.
+
+## D1213 ⚠ `RxNextStateV17`'s PROTOCOL/SCRAM arm is the one transition of eight that does not touch `V17RX_OBJ_RESULT_B2`
+
+Seven of the eight paths through the function write bit 0 of the byte at
++0x2a -- six clear it, the DATA arm sets it, and the default arm clears it. The
+PROTOCOL arm's SCRAM branch (0xa022b..0xa0242) writes the countdown, the
+handler, the state and `V17RX_FLAG_DATA` and then jumps to the bare epilogue at
+0xa01c2, leaving +0x2a exactly as it found it.
+
+Its own sibling on the same arm -- the BRIDGE branch at 0xa03d9 -- does clear
+it, at 0xa03f8, and does so AFTER the `StoreCoefV17` call rather than beside its
+other stores.
+
+Nothing in the object reads +0x2a, so the asymmetry has no observable
+consequence inside the object; it matters because it is the one fact that stops
+the bit being read as the complement of `V17RX_FLAG_DATA` (F9441).
+
+**Status:** reproduced. `t_v17rxstate.c`'s `N_SCRAM_CLEARS_B2` gives the SCRAM
+branch its sibling's clear and is asserted to separate; the fixture leaves the
+byte pseudorandom so that "cleared" and "left alone" differ on about half the
+trials rather than by luck.
+
+## D1214 ⚠ The three training handlers discard the words they just descrambled unless the block was the state's last
+
+`RxHdxScramV17`, `RxHdxBridgeV17` and `RxHdxPrtcolV17` demodulate the block,
+descramble `n` words into the caller's buffer, and then return **zero** on
+every path except the one where the countdown expired: `xor %eax,%eax` at
+0xa051b (and 0xa0627, 0xa0707) against `movswl %bp,%eax` at 0xa0578 (0xa067d,
+0xa075d). The carrier-lost arm returns zero too.
+
+`V17RX_modem` adds the return to its running total and advances `out` by it, so
+words produced during training are written into the caller's buffer and then
+not counted -- the next block overwrites them. On the one block that transitions
+they ARE counted, so a receiver leaving PROTOCOL hands its caller one block of
+descrambled training data.
+
+Whether that is intended is not something the object answers; what is certain
+is that it is not an oversight in one of the three, because all three do it and
+two of them are the same 210 bytes.
+
+**Status:** reproduced. `t_v17rxstate.c`'s `H_RETURN_N_ALWAYS` returns `n` on
+every path and is asserted to separate; `train_held` and `train_expired` are the
+denominators that say both sides of the branch ran.
+
+## D1215 ⚠ `RxNextStateV17`'s IDLE arm does not seed the countdown, where every other arm does
+
+Six of the seven transition arms write `V17RXC_COUNTDOWN` -- 5, 1 or 62, 1, 1,
+0 and 0. The IDLE arm (0xa02e5) writes the handler, the state, both flag bytes
+and the rate-keyed status byte, and leaves the countdown holding whatever the
+previous state left in it.
+
+It does not matter as the object runs, because the state it moves to is DATA
+and `RxHdxDataV17` never looks at the countdown. It would matter to any future
+arm that moved from IDLE to a state that counts.
+
+**Status:** reproduced. `t_v17rxstate.c`'s `N_IDLE_SEEDS` gives the arm a seed
+of 1 and is asserted to separate; the fixture plants 0x0123 in the field so
+"left alone" is distinguishable from any particular seed.
+
+## D1216 ⚠ The EPOCH_DET arm advances two coefficient pointers with no bound, over tables with two entries
+
+`RxNextStateV17` steps `struct fpm_agc::cfg.alpha` and `::cfg.beta` one `short`
+along on the transition out of EPOCH_DET (`addl $0x2,0xc0(%edx)` at 0xa0200 and
+`addl $0x2,0xc4(%edx)` at 0xa0207). `AGCv17_CFG` (`.rodata` 0x9e10) points them
+at 0x9e2c and 0x9e28, which hold two shorts each: alpha {0x4000, 0x7333} and
+beta {0x4000, 0x0ccd}, each pair summing to 0x8000 in Q15. So one step takes
+the level smoother from 0.5/0.5 to 0.9/0.1 -- acquisition to tracking -- and a
+SECOND step would walk off the end of both tables into whatever `.rodata`
+follows, which `FPM_AGC_agc` would then use as its coefficients.
+
+Bounded in the object's own graph: the arm runs once per `V17RX_create`,
+because nothing puts the machine back into EPOCH_DET. It is not bounded by
+anything in the code, and a harness that drives the arm twice from one fixture
+walks off the table.
+
+**Status:** reproduced. `src/fax/v17.c` writes `cfg.alpha++` and `cfg.beta++`
+with no test. `t_v17rxstate.c` asserts the pointer VALUES and the shorts they
+name after one visit, and no fixture in it visits the arm twice -- which is a
+constraint on the TEST and is written here so that the next person to extend it
+knows why.
+
+## D1217 ⚠ The three training handlers raise `V17RX_FLAG_LOW_SNR` and never lower it
+
+Each of `RxHdxScramV17`, `RxHdxBridgeV17` and `RxHdxPrtcolV17` ends its expiry
+path with `GetSNRV17`, `cmp $0x8,%ax`, `jg`, `orb $0x80,0x29(...)` -- a set with
+no matching clear. `RxHdxDataV17` is the only function in the object that clears
+the bit (`andb $0x7f` at 0xa00b1), and it does so on every block.
+
+So a receiver whose SNR dipped once during training reports LOW_SNR through
+`V17RX_status` for as long as it stays in training, however good the channel
+becomes afterwards, and the flag is only rehabilitated once the machine reaches
+DATA. `V17RX_status` turns a set bit into a reported `short_06` of zero.
+
+**Status:** reproduced. `t_v17rxstate.c`'s `H_SNR_CLEARED` puts
+`RxHdxDataV17`'s clear in front of the test and is asserted to separate;
+`snr_low_seen` and `snr_high_seen` are the denominators.

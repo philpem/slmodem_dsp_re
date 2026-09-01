@@ -107486,3 +107486,240 @@ Both were re-run after the fix and both go red. The full ritual, in order:
 `fse_tick wrap 0x4000 -> 0` RED, `AB given fse_tick` RED,
 `FSEv17_decision[1] and [2] transposed` RED, `eqtrn tap 16 -> 17` RED, AB's
 threshold replaced by V.32's `(4*e)/3` RED, and the restored tree GREEN.
+
+## F9440. The V.17 receive machine has eight states, seven of the names are the object's own text, and the mapping is forced twice over
+
+`RxNextStateV17` (0xa0130, 730 bytes) is a seven-way `switch` on a `short` at
+`V17RX_OBJ_CTL` + 0x18, dispatched through a compiler-generated jump table at
+`.rodata` 0xc2d0 whose seven entries are 0xa019a, 0xa01c7, 0xa0213, 0xa0247,
+0xa0270, 0xa02b1 and 0xa02e5. Each arm opens with a `dsplibs_debug_level > 1`
+guard and a `dsplibs_debug_printf` of a name out of `.rodata.str1.1`:
+
+    0  0x049bc  "V17RX_STATE_START\n"
+    1  0x049a5  "V17RX_STATE_EPOCH_DET\n"
+    2  0x0497d  "V17RX_STATE_PROTOCOL\n"
+    3  0x049f4  "V17RX_STATE_BRIDGE\n"
+    4  0x049e1  "V17RX_STATE_SCRAM\n"
+    5  0x049cf  "V17RX_STATE_DATA\n"
+    6  0x04993  "V17RX_STATE_IDLE\n"
+
+That is CLAUDE.md's rank-1 evidence -- a format string that prints the thing --
+and it is CORROBORATED BY A SECOND, INDEPENDENT SIGNAL: each arm also stores a
+handler address into `V17RXC_PROCESS`, and the blob symbol's own name matches
+the state the arm writes. State 1 goes with `RxHdxEpochDetV17`, 2 with
+`RxHdxPrtcolV17`, 3 with `RxHdxBridgeV17`, 4 with `RxHdxScramV17`, 5 with
+`RxHdxDataV17` and 6 with `RxHdxIdleV17`. Two derivations, one answer, and
+neither used the other.
+
+The eighth state has no case and no string. `RxHdxScramV17`, `RxHdxBridgeV17`,
+`RxHdxPrtcolV17` and `RxHdxEpochDetV17` all store 7 into the state field beside
+the store that installs `RxHdxErrorV17` (0xa053a and its three copies), so
+`V17RX_STATE_ERROR` takes its name from the handler and not from the object's
+text. It falls to the default arm; see D1211.
+
+**THE FIELD IS A SIGNED `short` AND THAT IS FORCED.** The load is
+`movswl 0x18(%edx),%eax` at 0xa013b and the bound test is `cmp $0x6,%eax` /
+`ja` -- UNSIGNED. An `unsigned short` cannot produce the `movswl`, and the
+pairing is what makes a negative state take the default rather than indexing the
+table backwards. `t_v17rxstate.c` drives -1, -2 and 0x8000 for that reason. This
+also settles the rename F9235 deferred: the field is the state, and
+`V17RXC_SHORT_0018` is now an alias kept only because `t_v17fax.c` spells it
+that way.
+
+**AND IT NAMES `V17RX_OBJ_RESULT_B1` BIT 0.** `RxNextStateV17` is the only
+writer of that bit anywhere in the object, so with this function written the
+pattern is an enumeration rather than a sample: SET on exactly the two arms
+that install `RxHdxDataV17` (`orb $0x1,0x29(%ebx)` at 0xa02a8 leaving SCRAM and
+at 0xa02ff leaving IDLE), CLEARED on every other arm and by the default. Set if
+and only if the handler just installed is the DATA handler. Nothing reads it.
+`V17RX_FLAG_DATA`.
+
+**THE DEFAULT ARM CLEARS IT INSIDE THE ERROR MASK, AND THE TWO MASKS DIFFER BY
+EXACTLY THAT BIT.** The default arm's read-modify-write is `or $0x2` then
+`and $0xde` (0xa0165/0xa0168 and the tail-duplicated copy at 0xa018f/0xa0192);
+the four handlers' error arms are `or $0x2` then `and $0xdf` (0xa0548,
+0xa0658, 0xa0738, 0xa07fb). 0xde clears CARRIER *and* DATA, 0xdf clears CARRIER
+alone. That is consistent -- the default arm is one of the eight paths through
+the state advance and every one of them writes the DATA bit, while the error
+arms are inside a handler and do not -- but the two are one instruction apart
+and read alike. The first reconstruction wrote 0xdf in both, `t_v17rxstate.c`
+failed 330 checks of 6,960 on the flag byte, and `dis.py` settled it.
+
+## F9441. `V17RX` + 0x2a bit 0 is written by one function, read by none, and is NOT the inverse of the DATA flag
+
+The byte at `V17RX_OBJ_RESULT` + 2 -- inside the int `V17RX_modem` returns -- is
+touched by `RxNextStateV17` and by nothing else in the 44 V.17 symbols. Only
+bit 0 is ever written. The whole write set:
+
+    START -> EPOCH_DET        cleared   0xa01ba
+    EPOCH_DET -> PROTOCOL     cleared   0xa01f8
+    PROTOCOL -> SCRAM         NOT WRITTEN
+    PROTOCOL -> BRIDGE        cleared   0xa03f8, AFTER the StoreCoefV17 call
+    BRIDGE -> SCRAM           cleared   0xa0267
+    SCRAM -> DATA             cleared   0xa02a4
+    DATA -> IDLE              SET       0xa02d8
+    IDLE -> DATA              cleared   0xa02fb
+    default                   cleared   0xa015d and 0xa0187
+
+Nothing anywhere reads it, so there is no second end to measure against and the
+field is named BY VALUE: `V17RX_OBJ_RESULT_B2` and `V17RX_RESULT_B2_BIT0`.
+
+**THE TEMPTING READING IS DECLINED.** Six of the eight writes are the exact
+complement of what the same instruction sequence does to `V17RX_FLAG_DATA`, and
+"the IDLE flag" is a natural gloss -- `v21fax.h` has a `V21RX_FLAG1_IDLE` of the
+same shape. But the PROTOCOL/SCRAM arm writes the DATA bit and does NOT write
+this one, so the two are not one flag spelled twice and the correspondence is
+not exhaustive. Naming it wrongly is worse than leaving it padded, so it stays
+at its value. D1213 records the asymmetry.
+
+## F9442. Two statements in `v17fax.h` were measured over the header's own functions and reported as if measured over the object
+
+Both are corrections to that header, made from `dis.py` and recorded here rather
+than done quietly.
+
+**`V17RXC_INT_0008` was described as "the one field in this header with exactly
+one reader and no writer anywhere in the object".** It has three writers.
+`RxNextStateV17`'s DATA arm clears it (`movl $0x0,0x8(%edx)` at 0xa02d1) on the
+transition into IDLE, and `V17RX_control` writes 0 at 0xa089c and 1 at 0xa08e0
+from two bits of its own argument byte. The reader count was right; the writer
+count was taken over the ten functions the header covered at the time.
+
+**`V17RX_FLAG_ERROR` was described as "SEEDED set by `V17RX_create`".** That
+read the `orb $0x2,0x29(%ebp)` at 0x97140 and stopped. Further along the same
+fall-through the function clears the WHOLE WORD -- `movl $0x0,0x28(%ebp)` at
+0x977a4 -- and then finishes `orb $0x50,0x29(%ebp)` at 0x977ab and
+`movb $0x2,0x28(%ebp)` at 0x977b5. So on any path reaching the second group the
+instance is delivered with 0x28 = 2, 0x29 = 0x50 and 0x2a = 0, and ERROR is
+CLEAR.
+
+The shape of both mistakes is the same one CLAUDE.md warns about for its own
+paragraphs: a count stated without the tool beside it. Neither changed any
+code; both changed what a future reader would have believed.
+
+## F9443. `V17RX_OBJ_CTL` + 0x0c is a four-value rate code, and `V17RX_create`'s bit-rate switch is what types it
+
+Two functions read the field and both do nothing with it but pick a status
+byte: `RxNextStateV17`'s IDLE arm (`movzwl 0xc(%edx),%eax` at 0xa0303) and
+`RxHdxScramV17`'s expiry path (0xa0551). Both spell the ladder the same way --
+`je` on 0 and on 1, then `cmp $0x2` / `sete %al` / `add $0x6,%al` -- so 0 gives
+9, 1 gives 8, 2 gives 7 and anything else gives 6.
+
+Its only writer is `V17RX_create`, which at 0x97113 loads `V17RX_OBJ_RX_BPS`
+(`movswl 0x4(%esi),%eax`, the same field `V17RX_status` reports as
+`struct v17_status::rx_bps`) and switches on the BIT RATE:
+
+    0x1c20   7200 -> 0   (0x97b15)      0x2ee0  12000 -> 2   (0x97b0a)
+    0x2580   9600 -> 1   (0x97a08)      0x3840  14400 -> 3   (0x97837)
+                                        default       -> 3   (0x97133)
+
+That is a writer that types the field, which is rank 2, so `V17RXC_RATE_CODE`
+and `V17RX_RATE_7200` .. `V17RX_RATE_14400` are derived and not inferred; and it
+carries the four status values with it, so `V17RX_STATUS_RATE_7200` = 9 and its
+three siblings are named by the rate that selects them. What the status VALUES
+mean to a reader of the returned word is still not established -- nothing in
+the object reads any of the nine.
+
+## F9444. `RxHdxBridgeV17` and `RxHdxPrtcolV17` are byte-for-byte identical, and `RxHdxScramV17` is the same body plus one thing
+
+0xa05b0 and 0xa0690, 210 bytes each. A byte-by-byte compare of the two ranges
+reports NO differing offset at all, and the six relocations are the same six
+targets in the same six positions. They are one source body compiled twice.
+
+`RxHdxScramV17` (0xa04a0, 266 bytes) is the same instruction sequence with one
+insertion: on the expiry path, between the countdown test and the `GetSNRV17`
+call, it reads `V17RXC_RATE_CODE` and writes the matching status byte
+(0xa0551..0xa05a8). The other two leave `V17RX_STATUS_CARRIER` there. Those 56
+bytes are the ONLY difference among the three.
+
+**WHY THIS MATTERS TO THE TEST AND NOT ONLY TO THE READER.** A reconstruction
+that wrote one of the three and copied it into the other two passes every check
+that does not drive an expiry with a rate code planted -- the three agree on
+the carrier arm, the error arm, the countdown, the SNR flag and the return.
+`t_v17rxstate.c` therefore drives each of the three to expiry at all four rate
+codes and asserts, by name and off the blob's own bytes, that Scram reported
+the rate and that its two twins did not. `train_ladder_sep` is the separating
+count.
+
+The three bodies are written out three times in `src/fax/v17.c` for the same
+reason `v17.c`'s existing comment gives for its reloads: a shared static helper
+would be one symbol where the object has three, and inlining is not something
+to hope for.
+
+## F9445. The V.17 handlers' translation unit saw `EpochDetectV17` returning a `short` and `CarrierDetectV17` returning an `int`
+
+`RxHdxEpochDetV17` tests `EpochDetectV17`'s result with `test %ax,%ax` at
+0xa07ce -- sixteen bits. Every one of the five handlers tests
+`CarrierDetectV17`'s with `test %eax,%eax` (0xa04fa, 0xa060a, 0xa06ea, 0xa07a9,
+0xa084c) -- thirty-two. Both widths are forced by a declared return type and
+neither is a choice the compiler had at the call site, so the two functions did
+not share a return type in that unit.
+
+`EpochDetectV17`'s own definition (0xa5670) cannot break the tie: it ends
+`setne %al` / `movzbl %al,%eax` / `ret`, which is what GCC emits for either
+return type over a 0-or-1 value.
+
+**NOT ACTED ON, AND THE REASON IS NOT TIMIDITY.** `EpochDetectV17` is declared
+`int` once in `v17fax.h` and defined `int` in `src/fax/v17.c`, and those are a
+different translation unit from the handlers in the object -- the symbols are
+0x5000 apart. Splitting one declaration into two to reproduce a 16-bit test
+would be a claim about which unit is which that nothing here supports, and the
+two readings agree over 0 and 1, which is all the function can return. The
+difference is one operand-size prefix and no differential test can see it.
+Recorded for whoever runs a codegen pass over this file.
+
+## F9446. The V.17 receive machine's test found nothing, so it was made to fire
+
+`t_v17rxstate.c` was green on its first complete run, which by F9417's rule is a
+reason to distrust it rather than to stop. Fifteen injections were run one at a
+time against `src/fax/v17.c`, each restored before the next, and **every one of
+them went RED**; the restored tree is GREEN at 52,208 checks.
+
+    state read from ctl+0x1a                          RED
+    PROTOCOL/SCRAM arm given its sibling's +0x2a clear RED
+    the countdown seeds 1 and 62 transposed            RED
+    Restore_rateV17 not called                         RED
+    the AGC alpha step omitted                         RED
+    StoreCoefV17 not called on the BRIDGE arm          RED
+    the IDLE arm's rate ladder shifted by one          RED
+    the default arm leaving V17RX_FLAG_DATA set        RED
+    the countdown test read unsigned                   RED
+    the training return made n on every path           RED
+    RxHdxScramV17's rate ladder taken away             RED
+    RxHdxBridgeV17 given RxHdxScramV17's rate ladder   RED
+    RxHdxEpochDetV17's `||` made `&&`                  RED
+    RxHdxIdleV17's 0x1fff compared strictly            RED
+    RxHdxStartV17 given an error arm                   RED
+
+The twelfth is F9444's discriminator and is the one worth naming twice: it makes
+`RxHdxBridgeV17` into `RxHdxScramV17`, which is what a reconstruction that
+copied one body into three would have produced.
+
+**THREE OF THEM WERE GREEN BEFORE THE FIXTURE WAS FIXED, AND THE REASON IS ONE
+FIELD.** `V17RXS_DEC_ERROR` is 0x1c2, which is `struct fpm_fse::mse` -- the
+equaliser OWNS it and rewrites it once per symbol -- so every trial that
+planted 0x1fff for `RxHdxIdleV17`'s threshold, or 5 for `GetSNRV17`'s, handed
+the handler the equaliser's own number instead. Shortening the block does not
+help: `FPM_AGC_agc` writes `signal` to zero on any call under half a
+measurement block, so a block short enough to produce no symbols is also a
+block with no carrier, and the threshold arm is never reached either way. The
+answer is the object's own abandon path -- `V17RXC_STATE` at START plus a tone
+`FPM_MTD_detect` answers PRESENT to, which returns from `DemodDataV17` AFTER
+the gain control and BEFORE the equaliser. Carrier up, `mse` untouched, edge
+driven. That is the same class of defect as the counters in F9417: three
+checks that ran, passed, and measured nothing.
+
+**THE ONE THAT WOULD HAVE ESCAPED A ONE-BLOCK FIXTURE** is the countdown, and
+it is F8790 again: with the seed at 1 the decrement, the store and the test all
+agree with a reading that never stored anything, because nothing looks at the
+field twice. The sweeps run four blocks per fixture and seed the countdown at 1,
+3 and 0x8000, and `H_COUNT_NOT_STORED` separates only on the multi-block rows.
+
+**THE ONE THAT NEEDED A PLANTED TABLE** is the AGC step, and it is D955 in its
+purest form. `cfg.alpha` and `cfg.beta` are SUBSCRIPTS -- the EPOCH_DET arm
+advances them and `FPM_AGC_agc` dereferences them later -- so a blob-against-blob
+run with an unplanted pointer has both sides reading the same neighbour and
+agreeing. The fixture points both sides at `AGCv17_CFG`'s own two-entry tables
+and the check is on the POINTER VALUES and the shorts they now name (0x7333 and
+0x0ccd), not on anything downstream. No fixture visits that arm twice, because
+the tables have exactly two entries and the object does not bound the increment
+(D1216).

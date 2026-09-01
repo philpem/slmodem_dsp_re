@@ -9,6 +9,13 @@
  *   V17RX_modem       .text 0x09ff80  127
  *   RxHdxDataV17      .text 0x0a0000  226
  *   RxHdxErrorV17     .text 0x0a00f0   59
+ *   RxNextStateV17    .text 0x0a0130  730
+ *   RxHdxIdleV17      .text 0x0a0410  132
+ *   RxHdxScramV17     .text 0x0a04a0  266
+ *   RxHdxBridgeV17    .text 0x0a05b0  210
+ *   RxHdxPrtcolV17    .text 0x0a0690  210
+ *   RxHdxEpochDetV17  .text 0x0a0770  156
+ *   RxHdxStartV17     .text 0x0a0810  105
  *   V17RX_status      .text 0x0a0910  190
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
@@ -94,6 +101,14 @@
 
 #define CTL(modem)		FIELD_PTR((modem), V17RX_OBJ_CTL)
 #define RXS(modem)		FIELD_PTR((modem), V17RX_OBJ_STATE)
+
+/*
+ * The dispatch slot as an lvalue.  `V17RX_modem` already spells the CALL this
+ * way; the state machine is what writes it, and storing a handler's address is
+ * a link-time reference exactly as a call is (CLAUDE.md, finding F8493).
+ */
+#define CTL_PROCESS(modem)	\
+	(*(v17rx_process_fn *)(void *)FIELD(CTL(modem), V17RXC_PROCESS))
 
 /*
  * The four FPM objects the receive chain runs, reached the long way round
@@ -277,6 +292,454 @@ RxHdxErrorV17(void *modem, short *in, short *out, unsigned short *count)
 	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_ERROR;
 
 	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	return 0;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxNextStateV17 -- .text 0x0a0130, 730 bytes.
+ *
+ * The receive machine's state advance.  See `v17fax.h` for what each arm does
+ * and for the eight state names, which are the author's own out of
+ * `.rodata.str1.1`.
+ *
+ * THE TABLE IS THE COMPILER'S AND THERE IS NOTHING TO REPRODUCE.  The object
+ * dispatches through `jmp *0xc2d0(,%eax,4)` after `cmp $0x6` / `ja`, which is
+ * what GCC emits for a dense `switch` on 0..6 with a `default`.  The `ja` is
+ * unsigned over a `movswl`-widened `short`, so a negative state takes the
+ * default rather than indexing backwards, and `t_v17rxstate.c` drives -1 for
+ * exactly that reason.
+ *
+ * EVERY ARM RE-READS `V17RX_OBJ_CTL` AFTER ITS DIAGNOSTIC AND THAT IS FORCED.
+ * The object reloads `0x5c(%ebx)` at 0x0a0398, 0x0a0384, 0x0a035c, 0x0a03d1,
+ * 0x0a03ac and 0x0a0370 -- once per arm that prints -- because the call to
+ * `dsplibs_debug_printf` clobbers memory it cannot see through.  The `CTL()`
+ * macro expands at each use, so the reloads come out of the C rather than
+ * being imitated; the SCRAM arm has none because its own reload happens after
+ * `FPM_AGC_Freeze` instead.
+ *
+ * THE EPOCH_DET ARM TESTS `V17RXC_INT_0010` TWICE AND THE SECOND TEST IS DEAD.
+ * `Restore_rateV17` writes only `V17RXS_RATE` and `V17RXS_SHORT_01F8`, both in
+ * the demodulator state, so it cannot change a control-block field -- but the
+ * compiler does not know that, and the object's `mov 0x10(%edx),%ecx` /
+ * `test` / `jne` at 0x0a0340 is the reload it is forced into.  On the arm
+ * where the call did NOT happen it CSEs the two tests and jumps straight to
+ * the 62, which is why 0x0a01d9's not-taken edge goes to 0x0a01df.  Written as
+ * the two reads the source had; deviation D1212.
+ */
+void
+RxNextStateV17(void *modem)
+{
+	switch (AT_S(CTL(modem), V17RXC_STATE)) {
+	case V17RX_STATE_START:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_START\n");
+		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 5;
+		CTL_PROCESS(modem) = RxHdxEpochDetV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_EPOCH_DET;
+		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			(unsigned char)~V17RX_FLAG_DATA;
+		break;
+
+	case V17RX_STATE_EPOCH_DET:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_EPOCH_DET\n");
+		if (AT_I(CTL(modem), V17RXC_INT_0010) != 0)
+			Restore_rateV17(modem);
+		AT_S(CTL(modem), V17RXC_COUNTDOWN) = (short)
+			(AT_I(CTL(modem), V17RXC_INT_0010) != 0 ? 1 : 62);
+		CTL_PROCESS(modem) = RxHdxPrtcolV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_PROTOCOL;
+		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			(unsigned char)~V17RX_FLAG_DATA;
+		/*
+		 * Acquisition to tracking: one `short` along each of the two
+		 * Q15 coefficient tables `AGCv17_CFG` points at, which the
+		 * object spells `addl $0x2` because that is what `const short *`
+		 * arithmetic compiles to.  See v17fax.h and D1216.
+		 */
+		RXS_AGC(RXS(modem))->cfg.alpha++;
+		RXS_AGC(RXS(modem))->cfg.beta++;
+		break;
+
+	case V17RX_STATE_PROTOCOL:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_PROTOCOL\n");
+		if (AT_I(CTL(modem), V17RXC_INT_0010) != 0) {
+			AT_S(CTL(modem), V17RXC_COUNTDOWN) = 1;
+			CTL_PROCESS(modem) = RxHdxScramV17;
+			AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_SCRAM;
+			AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+				(unsigned char)~V17RX_FLAG_DATA;
+			/* No write to V17RX_OBJ_RESULT_B2 here.  D1213. */
+		} else {
+			AT_S(CTL(modem), V17RXC_COUNTDOWN) = 1;
+			CTL_PROCESS(modem) = RxHdxBridgeV17;
+			AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_BRIDGE;
+			AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+				(unsigned char)~V17RX_FLAG_DATA;
+			StoreCoefV17(modem);
+			AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+				(unsigned char)~V17RX_RESULT_B2_BIT0;
+		}
+		break;
+
+	case V17RX_STATE_BRIDGE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_BRIDGE\n");
+		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 1;
+		CTL_PROCESS(modem) = RxHdxScramV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_SCRAM;
+		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			(unsigned char)~V17RX_FLAG_DATA;
+		break;
+
+	case V17RX_STATE_SCRAM:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_SCRAM\n");
+		FPM_AGC_Freeze(RXS_AGC(RXS(modem)));
+		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 0;
+		CTL_PROCESS(modem) = RxHdxDataV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_DATA;
+		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_DATA;
+		break;
+
+	case V17RX_STATE_DATA:
+		/*
+		 * UNREACHABLE IN THE OBJECT, AND WRITTEN ANYWAY.  Nothing that
+		 * runs while the state is DATA calls this function --
+		 * `RxHdxDataV17` and `RxHdxErrorV17` are the two handlers that
+		 * never do -- so this arm is 52 bytes of code the machine
+		 * cannot enter.  Deviation D1210.  The store order differs from
+		 * every other arm's (handler, state, countdown, rather than
+		 * countdown, handler, state) and is the object's.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_DATA\n");
+		CTL_PROCESS(modem) = RxHdxIdleV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_IDLE;
+		AT_S(CTL(modem), V17RXC_COUNTDOWN) = 0;
+		AT_I(CTL(modem), V17RXC_INT_0008) = 0;
+		AT_B(modem, V17RX_OBJ_RESULT_B2) |= V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			(unsigned char)~V17RX_FLAG_DATA;
+		break;
+
+	case V17RX_STATE_IDLE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_STATE_IDLE\n");
+		CTL_PROCESS(modem) = RxHdxDataV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_DATA;
+		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_DATA;
+		/* The one arm that does not seed the countdown.  D1215. */
+		switch (AT_US(CTL(modem), V17RXC_RATE_CODE)) {
+		case V17RX_RATE_7200:
+			AT_B(modem, V17RX_OBJ_RESULT) =
+				V17RX_STATUS_RATE_7200;
+			break;
+		case V17RX_RATE_9600:
+			AT_B(modem, V17RX_OBJ_RESULT) =
+				V17RX_STATUS_RATE_9600;
+			break;
+		case V17RX_RATE_12000:
+			AT_B(modem, V17RX_OBJ_RESULT) =
+				V17RX_STATUS_RATE_12000;
+			break;
+		default:
+			AT_B(modem, V17RX_OBJ_RESULT) =
+				V17RX_STATUS_RATE_14400;
+			break;
+		}
+		break;
+
+	default:
+		/*
+		 * Reached by `V17RX_STATE_ERROR`, which has no arm of its own,
+		 * and by any state outside 0..6.  D1211.
+		 */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17RX_DEFAULT: %d\n",
+					     AT_S(CTL(modem), V17RXC_STATE));
+		AT_B(modem, V17RX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17RX_RESULT_B2_BIT0;
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_DEFAULT;
+		/*
+		 * THE MASK IS 0xde AND NOT 0xdf: this arm clears CARRIER *and*
+		 * `V17RX_FLAG_DATA`, where the four handlers' error arms clear
+		 * CARRIER alone (`and $0xdf`).  That is consistent with every
+		 * other arm of this function writing the DATA bit -- the
+		 * default is not a transition, so it clears it -- and it is
+		 * one of the two places the two masks differ by exactly that
+		 * bit.  Read the bytes at 0x0a0168 and 0x0a0192.
+		 */
+		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
+			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+			 & ~(V17RX_FLAG_CARRIER | V17RX_FLAG_DATA));
+		break;
+	}
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxIdleV17 -- .text 0x0a0410, 132 bytes.
+ *
+ * See v17fax.h.  The `out` cast is D1141's, as in `RxHdxDataV17`: the handler
+ * signature spells the buffer `short *` and `DemodDataV17` spells it
+ * `unsigned short *`, the pointer is passed through untouched, and the cast
+ * costs no instruction.
+ */
+short
+RxHdxIdleV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		(unsigned char)~V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_IDLE;
+
+	if (CarrierDetectV17(modem) != 0)
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+
+	if ((AT_B(modem, V17RX_OBJ_RESULT_B1) & V17RX_FLAG_CARRIER) != 0
+	    && AT_S(RXS(modem), V17RXS_DEC_ERROR) <= V17RXS_DEC_ERROR_SMALL) {
+		RxNextStateV17(modem);
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Decision error is small back to DATA mode !!!\n");
+	}
+
+	return 0;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxScramV17 -- .text 0x0a04a0, 266 bytes.
+ *
+ * The rate ladder on the expiry path is the ONLY thing that separates this
+ * from `RxHdxBridgeV17` and `RxHdxPrtcolV17` below, which are 210 bytes each
+ * and byte-for-byte identical to one another.  See v17fax.h and F9444.
+ *
+ * THE COUNTDOWN IS LOADED UNSIGNED AND TESTED SIGNED, and both halves are the
+ * object's; see `V17RXC_COUNTDOWN`.  The local is what carries the extension.
+ */
+short
+RxHdxScramV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	unsigned short n;
+	short left;
+
+	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	if (CarrierDetectV17(modem) == 0) {
+		CTL_PROCESS(modem) = RxHdxErrorV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
+			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+			 & ~V17RX_FLAG_CARRIER);
+		return 0;
+	}
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+
+	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
+	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	if (left > 0)
+		return 0;
+
+	switch (AT_US(CTL(modem), V17RXC_RATE_CODE)) {
+	case V17RX_RATE_7200:
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_7200;
+		break;
+	case V17RX_RATE_9600:
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_9600;
+		break;
+	case V17RX_RATE_12000:
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_12000;
+		break;
+	default:
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_RATE_14400;
+		break;
+	}
+
+	/* SET and never cleared; only RxHdxDataV17 clears it.  D1217. */
+	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+
+	RxNextStateV17(modem);
+
+	return (short)n;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxBridgeV17 -- .text 0x0a05b0, 210 bytes.
+ *
+ * IDENTICAL TO `RxHdxPrtcolV17` BELOW, BYTE FOR BYTE, and the two bodies are
+ * written out twice for that reason: a shared static helper would be one
+ * symbol where the object has two, and would move the code generation of both.
+ * Do not fold them.  Finding F9444.
+ */
+short
+RxHdxBridgeV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	unsigned short n;
+	short left;
+
+	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	if (CarrierDetectV17(modem) == 0) {
+		CTL_PROCESS(modem) = RxHdxErrorV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
+			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+			 & ~V17RX_FLAG_CARRIER);
+		return 0;
+	}
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+
+	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
+	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	if (left > 0)
+		return 0;
+
+	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+
+	RxNextStateV17(modem);
+
+	return (short)n;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxPrtcolV17 -- .text 0x0a0690, 210 bytes.  The other copy; see above.
+ */
+short
+RxHdxPrtcolV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	unsigned short n;
+	short left;
+
+	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	if (CarrierDetectV17(modem) == 0) {
+		CTL_PROCESS(modem) = RxHdxErrorV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
+			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+			 & ~V17RX_FLAG_CARRIER);
+		return 0;
+	}
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+
+	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
+	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	if (left > 0)
+		return 0;
+
+	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+
+	RxNextStateV17(modem);
+
+	return (short)n;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxEpochDetV17 -- .text 0x0a0770, 156 bytes.
+ *
+ * THE `||` IS SHORT-CIRCUIT AND THE OBJECT PROVES IT: `jle` at 0x0a07c4 jumps
+ * over the `EpochDetectV17` call at 0x0a07c9 to the `RxNextStateV17` call at
+ * 0x0a07d3.  An expired countdown advances the machine without asking about the
+ * epoch, and `t_v17rxstate.c` drives that case with the epoch flag CLEAR so
+ * that a non-short-circuiting reading would stay put.
+ */
+short
+RxHdxEpochDetV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	short left;
+
+	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	if (CarrierDetectV17(modem) == 0) {
+		CTL_PROCESS(modem) = RxHdxErrorV17;
+		AT_S(CTL(modem), V17RXC_STATE) = V17RX_STATE_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_ERROR;
+		AT_B(modem, V17RX_OBJ_RESULT_B1) = (unsigned char)
+			((AT_B(modem, V17RX_OBJ_RESULT_B1) | V17RX_FLAG_ERROR)
+			 & ~V17RX_FLAG_CARRIER);
+		return 0;
+	}
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_CARRIER;
+
+	left = (short)(AT_US(CTL(modem), V17RXC_COUNTDOWN) - 1);
+	AT_S(CTL(modem), V17RXC_COUNTDOWN) = left;
+	if (left <= 0 || EpochDetectV17(modem) != 0)
+		RxNextStateV17(modem);
+
+	return 0;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxStartV17 -- .text 0x0a0810, 105 bytes.
+ *
+ * The only handler with no error arm; see v17fax.h.  `*count = 0` is ONE
+ * statement that the compiler tail-duplicated into both arms of the carrier
+ * test, which is why the object stores it at 0x0a0850 and again at 0x0a086c.
+ */
+short
+RxHdxStartV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		(unsigned char)~V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_START;
+
+	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+
+	if (CarrierDetectV17(modem) != 0) {
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+		RxNextStateV17(modem);
+	}
+
 	*count = 0;
 
 	return 0;
@@ -523,7 +986,7 @@ DemodDataV17(void *modem, short *in, unsigned short *bits, unsigned short count)
 	/* Not the object's `%eax`; the same value.  D1091. */
 	signal = RXS_AGC(RXS(modem))->signal;
 
-	if (AT_S(CTL(modem), V17RXC_SHORT_0018) == 0) {
+	if (AT_S(CTL(modem), V17RXC_STATE) == V17RX_STATE_START) {
 		short *buf = (short *)FIELD_PTR(CTL(modem), V17RXC_SCRATCH);
 		unsigned short i;
 
