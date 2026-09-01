@@ -32,6 +32,36 @@
  * every field's evidence is quoted with it.
  */
 
+/*
+ * RECONCILING THIS WITH `faxcfg.h`, WHICH ARRIVED ON ANOTHER BRANCH OF THE
+ * SAME WAVE.  `struct faxvmi_cfg` there is the 24 bytes of `FAXVMI_CFG` that
+ * the `init_vmi_*` constructors copy over the HEAD of a `struct faxvmi`, so
+ * it is this structure's leading sub-object and the two describe the same
+ * memory.  They AGREE on every width, and neither needs changing to be
+ * correct; what the two halves have between them is more evidence than either
+ * had alone, so whoever unifies them should carry these over:
+ *
+ *   +0x04  `int_0004` there, `reverse` here.  faxcfg records that the table
+ *          holds 0 and the constructors set it to 1; FAXVMI_process is what
+ *          says what 1 DOES -- it routes the block through
+ *          `vmi_reverse[mode]` in both directions (F9010).  The two readings
+ *          agree: a receive path wants the wire's bit order undone.
+ *   +0x08  `short_0008` there, `fifo_size` here -- it is the ring capacity
+ *          FAXVMI_create asks for.
+ *   +0x0a  `short_000a` there, `max_frame` here, and it has four independent
+ *          confirmations (F9011, F9019).
+ *   +0x0c  `short_000c` there, `frame_size` here -- it sizes the HDLC
+ *          assembly buffer.
+ *
+ * The other direction is worth as much: faxcfg's `modem_cfg` at +0x10 is the
+ * second argument `FAXVMI_create` hands `vxx_create`, which is all this file
+ * knew about it, and its `slot` at +0x0e is this file's `slot`.
+ *
+ * Embedding `struct faxvmi_cfg` as a member here is the obvious tidy-up and
+ * is NOT done: it would change every offset comment in this header for no
+ * behavioural gain, and both files are correct as they stand.
+ */
+
 #ifndef DSPLIB_FAXVMI_H
 #define DSPLIB_FAXVMI_H
 
