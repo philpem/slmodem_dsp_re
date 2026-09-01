@@ -163,38 +163,112 @@ struct fpm_tone;
  *     bit is quality zero.  BOTH ENDS ARE NOW MEASURED, which is what this
  *     header previously did not have and why the bit was neutral until now.
  *
- * Bit 0x0100 is set and cleared by `RxNextStateV29` alone and is not named.
+ * ---------------------------------------------------------------------------
+ * TWO MORE BITS ARE NAMED NOW, AND THE STATUS WORD IS THREE BYTES WIDE
+ *
+ * This header used to say "bit 0x0100 is set and cleared by `RxNextStateV29`
+ * alone and is not named", and did not record 0x010000 at all -- because both
+ * are written only by `RxNextStateV29`, which was unwritten.  Reading it gives
+ * both, and they are exact complements of one another:
+ *
+ *   DATA (0x0100), bit 0 of the byte at +0x19 -- SET by the two arms that
+ *     install `RxHdxDataV29` (PROTOCOL -> DATA at 0x0a4204 and IDLE -> DATA at
+ *     0x0a425b) and CLEARED by every other arm including the default.
+ *
+ *   IDLE (0x010000), bit 0 of the byte at +0x1a -- SET by the ONE arm that
+ *     installs `RxHdxIdleV29` (DATA -> IDLE at 0x0a4234) and CLEARED by all
+ *     five others.
+ *
+ * So every arm writes both and never the same way: the one entering IDLE sets
+ * IDLE and clears DATA, the two entering DATA do the reverse, and the rest
+ * clear both.  Nothing in the object reads either, so what they are FOR is a
+ * caller's business -- what is established is that together they report which
+ * of the two steady states the machine is in, or neither.
+ *
+ * `V21RX_FLAG_DATA` / `V21RX_FLAG1_IDLE` in `v21fax.h` and
+ * `V27_STATUS_FLAG_DATA` / `V27_STATUS_FLAG2_IDLE` in `v27fax.h` are the same
+ * two bits of the same two bytes of the same machine, derived from V.21's and
+ * V.27ter's own state machines.  Three modulations agreeing is corroboration;
+ * the derivation here is V.29's six arms.
  */
 #define V29_OBJ_STATUS		0x18
-#define V29_STATUS_ERROR	0x0200
-#define V29_STATUS_CARRIER	0x2000
-#define V29_STATUS_LOW_SNR	0x8000
+#define V29_STATUS_DATA		0x000100
+#define V29_STATUS_ERROR	0x000200
+#define V29_STATUS_CARRIER	0x002000
+#define V29_STATUS_LOW_SNR	0x008000
+#define V29_STATUS_IDLE		0x010000
 
 /*
- * The STATUS BYTE, which is byte 0 of that same int.  Seven values are
- * written across the receive handlers and NOTHING IN THE OBJECT READS ANY OF
- * THEM, so a name here is the site that writes it and no more than that --
- * `v21fax.h`'s ruling on the identically shaped byte, and its numbering turns
- * out to be the same one.  Only the value `RxHdxDataV29` writes is needed by
- * anything reconstructed, so only that one is named.
+ * The STATUS BYTE, which is byte 0 of that same int.  NINE values are written
+ * across the receive handlers and NOTHING IN THE OBJECT READS ANY OF THEM, so
+ * a name here is the site that writes it and no more than that -- `v21fax.h`'s
+ * ruling on the identically shaped byte.
  *
  *   0  RxHdxDataV29, every block          <- V29RX_STATUS_DATA
- *   1  RxHdxPrtcolV29, RxHdxEpochDetV29
+ *   1  RxHdxPrtcolV29, RxHdxEpochDetV29, on the carrier-present arm
  *   2  RxHdxStartV29
  *   3  RxNextStateV29's default arm
- *   4  RxHdxPrtcolV29, RxHdxEpochDetV29
+ *   4  RxHdxPrtcolV29, RxHdxEpochDetV29, on the carrier-lost arm
  *   5  RxHdxIdleV29
+ *   6  RxNextStateV29's IDLE arm and RxHdxPrtcolV29, when V29DET_SHORT_000C
+ *      is non-zero
+ *   7  the same two sites, when it is zero
  *
- * The author's own words for the STATES beside them are in .rodata.str1.1:
- * "V29RX_STATE_START", "V29RX_STATE_IDLE", "V29RX_STATE_DATA",
- * "V29RX_STATE_PROTOCOL", "V29RX_STATE_EPOCH_DET" and "V29RX_DEFAULT, %d"
- * (0x4d03, 0x4d16, 0x4d28, 0x4d3a, 0x4d50 and 0x4cf0), all printed by
- * `RxNextStateV29`.  Which value goes with which string is NOT read off here,
- * because that needs the jump table at .rodata + 0xc35c and this pass did not
- * need it; DATA is named from its writer, as above.
+ * 6 AND 7 ARE NEW IN THIS PASS and the paragraph above used to say "seven
+ * values"; the two extra ones come from the two writers this header could not
+ * see until `RxNextStateV29` and `RxHdxPrtcolV29` were read.  Both sites spell
+ * the choice the same way -- `cmp $0x1,%si` / `sbb` / `not %bl` / `add $0x7`,
+ * GCC's branchless two-constant conditional -- so they are one expression
+ * written twice and not two coincidences.
+ *
+ * ---------------------------------------------------------------------------
+ * THE STATE NUMBERING IS NOW READ OFF, FROM THE JUMP TABLE AT .rodata + 0xc35c
+ *
+ * The author's own words for the STATES are in .rodata.str1.1 and every one of
+ * them is printed by `RxNextStateV29`, from a five-armed switch on
+ * `V29DET_STATE`.  The table's five entries, in index order, are the five arm
+ * addresses, and each arm prints ONE string -- so the string names the state
+ * the machine is LEAVING and the index is that state's number:
+ *
+ *     0  0x4d03 "V29RX_STATE_START\n"       -> installs RxHdxEpochDetV29, 1
+ *     1  0x4d50 "V29RX_STATE_EPOCH_DET\n"   -> installs RxHdxPrtcolV29,   2
+ *     2  0x4d3a "V29RX_STATE_PROTOCOL\n"    -> installs RxHdxDataV29,     3
+ *     3  0x4d28 "V29RX_STATE_DATA\n"        -> installs RxHdxIdleV29,     4
+ *     4  0x4d16 "V29RX_STATE_IDLE\n"        -> installs RxHdxDataV29,     3
+ *
+ * and anything above 4 takes the default arm, which prints 0x4cf0
+ * "V29RX_DEFAULT, %d\n" with the value.  The consistency check is that each
+ * arm's INSTALLED HANDLER matches the number it stores -- state 1 gets
+ * `RxHdxEpochDetV29`, state 2 gets `RxHdxPrtcolV29`, state 3 gets
+ * `RxHdxDataV29`, state 4 gets `RxHdxIdleV29` -- which it does at all five,
+ * and which a mapping read the other way round would fail at every one.
+ * Evidence rank 1.  Finding F9320.
+ *
+ * State 5 has no arm of its own: `RxHdxPrtcolV29` and `RxHdxEpochDetV29` store
+ * it beside the store that installs `RxHdxErrorV29`, so it is the ERROR state
+ * and it is a trap -- `RxNextStateV29` would take the default arm on it, and
+ * `RxHdxErrorV29` never calls `RxNextStateV29`.
  */
 #define V29_OBJ_STATUS_B0	0x18
 #define V29RX_STATUS_DATA	0
+#define V29RX_STATUS_TRAIN	1	/* PROTOCOL and EPOCH_DET, carrier up */
+#define V29RX_STATUS_START	2
+#define V29RX_STATUS_DEFAULT	3	/* RxNextStateV29's default arm       */
+#define V29RX_STATUS_LOST	4	/* PROTOCOL and EPOCH_DET, carrier gone */
+#define V29RX_STATUS_IDLE	5
+#define V29RX_STATUS_DONE_A	6	/* V29DET_SHORT_000C non-zero         */
+#define V29RX_STATUS_DONE_B	7	/* ... and zero.  Neutral: nothing
+					 * reconstructed reads either field.  */
+
+/* The five states the jump table numbers, and the sixth the two error arms
+ * store.  See the derivation above. */
+#define V29RX_STATE_START	0
+#define V29RX_STATE_EPOCH_DET	1
+#define V29RX_STATE_PROTOCOL	2
+#define V29RX_STATE_DATA	3
+#define V29RX_STATE_IDLE	4
+#define V29RX_STATE_ERROR	5
+#define V29RX_STATE_MAX		4	/* `cmp $0x4` / `ja default`          */
 
 /*
  * `RxHdxDataV29` raises V29_STATUS_LOW_SNR when `GetSNRV29` comes back at or
@@ -338,12 +412,60 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
 #define V29DET_INT_0008		0x08	/* int                               */
 
 /*
- * The gate on `DemodDataV29`'s pre-pass.  While it is ZERO the demodulator
- * first halves the block into the scratch buffer, notches it and runs the
- * tone detector, and abandons the whole call if that detector fires.  Neutral
- * name: what the flag records is not established, only what it gates.
+ * A short nothing reconstructed writes, read by `RxHdxPrtcolV29` and by
+ * `RxNextStateV29`'s IDLE arm and by nothing else, and in both places for the
+ * same purpose: to choose between status bytes 6 and 7.  Two readers, one
+ * expression, no writer -- so what it RECORDS is not established and the name
+ * stays an offset.
  */
-#define V29DET_GATE_14		0x14	/* short                             */
+#define V29DET_SHORT_000C	0x0c	/* unsigned short                    */
+
+/*
+ * THE RECEIVE STATE NUMBER.  Upgraded from `V29DET_GATE_14`, which was neutral
+ * because this pass's writers were unwritten.
+ *
+ * `RxNextStateV29` switches on it (`movswl 0x14(%edx),%eax` / `cmp $0x4` /
+ * `jmp *0xc35c(,%eax,4)`) and every arm stores the next state back into it;
+ * `RxHdxPrtcolV29` and `RxHdxEpochDetV29` store `V29RX_STATE_ERROR` into it
+ * beside the store that installs `RxHdxErrorV29`; and `V29RX_create` seeds it.
+ * The five values it takes are exactly the five the jump table indexes, and
+ * each one arrives paired with its own handler in `V29DET_HANDLER`.
+ *
+ * `DemodDataV29`'s pre-pass gate is therefore "the machine is still in START":
+ * while this is zero the demodulator halves the block into the scratch buffer,
+ * notches it and runs the tone detector, and abandons the whole call if that
+ * detector fires.  `v27fax.h` records the identical field of the identical
+ * machine at `V27SH_SKIP_TONE` and says it is "ALMOST CERTAINLY THE RECEIVE
+ * STATE NUMBER" (finding F9235); this is that guess measured.  Finding F9320.
+ *
+ * It is read `movswl` and the 32-bit result is the switch's index, so SIGNED
+ * is FORCED -- CLAUDE.md's forced case exactly.  A negative value takes the
+ * default arm, because the bound test is `cmp $0x4` with an UNSIGNED `ja`.
+ */
+#define V29DET_STATE		0x14	/* short                             */
+
+/*
+ * How many more blocks the current state will sit in before it advances, and
+ * it is a COUNTDOWN rather than a count.
+ *
+ * `RxNextStateV29` seeds it on every transition -- 3 entering EPOCH_DET, 8
+ * entering PROTOCOL, 0 entering DATA -- and `RxHdxEpochDetV29` and
+ * `RxHdxPrtcolV29`, the two handlers of the two states that get a non-zero
+ * seed, each decrement it once per block and advance the machine when what is
+ * left is `<= 0`.  The IDLE arm does not write it and `RxHdxIdleV29` does not
+ * read it.
+ *
+ * USAGE INFERENCE, and this header says so: no format string names it and no
+ * other function in the object touches it.  What is MEASURED is the seed, the
+ * decrement and the `jle`; "blocks" is the unit only because the handlers are
+ * called once per block.
+ *
+ * The decrement is 16-bit and the test signed (`dec %cx` / `test %cx,%cx` /
+ * `jle`), so a seed of 0 goes to -1 and advances on the first block.
+ */
+#define V29DET_STATE_COUNT	0x16	/* short                             */
+#define V29DET_COUNT_EPOCH_DET	3	/* seeded entering EPOCH_DET         */
+#define V29DET_COUNT_PROTOCOL	8	/* ... and entering PROTOCOL         */
 
 /* `count` shorts.  Written by DemodDataV29, read by TONE_kill and MTD_detect. */
 #define V29DET_BUF		0x18	/* short *                           */
@@ -414,10 +536,29 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
 #define V29RX_FSE_TILT_ON	0x0168	/* struct fpm_fse + 0x48             */
 
 /*
- * Compared against 999 by `DataCarrierDetectV29` and by nothing else.  A
- * `short`: the object compares 16 bits and branches signed.
+ * Compared against 999 by `DataCarrierDetectV29`.  A `short`: the object
+ * compares 16 bits and branches signed.
+ *
+ * IT IS THE DECODER'S SYMBOL COUNTER, and that is now read off rather than
+ * guessed: `V29RX_create` sets the equaliser's `cfg.owner` to `rx + 0x28`
+ * (0x9b1c6: `mov 0x50(%ebp),%esi` then `add $0x28,%esi` at 0x9b1d6, stored
+ * into the on-stack `fpm_fse_cfg`'s +0x2c), and `V29DEC_SYM_COUNT` is that
+ * block's +0x1e -- so this offset and `V29RX_DEC + V29DEC_SYM_COUNT` are the
+ * same sixteen bits.  All three slicers advance it and this is its only
+ * reader, which is `V27RX_DEC_SETTLED`'s shape exactly.  The constant is kept
+ * because `t_v29fax.c` pokes raw bytes and must not agree with `src/` by
+ * construction.  Finding F9321.
  */
 #define V29RX_SHORT_0046	0x0046
+
+/*
+ * THE DECODER BLOCK, rx + 0x28 .. rx + 0x47, and the equaliser's `cfg.owner`.
+ *
+ * It ends exactly where `V29RX_MRF` begins, so the thirty-two bytes below tile
+ * it with nothing over.  Every offset in the `V29DEC_*` group is relative to
+ * THIS, not to the receive block.
+ */
+#define V29RX_DEC		0x0028
 
 #define V29RX_MRF		0x0048	/* struct fpm_mrf                    */
 
@@ -514,6 +655,239 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
 #define V29RX_RMS_SHIFT		15
 /* The decoder error above which the receiver declares no carrier. */
 #define V29RX_DEC_ERROR_MAX	0x3fff
+
+/* ------------------------------------------------------------------------ */
+/* The decoder block, at rx + V29RX_DEC and at fse->cfg.owner.               */
+
+/*
+ * IT IS NOT V.27ter's BLOCK WITH THE OFFSETS MOVED, and anyone reading
+ * `v27fax.h` beside this will assume it is.  V.27ter puts the three-point
+ * history at dec + 0x00 and its ONE leaky average at dec + 0x1e; V.29 puts TWO
+ * leaky averages at dec + 0x00 and dec + 0x02 and the history above them, and
+ * has no `eight_phase`/`train_short` pair, no `phase_mask`, no `pmap` or
+ * `angles` POINTER (both tables are named directly), and no `angle_prev`
+ * separate from the phase index.  Five of V.27's twelve fields have no
+ * counterpart here at all.  Finding F9322.
+ *
+ * ---------------------------------------------------------------------------
+ * THE TWO LEAKY AVERAGES, dec + 0x00 and dec + 0x02
+ *
+ * `V29RX_epoch_det` keeps two running averages of the MAGNITUDE the equaliser
+ * hands it, and updates exactly ONE of them per symbol -- the first when the
+ * phase advance since the previous symbol exceeds half a turn, the second when
+ * it does not.  Both are then read together, as `(a*a + b*b) >> 15`, to form
+ * the threshold the epoch test compares against.
+ *
+ * NEUTRALLY NAMED BY WHICH BRANCH FILLS THEM.  What is measured is the update,
+ * the selector and the joint read; nothing in the object names either, and
+ * "the average for the far half of the circle" is a description of the code
+ * and not a claim about what the author thought it meant.
+ *
+ * The update is `avg = (31 * avg) >> 5; avg = avg + (*mag >> 5);` and it is
+ * TWO STATEMENTS, not one: the object stores the intermediate to memory before
+ * it loads `*mag` (0x9b74b then 0x9b74f, and 0x9b7e6 then 0x9b7ea).  It has to
+ * -- `mag` is a `short *` parameter and may alias the field -- so the double
+ * store is forced by the source's shape and is reproduced.  The shifts are
+ * SHIFTS AND NOT DIVISIONS: a signed `/32` compiles to `test`/`add $31`/`sar`
+ * and there is no such correction in these 413 bytes.
+ */
+#define V29DEC_MAG_AVG_FAR	0x00	/* short: diff  >  V29DEC_HALF_TURN  */
+#define V29DEC_MAG_AVG_NEAR	0x02	/* short: diff <=  V29DEC_HALF_TURN  */
+
+#define V29EPOCH_AVG_SHIFT	5
+#define V29EPOCH_AVG_WEIGHT	31	/* (1 << V29EPOCH_AVG_SHIFT) - 1     */
+
+/*
+ * THE EPOCH DETECTOR'S THREE-POINT HISTORY, dec + 0x04 .. dec + 0x0f.
+ *
+ * `V29RX_epoch_det` is the only thing in the object that touches any of the
+ * six, and it uses them exactly as `V27RX_epoch_det` uses its own: the newest
+ * pair at +0x04/+0x06, one symbol back at +0x08/+0x0a and two symbols back at
+ * +0x0c/+0x0e, shifted along by one every call.
+ *
+ * THAT THE PAIRS ARE (I, Q) IS RANK 2: the values written into +0x04 and +0x06
+ * are `state->out_i[n]` and `state->out_q[n]`, and those two fields are
+ * `fpm_fse.h`'s, named there from `FPM_FSE_receive`.  WHICH pair is "one back"
+ * follows from the shift and from nothing else.
+ *
+ * ALL SIX ARE READ `movzwl` AND EVERY DIFFERENCE IS NARROWED BACK TO `short`,
+ * so the extension is F614's free case and the `unsigned short` here is what
+ * F7803's rule reads off the object -- the declared type of what is loaded --
+ * and not something a test can measure.  The two SAMPLES differenced against
+ * them are a different matter: they are read `movswl` and then SQUARED, so
+ * their sign extension is forced and IS measured.
+ */
+#define V29DEC_I0		0x04	/* unsigned short, the newest        */
+#define V29DEC_Q0		0x06
+#define V29DEC_I1		0x08	/* one symbol back                   */
+#define V29DEC_Q1		0x0a
+#define V29DEC_I2		0x0c	/* two symbols back                  */
+#define V29DEC_Q2		0x0e
+
+/*
+ * Sixteen constellation points or eight, and the same field chooses both which
+ * half of the training alternation is used and whether the fourth bit reaches
+ * the output.
+ *
+ * `V29RX_decision` computes `n = dec->sixteen_point ? 16 : 8` -- `cmp $0x1,%ebp;
+ * sbb %esi,%esi; and $0xfffffff8,%esi; lea 0x10(%esi),%ebp`, GCC's branchless
+ * two-constant conditional, which sets the mask on `%ebp == 0` alone -- and it
+ * gates the `| (bi & 8)` that puts the amplitude bit into the returned symbol.
+ * `V29RX_eq_train` uses it to choose between `V29_TRAIN_POINT_8` and
+ * `V29_TRAIN_POINT_16`.
+ *
+ * `src/fax/v29cfg.c` derives the same split from the tables: the first eight
+ * entries of `V29RX_DEC_IMAP`/`_QMAP` are V.29's inner ring, so eight points is
+ * three bits a symbol at 2400 baud (7200 bit/s) and sixteen is four (9600).
+ * An `int`: loaded 32 bits wide and tested 32 bits wide at all three sites.
+ */
+#define V29DEC_SIXTEEN_POINT	0x10	/* int                               */
+
+/*
+ * The previous symbol's phase index, 0..7, and the DPSK reference.
+ *
+ * `V29RX_decision` reads it, subtracts it from the index it just chose and
+ * indexes `V29RX_DEC_PMAP` with the difference; both slicers write the low
+ * three bits of their own chosen index back into it.  `V29RX_epoch_det` clears
+ * it at the handover.  Read `movzwl` and the difference is masked to three
+ * bits, so the extension is free and the type is F7803's reading.
+ */
+#define V29DEC_LAST		0x14	/* unsigned short                    */
+
+/*
+ * THE TRAINING SEQUENCE'S SHIFT REGISTER, and the field that makes
+ * `V29RX_eq_train` a generator rather than a slicer.
+ *
+ * Seven bits, updated once per symbol as
+ *
+ *     x    = (unsigned)s
+ *     x    = (((x << 6) & 0x80) ^ ((x & 1) << 7)) | x
+ *     s'   = (x >> 1) & 0x7f
+ *
+ * -- a right-shifting linear feedback register whose incoming bit is the XOR
+ * of the two it is about to lose.  That reading is the instructions and not an
+ * interpretation: `shl $0x6` / `and $0x80` places bit 1 at bit 7, `and $0x1` /
+ * `shl $0x7` places bit 0 there too, `xor` combines them, `or` re-attaches the
+ * body, `shr $0x1` (LOGICAL, which is what makes the intermediate unsigned)
+ * shifts and `and $0x7f` trims.
+ *
+ * ITS BIT 0 IS THE WHOLE OUTPUT: the training symbol is constellation point 0
+ * when the bit is clear and `V29_TRAIN_POINT_8`/`_16` when it is set, so the
+ * slicer emits a pseudo-random two-point alternation.  `V29RX_epoch_det` seeds
+ * it with `V29_TRAIN_LFSR_SEED` at the handover.
+ *
+ * Read `movswl` -- SIGNED, and the 32-bit result is `or`ed into the register
+ * before the logical shift, so a value with bit 15 set would change the answer.
+ * Nothing writes one, but the extension is what the object encodes.
+ */
+#define V29DEC_TRAIN_LFSR	0x16	/* short                             */
+#define V29_TRAIN_LFSR_SEED	0x55
+#define V29_TRAIN_LFSR_MASK	0x7f
+#define V29_TRAIN_POINT_8	3	/* the odd point at eight points     */
+#define V29_TRAIN_POINT_16	11	/* ... and at sixteen                */
+
+/*
+ * Symbols the CURRENT slicer has taken, and IT IS SHARED BY TWO OF THEM WITH
+ * ONE RESET IN BETWEEN -- exactly `V27DEC_TRAIN_COUNT`'s shape.
+ *
+ * `V29RX_epoch_det` increments it every call and will not judge until it has
+ * passed `V29_EPOCH_SETTLE`; on the call where it hands over it stores 0xffff
+ * and then FALLS INTO the same unconditional increment, so the counter reaches
+ * `V29RX_eq_train` at zero.  `V29RX_eq_train` then counts up to
+ * `V29_TRAIN_SYMS` and hands over in turn.
+ *
+ * READ SIGNED AND WRITTEN UNSIGNED, by both functions: `cmpw $0x80,0x18(%ebp)`
+ * with `jle` against `movzwl` / `inc` / 16-bit store.  F614 is why that is not
+ * a contradiction -- the increment's extension is dead and the compare's is
+ * not -- and both spellings are reproduced.
+ */
+#define V29DEC_TRAIN_COUNT	0x18	/* unsigned short                    */
+
+/*
+ * How many symbols `V29RX_epoch_det` waits before it will judge, and how many
+ * `V29RX_eq_train` trains for.  Both are literals in their own function and
+ * neither is selected by anything, which is where V.29 differs from V.27ter --
+ * `V27DEC_TRAIN_SHORT` picks between two of each there and has no counterpart
+ * here.
+ *
+ * The epoch test is `count > V29_EPOCH_SETTLE`, strictly, from `jle` on the
+ * fall-through.  The training test is `count == V29_TRAIN_SYMS`, from `je`,
+ * so it fires on exactly one call and a counter that started above the limit
+ * would never hand over.
+ */
+#define V29_EPOCH_SETTLE	0x80
+#define V29_TRAIN_SYMS		0x17e
+
+/*
+ * The epoch trigger's multiplier: the summed squared jump must EXCEED twice
+ * the joint average, `add %edx,%edx` then `cmp`/`jle`.  V.27ter's is four.
+ */
+#define V29EPOCH_TRIGGER	2
+
+/*
+ * The previous symbol's measured angle, the reference `V29RX_epoch_det`
+ * differences against.  Read and written `movzwl`, difference narrowed to
+ * `short`: F614's free case again.
+ *
+ * IT IS NOT `V29DEC_LAST` SPELLED TWICE.  `V29DEC_LAST` is a constellation
+ * INDEX in 0..7 and this is the raw angle in `FPM_atan`'s units, and the two
+ * are written by different slicers -- `V29RX_epoch_det` never touches
+ * `V29DEC_LAST` except to clear it once.
+ */
+#define V29DEC_ANGLE_PREV	0x1c	/* unsigned short                    */
+
+/*
+ * Symbols decided, saturating, and the one field of this block anything
+ * outside the slicers reads (`DataCarrierDetectV29`, as `V29RX_SHORT_0046`).
+ *
+ * `V29RX_decision` and `V29RX_eq_train` increment it and, when the increment
+ * would reach `V29DEC_SYM_COUNT_WRAP`, store `V29DEC_SYM_COUNT_RESTART`
+ * instead -- so it never goes negative and never stops moving.
+ * `V29RX_epoch_det` increments it WITHOUT the saturation, which is the one
+ * place the three slicers disagree about a shared field and is reproduced as
+ * written.
+ */
+#define V29DEC_SYM_COUNT	0x1e	/* unsigned short                    */
+#define V29DEC_SYM_COUNT_WRAP	0x8000
+#define V29DEC_SYM_COUNT_RESTART 0x4000
+
+/*
+ * The full circle in the units `fpm_fse` hands the slicer, and half of it.
+ * `V29RX_epoch_det` folds the phase difference into [0, 0x7fff] by SUBTRACTING
+ * a full turn when it is negative -- which is what the object encodes
+ * (`sub $0x8000,%eax` at 0x9b802) and is the same sixteen bits as adding one --
+ * and then splits on the half turn.  `V29RX_DEC_ANGLE`'s own step of 4096 per
+ * 45 degrees says the same thing: eight steps to the turn.
+ */
+#define V29DEC_PHASE_FULL	0x8000
+#define V29DEC_HALF_TURN	(V29DEC_PHASE_FULL / 2)
+
+/* The two constellation indices `V29RX_epoch_det` reports, one per half. */
+#define V29_EPOCH_POINT_FAR	4	/* V29RX_DEC_ANGLE + 8  = 180 degrees */
+#define V29_EPOCH_POINT_NEAR	7	/* V29RX_DEC_ANGLE + 14 = 315 degrees */
+
+/*
+ * What the training slicer parks the equaliser's `mse` at on EVERY call, and
+ * the two LMS step sizes the chain installs.
+ *
+ * NEUTRAL.  Nothing reconstructed reads `cfg.mu[0]` or `cfg.mu[1]` -- they
+ * belong to `FPM_FSE_receive` -- so what is established is only which slicer
+ * writes which, and that `V29RX_MU_TRAIN` is exactly twice `V29RX_MU_DATA`.
+ * The 0x4000 matters more than it looks: `RxHdxIdleV29` will only leave IDLE
+ * once `mse` has come back down to `V29RX_MSE_RECOVERED` or below, so a
+ * training slicer that is still running holds the machine there.
+ */
+#define V29RX_TRAIN_MSE		0x4000
+#define V29RX_MU_TRAIN		0x14e6	/* cfg.mu[0], by V29RX_epoch_det     */
+#define V29RX_MU_DATA		0x0a73	/* cfg.mu[1], by V29RX_eq_train      */
+
+/*
+ * The `fpm_fse::mse` below which `RxHdxIdleV29` will hand the machine back to
+ * DATA, compared with `>` and branched `jle`, 16-bit and signed.  V.29's
+ * no-carrier threshold on the same field is `V29RX_DEC_ERROR_MAX`, four times
+ * larger.
+ */
+#define V29RX_MSE_RECOVERED	0x1fff
 
 /* ------------------------------------------------------------------------ */
 /* The transmitter's private block, obj + 0x24.  See v29data.h for its shape. */
@@ -629,7 +1003,7 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
 #define V29TXS_10_BIT2		0x04	/* the one bit that reaches the report */
 
 /* ------------------------------------------------------------------------ */
-/* The demodulator slot `V29RX_modem` calls through.                        */
+/* The slot `V29RX_modem` calls through: THE CURRENT RECEIVE STATE HANDLER.  */
 
 /*
  * `call *0x10(%eax)` with `%eax` = the detection block.  A function pointer
@@ -638,14 +1012,23 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
  * pointers of the same kind, and V29RX_delete proves they are not (they are
  * an MTD and a TONE).
  *
+ * IT WAS `V29DET_DEMOD` / `v29_demod_fn` AND IT IS NOT A DEMODULATOR SLOT.
+ * Every store into it in the whole object is a `RxHdx*V29` state handler --
+ * five in `RxNextStateV29`, one each in `RxHdxPrtcolV29` and
+ * `RxHdxEpochDetV29`, and the seed in `V29RX_create` -- and every one of them
+ * is paired with a store of the matching number into `V29DET_STATE`.  So the
+ * slot is the machine's current state and `V29RX_modem` is its driver, which
+ * is `V27SH_STATE`'s shape one modulation over.  Renamed in this pass; the old
+ * name carried no claim that survived reading its writers.  Finding F9320.
+ *
  * The signature is forced by the caller: four arguments pushed, the return
  * sign-extended from 16 bits with `cwtl`, the third argument advanced by the
  * return and the second by what the fourth was decremented by.
  */
-#define V29DET_DEMOD		0x10
+#define V29DET_HANDLER		0x10
 
-typedef short (*v29_demod_fn)(void *modem, short *in, short *out,
-			      unsigned short *count);
+typedef short (*v29_rx_state_fn)(void *modem, short *in, short *out,
+				 unsigned short *count);
 
 /* ------------------------------------------------------------------------ */
 /* The functions.                                                           */
@@ -897,5 +1280,59 @@ int QualityDetectV29(void *modem);
 
 /* Above this many SRE outputs the receiver logs a buffer violation. */
 #define V29RX_SRE_MAX		0xa4
+
+/* ------------------------------------------------------------------------ */
+/*
+ * THE SLICER CHAIN: three stages in a line, each one installing the next.
+ *
+ * `V29RX_create` installs `V29RX_epoch_det`, which installs `V29RX_eq_train`,
+ * which installs `V29RX_decision`.  Nothing installs a stage backwards and no
+ * stage installs itself, so the chain runs once per carrier and the object
+ * carries exactly three `R_386_32` relocations to say so.  V.27ter's chain is
+ * the same three stages one modulation over; `v27fax.h` and `src/fax/v27.c`
+ * carry that reading and the differences are set out at `V29RX_DEC` above.
+ *
+ * All three take `fpm_fse`'s slicer signature, return 0xffff except
+ * `V29RX_decision`, and reach their state through `state->cfg.owner`.
+ */
+unsigned short V29RX_epoch_det(struct fpm_fse *state, short *angle, short *mag);
+unsigned short V29RX_eq_train(struct fpm_fse *state, short *angle, short *mag);
+unsigned short V29RX_decision(struct fpm_fse *state, short *angle, short *mag);
+
+/*
+ * THE HALF-DUPLEX RECEIVE MACHINE: five states in a cycle, and it does not
+ * decompose.
+ *
+ * `RxNextStateV29` stores four of the handlers and each of the other four
+ * calls it, so no proper subset of the five links -- `RxHdxDataV29` and
+ * `RxHdxErrorV29` were already written, which is the only reason the unit is
+ * five and not seven.  Finding F9256 measured that `DemodDataV29` carries NO
+ * relocation against any `RxHdx*V29`, so V.29 is not V.21's shape here.
+ *
+ * EVERY HANDLER RETURNS 0 EXCEPT `RxHdxDataV29` AND ONE ARM OF
+ * `RxHdxPrtcolV29`, and every one of them zeroes `*count` -- so a block is
+ * always fully consumed and `V29RX_modem`'s loop always terminates after one
+ * pass, whatever state it is in.
+ *
+ * START      demodulate, and advance as soon as a carrier appears.
+ * EPOCH_DET  demodulate, drop to ERROR if the carrier goes, and advance when
+ *            either the state's block budget runs out or `EpochDetectV29`
+ *            reports the equaliser has been forced to adapt.
+ * PROTOCOL   as EPOCH_DET, but it also DESCRAMBLES the block and returns what
+ *            the demodulator produced -- and only on the call that advances.
+ *            The blocks before that one are demodulated, descrambled and then
+ *            reported as zero units.
+ * DATA       see `RxHdxDataV29`.
+ * IDLE       demodulate, and go back to DATA once the equaliser's `mse` has
+ *            fallen to `V29RX_MSE_RECOVERED` -- the author's own words for
+ *            that transition are "Decision error is small back to DATA mode".
+ */
+void RxNextStateV29(void *modem);
+
+short RxHdxStartV29(void *modem, short *in, short *out, unsigned short *count);
+short RxHdxIdleV29(void *modem, short *in, short *out, unsigned short *count);
+short RxHdxPrtcolV29(void *modem, short *in, short *out, unsigned short *count);
+short RxHdxEpochDetV29(void *modem, short *in, short *out,
+		       unsigned short *count);
 
 #endif /* DSPLIB_V29FAX_H */

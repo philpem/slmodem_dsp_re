@@ -117,7 +117,9 @@
 #include "harness.h"
 
 #include "dsplib/v29fax.h"
+#include "dsplib/v29cfg.h"
 #include "dsplib/v29data.h"
+#include "dsplib/debug.h"
 
 #include "dsplib/faxfifo.h"
 #include "dsplib/fpm.h"
@@ -1124,8 +1126,8 @@ run_modem_one(const struct slot_step *script, int len, unsigned short count,
 
 	fixture(&fa, seed);
 	fixture(&fb, seed);
-	put_ptr(fa.det, V29DET_DEMOD, (void *)slot_fn);
-	put_ptr(fb.det, V29DET_DEMOD, (void *)slot_fn);
+	put_ptr(fa.det, V29DET_HANDLER, (void *)slot_fn);
+	put_ptr(fb.det, V29DET_HANDLER, (void *)slot_fn);
 
 	rng_seed(seed ^ 0x2f2f2f2fu);
 	for (k = 0; k < NBUF; k++)
@@ -1237,8 +1239,8 @@ run_modem(void)
 
 		fixture(&fa, 0x0c0ffee6u);
 		fixture(&fb, 0x0c0ffee6u);
-		put_ptr(fa.det, V29DET_DEMOD, (void *)slot_fn);
-		put_ptr(fb.det, V29DET_DEMOD, (void *)slot_fn);
+		put_ptr(fa.det, V29DET_HANDLER, (void *)slot_fn);
+		put_ptr(fb.det, V29DET_HANDLER, (void *)slot_fn);
 		put_int(fa.obj, V29_OBJ_STATUS, -1);
 		put_int(fb.obj, V29_OBJ_STATUS, -1);
 		put_int(fa.obj, V29_OBJ_STATUS + 4, -1);
@@ -2206,7 +2208,7 @@ dem_build(struct fix *f, unsigned seed, const struct dem_setup *u,
 						    : &mtd_nosignal_cfg));
 	put_ptr(f->det, V29DET_TONE, ref_FPM_TONE_create(0, 0));
 
-	put_short(f->det, V29DET_GATE_14, u->gate_14);
+	put_short(f->det, V29DET_STATE, u->gate_14);
 	put_int(f->rx, V29RX_INT_0004, dem_enable[u->enables][0]);
 	put_int(f->rx, V29RX_INT_0008, dem_enable[u->enables][1]);
 	put_int(f->rx, V29RX_INT_0020, dem_enable[u->enables][2]);
@@ -2255,7 +2257,7 @@ drive_demod(struct fix *f, short *in, unsigned short *out, unsigned short count,
 	if (d == M_SIGNAL_ONE)
 		signal = 1;
 
-	if (get_short(det, V29DET_GATE_14) == 0) {
+	if (get_short(det, V29DET_STATE) == 0) {
 		short *buf = (short *)get_ptr(det, V29DET_BUF);
 		unsigned short i;
 
@@ -3527,6 +3529,821 @@ run_hdx(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* 15.  The slicer chain: V29RX_epoch_det, V29RX_eq_train, V29RX_decision  */
+/*
+ * All three are PURE -- they call no FPM module and no other V.29 function --
+ * so the fixture is an `fpm_fse` with its two output arrays, its symbol index
+ * and its `cfg.owner` planted, and nothing else has to be wired.
+ *
+ * F8587 IS WHY THE INDEX IS PLANTED AND SWEPT.  `n_out` is a SUBSCRIPT and the
+ * object reads it `movswl` where `fpm_fse.h` models it `unsigned short`, so a
+ * negative index reads BEFORE both arrays.  A blob-against-blob dry run cannot
+ * catch a wrong subscript -- both sides read the same neighbour and agree --
+ * so `out_i` and `out_q` are aimed at the MIDDLE of two real arrays and the
+ * index is swept from SL_INDEX_LO to SL_INDEX_HI including negatives, with
+ * planted data at both ends.
+ *
+ * F8790 IS WHY EVERY TRIAL IS A SEQUENCE.  Two leaky averages, a three-point
+ * history, an LFSR and three counters carry between calls, and each handover
+ * fires on exactly ONE call -- so a single-call fixture sees none of it.  Every
+ * trial is SL_BLOCKS consecutive calls from a fresh fixture.
+ *
+ * THE FUNCTION POINTER CANNOT BE COMPARED AS A BYTE PATTERN, because the blob
+ * installs `ref_V29RX_eq_train` where we install `V29RX_eq_train`.  Each side's
+ * `cfg.decision` is mapped through its OWN table into a small integer and the
+ * two integers are compared; the slot is then restored to the sentinel before
+ * the fixtures are compared byte for byte.
+ *
+ * THE SAMPLES ARE BOUNDED AT +/-16000 for `V27RX_epoch_det`'s reason: the two
+ * squared differences are summed as `int`, and a pair at exactly +/-32768 would
+ * overflow that sum -- which the object does in hardware and which is undefined
+ * in C, making the answer a property of the compiler rather than of the code.
+ * The `short` narrowing of `d` and of the distances still wraps and is still
+ * exercised.
+ */
+extern unsigned short ref_V29RX_epoch_det(struct fpm_fse *state, short *angle,
+					  short *mag);
+extern unsigned short ref_V29RX_eq_train(struct fpm_fse *state, short *angle,
+					 short *mag);
+extern unsigned short ref_V29RX_decision(struct fpm_fse *state, short *angle,
+					 short *mag);
+
+#define SL_NBUF		256
+#define SL_ORIGIN	(SL_NBUF / 2)
+#define SL_INDEX_LO	(-48)
+#define SL_INDEX_HI	48
+#define SL_BLOCKS	40
+#define SL_DEC		0x40		/* 0x20 of block, 0x20 of guard      */
+
+/*
+ * The equaliser is stored as a REAL `struct fpm_fse` rather than a byte block,
+ * even though the three slicers touch nothing above +0x5e: a short block cast
+ * to the struct is an out-of-bounds access the modern compiler is entitled to
+ * warn about and to act on.  Only the first SL_FSE_LIVE bytes are filled or
+ * compared, which is the region the object reaches.
+ */
+#define SL_FSE_LIVE	0x54
+
+struct sl_fix {
+	struct fpm_fse	fse;
+	unsigned char	dec[SL_DEC];
+	short		out_i[SL_NBUF];
+	short		out_q[SL_NBUF];
+	double		align;
+};
+
+static struct sl_fix sla, slb;
+
+#define SL_FSE(f)	(&(f)->fse)
+#define SL_FSEB(f)	((unsigned char *)(void *)&(f)->fse)
+
+/*
+ * The bytes a comparison of two equalisers must skip: `cfg.owner` points into
+ * its own fixture, so the two addresses differ and always will, and
+ * `cfg.decision` is normalised separately.  Nothing else in the first 0x54
+ * bytes is a pointer.
+ */
+static int
+skip_fse(int off)
+{
+	return off >= 0x2c && off < 0x34;
+}
+
+/* The sentinel `cfg.decision` holds when nothing has installed anything. */
+static unsigned short
+sl_sentinel(struct fpm_fse *state, short *angle, short *mag)
+{
+	(void)state;
+	(void)angle;
+	(void)mag;
+	return 0;
+}
+
+struct sl_setup {
+	int		sixteen_point;
+	unsigned short	train_count;
+	unsigned short	sym_count;
+	short		lfsr;
+	short		avg_far;
+	short		avg_near;
+	int		amp;		/* the steady constellation radius  */
+	int		jump;		/* how far the occasional jump goes */
+	int		period;		/* how often it jumps               */
+	short		angle0;		/* the angle handed in each block   */
+	short		astep;		/* ... and how far it moves         */
+	short		mag0;		/* the magnitude handed in          */
+};
+
+static void
+sl_build(struct sl_fix *f, unsigned seed, const struct sl_setup *u)
+{
+	int i;
+
+	memset(f, 0, sizeof(*f));
+
+	rng_seed(seed);
+	for (i = 0; i < 0x60; i++)
+		SL_FSEB(f)[i] = (unsigned char)rng_next();
+	for (i = 0; i < SL_DEC; i++)
+		f->dec[i] = (unsigned char)rng_next();
+
+	rng_seed(seed ^ 0x9e3779b9u);
+	for (i = 0; i < SL_NBUF; i++) {
+		int k = i - SL_ORIGIN;
+		int big = (u->period != 0 && (k % u->period) == 0);
+		int v = (int)(rng_next() % 2001u) - 1000;
+		int a = big ? u->jump : u->amp;
+
+		/*
+		 * A SETUP WITH NO SIGNAL AT ALL, which is the only shape that
+		 * puts the sample exactly at the origin -- and that is the only
+		 * place four constellation points TIE, which is what separates
+		 * the slicer's `d < best` from `d <= best`.
+		 */
+		if (u->amp == 0 && u->jump == 0)
+			v = 0;
+		if (a > 16000)
+			a = 16000;
+		f->out_i[i] = (short)(a + v);
+		f->out_q[i] = (short)(-a - v);
+	}
+
+	SL_FSE(f)->cfg.owner = f->dec;
+	SL_FSE(f)->cfg.decision = sl_sentinel;
+	SL_FSE(f)->cfg.taps = 16;
+	SL_FSE(f)->cfg.mu[0] = 0x1111;
+	SL_FSE(f)->cfg.mu[1] = 0x2222;
+	SL_FSE(f)->cfg.mu[2] = 0x3333;
+	SL_FSE(f)->out_i = &f->out_i[SL_ORIGIN];
+	SL_FSE(f)->out_q = &f->out_q[SL_ORIGIN];
+	SL_FSE(f)->n_out = 0;
+	SL_FSE(f)->lms_on = 0x5a5a5a5a;
+	SL_FSE(f)->lms_force = 0x3c3c3c3c;
+	SL_FSE(f)->mu_sel = 0x1234;
+	SL_FSE(f)->mse = 0x0123;
+
+	put_int(f->dec, V29DEC_SIXTEEN_POINT, u->sixteen_point);
+	put_short(f->dec, V29DEC_MAG_AVG_FAR, u->avg_far);
+	put_short(f->dec, V29DEC_MAG_AVG_NEAR, u->avg_near);
+	put_short(f->dec, V29DEC_I0, 0);
+	put_short(f->dec, V29DEC_Q0, 0);
+	put_short(f->dec, V29DEC_I1, 0);
+	put_short(f->dec, V29DEC_Q1, 0);
+	put_short(f->dec, V29DEC_I2, 0);
+	put_short(f->dec, V29DEC_Q2, 0);
+	put_short(f->dec, V29DEC_LAST, 0);
+	put_short(f->dec, V29DEC_TRAIN_LFSR, u->lfsr);
+	put_short(f->dec, V29DEC_TRAIN_COUNT, (short)u->train_count);
+	put_short(f->dec, V29DEC_ANGLE_PREV, 0);
+	put_short(f->dec, V29DEC_SYM_COUNT, (short)u->sym_count);
+}
+
+/*
+ * Which slicer a `cfg.decision` slot holds, as a small integer, so the two
+ * sides' different addresses for the same function compare equal.
+ */
+static long
+sl_which(fpm_fse_decision fn, int is_ref)
+{
+	if (fn == sl_sentinel)
+		return 0;
+	if (is_ref) {
+		if (fn == (fpm_fse_decision)ref_V29RX_epoch_det)
+			return 1;
+		if (fn == (fpm_fse_decision)ref_V29RX_eq_train)
+			return 2;
+		if (fn == (fpm_fse_decision)ref_V29RX_decision)
+			return 3;
+	} else {
+		if (fn == V29RX_epoch_det)
+			return 1;
+		if (fn == V29RX_eq_train)
+			return 2;
+		if (fn == V29RX_decision)
+			return 3;
+	}
+	return -1;
+}
+
+/* Which stage of the chain a trial drives. */
+#define SL_EPOCH	0
+#define SL_TRAIN	1
+#define SL_DECIDE	2
+
+static long sl_ret[3];			/* a non-0xffff return was seen     */
+static long sl_handover[3];		/* the stage installed the next one */
+static long sl_neg_index, sl_pos_index;
+static long sl_far_arm, sl_near_arm;	/* both halves of the phase circle  */
+static long sl_lfsr_odd, sl_lfsr_even;	/* both training points             */
+static long sl_wrap;			/* the symbol counter restarted     */
+static long sl_amp_bit;			/* the fourth bit reached the output */
+static long sl_dec_ring1;		/* the outer ring won a decision    */
+
+static void
+run_sl_one(unsigned seed, const struct sl_setup *u, int stage, long where)
+{
+	int blk;
+
+	sl_build(&sla, seed, u);
+	sl_build(&slb, seed, u);
+
+	switch (stage) {
+	case SL_EPOCH:
+		SL_FSE(&sla)->cfg.decision =
+			(fpm_fse_decision)ref_V29RX_epoch_det;
+		SL_FSE(&slb)->cfg.decision = V29RX_epoch_det;
+		break;
+	case SL_TRAIN:
+		SL_FSE(&sla)->cfg.decision =
+			(fpm_fse_decision)ref_V29RX_eq_train;
+		SL_FSE(&slb)->cfg.decision = V29RX_eq_train;
+		break;
+	default:
+		SL_FSE(&sla)->cfg.decision =
+			(fpm_fse_decision)ref_V29RX_decision;
+		SL_FSE(&slb)->cfg.decision = V29RX_decision;
+		break;
+	}
+
+	for (blk = 0; blk < SL_BLOCKS; blk++) {
+		short aa, ma, ab, mb;
+		unsigned short ra, rb;
+		long wa, wb, now;
+		long id = where * 1000 + blk;
+		short idx;
+
+		/*
+		 * The subscript sweep, INCLUDING NEGATIVES.  Both ends land on
+		 * planted data because the arrays are aimed at their middle.
+		 */
+		idx = (short)(SL_INDEX_LO
+			      + (blk * (SL_INDEX_HI - SL_INDEX_LO))
+				/ (SL_BLOCKS - 1));
+		if (idx < 0)
+			sl_neg_index++;
+		else
+			sl_pos_index++;
+		SL_FSE(&sla)->n_out = (unsigned short)idx;
+		SL_FSE(&slb)->n_out = (unsigned short)idx;
+
+		aa = ab = (short)(u->angle0 + (short)(blk * u->astep));
+		ma = mb = u->mag0;
+
+		/*
+		 * DISPATCH THROUGH THE SLOT, so that once a stage hands over
+		 * the trial goes on through the NEXT one -- which is what the
+		 * equaliser does and is the only way a single trial reaches
+		 * more than one stage.  `now` is which stage this block
+		 * actually ran, and every counter below is indexed by it
+		 * rather than by the stage the trial STARTED in.
+		 */
+		now = sl_which(SL_FSE(&sla)->cfg.decision, 1);
+
+		ra = (*SL_FSE(&sla)->cfg.decision)(SL_FSE(&sla), &aa, &ma);
+		rb = (*SL_FSE(&slb)->cfg.decision)(SL_FSE(&slb), &ab, &mb);
+
+		diff_eq_int("at %ld: the slicer returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: the slicer left angle", (long)ab, (long)aa,
+			    id);
+		diff_eq_int("at %ld: the slicer left mag", (long)mb, (long)ma,
+			    id);
+
+		wa = sl_which(SL_FSE(&sla)->cfg.decision, 1);
+		wb = sl_which(SL_FSE(&slb)->cfg.decision, 0);
+		diff_eq_int("at %ld: the slot holds a known slicer", wb >= 0, 1,
+			    id);
+		diff_eq_int("at %ld: the installed slicer", wb, wa, id);
+
+		if (now >= 1 && now <= 3) {
+			if (ra != 0xffff)
+				sl_ret[now - 1]++;
+			if (wa != now)
+				sl_handover[now - 1]++;
+		}
+
+		/*
+		 * The slot is the ONLY field whose bytes legitimately differ,
+		 * so it is normalised before the blocks are compared and put
+		 * back afterwards.
+		 */
+		SL_FSE(&sla)->cfg.decision = sl_sentinel;
+		SL_FSE(&slb)->cfg.decision = sl_sentinel;
+
+		diff_eq_int("at %ld: first differing decoder byte",
+			    blk_first_diff(slb.dec, sla.dec, SL_DEC, 0), -1,
+			    id);
+		diff_eq_int("at %ld: first differing equaliser byte",
+			    blk_first_diff(SL_FSEB(&slb), SL_FSEB(&sla),
+					   SL_FSE_LIVE, skip_fse), -1, id);
+		diff_eq_int("at %ld: first differing sample byte",
+			    blk_first_diff((unsigned char *)slb.out_i,
+					   (unsigned char *)sla.out_i,
+					   sizeof(sla.out_i), 0), -1, id);
+
+		SL_FSE(&sla)->cfg.decision = (fpm_fse_decision)
+			(wa == 1 ? (fpm_fse_decision)ref_V29RX_epoch_det
+			 : wa == 2 ? (fpm_fse_decision)ref_V29RX_eq_train
+			 : wa == 3 ? (fpm_fse_decision)ref_V29RX_decision
+			 : sl_sentinel);
+		SL_FSE(&slb)->cfg.decision =
+			wb == 1 ? V29RX_epoch_det
+			: wb == 2 ? V29RX_eq_train
+			: wb == 3 ? V29RX_decision : sl_sentinel;
+
+		/* Which arms and outcomes this block actually reached. */
+		if (now == SL_EPOCH + 1) {
+			if (aa == V29RX_DEC_ANGLE[V29_EPOCH_POINT_FAR])
+				sl_far_arm++;
+			else if (aa == V29RX_DEC_ANGLE[V29_EPOCH_POINT_NEAR])
+				sl_near_arm++;
+		} else if (now == SL_TRAIN + 1) {
+			if (ma == V29RX_DEC_MAG[0])
+				sl_lfsr_even++;
+			else
+				sl_lfsr_odd++;
+		} else if (now == SL_DECIDE + 1) {
+			if ((ra & 8) != 0)
+				sl_amp_bit++;
+			if (ma == V29RX_DEC_MAG[8] || ma == V29RX_DEC_MAG[9])
+				sl_dec_ring1++;
+		}
+		if (get_short(sla.dec, V29DEC_SYM_COUNT)
+		    == (short)V29DEC_SYM_COUNT_RESTART)
+			sl_wrap++;
+	}
+}
+
+/*
+ * THE NAMED WRONG READINGS, and each one is a sentence somebody could have
+ * believed.  `sl_model` recomputes the ONE observable each defect can move --
+ * the chosen constellation index, which is what `angle`, `mag` and the return
+ * are all derived from -- and the counter says how many trials separated it.
+ */
+enum sl_defect {
+	S_NONE = 0,
+	S_Q_SHIFT_15,		/* the Q term by >>15, i.e. symmetric  D1171 */
+	S_I_SHIFT_16,		/* ... or the I term by >>16 instead         */
+	S_MAPS_SWAPPED,		/* V29RX_DEC_IMAP and _QMAP transposed       */
+	S_TIE_LOW,		/* `d <= best`, so a tie keeps the HIGHER    */
+	S_POINTS_SWAPPED,	/* 8 and 16 the other way round              */
+	S_IDX_UNSIGNED,		/* n_out read unsigned                       */
+	S_MAX
+};
+
+static long sl_sep[S_MAX];
+
+static short
+sl_model(const struct sl_fix *f, short idx, enum sl_defect d)
+{
+	short best = 0x7fff;
+	short bi = 0;
+	short k;
+	short points;
+	int n = idx;
+	short i, q;
+
+	points = get_int(f->dec, V29DEC_SIXTEEN_POINT) ? 16 : 8;
+	if (d == S_POINTS_SWAPPED)
+		points = (short)(24 - points);
+	if (d == S_IDX_UNSIGNED)
+		n = (int)(unsigned short)idx;
+
+	i = f->out_i[SL_ORIGIN + n];
+	q = f->out_q[SL_ORIGIN + n];
+
+	for (k = 0; k < points; k = (short)(k + 1)) {
+		short im = V29RX_DEC_IMAP[k];
+		short qm = V29RX_DEC_QMAP[k];
+		short di, dq, dd;
+
+		if (d == S_MAPS_SWAPPED) {
+			short t = im;
+
+			im = qm;
+			qm = t;
+		}
+		di = (short)(i - im);
+		dq = (short)(q - qm);
+		if (d == S_Q_SHIFT_15)
+			dd = (short)(((di * di) >> 15) + ((dq * dq) >> 15));
+		else if (d == S_I_SHIFT_16)
+			dd = (short)(((di * di) >> 16) + ((dq * dq) >> 16));
+		else
+			dd = (short)(((di * di) >> 15) + ((dq * dq) >> 16));
+
+		if (d == S_TIE_LOW ? dd <= best : dd < best) {
+			best = dd;
+			bi = k;
+		}
+	}
+	return bi;
+}
+
+static void
+run_sl_model(unsigned seed, const struct sl_setup *u, long where)
+{
+	int blk;
+
+	sl_build(&sla, seed, u);
+
+	for (blk = 0; blk < SL_BLOCKS; blk++) {
+		short aa = (short)(u->angle0 + (short)(blk * u->astep));
+		short ma = u->mag0;
+		short idx = (short)(SL_INDEX_LO
+				    + (blk * (SL_INDEX_HI - SL_INDEX_LO))
+				      / (SL_BLOCKS - 1));
+		short good;
+		int d;
+
+		SL_FSE(&sla)->n_out = (unsigned short)idx;
+		SL_FSE(&sla)->cfg.decision =
+			(fpm_fse_decision)ref_V29RX_decision;
+		ref_V29RX_decision(SL_FSE(&sla), &aa, &ma);
+
+		/* The blob's own answer, recovered from what it reported. */
+		good = sl_model(&sla, idx, S_NONE);
+		diff_eq_int("at %ld: the model tracks the blob's magnitude",
+			    (long)ma, (long)V29RX_DEC_MAG[good],
+			    where * 1000 + blk);
+		diff_eq_int("at %ld: the model tracks the blob's angle",
+			    (long)aa, (long)V29RX_DEC_ANGLE[good],
+			    where * 1000 + blk);
+
+		for (d = 1; d < (int)S_MAX; d++)
+			if (sl_model(&sla, idx, (enum sl_defect)d) != good)
+				sl_sep[d]++;
+	}
+}
+
+static int
+run_slicers(void)
+{
+	static const struct sl_setup cases[] = {
+	  /* 16pt count sym   lfsr  far   near  amp   jump  per angle step mag */
+	  {  1,  0,    0,     0x55, 0,    0,    6000, 0,     0, 0,    977,  6144 },
+	  {  0,  0,    0,     0x55, 0,    0,    6000, 0,     0, 0,    977,  2896 },
+	  {  1,  0x7e, 0x7ffe, 0x2a, 300,  300, 4000, 15000, 5, 900,  4099, 10240 },
+	  {  0,  0x7f, 0x7fff, 0x01, 10,   10,  2000, 12000, 3, 0x4000, 771, 8689 },
+	  {  1,  0x17c, 0x100, 0x7f, 0,    0,   9000, 0,     0, 0x7000, 61,  6144 },
+	  {  1,  0x81, 0,      0x00, 8000, 8000, 100, 32000, 2, 12000, 2731, 3000 },
+	  {  0,  0,    0,      0x55, 0,    0,   16000, 0,    0, 0x3fff, 8192, 16000 },
+	  /*
+	   * NO SIGNAL AT ALL, which puts every sample exactly at the origin --
+	   * where constellation points 1, 3, 5 and 7 are all the same distance
+	   * away.  It is the only shape that separates `d < best` from
+	   * `d <= best`, and without it that named wrong reading reported a
+	   * separating count of zero.  F134's argument, met.
+	   */
+	  {  1,  0,    0,      0x55, 0,    0,   0,     0,    0, 0,      1013, 6144 },
+	  {  0,  0,    0,      0x2a, 0,    0,   0,     0,    0, 0x2000, 511,  2896 }
+	};
+	int i;
+
+	diff_begin("the V.29 slicer chain");
+
+	for (i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); i++) {
+		run_sl_one(0xc9000000u + (unsigned)i, &cases[i], SL_EPOCH, i);
+		run_sl_one(0xc9100000u + (unsigned)i, &cases[i], SL_TRAIN,
+			   100 + i);
+		run_sl_one(0xc9200000u + (unsigned)i, &cases[i], SL_DECIDE,
+			   200 + i);
+		run_sl_model(0xc9300000u + (unsigned)i, &cases[i], 300 + i);
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* 16.  The half-duplex receive machine                                   */
+/*
+ * `RxNextStateV29` is testable on its own -- it calls nothing but
+ * `FPM_AGC_Freeze` and `dsplibs_debug_printf` -- so its six arms are driven
+ * directly, every state value from 0 to 7, at both debug levels.  The four
+ * handlers need the whole receiver, so they reuse `hdx_build`: the same wired
+ * fixture `RxHdxDataV29` is tested through.
+ *
+ * THE HANDLER SLOT IS THE ONE FIELD THAT CANNOT BE COMPARED AS BYTES, exactly
+ * as `cfg.decision` is above, and it is normalised the same way.
+ */
+extern void  ref_RxNextStateV29(void *modem);
+extern short ref_RxHdxStartV29(void *modem, short *in, short *out,
+			       unsigned short *count);
+extern short ref_RxHdxIdleV29(void *modem, short *in, short *out,
+			      unsigned short *count);
+extern short ref_RxHdxPrtcolV29(void *modem, short *in, short *out,
+				unsigned short *count);
+extern short ref_RxHdxEpochDetV29(void *modem, short *in, short *out,
+				  unsigned short *count);
+extern short ref_RxHdxDataV29(void *modem, short *in, short *out,
+			      unsigned short *count);
+
+/*
+ * `skip_det` plus the handler slot, which holds two different addresses for
+ * the same function and is compared as a small integer instead.
+ */
+static int
+skip_det_state(int off)
+{
+	if (off >= V29DET_HANDLER && off < V29DET_HANDLER + 4)
+		return 1;
+	return skip_det(off);
+}
+
+static long
+st_which(const void *fn, int is_ref)
+{
+	if (fn == 0)
+		return 0;
+	if (is_ref) {
+		if (fn == (const void *)ref_RxHdxStartV29)	return 1;
+		if (fn == (const void *)ref_RxHdxIdleV29)	return 2;
+		if (fn == (const void *)ref_RxHdxPrtcolV29)	return 3;
+		if (fn == (const void *)ref_RxHdxEpochDetV29)	return 4;
+		if (fn == (const void *)ref_RxHdxDataV29)	return 5;
+		if (fn == (const void *)ref_RxHdxErrorV29)	return 6;
+	} else {
+		if (fn == (const void *)RxHdxStartV29)		return 1;
+		if (fn == (const void *)RxHdxIdleV29)		return 2;
+		if (fn == (const void *)RxHdxPrtcolV29)		return 3;
+		if (fn == (const void *)RxHdxEpochDetV29)	return 4;
+		if (fn == (const void *)RxHdxDataV29)		return 5;
+		if (fn == (const void *)RxHdxErrorV29)		return 6;
+	}
+	return -1;
+}
+
+static long st_arm[8];			/* how often each state was entered */
+static long st_installed[7];		/* ... and each handler installed   */
+static long st_freeze;			/* the AGC-freeze arm               */
+static long st_coeff_step;		/* the coefficient-step arm         */
+static long st_debug;			/* a trial that printed             */
+static long st_done_a, st_done_b;	/* both sides of the 6/7 choice     */
+
+/*
+ * `RxNextStateV29` on its own: no demodulation, no carrier, just the
+ * transition.  `V29DET_SHORT_000C` is swept because it is what chooses between
+ * status bytes 6 and 7 on the IDLE arm, and `dsplibs_debug_level` because the
+ * printing arms are separate code and F150 is about exactly that.
+ */
+static void
+run_next_one(unsigned seed, int state, unsigned short c000c, unsigned level,
+	     long where)
+{
+	const short *alpha_a, *alpha_b;
+	long wa, wb;
+	int i;
+
+	fixture(&fa, seed);
+	fixture(&fb, seed);
+
+	for (i = 0; i < 2; i++) {
+		struct fix *f = i ? &fb : &fa;
+
+		ref_FPM_AGC_init(RX_AGC_OF(f), &AGCv29_CFG, 1);
+		put_short(f->det, V29DET_STATE, (short)state);
+		put_short(f->det, V29DET_STATE_COUNT, 0x1234);
+		put_short(f->det, V29DET_SHORT_000C, (short)c000c);
+		put_ptr(f->det, V29DET_HANDLER, 0);
+		put_int(f->det, V29DET_INT_0008, (int)0xa5a5a5a5);
+		put_int(f->obj, V29_OBJ_STATUS, (int)0x00ffff00);
+	}
+
+	alpha_a = RX_AGC_OF(&fa)->cfg.alpha;
+	alpha_b = RX_AGC_OF(&fb)->cfg.alpha;
+
+	dsplibs_debug_level = level;
+	ref_RxNextStateV29(fa.obj);
+	RxNextStateV29(fb.obj);
+	dsplibs_debug_level = 0;
+
+	if (level > 1)
+		st_debug++;
+	if (state >= 0 && state < 8)
+		st_arm[state]++;
+
+	wa = st_which(get_ptr(fa.det, V29DET_HANDLER), 1);
+	wb = st_which(get_ptr(fb.det, V29DET_HANDLER), 0);
+	diff_eq_int("at %ld: the slot holds a known handler", wb >= 0, 1,
+		    where);
+	diff_eq_int("at %ld: the installed handler", wb, wa, where);
+	if (wa >= 0 && wa < 7)
+		st_installed[wa]++;
+
+	diff_eq_int("at %ld: the next state", (long)get_short(fb.det,
+							      V29DET_STATE),
+		    (long)get_short(fa.det, V29DET_STATE), where);
+	diff_eq_int("at %ld: the block budget",
+		    (long)get_short(fb.det, V29DET_STATE_COUNT),
+		    (long)get_short(fa.det, V29DET_STATE_COUNT), where);
+	diff_eq_int("at %ld: the status word",
+		    (long)get_int(fb.obj, V29_OBJ_STATUS),
+		    (long)get_int(fa.obj, V29_OBJ_STATUS), where);
+	diff_eq_int("at %ld: the AGC coefficient pointer moved by",
+		    (long)(RX_AGC_OF(&fb)->cfg.alpha - alpha_b),
+		    (long)(RX_AGC_OF(&fa)->cfg.alpha - alpha_a), where);
+
+	if (RX_AGC_OF(&fa)->cfg.alpha != alpha_a)
+		st_coeff_step++;
+	if (state == V29RX_STATE_PROTOCOL)
+		st_freeze++;
+	if (state == V29RX_STATE_IDLE) {
+		if ((get_int(fa.obj, V29_OBJ_STATUS) & 0xff)
+		    == V29RX_STATUS_DONE_A)
+			st_done_a++;
+		if ((get_int(fa.obj, V29_OBJ_STATUS) & 0xff)
+		    == V29RX_STATUS_DONE_B)
+			st_done_b++;
+	}
+
+	put_ptr(fa.det, V29DET_HANDLER, 0);
+	put_ptr(fb.det, V29DET_HANDLER, 0);
+	compare_state(&fa, &fb, where);
+}
+
+#define ST_HANDLERS	4
+
+static long st_ret_nonzero, st_advanced, st_error_arm, st_lowsnr;
+
+static void
+run_state_one(unsigned seed, const struct hdx_setup *u, int which, int vary,
+	      long where)
+{
+	int blk, i;
+
+	dem_signal(seed ^ 0x0b10cced, 2);
+	for (i = 0; i < DEM_BUF; i++)
+		hdx_in[i] = dem_in[i];
+
+	hdx_build(&fa, seed, u, hdx_mrf_a, hdx_sre_a, hdx_det_a);
+	hdx_build(&fb, seed, u, hdx_mrf_b, hdx_sre_b, hdx_det_b);
+
+	for (i = 0; i < 2; i++) {
+		struct fix *f = i ? &fb : &fa;
+
+		put_short(f->det, V29DET_STATE_COUNT, 3);
+		put_short(f->det, V29DET_SHORT_000C, (short)(seed & 1));
+		put_ptr(f->det, V29DET_HANDLER, 0);
+	}
+
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short ca = HDX_COUNT, cb = HDX_COUNT;
+		short ra, rb;
+		long wa, wb;
+		long id = where * 1000 + blk;
+
+		if (vary) {
+			dem_signal(seed ^ (0x0b10cced + (unsigned)blk),
+				   (blk & 1) ? 0 : 2);
+			for (i = 0; i < DEM_BUF; i++)
+				hdx_in[i] = dem_in[i];
+		}
+
+		for (i = 0; i < HDX_OUT; i++)
+			hdx_out_a[i] = hdx_out_b[i] = HDX_MARK;
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+
+		switch (which) {
+		case 0:
+			ra = ref_RxHdxStartV29(fa.obj, hdx_work, hdx_out_a, &ca);
+			break;
+		case 1:
+			ra = ref_RxHdxIdleV29(fa.obj, hdx_work, hdx_out_a, &ca);
+			break;
+		case 2:
+			ra = ref_RxHdxPrtcolV29(fa.obj, hdx_work, hdx_out_a,
+						&ca);
+			break;
+		default:
+			ra = ref_RxHdxEpochDetV29(fa.obj, hdx_work, hdx_out_a,
+						  &ca);
+			break;
+		}
+
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+
+		switch (which) {
+		case 0:
+			rb = RxHdxStartV29(fb.obj, hdx_work, hdx_out_b, &cb);
+			break;
+		case 1:
+			rb = RxHdxIdleV29(fb.obj, hdx_work, hdx_out_b, &cb);
+			break;
+		case 2:
+			rb = RxHdxPrtcolV29(fb.obj, hdx_work, hdx_out_b, &cb);
+			break;
+		default:
+			rb = RxHdxEpochDetV29(fb.obj, hdx_work, hdx_out_b, &cb);
+			break;
+		}
+
+		diff_eq_int("at %ld: the handler returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: the count came back", (long)cb, (long)ca,
+			    id);
+		diff_eq_int("at %ld: the status word",
+			    (long)get_int(fb.obj, V29_OBJ_STATUS),
+			    (long)get_int(fa.obj, V29_OBJ_STATUS), id);
+		diff_eq_int("at %ld: the state number",
+			    (long)get_short(fb.det, V29DET_STATE),
+			    (long)get_short(fa.det, V29DET_STATE), id);
+		diff_eq_int("at %ld: the block budget",
+			    (long)get_short(fb.det, V29DET_STATE_COUNT),
+			    (long)get_short(fa.det, V29DET_STATE_COUNT), id);
+		diff_eq_int("at %ld: first differing output byte",
+			    blk_first_diff((unsigned char *)hdx_out_b,
+					   (unsigned char *)hdx_out_a,
+					   HDX_OUT * (int)sizeof(short), 0),
+			    -1, id);
+
+		wa = st_which(get_ptr(fa.det, V29DET_HANDLER), 1);
+		wb = st_which(get_ptr(fb.det, V29DET_HANDLER), 0);
+		diff_eq_int("at %ld: the slot holds a known handler", wb >= 0,
+			    1, id);
+		diff_eq_int("at %ld: the installed handler", wb, wa, id);
+		if (wa >= 0 && wa < 7)
+			st_installed[wa]++;
+
+		diff_eq_int("at %ld: first differing detector byte",
+			    blk_first_diff(fb.det, fa.det, DET_SIZE,
+					   skip_det_state), -1, id);
+		diff_eq_int("at %ld: first differing instance byte",
+			    blk_first_diff(fb.obj, fa.obj, OBJ_SIZE, skip_obj),
+			    -1, id);
+		diff_eq_int("at %ld: first differing MRF byte",
+			    blk_first_diff((unsigned char *)hdx_mrf_b,
+					   (unsigned char *)hdx_mrf_a,
+					   DEM_BUF * (int)sizeof(short), 0),
+			    -1, id);
+		diff_eq_int("at %ld: first differing SRE byte",
+			    blk_first_diff((unsigned char *)hdx_sre_b,
+					   (unsigned char *)hdx_sre_a,
+					   DEM_BUF * (int)sizeof(short), 0),
+			    -1, id);
+
+		if (ra != 0)
+			st_ret_nonzero++;
+		if (get_short(fa.det, V29DET_STATE) != (short)V29RX_STATE_ERROR
+		    && wa != 0)
+			st_advanced++;
+		if (get_short(fa.det, V29DET_STATE) == (short)V29RX_STATE_ERROR)
+			st_error_arm++;
+		if ((get_int(fa.obj, V29_OBJ_STATUS) & V29_STATUS_LOW_SNR) != 0)
+			st_lowsnr++;
+
+		put_ptr(fa.det, V29DET_HANDLER, 0);
+		put_ptr(fb.det, V29DET_HANDLER, 0);
+	}
+
+	hdx_free(&fa);
+	hdx_free(&fb);
+}
+
+static int
+run_states(void)
+{
+	static const struct hdx_setup cases[] = {
+		/* gate14 gate1c absent detgate carrier status mse */
+		{ 0, 0, 1, 0, 1, 0, 0 },
+		{ 1, 0, 0, 0, 1, -1, 0 },
+		{ 0, 0, 0, 0, 0, 0, 0 },	/* no carrier: the error arm */
+		{ 1, 0, 1, 0, 1, 0, 0x1000 },	/* IDLE's mse test passes    */
+		{ 1, 0, 1, 0, 1, 0, 0x7000 }	/* ... and fails             */
+	};
+	int i, s;
+	unsigned lv;
+
+	dem_tables();
+	dcd_cfgs();
+	diff_begin("the V.29 receive state machine");
+
+	/* Every state value the switch can see, both debug levels. */
+	for (lv = 0; lv <= 2; lv += 2)
+		for (s = 0; s < 8; s++)
+			for (i = 0; i < 2; i++)
+				run_next_one(0xca000000u + (unsigned)(s * 4 + i)
+						+ lv,
+					     s, (unsigned short)i, lv,
+					     (long)(lv * 100 + s * 2 + i));
+
+	for (i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); i++)
+		for (s = 0; s < ST_HANDLERS; s++)
+			run_state_one(0xcb000000u
+				      + (unsigned)(i * ST_HANDLERS + s),
+				      &cases[i], s, 0,
+				      (long)(1000 + i * ST_HANDLERS + s));
+
+	/* The loud/quiet alternation, for the arms a steady stimulus misses. */
+	for (s = 0; s < ST_HANDLERS; s++)
+		run_state_one(0xcc000000u + (unsigned)s, &cases[0], s, 1,
+			      (long)(2000 + s));
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -3555,6 +4372,8 @@ main(void)
 	rc |= run_txmodem();
 	rc |= run_moddata();
 	rc |= run_hdx();
+	rc |= run_slicers();
+	rc |= run_states();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -3729,6 +4548,75 @@ main(void)
 		    1, hdx_err_flag);
 	diff_eq_int("the ERROR state demodulated anyway (%ld)",
 		    hdx_err_moved > 0, 1, hdx_err_moved);
+
+	/*
+	 * The slicer chain's own denominators.  Each says a NAMED arm or a
+	 * NAMED wrong reading was actually reached; a zero makes the
+	 * corresponding check above decoration.  F134's argument.
+	 */
+	for (d = 1; d < (int)S_MAX; d++)
+		diff_eq_int("slicer wrong reading %ld separates", sl_sep[d] > 0,
+			    1, d);
+
+	diff_eq_int("the epoch detector handed over (%ld)",
+		    sl_handover[SL_EPOCH] > 0, 1, sl_handover[SL_EPOCH]);
+	diff_eq_int("the training slicer handed over (%ld)",
+		    sl_handover[SL_TRAIN] > 0, 1, sl_handover[SL_TRAIN]);
+	diff_eq_int("the running slicer installed nothing (%ld)",
+		    sl_handover[SL_DECIDE], 0, sl_handover[SL_DECIDE]);
+	diff_eq_int("the epoch detector always returned 0xffff (%ld)",
+		    sl_ret[SL_EPOCH], 0, sl_ret[SL_EPOCH]);
+	diff_eq_int("the training slicer always returned 0xffff (%ld)",
+		    sl_ret[SL_TRAIN], 0, sl_ret[SL_TRAIN]);
+	diff_eq_int("the running slicer returned a symbol (%ld)",
+		    sl_ret[SL_DECIDE] > 0, 1, sl_ret[SL_DECIDE]);
+	diff_eq_int("a NEGATIVE subscript was used (%ld)", sl_neg_index > 0, 1,
+		    sl_neg_index);
+	diff_eq_int("a non-negative subscript was used (%ld)",
+		    sl_pos_index > 0, 1, sl_pos_index);
+	diff_eq_int("the epoch detector took its FAR arm (%ld)",
+		    sl_far_arm > 0, 1, sl_far_arm);
+	diff_eq_int("the epoch detector took its NEAR arm (%ld)",
+		    sl_near_arm > 0, 1, sl_near_arm);
+	diff_eq_int("the training LFSR gave an even symbol (%ld)",
+		    sl_lfsr_even > 0, 1, sl_lfsr_even);
+	diff_eq_int("the training LFSR gave an odd symbol (%ld)",
+		    sl_lfsr_odd > 0, 1, sl_lfsr_odd);
+	diff_eq_int("the symbol counter restarted at half scale (%ld)",
+		    sl_wrap > 0, 1, sl_wrap);
+	diff_eq_int("the amplitude bit reached the output (%ld)",
+		    sl_amp_bit > 0, 1, sl_amp_bit);
+	diff_eq_int("the outer ring won a decision (%ld)", sl_dec_ring1 > 0, 1,
+		    sl_dec_ring1);
+
+	/* The state machine's. */
+	for (d = 0; d < 8; d++)
+		diff_eq_int("state %ld was dispatched", st_arm[d] > 0, 1, d);
+	/*
+	 * `RxHdxStartV29` is index 1 and is NOT here: nothing in the object
+	 * installs it but `V29RX_create`, which this binary does not drive.
+	 * Saying so is the point of the loop's lower bound.
+	 */
+	for (d = 2; d < 7; d++)
+		diff_eq_int("handler %ld was installed", st_installed[d] > 0, 1,
+			    d);
+	diff_eq_int("the AGC-freeze arm ran (%ld)", st_freeze > 0, 1,
+		    st_freeze);
+	diff_eq_int("the coefficient-step arm ran (%ld)", st_coeff_step > 0, 1,
+		    st_coeff_step);
+	diff_eq_int("a transition printed (%ld)", st_debug > 0, 1, st_debug);
+	diff_eq_int("the IDLE arm reported status byte 6 (%ld)", st_done_a > 0,
+		    1, st_done_a);
+	diff_eq_int("the IDLE arm reported status byte 7 (%ld)", st_done_b > 0,
+		    1, st_done_b);
+	diff_eq_int("a handler reported a non-zero count (%ld)",
+		    st_ret_nonzero > 0, 1, st_ret_nonzero);
+	diff_eq_int("a handler advanced the machine (%ld)", st_advanced > 0, 1,
+		    st_advanced);
+	diff_eq_int("a handler dropped to ERROR (%ld)", st_error_arm > 0, 1,
+		    st_error_arm);
+	diff_eq_int("a handler raised the low-SNR bit (%ld)", st_lowsnr > 0, 1,
+		    st_lowsnr);
 
 	rc |= diff_end();
 
