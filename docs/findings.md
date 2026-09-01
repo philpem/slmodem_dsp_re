@@ -105557,3 +105557,193 @@ shape -- `1` at +0x00, a bit rate of 300 at +0x04, 60000 at +0x08, then zeros
 TYPE or a reuse of `struct v29rx_cfg` is not settled by the bytes; `faxcfg.h`'s
 existing argument separates the other three by SIZE and that argument does not
 reach this case. (2026-09-01)
+
+## F9170. The V.17 receiver's twenty-four tables, and every element type has two independent readings
+
+*2026-09-01.* `V17RX_create` (.text 0x96eb0, 3,201 bytes) is the largest
+unwritten fax symbol and it was blocked on data. This pass wrote the
+twenty-four tables it references directly: fourteen in `.rodata` (`R`) and ten
+in `.data` (`D`), 2,714 bytes in all.
+
+The method is F9140's, applied unchanged. `V17RX_create` copies each library
+built-in configuration onto its stack with a `rep movsl` and patches the tables
+AND the lengths in, so every count is written down twice in the object -- once
+as `st_size` and once as the length field the constructor stores beside the
+pointer. Both readings agree for all twenty-four:
+
+| table | `st_size` | the count the constructor writes |
+|---|--:|---|
+| `FSEv17_ICOFF` / `QCOFF` | 98 | `fse.taps` = 0x31 = 49, at .text 0x97446 |
+| `CRRv17_CLK` | 8 | `fse.clk_mod` = 4, at .text 0x97482 |
+| `CRRv17_PLL_K1` / `K1_S` / `K2` | 6 | `fpm_fse_cfg`'s three gains |
+| `MRFv17_COFFS` | 720 | `mrf.taps` = 0x168 = 360, at .text 0x971d5 |
+| `SREv17_COFFS` | 362 | `sre.coeffs` = 0xb4 = 180, at .text 0x972d6, and `proto` holds one more |
+| `SREv17_XB_COFFS` | 22 | `FPM_SRE_DISC` = 11 |
+| `SREv17_PLL_K1` / `K1_S` / `K2` | 6 | `FPM_SRE_MODES` = 3 |
+| `SREv17_xCLOCK` / `yCLOCK` | 6 | `sre.clock_len` = 3, at .text 0x9726f |
+| `V17_MTD_COEFF` | 20 | `mtd.tones` = 2, at .text 0x96f9c, five shorts a section |
+| `VTBv17_?MAP16T` / `32` / `64` / `128` | 34 / 66 / 130 / 258 | `vtb.nsub` 1/2/3/4, at .text 0x97ad0 / 0x97a27 / 0x97a6b / 0x975bf |
+
+Every stride here is 2. A byte count alone does not separate `short[49]` from
+`int[24]` and two spare bytes, and wave 1's SGD failure was a layout error
+rather than an arithmetic one, so the second reading is not a nicety.
+
+**The relocation sweep was run over all twenty-four and only ONE has inner
+pointers.** `relocscan.py --range` answers "who points AT this symbol"; the
+question a table poses is the opposite, "what pointers does this symbol
+CONTAIN", and it is answered by taking the relocations whose offset falls
+inside the symbol's own byte range. Shown firing on `AGCb103_CFG` first -- two
+hits at +0x0c and +0x10 (F9050) -- before any clean answer elsewhere was
+believed. `AGCv17_CFG` has those same two, reaching .rodata 0x9e2c and 0x9e28;
+the other twenty-three contain none, so V.17 does not have V.27ter's
+pointer-array trap (F9145).
+
+`t_v17cfg.c` is the five-layer test, 4,633 checks green, and it was shown to
+reject: perturbing one entry of `VTBv17_IMAP64` by one fails three separate
+layers -- the value comparison, the V.32bis identity, and the decoder driven
+over it. (2026-09-01)
+
+## F9171. `CRRv17_CLK` is four entries of `round(i * 32768 / 4)`, and the arithmetic closes on V.17's own 1800 Hz carrier
+
+*2026-09-01.* All four entries of `CRRv17_CLK` are `{0, 8192, 16384, 24576}`,
+which is `round(i * 32768 / 4)` exactly -- one full turn of phase in Q16
+divided into four steps.
+
+That matters beyond being tidy, because it is what fixes the ELEMENT TYPE
+independently of the byte count. `V17RX_create` installs it as
+`fpm_fse_cfg::clk` with `clk_mod = 4` and `clk_inc = 1`, and the receiver runs
+at three samples per symbol at 2400 baud, which is 7200 Hz. Then
+
+    7200 Hz * 1 / 4 = 1800 Hz
+
+which is V.17's carrier frequency as the Recommendation defines it. A reading
+that made this table anything but four shorts of Q16 phase would not produce
+that number.
+
+This is F9141's argument for V.29's 72-entry ramp, made again with four
+entries, and it is the same shape of evidence: the ramp is the only field in
+the configuration that carries a frequency, and it agrees with the published
+one. The resampler beside it closes the same way -- 9 branches, decimation 10,
+360 taps is 8000 -> 7200 Hz at 40 taps a branch, against V.29's 30.
+
+Recorded as EVIDENCE FOR A TYPE, not as a generator. (2026-09-01)
+
+## F9172. V.17's four trellis constellations ARE V.32bis' own, byte for byte, and each carries one spare entry the decoder cannot reach
+
+*2026-09-01.* The eight `VTBv17_?MAP*` tables have sizes 2N+2 where the
+matching `VTBv32_?MAP*` have 2N, for N = 16, 32, 64, 128. Two facts settle
+what that means, and neither is arithmetic on the size.
+
+**First, they are the same tables.** `VTBv17_IMAP16T[0..15]` is
+`VTBv32_IMAP16T[0..15]` entry for entry, and so are the other seven pairs --
+asserted in `t_v17cfg.c` rather than eyeballed, which links two table sets
+extracted in two different passes from two different addresses with no blob in
+between. `V17RX_create` also installs V.32's OWN `VTB_BOUND_*` and
+`VTB_REGION_*` symbols, unduplicated, and fills the shared `struct vtb` with
+`VTBv32_init`'s own arithmetic: `grid = 2 * nsub` and
+`mask = (1 << (nsub + 2)) - 1`, with `nsub` 1/2/3/4 for 7200/9600/12000/14400
+bit/s. So the fax receiver's trellis is V.32bis' trellis, as the
+Recommendation says, and the object duplicates only the constellation maps and
+not the region machinery.
+
+**Second, the extra entry is zero in all eight and is unreachable.**
+`VTB_decoder` indexes `imap[]`/`qmap[]` by a point index out of `bound[]`,
+which `nsub` bounds at N-1. So the DECODER fixes the count at N and the SYMBOL
+fixes it at N+1, and the arrays have to be declared N+1 or ours are two bytes
+short of the object's -- which no value comparison run over our own length
+could ever notice. That is eight live cases of the hazard layer 1 of these
+tests exists for, against V.29's one (`V29RX_SRE_FILT`).
+
+Why the author's arrays are N+1 is not recoverable from the object and is not
+claimed here. What is recorded is the size, the zero, and that nothing reads
+it. (2026-09-01)
+
+## F9173. V.17's `_S` gain arrays are not a bit rate: ONE flag selects them, and it swaps the equaliser coefficients and both settle counts at the same time
+
+*2026-09-01.* `CRRv17_PLL_K1_S` and `SREv17_PLL_K1_S` sit beside
+`CRRv17_PLL_K1` and `SREv17_PLL_K1`, and there are two K1 arrays where there is
+one K2 in each loop. The suffix is not decoded from the letter; the branch is
+read from `V17RX_create`.
+
+One flag governs all of it: the receiver object's +0x10, which the constructor
+copies from the modem's +0x14 at .text 0x9709c, which came from the caller's
+parameter block at .text 0x96f1b. It is tested twice, at .text 0x97293 for the
+timing loop and .text 0x97411 for the equaliser, and it selects:
+
+| | flag non-zero | flag zero |
+|---|---|---|
+| `fse.icoff` / `qcoff` | the CALLER's arrays, modem +0x18 / +0x1c | `FSEv17_ICOFF` / `FSEv17_QCOFF` |
+| `fse.pll_k1` | `CRRv17_PLL_K1_S` | `CRRv17_PLL_K1` |
+| `fse.train_sym` | 256 | 1500 |
+| `sre.pll_k1` | `SREv17_PLL_K1_S` | `SREv17_PLL_K1` |
+| `sre.settle` | 48 | 85 |
+
+So the `_S` arrays are the ones used when the caller hands the receiver a
+pre-loaded equaliser instead of a cold one, the integral gains are shared
+between the two cases -- which is why there is one `*_PLL_K2` each -- and the
+carrier loop's proportional gain differs in gear 0 alone, 602 against 10347, a
+factor of 17.
+
+**What the letter STANDS for is not written anywhere in the object and is not
+asserted.** The mechanism above is; that is what the header and
+`src/fax/v17cfg.c` record, and `t_v17cfg.c` drives `FPM_SRE_init` and
+`FPM_FSE_init` over both settings. The bit rate selects `vtb.nsub` and nothing
+else in this function, so reading `_S` as a rate would have been wrong.
+(2026-09-01)
+
+## F9174. `SREv17_PLL_K1` and `SREv17_PLL_K1_S` hold identical values at two addresses, and the timing loop's switch changes only `settle`
+
+*2026-09-01.* Both are `{2336, 3049, 3049}`. They are two distinct global
+symbols, .data 0x79ee and 0x79e2, six bytes each, and `V17RX_create` chooses
+between them on F9173's flag -- so the choice exists in the code and has no
+effect on the gains. What the flag actually changes for the timing loop is
+`sre.settle`, 48 against 85.
+
+The carrier pair is not like this: `CRRv17_PLL_K1` and `CRRv17_PLL_K1_S` differ
+in element 0.
+
+This is recorded because it is exactly the shape of a transcription slip --
+one array copied over its neighbour -- and the only thing that distinguishes
+the two readings is that the blob says so. `t_v17cfg.c` asserts the SRE pair
+equal and the carrier pair unequal, so a future edit to either half of either
+pair fails rather than passing quietly. (2026-09-01)
+
+## F9175. V.17's equaliser rails tile the taps two-spaced where V.29's are three-spaced, and both receivers run three samples per symbol
+
+*2026-09-01.* `FSEv17_QCOFF` is zero at every EVEN index of its 49 and
+`FSEv17_ICOFF` at every ODD one, so between them they cover all 49 taps and
+never overlap. The I rail is symmetric about tap 24 and the Q rail
+antisymmetric about it, which is the I/Q pair of one passband filter.
+
+V.29's equivalent pair is zero every THIRD tap (F9140's `t_v29cfg.c` records
+the exception at tap 24), and that reads naturally as "three samples per
+symbol, energy only at the symbol instants". **`V17RX_create` writes
+`fse.interp = 3` too**, at .text 0x973e4, so the spacing is NOT the
+interpolation factor and the natural reading of V.29's pattern does not
+generalise. Two receivers, the same interpolation, different zero patterns in
+their initial coefficient sets.
+
+Recorded so that nobody derives one modulation's rails from the other's, and
+because it is the second time in this wave a "tidier" reading of a zero
+pattern was the wrong one -- `t_v29cfg.c`'s own comment says the same about
+V.29's tap 24. (2026-09-01)
+
+## F9176. What `V17RX_create` still needs after the table pass: two text symbols, 788 bytes, and no data at all
+
+*2026-09-01.* Its DIRECT references were enumerated again from `tools/dis.py`
+-- both `R_386_PC32` calls and `R_386_32` stored pointers, which is the
+F8492/F8493 pair -- and classified against `nm --defined-only` over
+`build/repro`. Fifty-four distinct names. Fifty-two are written, or are
+runtime symbols the harness supplies (`sysdep_malloc`, `dsplibs_debug_printf`,
+`dsplibs_debug_level`).
+
+Two are not:
+
+| symbol | size | note |
+|---|--:|---|
+| `RxHdxStartV17` | 105 | stored as a handler pointer at .text 0x97083, never called -- F8493's case |
+| `FAX_FSE_decision_AB` | 683 | stored as `fse.decision` at .text 0x974d4 |
+
+**Its data closure is empty**, which is what this pass was for, and F9145's
+forecast for V.17 is met exactly. Neither of the two has unwritten data behind
+it that this pass could see. (2026-09-01)

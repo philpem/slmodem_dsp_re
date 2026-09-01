@@ -11545,3 +11545,17 @@ latent rather than active.
 `FPM_MTD_CFG`. That touches `src/pump/`, which this pass was fenced from, and
 it is a behaviour change on a path with no coverage, so it wants its own
 differential test rather than a drive-by edit. *unmeasured.*
+
+## D1110 ⚠ the V.17 receiver's tables are in `src/fax/v17cfg.c`, not in the file that holds `V17RX_create`
+
+The twenty-four symbols `AGCv17_CFG`, `MRFv17_COFFS`, the eight
+`VTBv17_?MAP*` and the rest sit in `.data` and `.rodata` runs that also hold
+`V17RX_CFG`, so the author's translation unit was almost certainly the one
+holding `V17RX_create` itself. They are in a file of their own because
+`src/fax/v17.c` does not hold that constructor yet and a table is worth
+nothing until something can link against it.
+
+A data symbol's bytes do not depend on its translation unit, so moving them is
+free and it cannot be measured. This is D1100 and D1102 a third time, and the
+same resolution: record it rather than pretend the layout is settled.
+*unmeasured, and unmeasurable by any tier here.*
