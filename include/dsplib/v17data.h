@@ -96,6 +96,66 @@ struct fpm_smc_ring;
 #define V17FP_PPS		0x48	/* struct fpm_pps                    */
 
 /*
+ * More of `V17FP_SMC`, all written by `SetTxModeV17` and none of it any
+ * better established than `V17FP_SMC_SHORT_06` above -- neutral names, on
+ * the same ground.
+ *
+ * `V17FP_SMC_SHORT_00` IS `V17FP_SMC` ITSELF, so it has no separate name;
+ * `SetTxModeV17` copies `SMCv17_CFG` -- two shorts, one dword -- over
+ * `V17FP_SMC`/`V17FP_SMC_SHORT_02` in one move (`0xa0b89`), then every
+ * recognised mode overwrites just `V17FP_SMC` with a literal (3, 2, 4, 5 for
+ * modes 0..3) while `V17FP_SMC_SHORT_02` is separately and unconditionally
+ * pinned to 2 a few bytes later (`0xa0bad`) -- so `SMCv17_CFG`'s second short
+ * never survives past construction and only its first is ever read back, on
+ * whatever mode falls through to `default`.  `V17FP_SMC_SHORT_12` is the one
+ * literal that follows `mode` cleanly: 1, 2, 3, 4 for modes 0..3
+ * (`0xa0cb8`, `0xa0c11`, `0xa0c60`, `0xa0ce7`).
+ */
+#define V17FP_SMC_SHORT_02	0x36
+#define V17FP_SMC_SHORT_08	0x3c
+#define V17FP_SMC_SHORT_0C	0x40
+#define V17FP_SMC_SHORT_0E	0x42
+#define V17FP_SMC_SHORT_10	0x44
+#define V17FP_SMC_SHORT_12	0x46
+
+/*
+ * The constellation maps `SetTxModeV17` selects per mode, typed by their
+ * callers: every relocation at these two offsets names a `VTBv17_{I,Q}MAP*`
+ * table from `v17cfg.h` -- mode 0 (16T) at `0xa0ccb`/`0xa0cd5`, mode 1 (32) at
+ * `0xa0c24`/`0xa0c2e`, mode 2 (64) at `0xa0c73`/`0xa0c7a`, mode 3 (128) at
+ * `0xa0cfa`/`0xa0d04`.  The same four tables back `RxNextStateV17`'s VTB
+ * switch on the receive side of this object; the two paths do not share code,
+ * only the constants.  Rank 2 evidence: the pointer's own type, not usage.
+ */
+#define V17FP_SMC_IMAP		0x58
+#define V17FP_SMC_QMAP		0x5c
+
+/*
+ * `SetTxModeV17`'s own two `.rodata` tables.
+ *
+ * `V17TX_SYM_SIZE` is indexed by `mode` (`movswl 0x0(%ebp,%ebp,1),%edx` at
+ * `0xa0b03`) and its value becomes both `struct sgd_cfg::sym_bits` and
+ * `struct fpm_sdm_cfg::nbits` for the same call -- one load, spilled to the
+ * stack and read back rather than recomputed (`0xa0b19`, `0xa0b41`).  Four
+ * entries, one per mode, `.rodata` bytes `03 00 04 00 05 00 06 00`.
+ *
+ * `SMCv17_CFG` is the two shorts `SetTxModeV17` copies over `V17FP_SMC` /
+ * `V17FP_SMC_SHORT_02` in a single dword move before the per-mode switch
+ * (see the block above) -- `.rodata` bytes `00 00 01 00`.  Declared as an
+ * array of two, not a struct: nothing here establishes a role for either
+ * half beyond "the value `V17FP_SMC` starts with", and giving them field
+ * names would claim more than the object does.
+ */
+extern const short V17TX_SYM_SIZE[4];
+extern const short SMCv17_CFG[2];
+
+/*
+ * SetTxModeV17 -- .text 0x0a0ac0, 625 bytes.  See v17fax.h for what each
+ * mode selects and for the register `SDM_init` clears and this restores.
+ */
+void SetTxModeV17(void *modem, short mode);
+
+/*
  * The encoder table and its selector.
  *
  * Three function pointers, laid down by `V17TX_create` in the order

@@ -229,6 +229,16 @@ struct v17_status {
 #define V17TX_RESULT_B1_BIT1	0x02
 #define V17TX_RESULT_BYTE_09	9
 
+/*
+ * `SetTxModeV17`'s OWN unrecognised-`mode` arm writes the same two fields --
+ * `V17TX_OBJ_RESULT` gets a literal 7 and `V17TX_OBJ_RESULT_B1` gets
+ * `V17TX_RESULT_B1_BIT1` set -- but ALSO clears bit 0 of `_B1`, which
+ * `V17TX_modem`'s arm never touches (`0xa0bd4`..`0xa0bee`).  Same shape,
+ * different literal, one more bit: named separately rather than reusing
+ * `V17TX_RESULT_BYTE_09` and pretending the two arms agree on the value.
+ */
+#define V17TX_RESULT_BYTE_07	7
+
 /* ------------------------------------------------------------------------ */
 /* Inside the block at V17TX_OBJ_PARAMS                                     */
 

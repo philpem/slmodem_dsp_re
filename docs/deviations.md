@@ -12265,6 +12265,45 @@ comparison meaningful rather than a comparison of two heaps.
 **Status:** reproduced. `t_v17rxcreate.c` counts the zeroed and non-zeroed
 entries and asserts 160 and 4 rather than asserting the loop bound.
 *measured, over thirteen configurations.*
+
+## D1270 🐛 `SetTxModeV17` indexes `V17TX_SYM_SIZE` before checking `mode` is in range
+
+`0xa0b03` (`movswl V17TX_SYM_SIZE(%ebp,%ebp,1),%edx`) reads the table entry
+for `mode` UNCONDITIONALLY, before the four-way dispatch that later decides
+whether `mode` is 0..3 at all. `V17TX_SYM_SIZE` has four entries; any other
+`mode` is an out-of-bounds `.rodata` read, and the value it produces still
+feeds `struct sgd_cfg::sym_bits` and `struct fpm_sdm_cfg::nbits` for the
+`SGD_create`/`SDM_init` calls that ALSO run unconditionally ahead of the
+dispatch, so the garbage propagates into the transmitter's live state before
+the `default` arm's error report is even reached.
+
+Reproduced as `V17TX_SYM_SIZE[mode]` with no guard, which is what a C array
+index does under the same conditions.
+
+**Status:** reproduced. *unmeasured beyond `mode` 0..3: what an out-of-range
+read returns is a property of the linked object's `.rodata` layout, which
+`ref_V17TX_SYM_SIZE` and this tree's own copy do not share an address for, so
+two builds cannot be expected to agree on the garbage and `t_v17fax.c` does
+not try -- it drives the `default` arm at a mode comfortably clear of the
+table and compares only the two result-byte fields at `V17TX_OBJ_RESULT` /
+`V17TX_OBJ_RESULT_B1`, which the out-of-bounds read cannot reach.*
+
+## D1271 ⚠ `SetTxModeV17` re-initialises the descrambler and then puts its shift register back
+
+`SDM_init` clears every field of the `struct fpm_sdm` it is given, `reg`
+included. `SetTxModeV17` reads `V17FP_SDM`'s `reg` immediately before calling
+it (`0xa0b51`) and writes the SAME value back immediately after (`0xa0baa`),
+on every call -- recognised `mode` or not, and regardless of whether the
+descrambler's tap positions or bit width actually changed underneath it. Net
+effect: `SDM_init` still resets `mask`, `notmask`, `shift1` and `shift2` for
+the new `nbits`/`tap1`/`tap2`, but the scrambler's running shift register
+survives a rate change intact rather than restarting at zero.
+
+**Status:** reproduced. *measured: `t_v17fax.c`'s `run_settxmode` seeds the
+fixture so `reg` is never zero going in, calls both sides, and asserts the
+value survived; a WRONG READING that let `SDM_init`'s clear stand separates
+every trial.*
+
 ## D1160 `RxHdxPrtcolV27` reports a sample count on exactly one block and zero on every other
 
 `RxHdxPrtcolV27` demodulates and descrambles a block on every call, but the

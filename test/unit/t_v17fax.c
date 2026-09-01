@@ -36,6 +36,26 @@
  *         pretends to measure it.  What IS asserted is that every negative
  *         and every out-of-range `which` left the block untouched.
  *
+ *   SetTxModeV17
+ *       - the per-mode literal at `V17FP_SMC` off by the pattern that would
+ *         make it track `mode` cleanly (`V17FP_SMC_SHORT_12`'s 1, 2, 3, 4
+ *         does; `V17FP_SMC`'s 3, 2, 4, 5 does not, so the two are not
+ *         interchangeable).
+ *       - the constellation maps swapped (I for Q) or drawn from the wrong
+ *         mode's pair.
+ *       - `V17TXP_NOCARRIER_SYM` one shift off (a doubling error).
+ *       - the shift register left as `SDM_init` sets it, rather than
+ *         restored (D1271).
+ *       - a `default:` arm that does nothing, or that does not clear bit 0
+ *         of `V17TX_OBJ_RESULT_B1` alongside setting bit 1.
+ *       - THE OUT-OF-RANGE TABLE READ (D1270) IS NOT DRIVEN AT THE EXTREMES.
+ *         `V17TX_SYM_SIZE[mode]` runs unconditionally before the mode is
+ *         checked, and what an out-of-bounds read returns is the linked
+ *         object's own layout, which the reference build and this one do not
+ *         share -- so the `default` arm is exercised at a `mode` clear of the
+ *         table, and only its two result bytes are compared, not the rest of
+ *         `fp`.
+ *
  *   V17TX_status
  *       - the NULL guard absent, so the block is filled anyway.
  *       - status + 0x10 taken from params + 0x10 rather than params + 0x02.
@@ -120,6 +140,7 @@
 #include "dsplib/sdm.h"
 #include "dsplib/sgd.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/v17cfg.h"
 
 extern int ref_V17RX_modem(void *modem, short *in, short *out,
 			   unsigned short *count);
@@ -177,6 +198,17 @@ extern const struct fpm_mrf_cfg MRFv32_CFG;
 extern const struct fpm_sre_cfg SREv32_CFG;
 extern void ref_SeedScramblerV17(void *modem, unsigned int seed);
 extern void ref_SetEncoderV17(void *modem, short which, short arg);
+extern void ref_SetTxModeV17(void *modem, short mode);
+extern const short ref_V17TX_SYM_SIZE[4];
+extern const short ref_SMCv17_CFG[2];
+extern const short ref_VTBv17_QMAP128[129];
+extern const short ref_VTBv17_IMAP128[129];
+extern const short ref_VTBv17_QMAP64[65];
+extern const short ref_VTBv17_IMAP64[65];
+extern const short ref_VTBv17_QMAP32[33];
+extern const short ref_VTBv17_IMAP32[33];
+extern const short ref_VTBv17_QMAP16T[17];
+extern const short ref_VTBv17_IMAP16T[17];
 extern int ref_V17TX_status(void *params, struct v17_status *status);
 extern int ref_CarrierDetectV17(void *modem);
 extern short ref_QualityDetectV17(void *modem);
@@ -715,6 +747,253 @@ run_setenc(void)
 			}
 		}
 	}
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* SetTxModeV17                                                          */
+
+static long stm_case_sep, stm_pattern_sep, stm_map_sep, stm_nc_sep;
+static long stm_reg_sep, stm_default_sep;
+static long stm_valid, stm_default_hit;
+
+/*
+ * Two fresh `struct sgd` instances, one per fixture, so `V17TXP_SGD` never
+ * points at a pseudorandom address `SGD_create` would then write through
+ * (finding the shape of `txdelete_build`'s setup, above).
+ */
+static void
+stm_arm_sgd(struct fix *f)
+{
+	struct sgd *s = ref_SGD_create(0, 0);
+	put_ptr(f->prm, V17TXP_SGD, s);
+}
+
+/*
+ * `fp`'s and `prm`'s content compared WITHOUT the two pointer pairs that are
+ * per-fixture or per-binary by construction and never claimed to be equal as
+ * bytes: `V17TXP_SGD` (each fixture's own `struct sgd *`, both freshly
+ * malloc'd) and `V17FP_SMC_IMAP`/`_QMAP` (the reference binary's tables and
+ * this tree's are two distinct symbols holding the same sixteen bytes, so
+ * their ADDRESSES differ on principle). Those four are checked separately,
+ * by content and by identity against the correctly-named table.
+ */
+static long
+stm_fp_diff(const unsigned char *a, const unsigned char *b)
+{
+	int i;
+
+	for (i = 0; i < FP_SIZE; i++) {
+		if (i >= V17FP_SMC_IMAP
+		    && i < V17FP_SMC_QMAP + (int)sizeof(void *))
+			continue;
+		if (a[i] != b[i])
+			return i;
+	}
+	return -1;
+}
+
+static long
+stm_prm_diff(const unsigned char *a, const unsigned char *b)
+{
+	int i;
+
+	for (i = 0; i < PRM_SIZE; i++) {
+		if (i >= V17TXP_SGD && i < V17TXP_SGD + (int)sizeof(void *))
+			continue;
+		if (a[i] != b[i])
+			return i;
+	}
+	return -1;
+}
+
+static int
+stm_maps_ok(const unsigned char *fp, short mode, int ours)
+{
+	const short *want_i, *want_q;
+	void *got_i, *got_q;
+
+	switch (mode) {
+	case 0:
+		want_i = ours ? VTBv17_IMAP16T : ref_VTBv17_IMAP16T;
+		want_q = ours ? VTBv17_QMAP16T : ref_VTBv17_QMAP16T;
+		break;
+	case 1:
+		want_i = ours ? VTBv17_IMAP32 : ref_VTBv17_IMAP32;
+		want_q = ours ? VTBv17_QMAP32 : ref_VTBv17_QMAP32;
+		break;
+	case 2:
+		want_i = ours ? VTBv17_IMAP64 : ref_VTBv17_IMAP64;
+		want_q = ours ? VTBv17_QMAP64 : ref_VTBv17_QMAP64;
+		break;
+	default:
+		want_i = ours ? VTBv17_IMAP128 : ref_VTBv17_IMAP128;
+		want_q = ours ? VTBv17_QMAP128 : ref_VTBv17_QMAP128;
+		break;
+	}
+	got_i = get_ptr(fp, V17FP_SMC_IMAP);
+	got_q = get_ptr(fp, V17FP_SMC_QMAP);
+	return got_i == (const void *)want_i && got_q == (const void *)want_q;
+}
+
+static int
+run_settxmode(void)
+{
+	static const short modes[] = { 0, 1, 2, 3 };
+	unsigned m;
+
+	diff_begin("SetTxModeV17");
+	for (m = 0; m < sizeof(modes) / sizeof(modes[0]); m++) {
+		short mode = modes[m];
+		long where = (long)mode;
+		unsigned seed = 0x55550000u + m;
+		unsigned int reg_before;
+
+		fixture(&ma, seed);
+		fixture(&mb, seed);
+		stm_arm_sgd(&ma);
+		stm_arm_sgd(&mb);
+
+		reg_before = ((struct fpm_sdm *)(void *)
+			      (ma.fp + V17FP_SDM))->reg;
+		if (reg_before == 0)
+			reg_before = 0x13579bdfu;
+		put_i(ma.fp, V17FP_SDM + 0x10, (int)reg_before);
+		put_i(mb.fp, V17FP_SDM + 0x10, (int)reg_before);
+
+		ref_SetTxModeV17(ma.tobj, mode);
+		SetTxModeV17(mb.tobj, mode);
+
+		diff_eq_int("at %ld: first differing receive-instance byte",
+			    robj_diff(&mb, &ma), -1, where);
+		diff_eq_int("at %ld: first differing transmit-instance byte",
+			    tobj_diff(&mb, &ma), -1, where);
+		diff_eq_int("at %ld: first differing control-block byte",
+			    ctl_diff(&mb, &ma), -1, where);
+		diff_eq_int("at %ld: first differing receiver-state byte",
+			    rxs_diff(&mb, &ma), -1, where);
+		diff_eq_int("at %ld: first differing private-block byte"
+			    " (maps excepted)",
+			    stm_fp_diff(mb.fp, ma.fp), -1, where);
+		diff_eq_int("at %ld: first differing parameter byte"
+			    " (SGD excepted)",
+			    stm_prm_diff(mb.prm, ma.prm), -1, where);
+		diff_eq_int("at %ld: our maps follow the mode",
+			    stm_maps_ok(mb.fp, mode, 1), 1, where);
+		diff_eq_int("at %ld: the blob's own maps follow the mode",
+			    stm_maps_ok(ma.fp, mode, 0), 1, where);
+		stm_valid++;
+
+		diff_eq_int("at %ld: the shift register survived re-init",
+			    (long)(int)((struct fpm_sdm *)(void *)
+					(mb.fp + V17FP_SDM))->reg,
+			    (long)(int)reg_before, where);
+
+		/* WRONG READING: SDM_init's own clear left standing. */
+		fixture(&mc, seed);
+		stm_arm_sgd(&mc);
+		put_i(mc.fp, V17FP_SDM + 0x10, (int)reg_before);
+		ref_SetTxModeV17(mc.tobj, mode);
+		put_i(mc.fp, V17FP_SDM + 0x10, 0);
+		if (stm_fp_diff(mc.fp, ma.fp) != -1)
+			stm_reg_sep++;
+
+		/*
+		 * WRONG READING: the per-mode literal at V17FP_SMC following
+		 * the mode+1 pattern V17FP_SMC_SHORT_12 actually uses, rather
+		 * than the object's 3, 2, 4, 5.
+		 */
+		fixture(&mc, seed);
+		stm_arm_sgd(&mc);
+		ref_SetTxModeV17(mc.tobj, mode);
+		put_s(mc.fp, V17FP_SMC, (short)(mode + 1));
+		if ((short)(mode + 1) != get_s(ma.fp, V17FP_SMC)
+		    && stm_fp_diff(mc.fp, ma.fp) != -1)
+			stm_case_sep++;
+
+		/* WRONG READING: V17FP_SMC_SHORT_12 not tracking mode. */
+		fixture(&mc, seed);
+		stm_arm_sgd(&mc);
+		ref_SetTxModeV17(mc.tobj, mode);
+		put_s(mc.fp, V17FP_SMC_SHORT_12, (short)(mode + 2));
+		if (stm_fp_diff(mc.fp, ma.fp) != -1)
+			stm_pattern_sep++;
+
+		/*
+		 * WRONG READING: the maps swapped for this mode's pair.
+		 * `stm_maps_ok` is the check the main assertion above relies
+		 * on; this proves it would actually catch the swap rather
+		 * than trusting that a pointer identity test always would.
+		 */
+		{
+			unsigned char scratch[FP_SIZE];
+
+			memcpy(scratch, mb.fp, FP_SIZE);
+			put_ptr(scratch, V17FP_SMC_IMAP,
+				get_ptr(mb.fp, V17FP_SMC_QMAP));
+			put_ptr(scratch, V17FP_SMC_QMAP,
+				get_ptr(mb.fp, V17FP_SMC_IMAP));
+			if (stm_maps_ok(mb.fp, mode, 1)
+			    && !stm_maps_ok(scratch, mode, 1))
+				stm_map_sep++;
+		}
+
+		/* WRONG READING: V17TXP_NOCARRIER_SYM one shift off. */
+		fixture(&mc, seed);
+		stm_arm_sgd(&mc);
+		ref_SetTxModeV17(mc.tobj, mode);
+		put_s(mc.prm, V17TXP_NOCARRIER_SYM,
+		      (short)(get_us(ma.prm, V17TXP_NOCARRIER_SYM) << 1));
+		if (get_us(ma.prm, V17TXP_NOCARRIER_SYM) != 0
+		    && stm_prm_diff(mc.prm, ma.prm) != -1)
+			stm_nc_sep++;
+	}
+
+	/*
+	 * The `default` arm.  `mode` is comfortably clear of `V17TX_SYM_SIZE`
+	 * (D1270), so only the two result bytes in `tobj` -- untouched by
+	 * that out-of-bounds read -- are compared.
+	 */
+	{
+		static const short bad_modes[] = { -1, 4, 1000, -1000 };
+		unsigned b;
+
+		for (b = 0; b < sizeof(bad_modes) / sizeof(bad_modes[0]);
+		     b++) {
+			short mode = bad_modes[b];
+			long where = 10000 + (long)b;
+			unsigned seed = 0x55560000u + b;
+			unsigned char ra20, ra21, rb20, rb21;
+
+			fixture(&ma, seed);
+			fixture(&mb, seed);
+			stm_arm_sgd(&ma);
+			stm_arm_sgd(&mb);
+
+			ref_SetTxModeV17(ma.tobj, mode);
+			SetTxModeV17(mb.tobj, mode);
+
+			ra20 = ma.tobj[V17TX_OBJ_RESULT];
+			ra21 = ma.tobj[V17TX_OBJ_RESULT_B1];
+			rb20 = mb.tobj[V17TX_OBJ_RESULT];
+			rb21 = mb.tobj[V17TX_OBJ_RESULT_B1];
+			diff_eq_int("at %ld: default arm's result byte",
+				    (long)rb20, (long)ra20, where);
+			diff_eq_int("at %ld: default arm's result flag byte",
+				    (long)rb21, (long)ra21, where);
+			diff_eq_int("at %ld: default arm wrote 7",
+				    (long)ra20, (long)V17TX_RESULT_BYTE_07,
+				    where);
+			stm_default_hit++;
+
+			/* WRONG READING: an arm that leaves both untouched. */
+			fixture(&mc, seed);
+			if (mc.tobj[V17TX_OBJ_RESULT] != ra20
+			    || mc.tobj[V17TX_OBJ_RESULT_B1] != ra21)
+				stm_default_sep++;
+		}
+	}
+
 	return diff_end();
 }
 
@@ -4064,6 +4343,7 @@ main(void)
 
 	rc |= run_seed();
 	rc |= run_setenc();
+	rc |= run_settxmode();
 	rc |= run_txstatus();
 	rc |= run_rxm();
 	rc |= run_rxstatus();
@@ -4104,6 +4384,23 @@ main(void)
 		    1, enc_wrote);
 	diff_eq_int("SetEncoderV17 declined on some trials (%ld)",
 		    enc_declined > 0, 1, enc_declined);
+
+	diff_eq_int("SetTxModeV17's shift-register preservation separates"
+		    " (%ld)", stm_reg_sep > 0, 1, stm_reg_sep);
+	diff_eq_int("SetTxModeV17's per-mode literal separates (%ld)",
+		    stm_case_sep > 0, 1, stm_case_sep);
+	diff_eq_int("SetTxModeV17's mode+1 field separates (%ld)",
+		    stm_pattern_sep > 0, 1, stm_pattern_sep);
+	diff_eq_int("SetTxModeV17's map assignment separates (%ld)",
+		    stm_map_sep > 0, 1, stm_map_sep);
+	diff_eq_int("SetTxModeV17's no-carrier symbol separates (%ld)",
+		    stm_nc_sep > 0, 1, stm_nc_sep);
+	diff_eq_int("SetTxModeV17's default arm separates (%ld)",
+		    stm_default_sep > 0, 1, stm_default_sep);
+	diff_eq_int("SetTxModeV17 ran the valid-mode path (%ld)",
+		    stm_valid > 0, 1, stm_valid);
+	diff_eq_int("SetTxModeV17 ran the default arm (%ld)",
+		    stm_default_hit > 0, 1, stm_default_hit);
 
 	diff_eq_int("the NULL guard separates (%ld)", sta_null_sep > 0, 1,
 		    sta_null_sep);

@@ -108923,3 +108923,68 @@ reading V.27ter's onto V.21 would have scheduled a subset that cannot link at
 all. `tools/relocscan.py` is the tool for the data-reference half and was fixed
 the same day (F9280); `objdump -r` piped through a grep for the family's names
 is the cheap whole-object form and is what was used here.  (2026-09-01)
+
+### F9600. V.17's transmit half-duplex machine is TEN IN ONE UNIT, and `SGD_CTL` is the whole external blocker
+
+`TxNextStateV17` (0xa0f00, 1,439 bytes) is confirmed the same shape 9340 found
+for V.21's receive five, not V.27ter's or V.29's: `objdump -r` over its own
+range shows nine `R_386_32` stores, one per `TxHdx*V17` state, each a
+`movl $0x0,0x14(%reg) <== R_386_32 TxHdx{AB,Bridge,Data,EQCond,Idle,SCR1,
+Silence,Start,TEP_}V17` -- a handler address planted into a dispatch slot,
+exactly the F8492/F8493 shape. Every one of the nine also calls
+`TxNextStateV17` back (checked in `dis.py`, e.g. `TxHdxStartV17` at 0xa1b10 is
+a two-instruction tail call to it). So the ten link only together:
+`tools/closure.py --missing` over all ten returns the same 12-symbol,
+3,086-byte set regardless of which one is asked for, which is the same test
+9340 applied to V.27ter and V.29 and the opposite answer.
+
+**What is left in that set, after this wave wrote `SetTxModeV17`, is one data
+symbol and one rodata symbol -- `SGD_CTL` (.bss, 8 bytes) and
+`V17TX_PATTERN_SCR1` (.rodata, 8 bytes, read only inside `TxNextStateV17`
+itself, so writing it alone helps nothing).** `SGD_CTL` is the actual
+blocker, and it is NOT V.17's to write this wave. Three things point away
+from `src/fax/v17.c`:
+
+- **The name carries no protocol prefix.** Every other config `SetTxModeV17`
+  reads is prefixed for its own module -- `SMCv17_CFG`, `V17TX_SYM_SIZE` -- the
+  way `smc.c`'s header records `V29TX_SMC_*` are V.29's own instantiations of
+  a shared shape. A bare `SGD_CTL` reads as shared infrastructure, not a V.17
+  table.
+- **`closure.py --missing` on V.27ter's and V.29's own transmit families
+  (`TxNextStateV27`/`TxHdxAltV27`/... and `TxNextStateV29`/`TxHdxABV29`/...)
+  names `SGD_CTL` too**, so whatever TU defines it is read by at least three
+  sibling modules symmetrically, which a per-protocol file cannot be.
+- **Its size (8 bytes) matches `struct sgd_control_req` (two pointers)
+  exactly**, and `dis.py` on `TxNextStateV17` shows it read as a VALUE at
+  `SGD_CTL+4` (`mov 0x4,%edx <== R_386_32 SGD_CTL`) and copied into a
+  locally-built request passed to `SGD_control` -- so it is very likely a
+  shared scratch/template `struct sgd_control_req`, and `sgd.c` -- which
+  already carries `SGD_CFG`, the object's other shared SGD default -- is the
+  best-supported guess for its home. `class1tx.c` cannot be ruled out from
+  the evidence gathered here; nothing traced settles it.
+
+Both candidate files are outside this wave's ownership. Writing `SGD_CTL`
+under `v17.c`'s name on a guessed home would be exactly the wave-2
+duplicate-definition hazard the FIFO symbols were fenced against, so it was
+declined rather than guessed. The ten-symbol batch -- `TxNextStateV17` and
+all nine `TxHdx*V17` states, 3,070 bytes of call code -- is otherwise fully
+linked and ready the moment `SGD_CTL` lands under either name.  (2026-09-01)
+
+### F9601. `cTOOLS_handle_hdlc_output` is the framing layer's, not V.17's, despite sitting in V.17's ready queue
+
+`readyqueue.py --span 'class1tx.c +94'` lists `cTOOLS_handle_hdlc_output`
+(0x9ef10, 403 bytes) as READY with zero unwritten dependencies, in the same
+span as every other unwritten fax symbol -- the span brackets 95 translation
+units together (see `v17.c`'s own file header), so span membership says
+nothing about which module a symbol belongs to.
+
+`dis.py` over its whole range settles it: every call it makes is
+`GetT30FrameIDFromBuffer`, `GetT30FrameNameByID` (both `t30frame.c`,
+already written and already used from `class1tx.c`/`faxvmi.c` per
+`grep -l`) and `dsplibs_debug_printf` against `.rodata.str1.1` HDLC-frame
+debug strings (`aReversedCharsArray`-indexed frame-type text). Nothing in it
+touches V.17, V.21, V.27ter or V.29 by name or by field. It is the HDLC
+receive path's own frame-logging helper -- the `cTOOLS_` prefix reads as
+"class1 TOOLS" -- and belongs with `class1tx.c`/`t30frame.c`, both banned to
+this wave. Declined; left for whichever wave owns the framing layer.
+(2026-09-01)

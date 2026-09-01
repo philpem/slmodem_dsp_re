@@ -21,6 +21,7 @@
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
  *   SetEncoderV17     .text 0x0a0a00   90
+ *   SetTxModeV17      .text 0x0a0ac0  625
  *   V17TX_modem       .text 0x0a0e40  182
  *   V17TX_status      .text 0x0a1bd0  106
  *   DemodDataV17      .text 0x0a50a0  415
@@ -1453,6 +1454,121 @@ SetEncoderV17(void *modem, short which, short arg)
 		AT_S(fp, V17FP_SMC_SHORT_06) = arg;
 		break;
 	default:
+		break;
+	}
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * `SetTxModeV17`'s two `.rodata` tables.  See `v17data.h` for the evidence;
+ * the bytes are the object's, `03 00 04 00 05 00 06 00` and `00 00 01 00`.
+ */
+const short V17TX_SYM_SIZE[4] = { 3, 4, 5, 6 };
+const short SMCv17_CFG[2] = { 0, 1 };
+
+/*
+ * SetTxModeV17 -- .text 0x0a0ac0, 625 bytes.
+ *
+ * (Re)configures the transmitter's training-sequence detector, descrambler
+ * and SMCv17 coder state for one of four symbol rates and returns nothing.
+ * `mode` 0..3 select 16T/32/64/128-point constellations (V17TX_SYM_SIZE[mode]
+ * bits/symbol: 3, 4, 5, 6) in that order; anything else writes the same
+ * "unsupported" pair `V17TX_modem` writes on a short FIFO write, with one
+ * extra bit -- see `V17TX_RESULT_BYTE_07` in v17fax.h.
+ *
+ * THE SHIFT REGISTER SURVIVES ITS OWN RE-INIT.  `SDM_init` clears
+ * `struct fpm_sdm::reg` like every other field of its target, but this
+ * function reads `V17FP_SDM`'s `reg` BEFORE calling it and writes the same
+ * value back AFTER (`0xa0b51` / `0xa0baa`) -- so a caller re-arming the
+ * transmitter for a rate change keeps the descrambler's running state rather
+ * than restarting it at zero.  Reproduced, not second-guessed: nothing here
+ * says why, and the object does it on every call, recognised mode or not.
+ *
+ * SGD_CREATE'S CFG IS SGD_CFG WITH ONLY `sym_bits` CHANGED -- no det.*
+ * override the way `V17RX_create` gives its own training detector, so the
+ * request threshold and pattern stay whatever `SGD_CFG` ships.  The existing
+ * `struct sgd *` at `V17TXP_SGD` is reused if the caller already built one;
+ * `SGD_create` allocates only when it is NULL.
+ */
+void
+SetTxModeV17(void *modem, short mode)
+{
+	struct sgd_cfg sgdcfg;
+	struct fpm_sdm_cfg sdmcfg;
+	struct fpm_sdm *sdm;
+	void *fp;
+	void *prm;
+	short sym_size;
+	unsigned int saved_reg;
+
+	sym_size = V17TX_SYM_SIZE[mode];
+
+	sgdcfg = SGD_CFG;
+	sgdcfg.sym_bits = sym_size;
+	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	FIELD_PTR(prm, V17TXP_SGD) =
+		SGD_create((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), &sgdcfg);
+
+	sdmcfg = SDM_CFG;
+	sdmcfg.nbits = sym_size;
+	sdmcfg.tap1 = 0x12;
+	sdmcfg.tap2 = 0x17;
+
+	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
+	sdm = (struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM);
+	saved_reg = sdm->reg;
+	SDM_init(sdm, &sdmcfg);
+	sdm->reg = saved_reg;
+
+	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
+	memcpy(FIELD(fp, V17FP_SMC), SMCv17_CFG, sizeof(SMCv17_CFG));
+	AT_S(fp, V17FP_SMC_SHORT_08) = 0;
+	AT_S(fp, V17FP_SMC_SHORT_06) = 0;
+	AT_S(fp, V17FP_SMC_SHORT_0E) = 0;
+	AT_S(fp, V17FP_SMC_SHORT_0C) = 0;
+	AT_S(fp, V17FP_SMC_SHORT_10) = 0;
+	AT_S(fp, V17FP_SMC_SHORT_02) = 2;
+	AT_S(fp, V17FP_ENCODER_SEL) = 2;
+
+	switch (mode) {
+	case 0:
+		AT_S(fp, V17FP_SMC_SHORT_12) = 1;
+		AT_S(fp, V17FP_SMC) = 3;
+		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP16T;
+		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP16T;
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x10;
+		break;
+	case 1:
+		AT_S(fp, V17FP_SMC_SHORT_12) = 2;
+		AT_S(fp, V17FP_SMC) = 2;
+		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP32;
+		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP32;
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x20;
+		break;
+	case 2:
+		AT_S(fp, V17FP_SMC_SHORT_12) = 3;
+		AT_S(fp, V17FP_SMC) = 4;
+		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP64;
+		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP64;
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x40;
+		break;
+	case 3:
+		AT_S(fp, V17FP_SMC_SHORT_12) = 4;
+		AT_S(fp, V17FP_SMC) = 5;
+		FIELD_PTR(fp, V17FP_SMC_IMAP) = (void *)VTBv17_IMAP128;
+		FIELD_PTR(fp, V17FP_SMC_QMAP) = (void *)VTBv17_QMAP128;
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_US(prm, V17TXP_NOCARRIER_SYM) = 0x80;
+		break;
+	default:
+		AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
+		AT_B(modem, V17TX_OBJ_RESULT_B1) = (unsigned char)
+			((AT_B(modem, V17TX_OBJ_RESULT_B1)
+			  | V17TX_RESULT_B1_BIT1) & ~1);
 		break;
 	}
 }
