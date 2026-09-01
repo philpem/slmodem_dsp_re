@@ -1,0 +1,1149 @@
+/*
+ * t_faxadapt.c -- differential test of the 27 lowercase per-modulation
+ * adapters written in `src/fax/faxadapt.c` (finding F9271): the 4 RX
+ * creates, and the 8 deletes / 8 statuses / 7 processes across both sides.
+ * The 8 message adapters are `class1tx.c`'s and are tested in
+ * `t_class1leaves.c`, not here.
+ *
+ * ---------------------------------------------------------------------------
+ * WHY THE RX SIDE AND THE TX SIDE ARE TESTED DIFFERENTLY
+ *
+ * The RX side is cheap and safe: `v??rx_create` is itself one of the
+ * adapters under test, and once it is shown correct it is also the
+ * legitimate way to build a REAL handle for the matching delete/status/
+ * process adapter -- no guessing about internal layout required anywhere.
+ *
+ * The TX side has no create (all four are blocked -- see faxadapt.h), so
+ * there is no legitimate way to obtain a real TX handle.  What this file
+ * does instead is construct the SMALLEST fixture that will not crash the
+ * already-reconstructed `V??TX_delete`/`V??TX_status`/`V??TX_modem` it
+ * forwards to, built entirely from struct types and field offsets already
+ * public in `v17fax.h`/`v17data.h`/`v21fax.h`/`v27fax.h`/`v29fax.h`/
+ * `v29data.h` -- nothing here is guessed.  Reading those four `delete`
+ * functions (and the `FPM_PPS_free`/`FPM_FSM_delete`/`FPM_MRF_free`/
+ * `FPM_TONE_delete`/`SGD_delete`/`FIFO_delete` they call) establishes the
+ * SAME rule everywhere: a pointer that gets DEREFERENCED DIRECTLY by the
+ * callee must be a real, valid, big-enough address; a pointer that is only
+ * ever handed to `sysdep_free` may be anything, including zero or garbage,
+ * because the harness's allocator "swallows" an unrecognised free rather
+ * than passing it to the real one (`harness.h`, `bad_free`).  So every
+ * fixture below is zeroed EXCEPT the handful of slots that are themselves
+ * pointers a callee dereferences -- those get the address of another real,
+ * zeroed, correctly-typed object, one level deep.
+ *
+ * `V17TX_modem`/`V21TX_modem`/`V29TX_modem` additionally CALL THROUGH a
+ * function pointer at `V??TXP_PROCESS` (the per-block "process" slot).  A
+ * zeroed slot there is a call through NULL, so the TX process fixtures plant
+ * a small PROBE function of the right type instead -- one C function, shared
+ * by all three, that records the arguments it was called with and stops the
+ * budget loop after one iteration.  This tests exactly what the adapter is
+ * responsible for (which field goes to which formal parameter) without
+ * needing `V??TX_modem`'s own DSP behaviour to be re-proven here; that is
+ * already `t_v17fax.c`/`t_v21fax.c`/`t_v29fax.c`'s job.  `v27tx_process` is
+ * the one BLOCKED member (V27TX_modem unwritten) and has no test here.
+ *
+ * `V??TX_OBJ_PARAMS`'s `INT_0008`/`INT_0004` selector is set to 1 in every
+ * TX process fixture so `V??TX_modem` takes the "already taken" arm instead
+ * of calling `FIFO_write` on a fabricated FIFO -- one fewer real object to
+ * build, and it is the same choice `t_v17fax.c` is free to make in its own
+ * fixtures for the same reason.
+ *
+ * D955/F8587: every `struct faxvmi_link` field OTHER than `int_0014` is
+ * planted with a recognisable non-zero pattern before a TX delete/status/
+ * process call and checked UNCHANGED afterward -- the object's own adapter
+ * reads only `int_0014`, so a wrong-offset bug reads or writes elsewhere and
+ * this catches it even though delete/status never touch `dp` on their own.
+ */
+
+#include <stddef.h>
+#include <stdio.h>
+#include <string.h>
+
+#include "harness.h"
+
+#include "dsplib/debug.h"
+#include "dsplib/faxadapt.h"
+#include "dsplib/faxcfg.h"
+#include "dsplib/faxfifo.h"
+#include "dsplib/faxvmi.h"
+#include "dsplib/fpm_fsm.h"
+#include "dsplib/fpm_mrf.h"
+#include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_smc.h"
+#include "dsplib/fpm_tone.h"
+#include "dsplib/sgd.h"
+#include "dsplib/v17data.h"
+#include "dsplib/v17fax.h"
+#include "dsplib/v21cfg.h"
+#include "dsplib/v21fax.h"
+#include "dsplib/v27fax.h"
+#include "dsplib/v29data.h"
+#include "dsplib/v29fax.h"
+
+/* ------------------------------------------------------------------- */
+/* The blob's side of the 27 adapters under test                        */
+
+extern void ref_v17rx_create(struct faxvmi_link *dp,
+			     const struct v17rx_cfg *cfg);
+extern void ref_v21rx_create(struct faxvmi_link *dp,
+			     const struct v21rx_cfg *cfg);
+extern void ref_v27rx_create(struct faxvmi_link *dp,
+			     const struct v27rx_cfg *cfg);
+extern void ref_v29rx_create(struct faxvmi_link *dp,
+			     const struct v29rx_cfg *cfg);
+
+extern void ref_v17tx_delete(struct faxvmi_link *dp);
+extern void ref_v17rx_delete(struct faxvmi_link *dp);
+extern void ref_v21tx_delete(struct faxvmi_link *dp);
+extern void ref_v21rx_delete(struct faxvmi_link *dp);
+extern void ref_v27tx_delete(struct faxvmi_link *dp);
+extern void ref_v27rx_delete(struct faxvmi_link *dp);
+extern void ref_v29tx_delete(struct faxvmi_link *dp);
+extern void ref_v29rx_delete(struct faxvmi_link *dp);
+
+extern int ref_v17tx_status(struct faxvmi_link *dp, struct v17_status *st);
+extern int ref_v17rx_status(struct faxvmi_link *dp, struct v17_status *st);
+extern int ref_v21tx_status(struct faxvmi_link *dp, struct v21_status *st);
+extern int ref_v21rx_status(struct faxvmi_link *dp, struct v21_status *st);
+extern int ref_v27tx_status(struct faxvmi_link *dp, void *status);
+extern int ref_v27rx_status(struct faxvmi_link *dp, void *status);
+extern int ref_v29tx_status(struct faxvmi_link *dp, void *status);
+extern int ref_v29rx_status(struct faxvmi_link *dp, void *status);
+
+extern void ref_v17tx_process(struct faxvmi_link *dp, short *out,
+			      unsigned short *count, unsigned short *result);
+extern void ref_v17rx_process(struct faxvmi_link *dp, short *in,
+			      unsigned short *result, unsigned short *count);
+extern void ref_v21tx_process(struct faxvmi_link *dp, short *out,
+			      unsigned short *count, unsigned short *result);
+extern void ref_v21rx_process(struct faxvmi_link *dp, short *in,
+			      unsigned short *result, unsigned short *count);
+extern void ref_v27rx_process(struct faxvmi_link *dp, short *in,
+			      unsigned short *result, unsigned short *count);
+extern void ref_v29tx_process(struct faxvmi_link *dp, short *out,
+			      unsigned short *count, unsigned short *result);
+extern void ref_v29rx_process(struct faxvmi_link *dp, short *in,
+			      unsigned short *result, unsigned short *count);
+
+/* The underlying constructors/destructors, both sides, for RX handles. */
+extern void *ref_V17RX_create(void *modem, const struct v17rx_cfg *params);
+extern void *ref_V21RX_create(void *modem, const struct v21rx_cfg *params);
+extern void *ref_V27RX_create(void *modem, const struct v27rx_cfg *cfg);
+extern void *ref_V29RX_create(void *modem, const struct v29rx_cfg *params);
+extern void ref_V17RX_delete(void *modem);
+extern void ref_V21RX_delete(void *modem);
+extern void ref_V27RX_delete(void *modem);
+extern void ref_V29RX_delete(void *modem);
+
+/* ------------------------------------------------------------------- */
+/* Small helpers                                                        */
+
+static void
+put_ptr(unsigned char *p, int off, void *v)
+{
+	memcpy(p + off, &v, sizeof v);
+}
+
+static void
+put_i(unsigned char *p, int off, int v)
+{
+	memcpy(p + off, &v, sizeof v);
+}
+
+/* Poison every `struct faxvmi_link` field except `int_0014`. */
+static void
+poison_link(struct faxvmi_link *l, unsigned tag)
+{
+	memset(l, 0, sizeof *l);
+	l->ptr_0000 = (unsigned short *)(void *)(long)(0x10000000u + tag);
+	l->buf = (unsigned short *)(void *)(long)(0x20000000u + tag);
+	l->pack_count = (short)(0x1100 + (short)tag);
+	l->pack_width = (unsigned short)(0x2200 + tag);
+	l->unpack_width = (unsigned short)(0x3300 + tag);
+}
+
+static long
+link_canary_diff(const struct faxvmi_link *a, const struct faxvmi_link *b)
+{
+	if (a->ptr_0000 != b->ptr_0000)
+		return 1;
+	if (a->buf != b->buf)
+		return 2;
+	if (a->pack_count != b->pack_count)
+		return 3;
+	if (a->pack_width != b->pack_width)
+		return 4;
+	if (a->unpack_width != b->unpack_width)
+		return 5;
+	return 0;
+}
+
+/* ------------------------------------------------------------------- */
+/* RX create: the one genuinely stateful adapter under test             */
+
+struct rx_case {
+	const char *name;
+	int use_default;
+	short bit_rate;
+};
+
+static const struct rx_case v17_cases[] = {
+	{ "default (14400)", 1, 14400 },
+	{ "14400", 0, 14400 },
+	{ "12000", 0, 12000 },
+	{ "9600", 0, 9600 },
+	{ "7200", 0, 7200 },
+	{ "unrecognised", 0, 4800 },
+};
+
+static const struct rx_case v21_cases[] = {
+	{ "default (300)", 1, 300 },
+	{ "300", 0, 300 },
+};
+
+static const struct rx_case v27_cases[] = {
+	{ "default (4800)", 1, 4800 },
+	{ "2400", 0, 2400 },
+	{ "4800", 0, 4800 },
+};
+
+static const struct rx_case v29_cases[] = {
+	{ "default (9600)", 1, 9600 },
+	{ "9600", 0, 9600 },
+	{ "7200", 0, 7200 },
+};
+
+static int
+run_rx_create(void)
+{
+	long k;
+	char buf[128];
+
+	diff_begin("v17rx_create/v21rx_create/v27rx_create/v29rx_create");
+
+	for (k = 0; k < (long)(sizeof(v17_cases) / sizeof(v17_cases[0])); k++) {
+		struct v17rx_cfg c;
+		struct faxvmi_link la, lb;
+
+		c = V17RX_CFG;
+		c.bit_rate = v17_cases[k].bit_rate;
+		poison_link(&la, 0x10);
+		poison_link(&lb, 0x10);
+
+		v17rx_create(&la, v17_cases[k].use_default ? NULL : &c);
+		ref_v17rx_create(&lb, v17_cases[k].use_default ? NULL : &c);
+
+		snprintf(buf, sizeof(buf), "v17rx_create %s: pack_count (%%ld)",
+			 v17_cases[k].name);
+		diff_eq_int(buf, la.pack_count, lb.pack_count, k);
+		snprintf(buf, sizeof(buf), "v17rx_create %s: pack_width (%%ld)",
+			 v17_cases[k].name);
+		diff_eq_int(buf, la.pack_width, lb.pack_width, k);
+		snprintf(buf, sizeof(buf), "v17rx_create %s: unpack_width (%%ld)",
+			 v17_cases[k].name);
+		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
+		snprintf(buf, sizeof(buf), "v17rx_create %s: handle set (%%ld)",
+			 v17_cases[k].name);
+		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+
+		V17RX_delete((void *)(long)la.int_0014);
+		ref_V17RX_delete((void *)(long)lb.int_0014);
+	}
+
+	for (k = 0; k < (long)(sizeof(v21_cases) / sizeof(v21_cases[0])); k++) {
+		struct v21rx_cfg c;
+		struct faxvmi_link la, lb;
+
+		c = V21RX_CFG;
+		c.bit_rate = v21_cases[k].bit_rate;
+		poison_link(&la, 0x20);
+		poison_link(&lb, 0x20);
+
+		v21rx_create(&la, v21_cases[k].use_default ? NULL : &c);
+		ref_v21rx_create(&lb, v21_cases[k].use_default ? NULL : &c);
+
+		snprintf(buf, sizeof(buf), "v21rx_create %s: pack_count (%%ld)",
+			 v21_cases[k].name);
+		diff_eq_int(buf, la.pack_count, lb.pack_count, k);
+		snprintf(buf, sizeof(buf), "v21rx_create %s: pack_width (%%ld)",
+			 v21_cases[k].name);
+		diff_eq_int(buf, la.pack_width, lb.pack_width, k);
+		snprintf(buf, sizeof(buf), "v21rx_create %s: unpack_width (%%ld)",
+			 v21_cases[k].name);
+		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
+
+		V21RX_delete((void *)(long)la.int_0014);
+		ref_V21RX_delete((void *)(long)lb.int_0014);
+	}
+
+	for (k = 0; k < (long)(sizeof(v27_cases) / sizeof(v27_cases[0])); k++) {
+		struct v27rx_cfg c;
+		struct faxvmi_link la, lb;
+
+		c = V27RX_CFG;
+		c.bit_rate = v27_cases[k].bit_rate;
+		poison_link(&la, 0x30);
+		poison_link(&lb, 0x30);
+
+		v27rx_create(&la, v27_cases[k].use_default ? NULL : &c);
+		ref_v27rx_create(&lb, v27_cases[k].use_default ? NULL : &c);
+
+		snprintf(buf, sizeof(buf), "v27rx_create %s: pack_count (%%ld)",
+			 v27_cases[k].name);
+		diff_eq_int(buf, la.pack_count, lb.pack_count, k);
+		snprintf(buf, sizeof(buf), "v27rx_create %s: pack_width (%%ld)",
+			 v27_cases[k].name);
+		diff_eq_int(buf, la.pack_width, lb.pack_width, k);
+		snprintf(buf, sizeof(buf), "v27rx_create %s: unpack_width (%%ld)",
+			 v27_cases[k].name);
+		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
+
+		V27RX_delete((void *)(long)la.int_0014);
+		ref_V27RX_delete((void *)(long)lb.int_0014);
+	}
+
+	for (k = 0; k < (long)(sizeof(v29_cases) / sizeof(v29_cases[0])); k++) {
+		struct v29rx_cfg c;
+		struct faxvmi_link la, lb;
+
+		c = V29RX_CFG;
+		c.bit_rate = v29_cases[k].bit_rate;
+		poison_link(&la, 0x40);
+		poison_link(&lb, 0x40);
+
+		v29rx_create(&la, v29_cases[k].use_default ? NULL : &c);
+		ref_v29rx_create(&lb, v29_cases[k].use_default ? NULL : &c);
+
+		snprintf(buf, sizeof(buf), "v29rx_create %s: pack_count (%%ld)",
+			 v29_cases[k].name);
+		diff_eq_int(buf, la.pack_count, lb.pack_count, k);
+		snprintf(buf, sizeof(buf), "v29rx_create %s: pack_width (%%ld)",
+			 v29_cases[k].name);
+		diff_eq_int(buf, la.pack_width, lb.pack_width, k);
+		snprintf(buf, sizeof(buf), "v29rx_create %s: unpack_width (%%ld)",
+			 v29_cases[k].name);
+		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
+
+		V29RX_delete((void *)(long)la.int_0014);
+		ref_V29RX_delete((void *)(long)lb.int_0014);
+	}
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------- */
+/* RX delete/status/process: driven off a real, freshly-created handle  */
+
+static int
+run_rx_delete(void)
+{
+	long tag = 0;
+
+	diff_begin("v17rx_delete/v21rx_delete/v27rx_delete/v29rx_delete");
+
+#define RX_DELETE_CASE(mod, create_fn, ref_create_fn, delete_fn, \
+			ref_delete_fn, cfg_ty, cfg_default)	\
+	do {							\
+		cfg_ty c = (cfg_default);			\
+		struct faxvmi_link la, lb;			\
+		void *ha, *hb;					\
+		poison_link(&la, 0x50);			\
+		poison_link(&lb, 0x50);				\
+		create_fn(&la, &c);				\
+		ref_create_fn(&lb, &c);				\
+		ha = (void *)(long)la.int_0014;		\
+		hb = (void *)(long)lb.int_0014;		\
+		diff_eq_int(mod " delete: live before, ours (%ld)",	\
+			    harness_alloc_ordinal(ha) != 0, 1, tag);	\
+		diff_eq_int(mod " delete: live before, ref (%ld)",	\
+			    harness_alloc_ordinal(hb) != 0, 1, tag);	\
+		delete_fn(&la);					\
+		ref_delete_fn(&lb);				\
+		diff_eq_int(mod " delete: freed, ours (%ld)",		\
+			    harness_alloc_ordinal(ha) == 0, 1, tag);	\
+		diff_eq_int(mod " delete: freed, ref (%ld)",		\
+			    harness_alloc_ordinal(hb) == 0, 1, tag);	\
+		tag++;						\
+	} while (0)
+
+	RX_DELETE_CASE("v17rx", v17rx_create, ref_v17rx_create,
+			v17rx_delete, ref_v17rx_delete,
+			struct v17rx_cfg, V17RX_CFG);
+	RX_DELETE_CASE("v21rx", v21rx_create, ref_v21rx_create,
+			v21rx_delete, ref_v21rx_delete,
+			struct v21rx_cfg, V21RX_CFG);
+	RX_DELETE_CASE("v27rx", v27rx_create, ref_v27rx_create,
+			v27rx_delete, ref_v27rx_delete,
+			struct v27rx_cfg, V27RX_CFG);
+	RX_DELETE_CASE("v29rx", v29rx_create, ref_v29rx_create,
+			v29rx_delete, ref_v29rx_delete,
+			struct v29rx_cfg, V29RX_CFG);
+
+#undef RX_DELETE_CASE
+
+	return diff_end();
+}
+
+static int
+run_rx_status(void)
+{
+	long tag = 0;
+	struct faxvmi_link la, lb;
+	struct v17rx_cfg c17;
+	struct v21rx_cfg c21;
+	struct v27rx_cfg c27;
+	struct v29rx_cfg c29;
+	struct v17_status s17a, s17b;
+	struct v21_status s21a, s21b;
+	unsigned char s27a[64], s27b[64];
+	unsigned char s29a[64], s29b[64];
+
+	diff_begin("v17rx_status/v21rx_status/v27rx_status/v29rx_status");
+
+	c17 = V17RX_CFG;
+	poison_link(&la, 0x60);
+	poison_link(&lb, 0x60);
+	v17rx_create(&la, &c17);
+	ref_v17rx_create(&lb, &c17);
+	memset(&s17a, 0xa5, sizeof s17a);
+	memset(&s17b, 0xa5, sizeof s17b);
+	v17rx_status(&la, &s17a);
+	ref_v17rx_status(&lb, &s17b);
+	diff_eq_int("v17rx_status: struct byte-identical (%ld)",
+		    memcmp(&s17a, &s17b, sizeof s17a), 0, tag);
+	V17RX_delete((void *)(long)la.int_0014);
+	ref_V17RX_delete((void *)(long)lb.int_0014);
+	tag++;
+
+	c21 = V21RX_CFG;
+	poison_link(&la, 0x60);
+	poison_link(&lb, 0x60);
+	v21rx_create(&la, &c21);
+	ref_v21rx_create(&lb, &c21);
+	memset(&s21a, 0xa5, sizeof s21a);
+	memset(&s21b, 0xa5, sizeof s21b);
+	v21rx_status(&la, &s21a);
+	ref_v21rx_status(&lb, &s21b);
+	diff_eq_int("v21rx_status: struct byte-identical (%ld)",
+		    memcmp(&s21a, &s21b, sizeof s21a), 0, tag);
+	V21RX_delete((void *)(long)la.int_0014);
+	ref_V21RX_delete((void *)(long)lb.int_0014);
+	tag++;
+
+	c27 = V27RX_CFG;
+	poison_link(&la, 0x60);
+	poison_link(&lb, 0x60);
+	v27rx_create(&la, &c27);
+	ref_v27rx_create(&lb, &c27);
+	memset(s27a, 0xa5, sizeof s27a);
+	memset(s27b, 0xa5, sizeof s27b);
+	v27rx_status(&la, s27a);
+	ref_v27rx_status(&lb, s27b);
+	diff_eq_int("v27rx_status: 64-byte region byte-identical (%ld)",
+		    memcmp(s27a, s27b, sizeof s27a), 0, tag);
+	V27RX_delete((void *)(long)la.int_0014);
+	ref_V27RX_delete((void *)(long)lb.int_0014);
+	tag++;
+
+	c29 = V29RX_CFG;
+	poison_link(&la, 0x60);
+	poison_link(&lb, 0x60);
+	v29rx_create(&la, &c29);
+	ref_v29rx_create(&lb, &c29);
+	memset(s29a, 0xa5, sizeof s29a);
+	memset(s29b, 0xa5, sizeof s29b);
+	v29rx_status(&la, s29a);
+	ref_v29rx_status(&lb, s29b);
+	diff_eq_int("v29rx_status: 64-byte region byte-identical (%ld)",
+		    memcmp(s29a, s29b, sizeof s29a), 0, tag);
+	V29RX_delete((void *)(long)la.int_0014);
+	ref_V29RX_delete((void *)(long)lb.int_0014);
+	tag++;
+
+	return diff_end();
+}
+
+static int
+run_rx_process(void)
+{
+	long tag = 0;
+
+	{
+		struct v17rx_cfg c = V17RX_CFG;
+		struct faxvmi_link la, lb;
+		short in_a[16], in_b[16];
+		unsigned short out_a[64], out_b[64];
+		unsigned short result_a, result_b, count_a, count_b;
+		int i;
+
+		diff_begin("v17rx_process");
+		poison_link(&la, 0x70);
+		poison_link(&lb, 0x70);
+		v17rx_create(&la, &c);
+		ref_v17rx_create(&lb, &c);
+		la.buf = out_a;
+		lb.buf = out_b;
+		for (i = 0; i < 16; i++)
+			in_a[i] = in_b[i] = (short)(1000 + 37 * i);
+		memset(out_a, 0x5a, sizeof out_a);
+		memset(out_b, 0x5a, sizeof out_b);
+		count_a = count_b = 16;
+		result_a = result_b = 0xeeee;
+		v17rx_process(&la, in_a, &result_a, &count_a);
+		ref_v17rx_process(&lb, in_b, &result_b, &count_b);
+		diff_eq_int("v17rx_process: result (%ld)", result_a,
+			    result_b, tag);
+		diff_eq_int("v17rx_process: count cleared, ours (%ld)",
+			    count_a, 0, tag);
+		diff_eq_int("v17rx_process: count cleared, ref (%ld)",
+			    count_b, 0, tag);
+		diff_eq_int("v17rx_process: out buffer identical (%ld)",
+			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
+		V17RX_delete((void *)(long)la.int_0014);
+		ref_V17RX_delete((void *)(long)lb.int_0014);
+		tag += diff_end();
+	}
+
+	{
+		struct v21rx_cfg c = V21RX_CFG;
+		struct faxvmi_link la, lb;
+		short in_a[16], in_b[16];
+		unsigned short out_a[64], out_b[64];
+		unsigned short result_a, result_b, count_a, count_b;
+		int i;
+
+		diff_begin("v21rx_process");
+		poison_link(&la, 0x70);
+		poison_link(&lb, 0x70);
+		v21rx_create(&la, &c);
+		ref_v21rx_create(&lb, &c);
+		la.buf = out_a;
+		lb.buf = out_b;
+		for (i = 0; i < 16; i++)
+			in_a[i] = in_b[i] = (short)(1000 + 37 * i);
+		memset(out_a, 0x5a, sizeof out_a);
+		memset(out_b, 0x5a, sizeof out_b);
+		count_a = count_b = 16;
+		result_a = result_b = 0xeeee;
+		v21rx_process(&la, in_a, &result_a, &count_a);
+		ref_v21rx_process(&lb, in_b, &result_b, &count_b);
+		diff_eq_int("v21rx_process: result (%ld)", result_a,
+			    result_b, tag);
+		diff_eq_int("v21rx_process: count cleared, ours (%ld)",
+			    count_a, 0, tag);
+		diff_eq_int("v21rx_process: count cleared, ref (%ld)",
+			    count_b, 0, tag);
+		diff_eq_int("v21rx_process: out buffer identical (%ld)",
+			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
+		V21RX_delete((void *)(long)la.int_0014);
+		ref_V21RX_delete((void *)(long)lb.int_0014);
+		tag += diff_end();
+	}
+
+	{
+		struct v27rx_cfg c = V27RX_CFG;
+		struct faxvmi_link la, lb;
+		short in_a[16], in_b[16];
+		unsigned short out_a[64], out_b[64];
+		unsigned short result_a, result_b, count_a, count_b;
+		int i;
+
+		diff_begin("v27rx_process");
+		poison_link(&la, 0x70);
+		poison_link(&lb, 0x70);
+		v27rx_create(&la, &c);
+		ref_v27rx_create(&lb, &c);
+		la.buf = out_a;
+		lb.buf = out_b;
+		for (i = 0; i < 16; i++)
+			in_a[i] = in_b[i] = (short)(1000 + 37 * i);
+		memset(out_a, 0x5a, sizeof out_a);
+		memset(out_b, 0x5a, sizeof out_b);
+		count_a = count_b = 16;
+		result_a = result_b = 0xeeee;
+		v27rx_process(&la, in_a, &result_a, &count_a);
+		ref_v27rx_process(&lb, in_b, &result_b, &count_b);
+		diff_eq_int("v27rx_process: result (%ld)", result_a,
+			    result_b, tag);
+		diff_eq_int("v27rx_process: count cleared, ours (%ld)",
+			    count_a, 0, tag);
+		diff_eq_int("v27rx_process: count cleared, ref (%ld)",
+			    count_b, 0, tag);
+		diff_eq_int("v27rx_process: out buffer identical (%ld)",
+			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
+		V27RX_delete((void *)(long)la.int_0014);
+		ref_V27RX_delete((void *)(long)lb.int_0014);
+		tag += diff_end();
+	}
+
+	{
+		struct v29rx_cfg c = V29RX_CFG;
+		struct faxvmi_link la, lb;
+		short in_a[16], in_b[16];
+		unsigned short out_a[64], out_b[64];
+		unsigned short result_a, result_b, count_a, count_b;
+		int i;
+
+		diff_begin("v29rx_process");
+		poison_link(&la, 0x70);
+		poison_link(&lb, 0x70);
+		v29rx_create(&la, &c);
+		ref_v29rx_create(&lb, &c);
+		la.buf = out_a;
+		lb.buf = out_b;
+		for (i = 0; i < 16; i++)
+			in_a[i] = in_b[i] = (short)(1000 + 37 * i);
+		memset(out_a, 0x5a, sizeof out_a);
+		memset(out_b, 0x5a, sizeof out_b);
+		count_a = count_b = 16;
+		result_a = result_b = 0xeeee;
+		v29rx_process(&la, in_a, &result_a, &count_a);
+		ref_v29rx_process(&lb, in_b, &result_b, &count_b);
+		diff_eq_int("v29rx_process: result (%ld)", result_a,
+			    result_b, tag);
+		diff_eq_int("v29rx_process: count cleared, ours (%ld)",
+			    count_a, 0, tag);
+		diff_eq_int("v29rx_process: count cleared, ref (%ld)",
+			    count_b, 0, tag);
+		diff_eq_int("v29rx_process: out buffer identical (%ld)",
+			    memcmp(out_a, out_b, sizeof out_a), 0, tag);
+		V29RX_delete((void *)(long)la.int_0014);
+		ref_V29RX_delete((void *)(long)lb.int_0014);
+		tag += diff_end();
+	}
+
+	return tag != 0;
+}
+
+/* ------------------------------------------------------------------- */
+/* TX side: no create exists, so a minimal safe fixture stands in.      */
+/* Every intermediate pointer that a callee DEREFERENCES DIRECTLY is a  */
+/* real, zeroed, correctly-typed object; everything only ever handed to */
+/* `sysdep_free` is left zero.  See the file header for the derivation. */
+
+struct v17tx_fixture {
+	unsigned char modem[64];
+	unsigned char fp[256];
+	unsigned char prm[32];
+	struct sgd sgd;
+	struct fax_fifo fifo;
+};
+
+static void
+v17tx_fixture_build(struct v17tx_fixture *f)
+{
+	memset(f, 0, sizeof *f);
+	put_ptr(f->modem, V17TX_OBJ_FP, f->fp);
+	put_ptr(f->modem, V17TX_OBJ_PARAMS, f->prm);
+	put_ptr(f->prm, V17TXP_SGD, &f->sgd);
+	put_ptr(f->prm, V17TXP_FIFO, &f->fifo);
+}
+
+struct v21tx_fixture {
+	unsigned char modem[64];
+	struct v21_tx_dsp dsp;
+	struct fpm_tone tone;
+	unsigned char prm[32];
+	struct fax_fifo fifo;
+};
+
+static void
+v21tx_fixture_build(struct v21tx_fixture *f)
+{
+	memset(f, 0, sizeof *f);
+	f->dsp.fsm.tone = &f->tone;	/* FPM_TONE_delete derefs unconditionally */
+	put_ptr(f->modem, V21TX_OBJ_DSP, &f->dsp);
+	put_ptr(f->modem, V21TX_OBJ_PARAMS, f->prm);
+	put_ptr(f->prm, V21TXP_FIFO, &f->fifo);
+}
+
+struct v27tx_fixture {
+	unsigned char modem[64];
+	unsigned char tx[256];	/* V27TX_PPS (0x5c) + sizeof(struct fpm_pps) */
+	unsigned char txdata[32];
+	struct sgd sgd;
+	struct fax_fifo fifo;
+};
+
+static void
+v27tx_fixture_build(struct v27tx_fixture *f)
+{
+	memset(f, 0, sizeof *f);
+	put_ptr(f->modem, V27_OBJ_TX, f->tx);
+	put_ptr(f->modem, V27_OBJ_TXDATA, f->txdata);
+	put_ptr(f->txdata, V27TXD_FIFO, &f->fifo);
+	put_ptr(f->txdata, V27TXD_SGD, &f->sgd);
+}
+
+struct v29tx_fixture {
+	unsigned char modem[64];
+	unsigned char fp[256];
+	unsigned char prm[32];
+	struct sgd sgd;
+	struct fax_fifo fifo;
+};
+
+static void
+v29tx_fixture_build(struct v29tx_fixture *f)
+{
+	memset(f, 0, sizeof *f);
+	put_ptr(f->modem, V29TX_OBJ_FP, f->fp);
+	put_ptr(f->modem, V29TX_OBJ_PARAMS, f->prm);
+	put_ptr(f->prm, V29TXP_SGD, &f->sgd);
+	put_ptr(f->prm, V29TXP_FIFO, &f->fifo);
+}
+
+/*
+ * NONE OF THE FOUR OBJECT-LEVEL `V??TX_delete` FUNCTIONS WRITE BACK INTO
+ * `dp` -- the object's own adapter only ever reads `int_0014` and tail-jumps
+ * -- so the two things worth asserting per call are (1) `dp` is byte-for-byte
+ * unchanged (the D955 canary, catching a wrong-offset read or an accidental
+ * write) and (2) the call returned at all: a wrong-offset bug that hands
+ * `V??TX_delete` a non-pointer crashes the process, which `make one` reports
+ * as the whole binary failing, so reaching `diff_end()` below is already the
+ * survival half of the check.
+ */
+static int
+run_tx_delete(void)
+{
+	long tag = 0;
+	struct faxvmi_link la, lb, la0, lb0;
+
+	diff_begin("v17tx_delete/v21tx_delete/v27tx_delete/v29tx_delete");
+
+	{
+		struct v17tx_fixture fa, fb;
+
+		v17tx_fixture_build(&fa);
+		v17tx_fixture_build(&fb);
+		poison_link(&la, 0x80);
+		poison_link(&lb, 0x80);
+		la.int_0014 = (int)(long)fa.modem;
+		lb.int_0014 = (int)(long)fb.modem;
+		la0 = la;
+		lb0 = lb;
+		v17tx_delete(&la);
+		ref_v17tx_delete(&lb);
+		diff_eq_int("v17tx_delete: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v17tx_delete: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+	}
+	tag++;
+
+	{
+		struct v21tx_fixture fa, fb;
+
+		v21tx_fixture_build(&fa);
+		v21tx_fixture_build(&fb);
+		poison_link(&la, 0x80);
+		poison_link(&lb, 0x80);
+		la.int_0014 = (int)(long)fa.modem;
+		lb.int_0014 = (int)(long)fb.modem;
+		la0 = la;
+		lb0 = lb;
+		v21tx_delete(&la);
+		ref_v21tx_delete(&lb);
+		diff_eq_int("v21tx_delete: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v21tx_delete: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+	}
+	tag++;
+
+	{
+		struct v27tx_fixture fa, fb;
+
+		v27tx_fixture_build(&fa);
+		v27tx_fixture_build(&fb);
+		poison_link(&la, 0x80);
+		poison_link(&lb, 0x80);
+		la.int_0014 = (int)(long)fa.modem;
+		lb.int_0014 = (int)(long)fb.modem;
+		la0 = la;
+		lb0 = lb;
+		v27tx_delete(&la);
+		ref_v27tx_delete(&lb);
+		diff_eq_int("v27tx_delete: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v27tx_delete: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+	}
+	tag++;
+
+	{
+		struct v29tx_fixture fa, fb;
+
+		v29tx_fixture_build(&fa);
+		v29tx_fixture_build(&fb);
+		poison_link(&la, 0x80);
+		poison_link(&lb, 0x80);
+		la.int_0014 = (int)(long)fa.modem;
+		lb.int_0014 = (int)(long)fb.modem;
+		la0 = la;
+		lb0 = lb;
+		v29tx_delete(&la);
+		ref_v29tx_delete(&lb);
+		diff_eq_int("v29tx_delete: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v29tx_delete: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+	}
+	tag++;
+
+	return diff_end();
+}
+
+static int
+run_tx_status(void)
+{
+	long tag = 0;
+	struct faxvmi_link la, lb;
+
+	diff_begin("v17tx_status/v21tx_status/v27tx_status/v29tx_status");
+
+	{
+		unsigned char pa[64], pb[64];
+		struct v17_status sa, sb;
+		int i;
+
+		for (i = 0; i < (int)sizeof(pa); i++)
+			pa[i] = pb[i] = (unsigned char)(i * 7 + 3);
+		memset(&sa, 0x5a, sizeof sa);
+		memset(&sb, 0x5a, sizeof sb);
+		poison_link(&la, 0x90);
+		poison_link(&lb, 0x90);
+		la.int_0014 = (int)(long)pa;
+		lb.int_0014 = (int)(long)pb;
+		v17tx_status(&la, &sa);
+		ref_v17tx_status(&lb, &sb);
+		diff_eq_int("v17tx_status: struct byte-identical (%ld)",
+			    memcmp(&sa, &sb, sizeof sa), 0, tag);
+		diff_eq_int("v17tx_status: dp fields untouched (%ld)",
+			    link_canary_diff(&la, &lb), 0, tag);
+	}
+	tag++;
+
+	{
+		unsigned char pa[64], pb[64];
+		struct v21_status sa, sb;
+		int i;
+
+		for (i = 0; i < (int)sizeof(pa); i++)
+			pa[i] = pb[i] = (unsigned char)(i * 11 + 5);
+		memset(&sa, 0x5a, sizeof sa);
+		memset(&sb, 0x5a, sizeof sb);
+		poison_link(&la, 0x90);
+		poison_link(&lb, 0x90);
+		la.int_0014 = (int)(long)pa;
+		lb.int_0014 = (int)(long)pb;
+		v21tx_status(&la, &sa);
+		ref_v21tx_status(&lb, &sb);
+		diff_eq_int("v21tx_status: struct byte-identical (%ld)",
+			    memcmp(&sa, &sb, sizeof sa), 0, tag);
+		diff_eq_int("v21tx_status: dp fields untouched (%ld)",
+			    link_canary_diff(&la, &lb), 0, tag);
+	}
+	tag++;
+
+	{
+		unsigned char pa[64], pb[64];
+		unsigned char sa[64], sb[64];
+		int i;
+
+		for (i = 0; i < (int)sizeof(pa); i++)
+			pa[i] = pb[i] = (unsigned char)(i * 13 + 9);
+		memset(sa, 0x5a, sizeof sa);
+		memset(sb, 0x5a, sizeof sb);
+		poison_link(&la, 0x90);
+		poison_link(&lb, 0x90);
+		la.int_0014 = (int)(long)pa;
+		lb.int_0014 = (int)(long)pb;
+		v27tx_status(&la, sa);
+		ref_v27tx_status(&lb, sb);
+		diff_eq_int("v27tx_status: 64-byte region byte-identical (%ld)",
+			    memcmp(sa, sb, sizeof sa), 0, tag);
+		diff_eq_int("v27tx_status: dp fields untouched (%ld)",
+			    link_canary_diff(&la, &lb), 0, tag);
+	}
+	tag++;
+
+	{
+		unsigned char pa[64], pb[64];
+		unsigned char sa[64], sb[64];
+		int i;
+
+		for (i = 0; i < (int)sizeof(pa); i++)
+			pa[i] = pb[i] = (unsigned char)(i * 17 + 1);
+		memset(sa, 0x5a, sizeof sa);
+		memset(sb, 0x5a, sizeof sb);
+		poison_link(&la, 0x90);
+		poison_link(&lb, 0x90);
+		la.int_0014 = (int)(long)pa;
+		lb.int_0014 = (int)(long)pb;
+		v29tx_status(&la, sa);
+		ref_v29tx_status(&lb, sb);
+		diff_eq_int("v29tx_status: 64-byte region byte-identical (%ld)",
+			    memcmp(sa, sb, sizeof sa), 0, tag);
+		diff_eq_int("v29tx_status: dp fields untouched (%ld)",
+			    link_canary_diff(&la, &lb), 0, tag);
+	}
+	tag++;
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------- */
+/* TX process: a probe handler plugged into V??TXP_PROCESS              */
+
+static void *probe_modem_seen;
+static unsigned short *probe_in_seen;
+static short *probe_out_seen;
+static short probe_budget_seen;
+static int probe_calls;
+
+static short
+probe_tx_handler(void *modem, unsigned short *in, short *out, short *budget)
+{
+	probe_modem_seen = modem;
+	probe_in_seen = in;
+	probe_out_seen = out;
+	probe_budget_seen = *budget;
+	*budget = 0;
+	probe_calls++;
+	return 0;
+}
+
+static int
+run_tx_process(void)
+{
+	long tag = 0;
+
+	diff_begin("v17tx_process/v21tx_process/v29tx_process");
+
+	{
+		struct v17tx_fixture fa;
+		struct faxvmi_link la;
+		short out[16];
+		unsigned short count, result;
+
+		v17tx_fixture_build(&fa);
+		put_i(fa.prm, V17TXP_INT_0008, 1);
+		put_ptr(fa.prm, V17TXP_PROCESS, (void *)probe_tx_handler);
+		poison_link(&la, 0xa0);
+		la.buf = (unsigned short *)(void *)(fa.modem + 0);
+		la.int_0014 = (int)(long)fa.modem;
+		memset(out, 0x5a, sizeof out);
+		count = 16;
+		result = 0xeeee;
+		probe_calls = 0;
+		probe_modem_seen = 0;
+		probe_in_seen = 0;
+		probe_out_seen = 0;
+		v17tx_process(&la, out, &count, &result);
+		diff_eq_int("v17tx_process: probe called once (%ld)",
+			    probe_calls, 1, tag);
+		diff_eq_int("v17tx_process: modem forwarded (%ld)",
+			    probe_modem_seen == (void *)fa.modem, 1, tag);
+		diff_eq_int("v17tx_process: in is dp->buf (%ld)",
+			    probe_in_seen == la.buf, 1, tag);
+		diff_eq_int("v17tx_process: out is the caller's out (%ld)",
+			    probe_out_seen == out, 1, tag);
+		diff_eq_int("v17tx_process: result got the sample count (%ld)",
+			    result, 0, tag);
+		diff_eq_int("v17tx_process: count cleared (%ld)", count, 0,
+			    tag);
+	}
+	tag++;
+
+	{
+		struct v21tx_fixture fa;
+		struct faxvmi_link la;
+		short out[16];
+		unsigned short count, result;
+
+		v21tx_fixture_build(&fa);
+		put_i(fa.prm, V21TXP_INT_0004, 1);
+		put_ptr(fa.prm, V21TXP_PROCESS, (void *)probe_tx_handler);
+		poison_link(&la, 0xa0);
+		la.buf = (unsigned short *)(void *)(fa.modem + 0);
+		la.int_0014 = (int)(long)fa.modem;
+		memset(out, 0x5a, sizeof out);
+		count = 16;
+		result = 0xeeee;
+		probe_calls = 0;
+		probe_modem_seen = 0;
+		probe_in_seen = 0;
+		probe_out_seen = 0;
+		v21tx_process(&la, out, &count, &result);
+		diff_eq_int("v21tx_process: probe called once (%ld)",
+			    probe_calls, 1, tag);
+		diff_eq_int("v21tx_process: modem forwarded (%ld)",
+			    probe_modem_seen == (void *)fa.modem, 1, tag);
+		diff_eq_int("v21tx_process: in is dp->buf (%ld)",
+			    probe_in_seen == la.buf, 1, tag);
+		diff_eq_int("v21tx_process: out is the caller's out (%ld)",
+			    probe_out_seen == out, 1, tag);
+		diff_eq_int("v21tx_process: result got the sample count (%ld)",
+			    result, 0, tag);
+		diff_eq_int("v21tx_process: count cleared (%ld)", count, 0,
+			    tag);
+	}
+	tag++;
+
+	{
+		struct v29tx_fixture fa;
+		struct faxvmi_link la;
+		short out[16];
+		unsigned short count, result;
+
+		v29tx_fixture_build(&fa);
+		put_i(fa.prm, V29TXP_INT_0008, 1);
+		put_ptr(fa.prm, V29TXP_PROCESS, (void *)probe_tx_handler);
+		poison_link(&la, 0xa0);
+		la.buf = (unsigned short *)(void *)(fa.modem + 0);
+		la.int_0014 = (int)(long)fa.modem;
+		memset(out, 0x5a, sizeof out);
+		count = 16;
+		result = 0xeeee;
+		probe_calls = 0;
+		probe_modem_seen = 0;
+		probe_in_seen = 0;
+		probe_out_seen = 0;
+		v29tx_process(&la, out, &count, &result);
+		diff_eq_int("v29tx_process: probe called once (%ld)",
+			    probe_calls, 1, tag);
+		diff_eq_int("v29tx_process: modem forwarded (%ld)",
+			    probe_modem_seen == (void *)fa.modem, 1, tag);
+		diff_eq_int("v29tx_process: in is dp->buf (%ld)",
+			    probe_in_seen == la.buf, 1, tag);
+		diff_eq_int("v29tx_process: out is the caller's out (%ld)",
+			    probe_out_seen == out, 1, tag);
+		diff_eq_int("v29tx_process: result got the sample count (%ld)",
+			    result, 0, tag);
+		diff_eq_int("v29tx_process: count cleared (%ld)", count, 0,
+			    tag);
+	}
+	tag++;
+
+	/*
+	 * The BLOB's own v17tx_process/v21tx_process/v29tx_process, driven
+	 * through the SAME probe (its address is planted in `prm` exactly as
+	 * above), proving the blob's adapter passes the same four things to
+	 * `V??TX_modem` that ours does -- this is the actual differential
+	 * half of the check; the block above establishes what "correct"
+	 * looks like against the object's own field layout.
+	 */
+	{
+		struct v17tx_fixture fb;
+		struct faxvmi_link lb;
+		short out[16];
+		unsigned short count, result;
+
+		v17tx_fixture_build(&fb);
+		put_i(fb.prm, V17TXP_INT_0008, 1);
+		put_ptr(fb.prm, V17TXP_PROCESS, (void *)probe_tx_handler);
+		poison_link(&lb, 0xb0);
+		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
+		lb.int_0014 = (int)(long)fb.modem;
+		memset(out, 0x5a, sizeof out);
+		count = 16;
+		result = 0xeeee;
+		probe_calls = 0;
+		probe_modem_seen = 0;
+		probe_in_seen = 0;
+		probe_out_seen = 0;
+		ref_v17tx_process(&lb, out, &count, &result);
+		diff_eq_int("ref_v17tx_process: probe called once (%ld)",
+			    probe_calls, 1, tag);
+		diff_eq_int("ref_v17tx_process: modem forwarded (%ld)",
+			    probe_modem_seen == (void *)fb.modem, 1, tag);
+		diff_eq_int("ref_v17tx_process: in is dp->buf (%ld)",
+			    probe_in_seen == lb.buf, 1, tag);
+		diff_eq_int("ref_v17tx_process: out is the caller's out (%ld)",
+			    probe_out_seen == out, 1, tag);
+	}
+	tag++;
+
+	{
+		struct v21tx_fixture fb;
+		struct faxvmi_link lb;
+		short out[16];
+		unsigned short count, result;
+
+		v21tx_fixture_build(&fb);
+		put_i(fb.prm, V21TXP_INT_0004, 1);
+		put_ptr(fb.prm, V21TXP_PROCESS, (void *)probe_tx_handler);
+		poison_link(&lb, 0xb0);
+		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
+		lb.int_0014 = (int)(long)fb.modem;
+		memset(out, 0x5a, sizeof out);
+		count = 16;
+		result = 0xeeee;
+		probe_calls = 0;
+		probe_modem_seen = 0;
+		probe_in_seen = 0;
+		probe_out_seen = 0;
+		ref_v21tx_process(&lb, out, &count, &result);
+		diff_eq_int("ref_v21tx_process: probe called once (%ld)",
+			    probe_calls, 1, tag);
+		diff_eq_int("ref_v21tx_process: modem forwarded (%ld)",
+			    probe_modem_seen == (void *)fb.modem, 1, tag);
+		diff_eq_int("ref_v21tx_process: in is dp->buf (%ld)",
+			    probe_in_seen == lb.buf, 1, tag);
+		diff_eq_int("ref_v21tx_process: out is the caller's out (%ld)",
+			    probe_out_seen == out, 1, tag);
+	}
+	tag++;
+
+	{
+		struct v29tx_fixture fb;
+		struct faxvmi_link lb;
+		short out[16];
+		unsigned short count, result;
+
+		v29tx_fixture_build(&fb);
+		put_i(fb.prm, V29TXP_INT_0008, 1);
+		put_ptr(fb.prm, V29TXP_PROCESS, (void *)probe_tx_handler);
+		poison_link(&lb, 0xb0);
+		lb.buf = (unsigned short *)(void *)(fb.modem + 0);
+		lb.int_0014 = (int)(long)fb.modem;
+		memset(out, 0x5a, sizeof out);
+		count = 16;
+		result = 0xeeee;
+		probe_calls = 0;
+		probe_modem_seen = 0;
+		probe_in_seen = 0;
+		probe_out_seen = 0;
+		ref_v29tx_process(&lb, out, &count, &result);
+		diff_eq_int("ref_v29tx_process: probe called once (%ld)",
+			    probe_calls, 1, tag);
+		diff_eq_int("ref_v29tx_process: modem forwarded (%ld)",
+			    probe_modem_seen == (void *)fb.modem, 1, tag);
+		diff_eq_int("ref_v29tx_process: in is dp->buf (%ld)",
+			    probe_in_seen == lb.buf, 1, tag);
+		diff_eq_int("ref_v29tx_process: out is the caller's out (%ld)",
+			    probe_out_seen == out, 1, tag);
+	}
+	tag++;
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------- */
+
+int
+main(void)
+{
+	int bad = 0;
+
+	bad |= run_rx_create();
+	bad |= run_rx_delete();
+	bad |= run_rx_status();
+	bad |= run_rx_process();
+	bad |= run_tx_delete();
+	bad |= run_tx_status();
+	bad |= run_tx_process();
+
+	return bad;
+}

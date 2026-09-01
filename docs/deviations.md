@@ -12579,3 +12579,32 @@ here, one this tree cannot and need not reproduce bit-for-bit). Finding F9500.
 
 **Status:** untestable by construction, and excluded from comparison rather
 than guessed at.
+## D1250 The 27 F9271 adapters' `int_0014` traffic goes through `(void *)(long)`/`(int)(long)`, not a direct cast
+
+`v??rx_create`/`v??tx_delete`/`v??rx_delete`/`v??tx_status`/`v??rx_status`/
+`v??tx_process`/`v??rx_process` (`src/fax/faxadapt.c`) all read or write
+`struct faxvmi_link::int_0014` as a pointer -- it is the wrapped `V??_*`
+handle (finding F9550) -- while `faxvmi.h`, a different strand of the same
+wave, spells the field `int`. On the object's own target (32-bit x86) `int`
+and `void *` are the same width and this is a pure bit reinterpretation with
+no narrowing; a direct `(void *)dp->int_0014` would compile identically
+there. It is not identical everywhere this tree also has to compile:
+`make check64` builds the same source at 64 bits, where a bare int-to-pointer
+cast is a real narrowing GCC warns about (`-Wint-to-pointer-cast` under
+`-Wall`), and a value written through a 32-bit `int` on that build cannot
+hold a 64-bit address anyway.
+
+**Bit-exact, different structure.** The two-step cast changes nothing the
+32-bit differential or period tiers can observe -- `(void *)(long)x` and
+`(void *)x` compile to the same `mov` when `long` and `void *` are both 32
+bits, which `t_faxadapt.c`'s clean run over all 27 adapters confirms
+indirectly (every check compares real values through this path). What it
+buys is a warning-clean 64-bit build without retyping a field this batch does
+not own; retyping `int_0014` to `void *` or `intptr_t` in `faxvmi.h` would be
+the right fix and is CLAUDE.md's "one type, one home" territory once that
+header's own strand is ready to settle it, not a decision for a batch that
+only reads the field.
+
+**Status:** ✅ verified bit-exact on the 32-bit tiers (`t_faxadapt.c`); the
+64-bit truncation this inherits from `int_0014`'s own declared type is
+`faxvmi.h`'s to resolve, not reproduced or hardened against here.
