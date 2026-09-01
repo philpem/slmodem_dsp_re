@@ -38,6 +38,13 @@ struct fpm_fsm {
 extern const struct fpm_fsm_cfg FPM_FSM_CFG_data;
 
 /*
+ * The object's OWN name for the same table, `D` at .data:0x8198 -- see
+ * `src/dsp/fpm_fsm_cfg.c` for the derivation and D1230 for why both still
+ * exist.
+ */
+extern struct fpm_fsm_cfg FPM_FSM_CFG;
+
+/*
  * Build a modulator.  `cfg` supplies the two frequencies, the symbol length
  * in samples and the output scale; the frequencies are stored both as given
  * and pre-scaled for the tone generator.

@@ -12453,3 +12453,90 @@ than deciding.
 store on BOTH arms separates ZERO of twelve trials, which is what says the store
 is invisible; a detector that could not fire would otherwise read as a passing
 check.
+
+## D1230 🐛 `FPM_FSM_CFG_data` and `FPM_FSM_CFG` are two objects where the blob has one
+
+`src/dsp/fpm_fsm_cfg.c` defines `FPM_FSM_CFG`, the object's own table -- `D`
+at .data 0x8198, 8 bytes. `src/dsp/fpm_fsm.c` still defines
+`FPM_FSM_CFG_data`, a stub written when nothing referenced the real one and a
+reference to an unwritten blob symbol could not link (F8492). `V21TX_create`
+references `FPM_FSM_CFG` directly (0x0993e2/0x0993e8), so the real one had to
+exist. Finding F9500.
+
+This is D1180's shape a second time, and the same happy direction: the two
+tables hold identical bytes -- `{freq: {1850, 1650}, samples_per_sym: 24,
+scale: 32767}` -- and `t_v21txcreate.c` asserts `memcmp` equality rather than
+assuming it. What remains is a storage class (the object's is `D`, writable;
+the stub is `const`) and a duplicate symbol.
+
+**Not fixed here, and the fix is one line.** Delete the stub and its
+declaration in `include/dsplib/fpm_fsm.h`, and point its one reader --
+`src/pump/b103/b103fp.c:1092`, `fsm = FPM_FSM_CFG_data;` -- at `FPM_FSM_CFG`.
+That file is `src/pump/**`, fenced from this pass exactly as `fpm_fsd_cfg.c`'s
+own fix was. *measured: the two tables are byte-identical, so the duplicate
+costs 8 bytes of `.rodata` and nothing else.*
+
+## D1240 ⚠ `TxHdxDataV21` reports V21TX_STATUS_UNDERRUN and then immediately overwrites it with V21TX_STATUS_DATA, at the same call
+
+On the FIFO-underrun, `V21TXP_INT_0004 == 0` arm, the object stores `0x3`
+into the status byte at 0x0a2a23 and then `0x0` into the SAME byte at
+0x0a2a48, four instructions later in the same call with nothing between them
+that reads it. `V21TX_status` never reads this byte at all -- it leaves the
+library only through whatever a caller of the `v21tx_process_fn` dispatch
+slot itself inspects, and nothing reconstructed does.
+
+Reproduced as written, because the object writes both; a version that skips
+the first store would not fail any test this tree has, since nothing between
+the two writes and nothing outside the function can observe the intermediate
+value. Finding F9500.
+
+**Status:** reproduced, both stores, in the object's order. Untestable beyond
+"the object writes both", which `t_v21txcreate.c` does not attempt to
+separate from "the object writes only the second".
+
+## D1241 ⚠ `V21TX_create` writes three different literal FSK frequency pairs, and every one is dead
+
+`V21TX_create` stores one of three literal `{freq[0], freq[1]}` pairs onto its
+local FSM configuration -- {1180, 980} when `V21TX_CFG.short_0000 == 0`, {0, 0}
+otherwise, {1850, 1650} when `== 1` -- and every one of the three is
+unconditionally overwritten by a 32-bit load off the real `FPM_FSM_CFG`
+(0x099409) before `FPM_FSM_init` is ever called. So the modulator's frequency
+pair is `FPM_FSM_CFG`'s own regardless of `short_0000`; only `scale` survives
+as an override, to 0x1900 (6400) instead of the library's 32767.
+
+Reproduced as the observable NET EFFECT -- `fsm = FPM_FSM_CFG; fsm.scale =
+0x1900;` -- rather than as three dead stores followed by a fourth live one,
+because the three dead stores have no reachable state that could observe
+them: they write the same stack slots, in the same order, ahead of the same
+unconditional overwrite, on every one of the three paths. `short_0000` still
+controls one OBSERVABLE thing past the dead writes: the "neither 0 nor 1"
+path alone raises `V21TX_RESULT_B1_BIT1` and reports `V21TX_STATUS_DEFAULT`
+before falling into the shared tail, and that part is reproduced. Finding
+F9500.
+
+**Status:** reproduced (net effect); the three dead literal stores themselves
+are not written into `src/`, on the same ground CLAUDE.md gives for not
+writing `RxHdxStartV21`'s dead loop body -- nothing here claims the omission
+is itself evidence, only that it has no observable effect under any input.
+
+## D1242 ⚠ `V21TX_create`'s local `struct fpm_mrf_cfg.aux` is never written, unlike the receiver's
+
+`V21RX_create` explicitly sets `mrf.aux` from its own `cfg->aux` argument.
+`V21TX_create` does neither: it loads only two of `FPM_MRF_CFG`'s four dwords
+(offset 0 and offset 8, for `branches`/`decimate` and `taps`/`pad0a`) before
+patching `branches`, `decimate`, `coeff` and `taps` individually, and never
+touches the `aux` slot at all -- so the object's own local on the stack
+carries whatever was there before the call.
+
+`src/fax/v21.c` spells this as `mrf = FPM_MRF_CFG;` (a full struct copy, which
+DOES give `aux` a defined value -- the library default's own, typically NULL)
+rather than as an intentionally-uninitialised local: C makes reading an
+uninitialised struct member undefined behaviour, and nothing here needs to
+court that for a field nothing reconstructed ever reads back
+(`dsp->mrf.cfg.aux` has no reader anywhere in the object). `t_v21txcreate.c`
+excludes this offset from its byte comparison, the same move `t_v21create.c`
+makes for the receiver's `mrf.cfg.aux` (there, a real, deterministic value;
+here, one this tree cannot and need not reproduce bit-for-bit). Finding F9500.
+
+**Status:** untestable by construction, and excluded from comparison rather
+than guessed at.

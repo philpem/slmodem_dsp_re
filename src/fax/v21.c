@@ -6,6 +6,7 @@
  *
  *   V21RX_create      .text 0x098e70  1011
  *   V21RX_delete      .text 0x099270   123
+ *   V21TX_create      .text 0x0992f0   757
  *   V21TX_delete      .text 0x0995f0   104
  *   V21RX_modem       .text 0x0a1c40   127
  *   RxHdxErrorV21     .text 0x0a1cc0    59
@@ -16,6 +17,10 @@
  *   RxHdxDataV21      .text 0x0a2260   418
  *   V21RX_status      .text 0x0a2460   132
  *   V21TX_modem       .text 0x0a24f0   182
+ *   TxNextStateV21    .text 0x0a25b0   280
+ *   TxHdxStartV21     .text 0x0a26d0   380
+ *   TxHdxIdleV21      .text 0x0a2850   372
+ *   TxHdxDataV21      .text 0x0a29d0   451
  *   V21TX_status      .text 0x0a2c00    96
  *   DemodDataV21      .text 0x0a5740   217
  *   CarrierDetectV21  .text 0x0a5820    16
@@ -23,13 +28,20 @@
  *   ModDataV21        .text 0x0a5880    87
  *   TxNoCarrierV21    .text 0x0a58e0   103
  *
- * THESE ARE EIGHTEEN SYMBOLS OF THREE DIFFERENT CLUSTERS, not one author file:
- * 0x098e70 and 0x099270 sit with the constructors and destructors, 0x0a1c40
- * with the
- * half-duplex machine, and 0x0a5740 onward with the per-modulation data
- * paths.  They are collected here because they are the V.21 work that is
- * startable, and `include/dsplib/v21fax.h` says what each one establishes.
- * The order below is the object's own address order.
+ * THESE ARE TWENTY-THREE SYMBOLS OF THREE DIFFERENT CLUSTERS, not one author
+ * file: 0x098e70..0x0995f0 sit with the constructors and destructors,
+ * 0x0a1c40..0x0a2c00 with the half-duplex machines (receive and, since
+ * F9500, transmit), and 0x0a5740 onward with the per-modulation data paths.
+ * They are collected here because they are the V.21 work that is startable,
+ * and `include/dsplib/v21fax.h` says what each one establishes.  The order
+ * below is the object's own address order.
+ *
+ * THE TRANSMIT HALF-DUPLEX MACHINE IS A SECOND INDIVISIBLE UNIT, F9500's,
+ * on the same F8492/F8493 ground the receive one already stood on: each of
+ * `TxHdxStartV21`, `TxHdxIdleV21` and `TxHdxDataV21` installs at least one of
+ * the other two as a STORED FUNCTION POINTER (a data reference, no `call`),
+ * and `TxNextStateV21` -- the canonical, out-of-line copy of the switch all
+ * three inline -- installs all three itself.  No proper subset links.
  *
  * THE FIVE RECEIVE-PATH SYMBOLS ARE ONE INDIVISIBLE UNIT and had to be
  * written together.  `DemodDataV21` carries an `R_386_32` against
@@ -45,15 +57,16 @@
  *
  * Everything here takes a `void *` handle.  That was originally because
  * NEITHER constructor was reconstructed, so naming their fields would have
- * been guessing; `V21RX_create` is written now, and the handle is STILL a
- * `void *` because the constructor decided the layout without settling what
- * most of it MEANS.  It fixes the size at 0x54 and the width of every field,
- * and `v21fax.h` records both -- but +0x1c through +0x4b are written by this
- * one function and read by nothing else in the object, so they keep
- * `type_NNNN` names and a set of offset constants rather than becoming a
- * struct whose members would each be a claim.  `V21TX_create` (0x0992f0) is
- * still unwritten and the transmit handle is unmodelled for the original
- * reason.  See the header for the ruling and for where every offset used
+ * been guessing; both `V21RX_create` and `V21TX_create` are written now, and
+ * each handle is STILL a `void *` because each constructor decided its own
+ * layout without settling what most of it MEANS.  `V21RX_create` fixes the
+ * receive handle's size at 0x54 and the width of every field, and `v21fax.h`
+ * records both -- but +0x1c through +0x4b are written by that one function
+ * and read by nothing else in the object, so they keep `type_NNNN` names and
+ * a set of offset constants rather than becoming a struct whose members would
+ * each be a claim.  `V21TX_create` does the same for the transmit handle at
+ * 0x28 bytes: +0x00..+0x1b (`struct v21tx_cfg`, v21cfg.h) is likewise
+ * write-only.  See the header for the ruling and for where every offset used
  * below comes from.
  */
 
@@ -330,6 +343,157 @@ V21RX_delete(void *modem)
 	sysdep_free(V21RX_DSP(modem));
 	sysdep_free(V21RX_HDX(modem));
 	sysdep_free(modem);
+}
+
+/*
+ * V21TX_create -- .text 0x0992f0, 757 bytes.
+ *
+ * The three debug strings are the author's own words, from .rodata.str1.1 at
+ * 0x468d, 0x469d and 0x468b: "V.21 TX Create ", "New allocation\n" and "\n".
+ * Unlike `V21RX_create`'s three (which compose in sequence), these are TWO
+ * ALTERNATIVES after the first: "New allocation\n" when the handle was just
+ * allocated, "\n" otherwise -- 0x099590's branch chooses between them, not
+ * 0x099317's.
+ *
+ * WHAT THE FUNCTION IS.  Allocate-or-reuse the handle, copy the 28-byte
+ * configuration onto its head, allocate-or-reuse the parameter/half-duplex
+ * block and build the transmit FIFO into it, install `TxHdxStartV21` at
+ * `V21TX_STATE_START`, allocate-or-reuse the DSP block, and initialise the
+ * modulator and the rate converter.  `fresh` -- 1 only when this call
+ * allocated the handle -- is the third argument to `FPM_MRF_init` alone;
+ * `FPM_FSM_init` takes no such flag.
+ *
+ * THE TRANSMIT FIFO'S SIZE AND FILL ARE LITERALS, 6 AND 1, NOT `FIFO_CFG`'s
+ * OWN 100 AND 0.  The object loads `FIFO_CFG`'s first dword (word0, size)
+ * onto the stack at 0x099382 and then immediately overwrites the size half
+ * with the literal 6 at 0x099386 -- so this constructor's own correctness
+ * does not depend on `FIFO_CFG`'s VALUE, only on its `word0` field being 0,
+ * which is true of BOTH of the blob's same-named copies (F9058) and is why
+ * this call alone cannot tell the global 100-table from the local 300-one
+ * apart.  `t_fifocreate.c` is what proves `FIFO_CFG` itself, through
+ * `FIFO_create`'s own NULL-config default.
+ *
+ * THE THREE LITERAL FREQUENCY WRITES ARE DEAD.  `V21TX_CFG.short_0000`
+ * selects one of three short blocks (1180/980, 0/0, or 1850/1650 depending on
+ * whether it is 0, anything else, or 1) that each store a freq pair onto the
+ * stack -- and every one of the three is unconditionally overwritten by
+ * `FPM_FSM_CFG`'s OWN freq pair four to nine instructions later
+ * (0x099409), before `FPM_FSM_init` ever sees the local.  Reproduced as the
+ * observable net effect (`fsm = FPM_FSM_CFG; fsm.scale = 0x1900;`) rather
+ * than as dead stores; D1241.  The ONLY observable difference between the
+ * three branches is that "neither 0 nor 1" also raises
+ * `V21TX_RESULT_B1_BIT1` and reports `V21TX_STATUS_DEFAULT` before falling
+ * into the shared tail -- reproduced below.
+ *
+ * `MRF.AUX` IS NEVER WRITTEN, unlike the receiver's.  The object loads only
+ * TWO of `FPM_MRF_CFG`'s four dwords (offset 0 and offset 8) before patching
+ * `branches`/`decimate`/`coeff`/`taps`; `coeff` and `aux` are never read out
+ * of the library default at all, and `aux` is never written by anything
+ * else either -- so the object's own local carries whatever was on the stack
+ * before this call.  Spelled here as `mrf = FPM_MRF_CFG;` -- which DOES give
+ * `aux` a defined value, the library default's own (typically NULL) -- and
+ * not as an intentionally uninitialised local, because C makes reading an
+ * uninitialised struct member undefined and nothing here needs to court
+ * that; the field is untestable either way, since nothing reconstructed
+ * reads `dsp->mrf.cfg.aux` back out, and `t_v21txcreate.c` excludes it from
+ * comparison exactly as `t_v21create.c` excludes the receiver's.  D1242.
+ */
+void *
+V21TX_create(void *modem, const struct v21tx_cfg *params)
+{
+	struct fpm_fsm_cfg fsm;
+	struct fpm_mrf_cfg mrf;
+	struct fifo_cfg fc;
+	struct v21_tx_dsp *dsp;
+	void *prm;
+	void *existing_fifo;
+	short short_0000;
+	int fresh = 0;
+	int zero = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.21 TX Create ");
+
+	if (modem == NULL) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+		modem = sysdep_malloc(V21TX_OBJ_SIZE);
+		FIELD_PTR(modem, V21TX_OBJ_PARAMS) = NULL;
+		fresh = 1;
+		FIELD_PTR(modem, V21TX_OBJ_DSP) = NULL;
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("\n");
+	}
+
+	/* The configuration IS the handle's first twenty-eight bytes. */
+	if (params != NULL)
+		*(struct v21tx_cfg *)modem = *params;
+	else
+		*(struct v21tx_cfg *)modem = V21TX_CFG;
+
+	memcpy(FIELD(modem, V21TX_OBJ_RESULT), &zero, sizeof zero);
+	*FIELD(modem, V21TX_OBJ_RESULT_B1) |= 0x58;
+
+	prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	if (prm == NULL) {
+		prm = sysdep_malloc(0x10);
+		FIELD_PTR(modem, V21TX_OBJ_PARAMS) = prm;
+		FIELD_PTR(prm, V21TXP_FIFO) = NULL;
+	}
+
+	/*
+	 * The local FIFO configuration: `word0` from the real `FIFO_CFG`
+	 * (0 either of the blob's two copies), `size` and `fill` the
+	 * literals 6 and 1 -- see the function comment.
+	 */
+	fc.word0 = FIFO_CFG.word0;
+	fc.size = 6;
+	fc.fill = 1;
+	existing_fifo = FIELD_PTR(prm, V21TXP_FIFO);
+	FIELD_PTR(prm, V21TXP_FIFO) =
+		FIFO_create((struct fax_fifo *)existing_fifo, &fc);
+
+	AT_I(prm, V21TXP_INT_0004) = 0;
+	*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
+		TxHdxStartV21;
+	AT_S(prm, V21TXP_STATE) = V21TX_STATE_START;
+	AT_S(prm, V21TXP_SHORT_000E) = 0;
+
+	dsp = V21TX_DSP(modem);
+	if (dsp == NULL) {
+		dsp = (struct v21_tx_dsp *)
+			sysdep_malloc(sizeof(struct v21_tx_dsp));
+		sysdep_memset(dsp, 0, sizeof(struct v21_tx_dsp));
+		V21TX_DSP(modem) = dsp;
+		dsp->scratch = (short *)sysdep_malloc(V21TX_SCRATCH_BYTES);
+		sysdep_memset(dsp->scratch, 0, V21TX_SCRATCH_BYTES);
+	}
+
+	/*
+	 * `short_0000` selects one of three (past the dead frequency writes,
+	 * identical) paths; only the third has an observable side effect.
+	 */
+	memcpy(&short_0000, modem, sizeof short_0000);
+	if (short_0000 == 0 || short_0000 == 1) {
+		/* No observable effect; see the function comment and D1241. */
+	} else {
+		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT1;
+		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DEFAULT;
+	}
+
+	fsm = FPM_FSM_CFG;
+	fsm.scale = 0x1900;
+	FPM_FSM_init(&V21TX_DSP(modem)->fsm, &fsm);
+
+	mrf = FPM_MRF_CFG;
+	mrf.branches = 10;
+	mrf.decimate = 9;
+	mrf.coeff = V21_MRF_FILT;
+	mrf.taps = 360;
+	FPM_MRF_init(&V21TX_DSP(modem)->mrf, &mrf, fresh);
+
+	return modem;
 }
 
 /*
@@ -805,6 +969,203 @@ V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 }
 
 /*
+ * Advance the transmit state machine one step.
+ *
+ * THE OBJECT CARRIES THIS BLOCK FOUR TIMES, byte for byte: once out of line
+ * as `TxNextStateV21` (0x0a25b0, 280 bytes) and three more times inlined,
+ * once each into `TxHdxStartV21`, `TxHdxIdleV21` and `TxHdxDataV21` --
+ * `RxNextStateV21`'s situation on the transmit side (F8898/F9091), except
+ * every caller lands in this same commit, so there is no intermediate
+ * `static` step to record.
+ *
+ * The four strings are the author's own words, out of .rodata.str1.1 at
+ * 0x4b60, 0x4b72, 0x4b84 and 0x4b4d; `tools/relocscan.py` pairs them with
+ * these sites (finding F604).  They name the CURRENT state at each arm --
+ * "V21TX_STATE_DATA" is printed when state == V21TX_STATE_DATA, which then
+ * installs `TxHdxIdleV21` and advances to V21TX_STATE_IDLE -- exactly as
+ * `RxNextStateV21`'s strings name the state being LEFT, not the one entered.
+ *
+ * The default arm is reached for any state outside 0..2; it installs no
+ * handler, only reports V21TX_STATUS_DEFAULT and clears
+ * `V21TX_RESULT_B2_BIT0` while setting `V21TX_RESULT_B1_BIT1` and clearing
+ * `V21TX_RESULT_B1_BIT0`.
+ */
+void
+TxNextStateV21(void *modem)
+{
+	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	short state = AT_S(prm, V21TXP_STATE);
+
+	switch (state) {
+	case V21TX_STATE_DATA:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V21TX_STATE_DATA\n");
+		*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
+			TxHdxIdleV21;
+		AT_S(prm, V21TXP_STATE) = V21TX_STATE_IDLE;
+		*FIELD(modem, V21TX_OBJ_RESULT_B2) |= V21TX_RESULT_B2_BIT0;
+		*FIELD(modem, V21TX_OBJ_RESULT_B1) &=
+			(unsigned char)~V21TX_RESULT_B1_BIT0;
+		break;
+
+	case V21TX_STATE_IDLE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V21TX_STATE_IDLE\n");
+		AT_S(prm, V21TXP_SHORT_000E) = 0;
+		*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
+			TxHdxStartV21;
+		AT_S(prm, V21TXP_STATE) = V21TX_STATE_START;
+		*FIELD(modem, V21TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V21TX_RESULT_B2_BIT0;
+		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT0;
+		break;
+
+	case V21TX_STATE_START:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V21TX_STATE_START\n");
+		AT_S(prm, V21TXP_SHORT_000E) = 0;
+		*(v21tx_process_fn *)(void *)FIELD(prm, V21TXP_PROCESS) =
+			TxHdxDataV21;
+		AT_S(prm, V21TXP_STATE) = V21TX_STATE_DATA;
+		*FIELD(modem, V21TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V21TX_RESULT_B2_BIT0;
+		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT0;
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V21TX_DEFAULT, %d\n", state);
+		*FIELD(modem, V21TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V21TX_RESULT_B2_BIT0;
+		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DEFAULT;
+		*FIELD(modem, V21TX_OBJ_RESULT_B1) = (unsigned char)
+			((*FIELD(modem, V21TX_OBJ_RESULT_B1)
+			  | V21TX_RESULT_B1_BIT1)
+			 & ~V21TX_RESULT_B1_BIT0);
+		break;
+	}
+}
+
+/*
+ * The START state, installed by `V21TX_create` and by IDLE's own transition.
+ *
+ * Reads up to `*budget` elements out of the FIFO into `in`, modulates
+ * whatever it got, decrements `*budget` by the amount actually taken, and
+ * ALWAYS advances the state machine and reports V21TX_STATUS_START --
+ * unconditionally, on every path, which is why the status write sits after
+ * `TxNextStateV21` rather than inside any one of its arms: it overwrites
+ * whatever that call itself wrote, including its own default-arm status.
+ */
+short
+TxHdxStartV21(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	unsigned short taken;
+	short nsamples;
+
+	taken = (unsigned short)
+		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V21TXP_FIFO),
+			  in, (unsigned short)*budget);
+	*budget = (short)((unsigned short)*budget - taken);
+
+	nsamples = (short)ModDataV21(modem, in, out, taken);
+
+	TxNextStateV21(modem);
+	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_START;
+
+	return nsamples;
+}
+
+/*
+ * The IDLE state, installed only by `TxNextStateV21`'s own V21TX_STATE_DATA
+ * arm.
+ *
+ * With the FIFO empty, asks `TxNoCarrierV21` for the WHOLE current budget in
+ * one call -- not a per-block amount -- forces `*budget` to zero and reports
+ * V21TX_STATUS_IDLE.  With the FIFO non-empty, does not modulate at all:
+ * calls `TxNextStateV21` and returns 0, leaving `*budget` untouched for the
+ * newly-installed handler to consume on the SAME caller block (`V21TX_modem`'s
+ * `do`/`while` runs the dispatch slot again while `budget > 0`).
+ */
+short
+TxHdxIdleV21(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	struct fax_fifo *fifo = (struct fax_fifo *)
+		FIELD_PTR(prm, V21TXP_FIFO);
+
+	if (fifo->count == 0) {
+		unsigned short b = (unsigned short)*budget;
+		short nsamples = (short)TxNoCarrierV21(modem, in, out, b);
+
+		*budget = (short)((unsigned short)*budget - b);
+		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_IDLE;
+		return nsamples;
+	}
+
+	TxNextStateV21(modem);
+	return 0;
+}
+
+/*
+ * The DATA state, installed only by `TxNextStateV21`'s own V21TX_STATE_START
+ * arm.
+ *
+ * Reads up to `*budget` elements.  THREE ARMS:
+ *
+ *   - satisfied (the FIFO supplied the whole request): modulate `taken`,
+ *     zero `*budget` (it equals `taken` by construction), report
+ *     V21TX_STATUS_DATA.
+ *   - underrun, `V21TXP_INT_0004 == 0`: modulate the FULL REQUESTED BUDGET
+ *     regardless of what the FIFO actually supplied, force `*budget` to
+ *     zero, and report V21TX_STATUS_DATA -- after MOMENTARILY reporting
+ *     V21TX_STATUS_UNDERRUN, which the object writes and then immediately
+ *     overwrites at the same call (D1240; reproduced because it is there and
+ *     has no observable effect on any interface this file exposes).
+ *   - underrun, `V21TXP_INT_0004 != 0`: modulate only `taken`, LEAVE the
+ *     remainder in `*budget` (do not force it to zero), call
+ *     `TxNextStateV21`, and report whatever that installed.
+ */
+short
+TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+	unsigned short req = (unsigned short)*budget;
+	unsigned short taken;
+	unsigned short nbits;
+	short nsamples;
+
+	taken = (unsigned short)
+		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V21TXP_FIFO),
+			  in, req);
+
+	if (req <= taken) {
+		nbits = taken;
+		nsamples = (short)ModDataV21(modem, in, out, nbits);
+		*budget = (short)((unsigned short)*budget - nbits);
+		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DATA;
+		return nsamples;
+	}
+
+	if (AT_I(prm, V21TXP_INT_0004) != 0) {
+		nbits = taken;
+		nsamples = (short)ModDataV21(modem, in, out, nbits);
+		*budget = (short)((unsigned short)*budget - taken);
+		TxNextStateV21(modem);
+		return nsamples;
+	}
+
+	*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT1;
+	nbits = req;
+	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_UNDERRUN;
+	nsamples = (short)ModDataV21(modem, in, out, nbits);
+	*budget = (short)((unsigned short)*budget - nbits);
+	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DATA;
+
+	return nsamples;
+}
+
+/*
  * Fill the caller's status block.
  *
  * The last statement ASSIGNS the flags byte rather than merging into it, so
@@ -1043,5 +1404,14 @@ V21_ASSERT_OFF(struct v21_status, int_18, 0x18);
  */
 typedef char v21_tx_dsp_size[(sizeof(struct v21_tx_dsp) == 0x30) ? 1 : -1];
 typedef char v21_rx_dsp_size[(sizeof(struct v21_rx_dsp) == 0x94) ? 1 : -1];
+
+/*
+ * The transmit config table is what `V21TX_create` copies onto the handle's
+ * head, whole; its size is the literal 28 `V21TX_create` itself carries
+ * (0x099328..0x09934d's six-plus-one dword copy), and confirming it here
+ * catches a struct-shape slip the same way `t_faxcfg.c`'s `offcheck.py` pass
+ * caught one for `v29rx_cfg` (finding F9059).
+ */
+typedef char v21tx_cfg_size[(sizeof(struct v21tx_cfg) == 0x1c) ? 1 : -1];
 
 #endif

@@ -1,19 +1,42 @@
 /*
  * faxfifo.h -- Class 1 fax: the FIFO of 16-bit elements.
  *
- * `FIFO_read`, `FIFO_write`, `FIFO_delete` and `FIFO_full_test` are
- * reconstructed; `FIFO_create` (.text 0x096bb0) is not, because its default
- * configuration `FIFO_CFG` is an unwritten data symbol and a reference to it
- * would not link (F8492/F8493).  Its instructions are still the evidence for
- * the layout below and are quoted per field.
+ * `FIFO_read`, `FIFO_write`, `FIFO_delete`, `FIFO_full_test` and now
+ * `FIFO_create` (.text 0x096bb0, 167 bytes) are all reconstructed.
+ *
+ * `FIFO_create` WAS DECLINED TWICE (F9020, F9199) FOR ITS DEFAULT TABLE,
+ * `FIFO_CFG`.  The blob defines that name TWICE at DIFFERENT VALUES -- a
+ * file-local `d` at .data:0x83a0 holding {0, 300, 0}, and a global `R` at
+ * .rodata:0x9654 holding {0, 100, 0} -- so `symmap.py` gives it no `ref_`
+ * alias by name (F9058) and a naive `src/` definition looked like a multiple
+ * definition of a symbol the blob already has (F9199's second reason).
+ *
+ * BOTH OF THOSE ARE SETTLED NOW, MEASURED RATHER THAN TAKEN ON TRUST
+ * (F9500).  `V21TX_create`'s relocation at 0x099375 NAMES `FIFO_CFG`, and per
+ * CLAUDE.md a relocation that names a symbol resolves to the GLOBAL
+ * definition -- so `FIFO_create`'s own two loads at 0x096c1b/0x096c22 (also
+ * named relocations) read the same global, and the six bytes below are
+ * `00 00 64 00 00 00`, the 100-element copy.  And the "multiple definition"
+ * fear does not survive checking `build/dsplibs_ref.o`: `tools/symmap.py`'s
+ * redefine map renames EVERY symtab entry called `FIFO_CFG`, local and
+ * global alike (`nm` shows both `d` and `R` `ref_FIFO_CFG` after the rename),
+ * so nothing in the renamed blob is still named plain `FIFO_CFG` and `src/`
+ * is free to define it.  An external reference to `ref_FIFO_CFG` binds to the
+ * GLOBAL entry only -- local symbols never satisfy another translation
+ * unit's undefined reference -- which is what makes the differential test
+ * below able to tell 100 from 300 at all.
  *
  * WHAT `FIFO_create` ESTABLISHES.  It allocates `sysdep_malloc(0x14)` for the
  * object and `sysdep_malloc(size * 2)` for the buffer, so the object is 20
- * bytes and the buffer holds `size` SIXTEEN-BIT elements -- not bytes.  It
- * copies six bytes out of its configuration argument as one 32-bit store to
+ * bytes and the buffer holds `size` SIXTEEN-BIT elements -- not bytes.  With
+ * a NULL `cfg` it reads `FIFO_CFG` directly (0x096c1b/0x096c22); otherwise it
+ * copies six bytes out of the caller's configuration as one 32-bit store to
  * +0x00 and one 16-bit store to +0x04, which is why +0x00 and +0x02 are one
  * aligned pair; then it zeroes +0x0c, +0x0e and +0x10 and clears the whole
- * buffer.
+ * buffer with LITERAL ZERO, not `fill` -- `movw $0x0,(%ecx,%edx,2)` at
+ * 0x096c00, not a re-read of the fill field.  `fill` is what `FIFO_read`
+ * pads a shortfall with once the FIFO runs dry; it plays no part in the
+ * buffer's initial contents.
  */
 
 #ifndef DSPLIB_FAXFIFO_H
@@ -77,5 +100,39 @@ int FIFO_write(struct fax_fifo *f, unsigned short *src, unsigned short count);
 
 /* Free the buffer, then the object.  The second free is a tail call. */
 void FIFO_delete(struct fax_fifo *f);
+
+/*
+ * `FIFO_create`'s configuration argument: the same six bytes as `fax_fifo`'s
+ * own +0x00/+0x02/+0x04, but a distinct type -- the created object has ten
+ * more bytes (the buffer pointer and three cursors) that a caller supplying
+ * a default has no business naming.
+ */
+struct fifo_cfg {
+	short word0;	/* +0x00, copied to fax_fifo's short_000            */
+	short size;	/* +0x02, the FIFO's capacity in ELEMENTS            */
+	short fill;	/* +0x04, what FIFO_read pads a shortfall with       */
+};
+
+/*
+ * The object's own `FIFO_CFG`, `R` at .rodata:0x9654, 6 bytes: {0, 100, 0}.
+ * See the header note above for why this is the global copy and not the
+ * unrelated local one at .data:0x83a0.
+ */
+extern const struct fifo_cfg FIFO_CFG;
+
+/*
+ * Build a FIFO, or re-initialise one the caller already has.
+ *
+ * `f` NULL allocates a `sizeof(struct fax_fifo)` (0x14-byte) object and, with
+ * it, a `size * 2`-byte buffer; a non-NULL one is re-initialised IN PLACE,
+ * replacing its configuration and clearing its buffer without reallocating
+ * it -- there is no check that the existing buffer is even big enough for
+ * the new `size`, which is the object's own contract and not guarded here
+ * either.
+ *
+ * `cfg` NULL takes `FIFO_CFG`.  There is no failure return: the object does
+ * not check `sysdep_malloc`.
+ */
+struct fax_fifo *FIFO_create(struct fax_fifo *f, const struct fifo_cfg *cfg);
 
 #endif /* DSPLIB_FAXFIFO_H */
