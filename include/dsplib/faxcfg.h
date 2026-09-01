@@ -138,4 +138,12 @@ extern struct v17rx_cfg V17RX_CFG;
 extern struct v27rx_cfg V27RX_CFG;
 extern struct v29rx_cfg V29RX_CFG;
 
+/*
+ * The V.21 channel-2 tone detector's coefficients, `D` at .data 0x7a60.  Two
+ * biquad sections of five shorts, which is what `tones = 2` over 20 bytes
+ * fixes.  Shared by all three fax receiver constructors, which is why it lives
+ * beside the four tables above rather than in a per-modulation file.
+ */
+extern short V21_CHAN2_MTD_COEFF[10];
+
 #endif /* DSPLIB_FAXCFG_H */

@@ -82,3 +82,31 @@ struct v29rx_cfg V29RX_CFG = {
 	0,		/* +0x10 */
 	0		/* +0x14 */
 };
+
+/*
+ * V21_CHAN2_MTD_COEFF   .data 0x007a60   20
+ *
+ * The V.21 channel-2 tone detector's biquad bank, and it is here because it is
+ * the one table ALL THREE fax receiver constructors share: `V17RX_create`,
+ * `V27RX_create` and `V29RX_create` each build an `fpm_mtd_cfg` around it, so
+ * a per-modulation file would have had to pick one of the three arbitrarily.
+ * A V.21 file would be the better home once one exists; `src/fax/v21.c`
+ * belongs to another strand of this wave.  D1100, the same reasoning as the
+ * paragraph at the top of this file.
+ *
+ * TEN SHORTS IS THE CONSUMER'S COUNT, NOT A DIVISION OF THE BYTE SIZE.  Each
+ * of the three constructors writes `tones = 2` into the config beside it, and
+ * `FPM_MTD_detect` runs a five-coefficient biquad section per tone, so 20
+ * bytes is 2 x 5 shorts.  `V29_MTD_COEFF` and `DEF_COEFS` are both 20 bytes
+ * with the same `tones = 2`, which is three independent instances of the
+ * shape.
+ *
+ * The two sections share their first two coefficients (-13271, 16384) and
+ * differ in the last three, which is one bandpass pair at two centre
+ * frequencies -- V.21's channel-2 mark and space, 1650 and 1850 Hz.  That
+ * reading is usage inference and is not needed by anything here.
+ */
+short V21_CHAN2_MTD_COEFF[10] = {
+	-13271,  16384,   8005,  -8895,  16384,
+	-13271,  16384,   3466,  -3851,  16384
+};
