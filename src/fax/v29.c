@@ -5,8 +5,12 @@
  * Reconstructed from dsplibs.o:
  *
  *   V29RX_delete          .text 0x09b590  220
+ *   V29TX_delete          .text 0x09be90  135
  *   V29RX_modem           .text 0x0a3f50  127
+ *   RxHdxDataV29          .text 0x0a3fd0  226
+ *   RxHdxErrorV29         .text 0x0a40c0   59
  *   V29RX_status          .text 0x0a45f0  190
+ *   V29TX_modem           .text 0x0a46b0  182
  *   V29TX_status          .text 0x0a5030  100
  *   DemodDataV29          .text 0x0a5ff0  398
  *   DescrambleDataV29     .text 0x0a6180   30
@@ -18,6 +22,7 @@
  *   ScrambleDataV29       .text 0x0a6560   28
  *   SeedScramblerV29      .text 0x0a6580   15
  *   SetEncoderV29         .text 0x0a6590   43
+ *   ModDataV29            .text 0x0a65c0   89
  *
  * `include/dsplib/v29fax.h` carries the offset evidence; this file carries
  * the reasoning that is about the CODE.
@@ -27,14 +32,15 @@
  * TRANSLATION UNIT AND NOT A CLAIM ABOUT ELEVEN
  *
  * `tools/tumap.py` brackets these among 95 translation units it cannot
- * separate, so nothing establishes that they were one file.  Eight of the
- * eleven ARE contiguous in the object -- 0x0a5ff0 through 0x0a65bb with no
- * foreign symbol between them -- and the other three are not: `V29RX_delete`
- * sits 36 KB earlier, `V29RX_modem` 8 KB earlier and `V29TX_status` 4 KB
- * earlier.  They are kept together here because they are one layer, and
- * written in ascending address order because emission order is a register-
- * allocation carrier (CLAUDE.md's lever, finding F7796) and the object's own
- * order is the only ordering with any evidence behind it.
+ * separate, so nothing establishes that they were one file.  A RUN of them IS
+ * contiguous in the object -- 0x0a5ff0 through 0x0a6618 with no
+ * foreign symbol between them, `ModDataV29` now closing that run -- and the
+ * others are not: `V29RX_delete` and `V29TX_delete` sit 36 KB earlier, the
+ * three half-duplex symbols 8 KB earlier, and the two status fillers and
+ * `V29TX_modem` in between.  They are kept together here because they are one
+ * layer, and written in ascending address order because emission order is a
+ * register-allocation carrier (CLAUDE.md's lever, finding F7796) and the
+ * object's own order is the only ordering with any evidence behind it.
  *
  * ---------------------------------------------------------------------------
  * THE AGC'S RETURN VALUE, WHICH IS NOT ONE
@@ -76,6 +82,7 @@
 #include <stddef.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/faxfifo.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_fse.h"
@@ -86,6 +93,8 @@
 #include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_tone.h"
 #include "dsplib/sdm.h"
+#include "dsplib/sgd.h"
+#include "dsplib/smc.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v29data.h"
 
@@ -142,6 +151,44 @@ V29RX_delete(void *modem)
 
 /*
  * ---------------------------------------------------------------------------
+ * V29TX_delete -- .text 0x09be90, 135 bytes.
+ *
+ * The transmitter's nine releases.  The private block is re-read from the
+ * handle before every one -- five separate `mov 0x24(%ebx),%e?x` between
+ * 0x09bea1 and 0x09bed9, then three of `0x20(%ebx)` -- so `V29TX(modem)`
+ * expands at each use here as `RX()` and `DET()` do above.
+ *
+ * The object places a literal 1 in the second argument slot before
+ * `FPM_PPS_free` (0x09be91), which takes a single argument and reads no frame
+ * slot past the first.  Not reproduced; finding F8876, exactly as for
+ * `V29RX_delete`.
+ *
+ * The final free is a sibling `jmp` and is unconditional, and nothing on the
+ * way is guarded; D1150.
+ */
+void
+V29TX_delete(void *modem)
+{
+	FPM_PPS_free(&V29TX(modem)->pps);
+
+	sysdep_free(V29TX(modem)->ring.sym);
+	sysdep_free(V29TX(modem)->ring.q);
+	sysdep_free(V29TX(modem)->ring.i);
+	sysdep_free(V29TX(modem));
+
+	SGD_delete((struct sgd *)
+			FIELD_PTR(FIELD_PTR(modem, V29TX_OBJ_PARAMS),
+				  V29TXP_SGD));
+	FIFO_delete((struct fax_fifo *)
+			FIELD_PTR(FIELD_PTR(modem, V29TX_OBJ_PARAMS),
+				  V29TXP_FIFO));
+	sysdep_free(FIELD_PTR(modem, V29TX_OBJ_PARAMS));
+
+	sysdep_free(modem);
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * V29RX_modem -- .text 0x0a3f50, 127 bytes.
  *
  * THE TWO EXTENSIONS OF `*count` ARE BOTH FORCED, AND THEY DISAGREE, WHICH IS
@@ -164,7 +211,7 @@ V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 {
 	short produced = 0;
 
-	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_0200;
+	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_ERROR;
 
 	/*
 	 * A do-while: the object has no test above the loop head, only
@@ -186,6 +233,92 @@ V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	*count = (unsigned short)produced;
 
 	return FIELD_INT(modem, V29_OBJ_STATUS);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * RxHdxDataV29 -- .text 0x0a3fd0, 226 bytes.
+ *
+ * The DATA state: demodulate and descramble while the carrier is up, and
+ * grade the result.  It is `RxHdxDataV17` and `RxHdxDataV27` instruction for
+ * instruction with three offsets changed, and it is NOT `RxHdxDataV21`'s
+ * shape -- there is no state advance on either arm.
+ *
+ * THREE RETURNS FROM THE CALLEES ARE TESTED SIXTEEN BITS WIDE and that is
+ * FORCED, not free: `test %ax,%ax` at 0x0a400e on `DataCarrierDetectV29`'s
+ * result and `cmp $0x2,%ax` at 0x0a4077 on `QualityDetectV29`'s.  Both are
+ * declared `int` in `v29fax.h` and both are read here through a narrowing
+ * cast, which is what the object encodes.  The two readings AGREE over every
+ * value either function can produce -- the carrier verdict is 0 or 1 and the
+ * quality verdict is 0, 1 or 2 -- so the cast changes the instructions and
+ * cannot change the answer.  Finding F9257.
+ *
+ * THE CARRIER BIT IS RAISED UNCONDITIONALLY ON ENTRY and lowered again on the
+ * arm where the carrier has gone, which is not the same as assigning it: a
+ * caller reading the word between two handlers in one block sees the raised
+ * bit.  Same order as `RxHdxDataV21` (0x0a3ff3 before the call, 0x0a401d
+ * after it).
+ *
+ * `V29DET_INT_0008` is the second gate and nothing reconstructed sets it, so
+ * the test plants it rather than reaching it.
+ *
+ * THE UNITS REPORTED ARE ZERO WHEN THE QUALITY VERDICT IS `V29Q_NO_CARRIER`,
+ * after `out` has already been written and every filter advanced.  The object
+ * computes it `setne`/`movzbl`/`neg`/`and` (0x0a407b..0x0a4087), so there are
+ * exactly two outcomes and no third; D1149.
+ */
+short
+RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count)
+{
+	unsigned short n;
+	short units;
+
+	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CARRIER;
+	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_DATA;
+
+	if ((short)DataCarrierDetectV29(modem, in, *count) == 0
+	    || FIELD_INT(DET(modem), V29DET_INT_0008) != 0) {
+		FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_CARRIER;
+		*count = 0;
+		return 0;
+	}
+
+	n = DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV29(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	units = (short)((short)QualityDetectV29(modem) != V29Q_NO_CARRIER
+			? (short)n : 0);
+
+	FIELD_INT(modem, V29_OBJ_STATUS) &= ~V29_STATUS_LOW_SNR;
+	if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
+		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_LOW_SNR;
+
+	return units;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * RxHdxErrorV29 -- .text 0x0a40c0, 59 bytes.
+ *
+ * The ERROR state: raise the flag, run the block through the demodulator
+ * anyway so the filters keep their history, and consume it.
+ *
+ * Nothing here advances the state, so once something has installed this
+ * handler the machine stays in it until something outside installs another.
+ * The flag is a one-shot: `V29RX_modem` clears it at the top of every block,
+ * so a caller that does not read the returned word each block loses the
+ * event.  `RxHdxErrorV21` is the same function for V.21.
+ */
+short
+RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count)
+{
+	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
+
+	DemodDataV29(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	return 0;
 }
 
 /*
@@ -238,7 +371,7 @@ V29RX_status(void *modem, void *status)
 	FIELD_SHORT(status, V29STAT_ZERO_LO) =
 		(short)FIELD_USHORT(modem, V29_OBJ_BITRATE);
 	FIELD_SHORT(status, 0x06) = (short)
-		((FIELD_INT(modem, V29_OBJ_STATUS) & V29_STATUS_8000) == 0);
+		((FIELD_INT(modem, V29_OBJ_STATUS) & V29_STATUS_LOW_SNR) == 0);
 	FIELD_SHORT(status, 0x08) = GetSNRV29(modem);
 	FIELD_SHORT(status, 0x0a) = 0;
 	FIELD_SHORT(status, V29STAT_SHORT_0E) = 0;
@@ -265,6 +398,74 @@ V29RX_status(void *modem, void *status)
 	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT7;
 
 	return 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V29TX_modem -- .text 0x0a46b0, 182 bytes.  See v29fax.h for the two arms,
+ * the budget and why `in` does not advance while `out` does.
+ *
+ * IT IS `V17TX_modem` AND `V21TX_modem` FOR A THIRD MODULATION, and the
+ * object says so: all three are 182 bytes and the instruction sequences differ
+ * in four immediates and nothing else -- the gate at params + 0x08, the
+ * dispatch slot at + 0x10, the budget 0x30 and the status byte 7.  V.21's are
+ * + 0x04, + 0x08, 6 and 4; V.17's are + 0x08, + 0x14, 0x30 and 9.  Finding
+ * F9253.
+ *
+ * The parameter block is read ONCE before the gate and re-read at the top of
+ * every loop iteration; the object hoists the first iteration's read out of
+ * the loop (0x0a46bf and 0x0a475e reach the head at 0x0a46ea, and the back
+ * edge at 0x0a46e7 reloads), which is loop rotation of exactly this source.
+ */
+int
+V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
+{
+	void *prm;
+	unsigned short taken;
+	short budget;
+	short total;
+
+	prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V29TX_RESULT_B1_BIT1;
+
+	if (FIELD_INT(prm, V29TXP_INT_0008) == 0)
+		taken = (unsigned short)FIFO_write(
+				(struct fax_fifo *)
+					FIELD_PTR(prm, V29TXP_FIFO),
+				in, *count);
+	else
+		taken = *count;
+
+	budget = V29TX_MODEM_BUDGET;
+	total = 0;
+	do {
+		short got;
+
+		prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+		got = (*(v29tx_process_fn *)(void *)
+				FIELD(prm, V29TXP_PROCESS))
+					(modem, in, out, &budget);
+
+		out += got;
+		total = (short)(total + got);
+	} while (budget > 0);
+
+	if (*count != taken) {
+		FIELD_BYTE(modem, V29TX_OBJ_RESULT_B1) |=
+			V29TX_RESULT_B1_BIT1;
+		/*
+		 * A BYTE store into the low byte of the int this function
+		 * returns -- `movb $0x7,0x1c(%edi)` at 0x0a4724 -- which is
+		 * why it cannot be written through `FIELD_INT`.
+		 */
+		FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_RESULT_BYTE_07;
+	}
+
+	*count = (unsigned short)total;
+
+	return FIELD_INT(modem, V29TX_OBJ_RESULT);
 }
 
 /*
@@ -702,6 +903,43 @@ SetEncoderV29(void *modem, short which)
 		V29TX(modem)->smc.cfg.direct = 0;
 	else if (which == 1)
 		V29TX(modem)->smc.cfg.direct = 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * ModDataV29 -- .text 0x0a65c0, 89 bytes.
+ *
+ * One block through the transmit chain: encode the caller's data words into
+ * the ring, then shape the ring into samples.
+ *
+ * `count` GOES TO BOTH CALLS UNCHANGED and is not the same unit in each --
+ * `SMC_encoder` takes data words and `FPM_PPS_filter` takes symbols.  The
+ * object holds it in `%ebx` across both and stores it into `0xc(%esp)` twice
+ * (0x0a65d6 and 0x0a65ef), so there is no conversion to reproduce.
+ * `ModDataV27` is the same function over V.27ter's block.
+ *
+ * The block is re-read from the handle BETWEEN the two calls -- `mov
+ * 0x24(%esi),%eax` at 0x0a65da and again at 0x0a65fb -- and the ring is taken
+ * from it twice, once per call.  That is the reload pattern of every function
+ * in this file and it is what the two locals below spell.
+ *
+ * THE THREE OFFSETS ARE `v29data.h`'s AND THEY CORROBORATE `V29TX_delete`.
+ * `SMC_encoder` types +0x34 and `FPM_PPS_filter` types +0x64, and the delete
+ * above releases +0x64 through `FPM_PPS_free` and the ring's three rails --
+ * two readings of one block from two functions, neither derived from the
+ * other.  Finding F9255.
+ */
+unsigned short
+ModDataV29(void *modem, const unsigned short *bits, short *samples,
+	   unsigned short count)
+{
+	struct v29tx *tx;
+
+	tx = V29TX(modem);
+	SMC_encoder(&tx->smc, &tx->ring, bits, count);
+
+	tx = V29TX(modem);
+	return FPM_PPS_filter(&tx->pps, &tx->ring, samples, count);
 }
 
 /*

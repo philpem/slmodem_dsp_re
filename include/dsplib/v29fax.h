@@ -130,23 +130,80 @@ struct fpm_tone;
 /* --- the receive handle: V29RX_modem, V29RX_delete, and the detectors ---- */
 
 /*
- * A status word.  `V29RX_modem` clears bit 9 of it on entry -- `andb $0xfd,
- * 0x19(%eax)`, which is GCC's narrowing of `&= ~0x200` on the int at +0x18 --
- * and returns the whole int after the demodulation loop.  NEUTRAL NAME on
- * purpose: nothing reconstructed writes any other bit of it, and no string in
- * `.rodata` names it, so what bit 9 MEANS is not established.
+ * A status word: a status BYTE at +0x18 with a flags byte above it at +0x19,
+ * read out together as one `int` and returned by `V29RX_modem`.  That is
+ * `v21fax.h`'s +0x18/+0x19 shape and `v17fax.h`'s +0x20/+0x21 shape, and it
+ * is why every flag below is spelled as a bit of the INT: the object reaches
+ * them with `andb`/`orb`/`testb` on 0x19, which is GCC's own narrowing of a
+ * 16-bit mask on the int (`andb $0xfd,0x19` for `&= ~0x200`).
+ *
+ * THE THREE NAMED BITS ARE NAMED FROM AN ENUMERATION over every one of the
+ * 28 `*V29` functions in the object, not from V.21's identically placed byte;
+ * finding F9254 carries the enumeration and finding F8889 the rule.  What it
+ * found, at 0x19 and nowhere else:
+ *
+ *   ERROR (0x0200) -- set by `orb $0x2` at 0x0a40cc inside `RxHdxErrorV29`
+ *     and by nothing else; cleared by `V29RX_modem` at the top of every block
+ *     (0x0a3f5e).  An event a caller must read each block or lose.  The
+ *     setter is the ERROR state handler by the author's own symbol name.
+ *
+ *   CARRIER (0x2000) -- cleared and then set again if and only if a carrier
+ *     detector answers, in `RxHdxIdleV29` (0x0a4311 / 0x0a4325, and the ONE
+ *     site in the object that READS it, `testb $0x20` at 0x0a4329) and in
+ *     `RxHdxStartV29` (0x0a451d / 0x0a4560); set on entry by `RxHdxDataV29`
+ *     (0x0a3ff3) and cleared again on the arm where `DataCarrierDetectV29`
+ *     says it has gone (0x0a401d); set by `RxHdxPrtcolV29` and
+ *     `RxHdxEpochDetV29`.  Six functions, one role.
+ *
+ *   LOW_SNR (0x8000) -- cleared at 0x0a4081 and set at 0x0a4097 if and only
+ *     if `GetSNRV29` came back at or below `V29RX_SNR_THRESHOLD`, and set by
+ *     `RxHdxPrtcolV29` at 0x0a4441.  The one bit anything READS outside its
+ *     own handler: `V29RX_status` tests it as `testb $0x80,0x19(%esi)` at
+ *     0x0a461d and reports its COMPLEMENT as the report's `quality`, so a set
+ *     bit is quality zero.  BOTH ENDS ARE NOW MEASURED, which is what this
+ *     header previously did not have and why the bit was neutral until now.
+ *
+ * Bit 0x0100 is set and cleared by `RxNextStateV29` alone and is not named.
  */
 #define V29_OBJ_STATUS		0x18
-#define V29_STATUS_0200		0x0200
+#define V29_STATUS_ERROR	0x0200
+#define V29_STATUS_CARRIER	0x2000
+#define V29_STATUS_LOW_SNR	0x8000
+
 /*
- * Bit 15 of the same word, and the ONE bit of it anything reads.
- * `V29RX_status` tests it as `testb $0x80,0x19(%esi)` at 0x0a461d and reports
- * its COMPLEMENT as the report's `quality`, so a set bit is quality zero.
- * That is the same shape and the same reported field as V.21's
- * `V21RX_FLAG_LOW_SNR` (finding F8896), which is a corroboration and not the
- * derivation: nothing here names it and the neutral spelling stays.
+ * The STATUS BYTE, which is byte 0 of that same int.  Seven values are
+ * written across the receive handlers and NOTHING IN THE OBJECT READS ANY OF
+ * THEM, so a name here is the site that writes it and no more than that --
+ * `v21fax.h`'s ruling on the identically shaped byte, and its numbering turns
+ * out to be the same one.  Only the value `RxHdxDataV29` writes is needed by
+ * anything reconstructed, so only that one is named.
+ *
+ *   0  RxHdxDataV29, every block          <- V29RX_STATUS_DATA
+ *   1  RxHdxPrtcolV29, RxHdxEpochDetV29
+ *   2  RxHdxStartV29
+ *   3  RxNextStateV29's default arm
+ *   4  RxHdxPrtcolV29, RxHdxEpochDetV29
+ *   5  RxHdxIdleV29
+ *
+ * The author's own words for the STATES beside them are in .rodata.str1.1:
+ * "V29RX_STATE_START", "V29RX_STATE_IDLE", "V29RX_STATE_DATA",
+ * "V29RX_STATE_PROTOCOL", "V29RX_STATE_EPOCH_DET" and "V29RX_DEFAULT, %d"
+ * (0x4d03, 0x4d16, 0x4d28, 0x4d3a, 0x4d50 and 0x4cf0), all printed by
+ * `RxNextStateV29`.  Which value goes with which string is NOT read off here,
+ * because that needs the jump table at .rodata + 0xc35c and this pass did not
+ * need it; DATA is named from its writer, as above.
  */
-#define V29_STATUS_8000		0x8000
+#define V29_OBJ_STATUS_B0	0x18
+#define V29RX_STATUS_DATA	0
+
+/*
+ * `RxHdxDataV29` raises V29_STATUS_LOW_SNR when `GetSNRV29` comes back at or
+ * below this.  The compare in the object is 16 bits wide (`cmp $0x8,%ax` at
+ * 0x0a4091) and taken with `jg`, so it is SIGNED and NARROW; `GetSNRV29`
+ * already returns `short`, so nothing has to narrow at the call site.
+ * V.21's threshold is 5.
+ */
+#define V29RX_SNR_THRESHOLD	8
 
 /*
  * Two shorts at the very front of the handle, both read by `V29RX_status`
@@ -171,6 +228,79 @@ struct fpm_tone;
 #define V29_OBJ_TX		0x24
 
 /*
+ * ...AND THE HANDLE IT SITS IN IS NOW REACHED BY THREE MORE FUNCTIONS, which
+ * is what turns the paragraph above from a guess into a reading.
+ * `V29TX_delete`, `V29TX_modem` and `ModDataV29` all take a handle whose
+ * +0x24 is `struct v29tx` -- `V29TX_delete` releases exactly the three ring
+ * buffers and the shaper that `v29data.h` says live in it -- and `V29TX_delete`
+ * and `V29TX_modem` both reach the SAME parameter block at +0x20.  So the
+ * transmit handle has +0x1c, +0x20 and +0x24, and none of the receive
+ * constants above belongs to it.
+ *
+ * The int `V29TX_modem` returns, and the flag byte inside it: the object
+ * clears one bit of the BYTE at +0x1d on entry (`andb $0xfd`, 0x0a46c2), sets
+ * that same bit and stores a literal 7 into the BYTE at +0x1c on one
+ * condition (0x0a4720, 0x0a4724), and returns the INT at +0x1c (0x0a472f).
+ * `v17fax.h`'s `V17TX_OBJ_RESULT` / `_B1` pair byte for byte, and
+ * `v21fax.h`'s.  NEUTRAL: nothing reconstructed reads either, so what the bit
+ * indicates and what the 7 means are not established.  Named by VALUE.
+ */
+#define V29TX_OBJ_RESULT	0x1c
+#define V29TX_OBJ_RESULT_B1	0x1d
+#define V29TX_RESULT_B1_BIT1	0x02
+#define V29TX_RESULT_BYTE_07	7
+
+/*
+ * The parameter block the transmitter owns, and the four fields reached.
+ *
+ * `V29TX_delete` releases the block's `sgd`, its `fax_fifo` and then the block
+ * itself, so the transmitter owns it -- the same correction `v17fax.h` records
+ * for V.17's parameter block.
+ *
+ * +0x00 and +0x04 are TYPED BY THEIR CALLEES, rank 2: +0x00 is `FIFO_write`'s
+ * first argument at 0x0a4752 and `FIFO_delete`'s at 0x09befa, and +0x04 is
+ * `SGD_delete`'s at 0x09beed.
+ *
+ * +0x08 and +0x10 are TYPED BY THE CONSTRUCTOR, the same rank: `V29TX_create`
+ * writes `movl $0x0,0x8(%eax)` at 0x09bb33 and `movl $TxHdxStartV29,0x10(%eax)`
+ * at 0x09bb3a -- an `R_386_32` against a function, so the slot holds a function
+ * pointer and the word beside it is an `int` seeded to zero.  `V29TX_modem`
+ * reads the first to choose an arm and calls through the second.  What the int
+ * MEANS is not established, so it keeps its offset name.
+ */
+#define V29TX_OBJ_PARAMS	0x20
+
+#define V29TXP_FIFO		0x00	/* struct fax_fifo *                 */
+#define V29TXP_SGD		0x04	/* struct sgd *                      */
+#define V29TXP_INT_0008		0x08	/* int: zero selects the FIFO arm    */
+#define V29TXP_PROCESS		0x10	/* the dispatch slot                 */
+
+/*
+ * What `V29TX_modem` initialises its inner loop's budget to, ONCE, before the
+ * loop -- `movw $0x30,0x1a(%esp)` at 0x0a46d8.  The dispatch slot decrements
+ * it and the loop runs while it is STRICTLY POSITIVE as a signed short
+ * (`cmpw $0x0` with `jg`), so a slot that overshot into negative territory
+ * stops the loop rather than wrapping it.  V.17's is 0x30 too; V.21's is 6.
+ */
+#define V29TX_MODEM_BUDGET	0x30
+
+/*
+ * `V29TX_modem`'s inner call, and it is NOT `v29_demod_fn`.
+ *
+ * Four slots written: the instance, the caller's two buffers UNCHANGED, and
+ * fourth `lea 0x1a(%esp)` -- the address of a `short` LOCAL, not the caller's
+ * count.  `in` is NOT advanced between iterations (0x34(%esp) is reloaded
+ * unchanged at 0x0a46ee) and `out` IS (it accumulates `2 * got` at 0x0a470a).
+ * The result is sign-extended with `cwtl` before it joins the running total,
+ * so it is `short` and that is forced.
+ *
+ * `in` is `unsigned short *` because `FIFO_write` -- handed the very same
+ * pointer on the other arm -- declares its source that way.  Rank 2.
+ */
+typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
+				  short *budget);
+
+/*
  * The transmit block's scrambler, `struct fpm_sdm`.  `ScrambleDataV29` is
  * `add $0x1c,%eax` on the block pointer and a `jmp SDM_scrambler`, so the
  * offset is the whole of what that function establishes.
@@ -192,6 +322,20 @@ struct fpm_tone;
 
 #define V29DET_MTD		0x00	/* struct fpm_mtd *                  */
 #define V29DET_TONE		0x04	/* struct fpm_tone *                 */
+
+/*
+ * The SECOND gate on `RxHdxDataV29`: it demodulates only while the carrier is
+ * up AND this int is zero (`mov 0x8(%ecx),%edx; test %edx,%edx` at 0x0a4016).
+ * Loaded 32 bits wide, so it is an `int` and that is forced.
+ *
+ * NEUTRAL, AND IT HAS TO BE.  Nothing reconstructed writes it -- `V29RX_delete`
+ * does not free it, `V29TX_create` does not reach this block, and no other
+ * `*V29` function touches +0x08 of the detection block at all -- so what it
+ * records is not established, only what it gates.  `v21fax.h` says the same of
+ * `struct v21_rx_hdx`'s `int_0000`, which is the identical field in the
+ * identical position of V.21's own half-duplex context.
+ */
+#define V29DET_INT_0008		0x08	/* int                               */
 
 /*
  * The gate on `DemodDataV29`'s pre-pass.  While it is ZERO the demodulator
@@ -587,6 +731,105 @@ void DescrambleDataV29(void *modem, unsigned short *data, unsigned short count);
  * that supplied the storage does not get it back.
  */
 void V29RX_delete(void *modem);
+
+/*
+ * Release the TRANSMITTER: nine releases, in the object's order (0x09bea1
+ * through the sibling `jmp` at 0x09bf12).  The shaper at `V29FP_PPS`, then
+ * the ring's `sym`, `q` and `i` buffers, then the private block itself, then
+ * the `sgd` and the `fax_fifo` the parameter block owns and that block, and
+ * the handle last.
+ *
+ * IT IS ALSO THE SECOND, INDEPENDENT STATEMENT OF `struct v29tx`.
+ * `v29data.h` derives that layout from `TxNoCarrierV29` and `V29TX_create`;
+ * this function derives +0x08, +0x0c, +0x10 and +0x64 again from what
+ * RELEASES each, and the two readings agree.  Finding F9255.
+ *
+ * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED (0x09be91,
+ * before `FPM_PPS_free`).  Finding F8876, as for `V29RX_delete`.
+ *
+ * NO NULL GUARD ANYWHERE and the handle goes unconditionally, so a caller
+ * that supplied the storage does not get it back.  Reproduced; D1150.
+ */
+void V29TX_delete(void *modem);
+
+/*
+ * Drive the transmitter for one caller block, and report what the handle's
+ * result word says.
+ *
+ * TWO ARMS ON THE WAY IN, chosen by `V29TXP_INT_0008`.  Zero queues the
+ * caller's `count` words through `FIFO_write` and remembers how many it took;
+ * non-zero remembers `count` itself and touches the FIFO not at all.  What is
+ * remembered is compared against `*count` AFTER the loop, and a mismatch sets
+ * `V29TX_RESULT_B1_BIT1` and writes `V29TX_RESULT_BYTE_07` -- so on the second
+ * arm the comparison is between a value and itself and neither is ever
+ * written.
+ *
+ * THE LOOP IS A `do`/`while` ON A LOCAL, NOT ON THE CALLER'S COUNT: the budget
+ * starts at `V29TX_MODEM_BUDGET`, is set once before the loop, and the slot
+ * decrements it.  See `v29tx_process_fn`.
+ *
+ * `count` IS IN/OUT AND CHANGES UNITS across the call, and NOTHING CLAMPS what
+ * the slot writes through `out` -- deviation D956's shape.  A caller's output
+ * buffer must be sized from what the slot can produce over the whole budget
+ * and not from the input count.
+ *
+ * The running total is a `short` re-narrowed with `cwtl` every iteration, so a
+ * block producing more than 32,767 units wraps.  Reproduced; D1148.
+ */
+int V29TX_modem(void *modem, unsigned short *in, short *out,
+		unsigned short *count);
+
+/*
+ * Two of V.29's half-duplex receive states, and the only two the object
+ * reaches through a slot this tree has written.
+ *
+ * THEY ARE NOT AN INDIVISIBLE UNIT WITH THE REST OF THE RECEIVE PATH, and
+ * that is measured rather than assumed: `RxHdxDataV29` is the target of
+ * exactly two `R_386_32` relocations, both inside `RxNextStateV29`, and
+ * `RxHdxErrorV29` of two more, in `RxHdxPrtcolV29` and `RxHdxEpochDetV29`.
+ * `DemodDataV29` carries NO relocation against either.  V.21's five were one
+ * unit precisely because `DemodDataV21` DOES compare against `RxHdxDataV21`
+ * (findings F8492/F8493); V.29's demodulator makes no such comparison, so
+ * each of these two is independently writable.  Finding F9256.
+ *
+ * ERROR   demodulates the block anyway so the filters keep their history,
+ *         raises V29_STATUS_ERROR and returns 0.  It does not advance the
+ *         state, so the machine stays here.
+ * DATA    raises V29_STATUS_CARRIER and reports V29RX_STATUS_DATA, then
+ *         demodulates and descrambles the block ONLY while
+ *         `DataCarrierDetectV29` answers and the detection block's
+ *         `V29DET_INT_0008` is clear.  Otherwise it lowers the carrier bit,
+ *         consumes the block and returns 0 WITHOUT advancing the state --
+ *         which is where it differs from `RxHdxDataV21`, whose else arm calls
+ *         the state advance.
+ *
+ * `RxHdxDataV29` REPORTS ZERO UNITS WHEN THE QUALITY VERDICT IS
+ * `V29Q_NO_CARRIER`, having already written them to `out` and advanced every
+ * filter.  The object computes it `setne`/`movzbl`/`neg`/`and`, so the two
+ * outcomes are `n` and 0 and there is no third.  See docs/deviations.md D1149.
+ */
+short RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count);
+short RxHdxDataV29(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * Encode `count` data words into the transmit ring and shape them into
+ * `samples`, returning the number of samples written.
+ *
+ * `count` GOES TO BOTH CALLS UNCHANGED and is not the same unit in each:
+ * `SMC_encoder` takes data words and `FPM_PPS_filter` takes symbols.  The
+ * object holds it in `%ebx` across both and stores it into `0xc(%esp)` twice,
+ * so there is no conversion to reproduce.  `ModDataV27` is the same function
+ * over V.27ter's block and carries the same note.
+ *
+ * THE BLOCK IS RE-READ from the handle between the two calls -- `mov
+ * 0x24(%esi),%eax` at 0x0a65da and again at 0x0a65fb -- which is the reload
+ * pattern of every function in this file.
+ *
+ * RETURNS `unsigned short`: the object zero-extends with `movzwl %ax,%eax`
+ * before the epilogue and `FPM_PPS_filter` already returns `unsigned short`.
+ */
+unsigned short ModDataV29(void *modem, const unsigned short *bits,
+			  short *samples, unsigned short count);
 
 /*
  * Demodulate until the receiver stops asking for input.

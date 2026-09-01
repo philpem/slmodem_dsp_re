@@ -303,27 +303,93 @@ struct v17_status {
 #define V17RX_OBJ_RATESAVE	0x20
 
 /*
- * The int `V17RX_modem` returns, and the flag byte inside it.
+ * The int `V17RX_modem` returns, the STATUS BYTE at its low end, and the flag
+ * byte above that.
  *
- * NEUTRAL, and see the two-instances note above: 0x29 is byte 1 of the 4
- * bytes at 0x28, so the object both modifies and returns the same word.  What
- * `V17RX_modem` does is clear one bit of it on entry and hand the rest back;
- * nothing traced writes it, so what it reports is unknown.  The bit is named
- * by its VALUE, per CLAUDE.md, and the value is the one the object encodes:
- * `andb $0xfd,0x29(%eax)`.
+ * See the two-instances note above: 0x29 is byte 1 of the 4 bytes at 0x28, so
+ * the object both modifies and returns the same word, and 0x28 is byte 0 of
+ * it.  `V17RX_modem` clears one bit of 0x29 on entry and hands the whole word
+ * back.
  */
 #define V17RX_OBJ_RESULT	0x28
 #define V17RX_OBJ_RESULT_B1	0x29
-#define V17RX_RESULT_B1_BIT1	0x02
 
 /*
- * A second bit of the same byte, and the only OTHER thing in this batch that
- * reads it: `V17RX_status` reports `(byte & 0x80) == 0` -- inverted -- into the
- * status block's +0x06.  Named by value, like its neighbour; the INVERSION is
- * the object's `sete` after a `testb`, so the field is true when the bit is
- * CLEAR and that is not a transcription slip.
+ * THE THREE NAMED BITS OF 0x29, AND THE NAMES ARE NEW.
+ *
+ * `V17RX_RESULT_B1_BIT1` (0x02) and `V17RX_RESULT_B1_BIT7` (0x80) are RETIRED
+ * here, and the retirement is a change to this header's own record, so it is
+ * written down rather than done quietly.  Both were named BY VALUE when
+ * `V17RX_modem` and `V17RX_status` were the only functions in the tree that
+ * touched the byte -- one clearing a bit and one testing another, with nothing
+ * on the other end of either.  `RxHdxDataV17` and `RxHdxErrorV17` are the
+ * other end, and with them the WHOLE OBJECT can be enumerated: every `orb`,
+ * `andb`, `testb` and read-modify-write of `obj + 0x29` in all 44 V.17
+ * symbols, which is 34 sites.  Findings F9230 and F9231.
+ *
+ * The enumeration is this modem's own, taken from `dis.py`.  V.21's byte at
+ * `rx + 0x19` has the same three bits in the same three roles (`v21fax.h`,
+ * finding F8896) and Bell 103's does too -- that is a CORROBORATION and it is
+ * not the derivation, exactly as `v21fax.h` says of its own.
+ *
+ * ERROR (0x02) -- SET by `orb $0x2` at 0x0a00fc inside `RxHdxErrorV17`, by the
+ *   DEFAULT arm of `RxNextStateV17` (0x0a0165 and 0x0a0192, the two copies of
+ *   one arm either side of the debug print, beside the "V17RX_DEFAULT" status
+ *   3), and by the four transitions that install `RxHdxErrorV17` --
+ *   `RxHdxScramV17` 0x0a0548, `RxHdxBridgeV17`, `RxHdxPrtcolV17`,
+ *   `RxHdxEpochDetV17`.  CLEARED by `V17RX_modem` alone, `andb $0xfd` at
+ *   0x09ff9d, at the top of every block.  SEEDED set by `V17RX_create`.
+ *   Nothing in the object READS it: it leaves through the returned word, and
+ *   a caller that does not read that word each block loses the event.
+ *
+ * CARRIER (0x20) -- CLEARED and then SET AGAIN if and only if
+ *   `CarrierDetectV17` answers non-zero, in `RxHdxIdleV17` (`andb $0xdf` at
+ *   0x0a0441, the call, `orb $0x20` at 0x0a0455) and in `RxHdxStartV17`
+ *   (0x0a081d / 0x0a0860).  `RxHdxDataV17` sets it on entry and clears it on
+ *   the arm where `DataCarrierDetectV17` says the carrier has gone.  READ by
+ *   `testb $0x20,0x29(%esi)` at 0x0a0459 in `RxHdxIdleV17`, which is what
+ *   gates that function's look at the decoder error.  Both ends measured, and
+ *   the SET is gated on a function whose name is the author's own.
+ *
+ * LOW_SNR (0x80) -- CLEARED by `andb $0x7f` at 0x0a00b1 in `RxHdxDataV17` and
+ *   SET at 0x0a00c7 if and only if `GetSNRV17` came back at or below
+ *   `V17RX_SNR_THRESHOLD`; the same `cmpw $0x8` / `jg` / `orb $0x80` shape
+ *   appears in `RxHdxScramV17` (0x0a0566), `RxHdxBridgeV17` and
+ *   `RxHdxPrtcolV17`, and those four are exactly the four handlers that call
+ *   `GetSNRV17`.  READ by `testb $0x80` at 0x0a093d in `V17RX_status`, where
+ *   a SET bit makes the reported +0x06 zero.  Both ends measured.
+ *
+ * Bits 0x04, 0x08 and 0x40 are touched by nothing in the object; 0x01 is the
+ * DATA bit, set and cleared by `RxNextStateV17` alone, and it stays unnamed
+ * here because this batch writes neither of that function's arms.
  */
-#define V17RX_RESULT_B1_BIT7	0x80
+#define V17RX_FLAG_ERROR	(1 << 1)
+#define V17RX_FLAG_CARRIER	(1 << 5)
+#define V17RX_FLAG_LOW_SNR	(1 << 7)
+
+/*
+ * `RxHdxDataV17` raises `V17RX_FLAG_LOW_SNR` when `GetSNRV17` comes back at or
+ * below this.  The compare is 16 bits wide and SIGNED -- `cmpw $0x8,%ax` then
+ * `jg` -- which is what `GetSNRV17`'s own `short` return gives, so nothing
+ * narrows it here.  `GetSNRV17` is `13 - V17RXS_DEC_ERROR`, so the flag is
+ * raised once the decoder error reaches 5.
+ */
+#define V17RX_SNR_THRESHOLD	8
+
+/*
+ * The STATUS BYTE at `V17RX_OBJ_RESULT`, and the one value this batch writes.
+ *
+ * NOTHING IN THE OBJECT READS ANY OF THE NINE VALUES -- the byte leaves
+ * through the word `V17RX_modem` returns and nothing else -- so a name here
+ * can only be the site that writes it, which is `v21fax.h`'s ruling for the
+ * same field of the same shape.  The full write set, for whoever writes the
+ * other handlers: 0 `RxHdxDataV17`; 1 `RxHdxScram/Bridge/Prtcol/EpochDetV17`
+ * on entry; 2 `RxHdxStartV17`; 3 `RxNextStateV17`'s default arm and
+ * `V17RX_create`; 4 the same four handlers' error arm; 5 `RxHdxIdleV17`;
+ * 8 and 9 `RxHdxScramV17` and `RxNextStateV17`.  Only 0 is named, because
+ * only 0 is written by anything reconstructed.
+ */
+#define V17RX_STATUS_DATA	0
 
 /*
  * The two shorts `V17RX_status` copies out of the receive instance, and this
@@ -369,6 +435,24 @@ struct v17_status {
 #define V17RXC_TONE		0x04
 
 /*
+ * An int `RxHdxDataV17` requires to be ZERO before it will demodulate, and the
+ * SECOND half of its gate: the carrier must be up AND this must be clear.
+ *
+ * NEUTRAL, and it is the one field in this header with exactly one reader and
+ * no writer anywhere in the object -- nothing reconstructed and nothing
+ * unreconstructed in the 44 V.17 symbols writes it, so what sets it is outside
+ * what has been read.  It is an `int`: `mov 0x8(%ecx),%edx` then
+ * `test %edx,%edx`, 32 bits at both ends.
+ *
+ * IT IS NOT `V17RXS_INT_0008`, WHICH IS A DIFFERENT BLOCK.  `DemodDataV17`'s
+ * `mov 0x8(%ebp),%eax` at 0x0a51e3 reads +0x08 of the DEMODULATOR STATE
+ * (`V17RX_OBJ_STATE`, one of the three enables); this is +0x08 of the CONTROL
+ * block (`V17RX_OBJ_CTL`).  The two offsets are equal and the two fields are
+ * not.  Finding F9232.
+ */
+#define V17RXC_INT_0008		0x08
+
+/*
  * An int `CarrierDetectV17` and `DataCarrierDetectV17` both require to be
  * non-zero before they will look at the decoder error at all.  Neutral: what
  * it indicates is not established, only that it gates the carrier verdict.
@@ -386,6 +470,16 @@ struct v17_status {
 /*
  * A short `DemodDataV17` tests: non-zero skips the whole tone-kill and
  * tone-detect front end and goes straight to the resampler.  Neutral.
+ *
+ * IT IS ALMOST CERTAINLY THE RECEIVE STATE NUMBER, and that is recorded rather
+ * than acted on because this batch writes none of its writers.  Every writer
+ * in the object is the receive state machine: `RxNextStateV17` stores 1, 2, 3,
+ * 4, 5 and 6 into it in its six transition arms, the four handlers that
+ * install `RxHdxErrorV17` store 7 beside that store, and `V17RX_create` stores
+ * 0.  So `DemodDataV17`'s test is "the machine has left state 0", and the
+ * neutral name above is kept only because renaming it belongs with the pass
+ * that writes `RxNextStateV17`.  `V27SH_SKIP_TONE` in `v27fax.h` is the same
+ * field of the same machine with the same evidence.  Finding F9235.
  */
 #define V17RXC_SHORT_0018	0x18
 
@@ -734,9 +828,45 @@ typedef short (*v17tx_process_fn)(void *modem, unsigned short *in, short *out,
  * reproduced, not corrected.
  *
  * The one thing the loop does before any of that is clear
- * `V17RX_RESULT_B1_BIT1` in the word it will later return.
+ * `V17RX_FLAG_ERROR` in the word it will later return.
  */
 int V17RX_modem(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * The ERROR state: raise `V17RX_FLAG_ERROR`, run the block through the
+ * demodulator anyway so the filters keep their history, and consume it.
+ *
+ * Nothing here advances the state, so the machine stays in it until something
+ * outside re-installs another handler.  The flag is a one-shot -- `V17RX_modem`
+ * clears it at the top of every block.  `RxHdxErrorV21` and `RxHdxErrorV29`
+ * are the same eleven instructions over a different flag-byte offset.
+ */
+short RxHdxErrorV17(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * The DATA state: demodulate while the carrier is up, descramble, and grade
+ * what came out.
+ *
+ * IT IS NOT `RxHdxDataV21`'s SHAPE, and the differences are the object's: it
+ * descrambles, it grades with `QualityDetectV17`, and it does NOT advance the
+ * state on the carrier-gone arm -- where V.21's calls `RxNextStateV21`, this
+ * one just clears `V17RX_FLAG_CARRIER` and returns.
+ *
+ * The carrier flag is raised UNCONDITIONALLY on entry and lowered again on the
+ * deny arm, which is not the same as assigning it: a caller reading the byte
+ * between two handlers in one block sees the raised bit.
+ *
+ * THE GATE IS TWO TERMS AND THE SECOND IS `V17RXC_INT_0008`, which nothing in
+ * the object writes -- so the demodulating arm is reached only when something
+ * outside has left that field zero.  The test plants it rather than reaching
+ * it.
+ *
+ * THE RESULT IS `n` OR ZERO, and the object computes it branchlessly:
+ * `cmp $0x2,%ax` / `setne` / `movzbl` / `neg` / `and`, which is
+ * `n & -(quality != V17_QUALITY_UNRELIABLE)`.  It is written as the `?:` that
+ * expression came from; see the derivation in `src/fax/v17.c`.
+ */
+short RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count);
 
 /*
  * Tear the receive instance down.

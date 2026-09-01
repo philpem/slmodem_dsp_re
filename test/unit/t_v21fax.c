@@ -48,6 +48,7 @@
 #include <string.h>
 
 #include "harness.h"
+#include "dsplib/faxfifo.h"
 #include "dsplib/fpm_fsd.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
@@ -1366,6 +1367,510 @@ run_delete(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* V21TX_delete                                                          */
+
+extern void ref_V21TX_delete(void *modem);
+
+/*
+ * Eight SEPARATE allocations, one per thing the object releases, so "was this
+ * freed" is a question the allocator answers rather than a guess -- the same
+ * shape `run_delete` uses for the receiver, and with the same bound on what
+ * it can see: a liveness vector is a SET, so two implementations that free
+ * the same eight blocks in different orders are indistinguishable to it.  The
+ * order is stated in `v21fax.h` from the disassembly and is not tested here.
+ *
+ * The handle, the parameter block and the DSP block are filled PSEUDORANDOMLY
+ * before the pointers go in, so an offset wrong by four bytes reads garbage
+ * and frees a pointer the allocator never handed out (counted in `bad_free`)
+ * while leaving the right block live -- both halves of the vector move.  The
+ * receiver's fixture zeroes its blocks instead and cannot separate that.
+ */
+#define TXDEL_BLOCKS	8
+
+struct txdelfix {
+	void	*p[TXDEL_BLOCKS];
+	int	live[TXDEL_BLOCKS];
+	int	allocs, frees, bad_free, live_total;
+};
+
+static void *
+build_transmitter(struct txdelfix *d, unsigned seed)
+{
+	unsigned char *obj;
+	unsigned char *prm;
+	struct v21_tx_dsp *dsp;
+	struct fpm_tone *tone;
+	struct fax_fifo *fifo;
+	int i;
+
+	for (i = 0; i < TXDEL_BLOCKS; i++)
+		d->p[i] = 0;
+
+	obj = (unsigned char *)sysdep_malloc(TXOBJ_SIZE);
+	prm = (unsigned char *)sysdep_malloc(0x20);
+	dsp = (struct v21_tx_dsp *)sysdep_malloc(sizeof(*dsp));
+	tone = (struct fpm_tone *)sysdep_malloc(sizeof(*tone));
+	fifo = (struct fax_fifo *)sysdep_malloc(sizeof(*fifo));
+
+	rng_seed(seed);
+	for (i = 0; i < TXOBJ_SIZE; i++)
+		obj[i] = (unsigned char)rng_next();
+	for (i = 0; i < 0x20; i++)
+		prm[i] = (unsigned char)rng_next();
+	for (i = 0; i < (int)sizeof(*dsp); i++)
+		((unsigned char *)(void *)dsp)[i] = (unsigned char)rng_next();
+
+	/*
+	 * The tone object must be ZEROED: `FPM_TONE_delete` releases its four
+	 * sub-buffers only when `cfg.len` is positive, and a pseudorandom
+	 * `cfg.len` would have it free four wild pointers as well.  What is
+	 * being measured here is `V21TX_delete`'s call sequence, not
+	 * `FPM_TONE_delete`'s.
+	 */
+	memset(tone, 0, sizeof(*tone));
+	memset(fifo, 0, sizeof(*fifo));
+
+	d->p[0] = obj;
+	d->p[1] = prm;
+	d->p[2] = dsp;
+	d->p[3] = tone;				/* dsp->fsm.tone        */
+	d->p[4] = sysdep_malloc(32 * sizeof(short));	/* dsp->mrf.history */
+	d->p[5] = sysdep_malloc(64 * sizeof(short));	/* dsp->scratch     */
+	d->p[6] = fifo;				/* params + 0x00        */
+	d->p[7] = sysdep_malloc(64 * sizeof(unsigned short));	/* fifo->buf */
+
+	*(void **)(void *)(obj + V21TX_OBJ_DSP) = (void *)dsp;
+	*(void **)(void *)(obj + V21TX_OBJ_PARAMS) = (void *)prm;
+	*(void **)(void *)(prm + V21TXP_FIFO) = (void *)fifo;
+
+	dsp->fsm.tone = tone;
+	dsp->mrf.history = (short *)d->p[4];
+	dsp->scratch = (short *)d->p[5];
+	fifo->buf = (unsigned short *)d->p[7];
+
+	return (void *)obj;
+}
+
+static void
+txdel_record(struct txdelfix *d)
+{
+	int i;
+
+	for (i = 0; i < TXDEL_BLOCKS; i++)
+		d->live[i] = harness_alloc_ordinal(d->p[i]) != 0;
+	d->allocs = harness_alloc.allocs;
+	d->frees = harness_alloc.frees;
+	d->bad_free = harness_alloc.bad_free;
+	d->live_total = harness_alloc.live;
+}
+
+static long txdel_trials, txdel_freed_all;
+
+static int
+run_txdelete(void)
+{
+	static const unsigned seeds[] = { 0x7de1e7e0u, 0x7de1e7e1u };
+	int s, i;
+
+	diff_begin("V21TX_delete");
+
+	for (s = 0; s < (int)(sizeof(seeds) / sizeof(seeds[0])); s++) {
+		struct txdelfix da_, db_;
+		void *m;
+
+		harness_alloc_reset();
+		m = build_transmitter(&da_, seeds[s]);
+		ref_V21TX_delete(m);
+		txdel_record(&da_);
+
+		harness_alloc_reset();
+		m = build_transmitter(&db_, seeds[s]);
+		V21TX_delete(m);
+		txdel_record(&db_);
+
+		for (i = 0; i < TXDEL_BLOCKS; i++)
+			diff_eq_int("block %ld still live", (long)db_.live[i],
+				    (long)da_.live[i], i);
+		diff_eq_int("seed %ld: allocations", (long)db_.allocs,
+			    (long)da_.allocs, s);
+		diff_eq_int("seed %ld: frees", (long)db_.frees,
+			    (long)da_.frees, s);
+		diff_eq_int("seed %ld: bad frees", (long)db_.bad_free,
+			    (long)da_.bad_free, s);
+		diff_eq_int("seed %ld: outstanding", (long)db_.live_total,
+			    (long)da_.live_total, s);
+
+		/*
+		 * What makes the vector mean something rather than merely
+		 * agree: the blob freed EVERY block and fumbled none.  Without
+		 * these two, a pair that both leaked everything would pass.
+		 */
+		diff_eq_int("seed %ld: the blob left nothing live",
+			    (long)da_.live_total, 0, s);
+		diff_eq_int("seed %ld: the blob made no bad free",
+			    (long)da_.bad_free, 0, s);
+		diff_eq_int("seed %ld: the blob made exactly eight frees",
+			    (long)da_.frees, TXDEL_BLOCKS, s);
+		for (i = 0; i < TXDEL_BLOCKS; i++)
+			diff_eq_int("the blob freed block %ld",
+				    (long)da_.live[i], 0, i);
+
+		txdel_trials++;
+		if (da_.live_total == 0 && da_.frees == TXDEL_BLOCKS)
+			txdel_freed_all++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* V21TX_modem                                                           */
+
+extern int ref_V21TX_modem(void *modem, unsigned short *in, short *out,
+			   unsigned short *count);
+
+/*
+ * THE OUTPUT BUFFER IS SIZED FROM WHAT THE SLOT CAN PRODUCE, NOT FROM THE
+ * INPUT COUNT, and that is deviation D956's lesson rather than caution.
+ * `V21TX_modem` advances `out` by whatever the dispatch slot returns and
+ * clamps nothing; `*count` goes in as an input word count and comes back as
+ * an output unit count.  The wrap script below has the slot produce 40,000
+ * units from an input count of 1, so a buffer sized from `count` would be
+ * overrun on the BLOB's side as much as ours.  40,064 shorts is that script's
+ * worst case with headroom, and the slot bounds its own writes to the window
+ * so a wrong `out` advance is a MARK IN THE WRONG PLACE and not a crash.
+ */
+#define TXM_OUT_LEN	40064
+#define TXM_IN_LEN	256
+#define TXM_FIFO_LEN	64
+#define TXM_PRM_SIZE	0x20
+#define TXM_MARK	((short)0x71ce)
+
+struct txm_step {
+	short	spend;			/* what the slot takes off `budget` */
+	short	produce;		/* what it returns                  */
+};
+
+struct txm_call {
+	long	in_off;
+	long	out_off;
+	long	budget_in;
+	long	budget_out;
+	long	ret;
+};
+
+#define TXM_MAX	40
+
+static struct txm_call txm_log[TXM_MAX];
+static int txm_calls;
+static unsigned short *txm_in_base;
+static short *txm_out_base;
+static const struct txm_step *txm_script;
+static int txm_script_len;
+
+static short
+txm_slot(void *modem, unsigned short *in, short *out, short *budget)
+{
+	int idx = txm_calls;
+	short produce, spend;
+	int k;
+
+	if (idx < txm_script_len) {
+		spend = txm_script[idx].spend;
+		produce = txm_script[idx].produce;
+	} else {
+		spend = 0x7fff;
+		produce = 0;
+	}
+
+	if (idx < TXM_MAX) {
+		txm_log[idx].in_off = (long)(in - txm_in_base);
+		txm_log[idx].out_off = (long)(out - txm_out_base);
+		txm_log[idx].budget_in = *budget;
+	}
+
+	/* Stop a runaway script: the last entry always drains the budget. */
+	if (idx + 1 >= txm_script_len)
+		spend = 0x7fff;
+	*budget = (short)(*budget - spend);
+
+	for (k = 0; k < produce; k++) {
+		long o = (long)(out - txm_out_base) + k;
+
+		if (o >= 0 && o < TXM_OUT_LEN)
+			out[k] = (short)(0x1100 + ((idx << 4) & 0xff)
+					 + (k & 0x0f));
+	}
+
+	if (idx < TXM_MAX) {
+		txm_log[idx].budget_out = *budget;
+		txm_log[idx].ret = produce;
+	}
+	txm_calls++;
+	(void)modem;
+	return produce;
+}
+
+struct txmfix {
+	unsigned char		obj[TXOBJ_SIZE];
+	unsigned char		prm[TXM_PRM_SIZE];
+	struct fax_fifo		fifo;
+	unsigned short		fifobuf[TXM_FIFO_LEN];
+	double			align;
+};
+
+static struct txmfix xa, xb;
+static unsigned short txm_in[TXM_IN_LEN];
+static short txm_out_a[TXM_OUT_LEN], txm_out_b[TXM_OUT_LEN];
+
+/*
+ * Lay one transmitter down.  Every field the function READS is planted --
+ * including `V21TXP_PROCESS`, which it uses as a SUBSCRIPT into the parameter
+ * block and then CALLS.  D955 / finding F8587: a blob-against-blob dry run
+ * cannot catch an unplanted subscript, because both sides read the same wild
+ * slot and agree, and here an unplanted slot is a jump into pseudorandom
+ * bytes.
+ */
+static void
+txm_fixture(struct txmfix *f, unsigned seed, int gate, short fifo_size,
+	    unsigned short fifo_count, int word)
+{
+	int i;
+
+	memset(f, 0, sizeof(*f));
+
+	rng_seed(seed);
+	for (i = 0; i < TXOBJ_SIZE; i++)
+		f->obj[i] = (unsigned char)rng_next();
+	for (i = 0; i < TXM_PRM_SIZE; i++)
+		f->prm[i] = (unsigned char)rng_next();
+	for (i = 0; i < TXM_FIFO_LEN; i++)
+		f->fifobuf[i] = (unsigned short)rng_next();
+
+	*(void **)(void *)(f->obj + V21TX_OBJ_PARAMS) = (void *)f->prm;
+	memcpy(f->obj + V21TX_OBJ_RESULT, &word, sizeof word);
+
+	*(void **)(void *)(f->prm + V21TXP_FIFO) = (void *)&f->fifo;
+	*(int *)(void *)(f->prm + V21TXP_INT_0004) = gate;
+	*(void **)(void *)(f->prm + V21TXP_PROCESS) = (void *)txm_slot;
+
+	f->fifo.short_000 = 0;
+	f->fifo.size = fifo_size;
+	f->fifo.fill = 0;
+	f->fifo.buf = f->fifobuf;
+	f->fifo.count = fifo_count;
+	f->fifo.rd = 0;
+	f->fifo.wr = 0;
+}
+
+static long txm_fifo_arm, txm_direct_arm, txm_flag_sep, txm_noflag;
+static long txm_multi_call, txm_wrapped, txm_out_moved, txm_in_static;
+static long txm_budget_neg, txm_slot_called;
+
+static long
+blk_diff(const unsigned char *a, const unsigned char *b, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+		if (a[i] != b[i])
+			return i;
+	return -1;
+}
+
+/*
+ * The handle, the parameter block and the FIFO object compared byte for byte,
+ * with only the three per-fixture pointers skipped.
+ */
+static long
+txmobj_first_diff(const struct txmfix *a, const struct txmfix *b)
+{
+	int i;
+
+	for (i = 0; i < TXOBJ_SIZE; i++) {
+		if (i >= V21TX_OBJ_PARAMS
+		    && i < V21TX_OBJ_PARAMS + (int)sizeof(void *))
+			continue;
+		if (a->obj[i] != b->obj[i])
+			return i;
+	}
+	for (i = 0; i < TXM_PRM_SIZE; i++) {
+		if (i >= V21TXP_FIFO && i < V21TXP_FIFO + (int)sizeof(void *))
+			continue;
+		if (i >= V21TXP_PROCESS
+		    && i < V21TXP_PROCESS + (int)sizeof(void *))
+			continue;
+		if (a->prm[i] != b->prm[i])
+			return TXOBJ_SIZE + i;
+	}
+	for (i = 0; i < (int)sizeof(a->fifo); i++) {
+		int lo = (int)((const char *)&a->fifo.buf
+			       - (const char *)&a->fifo);
+
+		if (i >= lo && i < lo + (int)sizeof(void *))
+			continue;
+		if (((const unsigned char *)(const void *)&a->fifo)[i]
+		    != ((const unsigned char *)(const void *)&b->fifo)[i])
+			return TXOBJ_SIZE + TXM_PRM_SIZE + i;
+	}
+	return -1;
+}
+
+static void
+run_txm_one(const struct txm_step *script, int len, unsigned short count,
+	    int gate, short fifo_size, unsigned short fifo_count, int word,
+	    unsigned seed, long where)
+{
+	struct txm_call la[TXM_MAX], lb[TXM_MAX];
+	int na, nb, k;
+	int ra, rb;
+	unsigned short ca, cb;
+	unsigned char fa_res_b1, fb_res_b1;
+
+	txm_fixture(&xa, seed, gate, fifo_size, fifo_count, word);
+	txm_fixture(&xb, seed, gate, fifo_size, fifo_count, word);
+
+	rng_seed(seed ^ 0x1f1f1f1fu);
+	for (k = 0; k < TXM_IN_LEN; k++)
+		txm_in[k] = (unsigned short)rng_next();
+	for (k = 0; k < TXM_OUT_LEN; k++)
+		txm_out_a[k] = txm_out_b[k] = TXM_MARK;
+
+	txm_script = script;
+	txm_script_len = len;
+	txm_in_base = txm_in;
+
+	txm_calls = 0;
+	memset(txm_log, 0, sizeof(txm_log));
+	txm_out_base = txm_out_a;
+	ca = count;
+	ra = ref_V21TX_modem(xa.obj, txm_in, txm_out_a, &ca);
+	na = txm_calls;
+	memcpy(la, txm_log, sizeof(la));
+	fa_res_b1 = xa.obj[V21TX_OBJ_RESULT_B1];
+
+	txm_calls = 0;
+	memset(txm_log, 0, sizeof(txm_log));
+	txm_out_base = txm_out_b;
+	cb = count;
+	rb = V21TX_modem(xb.obj, txm_in, txm_out_b, &cb);
+	nb = txm_calls;
+	memcpy(lb, txm_log, sizeof(lb));
+	fb_res_b1 = xb.obj[V21TX_OBJ_RESULT_B1];
+
+	diff_eq_int("at %ld: V21TX_modem returned", (long)rb, (long)ra, where);
+	diff_eq_int("at %ld: the count came back", (long)cb, (long)ca, where);
+	diff_eq_int("at %ld: the slot was called the same number of times",
+		    (long)nb, (long)na, where);
+	diff_eq_int("at %ld: the result flag byte", (long)fb_res_b1,
+		    (long)fa_res_b1, where);
+	for (k = 0; k < na && k < TXM_MAX; k++) {
+		diff_eq_int("call %ld: the input offset", lb[k].in_off,
+			    la[k].in_off, k);
+		diff_eq_int("call %ld: the output offset", lb[k].out_off,
+			    la[k].out_off, k);
+		diff_eq_int("call %ld: the budget in", lb[k].budget_in,
+			    la[k].budget_in, k);
+	}
+
+	/* The whole handle, the whole parameter block, the whole FIFO. */
+	diff_eq_int("at %ld: first differing handle byte",
+		    txmobj_first_diff(&xa, &xb), -1, where);
+	diff_eq_int("at %ld: first differing output byte",
+		    (long)blk_diff((const unsigned char *)txm_out_b,
+				   (const unsigned char *)txm_out_a,
+				   (int)sizeof(txm_out_a)), -1, where);
+	diff_eq_int("at %ld: first differing FIFO buffer byte",
+		    (long)blk_diff((const unsigned char *)xb.fifobuf,
+				   (const unsigned char *)xa.fifobuf,
+				   (int)sizeof(xa.fifobuf)), -1, where);
+
+	/*
+	 * The separating counts, taken FROM THE BLOB'S RUN.  Each names a
+	 * wrong reading and records that this trial would have caught it.
+	 */
+	if (na > 0)
+		txm_slot_called++;
+	if (na > 1)
+		txm_multi_call++;
+	if (gate == 0)
+		txm_fifo_arm++;
+	else
+		txm_direct_arm++;
+	/* The queue would not take the whole block: flag and status written. */
+	if ((fa_res_b1 & V21TX_RESULT_B1_BIT1) != 0
+	    && xa.obj[V21TX_OBJ_RESULT] == V21TX_RESULT_BYTE_04)
+		txm_flag_sep++;
+	if ((fa_res_b1 & V21TX_RESULT_B1_BIT1) == 0)
+		txm_noflag++;
+	/* `out` advanced and `in` did not: the two are not interchangeable. */
+	if (na > 1 && la[1].out_off != 0)
+		txm_out_moved++;
+	if (na > 1 && la[1].in_off == 0)
+		txm_in_static++;
+	if (na > 0 && la[na - 1].budget_out < 0)
+		txm_budget_neg++;
+	{
+		long tot = 0;
+
+		for (k = 0; k < na && k < TXM_MAX; k++)
+			tot += la[k].ret;
+		if (tot > 0x7fff)
+			txm_wrapped++;
+	}
+}
+
+static int
+run_txmodem(void)
+{
+	/* One call that drains the whole budget in one go. */
+	static const struct txm_step s1[] = { { 6, 4 } };
+	/* Three calls, one unit of budget each, then a drain. */
+	static const struct txm_step s2[] = { { 1, 3 }, { 1, 5 }, { 4, 2 } };
+	/* A slot that spends NOTHING twice: the loop must keep going. */
+	static const struct txm_step s3[] = { { 0, 1 }, { 0, 2 }, { 6, 3 } };
+	/* Overshoot: the budget goes negative and the loop still stops. */
+	static const struct txm_step s4[] = { { 20, 7 } };
+	/* The wrap: 40,000 units out of an input count of one. */
+	static const struct txm_step s5[] = { { 1, 20000 }, { 1, 20000 },
+					      { 6, 3 } };
+	/* A slot that produces nothing at all. */
+	static const struct txm_step s6[] = { { 6, 0 } };
+
+	diff_begin("V21TX_modem");
+
+	/*
+	 * The FIFO arm, with room for everything the caller offers: `taken`
+	 * equals `*count` and the flag is NOT written.
+	 */
+	run_txm_one(s1, 1, 8, 0, 64, 0, 0x11223344, 0x7a110000u, 1);
+	/*
+	 * The FIFO arm with the queue nearly full: FIFO_write takes fewer
+	 * than asked, so the flag AND the status byte are written.
+	 */
+	run_txm_one(s2, 3, 20, 0, 64, 60, 0x11223344, 0x7a110001u, 2);
+	/* The queue completely full: nothing is taken at all. */
+	run_txm_one(s1, 1, 12, 0, 64, 64, 0x00000000, 0x7a110002u, 3);
+	/* The DIRECT arm: the FIFO is never touched and neither is the flag. */
+	run_txm_one(s2, 3, 20, 1, 64, 60, 0x11223344, 0x7a110003u, 4);
+	run_txm_one(s3, 3, 5, 1, 64, 0, 0x7fffffff, 0x7a110004u, 5);
+	/* The budget driven negative. */
+	run_txm_one(s4, 1, 3, 1, 64, 0, 0x11223344, 0x7a110005u, 6);
+	/* The far corner: the running short total wraps. */
+	run_txm_one(s5, 3, 1, 1, 64, 0, 0x11223344, 0x7a110006u, 7);
+	/* A zero input count, on both arms. */
+	run_txm_one(s6, 1, 0, 0, 64, 0, 0x11223344, 0x7a110007u, 8);
+	run_txm_one(s6, 1, 0, 1, 64, 0, 0x11223344, 0x7a110008u, 9);
+	/*
+	 * The result word seeded with every bit set, so a wrong bit cleared
+	 * on entry or a wrong offset read back is a different return value.
+	 */
+	run_txm_one(s1, 1, 8, 1, 64, 0, -1, 0x7a110009u, 10);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -1380,7 +1885,9 @@ main(void)
 	rc |= run_rxstatus();
 	rc |= run_txdata();
 	rc |= run_rxmodem();
+	rc |= run_txmodem();
 	rc |= run_delete();
+	rc |= run_txdelete();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -1478,6 +1985,32 @@ main(void)
 		    del_trials);
 	diff_eq_int("the blob freed every block (%ld)", del_freed_all > 0, 1,
 		    del_freed_all);
+
+	diff_eq_int("V21TX_delete was driven (%ld)", txdel_trials > 0, 1,
+		    txdel_trials);
+	diff_eq_int("the blob freed every transmit block (%ld)",
+		    txdel_freed_all > 0, 1, txdel_freed_all);
+
+	diff_eq_int("V21TX_modem dispatched its slot (%ld)",
+		    txm_slot_called > 0, 1, txm_slot_called);
+	diff_eq_int("the slot ran more than once (%ld)", txm_multi_call > 0, 1,
+		    txm_multi_call);
+	diff_eq_int("the FIFO arm was taken (%ld)", txm_fifo_arm > 0, 1,
+		    txm_fifo_arm);
+	diff_eq_int("the direct arm was taken (%ld)", txm_direct_arm > 0, 1,
+		    txm_direct_arm);
+	diff_eq_int("a short FIFO write set the flag and the byte (%ld)",
+		    txm_flag_sep > 0, 1, txm_flag_sep);
+	diff_eq_int("a full FIFO write left both alone (%ld)", txm_noflag > 0,
+		    1, txm_noflag);
+	diff_eq_int("`out` advanced between calls (%ld)", txm_out_moved > 0, 1,
+		    txm_out_moved);
+	diff_eq_int("`in` did NOT advance between calls (%ld)",
+		    txm_in_static > 0, 1, txm_in_static);
+	diff_eq_int("the budget was driven negative (%ld)", txm_budget_neg > 0,
+		    1, txm_budget_neg);
+	diff_eq_int("the total passed 32767 at least once (%ld)",
+		    txm_wrapped > 0, 1, txm_wrapped);
 	rc |= diff_end();
 
 	return rc;

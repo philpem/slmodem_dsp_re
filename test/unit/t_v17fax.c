@@ -1027,7 +1027,7 @@ run_rxm_one(int n, unsigned seed, int alt)
 	put_ptr(mc.ctl, V17RXC_PROCESS, (void *)rxm_step);
 	cc = (unsigned short)n;
 	rc = drive_rxm(&mc, big_in_b, big_out_b, &cc, V17RX_OBJ_RESULT,
-		       V17RX_OBJ_RESULT, V17RX_RESULT_B1_BIT1, 0, 1);
+		       V17RX_OBJ_RESULT, V17RX_FLAG_ERROR, 0, 1);
 	if (rc != ra)
 		rxm_byte_sep++;
 
@@ -1037,7 +1037,7 @@ run_rxm_one(int n, unsigned seed, int alt)
 	put_ptr(mc.ctl, V17RXC_PROCESS, (void *)rxm_step);
 	cc = (unsigned short)n;
 	(void)drive_rxm(&mc, big_in_b, big_out_b, &cc, V17RX_OBJ_RESULT,
-			V17RX_OBJ_RESULT_B1, V17RX_RESULT_B1_BIT1, 1, 1);
+			V17RX_OBJ_RESULT_B1, V17RX_FLAG_ERROR, 1, 1);
 	if (log_b.calls != log_a.calls || log_b.in_off != log_a.in_off
 	    || log_b.out_off != log_a.out_off)
 		rxm_swap_sep++;
@@ -1052,7 +1052,7 @@ run_rxm_one(int n, unsigned seed, int alt)
 	put_ptr(mc.ctl, V17RXC_PROCESS, (void *)rxm_step);
 	cc = (unsigned short)n;
 	(void)drive_rxm(&mc, big_in_b, big_out_b, &cc, V17RX_OBJ_RESULT,
-			V17RX_OBJ_RESULT_B1, V17RX_RESULT_B1_BIT1, 0, 0);
+			V17RX_OBJ_RESULT_B1, V17RX_FLAG_ERROR, 0, 0);
 	if (cc != ca)
 		rxm_wb_sep++;
 
@@ -2039,7 +2039,7 @@ drive_rxstatus(struct fix *f, enum rxs_defect d)
 	status->tx_bps = 0;
 	status->rx_bps = (short)get_us(rx, (d == S_RXBPS_02)
 					   ? 0x02 : V17RX_OBJ_RX_BPS);
-	bit = (d == S_06_BIT0) ? 0x01 : V17RX_RESULT_B1_BIT7;
+	bit = (d == S_06_BIT0) ? 0x01 : V17RX_FLAG_LOW_SNR;
 	status->short_06 = (short)((d == S_06_NOT_INV)
 				   ? ((rx[V17RX_OBJ_RESULT_B1] & bit) != 0)
 				   : ((rx[V17RX_OBJ_RESULT_B1] & bit) == 0));
@@ -3484,6 +3484,575 @@ run_txm(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* RxHdxDataV17 and RxHdxErrorV17                                        */
+
+/*
+ * The two receive-machine states this batch writes, driven THROUGH THEIR REAL
+ * CALLEES -- a live demodulator chain, a live V.21 detector, a live
+ * descrambler and the two graders -- because neither function does anything
+ * except order five calls and eight bit operations around them.  A fixture
+ * that stubbed the callees would measure the stubs.
+ *
+ * F8790 APPLIES TWICE OVER.  Both functions are stateful in six different
+ * places at once (the resampler, the recoverer, the equaliser, both AGCs, the
+ * descrambler's shift register and `QualityDetectV17`'s block counter), and
+ * the SNR arm depends on the equaliser's smoothed error, which needs blocks to
+ * move.  So a trial is HDX_BLOCKS consecutive blocks and every named wrong
+ * reading replays the whole sequence from a fresh fixture.
+ *
+ * THE WRONG READINGS
+ *
+ *   the second gate at ctl + 0x0c rather than ctl + 0x08, and read 16-bit
+ *     rather than 32.  The 16-bit reading is separated ON PURPOSE by setups
+ *     that plant 0x00010000 there: the int is non-zero and the short is zero,
+ *     so the two readings take different arms.  Without that plant the
+ *     variant would report zero and the check would be decoration.
+ *   the second gate not tested at all, and tested the other way round.
+ *   the carrier bit 0x01 rather than 0x20; not raised on entry; not lowered
+ *     on the deny arm.
+ *   the status byte written at 0x29 (the flags) rather than 0x28, and written
+ *     32 bits wide rather than as a byte -- the second is what a reading that
+ *     took `V17RX_OBJ_RESULT` for the whole word would do, and it destroys
+ *     the flags byte that lives inside it.
+ *   `*count` left alone, on each arm separately.
+ *   the quality code compared against 1 rather than 2, and the two arms of
+ *     that conditional transposed.
+ *   the SNR test `<` rather than `<=`, and the flag not cleared before it.
+ *   the descrambler given `*count` rather than the demodulator's return, and
+ *     not called at all.
+ *
+ * THE DIAGNOSTIC TRANSCRIPTS ARE NOT COMPARED HERE, AND THAT IS A PROPERTY OF
+ * THE HARNESS RATHER THAN A GAP IN THE CHECK.  Neither function prints; every
+ * line either could produce comes from a callee whose own section already
+ * compares it at level 2.  What made a transcript comparison here FAIL is
+ * `FPM_FSE_receive`'s "Decoder Error" line, which is gated on
+ * `avg_err_show.0` -- a FUNCTION-SCOPE STATIC in `.bss`, one per side, shared
+ * by every equaliser instance and never reset.  `run_demod`'s variant loop
+ * drives the BLOB's `ref_FPM_FSE_receive` seventeen times for every one call
+ * of ours, so by the time this section runs the two counters are thousands of
+ * samples apart and one side prints where the other does not.  The static is
+ * the object's and is correctly reproduced (`src/dsp/fpm_fse.c`); what is not
+ * composable is "compare the transcripts" across sections that drive the two
+ * sides unequally.  That is finding F9120, found from the V.27ter side and
+ * answered there by narrowing the comparison to one function's own line;
+ * finding F9238 records that it binds in `t_v17fax` too and that here there is
+ * no line to narrow to, because neither handler prints.
+ *
+ * WHAT IS NOT CLAIMED: the object's `movswl %si` on the way out.  The result
+ * is `n & -(q != 2)` and `n` is the equaliser's symbol count, which
+ * `V17RXS_SRE_MAX` bounds at 0xa4 -- so the value never reaches 0x8000 and no
+ * input separates a `short` return from an `unsigned short` one.  The
+ * narrowing is in `src/fax/v17.c` because the object encodes it, and it is
+ * counted here as REACHED-BUT-NOT-SEPARATING rather than asserted.
+ */
+extern short ref_RxHdxDataV17(void *modem, short *in, short *out,
+			      unsigned short *count);
+extern short ref_RxHdxErrorV17(void *modem, short *in, short *out,
+			       unsigned short *count);
+
+#define HDX_BLOCKS	10
+#define HDX_GATE_HIGH	0x00010000	/* non-zero as an int, zero as a short */
+
+struct hdx_setup {
+	short	gate_18;	/* ctl V17RXC_SHORT_0018, the tone pre-pass  */
+	int	tone;
+	int	enables;
+	int	gate_08;	/* ctl V17RXC_INT_0008, the second gate      */
+	short	mode_20;	/* ctl V17RXC_SHORT_0020, DCD's arm          */
+	short	rms_on;		/* rxs V17RXS_SHORT_4FB4                     */
+	int	carrier;	/* rxs V17RXS_INT_0120                       */
+	short	dec_error;	/* rxs V17RXS_DEC_ERROR, so GetSNRV17 moves  */
+};
+
+enum hdx_defect {
+	H_NONE = 0,
+	H_GATE_AT_0C,
+	H_GATE_16BIT,
+	H_GATE_OFF,
+	H_GATE_INVERTED,
+	H_CARRIER_BIT_01,
+	H_CARRIER_NOT_SET,
+	H_CARRIER_NOT_CLEARED,
+	H_STATUS_AT_29,
+	H_STATUS_WIDE,
+	H_COUNT_KEPT,
+	H_COUNT_KEPT_DENY,
+	H_QUALITY_EQ_1,
+	H_QUALITY_INVERTED,
+	H_SNR_STRICT,
+	H_SNR_NOT_CLEARED,
+	H_DESCR_COUNT,
+	H_NO_DESCRAMBLE,
+	H_MAX
+};
+
+enum herr_defect {
+	E_NONE = 0,
+	E_BIT_01,
+	E_AT_28,
+	E_NO_DEMOD,
+	E_COUNT_KEPT,
+	E_DEMOD_ZERO,
+	E_RET_N,
+	E_MAX
+};
+
+static long hdx_sep[H_MAX], herr_sep[E_MAX];
+static long hdx_accepted, hdx_denied;
+static long hdx_snr_low, hdx_snr_high;
+static long hdx_unreliable, hdx_graded;
+static long hdx_wide_return;	/* a return that would separate the narrowing */
+static long herr_blocks;
+
+static short hdx_out_a[DEM_BUF], hdx_out_b[DEM_BUF];
+static unsigned short hdx_scr_a[DEM_BUF];
+
+static void
+hdx_build(struct fix *f, unsigned seed, const struct hdx_setup *u,
+	  short *mrfbuf, short *srebuf, short *detbuf)
+{
+	struct dem_setup d;
+	struct fpm_sdm_cfg cfg;
+	struct fpm_agc *agc;
+
+	d.gate_18 = u->gate_18;
+	d.tone = u->tone;
+	d.enables = u->enables;
+	dem_build(f, seed, &d, mrfbuf, srebuf, detbuf);
+
+	/* `DataCarrierDetectV17`'s own chain, exactly as `dcd_setup` lays it. */
+	memset(&f->mtd, 0, sizeof(f->mtd));
+	memset(f->mtd_acc, 0, sizeof(f->mtd_acc));
+	memset(f->buf2, 0, sizeof(f->buf2));
+	f->mtd.acc = f->mtd_acc;
+	ref_FPM_MTD_create(&f->mtd, &ref_MTDv22_CFG);
+	put_ptr(f->ctl, V17RXC_MTD2, &f->mtd);
+	put_ptr(f->ctl, V17RXC_BUF2, f->buf2);
+
+	agc = (struct fpm_agc *)(void *)(f->ctl + V17RXC_AGC);
+	memset(agc, 0, sizeof(*agc));
+	ref_FPM_AGC_init(agc, &ref_AGCv17_CFG, 1);
+
+	/* V.17's own polynomial; see `scr_build`. */
+	cfg.nbits = 8;
+	cfg.tap1 = 0x12;
+	cfg.tap2 = 0x17;
+	ref_SDM_init((struct fpm_sdm *)(void *)(f->rxs + V17RXS_SDM), &cfg);
+
+	put_i(f->ctl, V17RXC_INT_0008, u->gate_08);
+	put_i(f->ctl, V17RXC_INT_0010, 1);
+	put_s(f->ctl, V17RXC_SHORT_0020, u->mode_20);
+	put_s(f->ctl, V17RXC_SHORT_002E, 0);
+	put_s(f->ctl, V17RXC_OFFBAND, 0);
+
+	put_i(f->rxs, V17RXS_EPOCH, 1);
+	put_s(f->rxs, V17RXS_SHORT_0094, 1000);
+	put_i(f->rxs, V17RXS_INT_0120, u->carrier);
+	put_s(f->rxs, V17RXS_AGC_SIGNAL, 1);
+	put_s(f->rxs, V17RXS_AGC_SIGNAL + 2, 0x1234);
+	put_s(f->rxs, V17RXS_SHORT_4FB4, u->rms_on);
+	put_s(f->rxs, V17RXS_RMS_REF, 0x2000);
+	put_s(f->rxs, V17RXS_RMS_PHASE, 0);
+	put_s(f->rxs, V17RXS_DEC_ERROR, u->dec_error);
+	put_s(f->rxs, V17RXS_QAVG, 0);
+	put_s(f->rxs, V17RXS_QCOUNT, 0);
+	put_s(f->rxs, V17RXS_SHORT_4FB0, 0x0100);
+	put_s(f->rxs, V17RXS_SHORT_4FB2, 0);
+}
+
+/* The object's own sequence, with one reading changed. */
+static short
+drive_hdx(struct fix *f, short *in, short *out, unsigned short *count, int v)
+{
+	unsigned char *ro = f->robj;
+	unsigned char carrier = (v == H_CARRIER_BIT_01)
+				? (unsigned char)0x01
+				: (unsigned char)V17RX_FLAG_CARRIER;
+	unsigned short n;
+	short q, s, r;
+	int gate;
+
+	if (v != H_CARRIER_NOT_SET)
+		ro[V17RX_OBJ_RESULT_B1] |= carrier;
+	if (v == H_STATUS_AT_29)
+		ro[V17RX_OBJ_RESULT_B1] = V17RX_STATUS_DATA;
+	else if (v == H_STATUS_WIDE)
+		put_i(ro, V17RX_OBJ_RESULT, V17RX_STATUS_DATA);
+	else
+		ro[V17RX_OBJ_RESULT] = V17RX_STATUS_DATA;
+
+	if (v == H_GATE_AT_0C)
+		gate = get_i(f->ctl, 0x0c);
+	else if (v == H_GATE_16BIT)
+		gate = get_s(f->ctl, V17RXC_INT_0008);
+	else
+		gate = get_i(f->ctl, V17RXC_INT_0008);
+	if (v == H_GATE_OFF)
+		gate = 0;
+	else if (v == H_GATE_INVERTED)
+		gate = !gate;
+
+	if (ref_DataCarrierDetectV17(ro, in, *count) == 0 || gate != 0) {
+		if (v != H_CARRIER_NOT_CLEARED)
+			ro[V17RX_OBJ_RESULT_B1] &= (unsigned char)~carrier;
+		if (v != H_COUNT_KEPT_DENY)
+			*count = 0;
+		return 0;
+	}
+
+	n = ref_DemodDataV17(ro, in, (unsigned short *)(void *)out, *count);
+	if (v != H_NO_DESCRAMBLE)
+		ref_DescrambleDataV17(ro, (unsigned short *)(void *)out,
+				      (v == H_DESCR_COUNT)
+					? (unsigned short)*count : n);
+	if (v != H_COUNT_KEPT)
+		*count = 0;
+
+	q = ref_QualityDetectV17(ro);
+	if (v == H_QUALITY_EQ_1)
+		r = (short)(q != 1 ? n : 0);
+	else if (v == H_QUALITY_INVERTED)
+		r = (short)(q == V17_QUALITY_UNRELIABLE ? n : 0);
+	else
+		r = (short)(q != V17_QUALITY_UNRELIABLE ? n : 0);
+
+	if (v != H_SNR_NOT_CLEARED)
+		ro[V17RX_OBJ_RESULT_B1] &=
+			(unsigned char)~(unsigned char)V17RX_FLAG_LOW_SNR;
+	s = ref_GetSNRV17(ro);
+	if (v == H_SNR_STRICT ? s < V17RX_SNR_THRESHOLD
+			      : s <= V17RX_SNR_THRESHOLD)
+		ro[V17RX_OBJ_RESULT_B1] |= (unsigned char)V17RX_FLAG_LOW_SNR;
+
+	return r;
+}
+
+/* `RxHdxErrorV17`'s eleven instructions, with one reading changed. */
+static short
+drive_herr(struct fix *f, short *in, short *out, unsigned short *count, int v)
+{
+	unsigned char *ro = f->robj;
+	unsigned short n;
+
+	ro[(v == E_AT_28) ? V17RX_OBJ_RESULT : V17RX_OBJ_RESULT_B1] |=
+		(v == E_BIT_01) ? (unsigned char)0x01
+				: (unsigned char)V17RX_FLAG_ERROR;
+
+	n = 0;
+	if (v != E_NO_DEMOD)
+		n = ref_DemodDataV17(ro, in, (unsigned short *)(void *)out,
+				     (v == E_DEMOD_ZERO) ? 0 : *count);
+	if (v != E_COUNT_KEPT)
+		*count = 0;
+
+	return (v == E_RET_N) ? (short)n : 0;
+}
+
+/* Everything one call made observable, folded into a word. */
+static unsigned long
+hdx_mark(unsigned long m, struct fix *f, short r, unsigned short count,
+	 const short *out)
+{
+	int i;
+
+	m = m * 1000003u + (unsigned short)r;
+	m = m * 31u + count;
+	m = m * 31u + f->robj[V17RX_OBJ_RESULT];
+	m = m * 31u + f->robj[V17RX_OBJ_RESULT_B1];
+	/*
+	 * A `short`, and reading it as an int would fold in the low half of
+	 * `fpm_fse::out_i` -- a per-fixture pointer, which differs for ever
+	 * and would make every variant "separate" whatever it did.
+	 */
+	m = m * 131u + (unsigned short)get_s(f->rxs, V17RXS_DEC_ERROR);
+	m = m * 131u + (unsigned long)(unsigned short)
+			get_s(f->rxs, V17RXS_QAVG);
+	m = m * 131u + get_us(f->rxs, V17RXS_QCOUNT);
+	for (i = 0; i < DEM_BUF; i++)
+		m = m * 31u + (unsigned short)out[i];
+	return m;
+}
+
+static void
+hdx_compare(struct fix *a, struct fix *b, long id)
+{
+	diff_eq_int("at %ld: first differing receive-instance byte",
+		    robj_diff(b, a), -1, id);
+	diff_eq_int("at %ld: first differing control-block byte",
+		    ctl_diff_demod(b, a), -1, id);
+	diff_eq_int("at %ld: first differing demodulator-state byte",
+		    rxs_diff_demod(b, a), -1, id);
+	diff_eq_int("at %ld: first differing V.21 detector field",
+		    mtd_diff(b, a), -1, id);
+	diff_eq_int("at %ld: first differing detector-buffer byte",
+		    first_diff((const unsigned char *)b->buf2,
+			       (const unsigned char *)a->buf2,
+			       (int)sizeof(a->buf2)), -1, id);
+}
+
+static void
+run_hdx_one(unsigned seed, const struct hdx_setup *u, unsigned short count,
+	    long tag)
+{
+	unsigned long marka = 0, markc;
+	int blk, d, i;
+
+	hdx_build(&ma, seed, u, dem_mrf_a, dem_sre_a, dem_det_a);
+	hdx_build(&mb, seed, u, dem_mrf_b, dem_sre_b, dem_det_b);
+
+	tone_phase = 0.0;
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short ca = count, cb = count;
+		short ra, rb;
+		long id = tag * 100 + blk;
+
+		fill_tone((int)count, dtones[u->tone].hz, dtones[u->tone].amp);
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_in[i] = (i < (int)count) ? tone_in[i] : 0;
+			hdx_out_a[i] = hdx_out_b[i] = (short)0xbeef;
+		}
+
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = dem_in[i];
+		ra = ref_RxHdxDataV17(ma.robj, dem_work, hdx_out_a, &ca);
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = dem_in[i];
+		rb = RxHdxDataV17(mb.robj, dem_work, hdx_out_b, &cb);
+
+		diff_eq_int("at %ld: RxHdxDataV17 returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: RxHdxDataV17 left *count", (long)cb,
+			    (long)ca, id);
+		diff_eq_int("at %ld: RxHdxDataV17's output buffer",
+			    first_diff((const unsigned char *)hdx_out_b,
+				       (const unsigned char *)hdx_out_a,
+				       DEM_BUF * 2), -1, id);
+		hdx_compare(&ma, &mb, id);
+
+		if ((ma.robj[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_CARRIER) != 0)
+			hdx_accepted++;
+		else
+			hdx_denied++;
+		if ((ma.robj[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) != 0)
+			hdx_snr_low++;
+		else
+			hdx_snr_high++;
+		if (ra == 0)
+			hdx_unreliable++;
+		else
+			hdx_graded++;
+		if (ra < 0)
+			hdx_wide_return++;
+
+		marka = hdx_mark(marka, &ma, ra, ca, hdx_out_a);
+	}
+
+	dem_free(&ma);
+	dem_free(&mb);
+
+	for (d = 1; d < (int)H_MAX; d++) {
+		hdx_build(&mc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+		markc = 0;
+		tone_phase = 0.0;
+		for (blk = 0; blk < HDX_BLOCKS; blk++) {
+			unsigned short cc = count;
+			short rc;
+
+			fill_tone((int)count, dtones[u->tone].hz,
+				  dtones[u->tone].amp);
+			for (i = 0; i < DEM_BUF; i++) {
+				dem_work[i] = (i < (int)count) ? tone_in[i] : 0;
+				hdx_out_b[i] = (short)0xbeef;
+			}
+			rc = drive_hdx(&mc, dem_work, hdx_out_b, &cc, d);
+			markc = hdx_mark(markc, &mc, rc, cc, hdx_out_b);
+		}
+		if (markc != marka)
+			hdx_sep[d]++;
+		dem_free(&mc);
+	}
+
+	/* The faithful model, which must agree with the blob exactly. */
+	hdx_build(&mc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+	markc = 0;
+	tone_phase = 0.0;
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short cc = count;
+		short rc;
+
+		fill_tone((int)count, dtones[u->tone].hz, dtones[u->tone].amp);
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_work[i] = (i < (int)count) ? tone_in[i] : 0;
+			hdx_out_b[i] = (short)0xbeef;
+		}
+		rc = drive_hdx(&mc, dem_work, hdx_out_b, &cc, H_NONE);
+		markc = hdx_mark(markc, &mc, rc, cc, hdx_out_b);
+	}
+	diff_eq_int("RxHdxDataV17 model (%ld)", markc == marka, 1, tag);
+	dem_free(&mc);
+}
+
+static void
+run_herr_one(unsigned seed, const struct hdx_setup *u, unsigned short count,
+	     long tag)
+{
+	unsigned long marka = 0, markc;
+	int blk, d, i;
+
+	hdx_build(&ma, seed, u, dem_mrf_a, dem_sre_a, dem_det_a);
+	hdx_build(&mb, seed, u, dem_mrf_b, dem_sre_b, dem_det_b);
+
+	tone_phase = 0.0;
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short ca = count, cb = count;
+		short ra, rb;
+		long id = 100000 + tag * 100 + blk;
+
+		fill_tone((int)count, dtones[u->tone].hz, dtones[u->tone].amp);
+		for (i = 0; i < DEM_BUF; i++) {
+			dem_in[i] = (i < (int)count) ? tone_in[i] : 0;
+			hdx_out_a[i] = hdx_out_b[i] = (short)0xbeef;
+		}
+
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = dem_in[i];
+		ra = ref_RxHdxErrorV17(ma.robj, dem_work, hdx_out_a, &ca);
+		for (i = 0; i < DEM_BUF; i++)
+			dem_work[i] = dem_in[i];
+		rb = RxHdxErrorV17(mb.robj, dem_work, hdx_out_b, &cb);
+
+		diff_eq_int("at %ld: RxHdxErrorV17 returned", (long)rb,
+			    (long)ra, id);
+		diff_eq_int("at %ld: RxHdxErrorV17 left *count", (long)cb,
+			    (long)ca, id);
+		diff_eq_int("at %ld: RxHdxErrorV17's output buffer",
+			    first_diff((const unsigned char *)hdx_out_b,
+				       (const unsigned char *)hdx_out_a,
+				       DEM_BUF * 2), -1, id);
+		hdx_compare(&ma, &mb, id);
+		herr_blocks++;
+
+		marka = hdx_mark(marka, &ma, ra, ca, hdx_out_a);
+	}
+
+	dem_free(&ma);
+	dem_free(&mb);
+
+	for (d = 1; d < (int)E_MAX; d++) {
+		hdx_build(&mc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+		markc = 0;
+		tone_phase = 0.0;
+		for (blk = 0; blk < HDX_BLOCKS; blk++) {
+			unsigned short cc = count;
+			short rc;
+
+			fill_tone((int)count, dtones[u->tone].hz,
+				  dtones[u->tone].amp);
+			for (i = 0; i < DEM_BUF; i++) {
+				dem_work[i] = (i < (int)count) ? tone_in[i] : 0;
+				hdx_out_b[i] = (short)0xbeef;
+			}
+			rc = drive_herr(&mc, dem_work, hdx_out_b, &cc, d);
+			markc = hdx_mark(markc, &mc, rc, cc, hdx_out_b);
+		}
+		if (markc != marka)
+			herr_sep[d]++;
+		dem_free(&mc);
+	}
+}
+
+/*
+ * The descrambler runs over the handler's OWN OUTPUT, which is the one thing
+ * `hdx_mark` cannot separate from the demodulator's: a reconstruction that
+ * left `DescrambleDataV17` out entirely writes a different buffer, but so does
+ * one that demodulated differently.  This runs the reference chain by hand --
+ * demodulate, then descramble the copy -- and asserts the handler's buffer is
+ * the descrambled one and NOT the raw one, on a block where the two differ.
+ */
+static long hdx_scr_checked, hdx_scr_moved;
+
+static void
+hdx_scramble_check(unsigned seed, const struct hdx_setup *u,
+		   unsigned short count, long tag)
+{
+	unsigned short ca = count;
+	unsigned short raw[8];
+	int i, differs = 0;
+	short n;
+
+	hdx_build(&ma, seed, u, dem_mrf_a, dem_sre_a, dem_det_a);
+	hdx_build(&mc, seed, u, dem_mrf_c, dem_sre_c, dem_det_c);
+
+	tone_phase = 0.0;
+	fill_tone((int)count, dtones[u->tone].hz, dtones[u->tone].amp);
+	for (i = 0; i < DEM_BUF; i++) {
+		dem_in[i] = (i < (int)count) ? tone_in[i] : 0;
+		hdx_out_a[i] = (short)0xbeef;
+		hdx_scr_a[i] = 0xbeef;
+	}
+
+	for (i = 0; i < DEM_BUF; i++)
+		dem_work[i] = dem_in[i];
+	n = ref_RxHdxDataV17(ma.robj, dem_work, hdx_out_a, &ca);
+
+	/* The same block, demodulated and left UNDESCRAMBLED. */
+	for (i = 0; i < DEM_BUF; i++)
+		dem_work[i] = dem_in[i];
+	(void)ref_DemodDataV17(mc.robj, dem_work, hdx_scr_a, count);
+
+	for (i = 0; i < 8; i++)
+		raw[i] = hdx_scr_a[i];
+	for (i = 0; i < 8; i++)
+		if (raw[i] != (unsigned short)hdx_out_a[i])
+			differs = 1;
+	if (differs)
+		hdx_scr_moved++;
+	diff_eq_int("at %ld: the handler descrambled its output",
+		    (n != 0 && differs) || n == 0, 1, tag);
+	hdx_scr_checked++;
+
+	dem_free(&ma);
+	dem_free(&mc);
+}
+
+static int
+run_hdx(void)
+{
+	static const struct hdx_setup setups[] = {
+	    /* g18 tone en gate_08         m20 rms carrier dec_error */
+	    {  0,  0, 0, 0,                0,  0,  1,      4 },
+	    {  0,  0, 0, 0,                0,  1,  1,      5 },
+	    {  1,  1, 1, 0,                0,  0,  1,      6 },
+	    {  1,  2, 0, 0,                1,  1,  1,      0 },
+	    {  0,  1, 1, 1,                0,  0,  1,      9 },
+	    {  0,  2, 0, HDX_GATE_HIGH,    0,  1,  1,     13 },
+	    {  1,  0, 1, HDX_GATE_HIGH,    1,  0,  1,     14 },
+	    {  0,  0, 0, 0,                0,  0,  0,      4 },
+	    {  1,  1, 0, 0,                1,  1,  0,      8 },
+	    {  0,  2, 1, 0,                0,  0,  1,      8 }
+	};
+	static const unsigned short counts[] = { 32, 160 };
+	int s, c;
+	long tag = 0;
+
+	dem_tables();
+	diff_begin("RxHdxDataV17 / RxHdxErrorV17");
+
+	for (s = 0; s < (int)(sizeof(setups) / sizeof(setups[0])); s++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		run_hdx_one(spread(0x0d47a000u, tag), &setups[s], counts[c],
+			    tag);
+		run_herr_one(spread(0x0e770000u, tag), &setups[s], counts[c],
+			     tag);
+		hdx_scramble_check(spread(0x05c70000u, tag), &setups[s],
+				   counts[c], tag);
+		tag++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -3506,6 +4075,7 @@ main(void)
 	rc |= run_cd();
 	rc |= run_dcd();
 	rc |= run_qd();
+	rc |= run_hdx();
 	rc |= run_accessors();
 
 	/*
@@ -3686,6 +4256,40 @@ main(void)
 	for (i = 0; i < 6; i++)
 		diff_eq_int("V17TX_modem path %ld was reached",
 			    txm_paths[i] > 0, 1, i);
+
+	for (i = 1; i < (int)H_MAX; i++)
+		diff_eq_int("RxHdxDataV17 wrong reading %ld separates",
+			    hdx_sep[i] > 0, 1, i);
+	for (i = 1; i < (int)E_MAX; i++)
+		diff_eq_int("RxHdxErrorV17 wrong reading %ld separates",
+			    herr_sep[i] > 0, 1, i);
+	diff_eq_int("RxHdxDataV17 took the demodulating arm (%ld)",
+		    hdx_accepted > 0, 1, hdx_accepted);
+	diff_eq_int("RxHdxDataV17 took the deny arm (%ld)", hdx_denied > 0, 1,
+		    hdx_denied);
+	diff_eq_int("RxHdxDataV17 raised LOW_SNR (%ld)", hdx_snr_low > 0, 1,
+		    hdx_snr_low);
+	diff_eq_int("RxHdxDataV17 left LOW_SNR clear (%ld)", hdx_snr_high > 0,
+		    1, hdx_snr_high);
+	diff_eq_int("RxHdxDataV17 returned a graded count (%ld)",
+		    hdx_graded > 0, 1, hdx_graded);
+	diff_eq_int("RxHdxDataV17 returned zero (%ld)", hdx_unreliable > 0, 1,
+		    hdx_unreliable);
+	diff_eq_int("RxHdxErrorV17 drove blocks (%ld)", herr_blocks > 0, 1,
+		    herr_blocks);
+	diff_eq_int("the descrambler check ran (%ld)", hdx_scr_checked > 0, 1,
+		    hdx_scr_checked);
+	diff_eq_int("the descrambler moved the handler's output (%ld)",
+		    hdx_scr_moved > 0, 1, hdx_scr_moved);
+	/*
+	 * NOT an assertion that it separates.  `n` is bounded by
+	 * `V17RXS_SRE_MAX`, so a `short` return and an `unsigned short` one
+	 * agree over every reachable value; this reports the count so a future
+	 * fixture that DID reach 0x8000 would show up as a non-zero here
+	 * rather than silently.
+	 */
+	diff_eq_int("RxHdxDataV17 returns that would separate the narrowing"
+		    " (%ld, expected 0)", hdx_wide_return, 0, hdx_wide_return);
 
 	rc |= diff_end();
 	return rc;

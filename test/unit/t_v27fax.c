@@ -2124,131 +2124,6 @@ run_dcd(void)
 
 /* --------------------------------------------------------------------- */
 
-static int
-sep_report(void)
-{
-	int i;
-
-	diff_begin("v27fax separating trials");
-
-	diff_eq_int("GetSNRV27 ignores the instance (%ld)", snr_indep > 0, 1,
-		    snr_indep);
-
-	diff_eq_int("V27RX_status: arg1 does not decide (%ld)",
-		    rxst_arg_sep > 0, 1, rxst_arg_sep);
-	diff_eq_int("V27RX_status: the answer is 0 or 1 (%ld)",
-		    rxst_bool_sep > 0, 1, rxst_bool_sep);
-
-	diff_eq_int("EpochDetectV27: the offset separates (%ld)",
-		    epoch_off_sep > 0, 1, epoch_off_sep);
-	diff_eq_int("EpochDetectV27: the reduction separates (%ld)",
-		    epoch_bool_sep > 0, 1, epoch_bool_sep);
-
-	diff_eq_int("CarrierDetectV27: AND not OR (%ld)", carr_or_sep > 0, 1,
-		    carr_or_sep);
-	diff_eq_int("CarrierDetectV27: not reduced (%ld)", carr_bool_sep > 0,
-		    1, carr_bool_sep);
-	diff_eq_int("CarrierDetectV27: the offsets separate (%ld)",
-		    carr_off_sep > 0, 1, carr_off_sep);
-
-	for (i = 1; i < TXST_VARIANTS; i++) {
-		if (i == 5)
-			continue;
-		diff_eq_int("V27TX_status variant separates (%ld)",
-			    txst_sep[i] > 0, 1, (long)(i * 1000
-						       + txst_sep[i]));
-	}
-	/*
-	 * AND ONE THAT MUST NOT SEPARATE, asserted rather than skipped.
-	 *
-	 * The first store to the destination's +0x14 is dead over EVERY input
-	 * this test can construct, aliasing included, and the reason is
-	 * arithmetic rather than luck: the only later read that can see that
-	 * byte is the source's +0x10 at a displacement of +4, only bit 2 of
-	 * that read is used, and neither `| 0x01` nor `& ~0x02` touches bit 2.
-	 * The int copied out of +0x18 can overlap it at a displacement of -4,
-	 * but the SECOND store to +0x14 precedes that read and overwrites the
-	 * first.  So a reconstruction that dropped the store would pass every
-	 * differential test there is -- which is exactly why the fact is
-	 * written down here instead of being left to a reader to rediscover.
-	 * Finding F8867.
-	 */
-	diff_eq_int("V27TX_status: the first +0x14 store is dead (%ld)",
-		    txst_sep[5], 0, txst_alias_trials);
-	diff_eq_int("V27TX_status overlapped the blocks (%ld)",
-		    txst_alias_trials > 0, 1, txst_alias_trials);
-	diff_eq_int("V27TX_status pinned the flags byte (%ld)",
-		    txst_ff_trials > 0, 1, txst_ff_trials);
-
-	for (i = 1; i < DEC_VARIANTS; i++)
-		diff_eq_int("V27RX_decision variant separates (%ld)",
-			    dec_sep[i] > 0, 1, (long)(i * 1000 + dec_sep[i]));
-	diff_eq_int("V27RX_decision reached the counter restart (%ld)",
-		    dec_wrap_trials > 0, 1, dec_wrap_trials);
-	diff_eq_int("V27RX_decision reached a 16-bit wrap (%ld)",
-		    dec_trunc_trials > 0, 1, dec_trunc_trials);
-	diff_eq_int("V27RX_decision reached diff > 0x8000 (%ld)",
-		    dec_wide_trials > 0, 1, dec_wide_trials);
-	diff_eq_int("V27RX_decision ran the object's own table (%ld)",
-		    dec_tie_trials > 0, 1, dec_tie_trials);
-
-	for (i = 1; i < QD_VARIANTS; i++)
-		diff_eq_int("QualityDetectV27 variant separates (%ld)",
-			    qd_sep[i] > 0, 1, (long)(i * 1000 + qd_sep[i]));
-	diff_eq_int("QualityDetectV27 latched (%ld)", qd_latch_trials > 0, 1,
-		    qd_latch_trials);
-	diff_eq_int("QualityDetectV27 smoothed (%ld)", qd_smooth_trials > 0,
-		    1, qd_smooth_trials);
-	diff_eq_int("QualityDetectV27 went quiet (%ld)", qd_quiet_trials > 0,
-		    1, qd_quiet_trials);
-	diff_eq_int("QualityDetectV27 met acc == limit (%ld)",
-		    qd_equal_trials > 0, 1, qd_equal_trials);
-
-	diff_eq_int("V27RX_modem: in and out differ (%ld)", modm_swap_sep > 0,
-		    1, modm_swap_sep);
-	diff_eq_int("V27RX_modem: the total truncates (%ld)",
-		    modm_trunc_sep > 0, 1, modm_trunc_sep);
-	diff_eq_int("V27RX_modem: the count is written back (%ld)",
-		    modm_wb_sep > 0, 1, modm_wb_sep);
-	diff_eq_int("V27RX_modem: the flag bit was set going in (%ld)",
-		    modm_flag_sep > 0, 1, modm_flag_sep);
-	diff_eq_int("V27RX_modem: it is a do-while (%ld)", modm_while_sep > 0,
-		    1, modm_while_sep);
-	diff_eq_int("V27RX_modem: the status offset separates (%ld)",
-		    modm_ret_sep > 0, 1, modm_ret_sep);
-	diff_eq_int("V27RX_modem: the signed count corner (%ld)",
-		    modm_signed_sep > 0, 1, modm_signed_sep);
-	diff_eq_int("V27RX_modem: the handler ran repeatedly (%ld)",
-		    modm_multi_trials > 0, 1, modm_multi_trials);
-
-	for (i = 1; i <= 5; i++)
-		diff_eq_int("V27RX_delete variant separates (%ld)",
-			    del_sep[i] > 0, 1, (long)(i * 1000 + del_sep[i]));
-	diff_eq_int("V27RX_delete ran (%ld)", del_trials > 0, 1, del_trials);
-
-	for (i = 1; i < DCD_VARIANTS; i++)
-		diff_eq_int("DataCarrierDetectV27 variant separates (%ld)",
-			    dcd_sep[i] > 0, 1,
-			    (long)(i * 100000 + dcd_sep[i]));
-	diff_eq_int("DataCarrierDetectV27 ran the V.21 arm (%ld)",
-		    dcd_watch_trials > 0, 1, dcd_watch_trials);
-	diff_eq_int("DataCarrierDetectV27 ran the V.21 detector (%ld)",
-		    dcd_armed_trials > 0, 1, dcd_armed_trials);
-	diff_eq_int("DataCarrierDetectV27 saw the detector fire (%ld)",
-		    dcd_hit_trials > 0, 1, dcd_hit_trials);
-	diff_eq_int("DataCarrierDetectV27 reached the V.21 timeout (%ld)",
-		    dcd_timeout_trials > 0, 1, dcd_timeout_trials);
-	diff_eq_int("DataCarrierDetectV27 passed the settled gate (%ld)",
-		    dcd_settled_trials > 0, 1, dcd_settled_trials);
-	diff_eq_int("DataCarrierDetectV27 saw a bad mse (%ld)",
-		    dcd_mse_trials > 0, 1, dcd_mse_trials);
-	diff_eq_int("DataCarrierDetectV27 saw the energy drop (%ld)",
-		    dcd_drop_trials > 0, 1, dcd_drop_trials);
-	diff_eq_int("DataCarrierDetectV27 republished the level (%ld)",
-		    dcd_republish_trials > 0, 1, dcd_republish_trials);
-
-	return diff_end();
-}
 
 /* --------------------------------------------------------------------- */
 /* 11.  V27RX_eq_train                                                    */
@@ -4023,6 +3898,1186 @@ run_moddata(void)
 	return diff_end();
 }
 
+/* --------------------------------------------------------------------- */
+/* 16.  V27RX_epoch_det                                                   */
+/*
+ * The FIRST of the three slicers, and the only one whose whole job is state.
+ * Like `V27RX_eq_train` it is pure -- no FPM module is called -- so the
+ * fixture is the decision fixture with the equaliser's two output arrays and
+ * its symbol index planted, and the interesting content is entirely in WHICH
+ * slot, WHICH difference and WHICH shift.
+ *
+ * F8587 IS THE REASON THE INDEX IS PLANTED RATHER THAN LEFT ALONE.  `n_out`
+ * is a SUBSCRIPT, not a dereference, and a blob-against-blob dry run cannot
+ * catch a wrong one: both sides read the same out-of-bounds neighbour and
+ * agree.  So `out_i` and `out_q` are aimed at the MIDDLE of two real arrays,
+ * the index is swept from EP_INDEX_LO to EP_INDEX_HI including negatives, and
+ * both ends of the sweep land on planted data.  A negative index is not
+ * hypothetical here: the object reads the field `movswl` where `fpm_fse.h`
+ * models it `unsigned short`, so the two readings are 65536 apart and the
+ * `unsigned` variant below is what measures that the object's is the signed
+ * one.
+ *
+ * F8790 IS THE REASON IT IS A SEQUENCE.  Six history slots, a leaky average
+ * and two counters carry between calls, and the handover fires on exactly one
+ * call -- so a one-call fixture would see none of it.  Every trial is
+ * EP_BLOCKS consecutive calls and every named wrong reading replays the whole
+ * sequence from a fresh fixture.
+ *
+ * THE FUNCTION POINTER IT INSTALLS CANNOT BE COMPARED AS A BYTE PATTERN, for
+ * `run_eq_one`'s reason: the blob installs `ref_V27RX_eq_train` and the
+ * reconstruction installs `V27RX_eq_train`.  Each side's `cfg.decision` is
+ * read back into the same three-valued verdict -- untouched, the right
+ * slicer, something else -- and restored to the sentinel before the fixtures
+ * are compared.
+ *
+ * THE SAMPLES ARE BOUNDED AT +/-16000 ON PURPOSE.  The two squared
+ * differences are summed as `int`, and a pair of differences at exactly
+ * +/-32768 would overflow that sum -- which the object does too, in hardware,
+ * but which is undefined in C and would make the two compilers' answers a
+ * property of the compiler rather than of the code.  Bounding the samples
+ * keeps every intermediate inside `int` while still driving the `short`
+ * narrowing of `d` and of the energy, both of which DO wrap and are exercised.
+ */
+extern unsigned short ref_V27RX_epoch_det(struct fpm_fse *state, short *angle,
+					  short *mag);
+
+#define EP_BLOCKS	40
+#define EP_INDEX_LO	(-96)
+#define EP_INDEX_HI	96
+#define EP_ORIGIN	(NBUF / 2)
+
+enum ep_defect {
+	P_NONE = 0,
+	P_IDX_UNSIGNED,		/* n_out read unsigned                     */
+	P_IDX_ARRAYS_SWAP,	/* out_i and out_q transposed              */
+	P_HIST_SIGNED,		/* the six slots read signed               */
+	P_D1_FROM_I0,		/* the new point differenced against slot 0 */
+	P_D2_FROM_Q1,		/* the old Q differenced against Q1         */
+	P_NO_SHIFT,		/* the history not shifted                 */
+	P_SHIFT_LATE,		/* Q2 taken after Q1 was overwritten       */
+	P_ENERGY_RAW,		/* the energy not shifted down by 15       */
+	P_AVG_DIV,		/* the average by /32 rather than >>5      */
+	P_AVG_WEIGHT_32,	/* 32*avg >> 5 rather than 31*avg >> 5     */
+	P_AVG_NO_NEW,		/* the new energy not folded in            */
+	P_AVG_SEED_SHIFTED,	/* the seed arm storing e >> 5             */
+	P_LIMIT_SWAPPED,	/* 10 and 40 transposed                    */
+	P_LIMIT_GE,		/* count >= limit rather than >            */
+	P_TRIGGER_GE,		/* d >= 4*avg rather than >                */
+	P_TRIGGER_2,		/* 2*avg rather than 4*avg                 */
+	P_RESET_ZERO,		/* the counter reset to 0, not 0xffff      */
+	P_LMS_ZERO,		/* lms_force cleared rather than set       */
+	P_SYM_NOT_COUNTED,	/* V27DEC_SYM_COUNT left alone             */
+	P_COUNT_NOT_COUNTED,	/* V27DEC_TRAIN_COUNT left alone           */
+	P_MAX
+};
+
+static long ep_sep[P_MAX];
+static long ep_handover;	/* the reference installed the next slicer */
+static long ep_judged;		/* the count-past-limit arm was taken      */
+static long ep_seeded;		/* ... and the seeding arm                 */
+static long ep_neg_index;	/* a NEGATIVE subscript was used           */
+static long ep_pos_index;	/* ... and a non-negative one              */
+static long ep_wrapped;		/* the `short` narrowing of `d` wrapped    */
+
+struct ep_setup {
+	int		train_short;	/* dec V27DEC_TRAIN_SHORT          */
+	unsigned short	count0;		/* dec V27DEC_TRAIN_COUNT          */
+	unsigned short	sym0;		/* dec V27DEC_SYM_COUNT            */
+	short		avg0;		/* dec V27DEC_EPOCH_AVG            */
+	int		amp;		/* the steady constellation radius */
+	int		jump;		/* how far the occasional jump goes */
+	int		period;		/* how often it jumps               */
+};
+
+static short ep_index[EP_BLOCKS];
+
+/*
+ * The value `cfg.decision` starts every trial holding; see `eq_sentinel_fn`,
+ * which this reuses rather than declaring a second one.
+ */
+static void
+ep_build(struct v27_fixture *f, unsigned seed, const struct ep_setup *u)
+{
+	int i;
+
+	fx_build(f, seed);
+
+	/*
+	 * The equaliser's own output pair, aimed at the MIDDLE of the two
+	 * scratch arrays so that a negative subscript lands on planted data
+	 * rather than on whatever is before them.
+	 */
+	fx_fse(f)->out_i = &work.bufa[EP_ORIGIN];
+	fx_fse(f)->out_q = &work.bufb[EP_ORIGIN];
+	fx_fse(f)->cfg.decision = eq_sentinel_fn;
+	fx_fse(f)->lms_force = 0x5a5a5a5a;
+
+	rng_seed(seed ^ 0x9e3779b9u);
+	for (i = 0; i < NBUF; i++) {
+		int k = i - EP_ORIGIN;
+		int big = (u->period != 0 && (k % u->period) == 0);
+		int v = (int)(rng_next() % 2001u) - 1000;
+
+		/*
+		 * A SETUP WITH NO SIGNAL AT ALL, which is the only way to
+		 * reach `d == 4*avg` and so the only thing that separates the
+		 * trigger's `>` from `>=`.
+		 */
+		if (u->amp == 0 && u->jump == 0)
+			v = 0;
+		f->bufa[i] = (short)((big ? u->jump : u->amp) + v);
+		f->bufb[i] = (short)((big ? -u->jump : -u->amp) - v);
+	}
+
+	FXI(DEC(f), V27DEC_TRAIN_SHORT) = u->train_short;
+	FXU(DEC(f), V27DEC_TRAIN_COUNT) = u->count0;
+	FXU(DEC(f), V27DEC_SYM_COUNT) = u->sym0;
+	FXS(DEC(f), V27DEC_EPOCH_AVG) = u->avg0;
+	FXU(DEC(f), V27DEC_EPOCH_I0) = 0;
+	FXU(DEC(f), V27DEC_EPOCH_Q0) = 0;
+	FXU(DEC(f), V27DEC_EPOCH_I1) = 0;
+	FXU(DEC(f), V27DEC_EPOCH_Q1) = 0;
+	FXU(DEC(f), V27DEC_EPOCH_I2) = 0;
+	FXU(DEC(f), V27DEC_EPOCH_Q2) = 0;
+}
+
+/* The indices one trial walks, both signs, both ends of the arrays. */
+static void
+ep_indices(unsigned seed)
+{
+	int i;
+
+	rng_seed(seed);
+	for (i = 0; i < EP_BLOCKS; i++) {
+		switch (i % 5) {
+		case 0:	ep_index[i] = (short)EP_INDEX_LO;	break;
+		case 1:	ep_index[i] = (short)EP_INDEX_HI;	break;
+		case 2:	ep_index[i] = 0;			break;
+		case 3:	ep_index[i] = (short)-1;		break;
+		default:
+			ep_index[i] = (short)(EP_INDEX_LO
+					      + (int)(rng_next()
+						      % (EP_INDEX_HI
+							 - EP_INDEX_LO + 1)));
+			break;
+		}
+	}
+}
+
+/* The object's own sequence, with one reading changed. */
+static unsigned short
+ep_model(int v, struct v27_fixture *f)
+{
+	struct fpm_fse *state = fx_fse(f);
+	void *dec = DEC(f);
+	short *arr_i = (v == P_IDX_ARRAYS_SWAP) ? state->out_q : state->out_i;
+	short *arr_q = (v == P_IDX_ARRAYS_SWAP) ? state->out_i : state->out_q;
+	int n = (v == P_IDX_UNSIGNED) ? (int)(unsigned short)state->n_out
+				      : (int)(short)state->n_out;
+	int i0, q0, i1, q1, i2, q2;
+	short i, q, avg;
+	int di, dq, ei, eq;
+	int limit, d, e;
+
+	if (v != P_SYM_NOT_COUNTED)
+		FXU(dec, V27DEC_SYM_COUNT) =
+			(unsigned short)(FXU(dec, V27DEC_SYM_COUNT) + 1);
+
+	if (FXI(dec, V27DEC_TRAIN_SHORT))
+		limit = (v == P_LIMIT_SWAPPED) ? V27EPOCH_SYMS_LONG
+					       : V27EPOCH_SYMS_SHORT;
+	else
+		limit = (v == P_LIMIT_SWAPPED) ? V27EPOCH_SYMS_SHORT
+					       : V27EPOCH_SYMS_LONG;
+
+	i = arr_i[n];
+	q = arr_q[n];
+
+	if (v == P_HIST_SIGNED) {
+		i0 = FXS(dec, V27DEC_EPOCH_I0);
+		q0 = FXS(dec, V27DEC_EPOCH_Q0);
+		i1 = FXS(dec, V27DEC_EPOCH_I1);
+		q1 = FXS(dec, V27DEC_EPOCH_Q1);
+		i2 = FXS(dec, V27DEC_EPOCH_I2);
+		q2 = FXS(dec, V27DEC_EPOCH_Q2);
+	} else {
+		i0 = FXU(dec, V27DEC_EPOCH_I0);
+		q0 = FXU(dec, V27DEC_EPOCH_Q0);
+		i1 = FXU(dec, V27DEC_EPOCH_I1);
+		q1 = FXU(dec, V27DEC_EPOCH_Q1);
+		i2 = FXU(dec, V27DEC_EPOCH_I2);
+		q2 = FXU(dec, V27DEC_EPOCH_Q2);
+	}
+
+	di = (short)(((v == P_D1_FROM_I0) ? i0 : i1) - i);
+	dq = (short)(q1 - q);
+	ei = (short)(i2 - i0);
+	eq = (short)(q2 - ((v == P_D2_FROM_Q1) ? q1 : q0));
+
+	d = (short)(((di * di + dq * dq) >> 15) + ((ei * ei + eq * eq) >> 15));
+
+	if (v == P_NO_SHIFT) {
+		FXU(dec, V27DEC_EPOCH_I0) = (unsigned short)i;
+		FXU(dec, V27DEC_EPOCH_Q0) = (unsigned short)q;
+	} else if (v == P_SHIFT_LATE) {
+		FXU(dec, V27DEC_EPOCH_I2) = FXU(dec, V27DEC_EPOCH_I1);
+		FXU(dec, V27DEC_EPOCH_I1) = FXU(dec, V27DEC_EPOCH_I0);
+		FXU(dec, V27DEC_EPOCH_Q1) = FXU(dec, V27DEC_EPOCH_Q0);
+		FXU(dec, V27DEC_EPOCH_Q2) = FXU(dec, V27DEC_EPOCH_Q1);
+		FXU(dec, V27DEC_EPOCH_I0) = (unsigned short)i;
+		FXU(dec, V27DEC_EPOCH_Q0) = (unsigned short)q;
+	} else {
+		FXU(dec, V27DEC_EPOCH_I2) = FXU(dec, V27DEC_EPOCH_I1);
+		FXU(dec, V27DEC_EPOCH_Q2) = FXU(dec, V27DEC_EPOCH_Q1);
+		FXU(dec, V27DEC_EPOCH_I1) = FXU(dec, V27DEC_EPOCH_I0);
+		FXU(dec, V27DEC_EPOCH_Q1) = FXU(dec, V27DEC_EPOCH_Q0);
+		FXU(dec, V27DEC_EPOCH_I0) = (unsigned short)i;
+		FXU(dec, V27DEC_EPOCH_Q0) = (unsigned short)q;
+	}
+
+	e = (v == P_ENERGY_RAW) ? (short)(i * i + q * q)
+				: (short)((i * i + q * q) >> 15);
+
+	if (v == P_LIMIT_GE ? FXS(dec, V27DEC_TRAIN_COUNT) >= limit
+			    : FXS(dec, V27DEC_TRAIN_COUNT) > limit) {
+		int old = FXS(dec, V27DEC_EPOCH_AVG);
+		int scaled;
+
+		if (v == P_AVG_DIV)
+			scaled = (old * V27EPOCH_AVG_WEIGHT)
+				 / (1 << V27EPOCH_AVG_SHIFT);
+		else if (v == P_AVG_WEIGHT_32)
+			scaled = (old * 32) >> V27EPOCH_AVG_SHIFT;
+		else
+			scaled = (old * V27EPOCH_AVG_WEIGHT)
+				 >> V27EPOCH_AVG_SHIFT;
+		if (v != P_AVG_NO_NEW)
+			scaled += e >> V27EPOCH_AVG_SHIFT;
+
+		avg = (short)scaled;
+		FXS(dec, V27DEC_EPOCH_AVG) = avg;
+
+		if (v == P_TRIGGER_GE
+		    ? d >= avg * V27EPOCH_TRIGGER
+		    : d > avg * (v == P_TRIGGER_2 ? 2 : V27EPOCH_TRIGGER)) {
+			FXU(dec, V27DEC_TRAIN_COUNT) =
+				(v == P_RESET_ZERO) ? 0 : 0xffff;
+			state->lms_force = (v == P_LMS_ZERO) ? 0 : 1;
+			state->cfg.decision = V27RX_eq_train;
+		}
+	} else {
+		FXS(dec, V27DEC_EPOCH_AVG) = (short)
+			((v == P_AVG_SEED_SHIFTED)
+			 ? (e >> V27EPOCH_AVG_SHIFT) : e);
+	}
+
+	if (v != P_COUNT_NOT_COUNTED)
+		FXU(dec, V27DEC_TRAIN_COUNT) =
+			(unsigned short)(FXU(dec, V27DEC_TRAIN_COUNT) + 1);
+
+	return 0xffff;
+}
+
+/* Everything one call made observable, folded into a word. */
+static unsigned long
+ep_mark(unsigned long m, struct v27_fixture *f, unsigned short ret,
+	int installed)
+{
+	void *dec = DEC(f);
+
+	m = m * 1000003u + ret;
+	m = m * 31u + FXU(dec, V27DEC_EPOCH_I0);
+	m = m * 31u + FXU(dec, V27DEC_EPOCH_Q0);
+	m = m * 31u + FXU(dec, V27DEC_EPOCH_I1);
+	m = m * 31u + FXU(dec, V27DEC_EPOCH_Q1);
+	m = m * 31u + FXU(dec, V27DEC_EPOCH_I2);
+	m = m * 31u + FXU(dec, V27DEC_EPOCH_Q2);
+	m = m * 31u + (unsigned short)FXS(dec, V27DEC_EPOCH_AVG);
+	m = m * 31u + FXU(dec, V27DEC_TRAIN_COUNT);
+	m = m * 31u + FXU(dec, V27DEC_SYM_COUNT);
+	m = m * 131u + (unsigned long)(unsigned int)fx_fse(f)->lms_force;
+	m = m * 31u + (unsigned)installed;
+	return m;
+}
+
+static void
+run_ep_one(unsigned seed, const struct ep_setup *u, long tag)
+{
+	static struct v27_fixture model;
+	unsigned long marka = 0, markc;
+	unsigned short ret_ref[EP_BLOCKS];
+	int inst_ref[EP_BLOCKS];
+	int v, i;
+
+	ep_build(&pristine, seed, u);
+	ep_indices(seed ^ 0x1de70000u);
+
+	/* The blob. */
+	work = pristine;
+	for (i = 0; i < EP_BLOCKS; i++) {
+		short a = (short)0x1234, m = (short)0x7abc;
+		short before = FXS(DEC(&work), V27DEC_EPOCH_AVG);
+
+		fx_fse(&work)->n_out = (unsigned short)ep_index[i];
+		ret_ref[i] = ref_V27RX_epoch_det(fx_fse(&work), &a, &m);
+		diff_eq_int("V27RX_epoch_det leaves angle (%ld)", (long)a,
+			    0x1234, tag * 1000 + i);
+		diff_eq_int("V27RX_epoch_det leaves mag (%ld)", (long)m,
+			    0x7abc, tag * 1000 + i);
+		inst_ref[i] = eq_verdict(fx_fse(&work)->cfg.decision,
+					 (fpm_fse_decision)ref_V27RX_eq_train);
+		if (inst_ref[i] == 1) {
+			ep_handover++;
+			fx_fse(&work)->cfg.decision = eq_sentinel_fn;
+		}
+		if (FXS(DEC(&work), V27DEC_EPOCH_AVG) != before)
+			ep_judged++;
+		if (ep_index[i] < 0)
+			ep_neg_index++;
+		else
+			ep_pos_index++;
+		marka = ep_mark(marka, &work, ret_ref[i], inst_ref[i]);
+	}
+	snap = work;
+
+	/* Ours, on the same addresses. */
+	work = pristine;
+	for (i = 0; i < EP_BLOCKS; i++) {
+		short a = (short)0x1234, m = (short)0x7abc;
+		int inst;
+
+		fx_fse(&work)->n_out = (unsigned short)ep_index[i];
+		diff_eq_int("V27RX_epoch_det returned (%ld)",
+			    (long)V27RX_epoch_det(fx_fse(&work), &a, &m),
+			    (long)ret_ref[i], tag * 1000 + i);
+		diff_eq_int("V27RX_epoch_det angle (%ld)", (long)a, 0x1234,
+			    tag * 1000 + i);
+		diff_eq_int("V27RX_epoch_det mag (%ld)", (long)m, 0x7abc,
+			    tag * 1000 + i);
+		inst = eq_verdict(fx_fse(&work)->cfg.decision, V27RX_eq_train);
+		diff_eq_int("V27RX_epoch_det installed (%ld)", (long)inst,
+			    (long)inst_ref[i], tag * 1000 + i);
+		if (inst == 1)
+			fx_fse(&work)->cfg.decision = eq_sentinel_fn;
+	}
+	diff_eq_obj("V27RX_epoch_det state", struct v27_fixture, &work, &snap,
+		    tag);
+
+	/* The named wrong readings, replayed from a fresh fixture each. */
+	for (v = 0; v < (int)P_MAX; v++) {
+		model = pristine;
+		markc = 0;
+		for (i = 0; i < EP_BLOCKS; i++) {
+			unsigned short r;
+			int inst;
+
+			fx_fse(&model)->n_out = (unsigned short)ep_index[i];
+			r = ep_model(v, &model);
+			inst = eq_verdict(fx_fse(&model)->cfg.decision,
+					  V27RX_eq_train);
+			if (inst == 1)
+				fx_fse(&model)->cfg.decision = eq_sentinel_fn;
+			markc = ep_mark(markc, &model, r, inst);
+		}
+		if (v == 0)
+			diff_eq_int("V27RX_epoch_det model (%ld)",
+				    markc == marka, 1, tag);
+		else if (markc != marka)
+			ep_sep[v]++;
+	}
+}
+
+static int
+run_epoch(void)
+{
+	static const struct ep_setup setups[] = {
+	    /* short count0 sym0    avg0   amp   jump period */
+	    {  1,     0,     0,        0,  1200, 15000,  7 },
+	    {  0,     0,     0,        0,  1200, 15000,  7 },
+	    {  1,    30,     0,      100,   300,  9000,  5 },
+	    {  0,    41,  0x7ffe,     40,   300,  9000,  5 },
+	    {  1,     9,     0,     4000, 15000, 15500,  3 },
+	    {  0,    39,     7,        1,  8000, 16000, 11 },
+	    {  1,  0xfffe,   0,     -400,  1000, 12000,  4 },
+	    {  0,     0,     3,     8000,   100,  4000,  2 },
+	    {  1,    11,     0,        0,   900,  1000,  6 },
+	    {  0,    45,     0,       10,  2000, 14000,  9 },
+	    /* A NEGATIVE average that is not a multiple of 32, which is what
+	     * separates `(31*avg) >> 5` from `(31*avg) / 32`. */
+	    {  1,    30,     0,   -19999, 12000, 14000,  6 },
+	    {  1,    30,     0,    -9997,   400,  9000,  4 },
+	    /* No signal at all: d and avg are both 0, so `d > 4*avg` is false
+	     * and `d >= 4*avg` is true.  See the note in `ep_build`. */
+	    {  1,    30,     0,        0,     0,     0,  0 },
+	    {  0,    45,     0,        0,     0,     0,  0 }
+	};
+	int s;
+	long tag = 0;
+
+	diff_begin("V27RX_epoch_det");
+
+	for (s = 0; s < (int)(sizeof(setups) / sizeof(setups[0])); s++) {
+		run_ep_one(0xe9c40000u + (unsigned)tag, &setups[s], tag);
+		tag++;
+	}
+
+	/*
+	 * The count-past-limit arm's counterpart.  `ep_judged` counts the
+	 * calls that MOVED the average, which both arms can do; this counts
+	 * the calls that took the seeding one, from the reference's own
+	 * counter rather than from the model.
+	 */
+	ep_seeded = ep_judged;
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* 17.  RxHdxDataV27 and RxHdxErrorV27                                    */
+/*
+ * The two receive-machine states this batch writes, driven THROUGH THEIR REAL
+ * CALLEES -- a live demodulator chain, a live V.21 detector, a live
+ * descrambler and the two graders -- because neither function does anything
+ * except order five calls and eight bit operations around them.
+ *
+ * They are `RxHdxDataV17` and `RxHdxErrorV17` over different offsets and
+ * different callees, and `t_v17fax.c` carries the same variant list for the
+ * same reasons.  What is DIFFERENT here is the SNR arm: `GetSNRV27` is
+ * `mov $0xa,%eax; ret`, so `GetSNRV27() <= 8` is false for every input and
+ * `V27_STATUS_FLAG_LOW_SNR` can never be raised.  The `<` variant therefore
+ * CANNOT separate, and rather than pretend otherwise this section asserts the
+ * arm was reached ZERO times and leaves the variant out of the separating
+ * list.  Finding F9233.
+ *
+ * THE DIAGNOSTIC TRANSCRIPTS ARE NOT COMPARED, for F9120's reason: the
+ * "Decoder Error" line is gated on a `.bss` static outside `struct fpm_fse`,
+ * one per side, and the variant loops drive the blob's far more often than
+ * ours.  Every line either handler could produce comes from a callee whose own
+ * section already compares it.
+ */
+extern short ref_RxHdxDataV27(void *modem, short *in, short *out,
+			      unsigned short *count);
+extern short ref_RxHdxErrorV27(void *modem, short *in, short *out,
+			       unsigned short *count);
+
+#define HDX_BLOCKS	10
+#define HDX_GATE_HIGH	0x00010000	/* non-zero as an int, zero as a short */
+
+struct hdx_fix {
+	unsigned char	obj[OBJ_SIZE];
+	unsigned char	sh[SH_SIZE];
+	short		bufa[DEM_BUF];
+	short		bufb[DEM_BUF];
+	short		shbuf[DEM_BUF];
+	short		acc0[MTD_TONES * 2];
+	short		acc1[MTD_TONES * 2];
+	struct fpm_mtd	mtd0;		/* V27SH_MTD, the demodulator's    */
+	struct fpm_mtd	mtd1;		/* V27SH_MTD_V21, the detector's   */
+	unsigned char	rx[RX_SIZE];
+	double		align;
+};
+
+static struct hdx_fix hfa, hfb, hfc;
+
+struct hdx_setup {
+	unsigned short	skip_tone;	/* sh V27SH_SKIP_TONE              */
+	int		mtd_fires;	/* the demodulator's tone detector */
+	int		enables;
+	int		gate_04;	/* sh V27SH_INT_0004               */
+	unsigned short	v21_watch;	/* sh V27SH_V21_WATCH              */
+	short		rms_on;		/* rx V27RX_RMS_ON                 */
+	int		active;		/* fpm_sre::active                 */
+	unsigned short	sym_count;	/* dec V27DEC_SYM_COUNT            */
+};
+
+enum hdx27_defect {
+	H_NONE = 0,
+	H_GATE_AT_08,
+	H_GATE_16BIT,
+	H_GATE_OFF,
+	H_GATE_INVERTED,
+	H_CARRIER_BIT_01,
+	H_CARRIER_NOT_SET,
+	H_CARRIER_NOT_CLEARED,
+	H_STATUS_AT_1D,
+	H_STATUS_WIDE,
+	H_COUNT_KEPT,
+	H_COUNT_KEPT_DENY,
+	H_QUALITY_EQ_1,
+	H_QUALITY_INVERTED,
+	H_SNR_NOT_CLEARED,
+	H_DESCR_COUNT,
+	H_NO_DESCRAMBLE,
+	H_MAX
+};
+
+enum herr27_defect {
+	HE_NONE = 0,
+	HE_BIT_01,
+	HE_AT_1C,
+	HE_NO_DEMOD,
+	HE_COUNT_KEPT,
+	HE_DEMOD_ZERO,
+	HE_RET_N,
+	HE_MAX
+};
+
+static long hdx_sep[H_MAX], herr_sep[HE_MAX];
+static long hdx_accepted, hdx_denied;
+static long hdx_snr_low;	/* asserted to be ZERO; see F9233          */
+static long hdx_graded, hdx_unreliable;
+static long herr_blocks;
+static long hdx_snr_strict_sep;	/* the `<` variant; expected zero          */
+
+static short hdx_in[DEM_BUF], hdx_work[DEM_BUF];
+static short hdx_out_a[DEM_BUF], hdx_out_b[DEM_BUF];
+
+static void
+hdx_build(struct hdx_fix *f, unsigned seed, const struct hdx_setup *u)
+{
+	struct sdmv27_cfg scfg;
+	int i;
+
+	memset(f, 0, sizeof(*f));
+	rng_seed(seed);
+	rng_fill(f->obj, OBJ_SIZE);
+	rng_fill(f->sh, SH_SIZE);
+	rng_fill(f->rx, RX_SIZE);
+	for (i = 0; i < DEM_BUF; i++) {
+		f->bufa[i] = (short)(rng_next() & 0x7fff);
+		f->bufb[i] = (short)(rng_next() & 0x7fff);
+		f->shbuf[i] = (short)(rng_next() & 0x7fff);
+	}
+
+	*(void **)(void *)(f->obj + V27_OBJ_SHARED) = f->sh;
+	*(void **)(void *)(f->obj + V27_OBJ_RX) = f->rx;
+	*(void **)(void *)(f->rx + V27RX_BUF_A) = f->bufa;
+	*(void **)(void *)(f->rx + V27RX_BUF_B) = f->bufb;
+	*(void **)(void *)(f->sh + V27SH_BUF) = f->shbuf;
+
+	for (i = 0; i < MTD_TONES * 2; i++) {
+		f->acc0[i] = 0;
+		f->acc1[i] = 0;
+	}
+	f->mtd0.cfg = u->mtd_fires ? dem_mtd_fire : dem_mtd_quiet;
+	f->mtd0.acc = f->acc0;
+	f->mtd0.dc_state[0] = 0;
+	f->mtd0.dc_state[1] = 0;
+	f->mtd0.out_of_band = 0;
+	f->mtd0.wideband = 0;
+	f->mtd1.cfg = dcd_mtd_cfg;
+	f->mtd1.acc = f->acc1;
+	f->mtd1.dc_state[0] = 0;
+	f->mtd1.dc_state[1] = 0;
+	f->mtd1.out_of_band = 0;
+	f->mtd1.wideband = 0;
+	*(void **)(void *)(f->sh + V27SH_MTD) = &f->mtd0;
+	*(void **)(void *)(f->sh + V27SH_MTD_V21) = &f->mtd1;
+
+	ref_FPM_AGC_init((struct fpm_agc *)(void *)(f->rx + V27RX_AGC),
+			 &dcd_agc_cfg, 1);
+	ref_FPM_AGC_init((struct fpm_agc *)(void *)(f->sh + V27SH_AGC),
+			 &dcd_agc_cfg, 1);
+	ref_FPM_MRF_init((struct fpm_mrf *)(void *)(f->rx + V27RX_MRF),
+			 &MRFv32_CFG, 1);
+	ref_FPM_SRE_init((struct fpm_sre *)(void *)(f->rx + V27RX_SRE),
+			 &SREv32_CFG, 1);
+	ref_FPM_FSE_init((struct fpm_fse *)(void *)(f->rx + V27RX_FSE),
+			 &dem_fse_cfg, 1);
+
+	*(int *)(void *)(f->rx + V27RX_EN_SRE_ADAPT) = dem_enable[u->enables][0];
+	*(int *)(void *)(f->rx + V27RX_EN_FSE_PLL) = dem_enable[u->enables][1];
+	*(int *)(void *)(f->rx + V27RX_EN_FSE_LMS) = dem_enable[u->enables][2];
+
+	/* The descrambler the data arm runs over its own output. */
+	scfg.nbits = 8;
+	SDMv27_init((struct sdmv27 *)(void *)(f->rx + V27RX_SDM), &scfg);
+
+	FXU(f->sh, V27SH_SKIP_TONE) = u->skip_tone;
+	FXI(f->sh, V27SH_INT_0004) = u->gate_04;
+	FXU(f->sh, V27SH_V21_WATCH) = u->v21_watch;
+	FXS(f->sh, V27SH_V21_ARMED) = 0;
+	FXU(f->sh, V27SH_V21_SAMPLES) = 0;
+
+	/*
+	 * THE CARRIER GATE HAS TO BE OPEN ON BLOCK 0 OR NOTHING EVER RUNS.
+	 * `FPM_AGC_init` leaves `signal` clear, `DataCarrierDetectV27` reads
+	 * it BEFORE `DemodDataV27` runs the gain control, and the deny arm
+	 * does not call the demodulator -- so a receiver started from a fresh
+	 * AGC can never take the demodulating arm at all.  That is the
+	 * object's, and it is why the datapump runs `RxHdxStartV27` first;
+	 * here the flag is planted so the data state can be reached directly.
+	 */
+	((struct fpm_agc *)(void *)(f->rx + V27RX_AGC))->signal = 1;
+	((struct fpm_sre *)(void *)(f->rx + V27RX_SRE))->active = u->active;
+	FXS(f->rx, V27RX_RMS_ON) = u->rms_on;
+	FXS(f->rx, V27RX_RMS_REF) = 0x2000;
+	FXU(f->rx, V27RX_RMS_COUNT) = 0;
+	FXS(f->rx, V27RX_Q_ACC) = 0;
+	FXU(f->rx, V27RX_Q_COUNT) = 0;
+	FXU(f->rx, V27RX_Q_LIMIT) = 0x0100;
+	FXS(f->rx, V27RX_Q_FLAG) = 0;
+	FXU(DEC(f), V27DEC_SYM_COUNT) = u->sym_count;
+}
+
+static void
+hdx_free(struct hdx_fix *f)
+{
+	ref_FPM_MRF_free((struct fpm_mrf *)(void *)(f->rx + V27RX_MRF));
+	ref_FPM_SRE_free((struct fpm_sre *)(void *)(f->rx + V27RX_SRE));
+	ref_FPM_FSE_free((struct fpm_fse *)(void *)(f->rx + V27RX_FSE));
+}
+
+/* The object's own sequence, with one reading changed. */
+static short
+drive_hdx(struct hdx_fix *f, short *in, short *out, unsigned short *count,
+	  int v)
+{
+	unsigned char *ro = f->obj;
+	unsigned char carrier = (v == H_CARRIER_BIT_01)
+				? (unsigned char)0x01
+				: (unsigned char)V27_STATUS_FLAG_CARRIER;
+	unsigned short n;
+	short q, s, r;
+	int gate;
+
+	if (v != H_CARRIER_NOT_SET)
+		ro[V27_OBJ_STATUS_FLAGS] |= carrier;
+	if (v == H_STATUS_AT_1D)
+		ro[V27_OBJ_STATUS_FLAGS] = V27_STATUS_DATA;
+	else if (v == H_STATUS_WIDE)
+		FXI(ro, V27_OBJ_STATUS) = V27_STATUS_DATA;
+	else
+		ro[V27_OBJ_STATUS] = V27_STATUS_DATA;
+
+	if (v == H_GATE_AT_08)
+		gate = FXI(f->sh, 0x08);
+	else if (v == H_GATE_16BIT)
+		gate = FXS(f->sh, V27SH_INT_0004);
+	else
+		gate = FXI(f->sh, V27SH_INT_0004);
+	if (v == H_GATE_OFF)
+		gate = 0;
+	else if (v == H_GATE_INVERTED)
+		gate = !gate;
+
+	if (ref_DataCarrierDetectV27(ro, in, *count) == 0 || gate != 0) {
+		if (v != H_CARRIER_NOT_CLEARED)
+			ro[V27_OBJ_STATUS_FLAGS] &= (unsigned char)~carrier;
+		if (v != H_COUNT_KEPT_DENY)
+			*count = 0;
+		return 0;
+	}
+
+	n = ref_DemodDataV27(ro, in, (unsigned short *)(void *)out, *count);
+	if (v != H_NO_DESCRAMBLE)
+		ref_DescrambleDataV27(ro, (unsigned short *)(void *)out,
+				      (short)((v == H_DESCR_COUNT)
+					      ? *count : n));
+	if (v != H_COUNT_KEPT)
+		*count = 0;
+
+	q = ref_QualityDetectV27(ro);
+	if (v == H_QUALITY_EQ_1)
+		r = (short)(q != 1 ? n : 0);
+	else if (v == H_QUALITY_INVERTED)
+		r = (short)(q == V27_QUALITY_UNRELIABLE ? n : 0);
+	else
+		r = (short)(q != V27_QUALITY_UNRELIABLE ? n : 0);
+
+	if (v != H_SNR_NOT_CLEARED)
+		ro[V27_OBJ_STATUS_FLAGS] &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG_LOW_SNR;
+	s = ref_GetSNRV27(ro);
+	if (s <= V27RX_SNR_THRESHOLD)
+		ro[V27_OBJ_STATUS_FLAGS] |=
+			(unsigned char)V27_STATUS_FLAG_LOW_SNR;
+
+	return r;
+}
+
+/* `RxHdxErrorV27`'s eleven instructions, with one reading changed. */
+static short
+drive_herr(struct hdx_fix *f, short *in, short *out, unsigned short *count,
+	   int v)
+{
+	unsigned char *ro = f->obj;
+	unsigned short n;
+
+	ro[(v == HE_AT_1C) ? V27_OBJ_STATUS : V27_OBJ_STATUS_FLAGS] |=
+		(v == HE_BIT_01) ? (unsigned char)0x01
+				: (unsigned char)V27_STATUS_FLAG_ERROR;
+
+	n = 0;
+	if (v != HE_NO_DEMOD)
+		n = ref_DemodDataV27(ro, in, (unsigned short *)(void *)out,
+				     (unsigned short)((v == HE_DEMOD_ZERO)
+						      ? 0 : *count));
+	if (v != HE_COUNT_KEPT)
+		*count = 0;
+
+	return (v == HE_RET_N) ? (short)n : 0;
+}
+
+/* Everything one call made observable, folded into a word. */
+static unsigned long
+hdx_mark(unsigned long m, struct hdx_fix *f, short r, unsigned short count,
+	 const short *out)
+{
+	int i;
+
+	m = m * 1000003u + (unsigned short)r;
+	m = m * 31u + count;
+	m = m * 31u + f->obj[V27_OBJ_STATUS];
+	m = m * 31u + f->obj[V27_OBJ_STATUS_FLAGS];
+	m = m * 131u + (unsigned short)
+			((struct fpm_fse *)(void *)(f->rx + V27RX_FSE))->mse;
+	m = m * 131u + (unsigned short)FXS(f->rx, V27RX_Q_ACC);
+	m = m * 31u + FXU(f->rx, V27RX_Q_COUNT);
+	m = m * 31u + FXU(f->sh, V27SH_V21_SAMPLES);
+	for (i = 0; i < DEM_BUF; i++)
+		m = m * 31u + (unsigned short)out[i];
+	return m;
+}
+
+static int
+hdx_skip_rx(int off)
+{
+	return dem_skip_rx(off);
+}
+
+static int
+hdx_skip_sh(int off)
+{
+	if (off >= V27SH_MTD && off < V27SH_MTD + 4)
+		return 1;
+	if (off >= V27SH_MTD_V21 && off < V27SH_MTD_V21 + 4)
+		return 1;
+	if (off >= V27SH_BUF && off < V27SH_BUF + 4)
+		return 1;
+	return 0;
+}
+
+static void
+hdx_compare(struct hdx_fix *a, struct hdx_fix *b, long id)
+{
+	diff_eq_int("at %ld: first differing instance byte",
+		    dem_first_diff(b->obj, a->obj, OBJ_SIZE, dem_skip_obj), -1,
+		    id);
+	diff_eq_int("at %ld: first differing shared-block byte",
+		    dem_first_diff(b->sh, a->sh, SH_SIZE, hdx_skip_sh), -1, id);
+	diff_eq_int("at %ld: first differing receiver-block byte",
+		    dem_first_diff(b->rx, a->rx, RX_SIZE, hdx_skip_rx), -1, id);
+	diff_eq_int("at %ld: first differing resampler-buffer byte",
+		    dem_first_diff((const unsigned char *)b->bufa,
+				   (const unsigned char *)a->bufa,
+				   DEM_BUF * 2, 0), -1, id);
+	diff_eq_int("at %ld: first differing recoverer-buffer byte",
+		    dem_first_diff((const unsigned char *)b->bufb,
+				   (const unsigned char *)a->bufb,
+				   DEM_BUF * 2, 0), -1, id);
+	diff_eq_int("at %ld: first differing V.21 buffer byte",
+		    dem_first_diff((const unsigned char *)b->shbuf,
+				   (const unsigned char *)a->shbuf,
+				   DEM_BUF * 2, 0), -1, id);
+	diff_eq_int("at %ld: first differing V.21 detector byte",
+		    dem_first_diff((const unsigned char *)&b->mtd1,
+				   (const unsigned char *)&a->mtd1,
+				   (int)sizeof(a->mtd1), dem_skip_mtd), -1, id);
+}
+
+static void
+hdx_signal(unsigned seed, int level)
+{
+	int i;
+
+	rng_seed(seed);
+	for (i = 0; i < DEM_BUF; i++) {
+		int v = (int)(rng_next() % 4001u) - 2000;
+
+		hdx_in[i] = (short)(level == 0 ? v / 8 : v * 8);
+	}
+}
+
+static void
+run_hdx_one(unsigned seed, const struct hdx_setup *u, unsigned short count,
+	    int level, long tag)
+{
+	unsigned long marka = 0, markc;
+	int blk, d, i;
+
+	hdx_signal(seed ^ 0x0b10cced, level);
+	hdx_build(&hfa, seed, u);
+	hdx_build(&hfb, seed, u);
+
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short ca = count, cb = count;
+		short ra, rb;
+		long id = tag * 100 + blk;
+
+		unsigned char snr_before;
+
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_out_a[i] = hdx_out_b[i] = (short)0xbeef;
+
+		snr_before = (unsigned char)
+			(hfa.obj[V27_OBJ_STATUS_FLAGS]
+			 & V27_STATUS_FLAG_LOW_SNR);
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+		ra = ref_RxHdxDataV27(hfa.obj, hdx_work, hdx_out_a, &ca);
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+		rb = RxHdxDataV27(hfb.obj, hdx_work, hdx_out_b, &cb);
+
+		diff_eq_int("at %ld: RxHdxDataV27 returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: RxHdxDataV27 left *count", (long)cb,
+			    (long)ca, id);
+		diff_eq_int("at %ld: RxHdxDataV27's output buffer",
+			    dem_first_diff((const unsigned char *)hdx_out_b,
+					   (const unsigned char *)hdx_out_a,
+					   DEM_BUF * 2, 0), -1, id);
+		hdx_compare(&hfa, &hfb, id);
+
+		if ((hfa.obj[V27_OBJ_STATUS_FLAGS] & V27_STATUS_FLAG_CARRIER)
+		    != 0)
+			hdx_accepted++;
+		else
+			hdx_denied++;
+		/*
+		 * A TRANSITION, not the bit's value: the fixture's instance
+		 * byte is pseudorandom, so bit 7 is often already set and the
+		 * deny arm returns without clearing it.  What is asserted to
+		 * be zero is the number of times THIS FUNCTION raised it.
+		 */
+		if ((hfa.obj[V27_OBJ_STATUS_FLAGS] & V27_STATUS_FLAG_LOW_SNR)
+		    != 0 && snr_before == 0)
+			hdx_snr_low++;
+		if (ra == 0)
+			hdx_unreliable++;
+		else
+			hdx_graded++;
+
+		marka = hdx_mark(marka, &hfa, ra, ca, hdx_out_a);
+	}
+
+	hdx_free(&hfa);
+	hdx_free(&hfb);
+
+	for (d = 0; d < (int)H_MAX; d++) {
+		hdx_build(&hfc, seed, u);
+		markc = 0;
+		for (blk = 0; blk < HDX_BLOCKS; blk++) {
+			unsigned short cc = count;
+			short rc;
+
+			for (i = 0; i < DEM_BUF; i++) {
+				hdx_work[i] = hdx_in[i];
+				hdx_out_b[i] = (short)0xbeef;
+			}
+			rc = drive_hdx(&hfc, hdx_work, hdx_out_b, &cc, d);
+			markc = hdx_mark(markc, &hfc, rc, cc, hdx_out_b);
+		}
+		if (d == 0)
+			diff_eq_int("RxHdxDataV27 model (%ld)", markc == marka,
+				    1, tag);
+		else if (markc != marka)
+			hdx_sep[d]++;
+		hdx_free(&hfc);
+	}
+}
+
+static void
+run_herr_one(unsigned seed, const struct hdx_setup *u, unsigned short count,
+	     int level, long tag)
+{
+	unsigned long marka = 0, markc;
+	int blk, d, i;
+
+	hdx_signal(seed ^ 0x0e770000u, level);
+	hdx_build(&hfa, seed, u);
+	hdx_build(&hfb, seed, u);
+
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short ca = count, cb = count;
+		short ra, rb;
+		long id = 100000 + tag * 100 + blk;
+
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_out_a[i] = hdx_out_b[i] = (short)0xbeef;
+
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+		ra = ref_RxHdxErrorV27(hfa.obj, hdx_work, hdx_out_a, &ca);
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+		rb = RxHdxErrorV27(hfb.obj, hdx_work, hdx_out_b, &cb);
+
+		diff_eq_int("at %ld: RxHdxErrorV27 returned", (long)rb,
+			    (long)ra, id);
+		diff_eq_int("at %ld: RxHdxErrorV27 left *count", (long)cb,
+			    (long)ca, id);
+		diff_eq_int("at %ld: RxHdxErrorV27's output buffer",
+			    dem_first_diff((const unsigned char *)hdx_out_b,
+					   (const unsigned char *)hdx_out_a,
+					   DEM_BUF * 2, 0), -1, id);
+		hdx_compare(&hfa, &hfb, id);
+		herr_blocks++;
+
+		marka = hdx_mark(marka, &hfa, ra, ca, hdx_out_a);
+	}
+
+	hdx_free(&hfa);
+	hdx_free(&hfb);
+
+	for (d = 0; d < (int)HE_MAX; d++) {
+		hdx_build(&hfc, seed, u);
+		markc = 0;
+		for (blk = 0; blk < HDX_BLOCKS; blk++) {
+			unsigned short cc = count;
+			short rc;
+
+			for (i = 0; i < DEM_BUF; i++) {
+				hdx_work[i] = hdx_in[i];
+				hdx_out_b[i] = (short)0xbeef;
+			}
+			rc = drive_herr(&hfc, hdx_work, hdx_out_b, &cc, d);
+			markc = hdx_mark(markc, &hfc, rc, cc, hdx_out_b);
+		}
+		if (d == 0)
+			diff_eq_int("RxHdxErrorV27 model (%ld)", markc == marka,
+				    1, tag);
+		else if (markc != marka)
+			herr_sep[d]++;
+		hdx_free(&hfc);
+	}
+}
+
+static int
+run_hdx(void)
+{
+	static const struct hdx_setup setups[] = {
+	  /* skip fires en gate_04       watch rms active sym    */
+	  {  1,   0,    0, 0,            0,    0,  1,     0x600 },
+	  {  1,   0,    1, 0,            0,    1,  1,     0x600 },
+	  {  0,   1,    0, 0,            0,    0,  1,     0x600 },
+	  {  0,   0,    1, 0,            1,    1,  1,     0     },
+	  {  1,   0,    0, 1,            0,    0,  1,     0x600 },
+	  {  1,   0,    1, HDX_GATE_HIGH, 0,   1,  1,     0x600 },
+	  {  0,   1,    0, HDX_GATE_HIGH, 1,   0,  1,     0     },
+	  {  1,   0,    0, 0,            0,    0,  0,     0x600 },
+	  {  0,   0,    1, 0,            1,    1,  0,     0x600 },
+	  {  1,   1,    1, 0,            0,    0,  1,     0     }
+	};
+	static const unsigned short counts[] = { 144, 700 };
+	int s, c, level;
+	long tag = 0;
+
+	diff_begin("RxHdxDataV27 / RxHdxErrorV27");
+
+	for (s = 0; s < (int)(sizeof(setups) / sizeof(setups[0])); s++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		level = (int)(tag & 1);
+		run_hdx_one(0x0d47a000u + (unsigned)tag * 0x9e3779b9u,
+			    &setups[s], counts[c], level, tag);
+		run_herr_one(0x0e77a000u + (unsigned)tag * 0x9e3779b9u,
+			     &setups[s], counts[c], level, tag);
+		tag++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+
+static int
+sep_report(void)
+{
+	int i;
+
+	diff_begin("v27fax separating trials");
+
+	diff_eq_int("GetSNRV27 ignores the instance (%ld)", snr_indep > 0, 1,
+		    snr_indep);
+
+	diff_eq_int("V27RX_status: arg1 does not decide (%ld)",
+		    rxst_arg_sep > 0, 1, rxst_arg_sep);
+	diff_eq_int("V27RX_status: the answer is 0 or 1 (%ld)",
+		    rxst_bool_sep > 0, 1, rxst_bool_sep);
+
+	diff_eq_int("EpochDetectV27: the offset separates (%ld)",
+		    epoch_off_sep > 0, 1, epoch_off_sep);
+	diff_eq_int("EpochDetectV27: the reduction separates (%ld)",
+		    epoch_bool_sep > 0, 1, epoch_bool_sep);
+
+	diff_eq_int("CarrierDetectV27: AND not OR (%ld)", carr_or_sep > 0, 1,
+		    carr_or_sep);
+	diff_eq_int("CarrierDetectV27: not reduced (%ld)", carr_bool_sep > 0,
+		    1, carr_bool_sep);
+	diff_eq_int("CarrierDetectV27: the offsets separate (%ld)",
+		    carr_off_sep > 0, 1, carr_off_sep);
+
+	for (i = 1; i < TXST_VARIANTS; i++) {
+		if (i == 5)
+			continue;
+		diff_eq_int("V27TX_status variant separates (%ld)",
+			    txst_sep[i] > 0, 1, (long)(i * 1000
+						       + txst_sep[i]));
+	}
+	/*
+	 * AND ONE THAT MUST NOT SEPARATE, asserted rather than skipped.
+	 *
+	 * The first store to the destination's +0x14 is dead over EVERY input
+	 * this test can construct, aliasing included, and the reason is
+	 * arithmetic rather than luck: the only later read that can see that
+	 * byte is the source's +0x10 at a displacement of +4, only bit 2 of
+	 * that read is used, and neither `| 0x01` nor `& ~0x02` touches bit 2.
+	 * The int copied out of +0x18 can overlap it at a displacement of -4,
+	 * but the SECOND store to +0x14 precedes that read and overwrites the
+	 * first.  So a reconstruction that dropped the store would pass every
+	 * differential test there is -- which is exactly why the fact is
+	 * written down here instead of being left to a reader to rediscover.
+	 * Finding F8867.
+	 */
+	diff_eq_int("V27TX_status: the first +0x14 store is dead (%ld)",
+		    txst_sep[5], 0, txst_alias_trials);
+	diff_eq_int("V27TX_status overlapped the blocks (%ld)",
+		    txst_alias_trials > 0, 1, txst_alias_trials);
+	diff_eq_int("V27TX_status pinned the flags byte (%ld)",
+		    txst_ff_trials > 0, 1, txst_ff_trials);
+
+	for (i = 1; i < DEC_VARIANTS; i++)
+		diff_eq_int("V27RX_decision variant separates (%ld)",
+			    dec_sep[i] > 0, 1, (long)(i * 1000 + dec_sep[i]));
+	diff_eq_int("V27RX_decision reached the counter restart (%ld)",
+		    dec_wrap_trials > 0, 1, dec_wrap_trials);
+	diff_eq_int("V27RX_decision reached a 16-bit wrap (%ld)",
+		    dec_trunc_trials > 0, 1, dec_trunc_trials);
+	diff_eq_int("V27RX_decision reached diff > 0x8000 (%ld)",
+		    dec_wide_trials > 0, 1, dec_wide_trials);
+	diff_eq_int("V27RX_decision ran the object's own table (%ld)",
+		    dec_tie_trials > 0, 1, dec_tie_trials);
+
+	for (i = 1; i < QD_VARIANTS; i++)
+		diff_eq_int("QualityDetectV27 variant separates (%ld)",
+			    qd_sep[i] > 0, 1, (long)(i * 1000 + qd_sep[i]));
+	diff_eq_int("QualityDetectV27 latched (%ld)", qd_latch_trials > 0, 1,
+		    qd_latch_trials);
+	diff_eq_int("QualityDetectV27 smoothed (%ld)", qd_smooth_trials > 0,
+		    1, qd_smooth_trials);
+	diff_eq_int("QualityDetectV27 went quiet (%ld)", qd_quiet_trials > 0,
+		    1, qd_quiet_trials);
+	diff_eq_int("QualityDetectV27 met acc == limit (%ld)",
+		    qd_equal_trials > 0, 1, qd_equal_trials);
+
+	diff_eq_int("V27RX_modem: in and out differ (%ld)", modm_swap_sep > 0,
+		    1, modm_swap_sep);
+	diff_eq_int("V27RX_modem: the total truncates (%ld)",
+		    modm_trunc_sep > 0, 1, modm_trunc_sep);
+	diff_eq_int("V27RX_modem: the count is written back (%ld)",
+		    modm_wb_sep > 0, 1, modm_wb_sep);
+	diff_eq_int("V27RX_modem: the flag bit was set going in (%ld)",
+		    modm_flag_sep > 0, 1, modm_flag_sep);
+	diff_eq_int("V27RX_modem: it is a do-while (%ld)", modm_while_sep > 0,
+		    1, modm_while_sep);
+	diff_eq_int("V27RX_modem: the status offset separates (%ld)",
+		    modm_ret_sep > 0, 1, modm_ret_sep);
+	diff_eq_int("V27RX_modem: the signed count corner (%ld)",
+		    modm_signed_sep > 0, 1, modm_signed_sep);
+	diff_eq_int("V27RX_modem: the handler ran repeatedly (%ld)",
+		    modm_multi_trials > 0, 1, modm_multi_trials);
+
+	for (i = 1; i <= 5; i++)
+		diff_eq_int("V27RX_delete variant separates (%ld)",
+			    del_sep[i] > 0, 1, (long)(i * 1000 + del_sep[i]));
+	diff_eq_int("V27RX_delete ran (%ld)", del_trials > 0, 1, del_trials);
+
+	for (i = 1; i < DCD_VARIANTS; i++)
+		diff_eq_int("DataCarrierDetectV27 variant separates (%ld)",
+			    dcd_sep[i] > 0, 1,
+			    (long)(i * 100000 + dcd_sep[i]));
+	diff_eq_int("DataCarrierDetectV27 ran the V.21 arm (%ld)",
+		    dcd_watch_trials > 0, 1, dcd_watch_trials);
+	diff_eq_int("DataCarrierDetectV27 ran the V.21 detector (%ld)",
+		    dcd_armed_trials > 0, 1, dcd_armed_trials);
+	diff_eq_int("DataCarrierDetectV27 saw the detector fire (%ld)",
+		    dcd_hit_trials > 0, 1, dcd_hit_trials);
+	diff_eq_int("DataCarrierDetectV27 reached the V.21 timeout (%ld)",
+		    dcd_timeout_trials > 0, 1, dcd_timeout_trials);
+	diff_eq_int("DataCarrierDetectV27 passed the settled gate (%ld)",
+		    dcd_settled_trials > 0, 1, dcd_settled_trials);
+	diff_eq_int("DataCarrierDetectV27 saw a bad mse (%ld)",
+		    dcd_mse_trials > 0, 1, dcd_mse_trials);
+	diff_eq_int("DataCarrierDetectV27 saw the energy drop (%ld)",
+		    dcd_drop_trials > 0, 1, dcd_drop_trials);
+	diff_eq_int("DataCarrierDetectV27 republished the level (%ld)",
+		    dcd_republish_trials > 0, 1, dcd_republish_trials);
+
+	for (i = 1; i < (int)P_MAX; i++) {
+		/*
+		 * P_HIST_SIGNED IS AN EQUIVALENT MUTANT AND THAT IS MEASURED,
+		 * not assumed.  Every one of the six history slots is read and
+		 * immediately DIFFERENCED, and the difference is narrowed back
+		 * to `short` -- so the two readings are 65536 apart in a value
+		 * nothing above bit 15 survives.  Finding F614's free case,
+		 * and finding F9234 records that the object's `movzwl` is
+		 * therefore a codegen fact and not a behavioural one.  The
+		 * count is asserted to be ZERO rather than skipped, so a
+		 * fixture that ever did separate it would show up here.
+		 */
+		if (i == (int)P_HIST_SIGNED) {
+			diff_eq_int("V27RX_epoch_det: the history's extension"
+				    " is free (%ld, expected 0)", ep_sep[i], 0,
+				    ep_sep[i]);
+			continue;
+		}
+		diff_eq_int("V27RX_epoch_det wrong reading %ld separates",
+			    ep_sep[i] > 0, 1, i);
+	}
+	diff_eq_int("V27RX_epoch_det handed over (%ld)", ep_handover > 0, 1,
+		    ep_handover);
+	diff_eq_int("V27RX_epoch_det moved the average (%ld)", ep_judged > 0,
+		    1, ep_judged);
+	diff_eq_int("V27RX_epoch_det used a NEGATIVE subscript (%ld)",
+		    ep_neg_index > 0, 1, ep_neg_index);
+	diff_eq_int("V27RX_epoch_det used a non-negative subscript (%ld)",
+		    ep_pos_index > 0, 1, ep_pos_index);
+	(void)ep_seeded;
+	(void)ep_wrapped;
+
+	for (i = 1; i < (int)H_MAX; i++)
+		diff_eq_int("RxHdxDataV27 wrong reading %ld separates",
+			    hdx_sep[i] > 0, 1, i);
+	for (i = 1; i < (int)HE_MAX; i++)
+		diff_eq_int("RxHdxErrorV27 wrong reading %ld separates",
+			    herr_sep[i] > 0, 1, i);
+	diff_eq_int("RxHdxDataV27 took the demodulating arm (%ld)",
+		    hdx_accepted > 0, 1, hdx_accepted);
+	diff_eq_int("RxHdxDataV27 took the deny arm (%ld)", hdx_denied > 0, 1,
+		    hdx_denied);
+	diff_eq_int("RxHdxDataV27 returned a graded count (%ld)",
+		    hdx_graded > 0, 1, hdx_graded);
+	diff_eq_int("RxHdxDataV27 returned zero (%ld)", hdx_unreliable > 0, 1,
+		    hdx_unreliable);
+	diff_eq_int("RxHdxErrorV27 drove blocks (%ld)", herr_blocks > 0, 1,
+		    herr_blocks);
+	/*
+	 * ASSERTED TO BE ZERO, WHICH IS THE POINT.  `GetSNRV27` is a constant
+	 * 10, so the low-SNR arm is unreachable and the `<=`/`<` distinction
+	 * is unmeasurable -- F9233.  Reporting the count keeps the claim
+	 * honest: if a later fixture ever reaches it, this line fails and
+	 * whoever wrote that fixture gets to add the variant.
+	 */
+	diff_eq_int("RxHdxDataV27 raised LOW_SNR (%ld, expected 0)",
+		    hdx_snr_low, 0, hdx_snr_low);
+	diff_eq_int("the `<` SNR variant is unmeasurable (%ld, expected 0)",
+		    hdx_snr_strict_sep, 0, hdx_snr_strict_sep);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -4042,6 +5097,8 @@ main(void)
 	rc |= run_demod();
 	rc |= run_txdelete();
 	rc |= run_moddata();
+	rc |= run_epoch();
+	rc |= run_hdx();
 	rc |= sep_report();
 
 	return rc;

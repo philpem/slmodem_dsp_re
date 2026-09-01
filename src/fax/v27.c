@@ -5,10 +5,13 @@
  * Reconstructed from dsplibs.o:
  *
  *   V27RX_delete         .text 0x099f10  193
- *   V27RX_eq_train       .text 0x09a110  255
+ *   V27RX_epoch_det      .text 0x099fe0  303
  *   V27TX_delete         .text 0x09a7c0  107
+ *   V27RX_eq_train       .text 0x09a110  255
  *   V27RX_decision       .text 0x09a210  284
  *   V27RX_modem          .text 0x0a2c60  127
+ *   RxHdxDataV27         .text 0x0a2ce0  226
+ *   RxHdxErrorV27        .text 0x0a2dd0   59
  *   V27RX_status         .text 0x0a3320   11
  *   V27TX_status         .text 0x0a3ed0  118
  *   DemodDataV27         .text 0x0a5950  331
@@ -152,6 +155,128 @@ V27RX_delete(void *modem)
 	sysdep_free(sh);
 
 	sysdep_free(modem);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * V27RX_epoch_det -- .text 0x099fe0, 303 bytes.
+ *
+ * The equaliser's FIRST slicer, and the one `V27RX_create` installs.  It
+ * decides nothing: `angle` and `mag` are never read or written, the return is
+ * 0xffff on every path, and what it does instead is watch the equaliser's own
+ * output for a jump.
+ *
+ * THE ARITHMETIC, and every part of it is the object's:
+ *
+ *   d = (short)( (((short)(I1 - i))^2 + ((short)(Q1 - q))^2) >> 15
+ *              + (((short)(I2 - I0))^2 + ((short)(Q2 - Q0))^2) >> 15 )
+ *   e = (short)((i*i + q*q) >> 15)
+ *
+ * -- two squared distances ACROSS TWO SYMBOLS each (the new point against the
+ * one two shifts back, and the two-back point against the one-back point),
+ * plus the new point's own energy.  Then, once the counter has passed its
+ * limit, `avg = (31*avg >> 5) + (e >> 5)` and the epoch is declared when
+ * `d > 4*avg`.
+ *
+ * THE SHIFTS ARE SHIFTS AND NOT DIVISIONS, which the object settles: a signed
+ * `/32` compiles to `test`/`add $31`/`sar`, and there is no such correction
+ * anywhere in these 303 bytes.  `31*avg` is `shl $5` then `sub`, GCC's own
+ * expansion of the multiply.
+ *
+ * THE SIX HISTORY SLOTS ARE READ `movzwl` AND THE TWO SAMPLES `movswl`, AND
+ * ONLY ONE OF THOSE IS FORCED.  The samples are SQUARED, and (-1)^2 and
+ * (65535)^2 are not the same 32-bit number, so their sign extension changes
+ * the answer and is forced -- `t_v27fax.c` measures it.  The history's does
+ * NOT: every slot is read and immediately differenced, and the difference is
+ * narrowed straight back to `short`, so nothing above bit 15 survives.  That
+ * is finding F614's free case exactly, and under finding F7803 the extension
+ * follows the DECLARED TYPE of what is loaded -- which is why the slots are
+ * `unsigned short` here.  The test asserts that variant separates NOTHING
+ * rather than pretending to measure it.
+ *
+ * `n_out` IS READ SIGNED, and that IS forced: its 32-bit result indexes
+ * `out_i[]` and `out_q[]`, which is CLAUDE.md's forced case exactly
+ * (`movswl 0x5e(%esi),%edx` at 0x9a006).  `fpm_fse.h` models the field as
+ * `unsigned short` from `FPM_FSE_receive`, so the two functions did not share
+ * a declaration and the `short` local below is what the object encodes here.
+ * A negative `n_out` therefore indexes BEFORE both arrays; `t_v27fax.c` drives
+ * that deliberately rather than assuming it cannot happen (finding F8587's
+ * rule: a subscript has to be planted, because a blob-against-blob run agrees
+ * on any out-of-bounds neighbour it reads).
+ *
+ * THE COUNTER RESET IS `0xffff` FOLLOWED BY THE UNCONDITIONAL INCREMENT, so
+ * the handover leaves `V27DEC_TRAIN_COUNT` at zero for `V27RX_eq_train` to
+ * count up from.  Writing it as a plain `= 0` before the increment would be a
+ * different instruction and a different value on the taken arm; the object's
+ * spelling is kept.
+ */
+unsigned short
+V27RX_epoch_det(struct fpm_fse *state, short *angle, short *mag)
+{
+	void *dec = state->cfg.owner;
+	short n = state->n_out;
+	short i, q;
+	short di, dq, ei, eq;
+	short avg;
+	int limit;
+	int d, e;
+
+	(void)angle;
+	(void)mag;
+
+	FIELD_US(dec, V27DEC_SYM_COUNT) =
+		(unsigned short)(FIELD_US(dec, V27DEC_SYM_COUNT) + 1);
+
+	limit = FIELD_I(dec, V27DEC_TRAIN_SHORT) ? V27EPOCH_SYMS_SHORT
+						 : V27EPOCH_SYMS_LONG;
+
+	i = state->out_i[n];
+	q = state->out_q[n];
+
+	/*
+	 * The new point against the one-back slot, and the two-back slot
+	 * against the newest one -- both of which are two symbols apart once
+	 * the shift below has happened.
+	 */
+	di = (short)(FIELD_US(dec, V27DEC_EPOCH_I1) - i);
+	dq = (short)(FIELD_US(dec, V27DEC_EPOCH_Q1) - q);
+	ei = (short)(FIELD_US(dec, V27DEC_EPOCH_I2)
+		     - FIELD_US(dec, V27DEC_EPOCH_I0));
+	eq = (short)(FIELD_US(dec, V27DEC_EPOCH_Q2)
+		     - FIELD_US(dec, V27DEC_EPOCH_Q0));
+
+	d = (short)(((di * di + dq * dq) >> 15)
+		    + ((ei * ei + eq * eq) >> 15));
+
+	FIELD_US(dec, V27DEC_EPOCH_I2) = FIELD_US(dec, V27DEC_EPOCH_I1);
+	FIELD_US(dec, V27DEC_EPOCH_Q2) = FIELD_US(dec, V27DEC_EPOCH_Q1);
+	FIELD_US(dec, V27DEC_EPOCH_I1) = FIELD_US(dec, V27DEC_EPOCH_I0);
+	FIELD_US(dec, V27DEC_EPOCH_Q1) = FIELD_US(dec, V27DEC_EPOCH_Q0);
+	FIELD_US(dec, V27DEC_EPOCH_I0) = (unsigned short)i;
+	FIELD_US(dec, V27DEC_EPOCH_Q0) = (unsigned short)q;
+
+	e = (short)((i * i + q * q) >> 15);
+
+	if (FIELD_S(dec, V27DEC_TRAIN_COUNT) > limit) {
+		avg = (short)(((FIELD_S(dec, V27DEC_EPOCH_AVG)
+				* V27EPOCH_AVG_WEIGHT) >> V27EPOCH_AVG_SHIFT)
+			      + (e >> V27EPOCH_AVG_SHIFT));
+		FIELD_S(dec, V27DEC_EPOCH_AVG) = avg;
+
+		if (d > avg * V27EPOCH_TRIGGER) {
+			FIELD_US(dec, V27DEC_TRAIN_COUNT) = 0xffff;
+			state->lms_force = 1;
+			state->cfg.decision = V27RX_eq_train;
+		}
+	} else {
+		FIELD_S(dec, V27DEC_EPOCH_AVG) = (short)e;
+	}
+
+	FIELD_US(dec, V27DEC_TRAIN_COUNT) =
+		(unsigned short)(FIELD_US(dec, V27DEC_TRAIN_COUNT) + 1);
+
+	return 0xffff;
 }
 
 /* ------------------------------------------------------------------ */
@@ -389,7 +514,7 @@ V27RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	short total = 0;
 
 	*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
-			(unsigned char)~(unsigned char)V27_STATUS_FLAG_02;
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG_ERROR;
 
 	n = *count;
 	do {
@@ -415,6 +540,85 @@ V27RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	*count = (unsigned short)total;
 
 	return FIELD_I(modem, V27_OBJ_STATUS);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxHdxDataV27 -- .text 0x0a2ce0, 226 bytes.
+ *
+ * The DATA state of the receive machine.  See v27fax.h for the flag-bit
+ * enumeration and for `V27SH_INT_0004`.
+ *
+ * THE `out` CASTS ARE THE RECONSTRUCTION'S AND THE OBJECT CANNOT SEE THEM: the
+ * handler family's signature (`v27_rx_state_fn`) spells the third argument
+ * `short *` and both callees declare theirs `unsigned short *`, and the
+ * pointer is passed through untouched either way.  Deviation D1141.
+ *
+ * THE RESULT IS A `?:` AND THE OBJECT SPELLS IT BRANCHLESSLY -- `cmp $0x2,%ax`
+ * / `setne` / `movzbl` / `neg` / `and`, which is `n & -(q != 2)`.  The `?:` is
+ * what is written, for the reason `src/fax/v17.c` gives at the identical site.
+ *
+ * ONE CODEGEN DIFFERENCE IS EXPECTED HERE AND IT IS DECLARED RATHER THAN
+ * FITTED.  The object widens `n` for the `DescrambleDataV27` call with
+ * `movzwl %ax,%edi`; `DescrambleDataV27`'s third parameter is `short` in this
+ * tree (from its own `movswl` of that parameter, F9118), so the implicit
+ * conversion below must widen with `movswl` instead.  Declaring that parameter
+ * `unsigned short` and letting the SINGLE narrowing happen inside the callee
+ * would reproduce both sites -- but it is a change to a written, tested
+ * function's signature that cannot be checked without the period compiler, so
+ * it is left for whoever has one.  The two spellings are behaviourally
+ * identical for every `n`, because the conversion to `short` happens either
+ * way before `SDMv27_descrambler` sees it.  Finding F9237, deviation D1140.
+ */
+short
+RxHdxDataV27(void *modem, short *in, short *out, unsigned short *count)
+{
+	unsigned short n;
+	short r;
+
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_CARRIER;
+	*FIELD(modem, V27_OBJ_STATUS) = V27_STATUS_DATA;
+
+	if (DataCarrierDetectV27(modem, in, *count) == 0
+	    || FIELD_I(FIELD_PTR(modem, V27_OBJ_SHARED), V27SH_INT_0004) != 0) {
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+			(unsigned char)~(unsigned char)V27_STATUS_FLAG_CARRIER;
+		*count = 0;
+		return 0;
+	}
+
+	n = DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV27(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	r = (short)(QualityDetectV27(modem) != V27_QUALITY_UNRELIABLE ? n : 0);
+
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) &=
+		(unsigned char)~(unsigned char)V27_STATUS_FLAG_LOW_SNR;
+	if (GetSNRV27(modem) <= V27RX_SNR_THRESHOLD)
+		*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_LOW_SNR;
+
+	return r;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * RxHdxErrorV27 -- .text 0x0a2dd0, 59 bytes.
+ *
+ * The ERROR state: raise the flag, demodulate anyway so the filters keep their
+ * history, and consume the block.  `DemodDataV27`'s return is DISCARDED.
+ */
+short
+RxHdxErrorV27(void *modem, short *in, short *out, unsigned short *count)
+{
+	*FIELD(modem, V27_OBJ_STATUS_FLAGS) |= V27_STATUS_FLAG_ERROR;
+
+	DemodDataV27(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	return 0;
 }
 
 /* ------------------------------------------------------------------ */
@@ -687,7 +891,7 @@ QualityDetectV27(void *modem)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V27 Dec error too big..."
 					     " unreliable data\n");
-		verdict = 2;
+		verdict = V27_QUALITY_UNRELIABLE;
 	}
 
 	n = FIELD_US(rx, V27RX_Q_COUNT);

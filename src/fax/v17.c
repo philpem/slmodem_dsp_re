@@ -7,6 +7,8 @@
  *   V17RX_delete      .text 0x097b40  251
  *   V17TX_delete      .text 0x098e00  107
  *   V17RX_modem       .text 0x09ff80  127
+ *   RxHdxDataV17      .text 0x0a0000  226
+ *   RxHdxErrorV17     .text 0x0a00f0   59
  *   V17RX_status      .text 0x0a0910  190
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
@@ -168,7 +170,7 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	unsigned short left;
 
 	*FIELD(modem, V17RX_OBJ_RESULT_B1) &=
-		(unsigned char)~V17RX_RESULT_B1_BIT1;
+		(unsigned char)~V17RX_FLAG_ERROR;
 
 	total = 0;
 	do {
@@ -196,6 +198,88 @@ V17RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	*count = (unsigned short)total;
 
 	return AT_I(modem, V17RX_OBJ_RESULT);
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxDataV17 -- .text 0x0a0000, 226 bytes.
+ *
+ * The DATA state of the receive machine.  See v17fax.h for the flag-bit
+ * enumeration and for `V17RXC_INT_0008`.
+ *
+ * THE `out` CASTS ARE THE RECONSTRUCTION'S AND THE OBJECT CANNOT SEE THEM.
+ * The state handlers share one signature (`v17rx_process_fn`) whose third
+ * argument this tree already spells `short *`, while `DemodDataV17` and
+ * `DescrambleDataV17` declare theirs `unsigned short *`.  Both pointers are
+ * passed through untouched, so nothing in the object distinguishes the two
+ * spellings and the casts cost no instruction.  Deviation D1141.
+ *
+ * THE RESULT IS A `?:` AND THE OBJECT SPELLS IT BRANCHLESSLY.  It emits
+ * `cmp $0x2,%ax` / `setne %al` / `movzbl %al,%esi` / `neg %esi` /
+ * `and %edi,%esi`, which is `n & -(q != 2)` -- the standard shape GCC folds a
+ * two-armed conditional into when one arm is a constant zero and the guard is
+ * already a flag.  The `?:` is what is written here, because it is the source
+ * that expression is the compilation of and because writing the mask by hand
+ * would be fitting the object rather than reading it.  `n` is `unsigned short`
+ * and the object zero-extends it (`movzwl %ax,%edi`), which is the local's
+ * declared type showing through (finding F7803); the final `movswl %si` is the
+ * function's own `short` return.
+ *
+ * THE `andb $0x7f` SITS BETWEEN THE `setne` AND THE `and` in the object.  That
+ * is the scheduler moving a store with no dependence on either, not a
+ * statement order to reproduce: the clear of `V17RX_FLAG_LOW_SNR` belongs with
+ * the `GetSNRV17` test it precedes.
+ */
+short
+RxHdxDataV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	unsigned short n;
+	short r;
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_CARRIER;
+	AT_B(modem, V17RX_OBJ_RESULT) = V17RX_STATUS_DATA;
+
+	if (DataCarrierDetectV17(modem, in, *count) == 0
+	    || AT_I(CTL(modem), V17RXC_INT_0008) != 0) {
+		AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+			(unsigned char)~V17RX_FLAG_CARRIER;
+		*count = 0;
+		return 0;
+	}
+
+	n = DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	DescrambleDataV17(modem, (unsigned short *)(void *)out, n);
+	*count = 0;
+
+	r = (short)(QualityDetectV17(modem) != V17_QUALITY_UNRELIABLE ? n : 0);
+
+	AT_B(modem, V17RX_OBJ_RESULT_B1) &=
+		(unsigned char)~V17RX_FLAG_LOW_SNR;
+	if (GetSNRV17(modem) <= V17RX_SNR_THRESHOLD)
+		AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_LOW_SNR;
+
+	return r;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * RxHdxErrorV17 -- .text 0x0a00f0, 59 bytes.
+ *
+ * The ERROR state: raise the flag, demodulate anyway so the filters keep their
+ * history, and consume the block.  `DemodDataV17`'s return is DISCARDED, which
+ * is the one thing separating this from a data handler that happened to fail.
+ */
+short
+RxHdxErrorV17(void *modem, short *in, short *out, unsigned short *count)
+{
+	AT_B(modem, V17RX_OBJ_RESULT_B1) |= V17RX_FLAG_ERROR;
+
+	DemodDataV17(modem, in, (unsigned short *)(void *)out, *count);
+	*count = 0;
+
+	return 0;
 }
 
 /* --------------------------------------------------------------------- */
@@ -241,7 +325,7 @@ V17RX_status(void *modem, struct v17_status *status)
 	status->tx_bps = 0;
 	status->rx_bps = (short)AT_US(rx, V17RX_OBJ_RX_BPS);
 	status->short_06 = (short)
-		((rx[V17RX_OBJ_RESULT_B1] & V17RX_RESULT_B1_BIT7) == 0);
+		((rx[V17RX_OBJ_RESULT_B1] & V17RX_FLAG_LOW_SNR) == 0);
 	status->snr = GetSNRV17(modem);
 	status->short_0a = 0;
 	status->short_0e = 0;

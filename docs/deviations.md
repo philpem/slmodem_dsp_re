@@ -11506,3 +11506,156 @@ the demodulator's own model, and asserts the returned value equals
 `agc.signal` -- over silent, quiet and loud blocks, which is what makes the
 bit take both of its values. The cost of the substitution is one extra load of
 `rx + 0x84` in our code, which no test can see and `compare.py` can.
+
+## D1140 ✅ `RxHdxDataV27` widens the descrambler's count with `movswl` where the object uses `movzwl`
+
+The object widens `DemodDataV27`'s return with `movzwl %ax,%edi` at 0x0a2d6b
+and hands `%edi` to `DescrambleDataV27`. `DescrambleDataV27` itself opens
+`movswl 0xc(%esp),%ecx` -- it narrows its own parameter to `short` and
+sign-extends it again -- which is what F9118 read off it and why `v27fax.h`
+declares that parameter `short`.
+
+The two cannot both come from one declaration: a `short` parameter makes the
+caller emit `movswl`, and the caller emits `movzwl`. F9237 records it as a
+cross-unit prototype disagreement, the same shape as F9116's `FPM_AGC_agc` in a
+milder form.
+
+**Bit-exact over the whole domain.** `SDMv27_descrambler`'s own parameter is
+`short`, so the conversion to `short` happens before the module sees the value
+whichever unit performs it, and the two spellings differ in no observable for
+any `n`. `n` is the equaliser's symbol count, bounded by `V27RX_SRE_MAX`, so it
+never reaches 0x8000 in the first place.
+
+**What it costs is one instruction at one call site**, which `compare.py` and
+`byteident.py` can see and no differential test can. The reconstruction keeps
+the callee faithful and lets the call site diverge, rather than the other way
+round, because the callee's `movswl` is the one the object states directly.
+
+**Status:** declared, not fitted, and one word from being retired. Declaring
+`DescrambleDataV27`'s third parameter `unsigned short` is the other element of
+a two-element enumeration and should reproduce BOTH sites -- GCC ought to fold
+`sign_extend(truncate(zero_extend(mem16)))` back to a single `movswl` inside
+the callee. It was not taken here because it changes a written, tested
+function's signature and the period compiler was not available to check it.
+Whoever runs `make period` next should A/B the two spellings and, if the callee
+stays byte-identical, take the change and retract this entry.
+
+## D1141 ✅ the four half-duplex handlers cast `out` where the author's family had one pointer type
+
+`RxHdxDataV17`, `RxHdxErrorV17`, `RxHdxDataV27` and `RxHdxErrorV27` are state
+handlers, so they share one signature -- `v17rx_process_fn` and
+`v27_rx_state_fn` -- whose third argument this tree already spells `short *`,
+from `V17RX_modem` and `V27RX_modem`. Their two callees do not:
+`DemodDataV17`/`V27` take `unsigned short *bits` and `DescrambleDataV17`/`V27`
+take `unsigned short *data`, both typed by what they are handed to
+(`FPM_FSE_receive`, `SDM_descrambler`, `SDMv27_descrambler`).
+
+The object passes one pointer straight through in every case and cannot
+distinguish the two spellings; the reconstruction inserts
+`(unsigned short *)(void *)out` at the four call sites, which emits nothing.
+
+**What the object probably had is the other resolution** -- the whole handler
+family declaring `out` as `unsigned short *`, and `V17RX_modem`/`V27RX_modem`
+with it. That is not taken here because it would change two written and tested
+functions' signatures for a difference no test and no codegen check can see,
+and because nothing in the object decides between them: `out` is only ever
+advanced by a `lea (%reg,%eax,2)`, which is the same for both types.
+
+**Status:** ours, and a type-model gap rather than a behavioural one. The pass
+that writes `RxNextStateV17`/`V27` will install these handlers through the
+typedef and should settle the family's spelling in one move at that point.
+
+## D1148 ⚠ `V21TX_modem` and `V29TX_modem` report an output count in a `short` that wraps
+
+Both functions accumulate what the dispatch slot returns into a running total
+and hand it back through `*count`, and the object re-narrows that total to
+sixteen bits on every iteration:
+
+    a2547:  8d 14 06        lea    (%esi,%eax,1),%edx
+    a254d:  0f bf f2        movswl %dx,%esi
+
+`%eax` is the slot's return, already sign-extended from sixteen bits by the
+`cwtl` above it, and `%esi` is the total. `V29TX_modem` has the identical pair
+at 0x0a4707/0x0a470d, and `V17TX_modem`, `V21RX_modem`, `V29RX_modem` and
+`B103FP_modem` all do the same thing with their own totals.
+
+So a call whose slot produces more than 32,767 units in one budget reports a
+wrapped count -- 40,000 comes back as -25,536 -- and the caller has no other
+way to learn how much was written. Nothing in either function clamps the
+budget or the slot's return, so the state is reachable: the budget is 6 for
+V.21 and 0x30 for V.29, and a slot returning more than about 5,500 units a
+call gets there.
+
+**Status:** reproduced. `t_v21fax` and `t_v29fax` each drive a script that
+produces 40,000 units from an input count of one, compare the wrapped count
+against the blob's, and assert from the run that the corner was reached. An
+`int` accumulator would be a different function with a different answer at
+that point, so this is a behaviour and not a spelling.
+
+## D1149 ⚠ `RxHdxDataV29` reports ZERO units after writing them and advancing every filter
+
+The DATA state demodulates the block, descrambles the result into the caller's
+buffer and then asks `QualityDetectV29` what it thinks. If the answer is
+`V29Q_NO_CARRIER` the function returns 0 -- not the number of words it just
+wrote:
+
+    a4072:  e8 fc ff ff ff  call   QualityDetectV29
+    a4077:  66 83 f8 02     cmp    $0x2,%ax
+    a407b:  0f 95 c0        setne  %al
+    a407e:  0f b6 f0        movzbl %al,%esi
+    a4085:  f7 de           neg    %esi
+    a4087:  21 fe           and    %edi,%esi
+
+`%edi` is the demodulator's count, so the return is exactly that count or
+exactly zero and there is no third outcome. The words themselves are in the
+caller's buffer either way, the descrambler's shift register has advanced over
+them, and the equaliser, the resampler and the symbol recoverer have all
+consumed the block. `V29RX_modem` adds the return to its running total and
+advances `out` by it, so on a zero the next handler call overwrites what this
+one wrote.
+
+The condition is reachable and is not a corner: `DataCarrierDetectV29` reads
+`sre.active & agc.signal` BEFORE the block is demodulated and
+`QualityDetectV29` reads the same pair AFTER, so any block on which the
+carrier goes away takes this arm.
+
+`RxHdxDataV17` and `RxHdxDataV27` carry the identical sequence, so it is one
+author's decision at three sites.
+
+**Status:** reproduced, with no repair. `t_v29fax` drives it by alternating
+loud and silent blocks -- the only stimulus shape that makes the two verdicts
+disagree -- and counts the trials on which the blob returned zero having
+written a non-empty buffer, asserting that count non-zero. On a steady
+stimulus the arm is never reached at all, which is what a separating count is
+for (finding F134).
+
+## D1150 ⚠ `V21TX_delete` and `V29TX_delete` free the handle unconditionally and guard nothing
+
+Neither function tests any pointer before dereferencing it and neither tests
+the handle before releasing it. `V21TX_delete` walks
+`modem -> +0x24 -> {+0x00, +0x10, +0x2c}` and `modem -> +0x20 -> +0x00` and
+then frees the handle by a sibling `jmp` at 0x099653; `V29TX_delete` walks
+`modem -> +0x24 -> {+0x64, +0x10, +0x0c, +0x08}` and
+`modem -> +0x20 -> {+0x04, +0x00}` and frees the handle by a sibling `jmp` at
+0x09bf12.
+
+So a NULL handle faults, a partially constructed one faults, and a caller that
+supplied the storage itself does not get it back. That is exactly what D1039
+records for `V21RX_delete` and what `V29RX_delete` does with its own ten
+sub-objects; this entry exists so the transmit pair is not read as an
+oversight in the reconstruction.
+
+**Status:** reproduced. `t_v21fax` and `t_v29fax` build both transmitters out
+of the harness allocator -- eight separate allocations for V.21 and twelve for
+V.29, one per thing that is actually released -- and compare the two sides'
+liveness vectors. Neither test drives a NULL handle, for D1022's reason: both
+sides would fault identically and the comparison would learn nothing.
+
+**AND WHAT THE VECTOR CANNOT SEE IS THE ORDER.** A liveness vector is a SET.
+Both sides call the same `sysdep_free` and the harness records no sequence, so
+two implementations that free the same blocks in different orders are
+indistinguishable to it -- `v21fax.h` already records this bound for
+`V21RX_delete`, and a parallel V.29 pass measured it directly. The order in
+both source files is read from the object's own call sequence and is stated,
+not tested. Nothing depends on it: every callee takes one pointer, none reads
+another's block, and the handle goes last on every reading.

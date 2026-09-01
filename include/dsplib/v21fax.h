@@ -401,6 +401,86 @@ struct v21_status {
 	(*(unsigned char *)((char *)(m) + V21TX_OBJ_FLAGS))
 
 /* ------------------------------------------------------------------------ */
+/* The rest of the TRANSMITTER handle, from V21TX_modem and V21TX_delete    */
+
+/*
+ * The int `V21TX_modem` returns, and the flag byte inside it.
+ *
+ * The object clears one bit of the BYTE at +0x1d on entry (`andb $0xfd`,
+ * 0x0a2502), sets that same bit and stores a literal 4 into the BYTE at +0x1c
+ * on one condition (0x0a2560, 0x0a2564), and returns the INT at +0x1c
+ * (0x0a256f).  So +0x1d is byte 1 of the four bytes at +0x1c and the function
+ * both modifies and returns one word -- `v17fax.h`'s `V17TX_OBJ_RESULT` /
+ * `_B1` pair, byte for byte, and `V29TX_modem`'s +0x1c/+0x1d likewise.
+ *
+ * NEUTRAL, because nothing reconstructed reads either.  What the bit indicates
+ * is not established and neither is what the 4 means; it is spelled as the
+ * object spells it, a BYTE store, which is why it cannot go through the int.
+ *
+ * The CONDITION is established: both are written only when the word count the
+ * caller asked for differs from what `FIFO_write` accepted, so they report a
+ * transmit queue that would not take the whole block.  On the non-FIFO arm the
+ * two are equal by construction and neither is ever written.
+ */
+#define V21TX_OBJ_RESULT	0x1c
+#define V21TX_OBJ_RESULT_B1	0x1d
+#define V21TX_RESULT_B1_BIT1	0x02
+#define V21TX_RESULT_BYTE_04	4
+
+/*
+ * The parameter block the transmitter owns, and the three fields of it that
+ * are reached.
+ *
+ * `V21TX_delete` releases the block's `fax_fifo` and then the block, so the
+ * transmitter owns it -- the same correction `v17fax.h` records for V.17's.
+ *
+ * +0x00 is TYPED BY ITS CALLEES and that is rank 2: it is `FIFO_write`'s
+ * first argument at 0x0a2592 and `FIFO_delete`'s at 0x0a263b.
+ *
+ * +0x04 and +0x08 are TYPED BY THE CONSTRUCTOR, which is the same rank: at
+ * 0x0993a1 `V21TX_create` writes `movl $0x0,0x4(%edi)` and at 0x0993a8
+ * `movl $TxHdxStartV21,0x8(%edi)` -- an `R_386_32` against a function, so the
+ * slot holds a function pointer and the word beside it is an `int` seeded to
+ * zero.  `V21TX_modem` reads the first to choose an arm and calls through the
+ * second.  What the int MEANS is not established, so it keeps its offset name.
+ */
+#define V21TX_OBJ_PARAMS	0x20
+
+#define V21TXP_FIFO		0x00	/* struct fax_fifo *                 */
+#define V21TXP_INT_0004		0x04	/* int: zero selects the FIFO arm    */
+#define V21TXP_PROCESS		0x08	/* the dispatch slot                 */
+
+/*
+ * What `V21TX_modem` initialises its inner loop's budget to, ONCE, before the
+ * loop rather than per iteration -- `movw $0x6,0x1a(%esp)` at 0x0a2518.  The
+ * dispatch slot is what decrements it, and the loop runs while it is STRICTLY
+ * POSITIVE as a signed short (`cmpw $0x0` with `jg`), so a slot that overshot
+ * into negative territory stops the loop rather than wrapping it.
+ *
+ * V.29's is 0x30 and V.17's is 0x30; this one is 6, which is the whole
+ * difference in that statement between the three.
+ */
+#define V21TX_MODEM_BUDGET	6
+
+/*
+ * `V21TX_modem`'s inner call, spelled from the object's own argument set:
+ * four slots written, the instance first, then the caller's two buffers
+ * UNCHANGED, and fourth `lea 0x1a(%esp)` -- the address of a `short` LOCAL,
+ * not the caller's count.  So the slot is handed a per-call budget the caller
+ * never sees.
+ *
+ * `in` IS NOT ADVANCED between iterations and `out` IS: `0x34(%esp)` is
+ * reloaded unchanged every time round (0x0a252e) while the output pointer
+ * accumulates `2 * got` (0x0a254a).  The result is sign-extended with `cwtl`
+ * before it joins the running total, so it is `short` and that is forced.
+ *
+ * `in` is `unsigned short *` because `FIFO_write` -- handed the very same
+ * pointer on the other arm -- declares its source that way.  Rank 2.
+ */
+typedef short (*v21tx_process_fn)(void *modem, unsigned short *in, short *out,
+				  short *budget);
+
+/* ------------------------------------------------------------------------ */
 /* The functions                                                            */
 
 /*
@@ -515,6 +595,60 @@ int V21RX_modem(void *modem, short *in, short *out, short *count);
  * function in the tree at once, and is not this file's to add.
  */
 void V21RX_delete(void *modem);
+
+/*
+ * Tear the TRANSMITTER down.  Seven releases, in the object's order
+ * (0x0995f8 through the sibling `jmp` at 0x099653): the modulator, the rate
+ * converter, the shared scratch buffer and then the DSP block itself, then
+ * the `fax_fifo` the parameter block owns and that block, and the handle last.
+ *
+ * IT IS ALSO THE SECOND, INDEPENDENT STATEMENT OF `struct v21_tx_dsp`.
+ * `ModDataV21` establishes +0x00, +0x10 and +0x2c by which module each is
+ * handed to; this function establishes the same three by which module
+ * RELEASES each -- `FPM_FSM_delete`, `FPM_MRF_free` and a plain `sysdep_free`
+ * of the pointer at +0x2c.  Two readings of one block, neither derived from
+ * the other, and they agree.  Finding F9252.
+ *
+ * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED.  The object
+ * plants one at 0x099603 before `FPM_MRF_free`, which takes a single argument
+ * and reads no frame slot past the first.  Finding F8876, and `V17TX_delete`
+ * and `V21RX_delete` both carry the note.
+ *
+ * There is no NULL guard on anything and the handle is released
+ * unconditionally by a sibling `jmp`, so a caller that supplied the storage
+ * does not get it back.  Both reproduced; see docs/deviations.md D1150, which
+ * is this pair's entry and points back at D1039 for the receive side.
+ */
+void V21TX_delete(void *modem);
+
+/*
+ * Drive the transmitter for one caller block, and report what the handle's
+ * result word says.
+ *
+ * TWO ARMS ON THE WAY IN, chosen by `V21TXP_INT_0004`.  Zero queues the
+ * caller's `count` words through `FIFO_write` and remembers how many it took;
+ * non-zero remembers `count` itself and touches the FIFO not at all.  What is
+ * remembered is compared against `*count` AFTER the loop, and a mismatch is
+ * what sets `V21TX_RESULT_B1_BIT1` and writes `V21TX_RESULT_BYTE_04` -- so on
+ * the second arm the comparison is between a value and itself and neither is
+ * ever written.
+ *
+ * THE LOOP IS A `do`/`while` ON A LOCAL, NOT ON THE CALLER'S COUNT.  See
+ * `v21tx_process_fn`: the budget starts at `V21TX_MODEM_BUDGET`, is set ONCE
+ * before the loop, and the slot decrements it.
+ *
+ * `count` IS IN/OUT AND CHANGES UNITS across the call -- on entry the number
+ * of input words, on return the total the slot produced -- and NOTHING CLAMPS
+ * WHAT THE SLOT WRITES THROUGH `out`.  That is the shape deviation D956 is
+ * about; a caller's output buffer must be sized from what the slot can
+ * produce over `V21TX_MODEM_BUDGET` and not from the input count.
+ *
+ * The running total is a `short` and the object re-narrows it with `cwtl` on
+ * every iteration, so a block producing more than 32,767 units wraps.
+ * Reproduced, not corrected; docs/deviations.md D1148.
+ */
+int V21TX_modem(void *modem, unsigned short *in, short *out,
+		unsigned short *count);
 
 /* ------------------------------------------------------------------------ */
 /* The receive data path                                                    */

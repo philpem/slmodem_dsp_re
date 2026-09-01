@@ -5,6 +5,7 @@
  * Reconstructed from dsplibs.o:
  *
  *   V21RX_delete      .text 0x099270   123
+ *   V21TX_delete      .text 0x0995f0   104
  *   V21RX_modem       .text 0x0a1c40   127
  *   RxHdxErrorV21     .text 0x0a1cc0    59
  *   RxHdxIdleV21      .text 0x0a1d00    81
@@ -13,6 +14,7 @@
  *   RxHdxWaitV21      .text 0x0a20a0   440
  *   RxHdxDataV21      .text 0x0a2260   418
  *   V21RX_status      .text 0x0a2460   132
+ *   V21TX_modem       .text 0x0a24f0   182
  *   V21TX_status      .text 0x0a2c00    96
  *   DemodDataV21      .text 0x0a5740   217
  *   CarrierDetectV21  .text 0x0a5820    16
@@ -20,7 +22,7 @@
  *   ModDataV21        .text 0x0a5880    87
  *   TxNoCarrierV21    .text 0x0a58e0   103
  *
- * THESE ARE TWELVE LEAVES OF THREE DIFFERENT CLUSTERS, not one author file:
+ * THESE ARE SEVENTEEN LEAVES OF THREE DIFFERENT CLUSTERS, not one author file:
  * 0x099270 sits with the constructors and destructors, 0x0a1c40 with the
  * half-duplex machine, and 0x0a5740 onward with the per-modulation data
  * paths.  They are collected here because they are the V.21 work that is
@@ -48,6 +50,7 @@
 #include <string.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/faxfifo.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_fsd.h"
 #include "dsplib/fpm_fsm.h"
@@ -55,6 +58,17 @@
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v21fax.h"
+
+/*
+ * The TRANSMITTER handle is not modelled -- `V21TX_create` is not
+ * reconstructed -- so the two transmit entry points below reach it through
+ * offsets, exactly as `v17.c` and `v29.c` reach theirs.  The receive side
+ * keeps its typed accessors from `v21fax.h`; the two halves are different
+ * objects (see the header) and are spelled differently on purpose.
+ */
+#define FIELD(obj, off)		((unsigned char *)(obj) + (off))
+#define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
+#define AT_I(p, off)		(*(int *)(void *)FIELD((p), (off)))
 
 /*
  * The handle is re-read from the caller's argument before every free rather
@@ -83,6 +97,42 @@ V21RX_delete(void *modem)
 	sysdep_free(V21RX_DSP(modem)->mag);
 	sysdep_free(V21RX_DSP(modem));
 	sysdep_free(V21RX_HDX(modem));
+	sysdep_free(modem);
+}
+
+/*
+ * V21TX_delete -- .text 0x0995f0, 104 bytes.
+ *
+ * The transmitter's seven releases.  The DSP block is re-read from the handle
+ * before every one rather than cached, because the object re-reads it: four
+ * separate `mov 0x24(%ebx),%e?x` between 0x0995f8 and 0x099628, and two more
+ * of `0x20(%ebx)` after them.
+ *
+ * `FPM_FSM_delete`, `FPM_MRF_free` and the `sysdep_free` of +0x2c type the
+ * three members of `struct v21_tx_dsp` a second time -- `ModDataV21` typed
+ * them by what each is handed TO, this function by what releases each -- so
+ * the block's layout has two independent statements behind it.  See the
+ * header and finding F9252.
+ *
+ * THE LITERAL 1 IN THE SECOND ARGUMENT SLOT IS NOT REPRODUCED (0x099603,
+ * before `FPM_MRF_free`).  Finding F8876; `V21RX_delete` above carries the
+ * same note for the same reason.
+ *
+ * No NULL guard anywhere, and the handle goes unconditionally; D1150.
+ */
+void
+V21TX_delete(void *modem)
+{
+	FPM_FSM_delete(&V21TX_DSP(modem)->fsm);
+	FPM_MRF_free(&V21TX_DSP(modem)->mrf);
+	sysdep_free(V21TX_DSP(modem)->scratch);
+	sysdep_free(V21TX_DSP(modem));
+
+	FIFO_delete((struct fax_fifo *)
+			FIELD_PTR(FIELD_PTR(modem, V21TX_OBJ_PARAMS),
+				  V21TXP_FIFO));
+	sysdep_free(FIELD_PTR(modem, V21TX_OBJ_PARAMS));
+
 	sysdep_free(modem);
 }
 
@@ -455,6 +505,71 @@ V21RX_status(void *modem, struct v21_status *st)
 			       * V21_STATUS_BPS);
 
 	return 1;
+}
+
+/*
+ * V21TX_modem -- .text 0x0a24f0, 182 bytes.  See v21fax.h for the two arms,
+ * the budget and why `in` does not advance while `out` does.
+ *
+ * IT IS `V17TX_modem` FOR A DIFFERENT MODULATION, and the object says so:
+ * both are 182 bytes and the instruction sequences differ in four immediates
+ * and nothing else -- the gate at params + 0x04 against V.17's + 0x08, the
+ * dispatch slot at + 0x08 against + 0x14, the budget 6 against 0x30, and the
+ * status byte 4 against 9.  `V29TX_modem` is the third copy.  Finding F9253.
+ *
+ * The parameter block is read ONCE before the gate and re-read at the top of
+ * every loop iteration; the object hoists the first iteration's read out of
+ * the loop (0x0a24ff and 0x0a259e reach the head at 0x0a252a, and the back
+ * edge at 0x0a2527 reloads), which is loop rotation of exactly this source.
+ */
+int
+V21TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
+{
+	void *prm;
+	unsigned short taken;
+	short budget;
+	short total;
+
+	prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+
+	*FIELD(modem, V21TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V21TX_RESULT_B1_BIT1;
+
+	if (AT_I(prm, V21TXP_INT_0004) == 0)
+		taken = (unsigned short)FIFO_write(
+				(struct fax_fifo *)
+					FIELD_PTR(prm, V21TXP_FIFO),
+				in, *count);
+	else
+		taken = *count;
+
+	budget = V21TX_MODEM_BUDGET;
+	total = 0;
+	do {
+		short got;
+
+		prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+		got = (*(v21tx_process_fn *)(void *)
+				FIELD(prm, V21TXP_PROCESS))
+					(modem, in, out, &budget);
+
+		out += got;
+		total = (short)(total + got);
+	} while (budget > 0);
+
+	if (*count != taken) {
+		*FIELD(modem, V21TX_OBJ_RESULT_B1) |= V21TX_RESULT_B1_BIT1;
+		/*
+		 * A BYTE store into the low byte of the int this function
+		 * returns -- `movb $0x4,0x1c(%edi)` at 0x0a2564 -- which is
+		 * why it cannot be written through `AT_I`.
+		 */
+		*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_RESULT_BYTE_04;
+	}
+
+	*count = (unsigned short)total;
+
+	return AT_I(modem, V21TX_OBJ_RESULT);
 }
 
 /*

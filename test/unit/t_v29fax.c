@@ -111,6 +111,7 @@
  *         that makes `agc.signal` itself observable.
  */
 
+#include <stddef.h>
 #include <string.h>
 
 #include "harness.h"
@@ -118,8 +119,12 @@
 #include "dsplib/v29fax.h"
 #include "dsplib/v29data.h"
 
+#include "dsplib/faxfifo.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
+#include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_tone.h"
+#include "dsplib/sgd.h"
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
@@ -1168,7 +1173,7 @@ run_modem_one(const struct slot_step *script, int len, unsigned short count,
 
 	/* The status word: bit 0x200 clear, everything else untouched. */
 	diff_eq_int("at %ld: bit 0x200 was cleared",
-		    get_int(fa.obj, V29_OBJ_STATUS) & V29_STATUS_0200, 0,
+		    get_int(fa.obj, V29_OBJ_STATUS) & V29_STATUS_ERROR, 0,
 		    where);
 	if (ra != 0)
 		mdm_ret_nonzero++;
@@ -1254,7 +1259,7 @@ run_modem(void)
 
 		diff_eq_int("the seeded status came back as %ld", rb, ra,
 			    (long)ra);
-		diff_eq_int("exactly bit 0x200 was cleared", ra, ~V29_STATUS_0200,
+		diff_eq_int("exactly bit 0x200 was cleared", ra, ~V29_STATUS_ERROR,
 			    0);
 		diff_eq_int("the next word is untouched",
 			    get_int(fa.obj, V29_OBJ_STATUS + 4), -1, 0);
@@ -2492,6 +2497,1036 @@ run_demod(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* V29TX_delete                                                          */
+
+extern void ref_V29TX_delete(void *modem);
+
+/*
+ * TWELVE SEPARATE ALLOCATIONS, one per thing the twelve `sysdep_free` calls
+ * the object reaches actually release -- nine of them directly and three
+ * through `FPM_PPS_free`, `SGD_delete` and `FIFO_delete`.  `run_delete`
+ * above says what a liveness vector can and cannot see; the same bound
+ * applies here, and the ORDER is stated in `v29fax.h` from the disassembly
+ * and is not tested.
+ *
+ * The handle, the parameter block and the private block are filled
+ * PSEUDORANDOMLY before the pointers go in, so an offset wrong by four bytes
+ * frees a pointer the allocator never handed out (counted in `bad_free`) and
+ * leaves the right block live -- both halves of the vector move.
+ */
+#define TXDEL_BLOCKS	12
+#define TXDEL_OBJ	0x40
+#define TXDEL_PRM	0x20
+
+struct txdelfix {
+	void	*p[TXDEL_BLOCKS];
+	int	live[TXDEL_BLOCKS];
+	int	allocs, frees, bad_free, live_total;
+};
+
+static void *
+txdel_build(struct txdelfix *d, unsigned seed)
+{
+	unsigned char *obj, *prm, *tx;
+	struct fax_fifo *fifo;
+	struct sgd *sg;
+	struct fpm_pps *pps;
+	int i;
+
+	for (i = 0; i < TXDEL_BLOCKS; i++)
+		d->p[i] = 0;
+
+	obj = (unsigned char *)sysdep_malloc(TXDEL_OBJ);
+	prm = (unsigned char *)sysdep_malloc(TXDEL_PRM);
+	tx = (unsigned char *)sysdep_malloc(TX_SIZE);
+	fifo = (struct fax_fifo *)sysdep_malloc(sizeof(*fifo));
+	sg = (struct sgd *)sysdep_malloc(sizeof(*sg));
+
+	rng_seed(seed);
+	for (i = 0; i < TXDEL_OBJ; i++)
+		obj[i] = (unsigned char)rng_next();
+	for (i = 0; i < TXDEL_PRM; i++)
+		prm[i] = (unsigned char)rng_next();
+	for (i = 0; i < TX_SIZE; i++)
+		tx[i] = (unsigned char)rng_next();
+	memset(fifo, 0, sizeof(*fifo));
+	memset(sg, 0, sizeof(*sg));
+
+	d->p[0] = obj;
+	d->p[1] = prm;
+	d->p[2] = tx;
+	d->p[3] = sysdep_malloc(32 * sizeof(short));	/* pps.hist_i     */
+	d->p[4] = sysdep_malloc(32 * sizeof(short));	/* pps.hist_q     */
+	d->p[5] = sysdep_malloc(32 * sizeof(short));	/* ring.i  +0x08  */
+	d->p[6] = sysdep_malloc(32 * sizeof(short));	/* ring.q  +0x0c  */
+	d->p[7] = sysdep_malloc(32 * sizeof(short));	/* ring.sym +0x10 */
+	d->p[8] = fifo;					/* params + 0x00  */
+	d->p[9] = sysdep_malloc(32 * sizeof(unsigned short));	/* fifo->buf */
+	d->p[10] = sg;					/* params + 0x04  */
+	d->p[11] = sysdep_malloc(32);			/* sgd->hist      */
+
+	put_ptr(obj, V29_OBJ_TX, tx);
+	put_ptr(obj, V29TX_OBJ_PARAMS, prm);
+	put_ptr(prm, V29TXP_FIFO, fifo);
+	put_ptr(prm, V29TXP_SGD, sg);
+
+	pps = (struct fpm_pps *)(void *)(tx + V29FP_PPS);
+	memset(pps, 0, sizeof(*pps));
+	pps->hist_i = (short *)d->p[3];
+	pps->hist_q = (short *)d->p[4];
+
+	put_ptr(tx, V29FP_SMC_RING + 0x00, d->p[5]);
+	put_ptr(tx, V29FP_SMC_RING + 0x04, d->p[6]);
+	put_ptr(tx, V29FP_SMC_RING + 0x08, d->p[7]);
+
+	fifo->buf = (unsigned short *)d->p[9];
+	sg->hist = (unsigned short *)d->p[11];
+
+	return (void *)obj;
+}
+
+static void
+txdel_record(struct txdelfix *d)
+{
+	int i;
+
+	for (i = 0; i < TXDEL_BLOCKS; i++)
+		d->live[i] = harness_alloc_ordinal(d->p[i]) != 0;
+	d->allocs = harness_alloc.allocs;
+	d->frees = harness_alloc.frees;
+	d->bad_free = harness_alloc.bad_free;
+	d->live_total = harness_alloc.live;
+}
+
+static long txdel_trials, txdel_freed_all;
+
+static int
+run_txdelete(void)
+{
+	static const unsigned seeds[] = { 0x2de17a00u, 0x2de17a01u };
+	int s, i;
+
+	diff_begin("V29TX_delete");
+
+	for (s = 0; s < (int)(sizeof(seeds) / sizeof(seeds[0])); s++) {
+		struct txdelfix da_, db_;
+		void *m;
+
+		harness_alloc_reset();
+		m = txdel_build(&da_, seeds[s]);
+		ref_V29TX_delete(m);
+		txdel_record(&da_);
+
+		harness_alloc_reset();
+		m = txdel_build(&db_, seeds[s]);
+		V29TX_delete(m);
+		txdel_record(&db_);
+
+		for (i = 0; i < TXDEL_BLOCKS; i++)
+			diff_eq_int("block %ld still live", (long)db_.live[i],
+				    (long)da_.live[i], i);
+		diff_eq_int("seed %ld: frees", (long)db_.frees,
+			    (long)da_.frees, s);
+		diff_eq_int("seed %ld: bad frees", (long)db_.bad_free,
+			    (long)da_.bad_free, s);
+		diff_eq_int("seed %ld: outstanding", (long)db_.live_total,
+			    (long)da_.live_total, s);
+
+		diff_eq_int("seed %ld: the blob left nothing live",
+			    (long)da_.live_total, 0, s);
+		diff_eq_int("seed %ld: the blob made no bad free",
+			    (long)da_.bad_free, 0, s);
+		diff_eq_int("seed %ld: the blob made exactly twelve frees",
+			    (long)da_.frees, TXDEL_BLOCKS, s);
+		for (i = 0; i < TXDEL_BLOCKS; i++)
+			diff_eq_int("the blob freed block %ld",
+				    (long)da_.live[i], 0, i);
+
+		txdel_trials++;
+		if (da_.live_total == 0 && da_.frees == TXDEL_BLOCKS)
+			txdel_freed_all++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* V29TX_modem                                                           */
+
+extern int ref_V29TX_modem(void *modem, unsigned short *in, short *out,
+			   unsigned short *count);
+
+/*
+ * THE OUTPUT BUFFER IS SIZED FROM WHAT THE SLOT CAN PRODUCE, NOT FROM THE
+ * INPUT COUNT -- deviation D956's lesson.  `V29TX_modem` advances `out` by
+ * whatever the slot returns and clamps nothing, and `*count` goes in as an
+ * input word count and comes back as an output unit count.  The wrap script
+ * produces 40,000 units from an input count of one, so a buffer sized from
+ * `count` would be overrun on the BLOB's side as much as ours.  The slot
+ * bounds its own writes to the window, so a wrong `out` advance is a mark in
+ * the wrong place and not a crash.
+ */
+#define TXM_OUT_LEN	40064
+#define TXM_IN_LEN	256
+#define TXM_FIFO_LEN	64
+#define TXM_OBJ_SIZE	0x40
+#define TXM_PRM_SIZE	0x20
+#define TXM_MARK	((short)0x71ce)
+#define TXM_MAX		40
+
+struct txm_step {
+	short	spend;			/* what the slot takes off `budget` */
+	short	produce;		/* what it returns                  */
+};
+
+struct txm_call {
+	long	in_off;
+	long	out_off;
+	long	budget_in;
+	long	budget_out;
+	long	ret;
+};
+
+static struct txm_call txm_log[TXM_MAX];
+static int txm_calls;
+static unsigned short *txm_in_base;
+static short *txm_out_base;
+static const struct txm_step *txm_script;
+static int txm_script_len;
+
+static short
+txm_slot(void *modem, unsigned short *in, short *out, short *budget)
+{
+	int idx = txm_calls;
+	short produce, spend;
+	int k;
+
+	if (idx < txm_script_len) {
+		spend = txm_script[idx].spend;
+		produce = txm_script[idx].produce;
+	} else {
+		spend = 0x7fff;
+		produce = 0;
+	}
+
+	if (idx < TXM_MAX) {
+		txm_log[idx].in_off = (long)(in - txm_in_base);
+		txm_log[idx].out_off = (long)(out - txm_out_base);
+		txm_log[idx].budget_in = *budget;
+	}
+
+	/* Stop a runaway script: the last entry always drains the budget. */
+	if (idx + 1 >= txm_script_len)
+		spend = 0x7fff;
+	*budget = (short)(*budget - spend);
+
+	for (k = 0; k < produce; k++)
+		if ((long)(out - txm_out_base) + k < TXM_OUT_LEN)
+			out[k] = (short)(0x2200 + ((idx << 4) & 0xff)
+					 + (k & 0x0f));
+
+	if (idx < TXM_MAX) {
+		txm_log[idx].budget_out = *budget;
+		txm_log[idx].ret = produce;
+	}
+	txm_calls++;
+	(void)modem;
+	return produce;
+}
+
+struct txmfix {
+	unsigned char	obj[TXM_OBJ_SIZE];
+	unsigned char	prm[TXM_PRM_SIZE];
+	struct fax_fifo	fifo;
+	unsigned short	fifobuf[TXM_FIFO_LEN];
+	double		align;
+};
+
+static struct txmfix xa, xb;
+static unsigned short txm_in[TXM_IN_LEN];
+static short txm_out_a[TXM_OUT_LEN], txm_out_b[TXM_OUT_LEN];
+
+/*
+ * Lay one transmitter down.  Every field the function READS is planted --
+ * including `V29TXP_PROCESS`, which it uses as a SUBSCRIPT into the parameter
+ * block and then CALLS.  D955 / finding F8587: a blob-against-blob dry run
+ * cannot catch an unplanted subscript, and here an unplanted slot is a jump
+ * into pseudorandom bytes.
+ */
+static void
+txm_fixture(struct txmfix *f, unsigned seed, int gate, short fifo_size,
+	    unsigned short fifo_count, int word)
+{
+	int i;
+
+	memset(f, 0, sizeof(*f));
+
+	rng_seed(seed);
+	for (i = 0; i < TXM_OBJ_SIZE; i++)
+		f->obj[i] = (unsigned char)rng_next();
+	for (i = 0; i < TXM_PRM_SIZE; i++)
+		f->prm[i] = (unsigned char)rng_next();
+	for (i = 0; i < TXM_FIFO_LEN; i++)
+		f->fifobuf[i] = (unsigned short)rng_next();
+
+	put_ptr(f->obj, V29TX_OBJ_PARAMS, f->prm);
+	memcpy(f->obj + V29TX_OBJ_RESULT, &word, sizeof word);
+
+	put_ptr(f->prm, V29TXP_FIFO, &f->fifo);
+	put_int(f->prm, V29TXP_INT_0008, gate);
+	put_ptr(f->prm, V29TXP_PROCESS, (void *)txm_slot);
+
+	f->fifo.short_000 = 0;
+	f->fifo.size = fifo_size;
+	f->fifo.fill = 0;
+	f->fifo.buf = f->fifobuf;
+	f->fifo.count = fifo_count;
+	f->fifo.rd = 0;
+	f->fifo.wr = 0;
+}
+
+static long txm_fifo_arm, txm_direct_arm, txm_flag_sep, txm_noflag;
+static long txm_multi_call, txm_wrapped, txm_out_moved, txm_in_static;
+static long txm_budget_neg, txm_slot_called;
+
+static long
+txm_blk_diff(const unsigned char *a, const unsigned char *b, int n)
+{
+	int i;
+
+	for (i = 0; i < n; i++)
+		if (a[i] != b[i])
+			return i;
+	return -1;
+}
+
+/*
+ * The handle, the parameter block and the FIFO object byte for byte, with
+ * only the three per-fixture pointers skipped.
+ */
+static long
+txm_first_diff(const struct txmfix *a, const struct txmfix *b)
+{
+	int i;
+	int lo = (int)((const char *)&a->fifo.buf - (const char *)&a->fifo);
+
+	for (i = 0; i < TXM_OBJ_SIZE; i++) {
+		if (i >= V29TX_OBJ_PARAMS
+		    && i < V29TX_OBJ_PARAMS + (int)sizeof(void *))
+			continue;
+		if (a->obj[i] != b->obj[i])
+			return i;
+	}
+	for (i = 0; i < TXM_PRM_SIZE; i++) {
+		if (i >= V29TXP_FIFO && i < V29TXP_FIFO + (int)sizeof(void *))
+			continue;
+		if (i >= V29TXP_PROCESS
+		    && i < V29TXP_PROCESS + (int)sizeof(void *))
+			continue;
+		if (a->prm[i] != b->prm[i])
+			return TXM_OBJ_SIZE + i;
+	}
+	for (i = 0; i < (int)sizeof(a->fifo); i++) {
+		if (i >= lo && i < lo + (int)sizeof(void *))
+			continue;
+		if (((const unsigned char *)(const void *)&a->fifo)[i]
+		    != ((const unsigned char *)(const void *)&b->fifo)[i])
+			return TXM_OBJ_SIZE + TXM_PRM_SIZE + i;
+	}
+	return -1;
+}
+
+static void
+run_txm_one(const struct txm_step *script, int len, unsigned short count,
+	    int gate, short fifo_size, unsigned short fifo_count, int word,
+	    unsigned seed, long where)
+{
+	struct txm_call la[TXM_MAX], lb[TXM_MAX];
+	int na, nb, k;
+	int ra, rb;
+	unsigned short ca, cb;
+	unsigned char ra_b1, rb_b1;
+
+	txm_fixture(&xa, seed, gate, fifo_size, fifo_count, word);
+	txm_fixture(&xb, seed, gate, fifo_size, fifo_count, word);
+
+	rng_seed(seed ^ 0x1f1f1f1fu);
+	for (k = 0; k < TXM_IN_LEN; k++)
+		txm_in[k] = (unsigned short)rng_next();
+	for (k = 0; k < TXM_OUT_LEN; k++)
+		txm_out_a[k] = txm_out_b[k] = TXM_MARK;
+
+	txm_script = script;
+	txm_script_len = len;
+	txm_in_base = txm_in;
+
+	txm_calls = 0;
+	memset(txm_log, 0, sizeof(txm_log));
+	txm_out_base = txm_out_a;
+	ca = count;
+	ra = ref_V29TX_modem(xa.obj, txm_in, txm_out_a, &ca);
+	na = txm_calls;
+	memcpy(la, txm_log, sizeof(la));
+	ra_b1 = xa.obj[V29TX_OBJ_RESULT_B1];
+
+	txm_calls = 0;
+	memset(txm_log, 0, sizeof(txm_log));
+	txm_out_base = txm_out_b;
+	cb = count;
+	rb = V29TX_modem(xb.obj, txm_in, txm_out_b, &cb);
+	nb = txm_calls;
+	memcpy(lb, txm_log, sizeof(lb));
+	rb_b1 = xb.obj[V29TX_OBJ_RESULT_B1];
+
+	diff_eq_int("at %ld: V29TX_modem returned", (long)rb, (long)ra, where);
+	diff_eq_int("at %ld: the count came back", (long)cb, (long)ca, where);
+	diff_eq_int("at %ld: the slot was called the same number of times",
+		    (long)nb, (long)na, where);
+	diff_eq_int("at %ld: the result flag byte", (long)rb_b1, (long)ra_b1,
+		    where);
+	for (k = 0; k < na && k < TXM_MAX; k++) {
+		diff_eq_int("call %ld: the input offset", lb[k].in_off,
+			    la[k].in_off, k);
+		diff_eq_int("call %ld: the output offset", lb[k].out_off,
+			    la[k].out_off, k);
+		diff_eq_int("call %ld: the budget in", lb[k].budget_in,
+			    la[k].budget_in, k);
+	}
+
+	diff_eq_int("at %ld: first differing handle byte",
+		    txm_first_diff(&xa, &xb), -1, where);
+	diff_eq_int("at %ld: first differing output byte",
+		    txm_blk_diff((const unsigned char *)txm_out_b,
+				 (const unsigned char *)txm_out_a,
+				 (int)sizeof(txm_out_a)), -1, where);
+	diff_eq_int("at %ld: first differing FIFO buffer byte",
+		    txm_blk_diff((const unsigned char *)xb.fifobuf,
+				 (const unsigned char *)xa.fifobuf,
+				 (int)sizeof(xa.fifobuf)), -1, where);
+
+	/* The separating counts, taken FROM THE BLOB'S RUN. */
+	if (na > 0)
+		txm_slot_called++;
+	if (na > 1)
+		txm_multi_call++;
+	if (gate == 0)
+		txm_fifo_arm++;
+	else
+		txm_direct_arm++;
+	if ((ra_b1 & V29TX_RESULT_B1_BIT1) != 0
+	    && xa.obj[V29TX_OBJ_RESULT] == V29TX_RESULT_BYTE_07)
+		txm_flag_sep++;
+	if ((ra_b1 & V29TX_RESULT_B1_BIT1) == 0)
+		txm_noflag++;
+	if (na > 1 && la[1].out_off != 0)
+		txm_out_moved++;
+	if (na > 1 && la[1].in_off == 0)
+		txm_in_static++;
+	if (na > 0 && la[na - 1].budget_out < 0)
+		txm_budget_neg++;
+	{
+		long tot = 0;
+
+		for (k = 0; k < na && k < TXM_MAX; k++)
+			tot += la[k].ret;
+		if (tot > 0x7fff)
+			txm_wrapped++;
+	}
+}
+
+static int
+run_txmodem(void)
+{
+	/* One call that drains the whole 0x30 budget in one go. */
+	static const struct txm_step s1[] = { { 0x30, 4 } };
+	/* Three calls, part of the budget each, then a drain. */
+	static const struct txm_step s2[] = { { 0x10, 3 }, { 0x10, 5 },
+					      { 0x10, 2 } };
+	/* A slot that spends NOTHING twice: the loop must keep going. */
+	static const struct txm_step s3[] = { { 0, 1 }, { 0, 2 }, { 0x30, 3 } };
+	/* Overshoot: the budget goes negative and the loop still stops. */
+	static const struct txm_step s4[] = { { 0x100, 7 } };
+	/* The wrap: 40,000 units out of an input count of one. */
+	static const struct txm_step s5[] = { { 0x10, 20000 },
+					      { 0x10, 20000 },
+					      { 0x10, 3 } };
+	/* A slot that produces nothing at all. */
+	static const struct txm_step s6[] = { { 0x30, 0 } };
+
+	diff_begin("V29TX_modem");
+
+	/* The FIFO arm with room for everything: the flag is NOT written. */
+	run_txm_one(s1, 1, 8, 0, 64, 0, 0x11223344, 0x2a290000u, 1);
+	/* The FIFO arm with the queue nearly full: flag AND status byte. */
+	run_txm_one(s2, 3, 20, 0, 64, 60, 0x11223344, 0x2a290001u, 2);
+	/* Completely full: nothing taken at all. */
+	run_txm_one(s1, 1, 12, 0, 64, 64, 0x00000000, 0x2a290002u, 3);
+	/* The DIRECT arm: the FIFO is untouched and so is the flag. */
+	run_txm_one(s2, 3, 20, 1, 64, 60, 0x11223344, 0x2a290003u, 4);
+	run_txm_one(s3, 3, 5, 1, 64, 0, 0x7fffffff, 0x2a290004u, 5);
+	/* The budget driven negative. */
+	run_txm_one(s4, 1, 3, 1, 64, 0, 0x11223344, 0x2a290005u, 6);
+	/* The far corner: the running short total wraps. */
+	run_txm_one(s5, 3, 1, 1, 64, 0, 0x11223344, 0x2a290006u, 7);
+	/* A zero input count, on both arms. */
+	run_txm_one(s6, 1, 0, 0, 64, 0, 0x11223344, 0x2a290007u, 8);
+	run_txm_one(s6, 1, 0, 1, 64, 0, 0x11223344, 0x2a290008u, 9);
+	/*
+	 * The result word seeded with every bit set, so a wrong bit cleared on
+	 * entry or a wrong offset read back is a different return value.
+	 */
+	run_txm_one(s1, 1, 8, 1, 64, 0, -1, 0x2a290009u, 10);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* ModDataV29                                                            */
+
+extern unsigned short ref_ModDataV29(void *modem, const unsigned short *bits,
+				     short *samples, unsigned short count);
+extern void ref_SMC_init(void *smc, const void *cfg);
+extern void ref_FPM_PPS_init(void *state, const void *cfg, int fresh);
+extern void ref_FPM_PPS_free(void *state);
+
+#define MOD_RING	64
+#define MOD_PHASES	10
+#define MOD_COEFFS	120
+#define MOD_OUT		4096
+#define MOD_NDATA	256
+#define MOD_BLOCKS	12
+#define MOD_MARK	((short)0x5ead)
+
+struct modfix {
+	unsigned char	obj[0x40];
+	unsigned char	fp[TX_SIZE];
+	short		ri[MOD_RING], rq[MOD_RING], sym[MOD_RING];
+	double		align;
+};
+
+static struct modfix moda, modb;
+static short mod_imap[16], mod_qmap[16];
+static short mod_cos[32], mod_sin[32];
+static unsigned short mod_pmap[16];
+static short mod_ci[MOD_COEFFS], mod_cq[MOD_COEFFS];
+static unsigned short mod_data[MOD_NDATA];
+static short mod_out_a[MOD_OUT], mod_out_b[MOD_OUT];
+
+/*
+ * Built here rather than taken from the object's own banks, for finding
+ * F3574's reason: a real bank repeats entries, and a transposition inside a
+ * repeated run is invisible.  Every entry below is distinct.
+ */
+static void
+mod_tables(void)
+{
+	int i;
+
+	for (i = 0; i < 16; i++) {
+		mod_imap[i] = (short)(1000 + i * 37);
+		mod_qmap[i] = (short)(-900 - i * 41);
+		mod_pmap[i] = (unsigned short)((i * 5 + 1) & 0x0f);
+	}
+	for (i = 0; i < 32; i++) {
+		mod_cos[i] = (short)(3000 + i * 611);
+		mod_sin[i] = (short)(-2500 + i * 577);
+	}
+	for (i = 0; i < MOD_COEFFS; i++) {
+		mod_ci[i] = (short)(((i * 811) % 6007) - 3000);
+		mod_cq[i] = (short)(((i * 907) % 5501) - 2700);
+	}
+	rng_seed(0x0d0da7a0u);
+	for (i = 0; i < MOD_NDATA; i++)
+		mod_data[i] = (unsigned short)(rng_next() & 0x0f);
+}
+
+static void
+mod_fixture(struct modfix *f, unsigned seed)
+{
+	struct fpm_smc_cfg smc;
+	struct fpm_pps_cfg pps;
+	int i;
+
+	memset(f, 0, sizeof(*f));
+
+	rng_seed(seed);
+	for (i = 0; i < (int)sizeof(f->obj); i++)
+		f->obj[i] = (unsigned char)rng_next();
+	for (i = 0; i < TX_SIZE; i++)
+		f->fp[i] = (unsigned char)rng_next();
+	for (i = 0; i < MOD_RING; i++) {
+		f->ri[i] = (short)(rng_next() % 20001u) - 10000;
+		f->rq[i] = (short)(rng_next() % 20001u) - 10000;
+		f->sym[i] = (short)((rng_next() % 200u) + 20u);
+	}
+
+	put_ptr(f->obj, V29_OBJ_TX, f->fp);
+
+	put_ptr(f->fp, V29FP_SMC_RING + 0x00, f->ri);
+	put_ptr(f->fp, V29FP_SMC_RING + 0x04, f->rq);
+	put_ptr(f->fp, V29FP_SMC_RING + 0x08, f->sym);
+	put_short(f->fp, V29FP_SMC_RING + 0x0c, 0);	/* widx */
+	put_short(f->fp, V29FP_SMC_RING + 0x0e, 0);	/* ridx */
+	put_short(f->fp, V29FP_SMC_RING + 0x10, MOD_RING);
+
+	/* V.29 9600's shape, from t_faxsmc.c's own enumeration. */
+	memset(&smc, 0, sizeof(smc));
+	smc.f00 = 0;			/* the COMPLEX output form  */
+	smc.direct = 1;
+	smc.rot_step = 17;
+	smc.rot_mod = 24;
+	smc.qshift = 0;
+	smc.qmask = 7;
+	smc.amask = 8;
+	smc.pmask = 7;
+	smc.pmap = mod_pmap;
+	smc.imap = mod_imap;
+	smc.qmap = mod_qmap;
+	smc.cosine = mod_cos;
+	smc.sine = mod_sin;
+	ref_SMC_init(f->fp + V29FP_SMC, &smc);
+
+	memset(&pps, 0, sizeof(pps));
+	pps.phases = MOD_PHASES;
+	pps.step = MOD_PHASES;		/* one output per symbol; see below */
+	pps.mapped = 0;			/* V29TX_create clears it           */
+	pps.scale = 32767;
+	pps.step_adj = 0;
+	pps.imap = mod_imap;
+	pps.qmap = mod_qmap;
+	pps.coeff_i = mod_ci;
+	pps.coeff_q = mod_cq;
+	pps.coeffs = MOD_COEFFS;
+	ref_FPM_PPS_init(f->fp + V29FP_PPS, &pps, 1);
+}
+
+static void
+mod_free(struct modfix *f)
+{
+	ref_FPM_PPS_free(f->fp + V29FP_PPS);
+}
+
+/*
+ * The private block byte for byte, with the three ring pointers and the
+ * shaper's two per-instance histories skipped.
+ */
+static long
+mod_fp_diff(const struct modfix *a, const struct modfix *b)
+{
+	int i;
+	int hlo = V29FP_PPS + (int)offsetof(struct fpm_pps, hist_i);
+
+	for (i = 0; i < TX_SIZE; i++) {
+		if (i >= V29FP_SMC_RING && i < V29FP_SMC_RING + 0x0c)
+			continue;
+		if (i >= hlo && i < hlo + 2 * (int)sizeof(void *))
+			continue;
+		if (a->fp[i] != b->fp[i])
+			return i;
+	}
+	return -1;
+}
+
+static long mod_ret_nonzero, mod_state_carried, mod_ring_moved, mod_zero_count;
+
+static int
+run_moddata(void)
+{
+	static const unsigned short counts[] = { 1, 4, 11, 0, 20 };
+	int c, blk, i;
+
+	mod_tables();
+	diff_begin("ModDataV29");
+
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		unsigned seed = 0x30d0000u + (unsigned)c;
+		short prev_widx = -1;
+
+		mod_fixture(&moda, seed);
+		mod_fixture(&modb, seed);
+
+		/*
+		 * MANY CONSECUTIVE BLOCKS, because the ring cursor, the
+		 * encoder's quadrant accumulator and the shaper's phase and
+		 * history all carry across -- finding F8790's rule.  A
+		 * one-block fixture cannot see a stage fed from the wrong
+		 * offset once the state has built up.
+		 */
+		for (blk = 0; blk < MOD_BLOCKS; blk++) {
+			const unsigned short *bits =
+				mod_data + (blk * 17) % (MOD_NDATA - 32);
+			unsigned short count = counts[c];
+			unsigned short ka, kb;
+			long where = (long)c * 100 + blk;
+			short widx;
+
+			for (i = 0; i < MOD_OUT; i++)
+				mod_out_a[i] = mod_out_b[i] = MOD_MARK;
+
+			ka = ref_ModDataV29(moda.obj, bits, mod_out_a, count);
+			kb = ModDataV29(modb.obj, bits, mod_out_b, count);
+
+			diff_eq_int("at %ld: ModDataV29 returned", (long)kb,
+				    (long)ka, where);
+			diff_eq_int("at %ld: the return fits the buffer",
+				    ka < MOD_OUT, 1, where);
+			if (ka >= MOD_OUT)
+				break;
+			for (i = 0; i < (int)ka; i++)
+				diff_eq_int("sample %ld", (long)mod_out_b[i],
+					    (long)mod_out_a[i], i);
+			diff_eq_int("at %ld: nothing past the returned count",
+				    mod_out_a[ka] == MOD_MARK, 1, where);
+			diff_eq_int("at %ld: first differing block byte",
+				    mod_fp_diff(&moda, &modb), -1, where);
+			for (i = 0; i < MOD_RING; i++) {
+				diff_eq_int("ring i[%ld]", (long)modb.ri[i],
+					    (long)moda.ri[i], i);
+				diff_eq_int("ring q[%ld]", (long)modb.rq[i],
+					    (long)moda.rq[i], i);
+				diff_eq_int("ring sym[%ld]", (long)modb.sym[i],
+					    (long)moda.sym[i], i);
+			}
+
+			widx = get_short(moda.fp, V29FP_SMC_RING + 0x0c);
+			if (ka > 0)
+				mod_ret_nonzero++;
+			if (count == 0)
+				mod_zero_count++;
+			if (prev_widx >= 0 && widx != prev_widx)
+				mod_ring_moved++;
+			if (blk > 0 && ka > 0)
+				mod_state_carried++;
+			prev_widx = widx;
+		}
+
+		mod_free(&moda);
+		mod_free(&modb);
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* RxHdxDataV29 and RxHdxErrorV29                                        */
+
+extern short ref_RxHdxDataV29(void *modem, short *in, short *out,
+			      unsigned short *count);
+extern short ref_RxHdxErrorV29(void *modem, short *in, short *out,
+			       unsigned short *count);
+
+#define HDX_BLOCKS	60
+#define HDX_COUNT	160
+#define HDX_OUT		DEM_BUF
+#define HDX_MARK	((short)0x6bad)
+
+static short hdx_mrf_a[DEM_BUF], hdx_sre_a[DEM_BUF], hdx_det_a[DEM_BUF];
+static short hdx_mrf_b[DEM_BUF], hdx_sre_b[DEM_BUF], hdx_det_b[DEM_BUF];
+static short hdx_in[DEM_BUF], hdx_work[DEM_BUF];
+static short hdx_out_a[HDX_OUT], hdx_out_b[HDX_OUT];
+
+struct hdx_setup {
+	short	gate_14;	/* DemodDataV29's tone pre-pass gate       */
+	short	gate_1c;	/* DataCarrierDetectV29's V.21 scan gate   */
+	int	mtd_absent;	/* the pre-pass detector's forced verdict  */
+	int	det_gate;	/* V29DET_INT_0008: the second gate        */
+	int	carrier;	/* the seed for sre.active / agc.signal    */
+	int	status;		/* the seed for the whole status word      */
+	/*
+	 * THE EQUALISER'S ERROR, AND IT IS ONLY LIVE ON ONE PATH.
+	 *
+	 * `GetSNRV29` is `14 - mse` and `RxHdxDataV29` compares it against 8,
+	 * so the ONE input that separates the threshold from its neighbour is
+	 * `mse == 6`.  On every path where `FPM_FSE_receive` runs, `mse` is
+	 * whatever the equaliser leaves and cannot be steered -- and the first
+	 * version of this test asserted the threshold anyway and was not
+	 * caught when the source was changed to `<= 7`.
+	 *
+	 * The pre-pass abandon is the path that makes it reachable:
+	 * `DemodDataV29` returns before touching the equaliser, so `mse` keeps
+	 * the value planted here for the whole trial.  `mtd_absent` = 0 forces
+	 * the pre-pass detector to NOSIGNAL, which is non-zero and abandons.
+	 */
+	short	mse;
+};
+
+/*
+ * The whole receiver, and every field either handler READS is planted.
+ *
+ * D955 / finding F8587 again: `fixture()` fills the receive and detection
+ * blocks pseudorandomly, and `DataCarrierDetectV29` uses `V29DET_V21_MTD` and
+ * `V29DET_V21_BUF` as pointers and `V29RX_SDM` as the descrambler's state --
+ * an unplanted one of those is a wild pointer that both sides follow equally
+ * and agree about, right up to the segfault.
+ */
+static void
+hdx_build(struct fix *f, unsigned seed, const struct hdx_setup *u,
+	  short *mrfbuf, short *srebuf, short *detbuf)
+{
+	struct dem_setup d;
+	struct fpm_sdm_cfg sdm;
+	int act, sig;
+
+	d.gate_14 = u->gate_14;
+	d.mtd_absent = u->mtd_absent;
+	d.enables = 0;
+	dem_build(f, seed, &d, mrfbuf, srebuf, detbuf);
+
+	/* The V.21 scan's own detector and gain control. */
+	ref_FPM_AGC_init((struct fpm_agc *)(void *)(f->det + V29DET_V21_AGC),
+			 &AGCv22_CFG, 1);
+	put_ptr(f->det, V29DET_V21_MTD,
+		ref_FPM_MTD_create(0, u->mtd_absent ? &mtd_absent_cfg
+						    : &mtd_nosignal_cfg));
+	put_short(f->det, V29DET_GATE_1C, u->gate_1c);
+	put_short(f->det, V29DET_V21_ENABLE, 0);
+	put_short(f->det, V29DET_V21_SAMPLES, 0);
+
+	/* The carrier-detect gates, all off but the ones under test. */
+	put_short(f->rx, V29RX_SHORT_0046, 0);
+	put_short(f->rx, V29RX_SHORT_4F64, 0);
+	put_short(f->rx, V29RX_RMS_REF, 4000);
+	put_short(f->rx, V29RX_RMS_N, 0);
+
+	/*
+	 * The quality average STARTS AT BLOCK ZERO, so HDX_BLOCKS blocks walk
+	 * the seed, the whole 1..0x31 smoothing run and the 0x32 verdict.
+	 * `QualityDetectV29` is what finding F8790 is about, and a one-block
+	 * fixture never reaches any of it.
+	 */
+	put_short(f->rx, V29RX_DEC_ERROR_AVG, 0);
+	put_short(f->rx, V29RX_DEC_ERROR_N, 0);
+	put_short(f->rx, V29RX_DEC_ERROR_LIMIT, 400);
+	put_short(f->rx, V29RX_SHORT_4F62, 0);
+
+	/* The descrambler the DATA state runs over its own output. */
+	sdm.nbits = 4;
+	sdm.tap1 = 9;
+	sdm.tap2 = 11;
+	ref_FPM_SDM_init((struct fpm_sdm *)(void *)(f->rx + V29RX_SDM), &sdm);
+	((struct fpm_sdm *)(void *)(f->rx + V29RX_SDM))->reg = 0x0001357bu;
+
+	act = (u->carrier == 0) ? 0 : 1;
+	sig = (u->carrier == 0) ? 0 : 1;
+	put_int(f->rx, V29RX_SRE_ACTIVE, act);
+	put_int(f->rx, V29RX_AGC_SIGNAL, sig);
+
+	put_short(f->rx, V29RX_FSE_MSE, u->mse);
+
+	put_int(f->det, V29DET_INT_0008, u->det_gate);
+	put_int(f->obj, V29_OBJ_STATUS, u->status);
+}
+
+static void
+hdx_free(struct fix *f)
+{
+	dem_free(f);
+	ref_FPM_MTD_delete((struct fpm_mtd *)get_ptr(f->det, V29DET_V21_MTD));
+	put_ptr(f->det, V29DET_V21_MTD, 0);
+}
+
+static long hdx_bail, hdx_proceed, hdx_units, hdx_zero_units, hdx_quality_zero;
+static long hdx_snr_set, hdx_snr_clear, hdx_carrier_set, hdx_carrier_clear;
+static long hdx_status_byte, hdx_err_flag, hdx_err_moved, hdx_count_zeroed;
+static long hdx_snr_at, hdx_snr_over;
+
+/*
+ * `vary` ALTERNATES LOUD BLOCKS WITH SILENT ONES, and it is not a stimulus
+ * sweep: it is the only shape that reaches the arm where the DATA state
+ * demodulates and then reports ZERO units.
+ *
+ * `DataCarrierDetectV29` reads `sre.active & agc.signal` BEFORE the block is
+ * demodulated, so it sees the PREVIOUS block's verdict, and
+ * `QualityDetectV29` reads the same pair AFTER, so it sees this one's.  On a
+ * steady stimulus the two always agree and the `setne`/`neg`/`and` that
+ * forces the return to zero is never exercised.  One loud-to-quiet transition
+ * per pair of blocks is what separates them; without it that named reading
+ * reported a separating count of zero, which is exactly what the count is
+ * for (finding F134).
+ */
+static void
+run_hdx_one(unsigned seed, const struct hdx_setup *u, int error_state,
+	    int vary, long where)
+{
+	int blk, i;
+
+	dem_signal(seed ^ 0x0b10cced, 2);
+	for (i = 0; i < DEM_BUF; i++)
+		hdx_in[i] = dem_in[i];
+
+	hdx_build(&fa, seed, u, hdx_mrf_a, hdx_sre_a, hdx_det_a);
+	hdx_build(&fb, seed, u, hdx_mrf_b, hdx_sre_b, hdx_det_b);
+
+	for (blk = 0; blk < HDX_BLOCKS; blk++) {
+		unsigned short ca = HDX_COUNT, cb = HDX_COUNT;
+		short ra, rb;
+		int sa, sb;
+		long id = where * 1000 + blk;
+		int moved;
+
+		if (vary) {
+			dem_signal(seed ^ (0x0b10cced + (unsigned)blk),
+				   (blk & 1) ? 0 : 2);
+			for (i = 0; i < DEM_BUF; i++)
+				hdx_in[i] = dem_in[i];
+		}
+
+		for (i = 0; i < HDX_OUT; i++)
+			hdx_out_a[i] = hdx_out_b[i] = HDX_MARK;
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+
+		if (error_state)
+			ra = ref_RxHdxErrorV29(fa.obj, hdx_work, hdx_out_a,
+					       &ca);
+		else
+			ra = ref_RxHdxDataV29(fa.obj, hdx_work, hdx_out_a, &ca);
+		sa = get_int(fa.obj, V29_OBJ_STATUS);
+
+		for (i = 0; i < DEM_BUF; i++)
+			hdx_work[i] = hdx_in[i];
+		if (error_state)
+			rb = RxHdxErrorV29(fb.obj, hdx_work, hdx_out_b, &cb);
+		else
+			rb = RxHdxDataV29(fb.obj, hdx_work, hdx_out_b, &cb);
+		sb = get_int(fb.obj, V29_OBJ_STATUS);
+
+		diff_eq_int("at %ld: the handler returned", (long)rb, (long)ra,
+			    id);
+		diff_eq_int("at %ld: the count came back", (long)cb, (long)ca,
+			    id);
+		diff_eq_int("at %ld: the status word", (long)sb, (long)sa, id);
+		diff_eq_int("at %ld: first differing output byte",
+			    blk_first_diff((unsigned char *)hdx_out_b,
+					   (unsigned char *)hdx_out_a,
+					   HDX_OUT * 2, 0), -1, id);
+		diff_eq_int("at %ld: first differing receiver byte",
+			    blk_first_diff(fb.rx, fa.rx, RX_SIZE,
+					   skip_rx_demod), -1, id);
+		diff_eq_int("at %ld: first differing detector byte",
+			    blk_first_diff(fb.det, fa.det, DET_SIZE, skip_det),
+			    -1, id);
+		diff_eq_int("at %ld: the resampler's buffer",
+			    blk_first_diff((unsigned char *)hdx_mrf_b,
+					   (unsigned char *)hdx_mrf_a,
+					   DEM_BUF * 2, 0), -1, id);
+		diff_eq_int("at %ld: the recoverer's buffer",
+			    blk_first_diff((unsigned char *)hdx_sre_b,
+					   (unsigned char *)hdx_sre_a,
+					   DEM_BUF * 2, 0), -1, id);
+
+		/*
+		 * The named readings, all counted FROM THE BLOB'S RUN, so a
+		 * zero at the end says the check is decoration.
+		 */
+		if (ca == 0)
+			hdx_count_zeroed++;
+
+		if (error_state) {
+			if ((sa & V29_STATUS_ERROR) != 0)
+				hdx_err_flag++;
+			/*
+			 * The ERROR state DEMODULATES ANYWAY, and that is what
+			 * separates it from a handler that merely consumes the
+			 * block: the resampler's output buffer moves.
+			 */
+			moved = 0;
+			for (i = 0; i < HDX_COUNT; i++)
+				if (hdx_mrf_a[i] != 0)
+					moved = 1;
+			if (moved)
+				hdx_err_moved++;
+			continue;
+		}
+
+		if ((sa & V29_STATUS_CARRIER) != 0)
+			hdx_carrier_set++;
+		else
+			hdx_carrier_clear++;
+		if ((sa & V29_STATUS_LOW_SNR) != 0)
+			hdx_snr_set++;
+		else
+			hdx_snr_clear++;
+		if ((sa & 0xff) == V29RX_STATUS_DATA)
+			hdx_status_byte++;
+
+		/*
+		 * THE THRESHOLD WAS EVALUATED AT ITS BOUNDARY, and this is the
+		 * count that says so.  `GetSNRV29` is re-read from the blob
+		 * after the handler, which is the same value the handler saw
+		 * on the pre-pass-abandon path because nothing between the two
+		 * touches `mse`.
+		 */
+		{
+			short snr = ref_GetSNRV29(fa.obj);
+
+			if (snr == V29RX_SNR_THRESHOLD)
+				hdx_snr_at++;
+			else if (snr == V29RX_SNR_THRESHOLD + 1)
+				hdx_snr_over++;
+		}
+
+		if (ra > 0) {
+			hdx_units++;
+			hdx_proceed++;
+		} else {
+			/*
+			 * Zero can mean either arm.  The output buffer says
+			 * which: the bail arm never writes it.
+			 */
+			if (hdx_out_a[0] != HDX_MARK) {
+				hdx_proceed++;
+				hdx_quality_zero++;
+			} else {
+				hdx_bail++;
+			}
+			hdx_zero_units++;
+		}
+	}
+
+	hdx_free(&fa);
+	hdx_free(&fb);
+}
+
+static int
+run_hdx(void)
+{
+	static const struct hdx_setup cases[] = {
+		/* gate14 gate1c absent detgate carrier status      mse */
+		{ 0, 0, 1, 0, 1, 0, 0 },	/* the ordinary DATA path   */
+		{ 1, 0, 0, 0, 1, -1, 0 },	/* pre-pass off, all bits set */
+		{ 0, 0, 0, 0, 0, 0, 0 },	/* no carrier: the bail arm */
+		{ 1, 0, 1, 1, 1, 0, 0 },	/* the second gate closed   */
+		{ 1, 1, 1, 0, 1, (int)0xffff0000, 0 }, /* the V.21 scan armed */
+		/*
+		 * The threshold pair.  The pre-pass abandons, so `mse` stays
+		 * planted and `GetSNRV29` answers exactly 8 and then 9 -- the
+		 * only two inputs that tell `<= 8` from `<= 7` and from `< 8`.
+		 */
+		{ 0, 0, 0, 0, 1, 0, 6 },
+		{ 0, 0, 0, 0, 1, 0, 5 }
+	};
+	int i;
+
+	dem_tables();
+	dcd_cfgs();
+	diff_begin("RxHdxDataV29 / RxHdxErrorV29");
+
+	for (i = 0; i < (int)(sizeof(cases) / sizeof(cases[0])); i++)
+		run_hdx_one(0x8d000000u + (unsigned)i, &cases[i], 0, 0, i);
+
+	/* The loud/quiet alternation; see the note above `run_hdx_one`. */
+	run_hdx_one(0x8d100000u, &cases[0], 0, 1, 50);
+	run_hdx_one(0x8d100001u, &cases[1], 0, 1, 51);
+
+	/* The ERROR state, over the same two shapes. */
+	run_hdx_one(0x8e000000u, &cases[0], 1, 0, 100);
+	run_hdx_one(0x8e000001u, &cases[1], 1, 0, 101);
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -2516,6 +3551,10 @@ main(void)
 	rc |= run_quality();
 	rc |= run_dcd();
 	rc |= run_demod();
+	rc |= run_txdelete();
+	rc |= run_txmodem();
+	rc |= run_moddata();
+	rc |= run_hdx();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -2624,6 +3663,72 @@ main(void)
 	for (d = 0; d < 6; d++)
 		diff_eq_int("demodulator path %ld was reached",
 			    dem_paths[d] > 0, 1, d);
+
+	diff_eq_int("V29TX_delete was driven (%ld)", txdel_trials > 0, 1,
+		    txdel_trials);
+	diff_eq_int("the blob freed every transmit block (%ld)",
+		    txdel_freed_all > 0, 1, txdel_freed_all);
+
+	diff_eq_int("V29TX_modem dispatched its slot (%ld)",
+		    txm_slot_called > 0, 1, txm_slot_called);
+	diff_eq_int("the transmit slot ran more than once (%ld)",
+		    txm_multi_call > 0, 1, txm_multi_call);
+	diff_eq_int("the FIFO arm was taken (%ld)", txm_fifo_arm > 0, 1,
+		    txm_fifo_arm);
+	diff_eq_int("the direct arm was taken (%ld)", txm_direct_arm > 0, 1,
+		    txm_direct_arm);
+	diff_eq_int("a short FIFO write set the flag and the byte (%ld)",
+		    txm_flag_sep > 0, 1, txm_flag_sep);
+	diff_eq_int("a full FIFO write left both alone (%ld)", txm_noflag > 0,
+		    1, txm_noflag);
+	diff_eq_int("`out` advanced between transmit calls (%ld)",
+		    txm_out_moved > 0, 1, txm_out_moved);
+	diff_eq_int("`in` did NOT advance between transmit calls (%ld)",
+		    txm_in_static > 0, 1, txm_in_static);
+	diff_eq_int("the transmit budget was driven negative (%ld)",
+		    txm_budget_neg > 0, 1, txm_budget_neg);
+	diff_eq_int("the transmit total passed 32767 (%ld)", txm_wrapped > 0,
+		    1, txm_wrapped);
+
+	diff_eq_int("ModDataV29 returned samples (%ld)", mod_ret_nonzero > 0,
+		    1, mod_ret_nonzero);
+	diff_eq_int("the shaper carried state between blocks (%ld)",
+		    mod_state_carried > 0, 1, mod_state_carried);
+	diff_eq_int("the ring cursor advanced (%ld)", mod_ring_moved > 0, 1,
+		    mod_ring_moved);
+	diff_eq_int("a zero count was driven through ModDataV29 (%ld)",
+		    mod_zero_count > 0, 1, mod_zero_count);
+
+	diff_eq_int("the DATA state took its bail arm (%ld)", hdx_bail > 0, 1,
+		    hdx_bail);
+	diff_eq_int("the DATA state demodulated (%ld)", hdx_proceed > 0, 1,
+		    hdx_proceed);
+	diff_eq_int("the DATA state reported units (%ld)", hdx_units > 0, 1,
+		    hdx_units);
+	diff_eq_int("the DATA state reported none (%ld)", hdx_zero_units > 0,
+		    1, hdx_zero_units);
+	diff_eq_int("the quality verdict forced zero units (%ld)",
+		    hdx_quality_zero > 0, 1, hdx_quality_zero);
+	diff_eq_int("the low-SNR bit was set (%ld)", hdx_snr_set > 0, 1,
+		    hdx_snr_set);
+	diff_eq_int("the low-SNR bit was left clear (%ld)", hdx_snr_clear > 0,
+		    1, hdx_snr_clear);
+	diff_eq_int("the SNR landed exactly ON the threshold (%ld)",
+		    hdx_snr_at > 0, 1, hdx_snr_at);
+	diff_eq_int("the SNR landed exactly one ABOVE it (%ld)",
+		    hdx_snr_over > 0, 1, hdx_snr_over);
+	diff_eq_int("the carrier bit came out set (%ld)", hdx_carrier_set > 0,
+		    1, hdx_carrier_set);
+	diff_eq_int("the carrier bit came out clear (%ld)",
+		    hdx_carrier_clear > 0, 1, hdx_carrier_clear);
+	diff_eq_int("the status byte was written (%ld)", hdx_status_byte > 0,
+		    1, hdx_status_byte);
+	diff_eq_int("both handlers zeroed the count (%ld)",
+		    hdx_count_zeroed > 0, 1, hdx_count_zeroed);
+	diff_eq_int("the ERROR state raised its flag (%ld)", hdx_err_flag > 0,
+		    1, hdx_err_flag);
+	diff_eq_int("the ERROR state demodulated anyway (%ld)",
+		    hdx_err_moved > 0, 1, hdx_err_moved);
 
 	rc |= diff_end();
 
