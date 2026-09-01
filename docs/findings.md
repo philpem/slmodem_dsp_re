@@ -107633,3 +107633,62 @@ shape as F9233's unreachable SNR arm.
 The store is reproduced because it is there, and the deviation register carries
 it as D1162. What it is NOT is evidence that 2400 wants a different block
 length: nothing writes the field on that arm, so both rates run on 40.  (2026-09-01)
+
+### F9340. The V.27ter and V.29 receive families are two link units each, not one -- and the shape differs from V.21 for a reason that is now measured
+
+Scheduling this wave needed the answer to one question -- which of these
+symbols can be written without the others -- and the honest way to get it is a
+relocation probe over the whole 1.2 MB, not an inspection of the call graph.
+A stored handler address (`movl $handler,field`) has no `call`, appears in no
+call graph, and pins the symbol at link exactly as a call does (F8493), so a
+probe that looks only at `R_386_PC32` gets this wrong in the direction that
+costs work.
+
+**EVERY relocation in `dsplibs.o` naming any symbol of either family**, both
+kinds, `objdump -r` over the whole object:
+
+| site | kind | target |
+|---|---|---|
+| 0x000996fc (`V27RX_create`) | `R_386_32` | `RxHdxStartV27` |
+| 0x00099b6d (`V27RX_create`) | `R_386_32` | `V27RX_epoch_det` |
+| 0x0009a0e4 (`V27RX_epoch_det`) | `R_386_32` | `V27RX_eq_train` |
+| 0x0009a1f7 (`V27RX_eq_train`) | `R_386_32` | `V27RX_decision` |
+| 0x000a2e90 / 0a2f00 / 0a2f27 / 0a2f5b / 0a2f96 (`RxNextStateV27`) | `R_386_32` | `RxHdxEpochDetV27`, `RxHdxDataV27`, `RxHdxIdleV27`, `RxHdxDataV27`, `RxHdxPrtcolV27` |
+| 0x000a3089 / 0a3175 / 0a31f7 / 0a3284 | `R_386_PC32` | `RxNextStateV27`, from `RxHdxIdleV27`, `RxHdxPrtcolV27`, `RxHdxEpochDetV27`, `RxHdxStartV27` |
+| 0x000a3146 / 0a3209 | `R_386_32` | `RxHdxErrorV27`, from `RxHdxPrtcolV27` and `RxHdxEpochDetV27` |
+
+and V.29's set is the same table with the same shape at 0x0009aef0, 0x0009b1e5,
+0x0009b7a1, 0x0009b8e1, 0x000a4180..0a424d, 0x000a4349..0a4568 and
+0x000a4406/0a44e9.
+
+**So each modulation is TWO units and not one.**
+
+- **The slicer chain is three in a LINE**, because each stage installs the next
+  into `fpm_fse_cfg::decision`: `epoch_det` -> `eq_train` -> `decision`. The
+  bottom of the line is writable alone -- `readyqueue.py` correctly called
+  `V29RX_decision` READY -- and each stage links the moment the one below it
+  exists. V.27ter's three were already written; V.29's three were not, and
+  writing them bottom-up gave three independently green commits' worth of work
+  in one.
+- **The state machine is five in a CYCLE.** `RxNextState*` stores
+  Idle/Prtcol/EpochDet/Data, and each of Start/Idle/Prtcol/EpochDet calls
+  `RxNextState*`. **No proper subset links.** It is five rather than seven only
+  because `RxHdxData*` and `RxHdxError*` were already written (F9256's pass).
+- The constructor is downstream of both: it names `RxHdxStart*` and
+  `*RX_epoch_det` and nothing else of either family.
+
+**AND THIS IS NOT V.21'S SHAPE, WHICH IS THE PART WORTH CARRYING.** V.21's five
+receive symbols were ONE unit because `DemodDataV21` carries an `R_386_32`
+against `RxHdxDataV21` on a `cmpl` -- a DATA reference from the demodulator into
+the state machine (F8492/F8493). `DemodDataV27` and `DemodDataV29` carry **zero**
+relocations against any `RxHdx*`, which is why the demodulator is not in either
+unit here. F9256 had already measured that for V.29's two written states; this
+extends it to all five and to V.27ter.
+
+**The general rule is that indivisibility differs BY MODULATION and must be
+probed per family rather than inferred from the last one.** Reading V.21's
+answer onto V.27ter would have scheduled six symbols where five link, and
+reading V.27ter's onto V.21 would have scheduled a subset that cannot link at
+all. `tools/relocscan.py` is the tool for the data-reference half and was fixed
+the same day (F9280); `objdump -r` piped through a grep for the family's names
+is the cheap whole-object form and is what was used here.  (2026-09-01)
