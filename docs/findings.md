@@ -105509,3 +105509,51 @@ CONTRADICTION.** Each load is followed by a subtraction and then a
 `short` is chosen because `_IMAP` holds -6144 and an amplitude is signed.
 Recorded as a CHOICE, not as a reading -- `extcheck.py` cannot separate these
 and F619's ruling that it needs real dataflow stands. (2026-09-01)
+
+## F9147. `V21RX_create` is 1,011 bytes blocked on EIGHT tables and on nothing else -- its one text dependency is already written
+
+*2026-09-01.* Measured while enumerating the fax receivers' data, and recorded
+rather than acted on because `src/fax/v21.c` belongs to another strand of this
+wave and a duplicate definition of one symbol fails every binary at link (the
+wave 2 defect). This is a scheduling fact for whoever owns V.21.
+
+`V21RX_create`'s direct references -- `R_386_PC32` calls and `R_386_32` stored
+pointers both, which is the F8492/F8493 pair -- classify against the built
+object tree as:
+
+    WRITTEN   FPM_AGC_init  FPM_FSD_init  FPM_MRF_init  FPM_MTD_create
+              FPM_MRF_CFG   FPM_MTD_CFG   V21_CHAN2_MTD_COEFF
+              RxHdxStartV21  (522 bytes, and the ONLY text dependency)
+
+    MISSING   AGCv21_CFG          .rodata 0x0a0e4   24   struct fpm_agc_cfg
+              FPM_FSD_CFG         .data   0x0812c   28   the library built-in
+              V21_CHAN1_MTD_COEFF .data   0x07a74   20
+              V21RX_CFG           .data   0x07ab4   24
+              V21_MRF_FILT        .rodata 0x0c000  720
+              V21RX_CHAN2_INTRP   .rodata 0x0a0a6   30
+              V21RX_CHAN1_INTRP   .rodata 0x0a0c4   30
+              V21RX_IIR_LPF       .rodata 0x0a088   30
+
+Eight tables, 906 bytes of data, and the 1,011-byte constructor falls out.
+`FPM_MTD_CFG` and `V21_CHAN2_MTD_COEFF` moved from that column to the first one
+in this pass, so two of its blockers are already gone.
+
+**Three things measured for whoever writes them.** The relocation sweep over
+each symbol's own byte range finds pointers in exactly one of the eight:
+`AGCv21_CFG` at +0x0c and +0x10. **Those two targets are NOT the file-static
+`AGC_DEF_ALPHA`/`AGC_DEF_BETA` this module family usually carries** -- they are
+`AGC_DEF_ALPHA_v21` and `AGC_DEF_BETA_v21`, .rodata 0xa100 and 0xa0fc, GLOBAL
+and uniquely named, so unlike V.17's, V.27's and V.29's they DO have a `ref_`
+alias and must be written as globals and compared by name. That is the F9144
+case inverted, and reading the family's pattern instead of the symbol table
+would have got it wrong in the safe-looking direction.
+
+`FPM_FSD_CFG` is the FSK demodulator's library built-in and belongs beside
+`FPM_FSE_CFG` and `FPM_SRE_CFG` in `src/dsp/`, not in a V.21 file.
+
+`V21RX_CFG` is 24 bytes and decodes field for field as `struct v29rx_cfg`'s
+shape -- `1` at +0x00, a bit rate of 300 at +0x04, 60000 at +0x08, then zeros
+-- so it is the fourth member of `faxcfg.c`'s family. Whether it is a fourth
+TYPE or a reuse of `struct v29rx_cfg` is not settled by the bytes; `faxcfg.h`'s
+existing argument separates the other three by SIZE and that argument does not
+reach this case. (2026-09-01)
