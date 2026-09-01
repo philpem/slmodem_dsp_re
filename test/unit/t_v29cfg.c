@@ -105,6 +105,11 @@ extern short ref_V29RX_SRE_PLLK1[3];
 extern short ref_V29RX_YCLOCK[3];
 extern short ref_V29RX_XCLOCK[3];
 extern short ref_V21_CHAN2_MTD_COEFF[10];
+extern short ref_V29RX_DEC_IMAP[16];
+extern short ref_V29RX_DEC_QMAP[16];
+extern short ref_V29RX_DEC_ANGLE[16];
+extern short ref_V29RX_DEC_MAG[16];
+extern short ref_V29RX_DEC_PMAP[8];
 
 extern struct fpm_fse_cfg ref_FPM_FSE_CFG;
 extern struct fpm_mtd_cfg ref_FPM_MTD_CFG;
@@ -211,6 +216,23 @@ test_shape(void)
 		    (long)sizeof(V29RX_XCLOCK), 6, 0);
 	diff_eq_int("sizeof V21_CHAN2_MTD_COEFF (%ld)",
 		    (long)sizeof(V21_CHAN2_MTD_COEFF), 20, 0);
+	diff_eq_int("sizeof V29RX_DEC_QMAP (%ld)",
+		    (long)sizeof(V29RX_DEC_QMAP), 32, 0);
+	diff_eq_int("sizeof V29RX_DEC_IMAP (%ld)",
+		    (long)sizeof(V29RX_DEC_IMAP), 32, 0);
+	diff_eq_int("sizeof V29RX_DEC_ANGLE (%ld)",
+		    (long)sizeof(V29RX_DEC_ANGLE), 32, 0);
+	diff_eq_int("sizeof V29RX_DEC_MAG (%ld)",
+		    (long)sizeof(V29RX_DEC_MAG), 32, 0);
+	diff_eq_int("sizeof V29RX_DEC_PMAP (%ld)",
+		    (long)sizeof(V29RX_DEC_PMAP), 16, 0);
+	/* The slicer's two search bounds, which is why the four maps are 16
+	 * entries and not 8.  `V29RX_decision` computes 8 or 16 branchlessly
+	 * from the rate selector and always starts the search at zero. */
+	diff_eq_int("DEC maps hold the 16-point superset (%ld)",
+		    (long)(sizeof(V29RX_DEC_IMAP) / sizeof(short)), 16, 0);
+	diff_eq_int("DEC_PMAP holds one octant (%ld)",
+		    (long)(sizeof(V29RX_DEC_PMAP) / sizeof(short)), 8, 0);
 	diff_eq_int("sizeof FPM_FSE_CFG (%ld)",
 		    (long)sizeof(FPM_FSE_CFG), 56, 0);
 	diff_eq_int("sizeof FPM_MTD_CFG (%ld)",
@@ -277,6 +299,15 @@ test_values(void)
 	cmp_shorts("V29RX_XCLOCK[%ld]", V29RX_XCLOCK, ref_V29RX_XCLOCK, 3);
 	cmp_shorts("V21_CHAN2_MTD_COEFF[%ld]", V21_CHAN2_MTD_COEFF,
 		   ref_V21_CHAN2_MTD_COEFF, 10);
+	cmp_shorts("V29RX_DEC_QMAP[%ld]", V29RX_DEC_QMAP,
+		   ref_V29RX_DEC_QMAP, 16);
+	cmp_shorts("V29RX_DEC_IMAP[%ld]", V29RX_DEC_IMAP,
+		   ref_V29RX_DEC_IMAP, 16);
+	cmp_shorts("V29RX_DEC_ANGLE[%ld]", V29RX_DEC_ANGLE,
+		   ref_V29RX_DEC_ANGLE, 16);
+	cmp_shorts("V29RX_DEC_MAG[%ld]", V29RX_DEC_MAG, ref_V29RX_DEC_MAG, 16);
+	cmp_shorts("V29RX_DEC_PMAP[%ld]", V29RX_DEC_PMAP,
+		   ref_V29RX_DEC_PMAP, 8);
 
 	/* AGCv29_CFG, field by field; the two pointers by their contents. */
 	diff_eq_int("AGCv29_CFG.ref_level (%ld)", AGCv29_CFG.ref_level,
@@ -447,7 +478,12 @@ test_detector_fires(void)
 		{ V29RX_SRE_PLLK1,      3, "V29RX_SRE_PLLK1"     },
 		{ V29RX_YCLOCK,         3, "V29RX_YCLOCK"        },
 		{ V29RX_XCLOCK,         3, "V29RX_XCLOCK"        },
-		{ V21_CHAN2_MTD_COEFF, 10, "V21_CHAN2_MTD_COEFF" }
+		{ V21_CHAN2_MTD_COEFF, 10, "V21_CHAN2_MTD_COEFF" },
+		{ V29RX_DEC_QMAP,      16, "V29RX_DEC_QMAP"      },
+		{ V29RX_DEC_IMAP,      16, "V29RX_DEC_IMAP"      },
+		{ V29RX_DEC_ANGLE,     16, "V29RX_DEC_ANGLE"     },
+		{ V29RX_DEC_MAG,       16, "V29RX_DEC_MAG"       },
+		{ V29RX_DEC_PMAP,       8, "V29RX_DEC_PMAP"      }
 	};
 	const int ntab = (int)(sizeof(tab) / sizeof(tab[0]));
 
@@ -577,6 +613,133 @@ test_value_shape(void)
 	diff_eq_int("the two banks differ (%ld)",
 		    shorts_differ(V29_MTD_COEFF, V21_CHAN2_MTD_COEFF, 10),
 		    1, 0);
+
+	return diff_end();
+}
+
+/* Nearest integer to sqrt(n), in integers -- no libm, no rounding mode. */
+static long
+isqrt_round(long n)
+{
+	long r = 0;
+
+	while ((r + 1) * (r + 1) <= n)
+		r++;
+	/* round up when the true root is nearer to r+1 */
+	if (n - r * r > (r + 1) * (r + 1) - n)
+		r++;
+	return r;
+}
+
+/*
+ * The V.29 constellation, checked against ITU-T V.29's own amplitudes rather
+ * than against the blob.  This is the layer that types these five tables: a
+ * transcription that reproduced the bytes but split them into the wrong number
+ * of elements, or that read them as an unsigned magnitude table, would not
+ * satisfy four independent published numbers at once.
+ */
+static int
+test_constellation(void)
+{
+	/*
+	 * V.29 Table 1: amplitude 3 on the axes and sqrt(2) on the diagonals
+	 * for the inner ring, 5 and 3*sqrt(2) for the outer.  Scaled by 2048,
+	 * the axis values are exact integers and only the diagonals round.
+	 */
+	static const short axis[2] = { 3 * 2048, 5 * 2048 };
+	/* A * cos(45 degrees) * 2048 for the two diagonal amplitudes:
+	 * sqrt(2)*2048/sqrt(2) = 2048, and 3*sqrt(2)*2048/sqrt(2) = 6144. */
+	static const short diag[2] = { 2048, 3 * 2048 };
+	int ring, k, i, seen[8];
+
+	diff_begin("v29cfg: the decision tables are V.29's own constellation");
+
+	for (ring = 0; ring < 2; ring++) {
+		for (k = 0; k < 8; k++) {
+			short a = axis[ring];
+			short d = diag[ring];
+			short wi, wq;
+
+			i = ring * 8 + k;
+
+			/*
+			 * Eight phases 45 degrees apart.  The even ones lie on
+			 * an axis at amplitude `a`; the odd ones on a diagonal
+			 * at (d, d) with the signs of that octant.
+			 */
+			switch (k) {
+			case 0: wi =  a; wq =  0; break;
+			case 1: wi =  d; wq =  d; break;
+			case 2: wi =  0; wq =  a; break;
+			case 3: wi = (short)-d; wq =  d; break;
+			case 4: wi = (short)-a; wq =  0; break;
+			case 5: wi = (short)-d; wq = (short)-d; break;
+			case 6: wi =  0; wq = (short)-a; break;
+			default: wi = d; wq = (short)-d; break;
+			}
+
+			diff_eq_int("DEC_IMAP[%ld] is V.29's own I",
+				    V29RX_DEC_IMAP[i], wi, i);
+			diff_eq_int("DEC_QMAP[%ld] is V.29's own Q",
+				    V29RX_DEC_QMAP[i], wq, i);
+
+			/*
+			 * `DEC_MAG` is the point's radius, to the nearest
+			 * integer -- which is what makes 2896 and 8689 the
+			 * rounded sqrt(2) and 3*sqrt(2) rather than two
+			 * arbitrary constants.
+			 */
+			diff_eq_int("DEC_MAG[%ld] is the point's radius",
+				    V29RX_DEC_MAG[i],
+				    (short)isqrt_round((long)wi * wi +
+						       (long)wq * wq), i);
+
+			/* 4096 counts per 45 degrees in a 32768-count turn. */
+			diff_eq_int("DEC_ANGLE[%ld] is k * 45 degrees",
+				    V29RX_DEC_ANGLE[i], k * 4096, i);
+		}
+	}
+
+	/*
+	 * The two rings are at the SAME eight phases -- so the angle table
+	 * repeats -- and differ only in amplitude, in the ratio 5:3 on the
+	 * axes.  Both are stated as arithmetic on the table rather than as
+	 * literals, so a swapped ring would fail them.
+	 */
+	for (i = 0; i < 8; i++)
+		diff_eq_int("DEC_ANGLE repeats for the outer ring (%ld)",
+			    V29RX_DEC_ANGLE[i + 8], V29RX_DEC_ANGLE[i], i);
+	diff_eq_int("the rings are in the ratio 5:3 (%ld)",
+		    3 * (int)V29RX_DEC_IMAP[8], 5 * (int)V29RX_DEC_IMAP[0], 0);
+
+	/*
+	 * The differential map is a PERMUTATION of 0..7.  Eight small integers
+	 * is exactly where a transcription slip hides, and "every value is in
+	 * range" would not catch a repeat.
+	 */
+	for (i = 0; i < 8; i++)
+		seen[i] = 0;
+	for (i = 0; i < 8; i++) {
+		diff_eq_int("DEC_PMAP[%ld] is in 0..7",
+			    V29RX_DEC_PMAP[i] >= 0 && V29RX_DEC_PMAP[i] < 8,
+			    1, i);
+		if (V29RX_DEC_PMAP[i] >= 0 && V29RX_DEC_PMAP[i] < 8)
+			seen[V29RX_DEC_PMAP[i]]++;
+	}
+	for (i = 0; i < 8; i++)
+		diff_eq_int("DEC_PMAP hits %ld exactly once", seen[i], 1, i);
+
+	/* And it is not the identity, which is the one permutation a missing
+	 * table would look like. */
+	diff_eq_int("DEC_PMAP is not the identity (%ld)",
+		    V29RX_DEC_PMAP[0] != 0 || V29RX_DEC_PMAP[1] != 1, 1, 0);
+
+	/* isqrt_round is doing real work, so show it rejecting: the radius of
+	 * the inner diagonal point is 2896 and not 2895 or 2897. */
+	diff_eq_int("isqrt_round(2048^2 * 2) (%ld)",
+		    isqrt_round(2048L * 2048 * 2), 2896, 0);
+	diff_eq_int("isqrt_round(6144^2 * 2) (%ld)",
+		    isqrt_round(6144L * 6144 * 2), 8689, 0);
 
 	return diff_end();
 }
@@ -902,6 +1065,7 @@ main(void)
 	rc |= test_values();
 	rc |= test_detector_fires();
 	rc |= test_value_shape();
+	rc |= test_constellation();
 	rc |= test_use_agc();
 	rc |= test_use_mtd();
 	rc |= test_use_sre();

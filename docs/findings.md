@@ -105457,3 +105457,55 @@ writing both of its targets first, and reading it as `short[4]` would produce
 four plausible small integers. Nine of V.27's remaining names are four bytes
 and are scalars-in-`.data` selected the same way. Sweep the inner relocations
 before typing any of them. (2026-09-01)
+
+## F9146. The V.29 slicer's five tables ARE the Recommendation's constellation, scaled by 2048 -- four published numbers agreeing at once
+
+*2026-09-01.* `V29RX_decision` (0x9b8f0, 260 bytes) references five data
+symbols and nothing else unwritten, so those five are the whole of its
+blocker: `V29RX_DEC_IMAP`, `_QMAP`, `_ANGLE` and `_MAG` at 32 bytes each and
+`_PMAP` at 16.
+
+**The stride is the addressing mode, not an assumption.** Every one of the five
+is loaded as `movzwl TABLE(%reg,%reg,1)` -- the index doubled by the
+`(base,index,1)` form rather than scaled by an element size -- so the element
+is sixteen bits and the counts are 16, 16, 16, 16 and 8.
+
+**The search bound is 8 or 16 and the object computes it without a branch:**
+
+    cmp  $0x1,%ebp          ebp = the rate selector at rx+0x10
+    sbb  %esi,%esi          esi = -1 when it is zero, else 0
+    and  $0xfffffff8,%esi   esi = -8 or 0
+    lea  0x10(%esi),%ebp    ebp = 8 or 16
+
+So the slicer searches the first EIGHT points at the low rate and all sixteen
+at the high one -- three bits a symbol at 2400 baud is 7200 bit/s, four is
+9600 -- and that is why the maps are sixteen entries with the eight-point
+constellation first. Measured from the code; the layout alone would not say it.
+
+**And the values are ITU-T V.29's own.** The Recommendation gives amplitudes 3
+and 5 on the axes and sqrt(2) and 3*sqrt(2) on the diagonals. Multiply each by
+2048:
+
+    3 * 2048 = 6144        sqrt(2) * 2048 = 2896 (rounded from 2896.31)
+    5 * 2048 = 10240     3*sqrt(2) * 2048 = 8689 (rounded from 8689.94)
+
+and every entry of `_IMAP`, `_QMAP` and `_MAG` is one of those four with a
+sign. `t_v29cfg.c` reconstructs all sixteen points from the four amplitudes
+alone and asserts `_MAG` is the rounded radius `isqrt(I*I + Q*Q)`, which is
+what makes 2896 and 8689 derived rather than transcribed. `_ANGLE` is
+`k * 4096` for k in 0..7, twice -- 4096 counts per 45 degrees in a 32768-count
+turn, and the outer ring repeats the inner ring's angles because both rings sit
+at the same eight phases.
+
+`_PMAP` is indexed `(phase - prev_phase) & 7` and is the differential
+decoder's map. Asserted to be a PERMUTATION of 0..7 and not the identity: eight
+small integers is where a transcription slip hides, and a range check would not
+catch a repeat.
+
+**THE LOADS ARE `movzwl` AND THE VALUES ARE NEGATIVE, AND THAT IS NOT A
+CONTRADICTION.** Each load is followed by a subtraction and then a
+`movswl %dx,%edx` that discards the upper half, so this is F614's free case:
+`short` and `unsigned short` compile to the same bytes and behave identically.
+`short` is chosen because `_IMAP` holds -6144 and an amplitude is signed.
+Recorded as a CHOICE, not as a reading -- `extcheck.py` cannot separate these
+and F619's ruling that it needs real dataflow stands. (2026-09-01)

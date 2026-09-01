@@ -107,6 +107,22 @@ extern short V29RX_SRE_PLLK2[FPM_SRE_MODES];
 extern short V29RX_XCLOCK[3];
 extern short V29RX_YCLOCK[3];
 
+/*
+ * The slicer's constellation, read only by `V29RX_decision`.  Sixteen points
+ * with the eight-point 7200 bit/s subset FIRST, because the slicer's search
+ * bound is 8 or 16 depending on the rate selector and it always starts at
+ * zero.  Every amplitude is 2048 times one of V.29's own four -- 3, 5,
+ * sqrt(2) and 3*sqrt(2) -- which is what types them as signed 16-bit
+ * amplitudes rather than as anything else of the same width.  `v29cfg.c`
+ * carries the derivation and the note on why the object's `movzwl` does not
+ * make them unsigned.
+ */
+extern short V29RX_DEC_IMAP[16];
+extern short V29RX_DEC_QMAP[16];
+extern short V29RX_DEC_ANGLE[16];
+extern short V29RX_DEC_MAG[16];
+extern short V29RX_DEC_PMAP[8];
+
 #ifdef __cplusplus
 }
 #endif
