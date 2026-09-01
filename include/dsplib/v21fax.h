@@ -18,18 +18,22 @@
  * blocks and must not be collected into one struct.  They are kept apart
  * here, and the two handles are `void *`.
  *
- * `V21RX_create` IS RECONSTRUCTED AND `V21TX_create` IS NOT, so the receive
- * handle's LAYOUT is now the constructor's own and the transmit handle's is
- * still unmodelled.  Both are `void *` all the same, and this header follows
- * the ruling `include/dsplib/v17data.h` sets out: the handle is `void *` and
- * every offset into it is a named constant with the evidence beside it.
- * `V21RX_create` fixes the receive handle at `V21RX_OBJ_SIZE` bytes and fixes
- * the WIDTH of every field in it, which is why the offsets below now run to
- * +0x4b instead of stopping at +0x1a; what it does NOT do is say what most of
- * them mean, since it is the only thing in the object that writes them.  What IS modelled is the two DSP sub-blocks the handles point
- * at, because every field in them is forced by the type of the callee it is
- * handed to -- which is CLAUDE.md's second-strongest class of evidence, and
- * is how `b103fp.h` came by the same layout for Bell 103.
+ * `V21RX_create` AND `V21TX_create` ARE BOTH RECONSTRUCTED NOW (F9500), so
+ * both handles' LAYOUTS are the constructors' own.  Both are `void *` all the
+ * same, and this header follows the ruling `include/dsplib/v17data.h` sets
+ * out: the handle is `void *` and every offset into it is a named constant
+ * with the evidence beside it.  `V21RX_create` fixes the receive handle at
+ * `V21RX_OBJ_SIZE` bytes and fixes the WIDTH of every field in it, which is
+ * why the offsets below now run to +0x4b instead of stopping at +0x1a; what
+ * it does NOT do is say what most of them mean, since it is the only thing in
+ * the object that writes them.  `V21TX_create` fixes the transmit handle at
+ * `V21TX_OBJ_SIZE` (0x28) bytes the same way -- its own config area
+ * (+0x00..+0x1b) is likewise WRITE-ONLY, read back by nothing reconstructed,
+ * and kept as `struct v21tx_cfg` in `v21cfg.h` for that reason rather than
+ * individually-named fields.  What IS modelled is the two DSP sub-blocks the
+ * handles point at, because every field in them is forced by the type of the
+ * callee it is handed to -- which is CLAUDE.md's second-strongest class of
+ * evidence, and is how `b103fp.h` came by the same layout for Bell 103.
  *
  * ---------------------------------------------------------------------------
  * WHERE EACH OFFSET COMES FROM
@@ -46,6 +50,22 @@
  *
  * `struct fpm_fsm` is 0x10 bytes and `struct fpm_mrf` is 0x1c, so 0x00, 0x10
  * and 0x2c abut with no gap: the block is exactly those three things.
+ *
+ * Added by F9500, once `V21TX_create` and the transmit half-duplex machine
+ * were reconstructed:
+ *
+ *   992ed  V21TX_create    tx + 0x20 -> the parameter/half-duplex block
+ *   99595  V21TX_create    sysdep_malloc(0x28) is the whole handle
+ *   9939f  V21TX_create    the block at tx+0x20 is 0x10 bytes
+ *   993a8  V21TX_create    tx+0x20+0x08 <- TxHdxStartV21 (R_386_32, a DATA
+ *                          reference -- F8493's hazard, not a call)
+ *   a26ed  TxHdxStartV21   FIFO_read(params->fifo, ...) types params+0x00
+ *   a2867  TxHdxIdleV21    fifo->+0x0c is tested for zero -- `fax_fifo`'s
+ *                          own `count`, so the FIFO pointer at params+0x00
+ *                          is typed `struct fax_fifo *` independently of
+ *                          `V21TX_delete`'s `FIFO_delete` call on it
+ *   a2723  TxHdxStartV21   params+0x0c read `movswl`, switched on 0/1/2
+ *   a25b8  TxNextStateV21  the canonical copy of that switch, out of line
  *
  * Receiver:
  *
@@ -122,11 +142,29 @@ struct v21_tx_dsp {
 	short		*scratch;	/* +0x2c the shared intermediate    */
 };
 
+/*
+ * `V21TX_create`'s literal at 0x0994c3: 320 bytes, 160 shorts.  Established
+ * by F9500; unlike the receiver's `V21RX_MAG_BYTES` this one has no second
+ * independent reading (nothing reconstructed reads a symbol-carried length
+ * for it) so it is recorded as a bare literal rather than tied to a
+ * modulator field.
+ */
+#define V21TX_SCRATCH_BYTES	0x140
+
 /* The transmit DSP block's home in the transmitter handle. */
 #define V21TX_OBJ_DSP		0x24
 
 #define V21TX_DSP(m) \
 	(*(struct v21_tx_dsp **)(void *)((char *)(m) + V21TX_OBJ_DSP))
+
+/*
+ * The whole transmit handle, which `V21TX_create` (0x0992f0) fixes at 0x28
+ * bytes: the literal `sysdep_malloc` is given at 0x099595 when the caller
+ * passes NULL.  It is gapless end to end: +0x00..+0x1b is `struct v21tx_cfg`
+ * (v21cfg.h), +0x1c..+0x1f is the result word `V21TX_OBJ_RESULT` already
+ * names, +0x20 is `V21TX_OBJ_PARAMS` and +0x24 is `V21TX_OBJ_DSP`.
+ */
+#define V21TX_OBJ_SIZE		0x28
 
 /* ------------------------------------------------------------------------ */
 /* The receiver                                                             */
@@ -510,6 +548,52 @@ struct v21_status {
 #define V21TX_RESULT_BYTE_04	4
 
 /*
+ * Byte 2 of the same word, +0x1e -- established by F9500, not by
+ * `V21TX_modem`, which never touches it.  `TxNextStateV21`'s three valid-state
+ * arms and its default arm all write exactly one bit here or in
+ * `V21TX_OBJ_RESULT_B1`, never both: V21TX_STATE_DATA's arm sets THIS byte's
+ * bit 0 and clears `V21TX_OBJ_RESULT_B1`'s; the other two arms (and the
+ * default) do the opposite.  Nothing reconstructed reads either bit, so both
+ * are named by BIT VALUE alone.
+ */
+#define V21TX_OBJ_RESULT_B2	0x1e
+#define V21TX_RESULT_B1_BIT0	0x01
+#define V21TX_RESULT_B2_BIT0	0x01
+
+/*
+ * `V21TXP_STATE`'s three values, named from the author's own debug strings
+ * -- see the field's own comment above.  `TxHdxStartV21` is installed at
+ * V21TX_STATE_START (what `V21TX_create` seeds), `TxHdxDataV21` at
+ * V21TX_STATE_DATA and `TxHdxIdleV21` at V21TX_STATE_IDLE: the CURRENT
+ * handler when the state machine is asked to advance, cycling
+ * START -> DATA -> IDLE -> START.
+ */
+#define V21TX_STATE_START	0
+#define V21TX_STATE_DATA	1
+#define V21TX_STATE_IDLE	2
+
+/*
+ * The status byte, `V21TX_OBJ_RESULT`'s low byte, tx + 0x1c -- established by
+ * F9500 and by nothing older, since `V21TX_status` never reads it either.
+ * Named by SITE, the same rule `V21RX_STATUS_*` uses, because nothing
+ * reconstructed reads any of them:
+ *
+ *   V21TX_STATUS_DATA        0   TxHdxDataV21, satisfied or forced-full read
+ *   V21TX_STATUS_IDLE        1   TxHdxIdleV21, FIFO empty (TxNoCarrierV21)
+ *   V21TX_STATUS_UNDERRUN    3   TxHdxDataV21's FIFO-underrun, non-bypass arm
+ *                                -- MOMENTARY, overwritten to DATA (0) two
+ *                                statements later at the same call; kept
+ *                                because the object writes it, D1240
+ *   V21TX_STATUS_DEFAULT     2   the unknown-state arm, all four functions
+ *   V21TX_STATUS_START       5   TxHdxStartV21, EVERY exit unconditionally
+ */
+#define V21TX_STATUS_DATA	0
+#define V21TX_STATUS_IDLE	1
+#define V21TX_STATUS_DEFAULT	2
+#define V21TX_STATUS_UNDERRUN	3
+#define V21TX_STATUS_START	5
+
+/*
  * The parameter block the transmitter owns, and the three fields of it that
  * are reached.
  *
@@ -531,6 +615,28 @@ struct v21_status {
 #define V21TXP_FIFO		0x00	/* struct fax_fifo *                 */
 #define V21TXP_INT_0004		0x04	/* int: zero selects the FIFO arm    */
 #define V21TXP_PROCESS		0x08	/* the dispatch slot                 */
+
+/*
+ * The two shorts beyond the dispatch slot, established by F9500's reading of
+ * `TxHdxStartV21`/`TxHdxIdleV21`/`TxHdxDataV21`/`TxNextStateV21` -- all four
+ * are one state machine, instruction-identical at every site, exactly as
+ * `RxNextStateV21` was four copies of one function on the receive side.
+ *
+ * `V21TXP_STATE` is switched on (sign-extended, `movswl`) by all four and
+ * cycles V21TX_STATE_START -> DATA -> IDLE -> START as each transition
+ * installs the NEXT handler at `V21TXP_PROCESS` and its own value here; the
+ * three debug strings "V21TX_STATE_DATA/IDLE/START\n" (relocscan at
+ * .rodata.str1.1:0x4b60/0x4b72/0x4b84) are the author's own names for the
+ * CURRENT state at each arm, and "V21TX_DEFAULT, %d\n" (0x4b4d) for anything
+ * else.  `V21TX_create` seeds it to V21TX_STATE_START alongside installing
+ * `TxHdxStartV21`.
+ *
+ * `V21TXP_SHORT_000E` is zeroed by the START and IDLE transition arms (the
+ * ones that install TxHdxDataV21 and TxHdxStartV21 respectively) and by
+ * NOTHING else in the object, so it is not named further.
+ */
+#define V21TXP_STATE		0x0c	/* short: V21TX_STATE_*              */
+#define V21TXP_SHORT_000E	0x0e
 
 /*
  * What `V21TX_modem` initialises its inner loop's budget to, ONCE, before the
@@ -697,6 +803,49 @@ void *V21RX_create(void *modem, const struct v21rx_cfg *params);
 void V21RX_delete(void *modem);
 
 /*
+ * Build a V.21 transmitter, or re-initialise one the caller already has.
+ *
+ * `modem` NULL allocates a `V21TX_OBJ_SIZE` handle (0x099595's own literal
+ * 0x28) and, with it, every buffer the DSP block and the transmit FIFO need;
+ * a non-NULL one is re-initialised IN PLACE, keeping whatever `params` and
+ * `dsp` allocations it already carries -- the same contract `V21RX_create`
+ * has for `hdx`/`dsp`, checked the same way (each sub-pointer tested for
+ * NULL independently of the top-level handle).
+ *
+ * `params` NULL takes `V21TX_CFG` (v21cfg.h); the table is COPIED over the
+ * handle's head, so the caller's may be a temporary.  NOTHING reconstructed
+ * reads any field of it back out of the handle -- see `v21cfg.h`'s own
+ * derivation note.
+ *
+ * ALWAYS INSTALLS `TxHdxStartV21` AT `V21TX_STATE_START`, whether or not
+ * `params`/`dsp` already existed -- 0x0993a8/0x0993af are unconditional, past
+ * the branch that skips (re)allocating the DSP block.  So a caller
+ * re-initialising a handle mid-transmission resets the half-duplex machine
+ * to its first state; there is no path that resumes one.
+ *
+ * `FPM_FSM_init`'s frequencies and `samples_per_sym` are `FPM_FSM_CFG`'s own
+ * (V.21 channel 2, 1850/1650 Hz, 24 samples/symbol) UNCONDITIONALLY --
+ * `V21TX_create` writes two DIFFERENT literal frequency pairs first (1180/980
+ * for `V21TX_CFG.short_0000 == 0`, 0/0 otherwise, 1850/1650 for `== 1`) and
+ * every one of the three is immediately overwritten by the same 32-bit load
+ * off `FPM_FSM_CFG` at 0x099409, so none is ever observed.  `scale` alone
+ * survives as an override, to 0x1900 (6400) rather than the library's 32767.
+ * D1241 records the dead literals; the net effect is reproduced without
+ * writing dead code for it.  `V21TX_CFG.short_0000` still selects which of
+ * three (near-identical, past the dead writes) paths runs, and only the
+ * "neither 0 nor 1" one has an observable side effect: it raises
+ * `V21TX_RESULT_B1_BIT1` and sets `V21TX_OBJ_RESULT` to `V21TX_STATUS_DEFAULT`
+ * before falling into the shared tail.
+ *
+ * The resampler is 10:9 (branches:decimate) here against the receiver's 9:10
+ * -- the opposite direction, as the two sides convert opposite ways -- over
+ * `V21_MRF_FILT`'s same 360 taps, shared with the receiver's own instance.
+ *
+ * There is no failure return: the object does not check `sysdep_malloc`.
+ */
+void *V21TX_create(void *modem, const struct v21tx_cfg *params);
+
+/*
  * Tear the TRANSMITTER down.  Seven releases, in the object's order
  * (0x0995f8 through the sibling `jmp` at 0x099653): the modulator, the rate
  * converter, the shared scratch buffer and then the DSP block itself, then
@@ -859,5 +1008,60 @@ short RxHdxStartV21(void *modem, short *in, short *out, short *count);
  * claimed.
  */
 void RxNextStateV21(void *modem);
+
+/* ------------------------------------------------------------------------ */
+/* The transmit data path                                                   */
+
+/*
+ * Advance the transmit state machine one step: switch on `V21TXP_STATE`,
+ * install the next handler at `V21TXP_PROCESS`, and set `V21TXP_STATE` to
+ * match -- see the field's own comment for the cycle and the strings that
+ * name it.
+ *
+ * The object carries this block four times, byte for byte: once out of line
+ * as `TxNextStateV21` (0x0a25b0, 280 bytes) and three more times inlined,
+ * once each into `TxHdxStartV21`, `TxHdxIdleV21` and `TxHdxDataV21` -- the
+ * transmit-side twin of `RxNextStateV21`'s situation (F8898/F9091), except
+ * all three inlining call sites are written together here, so there was no
+ * intermediate `static` step.
+ */
+void TxNextStateV21(void *modem);
+
+/*
+ * The three half-duplex TRANSMIT states.  Each has the shape
+ * `v21tx_process_fn` declares -- `(modem, in, out, budget)` returning the
+ * number of samples produced -- and each is installed at `V21TXP_PROCESS`
+ * by `V21TX_create` or by one another through `TxNextStateV21`.
+ *
+ * START  reads up to `*budget` elements out of the FIFO into `in`, modulates
+ *        what it got, decrements `*budget` by the amount taken, calls
+ *        `TxNextStateV21`, and unconditionally reports V21TX_STATUS_START --
+ *        overwriting whatever `TxNextStateV21` itself wrote to the status
+ *        byte, including its own V21TX_STATUS_DEFAULT.  Installed by
+ *        `V21TX_create` and by IDLE's own default arm.
+ *
+ * DATA   reads up to `*budget` elements.  If the FIFO supplied the whole
+ *        request, modulates `taken` bits, zeroes `*budget` (taken equals the
+ *        request by construction) and reports V21TX_STATUS_DATA.  On an
+ *        underrun with `V21TXP_INT_0004 == 0`, modulates the FULL requested
+ *        budget anyway (not just what the FIFO supplied), forces `*budget`
+ *        to zero, and reports V21TX_STATUS_DATA too -- V21TX_STATUS_UNDERRUN
+ *        is written and then immediately overwritten at the same call
+ *        (D1240).  On an underrun with `V21TXP_INT_0004 != 0`, modulates only
+ *        `taken`, LEAVES the remainder in `*budget` (does not force it to
+ *        zero), calls `TxNextStateV21`, and reports whatever that installed.
+ *
+ * IDLE   with the FIFO empty, calls `TxNoCarrierV21` for the WHOLE current
+ *        budget in one call, forces `*budget` to zero, reports
+ *        V21TX_STATUS_IDLE and returns the sample count.  With the FIFO
+ *        non-empty, does NOT modulate at all: calls `TxNextStateV21` and
+ *        returns 0.
+ */
+short TxHdxStartV21(void *modem, unsigned short *in, short *out,
+		    short *budget);
+short TxHdxIdleV21(void *modem, unsigned short *in, short *out,
+		   short *budget);
+short TxHdxDataV21(void *modem, unsigned short *in, short *out,
+		   short *budget);
 
 #endif /* DSPLIB_V21FAX_H */

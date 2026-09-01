@@ -178,3 +178,21 @@ short V21_CHAN1_MTD_COEFF[10] = {
 	-13271,  16384,  21178, -23532,  16384,
 	-13271,  16384,  17707, -19675,  16384,
 };
+
+/*
+ * `D` at .data 0x07af8, 28 bytes.  `V21TX_create`'s own default; see the
+ * header for the derivation and for why the SHORT/INT split is the
+ * receiver's precedent rather than something this table's own instructions
+ * force.
+ */
+struct v21tx_cfg V21TX_CFG = {
+	1,		/* +0x00 short_0000                         */
+	300,		/* +0x02 bit_rate                           */
+	0,		/* +0x04 short_0004                         */
+	0,		/* +0x06 short_0006                         */
+	60000,		/* +0x08 int_0008                           */
+	3200,		/* +0x0c int_000c                           */
+	0,		/* +0x10 int_0010                           */
+	0,		/* +0x14 int_0014                           */
+	0		/* +0x18 int_0018                           */
+};

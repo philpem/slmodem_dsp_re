@@ -108988,3 +108988,107 @@ receive path's own frame-logging helper -- the `cTOOLS_` prefix reads as
 "class1 TOOLS" -- and belongs with `class1tx.c`/`t30frame.c`, both banned to
 this wave. Declined; left for whichever wave owns the framing layer.
 (2026-09-01)
+## F9500. `FIFO_CFG` lands, and it is the CHOKEPOINT: `FIFO_create`, `V21TX_create` and the transmit half-duplex machine all follow
+
+*2026-09-01.* F9020, F9199 and F9356 all declined `FIFO_CFG` in turn -- the
+blob defines the name twice, a file-local `d` at .data:0x83a0 holding
+{0, 300, 0} and a global `R` at .rodata:0x9654 holding {0, 100, 0} -- and
+F9199's second reason was that a `src/` definition of the name looked like a
+multiple definition of a symbol the blob already carries.
+
+**THAT SECOND REASON DOES NOT SURVIVE CHECKING `build/dsplibs_ref.o`.**
+`tools/symmap.py`'s redefine map is built from `nm --defined-only
+--extern-only`, so it emits exactly one rule, `FIFO_CFG ref_FIFO_CFG` -- but
+`objcopy --redefine-syms` applies a rule to every symtab entry matching the
+OLD name, local and global alike, and `nm build/dsplibs_ref.o | grep FIFO_CFG`
+after the real build shows BOTH survive the rename:
+
+    000083a0 d ref_FIFO_CFG
+    00009654 R ref_FIFO_CFG
+
+So after the rename nothing in the blob-derived object is still called plain
+`FIFO_CFG`, and `src/` defining that name collides with nothing.  What makes
+the differential test able to tell 100 from 300 apart at all is the OTHER
+half of ordinary ELF linking: an external reference to `ref_FIFO_CFG` from a
+different translation unit can only bind to a `GLOBAL` (or `WEAK`) symbol, so
+it resolves to the .rodata entry and never to the .data one, exactly as
+CLAUDE.md's rule for a plain relocation says a NAMED one does.  Measured with
+a two-line probe object linked (`ld -r`) against the real `build/dsplibs_ref.o`
+before writing anything, not assumed.
+
+**THE WRONG-COPY TEST, F134's ritual applied to the whole point of this
+task.** `test/unit/t_fifocreate.c` calls `FIFO_create(0, 0)` on both sides and
+asserts the created object's `size` field is 100 (`ref_FIFO_CFG`'s own value,
+via the differential comparison, and a literal 100 as a second, independent
+assertion so the test does not depend on `FIFO_CFG` being right to prove
+itself right). Planting `FIFO_CFG = { 0, 300, 0 }` in `src/fax/fifo.c` and
+re-running: the literal-100 assertion fails immediately, `size == 300`.
+Restored, and `make one T=t_fifocreate` green again. The fixture can tell 100
+from 300 apart, which is the thing F9199 left unproven.
+
+**`FIFO_create`'s BUFFER-CLEAR LOOP STORES A LITERAL ZERO, NOT `fill`.**
+`movw $0x0,(%ecx,%edx,2)` at 0x096c00, not a re-read of the fill field --
+`fill` is what `FIFO_read` pads a shortfall with once the FIFO runs dry, and
+plays no part in the buffer's initial contents.  Easy to misread as
+"`fill`-initialise the ring" and reproduce that instead; F134's ritual is what
+would have caught it, had it been wrong, and it is why the ritual is worth
+running even where the derivation looks obvious.
+
+**`FIFO_create`'S OWN LINK REQUIREMENT IS SMALLER THAN F9199 THOUGHT.**
+`readyqueue.py` at F9199's commit put `FIFO_create` in the BLOCKED column with
+no consumer to test it through, because `V17TX_create`, `V21TX_create`,
+`V27TX_create`, `V29TX_create` and `_tx_scrambled_ones_init` were ALL
+unwritten. **`ref_FIFO_create` already exists and needs none of them** -- it
+is an ordinary, non-duplicated `T` symbol (`FIFO_create` appears once in
+`nm`, unlike `FIFO_CFG`), so `symmap.py` gives it a normal alias and
+`t_fifocreate.c` drives it directly. `V21TX_create` is still written in this
+same commit, both because it was this task's other half and because IT
+demonstrates the F9199-style "prove it through a consumer" method F9199 and
+this task's brief both point at -- but it turned out not to be load-bearing
+for `FIFO_CFG` itself; see the paragraph below for why.
+
+**`V21TX_create`'S OWN CALL TO `FIFO_create` DOES NOT OBSERVE `FIFO_CFG`'S
+VALUE, WHICH IS WORTH KNOWING BEFORE TRUSTING A CONSUMER-ONLY TEST OF IT.**
+At 0x099375 `V21TX_create` loads `FIFO_CFG`'s first dword (`word0`, `size`
+packed together) onto its own stack-built configuration, and two
+instructions later (0x099386) OVERWRITES the `size` half with the literal 6;
+the local `fill` is a separate literal, 1, set at 0x09936a. So the only part
+of `FIFO_CFG` this constructor's own correctness depends on is `word0`, which
+is 0 in BOTH of the blob's same-named copies -- a test driving `FIFO_CFG`
+only through `V21TX_create` would pass identically whether `FIFO_CFG.size`
+were 100 or 300, and would NOT be the proof F9199 asked for. That proof is
+`t_fifocreate.c`'s direct call, above; `t_v21txcreate.c` still exercises
+`V21TX_create`'s own path through `FIFO_create` and would catch a defect in
+THAT call's own literals (6, 1, `word0`), just not one in `FIFO_CFG.size`.
+
+**THE TRANSMIT HALF-DUPLEX MACHINE IS THREE STATES IN A CYCLE, NOT FIVE LIKE
+THE RECEIVE SIDE'S.** `TxHdxStartV21` (0x0a26d0, 380 bytes), `TxHdxIdleV21`
+(0x0a2850, 372) and `TxHdxDataV21` (0x0a29d0, 451) install each other through
+`TxNextStateV21` (0x0a25b0, 280, out of line) and `TxNextStateV21` installs
+all three -- the same F8492/F8493 shape `RxNextStateV21` established on the
+receive side, with every caller landing in this commit so there is no
+intermediate `static` step to record (contrast F8898/F9091). `readyqueue.py`
+confirms the closure is exactly these three plus `TxNextStateV21`'s own three
+needs -- no `TxNextStateV21` reference from `V21TX_create` itself (it only
+stores `TxHdxStartV21`), and `TxNextStateV21` has ZERO callers anywhere in
+the 1.2 MB (`objdump -dr | grep TxNextStateV21` finds nothing referencing
+it) -- an orphan exactly like the leaves this tree has scheduled before,
+kept unwritten this pass because nothing needs it to link.
+
+**THE CYCLE'S NAMES ARE THE AUTHOR'S OWN, from four debug strings at
+.rodata.str1.1:0x4b60/0x4b72/0x4b84/0x4b4d** -- "V21TX_STATE_DATA\n",
+"V21TX_STATE_IDLE\n", "V21TX_STATE_START\n" and "V21TX_DEFAULT, %d\n" --
+naming the CURRENT state at each of `TxNextStateV21`'s arms exactly as
+`RxNextStateV21`'s four strings name the state being left, not the one
+entered: `V21TX_create` seeds V21TX_STATE_START, whose own arm (when
+`TxNextStateV21` is reached with that state current) installs
+`TxHdxDataV21` and advances to V21TX_STATE_DATA; that state's arm installs
+`TxHdxIdleV21` and advances to V21TX_STATE_IDLE; that one installs
+`TxHdxStartV21` and returns to V21TX_STATE_START. `tools/relocscan.py --at`
+is what pairs the four addresses with these sites (finding F604).
+
+**AND ONCE THIS LANDS, `readyqueue.py` DROPS `FIFO_CFG` AND `FIFO_create` FROM
+`V17TX_create`, `V27TX_create` AND `V29TX_create`'S BLOCKER LISTS**, which is
+the whole point of clearing the chokepoint even though this task did not
+write those three. Re-measured after this commit, not assumed from the
+derivation alone.  (2026-09-01)

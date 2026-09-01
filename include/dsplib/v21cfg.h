@@ -1,7 +1,8 @@
 /*
  * v21cfg.h -- Class 1 fax, V.21 channel: the nine tables `V21RX_create`
  *             (0x098e70) references directly, and the configuration type it
- *             copies onto its stack.
+ *             copies onto its stack -- plus `V21TX_create`'s own default,
+ *             `V21TX_CFG`, added by F9500 for the same reason.
  *
  *   AGCv21_CFG           .rodata 0x00a0e4    24   struct fpm_agc_cfg
  *   AGC_DEF_ALPHA_v21    .rodata 0x00a100     4   short[2]
@@ -124,6 +125,46 @@ extern const short V21_MRF_FILT[360];
 
 extern short V21_CHAN1_MTD_COEFF[10];
 extern struct v21rx_cfg V21RX_CFG;
+
+/*
+ * `V21TX_CFG`, `D` at .data 0x07af8, 28 bytes -- `V21TX_create`'s own
+ * default, copied onto the transmit handle's first 28 bytes exactly as
+ * `V21RX_CFG` is onto the receiver's first 24.  See v21fax.h for what
+ * `V21TX_create` (0x0992f0) establishes about the handle; NOTHING
+ * reconstructed READS any field of this table back out of the handle, so it
+ * is spelled from the object's bytes and forced widths alone, not from a
+ * consumer.
+ *
+ * NOT `struct v21rx_cfg`'s layout, and F9356 already showed why: the
+ * receiver's +0x00 is tested `cmpw` (16-bit forced) while this table is 28
+ * bytes to the receiver's 24, with a different value at +0x0c than the
+ * receiver's +0x08.  `V21TX_create` never tests any field of its own copy
+ * with a width-forcing compare (the six-plus-one dword copy at 0x099328 is a
+ * bulk `mov` sequence, width-blind), so the SHORT/INT split below is the
+ * receiver's own precedent, not something this table's own instructions
+ * force -- keep that distinction in mind before trusting it further than
+ * that.
+ *
+ * The bytes: `01 00 2c 01 00 00 00 00 60 ea 00 00 80 0c 00 00` then four
+ * zero dwords.  Read as short,short,short,short,int,int,int,int,int:
+ * {1, 300, 0, 0, 60000, 3200, 0, 0, 0}.  300 sits where V.21's own bit rate
+ * sits in every sibling table in this file; 60000 is the same literal
+ * `V21RX_CFG.int_0008` and every one of `faxcfg.h`'s siblings carry at their
+ * own +0x08. 3200 has no parallel elsewhere in this file and is not named.
+ */
+struct v21tx_cfg {
+	short	short_0000;	/* +0x00  1                                 */
+	short	bit_rate;	/* +0x02  300, V.21's only rate              */
+	short	short_0004;	/* +0x04  0                                  */
+	short	short_0006;	/* +0x06  0                                  */
+	int	int_0008;	/* +0x08  60000, as in every sibling table   */
+	int	int_000c;	/* +0x0c  3200                               */
+	int	int_0010;	/* +0x10  0                                  */
+	int	int_0014;	/* +0x14  0                                  */
+	int	int_0018;	/* +0x18  0                                  */
+};
+
+extern struct v21tx_cfg V21TX_CFG;
 
 /*
  * The two tone-detector banks are RESONATORS AT V.21'S OWN FOUR FREQUENCIES,
