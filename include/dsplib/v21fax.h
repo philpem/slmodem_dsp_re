@@ -18,10 +18,15 @@
  * blocks and must not be collected into one struct.  They are kept apart
  * here, and the two handles are `void *`.
  *
- * NEITHER CONSTRUCTOR IS RECONSTRUCTED, so neither object is modelled.  This
- * header follows the ruling `include/dsplib/v17data.h` sets out: the handle
- * is `void *` and every offset into it is a named constant with the evidence
- * beside it.  What IS modelled is the two DSP sub-blocks the handles point
+ * `V21RX_create` IS RECONSTRUCTED AND `V21TX_create` IS NOT, so the receive
+ * handle's LAYOUT is now the constructor's own and the transmit handle's is
+ * still unmodelled.  Both are `void *` all the same, and this header follows
+ * the ruling `include/dsplib/v17data.h` sets out: the handle is `void *` and
+ * every offset into it is a named constant with the evidence beside it.
+ * `V21RX_create` fixes the receive handle at `V21RX_OBJ_SIZE` bytes and fixes
+ * the WIDTH of every field in it, which is why the offsets below now run to
+ * +0x4b instead of stopping at +0x1a; what it does NOT do is say what most of
+ * them mean, since it is the only thing in the object that writes them.  What IS modelled is the two DSP sub-blocks the handles point
  * at, because every field in them is forced by the type of the callee it is
  * handed to -- which is CLAUDE.md's second-strongest class of evidence, and
  * is how `b103fp.h` came by the same layout for Bell 103.
@@ -97,6 +102,7 @@
 #include "dsplib/fpm_fsd.h"
 #include "dsplib/fpm_fsm.h"
 #include "dsplib/fpm_mrf.h"
+#include "dsplib/v21cfg.h"
 
 struct fpm_mtd;
 
@@ -212,6 +218,68 @@ struct v21_rx_hdx {
 #define V21RX_OBJ_HDX		0x4c
 #define V21RX_OBJ_DSP		0x50
 
+/*
+ * The whole handle, which `V21RX_create` (0x098e70) fixes at 0x54 bytes: it
+ * is the literal `sysdep_malloc` is given at 0x099139 when the caller passes
+ * NULL.
+ */
+#define V21RX_OBJ_SIZE		0x54
+
+/*
+ * The shared intermediate buffer `V21RX_create` hangs off the DSP block, the
+ * literal at 0x099210.  320 bytes is 160 shorts, which is
+ * `FPM_FSD_CFG.trace_len` -- the demodulator writes one trace word per input
+ * sample and `GetSNRV21` rectifies that trace into `mag`, so the two buffers
+ * are the same length and the count has two independent readings.
+ */
+#define V21RX_MAG_BYTES		0x140
+
+/*
+ * +0x00 .. +0x17 IS THE CONFIGURATION, and it is `struct v21rx_cfg` -- see
+ * `v21cfg.h`.  `V21RX_create` copies twenty-four bytes over the head of the
+ * handle, from the caller's table or from `V21RX_CFG` when the caller passes
+ * none, and every later read of a config field reads it here.
+ *
+ * That also identifies the word `V21RX_status` reports as the "protocol":
+ * `movzwl (%esi),%ecx` at 0x0a2473 reads +0x00, which is `chan2`.  The two
+ * readings are independent and they agree, so the handle's head and the
+ * config table are the same twenty-four bytes.
+ */
+#define V21RX_OBJ_CFG		0x00
+
+/*
+ * +0x1c .. +0x4b, WRITTEN ONLY BY `V21RX_create` AND READ BY NOTHING THAT IS
+ * RECONSTRUCTED.  The widths are the constructor's own stores and the three
+ * two-byte gaps are its own silence; the MEANINGS are not established, so the
+ * names are `type_NNNN` and stay that way until something reads them.
+ *
+ * What IS measured is where two of them come from.  +0x1c takes the FSD's
+ * trace buffer and +0x24 takes the ADDRESS of the FSD's `last_count`, both
+ * read out of the DSP block at 0x0990a3 and 0x0990a6 -- so this looks like a
+ * diagnostic export of the demodulator's trace, and "looks like" is exactly
+ * why neither is named for it.
+ *
+ * +0x28 through +0x4b are three identical twelve-byte groups: an `int`, an
+ * `int`, a `short`, and two bytes the constructor does not touch.  The
+ * repetition is real -- 0x28/0x2c/0x30, 0x34/0x38/0x3c and 0x40/0x44/0x48,
+ * with `movl`, `movl`, `movw` each time -- but three groups of the same shape
+ * is not enough to say they are an ARRAY rather than three fields that happen
+ * to match, and nothing reads them to settle it.  They are spelled out one at
+ * a time for that reason.
+ */
+#define V21RX_OBJ_TRACE		0x1c	/* short *: dsp->fsd.trace          */
+#define V21RX_OBJ_INT_0020	0x20
+#define V21RX_OBJ_COUNT_AT	0x24	/* short *: &dsp->fsd.last_count    */
+#define V21RX_OBJ_INT_0028	0x28
+#define V21RX_OBJ_INT_002C	0x2c
+#define V21RX_OBJ_SHORT_0030	0x30
+#define V21RX_OBJ_INT_0034	0x34
+#define V21RX_OBJ_INT_0038	0x38
+#define V21RX_OBJ_SHORT_003C	0x3c
+#define V21RX_OBJ_INT_0040	0x40
+#define V21RX_OBJ_INT_0044	0x44
+#define V21RX_OBJ_SHORT_0048	0x48
+
 #define V21RX_DSP(m) \
 	(*(struct v21_rx_dsp **)(void *)((char *)(m) + V21RX_OBJ_DSP))
 #define V21RX_HDX(m) \
@@ -261,6 +329,20 @@ struct v21_rx_hdx {
 #define V21RX_FLAG_ERROR	(1 << 1)
 #define V21RX_FLAG_CARRIER	(1 << 5)
 #define V21RX_FLAG_LOW_SNR	(1 << 7)
+
+/*
+ * The two bits `V21RX_create` seeds, and the two the note above says nothing
+ * else in the object touches.  `orb $0x50,0x19(%esi)` at 0x099095 sets both
+ * and there is no other setter, no clearer and no reader anywhere in the 1.2
+ * MB, so they are named BY BIT VALUE and by nothing else -- which is the only
+ * honest name available when a bit is written once and never consulted.
+ *
+ * They do leave the library: +0x19 is the second byte of the 32-bit word
+ * `V21RX_modem` returns, so a host could be reading them even though the
+ * object does not.
+ */
+#define V21RX_FLAG_BIT4		(1 << 4)
+#define V21RX_FLAG_BIT6		(1 << 6)
 
 /*
  * The second flags byte, rx + 0x1a.  It is the third byte of the 32-bit word
@@ -594,6 +676,24 @@ int V21RX_modem(void *modem, short *in, short *out, short *count);
  * both readings.  A free LOG in the harness would close it for every delete
  * function in the tree at once, and is not this file's to add.
  */
+/*
+ * Build a V.21 receiver, or re-initialise one the caller already has.
+ *
+ * `modem` NULL allocates a `V21RX_OBJ_SIZE` handle and, with it, every buffer
+ * the DSP blocks need; a non-NULL one is re-initialised IN PLACE, keeping
+ * whatever `hdx` and `dsp` allocations it already carries.  That distinction
+ * is the third argument to `FPM_MRF_init`, `FPM_AGC_init` and `FPM_FSD_init`,
+ * so passing a handle whose `dsp` pointer is uninitialised garbage is a crash
+ * rather than a fresh start -- the object has no guard.
+ *
+ * `params` NULL takes `V21RX_CFG`, which selects channel 2.  The table is
+ * COPIED over the handle's head, so the caller's may be a temporary.
+ *
+ * Returns the handle, allocated or not.  There is no failure return: the
+ * object does not check `sysdep_malloc`.
+ */
+void *V21RX_create(void *modem, const struct v21rx_cfg *params);
+
 void V21RX_delete(void *modem);
 
 /*

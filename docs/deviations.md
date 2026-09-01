@@ -12044,3 +12044,79 @@ DATA. `V17RX_status` turns a set bit into a reported `short_06` of zero.
 **Status:** reproduced. `t_v17rxstate.c`'s `H_SNR_CLEARED` puts
 `RxHdxDataV17`'s clear in front of the test and is asserted to separate;
 `snr_low_seen` and `snr_high_seen` are the denominators.
+## D1180 🐛 `FPM_FSD_CFG_data` and `FPM_FSD_CFG` are two objects where the blob has one
+
+`src/dsp/fpm_fsd_cfg.c` defines `FPM_FSD_CFG`, the object's own table -- `D` at
+.data 0x812c, 28 bytes. `src/dsp/fpm_fsd.c` still defines `FPM_FSD_CFG_data`, a
+stub of it written when nothing referenced the real one and a reference to an
+unwritten blob symbol could not link (F8492). `V21RX_create` references
+`FPM_FSD_CFG` directly, so the real one had to exist.
+
+**This is D1101 one block over, and in the harmless direction.** D1101 records a
+real divergence, because `FPM_MTD_CFG` holds a pointer the stub sets NULL. This
+table holds NO pointer at all -- a relocation sweep over its own 28 bytes finds
+nothing inside it -- and every scalar in the stub already equalled the object's.
+`t_v21cfg.c` asserts `memcmp(&FPM_FSD_CFG_data, &FPM_FSD_CFG, sizeof) == 0`, so
+the two being one table is measured rather than assumed, and no behavioural path
+can tell them apart.
+
+What remains is a storage class and a duplicate symbol: the object's is `D`,
+global and writable; the stub is `R`, const in `.rodata`.
+
+**Not fixed here, and the fix is three lines.** Delete the stub and its
+declaration in `include/dsplib/fpm_fsd.h`, and point its one reader --
+`src/pump/b103/b103fp.c:1093`, `fsd = FPM_FSD_CFG_data;` -- at `FPM_FSD_CFG`.
+That file is `src/pump/**`, which this pass was fenced from. *measured: the two
+tables are byte-identical, so the duplicate costs 28 bytes of `.rodata` and
+nothing else.*
+
+## D1181 ⚠ `fpm_fsd_cfg`'s `f18`/`pad1a` are two `short` here and are probably one 32-bit slot
+
+`V21RX_create` writes that dword with a single 32-bit `mov` at 0x098f75, from
+the same register it stores into `struct fpm_mrf_cfg`'s `void *aux` nine
+instructions later. Two `short` stores are not what the object emits there, so
+the pair is very likely one `void *aux` -- the same trailing slot the resampler's
+configuration carries, receiving the same value.
+
+It is left alone because it moves nothing this pass can measure: both spellings
+are four bytes at the same offset, the value is zero in `FPM_FSD_CFG` and zero in
+`V21RX_CFG`, and `include/dsplib/fpm_fsd.h` is shared with B.103, whose own
+constructor would have to be re-read before the type changed under it.
+`t_v21cfg.c` compares `f18` and `pad1a` against the blob as they stand.
+
+`V21RX_create` IS now written, and it splits the pointer by hand:
+`fsd.f18` takes the low half and `fsd.pad1a` the high one. That reproduces the
+stored BYTES exactly for every input on the 32-bit build this reconstruction
+targets, so nothing observable is given up -- only the shape of the two
+instructions, one `movl` becoming two `movw`.
+
+**And the byte order of the split is MEASURED, not assumed.**
+`test/unit/t_v21create.c` runs two cases whose `aux` has unequal halves --
+0x1234abcd and 0xfedc0011 -- and compares the resulting `fpm_fsd` against the
+blob's. Swapping the two halves in `src/fax/v21.c` fails four checks in each of
+that binary's three suites. So the object really does put the low half at
++0x18, and this entry is now about instruction shape alone.
+
+The retype remains the right fix and remains out of reach from a pass fenced
+off `src/pump/`. *measured: identical stored bytes on 32 bits, over five
+configurations including two with unequal halves; the divergence is two
+instructions, not a value.*
+
+## D1182 ⚠ the V.21 receiver's tables are in `src/fax/v21cfg.c`, not in the file that holds `V21RX_create`
+
+`AGCv21_CFG`, `V21_MRF_FILT`, the two discriminator FIRs and the rest sit in
+`.data` and `.rodata` runs that also hold `V21RX_CFG` and `V21TX_CFG`, so the
+author's translation unit was almost certainly the one holding `V21RX_create`
+itself -- which is `src/fax/v21.c` here.
+
+They are in a file of their own for the reason D1100, D1102 and D1110 give for
+V.29, V.27ter and V.17: a table is worth nothing until something can link
+against it, and the tables land a pass before the constructor does. A data
+symbol's bytes do not depend on its translation unit, so moving them is free
+and it cannot be measured.
+
+`V21_CHAN1_MTD_COEFF` has a second reason to be here: its channel-2 twin lives
+in `src/fax/faxcfg.c`, because all three fax receivers reference that one,
+and only V.21 references this one. So the pair is split across two files in the
+reconstruction and is contiguous in the object, at .data 0x7a60 and 0x7a74.
+*unmeasured, and unmeasurable by any tier here.*
