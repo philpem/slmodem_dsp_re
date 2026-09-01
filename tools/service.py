@@ -141,8 +141,16 @@ def main():
         tus = coverage.load_tus(args.tumap)
         for size, n in sorted(((syms[n][0], n) for n in groups[args.list]),
                               reverse=True):
+            # NOT `n[:56]`.  This column used to truncate, and a truncated
+            # symbol name is the worst kind of wrong output: it still looks
+            # like a name, so `nm ... | grep " $n$"` finds nothing and a
+            # disassembly driven off it silently reads the wrong address.
+            # Two of the 129 in the `none` class are exactly 56 characters
+            # and were being cut -- `V90ConnectionEvaluator::evaluateMean
+            # ErrorStdPhase3` and `V90Phase4Modulator::recivedPartTwoSilence
+            # RrnSUVtag`, both losing their trailing `v`.  Finding F9486.
             print("%7d  %-56s %s"
-                  % (size, n[:56],
+                  % (size, n,
                      coverage.area_of(addr.get(n, -1), tus, syms[n][1])))
         return
 

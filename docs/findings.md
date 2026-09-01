@@ -108923,3 +108923,387 @@ reading V.27ter's onto V.21 would have scheduled a subset that cannot link at
 all. `tools/relocscan.py` is the tool for the data-reference half and was fixed
 the same day (F9280); `objdump -r` piped through a grep for the family's names
 is the cheap whole-object form and is what was used here.  (2026-09-01)
+
+### F9480. NONE of the no-entry-point bucket is on slmodemd's API surface -- corroborating F8401 independently, correcting its count from 25 to 22, and drawing the consequence it did not: every signature in that bucket is rank-3 inference
+
+**RENUMBERED TWICE, AND THREE OF THE EIGHT WITHDRAWN AS SUPERSEDED.** This
+block was written on a worktree branch as 8400-8407, against a `master` whose
+highest finding was F8326. Master landed 8400, 8401 and 8402 while the branch
+was in flight, so it shifted by 30 to 8430-8437. It then sat unlanded for a
+week, master took 8430 as well (the `VPcmV34Main.cpp +72` leaf batch), and in
+the same period master reconstructed the fax message reporters independently.
+So the surviving five are renumbered ABOVE master's high-water mark rather than
+into another low range, and three are dropped outright:
+
+    ORIGINAL   FIRST SHIFT   NOW          ORIGINAL   FIRST SHIFT   NOW
+      8400        8430       F9480          8404        8434       F9484
+      8401        8431       withdrawn      8405        8435       F9485
+      8402        8432       withdrawn      8406        8436       F9486
+      8403        8433       withdrawn      8407        8437       F9487
+
+(The two dead schemes are written WITHOUT the `F` above on purpose: they name
+nothing now, and `refcheck.py` reads a bare `Fnnnn` as a citation.)
+
+The three withdrawn ones were the reconstruction half, and master got there
+first and independently: the eight reporters' off-by-one guard is master's
+D951, the `vxx_message` dispatch table is in `src/fax/faxvmi.c`, and the
+accessors themselves are `MESSAGE_FN` in `src/fax/class1tx.c`. Master's
+`(unsigned)code` cast against a declared `int` says the same thing the
+withdrawn block said with an `unsigned int` parameter, so nothing is lost by
+dropping them. What survives here is the BUCKET analysis, which master has not
+recorded.
+
+Anything quoting the two dead schemes from the original branch's commit
+messages (`d7f7a8b9`, `b832cf8a`, `a67d415e`, `38b3d8be`) means the renumbered
+finding in the table above, or one of the three withdrawn.
+
+**This is the third AND FOURTH live demonstration of the rule it breaks.** A findings
+range cannot be pre-assigned: it was free when derived, checked across all
+branches, and stale before the work landed. The two subagent blocks issued from
+that session (8410-8419 and 8420-8429) were derived at the same moment and
+survived only because master happened to take the bottom of the range rather
+than the middle.
+
+**READ F8401 FIRST; THIS IS THE SECOND HALF OF IT.** Two sessions asked
+overlapping questions in parallel without knowing it. F8401 asked *"can we take
+the API signatures from slmodem's source"* and answered it for the API side:
+the headers declare nothing the blob defines, the signatures live in the `.c`
+files as local `extern` declarations, and the seven headers are now vendored at
+`third_party/slmodem/`. That work landed on master while this branch was being
+written; **it is the primary record and this finding does not restate it.**
+
+This finding was reached from the other end -- *"what evidence is there for the
+139 leaves I have been asked to write"* -- and it adds three things F8401 does
+not contain.
+
+**FIRST, THE INTERSECTION WITH THE BUCKET, WHICH IS THE POINT.** F8401
+establishes that a published API exists and where it lives. It does not ask
+whether the leaves are on it. They are not: **0 of 138**, by every method
+below. So the shape of the bucket is settled -- it is not slmodemd's API
+surface, and the `extern` declarations F8401 recovered, valuable as they are,
+buy nothing for any symbol in it.
+
+**SECOND, A CORRECTION TO THE COUNT.** F8401's headline says the `.c` files
+carry **25** such declarations. Its own itemisation is nineteen at
+`modem.c:75-100`, one at `modem_at.c:824` and two at `modem_main.c:102-103` --
+which is **22**, and 22 is what three independent methods give here. The likely
+origin of the 25 is that `extern ... name(` appears **54** times across the 16
+`.c` files and only 22 of those name a symbol the blob defines; the rest are
+slmodemd's own. Recorded rather than corrected in place, per this tree's rule
+against renumbering or rewriting history: **the number to quote is 22**, and
+F8401's list is right where its total is not.
+
+Related and NOT a discrepancy: F8401 counts **eight** blob imports that
+slmodemd declares, which is the count *in the headers*. The link-level figure
+is **21** -- the same eight plus `dsplibs_debug_level`, `dsplibs_debug_printf`,
+`modem_recv_from_tty`, `modem_send_to_tty` and the nine `sysdep_*`. Two frames,
+both correct; say which when quoting.
+
+**THIRD, THE EVIDENCE-RANK CONSEQUENCE**, which is what changes how the rest of
+this bucket gets written, and is set out at the end of this finding.
+
+**Measured three independent ways, which all agree.**
+
+| method | what it counts | result |
+|---|---|---|
+| `extern ... name(` declarations across all 16 `slmodemd/*.c` | 54 distinct, of which the blob defines | **22** |
+| link level: `nm --undefined-only` over 17 `slmodemd/*.o` against `nm --defined-only` on the blob | what the linker actually resolves | **22** |
+| raw identifier sweep over all 23 `slmodemd/*.{c,h}` | 3,343 distinct identifiers, of which blob symbols | **22** |
+
+The three sets are *identical*, not merely equal in size. And the intersection
+with the bucket is **0 of 138**, by all three.
+
+**THE HEADERS ARE THE WRONG PLACE TO LOOK, AND THE ZERO THERE IS NOT A DEAD
+DETECTOR.** `modem.h`, `modem_dp.h`, `modem_defs.h` and `modem_param.h` declare
+**zero** symbols the blob defines. The traffic through them runs the other way:
+the blob's *undefined* set is resolved by the daemon, 21 symbols of it --
+`modem_get_bits`, `modem_put_bits`, `modem_dp_register`, `modem_dp_deregister`,
+`modem_get_param`, `modem_set_param`, `modem_get_sreg`, `modem_debug_log_data`,
+`dsplibs_debug_level`, `dsplibs_debug_printf`, `modem_recv_from_tty`,
+`modem_send_to_tty` and the nine `sysdep_*`. `modem_dp.h:54`'s
+`struct dp_operations` is why: dsplibs **registers a vtable** and slmodemd
+reaches the datapumps through function pointers, so the datapump entry points
+never need a name in a header. The detector is shown to fire by the 22 it does
+find in the `.c` files -- finding F134's rule, applied to a measurement whose
+headline number is zero.
+
+**The 22, in full, and this is the ONE place the whole list is written out.**
+F8401 quotes nine of them as a sample; the complete set is here because the
+correction above turns on it -- a reader who wants to check 22 against 25 needs
+every row, and re-deriving them is not free:
+
+    modem.c:75   extern void *dp_runtime_create(struct modem *m);
+    modem.c:76   extern void  dp_runtime_delete(void *runtime);
+    modem.c:77   extern void *dcr_create();
+    modem.c:78   extern void  dcr_delete(void *dcr);
+    modem.c:79   extern void  dcr_process(void *dcr, void *buf, int len);
+    modem.c:81   extern void *RD_create(struct modem *m, unsigned rate);
+    modem.c:82   extern void  RD_delete(void *obj);
+    modem.c:83   extern int   RD_process(void *obj, void *in, int count);
+    modem.c:84   extern void  RD_ring_details(void *obj, long *freq, long *duration);
+    modem.c:87   extern void *CID_create(struct modem *m, unsigned rate, unsigned cid_val);
+    modem.c:88   extern void  CID_delete(void *cid);
+    modem.c:89   extern int   CID_process(void *cid, void *in, int count);
+    modem.c:92   extern void *VOICE_create(struct modem *m, unsigned srate);
+    modem.c:93   extern void  VOICE_delete(void *obj);
+    modem.c:94   extern int   VOICE_process(void *obj, void *in, void *out, int count);
+    modem.c:95   extern int   VOICE_command(void *obj, enum VOICE_CMD cmd);
+    modem.c:98   extern void *FAX_create(struct modem *m, unsigned caller, unsigned srate);
+    modem.c:99   extern int   FAX_process(void *obj, void *in, void *out, int count);
+    modem.c:100  extern void  FAX_delete(void *obj);
+    modem_at.c:824   extern int  FAX_class1_command(void *obj, unsigned cmd, unsigned param);
+    modem_main.c:102 extern int  prop_dp_init(void);
+    modem_main.c:103 extern void prop_dp_exit(void);
+
+Two details about quoting them -- `dcr_create()`'s empty parens being a K&R
+unprototyped declaration rather than `(void)`, and `modem_at.c:600`'s
+`modem_voice_command` being slmodemd's own and not `VOICE_command` -- were
+found independently by both sessions and are **F8401's to state**. They are
+named here only so that this list is not read without them.
+
+**AND THE VENDORED COPIES ARE NOW THE RIGHT SOURCE TO QUOTE FROM.** The
+measurements above were taken against the live `/home/philpem/dev/sip-D-modem/slmodemd/`
+tree, because that was all this branch had. F8401 has since vendored the seven
+headers verbatim at `third_party/slmodem/` with a sha256 manifest and a
+`vendorcheck.py` in `make phase`. The `.c` files are **not** vendored -- only
+the headers are -- so the 22 declarations still have no in-tree copy, and a
+future pass wanting them under the drift check would have to extend the
+manifest. Worth knowing before anyone assumes `third_party/slmodem/` already
+holds them.
+
+**A published signature does not lift the FAX fence.** Four of the 22 are
+`FAX_create`, `FAX_process`, `FAX_delete` and `FAX_class1_command`. Having the
+declaration makes the eventual fax pass cheaper; it says nothing about the
+machinery a body needs. Recorded and left.
+
+**THE CONSEQUENCE FOR THIS PASS, which is the point of the finding.** State
+which bucket a symbol is in before writing it:
+
+| bucket | count of the 138 |
+|---|---|
+| PUBLISHED -- signature quoted from slmodemd, with file and line | **0** |
+| NOT-IN-SLMODEMD -- checked, absent from all 23 sources | **138** |
+| INFERRED -- from the disassembly alone | **138** |
+
+So there is **no rank-1 signature evidence anywhere in this bucket**. What is
+still rank 1 is the *symbol name* -- the author's own word -- and that is a
+different claim from the signature and must be kept apart from it in any
+finding. What is available above inference is rank 2, a caller or a table that
+types the thing, and `vxx_message` in `src/fax/faxvmi.c` is the case where it exists.
+
+`prop_dp_init` and `prop_dp_exit` are **not** in the bucket: they are entry
+points, they are how the datapump table reaches the daemon, and `service.py`
+already reaches them.
+
+### F9484. What is LEFT of the no-entry-point bucket, categorised by what BLOCKS each symbol rather than by size -- and three of the categories are not "unwritten", they are "not worth writing yet"
+
+The brief for this pass asked for the number remaining, because that is what
+says when the phase ends. A raw count does not say it: the bucket is not one
+kind of work. Measured at 129 symbols / 15,444 bytes, after master's `src/fax/class1tx.c` cleared nine.
+
+**By span, which is where the mass is:**
+
+| span | symbols | bytes |
+|---|--:|--:|
+| `VPcmV34Main.cpp +72` | 67 | 5,805 |
+| `class1tx.c +94` | 18 | 2,284 |
+| `V32mod.c +39` | 13 | 1,040 |
+| `Beepgen.c +3` | 12 | 2,075 |
+| `Fdspkrnl.c +13` | 7 | 1,784 |
+| `b103.c +2` | 5 | 632 |
+| `class1.c` | 5 | 480 |
+| `Dialer.c +18` | 1 | 895 |
+| `voice.c#3 +3` | 1 | 449 |
+
+**By what evidence exists for the signature**, which F9480 makes the first
+question rather than the last:
+
+| | symbols | bytes | what that means |
+|---|--:|--:|---|
+| C++, mangled | 66 | 6,128 | the mangling states the argument types -- **rank 2** |
+| plain C | 63 | 9,316 | nothing states them -- **rank 3, inference only** |
+
+So slightly over half the remaining symbols carry their own argument types and
+slightly under half do not, and the C half is the larger by bytes. A pass that
+takes the C++ half first is taking the better-evidenced work, not merely the
+smaller.
+
+**And the categories that matter, which are about blocking and not size:**
+
+1. **Writable now, rank-2 typed.** The bulk of the `VPcmV34Main.cpp` C++,
+   whose classes already have headers with offset maps in `include/dsplib/`.
+   This is where a breadth pass should keep going.
+2. **Needs a struct nobody has modelled.** `cid_value`, `cid_threshold` and
+   `cid_reset` write through *two sub-object pointers* at `+0x33e` and `+0x28`
+   of a container `include/dsplib/cid.h` does not describe -- that header
+   models the DSP-side `struct cid`, not the service object `CID_create`
+   returns. `V22FP_control` writes six fields of `struct v22fp_dsp` and two of
+   a sub-object at `fp+0x50`. The `SGD_*`, `TONE_*` and `FDSP_*` families are
+   the same shape. **These are structural work wearing a leaf's byte count**,
+   and scheduling them off `worklist.py`'s size column is how a 145-byte
+   function becomes a session.
+3. **DIFFERENTIALLY NEAR-VACUOUS, and this is a category the tree did not
+   have a name for.** A function can be perfectly writable and still have
+   almost nothing a differential test can assert. `V22FP_GetDiagnostics` is
+   21 bytes that tail-call `V22_FSE_getdiag`, which is `xor %eax,%eax; ret`
+   and does not touch its argument -- so ours and the blob's both return 0
+   whatever the pointer arithmetic did, and the `+0x164` displacement that is
+   the entire content of the function is **invisible to the tier that
+   decides**. Landing it would move the count and add no evidence. It is
+   pinned instead by `offsetof` assertions and the codegen tier, and that
+   should be said when it is eventually written rather than discovered by the
+   next reader. Eight symbols are `ret` or `xor %eax,%eax; ret` outright --
+   18 bytes between them (F9485).
+4. **Needs fenced machinery.** Recorded and stopped, per the brief.
+
+**THE ONE REVERSE EDGE LEFT.** After master's `src/fax/class1tx.c`, exactly **one** of the 129 has any
+relocation anywhere in the 1.2 MB pointing at it -- `fComputeRMSValueFloatBuf`,
+one reference. The other 128 have none. F8320's reading is now sharper than
+"129 of 139": the eight that had a referrer had `vxx_message`, which is itself
+dead (`vxx_message` in `src/fax/faxvmi.c`), and clearing them took the referred-to population from 10 to 1.
+**The bucket really is a dead export and following its edges does not lead
+anywhere.**
+
+**The denominator moved under this pass and the numbers should be quoted with
+that said.** The brief specified 139 symbols / 16,013 bytes; `service.py` at
+`406cf7fd` reported **138 / 15,767** before any work here, so master moved
+between the brief being written and the run. This pass then took it to
+**129 / 15,444**. All three figures are real measurements of different trees.
+
+### F9485. Eight of the bucket are `ret` or `xor %eax,%eax; ret`, and the four `K56FlexFloModem` constructors are blocked by a test fixture rather than by evidence -- while the header's `void` on `getK56MPsReceiver` is measurably wrong by this tree's own criterion
+
+Eight symbols, 18 bytes between them, are the entire body:
+
+    1  _ZN15K56FlexFloModemC1EPviP19_tagModemParameters   c3
+    1  _ZN15K56FlexFloModemC2EPviP19_tagModemParameters   c3
+    1  _ZN15K56FlexFloModemD1Ev                           c3
+    1  _ZN15K56FlexFloModemD2Ev                           c3
+    3  K56FLEX_SessionTermination                         31 c0 c3
+    3  _ZN15K56FlexFloModem17getK56MPsReceiverEv          31 c0 c3
+    3  fax_class1_GetConstalation                         31 c0 c3
+    5  _ZN18V90Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv
+
+**They are not vacuous to test, and that is worth stating**, because the
+instinct is to skip them. `src/pump/v90/K56FlexFloModem.cpp` already carries
+five of exactly this shape, and its test's argument is the right one: *the
+interesting claim about a stub is what it does NOT do*. A mutation that writes
+a field, or returns 1, is caught.
+
+**THE FOUR CONSTRUCTORS ARE BLOCKED BY THE FIXTURE, NOT BY THE OBJECT.**
+`include/dsplib/K56FlexFloModem.h` says so in as many words -- *"Declaring a
+constructor or destructor is deliberately avoided: it would make the class
+non-trivial and delete the defaulted members of the union the test fixture
+puts it in."* That was the right call when the class had no constructor to
+write. It is now the thing standing between this tree and four symbols the
+blob demonstrably has, so the cost has moved from zero to four symbols and the
+decision is worth re-taking rather than inheriting. The fixture change is the
+same one `t_v90leaves` already made for `V90SdDetector` and
+`V90SpectralVerifier`: hold storage and alignment in the union and reach the
+object through a cast.
+
+**AND THE HEADER'S RETURN TYPE FOR `getK56MPsReceiver` IS WRONG BY THE FILE'S
+OWN RULE.** The header declares `void getK56MPsReceiver();` and says of it
+*"the return type is unrecoverable and is spelled `void` to say exactly that
+-- no `void` here was measured."* But `src/pump/v90/K56FlexFloModem.cpp`
+establishes the criterion two paragraphs earlier and it does apply here: *"a
+function returning nothing leaves `%eax` alone and one returning zero sets
+it"*. `getK56MPsReceiver` is `31 c0 c3` -- it **sets** `%eax`. By the tree's
+own two-shapes argument it returns a value, exactly as `getK56FlexJaBits` and
+`getK56FlexMpBits` do, and `void` is not merely unmeasured but contradicted.
+
+The reason the contradiction survived is instructive: the declaration was
+written from the mangling, which omits return types, and **the body was never
+consulted because the function was never defined**. A declared-not-defined
+member is the one place where this tree's usual discipline -- read the
+disassembly -- has no natural prompt. `int` is as far as the evidence goes; a
+`short`, an `unsigned` or a null pointer return compiles to the same two
+bytes, which is the same bound the file already records for its siblings.
+
+Not changed here, because changing a declaration without writing the
+definition swaps one unverified claim for another; it is recorded so that
+whoever writes the body fixes both at once.
+
+### F9486. `service.py --list` truncated symbol names at 56 characters, so two of the 129 could not be fed back to `nm` -- and a disassembly driven off one of them read the wrong address in silence
+
+`tools/service.py --list <class>` printed its symbol column as `%-56s` over
+`n[:56]`. A truncated symbol name **still looks like a symbol name**, so
+nothing downstream can tell: `nm --defined-only | grep " $n$"` finds nothing
+and reports nothing, and a script that maps a name to an address for
+`tools/dis.py` gets no address and disassembles from wherever its default
+takes it.
+
+That is not hypothetical -- it happened in this pass. A helper that turns a
+name into an address range produced an empty address for
+`_ZN18V90Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv`, disassembled from
+0, and printed plausible-looking garbage (`.byte 0xe8`, `cld`, `dec %esp`)
+that was briefly read as evidence the symbol was data rather than text. It is
+a 5-byte function at 0x2cc60.
+
+**Exactly two names are affected and both are exactly 56 characters**, losing
+their trailing `v`:
+
+    _ZN22V90ConnectionEvaluator26evaluateMeanErrorStdPhase3Ev
+    _ZN18V90Phase4Modulator30recivedPartTwoSilenceRrnSUVtagEv
+
+Both are in the `none` class; `data`, `fax` and `other` have none. So the
+defect was invisible in three of the four classes and cost one symbol in the
+fourth.
+
+**Fixed**: the column still pads to 56 but no longer cuts. The check is a
+detector shown to fire -- every name in all four classes was looked up in `nm`
+before the change (2 unresolvable) and after it (0), which is finding F134's
+ritual applied to a one-line format string. This is the same family as F2400,
+F3100 and F3055: a tool whose output is wrong in a way that renders as
+plausible.
+
+### F9487. 59 of the remaining 129 land in a file that already exists, and the split is not 50/50 by bytes -- the cheap half is C++ and the expensive half is C
+
+F9484 divided the bucket by what blocks each symbol. This is the same
+population divided by the question a scheduler actually asks: **is there
+already a file and a modelled type to put this in?**
+
+Every C++ symbol left was mapped to its class, and the class to
+`include/dsplib/<class>.h` and a `src/**` definition:
+
+| | symbols | bytes |
+|---|--:|--:|
+| C++, class already has a header AND a `.cpp` | **59** | **4,858** |
+| plain C, or a free/template function | 70 | 10,586 |
+| | **129** | **15,444** |
+
+The C++ side is 46% of the symbols and 31% of the bytes, and **all of it is
+"add a method to a file that already exists"**. There is no residue: the four
+that a first pass flagged as needing a new file were `ModulusEncoder` and
+`ModulusDecoder`'s seven-argument constructors, and `ModulusCoder.h` /
+`src/pump/v90/ModulusCoder.cpp` exist and already *declare* both. The naming
+mismatch was in the mapping, not the tree.
+
+**The C++ classes, by how much each still owes:**
+
+    VPcmFloModem 810   V90Phase3Modulator 670   V92Phase2Info 659
+    V92Phase3Modulator 572   V90Phase4Modulator 452
+    V90ConnectionEvaluator 411   V90MP 253   V92Jd 238
+    V90Phase4Demodulator 183   V90Jd 148   ModulusEncoder 106
+    ModulusDecoder 106   V92EchoCanceller 107   V92Precoder 87
+    V90Phase2Info 49   K56FlexFloModem 7
+
+Fifteen classes and one C-linkage stub, none of them needing a type this tree
+has not already settled.
+
+**SO THE PHASE ENDS IN TWO UNEQUAL HALVES, and they should be scheduled as
+two things rather than as one list ordered by size.** The C++ half is
+breadth work: rank-2 typed (F9480), existing files, existing offset maps, and
+`t_v90leaves` already carries the fixture and the `only_wrote` pattern that
+makes a one-method setter's test mean something. The C half is 70 symbols and
+two thirds of the bytes, and F9484's category 2 is most of it -- `cid_*`,
+`V22FP_control`, `SGD_*`, `TONE_*`, `FDSP_*`, every one of them needing a
+struct nobody has modelled. **Reading `worklist.py`'s size column across both
+halves is what makes the second look like the first**, and it is why a
+145-byte C function here is not comparable to a 145-byte C++ method.
+
+One caveat on the C++ number, so it is not over-read: "the file exists" bounds
+the *setup* cost and says nothing about the body. `V92Phase2Info::printInfo`
+is 572 bytes of diagnostics and `VPcmFloModem::internalReset` is 165 bytes of
+state; those are real functions that happen to have a home. The number to take
+from this finding is that **none of the 59 is blocked**, not that any of them
+is trivial.
