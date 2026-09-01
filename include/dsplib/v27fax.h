@@ -28,12 +28,57 @@
  *
  * `tools/service.py` puts all of them on the FAX side.
  *
+ * AND THE HALF-DUPLEX RECEIVE MACHINE ITSELF, which is six symbols and one
+ * cycle:
+ *
+ *   RxNextStateV27        the transition table -- six states, five arms
+ *   RxHdxStartV27         wait for a carrier
+ *   RxHdxEpochDetV27      wait for the equaliser's epoch
+ *   RxHdxPrtcolV27        train, descramble, hand over to DATA
+ *   RxHdxIdleV27          carrier lost; wait for the error to come back down
+ *   RxHdxErrorV27         demodulate and complain
+ *
+ * `RxNextStateV27` stores the addresses of four of them and each of the four
+ * calls it back, so no proper subset of the five links -- see the note at the
+ * top of `src/fax/v27.c`.
+ *
  * ---------------------------------------------------------------------------
- * THE INSTANCE IS NOT MODELLED, and this header follows the ruling
- * `include/dsplib/v17data.h` and `v22data.h` set out: `V27RX_create` -- 2,210
- * bytes that lay the instance out -- is not reconstructed, so naming its
- * fields now would mean guessing.  The parameter is `void *` and every offset
- * is a named constant below with the evidence beside it.
+ * "THE INSTANCE" WAS TWO OBJECTS ALL ALONG, AND `V27RX_create` IS WHAT SHOWS IT
+ *
+ * This header used to say the instance was not modelled because `V27RX_create`
+ * -- 2,210 bytes that lay it out -- was not reconstructed.  It is now, and the
+ * first thing it settles is that there is no single instance: the RECEIVE
+ * handle and the TRANSMIT handle are different allocations with different
+ * layouts, and reading them as one would have been silently wrong.
+ *
+ *   - `V27RX_create` allocates 0x58 bytes, stores the shared block at +0x50
+ *     and the receive block at +0x54, and fills +0x20..+0x34 with pointers
+ *     INTO the equaliser.  `V27RX_delete` frees +0x50, +0x54 and the handle.
+ *   - `V27TX_delete` frees `*(h + 0x28) + 0x5c` through `FPM_PPS_free` and
+ *     `*(h + 0x24)`'s FIFO and `sgd`; `ModDataV27` and `ScrambleDataV27` reach
+ *     the transmit chain through `*(h + 0x28)`.
+ *
+ * They cannot be the same handle.  On the receive one, +0x28 holds
+ * `&fse->n_out` and +0x24 holds `fse->out_q`, so `FPM_PPS_free` would be given
+ * a pointer into the middle of the equaliser -- and both deletes free the
+ * handle itself, which would be a double free.  So `V27_OBJ_TX`,
+ * `V27_OBJ_TXDATA` and the `V27TX_*` offsets below belong to the TRANSMIT
+ * handle, and `V27_OBJ_SHARED`, `V27_OBJ_RX`, `V27_OBJ_STATUS` and the
+ * `V27RXH_*` offsets to the RECEIVE one.  Finding F9304.
+ *
+ * THE RECEIVE HANDLE'S FIRST 28 BYTES ARE A `struct v27rx_cfg`.  `V27RX_create`
+ * copies the caller's config there wholesale -- seven dwords, or `V27RX_CFG`
+ * when the caller passes none -- and then reads three of its fields back:
+ * `bit_rate` decides `V27SH_RATE`, `int_0014` decides `V27SH_TRAIN_LONG`, and
+ * `ptr_0018` is handed to the resampler, the symbol recovery and the equaliser
+ * as their context pointer.  `faxcfg.h` had already modelled that structure
+ * from `init_vmi_v27rx`, which fills it and stores it in the VMI slot; this is
+ * the other end of the same object.
+ *
+ * The accessors below stay `void *` plus named offsets rather than becoming a
+ * `struct`, because every reconstructed V.27ter function already spells them
+ * that way and a rewrite would move code generation everywhere at once for no
+ * evidence.
  *
  * WHAT IS DIFFERENT HERE, AND IT IS THE STRONGEST EVIDENCE IN THIS FILE: the
  * receiver block is not opaque all the way down.  Four of the library's own
@@ -100,6 +145,7 @@
 #define DSPLIB_V27FAX_H
 
 struct fpm_fse;
+struct v27rx_cfg;
 
 /* ------------------------------------------------------------------ */
 /* The modem instance                                                  */
@@ -152,6 +198,17 @@ struct fpm_fse;
 #define V27_OBJ_STATUS_FLAGS	0x1d	/* byte 1 of the word above      */
 
 /*
+ * BYTE 2 OF THE SAME WORD, and it is new here.
+ *
+ * It was not modelled while `RxNextStateV27` was unwritten because nothing
+ * else in the object touches it: every one of its six sites is in the state
+ * machine.  `V27RX_create`'s single `movl $0x0,0x1c(%ebp)` at 99d0d zeroes it
+ * along with the rest of the word, which is what puts it inside the word
+ * rather than beside it -- the same argument `V27_OBJ_STATUS_FLAGS` rests on.
+ */
+#define V27_OBJ_STATUS_FLAGS2	0x1e	/* byte 2 of the word above      */
+
+/*
  * THE THREE NAMED BITS OF `V27_OBJ_STATUS_FLAGS`, AND THE NAMES ARE NEW.
  *
  * `V27_STATUS_FLAG_02` is RETIRED here.  It was named neutrally and correctly
@@ -199,24 +256,134 @@ struct fpm_fse;
  *
  * `V27RX_create`'s `orb $0x50` sets bits 4 and 6, which nothing else touches.
  */
+/*
+ * AND THE FOURTH BIT, WHICH THE STATE MACHINE OWNS ENTIRELY.
+ *
+ * DATA (0x01) -- SET by the two transitions that install `RxHdxDataV27`
+ *   (`RxNextStateV27`'s PROTOCOL arm at 0x0a2f0a and its IDLE arm at
+ *   0x0a2f65, both `orb $0x1,0x1d`).  CLEARED by every other arm of that
+ *   function -- START, EPOCH_DET, DATA and the default -- and by nothing
+ *   outside it.  So it is raised exactly while the machine is in
+ *   V27RX_STATE_DATA.  NOTHING IN THE OBJECT READS IT: like the other three
+ *   it leaves through the word `V27RX_modem` returns.
+ *
+ *   `V21RX_FLAG_DATA` in `v21fax.h` is bit 0 of the same byte of the same
+ *   machine, set and cleared by the same two transitions, and V.21's IS read
+ *   -- `V21RX_status` reports `quality` off it.  That is a corroboration of
+ *   the name and not its derivation, which is the enumeration above.
+ */
+#define V27_STATUS_FLAG_DATA	(1 << 0)
 #define V27_STATUS_FLAG_ERROR	(1 << 1)
 #define V27_STATUS_FLAG_CARRIER	(1 << 5)
 #define V27_STATUS_FLAG_LOW_SNR	(1 << 7)
+
+/*
+ * The one bit of `V27_OBJ_STATUS_FLAGS2` anything touches, and it is the exact
+ * complement of `V27_STATUS_FLAG_DATA`: every arm of `RxNextStateV27` writes
+ * both, and never the same way.  The DATA -> IDLE transition sets this and
+ * clears that (0x0a2f3e / 0x0a2f42); all five other arms do the reverse.  So
+ * it is raised exactly while the machine is in V27RX_STATE_IDLE.
+ *
+ * `V21RX_FLAG1_IDLE` is bit 0 of V.21's second flags byte with the same six
+ * sites and the same pairing.  Nothing reads either.
+ */
+#define V27_STATUS_FLAG2_IDLE	(1 << 0)
 
 /* See V27_STATUS_FLAG_LOW_SNR: a signed 16-bit `cmpw $0x8,%ax` then `jg`. */
 #define V27RX_SNR_THRESHOLD	8
 
 /*
- * The STATUS BYTE at `V27_OBJ_STATUS`, and the one value this batch writes.
+ * THE STATUS BYTE at `V27_OBJ_STATUS`, ALL EIGHT VALUES, AND THE WRITE SET IS
+ * NOW COMPLETE.
  *
- * Nothing in the object reads any of the six values -- the byte leaves through
- * the word `V27RX_modem` returns -- so a name can only be the site that writes
- * it.  The full write set, for whoever writes the other handlers: 0
- * `RxHdxDataV27`; 1 `RxHdxPrtcolV27` and `RxHdxEpochDetV27` on entry; 2
- * `RxHdxStartV27`; 3 `RxNextStateV27`'s default arm and `V27RX_create`; 4 the
- * same two handlers' error arm; 5 `RxHdxIdleV27`.
+ * Nothing in the object reads any of them -- the byte leaves through the word
+ * `V27RX_modem` returns -- so a name can only be the site that writes it, and
+ * that is what every name below is.  The previous revision of this paragraph
+ * listed six values from the handlers it could see; writing the state machine
+ * added 6 and 7 and settled what distinguishes them.  Finding F9302.
+ *
+ *   0  `RxHdxDataV27`, every block
+ *   1  `RxHdxPrtcolV27` and `RxHdxEpochDetV27`, carrier-present arm
+ *   2  `RxHdxStartV27`, every block
+ *   3  `RxNextStateV27`'s default arm; `V27RX_create` on an unknown rate
+ *   4  the same two handlers' carrier-lost arm
+ *   5  `RxHdxIdleV27`, every block
+ *   6  the two handovers into `RxHdxDataV27`, when `V27SH_RATE` is 2400
+ *   7  the same two handovers, when it is 4800
+ *
+ * 6 AND 7 ARE ONE SITE-PAIR AND ONE SELECTOR.  `RxHdxPrtcolV27`'s
+ * countdown-expiry arm (0x0a3161) and `RxNextStateV27`'s IDLE arm (0x0a2f6d)
+ * both compute `V27SH_RATE < 1 ? 6 : 7` with the same branchless idiom
+ * (`cmp $0x1,%cx` / `sbb` / `add $0x7`), and both are immediately followed by
+ * the transition that installs `RxHdxDataV27`.  So the pair reports the rate
+ * the machine is about to carry data at; `V27SH_RATE` is where the 2400 and
+ * the 4800 come from, and they are the author's own numbers.
+ *
+ * V.21's byte carries 0, 3, 4 and 5 in exactly these four roles (`v21fax.h`),
+ * which corroborates those four and says nothing about 1, 2, 6 or 7 -- the two
+ * modems do not have the same states.
  */
-#define V27_STATUS_DATA		0
+#define V27_STATUS_DATA			0
+#define V27_STATUS_TRAINING		1
+#define V27_STATUS_START		2
+#define V27_STATUS_DEFAULT		3
+#define V27_STATUS_ERROR		4
+#define V27_STATUS_IDLE			5
+#define V27_STATUS_ENTER_DATA_2400	6
+#define V27_STATUS_ENTER_DATA_4800	7
+
+/*
+ * THE RECEIVE HANDLE, +0x20 .. +0x54, and every one of these is written by
+ * `V27RX_create` and by nothing else in the object.
+ *
+ * FIVE OF THEM ARE A VIEW OF THE EQUALISER, taken once at the end of
+ * construction and never refreshed: `FPM_FSE_init` has just allocated those
+ * four buffers, so the pointers stay valid for the life of the object, and
+ * `n_out` is handed over BY ADDRESS rather than by value (`lea 0x182(%ebx)`
+ * at 0x99ce5, which is `V27RX_FSE + offsetof(struct fpm_fse, n_out)`).  What
+ * reads them is outside this object -- nothing reconstructed does -- so the
+ * name says which field of `struct fpm_fse` each one is and no more than that.
+ */
+#define V27RXH_EQ_OUT_I		0x20	/* fse->out_i                      */
+#define V27RXH_EQ_OUT_Q		0x24	/* fse->out_q                      */
+#define V27RXH_EQ_N_OUT		0x28	/* &fse->n_out, the ADDRESS        */
+#define V27RXH_EQ_ICOEFF	0x2c	/* fse->icoeff                     */
+#define V27RXH_EQ_QCOEFF	0x30	/* fse->qcoeff                     */
+#define V27RXH_EQ_TAPS		0x34	/* short: fse->cfg.taps            */
+
+/*
+ * The six `V27RX_create` zeroes and nothing else in the object touches.  Their
+ * WIDTHS are the object's -- three `movl` and two `movw` -- and their meanings
+ * are not established, so they are named by offset.
+ */
+#define V27RXH_ZERO_38		0x38	/* int   */
+#define V27RXH_ZERO_3C		0x3c	/* int   */
+#define V27RXH_ZERO_40		0x40	/* short */
+#define V27RXH_ZERO_44		0x44	/* int   */
+#define V27RXH_ZERO_48		0x48	/* int   */
+#define V27RXH_ZERO_4C		0x4c	/* short */
+
+/*
+ * `sysdep_malloc`'s three arguments, which are the only statement in the
+ * object about how big any of these are.  The handle's 0x58 covers +0x54 and
+ * its pointer with nothing over; the two scratch buffers are 160 and 164
+ * `short`, and `V27RX_create` zeroes the first 160 entries of each.
+ */
+#define V27RXH_SIZE		0x58
+#define V27RX_BLOCK_SIZE	0x4f58
+#define V27RX_BUF_A_BYTES	0x140
+#define V27RX_BUF_B_BYTES	0x148
+#define V27RX_BUF_ZERO		160	/* entries cleared in EACH buffer  */
+#define V27SH_SIZE		0x50
+#define V27SH_BUF_BYTES		0x140
+
+/*
+ * The two bits `V27RX_create`'s `orb $0x50,0x1d(%ebp)` raises (0x99d14).
+ * Nothing else in the object sets, clears or reads either, so this is the
+ * seed and not a flag pair -- naming the bits would be inventing two meanings
+ * out of one store.
+ */
+#define V27_STATUS_FLAGS_SEED	0x50
 
 /* ------------------------------------------------------------------ */
 /* The receiver block, at *(void **)(obj + V27_OBJ_RX)                  */
@@ -340,6 +507,20 @@ struct fpm_fse;
  * `DataCarrierDetectV27` prints "V27 Decoder error too big... no carrier".
  */
 #define V27RX_MSE_NO_CARRIER	0x3fff
+
+/*
+ * The THIRD `fpm_fse::mse` threshold, and the only one compared with `<=`.
+ *
+ * `RxHdxIdleV27` restarts the machine when the carrier is up AND the error has
+ * come back down to this (`cmpw $0x1fff,0x176(%ebx)` / `jle` at 0x0a3072), and
+ * the author names the branch: `.rodata.str1.4 + 0x12b9c` is "Decision error
+ * is small back to DATA mode !!!\n" and is printed on it and nowhere else.  So
+ * the constant, the comparison and the string agree, and the string is what
+ * makes this the "small enough" threshold rather than merely a number.  It is
+ * exactly half `V27RX_MSE_NO_CARRIER`; nothing says the two are related beyond
+ * that and this does not claim they are.
+ */
+#define V27RX_MSE_IDLE_OK	0x1fff
 
 /*
  * The one value `QualityDetectV27` returns that is a CODE rather than the
@@ -614,23 +795,146 @@ struct fpm_fse;
 #define V27SH_INT_0004		0x04	/* int */
 
 /*
- * Two guards, both compared against zero as 16-bit values and neither written
- * by anything reconstructed.  Named for what they GATE, which is all that is
- * established: +0x10 skips `DemodDataV27`'s tone test, +0x14 selects which
- * half of `DataCarrierDetectV27` runs.
+ * THE RECEIVE STATE NUMBER.  `V27SH_SKIP_TONE` IS RETIRED.
  *
- * +0x10 IS ALMOST CERTAINLY THE RECEIVE STATE NUMBER, and that is recorded
- * rather than acted on because this batch writes none of its writers.  Every
- * writer in the object is the receive state machine: `RxNextStateV27` stores
- * 1, 2, 3 and 4 into it in its transition arms, `RxHdxPrtcolV27` and
- * `RxHdxEpochDetV27` store 5 beside the store that installs `RxHdxErrorV27`,
- * and `V27RX_create` stores 0 at 0x996ed.  So `DemodDataV27`'s test is "the
- * machine has left state 0", and the neutral name is kept only because
- * renaming it belongs with the pass that writes `RxNextStateV27`.
- * `V17RXC_SHORT_0018` in `v17fax.h` is the same field of the same machine with
- * the same evidence.  Finding F9235.
+ * F9235 recorded this field as "almost certainly the receive state number",
+ * named it for the one thing that READ it -- `DemodDataV27` skips its tone
+ * test while it is zero -- and said the rename belonged with the pass that
+ * wrote `RxNextStateV27`.  That pass is done and the rename is taken.
+ *
+ * IT IS THE AUTHOR'S OWN WORD, RANK 1.  `RxNextStateV27` switches on this
+ * field through the jump table at `.rodata:0xc31c` and each of the five arms
+ * begins by printing the state's name from `.rodata.str1.1`:
+ *
+ *     index 0  ->  0x0a2e7a  "V27RX_STATE_START\n"       (0x4bc1)
+ *     index 1  ->  0x0a2ea7  "V27RX_STATE_EPOCH_DET\n"   (0x4baa)
+ *     index 2  ->  0x0a2ed9  "V27RX_STATE_PROTOCOL\n"    (0x4bf8)
+ *     index 3  ->  0x0a2f17  "V27RX_STATE_DATA\n"        (0x4be6)
+ *     index 4  ->  0x0a2f4b  "V27RX_STATE_IDLE\n"        (0x4bd4)
+ *     default  ->  0x0a2e30  "V27RX_DEFAULT, %d\n"       (0x4b97)
+ *
+ * so the five names AND their five numbers come off the object's own text.
+ * `tools/relocscan.py --at .rodata.str1.1:0xNNNN` is what pairs a string with
+ * its site, because the reference is an `R_386_32` against the section symbol
+ * with the offset as an inline addend (finding F604).
+ *
+ * Each arm also stores the NEXT state's number and the NEXT state's handler
+ * together, and the two agree 1:1 across all five, which is the second
+ * derivation: 1 goes with `RxHdxEpochDetV27`, 2 with `RxHdxPrtcolV27`, 3 with
+ * `RxHdxDataV27` and 4 with `RxHdxIdleV27`.  `V27RX_create` stores 0 with
+ * `RxHdxStartV27` (0x996ed and 0x996f9).  Finding F9300.
+ *
+ * READ SIGNED: `movswl 0x10(%edx),%eax` before the range check, so the switch
+ * is over `short` and a value above 4 -- or below 0 -- takes the default arm.
  */
-#define V27SH_SKIP_TONE		0x10	/* unsigned short */
+#define V27SH_RX_STATE		0x10	/* short: V27RX_STATE_*            */
+
+/*
+ * BLOCKS LEFT IN THE CURRENT STATE.
+ *
+ * `RxHdxPrtcolV27` and `RxHdxEpochDetV27` are the only two handlers that count
+ * it: each decrements it once per block on its carrier-present arm and hands
+ * over to `RxNextStateV27` when the result is at or below zero.  Every arm of
+ * `RxNextStateV27` seeds it for the state it is entering, and `V27RX_create`
+ * zeroes it at 0x996f3 beside the state number.
+ *
+ * WRITTEN AND COMPARED IN SIXTEEN BITS, and the two readings are not the same:
+ * the decrement loads `movzwl` and the exhaustion test is `test %cx,%cx` /
+ * `jle`, so the count is unsigned in memory and the test is signed.  Both
+ * spellings are reproduced.  `struct v21_rx_hdx::countdown` is the same field
+ * of the same machine, read the same two ways.
+ */
+#define V27SH_COUNTDOWN		0x12	/* unsigned short */
+
+/*
+ * THE BIT RATE, AS AN INDEX, AND THE TWO NUMBERS ARE THE AUTHOR'S.
+ *
+ * `V27RX_create` reads the caller's `modem + 0x04` signed and compares it
+ * against two literals before it writes this field (0x99794..0x997ae):
+ *
+ *     0x960  == 2400  ->  0   (0x99ecd)
+ *     0x12c0 == 4800  ->  1   (0x99ed8)
+ *     anything else   ->  1, and the status byte goes to V27_STATUS_DEFAULT
+ *                            with V27_STATUS_FLAG_ERROR raised
+ *
+ * 2400 and 4800 bit/s are V.27ter's two rates to the digit, so the field is
+ * the rate and the encoding is which of the two.  Everything else that reads
+ * it agrees: it indexes `V27_MTD_COEFF_2400`/`_4800`, `V27RX_MRF_*`,
+ * `V27RX_SRE_*`, `V27RX_FSE_*`, `V27RX_DEC_PMAP`, `V27RX_DEC_LAST_PHASE` and
+ * `V27RX_DEC_PHS_MASK`, and `V27DEC_EIGHT_PHASE` is `rate == 1` -- eight
+ * phases at 4800 and four at 2400, which is the recommendation's own
+ * constellation.  Finding F9301.
+ *
+ * `V27RX_create` reads it `movswl` at nine sites and `movzwl` at none, which
+ * is why it is a `short` here; the state machine's own two reads are
+ * `movzwl` / 16-bit compare, where the extension is dead (finding F614).
+ */
+#define V27SH_RATE		0x08	/* short: V27SH_RATE_*             */
+#define V27SH_RATE_2400		0
+#define V27SH_RATE_4800		1
+
+/*
+ * LONG TRAINING RATHER THAN SHORT, and it is one flag with two readers.
+ *
+ * `V27RX_create` sets it from the caller's `modem + 0x14` at 0x996e9 --
+ * `cmpl $0x0,0x14(%ebp)` / `sete` -- so it is raised when that word is ZERO.
+ * The two things that read it are:
+ *
+ *   - `V27RX_create` itself at 0x99c61, where `V27DEC_TRAIN_SHORT` is set to
+ *     `this field == 0`.  So this field non-zero means the equaliser takes
+ *     `V27DEC_TRAIN_SYMS_LONG` (1000 symbols) rather than `..._SHORT` (50),
+ *     and `V27RX_epoch_det` waits `V27EPOCH_SYMS_LONG` rather than `_SHORT`.
+ *   - `RxNextStateV27`'s EPOCH_DET arm, where it chooses the PROTOCOL state's
+ *     countdown: 1 or 2 blocks when it is clear, 33 or 45 when it is set.
+ *
+ * Both readers make the same choice between a short timing set and a long one,
+ * and the word "training" is the AUTHOR'S -- it is what `V27RX_eq_train` and
+ * `V27DEC_TRAIN_SHORT`'s own derivation are named from.  What `modem + 0x14`
+ * MEANS to the caller is still not established and this does not guess.
+ * Finding F9301.
+ */
+#define V27SH_TRAIN_LONG	0x0a	/* short */
+
+/*
+ * The PROTOCOL state's countdown, in blocks, by rate and by training length.
+ *
+ * `RxNextStateV27`'s EPOCH_DET arm and nothing else.  The short pair is
+ * computed as `(rate != 1) + 1` and the long pair is selected by `rate == 1`,
+ * which is why the two are spelled as two different idioms below.
+ */
+/*
+ * The EPOCH_DET state's countdown, which is a literal 2 whatever the rate and
+ * whatever the training length -- `movw $0x2,0x12(%edx)` at 0x0a2e87, the only
+ * seed in the function that is not selected by anything.
+ */
+#define V27SH_EPOCH_DET_BLOCKS		2
+
+#define V27SH_PROTOCOL_SHORT_4800	1
+#define V27SH_PROTOCOL_SHORT_2400	2
+#define V27SH_PROTOCOL_LONG_4800	0x21
+#define V27SH_PROTOCOL_LONG_2400	0x2d
+
+/*
+ * The state numbers.  0..4 are the author's own words; see `V27SH_RX_STATE`.
+ *
+ * 5 IS NOT.  `RxHdxPrtcolV27` and `RxHdxEpochDetV27` store it beside the store
+ * that installs `RxHdxErrorV27` (0x0a3146/0x0a314a and 0x0a3206/0x0a320d), and
+ * `RxNextStateV27` has no arm for it -- so a machine that reaches it and is
+ * then advanced takes the default arm.  The name is the handler's and nothing
+ * more.
+ */
+#define V27RX_STATE_START	0
+#define V27RX_STATE_EPOCH_DET	1
+#define V27RX_STATE_PROTOCOL	2
+#define V27RX_STATE_DATA	3
+#define V27RX_STATE_IDLE	4
+#define V27RX_STATE_ERROR	5
+
+/*
+ * A guard compared against zero as a 16-bit value and not written by anything
+ * reconstructed.  Named for what it GATES, which is all that is established:
+ * it selects which half of `DataCarrierDetectV27` runs.
+ */
 #define V27SH_V21_WATCH		0x14	/* unsigned short */
 
 /*
@@ -664,6 +968,86 @@ struct fpm_fse;
  */
 typedef short (*v27_rx_state_fn)(void *modem, short *in, short *out,
 				 unsigned short *count);
+
+/* ------------------------------------------------------------------ */
+/* What `V27RX_create` puts in the five configurations                  */
+/*
+ * EVERY ONE OF THESE IS A LITERAL IN THE OBJECT and none of them is read
+ * anywhere else, so the names below say which FIELD of which module's config
+ * the literal lands in -- which is measured, because `V27RX_create` copies the
+ * library's own `*_CFG` onto the stack and then patches named offsets of it.
+ * What the VALUES mean is the module's business and its header's; this one
+ * only records where V.27ter puts them.
+ *
+ * The rate-dependent ones are named `_2400` / `_4800` after `V27SH_RATE`.
+ */
+
+/* The V.21 control-channel detector, `V27SH_MTD_V21`. */
+#define V27_MTD_V21_TONES	2
+#define V27_MTD_V21_RATIO	0x4ccd
+#define V27_MTD_V21_MIN_LEVEL	300
+
+/* The data-channel detector, `V27SH_MTD`. */
+#define V27_MTD_TONES		2
+#define V27_MTD_RATIO		0x199a
+#define V27_MTD_MIN_LEVEL	100
+
+/*
+ * The gain control's measurement block at 4800 bit/s -- AND IT IS A NO-OP.
+ *
+ * `V27RX_create` stores it into the LIVE `fpm_agc_cfg::block_len` on the 4800
+ * arm only, four instructions after `FPM_AGC_init` copied the configuration in,
+ * and `AGCv27_CFG.block_len` is 40, which IS 0x28.  So the store puts back the
+ * value that is already there and both rates run on a 40-sample block.
+ * `t_v27fax.c` asserts that the variant doing it on BOTH arms separates
+ * nothing, which is what makes the deadness measured rather than argued.
+ * Finding F9307, deviation D1162.
+ */
+#define V27_AGC_BLOCK_4800	0x28
+
+/* `struct fpm_sre_cfg`, the scalars V.27ter overrides. */
+#define V27_SRE_GROUPS_ACQ	1
+#define V27_SRE_GROUPS_TRK	8
+#define V27_SRE_SETTLE		0x40
+#define V27_SRE_MAG_HI		2
+#define V27_SRE_MAG_LO		1
+#define V27_SRE_ERR_HI		0x3333
+#define V27_SRE_ERR_LO		0x199a
+/*
+ * `rms_min` is not a literal: it is `AGCv27_CFG.ref_level / 6`, read back out
+ * of the gain control this function has just initialised (`movswl 0x68(%edx)`
+ * at 0x999ee against the magic multiply 0x2aaaaaab, which is GCC's division by
+ * six).  `rms_len` is `3 * V27RX_SAMP_PER_BAUD[rate]`, three symbols' worth.
+ */
+#define V27_SRE_RMS_MIN_DIV	6
+#define V27_SRE_RMS_LEN_SYMS	3
+
+/* `struct fpm_sre_cfg`, the timing meter's four caller-supplied fields. */
+#define V27_SRE_PPM_STEP_2400	0x18
+#define V27_SRE_PPM_STEP_4800	0x20
+#define V27_SRE_PPM_UNIT	200	/* ppm_period = ppm_step * this    */
+#define V27_SRE_PPM_MILLION	1000000	/* ppm_scale and ppm_n_max divide it */
+
+/* `struct fpm_fse_cfg`, the scalars V.27ter overrides. */
+#define V27_FSE_BLOCK_2400	0x90
+#define V27_FSE_BLOCK_4800	0xa0
+#define V27_FSE_TRAIN_SYM	0x3e8
+#define V27_FSE_ERR_HI		0x2666
+#define V27_FSE_ERR_LO		0x8f6
+
+/* `V27RX_Q_LIMIT`, the only field of the quality smoother that depends on the
+ * rate.  Set on both arms and on NEITHER for a rate that is not 0 or 1 --
+ * which `V27SH_RATE`'s own two arms make unreachable. */
+#define V27RX_Q_LIMIT_2400	0x1b9e
+#define V27RX_Q_LIMIT_4800	0x0d27
+
+/*
+ * `struct sdmv27_cfg::nbits`, and it is the recommendation's own number: two
+ * bits per symbol on the four-phase 2400 bit/s constellation and three on the
+ * eight-phase 4800 one.  The object writes `3 - (rate == 0)`.
+ */
+#define V27_SDM_NBITS_2400	2
+#define V27_SDM_NBITS_4800	3
 
 /* ------------------------------------------------------------------ */
 /* The functions                                                       */
@@ -824,6 +1208,31 @@ int V27RX_modem(void *modem, short *in, short *out, unsigned short *count);
 void V27RX_delete(void *modem);
 
 /*
+ * Build the receiver: the handle, the shared block, the receive block, five
+ * module configurations and the decoder's own state.  Returns the handle.
+ *
+ * BOTH ARGUMENTS MAY BE NULL AND THE TWO NULLS MEAN DIFFERENT THINGS.  A null
+ * `modem` is allocated here (`V27RXH_SIZE`) with its two block pointers
+ * cleared, which is what makes the three "allocate if absent" tests below
+ * fire; a null `cfg` means `V27RX_CFG`, the library's own defaults.  Neither
+ * `sysdep_malloc` result is checked, here or in `V27RX_delete`.
+ *
+ * `fresh` IS TWO DIFFERENT FLAGS, and which one each module gets is the
+ * object's.  The AGC inside the SHARED block is initialised with "the shared
+ * block was allocated by this call"; the resampler, the AGC inside the RECEIVE
+ * block, the symbol recovery and the equaliser are all initialised with "the
+ * HANDLE was allocated by this call".  So re-creating over a live handle whose
+ * receive block was allocated elsewhere reuses those four modules' buffers,
+ * and the two flags are not interchangeable.
+ *
+ * IT DOES NOT CLEAR THE RECEIVE BLOCK.  Everything the reconstructed functions
+ * read is written here -- the three enables, the decoder's fourteen fields, the
+ * quality smoother, the energy-drop detector -- but the block comes from
+ * `sysdep_malloc` and the parts no module claims keep whatever was in the heap.
+ */
+void *V27RX_create(void *modem, const struct v27rx_cfg *cfg);
+
+/*
  * The equaliser's slicer: `fpm_fse_decision` for V.27ter.
  *
  * Both arguments are in/out.  It is handed the measured angle, subtracts the
@@ -939,6 +1348,73 @@ short RxHdxErrorV27(void *modem, short *in, short *out, unsigned short *count);
  * it.
  */
 short RxHdxDataV27(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * Advance the receive machine one step, from whatever `V27SH_RX_STATE` says.
+ *
+ * Each arm installs the NEXT state's handler, writes the next state's number
+ * and seeds `V27SH_COUNTDOWN` for it; the two flag bits the machine owns
+ * (`V27_STATUS_FLAG_DATA` and `V27_STATUS_FLAG2_IDLE`) are written by every
+ * arm, always the opposite way round.  The default arm installs NOTHING: it
+ * reports `V27_STATUS_DEFAULT`, raises `V27_STATUS_FLAG_ERROR` and clears the
+ * carrier, so the machine keeps whatever handler it had.
+ *
+ * ONLY THE EPOCH_DET ARM TOUCHES THE DSP.  It steps the AGC's two smoother
+ * coefficient POINTERS on by one `short` each, and the PROTOCOL arm freezes
+ * the AGC's gain outright.  Neither happens anywhere else in the object.
+ *
+ * IT RETURNS NOTHING.  All four callers ignore `%eax`, and the arms leave
+ * different things in it (`RxHdxIdleV27`'s caller then loads a fresh zero), so
+ * there is no return value to reproduce.
+ */
+void RxNextStateV27(void *modem);
+
+/*
+ * The START state, which is the one `V27RX_create` installs (0x0996f9).
+ *
+ * It lowers the carrier flag, reports `V27_STATUS_START`, demodulates the
+ * block and advances the machine as soon as `CarrierDetectV27` answers.  The
+ * demodulator's return is DISCARDED and this handler always reports zero
+ * output samples, so nothing it produced reaches `V27RX_modem`'s caller.
+ */
+short RxHdxStartV27(void *modem, short *in, short *out, unsigned short *count);
+
+/*
+ * The EPOCH_DET state: wait for the equaliser to find its epoch.
+ *
+ * Carrier gone -> install `RxHdxErrorV27`, state `V27RX_STATE_ERROR`, report
+ * `V27_STATUS_ERROR` and raise `V27_STATUS_FLAG_ERROR`.  Carrier up -> count
+ * `V27SH_COUNTDOWN` down and advance either when it is exhausted OR when
+ * `EpochDetectV27` answers, whichever comes first.  The demodulator's return
+ * is discarded and the handler always reports zero output samples.
+ */
+short RxHdxEpochDetV27(void *modem, short *in, short *out,
+		       unsigned short *count);
+
+/*
+ * The PROTOCOL state: the only handler besides `RxHdxDataV27` that
+ * descrambles, and the only one that reports a non-zero sample count.
+ *
+ * It is `RxHdxEpochDetV27`'s carrier arm with two additions -- the descramble,
+ * and `V27_STATUS_ENTER_DATA_*` written on the way out -- and one subtraction:
+ * there is no `EpochDetectV27`, so only the countdown can advance it.  On the
+ * arm that does advance, it returns what `DemodDataV27` produced; on every
+ * other arm it returns zero.
+ */
+short RxHdxPrtcolV27(void *modem, short *in, short *out,
+		     unsigned short *count);
+
+/*
+ * The IDLE state: demodulate, report `V27_STATUS_IDLE`, re-read the carrier,
+ * and go back to DATA when the equaliser's error has come back down.
+ *
+ * THE CARRIER FLAG IS CLEARED AND THEN RE-RAISED rather than assigned, exactly
+ * as `RxHdxIdleV21` does it, and the restart test READS THE FLAG BACK rather
+ * than the call's result (`testb $0x20,0x1d(%esi)` at 0x0a3069).  The two are
+ * not the same thing -- the flag is a byte of the instance and the call is a
+ * fresh answer -- and the object is what says which one gates the restart.
+ */
+short RxHdxIdleV27(void *modem, short *in, short *out, unsigned short *count);
 
 /*
  * One block through the receive chain: gain control, an optional tone test,
