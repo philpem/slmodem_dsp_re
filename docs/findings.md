@@ -111085,3 +111085,237 @@ afterwards, so no denominator moved and every guard in the tool passed.
 **What caught it was adding the three numbers up.** `classify` now asserts the
 partition, with the arithmetic in the message. A count that cannot be wrong is
 worth asserting precisely because nobody re-adds a printed column by hand.
+
+## The C++ leaf batch's method findings: F8416-F8419
+
+Derived on `worktree-agent-af8bd26b85acf6acc`, which never landed.  Master has
+since written every symbol that branch reconstructed, and more: across
+`V90Jd.cpp`, `V90MP.cpp`, `V90Phase2Info.cpp`, `V92EchoCanceller.cpp`,
+`V92Jd.cpp`, `V92Precoder.cpp` and `VPcmFloModem.cpp` master defines a strict
+superset -- no symbol exists on that branch and not on master, and master has
+four the branch did not reach.  The CODE is therefore withdrawn entirely, and
+so are the six findings that describe it (the branch numbered them F8410-F8415,
+and master has since taken F8410-F8413 for other things).
+
+These four are kept because they are about METHOD rather than about the
+symbols, and they survive their batch.  F8418 is the one with no counterpart
+anywhere in master's findings: `only_wrote` reports at WORD resolution, so it
+cannot state a single-byte claim, and most of that batch was single-byte.
+Citations to the withdrawn six are rewritten in place to name master's files.
+## F8416. Three spellings of one loop, none of which maps -- and the residual is the CONSTRUCTOR's
+
+The two `setRatesMask` bodies and `V92Jd::setJdPhase` do not come out
+byte-identical, and the reason is one idiom that predates this batch.
+
+The object writes a bit of a mask into a byte of the message as
+
+    sar %cl,%eax ; test $0x1,%al ; setne 0x14(%ecx,%esi,1)
+
+and GCC 3.4.2, at this tree's flags, compiles the source this tree already had
+as `sar %cl,%eax ; and $0x1,%al ; mov %al,0x14(...)` -- one byte longer per
+loop. So `V90Jd::setRatesMask` is 70 bytes against the object's 71,
+`V92Jd::setRatesMask` the same, and `V92Jd::setJdPhase` 86 against 87.
+
+**IT IS NOT NEW, AND MEASURING THAT WAS THE POINT.** The V90Jd CONSTRUCTOR
+carries the identical loops and comes out 118 bytes against 119; the V92Jd
+constructor comes out 209 against 211. Both are committed, tested and predate
+this work. One idiom, five symbols, not five defects.
+
+**THE ENUMERATION, AND ITS VERDICT.** Three spellings were compiled and
+measured against the object:
+
+    (mask >> i) & 1                 70 B / 118 B   `and $0x1,%al`  (2 bytes)
+    ((mask >> i) & 1) != 0          71 B / 119 B   `and $0x1,%eax` (3 bytes)
+    (bool)((mask >> i) & 1)         71 B / 119 B   identical to the above
+
+The second and third reach the object's SIZE exactly and differ in EIGHT bytes
+where the first differs in one. **That is F7782's line and the answer is on
+the declining side**: closer bytes are not a grade, a matching size with worse
+bytes is not progress, and the candidate space is plainly not exhausted --
+nothing tried emits `setne` to memory at all. No byte-identity claim is made
+for these three symbols, the first spelling is kept because it is the one the
+rest of both files already uses, and the residual is recorded here rather than
+hill-climbed. Anyone resuming: the open question is what source makes GCC 3.4.2
+emit `setne <mem>` for a value it can prove is 0 or 1, and the answer is not
+`!= 0` and not a `bool` cast.
+
+## F8417. Dropping `inline` from six `VPcmFloModem` members costs `v90RunDemodulator` nothing, measured
+
+`VPcmFloModem.h` recorded that seven small members are defined `inline` in the
+`.cpp` and their symbols therefore not claimed, and priced the change: "Drop
+the `inline` ... and expect coverage to gain 451 bytes and seven symbols".
+Six of the seven are in this batch -- `setTerminateJaFlag`,
+`setTerminateCpFlag`, `setTerminateCpNotFlag`, `setMinNofTransmitSequences`,
+`setNofBitsPhase4` and `resetBitPointer`, 235 bytes -- and the `inline` is
+dropped. `copyMpInfoForInterface` (183 B) is left, as it is not in this batch.
+
+**THE RISK WAS THAT IT MOVED `v90RunDemodulator`, WHICH INLINES ALL SIX AT
+FOURTEEN CALL SITES, AND IT DOES NOT.** Compiled by GCC 3.4.2 at the tree's
+flags, before and after:
+
+    v90RunDemodulator   0xbc5 both ways, 202 bytes from the object both ways
+    runPcmModem         0x7f2 both ways, byte-identical to itself
+
+The 28 bytes that differ between the two builds of `v90RunDemodulator` are all
+`.rodata.str1.1` addends, shifted by 0x30 because the six functions' strings
+moved position in the section when they became out-of-line. Not one
+instruction changed, and the distance to the object is identical. So the
+"blast radius" this header warned of is empty, and the price was 235 bytes of
+symbol for no codegen movement anywhere.
+
+**Two of the six are BYTE-IDENTICAL to the object** --
+`setMinNofTransmitSequences` (26 B) and `resetBitPointer` (51 B), 0 differing
+bytes. The other four differ in exactly 2 bytes each, at the immediate of the
+`mov $<string>,%ecx` that loads their format string: a relocation target,
+which `byteident.py` compares by target and a naive byte compare does not.
+
+**What the four printers say, and it is rank-1 evidence for the field names
+the header already carried.** `"Ja Flag set to %d\r\n"`,
+`"CP Flag set to %d\r\n"`, `"CPnot Flag set to %d\r\n"` and
+`"SetNofBitsPhase4 - nof bits each call = %d\r\n"`. The last one names what
++0x7dd2 holds -- bits per call -- and the body is `constel == 0 ? 2 : 4`,
+built by the object as `cmpl $0x1` / `sbb %ecx,%ecx` / `and $0xfe,%dl` /
+`add $0x4,%dl`. The comparison is UNSIGNED, so 0x80000000 is above one and
+takes the four-bit arm; the test drives exactly that value because a signed
+reading would put it below and give two.
+
+## F8418. `only_wrote` at word resolution cannot state a single-byte claim, and most of this batch is single-byte
+
+`t_v90leaves.cpp`'s `only_wrote` is the check that stops `diff_eq_obj` being
+vacuous about OFFSETS: it asserts which four-byte words of the BLOB's object
+moved, by absolute offset, so a header that declared a field four bytes off
+fails even though both sides would write four bytes off together.
+
+**IT STRIDES FOUR BYTES, AND MOST OF THIS BATCH'S SUBJECTS WRITE SINGLE
+BYTES.** Several of them share a word with a byte they must not touch:
+
+    V92Jd::setConstelSize    +0x7a,+0x7b   word 0x78 holds +0x79, the phase
+                                           message's constant tag byte
+    V90Jd::setConstelSize    +0x31,+0x32   word 0x30 holds setMaxLookahead's
+                                           +0x33
+    V90MP::resetDetector     +0x19..+0x1b  word 0x18 holds `type`, which the
+                                           receiver needs ACROSS a reset
+    VPcmFloModem's three      one byte     all three in word 0x7dcc, with
+      termination flags        each        `cpNofBits`
+    ::resetBitPointer        +0x1738       and +0x1736 is `nofBits`, in the
+                                           word below
+
+Declare `bits` at +0x03 instead of +0x02 and `V90Jd::setConstelSize` writes
++0x32 and +0x33 -- still inside word 0x30. A word-granular `allow` of
+`{ 0x30 }` passes; `diff_eq_obj` passes, because the test seeded the blob's
+object through the same wrong header. **The check that exists to catch a
+shifted offset survives the shift.** It is not a defect in `only_wrote` -- the
+six subjects it was written for write whole words -- but it is a resolution
+limit that has to be respected per subject rather than inherited.
+
+`t_v90cxxleaf.cpp` therefore carries `only_wrote_b`, the same function at byte
+stride with a byte allow-list, and uses it for every subject whose writes are
+not word-aligned-and-word-wide. It also reads as the claim: `{ 0x31, 0x32 }`
+says which two bytes; `{ 0x30 }` says nothing. Both directions are kept from
+the original -- an undeclared byte that moves is a failure, and a DECLARED
+byte that never moves across the whole run is a failure too, which is what
+forces the argument ladders to be chosen rather than swept (`setMaxLookahead`
+needs a value with bit 1 set before `bits[50]` can be seen to move at all).
+
+**Two subjects use an allow-list of ZERO entries**, which is the strongest
+form the check takes: `V92EchoCanceller::zeroEchoCoeff` and
+`V92Precoder::reset` write only through pointers, so the blob's object must
+not move at all.
+
+**AND THE CHECK WAS SHOWN TO FIRE, BY GETTING IT WRONG.** Four of the six
+`VPcmFloModem` sections and one `resetBitPointer` check were handed an
+ABSOLUTE allow-list against a WINDOW of the object, so the offsets never
+matched and each function's own field read as an unexpected write: 49 of 322
+checks failed in each of the three flag sections and 50 of 536 in
+`resetBitPointer`, with `first` landing on exactly the byte the function is
+supposed to write. That is F134's ritual arriving for free -- a detector that
+has never been seen to fail is indistinguishable from one that cannot -- and
+it is worth recording because the failure mode is silent in the other
+direction: an allow-list that is too WIDE never fires and looks identical to a
+clean run.
+
+**THE SAME RUN FOUND A GAP THAT ONLY THE MUTATION TIER COULD SEE.** The two
+echo-canceller sections each compared their OWN buffer between the two sides
+and asserted that the BLOB had left the other buffer alone -- which reads as
+covering both, and does not. `mutate.py` changes `src/` and never the object,
+so a spelling that zeroed OUR `echoCoeff` inside `resetEchoHistory` left the
+blob's untouched, passed the blob-side check, and passed the object
+comparison too because neither buffer lives in the object. `resetEchoHistory:
+it clears the coefficients as well` came back NOT CAUGHT. Both sections now
+compare BOTH buffers across the two sides and keep the blob-side assertion
+beside it, and the symmetric row was added to the other section so the repair
+is measured in both directions.
+
+**AND THE THIRD THING THE RUN FOUND WAS IN THE HARNESS, NOT IN `src/`, AND
+ONLY THE PERIOD COMPILER COULD SEE IT.** Three sections assert that a seeded
+float PAST a loop's bound is still non-zero -- which is what makes "the loop
+stopped where it should" a claim rather than a hope -- and the buffers were
+seeded with raw pseudorandom BYTES. Four such bytes can encode a NaN, and
+`x != 0.0f` on a NaN is a question the two compilers answer differently: the
+object's float compares are ordered, one `fcom` with no parity test, which is
+why `-mno-ieee-fp` is in both flag sets, so under GCC 3.4.2 a NaN compares
+equal to zero and the assertion fails. The modern build was green at 22 of 22
+sections and `make period` failed 42, 153 and 111 checks in three of them.
+`fill_floats_pair` now keeps each word's seeded sign and significand and gives
+it a fixed finite exponent, so every entry is a normal number between 0.125
+and 0.25 and never zero; the values matter to none of the three subjects,
+since all any of them writes is 0.0f. **That is F2303's shape exactly** -- the
+flag folding a float predicate and deleting a detector in the APPARATUS -- and
+`t_v90adid`'s `mu_finite_variances` is the same repair for the same reason.
+It is also the cleanest argument in this batch for why `make period` is the
+gate and the modern build is not: nothing else in the tree would have found
+it.
+
+**A FOURTH HAZARD WAS RAISED BY A PARALLEL BATCH AND CHECKED HERE RATHER THAN
+ASSUMED AWAY.** A sibling batch's F8426 -- not on `master` when this was
+written; it is on `worktree-agent-a0118dff3368d1d6b` -- records that
+`diff_eq_float` cannot separate `-0.0f`
+from `+0.0f`, because it maps both through a subtraction that comes out zero
+-- so a claim that turns on the SIGN of a stored zero is unchecked by it. Two
+subjects here store zeros: `V92EchoCanceller::zeroEchoCoeff` and
+`resetEchoHistory`, whose object writes them as `movl $0x0`, which is `+0.0f`.
+**This file does not use `diff_eq_float` for either.** Both buffers are
+compared with `diff_eq_obj_`, which is a byte comparison, so a side that wrote
+`-0.0f` would differ in one byte per entry and fail. The per-entry
+`== 0.0f` assertions beside it WOULD accept a negative zero, and they are not
+what decides -- they are the non-vacuity half. No change was needed; recorded
+because "the byte comparison is the one that decides here" is the reason, and
+a later edit that replaced it with a float comparison would silently drop the
+guarantee.
+
+Final verdicts for the batch: 75 mutations over seven suites, 73 caught, 0 NOT
+caught, 2 recorded `equivalent` with the argument in the suite.
+
+## F8419. Nineteen mutation anchors became ambiguous because the object emits a body twice and now so do we
+
+`tools/mutate.py`'s contract is `src.count(find) == 1`, and `make refs` gates
+it. Writing the standalone members of the `V90Jd` setter batch (master's `src/pump/v90/V90Jd.cpp`), the `V92Jd` setter batch (master's `src/pump/v90/V92Jd.cpp`) and the `V92EchoCanceller` pair (master's `src/pump/v90/V92EchoCanceller.cpp`) put a SECOND copy
+of the constructor's (or `reset`'s) statements into the same source file, and
+nineteen rows across `v90jd`, `v92jd` and `v92ec` that had matched once began
+matching twice -- four, three and twelve respectively.
+
+**This is F432's failure mode arriving from the other direction.** There, nine
+anchors landed in an arm their label did not name and every one was reported
+CAUGHT, at a claim nobody made. Here the tool refuses instead of guessing,
+which is the repair F432 bought.
+
+Each of the nineteen was re-anchored on its ORIGINAL site -- the later
+occurrence in all three files, because the new members were inserted above the
+functions whose statements they repeat -- by prepending whole preceding source
+lines to `find` until it is unique, with the same prefix prepended to
+`replace`. The row still expresses exactly the change it expressed before, so
+the recorded verdicts still describe the same claim.
+
+The seven NEW suites (`cxxleafjd90`, `cxxleafjd92`, `cxxleafmp`,
+`cxxleafp2i`, `cxxleafec`, `cxxleafprec` and `cxxleafvpcm`, all driven by
+`build/test/t_v90cxxleaf`) anchor every row on its function's own SIGNATURE
+for the same reason. Seven suites rather than one because `suites.json` maps a
+suite to ONE source file and this batch touches seven; sharing a binary is
+established practice (`ansamtone` and `gtonedet` both drive `t_gtonedet`).
+
+**The general shape, for whoever writes the next batch of this kind.** A
+reconstruction that adds the out-of-line copy of a body the compiler inlined
+elsewhere in the same translation unit WILL break every mutation anchor over
+that body. It is cheap to fix and impossible to miss, because `make refs`
+fails -- but it is not obvious in advance, and the cost lands on suites the
+batch never intended to touch.
