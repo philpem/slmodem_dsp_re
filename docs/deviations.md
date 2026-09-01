@@ -11154,3 +11154,146 @@ not a recovered one.
 abandoned them. `t_class1handlers` drives both outcomes and asserts each
 fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
 are all ones for the give-up, and one with a zero among them for the lock.
+
+## D1070 ⚠ both ring writers clear `vmi->int_0018` only when the WHOLE request was taken
+
+`faxvmi_write_fifo` and `faxvmi_write_frame` hold `vmi->int_0018` in a
+register across their copy loop rather than storing zero inside it:
+
+    968f6:  8b 53 18        mov    0x18(%ebx),%edx       ; before the loop
+    96961:  31 d2           xor    %edx,%edx             ; inside it
+    96978:  89 56 18        mov    %edx,0x18(%esi)       ; at the NORMAL exit
+    96980:  ...             ; the ring-full path returns without passing it
+
+so there are three outcomes and they are all different:
+
+  - the loop ran to completion    -> the field is zero
+  - the ring filled part-way      -> the field is UNCHANGED
+  - the count was zero            -> the field is re-stored unchanged
+
+`faxvmi_write_frame` is the same shape one level in, and the jump that skips
+the store is explicit: 0x96ba5 saves the source cursor and jumps to 0x96b05,
+past the `mov %edx,0x18(%ebx)` at 0x96b02.
+
+The obvious spelling -- `vmi->int_0018 = 0;` as the last statement of the loop
+body -- agrees on the first and third outcomes and DISAGREES on the second,
+leaving zero where the object leaves the old value. That is a behavioural
+difference, not a code-generation one, so the register-held flag with a `goto`
+past the store is the reconstruction and not a stylistic choice.
+
+**Status:** reproduced. `t_faxunframe` counts partial writes over a non-zero
+`int_0018` FROM THE REFERENCE's own answers and asserts the count is not zero,
+so the arm that separates the two spellings is known to have run.
+
+## D1071 ⚠ `faxvmi_write_frame` appends the FCS with no fullness test at all
+
+The two FCS elements at 0x96b05 and 0x96b2b are written straight into the ring
+-- cursor advanced, wrap applied, and the occupancy NOT touched -- because the
+occupancy was raised by three at 0x96a33 before any data was copied. The fit
+test at the top of each frame (`count + len + 3 >= size`, signed) is what is
+supposed to guarantee the room.
+
+It does not guarantee it in general. The test is signed and `len` comes from
+`movswl (%ebx)`, so a negative length passes it; the copy loop then runs
+65,536 + len times against a 16-bit counter (D1052's shape) and can fill the
+ring, after which the two FCS elements overwrite whatever the cursor now
+points at.
+
+**Status:** reproduced, including the missing test. Not driven with a negative
+length: the copy loop would make tens of thousands of ring writes on BOTH
+sides and the case says nothing the ordinary ones do not.
+
+## D1072 ⚠ the three unpackers discard the input cursor they advanced
+
+`faxvmi_simp_unpack`, `faxvmi_asyc_unpack` and `faxvmi_hdlc_unframe` all read
+`vmi->link->rx` into a local, walk it, and never write it back -- the state
+they save at the end is the framer's bit position and nothing else.
+
+So a caller that presents the same buffer twice re-reads it from the start
+while the framer believes it is mid-stream. It is consistent across all three,
+which is what makes it the interface rather than an oversight: the bit
+position within an element is carried in `framer->mask` and the ELEMENT
+position is the caller's business.
+
+**Status:** reproduced, and PINNED in all three. `t_faxunframe`'s
+`run_multicall` plants one object and makes five consecutive calls without
+replanting, which is the only shape that can see this: a fixture that
+re-points `rx` before every call cannot tell a callee that moved it from one
+that did not. The injection ritual proved that the hard way -- the inverted
+mutant survived every single-call suite in the file and is caught by this one
+in `simp_unpack`, `asyc_unpack` and `hdlc_unframe` alike. F9022.
+
+## D1073 ⚠ `faxvmi_hdlc_unframe`'s output guard never accumulates
+
+The guard before every emitted frame is
+
+    96333:  8b 54 24 34     mov    0x34(%esp),%edx      ; the accumulator
+    96337:  8b 44 24 28     mov    0x28(%esp),%eax      ; this frame's length
+    9633b:  0f b7 71 0a     movzwl 0xa(%ecx),%esi       ; vmi->max_frame
+    9633f:  01 c2           add    %eax,%edx
+    96341:  39 f2           cmp    %esi,%edx
+    96343:  0f 8d cb 00     jge    96414                ; overflow
+
+and the accumulator's only update, after the frame has been copied out, is
+
+    96384:  0f bf 54 24 34  movswl 0x34(%esp),%edx
+    96399:  89 54 24 34     mov    %edx,0x34(%esp)
+
+-- the slot reloaded, sign-extended and stored straight back. It is
+initialised to zero at 0x95ed1 and nothing else writes it, so it is zero for
+the whole call and the guard is really `frame_len >= max_frame`.
+
+The consequence is a caller-visible one: several frames decoded in a single
+call each write one length element plus their own octets, with no cumulative
+limit, so the destination can take many times `max_frame` elements. That is
+F8607/D956's shape with the bound present but inert.
+
+**Status:** reproduced, and DRIVEN rather than merely noted --
+`t_faxunframe`'s `run_hdlc_d1073` decodes three frames in one call with
+`max_frame` at 8, counts what the REFERENCE wrote by walking its own length
+prefixes, and asserts the total exceeded 8. Writing the accumulation the name
+suggests would make the function reject frames the object accepts.
+
+## D1074 ⚠ the bit-shift repair reads one element past the assembled octets
+
+The realignment loop walks `frame[i] = (frame[i] << 1) | (frame[i+1] >> 7)`
+for `i < len`, where `len` is the frame length BEFORE the decrement that
+precedes the loop:
+
+    96150:  ...             ; flen-- ,  len = the old flen
+    961a0:  0f b7 01        movzwl (%ecx),%eax          ; frame[i]
+    961a3:  0f bf 51 02     movswl 0x2(%ecx),%edx       ; frame[i+1]
+
+so the last iteration reads `frame[len]`, one past the last octet stored. The
+octet store's own guard is `frame_len < frame_size`, so `frame_len` can reach
+`frame_size` exactly, and then `frame[frame_size]` is one element past the end
+of the buffer `FAXVMI_create` allocated.
+
+**Status:** reproduced. `t_faxunframe` gives its frame array one element more
+than the capacity it plants and fills that element identically on both sides,
+so the read is defined and compared rather than left to luck -- which is
+F8587/D955's point: a blob-against-blob run would have had both sides read the
+same rubbish and agree.
+
+## D1075 ⚠ a frame refused for want of room leaves the assembly buffer where it is
+
+`faxvmi_hdlc_unframe` resets `frame_len` to zero only on the arm that actually
+emitted (0x9638f). The overflow arm at 0x96414 sets `vmi->overflow` and jumps
+straight to the common tail, which clears `in_frame` and the bit counter and
+nothing else.
+
+So the next frame's octets are appended after the refused one's, and the two
+run together until `frame_len` reaches `frame_size` and the store guard stops
+accepting octets altogether.
+
+**Status:** reproduced, and DRIVEN. `t_faxunframe`'s `run_hdlc_overflow` sends
+one well-formed frame with `max_frame` at 1 so the guard must refuse it, then
+sends the SAME input again with room, and asserts the difference between the
+two `frame_len` values is exactly the six octets the refusal did not discard.
+A magic constant would have been wrong: the trailing mark the fixture needs
+contributes octets of its own to both runs, so the deviation is the difference
+and not either figure.
+
+The random cases do NOT reach it, which was measured rather than assumed --
+an anti-vacuity counter for this arm read zero over 400 of them, because a
+random stream completes frames but never with a `frame_len` past `max_frame`.

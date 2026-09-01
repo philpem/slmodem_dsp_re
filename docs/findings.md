@@ -103949,3 +103949,480 @@ fine.
 
 Shown to fire: a detached worktree at `c1ca61af` reports "140 commit(s)
 behind"; the up-to-date tree is silent.  (2026-08-31)
+
+### F9010. The three framing tables carry the AUTHOR'S OWN NAMES, and they name the modes
+
+`FAXVMI_process` dispatches through three `.rodata` tables at 0x94a8, 0x94b4
+and 0x94c0. They are not anonymous: the object's symbol table names them, and
+their contents name the modes.
+
+```
+vmi_unpack  .rodata 0x94a8 = { faxvmi_simp_unpack, faxvmi_asyc_unpack,
+                               faxvmi_hdlc_unframe }
+vmi_pack    .rodata 0x94b4 = { faxvmi_simp_pack,   faxvmi_asyc_pack,
+                               faxvmi_hdlc_frame }
+vmi_reverse .rodata 0x94c0 = { faxvmi_byte_reverse, faxvmi_byte_reverse,
+                               faxvmi_frame_reverse }
+```
+
+Three entries each, indexed by `vmi->+0x00`, which `FAXVMI_control` refuses to
+set above 2 (`cmpw $0x2,0x10(%ebx); ja` at 0x956d0, before the store at
+0x9577e). So `+0x00` is the framing MODE -- 0 simple, 1 async, 2 HDLC -- and
+`FAXVMI_MODE_SIMP`/`ASYC`/`HDLC` are the author's abbreviations rather than
+this pass's.
+
+**It is a different index from the slot.** `vmi->+0x0e` selects the modulation
+through the thirteen-entry `vxx_*` tables; `vmi->+0x00` selects the framing.
+Two dispatches, two fields, and reading either for the other would put the
+wrong function in the wrong table.
+
+**`vmi_reverse` also closes F8932's loose end.** That finding says the bit
+order HDLC wants "is arranged OUTSIDE, by `faxvmi_byte_reverse`", and left
+open where. It is here: `FAXVMI_process` calls `vmi_reverse[mode]` on the way
+IN (0x9558d, before the pack) and again on the way OUT (0x955ab, after the
+unpack), both gated on `vmi->+0x04` being non-zero -- which is what names that
+field `reverse`. Modes 0 and 1 reverse every octet in the block; mode 2
+reverses each frame's data and leaves its length element alone, which is
+exactly `faxvmi_frame_reverse`'s contract.
+
+`relocscan.py --range .rodata:0x94a8-0x94e0` finds who POINTS at the tables;
+`objdump -r -j .rodata` over the same window is what lists their CONTENTS. The
+second is what was actually wanted here, and the first alone would only have
+said that `FAXVMI_process` calls something.  (2026-09-01)
+
+### F9011. The `vmi->framer` object is ONE 88-byte block doing THREE jobs, which is why the five functions had to be written together
+
+Wave 1 declined `faxvmi_hdlc_unframe`, `faxvmi_write_frame`,
+`faxvmi_asyc_unpack`, `faxvmi_simp_unpack` and `faxvmi_write_fifo` as a unit
+rather than take the two small ones. That was right, and this is what it was
+protecting: all five reach `vmi->+0x24`, and `FAXVMI_create` sizes it with one
+`sysdep_malloc(0x58)` at 0x953c0 -- so the layout is CLOSED at 88 bytes and
+the three regions inside it are not three objects.
+
+```
+  +0x00 fifo         unsigned short *   the ring the packers fill
+  +0x04 fifo_size    unsigned short     capacity, in elements
+  +0x06                                 zeroed by create and control
+  +0x08 wr           unsigned short     write cursor
+  +0x0a count        unsigned short     occupancy
+  +0x0c..+0x1f                          create: 0, 0, -1, -1, and +0x1c
+
+  +0x20 mask         unsigned int       the bit being taken from `word`
+  +0x24 word         unsigned int       the element being consumed
+  +0x28 acc          unsigned int       the bit accumulator
+  +0x2c bit          unsigned short     bits into the current octet
+  +0x30 async_hunt   int                create: 1 -- see F9018
+  +0x34, +0x38                          FAXVMI_control copies the control
+                                        record's +0x08 and +0x04 here
+  +0x3c zero_run_seen int                the async long-zero latch
+
+  +0x40 frame        unsigned short *   HDLC assembly, one octet per element
+  +0x44 frame_size   unsigned short     its capacity
+  +0x46                                 zeroed
+  +0x48 frame_len    short              octets assembled
+  +0x4a flags_wanted unsigned short     create and control: 2
+  +0x4c                                 create and control: 1
+  +0x50 ones         short              the run of consecutive one bits
+  +0x54 in_frame     int                an octet was stored in this frame
+```
+
+**The ring's size and `max_frame` check each other, which is what makes
+`max_frame` a NAME rather than a guess.** FAXVMI_create computes
+`max(cfg->+0x08, cfg->+0x0a + 3)` at 0x9516b before allocating, and
+`faxvmi_write_frame`'s per-frame overhead is exactly three elements -- one
+length and two FCS. Two independent readings of the same `+ 3`. The same field
+caps all three unpackers' output and is `FAXVMI_process`'s "the ring cannot
+take another frame" threshold. Four sites, one meaning.
+
+`struct faxvmi` itself is `sysdep_malloc(0x2c)` and `vmi->+0x28` is
+`sysdep_malloc(0x18)`; both sizes are read the same way, off create's own
+arguments.  (2026-09-01)
+
+### F9012. `framer->mask` is a 32-BIT FIELD held in an `unsigned short` LOCAL, and the load/store asymmetry is what says so
+
+All three unpackers load `+0x20` with `movzwl` and store it back with a
+32-bit `mov`:
+
+```
+  959df:  0f b7 5e 20     movzwl 0x20(%esi),%ebx      ; asyc_unpack
+  95a7b:  89 5e 20        mov    %ebx,0x20(%esi)
+  9669d:  0f b7 55 20     movzwl 0x20(%ebp),%edx      ; simp_unpack
+  96740:  89 55 20        mov    %edx,0x20(%ebp)
+```
+
+A 16-bit field would be stored with `mov %bx,`; a 32-bit field read as itself
+would be loaded with a plain `mov`. Neither reading fits both instructions,
+and the pair only makes sense one way: **the FIELD is 32 bits and the LOCAL is
+an `unsigned short`.** Assigning a wide field to a narrow local needs only the
+low half (movzwl); assigning the narrow local back to the wide field stores
+the register, which already holds the zero-extended value (movl).
+
+`FAXVMI_create` settles it independently -- `movl $0x0,0x20(%esi)` at 0x951ec
+writes four bytes -- and `+0x2c` is the control: it is loaded `movzwl` and
+stored `mov %dx,`, sixteen bits both ways, so the two fields really are
+different widths and the difference is visible in the instructions rather than
+assumed.
+
+The same reasoning types `word` (+0x24) and `acc` (+0x28) as 32-bit fields in
+32-bit locals: `mov 0x24(%esi),%edx` in and `mov %edx,0x24(%esi)` out.
+
+This is CLAUDE.md's forced/free rule doing real work. The extension on a load
+is free when the upper half is discarded; here the upper half is STORED, so
+the pair of widths is forced and it names a declared type.  (2026-09-01)
+
+### F9013. `+0x1c` is written as a WORD and read as a DWORD into `+0x2c`, at two independent sites
+
+`FAXVMI_create` and `FAXVMI_control` both do this to the framer:
+
+```
+  951c7:  66 c7 46 1c 00 00   movw   $0x0,0x1c(%esi)
+  951d4:  8b 56 1c            mov    0x1c(%esi),%edx     ; FOUR bytes
+  95201:  89 56 2c            mov    %edx,0x2c(%esi)
+```
+```
+  95729:  66 c7 42 1c 00 00   movw   $0x0,0x1c(%edx)
+  9572f:  8b 4a 1c            mov    0x1c(%edx),%ecx
+  9574d:  89 4a 2c            mov    %ecx,0x2c(%edx)
+```
+
+Two bytes written, four read, so the upper half of that dword is `+0x1e`,
+which nothing anywhere writes. The value then lands in `+0x2c` as a 32-bit
+store, covering `+0x2c` and `+0x2e`.
+
+**It is inert, and that is measured rather than hoped:** every reader of
+`+0x2c` in the three unpackers is a `movzwl`, so only the low half -- the zero
+that was written -- is ever used, and nothing reads `+0x2e`.
+
+Recorded rather than modelled away. `faxvmi.h` gives `+0x1c` and `+0x1e` two
+`short`s and `+0x2e` its own name, and `t_faxunframe` compares all three after
+every call, so if some future function does read one of them the difference is
+a failure and not a silent divergence. Appearing at TWO sites is what makes it
+the author's idiom rather than a one-off.  (2026-09-01)
+
+### F9014. The HDLC "good FCS" constant 0xE2F0 is DERIVED, not matched
+
+`faxvmi_hdlc_unframe` tests every FCS against `cmp $0xe2f0,%bx` -- six times,
+at 0x96079, 0x96100, 0x96145, 0x9625d, 0x962a1 and 0x962ea. The number is not
+arbitrary and needs no table to explain it.
+
+`faxvmi_gen_fcs16` is CRC-CCITT taken most-significant-nibble-first from
+0xFFFF with the polynomial 0x1021 and no reflection (F8932), and it
+COMPLEMENTS the register on the way out. The standard residue of that
+arrangement, taken over the data AND the two transmitted FCS octets, is
+**0x1D0F**; complemented, that is **0xE2F0**.
+
+So the receiver's check and `faxvmi_write_frame`'s transmitter agree by
+construction: the writer appends `gen_fcs16(data) >> 8` then `& 0xff`
+(0x96b17 and 0x96b40), and the reader requires `gen_fcs16(data + fcs)` to be
+0xE2F0.
+
+**Checked rather than asserted.** `t_faxunframe`'s encoder computes the FCS
+with `ref_faxvmi_gen_fcs16` and lays the frame out that way; the BLOB then
+decodes it and reports a non-zero-length frame, which is only possible if the
+residue is what this finding says. `run_write_frame_fcs` closes the other
+direction, comparing the two octets the object put in the ring against the
+same function's answer for the same data.  (2026-09-01)
+
+### F9015. Both ring writers hold the `int_0018` flag in a REGISTER, and the difference from a store-in-the-loop is behavioural
+
+Recorded as D1070 with the instructions. What belongs here is why it was not
+read as code generation and waved through.
+
+The tempting reading is GCC's loop store motion: a `vmi->int_0018 = 0;` in the
+loop body, hoisted into a register, initialised from memory, stored at the
+exit. That reading is WRONG, and the object itself says so -- store motion out
+of a loop with an early `return` would have to store on the return path too,
+and 0x96980 (write_fifo) and 0x96ba5 (write_frame) both leave without passing
+the store. A compiler doing that transform would be miscompiling; the object
+is not miscompiled, so the source has the assignment where the object puts it.
+
+The three outcomes are separable by test, which is what settles it rather than
+argument:
+
+    count == 0        the field is re-stored UNCHANGED
+    whole request     the field becomes 0
+    ring filled       the field is left ALONE
+
+A store inside the loop agrees on the first two and disagrees on the third.
+`t_faxunframe` counts partial writes over a non-zero starting value from the
+REFERENCE's own answers and asserts the count is not zero, so the separating
+case is known to have run, and the injection ritual catches the wrong
+spelling -- **in `faxvmi_write_fifo`.**
+
+**In `faxvmi_write_frame` it does NOT, and that is the honest half of this
+finding.** There the ring-full path is unreachable: the per-frame fit test
+demands `count + len + 3 < size` before anything is written, so the copy
+loop's own `count >= size` can never fire for a non-negative length. The two
+spellings are therefore indistinguishable by any input a differential test can
+safely present, and the source follows the object's instructions rather than a
+test. F9022 has the reachability argument and why the separating input is one
+D1071 declines to drive.  (2026-09-01)
+
+### F9016. The HDLC receiver's repair pass: three substitutions, seven realignments, and the author's own words for all of them
+
+`faxvmi_hdlc_unframe` does not drop a frame whose FCS is wrong. It tries, in
+order, and the format strings are the object's:
+
+1. the frame as received;
+2. `frame[0] = 0xff` -- *"Replacing the first byte...\n"*, .rodata.str1.1
+   0x4292;
+3. `frame[1] = 0xc8` -- *"Replacing the second byte...\n"*, 0x4239;
+4. then, up to seven times -- *"Shifting data %d bits\n"*, 0x4257 -- the whole
+   buffer walked one bit to the LEFT, with all three readings tried after each
+   step. *"Bad CRC!\n"* (0x426e), *"Replacing first byte ...\n"* (0x4278),
+   *"Replacing the second byte ...\n"* (.rodata.str1.4 0x11b54) and *"CRC is
+   now OK!\n"* (0x42af) belong to this loop, and their spellings differ from
+   the first pass's by a space -- which is how the two blocks are told apart,
+   and why the object carries two nearly identical strings for each.
+
+0xff and 0xc8 are HDLC's all-stations address and a T.30 control octet, so
+this is a receiver that knows what the first two octets of a fax frame have to
+be and will assert them rather than lose the frame.
+
+**Only when all the attempts fail is the frame emitted with a length of ZERO**
+(0x96322 sets `frame_len` to 0 and falls into the emit), so the frame COUNT
+still advances and the caller sees an empty frame rather than nothing at all.
+
+The realignment is `frame[i] = ((frame[i] << 1) & 0xfe) | ((frame[i+1] >> 7) &
+1)` over `len` elements, where `len` is the length BEFORE the single decrement
+that precedes the loop -- so the frame gets one octet shorter and every
+attempt uses that shortened length. That, and the read one element past the
+stored octets, are D1074.
+
+`t_faxunframe` drives all three arms with constructed frames and counts the
+recoveries from the reference, because a repair arm that never runs is
+indistinguishable from one that does not exist.  (2026-09-01)
+
+### F9017. The last input element of a call yields exactly ONE bit, and the fixture is what found it
+
+All three unpackers are a do-while on the ELEMENT count, not on bits:
+
+```
+  95f30:  test %edi,%edi        ; mask == 0 ?          <- loop top
+  95f34:  ...                   ; fetch an element, left--
+  95fae:  mov 0x48(%esp),%eax
+  95fb2:  test %eax,%eax
+  95fb4:  jne 95f30             ; while (left != 0)
+```
+
+`left` is decremented when an element is FETCHED and tested after ONE bit has
+been processed. So a call presenting N elements consumes 8N-7 bits of them at
+width 8, and leaves the last element's remaining bits in `framer->word` with
+`framer->mask` pointing into it for the next call to finish.
+
+That is correct streaming and not a defect -- no bit is lost -- but it is
+invisible from the source, and it silently broke the first version of this
+test. The constructed frames' closing flag was the last thing in the stream,
+its final zero fell in the untaken tail, no frame was ever completed, and
+**every DIFFERENTIAL check still passed**, because both sides did the same
+thing. Only the anti-vacuity counters failed.
+
+**That is the argument for anti-vacuity counters in one paragraph.** The suite
+was 90,881 differential checks at that moment and every one of them agreed,
+while the case the fixture existed to drive was not running. What caught it
+was four assertions that the REFERENCE had produced a frame, and they cost
+nothing to write. The fixture now pads with two elements' worth of mark after
+the closing flag, and says why.
+
+It happened a second time in the same file and the same way: the output guard
+`hdlc_overflowed` counter, added later, read zero over 400 random cases,
+because a random stream completes frames but never with a `frame_len` past
+`max_frame`. That one is now `run_hdlc_overflow`, driven deliberately -- an
+anti-vacuity counter belongs in the suite that drives its case, not in the one
+that happens to be nearby.  (2026-09-01)
+
+### F9018. `faxvmi_asyc_unpack` is a start-bit hunt with a 23-bit long-zero detector running underneath it
+
+Two mechanisms, and they run on every bit independently of each other.
+
+**The framer.** `framer->async_hunt` (+0x30, which FAXVMI_create sets to 1) is
+assigned THE INCOMING BIT while it is set: `mov %eax,%ecx` at 0x95aa5, where
+`eax` is the `setne` from the mask test. So a one keeps hunting and the first
+zero -- the start bit -- clears it; the eight bits after that are counted into
+`framer->bit`, the character is emitted at eight, and hunting resumes. One
+assignment does the whole state machine, which is why it does not look like
+one.
+
+**The detector.** Independently, `acc & 0x7fffff` is tested twice per bit:
+
+```
+  95a59:  25 ff ff 7f 00   and    $0x7fffff,%eax
+  95a5e:  75 50            jne    95ab0
+  95a60:  ...              ; bit = 0, hunt = 1
+  95ab0:  48               dec    %eax
+  95ab1:  0f 85 ...        jne    95a10
+  95ab7:  ...              ; framer->zero_run_seen = 1
+```
+
+Zero means twenty-three consecutive zero bits: the character in progress is
+abandoned and the hunt restarts. One means twenty-two zeros followed by a one,
+which is the RISING EDGE at the end of such a run, and it latches
+`framer->zero_run_seen` -- a level `FAXVMI_status` exports at +0x10 and
+`FAXVMI_process` uses to CLEAR bit 28 of its status word.
+
+The obvious word for a long zero on an async line is BREAK, and the header
+does not use it: what is ESTABLISHED is the bit count and the two effects, and
+`zero_run_seen` says exactly that much and no more. `t_faxunframe` zeroes a
+quarter of the input in every fifth case, because a uniform random fill
+essentially never produces twenty-three zeros in a row, and asserts from the
+reference's own latch that the arm fired.  (2026-09-01)
+
+### F9019. `FAXVMI_process` composes five status bits out of the VMI's own state, and that is what names three fields
+
+The status word `FAXVMI_process` returns and caches at `vmi->+0x20` is
+`vxx_process`'s answer with bits 24..28 replaced:
+
+```
+  9550f:  and $0xe0ffffff,%ecx                  ; clear 24..28
+  95519:  or  $0x01000000,%ecx    if vmi->int_0018 != 0
+  95534:  or  $0x02000000,%ecx    if (ring size - occupancy) < vmi->max_frame
+  95541:  or  $0x04000000,%ecx    if framer->int_000c != 0
+  9554e:  or  $0x08000000,%ecx    if vmi->overflow != 0
+  9555b:  and $0xefffffff,%ecx    if framer->zero_run_seen != 0   (CLEARS 28)
+```
+
+Bit 28 is only ever cleared here, never set, so it arrives from the
+modulation's own status and the long-zero latch withdraws it.
+
+**Bit 25 is what confirms `max_frame`.** "The free space in the ring has
+fallen below `max_frame`" is only a sensible thing to report if `max_frame` is
+the size of the largest thing that will be put in it, which is the same
+reading `FAXVMI_create`'s `+ 3` headroom and `faxvmi_write_frame`'s per-frame
+overhead give. Three sites, one meaning, none of them a format string.
+
+`FAXVMI_status` fills a 28-byte record from the same places: the ring's free
+space as a short at +0x00, `framer->int_000c` at +0x04, `vmi->int_0018` at
++0x08, `vmi->overflow` at +0x0c, `framer->zero_run_seen` at +0x10, and
+`framer->+0x4a <= 1` at +0x14.
+
+**`vmi->int_0018` keeps a neutral name despite all this.** It is create's 1,
+the ring writers' 0, `vxx_status`'s second argument, the gate on whether that
+call happens at all, and status bit 24 -- five sites and no format string, and
+no reading of them that is better than a guess. CLAUDE.md's rule applies
+literally: a wrong name would be believed by every future reader and no test
+could fail on it.  (2026-09-01)
+
+### F9020. `FIFO_create` is DECLINED, and there are now two independent reasons
+
+Wave 1 recorded it as blocked only on `FIFO_CFG`, an unwritten data symbol
+(F8930). This pass read the function fully, has its derivation, and has the
+table's bytes -- `.rodata 0x9654` is `00 00 64 00 00 00`, so the default FIFO
+is 100 elements with a fill of 0 and a leading configuration word of 0 -- and
+still does not write it.
+
+**Reason one, coordination.** `FIFO_CFG` is referenced from five translation
+units: `FIFO_create` itself, and `V17TX_create`, `V21TX_create`,
+`V27TX_create`, `V29TX_create` (0x98a71, 0x99377, 0x9a450, 0x9ba8b) plus
+`_tx_scrambled_ones_init` (0x9cfa9), all in files this pass does not own.
+Defining it here while another branch defines it there is the wave-2 merge
+defect exactly: two definitions of one symbol, merged without a conflict
+marker, failing every binary at link.
+
+**Reason two, supplied by a concurrent agent and stronger.** `FIFO_CFG` has no
+`ref_` alias at all. The blob defines the name TWICE -- a file-local `d` at
+`.data` 0x83a0 and a global `R` at `.rodata` 0x9654, two different objects
+sharing a name -- and `symmap.py` declines to globalise a duplicated local
+name. So the usual comparison, ours against a `ref_` copy, does not exist and
+the table could only be established through its consumer.
+
+Which of the two `FIFO_create` reads was settled from the relocations rather
+than from a name lookup: 0x96c1e and 0x96c24 are `R_386_32 FIFO_CFG` with
+addends 4 and 0, in the arm at 0x96c1b taken when the configuration argument
+is null, and that arm sits in the fax TU whose `.rodata` cluster 0x9654 is.
+
+What declining costs is 167 bytes. What it protects is the gate. The
+derivation is recorded so that whoever owns the coordination can land it as
+one small commit: copy the six bytes above, allocate 0x14 for the object and
+`size * 2` for the buffer, copy six bytes of configuration as one 32-bit and
+one 16-bit store, zero `+0x0c`, `+0x0e` and `+0x10`, and clear the whole
+buffer with a signed `for (i = 0; i < f->size; i++)`.  (2026-09-01)
+
+### F9021. Every symbol this batch wrote was reachable, and the check took two minutes
+
+Checked before writing, per F8492/F8493, with `objdump -r -j .text` restricted
+to each function's address range rather than by reading names:
+
+    faxvmi_write_fifo     no relocations at all
+    faxvmi_write_frame    no relocations at all
+    faxvmi_simp_unpack    no relocations at all
+    faxvmi_asyc_unpack    no relocations at all
+    faxvmi_hdlc_unframe   faxvmi_gen_fcs16 x6, dsplibs_debug_printf,
+                          dsplibs_debug_level, and two string sections
+
+All three callees are already written, so nothing in the five was blocked --
+worth recording because the wave that scheduled them treated the possibility
+as open, and settling it cost one command.
+
+**Both relocation kinds were looked at, not just calls.** The four with none
+have no stored function pointers either, which is the half F8493 says is easy
+to miss. The symbols that DO store pointers into this batch are `vmi_pack`,
+`vmi_unpack` and `vmi_reverse`, and they belong to the unwritten half of the
+module and stay there -- writing a table whose entries do not all exist is the
+same link failure from the other end.  (2026-09-01)
+
+### F9022. The injection ritual over the framing unit: 25 defects, two survivors, and both survivors were worth more than the 23 that were caught
+
+Every mutant applied to `src/fax/faxvmi.c`, built and run against the blob.
+Twenty-three were caught on the first round. The two that were not are the
+reason to do this at all.
+
+**Survivor one was a real hole in the FIXTURE, and it is now closed.** A
+mutant that wrote the advanced input cursor back to `link->rx` -- D1072
+inverted -- survived every suite in the file, because every suite planted a
+fresh object before each call and therefore compared the framer's SAVE
+without ever exercising its RESTORE. A fixture that re-points `rx` before
+each call cannot see a callee that moved it.
+
+That is F8790's lesson with a different field: one call per object measures
+half the state machine. `run_multicall` now plants once and makes five
+consecutive calls with no replanting, comparing the whole object after each,
+and the same mutant is caught in all THREE unpackers -- checked for each
+rather than assumed from one. It also added the only coverage this file has
+of `mask`, `word`, `acc`, `bit`, `ones` and `frame_len` being carried across
+a return, which is the framer's entire purpose and was untested.
+
+**Survivor two is EQUIVALENT, by unreachability, and that is a measurement
+rather than a shrug.** The mutant moves `faxvmi_write_frame`'s `int_0018`
+store inside its copy loop -- D1070's wrong spelling, which IS caught in
+`faxvmi_write_fifo`. The two differ only when the ring fills PART-WAY through
+one frame, and the fit test at the top of each frame makes that impossible:
+it demands `count + len + 3 < size` before anything is written, so after the
+`count += 3` the loop's own `count >= size` test cannot fire for any
+non-negative `len` on a ring whose occupancy is below its size.
+
+The inputs that WOULD separate them are the ones D1071 already declines: a
+negative `len` passes the signed fit test and then runs the FCS walk 65,000
+times over memory neither side owns. So the case is not merely unreached by
+this fixture, it is unreachable by any input a differential test can safely
+present -- and the spelling is still the object's, because the jump that
+skips the store is right there at 0x96ba5.
+
+Recorded because "one not caught" in a mutation column is otherwise
+indistinguishable from a missing check, and `mutate.py` cannot tell them
+apart either -- F8933's point, and this is the second time it has come up in
+this file.
+
+**Final state: 25 mutants, 24 caught, 1 equivalent, 0 unusable.** The suite
+is 12 groups and **106,717 differential checks** against the blob.
+
+**AND THE RITUAL ITSELF FAILED THE FIRST TIME, in a way worth writing down.**
+The first run was wrapped in `timeout 3000` and its output piped to `tail`.
+It was killed at the deadline: `tail` had buffered every verdict and printed
+none of them, and the script's `restore()` never ran, so `src/fax/faxvmi.c`
+was left holding mutant seventeen with no copy of the original anywhere on
+disk -- the script held it in memory only, and `git checkout` would have
+discarded the whole uncommitted pass.
+
+It was recoverable because each mutant is a single known replacement, so
+reversing the one whose text is present reconstructs the original exactly;
+that is what happened, and the reconstruction was then proved by rebuilding
+and passing. The second version writes a pristine copy to disk BEFORE
+mutating anything, restores in a `finally`, logs line-buffered to its own
+file, and builds `build/test/t_faxunframe` directly instead of through `make
+one` -- whose refcheck and mutation-snapshot preamble cost more per mutant
+than the mutant did. Fifty minutes became four.
+
+**Two operational rules from it**, both instances of things this tree already
+knows in other forms: never pipe a long ritual's verdicts through `tail`, and
+never let a mutating script be the only holder of the original.
+(2026-09-01)

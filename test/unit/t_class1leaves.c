@@ -328,8 +328,14 @@ run_faxvmi(void)
 		memcpy(&vmi_b, &vmi_a, sizeof(vmi_a));
 		vmi_a.slot = (short)slot;
 		vmi_b.slot = (short)slot;
-		vmi_a.handle = &vmi_a;
-		vmi_b.handle = &vmi_b;
+		/*
+		 * A distinguishable pointer, not a real link block: this test
+		 * only needs FAXVMI_message to hand the reporter whatever is
+		 * at +0x28, and each side must hand it something different.
+		 * `faxvmi.h` typed that field when the framing unit landed.
+		 */
+		vmi_a.link = (struct faxvmi_link *)&vmi_a;
+		vmi_b.link = (struct faxvmi_link *)&vmi_b;
 
 		for (code = 0; code < 256; code++) {
 			char *ma, *mb;
