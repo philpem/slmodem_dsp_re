@@ -107447,3 +107447,76 @@ against the tables themselves.
   slicer instead advances the previous decision by half the constellation when
   the measured phase moved more than a quarter turn. Same role, different
   mechanism, and neither derivation transfers.  (2026-09-01)
+
+### F9323. V.29's `V29DET_SHORT_000C` is the bit rate, settled three independent ways by `V29RX_create`
+
+The field had two readers and no writer until the constructor was read, so
+`v29fax.h` carried it neutrally. `V29RX_create` writes it from a three-armed
+switch on the configuration's own `bit_rate`:
+
+    cmp $0x1c20 -> store 0        0x1c20 = 7200
+    cmp $0x2580 -> store 1        0x2580 = 9600
+    default     -> store 1
+
+7200 and 9600 are the only two rates V.29 defines, and `faxcfg.h` derives
+`v29rx_cfg::bit_rate` independently from the same two constants seen from the
+table's side.
+
+**AND THE OBJECT SAYS THE SAME THING TWICE MORE IN THE SAME FUNCTION.** The
+descrambler's `nbits` is `4 - (rate == 0)`, so three bits a symbol at rate 0
+and four at rate 1 -- and V.29 is 2400 baud, so 3 x 2400 = 7200 and
+4 x 2400 = 9600. And `V29DEC_SIXTEEN_POINT` is filled from this field
+directly, which `V29RX_decision` turns into a search over 8 or 16
+constellation points: three bits or four again. Three readings, one field, and
+they agree on WHICH VALUE IS WHICH, which one reading alone could not.
+
+That in turn names the two status bytes the field chooses between:
+`RxNextStateV29`'s IDLE arm and `RxHdxPrtcolV29`'s handover arm write 6 at
+9600 and 7 at 7200, both at the moment they install `RxHdxDataV29`. Nothing in
+the object reads either byte, so the names say where the value comes from and
+not what a caller does with it.  (2026-09-01)
+
+### F9324. `fpm_sre_cfg` + 0x34 is a POINTER, and V.29 is the third caller to store one there
+
+`include/dsplib/fpm_sre.h` models the last eight bytes of the config as
+`short pad34` and `short pad36`, "0 in the built-in instance". `V29RX_create`
+stores 32 bits there in one instruction -- `mov %edi,0xa4(%esp)` at 0x9b07b,
+where `%edi` is the caller's `v29rx_cfg::ptr_0014` -- which two shorts cannot
+express.
+
+**WHAT MAKES IT A POINTER RATHER THAN AN INT IS THE COMPANY IT KEEPS.** The
+same value goes to `fpm_mrf_cfg::aux` (+0x0c) and `fpm_fse_cfg::reserved34`
+(+0x34) in the same function, and both of those ARE declared pointers in their
+own headers, derived there from other callers. So one `aux` out of the
+caller's configuration reaches three modules at the same relative place, and
+the sre field is the third of three rather than a lone 32-bit store.
+
+`src/pump/v32/v32fprecr.c` already reached this conclusion from V.32's side and
+answered it with `memcpy(&srecfg.pad34, &p->r24, sizeof p->r24)` rather than
+renaming the shared header. This pass follows that precedent rather than
+renaming `fpm_sre_cfg` from a V.29 file; the rename is right and belongs to
+whoever owns `fpm_sre.h`, with `src/dsp/fpm_sre_cfg.c`,
+`src/pump/v32/v32sre_tables.c`, `t_v29cfg.c` and `t_v32hdxtab.c` to update
+with it.  (2026-09-01)
+
+### F9325. `V29RX_create` is the caller `fpm_sre.h` said had to exist, and it fills exactly the four fields named
+
+`fpm_sre.h` records that `ppm_step`, `ppm_scale`, `ppm_period` and `ppm_n_max`
+are read by `FPM_SRE_recover` and written by neither it nor `FPM_SRE_init`, so
+"a caller has to fill them and an all-zero state divides by zero". That was an
+inference from absence.
+
+`V29RX_create` fills those four and no others, immediately after
+`FPM_SRE_init` returns, at `rx + 0x10c`, `+0x118`, `+0x11a` and `+0x11c` --
+which are sre + 0x7c, +0x88, +0x8a and +0x8c, the four fields by name:
+
+    ppm_step   0x30
+    ppm_scale  1000000 / (cfg.clock_len * 9600)    = 34 for clock_len 3
+    ppm_period 0x2580 = 9600
+    ppm_n_max  0x68
+
+The set matches the header's list exactly -- four named, four written, none
+over and none missing -- so the inference is now a reading. The `ppm_scale`
+expression is also what confirms the unit: microseconds per second divided by
+samples per interval is parts per million per slipped sample, which is what
+the debug line "TimingVxx: Timing Offset [ppm] = %d" prints.  (2026-09-01)

@@ -107,6 +107,7 @@ struct fpm_mrf;
 struct fpm_mtd;
 struct fpm_sre;
 struct fpm_tone;
+struct v29rx_cfg;
 
 /* ------------------------------------------------------------------------ */
 /* The handles.                                                             */
@@ -210,9 +211,9 @@ struct fpm_tone;
  *   3  RxNextStateV29's default arm
  *   4  RxHdxPrtcolV29, RxHdxEpochDetV29, on the carrier-lost arm
  *   5  RxHdxIdleV29
- *   6  RxNextStateV29's IDLE arm and RxHdxPrtcolV29, when V29DET_SHORT_000C
- *      is non-zero
- *   7  the same two sites, when it is zero
+ *   6  RxNextStateV29's IDLE arm and RxHdxPrtcolV29, when V29DET_RATE says
+ *      9600
+ *   7  the same two sites, when it says 7200
  *
  * 6 AND 7 ARE NEW IN THIS PASS and the paragraph above used to say "seven
  * values"; the two extra ones come from the two writers this header could not
@@ -256,9 +257,15 @@ struct fpm_tone;
 #define V29RX_STATUS_DEFAULT	3	/* RxNextStateV29's default arm       */
 #define V29RX_STATUS_LOST	4	/* PROTOCOL and EPOCH_DET, carrier gone */
 #define V29RX_STATUS_IDLE	5
-#define V29RX_STATUS_DONE_A	6	/* V29DET_SHORT_000C non-zero         */
-#define V29RX_STATUS_DONE_B	7	/* ... and zero.  Neutral: nothing
-					 * reconstructed reads either field.  */
+/*
+ * 6 and 7 report the RATE the machine is about to carry data at, and both
+ * sites write one of them at the moment they install `RxHdxDataV29`.  The
+ * field they read is `V29DET_RATE`, which `V29RX_create` fills from the
+ * configuration's `bit_rate`; see there.  Nothing in the object READS either
+ * byte, so this names the value's source and not its purpose.
+ */
+#define V29RX_STATUS_DATA_9600	6
+#define V29RX_STATUS_DATA_7200	7
 
 /* The five states the jump table numbers, and the sixth the two error arms
  * store.  See the derivation above. */
@@ -412,13 +419,31 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
 #define V29DET_INT_0008		0x08	/* int                               */
 
 /*
- * A short nothing reconstructed writes, read by `RxHdxPrtcolV29` and by
- * `RxNextStateV29`'s IDLE arm and by nothing else, and in both places for the
- * same purpose: to choose between status bytes 6 and 7.  Two readers, one
- * expression, no writer -- so what it RECORDS is not established and the name
- * stays an offset.
+ * THE NEGOTIATED BIT RATE, as an index rather than a rate: 0 is 7200 and 1 is
+ * 9600.  This was `V29DET_SHORT_000C` and neutral until `V29RX_create` was
+ * read, because until then it had two readers and no writer.
+ *
+ * `V29RX_create` fills it from the configuration's own `bit_rate`:
+ * `cmp $0x1c20` stores 0, `cmp $0x2580` stores 1, and ANYTHING ELSE ALSO
+ * STORES 1 -- 0x1c20 is 7200 and 0x2580 is 9600, which are the only two rates
+ * V.29 defines.  `faxcfg.h` derives `v29rx_cfg::bit_rate` independently, from
+ * the same two constants seen from the table's side.
+ *
+ * AND THE OBJECT CONFIRMS IT ONE MODULE FURTHER ON: `V29RX_create` sets the
+ * descrambler's `nbits` to `4 - (rate == 0)`, so 3 bits a symbol at rate 0 and
+ * 4 at rate 1 -- and V.29 is 2400 baud, so 3 x 2400 = 7200 and 4 x 2400 =
+ * 9600.  Two independent readings of the same field agreeing on which value
+ * is which.  It also chooses `V29DEC_SIXTEEN_POINT`, which is the same fact a
+ * third time.  Finding F9323.
+ *
+ * The two readers pick a status byte from it, which is why those are named for
+ * the rate they report.
  */
-#define V29DET_SHORT_000C	0x0c	/* unsigned short                    */
+#define V29DET_RATE		0x0c	/* short: 0 = 7200, 1 = 9600         */
+#define V29_BPS_7200		0x1c20
+#define V29_BPS_9600		0x2580
+#define V29_RATE_7200		0
+#define V29_RATE_9600		1
 
 /*
  * THE RECEIVE STATE NUMBER.  Upgraded from `V29DET_GATE_14`, which was neutral
@@ -510,6 +535,31 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
 #define V29RX_INT_0004		0x0004
 #define V29RX_INT_0008		0x0008
 #define V29RX_INT_0020		0x0020
+
+/*
+ * TEN INTS IN A ROW, rx + 0x00 .. rx + 0x27, ALL SEEDED BY `V29RX_create` and
+ * all seeded with 0 or 1.  Three of them are the enables above and two more
+ * are read by `V29RX_status`; the other five have no reader anywhere in the
+ * object, so they keep offset names.  The run is a solid block of `movl $0` /
+ * `movl $1` at 0x9b337 through 0x9b39c, which is what says they are ten ints
+ * rather than a mixture -- and it is why the sizes here are not guesses.
+ *
+ *     +0x00  1   V29RX_INT_0000, read by V29RX_status
+ *     +0x04  1   V29RX_INT_0004, the SRE's phase-update enable
+ *     +0x08  1   V29RX_INT_0008, the FSE's carrier-recovery enable
+ *     +0x0c  0
+ *     +0x10  0
+ *     +0x14  1
+ *     +0x18  1   V29RX_FLAGS_0018, read as a BYTE by V29RX_status
+ *     +0x1c  0
+ *     +0x20  1   V29RX_INT_0020, the FSE's coefficient-adaptation enable
+ *     +0x24  0
+ */
+#define V29RX_INT_000C		0x000c
+#define V29RX_INT_0010		0x0010
+#define V29RX_INT_0014		0x0014
+#define V29RX_INT_001C		0x001c
+#define V29RX_INT_0024		0x0024
 
 /*
  * Two more of the receive block's own words, reached only by `V29RX_status`.
@@ -802,6 +852,14 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
  * not -- and both spellings are reproduced.
  */
 #define V29DEC_TRAIN_COUNT	0x18	/* unsigned short                    */
+
+/*
+ * Zeroed by `V29RX_create` and touched by NOTHING ELSE in the object -- not by
+ * any of the three slicers and not by any `*V29` function.  Two bytes, from
+ * its neighbours: `V29DEC_TRAIN_COUNT` is a `short` above it and
+ * `V29DEC_ANGLE_PREV` a `short` below.
+ */
+#define V29DEC_SHORT_001A	0x1a	/* short                             */
 
 /*
  * How many symbols `V29RX_epoch_det` waits before it will judge, and how many
@@ -1280,6 +1338,127 @@ int QualityDetectV29(void *modem);
 
 /* Above this many SRE outputs the receiver logs a buffer violation. */
 #define V29RX_SRE_MAX		0xa4
+
+/* ------------------------------------------------------------------------ */
+/* What `V29RX_create` lays down.                                           */
+
+/*
+ * THE THREE ALLOCATIONS ARE MEASURED, from `sysdep_malloc`'s own argument at
+ * each of the six call sites.  The receive block's 0x4f6c is what makes the
+ * 0x4f00 region members of it rather than a separate object, which this header
+ * had inferred from `DescrambleDataV29`'s `add $0x4f3c` and can now state.
+ */
+#define V29_OBJ_SIZE		0x54
+#define V29DET_SIZE		0x58
+#define V29RX_SIZE		0x4f6c
+
+/*
+ * The four scratch buffers, in BYTES as the object allocates them.  Three are
+ * 0x140 and the fourth is 0x148, and the difference is not a typo: the SRE's
+ * output feeds the equaliser, which reads one entry past what it was given.
+ * `V29RX_create` then zeroes the FIRST V29RX_BUF_ZEROED entries of the MRF and
+ * SRE buffers -- 160 of the MRF's 160 and 160 of the SRE's 164 -- so the SRE's
+ * last four shorts keep whatever the allocator left.
+ */
+#define V29DET_BUF_BYTES	0x140
+#define V29DET_V21_BUF_BYTES	0x140
+#define V29RX_BUF_MRF_BYTES	0x140
+#define V29RX_BUF_SRE_BYTES	0x148
+#define V29RX_BUF_ZEROED	0xa0
+
+/*
+ * THE EQUALISER'S WORKING STATE, REPUBLISHED ON THE HANDLE.  Six fields that
+ * `V29RX_create` copies out of `struct fpm_fse` once, at the end, and that
+ * nothing reconstructed reads: five pointers straight into the equaliser and
+ * its tap count.  They are TYPED BY WHERE THEY COME FROM -- `fpm_fse.h` names
+ * every one -- which is evidence rank 2, and what a caller DOES with them is
+ * not established.  A diagnostic window is the obvious guess and is left as
+ * one.
+ *
+ * `V29_OBJ_EQ_NOUT` is the ADDRESS of the equaliser's `n_out`, not its value:
+ * the object computes `lea 0x17e(%edx)` on the receive block, and 0x17e is
+ * `V29RX_FSE + offsetof(struct fpm_fse, n_out)`.
+ */
+#define V29_OBJ_EQ_OUT_I	0x1c	/* short *                           */
+#define V29_OBJ_EQ_OUT_Q	0x20	/* short *                           */
+#define V29_OBJ_EQ_NOUT		0x24	/* unsigned short *                  */
+#define V29_OBJ_EQ_ICOEFF	0x28	/* short *                           */
+#define V29_OBJ_EQ_QCOEFF	0x2c	/* short *                           */
+#define V29_OBJ_EQ_TAPS		0x30	/* short                             */
+
+/*
+ * Six more the constructor zeroes and nothing reads.  The widths are the
+ * object's own stores: 0x34, 0x38, 0x40 and 0x44 with `movl`, 0x3c and 0x48
+ * with `movw`.  The gap at 0x4a..0x53 is never written by anything.
+ */
+#define V29_OBJ_INT_0034	0x34
+#define V29_OBJ_INT_0038	0x38
+#define V29_OBJ_SHORT_003C	0x3c
+#define V29_OBJ_INT_0040	0x40
+#define V29_OBJ_INT_0044	0x44
+#define V29_OBJ_SHORT_0048	0x48
+
+/* The two flags `V29RX_create` raises in the status word and nothing reads. */
+#define V29_STATUS_CREATE_BITS	0x5000
+
+/*
+ * The constants the constructor plants that are not any module's own.
+ *
+ * `V29RX_TONE_HZ` is 1700, which is V.29's carrier frequency, and it replaces
+ * `FPM_TONE_CFG_data`'s 2100 (V.25's answer tone) in the copy the detector
+ * gets.  `V29RX_MTD_*` and `V29RX_V21_MTD_*` are the two tone detectors'
+ * thresholds; the V.21 one runs on 300 bit/s channel 2 and takes
+ * `V21_CHAN2_MTD_COEFF`.
+ *
+ * NEUTRAL WHERE THE OBJECT IS: what `ratio`, `min_level` and `tones` mean is
+ * `fpm_mtd.h`'s business, and these are just the values V.29 asks for.
+ */
+#define V29RX_TONE_HZ		0x6a4	/* fpm_tone_cfg::freq, 1700 Hz       */
+#define V29RX_MTD_TONES		2
+#define V29RX_MTD_RATIO		0x199a
+#define V29RX_MTD_MIN_LEVEL	0x32
+#define V29RX_V21_MTD_TONES	2
+#define V29RX_V21_MTD_RATIO	0x4ccd
+#define V29RX_V21_MTD_MIN_LEVEL	0x12c
+
+/*
+ * The descrambler's two taps.  `nbits` is `4 - (rate == V29_RATE_7200)` and is
+ * derived at `V29DET_RATE`; these two are literals.
+ */
+#define V29RX_SDM_TAP1		0x12
+#define V29RX_SDM_TAP2		0x17
+
+/*
+ * The decoder-error limit, which is the ONE field of the receive block whose
+ * seed depends on the rate and whose default arm writes NOTHING AT ALL.  Rate
+ * 0 gets 0x320 and rate 1 gets 0x2bc; any other value leaves the field holding
+ * whatever `sysdep_malloc` returned, which on a reused instance is the
+ * previous session's.  Reproduced; deviation D1173.
+ */
+#define V29RX_DEC_ERROR_LIMIT_7200	0x320
+#define V29RX_DEC_ERROR_LIMIT_9600	0x2bc
+
+/* The seed `V29RX_create` gives the training sequence's shift register. */
+#define V29RX_TRAIN_LFSR_INIT	0x6a
+
+/*
+ * Create or re-initialise a V.29 receiver.
+ *
+ * `modem` NULL allocates the handle; anything else is re-initialised IN PLACE,
+ * and so are the detection and receive blocks if their pointers are already
+ * set.  `params` NULL takes `V29RX_CFG`.  Returns the handle, which is the one
+ * passed in unless it was NULL.
+ *
+ * THE `reset` FLAG THE FPM MODULES GET IS "I JUST ALLOCATED THIS", and it is
+ * TWO different flags: the detection block's sub-objects get one that is set
+ * only when the DETECTION BLOCK was freshly allocated, and the receive block's
+ * get one set only when the HANDLE was.  Re-initialising an existing handle
+ * whose receive block was NULL therefore allocates that block and then hands
+ * `FPM_MRF_init`, `FPM_AGC_init`, `FPM_SRE_init` and `FPM_FSE_init` a zero --
+ * so those four modules re-init over uninitialised memory.  It is the object's
+ * and is not a path any reconstructed caller takes; deviation D1174.
+ */
+void *V29RX_create(void *modem, const struct v29rx_cfg *params);
 
 /* ------------------------------------------------------------------------ */
 /*

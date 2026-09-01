@@ -119,6 +119,7 @@
 #include "dsplib/v29fax.h"
 #include "dsplib/v29cfg.h"
 #include "dsplib/v29data.h"
+#include "dsplib/faxcfg.h"
 #include "dsplib/debug.h"
 
 #include "dsplib/faxfifo.h"
@@ -4082,7 +4083,7 @@ static long st_done_a, st_done_b;	/* both sides of the 6/7 choice     */
 
 /*
  * `RxNextStateV29` on its own: no demodulation, no carrier, just the
- * transition.  `V29DET_SHORT_000C` is swept because it is what chooses between
+ * transition.  `V29DET_RATE` is swept because it is what chooses between
  * status bytes 6 and 7 on the IDLE arm, and `dsplibs_debug_level` because the
  * printing arms are separate code and F150 is about exactly that.
  */
@@ -4103,7 +4104,7 @@ run_next_one(unsigned seed, int state, unsigned short c000c, unsigned level,
 		ref_FPM_AGC_init(RX_AGC_OF(f), &AGCv29_CFG, 1);
 		put_short(f->det, V29DET_STATE, (short)state);
 		put_short(f->det, V29DET_STATE_COUNT, 0x1234);
-		put_short(f->det, V29DET_SHORT_000C, (short)c000c);
+		put_short(f->det, V29DET_RATE, (short)c000c);
 		put_ptr(f->det, V29DET_HANDLER, 0);
 		put_int(f->det, V29DET_INT_0008, (int)0xa5a5a5a5);
 		put_int(f->obj, V29_OBJ_STATUS, (int)0x00ffff00);
@@ -4149,10 +4150,10 @@ run_next_one(unsigned seed, int state, unsigned short c000c, unsigned level,
 		st_freeze++;
 	if (state == V29RX_STATE_IDLE) {
 		if ((get_int(fa.obj, V29_OBJ_STATUS) & 0xff)
-		    == V29RX_STATUS_DONE_A)
+		    == V29RX_STATUS_DATA_9600)
 			st_done_a++;
 		if ((get_int(fa.obj, V29_OBJ_STATUS) & 0xff)
-		    == V29RX_STATUS_DONE_B)
+		    == V29RX_STATUS_DATA_7200)
 			st_done_b++;
 	}
 
@@ -4182,7 +4183,7 @@ run_state_one(unsigned seed, const struct hdx_setup *u, int which, int vary,
 		struct fix *f = i ? &fb : &fa;
 
 		put_short(f->det, V29DET_STATE_COUNT, 3);
-		put_short(f->det, V29DET_SHORT_000C, (short)(seed & 1));
+		put_short(f->det, V29DET_RATE, (short)(seed & 1));
 		put_ptr(f->det, V29DET_HANDLER, 0);
 	}
 
@@ -4344,6 +4345,233 @@ run_states(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* 17.  V29RX_create                                                      */
+/*
+ * THE COMPARISON IS "ZAP, THEN COMPARE EVERYTHING", NOT "SKIP WHAT I THOUGHT
+ * OF", and the difference is which way it fails.  Every field the two sides
+ * cannot agree about is a POINTER -- each side allocates its own blocks and
+ * names its own copy of every table -- so both sides' pointer words are
+ * overwritten with zero and then all 0x54 + 0x58 + 0x4f6c bytes are compared.
+ *
+ * A pointer this list forgets therefore shows up as a LOUD failure naming its
+ * offset, where a skip list that forgets one silently stops checking a region.
+ * F134's argument applied to the shape of the check rather than to its count.
+ *
+ * The zap list is derived, not guessed: `fpm_agc.h`, `fpm_mrf.h`, `fpm_sre.h`
+ * and `fpm_fse.h` each say which of their members are pointers, and the
+ * offsets below are those plus the block base each module sits at.
+ *
+ * FOUR ALLOCATION SHAPES ARE DRIVEN, because `V29RX_create` has two
+ * independent `reset` flags and a third block with none of its own:
+ *
+ *   A  modem NULL                       both flags set
+ *   B  modem, det and rx all present    both clear
+ *   C  modem and rx present, det NULL   det flag set, handle flag clear
+ *   D  modem and det present, rx NULL   D1174: rx allocated, flag CLEAR
+ *
+ * and each over four configurations: NULL, 7200, 9600 and a rate that is
+ * neither -- which is the only input that reaches D1173's default-less arm.
+ */
+extern void *ref_V29RX_create(void *modem, const struct v29rx_cfg *params);
+
+static const int cr_zap_obj[] = {
+	V29_OBJ_EQ_OUT_I, V29_OBJ_EQ_OUT_Q, V29_OBJ_EQ_NOUT,
+	V29_OBJ_EQ_ICOEFF, V29_OBJ_EQ_QCOEFF,
+	V29_OBJ_DET, V29_OBJ_RX,
+	-1
+};
+
+static const int cr_zap_det[] = {
+	V29DET_MTD, V29DET_TONE, V29DET_HANDLER, V29DET_BUF,
+	V29DET_V21_MTD, V29DET_V21_BUF,
+	V29DET_V21_AGC + 0x0c, V29DET_V21_AGC + 0x10,	/* cfg.alpha, .beta  */
+	-1
+};
+
+static const int cr_zap_rx[] = {
+	V29RX_MRF + 0x04, V29RX_MRF + 0x0c,		/* cfg.coeff, .aux   */
+	V29RX_MRF + 0x18,				/* history           */
+	V29RX_AGC + 0x0c, V29RX_AGC + 0x10,		/* cfg.alpha, .beta  */
+	V29RX_SRE + 0x10, V29RX_SRE + 0x14, V29RX_SRE + 0x18,
+	V29RX_SRE + 0x1c, V29RX_SRE + 0x20, V29RX_SRE + 0x24,
+	V29RX_SRE + 0x34,				/* the aux pointer   */
+	V29RX_SRE + 0x50, V29RX_SRE + 0x54, V29RX_SRE + 0x58,
+	V29RX_SRE + 0x74,
+	V29RX_FSE + 0x04, V29RX_FSE + 0x08, V29RX_FSE + 0x14,
+	V29RX_FSE + 0x24, V29RX_FSE + 0x28, V29RX_FSE + 0x2c,
+	V29RX_FSE + 0x30, V29RX_FSE + 0x34,
+	V29RX_FSE + 0x54, V29RX_FSE + 0x58, V29RX_FSE + 0x60,
+	V29RX_FSE + 0x64, V29RX_FSE + 0x68,
+	V29RX_BUF_MRF, V29RX_BUF_SRE,
+	-1
+};
+
+static long cr_bytes;			/* bytes actually compared          */
+static long cr_shape[4];		/* how often each allocation shape  */
+static long cr_rate[3];			/* 7200, 9600, neither              */
+static long cr_limit_unwritten;		/* D1173's arm was reached          */
+static long cr_reset_split;		/* D1174's arm was reached          */
+
+static void
+cr_zap(unsigned char *p, const int *offs)
+{
+	int i;
+
+	for (i = 0; offs[i] >= 0; i++)
+		*(void **)(void *)(p + offs[i]) = 0;
+}
+
+/*
+ * The MRF's and SRE's scratch buffers are compared through their own
+ * pointers, before those are zapped -- so the zeroing loop is measured and
+ * not merely assumed to have run.
+ */
+static long
+cr_cmp_buf(void *a, void *b, int nshorts, long where, const char *what)
+{
+	int i;
+	short *sa = (short *)a;
+	short *sb = (short *)b;
+
+	for (i = 0; i < nshorts; i++)
+		if (sa[i] != sb[i])
+			break;
+	diff_eq_int(what, i == nshorts ? -1 : i, -1, where);
+	return nshorts;
+}
+
+static void
+run_create_one(unsigned seed, int shape, const struct v29rx_cfg *params,
+	       long where)
+{
+	void *ma, *mb;
+	void *da, *db, *ra, *rb;
+	unsigned char *pa, *pb;
+	int i;
+
+	(void)seed;
+
+	/*
+	 * SHAPES 1..3 RE-ENTER AN INSTANCE THIS FUNCTION BUILT, not a
+	 * pseudorandom block.  A `struct fix` filled by `fixture()` cannot be
+	 * used here: `V29RX_create` hands the detection block's existing MTD
+	 * pointer straight to `FPM_MTD_create` and re-initialises four FPM
+	 * modules in place, so garbage in any of those is a wild pointer the
+	 * constructor writes through.  Building a real instance first is the
+	 * only way to reach the re-entrant path at all.
+	 */
+	if (shape == 0) {
+		ma = ref_V29RX_create(0, params);
+		mb = V29RX_create(0, params);
+	} else {
+		ma = ref_V29RX_create(0, 0);
+		mb = V29RX_create(0, 0);
+
+		if (shape == 2) {
+			put_ptr((unsigned char *)ma, V29_OBJ_DET, 0);
+			put_ptr((unsigned char *)mb, V29_OBJ_DET, 0);
+		} else if (shape == 3) {
+			put_ptr((unsigned char *)ma, V29_OBJ_RX, 0);
+			put_ptr((unsigned char *)mb, V29_OBJ_RX, 0);
+			cr_reset_split++;
+		}
+
+		ma = ref_V29RX_create(ma, params);
+		mb = V29RX_create(mb, params);
+	}
+	cr_shape[shape]++;
+
+	diff_eq_int("at %ld: the constructor returned non-null", mb != 0, 1,
+		    where);
+	diff_eq_int("at %ld: it returned a handle", mb != 0 && ma != 0, 1,
+		    where);
+	if (mb == 0 || ma == 0)
+		return;
+
+	da = get_ptr((unsigned char *)ma, V29_OBJ_DET);
+	db = get_ptr((unsigned char *)mb, V29_OBJ_DET);
+	ra = get_ptr((unsigned char *)ma, V29_OBJ_RX);
+	rb = get_ptr((unsigned char *)mb, V29_OBJ_RX);
+	diff_eq_int("at %ld: both blocks were laid down",
+		    (db != 0) + (rb != 0), (da != 0) + (ra != 0), where);
+	if (da == 0 || db == 0 || ra == 0 || rb == 0)
+		return;
+
+	/* The rate, and which of D1173's three arms this trial reached. */
+	i = get_short((unsigned char *)da, V29DET_RATE);
+	diff_eq_int("at %ld: the rate index",
+		    (long)get_short((unsigned char *)db, V29DET_RATE), (long)i,
+		    where);
+	if (params == 0)
+		cr_rate[1]++;
+	else if (params->bit_rate == V29_BPS_7200)
+		cr_rate[0]++;
+	else if (params->bit_rate == V29_BPS_9600)
+		cr_rate[1]++;
+	else
+		cr_rate[2]++;
+	if (i != V29_RATE_7200 && i != V29_RATE_9600)
+		cr_limit_unwritten++;
+
+	/* The scratch buffers, through the pointers, before they are zapped. */
+	cr_bytes += 2 * cr_cmp_buf(get_ptr((unsigned char *)ra, V29RX_BUF_MRF),
+				   get_ptr((unsigned char *)rb, V29RX_BUF_MRF),
+				   V29RX_BUF_ZEROED, where,
+				   "at %ld: first differing MRF buffer entry");
+	cr_bytes += 2 * cr_cmp_buf(get_ptr((unsigned char *)ra, V29RX_BUF_SRE),
+				   get_ptr((unsigned char *)rb, V29RX_BUF_SRE),
+				   V29RX_BUF_ZEROED, where,
+				   "at %ld: first differing SRE buffer entry");
+
+	pa = (unsigned char *)ma;
+	pb = (unsigned char *)mb;
+	cr_zap(pa, cr_zap_obj);
+	cr_zap(pb, cr_zap_obj);
+	cr_zap((unsigned char *)da, cr_zap_det);
+	cr_zap((unsigned char *)db, cr_zap_det);
+	cr_zap((unsigned char *)ra, cr_zap_rx);
+	cr_zap((unsigned char *)rb, cr_zap_rx);
+
+	diff_eq_int("at %ld: first differing handle byte",
+		    blk_first_diff(pb, pa, V29_OBJ_SIZE, 0), -1, where);
+	diff_eq_int("at %ld: first differing detection byte",
+		    blk_first_diff((unsigned char *)db, (unsigned char *)da,
+				   V29DET_SIZE, 0), -1, where);
+	diff_eq_int("at %ld: first differing receiver byte",
+		    blk_first_diff((unsigned char *)rb, (unsigned char *)ra,
+				   V29RX_SIZE, 0), -1, where);
+	cr_bytes += V29_OBJ_SIZE + V29DET_SIZE + V29RX_SIZE;
+}
+
+static int
+run_create(void)
+{
+	static struct v29rx_cfg cfgs[3];
+	int shape, c;
+
+	diff_begin("V29RX_create");
+
+	cfgs[0] = V29RX_CFG;
+	cfgs[0].bit_rate = V29_BPS_7200;
+	cfgs[1] = V29RX_CFG;
+	cfgs[1].bit_rate = V29_BPS_9600;
+	cfgs[2] = V29RX_CFG;
+	cfgs[2].bit_rate = 4800;	/* neither: D1173's default arm */
+
+	for (shape = 0; shape < 4; shape++)
+		for (c = 0; c < 4; c++) {
+			harness_alloc_reset();
+			run_create_one(0xd0000000u
+				       + (unsigned)(shape * 4 + c),
+				       shape, c == 3 ? 0 : &cfgs[c],
+				       (long)(shape * 10 + c));
+		}
+
+	harness_alloc_reset();
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -4374,6 +4602,7 @@ main(void)
 	rc |= run_hdx();
 	rc |= run_slicers();
 	rc |= run_states();
+	rc |= run_create();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -4617,6 +4846,26 @@ main(void)
 		    st_error_arm);
 	diff_eq_int("a handler raised the low-SNR bit (%ld)", st_lowsnr > 0, 1,
 		    st_lowsnr);
+
+	/*
+	 * The constructor's.  `cr_bytes` is the DENOMINATOR of the byte
+	 * comparison and is printed rather than merely tested, because a zap
+	 * list that grew a bug could otherwise leave the whole check reading
+	 * green over nothing.
+	 */
+	diff_eq_int("V29RX_create compared bytes (%ld)", cr_bytes > 100000, 1,
+		    cr_bytes);
+	for (d = 0; d < 4; d++)
+		diff_eq_int("allocation shape %ld was driven", cr_shape[d] > 0,
+			    1, d);
+	diff_eq_int("the 7200 arm was taken (%ld)", cr_rate[0] > 0, 1,
+		    cr_rate[0]);
+	diff_eq_int("the 9600 arm was taken (%ld)", cr_rate[1] > 0, 1,
+		    cr_rate[1]);
+	diff_eq_int("a rate that is neither was driven (%ld)", cr_rate[2] > 0,
+		    1, cr_rate[2]);
+	diff_eq_int("D1174's split reset flags were driven (%ld)",
+		    cr_reset_split > 0, 1, cr_reset_split);
 
 	rc |= diff_end();
 

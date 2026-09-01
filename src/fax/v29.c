@@ -4,6 +4,7 @@
  *
  * Reconstructed from dsplibs.o:
  *
+ *   V29RX_create          .text 0x09ad40 2127
  *   V29RX_delete          .text 0x09b590  220
  *   V29RX_epoch_det       .text 0x09b670  413
  *   V29RX_eq_train        .text 0x09b810  221
@@ -88,8 +89,10 @@
 #include "dsplib/v29fax.h"
 
 #include <stddef.h>
+#include <string.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/faxcfg.h"
 #include "dsplib/faxfifo.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
@@ -122,6 +125,385 @@
 #define RX_SRE(rx)	((struct fpm_sre *)(void *)FIELD((rx), V29RX_SRE))
 #define RX_FSE(rx)	((struct fpm_fse *)(void *)FIELD((rx), V29RX_FSE))
 #define RX_MRF(rx)	((struct fpm_mrf *)(void *)FIELD((rx), V29RX_MRF))
+
+/* The decoder block, `fse->cfg.owner`, and the receive block's rx + 0x28. */
+#define DEC(rx)		((void *)FIELD((rx), V29RX_DEC))
+
+/* Install a receive state handler.  See `V29DET_HANDLER` in v29fax.h. */
+#define SET_HANDLER(det, fn)						\
+	(*(v29_rx_state_fn *)(void *)FIELD((det), V29DET_HANDLER) = (fn))
+
+/*
+ * ---------------------------------------------------------------------------
+ * V29RX_create -- .text 0x09ad40, 2,127 bytes.
+ *
+ * The constructor, and the function that lays out everything the rest of this
+ * file reads through named offsets.  Three allocations, six FPM modules
+ * initialised from five stack-built configurations, and then about sixty
+ * literal seeds.
+ *
+ * IT IS RE-ENTRANT OVER AN EXISTING INSTANCE, at three independent levels: a
+ * non-NULL `modem` is re-initialised in place, and the detection and receive
+ * blocks are allocated only if their pointers are already clear.  That is what
+ * makes the two `reset` flags below two flags and not one.
+ *
+ * THE TWO `reset` FLAGS ARE SEPARATE AND THE OBJECT KEEPS THEM IN SEPARATE
+ * PLACES -- `%edi` for the detection block's and `0x1c(%esp)` for the handle's.
+ * `FPM_AGC_init` on the V.21 gain control gets the first; `FPM_MRF_init`,
+ * `FPM_AGC_init` on the input gain control, `FPM_SRE_init` and `FPM_FSE_init`
+ * get the second.  A handle that already exists but whose receive block does
+ * not therefore allocates that block and then hands those four modules a ZERO,
+ * so they re-initialise over uninitialised memory.  D1174.
+ *
+ * THE CONFIGURATIONS ARE TEMPLATE-PLUS-PATCH, five times over, and GCC dead-
+ * stored the parts of each template that are wholly overwritten -- which is
+ * why the object copies only two of `FPM_MTD_CFG`'s three dwords and only one
+ * of `SDM_CFG`'s two.  The source is a struct assignment followed by field
+ * assignments in every case; what survives of each template is stated beside
+ * it below.
+ *
+ * `fpm_sre_cfg`'s +0x34 IS A POINTER AND THE HEADER SPELLS IT `pad34`/`pad36`.
+ * The object stores 32 bits there (`mov %edi,0xa4(%esp)`), which two shorts
+ * cannot express, so this file uses the `memcpy` idiom
+ * `src/pump/v32/v32fprecr.c` already established for exactly this field rather
+ * than renaming a shared header from a V.29 pass.  The same pointer goes to
+ * `fpm_mrf_cfg::aux` and `fpm_fse_cfg::reserved34`, which ARE declared as
+ * pointers -- so all three modules are handed one `aux` out of the caller's
+ * configuration, and that is what says the sre field is one too.  F9324.
+ *
+ * THE ONE FIELD WITH A DEFAULT-LESS SWITCH is `V29RX_DEC_ERROR_LIMIT`: rate 0
+ * writes 0x320, rate 1 writes 0x2bc, and any other value writes NOTHING.  On a
+ * freshly allocated block that leaves the allocator's contents in a field
+ * `DataCarrierDetectV29` compares against.  D1173.
+ *
+ * WHAT THE SRE'S TIMING METER IS GIVEN.  `fpm_sre.h` records that
+ * `ppm_step`, `ppm_scale`, `ppm_period` and `ppm_n_max` are read by
+ * `FPM_SRE_recover` and written by neither it nor `FPM_SRE_init`, so "a caller
+ * has to fill them".  THIS IS THAT CALLER, and it fills exactly those four and
+ * no others -- 0x30, 1000000 / (clock_len * 9600), 9600 and 0x68 -- which
+ * turns that paragraph's inference into a reading.  Finding F9325.
+ */
+void *
+V29RX_create(void *modem, const struct v29rx_cfg *params)
+{
+	struct fpm_mtd_cfg mcfg;
+	struct fpm_tone_cfg tcfg;
+	struct fpm_mrf_cfg rcfg;
+	struct fpm_sre_cfg scfg;
+	struct fpm_fse_cfg fcfg;
+	struct fpm_sdm_cfg dcfg;
+	void *det;
+	void *rx;
+	void *dec;
+	void *aux;
+	int new_handle = 0;
+	int new_det = 0;
+	short i;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.29 RX Create ");
+
+	if (modem == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+
+		modem = sysdep_malloc(V29_OBJ_SIZE);
+		FIELD_PTR(modem, V29_OBJ_DET) = 0;
+		FIELD_PTR(modem, V29_OBJ_RX) = 0;
+		new_handle = 1;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\n");
+
+	/*
+	 * TWO STRUCT ASSIGNMENTS, not one with a conditional operand: the
+	 * object has two unrolled six-dword copies whose tails are merged at
+	 * 0x9ada5, which is what a compiler does to an if/else and not to a
+	 * `?:` over one destination.
+	 */
+	if (params != 0)
+		*(struct v29rx_cfg *)modem = *params;
+	else
+		*(struct v29rx_cfg *)modem = V29RX_CFG;
+
+	/* ---- the detection block ---------------------------------------- */
+
+	det = FIELD_PTR(modem, V29_OBJ_DET);
+	if (det == 0) {
+		det = sysdep_malloc(V29DET_SIZE);
+		FIELD_PTR(modem, V29_OBJ_DET) = det;
+
+		FIELD_PTR(det, V29DET_MTD) = 0;
+		FIELD_PTR(det, V29DET_TONE) = 0;
+		FIELD_PTR(det, V29DET_BUF) = sysdep_malloc(V29DET_BUF_BYTES);
+		FIELD_PTR(DET(modem), V29DET_V21_BUF) =
+			sysdep_malloc(V29DET_V21_BUF_BYTES);
+		FIELD_PTR(DET(modem), V29DET_V21_MTD) = 0;
+		new_det = 1;
+	}
+
+	/* The block detector.  Only `f0a` survives from the template. */
+	mcfg = FPM_MTD_CFG;
+	mcfg.coeff = V29_MTD_COEFF;
+	mcfg.tones = V29RX_MTD_TONES;
+	mcfg.ratio = V29RX_MTD_RATIO;
+	mcfg.min_level = V29RX_MTD_MIN_LEVEL;
+	FIELD_PTR(det, V29DET_MTD) = FPM_MTD_create(
+		(struct fpm_mtd *)FIELD_PTR(DET(modem), V29DET_MTD), &mcfg);
+
+	/*
+	 * The notch and tone detector.  Everything but `freq` survives, and
+	 * the 1700 Hz that replaces it is V.29's own carrier -- where
+	 * `FPM_TONE_CFG_data` carries V.25's 2100 Hz answer tone.
+	 */
+	tcfg = FPM_TONE_CFG_data;
+	tcfg.freq = V29RX_TONE_HZ;
+	FIELD_PTR(det, V29DET_TONE) = FPM_TONE_create(
+		(struct fpm_tone *)FIELD_PTR(DET(modem), V29DET_TONE), &tcfg);
+
+	/* The receive machine starts in START, with START's handler. */
+	det = FIELD_PTR(modem, V29_OBJ_DET);
+	FIELD_SHORT(det, V29DET_STATE) = V29RX_STATE_START;
+	FIELD_SHORT(det, V29DET_STATE_COUNT) = 0;
+	FIELD_INT(det, V29DET_INT_0008) = 0;
+	SET_HANDLER(det, RxHdxStartV29);
+
+	/* The V.21 channel-2 detector, from the same template again. */
+	mcfg = FPM_MTD_CFG;
+	mcfg.coeff = V21_CHAN2_MTD_COEFF;
+	mcfg.tones = V29RX_V21_MTD_TONES;
+	mcfg.ratio = V29RX_V21_MTD_RATIO;
+	mcfg.min_level = V29RX_V21_MTD_MIN_LEVEL;
+	FIELD_PTR(det, V29DET_V21_MTD) = FPM_MTD_create(
+		(struct fpm_mtd *)FIELD_PTR(DET(modem), V29DET_V21_MTD),
+		&mcfg);
+
+	FPM_AGC_init((struct fpm_agc *)(void *)FIELD(DET(modem),
+						     V29DET_V21_AGC),
+		     &AGCv29_CFG, new_det);
+
+	det = FIELD_PTR(modem, V29_OBJ_DET);
+	FIELD_SHORT(det, V29DET_V21_SAMPLES) = 0;
+	FIELD_SHORT(det, V29DET_V21_ENABLE) = 0;
+
+	/*
+	 * The rate, as an index.  The DEFAULT arm and the 9600 arm write the
+	 * same value and are still two arms in the object (0x9b565 and
+	 * 0x9af7d), which is what says this was a `switch` and not an
+	 * `== 7200` test.
+	 */
+	switch (((struct v29rx_cfg *)modem)->bit_rate) {
+	case V29_BPS_7200:
+		FIELD_SHORT(det, V29DET_RATE) = V29_RATE_7200;
+		break;
+	case V29_BPS_9600:
+		FIELD_SHORT(det, V29DET_RATE) = V29_RATE_9600;
+		break;
+	default:
+		FIELD_SHORT(det, V29DET_RATE) = V29_RATE_9600;
+		break;
+	}
+
+	/* ---- the receive block ------------------------------------------ */
+
+	aux = ((struct v29rx_cfg *)modem)->ptr_0014;
+
+	/*
+	 * Raised here and overwritten at the end of the function.  Both stores
+	 * are real and a caller cannot see either, because nothing else runs
+	 * in between.
+	 */
+	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_ERROR;
+	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_DEFAULT;
+
+	rx = FIELD_PTR(modem, V29_OBJ_RX);
+	if (rx == 0) {
+		rx = sysdep_malloc(V29RX_SIZE);
+		FIELD_PTR(modem, V29_OBJ_RX) = rx;
+
+		FIELD_PTR(rx, V29RX_BUF_MRF) =
+			sysdep_malloc(V29RX_BUF_MRF_BYTES);
+		FIELD_PTR(RX(modem), V29RX_BUF_SRE) =
+			sysdep_malloc(V29RX_BUF_SRE_BYTES);
+	}
+
+	/* The resampler.  Only `pad0a` survives from the template. */
+	rcfg = FPM_MRF_CFG;
+	rcfg.branches = 9;
+	rcfg.decimate = 10;
+	rcfg.coeff = V29RX_MRF_FILT;
+	rcfg.taps = 0x10e;
+	rcfg.aux = aux;
+	FPM_MRF_init(RX_MRF(RX(modem)), &rcfg, new_handle);
+
+	FPM_AGC_init(RX_AGC(RX(modem)), &AGCv29_CFG, new_handle);
+
+	/*
+	 * The symbol recoverer.  `pad0e` and `pad36` survive; everything else
+	 * is V.29's.
+	 *
+	 * `rms_min` IS READ BACK OUT OF THE GAIN CONTROL the line above just
+	 * initialised -- `movswl 0x64(%edx)` on the receive block is
+	 * `agc.cfg.ref_level` -- and divided by six.  The object does it with
+	 * the `imul $0x2aaaaaab` / `sar $0x1f` / `sub` magic sequence, which
+	 * is GCC's signed division by 6 and not a shift.
+	 */
+	scfg = FPM_SRE_CFG;
+	scfg.clock_len = 3;
+	scfg.groups_acq = 3;
+	scfg.groups_trk = 0x10;
+	scfg.settle = 0x2b;
+	scfg.acc_down = 0x2000;
+	scfg.acc_up = 0x4000;
+	scfg.coeffs = 0xb4;
+	scfg.proto = V29RX_SRE_FILT;
+	scfg.disc = V29RX_XB_COFFS;
+	scfg.xclock = V29RX_XCLOCK;
+	scfg.yclock = V29RX_YCLOCK;
+	scfg.pll_k1 = V29RX_SRE_PLLK1;
+	scfg.pll_k2 = V29RX_SRE_PLLK2;
+	scfg.mag_hi = 2;
+	scfg.mag_lo = 1;
+	scfg.err_hi = 0x2666;
+	scfg.err_lo = 0xc8;
+	scfg.rms_min = (short)(RX_AGC(RX(modem))->cfg.ref_level / 6);
+	scfg.rms_len = 9;
+	memcpy(&scfg.pad34, &aux, sizeof aux);
+	FPM_SRE_init(RX_SRE(RX(modem)), &scfg, new_handle);
+
+	/* The four timing-meter fields `FPM_SRE_init` leaves to its caller. */
+	RX_SRE(RX(modem))->ppm_step = 0x30;
+	RX_SRE(RX(modem))->ppm_period = V29_BPS_9600;
+	RX_SRE(RX(modem))->ppm_n_max = 0x68;
+	RX_SRE(RX(modem))->ppm_scale =
+		(short)(1000000 / (scfg.clock_len * V29_BPS_9600));
+
+	/*
+	 * The equaliser.  `block`, `mu[2]` and `pad22` survive the template.
+	 * `owner` is the decoder block and `decision` is the first stage of
+	 * the slicer chain -- which is the whole of what installs it.
+	 */
+	fcfg = FPM_FSE_CFG;
+	fcfg.interp = 3;
+	fcfg.icoff = V29RX_FSE_IFILT;
+	fcfg.qcoff = V29RX_FSE_QFILT;
+	fcfg.taps = 0x31;
+	fcfg.mu[0] = 0;
+	fcfg.mu[1] = 0;
+	fcfg.clk = V29RX_CRR_TABLE;
+	fcfg.clk_mod = 0x48;
+	fcfg.clk_inc = 0x11;
+	fcfg.train_sym = 0x1c8;
+	fcfg.err_hi = 0x199a;
+	fcfg.err_lo = 0xccd;
+	fcfg.pll_k1 = V29RX_FSE_PLLK1;
+	fcfg.pll_k2 = V29RX_FSE_PLLK2;
+	fcfg.owner = FIELD(RX(modem), V29RX_DEC);
+	fcfg.decision = V29RX_epoch_det;
+	fcfg.reserved34 = aux;
+	FPM_FSE_init(RX_FSE(RX(modem)), &fcfg, new_handle);
+
+	/*
+	 * The descrambler.  Three bits a symbol at 7200 and four at 9600, over
+	 * V.29's 2400 baud -- which is the second, independent statement that
+	 * `V29DET_RATE` is the bit rate and which value is which.
+	 */
+	dcfg = SDM_CFG;
+	dcfg.nbits = (short)(4 - (FIELD_SHORT(DET(modem), V29DET_RATE)
+				  == V29_RATE_7200));
+	dcfg.tap1 = V29RX_SDM_TAP1;
+	dcfg.tap2 = V29RX_SDM_TAP2;
+	SDM_init((struct fpm_sdm *)(void *)FIELD(RX(modem), V29RX_SDM), &dcfg);
+
+	/* ---- the seeds --------------------------------------------------- */
+
+	rx = FIELD_PTR(modem, V29_OBJ_RX);
+
+	/*
+	 * Only the FIRST V29RX_BUF_ZEROED entries, which is all of the MRF's
+	 * buffer and all but four shorts of the SRE's.  The induction variable
+	 * is a `short` -- `inc %eax` then `cwtl` -- which is the object's.
+	 */
+	for (i = 0; i < V29RX_BUF_ZEROED; i = (short)(i + 1)) {
+		((short *)FIELD_PTR(rx, V29RX_BUF_MRF))[i] = 0;
+		((short *)FIELD_PTR(rx, V29RX_BUF_SRE))[i] = 0;
+	}
+
+	det = FIELD_PTR(modem, V29_OBJ_DET);
+	FIELD_SHORT(rx, V29RX_DEC_ERROR_AVG) = 0;
+	FIELD_SHORT(rx, V29RX_DEC_ERROR_N) = 0;
+	FIELD_SHORT(rx, V29RX_SHORT_4F62) = 0;
+
+	/* NO DEFAULT ARM.  See the note above and D1173. */
+	switch (FIELD_SHORT(det, V29DET_RATE)) {
+	case V29_RATE_7200:
+		FIELD_SHORT(rx, V29RX_DEC_ERROR_LIMIT) =
+			V29RX_DEC_ERROR_LIMIT_7200;
+		break;
+	case V29_RATE_9600:
+		FIELD_SHORT(rx, V29RX_DEC_ERROR_LIMIT) =
+			V29RX_DEC_ERROR_LIMIT_9600;
+		break;
+	default:
+		break;
+	}
+
+	dec = DEC(rx);
+	FIELD_SHORT(dec, V29DEC_MAG_AVG_FAR) = 0;
+	FIELD_SHORT(rx, V29RX_SHORT_4F64) = 1;
+	FIELD_SHORT(rx, V29RX_RMS_N) = 0;
+	FIELD_SHORT(rx, V29RX_RMS_REF) = 0;
+	FIELD_SHORT(dec, V29DEC_MAG_AVG_NEAR) = 0;
+	FIELD_SHORT(dec, V29DEC_I0) = 0;
+	FIELD_SHORT(dec, V29DEC_Q0) = 0;
+	FIELD_SHORT(dec, V29DEC_I1) = 0;
+	FIELD_SHORT(dec, V29DEC_Q1) = 0;
+	FIELD_SHORT(dec, V29DEC_I2) = 0;
+	FIELD_SHORT(dec, V29DEC_Q2) = 0;
+
+	FIELD_INT(rx, V29RX_INT_0000) = 1;
+	FIELD_SHORT(dec, V29DEC_LAST) = 0;
+	FIELD_SHORT(dec, V29DEC_TRAIN_LFSR) = V29RX_TRAIN_LFSR_INIT;
+	FIELD_INT(dec, V29DEC_SIXTEEN_POINT) = FIELD_SHORT(det, V29DET_RATE);
+	FIELD_SHORT(dec, V29DEC_TRAIN_COUNT) = 0;
+	FIELD_SHORT(dec, V29DEC_SHORT_001A) = 0;
+	FIELD_SHORT(dec, V29DEC_ANGLE_PREV) = 0;
+	FIELD_SHORT(dec, V29DEC_SYM_COUNT) = 0;
+	FIELD_INT(rx, V29RX_INT_0004) = 1;
+	FIELD_INT(rx, V29RX_INT_0008) = 1;
+	FIELD_INT(rx, V29RX_INT_000C) = 0;
+	FIELD_INT(rx, V29RX_INT_0010) = 0;
+	FIELD_INT(rx, V29RX_INT_0014) = 1;
+	FIELD_INT(rx, V29RX_FLAGS_0018) = 1;
+	FIELD_INT(rx, V29RX_INT_001C) = 0;
+	FIELD_INT(rx, V29RX_INT_0020) = 1;
+	FIELD_INT(rx, V29RX_INT_0024) = 0;
+
+	/* ---- the handle -------------------------------------------------- */
+
+	rx = FIELD_PTR(modem, V29_OBJ_RX);
+
+	FIELD_INT(modem, V29_OBJ_STATUS) = 0;
+	FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_CREATE_BITS;
+	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) = V29RX_STATUS_START;
+
+	FIELD_PTR(modem, V29_OBJ_EQ_OUT_I) = RX_FSE(rx)->out_i;
+	FIELD_PTR(modem, V29_OBJ_EQ_OUT_Q) = RX_FSE(rx)->out_q;
+	FIELD_PTR(modem, V29_OBJ_EQ_NOUT) = &RX_FSE(rx)->n_out;
+	FIELD_PTR(modem, V29_OBJ_EQ_ICOEFF) = RX_FSE(rx)->icoeff;
+	FIELD_PTR(modem, V29_OBJ_EQ_QCOEFF) = RX_FSE(rx)->qcoeff;
+	FIELD_SHORT(modem, V29_OBJ_EQ_TAPS) = RX_FSE(rx)->cfg.taps;
+
+	FIELD_SHORT(modem, V29_OBJ_SHORT_003C) = 0;
+	FIELD_SHORT(modem, V29_OBJ_SHORT_0048) = 0;
+	FIELD_INT(modem, V29_OBJ_INT_0034) = 0;
+	FIELD_INT(modem, V29_OBJ_INT_0038) = 0;
+	FIELD_INT(modem, V29_OBJ_INT_0040) = 0;
+	FIELD_INT(modem, V29_OBJ_INT_0044) = 0;
+
+	return modem;
+}
 
 /*
  * ---------------------------------------------------------------------------
@@ -157,9 +539,6 @@ V29RX_delete(void *modem)
 
 	sysdep_free(modem);
 }
-
-/* The decoder block, `fse->cfg.owner`, and the receive block's rx + 0x28. */
-#define DEC(rx)		((void *)FIELD((rx), V29RX_DEC))
 
 /*
  * ---------------------------------------------------------------------------
@@ -633,10 +1012,6 @@ RxHdxErrorV29(void *modem, short *in, short *out, unsigned short *count)
 	return 0;
 }
 
-/* Install a receive state handler.  See `V29DET_HANDLER` in v29fax.h. */
-#define SET_HANDLER(det, fn)						\
-	(*(v29_rx_state_fn *)(void *)FIELD((det), V29DET_HANDLER) = (fn))
-
 /*
  * ---------------------------------------------------------------------------
  * RxNextStateV29 -- .text 0x0a4100, 467 bytes.
@@ -760,8 +1135,9 @@ RxNextStateV29(void *modem)
 		 * arms all write it.
 		 */
 		FIELD_BYTE(modem, V29_OBJ_STATUS_B0) =
-			FIELD_USHORT(DET(modem), V29DET_SHORT_000C) != 0
-				? V29RX_STATUS_DONE_A : V29RX_STATUS_DONE_B;
+			FIELD_USHORT(DET(modem), V29DET_RATE) != V29_RATE_7200
+				? V29RX_STATUS_DATA_9600
+				: V29RX_STATUS_DATA_7200;
 		break;
 
 	default:
@@ -884,8 +1260,8 @@ RxHdxPrtcolV29(void *modem, short *in, short *out, unsigned short *count)
 		return 0;
 
 	FIELD_BYTE(modem, V29_OBJ_STATUS_B0) =
-		FIELD_USHORT(DET(modem), V29DET_SHORT_000C) != 0
-			? V29RX_STATUS_DONE_A : V29RX_STATUS_DONE_B;
+		FIELD_USHORT(DET(modem), V29DET_RATE) != V29_RATE_7200
+			? V29RX_STATUS_DATA_9600 : V29RX_STATUS_DATA_7200;
 
 	if (GetSNRV29(modem) <= V29RX_SNR_THRESHOLD)
 		FIELD_INT(modem, V29_OBJ_STATUS) |= V29_STATUS_LOW_SNR;

@@ -11904,3 +11904,49 @@ type, one home, applied to a prototype). Declaring it `short` there would move
 does for its two and produces the same `test %ax,%ax`. The two readings agree
 over every value the function can return, which is 0 or 1, so nothing
 observable turns on it; `test/unit/t_v29hdx.c` drives both.
+
+## D1173 `V29RX_create`'s rate switch has no default arm for the decoder-error limit, so an unknown bit rate leaves it holding the allocator's contents
+
+The constructor makes two switches on the same rate value and only one of them
+is total. The first, which fills `V29DET_RATE`, has three arms and its default
+stores 1. The second, at 0x9b2d2, has two:
+
+    rate == 0 -> V29RX_DEC_ERROR_LIMIT = 0x320     (0x9b422)
+    rate == 1 -> V29RX_DEC_ERROR_LIMIT = 0x2bc     (0x9b570)
+    otherwise -> nothing is stored
+
+`V29DET_RATE` cannot in fact hold a third value, because the first switch just
+constrained it -- so the arm is unreachable as the function stands. It is still
+the object's control flow and it is still a hole: the field is compared by
+`DataCarrierDetectV29`, so on a freshly allocated receive block an unwritten
+one would be whatever `sysdep_malloc` returned, and on a reused instance it
+would be the previous session's limit.
+
+**Status:** reproduced. `src/fax/v29.c` writes the two arms and an empty
+`default:`, and `test/unit/t_v29fax.c` drives the constructor at both rates and
+compares the field against `ref_V29RX_create`'s.
+
+## D1174 `V29RX_create` carries TWO reset flags, and a handle that outlives its receive block re-initialises four FPM modules over uninitialised memory
+
+The object keeps them in two places -- `%edi` for the detection block's and
+`0x1c(%esp)` for the handle's -- and hands them to different modules:
+
+    detection block freshly allocated   FPM_AGC_init on the V.21 gain control
+    handle freshly allocated            FPM_MRF_init, FPM_AGC_init on the
+                                        input gain control, FPM_SRE_init,
+                                        FPM_FSE_init
+
+The receive block has no flag of its own. So calling `V29RX_create` with a
+handle that already exists but whose `V29_OBJ_RX` is NULL allocates a fresh
+0x4f6c-byte block and then passes `reset = 0` to the four modules that live in
+it -- which is exactly the case those modules' `reset` argument exists to
+distinguish, and they will re-initialise over `sysdep_malloc`'s contents.
+
+Nothing reconstructed reaches that state: `V29RX_delete` frees the handle
+along with everything else, so a handle whose receive block is NULL can only be
+built by a caller doing it deliberately.
+
+**Status:** reproduced -- two locals, passed exactly as the object passes them.
+`test/unit/t_v29fax.c` drives all four combinations of the two flags, including
+that one, and compares the whole receive and detection blocks against
+`ref_V29RX_create`'s afterwards.
