@@ -11155,9 +11155,9 @@ abandoned them. `t_class1handlers` drives both outcomes and asserts each
 fired FROM THE REFERENCE's own `async_locked` -- a window whose bits 16..23
 are all ones for the give-up, and one with a zero among them for the lock.
 
-## D1070 ⚠ both ring writers clear `vmi->int_0018` only when the WHOLE request was taken
+## D1070 ⚠ both ring writers clear `vmi->underrun` (`int_0018` when this was written; finding F9195 named it) only when the WHOLE request was taken
 
-`faxvmi_write_fifo` and `faxvmi_write_frame` hold `vmi->int_0018` in a
+`faxvmi_write_fifo` and `faxvmi_write_frame` hold `vmi->underrun` in a
 register across their copy loop rather than storing zero inside it:
 
     968f6:  8b 53 18        mov    0x18(%ebx),%edx       ; before the loop
@@ -11175,14 +11175,14 @@ so there are three outcomes and they are all different:
 the store is explicit: 0x96ba5 saves the source cursor and jumps to 0x96b05,
 past the `mov %edx,0x18(%ebx)` at 0x96b02.
 
-The obvious spelling -- `vmi->int_0018 = 0;` as the last statement of the loop
+The obvious spelling -- `vmi->underrun = 0;` as the last statement of the loop
 body -- agrees on the first and third outcomes and DISAGREES on the second,
 leaving zero where the object leaves the old value. That is a behavioural
 difference, not a code-generation one, so the register-held flag with a `goto`
 past the store is the reconstruction and not a stylistic choice.
 
 **Status:** reproduced. `t_faxunframe` counts partial writes over a non-zero
-`int_0018` FROM THE REFERENCE's own answers and asserts the count is not zero,
+`underrun` FROM THE REFERENCE's own answers and asserts the count is not zero,
 so the arm that separates the two spellings is known to have run.
 
 ## D1071 ⚠ `faxvmi_write_frame` appends the FCS with no fullness test at all
@@ -11725,3 +11725,79 @@ A data symbol's bytes do not depend on its translation unit, so moving them is
 free and it cannot be measured. This is D1100 and D1102 a third time, and the
 same resolution: record it rather than pretend the layout is settled.
 *unmeasured, and unmeasurable by any tier here.*
+## D1120 ⚠ the last refill of an async zero run sends a SPACE where its own assignment says MARK
+
+`faxvmi_asyc_pack`'s refill has four arms and three of them set a mask. The
+one that does not is the arm that ENDS a zero run:
+
+    95904:  movl $0x0,0x38(%ebx)   ; zero_run_send = 0
+    9590b:  mov  $0x1,%eax
+    95910:  mov  %eax,0x14(%esp)   ; word = 1
+    95914:  jmp  958a0             ; ... with %edx, the mask, still ZERO
+
+Every other arm pairs its `word` with a mask that selects a bit of it: the
+countdown arm sets `word = 0, mask = 1`, the empty-ring arm sets
+`word = 1, mask = 1`, and the character arm sets `word = the ten-bit
+character, mask = 0x200`. This one sets `word = 1` -- which in the empty-ring
+arm means "send a mark" -- and leaves the mask at zero, so the bit actually
+emitted at 0x958a7 is `word & 0` and the accumulator takes a ZERO.
+
+The bit count is unaffected: one bit is emitted either way, and the next
+iteration finds the mask still zero, `zero_run_send` now clear, and refills
+from the ring. So the whole of the difference is that the bit closing a break
+is a space rather than the mark the code reads as intending, which lengthens
+every break by exactly one bit time.
+
+**Status:** reproduced. `src/fax/faxvmi.c` writes the four arms as the object
+has them, with the missing `mask = 1` marked rather than supplied.
+`t_faxpack` drives it deliberately -- a third of the async cases plant
+`zero_run_send` with a run length of 0..3, short enough that the ending arm is
+reached inside the block -- and counts the cases where the reference's own
+`zero_run_send` came back cleared, asserting that count is not zero.
+
+## D1121 ⚠ `faxvmi_hdlc_frame`'s trace walks the ring from an UNWRAPPED `rd + 1`
+
+Both of the loops in `faxvmi_hdlc_frame`'s preamble start at `rd + 1` without
+putting that first index through the wrap the loop body applies to every
+later one:
+
+    95bba:  movzwl 0x6(%esi),%eax    ; rd
+    95bbe:  lea    0x1(%eax),%ebx    ; i = rd + 1  -- no wrap
+    95bd5:  movzwl 0x8(%esi),%edx    ; and the body's wrap is
+    95bc3:  ... setg/neg/and ...     ;   i = (fifo_size > i+1) ? i+1 : 0
+
+and the three-octet copy at 0x95c2a does exactly the same. So with
+`rd == fifo_size - 1` the first element read is `fifo[fifo_size]`, one past
+the ring, and the second read wraps correctly to `fifo[0]`. Every later index
+is in range.
+
+The read is the only consequence: the value goes to `dsplibs_debug_printf` in
+the first loop and into a three-byte local in the second, and neither feeds
+anything the object acts on -- the second's only consumer is the frame name
+in another trace line. **The bit engine below is unaffected**, because it
+re-reads `framer->rd` and applies the wrap on every fetch (0x95dd8, 0x95e20).
+
+**Status:** reproduced. `src/fax/faxvmi.c` starts both loops at
+`(unsigned int)fr->rd + 1` with the wrap only in the body, as the object has
+it. `t_faxpack` sizes the ring array with a guard region past `fifo_size` and
+compares it, and drives `rd == fifo_size - 1` deliberately, so the one-past
+read happens on both sides over identical bytes and the guard proves neither
+side wrote there.
+
+## D1122 ⚠ `vmi_pack`, `vmi_unpack` and `vmi_reverse` are file-local in the object and global here
+
+The three framing tables are `r` in `nm`, not `R` -- file-local `.rodata` at
+0x94a8, 0x94b4 and 0x94c0. Ours are global.
+
+The reason is the same as D1081's and is a property of what is written rather
+than a preference: their only reader in the object is `FAXVMI_process`, which
+this tree has not reconstructed. A `static const` array with no referent in
+its translation unit is discarded by the compiler at any optimisation level,
+so the definition would not reach the object file and could not be compared
+against the blob's copy at all. Global keeps it, and `symmap.py` globalises
+the blob's side anyway, so the comparison is entry by entry.
+
+**Status:** reproduced as a storage class, not as behaviour; nothing observes
+the difference except `nm`. It should be made `static` in the same commit that
+writes `FAXVMI_process`, which is when it acquires a reader.
+`test/unit/t_faxpack.c` compares all nine entries against `ref_vmi_*`.

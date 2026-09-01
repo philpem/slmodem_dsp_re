@@ -14,7 +14,7 @@
  *     framer->wr          -> framer->fifo    (both writers)
  *     framer->frame_len   -> framer->frame   (hdlc_unframe's octet store)
  *     framer->mask        -> selects a bit, and a wild one only reads
- *     link->rx            -> `count` elements, walked by all three unpackers
+ *     link->buf            -> `count` elements, walked by all three unpackers
  *
  * and the SHIFT REPAIR reads `framer->frame[len]`, one element past the
  * octets that were stored (D1074), so the frame array is one longer than the
@@ -122,8 +122,8 @@ plant(unsigned short mask, unsigned short bit, short flen,
 	fra.fifo_size = FIFOCAP;
 	fra.wr = wr;
 	fra.count = count;
-	fra.mask = mask;
-	fra.bit = bit;
+	fra.unpack_mask = mask;
+	fra.unpack_bit = bit;
 	fra.async_hunt = async_hunt;
 	fra.frame = framea;
 	fra.frame_size = FRAMECAP;
@@ -132,8 +132,8 @@ plant(unsigned short mask, unsigned short bit, short flen,
 	fra.ones = ones;
 	fra.in_frame = in_frame;
 
-	lka.rx = rxa;
-	lka.width = width;
+	lka.buf = rxa;
+	lka.unpack_width = width;
 
 	va.framer = &fra;
 	va.link = &lka;
@@ -149,7 +149,7 @@ plant(unsigned short mask, unsigned short bit, short flen,
 
 	frb.fifo = fifob;
 	frb.frame = frameb;
-	lkb.rx = rxb;
+	lkb.buf = rxb;
 	vb.framer = &frb;
 	vb.link = &lkb;
 }
@@ -171,64 +171,66 @@ compare(const char *what, long tag)
 	} while (0)
 
 	long a_fifo_size = fra.fifo_size, b_fifo_size = frb.fifo_size;
-	long a_short_0006 = fra.short_0006, b_short_0006 = frb.short_0006;
+	long a_rd = fra.rd, b_rd = frb.rd;
 	long a_wr = fra.wr, b_wr = frb.wr;
 	long a_count = fra.count, b_count = frb.count;
-	long a_int_000c = fra.int_000c, b_int_000c = frb.int_000c;
-	long a_int_0010 = fra.int_0010, b_int_0010 = frb.int_0010;
-	long a_int_0014 = fra.int_0014, b_int_0014 = frb.int_0014;
-	long a_int_0018 = fra.int_0018, b_int_0018 = frb.int_0018;
-	long a_short_001c = fra.short_001c, b_short_001c = frb.short_001c;
-	long a_short_001e = fra.short_001e, b_short_001e = frb.short_001e;
-	long a_mask = fra.mask, b_mask = frb.mask;
-	long a_word = fra.word, b_word = frb.word;
-	long a_acc = fra.acc, b_acc = frb.acc;
-	long a_bit = fra.bit, b_bit = frb.bit;
+	long a_residue = fra.residue, b_residue = frb.residue;
+	long a_pack_mask = fra.pack_mask, b_pack_mask = frb.pack_mask;
+	long a_pack_word = fra.pack_word, b_pack_word = frb.pack_word;
+	long a_pack_acc = fra.pack_acc, b_pack_acc = frb.pack_acc;
+	long a_pack_bit = fra.pack_bit, b_pack_bit = frb.pack_bit;
+	long a_pad_001e = fra.pad_001e, b_pad_001e = frb.pad_001e;
+	long a_unpack_mask = fra.unpack_mask, b_unpack_mask = frb.unpack_mask;
+	long a_unpack_word = fra.unpack_word, b_unpack_word = frb.unpack_word;
+	long a_unpack_acc = fra.unpack_acc, b_unpack_acc = frb.unpack_acc;
+	long a_unpack_bit = fra.unpack_bit, b_unpack_bit = frb.unpack_bit;
 	long a_short_002e = fra.short_002e, b_short_002e = frb.short_002e;
 	long a_async_hunt = fra.async_hunt, b_async_hunt = frb.async_hunt;
-	long a_short_0034 = fra.short_0034, b_short_0034 = frb.short_0034;
-	long a_int_0038 = fra.int_0038, b_int_0038 = frb.int_0038;
+	long a_zero_run_bits = fra.zero_run_bits, b_zero_run_bits = frb.zero_run_bits;
+	long a_zero_run_send = fra.zero_run_send, b_zero_run_send = frb.zero_run_send;
 	long a_zero_run_seen = fra.zero_run_seen;
 	long b_zero_run_seen = frb.zero_run_seen;
 	long a_frame_size = fra.frame_size, b_frame_size = frb.frame_size;
-	long a_short_0046 = fra.short_0046, b_short_0046 = frb.short_0046;
+	long a_pack_frame_left = fra.pack_frame_left;
+	long b_pack_frame_left = frb.pack_frame_left;
 	long a_frame_len = fra.frame_len, b_frame_len = frb.frame_len;
 	long a_flags_wanted = fra.flags_wanted;
 	long b_flags_wanted = frb.flags_wanted;
-	long a_int_004c = fra.int_004c, b_int_004c = frb.int_004c;
+	long a_pack_flagging = fra.pack_flagging;
+	long b_pack_flagging = frb.pack_flagging;
 	long a_ones = fra.ones, b_ones = frb.ones;
 	long a_in_frame = fra.in_frame, b_in_frame = frb.in_frame;
 
 	CMP(fifo_size);
-	CMP(short_0006);
+	CMP(rd);
 	CMP(wr);
 	CMP(count);
-	CMP(int_000c);
-	CMP(int_0010);
-	CMP(int_0014);
-	CMP(int_0018);
-	CMP(short_001c);
-	CMP(short_001e);
-	CMP(mask);
-	CMP(word);
-	CMP(acc);
-	CMP(bit);
+	CMP(residue);
+	CMP(pack_mask);
+	CMP(pack_word);
+	CMP(pack_acc);
+	CMP(pack_bit);
+	CMP(pad_001e);
+	CMP(unpack_mask);
+	CMP(unpack_word);
+	CMP(unpack_acc);
+	CMP(unpack_bit);
 	CMP(short_002e);
 	CMP(async_hunt);
-	CMP(short_0034);
-	CMP(int_0038);
+	CMP(zero_run_bits);
+	CMP(zero_run_send);
 	CMP(zero_run_seen);
 	CMP(frame_size);
-	CMP(short_0046);
+	CMP(pack_frame_left);
 	CMP(frame_len);
 	CMP(flags_wanted);
-	CMP(int_004c);
+	CMP(pack_flagging);
 	CMP(ones);
 	CMP(in_frame);
 #undef CMP
 
-	snprintf(msg, sizeof(msg), "%s: vmi->int_0018 (%%ld)", what);
-	diff_eq_int(msg, (long)vb.int_0018, (long)va.int_0018, tag);
+	snprintf(msg, sizeof(msg), "%s: vmi->underrun (%%ld)", what);
+	diff_eq_int(msg, (long)vb.underrun, (long)va.underrun, tag);
 	snprintf(msg, sizeof(msg), "%s: vmi->overflow (%%ld)", what);
 	diff_eq_int(msg, (long)vb.overflow, (long)va.overflow, tag);
 	snprintf(msg, sizeof(msg), "%s: vmi->status (%%ld)", what);
@@ -825,7 +827,7 @@ run_hdlc_d1073(void)
  * one carries on: `mask`, `word`, `acc`, `bit`, `ones`, `frame_len` and the
  * async hunt all survive the return.  Re-planting before every call compares
  * the SAVE but never the RESTORE, and the injection ritual proved it -- a
- * mutant that wrote the input cursor back to `link->rx` (D1072) survived
+ * mutant that wrote the input cursor back to `link->buf` (D1072) survived
  * every single-call suite, because a fixture that re-points `rx` each time
  * cannot see it.  F8790's argument with a different field.
  *
@@ -864,7 +866,7 @@ run_multicall(void)
 			long tag = (long)(t * 10 + k);
 			int ra, rb;
 
-			if (fra.mask != 0)
+			if (fra.unpack_mask != 0)
 				multi_carried++;
 
 			if (which == 0) {
@@ -919,7 +921,7 @@ run_write_fifo(void)
 		fill(srca, (unsigned)sizeof(srca));
 		memcpy(srcb, srca, sizeof(srca));
 
-		before = va.int_0018;
+		before = va.underrun;
 		pa = srca;
 		pb = srcb;
 		ra = ref_faxvmi_write_fifo(&va, &pa, count);
@@ -940,9 +942,9 @@ run_write_fifo(void)
 			wf_whole++;
 		if (ra > 0 && ra < (int)count)
 			wf_partial++;
-		if (va.int_0018 == 0 && before != 0)
+		if (va.underrun == 0 && before != 0)
 			wf_cleared++;
-		if (ra < (int)count && ra > 0 && va.int_0018 == before
+		if (ra < (int)count && ra > 0 && va.underrun == before
 		    && before != 0)
 			wf_untouched++;
 	}
@@ -952,13 +954,13 @@ run_write_fifo(void)
 		    1, (long)wf_whole);
 	diff_eq_int("write_fifo: partial writes happened (%ld)", wf_partial > 0,
 		    1, (long)wf_partial);
-	diff_eq_int("write_fifo: int_0018 was cleared (%ld)", wf_cleared > 0, 1,
+	diff_eq_int("write_fifo: underrun was cleared (%ld)", wf_cleared > 0, 1,
 		    (long)wf_cleared);
 	/*
 	 * D1070, and it is the whole point of the register-held flag: a
 	 * partial write leaves the field ALONE.  Counted from the reference.
 	 */
-	diff_eq_int("D1070: a partial write left int_0018 alone (%ld)",
+	diff_eq_int("D1070: a partial write left underrun alone (%ld)",
 		    wf_untouched > 0, 1, (long)wf_untouched);
 	return diff_end();
 }
@@ -1001,7 +1003,7 @@ run_write_frame(void)
 		plant(0, 0, 0, 0, 0, 0, 8, 64, wr, occ, 0);
 		build_frames((int)count + 2, (int)(3 + rnd() % 12));
 
-		before = va.int_0018;
+		before = va.underrun;
 		pa = srca;
 		pb = srcb;
 		ra = ref_faxvmi_write_frame(&va, &pa, count);
@@ -1020,7 +1022,7 @@ run_write_frame(void)
 			wr_stopped++;
 		if (ra > 0 && ra < (int)count)
 			wr_partial++;
-		if (ra > 0 && va.int_0018 == before && before != 0)
+		if (ra > 0 && va.underrun == before && before != 0)
 			wr_untouched++;
 	}
 	diff_eq_int("write_frame: frames were written (%ld)", wr_frames > 0, 1,
