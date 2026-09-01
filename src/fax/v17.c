@@ -5,11 +5,13 @@
  * Reconstructed from dsplibs.o:
  *
  *   V17RX_delete      .text 0x097b40  251
+ *   V17TX_delete      .text 0x098e00  107
  *   V17RX_modem       .text 0x09ff80  127
  *   V17RX_status      .text 0x0a0910  190
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
  *   SetEncoderV17     .text 0x0a0a00   90
+ *   V17TX_modem       .text 0x0a0e40  182
  *   V17TX_status      .text 0x0a1bd0  106
  *   DemodDataV17      .text 0x0a50a0  415
  *   DescrambleDataV17 .text 0x0a5240   30
@@ -65,11 +67,13 @@
 #include "dsplib/v17fax.h"
 
 #include "dsplib/debug.h"
+#include "dsplib/faxfifo.h"
 #include "dsplib/fpm.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_sdm.h"
 #include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_tone.h"
@@ -125,6 +129,31 @@ V17RX_delete(void *modem)
 	sysdep_free(FIELD_PTR(CTL(modem), V17RXC_BUF2));
 	FPM_MTD_delete((struct fpm_mtd *)FIELD_PTR(CTL(modem), V17RXC_MTD2));
 	sysdep_free(CTL(modem));
+
+	sysdep_free(modem);
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * V17TX_delete -- .text 0x098e00, 107 bytes.  See v17fax.h; the object's
+ * literal 1 before `FPM_PPS_free` is F8876 again and is not reproduced.
+ */
+void
+V17TX_delete(void *modem)
+{
+	FPM_PPS_free((struct fpm_pps *)(void *)
+			FIELD(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PPS));
+	sysdep_free(FIELD_PTR(FIELD_PTR(modem, V17TX_OBJ_FP), V17FP_PTR_0010));
+	sysdep_free(FIELD_PTR(modem, V17TX_OBJ_FP));
+
+	SGD_delete((struct sgd *)
+			FIELD_PTR(FIELD_PTR(modem, V17TX_OBJ_PARAMS),
+				  V17TXP_SGD));
+	FIFO_delete((struct fax_fifo *)
+			FIELD_PTR(FIELD_PTR(modem, V17TX_OBJ_PARAMS),
+				  V17TXP_FIFO));
+	sysdep_free(FIELD_PTR(modem, V17TX_OBJ_PARAMS));
 
 	sysdep_free(modem);
 }
@@ -288,6 +317,63 @@ SetEncoderV17(void *modem, short which, short arg)
 	default:
 		break;
 	}
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * V17TX_modem -- .text 0x0a0e40, 182 bytes.  See v17fax.h for the two arms,
+ * the budget and why `in` does not advance while `out` does.
+ */
+int
+V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
+{
+	void *prm;
+	unsigned short taken;
+	short budget;
+	short total;
+
+	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+
+	*FIELD(modem, V17TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V17TX_RESULT_B1_BIT1;
+
+	if (AT_I(prm, V17TXP_INT_0008) == 0)
+		taken = (unsigned short)FIFO_write(
+				(struct fax_fifo *)
+					FIELD_PTR(prm, V17TXP_FIFO),
+				in, *count);
+	else
+		taken = *count;
+
+	budget = V17TX_MODEM_BUDGET;
+	total = 0;
+	do {
+		short got;
+
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		got = (*(v17tx_process_fn *)(void *)
+				FIELD(prm, V17TXP_PROCESS))
+					(modem, in, out, &budget);
+
+		out += got;
+		total = (short)(total + got);
+	} while (budget > 0);
+
+	if (*count != taken) {
+		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT1;
+		/*
+		 * A BYTE store into the low byte of the int this function
+		 * returns, which is what the object encodes
+		 * (`movb $0x9,0x20(%edi)`) and is why it cannot be written
+		 * through `AT_I`.
+		 */
+		*FIELD(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_09;
+	}
+
+	*count = (unsigned short)total;
+
+	return AT_I(modem, V17TX_OBJ_RESULT);
 }
 
 /* --------------------------------------------------------------------- */

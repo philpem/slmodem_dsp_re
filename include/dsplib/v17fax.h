@@ -61,7 +61,10 @@
 
 #include "dsplib/v17data.h"	/* V17TX_OBJ_FP, V17FP_SMC, V17FP_ENCODER_SEL */
 
+struct fax_fifo;
+struct fpm_pps;
 struct fpm_sdm;
+struct sgd;
 
 /* ------------------------------------------------------------------------ */
 /* The status block                                                         */
@@ -192,6 +195,72 @@ struct v17_status {
  * the absolute encoder is not; what it means is not.
  */
 #define V17FP_SMC_SHORT_06	0x3a
+
+/*
+ * A pointer the private block owns, released by `V17TX_delete` between the
+ * shaper and the block itself.  NEUTRAL: `sysdep_free` types nothing, and
+ * nothing else read here touches it.
+ */
+#define V17FP_PTR_0010		0x10
+
+/*
+ * The int `V17TX_modem` returns, and the flag byte inside it.
+ *
+ * IT IS THE SAME SHAPE AS THE RECEIVER'S `V17RX_OBJ_RESULT` / `_B1` PAIR, byte
+ * for byte: the object clears one bit of the byte at +0x21 on entry, sets that
+ * same bit and stores a literal 9 into the BYTE at +0x20 on one condition, and
+ * returns the INT at +0x20.  So +0x21 is byte 1 of the four bytes at +0x20 and
+ * the function both modifies and returns the same word, which is exactly what
+ * `V17RX_modem` does 0x28 into the other instance.
+ *
+ * Neutral, like its receive-side twin.  What the bit indicates is not
+ * established; what the 9 means is not established either, and it is spelled
+ * as the object spells it -- a BYTE store, which is why it cannot be written
+ * through the int.  Named by VALUE per CLAUDE.md.
+ *
+ * The CONDITION is established: the flag and the 9 are written only when the
+ * word count the caller asked for differs from what `FIFO_write` accepted, so
+ * they report a transmit queue that would not take the whole block.  On the
+ * non-FIFO arm the two are equal by construction and neither is ever written.
+ */
+#define V17TX_OBJ_RESULT	0x20
+#define V17TX_OBJ_RESULT_B1	0x21
+#define V17TX_RESULT_B1_BIT1	0x02
+#define V17TX_RESULT_BYTE_09	9
+
+/* ------------------------------------------------------------------------ */
+/* Inside the block at V17TX_OBJ_PARAMS                                     */
+
+/*
+ * `v17data.h` describes this block as "a parameter block the instance points
+ * at rather than owns", which is what `V17TX_create` alone could say.
+ * `V17TX_delete` SETTLES THE OWNERSHIP THE OTHER WAY: it releases the block's
+ * `SGD`, its `fax_fifo` and then the block itself, so the transmitter owns it.
+ * The name in `v17data.h` is left alone -- renaming it is a change to a header
+ * this batch does not own -- and the correction is recorded here and in
+ * finding F9106 rather than by two headers disagreeing.
+ *
+ * `V17TXP_FIFO` and `V17TXP_SGD` are TYPED BY THEIR CALLEES, which is rank 2:
+ * +0x00 is `FIFO_write`'s and `FIFO_delete`'s first argument and +0x04 is
+ * `SGD_delete`'s.  The other two are neutral -- +0x08 is an int `V17TX_modem`
+ * tests for zero to choose between queueing the caller's block and passing it
+ * straight through, and +0x14 is a dispatch slot planted at construction
+ * (`call *0x14(%edx)` carries no relocation, so nothing here can say which
+ * function lands in it).
+ */
+#define V17TXP_FIFO		0x00
+#define V17TXP_SGD		0x04
+#define V17TXP_INT_0008		0x08
+#define V17TXP_PROCESS		0x14
+
+/*
+ * What `V17TX_modem` initialises its inner loop's budget to, ONCE, before the
+ * loop rather than per iteration.  From the object's `movw $0x30,0x1a(%esp)`.
+ * The dispatch slot is what decrements it, and the loop runs while it is
+ * STRICTLY POSITIVE as a signed short -- `cmpw $0x0` with `jg`, so a slot that
+ * overshot into negative territory stops the loop rather than wrapping it.
+ */
+#define V17TX_MODEM_BUDGET	0x30
 
 /*
  * The three values `SetEncoderV17` will accept, which is what BOUNDS the
@@ -624,6 +693,29 @@ struct v17_status {
 typedef short (*v17rx_process_fn)(void *modem, short *in, short *out,
 				  unsigned short *count);
 
+/*
+ * `V17TX_modem`'s inner call, and it is NOT the same signature.
+ *
+ * Four slots written, as on the receive side, and the first three are the
+ * instance and the caller's two buffers unchanged -- but the FOURTH is
+ * `lea 0x1a(%esp)`, the address of a `short` LOCAL, not the caller's count.
+ * So the transmitter's slot is handed a per-call budget the caller never sees,
+ * and the caller's `count` is read once before the loop and written once
+ * after it.
+ *
+ * `in` IS NOT ADVANCED between iterations and `out` IS.  Both are the
+ * object's: `0x34(%esp)` is reloaded unchanged every time round, while the
+ * output pointer accumulates `2 * got`.  The result is sign-extended with
+ * `cwtl` before it is added to the running total, so it is `short` and that is
+ * forced.
+ *
+ * `in` is `unsigned short *` because `FIFO_write` -- which the other arm hands
+ * the very same pointer to -- declares its source that way.  Rank 2, a callee
+ * that types it, and not usage inference.
+ */
+typedef short (*v17tx_process_fn)(void *modem, unsigned short *in, short *out,
+				  short *budget);
+
 /* ------------------------------------------------------------------------ */
 /* The functions                                                            */
 
@@ -664,6 +756,41 @@ int V17RX_modem(void *modem, short *in, short *out, unsigned short *count);
  * reproduce.
  */
 void V17RX_delete(void *modem);
+
+/*
+ * Tear the transmit instance down.  Seven releases, in the object's order: the
+ * shaper and the two things the private block owns, then the `SGD` and the
+ * `fax_fifo` the block at `V17TX_OBJ_PARAMS` owns and that block itself, then
+ * the instance as a sibling `jmp`.
+ *
+ * The object plants a literal 1 in the second argument slot before
+ * `FPM_PPS_free`, which takes one argument and reads no frame slot past the
+ * first.  Not reproduced, for F8876's reason and no other.
+ */
+void V17TX_delete(void *modem);
+
+/*
+ * Drive the transmitter for one caller block, and report what the instance's
+ * result word says.
+ *
+ * TWO ARMS ON THE WAY IN, chosen by `V17TXP_INT_0008`.  Zero queues the
+ * caller's `count` words through `FIFO_write` and remembers how many it took;
+ * non-zero remembers `count` itself and touches the FIFO not at all.  What is
+ * remembered is compared against `*count` AFTER the loop, and a mismatch is
+ * what sets `V17TX_RESULT_B1_BIT1` and writes `V17TX_RESULT_BYTE_09` -- so on
+ * the second arm the comparison is between a value and itself and neither is
+ * ever written.  That is the object's, not a simplification.
+ *
+ * THE LOOP IS A `do`/`while` ON A LOCAL, NOT ON THE CALLER'S COUNT.  See
+ * `v17tx_process_fn`: the budget starts at `V17TX_MODEM_BUDGET`, is set ONCE
+ * before the loop, and the slot decrements it.  `count` is IN/OUT and changes
+ * meaning across the call exactly as `V17RX_modem`'s does -- on entry the
+ * number of input words, on return the total the slot produced -- and the
+ * total is a `short` that wraps, which the object forces with `cwtl` on every
+ * iteration.
+ */
+int V17TX_modem(void *modem, unsigned short *in, short *out,
+		unsigned short *count);
 
 /*
  * Fill a status block from the RECEIVE instance, or report that there was

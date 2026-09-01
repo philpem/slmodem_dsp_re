@@ -109,10 +109,12 @@
 #include "dsplib/v17fax.h"
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
+#include "dsplib/faxfifo.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_sdm.h"
 #include "dsplib/fpm_sre.h"
 #include "dsplib/sdm.h"
@@ -122,6 +124,11 @@
 extern int ref_V17RX_modem(void *modem, short *in, short *out,
 			   unsigned short *count);
 extern void ref_V17RX_delete(void *modem);
+extern void ref_V17TX_delete(void *modem);
+extern int ref_V17TX_modem(void *modem, unsigned short *in, short *out,
+			   unsigned short *count);
+extern int ref_FIFO_write(struct fax_fifo *f, unsigned short *src,
+			  unsigned short count);
 extern int ref_V17RX_status(void *modem, struct v17_status *status);
 extern void ref_ScrambleDataV17(void *modem, unsigned short *data,
 				unsigned short count);
@@ -2972,6 +2979,511 @@ run_demod(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* V17TX_delete                                                          */
+
+/*
+ * The transmit side's counterpart, and the same argument as `V17RX_delete`'s:
+ * what is checkable is which pointers were released.  Three of the seven
+ * releases are the fixture's own static blocks and land in `bad_free`; the
+ * other four allocations, plus the two the `SGD` and the `fax_fifo` own
+ * internally, are probed with `harness_alloc_ordinal`.
+ *
+ * The shaper at `V17FP_PPS` is zeroed so `FPM_PPS_free` releases two null
+ * pointers and lands in `free_null` rather than chasing the block's
+ * pseudorandom filler.  That the object calls it AT ALL is what `free_null`
+ * counts.
+ */
+#define N_TXPROBE	6
+#define TXFIFO_ELEMS	32
+
+static void
+txdelete_build(struct fix *f, unsigned seed, void *probe[N_TXPROBE])
+{
+	struct sgd *s;
+	struct fax_fifo *ff;
+
+	fixture(f, seed);
+
+	memset(f->fp + V17FP_PPS, 0, sizeof(struct fpm_pps));
+	put_ptr(f->fp, V17FP_PTR_0010, sysdep_malloc(DEL_BUF));
+
+	s = ref_SGD_create(0, 0);
+	put_ptr(f->prm, V17TXP_SGD, s);
+
+	ff = (struct fax_fifo *)sysdep_malloc(sizeof(struct fax_fifo));
+	memset(ff, 0, sizeof(*ff));
+	ff->size = TXFIFO_ELEMS;
+	ff->buf = (unsigned short *)sysdep_malloc(TXFIFO_ELEMS
+						  * sizeof(unsigned short));
+	put_ptr(f->prm, V17TXP_FIFO, ff);
+
+	probe[0] = get_ptr(f->fp, V17FP_PTR_0010);
+	probe[1] = s;
+	probe[2] = s->hist;
+	probe[3] = ff;
+	probe[4] = ff->buf;
+	/*
+	 * The sixth probe is the ONE THING THIS FUNCTION MUST NOT FREE that is
+	 * also allocated.  `V17TXP_INT_0008 + 4` is in the same parameter block
+	 * as the queue and the sequence detector and the delete path does not
+	 * touch it; without it, "everything the delete owns was released" would
+	 * pass equally well for a function that walked the block freeing every
+	 * word in it.
+	 */
+	probe[5] = sysdep_malloc(DEL_BUF);
+	put_ptr(f->prm, V17TXP_INT_0008 + 4, probe[5]);
+}
+
+static long txdel_released, txdel_probes, txdel_kept;
+
+static int
+run_txdelete(void)
+{
+	void *pa[N_TXPROBE], *pb[N_TXPROBE];
+	int liva[N_TXPROBE], livb[N_TXPROBE];
+	struct alloc_log before, mid, after;
+	int i, s, sum;
+	static const unsigned seeds[] = { 0x0de1e7b0u, 0x0de1e7b1u };
+
+	diff_begin("V17TX_delete");
+
+	for (s = 0; s < (int)(sizeof(seeds) / sizeof(seeds[0])); s++) {
+		unsigned seed = spread(seeds[s], s);
+
+		txdelete_build(&ma, seed, pa);
+		before = harness_alloc;
+		ref_V17TX_delete(ma.tobj);
+		mid = harness_alloc;
+		for (i = 0; i < N_TXPROBE; i++)
+			liva[i] = harness_alloc_ordinal(pa[i]) != 0;
+
+		txdelete_build(&mb, seed, pb);
+		V17TX_delete(mb.tobj);
+		after = harness_alloc;
+		for (i = 0; i < N_TXPROBE; i++)
+			livb[i] = harness_alloc_ordinal(pb[i]) != 0;
+
+		sum = 0;
+		for (i = 0; i < N_TXPROBE; i++) {
+			diff_eq_int("probe %ld still live", livb[i], liva[i],
+				    i);
+			txdel_probes++;
+			if (i < N_TXPROBE - 1) {
+				sum += liva[i];
+				if (liva[i] == 0)
+					txdel_released++;
+			} else if (liva[i] != 0) {
+				txdel_kept++;
+			}
+		}
+		diff_eq_int("seed %ld: everything the delete owns was released",
+			    sum, 0, s);
+		diff_eq_int("seed %ld: the scrambler was NOT released",
+			    liva[N_TXPROBE - 1], 1, s);
+
+		diff_eq_int("seed %ld: frees", after.frees - mid.frees,
+			    mid.frees - before.frees, s);
+		diff_eq_int("seed %ld: null frees",
+			    after.free_null - mid.free_null,
+			    mid.free_null - before.free_null, s);
+		diff_eq_int("seed %ld: unknown frees",
+			    after.bad_free - mid.bad_free,
+			    mid.bad_free - before.bad_free, s);
+		diff_eq_int("seed %ld: the shaper was freed",
+			    (mid.free_null - before.free_null) > 0, 1, s);
+		diff_eq_int("seed %ld: the three static blocks were freed",
+			    (mid.bad_free - before.bad_free) > 0, 1, s);
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
+/* V17TX_modem                                                           */
+
+/*
+ * The dispatch slot is a stub on BOTH sides -- it has to be, since nothing
+ * establishes which function the object plants there -- so what this measures
+ * is the loop around it: how many times it fires, with which pointers, what
+ * budget it is handed, and what the instance's result word ends up as.
+ *
+ * THE SLOT'S LOG IS WHAT MAKES THE POINTER ARITHMETIC OBSERVABLE AT ALL.  `in`
+ * does not advance and `out` does, and neither fact reaches the return value
+ * or the samples unless the calls are recorded.
+ *
+ * TWO STEP MODES, AND THE SECOND ONE EXISTS FOR TWO NAMED READINGS.  Mode 0
+ * takes 9 off the budget and writes a handful of samples, which is the
+ * ordinary shape.  Mode 1 takes 24, so the budget lands EXACTLY on zero -- the
+ * only way "the loop runs while the budget is >= 0" is distinguishable from
+ * "> 0" -- and writes 20,000 samples a call, so the running total passes
+ * 32767.
+ *
+ * TWO READINGS ARE NOT CLAIMED, AND WHY IS PART OF THE RECORD.
+ *
+ *   - "the budget reloaded every iteration rather than once before the loop".
+ *     The object sets it once (`movw $0x30,0x1a(%esp)` sits at the join of
+ *     both arms, above the loop), and a per-iteration reading DOES NOT
+ *     TERMINATE for any slot that decrements by less than the reload -- which
+ *     is a fact about the reading, not something a differential run can be
+ *     asked to measure.  Settled from the disassembly.
+ *   - "the running total not narrowed to a short".  The object narrows with
+ *     `cwtl` on every iteration, and the narrowing is UNOBSERVABLE: the total
+ *     leaves through `*count`, which is 16 bits wide, and a 32-bit sum and its
+ *     `short` truncation have the same low sixteen.  Followed because the
+ *     object encodes it, not because anything here can see it.  Finding F9107.
+ */
+#define TXM_IN		256
+#define TXM_OUT		65536
+#define TXM_BIG		20000
+
+struct txm_log {
+	int	calls;
+	long	in_off;			/* of the LAST call            */
+	long	out_off;
+	long	first_out_off;
+	long	budget_first;		/* what the slot was handed    */
+	long	raw_total;
+};
+
+static struct txm_log tlog_a, tlog_b;
+static unsigned short txm_in_a[TXM_IN], txm_in_b[TXM_IN];
+static short txm_out_a[TXM_OUT], txm_out_b[TXM_OUT];
+
+/* One FIFO per fixture, so the queue's own state is compared as well. */
+static struct fax_fifo txm_fifo[3];
+static unsigned short txm_fbuf[3][TXFIFO_ELEMS];
+
+static int txm_mode;
+
+static short
+txm_step(void *modem, unsigned short *in, short *out, short *budget)
+{
+	struct txm_log *lg;
+	unsigned short *ibase;
+	short *obase;
+	short give;
+	int k;
+
+	if (modem == (void *)ma.tobj) {
+		lg = &tlog_a;
+		ibase = txm_in_a;
+		obase = txm_out_a;
+	} else {
+		lg = &tlog_b;
+		ibase = txm_in_b;
+		obase = txm_out_b;
+	}
+
+	if (lg->calls == 0) {
+		lg->first_out_off = out - obase;
+		lg->budget_first = *budget;
+	}
+	lg->calls++;
+	lg->in_off = in - ibase;
+	lg->out_off = out - obase;
+
+	if (txm_mode == 0) {
+		give = (short)(11 + (*budget & 7));
+		*budget = (short)(*budget - 9);
+	} else {
+		give = (short)(TXM_BIG + (*budget & 7));
+		*budget = (short)(*budget - 24);
+	}
+
+	/*
+	 * The source words come from the BASE, never from `in`.  One named
+	 * wrong reading advances `in` by what the slot returned, which under
+	 * mode 1 is 20,000 -- reading through it would be out of bounds and
+	 * would measure the operating system rather than the code.
+	 */
+	for (k = 0; k < give; k++)
+		out[k] = (short)(0x1000 + ((ibase[k % TXM_IN] + k) & 0x7ff));
+
+	lg->raw_total += give;
+	return give;
+}
+
+/* The named wrong readings, one changed thing each. */
+enum txm_defect {
+	T_NONE = 0,
+	T_NO_CLEAR,		/* the entry bit is not cleared             */
+	T_WRONG_BIT,		/* bit 0 cleared instead of bit 1           */
+	T_BUDGET_31,		/* the budget starts at 0x31               */
+	T_GE_ZERO,		/* the loop runs while the budget is >= 0   */
+	T_IN_ADVANCES,		/* `in` advanced by what the slot returned  */
+	T_OUT_STILL,		/* `out` not advanced                       */
+	T_FIFO_ALWAYS,		/* the queue used whatever +0x08 says       */
+	T_FIFO_NEVER,		/* the queue never used                     */
+	T_SAVED_IS_COUNT,	/* the saved value always `*count`          */
+	T_NO_BUSY_BIT,		/* the flag bit not set on a short write    */
+	T_NO_BUSY_BYTE,		/* the literal 9 not written                */
+	T_RESULT_OFF,		/* the result word read from +0x1c          */
+	T_MAX
+};
+
+static long txm_sep[T_MAX];
+static long txm_paths[6];
+
+static int
+drive_txm(struct fix *f, unsigned short *in, short *out, unsigned short *count,
+	  enum txm_defect d)
+{
+	unsigned char *prm;
+	unsigned short taken;
+	short budget;
+	short total;
+
+	prm = (unsigned char *)get_ptr(f->tobj, V17TX_OBJ_PARAMS);
+
+	if (d != T_NO_CLEAR)
+		f->tobj[V17TX_OBJ_RESULT_B1] &= (unsigned char)
+			~((d == T_WRONG_BIT) ? 0x01 : V17TX_RESULT_B1_BIT1);
+
+	if (d == T_FIFO_NEVER
+	    || (d != T_FIFO_ALWAYS && get_i(prm, V17TXP_INT_0008) != 0))
+		taken = *count;
+	else
+		taken = (unsigned short)ref_FIFO_write(
+				(struct fax_fifo *)get_ptr(prm, V17TXP_FIFO),
+				in, *count);
+	if (d == T_SAVED_IS_COUNT)
+		taken = *count;
+
+	budget = (short)((d == T_BUDGET_31) ? 0x31 : V17TX_MODEM_BUDGET);
+	total = 0;
+	do {
+		short got;
+
+		prm = (unsigned char *)get_ptr(f->tobj, V17TX_OBJ_PARAMS);
+		got = (*(v17tx_process_fn *)(void *)(prm + V17TXP_PROCESS))
+				(f->tobj, in, out, &budget);
+
+		if (d == T_IN_ADVANCES)
+			in += got;
+		if (d != T_OUT_STILL)
+			out += got;
+		total = (short)(total + got);
+	} while ((d == T_GE_ZERO) ? (budget >= 0) : (budget > 0));
+
+	if (*count != taken) {
+		if (d != T_NO_BUSY_BIT)
+			f->tobj[V17TX_OBJ_RESULT_B1] |= V17TX_RESULT_B1_BIT1;
+		if (d != T_NO_BUSY_BYTE)
+			f->tobj[V17TX_OBJ_RESULT] = V17TX_RESULT_BYTE_09;
+	}
+
+	*count = (unsigned short)total;
+
+	return get_i(f->tobj, (d == T_RESULT_OFF) ? 0x1c : V17TX_OBJ_RESULT);
+}
+
+static unsigned long
+txm_mark(const struct fix *f, int ret, unsigned short cnt,
+	 const struct txm_log *lg, const short *out, int slot)
+{
+	unsigned long m = (unsigned long)ret;
+	int i;
+
+	m = m * 131u + cnt;
+	m = m * 131u + (unsigned long)lg->calls;
+	m = m * 131u + (unsigned long)lg->in_off;
+	m = m * 131u + (unsigned long)lg->out_off;
+	m = m * 131u + (unsigned long)lg->first_out_off;
+	m = m * 131u + (unsigned long)lg->budget_first;
+	m = m * 131u + (unsigned long)lg->raw_total;
+	m = m * 131u + f->tobj[V17TX_OBJ_RESULT];
+	m = m * 131u + f->tobj[V17TX_OBJ_RESULT_B1];
+	/* The queue's own state, so a wrong arm is caught even when the
+	 * result word happens to agree. */
+	m = m * 131u + (unsigned long)txm_fifo[slot].count;
+	m = m * 131u + (unsigned long)txm_fifo[slot].wr;
+	m = m * 131u + (unsigned long)txm_fifo[slot].rd;
+	for (i = 0; i < TXFIFO_ELEMS; i++)
+		m = m * 31u + txm_fbuf[slot][i];
+	for (i = 0; i < TXM_OUT; i++)
+		m = m * 31u + (unsigned short)out[i];
+	return m;
+}
+
+/*
+ * `gate` chooses the arm and `room` chooses whether the queue can take the
+ * whole block.  Both matter: with the FIFO always able to take everything, the
+ * mismatch that sets the result byte never fires and four named readings
+ * separate nothing.
+ */
+static void
+txm_build(struct fix *f, unsigned seed, int gate, int room, int slot)
+{
+	fixture(f, seed);
+	put_ptr(f->prm, V17TXP_PROCESS, (void *)txm_step);
+	put_i(f->prm, V17TXP_INT_0008, gate);
+
+	memset(&txm_fifo[slot], 0, sizeof(txm_fifo[slot]));
+	memset(txm_fbuf[slot], 0, sizeof(txm_fbuf[slot]));
+	txm_fifo[slot].size = (short)(room ? TXFIFO_ELEMS : 2);
+	txm_fifo[slot].buf = txm_fbuf[slot];
+	put_ptr(f->prm, V17TXP_FIFO, &txm_fifo[slot]);
+}
+
+/*
+ * `compare_all` minus the parameter block, which cannot come out equal here:
+ * `V17TXP_FIFO` holds each fixture's own queue and the two addresses differ for
+ * ever.  Every other byte of the block IS compared, including the mode int and
+ * the dispatch slot.
+ */
+static void
+txm_compare_all(struct fix *a, struct fix *b, long where)
+{
+	int i;
+
+	for (i = 0; i < PRM_SIZE; i++) {
+		if (i >= V17TXP_FIFO && i < V17TXP_FIFO + (int)sizeof(void *))
+			continue;
+		if (i >= V17TXP_PROCESS
+		    && i < V17TXP_PROCESS + (int)sizeof(void *))
+			continue;
+		if (a->prm[i] != b->prm[i]) {
+			diff_eq_int("at %ld: first differing parameter byte",
+				    (long)i, -1, where);
+			break;
+		}
+	}
+	if (i == PRM_SIZE)
+		diff_eq_int("at %ld: first differing parameter byte", -1L, -1,
+			    where);
+
+	diff_eq_int("at %ld: first differing receive-instance byte",
+		    robj_diff(b, a), -1, where);
+	diff_eq_int("at %ld: first differing transmit-instance byte",
+		    tobj_diff(b, a), -1, where);
+	diff_eq_int("at %ld: first differing control-block byte",
+		    ctl_diff(b, a), -1, where);
+	diff_eq_int("at %ld: first differing receiver-state byte",
+		    rxs_diff(b, a), -1, where);
+	diff_eq_int("at %ld: first differing private-block byte",
+		    first_diff(b->fp, a->fp, FP_SIZE), -1, where);
+	diff_eq_int("at %ld: first differing status byte",
+		    first_diff(b->sta, a->sta, STA_SIZE), -1, where);
+}
+
+static void
+run_txm_one(unsigned seed, int gate, int room, int mode, unsigned short n,
+	    long where)
+{
+	unsigned long marka, markc;
+	int ra, rb, rc, d, i;
+	unsigned short ca, cb, cc;
+
+	txm_mode = mode;
+	txm_build(&ma, seed, gate, room, 0);
+	txm_build(&mb, seed, gate, room, 1);
+
+	rng_seed(seed ^ 0x7c1a5500u);
+	for (i = 0; i < TXM_IN; i++)
+		txm_in_a[i] = txm_in_b[i] = (unsigned short)rng_next();
+	for (i = 0; i < TXM_OUT; i++)
+		txm_out_a[i] = txm_out_b[i] = (short)OMARK;
+
+	memset(&tlog_a, 0, sizeof(tlog_a));
+	memset(&tlog_b, 0, sizeof(tlog_b));
+	ca = n;
+	cb = n;
+
+	ra = ref_V17TX_modem(ma.tobj, txm_in_a, txm_out_a, &ca);
+	rb = V17TX_modem(mb.tobj, txm_in_b, txm_out_b, &cb);
+
+	diff_eq_int("at %ld: V17TX_modem returned", (long)rb, (long)ra, where);
+	diff_eq_int("at %ld: the total written back", (long)cb, (long)ca,
+		    where);
+	diff_eq_int("at %ld: the same number of inner calls", tlog_b.calls,
+		    tlog_a.calls, where);
+	diff_eq_int("at %ld: the inner call fired", tlog_a.calls > 0, 1, where);
+	diff_eq_int("at %ld: the budget the slot was handed",
+		    tlog_b.budget_first, tlog_a.budget_first, where);
+	diff_eq_int("at %ld: the budget started at 0x30", tlog_a.budget_first,
+		    V17TX_MODEM_BUDGET, where);
+	diff_eq_int("at %ld: the last input pointer", tlog_b.in_off,
+		    tlog_a.in_off, where);
+	diff_eq_int("at %ld: the input pointer did not move", tlog_a.in_off, 0,
+		    where);
+	diff_eq_int("at %ld: the last output pointer", tlog_b.out_off,
+		    tlog_a.out_off, where);
+	diff_eq_int("at %ld: the first output pointer", tlog_b.first_out_off,
+		    tlog_a.first_out_off, where);
+	diff_eq_int("at %ld: first differing output sample",
+		    first_diff((const unsigned char *)txm_out_b,
+			       (const unsigned char *)txm_out_a,
+			       (int)sizeof(txm_out_a)), -1, where);
+	diff_eq_int("at %ld: first differing input word",
+		    first_diff((const unsigned char *)txm_in_b,
+			       (const unsigned char *)txm_in_a,
+			       (int)sizeof(txm_in_a)), -1, where);
+	diff_eq_int("at %ld: first differing queue byte",
+		    first_diff((const unsigned char *)&txm_fifo[1],
+			       (const unsigned char *)&txm_fifo[0],
+			       (int)((const char *)&txm_fifo[0].buf
+				     - (const char *)&txm_fifo[0])), -1, where);
+	diff_eq_int("at %ld: first differing queued word",
+		    first_diff((const unsigned char *)txm_fbuf[1],
+			       (const unsigned char *)txm_fbuf[0],
+			       (int)sizeof(txm_fbuf[0])), -1, where);
+	diff_eq_int("at %ld: the queue's occupancy",
+		    (long)txm_fifo[1].count, (long)txm_fifo[0].count, where);
+	txm_compare_all(&ma, &mb, where);
+
+	if (gate == 0)
+		txm_paths[0]++;
+	else
+		txm_paths[1]++;
+	if (ma.tobj[V17TX_OBJ_RESULT_B1] & V17TX_RESULT_B1_BIT1)
+		txm_paths[2]++;
+	else
+		txm_paths[3]++;
+	if (tlog_a.calls > 1)
+		txm_paths[4]++;
+	if (tlog_a.raw_total > 32767)
+		txm_paths[5]++;		/* the running total wrapped */
+
+	marka = txm_mark(&ma, ra, ca, &tlog_a, txm_out_a, 0);
+
+	for (d = 1; d < (int)T_MAX; d++) {
+		txm_build(&mc, seed, gate, room, 2);
+		for (i = 0; i < TXM_IN; i++)
+			txm_in_b[i] = txm_in_a[i];
+		for (i = 0; i < TXM_OUT; i++)
+			txm_out_b[i] = (short)OMARK;
+		memset(&tlog_b, 0, sizeof(tlog_b));
+		cc = n;
+		rc = drive_txm(&mc, txm_in_b, txm_out_b, &cc,
+			       (enum txm_defect)d);
+		markc = txm_mark(&mc, rc, cc, &tlog_b, txm_out_b, 2);
+		if (markc != marka)
+			txm_sep[d]++;
+	}
+}
+
+static int
+run_txm(void)
+{
+	static const unsigned short counts[] = { 1, 4, 20, 64 };
+	int gate, room, mode, c;
+	long where = 0;
+
+	diff_begin("V17TX_modem");
+
+	for (gate = 0; gate < 2; gate++)
+	for (room = 0; room < 2; room++)
+	for (mode = 0; mode < 2; mode++)
+	for (c = 0; c < (int)(sizeof(counts) / sizeof(counts[0])); c++) {
+		run_txm_one(spread(0x07c17a00u, where), gate, room, mode,
+			    counts[c], where);
+		where++;
+	}
+
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -2988,6 +3500,8 @@ main(void)
 	rc |= run_rxstatus();
 	rc |= run_scramble();
 	rc |= run_rxdelete();
+	rc |= run_txdelete();
+	rc |= run_txm();
 	rc |= run_demod();
 	rc |= run_cd();
 	rc |= run_dcd();
@@ -3157,6 +3671,21 @@ main(void)
 			    dem_paths[i] > 0, 1, i);
 	diff_eq_int("the AGC identity was measured (%ld)",
 		    dem_agc_checked > 0, 1, dem_agc_checked);
+
+	diff_eq_int("V17TX_delete probes taken (%ld)", txdel_probes > 0, 1,
+		    txdel_probes);
+	diff_eq_int("V17TX_delete released every probe (%ld)",
+		    txdel_released, (txdel_probes / N_TXPROBE)
+				    * (N_TXPROBE - 1), txdel_probes);
+	diff_eq_int("V17TX_delete kept the one it does not own (%ld)",
+		    txdel_kept, txdel_probes / N_TXPROBE, txdel_kept);
+
+	for (i = 1; i < (int)T_MAX; i++)
+		diff_eq_int("V17TX_modem wrong reading %ld separates",
+			    txm_sep[i] > 0, 1, i);
+	for (i = 0; i < 6; i++)
+		diff_eq_int("V17TX_modem path %ld was reached",
+			    txm_paths[i] > 0, 1, i);
 
 	rc |= diff_end();
 	return rc;

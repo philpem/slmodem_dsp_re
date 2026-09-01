@@ -104122,3 +104122,57 @@ file has its count asserted rather than reported. The three sweeps added in
 this batch use `spread`; the older ones in the file were left alone because
 their counts are non-zero and churning a green fixture measures nothing.
 (2026-09-01)
+
+### F9106. `V17TX_OBJ_PARAMS` is not a parameter block the transmitter points at; it is one the transmitter OWNS, and the delete says so
+
+`v17data.h` named `V17TX_OBJ_PARAMS` from `V17TX_create` alone, which reads a
+rate index out of its +0x10, and glossed it "a parameter block the instance
+points at rather than owns ... the block's extent and owner are unknown". That
+was the right call on the evidence then available.
+
+`V17TX_delete` settles it. The function releases the block's +0x04 through
+`SGD_delete`, its +0x00 through `FIFO_delete`, and then the block itself
+through `sysdep_free`. A block whose lifetime the instance's destructor ends is
+the instance's.
+
+**And its contents are a control block, not parameters.** `V17TX_modem` reads
++0x08 as an int gating which of two arms runs and calls through +0x14 as a
+function pointer. So the four offsets now known are a `fax_fifo *`, a
+`struct sgd *`, a mode int and a dispatch slot -- the transmit-side analogue of
+`V17RX_OBJ_CTL`, which holds two detectors, a buffer and a dispatch slot at
++0x14 as well.
+
+**The name is left alone deliberately.** Renaming it is a change to
+`include/dsplib/v17data.h`, which this batch does not own, and two headers
+disagreeing about one constant is worse than one header carrying a correction.
+`v17fax.h` states it beside the four new offsets; a later pass that owns both
+files should rename `V17TX_OBJ_PARAMS` to a control-block name and update
+`V17TXP_NOCARRIER_SYM` with it.  (2026-09-01)
+
+### F9107. Two of `V17TX_modem`'s readings are settled from the object because no differential run can reach them
+
+`t_v17fax.c` asserts a non-zero separating count for every named wrong reading
+it carries, which means a reading that cannot separate must not be carried.
+Two of `V17TX_modem`'s were dropped, and each for its own reason.
+
+**The budget reloaded per iteration.** The object sets the inner loop's budget
+once, at the join of both arms and above the loop (`movw $0x30,0x1a(%esp)` at
+0x0a0e68, with the back edge at 0x0a0e77). Moving that assignment inside the
+loop DOES NOT TERMINATE for any dispatch slot that takes less off the budget
+than the reload puts back -- which is every slot a test can write, since a slot
+that consumed 48 or more in one call would make the loop single-iteration and
+measure nothing else. The reading is refuted by the disassembly and by
+non-termination, and neither is a differential measurement.
+
+**The running total not narrowed to a short.** The object narrows with `cwtl`
+on every iteration. The total leaves the function through `*count`, which is
+`unsigned short`, and a 32-bit sum and its `short` truncation have the same low
+sixteen bits -- so no caller can tell the two apart. Reproduced because the
+object encodes it; not claimed, because nothing can see it. `V17RX_modem`'s
+total is the same shape, and `t_v17fax.c` counts the trials that WRAP as a path
+rather than asserting a separating count for the narrowing.
+
+**What replaced them.** Mode 1 of the dispatch stub takes exactly 24 off a
+budget of 0x30, so it lands on zero -- the only state that distinguishes "runs
+while > 0" from ">= 0" -- and returns 20,000 samples a call so the total passes
+32767 and the wrap path is reached and counted.  (2026-09-01)
