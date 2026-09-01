@@ -103950,6 +103950,213 @@ fine.
 Shown to fire: a detached worktree at `c1ca61af` reports "140 commit(s)
 behind"; the up-to-date tree is silent.  (2026-08-31)
 
+### F9050. The four Class 1 receive-side configuration tables contain no pointers, and the tool that answers that is not the one you reach for first
+
+`FAXVMI_CFG` (24), `V17RX_CFG` (40), `V27RX_CFG` (28) and `V29RX_CFG` (24) are
+the whole of what blocked `class1rx.c`'s three `init_vmi_*rx` constructors, and
+the first thing to settle about a config table is whether any of its dwords is
+a relocation. **All four are pointer-free**, measured rather than assumed.
+
+**`relocscan.py --range` DOES NOT ANSWER THIS.** It answers "who points AT this
+range", which for a table is the opposite question: it reported "(nothing points
+there)" for three of the four and named `vmi_unpack` for the fourth, and neither
+answer says anything about the table's own contents. The question is "does any
+relocation have its `r_offset` INSIDE this range", which is `readelf -r`
+filtered on the offset column. The same sweep run over the neighbouring AGC
+tables shows what a positive looks like: `AGCv17_CFG`, `AGCv27_CFG`,
+`AGCv29_CFG` and `AGCv21_CFG` each carry two relocations at +0x0c and +0x10,
+and `AGCv21_CFG`'s resolve by name to `AGC_DEF_ALPHA_v21` and
+`AGC_DEF_BETA_v21`. So the detector was shown firing on a known positive before
+its clean answer was believed -- F134's rule, and the reason the "no pointers"
+claim here is worth anything.
+
+That matters beyond neatness: a pointer in one of these would have made the
+table BLOCKED under the link constraint (F8492, F8493) rather than ready, and
+the whole of `class1rx.c` would have stayed shut.  (2026-08-31)
+
+### F9051. The three receive modem configurations are three TYPES, and the sizes are read twice from different places
+
+40, 28 and 24 bytes for V.17, V.27ter and V.29. Two independent readings agree
+on each:
+
+- the `sysdep_malloc` argument in the matching constructor -- `movl $0x28`,
+  `$0x1c`, `$0x18` -- which is what the object allocates;
+- the number of dwords the matching `v??rx_create` copies onto its stack before
+  calling `V??RX_create`: ten, seven and six.
+
+and both agree with the symbol's own `st_size`. A single shared type would be
+wrong for two of the three, and getting it wrong is a heap defect rather than a
+cosmetic one, so `t_faxcfg.c` asserts all three sizes against literals and
+asserts that the three are pairwise DIFFERENT.  (2026-08-31)
+
+### F9052. `+0x04` of each modem configuration is the BIT RATE, from the object's own equality tests
+
+`v17rx_create` compares it against 0x3840, 0x2ee0 and 0x2580; `v27rx_create`
+against 0x960; `v29rx_create` against 0x1c20. Those are 14400, 12000 and 9600;
+2400; and 7200 -- exactly the rates V.17, V.27ter and V.29 define and nothing
+else -- and the field selects a small mode number in each (`setne` then
+`add $0x2` for V.27ter, `add $0x3` for V.29). It is also the field each
+`init_vmi_*rx` overwrites with its own second argument, so the caller chooses
+the rate and the table supplies the default: 14400, 4800 and 9600.
+
+**The WIDTH is forced and the SIGN is not.** Every access is 16-bit -- `movw`
+in the constructors, `cmpw` in the create functions -- so the field is a short
+and not the low half of an int. Every comparison the object makes on it is an
+EQUALITY, which carries no sign, and every value it holds is below 32768.
+`short` is therefore a choice and `faxcfg.h` records it as one.  (2026-08-31)
+
+### F9053. The three constructors plant slots 12, 8 and 10, which corroborates `faxvmi.h`'s slot map exactly
+
+`faxvmi.h` derived the VMI slot map from `vxx_message`'s relocations alone --
+5 v21tx, 6 v21rx, 7 v27tx, 8 v27rx, 9 v29tx, 10 v29rx, 11 v17tx, 12 v17rx --
+and it did so without reading any of these three functions. `init_vmi_v17rx`
+writes `movw $0xc` to +0x0e, `init_vmi_v27rx` writes `$0x8` and
+`init_vmi_v29rx` writes `$0xa`.
+
+Three independent constants matching three independent predictions is the
+strongest confirmation available here short of a format string, and it settles
+`slot` as a name rather than an inference. It also fixes the offset: the store
+is 16-bit at +0x0e, so `slot` is a short there and not the top half of a dword
+at +0x0c.  (2026-08-31)
+
+### F9054. The struct copy in each constructor is SHORT BY ONE DWORD, and that is dead-store elimination, not a smaller struct
+
+Every one of the six aggregate copies in these three functions emits one dword
+fewer than the type's size:
+
+    init_vmi_v17rx   V17RX_CFG   40 bytes,  9 dwords emitted, +0x24 missing
+    init_vmi_v27rx   V27RX_CFG   28 bytes,  6 dwords emitted, +0x18 missing
+    init_vmi_v29rx   V29RX_CFG   24 bytes,  5 dwords emitted, +0x14 missing
+    all three        FAXVMI_CFG  24 bytes,  4 dwords emitted, +0x10 and +0x14
+
+**Reading that as "the struct is one dword shorter" is wrong and would have
+under-allocated every one of them**, because the malloc beside it asks for the
+FULL size. What the missing dword always is, in all six, is a slot the function
+overwrites in the SAME basic block with no intervening call. The V.17 case
+proves the mechanism rather than merely being consistent with it: +0x18, +0x1c
+and +0x20 are ALSO overwritten, and they ARE copied -- because a
+`sysdep_malloc` call sits between the copy and each store, and GCC 3.4.2's dead
+store elimination does not reach across it. Same function, same optimiser, both
+outcomes, and the only thing separating them is the call.
+
+So the rule for reading one of these: an absent dword in an aggregate copy is
+evidence about the OPTIMISER's window, and the size comes from the allocation.
+(2026-08-31)
+
+### F9055. The object names these three constructors in its own words: "No ECM (Simple Packing)"
+
+At `.rodata.str1.4` 0x11878, 0x118b0 and 0x118e8, gated on
+`dsplibs_debug_level > 2`:
+
+    Initializing VMI_V17_RX Modem No ECM (Simple Packing)
+    Initializing VMI_V29_RX Modem No ECM (Simple Packing)
+    Initializing VMI_V27_RX Modem No ECM (Simple Packing)
+
+Evidence rank 1 -- the author's own labels. Three things follow. The entities
+are `VMI_V17_RX`, `VMI_V29_RX` and `VMI_V27_RX`, which is where the `slot`
+naming above lands. The emission ORDER is v17, v29, v27, which is also the
+order of the three functions in `.text` and is the order `class1rx.c` writes
+them in. And what these build is the NO-ECM path specifically, so a later pass
+finding an ECM variant should expect a second family rather than more arms
+here.  (2026-08-31)
+
+### F9056. The injection ritual restored with `mv`, and every verdict after the first was measured against a build tree nobody had restored
+
+The ritual is: perturb the source, expect RED, restore, expect GREEN. This
+pass's first script did the restore with `mv "$F.bak" "$F"`, which carries the
+BACKUP's mtime -- older than the object make had just built from the mutated
+source. So make reused the mutated `.o`, and the next injection ran against a
+tree that still contained the previous defect.
+
+**The symptom was that it kept working.** Four injections in a row reported
+"caught", which is what a healthy ritual looks like; the tell was that all four
+named the SAME two failing suites, including two injections that touch a file
+those suites do not test. A ritual whose verdicts are all positive cannot be
+distinguished from one that is stuck, which is F134's argument arriving at the
+apparatus built to satisfy F134.
+
+The corrected script `touch`es after every restore, re-measures a GREEN baseline
+before the first injection and after the last, prints WHICH suites went red for
+each injection rather than the first three lines of the log, and carries a
+deliberately unmatchable `sed` so that its own "this changed nothing" guard is
+seen firing in the same run. The first script's four verdicts are discarded
+entirely rather than re-used, because there is no way to tell which of them was
+real.  (2026-08-31)
+
+### F9057. `class1rx.c` after the configuration tables: three of five symbols, and the remaining two are deep
+
+The span is 2,495 bytes and had **zero** ready symbols because both its
+constructors' blockers were data. With the four tables written, the three
+`init_vmi_*rx` are ready and written -- 763 bytes, 31% of the span. What is
+left is not another table pass:
+
+    _init_receiver         1583 bytes   343 unwritten symbols in its closure
+    _delete_data_rx_modem   149 bytes    16 unwritten symbols in its closure
+
+`_delete_data_rx_modem` is the cheaper of the two by a wide margin and its
+sixteen are a coherent family -- `FAXVMI_delete`, `V17RX_delete`,
+`V17TX_delete`, `V21TX_delete` and the rest of the per-modulation destructors
+-- so it lands with the modulation modules rather than needing a pass of its
+own. `_init_receiver` is downstream of essentially the whole fax
+reconstruction and should be scheduled last within it, not next.  (2026-08-31)
+
+### F9058. Thirteen symbol NAMES are defined twice in the object, and four of them are configuration tables
+
+`nm --defined-only | uniq -d` over the 1.2 MB:
+
+    AGC_DEF_ALPHA   AGC_DEF_BETA   AGCv23_CFG   FIFO_CFG   PROTOCOL
+    rx_out_internal   sqrt_table   temp.0   ToneLPF   TONEv23_CFG
+    tx_in_internal   V23_AGC_DEF_ALPHA   V23_AGC_DEF_BETA
+
+They are file-local symbols in different translation units and are legal; two
+of the pairs sit at genuinely different addresses with different contents
+(`AGCv23_CFG` at .rodata 0x8220 and 0x8384, `TONEv23_CFG` at 0x8240 and
+0x82a0). `FIFO_CFG` is one local `d` at .data 0x83a0 and one global `R` at
+.rodata 0x9654 -- the same name for two different objects.
+
+**The consequence is testability, and it is not obvious.** `symmap.py`
+deliberately declines to globalise a file-local name that occurs more than
+once, so none of these gets a `ref_` alias and none can be driven against the
+blob directly. Anyone scheduling `FIFO_CFG` -- which is what blocks
+`FIFO_create` -- should know that before writing the test, not after: the
+global `.rodata` one is aliasable and the local `.data` one is not, and they
+are not the same table.  (2026-08-31)
+
+### F9059. The struct-shape injections were caught by `offcheck.py`, not by the test, and that is the right answer for the wrong-looking reason
+
+The injection ritual for `t_faxcfg.c` ran eight perturbations. Six were caught
+by the test and named the suites you would expect. Two -- both of them SHAPE
+perturbations, a leading byte added to `struct v29rx_cfg` and its `bit_rate`
+widened from `short` to `int` -- reported `caught` with **zero failing
+suites**, which is the signature of a build failure rather than a test result
+and had to be run down rather than counted.
+
+Neither was a build failure. `make one` runs `tools/offcheck.py` before the
+tests, and it reads the `/* +0xNN */` annotation beside every field in every
+header and checks it against the compiler's actual layout:
+
+    MISMATCH  struct v29rx_cfg.short_0006 says +0x6
+    MISMATCH  struct v29rx_cfg.int_0008 says +0x8
+    ... 5 of 1908 annotations do not match the layout
+    make: *** [Makefile:519: offsets] Error 1
+
+So the gate fired at the earliest tier that could see the defect, and the test
+binary was never built. **Two lessons, and the second is the useful one.**
+
+First, `exit != 0` is not "the test caught it" -- a ritual that scores on exit
+status alone cannot tell a caught defect from a compile error, and this one
+printed enough to notice only because it had been changed to name the failing
+suites. Report WHICH check fired, not that something did.
+
+Second, the `/* +0xNN */` comments in this tree's headers are not decoration:
+they are 1,908 machine-checked assertions, and a header whose annotations are
+right is a header whose layout is proven for as long as `make one` runs. That
+makes them the cheapest possible cover for the class of error a byte
+comparison against `ref_` is blind to, and it means a new header should carry
+an offset comment on EVERY field rather than only on the interesting ones.
+`t_faxcfg.c` keeps its own `offsetof` layer regardless -- `offcheck.py` proves
+the comment matches the struct and cannot prove the struct matches the object.
+(2026-09-01)
 ### F9115. V.27ter's demodulator hands the tone detector the CALLER's buffer -- no copy and no notch, where V.17 and V.29 have both
 
 `DemodDataV17`, `DemodDataV29` and `DemodDataV27` are the same six-stage
