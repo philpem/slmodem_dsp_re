@@ -99,6 +99,9 @@ extern short ref_RxHdxWaitV21(void *modem, short *in, short *out,
 			      short *count);
 extern short ref_RxHdxDataV21(void *modem, short *in, short *out,
 			      short *count);
+extern short ref_RxHdxStartV21(void *modem, short *in, short *out,
+			       short *count);
+extern void ref_RxNextStateV21(void *modem);
 
 extern void ref_FPM_AGC_init(struct fpm_agc *agc, const struct fpm_agc_cfg *cfg,
 			     int reset);
@@ -228,6 +231,7 @@ static short bits_a[BITS_LEN], bits_b[BITS_LEN];
 #define H_WAIT		3
 #define H_DATA		4
 #define H_OTHER		5
+#define H_START		6
 #define H_UNKNOWN	(-1)
 
 /* A pointer that is none of the four, for the "not the data handler" case. */
@@ -254,6 +258,8 @@ handler_id(short (*h)(void *, short *, short *, short *))
 		return H_WAIT;
 	if (h == RxHdxDataV21 || h == ref_RxHdxDataV21)
 		return H_DATA;
+	if (h == RxHdxStartV21 || h == ref_RxHdxStartV21)
+		return H_START;
 	if (h == other_handler)
 		return H_OTHER;
 	return H_UNKNOWN;
@@ -267,10 +273,27 @@ static short
 	case H_IDLE:	return blob ? ref_RxHdxIdleV21 : RxHdxIdleV21;
 	case H_WAIT:	return blob ? ref_RxHdxWaitV21 : RxHdxWaitV21;
 	case H_DATA:	return blob ? ref_RxHdxDataV21 : RxHdxDataV21;
+	case H_START:	return blob ? ref_RxHdxStartV21 : RxHdxStartV21;
 	case H_OTHER:	return other_handler;
 	default:	return 0;
 	}
 }
+
+/*
+ * `RxHdxStartV21`'s two counters, planted into the half-duplex block by
+ * `fixture()`.
+ *
+ * THEY ARE FILE-SCOPE RATHER THAN PARAMETERS ON PURPOSE, and the reason is
+ * D955 and finding F8587 read the other way round: every other trial in this
+ * file must plant them too, or the START arms would be reading whatever the
+ * pseudorandom fill left and both sides would agree on garbage.  Making them
+ * two more arguments would have added them to thirty call sites that do not
+ * care; a pair of statics that every `run_*` resets EXPLICITLY at its top
+ * plants them everywhere with one place to read the value from.  `run_start`
+ * is the only function that ever sets them non-zero.
+ */
+static unsigned short plant_ones_run;
+static unsigned short plant_mark_seq;
 
 /*
  * Bring one receiver up.
@@ -309,6 +332,8 @@ fixture(struct hdxfix *f, unsigned seed, int blob, int handler,
 	f->hdx.handler = handler_for(handler, blob);
 	f->hdx.state = state;
 	f->hdx.countdown = countdown;
+	f->hdx.ones_run = plant_ones_run;
+	f->hdx.mark_seq = plant_mark_seq;
 
 	/*
 	 * The two ints `CarrierDetectV21` reads.  `DemodDataV21` overwrites
@@ -530,6 +555,14 @@ static long wait_held, wait_ret_sep, wait_pre_sep, wait_state_moved;
 static long data_blocks, data_carrier, data_nocarrier, data_gated;
 static long data_snr_sep, data_assign_sep, data_gate_sep, data_state_moved;
 
+static long start_blocks, start_walked, start_carrier, start_nocarrier;
+static long start_advanced, start_held, start_run_nonzero, start_run_zeroed;
+static long start_run_over6, start_mark_up, start_thresh_sep;
+static long start_status_sep, start_default_sep;
+static unsigned short start_mark_was;
+
+static long next_blocks, next_state_moved, next_default;
+
 static long adv_seen[5];
 
 /* --------------------------------------------------------------------- */
@@ -540,6 +573,8 @@ static long adv_seen[5];
 #define CALL_IDLE	2
 #define CALL_WAIT	3
 #define CALL_DATA	4
+#define CALL_START	5
+#define CALL_NEXT	6
 
 /*
  * Run BLOCKS consecutive blocks through both sides and compare everything
@@ -560,6 +595,8 @@ run_stream(int which, int shape, int handler, short state,
 		flags1, status);
 	fixture(&fb, seed, 0, handler, state, countdown, gate, shape, flags,
 		flags1, status);
+
+	start_mark_was = plant_mark_seq;
 
 	for (block = 0; block < BLOCKS; block++) {
 		short ca = BLOCK, cb = BLOCK;
@@ -591,6 +628,22 @@ run_stream(int which, int shape, int handler, short state,
 		case CALL_WAIT:
 			ra = ref_RxHdxWaitV21(fa.obj, in_a, bits_a, &ca);
 			rb = RxHdxWaitV21(fb.obj, in_b, bits_b, &cb);
+			break;
+		case CALL_START:
+			ra = ref_RxHdxStartV21(fa.obj, in_a, bits_a, &ca);
+			rb = RxHdxStartV21(fb.obj, in_b, bits_b, &cb);
+			break;
+		case CALL_NEXT:
+			/*
+			 * The OUT-OF-LINE `RxNextStateV21`, driven directly.
+			 * The three inlined copies are already covered through
+			 * their callers; this is the only thing that reaches
+			 * the standalone symbol, which is why it is a case of
+			 * its own rather than a side effect of one.
+			 */
+			ref_RxNextStateV21(fa.obj);
+			RxNextStateV21(fb.obj);
+			ra = rb = 0;
 			break;
 		default:
 			ra = ref_RxHdxDataV21(fa.obj, in_a, bits_a, &ca);
@@ -765,6 +818,73 @@ run_stream(int which, int shape, int handler, short state,
 				wait_pre_sep++;
 			if (fa.hdx.state != state)
 				wait_state_moved++;
+		} else if (which == CALL_START) {
+			int nunits = 0;
+			int moved;
+
+			while (nunits < BITS_LEN && bits_a[nunits] != MARK)
+				nunits++;
+
+			moved = (fa.hdx.state != state
+				 || fa.obj[V21RX_OBJ_STATUS]
+				    != V21RX_STATUS_START);
+
+			start_blocks++;
+			if (nunits > 0)
+				start_walked++;
+			if ((fa.obj[V21RX_OBJ_FLAGS] & V21RX_FLAG_CARRIER) != 0)
+				start_carrier++;
+			else
+				start_nocarrier++;
+			if (moved)
+				start_advanced++;
+			else
+				start_held++;
+			if (fa.hdx.ones_run != 0)
+				start_run_nonzero++;
+			else
+				start_run_zeroed++;
+			if (fa.hdx.ones_run > V21RX_MARK_RUN)
+				start_run_over6++;
+			if (fa.hdx.mark_seq != start_mark_was)
+				start_mark_up++;
+			/*
+			 * WRONG READING: the threshold taken as `>= 4` rather
+			 * than `> 4`.  Separated on a block where the carrier
+			 * WAS detected, `mark_seq` stood at exactly 4 and the
+			 * state did not advance -- under the wrong reading that
+			 * block would have advanced.
+			 *
+			 * The carrier is read from the two DSP ints and NOT
+			 * from V21RX_FLAG_CARRIER, because the flag is raised
+			 * at 0x0a1f36, which is AFTER the threshold test at
+			 * 0x0a1f30: a block held by the threshold leaves the
+			 * bit clear even though the carrier was there.  Reading
+			 * the flag would have made this counter unreachable,
+			 * which is exactly how it was first written.
+			 */
+			if (!moved && fa.hdx.mark_seq == V21RX_MARK_SEQ_THRESHOLD
+			    && (fa.dsp.int_0004 & fa.dsp.int_0008) != 0)
+				start_thresh_sep++;
+			/*
+			 * WRONG READING: the status byte written after the
+			 * demodulate rather than before it.  The advance's
+			 * default arm overwrites it with V21RX_STATUS_DEFAULT,
+			 * so a block that reaches that arm leaves 3 and not 1;
+			 * a block that does not leaves 1.  Both are counted,
+			 * because only having both makes the ORDER visible.
+			 */
+			if (fa.obj[V21RX_OBJ_STATUS] == V21RX_STATUS_START)
+				start_status_sep++;
+			if (fa.obj[V21RX_OBJ_STATUS] == V21RX_STATUS_DEFAULT)
+				start_default_sep++;
+			start_mark_was = fa.hdx.mark_seq;
+		} else if (which == CALL_NEXT) {
+			next_blocks++;
+			if (fa.hdx.state != state)
+				next_state_moved++;
+			if (fa.obj[V21RX_OBJ_STATUS] == V21RX_STATUS_DEFAULT)
+				next_default++;
 		} else {
 			data_blocks++;
 			if ((fa.obj[V21RX_OBJ_FLAGS] & V21RX_FLAG_CARRIER) != 0)
@@ -804,6 +924,9 @@ run_demod(void)
 {
 	diff_begin("DemodDataV21");
 
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
+
 	/* The DATA handler installed: the squelch arm must NOT run. */
 	run_stream(CALL_DEMOD, IN_CARRIER, H_DATA, V21RX_STATE_DATA, 0, 0,
 		   0x00, 0x00, 0x00, 0x21000001u);
@@ -836,6 +959,9 @@ run_error(void)
 {
 	diff_begin("RxHdxErrorV21");
 
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
+
 	run_stream(CALL_ERROR, IN_CARRIER, H_ERROR, V21RX_STATE_ERROR, 0, 0,
 		   0x00, 0x00, 0x04, 0x21100001u);
 	run_stream(CALL_ERROR, IN_SILENT, H_ERROR, V21RX_STATE_ERROR, 0, 0,
@@ -850,6 +976,9 @@ static int
 run_idle(void)
 {
 	diff_begin("RxHdxIdleV21");
+
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
 
 	run_stream(CALL_IDLE, IN_CARRIER, H_IDLE, V21RX_STATE_IDLE, 0, 0,
 		   0x00, 0x01, 0x05, 0x21200001u);
@@ -867,6 +996,9 @@ static int
 run_wait(void)
 {
 	diff_begin("RxHdxWaitV21");
+
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
 
 	/* Carrier up, countdown 1: the advance fires on the first block. */
 	run_stream(CALL_WAIT, IN_CARRIER, H_WAIT, V21RX_STATE_WAIT, 1, 0,
@@ -900,6 +1032,9 @@ run_data(void)
 {
 	diff_begin("RxHdxDataV21");
 
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
+
 	/*
 	 * The carrier here is whatever the PREVIOUS block left in the two
 	 * ints, because RxHdxDataV21 tests it before it demodulates.  A loud
@@ -930,6 +1065,146 @@ run_data(void)
 	return diff_end();
 }
 
+/*
+ * `RxHdxStartV21`.
+ *
+ * THE TWO COUNTERS ARE PLANTED RATHER THAN REACHED, and that is deliberate.
+ * `mark_seq` only advances when the demodulated stream carries six non-zero
+ * units followed by a zero, and getting five of those out of the FSK
+ * demodulator by choosing an input would be fitting the fixture to the answer
+ * (finding F7782's distinction).  Planting the field is the same move
+ * `RxHdxDataV21`'s `int_0000` gate needed and for the same reason: nothing
+ * reconstructed writes it, so the arms behind it are reached by setting it.
+ *
+ * What is NOT planted is the walk itself -- `ones_run` is driven by whatever
+ * the demodulator produced, over eleven consecutive blocks, so the carry from
+ * one block to the next is exercised rather than asserted.
+ */
+static int
+run_start(void)
+{
+	diff_begin("RxHdxStartV21");
+
+	/* Below the threshold: the walk runs, the state stays. */
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x00, 0x21500001u);
+	run_stream(CALL_START, IN_TONE, H_START, V21RX_STATE_START, 0, 0,
+		   0x50, 0x00, 0x01, 0x21500002u);
+	run_stream(CALL_START, IN_SILENT, H_START, V21RX_STATE_START, 0, 0,
+		   0xff, 0xff, 0x01, 0x21500003u);
+	run_stream(CALL_START, IN_MIXED, H_START, V21RX_STATE_START, 0, 0,
+		   0x20, 0x01, 0x05, 0x21500004u);
+
+	/* Exactly at it: `> 4` holds where `>= 4` would have advanced. */
+	plant_ones_run = 0;
+	plant_mark_seq = V21RX_MARK_SEQ_THRESHOLD;
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500005u);
+	run_stream(CALL_START, IN_MIXED, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500006u);
+
+	/* Over it, with a carrier: the advance fires, from every state. */
+	plant_ones_run = 0;
+	plant_mark_seq = V21RX_MARK_SEQ_THRESHOLD + 1;
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500007u);
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_WAIT, 2, 0,
+		   0x00, 0x00, 0x01, 0x21500008u);
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_DATA, 0, 0,
+		   0x01, 0x00, 0x01, 0x21500009u);
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_IDLE, 0, 0,
+		   0x21, 0x01, 0x05, 0x2150000au);
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_ERROR, 0, 0,
+		   0xff, 0xff, 0x04, 0x2150000bu);
+
+	/* Over it with NO carrier: the advance must not fire. */
+	run_stream(CALL_START, IN_SILENT, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x2150000cu);
+	run_stream(CALL_START, IN_TONE, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x2150000du);
+
+	/*
+	 * The run poised AT six, so the next zero unit takes the arm that
+	 * increments `mark_seq`, and poised ABOVE six, so the arm that keeps
+	 * counting past it is entered on the first unit.
+	 */
+	plant_ones_run = V21RX_MARK_RUN;
+	plant_mark_seq = 0;
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x2150000eu);
+	run_stream(CALL_START, IN_TONE, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x2150000fu);
+	run_stream(CALL_START, IN_MIXED, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500010u);
+
+	plant_ones_run = V21RX_MARK_RUN + 1;
+	plant_mark_seq = 1;
+	run_stream(CALL_START, IN_SILENT, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500011u);
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500012u);
+
+	/* The 16-bit wrap on both counters, driven rather than reasoned about. */
+	plant_ones_run = 0xffff;
+	plant_mark_seq = 0xffff;
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500013u);
+	run_stream(CALL_START, IN_TONE, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500014u);
+
+	/*
+	 * `mark_seq` with the top bit set.  The object's test is `cmpw $0x4`
+	 * with `jle`, so it is SIGNED: 0x8000 is negative and must NOT advance,
+	 * where an unsigned reading would.
+	 */
+	plant_ones_run = 0;
+	plant_mark_seq = 0x8000;
+	run_stream(CALL_START, IN_CARRIER, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21500015u);
+
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
+
+	return diff_end();
+}
+
+/*
+ * The OUT-OF-LINE `RxNextStateV21`.
+ *
+ * Its body is inlined into three of the handlers above and is driven through
+ * them; this drives the standalone symbol, which is the one the tree now
+ * claims and which no other call site in `src/` reaches.  All five states,
+ * because a `switch` arm nothing enters agrees with anything.
+ */
+static int
+run_next(void)
+{
+	diff_begin("RxNextStateV21");
+
+	plant_ones_run = 0;
+	plant_mark_seq = 0;
+
+	run_stream(CALL_NEXT, IN_SILENT, H_START, V21RX_STATE_START, 0, 0,
+		   0x00, 0x00, 0x01, 0x21600001u);
+	run_stream(CALL_NEXT, IN_SILENT, H_WAIT, V21RX_STATE_WAIT, 3, 0,
+		   0x50, 0x00, 0x02, 0x21600002u);
+	run_stream(CALL_NEXT, IN_SILENT, H_DATA, V21RX_STATE_DATA, 0, 0,
+		   0x01, 0x00, 0x00, 0x21600003u);
+	run_stream(CALL_NEXT, IN_SILENT, H_IDLE, V21RX_STATE_IDLE, 0, 0,
+		   0x21, 0x01, 0x05, 0x21600004u);
+	run_stream(CALL_NEXT, IN_SILENT, H_ERROR, V21RX_STATE_ERROR, 0, 0,
+		   0xff, 0xff, 0x04, 0x21600005u);
+	/* A state outside the four the object names, so the default arm runs. */
+	run_stream(CALL_NEXT, IN_SILENT, H_NONE, (short)-3, 0, 0,
+		   0x00, 0x00, 0x00, 0x21600006u);
+	run_stream(CALL_NEXT, IN_SILENT, H_OTHER, (short)9, 0, 0,
+		   0xff, 0x01, 0x03, 0x21600007u);
+
+	return diff_end();
+}
+
 /* --------------------------------------------------------------------- */
 
 int
@@ -944,6 +1219,8 @@ main(void)
 	rc |= run_idle();
 	rc |= run_wait();
 	rc |= run_data();
+	rc |= run_start();
+	rc |= run_next();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -1030,6 +1307,39 @@ main(void)
 		    data_assign_sep > 0, 1, data_assign_sep);
 	diff_eq_int("data advanced the state (%ld)", data_state_moved > 0, 1,
 		    data_state_moved);
+
+	diff_eq_int("RxHdxStartV21 was driven (%ld)", start_blocks > 0, 1,
+		    start_blocks);
+	diff_eq_int("start walked a non-empty block (%ld)", start_walked > 0, 1,
+		    start_walked);
+	diff_eq_int("start saw a carrier (%ld)", start_carrier > 0, 1,
+		    start_carrier);
+	diff_eq_int("start saw none (%ld)", start_nocarrier > 0, 1,
+		    start_nocarrier);
+	diff_eq_int("start advanced the state (%ld)", start_advanced > 0, 1,
+		    start_advanced);
+	diff_eq_int("start held the state (%ld)", start_held > 0, 1, start_held);
+	diff_eq_int("the run counter ended non-zero (%ld)",
+		    start_run_nonzero > 0, 1, start_run_nonzero);
+	diff_eq_int("the run counter was reset (%ld)", start_run_zeroed > 0, 1,
+		    start_run_zeroed);
+	diff_eq_int("the run counted past six (%ld)", start_run_over6 > 0, 1,
+		    start_run_over6);
+	diff_eq_int("a mark sequence was counted (%ld)", start_mark_up > 0, 1,
+		    start_mark_up);
+	diff_eq_int("the > 4 threshold separates from >= 4 (%ld)",
+		    start_thresh_sep > 0, 1, start_thresh_sep);
+	diff_eq_int("start left its own status (%ld)", start_status_sep > 0, 1,
+		    start_status_sep);
+	diff_eq_int("start reached the advance's default arm (%ld)",
+		    start_default_sep > 0, 1, start_default_sep);
+
+	diff_eq_int("RxNextStateV21 was driven out of line (%ld)",
+		    next_blocks > 0, 1, next_blocks);
+	diff_eq_int("the out-of-line advance moved the state (%ld)",
+		    next_state_moved > 0, 1, next_state_moved);
+	diff_eq_int("the out-of-line advance reached its default (%ld)",
+		    next_default > 0, 1, next_default);
 
 	/*
 	 * Every arm of the inlined state advance was entered.  Without this

@@ -104426,6 +104426,433 @@ than the mutant did. Fifty minutes became four.
 knows in other forms: never pipe a long ritual's verdicts through `tail`, and
 never let a mutating script be the only holder of the original.
 
+## F9090. `RxHdxStartV21` counts runs of six non-zero units and the fifth of them opens the machine -- what is measured, and what is only inferred
+
+*2026-08-31.* The start state is the handler `V21RX_create` installs
+(`movl $RxHdxStartV21,0x4(%eax)` at 0x098ee1, with `state`, `countdown` and
+both new counters zeroed around it at 0x098ee8..0x098efc), so every V.21
+receiver begins here.
+
+**WHAT THE INSTRUCTIONS SAY.** After demodulating the block it walks the
+demodulated units at 0x0a1ee0..0x0a1f0e:
+
+    hdx + 0x0c   the length of the current run of non-zero units
+    hdx + 0x0e   how many times that run stood at exactly 6 and the next
+                 unit was zero
+
+The walk has three outcomes and the object reaches the common store from two
+places, which is what makes the ordering readable rather than assumed: at
+`0x0c == 6` with a zero unit it increments `0x0e` at 0x0a1f9c and falls into
+the store that puts zero in `0x0c`; at `0x0c == 6` with a non-zero unit it
+jumps to 0x0a1ef7 and stores `0x0c + 1`, leaving `0x0e` alone; otherwise the
+store is `unit ? 0x0c + 1 : 0`.
+
+Then, and only then, `V21RX_FLAG_CARRIER` is cleared, `CarrierDetectV21` is
+called, and the state advances if and only if the detector answers AND
+`cmpw $0x4,0xe(%edx)` at 0x0a1f2b does not take its `jle`. So the advance
+happens on the FIFTH sequence, not the fourth, and the test is SIGNED over
+sixteen bits -- 0x8000 in that field does not advance.
+
+**BOTH LOOP VARIABLES ARE SIXTEEN BITS AND IT IS FORCED**, not the free kind
+of extension: the count is decremented `lea -0x1(%esi),%eax` / `movzwl
+%ax,%esi` and the index incremented `lea 0x1(%edi),%ebx` / `movzwl %bx,%edi`
+at 0x0a1f00..0x0a1f0b, and both feed the next iteration.
+
+**WHAT IS NOT MEASURED.** Six ones followed by a zero is the HDLC flag 0x7e
+and five flags is a preamble, which is exactly what a V.21 fax control
+channel would wait for -- but nothing in the object says so. There is no
+format string for either field, no other referent to type them, and
+`V21RX_create` only zeroes them. So the fields are named for the arithmetic
+(`ones_run`, `mark_seq`) and the interpretation lives in a comment where a
+later reader can weigh it, which is CLAUDE.md's rule that a wrong name is
+worse than a neutral one. This is USAGE INFERENCE, the weakest class, and it
+is labelled as such at both the header and the source.
+
+The return is a literal zero on every path (0x0a1f83), so the units this
+handler produced are reported to `V21RX_modem` as none -- deviation D1090.
+
+## F9091. `RxNextStateV21` is claimed, and the third caller finding F8898 was waiting for is `RxHdxStartV21`
+
+*2026-08-31.* F8898 reconstructed the body of `RxNextStateV21` in order to
+write `RxHdxWaitV21` and `RxHdxDataV21`, whose copies of it are inlined, and
+left it `static v21rx_next_state` for two stated reasons: its third caller
+was not reconstructed, and a `static` carrying a blob symbol's name would be
+counted as written by every tool that globs `build/repro`, which would be a
+false coverage claim. It said plainly that making it global and giving it the
+object's name was the whole of what claiming it would take.
+
+That is what happened. `RxHdxStartV21` is the third caller, its inlined copy
+at 0x0a1f3c..0x0a2098 is the same instructions in the same order as the
+out-of-line one at 0x0a1d60, and the symbol is now global under its own name
+with no change to its body.
+
+**THE OUT-OF-LINE SYMBOL IS DRIVEN DIRECTLY, which the inlined copies do not
+do for it.** `t_v21hdx.c` gained a `CALL_NEXT` case that calls
+`ref_RxNextStateV21` and `RxNextStateV21` on the two handles and compares
+everything, over all five named states and two states the object does not
+name, so the default arm is entered from outside a handler as well as from
+inside one. Driving it only through the three callers would have tested three
+copies of the body and never the symbol the tree is claiming.
+
+## F9130. `V29RX_status` reads its own flags byte and every bit of it is dead -- the read and the four stores are ALIASING, and only that
+
+*2026-09-01.* `V29RX_status` (0x0a45f0, 190 bytes) is the receiver's half of
+the report block `V29TX_status` fills from the transmitter, and it is not a
+mirror of it. Four differences, all read off the instructions:
+
+| | transmit | receive |
+|---|---|---|
+| handle read | `tx` (`obj + 0x14`) | the instance itself |
+| bit rate lands in | +0x02 and +0x10 | +0x04 and +0x12 |
+| the zeroed gap short | +0x0c | +0x0e |
+| stores to the flags byte | two | four |
+
+**THE FOUR STORES ARE FORCED BY ALIASING.** They land at 0x0a4657, 0x0a466f,
+0x0a4685 and 0x0a46a2, and each one sits immediately before a load through
+the instance pointer -- `mov 0x50(%esi),%edx` at 0x0a465c, again at 0x0a4672,
+again at 0x0a4688. `status` and `modem` are unrelated parameters and the
+compiler cannot prove them disjoint, so each partial value has to reach
+memory before the next load can be made. A compiler that could prove them
+disjoint would have emitted one store, and the source would look no
+different.
+
+**AND THE VALUE IT READS AT 0x0a464e IS DEAD.** All EIGHT bits of the byte
+are determined before the function returns: 0, 2 and 7 cleared, 4 and 6 set,
+and 1, 3 and 5 assigned from fields (`rx + 0x0018` bit 0, `rx + 0x0000 == 0`
+and `rx + 0x0020 == 0` respectively). So the caller's byte contributes
+nothing to the result -- the read exists only because it is the source of the
+three intermediate values the stores above put in memory.
+
+That is the exact opposite of `V29TX_status`, which reads as an assignment
+after two pointless clears and is a deviation for losing the caller's bits
+(D1035). This one reads as a merge and behaves as an assignment. Recorded as
+D1097 because a reader who checks one against the other will get the sense
+backwards; the pair is the reason to write it down rather than either alone.
+
+**AND THE STORE SEQUENCE IS NOT DIRECTLY TESTABLE, WHICH IS SAID HERE RATHER
+THAN PAPERED OVER.** `t_v29fax` overlays the report on the instance on half
+its trials -- the only arrangement under which an intermediate value could
+reach a later load at all -- and it still cannot separate four stores from
+one. The reason is specific: every intermediate value goes to the report's
++0x14, and no load in this function reads the instance at +0x14. An overlay
+that DID put +0x14 under a field read later would have to put it under the
+receive-block pointer at +0x50, and both sides would then dereference a
+corrupted pointer, which measures nothing and crashes. So the four stores are
+recorded as FORCED BY THE INSTRUCTIONS and the overlay is recorded as arm
+coverage -- "the overlapping case ran and the two sides agreed" -- not as a
+separation. Counting it as one would be the decoration F134 warns about.
+
+**BIT 15 OF THE STATUS WORD IS TESTED AS A BYTE**, `testb $0x80,0x19(%esi)`
+at 0x0a461d, which is GCC's narrowing of `& 0x8000` on the `int` at +0x18 --
+exactly as `V29RX_modem`'s `andb $0xfd,0x19` is its narrowing of `&= ~0x200`,
+and the word is spelled as the `int` it is at both sites. Its complement is
+the reported `quality`, so a set bit is quality zero. That is the same shape
+and the same reported field as V.21's `V21RX_FLAG_LOW_SNR` (F8896) -- a
+corroboration, not the derivation, and the seven flag bits keep neutral names
+because no format string prints any of them and nothing else in the 1.2 MB
+reads them.
+
+## F9131. The V.29 scrambler pair is a fourth site for F8120's "no intermediate local", and the relocation is what picks `SDM_*` over `FPM_SDM_*`
+
+*2026-09-01.* `ScrambleDataV29` (0x0a6560, 28 bytes) and `DescrambleDataV29`
+(0x0a6180, 30 bytes) are two instructions and a tail jump each: widen the
+count, add a constant to a block pointer, jump. What they establish is the
+two offsets -- `V29_OBJ_TX + 0x1c` for the transmit state and
+`V29_OBJ_RX + 0x4f3c` for the receive one -- and each reaches a DIFFERENT
+block, which is what pairs them with their names independently of the names.
+
+**THE TWO-BYTE SIZE DIFFERENCE IS THE DISPLACEMENT AND NOT THE SOURCE.**
+`add $0x1c,%eax` takes an eight-bit displacement and `add $0x4f3c,%eax` does
+not; the two functions are otherwise identical.
+
+**NO INTERMEDIATE LOCAL, AT A FOURTH SITE.** F8120 enumerated seven spellings
+of `ScrambleDataV22`/`DescrambleDataV22` and found exactly one that
+reproduces them: the sub-object computed inline with no local. With a local,
+GCC puts the pointer in `%edx` and pays the six-byte `add $imm32,%edx`;
+without it the pointer lands in `%eax` and takes the five-byte short form,
+which is what the object has at 0x0a6190 and 0x0a656d. The same evidence in
+the same form, at two more call sites.
+
+**THEY JUMP TO `SDM_*`, NOT TO `FPM_SDM_*`.** The two families are byte for
+byte the same code at two addresses (`include/dsplib/sdm.h`), so which one a
+call site names cannot be settled by which would work -- only the relocation
+says, and 0x0a6199 carries `R_386_PC32 SDM_descrambler` and 0x0a6577
+`R_386_PC32 SDM_scrambler`.
+
+The test seeds the two `fpm_sdm` states to different values and asserts, from
+the reference's own run, that each wrapper advanced its own and left the
+other's alone. Reaching the wrong block would otherwise be invisible: both
+are inside the same pseudorandom fill and both produce a plausible bit
+stream.
+
+## F9132. `V21RX_status` computes the bit rate a second time out of the demodulator's `f22` -- and `f22` has a reader after all
+
+*2026-09-01.* `V21RX_status` (0x0a2460, 132 bytes) fills the same report
+block `V21TX_status` does, from the RECEIVE handle, and differs from it in
+five places rather than one:
+
+| | transmit | receive |
+|---|---|---|
+| the rate goes to | `tx_bps` (+0x02) | `rx_bps` (+0x04) |
+| `snr` | a literal 0 | `GetSNRV21`'s answer |
+| `quality` | a literal 0 | the COMPLEMENT of V21RX_FLAG_LOW_SNR |
+| the zeroed gap short | +0x0c | +0x0e |
+| the flags byte | merged from the handle | stored as a literal 0 |
+
+**THE ONLY ARITHMETIC IN THE FUNCTION IS +0x12, AND IT IS THE RATE AGAIN.**
+0x0a24b3..0x0a24d7 is `movswl 0x76(%eax)`, `movswl 0x66(%eax)`, `add` the
+first to itself, `cltd`, `idiv`, `2 -` the quotient, `imul $0x12c`:
+
+    short_12 = (2 - 2 * fsd.f22 / fsd.cfg.bit_samples) * 300
+
+Both operands are in the fsd, under the DSP block's +0x54: +0x66 is
+`cfg.bit_samples` and +0x76 is `f22`. `FPM_FSD_init` sets `f22` to
+`bit_samples / 2`, so for an EVEN `bit_samples` the quotient is 1 and the
+field comes out at 300 -- the same number `rx_bps` gets from the literal
+0x12c four statements earlier, by a completely different route. For an odd
+one it does not: `bit_samples` 3 with `f22` 4 gives 0, and the test drives
+that.
+
+**AND THIS IS `f22`'S ONLY READER.** `include/dsplib/fpm_fsd.h` describes it
+as "set by init and then never read -- demodulate recomputes it", which is
+true of `FPM_FSD_demodulate` and is no longer true of the object: a function
+outside `fpm_fsd.c` reads it, and what it reads it for is to recover the bit
+rate without being told it. The comment is left alone here because
+`fpm_fsd.h` belongs to another module and three branches were live; it is
+flagged for whoever merges.
+
+**THE DIVIDE IS UNGUARDED** -- deviation D1098.
+
+The flags byte is stored as a LITERAL ZERO (`movb $0x0,0x14(%ebx)` at
+0x0a24bf), not merged, so unlike `V21TX_status` there is not even a
+pointless clear before it; and the `flags1` clear at 0x0a24bb is the one
+statement the two functions share.
+### F9100. The fax status block's +0x08 is the SNR, and `V17RX_status` is what settles it
+
+`struct v17_status`'s +0x08 was `short_08` because the only V.17 writer known
+was `V17TX_status`, which stores a constant zero there. `V17RX_status` stores
+`GetSNRV17`'s return and nothing else.
+
+`GetSNRV17` is the author's own function name for `13 - V17RXS_DEC_ERROR`, and
+`V17RXS_DEC_ERROR` is itself named from two of the author's format strings
+("V17 Decoder error too big... no carrier", "V17 Dec error too big...
+unreliable data"). So the value that lands in +0x08 is a signal-to-noise
+estimate by the author's own words, twice removed and no further.
+
+`v32fpstat.h` independently calls the same offset `snr`, derived from
+`V32FP_status`'s disassembly with nothing to do with V.17. Two modules, two
+derivations, one meaning -- which is the shape v17fax.h's own note demanded
+before any of the five contested offsets could be named.
+
+`v22status.h` calls +0x08 `short_08` and glosses it "written 0, read by
+nothing", so it does not DISAGREE; it simply has no evidence. +0x06 stays
+neutral for the opposite reason: `v22_status` calls it `quality` and describes
+a number counting DOWN from 2048, and `V17RX_status` writes a 0 or a 1 there,
+which does not fit that reading. One offset moved, one did not, and the
+difference is which way the third module's evidence points.  (2026-09-01)
+
+### F9101. `V17RX_status`'s flags byte is four stores and the caller's byte does not survive any of them
+
+The object builds `status + 0x14` over four `mov %al` stores separated by
+three loads of `V17RX_OBJ_STATE`. It looks like a read-modify-write chain that
+preserves what the caller had. It does not.
+
+Reading it out with `b` for the incoming byte and `x1`, `x3`, `x5` for the
+three state bits:
+
+    store 1   b & 0xfe
+    store 2   ((b & 0xfc) | x1) & 0xfb            =  (b & 0xf8) | x1
+    store 3   (((b & 0xf8) & 0xf3) | x3) | 0x10   =  (b & 0xf0) | x1 | x3 | 0x10
+    store 4   ((that & 0xdf) | x5 | 0x40) & 0x7f
+
+and the last line leaves `(b & 0x50) | x1 | x3 | x5 | 0x10 | 0x40`. Bits 4 and
+6 are the only ones of `b` that reach it, and both are forced set by the two
+constants anyway -- so the result is `0x50 | x1 | x3 | x5` and depends on the
+caller's byte not at all.
+
+**Why that matters and is not trivia.** It is what makes the three
+intermediate stores unobservable except to a caller whose two arguments
+overlap, which is deviation D1092; and it is what let the test assert an exact
+value for the byte instead of a relation to what was there before. The four
+stores are still written as four statements, because each is separated from
+the next by a load through a character type that may alias the status block and
+a source that assigned once could not have produced them.
+
+The neighbouring `status + 0x15` is the opposite case and is left alone here:
+one bit is cleared and the other seven are genuinely preserved.  (2026-09-01)
+
+### F9102. Four "neutral" offsets in the V.17 receiver state are fields of two modelled structs, and F8854's tiling is the proof
+
+`v17fax.h` carried `V17RXS_INT_0128`, `_01B4`, `_01B8` and `_01BC` as modelled
+but unnamed ints, on the ground that `DemodDataV17`'s plumbing was established
+and their meaning was not. The tiling F8854 already measured settles them
+without any new evidence:
+
+    0x128 - V17RXS_SRE (0xe0)  = 0x48   struct fpm_sre::adapt
+    0x1b4 - V17RXS_FSE (0x170) = 0x44   struct fpm_fse::pll_on
+    0x1b8 - V17RXS_FSE         = 0x48   struct fpm_fse::tilt_on
+    0x1bc - V17RXS_FSE         = 0x4c   struct fpm_fse::lms_on
+
+`fpm_sre.h` and `fpm_fse.h` model all four from their own disassembly and
+describe every one of them as the CALLER's enable for a stage of the loop.
+`DemodDataV17` is that caller, and what it writes them with is
+`agc->signal & <an enable word>` -- exactly an enable. So these were never
+unnamed fields of an unmodelled block; they were named fields of a modelled one
+reached the long way round, and `src/fax/v17.c` now reaches them as members.
+
+`src/fax/v29.c` had already done this for the same four fields of the V.29
+receiver, which is why the V.17 spelling looked wrong beside it rather than
+merely unfinished. The offsets are kept as `V17RXS_SRE_ADAPT`,
+`V17RXS_FSE_PLL_ON`, `V17RXS_FSE_TILT_ON` and `V17RXS_FSE_LMS_ON` because the
+test has to find the same bytes without the struct.  (2026-09-01)
+
+### F9103. `DemodDataV17`'s pre-pass copies; `DemodDataV29`'s HALVES. The two functions are otherwise the same shape
+
+The two demodulators are the same six calls in the same order with the same
+abandon-on-detect, and the temptation is to write one from the other. The
+copy loop is where that fails.
+
+`DemodDataV29`, 0x0a6040:
+
+    a6040  0f bf 5c 55 00   movswl 0x0(%ebp,%edx,2),%ebx
+    a6045  8d 42 01         lea    0x1(%edx),%eax
+    a6048  d1 fb            sar    $1,%ebx
+    a604a  66 89 1c 51      mov    %bx,(%ecx,%edx,2)
+
+`DemodDataV17`, 0x0a5100:
+
+    a5100  0f b7 5c 55 00   movzwl 0x0(%ebp,%edx,2),%ebx
+    a5105  8d 42 01         lea    0x1(%edx),%eax
+    a5108  66 89 1c 51      mov    %bx,(%ecx,%edx,2)
+
+Same three-instruction shape, same index arithmetic, one `sar` present in the
+one and absent in the other.
+
+No shift, and the load's extension is the other one -- which is 614's free case
+here, since only `%bx` is stored, and follows the declared type of the local
+rather than the field's.
+
+**It is not observable in the pre-pass's own verdict most of the time**, which
+is why it is written down. The copy feeds `FPM_TONE_kill` and then
+`FPM_MTD_detect`, and halving a block scales its energy by exactly one half --
+so the detector's RATIO test between bands is unmoved and only its absolute
+`min_level` gate can see the difference. A fixture driven at one comfortable
+level would report the two readings as identical. `t_v17fax.c` names the
+halving reading `M_HALVE` and drives it over the six stimuli of `dtones[]`,
+which span three amplitudes at the ABSENT frequency, one PRESENT frequency, one
+low-amplitude in-band tone, and silence -- and the separating count is asserted
+non-zero, so if some future change left the halving invisible the test would
+say so rather than passing quietly.  (2026-09-01)
+
+### F9104. A `sete` on a pseudorandom int is never zero, so two flag-bit readings separated nothing until the fixture planted zeros
+
+`V17RX_status` turns two 32-bit state fields into single bits with `sete` --
+the bit is set when the field is ZERO. The first version of `t_v17fax.c`'s
+block for it drove those fields as `fixture()` left them, which is
+pseudorandom, and a pseudorandom int is non-zero on every trial.
+
+So both bits read 0 every time, and the two named wrong readings that took a
+bit from the WRONG OFFSET produced 0 as well. Their separating counts were
+zero and the checks above them were decoration, exactly as F3052's rule says.
+
+The fix is not "more trials". It is a sweep over the four combinations of the
+two fields being zero, with the neighbouring offset a wrong reading would pick
+up planted with the COMPLEMENT of whatever the right one holds -- so an offset
+wrong by four bytes reports the opposite bit rather than the same one.
+
+**The general shape, which is worth more than the instance.** A random fixture
+separates a wrong FIELD; it does not separate a wrong PREDICATE ON a field
+whose predicate is almost always false. `sete`, `setne`, `test`-against-a-mask
+and any comparison against a constant a random value never reaches are all in
+that class, and each needs its answer driven both ways by construction. F8885
+is the same lesson in its bit-0 form.  (2026-09-01)
+
+### F9105. Consecutive seeds into an xorshift make a fixed byte's bit 7 CONSTANT, and a named wrong reading reported zero because of it
+
+`t_v17fax.c`'s `fixture()` fills every block with `(unsigned char)rng_next()`
+and `rng_next` is xorshift32. That generator is LINEAR over GF(2): the byte it
+writes at a fixed offset is a fixed matrix applied to the seed, so every bit of
+that byte is a fixed XOR of the seed's bits.
+
+A sweep seeded `base + where` with `where` running 0..23 varies only the
+seed's low five bits. Any output bit whose linear form does not involve one of
+those five is then the SAME on every trial of the sweep.
+
+That is what happened. `V17RX_status`'s "0x80 not forced clear" reading is
+observable exactly when the incoming byte at `status + 0x14` has bit 7 set; the
+fixture laid down bit 7 CLEAR on all 24 trials, so the reading separated
+nothing and its count read zero. The bytes looked pseudorandom -- 0x08, 0x0f,
+0x1b, 0x1c, 0x28, ... -- and every one of them was under 0x80.
+
+**The fix is not more trials.** Twenty-four thousand consecutive seeds would
+have varied fifteen bits and left the same bit constant if its form missed
+them. `spread(base, where)` XORs in `where * 0x9e3779b9`, which puts a
+different pattern into all 32 seed bits for every `where`, and the reading then
+separates.
+
+**What generalises.** Any test that sweeps `base + i` into a linear generator
+and then asserts something about ONE BIT of ONE BYTE is exposed to this, and
+the symptom is a separating count of zero on a check that looks fine. F9104 is
+the neighbouring failure with a different cause -- a predicate a random value
+never satisfies -- and the two together are why every named reading in this
+file has its count asserted rather than reported. The three sweeps added in
+this batch use `spread`; the older ones in the file were left alone because
+their counts are non-zero and churning a green fixture measures nothing.
+(2026-09-01)
+
+### F9106. `V17TX_OBJ_PARAMS` is not a parameter block the transmitter points at; it is one the transmitter OWNS, and the delete says so
+
+`v17data.h` named `V17TX_OBJ_PARAMS` from `V17TX_create` alone, which reads a
+rate index out of its +0x10, and glossed it "a parameter block the instance
+points at rather than owns ... the block's extent and owner are unknown". That
+was the right call on the evidence then available.
+
+`V17TX_delete` settles it. The function releases the block's +0x04 through
+`SGD_delete`, its +0x00 through `FIFO_delete`, and then the block itself
+through `sysdep_free`. A block whose lifetime the instance's destructor ends is
+the instance's.
+
+**And its contents are a control block, not parameters.** `V17TX_modem` reads
++0x08 as an int gating which of two arms runs and calls through +0x14 as a
+function pointer. So the four offsets now known are a `fax_fifo *`, a
+`struct sgd *`, a mode int and a dispatch slot -- the transmit-side analogue of
+`V17RX_OBJ_CTL`, which holds two detectors, a buffer and a dispatch slot at
++0x14 as well.
+
+**The name is left alone deliberately.** Renaming it is a change to
+`include/dsplib/v17data.h`, which this batch does not own, and two headers
+disagreeing about one constant is worse than one header carrying a correction.
+`v17fax.h` states it beside the four new offsets; a later pass that owns both
+files should rename `V17TX_OBJ_PARAMS` to a control-block name and update
+`V17TXP_NOCARRIER_SYM` with it.  (2026-09-01)
+
+### F9107. Two of `V17TX_modem`'s readings are settled from the object because no differential run can reach them
+
+`t_v17fax.c` asserts a non-zero separating count for every named wrong reading
+it carries, which means a reading that cannot separate must not be carried.
+Two of `V17TX_modem`'s were dropped, and each for its own reason.
+
+**The budget reloaded per iteration.** The object sets the inner loop's budget
+once, at the join of both arms and above the loop (`movw $0x30,0x1a(%esp)` at
+0x0a0e68, with the back edge at 0x0a0e77). Moving that assignment inside the
+loop DOES NOT TERMINATE for any dispatch slot that takes less off the budget
+than the reload puts back -- which is every slot a test can write, since a slot
+that consumed 48 or more in one call would make the loop single-iteration and
+measure nothing else. The reading is refuted by the disassembly and by
+non-termination, and neither is a differential measurement.
+
+**The running total not narrowed to a short.** The object narrows with `cwtl`
+on every iteration. The total leaves the function through `*count`, which is
+`unsigned short`, and a 32-bit sum and its `short` truncation have the same low
+sixteen bits -- so no caller can tell the two apart. Reproduced because the
+object encodes it; not claimed, because nothing can see it. `V17RX_modem`'s
+total is the same shape, and `t_v17fax.c` counts the trials that WRAP as a path
+rather than asserting a separating count for the narrowing.
+
+**What replaced them.** Mode 1 of the dispatch stub takes exactly 24 off a
+budget of 0x30, so it lands on zero -- the only state that distinguishes "runs
+while > 0" from ">= 0" -- and returns 20,000 samples a call so the total passes
+32767 and the wrap path is reached and counted.  (2026-09-01)
 ### F9050. The four Class 1 receive-side configuration tables contain no pointers, and the tool that answers that is not the one you reach for first
 
 `FAXVMI_CFG` (24), `V17RX_CFG` (40), `V27RX_CFG` (28) and `V29RX_CFG` (24) are
@@ -104633,3 +105060,230 @@ an offset comment on EVERY field rather than only on the interesting ones.
 `t_faxcfg.c` keeps its own `offsetof` layer regardless -- `offcheck.py` proves
 the comment matches the struct and cannot prove the struct matches the object.
 (2026-09-01)
+### F9115. V.27ter's demodulator hands the tone detector the CALLER's buffer -- no copy and no notch, where V.17 and V.29 have both
+
+`DemodDataV17`, `DemodDataV29` and `DemodDataV27` are the same six-stage
+receive chain, and the tone pre-pass is the one stage where they are not the
+same code.
+
+V.29's (0x0a5ff0) copies the block into the detection block's scratch buffer,
+halving each sample, runs `FPM_TONE_kill` over the COPY and hands the copy to
+`FPM_MTD_detect`. V.17's does the same thing.
+
+V.27ter's (0x0a5950) does neither. Its 331 bytes contain **no loop at all** --
+the only backward branch is the `jmp` that rejoins after the debug print -- and
+**no `FPM_TONE_kill` relocation**; there are eight relocations in the range and
+they name `FPM_AGC_agc`, `FPM_MTD_detect`, `FPM_MRF_filter`, `FPM_SRE_recover`,
+`FPM_FSE_receive`, `dsplibs_debug_level`, `.rodata.str1.4` and
+`dsplibs_debug_printf`. The detector is given `in`, the caller's own buffer, at
+0x0a599b -- and by then that buffer is what `FPM_AGC_agc` has rewritten in
+place, so the detector runs on gain-controlled samples rather than on a halved
+copy.
+
+The shared block still HAS a scratch buffer at +0x1c and still uses it:
+`DataCarrierDetectV27` copies into it, gain-controls the copy and runs the
+V.21 detector over that. So the buffer is not unused, and this is not a
+demodulator that was written before the buffer existed.
+
+**Checked against the bytes rather than inferred from the size**, because it
+is the structural difference between the three and a reader who assumes the
+family is uniform writes a copy loop that no test can fail on: the copy would
+be into a buffer nothing downstream reads, and the detector would see the same
+samples either way only if the halving were also omitted.  (2026-09-01)
+
+### F9116. `DemodDataV27` is the fourth site to call `FPM_AGC_agc` with an argument it does not have and read a result it does not return
+
+At 0x0a5975 the object stores the literal 1 into `0xc(%esp)` -- a fourth
+argument -- and at 0x0a5992 it takes `%eax` as the carrier bit and ANDs it into
+three of the receiver's enable words. `FPM_AGC_agc` is `void` and takes three
+arguments.
+
+That is F8875's shape exactly, and the same argument closes it: the function
+has one `ret`, every path funnels through it, and the two instructions before
+it store `agc->signal`. So the reconstruction reads the field.
+
+**The four sites are `v22data.c`, `bwchdem.c`, `DemodDataV29` and this one**,
+and the extra argument also appears at `V27RX_delete`'s three `FPM_*_free`
+calls (F8870). One prototype in one header, wrong in both directions, was
+included by several translation units -- which is what a private header that
+was not kept in step with its module looks like from the object.
+
+Recorded as D1094, and `t_v27fax.c` MEASURES the identity rather than
+believing it: it declares `ref_FPM_AGC_agc` as returning `int` and asserts the
+returned value equals `agc.signal` on every demodulator trial, so a blob that
+ever broke the equivalence would fail rather than pass quietly.  (2026-09-01)
+
+### F9117. `V27RX_eq_train` contains a counted loop with no body, and there is no preimage to recover
+
+At the handover, before it clears `lms_force` and installs `V27RX_decision`,
+the object runs
+
+    9a1ce:  movzwl 0xc(%ebx),%edx        ; state->cfg.taps
+    9a1d2:  xor    %eax,%eax             ; i = 0
+    9a1d4:  cmp    $0x0,%dx
+    9a1d8:  jmp    9a1e5
+    9a1e0:  inc    %eax
+    9a1e1:  cwtl                         ; i is a short
+    9a1e2:  cmp    %ax,%dx
+    9a1e5:  jg     9a1e0
+
+and falls straight through to `movl $0x0,0x40(%ebx)`. `%eax` is dead at the
+exit. The bound is hoisted, the induction variable is a `short`, and the body
+is empty.
+
+**Whatever the author wrote there emitted no instructions**, so the candidate
+space is not a small finite family and the fit-versus-recovery rule (F7782)
+says this is not recoverable: a loop over `cfg.taps` accumulating into an
+unused local, a loop whose body was `#if`-ed out, and a deliberately empty
+loop all compile to this and nothing separates them. The obvious guess -- that
+it re-seeds the equaliser's coefficients from `cfg.icoff`/`cfg.qcoff` -- is
+REFUTED rather than merely unproven, because those stores would have to appear
+and none do.
+
+Reproduced as an empty loop, for the control flow and for nothing else. It is
+not observable, so no test can cover it and none pretends to; GCC 14 deletes
+it and GCC 3.4.2 emits it, which is why it is recorded here rather than
+defended in a comment alone.  (2026-09-01)
+
+### F9118. V.27ter's two scrambler wrappers sign-extend their count where V.17's and V.29's zero-extend it, and the difference cannot be observed through the callee
+
+`ScrambleDataV27` (0x0a5e70) and `DescrambleDataV27` (0x0a5aa0) are 28 bytes
+each and identical but for two constants:
+
+    a5e70:  movswl 0xc(%esp),%ecx        ; count, SIGN-extended
+    a5e75:  mov    0x4(%esp),%edx        ; modem
+    a5e79:  mov    %ecx,0xc(%esp)
+    a5e7d:  mov    0x28(%edx),%eax       ; the TRANSMITTER block
+    a5e80:  add    $0x1c,%eax
+    a5e83:  mov    %eax,0x4(%esp)
+    a5e87:  jmp    SDMv27_scrambler
+
+The descrambler takes `0x54(%edx)` -- the RECEIVER block -- and `+0x3c`. So
+the scrambler state lives in the transmitter's block and the descrambler's in
+the receiver's, at two different offsets, and neither wrapper does anything
+else.
+
+The wrappers around the GENERIC scrambler module in `v17data.c` and
+`v29data.c` widen their count with `movzwl`. `SDMv27_scrambler` takes a
+`short`, so **the widening the wrapper chooses is not observable through it**
+-- the callee reads sixteen bits either way. It is recorded because it is
+forced (the caller's own parameter must be a `short` for GCC to emit
+`movswl` on it) and because `sdmv27.h` already records what the module makes
+of a negative count, which is not an early exit: the loop is
+`while (count--)`, so it wraps and runs tens of thousands of words.
+
+`t_v27fax.c` therefore does not try to separate the two widenings and says so.
+What it DOES separate is the four block/offset combinations, by planting a
+live, differently-seeded `struct sdmv27` at each of them -- so a wrapper
+reading the wrong block or the wrong offset gets a plausible scrambler and a
+wrong answer rather than a fault.  (2026-09-01)
+
+### F9119. `V27RX_eq_train`'s two fold comparisons are strict on one side and equal on the other, and NO test can ever settle which -- the folded difference is used only for its magnitude
+
+The training slicer folds the phase difference into half a turn either side:
+
+    9a14b:  cmp    $0x4000,%dx
+    9a150:  jle    9a15b                  ; skip unless d >  +0x4000
+    9a152:  lea    0x8000(%edx),%eax
+    ...
+    9a15b:  cmp    $0xc000,%dx
+    9a160:  jge    9a16b                  ; skip unless d <  -0x4000
+
+so the high test is `>` and the low test is `<`, and exactly +0x4000 folds
+while exactly -0x4000 does not -- an asymmetry that reads like a defect.
+
+**It is not observable, and that was MEASURED and not argued.** Both
+`>=` variants were written into `t_v27fax.c`'s model, run over a fixture whose
+angle sequence lands on both boundaries by construction, and both reported a
+separating count of **zero**. The reason is that `d` reaches exactly one
+consumer -- `err = |d|`, tested against a quarter turn -- and folding by a
+half turn at exactly a half turn NEGATES `d`, leaving `|d|` alone. Every
+observable of the function is identical.
+
+So the two strictnesses are settled by the disassembly and by nothing else,
+which is the honest statement, and the test now carries two variants that ARE
+observable in their place: the folds themselves OMITTED. Those separate,
+because folding can carry `|d|` from above the advance threshold to below it
+(0x7000 folds to -0x1000).
+
+**The general shape is worth carrying.** A comparison whose operand feeds only
+an absolute value is boundary-blind at the point where the fold is its own
+negation, and a wrong-reading variant aimed at the boundary reports zero and
+looks like a hole in the fixture. It is not a hole; the fixture is right and
+the mutant is equivalent. F134's rule says a zero separating count is a
+failure -- this is the case where the correct response is to REPLACE the
+variant rather than to strengthen the stimulus, and to say in the record that
+the property is unreachable.  (2026-09-01)
+
+### F9120. A callee's out-of-band static counter makes a whole-transcript comparison measure the apparatus, not the code
+
+`t_v27fax`'s demodulator trial compares the two sides' debug transcripts, and
+two of eight blocks disagreed -- on one block the reconstruction printed
+`Decoder Error = 16525` and the blob printed nothing, on another the reverse.
+Every numeric observable agreed on both: the return, every output word, the
+whole 20,320-byte receiver block, both scratch buffers, and
+`DemodDataV27`'s OWN report, `ERROR: SRE buffer violation(630)`, which was
+byte-identical.
+
+The cause is in `FPM_FSE_receive`, not in either demodulator. Its
+"Decoder Error" report is gated on a counter that lives **outside**
+`struct fpm_fse` -- one static per side -- and the trial replays the BLOB's
+modules 96 extra times per case for the wrong-reading variants and the
+reconstruction's not at all. By the debug arm the two statics are hundreds of
+calls apart, so a whole-transcript `strcmp` was reporting how often each side
+had been CALLED.
+
+**A state that a fixture cannot snapshot is a state a differential test cannot
+carry**, and this is the general form: `diff_eq_obj` over the instance is
+blind to it by construction, so it fails only where the transcript is the
+observable. The two candidate fixes are not equal --
+
+- narrow the comparison to the output of the function UNDER TEST, which is
+  what was done: the report is extracted by its prefix and both the count and
+  the text are compared, so the threshold at 0xa4 and the `%d` argument are
+  still measured; or
+- drive both sides the same number of times, which would mean replaying every
+  wrong reading through the reconstruction as well and would make the model a
+  copy of `src/` rather than an independent statement of it.
+
+The first keeps the model independent. What it gives up is `FPM_FSE_receive`'s
+own diagnostic path, which belongs to `t_fpmfse` and not here.  (2026-09-01)
+
+### F9121. The V.27ter transmitter block tiles exactly like the receiver's, and the tiling REFUTED the obvious reading of `tx + 0x10`
+
+`V27TX_delete` frees `*(int *)(tx + 0x10)` and the obvious reading is a scratch
+allocation of the transmitter's own -- which is how it was first written here.
+It is wrong, and the arithmetic that settles it is `v27fax.h`'s own method
+applied to the other block.
+
+Three of the four regions are typed by a CALLEE and the fourth by the module
+that owns it:
+
+    tx + 0x08   struct fpm_smc_ring   ModDataV27's 2nd argument to BOTH calls
+    tx + 0x1c   struct sdmv27         ScrambleDataV27
+    tx + 0x2c   struct fpm_smc        SMC_encoder
+    tx + 0x5c   struct fpm_pps        FPM_PPS_filter and FPM_PPS_free
+
+and their sizes close the block:
+
+    0x08 + 0x14 == 0x1c     sizeof(struct fpm_smc_ring)
+    0x1c + 0x0e == 0x2a     sizeof(struct sdmv27), aligned up to 0x2c
+    0x2c + 0x30 == 0x5c     sizeof(struct fpm_smc)
+    0x5c + 0x38 == 0x94     sizeof(struct fpm_pps)
+
+One two-byte alignment gap, no overlap, and **no room for a field at 0x10**:
+0x10 is `V27TX_RING + offsetof(struct fpm_smc_ring, sym)`, the symbol-index
+buffer the encoder writes and the shaper reads. So the delete releases the
+RING's buffer, and `src/fax/v27.c` spells it `ring->sym` rather than an opaque
+`FIELD_PTR(tx, 0x10)`.
+
+**Both spellings free the same address, so no test can tell them apart** --
+this is the class of error the naming rules exist for, a wrong name believed by
+every future reader with nothing able to fail on it. What caught it was
+building the block's map to write `ModDataV27` and finding two names for one
+offset; the same method had already closed the receiver's four modules, and
+neither was available before the transmit-side functions were read.
+
+`t_v27fax.c` plants the ring's `sym` through the structure, so the test would
+now fail if the field moved -- but it agreed with the wrong spelling too, and
+that is the point.  (2026-09-01)

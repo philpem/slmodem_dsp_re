@@ -6,13 +6,16 @@
  *
  *   V29RX_delete          .text 0x09b590  220
  *   V29RX_modem           .text 0x0a3f50  127
+ *   V29RX_status          .text 0x0a45f0  190
  *   V29TX_status          .text 0x0a5030  100
  *   DemodDataV29          .text 0x0a5ff0  398
+ *   DescrambleDataV29     .text 0x0a6180   30
  *   CarrierDetectV29      .text 0x0a61a0   22
  *   DataCarrierDetectV29  .text 0x0a61c0  579
  *   QualityDetectV29      .text 0x0a6410  266
  *   EpochDetectV29        .text 0x0a6520   22
  *   GetSNRV29             .text 0x0a6540   23
+ *   ScrambleDataV29       .text 0x0a6560   28
  *   SeedScramblerV29      .text 0x0a6580   15
  *   SetEncoderV29         .text 0x0a6590   43
  *
@@ -78,9 +81,11 @@
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_sdm.h"
 #include "dsplib/fpm_smc.h"
 #include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_tone.h"
+#include "dsplib/sdm.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/v29data.h"
 
@@ -89,6 +94,7 @@
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 #define FIELD_INT(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
 #define FIELD_SHORT(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
+#define FIELD_USHORT(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
 #define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
 #define RX(modem)		FIELD_PTR((modem), V29_OBJ_RX)
@@ -180,6 +186,85 @@ V29RX_modem(void *modem, short *in, short *out, unsigned short *count)
 	*count = (unsigned short)produced;
 
 	return FIELD_INT(modem, V29_OBJ_STATUS);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * V29RX_status -- .text 0x0a45f0, 190 bytes.
+ *
+ * The receiver's half of the status report.  It is NOT a mirror of
+ * `V29TX_status`: it reads the receive handle, puts the bit rate in +0x04 and
+ * +0x12 rather than +0x02 and +0x10, writes +0x0e rather than +0x0c, and
+ * rewrites the flags byte four times rather than twice.
+ *
+ * THE BIT RATE IS LOADED TWICE, from 0x0a4615 and 0x0a4646, with stores to
+ * the report in between.  Two statements, not one value used twice -- the
+ * same reasoning `V29TX_status` records for its own double load, and forced
+ * for the same reason: `status` and `modem` are unrelated parameters.
+ *
+ * THE FOUR STORES TO THE FLAGS BYTE ARE ALIASING, NOT REDUNDANCY.  The object
+ * flushes +0x14 at 0x0a4657, 0x0a466f, 0x0a4685 and 0x0a46a2, and each flush
+ * sits immediately before a load through `modem`.  A compiler that could
+ * prove the two blocks disjoint would have emitted one store; this one could
+ * not, so the intermediate values are visible to a caller that overlaps them.
+ * Spelled through `unsigned char` lvalues, which alias everything and give
+ * the modern compiler the same reason to keep them.  `t_v29fax.c` drives the
+ * overlapping case rather than assuming it away.
+ *
+ * AND THE VALUE IT READS OUT OF +0x14 IS DEAD.  All EIGHT bits are determined
+ * before the function returns -- 0, 2 and 7 cleared, 4 and 6 set, and 1, 3
+ * and 5 assigned from fields -- so the final byte does not depend on what the
+ * caller had there.  The object reads it anyway, at 0x0a464e, and the read is
+ * not removable for the same aliasing reason the stores are not: it is the
+ * source of the three intermediate values that reach memory.  So this reads
+ * as a merge and behaves as an assignment, which is the opposite of
+ * `V29TX_status`, which reads as an assignment after two pointless clears
+ * (D1035).  Deviation D1097; finding F9130.
+ *
+ * BIT 15 OF THE STATUS WORD IS TESTED AS A BYTE.  The object writes `testb
+ * $0x80,0x19(%esi)`, which is GCC's narrowing of `& 0x8000` on the `int` at
+ * +0x18 -- exactly as `V29RX_modem`'s `andb $0xfd,0x19` is its narrowing of
+ * `&= ~0x200`.  The word is spelled as the `int` it is at both sites.
+ */
+int
+V29RX_status(void *modem, void *status)
+{
+	if (status == 0)
+		return 0;
+
+	FIELD_SHORT(status, V29STAT_PROTOCOL) =
+		(short)FIELD_USHORT(modem, V29_OBJ_PROTOCOL);
+	FIELD_SHORT(status, V29STAT_TX_BPS) = 0;
+	FIELD_SHORT(status, V29STAT_ZERO_LO) =
+		(short)FIELD_USHORT(modem, V29_OBJ_BITRATE);
+	FIELD_SHORT(status, 0x06) = (short)
+		((FIELD_INT(modem, V29_OBJ_STATUS) & V29_STATUS_8000) == 0);
+	FIELD_SHORT(status, 0x08) = GetSNRV29(modem);
+	FIELD_SHORT(status, 0x0a) = 0;
+	FIELD_SHORT(status, V29STAT_SHORT_0E) = 0;
+	FIELD_SHORT(status, V29STAT_SHORT_10) = 0;
+	FIELD_SHORT(status, V29STAT_SHORT_12) =
+		(short)FIELD_USHORT(modem, V29_OBJ_BITRATE);
+
+	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT0;
+	FIELD_BYTE(status, V29STAT_FLAGS) = (unsigned char)
+		((FIELD_BYTE(status, V29STAT_FLAGS) & ~V29STAT_BIT1)
+		 | ((FIELD_BYTE(RX(modem), V29RX_FLAGS_0018)
+		     & V29RX_0018_BIT0) << 1));
+	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT2;
+	FIELD_BYTE(status, V29STAT_FLAGS) = (unsigned char)
+		((FIELD_BYTE(status, V29STAT_FLAGS) & ~V29STAT_BIT3)
+		 | ((FIELD_INT(RX(modem), V29RX_INT_0000) == 0) << 3));
+	FIELD_BYTE(status, V29STAT_FLAGS) |= V29STAT_BIT4;
+	FIELD_BYTE(status, V29STAT_FLAGS2) &=
+		(unsigned char)~V29STAT_FLAGS2_BIT0;
+	FIELD_BYTE(status, V29STAT_FLAGS) = (unsigned char)
+		((FIELD_BYTE(status, V29STAT_FLAGS) & ~V29STAT_BIT5)
+		 | ((FIELD_INT(RX(modem), V29RX_INT_0020) == 0) << 5));
+	FIELD_BYTE(status, V29STAT_FLAGS) |= V29STAT_BIT6;
+	FIELD_BYTE(status, V29STAT_FLAGS) &= (unsigned char)~V29STAT_BIT7;
+
+	return 1;
 }
 
 /*
@@ -318,6 +403,34 @@ DemodDataV29(void *modem, short *in, unsigned short *out, unsigned short count)
 			       (const short *)
 				FIELD_PTR(RX(modem), V29RX_BUF_SRE),
 			       out, n);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * DescrambleDataV29 -- .text 0x0a6180, 30 bytes.
+ *
+ * Two instructions and a tail jump: pick the `fpm_sdm` out of the receive
+ * block and hand the caller's buffer and count straight to `SDM_descrambler`.
+ *
+ * NO INTERMEDIATE LOCAL, and that is measured rather than a style choice --
+ * `ScrambleDataV22` and `DescrambleDataV22` enumerated seven spellings and
+ * exactly one reproduces them, the one with no local (finding F8120).  The
+ * local costs the register: with it GCC puts the sub-object pointer in %edx
+ * and pays the six-byte `add $imm32,%edx`, and the object has the five-byte
+ * `add $imm32,%eax` here at 0x0a6190.  The same evidence, in the same form,
+ * at a fourth site.
+ *
+ * IT JUMPS TO `SDM_descrambler`, NOT TO `FPM_SDM_descrambler`.  The two are
+ * byte for byte the same code at two addresses (`include/dsplib/sdm.h`), and
+ * which one a call site names is settled by the relocation and not by which
+ * would work -- 0x0a6199 carries `R_386_PC32 SDM_descrambler`.
+ */
+void
+DescrambleDataV29(void *modem, unsigned short *data, unsigned short count)
+{
+	SDM_descrambler((struct fpm_sdm *)(void *)
+			FIELD(FIELD_PTR(modem, V29_OBJ_RX), V29RX_SDM),
+			data, count);
 }
 
 /*
@@ -534,6 +647,26 @@ short
 GetSNRV29(void *modem)
 {
 	return (short)(14 - RX_FSE(RX(modem))->mse);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * ScrambleDataV29 -- .text 0x0a6560, 28 bytes.
+ *
+ * The transmit half of the pair, reaching the TRANSMIT block (`V29_OBJ_TX`,
+ * +0x24) where its sibling reaches the receive one.  Same shape, same "no
+ * intermediate local" ruling, and `R_386_PC32 SDM_scrambler` at 0x0a6577.
+ *
+ * Two bytes shorter than the receive one for one reason and it is not a
+ * difference in the source: `add $0x1c,%eax` has an eight-bit displacement
+ * and `add $0x4f3c,%eax` does not.
+ */
+void
+ScrambleDataV29(void *modem, unsigned short *data, unsigned short count)
+{
+	SDM_scrambler((struct fpm_sdm *)(void *)
+		      FIELD(FIELD_PTR(modem, V29_OBJ_TX), V29TX_SDM),
+		      data, count);
 }
 
 /*

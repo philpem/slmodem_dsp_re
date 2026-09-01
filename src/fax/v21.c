@@ -8,8 +8,11 @@
  *   V21RX_modem       .text 0x0a1c40   127
  *   RxHdxErrorV21     .text 0x0a1cc0    59
  *   RxHdxIdleV21      .text 0x0a1d00    81
+ *   RxNextStateV21    .text 0x0a1d60   290
+ *   RxHdxStartV21     .text 0x0a1e90   522
  *   RxHdxWaitV21      .text 0x0a20a0   440
  *   RxHdxDataV21      .text 0x0a2260   418
+ *   V21RX_status      .text 0x0a2460   132
  *   V21TX_status      .text 0x0a2c00    96
  *   DemodDataV21      .text 0x0a5740   217
  *   CarrierDetectV21  .text 0x0a5820    16
@@ -176,16 +179,16 @@ RxHdxIdleV21(void *modem, short *in, short *out, short *count)
 /*
  * Advance the receive state machine one step.
  *
- * THIS IS `RxNextStateV21` (0x0a1d60, 290 bytes), WHICH IS NOT CLAIMED HERE.
+ * THIS IS `RxNextStateV21` (0x0a1d60, 290 bytes), AND IT IS NOW CLAIMED.
  * The object carries the block four times: once out of line under that name,
  * and three more times inlined into `RxHdxStartV21`, `RxHdxWaitV21` and
  * `RxHdxDataV21`.  All four copies are the same instructions in the same
  * order, which is what says the author wrote one function and the compiler
- * inlined it at `-O3`.  It is `static` here because `RxHdxStartV21` -- the
- * third caller -- is not reconstructed, so the out-of-line symbol would have
- * no third referent and claiming it is out of this pass's scope; making it
- * global and giving it the object's name is the whole of what that would
- * take.  See finding F8898.
+ * inlined it at `-O3`.  Finding F8898 left it `static v21rx_next_state`
+ * because its third caller, `RxHdxStartV21`, was not reconstructed and a
+ * `static` carrying a blob symbol's name would have been counted as written
+ * by every tool that globs `build/repro`.  That caller is below, so the
+ * symbol is global and named here; finding F9091.
  *
  * The four strings are the author's own words, out of .rodata.str1.1 at
  * 0x4b3a, 0x4b16, 0x4b28 and 0x4b03; `tools/relocscan.py` is what pairs them
@@ -196,8 +199,8 @@ RxHdxIdleV21(void *modem, short *in, short *out, short *count)
  * does not install a handler: it only resets the flags and reports
  * V21RX_STATUS_DEFAULT.
  */
-static void
-v21rx_next_state(void *modem)
+void
+RxNextStateV21(void *modem)
 {
 	struct v21_rx_hdx *hdx = V21RX_HDX(modem);
 
@@ -243,6 +246,78 @@ v21rx_next_state(void *modem)
 }
 
 /*
+ * The start state, which is the one `V21RX_create` installs (0x098ee1).
+ *
+ * It demodulates the block like every other handler and then WALKS THE
+ * DEMODULATED UNITS, which none of the other four does.  The walk keeps
+ * `ones_run` as the length of the current run of non-zero units and bumps
+ * `mark_seq` on each transition out of a run of exactly six; the state
+ * advances once `mark_seq` has passed four and the carrier is up.
+ *
+ * THE TWO COUNTERS ARE UPDATED IN THE ORDER THE OBJECT UPDATES THEM, and the
+ * ordering is observable: at `ones_run == 6` with a zero unit the object
+ * increments `mark_seq` (0x0a1f9c) and then falls into the common store that
+ * puts zero in `ones_run` (0x0a1efc), while at `ones_run == 6` with a
+ * non-zero unit it jumps straight to the increment at 0x0a1ef7 and leaves
+ * `mark_seq` alone.  The `? :` below is the same three-way outcome written
+ * once; the object's two entries into the common store are the compiler's
+ * tail-merge of it.
+ *
+ * BOTH LOOP VARIABLES ARE 16-BIT AND THAT IS FORCED.  `nbits` is decremented
+ * with `lea -0x1(%esi),%eax` / `movzwl %ax,%esi` and `i` incremented with
+ * `lea 0x1(%edi),%ebx` / `movzwl %bx,%edi` (0x0a1f00..0x0a1f0b), so a count of
+ * 0x10000 would be a count of zero and the walk is skipped entirely; the
+ * demodulator cannot return one, but the reproduction does not depend on
+ * that.  The `> 4` test is `cmpw $0x4` with `jle`, so it is SIGNED over
+ * sixteen bits -- the same shape `RxHdxWaitV21`'s countdown has and the same
+ * cast is used for it.
+ *
+ * The return is a literal zero on every path (0x0a1f83), so the bits this
+ * handler produced are reported to `V21RX_modem` as none.  That is the
+ * object's; see docs/deviations.md D1090.
+ */
+short
+RxHdxStartV21(void *modem, short *in, short *out, short *count)
+{
+	struct v21_rx_hdx *hdx;
+	unsigned short nbits;
+	unsigned short i;
+
+	V21RX_STATUS(modem) = V21RX_STATUS_START;
+
+	nbits = DemodDataV21(modem, in, out, (unsigned short)*count);
+	*count = 0;
+
+	hdx = V21RX_HDX(modem);
+
+	i = 0;
+	while (nbits != 0) {
+		if (hdx->ones_run == V21RX_MARK_RUN && out[i] == 0)
+			hdx->mark_seq = (unsigned short)(hdx->mark_seq + 1);
+
+		hdx->ones_run = (unsigned short)
+			(out[i] != 0 ? hdx->ones_run + 1 : 0);
+
+		nbits = (unsigned short)(nbits - 1);
+		i = (unsigned short)(i + 1);
+	}
+
+	V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_CARRIER;
+
+	if (!CarrierDetectV21(modem))
+		return 0;
+
+	hdx = V21RX_HDX(modem);
+	if ((short)hdx->mark_seq <= V21RX_MARK_SEQ_THRESHOLD)
+		return 0;
+
+	V21RX_FLAGS(modem) |= V21RX_FLAG_CARRIER;
+	RxNextStateV21(modem);
+
+	return 0;
+}
+
+/*
  * The wait state: hold for `hdx->countdown` blocks with the carrier up, then
  * advance.
  *
@@ -283,7 +358,7 @@ RxHdxWaitV21(void *modem, short *in, short *out, short *count)
 		return 0;
 
 	V21RX_STATUS(modem) = V21RX_STATUS_TIMEOUT;
-	v21rx_next_state(modem);
+	RxNextStateV21(modem);
 
 	return (short)nbits;
 }
@@ -325,9 +400,61 @@ RxHdxDataV21(void *modem, short *in, short *out, short *count)
 	}
 
 	V21RX_FLAGS(modem) &= (unsigned char)~V21RX_FLAG_CARRIER;
-	v21rx_next_state(modem);
+	RxNextStateV21(modem);
 
 	return 0;
+}
+
+/*
+ * Fill the caller's status block from the RECEIVER.
+ *
+ * NOT a mirror of `V21TX_status`.  The rate goes in `rx_bps` and not
+ * `tx_bps`, `snr` carries what `GetSNRV21` answered rather than a literal
+ * zero, `quality` is the COMPLEMENT of V21RX_FLAG_LOW_SNR (`testb $0x80`
+ * followed by `sete`, 0x0a2487), +0x0e is zeroed where the transmit side
+ * zeroes +0x0c, and the flags byte is stored as a literal 0 rather than
+ * merged from the handle.
+ *
+ * `short_12` IS THE ONLY ARITHMETIC IN THE FUNCTION and it is a `cltd`/`idiv`
+ * over two SIGNED shorts loaded `movswl` (0x0a24b3 and 0x0a24b7), then
+ * `imul $0x12c`.  Both operands live in the fsd: +0x76 of the DSP block is
+ * `fsd.f22` and +0x66 is `fsd.cfg.bit_samples`, and `FPM_FSD_init` sets the
+ * first to half the second -- so for an even `bit_samples` the quotient is 1
+ * and the field comes out at 300, which is `rx_bps` again by a different
+ * route.  Finding F9132.
+ *
+ * THE DIVIDE HAS NO GUARD.  A receiver whose fsd was never configured has
+ * `bit_samples` zero and this faults; see docs/deviations.md D1098.  It is
+ * reproduced, and the test asserts the precondition on BOTH sides rather
+ * than driving it.
+ */
+int
+V21RX_status(void *modem, struct v21_status *st)
+{
+	short f22, bit_samples;
+
+	if (st == NULL)
+		return 0;
+
+	st->protocol = (short)*(unsigned short *)(void *)
+		((char *)modem + V21RX_OBJ_PROTOCOL);
+	st->tx_bps = 0;
+	st->rx_bps = V21_STATUS_BPS;
+	st->quality = (short)
+		((V21RX_FLAGS(modem) & V21RX_FLAG_LOW_SNR) == 0);
+	st->snr = (short)GetSNRV21(modem);
+	st->short_0a = 0;
+	st->short_0e = 0;
+	st->short_10 = 0;
+	st->flags1 &= (unsigned char)~V21_STATUS1_BIT0;
+	st->flags = 0;
+
+	f22 = V21RX_DSP(modem)->fsd.f22;
+	bit_samples = V21RX_DSP(modem)->fsd.cfg.bit_samples;
+	st->short_12 = (short)((2 - 2 * (int)f22 / (int)bit_samples)
+			       * V21_STATUS_BPS);
+
+	return 1;
 }
 
 /*
@@ -545,6 +672,8 @@ V21_ASSERT_OFF(struct v21_rx_dsp, mag, 0x90);
 V21_ASSERT_OFF(struct v21_rx_hdx, handler, 0x04);
 V21_ASSERT_OFF(struct v21_rx_hdx, state, 0x08);
 V21_ASSERT_OFF(struct v21_rx_hdx, countdown, 0x0a);
+V21_ASSERT_OFF(struct v21_rx_hdx, ones_run, 0x0c);
+V21_ASSERT_OFF(struct v21_rx_hdx, mark_seq, 0x0e);
 
 V21_ASSERT_OFF(struct v21_status, tx_bps, 0x02);
 V21_ASSERT_OFF(struct v21_status, rx_bps, 0x04);
@@ -552,6 +681,7 @@ V21_ASSERT_OFF(struct v21_status, quality, 0x06);
 V21_ASSERT_OFF(struct v21_status, snr, 0x08);
 V21_ASSERT_OFF(struct v21_status, short_0a, 0x0a);
 V21_ASSERT_OFF(struct v21_status, short_0c, 0x0c);
+V21_ASSERT_OFF(struct v21_status, short_0e, 0x0e);
 V21_ASSERT_OFF(struct v21_status, short_10, 0x10);
 V21_ASSERT_OFF(struct v21_status, short_12, 0x12);
 V21_ASSERT_OFF(struct v21_status, flags, 0x14);

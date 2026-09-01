@@ -11298,6 +11298,136 @@ The random cases do NOT reach it, which was measured rather than assumed --
 an anti-vacuity counter for this arm read zero over 400 of them, because a
 random stream completes frames but never with a `frame_len` past `max_frame`.
 
+## D1090 ⚠ `RxHdxStartV21` throws away every unit it demodulated
+
+The start state returns a literal zero on all four of its exits -- the common
+epilogue at 0x0a1f80 is `add $0x1c,%esp` / `xor %eax,%eax` / four pops /
+`ret`, and nothing else returns. The count `DemodDataV21` gave it is used for
+the walk that maintains `ones_run` and `mark_seq`, and is then dropped.
+
+Its three siblings do not do this. `RxHdxWaitV21` returns the count on the
+block where the countdown expires and `RxHdxDataV21` returns it on every
+block it demodulates; both feed `V21RX_modem`'s running total, which is what
+the caller gets back in `*count`.
+
+So the units a receiver demodulates while it is still looking for its opening
+sequence are never delivered. Whether that is a defect depends on whether the
+author meant those units to be data -- the walk consumes them as a preamble
+search, which is a reading that makes the zero correct, and nothing in the
+object settles it.
+
+**Status:** reproduced. `t_v21hdx` compares the return on every block of
+every start stream and asserts from the reference's own run that the walk
+was driven on a non-empty block (`start_walked`), so the zero is checked
+against blocks that really did produce units rather than against empty ones.
+
+## D1097 ⚠ the two V.29 status reports read backwards from how they behave
+
+`V29TX_status` clears the low two bits of the report's +0x14 and then
+ASSIGNS the whole byte four statements later, so the clears are dead and
+every other bit the caller had is lost. That is D1035.
+
+`V29RX_status` reads like the careful one -- a sequence of read-modify-writes
+that clears three bits, sets two and assigns three -- and behaves like the
+blunt one, because between them those eight operations determine all eight
+bits. The byte's prior value contributes nothing to the result.
+
+So a reader comparing the two functions gets the sense backwards in both
+directions. Neither is a defect on its own; what is worth recording is that
+the SHAPE of each is not a guide to what it does, which is why the check in
+`t_v29fax.c` compares the resulting bytes rather than reasoning about the
+statements.
+
+**Status:** both reproduced exactly, including the dead read and the four
+intermediate stores, which are observable only where the report overlaps the
+instance. `t_v29fax` drives that overlap on half its `V29RX_status` trials
+rather than assuming it away, and asserts the count of overlaid trials from
+the run.
+
+## D1098 ⚠ `V21RX_status` divides by the demodulator's `bit_samples` with no guard
+
+The report's +0x12 is
+
+    (2 - 2 * fsd.f22 / fsd.cfg.bit_samples) * 300
+
+and the object computes it with `cltd` / `idiv 0x66(%eax)` at 0x0a24c7 --
+a signed 32-bit divide by a field it does not test. A receiver whose fsd
+was never configured has `bit_samples` zero, and the call takes SIGFPE.
+
+Nothing this tree has reconstructed can produce that state: `V21RX_create`
+runs `FPM_FSD_init` with a real configuration before the handle is handed
+out. It is reachable only by a caller that builds a receiver by hand or
+reuses freed storage.
+
+The second operand can also make the result meaningless without faulting.
+`f22` is `bit_samples / 2` as init leaves it, so an EVEN `bit_samples` gives
+a quotient of 1 and a field of 300; an odd one gives 0 or more, and the field
+comes out at 0 or negative. That is arithmetic, not a fault, and it is
+reproduced.
+
+**Status:** reproduced, with no guard added. `t_v21fax` ASSERTS the
+precondition on both sides -- every trial plants a non-zero `bit_samples` and
+checks it before the call -- rather than driving the fault, because both
+sides would fault identically and a differential comparison would learn
+nothing from it. That is D1022's ruling applied again: where the object
+faults on a precondition, assert the precondition instead of pretending to
+cover the arm.
+## D1091 ⚠ `DemodDataV17` uses `%eax` from a `void` function, and this reads the field it happens to hold
+
+`FPM_AGC_agc` returns nothing. `include/dsplib/fpm_agc.h` declares it `void`
+and that is measured, not assumed: the object's definition reads frame slots
+0x50, 0x54 and 0x58 and never 0x5c, so it takes three arguments, and it has no
+`ret` that sets `%eax` on purpose.
+
+`DemodDataV17` calls it and then uses `%eax`:
+
+    a50d0:  e8 fc ff ff ff    call   FPM_AGC_agc
+    a50d5:  89 44 24 18       mov    %eax,0x18(%esp)
+
+and 0x18(%esp) is the value later ANDed into `sre.adapt`, `fse.pll_on` and
+`fse.lms_on`. So the calling translation unit declared the function as
+returning `int` while the defining one returned nothing, and what `%eax` holds
+is whatever the definition left there.
+
+**What it leaves there is `agc->signal`**, and that is a property of the object
+rather than of C: `FPM_AGC_agc` has exactly one `ret`, every path funnels
+through the same epilogue, and the two instructions before it are
+`movzbl %dl,%eax` / `mov %eax,0x1c(%edi)` -- the store to `signal` itself.
+
+**Status:** the field is read instead. This file cannot spell what the object
+spells, because `fpm_agc.h` is right and a second prototype disagreeing with it
+would be "one type, one home" in its function-prototype form. `DemodDataV29`
+and two other sites are the same shape and D1035 is where that was first
+recorded; this is the fourth.
+
+`t_v17fax.c` MEASURES the identity rather than believing it. `dem_agc_identity`
+casts `ref_FPM_AGC_agc` to a pointer returning `int`, drives the AGC the
+demodulator itself uses with the stimuli the demodulator sees, and asserts the
+return equals `agc.signal` on every block -- with the number of blocks checked
+asserted non-zero at the end. It runs INSIDE the demodulator fixture and not in
+a local of its own, which is the one thing `t_v29fax.c`'s withdrawn
+`run_agc_identity` did differently (F9001).
+
+## D1092 ⚠ `V17RX_status` stores the flags byte four times and only the last one is a value
+
+The object writes `status + 0x14` at 0x0a0977, 0x0a098f, 0x0a09a5 and 0x0a09c2.
+The first three are dead in every ordinary sense: F9101 works the chain out and
+the byte the caller sees is `0x50 | x1 | x3 | x5`, in which nothing of the
+incoming byte and nothing of the first three stores survives.
+
+They exist because the object reaches `V17RX_OBJ_STATE` through a character
+pointer between each pair of them, which may alias the status block, so the
+compiler must flush the byte before every load and cannot merge the four
+statements into one.
+
+**Status:** reproduced, as four statements, for exactly that reason -- a source
+that assigned once would not produce them and would not be the object. What
+they are observable to is a caller that passes overlapping pointers, which is
+the same shape as `V17TX_status`'s single dead store (D1032) and, like it, is
+not claimed by any check here: what such a check would measure is STATEMENT
+ORDER, a codegen-tier question this test is not equipped to settle. What IS
+asserted is the settled value, which F9101's derivation makes exact rather than
+relative.
 ## D1080 ⚠ the four receive-side fax configuration tables live in a table file, not in their modules' translation units
 
 `FAXVMI_CFG`, `V17RX_CFG`, `V27RX_CFG` and `V29RX_CFG` are defined in
@@ -11350,3 +11480,29 @@ worse.
 writes `_init_receiver` should take all three back to `static` in the same
 commit -- at which point the test must reach them another way or be retired
 in favour of driving `_init_receiver` itself.
+## D1094 🐛 `DemodDataV27` reads a return value from a `void` function, exactly as `DemodDataV29` does
+
+`DemodDataV27` (0x0a5950) pushes four arguments to `FPM_AGC_agc` and then uses
+`%eax` as the carrier bit, ANDing it into `fpm_sre::adapt`, `fpm_fse::lms_on`
+and `fpm_fse::pll_on`. `FPM_AGC_agc` returns `void` and takes three arguments,
+so the calling translation unit's prototype disagreed with the definition in
+both directions at once (F9116, and F8875 for the V.29 instance).
+
+It is undefined behaviour that happens to be correct, and what makes it
+correct is a property of the compiled object rather than of the source:
+`FPM_AGC_agc` has one `ret`, every path funnels through the same epilogue, and
+the two instructions before it are `movzbl %dl,%eax` / `mov %eax,0x1c(%edi)` --
+the store to `agc->signal`. The register holds that field on every return.
+
+**NOT reproduced, because it cannot be**: `include/dsplib/fpm_agc.h` declares
+`FPM_AGC_agc` correctly, and a second disagreeing prototype inside `src/`
+would be "one type, one home" in its function-prototype form. `src/fax/v27.c`
+reads `RX_AGC(rx)->signal` instead.
+
+**The substitution is MEASURED on every run and not argued once.**
+`test/unit/t_v27fax.c` declares the blob's own `ref_FPM_AGC_agc` a second time
+through a function-pointer cast that returns `int`, calls it that way inside
+the demodulator's own model, and asserts the returned value equals
+`agc.signal` -- over silent, quiet and loud blocks, which is what makes the
+bit take both of its values. The cost of the substitution is one extra load of
+`rx + 0x84` in our code, which no test can see and `compare.py` can.
