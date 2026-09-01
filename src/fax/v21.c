@@ -4,6 +4,7 @@
  *
  * Reconstructed from dsplibs.o:
  *
+ *   V21RX_create      .text 0x098e70  1011
  *   V21RX_delete      .text 0x099270   123
  *   V21TX_delete      .text 0x0995f0   104
  *   V21RX_modem       .text 0x0a1c40   127
@@ -22,8 +23,9 @@
  *   ModDataV21        .text 0x0a5880    87
  *   TxNoCarrierV21    .text 0x0a58e0   103
  *
- * THESE ARE SEVENTEEN LEAVES OF THREE DIFFERENT CLUSTERS, not one author file:
- * 0x099270 sits with the constructors and destructors, 0x0a1c40 with the
+ * THESE ARE EIGHTEEN SYMBOLS OF THREE DIFFERENT CLUSTERS, not one author file:
+ * 0x098e70 and 0x099270 sit with the constructors and destructors, 0x0a1c40
+ * with the
  * half-duplex machine, and 0x0a5740 onward with the per-modulation data
  * paths.  They are collected here because they are the V.21 work that is
  * startable, and `include/dsplib/v21fax.h` says what each one establishes.
@@ -41,15 +43,24 @@
  * lever this tree has on register allocation across a translation unit
  * (finding F7796) -- it is not a claim that the author had them in one file.
  *
- * Everything here takes a `void *` handle, because neither `V21TX_create`
- * (0x0992f0) nor `V21RX_create` (0x098e70) is reconstructed and naming their
- * fields now would be guessing.  See the header for the ruling and for where
- * every offset used below comes from.
+ * Everything here takes a `void *` handle.  That was originally because
+ * NEITHER constructor was reconstructed, so naming their fields would have
+ * been guessing; `V21RX_create` is written now, and the handle is STILL a
+ * `void *` because the constructor decided the layout without settling what
+ * most of it MEANS.  It fixes the size at 0x54 and the width of every field,
+ * and `v21fax.h` records both -- but +0x1c through +0x4b are written by this
+ * one function and read by nothing else in the object, so they keep
+ * `type_NNNN` names and a set of offset constants rather than becoming a
+ * struct whose members would each be a claim.  `V21TX_create` (0x0992f0) is
+ * still unwritten and the transmit handle is unmodelled for the original
+ * reason.  See the header for the ruling and for where every offset used
+ * below comes from.
  */
 
 #include <string.h>
 
 #include "dsplib/debug.h"
+#include "dsplib/faxcfg.h"
 #include "dsplib/faxfifo.h"
 #include "dsplib/fpm_agc.h"
 #include "dsplib/fpm_fsd.h"
@@ -69,6 +80,227 @@
 #define FIELD(obj, off)		((unsigned char *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
 #define AT_I(p, off)		(*(int *)(void *)FIELD((p), (off)))
+#define AT_S(p, off)		(*(short *)(void *)FIELD((p), (off)))
+
+/*
+ * V21RX_create -- .text 0x098e70, 1,011 bytes.
+ *
+ * IT IS FIRST IN THE FILE BECAUSE IT IS FIRST IN THE OBJECT.  0x098e70 is
+ * below `V21RX_delete`'s 0x099270, and a translation unit's emission order is
+ * what register allocation follows (finding F7796), so the order here is the
+ * blob's rather than the one the file grew in.
+ *
+ * The three debug strings are the author's own words, from .rodata.str1.1 at
+ * 0x461b, 0x462d and 0x462b: "V.21 RX Create ", "New allocation\n" and "\n".
+ * The first has a trailing space and no newline, so the three compose into one
+ * line either way -- "V.21 RX Create New allocation" when the handle is
+ * allocated here and "V.21 RX Create" when the caller supplied one.  That is
+ * what fixes the order of the three tests.
+ *
+ * WHAT THE FUNCTION IS.  Four allocations, a configuration copy, four DSP
+ * blocks initialised from the library built-ins with V.21's tables patched in,
+ * and a tail of field initialisation.  `fresh` -- 1 only when this call
+ * allocated the handle -- is the third argument to all three `*_init` calls,
+ * which is how the blocks learn whether to allocate their own buffers or
+ * re-initialise in place.  The object keeps it in `%ebp`, zeroed at entry by
+ * `xor %ebp,%ebp` before anything else happens.
+ *
+ * THE HANDLE IS RE-READ RATHER THAN CACHED, exactly as in `V21RX_delete`
+ * below and for the same reason: the object re-loads `0x50(%esi)` at 0x098f30,
+ * 0x098f64, 0x098f72, 0x098ff2, 0x099056, 0x09905d and 0x099089 rather than
+ * keeping the DSP pointer in a register across the calls.
+ *
+ * THE CONFIGURATION COPY IS WRITTEN AS TWO ARMS, not as a pointer fixup
+ * followed by one copy.  The object carries the six-dword copy TWICE, at
+ * 0x098ea8 from the caller's table and at 0x099190 from `V21RX_CFG`, and two
+ * arms is the spelling that says so.  `B103FP_create` uses the other form
+ * (`cfg = &B103_CFG_data;` then one assignment) and both are behaviourally
+ * identical; which one the period compiler turns into the object's two copies
+ * was NOT measured here, because this worktree has no period compiler.  If a
+ * later pass measures it, this is the site.
+ */
+void *
+V21RX_create(void *modem, const struct v21rx_cfg *params)
+{
+	struct fpm_mrf_cfg mrf;
+	struct fpm_fsd_cfg fsd;
+	struct fpm_mtd_cfg mtd;
+	struct v21_rx_hdx *hdx;
+	struct v21_rx_dsp *dsp;
+	const struct v21rx_cfg *cfg;
+	unsigned long aux;
+	int fresh = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.21 RX Create ");
+
+	if (modem == NULL) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+		modem = sysdep_malloc(V21RX_OBJ_SIZE);
+		V21RX_HDX(modem) = NULL;
+		fresh = 1;
+		V21RX_DSP(modem) = NULL;
+	}
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("\n");
+
+	/* The configuration IS the handle's first twenty-four bytes. */
+	if (params != NULL)
+		*(struct v21rx_cfg *)modem = *params;
+	else
+		*(struct v21rx_cfg *)modem = V21RX_CFG;
+	cfg = (const struct v21rx_cfg *)modem;
+
+	/*
+	 * `cfg->aux` reaches TWO configurations from here -- the resampler's
+	 * `aux` and the FSK demodulator's trailing slot -- and the object
+	 * loads it once, into `%edi` at 0x098ede, before either.
+	 */
+	aux = (unsigned long)cfg->aux;
+
+	if (V21RX_HDX(modem) == NULL)
+		V21RX_HDX(modem) = sysdep_malloc(sizeof(struct v21_rx_hdx));
+	hdx = V21RX_HDX(modem);
+
+	hdx->int_0000 = 0;
+	hdx->handler = RxHdxStartV21;
+	hdx->state = V21RX_STATE_START;
+	hdx->countdown = 0;
+	hdx->ones_run = 0;
+	hdx->mark_seq = 0;
+
+	/*
+	 * The DSP block and the shared intermediate buffer.  0x140 bytes is
+	 * 160 shorts, which is `FPM_FSD_CFG.trace_len` -- the demodulator
+	 * writes one trace word per input sample and `GetSNRV21` rectifies
+	 * that trace into `mag`, so the two buffers are the same length and
+	 * the count is written down twice in the object.
+	 */
+	if (V21RX_DSP(modem) == NULL) {
+		V21RX_DSP(modem) =
+			sysdep_malloc(sizeof(struct v21_rx_dsp));
+		sysdep_memset(V21RX_DSP(modem), 0,
+			      sizeof(struct v21_rx_dsp));
+		V21RX_DSP(modem)->mag = sysdep_malloc(V21RX_MAG_BYTES);
+		sysdep_memset(V21RX_DSP(modem)->mag, 0, V21RX_MAG_BYTES);
+		V21RX_DSP(modem)->mtd = NULL;
+	}
+
+	/*
+	 * The receive rate converter: 8 kHz in, 7200 Hz out.  `branches` and
+	 * `decimate` are written even though they already equal the built-in's
+	 * -- the object stores both explicitly at 0x098f3c and 0x098f49.
+	 */
+	mrf = FPM_MRF_CFG;
+	mrf.branches = 9;
+	mrf.decimate = 10;
+	mrf.coeff = V21_MRF_FILT;
+	mrf.taps = 360;
+	mrf.aux = (void *)aux;
+	FPM_MRF_init(&V21RX_DSP(modem)->mrf, &mrf, fresh);
+
+	FPM_AGC_init(&V21RX_DSP(modem)->agc, &AGCv21_CFG, fresh);
+
+	dsp = V21RX_DSP(modem);
+	dsp->int_0000 = 1;
+	dsp->int_0004 = 0;
+	dsp->int_0008 = 0;
+
+	/*
+	 * The FSK demodulator.  `high_bit` is patched to ZERO, which inverts
+	 * the demodulated data against the library default's 1 -- V.21's mark
+	 * is the LOWER of each channel's pair, so the discriminator's sign
+	 * runs the other way round from Bell 103's.
+	 *
+	 * `bit_samples` is 24 rather than the built-in's 8, which is 7200 Hz
+	 * divided by 300 bit/s: one bit is twenty-four samples at the rate the
+	 * resampler above delivers.  That is the arithmetic tying this call to
+	 * the one before it.
+	 */
+	fsd = FPM_FSD_CFG;
+	if (cfg->chan2) {
+		fsd.delay = 3;
+		fsd.fir = V21RX_CHAN2_INTRP;
+	} else {
+		fsd.delay = 5;
+		fsd.fir = V21RX_CHAN1_INTRP;
+	}
+	fsd.fir_taps = 15;
+	fsd.iir = V21RX_IIR_LPF;
+	fsd.iir_len = 3;
+	fsd.high_bit = 0;
+	fsd.bit_samples = 24;
+	/*
+	 * The object stores `aux` over `f18` AND `pad1a` with ONE 32-bit `mov`
+	 * at 0x098f75, which is what a `void *` member there would take and
+	 * not what two `short` stores would -- so the original almost
+	 * certainly had one four-byte slot here, the same trailing `aux` that
+	 * `struct fpm_mrf_cfg` carries and that receives the same value nine
+	 * instructions later.
+	 *
+	 * `fpm_fsd.h` cannot be retyped from this pass: `src/pump/v23/v23rx.c`
+	 * names `.f18` in a designated initialiser and that file is outside
+	 * this pass's scope.  Splitting the pointer by hand reproduces the
+	 * stored BYTES exactly for every input on the 32-bit build this
+	 * reconstruction targets, so nothing observable is given up -- only
+	 * the shape of the two instructions.  Recorded as D1181.
+	 */
+	fsd.f18 = (short)(unsigned short)aux;
+	fsd.pad1a = (short)(unsigned short)(aux >> 16);
+	FPM_FSD_init(&V21RX_DSP(modem)->fsd, &fsd, fresh);
+
+	/*
+	 * The tone detector, listening for the mark and space of whichever
+	 * channel `chan2` selected.  0x4ccd is 0.6 in Q15 and 300 is V.21's
+	 * own bit rate reused as a level floor.
+	 */
+	mtd = FPM_MTD_CFG;
+	mtd.coeff = cfg->chan2 ? V21_CHAN2_MTD_COEFF : V21_CHAN1_MTD_COEFF;
+	mtd.tones = 2;
+	mtd.ratio = 0x4ccd;
+	mtd.min_level = 300;
+	V21RX_DSP(modem)->mtd =
+		FPM_MTD_create(V21RX_DSP(modem)->mtd, &mtd);
+
+	/*
+	 * The status word is zeroed as one 32-bit unit and then two of its
+	 * bytes are written back -- `movl $0x0,0x18(%esi)`, `orb $0x50`,
+	 * `movb $0x1`.  It is spelled with `memcpy` here for the reason
+	 * `V21RX_modem` reads it with one: +0x18 leaves the library as a
+	 * single word, so the four bytes are one object rather than four.
+	 */
+	{
+		int zero = 0;
+
+		memcpy(FIELD(modem, V21RX_OBJ_STATUS), &zero, sizeof zero);
+	}
+	V21RX_FLAGS(modem) |= (unsigned char)(V21RX_FLAG_BIT4
+					      | V21RX_FLAG_BIT6);
+	V21RX_STATUS(modem) = V21RX_STATUS_START;
+
+	/*
+	 * The trace export and the three unmodelled groups.  See `v21fax.h`
+	 * for what is known about each and what is not; the DSP pointer is
+	 * re-read here because the object re-reads it at 0x099089.
+	 */
+	dsp = V21RX_DSP(modem);
+	FIELD_PTR(modem, V21RX_OBJ_TRACE) = dsp->fsd.trace;
+	AT_I(modem, V21RX_OBJ_INT_0020) = 0;
+	FIELD_PTR(modem, V21RX_OBJ_COUNT_AT) = &dsp->fsd.last_count;
+	AT_I(modem, V21RX_OBJ_INT_0028) = 0;
+	AT_I(modem, V21RX_OBJ_INT_002C) = 0;
+	AT_S(modem, V21RX_OBJ_SHORT_0030) = 0;
+	AT_I(modem, V21RX_OBJ_INT_0034) = 0;
+	AT_I(modem, V21RX_OBJ_INT_0038) = 0;
+	AT_S(modem, V21RX_OBJ_SHORT_003C) = 0;
+	AT_I(modem, V21RX_OBJ_INT_0040) = 0;
+	AT_I(modem, V21RX_OBJ_INT_0044) = 0;
+	AT_S(modem, V21RX_OBJ_SHORT_0048) = 0;
+
+	return modem;
+}
 
 /*
  * The handle is re-read from the caller's argument before every free rather

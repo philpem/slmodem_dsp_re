@@ -11842,9 +11842,23 @@ are four bytes at the same offset, the value is zero in `FPM_FSD_CFG` and zero i
 constructor would have to be re-read before the type changed under it.
 `t_v21cfg.c` compares `f18` and `pad1a` against the blob as they stand.
 
-The evidence for the retype is in `V21RX_create` and should be acted on when
-that function is written, not before. *unmeasured; both spellings are
-indistinguishable at every site reconstructed today.*
+`V21RX_create` IS now written, and it splits the pointer by hand:
+`fsd.f18` takes the low half and `fsd.pad1a` the high one. That reproduces the
+stored BYTES exactly for every input on the 32-bit build this reconstruction
+targets, so nothing observable is given up -- only the shape of the two
+instructions, one `movl` becoming two `movw`.
+
+**And the byte order of the split is MEASURED, not assumed.**
+`test/unit/t_v21create.c` runs two cases whose `aux` has unequal halves --
+0x1234abcd and 0xfedc0011 -- and compares the resulting `fpm_fsd` against the
+blob's. Swapping the two halves in `src/fax/v21.c` fails four checks in each of
+that binary's three suites. So the object really does put the low half at
++0x18, and this entry is now about instruction shape alone.
+
+The retype remains the right fix and remains out of reach from a pass fenced
+off `src/pump/`. *measured: identical stored bytes on 32 bits, over five
+configurations including two with unequal halves; the divergence is two
+instructions, not a value.*
 
 ## D1182 ⚠ the V.21 receiver's tables are in `src/fax/v21cfg.c`, not in the file that holds `V21RX_create`
 

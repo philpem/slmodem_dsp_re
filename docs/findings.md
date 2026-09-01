@@ -107357,3 +107357,152 @@ measures the equality rather than assuming it.
 757 bytes) is the next V.21 constructor; its own table `V21TX_CFG` (.data
 0x7af8, 28 bytes) is still unwritten. `t_v21cfg.c` is 812 checks over nine
 suites, green under `make one`. (2026-09-01)
+
+## F9354. `V21RX_create` with a caller-supplied handle is only safe on a handle it built, and the obvious test for it segfaults on both sides
+
+*2026-09-01.* `t_b103create.c`'s caller-supplied case hands `B103FP_create` a
+ZEROED buffer, and writing the same test for `V21RX_create` crashes -- ours and
+the blob's alike, which is what says it is the object's contract rather than a
+defect in the reconstruction.
+
+The chain is three steps and every one of them is in written code:
+
+- `V21RX_create` sets `fresh = 1` **only** inside the `modem == NULL` arm. A
+  caller-supplied handle therefore always reaches the three `*_init` calls with
+  `fresh == 0`.
+- The DSP block is allocated on its own test, `V21RX_DSP(modem) == NULL`, which
+  a zeroed handle passes. So the handle gets a brand-new, `sysdep_memset`-zeroed
+  `struct v21_rx_dsp` whose buffer pointers are all NULL.
+- `FPM_FSD_init` at `fresh == 0` does not allocate, and then zeroes `fir_hist`,
+  `iir_hist` and `trace` unconditionally. Three NULL dereferences.
+
+So the two allocation decisions are taken on DIFFERENT tests -- the handle's on
+its own pointer, the buffers' on `fresh` -- and a caller who supplies a handle
+with a NULL `dsp` falls between them. The only supported caller-supplied use is
+RE-INITIALISATION of a handle a previous `V21RX_create` fully built, which is
+what a re-train does.
+
+`t_v21create.c` is shaped around that: its second suite creates, plants a
+non-zero pattern over the whole handle except the two sub-pointers, and creates
+again over it. That covers the caller-supplied path, D955's planting and the
+`fresh == 0` arm at once, and it additionally asserts that every allocation --
+`dsp`, `hdx`, `mag` and `fsd.trace` -- is REUSED rather than replaced, which is
+the property `fresh` exists to produce.
+
+Not recorded as a deviation, because ours does exactly what the object does.
+It is a note about the API for whoever writes `V21TX_create` or a T.30 caller.
+(2026-09-01)
+
+## F9355. `V21RX_create` is written, and the `f18`/`pad1a` split is measured rather than assumed
+
+*2026-09-01.* `V21RX_create` (.text 0x098e70, 1,011 bytes) is reconstructed in
+`src/fax/v21.c`, placed FIRST in the file because 0x098e70 is below every other
+symbol there and emission order is what register allocation follows (F7796).
+Its ten data blockers landed in F9353 and its one text dependency,
+`RxHdxStartV21`, was already written, so nothing was left in the way.
+
+**What it decided about the handle.** The size is 0x54, the literal
+`sysdep_malloc` is given at 0x099139. +0x00..+0x17 is the configuration, which
+is the same twenty-four bytes as `V21RX_CFG` -- and that independently confirms
+what `V21RX_status` reports as the "protocol" word, since its `movzwl (%esi)`
+at 0x0a2473 reads `chan2`. +0x1c takes the FSD's trace buffer and +0x24 the
+ADDRESS of the FSD's `last_count`. +0x28..+0x4b is three identical twelve-byte
+groups of `movl`, `movl`, `movw`, each leaving two bytes untouched. Nothing in
+the object reads any of +0x1c..+0x4b, so they keep `type_NNNN` names; three
+groups of one shape is not enough to call them an array.
+
+**The one place the reconstruction cannot spell what the object does, and why
+it costs nothing.** The object stores the config's `aux` over
+`fpm_fsd_cfg`'s `f18` and `pad1a` with a single 32-bit `mov` at 0x098f75, from
+the same register it puts in `struct fpm_mrf_cfg`'s `void *aux` nine
+instructions later -- so the original almost certainly had one four-byte slot
+there. `fpm_fsd.h` cannot be retyped from this pass: `src/pump/v23/v23rx.c`
+names `.f18` in a designated initialiser and that file is out of scope. The
+constructor therefore writes the two halves separately.
+
+**That is measured, not asserted.** `t_v21create.c` runs two cases with a
+non-zero `aux` whose halves DIFFER -- 0x1234abcd and 0xfedc0011 -- and compares
+the resulting `fpm_fsd` against the blob's. Swapping the two halves in `src/`
+fails 4 checks in each of the three suites, so the byte order of the split is
+pinned by the object and not by the author of this pass. D1181.
+
+**The test is 1,327 checks over three suites**, on `t_b103create.c`'s method:
+pointer slots skipped and their targets compared by content, over the handle,
+the half-duplex context, the DSP block, the `fpm_mtd` and every buffer the four
+DSP blocks hang off. The two trace slots cannot be compared across the sides at
+all and are checked as a RELATION on each side -- +0x1c equals that side's
+`fsd.trace`, +0x24 equals that side's `&fsd.last_count` -- which a skip alone
+would not catch. Both allocation paths run for all five configurations,
+including the channel-1 arm, which `V21RX_CFG` alone never reaches because it
+ships `chan2 = 1`.
+
+**Two arithmetic facts the constructor makes visible**, asserted in the test
+independently of the blob: `fsd.bit_samples` is 24, which is 7200/300 -- one
+bit at the rate the resampler delivers -- and the resampler's own 9/10 turns
+8000 into that 7200. `mag` is 0x140 bytes and `trace_len` is 160 shorts, the
+same length, which is the second reading of that count.
+
+`V21TX_create` (0x0992f0, 757 bytes) is the next V.21 symbol and is blocked on
+`V21TX_CFG` (.data 0x7af8, 28 bytes), which is unwritten. (2026-09-01)
+
+## F9356. What `V21TX_create` still needs, and the one blocker that cannot simply be written: `FIFO_CFG` is one of F9058's thirteen
+
+*2026-09-01.* `V21TX_create` (.text 0x0992f0, 757 bytes) is the next V.21
+symbol and it does NOT come free with `V21RX_create`. Its direct references --
+`R_386_PC32` calls and `R_386_32` stored pointers both, which is the
+F8492/F8493 pair -- classify against the built object tree as:
+
+    WRITTEN   FPM_FSM_init  FPM_MRF_init  FPM_MRF_CFG  V21_MRF_FILT
+              (the last two landed in F9353; the resampler is shared with
+               the receiver and its prototype is the SAME table)
+
+    MISSING   V21TX_CFG    .data   0x07af8   28   its own configuration
+              FPM_FSM_CFG  .data   0x08198    8   the library built-in
+              FIFO_CFG     .rodata 0x09654    6   see below
+              FIFO_create    .text 0x096bb0  167
+              TxHdxStartV21  .text 0x0a26d0  380
+
+So three tables and TWO TEXT symbols, and the text is the real cost:
+`TxHdxStartV21` is the transmit half-duplex machine's entry state and will
+drag the rest of that machine in behind it, exactly as `RxHdxStartV21` did on
+the receive side.
+
+**`FIFO_CFG` IS THE TRAP AND IT IS F9199's HAZARD, NOT MERELY F9058's.** The
+blob defines the name TWICE with DIFFERENT VALUES: a `LOCAL` copy in `.data` at
+0x83a0 holding {0, 300, 0}, and a `GLOBAL` copy in `.rodata` at 0x9654 holding
+{0, 100, 0}. `symmap.py` therefore gives it no `ref_` alias, so it cannot be
+compared by name -- the consumer is the only comparison, which is F9144's
+rule -- and a definition in `src/` under that name is a MULTIPLE DEFINITION at
+link rather than merely an untestable one.
+
+`V21TX_create` references the GLOBAL one: the relocation at 0x099375 NAMES
+`FIFO_CFG`, and a relocation that names a symbol resolves to the global
+definition, where the local copy would appear as a section-relative
+relocation. So the 300 in the `.data` copy is somebody else's and the value
+this constructor installs is 100.
+
+**The thirteen were re-measured rather than quoted.** A first count over
+`readelf -sW` said seventeen, which was an artefact of counting `SECTION` and
+`FILE` symbols; excluding those gives exactly thirteen, matching F9058.
+`FIFO_CFG` is the only one of the thirteen where a `GLOBAL` and a `LOCAL`
+share a name -- every other duplicate is local-only or, for `AGC_DEF_ALPHA`
+and `AGC_DEF_BETA`, five locals and one global of the SAME size and role. That
+is what makes this one the link hazard and not just a naming one.
+
+**`FPM_FSM_CFG` is `FPM_FSD_CFG`'s situation a third time**: `fpm_fsm.c`
+already defines a `FPM_FSM_CFG_data` stub under a name the object does not
+have, and its one reader is `src/pump/b103/b103fp.c:1092`. Whoever writes it
+should check whether the two hold identical values, as D1180 did here, before
+deciding whether it is a duplicate or a divergence.
+
+**And its four shorts are a cross-check on F9350.** `FPM_FSM_CFG` is
+{1850, 1650, 24, 32767} -- the modulator's built-in tone pair is V.21 CHANNEL
+2's space and mark, the same 1850 and 1650 Hz that F9350 recovered from
+`V21_CHAN2_MTD_COEFF`'s resonator coefficients by a completely different
+route. Two independent readings of the same two numbers.
+
+**`V21TX_CFG` is not `V21RX_CFG`'s layout.** Its dwords are
+[1, 300, 0, 60000, 3200, 0, 0] against the receiver's
+[1, 300, 60000, 0, 0, 0]: 28 bytes rather than 24, and 60000 at +0x0c rather
+than +0x08. So it is a fifth type in `faxcfg.h`'s family and not the
+transmitter's copy of the fourth. Not settled further here. (2026-09-01)
