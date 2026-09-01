@@ -5,15 +5,21 @@
  * Reconstructed from dsplibs.o:
  *
  *   V27RX_delete         .text 0x099f10  193
+ *   V27RX_eq_train       .text 0x09a110  255
+ *   V27TX_delete         .text 0x09a7c0  107
  *   V27RX_decision       .text 0x09a210  284
  *   V27RX_modem          .text 0x0a2c60  127
  *   V27RX_status         .text 0x0a3320   11
  *   V27TX_status         .text 0x0a3ed0  118
+ *   DemodDataV27         .text 0x0a5950  331
+ *   DescrambleDataV27    .text 0x0a5aa0   28
  *   CarrierDetectV27     .text 0x0a5ac0   22
  *   DataCarrierDetectV27 .text 0x0a5ae0  579
  *   QualityDetectV27     .text 0x0a5d30  266
  *   EpochDetectV27       .text 0x0a5e40   22
  *   GetSNRV27            .text 0x0a5e60    6
+ *   ScrambleDataV27      .text 0x0a5e70   28
+ *   ModDataV27           .text 0x0a5ef0   89
  *
  * `tools/tumap.py` brackets these across `class1tx.c +94` and `class1.c`, so
  * it cannot say which translation units they are; they are kept in one file
@@ -22,10 +28,24 @@
  * has been established.  `include/dsplib/v27fax.h` carries the offset
  * evidence.
  *
- * `DemodDataV27` (0x0a5950, 331) belongs here and is NOT YET WRITTEN: it
- * drives all four embedded modules end to end, so a differential test for it
- * needs the receiver's whole chain configured rather than merely planted, and
- * this file carries only what `t_v27fax` measures.
+ * ---------------------------------------------------------------------------
+ * THE AGC'S RETURN VALUE, WHICH IS NOT ONE
+ *
+ * `DemodDataV27` calls `FPM_AGC_agc`, passes it a FOURTH argument (the literal
+ * 1) that it does not have, and then USES `%eax`.  `FPM_AGC_agc` is `void` --
+ * `include/dsplib/fpm_agc.h` says so and the object's own frame reads confirm
+ * it -- so the calling translation unit declared it as returning `int` while
+ * the defining one returned nothing, and `%eax` holds whatever the definition
+ * left there.
+ *
+ * WHAT IT LEAVES THERE IS `agc->signal`: the two instructions before its only
+ * `ret` are `movzbl %dl,%eax` / `mov %eax,0x1c(%edi)`, the store to `signal`
+ * itself.  So this file READS THE FIELD, which it can spell without a second
+ * prototype disagreeing with `fpm_agc.h`, and `t_v27fax.c` MEASURES the
+ * identity rather than believing it -- it declares `ref_FPM_AGC_agc` as
+ * returning `int` and asserts the return equals `agc.signal` on every trial.
+ * This is the fourth site with that shape; findings F8875 and F9116,
+ * deviations D1035 and D1094.
  *
  * ---------------------------------------------------------------------------
  * WHAT THE FOUR READING FUNCTIONS SHARE
@@ -65,7 +85,13 @@
 #include "dsplib/fpm_fse.h"
 #include "dsplib/fpm_mrf.h"
 #include "dsplib/fpm_mtd.h"
+#include "dsplib/fpm_pps.h"
+#include "dsplib/fpm_smc.h"
 #include "dsplib/fpm_sre.h"
+#include "dsplib/faxfifo.h"
+#include "dsplib/sdmv27.h"
+#include "dsplib/sgd.h"
+#include "dsplib/smc.h"
 #include "dsplib/sysdep.h"
 
 /* The instance is not modelled; see v27fax.h.  These are the only accessors. */
@@ -126,6 +152,148 @@ V27RX_delete(void *modem)
 	sysdep_free(sh);
 
 	sysdep_free(modem);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * Release the transmitter, in the object's order.
+ *
+ * The instance pointer is kept in a register across all seven calls -- it is
+ * the only thing in this function that is not re-read -- while both BLOCK
+ * pointers are loaded afresh before each use, exactly as `V27RX_delete` does.
+ * Neither is observable, because nothing on this path writes the instance.
+ *
+ * `FPM_PPS_free` is given a second argument the object does not declare; see
+ * `v27fax.h` and F8870.  Not reproduced.
+ */
+void
+V27TX_delete(void *modem)
+{
+	void *tx;
+	void *src;
+
+	tx = FIELD_PTR(modem, V27_OBJ_TX);
+	FPM_PPS_free((struct fpm_pps *)(void *)FIELD(tx, V27TX_PPS));
+
+	/*
+	 * The SYMBOL RING's buffer, not a scratch allocation of the
+	 * transmitter's.  The object frees `*(tx + 0x10)`, and 0x10 is
+	 * `V27TX_RING + offsetof(struct fpm_smc_ring, sym)`; see v27fax.h and
+	 * F9121 for why there is no room for a separate field there.
+	 */
+	tx = FIELD_PTR(modem, V27_OBJ_TX);
+	sysdep_free(((struct fpm_smc_ring *)(void *)
+			FIELD(tx, V27TX_RING))->sym);
+
+	tx = FIELD_PTR(modem, V27_OBJ_TX);
+	sysdep_free(tx);
+
+	src = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	FIFO_delete((struct fax_fifo *)FIELD_PTR(src, V27TXD_FIFO));
+
+	src = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	SGD_delete((struct sgd *)FIELD_PTR(src, V27TXD_SGD));
+
+	src = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	sysdep_free(src);
+
+	sysdep_free(modem);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * The equaliser's TRAINING slicer, and the handover to the running one.
+ *
+ * The decision it takes is a binary one: the training symbol alternates
+ * between two constellation points half a revolution apart, so the only
+ * question is whether the measured angle has crossed to the other side.  The
+ * phase difference is folded into [-V27DEC_HALF_TURN, +V27DEC_HALF_TURN] --
+ * NOT into [0, V27DEC_PHASE_FULL] as `V27RX_decision` folds it -- and the
+ * reference index is advanced by half the constellation when what is left
+ * exceeds a quarter of a revolution.
+ *
+ * THE FOLD'S TWO TESTS ARE ASYMMETRIC AND THAT IS THE OBJECT'S: the high side
+ * is `> 0x4000` and the low side is `< -0x4000`, so exactly +0x4000 folds and
+ * exactly -0x4000 does not.  Both comparisons are 16-bit and signed
+ * (`cmp $0x4000,%dx` / `jle`, `cmp $0xc000,%dx` / `jge`), which is why `diff`
+ * is a `short` and not an `int`; a 32-bit fold would not wrap the same way.
+ *
+ * THE EMPTY LOOP IS THE OBJECT'S TOO, AND WHAT THE AUTHOR PUT IN IT CANNOT BE
+ * RECOVERED.  At 0x9a1ce the object loads `state->cfg.taps`, runs a counted
+ * loop with a `short` induction variable (`inc %eax` then `cwtl`) and NO body
+ * at all, and falls through.  Whatever was written there produced no
+ * instructions, so there is no preimage to derive: the loop is reproduced for
+ * its control flow and it is not observable.  Finding F9117.
+ *
+ * `mu_sel` IS CLEARED ON EVERY CALL and set to 1 only on the handover, so the
+ * equaliser trains on `cfg.mu[0]` and runs on `cfg.mu[1]`.
+ *
+ * THE COUNTER IS RE-READ FROM MEMORY for the limit test rather than reused
+ * from the increment (`mov %dx,0x1c(%ecx)` ... `cmp %di,0x1c(%ecx)`), and that
+ * is forced: `state->mu_sel` is a `short` and the counter is an
+ * `unsigned short`, so the store between them may alias and the compiler has
+ * to reload.  Written as a re-read for that reason.
+ */
+unsigned short
+V27RX_eq_train(struct fpm_fse *state, short *angle, short *mag)
+{
+	void *dec = state->cfg.owner;
+	const short *tbl;
+	unsigned short count;
+	short step;
+	short diff;
+	short err;
+	short a;
+	short limit;
+	short i;
+
+	/* Saturating, and it restarts at half scale -- V27RX_decision's. */
+	count = (unsigned short)(FIELD_US(dec, V27DEC_SYM_COUNT) + 1);
+	if (count == V27DEC_PHASE_FULL)
+		FIELD_US(dec, V27DEC_SYM_COUNT) = V27DEC_PHASE_FULL / 2;
+	else
+		FIELD_US(dec, V27DEC_SYM_COUNT) = count;
+
+	/* Half the constellation: 4 of 8, or 2 of 4. */
+	step = FIELD_I(dec, V27DEC_EIGHT_PHASE) ? 4 : 2;
+
+	diff = (short)(*angle - FIELD_S(dec, V27DEC_ANGLE_PREV));
+	if (diff > V27DEC_HALF_TURN)
+		diff = (short)(diff + V27DEC_PHASE_FULL);
+	if (diff < -V27DEC_HALF_TURN)
+		diff = (short)(diff - V27DEC_PHASE_FULL);
+
+	*mag = V27DEC_MAG;
+
+	err = diff < 0 ? (short)-diff : diff;
+	if (err > V27DEC_QUARTER_TURN)
+		FIELD_S(dec, V27DEC_LAST) =
+			(short)((FIELD_S(dec, V27DEC_LAST) + step)
+				& FIELD_US(dec, V27DEC_PHASE_MASK));
+
+	tbl = (const short *)FIELD_PTR(dec, V27DEC_ANGLES);
+	a = tbl[FIELD_S(dec, V27DEC_LAST)];
+	limit = FIELD_I(dec, V27DEC_TRAIN_SHORT) ? V27DEC_TRAIN_SYMS_SHORT
+						 : V27DEC_TRAIN_SYMS_LONG;
+	*angle = a;
+	FIELD_S(dec, V27DEC_ANGLE_PREV) = a;
+	FIELD_US(dec, V27DEC_TRAIN_COUNT) =
+		(unsigned short)(FIELD_US(dec, V27DEC_TRAIN_COUNT) + 1);
+
+	state->mu_sel = 0;
+
+	if (FIELD_S(dec, V27DEC_TRAIN_COUNT) >= limit) {
+		for (i = 0; i < state->cfg.taps; i = (short)(i + 1)) {
+			/* No body in the object.  See the note above. */
+		}
+		state->lms_force = 0;
+		state->mu_sel = 1;
+		state->cfg.decision = V27RX_decision;
+	}
+
+	return 0xffff;
 }
 
 /* ------------------------------------------------------------------ */
@@ -317,6 +485,95 @@ V27TX_status(const void *tx, void *status)
 /* ------------------------------------------------------------------ */
 
 /*
+ * One block through the receive chain.
+ *
+ * THE TONE TEST HAS NO COPY AND NO NOTCH, WHERE V.17 AND V.29 HAVE BOTH.
+ * Both of those halve the caller's block into a scratch buffer, run
+ * `FPM_TONE_kill` over the copy and hand the copy to the detector; V.27ter
+ * hands `FPM_MTD_detect` the CALLER's buffer, which by then is the buffer
+ * `FPM_AGC_agc` has rewritten in place.  There is no copy loop in the object's
+ * 331 bytes -- no loop at all -- and no `FPM_TONE_kill` relocation.  Checked
+ * against the bytes rather than inferred from the size, because it is the one
+ * structural difference between the three demodulators.  Finding F9115.
+ *
+ * A DETECTION ABANDONS THE WHOLE CALL: it returns 0 having run the gain
+ * control and nothing else, so the caller's samples are left gain-controlled
+ * and the resampler, the recoverer and the equaliser do not advance.
+ *
+ * THE TWO WIDENINGS OF `count` ARE DIFFERENT AND BOTH ARE FORCED.  The gain
+ * control takes an `unsigned short` and gets `movzwl`; the tone detector takes
+ * a `short` and gets `movswl` (0x0a599f).  The resampler's is `movzwl` again
+ * only because the register already held that value and the callee's parameter
+ * is 16 bits wide -- F614's free case, not a third reading.
+ *
+ * THE THREE EQUALISER FLAGS ARE STORED IN THE OBJECT'S ORDER, which is
+ * `tilt_on`, `lms_on`, `pll_on` (0x0a5a24, 0x0a5a2f, 0x0a5a37).  That is NOT
+ * V.17's or V.29's order, and the difference is kept because a store order is
+ * evidence about one function and does not carry to its siblings.
+ */
+unsigned short
+DemodDataV27(void *modem, short *in, unsigned short *bits, unsigned short count)
+{
+	int signal;
+	unsigned short n;
+	unsigned short m;
+	void *rx;
+	void *sh;
+
+	FPM_AGC_agc(RX_AGC(FIELD_PTR(modem, V27_OBJ_RX)), in, count);
+	/* Not the object's `%eax`; the same value.  D1094. */
+	signal = RX_AGC(FIELD_PTR(modem, V27_OBJ_RX))->signal;
+
+	sh = FIELD_PTR(modem, V27_OBJ_SHARED);
+	if (FIELD_US(sh, V27SH_SKIP_TONE) == 0) {
+		if (FPM_MTD_detect((struct fpm_mtd *)FIELD_PTR(sh, V27SH_MTD),
+				   in, (short)count) != 0)
+			return 0;
+	}
+
+	rx = FIELD_PTR(modem, V27_OBJ_RX);
+	n = (unsigned short)FPM_MRF_filter(RX_MRF(rx), in,
+					   (short *)FIELD_PTR(rx, V27RX_BUF_A),
+					   (short)count);
+
+	rx = FIELD_PTR(modem, V27_OBJ_RX);
+	RX_SRE(rx)->adapt = signal & FIELD_I(rx, V27RX_EN_SRE_ADAPT);
+	m = FPM_SRE_recover(RX_SRE(rx),
+			    (const short *)FIELD_PTR(rx, V27RX_BUF_A),
+			    (short *)FIELD_PTR(rx, V27RX_BUF_B),
+			    (short)n);
+
+	if (m > V27RX_SRE_MAX && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("ERROR: SRE buffer violation(%d)", m);
+
+	rx = FIELD_PTR(modem, V27_OBJ_RX);
+	RX_FSE(rx)->tilt_on = 0;
+	RX_FSE(rx)->lms_on = signal & FIELD_I(rx, V27RX_EN_FSE_LMS);
+	RX_FSE(rx)->pll_on = signal & FIELD_I(rx, V27RX_EN_FSE_PLL);
+
+	return FPM_FSE_receive(RX_FSE(rx),
+			       (const short *)FIELD_PTR(rx, V27RX_BUF_B),
+			       bits, m);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * The receiver's descrambler, and its sibling `ScrambleDataV27` at the foot of
+ * this file.  One indirection, one addition and a tail call each; the only
+ * work either does is sign-extending `count`.
+ */
+void
+DescrambleDataV27(void *modem, unsigned short *data, short count)
+{
+	SDMv27_descrambler((struct sdmv27 *)(void *)
+				FIELD(FIELD_PTR(modem, V27_OBJ_RX), V27RX_SDM),
+			   data, count);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
  * Carrier, and the two things that can take it away.
  *
  * The V.21 arm exists because a fax receiver that has lost the image carrier
@@ -474,4 +731,51 @@ GetSNRV27(void *modem)
 {
 	(void)modem;			/* never read; see v27fax.h */
 	return 10;
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * One block through the transmit chain.
+ *
+ * `count` GOES TO BOTH CALLS UNCHANGED, and it is not the same unit in each:
+ * `SMC_encoder` takes data words and `FPM_PPS_filter` takes symbols.  The
+ * object holds the caller's count in `%ebx` across both and stores it into
+ * `0xc(%esp)` twice, so there is no conversion to reproduce.
+ *
+ * The ring is loaded from `tx + 0x08` twice, once per call, and `tx` itself is
+ * re-read from the instance in between -- the reload pattern of every function
+ * in this file.
+ */
+unsigned short
+ModDataV27(void *modem, const unsigned short *bits, short *samples,
+	   unsigned short count)
+{
+	void *tx;
+
+	tx = FIELD_PTR(modem, V27_OBJ_TX);
+	SMC_encoder((struct fpm_smc *)(void *)FIELD(tx, V27TX_SMC),
+		    (struct fpm_smc_ring *)(void *)FIELD(tx, V27TX_RING),
+		    bits, count);
+
+	tx = FIELD_PTR(modem, V27_OBJ_TX);
+	return FPM_PPS_filter((struct fpm_pps *)(void *)FIELD(tx, V27TX_PPS),
+			      (struct fpm_smc_ring *)(void *)
+					FIELD(tx, V27TX_RING),
+			      samples, count);
+}
+
+/* ------------------------------------------------------------------ */
+
+/*
+ * The transmitter's scrambler.  `DescrambleDataV27` above is the same shape
+ * over a different block: the scrambler lives in the TRANSMITTER's, at
+ * tx + V27TX_SDM, and the descrambler in the receiver's.
+ */
+void
+ScrambleDataV27(void *modem, unsigned short *data, short count)
+{
+	SDMv27_scrambler((struct sdmv27 *)(void *)
+				FIELD(FIELD_PTR(modem, V27_OBJ_TX), V27TX_SDM),
+			 data, count);
 }
