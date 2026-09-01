@@ -13,6 +13,15 @@ without the compiler beside it, so: **GCC 3.4.2, `-O3`, the flag set in
 build both define**, which is `byteident.py`'s and `compare.py`'s denominator
 exactly.
 
+> **`docs/method/evidence.md` is the other half of this question and was
+> written after it.** This document asks whether a MACHINE can decide grade 2
+> and answers no. That leaves the differential tier as the only apparatus for
+> semantic equivalence, and evidence.md measures what it actually proves:
+> grade 1 is a proof for its current population, verified against four named
+> holes, and of the 674 symbols that are neither grade 0 nor grade 1, **two**
+> are exhaustive over a whole input domain and 666 are sampled. Findings
+> F9490–F9496.
+
 ---
 
 ## The recommendation

@@ -12453,3 +12453,170 @@ than deciding.
 store on BOTH arms separates ZERO of twelve trials, which is what says the store
 is invisible; a detector that could not fire would otherwise read as a passing
 check.
+
+## D962 ⚠ A zero `scale` makes both `zFLTUTL_*` converters leave the destination UNWRITTEN
+
+`zFLTUTL_Linear2Float` and `zFLTUTL_Float2Linear` each open by comparing
+`scale` against a four-byte zero in `.rodata.cst4` -- `+0x52c` and `+0x528`
+respectively, both verified as `00 00 00 00` -- and jump over the whole loop
+when they are equal:
+
+    ae0f1:  fcoms  0x52c(.rodata.cst4)
+    ae0fa:  je     ae10d          <- past the loop, straight to the epilogue
+
+So a caller that passes `scale == 0.0f` gets its destination buffer back
+holding whatever it held before the call. It is **not** zeroed, which is the
+other plausible reading of "scale by zero" and the one a reconstruction is
+most likely to write by accident: `dst[i] = src[i] * 0.0f` would fill it with
+zeros, and the object's own control flow forbids that.
+
+**Why it is an entry rather than a comment.** The two readings are the same
+function everywhere except on a buffer the caller has not initialised, and
+there they differ by the whole contents. Nothing in the object says which the
+author meant. A guard that skips the work is the natural spelling of "a zero
+gain is a no-op"; it is also exactly the spelling that hands a caller stale
+data where the caller expected silence.
+
+**Reproduced**, and pinned against the SEED rather than against the reference:
+`test/unit/t_fltutl.c` fills each destination with a pseudorandom pattern the
+computation cannot produce and asserts that every byte still holds it, because
+ours-against-the-blob would pass if both sides wrote the same wrong thing
+(F8163). `test/mutations/fltutl.json` carries the zeroing reading as a
+mutation for each of the two functions and both are caught.
+
+**Status:** unmeasured. There is no caller anywhere in the 1.2 MB and none in
+slmodemd (F8400), so no configuration exists that would say whether a zero
+scale ever reaches either function.
+
+## D963 🐛 `zfFLTUTL_GetMaxAbsValue` reads element 0 before it looks at the count
+
+    ae85e:  flds   (%ecx)         <- buf[0], unconditionally
+    ae869:  mov    $0x1,%ebx      <- i = 1
+    ae870:  jae    ae8a1          <- and only now, i >= n ?
+
+The load is three instructions ahead of the only bound test in the function.
+A count of zero therefore reads `buf[0]` anyway and returns its magnitude,
+where the name promises a maximum over an empty range. On a caller that sized
+its buffer to the count, that is a read of memory it does not own.
+
+It also fixes the return value for the empty case at `|buf[0]|` rather than at
+zero, so a caller using the result as an energy or a normalisation divisor
+gets a number with no relation to the empty input it asked about.
+
+**Reproduced**, and pinned absolutely as well as differentially: a guard added
+before the load is a mutation in `test/mutations/fltutl.json` and is caught.
+
+**A second quirk in the same function, recorded here rather than as its own
+entry because it is the same three instructions.** The magnitude is
+`x > 0.0f ? x : -x` with a STRICT comparison (`ja` at 0x0ae865), so a zero
+input takes the negating arm and the function returns **minus** zero. That is
+not what `fabsf` does. It is invisible to any value comparison -- see F8426
+for why the harness's own float check cannot see it either -- and the test
+pins it on the bit pattern.
+
+**Status:** unmeasured, and unmeasurable from this object: no caller exists,
+so nothing says whether a zero count is ever passed.
+
+## D964 ⚠ Neither `fComputeRMSValue*` takes a square root
+
+`fComputeRMSValueFloatBuf` (0x0ae120) and `fComputeRMSValueShortBuf`
+(0x0ae180) both sum the buffer, divide by the count, accumulate the squared
+differences from that mean, and divide by the count again. There is no
+`fsqrt` in either function and no call out to one: 82 and 85 bytes, fully
+disassembled, ending on `fdivrp`/`fmulp` and `ret`.
+
+So what comes back is a **mean square about the mean** -- a variance -- and
+the name says RMS. A caller comparing the result against a threshold derived
+from an amplitude would be out by the square.
+
+**Reproduced.** The test pins it absolutely rather than only differentially,
+on `{2, -2}`: the mean is zero, the squared differences sum to 8, and both
+functions return 8/2 = 4. An RMS would return 2. Both mutations that halve
+the result -- which is exactly the RMS answer on that input -- are caught.
+
+**Status:** unmeasured. No caller exists (F8400), so nothing in the object
+says whether the value is consumed as a variance, in which case the name is
+merely wrong, or as an amplitude, in which case the arithmetic is.
+
+## D965 🐛 `fComputeRMSValueShortBuf` forms its mean in integer arithmetic and divides it UNSIGNED
+
+Two separate things, both at 0x0ae19d-0x0ae1a3:
+
+    ae19d:  mov    %ecx,%eax      <- the sum, a signed accumulation of
+                                     `movswl` loads from 0x0ae192
+    ae19f:  xor    %edx,%edx
+    ae1a3:  div    %ebx           <- UNSIGNED 32-bit divide
+
+**The mean is truncated before the second pass ever runs.** Every difference
+below it is an integer difference, so a buffer of `{1, 2}` has a mean of 1
+rather than 1.5, differences of 0 and 1 rather than -0.5 and 0.5, and a result
+of 0.5 rather than 0.25. For small samples that is a large bias, and it grows
+as the true mean's fractional part does.
+
+**And the divide is unsigned while the sum is signed.** This is not a cast the
+author wrote: `int / unsigned` in C promotes the int, which is exactly the
+`xor %edx,%edx; div` pair GCC emits. A buffer whose samples sum to a negative
+number -- any DC-free or negative-biased signal -- therefore divides as a
+value near 2^32 and the mean comes out enormous. `{-1, -1}` sums to -2, which
+divides as `0xfffffffe / 2 = 0x7fffffff`, giving a mean of 2,147,483,647, a
+difference of -2,147,483,648 per sample, and a result of 2^62. The correct
+answer is zero.
+
+This is the one entry in the batch that is a defect on ordinary input rather
+than on a degenerate one: a signed sample buffer summing negative is the
+common case, not the corner.
+
+**Reproduced**, with both readings carried as mutations -- a signed divide and
+an exact float mean -- and both caught.
+
+**AND THE ENORMOUS MEAN MAKES THE NEXT LINE OVERFLOW, WHICH IS UB IN OUR C
+AND NOT IN THE OBJECT.** `src/dsp/fltutl.c` spells the second pass
+
+    int iDiff = buf[i] - iMean;
+
+because 0x0ae1b5 is a plain 32-bit `sub` on a `movswl` load, and in the
+machine code that simply wraps -- there is no undefined behaviour anywhere in
+the object. In C it is signed integer overflow the moment `iMean` lands near
+`INT_MAX`, which is exactly what the unsigned divide above produces.
+
+**It is DRIVEN, not hypothetical.** `t_fltutl`'s `run_rmsshort` reaches it at
+`n == 2`, fill mode 3: the buffer is `{32767, -32768}`, the sum is -1, the
+unsigned divide gives a mean of 2,147,483,647, and element 1 computes
+-32768 - 2147483647 = -2,147,516,415, which is 32,767 below `INT_MIN`. The
+all-negative fill (mode 2) reaches it at other small counts. **Both compilers
+wrap and both agree with the blob** -- the value is converted straight to
+float by `fildl` with no comparison or loop bound derived from it, so nothing
+in GCC's value-range machinery has anything to exploit.
+
+This paragraph exists so that a future `-ftrapv`, UBSan or optimiser run finds
+a KNOWN and accepted condition here rather than a fresh mystery. Anyone
+closing it must not do so by changing the arithmetic: `(int)((unsigned)buf[i]
+- (unsigned)iMean)` is bit-identical and UB-free, and is a change to the C
+spelling only -- but it is also further from what the author wrote, which is
+why it was not taken.
+
+**Status:** the unsigned divide itself is unmeasured -- no caller, so the sign
+distribution of the buffers it would have been handed is unknown. The overflow
+consequence above is MEASURED: `t_fltutl` drives it and both builds agree with
+the object on it.
+
+## D966 🐛 `fComputeRMSValueShortBuf` divides by zero, and takes SIGFPE, on an empty buffer
+
+`div %ebx` at 0x0ae1a3 is reached unconditionally with the caller's count in
+`%ebx`. There is no guard anywhere in the 85 bytes. A count of zero is `#DE`
+and the process dies on SIGFPE.
+
+Its float sibling does not share this: `fComputeRMSValueFloatBuf` converts the
+count and divides on the x87, where 0.0/0.0 is a masked invalid operation
+returning a NaN, so an empty buffer there returns a NaN rather than killing
+the process. Two functions of the same shape and name, one of which is fatal
+on the same input.
+
+**Reproduced -- the reconstruction has no guard either**, which means the
+input cannot be driven by a test at all. `test/unit/t_fltutl.c` skips a count
+of zero for this function and says in its header that it does so, so that the
+gap reads as a recorded consequence rather than as an oversight; no mutation
+here can be scored against that count either, and `fltutl.json` carries a NOTE
+saying so.
+
+**Status:** unmeasured, and undrivable. No caller exists (F8400).

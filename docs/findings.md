@@ -110500,3 +110500,588 @@ in its words: **a grep written for `%esi` finds four of five sites and reports
 them as all of them.** The instance's register is the compiler's choice per
 function, so any "every site that…" claim about a structure has to be made
 register-blind before it is written down.
+
+## Six float-buffer leaves: F8420-F8429
+
+Derived on `worktree-agent-a0118dff3368d1d6b`, which never landed.  Master has
+since written all six symbols independently -- `zFLTUTL_Float2Linear`,
+`zFLTUTL_Linear2Float`, `fComputeRMSValueFloatBuf`, `fComputeRMSValueShortBuf`
+and `zfFLTUTL_GetMaxAbsValue` in `src/service/beepgen.c`, `zFLTUTL_FloatMemSet`
+in `src/service/fdspkrnl.c` -- so the CODE is withdrawn and no `src/dsp/fltutl.c`
+is created here.  F8427 cites a `t_fltutl` that does not exist on master; read
+it as the first attempt's measurement.
+
+What is kept is the ANALYSIS, and D962-D966 with it: master wrote these six
+without recording a single one of their five behavioural deviations.
+## F8420. Six float-buffer leaves, and the difference between what the object pins and what is inference
+
+`src/dsp/fltutl.c` and `include/dsplib/fltutl.h` reconstruct
+
+    0x0ae070  zFLTUTL_Float2Linear        0x65 bytes
+    0x0ae0e0  zFLTUTL_Linear2Float        0x31
+    0x0ae120  fComputeRMSValueFloatBuf    0x52
+    0x0ae180  fComputeRMSValueShortBuf    0x55
+    0x0ae850  zfFLTUTL_GetMaxAbsValue     0x6a
+    0x0aea70  zFLTUTL_FloatMemSet         0x1b
+
+**None of them has a caller.** Nothing in the 1.2 MB reaches any of them and
+slmodemd does not either -- the daemon consumes exactly 22 symbols from the
+object and none of these six is among them (F8400). So the usual rank-2
+evidence, a caller or callee that types the thing, does not exist for any
+argument of any of them, and it is worth being exact about what remains rather
+than writing "rank 3" across the batch.
+
+**Rank 1, the author's own word:** the SYMBOL NAMES. `zFLTUTL_`/`zfFLTUTL_`
+on four of them, and the leading `f` on the two `fComputeRMSValue*`, which is
+the object's own convention for a float return and agrees with what the
+instruction stream leaves in `%st(0)`.
+
+**Pinned by the instruction stream, so not inference at all:**
+
+| what | where |
+|---|---|
+| each argument's POSITION and ROLE | slot 1 of both `fComputeRMSValue*` is the loop bound AND the divisor, slot 2 is the base of an indexed load -- 0x0ae123/0x0ae127 and 0x0ae186/0x0ae18a. The count is FIRST, and that is measured |
+| the loop counter's SIGNEDNESS | `jb`/`jae` in four of them, `jl` and `test`/`jle` in the two converters. See F8425 for what a test can and cannot add to this |
+| element WIDTH and signedness | `filds` (signed 16-bit) in Linear2Float, `fistps` (16-bit store) in Float2Linear, `movswl` in ShortBuf, `(base,index,4)` in the float ones |
+| the return type | `%st(0)` live at `ret` in three, cleared with `fstp %st(0)` in the three that return void |
+
+**Inference, and it is the C SPELLING and nothing else:** whether the count is
+written `unsigned`, `size_t` or `unsigned long`; whether the pointers carry
+`const`; and the parameter names. A differential test cannot separate any of
+those, because both sides are seeded by the same driver and no caller
+constrains them.
+
+**Recording the whole signature as rank 3 would have been a record defect in
+its own right**, and this entry exists to say which half is which. A green
+`t_fltutl` is not confirmation of the argument order -- the disassembly is.
+
+## F8421. Both `zFLTUTL_*` converters skip on a zero scale, and the constant is verified rather than assumed
+
+`zFLTUTL_Linear2Float` compares against `.rodata.cst4 + 0x52c` and
+`zFLTUTL_Float2Linear` against `.rodata.cst4 + 0x528`. The section starts at
+file offset `0x0dcbf8`, and both words read `00 00 00 00`, i.e. `+0.0f`.
+
+That check is not ceremony. A string or constant reference in this object is
+an `R_386_32` against the SECTION symbol with the offset riding inline
+(F604), so the disassembly prints a bare displacement and any reading of
+"compares against zero" taken from the mnemonic alone would be a guess. The
+bytes were read out of the file.
+
+What the comparison then does is D962: `je` past the entire loop, leaving the
+destination unwritten rather than zeroed.
+
+**One thing NOT written into the source, and why.** `zFLTUTL_Float2Linear`
+also has `test %edx,%edx; jle` at 0x0ae08f, which `zFLTUTL_Linear2Float` does
+not. That is not a second guard the author wrote: Float2Linear's loop is
+rotated into a `dec`/`jne` do-while and GCC emits the entry test itself, while
+Linear2Float's is an ordinary indexed loop that needs none. Both are written
+here as a plain `for (i = 0; i < n; i++)`. **Behaviour cannot separate the two
+spellings** -- they agree on every input including a negative count -- so this
+is a codegen-tier question and it was not run for this batch.
+
+## F8422. `zfFLTUTL_GetMaxAbsValue` reads element 0 before any bound test, and returns MINUS zero for a zero input
+
+The control flow is awkward enough to be worth writing down, because an
+`fchs` is reached two ways and the second route runs through a `jmp` back into
+the middle of the first.
+
+    ae85e  flds (%ecx)          buf[0], before anything is compared
+    ae860  fcom %st(1) / ja     against the fldz'd zero
+    ae867  fchs                 the negating arm
+    ae869  mov $1,%ebx          i = 1
+    ae870  cmp %edx,%ebx / jae  and only here is n consulted
+
+Inside the loop the element is compared against zero FIRST (0x0ae883), and the
+two arms rejoin at 0x0ae88e:
+
+- `x > 0`: compare `x` against the running maximum directly.
+- `x <= 0`: 0x0ae8b0 pushes a copy, negates it, `fcomp`s it against the
+  maximum, and **jumps back to 0x0ae88e** -- into the middle of the positive
+  arm -- to share the `sahf` and the `jbe`.
+
+Whichever way it arrives, an update runs `fstp %st(1)` and then evaluates the
+magnitude AGAIN (0x0ae893-0x0ae89a). So the object computes the magnitude
+twice per element that wins, once for the comparison and once for the
+assignment, which is what a macro used twice compiles to and is why the source
+is written that way rather than with a temporary.
+
+**The magnitude is `x > 0.0f ? x : -x` and the comparison is STRICT**, so
+`x == 0.0f` takes the negating arm: the function returns **-0.0f** for a zero
+input, and `fabsf` would not. See F8426 for why the obvious check cannot see
+that. The unconditional first read is D963.
+
+## F8423. Neither `fComputeRMSValue*` takes a square root, and the two of them end differently -- which is where the reciprocal comes from
+
+Both are fully disassembled and neither contains `fsqrt` or a call to
+anything. What they compute is the mean square about the mean. D964.
+
+The interesting part is the last three instructions, because the two are NOT
+the same and the asymmetry is load-bearing:
+
+| | mean | result |
+|---|---|---|
+| `fComputeRMSValueFloatBuf` | `sum / n`, a plain divide (0x0ae147) | `acc * (1.0f / n)` -- `fld1` hoisted to 0x0ae13b, `FDIVP` at 0x0ae16d, `FMULP` at 0x0ae16f |
+| `fComputeRMSValueShortBuf` | an INTEGER `div` (0x0ae1a3) | `acc / n`, a plain divide (0x0ae1d2), and no `fld1` anywhere in the function |
+
+**A blanket reciprocal transform would have taken the FloatBuf function's mean
+as well**, and it did not. So the `1.0f` is in the author's source at that one
+site and not a compiler artefact, and the `fld1` before the first loop is
+ordinary invariant hoisting of a constant load.
+
+**The differential tier cannot see this and must not be read as confirming
+it.** `acc * (1.0f / n)` and `acc / n` are both x87 extended-precision
+intermediates under `-mfpmath=387`, and the difference between one rounding
+and two vanishes when the result narrows to the returned float. No check in
+this tree separates them; `test/mutations/fltutl.json` therefore carries the
+question as a NOTE rather than as a mutation that would report NOT CAUGHT for
+ever. The evidence is the instruction stream, and only that.
+
+**Both endings are `DE` pop encodings and objdump prints them as their own
+opposite** (F245). `de fa` and `de f9` render as `fdivrp` in AT&T and are
+`FDIVP`; `dis.py` appends `<== Intel: fdivp` to both. Taken the other way
+round the first would compute `n / sum` and the second `n / 1.0`, neither of
+which is a statistic.
+
+## F8424. `int / unsigned` is what makes `fComputeRMSValueShortBuf`'s divide unsigned -- the author wrote no cast
+
+    ae192  movswl (%esi,%edx,2),%eax     signed load
+    ae197  add    %eax,%ecx              signed accumulation
+    ...
+    ae19f  xor    %edx,%edx
+    ae1a3  div    %ebx                   UNSIGNED divide
+
+It is tempting to record this as "the divide is unsigned", and that
+understates it. `xor %edx,%edx` immediately before `div` is exactly what GCC
+emits for `int / unsigned` in C: the usual arithmetic conversions promote the
+signed operand, and the division that results is unsigned. **No cast appears
+in the source and none is needed to produce this.** So the defect is a type
+mismatch between a signed accumulator and an unsigned count, which is the
+easiest kind to write and the hardest to see -- and it is why D965 is filed as
+a defect rather than as a deliberate choice.
+
+The same reading pins the count as `unsigned` a second time, independently of
+`jb`: the final conversion at 0x0ae1ca is `fildll` on a zero-extended
+`(0, n)` pair, GCC's unsigned-to-float idiom. An `int` would have given the
+single-push `fildl` -- which is exactly what the DIFFERENCE gets at 0x0ae1b8,
+in the same function, so both idioms are present and can be compared side by
+side.
+
+`div %ebx` with a zero count is `#DE` and SIGFPE. D966.
+
+## F8425. A negative count is the only signature evidence a differential test can produce here, and it reaches two of the six
+
+The brief for this batch was right that a seeded-both-sides test cannot
+confirm a signature. It is worth saying precisely where the exception is,
+because there is one and it was driven.
+
+`zFLTUTL_Linear2Float` (`jl` at 0x0ae10b) and `zFLTUTL_Float2Linear`
+(`test`/`jle` at 0x0ae08f) take a SIGNED count, and a negative one is a legal
+input that writes nothing. `t_fltutl` calls both with `n = -1` and `n = -7`
+and asserts the destination still holds its seed. A build that read the count
+as unsigned would run four billion iterations off the end of the buffer, so
+the two readings are separated by an observable and the check is not vacuous.
+`test/mutations/fltutl.json` carries the unsigned reading in an in-bounds form
+-- `i < (n < 0 ? -n : n)`, which writes as many elements as the magnitude
+rather than crashing -- and it is caught for both functions.
+
+**The other four have no equivalent and cannot get one.**
+`zFLTUTL_FloatMemSet`, `zfFLTUTL_GetMaxAbsValue` and both
+`fComputeRMSValue*` test with `jb`/`jae`, so the count is unsigned and the
+alternative reading -- a signed count with a negative value -- differs only by
+reading or writing off the end of the buffer. There is no input at which the
+two disagree observably and in bounds. Their `unsigned` is read from the
+branch and from the `fildll` idiom (F8424), not from any test.
+
+So: **two of six signatures have a measured component, four do not**, and a
+green run says nothing about the four.
+
+## F8426. `diff_eq_float` cannot separate -0.0f from +0.0f, so a sign-of-zero claim needs the bits
+
+`float_ulps` maps sign-magnitude onto a monotone integer order with
+
+    if (ia < 0) ia = 0x80000000L - ia;
+
+and for `-0.0f` that is `0x80000000 - 0x80000000 = 0`, which is what `+0.0f`
+already is. The two therefore come out 0 ULP apart and `diff_eq_float` -- the
+tree's EXACT float comparison, the one its own header calls "bit for bit" --
+passes on the pair.
+
+That is the right behaviour for every ordinary numeric comparison and it is a
+hole for exactly one class of claim: a function whose output is a signed zero
+BECAUSE of how it was computed. `zfFLTUTL_GetMaxAbsValue` is that function
+(F8422, D963) -- the strict `ja` sends a zero input through `fchs` -- and a
+reconstruction using `fabsf` would return `+0.0f`, agree with the blob under
+`diff_eq_float`, and be wrong.
+
+`t_fltutl` therefore checks that function's result BOTH ways: `diff_eq_float`
+for a readable ULP report on ordinary values, and a punned `diff_eq_int` over
+the bit patterns for the sign of zero. The mutation that relaxes the magnitude
+to `>=` -- which flips exactly that case and nothing else -- is caught, and it
+is caught by the bits check alone.
+
+**The general shape, for whoever hits this next:** the harness's exact float
+check is exact over VALUES, not over BIT PATTERNS, and the two differ at
+signed zero and at NaN (where it is deliberate and documented). Any claim
+about which of two equal values the object produced needs the punned form.
+
+## F8427. `t_fltutl` and `fltutl`: 38,770 checks, 27 mutations, 27 caught
+
+Differential checks, per section, on the modern build; the period build passes
+the same six with GCC 3.4.2 and there is nothing to declare in
+`gccdiverge.json`:
+
+    zFLTUTL_FloatMemSet        3,026
+    zFLTUTL_Linear2Float      16,377
+    zFLTUTL_Float2Linear      19,111
+    zfFLTUTL_GetMaxAbsValue      132
+    fComputeRMSValueFloatBuf      72
+    fComputeRMSValueShortBuf      52
+
+`tools/mutate.py --suite fltutl`: **27 caught, 0 NOT caught, 0 unusable, 0
+equivalent.**
+
+**No mutation is marked `equivalent`, deliberately.** The one claim in this
+batch that no check can reach -- `acc * (1.0f/n)` against `acc / n` (F8423) --
+is a NOTE and not an equivalence entry, because the mutation would survive for
+lack of an observable rather than because it provably cannot change behaviour,
+and those are opposite results. `tools/mutate.py`'s own header draws that line
+and this is the case it draws it for.
+
+**Three checks in the file are absolute rather than differential**, and each
+exists because ours-against-the-blob is vacuous for it:
+
+- the destination still holds its SEED after a zero-scale call (F8163: a
+  reached branch is not a distinguished one);
+- a zero count returns the magnitude of element 0, and an all-zero buffer
+  returns the bit pattern `0x80000000`;
+- `{2,-2}` gives 4 and `{1,2}` gives 0.5, which pin the missing square root
+  and the truncated integer mean respectively -- both are values an RMS or a
+  float mean would get wrong, and 4-against-2 is precisely the RMS answer.
+
+## F8428. Three tools give three different homes for these six, so the file header claims none
+
+The six do not sit together. Four are adjacent at 0x0ae070-0x0ae180 and the
+other two are 1.7 KB and 2.4 KB further on, with unrelated code in between and
+around:
+
+    tuattrib.py   Dtmf.c|Fdsp.c   for the first four, sharing that span with
+                                  CrossDataLinks, bSearchEnergy, FindCorrelation
+    tuattrib.py   Fdsp.c          for GetMaxAbsValue and FloatMemSet, sharing
+                                  it with EchoCanceler and four FDSP_Kernel_*
+    service.py    Beepgen.c +3    for five of them
+    service.py    Fdspkrnl.c +13  for FloatMemSet
+
+All of it is contiguity inference, which scores **0/8** against held-out
+ground truth and which the README labels provisional throughout;
+`tuattrib.py` marks the first four `_(ambiguous)_` and the other two `_(fill)_`
+in `docs/attribution.md`.
+
+So `src/dsp/fltutl.c` is a grouping by NAME and by ROLE and its header says so
+in those words. **It is not a claim about a translation unit** -- the object's
+own boundary is not established for any of the six, and writing the file as
+though it were would have been a naming-on-inference error of exactly the kind
+CLAUDE.md rules against for struct fields.
+
+## F8429. The no-entry-point bucket: 138 before, 132 after
+
+`tools/service.py --list none`, counted by lines, reads **138** at the fork
+point and **132** with this batch in; the six are the difference and no other
+row moved.
+
+The tool refuses on an empty object tree and says so rather than reporting a
+clean sheet, which is F3055's repair, so **the coverage object tree has to
+have been built before either number means anything.** The refusal goes to
+STDERR, so the first attempt at the "before" figure -- a `--list none` piped
+to `wc -l` -- came back as **0**, which reads exactly like an empty bucket and
+not at all like a tool declining to answer. F3055 made the tool honest; it did
+not make a line count of its stdout honest, and anyone measuring this the
+obvious way has to look at stderr as well as at the number.
+
+It also reads `build/src` rather than `build/repro`, so building one test
+binary does not move it: after `make one T=t_fltutl` the count was still 138,
+and it did not fall to 132 until the coverage tree was rebuilt. That is the
+same trap one level down -- a stale denominator rather than an empty one --
+and it is the reason the "after" figure here is quoted from a run that
+followed `make coverage` rather than from the one that followed the test.
+
+CLAUDE.md's standing figure for this bucket is 139 symbols / 16,013 bytes,
+measured at F8320. 138 is the count of LINES the lister prints, and the two
+are not the same denominator; quote the tool, and say which of the two you
+ran.
+
+## What the differential evidence proves: F9490-F9496
+
+Derived on `worktree-agent-a23f4efbb2eac8ecb` as F8420-F8426 and renumbered:
+that range collided with the float-buffer block above, which was pre-assigned
+on a sibling branch at the same time and is the same failure F9480 records.
+Master has no equivalent tooling, so `tools/eqproof.py` comes across whole.
+## F9490. Grade 1 IS a proof, for the current 32, and here are the four holes it does not have
+
+`byteident.py`'s grade 1 is "the same instructions and the same operands under
+a register bijection taken per live range". A consistent renaming of registers
+preserves semantics, so the standing assumption has been that a grade-1 symbol
+is *proven* equivalent by construction rather than by testing. That assumption
+had never been checked, and it is not true in general. It is true here.
+
+**The argument has four holes**, each a place where two instruction streams can
+be identical under a consistent renaming and still compute different functions.
+Each is a synthetic control in `tools/eqproof.py --selftest`, and every control
+is a pair `alpha_equal` **accepts**:
+
+- **RET.** `ret` carries no operands, so nothing pins the binding at the one
+  point where a value LEAVES the function. `mov 0x4(%esp),%eax; ret` against
+  `mov 0x4(%esp),%edx; ret` is a clean rebind and returns a different value.
+- **SAVECLASS.** The bijection may map a callee-saved register onto a
+  caller-saved one. `push %ebx … pop %ebx` against `push %ecx … pop %ecx`
+  matches instruction for instruction, and the second preserves %ecx while
+  destroying the caller's %ebx.
+- **CALLLIVE.** The same crossing with a `call` standing in it and the value
+  read afterwards: the blob's %ebx survives the call and our %ecx does not.
+- **LOOPREBIND.** `alpha_why` is a LINEAR SCAN with no control-flow graph, so
+  it validates one pass through the instruction list. A back edge means the
+  second pass begins with the bindings the first pass ENDED with. Two loops
+  that accumulate into %ebx and then rebind it agree on iteration one and
+  diverge on iteration two.
+
+**Censused over the real population: 32 of 32 are clean of every shape that is
+not vacuous.** 591 grade 0, 32 grade 1, 674 neither, over `byteident.py`'s own
+1,297-symbol denominator, at `5d1a2e2` (this branch) against `ref/slmodemd/dsplibs.o`
+(sha256 `1f3e56d0…`) and `build/tc_out` from `tools/toolchain/build.sh` on
+`dsplibs-tc342` -- GCC 3.4.2 exact, 206 objects, 0 failed.
+
+| shape | fires | of it |
+|---|---|---|
+| RET | 16 | **16 return void**, so the shape is vacuous; 0 return a value |
+| SAVECLASS | 9 | none of the nine is live across a call |
+| CALLLIVE | **0** | |
+| LOOPREBIND | **0** | |
+| REPLAY | **0** | the replay never disagreed with `alpha_equal` |
+
+**All 32 are ALSO in the DIRECT population**, so the by-construction proof and
+the differential evidence are independent and both present for every one of
+them. That matters most where this census leans on something outside the
+instruction stream: the sixteen RET hits are cleared by the return type
+declared in OUR OWN HEADERS, and if that lookup were wrong for any of them, the
+differential test on that symbol is a second line of defence rather than
+nothing.
+
+**So grade 1 may be quoted as a proof, and the sentence has to carry its
+population.** It is a proof *for these 32, verified against four named holes*,
+not a property of the grade. The next symbol that lands at grade 1 has to be
+re-censused, which is one command.
+
+**Two things the grade already gets right and which the argument needs.**
+`%esp` and `%ebp` are pinned to themselves, so every stack address agrees; and
+`%st(N)` survives the register substitution as `%r(N)`, so x87 stack indices
+are compared literally and `fsub %st(1),%st` is never equal to
+`fsub %st(2),%st`. **Grade 1 makes no floating-point concession at all**, so
+`docs/method/equivalence.md` §3 -- where Ghidra's high P-Code dropped an
+arithmetic operation and collapsed an 80-bit intermediate -- does not touch it.
+
+## F9491. Two of the four hazard probes over-reported, and both over-reports were mine
+
+Recorded because the first census read **5 of 32 clean** and the true answer is
+32, and the gap was entirely in how the two liveness-sensitive shapes were
+asked.
+
+**LOOPREBIND asked "was there a rebind inside a loop".** That fires on an
+identity rebind (`%ebx -> %ebx`), which is the commonest thing in a loop and
+changes nothing. The sharp question is whether the MAP differs between the loop
+head and the back edge, **and differs for a register the body reads before
+writing** -- a loop-carried value. 16 of 32 became 1.
+
+**And that last one was a back edge that is not a loop.** GCC 3.4.2 puts a cold
+path at the END of a function and jumps back into the main line.
+`_iir_filter_create` does exactly that: `je +0xb0` at the top, `jmp +0x23` at
++0xbe once `sysdep_malloc` has returned. Textually that is a backward branch
+spanning the function; in the CFG it is a MERGE that runs at most once, and the
+state re-entering at +0x23 is the state that left the top and not the state at
++0xbe. `eqproof.py` now builds basic blocks and computes dominators, and takes
+only edges `u -> v` where `v` dominates `u`. 1 of 32 became 0. There is a
+control for each half: the same rebind with a real back edge must fire, and
+with a cold-block re-entry must not.
+
+**CALLLIVE asked "is there a call anywhere in the function".** The crossing
+binding must still stand AT the call and the register must be READ after it.
+7 of 32 became 0.
+
+**And RET was folded when it should have been split.** The shape is vacuous for
+a function returning `void`, and nothing in an instruction stream can tell the
+two apart -- a void function may leave anything in %eax and no caller may read
+it. The answer is in the source, which we have. All 16 return void: eight are
+constructors or destructors (a language rule, not an ABI guess), one is a
+template whose mangled name carries `v` for its return type, and the rest are
+looked up in our own headers.
+
+**The direction is the point, and it is the opposite of the mistake
+`docs/method/equivalence.md` §9 records against itself.** That one
+over-normalised and made the tree look MORE equivalent than it is, which is the
+failure mode a grade-2 oracle has by default. All four of these made it look
+*less* proven, which is the safe way for a detector of this kind to fail. It is
+still four wrong numbers, and three of them would have been quoted.
+
+## F9492. What the differential evidence proves: 2 of 674 are proofs
+
+The first time this tree has asked what its differential tier PROVES rather
+than whether it passes. `tools/eqproof.py`, no flag; every number below is over
+the 674 symbols that are neither grade 0 nor grade 1, which is where the
+question lives.
+
+**Where the evidence comes from -- and the tree's own rule is upheld.**
+
+| | | |
+|---|---|---|
+| DIRECT | **673** (99.9%) | a compiled test object references `ref_SYMBOL`, so it is compared AT ITS OWN BOUNDARY |
+| COMPOSITE | **0** | |
+| NONE | **1** (0.1%) | `GetNextDigitAndReturnNextState` |
+
+Over the whole 1,297: **1,294 DIRECT, 3 not**, and the other two are
+`_ZN5V90JdD2Ev` and `_ZN5V92JdD2Ev` -- the two F8326 already names and declines,
+one byte each. **COMPOSITE reading 0 is a property of the tree and not a dead
+detector**: the graph carries 2,919 edges over 1,304 functions, and
+`--selftest` takes a real caller/callee pair and requires the callee to be
+reachable from the caller and not from no root at all.
+
+**What that evidence proves, strongest first.** A symbol lands in the first
+class it qualifies for, so these partition the 674.
+
+| | | |
+|---|---|---|
+| EXHAUSTIVE, whole domain | **2** (0.3%) | `FPM_div`, `charFlip` |
+| EXHAUSTIVE, reduced domain | **5** (0.7%) | the two `FPM_phasor`s, `FPM_phasor_dp`, `RxTrained1200/2400` |
+| SAMPLED | **666** (98.8%) | driven, >=100 checks, nothing claimed |
+| AD-HOC VECTORS | 0 | **empty by construction, not measured empty** -- see below |
+| UNTESTED | **1** (0.1%) | |
+
+**AD-HOC VECTORS reading 0 is not a measurement that nothing is driven ad hoc.**
+A check count is per BINARY, so a symbol reached by three hand-written calls
+inside a binary that sweeps 500,000 checks elsewhere is credited with all
+500,000 and lands in the top band. The class can only ever catch a symbol whose
+WHOLE binary is ad-hoc, and the "under 100" band is 0 for the same reason.
+Telling the two apart needs per-symbol attribution, which nothing here has.
+
+**628,543,812 checks over 263 binaries**, and the distribution is not thin:
+352 of the 673 DIRECT symbols are driven by a binary running 100,000 checks or
+more, 302 by one running 1,000 to 99,999, 19 by 100 to 999, and none by fewer. So the SAMPLED
+class is not weak for want of effort. It is weak because **a sample is not a
+universal claim**, which is the same gap `docs/method/equivalence.md` §5 names
+for unicorn: 2,000,000 random inputs separated `narrow` from `wide` on
+1,999,998 of them and agreed on 2.
+
+**The five exhaustiveness claims were READ, and they are two different things.**
+
+- `charFlip` -- 256 of 256 values of one `unsigned char`. **Whole domain.**
+- `FPM_div` -- 65,536 of 65,536 values of one `unsigned short`. **Whole domain.**
+- `FPM_phasor` -- all 65,536 phases against **fourteen chosen** increments of
+  65,536. Reduced.
+- `FPM_phasor_dp` -- exhaustive over phase; `frac_phase × frac_inc` is 2^32 and
+  is expressly NOT swept, the carry boundary is. Its header says so.
+- `RxTrained` -- all 3^n sequences over an alphabet of **three** shorts of
+  65,536, "the two symbols that matter plus one that matters to neither".
+
+**Every one of the five is honest in its own prose and none can be told from
+its LABEL.** That is structural rather than sloppiness: a label names a sweep,
+and whether a sweep is a whole domain is a fact about the SIGNATURE that no
+label carries.
+
+**Discriminating power, which is the only axis here that speaks to whether a
+test could TELL.** F8163: a non-vacuity guard proves a branch was REACHED, not
+that the test can tell it from its alternative. A mutation suite covers a
+binary driving **517 of 673** (76.8%); nothing in those suites went uncaught for
+**415**; **156** (23.2%) are reached by no mutation suite at all. Over the
+recorded snapshot: 9,252 mutations, 146 UNCAUGHT.
+
+## F9493. What it would cost to move `SAMPLED` up, and why the boundary is the signature
+
+The brief asked for the cost. It is not a gradient, it is a wall, and both
+verified whole-domain proofs are on the near side of it for the same reason:
+**they are functions of one scalar.** A scalar signature has an input domain a
+loop can enumerate. A parameter that is a pointer replaces the domain with a
+reachable STATE SPACE, which is a property of the whole program rather than of
+the function, and no sweep can exhaust it.
+
+Of the 666 SAMPLED, by our own declarations: **201 (30.2%) take no pointer parameter at all**, so
+their domain IS their parameters and a sweep is conceivable at a cost equal to
+their total width; **392 (58.9%) take at least one pointer**, which has to be
+read rather than counted; **73 (11.0%)** our source does not settle.
+
+**Conceivable is not affordable and the width still decides.** One 16-bit
+argument is 65,536 trials and `t_fpm_div` runs it in under a second. Two is
+2^32, and `t_fpm_phasordp` declined exactly that -- it swept the carry boundary
+instead and wrote down which half it had not covered. So the honest ceiling on
+"make it exhaustive" is **a subset of 201**, bounded further by argument width,
+against a population of 674. **The weak class dominates, it will go on
+dominating, and that is the answer rather than a defect to fix.**
+
+**The one thing that is cheap and is not being done: mutation.** 156 DIRECT
+symbols are reached by no suite, and a mutation suite needs no new input domain
+-- it asks whether the test could tell, which is exactly the question a sample
+leaves open. It is the only axis in the report that can be moved at a cost the
+tree already pays.
+
+## F9494. The AD-HOC class had one member and it was the measurement
+
+`eqproof.py`'s weakest populated class was AD-HOC VECTORS, one symbol:
+`V90SpectralVerifier::process`, driven by `t_v90specproc` on **0 checks**.
+
+It runs 35,450. `tools/eqproof-checks.sh` summed `PASS <section> <n> checks`
+and nothing else, and **a FAILING section reports `FAIL <section> <a>/<b>
+checks failed`** -- a different line, which the sed did not match. Eight
+binaries carry a check `tools/gccdiverge.json` declares, so they exit non-zero
+under modern GCC while `make period` passes them and `make phase` is green;
+every one of them was reading as zero checks.
+
+Fixed, and the class is now empty. **The shape is F2400's** -- a detector
+reporting a plausible number for something it did not measure -- with the
+mitigation that it under-reported into the weakest class, which is where
+anybody would look first.
+
+**And `tools/gccdiverge.json` has EIGHT entries, not the seven `CLAUDE.md`
+states.** `t_v90specproc` is the eighth. Read it from the tool.
+
+## F9495. `CLAUDE.md`'s grade counts are stale by 153 symbols, again
+
+`CLAUDE.md` says "**433 of 1,251 at grade 0 and 486 at grade 0-or-1 today**".
+`tools/toolchain/byteident.py` on this tree says **586 of 1,297 at grade 0, 591
+counting UNRESOLVED, and 623 at grade 0-or-1.** The paragraph that carries the
+stale numbers also says "read the number from the tool, not from here", so the
+rule is written down and the numbers under it drifted anyway.
+
+Two notes for anyone reconciling: `docs/method/equivalence.md` measures the
+same thing at a denominator of 1,200 and a different commit, and both are right
+for what they were; and the brief that opened this pass said "~37 symbols" at
+grade 1, where the tool says 32. **This is F6100/F6103's family and it is now
+five members** -- a count in a rules file with no gate behind it has the
+shelf-life of a comment.
+
+## F9496. The columns did not add up, and that is the only reason it was found
+
+`eqproof.py`'s section V splits the SAMPLED population three ways on one
+three-valued question, so the three counts are that population **by
+construction**. They printed **201 + 130 + 349 = 680 over a population of 666**,
+and the report rendered it without complaint.
+
+The cause is one method call. `scalar_only` ended:
+
+```python
+got = _arglists().get(sym)
+return got.pop() if got and len(got) == 1 else None
+```
+
+`got` **is** the cached set, and `.pop()` empties it. The first call for a
+symbol answered correctly and every call after it returned `None`. `classify`
+asks three times, once per class, so the first list was right, the second saw
+only the symbols that never touch that cache -- the C++ ones, answered from the
+demangling -- and the third collected the wreckage. `next(iter(got))` is the
+fix. True numbers: **201 / 392 / 73**.
+
+**A cache that answers once is worse than no cache**, because a cold run and a
+warm run disagree and neither is reproducible from the other. The tree has the
+same shape recorded twice already -- F2400's `TC_OUT` default and F3055's
+object tree -- but both of those were a wrong PATH, which a denominator check
+catches. This one measured the right thing the first time and a different thing
+afterwards, so no denominator moved and every guard in the tool passed.
+
+**What caught it was adding the three numbers up.** `classify` now asserts the
+partition, with the arithmetic in the message. A count that cannot be wrong is
+worth asserting precisely because nobody re-adds a printed column by hand.
