@@ -12608,3 +12608,25 @@ only reads the field.
 **Status:** ✅ verified bit-exact on the 32-bit tiers (`t_faxadapt.c`); the
 64-bit truncation this inherits from `int_0014`'s own declared type is
 `faxvmi.h`'s to resolve, not reproduced or hardened against here.
+
+## D1330 ⚠ `states_names` and `status_names` are file-local in the object and global here
+
+D1122's exact shape, one file later. Both are `r` in `nm`, not `R` --
+file-local `.rodata` at 0x9360 (`states_names`, 20 entries) and 0x9300
+(`status_names`, 11 entries). Ours are global.
+
+The reason is the same as D1122's: their only reader in the object,
+`fax_class1_progress`, is not reconstructed (F9802 says why -- a pointer
+chain into a per-modulation object whose RX/TX identity `class1.h` itself
+flags as unsettled). A `static const` array with no referent in its
+translation unit is discarded by the compiler at any optimisation level, so
+global keeps the definition in the object where it can be compared against
+the blob's copy at all.
+
+**Status:** reproduced as a storage class, not as behaviour; nothing observes
+the difference except `nm`. It should be made `static` in the same commit
+that writes `fax_class1_progress`, which is when it acquires a reader.
+`test/unit/t_class1names.c` compares both tables entry by entry against
+`ref_states_names`/`ref_status_names` -- 68 checks -- and, per F134, first
+proves the comparison itself fires by corrupting a scratch copy's `id` and
+`name` and checking each is caught before trusting the clean run.

@@ -109255,3 +109255,96 @@ re-prove. `V??TXP_INT_0008`/`INT_0004` is set to 1 in the same fixtures so
 `run_tx_process`, one from each side of the probe comparison. Both reverted
 after confirming the FAIL, per CLAUDE.md's F134 rule -- a detector shown only
 passing is indistinguishable from a dead one. (2026-09-01)
+
+## F9800. `cTOOLS_handle_hdlc_output` is output TO THE HOST of a frame the modem RECEIVED, not one being transmitted
+
+Its own name reads like a transmit-side function -- it sits in `class1tx.c`'s
+span, right after `_handle_data_output` -- but its one high-level debug print
+(`.rodata.str1.1` 0x4926, gated on `count > 2` and `dsplibs_debug_level > 1`)
+is `"FCL1: FRAME RECEIVED (%s)\n"`, decoded from the first three elements via
+`GetT30FrameIDFromBuffer`/`GetT30FrameNameByID` -- the same idiom
+`faxvmi_hdlc_frame`'s own debug line uses on transmit. So the function is
+`_handle_hdlc_input`'s mirror: it recovers an octet from each of `count`
+16-bit elements (the low byte only, no async start-bit search -- these are
+already-aligned HDLC receive elements, unlike `_handle_data_output`'s), DLE-
+stuffs them into `dst`, and appends DLE ETX when `terminate` is set. `ctx` is
+read nowhere in the object.
+
+Two debug prints share one call site through a shared tail (`0x09f00a`,
+`"HDLC Recieved Frame of %d: \n"`, `.rodata.str1.1` 0x4941) reached from BOTH
+the `count > 2` arm (after the frame-decode print) and its `else`, each with
+its own, differently-coded `cmpl $0x1,dsplibs_debug_level` test (0x09ef2e is a
+direct compare-to-memory, 0x09eff0 loads to a register first) -- not one
+shared test after an if/else, which is why the source states the level check
+twice. A third debug block (0x09f063, only when `terminate` actually appends)
+hex-dumps the two terminator bytes via `aReversedCharsArray[0x10]` and
+`aReversedCharsArray[0x03]`, the same table `_handle_hdlc_input`'s neighbours
+already use, ending the line with `"%02X\n"` (0x4964) where every other byte
+in the dump uses `"%02X,"` (0x495e, no newline). None of the four strings
+resolves anything about correctness -- the differential test drives every
+`dsplibs_debug_level` value to exercise the branches but does not capture
+`dsplibs_debug_printf`'s output, since nothing here compares it -- but they
+are the whole of the evidence for the function's DIRECTION, which its own
+name does not give away. `test/unit/t_class1handlers.c`, `run_hdlc_output`,
+245 checks. (2026-09-02)
+
+## F9801. The null datapump: five leaves, and the tables that dispatch to them are all one strand's, elsewhere
+
+`null_create`/`null_delete`/`null_process`/`null_status`/`null_control`
+(`.text` 0x09f0b0..0x09f135, 102 bytes together, immediately after
+`cTOOLS_handle_hdlc_output` and immediately before `SDM_scrambler`) are the
+"no modulation is active" arm (slots 0..4) of five 13-slot `.rodata` dispatch
+tables -- `vxx_create` (0x9620), `vxx_delete` (0x95e0), `vxx_process`
+(0x9520), `vxx_status` (0x95a0), `vxx_control` (0x9560) -- laid out every
+0x40 bytes alongside the already-written `vxx_message` (0x94e0), confirmed by
+sweeping every relocation whose offset falls inside each table's own 0x34-byte
+range (F9050's method) rather than trusting the address arithmetic alone.
+Slots 5..12 are v21tx, v21rx, v27tx, v27rx, v29tx, v29rx, v17tx, v17rx in
+every one of the six tables, matching `faxvmi.h`'s slot map exactly.
+
+None of the five tables is written this batch: every one is `vxx_message`'s
+exact analogue and `vxx_message` lives in `faxvmi.c`, another strand's file
+this wave -- so that is where the other five belong too. Writing the leaves
+still clears them out of all five tables' blocked-on lists.
+
+Each leaf's signature was read off the CALLER, not off a `faxadapt.c`
+sibling picked for convenience: `null_status`/`null_control` from
+`FAXVMI_status`/`FAXVMI_control`'s own call sites (`0x095638`/`0x09578e`,
+both `(struct faxvmi_link *dp, void *)`, return `int` in `eax`); `null_create`
+/`null_delete` match the already-established `v??tx_create`/`v??tx_delete`
+shape directly (`faxadapt.h`); `null_process` was read off its own body,
+which matches the RX shape `(dp, in, result, count)` `faxadapt.h`'s process
+note documents (it never touches `result`). `null_process`'s loop index is
+16-bit in the object -- `lea 0x1(%edx),%eax` then `movswl %ax,%edx` re-
+narrows and re-sign-extends after every increment, which a plain `int` index
+would not need -- so it is declared `short`. `test/unit/t_nulldp.c`, 171
+checks across four groups.
+
+## F9802. `states_names`/`status_names` are the eleven-and-twenty tables `class1.h` already predicted, and their reader is a real, unresolved question
+
+`.rodata` 0x9360 (160 bytes, 20 entries) and 0x9300 (88 bytes, 11 entries),
+each `{int id; char *name}`, dumped by resolving every relocation inside each
+table's own byte range against `.rodata.str1.1`/`.rodata.str1.4` directly
+(the `--range` direction `relocscan.py` has does not answer "what does this
+table point AT", per F9050) rather than trusting `objdump` trimmed to the
+table's address window (this tree's own three-times-made mistake). Every
+string is the author's own and matches `class1.h`'s existing `CLASS1_*`/
+`FAX_CLASS1_*` macros exactly -- the state names minus the `CLASS1_` prefix
+the header already said was ours, the status names verbatim -- so this batch
+confirms rather than derives those macros' spellings.
+
+Both tables are `r` (file-local) in the object; they are written GLOBAL here,
+D1122's exact shape, because their only reader, `fax_class1_progress`
+(1145 bytes), is not written. **What blocks it is not the two tables** --
+it is a chain, `ctx->0x1208 -> *(+0x28) -> *(+0x14) -> *(+0x50, +0x54 or
++0x60) -> a `short` at +0x4f4e, +0x4f62 or +0x4fb2 of THAT`, keyed on a
+still-unnamed `ctx->0x1254` (currently `pad_1254`) taking one of three small,
+evenly-spaced literal sets (24 apart: `{0x91,0x79,0x61,0x49}`, `{0x60,0x48}`,
+`{0x30,0x18}`). `class1.h`'s own comment on `+0x1208` already hedges
+"transmit-side for 12..13 (which side is which is NOT settled)", and
+`v17fax.h`/`v21fax.h`/`v29fax.h` independently name offset `0x50` an RX-side
+field (`V17RX_OBJ_INT_0050`, `V21RX_OBJ_DSP`, `V29_OBJ_RX`) in objects this
+batch did not reconstruct and two concurrent strands are actively extending
+this wave. Declined rather than guessed, per CLAUDE.md's ruling on naming
+wrongly versus leaving padded -- see D1330 for the deviation this leaves
+outstanding. (2026-09-02)

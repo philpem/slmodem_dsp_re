@@ -166,6 +166,20 @@ struct fax_class1 {
 #define FAX_CLASS1_ACCEPT_RATE			10
 
 /*
+ * `states_names` (twenty entries) and `status_names` (eleven) -- see
+ * class1.c for the derivation and D1330 for why they are global here where
+ * the object has them file-local.  Declared here so a test can compare them
+ * against the blob's own copy without a reader in `src/` yet.
+ */
+struct class1_name {
+	int id;
+	char *name;
+};
+
+extern struct class1_name states_names[20];
+extern struct class1_name status_names[11];
+
+/*
  * The silence detector's threshold, and the block it emits.  Both are
  * immediates in `_recieve_silence_state`; the object's own string calls the
  * first a "silence treshold" (its spelling) and `fax_class1_progress` calls

@@ -121,4 +121,15 @@ void cTOOLS_handle_data_output_reset(struct fax_class1 *ctx);
 int _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
 			unsigned char *dst, int count, int terminate);
 
+/*
+ * The receive-side mirror of `_handle_data_output`, without its async
+ * start-bit search: `src`'s elements are already-aligned HDLC receive
+ * bytes, so only DLE-stuffing and the DLE ETX terminator are needed.
+ * Returns the byte count, which can reach `2 * count + 2`.  See
+ * class1tx.c for why "hdlc_output" means output to the HOST of a frame
+ * the modem RECEIVED.
+ */
+int cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
+			      unsigned char *dst, int count, int terminate);
+
 #endif /* DSPLIB_CLASS1TX_H */
