@@ -109718,3 +109718,121 @@ batch did not reconstruct and two concurrent strands are actively extending
 this wave. Declined rather than guessed, per CLAUDE.md's ruling on naming
 wrongly versus leaving padded -- see D1330 for the deviation this leaves
 outstanding. (2026-09-02)
+
+## F9900. `V17RX_control`'s suspicious call site is resolved: it is `V17RX_create(modem, modem)`, and that is a legitimate self-referential reinit
+
+A previous wave left `V17RX_control` (0x0a0880, 131 bytes) unwritten because
+its call at 0x0a08fc (`mov %esi,0x4(%esp)` / `mov %esi,(%esp)` / `call
+V17RX_create`) passes the SAME register, `%esi`, as both `modem` and
+`params`. Read with `tools/dis.py ref/slmodemd/dsplibs.o 0xa0880 0xa0903`,
+that is not a defect and not an aliasing accident: `V17RX_create`'s own
+header already establishes (finding F9470) that the receive instance's head,
+byte for byte, IS a `struct v17rx_cfg` -- the constructor copies `params`
+onto exactly those bytes and every field it reads back afterwards lines up.
+So `V17RX_create(modem, (const struct v17rx_cfg *)modem)` reads the
+instance's OWN current configuration as its "new" one (an identity copy,
+except for two fields this same function just updated -- see below) and
+reruns construction. `V17RX_create`'s own prologue
+(`tools/dis.py ref/slmodemd/dsplibs.o 0x96eb0 0x96f60`) confirms the general
+shape independent of the caller: it loads `params` from one stack slot and
+`modem` from the other, and the 0x28-byte struct-copy loop at 0x096ef5
+writes FROM the `params` pointer INTO the `modem` pointer -- two loads and
+two stores per field, nothing that requires the two pointers to differ.
+
+The rest of `V17RX_control`'s body: `arg == NULL` returns 0 and touches
+nothing; otherwise `cfg->int_0008 = arg->int_0004` unconditionally,
+`V17RXC_INT_0008` (already named, v17fax.h, "the writers are RxNextStateV17's
+DATA arm and V17RX_control") is set from bit 4 of `arg->flags_0d`
+(`V17RXCTL_SET_CTL_INT_0008`), bit 1 of the same byte
+(`V17RXCTL_REINIT`) copies `arg->int_0010` into `cfg->int_0014` and gates the
+self-referential `V17RX_create` call, and -- REGARDLESS of which `flags_0d`
+arm ran, both converge on one shared tail (`jmp 0x0a08af`) -- `arg->flags_0c`
+bits 3 and 5 (`V17RXCTL_CLEAR_STATE0`/`_STATE10`) unconditionally clear
+`V17RXS_INT_0000`/`V17RXS_INT_0010` of the demodulator state. `arg`'s own
+type, `struct v17rx_ctl` (v17fax.h), reads what the four loads force and no
+further, the same discipline `v22ctl.h`'s `struct v22fp_ctl` states for the
+identical "control block, no caller in the object" shape -- `V17RX_control`
+has no relocation anywhere in the 1.2 MB pointing at it either; its only
+referrer is the lowercase adapter `v17rx_control` (0x9c230), which forwards
+this same opaque argument unchanged from ITS OWN caller.
+
+`test/unit/t_v17rxcreate.c`'s new `test_control`, 1293 checks across nine
+cases (`NULL` arg, every single flag bit, every pairing, and all of them at
+once), differential against `ref_V17RX_control`. A live mutation (swapping
+which state field `V17RXCTL_CLEAR_STATE0` clears) was planted and caught --
+2 of 1293 checks failed -- then reverted, per F134's discipline. (2026-09-02)
+
+## F9901. `ref_V17RX_control`'s REINIT path crashes the BLOB ITSELF on a cold -> short-retrain transition under reuse, and the test avoids it rather than "fixing" it
+
+While building `test_control` (F9900) for `V17RX_control`, driving the
+REINIT flag (`V17RXCTL_REINIT`) with `arg->int_0010 == 1` against an
+instance that was BUILT with `int_0014` (retrain) == 0 segfaulted --
+inside `ref_V17RX_control`, the renamed BLOB SYMBOL, before reaching our
+reconstruction at all (confirmed with `fprintf`/`fflush` bisection: the
+crash lands between "before ref call" and "before our call"). This is a
+0 -> 1 transition of the retrain flag under `owned == 0` reuse (the
+self-referential `V17RX_create(modem, modem)` call F9900 documents), a
+combination `t_v17rxcreate.c`'s own `test_reinit` never exercises -- it
+only ever reinits a `cases[k]` value onto ITSELF, never a different one, so
+"cold, built once, then reinited to short-retrain via control" is genuinely
+untested territory in the object, not merely in this reconstruction. Two
+plausible causes are the object sizing a sub-block (equaliser survivor ring,
+per `V17RXS_PTR_0030`/`vtb.paths`) differently for the two retrain regimes
+and not reallocating it on reuse; this finding does not trace which,
+because the crash is in the BLOB and not in `src/`, and there is nothing to
+fix on our side.
+
+`test_control`'s cases therefore keep `int_0010` (retrain) at 0
+throughout -- see the comment on `ctl_cases[]` in `t_v17rxcreate.c`.
+Retrain=1 stays covered where it is safe to drive it: `test_reinit`'s own
+"short retrain" cases, always reinited to the SAME value they were built
+with. Nothing reconstructed calls `V17RX_control` this way either (F9900:
+zero relocations reach it beyond its own lowercase adapter), so this is not
+a gap in coverage of any real call path, only a documented boundary of what
+the differential test may safely explore. (2026-09-02)
+
+## F9902. `V21RX_control` and `V21TX_control`: the same shape and the same self-referential reinit as `V17RX_control`, on the V.21 side
+
+`V21RX_control` (0x0a2410, 75 bytes) and `V21TX_control` (0x0a2ba0, 94 bytes)
+were ready (no unwritten dependency) and turned out to be exactly
+`V17RX_control`'s shape (F9900), read with `tools/dis.py` at each address:
+
+- `V21RX_control(modem, arg)`: `arg == NULL` returns 0; otherwise
+  `cfg->int_0008` (the receive handle's own `struct v21rx_cfg` head) is set
+  from `arg->int_0004`; `V21RX_HDX(modem)->int_0000` -- already a named
+  field, and `RxHdxDataV21` already gates demodulation on it -- is set from
+  bit 4 of `arg->flags_0d`; bit 1 of the same byte calls
+  `V21RX_create(modem, modem)`. That field's header comment used to read
+  "nothing written sets it"; it is corrected in `v21fax.h` to name this
+  function as the setter.
+- `V21TX_control(modem, arg)`: `arg == NULL` returns 0; otherwise, in the
+  object's own order, `V21TX_DSP(modem)->fsm.cfg.scale` (already a named
+  field via `struct fpm_fsm_cfg`) is set from `arg->int_0008`, narrowed to
+  `short` exactly as the object narrows it (`mov %dx,...`); `cfg->int_0008`
+  is set from `arg->int_0004`; bit 2 of `arg->flags_0c` is ORed into
+  `V21TX_FLAGS(modem)`; bit 4 of `arg->flags_0d` sets `V21TXP_INT_0004`
+  (already named, "int: zero selects the FIFO arm") as a boolean; bit 1 of
+  the same byte calls `V21TX_create(modem, modem)`.
+
+Both self-referential reinit calls are the identical move F9900 establishes
+for `V17RX_control`, and for the identical reason: each handle's head, byte
+for byte, IS its own config struct (already established for both -- v21fax.h
+already said "the whole transmit handle... +0x00..+0x1b IS `struct
+v21tx_cfg`" before this batch touched it). Neither `struct v21rx_ctl` nor
+`struct v21tx_ctl` has a caller anywhere in the object beyond its own
+lowercase adapter (`v21rx_control`/`v21tx_control`, faxadapt.c), so both
+follow `v22ctl.h`'s "read what the loads force, no further" discipline.
+
+Differential tests: `test/unit/t_v21create.c`'s new `test_control` (600
+checks, five cases: NULL, flags clear, each bit, and REINIT) and
+`test/unit/t_v21txcreate.c`'s new `test_control` (204 checks, six cases).
+The latter needed `compare_tree` split into `compare_tree_ex` with an
+`expect_default_scale` flag: the shared comparison asserted
+`dsp.fsm.cfg.scale == 0x1900` as a blanket invariant true for every OTHER
+caller (fresh construction, reinit, a modem cycle), which `V21TX_control`
+deliberately violates by design -- the cross-side agreement check
+(`da->fsm.cfg.scale == db->fsm.cfg.scale`) stays unconditional and is what
+`test_control` actually relies on. Two live mutations were planted (swapping
+which flag byte `V21TXCTL_SET_TXFLAGS_BIT2` reads in `V21TX_control`, and
+swapping `V21RXCTL_SET_HDX_INT0000` for `V21RXCTL_REINIT` in
+`V21RX_control`) and caught, then reverted, per F134. (2026-09-02)

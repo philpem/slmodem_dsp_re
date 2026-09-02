@@ -52,6 +52,7 @@
 
 extern void *ref_V21TX_create(void *modem, const struct v21tx_cfg *params);
 extern void ref_V21TX_delete(void *modem);
+extern int ref_V21TX_control(void *modem, const struct v21tx_ctl *arg);
 extern int ref_V21TX_modem(void *modem, unsigned short *in, short *out,
 			   unsigned short *count);
 extern short ref_TxHdxStartV21(void *modem, unsigned short *in, short *out,
@@ -166,7 +167,8 @@ test_fsm_cfg_duplicate(void)
  * re-walked here.
  */
 static void
-compare_tree(const char *what, void *a, void *b, long tag)
+compare_tree_ex(const char *what, void *a, void *b, long tag,
+		 int expect_default_scale)
 {
 	void *pa = FIELD_PTR(a, V21TX_OBJ_PARAMS);
 	void *pb = FIELD_PTR(b, V21TX_OBJ_PARAMS);
@@ -246,8 +248,9 @@ compare_tree(const char *what, void *a, void *b, long tag)
 		    tag);
 	diff_eq_int("dsp.fsm.cfg.scale (%ld)", da->fsm.cfg.scale,
 		    db->fsm.cfg.scale, tag);
-	diff_eq_int("dsp.fsm.cfg.scale is 0x1900 (%ld)", da->fsm.cfg.scale,
-		    0x1900, tag);
+	if (expect_default_scale)
+		diff_eq_int("dsp.fsm.cfg.scale is 0x1900 (%ld)",
+			    da->fsm.cfg.scale, 0x1900, tag);
 	diff_eq_int("dsp.fsm.tone built on both sides (%ld)",
 		    da->fsm.tone != 0 && db->fsm.tone != 0, 1, tag);
 
@@ -275,6 +278,16 @@ compare_tree(const char *what, void *a, void *b, long tag)
 	if (da->scratch != 0 && db->scratch != 0)
 		cmp_shorts("dsp.scratch[%ld]", da->scratch, db->scratch,
 			   V21TX_SCRATCH_BYTES / 2);
+}
+
+/*
+ * The scale invariant holds for every caller except `test_control`, which
+ * deliberately overrides `dsp.fsm.cfg.scale` through `V21TX_control`.
+ */
+static void
+compare_tree(const char *what, void *a, void *b, long tag)
+{
+	compare_tree_ex(what, a, b, tag, 1);
 }
 
 /* ------------------------------------------------------------------------- */
@@ -658,6 +671,79 @@ test_next_state_default_arm(void)
 }
 
 /* ------------------------------------------------------------------------- */
+/* V21TX_control, reconfiguring a built instance in place                    */
+
+static const struct {
+	const char *name;
+	int null_arg;
+	int int_0004;
+	int int_0008;
+	unsigned char flags_0c;
+	unsigned char flags_0d;
+} tctl_cases[] = {
+	{ "NULL arg",                     1,     0,     0, 0, 0 },
+	{ "flags clear",                  0, 60000,   500, 0, 0 },
+	{ "SET_TXFLAGS_BIT2 only",        0, 60000,  1000,
+	  V21TXCTL_SET_TXFLAGS_BIT2, 0 },
+	{ "SET_PARAMS_INT0004 only",      0, 60000, -1000, 0,
+	  V21TXCTL_SET_PARAMS_INT0004 },
+	{ "REINIT only",                  0, 60000,     0, 0, V21TXCTL_REINIT },
+	{ "everything at once",           0, 60000,  2000,
+	  V21TXCTL_SET_TXFLAGS_BIT2,
+	  (unsigned char)(V21TXCTL_SET_PARAMS_INT0004 | V21TXCTL_REINIT) },
+};
+
+#define NTCTL_CASES ((long)(sizeof(tctl_cases) / sizeof(tctl_cases[0])))
+
+static int
+test_control(void)
+{
+	long k;
+
+	diff_begin("v21txcreate: V21TX_control, reconfigure in place");
+
+	for (k = 0; k < NTCTL_CASES; k++) {
+		struct v21tx_cfg ca, cb;
+		struct v21tx_ctl arga, argb;
+		void *a, *b;
+		int ra, rb;
+
+		/* Always case 0 ("params NULL"): REINIT re-derives the SAME
+		 * configuration it was built with. */
+		build_cfg(&ca, 0);
+		build_cfg(&cb, 0);
+
+		b = ref_V21TX_create(0, &cb);
+		a = V21TX_create(0, &ca);
+		if (a == 0 || b == 0) {
+			diff_eq_int("both built (%ld)", a != 0 && b != 0, 1,
+				    k);
+			continue;
+		}
+
+		memset(&arga, 0, sizeof arga);
+		arga.int_0004 = tctl_cases[k].int_0004;
+		arga.int_0008 = tctl_cases[k].int_0008;
+		arga.flags_0c = tctl_cases[k].flags_0c;
+		arga.flags_0d = tctl_cases[k].flags_0d;
+		argb = arga;
+
+		rb = ref_V21TX_control(b, tctl_cases[k].null_arg ? NULL
+							   : &argb);
+		ra = V21TX_control(a, tctl_cases[k].null_arg ? NULL : &arga);
+
+		diff_eq_int("V21TX_control return (%ld)", ra, rb, k);
+
+		compare_tree_ex(tctl_cases[k].name, a, b, k, 0);
+
+		V21TX_delete(a);
+		ref_V21TX_delete(b);
+	}
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------------- */
 
 int
 main(void)
@@ -671,6 +757,7 @@ main(void)
 	rc |= test_modem_cycle();
 	rc |= test_underrun_bypass_arm();
 	rc |= test_next_state_default_arm();
+	rc |= test_control();
 
 	return rc;
 }

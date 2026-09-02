@@ -20,6 +20,7 @@
  *   RxHdxPrtcolV17    .text 0x0a0690  210
  *   RxHdxEpochDetV17  .text 0x0a0770  156
  *   RxHdxStartV17     .text 0x0a0810  105
+ *   V17RX_control     .text 0x0a0880  131
  *   V17RX_status      .text 0x0a0910  190
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
@@ -1585,6 +1586,51 @@ RxHdxStartV17(void *modem, short *in, short *out, unsigned short *count)
 	*count = 0;
 
 	return 0;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * V17RX_control -- .text 0x0a0880, 131 bytes.
+ *
+ * See v17fax.h for the derivation of `struct v17rx_ctl` and for why the
+ * self-referential `V17RX_create(modem, modem)` call below is a legitimate
+ * reinit-with-current-config and not the aliasing defect it first looks
+ * like (finding F9470, the receive instance's head IS its own config
+ * struct).
+ *
+ * THE MERGE IS BEHAVIOURAL, NOT A SIMPLIFICATION.  The object tests
+ * `flags_0d`'s bit 4 twice -- once on each of the two paths through bit 1 --
+ * and both paths converge on the same `flags_0c` tail (`jmp 0x0a08af`).
+ * Written straight-line, that is exactly the order below: the `int_0008`
+ * write, then the `V17RXC_INT_0008` write, then the conditional reinit,
+ * then both `flags_0c` clears unconditionally.
+ */
+int
+V17RX_control(void *modem, const struct v17rx_ctl *arg)
+{
+	struct v17rx_cfg *cfg = (struct v17rx_cfg *)modem;
+
+	if (arg == NULL)
+		return 0;
+
+	cfg->int_0008 = arg->int_0004;
+
+	AT_I(CTL(modem), V17RXC_INT_0008) =
+		(arg->flags_0d & V17RXCTL_SET_CTL_INT_0008) != 0;
+
+	if (arg->flags_0d & V17RXCTL_REINIT) {
+		cfg->int_0014 = arg->int_0010;
+		V17RX_create(modem, (const struct v17rx_cfg *)modem);
+	}
+
+	if (arg->flags_0c & V17RXCTL_CLEAR_STATE0)
+		AT_I(RXS(modem), V17RXS_INT_0000) = 0;
+
+	if (arg->flags_0c & V17RXCTL_CLEAR_STATE10)
+		AT_I(RXS(modem), V17RXS_INT_0010) = 0;
+
+	return 1;
 }
 
 /* --------------------------------------------------------------------- */

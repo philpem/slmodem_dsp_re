@@ -67,6 +67,49 @@ struct fpm_sdm;
 struct sgd;
 struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
 
+/*
+ * `V17RX_control`'s second argument, at 0x0a0880.  Reads four fields and
+ * nothing past +0x10, so the struct stops there -- the same "read what the
+ * loads force, no further" rule `v22ctl.h`'s `struct v22fp_ctl` states for
+ * the identical shape.  NOTHING IN THE OBJECT CALLS `V17RX_control` directly:
+ * its only referrer is the lowercase adapter `v17rx_control` (faxadapt.c),
+ * which forwards this argument unchanged from ITS OWN caller, so nothing
+ * reconstructed corroborates the type further than these four loads do.
+ *
+ * `int_0004` and `int_0010` are `int`, both loaded and stored whole
+ * (`mov`/`mov`, no narrowing).  `flags_0c` and `flags_0d` are `unsigned
+ * char`, each read once with `movzbl` and tested bit by bit.
+ */
+struct v17rx_ctl {
+	unsigned char	unmapped_0000[0x04];
+	int		int_0004;	/* +0x04 -> cfg->int_0008            */
+	unsigned char	unmapped_0008[0x04];
+	unsigned char	flags_0c;	/* +0x0c                             */
+	unsigned char	flags_0d;	/* +0x0d                             */
+	unsigned char	unmapped_000e[0x02];
+	int		int_0010;	/* +0x10 -> cfg->int_0014, REINIT only */
+};
+
+/*
+ * `flags_0c`.  Both bits clear a field of the demodulator state
+ * (`V17RXS_INT_0000`/`V17RXS_INT_0010`) and neither pairs with a reader that
+ * would type its MEANING, so the names state the forced effect and nothing
+ * more -- the same discipline `v22ctl.h` uses for its own unmodelled byte.
+ */
+#define V17RXCTL_CLEAR_STATE0		(1 << 3)	/* 0x08 */
+#define V17RXCTL_CLEAR_STATE10		(1 << 5)	/* 0x20 */
+
+/*
+ * `flags_0d`.  Bit 1 gates a call back into `V17RX_create(modem, modem)` --
+ * the self-referential reinit `V17RX_create`'s own header documents (finding
+ * F9470: the instance's head IS a `struct v17rx_cfg`, so passing the handle
+ * as its own `params` re-copies its current configuration onto itself and
+ * reruns construction).  Bit 4 sets `V17RXC_INT_0008`; nothing pairs that
+ * field with a reader either, so the name states only which bit reaches it.
+ */
+#define V17RXCTL_SET_CTL_INT_0008	(1 << 4)	/* 0x10 */
+#define V17RXCTL_REINIT			(1 << 1)	/* 0x02 */
+
 /* ------------------------------------------------------------------------ */
 /* The status block                                                         */
 
@@ -1253,6 +1296,42 @@ void V17TX_delete(void *modem);
  */
 int V17TX_modem(void *modem, unsigned short *in, short *out,
 		unsigned short *count);
+
+/*
+ * Reconfigure the RECEIVE instance in place, or report that there was
+ * nothing to do.
+ *
+ * `arg == NULL` returns 0 and touches nothing.  Otherwise: `cfg->int_0008`
+ * (the instance's own head, `struct v17rx_cfg`) is unconditionally set from
+ * `arg->int_0004`; `V17RXC_INT_0008` in the control block is set to 1 when
+ * `V17RXCTL_SET_CTL_INT_0008` is set in `arg->flags_0d` and to 0 otherwise;
+ * `V17RXCTL_REINIT` (also in `flags_0d`) copies `arg->int_0010` into
+ * `cfg->int_0014` and then calls `V17RX_create(modem, modem)` -- see the
+ * struct's own comment for why passing the handle as its own `params` is
+ * legitimate rather than an aliasing accident; and finally, REGARDLESS of
+ * which of those branches ran, `arg->flags_0c` clears `V17RXS_INT_0000` and/or
+ * `V17RXS_INT_0010` of the demodulator state per `V17RXCTL_CLEAR_STATE0`/
+ * `_STATE10`.  The last two tests are unconditional on the object's own
+ * control flow: both `flags_0d` arms fall through to the same `flags_0c`
+ * checks (`jmp` back into the shared tail at 0x0a08af), so the merged
+ * reading above is behaviourally identical to the object's duplicated
+ * branches and not a simplification of them.
+ *
+ * THE SUSPICIOUS-LOOKING CALL SITE IS RESOLVED, NOT DECLINED.  A previous
+ * pass left this function unwritten because `V17RX_create(modem, modem)`
+ * passes what looks like the same pointer as two different parameters.  It
+ * is: `V17RX_create`'s own header (finding F9470) already establishes that
+ * the receive instance's head, byte for byte, IS a `struct v17rx_cfg` --
+ * the constructor copies `params` onto exactly those bytes and every field
+ * it reads back afterwards lines up.  So `V17RX_create(modem,
+ * (const struct v17rx_cfg *)modem)` reads the instance's OWN current
+ * configuration as its "new" configuration (an identity copy on those
+ * fields, except `int_0008` and `int_0014` which this function just
+ * updated) and reruns the rest of construction -- a self-referential
+ * reinit-with-current-config, not a defect in the object nor a
+ * misreading of the call site.
+ */
+int V17RX_control(void *modem, const struct v17rx_ctl *arg);
 
 /*
  * Fill a status block from the RECEIVE instance, or report that there was

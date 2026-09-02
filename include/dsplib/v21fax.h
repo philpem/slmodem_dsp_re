@@ -166,6 +166,42 @@ struct v21_tx_dsp {
  */
 #define V21TX_OBJ_SIZE		0x28
 
+/*
+ * `V21TX_control`'s second argument, at 0x0a2ba0.  Reads four fields and
+ * nothing past +0x0d, the same "read what the loads force" rule
+ * `v22ctl.h`'s `struct v22fp_ctl` states for the identical shape.  NOTHING
+ * IN THE OBJECT CALLS `V21TX_control` directly; its only referrer is the
+ * lowercase adapter `v21tx_control` (faxadapt.c), which forwards `arg`
+ * unchanged from its own caller.
+ *
+ * `int_0004` and `int_0008` are `int`, both loaded and stored whole; `int_0008`
+ * is then NARROWED to `short` on its way into `dsp->fsm.cfg.scale`
+ * (`mov %dx,0x6(%ecx)`, the object's own truncation, so the source keeps the
+ * cast rather than declaring the field `short` and losing the wide load).
+ * `flags_0c` and `flags_0d` are `unsigned char`, each read once with
+ * `movzbl` and tested bit by bit.
+ */
+struct v21tx_ctl {
+	unsigned char	unmapped_0000[0x04];
+	int		int_0004;	/* +0x04 -> cfg->int_0008           */
+	int		int_0008;	/* +0x08 -> dsp->fsm.cfg.scale, narrowed */
+	unsigned char	flags_0c;	/* +0x0c                            */
+	unsigned char	flags_0d;	/* +0x0d                            */
+};
+
+/*
+ * `flags_0c` bit 2 is ORed into `V21TX_FLAGS(modem)`; nothing pairs that
+ * byte with a reader that would type any of its bits (v21fax.h's own note
+ * on `V21TX_OBJ_FLAGS` above), so the name states only which bit this
+ * function sets.  `flags_0d` bit 4 sets `V21TXP_INT_0004` -- an already-
+ * named field ("int: zero selects the FIFO arm") -- as a boolean; bit 1
+ * gates the self-referential `V21TX_create(modem, modem)` reinit, the same
+ * move `V17RX_control` makes (finding F9900).
+ */
+#define V21TXCTL_SET_TXFLAGS_BIT2	(1 << 2)	/* 0x04 */
+#define V21TXCTL_SET_PARAMS_INT0004	(1 << 4)	/* 0x10 */
+#define V21TXCTL_REINIT			(1 << 1)	/* 0x02 */
+
 /* ------------------------------------------------------------------------ */
 /* The receiver                                                             */
 
@@ -207,7 +243,11 @@ struct v21_rx_hdx {
 					 *       demodulate while this is
 					 *       non-zero; the transition into
 					 *       the IDLE state clears it.
-					 *       Nothing written sets it.    */
+					 *       `V21RX_control` is the setter
+					 *       (0x0a2437): a boolean from bit
+					 *       4 of its own argument's
+					 *       `flags_0d`.  See `struct
+					 *       v21rx_ctl` below.           */
 	short		(*handler)(void *rx, short *in, short *out,
 				   short *count);
 					/* +0x04 the current receive state  */
@@ -233,6 +273,35 @@ struct v21_rx_hdx {
 					 *       note on RxHdxStartV21 for what
 					 *       is measured and what is not. */
 };
+
+/*
+ * `V21RX_control`'s second argument, at 0x0a2410.  Reads two fields and
+ * nothing past +0x0d, the same "read what the loads force" rule
+ * `v22ctl.h`'s `struct v22fp_ctl` states for the identical shape -- and the
+ * same shape `v17fax.h`'s `struct v17rx_ctl` documents for `V17RX_control`
+ * (finding F9900).  NOTHING IN THE OBJECT CALLS `V21RX_control` directly;
+ * its only referrer is the lowercase adapter `v21rx_control` (faxadapt.c),
+ * which forwards this argument unchanged from ITS OWN caller.
+ *
+ * `int_0004` is `int`, loaded and stored whole.  `flags_0d` is `unsigned
+ * char`, read once with `movzbl` and tested bit by bit.
+ */
+struct v21rx_ctl {
+	unsigned char	unmapped_0000[0x04];
+	int		int_0004;	/* +0x04 -> cfg->int_0008           */
+	unsigned char	unmapped_0008[0x05];
+	unsigned char	flags_0d;	/* +0x0d                            */
+};
+
+/*
+ * Bit 4 sets `struct v21_rx_hdx::int_0000`; nothing pairs that field with a
+ * reader that would type its MEANING (see the field's own comment), so the
+ * name states only which bit reaches it.  Bit 1 gates the self-referential
+ * `V21RX_create(modem, modem)` reinit -- the same move `V17RX_control`
+ * makes, finding F9900.
+ */
+#define V21RXCTL_SET_HDX_INT0000	(1 << 4)	/* 0x10 */
+#define V21RXCTL_REINIT			(1 << 1)	/* 0x02 */
 
 /*
  * Offsets in the receiver handle.
@@ -899,6 +968,16 @@ void V21TX_delete(void *modem);
 int V21TX_modem(void *modem, unsigned short *in, short *out,
 		unsigned short *count);
 
+/*
+ * Reconfigure the TRANSMITTER in place, or report there was nothing to do.
+ *
+ * See `struct v21tx_ctl` above for the argument.  The self-referential
+ * `V21TX_create(modem, modem)` reinit this can trigger is the same move
+ * `V17RX_control` makes and for the same reason (finding F9900): the
+ * transmit handle's head, byte for byte, IS its own `struct v21tx_cfg`.
+ */
+int V21TX_control(void *modem, const struct v21tx_ctl *arg);
+
 /* ------------------------------------------------------------------------ */
 /* The receive data path                                                    */
 
@@ -948,6 +1027,17 @@ unsigned short DemodDataV21(void *modem, short *in, short *bits,
  *         `hdx->int_0000` is clear, and reports the demodulator's SNR
  *         through V21RX_FLAG_LOW_SNR.  Otherwise it advances the state.
  */
+/*
+ * Reconfigure the RECEIVER in place, or report there was nothing to do.
+ *
+ * See `struct v21rx_ctl` above for the argument and `V17RX_control`'s much
+ * longer comment (v17fax.h, finding F9900) for why the self-referential
+ * `V21RX_create(modem, modem)` reinit this makes is legitimate rather than
+ * an aliasing accident: the receive handle's head IS its own `struct
+ * v21rx_cfg`.
+ */
+int V21RX_control(void *modem, const struct v21rx_ctl *arg);
+
 /*
  * Fill a status report from the RECEIVER, and say whether there was one to
  * fill: 0 for a null pointer, 1 otherwise.
