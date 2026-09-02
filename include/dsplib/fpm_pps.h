@@ -32,7 +32,11 @@
  *   FPM_PPS_filter  .text   0x0a9590  753 B
  *   FPM_PPS_init    .text   0x0a98c0  259 B
  *   FPM_PPS_free    .text   0x0a9890   35 B
- *   FPM_PPS_CFG     .rodata 0x00c4a0   40 B   -- not written
+ *   FPM_PPS_CFG     .rodata 0x00c4a0   40 B
+ *
+ * `FPM_PPS_CFG` is `src/dsp/fpm_pps_cfg.c`, alongside the module -- this
+ * project's usual split between a module and its default configuration
+ * (`fpm_sre_cfg.c`, `fpm_fsd_cfg.c`, ...).
  */
 
 #ifndef DSPLIB_FPM_PPS_H
@@ -85,6 +89,9 @@ struct fpm_pps_cfg {
 	 */
 	void *aux;		/* +0x24                                     */
 };
+
+/* The blob's default configuration; see src/dsp/fpm_pps_cfg.c. */
+extern const struct fpm_pps_cfg FPM_PPS_CFG;
 
 struct fpm_pps {
 	struct fpm_pps_cfg cfg;	/* +0x00 copied wholesale by init            */

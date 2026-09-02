@@ -12608,3 +12608,44 @@ only reads the field.
 **Status:** ✅ verified bit-exact on the 32-bit tiers (`t_faxadapt.c`); the
 64-bit truncation this inherits from `int_0014`'s own declared type is
 `faxvmi.h`'s to resolve, not reproduced or hardened against here.
+
+## D1291 ⚠ `TxNextStateV29`'s two `SGD_control` calls build a `gen` config that is only two fields of six
+
+`TxNextStateV29`'s QUIET->ALT and EQCOND->SCR1 transitions each build a
+`struct sgd_control_req` on the stack whose `gen` pointer addresses a LOCAL
+`struct sgd_gen_cfg` that is only PARTLY written: `data_word` and
+`word_syms` are set explicitly (0x4f/2 at the first site, `V29TX_PATTERN_SCR1
+[rate]`/1 at the second), and `seq`/`seq_len`/`short_0006`/`seq_enable` are
+never touched -- confirmed by reading every instruction between each call's
+config-build and the `call SGD_control` itself: no store reaches those four
+fields at either site (0x9a879..0x9a8b5 and 0x9a916..0x9a959 in
+`TxNextStateV29`'s own address space, i.e. 0xa4886..0xa48ba and
+0xa4927..0xa495e).
+
+**THIS IS SAFE BECAUSE THE ONLY CONSUMER IS `SGD_symbol_gen`, WHICH NEVER
+READS THEM.** `sgd.h` documents `data_word`/`word_syms` as what
+`SGD_symbol_gen` shifts bits out of, and `seq`/`seq_len`/`seq_enable` as
+what `SGD_sequence_gen` (never called by anything in V.29's transmit path)
+reads instead. `SGD_control` itself copies the whole 24-byte `gen` struct
+into the SGD object's persistent `cfg.gen` regardless (`rep movsl`, six
+dwords, per `sgd.h`'s own note on the function), so the four untouched
+fields DO reach the object -- as whatever the calling function's stack frame
+held at that point, which is compiler- and build-specific and not
+reproducible byte-for-byte across a differential comparison of two
+different compilations of two different sources.
+
+**REPRODUCED AS AN UNINITIALISED LOCAL, NOT ZERO-FILLED.** Zero-filling
+would be a cleaner-looking but WRONG statement: it would claim the object
+sets `seq`/`seq_len`/`seq_enable` to zero, when what is actually true is
+that it does not set them at all. `test/unit/t_v29txcreate.c`'s
+`run_tx_cycle` therefore does not assert on the SGD object's `cfg.gen.seq`/
+`seq_len`/`short_0006`/`seq_enable` fields after driving the QUIET->ALT or
+EQCOND->SCR1 transitions -- the same exclusion `V21TX_create`'s
+`t_v21txcreate.c` applies to `mrf.aux` (D1242) and for the same reason:
+untestable either way, and nothing downstream in the reconstructed call
+graph reads them back out.
+
+**Status:** ✅ reproduced faithfully (the two fields that matter,
+`data_word`/`word_syms`, are set and asserted); the four fields nothing
+downstream reads are excluded from comparison rather than given a value the
+object does not give them.
