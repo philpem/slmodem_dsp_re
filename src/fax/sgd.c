@@ -13,6 +13,7 @@
  *   SGD_control       .text 0x09f8c0    235 bytes
  *   SGD_status        .text 0x09f9b0     84 bytes
  *   SGD_CFG           .data 0x0080e0     52 bytes
+ *   SGD_CTL           .bss  0x0008c8      8 bytes
  *
  * Definitions are in the object's own address order.  `include/dsplib/sgd.h`
  * carries the object model and the derivation of every field name; this file
@@ -84,6 +85,23 @@ struct sgd_cfg SGD_CFG = {
 		0			/* det.pat_out_mask */
 	}
 };
+
+/*
+ * .bss 0x0008c8, 8 bytes -- `struct sgd_control_req`, shared TX-side
+ * scratch and NOT this file's own protocol table.  V.17, V.27ter and V.29's
+ * transmit half-duplex machines (`TxNextStateV17`/`V27`/`V29`) are its only
+ * thirteen referrers in the whole object, every one a plain load of the
+ * `det` half at +4 -- never a store, anywhere -- so this global's `det` is
+ * always NULL wherever those callers use it and its `gen` half is dead.
+ * A bare name with no protocol prefix, read symmetrically by all three
+ * modulations' transmit families, is shared infrastructure and not any one
+ * of theirs; it belongs beside `SGD_CFG`, the object's other shared SGD
+ * default.  Findings F9600 and F9700.
+ *
+ * It is zero-initialised .bss, not .data: the object never stores a value
+ * into it, so there is nothing to give it but zero.
+ */
+struct sgd_control_req SGD_CTL;
 
 /*
  * Construct, or re-arm a caller-supplied object.
@@ -498,5 +516,7 @@ typedef char sgd_cfg_size[(sizeof(struct sgd_cfg) == 0x34) ? 1 : -1];
 typedef char sgd_status_size[(sizeof(struct sgd_status) == 0x18) ? 1 : -1];
 typedef char sgd_gen_size[(sizeof(struct sgd_gen_cfg) == 0x18) ? 1 : -1];
 typedef char sgd_det_size[(sizeof(struct sgd_det_cfg) == 0x14) ? 1 : -1];
+typedef char sgd_control_req_size[
+    (sizeof(struct sgd_control_req) == 0x08) ? 1 : -1];
 
 #endif

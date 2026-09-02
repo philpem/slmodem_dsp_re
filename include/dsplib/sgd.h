@@ -159,6 +159,21 @@ struct sgd_control_req {
 	struct sgd_det_cfg *det;
 };
 
+/*
+ * .bss 0x0008c8, 8 bytes -- exactly `sizeof(struct sgd_control_req)`, and
+ * never written anywhere in the object.  V.17, V.27ter and V.29's transmit
+ * half-duplex machines (`TxNextStateV17`/`V27`/`V29`, 7+4+2 = 13 sites, all
+ * of them a plain load) each build a fresh `sgd_control_req` on their own
+ * stack for every state transition, filling `gen` locally and copying
+ * `SGD_CTL.det` straight across unread and unset -- so every call this
+ * object makes to `SGD_control` through it passes a `det` of NULL, and the
+ * detector half of `SGD_control` is a no-op on every one of these sites.
+ * Bare name, no protocol prefix, shared across all three modulations'
+ * transmit families symmetrically: this is shared TX-side scratch, not any
+ * one modulation's table.  See `SGD_CTL` in `sgd.c` and findings F9600/F9700.
+ */
+extern struct sgd_control_req SGD_CTL;
+
 struct sgd *SGD_create(struct sgd *s, const struct sgd_cfg *cfg);
 void SGD_delete(struct sgd *s);
 void SGD_control(struct sgd *s, struct sgd_control_req *req);

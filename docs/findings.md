@@ -109255,3 +109255,86 @@ re-prove. `V??TXP_INT_0008`/`INT_0004` is set to 1 in the same fixtures so
 `run_tx_process`, one from each side of the probe comparison. Both reverted
 after confirming the FAIL, per CLAUDE.md's F134 rule -- a detector shown only
 passing is indistinguishable from a dead one. (2026-09-01)
+
+## F9700. `SGD_CTL` lands under `sgd.c`, unambiguous unlike `FIFO_CFG` -- and it is the wave's real chokepoint, unblocking V.17/V.27ter/V.29's transmit families at once
+
+F9600 measured `SGD_CTL` (.bss 0x0008c8, 8 bytes) as the sole remaining
+external blocker on V.17's ten-symbol transmit half-duplex unit and declined
+to write it under `v17.c`'s name, on the ground that a bare, unprefixed name
+read symmetrically by all three TX modulation families is shared
+infrastructure and not any one protocol's table -- but left the home
+unconfirmed between `sgd.c` and `class1tx.c`.
+
+**FIRST, THE F9500 CHECK THIS BRIEF ASKED FOR.** F9500 corrected three prior
+findings that had wrongly declined `FIFO_CFG` as unwritably ambiguous, when
+the true shape was one local `.data` copy plus one already-global `.rodata`
+copy -- not ambiguous at all. `SGD_CTL` is not that shape either, and here
+there is nothing even to correct: `nm --defined-only ref/slmodemd/dsplibs.o`
+lists it exactly once,
+
+    000008c8 B SGD_CTL
+
+a single global `.bss` symbol, no local duplicate anywhere in the object.
+It was never actually ambiguous; F9600 declined it on OWNERSHIP grounds (no
+file to put it in was this wave's to write), not on a duplicate-definition
+hazard, and that reading holds up.
+
+**THE HOME IS `sgd.c`, CONFIRMED BY THE OBJECT AND NOT JUST THE OLD
+BEST GUESS.** `tools/relocscan.py --at .bss:0x8c8` finds exactly 13
+referring instructions in the whole 1.2 MB, all in `TxNextStateV17` (7),
+`TxNextStateV27` (4) and `TxNextStateV29` (2) -- confirmed by address
+against `nm`'s ranges for those three symbols, none elsewhere. `sgd.c`
+already holds `SGD_CFG`, the object's other shared SGD default, and no
+V.17/V.27/V.29-specific file is a referrer at all.
+
+**RELOCSCAN'S `--into`/`--at` REPORT AN ADDEND OF +0 FOR EVERY ONE OF THESE
+13 SITES, AND THAT IS WRONG -- WORTH RECORDING SO THE NEXT AGENT DOES NOT
+TRUST IT BLIND.** Reading `relocscan.py`'s own resolution code: for a
+relocation against a *named* symbol (as opposed to a section symbol) it
+treats the target as the symbol's bare address and never reads the addend
+out of the section bytes, on the stated assumption "there is no addend to
+read... the target IS the symbol" -- true for the `R_386_PC32` call
+relocations the tool was built to handle, not for an `R_386_32` data load
+whose REL-format addend lives in the four bytes at the relocation site
+itself. Checked directly: `objdump -dr` on any of the 13 sites shows
+`mov 0x4,%reg <== R_386_32 SGD_CTL` -- raw pre-link bytes `04 00 00 00`,
+confirmed with a small script reading `.text` at each of the 13 offsets
+(`0xa1036`, `0xa1092`, `0xa1122`, `0xa11bf`, `0xa126e`, `0xa12e5`, `0xa134d`,
+`0xa3664`, `0xa36db`, `0xa374c`, `0xa37bf`, `0xa488e`, `0xa492f`) -- so the
+true target of every single one is `SGD_CTL+4`, not `SGD_CTL+0` as
+`relocscan.py --into SGD_CTL` reports (`[+0] x13`). `tools/dis.py`, which
+prints the raw instruction bytes rather than resolving the addend itself,
+is not fooled and is what this finding's addend claim rests on. Not fixed
+here -- `tools/` is shared with two other live agents and the fix is
+outside this wave's owned files -- but any future finding leaning on
+`relocscan.py`'s reported offset for a *named* (not section-symbol)
+relocation should re-derive it from `dis.py`'s raw bytes first.
+
+**ALL 13 SITES ARE A LOAD OF `SGD_CTL+4` (the `det` half of
+`struct sgd_control_req`), NEVER A STORE, AND `SGD_CTL+0` (`gen`) HAS NO
+REFERRER ANYWHERE IN THE OBJECT.** So `SGD_CTL` is written into `sgd.c` as
+a plain zero-initialised `struct sgd_control_req SGD_CTL;` in `.bss` --
+matching the object exactly, since nothing ever stores into it and there is
+no other value it could hold. Every one of the three TX families' calls
+into `SGD_control` through this global therefore passes `det == NULL`,
+which is a real, checkable consequence and not a guess: `SGD_control`'s own
+already-written code treats a null `det` as "leave the detector half
+alone", so these calls only ever touch the generator half of whatever `sgd`
+object they act on.
+
+**THE WRONG-COPY RITUAL (F134).** `t_faxsgd.c` gained `run_ctl_global()`,
+comparing `SGD_CTL` against `ref_SGD_CTL` (the blob's own copy, aliased by
+`symmap.py` exactly as `ref_SGD_CFG` already is -- an ordinary, non-ambiguous
+global `OBJECT` symbol) and against an explicit all-zero buffer.  Planting a
+nonzero byte in `SGD_CTL`'s `det` field failed the check immediately
+(`0x00000000` vs `0x00000001`, or the all-zero comparison alone catching it
+if `ref_SGD_CTL` happened to agree); reverted, and `make one T=t_faxsgd`
+green again -- the assertion is not vacuously true.
+
+**WHAT THIS UNBLOCKS, RE-MEASURED AND NOT ASSUMED FROM THE DERIVATION
+ALONE.** Per this brief's own framing, `SGD_CTL` was the sole remaining
+external blocker on the ten-symbol V.17 unit (F9600) and is named by
+`readyqueue.py`/`closure.py --missing` in V.27ter's and V.29's own transmit
+families too. Re-running `readyqueue.py` after this lands is how the
+V.29 half of this wave measured what actually opened up; see the
+transmit-half-duplex finding below for the count. (2026-09-02)
