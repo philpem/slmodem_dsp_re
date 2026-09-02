@@ -5,17 +5,17 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `5c0ca032`+wave-6-merge, 2026-09-02:
+Measured post-wave-7-merge, 2026-09-03:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 93.6%  (687,342 bytes / 1,760 symbols)   was 76.6% / 1,296
-remaining  45,207 bytes /   89 symbols
-  fax only              85 sym   30,526 B   <-- 96% of what remains
-  no-entry-point leaves  4 sym    1,328 B
+translated 94.8%  (696,705 bytes / 1,792 symbols)   was 76.6% / 1,296
+remaining  22,491 bytes /   57 symbols
+  fax only              54 sym   21,297 B   <-- 95% of what remains
+  no-entry-point leaves  3 sym    1,194 B
 ```
 
-Merged master period-green at **351 passed, 0 failed**, onedef/banners/check64
+Merged master period-green at **355 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
@@ -671,3 +671,49 @@ threads: `V17TX_create`/`V27TX_create` (both now just `SGD_CTL` + their own
 `FAXVMI_status` (down to one blocker, `vxx_status`, which lives in
 `faxvmi.c`), the `vxx_*` dispatch table (declined, belongs beside
 `vxx_message` in `faxvmi.c`), and `_init_receiver`/`_init_transmitter` last.
+
+## Wave 7 — FAXVMI create/delete chokepoint, V.17 and V.27 transmit machines complete
+
+Three agents on disjoint files, converging by design: `FAXVMI_create`/
+`FAXVMI_control` turned out to be blocked on `SetScramblerV27` and
+`TxHdxABV17` — exactly the two other agents' targets. All three gated
+period-green individually (352, 353, 353 passed / 0 failed); final merged-tree
+gate confirms 355/0 above.
+
+| agent | delivered |
+|---|---|
+| FAXVMI chokepoint | `FAXVMI_CTL`, `vxx_status`, `vxx_delete`, `FAXVMI_delete`, `FAXVMI_status` — 5 symbols / 379 bytes. Re-measured (not assumed) that `FAXVMI_create`/`FAXVMI_control` were UNCHANGED afterward — neither touches the `vxx_status`/`vxx_delete` family |
+| V.17 TX | Resolved `V17RX_control`'s suspicious shared-pointer call site as LEGITIMATE (self-referential reinit, confirmed against `V17RX_create`'s prologue) — not a defect. Then the whole `TxNextStateV17` + nine `TxHdx*V17` states + `V17TX_create` batch, 4,145 bytes, one indivisible unit. Found a genuine BLOB SEGFAULT on an untested retrain-transition input (F9901), worked around in the test rather than "fixed" |
+| V.27 TX | The FULL `V27TX_create` closure — 42 symbols in one commit, the whole TX half-duplex machine plus 30 rodata tables, then two bonus symbols (`V27TX_modem`, `V27TX_control`) that unblocked once it landed |
+
+### What this wave established
+
+- **A chokepoint found itself.** Neither I nor any agent set out to link these
+  three tasks; measuring `FAXVMI_create`'s actual closure revealed the
+  dependency on the other two agents' targets. Scoping by measured closure
+  rather than by file/module guesswork keeps finding this shape.
+- **A "suspicious call site" resolved as correct, with evidence, rather than
+  left declined forever.** The previous wave's agent was right to decline
+  rather than guess; this wave's agent, alone in the file with time to look
+  properly, traced both the call site and the callee's prologue and found the
+  self-referential call is exactly what the object does. Declining pending
+  more evidence and later confirming it is the intended cycle, not a wasted
+  turn.
+- **A genuine bug in the BLOB itself** (F9901) — the object segfaults on an
+  untested retrain-transition input. Not our defect, not fixed, worked around
+  in the fixture with the reason recorded. The same discipline as D956/D1022's
+  earlier blob-fault findings.
+- **Explicit anti-pattern warnings worked, partially.** Every wave-7 brief
+  told agents to drive their own build rather than stop mid-wait on a
+  background monitor with no live children. One agent still did it once and
+  needed an explicit resume; the other two self-corrected or never hit it.
+  Worth repeating in every brief until it stops recurring.
+
+### What's left, measured
+
+Fax is **54 symbols / 21,297 bytes** — 95% of everything remaining. The two
+`_init_receiver`/`_init_transmitter` closures are now visibly shrinking each
+wave (need counts have been falling: 122→85 and 125→88 over waves 5-6) as
+their hundred-plus-symbol dependency trees get cleared from underneath by
+other work landing. Expect them to become tractable within one or two more
+waves rather than needing a dedicated assault.
