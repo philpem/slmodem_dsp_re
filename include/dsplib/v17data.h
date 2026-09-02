@@ -131,6 +131,40 @@ struct fpm_smc_ring;
 #define V17FP_SMC_QMAP		0x5c
 
 /*
+ * `V17TX_create`'s own pulse-shaper setup (0x098bd0..0x098c50, not itself
+ * reconstructed): it copies `FPM_PPS_CFG` (`fpm_pps.h`) onto its stack and
+ * patches four fields before calling `FPM_PPS_init` -- `imap`/`qmap` from
+ * these two tables (`0x98c13`/`0x98c26`), `coeff_i`/`coeff_q` from the pair
+ * below (`0x98bfc`/`0x98c36`), and `scale` from `V17TX_PPS_SCALE[rate]`
+ * (`0x98c43`, a signed 32-bit `imul`, scale 4 -- an `int` table, not a
+ * `short` one).  `.rodata` bytes, five shorts each:
+ * `00 10 00 30 00 f0 00 d0 00 00` and `00 30 00 f0 00 d0 00 10 00 00`.
+ */
+extern const short SMCv17_IMAP4[5];
+extern const short SMCv17_QMAP4[5];
+extern const int V17TX_PPS_SCALE[4];
+
+/*
+ * `TxNextStateV17`'s scrambler-pattern table (not itself reconstructed; three
+ * read sites inside it, all `movswl` scale 2 -- signed, forced).  Needed for
+ * `V17TX_create`'s CLOSURE, not its own body: `V17TX_create` starts the state
+ * machine `TxNextStateV17` implements, and that machine's ten-symbol batch
+ * (F9600) is what actually reads this table.  `.rodata` bytes
+ * `07 00 0f 00 1f 00 3f 00`.
+ */
+extern const short V17TX_PATTERN_SCR1[4];
+
+/*
+ * The pulse shaper's own coefficient pair, `V17TX_create`'s `coeff_i` /
+ * `coeff_q` (see above).  120 entries each -- `coeffs / phases` = 12 taps at
+ * `FPM_PPS_CFG.phases` = 10 -- and, like V.32's `PPSv32_ICOFFS`/
+ * `PPSv32_QCOFFS`, the passband pair a quadrature pulse shaper always is: I
+ * is even about the centre, Q is odd.  `test/unit/t_v17ppstab.c` checks both.
+ */
+extern const short PPSv17_ICOFFS[120];
+extern const short PPSv17_QCOFFS[120];
+
+/*
  * `SetTxModeV17`'s own two `.rodata` tables.
  *
  * `V17TX_SYM_SIZE` is indexed by `mode` (`movswl 0x0(%ebp,%ebp,1),%edx` at

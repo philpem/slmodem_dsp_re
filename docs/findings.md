@@ -109317,3 +109317,53 @@ of 122 checks across the four DIF runs and left every other run green,
 confirmed and reverted per F134. `make one T=t_v17fax` still green
 afterward (19 groups, no regression). Not period-gated -- `make one` only,
 per this wave's brief. (2026-09-02)
+
+### F9751. `V17TX_create`'s PPS shaper setup is fully written: `FPM_PPS_CFG` plus six V.17 tables, 6 symbols, 636 bytes
+
+`FPM_PPS_CFG` (`fpm_pps.h`/`fpm_pps.c`, .rodata 0x00c4a0, 40 B) was
+documented but never defined -- the field comments already quoted its
+values (`phases` 10, `step` 3, `mapped` 1, `scale` 32767, `coeffs` 120) for
+scale, and this wave reads the bytes and writes the constant. It is shared,
+not V.17-specific: `V27TX_create` and `V29TX_create` name it too
+(`readyqueue.py`'s BLOCKED list), so it goes in `fpm_pps.c` beside
+`FPM_PPS_init`/`filter`/`free` rather than under `v17.c`'s name, on the same
+reasoning F9600 declined `SGD_CTL`. Confirmed with no relocation at any of
+its four pointer offsets (+0x10/+0x14/+0x18/+0x1c) -- a caller patches them,
+exactly as the header already said.
+
+The five V.17-specific tables `V17TX_create`'s pulse-shaper setup
+(0x098bd0-0x098c50, that function itself not reconstructed) reads:
+
+    SMCv17_IMAP4[5]        .rodata 0x00a03e   10  const short
+    SMCv17_QMAP4[5]        .rodata 0x00a034   10  const short
+    V17TX_PPS_SCALE[4]     .rodata 0x00a060   16  const int   (imul, scale 4)
+    V17TX_PATTERN_SCR1[4]  .rodata 0x00a070    8  const short (movswl, scale 2)
+    PPSv17_ICOFFS[120]     .rodata 0x009f40  240  const short
+    PPSv17_QCOFFS[120]     .rodata 0x009e40  240  const short
+
+`V17TX_PATTERN_SCR1` is not read by `V17TX_create` itself -- it is read three
+times inside `TxNextStateV17` (0xa1042, 0xa113c, 0xa11d9), one of the ten
+symbols F9600 already found fully blocked on `SGD_CTL`. It is in
+`V17TX_create`'s CLOSURE because `V17TX_create` starts that state machine;
+writing it here does not unblock `TxNextStateV17` and is not claimed to.
+
+**PPSv17_ICOFFS/QCOFFS ARE A QUADRATURE PAIR, CHECKED AND NOT JUST ASSERTED.**
+Both are 120 entries (`coeffs / phases` = 12 taps at 10 phases, matching
+`FPM_PPS_CFG`), and I is symmetric about the centre while Q is
+anti-symmetric -- verified over all 120 values before writing them and again
+in `test/unit/t_v17ppstab.c`, the same invariant `t_v32fptab.c` checks for
+V.32's `PPSv32_ICOFFS`/`PPSv32_QCOFFS`. A single mistyped coefficient breaks
+one of the sixty pairs.
+
+**TESTED IN TWO LAYERS**, `test/unit/t_v17ppstab.c`, modelled on
+`t_v32fptab.c`: every table element by element and struct field by field
+first, then `FPM_PPS_CFG` with `imap`/`qmap`/`coeff_i`/`coeff_q` patched to
+V.17's own four tables (exactly what `V17TX_create` will do) driven through
+`FPM_PPS_init`/`FPM_PPS_filter` against the blob's own copies over a real
+symbol stream -- a wrong field boundary or wrong table pairing can leave
+every value matching while the block behaves differently, and only that
+layer would see it. `make one T=t_v17ppstab`: 668 checks, all green.
+`make one T=t_v32fptab` (V.32's own PPS test, sharing `fpm_pps.c`) and
+`make one T=t_v17smc`/`t_v17fax` still green afterward -- no regression from
+adding `FPM_PPS_CFG`. Not period-gated -- `make one` only, per this wave's
+brief. (2026-09-02)

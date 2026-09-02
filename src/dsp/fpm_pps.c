@@ -31,6 +31,31 @@
 #include "dsplib/sysdep.h"
 
 /*
+ * FPM_PPS_CFG -- .rodata 0x00c4a0, 40 bytes.
+ *
+ * Bytes read straight from `.rodata`: `0a 00 03 00 01 00 00 00 ff 7f 00 00`
+ * then four zero dwords (the four pointers `fpm_pps.h` already documents as
+ * NULL, confirmed with no relocation at any of the four offsets) then
+ * `78 00 00 00 00 00 00 00`.  10 phases, a nominal step of 3, mapped, a Q15
+ * unity-ish gain of 32767, and 120 coefficients -- 12 taps at 10 phases.
+ */
+const struct fpm_pps_cfg FPM_PPS_CFG = {
+	10,		/* +0x00  phases                                     */
+	3,		/* +0x02  step                                       */
+	1,		/* +0x04  mapped                                     */
+	32767,		/* +0x08  scale                                      */
+	0,		/* +0x0c  step_adj                                   */
+	0,		/* +0x0e  pad0e                                      */
+	NULL,		/* +0x10  imap -- patched by the caller              */
+	NULL,		/* +0x14  qmap -- patched by the caller              */
+	NULL,		/* +0x18  coeff_i -- patched by the caller           */
+	NULL,		/* +0x1c  coeff_q -- patched by the caller           */
+	120,		/* +0x20  coeffs                                     */
+	0,		/* +0x22  pad22                                      */
+	NULL		/* +0x24  aux                                        */
+};
+
+/*
  * THE REUSE TEST GUARDS EXACTLY WHAT IT SIZES, WHICH IS WHERE THIS DIFFERS
  * FROM ITS SIBLING.  `FPM_SRE_init` decides on `cfg.coeffs` and then sizes a
  * fourth buffer on `cfg.rms_len`, which the test never looks at (deviation

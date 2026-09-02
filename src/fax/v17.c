@@ -808,6 +808,68 @@ const unsigned short SMCv17_MOD[8] = {
 	0x2534, 0x3425, 0x1706, 0x0617
 };
 
+/*
+ * `V17TX_create`'s pulse-shaper setup tables (see v17data.h for the read
+ * sites; `V17TX_create` itself is not reconstructed).  The two constellation
+ * maps, `SMCv17_IMAP4`/`SMCv17_QMAP4`, are five signed shorts each, bytes
+ * `00 10 00 30 00 f0 00 d0 00 00` / `00 30 00 f0 00 d0 00 10 00 00`.
+ * `V17TX_PPS_SCALE` is four `int`s (a 32-bit `imul`, scale 4, is what forces
+ * the width), bytes `78 69 00 00 78 69 00 00 a0 5f 00 00 a0 5f 00 00`.
+ */
+const short SMCv17_IMAP4[5] = { 0x3000, -0x1000, -0x3000, 0x1000, 0 };
+const short SMCv17_QMAP4[5] = { 0x1000, 0x3000, -0x1000, -0x3000, 0 };
+const int V17TX_PPS_SCALE[4] = { 27000, 27000, 24480, 24480 };
+
+/*
+ * `TxNextStateV17`'s scrambler-pattern table -- see v17data.h for why it is
+ * here rather than with V.17's transmit half-duplex machine (F9600), which
+ * this batch does not otherwise touch.
+ */
+const short V17TX_PATTERN_SCR1[4] = { 7, 15, 31, 63 };
+
+/*
+ * `V17TX_create`'s two shaper coefficient arrays, `coeff_i`/`coeff_q` in the
+ * local `struct fpm_pps_cfg` it builds from `FPM_PPS_CFG` (fpm_pps.h).
+ * Bytes taken straight from `.rodata` (0x9f40, 0x9e40); `t_v17ppstab.c`
+ * checks the quadrature symmetry (I even, Q odd) V.32's own pair has, and
+ * that this pair has it too.
+ */
+const short PPSv17_ICOFFS[120] = {
+	    -8,     -9,     -6,      1,      6,      2,    -12,    -28,
+	   -33,    -17,     20,     59,     75,     55,     10,    -25,
+	    -9,     72,    191,    282,    288,    197,     67,     -3,
+	    65,    267,    496,    601,    482,    174,   -151,   -284,
+	  -113,    269,    597,    582,    114,   -633,  -1266,  -1409,
+	  -965,   -238,    206,   -116,  -1258,  -2718,  -3681,  -3507,
+	 -2206,   -567,    203,   -805,  -3524,  -6696,  -8326,  -6665,
+	 -1214,   6781,  14693,  19599,  19599,  14693,   6781,  -1214,
+	 -6665,  -8326,  -6696,  -3524,   -805,    203,   -567,  -2206,
+	 -3507,  -3681,  -2718,  -1258,   -116,    206,   -238,   -965,
+	 -1409,  -1266,   -633,    114,    582,    597,    269,   -113,
+	  -284,   -151,    174,    482,    601,    496,    267,     65,
+	    -3,     67,    197,    288,    282,    191,     72,     -9,
+	   -25,     10,     55,     75,     59,     20,    -17,    -33,
+	   -28,    -12,      2,      6,      1,     -6,     -9,     -8
+};
+
+const short PPSv17_QCOFFS[120] = {
+	    -2,     -8,    -13,    -15,     -9,     -1,      1,    -12,
+	   -39,    -69,    -83,    -69,    -31,      4,      6,    -41,
+	  -117,   -174,   -163,    -68,     69,    168,    161,     43,
+	  -107,   -164,    -39,    249,    564,    727,    630,    332,
+	    47,     21,    366,    951,   1449,   1529,   1082,    338,
+	  -232,   -203,    498,   1477,   2052,   1666,    290,  -1453,
+	 -2583,  -2361,   -847,    942,   1460,   -527,  -5102, -10876,
+	-15427, -16372, -12549,  -4705,   4705,  12549,  16372,  15427,
+	 10876,   5102,    527,  -1460,   -942,    847,   2361,   2583,
+	  1453,   -290,  -1666,  -2052,  -1477,   -498,    203,    232,
+	  -338,  -1082,  -1529,  -1449,   -951,   -366,    -21,    -47,
+	  -332,   -630,   -727,   -564,   -249,     39,    164,    107,
+	   -43,   -161,   -168,    -69,     68,    163,    174,    117,
+	    41,     -6,     -4,     31,     69,     83,     69,     39,
+	    12,     -1,      1,      9,     15,     13,      8,      2
+};
+
 /* (widx + 1) mod len, exactly as the object spells it -- see v32smc.c. */
 static short
 smc_ring_advance(short widx, short len)
