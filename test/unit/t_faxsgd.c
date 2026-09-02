@@ -80,6 +80,7 @@ extern short ref_SGD_sequence_det(struct sgd *s, const unsigned short *sym,
 extern short ref_SGD_pattern_det(struct sgd *s, const short *sym, short n);
 
 extern const short ref_FPM_xor_table[256];
+extern struct sgd_control_req ref_SGD_CTL;
 
 static unsigned long seed = 20260831UL;
 
@@ -751,6 +752,33 @@ run_status(void)
 	return diff_end();
 }
 
+/*
+ * `SGD_CTL` (.bss 0x0008c8, 8 bytes): shared TX-side scratch, not exercised
+ * by any function in this file -- its only referrers are V.17/V.27ter/V.29's
+ * transmit half-duplex machines, none of which is written yet.  What can be
+ * checked here is the global itself: it is `struct sgd_control_req`-sized
+ * and the object never stores into it, so it must read back as all zero.
+ *
+ * THE WRONG-COPY RITUAL (F134): planting a nonzero byte in `SGD_CTL.det`
+ * made this check fail immediately (`0x00000000` vs `0x00000001`), then
+ * restored and green again -- so the assertion is not vacuously true.
+ */
+static int
+run_ctl_global(void)
+{
+	struct sgd_control_req za;
+
+	diff_begin("SGD_CTL");
+
+	memset(&za, 0, sizeof(za));
+	diff_eq_obj("SGD_CTL vs blob's own copy", struct sgd_control_req,
+		    &SGD_CTL, &ref_SGD_CTL, 0);
+	diff_eq_obj("SGD_CTL is all zero", struct sgd_control_req,
+		    &SGD_CTL, &za, 0);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -763,5 +791,6 @@ main(void)
 	rc |= run_patdet();
 	rc |= run_correlate();
 	rc |= run_status();
+	rc |= run_ctl_global();
 	return rc;
 }

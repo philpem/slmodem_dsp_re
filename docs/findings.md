@@ -109256,6 +109256,265 @@ re-prove. `V??TXP_INT_0008`/`INT_0004` is set to 1 in the same fixtures so
 after confirming the FAIL, per CLAUDE.md's F134 rule -- a detector shown only
 passing is indistinguishable from a dead one. (2026-09-01)
 
+## F9700. `SGD_CTL` lands under `sgd.c`, unambiguous unlike `FIFO_CFG` -- and it is the wave's real chokepoint, unblocking V.17/V.27ter/V.29's transmit families at once
+
+F9600 measured `SGD_CTL` (.bss 0x0008c8, 8 bytes) as the sole remaining
+external blocker on V.17's ten-symbol transmit half-duplex unit and declined
+to write it under `v17.c`'s name, on the ground that a bare, unprefixed name
+read symmetrically by all three TX modulation families is shared
+infrastructure and not any one protocol's table -- but left the home
+unconfirmed between `sgd.c` and `class1tx.c`.
+
+**FIRST, THE F9500 CHECK THIS BRIEF ASKED FOR.** F9500 corrected three prior
+findings that had wrongly declined `FIFO_CFG` as unwritably ambiguous, when
+the true shape was one local `.data` copy plus one already-global `.rodata`
+copy -- not ambiguous at all. `SGD_CTL` is not that shape either, and here
+there is nothing even to correct: `nm --defined-only ref/slmodemd/dsplibs.o`
+lists it exactly once,
+
+    000008c8 B SGD_CTL
+
+a single global `.bss` symbol, no local duplicate anywhere in the object.
+It was never actually ambiguous; F9600 declined it on OWNERSHIP grounds (no
+file to put it in was this wave's to write), not on a duplicate-definition
+hazard, and that reading holds up.
+
+**THE HOME IS `sgd.c`, CONFIRMED BY THE OBJECT AND NOT JUST THE OLD
+BEST GUESS.** `tools/relocscan.py --at .bss:0x8c8` finds exactly 13
+referring instructions in the whole 1.2 MB, all in `TxNextStateV17` (7),
+`TxNextStateV27` (4) and `TxNextStateV29` (2) -- confirmed by address
+against `nm`'s ranges for those three symbols, none elsewhere. `sgd.c`
+already holds `SGD_CFG`, the object's other shared SGD default, and no
+V.17/V.27/V.29-specific file is a referrer at all.
+
+**RELOCSCAN'S `--into`/`--at` REPORT AN ADDEND OF +0 FOR EVERY ONE OF THESE
+13 SITES, AND THAT IS WRONG -- WORTH RECORDING SO THE NEXT AGENT DOES NOT
+TRUST IT BLIND.** Reading `relocscan.py`'s own resolution code: for a
+relocation against a *named* symbol (as opposed to a section symbol) it
+treats the target as the symbol's bare address and never reads the addend
+out of the section bytes, on the stated assumption "there is no addend to
+read... the target IS the symbol" -- true for the `R_386_PC32` call
+relocations the tool was built to handle, not for an `R_386_32` data load
+whose REL-format addend lives in the four bytes at the relocation site
+itself. Checked directly: `objdump -dr` on any of the 13 sites shows
+`mov 0x4,%reg <== R_386_32 SGD_CTL` -- raw pre-link bytes `04 00 00 00`,
+confirmed with a small script reading `.text` at each of the 13 offsets
+(`0xa1036`, `0xa1092`, `0xa1122`, `0xa11bf`, `0xa126e`, `0xa12e5`, `0xa134d`,
+`0xa3664`, `0xa36db`, `0xa374c`, `0xa37bf`, `0xa488e`, `0xa492f`) -- so the
+true target of every single one is `SGD_CTL+4`, not `SGD_CTL+0` as
+`relocscan.py --into SGD_CTL` reports (`[+0] x13`). `tools/dis.py`, which
+prints the raw instruction bytes rather than resolving the addend itself,
+is not fooled and is what this finding's addend claim rests on. Not fixed
+here -- `tools/` is shared with two other live agents and the fix is
+outside this wave's owned files -- but any future finding leaning on
+`relocscan.py`'s reported offset for a *named* (not section-symbol)
+relocation should re-derive it from `dis.py`'s raw bytes first.
+
+**ALL 13 SITES ARE A LOAD OF `SGD_CTL+4` (the `det` half of
+`struct sgd_control_req`), NEVER A STORE, AND `SGD_CTL+0` (`gen`) HAS NO
+REFERRER ANYWHERE IN THE OBJECT.** So `SGD_CTL` is written into `sgd.c` as
+a plain zero-initialised `struct sgd_control_req SGD_CTL;` in `.bss` --
+matching the object exactly, since nothing ever stores into it and there is
+no other value it could hold. Every one of the three TX families' calls
+into `SGD_control` through this global therefore passes `det == NULL`,
+which is a real, checkable consequence and not a guess: `SGD_control`'s own
+already-written code treats a null `det` as "leave the detector half
+alone", so these calls only ever touch the generator half of whatever `sgd`
+object they act on.
+
+**THE WRONG-COPY RITUAL (F134).** `t_faxsgd.c` gained `run_ctl_global()`,
+comparing `SGD_CTL` against `ref_SGD_CTL` (the blob's own copy, aliased by
+`symmap.py` exactly as `ref_SGD_CFG` already is -- an ordinary, non-ambiguous
+global `OBJECT` symbol) and against an explicit all-zero buffer.  Planting a
+nonzero byte in `SGD_CTL`'s `det` field failed the check immediately
+(`0x00000000` vs `0x00000001`, or the all-zero comparison alone catching it
+if `ref_SGD_CTL` happened to agree); reverted, and `make one T=t_faxsgd`
+green again -- the assertion is not vacuously true.
+
+**WHAT THIS UNBLOCKS, RE-MEASURED AND NOT ASSUMED FROM THE DERIVATION
+ALONE.** Per this brief's own framing, `SGD_CTL` was the sole remaining
+external blocker on the ten-symbol V.17 unit (F9600) and is named by
+`readyqueue.py`/`closure.py --missing` in V.27ter's and V.29's own transmit
+families too. Re-running `readyqueue.py` after this lands is how the
+V.29 half of this wave measured what actually opened up; see the
+transmit-half-duplex finding below for the count. (2026-09-02)
+
+## F9701. V.29's transmit half-duplex machine lands whole: `V29TX_create`, `TxNextStateV29` and all seven `TxHdx*V29` states, plus `FPM_PPS_CFG` and the nine V29TX-prefixed tables
+
+F9700 cleared the sole external blocker (`SGD_CTL`); `python3
+tools/closure.py --missing V29TX_create` measured 20 unwritten symbols, 3,843
+bytes, `readyqueue.py` confirming the same 19-symbol "needs" list against
+`V29TX_create` itself. All 20 land in this commit: `V29TX_create` (0x09ba00,
+1,162 bytes), `TxNextStateV29` (0x0a47e0, 698 bytes) and the seven
+`TxHdx{Idle,Data,SCR1,EQCond,AB,Quiet,Start}V29` states (0x0a4aa0..0x0a4fb0,
+1,247 bytes together), `V29TX_CFG`/`V29TX_PPS_SCALE`/`V29TX_PATTERN_SCR1`
+(40 bytes of `.data`), `FPM_PPS_CFG` (`src/dsp/fpm_pps_cfg.c`, 40 bytes of
+`.rodata`, shared with V17TX_create's and V27TX_create's own unwritten
+closures -- `python3 tools/closure.py --missing V17TX_create V27TX_create`
+still names it, confirmed before writing it, so this commit also removes it
+from both of those) and the six `V29TX_SMC_*`/`V29TX_PPS_*` coefficient
+tables (656 bytes of `.rodata`).
+
+**THE EIGHT-SYMBOL CYCLE IS THE F8492/F8493 SHAPE, CONFIRMED AND LANDED
+WHOLE.** `TxNextStateV29` opens `jmp *0xc370(,%eax,4)` -- a real jump table,
+not a compare chain, unlike `TxNextStateV21` -- and stores all seven
+`TxHdx*V29` handler addresses across its seven arms; every one of the seven
+tail-calls back into `TxNextStateV29` (seven `R_386_PC32 TxNextStateV29`
+relocations, one per state, confirmed with `objdump -dr`). `V29TX_create`
+installs only `TxHdxStartV29` directly and never references
+`TxNextStateV29` itself. No proper subset of the eight links.
+
+**THE STATE NAMES ARE THE AUTHOR'S OWN**, from seven debug strings at
+`.rodata.str1.1` 0x4d67 ("V29TX_DEFAULT, %d\n") through 0x4de8
+("V29TX_STATE_QUIET\n"), read with `objdump -s` rather than
+`tools/relocscan.py --at` (which resolves an R_386_PC32/target relationship,
+not which jump-table INDEX prints which string -- the index-to-string
+pairing is read off which arm's own body contains which
+`dsplibs_debug_printf` call). Each arm's string names the CURRENT state
+(the one being left), exactly as `TxNextStateV21`'s four do, and the cycle
+runs
+
+    0 START -> installs QUIET   (TxHdxQuietV29,   budget 0x30)
+    1 QUIET -> installs ALT     (TxHdxABV29,      budget 0x80;
+                                  SGD_control + SetEncoderV29(1) first)
+    2 ALT   -> installs EQCOND  (TxHdxEQCondV29,  budget 0x180;
+                                  reseeds V29SCRAM_SR to 0x2a)
+    3 EQCOND-> installs SCR1    (TxHdxSCR1V29,    budget 0x30;
+                                  SGD_control + SeedScramblerV29(0) +
+                                  SetEncoderV29(0) first)
+    4 SCR1  -> installs DATA    (TxHdxDataV29,    budget 1)
+    5 DATA  -> installs IDLE    (TxHdxIdleV29,    budget 0)
+    6 IDLE  -> installs START   (TxHdxStartV29,   budget 0) -- wraps
+
+Every arm's installed handler is the state its own debug string does NOT
+name (it names where it's leaving FROM), which is the same self-consistency
+check `V29RX_create`'s jump table used (finding F9320): reading the mapping
+backwards fails at all seven.
+
+**THE FUNCTION NAME AND THE STATE NAME DISAGREE FOR ONE STATE, AND BOTH ARE
+THE AUTHOR'S.** State 2's own debug string is "V29TX_STATE_ALT\n" but the
+handler installed for it is `TxHdxABV29` -- the object's own exported symbol
+name. Not reconciled; `V29TX_STATE_ALT` is named from the string (rank 1)
+and the function keeps the object's own name.
+
+**`V29TXP_RATE` (params+0xc) IS DERIVED IN `V29TX_create`, NOT LEFT
+UNINITIALISED** -- an earlier draft of this finding, before the whole
+function had been read, wrongly declared it "never written by anything
+reconstructed" from having read only the later reads of it; re-reading
+`V29TX_create`'s own bitrate compare (0x9bb2f..0x9bb63) found the write. It
+is exactly `V29RX_create`'s own three-way compare for `V29DET_RATE`, one
+modulation over: `bitrate == V29_BPS_7200` stores `V29_RATE_7200`,
+`== V29_BPS_9600` stores `V29_RATE_9600`, and anything else ALSO stores
+`V29_RATE_9600` while additionally raising `V29TX_RESULT_B1_BIT1` and
+reporting `V29TX_STATUS_DEFAULT` -- which the two recognised arms skip.
+`sdm.h`'s own note on `SDM_CFG`, written in an earlier pass from
+`V29TX_create`'s call site alone ("nbits = <rate> + 3"), independently
+predicted this field's existence and shape before this pass confirmed it
+from the constructor itself.
+
+**`struct v29tx`'s OLD `pad_1c` WAS THE SCRAMBLER, NOT AN UNKNOWN GAP.**
+`V29TX_SDM` (0x1c) was already named in v29fax.h from `ScrambleDataV29`'s
+own `add $0x1c,%eax`, but `v29data.h`'s struct had not folded it in.
+`V29TX_create`'s own `SDM_init` call (0x9bc28) at that exact offset is the
+second, independent statement, and `struct fpm_sdm` is 0x18 bytes (not the
+0x0c a first glance at `struct fpm_sdm_cfg` suggests -- `fpm_sdm.h`'s own
+`struct fpm_sdm` carries `mask`/`notmask`/`reg`/`shift1`/`shift2` past the
+three-field config `FPM_SDM_init` derives from), which closes the gap with
+NOTHING left over: 0x1c + 0x18 = 0x34, `smc`'s own offset exactly.
+`tools/offcheck.py` caught the wrong size immediately (`0x0c` at that offset
+put `smc`/`pps` at the wrong place) before any test ran. Only
+`pad_00[0x08]` remains unmodelled in `struct v29tx` now.
+
+**THE SGD REQUESTS ARE PARTIALLY UNINITIALISED, AND THAT IS THE OBJECT'S,
+NOT A DEFECT INTRODUCED HERE.** Deviation D1291.
+
+**THE F134 WRONG-COPY RITUAL.** See below for the actual command and
+failure text -- it fires, and hard.
+
+**TABLES, READ WITH `tools/tabdump.py`, NOT `dis.py` (a data table, not
+code).** `FPM_PPS_CFG`'s four pointer fields (`imap`/`qmap`/`coeff_i`/
+`coeff_q`) are confirmed NULL by `tools/relocscan.py --at .rodata:0xc4a0`
+finding no relocation into that range at all, matching `fpm_sre_cfg.c`'s own
+check. `V29TX_SMC_PMAP` is declared `unsigned short`, not `short` --
+`struct fpm_smc_cfg::pmap`'s own declared type (rank 2), unlike its four
+sibling tables which are all `const short *`.
+
+**`FPM_PPS_CFG` ALSO CLOSES ITSELF AGAINST ITS OWN HEADER COMMENT.** Its
+values byte for byte MATCH what `fpm_pps.h` had already written down as the
+"built-in `FPM_PPS_CFG`... quoted below for scale only" -- phases=10,
+step=3, mapped=1, scale=32767, coeffs=120 -- an independent confirmation
+that the earlier reading (from `FPM_PPS_init`'s own struct-copy code,
+without the table itself) was exact.
+
+**NOT LANDED: `V29TX_control` (0x0a4fb0, not reconstructed) and
+`V29TXP_SHORT_000C`-turned-`V29TXP_RATE`'s own SETTER outside
+`V29TX_create`** -- `V29TX_control` reads `V29TXP_RATE` too (to index
+`V29TX_PPS_SCALE` again) but was not traced further; it is not in this
+closure and no wave has claimed it yet.
+
+**THE FIRST DRAFT OF `test_tx_cycle` HAD A REAL BUG OF ITS OWN, WORTH
+RECORDING SO THE NEXT SESSION DOES NOT REPEAT IT.** `in` is reused by
+`V29TX_modem`'s dispatch loop as SCRATCH for the whole call, not just for
+the initial `FIFO_write` -- `TxHdxEQCondV29`/`TxHdxABV29`/`TxHdxSCR1V29`
+write up to `V29TX_MODEM_BUDGET` (0x30 = 48) elements into it directly. An
+8-element `qbuf_a`/`qbuf_b` (sized for the small `FIFO_write` count alone,
+`t_v21txcreate.c`'s own array size, safe there because
+`V21TX_MODEM_BUDGET` is 6) is a stack overflow at V.29's larger budget, not
+a failing comparison -- it produced chaotic, wildly-off sample mismatches
+(`out[0] got 2177, reference 6055` and worse) that looked exactly like a
+codegen defect until the buffer was sized to `V29TX_MODEM_BUDGET`, after
+which all 1,250 checks in that suite passed outright. Recorded because nine
+tenths of the debugging time on this pass went into this, not into the
+reconstruction itself.
+
+**THE F134 WRONG-COPY RITUAL, ACTUAL FAILURE TEXT.** Swapped which handler
+`TxNextStateV29`'s SCR1 and DATA arms install (SCR1 -> installs
+`TxHdxIdleV29`, DATA -> installs `TxHdxDataV29`) and reran
+`make one T=t_v29txcreate`:
+
+```
+FAIL v29txcreate: the half-duplex machine through V29TX_modem 392/1250 checks failed
+FAIL v29txcreate: TxHdxDataV29's V29TXP_INT_0008 != 0 underrun arm 1/8 checks failed
+test/unit/t_v29txcreate.c:495: V29TX_modem return (12)  got 88064, reference 22786
+test/unit/t_v29txcreate.c:495: V29TX_modem return (13)  got 88582, reference 23302
+```
+
+Reverted both lines; `make one T=t_v29txcreate` green again (6/6 suites, 0
+failures) and `make one T=t_v29fax` unaffected (all 18 of its own suites
+still green, confirming this landing did not disturb the already-written
+receive side or the two already-written accessors).
+
+**`make one T=t_v29txcreate` tail:**
+
+```
+PASS v29txcreate: sizes against the object's symbol table 4 checks
+PASS v29txcreate: V29TX_create, self-allocating 191 checks
+PASS v29txcreate: V29TX_create, re-initialised in place 51 checks
+PASS v29txcreate: the half-duplex machine through V29TX_modem 1250 checks
+PASS v29txcreate: TxHdxDataV29's V29TXP_INT_0008 != 0 underrun arm 8 checks
+PASS v29txcreate: TxNextStateV29's out-of-range default arm 22 checks
+```
+
+Not `make phase`/`make period`-gated; the parent session owns that tier.
+
+**CORRECTION, ON MERGE WITH `master` (2026-09-02).** This finding originally
+claimed `FPM_PPS_CFG` as a new file, `src/dsp/fpm_pps_cfg.c`, written here.
+Merging `master` found finding F9751 had landed the SAME symbol independently
+in the same session's time frame, in `src/dsp/fpm_pps.c` beside
+`FPM_PPS_init`/`filter`/`free` rather than a companion `_cfg.c` file -- a
+different home, same reasoning (F9600's), and the SAME THIRTEEN VALUES: both
+derivations read `phases=10, step=3, mapped=1, scale=32767, step_adj=0,
+coeffs=120`, all four pointers NULL, independently off `.rodata:0xc4a0`. Two
+agents deriving byte-identical values from the same forty bytes is exactly
+the kind of agreement CLAUDE.md's evidence-order paragraph treats as
+confirmation, not as redundant work -- but only one definition can survive a
+link. `src/dsp/fpm_pps_cfg.c` was deleted on merge, this branch's copy of the
+extern declaration in `fpm_pps.h` was removed in favour of F9751's, and
+`FPM_PPS_CFG` is F9751's finding from here on, not this one's. Everything
+else in this finding (the eight-symbol cycle, the nine V29TX-prefixed
+tables, `V29TXP_RATE`, `struct v29tx`'s scrambler field, D1291, the F134
+ritual) is this branch's own and unaffected. (2026-09-02)
+
 ### F9750. The SMCv17 encoder family is written -- 7 symbols, 792 bytes, and it reuses V.32's trellis coder tables verbatim
 
 `SMCv17_init` (.text 0x0a0a60, 87 B), `SMCv17_encoder_dif` (0x09fcc0, 164 B),

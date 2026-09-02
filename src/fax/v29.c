@@ -841,6 +841,328 @@ V29RX_decision(struct fpm_fse *state, short *angle, short *mag)
 }
 
 /*
+ * The transmit configuration and the tables `V29TX_create` builds its DSP
+ * sub-objects from.  `protocol`/`bitrate`/`flags_10` are typed by
+ * `V29TX_status`'s own reads (`V29TXS_PROTOCOL`/`_BITRATE`/`_FLAGS_10`,
+ * v29fax.h); `int_0008` is 60000, `v21tx_cfg`'s own value at the identical
+ * offset.  The rest are usage inference; see v29data.h.
+ */
+struct v29tx_cfg V29TX_CFG = {
+	0,			/* protocol                                  */
+	9600,			/* bitrate                                   */
+	0,			/* short_0004                                */
+	0,			/* short_0006                                */
+	60000,			/* int_0008                                  */
+	1,			/* int_000c                                  */
+	0,			/* flags_10                                  */
+	0,			/* short_0012                                */
+	1,			/* int_0014 -- V29TX_create's own transmit
+					FIFO size is int_0014 * 48           */
+	0,			/* int_0018 -- V29TX_create's own FPM_PPS_CFG
+					aux, across the (void *)(long) idiom */
+};
+
+/* Indexed by V29TXP_RATE.  Fed to FPM_PPS_init's `scale` at 0x9bd25. */
+int V29TX_PPS_SCALE[2] = { 45016, 25480 };
+
+/* Indexed by V29TXP_RATE, read inside TxNextStateV29 itself at 0xa4937. */
+short V29TX_PATTERN_SCR1[2] = { 7, 15 };
+
+/* The transmit pulse shaper's I and Q coefficient tables, 120 shorts each,
+ * fed to FPM_PPS_init at 0x9bd57. */
+const short V29TX_PPS_IFILT[120] = {
+	   -22,   -192,   -455,   -670,   -707,   -522,   -190,    125,
+	   258,    137,   -162,   -453,   -529,   -287,    207,    738,
+	  1051,    997,    622,    164,    -75,    110,    690,   1406,
+	  1887,   1859,   1304,    499,   -123,   -201,    333,   1191,
+	  1856,   1858,   1046,   -291,  -1545,  -2104,  -1699,   -598,
+	   487,    759,   -222,  -2234,  -4436,  -5760,  -5483,  -3691,
+	 -1359,     51,   -675,  -3781,  -8197, -11812, -12306,  -8208,
+	   298,  11207,  21310,  27371,  27371,  21310,  11207,    298,
+	 -8208, -12306, -11812,  -8197,  -3781,   -675,     51,  -1359,
+	 -3691,  -5483,  -5760,  -4436,  -2234,   -222,    759,    487,
+	  -598,  -1699,  -2104,  -1545,   -291,   1046,   1858,   1856,
+	  1191,    333,   -201,   -123,    499,   1304,   1859,   1887,
+	  1406,    690,    110,    -75,    164,    622,    997,   1051,
+	   738,    207,   -287,   -529,   -453,   -162,    137,    258,
+	   125,   -190,   -522,   -707,   -670,   -455,   -192,    -22,
+};
+
+const short V29TX_PPS_QFILT[120] = {
+	    99,    244,    224,      9,   -326,   -628,   -747,   -628,
+	  -345,    -72,      6,   -194,   -603,  -1017,  -1206,  -1044,
+	  -589,    -65,    248,    177,   -240,   -756,  -1033,   -836,
+	  -173,    686,   1339,   1469,   1036,    318,   -210,   -141,
+	   630,   1810,   2836,   3167,   2597,   1406,    246,   -186,
+	   451,   1901,   3389,   3989,   3135,    990,  -1546,  -3237,
+	 -3164,  -1305,   1283,   2823,   1630,  -3000, -10235, -17804,
+	-22775, -22725, -16800,  -6193,   6193,  16800,  22725,  22775,
+	 17804,  10235,   3000,  -1630,  -2823,  -1283,   1305,   3164,
+	  3237,   1546,   -990,  -3135,  -3989,  -3389,  -1901,   -451,
+	   186,   -246,  -1406,  -2597,  -3167,  -2836,  -1810,   -630,
+	   141,    210,   -318,  -1036,  -1469,  -1339,   -686,    173,
+	   836,   1033,    756,    240,   -177,   -248,     65,    589,
+	  1044,   1206,   1017,    603,    194,     -6,     72,    345,
+	   628,    747,    628,    326,     -9,   -224,   -244,    -99,
+};
+
+/*
+ * The symbol coder's carrier phasor (24 steps, 1700 Hz at 2400 baud with
+ * `rot_step` = 0x11) and its constellation maps, fed to SMC_init at
+ * 0x9bcba.  smc.h names cosine/sine's slots from this function's own
+ * relocations.
+ */
+const short V29TX_SMC_COSINE[24] = {
+	32767,  31651,  28378,  23170,  16384,   8481,      0,  -8481,
+       -16384, -23170, -28378, -31651, -32767, -31651, -28378, -23170,
+       -16384,  -8481,      0,   8481,  16384,  23170,  28378,  31651,
+};
+
+const short V29TX_SMC_SINE[24] = {
+	    0,   8481,  16384,  23170,  28378,  31651,  32767,  31651,
+	28378,  23170,  16384,   8481,      0,  -8481, -16384, -23170,
+       -28378, -31651, -32767, -31651, -28378, -23170, -16384,  -8481,
+};
+
+const short V29TX_SMC_IMAP[16] = {
+	 6144,  2048,     0, -2048, -6144, -2048,     0,  2048,
+	10240,  6144,     0, -6144,-10240, -6144,     0,  6144,
+};
+
+const short V29TX_SMC_QMAP[16] = {
+	    0,  2048,  6144,  2048,     0, -2048, -6144, -2048,
+	    0,  6144, 10240,  6144,     0, -6144,-10240, -6144,
+};
+
+/* dibit -> quadrant increment; struct fpm_smc_cfg::pmap's own type. */
+const unsigned short V29TX_SMC_PMAP[8] = { 1, 0, 2, 3, 6, 7, 5, 4 };
+
+/*
+ * ---------------------------------------------------------------------------
+ * V29TX_create -- .text 0x09ba00, 1,162 bytes.
+ *
+ * THE SHAPE IS `V21TX_create`'s, ONE MODULATION OVER: allocate-or-reuse the
+ * handle, copy the caller's config (or `V29TX_CFG`) onto its first 28 bytes,
+ * allocate-or-reuse the parameter/half-duplex block and build the FIFO and
+ * the SGD generator into it, derive `V29TXP_RATE`, seed the half-duplex
+ * machine at `V29TX_STATE_START`, then allocate-or-reuse `struct v29tx` and
+ * initialise its three sub-objects.  Two debug strings, "V.29 TX Create "
+ * (0x4889) then either "New allocation\n" (0x4899) or "\n" (0x4887),
+ * exactly as `V21TX_create`'s three collapse to two here because there is
+ * no third, unconditional message.
+ *
+ * `V29TXP_RATE` IS DERIVED HERE, NOT FROM ANY DEDICATED "SET RATE" CALL --
+ * see its own comment in v29data.h.  The three-way compare
+ * (`V29_BPS_7200`/`V29_BPS_9600`/anything else) is `V29RX_create`'s own for
+ * `V29DET_RATE`, read one modulation over; the "anything else" arm ALSO
+ * raises `V29TX_RESULT_B1_BIT1` and reports `V29TX_STATUS_DEFAULT`
+ * (0x9bb5f/0x9bb63), which the two recognised arms (0x9be66, 0x9be71) skip
+ * by jumping straight back into the shared tail.
+ *
+ * `fresh` IS THE SAME STACK SLOT FROM ENTRY TO EXIT -- the object spills the
+ * "did THIS call allocate the handle" flag at one local (0x1c(%esp)) at
+ * 0x9ba11/0x9be5d and reloads the identical slot at 0x9bd21 to pass as
+ * `FPM_PPS_init`'s third argument, 160 bytes of unrelated code later.  Forced
+ * by the register/stack allocator reusing one slot for the whole function,
+ * exactly the carrier CLAUDE.md's codegen section describes; reproduced as
+ * one C local rather than two, which is what makes the reuse fall out on its
+ * own.
+ *
+ * THE TRANSMIT FIFO'S SIZE IS COMPUTED, NOT A LITERAL -- `int_0014 * 3 * 16`
+ * (`lea (%eax,%eax,2),%esi; shl $0x4,%esi` at 0x9bac0/0x9bac5), which is 48
+ * for the default config's `int_0014` of 1.  `word0` and `fill` come
+ * unchanged from `FIFO_CFG`, matching `V21TX_create`'s own note that only
+ * `word0`'s zero matters and the size is the caller's to set.
+ *
+ * THE SGD GENERATOR TAKES `SGD_CFG` WITH ONLY `sym_bits` PATCHED, to 4 --
+ * the whole 13-dword template is copied (`rep movsl`, 0x9bae5) and every
+ * other field survives, unlike the FIFO and PPS configs below, which patch
+ * several fields each.
+ *
+ * `RING.SYM` IS REALLOCATED ON EVERY CALL, EVEN WHEN THE TX BLOCK IS REUSED
+ * -- `sysdep_malloc(0x64)` at 0x9bb85 runs unconditionally after the
+ * fresh/reuse branch converges, with no free of whatever `ring.sym`
+ * previously held.  Reproduced as observed; a caller that repeatedly
+ * re-initialises an existing transmit handle leaks one 100-byte buffer per
+ * call, same as the object.
+ *
+ * SDM_init's `nbits` AND SMC's `amask` ARE ALSO KEYED ON `V29TXP_RATE`,
+ * READ BACK OUT OF THE FIELD THIS SAME FUNCTION JUST WROTE (0x9bbfe and
+ * 0x9bc78) -- not from a local kept in a register, so both reads are
+ * reproduced as fresh field reads rather than of one cached value, matching
+ * the object's own reload discipline elsewhere in this file.
+ *
+ * `PCFG.AUX` CARRIES THE CALLER'S OWN `int_0018`, ACROSS THE INT/POINTER
+ * BOUNDARY -- `mov 0x18(%ebp),%ebx` at 0x9bb67 (the FULL 32 bits, unlike
+ * `int_0014`'s 16-bit read above) is spilled to a stack slot and reloaded
+ * at 0x9bcbf, 260 bytes later, to become `FPM_PPS_CFG`'s `aux` field
+ * (0x9bccf).  `V29TX_CFG`'s own `int_0018` is 0, so this is invisible on
+ * the default config; the `(void *)(long)` idiom is D1250's, for the same
+ * reason.
+ *
+ * Finding F9701.
+ */
+void *
+V29TX_create(void *modem, const struct v29tx_cfg *params)
+{
+	void *prm;
+	void *existing;
+	int fresh = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.29 TX Create ");
+
+	if (modem == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+
+		modem = sysdep_malloc(0x28);
+		FIELD_PTR(modem, V29TX_OBJ_PARAMS) = 0;
+		V29TX(modem) = 0;
+		fresh = 1;
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("\n");
+	}
+
+	if (params != 0)
+		*(struct v29tx_cfg *)modem = *params;
+	else
+		*(struct v29tx_cfg *)modem = V29TX_CFG;
+
+	FIELD_INT(modem, V29TX_OBJ_RESULT) = 0;
+	*FIELD(modem, V29TX_OBJ_RESULT_B1) |= 0x58;
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+
+	/* ---- the parameter/half-duplex block, the FIFO and the SGD ------- */
+
+	prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	if (prm == 0) {
+		prm = sysdep_malloc(0x1c);
+		FIELD_PTR(modem, V29TX_OBJ_PARAMS) = prm;
+		FIELD_PTR(prm, V29TXP_FIFO) = 0;
+		FIELD_PTR(prm, V29TXP_SGD) = 0;
+	}
+
+	{
+		struct fifo_cfg fc;
+		unsigned short n = (unsigned short)
+			((struct v29tx_cfg *)modem)->int_0014;
+
+		fc.word0 = FIFO_CFG.word0;
+		fc.size = (short)(n * 3 * 16);
+		fc.fill = FIFO_CFG.fill;
+
+		existing = FIELD_PTR(prm, V29TXP_FIFO);
+		FIELD_PTR(prm, V29TXP_FIFO) =
+			FIFO_create((struct fax_fifo *)existing, &fc);
+	}
+
+	{
+		struct sgd_cfg gcfg = SGD_CFG;
+
+		gcfg.sym_bits = 4;
+
+		existing = FIELD_PTR(prm, V29TXP_SGD);
+		FIELD_PTR(prm, V29TXP_SGD) =
+			SGD_create((struct sgd *)existing, &gcfg);
+	}
+
+	/* ---- the half-duplex machine's own state ------------------------- */
+
+	prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_START;
+	FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
+	FIELD_SHORT(prm, V29SCRAM_SR) = 0x2a;
+
+	FIELD_INT(prm, V29TXP_INT_0008) = 0;
+	*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) = TxHdxStartV29;
+
+	if (((struct v29tx_cfg *)modem)->bitrate == V29_BPS_7200) {
+		FIELD_SHORT(prm, V29TXP_RATE) = V29_RATE_7200;
+	} else if (((struct v29tx_cfg *)modem)->bitrate == V29_BPS_9600) {
+		FIELD_SHORT(prm, V29TXP_RATE) = V29_RATE_9600;
+	} else {
+		FIELD_SHORT(prm, V29TXP_RATE) = V29_RATE_9600;
+		*FIELD(modem, V29TX_OBJ_RESULT_B1) |= V29TX_RESULT_B1_BIT1;
+		FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_DEFAULT;
+	}
+
+	/* ---- the private block: the ring, the scrambler, the symbol coder
+	 * and the pulse shaper ---------------------------------------------- */
+
+	if (V29TX(modem) == 0) {
+		struct v29tx *tx = (struct v29tx *)sysdep_malloc(0x9c);
+
+		V29TX(modem) = tx;
+		tx->ring.i = (short *)sysdep_malloc(0x64);
+		tx->ring.q = (short *)sysdep_malloc(0x64);
+	}
+
+	V29TX(modem)->ring.ridx = 0;
+	V29TX(modem)->ring.widx = 0;
+	V29TX(modem)->ring.sym = (short *)sysdep_malloc(0x64);
+	V29TX(modem)->ring.len = 0x32;
+
+	{
+		short i;
+
+		for (i = 0; i <= 0x31; i++) {
+			V29TX(modem)->ring.i[i] = 0;
+			V29TX(modem)->ring.q[i] = 0;
+		}
+	}
+
+	{
+		struct fpm_sdm_cfg dcfg = SDM_CFG;
+
+		dcfg.nbits = (short)((FIELD_SHORT(prm, V29TXP_RATE) != 0)
+				     ? 4 : 3);
+		dcfg.tap1 = 0x12;
+		dcfg.tap2 = 0x17;
+
+		SDM_init(&V29TX(modem)->sdm, &dcfg);
+	}
+
+	{
+		struct fpm_smc_cfg scfg = SMC_CFG;
+
+		scfg.f00 = 0;
+		scfg.direct = 1;
+		scfg.rot_step = 0x11;
+		scfg.rot_mod = 0x18;
+		scfg.qshift = 0;
+		scfg.qmask = 7;
+		scfg.amask = (unsigned short)
+			((FIELD_SHORT(prm, V29TXP_RATE) != 0) ? 8 : 0);
+		scfg.pmask = 7;
+		scfg.pmap = V29TX_SMC_PMAP;
+		scfg.imap = V29TX_SMC_IMAP;
+		scfg.qmap = V29TX_SMC_QMAP;
+		scfg.cosine = V29TX_SMC_COSINE;
+		scfg.sine = V29TX_SMC_SINE;
+
+		SMC_init(&V29TX(modem)->smc, &scfg);
+	}
+
+	{
+		struct fpm_pps_cfg pcfg = FPM_PPS_CFG;
+
+		pcfg.phases = 10;
+		pcfg.step = 3;
+		pcfg.mapped = 0;
+		pcfg.scale = V29TX_PPS_SCALE[FIELD_SHORT(prm, V29TXP_RATE)];
+		pcfg.coeff_i = V29TX_PPS_IFILT;
+		pcfg.coeff_q = V29TX_PPS_QFILT;
+		pcfg.aux = (void *)(long)((struct v29tx_cfg *)modem)->int_0018;
+
+		FPM_PPS_init(&V29TX(modem)->pps, &pcfg, fresh);
+	}
+
+	return modem;
+}
+
+/*
  * ---------------------------------------------------------------------------
  * V29TX_delete -- .text 0x09be90, 135 bytes.
  *
@@ -1502,6 +1824,477 @@ V29TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	*count = (unsigned short)total;
 
 	return FIELD_INT(modem, V29TX_OBJ_RESULT);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * TxNextStateV29 -- .text 0x0a47e0, 698 bytes.
+ *
+ * `jmp *0xc370(,%eax,4)` on `V29TXP_STATE`, bounded `cmp $0x6` / `ja
+ * default` -- a real jump table, not a compare chain, unlike `TxNextStateV21`.
+ * The seven case bodies are read off `tools/dis.py`; the STATE NAMES are the
+ * author's own, from seven debug strings at `.rodata.str1.1` 0x4d67..0x4de8
+ * (`tools/relocscan.py --at` cannot pair a jump-table entry with its target,
+ * so the printed name inside each arm is what settles which index is which
+ * state -- CLAUDE.md's evidence rank 1), each naming the state being LEFT,
+ * exactly as `TxNextStateV21`'s four do:
+ *
+ *   V29TX_STATE_START    installs TxHdxQuietV29, budget 0x30
+ *   V29TX_STATE_QUIET    SGD_control(gen={0x4f,2 syms}), SetEncoderV29(1),
+ *                        installs TxHdxABV29, budget 0x80
+ *   V29TX_STATE_ALT      installs TxHdxEQCondV29, budget 0x180, reseeds
+ *                        V29SCRAM_SR to 0x2a
+ *   V29TX_STATE_EQCOND   SGD_control(gen={V29TX_PATTERN_SCR1[rate],1 sym}),
+ *                        SeedScramblerV29(0), SetEncoderV29(0), installs
+ *                        TxHdxSCR1V29, budget 0x30
+ *   V29TX_STATE_SCR1     installs TxHdxDataV29, budget 1
+ *   V29TX_STATE_DATA     installs TxHdxIdleV29, budget 0
+ *   V29TX_STATE_IDLE     installs TxHdxStartV29, budget 0 -- wraps to START
+ *
+ * EVERY ARM'S PRINTED STRING NAMES THE INDEX IT RUNS UNDER, AND EVERY ONE
+ * INSTALLS THE HANDLER FOR THE STATE IT ADVANCES TO -- the same
+ * self-consistency check `V29RX_create`'s jump table used (finding F9320).
+ *
+ * THE FUNCTION NAME `TxHdxABV29` AND THE STATE NAME `V29TX_STATE_ALT` ARE
+ * BOTH THE AUTHOR'S AND DISAGREE.  Not reconciled; see V29TX_STATE_ALT's own
+ * comment.
+ *
+ * B1_BIT0/B2_BIT0's OWN VALUES PER ARM (V29TX_RESULT_B1_BIT0/_B2_BIT0,
+ * neutral): every arm except SCR1 and DATA clears both; SCR1 sets B1_BIT0
+ * (clears B2_BIT0); DATA sets B2_BIT0 (clears B1_BIT0).  The default arm
+ * clears B2_BIT0, sets B1_BIT1 and clears B1_BIT0, and writes
+ * V29TX_STATUS_DEFAULT -- the only arm that touches the status byte at all.
+ *
+ * THE SGD REQUESTS' `gen` HALF IS ONLY PARTLY INITIALISED, AND THAT IS THE
+ * OBJECT'S: neither call site (QUIET's own transition or EQCOND's) writes
+ * `gen.seq`/`seq_len`/`short_0006`/`seq_enable` -- only `data_word` and
+ * `word_syms`, the two fields `SGD_symbol_gen` reads, which is all either
+ * caller needs since neither drives `SGD_sequence_gen`.  Deviation D1291.
+ *
+ * `req.det` IS `SGD_CTL.det`, READ BACK OUT OF THE GLOBAL RATHER THAN
+ * HARDCODED NULL -- the same shape F9700 established for V.17/V.27ter's
+ * own sites, and this file's two of the thirteen.
+ *
+ * THE WRONG-COPY RITUAL (F134).  Swapping `TxHdxDataV29` and
+ * `TxHdxIdleV29` in the SCR1 and DATA arms' installs (so SCR1 installs
+ * Idle and DATA installs Data-again) failed `t_v29txcreate.c`'s
+ * `run_tx_cycle()` immediately -- the DATA state's own probe never saw the
+ * FIFO drained the way the reference build did, and the process-slot
+ * comparison at the SCR1->DATA transition diverged first.  Reverted;
+ * `make one T=t_v29txcreate` green again.  See the finding for the exact
+ * failure text.  Finding F9701.
+ */
+void
+TxNextStateV29(void *modem)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	short state = FIELD_SHORT(prm, V29TXP_STATE);
+
+	switch (state) {
+	case V29TX_STATE_START:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_START\n");
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x30;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxQuietV29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_QUIET;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		break;
+
+	case V29TX_STATE_QUIET:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_QUIET\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = 0x4f;
+			gen.word_syms = 2;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V29TXP_SGD), &req);
+		}
+		SetEncoderV29(modem, 1);
+		prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x80;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxABV29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_ALT;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		break;
+
+	case V29TX_STATE_ALT:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_ALT\n");
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x180;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxEQCondV29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_EQCOND;
+		FIELD_SHORT(prm, V29SCRAM_SR) = 0x2a;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		break;
+
+	case V29TX_STATE_EQCOND:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_EQCOND\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = (unsigned short)
+				V29TX_PATTERN_SCR1[FIELD_SHORT(prm,
+								V29TXP_RATE)];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V29TXP_SGD), &req);
+		}
+		SeedScramblerV29(modem, 0);
+		SetEncoderV29(modem, 0);
+		prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0x30;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxSCR1V29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_SCR1;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		break;
+
+	case V29TX_STATE_SCR1:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_SCR1\n");
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 1;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxDataV29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_DATA;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		*FIELD(modem, V29TX_OBJ_RESULT_B1) |= V29TX_RESULT_B1_BIT0;
+		return;
+
+	case V29TX_STATE_DATA:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_DATA\n");
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxIdleV29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_IDLE;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) |= V29TX_RESULT_B2_BIT0;
+		*FIELD(modem, V29TX_OBJ_RESULT_B1) &=
+			(unsigned char)~V29TX_RESULT_B1_BIT0;
+		return;
+
+	case V29TX_STATE_IDLE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_STATE_IDLE\n");
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
+		*(v29tx_process_fn *)(void *)FIELD(prm, V29TXP_PROCESS) =
+			TxHdxStartV29;
+		FIELD_SHORT(prm, V29TXP_STATE) = V29TX_STATE_START;
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V29TX_DEFAULT, %d\n", state);
+		*FIELD(modem, V29TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V29TX_RESULT_B2_BIT0;
+		FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_DEFAULT;
+		*FIELD(modem, V29TX_OBJ_RESULT_B1) = (unsigned char)
+			((*FIELD(modem, V29TX_OBJ_RESULT_B1)
+			  | V29TX_RESULT_B1_BIT1)
+			 & ~V29TX_RESULT_B1_BIT0);
+		break;
+	}
+
+	*FIELD(modem, V29TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V29TX_RESULT_B1_BIT0;
+}
+
+/*
+ * TxHdxStartV29 -- .text 0x0a4f90, 21 bytes.  Nothing but the transition.
+ */
+short
+TxHdxStartV29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	TxNextStateV29(modem);
+	return 0;
+}
+
+/*
+ * TxHdxIdleV29 -- .text 0x0a4aa0, 116 bytes.
+ *
+ * NO V29TXP_SHORT_0016 COUNTDOWN, unlike its four siblings below -- with the
+ * FIFO empty it spends the WHOLE current budget on TxNoCarrierV29 in one
+ * call; with the FIFO non-empty it does not modulate at all, just calls
+ * TxNextStateV29.  Exactly TxHdxIdleV21's shape.
+ *
+ * V29TX_STATUS_IDLE (4) is written UNCONDITIONALLY at entry -- even on the
+ * arm that immediately hands off to TxNextStateV29, which the object does
+ * not override afterward.
+ */
+short
+TxHdxIdleV29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	struct fax_fifo *fifo =
+		(struct fax_fifo *)FIELD_PTR(prm, V29TXP_FIFO);
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_IDLE;
+
+	if (fifo->count == 0) {
+		unsigned short b = (unsigned short)*budget;
+		short nsamples = (short)TxNoCarrierV29(modem, in, out, b);
+
+		*budget = (short)((unsigned short)*budget - b);
+		return nsamples;
+	}
+
+	TxNextStateV29(modem);
+	return 0;
+}
+
+/*
+ * TxHdxQuietV29 -- .text 0x0a4ee0, 163 bytes.
+ *
+ * The V29TXP_SHORT_0016 countdown shape all four of QUIET/ALT/EQCOND/SCR1
+ * share: report status 1, then TxNoCarrierV29 over min(remaining, *budget)
+ * at a time until the countdown reaches zero, at which point call
+ * TxNextStateV29 instead and report nothing.
+ */
+short
+TxHdxQuietV29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+
+	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	if (remaining <= 0) {
+		TxNextStateV29(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+
+	nsamples = (short)TxNoCarrierV29(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxABV29 -- .text 0x0a4e20, 190 bytes.  Function name AB, debug string
+ * ALT; see V29TX_STATE_ALT.
+ *
+ * Same V29TXP_SHORT_0016 shape as TxHdxQuietV29, but drives
+ * SGD_symbol_gen's data-word form (word_syms=2, data_word=0x4f, set by
+ * TxNextStateV29's QUIET arm) STRAIGHT INTO ModDataV29 -- no
+ * ScrambleDataV29, unlike TxHdxSCR1V29 below.  V.29's alternating training
+ * dibit is unscrambled.
+ */
+short
+TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+
+	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	if (remaining <= 0) {
+		TxNextStateV29(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V29TXP_SGD), in, (short)n);
+	nsamples = (short)ModDataV29(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxEQCondV29 -- .text 0x0a4d30, 237 bytes.
+ *
+ * THE LFSR RECURRENCE IS GenEQTrnSequenceV29's OWN (v29data.h), WRITTEN OUT
+ * AGAIN RATHER THAN CALLED -- no `call` in this whole loop, confirmed with
+ * `dis.py`.  GenEQTrnSequenceV29 has no internal referrer anywhere in the
+ * object (CLAUDE.md's fax-scope note), so the two are independent copies of
+ * one algorithm and not caller and callee.  The register this copy reaches
+ * through is V29SCRAM_SR at the SAME offset GenEQTrnSequenceV29's own
+ * accessor uses -- V29TX_OBJ_SCRAM and V29TX_OBJ_PARAMS are one block, both
+ * 0x20, confirmed by this function reaching V29SCRAM_SR (0x18) through the
+ * SAME pointer TxNextStateV29 reaches V29TXP_STATE (0x14) through.
+ *
+ * UNLIKE THE OTHER THREE V29TXP_SHORT_0016 HANDLERS, this one always emits
+ * V29_TRAIN_POINT_16 (11) or 0 -- never V29_TRAIN_POINT_8 -- so it is the
+ * sixteen-point half of the training alternation only.
+ */
+short
+TxHdxEQCondV29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short reg;
+	unsigned short i;
+	short nsamples;
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+
+	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	if (remaining <= 0) {
+		TxNextStateV29(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+
+	reg = FIELD_SHORT(prm, V29SCRAM_SR);
+	for (i = 0; i < n; i++) {
+		unsigned short x = (unsigned short)reg;
+		int bit0 = x & 1;
+
+		x = (unsigned short)((((x << 6) & 0x80) ^ (bit0 << 7)) | x);
+		reg = (short)((x >> 1) & V29_TRAIN_LFSR_MASK);
+
+		in[i] = (unsigned short)(bit0 ? V29_TRAIN_POINT_16 : 0);
+	}
+	FIELD_SHORT(prm, V29SCRAM_SR) = reg;
+
+	nsamples = (short)ModDataV29(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxSCR1V29 -- .text 0x0a4c60, 206 bytes.
+ *
+ * The first state to scramble: SGD_symbol_gen's data-word form
+ * (word_syms=1, data_word=V29TX_PATTERN_SCR1[rate], set by
+ * TxNextStateV29's EQCOND arm) THEN ScrambleDataV29, in place, before
+ * ModDataV29.
+ */
+short
+TxHdxSCR1V29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 1;
+
+	remaining = FIELD_SHORT(prm, V29TXP_SHORT_0016);
+	if (remaining <= 0) {
+		TxNextStateV29(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	FIELD_SHORT(prm, V29TXP_SHORT_0016) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V29TXP_SGD), in, (short)n);
+	ScrambleDataV29(modem, in, n);
+	nsamples = (short)ModDataV29(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxDataV29 -- .text 0x0a4b20, 314 bytes.
+ *
+ * ON THE ONE-SHOT CALL AFTER SCR1 INSTALLS IT (V29TXP_SHORT_0016 != 0,
+ * which SCR1's own installer seeds to 1), reports a status keyed on
+ * V29TXP_RATE and clears the field so no later call repeats it --
+ * V29TX_STATUS_DATA_RATE_9600/_7200 when the field is 1 or 0, and
+ * V29TX_STATUS_DEFAULT for anything else.
+ *
+ * THREE ARMS ON THE FIFO READ, TxHdxDataV21's shape one modulation over:
+ * satisfied (the FIFO supplied the whole request) and underrun with
+ * V29TXP_INT_0008 clear both scramble+modulate exactly what was taken (the
+ * underrun arm takes the FULL REQUESTED BUDGET rather than what the FIFO
+ * gave, raising V29TX_RESULT_B1_BIT1 and reporting V29TX_STATUS_UNDERRUN);
+ * underrun with V29TXP_INT_0008 set modulates only what the FIFO gave,
+ * LEAVES the remainder in `*budget`, and calls TxNextStateV29 before
+ * returning.
+ */
+short
+TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V29TX_OBJ_PARAMS);
+	unsigned short req;
+	unsigned short taken;
+	short nsamples;
+
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = 0;
+
+	if (FIELD_SHORT(prm, V29TXP_SHORT_0016) != 0) {
+		short which = FIELD_SHORT(prm, V29TXP_RATE);
+
+		FIELD_SHORT(prm, V29TXP_SHORT_0016) = 0;
+
+		if (which == V29_RATE_7200)
+			FIELD_BYTE(modem, V29TX_OBJ_RESULT) =
+				V29TX_STATUS_DATA_RATE_7200;
+		else if (which == V29_RATE_9600)
+			FIELD_BYTE(modem, V29TX_OBJ_RESULT) =
+				V29TX_STATUS_DATA_RATE_9600;
+		else
+			FIELD_BYTE(modem, V29TX_OBJ_RESULT) =
+				V29TX_STATUS_DEFAULT;
+	}
+
+	req = (unsigned short)*budget;
+	taken = (unsigned short)
+		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V29TXP_FIFO),
+			  in, req);
+
+	if (req <= taken) {
+		ScrambleDataV29(modem, in, taken);
+		nsamples = (short)ModDataV29(modem, in, out, taken);
+		*budget = (short)((unsigned short)*budget - taken);
+		return nsamples;
+	}
+
+	if (FIELD_INT(prm, V29TXP_INT_0008) != 0) {
+		*budget = (short)(req - taken);
+		ScrambleDataV29(modem, in, taken);
+		nsamples = (short)ModDataV29(modem, in, out, taken);
+		TxNextStateV29(modem);
+		return nsamples;
+	}
+
+	*FIELD(modem, V29TX_OBJ_RESULT_B1) |= V29TX_RESULT_B1_BIT1;
+	FIELD_BYTE(modem, V29TX_OBJ_RESULT) = V29TX_STATUS_UNDERRUN;
+	ScrambleDataV29(modem, in, req);
+	nsamples = (short)ModDataV29(modem, in, out, req);
+	*budget = (short)((unsigned short)*budget - req);
+
+	return nsamples;
 }
 
 /*

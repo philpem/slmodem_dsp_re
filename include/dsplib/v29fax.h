@@ -108,6 +108,7 @@ struct fpm_mtd;
 struct fpm_sre;
 struct fpm_tone;
 struct v29rx_cfg;
+struct v29tx_cfg;
 
 /* ------------------------------------------------------------------------ */
 /* The handles.                                                             */
@@ -332,6 +333,51 @@ struct v29rx_cfg;
 #define V29TX_RESULT_BYTE_07	7
 
 /*
+ * A THIRD BYTE OF THE SAME INT, TYPED BY `TxNextStateV29`, AND ONE MORE BIT
+ * OF THE SECOND.  `V29TX_OBJ_RESULT` is a 32-bit store, so it has four
+ * bytes; `TxNextStateV29`'s IDLE-installing arm sets bit 0 of the byte at
+ * +0x1e (`orb $0x1,0x1e(%ebx)` at 0xa49e2) and every other arm clears it --
+ * `v21fax.h`'s `V21TX_OBJ_RESULT_B2`/`V21TX_RESULT_B2_BIT0` are the same
+ * byte and the same bit of the identically-shaped machine one modulation
+ * over, named on that precedent.  `V29TX_RESULT_B1_BIT0` is the DATA-
+ * installing arm's own bit of +0x1d (`orb $0x1,0x1d(%ebx)` at 0xa49bd),
+ * paired the same way with the already-named BIT1.  NEUTRAL, like BIT1:
+ * nothing reconstructed reads either.
+ */
+#define V29TX_OBJ_RESULT_B2	0x1e
+#define V29TX_RESULT_B1_BIT0	0x01
+#define V29TX_RESULT_B2_BIT0	0x01
+
+/*
+ * THE STATUS BYTE `V29TX_OBJ_RESULT` HOLDS (its low byte, +0x1c itself),
+ * NAMED BY WHICH SITE WRITES IT -- `v29fax.h`'s own ruling on the
+ * identically-shaped receive-side byte, `V29RX_STATUS_*` above.
+ *
+ *   0  TxHdxDataV29, unconditional entry write (0xa4b42)
+ *   1  TxHdxQuietV29/TxHdxABV29/TxHdxEQCondV29/TxHdxSCR1V29, unconditional
+ *      entry write -- the four states between START and DATA
+ *   2  TxHdxDataV29, on the one-shot arm, when V29TXP_RATE == 1 (0xa4c51)
+ *   3  TxHdxDataV29, on the one-shot arm, when V29TXP_RATE == 0 (0xa4bf0)
+ *   4  TxHdxIdleV29, unconditional entry write (0xa4ab6)
+ *   5  TxNextStateV29's default arm, AND TxHdxDataV29's one-shot arm when
+ *      V29TXP_RATE is neither 0 nor 1 (0xa4811/0xa4b66)
+ *   6  TxHdxDataV29, the FIFO-underrun arm with V29TXP_INT_0008 == 0
+ *      (0xa4ba1) -- the same shape and the same value as
+ *      `V21TX_STATUS_UNDERRUN`
+ *
+ * 2 and 3 track `V29TXP_RATE` the same way `SetEncoderV29`'s argument does
+ * (0 selects one report, 1 the other), which is why they are named for the
+ * rate rather than left as bare numbers -- but nothing reconstructed reads
+ * either value back, so this is usage inference over a correlation, not a
+ * callee's own type.
+ */
+#define V29TX_STATUS_DATA_RATE_9600	2
+#define V29TX_STATUS_DATA_RATE_7200	3
+#define V29TX_STATUS_IDLE		4
+#define V29TX_STATUS_DEFAULT		5
+#define V29TX_STATUS_UNDERRUN		6
+
+/*
  * The parameter block the transmitter owns, and the four fields reached.
  *
  * `V29TX_delete` releases the block's `sgd`, its `fax_fifo` and then the block
@@ -364,6 +410,50 @@ struct v29rx_cfg;
  * stops the loop rather than wrapping it.  V.17's is 0x30 too; V.21's is 6.
  */
 #define V29TX_MODEM_BUDGET	0x30
+
+/*
+ * THE TRANSMIT HALF-DUPLEX MACHINE'S OWN FIELDS, all still inside the
+ * `V29TX_OBJ_PARAMS` block -- `TxNextStateV29` reaches every one of these
+ * through the same pointer `V29TXP_FIFO`/`V29TXP_SGD`/`V29TXP_INT_0008`/
+ * `V29TXP_PROCESS` already name, so the block is one struct, not two.
+ *
+ * `V29TXP_STATE` is typed by the dispatcher itself: `TxNextStateV29` reads
+ * it with `movswl 0x14(%ecx),%eax`, bounds it `cmp $0x6` / `ja default`, and
+ * indexes a 7-entry jump table with it -- the same shape `V29DET_STATE`
+ * has on the receive side.  Evidence rank 1: every one of the seven cases'
+ * own debug string (`.rodata.str1.1` 0x4d67..0x4de8, read with
+ * `tools/relocscan.py --at`) names the state being LEFT when it executes,
+ * exactly as `TxNextStateV21`'s four do, and every string's name matches
+ * which state the arm's OWN transition installs next -- `V29TX_STATE_START`
+ * installs `TxHdxQuietV29` and advances to QUIET, `V29TX_STATE_QUIET`
+ * installs `TxHdxABV29` and advances to ALT, and so on around the cycle
+ * below.  Finding F9701.
+ */
+#define V29TXP_STATE		0x14	/* short                             */
+
+#define V29TX_STATE_START	0
+#define V29TX_STATE_QUIET	1
+#define V29TX_STATE_ALT		2	/* installs TxHdxABV29 -- the object's
+					 * own function name reads "AB", its
+					 * own debug string reads "ALT"; both
+					 * are the author's, not reconciled  */
+#define V29TX_STATE_EQCOND	3
+#define V29TX_STATE_SCR1	4
+#define V29TX_STATE_DATA	5
+#define V29TX_STATE_IDLE	6
+#define V29TX_STATE_MAX		6	/* `cmp $0x6` / `ja default`         */
+
+/*
+ * A per-state budget, in whatever unit that state's own handler counts in
+ * (blocks for QUIET/ALT/EQCOND/SCR1, a one-shot flag for DATA -- see
+ * `TxHdxDataV29` below).  `TxNextStateV29` seeds it on every transition --
+ * 0x30 entering QUIET, 0x80 entering ALT, 0x180 entering EQCOND, 0x30
+ * entering SCR1, 1 entering DATA, 0 entering IDLE and entering START -- and
+ * `V29TX_create` also seeds it 0 at construction (state starts at START).
+ * USAGE INFERENCE: no format string names it and no function outside this
+ * cycle touches it.
+ */
+#define V29TXP_SHORT_0016	0x16	/* short                             */
 
 /*
  * `V29TX_modem`'s inner call, and it is NOT `v29_demod_fn`.
@@ -1219,6 +1309,131 @@ void V29TX_delete(void *modem);
  */
 int V29TX_modem(void *modem, unsigned short *in, short *out,
 		unsigned short *count);
+
+/*
+ * THE TRANSMIT HALF-DUPLEX MACHINE: seven states in a cycle, and it does not
+ * decompose -- `TxNextStateV29` stores all seven `TxHdx*V29` handlers and
+ * each of the seven calls it back (confirmed with `objdump -dr`: seven
+ * `R_386_PC32 TxNextStateV29` relocations, one per state), the F8492/F8493
+ * shape.  `V29TX_create` installs only `TxHdxStartV29` directly and never
+ * references `TxNextStateV29` itself, so all eight symbols link only
+ * together.
+ *
+ * START    does nothing but advance -- no FIFO read, no budget spent.
+ * QUIET    unmodulated silence (`TxNoCarrierV29`) for V29TXP_SHORT_0016
+ *          blocks, then advances; the transition also seeds the scrambler's
+ *          shift register (V29SCRAM_SR, the SAME field GenEQTrnSequenceV29
+ *          uses, since V29TX_OBJ_SCRAM and V29TX_OBJ_PARAMS are one block --
+ *          see the note at V29SCRAM_SR in v29data.h) to 42 and installs
+ *          TxHdxABV29.
+ * ALT      SGD_symbol_gen's data-word form (word_syms=2, data_word=0x4f)
+ *          shaped directly, no scrambling -- V.29's alternating training
+ *          dibit.  The QUIET->ALT transition also calls SetEncoderV29(1).
+ * EQCOND   the equaliser-training LFSR, inlined (see below) rather than
+ *          calling the separately-exported GenEQTrnSequenceV29 -- the two
+ *          are independent copies of the same recurrence, not caller and
+ *          callee; GenEQTrnSequenceV29 has no internal referrer at all
+ *          (CLAUDE.md's fax-scope note).  The ALT->EQCOND transition
+ *          re-seeds the same LFSR field to 42.
+ * SCR1     SGD_symbol_gen (word_syms=1, data_word = V29TX_PATTERN_SCR1
+ *          [V29TXP_RATE]) THEN ScrambleDataV29 -- the first state that
+ *          scrambles.  The EQCOND->SCR1 transition seeds the scrambler
+ *          (SeedScramblerV29(modem, 0)) and the encoder
+ *          (SetEncoderV29(modem, 0)) fresh.
+ * DATA     see TxHdxDataV29.
+ * IDLE     see TxHdxIdleV29; wraps to START once the FIFO has data again.
+ *
+ * Every arm installs its OWN next handler and seeds V29TXP_SHORT_0016 with
+ * that next state's own budget (0x30/0x80/0x180/0x30/1/0/0 for
+ * QUIET/ALT/EQCOND/SCR1/DATA/IDLE/START) -- see V29TXP_SHORT_0016's own
+ * comment.  Finding F9701.
+ */
+void TxNextStateV29(void *modem);
+
+/* The START state: nothing but the transition.  0xa4f90, 21 bytes. */
+short TxHdxStartV29(void *modem, unsigned short *in, short *out,
+		    short *budget);
+
+/*
+ * The QUIET state.  Reports V29TX_STATUS_DEFAULT's sibling status 1 (shared
+ * with EQCOND/SCR1/ALT, see V29TX_OBJ_RESULT's status-byte comment) at
+ * entry, then TxNoCarrierV29 over V29TXP_SHORT_0016 blocks, decrementing it
+ * by min(remaining, *budget) each call.  0xa4ee0, 163 bytes.
+ */
+short TxHdxQuietV29(void *modem, unsigned short *in, short *out,
+		    short *budget);
+
+/* The ALT state (function name AB, debug string ALT).  0xa4e20, 190 bytes. */
+short TxHdxABV29(void *modem, unsigned short *in, short *out, short *budget);
+
+/*
+ * The EQCOND state.  0xa4d30, 237 bytes.  The LFSR recurrence is
+ * GenEQTrnSequenceV29's own (v29data.h) written out again rather than
+ * called -- see TxNextStateV29's comment above.
+ */
+short TxHdxEQCondV29(void *modem, unsigned short *in, short *out,
+		     short *budget);
+
+/* The SCR1 state, the first to scramble.  0xa4c60, 206 bytes. */
+short TxHdxSCR1V29(void *modem, unsigned short *in, short *out,
+		   short *budget);
+
+/*
+ * The DATA state.  0xa4b20, 314 bytes.
+ *
+ * ON THE ONE-SHOT CALL AFTER SCR1 INSTALLS IT (V29TXP_SHORT_0016 != 0, which
+ * SCR1's own installer seeds to 1), reports a status that tracks
+ * V29TXP_RATE and clears the field so no later call repeats it -- see
+ * V29TX_STATUS_DATA_RATE_9600/_7200/_DEFAULT's own comments.
+ *
+ * THREE ARMS ON THE FIFO READ, all sharing TxHdxDataV21's shape one
+ * modulation over: satisfied (FIFO supplied the whole request) and
+ * underrun-with-V29TXP_INT_0008-set both scramble+modulate exactly what the
+ * FIFO gave and zero the remaining budget; underrun-with-INT_0008-clear
+ * scrambles+modulates the FULL REQUESTED BUDGET regardless of what the FIFO
+ * supplied (raising V29TX_RESULT_B1_BIT1 and reporting
+ * V29TX_STATUS_UNDERRUN); underrun-with-INT_0008-set instead modulates only
+ * what the FIFO gave, LEAVES the remainder in `*budget`, and calls
+ * TxNextStateV29 before returning.
+ */
+short TxHdxDataV29(void *modem, unsigned short *in, short *out,
+		   short *budget);
+
+/*
+ * The IDLE state, installed by the DATA arm.  Unconditionally reports
+ * V29TX_STATUS_IDLE (4) at entry -- unlike QUIET/ALT/EQCOND/SCR1, it has no
+ * V29TXP_SHORT_0016 countdown of its own: with the FIFO empty it asks
+ * TxNoCarrierV29 for the WHOLE current budget in one call and zeroes it;
+ * with the FIFO non-empty it does not modulate at all and calls
+ * TxNextStateV29 immediately, matching TxHdxIdleV21's shape.  0xa4aa0, 116
+ * bytes.
+ */
+short TxHdxIdleV29(void *modem, unsigned short *in, short *out,
+		   short *budget);
+
+/*
+ * Allocate-or-reuse the handle, copy the 28-byte configuration onto its
+ * head (`params`, or `V29TX_CFG` when NULL), allocate-or-reuse the
+ * parameter/half-duplex block and build the transmit FIFO and SGD into it,
+ * derive `V29TXP_RATE` from the just-copied config's own `bitrate` (see its
+ * own comment in v29data.h -- the same three-way compare `V29RX_create`
+ * runs for `V29DET_RATE`, including the same "anything else" default arm
+ * that raises `V29TX_RESULT_B1_BIT1` and reports `V29TX_STATUS_DEFAULT`),
+ * seed the scrambler LFSR (`V29SCRAM_SR`) and install `TxHdxStartV29` at
+ * `V29TX_STATE_START`, allocate-or-reuse `struct v29tx` (v29data.h) and
+ * initialise its ring, its descrambler (`SDM_init`, `nbits` from
+ * `V29TXP_RATE`), its symbol coder (`SMC_init`, direct/complex form,
+ * `V29TX_SMC_*` tables, `amask` from `V29TXP_RATE`) and its pulse shaper
+ * (`FPM_PPS_init`, `V29TX_PPS_IFILT`/`QFILT`, scale from
+ * `V29TX_PPS_SCALE[V29TXP_RATE]`).  0x09ba00, 1,162 bytes.
+ *
+ * THE MODEM HANDLE IS NOT MODELLED AS A STRUCT, on this file's own
+ * established convention: nothing traced needs its total size, only the
+ * individual offsets already named (V29TX_OBJ_RESULT/_B1/_B2,
+ * V29TX_OBJ_PARAMS, V29TX_OBJ_TX and V29TX_CFG's own 28 bytes).  Finding
+ * F9701.
+ */
+void *V29TX_create(void *modem, const struct v29tx_cfg *params);
 
 /*
  * Two of V.29's half-duplex receive states, and the only two the object
