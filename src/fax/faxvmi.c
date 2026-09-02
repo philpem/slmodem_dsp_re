@@ -22,11 +22,23 @@
  *   vxx_message           .rodata 0x94e0     52  (13 slots)
  *
  * NOT written, and read only as evidence: FAXVMI_create (0x095120),
- * _delete (0x0953f0), _process (0x095470), _status (0x0955c0), _control
- * (0x095650).  The three dispatch tables `vmi_pack`, `vmi_unpack` and
- * `vmi_reverse` ARE written, below: every entry of all three now exists, so
- * the link constraint F8492/F8493 no longer blocks them.  They are the last
- * of this module that is not the five entry points.
+ * _process (0x095470), _control (0x095650) -- all three still blocked, the
+ * first two on other modulations' constructors, the third on the closures
+ * two concurrent strands are writing in v17.c/v27.c this wave.  The three
+ * dispatch tables `vmi_pack`, `vmi_unpack` and `vmi_reverse` ARE written,
+ * below: every entry of all three now exists, so the link constraint
+ * F8492/F8493 no longer blocks them.
+ *
+ * THIS BATCH ADDS `FAXVMI_delete`, `FAXVMI_status` and the two dispatch
+ * tables their table lookups need, `vxx_delete` and `vxx_status` -- the
+ * `vxx_message` (F8320) analogue for tearing down and polling, rather than
+ * naming.  All eighteen callees both tables reach (`null_*` plus the eight
+ * `v??tx_*`/`v??rx_*` adapters, `faxadapt.h`/`nulldp.h`) were already
+ * written by a prior wave, so both tables link clean.  `FAXVMI_CTL`, the
+ * all-zero 24-byte "quiescent control record" `FAXVMI_control`'s own
+ * callers pass instead of NULL, is also added here -- see `faxvmi.h` for
+ * why it belongs beside these two rather than waiting for `FAXVMI_control`
+ * itself.
  *
  * THE FUNCTIONS HERE ARE ONE UNIT, and that is why they came together: every
  * one of them goes through `vmi->framer`, a single 88-byte object that is a
@@ -50,7 +62,10 @@
 
 #include "dsplib/class1tx.h"
 #include "dsplib/debug.h"
+#include "dsplib/faxadapt.h"
 #include "dsplib/faxvmi.h"
+#include "dsplib/nulldp.h"
+#include "dsplib/sysdep.h"
 #include "dsplib/t30frame.h"
 
 /*
@@ -171,6 +186,113 @@ faxvmi_message_fn const vxx_message[13] = {
 	v17tx_message,
 	v17rx_message,
 };
+
+/*
+ * `vxx_delete`.  Every entry already shares the one signature
+ * `void (*)(struct faxvmi_link *)` (`faxadapt.h`, `nulldp.h`), so no cast is
+ * needed anywhere below -- unlike `vxx_status`, next.
+ */
+faxvmi_delete_fn const vxx_delete[13] = {
+	null_delete,
+	null_delete,
+	null_delete,
+	null_delete,
+	null_delete,
+	v21tx_delete,
+	v21rx_delete,
+	v27tx_delete,
+	v27rx_delete,
+	v29tx_delete,
+	v29rx_delete,
+	v17tx_delete,
+	v17rx_delete,
+};
+
+/*
+ * `vxx_status`.  `v17tx_status`/`v17rx_status`/`v21tx_status`/`v21rx_status`
+ * are declared in `faxadapt.h` with a typed second argument
+ * (`struct v17_status *` / `struct v21_status *`); the table's own element
+ * type is the untyped form `FAXVMI_status` itself calls through
+ * (`faxvmi.h`), so those four need the explicit cast the other nine do not.
+ */
+faxvmi_status_fn const vxx_status[13] = {
+	null_status,
+	null_status,
+	null_status,
+	null_status,
+	null_status,
+	(faxvmi_status_fn)v21tx_status,
+	(faxvmi_status_fn)v21rx_status,
+	v27tx_status,
+	v27rx_status,
+	v29tx_status,
+	v29rx_status,
+	(faxvmi_status_fn)v17tx_status,
+	(faxvmi_status_fn)v17rx_status,
+};
+
+/*
+ * `FAXVMI_control`'s own quiescent instance -- see `faxvmi.h` for the full
+ * derivation.  All 24 bytes are zero in the object.
+ */
+const struct faxvmi_ctl FAXVMI_CTL = { 0 };
+
+/*
+ * `vmi->slot`'s own teardown, then every heap block `FAXVMI_create`
+ * allocated, then `vmi` itself -- read straight off `FAXVMI_delete`
+ * (0x0953f0): `vxx_delete[slot](link)`, `free(link->ptr_0000)`,
+ * `free(link->buf)`, `free(framer->frame)`, `free(framer->fifo)`,
+ * `free(link)`, `free(framer)`, tail-call `free(vmi)`.  `link` and `framer`
+ * are re-read from `vmi` at each step in the object; caching them once here
+ * is equivalent because nothing between the reads writes either field.
+ */
+void
+FAXVMI_delete(struct faxvmi *vmi)
+{
+	struct faxvmi_link *lk = vmi->link;
+	struct faxvmi_framer *fr = vmi->framer;
+
+	vxx_delete[(unsigned short)vmi->slot](lk);
+	sysdep_free(lk->ptr_0000);
+	sysdep_free(lk->buf);
+	sysdep_free(fr->frame);
+	sysdep_free(fr->fifo);
+	sysdep_free(lk);
+	sysdep_free(fr);
+	sysdep_free(vmi);
+}
+
+/*
+ * `status->modem_status` is read FIRST, before any other field is touched,
+ * and -- when non-NULL -- passed straight to `vxx_status[vmi->slot]` as its
+ * own second argument; the return value becomes this function's return
+ * value instead of 0.  Every other field is then written unconditionally
+ * from `vmi`'s own counters.  `status == NULL` returns -1 without touching
+ * anything.  Read off `FAXVMI_status` (0x0955c0).
+ */
+int
+FAXVMI_status(struct faxvmi *vmi, struct faxvmi_status *status)
+{
+	struct faxvmi_framer *fr;
+	int ret = 0;
+
+	if (status == NULL)
+		return -1;
+
+	if (status->modem_status != NULL)
+		ret = vxx_status[(unsigned short)vmi->slot](vmi->link,
+							     status->modem_status);
+
+	fr = vmi->framer;
+	status->room = (unsigned short)(fr->fifo_size - fr->count);
+	status->residue = fr->residue;
+	status->underrun = vmi->underrun;
+	status->overflow = vmi->overflow;
+	status->zero_run_seen = fr->zero_run_seen;
+	status->flag_0014 = (fr->flags_wanted <= 1);
+
+	return ret;
+}
 
 /*
  * The out-parameter is initialised to NULL BEFORE the dispatch, so a slot
