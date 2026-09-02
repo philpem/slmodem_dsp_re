@@ -131,6 +131,40 @@ struct fpm_smc_ring;
 #define V17FP_SMC_QMAP		0x5c
 
 /*
+ * `V17TX_create`'s own pulse-shaper setup (0x098bd0..0x098c50, not itself
+ * reconstructed): it copies `FPM_PPS_CFG` (`fpm_pps.h`) onto its stack and
+ * patches four fields before calling `FPM_PPS_init` -- `imap`/`qmap` from
+ * these two tables (`0x98c13`/`0x98c26`), `coeff_i`/`coeff_q` from the pair
+ * below (`0x98bfc`/`0x98c36`), and `scale` from `V17TX_PPS_SCALE[rate]`
+ * (`0x98c43`, a signed 32-bit `imul`, scale 4 -- an `int` table, not a
+ * `short` one).  `.rodata` bytes, five shorts each:
+ * `00 10 00 30 00 f0 00 d0 00 00` and `00 30 00 f0 00 d0 00 10 00 00`.
+ */
+extern const short SMCv17_IMAP4[5];
+extern const short SMCv17_QMAP4[5];
+extern const int V17TX_PPS_SCALE[4];
+
+/*
+ * `TxNextStateV17`'s scrambler-pattern table (not itself reconstructed; three
+ * read sites inside it, all `movswl` scale 2 -- signed, forced).  Needed for
+ * `V17TX_create`'s CLOSURE, not its own body: `V17TX_create` starts the state
+ * machine `TxNextStateV17` implements, and that machine's ten-symbol batch
+ * (F9600) is what actually reads this table.  `.rodata` bytes
+ * `07 00 0f 00 1f 00 3f 00`.
+ */
+extern const short V17TX_PATTERN_SCR1[4];
+
+/*
+ * The pulse shaper's own coefficient pair, `V17TX_create`'s `coeff_i` /
+ * `coeff_q` (see above).  120 entries each -- `coeffs / phases` = 12 taps at
+ * `FPM_PPS_CFG.phases` = 10 -- and, like V.32's `PPSv32_ICOFFS`/
+ * `PPSv32_QCOFFS`, the passband pair a quadrature pulse shaper always is: I
+ * is even about the centre, Q is odd.  `test/unit/t_v17ppstab.c` checks both.
+ */
+extern const short PPSv17_ICOFFS[120];
+extern const short PPSv17_QCOFFS[120];
+
+/*
  * `SetTxModeV17`'s own two `.rodata` tables.
  *
  * `V17TX_SYM_SIZE` is indexed by `mode` (`movswl 0x0(%ebp,%ebp,1),%edx` at
@@ -185,6 +219,91 @@ void SetTxModeV17(void *modem, short mode);
 typedef void (*v17_encoder_fn)(void *smc, struct fpm_smc_ring *ring,
 			       const unsigned short *data,
 			       unsigned short count);
+
+/*
+ * SMCv17_init -- .text 0x0a0a60, 87 bytes.
+ *
+ * Loads `cfg` (or `SMCv17_CFG` when `cfg` is NULL) into the leading dword of
+ * `smc` -- `V17FP_SMC` and `V17FP_SMC_SHORT_02` together, one dword move,
+ * exactly what `SetTxModeV17` also copies from the same source at `0xa0b89`
+ * -- and clears the five neutral shorts above it, `V17FP_SMC_SHORT_06`
+ * through `V17FP_SMC_SHORT_10`.  A SECOND, independent confirmation of every
+ * one of those five offsets: the same five are zeroed here, by a different
+ * function, from a different address, agreeing with `SetTxModeV17` without
+ * either being derived from the other.
+ */
+void SMCv17_init(void *smc, const short *cfg);
+
+/*
+ * WHAT THE THREE ENCODERS' FIELDS ARE, FROM THEIR OWN DATAFLOW
+ * ---------------------------------------------------------------------
+ *
+ * Each encoder's first parameter IS `V17FP_SMC` -- so inside them, a field's
+ * offset is `V17FP_SMC_SHORT_NN - V17FP_SMC`, not `V17FP_SMC_SHORT_NN`
+ * itself.  Usage inference (CLAUDE.md's weakest evidence tier), but taken
+ * from three independent functions that all agree, and cross-checked
+ * against a fourth family: V.32's homologous coder (`v32smc.c`) uses the
+ * same three-arm shape -- differential accumulator, absolute table, trellis
+ * state plus a "previous transition" test against 3 -- at different offsets
+ * in its own (modelled) struct, and its `TrellisEncodeDifTable`,
+ * `TrellisTransitionTable` and `SMCv32_MOD` are byte-identical to the three
+ * tables V.17's trellis arm indexes below.  Neither family's naming was
+ * copied onto the other; the offsets differ (V.17 keeps "trellis" at
+ * `V17FP_SMC_SHORT_0C` where V.32 keeps it at its own `f0e`) and only the
+ * table CONTENTS and the algorithm's SHAPE repeat.
+ *
+ *   smc + 0x00  the byte `SetEncoderV17`/`SetTxModeV17` write as `V17FP_SMC`
+ *               itself: `SMCv17_encoder_tcm`'s tag, read `movsbl` (signed,
+ *               free -- only its low 8 bits reach the 16-bit store)
+ *   smc + 0x06  V17FP_SMC_SHORT_06 -- "quad": `(quad + 3) & 3` every symbol
+ *               in all three encoders; `SetEncoderV17`'s `arg` seeds it
+ *               directly on the DIF and TCM arms
+ *   smc + 0x08  V17FP_SMC_SHORT_08 -- the differential accumulator
+ *               `SMCv17_encoder_dif` alone reads and writes
+ *   smc + 0x0c  V17FP_SMC_SHORT_0C -- the trellis state `SMCv17_encoder_tcm`
+ *               alone reads and writes, indexing `TrellisEncodeDifTable`
+ *   smc + 0x0e  V17FP_SMC_SHORT_0E -- the previous trellis transition,
+ *               `SMCv17_encoder_tcm` alone; compared against 3 before each
+ *               symbol (`cmpw $0x3` / `jle`) and replaced from
+ *               `TrellisTransitionTable`
+ *   smc + 0x12  V17FP_SMC_SHORT_12 -- the shift `SetTxModeV17` sets per mode
+ *               (1, 2, 3, 4), UNSIGNED (`movzwl`), used both as a shift
+ *               count and to build the three masks `SMCv17_encoder_tcm`
+ *               derives from it once, before its loop
+ */
+extern const unsigned short SMCv17_PMAP4[4];	/* differential quadrant map,
+						 * SMCv17_encoder_dif only    */
+extern const unsigned short SMCv17_ABS4[4];	/* absolute quadrant map,
+						 * SMCv17_encoder_abs only    */
+extern const unsigned short SMCv17_MOD[8];	/* trellis rotation table --
+						 * bytewise == V.32's
+						 * SMCv32_MOD, see v32smc.c   */
+
+/*
+ * SMCv17_encoder_dif -- .text 0x09fcc0, 164 bytes.
+ * SMCv17_encoder_abs -- .text 0x09fd70, 135 bytes.
+ *
+ * Both match `v17_encoder_fn`: `data` is read `movzwl` (forced UNSIGNED) and
+ * neither writes through it.
+ */
+void SMCv17_encoder_dif(void *smc, struct fpm_smc_ring *ring,
+			const unsigned short *data, unsigned short count);
+void SMCv17_encoder_abs(void *smc, struct fpm_smc_ring *ring,
+			const unsigned short *data, unsigned short count);
+
+/*
+ * SMCv17_encoder_tcm -- .text 0x09fe00, 374 bytes.
+ *
+ * NOT `v17_encoder_fn`-shaped, on the object's own evidence: it masks each
+ * input word and WRITES THE RESULT BACK in place (`mov %ax,(%edx)` at
+ * `0x9fea8`) before the loop ever reads that slot again, so `data` cannot be
+ * `const`.  `SMCv32_encoder_tcm` breaks from its own family's typedef the
+ * same way and for the same reason (see `v32smc.c`).  Whether `V17TX_create`
+ * stores this function through `v17_encoder_fn` regardless, or through a
+ * wider type, is not established -- that function is not yet reconstructed.
+ */
+void SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
+			unsigned short *data, unsigned short count);
 
 /*
  * Modulate `count` data words into `out`, returning the number of samples

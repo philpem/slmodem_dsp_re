@@ -33,10 +33,6 @@
  *   FPM_PPS_init    .text   0x0a98c0  259 B
  *   FPM_PPS_free    .text   0x0a9890   35 B
  *   FPM_PPS_CFG     .rodata 0x00c4a0   40 B
- *
- * `FPM_PPS_CFG` is `src/dsp/fpm_pps_cfg.c`, alongside the module -- this
- * project's usual split between a module and its default configuration
- * (`fpm_sre_cfg.c`, `fpm_fsd_cfg.c`, ...).
  */
 
 #ifndef DSPLIB_FPM_PPS_H
@@ -90,9 +86,6 @@ struct fpm_pps_cfg {
 	void *aux;		/* +0x24                                     */
 };
 
-/* The blob's default configuration; see src/dsp/fpm_pps_cfg.c. */
-extern const struct fpm_pps_cfg FPM_PPS_CFG;
-
 struct fpm_pps {
 	struct fpm_pps_cfg cfg;	/* +0x00 copied wholesale by init            */
 	short need;		/* +0x28 1 if the next output takes a new
@@ -144,5 +137,16 @@ void FPM_PPS_free(struct fpm_pps *state);
  */
 unsigned short FPM_PPS_filter(struct fpm_pps *state, struct fpm_smc_ring *src,
 			      short *out, unsigned short count);
+
+/*
+ * The library's own built-in configuration, .rodata 0x00c4a0, 40 bytes,
+ * quoted piecemeal in the field comments above; read directly from
+ * `.rodata` here rather than reassembled from them.  Its four pointers are
+ * NULL with no relocation at any of the four offsets -- a caller patches
+ * `imap`/`qmap`/`coeff_i`/`coeff_q` before using it, exactly as the field
+ * comments already say.  V.17's transmitter is the first reconstructed
+ * consumer (`V17TX_create`, not yet written); nothing here is V.17-specific.
+ */
+extern const struct fpm_pps_cfg FPM_PPS_CFG;
 
 #endif /* DSPLIB_FPM_PPS_H */
