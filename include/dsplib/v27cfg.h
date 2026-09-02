@@ -180,6 +180,60 @@ extern const short V27RX_MRF_UP[2];
  */
 extern const struct fpm_agc_cfg AGCv27_CFG;
 
+/*
+ * ---------------------------------------------------------------------------
+ * THE TRANSMIT TABLES `V27TX_create` BUILDS ITS DSP SUB-OBJECTS FROM
+ *
+ * Same shape as the receive tables above -- a PER-RATE SCALAR is `short[2]`,
+ * a SELECTOR is two pointers into a `_2400`/`_4800` pair -- settled the same
+ * way: `relocscan.py`/`objdump -r` over each selector's own eight bytes finds
+ * `R_386_32` at +0x00 against the `_2400` table and +0x04 against `_4800`,
+ * for every one of `V27TX_PPS_IFILT/QFILT/IMAP/QMAP` and `V27TX_SMC_PMAP`.
+ * `V27TX_PPS_SCALE` is the one exception: `V27TX_create` indexes it with a
+ * FOUR-BYTE stride (`mov 0x0(,%eax,4),%edi`) and it carries no relocation, so
+ * it is `int[2]`, a literal pair, not a selector.
+ *
+ * `V27TX_SMC_PMAP_24`/`_48` are `unsigned short`, typed by
+ * `struct fpm_smc_cfg::pmap`'s own declared pointee (`fpm_smc.h`) -- rank 2,
+ * not the byte count.  Everything else here is `short`, matching every
+ * `TxHdx*V27` read site's own width (`movzwl`/`movswl` against a two-byte
+ * stride throughout).
+ */
+extern const short V27TX_PPS_IFILT_2400[120];
+extern const short V27TX_PPS_QFILT_2400[120];
+extern const short V27TX_PPS_IFILT_4800[60];
+extern const short V27TX_PPS_QFILT_4800[60];
+extern const short *const V27TX_PPS_IFILT[2];
+extern const short *const V27TX_PPS_QFILT[2];
+
+extern const short V27TX_PPS_IMAP_2400[5];
+extern const short V27TX_PPS_QMAP_2400[5];
+extern const short V27TX_PPS_IMAP_4800[9];
+extern const short V27TX_PPS_QMAP_4800[9];
+extern const short *const V27TX_PPS_IMAP[2];
+extern const short *const V27TX_PPS_QMAP[2];
+
+extern const int V27TX_PPS_SCALE[2];
+
+extern const unsigned short V27TX_SMC_PMAP_24[4];
+extern const unsigned short V27TX_SMC_PMAP_48[8];
+extern const unsigned short *const V27TX_SMC_PMAP[2];
+
+extern const short V27TX_ALT_COUNT[2];
+extern const short V27TX_EQCOND_COUNT[2];
+extern const short V27TX_FRMSIZE[2];
+extern const short V27TX_NOCARR_SYMBOL[2];
+extern const short V27TX_PATTERN_ALT[2];
+extern const short V27TX_PATTERN_CARR[2];
+extern const short V27TX_PATTERN_SCR1[2];
+extern const short V27TX_PPS_DOWN_FACT[2];
+extern const short V27TX_PPS_FILT_LEN[2];
+extern const short V27TX_PPS_UP_FACT[2];
+extern const short V27TX_SDM_NUM_BITS[2];
+extern const short V27TX_SMC_CRR_ADJ[2];
+extern const short V27TX_SMC_CRR_LEN[2];
+extern const short V27TX_SMC_PHS_MASK[2];
+
 /* -------------------------------------------------------------------- .data */
 
 /* The V.27ter tone detector's biquad bank: two sections of five shorts. */
