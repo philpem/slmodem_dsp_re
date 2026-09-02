@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [################################..]  93.0%    682970 bytes, 1741 symbols
-  tested      [##################################]  99.3%    678283 bytes, 1703 of 1741 that can be
+  translated  [################################..]  93.6%    687342 bytes, 1760 symbols
+  tested      [##################################] 100.0%    687197 bytes, 1756 of 1760 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,42 +17,8 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 39 of ours (15912 bytes).
 
   translated, alias exists, and NOT tested:
-    V21TX_create                                    757 bytes
-    SetTxModeV17                                    625 bytes
-    TxHdxDataV21                                    451 bytes
-    TxHdxStartV21                                   380 bytes
-    TxHdxIdleV21                                    372 bytes
-    v17rx_create                                    295 bytes
-    TxNextStateV21                                  280 bytes
-    v27rx_create                                    196 bytes
-    v29rx_create                                    171 bytes
-    FIFO_create                                     167 bytes
-    v21rx_create                                    158 bytes
     GenEQTrnSequenceV29                              99 bytes
-    v29tx_process                                    62 bytes
-    v29rx_process                                    62 bytes
-    v27rx_process                                    62 bytes
-    v21tx_process                                    62 bytes
-    v21rx_process                                    62 bytes
-    v17tx_process                                    62 bytes
-    v17rx_process                                    62 bytes
     _handle_status                                   44 bytes
-    v29tx_status                                     16 bytes
-    v29tx_delete                                     16 bytes
-    v29rx_status                                     16 bytes
-    v29rx_delete                                     16 bytes
-    v27tx_status                                     16 bytes
-    v27tx_delete                                     16 bytes
-    v27rx_status                                     16 bytes
-    v27rx_delete                                     16 bytes
-    v21tx_status                                     16 bytes
-    v21tx_delete                                     16 bytes
-    v21rx_status                                     16 bytes
-    v21rx_delete                                     16 bytes
-    v17tx_status                                     16 bytes
-    v17tx_delete                                     16 bytes
-    v17rx_status                                     16 bytes
-    v17rx_delete                                     16 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
 
@@ -117,7 +83,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                 26435 bytes    94 symbols
+    class1tx.c +94                                 22063 bytes    75 symbols
     class1.c                                        3883 bytes     6 symbols
     voice.c#3 +3                                    3253 bytes     4 symbols
     class1rx.c                                      1732 bytes     2 symbols

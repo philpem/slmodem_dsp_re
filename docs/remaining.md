@@ -5,20 +5,18 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured at `1bb8db5a` (wave 5 merging), 2026-09-01:
+Measured at `5c0ca032`+wave-6-merge, 2026-09-02:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 93.0%  (682,970 bytes / 1,741 symbols)   was 76.6% / 1,296
-remaining  51,635 bytes /   120 symbols
-  fax only              104 sym   34,898 B   <-- 96% of what remains
-  no-entry-point leaves   4 sym    1,328 B
+translated 93.6%  (687,342 bytes / 1,760 symbols)   was 76.6% / 1,296
+remaining  45,207 bytes /   89 symbols
+  fax only              85 sym   30,526 B   <-- 96% of what remains
+  no-entry-point leaves  4 sym    1,328 B
 ```
 
-**Fax fell from 168 to 104 symbols this pass** (waves 4-5): both wave-4
-constructors and wave 5's chokepoint clearance. Merged master is period-green;
-final gate for wave 5 in progress at commit time -- see the wave-5 section
-below for the confirmed number.
+Merged master period-green at **351 passed, 0 failed**, onedef/banners/check64
+clean, duplicate-symbol sweep clean.
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
 ## blocked, and the reasoning that said it was applies to fewer of F9058's
@@ -619,3 +617,57 @@ essentially untouched; the remaining 13 adapter symbols are blocked on those
 constructors and `*_control` functions; `_init_receiver`/`_init_transmitter`
 (1,583 / 1,326 B) are last, each needing >140 symbols and are the natural
 closing item once everything else lands.
+
+## Wave 6 — SGD_CTL cleared, V29TX_create complete, V17TX_create's closure to 13
+
+Three agents on disjoint files, chasing the new shared chokepoint `SGD_CTL`
+(8 bytes, blocking three TX constructors and both open `TxNextState`
+machines) plus two independent small wins. All three gated period-green
+individually (348, 348, 349 passed / 0 failed); final merged-tree gate
+confirms 351/0 above.
+
+| agent | delivered |
+|---|---|
+| SGD_CTL + V.29 TX | `SGD_CTL` (genuinely unambiguous, unlike `FIFO_CFG` — a single global `.bss` symbol, no local duplicate at all; F9600 had declined it purely on file ownership) + the FULL `V29TX_create` closure, 20 symbols / 3,843 bytes, including the seven-state TX half-duplex machine as one indivisible unit |
+| V.17 TX closure | SMC encoder family (`SMCv17_init`/`encoder_dif`/`encoder_abs`/`encoder_tcm` + 3 tables, 792 B) + PPS shaper tables (`FPM_PPS_CFG` + V.17's own) — `V17TX_create`'s closure narrowed from 27 to 13 symbols, all now blocked on nothing but `SGD_CTL` + `V17TX_CFG` |
+| class1.c small wins | `cTOOLS_handle_hdlc_output` (403 B, declined twice by prior agents, resolved this wave), the 5-function null datapump (new `src/fax/nulldp.c`), `states_names`/`status_names` (248 B, author's-own-words tables) |
+
+### What this wave established
+
+- **A genuine SGD_CTL/FIFO_CFG contrast, checked rather than assumed.** The
+  SGD_CTL agent was briefed to check whether it was really ambiguous before
+  declining anything on F9500's ground — it was not; `nm` shows exactly one
+  `SGD_CTL` symbol. F9500's correction was about a specific shape (local +
+  already-global), not a blanket "duplicated names are fine now".
+- **A cross-branch collision caught and resolved by evidence, not by
+  picking a side.** Two concurrent agents independently derived `FPM_PPS_CFG`
+  (V.17 agent in `fpm_pps.c`, V.29 agent in a new `fpm_pps_cfg.c`). The V.29
+  agent's merge found both derivations agreed byte-for-byte on all 13 field
+  values, kept the earlier one, deleted the duplicate, and corrected its own
+  finding to point provenance at the survivor — independent confirmation
+  treated as evidence rather than noise.
+- **Two agents stopped mid-wait on a background monitor that could not
+  re-invoke them** (the fork/monitor pattern that has bitten before) and had
+  to be resumed explicitly to drive their own builds to completion and commit.
+  Worth watching for in every wave: a "waiting for the build" final message
+  with no live children behind it is not actually waiting for anything.
+- **A disciplined decline on a suspicious call site.** `V17RX_control`
+  (131 B) read as ready but its call passes the SAME pointer as two different
+  arguments to `V17RX_create`; the agent left it rather than guess what that
+  means, flagging it for a careful look rather than a wrong-but-plausible
+  commit.
+- **`fax_class1_progress` (1,145 B) was correctly declined** rather than
+  guessed: it walks through a still-unmodelled offset (`ctx->0x1254`) whose
+  meaning depends on structs three OTHER concurrent agents were actively
+  extending. The cross-reference is left in `class1.h`'s comments for whoever
+  picks it up once the structs settle.
+
+### What's left, measured
+
+Fax is **85 symbols / 30,526 bytes** — 96% of everything remaining. Open
+threads: `V17TX_create`/`V27TX_create` (both now just `SGD_CTL` + their own
+`*TX_CFG` + their TxHdx machine away), `V29TX_control` (unclaimed, reads
+`V29TXP_RATE`, not traced), `V17RX_control` (declined, suspicious call site),
+`FAXVMI_status` (down to one blocker, `vxx_status`, which lives in
+`faxvmi.c`), the `vxx_*` dispatch table (declined, belongs beside
+`vxx_message` in `faxvmi.c`), and `_init_receiver`/`_init_transmitter` last.
