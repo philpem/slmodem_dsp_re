@@ -2070,6 +2070,63 @@ V27TX_create(void *modem, const struct v27tx_cfg *params)
 }
 
 /*
+ * V27TX_modem .text 0x0a3330, 192 bytes.
+ *
+ * `V29TX_modem`'s own shape: fill the FIFO from `in` unless
+ * `V27TXP_INT_0008` is non-zero (in which case `*count` is already queued
+ * elsewhere), then run the installed handler in a do/while seeded with
+ * `V27TX_FRMSIZE[rate]` budget -- V.29's own fixed `V29TX_MODEM_BUDGET`
+ * literal, here the same per-rate table every `TxHdx*V27` handler already
+ * reads.  `in` is re-passed unchanged to every call in the loop, never
+ * advanced; only `out` advances, by what each call returns.
+ */
+int
+V27TX_modem(void *modem, unsigned short *in, short *out,
+	   unsigned short *count)
+{
+	void *prm;
+	unsigned short taken;
+	short budget;
+	short total;
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+
+	*FIELD(modem, V27TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V27TX_RESULT_B1_BIT1;
+
+	if (FIELD_I(prm, V27TXP_INT_0008) == 0)
+		taken = (unsigned short)FIFO_write(
+				(struct fax_fifo *)
+					FIELD_PTR(prm, V27TXD_FIFO),
+				in, *count);
+	else
+		taken = *count;
+
+	budget = V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)];
+	total = 0;
+	do {
+		short got;
+
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		got = (*(v27tx_process_fn *)(void *)
+				FIELD(prm, V27TXP_PROCESS))
+					(modem, in, out, &budget);
+
+		out += got;
+		total = (short)(total + got);
+	} while (budget > 0);
+
+	if (*count != taken) {
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) |= V27TX_RESULT_B1_BIT1;
+		FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_RESULT_BYTE_07;
+	}
+
+	*count = (unsigned short)total;
+
+	return FIELD_I(modem, V27TX_OBJ_RESULT);
+}
+
+/*
  * TxNextStateV27 .text 0x0a3480, 1148 bytes.
  *
  * `jmp *table(,%eax,4)` on `V27TXP_STATE`, bounded `cmp $0xa` / `ja default`

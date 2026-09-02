@@ -109866,3 +109866,41 @@ behavioural claim; `t_v27rxcontrol.c`'s cases include the bit combined with
 checks; a live mutation (forcing `V27SH_INT_0004` to 2 instead of 1 on the
 force-nocarrier arm) was reverted after confirming the differential test
 catches it, per CLAUDE.md's F134 discipline. (2026-09-02)
+
+## F9955. `V27TX_modem` is `V29TX_modem`'s own shape, exactly, and it went from unwritten to READY the moment F9950's closure landed
+
+Not part of `V27TX_create`'s own 42-symbol closure (nothing in that closure
+calls it), but `tools/readyqueue.py` reported it READY -- needing only
+itself -- as soon as `TxNextStateV27` and the seven `TxHdx*V27` handlers
+existed for it to dispatch through. `V27TX_modem` (.text 0x0a3330, 192
+bytes) disassembled to the identical structure `V29TX_modem` already has,
+field for field: clear `V27TX_RESULT_B1_BIT1`; `FIFO_write` the caller's
+`in` into the queue unless `V27TXP_INT_0008` is non-zero (in which case
+`*count` is taken as already queued); run the installed handler in a
+do/while seeded with a budget, accumulating each call's return into
+`*count`'s own out-value and advancing `out`; report `V27TX_RESULT_BYTE_07`
+(bare-named, `V29TX_RESULT_BYTE_07`'s own shape -- nothing establishes what
+7 means beyond the literal byte) if the FIFO could not take the whole
+block.
+
+**THE ONE REAL DIFFERENCE FROM V.29's SHAPE: THE BUDGET SEED.** `V29TX_modem`
+seeds its do/while from a named constant, `V29TX_MODEM_BUDGET` (0x30,
+unrelated to any per-rate table). `V27TX_modem` seeds it from
+`V27TX_FRMSIZE[rate]` directly -- the SAME table `V27TX_STATE_START`'s own
+arm in `TxNextStateV27` uses for its own budget, re-read here rather than
+reused, `V27TXP_RATE`'s own established re-read discipline holding one more
+function over. `in` is passed UNCHANGED to every call in the loop (never
+advanced across iterations) -- confirmed by the object re-reading the SAME
+stack slot for the second argument on every one of `V27TX_modem`'s own call
+sites rather than advancing a pointer, matching every `TxHdx*V27` handler's
+own scratch-buffer treatment of it.
+
+`t_v27txcreate.c`'s `test_modem_cycle`, 800 driven blocks through the real
+entry point (not the by-hand handler dispatch `test_tx_cycle` already
+covers), 3,257 checks; the scratch buffer sized 512 rather than the smaller
+size first tried, because QUIET's own budget reaches
+`V27TX_FRMSIZE[rate] * 10` (up to 320 at 4800 bit/s) and `in` is the WHOLE
+dispatch loop's scratch, not sized to the queued count -- `t_v29txcreate.c`'s
+own documented trap, hit and fixed here rather than avoided by reading the
+warning first. A live mutation (budget seeded one element too wide) was
+reverted after confirming the test catches it. (2026-09-02)

@@ -62,6 +62,8 @@ extern short ref_TxHdxIdleV27(void *modem, unsigned short *in, short *out,
 			      short *budget);
 extern short ref_TxNoCarrierV27(void *modem, unsigned short *in, short *out,
 				unsigned short count);
+extern int ref_V27TX_modem(void *modem, unsigned short *in, short *out,
+			   unsigned short *count);
 extern void ref_TxNextStateV27(void *modem);
 extern void ref_SetScramblerV27(void *modem);
 extern void ref_GenEQTrnSequenceV27(void *modem, unsigned short *buf,
@@ -672,6 +674,89 @@ test_next_state_default_arm(void)
 }
 
 /*
+ * `V27TX_modem` itself, the real entry point -- `test_tx_cycle`'s own
+ * driving loop, but through the dispatcher rather than calling the
+ * installed handler by hand.  `in` is caller-owned scratch for the whole
+ * call (never advanced), and `*count` is IN/OUT: samples queued on the way
+ * in, samples produced on the way out.
+ */
+static int
+test_modem_cycle(void)
+{
+	void *a, *b;
+	struct v27tx_cfg ca, cb;
+	unsigned seed = 292919u;
+	int block;
+	int seen_state[11];
+	int i;
+
+	diff_begin("v27txcreate: V27TX_modem, the real entry point");
+
+	ca = V27TX_CFG;
+	cb = V27TX_CFG;
+	ca.bitrate = cb.bitrate = 2400;
+	a = V27TX_create(0, &ca);
+	b = ref_V27TX_create(0, &cb);
+	diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, 0);
+	if (a == 0 || b == 0)
+		return diff_end();
+
+	for (i = 0; i < 11; i++)
+		seen_state[i] = 0;
+
+	for (block = 0; block < 800; block++) {
+		/*
+		 * `in` is scratch for the WHOLE `V27TXP_PROCESS` dispatch
+		 * loop, not just the initial `FIFO_write` -- QUIET's own
+		 * budget can reach `V27TX_FRMSIZE[rate] * 10` (up to 320 at
+		 * 4800 bit/s).  512 is headroom, not the queued count.
+		 */
+		unsigned short qbuf_a[512], qbuf_b[512];
+		short outa[512], outb[512];
+		unsigned short counta, countb;
+		int reta, retb;
+		void *pa, *pb;
+		short sta, stb;
+		int qn = (int)(rnd(&seed) % 9);
+
+		for (i = 0; i < qn; i++)
+			qbuf_a[i] = qbuf_b[i] =
+				(unsigned short)(rnd(&seed) & 1);
+
+		counta = countb = (unsigned short)qn;
+		memset(outa, 0xa5, sizeof outa);
+		memset(outb, 0xa5, sizeof outb);
+
+		reta = V27TX_modem(a, qbuf_a, outa, &counta);
+		retb = ref_V27TX_modem(b, qbuf_b, outb, &countb);
+
+		diff_eq_int("V27TX_modem return (%ld)", reta, retb, block);
+		diff_eq_int("V27TX_modem *count (%ld)", counta, countb, block);
+		if (counta == countb && counta <= 512)
+			cmp_shorts("out[%ld]", outa, outb, counta);
+
+		pa = FIELD_PTR(a, V27_OBJ_TXDATA);
+		pb = FIELD_PTR(b, V27_OBJ_TXDATA);
+		sta = AT_S(pa, V27TXP_STATE);
+		stb = AT_S(pb, V27TXP_STATE);
+		diff_eq_int("params.state agrees (%ld)", sta, stb, block);
+		if (sta >= 0 && sta < 11)
+			seen_state[sta] = 1;
+	}
+
+	for (i = 1; i <= 7; i++)
+		diff_eq_int("state %ld visited during the run", seen_state[i],
+			    1, i);
+
+	compare_tree("after V27TX_modem cycle", a, b, 0);
+
+	V27TX_delete(a);
+	ref_V27TX_delete(b);
+
+	return diff_end();
+}
+
+/*
  * `GenEQTrnSequenceV27` -- the free-standing generator, over the two rates
  * and a handful of counts (0 included, since the object's own loop guard
  * treats it specially).
@@ -735,6 +820,7 @@ main(void)
 	rc |= test_tx_cycle();
 	rc |= test_data_underrun_bypass_arm();
 	rc |= test_next_state_default_arm();
+	rc |= test_modem_cycle();
 	rc |= test_gen_eq_trn_sequence();
 
 	return rc;

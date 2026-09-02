@@ -311,6 +311,13 @@ typedef short (*v27tx_process_fn)(void *modem, unsigned short *in,
 #define V27TX_STATUS_UNDERRUN		6
 
 /*
+ * `V27TX_modem`'s own report when the FIFO could not take the whole block --
+ * `V29TX_modem`'s identical `V29TX_RESULT_BYTE_07`, bare-named there too
+ * because nothing but the literal byte value is established.
+ */
+#define V27TX_RESULT_BYTE_07		7
+
+/*
  * The status word `V27RX_modem` returns, and the flags byte inside it.
  *
  * ONE 32-BIT WORD, NOT TWO FIELDS: `V27RX_create` zeroes all four bytes at
@@ -1677,6 +1684,20 @@ void DescrambleDataV27(void *modem, unsigned short *data, short count);
  * every sub-object's own memory.
  */
 void *V27TX_create(void *modem, const struct v27tx_cfg *params);
+
+/*
+ * Run the half-duplex machine until `*count` samples have been produced (or
+ * the FIFO cannot keep up), `V29TX_modem`'s own do/while shape one
+ * modulation over: fill the FIFO from `in` (unless `V27TXP_INT_0008` is
+ * non-zero, in which case `*count` is taken as already queued), then call
+ * the installed handler in a loop seeded with `V27TX_FRMSIZE[rate]` budget,
+ * accumulating what each call returns into `*count`'s own out-value and
+ * advancing `out`.  `in` is NOT advanced across calls -- passed unchanged to
+ * every one, exactly as the `TxHdx*V27` family's own scratch-buffer use of
+ * it expects.
+ */
+int V27TX_modem(void *modem, unsigned short *in, short *out,
+		unsigned short *count);
 
 /*
  * Advance the transmit machine one step, from whatever `V27TXP_STATE` says.
