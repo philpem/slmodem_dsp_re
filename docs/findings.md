@@ -109718,3 +109718,131 @@ batch did not reconstruct and two concurrent strands are actively extending
 this wave. Declined rather than guessed, per CLAUDE.md's ruling on naming
 wrongly versus leaving padded -- see D1330 for the deviation this leaves
 outstanding. (2026-09-02)
+
+## F9850. The FAXVMI create/delete/status chokepoint: `FAXVMI_CTL`, `vxx_status`, `vxx_delete`, `FAXVMI_delete` and `FAXVMI_status` land as one unit
+
+*2026-09-02.* `readyqueue.py --limit 600` at `43a5f5d3` (master, fast-forwarded,
+`HEAD..master` at 0) confirmed the brief's shape exactly: `FAXVMI_CTL`
+(.rodata, 24 B), `vxx_status` and `vxx_delete` (.rodata, 52 B each) are all
+`closure.py --missing`-clean -- zero unwritten dependents apiece, because
+every one of the eighteen callees the two 13-slot tables reach (`null_delete`/
+`null_status` plus the eight `v??tx_*`/`v??rx_*` adapters in `faxadapt.h`/
+`nulldp.h`) was already written by a prior wave. `objdump -r` on the exact
+`.rodata` ranges (`0x95a0`-`0x95d4`, `0x95e0`-`0x9614`) reads the thirteen
+relocations per table directly -- the ground truth `relocscan.py --at` cannot
+give for a table's OWN contents, only for who points AT an address (see the
+tool's own `--at`/`--range` asymmetry, F9050's shape again) -- and both read
+the same 0..4 null, 5 v21tx, 6 v21rx, 7 v27tx, 8 v27rx, 9 v29tx, 10 v29rx,
+11 v17tx, 12 v17rx order `vxx_message` already established.
+
+**`vxx_status`'s thirteen slots do NOT share one declared C signature**, which
+`nulldp.h` had already flagged from `null_status`'s own evidence: `v17tx_
+status`/`v17rx_status`/`v21tx_status`/`v21rx_status` take a typed
+`struct v17_status *` / `struct v21_status *` in `faxadapt.h`, where every
+other slot and the table's own caller (`FAXVMI_status`, read below as
+evidence) take a bare `void *`. So those four entries need an explicit
+`(faxvmi_status_fn)` cast in the initialiser and the other nine do not;
+`vxx_delete`'s nine (`void (*)(struct faxvmi_link *)` throughout) needed none.
+
+**`FAXVMI_delete` (114 B, 0x0953f0) is eight calls, read straight off
+`dis.py`**: `vxx_delete[vmi->slot](vmi->link)`, then `sysdep_free` on
+`link->ptr_0000`, `link->buf`, `framer->frame`, `framer->fifo`, `link`,
+`framer`, and a tail-called `sysdep_free(vmi)`. No new struct knowledge was
+needed -- every field is already in `faxvmi.h`. The differential test
+(`t_faxvmids.c`) proves this NOT by inspecting freed memory (undefined once
+freed) but via the harness's `struct alloc_log`: allocate the seven objects
+for real through `sysdep_malloc`, call, and check `frees == 7, live == 0,
+bad_free == 0` on both sides. That is a stronger check than a memory diff
+would be -- it fails if EITHER an extra pointer is freed, a wrong one is
+freed (bad_free), or one of the seven is missed (live > 0) -- and it does not
+need the non-NULL slots to be safe to invoke (they are not; see F9851).
+
+**`FAXVMI_status` (137 B, 0x0955c0) was NOT this wave's assignment on paper
+but unblocked the instant `vxx_status` landed**, exactly as the brief
+predicted, so it is included. It reads `status->modem_status` (a NEW field,
+`faxvmi.h`'s `struct faxvmi_status` +0x18) FIRST, and when non-NULL forwards
+it to `vxx_status[vmi->slot](vmi->link, status->modem_status)` BEFORE
+anything else, making the dispatch call's return value the function's own
+return instead of 0. Every other field --`room` (+0x00, `fifo_size - count`,
+new), `residue`/`underrun`/`overflow`/`zero_run_seen` (+0x04/+0x08/+0x0c/
++0x10, all already-named fields `faxvmi.h` had evidence for from a prior
+wave's reading of this same not-yet-written function) -- is then written
+unconditionally. One field, `flag_0014` (+0x14, `framer->flags_wanted <= 1`
+as 0/1), is usage inference only and named accordingly -- the object never
+prints a word for it.
+
+**`FAXVMI_CTL` is 24 bytes of zero, and what reads it turned out to matter
+more than what is in it.** `FAXVMI_control`'s own `ctl == NULL` path
+(`dis.py` on 0x095650, read as evidence, the function itself is still NOT
+written -- it needs `SetScramblerV27`, `TxHdxABV17` and dozens more two
+concurrent strands are writing this wave) returns -1 immediately WITHOUT
+ever touching `FAXVMI_CTL` -- so the twenty-plus references to
+`.rodata:0x9478` scattered through the still-unwritten `v??tx_control`/
+`v??rx_control` functions (`class1tx.c`'s span) are not the NULL case at all;
+they read as passing `&FAXVMI_CTL` where the all-fields-quiescent behaviour
+(no ring clear, no zero-run change, no mode change, no `vxx_control`
+recursion) is wanted instead of NULL's hard failure. The 24-byte record's
+FIELD LAYOUT (`struct faxvmi_ctl` in `faxvmi.h`) is read off
+`FAXVMI_control`'s own instructions for the same "not written, read as
+evidence" reason `faxvmi.h` already used for `FAXVMI_create`/`_process`; two
+of its eight fields already had a name from a prior wave's partial reading
+(`zero_run_send`/`zero_run_bits`, feeding `faxvmi_framer`'s fields of the
+same name), the rest are neutral `type_NNNN` per CLAUDE.md's naming rule
+since the evidence for them is behavioural (what a nonzero value MAKES
+`FAXVMI_control` do) rather than a format string or a typed caller.
+
+**Total: 5 symbols, 379 bytes** (24 + 52 + 52 + 114 + 137), `t_faxvmids.c`
+green (172 checks across four groups), `make one T=t_faxvmids` only -- not
+period-gated, per this wave's instructions. `refcheck.py` and
+`bannercheck.py` both clean afterward (563/563 banners agree).
+
+## F9851. `_delete_data_rx_modem`/`_delete_data_tx_modem` are readyqueue-ready and declined anyway: they need a `struct fax_class1` field that does not exist yet, in a file two other strands are extending
+
+*2026-09-02.* Landing F9850's five symbols made `closure.py --missing
+_delete_data_rx_modem _delete_data_tx_modem` report 0 unwritten dependencies
+-- both call only `sysdep_free` (already written, harness-provided) and
+`FAXVMI_delete` (F9850) -- and `readyqueue.py` lists both READY. Written
+anyway would be premature: `dis.py` on both (0x0941a0, 0x09b70) shows a large
+context pointer, `ebx`, read at three fixed offsets -- `+0x1208`, `+0x1214`
+and (tx only) `+0x1288` -- and dereferences a FOURTH struct through
+`+0x1214` itself, with a `short` at its own `+0xe` compared against `0xc`
+(the `v17rx` slot) and a pointer at its own `+0x10` that, on that one slot,
+is walked further for THREE more `sysdep_free`s at `+0x18`, `+0x1c` and
+`+0x20`.
+
+**`ebx` is `struct fax_class1 *`, and TWO of the three offsets are already
+named** -- `class1.h`'s own `+0x1208` is `vmi_b`, "FAXVMI handle, states
+12..13" (matches: `_delete_data_tx_modem` hands it straight to
+`FAXVMI_delete`), and `+0x1288` is `f1288`. **The third, `+0x1214`, is NOT
+named -- it falls inside `class1.h`'s own `pad_120c[0x10]` (0x120c..0x121c),
+the exact "expected to become fields when the fax phase reads
+`fax_class1_create` properly" region that header's own opening comment
+predicts.** Naming it needs deriving a new nested struct (the "data modem
+params" object `+0x1214` points at, with its OWN `+0xe`/`+0x10`/`+0x18`/
+`+0x1c`/`+0x20`) inside `struct fax_class1`, which is `class1.h`'s home and
+not `faxvmi.c`'s (CLAUDE.md's "one type, one home"), and `class1.c`/
+`class1tx.c`/`class1rx.c` are explicitly off-limits this wave, held by two
+concurrent strands actively extending this exact struct (F9802's finding,
+same wave, same file, same caution). Declined on the ground CLAUDE.md states
+plainly: naming a shared struct's field wrongly under contention is worse
+than leaving it padded. Left for whoever next owns `class1.h` -- the
+derivation above (offsets, widths, and the v17rx-slot special case) is
+handed over rather than re-discovered.
+
+`_hdlc_receive_between_buffers_state` (566 B, the "if genuinely independent"
+item) was also checked and is NOT independent: its remaining closure is
+`FAXVMI_process` (327 B, itself blocked on other things), `V27TX_modem`,
+`v27tx_process` and `V27TX_FRMSIZE` -- the V.27 TX modem a concurrent strand
+is writing in `v27.c` this wave, exactly the machinery the brief said to
+stay out of. Declined on the brief's own ground rather than measured wrong.
+
+**`FAXVMI_create` and `FAXVMI_control`, re-measured with `closure.py
+--missing` after F9850 landed, are UNCHANGED** -- 60 symbols / 10,540 bytes
+and 72 symbols / 10,386 bytes respectively, identical to their pre-batch
+figures. Expected and confirmed rather than assumed: neither constructor's
+own machine code reaches `vxx_status`/`vxx_delete`/`FAXVMI_CTL` at all (they
+use the SIBLING tables `vxx_create`/`vxx_control`, still fully unwritten), so
+this wave's five symbols were never on either closure's path. Both remain
+blocked on the V.17/V.27 TX half-duplex machinery (`TxNextStateV17`,
+`V27TX_create`, `SetScramblerV27`, `TxHdxABV17` and the rest) two other
+strands are writing this wave.

@@ -404,6 +404,169 @@ extern faxvmi_message_fn const vxx_message[13];
  */
 char *FAXVMI_message(struct faxvmi *vmi, unsigned char code);
 
+/*
+ * `vxx_delete[slot]`.  Same 13-slot order as every other vxx table
+ * (`nulldp.h`'s own reading of the layout, confirmed again by this table's
+ * own relocations): 0..4 null_delete, 5 v21tx_delete, 6 v21rx_delete,
+ * 7 v27tx_delete, 8 v27rx_delete, 9 v29tx_delete, 10 v29rx_delete,
+ * 11 v17tx_delete, 12 v17rx_delete -- all thirteen already written
+ * (`faxadapt.h`, `nulldp.h`) with the SAME signature, so no cast is needed
+ * anywhere in the table's initialiser.
+ */
+typedef void (*faxvmi_delete_fn)(struct faxvmi_link *dp);
+extern faxvmi_delete_fn const vxx_delete[13];
+
+/*
+ * `vmi->slot`'s own teardown: releases the wrapped modulation, then every
+ * heap block `FAXVMI_create` allocated, then `vmi` itself.  Evidence is
+ * `FAXVMI_delete` (0x0953f0, read here as it is not yet written -- see the
+ * top of faxvmi.c for what still blocks it).
+ */
+void FAXVMI_delete(struct faxvmi *vmi);
+
+/*
+ * `vxx_status[slot]`.  Same 13-slot order and order of evidence as
+ * `vxx_delete` above.  UNLIKE `vxx_delete`, the table's own callers do NOT
+ * all share one declared signature: `v17tx_status`/`v17rx_status` and
+ * `v21tx_status`/`v21rx_status` take a typed `struct v17_status *` /
+ * `struct v21_status *` in `faxadapt.h`, where every other slot and the
+ * table's own caller (`FAXVMI_status`, below) take a bare `void *` --
+ * `null_status`'s own declaration in `nulldp.h` is explicit that this is
+ * exact rather than a guess, because neither the caller nor `null_status`
+ * itself ever narrows the pointer.  So the table's element type is the
+ * untyped form, and the four typed entries need an explicit cast in the
+ * initialiser; nothing here says those four functions are wrong to take a
+ * typed pointer; the table just cannot express it.
+ */
+typedef int (*faxvmi_status_fn)(struct faxvmi_link *dp, void *status);
+extern faxvmi_status_fn const vxx_status[13];
+
+/*
+ * THE STATUS RECORD, `FAXVMI_status`'s second argument.  Caller-allocated --
+ * no `sysdep_malloc` sizes it anywhere in `FAXVMI_status` -- so unlike
+ * `struct faxvmi`/`_framer`/`_link` there is no total size to assert; only
+ * the fields this function itself touches are known, all read off
+ * `FAXVMI_status` (0x0955c0, read here as evidence; the function is not yet
+ * written, see faxvmi.c).
+ *
+ * `modem_status` is read FIRST, before anything is written, and passed
+ * UNCHANGED to `vxx_status[vmi->slot]` as its own second argument when it is
+ * non-NULL -- a caller wanting the wrapped modulation's own status pre-loads
+ * a pointer for it there.  Every other field is written unconditionally.
+ */
+struct faxvmi_status {
+	unsigned short room;		/* +0x00 fifo_size - count: elements
+					 * of the ring still free           */
+	unsigned short pad_0002;	/* +0x02                             */
+	int residue;			/* +0x04 = framer->residue           */
+	int underrun;			/* +0x08 = vmi->underrun             */
+	int overflow;			/* +0x0c = vmi->overflow             */
+	int zero_run_seen;		/* +0x10 = framer->zero_run_seen     */
+	int flag_0014;			/* +0x14 (framer->flags_wanted <= 1)
+					 * as 0/1 -- at least one opening
+					 * flag has been seen since the HDLC
+					 * receiver last reset.  Usage
+					 * inference only: the object never
+					 * names this bit                    */
+	void *modem_status;		/* +0x18 IN: forwarded to
+					 * vxx_status[slot] when non-NULL;
+					 * never written by this function    */
+};
+
+/*
+ * Every field but the last is a plain `int`/`unsigned short`, so these hold
+ * on both a 32- and a 64-bit build without `__SIZEOF_POINTER__`'s guard --
+ * unlike `faxvmi_link`, the one pointer here is the LAST field and does not
+ * shift anything before it.
+ */
+#define STATUS_ASSERT_OFF(field, off) \
+	typedef char faxvmi_status_off_##field[ \
+		((int)__builtin_offsetof(struct faxvmi_status, field) \
+		 == (off)) ? 1 : -1]
+STATUS_ASSERT_OFF(room, 0x00);
+STATUS_ASSERT_OFF(residue, 0x04);
+STATUS_ASSERT_OFF(underrun, 0x08);
+STATUS_ASSERT_OFF(overflow, 0x0c);
+STATUS_ASSERT_OFF(zero_run_seen, 0x10);
+STATUS_ASSERT_OFF(flag_0014, 0x14);
+STATUS_ASSERT_OFF(modem_status, 0x18);
+
+/*
+ * Fill `status` from `vmi`'s own counters and, if `status->modem_status` is
+ * set, from the wrapped modulation's own status too -- in which case the
+ * return value is THAT call's return, not 0.  `status == NULL` returns -1
+ * without touching anything.
+ */
+int FAXVMI_status(struct faxvmi *vmi, struct faxvmi_status *status);
+
+/*
+ * THE CONTROL RECORD, `FAXVMI_control`'s second argument -- `FAXVMI_CTL`
+ * below is the object's own instance of it, not a struct this file's
+ * functions consume.  Evidence is `FAXVMI_control` (0x095650), read here for
+ * the same reason `FAXVMI_status`'s record is: `FAXVMI_control` itself is
+ * NOT yet written (this wave's brief excludes it -- it needs `SetScramblerV27`,
+ * `TxHdxABV17` and dozens more that two concurrent strands are writing this
+ * wave), but `FAXVMI_CTL` is a plain 24-byte `.rodata` object with no
+ * dependency of its own, and its type is what this file needs to declare it.
+ *
+ * `ptr_0000` nonzero also empties the ring (`framer->rd`/`wr`/`count`/
+ * `residue` all zeroed, `framer->fifo` overwritten with zero out to
+ * `fifo_size`).  `int_0004`/`short_0008` are copied straight into
+ * `framer->zero_run_send`/`zero_run_bits` -- already named from this same
+ * evidence in `faxvmi_framer`'s own fields, above.  `int_000c` nonzero (and
+ * `short_0010` at most 2) additionally resets the whole HDLC receiver to
+ * `FAXVMI_create`'s own initial values and sets `vmi->mode` from
+ * `short_0010`; `int_0014` nonzero makes `FAXVMI_control` recurse through
+ * `vxx_control[vmi->slot]` with a literal -1 before applying anything else.
+ * Four of the eight fields already have a habitable name; the rest are
+ * usage inference only, hedged as such, and left neutral rather than guessed
+ * further -- CLAUDE.md's "naming wrongly is worse than padding" ground.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define CTL_ASSERT_OFF(field, off) \
+	typedef char faxvmi_ctl_off_##field[ \
+		((int)__builtin_offsetof(struct faxvmi_ctl, field) == (off)) \
+			? 1 : -1]
+#endif
+
+struct faxvmi_ctl {
+	void *ptr_0000;		/* +0x00 nonzero: also empty the ring */
+	int int_0004;		/* +0x04 -> framer->zero_run_send     */
+	unsigned short short_0008;	/* +0x08 -> framer->zero_run_bits */
+	unsigned short pad_000a;	/* +0x0a                          */
+	int int_000c;		/* +0x0c nonzero: full framer reset + mode
+				 * change from short_0010              */
+	unsigned short short_0010;	/* +0x10 new vmi->mode, 0..2       */
+	unsigned short pad_0012;	/* +0x12                           */
+	int int_0014;		/* +0x14 nonzero: also call
+				 * vxx_control[vmi->slot](vmi->link, -1)
+				 * before anything else applies         */
+};
+
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+CTL_ASSERT_OFF(ptr_0000, 0x00);
+CTL_ASSERT_OFF(int_0004, 0x04);
+CTL_ASSERT_OFF(short_0008, 0x08);
+CTL_ASSERT_OFF(int_000c, 0x0c);
+CTL_ASSERT_OFF(short_0010, 0x10);
+CTL_ASSERT_OFF(int_0014, 0x14);
+typedef char faxvmi_ctl_size[(sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
+#endif
+
+/*
+ * The object's own instance: 24 bytes of zero at `.rodata` 0x9478,
+ * referenced from many places inside the still-unwritten per-modulation
+ * `v??tx_control`/`v??rx_control` functions (`class1tx.c`'s span, not this
+ * file's) -- every one of those references reads as passing `&FAXVMI_CTL`
+ * where `FAXVMI_control`'s `ctl == NULL` path is not what is wanted:
+ * `FAXVMI_control` itself returns -1 immediately on a null `ctl` without
+ * ever touching this object, so a caller wanting the all-fields-quiescent
+ * behaviour (no ring clear, no zero-run change, no mode change, no
+ * `vxx_control` recursion) passes the address of this all-zero record
+ * instead of NULL.  `R`, global, in the object; global here too.
+ */
+extern const struct faxvmi_ctl FAXVMI_CTL;
+
 /* --------------------------------------------------------------------- */
 /* The packers: `vmi_pack[mode]`.                                         */
 
