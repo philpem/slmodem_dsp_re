@@ -12670,3 +12670,33 @@ graph reads them back out.
 `data_word`/`word_syms`, are set and asserted); the four fields nothing
 downstream reads are excluded from comparison rather than given a value the
 object does not give them.
+
+## D1390 ✅ `TxHdxEQCondV27`/`GenEQTrnSequenceV27` test a full word where the object tests one byte
+
+Both walk a scrambled buffer choosing `V27TX_PATTERN_ALT[rate]` or
+`V27TX_PATTERN_CARR[rate]` for element `i` from bit 2 of element `i + 1`.
+The object reads that bit with `testb $0x4,0x2(%edx)` -- an 8-bit test
+against the LOW BYTE of `in[i + 1]` (`edx` points at `in[i]`; `+0x2` is one
+`short` further on). The reconstruction spells it `in[i + 1] & 0x04`, a
+16-bit test against the whole element.
+
+**Bit-exact over the whole domain.** x86 is little-endian, so a 16-bit
+element's low byte carries bits 0-7 and bit 2 of the value is bit 2 of that
+byte either way; `in[i + 1] & 0x04` and `((unsigned char *)&in[i + 1])[0]
+& 0x04` agree for every possible value of `in[i + 1]`, not just the ones
+either function's own inputs happen to produce.
+
+**What it costs is scale, not correctness**: the object's byte test is
+forced by nothing downstream (there is no callee typing `in[i + 1]` as a
+byte), so reproducing it would need an explicit cast at both sites for no
+behavioural gain and a codegen shape (`movzbl` off a `short *` element) this
+tree has no existing idiom for. `compare.py`/`byteident.py` would see the
+one-instruction difference (`movzwl` vs `movzbl`) at both sites; no
+differential test can, and `t_v27txcreate.c`'s `TxHdxEQCondV27` coverage
+(inside `test_tx_cycle`) and `t_v27txcreate.c`'s `test_gen_eq_trn_sequence`
+(26 checks, both rates, seven counts) both exercise every reachable value of
+`in[i + 1]`'s low byte without separating the two readings.
+
+**Status:** ✅ declared, not fitted -- reproduced for behaviour, and the
+narrower byte-level spelling is left for whoever next runs the codegen-level
+comparison tier on this file.

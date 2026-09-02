@@ -136,6 +136,7 @@
 #define FIELD_S(obj, off)	(*(short *)(void *)FIELD((obj), (off)))
 #define FIELD_US(obj, off)	(*(unsigned short *)(void *)FIELD((obj), (off)))
 #define FIELD_I(obj, off)	(*(int *)(void *)FIELD((obj), (off)))
+#define FIELD_BYTE(obj, off)	(*(unsigned char *)FIELD((obj), (off)))
 
 /*
  * The rate index, re-read at every use because that is what the object does:
@@ -1400,6 +1401,90 @@ V27RX_status(void *rx, void *status)
 }
 
 /*
+ * V27RX_control .text 0x0a32a0, 125 bytes.
+ *
+ * See v27fax.h for the request's own layout.  `int_0008` and the
+ * `V27SH_INT_0004` reset are unconditional; the mask byte's two disables and
+ * the flags byte's force/reinit are each gated on their own bit.
+ */
+int
+V27RX_control(void *rx, void *req)
+{
+	void *sh;
+	void *rxb;
+	unsigned char flags;
+	unsigned char mask;
+
+	if (req == 0)
+		return 0;
+
+	((struct v27rx_cfg *)rx)->int_0008 = FIELD_I(req, V27RXCTL_INT_0004);
+	sh = FIELD_PTR(rx, V27_OBJ_SHARED);
+	FIELD_I(sh, V27SH_INT_0004) = 0;
+
+	flags = FIELD_BYTE(req, V27RXCTL_FLAGS);
+	if (flags & V27RXCTL_FLAGS_FORCE_NOCARRIER)
+		FIELD_I(sh, V27SH_INT_0004) = 1;
+	if (flags & V27RXCTL_FLAGS_REINIT)
+		V27RX_create(rx, (const struct v27rx_cfg *)rx);
+
+	mask = FIELD_BYTE(req, V27RXCTL_MASK);
+	rxb = FIELD_PTR(rx, V27_OBJ_RX);
+	if (mask & V27RXCTL_MASK_DISABLE_00)
+		FIELD_I(rxb, V27RX_EN_00) = 0;
+	if (mask & V27RXCTL_MASK_DISABLE_FSE_LMS)
+		FIELD_I(rxb, V27RX_EN_FSE_LMS) = 0;
+
+	return 1;
+}
+
+/*
+ * V27TX_control .text 0x0a3e30, 148 bytes.
+ *
+ * See v27fax.h for the request's own layout.  The pulse shaper's gain and
+ * `int_0008`/`int_0018` are unconditional; `V27TX_HANDLE_FLAGS`'s bit and
+ * `int_0008`'s force/reinit are each gated on their own bit -- `V27RX_
+ * control`'s own shape, transmit side.
+ */
+int
+V27TX_control(void *modem, void *req)
+{
+	void *prm;
+	struct fpm_pps *pps;
+	short rate;
+	unsigned char mask;
+	unsigned char flags;
+
+	if (req == 0)
+		return 0;
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	pps = (struct fpm_pps *)(void *)
+		FIELD(FIELD_PTR(modem, V27_OBJ_TX), V27TX_PPS);
+	rate = FIELD_S(prm, V27TXP_RATE);
+
+	pps->cfg.scale = FIELD_I(req, V27TXCTL_SCALE_MUL) *
+		V27TX_PPS_SCALE[rate];
+
+	((struct v27tx_cfg *)modem)->int_0018 = FIELD_I(req, V27TXCTL_INT_0010);
+	((struct v27tx_cfg *)modem)->int_0008 = FIELD_I(req, V27TXCTL_INT_0004);
+
+	mask = FIELD_BYTE(req, V27TXCTL_MASK);
+	if (mask & V27TXCTL_MASK_HANDLE_FLAG_04)
+		*FIELD(modem, V27TX_HANDLE_FLAGS) |= 0x04;
+
+	FIELD_I(prm, V27TXP_INT_0008) = 0;
+
+	flags = FIELD_BYTE(req, V27TXCTL_FLAGS);
+	if (flags & V27TXCTL_FLAGS_FORCE_INT_0008)
+		FIELD_I(prm, V27TXP_INT_0008) = 1;
+	if (flags & V27TXCTL_FLAGS_REINIT)
+		V27TX_create(modem, (const struct v27tx_cfg *)modem);
+
+	return 1;
+}
+
+/*
  * Fill the caller's status block from the transmitter's.
  *
  * THE TWO WRITES TO +0x14 ARE BOTH THE OBJECT'S, and the first is not dead.
@@ -1752,4 +1837,948 @@ ScrambleDataV27(void *modem, unsigned short *data, short count)
 	SDMv27_scrambler((struct sdmv27 *)(void *)
 				FIELD(FIELD_PTR(modem, V27_OBJ_TX), V27TX_SDM),
 			 data, count);
+}
+
+/* ------------------------------------------------------------------ */
+/* The transmit half-duplex machine and its constructor.  F9751.       */
+
+/*
+ * The transmit configuration `V27TX_create` builds its DSP sub-objects from,
+ * .data 0x007d60, 32 bytes.  Dumped from the object's own bytes, not typed by
+ * any function: `bitrate` is 9600, which is neither 2400 nor 4800, so the
+ * DEFAULT INSTANCE itself takes `V27TX_create`'s own default arm -- the same
+ * shape `t_v29txcreate.c`'s "explicit, bitrate == 1200 (default arm)" case
+ * exercises deliberately, except here it is what a NULL `params` gets.  See
+ * v27fax.h.
+ */
+struct v27tx_cfg V27TX_CFG = {
+	0,			/* protocol                                  */
+	9600,			/* bitrate -- neither of V.27ter's own rates  */
+	0,			/* int_0004                                  */
+	60000,			/* int_0008 -- v27rx_cfg's own value          */
+	1,			/* int_000c -- the PPS gain multiplier        */
+	0,			/* flags_0010                                */
+	0,			/* short_0012                                */
+	1,			/* int_0014 -- the FIFO's own size multiplier */
+	0,			/* int_0018 -- V27TXP_TRAIN_LONG's source     */
+	0,			/* int_001c -- FPM_PPS_CFG's aux              */
+};
+
+/*
+ * SetScramblerV27 .text 0x0a5e90, 92 bytes.
+ *
+ * Reseed the scrambler for the rate `TxNextStateV27`'s EQCOND arm has just
+ * settled on.  `sdmv27.h` already carries this derivation -- written before
+ * this file reconstructed the function that needed it -- and this is that
+ * derivation typed out: `reg` is saved across `SDMv27_init` and put back by
+ * hand, because `SDMv27_init` has no separate reset and would otherwise drop
+ * the shift register's running state on every rate-driven reseed.
+ */
+void
+SetScramblerV27(void *modem)
+{
+	struct sdmv27_cfg cfg;
+	void *prm;
+	struct sdmv27 *sdm;
+	short rate;
+	unsigned short reg;
+
+	cfg = SDMv27_CFG;
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	rate = FIELD_S(prm, V27TXP_RATE);
+	cfg.nbits = (unsigned short)V27TX_SDM_NUM_BITS[rate];
+
+	sdm = (struct sdmv27 *)(void *)FIELD(FIELD_PTR(modem, V27_OBJ_TX),
+					     V27TX_SDM);
+	reg = sdm->reg;
+
+	SDMv27_init(sdm, &cfg);
+
+	sdm = (struct sdmv27 *)(void *)FIELD(FIELD_PTR(modem, V27_OBJ_TX),
+					     V27TX_SDM);
+	sdm->reg = reg;
+}
+
+/*
+ * V27TX_create .text 0x09a330, 1165 bytes.
+ *
+ * The transmitter's constructor: the handle, the data-source block (a FIFO
+ * and an `sgd`), and the private DSP block (the symbol ring, the scrambler,
+ * the symbol coder and the pulse shaper).  Same four-part shape as
+ * `V29TX_create`; see its own comment in v29.c for the codegen-level notes
+ * (`fresh`'s two roles, the rate re-read seventeen times over, `aux`'s
+ * `(void *)(long)` cast) that hold here without change.
+ *
+ * THE SYMBOL RING ALLOCATES ONLY `sym`.  Unlike V.29's private ring (its own
+ * struct, `i`/`q` both `sysdep_malloc`'d), V.27ter's ring is a
+ * `struct fpm_smc_ring` and `ModDataV27` runs the pulse shaper in MAPPED
+ * mode, so `i`/`q` are zeroed and never allocated -- `V27TX_delete` frees
+ * exactly the one buffer this function allocates.  Finding F9751.
+ *
+ * THE RING'S LENGTH IS COMPUTED, `V27TX_FRMSIZE[rate] + 2`, matching
+ * `V29TX_create`'s own `+2` over its FRMSIZE-equivalent lookup.
+ *
+ * `V27TXP_TRAIN_LONG` IS SEEDED ONCE, `(params->int_0018 == 0)`, the same
+ * `sete` idiom `V27RX_create` uses for `V27SH_TRAIN_LONG` one struct over.
+ *
+ * THE PPS `scale` FIELD IS NOT THE TABLE VALUE ALONE: `V27TX_PPS_SCALE[rate]`
+ * is multiplied by the config's own `int_000c` (default 1, so invisible on
+ * `V27TX_CFG` itself) -- V.27ter's own caller-adjustable output gain, which
+ * V.29's `V29TX_create` does not have at the identical field.
+ */
+void *
+V27TX_create(void *modem, const struct v27tx_cfg *params)
+{
+	void *prm;
+	int fresh = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.27 TX Create ");
+
+	if (modem == 0) {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+
+		modem = sysdep_malloc(0x2c);
+		FIELD_PTR(modem, V27_OBJ_TXDATA) = 0;
+		FIELD_PTR(modem, V27_OBJ_TX) = 0;
+		fresh = 1;
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("\n");
+	}
+
+	if (params != 0)
+		*(struct v27tx_cfg *)modem = *params;
+	else
+		*(struct v27tx_cfg *)modem = V27TX_CFG;
+
+	FIELD_I(modem, V27TX_OBJ_RESULT) = 0;
+	*FIELD(modem, V27TX_OBJ_RESULT_B1) |= 0x58;
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = 1;
+
+	/* ---- the data-source block: the FIFO and the SGD ------------- */
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	if (prm == 0) {
+		prm = sysdep_malloc(V27TXDATA_SIZE);
+		FIELD_PTR(modem, V27_OBJ_TXDATA) = prm;
+		FIELD_PTR(prm, V27TXD_FIFO) = 0;
+		FIELD_PTR(prm, V27TXD_SGD) = 0;
+	}
+
+	{
+		struct sgd_cfg gcfg = SGD_CFG;
+		void *existing;
+
+		gcfg.sym_bits = 3;
+
+		existing = FIELD_PTR(prm, V27TXD_SGD);
+		FIELD_PTR(prm, V27TXD_SGD) =
+			SGD_create((struct sgd *)existing, &gcfg);
+	}
+
+	/* ---- the half-duplex machine's own state ---------------------- */
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	FIELD_I(prm, V27TXP_INT_0008) = 0;
+	FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_START;
+	FIELD_S(prm, V27TXP_COUNTDOWN) = 0;
+	*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) = TxHdxStartV27;
+	FIELD_S(prm, V27TXP_TRAIN_LONG) = (short)
+		(((struct v27tx_cfg *)modem)->int_0018 == 0);
+
+	if (((struct v27tx_cfg *)modem)->bitrate == 2400) {
+		FIELD_S(prm, V27TXP_RATE) = 0;
+	} else if (((struct v27tx_cfg *)modem)->bitrate == 4800) {
+		FIELD_S(prm, V27TXP_RATE) = 1;
+	} else {
+		FIELD_S(prm, V27TXP_RATE) = 1;
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) |= V27TX_RESULT_B1_BIT1;
+		FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_DEFAULT;
+	}
+
+	/* ---- the FIFO --------------------------------------------------- */
+
+	{
+		struct fifo_cfg fc;
+		unsigned short n = (unsigned short)
+			((struct v27tx_cfg *)modem)->int_0014;
+		void *existing;
+		short rate;
+
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		rate = FIELD_S(prm, V27TXP_RATE);
+
+		fc.word0 = FIFO_CFG.word0;
+		fc.fill = 0;
+		fc.size = (short)(n * V27TX_FRMSIZE[rate]);
+
+		existing = FIELD_PTR(prm, V27TXD_FIFO);
+		FIELD_PTR(prm, V27TXD_FIFO) =
+			FIFO_create((struct fax_fifo *)existing, &fc);
+	}
+
+	/* ---- the private block: the ring, the scrambler, the symbol coder
+	 * and the pulse shaper ---------------------------------------------- */
+
+	{
+		void *tx;
+		short rate;
+		short ring_len;
+
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		rate = FIELD_S(prm, V27TXP_RATE);
+		ring_len = (short)(V27TX_FRMSIZE[rate] + 2);
+
+		tx = FIELD_PTR(modem, V27_OBJ_TX);
+		if (tx == 0) {
+			struct fpm_smc_ring *ring;
+
+			tx = sysdep_malloc(0x94);
+			FIELD_PTR(modem, V27_OBJ_TX) = tx;
+			ring = (struct fpm_smc_ring *)(void *)
+					FIELD(tx, V27TX_RING);
+			ring->sym = (short *)
+				sysdep_malloc((unsigned)(ring_len * 2));
+		}
+
+		tx = FIELD_PTR(modem, V27_OBJ_TX);
+		{
+			struct fpm_smc_ring *ring = (struct fpm_smc_ring *)
+					(void *)FIELD(tx, V27TX_RING);
+			short i;
+
+			ring->i = 0;
+			ring->q = 0;
+			ring->widx = 0;
+			ring->ridx = 0;
+			ring->len = ring_len;
+
+			for (i = 0; i < ring_len; i++)
+				ring->sym[i] = 0;
+		}
+	}
+
+	{
+		struct fpm_smc_cfg scfg = SMC_CFG;
+		void *tx = FIELD_PTR(modem, V27_OBJ_TX);
+		short rate = FIELD_S(FIELD_PTR(modem, V27_OBJ_TXDATA),
+				     V27TXP_RATE);
+
+		scfg.f00 = 1;
+		scfg.direct = 0;
+		scfg.rot_step = V27TX_SMC_CRR_ADJ[rate];
+		scfg.rot_mod = V27TX_SMC_CRR_LEN[rate];
+		scfg.qshift = 0;
+		scfg.qmask = (unsigned short)V27TX_SMC_PHS_MASK[rate];
+		scfg.amask = 0;
+		scfg.pmask = (unsigned short)V27TX_SMC_PHS_MASK[rate];
+		scfg.pmap = V27TX_SMC_PMAP[rate];
+
+		SMC_init((struct fpm_smc *)(void *)FIELD(tx, V27TX_SMC), &scfg);
+	}
+
+	{
+		struct fpm_pps_cfg pcfg = FPM_PPS_CFG;
+		void *tx = FIELD_PTR(modem, V27_OBJ_TX);
+		short rate = FIELD_S(FIELD_PTR(modem, V27_OBJ_TXDATA),
+				     V27TXP_RATE);
+
+		pcfg.phases = V27TX_PPS_UP_FACT[rate];
+		pcfg.step = V27TX_PPS_DOWN_FACT[rate];
+		pcfg.mapped = 1;
+		pcfg.scale = V27TX_PPS_SCALE[rate] *
+			((struct v27tx_cfg *)modem)->int_000c;
+		pcfg.step_adj = 0;
+		pcfg.imap = V27TX_PPS_IMAP[rate];
+		pcfg.qmap = V27TX_PPS_QMAP[rate];
+		pcfg.coeff_i = V27TX_PPS_IFILT[rate];
+		pcfg.coeff_q = V27TX_PPS_QFILT[rate];
+		pcfg.coeffs = V27TX_PPS_FILT_LEN[rate];
+		pcfg.aux = (void *)(long)((struct v27tx_cfg *)modem)->int_001c;
+
+		FPM_PPS_init((struct fpm_pps *)(void *)FIELD(tx, V27TX_PPS),
+			    &pcfg, fresh);
+	}
+
+	{
+		struct sdmv27_cfg dcfg;
+		void *tx = FIELD_PTR(modem, V27_OBJ_TX);
+
+		dcfg.nbits = 3;
+		SDMv27_init((struct sdmv27 *)(void *)FIELD(tx, V27TX_SDM),
+			   &dcfg);
+	}
+
+	return modem;
+}
+
+/*
+ * V27TX_modem .text 0x0a3330, 192 bytes.
+ *
+ * `V29TX_modem`'s own shape: fill the FIFO from `in` unless
+ * `V27TXP_INT_0008` is non-zero (in which case `*count` is already queued
+ * elsewhere), then run the installed handler in a do/while seeded with
+ * `V27TX_FRMSIZE[rate]` budget -- V.29's own fixed `V29TX_MODEM_BUDGET`
+ * literal, here the same per-rate table every `TxHdx*V27` handler already
+ * reads.  `in` is re-passed unchanged to every call in the loop, never
+ * advanced; only `out` advances, by what each call returns.
+ */
+int
+V27TX_modem(void *modem, unsigned short *in, short *out,
+	   unsigned short *count)
+{
+	void *prm;
+	unsigned short taken;
+	short budget;
+	short total;
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+
+	*FIELD(modem, V27TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V27TX_RESULT_B1_BIT1;
+
+	if (FIELD_I(prm, V27TXP_INT_0008) == 0)
+		taken = (unsigned short)FIFO_write(
+				(struct fax_fifo *)
+					FIELD_PTR(prm, V27TXD_FIFO),
+				in, *count);
+	else
+		taken = *count;
+
+	budget = V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)];
+	total = 0;
+	do {
+		short got;
+
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		got = (*(v27tx_process_fn *)(void *)
+				FIELD(prm, V27TXP_PROCESS))
+					(modem, in, out, &budget);
+
+		out += got;
+		total = (short)(total + got);
+	} while (budget > 0);
+
+	if (*count != taken) {
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) |= V27TX_RESULT_B1_BIT1;
+		FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_RESULT_BYTE_07;
+	}
+
+	*count = (unsigned short)total;
+
+	return FIELD_I(modem, V27TX_OBJ_RESULT);
+}
+
+/*
+ * TxNextStateV27 .text 0x0a3480, 1148 bytes.
+ *
+ * `jmp *table(,%eax,4)` on `V27TXP_STATE`, bounded `cmp $0xa` / `ja default`
+ * -- eleven arms, not V.29's seven, and each arm's printed string names the
+ * state being LEFT (the object's own debug strings at .rodata.str1.1
+ * 0x4c21..0x4cdc, CLAUDE.md's evidence rank 1):
+ *
+ *   V27TX_STATE_START    installs TxHdxQuietV27, budget FRMSIZE[rate]
+ *   V27TX_STATE_QUIET    SGD_control(gen={PATTERN_CARR[rate],1}), installs
+ *                        TxHdxAltV27, budget FRMSIZE[rate]*10
+ *   V27TX_STATE_CARR     installs TxHdxQuietV27, budget FRMSIZE[rate]
+ *   V27TX_STATE_NOCARR   SGD_control(gen={PATTERN_ALT[rate],1}), installs
+ *                        TxHdxAltV27, budget ALT_COUNT[TRAIN_LONG]
+ *   V27TX_STATE_ALT      installs TxHdxEQCondV27, budget
+ *                        EQCOND_COUNT[TRAIN_LONG]
+ *   V27TX_STATE_EQCOND   SGD_control(gen={PATTERN_SCR1[rate],1}), installs
+ *                        TxHdxSCR1V27, budget 8, SetScramblerV27(modem),
+ *                        RETURNS (bypasses the shared tail)
+ *   V27TX_STATE_SCR1     installs TxHdxDataV27, budget 1 (no table lookup),
+ *                        RESULT_B1_BIT0 SET, RETURNS
+ *   V27TX_STATE_DATA     SGD_control(gen={PATTERN_SCR1[rate],1}), installs
+ *                        TxHdxSCR1V27, budget FRMSIZE[rate] -- reached only
+ *                        from TxHdxDataV27's own underrun-bypass arm, which
+ *                        nothing reconstructed drives (see TxHdxDataV27)
+ *   V27TX_STATE_TURNOFF  installs TxHdxQuietV27, budget FRMSIZE[rate]
+ *   V27TX_STATE_NOENG    installs TxHdxIdleV27, budget 0, RESULT_B2_BIT0 SET
+ *   V27TX_STATE_IDLE     installs TxHdxStartV27, budget 0 -- wraps to START
+ *
+ * EVERY ARM CLEARS RESULT_B2_BIT0 on its way out except NOENG's, which SETS
+ * it, and every arm clears RESULT_B1_BIT0 except EQCOND's (cleared
+ * explicitly, matching the shared tail) and SCR1's (SET, and returned
+ * before the tail can clear it) -- `TxNextStateV29`'s own SCR1 asymmetry,
+ * one state index later in this machine's numbering.
+ *
+ * `V27TX_STATE_NOCARR`/`_ALT` INDEX BY `V27TXP_TRAIN_LONG`, NOT
+ * `V27TXP_RATE` -- the one place this machine differs from `V27TX_FRMSIZE`'s
+ * own rate indexing, and it is what the object's `movswl 0xe(%ecx)` reads
+ * (field 0x0e, not 0xc) at both sites.
+ *
+ * `req.det` IS `SGD_CTL.det`, read back out of the global exactly as
+ * `TxNextStateV29`'s own two sites do -- this machine's four, matching
+ * `sgd.h`'s own tally of "7+4+2 = 13" SGD_control sites across V.17, V.27ter
+ * and V.29.
+ */
+void
+TxNextStateV27(void *modem)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	short state = FIELD_S(prm, V27TXP_STATE);
+
+	switch (state) {
+	case V27TX_STATE_START:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_START\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) =
+			V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)];
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxQuietV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_QUIET;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_QUIET:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_QUIET\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = (unsigned short)
+				V27TX_PATTERN_CARR[FIELD_S(prm, V27TXP_RATE)];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V27TXD_SGD), &req);
+		}
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		FIELD_S(prm, V27TXP_COUNTDOWN) = (short)
+			(V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)] * 10);
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxAltV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_CARR;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_CARR:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_CARR\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) =
+			V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)];
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxQuietV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_NOCARR;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_NOCARR:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_NOCARR\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = (unsigned short)
+				V27TX_PATTERN_ALT[FIELD_S(prm, V27TXP_RATE)];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V27TXD_SGD), &req);
+		}
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		FIELD_S(prm, V27TXP_COUNTDOWN) =
+			V27TX_ALT_COUNT[FIELD_S(prm, V27TXP_TRAIN_LONG)];
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxAltV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_ALT;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_ALT:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_ALT\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) =
+			V27TX_EQCOND_COUNT[FIELD_S(prm, V27TXP_TRAIN_LONG)];
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxEQCondV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_EQCOND;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_EQCOND:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_EQCOND\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = (unsigned short)
+				V27TX_PATTERN_SCR1[FIELD_S(prm, V27TXP_RATE)];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V27TXD_SGD), &req);
+		}
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		FIELD_S(prm, V27TXP_COUNTDOWN) = 8;
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxSCR1V27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_SCR1;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) &=
+			(unsigned char)~V27TX_RESULT_B1_BIT0;
+		SetScramblerV27(modem);
+		return;
+
+	case V27TX_STATE_SCR1:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_SCR1\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) = 1;
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxDataV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_DATA;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) |= V27TX_RESULT_B1_BIT0;
+		return;
+
+	case V27TX_STATE_DATA:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_DATA\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = (unsigned short)
+				V27TX_PATTERN_SCR1[FIELD_S(prm, V27TXP_RATE)];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V27TXD_SGD), &req);
+		}
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		FIELD_S(prm, V27TXP_COUNTDOWN) =
+			V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)];
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxSCR1V27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_TURNOFF;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_TURNOFF:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_TURNOFF\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) =
+			V27TX_FRMSIZE[FIELD_S(prm, V27TXP_RATE)];
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxQuietV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_NOENG;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	case V27TX_STATE_NOENG:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_NOENG\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) = 0;
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxIdleV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_IDLE;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) |= V27TX_RESULT_B2_BIT0;
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) &=
+			(unsigned char)~V27TX_RESULT_B1_BIT0;
+		return;
+
+	case V27TX_STATE_IDLE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_STATE_IDLE\n");
+		FIELD_S(prm, V27TXP_COUNTDOWN) = 0;
+		*(v27tx_process_fn *)(void *)FIELD(prm, V27TXP_PROCESS) =
+			TxHdxStartV27;
+		FIELD_S(prm, V27TXP_STATE) = V27TX_STATE_START;
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V27TX_DEFAULT, %d\n", state);
+		*FIELD(modem, V27TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V27TX_RESULT_B2_BIT0;
+		FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_DEFAULT;
+		*FIELD(modem, V27TX_OBJ_RESULT_B1) = (unsigned char)
+			((*FIELD(modem, V27TX_OBJ_RESULT_B1)
+			  | V27TX_RESULT_B1_BIT1)
+			 & (unsigned char)~V27TX_RESULT_B1_BIT0);
+		break;
+	}
+
+	*FIELD(modem, V27TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V27TX_RESULT_B1_BIT0;
+}
+
+/*
+ * TxHdxStartV27 .text 0x0a3e10, 21 bytes.  Nothing but the transition.
+ */
+short
+TxHdxStartV27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	(void)in;
+	(void)out;
+	(void)budget;
+	TxNextStateV27(modem);
+	return 0;
+}
+
+/*
+ * TxHdxQuietV27 .text 0x0a3d60, 160 bytes.
+ *
+ * Spend `min(V27TXP_COUNTDOWN, *budget)` on `TxNoCarrierV27`, or transition
+ * once the countdown reaches zero.  `TxHdxAltV27` is the identical shape
+ * over `SGD_symbol_gen`+`ModDataV27` instead.
+ */
+short
+TxHdxQuietV27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	short countdown;
+	short taken;
+	short r;
+
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_TRAINING;
+
+	countdown = FIELD_S(prm, V27TXP_COUNTDOWN);
+	if (countdown <= 0) {
+		TxNextStateV27(modem);
+		return 0;
+	}
+
+	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	FIELD_S(prm, V27TXP_COUNTDOWN) = (short)(countdown - taken);
+
+	r = TxNoCarrierV27(modem, in, out, (unsigned short)taken);
+	*budget = (short)(*budget - taken);
+	return r;
+}
+
+/*
+ * TxHdxAltV27 .text 0x0a3ca0, 190 bytes.
+ *
+ * `SGD_symbol_gen` fills `in` with `taken` symbols using the pattern
+ * `TxNextStateV27`'s NOCARR arm just installed into the SGD, then
+ * `ModDataV27` modulates them -- `TxHdxQuietV27`'s shape with the source
+ * swapped for a real pattern.
+ */
+short
+TxHdxAltV27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	short countdown;
+	short taken;
+	short r;
+
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_TRAINING;
+
+	countdown = FIELD_S(prm, V27TXP_COUNTDOWN);
+	if (countdown <= 0) {
+		TxNextStateV27(modem);
+		return 0;
+	}
+
+	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	FIELD_S(prm, V27TXP_COUNTDOWN) = (short)(countdown - taken);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V27TXD_SGD), in, taken);
+	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
+
+	*budget = (short)(*budget - taken);
+	return r;
+}
+
+/*
+ * TxHdxEQCondV27 .text 0x0a3b90, 264 bytes.
+ *
+ * Equaliser conditioning: fill `in[0..taken)` with the literal 7, scramble
+ * the whole run, then walk it choosing `V27TX_PATTERN_ALT[rate]` or
+ * `V27TX_PATTERN_CARR[rate]` per element from bit 2 of the FOLLOWING
+ * scrambled element -- `in[taken]`, one element past what was filled, on the
+ * loop's last iteration.  Reproduced as `in[i + 1] & 0x04`, a full-word test
+ * rather than the object's byte test on `((unsigned char *)&in[i+1])[0]`;
+ * x86 is little-endian, so the two are the same value for every `in[i+1]`.
+ */
+short
+TxHdxEQCondV27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	short countdown;
+	short taken;
+	short r;
+	short i;
+
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_TRAINING;
+
+	countdown = FIELD_S(prm, V27TXP_COUNTDOWN);
+	if (countdown <= 0) {
+		TxNextStateV27(modem);
+		return 0;
+	}
+
+	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	FIELD_S(prm, V27TXP_COUNTDOWN) = (short)(countdown - taken);
+
+	for (i = 0; i < taken; i++)
+		in[i] = 7;
+
+	ScrambleDataV27(modem, in, taken);
+
+	if (taken != 0) {
+		short rate;
+
+		prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		rate = FIELD_S(prm, V27TXP_RATE);
+
+		for (i = 0; i < taken; i++) {
+			if (in[i + 1] & 0x04)
+				in[i] = (unsigned short)V27TX_PATTERN_ALT[rate];
+			else
+				in[i] = (unsigned short)
+					V27TX_PATTERN_CARR[rate];
+		}
+	}
+
+	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
+	*budget = (short)(*budget - taken);
+	return r;
+}
+
+/*
+ * TxHdxSCR1V27 .text 0x0a3ac0, 206 bytes.
+ *
+ * `SGD_symbol_gen`, `ScrambleDataV27`, `ModDataV27` -- the scrambled-1s
+ * training pattern.  `TxNextStateV27`'s EQCOND arm seeds
+ * `V27TXP_COUNTDOWN` to 8 for this handler's first calls and its OWN arm
+ * (reached when that countdown hits zero) reseeds it to 1 and installs
+ * `TxHdxDataV27`, so this handler's own countdown-exhausted transition is
+ * what carries the machine into DATA.
+ */
+short
+TxHdxSCR1V27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	short countdown;
+	short taken;
+	short r;
+
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_TRAINING;
+
+	countdown = FIELD_S(prm, V27TXP_COUNTDOWN);
+	if (countdown <= 0) {
+		TxNextStateV27(modem);
+		return 0;
+	}
+
+	taken = (short)((countdown <= *budget) ? countdown : *budget);
+	FIELD_S(prm, V27TXP_COUNTDOWN) = (short)(countdown - taken);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V27TXD_SGD), in, taken);
+	ScrambleDataV27(modem, in, taken);
+	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
+
+	*budget = (short)(*budget - taken);
+	return r;
+}
+
+/*
+ * TxHdxDataV27 .text 0x0a3980, 314 bytes.
+ *
+ * Drain the FIFO through `FIFO_read`, scramble, modulate.
+ *
+ * THE ONE-TIME ENTRY STATUS.  `V27TXP_COUNTDOWN` is nonzero exactly once, on
+ * the call right after the SCR1->DATA transition -- SCR1's own arm seeds it
+ * to 1 and never overwrites it with a table lookup the way every other arm
+ * does -- so this is the only handler that reads it as anything but a
+ * countdown, and it clears the field immediately after.
+ *
+ * `FIFO_read` NEVER RETURNS MORE THAN IT IS ASKED FOR (`faxfifo.h`'s own
+ * contract), and this function asks for exactly `*budget`, so the object's
+ * `got > *budget` branch is UNREACHABLE from `V27TX_modem`'s own loop --
+ * `TxHdxDataV29`'s own `V29TXP_INT_0008` arm, one modulation over, and
+ * `t_v29txcreate.c`'s own idiom for reaching it (`TxHdxDataV27` called
+ * directly with `V27TXP_INT_0008` poked non-zero) is the only way in.
+ */
+short
+TxHdxDataV27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	short taken;
+	short got;
+	short r;
+
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_DATA;
+
+	if (FIELD_S(prm, V27TXP_COUNTDOWN) != 0) {
+		short rate = FIELD_S(prm, V27TXP_RATE);
+
+		FIELD_S(prm, V27TXP_COUNTDOWN) = 0;
+
+		if (rate == 0)
+			FIELD_BYTE(modem, V27TX_OBJ_RESULT) =
+				V27TX_STATUS_ENTER_DATA_2400;
+		else if (rate == 1)
+			FIELD_BYTE(modem, V27TX_OBJ_RESULT) =
+				V27TX_STATUS_ENTER_DATA_4800;
+		else
+			FIELD_BYTE(modem, V27TX_OBJ_RESULT) =
+				V27TX_STATUS_DEFAULT;
+	}
+
+	taken = *budget;
+	got = (short)FIFO_read((struct fax_fifo *)
+					FIELD_PTR(prm, V27TXD_FIFO),
+			       in, (unsigned short)taken);
+
+	if (*budget <= got) {
+		ScrambleDataV27(modem, in, got);
+		r = (short)ModDataV27(modem, in, out, (unsigned short)got);
+		*budget = (short)(*budget - got);
+		return r;
+	}
+
+	/* Underrun: FIFO_read returned fewer than asked for. */
+	if (FIELD_I(prm, V27TXP_INT_0008) != 0) {
+		short remaining = (short)(*budget - got);
+
+		*budget = remaining;
+		ScrambleDataV27(modem, in, got);
+		r = (short)ModDataV27(modem, in, out, (unsigned short)got);
+		TxNextStateV27(modem);
+		return r;
+	}
+
+	*FIELD(modem, V27TX_OBJ_RESULT_B1) |= V27TX_RESULT_B1_BIT1;
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_UNDERRUN;
+	taken = *budget;
+	ScrambleDataV27(modem, in, taken);
+	r = (short)ModDataV27(modem, in, out, (unsigned short)taken);
+	*budget = (short)(*budget - taken);
+	return r;
+}
+
+/*
+ * TxHdxIdleV27 .text 0x0a3900, 116 bytes.
+ *
+ * `V27TX_STATUS_IDLE` is written UNCONDITIONALLY at entry, even on the
+ * transition arm, which the object does not undo -- `TxHdxIdleV29`'s own
+ * shape.  With the FIFO non-empty this does not modulate at all, just
+ * transitions; with it empty this spends the WHOLE current `*budget` on
+ * `TxNoCarrierV27` in one call.
+ */
+short
+TxHdxIdleV27(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	struct fax_fifo *fifo;
+	short taken;
+	short r;
+
+	FIELD_BYTE(modem, V27TX_OBJ_RESULT) = V27TX_STATUS_IDLE;
+
+	fifo = (struct fax_fifo *)FIELD_PTR(prm, V27TXD_FIFO);
+	if (fifo->count != 0) {
+		TxNextStateV27(modem);
+		return 0;
+	}
+
+	taken = *budget;
+	r = TxNoCarrierV27(modem, in, out, (unsigned short)taken);
+	*budget = (short)(*budget - taken);
+	return r;
+}
+
+/*
+ * TxNoCarrierV27 .text 0x0a5f50, 151 bytes.
+ *
+ * Fill `count` symbol-ring slots with `V27TX_NOCARR_SYMBOL[rate]` -- wrapping
+ * `widx` against `struct fpm_smc_ring::len` by hand, one slot at a time,
+ * rather than through `FPM_SMC_encoder` -- then run the pulse shaper over
+ * `count` samples.  `sym` and `len` are read out of the ring ONCE, before the
+ * loop, and only `rate` is re-read every iteration -- the object's own
+ * register/reload discipline, and `in` is UNREAD, exactly as its callers'
+ * own `in` buffers go untouched here.
+ */
+short
+TxNoCarrierV27(void *modem, unsigned short *in, short *out,
+	      unsigned short count)
+{
+	void *tx = FIELD_PTR(modem, V27_OBJ_TX);
+	struct fpm_smc_ring *ring =
+		(struct fpm_smc_ring *)(void *)FIELD(tx, V27TX_RING);
+	short *sym = ring->sym;
+	short len = ring->len;
+	short widx = ring->widx;
+	unsigned short i;
+	short r;
+
+	(void)in;
+
+	for (i = 0; i < count; i++) {
+		void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		short rate = FIELD_S(prm, V27TXP_RATE);
+
+		sym[widx] = V27TX_NOCARR_SYMBOL[rate];
+		widx = (short)((widx + 1 < len) ? widx + 1 : 0);
+	}
+
+	r = (short)FPM_PPS_filter(
+		(struct fpm_pps *)(void *)FIELD(tx, V27TX_PPS),
+		(struct fpm_smc_ring *)(void *)FIELD(tx, V27TX_RING),
+		out, count);
+
+	tx = FIELD_PTR(modem, V27_OBJ_TX);
+	((struct fpm_smc_ring *)(void *)FIELD(tx, V27TX_RING))->widx = widx;
+
+	return r;
+}
+
+/*
+ * GenEQTrnSequenceV27 .text 0x0a33f0, 134 bytes.
+ *
+ * `TxHdxEQCondV27`'s own fill/scramble/choose sequence, free-standing over a
+ * caller's buffer and count instead of `*budget`.  No reconstructed caller
+ * reaches it and, per the reverse-edge probe `docs/remaining.md` records,
+ * neither does anything in the object -- exported API surface with no
+ * internal caller, not a missing graph hop.
+ */
+void
+GenEQTrnSequenceV27(void *modem, unsigned short *buf, unsigned short count)
+{
+	unsigned short i;
+
+	for (i = 0; i < count; i++)
+		buf[i] = 7;
+
+	ScrambleDataV27(modem, buf, (short)count);
+
+	if (count != 0) {
+		void *prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+		short rate = FIELD_S(prm, V27TXP_RATE);
+
+		for (i = 0; i < count; i++) {
+			if (buf[i + 1] & 0x04)
+				buf[i] = (unsigned short)
+					V27TX_PATTERN_ALT[rate];
+			else
+				buf[i] = (unsigned short)
+					V27TX_PATTERN_CARR[rate];
+		}
+	}
 }

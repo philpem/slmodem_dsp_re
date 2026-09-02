@@ -109846,3 +109846,217 @@ this wave's five symbols were never on either closure's path. Both remain
 blocked on the V.17/V.27 TX half-duplex machinery (`TxNextStateV17`,
 `V27TX_create`, `SetScramblerV27`, `TxHdxABV17` and the rest) two other
 strands are writing this wave.
+## F9950. `TxNextStateV27` is an eleven-state stored-function-pointer cycle, same shape as F8492/F8493, and the whole cycle landed together
+
+`TxNextStateV27` (.text 0x0a3480, 1148 bytes) is a jump table over
+`V27TXP_STATE` bounded `cmp $0xa` / `ja default` -- eleven arms, not V.29's
+seven -- and every arm installs the NEXT arm's `TxHdx*V27` handler by
+address (`movl $handler,0x10(%ecx)`, an `R_386_32` relocation with no `call`
+anywhere near it) while the seven `TxHdx*V27` handlers each tail-call back
+into `TxNextStateV27` once their own countdown reaches zero. Per F8492/F8493
+a reference from `src/` to a symbol this tree has not written is an
+undefined reference that fails the whole test binary, for a stored function
+pointer exactly as for a call -- so no proper subset of `TxNextStateV27` and
+the seven `TxHdx*V27` states links, and all eight were written in one
+commit together with `SetScramblerV27` (called from the EQCOND arm) and
+`TxNoCarrierV27` (called from `TxHdxQuietV27`/`TxHdxIdleV27`).
+
+State names came off the object's own debug strings, .rodata.str1.1
+0x4c21..0x4cdc (`V27TX_STATE_START` through `V27TX_STATE_EQCOND`,
+CLAUDE.md's evidence rank 1), each arm's print naming the state being LEFT --
+`TxNextStateV29`'s own convention, confirmed self-consistent the same way
+F9320/F9701 confirmed it there: every arm's printed name matches the state
+value the jump table's own bytes (`.rodata` 0xc330..0xc358, dumped with
+`objdump -s` since the twelve pointers there carry no per-entry symbol,
+only a whole-range `R_386_32 .text` relocation) route to that arm.
+
+The topology is NOT V.29's linear seven-state cycle: `V27TX_STATE_NOCARR`
+and `_ALT` index `V27TX_ALT_COUNT`/`V27TX_EQCOND_COUNT` by `V27TXP_TRAIN_LONG`
+rather than by rate (the one site in this machine where `0xe(%ecx)` is read
+instead of `0xc(%ecx)`), and `V27TX_STATE_DATA` -- the arm TxHdxDataV27's own
+underrun-bypass path calls into, not anything reachable in ordinary
+operation -- installs `TxHdxSCR1V27` again rather than continuing toward
+IDLE, so the "TURNOFF"/"NOENG"/"IDLE" tail of the cycle (states 8/9/10, plus
+0/START on the wrap) is reachable ONLY through that one rare path. Measured,
+not assumed: a 600-block driven differential run (`t_v27txcreate.c`,
+`test_tx_cycle`) visits states 1..7 (QUIET..DATA) on every run and NEVER
+visits 0/8/9/10, and `test_data_underrun_bypass_arm` is what reaches the one
+transition (DATA -> TURNOFF) the underrun path actually takes.
+
+`make one T=t_v27txcreate` — all six groups green, 3,376 checks. Not
+period-gated; the parent session runs `make phase`/`make period`.
+
+## F9951. `struct v27tx_cfg` is 32 bytes, one dword longer than V.29's config, and its own default instance takes its own default arm
+
+`V27TX_create` (.text 0x09a330, 1165 bytes) copies eight dwords from
+`params` or, when NULL, from `V27TX_CFG` -- one more than
+`struct v29tx_cfg`'s seven at the identical role, read directly off the
+copy loop's own instructions (0x9a375..0x9a3af, then a ninth store at
+0x9a3af for the field the fresh-vs-reuse branch reorders around). `protocol`/
+`bitrate` are rank 2 (typed by `V27TX_status`'s own reads of the handle's
++0x00/+0x02, already established before this closure landed); the rest are
+usage inference, flagged as such in `v27fax.h`.
+
+**`V27TX_CFG` ITSELF IS THE DEFAULT-ARM CASE.** Dumped straight from the
+object's `.data` bytes at 0x007d60 (`objdump -s`, no relocations inside the
+range): `bitrate` is 9600, which is neither of V.27ter's own rates (2400,
+4800) -- so a caller passing `params == NULL` takes `V27TX_create`'s own
+"neither rate" branch, sets `V27TXP_RATE` to 1 (4800) anyway and raises
+`V27TX_RESULT_B1_BIT1` plus `V27TX_STATUS_DEFAULT`. `t_v27txcreate.c`'s
+`{ "params NULL (V27TX_CFG)", 1, 0 }` case exercises exactly this and does
+NOT assert the default-arm side effects (only the explicit-9600 case does,
+since the default-instance path and the explicit-invalid-bitrate path are
+behaviourally identical and the test's own `cases[]` table already covers
+the explicit one).
+
+The private DSP block's ring allocates only `struct fpm_smc_ring::sym`
+(`V27TX_FRMSIZE[rate] + 2` elements) -- `i`/`q` are zeroed and never
+`sysdep_malloc`'d, because `ModDataV27` (already written, prior wave) runs
+`FPM_PPS_filter` in MAPPED mode. This is NOT V.29's ring shape (a bespoke
+struct with `i`/`q` both allocated at a fixed 0x64 bytes); `V27TX_delete`
+(already written) frees exactly the one buffer this closure's `V27TX_create`
+allocates, which is what first suggested the asymmetry and this closure
+confirms it from the constructor's own side.
+
+## F9952. `TxHdxDataV27`'s `FIFO_read` "got > *budget" branch is unreachable from ordinary driving, `TxHdxDataV29`'s own shape one modulation over
+
+`TxHdxDataV27` reads `taken = *budget` and calls
+`FIFO_read(fifo, in, taken)`, whose own contract (`faxfifo.h`) is that it
+NEVER returns more than it is asked for. The object still encodes a branch
+for `got > *budget` (`V27TXP_INT_0008 != 0`: reseed `*budget` to the
+remainder, scramble/modulate only `got`, call `TxNextStateV27`, return early
+without the tail's `*budget -= taken`), which is therefore dead on every
+path `V27TX_create`'s own machine can drive itself -- `int_0008` is zeroed
+by `V27TX_create` and nothing reconstructed anywhere in this closure ever
+sets it non-zero, the identical shape `t_v29txcreate.c` already documented
+for `TxHdxDataV29`'s `V29TXP_INT_0008` arm.
+
+Reached the same way `t_v29txcreate.c` reaches its own: `TxHdxDataV27`
+called directly against a handle `V27TX_create` built, with the FIFO
+underfed by hand and `V27TXP_INT_0008` poked to 1 by offset --
+`t_v27txcreate.c`'s `test_data_underrun_bypass_arm`, 9 checks, confirming
+the remainder is left in `*budget` (6, not 0) and that the transition this
+arm alone can reach (DATA -> TURNOFF, `TxHdxSCR1V27` installed) matches the
+blob on both sides.
+
+## F9953. `GenEQTrnSequenceV27` really is a leaf with no relocation anywhere, exactly as the reverse-edge probe already found
+
+`GenEQTrnSequenceV27` (.text 0x0a33f0, 134 bytes) is `TxHdxEQCondV27`'s own
+fill/scramble/choose sequence lifted out as a free-standing function over a
+caller-supplied buffer and count instead of `*budget` -- confirmed by
+disassembling both and finding the same three-part shape (fill with the
+literal 7, `ScrambleDataV27`, then walk choosing `V27TX_PATTERN_ALT[rate]`
+or `V27TX_PATTERN_CARR[rate]` per element from bit 2 of the FOLLOWING
+element). `objdump -r` over the whole object finds no relocation naming
+`GenEQTrnSequenceV27` anywhere outside its own 134 bytes, matching
+`docs/remaining.md`'s reverse-edge probe (129 of 139 no-entry-point leaves
+have no referrer at all, and this is one of the four named examples there).
+Written on its own merit once `V27TX_PATTERN_ALT`/`_CARR` landed as part of
+F9950's closure, not because anything calls it. `t_v27txcreate.c`'s
+`test_gen_eq_trn_sequence`, both rates and seven counts including 0, 26
+checks.
+
+## F9954. `V27RX_control`'s request layout, entirely usage inference, and the two independent gates the object's nested branch encodes as one
+
+`V27RX_control` (.text 0x0a32a0, 125 bytes) was READY and standalone --
+`tools/readyqueue.py` confirmed it, in the blob span misleadingly labelled
+`class1tx.c +94` (CLAUDE.md's "DO NOT READ A SPAN NAME AS A MODULE NAME"
+trap; the function is v27.c's). No sibling `V17RX_control`/`V21RX_control`/
+`V29RX_control` is written anywhere in this tree to type its request
+against, so every field below is usage inference, weakest of CLAUDE.md's
+three evidence ranks, and named that way in `v27fax.h`: +0x04 (int, copied
+straight into the receive handle's own `int_0008`), +0x0c (a MASK byte
+tested bit 0x08 against `V27RX_EN_00` and bit 0x20 against
+`V27RX_EN_FSE_LMS`), +0x0d (a FLAGS byte: bit 0x10 forces `V27SH_INT_0004`,
+the field `RxHdxDataV27`'s own comment already calls "planted from outside";
+bit 0x02 re-runs `V27RX_create(rx, rx)`, self-copying the handle's own first
+28 bytes onto itself since "the handle's first 28 bytes ARE the
+configuration").
+
+**`V27RX_EN_00` IS A NEWLY-NAMED FOURTH ENABLE.** `v27fax.h` already
+documented three caller-owned enables at rx+0x04/+0x08/+0x10
+(`V27RX_EN_SRE_ADAPT`/`_FSE_PLL`/`_FSE_LMS`) and a fourth field at +0x0c
+`V27RX_create` sets to 0 -- but rx+0x00, set to 1 by the same
+`V27RX_create` alongside the other three, had no name because nothing read
+it. `V27RX_control` is that reader (it CLEARS it, gated on the mask byte's
+0x08 bit), so it is named `V27RX_EN_00` here on the same class of evidence
+the other three already carry, and still not typed to a meaning.
+
+**THE OBJECT'S NESTED BRANCH (`flags & 0x10` gates a SECOND test of
+`flags & 0x02` on one arm, and the other arm tests `flags & 0x02`
+independently before falling through) COLLAPSES TO TWO INDEPENDENT `if`s
+with no change in behaviour for any input** -- both of the object's paths
+call `V27RX_create(rx, rx)` on the identical `flags & 0x02` condition, so
+factoring it out to run once is a pure control-flow simplification, not a
+behavioural claim; `t_v27rxcontrol.c`'s cases include the bit combined with
+`0x10` both set and clear to cover it. `t_v27rxcontrol.c`, two groups, 56
+checks; a live mutation (forcing `V27SH_INT_0004` to 2 instead of 1 on the
+force-nocarrier arm) was reverted after confirming the differential test
+catches it, per CLAUDE.md's F134 discipline. (2026-09-02)
+
+## F9955. `V27TX_modem` is `V29TX_modem`'s own shape, exactly, and it went from unwritten to READY the moment F9950's closure landed
+
+Not part of `V27TX_create`'s own 42-symbol closure (nothing in that closure
+calls it), but `tools/readyqueue.py` reported it READY -- needing only
+itself -- as soon as `TxNextStateV27` and the seven `TxHdx*V27` handlers
+existed for it to dispatch through. `V27TX_modem` (.text 0x0a3330, 192
+bytes) disassembled to the identical structure `V29TX_modem` already has,
+field for field: clear `V27TX_RESULT_B1_BIT1`; `FIFO_write` the caller's
+`in` into the queue unless `V27TXP_INT_0008` is non-zero (in which case
+`*count` is taken as already queued); run the installed handler in a
+do/while seeded with a budget, accumulating each call's return into
+`*count`'s own out-value and advancing `out`; report `V27TX_RESULT_BYTE_07`
+(bare-named, `V29TX_RESULT_BYTE_07`'s own shape -- nothing establishes what
+7 means beyond the literal byte) if the FIFO could not take the whole
+block.
+
+**THE ONE REAL DIFFERENCE FROM V.29's SHAPE: THE BUDGET SEED.** `V29TX_modem`
+seeds its do/while from a named constant, `V29TX_MODEM_BUDGET` (0x30,
+unrelated to any per-rate table). `V27TX_modem` seeds it from
+`V27TX_FRMSIZE[rate]` directly -- the SAME table `V27TX_STATE_START`'s own
+arm in `TxNextStateV27` uses for its own budget, re-read here rather than
+reused, `V27TXP_RATE`'s own established re-read discipline holding one more
+function over. `in` is passed UNCHANGED to every call in the loop (never
+advanced across iterations) -- confirmed by the object re-reading the SAME
+stack slot for the second argument on every one of `V27TX_modem`'s own call
+sites rather than advancing a pointer, matching every `TxHdx*V27` handler's
+own scratch-buffer treatment of it.
+
+`t_v27txcreate.c`'s `test_modem_cycle`, 800 driven blocks through the real
+entry point (not the by-hand handler dispatch `test_tx_cycle` already
+covers), 3,257 checks; the scratch buffer sized 512 rather than the smaller
+size first tried, because QUIET's own budget reaches
+`V27TX_FRMSIZE[rate] * 10` (up to 320 at 4800 bit/s) and `in` is the WHOLE
+dispatch loop's scratch, not sized to the queued count -- `t_v29txcreate.c`'s
+own documented trap, hit and fixed here rather than avoided by reading the
+warning first. A live mutation (budget seeded one element too wide) was
+reverted after confirming the test catches it. (2026-09-02)
+
+## F9956. `V27TX_control` is `V27RX_control`'s own shape, transmit side, and READY the moment it was checked
+
+Also not part of `V27TX_create`'s own closure, and also not in the original
+brief this batch worked from -- found READY by re-running
+`tools/readyqueue.py` after F9950/F9955 landed. `V27TX_control` (.text
+0x0a3e30, 148 bytes) disassembled to the same request-driven shape
+`V27RX_control` already established: an int copied straight into the
+handle's own `int_0008` and another into `int_0018`, a mask byte's one bit
+gated against `V27TX_HANDLE_FLAGS` (already-named, from `V27TX_status`'s own
+prior-wave read of it), a flags byte's two bits gating `V27TXP_INT_0008`'s
+force and a `V27TX_create(modem, modem)` self-reinit -- `V27RX_control`'s
+own idiom, transmit side.
+
+**THE ONE FIELD WITH NO RECEIVE-SIDE ANALOGUE: THE PULSE SHAPER'S LIVE
+GAIN.** `V27TX_control` computes `pps.cfg.scale = req->0x08 *
+V27TX_PPS_SCALE[rate]` -- the SAME table `V27TX_create` seeds `scale` from
+at construction (`V27TX_PPS_SCALE[rate] * cfg.int_000c`, F9951), but driven
+by the request's own multiplier instead of the handle's `int_000c`, which
+this function does not touch. Typed by `struct fpm_pps_cfg::scale` (already
+`int`, `fpm_pps.h`), not inferred from the byte count; `tx + 0x64` lands
+exactly on `pps.cfg.scale` because `V27TX_PPS` (0x5c) plus the field's own
+offset (0x08) is 0x64, arithmetic rather than a guess.
+
+`t_v27txcreate.c`'s `test_tx_control`, seven cases (every mask/flags bit
+combination the other two request bytes exercise, `V27RX_control`'s own
+case-table shape), 49 checks, plus `test_tx_control_null_req`. A live
+mutation (the mask bit's target flag value changed from 0x04 to 0x08) was
+reverted after confirming the test catches it. (2026-09-02)

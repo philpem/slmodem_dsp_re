@@ -147,6 +147,39 @@
 struct fpm_fse;
 struct v27rx_cfg;
 
+/*
+ * The transmit handle's first 32 bytes, `V27TX_create` copies wholesale from
+ * the caller's `params` or, when NULL, from `V27TX_CFG` -- eight dwords read
+ * off its own copy loop (0x9a375..0x9a3af), one more than `struct v29tx_cfg`
+ * (0x1c) at the identical role, so this is NOT that struct one field short:
+ * V.27ter's `int_001c` is its own field and V.29's `int_0018` fills the same
+ * ROLE (FPM_PPS_CFG's `aux`) one field earlier.
+ *
+ * `protocol`/`bitrate` are RANK 2: `V27TX_status` reads the transmit handle's
+ * own +0x00/+0x02 back as `V27STAT_PROTOCOL`/`V27STAT_TX_BPS`, and
+ * `V27TX_create`'s only branch on the config tests +0x02 against 2400 and
+ * 4800 in decimal.  `flags_0010`/`short_0012` split the fifth dword because
+ * `V27TX_status` reads the handle's own +0x10 back as a SHORT
+ * (`V27TX_HANDLE_FLAGS`); nothing splits the others, so they stay one `int`
+ * each.  Usage inference for the rest, flagged per CLAUDE.md.
+ */
+struct v27tx_cfg {
+	short	protocol;	/* +0x00                                     */
+	short	bitrate;	/* +0x02  2400 or 4800                       */
+	int	int_0004;	/* +0x04                                     */
+	int	int_0008;	/* +0x08  60000, `v27rx_cfg`'s own value      */
+	int	int_000c;	/* +0x0c  1; multiplies into the PPS gain     */
+	short	flags_0010;	/* +0x10  `V27TX_HANDLE_FLAGS`                */
+	short	short_0012;	/* +0x12                                     */
+	int	int_0014;	/* +0x14  the transmit FIFO's element count is
+					this * `V27TX_FRMSIZE[rate]`         */
+	int	int_0018;	/* +0x18  `== 0` seeds `V27TXP_TRAIN_LONG`    */
+	int	int_001c;	/* +0x1c  `FPM_PPS_CFG`'s `aux`, across the
+					`(void *)(long)` idiom D1250 names   */
+};
+
+extern struct v27tx_cfg V27TX_CFG;
+
 /* ------------------------------------------------------------------ */
 /* The modem instance                                                  */
 
@@ -184,6 +217,105 @@ struct v27rx_cfg;
 #define V27_OBJ_TXDATA		0x24
 #define V27TXD_FIFO		0x00	/* struct fax_fifo * */
 #define V27TXD_SGD		0x04	/* struct sgd *      */
+
+/*
+ * ITS EXTENT IS ESTABLISHED NOW: `V27TX_create` allocates it at 0x18 (24)
+ * bytes and the half-duplex machine (`TxNextStateV27`, `SetScramblerV27` and
+ * every `TxHdx*V27`) fills every byte of it.  Six more fields, all found by
+ * `dis.py` against those functions rather than assumed from V.29's layout at
+ * the same offsets -- V.27ter's own field WIDTHS and roles differ, most
+ * visibly the two-int underrun/rate pair where V.29 has one.
+ *
+ *   V27TXP_INT_0008    int    zeroed by `V27TX_create`; `TxHdxDataV27` takes
+ *                             a different underrun arm when non-zero and
+ *                             nothing reconstructed ever sets it -- V.29's
+ *                             `V29TXP_INT_0008` again, same shape, same dead
+ *                             arm.
+ *   V27TXP_RATE        short  `V27TX_SH_RATE_*`-style index (0 = 2400,
+ *                             1 = 4800), re-read at every `V27TX_*` table
+ *                             lookup rather than cached, `V27SH_RATE`'s own
+ *                             discipline one modem over.
+ *   V27TXP_TRAIN_LONG  short  `(cfg->int_0018 == 0)`, set once by
+ *                             `V27TX_create` -- the transmit-side echo of
+ *                             `V27SH_TRAIN_LONG`, indexing
+ *                             `V27TX_ALT_COUNT`/`V27TX_EQCOND_COUNT`.
+ *   V27TXP_PROCESS     v27tx_process_fn  the installed half-duplex handler.
+ *   V27TXP_STATE       short  `TxNextStateV27`'s own dispatch index,
+ *                             `V27TX_STATE_*` below.
+ *   V27TXP_COUNTDOWN   short  the current handler's remaining budget for
+ *                             this state; every `TxHdx*V27` decrements it
+ *                             and calls `TxNextStateV27` at zero.
+ */
+#define V27TXP_INT_0008		0x08
+#define V27TXP_RATE		0x0c
+#define V27TXP_TRAIN_LONG	0x0e
+#define V27TXP_PROCESS		0x10
+#define V27TXP_STATE		0x14
+#define V27TXP_COUNTDOWN	0x16
+#define V27TXDATA_SIZE		0x18
+
+/*
+ * `TxNextStateV27`'s own dispatch index, at `V27TXP_STATE` -- an 11-entry
+ * jump table (`ja default` bounds it at 0xa), read off the object's own
+ * debug strings at .rodata.str1.1 0x4c21..0x4cdc, each naming the state
+ * being LEFT (CLAUDE.md's evidence rank 1, same technique F9320/F9701 used
+ * for V.29's four-entry machine).  The FUNCTION names and these STATE names
+ * disagree in places exactly as V29TX_STATE_ALT/TxHdxABV29 do; not
+ * reconciled, see TxNextStateV27's own comment in v27.c.
+ */
+#define V27TX_STATE_START	0
+#define V27TX_STATE_QUIET	1
+#define V27TX_STATE_CARR	2
+#define V27TX_STATE_NOCARR	3
+#define V27TX_STATE_ALT		4
+#define V27TX_STATE_EQCOND	5
+#define V27TX_STATE_SCR1	6
+#define V27TX_STATE_DATA	7
+#define V27TX_STATE_TURNOFF	8
+#define V27TX_STATE_NOENG	9
+#define V27TX_STATE_IDLE	10
+
+typedef short (*v27tx_process_fn)(void *modem, unsigned short *in,
+				  short *out, short *budget);
+
+/*
+ * The result word `V27TX_modem` would return (unwritten; nothing reconstructed
+ * calls it yet), and the two flag bytes beside it -- `V27TX_create` zeroes
+ * all three with one `movl $0x0,0x20(%ebp)` and the half-duplex machine reads
+ * and writes them as bytes throughout, the same ONE-WORD-NOT-THREE-FIELDS
+ * shape `V27_OBJ_STATUS` has on the receive side.
+ */
+#define V27TX_OBJ_RESULT	0x20	/* int; byte 0 is the status code   */
+#define V27TX_OBJ_RESULT_B1	0x21	/* byte                              */
+#define V27TX_OBJ_RESULT_B2	0x22	/* byte                              */
+
+#define V27TX_RESULT_B1_BIT0	(1 << 0)
+#define V27TX_RESULT_B1_BIT1	(1 << 1)
+#define V27TX_RESULT_B2_BIT0	(1 << 0)
+
+/*
+ * The status codes `V27TX_OBJ_RESULT`'s low byte carries.  Usage inference --
+ * each is what the naming FUNCTION writes into it, weakest of the three
+ * evidence ranks, flagged per CLAUDE.md.  `V27TX_STATUS_DEFAULT` is the
+ * exception: `TxNextStateV27`'s out-of-range arm and `V27TX_create`'s
+ * neither-2400-nor-4800 arm both write the literal 5, matching the "keeps
+ * whatever handler it had, reports DEFAULT" shape V29's own default arm has.
+ */
+#define V27TX_STATUS_DATA		0
+#define V27TX_STATUS_TRAINING		1	/* Quiet/Alt/EQCond/SCR1 all
+						   write this same value    */
+#define V27TX_STATUS_ENTER_DATA_2400	2
+#define V27TX_STATUS_ENTER_DATA_4800	3
+#define V27TX_STATUS_IDLE		4
+#define V27TX_STATUS_DEFAULT		5
+#define V27TX_STATUS_UNDERRUN		6
+
+/*
+ * `V27TX_modem`'s own report when the FIFO could not take the whole block --
+ * `V29TX_modem`'s identical `V29TX_RESULT_BYTE_07`, bare-named there too
+ * because nothing but the literal byte value is established.
+ */
+#define V27TX_RESULT_BYTE_07		7
 
 /*
  * The status word `V27RX_modem` returns, and the flags byte inside it.
@@ -404,6 +536,15 @@ struct v27rx_cfg;
 #define V27RX_EN_SRE_ADAPT	0x04
 #define V27RX_EN_FSE_PLL	0x08
 #define V27RX_EN_FSE_LMS	0x10
+
+/*
+ * A FOURTH caller-owned enable, at +0x00 -- `V27RX_create` sets it to 1
+ * alongside the three above (`FIELD_I(rx, 0x00) = 1;`, this file's own
+ * `V27RX_create`), and `V27RX_control` is the only function that clears it,
+ * gated on its own request's mask byte.  Neither function types what it
+ * selects; usage inference only.
+ */
+#define V27RX_EN_00		0x00
 
 /* The decoder block; see the header comment. */
 #define V27RX_DEC		0x14
@@ -1076,6 +1217,82 @@ short GetSNRV27(void *modem);
 int V27RX_status(void *rx, void *status);
 
 /*
+ * `V27RX_control`'s own request, byte offsets only -- CLAUDE.md's "the
+ * instance is not modelled" convention, because nothing establishes the
+ * request's size or any field before +0x04.  Usage inference throughout:
+ * every field's role is read off what `V27RX_control` DOES with it, not off
+ * a name or a typed caller/callee.
+ *
+ *   +0x04  int     copied straight into the handle's own `int_0008`
+ *                   (`struct v27rx_cfg`'s field of that name)
+ *   +0x0c  byte    a MASK, tested bit by bit against the receive block's
+ *                  enables
+ *   +0x0d  byte    FLAGS: bit 0x10 forces `V27SH_INT_0004` (the field
+ *                  `RxHdxDataV27`'s own comment calls "planted from
+ *                  outside"); bit 0x02 re-runs `V27RX_create(rx, rx)` --
+ *                  the handle's own first 28 bytes ARE its config, so this
+ *                  reinitialises from whatever is already there
+ */
+#define V27RXCTL_INT_0004		0x04
+#define V27RXCTL_MASK			0x0c
+#define V27RXCTL_FLAGS			0x0d
+
+#define V27RXCTL_MASK_DISABLE_00	(1 << 3)
+#define V27RXCTL_MASK_DISABLE_FSE_LMS	(1 << 5)
+#define V27RXCTL_FLAGS_FORCE_NOCARRIER	(1 << 4)
+#define V27RXCTL_FLAGS_REINIT		(1 << 1)
+
+/*
+ * Plant `V27SH_INT_0004` and/or two of the receive block's enables from the
+ * caller's request, and optionally re-run `V27RX_create` over the handle's
+ * own current config.  Returns 0 if `req` is NULL, else 1.
+ *
+ * THE TWO GATES THE OBJECT ENCODES AS ONE NESTED BRANCH COLLAPSE TO TWO
+ * INDEPENDENT TESTS: `V27SH_INT_0004 = (flags & FORCE_NOCARRIER) ? 1 : 0`
+ * and `if (flags & REINIT) V27RX_create(...)` fire the identical
+ * `V27RX_create` call on the SAME `flags & REINIT` bit whichever way the
+ * object's `jne`/`else` split reads it, so the collapse changes no
+ * behaviour for any input.  `int_0004` and the two enable-disables are
+ * unconditional on the request's other fields.
+ */
+int V27RX_control(void *rx, void *req);
+
+/*
+ * `V27TX_control`'s own request -- byte offsets only, `V27RX_control`'s own
+ * convention, and again entirely usage inference:
+ *
+ *   +0x04  int     copied straight into the handle's own `int_0008`
+ *   +0x08  int     multiplied by `V27TX_PPS_SCALE[rate]` into the pulse
+ *                  shaper's live `cfg.scale` -- the SAME table
+ *                  `V27TX_create` seeds `scale` from at construction time,
+ *                  here driven by the request instead of the handle's own
+ *                  `int_000c`
+ *   +0x0c  byte    a MASK, bit 0x04 tested against `V27TX_HANDLE_FLAGS`
+ *   +0x0d  byte    FLAGS: bit 0x10 forces `V27TXP_INT_0008`; bit 0x02
+ *                  re-runs `V27TX_create(modem, modem)` -- the transmit
+ *                  handle's own first 32 bytes ARE its config, the same
+ *                  self-reinit idiom `V27RX_control` uses
+ *   +0x10  int     copied straight into the handle's own `int_0018`
+ */
+#define V27TXCTL_INT_0004		0x04
+#define V27TXCTL_SCALE_MUL		0x08
+#define V27TXCTL_MASK			0x0c
+#define V27TXCTL_FLAGS			0x0d
+#define V27TXCTL_INT_0010		0x10
+
+#define V27TXCTL_MASK_HANDLE_FLAG_04	(1 << 2)
+#define V27TXCTL_FLAGS_FORCE_INT_0008	(1 << 4)
+#define V27TXCTL_FLAGS_REINIT		(1 << 1)
+
+/*
+ * Retune the pulse shaper's live gain, plant `int_0008`/`int_0018` from the
+ * request, and optionally re-run `V27TX_create` over the handle's own
+ * current config.  Returns 0 if `req` is NULL, else 1.  `V27RX_control`'s
+ * own shape, transmit side.
+ */
+int V27TX_control(void *modem, void *req);
+
+/*
  * Has the equaliser been told to adapt regardless of its own gate?
  *
  * Reads `fpm_fse::lms_force` and returns it as 0 or 1.  The NAME is the
@@ -1478,5 +1695,162 @@ unsigned short ModDataV27(void *modem, const unsigned short *bits,
 
 void ScrambleDataV27(void *modem, unsigned short *data, short count);
 void DescrambleDataV27(void *modem, unsigned short *data, short count);
+
+/* ------------------------------------------------------------------ */
+/* The transmit half-duplex machine and its constructor                */
+
+/*
+ * Build the transmitter: the handle, the data-source block (a FIFO and an
+ * `sgd`), and the private DSP block (the symbol ring, the scrambler, the
+ * symbol coder and the pulse shaper).  Returns the handle.
+ *
+ * BOTH ARGUMENTS MAY BE NULL, exactly as `V27RX_create`'s: a null `modem` is
+ * allocated here (44 bytes) with both block pointers cleared; a null
+ * `params` means `V27TX_CFG`.
+ *
+ * THE SYMBOL RING'S LENGTH IS COMPUTED, `V27TX_FRMSIZE[rate] + 2`, and its
+ * buffer -- `struct fpm_smc_ring::sym`, the only one of the ring's three
+ * buffer fields this modem allocates; `i` and `q` are zeroed and never
+ * `sysdep_malloc`'d, because `ModDataV27` runs the pulse shaper in MAPPED
+ * mode.  `V27TX_delete` frees exactly this one buffer, matching.
+ *
+ * A NEW HANDLE'S `fresh` FLAG THREADS ALL THE WAY TO `FPM_PPS_init`, the same
+ * shape as `V29TX_create`; a caller re-initialising an existing handle keeps
+ * every sub-object's own memory.
+ */
+void *V27TX_create(void *modem, const struct v27tx_cfg *params);
+
+/*
+ * Run the half-duplex machine until `*count` samples have been produced (or
+ * the FIFO cannot keep up), `V29TX_modem`'s own do/while shape one
+ * modulation over: fill the FIFO from `in` (unless `V27TXP_INT_0008` is
+ * non-zero, in which case `*count` is taken as already queued), then call
+ * the installed handler in a loop seeded with `V27TX_FRMSIZE[rate]` budget,
+ * accumulating what each call returns into `*count`'s own out-value and
+ * advancing `out`.  `in` is NOT advanced across calls -- passed unchanged to
+ * every one, exactly as the `TxHdx*V27` family's own scratch-buffer use of
+ * it expects.
+ */
+int V27TX_modem(void *modem, unsigned short *in, short *out,
+		unsigned short *count);
+
+/*
+ * Advance the transmit machine one step, from whatever `V27TXP_STATE` says.
+ *
+ * `ja default` bounds an 11-entry jump table (`V27TX_STATE_*`), and it is ONE
+ * OF THE PROJECT'S STORED-FUNCTION-POINTER CYCLES (F8492/F8493): every arm
+ * but SCR1's own transition installs the next state's `TxHdx*V27` handler by
+ * address and sets `V27TXP_STATE`; SCR1's OWN arm additionally calls
+ * `SetScramblerV27`.  No proper subset of `TxNextStateV27` and the seven
+ * `TxHdx*V27` states links, so they are written together.
+ *
+ * EVERY ARM CLEARS `V27TX_RESULT_B1_BIT0` ON ITS WAY OUT except SCR1's, which
+ * SETS it and returns immediately rather than falling into the shared tail --
+ * the same asymmetry `TxNextStateV29`'s own SCR1 arm has, one state earlier
+ * in that machine's own numbering.
+ */
+void TxNextStateV27(void *modem);
+
+/* Wait for a carrier: nothing but the transition.  21 bytes. */
+short TxHdxStartV27(void *modem, unsigned short *in, short *out,
+		    short *budget);
+
+/*
+ * Fill the budget with `TxNoCarrierV27` while `V27TXP_COUNTDOWN` runs down,
+ * then transition.  `TxHdxAltV27`'s and `TxHdxQuietV27`'s shapes are
+ * identical but for what they call once the budget is taken -- silence here,
+ * the ALT pattern there.
+ */
+short TxHdxQuietV27(void *modem, unsigned short *in, short *out,
+		    short *budget);
+
+/*
+ * Generate the alternating pattern with `SGD_symbol_gen` and modulate it,
+ * budget-limited the same way `TxHdxQuietV27` is.
+ */
+short TxHdxAltV27(void *modem, unsigned short *in, short *out,
+		  short *budget);
+
+/*
+ * Equaliser conditioning.  Fills `in` with the literal 7, scrambles it, then
+ * walks the scrambled buffer choosing `V27TX_PATTERN_ALT` or
+ * `V27TX_PATTERN_CARR` per element from bit 2 of the FOLLOWING scrambled
+ * element -- a one-ahead read that touches `in[taken]` on its last iteration,
+ * one element past what was filled.  Reproduced as a full-word test
+ * (`in[i+1] & 0x04`) rather than the object's byte test; behaviourally
+ * identical for every value 0x04 can appear in, since x86 is little-endian
+ * and the low byte carries that bit either way.
+ */
+short TxHdxEQCondV27(void *modem, unsigned short *in, short *out,
+		     short *budget);
+
+/*
+ * The scrambled-1s training pattern: `SGD_symbol_gen`, `ScrambleDataV27`,
+ * `ModDataV27`.  `TxNextStateV27`'s SCR1 arm seeds `V27TXP_COUNTDOWN` to 1 and
+ * does NOT overwrite it with a table lookup the way every other arm does, so
+ * this handler's very first call is what carries the machine into DATA.
+ */
+short TxHdxSCR1V27(void *modem, unsigned short *in, short *out,
+		   short *budget);
+
+/*
+ * The DATA state: drain the FIFO through `FIFO_read`, scramble, modulate.
+ *
+ * ONE-TIME ENTRY STATUS.  `V27TXP_COUNTDOWN` is nonzero exactly once, on the
+ * call that follows the SCR1->DATA transition (SCR1's arm seeds it to 1 and
+ * never clears it), and this function reads `V27TXP_RATE` at that one call to
+ * report `V27TX_STATUS_ENTER_DATA_2400`/`_4800` before clearing the field.
+ *
+ * THE UNDERRUN ARM `FIFO_read` GATES CANNOT BE REACHED FROM `V27TX_modem`'s
+ * OWN LOOP: `FIFO_read` never returns more than it is asked for, and this
+ * function asks for exactly `*budget`, so the "got > *budget" branch the
+ * object encodes is dead in every path this modem can drive itself -- the
+ * SAME shape `t_v29txcreate.c` documents for `TxHdxDataV29`'s own
+ * `V29TXP_INT_0008` arm.  Reached (if at all) by calling this handler
+ * directly with `V27TXP_INT_0008` poked non-zero, `t_v29txcreate.c`'s own
+ * idiom.
+ */
+short TxHdxDataV27(void *modem, unsigned short *in, short *out,
+		   short *budget);
+
+/*
+ * Spend the FIFO-EMPTY block on `TxNoCarrierV27`, or transition if the FIFO
+ * has data waiting.  Sets `V27TX_STATUS_IDLE` unconditionally on entry, even
+ * on the transition arm, which the object does not undo.
+ */
+short TxHdxIdleV27(void *modem, unsigned short *in, short *out,
+		   short *budget);
+
+/*
+ * Fill `count` symbol-ring slots with `V27TX_NOCARR_SYMBOL[rate]` -- wrapping
+ * `widx` against `struct fpm_smc_ring::len` by hand, one slot at a time,
+ * rather than through `FPM_SMC_encoder` -- then run the pulse shaper over
+ * `count` samples.  `count` is a VALUE here, not `*budget`: every caller
+ * passes what it already read out of `*budget`, so this takes the plain
+ * `unsigned short` rather than the `v27tx_process_fn` pointer shape.
+ */
+short TxNoCarrierV27(void *modem, unsigned short *in, short *out,
+		     unsigned short count);
+
+/*
+ * Reseed the scrambler for a rate change: build an `sdmv27_cfg` from
+ * `V27TX_SDM_NUM_BITS[rate]`, save `struct sdmv27::reg` across `SDMv27_init`
+ * and put it back by hand afterward -- `sdmv27.h`'s own account of this
+ * function, written before this file reconstructed it.  `TxNextStateV27`'s
+ * EQCOND arm is the only caller.
+ */
+void SetScramblerV27(void *modem);
+
+/*
+ * The same equaliser-conditioning sequence `TxHdxEQCondV27` builds inline --
+ * fill with the literal 7, scramble, then choose `V27TX_PATTERN_ALT[rate]`
+ * or `V27TX_PATTERN_CARR[rate]` per element from bit 2 of the FOLLOWING
+ * scrambled element -- as a free-standing generator over a caller-supplied
+ * buffer and count rather than `*budget`.  No reconstructed caller reaches
+ * it; `docs/remaining.md`'s reverse-edge probe already found it has none in
+ * the object either (F8320).
+ */
+void GenEQTrnSequenceV27(void *modem, unsigned short *buf,
+			 unsigned short count);
 
 #endif /* DSPLIB_V27FAX_H */
