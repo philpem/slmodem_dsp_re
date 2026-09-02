@@ -15,12 +15,14 @@
  *   RxHdxStartV21     .text 0x0a1e90   522
  *   RxHdxWaitV21      .text 0x0a20a0   440
  *   RxHdxDataV21      .text 0x0a2260   418
+ *   V21RX_control     .text 0x0a2410    75
  *   V21RX_status      .text 0x0a2460   132
  *   V21TX_modem       .text 0x0a24f0   182
  *   TxNextStateV21    .text 0x0a25b0   280
  *   TxHdxStartV21     .text 0x0a26d0   380
  *   TxHdxIdleV21      .text 0x0a2850   372
  *   TxHdxDataV21      .text 0x0a29d0   451
+ *   V21TX_control     .text 0x0a2ba0    94
  *   V21TX_status      .text 0x0a2c00    96
  *   DemodDataV21      .text 0x0a5740   217
  *   CarrierDetectV21  .text 0x0a5820    16
@@ -28,7 +30,7 @@
  *   ModDataV21        .text 0x0a5880    87
  *   TxNoCarrierV21    .text 0x0a58e0   103
  *
- * THESE ARE TWENTY-THREE SYMBOLS OF THREE DIFFERENT CLUSTERS, not one author
+ * THESE ARE TWENTY-FIVE SYMBOLS OF THREE DIFFERENT CLUSTERS, not one author
  * file: 0x098e70..0x0995f0 sit with the constructors and destructors,
  * 0x0a1c40..0x0a2c00 with the half-duplex machines (receive and, since
  * F9500, transmit), and 0x0a5740 onward with the per-modulation data paths.
@@ -852,6 +854,45 @@ RxHdxDataV21(void *modem, short *in, short *out, short *count)
 }
 
 /*
+ * V21RX_control -- .text 0x0a2410, 75 bytes.
+ *
+ * `arg == NULL` returns 0 and touches nothing.  Otherwise: `cfg->int_0008`
+ * (the receive handle's own head, `struct v21rx_cfg`) is set unconditionally
+ * from `arg->int_0004`; `V21RX_HDX(modem)->int_0000` -- the SAME field
+ * `RxHdxDataV21` gates demodulation on, above, and whose header comment used
+ * to read "nothing written sets it" -- is set to 1 when
+ * `V21RXCTL_SET_HDX_INT0000` is set in `arg->flags_0d` and to 0 otherwise;
+ * and `V21RXCTL_REINIT` (also in `flags_0d`) calls `V21RX_create(modem,
+ * modem)`, the same self-referential reinit `v17fax.h` documents for
+ * `V17RX_control` (finding F9470/F9900: the receive handle's head, byte for
+ * byte, IS a `struct v21rx_cfg`, so passing it as its own `params` re-copies
+ * its current configuration onto itself and reruns construction).
+ *
+ * NOTHING IN THE OBJECT CALLS THIS DIRECTLY: like `V17RX_control`, its only
+ * referrer is the lowercase adapter `v21rx_control` (faxadapt.c), which
+ * forwards `arg` unchanged from its own caller -- so `struct v21rx_ctl`
+ * reads what the two loads force and no further, `v22ctl.h`'s discipline.
+ */
+int
+V21RX_control(void *modem, const struct v21rx_ctl *arg)
+{
+	struct v21rx_cfg *cfg = (struct v21rx_cfg *)modem;
+
+	if (arg == NULL)
+		return 0;
+
+	cfg->int_0008 = arg->int_0004;
+
+	V21RX_HDX(modem)->int_0000 =
+		(arg->flags_0d & V21RXCTL_SET_HDX_INT0000) != 0;
+
+	if (arg->flags_0d & V21RXCTL_REINIT)
+		V21RX_create(modem, (const struct v21rx_cfg *)modem);
+
+	return 1;
+}
+
+/*
  * Fill the caller's status block from the RECEIVER.
  *
  * NOT a mirror of `V21TX_status`.  The rate goes in `rx_bps` and not
@@ -1163,6 +1204,45 @@ TxHdxDataV21(void *modem, unsigned short *in, short *out, short *budget)
 	*FIELD(modem, V21TX_OBJ_RESULT) = V21TX_STATUS_DATA;
 
 	return nsamples;
+}
+
+/*
+ * V21TX_control -- .text 0x0a2ba0, 94 bytes.
+ *
+ * `arg == NULL` returns 0 and touches nothing.  Otherwise, in the object's
+ * own order: `dsp->fsm.cfg.scale` is set from `arg->int_0008`, narrowed to
+ * `short` as the object narrows it; `cfg->int_0008` (the transmit handle's
+ * own head, `struct v21tx_cfg`) is set unconditionally from `arg->int_0004`;
+ * `arg->flags_0c`'s bit 2 ORs into `V21TX_FLAGS(modem)`; `arg->flags_0d`'s
+ * bit 4 sets `V21TXP_INT_0004` (of the params block at `V21TX_OBJ_PARAMS`)
+ * to a boolean; and bit 1 of the same byte calls `V21TX_create(modem,
+ * modem)` -- the self-referential reinit `V17RX_control`'s header comment
+ * documents at length (finding F9900): the transmit handle's head IS its
+ * own `struct v21tx_cfg`, so passing it as its own `params` re-copies its
+ * current configuration onto itself and reruns construction.
+ */
+int
+V21TX_control(void *modem, const struct v21tx_ctl *arg)
+{
+	struct v21tx_cfg *cfg = (struct v21tx_cfg *)modem;
+	void *prm = FIELD_PTR(modem, V21TX_OBJ_PARAMS);
+
+	if (arg == NULL)
+		return 0;
+
+	V21TX_DSP(modem)->fsm.cfg.scale = (short)arg->int_0008;
+	cfg->int_0008 = arg->int_0004;
+
+	if (arg->flags_0c & V21TXCTL_SET_TXFLAGS_BIT2)
+		V21TX_FLAGS(modem) |= V21TXCTL_SET_TXFLAGS_BIT2;
+
+	AT_I(prm, V21TXP_INT_0004) =
+		(arg->flags_0d & V21TXCTL_SET_PARAMS_INT0004) != 0;
+
+	if (arg->flags_0d & V21TXCTL_REINIT)
+		V21TX_create(modem, (const struct v21tx_cfg *)modem);
+
+	return 1;
 }
 
 /*

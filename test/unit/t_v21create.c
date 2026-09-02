@@ -66,6 +66,7 @@
 
 extern void *ref_V21RX_create(void *modem, const struct v21rx_cfg *params);
 extern void ref_V21RX_delete(void *modem);
+extern int ref_V21RX_control(void *modem, const struct v21rx_ctl *arg);
 extern short ref_RxHdxStartV21(void *modem, short *in, short *out,
 			       short *count);
 extern struct v21rx_cfg ref_V21RX_CFG;
@@ -527,6 +528,75 @@ test_shape(void)
 }
 
 /* ------------------------------------------------------------------------- */
+/* V21RX_control, reconfiguring a built instance in place                    */
+
+static const struct {
+	const char *name;
+	int null_arg;
+	int int_0004;
+	unsigned char flags_0d;
+} ctl_cases[] = {
+	{ "NULL arg",                  1,     0, 0 },
+	{ "flags clear",               0, 60000, 0 },
+	{ "SET_HDX_INT0000 only",      0, 60000, V21RXCTL_SET_HDX_INT0000 },
+	{ "REINIT only",                0, 60000, V21RXCTL_REINIT },
+	{ "SET_HDX_INT0000 + REINIT",   0, 60000,
+	  (unsigned char)(V21RXCTL_SET_HDX_INT0000 | V21RXCTL_REINIT) },
+};
+
+#define NCTL_CASES	((long)(sizeof(ctl_cases) / sizeof(ctl_cases[0])))
+
+static int
+test_control(void)
+{
+	long k;
+
+	diff_begin("V21RX_control: reconfigure a built instance in place");
+
+	for (k = 0; k < NCTL_CASES; k++) {
+		struct v21rx_cfg ca, cb;
+		struct v21rx_ctl arga, argb;
+		void *a, *b;
+		int ra, rb;
+
+		/* Always case 0 ("params NULL"): REINIT must re-derive the
+		 * SAME configuration it was built with -- V21RX_control never
+		 * touches `chan2`, so nothing here drives the table-selecting
+		 * field through a transition the object was never built to
+		 * survive (the hazard finding F9901 records for V17's
+		 * `int_0014`/retrain). */
+		build_cfg(&ca, 0);
+		build_cfg(&cb, 0);
+
+		b = ref_V21RX_create(0, &cb);
+		a = V21RX_create(0, &ca);
+		if (a == 0 || b == 0) {
+			diff_eq_int("both built (%ld)", a != 0 && b != 0, 1,
+				    k);
+			continue;
+		}
+
+		memset(&arga, 0, sizeof arga);
+		arga.int_0004 = ctl_cases[k].int_0004;
+		arga.flags_0d = ctl_cases[k].flags_0d;
+		argb = arga;
+
+		rb = ref_V21RX_control(b, ctl_cases[k].null_arg ? NULL
+							  : &argb);
+		ra = V21RX_control(a, ctl_cases[k].null_arg ? NULL : &arga);
+
+		diff_eq_int("V21RX_control return (%ld)", ra, rb, k);
+
+		compare_tree(ctl_cases[k].name, a, b, k);
+
+		V21RX_delete(a);
+		ref_V21RX_delete(b);
+	}
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------------- */
 
 int
 main(void)
@@ -535,6 +605,7 @@ main(void)
 
 	rc |= test_self_allocating();
 	rc |= test_reinit();
+	rc |= test_control();
 	rc |= test_shape();
 
 	return rc;

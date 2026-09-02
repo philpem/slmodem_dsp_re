@@ -67,6 +67,49 @@ struct fpm_sdm;
 struct sgd;
 struct v17rx_cfg;	/* faxcfg.h -- and the receive instance's own head */
 
+/*
+ * `V17RX_control`'s second argument, at 0x0a0880.  Reads four fields and
+ * nothing past +0x10, so the struct stops there -- the same "read what the
+ * loads force, no further" rule `v22ctl.h`'s `struct v22fp_ctl` states for
+ * the identical shape.  NOTHING IN THE OBJECT CALLS `V17RX_control` directly:
+ * its only referrer is the lowercase adapter `v17rx_control` (faxadapt.c),
+ * which forwards this argument unchanged from ITS OWN caller, so nothing
+ * reconstructed corroborates the type further than these four loads do.
+ *
+ * `int_0004` and `int_0010` are `int`, both loaded and stored whole
+ * (`mov`/`mov`, no narrowing).  `flags_0c` and `flags_0d` are `unsigned
+ * char`, each read once with `movzbl` and tested bit by bit.
+ */
+struct v17rx_ctl {
+	unsigned char	unmapped_0000[0x04];
+	int		int_0004;	/* +0x04 -> cfg->int_0008            */
+	unsigned char	unmapped_0008[0x04];
+	unsigned char	flags_0c;	/* +0x0c                             */
+	unsigned char	flags_0d;	/* +0x0d                             */
+	unsigned char	unmapped_000e[0x02];
+	int		int_0010;	/* +0x10 -> cfg->int_0014, REINIT only */
+};
+
+/*
+ * `flags_0c`.  Both bits clear a field of the demodulator state
+ * (`V17RXS_INT_0000`/`V17RXS_INT_0010`) and neither pairs with a reader that
+ * would type its MEANING, so the names state the forced effect and nothing
+ * more -- the same discipline `v22ctl.h` uses for its own unmodelled byte.
+ */
+#define V17RXCTL_CLEAR_STATE0		(1 << 3)	/* 0x08 */
+#define V17RXCTL_CLEAR_STATE10		(1 << 5)	/* 0x20 */
+
+/*
+ * `flags_0d`.  Bit 1 gates a call back into `V17RX_create(modem, modem)` --
+ * the self-referential reinit `V17RX_create`'s own header documents (finding
+ * F9470: the instance's head IS a `struct v17rx_cfg`, so passing the handle
+ * as its own `params` re-copies its current configuration onto itself and
+ * reruns construction).  Bit 4 sets `V17RXC_INT_0008`; nothing pairs that
+ * field with a reader either, so the name states only which bit reaches it.
+ */
+#define V17RXCTL_SET_CTL_INT_0008	(1 << 4)	/* 0x10 */
+#define V17RXCTL_REINIT			(1 << 1)	/* 0x02 */
+
 /* ------------------------------------------------------------------------ */
 /* The status block                                                         */
 
@@ -285,6 +328,218 @@ struct v17_status {
 #define V17_ENCODER_DIF		0
 #define V17_ENCODER_ABS		1
 #define V17_ENCODER_TCM		2
+
+/*
+ * A byte alongside `V17TX_OBJ_RESULT`/`_B1`, the same shape `V29TX_OBJ_
+ * RESULT_B2` and `V21TX_OBJ_RESULT_B2` already carry for their own transmit
+ * instances -- the third byte of the four at `V17TX_OBJ_RESULT`.
+ * `TxNextStateV17` is what establishes it: every one of its twelve arms
+ * clears bit 0 except `V17TX_STATE_QUIET_END`, which SETS it, and every arm
+ * -- SET or CLEAR -- touches this byte and none of the others at
+ * `V17TX_OBJ_RESULT`+2/+3.  Nothing reconstructed reads it back; like its
+ * V.21/V.29 siblings it leaves only through the word `V17TX_modem` returns.
+ */
+#define V17TX_OBJ_RESULT_B2	0x22
+#define V17TX_RESULT_B1_BIT0	(1 << 0)
+#define V17TX_RESULT_B2_BIT0	(1 << 0)
+
+/*
+ * THE REST OF THE PARAMETER/HALF-DUPLEX BLOCK, ALL FOUR FROM `TxNextStateV17`
+ * AND `V17TX_create` TOGETHER.
+ *
+ * `V17TXP_MODE` is the transmit constellation index (0..3), TYPED BY
+ * `SetTxModeV17`'s own parameter (`v17data.h`'s `void SetTxModeV17(void
+ * *modem, short mode)`, CLAUDE.md rank 2): every site that reads this field
+ * either passes it straight to `SetTxModeV17` or uses it to index
+ * `V17TX_PATTERN_SCR1`/`V17TX_PPS_SCALE`, both of which `SetTxModeV17`'s own
+ * mode-indexed tables (`V17TX_SYM_SIZE`) corroborate. `V17TX_create` derives
+ * it from the caller's bit rate (7200/9600/12000/14400 -> 0/1/2/3, anything
+ * else -> 3 with the error flags below set) and writes it here; nothing
+ * downstream ever changes it.
+ *
+ * `V17TXP_INT_000C` is USAGE INFERENCE, the weakest tier, stated as such: it
+ * is copied verbatim from the caller's config at construction
+ * (`V17TX_OBJ_INT_0018` below) and read back only by `TxNextStateV17`'s ALT
+ * and EQCOND arms, where a non-zero value shortens ALT's training budget
+ * (0x26 samples instead of 0xba0) and steers EQCOND straight to
+ * `V17TX_STATE_SCR1` instead of by way of `V17TX_STATE_BRIDGE`. That reads as
+ * a short-versus-long training request, the same role V.17 fax's "short
+ * training" option plays in the ITU-T text, but nothing in the object types
+ * it that way, so the name stays neutral.
+ *
+ * `V17TXP_STATE` is the half-duplex machine's own state number, `V17TX_STATE_*`
+ * below -- typed by `TxNextStateV17`'s own `jmp *table(,%eax,4)` (a real jump
+ * table, `cmp $0xb`/`ja default` bounding it at 0..11) and by the twelve
+ * debug strings the object prints for it, `.rodata.str1.1` 0x4a08..0x4af0
+ * (CLAUDE.md's evidence rank 1 -- the author's own words).
+ *
+ * `V17TXP_SHORT_001A` is the per-state countdown/budget every `TxHdx*V17`
+ * handler decrements towards zero before calling `TxNextStateV17` -- the same
+ * role `V29TXP_SHORT_0016` plays for V.29's own machine, kept to a neutral
+ * name for the same reason that one is.
+ */
+#define V17TXP_INT_000C		0x0c
+#define V17TXP_MODE		0x10
+#define V17TXP_STATE		0x18
+#define V17TXP_SHORT_001A	0x1a
+
+/*
+ * Cleared to 0 by `TxNextStateV17`'s ALT arm alone, immediately before it
+ * seeds the equaliser-conditioning LFSR with `SeedScramblerV17`. NEUTRAL:
+ * nothing else in this closure reads or writes it, so no role is established
+ * beyond "the ALT transition clears it".
+ */
+#define V17TXP_SHORT_001C	0x1c
+
+/*
+ * THE TWELVE STATES, AND ELEVEN OF THE TWELVE NAMES ARE THE AUTHOR'S OWN
+ * WORDS -- `TxNextStateV17` prints the name of the state it is LEAVING at the
+ * top of each arm, gated on `dsplibs_debug_level > 1`, paired to a jump-table
+ * index the same two ways `RxNextStateV17`'s own table is (CLAUDE.md rank 1,
+ * plus each arm installing the handler whose blob symbol name matches):
+ *
+ *    0  0x4a7f  "V17TX_STATE_START\n"        installs TxHdxSilenceV17
+ *    1  0x4a59  "V17TX_STATE_SILENCE\n"      installs TxHdxTEP_V17
+ *    2  0x4acd  "V17TX_STATE_TEP\n"          installs TxHdxSilenceV17
+ *    3  0x4af0  "V17TX_STATE_QUIET\n"        installs TxHdxABV17
+ *    4  0x4a6e  "V17TX_STATE_ALT\n"          installs TxHdxEQCondV17
+ *    5  0x4a45  "V17TX_STATE_EQCOND\n"       installs TxHdxBridgeV17 or
+ *                                             TxHdxSCR1V17 (V17TXP_INT_000C)
+ *    6  0x4a1b  "V17TX_STATE_BRIDGE\n"       installs TxHdxSCR1V17
+ *    7  0x4ade  "V17TX_STATE_SCR1\n"         installs TxHdxDataV17
+ *    8  0x4abb  "V17TX_STATE_DATA\n"         installs TxHdxSCR1V17
+ *    9  0x4a2f  "V17TX_STATE_SCR1_END\n"     installs TxHdxSilenceV17
+ *   10  0x4aa4  "V17TX_STATE_QUIET_END\n"    installs TxHdxIdleV17
+ *   11  0x4a92  "V17TX_STATE_IDLE\n"         installs TxHdxStartV17, wraps
+ *
+ * THE FUNCTION NAME `TxHdxABV17` AND THE STATE NAME `V17TX_STATE_ALT` ARE
+ * BOTH THE AUTHOR'S AND DISAGREE, the identical mismatch `TxHdxABV29`/
+ * `V29TX_STATE_ALT` already carries in `v29fax.h` -- not reconciled, for the
+ * same reason.
+ *
+ * `TxHdxSCR1V17` IS INSTALLED TWICE, ONCE BY `BRIDGE` (state 6, budget 0x30)
+ * AND ONCE BY `DATA` (state 8, budget 0x20): the same handler drives both the
+ * pre-data and the post-data scrambled-training segments, distinguished only
+ * by whatever `SGD_control` request the installing arm built immediately
+ * before -- the handler itself reads the SGD object's own configuration and
+ * does not look at which STATE value led to it.  Likewise `TxHdxSilenceV17`
+ * is installed three times (by START, TEP and SCR1_END) and is the same
+ * "spend TxNoCarrierV17 for N samples" handler each time.
+ *
+ * THE DEFAULT ARM HAS NO STRING because it has no jump-table entry --
+ * `V17TX_DEFAULT, %d\n` at 0x4a08 is the thirteenth string and prints for any
+ * state outside 0..11, the same "no case, falls to default" shape
+ * `V17RX_STATE_ERROR` has on the receive side.
+ */
+#define V17TX_STATE_START	0
+#define V17TX_STATE_SILENCE	1
+#define V17TX_STATE_TEP		2
+#define V17TX_STATE_QUIET	3
+#define V17TX_STATE_ALT		4
+#define V17TX_STATE_EQCOND	5
+#define V17TX_STATE_BRIDGE	6
+#define V17TX_STATE_SCR1	7
+#define V17TX_STATE_DATA	8
+#define V17TX_STATE_SCR1_END	9
+#define V17TX_STATE_QUIET_END	10
+#define V17TX_STATE_IDLE	11
+
+/*
+ * `V17TX_OBJ_RESULT`'s remaining values, from the handlers and from
+ * `TxNextStateV17`'s default arm (which reuses `V17TX_RESULT_BYTE_07`,
+ * already named above, rather than a fresh constant -- the two default arms,
+ * this function's and `V17TX_modem`'s own unrecognised-mode arm, write the
+ * identical byte). `TxHdxDataV17`'s own one-shot rate report (fired once,
+ * the first time it runs after `TxHdxSCR1V17` installs it with
+ * `V17TXP_SHORT_001A` == 1) is keyed on `V17TXP_MODE` the same way
+ * `V17RX_STATUS_RATE_*` is keyed on the receive side's rate code -- rank 2,
+ * a field this same function types by switching on it.
+ */
+#define V17TX_STATUS_DATA		0	/* TxHdxDataV17, steady state */
+#define V17TX_STATUS_TRAINING		1	/* AB/SCR1/Bridge/EQCond entry */
+#define V17TX_STATUS_DATA_RATE_14400	2
+#define V17TX_STATUS_DATA_RATE_12000	3
+#define V17TX_STATUS_DATA_RATE_9600	4
+#define V17TX_STATUS_DATA_RATE_7200	5
+#define V17TX_STATUS_IDLE		6	/* TxHdxIdleV17               */
+#define V17TX_STATUS_UNDERRUN		8	/* TxHdxDataV17, no-flag arm  */
+
+/*
+ * ------------------------------------------------------------------------
+ * `V17TX_create`'s OWN CONFIGURATION -- the handle's first 0x20 bytes,
+ * copied in from the caller (or from `V17TX_CFG`) by one struct assignment,
+ * `V17TX_create`'s own 8-dword copy loop.  `struct v17_status::protocol` and
+ * `::tx_bps` above already established `+0x00`/`+0x02` from `V17TX_status`'s
+ * own reads; the rest are `V17TX_create`'s alone.
+ *
+ * `int_0014` IS THE TRANSMIT FIFO'S SIZE FACTOR, READ BACK BY `V17TX_create`
+ * ITSELF (`movzwl 0x14(%ebp),%eax` at 0x098a93) to compute the FIFO's
+ * capacity as `int_0014 * 3 * 16` -- 48 elements at the default value of 1,
+ * the identical role and the identical default `V29TX_CFG`'s own `int_0014`
+ * carries at the same offset.
+ *
+ * `int_0018` IS COPIED, UNCHANGED, TO `V17TXP_INT_000C` (`mov 0x18(%ebp),%edi`
+ * / `mov %edi,0xc(%edx)` at 0x098b14/0x098b23) -- see that constant's own
+ * comment for what little is established about what it steers.
+ *
+ * `int_001c` BECOMES `FPM_PPS_CFG.aux`, READ BACK AT 0x098b4e AND STORED
+ * THROUGH TO THE SHAPER'S OWN CONFIGURATION AT 0x098be3 -- the same
+ * "aux carries the caller's own field, across the (void *)(long) idiom"
+ * shape D1250 already names for `V29TX_create`'s `int_0018`, one field over
+ * because V.17's config carries one more dword than V.29's (`int_0010`,
+ * below, which nothing traced reads at all).
+ *
+ * `short_0004`, `short_0006` and `int_0008`/`int_000c`/`int_0010` are copied
+ * in and never read back by anything in this closure -- neutral, the same
+ * ground `V29TX_CFG`'s own untouched fields stand on.
+ */
+struct v17tx_cfg {
+	short		protocol;	/* +0x00 <- V17TX_status's own read  */
+	short		bitrate;	/* +0x02 <- V17TX_status's own read  */
+	short		short_0004;	/* +0x04 copied, never read here     */
+	short		short_0006;	/* +0x06 copied, never read here     */
+	int		int_0008;	/* +0x08 copied, never read here     */
+	int		int_000c;	/* +0x0c copied, never read here     */
+	int		int_0010;	/* +0x10 copied, never read here --
+					 * the dword V.29's own cfg lacks    */
+	int		int_0014;	/* +0x14 the FIFO's size factor      */
+	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
+	int		int_001c;	/* +0x1c -> FPM_PPS_CFG.aux          */
+};
+
+extern struct v17tx_cfg V17TX_CFG;
+
+/*
+ * Build the transmit instance, or reinitialise the one the caller already
+ * has.  See `src/fax/v17.c` for the derivation and `V21TX_create`/
+ * `V29TX_create` for the shape this follows.
+ */
+void *V17TX_create(void *modem, const struct v17tx_cfg *params);
+
+/*
+ * The half-duplex machine's own dispatcher and its twelve installed states
+ * -- `TxNextStateV17` and the nine `TxHdx*V17` handlers (`TxHdxSCR1V17` and
+ * `TxHdxSilenceV17` each cover more than one `V17TX_STATE_*` value; see
+ * above).  All ten link only together (finding F9600); see `src/fax/v17.c`.
+ */
+void TxNextStateV17(void *modem);
+short TxHdxStartV17(void *modem, unsigned short *in, short *out,
+		    short *budget);
+short TxHdxSilenceV17(void *modem, unsigned short *in, short *out,
+		      short *budget);
+short TxHdxTEP_V17(void *modem, unsigned short *in, short *out,
+		   short *budget);
+short TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget);
+short TxHdxEQCondV17(void *modem, unsigned short *in, short *out,
+		     short *budget);
+short TxHdxBridgeV17(void *modem, unsigned short *in, short *out,
+		     short *budget);
+short TxHdxSCR1V17(void *modem, unsigned short *in, short *out,
+		   short *budget);
+short TxHdxDataV17(void *modem, unsigned short *in, short *out,
+		   short *budget);
+short TxHdxIdleV17(void *modem, unsigned short *in, short *out,
+		   short *budget);
 
 /* ------------------------------------------------------------------------ */
 /* The RECEIVE instance                                                     */
@@ -1253,6 +1508,42 @@ void V17TX_delete(void *modem);
  */
 int V17TX_modem(void *modem, unsigned short *in, short *out,
 		unsigned short *count);
+
+/*
+ * Reconfigure the RECEIVE instance in place, or report that there was
+ * nothing to do.
+ *
+ * `arg == NULL` returns 0 and touches nothing.  Otherwise: `cfg->int_0008`
+ * (the instance's own head, `struct v17rx_cfg`) is unconditionally set from
+ * `arg->int_0004`; `V17RXC_INT_0008` in the control block is set to 1 when
+ * `V17RXCTL_SET_CTL_INT_0008` is set in `arg->flags_0d` and to 0 otherwise;
+ * `V17RXCTL_REINIT` (also in `flags_0d`) copies `arg->int_0010` into
+ * `cfg->int_0014` and then calls `V17RX_create(modem, modem)` -- see the
+ * struct's own comment for why passing the handle as its own `params` is
+ * legitimate rather than an aliasing accident; and finally, REGARDLESS of
+ * which of those branches ran, `arg->flags_0c` clears `V17RXS_INT_0000` and/or
+ * `V17RXS_INT_0010` of the demodulator state per `V17RXCTL_CLEAR_STATE0`/
+ * `_STATE10`.  The last two tests are unconditional on the object's own
+ * control flow: both `flags_0d` arms fall through to the same `flags_0c`
+ * checks (`jmp` back into the shared tail at 0x0a08af), so the merged
+ * reading above is behaviourally identical to the object's duplicated
+ * branches and not a simplification of them.
+ *
+ * THE SUSPICIOUS-LOOKING CALL SITE IS RESOLVED, NOT DECLINED.  A previous
+ * pass left this function unwritten because `V17RX_create(modem, modem)`
+ * passes what looks like the same pointer as two different parameters.  It
+ * is: `V17RX_create`'s own header (finding F9470) already establishes that
+ * the receive instance's head, byte for byte, IS a `struct v17rx_cfg` --
+ * the constructor copies `params` onto exactly those bytes and every field
+ * it reads back afterwards lines up.  So `V17RX_create(modem,
+ * (const struct v17rx_cfg *)modem)` reads the instance's OWN current
+ * configuration as its "new" configuration (an identity copy on those
+ * fields, except `int_0008` and `int_0014` which this function just
+ * updated) and reruns the rest of construction -- a self-referential
+ * reinit-with-current-config, not a defect in the object nor a
+ * misreading of the call site.
+ */
+int V17RX_control(void *modem, const struct v17rx_ctl *arg);
 
 /*
  * Fill a status block from the RECEIVE instance, or report that there was

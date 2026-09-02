@@ -98,6 +98,7 @@
 
 extern void *ref_V17RX_create(void *modem, const struct v17rx_cfg *params);
 extern void ref_V17RX_delete(void *modem);
+extern int ref_V17RX_control(void *modem, const struct v17rx_ctl *arg);
 extern int ref_V17RX_modem(void *modem, short *in, short *out,
 			   unsigned short *count);
 extern short ref_RxHdxStartV17(void *modem, short *in, short *out,
@@ -1252,6 +1253,128 @@ test_reinit(void)
 }
 
 /* ------------------------------------------------------------------------- */
+/* Layer 3.5 -- V17RX_control, reconfiguring a built instance in place        */
+
+static long control_null_arm[2];	/* arg == NULL / arg present         */
+static long control_0c_arm[2];		/* CLEAR_STATE0 / CLEAR_STATE10 seen */
+static long control_0d_arm[2];		/* SET_CTL_INT_0008 / REINIT seen    */
+
+static const struct {
+	const char *name;
+	int null_arg;
+	int int_0004;
+	unsigned char flags_0c;
+	unsigned char flags_0d;
+	int int_0010;
+} ctl_cases[] = {
+	/*
+	 * `int_0004` lands in `cfg->int_0008`, which every sibling table in
+	 * faxcfg.h holds as the literal 60000 and nothing traced re-reads
+	 * during construction; kept realistic anyway.  `int_0010` lands in
+	 * `cfg->int_0014`, `V17RX_create`'s own retrain flag, and EVERY CASE
+	 * HERE KEEPS IT AT 0 (cold) DELIBERATELY: the base instance below is
+	 * always built cold (case 0), and driving REINIT with `int_0010 == 1`
+	 * against an object that was BUILT cold -- a 0 -> 1 transition under
+	 * reuse (`owned == 0`) -- crashes `ref_V17RX_control` itself.
+	 * `t_v17rxcreate.c`'s own `test_reinit` only ever reinits a `retrain`
+	 * value onto ITSELF (built and reinited with the same `cases[k]`), so
+	 * that transition is untested territory in the object, not a defect
+	 * in this reconstruction; nothing reconstructed drives V17RX_control
+	 * this way either (its header note: no relocation reaches it at all).
+	 * Retrain=1 stays covered by `test_reinit`.
+	 */
+	{ "NULL arg",                      1,     0, 0, 0, 0 },
+	{ "all flags clear",               0, 60000, 0, 0, 0 },
+	{ "SET_CTL_INT_0008 only",         0, 60000, 0,
+	  V17RXCTL_SET_CTL_INT_0008, 0 },
+	{ "REINIT only",                   0, 60000, 0,
+	  V17RXCTL_REINIT, 0 },
+	{ "SET_CTL_INT_0008 + REINIT",     0, 60000, 0,
+	  (unsigned char)(V17RXCTL_SET_CTL_INT_0008 | V17RXCTL_REINIT), 0 },
+	{ "CLEAR_STATE0 only",             0,     0, V17RXCTL_CLEAR_STATE0,
+	  0, 0 },
+	{ "CLEAR_STATE10 only",            0,     0, V17RXCTL_CLEAR_STATE10,
+	  0, 0 },
+	{ "CLEAR_STATE0 + CLEAR_STATE10",  0,     0,
+	  (unsigned char)(V17RXCTL_CLEAR_STATE0 | V17RXCTL_CLEAR_STATE10),
+	  0, 0 },
+	{ "everything at once",            0, 60000,
+	  (unsigned char)(V17RXCTL_CLEAR_STATE0 | V17RXCTL_CLEAR_STATE10),
+	  (unsigned char)(V17RXCTL_SET_CTL_INT_0008 | V17RXCTL_REINIT), 0 },
+};
+
+#define NCTL_CASES	((long)(sizeof(ctl_cases) / sizeof(ctl_cases[0])))
+
+static int
+test_control(void)
+{
+	long k;
+
+	diff_begin("V17RX_control: reconfigure a built instance in place");
+
+	for (k = 0; k < NCTL_CASES; k++) {
+		struct v17rx_cfg ca, cb;
+		struct v17rx_ctl arga, argb;
+		void *a, *b;
+		int ra, rb;
+		long tag = k;
+
+		build_cfg(&ca, 0);
+		build_cfg(&cb, 0);
+
+		b = ref_V17RX_create(0, &cb);
+		a = V17RX_create(0, &ca);
+		if (a == 0 || b == 0) {
+			diff_eq_int("both built (%ld)", a != 0 && b != 0, 1,
+				    tag);
+			continue;
+		}
+
+		memset(&arga, 0, sizeof arga);
+		arga.int_0004 = ctl_cases[k].int_0004;
+		arga.flags_0c = ctl_cases[k].flags_0c;
+		arga.flags_0d = ctl_cases[k].flags_0d;
+		arga.int_0010 = ctl_cases[k].int_0010;
+		argb = arga;
+
+		control_null_arm[ctl_cases[k].null_arg]++;
+		if (ctl_cases[k].flags_0c & V17RXCTL_CLEAR_STATE0)
+			control_0c_arm[0]++;
+		if (ctl_cases[k].flags_0c & V17RXCTL_CLEAR_STATE10)
+			control_0c_arm[1]++;
+		if (ctl_cases[k].flags_0d & V17RXCTL_SET_CTL_INT_0008)
+			control_0d_arm[0]++;
+		if (ctl_cases[k].flags_0d & V17RXCTL_REINIT)
+			control_0d_arm[1]++;
+
+		rb = ref_V17RX_control(b, ctl_cases[k].null_arg ? NULL : &argb);
+		ra = V17RX_control(a, ctl_cases[k].null_arg ? NULL : &arga);
+
+		diff_eq_int("V17RX_control return (%ld)", ra, rb, tag);
+
+		compare_tree(ctl_cases[k].name, a, b, 1, tag);
+
+		V17RX_delete(a);
+		ref_V17RX_delete(b);
+	}
+
+	diff_eq_int("NULL-arg arm was reached (%ld)", control_null_arm[1] > 0,
+		    1, 0);
+	diff_eq_int("present-arg arm was reached (%ld)",
+		    control_null_arm[0] > 0, 1, 0);
+	diff_eq_int("CLEAR_STATE0 arm was reached (%ld)",
+		    control_0c_arm[0] > 0, 1, 0);
+	diff_eq_int("CLEAR_STATE10 arm was reached (%ld)",
+		    control_0c_arm[1] > 0, 1, 0);
+	diff_eq_int("SET_CTL_INT_0008 arm was reached (%ld)",
+		    control_0d_arm[0] > 0, 1, 0);
+	diff_eq_int("REINIT arm was reached (%ld)", control_0d_arm[1] > 0, 1,
+		    0);
+
+	return diff_end();
+}
+
+/* ------------------------------------------------------------------------- */
 /* Layer 4 -- run the receiver on what was built                              */
 
 /*
@@ -1433,6 +1556,7 @@ main(void)
 	rc |= check_shape();
 	rc |= test_self_allocating();
 	rc |= test_reinit();
+	rc |= test_control();
 	rc |= test_run();
 	rc |= test_coverage();
 

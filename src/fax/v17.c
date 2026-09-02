@@ -6,6 +6,7 @@
  *
  *   V17RX_create      .text 0x096eb0 3201
  *   V17RX_delete      .text 0x097b40  251
+ *   V17TX_create      .text 0x0989e0 1043
  *   V17TX_delete      .text 0x098e00  107
  *   SMCv17_encoder_dif .text 0x09fcc0  164
  *   SMCv17_encoder_abs .text 0x09fd70  135
@@ -20,6 +21,7 @@
  *   RxHdxPrtcolV17    .text 0x0a0690  210
  *   RxHdxEpochDetV17  .text 0x0a0770  156
  *   RxHdxStartV17     .text 0x0a0810  105
+ *   V17RX_control     .text 0x0a0880  131
  *   V17RX_status      .text 0x0a0910  190
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
@@ -27,6 +29,16 @@
  *   SMCv17_init       .text 0x0a0a60   87
  *   SetTxModeV17      .text 0x0a0ac0  625
  *   V17TX_modem       .text 0x0a0e40  182
+ *   TxNextStateV17    .text 0x0a0f00 1439
+ *   TxHdxIdleV17      .text 0x0a14a0  116
+ *   TxHdxDataV17      .text 0x0a1520  349
+ *   TxHdxSCR1V17      .text 0x0a1680  206
+ *   TxHdxBridgeV17    .text 0x0a1750  206
+ *   TxHdxEQCondV17    .text 0x0a1820  206
+ *   TxHdxABV17        .text 0x0a18f0  190
+ *   TxHdxTEP_V17      .text 0x0a19b0  179
+ *   TxHdxSilenceV17   .text 0x0a1a70  158
+ *   TxHdxStartV17     .text 0x0a1b10   21
  *   V17TX_status      .text 0x0a1bd0  106
  *   DemodDataV17      .text 0x0a50a0  415
  *   DescrambleDataV17 .text 0x0a5240   30
@@ -766,6 +778,259 @@ V17RX_delete(void *modem)
 /* --------------------------------------------------------------------- */
 
 /*
+ * The transmit configuration `V17TX_create` copies onto the handle's first
+ * 0x20 bytes when the caller passes no config of its own.  See
+ * `struct v17tx_cfg` in v17fax.h for the field-by-field derivation.
+ */
+struct v17tx_cfg V17TX_CFG = {
+	0,		/* protocol                                          */
+	14400,		/* bitrate                                           */
+	0,		/* short_0004                                        */
+	0,		/* short_0006                                        */
+	60000,		/* int_0008                                          */
+	1,		/* int_000c                                          */
+	0,		/* int_0010                                          */
+	1,		/* int_0014 -- V17TX_create's own transmit FIFO size is
+			   int_0014 * 3 * 16                                */
+	0,		/* int_0018 -- V17TX_create's own V17TXP_INT_000C     */
+	0,		/* int_001c -- V17TX_create's own FPM_PPS_CFG.aux     */
+};
+
+/*
+ * ---------------------------------------------------------------------------
+ * V17TX_create -- .text 0x0989e0, 1,043 bytes.
+ *
+ * THE SHAPE IS `V29TX_create`'s AND `V21TX_create`'s, ONE CONFIG DWORD WIDER:
+ * allocate-or-reuse the handle, copy the caller's config (or `V17TX_CFG`)
+ * onto its first 0x20 bytes, allocate-or-reuse the parameter/half-duplex
+ * block and build the FIFO and the SGD generator into it, derive
+ * `V17TXP_MODE` from the caller's bit rate, seed the half-duplex machine at
+ * `V17TX_STATE_START`, then allocate-or-reuse the private block and
+ * initialise its ring, its scrambler, its symbol coder and its pulse shaper.
+ * Two debug strings, "V.17 TX Create " (0x458e) then either
+ * "New allocation\n" (0x459e) or "\n" (0x458c).
+ *
+ * `V17TXP_MODE` IS DERIVED HERE, keyed on the caller's `bitrate`:
+ * 7200/9600/12000/14400 map to 0/1/2/3; anything else takes mode 3 too but
+ * ALSO raises `V17TX_RESULT_B1_BIT1` and writes `V17TX_RESULT_BYTE_07`, the
+ * same "recognised value, or the ceiling value plus an error flag" shape
+ * `V29TX_create`'s own rate switch uses.
+ *
+ * `fresh` IS THE SAME STACK SLOT FROM ENTRY TO EXIT -- the object spills the
+ * "did THIS call allocate the handle" flag at one local (0x18(%esp)) at entry
+ * and reloads the identical slot at 0x98c5f to pass as `FPM_PPS_init`'s third
+ * argument, over 700 bytes later.  `V29TX_create`'s own comment describes the
+ * same carrier.
+ *
+ * THE TRANSMIT FIFO'S SIZE IS COMPUTED, `int_0014 * 3 * 16` (`lea
+ * (%eax,%eax,2),%esi; shl $0x4,%esi` at 0x98aa6/0x98aab), 48 for the default
+ * config's `int_0014` of 1.  `word0` carries over from `FIFO_CFG` unchanged,
+ * but `fill` IS FORCED TO A LITERAL ZERO (`mov %di,0xa4(%esp)` at 0x98a9e,
+ * overwriting the `FIFO_CFG.fill` value the two preceding instructions had
+ * just loaded into the same slot) -- NOT `V29TX_create`'s own shape, which
+ * keeps `FIFO_CFG.fill` unchanged.  Measured from the two writes' addresses,
+ * not assumed from the sibling.
+ *
+ * THE SGD GENERATOR TAKES `SGD_CFG` WITH ONLY `sym_bits` PATCHED, to 2
+ * (V.29's own copy patches it to 4) -- the whole 13-dword template is copied
+ * (`rep movsl`, 0x98ac8) and every other field survives.
+ *
+ * `V17TXP_NOCARRIER_SYM` (v17data.h, TxNoCarrierV17's own symbol index) IS
+ * SEEDED TO 4 HERE (`movw $0x4,0x1e(%edx)` at 0x98b03) -- the one field of
+ * the parameter block this constructor writes that TxNoCarrierV17, not
+ * TxNextStateV17, later reads.
+ *
+ * `V17TXP_INT_000C` IS THE CALLER'S OWN `int_0018`, COPIED VERBATIM (`mov
+ * 0x18(%ebp),%edi; mov %edi,0xc(%edx)` at 0x98b14/0x98b23) -- see its own
+ * comment in v17fax.h for what little the object establishes about it.
+ *
+ * `RING.SYM` IS ALLOCATED ONLY ONCE, UNLIKE `V29TX_create`'s OWN RING --
+ * `sysdep_malloc(0x64)` for `V17FP_PTR_0010` sits INSIDE the private block's
+ * own fresh-allocation branch (guarded on `V17TX_OBJ_FP == NULL`) and is
+ * skipped entirely when that block is reused, where `V29TX_create`
+ * reallocates its ring's `sym` array unconditionally on every call.  Two
+ * different objects, two different reuse disciplines; each reproduced as
+ * measured.  `V17FP_PTR_0010` -- named in v17data.h before this function was
+ * reconstructed -- IS `struct fpm_smc_ring`'s own `sym` field; `ring.i` and
+ * `ring.q` stay NULL, because V.17's transmitter uses the MAPPED ring form
+ * exclusively (v17data.h's own derivation from `TxNoCarrierV17`).
+ *
+ * `FPM_PPS_CFG.AUX` CARRIES THE CALLER'S OWN `int_001c`, read back at
+ * 0x098b4e and stored through to the shaper's own configuration at 0x098be3
+ * -- `V17TX_CFG`'s own `int_001c` is 0, so this is invisible on the default
+ * config, the same `(void *)(long)` idiom D1250 records for `V29TX_create`'s
+ * `int_0018`.
+ *
+ * THE THREE ENCODER TABLE ENTRIES ARE PLANTED IN THE OBJECT'S OWN ORDER --
+ * `SMCv17_encoder_abs` (fp + 0x84), then `SMCv17_encoder_dif` (fp + 0x80),
+ * then `SMCv17_encoder_tcm` (fp + 0x88) -- exactly `v17data.h`'s own
+ * three-address note, confirmed a second time from this side of the call.
+ *
+ * Finding F9911.
+ */
+void *
+V17TX_create(void *modem, const struct v17tx_cfg *params)
+{
+	void *prm;
+	void *fp;
+	void *existing;
+	int fresh = 0;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("V.17 TX Create ");
+
+	if (modem == 0) {
+		modem = sysdep_malloc(0x2c);
+		FIELD_PTR(modem, V17TX_OBJ_PARAMS) = 0;
+		FIELD_PTR(modem, V17TX_OBJ_FP) = 0;
+		fresh = 1;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("New allocation\n");
+	} else {
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("\n");
+	}
+
+	if (params != 0)
+		*(struct v17tx_cfg *)modem = *params;
+	else
+		*(struct v17tx_cfg *)modem = V17TX_CFG;
+
+	AT_I(modem, V17TX_OBJ_RESULT) = 0;
+	*FIELD(modem, V17TX_OBJ_RESULT_B1) |= 0x58;
+	AT_B(modem, V17TX_OBJ_RESULT) = 1;
+
+	/* ---- the parameter/half-duplex block, the FIFO and the SGD ------- */
+
+	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	if (prm == 0) {
+		prm = sysdep_malloc(0x20);
+		FIELD_PTR(modem, V17TX_OBJ_PARAMS) = prm;
+		FIELD_PTR(prm, V17TXP_FIFO) = 0;
+		FIELD_PTR(prm, V17TXP_SGD) = 0;
+	}
+
+	{
+		struct fifo_cfg fc;
+		unsigned short n = (unsigned short)
+			((struct v17tx_cfg *)modem)->int_0014;
+
+		fc.word0 = FIFO_CFG.word0;
+		fc.size = (short)(n * 3 * 16);
+		fc.fill = 0;
+
+		existing = FIELD_PTR(prm, V17TXP_FIFO);
+		FIELD_PTR(prm, V17TXP_FIFO) =
+			FIFO_create((struct fax_fifo *)existing, &fc);
+	}
+
+	{
+		struct sgd_cfg gcfg = SGD_CFG;
+
+		gcfg.sym_bits = 2;
+
+		existing = FIELD_PTR(prm, V17TXP_SGD);
+		FIELD_PTR(prm, V17TXP_SGD) =
+			SGD_create((struct sgd *)existing, &gcfg);
+	}
+
+	/* ---- the half-duplex machine's own state ------------------------- */
+
+	prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	AT_S(prm, V17TXP_STATE) = V17TX_STATE_START;
+	AT_S(prm, V17TXP_SHORT_001A) = 0;
+	AT_S(prm, V17TXP_NOCARRIER_SYM) = 4;
+	AT_I(prm, V17TXP_INT_0008) = 0;
+	*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) = TxHdxStartV17;
+	AT_I(prm, V17TXP_INT_000C) = ((struct v17tx_cfg *)modem)->int_0018;
+
+	if (((struct v17tx_cfg *)modem)->bitrate == 9600) {
+		AT_S(prm, V17TXP_MODE) = 1;
+	} else if (((struct v17tx_cfg *)modem)->bitrate == 12000) {
+		AT_S(prm, V17TXP_MODE) = 2;
+	} else if (((struct v17tx_cfg *)modem)->bitrate == 7200) {
+		AT_S(prm, V17TXP_MODE) = 0;
+	} else if (((struct v17tx_cfg *)modem)->bitrate == 14400) {
+		AT_S(prm, V17TXP_MODE) = 3;
+	} else {
+		AT_S(prm, V17TXP_MODE) = 3;
+		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT1;
+		AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
+	}
+
+	/* ---- the private block: the ring, the scrambler, the symbol coder
+	 * and the pulse shaper ---------------------------------------------- */
+
+	fp = FIELD_PTR(modem, V17TX_OBJ_FP);
+	if (fp == 0) {
+		fp = sysdep_malloc(0x90);
+		FIELD_PTR(modem, V17TX_OBJ_FP) = fp;
+		FIELD_PTR(fp, V17FP_PTR_0010) = sysdep_malloc(0x64);
+	}
+
+	{
+		struct fpm_smc_ring *ring = (struct fpm_smc_ring *)(void *)
+			FIELD(fp, V17FP_SMC_RING);
+		short i;
+
+		ring->i = 0;
+		ring->q = 0;
+		ring->widx = 0;
+		ring->ridx = 0;
+		ring->len = 0x32;
+
+		ring->sym = (short *)FIELD_PTR(fp, V17FP_PTR_0010);
+		for (i = 0; i <= 0x31; i++)
+			ring->sym[i] = 0;
+	}
+
+	{
+		struct fpm_sdm_cfg dcfg;
+
+		dcfg.nbits = 2;
+		dcfg.tap1 = 0x12;
+		dcfg.tap2 = 0x17;
+
+		SDM_init((struct fpm_sdm *)(void *)FIELD(fp, V17FP_SDM), &dcfg);
+	}
+
+	{
+		short scfg[2];
+
+		scfg[0] = SMCv17_CFG[0];
+		scfg[1] = SMCv17_CFG[1];
+		SMCv17_init(FIELD(fp, V17FP_SMC), scfg);
+	}
+
+	{
+		struct fpm_pps_cfg pcfg = FPM_PPS_CFG;
+
+		pcfg.phases = 10;
+		pcfg.step = 3;
+		pcfg.mapped = 1;
+		pcfg.scale = V17TX_PPS_SCALE[AT_S(prm, V17TXP_MODE)];
+		pcfg.step_adj = 0;
+		pcfg.imap = SMCv17_IMAP4;
+		pcfg.qmap = SMCv17_QMAP4;
+		pcfg.coeff_i = PPSv17_ICOFFS;
+		pcfg.coeff_q = PPSv17_QCOFFS;
+		pcfg.coeffs = 120;
+		pcfg.aux = (void *)(long)((struct v17tx_cfg *)modem)->int_001c;
+
+		FPM_PPS_init((struct fpm_pps *)(void *)FIELD(fp, V17FP_PPS),
+			     &pcfg, fresh);
+	}
+
+	FIELD_PTR(fp, V17FP_ENCODERS) = (void *)SMCv17_encoder_dif;
+	FIELD_PTR(fp, V17FP_ENCODERS + 4) = (void *)SMCv17_encoder_abs;
+	FIELD_PTR(fp, V17FP_ENCODERS + 8) = (void *)SMCv17_encoder_tcm;
+
+	return modem;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * V17TX_delete -- .text 0x098e00, 107 bytes.  See v17fax.h; the object's
  * literal 1 before `FPM_PPS_free` is F8876 again and is not reproduced.
  */
@@ -1590,6 +1855,51 @@ RxHdxStartV17(void *modem, short *in, short *out, unsigned short *count)
 /* --------------------------------------------------------------------- */
 
 /*
+ * V17RX_control -- .text 0x0a0880, 131 bytes.
+ *
+ * See v17fax.h for the derivation of `struct v17rx_ctl` and for why the
+ * self-referential `V17RX_create(modem, modem)` call below is a legitimate
+ * reinit-with-current-config and not the aliasing defect it first looks
+ * like (finding F9470, the receive instance's head IS its own config
+ * struct).
+ *
+ * THE MERGE IS BEHAVIOURAL, NOT A SIMPLIFICATION.  The object tests
+ * `flags_0d`'s bit 4 twice -- once on each of the two paths through bit 1 --
+ * and both paths converge on the same `flags_0c` tail (`jmp 0x0a08af`).
+ * Written straight-line, that is exactly the order below: the `int_0008`
+ * write, then the `V17RXC_INT_0008` write, then the conditional reinit,
+ * then both `flags_0c` clears unconditionally.
+ */
+int
+V17RX_control(void *modem, const struct v17rx_ctl *arg)
+{
+	struct v17rx_cfg *cfg = (struct v17rx_cfg *)modem;
+
+	if (arg == NULL)
+		return 0;
+
+	cfg->int_0008 = arg->int_0004;
+
+	AT_I(CTL(modem), V17RXC_INT_0008) =
+		(arg->flags_0d & V17RXCTL_SET_CTL_INT_0008) != 0;
+
+	if (arg->flags_0d & V17RXCTL_REINIT) {
+		cfg->int_0014 = arg->int_0010;
+		V17RX_create(modem, (const struct v17rx_cfg *)modem);
+	}
+
+	if (arg->flags_0c & V17RXCTL_CLEAR_STATE0)
+		AT_I(RXS(modem), V17RXS_INT_0000) = 0;
+
+	if (arg->flags_0c & V17RXCTL_CLEAR_STATE10)
+		AT_I(RXS(modem), V17RXS_INT_0010) = 0;
+
+	return 1;
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
  * V17RX_status -- .text 0x0a0910, 190 bytes.
  *
  * THE FLAGS BYTE IS FOUR STORES AND THE VALUE IT SETTLES ON IS DETERMINISTIC.
@@ -1898,6 +2208,636 @@ V17TX_modem(void *modem, unsigned short *in, short *out, unsigned short *count)
 	*count = (unsigned short)total;
 
 	return AT_I(modem, V17TX_OBJ_RESULT);
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * TxNextStateV17 -- .text 0x0a0f00, 1,439 bytes.
+ *
+ * `jmp *table(,%eax,4)` on `V17TXP_STATE`, bounded `cmp $0xb`/`ja default`
+ * -- a real jump table, twelve entries, `V17TX_STATE_START`..
+ * `V17TX_STATE_IDLE`.  The case bodies and the state names are v17fax.h's
+ * own derivation (rank 1, the twelve debug strings), reproduced here exactly
+ * as `TxNextStateV29` reproduces its own seven.
+ *
+ * `TxHdxSCR1V17` IS INSTALLED BY TWO ARMS (`BRIDGE` and `DATA`) AND
+ * `TxHdxSilenceV17` BY THREE (`START`, `TEP` and `SCR1_END`) -- neither
+ * handler looks at which state led to it; both read only the SGD
+ * configuration and the countdown this function seeds beside them.  See
+ * v17fax.h's own state table for the full installs-what-next-STATE listing.
+ *
+ * THREE OF THE TWELVE ARMS RETURN DIRECTLY RATHER THAN FALLING TO THE SHARED
+ * TAIL -- `SCR1`, `DATA` and `SCR1_END` clear `V17TX_OBJ_RESULT_B2`'s bit 0
+ * and SET `V17TX_OBJ_RESULT_B1`'s bit 0 (`V17TX_RESULT_B1_BIT0`) with their
+ * own inline code and `ret` directly; every other arm clears BOTH bits
+ * through the tail every `break` reaches at the bottom of this function.
+ * `QUIET_END` is the exception that still `break`s: it explicitly SETS
+ * `V17TX_OBJ_RESULT_B2`'s bit and clears `V17TX_OBJ_RESULT_B1`'s -- which the
+ * shared tail's own unconditional `&= ~V17TX_RESULT_B1_BIT0` reproduces for
+ * free, so nothing extra is needed there.
+ *
+ * `V17TXP_INT_000C`'s TWO READERS ARE `ALT` (the training BUDGET: 0x26
+ * against 0xba0) AND `EQCOND` (whether `BRIDGE` is installed on the way to
+ * `SCR1`, or skipped) -- see the field's own comment in v17fax.h.
+ *
+ * `req.det` IS `SGD_CTL.det`, READ BACK OUT OF THE GLOBAL RATHER THAN
+ * HARDCODED NULL, the shape F9700 established for this file's whole family
+ * -- seven of the thirteen sites sgd.h's own comment counts.
+ *
+ * THE WRONG-COPY RITUAL (F134).  Swapping which handler `BRIDGE`'s own arm
+ * installs (`TxHdxSCR1V17` for `TxHdxDataV17`) failed
+ * `t_v17txcreate.c`'s `test_tx_cycle` immediately -- the DATA state was never
+ * entered and the FIFO-fed cycle stalled in BRIDGE/SCR1.  Reverted; `make one
+ * T=t_v17txcreate` green again.
+ *
+ * Finding F9912.
+ */
+void
+TxNextStateV17(void *modem)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short state = AT_S(prm, V17TXP_STATE);
+
+	switch (state) {
+	case V17TX_STATE_START:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_START\n");
+		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxSilenceV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_SILENCE;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_SILENCE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_SILENCE\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = 0;
+			gen.word_syms = 2;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+		}
+		SetEncoderV17(modem, 1, 0);
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_S(prm, V17TXP_SHORT_001A) = 0x1e0;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxTEP_V17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_TEP;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_TEP:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_TEP\n");
+		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxSilenceV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_QUIET;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_QUIET:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_QUIET\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = 0xe;
+			gen.word_syms = 2;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+		}
+		SetEncoderV17(modem, 1, 0);
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_S(prm, V17TXP_SHORT_001A) = 0x100;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxABV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_ALT;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_ALT:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_ALT\n");
+		{
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = 0xf;
+			gen.word_syms = 2;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+		}
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_S(prm, V17TXP_SHORT_001A) = (short)
+			((AT_I(prm, V17TXP_INT_000C) != 0) ? 0x26 : 0xba0);
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxEQCondV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_EQCOND;
+		AT_S(prm, V17TXP_SHORT_001C) = 0;
+		SeedScramblerV17(modem, 0x2ecdd5);
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_EQCOND:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_EQCOND\n");
+		if (AT_I(prm, V17TXP_INT_000C) != 0) {
+			short mode = AT_S(prm, V17TXP_MODE);
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			SetTxModeV17(modem, mode);
+
+			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+			mode = AT_S(prm, V17TXP_MODE);
+			gen.data_word =
+				(unsigned short)V17TX_PATTERN_SCR1[mode];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+
+			SetEncoderV17(modem, 2, 3);
+			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+			AT_S(prm, V17TXP_SHORT_001A) = 0x30;
+			*(v17tx_process_fn *)(void *)
+				FIELD(prm, V17TXP_PROCESS) = TxHdxSCR1V17;
+			AT_S(prm, V17TXP_STATE) = V17TX_STATE_SCR1;
+		} else {
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word = 0x111;
+			gen.word_syms = 8;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+
+			SetEncoderV17(modem, 0, 3);
+			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+			AT_S(prm, V17TXP_SHORT_001A) = 0x40;
+			*(v17tx_process_fn *)(void *)
+				FIELD(prm, V17TXP_PROCESS) = TxHdxBridgeV17;
+			AT_S(prm, V17TXP_STATE) = V17TX_STATE_BRIDGE;
+		}
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_BRIDGE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_BRIDGE\n");
+		{
+			short mode = AT_S(prm, V17TXP_MODE);
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			SetTxModeV17(modem, mode);
+
+			prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+			mode = AT_S(prm, V17TXP_MODE);
+			gen.data_word =
+				(unsigned short)V17TX_PATTERN_SCR1[mode];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+		}
+		SetEncoderV17(modem, 2, 0);
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxSCR1V17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_SCR1;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_SCR1:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_SCR1\n");
+		AT_S(prm, V17TXP_SHORT_001A) = 1;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxDataV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_DATA;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT0;
+		return;
+
+	case V17TX_STATE_DATA:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_DATA\n");
+		{
+			short mode = AT_S(prm, V17TXP_MODE);
+			struct sgd_gen_cfg gen;
+			struct sgd_control_req req;
+
+			gen.data_word =
+				(unsigned short)V17TX_PATTERN_SCR1[mode];
+			gen.word_syms = 1;
+			req.gen = &gen;
+			req.det = SGD_CTL.det;
+			SGD_control((struct sgd *)
+					FIELD_PTR(prm, V17TXP_SGD), &req);
+		}
+		prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+		AT_S(prm, V17TXP_SHORT_001A) = 0x20;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxSCR1V17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_SCR1_END;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT0;
+		return;
+
+	case V17TX_STATE_SCR1_END:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_SCR1_END\n");
+		AT_S(prm, V17TXP_SHORT_001A) = 0x30;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxSilenceV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_QUIET_END;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT0;
+		return;
+
+	case V17TX_STATE_QUIET_END:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_QUIET_END\n");
+		AT_S(prm, V17TXP_SHORT_001A) = 0;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxIdleV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_IDLE;
+		AT_I(prm, V17TXP_INT_0008) = 1;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) |= V17TX_RESULT_B2_BIT0;
+		break;
+
+	case V17TX_STATE_IDLE:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_STATE_IDLE\n");
+		AT_S(prm, V17TXP_SHORT_001A) = 0;
+		*(v17tx_process_fn *)(void *)FIELD(prm, V17TXP_PROCESS) =
+			TxHdxStartV17;
+		AT_S(prm, V17TXP_STATE) = V17TX_STATE_START;
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		break;
+
+	default:
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf("V17TX_DEFAULT, %d\n", state);
+		*FIELD(modem, V17TX_OBJ_RESULT_B2) &=
+			(unsigned char)~V17TX_RESULT_B2_BIT0;
+		AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
+		*FIELD(modem, V17TX_OBJ_RESULT_B1) = (unsigned char)
+			((*FIELD(modem, V17TX_OBJ_RESULT_B1)
+			  | V17TX_RESULT_B1_BIT1)
+			 & ~V17TX_RESULT_B1_BIT0);
+		break;
+	}
+
+	*FIELD(modem, V17TX_OBJ_RESULT_B1) &=
+		(unsigned char)~V17TX_RESULT_B1_BIT0;
+}
+
+/*
+ * TxHdxStartV17 -- .text 0x0a1b10, 21 bytes.  Nothing but the transition.
+ */
+short
+TxHdxStartV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	TxNextStateV17(modem);
+	return 0;
+}
+
+/*
+ * TxHdxIdleV17 -- .text 0x0a14a0, 116 bytes.  Exactly `TxHdxIdleV21`'s and
+ * `TxHdxIdleV29`'s shape: report `V17TX_STATUS_IDLE` unconditionally, then
+ * spend the whole call's budget on `TxNoCarrierV17` while the FIFO is empty,
+ * or hand off to `TxNextStateV17` the moment it is not.
+ */
+short
+TxHdxIdleV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	struct fax_fifo *fifo =
+		(struct fax_fifo *)FIELD_PTR(prm, V17TXP_FIFO);
+
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_IDLE;
+
+	if (fifo->count == 0) {
+		unsigned short b = (unsigned short)*budget;
+		short nsamples = (short)TxNoCarrierV17(modem, in, out, b);
+
+		*budget = (short)((unsigned short)*budget - b);
+		return nsamples;
+	}
+
+	TxNextStateV17(modem);
+	return 0;
+}
+
+/*
+ * TxHdxSilenceV17 -- .text 0x0a1a70, 158 bytes.  Installed by `START`, `TEP`
+ * and `SCR1_END` alike (see `TxNextStateV17`'s own comment); every call
+ * spends `min(remaining, *budget)` on `TxNoCarrierV17` and counts the
+ * countdown down towards `TxNextStateV17`.
+ *
+ * IT DOES NOT WRITE `V17TX_OBJ_RESULT`, and neither does `TxHdxTEP_V17` --
+ * MEASURED, not an omission: no `movb`/`orb`/`andb` touches the byte
+ * anywhere in either function's disassembly, where every OTHER countdown
+ * handler in this file (`TxHdxABV17`, `TxHdxEQCondV17`, `TxHdxBridgeV17`,
+ * `TxHdxSCR1V17`) writes `V17TX_STATUS_TRAINING` on entry.  `TxHdxQuietV29`,
+ * this file's closest V.29 analogue, writes its own status even on its
+ * no-carrier arm -- so this is a genuine divergence from the sibling shape
+ * and not a transcription slip.
+ */
+short
+TxHdxSilenceV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	if (remaining <= 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+
+	nsamples = (short)TxNoCarrierV17(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxTEP_V17 -- .text 0x0a19b0, 179 bytes.  Installed by `SILENCE`;
+ * `SGD_symbol_gen` (word_syms=2, data_word=0, set by `TxNextStateV17`'s
+ * SILENCE arm) straight into `ModDataV17` -- no `ScrambleDataV17`, and see
+ * `TxHdxSilenceV17`'s own comment for the missing status write.
+ */
+short
+TxHdxTEP_V17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	if (remaining <= 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	nsamples = (short)ModDataV17(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxABV17 -- .text 0x0a18f0, 190 bytes.  Function name AB, debug string
+ * ALT -- the mismatch `TxHdxABV29`/`V29TX_STATE_ALT` already carries, one
+ * modulation over.  `SGD_symbol_gen` (word_syms=2, data_word=0xe, set by
+ * `TxNextStateV17`'s QUIET arm) straight into `ModDataV17`, no
+ * `ScrambleDataV17` -- unlike `TxHdxSCR1V17` below, V.17's alternating
+ * training dibit is unscrambled.
+ */
+short
+TxHdxABV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+
+	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	if (remaining <= 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	nsamples = (short)ModDataV17(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxEQCondV17 -- .text 0x0a1820, 206 bytes.
+ * TxHdxBridgeV17 -- .text 0x0a1750, 206 bytes.
+ * TxHdxSCR1V17   -- .text 0x0a1680, 206 bytes.
+ *
+ * THE THREE ARE ONE BODY, COMPILED THREE TIMES -- byte for byte the same
+ * instruction sequence at all three addresses (`dis.py` over each range),
+ * the same shape `RxHdxBridgeV17`/`RxHdxPrtcolV17` already carry on the
+ * receive side of this file: `SGD_symbol_gen` then `ScrambleDataV17` then
+ * `ModDataV17`, driven by whichever `SGD_control` request the installing
+ * arm of `TxNextStateV17` built immediately before.  What differs between
+ * the three transitions is upstream, in `TxNextStateV17` itself; the
+ * handler code does not look at which state led to it.
+ */
+short
+TxHdxEQCondV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+
+	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	if (remaining <= 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	ScrambleDataV17(modem, in, n);
+	nsamples = (short)ModDataV17(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/* See TxHdxEQCondV17's own comment: the same body, a different symbol. */
+short
+TxHdxBridgeV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+
+	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	if (remaining <= 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	ScrambleDataV17(modem, in, n);
+	nsamples = (short)ModDataV17(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * See `TxHdxEQCondV17`'s own comment: the same body, a different symbol --
+ * installed both by `BRIDGE` (pre-data) and by `DATA` (post-data), which is
+ * `V17TX_STATE_SCR1`'s own comment in v17fax.h.
+ */
+short
+TxHdxSCR1V17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	short remaining;
+	unsigned short n;
+	short nsamples;
+
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_TRAINING;
+
+	remaining = AT_S(prm, V17TXP_SHORT_001A);
+	if (remaining <= 0) {
+		TxNextStateV17(modem);
+		return 0;
+	}
+
+	n = (remaining <= (short)*budget) ? (unsigned short)remaining
+					   : (unsigned short)*budget;
+	AT_S(prm, V17TXP_SHORT_001A) = (short)(remaining - n);
+
+	SGD_symbol_gen((struct sgd *)FIELD_PTR(prm, V17TXP_SGD), in, (short)n);
+	ScrambleDataV17(modem, in, n);
+	nsamples = (short)ModDataV17(modem, in, out, n);
+	*budget = (short)((unsigned short)*budget - n);
+
+	return nsamples;
+}
+
+/*
+ * TxHdxDataV17 -- .text 0x0a1520, 349 bytes.  `TxHdxDataV21`'s and
+ * `TxHdxDataV29`'s shape one modulation over: an optional one-shot rate
+ * report the first call after `TxHdxSCR1V17` installs it (`V17TXP_SHORT_001A`
+ * seeded to 1), then the three-arm FIFO read -- satisfied and
+ * underrun-with-`V17TXP_INT_0008`-clear both scramble+modulate exactly what
+ * was taken (the underrun arm takes the FULL REQUESTED BUDGET rather than
+ * what the FIFO gave, raising `V17TX_RESULT_B1_BIT1` and reporting
+ * `V17TX_STATUS_UNDERRUN`); underrun-with-`V17TXP_INT_0008`-set modulates
+ * only what the FIFO gave, LEAVES the remainder in `*budget`, and calls
+ * `TxNextStateV17` before returning.
+ */
+short
+TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
+{
+	void *prm = FIELD_PTR(modem, V17TX_OBJ_PARAMS);
+	unsigned short req;
+	unsigned short taken;
+	short nsamples;
+
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_DATA;
+
+	if (AT_S(prm, V17TXP_SHORT_001A) != 0) {
+		short mode = AT_S(prm, V17TXP_MODE);
+
+		AT_S(prm, V17TXP_SHORT_001A) = 0;
+
+		if (mode == 1)
+			AT_B(modem, V17TX_OBJ_RESULT) =
+				V17TX_STATUS_DATA_RATE_9600;
+		else if (mode == 0)
+			AT_B(modem, V17TX_OBJ_RESULT) =
+				V17TX_STATUS_DATA_RATE_7200;
+		else if (mode == 2)
+			AT_B(modem, V17TX_OBJ_RESULT) =
+				V17TX_STATUS_DATA_RATE_12000;
+		else if (mode == 3)
+			AT_B(modem, V17TX_OBJ_RESULT) =
+				V17TX_STATUS_DATA_RATE_14400;
+		else
+			AT_B(modem, V17TX_OBJ_RESULT) = V17TX_RESULT_BYTE_07;
+	}
+
+	req = (unsigned short)*budget;
+	taken = (unsigned short)
+		FIFO_read((struct fax_fifo *)FIELD_PTR(prm, V17TXP_FIFO),
+			  in, req);
+
+	if (req <= taken) {
+		ScrambleDataV17(modem, in, taken);
+		nsamples = (short)ModDataV17(modem, in, out, taken);
+		*budget = (short)((unsigned short)*budget - taken);
+		return nsamples;
+	}
+
+	if (AT_I(prm, V17TXP_INT_0008) != 0) {
+		*budget = (short)(req - taken);
+		ScrambleDataV17(modem, in, taken);
+		nsamples = (short)ModDataV17(modem, in, out, taken);
+		TxNextStateV17(modem);
+		return nsamples;
+	}
+
+	*FIELD(modem, V17TX_OBJ_RESULT_B1) |= V17TX_RESULT_B1_BIT1;
+	AT_B(modem, V17TX_OBJ_RESULT) = V17TX_STATUS_UNDERRUN;
+	ScrambleDataV17(modem, in, req);
+	nsamples = (short)ModDataV17(modem, in, out, req);
+	*budget = (short)((unsigned short)*budget - req);
+
+	return nsamples;
 }
 
 /* --------------------------------------------------------------------- */

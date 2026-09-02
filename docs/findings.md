@@ -110060,3 +110060,284 @@ combination the other two request bytes exercise, `V27RX_control`'s own
 case-table shape), 49 checks, plus `test_tx_control_null_req`. A live
 mutation (the mask bit's target flag value changed from 0x04 to 0x08) was
 reverted after confirming the test catches it. (2026-09-02)
+
+## F9900. `V17RX_control`'s suspicious call site is resolved: it is `V17RX_create(modem, modem)`, and that is a legitimate self-referential reinit
+
+A previous wave left `V17RX_control` (0x0a0880, 131 bytes) unwritten because
+its call at 0x0a08fc (`mov %esi,0x4(%esp)` / `mov %esi,(%esp)` / `call
+V17RX_create`) passes the SAME register, `%esi`, as both `modem` and
+`params`. Read with `tools/dis.py ref/slmodemd/dsplibs.o 0xa0880 0xa0903`,
+that is not a defect and not an aliasing accident: `V17RX_create`'s own
+header already establishes (finding F9470) that the receive instance's head,
+byte for byte, IS a `struct v17rx_cfg` -- the constructor copies `params`
+onto exactly those bytes and every field it reads back afterwards lines up.
+So `V17RX_create(modem, (const struct v17rx_cfg *)modem)` reads the
+instance's OWN current configuration as its "new" one (an identity copy,
+except for two fields this same function just updated -- see below) and
+reruns construction. `V17RX_create`'s own prologue
+(`tools/dis.py ref/slmodemd/dsplibs.o 0x96eb0 0x96f60`) confirms the general
+shape independent of the caller: it loads `params` from one stack slot and
+`modem` from the other, and the 0x28-byte struct-copy loop at 0x096ef5
+writes FROM the `params` pointer INTO the `modem` pointer -- two loads and
+two stores per field, nothing that requires the two pointers to differ.
+
+The rest of `V17RX_control`'s body: `arg == NULL` returns 0 and touches
+nothing; otherwise `cfg->int_0008 = arg->int_0004` unconditionally,
+`V17RXC_INT_0008` (already named, v17fax.h, "the writers are RxNextStateV17's
+DATA arm and V17RX_control") is set from bit 4 of `arg->flags_0d`
+(`V17RXCTL_SET_CTL_INT_0008`), bit 1 of the same byte
+(`V17RXCTL_REINIT`) copies `arg->int_0010` into `cfg->int_0014` and gates the
+self-referential `V17RX_create` call, and -- REGARDLESS of which `flags_0d`
+arm ran, both converge on one shared tail (`jmp 0x0a08af`) -- `arg->flags_0c`
+bits 3 and 5 (`V17RXCTL_CLEAR_STATE0`/`_STATE10`) unconditionally clear
+`V17RXS_INT_0000`/`V17RXS_INT_0010` of the demodulator state. `arg`'s own
+type, `struct v17rx_ctl` (v17fax.h), reads what the four loads force and no
+further, the same discipline `v22ctl.h`'s `struct v22fp_ctl` states for the
+identical "control block, no caller in the object" shape -- `V17RX_control`
+has no relocation anywhere in the 1.2 MB pointing at it either; its only
+referrer is the lowercase adapter `v17rx_control` (0x9c230), which forwards
+this same opaque argument unchanged from ITS OWN caller.
+
+`test/unit/t_v17rxcreate.c`'s new `test_control`, 1293 checks across nine
+cases (`NULL` arg, every single flag bit, every pairing, and all of them at
+once), differential against `ref_V17RX_control`. A live mutation (swapping
+which state field `V17RXCTL_CLEAR_STATE0` clears) was planted and caught --
+2 of 1293 checks failed -- then reverted, per F134's discipline. (2026-09-02)
+
+## F9901. `ref_V17RX_control`'s REINIT path crashes the BLOB ITSELF on a cold -> short-retrain transition under reuse, and the test avoids it rather than "fixing" it
+
+While building `test_control` (F9900) for `V17RX_control`, driving the
+REINIT flag (`V17RXCTL_REINIT`) with `arg->int_0010 == 1` against an
+instance that was BUILT with `int_0014` (retrain) == 0 segfaulted --
+inside `ref_V17RX_control`, the renamed BLOB SYMBOL, before reaching our
+reconstruction at all (confirmed with `fprintf`/`fflush` bisection: the
+crash lands between "before ref call" and "before our call"). This is a
+0 -> 1 transition of the retrain flag under `owned == 0` reuse (the
+self-referential `V17RX_create(modem, modem)` call F9900 documents), a
+combination `t_v17rxcreate.c`'s own `test_reinit` never exercises -- it
+only ever reinits a `cases[k]` value onto ITSELF, never a different one, so
+"cold, built once, then reinited to short-retrain via control" is genuinely
+untested territory in the object, not merely in this reconstruction. Two
+plausible causes are the object sizing a sub-block (equaliser survivor ring,
+per `V17RXS_PTR_0030`/`vtb.paths`) differently for the two retrain regimes
+and not reallocating it on reuse; this finding does not trace which,
+because the crash is in the BLOB and not in `src/`, and there is nothing to
+fix on our side.
+
+`test_control`'s cases therefore keep `int_0010` (retrain) at 0
+throughout -- see the comment on `ctl_cases[]` in `t_v17rxcreate.c`.
+Retrain=1 stays covered where it is safe to drive it: `test_reinit`'s own
+"short retrain" cases, always reinited to the SAME value they were built
+with. Nothing reconstructed calls `V17RX_control` this way either (F9900:
+zero relocations reach it beyond its own lowercase adapter), so this is not
+a gap in coverage of any real call path, only a documented boundary of what
+the differential test may safely explore. (2026-09-02)
+
+## F9902. `V21RX_control` and `V21TX_control`: the same shape and the same self-referential reinit as `V17RX_control`, on the V.21 side
+
+`V21RX_control` (0x0a2410, 75 bytes) and `V21TX_control` (0x0a2ba0, 94 bytes)
+were ready (no unwritten dependency) and turned out to be exactly
+`V17RX_control`'s shape (F9900), read with `tools/dis.py` at each address:
+
+- `V21RX_control(modem, arg)`: `arg == NULL` returns 0; otherwise
+  `cfg->int_0008` (the receive handle's own `struct v21rx_cfg` head) is set
+  from `arg->int_0004`; `V21RX_HDX(modem)->int_0000` -- already a named
+  field, and `RxHdxDataV21` already gates demodulation on it -- is set from
+  bit 4 of `arg->flags_0d`; bit 1 of the same byte calls
+  `V21RX_create(modem, modem)`. That field's header comment used to read
+  "nothing written sets it"; it is corrected in `v21fax.h` to name this
+  function as the setter.
+- `V21TX_control(modem, arg)`: `arg == NULL` returns 0; otherwise, in the
+  object's own order, `V21TX_DSP(modem)->fsm.cfg.scale` (already a named
+  field via `struct fpm_fsm_cfg`) is set from `arg->int_0008`, narrowed to
+  `short` exactly as the object narrows it (`mov %dx,...`); `cfg->int_0008`
+  is set from `arg->int_0004`; bit 2 of `arg->flags_0c` is ORed into
+  `V21TX_FLAGS(modem)`; bit 4 of `arg->flags_0d` sets `V21TXP_INT_0004`
+  (already named, "int: zero selects the FIFO arm") as a boolean; bit 1 of
+  the same byte calls `V21TX_create(modem, modem)`.
+
+Both self-referential reinit calls are the identical move F9900 establishes
+for `V17RX_control`, and for the identical reason: each handle's head, byte
+for byte, IS its own config struct (already established for both -- v21fax.h
+already said "the whole transmit handle... +0x00..+0x1b IS `struct
+v21tx_cfg`" before this batch touched it). Neither `struct v21rx_ctl` nor
+`struct v21tx_ctl` has a caller anywhere in the object beyond its own
+lowercase adapter (`v21rx_control`/`v21tx_control`, faxadapt.c), so both
+follow `v22ctl.h`'s "read what the loads force, no further" discipline.
+
+Differential tests: `test/unit/t_v21create.c`'s new `test_control` (600
+checks, five cases: NULL, flags clear, each bit, and REINIT) and
+`test/unit/t_v21txcreate.c`'s new `test_control` (204 checks, six cases).
+The latter needed `compare_tree` split into `compare_tree_ex` with an
+`expect_default_scale` flag: the shared comparison asserted
+`dsp.fsm.cfg.scale == 0x1900` as a blanket invariant true for every OTHER
+caller (fresh construction, reinit, a modem cycle), which `V21TX_control`
+deliberately violates by design -- the cross-side agreement check
+(`da->fsm.cfg.scale == db->fsm.cfg.scale`) stays unconditional and is what
+`test_control` actually relies on. Two live mutations were planted (swapping
+which flag byte `V21TXCTL_SET_TXFLAGS_BIT2` reads in `V21TX_control`, and
+swapping `V21RXCTL_SET_HDX_INT0000` for `V21RXCTL_REINIT` in
+`V21RX_control`) and caught, then reverted, per F134. (2026-09-02)
+
+## F9910. V.17's transmit half-duplex machine lands whole, all twelve symbols in one commit: `TxNextStateV17`, its nine `TxHdx*V17` states, `V17TX_create` and `V17TX_CFG`
+
+F9600 measured the shape last wave and left it blocked on `SGD_CTL`
+(sgd.c/sgd.h), the last external dependency; that landed separately in the
+interim (F9700), so `tools/closure.py --missing` over all twelve names now
+returns exactly the twelve, 4,145 bytes, with nothing else unwritten:
+`TxNextStateV17` (1,439 bytes), `V17TX_create` (1,043), the nine
+`TxHdx*V17` states and `V17TX_CFG` (.data, 32 bytes). No proper subset
+links -- every one of `TxNextStateV17`'s nine `R_386_32` handler installs
+and every one of the nine handlers' tail calls back into `TxNextStateV17`
+is a link-time reference (CLAUDE.md's F8492/F8493 shape), and
+`V17TX_create` is what seeds the cycle at `V17TX_STATE_START` in the first
+place.
+
+**THE MACHINE IS TWELVE STATES, NOT NINE OR TEN** -- one more layer than
+V.21's three or V.29's seven, because two of the nine handler FUNCTIONS
+are each installed by more than one STATE: `TxHdxSilenceV17` (START, TEP
+and SCR1_END all install it) and `TxHdxSCR1V17` (BRIDGE and DATA both
+install it, once before the data phase and once after). Neither handler
+looks at which state led to it; both simply read whatever
+`SGD_control` request the installing arm of `TxNextStateV17` built
+immediately beforehand. `include/dsplib/v17fax.h` carries the full
+state -> handler table, taken from the twelve author's-own debug strings at
+`.rodata.str1.1` 0x4a08..0x4af0 (rank 1) and cross-checked against which
+`TxHdx*V17` symbol each arm's own `R_386_32` install names (the same
+double-check `RxNextStateV17`'s own table used).
+
+**THREE OF THE TWELVE HANDLER-SHAPED THINGS ARE ONE BODY, COMPILED THREE
+TIMES.** `TxHdxEQCondV17`, `TxHdxBridgeV17` and `TxHdxSCR1V17` are
+byte-for-byte the same instruction sequence at three different addresses
+(checked with `dis.py` over all three ranges) -- `SGD_symbol_gen` then
+`ScrambleDataV17` then `ModDataV17`, the same "one algorithm, several
+compiled copies" shape `v17fax.h` already records for `RxHdxBridgeV17`/
+`RxHdxPrtcolV17` on the receive side of this file.
+
+**`TxHdxSilenceV17` AND `TxHdxTEP_V17` DO NOT WRITE `V17TX_OBJ_RESULT`, AND
+THAT IS MEASURED, NOT AN OMISSION.** Every other countdown handler in this
+batch (`TxHdxABV17`, `TxHdxEQCondV17`, `TxHdxBridgeV17`, `TxHdxSCR1V17`)
+writes `V17TX_STATUS_TRAINING` (1) on entry; neither `TxHdxSilenceV17` nor
+`TxHdxTEP_V17` contains a single `movb`/`orb`/`andb` touching that byte
+anywhere in its disassembly. `TxHdxQuietV29`, this file's closest V.29
+analogue (also a no-carrier countdown handler), DOES write its own status
+even on its no-carrier arm -- so this is a genuine divergence from the
+sibling shape, confirmed by re-reading both functions' full disassembly a
+second time before trusting it, not a transcription slip carried over from
+V.29's file.
+
+**`V17TX_create`'S OWN FIFO CONFIG FORCES `fill` TO A LITERAL ZERO, WHERE
+`V29TX_create` KEEPS `FIFO_CFG.fill` UNCHANGED.** `mov %di,0xa4(%esp)` at
+0x098a9e overwrites the `FIFO_CFG.fill` value the two preceding
+instructions had just loaded into the same stack slot, with `di` == 0
+(cleared at 0x098a75, four instructions earlier and never touched since).
+Two different transmit constructors, two different disciplines for the
+same field, each reproduced as measured rather than assumed to match.
+
+**`RING.SYM` IS ALLOCATED EXACTLY ONCE, WHERE `V29TX_create`'S OWN RING
+`sym`/`i`/`q` ARE REALLOCATED ON EVERY CALL.** The `sysdep_malloc(0x64)`
+for `V17FP_PTR_0010` sits INSIDE `V17TX_create`'s private-block
+fresh-allocation branch (guarded on `V17TX_OBJ_FP == NULL`) and is skipped
+entirely on reuse; `V29TX_create`'s equivalent call sits AFTER its own
+fresh/reuse branch converges and runs unconditionally every call (already
+on record in `v29.c`'s own header comment as a one-buffer-per-call leak on
+reuse). Two constructors, two disciplines, each reproduced as observed.
+
+**THE F134 RITUAL: A WRONG COPY, CAUGHT AND REVERTED.** Swapping
+`TxNextStateV17`'s `BRIDGE` arm's install (`TxHdxSCR1V17` swapped for
+`TxHdxDataV17`) failed `t_v17txcreate.c`'s long-training cycle test
+immediately: the machine never reached `V17TX_STATE_DATA`, and the
+mid-cycle `compare_tree` diverged on `params.process` at the first block
+that should have entered `SCR1`. Reverted; `make one T=t_v17txcreate`
+green again.
+
+**COVERAGE, WITH ITS OWN DENOMINATOR.** `t_v17txcreate.c` runs the cycle
+twice -- once under long training (`V17TXP_INT_000C == 0`, 900 blocks,
+which is what visits `BRIDGE`) and once under short training (`!= 0`, 200
+blocks, which is what exercises `EQCOND`'s OTHER arm, installing
+`TxHdxSCR1V17` directly) -- and asserts, per state, that it was actually
+entered during the run rather than merely hoping the block count was
+enough; `TxHdxDataV17`'s `V17TXP_INT_0008 != 0` underrun arm and
+`TxNextStateV17`'s out-of-range default arm are reached by direct calls
+against a handle `V17TX_create` built, `t_v29txcreate.c`'s own idiom for
+the arms a FIFO-driven cycle cannot reach reliably.
+
+Everything else -- the field-by-field derivation of `V17TXP_MODE`,
+`V17TXP_INT_000C`, `V17TXP_STATE`, `V17TXP_SHORT_001A`,
+`V17TXP_SHORT_001C`, `V17TX_OBJ_RESULT_B2` and the twelve
+`V17TX_STATE_*`/nine `V17TX_STATUS_*` constants -- is in `v17fax.h`
+itself, next to the offsets it names.  `t_v17txcreate.c` finishes at 44,357
+checks across nine `diff_begin`/`diff_end` spans, all green, and the
+pre-existing `t_v17fax.c` (95,619 checks over the receive side and the
+shared setters) stays green untouched.
+
+**A DIRECT-CALL TEST CAN CRASH ON A PRECONDITION THE STATE MACHINE WOULD
+HAVE SATISFIED, AND THAT IS A TEST DEFECT, NOT A BLOB-CRASH FINDING LIKE
+F9901's.** `ModDataV17` indexes `V17FP_ENCODERS` by `V17FP_ENCODER_SEL`
+(v17data.h), a field `V17TX_create` never initialises -- only
+`SetEncoderV17`/`SetTxModeV17` do, both reached from `TxNextStateV17`'s
+QUIET/BRIDGE/EQCOND arms on the way to `DATA` in any real cycle. The first
+draft of `t_v17txcreate.c`'s underrun-bypass test called `TxHdxDataV17`
+directly against a freshly-built handle with no such arm ever run, so
+`ModDataV17` indexed the table with whatever `sysdep_malloc` happened to
+leave there and jumped through it -- a segfault inside the RECONSTRUCTION,
+bisected with `fprintf`/`fflush` checkpoints the way F9901's own crash was
+traced. The fix is in the test, not in `src/`: prime `V17FP_ENCODER_SEL`
+with `SetEncoderV17(handle, V17_ENCODER_TCM, 0)` before the bypass call,
+matching what `TxHdxBridgeV17`/`TxHdxEQCondV17` would have left behind.
+
+**THE F134 RITUAL, TWICE OVER.** Beyond the `TxNextStateV17` swap recorded
+above, `v17tx_create` (`src/fax/faxadapt.c`, now unblocked by this batch --
+see below) was checked the same way: changing its 14400 arm's literal
+`pack_width` from 6 to 7 failed `t_faxadapt.c`'s new `v17tx_create` case
+(2 of 36 checks) immediately. Reverted; `make one T=t_faxadapt` green
+again.
+
+**`v17tx_create` ITSELF LANDS IN THE SAME COMMIT.** `readyqueue.py`
+(rebuilt fresh over `build/src/fax/v17.o` -- see the caveat below) showed
+`v17tx_create` (0x09bf20, 270 bytes) READY the moment the twelve symbols
+above were in place: its only blockers were `V17TX_create` and
+`V17TX_CFG`. Derived directly from `dis.py` over 0x9bf20..0x9c030, not by
+analogy to `v21tx_create`/`v29tx_create` (both still BLOCKED, per
+faxadapt.h, and not this batch's to write): copy the caller's config (or
+`V17TX_CFG`) onto a local, call `V17TX_create` with the wrapped handle,
+plant `pack_count` = 0x30 (`V17TX_MODEM_BUDGET`) unconditionally, and set
+`pack_width`/`unpack_width` from `local.bitrate` by a three-way
+classification -- 14400 and 12000 each get their own arm (`pack_width` 6
+or 5, `unpack_width` 0), everything else (including 9600) falls to an
+`else` that further splits 9600 (`pack_width` 4) from the rest
+(`pack_width` 3), `unpack_width` 0 throughout. `dis.py` over
+0x9bf87..0x9bfae shows no reference to `V17TX_SYM_SIZE` at all, so the
+three literals are reproduced as the object's own rather than derived from
+that table. `test/unit/t_faxadapt.c` gained a `run_tx_create_v17` case (36
+checks, six bit rates including the unrecognised-rate default arm),
+called through the ADAPTER (`v17tx_create`/`ref_v17tx_create`) exactly as
+`run_rx_create`'s four RX cases already are, rather than via a fabricated
+fixture -- V.17's TX side no longer needs one now that a real constructor
+exists.
+
+**READYQUEUE.PY NEEDED A FRESH `build/src/fax/v17.o` TO SEE ANY OF THIS,
+CONFIRMING THE STALENESS CAVEAT CLAUDE.md ALREADY CARRIES.** `make one`
+only fills `build/repro`; a single `make build/src/fax/v17.o` (not a full
+`make coverage`) was enough to unstick `readyqueue.py`'s glob without a
+project-wide rebuild.  (2026-09-02)
+
+## F9911. `V17TX_create`'s own derivation: see the header comment at its definition, `src/fax/v17.c`
+
+Recorded inline rather than duplicated here -- `V17TX_create` (.text
+0x0989e0, 1,043 bytes) is `V29TX_create`'s and `V21TX_create`'s shape one
+config dword wider, and every departure from that shape (the forced-zero
+FIFO `fill`, the once-only ring allocation, the `V17TXP_NOCARRIER_SYM` seed,
+the `V17TXP_INT_000C` copy and the `FPM_PPS_CFG.aux` derivation) is footnoted
+at the exact instruction address in `src/fax/v17.c`'s own comment, per
+CLAUDE.md's "the record is the deliverable" rule for a function this large.
+See F9910 for the batch this landed with. (2026-09-02)
+
+## F9912. `TxNextStateV17`'s own derivation: see the header comment at its definition, `src/fax/v17.c`
+
+Recorded inline rather than duplicated here, for the same reason F9911
+gives -- the twelve-arm switch, its state table and its evidence (rank 1,
+the twelve debug strings) are in `src/fax/v17.c`'s own comment on
+`TxNextStateV17`, and the state numbering, the handler-sharing and the
+status constants are in `include/dsplib/v17fax.h`. See F9910 for the batch
+this landed with. (2026-09-02)
