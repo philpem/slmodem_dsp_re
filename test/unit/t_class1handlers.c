@@ -1,7 +1,7 @@
 /*
  * t_class1handlers.c -- differential test of the Class 1 host-link handlers:
- * `_hdlc_receive_state_init`, `_handle_data_input`, `_handle_hdlc_input` and
- * `_handle_data_output`.
+ * `_hdlc_receive_state_init`, `_handle_data_input`, `_handle_hdlc_input`,
+ * `_handle_data_output` and `cTOOLS_handle_hdlc_output`.
  *
  * EVERY DESTINATION IS SIZED FROM WHAT THE FUNCTION CAN WRITE, NOT FROM ITS
  * INPUT (F8607/D956).  `_handle_data_input` appends twenty zero elements
@@ -42,6 +42,9 @@ extern int ref__handle_hdlc_input(void *ctx, const unsigned char *src,
 extern int ref__handle_data_output(void *ctx, const unsigned short *src,
 				   unsigned char *dst, int count,
 				   int terminate);
+extern int ref_cTOOLS_handle_hdlc_output(void *ctx, const unsigned short *src,
+					 unsigned char *dst, int count,
+					 int terminate);
 
 #define IN_MAX		64
 #define CURSOR_MAX	8
@@ -379,6 +382,87 @@ run_data_input_limit(void)
 	return diff_end();
 }
 
+/*
+ * `cTOOLS_handle_hdlc_output`'s own debug prints are exercised (F134: the
+ * level is driven across every value the branches key on) but not compared
+ * -- `dsplibs_debug_printf` is a plain formatter and neither side captures
+ * its output, so what is checked is the RETURN, `dst` and the guard.  The
+ * first three elements are planted so the `count > 2` arm's frame-decode
+ * print (`GetT30FrameIDFromBuffer`/`GetT30FrameNameByID`, already written)
+ * has real bytes to read rather than whatever `rnd()` leaves in `src[0..2]`
+ * for the `count <= 2` cases, which never reach it.
+ */
+static int
+run_hdlc_output(void)
+{
+	static unsigned short src[IN_MAX];
+	static unsigned char dst_a[2 * IN_MAX + 2 + GUARD];
+	static unsigned char dst_b[2 * IN_MAX + 2 + GUARD];
+	unsigned p, level;
+	long doubled = 0, terminated = 0, untermed = 0, framed = 0, short_c = 0;
+
+	diff_begin("cTOOLS_handle_hdlc_output");
+	for (level = 0; level < 4; level++) {
+		for (p = 0; p < 20; p++) {
+			int count = (int)(p % (IN_MAX + 1));
+			int terminate = (p & 1) != 0;
+			int ra, rb, i;
+			long tag = (long)(level * 100 + p);
+
+			for (i = 0; i < IN_MAX; i++)
+				src[i] = (unsigned short)(rnd() & 0xff);
+			/* force a DLE (0x10) into the stream somewhere */
+			if (count > 0)
+				src[count / 2] = CLASS1_DLE;
+			/* an address/control/fcf FAX_class1_progress's sibling
+			 * print can actually resolve, when count > 2 */
+			src[0] = 0xff;
+			src[1] = 0x03;
+			src[2] = 0x01;
+
+			ctx_plant();
+			memset(dst_a, 0x5a, sizeof(dst_a));
+			memcpy(dst_b, dst_a, sizeof(dst_a));
+			dsplibs_debug_level = ref_dsplibs_debug_level = level;
+
+			ra = ref_cTOOLS_handle_hdlc_output(&ctx_a, src, dst_a,
+							   count, terminate);
+			rb = cTOOLS_handle_hdlc_output(&ctx_b, src, dst_b,
+						       count, terminate);
+
+			diff_eq_int("hdlc_output return (%ld)", rb, ra, tag);
+			diff_eq_int("hdlc_output dst and guard (%ld)",
+				    memcmp(dst_a, dst_b, sizeof(dst_a)), 0,
+				    tag);
+			ctx_compare("hdlc_output", tag);
+
+			if (ra > count)
+				doubled++;
+			if (terminate && count != 0)
+				terminated++;
+			if (!terminate || count == 0)
+				untermed++;
+			if (count > 2 && level > 1)
+				framed++;
+			if (count > 0 && count <= 2)
+				short_c++;
+		}
+	}
+	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
+
+	diff_eq_int("hdlc_output: a DLE was doubled (%ld)", doubled > 0, 1,
+		    doubled);
+	diff_eq_int("hdlc_output: the terminator was appended (%ld)",
+		    terminated > 0, 1, terminated);
+	diff_eq_int("hdlc_output: and was not (%ld)", untermed > 0, 1,
+		    untermed);
+	diff_eq_int("hdlc_output: the frame-decode print's arm ran (%ld)",
+		    framed > 0, 1, framed);
+	diff_eq_int("hdlc_output: the count<=2 arm ran (%ld)", short_c > 0, 1,
+		    short_c);
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -389,5 +473,6 @@ main(void)
 	rc |= run_data_input_limit();
 	rc |= run_hdlc_input();
 	rc |= run_data_output();
+	rc |= run_hdlc_output();
 	return rc;
 }

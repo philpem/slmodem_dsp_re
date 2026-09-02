@@ -26,11 +26,87 @@
  *
  * The spelling `_recieve_...` is the AUTHOR'S, from the symbol table; do
  * not fix it.
+ *
+ * `states_names` (.rodata 0x9360, 160 bytes) and `status_names` (.rodata
+ * 0x9300, 88 bytes) are added here from a later batch: twenty and eleven
+ * `{int, char *}` pairs, dumped with their relocations resolved (never
+ * trimmed `objdump`, per this tree's own rule about tables of pointers) --
+ * see the tables below for the exact bytes and the strings, which are the
+ * author's own and the strongest evidence class this tree recognises.
+ * `fax_class1_progress` (.text 0x0936d0, 1145 bytes), their only reader, is
+ * NOT written: it walks `session->0x1208 (a FAXVMI handle) ->link(+0x28)
+ * ->int_0014(+0x14)` into a per-modulation TX/RX object and reads/writes a
+ * `short` at +0x50, +0x54 or +0x60 of THAT object and then +0x4f4e/+0x4f62/
+ * +0x4fb2 of what it points to -- offsets this tree's v17fax.h/v21fax.h/
+ * v27fax.h/v29fax.h attribute to RX-side objects (`V17RX_OBJ_INT_0050`,
+ * `V21RX_OBJ_DSP`, `V29_OBJ_RX`, all `0x50`), while class1.h's own comment
+ * for +0x1208 hedges "transmit-side for 12..13 (which side is which is NOT
+ * settled)".  Reconciling that is real work this batch did not do, so the
+ * function is left for whoever settles it -- the two tables are written on
+ * their own merit and GLOBAL rather than the object's own file-local `r`
+ * because their only reader is unwritten (D1122's shape; see D1330).
  */
 
 #include "dsplib/class1.h"
 #include "dsplib/debug.h"
 #include "dsplib/fpm.h"
+
+/*
+ * The state and status name tables `fax_class1_progress` searches to log a
+ * transition -- see D1330 for why these are GLOBAL where the object has them
+ * `r` (file-local).  Both are searched linearly by `id`, bounded by the
+ * object's own `cmp $0x13,%eax`/`cmp $0xa,%eax` (index, not count-minus-one),
+ * so a lookup that runs off either end is a real property of the object and
+ * not modelled defensively here.
+ *
+ * THE SPELLINGS ARE THE AUTHOR'S, byte for byte, `RECIEVE` included -- see
+ * class1.h's own note by the `CLASS1_*` macros, which these confirm rather
+ * than derive: every string here is one of those macros with the `CLASS1_`
+ * prefix stripped (`states_names`) or reproduced verbatim (`status_names`).
+ * `struct class1_name` is declared in class1.h, not here, so a test can
+ * reach it without a reader in `src/` yet.
+ */
+struct class1_name states_names[20] = {
+	{ CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE,
+	  "T30_SILENCE_BEFORE_PREAMBLE_STATE" },
+	{ CLASS1_T30_PREAMBLE_STATE,		"T30_PREAMBLE_STATE" },
+	{ CLASS1_SEND_HDLC_BUFFER_STATE,	"SEND_HDLC_BUFFER_STATE" },
+	{ CLASS1_SEND_HDLC_BETWEEN_BUFFER_STATE,
+	  "SEND_HDLC_BETWEEN_BUFFER_STATE" },
+	{ CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE,
+	  "HDLC_RECEIVE_LOOK_CARRIER_STATE" },
+	{ CLASS1_HDLC_RECEIVE_STATE,		"HDLC_RECEIVE_STATE" },
+	{ CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE,
+	  "HDLC_RECEIVE_BETWEEN_BUFFERS_STATE" },
+	{ CLASS1_HDLC_EMULATE_RECEIVE_STATE,	"HDLC_EMULATE_RECEIVE_STATE" },
+	{ CLASS1_IDLE_STATE,			"IDLE_STATE" },
+	{ CLASS1_TX_SCRAMBLED_ONES_STATE,	"TX_SCRAMBLED_ONES_STATE" },
+	{ CLASS1_TX_DATA_STATE,			"TX_DATA_STATE" },
+	{ CLASS1_TX_NULLS_STATE,		"TX_NULLS_STATE" },
+	{ CLASS1_RX_LOOK_CARRIER,		"RX_LOOK_CARRIER" },
+	{ CLASS1_RX_DATA_STATE,			"RX_DATA_STATE" },
+	{ CLASS1_ANSWER_TONE_STATE,		"ANSWER_TONE_STATE" },
+	{ CLASS1_SEND_SILENCE_STATE,		"SEND_SILENCE_STATE" },
+	{ CLASS1_RECIEVE_SILENCE_STATE,		"RECIEVE_SILENCE_STATE" },
+	{ CLASS1_CHDLCTX_OFF_STATE,		"CHDLCTX_OFF_STATE" },
+	{ CLASS1_TX_SILENCE_BEFORE_SCRM_ONES,	"TX_SILENCE_BEFORE_SCRM_ONES" },
+	{ CLASS1_MAX_STATES,			"MAX_STATES" },
+};
+
+struct class1_name status_names[11] = {
+	{ FAX_CLASS1_NO_MESSAGE,		"FAX_CLASS1_NO_MESSAGE" },
+	{ FAX_CLASS1_OK,			"FAX_CLASS1_OK" },
+	{ FAX_CLASS1_ERROR,			"FAX_CLASS1_ERROR" },
+	{ FAX_CLASS1_OK_NO_CARRIER,		"FAX_CLASS1_OK_NO_CARRIER" },
+	{ FAX_CLASS1_ERROR_NO_CARRIER,		"FAX_CLASS1_ERROR_NO_CARRIER" },
+	{ FAX_CLASS1_ERROR_ON_HOOK,		"FAX_CLASS1_ERROR_ON_HOOK" },
+	{ FAX_CLASS1_CONNECT,			"FAX_CLASS1_CONNECT" },
+	{ FAX_CLASS1_NO_CARRIER,		"FAX_CLASS1_NO_CARRIER" },
+	{ FAX_CLASS1_NO_CARRIER_NO_MESSAGE,
+	  "FAX_CLASS1_NO_CARRIER_NO_MESSAGE" },
+	{ FAX_CLASS1_OTHER_CARRIER,		"FAX_CLASS1_OTHER_CARRIER" },
+	{ FAX_CLASS1_ACCEPT_RATE,		"FAX_CLASS1_ACCEPT_RATE" },
+};
 
 /*
  * Both silence inits: install the state number and arm the countdown with

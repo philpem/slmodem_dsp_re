@@ -43,6 +43,7 @@
 #include "dsplib/class1.h"
 #include "dsplib/class1tx.h"
 #include "dsplib/debug.h"
+#include "dsplib/t30frame.h"
 
 /*
  * `aReversedCharsArray` -- .rodata 0xba40, 256 bytes, GLOBAL.  Entry `i` is
@@ -495,6 +496,99 @@ _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
 	}
 
 	if (terminate != 0) {
+		dst[out] = CLASS1_DLE;
+		dst[out + 1] = CLASS1_ETX;
+		out += 2;
+	}
+	return out;
+}
+
+/*
+ * The other other direction: recover an octet from each of `count` elements,
+ * as `_handle_data_output` does, but WITHOUT its async start-bit search --
+ * these are already-aligned HDLC receive elements, so the low byte of each
+ * one is the octet.  DLE-stuff them into `dst` and append DLE ETX when
+ * `terminate` is set.  `ctx` is read nowhere in the object; it is carried
+ * only because every other member of this family takes it.
+ *
+ * FOUR `.rodata.str1.1` STRINGS, the author's own, gate the debug blocks
+ * that the differential test cannot see but that are reproduced anyway --
+ * they are the evidence for the function's DIRECTION, which its own name
+ * does not give away:
+ *
+ *   "FCL1: FRAME RECEIVED (%s)\n"    (0x4926) -- printed once, when `count`
+ *       is over 2 and the level allows it, naming the frame from its first
+ *       three elements via `GetT30FrameIDFromBuffer`/`GetT30FrameNameByID`
+ *       -- the same idiom `faxvmi_hdlc_frame`'s debug line uses on
+ *       transmit.  So despite the symbol's own name, "hdlc_output" means
+ *       OUTPUT TO THE HOST of a frame the modem RECEIVED, not one being
+ *       sent -- the mirror of `_handle_hdlc_input`, which takes the HOST's
+ *       bytes in.
+ *   "HDLC Recieved Frame of %d: \n"  (0x4941, "Recieved" is the object's) --
+ *       printed whenever the level allows it, whatever `count` is.
+ *   "%02X,"                          (0x495e) -- once per output byte, loop
+ *       and terminator alike.
+ *   "%02X\n"                         (0x4964) -- once, ending the line, only
+ *       when a terminator is actually appended.
+ *
+ * `dis.py` shows the "Recieved Frame" print (0x09f00a, one call site) reached
+ * both from the `count > 2` arm, after the frame-decode print, AND from its
+ * `else`, each guarded by its OWN `cmpl $0x1,dsplibs_debug_level` (0x09ef2e
+ * and 0x09eff0 -- a direct compare-to-memory in one arm, a load into a
+ * register first in the other) rather than one shared test after an
+ * if/else, which is why the level is checked twice below rather than once.
+ */
+int
+cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
+			  unsigned char *dst, int count, int terminate)
+{
+	int out = 0;
+	int i;
+
+	(void)ctx;
+
+	if (count != 0) {
+		if (count > 2) {
+			if (dsplibs_debug_level > 1) {
+				int id = GetT30FrameIDFromBuffer(
+				    (unsigned char)src[0],
+				    (unsigned char)src[1],
+				    (unsigned char)src[2]) & 0xffff7fff;
+
+				dsplibs_debug_printf(
+				    "FCL1: FRAME RECEIVED (%s)\n",
+				    GetT30FrameNameByID(id));
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "HDLC Recieved Frame of %d: \n",
+					    count);
+			}
+		} else if (dsplibs_debug_level > 1) {
+			dsplibs_debug_printf(
+			    "HDLC Recieved Frame of %d: \n", count);
+		}
+
+		for (i = 0; i < count; i++) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf("%02X,",
+				    aReversedCharsArray[(unsigned char)src[i]]);
+			dst[out++] = (unsigned char)src[i];
+			if (src[i] == CLASS1_DLE) {
+				dst[out++] = CLASS1_DLE;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf("%02X,",
+					    aReversedCharsArray[CLASS1_DLE]);
+			}
+		}
+	}
+
+	if (count != 0 && terminate != 0) {
+		if (dsplibs_debug_level > 1) {
+			dsplibs_debug_printf("%02X,",
+			    aReversedCharsArray[CLASS1_DLE]);
+			dsplibs_debug_printf("%02X\n",
+			    aReversedCharsArray[CLASS1_ETX]);
+		}
 		dst[out] = CLASS1_DLE;
 		dst[out + 1] = CLASS1_ETX;
 		out += 2;
