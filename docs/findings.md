@@ -109255,3 +109255,65 @@ re-prove. `V??TXP_INT_0008`/`INT_0004` is set to 1 in the same fixtures so
 `run_tx_process`, one from each side of the probe comparison. Both reverted
 after confirming the FAIL, per CLAUDE.md's F134 rule -- a detector shown only
 passing is indistinguishable from a dead one. (2026-09-01)
+
+### F9750. The SMCv17 encoder family is written -- 7 symbols, 792 bytes, and it reuses V.32's trellis coder tables verbatim
+
+`SMCv17_init` (.text 0x0a0a60, 87 B), `SMCv17_encoder_dif` (0x09fcc0, 164 B),
+`SMCv17_encoder_abs` (0x09fd70, 135 B), `SMCv17_encoder_tcm` (0x09fe00,
+374 B) and their three `.rodata` tables `SMCv17_PMAP4`, `SMCv17_ABS4`,
+`SMCv17_MOD` (8, 8, 16 bytes) are now in `src/fax/v17.c` and
+`include/dsplib/v17data.h`, driven by `test/unit/t_v17smc.c`. This was the
+self-contained batch `python3 tools/closure.py --missing SMCv17_init
+SMCv17_encoder_dif SMCv17_encoder_abs SMCv17_encoder_tcm` measured last wave:
+no dependency on `SGD_CTL` or FIFO, confirmed again this wave at the same 7
+symbols, 792 bytes.
+
+**THE FIELD LAYOUT.** All four functions take the coder state directly as
+`V17FP_SMC` (their first parameter IS that sub-object, not `fp`), so their
+own field offsets are `V17FP_SMC_SHORT_NN - V17FP_SMC`. Traced independently
+from each function's own dataflow:
+
+    smc + 0x00  "mode" -- the byte SetEncoderV17/SetTxModeV17 write as
+                V17FP_SMC itself; SMCv17_encoder_tcm's tag, read `movsbl`
+    smc + 0x06  "quad" -- V17FP_SMC_SHORT_06, (quad+3)&3 every symbol in
+                all three encoders
+    smc + 0x08  "state" -- V17FP_SMC_SHORT_08, SMCv17_encoder_dif's
+                differential accumulator, alone
+    smc + 0x0c  "trellis" -- V17FP_SMC_SHORT_0C, SMCv17_encoder_tcm alone
+    smc + 0x0e  "prev" -- V17FP_SMC_SHORT_0E, SMCv17_encoder_tcm alone,
+                compared against 3 (`cmpw $0x3` / `jle`)
+    smc + 0x12  "nbits" -- V17FP_SMC_SHORT_12, unsigned, SMCv17_encoder_tcm
+                only, both a shift count and the source of three masks
+
+`SMCv17_init` independently confirms `SetTxModeV17`'s five neutral fields
+(`V17FP_SMC_SHORT_06` through `_10`) a second time: it clears the same five,
+from a different address, agreeing without either reading being derived from
+the other.
+
+**THE TRELLIS CODER IS V.32's, REUSED WHOLESALE.** `SMCv17_encoder_tcm`
+indexes `TrellisEncodeDifTable` and `TrellisTransitionTable` -- the exact
+symbols `src/pump/v32/v32smc.c` already defines, read-only from `v17.c` via a
+new `#include "dsplib/v32smc.h"` -- and `SMCv17_MOD`'s 16 bytes
+(`70 61 61 70 42 53 53 42 34 25 25 34 06 17 17 06`) are bytewise identical to
+`SMCv32_MOD`'s, read separately from `.rodata` at both addresses rather than
+assumed. One trellis coder, two protocols, two symbol names for the same
+sixteen shorts because each side reads its own object's copy.
+
+**`SMCv17_encoder_tcm` IS NOT `v17_encoder_fn`-SHAPED**, on the object's own
+evidence: it masks each input word and writes the result back in place
+(`mov %ax,(%edx)` at 0x9fea8) before the loop reads that slot again, so
+`data` cannot be `const`. Declared `unsigned short *data`, matching
+`SMCv32_encoder_tcm`'s own break from its family's typedef for the same
+reason. Whether `V17TX_create` (not yet reconstructed) stores it through
+`v17_encoder_fn` regardless is not established.
+
+**TESTED**, `test/unit/t_v17smc.c`, modelled closely on `t_v32smc.c`: the
+`smc` state is a raw byte buffer (the instance is not modelled) poked and
+read at its offsets directly, the WHOLE buffer is diffed after every run to
+catch a stray write, and the ring is shorter than the run so wraps are taken
+repeatedly. `make one T=t_v17smc`: 3,802 checks, all green. Live mutation
+fired: dropping DIF's `+ 1` term (`point = (state + quad) & 3`) failed 40-125
+of 122 checks across the four DIF runs and left every other run green,
+confirmed and reverted per F134. `make one T=t_v17fax` still green
+afterward (19 groups, no regression). Not period-gated -- `make one` only,
+per this wave's brief. (2026-09-02)

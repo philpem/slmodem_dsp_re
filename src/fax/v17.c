@@ -7,6 +7,9 @@
  *   V17RX_create      .text 0x096eb0 3201
  *   V17RX_delete      .text 0x097b40  251
  *   V17TX_delete      .text 0x098e00  107
+ *   SMCv17_encoder_dif .text 0x09fcc0  164
+ *   SMCv17_encoder_abs .text 0x09fd70  135
+ *   SMCv17_encoder_tcm .text 0x09fe00  374
  *   V17RX_modem       .text 0x09ff80  127
  *   RxHdxDataV17      .text 0x0a0000  226
  *   RxHdxErrorV17     .text 0x0a00f0   59
@@ -21,6 +24,7 @@
  *   ScrambleDataV17   .text 0x0a09d0   28
  *   SeedScramblerV17  .text 0x0a09f0   15
  *   SetEncoderV17     .text 0x0a0a00   90
+ *   SMCv17_init       .text 0x0a0a60   87
  *   SetTxModeV17      .text 0x0a0ac0  625
  *   V17TX_modem       .text 0x0a0e40  182
  *   V17TX_status      .text 0x0a1bd0  106
@@ -89,6 +93,7 @@
 #include "dsplib/fpm_mtd.h"
 #include "dsplib/fpm_pps.h"
 #include "dsplib/fpm_sdm.h"
+#include "dsplib/fpm_smc.h"
 #include "dsplib/fpm_sre.h"
 #include "dsplib/fpm_tone.h"
 #include "dsplib/sdm.h"
@@ -96,6 +101,9 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/v17cfg.h"
 #include "dsplib/v17dec.h"
+#include "dsplib/v32smc.h"	/* TrellisEncodeDifTable, TrellisTransitionTable:
+				 * SMCv17_encoder_tcm reuses V.32's trellis
+				 * coder tables, see v17data.h              */
 #include "dsplib/vtb.h"
 
 /* The instances are not modelled; see v17fax.h.  These are the only accessors. */
@@ -106,6 +114,19 @@
 #define AT_US(p, off)		(*(unsigned short *)(void *)FIELD((p), (off)))
 #define AT_I(p, off)		(*(int *)(void *)FIELD((p), (off)))
 #define AT_B(p, off)		(*(unsigned char *)FIELD((p), (off)))
+#define AT_SB(p, off)		(*(signed char *)(void *)FIELD((p), (off)))
+
+/*
+ * The SMCv17 coder's fields, offset from `smc` (== `V17FP_SMC`) rather than
+ * from `fp` -- `V17FP_SMC_SHORT_NN - V17FP_SMC`, tied to those constants
+ * rather than restated.  See v17data.h for the derivation.
+ */
+#define SMC_MODE(smc)		AT_SB((smc), 0x00 - 0x00)
+#define SMC_QUAD(smc)		AT_S((smc), V17FP_SMC_SHORT_06 - V17FP_SMC)
+#define SMC_STATE(smc)		AT_S((smc), V17FP_SMC_SHORT_08 - V17FP_SMC)
+#define SMC_TRELLIS(smc)	AT_S((smc), V17FP_SMC_SHORT_0C - V17FP_SMC)
+#define SMC_PREV(smc)		AT_S((smc), V17FP_SMC_SHORT_0E - V17FP_SMC)
+#define SMC_NBITS(smc)		AT_US((smc), V17FP_SMC_SHORT_12 - V17FP_SMC)
 
 #define CTL(modem)		FIELD_PTR((modem), V17RX_OBJ_CTL)
 #define RXS(modem)		FIELD_PTR((modem), V17RX_OBJ_STATE)
@@ -765,6 +786,173 @@ V17TX_delete(void *modem)
 	sysdep_free(FIELD_PTR(modem, V17TX_OBJ_PARAMS));
 
 	sysdep_free(modem);
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * The trellis coder's three tables.  Bytes taken straight from the object;
+ * widths from the loads (`movzwl`, scale 2 -- unsigned short, forced).
+ *
+ * `SMCv17_MOD` is bytewise identical to `SMCv32_MOD` (`v32smc.c`): the same
+ * eight rotation words, `0x6170 0x7061 0x5342 0x4253 0x2534 0x3425 0x1706
+ * 0x0617`, confirmed by reading `.rodata` at both addresses rather than by
+ * assuming the reuse.  `TrellisEncodeDifTable` and `TrellisTransitionTable`
+ * (indexed by `SMCv17_encoder_tcm` below) are the SAME symbols V.32's coder
+ * already defines in `v32smc.c` -- one trellis coder, two protocols.
+ */
+const unsigned short SMCv17_PMAP4[4] = { 1, 0, 2, 3 };
+const unsigned short SMCv17_ABS4[4]  = { 0, 1, 3, 2 };
+const unsigned short SMCv17_MOD[8] = {
+	0x6170, 0x7061, 0x5342, 0x4253,
+	0x2534, 0x3425, 0x1706, 0x0617
+};
+
+/* (widx + 1) mod len, exactly as the object spells it -- see v32smc.c. */
+static short
+smc_ring_advance(short widx, short len)
+{
+	short next = (short)(widx + 1);
+
+	return (next < len) ? next : 0;
+}
+
+/*
+ * SMCv17_encoder_dif -- .text 0x09fcc0, 164 bytes.
+ *
+ * `state = (state + PMAP4[in[i] & 3]) & 3; point = (state + quad + 1) & 3`.
+ * `in[i]` is read whole and unsigned (`movzwl`) and only its low two bits are
+ * ever used, so nothing separates `short` from `unsigned short` here -- the
+ * type follows `v17_encoder_fn`, not a forced reading.
+ */
+void
+SMCv17_encoder_dif(void *smc, struct fpm_smc_ring *ring,
+		   const unsigned short *data, unsigned short count)
+{
+	short *const sym = ring->sym;
+	const short len = ring->len;
+	short widx = ring->widx;
+	int quad = SMC_QUAD(smc);
+	int state = SMC_STATE(smc);
+	unsigned int i;
+
+	for (i = 0; i < count; i++) {
+		unsigned int sel = (unsigned int)data[i] & 3u;
+		int point;
+
+		quad = (quad + 3) & 3;
+		state = (int)(state + SMCv17_PMAP4[sel]) & 3;
+		point = (state + quad + 1) & 3;
+		sym[widx] = (short)point;
+		widx = smc_ring_advance(widx, len);
+	}
+
+	SMC_STATE(smc) = (short)state;
+	SMC_QUAD(smc) = (short)quad;
+	ring->widx = widx;
+}
+
+/*
+ * SMCv17_encoder_abs -- .text 0x09fd70, 135 bytes.
+ *
+ * `point = (quad + ABS4[in[i] & 3]) & 3` -- no accumulator, the point comes
+ * straight out of the table every symbol.
+ */
+void
+SMCv17_encoder_abs(void *smc, struct fpm_smc_ring *ring,
+		   const unsigned short *data, unsigned short count)
+{
+	short *const sym = ring->sym;
+	const short len = ring->len;
+	short widx = ring->widx;
+	int quad = SMC_QUAD(smc);
+	unsigned int i;
+
+	for (i = 0; i < count; i++) {
+		unsigned int sel = (unsigned int)data[i] & 3u;
+		int point;
+
+		quad = (quad + 3) & 3;
+		point = (int)(quad + SMCv17_ABS4[sel]) & 3;
+		sym[widx] = (short)point;
+		widx = smc_ring_advance(widx, len);
+	}
+
+	SMC_QUAD(smc) = (short)quad;
+	ring->widx = widx;
+}
+
+/*
+ * SMCv17_encoder_tcm -- .text 0x09fe00, 374 bytes.
+ *
+ * The trellis coder.  Three tables and four pieces of state (`quad`,
+ * `trellis`, `prev`, `nbits`), and unlike its two siblings it WRITES BACK to
+ * its input buffer -- see v17data.h for why `data` cannot be `const` here.
+ *
+ *     in[i] &= mask_all                        -- in place, before anything
+ *     trellis = TrellisEncodeDifTable[trellis + (in[i] >> nbits) * 4]
+ *     word    = (trellis << nbits) + (in[i] & mask_low)
+ *     if (prev > 3) word = (word + (1 << (nbits + 2))) & 0xffff
+ *     quad    = (quad + 3) & 3
+ *     prev    = TrellisTransitionTable[trellis + prev * 4]
+ *     rot     = (SMCv17_MOD[word >> nbits] >> (quad * 4)) & 7
+ *     out     = ((rot << nbits) + (word & mask_low)) | (mode << 8)
+ *
+ * Exactly `SMCv32_encoder_tcm`'s algorithm (`v32smc.c`), reusing that file's
+ * tables; only the state's offsets differ.  `mask_low`, `mask_all` and the
+ * `1 << (nbits + 2)` constant are built once, before the loop, and all three
+ * are truncated to 16 bits where the object builds them.
+ *
+ * `prev > 3` is a SIGNED 16-bit comparison (`cmpw $0x3` / `jle`) against the
+ * value from the PREVIOUS iteration -- the update below it happens later in
+ * the same body, exactly as in V.32's coder.
+ */
+void
+SMCv17_encoder_tcm(void *smc, struct fpm_smc_ring *ring,
+		   unsigned short *data, unsigned short count)
+{
+	short *const sym = ring->sym;
+	const short len = ring->len;
+	const int nbits = SMC_NBITS(smc);
+	const unsigned short mask_low = (unsigned short)((1 << nbits) - 1);
+	const unsigned short bit_hi = (unsigned short)(1 << (nbits + 2));
+	const unsigned short mask_all = (unsigned short)(bit_hi - 1);
+	const int tag = SMC_MODE(smc) << 8;
+	short widx = ring->widx;
+	int quad = SMC_QUAD(smc);
+	int trellis = SMC_TRELLIS(smc);
+	int prev = SMC_PREV(smc);
+	unsigned int i;
+
+	for (i = 0; i < count; i++) {
+		int word;
+		int rot;
+		int masked;
+
+		/* In place, and the caller sees it. */
+		data[i] = (unsigned short)(data[i] & mask_all);
+		masked = data[i];
+
+		trellis = TrellisEncodeDifTable[trellis
+						+ ((masked >> nbits) * 4)];
+		word = (trellis << nbits) + (masked & mask_low);
+		if (prev > 3)
+			word = (int)(unsigned short)(word + bit_hi);
+
+		quad = (quad + 3) & 3;
+		prev = TrellisTransitionTable[trellis + prev * 4];
+
+		rot = (SMCv17_MOD[(unsigned short)(word >> nbits)]
+		       >> (quad * 4)) & 7;
+		sym[widx] = (short)(((rot << nbits) + (word & mask_low))
+				    | tag);
+		widx = smc_ring_advance(widx, len);
+	}
+
+	SMC_QUAD(smc) = (short)quad;
+	SMC_TRELLIS(smc) = (short)trellis;
+	SMC_PREV(smc) = (short)prev;
+	ring->widx = widx;
 }
 
 /* --------------------------------------------------------------------- */
@@ -1456,6 +1644,26 @@ SetEncoderV17(void *modem, short which, short arg)
 	default:
 		break;
 	}
+}
+
+/* --------------------------------------------------------------------- */
+
+/*
+ * SMCv17_init -- .text 0x0a0a60, 87 bytes.  See v17data.h for what this
+ * confirms about the five neutral fields it clears.
+ */
+void
+SMCv17_init(void *smc, const short *cfg)
+{
+	if (cfg == NULL)
+		cfg = SMCv17_CFG;
+
+	memcpy(FIELD(smc, 0x00), cfg, sizeof(short[2]));
+	SMC_QUAD(smc) = 0;
+	SMC_STATE(smc) = 0;
+	SMC_TRELLIS(smc) = 0;
+	SMC_PREV(smc) = 0;
+	AT_S(smc, V17FP_SMC_SHORT_10 - V17FP_SMC) = 0;
 }
 
 /* --------------------------------------------------------------------- */
