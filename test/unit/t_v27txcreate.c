@@ -64,6 +64,7 @@ extern short ref_TxNoCarrierV27(void *modem, unsigned short *in, short *out,
 				unsigned short count);
 extern int ref_V27TX_modem(void *modem, unsigned short *in, short *out,
 			   unsigned short *count);
+extern int ref_V27TX_control(void *modem, void *req);
 extern void ref_TxNextStateV27(void *modem);
 extern void ref_SetScramblerV27(void *modem);
 extern void ref_GenEQTrnSequenceV27(void *modem, unsigned short *buf,
@@ -756,6 +757,126 @@ test_modem_cycle(void)
 	return diff_end();
 }
 
+/* The request `V27TX_control` reads; see v27fax.h for the field layout. */
+struct v27txctl_req {
+	unsigned char pad_00[4];
+	int int_0004;
+	int scale_mul;
+	unsigned char mask;
+	unsigned char flags;
+	unsigned char pad_0e[2];
+	int int_0010;
+};
+
+static const struct v27txctl_req txctl_cases[] = {
+	{ { 0 }, 0,     1, 0x00, 0x00, { 0 }, 0 },
+	{ { 0 }, 12345, 3, 0x00, 0x00, { 0 }, 99 },
+	{ { 0 }, 0,     1, 0x04, 0x00, { 0 }, 0 },
+	{ { 0 }, 0,     1, 0x00, 0x10, { 0 }, 0 },
+	{ { 0 }, 0,     1, 0x00, 0x02, { 0 }, 0 },
+	{ { 0 }, 42,    5, 0x04, 0x12, { 0 }, 7 },
+	{ { 0 }, 0,     1, 0xff, 0xff, { 0 }, 0 },
+};
+#define NTXCTL ((long)(sizeof(txctl_cases) / sizeof(txctl_cases[0])))
+
+static void
+compare_after_control(const char *what, void *a, void *b, long tag)
+{
+	void *pa, *pb;
+	void *ta, *tb;
+	struct fpm_pps *ppa, *ppb;
+	char buf[128];
+
+	pa = FIELD_PTR(a, V27_OBJ_TXDATA);
+	pb = FIELD_PTR(b, V27_OBJ_TXDATA);
+	ta = FIELD_PTR(a, V27_OBJ_TX);
+	tb = FIELD_PTR(b, V27_OBJ_TX);
+	ppa = (struct fpm_pps *)(void *)FIELD(ta, V27TX_PPS);
+	ppb = (struct fpm_pps *)(void *)FIELD(tb, V27TX_PPS);
+
+	snprintf(buf, sizeof(buf), "%.80s pps.cfg.scale (%%ld)", what);
+	diff_eq_int(buf, ppa->cfg.scale, ppb->cfg.scale, tag);
+	snprintf(buf, sizeof(buf), "%.80s cfg.int_0008 (%%ld)", what);
+	diff_eq_int(buf, ((struct v27tx_cfg *)a)->int_0008,
+		    ((struct v27tx_cfg *)b)->int_0008, tag);
+	snprintf(buf, sizeof(buf), "%.80s cfg.int_0018 (%%ld)", what);
+	diff_eq_int(buf, ((struct v27tx_cfg *)a)->int_0018,
+		    ((struct v27tx_cfg *)b)->int_0018, tag);
+	snprintf(buf, sizeof(buf), "%.80s handle_flags (%%ld)", what);
+	diff_eq_int(buf, *(unsigned char *)FIELD(a, V27TX_HANDLE_FLAGS),
+		    *(unsigned char *)FIELD(b, V27TX_HANDLE_FLAGS), tag);
+	snprintf(buf, sizeof(buf), "%.80s params.int_0008 (%%ld)", what);
+	diff_eq_int(buf, AT_I(pa, V27TXP_INT_0008), AT_I(pb, V27TXP_INT_0008),
+		    tag);
+}
+
+static int
+test_tx_control(void)
+{
+	long k;
+
+	diff_begin("v27txcreate: V27TX_control over its request's bits");
+
+	for (k = 0; k < NTXCTL; k++) {
+		void *a, *b;
+		struct v27tx_cfg ca, cb;
+		struct v27txctl_req ra, rb;
+		int reta, retb;
+
+		ca = V27TX_CFG;
+		cb = V27TX_CFG;
+		ca.bitrate = cb.bitrate = 4800;
+		a = V27TX_create(0, &ca);
+		b = ref_V27TX_create(0, &cb);
+		diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, k);
+		if (a == 0 || b == 0)
+			continue;
+
+		ra = txctl_cases[k];
+		rb = txctl_cases[k];
+
+		reta = V27TX_control(a, &ra);
+		retb = ref_V27TX_control(b, &rb);
+
+		diff_eq_int("return (%ld)", reta, retb, k);
+		compare_after_control(txctl_cases[k].flags ? "flagged" : "plain",
+				      a, b, k);
+
+		V27TX_delete(a);
+		ref_V27TX_delete(b);
+	}
+
+	return diff_end();
+}
+
+static int
+test_tx_control_null_req(void)
+{
+	void *a, *b;
+	struct v27tx_cfg ca, cb;
+	int reta, retb;
+
+	diff_begin("v27txcreate: V27TX_control(modem, NULL)");
+
+	ca = V27TX_CFG;
+	cb = V27TX_CFG;
+	ca.bitrate = cb.bitrate = 4800;
+	a = V27TX_create(0, &ca);
+	b = ref_V27TX_create(0, &cb);
+	diff_eq_int("both built (%ld)", a != 0 && b != 0, 1, 0);
+	if (a == 0 || b == 0)
+		return diff_end();
+
+	reta = V27TX_control(a, 0);
+	retb = ref_V27TX_control(b, 0);
+	diff_eq_int("return (%ld)", reta, retb, 0);
+
+	V27TX_delete(a);
+	ref_V27TX_delete(b);
+
+	return diff_end();
+}
+
 /*
  * `GenEQTrnSequenceV27` -- the free-standing generator, over the two rates
  * and a handful of counts (0 included, since the object's own loop guard
@@ -821,6 +942,8 @@ main(void)
 	rc |= test_data_underrun_bypass_arm();
 	rc |= test_next_state_default_arm();
 	rc |= test_modem_cycle();
+	rc |= test_tx_control();
+	rc |= test_tx_control_null_req();
 	rc |= test_gen_eq_trn_sequence();
 
 	return rc;

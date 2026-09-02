@@ -109904,3 +109904,32 @@ dispatch loop's scratch, not sized to the queued count -- `t_v29txcreate.c`'s
 own documented trap, hit and fixed here rather than avoided by reading the
 warning first. A live mutation (budget seeded one element too wide) was
 reverted after confirming the test catches it. (2026-09-02)
+
+## F9956. `V27TX_control` is `V27RX_control`'s own shape, transmit side, and READY the moment it was checked
+
+Also not part of `V27TX_create`'s own closure, and also not in the original
+brief this batch worked from -- found READY by re-running
+`tools/readyqueue.py` after F9950/F9955 landed. `V27TX_control` (.text
+0x0a3e30, 148 bytes) disassembled to the same request-driven shape
+`V27RX_control` already established: an int copied straight into the
+handle's own `int_0008` and another into `int_0018`, a mask byte's one bit
+gated against `V27TX_HANDLE_FLAGS` (already-named, from `V27TX_status`'s own
+prior-wave read of it), a flags byte's two bits gating `V27TXP_INT_0008`'s
+force and a `V27TX_create(modem, modem)` self-reinit -- `V27RX_control`'s
+own idiom, transmit side.
+
+**THE ONE FIELD WITH NO RECEIVE-SIDE ANALOGUE: THE PULSE SHAPER'S LIVE
+GAIN.** `V27TX_control` computes `pps.cfg.scale = req->0x08 *
+V27TX_PPS_SCALE[rate]` -- the SAME table `V27TX_create` seeds `scale` from
+at construction (`V27TX_PPS_SCALE[rate] * cfg.int_000c`, F9951), but driven
+by the request's own multiplier instead of the handle's `int_000c`, which
+this function does not touch. Typed by `struct fpm_pps_cfg::scale` (already
+`int`, `fpm_pps.h`), not inferred from the byte count; `tx + 0x64` lands
+exactly on `pps.cfg.scale` because `V27TX_PPS` (0x5c) plus the field's own
+offset (0x08) is 0x64, arithmetic rather than a guess.
+
+`t_v27txcreate.c`'s `test_tx_control`, seven cases (every mask/flags bit
+combination the other two request bytes exercise, `V27RX_control`'s own
+case-table shape), 49 checks, plus `test_tx_control_null_req`. A live
+mutation (the mask bit's target flag value changed from 0x04 to 0x08) was
+reverted after confirming the test catches it. (2026-09-02)

@@ -1258,6 +1258,41 @@ int V27RX_status(void *rx, void *status);
 int V27RX_control(void *rx, void *req);
 
 /*
+ * `V27TX_control`'s own request -- byte offsets only, `V27RX_control`'s own
+ * convention, and again entirely usage inference:
+ *
+ *   +0x04  int     copied straight into the handle's own `int_0008`
+ *   +0x08  int     multiplied by `V27TX_PPS_SCALE[rate]` into the pulse
+ *                  shaper's live `cfg.scale` -- the SAME table
+ *                  `V27TX_create` seeds `scale` from at construction time,
+ *                  here driven by the request instead of the handle's own
+ *                  `int_000c`
+ *   +0x0c  byte    a MASK, bit 0x04 tested against `V27TX_HANDLE_FLAGS`
+ *   +0x0d  byte    FLAGS: bit 0x10 forces `V27TXP_INT_0008`; bit 0x02
+ *                  re-runs `V27TX_create(modem, modem)` -- the transmit
+ *                  handle's own first 32 bytes ARE its config, the same
+ *                  self-reinit idiom `V27RX_control` uses
+ *   +0x10  int     copied straight into the handle's own `int_0018`
+ */
+#define V27TXCTL_INT_0004		0x04
+#define V27TXCTL_SCALE_MUL		0x08
+#define V27TXCTL_MASK			0x0c
+#define V27TXCTL_FLAGS			0x0d
+#define V27TXCTL_INT_0010		0x10
+
+#define V27TXCTL_MASK_HANDLE_FLAG_04	(1 << 2)
+#define V27TXCTL_FLAGS_FORCE_INT_0008	(1 << 4)
+#define V27TXCTL_FLAGS_REINIT		(1 << 1)
+
+/*
+ * Retune the pulse shaper's live gain, plant `int_0008`/`int_0018` from the
+ * request, and optionally re-run `V27TX_create` over the handle's own
+ * current config.  Returns 0 if `req` is NULL, else 1.  `V27RX_control`'s
+ * own shape, transmit side.
+ */
+int V27TX_control(void *modem, void *req);
+
+/*
  * Has the equaliser been told to adapt regardless of its own gate?
  *
  * Reads `fpm_fse::lms_force` and returns it as 0 or 1.  The NAME is the

@@ -1439,6 +1439,52 @@ V27RX_control(void *rx, void *req)
 }
 
 /*
+ * V27TX_control .text 0x0a3e30, 148 bytes.
+ *
+ * See v27fax.h for the request's own layout.  The pulse shaper's gain and
+ * `int_0008`/`int_0018` are unconditional; `V27TX_HANDLE_FLAGS`'s bit and
+ * `int_0008`'s force/reinit are each gated on their own bit -- `V27RX_
+ * control`'s own shape, transmit side.
+ */
+int
+V27TX_control(void *modem, void *req)
+{
+	void *prm;
+	struct fpm_pps *pps;
+	short rate;
+	unsigned char mask;
+	unsigned char flags;
+
+	if (req == 0)
+		return 0;
+
+	prm = FIELD_PTR(modem, V27_OBJ_TXDATA);
+	pps = (struct fpm_pps *)(void *)
+		FIELD(FIELD_PTR(modem, V27_OBJ_TX), V27TX_PPS);
+	rate = FIELD_S(prm, V27TXP_RATE);
+
+	pps->cfg.scale = FIELD_I(req, V27TXCTL_SCALE_MUL) *
+		V27TX_PPS_SCALE[rate];
+
+	((struct v27tx_cfg *)modem)->int_0018 = FIELD_I(req, V27TXCTL_INT_0010);
+	((struct v27tx_cfg *)modem)->int_0008 = FIELD_I(req, V27TXCTL_INT_0004);
+
+	mask = FIELD_BYTE(req, V27TXCTL_MASK);
+	if (mask & V27TXCTL_MASK_HANDLE_FLAG_04)
+		*FIELD(modem, V27TX_HANDLE_FLAGS) |= 0x04;
+
+	FIELD_I(prm, V27TXP_INT_0008) = 0;
+
+	flags = FIELD_BYTE(req, V27TXCTL_FLAGS);
+	if (flags & V27TXCTL_FLAGS_FORCE_INT_0008)
+		FIELD_I(prm, V27TXP_INT_0008) = 1;
+	if (flags & V27TXCTL_FLAGS_REINIT)
+		V27TX_create(modem, (const struct v27tx_cfg *)modem);
+
+	return 1;
+}
+
+/*
  * Fill the caller's status block from the transmitter's.
  *
  * THE TWO WRITES TO +0x14 ARE BOTH THE OBJECT'S, and the first is not dead.
