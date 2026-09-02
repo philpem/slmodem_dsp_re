@@ -83,6 +83,8 @@
 /* ------------------------------------------------------------------- */
 /* The blob's side of the 27 adapters under test                        */
 
+extern void ref_v17tx_create(struct faxvmi_link *dp,
+			     const struct v17tx_cfg *cfg);
 extern void ref_v17rx_create(struct faxvmi_link *dp,
 			     const struct v17rx_cfg *cfg);
 extern void ref_v21rx_create(struct faxvmi_link *dp,
@@ -134,6 +136,10 @@ extern void ref_V17RX_delete(void *modem);
 extern void ref_V21RX_delete(void *modem);
 extern void ref_V27RX_delete(void *modem);
 extern void ref_V29RX_delete(void *modem);
+
+/* V.17's TX side has a real create now (finding F9910); `V17TX_delete` is
+ * already declared through `v17fax.h`. */
+extern void ref_V17TX_delete(void *modem);
 
 /* ------------------------------------------------------------------- */
 /* Small helpers                                                        */
@@ -326,6 +332,68 @@ run_rx_create(void)
 
 		V29RX_delete((void *)(long)la.int_0014);
 		ref_V29RX_delete((void *)(long)lb.int_0014);
+	}
+
+	return diff_end();
+}
+
+/*
+ * `v17tx_create` -- the one TX-side adapter with a real constructor behind
+ * it (finding F9910; the other three TX creates are still BLOCKED, see
+ * faxadapt.h).  Reuses `struct rx_case` even though the field is a bit
+ * rate rather than a "RX" anything; the shape is identical.
+ */
+static const struct rx_case v17tx_cases[] = {
+	{ "default (14400)", 1, 14400 },
+	{ "14400", 0, 14400 },
+	{ "12000", 0, 12000 },
+	{ "9600", 0, 9600 },
+	{ "7200", 0, 7200 },
+	{ "unrecognised", 0, 4800 },
+};
+
+static int
+run_tx_create_v17(void)
+{
+	long k;
+	char buf[128];
+
+	diff_begin("v17tx_create");
+
+	for (k = 0; k < (long)(sizeof(v17tx_cases) / sizeof(v17tx_cases[0]));
+	     k++) {
+		struct v17tx_cfg c;
+		struct faxvmi_link la, lb;
+
+		c = V17TX_CFG;
+		c.bitrate = v17tx_cases[k].bit_rate;
+		poison_link(&la, 0x70);
+		poison_link(&lb, 0x70);
+
+		v17tx_create(&la, v17tx_cases[k].use_default ? NULL : &c);
+		ref_v17tx_create(&lb, v17tx_cases[k].use_default ? NULL : &c);
+
+		snprintf(buf, sizeof(buf), "v17tx_create %s: pack_count (%%ld)",
+			 v17tx_cases[k].name);
+		diff_eq_int(buf, la.pack_count, lb.pack_count, k);
+		snprintf(buf, sizeof(buf), "v17tx_create %s: pack_count is 0x30 (%%ld)",
+			 v17tx_cases[k].name);
+		diff_eq_int(buf, la.pack_count, 0x30, k);
+		snprintf(buf, sizeof(buf), "v17tx_create %s: pack_width (%%ld)",
+			 v17tx_cases[k].name);
+		diff_eq_int(buf, la.pack_width, lb.pack_width, k);
+		snprintf(buf, sizeof(buf), "v17tx_create %s: unpack_width (%%ld)",
+			 v17tx_cases[k].name);
+		diff_eq_int(buf, la.unpack_width, lb.unpack_width, k);
+		snprintf(buf, sizeof(buf), "v17tx_create %s: unpack_width is 0 (%%ld)",
+			 v17tx_cases[k].name);
+		diff_eq_int(buf, la.unpack_width, 0, k);
+		snprintf(buf, sizeof(buf), "v17tx_create %s: handle set (%%ld)",
+			 v17tx_cases[k].name);
+		diff_eq_int(buf, la.int_0014 != 0, lb.int_0014 != 0, k);
+
+		V17TX_delete((void *)(long)la.int_0014);
+		ref_V17TX_delete((void *)(long)lb.int_0014);
 	}
 
 	return diff_end();
@@ -1138,6 +1206,7 @@ main(void)
 	int bad = 0;
 
 	bad |= run_rx_create();
+	bad |= run_tx_create_v17();
 	bad |= run_rx_delete();
 	bad |= run_rx_status();
 	bad |= run_rx_process();

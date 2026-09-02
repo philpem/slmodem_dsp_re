@@ -25,10 +25,41 @@
 /* ========================================================================= */
 
 /*
- * v17tx_create, 0x09bf20.  BLOCKED: V17TX_create and V17TX_CFG are not
- * written (readyqueue.py: needs 32, starting with FIFO_CFG/FIFO_create/
- * FPM_PPS_CFG/PPSv17_ICOFFS).  Not declared in faxadapt.h.
+ * v17tx_create, 0x09bf20.  `pack_count` is a literal 0x30 on every path --
+ * `V17TX_MODEM_BUDGET`, the TX side's own per-call budget, planted here
+ * unconditionally rather than derived. `pack_width` is set from
+ * `local.bitrate` by a three-way classification (14400 and 12000 each get
+ * their own arm, everything else -- including 9600 -- falls to the `else`,
+ * which further splits 9600 from the rest) -- the same three-way shape
+ * `v17rx_create` already uses for `unpack_width`, one modulation side over,
+ * and reproduced here as the object's own literals (6, 5, and 4-or-3) rather
+ * than by indexing `V17TX_SYM_SIZE`: `dis.py` over 0x9bf87..0x9bfae shows no
+ * reference to that table at all. `unpack_width` is written to 0 on every
+ * path -- TX only ever writes `pack_width` meaningfully; see faxadapt.h.
  */
+void
+v17tx_create(struct faxvmi_link *dp, const struct v17tx_cfg *cfg)
+{
+	struct v17tx_cfg local;
+	void *handle;
+
+	local = (cfg != NULL) ? *cfg : V17TX_CFG;
+
+	handle = V17TX_create((void *)(long)dp->int_0014, &local);
+	dp->pack_count = 0x30;
+	dp->int_0014 = (int)(long)handle;
+
+	if (local.bitrate == 14400) {
+		dp->pack_width = 6;
+		dp->unpack_width = 0;
+	} else if (local.bitrate == 12000) {
+		dp->pack_width = 5;
+		dp->unpack_width = 0;
+	} else {
+		dp->unpack_width = 0;
+		dp->pack_width = (short)((local.bitrate == 9600) ? 4 : 3);
+	}
+}
 
 /*
  * v17rx_create, 0x09c030.  `dp->int_0014` doubles as the "reinitialise an

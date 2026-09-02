@@ -12670,3 +12670,30 @@ graph reads them back out.
 `data_word`/`word_syms`, are set and asserted); the four fields nothing
 downstream reads are excluded from comparison rather than given a value the
 object does not give them.
+
+## D1331 ⚠ `TxNextStateV17`'s seven `SGD_control` calls have the identical shape D1291 already names
+
+`TxNextStateV17`'s `SILENCE`, `QUIET`, `ALT`, both of `EQCOND`'s arms,
+`BRIDGE` and `DATA` each build a `struct sgd_gen_cfg` on the stack with
+only `data_word` and `word_syms` set (`dis.py` confirms no store reaches
+`seq`/`seq_len`/`short_0006`/`seq_enable` at any of the seven sites) before
+calling `SGD_control` on the transmitter's own SGD object -- D1291's exact
+finding for `TxNextStateV29`'s two sites, one modulation over and five
+more call sites of it.
+
+**SAFE FOR THE SAME REASON D1291 GIVES:** the only consumer is
+`SGD_symbol_gen`, which never reads the four untouched fields; the whole
+24-byte `gen` half is still copied into the SGD object's persistent
+`cfg.gen` (`SGD_control`'s own documented contract, `sgd.h`), so those four
+fields DO reach the object as whatever the calling function's stack frame
+held, which is compiler- and build-specific and not reproducible
+byte-for-byte across two different compilations of two different sources.
+
+**REPRODUCED AS AN UNINITIALISED LOCAL, NOT ZERO-FILLED**, for the identical
+reason D1291 gives. `test/unit/t_v17txcreate.c`'s `compare_tree` does not
+assert on `sgd.cfg.gen.seq`/`seq_len`/`short_0006`/`seq_enable` at all,
+only on `sym_bits` and `hist_len`, which nothing here touches.
+
+**Status:** ✅ reproduced faithfully, by the same argument and the same
+exclusion D1291 already established -- recorded separately because it is a
+different symbol and a different object, not because the shape differs.

@@ -50,10 +50,7 @@
  *
  * WHAT IS WRITTEN, AND WHAT IS NOT (F9271's map, address order):
  *
- *   0x09bf20 v17tx_create   BLOCKED: V17TX_create, V17TX_CFG (data), and
- *                           V17TX_create's own closure -- FIFO_CFG,
- *                           FIFO_create, FPM_PPS_CFG, PPSv17_ICOFFS and 27
- *                           more (readyqueue.py, 2026-09-01)
+ *   0x09bf20 v17tx_create   WRITTEN (F9910 landed the closure whole)
  *   0x09c030 v17rx_create   WRITTEN
  *   0x09c160 v17tx_delete   WRITTEN
  *   0x09c170 v17rx_delete   WRITTEN
@@ -119,6 +116,7 @@
 #define DSPLIB_FAXADAPT_H
 
 struct faxvmi_link;
+struct v17tx_cfg;
 struct v17rx_cfg;
 struct v21rx_cfg;
 struct v27rx_cfg;
@@ -126,8 +124,12 @@ struct v29rx_cfg;
 struct v17_status;
 struct v21_status;
 
-/* ---- create (RX side only; TX blocked, see above) ---------------------- */
+/*
+ * ---- create.  V.17's TX side is written; V.21/V.27/V.29's TX sides remain
+ * BLOCKED, see above -- this is the RX side for those three, plus V.17 TX.
+ */
 
+void v17tx_create(struct faxvmi_link *dp, const struct v17tx_cfg *cfg);
 void v17rx_create(struct faxvmi_link *dp, const struct v17rx_cfg *cfg);
 void v21rx_create(struct faxvmi_link *dp, const struct v21rx_cfg *cfg);
 void v27rx_create(struct faxvmi_link *dp, const struct v27rx_cfg *cfg);
