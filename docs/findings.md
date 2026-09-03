@@ -111428,3 +111428,125 @@ exercise is already covered as described above).
 **`tools/onedef.py`, `tools/bannercheck.py src/fax src/service` and
 `tools/refcheck.py`** all clean after this pass (295 types / 1 known
 duplicate unchanged; 273/273 banners agree; 13,061 references, 0 dangling).
+
+## F10107. `V17TX_control` and `V29TX_control` written, 148/126 bytes, closing F10103's own blocker -- and both omit one effect F10103's banked pseudocode never mentioned
+
+F10103 declined both symbols because their sole callee, `*TX_create`, was
+unwritten; those constructors landed afterwards, in waves 6/7, well before
+F10103's own wave 9 -- `docs/remaining.md`'s wave-9 "what's left" prose
+never caught up, and this pass's own brief inherited that staleness before
+`tools/closure.py V17TX_control`/`V29TX_control` were run to check it (both
+report every symbol they call already defined in `src/`).  Corrected in
+`docs/remaining.md` directly; this finding is the closure, not the
+correction.
+
+**RE-DISASSEMBLING RATHER THAN TRANSCRIBING FOUND A SIXTH EFFECT NEITHER
+FUNCTION'S BANKED PSEUDOCODE NAMED.**  Both write the request's `+0x04`
+straight into the HANDLE's own `int_0008` (`struct v17tx_cfg`/
+`struct v29tx_cfg`, the config block `*TX_create` copies onto the handle's
+first bytes) -- `mov 0x4(%ebx),%eax; mov %eax,0x8(%edi)` at 0x0a1b6e/0a1b71
+for V.17, `mov 0x4(%ebx),%eax; mov %eax,0x8(%esi)` at 0x0a4fe8/0a4feb for
+V.29.  F10103's pseudocode listed five effects for each and this write was
+in neither list, even though it sits between the two it DID list (the scale
+computation and the `+0x0c` bit test) in both functions' own instruction
+order -- not a subtle omission, a skipped instruction.  It is the same
+shape `V29RX_control` itself established for `V29_OBJ_INT_0008` (F10103),
+now confirmed a THIRD time on a THIRD field.
+
+**THE PPS SHAPER'S `scale` IS TYPED BY A CALLEE, NOT GUESSED.**  Both
+functions multiply the request's `+0x08` by `*TX_PPS_SCALE[rate]` and store
+the product into the private block at a fixed offset -- block+0x50 for
+V.17, block+0x6c for V.29.  Both offsets are `V17FP_PPS`/`V29FP_PPS` (0x48/
+0x64, already named from `*TX_create`) plus 0x08, and `struct fpm_pps_cfg`
+already names +0x08 `scale` (`fpm_pps.h`, established from `FPM_PPS_init`'s
+own signature) -- so this is a runtime GAIN OVERRIDE on the constructor's
+own per-rate table lookup, not an unmodelled offset.  V.29's private block
+already has a named C struct (`struct v29tx`, `v29data.h`) with `pps` as a
+real member, so `V29TX(fp)->pps.cfg.scale` is a typed field access; V.17's
+private block has no equivalent struct (`V17FP_SMC` is explicitly
+"unmodelled"), so `V17TX_control` reaches the same field through
+`(struct fpm_pps *)(void *)FIELD(block, V17FP_PPS)`, `*TX_create`'s own
+idiom for that same block.
+
+**BOTH WRITE THEIR SCALE FIELD TWICE, AND BOTH DEAD STORES ARE THE
+OBJECT'S OWN** -- `mov %eax,0x50(%ecx)` at 0x0a1b5a then again at 0x0a1b6b
+after the `imul` (V.17); `mov %eax,0x6c(%ecx)` at 0x0a4fda then again at
+0x0a4fe5 (V.29).  F10103's own pseudocode for `V17TX_control` already
+flagged its copy as "dead store, object's own"; this finding adds that
+V.29's version does the identical thing at the identical point in its own
+instruction sequence, and reproduces both as two literal assignments to the
+same field rather than simplified into one, the same D1032/F8878 ground the
+two sibling `*TX_status` functions stand on for a materially identical
+shape (a dead store kept alive by an intervening store through an unrelated,
+possibly-aliasing pointer).
+
+**`V17TX_control` SETTLES AN OPEN QUESTION IN `V17TX_status`'S OWN
+COMMENT.**  `v17fax.h` recorded `V17TX_status`'s `params` argument as
+unidentified between two candidates -- `V17TX_OBJ_FP`'s private block or
+`V17TX_OBJ_PARAMS`'s parameter block -- because it reads `params+0x00`,
+`+0x02`, `+0x10` and `+0x18` and "both have room for all four".
+`V17TX_control` writes those SAME FOUR OFFSETS directly on `fp`, its own
+first argument, dereferencing `V17TX_OBJ_FP` and `V17TX_OBJ_PARAMS`
+separately from that same `fp` to reach its OTHER two blocks -- so `params`
+is neither candidate, it is the top-level TX handle itself, the same object
+`V17TX_create` and `V17TX_control` take as their own first argument.  Two
+of the four offsets were already independently established as
+`struct v17tx_cfg::protocol`/`::bitrate` at that struct's own field
+comments (which said "V17TX_status's own read" without the cross-file
+cross-reference existing yet); this closes the loop.  Corrected beside the
+original note in `v17fax.h` rather than silently, this file's own
+convention for a second writer or a resolved ambiguity.
+
+**TWO CODEGEN DIFFERENCES BETWEEN THE OTHERWISE-IDENTICAL SIBLINGS, BOTH
+FORCED AND BOTH REPRODUCED AS FOUND.**  `V17TX_control` sets its parameter
+block's `V17TXP_INT_0008` with two LITERAL stores gated on a branch
+(`movl $0x0,...` then conditionally `movl $0x1,...`); `V29TX_control` sets
+the analogous `V29TXP_INT_0008` with `setne` (matching `V29RX_control`'s
+own style for the equivalent bit).  Both are reproduced in the shape the
+object uses at that site rather than unified to one idiom -- CLAUDE.md's
+"the rule for reading a codegen difference": this is IN the object's own
+instructions at each site, not a free choice imposed by rewriting.
+
+**REQUEST TYPES, NEW, SAME FOOTING AS `V29RX_control`'S:** `struct
+v17tx_control_req` (`v17fax.h`) and `struct v29tx_control_req` (`v29fax.h`),
+neither read by anything else reconstructed.  V.17's carries one field V.29's
+does not -- `int_0010`, written to the handle's own `int_0018` -- matching
+F10103's own prediction that the two are "the same shape one level of
+indirection different ... with NO +0x10 field touched" on the V.29 side; that
+prediction is confirmed, not merely repeated.
+
+**TESTED DIFFERENTIALLY**, `test/unit/t_v17txcreate.c`'s new
+`run_v17tx_control()` and `test/unit/t_v29txcreate.c`'s new
+`run_v29tx_control()`, both `run_rxcontrol`'s own shape: every combination
+of both control bytes' named bits, with noise on every other bit proving
+those are ignored, over several bit rates so the PPS_SCALE index varies:
+each of the six effects (five in F10103's own list plus this finding's
+sixth) gets its own separating counter reporting how many trials
+distinguished the real behaviour from a "this write never happens" bug,
+plus a null-request trial.  `make one T=t_v17txcreate` and
+`make one T=t_v29txcreate` (GCC 14, host compiler) both green; `make period`
+was not run by this pass, per the brief -- the parent session runs that
+gate.
+
+`tools/onedef.py`, `tools/bannercheck.py src/fax` and `tools/refcheck.py`
+clean after this pass.
+
+**LANDING BOTH ALSO UNBLOCKED THREE ADAPTER FORWARDERS IN `faxadapt.c`, ONE
+OF WHICH WAS ALREADY WRONGLY MARKED BLOCKED.**  `v17tx_control` and
+`v29tx_control` were genuinely blocked on `V17TX_control`/`V29TX_control`
+and are now written -- three-instruction tail calls, `v17rx_control`'s own
+shape (`faxadapt.h`).  `v29rx_control` carried the SAME "BLOCKED:
+V29RX_control is not written" comment in both `faxadapt.c` and
+`faxadapt.h`, even though `V29RX_control` itself landed in wave 9
+(F10103) -- the identical stale-comment shape this finding's own opening
+paragraph found in `docs/remaining.md`, now found a second time in a
+different file.  All three are tested in `t_faxadapt.c`'s `run_control()`,
+extended with three more blocks in the same shape as its existing five: a
+REAL handle from the matching `v??tx_create`/`v??rx_create` (all four TX
+creates are written now too, so this file's own intro comment about "the TX
+side has no create" is ALSO stale for these three -- not corrected here,
+flagged for whoever next touches that comment), the new control call on
+both sides, a `struct faxvmi_link` canary unchanged either way (D955/F8587),
+and a status readback confirming the effect landed on the right object.
+`make one T=t_faxadapt` green, 32 checks over all eight `*_control`
+adapters (up from the prior five).  (2026-09-03)

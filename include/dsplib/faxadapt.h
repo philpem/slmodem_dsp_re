@@ -58,7 +58,7 @@
  *   0x09c1c0 v17rx_process  WRITTEN
  *   0x09c200 v17tx_status   WRITTEN
  *   0x09c210 v17rx_status   WRITTEN
- *   0x09c220 v17tx_control  BLOCKED: V17TX_control (unwritten)
+ *   0x09c220 v17tx_control  WRITTEN (F10107)
  *   0x09c230 v17rx_control  WRITTEN (F10010)
  *   0x09c240 v17tx_message  already in class1tx.c
  *   0x09c270 v17rx_message  already in class1tx.c
@@ -97,17 +97,21 @@
  *   0x09ca20 v29rx_process  WRITTEN
  *   0x09ca60 v29tx_status   WRITTEN
  *   0x09ca70 v29rx_status   WRITTEN
- *   0x09ca80 v29tx_control  BLOCKED: V29TX_control (unwritten)
- *   0x09ca90 v29rx_control  BLOCKED: V29RX_control (unwritten)
+ *   0x09ca80 v29tx_control  WRITTEN (F10107)
+ *   0x09ca90 v29rx_control  WRITTEN (F10107)
  *   0x09caa0 v29tx_message  already in class1tx.c
  *   0x09cad0 v29rx_message  already in class1tx.c
  *
- * 36 of the 40 non-message symbols are written here; 4 remain (v17tx_control,
- * v29tx_control, v29rx_control, all `*_control` adapters blocked on their own
- * matching `V??_control`, which lives in `v17.c`/`v29.c` -- files this file's
- * owner does not touch).  `init_vmi_v17tx`/`init_vmi_v27tx`/`init_vmi_v29tx`
- * (F9271's "check with nm -S" question, F10010) are NOT in this file and
- * never were candidates for it: their addresses (0x94870, 0x94a70, 0x94970)
+ * ALL 40 non-message symbols are now written here.  The last three --
+ * v17tx_control, v29tx_control, v29rx_control -- were blocked on their own
+ * matching `V??_control` (`v17.c`/`v29.c`); `V17TX_control`/`V29TX_control`
+ * landed together (F10107), which is also the pass that noticed
+ * `V29RX_control` itself had already landed in wave 9 (F10103) while this
+ * comment and the "BLOCKED" note beside `v29rx_control` in `faxadapt.c`
+ * both still called it unwritten.  `init_vmi_v17tx`/`init_vmi_v27tx`/
+ * `init_vmi_v29tx` (F9271's "check with nm -S" question, F10010) are NOT in
+ * this file and never were candidates for it: their addresses (0x94870,
+ * 0x94a70, 0x94970)
  * fall in the `class1tx.c` span (0x94870..0xac960), immediately AFTER the
  * `class1rx.c` span (0x93e80..0x94870) that holds their RX siblings
  * `init_vmi_v17rx`/`init_vmi_v27rx`/`init_vmi_v29rx` -- adjacent spans, not
@@ -132,8 +136,11 @@ struct v29rx_cfg;
 struct v17_status;
 struct v21_status;
 struct v17rx_ctl;
+struct v17tx_control_req;
 struct v21tx_ctl;
 struct v21rx_ctl;
+struct v29tx_control_req;
+struct v29rx_control_req;
 
 /* ---- create: every `*_create` in the 48-symbol TU is now written -------- */
 
@@ -205,16 +212,24 @@ void v29rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 /*
  * ---- control: `V??_control(dp->int_0014, arg)`, tail-called ------------
  *
- * `v17tx_control`, `v29tx_control` and `v29rx_control` remain BLOCKED --
- * `V17TX_control`, `V29TX_control` and `V29RX_control` are not written; see
- * the address map above.  `V27TX_control`/`V27RX_control` take an untyped
- * `void *`, not a struct pointer (v27fax.h).
+ * All twelve are now written -- `v17tx_control`/`v29tx_control`/
+ * `v29rx_control` (F10107) were the last three, unblocked by
+ * `V17TX_control`/`V29TX_control` landing and by re-checking `V29RX_control`
+ * (wave 9, F10103) against the stale "BLOCKED" comment this header and
+ * `faxadapt.c` both still carried for it.  `V27TX_control`/`V27RX_control`
+ * take an untyped `void *`, not a struct pointer (v27fax.h).
  */
 
+int v17tx_control(struct faxvmi_link *dp,
+		  const struct v17tx_control_req *arg);
 int v17rx_control(struct faxvmi_link *dp, const struct v17rx_ctl *arg);
 int v21tx_control(struct faxvmi_link *dp, const struct v21tx_ctl *arg);
 int v21rx_control(struct faxvmi_link *dp, const struct v21rx_ctl *arg);
 int v27tx_control(struct faxvmi_link *dp, void *req);
 int v27rx_control(struct faxvmi_link *dp, void *req);
+int v29tx_control(struct faxvmi_link *dp,
+		  const struct v29tx_control_req *arg);
+int v29rx_control(struct faxvmi_link *dp,
+		  const struct v29rx_control_req *arg);
 
 #endif /* DSPLIB_FAXADAPT_H */

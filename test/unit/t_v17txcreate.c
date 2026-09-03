@@ -75,6 +75,7 @@ extern short ref_TxHdxIdleV17(void *modem, unsigned short *in, short *out,
 			      short *budget);
 extern void ref_TxNextStateV17(void *modem);
 extern struct v17tx_cfg ref_V17TX_CFG;
+extern int ref_V17TX_control(void *fp, const struct v17tx_control_req *req);
 
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
@@ -824,6 +825,213 @@ test_next_state_default_arm(void)
 	return diff_end();
 }
 
+/*
+ * V17TX_control -- see v17fax.h for the five effects.  Exercises every
+ * combination of both control bytes' NAMED bits, plus noise on every OTHER
+ * bit (proving those are ignored), over each of `cases[]`'s bit rates so
+ * `mode` -- the PPS_SCALE index -- varies too.  Each named effect gets its
+ * own separating counter, F134's discipline: a zero count means the check
+ * above it never had anything to catch.  Finding F10107.
+ */
+static long v17ctl_int08_sep, v17ctl_int18_sep, v17ctl_scale_sep;
+static long v17ctl_flag_sep, v17ctl_int0008p_sep, v17ctl_create_sep;
+static long v17ctl_null_trials;
+
+static int
+run_v17tx_control(void)
+{
+	int pass, i;
+	long k;
+
+	diff_begin("v17txcreate: V17TX_control");
+
+	for (pass = 0; pass < 2; pass++) {
+		unsigned char noise0 = pass
+			? (unsigned char)~V17TXCTL_CTL0_BIT2 : 0;
+		unsigned char noise1 = pass ? (unsigned char)
+			~(V17TXCTL_CTL1_BIT1 | V17TXCTL_CTL1_BIT4) : 0;
+
+		for (k = 0; k < NCASES; k++) {
+			for (i = 0; i < 16; i++) {
+				struct v17tx_cfg ca, cb;
+				void *a, *b;
+				void *pa, *pb;
+				void *fa, *fb;
+				struct fpm_pps *ppa, *ppb;
+				struct v17tx_control_req reqa, reqb;
+				int ret_a, ret_b;
+				int bit2 = (i & 1) != 0;
+				int bit1 = (i & 2) != 0;	/* recreate */
+				int bit4 = (i & 4) != 0;
+				int before_int08, before_int18, before_scale;
+				short marker_state = 4242;
+				long where = pass * 1000 + k * 100 + i;
+
+				build_cfg(&ca, k);
+				build_cfg(&cb, k);
+				a = V17TX_create(0, &ca);
+				b = ref_V17TX_create(0, &cb);
+				diff_eq_int("at %ld: both built",
+					    a != 0 && b != 0, 1, where);
+				if (a == 0 || b == 0)
+					continue;
+
+				pa = FIELD_PTR(a, V17TX_OBJ_PARAMS);
+				pb = FIELD_PTR(b, V17TX_OBJ_PARAMS);
+				fa = FIELD_PTR(a, V17TX_OBJ_FP);
+				fb = FIELD_PTR(b, V17TX_OBJ_FP);
+				ppa = (struct fpm_pps *)(void *)
+					FIELD(fa, V17FP_PPS);
+
+				AT_S(pa, V17TXP_STATE) = marker_state;
+				AT_S(pb, V17TXP_STATE) = marker_state;
+
+				before_int08 = ((struct v17tx_cfg *)a)->
+					int_0008;
+				before_int18 = ((struct v17tx_cfg *)a)->
+					int_0018;
+				before_scale = ppa->cfg.scale;
+
+				memset(&reqa, 0, sizeof(reqa));
+				reqa.int_0004 = 0x1000 + (int)where;
+				reqa.int_0008 = 3 + (int)(where % 7);
+				reqa.int_0010 = 0x2000 + (int)where;
+				reqa.ctl0 = (unsigned char)
+					((bit2 ? V17TXCTL_CTL0_BIT2 : 0)
+					 | noise0);
+				reqa.ctl1 = (unsigned char)
+					((bit1 ? V17TXCTL_CTL1_BIT1 : 0)
+					 | (bit4 ? V17TXCTL_CTL1_BIT4 : 0)
+					 | noise1);
+				reqb = reqa;
+
+				ret_a = V17TX_control(a, &reqa);
+				ret_b = ref_V17TX_control(b, &reqb);
+
+				diff_eq_int("at %ld: returned", ret_a, ret_b,
+					    where);
+				diff_eq_int("at %ld: returns 1", ret_a, 1,
+					    where);
+
+				/* A recreate does not move either block
+				 * (self-referential reinit, D1173's shape). */
+				pa = FIELD_PTR(a, V17TX_OBJ_PARAMS);
+				pb = FIELD_PTR(b, V17TX_OBJ_PARAMS);
+				fa = FIELD_PTR(a, V17TX_OBJ_FP);
+				fb = FIELD_PTR(b, V17TX_OBJ_FP);
+				diff_eq_int("at %ld: sub-blocks stayed put",
+					    (pa == 0) + (fa == 0),
+					    (pb == 0) + (fb == 0), where);
+				if (pa == 0 || pb == 0 || fa == 0
+				    || fb == 0) {
+					V17TX_delete(a);
+					ref_V17TX_delete(b);
+					continue;
+				}
+
+				compare_tree("v17tx_control", a, b, where);
+
+				ppa = (struct fpm_pps *)(void *)
+					FIELD(fa, V17FP_PPS);
+				ppb = (struct fpm_pps *)(void *)
+					FIELD(fb, V17FP_PPS);
+
+				diff_eq_int("at %ld: handle's int_0008",
+					    ((struct v17tx_cfg *)a)->int_0008,
+					    ((struct v17tx_cfg *)b)->int_0008,
+					    where);
+				diff_eq_int("at %ld: handle's int_0018",
+					    ((struct v17tx_cfg *)a)->int_0018,
+					    ((struct v17tx_cfg *)b)->int_0018,
+					    where);
+				diff_eq_int("at %ld: params.int_0008",
+					    AT_I(pa, V17TXP_INT_0008),
+					    AT_I(pb, V17TXP_INT_0008), where);
+				diff_eq_int("at %ld: pps.cfg.scale",
+					    ppa->cfg.scale, ppb->cfg.scale,
+					    where);
+
+				/*
+				 * Separating counts, from the REFERENCE's own
+				 * answer: each counts a trial where the field
+				 * ended up DIFFERENT from what a "this write
+				 * never happens" bug would have left in
+				 * place, per run_rxcontrol's own discipline.
+				 */
+				if (((struct v17tx_cfg *)b)->int_0008
+				    != before_int08)
+					v17ctl_int08_sep++;
+				if (((struct v17tx_cfg *)b)->int_0018
+				    != before_int18)
+					v17ctl_int18_sep++;
+				if (ppb->cfg.scale != before_scale)
+					v17ctl_scale_sep++;
+				if (bit2
+				    && (*FIELD(b, 0x10) & V17_STATUS_FLAG_04)
+				       != 0)
+					v17ctl_flag_sep++;
+				if (AT_I(pb, V17TXP_INT_0008) == bit4)
+					v17ctl_int0008p_sep++;
+				if (bit1
+				    && AT_S(pb, V17TXP_STATE)
+				       != marker_state)
+					v17ctl_create_sep++;
+
+				V17TX_delete(a);
+				ref_V17TX_delete(b);
+			}
+		}
+	}
+
+	/* A null request: returns 0 and touches nothing observable. */
+	{
+		struct v17tx_cfg ca, cb;
+		void *a, *b;
+		void *pa;
+		short before;
+		int ret_a, ret_b;
+
+		build_cfg(&ca, 0);
+		build_cfg(&cb, 0);
+		a = V17TX_create(0, &ca);
+		b = ref_V17TX_create(0, &cb);
+		diff_eq_int("null: both built", a != 0 && b != 0, 1, 0);
+		if (a != 0 && b != 0) {
+			pa = FIELD_PTR(a, V17TX_OBJ_PARAMS);
+			before = AT_S(pa, V17TXP_STATE);
+
+			ret_a = V17TX_control(a, 0);
+			ret_b = ref_V17TX_control(b, 0);
+
+			diff_eq_int("null: returned", ret_a, ret_b, 0);
+			diff_eq_int("null: returns 0", ret_a, 0, 0);
+			diff_eq_int("null: params.state unchanged",
+				    AT_S(pa, V17TXP_STATE), before, 0);
+			v17ctl_null_trials++;
+
+			V17TX_delete(a);
+			ref_V17TX_delete(b);
+		}
+	}
+
+	diff_eq_int("separating: int_0004 -> handle's int_0008 (%ld)",
+		    v17ctl_int08_sep > 0, 1, v17ctl_int08_sep);
+	diff_eq_int("separating: int_0010 -> handle's int_0018 (%ld)",
+		    v17ctl_int18_sep > 0, 1, v17ctl_int18_sep);
+	diff_eq_int("separating: pps.cfg.scale actually recomputed (%ld)",
+		    v17ctl_scale_sep > 0, 1, v17ctl_scale_sep);
+	diff_eq_int("separating: ctl0 bit2 -> V17_STATUS_FLAG_04 (%ld)",
+		    v17ctl_flag_sep > 0, 1, v17ctl_flag_sep);
+	diff_eq_int("separating: ctl1 bit4 -> V17TXP_INT_0008 (%ld)",
+		    v17ctl_int0008p_sep > 0, 1, v17ctl_int0008p_sep);
+	diff_eq_int("separating: ctl1 bit1 -> V17TX_create recreate (%ld)",
+		    v17ctl_create_sep > 0, 1, v17ctl_create_sep);
+	diff_eq_int("null trials counted (%ld)", v17ctl_null_trials > 0, 1,
+		    v17ctl_null_trials);
+
+	return diff_end();
+}
+
 /* ------------------------------------------------------------------------- */
 
 int
@@ -838,6 +1046,7 @@ main(void)
 	rc |= test_tx_cycle_short_train();
 	rc |= test_data_underrun_bypass_arm();
 	rc |= test_next_state_default_arm();
+	rc |= run_v17tx_control();
 
 	return rc;
 }

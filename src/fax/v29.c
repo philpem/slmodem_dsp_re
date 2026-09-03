@@ -2326,6 +2326,40 @@ TxHdxDataV29(void *modem, unsigned short *in, short *out, short *budget)
 
 /*
  * ---------------------------------------------------------------------------
+ * V29TX_control -- .text 0x0a4fb0, 126 bytes.  See v29fax.h for the five
+ * effects and the request type's derivation.
+ */
+int
+V29TX_control(void *fp, const struct v29tx_control_req *req)
+{
+	void *prm;
+	short rate;
+
+	if (req == 0)
+		return 0;
+
+	prm = FIELD_PTR(fp, V29TX_OBJ_PARAMS);
+	rate = FIELD_SHORT(prm, V29TXP_RATE);
+
+	V29TX(fp)->pps.cfg.scale = req->int_0008;
+	V29TX(fp)->pps.cfg.scale = V29TX_PPS_SCALE[rate] * req->int_0008;
+
+	((struct v29tx_cfg *)fp)->int_0008 = req->int_0004;
+
+	if (req->ctl0 & V29TXCTL_CTL0_BIT2)
+		FIELD_BYTE(fp, V29TXS_FLAGS_10) |= V29TXS_10_BIT2;
+
+	FIELD_INT(prm, V29TXP_INT_0008) =
+		(req->ctl1 & V29TXCTL_CTL1_BIT4) != 0;
+
+	if (req->ctl1 & V29TXCTL_CTL1_BIT1)
+		V29TX_create(fp, fp);
+
+	return 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * V29TX_status -- .text 0x0a5030, 100 bytes.
  *
  * THE STORE TO +0x14 HAPPENS TWICE AND THE FIRST ONE IS NOT DEAD.

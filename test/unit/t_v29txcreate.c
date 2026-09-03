@@ -63,6 +63,7 @@ extern short ref_TxHdxIdleV29(void *modem, unsigned short *in, short *out,
 			      short *budget);
 extern void ref_TxNextStateV29(void *modem);
 extern struct v29tx_cfg ref_V29TX_CFG;
+extern int ref_V29TX_control(void *fp, const struct v29tx_control_req *req);
 
 #define FIELD(obj, off)		((unsigned char *)(void *)(obj) + (off))
 #define FIELD_PTR(obj, off)	(*(void **)(void *)FIELD((obj), (off)))
@@ -661,6 +662,190 @@ test_next_state_default_arm(void)
 	return diff_end();
 }
 
+/*
+ * V29TX_control -- see v29fax.h for the five effects.  `V17TX_control`'s own
+ * shape, one level of indirection different and with no `int_0010`/handle's
+ * `int_0018` effect (F10107).  Each named effect gets its own separating
+ * counter, F134's discipline: a zero count means the check above it never
+ * had anything to catch.  Finding F10107.
+ */
+static long v29ctl_int08_sep, v29ctl_scale_sep, v29ctl_flag_sep;
+static long v29ctl_int0008p_sep, v29ctl_create_sep, v29ctl_null_trials;
+
+static int
+run_v29tx_control(void)
+{
+	int pass, i;
+	long k;
+
+	diff_begin("v29txcreate: V29TX_control");
+
+	for (pass = 0; pass < 2; pass++) {
+		unsigned char noise0 = pass
+			? (unsigned char)~V29TXCTL_CTL0_BIT2 : 0;
+		unsigned char noise1 = pass ? (unsigned char)
+			~(V29TXCTL_CTL1_BIT1 | V29TXCTL_CTL1_BIT4) : 0;
+
+		for (k = 0; k < NCASES; k++) {
+			for (i = 0; i < 16; i++) {
+				struct v29tx_cfg ca, cb;
+				void *a, *b;
+				void *pa, *pb;
+				struct v29tx *ta, *tb;
+				struct v29tx_control_req reqa, reqb;
+				int ret_a, ret_b;
+				int bit2 = (i & 1) != 0;
+				int bit1 = (i & 2) != 0;	/* recreate */
+				int bit4 = (i & 4) != 0;
+				int before_int08, before_scale;
+				short marker_state = 4242;
+				long where = pass * 1000 + k * 100 + i;
+
+				build_cfg(&ca, k);
+				build_cfg(&cb, k);
+				a = V29TX_create(0, &ca);
+				b = ref_V29TX_create(0, &cb);
+				diff_eq_int("at %ld: both built",
+					    a != 0 && b != 0, 1, where);
+				if (a == 0 || b == 0)
+					continue;
+
+				pa = FIELD_PTR(a, V29TX_OBJ_PARAMS);
+				pb = FIELD_PTR(b, V29TX_OBJ_PARAMS);
+				ta = V29TX(a);
+
+				AT_S(pa, V29TXP_STATE) = marker_state;
+				AT_S(pb, V29TXP_STATE) = marker_state;
+
+				before_int08 = ((struct v29tx_cfg *)a)->
+					int_0008;
+				before_scale = ta->pps.cfg.scale;
+
+				memset(&reqa, 0, sizeof(reqa));
+				reqa.int_0004 = 0x1000 + (int)where;
+				reqa.int_0008 = 3 + (int)(where % 7);
+				reqa.ctl0 = (unsigned char)
+					((bit2 ? V29TXCTL_CTL0_BIT2 : 0)
+					 | noise0);
+				reqa.ctl1 = (unsigned char)
+					((bit1 ? V29TXCTL_CTL1_BIT1 : 0)
+					 | (bit4 ? V29TXCTL_CTL1_BIT4 : 0)
+					 | noise1);
+				reqb = reqa;
+
+				ret_a = V29TX_control(a, &reqa);
+				ret_b = ref_V29TX_control(b, &reqb);
+
+				diff_eq_int("at %ld: returned", ret_a, ret_b,
+					    where);
+				diff_eq_int("at %ld: returns 1", ret_a, 1,
+					    where);
+
+				/* A recreate does not move either block
+				 * (self-referential reinit, D1173's shape). */
+				pa = FIELD_PTR(a, V29TX_OBJ_PARAMS);
+				pb = FIELD_PTR(b, V29TX_OBJ_PARAMS);
+				ta = V29TX(a);
+				tb = V29TX(b);
+				diff_eq_int("at %ld: sub-blocks stayed put",
+					    (pa == 0) + (ta == 0),
+					    (pb == 0) + (tb == 0), where);
+				if (pa == 0 || pb == 0 || ta == 0
+				    || tb == 0) {
+					V29TX_delete(a);
+					ref_V29TX_delete(b);
+					continue;
+				}
+
+				compare_tree("v29tx_control", a, b, where);
+
+				diff_eq_int("at %ld: handle's int_0008",
+					    ((struct v29tx_cfg *)a)->int_0008,
+					    ((struct v29tx_cfg *)b)->int_0008,
+					    where);
+				diff_eq_int("at %ld: params.int_0008",
+					    AT_I(pa, V29TXP_INT_0008),
+					    AT_I(pb, V29TXP_INT_0008), where);
+				diff_eq_int("at %ld: pps.cfg.scale",
+					    ta->pps.cfg.scale,
+					    tb->pps.cfg.scale, where);
+
+				/*
+				 * Separating counts, from the REFERENCE's own
+				 * answer: each counts a trial where the field
+				 * ended up DIFFERENT from what a "this write
+				 * never happens" bug would have left in
+				 * place, per run_rxcontrol's own discipline.
+				 */
+				if (((struct v29tx_cfg *)b)->int_0008
+				    != before_int08)
+					v29ctl_int08_sep++;
+				if (tb->pps.cfg.scale != before_scale)
+					v29ctl_scale_sep++;
+				if (bit2
+				    && (*FIELD(b, V29TXS_FLAGS_10)
+					& V29TXS_10_BIT2) != 0)
+					v29ctl_flag_sep++;
+				if (AT_I(pb, V29TXP_INT_0008) == bit4)
+					v29ctl_int0008p_sep++;
+				if (bit1
+				    && AT_S(pb, V29TXP_STATE)
+				       != marker_state)
+					v29ctl_create_sep++;
+
+				V29TX_delete(a);
+				ref_V29TX_delete(b);
+			}
+		}
+	}
+
+	/* A null request: returns 0 and touches nothing observable. */
+	{
+		struct v29tx_cfg ca, cb;
+		void *a, *b;
+		void *pa;
+		short before;
+		int ret_a, ret_b;
+
+		build_cfg(&ca, 0);
+		build_cfg(&cb, 0);
+		a = V29TX_create(0, &ca);
+		b = ref_V29TX_create(0, &cb);
+		diff_eq_int("null: both built", a != 0 && b != 0, 1, 0);
+		if (a != 0 && b != 0) {
+			pa = FIELD_PTR(a, V29TX_OBJ_PARAMS);
+			before = AT_S(pa, V29TXP_STATE);
+
+			ret_a = V29TX_control(a, 0);
+			ret_b = ref_V29TX_control(b, 0);
+
+			diff_eq_int("null: returned", ret_a, ret_b, 0);
+			diff_eq_int("null: returns 0", ret_a, 0, 0);
+			diff_eq_int("null: params.state unchanged",
+				    AT_S(pa, V29TXP_STATE), before, 0);
+			v29ctl_null_trials++;
+
+			V29TX_delete(a);
+			ref_V29TX_delete(b);
+		}
+	}
+
+	diff_eq_int("separating: int_0004 -> handle's int_0008 (%ld)",
+		    v29ctl_int08_sep > 0, 1, v29ctl_int08_sep);
+	diff_eq_int("separating: pps.cfg.scale actually recomputed (%ld)",
+		    v29ctl_scale_sep > 0, 1, v29ctl_scale_sep);
+	diff_eq_int("separating: ctl0 bit2 -> V29TXS_10_BIT2 (%ld)",
+		    v29ctl_flag_sep > 0, 1, v29ctl_flag_sep);
+	diff_eq_int("separating: ctl1 bit4 -> V29TXP_INT_0008 (%ld)",
+		    v29ctl_int0008p_sep > 0, 1, v29ctl_int0008p_sep);
+	diff_eq_int("separating: ctl1 bit1 -> V29TX_create recreate (%ld)",
+		    v29ctl_create_sep > 0, 1, v29ctl_create_sep);
+	diff_eq_int("null trials counted (%ld)", v29ctl_null_trials > 0, 1,
+		    v29ctl_null_trials);
+
+	return diff_end();
+}
+
 /* ------------------------------------------------------------------------- */
 
 int
@@ -674,6 +859,7 @@ main(void)
 	rc |= test_tx_cycle();
 	rc |= test_data_underrun_bypass_arm();
 	rc |= test_next_state_default_arm();
+	rc |= run_v29tx_control();
 
 	return rc;
 }
