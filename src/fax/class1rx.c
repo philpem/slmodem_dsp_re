@@ -10,10 +10,20 @@
  * They are written in the object's own emission order, which is v17, v29,
  * v27 and not the numeric one.
  *
- * `_delete_data_rx_modem` (0x0941a0, 149 bytes) and `_init_receiver`
- * (0x094240, 1,583) are the rest of the span and are NOT here: the first still
- * needs 16 unwritten symbols and the second 336, and a reference from `src/`
- * to an unwritten blob symbol fails the whole suite at link (F8492, F8493).
+ * `_delete_data_rx_modem` (0x0941a0, 149 bytes) is also here now.
+ *
+ * `_init_receiver` (0x094240, 1,583 bytes) closes the span.  It dispatches
+ * on a derived index 0/1/2 (V.27ter/V.29/V.17, `_set_modem_rate`'s own
+ * inlined range checks -- no relocation to that shared function appears in
+ * this range, so the object genuinely duplicates the logic rather than
+ * calling it) between a FRESH-CREATE path (`ctx->modem_vmi == NULL`, or a
+ * modulation switch after tearing the old one down) that dispatches through
+ * `init_vmi_data_rx_modem[mod]` and `FAXVMI_create`, and a REINIT path
+ * (`ctx->current_mod == mod` already) that merges a per-modulation `.data`
+ * template (`V17RX_CTL`/`V27RX_CTL`/`V29RX_CTL`, below) with the all-zero
+ * `FAXVMI_CTL` and calls `FAXVMI_control` -- which is why `FAXVMI_control`
+ * had to land first (`faxvmi.c`) before this function could link at all
+ * (F8492/F8493).  See `class1rx.h` for the field-by-field derivation.
  *
  * Read `class1rx.h` for the shape the three share, for why they are global
  * rather than `static`, and for the third parameter that none of them reads.
@@ -40,6 +50,9 @@
 #include "dsplib/faxvmi.h"
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
+#include "dsplib/v17fax.h"
+#include "dsplib/v27fax.h"
+#include "dsplib/v29fax.h"
 
 void
 init_vmi_v17rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
@@ -172,4 +185,354 @@ _delete_data_rx_modem(struct fax_class1 *ctx)
 	ctx->modem_vmi = NULL;
 	FAXVMI_delete(handle);
 	ctx->vmi_b = NULL;
+}
+
+/*
+ * `init_vmi_data_rx_modem[mod]`, `.data` 0x7920, 12 bytes -- LOCAL in the
+ * object (`d`, `nm`), so `static` here.  Three `R_386_32` relocations,
+ * `nm`-resolved: index 0 V.27ter, 1 V.29, 2 V.17 -- the SAME order
+ * `_init_receiver`'s own inlined `_set_modem_rate`-shaped derivation below
+ * produces.  Independently re-confirmed against `objdump -r` (F10109 first
+ * reported this table; not taken on that report alone here).
+ */
+static void (*const init_vmi_data_rx_modem[3])(struct faxvmi_cfg *,
+						unsigned short, int, void *) = {
+	init_vmi_v27rx,
+	init_vmi_v29rx,
+	init_vmi_v17rx,
+};
+
+/*
+ * The three per-modulation REINIT request templates `_init_receiver`'s
+ * reinit path merges with the all-zero `FAXVMI_CTL` before calling
+ * `FAXVMI_control`.  Raw bytes taken with `objdump -s -j .data` against
+ * `ref/slmodemd/dsplibs.o` and matched field-by-field against each type's
+ * own established offsets (`v17fax.h`'s `struct v17rx_ctl`, `v27fax.h`'s new
+ * `struct v27rx_ctl`, `v29fax.h`'s `struct v29rx_control_req`).  Zero
+ * relocations in any of the three (F10109).
+ *
+ * `unmapped_0000`/`pad_0000`'s own UPPER 16 bits hold a per-modulation
+ * PLACEHOLDER bit rate (0x3840/0x12c0/0x2580 = 14400/4800/9600) that
+ * `_init_receiver` overwrites with the live negotiated rate before use
+ * (`mov %di,...+2` in the disassembly); the flags/ctl1 byte's REINIT bit is
+ * OR'd in at runtime, not baked into the constant.
+ */
+const struct v17rx_ctl V17RX_CTL = {
+	{ 0x00, 0x00, 0x40, 0x38 },	/* unmapped_0000 */
+	60000,				/* int_0004      */
+	{ 0, 0, 0, 0 },			/* unmapped_0008 */
+	0x00,				/* flags_0c      */
+	0x00,				/* flags_0d      */
+	{ 0, 0 },			/* unmapped_000e */
+	0,				/* int_0010      */
+};
+
+const struct v27rx_ctl V27RX_CTL = {
+	{ 0x00, 0x00, 0xc0, 0x12 },	/* unmapped_0000 */
+	60000,				/* int_0004      */
+	{ 0, 0, 0, 0 },			/* unmapped_0008 */
+	0x00,				/* mask          */
+	0x00,				/* flags         */
+	{ 0, 0 },			/* unmapped_000e */
+	{ 0, 0, 0, 0 },			/* unmapped_0010 */
+};
+
+const struct v29rx_control_req V29RX_CTL = {
+	{ 0x00, 0x00, 0x80, 0x25 },	/* pad_0000 */
+	60000,				/* int_0004 */
+	{ 0, 0, 0, 0 },			/* pad_0008 */
+	0x00,				/* ctl0     */
+	0x00,				/* ctl1     */
+};
+
+/*
+ * The three FRESH-CREATE finishers.  Each copies `ctx->f12c0`/`ctx->f12c4`
+ * (16 bits each) into a per-modulation offset of the WRAPPED modem object
+ * reached via `vmi_b->link->int_0014` cast to a pointer (the same
+ * `(void *)(long)` idiom `faxadapt.c`'s `FIELD_PTR` macro already uses on
+ * this exact field, just spelled out here rather than imported) -- but only
+ * on the fresh path; the reinit path skips straight to the `f12d4` write.
+ * `sub` is at a DIFFERENT offset for each of the three: V.27ter +0x54,
+ * V.29 +0x50, V.17 +0x60 -- read straight off `dis.py`
+ * (0x9455e-0x9457a, 0x946c2-0x946de, 0x94666-0x94682) and independently
+ * re-confirmed for this pass.  Nothing establishes what `sub` or its own
+ * +0x8c/+0x8e &c fields ARE beyond this site, so both stay raw offsets.
+ *
+ * The `f12d4` write and the state/current_mod update happen on BOTH paths
+ * and are common to `finish_*rx`.
+ */
+static void
+finish_v27rx(struct fax_class1 *ctx, int fresh)
+{
+	struct faxvmi_link *link = ctx->vmi_b->link;
+	void *wrapped = (void *)(long)link->int_0014;
+
+	if (fresh) {
+		void *sub = *(void **)((char *)wrapped + 0x54);
+
+		*(short *)((char *)sub + 0x8c) = (short)ctx->f12c0;
+		*(short *)((char *)sub + 0x8e) = (short)ctx->f12c4;
+		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+	}
+
+	{
+		void *sub = *(void **)((char *)wrapped + 0x50);
+
+		*(short *)((char *)sub + 0x14) = (short)ctx->f12d4;
+	}
+
+	ctx->state = CLASS1_RX_LOOK_CARRIER;
+	ctx->current_mod = 0;
+}
+
+static void
+finish_v29rx(struct fax_class1 *ctx, int fresh)
+{
+	struct faxvmi_link *link = ctx->vmi_b->link;
+	void *wrapped = (void *)(long)link->int_0014;
+
+	if (fresh) {
+		void *sub = *(void **)((char *)wrapped + 0x50);
+
+		*(short *)((char *)sub + 0x88) = (short)ctx->f12c0;
+		*(short *)((char *)sub + 0x8a) = (short)ctx->f12c4;
+		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+	}
+
+	{
+		void *sub = *(void **)((char *)wrapped + 0x4c);
+
+		*(short *)((char *)sub + 0x1c) = (short)ctx->f12d4;
+	}
+
+	ctx->current_mod = 1;
+	ctx->state = CLASS1_RX_LOOK_CARRIER;
+}
+
+static void
+finish_v17rx(struct fax_class1 *ctx, int fresh)
+{
+	struct faxvmi_link *link = ctx->vmi_b->link;
+	void *wrapped = (void *)(long)link->int_0014;
+
+	if (fresh) {
+		void *sub = *(void **)((char *)wrapped + 0x60);
+
+		*(short *)((char *)sub + 0xd8) = (short)ctx->f12c0;
+		*(short *)((char *)sub + 0xda) = (short)ctx->f12c4;
+		wrapped = (void *)(long)ctx->vmi_b->link->int_0014;
+	}
+
+	ctx->state = CLASS1_RX_LOOK_CARRIER;
+	{
+		void *sub = *(void **)((char *)wrapped + 0x5c);
+
+		*(short *)((char *)sub + 0x20) = (short)ctx->f12d4;
+	}
+	ctx->current_mod = 2;
+}
+
+/*
+ * `_init_receiver`, 0x094240, 1,583 bytes.  See `class1rx.h` for the full
+ * derivation; this is the object's own control flow read straight off
+ * `dis.py`, not tidied.  `rate_code` is the T.30 modem-rate code
+ * `_set_modem_rate` (`class1.c`) already recognises -- the same four V.17
+ * two-code ranges and the V.29/V.27ter singles, duplicated inline here
+ * rather than called (no relocation to `_set_modem_rate` in this range).
+ *
+ * `sym` is the value `_sym_size` (`class1.c`) would answer for `rate` --
+ * again inlined rather than called -- and it is stored into
+ * `vmi_b->link->unpack_width`, a field `faxvmi.h` already names, ONLY on
+ * the reinit path, right before the `FAXVMI_control` call.
+ */
+void
+_init_receiver(struct fax_class1 *ctx, int rate_code)
+{
+	int mod = 0;
+	int rate = 0;
+	int sym;
+	struct faxvmi_cfg *cfg;
+	struct faxvmi_link *link;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"%2d.%02d[sec] Initializing RX modem receiver, "
+			"MODEM_IDX=%d\n",
+			ctx->clock_sec, ctx->clock_frac, ctx->current_mod);
+
+	if ((rate_code == 0x4a || rate_code == 0x62 || rate_code == 0x7a ||
+	     rate_code == 0x92) && DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Short train in V.17 mode is selected\n");
+
+	/* `_set_modem_rate`'s own shape (class1.c), inlined */
+	if ((unsigned)(rate_code - 0x91) <= 1) {
+		rate = 0x3840;
+		mod = 2;
+	}
+	if ((unsigned)(rate_code - 0x79) <= 1) {
+		rate = 0x2ee0;
+		mod = 2;
+	}
+	if ((unsigned)(rate_code - 0x61) <= 1) {
+		rate = 0x2580;
+		mod = 2;
+	}
+	if ((unsigned)(rate_code - 0x49) <= 1) {
+		rate = 0x1c20;
+		mod = 2;
+	}
+	if (rate_code == 0x60) {
+		rate = 0x2580;
+		mod = 1;
+	} else if (rate_code == 0x48) {
+		rate = 0x1c20;
+		mod = 1;
+	} else if (rate_code == 0x30) {
+		rate = 0x12c0;
+		mod = 0;
+	} else if (rate_code == 0x18) {
+		rate = 0x0960;
+		mod = 0;
+	}
+
+	if (ctx->current_mod != mod && ctx->modem_vmi != NULL &&
+	    ctx->vmi_b != NULL) {
+		/* modulation SWITCH: tear the old modem down first */
+		cfg = ctx->modem_vmi;
+
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"%2d.%02d[sec] New RX Modem... "
+				"Deleting previous existing one\n",
+				ctx->clock_sec, ctx->clock_frac);
+
+		if (cfg->slot == VMI_SLOT_V17RX) {
+			struct v17rx_cfg *v17 = cfg->modem_cfg;
+
+			sysdep_free(v17->ptr_0020);
+			cfg = ctx->modem_vmi;
+			v17 = cfg->modem_cfg;
+			sysdep_free(v17->ptr_001c);
+			cfg = ctx->modem_vmi;
+			v17 = cfg->modem_cfg;
+			sysdep_free(v17->ptr_0018);
+			cfg = ctx->modem_vmi;
+		}
+		sysdep_free(cfg->modem_cfg);
+		cfg = ctx->modem_vmi;
+		sysdep_free(cfg);
+
+		{
+			struct faxvmi *vmi = ctx->vmi_b;
+
+			ctx->modem_vmi = NULL;
+			FAXVMI_delete(vmi);
+			ctx->vmi_b = NULL;
+		}
+	}
+
+	if (ctx->modem_vmi == NULL) {
+		/* FRESH CREATE */
+		ctx->modem_vmi = sysdep_malloc(sizeof(struct faxvmi_cfg));
+		init_vmi_data_rx_modem[mod](ctx->modem_vmi,
+					    (unsigned short)rate, 0, NULL);
+
+		cfg = ctx->modem_vmi;
+		ctx->vmi_b = FAXVMI_create(NULL, cfg);
+
+		if (mod == 2)
+			finish_v17rx(ctx, 1);
+		else if (mod == 1)
+			finish_v29rx(ctx, 1);
+		else
+			finish_v27rx(ctx, 1);
+		return;
+	}
+
+	/* REINIT PATH */
+	cfg = ctx->modem_vmi;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf("Restarting existing RX modem\n");
+
+	cfg = ctx->modem_vmi;
+
+	{
+		struct faxvmi_ctl ctl = FAXVMI_CTL;
+		void *wrapped;
+
+		if (cfg->slot == VMI_SLOT_V17RX) {
+			struct v17rx_ctl req = V17RX_CTL;
+
+			*(short *)((char *)&req + 2) = (short)rate;
+			req.flags_0d |= V17RXCTL_REINIT;
+			ctl.int_0014 = (int)(long)&req;
+
+			link = ctx->vmi_b->link;
+			wrapped = (void *)(long)link->int_0014;
+			*(short *)((char *)wrapped + 4) = (short)rate;
+
+			switch (rate) {
+			case 0x960:  sym = 2; break;
+			case 0x12c0: sym = 3; break;
+			case 0x1c20: sym = 3; break;
+			case 0x2580: sym = 4; break;
+			case 0x2ee0: sym = 5; break;
+			case 0x3840: sym = 6; break;
+			default:     sym = 0; break;
+			}
+			link->unpack_width = (unsigned short)sym;
+
+			FAXVMI_control(ctx->vmi_b, &ctl);
+			finish_v17rx(ctx, 0);
+		} else if (cfg->slot == VMI_SLOT_V29RX) {
+			struct v29rx_control_req req = V29RX_CTL;
+
+			*(short *)((char *)&req + 2) = (short)rate;
+			req.ctl1 |= V29RXCTL_CTL1_BIT1;
+			ctl.int_0014 = (int)(long)&req;
+
+			link = ctx->vmi_b->link;
+			wrapped = (void *)(long)link->int_0014;
+			*(short *)((char *)wrapped + 4) = (short)rate;
+
+			switch (rate) {
+			case 0x960:  sym = 2; break;
+			case 0x12c0: sym = 3; break;
+			case 0x1c20: sym = 3; break;
+			case 0x2580: sym = 4; break;
+			case 0x2ee0: sym = 5; break;
+			case 0x3840: sym = 6; break;
+			default:     sym = 0; break;
+			}
+			link->unpack_width = (unsigned short)sym;
+
+			FAXVMI_control(ctx->vmi_b, &ctl);
+			finish_v29rx(ctx, 0);
+		} else {
+			struct v27rx_ctl req = V27RX_CTL;
+
+			*(short *)((char *)&req + 2) = (short)rate;
+			req.flags |= V27RXCTL_FLAGS_REINIT;
+			ctl.int_0014 = (int)(long)&req;
+
+			link = ctx->vmi_b->link;
+			wrapped = (void *)(long)link->int_0014;
+			*(short *)((char *)wrapped + 4) = (short)rate;
+
+			switch (rate) {
+			case 0x960:  sym = 2; break;
+			case 0x12c0: sym = 3; break;
+			case 0x1c20: sym = 3; break;
+			case 0x2580: sym = 4; break;
+			case 0x2ee0: sym = 5; break;
+			case 0x3840: sym = 6; break;
+			default:     sym = 0; break;
+			}
+			link->unpack_width = (unsigned short)sym;
+
+			FAXVMI_control(ctx->vmi_b, &ctl);
+			finish_v27rx(ctx, 0);
+		}
+	}
 }

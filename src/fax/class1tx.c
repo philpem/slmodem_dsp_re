@@ -53,6 +53,7 @@
 #include "dsplib/v17fax.h"
 #include "dsplib/v27fax.h"
 #include "dsplib/v29data.h"
+#include "dsplib/v29fax.h"
 
 /*
  * `aReversedCharsArray` -- .rodata 0xba40, 256 bytes, GLOBAL.  Entry `i` is
@@ -774,6 +775,227 @@ _delete_data_tx_modem(struct fax_class1 *ctx)
 	if (ctx->f1288 != NULL)
 		FIFO_delete(ctx->f1288);
 	ctx->f1288 = NULL;
+}
+
+/*
+ * `init_vmi_data_tx_modem[mod]`, `.data` 0x792c, 12 bytes -- LOCAL in the
+ * object (`d`, `nm`), so `static` here.  Three `R_386_32` relocations,
+ * `nm`-resolved: index 0 V.27ter, 1 V.29, 2 V.17, the same order
+ * `_init_transmitter`'s own inlined `_set_modem_rate`-shaped derivation
+ * below produces.  Independently re-confirmed against `objdump -r`
+ * (F10109 first reported this table; not taken on that report alone here).
+ */
+static int (*const init_vmi_data_tx_modem[3])(struct faxvmi_cfg *,
+					       unsigned short, int, void *) = {
+	init_vmi_v27tx,
+	init_vmi_v29tx,
+	init_vmi_v17tx,
+};
+
+/*
+ * The three per-modulation control-request templates `_init_transmitter`
+ * merges with the all-zero `FAXVMI_CTL` before calling `FAXVMI_control` --
+ * ONLY for a V.17 SHORT-TRAINING rate code (`ebp` in the disassembly), and
+ * then regardless of whether the modem was just freshly built or already
+ * existed (see `_init_transmitter`'s own derivation).  Raw bytes taken with
+ * `objdump -s -j .data` against `ref/slmodemd/dsplibs.o` and matched
+ * field-by-field against each type's own established offsets (`v17fax.h`'s
+ * `struct v17tx_control_req`, `v27fax.h`'s new `struct v27tx_ctl`,
+ * `v29fax.h`'s `struct v29tx_control_req`).  Zero relocations in any of the
+ * three (F10109).
+ *
+ * `pad_0000`/`unmapped_0000`'s own LOW 16 bits hold a per-modulation
+ * PLACEHOLDER bit rate (0x3840/0x2580/0x2580 -- V.17/V.27ter/V.29 -- note
+ * this is the OPPOSITE half from the receive-side templates, which put the
+ * placeholder in the UPPER 16 bits) that `_init_transmitter` overwrites with
+ * the live negotiated rate (`mov %di,...` on the HIGH 16 this time); the
+ * flags/ctl1 byte's REINIT bit is OR'd in at runtime, not baked into the
+ * constant.
+ */
+const struct v17tx_control_req V17TX_CTL = {
+	{ 0x40, 0x38, 0x00, 0x00 },	/* pad_0000 */
+	60000,				/* int_0004 */
+	1,				/* int_0008 */
+	0x00,				/* ctl0     */
+	0x00,				/* ctl1     */
+	{ 0, 0 },			/* pad_000e */
+	0,				/* int_0010 */
+};
+
+const struct v27tx_ctl V27TX_CTL = {
+	{ 0x80, 0x25, 0x00, 0x00 },	/* unmapped_0000 */
+	60000,				/* int_0004      */
+	1,				/* scale_mul     */
+	0x00,				/* mask          */
+	0x00,				/* flags         */
+	{ 0, 0 },			/* unmapped_000e */
+	0,				/* int_0010      */
+};
+
+const struct v29tx_control_req V29TX_CTL = {
+	{ 0x80, 0x25, 0x00, 0x00 },	/* pad_0000 */
+	60000,				/* int_0004 */
+	1,				/* int_0008 */
+	0x00,				/* ctl0     */
+	0x00,				/* ctl1     */
+};
+
+/*
+ * `_init_transmitter`, 0x094bf0, 1,326 bytes.  See `class1tx.h` for the
+ * derivation summary; this is the object's own control flow read straight
+ * off `dis.py`, not tidied.  `rate_code` is the same T.30 modem-rate code
+ * space `_init_receiver` (class1rx.c) reads, and the mod/rate/`f1230`/
+ * `f1234` derivation duplicates `_set_modem_rate`'s own inline shape again
+ * (no relocation to that function in this range).
+ *
+ * UNLIKE THE RECEIVE SIDE, there is no `ctx->current_mod` check here at
+ * all: whenever `ctx->modem_vmi` AND `ctx->vmi_b` are both already set, the
+ * existing modem is ALWAYS torn down and rebuilt fresh, regardless of
+ * whether the newly requested modulation is the same one -- confirmed by
+ * grepping this function's own disassembly for every reference to
+ * `ctx->current_mod` (0x1248): the only two are the diagnostic print at
+ * entry and the write at the very end.  `ebp` (a V.17 SHORT-TRAINING rate
+ * code, 0x4a/0x62/0x7a/0x92) instead gates a SEPARATE, optional
+ * control-request call that runs regardless of fresh-vs-existing, targeting
+ * whichever modem is live after the (possible) rebuild above it.
+ */
+void
+_init_transmitter(struct fax_class1 *ctx, int rate_code)
+{
+	int mod = 0;
+	int rate = 0;
+	int is_v17_short = 0;
+	struct faxvmi_cfg *cfg;
+
+	if (DSPLIB_DEBUG_ON())
+		dsplibs_debug_printf(
+			"%2d.%02d[sec] Initializing TX modem, "
+			"MODEM_IDX = %d, silence %d ms\n",
+			ctx->clock_sec, ctx->clock_frac, ctx->current_mod,
+			ctx->silence_blocks);
+
+	if (rate_code == 0x4a || rate_code == 0x62 || rate_code == 0x7a ||
+	    rate_code == 0x92) {
+		is_v17_short = 1;
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"Short train in V.17 mode is selected\n");
+	}
+
+	/* `_set_modem_rate`'s own shape (class1.c), inlined, extended with
+	 * the `f1230`/`f1234` writes this function alone makes             */
+	if ((unsigned)(rate_code - 0x91) <= 1) {
+		ctx->f1230 = 0x30;
+		ctx->f1234 = 0x8000;
+		rate = 0x3840;
+		mod = 2;
+	}
+	if ((unsigned)(rate_code - 0x79) <= 1) {
+		ctx->f1230 = 0x30;
+		ctx->f1234 = 0x8000;
+		rate = 0x2ee0;
+		mod = 2;
+	}
+	if ((unsigned)(rate_code - 0x61) <= 1) {
+		ctx->f1230 = 0x18;
+		ctx->f1234 = 0x8000;
+		rate = 0x2580;
+		mod = 2;
+	}
+	if ((unsigned)(rate_code - 0x49) <= 1) {
+		ctx->f1230 = 0x18;
+		ctx->f1234 = 0x8000;
+		rate = 0x1c20;
+		mod = 2;
+	}
+	if (rate_code == 0x60) {
+		ctx->f1234 = 0x8000;
+		ctx->f1230 = 0x18;
+		rate = 0x2580;
+		mod = 1;
+	} else if (rate_code == 0x48) {
+		ctx->f1234 = 0x75a2;
+		ctx->f1230 = 0x18;
+		rate = 0x1c20;
+		mod = 1;
+	} else if (rate_code == 0x30) {
+		ctx->f1234 = 0x4000;
+		ctx->f1230 = 0x0c;
+		rate = 0x12c0;
+		mod = 0;
+	} else if (rate_code == 0x18) {
+		ctx->f1234 = 0x4000;
+		ctx->f1230 = 0x06;
+		rate = 0x960;
+		mod = 0;
+	}
+
+	if (ctx->modem_vmi != NULL && ctx->vmi_b != NULL) {
+		/* ALWAYS torn down and rebuilt -- no modulation-match check */
+		if (DSPLIB_DEBUG_ON())
+			dsplibs_debug_printf(
+				"%2d.%02d[sec] New TX Modem... "
+				"Deleting previous existing one\n",
+				ctx->clock_sec, ctx->clock_frac);
+
+		sysdep_free(ctx->modem_vmi->modem_cfg);
+		sysdep_free(ctx->modem_vmi);
+		ctx->modem_vmi = NULL;
+		FAXVMI_delete(ctx->vmi_b);
+		ctx->vmi_b = NULL;
+
+		if (ctx->f1288 != NULL)
+			FIFO_delete(ctx->f1288);
+		ctx->f1288 = NULL;
+	}
+
+	if (ctx->vmi_b == NULL) {
+		if (ctx->modem_vmi == NULL)
+			ctx->modem_vmi = sysdep_malloc(
+				sizeof(struct faxvmi_cfg));
+
+		init_vmi_data_tx_modem[mod](ctx->modem_vmi,
+					    (unsigned short)rate, 0, NULL);
+
+		cfg = ctx->modem_vmi;
+		ctx->vmi_b = FAXVMI_create(NULL, cfg);
+	}
+
+	if (is_v17_short) {
+		struct faxvmi_ctl ctl = FAXVMI_CTL;
+
+		cfg = ctx->modem_vmi;
+
+		if (cfg->slot == VMI_SLOT_V17TX) {
+			struct v17tx_control_req req = V17TX_CTL;
+
+			*(short *)((char *)&req + 2) = (short)rate;
+			req.ctl1 |= V17TXCTL_CTL1_BIT1;
+			ctl.int_0014 = (int)(long)&req;
+			FAXVMI_control(ctx->vmi_b, &ctl);
+		} else if (cfg->slot == VMI_SLOT_V29TX) {
+			struct v29tx_control_req req = V29TX_CTL;
+
+			*(short *)((char *)&req + 2) = (short)rate;
+			req.ctl1 |= V29TXCTL_CTL1_BIT1;
+			ctl.int_0014 = (int)(long)&req;
+			FAXVMI_control(ctx->vmi_b, &ctl);
+		} else {
+			struct v27tx_ctl req = V27TX_CTL;
+
+			*(short *)((char *)&req + 2) = (short)rate;
+			req.flags |= V27TXCTL_FLAGS_REINIT;
+			ctl.int_0014 = (int)(long)&req;
+			FAXVMI_control(ctx->vmi_b, &ctl);
+		}
+	}
+
+	ctx->tx_rate = rate;
+	ctx->state = (ctx->silence_blocks == 0)
+			     ? CLASS1_TX_SCRAMBLED_ONES_STATE
+			     : CLASS1_TX_SILENCE_BEFORE_SCRM_ONES;
+	ctx->current_mod = mod;
+	ctx->countdown = 0;
 }
 
 /*

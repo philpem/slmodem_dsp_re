@@ -111851,3 +111851,212 @@ state`, `cHDLCtx_off` -- 35/88/80 checks), `t_class1rxstates.c`
 second, narrower pass over the RX pair -- 21/15/15/20/20/24/10/15/12
 checks) all pass. `tools/onedef.py`, `tools/bannercheck.py src/fax` and
 `tools/refcheck.py` clean. (2026-09-03)
+
+## F10111. `FAXVMI_control`/`vxx_control` land, unblocking `_init_receiver`/`_init_transmitter` at link -- both directly call it on their reinit path
+
+Assigned `_init_receiver`/`_init_transmitter` and traced both with `dis.py`
+before writing anything: each contains a direct `call FAXVMI_control`
+(`R_386_PC32`) on its own reinit path, so per CLAUDE.md's link trap neither
+function could be committed until `FAXVMI_control` itself existed in
+`src/`. `tools/closure.py --missing FAXVMI_control` showed its own closure
+was down to itself (338 B) plus `vxx_control` (52 B, `.rodata`) -- every one
+of the eight per-modulation `*_control` functions the table needs
+(`v17tx_control`/`v17rx_control`/`v21tx_control`/`v21rx_control`/
+`v27tx_control`/`v27rx_control`/`v29tx_control`/`v29rx_control`) already
+landed in `src/fax/faxadapt.c` across waves 9-10, plus `null_control`
+(`nulldp.c`). So both landed first, in `src/fax/faxvmi.c`, following the
+already-written `vxx_create`/`vxx_process`/`vxx_status` tables' own shape.
+
+`vxx_control`'s slot order (0..4 null, 5 v21tx, 6 v21rx, 7 v27tx, 8 v27rx,
+9 v29tx, 10 v29rx, 11 v17tx, 12 v17rx) matches every other `vxx_*` table;
+six of its eight typed entries need the same argument-pointer cast
+`vxx_status`/`vxx_create` already carry (`v27tx_control`/`v27rx_control`
+are already untyped `void *req`, so those two need none).
+
+`FAXVMI_control`'s own body (0x095650, 338 bytes), read from `dis.py`
+directly rather than taken on F10108/F10109's prior trace, in the object's
+own order:
+
+  1. `ctl == NULL` returns -1 immediately.
+  2. `ctl->int_0014` nonzero recurses FIRST:
+     `vxx_control[vmi->slot](vmi->link, (void *)(long)ctl->int_0014)`,
+     and that call's return becomes `FAXVMI_control`'s own return (0
+     otherwise) -- independently re-confirmed the exact instruction
+     sequence F10108 quoted (`test %eax,%eax; jne` landing directly on the
+     call's argument setup, no intervening write to `%eax`).
+  3. `ctl->int_000c` nonzero AND `ctl->short_0010 <= 2` (unsigned; an
+     out-of-range mode is treated as if `int_000c` were zero) -- a full
+     framer reset to `FAXVMI_create`'s own initial values, including the
+     same `unpack_bit = pack_bit; short_002e = pad_001e;` dword-reload
+     trick `FAXVMI_create` already uses -- and sets `vmi->mode` from
+     `short_0010`.
+  4. `ctl->ptr_0000` nonzero empties the ring.
+  5. Unconditionally: `zero_run_send = ctl->int_0004`,
+     `zero_run_bits = ctl->short_0008`.
+  6. Returns whatever step 2 left.
+
+`make one T=t_faxvmicp` (extended with `run_control`, six cases: `ctl ==
+NULL`, the all-zero `FAXVMI_CTL`, `ptr_0000`-only, `int_000c` in-range,
+`int_000c` out-of-range, `int_0014` recursion through the null slot) green,
+117 new checks, 0 failed. `tools/onedef.py`, `tools/bannercheck.py src/fax`,
+`tools/refcheck.py` clean.  (2026-09-03)
+
+## F10112. The six per-modulation reinit request templates (`V17RX_CTL`/`V27RX_CTL`/`V29RX_CTL`/`V17TX_CTL`/`V27TX_CTL`/`V29TX_CTL`) decoded and independently re-verified against `dis.py`/`objdump`, correcting F10109's own caveat
+
+F10109 banked these six `.data` symbols' existence and sizes from a prior
+agent's report but explicitly declined to re-verify their byte content or
+the `+0x1248` field, flagging both for whoever picked the work up next.
+Both are now independently re-derived from the tools, not taken on that
+report:
+
+`nm -S` against `ref/slmodemd/dsplibs.o`: `V17RX_CTL`/`V27RX_CTL`/
+`V17TX_CTL`/`V27TX_CTL` are 20 bytes (`0x14`) each; `V29RX_CTL`/`V29TX_CTL`
+are 16 (`0x10`). `objdump -s -j .data` at each address, matched
+field-by-field against the ALREADY-established request-struct types
+`V17RX_control`/`V17TX_control`/`V29RX_control`/`V29TX_control` type
+(`v17fax.h`'s `struct v17rx_ctl`, `struct v17tx_control_req`; `v29fax.h`'s
+`struct v29rx_control_req`, `struct v29tx_control_req`) and, for V.27ter
+(which has no named struct -- `V27RX_control`/`V27TX_control` use
+`FIELD_I`/`FIELD_BYTE` macros on an untyped `void *`), against the
+`V27RXCTL_*`/`V27TXCTL_*` offset macros already in `v27fax.h`. All six
+agree on a shared `int_0004` default of 60000 and, for the three TX
+templates, an `int_0008`/`scale_mul` default of 1 (the PPS shaper gain
+scale each `V??TX_control` multiplies).
+
+**The placeholder bit rate lives in a DIFFERENT half on each side.** All
+six templates' leading 4-byte field (`unmapped_0000`/`pad_0000`, unmodelled
+by the per-modulation `*_control` functions themselves) carries a
+per-modulation PLACEHOLDER bit rate that `_init_receiver`/
+`_init_transmitter` overwrite with the live negotiated rate before use --
+but the RECEIVE templates put it in the UPPER 16 bits (`V17RX_CTL`
+0x00,0x00,0x40,0x38 = high16 0x3840) while the TRANSMIT templates put it in
+the LOWER 16 bits (`V17TX_CTL` 0x40,0x38,0x00,0x00 = low16 0x3840),
+confirmed by which half `_init_receiver`/`_init_transmitter`'s own store
+instruction targets (`dis.py`: `mov %di,+2` for RX templates written into
+the merged buffer, `mov %di,+2` for TX too, but landing on the OPPOSITE
+half of the template's own placeholder because the RX/TX templates
+disagree on where THEY put it, not because the write itself differs).
+
+**The `+0x1248` field IS "current modulation" as F10109 reported**,
+independently confirmed: `_init_receiver` compares it against the freshly
+derived mod index (`cmp %edx,0x1248(%esi)`, both `movl`/`cmpl`, forced
+32-bit) to choose reinit over fresh-create, and both functions write it on
+every exit. Promoted from `pad_1248[4]` to `int current_mod` in
+`class1.h`.
+
+All six templates, plus new `struct v27rx_ctl`/`struct v27tx_ctl` types in
+`v27fax.h` (added for THIS reader, not a retyping of `V27RX_control`'s own
+already-correct untyped argument), landed alongside `_init_receiver`/
+`_init_transmitter` (F10113/F10114) and are exercised by both those
+functions' differential tests -- there is no direct test of the six
+constants' raw bytes beyond what those tests already prove by using them.
+(2026-09-03)
+
+## F10113. `_init_receiver` lands -- fresh-create/reinit/modulation-switch, all three modulations, 1,583 bytes
+
+`class1rx.c`, `.text` 0x094240. Dispatches on a derived index 0/1/2
+(V.27ter/V.29/V.17) between a FRESH-CREATE path (`ctx->modem_vmi == NULL`,
+or after tearing an old one down on a modulation SWITCH) through
+`init_vmi_data_rx_modem[mod]`/`FAXVMI_create`, and a REINIT path
+(`ctx->current_mod == mod` already) through the merged CTL template +
+`FAXVMI_control` (F10111/F10112). The mod/rate derivation duplicates
+`_set_modem_rate`'s own inline range-check shape (`class1.c`) and the
+reinit path's `link->unpack_width` write duplicates `_sym_size`'s own
+switch -- confirmed by checking BOTH functions' relocation lists (`dis.py`'s
+own "N relocation(s) in this range, all shown inline" trailer) for the
+absence of any call to either shared function: the object genuinely
+duplicates this logic rather than factoring it out.
+
+**One write in the reinit path was missed on a first hand-trace and caught
+by re-verifying against `dis.py` before committing**, not after: right
+before the `link->unpack_width` write, the object ALSO stores the live rate
+into the WRAPPED modem object's own `+0x4` field (`mov 0x14(%ecx),%eax;
+mov %di,0x4(%eax)`, `ecx` = `link`, `eax` = `link->int_0014` cast to a
+pointer) -- easy to miss because it sits between two other writes to
+totally different objects. CLAUDE.md's own worked examples of self-caught
+tracing errors (7770, 7785) are the same shape: the fix was re-reading the
+tool, not trusting a first pass.
+
+**Two new struct fields, both evidence class "usage inference," per
+CLAUDE.md's naming discipline:**
+
+- `ctx->current_mod` (`+0x1248`, promoted from `pad_1248[4]`) -- see
+  F10112.
+- `ctx->f12d4` (`+0x12d4`, promoted from `pad_12d4[4]`) -- read (32-bit) on
+  EVERY exit path (both fresh and reinit) and its low 16 bits stored into a
+  per-modulation offset of the wrapped modem object: V.27ter -> that
+  object's `+0x50` then `+0x14`; V.29 -> `+0x4c` then `+0x1c`; V.17 ->
+  `+0x5c` then `+0x20`. `ctx->f12c0`/`f12c4` (already named) get the same
+  treatment but ONLY on the fresh path, at three DIFFERENT offsets
+  (`+0x54`->`+0x8c`/`+0x8e`, `+0x50`->`+0x88`/`+0x8a`, `+0x60`->`+0xd8`/
+  `+0xda` respectively) -- the V.17 one matches F10109's own "+0xd8/+0xda
+  on the wrapped per-modulation object, for V.17" independently.
+
+**Tested with real per-modulation slots, not the NULL ones
+`t_faxvmicp.c`/`t_class1rxstates.c` deliberately stick to** -- new
+`test/unit/t_class1initrx.c`. `_init_receiver`'s own job is building the
+real `V17RX_create`/`V27RX_create`/`V29RX_create` chain, so exercising it
+end to end (through `FAXVMI_create`'s own `vxx_create[slot]` dispatch) is
+what the function IS, not a fresh risk -- those three constructors are
+already differentially tested elsewhere and routinely invoked as `vxx_*`
+table entries. The wrapped-object pokes above are verified by reading the
+SAME computed offset back on both sides (`ref__init_receiver` and ours),
+safe because both sides ran the identical already-tested constructor, so
+the sub-object's shape and size are identical by construction even with no
+struct named for it.
+
+18 cases (7 fresh-create, 6 reinit, 3 modulation-switch, plus a
+debug-level-on pass), all three modulations, multiple rates each. `make one
+T=t_class1initrx` green, 350 checks, 0 failed. (2026-09-03)
+
+## F10114. `_init_transmitter` lands -- and its dispatch shape genuinely differs from the receive side's: no `current_mod` check at all, an existing modem is ALWAYS torn down and rebuilt
+
+`class1tx.c`, `.text` 0x094bf0, 1,326 bytes. Same rate/mod derivation shape
+as `_init_receiver` (F10113), extended with two more fields this function
+alone writes -- `ctx->f1230`/`ctx->f1234` (promoted from `pad_1230[8]`,
+usage inference only, no reader established yet) -- and a debug-print
+string with one more argument than the receive side's own version
+(`silence %d ms`, `ctx->silence_blocks`).
+
+**Grepped this function's OWN disassembly for every reference to
+`ctx->current_mod` (`+0x1248`) before writing a line of C, expecting
+`_init_receiver`'s shape to carry over -- it does not.** The only two hits
+are the diagnostic print at entry and the write at the very end; there is
+NO comparison against it anywhere in the fresh-vs-rebuild decision. Instead:
+whenever `ctx->modem_vmi` AND `ctx->vmi_b` are BOTH already non-null, the
+existing modem is unconditionally torn down (free the config, free the VMI
+block, `FAXVMI_delete` the handle, `FIFO_delete` `ctx->f1288` if set --
+`_delete_data_tx_modem`'s own body, inlined again rather than called) and
+rebuilt fresh through `init_vmi_data_tx_modem[mod]`/`FAXVMI_create` --
+REGARDLESS of whether the newly requested modulation matches the one
+already installed. Confirmed by re-fetching the exact fall-through at
+0x94dea (the end of the fresh-create block) with `dis.py`: it lands
+directly on 0x94df0 with no intervening jump, so there genuinely is no
+"skip rebuild, current_mod already matches" arm to find.
+
+**A SEPARATE, unrelated control-request call is what looked like RX's own
+reinit path at first glance, and is not one.** `ebp` (set when `rate_code`
+is a V.17 SHORT-TRAINING code: 0x4a/0x62/0x7a/0x92) gates a per-modulation
+CTL-template-merge + `FAXVMI_control` call (same shape F10112 documents,
+minus RX's own `wrapped+4`/`unpack_width` writes -- neither appears
+anywhere in this function), but that block is reached from BOTH the
+just-rebuilt path (falls through) AND the already-existing path (jumps in
+directly) -- so it fires whenever the RATE CODE calls for V.17 short
+training, independent of whether the modem was just freshly built. A
+freshly built V.17-short-training modem gets an IMMEDIATE extra
+REINIT-flagged control call right after construction; this is the object's
+own behaviour, reproduced rather than "simplified" to look more like RX's.
+
+Tested the same way as `_init_receiver` (F10113): real per-modulation
+slots, new `test/unit/t_class1inittx.c`. 16 cases -- 6 fresh builds, 3
+unconditional-rebuild-with-same-rate-code (proving the "always rebuild"
+shape rather than a skipped reinit), 3 modulation switches, 4 V.17
+short-training (each run twice, fresh then again, to prove the control call
+fires both times), plus a debug-level-on pass. `make one T=t_class1inittx`
+green, 356 checks, 0 failed.
+
+Merged-tree structural gates: `tools/onedef.py` (300 types, 1 known
+duplicate, unchanged), `tools/bannercheck.py src/fax` (230/230 agree),
+`tools/refcheck.py` (13099 references, 0 dangling) all clean. `make period`
+not run here (no docker in this session's shell); left for the parent
+session's gate. (2026-09-03)

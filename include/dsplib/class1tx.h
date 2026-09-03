@@ -190,6 +190,13 @@ int init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 void _delete_data_tx_modem(struct fax_class1 *ctx);
 
 /*
+ * `_init_transmitter`, 0x094bf0, 1,326 bytes -- see `class1tx.c` for the
+ * full derivation.  `rate_code` is the same T.30 modem-rate code space
+ * `_init_receiver` (class1rx.c) reads.
+ */
+void _init_transmitter(struct fax_class1 *ctx, int rate_code);
+
+/*
  * ------------------------------------------------------------------
  * Two more of the nineteen state handlers, unblocked once `_put_silence`
  * landed. `.text` 0x09e590 (194 bytes) and 0x09d720 (111 bytes).

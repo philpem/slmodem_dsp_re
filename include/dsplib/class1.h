@@ -132,7 +132,27 @@ struct fax_class1 {
 					 * fax_class1_progress RETURNS
 					 * (0x93a43: it loads this and
 					 * leaves it in eax)                */
-	unsigned char pad_1230[8];	/* +0x1230                          */
+	int f1230;			/* +0x1230 written once by
+						 * `_init_transmitter`
+						 * (class1tx.c), keyed on the
+						 * rate_code group: 0x30 for
+						 * V.17 14400/12000, 0x18 for
+						 * V.17 9600/7200 and V.29
+						 * 9600/7200, 0xc for V.27ter
+						 * 4800, 0x6 for V.27ter 2400.
+						 * Nothing reconstructed reads
+						 * it back yet.  Usage inference
+						 * only -- no format string or
+						 * typed reader establishes what
+						 * it means, so it keeps a
+						 * neutral name rather than a
+						 * guessed one                      */
+	int f1234;			/* +0x1234 the same function's other
+						 * half: 0x8000 for every V.17
+						 * rate and for V.29 9600, 0x75a2
+						 * for V.29 7200, 0x4000 for both
+						 * V.27ter rates.  Usage inference
+						 * only, same as `f1230`            */
 	int last_in_byte;		/* +0x1238 the LAST byte of the block
 					 * _handle_data_input was handed,
 					 * kept whether or not the block is
@@ -157,7 +177,19 @@ struct fax_class1 {
 						 * modem is, but whether it is a
 						 * plain boolean or carries other
 						 * values is not established        */
-	unsigned char pad_1248[4];	/* +0x1248                          */
+	int current_mod;		/* +0x1248 the modulation currently
+						 * installed at `modem_vmi`/`vmi_b`
+						 * -- 0 V.27ter, 1 V.29, 2 V.17.
+						 * `_init_receiver`/`_init_
+						 * transmitter` (class1rx.c/
+						 * class1tx.c) compare a freshly
+						 * derived modulation index against
+						 * this field to choose their
+						 * reinit path over a fresh create,
+						 * and write it back on every exit.
+						 * Evidence class 1: both the
+						 * compare and every store are
+						 * `cmpl`/`movl`, forced 32-bit    */
 	int dle_seen;			/* +0x124c a DLE has been seen and
 					 * the next byte is its argument.
 					 * Both _handle_data_input and
@@ -209,7 +241,16 @@ struct fax_class1 {
 					 * LOOK_CARRIER_STATE and on a hard
 					 * timeout; no reconstructed writer sets
 					 * it nonzero yet.  Usage inference only */
-	unsigned char pad_1268[8];	/* +0x1268                          */
+	unsigned char pad_1268[4];	/* +0x1268                          */
+	int tx_rate;			/* +0x126c written once by
+						 * `_init_transmitter`
+						 * (class1tx.c): the same
+						 * negotiated bit rate it just
+						 * derived from `rate_code`
+						 * (0x960/0x12c0/0x1c20/0x2580/
+						 * 0x2ee0/0x3840).  Nothing
+						 * reconstructed reads it back
+						 * yet.  Usage inference only  */
 	int f1270;			/* +0x1270 `_tx_scrambled_ones_state`'s
 					 * own one-shot countdown: decremented
 					 * once per call while positive, and
@@ -396,7 +437,23 @@ struct fax_class1 {
 						 * records.  Reset to 0.  All three
 						 * are read-and-written by that one
 						 * function only, this batch        */
-	unsigned char pad_12d4[4];	/* +0x12d4                          */
+	int f12d4;			/* +0x12d4 read (32-bit `mov`) by
+						 * `_init_receiver`/`_init_
+						 * transmitter` on every exit path
+						 * (both fresh-create and reinit)
+						 * and its LOW 16 BITS stored into a
+						 * per-modulation offset of the
+						 * wrapped modem object reached via
+						 * `vmi_b->link->int_0014`:
+						 * V.27ter -> that object's +0x50,
+						 * then +0x14; V.29 -> +0x4c, then
+						 * +0x1c; V.17 -> +0x5c, then +0x20
+						 * (`dis.py`, 0x944b3-0x944c8,
+						 * 0x946e5-0x94704, 0x94689-0x946b3).
+						 * Nothing establishes what it MEANS
+						 * beyond "propagated to the wrapped
+						 * modem" -- usage inference only,
+						 * kept neutral on purpose          */
 	int f12d8;			/* +0x12d8 fax_class1_info(0);
 					 * create clears it                 */
 	const short *f12dc;		/* +0x12dc create: a .rodata ptr.
