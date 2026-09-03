@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#################################.]  95.8%    704001 bytes, 1818 symbols
-  tested      [##################################]  98.9%    696317 bytes, 1786 of 1818 that can be
+  translated  [#################################.]  96.8%    710735 bytes, 1835 symbols
+  tested      [##################################]  99.9%    710347 bytes, 1829 of 1835 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,36 +17,10 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 42 of ours (16648 bytes).
 
   translated, alias exists, and NOT tested:
-    FAX_process                                    1809 bytes
-    fax_class1_progress                            1145 bytes
-    FAXVMI_create                                   705 bytes
-    _hdlc_emulate_receive_state                     452 bytes
-    fax_class1_delete                               347 bytes
-    FAXVMI_process                                  327 bytes
-    init_vmi_v27tx                                  248 bytes   (file-local)
-    init_vmi_v17tx                                  247 bytes   (file-local)
-    init_vmi_v29tx                                  241 bytes   (file-local)
-    v27tx_create                                    229 bytes
-    v29tx_create                                    196 bytes
-    _t30_silence_before_tx_state                    194 bytes
-    v21tx_create                                    177 bytes
-    FAX_delete                                      172 bytes
     TxNoCarrierV27                                  151 bytes
-    fax_class1_status                               150 bytes
-    _delete_data_rx_modem                           149 bytes
-    _delete_data_tx_modem                           117 bytes
-    _tx_silence_before_scrm_ones                    111 bytes
-    V29RX_control                                   110 bytes
     GenEQTrnSequenceV29                              99 bytes
     SetScramblerV27                                  92 bytes
-    v27tx_process                                    62 bytes
     _handle_status                                   44 bytes
-    _put_silence                                     28 bytes
-    v27tx_control                                    16 bytes
-    v27rx_control                                    16 bytes
-    v21tx_control                                    16 bytes
-    v21rx_control                                    16 bytes
-    v17rx_control                                    16 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
 
@@ -111,7 +85,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                  9204 bytes    24 symbols
+    class1tx.c +94                                  2470 bytes     7 symbols
     class1.c                                        2241 bytes     3 symbols
     class1rx.c                                      1583 bytes     1 symbols
     voice.c#3 +3                                    1272 bytes     2 symbols
