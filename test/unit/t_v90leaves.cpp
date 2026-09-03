@@ -1974,11 +1974,11 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 	diff_eq_int("word_64 (%ld)", (long)o->word_64, 1600, tag);
 	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
 	diff_eq_int("word_8c (%ld)", (long)o->word_8c, -1, tag);
-	diff_eq_int("short_9c (%ld)", (long)o->short_9c, -1, tag);
+	diff_eq_int("initDmin (%ld)", (long)o->initDmin, -1, tag);
 	diff_eq_int("curDmin (%ld)", (long)o->curDmin, 0, tag);
 	diff_eq_int("short_b0 (%ld)", (long)o->short_b0, 1, tag);
-	diff_eq_int("short_b2 (%ld)", (long)o->short_b2, 0, tag);
-	diff_eq_int("short_b4 (%ld)", (long)o->short_b4, 0, tag);
+	diff_eq_int("altRbsDetectedOnQc (%ld)", (long)o->altRbsDetectedOnQc, 0, tag);
+	diff_eq_int("echoRrnState (%ld)", (long)o->echoRrnState, 0, tag);
 	diff_eq_int("nofV90Retrains (%ld)", (long)o->nofV90Retrains, 0, tag);
 	diff_eq_int("word_24 (%ld)", (long)o->word_24, 0, tag);
 	/* A float now, so the bit pattern and not the value: -0.0f is not 0. */

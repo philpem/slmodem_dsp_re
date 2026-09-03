@@ -278,11 +278,11 @@ ce_check_values(V90ConnectionEvaluator *o, V90Parameters *p, long tag)
 	diff_eq_int("word_64 (%ld)", (long)o->word_64, 1600, tag);
 	diff_eq_int("word_68 (%ld)", (long)o->word_68, 1600, tag);
 	diff_eq_int("word_8c (%ld)", (long)o->word_8c, -1, tag);
-	diff_eq_int("short_9c (%ld)", (long)o->short_9c, -1, tag);
+	diff_eq_int("initDmin (%ld)", (long)o->initDmin, -1, tag);
 	diff_eq_int("curDmin (%ld)", (long)o->curDmin, 0, tag);
 	diff_eq_int("short_b0 (%ld)", (long)o->short_b0, 1, tag);
-	diff_eq_int("short_b2 (%ld)", (long)o->short_b2, 0, tag);
-	diff_eq_int("short_b4 (%ld)", (long)o->short_b4, 0, tag);
+	diff_eq_int("altRbsDetectedOnQc (%ld)", (long)o->altRbsDetectedOnQc, 0, tag);
+	diff_eq_int("echoRrnState (%ld)", (long)o->echoRrnState, 0, tag);
 	diff_eq_int("nofV90Retrains (%ld)", (long)o->nofV90Retrains, 0, tag);
 	diff_eq_int("nofRemoteRateReneg (%ld)", (long)o->nofRemoteRateReneg, 0,
 		    tag);
@@ -1236,7 +1236,7 @@ run_ce_phase3(void)
 				  trial & 3);
 			p34_params();
 			SET_CE(word_74, 0u);
-			SET_CE(short_b2, (short)1);
+			SET_CE(altRbsDetectedOnQc, (short)1);
 			SET_CE(word_88, 1u);
 			SET_CE(word_84, 1u);
 			memcpy(before, ce_b, CE_SLOT);
@@ -1266,7 +1266,7 @@ run_ce_phase3(void)
 			p34_params();
 			SET_CE(word_74, 37u);
 			SET_CEF(word_70, avg_bits[(unsigned)trial % NAVG]);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 0u);
 			SET_CE(word_84, 0u);
 			memcpy(before, ce_b, CE_SLOT);
@@ -1314,13 +1314,13 @@ run_ce_phase3(void)
 				SET_CE(word_74, 11u + (unsigned)call);
 				SET_CEF(word_70,
 					avg_bits[(unsigned)call % NAVG]);
-				SET_CE(short_b2, (short)(1 + call));
+				SET_CE(altRbsDetectedOnQc, (short)(1 + call));
 
 				vb = p3_call(tag, 1);
 				diff_eq_int("the arm decided (%ld)",
 					    vb == 4 || vb == 5, 1, tag);
 				diff_eq_int("altRbs was cleared (%ld)",
-					    (long)CEB->short_b2, 0, tag);
+					    (long)CEB->altRbsDetectedOnQc, 0, tag);
 				diff_eq_int("word_1c was cleared (%ld)",
 					    (long)CEB->word_1c, 0, tag);
 				diff_eq_int("word_90 was cleared (%ld)",
@@ -1364,7 +1364,7 @@ run_ce_phase3(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 3u);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 1u);
 			SET_CE(word_84, 1u);
 			SET_CE(word_10, 0u);
@@ -1433,7 +1433,7 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, -4);
 			SET_P(unnamed_45c, -4);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 0u);
 			SET_CE(word_84, 1u);
 			SET_CE(word_10, 0u);
@@ -1495,7 +1495,7 @@ run_ce_phase3(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 0u);
 			SET_CE(word_84, 1u);
 			SET_CE(word_10, 0u);
@@ -1542,7 +1542,7 @@ run_ce_phase3(void)
 			SET_PF(TRN1D_ERROR_FOR_V34_FALLBACK, 0xff7fffffu);
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 1u);
 			SET_CE(word_84, 0u);
 			SET_CE(word_10, 0u);
@@ -1588,7 +1588,7 @@ run_ce_phase3(void)
 			p34_params();
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 0u);
 			SET_CE(word_84, 1u);
 			SET_CE(word_10, 0u);
@@ -1631,7 +1631,7 @@ run_ce_phase3(void)
 			SET_P(MAX_NOF_V90_RETRAINS, -1);
 			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
 			SET_CE(nofV90Retrains, 0u);
-			SET_CE(short_b2, (short)0);
+			SET_CE(altRbsDetectedOnQc, (short)0);
 			SET_CE(word_88, 0u);
 			SET_CE(word_84, 1u);
 			SET_CE(word_10, 0u);
@@ -1697,8 +1697,8 @@ run_ce_phase4(void)
 			p34_params();
 			SET_CE(word_74, 0u);
 			SET_CE(short_b0, (short)1);
-			SET_CE(word_78, 1u);
-			SET_CE(word_7c, 1u);
+			SET_CE(delayedRetrainRequest, 1u);
+			SET_CE(delayedRetrainArmed, 1u);
 			memcpy(before, ce_b, CE_SLOT);
 
 			vb = p4_call(tag, as_float(arg_bits[trial]), 1);
@@ -1739,8 +1739,8 @@ run_ce_phase4(void)
 			SET_P(unnamed_45c, 100);
 			SET_CE(nofV90Retrains, 5u);
 			SET_CE(short_b0, (short)1);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 990u);
 			SET_CE(word_18, 777u);
 			SET_CE(word_64, 12345u);
@@ -1809,8 +1809,8 @@ run_ce_phase4(void)
 			SET_P(unnamed_45c, room ? 100 : 5);
 			SET_CE(nofV90Retrains, 5u);
 			SET_CE(short_b0, (short)(b0 ? 1 : 0));
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -1855,8 +1855,8 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 9u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 8888u);
 			SET_CE(word_64, 3u);		/* would trip at once */
@@ -1935,8 +1935,8 @@ run_ce_phase4(void)
 			SET_P(unnamed_45c, -5);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 7u);
@@ -2051,8 +2051,8 @@ run_ce_phase4(void)
 			SET_P(unnamed_45c, -5);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 7u);
@@ -2091,8 +2091,8 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100);
 			SET_CE(nofV90Retrains, 2u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, w78);
-			SET_CE(word_7c, w7c);
+			SET_CE(delayedRetrainRequest, w78);
+			SET_CE(delayedRetrainArmed, w7c);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2107,9 +2107,9 @@ run_ce_phase4(void)
 				diff_eq_int("the delayed retrain fired (%ld)",
 					    vb, 4, tag);
 				diff_eq_int("+0x78 was cleared (%ld)",
-					    (long)CEB->word_78, 0, tag);
+					    (long)CEB->delayedRetrainRequest, 0, tag);
 				diff_eq_int("+0x7c was cleared (%ld)",
-					    (long)CEB->word_7c, 0, tag);
+					    (long)CEB->delayedRetrainArmed, 0, tag);
 				diff_eq_int("the counter kept counting (%ld)",
 					    (long)CEB->nofV90Retrains, 3, tag);
 				p4_delayed = 1;
@@ -2117,9 +2117,9 @@ run_ce_phase4(void)
 				diff_eq_int("half a request is nothing (%ld)",
 					    vb, 0, tag);
 				diff_eq_int("+0x78 was left alone (%ld)",
-					    (long)CEB->word_78, (long)w78, tag);
+					    (long)CEB->delayedRetrainRequest, (long)w78, tag);
 				diff_eq_int("+0x7c was left alone (%ld)",
-					    (long)CEB->word_7c, (long)w7c, tag);
+					    (long)CEB->delayedRetrainArmed, (long)w7c, tag);
 				p4_delayed_half = 1;
 			}
 			consumed(tag);
@@ -2144,8 +2144,8 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, ~trial);
 			SET_CE(nofV90Retrains, (unsigned int)trial);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 1u);
-			SET_CE(word_7c, 1u);
+			SET_CE(delayedRetrainRequest, 1u);
+			SET_CE(delayedRetrainArmed, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2161,9 +2161,9 @@ run_ce_phase4(void)
 			diff_eq_int("the counter restarted (%ld)",
 				    (long)CEB->nofV90Retrains, 0, tag);
 			diff_eq_int("+0x78 was cleared (%ld)",
-				    (long)CEB->word_78, 0, tag);
+				    (long)CEB->delayedRetrainRequest, 0, tag);
 			diff_eq_int("+0x7c was cleared (%ld)",
-				    (long)CEB->word_7c, 0, tag);
+				    (long)CEB->delayedRetrainArmed, 0, tag);
 			if (lvl > 1)
 				diff_eq_int("two lines came out (%ld)",
 					    (int)dsplib_debug_capture_lines(1),
@@ -2201,8 +2201,8 @@ run_ce_phase4(void)
 			SET_P(unnamed_45c, -4);
 			SET_CE(nofV90Retrains, 2u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 1u);
-			SET_CE(word_7c, 1u);
+			SET_CE(delayedRetrainRequest, 1u);
+			SET_CE(delayedRetrainArmed, 1u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2235,8 +2235,8 @@ run_ce_phase4(void)
 				  trial & 3);
 			p34_params();
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2270,8 +2270,8 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2307,8 +2307,8 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_V90_RETRAINS, 100000);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2348,8 +2348,8 @@ run_ce_phase4(void)
 			SET_P(unnamed_45c, -1);
 			SET_CE(nofV90Retrains, 7u);
 			SET_CE(short_b0, (short)1);
-			SET_CE(word_78, 0u);
-			SET_CE(word_7c, 0u);
+			SET_CE(delayedRetrainRequest, 0u);
+			SET_CE(delayedRetrainArmed, 0u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2380,8 +2380,8 @@ run_ce_phase4(void)
 			SET_P(MAX_NOF_REMOTE_RETRAINS, 0);
 			SET_CE(nofV90Retrains, 0u);
 			SET_CE(short_b0, (short)0);
-			SET_CE(word_78, 3u);
-			SET_CE(word_7c, 4u);
+			SET_CE(delayedRetrainRequest, 3u);
+			SET_CE(delayedRetrainArmed, 4u);
 			SET_CE(word_10, 0u);
 			SET_CE(word_18, 0u);
 			SET_CE(word_64, 100000u);
@@ -2589,7 +2589,7 @@ ec_base(int trial)
 	SET_P(DEBUG_CONNECTION_EVALUATOR_PERIOD, 1);
 
 	SET_CE(word_8c, -1);
-	SET_CE(short_9c, -1);
+	SET_CE(initDmin, -1);
 	SET_CE(curDmin, 0);
 	SET_CE(nofV90Retrains, 0);
 	SET_CE(nofRemoteRetrains, 0);
@@ -2604,7 +2604,7 @@ ec_base(int trial)
 	SET_CE(word_90, 0);
 	SET_CE(word_94, 0);
 	SET_CE(word_98, 0);
-	SET_CE(short_b4, 0);
+	SET_CE(echoRrnState, 0);
 
 	SET_CE(enableRrnDown, 0);
 	SET_CE(enableRrnUp, 0);
@@ -2670,7 +2670,7 @@ ec_scenarios(int lvl)
 	SET_CE(curDmin, 77);
 	v = ec_call(b + 1);
 	ec_is("the empty call answers 0 (%ld)", v, 0, b + 1);
-	ec_is("and latched initDmin anyway (%ld)", (long)CEB->short_9c, 77,
+	ec_is("and latched initDmin anyway (%ld)", (long)CEB->initDmin, 77,
 	      b + 1);
 	ec_is("and printed nothing (%ld)",
 	      (long)dsplib_debug_capture_lines(1), 0, b + 1);
@@ -2679,9 +2679,9 @@ ec_scenarios(int lvl)
 	/* an empty call with initDmin already set leaves it alone */
 	ec_base(2);
 	SET_CE(curDmin, 77);
-	SET_CE(short_9c, 12);
+	SET_CE(initDmin, 12);
 	v = ec_call(b + 2);
-	ec_is("initDmin latches only once (%ld)", (long)CEB->short_9c, 12,
+	ec_is("initDmin latches only once (%ld)", (long)CEB->initDmin, 12,
 	      b + 2);
 
 	/* ------------------------------------------- a call with nothing on */
@@ -2748,7 +2748,7 @@ ec_scenarios(int lvl)
 
 			ec_base(6 + i);
 			SET_CE(word_8c, code[i]);
-			SET_CE(short_9c, 10);
+			SET_CE(initDmin, 10);
 			SET_CE(curDmin, 5);
 			v = ec_step(t, 100, EC_5);
 			ec_is("the external demand decided (%ld)", v, want[i],
@@ -2771,7 +2771,7 @@ ec_scenarios(int lvl)
 		 */
 		ec_base(20);
 		SET_CE(word_8c, 5);
-		SET_CE(short_9c, 10);
+		SET_CE(initDmin, 10);
 		SET_CE(curDmin, 5);
 		ec_step(b + 80, 100, EC_5);
 		ec_is("+0x90 is (word_8c > 3) (%ld)", (long)CEB->word_90, 1,
@@ -2809,7 +2809,7 @@ ec_scenarios(int lvl)
 	ec_base(24);
 	SET_CE(word_8c, 7);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	SET_CE(debugFallBack, 1);
 	SET_CE(debugPeriod, 1);
@@ -2843,7 +2843,7 @@ ec_scenarios(int lvl)
 	ec_base(72);
 	SET_CE(word_8c, 0);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	SET_CE(word_94, 1);
 	v = ec_step(b + 97, 100, EC_5);
@@ -2854,7 +2854,7 @@ ec_scenarios(int lvl)
 	ec_base(25);
 	SET_CE(word_8c, 0);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	SET_CE(word_94, 1);
 	v = ec_step(b + 92, 100, EC_5);
@@ -2866,19 +2866,19 @@ ec_scenarios(int lvl)
 	ec_base(26);
 	SET_CE(word_8c, 0);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	v = ec_step(b + 93, 100, EC_5);
 	ec_is("the doubled distance retrains (%ld)", v, 4, b + 93);
 	ec_is("and counted one (%ld)", (long)CEB->nofV90Retrains, 1, b + 93);
-	ec_is("and re-armed initDmin (%ld)", (long)CEB->short_9c, -1, b + 93);
+	ec_is("and re-armed initDmin (%ld)", (long)CEB->initDmin, -1, b + 93);
 	ec_ext_retrain = 1;
 
 	/* and once too often, a fall-back */
 	ec_base(27);
 	SET_CE(word_8c, 0);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	SET_CE(nofV90Retrains, 4);
 	v = ec_step(b + 94, 100, EC_5);
@@ -2891,7 +2891,7 @@ ec_scenarios(int lvl)
 	ec_base(28);
 	SET_CE(word_8c, 0);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	SET_CE(nofV90Retrains, 4);
 	SET_P(MAX_NOF_V90_RETRAINS, -1);
@@ -2972,7 +2972,7 @@ ec_scenarios(int lvl)
 	/* ----------------------------------------- 4: the plain rate down */
 	ec_base(34);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	for (i = 0; i < 4; i++) {
 		long t = b + 120 + i;
@@ -3003,19 +3003,19 @@ ec_scenarios(int lvl)
 	/* the rate down turning into a retrain, and then a fall-back */
 	ec_base(36);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	SET_CE(word_14, 500);
 	SET_CE(word_1c, 500);
 	v = ec_step(b + 131, 200, EC_18);
 	ec_is("the rate down retrains when the distance doubled (%ld)", v, 4,
 	      b + 131);
-	ec_is("and re-armed initDmin (%ld)", (long)CEB->short_9c, -1, b + 131);
+	ec_is("and re-armed initDmin (%ld)", (long)CEB->initDmin, -1, b + 131);
 	ec_case2_retrain = 1;
 
 	ec_base(37);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	SET_CE(word_14, 500);
 	SET_CE(word_1c, 500);
@@ -3027,7 +3027,7 @@ ec_scenarios(int lvl)
 	/* the rate-down arm's own copy of the unsigned limit */
 	ec_base(70);
 	SET_CE(enableRrnDown, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 25);
 	SET_CE(word_14, 500);
 	SET_CE(word_1c, 500);
@@ -3060,7 +3060,7 @@ ec_scenarios(int lvl)
 	ec_base(40);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
 	SET_CE(enableRrnDown, 0);	/* the echo arm ignores it */
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	for (i = 0; i < 7; i++) {
 		long t = b + 140 + i;
@@ -3073,7 +3073,7 @@ ec_scenarios(int lvl)
 		} else if (i == 2) {
 			ec_is("the scaled rate down fired (%ld)", v, 2, t);
 			ec_is("and advanced the state (%ld)",
-			      (long)CEB->short_b4, 1, t);
+			      (long)CEB->echoRrnState, 1, t);
 			ec_bits("and set the keep-rate energy to 0.65 (%ld)",
 				&PA->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE,
 				0x3f266666u, t);
@@ -3085,7 +3085,7 @@ ec_scenarios(int lvl)
 			ec_echo_139 = 1;
 		} else if (i == 4) {
 			ec_is("the dwell ran out and the state went to 3 "
-			      "(%ld)", (long)CEB->short_b4, 3, t);
+			      "(%ld)", (long)CEB->echoRrnState, 3, t);
 			ec_bits("and the keep-rate energy went to 2.0 (%ld)",
 				&PA->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE,
 				0x40000000u, t);
@@ -3107,7 +3107,7 @@ ec_scenarios(int lvl)
 	ec_step(b + 153, 50, EC_18);
 	ec_bits("the 2.3 guard kept state 0 (%ld)", &CEB->word_b8,
 		0x3fc28f5cu, b + 153);
-	ec_is("and the state did not go terminal (%ld)", (long)CEB->short_b4,
+	ec_is("and the state did not go terminal (%ld)", (long)CEB->echoRrnState,
 	      0, b + 153);
 	ec_echo_23 = 1;
 
@@ -3119,23 +3119,23 @@ ec_scenarios(int lvl)
 	ec_base(65);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
 	SET_CE(word_1c, 400);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	v = ec_step(b + 154, 210, EC_18);
 	ec_is("a third of the duration fired it (%ld)", v, 2, b + 154);
-	ec_is("and advanced the state (%ld)", (long)CEB->short_b4, 1, b + 154);
+	ec_is("and advanced the state (%ld)", (long)CEB->echoRrnState, 1, b + 154);
 	ec_echo_thirds_only = 1;
 
 	/* the second fire condition: a fifth of the duration, in state 1 */
 	ec_base(41);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
-	SET_CE(short_b4, 1);
+	SET_CE(echoRrnState, 1);
 	SET_CE(word_1c, 250);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	v = ec_step(b + 150, 130, EC_18);
 	ec_is("the fifths condition fired (%ld)", v, 2, b + 150);
-	ec_is("and advanced the state to 2 (%ld)", (long)CEB->short_b4, 2,
+	ec_is("and advanced the state to 2 (%ld)", (long)CEB->echoRrnState, 2,
 	      b + 150);
 	ec_bits("and set the keep-rate energy to 1.8 (%ld)",
 		&PA->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE, 0x3fe66666u,
@@ -3151,14 +3151,14 @@ ec_scenarios(int lvl)
 	 */
 	ec_base(42);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
-	SET_CE(short_b4, 1);
+	SET_CE(echoRrnState, 1);
 	SET_CE(minDurationInDataBeforeRrnDown, 16777217);
 	SET_CE(word_1c, 16777116);
 	SET_CE(word_14, 0);
 	ec_step(b + 151, 100, EC_18);
 	ec_bits("+0x5c is not rounded through float (%ld)", &CEB->word_b8,
 		0x3fb1eb85u, b + 151);
-	ec_is("and the state did not go terminal (%ld)", (long)CEB->short_b4,
+	ec_is("and the state did not go terminal (%ld)", (long)CEB->echoRrnState,
 	      1, b + 151);
 	ec_mindur_exact = 1;
 
@@ -3169,20 +3169,20 @@ ec_scenarios(int lvl)
 	 */
 	ec_base(43);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
-	SET_CE(short_b4, 2);
+	SET_CE(echoRrnState, 2);
 	SET_CEF(word_b8, 0x40133333u);		/* 2.3f */
 	ec_step(b + 152, 100, EC_10);
-	ec_is("the terminal arm ran (%ld)", (long)CEB->short_b4, 3, b + 152);
+	ec_is("the terminal arm ran (%ld)", (long)CEB->echoRrnState, 3, b + 152);
 	if (lvl > 1)
 		ec_prod_exact = 1;
 
 	/* and the same diagnostic on a negative product, for the `abs` */
 	ec_base(67);
 	SET_P(HIGH_LEVEL_TX_ACTIVE, 1);
-	SET_CE(short_b4, 2);
+	SET_CE(echoRrnState, 2);
 	ec_step(b + 155, 100, EC_M125);
 	ec_is("the terminal arm ran on a negative average (%ld)",
-	      (long)CEB->short_b4, 3, b + 155);
+	      (long)CEB->echoRrnState, 3, b + 155);
 
 	/*
 	 * THE COMPARISON IS AGAINST THE SCALED AVERAGE.  12.0f is under
@@ -3230,7 +3230,7 @@ ec_scenarios(int lvl)
 			ec_is("and +0x18 restarted (%ld)", (long)CEB->word_18,
 			      0, t);
 			ec_is("and initDmin was re-armed (%ld)",
-			      (long)CEB->short_9c, -1, t);
+			      (long)CEB->initDmin, -1, t);
 			ec_retrain = 1;
 		}
 	}
@@ -3309,7 +3309,7 @@ ec_scenarios(int lvl)
 	ec_base(50);
 	SET_CE(enableRrnDown, 1);
 	SET_CE(word_94, 1);
-	SET_CE(short_9c, 10);
+	SET_CE(initDmin, 10);
 	SET_CE(curDmin, 5);
 	SET_CE(word_14, 500);
 	SET_CE(word_1c, 500);
@@ -3460,7 +3460,7 @@ ec_sweep(int lvl)
 		SET_CE(nofRemoteRetrains, cfg % 3);
 		SET_CE(nofRemoteRateReneg, cfg % 4);
 		SET_CE(nofRemoteRateRenegBeforeRetrain, 6);
-		SET_CE(short_9c, 8 + cfg);
+		SET_CE(initDmin, 8 + cfg);
 		SET_CE(curDmin, 3 * cfg);
 		SET_CE(debugAlternateDebug, (cfg == 9) ? 1 : 0);
 		SET_CE(debugRateDown, (cfg == 10) ? 1 : 0);

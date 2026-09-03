@@ -84,8 +84,8 @@ CE_OFF(word_68,				0x68, word68);
 CE_OFF(debugPeriod,			0x6c, dbgperiod);
 CE_OFF(word_70,				0x70, word70);
 CE_OFF(word_74,				0x74, word74);
-CE_OFF(word_78,				0x78, word78);
-CE_OFF(word_7c,				0x7c, word7c);
+CE_OFF(delayedRetrainRequest,				0x78, word78);
+CE_OFF(delayedRetrainArmed,				0x7c, word7c);
 CE_OFF(word_80,				0x80, word80);
 CE_OFF(word_84,				0x84, word84);
 CE_OFF(word_88,				0x88, word88);
@@ -97,15 +97,15 @@ CE_OFF(word_90,				0x90, word90);
  * each.  With them the class has no unmodelled region left.
  */
 CE_OFF(word_98,				0x98, word98);
-CE_OFF(short_9c,			0x9c, short9c);
+CE_OFF(initDmin,			0x9c, short9c);
 CE_OFF(curDmin,				0x9e, curdmin);
 CE_OFF(threshUp,			0xa0, threshup);
 CE_OFF(threshDown,			0xa4, threshdown);
 CE_OFF(threshRetrain,			0xa8, threshretr);
 CE_OFF(phase4ErrorForV34Fallback,	0xac, p4err);
 CE_OFF(short_b0,			0xb0, shortb0);
-CE_OFF(short_b2,			0xb2, shortb2);
-CE_OFF(short_b4,			0xb4, shortb4);
+CE_OFF(altRbsDetectedOnQc,			0xb2, shortb2);
+CE_OFF(echoRrnState,			0xb4, shortb4);
 CE_OFF(word_b8,				0xb8, wordb8);
 typedef char v90ce_size[(sizeof(V90ConnectionEvaluator) == 0xbc) ? 1 : -1];
 #endif
@@ -161,13 +161,13 @@ V90ConnectionEvaluator::reset()
 	edprintf(" *********** Echo Rrn Mechanism *********** \n");
 
 	word_10 = 0;
-	short_b4 = 0;
+	echoRrnState = 0;
 	short_b0 = 1;
 	word_80 = 0;
 	phase4ErrorForV34Fallback = params->PHASE4_ERROR_FOR_V34_FALLBACK;
-	short_b2 = 0;
+	altRbsDetectedOnQc = 0;
 	word_84 = 0;
-	short_9c = -1;
+	initDmin = -1;
 	word_90 = 0;
 	word_8c = -1;
 
@@ -181,8 +181,8 @@ V90ConnectionEvaluator::reset()
 	word_20 = 0;
 
 	word_94 = 0;
-	word_78 = 0;
-	word_7c = 0;
+	delayedRetrainRequest = 0;
+	delayedRetrainArmed = 0;
 	word_74 = 0;
 
 	curDmin = 0;
@@ -604,8 +604,8 @@ V90ConnectionEvaluator::evaluatePhase3()
 	if (nofSymbols == 0)
 		return V90CE_VERDICT_NONE;
 
-	if (short_b2 != 0) {
-		short_b2 = 0;
+	if (altRbsDetectedOnQc != 0) {
+		altRbsDetectedOnQc = 0;
 		nofV90Retrains++;
 		if (nofV90Retrains
 		    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
@@ -920,11 +920,11 @@ V90ConnectionEvaluator::evaluatePhase4(float meanErrBefToAftUpdateRatio)
 			word_18 = 0;
 		}
 
-		if (word_78 != 0 && word_7c != 0) {
+		if (delayedRetrainRequest != 0 && delayedRetrainArmed != 0) {
 			edprintf("V90ConnectionEvaluator (phase4): Initiating "
 				 "retrain (delayed)...\r\n");
-			word_78 = 0;
-			word_7c = 0;
+			delayedRetrainRequest = 0;
+			delayedRetrainArmed = 0;
 			nofV90Retrains++;
 			if (nofV90Retrains
 			    > (unsigned int)params->MAX_NOF_V90_RETRAINS) {
@@ -1153,18 +1153,18 @@ ce_echo_rate_down(V90ConnectionEvaluator *ce, unsigned int nofSymbols,
 	if (ce->word_70 * scale > ce->threshDown) {
 		ce->word_14 += nofSymbols;
 		if ((ce->word_14 >= dur / 3 && ce->word_1c >= minDur * 1.3)
-		    || (ce->word_14 >= dur / 5 && ce->short_b4 == 1
+		    || (ce->word_14 >= dur / 5 && ce->echoRrnState == 1
 			&& ce->word_1c >= minDur * 0.6)) {
-			ce->short_b4++;
+			ce->echoRrnState++;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90-mod3 CHANGE echoRrnState = %d",
-				    ce->short_b4);
+				    ce->echoRrnState);
 			ce_echo_rrn_debug(ce);
 			ce->word_98 = 0;
 			ce->word_90 = ce->params->RRN_SILENCE_REQUESTED;
 			ce->params->RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE =
-			    (ce->short_b4 == 1) ? 0.65f : 1.8f;
+			    (ce->echoRrnState == 1) ? 0.65f : 1.8f;
 			ce->word_14 = 0;
 			ce->word_1c = 0;
 			demanded = 1;
@@ -1187,8 +1187,8 @@ V90ConnectionEvaluator::evaluateConnection()
 	 * The first non-empty call after a retrain latches the distance the
 	 * connection settled at; 0x3e6dd, and both retrain arms put it back.
 	 */
-	if (short_9c == -1)
-		short_9c = curDmin;
+	if (initDmin == -1)
+		initDmin = curDmin;
 
 	nofSymbols = word_74;
 	if (nofSymbols == 0)
@@ -1281,9 +1281,9 @@ V90ConnectionEvaluator::evaluateConnection()
 
 			edprintf("V90ConnectionEvaluator: before EC RRN: "
 				 "curDmin = %d, initDmin = %d\r\n",
-				 curDmin, short_9c);
+				 curDmin, initDmin);
 
-			if (curDmin >= 2 * short_9c) {
+			if (curDmin >= 2 * initDmin) {
 				nofV90Retrains++;
 				edprintf("V90ConnectionEvaluator: error "
 					 "correction mechanism demanded rate "
@@ -1297,7 +1297,7 @@ V90ConnectionEvaluator::evaluateConnection()
 				word_18 = 0;
 				verdict = V90CE_VERDICT_RETRAIN;
 				word_1c = 0;
-				short_9c = -1;
+				initDmin = -1;
 				if (nofV90Retrains
 				    > (unsigned int)
 				      params->MAX_NOF_V90_RETRAINS) {
@@ -1396,20 +1396,20 @@ V90ConnectionEvaluator::evaluateConnection()
 		float scale = 0.0f;
 		int scaled = 1;
 
-		if (word_1c < (unsigned int)(minDur * 2.3f) && short_b4 == 0)
+		if (word_1c < (unsigned int)(minDur * 2.3f) && echoRrnState == 0)
 			scale = 1.52f;
-		else if (word_1c < minDur && short_b4 == 1)
+		else if (word_1c < minDur && echoRrnState == 1)
 			scale = 1.39f;
 		else {
 			scaled = 0;
-			if (short_b4 <= 2) {
+			if (echoRrnState <= 2) {
 				if (DSPLIB_DEBUG_ON())
 					dsplibs_debug_printf(
 					    "V90-mod3  Echo_Rrn_State = %d ",
-					    short_b4);
+					    echoRrnState);
 				ce_echo_rrn_debug(this);
 				word_14 = 0;
-				short_b4 = 3;
+				echoRrnState = 3;
 				params->
 				    RRN_SILENCE_MIN_ECHO_ENERGY_FOR_KEEP_RATE
 				    = 2.0f;
@@ -1491,8 +1491,8 @@ V90ConnectionEvaluator::evaluateConnection()
 
 	case V90CE_VERDICT_RRN_DOWN:
 		edprintf("V90ConnectionEvaluator: on Rate Down: curDmin = %d, "
-			 "initDmin = %d\r\n", curDmin, short_9c);
-		if (curDmin >= 2 * short_9c) {
+			 "initDmin = %d\r\n", curDmin, initDmin);
+		if (curDmin >= 2 * initDmin) {
 			nofV90Retrains++;
 			edprintf("V90ConnectionEvaluator: initiating retrain, "
 				 "due to %d rate renegotiations down, "
@@ -1504,7 +1504,7 @@ V90ConnectionEvaluator::evaluateConnection()
 			edprintf("V90ConnectionEvaluator: retrain no %d\r\n",
 				 nofV90Retrains);
 			word_18 = 0;
-			short_9c = -1;
+			initDmin = -1;
 			verdict = V90CE_VERDICT_RETRAIN;
 			if (nofV90Retrains
 			    > (unsigned int)
@@ -1526,7 +1526,7 @@ V90ConnectionEvaluator::evaluateConnection()
 		break;
 
 	case V90CE_VERDICT_RETRAIN:
-		short_9c = -1;
+		initDmin = -1;
 		word_90 = 0;
 		break;
 	}

@@ -7,10 +7,14 @@
  * only things in the tree that touched it were `V90Demodulator::enterPhase3`
  * (four words it clears) and `VPcmFloModem::getV90CpBits` (a copy from +0x78
  * to +0x7c).  Task #88 wrote the three members the class actually owns, so it
- * has its own header now.  **No field moved and no field was renamed** --
- * `word_70`, `word_74`, `word_78`, `word_7c`, `word_84` and `word_88` are the
- * names those two earlier batches gave them, and the offset assertions moved
- * from `V90Demodulator.cpp` to `V90ConnectionEvaluator.cpp` unchanged.
+ * has its own header now.  **No field moved when it did** -- `word_70`,
+ * `word_74`, `word_78`, `word_7c`, `word_84` and `word_88` were the names
+ * those two earlier batches gave them, and the offset assertions moved from
+ * `V90Demodulator.cpp` to `V90ConnectionEvaluator.cpp` unchanged.  Two of the
+ * six are renamed now: `word_78` and `word_7c` are `delayedRetrainRequest`
+ * and `delayedRetrainArmed` below, in the naming pass that also settled
+ * `initDmin`, `altRbsDetectedOnQc` and `echoRrnState` -- see each field's own
+ * comment for the evidence, and finding F9480 for the batch.
  *
  * NOT POLYMORPHIC.  `nm` gives `D1` at 0x3e390 and `D2` at 0x3e380 and no
  * `D0`; GCC emits a deleting destructor only for a virtual class, so offset 0
@@ -381,17 +385,25 @@ public:
 	 * with `evaluatePhase4`'s "Initiating retrain (delayed)..." reached
 	 * from the same slot.
 	 *
-	 * THE NAMES ARE STILL NOT CHANGED, and the reason is coordination
-	 * rather than evidence.  `word_78` is spelled 45 times across nine
-	 * files, `V90Equalizer` has a DIFFERENT member of the same name at
-	 * its own +0x78, and `VPcmFloModem.cpp` and two mutation sets refer
-	 * to this one by its offset name and belong to other work.  A rename
-	 * here would be a nine-file edit whose only checkable part is that
-	 * nothing broke.  The evidence is recorded so that the pass which
-	 * owns those files can make it in one move; finding F7485.
+	 * THE NAMES ARE NOW CHANGED; finding F7485 recorded the evidence and
+	 * F9480 is the batch that carried it through.  The old name,
+	 * `word_78`, was spelled 45 times across nine files and
+	 * `V90Equalizer` has a DIFFERENT member of the same name at its own
+	 * +0x78 -- so this rename touched every referrer of THIS class's
+	 * +0x78 (`VPcmFloModem.cpp`, this file's own offset asserts, and the
+	 * unit tests) and left `V90Equalizer::word_78` alone, being a
+	 * different field of a different class at a coincident offset.
+	 *
+	 * +0x7c HAS NO STRING OF ITS OWN.  `delayedRetrainArmed` is usage
+	 * inference, not rule 1: it is the copy `getV90CpBits` makes of
+	 * +0x78, and `evaluatePhase4` fires its delayed-retrain arm only once
+	 * BOTH are non-zero -- so the request is not honoured until the copy
+	 * "arms" it, which is the object's own reading and not a name it
+	 * states.  Weaker evidence than +0x78's, and said so here rather than
+	 * left silent.
 	 */
-	unsigned int word_78;		/* +0x78 copied to word_7c           */
-	unsigned int word_7c;		/* +0x7c                             */
+	unsigned int delayedRetrainRequest;	/* +0x78 copied to delayedRetrainArmed */
+	unsigned int delayedRetrainArmed;	/* +0x7c                              */
 	unsigned int word_80;		/* +0x80 zeroed by reset             */
 	unsigned int word_84;		/* +0x84 cleared by enterPhase3      */
 	unsigned int word_88;		/* +0x88 cleared by enterPhase3;
@@ -451,12 +463,13 @@ public:
 	 * initDmin` -- the distance having doubled since the connection
 	 * settled is what turns a rate-down demand into a retrain.
 	 *
-	 * THE FIELD KEEPS ITS OFFSET NAME.  `test/unit/t_v90leaves.cpp` refers
-	 * to it as `short_9c` and belongs to other work; renaming here would
-	 * edit a file this batch does not own, which is the reason +0xac and
-	 * +0xb2 kept theirs.
+	 * THE FIELD IS NOW NAMED `initDmin`.  It used to keep its offset name
+	 * solely because `test/unit/t_v90leaves.cpp` and `t_v90conneval.cpp`
+	 * referred to it by that name and belonged to other work; finding
+	 * F9480's batch carried the rename through both, `altRbsDetectedOnQc`
+	 * and `echoRrnState` below the same way.
 	 */
-	short short_9c;
+	short initDmin;
 
 	/*
 	 * +0x9e  THE CURRENT MINIMUM DISTANCE, and the name is the object's
@@ -500,10 +513,11 @@ public:
 	 * derivation `curDmin` above rests on -- a store and a string naming
 	 * the value stored.
 	 *
-	 * THE FIELD KEEPS THE NAME THE LIFECYCLE BATCH GAVE IT.  That name is
-	 * a derivation too (it is the parameter `reset` copies in), and
-	 * `test/unit/t_v90leaves.cpp` refers to the field by it and belongs to
-	 * other work; renaming here would edit a file this batch does not own.
+	 * THE FIELD KEEPS THE NAME THE LIFECYCLE BATCH GAVE IT, `phase4ErrorForV34Fallback`.
+	 * That name is a derivation too (it is the parameter `reset` copies
+	 * in), and it is unrelated to `initDmin`, `altRbsDetectedOnQc` and
+	 * `echoRrnState` being offset-named below until F9480 -- this field
+	 * was never offset-named, so there was nothing to carry through here.
 	 * The two names are consistent -- `reset` initialises the threshold
 	 * from `PHASE4_ERROR_FOR_V34_FALLBACK` and `evaluatePhase4` replaces it
 	 * with `params->unnamed_434` (250.0f by default, finding F878) the first
@@ -534,10 +548,14 @@ public:
 	 * it: `evaluatePhase3`'s first arm runs when +0xb2 is non-zero, clears
 	 * it, and prints "V90ConnectionEvaluator (phase3): altRbsDetectedOnQc
 	 * => initiating Retrain" -- the flag is the detection and the arm is
-	 * what services it.  THE FIELD KEEPS ITS OFFSET NAME for the same
-	 * reason +0xac does: `t_v90leaves.cpp` uses `short_b2` and is not this
-	 * batch's file.  Nothing reconstructed so far SETS it, so whatever
-	 * detects alternate RBS on the QC path is somewhere still unread.
+	 * what services it.  THE FIELD IS NOW NAMED for it, `t_v90leaves.cpp`
+	 * and `t_v90conneval.cpp` carried through in finding F9480's batch.
+	 *
+	 * THE CLAIM THAT NOTHING SETS IT IS RETRACTED; it was already stale
+	 * when this paragraph was last true.  `V90Demodulator::progress`'s
+	 * phase-3 leg does, at quick connect, out of
+	 * `autoDigitalImpDetector->isThereAnyAltRbsPhase()` -- see that
+	 * function's own comment for the site.
 	 *
 	 * +0xb4 IS `echoRrnState`, and that is the object's own word for it
 	 * too.  `evaluateConnection` increments it at 0x3ea9c and then prints
@@ -560,12 +578,12 @@ public:
 	 * is dropped altogether.  SIXTEEN BITS AND SIGNED: `cmpw $0x1`,
 	 * `cmpw $0x2; jg` and `movswl %bx,%esi` before the diagnostic.
 	 *
-	 * THE FIELD KEEPS ITS OFFSET NAME, for the third time and the same
-	 * reason: `t_v90leaves.cpp` says `short_b4`.
+	 * THE FIELD IS NOW NAMED, for the third time in this batch:
+	 * `t_v90leaves.cpp` and `t_v90conneval.cpp` carried through to match.
 	 */
 	short short_b0;
-	short short_b2;
-	short short_b4;
+	short altRbsDetectedOnQc;
+	short echoRrnState;
 
 	unsigned char pad_b6[2];	/* +0xb6 .. +0xb7                    */
 

@@ -64,8 +64,8 @@
  },
  {
   "label": "Cp: the +0x20c word is copied the other way",
-  "find": "\tseen->word_7c = seen->word_78;",
-  "replace": "\tseen->word_78 = seen->word_7c;"
+  "find": "\tseen->delayedRetrainArmed = seen->delayedRetrainRequest;",
+  "replace": "\tseen->delayedRetrainRequest = seen->delayedRetrainArmed;"
  },
  {
   "label": "Cp: +0x20c is reached from the modem rather than the demodulator",

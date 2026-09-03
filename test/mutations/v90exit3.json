@@ -255,18 +255,18 @@
  },
  {
   "label": "the delayed retrain request is cleared rather than raised",
-  "find": "\t\tconnectionEvaluator->word_78 = 1;",
-  "replace": "\t\tconnectionEvaluator->word_78 = 0;"
+  "find": "\t\tconnectionEvaluator->delayedRetrainRequest = 1;",
+  "replace": "\t\tconnectionEvaluator->delayedRetrainRequest = 0;"
  },
  {
   "label": "the delayed retrain request is never raised",
-  "find": "\t\tconnectionEvaluator->word_78 = 1;\n",
+  "find": "\t\tconnectionEvaluator->delayedRetrainRequest = 1;\n",
   "replace": ""
  },
  {
   "label": "the delayed retrain request lands in the acknowledgement slot",
-  "find": "\t\tconnectionEvaluator->word_78 = 1;",
-  "replace": "\t\tconnectionEvaluator->word_7c = 1;"
+  "find": "\t\tconnectionEvaluator->delayedRetrainRequest = 1;",
+  "replace": "\t\tconnectionEvaluator->delayedRetrainArmed = 1;"
  },
  {
   "label": "the delayed retrain line is printed unconditionally",
