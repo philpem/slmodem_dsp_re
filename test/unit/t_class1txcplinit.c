@@ -1,22 +1,28 @@
 /*
- * t_class1txcplinit.c -- differential test of the four `class1tx.c` leaves
- * that were blocked on `FAXVMI_control`: `_rx_look_carrier_init`,
- * `_tx_scrambled_ones_init`, `cHDLCtx_preamble_state_init` and
- * `_cHDLCrx_init_from_idle`.  See class1tx.c and docs/findings.md for the
- * per-function derivation.
+ * t_class1txcplinit.c -- differential test of the `class1tx.c` leaves that
+ * were blocked on `FAXVMI_control`: `_rx_look_carrier_init`,
+ * `_tx_scrambled_ones_init`, `cHDLCtx_preamble_state_init`,
+ * `_cHDLCrx_init_from_idle` and `cHDLCtx_off_init`.  See class1tx.c and
+ * docs/findings.md for the per-function derivation.
  *
  * `_rx_look_carrier_init`/`_tx_scrambled_ones_init` drive the already-tested
  * `_init_receiver`/`_init_transmitter` (t_class1initrx.c/t_class1inittx.c),
  * so their own cases build a fresh data modem the same way those files do.
  *
- * `cHDLCtx_preamble_state_init`/`_cHDLCrx_init_from_idle` drive
- * `FAXVMI_control` on `vmi_c`/`vmi_a`, the V.21 TX/RX control-channel
+ * `cHDLCtx_preamble_state_init`/`_cHDLCrx_init_from_idle`/`cHDLCtx_off_init`
+ * drive `FAXVMI_control` on `vmi_c`/`vmi_a`, the V.21 TX/RX control-channel
  * handles -- built here the same way `fax_class1_create` builds them (a
  * `faxvmi_cfg` wrapping a `V21TX_CFG`/`V21RX_CFG`-based modem config, slot
  * `VMI_SLOT_V21TX`/`VMI_SLOT_V21RX`, through `FAXVMI_create`), since neither
  * this file nor `fax_class1_create` is a precondition for the other -- V.21's
  * own constructors/controllers are already fully reconstructed and tested
  * (t_v21create.c, t_v21fax.c).
+ *
+ * `cHDLCtx_off_init` is different from the other four in one way worth
+ * flagging: no entry point in the object reaches it (F8320's no-entry-point
+ * bucket), so there is no dispatcher or caller to drive it through -- its
+ * case calls `ref_cHDLCtx_off_init`/`cHDLCtx_off_init` directly, the same way
+ * every no-entry-point leaf in this tree is tested.
  */
 
 #include <stddef.h>
@@ -37,6 +43,7 @@ extern int ref__rx_look_carrier_init(struct fax_class1 *ctx, int rate_code);
 extern int ref__tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code);
 extern int ref_cHDLCtx_preamble_state_init(struct fax_class1 *ctx);
 extern int ref__cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2);
+extern int ref_cHDLCtx_off_init(struct fax_class1 *ctx);
 extern unsigned int ref_dsplibs_debug_level;
 
 /* Build a real V.21 TX handle, the same shape fax_class1_create uses. */
@@ -231,6 +238,43 @@ run_hdlcrx_init(int arg2, long tag)
 	return diff_end();
 }
 
+/*
+ * cHDLCtx_off_init: no entry point in the object reaches it (F8320's
+ * no-entry-point bucket -- see class1tx.h), so unlike every other case in
+ * this file it is called directly through its `ref_` alias rather than
+ * through any dispatcher or caller. Same `vmi_a` build as
+ * `run_hdlcrx_init` above, since it drives the same `ctx->vmi_a` handle.
+ */
+static int
+run_cHDLCtx_off_init(long tag)
+{
+	struct fax_class1 ctx_a, ctx_b;
+	int ra, rb;
+
+	memset(&ctx_a, 0, sizeof(ctx_a));
+	memset(&ctx_b, 0, sizeof(ctx_b));
+	ctx_a.vmi_a = make_vmi_a();
+	ctx_b.vmi_a = make_vmi_a();
+	ctx_a.state = ctx_b.state = CLASS1_IDLE_STATE;
+	ctx_a.countdown = ctx_b.countdown = 55;
+	ctx_a.delayed_status_countdown = ctx_b.delayed_status_countdown = 66;
+
+	diff_begin("cHDLCtx_off_init");
+
+	ra = ref_cHDLCtx_off_init(&ctx_a);
+	rb = cHDLCtx_off_init(&ctx_b);
+	diff_eq_int("cHDLCtx_off_init ret (%ld)", rb, ra, tag);
+	cmp_ctx_common("cHDLCtx_off_init", &ctx_a, &ctx_b, tag);
+
+	/* A second call proves the REINIT path (already-built vmi_a). */
+	ra = ref_cHDLCtx_off_init(&ctx_a);
+	rb = cHDLCtx_off_init(&ctx_b);
+	diff_eq_int("cHDLCtx_off_init reinit ret (%ld)", rb, ra, tag + 1);
+	cmp_ctx_common("cHDLCtx_off_init reinit", &ctx_a, &ctx_b, tag + 1);
+
+	return diff_end();
+}
+
 /* Debug-level coverage across all four -- proves the gated prints agree. */
 static int
 run_debug_on(void)
@@ -284,6 +328,8 @@ main(void)
 						 * sentinel */
 	rc |= run_hdlcrx_init(0x18, 41);	/* a real rate code, never 3 */
 	rc |= run_hdlcrx_init(0, 42);
+
+	rc |= run_cHDLCtx_off_init(50);
 
 	rc |= run_debug_on();
 

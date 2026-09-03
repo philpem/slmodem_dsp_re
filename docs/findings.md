@@ -112482,3 +112482,80 @@ added no new `.text 0xNNNNN` banner mentions), `tools/refcheck.py` (13107
 references, 0 dangling) all clean. `make period` left for the parent
 session's gate, per this wave's own brief -- this session has no docker.
 (2026-09-03)
+
+## F10122. `cHDLCtx_off_init` lands -- 149 bytes, the quiescent half of its own sibling, and a worktree 62 commits stale is what made the brief look wrong
+
+The brief for this task assigned `cHDLCtx_off_init` and asserted
+`FAXVMI_control`/`V21RX_CTL`/`FAXVMI_CTL` already existed in `src/`, citing
+F8492 and a wave-12 finding "F10119" for the sibling functions
+`cHDLCtx_preamble_state_init`/`_cHDLCrx_init_from_idle`. Told to re-verify
+before relying on it, `nm ref/slmodemd/dsplibs.o` and a plain `grep` of
+`src/`/`include/` found NEITHER sibling function nor `FAXVMI_control` itself
+anywhere in this session's tree, and `git log` showed the assigned worktree's
+branch was **62 commits behind `master`** -- its last fax-relevant commit was
+`aee0f1bd` ("`_init_receiver`/`_init_transmitter`, the wave's closing pair"),
+before `4d00f03e` landed `FAXVMI_control`/`vxx_control` at all. `git merge
+master` fast-forwarded cleanly (no conflicting local commits to lose), which
+is the honest fix for a stale worktree per CLAUDE.md's own note that this is
+"a branch difference and not a worktree one" (F3100) -- not a reason to
+distrust the brief's SUBSTANCE, which was correct about the current `master`.
+
+**Chased the dependency chain fully before writing anything, because the
+first-order claim ("cHDLCtx_off_init calls FAXVMI_control") undersells how
+deep the actual link requirement goes.** `dis.py` on `FAXVMI_control` itself
+shows a data relocation against `vxx_control` (`call *0x0(,%edx,4) <== R_386_32
+vxx_control`, taken whenever the control record's `int_0014` is nonzero, which
+`cHDLCtx_off_init`'s own call always sets); `objdump -r`'s relocations
+*inside* `.rodata` at `vxx_control`'s own address name all thirteen slots:
+`null_control` five times, then `v21tx_control`/`v21rx_control`/
+`v27tx_control`/`v27rx_control`/`v29tx_control`/`v29rx_control`/
+`v17tx_control`/`v17rx_control`. Per F8493, a data relocation binds at link
+exactly as a call does, so `FAXVMI_control` was genuinely unwritable until
+every one of those nine existed -- which, on current `master` (post-merge),
+they do: all landed across waves 9-11 (F9500, F10103, F10108, F10109,
+F10115). So the true chain was `cHDLCtx_off_init` -> `FAXVMI_control` ->
+`vxx_control`'s nine entries -> (for six of the eight, `faxadapt.c`'s own
+`V??TX_control`/`V??RX_control`), and it is fully closed on `master`, not
+merely at the first hop F8492 originally checked.
+
+**`cHDLCtx_off_init` (0x9e9d0, 149 bytes) is the quiescent HALF of its own
+sibling `_cHDLCrx_init_from_idle`** (0x9d790, 226 bytes, landed alongside
+`cHDLCtx_preamble_state_init` once `FAXVMI_control` cleared, F10115/F10119's
+wave) -- `dis.py` shows the identical `V21RX_CTL`-sourced `req`, the
+identical `V21RXCTL_REINIT` bit forced into `req.flags_0d`, and the identical
+full-framer-reset `struct faxvmi_ctl` (`ptr_0000 = (void *)1`,
+`int_000c = 1`, `short_0010 = 2`, `int_0014 = &req`) sent to the identical
+`ctx->vmi_a`, but with three things removed: no second argument at all (one
+`push`, one `sub $0x48,%esp`, nothing that compares against 3 anywhere in the
+149 bytes), no write to `ctx->delayed_status_countdown`, and no
+`dsplibs_debug_level` read or debug line. `FAXVMI_control`'s return value
+passes straight through -- `%eax` is never touched between the `call` and the
+final `ret`, unlike `_cHDLCrx_init_from_idle`'s `arg2 == 3` override to 4.
+The only other effect is `ctx->countdown = 0` (`+0x1228`, the same field
+`_cHDLCrx_init_from_idle` also clears). No new struct field, no new named
+constant: every identifier this function touches (`struct v21rx_ctl`,
+`struct faxvmi_ctl`, `V21RX_CTL`, `FAXVMI_CTL`, `V21RXCTL_REINIT`,
+`ctx->vmi_a`, `ctx->countdown`) already had a name from the sibling's own
+wave.
+
+**Confirmed still genuinely reached by nothing** before writing it:
+`objdump -r` over the whole 1.2 MB names `cHDLCtx_off_init` from no call site
+and no stored-handler-address site either (F8493's pair) -- it is F8320's
+no-entry-point bucket, not a fax-closure member, so it is scheduled on its
+own merit as the brief said, independent of `master`'s fax-closure
+completeness.
+
+**Tested by calling `ref_cHDLCtx_off_init` directly**, the same way every
+no-entry-point leaf in this tree is tested -- there being no dispatcher or
+live caller to drive it through. Extended `test/unit/t_class1txcplinit.c`
+(already the differential test for `_cHDLCrx_init_from_idle`, which needs the
+identical `ctx->vmi_a` handle built from a real `FAXVMI_create`) with
+`run_cHDLCtx_off_init`: a fresh build and a second REINIT-path call, both
+comparing every `cmp_ctx_common` field plus the return value against
+`ref_cHDLCtx_off_init`. `make one T=t_class1txcplinit`: 14 PASS lines
+including the two new `cHDLCtx_off_init` cases (32 checks total), 0 failed.
+`tools/onedef.py` (301 types, 1 known duplicate, unchanged), `tools/
+bannercheck.py src/fax` (233/233 agree), `tools/refcheck.py` (13117
+references, 0 dangling) all clean. `make period` left for the parent
+session's gate, per this project's standing rule -- this session has no
+docker. (2026-09-03)

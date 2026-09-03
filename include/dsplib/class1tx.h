@@ -96,8 +96,11 @@ int _send_hdlc_between_buffer_state_init(struct fax_class1 *ctx);
  * shows zero relocations of either kind (F8493's call/data-store pair)
  * naming it -- so it sits in finding F8320's no-entry-point bucket rather
  * than in this fax-reachable closure, matching `service.py`'s own
- * reachability count over `worklist.py`'s span listing.  It is scheduled on
- * its own merit, separately, and is not written here.
+ * reachability count over `worklist.py`'s span listing.  It was scheduled on
+ * its own merit, separately, and IS now written (class1tx.c): the quiescent
+ * half of `_cHDLCrx_init_from_idle` below, once that sibling's own
+ * `FAXVMI_control` dependency (F10115) and the seven other `v??tx_control`/
+ * `v??rx_control` functions behind it existed.
  */
 
 /*
@@ -148,6 +151,17 @@ int cHDLCtx_preamble_state_init(struct fax_class1 *ctx);
  * `countdown` and `delayed_status_countdown` unconditionally.
  */
 int _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2);
+
+/*
+ * `cHDLCtx_off_init`, 0x9e9d0, 149 bytes.  No entry point in the object
+ * reaches it (see the note above); it is the quiescent HALF of
+ * `_cHDLCrx_init_from_idle` above -- the same `V21RX_CTL`-sourced,
+ * `V21RXCTL_REINIT`-forced request merged into the same full-framer-reset
+ * `FAXVMI_ctl` and sent to the same `ctx->vmi_a`, but with no `arg2`, no
+ * state transition, no `delayed_status_countdown` clear and no debug line.
+ * Returns whatever `FAXVMI_control` returned; also clears `countdown`.
+ */
+int cHDLCtx_off_init(struct fax_class1 *ctx);
 
 /*
  * THE HOST LINK IS DLE-STUFFED BYTES ONE WAY AND 16-BIT ELEMENTS THE OTHER.

@@ -26,9 +26,14 @@
  * pass because it tail-calls the then-unreconstructed
  * `_handle_hdlc_input_open` (F215: no scaffold).  Writing that callee here
  * unblocked it and both are now in, which is the link constraint working the
- * way round it is supposed to -- F9198.  `cHDLCtx_off_init` (calls
- * FAXVMI_control) and the V21 next-state pair, which store six
- * unreconstructed handler addresses, are still out.  Findings F8492/F8493.
+ * way round it is supposed to -- F9198.  `cHDLCtx_off_init` was the same
+ * shape one step further out: F8492 called it blocked on `FAXVMI_control`
+ * alone, but `FAXVMI_control` (landed wave 11) itself recurses through the
+ * `vxx_control` table, so the true dependency was the whole eight-function
+ * `v??tx_control`/`v??rx_control` family -- all landed by wave 10-11, so it
+ * is written below alongside its sibling `_cHDLCrx_init_from_idle`.  The V21
+ * next-state pair, which store six unreconstructed handler addresses, are
+ * still out.  Findings F8492/F8493.
  *
  * THE STRINGS ARE THE AUTHOR'S, byte for byte: "Protocal", "Transmition"
  * and V29TX's "7600 bps" are the object's spellings, and fixing them would
@@ -432,6 +437,45 @@ _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2)
 		dsplibs_debug_printf(
 		    "At %2d.%02d[sec]  HDLCrx_init_from_idle\n",
 		    ctx->clock_sec, ctx->clock_frac);
+	return ret;
+}
+
+/*
+ * `cHDLCtx_off_init`, 0x9e9d0, 149 bytes.  THE ONE FINDING F8320'S BUCKET
+ * ACTUALLY DESCRIBES: `objdump -r` over the whole 1.2 MB names it from
+ * NOWHERE, no call and no stored handler address either (F8493's pair), so it
+ * is orphaned exported API surface rather than a fax entry point's callee --
+ * see class1tx.h for the reachability note.  Its own body is the exact
+ * quiescent HALF of `_cHDLCrx_init_from_idle` immediately above: the same
+ * `V21RX_CTL`-sourced `req` with the same `V21RXCTL_REINIT` bit forced, the
+ * same full-framer-reset `ctl` (`ptr_0000 = 1`, `int_000c = 1`,
+ * `short_0010 = 2`, `int_0014 = &req`) sent to the same `ctx->vmi_a`, but
+ * WITHOUT the `arg2 == 3` state transition, WITHOUT touching
+ * `delayed_status_countdown`, and WITHOUT the debug line -- `dis.py` shows no
+ * second argument at all (one push, one `sub $0x48,%esp`, no comparison
+ * against 3 anywhere in the 149 bytes) and no read of
+ * `dsplibs_debug_level`.  `FAXVMI_control`'s return value is passed straight
+ * through: the object's `%eax` is never touched between the `call` and the
+ * final `ret`.  The only other effect is `ctx->countdown = 0` (`+0x1228`,
+ * matching `_cHDLCrx_init_from_idle`'s own clear of the same field).
+ */
+int
+cHDLCtx_off_init(struct fax_class1 *ctx)
+{
+	struct v21rx_ctl req = V21RX_CTL;
+	struct faxvmi_ctl ctl = FAXVMI_CTL;
+	int ret;
+
+	req.flags_0d |= V21RXCTL_REINIT;
+
+	ctl.ptr_0000 = (void *)1;
+	ctl.int_000c = 1;
+	ctl.short_0010 = 2;
+	ctl.int_0014 = (int)(long)&req;
+
+	ret = FAXVMI_control(ctx->vmi_a, &ctl);
+
+	ctx->countdown = 0;
 	return ret;
 }
 

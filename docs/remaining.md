@@ -1077,3 +1077,41 @@ left for the parent session's gate, per this wave's own brief.
   FILL` pattern turned that into an immediate, unambiguous differential
   failure rather than a silent zero that happened to agree by luck of a
   fresh page.
+
+## Wave 13 — `cHDLCtx_off_init` lands: one no-entry-point leaf closes, one remains
+
+**The brief looked wrong and wasn't -- the assigned worktree was 62 commits
+behind `master`.** Told to write `cHDLCtx_off_init` on the premise that
+`FAXVMI_control`/`V21RX_CTL`/`FAXVMI_CTL` already existed (true on `master`
+since wave 11/12), the session's own tree had none of them: its branch's last
+fax commit was wave 10's closing pair, before `FAXVMI_control` landed at all.
+`git merge master` fast-forwarded cleanly and the brief's substance held
+throughout — see F10122 for the full chain re-verification.
+
+`cHDLCtx_off_init` (0x9e9d0, 149 bytes) is the quiescent half of its own
+sibling `_cHDLCrx_init_from_idle`, landed in `src/fax/class1tx.c` with no new
+struct field or constant — every identifier it touches already had a name
+from the sibling's wave. Tested by calling `ref_cHDLCtx_off_init` directly
+(no dispatcher reaches it, same as any no-entry-point leaf), extending
+`test/unit/t_class1txcplinit.c`. `make one T=t_class1txcplinit` green, 32 new
+checks. `tools/onedef.py`, `tools/bannercheck.py src/fax`,
+`tools/refcheck.py` all clean. `make period` left for the parent session's
+gate — this session has no docker.
+
+**`service.py --list none` now names exactly one symbol, not two:**
+
+```
+    895  GetNextDigitAndReturnNextState                           ?
+```
+
+`GetNextDigitAndReturnNextState` is NOT remaining work — F8490 already
+established it as an inlining-boundary artefact: it has been in
+`src/dialer/dialer.c` since the dialer pass, fully tested through
+`DialerProgress` (`t_dialerprog`), and the modern compiler simply inlines it
+away so no standalone symbol exists to count against it. So the no-entry-point
+bucket, and with it the object's remaining REAL reconstruction work, is
+now **empty**. What's left in the whole 1.2 MB is bookkeeping only:
+`docs/coverage.md`'s next regeneration (not run here, per this session's
+brief) and whatever stub arms already-written dispatch functions route into
+(the "also on the board" note near the top of this file) — neither is a
+symbol left to write.
