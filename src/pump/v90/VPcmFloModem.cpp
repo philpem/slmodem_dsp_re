@@ -1334,7 +1334,7 @@ VPcmFloModem::copyMpInfoForInterface()
  * ONE BLOCK OF SAMPLES THROUGH A V.90 SESSION'S RECEIVER, and it is the
  * ANALOGUE end: the modem it drives is the embedded `V90Modem`, whose
  * `progress` fans out to `V90Demodulator::progress` on this side.
- * `VPcmV34Progress` turns the small code it returns into a new `f0004`, the
+ * `VPcmV34Progress` turns the small code it returns into a new `progress`, the
  * same way it does for `runPcmModem`.
  *
  * ===========================================================================
@@ -1921,7 +1921,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
  * ===========================================================================
  *
  * ONE BLOCK OF SAMPLES THROUGH A V.92 SESSION.  `VPcmV34Progress`'s arm 2
- * calls it and turns the small code it returns into a new `f0004`; the
+ * calls it and turns the small code it returns into a new `progress`; the
  * argument order is the mangling's and the names are the header's.  `in` is
  * the line signal, `out` is the block this session transmits, and the four
  * `int *` are the two bit pipes and their two counts.

@@ -100,7 +100,7 @@ static short dummy_a[DUMMY_LEN], dummy_b[DUMMY_LEN];
 static const unsigned ptr_skip[] = {
 	0x0394,		/* receiver +0x130 rx_samples -- rxinit, interior   */
 	0x0418,		/* receiver +0x1b4 carrier    -- setupreceiver      */
-	0x0508,		/* receiver +0x2a4 f2a4       -- dpskinit           */
+	0x0508,		/* receiver +0x2a4 fir_coeff       -- dpskinit           */
 	0x1460,		/* modulator +0x10 sine       -- V34SetupModulator  */
 	0x2074,		/* modulator +0xc24 shaped    -- the test seeds it  */
 	0x20cc,		/* modulator +0xc7c ec_prem                         */
@@ -1050,7 +1050,7 @@ struct hsi_case {
 	int		mode;
 	int		timer_base;	/* +0x238 */
 	int		timer_delta;	/* +0x248 */
-	short		f359c;		/* originate/answer, 0x65 vs 0x66 */
+	short		role;		/* originate/answer, 0x65 vs 0x66 */
 	unsigned short	rxflags;	/* receiver +0x122 */
 	unsigned short	txflags;	/* +0x25c2 */
 	unsigned char	ac17;		/* mode 1's second branch input */
@@ -1061,7 +1061,7 @@ struct hsi_case {
 	short		txst;
 	short		trace1;		/* +0x2aa2, printed as [1] */
 	short		trace2;		/* +0xaa78, printed as [2] */
-	short		f262;		/* the AGC's starting gain */
+	short		agc_start_gain;		/* the AGC's starting gain */
 	int		v90_receiver;	/* +0x24c, gates V34SetINFO0dBits */
 	int		moh_message;	/* +0xabf0 */
 };
@@ -1074,7 +1074,7 @@ struct hsi_case {
 static const struct hsi_case hsi_base = {
 	0,			/* mode                                     */
 	0, 0,			/* timer base, delta                        */
-	0x65,			/* f359c                                    */
+	0x65,			/* role                                    */
 	0x0000, 0x0000,		/* rxflags, txflags                         */
 	0,			/* ac17                                     */
 	0x0111, 0x0222,		/* ac12, ac14                               */
@@ -1082,7 +1082,7 @@ static const struct hsi_case hsi_base = {
 	V34HS_PHASE2,		/* rxst = 34                                */
 	V34HS_TONE_AB,		/* txst = 60                                */
 	0x1111, 0x2222,		/* [1], [2]                                 */
-	0x0600,			/* f262                                     */
+	0x0600,			/* agc_start_gain                                     */
 	0,			/* v90_receiver                             */
 	9			/* moh_message: above 5, builds nothing     */
 };
@@ -1138,7 +1138,7 @@ run_handshakinit(const struct hsi_case *c, long tag)
 	poke_int(0x248, c->timer_delta);
 	poke_int(0x24c, c->v90_receiver);
 	poke_int(0xabf0, c->moh_message);
-	poke_short(0x359c, c->f359c);
+	poke_short(0x359c, c->role);
 	poke_short(0x264 + 0x122, (short)c->rxflags);
 	poke_short(0x25c2, (short)c->txflags);
 	poke_byte(0xac17, c->ac17);
@@ -1149,7 +1149,7 @@ run_handshakinit(const struct hsi_case *c, long tag)
 	poke_short(HSI_TXSTATE, c->txst);
 	poke_short(0x2aa2, c->trace1);
 	poke_short(0xaa78, c->trace2);
-	poke_short(0x264 + 0x262, c->f262);
+	poke_short(0x264 + 0x262, c->agc_start_gain);
 
 	v34handshakinit(&oa, c->mode);
 	ref_v34handshakinit(ob, c->mode);
@@ -1220,7 +1220,7 @@ run_handshakinit(const struct hsi_case *c, long tag)
 	if (c->mode == 4)
 		diff_eq_int("v34handshakinit MOH detector coeff",
 			    get_ptr_a(0x3564)
-			    == (void *)(c->f359c == 0x65 ? c2400_ : c1200_),
+			    == (void *)(c->role == 0x65 ? c2400_ : c1200_),
 			    1, tag);
 }
 
@@ -3021,7 +3021,7 @@ main(void)
 		/*
 		 * 1356 bytes of straight-line stores over the whole object,
 		 * so the whole-object compare is the test.  Both values of
-		 * f359c, because the two configurations differ in five
+		 * role, because the two configurations differ in five
 		 * places and nothing else -- a reconstruction that folded
 		 * them wrongly would be right for one end and wrong for the
 		 * other.
@@ -3199,7 +3199,7 @@ main(void)
 	}
 	rc |= diff_end();
 
-	diff_begin("v34 handshake: v34handshakinit's f359c, three values");
+	diff_begin("v34 handshake: v34handshakinit's role, three values");
 	{
 		/*
 		 * THREE, NOT TWO.  `v34modeminit` and mode 4 test `== 0x65`;
@@ -3217,7 +3217,7 @@ main(void)
 			struct hsi_case c = hsi_base;
 
 			c.mode = modes[mi];
-			c.f359c = f[si];
+			c.role = f[si];
 			/* Mode 0's V34SetINFO0dBits writes index 12 of the
 			 * same record mode 0 just wrote, so both arms of its
 			 * own gate change what lands there. */
@@ -3387,7 +3387,7 @@ main(void)
 			struct hsi_case c = hsi_base;
 
 			c.mode = modes[mi];
-			c.f359c = f[si];
+			c.role = f[si];
 			c.rxflags = fl[fi];
 			c.txflags = (unsigned short)(0x1234 + fi);
 			c.v90_receiver = (int)si;
@@ -3549,7 +3549,7 @@ main(void)
 	/*
 	 * txmitdibit and txmitquadbit.
 	 *
-	 * `quad` picks which of the two runs; `gpc` drives bit 0 of f25c2,
+	 * `quad` picks which of the two runs; `gpc` drives bit 0 of tx_flags,
 	 * which is the scrambler generator and the one branch inside them;
 	 * `gate` drives bit 9, which is txmit's echo feed, so both settings
 	 * of it exercise a different amount of the tail call.
@@ -3596,15 +3596,15 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.f25d4 = ob.f25d4 = 0x4000;
-			oa.f25c2 = ob.f25c2 =
+			oa.tx_scale = ob.tx_scale = 0x4000;
+			oa.tx_flags = ob.tx_flags =
 				(short)((gate ? 0x200 : 0) | (gpc ? 1 : 0));
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
 			/* A scrambler state that is not all zeroes. */
-			oa.f25cc = ob.f25cc = 0x2f6b3d51;
-			oa.f25c6 = ob.f25c6 = 2;
+			oa.tx_scr_sr = ob.tx_scr_sr = 0x2f6b3d51;
+			oa.prev_quadrant = ob.prev_quadrant = 2;
 
 			for (it = 0; it < 40; it++) {
 				short b = bits[it % 10];

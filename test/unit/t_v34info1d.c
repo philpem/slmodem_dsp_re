@@ -175,7 +175,7 @@ static const unsigned ptr_skip[] = {
 	0x0268, 0x026c,			/* rxq read and write cursors    */
 	0x0394,				/* receiver +0x130 rx_samples    */
 	0x0418,				/* receiver +0x1b4 carrier       */
-	0x0508,				/* receiver +0x2a4 f2a4          */
+	0x0508,				/* receiver +0x2a4 fir_coeff          */
 	0x0a28, 0x0e48,			/* receive shell context         */
 	0x1460,				/* modulator +0x10 sine          */
 	0x2074,				/* modulator +0xc24 shaped       */
@@ -268,8 +268,8 @@ struct gi_case {
 	unsigned char	cfg_flags;	/* cfg +0x00, bits 3 and 4         */
 	unsigned char	cfg_isp;	/* cfg +0x50                       */
 	int		sens;		/* pcm receiver +0x4f8             */
-	short		f359c;		/* obj +0x359c, originate/answer   */
-	short		f35a4;		/* obj +0x35a4                     */
+	short		role;		/* obj +0x359c, originate/answer   */
+	short		short_35a4;		/* obj +0x35a4                     */
 	int		mside;		/* session +0x6114, V90Modem::side */
 };
 
@@ -300,8 +300,8 @@ static const struct gi_case gi_base = {
 	0x18,			/* cfg_flags: both v90 and flex allowed     */
 	0x41,			/* cfg_isp: bit 3 clear, other bits set     */
 	0,			/* sens                                     */
-	0x65,			/* f359c                                    */
-	3,			/* f35a4                                    */
+	0x65,			/* role                                    */
+	3,			/* short_35a4                                    */
 	2			/* mside                                    */
 };
 
@@ -472,8 +472,8 @@ drive(const struct gi_case *c)
 	poke_int(OB_K56RX, c->k56rx);
 	poke_int(OB_TIMER_BASE, 0);
 	poke_int(OB_TIMER_MARK, 0);
-	poke_short(OB_F359C, c->f359c);
-	poke_short(OB_F35A4, c->f35a4);
+	poke_short(OB_F359C, c->role);
+	poke_short(OB_F35A4, c->short_35a4);
 	poke_short(OB_REMOTE_V92, c->remote_v92);
 	poke_short(OB_RXFLAGS, 0);
 	poke_byte(OB_FAC00, 0x5c);	/* neither 0 nor 1 */
@@ -759,7 +759,7 @@ main(void)
 			c.k56rx = k56_in[i];
 			c.gate = gate_in[j];
 			c.k56gate = k56gate_in[k];
-			c.f359c = f359c_in[l];
+			c.role = f359c_in[l];
 			run_case(&c, tag++);
 		}
 	}

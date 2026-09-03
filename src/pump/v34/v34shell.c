@@ -286,7 +286,7 @@ shellDemapper(void *shellp)
  *     wide                       the shell index
  *     (1, small, w, w) x 4       one group per 2D symbol of the 8D frame
  *
- * where `w` is `fa14` and `small` is normally 2.  Four groups of four is
+ * where `w` is `idx_width` and `small` is normally 2.  Four groups of four is
  * V.34's 8D frame -- four 2D symbols -- so the single bit per group is the
  * differential quadrant bit and the two `w`-wide fields are the point.
  *
@@ -296,7 +296,7 @@ shellDemapper(void *shellp)
  *             frame[1].  frame[1] is read on this path ONLY.
  *   nb > 0    all of it from frame[0].
  *   otherwise no call at all, and the group widths change instead: `small`
- *             becomes 2 minus whether fa04 is 8 or less, and the LAST
+ *             becomes 2 minus whether group_count is 8 or less, and the LAST
  *             group's width becomes that plus nb -- which is negative here,
  *             so the final group is narrower than the other three.
  *
@@ -311,21 +311,21 @@ putFrame(void *shellp)
 	struct v34_shell *s = (struct v34_shell *)shellp;
 	v34_putbits_fn put = s->put_bits;
 	const short *v = s->frame;
-	int w = s->fa14;
+	int w = s->idx_width;
 	int small = 2;
 	int small_last = 2;
 	int sum;
 	int nb;
 	int g;
 
-	sum = (unsigned short)s->fa08 + (unsigned short)s->fa06;
+	sum = (unsigned short)s->wide_accum + (unsigned short)s->remainder;
 
-	if ((unsigned short)s->fa00 > (unsigned short)sum) {
-		s->fa08 = (short)sum;
-		nb = s->fa10;
+	if ((unsigned short)s->span > (unsigned short)sum) {
+		s->wide_accum = (short)sum;
+		nb = s->wide_bits_alt;
 	} else {
-		s->fa08 = (short)(sum - s->fa00);
-		nb = s->fa0e;
+		s->wide_accum = (short)(sum - s->span);
+		nb = s->wide_bits;
 	}
 
 	if (nb > 16) {
@@ -334,7 +334,7 @@ putFrame(void *shellp)
 	} else if (nb > 0) {
 		put(s, (unsigned short)v[0], nb);
 	} else {
-		small = 2 - ((unsigned short)s->fa04 < 9 ? 1 : 0);
+		small = 2 - ((unsigned short)s->group_count < 9 ? 1 : 0);
 		small_last = (short)(nb + small);
 	}
 
@@ -556,16 +556,16 @@ decodeDepth(void *shellp, short *quad, short *idx)
 	packed = (unsigned short)(a - r0)
 	       | ((unsigned)(unsigned short)(b - r1) << 16);
 	g = grid[(depth_rotate(packed, k1) + 0x408) >> 2];
-	idx[0] = (short)((g >> (s->fa14 & 31)) & 0x1f);
-	/* The mask is truncated to a short first, so fa14 == 16 gives -1. */
-	quad[2] = (short)(g & (short)((1 << (s->fa14 & 31)) - 1));
+	idx[0] = (short)((g >> (s->idx_width & 31)) & 0x1f);
+	/* The mask is truncated to a short first, so idx_width == 16 gives -1. */
+	quad[2] = (short)(g & (short)((1 << (s->idx_width & 31)) - 1));
 
 	/* Second, from the second half's. */
 	packed = (unsigned short)(c - r2)
 	       | ((unsigned)(unsigned short)(d - r3) << 16);
 	g = grid[(depth_rotate(packed, k2) + 0x408) >> 2];
-	idx[1] = (short)((g >> (s->fa14 & 31)) & 0x1f);
-	quad[3] = (short)(g & (short)((1 << (s->fa14 & 31)) - 1));
+	idx[1] = (short)((g >> (s->idx_width & 31)) & 0x1f);
+	quad[3] = (short)(g & (short)((1 << (s->idx_width & 31)) - 1));
 }
 
 
@@ -658,7 +658,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	for (i = 0; i < 2; i++) {
 		int p0 = s->state[st].par[i * 2];
 		int p1 = s->state[st].par[i * 2 + 1];
-		int sh = s->fa44 & 31;
+		int sh = s->cost_shift & 31;
 		int d0 = ((p0 - cand[i * 4 + 0]) * (p0 - cand[i * 4 + 0])) >> sh;
 		int d1 = ((p0 - cand[i * 4 + 1]) * (p0 - cand[i * 4 + 1])) >> sh;
 		int e0 = ((p1 - cand[i * 4 + 2]) * (p1 - cand[i * 4 + 2])) >> sh;
@@ -749,16 +749,16 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	s->state_idx = (short)((s->state_idx + 1) & 0x1f);
 
 	/* The two counters, and the invert flag the outer one refreshes. */
-	if ((short)(s->fa3c + 1) < s->fa02) {
-		s->fa3c = (short)(s->fa3c + 1);
+	if ((short)(s->subframe_count + 1) < s->subframe_limit) {
+		s->subframe_count = (short)(s->subframe_count + 1);
 		s->invert = 0;
 	} else {
-		s->fa3c = 0;
-		if ((short)(s->fa3e + 1) < s->fa40) {
-			s->fa3e = (short)(s->fa3e + 1);
-			s->invert = gInvertPat[s->fa3e & 15];
+		s->subframe_count = 0;
+		if ((short)(s->frame_count + 1) < s->frame_limit) {
+			s->frame_count = (short)(s->frame_count + 1);
+			s->invert = gInvertPat[s->frame_count & 15];
 		} else {
-			s->fa3e = 0;
+			s->frame_count = 0;
 			s->invert = 0;
 		}
 	}
@@ -783,7 +783,7 @@ demapFrame(void *shellp, void *ap, void *bp, short n)
 	s->frame_wide = shellDemapper(s);
 	putFrame(s);
 
-	if (n >= 0x40 + (unsigned short)s->fa00 * 8)
+	if (n >= 0x40 + (unsigned short)s->span * 8)
 		s->latched = 1;
 
 	return 1;
@@ -814,7 +814,7 @@ const unsigned short lsbMask[17] = {
  *                           bits, and the reason frame[1] exists
  *     (1, small, w, w) x 4  one group per 2D symbol, into frame[2..17]
  *
- * and the widths are chosen the same way, from `fa00` against `fa06 + fa08`.
+ * and the widths are chosen the same way, from `span` against `remainder + wide_accum`.
  *
  * THE BIT WINDOW.  A 32-bit buffer at +0xe80 with a position at +0xe84;
  * fields come out as `(buf >> pos) & lsbMask[width]` and the position
@@ -827,7 +827,7 @@ getFrame(void *objp)
 {
 	struct v34_shell *s =
 	    (struct v34_shell *)((char *)objp + V34_SHELL_TX);
-	int w = s->fa14;
+	int w = s->idx_width;
 	int small = 2;
 	int small_last = 2;
 	int sum;
@@ -835,14 +835,14 @@ getFrame(void *objp)
 	int pos;
 	int g;
 
-	sum = (unsigned short)s->fa08 + (unsigned short)s->fa06;
+	sum = (unsigned short)s->wide_accum + (unsigned short)s->remainder;
 
-	if ((unsigned short)s->fa00 > (unsigned short)sum) {
-		s->fa08 = (short)sum;
-		nb = s->fa10;
+	if ((unsigned short)s->span > (unsigned short)sum) {
+		s->wide_accum = (short)sum;
+		nb = s->wide_bits_alt;
 	} else {
-		s->fa08 = (short)(sum - s->fa00);
-		nb = s->fa0e;
+		s->wide_accum = (short)(sum - s->span);
+		nb = s->wide_bits;
 	}
 
 	pos = (unsigned short)s->bitpos;
@@ -894,7 +894,7 @@ getFrame(void *objp)
 		 * counterpart on that side and is easy to miss.
 		 */
 		s->frame_wide = 0;
-		small = 2 - ((unsigned short)s->fa04 < 9 ? 1 : 0);
+		small = 2 - ((unsigned short)s->group_count < 9 ? 1 : 0);
 		small_last = (short)(nb + small);
 	}
 
@@ -1129,7 +1129,7 @@ const int xyz[945] = {
 };
 
 /*
- * The ring size, indexed by `fa0e`.  initV34 takes MMaxTable when its
+ * The ring size, indexed by `wide_bits`.  initV34 takes MMaxTable when its
  * `use_max` argument is non-zero and MMinTable when it is not, and the index
  * it uses is bounded to 0..31 by the loop that produces it -- so `count`
  * lands in 1..18 and nothing else, which is what keeps xyz's header read in
@@ -1217,16 +1217,16 @@ preinitV34(void *fields)
 		s->t3[i] = -1;
 	}
 	for (i = 0; i <= 5; i++) {
-		s->fa2c[i] = 0;
+		s->conv_sr[i] = 0;
 		s->hist[i] = 0;
 	}
 
-	s->fa16 = 0x18;
+	s->feedback_mask = 0x18;
 	s->conv = Convolve16;
-	s->fa3c = 0;
+	s->subframe_count = 0;
 	s->prev_k = 0;
 	s->latched = 0;
-	s->fa08 = 0;
+	s->wide_accum = 0;
 	s->scramble = scrambleGPC;
 }
 
@@ -1317,8 +1317,8 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	else
 		span = 12;
 
-	s->fa00 = (short)span;
-	s->fa02 = (short)(2 * span);
+	s->span = (short)span;
+	s->subframe_limit = (short)(2 * span);
 	s->coeff = coeff;
 
 	/*
@@ -1327,19 +1327,19 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	 * zero leaves preinitV34's 24 and the 16-state code alone.
 	 */
 	if (depth != 0) {
-		s->fa16 = (short)(depth << 5);
+		s->feedback_mask = (short)(depth << 5);
 		s->conv = (depth == 1) ? Convolve32 : Convolve64;
 	}
 
-	s->fa40 = (short)(2 * group);
-	s->fa3e = (short)(2 * group - 2);
+	s->frame_limit = (short)(2 * group);
+	s->frame_count = (short)(2 * group - 2);
 	s->invert = (short)(unsigned short)gInvertPat[(short)(2 * group - 2)];
 
 	/*
 	 * Three divisions, each rounding differently: /25 truncating, then
-	 * /group truncating, then /span rounding UP.  `fa06` is what the
+	 * /group truncating, then /span rounding UP.  `remainder` is what the
 	 * rounding up left over, so the last pair is a quotient and its
-	 * remainder spread across `fa04` groups.
+	 * remainder spread across `group_count` groups.
 	 *
 	 * The 25 is worth pinning down, because the object does it as a
 	 * reciprocal multiply and the constant is the one everybody reads as
@@ -1351,11 +1351,11 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 	m = (unsigned short)((int)(q * 7) / (int)group);
 	u = (unsigned)(int)((int)(m + span - 1) / (int)span);
 
-	s->fa04 = (short)u;
+	s->group_count = (short)u;
 	s->wrap = (short)(2 - ((unsigned short)u <= 0x37));
-	s->fa0a = (short)(15 - group);
-	s->fa06 = (short)(m - ((unsigned short)u - 1) * span);
-	s->fa14 = 0;
+	s->short_a0a = (short)(15 - group);
+	s->remainder = (short)(m - ((unsigned short)u - 1) * span);
+	s->idx_width = 0;
 
 	/*
 	 * Bring `u` down into 12..43 in steps of eight, and record how many
@@ -1372,11 +1372,11 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 			j++;
 			idx = u - 8 * (unsigned short)j - 12;
 		} while ((unsigned short)idx > 0x1f);
-		s->fa14 = (short)j;
+		s->idx_width = (short)j;
 	}
 
-	s->fa0e = (short)idx;
-	s->fa10 = (short)(idx - 1);
+	s->wide_bits = (short)idx;
+	s->wide_bits_alt = (short)(idx - 1);
 
 	/*
 	 * The ring size, and then initG248's three loops inline -- which is
@@ -1415,22 +1415,22 @@ initV34(void *fields, short baud, short bitrate, short use_max,
 		s->t3[k] = xyz[cursor++];
 
 	/*
-	 * `fa44` is the field width `divisor` needs, found by walking powers
+	 * `cost_shift` is the field width `divisor` needs, found by walking powers
 	 * of two up from 128 -- and then one more, so it is a width and not
 	 * an exponent.  A divisor of 128 or less skips the search entirely
 	 * and takes the 7 the search would have returned.
 	 */
 	s->divisor = divisor;
-	s->fa44 = 7;
+	s->cost_shift = 7;
 	if ((int)(unsigned)(unsigned short)divisor > 0x80) {
 		w = 7;
 		do {
 			w++;
 		} while ((int)(1u << (w & 31))
 			 < (int)(unsigned)(unsigned short)divisor);
-		s->fa44 = (short)w;
+		s->cost_shift = (short)w;
 	}
-	s->fa44 = (short)((unsigned short)s->fa44 + 1);
+	s->cost_shift = (short)((unsigned short)s->cost_shift + 1);
 
 	return 0;
 }
@@ -1469,8 +1469,8 @@ const short smIndex[16] = {
  * quarter -- 416 shorts, each holding TWO SIGNED BYTES: the high byte is the
  * coordinate offset and the low byte a second one, and the code takes the low
  * one with an explicit sign test rather than an arithmetic shift.  Indexed by
- * `(sub << fa14) + frame`, so the frame field selects within a group of
- * `1 << fa14` and the sub-index selects the group.
+ * `(sub << idx_width) + frame`, so the frame field selects within a group of
+ * `1 << idx_width` and the sub-index selects the group.
  */
 const short quarter[416] = {
 	257, -767, 509, -515, 261, 1281, -763, 1533,
@@ -1545,7 +1545,7 @@ const short quarter[416] = {
  *
  * THE ROLE SWAPS TWO NIBBLES.  `info_rates` carries one four-bit rate per
  * direction, at bits 2..5 and 6..9, and which one is "ours" depends on
- * `f359c` -- the same flag that picks the scrambler polynomial and the
+ * `role` -- the same flag that picks the scrambler polynomial and the
  * timing table.  Everything after the unpack is role-independent.
  *
  * RATES ARE COUNTS OF 2400 bps throughout, and only become bits per second
@@ -1569,7 +1569,7 @@ initdigital(void *obj)
 	 * carries a capability list whose most significant bit is the lowest
 	 * rate.
 	 */
-	if (o->f359c == 0x65) {
+	if (o->role == 0x65) {
 		cfg->txbits = (short)((info >> 2) & 0xf);
 		lim_rx = (int)((info >> 6) & 0xf);
 		lim_tx = bitreverse((unsigned short)
@@ -1688,9 +1688,9 @@ initdigital(void *obj)
 
 	/* Bit 13 of the same word is modulatevector's non-linear encoder. */
 	if (info & 0x2000)
-		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x4000);
+		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x4000);
 	else
-		o->f25c2 = (short)((unsigned short)o->f25c2 & ~0x4000);
+		o->tx_flags = (short)((unsigned short)o->tx_flags & ~0x4000);
 
 	if (level > 1)
 		dsplibs_debug_printf("V34DATARATE, finally txbitrate %d,"
@@ -1958,35 +1958,35 @@ sm_index(int x, int y)
  * One trellis step.  Two spellings of the same recurrence: the general one
  * shifts the state down and XORs the feedback mask back in when the bit
  * leaving is set, and the 64-state one is that unrolled over six one-bit
- * registers in `fa2c`.  Which is used is decided by the mask being 64.
+ * registers in `conv_sr`.  Which is used is decided by the mask being 64.
  */
 static void
 trellis_step(struct v34_shell *tx, unsigned idx)
 {
-	unsigned mask = (unsigned short)tx->fa16;
+	unsigned mask = (unsigned short)tx->feedback_mask;
 	int t;
 
 	if (mask == 0x40) {
-		short c0 = tx->fa2c[0], c1 = tx->fa2c[1], c2 = tx->fa2c[2];
-		short c3 = tx->fa2c[3], c4 = tx->fa2c[4], c5 = tx->fa2c[5];
+		short c0 = tx->conv_sr[0], c1 = tx->conv_sr[1], c2 = tx->conv_sr[2];
+		short c3 = tx->conv_sr[3], c4 = tx->conv_sr[4], c5 = tx->conv_sr[5];
 		int v = tx->conv[idx];
 		int b = (short)((v & 1) ^ (unsigned short)c4);
 		int e = (short)((unsigned short)c4 ^ (unsigned short)c5);
 
-		tx->fa2c[1] = c0;
-		tx->fa2c[5] = (short)(((v >> 3) ^ e) ^ (b & (unsigned short)c3));
-		tx->fa2c[3] = (short)(b ^ (unsigned short)c3);
-		tx->fa2c[2] = c3;
-		tx->fa2c[4] = (short)(((e ^ (unsigned short)c2) ^ (v >> 2))
+		tx->conv_sr[1] = c0;
+		tx->conv_sr[5] = (short)(((v >> 3) ^ e) ^ (b & (unsigned short)c3));
+		tx->conv_sr[3] = (short)(b ^ (unsigned short)c3);
+		tx->conv_sr[2] = c3;
+		tx->conv_sr[4] = (short)(((e ^ (unsigned short)c2) ^ (v >> 2))
 				      ^ ((v >> 1) & (unsigned short)c3));
-		tx->fa2c[0] = (short)((v >> 1)
+		tx->conv_sr[0] = (short)((v >> 1)
 				      ^ ((unsigned short)c1 ^ (unsigned short)c3));
 	} else {
-		unsigned st = (unsigned short)tx->fa2c[0];
+		unsigned st = (unsigned short)tx->conv_sr[0];
 
 		t = (short)((unsigned short)tx->conv[idx] ^ st);
 		t ^= (int)((st & 1) * mask);
-		tx->fa2c[0] = (short)((unsigned)t >> 1);
+		tx->conv_sr[0] = (short)((unsigned)t >> 1);
 	}
 
 	/*
@@ -1995,21 +1995,21 @@ trellis_step(struct v34_shell *tx, unsigned idx)
 	 * is where gInvertPat supplies it.
 	 */
 	{
-		int sf = (short)((unsigned short)tx->fa3c + 1);
+		int sf = (short)((unsigned short)tx->subframe_count + 1);
 
-		if (sf < (int)(unsigned short)tx->fa02) {
-			tx->fa3c = (short)sf;
+		if (sf < (int)(unsigned short)tx->subframe_limit) {
+			tx->subframe_count = (short)sf;
 			tx->invert = 0;
 		} else {
-			int fr = (short)((unsigned short)tx->fa3e + 1);
+			int fr = (short)((unsigned short)tx->frame_count + 1);
 
-			tx->fa3c = 0;
-			if (fr < (int)tx->fa40) {
-				tx->fa3e = (short)fr;
+			tx->subframe_count = 0;
+			if (fr < (int)tx->frame_limit) {
+				tx->frame_count = (short)fr;
 				tx->invert = (short)(unsigned short)
 					gInvertPat[(short)fr];
 			} else {
-				tx->fa3e = 0;
+				tx->frame_count = 0;
 				tx->invert = 0;
 			}
 		}
@@ -2025,9 +2025,9 @@ modulatevector(void *obj)
 	unsigned n = (unsigned short)o->vect_idx;
 
 	if (n == 8) {
-		unsigned flags = (unsigned short)o->f25c2;
+		unsigned flags = (unsigned short)o->tx_flags;
 		unsigned count = (unsigned short)tx->count;
-		unsigned shift = (unsigned short)tx->fa14;
+		unsigned shift = (unsigned short)tx->idx_width;
 		unsigned target, quad, lo, hi, mid, si, rem, d;
 		unsigned n1, n2, n3, q2, s2, s6, a, b, g;
 		const short *coeff;
@@ -2041,12 +2041,12 @@ modulatevector(void *obj)
 		 * set, and nothing reads the counter again.
 		 */
 		if (!(flags & 0x10) && rx->latched != 0) {
-			int c = o->faa74;
+			int c = o->train_symcount;
 
-			o->faa74 = c + 1;
-			if (c >= (int)(unsigned short)tx->fa00) {
+			o->train_symcount = c + 1;
+			if (c >= (int)(unsigned short)tx->span) {
 				o->data_enable = 1;
-				o->f25c2 = (short)(flags | 0x10);
+				o->tx_flags = (short)(flags | 0x10);
 			}
 		}
 
@@ -2168,7 +2168,7 @@ modulatevector(void *obj)
 
 			parity ^= (unsigned)(short)(xq ^ yq);
 			parity = (unsigned)((((int)parity >> 1)
-					     ^ (unsigned short)tx->fa2c[0]
+					     ^ (unsigned short)tx->conv_sr[0]
 					     ^ (unsigned short)tx->invert) & 1);
 
 			/*
@@ -2203,7 +2203,7 @@ modulatevector(void *obj)
 	}
 
 	o->vect_idx = (short)(n + 1);
-	if (o->f25c2 & 0x4000)
+	if (o->tx_flags & 0x4000)
 		V34nlencoder(&o->vect[2 * n], o->txpoint.c);
 	else
 		o->txpoint.word = o->vectp[n];
@@ -2231,16 +2231,16 @@ V34SH_ASSERT(put_bits, 0xe48);
 V34SH_ASSERT(bitbuf, 0xe80);
 V34SH_ASSERT(bitpos, 0xe84);
 V34SH_ASSERT(frame, 0xe50);
-V34SH_ASSERT(fa00, 0xa00);
-V34SH_ASSERT(fa14, 0xa14);
+V34SH_ASSERT(span, 0xa00);
+V34SH_ASSERT(idx_width, 0xa14);
 
 /* The fields the initialisers and the scrambler callbacks added. */
-V34SH_ASSERT(fa0a, 0xa0a);
-V34SH_ASSERT(fa16, 0xa16);
+V34SH_ASSERT(short_a0a, 0xa0a);
+V34SH_ASSERT(feedback_mask, 0xa16);
 V34SH_ASSERT(hist, 0xa18);
 V34SH_ASSERT(coeff, 0xa24);
 V34SH_ASSERT(conv, 0xa28);
-V34SH_ASSERT(fa2c, 0xa2c);
+V34SH_ASSERT(conv_sr, 0xa2c);
 V34SH_ASSERT(prev_k, 0xa38);
 V34SH_ASSERT(cost, 0xeac);
 V34SH_ASSERT(trellis, 0xecc);
@@ -2264,11 +2264,11 @@ V34OB_ASSERT(tx_data, 0x118);
 V34OB_ASSERT(tx_n, 0x218);
 V34OB_ASSERT(tx_rd, 0x21c);
 V34OB_ASSERT(data_enable, 0x2214);
-V34OB_ASSERT(faa74, 0xaa74);
+V34OB_ASSERT(train_symcount, 0xaa74);
 V34OB_ASSERT(vect, 0x2a80);
 V34OB_ASSERT(vect_idx, 0x2aa2);
 V34OB_ASSERT(txpoint, 0x25d0);
-V34OB_ASSERT(f25c2, 0x25c2);
+V34OB_ASSERT(tx_flags, 0x25c2);
 /* initdigital's, including the two that grew the struct past 0xac10. */
 V34OB_ASSERT(ptc, 0x008);
 V34OB_ASSERT(nof_tx_bits, 0x010);

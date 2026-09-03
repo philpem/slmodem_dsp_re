@@ -108923,3 +108923,121 @@ reading V.27ter's onto V.21 would have scheduled a subset that cannot link at
 all. `tools/relocscan.py` is the tool for the data-reference half and was fixed
 the same day (F9280); `objdump -r` piped through a grep for the family's names
 is the cheap whole-object form and is what was used here.  (2026-09-01)
+
+### F9341. Naming pass over the V.34 handshake/FSK cluster: 84 declared fields plus 8 carved out of four pad regions, none left as a bare `fNNNN`
+
+Scope was `include/dsplib/v34fsk.h`, `src/pump/v34/v34hshak.c`,
+`src/pump/v34/v34hstx1.cpp` and `src/pump/v34/v34shell.c` -- the four files
+whose bare `fNNNN` identifiers this pass was asked to resolve -- and the
+identifiers turned out to name fields in THREE shared structs, only one of
+which (`struct v34_object`) lives in one of the four files. `struct
+v34_receiver` (`v34recv.h`) and `struct v34_shell` (`v34shell.h`) are reached
+from the same four files by pointer, and CLAUDE.md's "one type, one home"
+rule puts the field's name at its declaration, not at its use site -- so both
+headers were edited too, plus every OTHER file in the tree that names the
+same field, tree-wide, or the build would not link. That turned out to be 39
+more files (`v34diag.cpp`, `v34digital.c`, `v34pcmif.c`, `v34pcmmain.cpp`,
+`v34rx.c`, `VPcmFloModem.cpp`, `TAG_DiagnosticResults.h` and 24 `test/unit/`
+files that construct `struct v34_object`/`struct v34_receiver` directly), plus
+25 `test/mutations/*.json` files whose `find`/`replace` anchors are literal
+source text and went stale the moment the identifiers under them changed --
+exactly finding F7002's shape, on this rename rather than the one that
+finding was written about; `tools/anchorcheck.py` is what found the 497 that
+broke and confirmed all were repaired.
+
+**THE COUNT.** 84 already-declared bare fields were resolved: 41 in
+`struct v34_object`, 28 in `struct v34_receiver` (26 `f*` plus `f25e`/`f260`,
+which collide in NAME but not in OFFSET with two `v34_object` fields of the
+same spelling -- the rename script handled the two structs' `f25e`/`f260`
+separately, keyed on the `rx->`/`obj->` prefix at each use site, because a
+blind tree-wide substitution would have put the object's names on the
+receiver's fields or vice versa) and 15 in `struct v34_shell`. A further 8
+fields were carved out of four regions that were previously `unmapped_*`
+padding, because the accessor macros in `v34hshak.c` and `v34hstx1.cpp`
+(`DP_MODE`, `TX1_SEGLEN`, `TX1_FABE4`/`FABE6`/`FABE8`, `TX1_FABF8`/`FABF9`,
+`T41_FAA7A`) were already reaching into those spans by raw offset without a
+struct member to show for it -- `hs_mode` (+0x2218, was 4 of
+`unmapped_2216`'s 6 bytes), `seg_len` (+0x35a6, was the whole of
+`unmapped_35a6`), `short_abe4`/`short_abe6`/`moh_active` (+0xabe4/6/8, were 6
+of `unmapped_abe4`'s 8 bytes) and `moh_msg_pending`/`moh_path_sel` (+0xabf8/9,
+was the whole of `unmapped_abf8`). Every split was checked by confirming the
+new members' combined size equals the pad they replace and that the object's
+next named field keeps its offset; `make one` over the whole cluster (~450
+checks across `t_v34hshak`, `t_v34hstx1`, `t_v34shell`, `t_v34rx`,
+`t_v34pcmif`, `t_v90p34` and sixteen smaller suites) passed unchanged before
+and after, which a struct-layout mistake could not have survived.
+
+**72 OF THE 92 GOT A REAL NAME; 20 WERE PROMOTED TO `type_NNNN` AND LEFT
+THERE.** The 20 are exactly CLAUDE.md's second state -- shape and size known,
+meaning not -- and eleven of them (`short_3588`, `short_358a`, `short_358c`,
+`short_35a4`, `short_aa78`, `short_abae`, `short_abc2`, `short_abce`,
+`short_abd0`, `short_abd2`, `short_a0a` in `v34_shell`) already carried a
+comment from a previous pass explicitly declining a name -- F633, F634 and
+F635's "OFFSET-NAMED ON PURPOSE" fields. This pass did not revisit those
+rulings, only converted them from a bare offset to a typed placeholder, which
+is a pure rename. The other nine (`short_382`, `short_2aa0`, `short_3552`,
+`short_19e`, `short_25e` in `v34_receiver`, `short_abe2`, and the three new
+pad-split fields `short_aa7a`/`short_abe4`/`short_abe6`) had no comment at all
+before this pass and got none now beyond what a single write site or a
+"nothing reads this" note supports -- usage inference at most, stated as such
+in each field's comment, and in two cases (`short_aa7a`, and the
+`short_abe4`/`short_abe6` pair) not even usage: a single write and no reader
+anywhere in the tree.
+
+**ONE FIELD'S EVIDENCE OVERTURNED ITS OWN HEADER'S CLAIM.** `v34fsk.h` had
+`f359c` down as "0x65 here selects `setTimingStateParameters`' second
+parameter table" -- true, but not the field's primary role. `v34hshak.c`
+reads it once into a local variable it names `originate`
+(`originate = (obj->f359c == 0x65)`), and forty-odd sites elsewhere compare
+it against 0x65/0x66 directly for everything from the scrambler polynomial to
+which debug constant to print. It is `role`, the calling/answering flag, and
+the timing-table selection is a consequence of the role rather than a second
+fact about the field. Two constants, `V34_ROLE_CALL` (0x65) and
+`V34_ROLE_ANSWER` (0x66), are declared beside it in `v34fsk.h` -- the
+THIRD spelling of the same two values in this tree, after `v34diag.cpp`'s
+`VDIAG_ROLE_CALL`/`VDIAG_ROLE_ANSWER` and `v34pcmmain.cpp`'s
+`PROG_ROLE_ORIGINATE`, kept separate rather than consolidated because
+consolidating them was not this pass's job and the three files each already
+compile against their own copy.
+
+**BIT FLAGS: FOUR NEW, THREE ALREADY NAMED AND NEARLY DUPLICATED.**
+`tx_flags` (`v34_object::f25c2`) carries at least ten meaningful bits, of
+which eight are established and two (bits 8 and 10) are one write site each
+with no reader and are left as bare hex. Of the eight, four are named here
+for the first time -- `V34_TXFLAG_CALLER` (bit 0, the scrambler generator
+select), `V34_TXFLAG_SEG4A` (bit 13, TRNSEG4A/SSEG), `V34_TXFLAG_NLENCODE`
+(bit 14, `initdigital`'s own comment: "Bit 13 of the same word is
+modulatevector's non-linear encoder" -- bit 13 of the INFO word lands at bit
+14 here) and `V34_TXFLAG_PPSEG` (bit 15, read as the field's sign) -- and
+THREE (bits 2, 4 and 9) already had names this pass nearly duplicated before
+a tree-wide grep for the bit values turned up `V34_EC_FROZEN` and
+`V34_EC_FEED` in `v34rx.h` and `PROG_TXBIT_DATA` in `v34pcmmain.cpp`, all
+three already in active use in `v34rx.c`, `v34pcmmain.cpp` and two test
+files. The near-duplicates were deleted rather than kept; the field's own
+comment in `v34fsk.h` now cites all seven by name and says which header owns
+each. This is the same lesson F604 states for names generally, applied to
+flag constants specifically: grep for the VALUE, not just the field, before
+minting a name.
+
+**WHAT DID NOT CHANGE.** No `src/` behaviour: every rename is an identifier
+substitution and every pad split replaces bytes nothing in `src/` read as a
+struct member with a named member of the same total size at the same offset,
+so nothing a differential test can observe moved. `make one` across the
+cluster's own suites plus every other test binary the renamed structs reach
+(`t_v34diag`, `t_v34digital`, `t_v34info1a`, `t_v34info1d`, `t_v34k56`,
+`t_v34link`, `t_v34pcmapi`, `t_v34retrain`, `t_vpcmguard`, `t_v34call`,
+`t_v34demod`, `t_v34hsmst44`, `t_v34hsrx72`, `t_v34hst3core`, `t_v34hst3mid`,
+`t_v34hstb1`, `t_v90p34`) passed with unchanged check counts throughout.
+`tools/onedef.py` and `tools/refcheck.py` are clean, and `tools/anchorcheck.py`
+went from 497 broken anchors (mid-rename) to 0. `make period`/`make phase`
+could not be run in this sandbox -- `docker` is present but the daemon socket
+refuses this user's connection -- so the codegen-matching tier this class of
+change cannot move (a name or a struct-member split is compile-time-only) was
+not re-verified by the tier CLAUDE.md says decides; the modern-compiler
+differential suite is what stands behind this entry until that tier runs.
+`python3 tools/bannercheck.py src/pump/v34` reports zero banners either side
+of this change -- the V.34 module was reconstructed under the fast pass
+(`docs/fastpass.md`) rather than the per-function banner convention, so this
+is the tool correctly finding nothing to check rather than a clean run of a
+live one; confirmed by running it against `src/pump/v22`, which does carry
+banners and reports 47 agreeing.  (2026-09-03)

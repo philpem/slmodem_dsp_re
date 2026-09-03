@@ -83,7 +83,7 @@
 #define DP_V92			92
 
 /*
- * The answerer's value of `f359c`, the same 0x65/0x66 pair `v34modeminit`,
+ * The answerer's value of `role`, the same 0x65/0x66 pair `v34modeminit`,
  * `preinitdigital` and `v34handshakinit` all test it against and the same
  * constant v34pcmmain.cpp spells `PCM_ROLE`.  Named here too because the four
  * "current" getters below test it four times and a bare 0x66 in four places
@@ -246,11 +246,11 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
 
 	v34handshakinit(obj, 2);
 
-	obj->f0004 = 6;
+	obj->progress = 6;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
 
 	*(int *)(m + 0x2218) = 5;
 
@@ -287,7 +287,7 @@ VPcmV34InitiateRateRenegotiation(void *objp, int req)
  * what we settled on".  Then mode 2 of `v34handshakinit` -- the same mode the
  * renegotiation uses, because from the handshake's point of view a hang-up is
  * a renegotiation that never completes -- and the three receiver scalars at
- * +0x4bc, which are `struct v34_receiver`'s f258, f25a and f25c and not the
+ * +0x4bc, which are `struct v34_receiver`'s bad_run, bad_long_run and good_run and not the
  * object's own trio at +0x25c.
  *
  * The PCM arm is the only place in this file that writes the session flag at
@@ -324,12 +324,12 @@ VPcmV34InitiateHangUp(void *objp)
 
 	v34handshakinit(obj, 2);
 
-	obj->f0004 = 6;
+	obj->progress = 6;
 	*(int *)(m + 0x2218) = 5;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
 }
 
 /*
@@ -420,7 +420,7 @@ VPcmV34GetQuickConnectIndication(void *objp)
  * The four "current" getters that answer in baud and in hertz.
  *
  * THEY LOOK LIKE FOUR COPIES OF ONE FUNCTION AND THEY ARE NOT.  All four open
- * on `f359c == 0x66` and then on a range test over `status`, and all four
+ * on `role == 0x66` and then on a range test over `status`, and all four
  * differ inside it -- the crossing is the same one v34pcmmain.cpp documents
  * for the two BIT rate getters, and the two carriers are a third and fourth
  * shape again:
@@ -470,7 +470,7 @@ VPcmV34GetCurrentRxBaudRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+	if (obj->role == PCMIF_ROLE_ANSWER) {
 		if ((unsigned int)(obj->status - 1) <= 1u)
 			return PCMIF_PCM_BAUD;
 	} else if ((unsigned int)(obj->status - 2) <= 1u) {
@@ -486,7 +486,7 @@ VPcmV34GetCurrentTxBaudRate(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+	if (obj->role == PCMIF_ROLE_ANSWER) {
 		if ((unsigned int)(obj->status - 2) <= 1u)
 			return PCMIF_PCM_BAUD;
 	} else if ((unsigned int)(obj->status - 1) <= 1u) {
@@ -502,7 +502,7 @@ VPcmV34GetCurrentRxCarrier(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+	if (obj->role == PCMIF_ROLE_ANSWER) {
 		if ((unsigned int)(obj->status - 1) <= 1u)
 			return 0;
 	} else if ((unsigned int)(obj->status - 2) <= 1u) {
@@ -518,7 +518,7 @@ VPcmV34GetCurrentTxCarrier(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	if (obj->f359c == PCMIF_ROLE_ANSWER) {
+	if (obj->role == PCMIF_ROLE_ANSWER) {
 		if ((unsigned int)(obj->status - 2) <= 1u)
 			return 0;
 	} else if (obj->status == 2) {
@@ -586,8 +586,8 @@ VPcmV34GetSNR(void *objp)
 	int db = 0;
 	int last = 0;
 
-	if (rx->f21a > 0) {
-		int v = rx->f248 / rx->f21a;
+	if (rx->equerr > 0) {
+		int v = rx->f248 / rx->equerr;
 
 		if (v > 0) {
 			for (;;) {
@@ -664,11 +664,11 @@ getTimingPhase(void *objp)
  * The echo-cancelled samples the host's data logger asks for, and the count
  * it has accumulated since the last ask.
  *
- * `hist_2f58` is the ring `modem_serrint` fills and `f2aa6` is its write
+ * `hist_2f58` is the ring `modem_serrint` fills and `hist2_idx` is its write
  * index, so the count handed back is the index and reading it RESETS it --
  * this is a drain, not a peek, and the zeroing at 0x71e1 is the whole of the
  * function's effect on the object.  The load is `movswl`, so the index is
- * read SIGNED into the caller's int: `f2aa6` is a `short` and the object
+ * read SIGNED into the caller's int: `hist2_idx` is a `short` and the object
  * sign-extends it rather than masking.
  *
  * The return is `obj + 0x2f58` computed as an `add`, with no test of the
@@ -679,8 +679,8 @@ VPcmV34GetCleanedSamples(void *objp, int *n)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	*n = obj->f2aa6;
-	obj->f2aa6 = 0;
+	*n = obj->hist2_idx;
+	obj->hist2_idx = 0;
 	return obj->hist_2f58;
 }
 
@@ -698,7 +698,7 @@ VPcmV34GetCleanedSamples(void *objp, int *n)
  * v34pcmmain.cpp calls `O_MOHCOUNT` is the object's `mohTimer` and +0xaa74
  * is its `count2`, a deadline 48,000 samples further on.
  *
- * `faa74` KEEPS ITS OFFSET NAME.  "count2" is what the string calls it, and
+ * `train_symcount` KEEPS ITS OFFSET NAME.  "count2" is what the string calls it, and
  * that is a position in a set of counters rather than a description; nothing
  * here reads it back.
  *
@@ -735,7 +735,7 @@ VPcmV34NotifyDP(void *objp, int what)
 
 		edprintf("VPcmV34 Notification: Validate 3-Way Call...\r\n");
 		obj->status = 6;
-		obj->faa74 = count2;
+		obj->train_symcount = count2;
 		edprintf("VPcmV34 debug validate: mohTimer = %d, setting "
 			 "count2 to %d\r\n", moh, count2);
 		break;
@@ -814,7 +814,7 @@ VPcmV34SetTxScale(void *objp)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	obj->f25d4 = 0x16a1;
+	obj->tx_scale = 0x16a1;
 	edprintf("VPcmV34SetTxScale: tx scale set to %d\r\n", 0x16a1);
 }
 
@@ -841,7 +841,7 @@ VPcmV34SetTxScale(void *objp)
  * also sets the echo canceller's three adaptation constants and flips a flag
  * in the PCM receiver.  Both diagnostics say so -- the first names the three
  * constants it just wrote, and it is the object's own words that give
- * `f3554`, `f3558` and `f355c` the names "decay start", "decay fact" and
+ * `echo_decay_start`, `echo_decay_fact` and `echo_beta` the names "decay start", "decay fact" and
  * "beta", which nothing else in the tree could have supplied.
  *
  * THE CLAMP IS ASYMMETRIC and it is a clamp rather than a saturate-to-zero:
@@ -883,24 +883,24 @@ GetVPcmMinimalTxPowerReduction(void *objp)
 
 	if (red > 0) {
 		*(int *)(pcm + 0x4f4) = 0;
-		obj->f3554 = 0x7d0;
-		obj->f3558 = 0x7fdf;
-		obj->f355c = 2;
+		obj->echo_decay_start = 0x7d0;
+		obj->echo_decay_fact = 0x7fdf;
+		obj->echo_beta = 2;
 	} else {
 		*(int *)(pcm + 0x4f4) = 1;
-		obj->f3554 = 0x7d0;
-		obj->f3558 = 0x7fcb;
+		obj->echo_decay_start = 0x7d0;
+		obj->echo_decay_fact = 0x7fcb;
 		/*
 		 * 4 when the configuration's +0x54 is exactly 4 and 6
 		 * otherwise -- `cmpl $4; setne; lea 4(%ecx,%ecx,1)`, which is
 		 * a two-way choice and not arithmetic on the field.
 		 */
-		obj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
+		obj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;
 	}
 
 	edprintf("VPcmV34Main: Due to final MinTXPR = %d, setting echo: "
 		 "decay start = %d, decay fact = %d, beta = %d\r\n",
-		 (int)red, obj->f3554, obj->f3558, obj->f355c);
+		 (int)red, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);
 
 	/*
 	 * The session pointer is RE-LOADED for the second report rather than
@@ -1077,8 +1077,8 @@ V34XF_GetRTD(void *objp)
  * NO HANDSHAKE: this is the one of the three that does not call
  * `v34handshakinit`.  What it does instead is `v34handshakinit`'s mode 2
  * block with the state machines left out -- the same four transmit-queue
- * fields, the same mask on `f25c2`, the same `preinitdigital`, the same
- * `f382` pair.  Two independent readings of one block, which is the
+ * fields, the same mask on `tx_flags`, the same `preinitdigital`, the same
+ * `short_382` pair.  Two independent readings of one block, which is the
  * corroboration that block was read right.
  *
  * IT ALSO WINDS `v90_receiver` BACKWARDS.  That field is documented as a
@@ -1086,7 +1086,7 @@ V34XF_GetRTD(void *objp)
  * renegotiation can move it down.  See D48.
  *
  * `rrn_type` is tested against zero only, and `constel_size` likewise -- the
- * two `f382` values differ by 32 and are the pair `V34XF_IndicateJdReceived`
+ * two `short_382` values differ by 32 and are the pair `V34XF_IndicateJdReceived`
  * chooses between on its own constellation-size bit.  The parameter names are
  * the object's, from the diagnostic below.
  */
@@ -1109,20 +1109,20 @@ VPcmV34SetV90RateReneg(void *objp, short rrn_type, unsigned char constel_size)
 	 */
 	obj->v90_receiver = (rrn_type != 0) ? 15 : 11;
 
-	obj->f25c6 = 0;
-	obj->f25c0 = 0;
-	obj->f25cc = 0;
-	obj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);
+	obj->prev_quadrant = 0;
+	obj->seg_symcount = 0;
+	obj->tx_scr_sr = 0;
+	obj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);
 
 	preinitdigital(obj);
 
 	/* The `[1]` counter every handshake trace prints; see v34hshak.c. */
 	*(short *)(m + 0x2aa2) = 0;
 
-	obj->f0004 = 6;
+	obj->progress = 6;
 	*(int *)(m + 0x2218) = 5;
 
-	obj->f382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
+	obj->short_382 = (short)(constel_size != 0 ? 0x89b0 : 0x8990);
 
 	/*
 	 * The timer, reset: the same three fields and the same two constants
@@ -1167,11 +1167,11 @@ V34XF_IndicateJdReceived(void *objp, unsigned char constel,
 	obj->v90_receiver = 3;
 
 	if (silence_scr != 0)
-		obj->f382 = 0;
+		obj->short_382 = 0;
 	else if (constel != 0)
-		obj->f382 = (short)0x89b0;
+		obj->short_382 = (short)0x89b0;
 	else
-		obj->f382 = (short)0x8990;
+		obj->short_382 = (short)0x8990;
 }
 
 /*
@@ -1194,12 +1194,12 @@ V34XF_IndicateDilReceived(void *objp, unsigned char constel)
 			constel);
 
 	obj->v90_receiver = 6;
-	obj->f25c0 = 0;
+	obj->seg_symcount = 0;
 
 	if (constel != 0)
-		obj->f382 = (short)0x89b0;
+		obj->short_382 = (short)0x89b0;
 	else
-		obj->f382 = (short)0x8990;
+		obj->short_382 = (short)0x8990;
 }
 
 /*
@@ -1373,8 +1373,8 @@ chkForceBaudRate(void *objp, struct v34_dftbin *bins)
  *      re-seeded.
  *
  * THE DC SEED IS THE SAME EXPRESSION `VPcmV34InitiateRetrain` WRITES, at the
- * same offset: `336 * f35a4 + 10000`, `f35a4` read signed, into +0x254 with
- * +0x256 and +0x258 cleared behind it.  v34fsk.h's note on `f35a4` said that
+ * same offset: `336 * short_35a4 + 10000`, `short_35a4` read signed, into +0x254 with
+ * +0x256 and +0x258 cleared behind it.  v34fsk.h's note on `short_35a4` said that
  * two functions computed it and that "nothing establishes that their
  * destinations are the same field".  This is the second one, it is
  * reconstructed, and the destination is the same -- so that reservation is
@@ -1395,7 +1395,7 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 
 	rx->flags = (unsigned short)(rx->flags | V34_RX_FLAG_LATE_TRN);
 
-	obj->f382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
+	obj->short_382 = (constel == 0x10) ? (short)0x89b0 : (short)0x8990;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
@@ -1408,9 +1408,9 @@ V34XF_IndicateK56FlexJdReceived(void *objp, unsigned char constel)
 	if (obj->txstate != 0x12)
 		obj->txstate = 0x12;
 
-	obj->f25c0 = 0;
-	obj->f25c6 = 0;
-	obj->f25cc = 0;
+	obj->seg_symcount = 0;
+	obj->prev_quadrant = 0;
+	obj->tx_scr_sr = 0;
 
 	*(short *)(m + 0x254) =
 		(short)(336 * (int)*(const short *)(m + 0x35a4) + 10000);
@@ -1444,7 +1444,7 @@ VPcmV34LogTimingOffset(void *objp, short offset)
 {
 	struct v34_object *obj = (struct v34_object *)objp;
 
-	obj->fac0c = offset;
+	obj->v90_timing_offset = offset;
 }
 
 /*
@@ -1511,16 +1511,16 @@ VPcmV34SetIndicationOfRemoteRetrain(void *objp)
 		((int)__builtin_offsetof(struct v34_object, field) == (off)) \
 		? 1 : -1]
 
-V34PCMIF_ASSERT(txscale, f25d4,           0x25d4);
+V34PCMIF_ASSERT(txscale, tx_scale,           0x25d4);
 V34PCMIF_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMIF_ASSERT(k56rx,   k56flex_receiver, 0x0250);
-V34PCMIF_ASSERT(f382,    f382,             0x0382);
-V34PCMIF_ASSERT(f25c0,   f25c0,            0x25c0);
+V34PCMIF_ASSERT(short_382,    short_382,             0x0382);
+V34PCMIF_ASSERT(seg_symcount,   seg_symcount,            0x25c0);
 V34PCMIF_ASSERT(probe,   probe_results,    0xa258);
 V34PCMIF_ASSERT(info0,   info0_bits,       0xa8a4);
 V34PCMIF_ASSERT(rtd,     rtd,              0xaa7e);
-V34PCMIF_ASSERT(timeoff, fac0c,            0xac0c);
-V34PCMIF_ASSERT(f0004,   f0004,            0x0004);
+V34PCMIF_ASSERT(timeoff, v90_timing_offset,            0xac0c);
+V34PCMIF_ASSERT(progress,   progress,            0x0004);
 V34PCMIF_ASSERT(rmin,    rate_min,         0x0220);
 V34PCMIF_ASSERT(rmax,    rate_max,         0x0224);
 V34PCMIF_ASSERT(rnow,    rate_now,         0x0228);
@@ -1542,9 +1542,9 @@ V34PCMIF_ASSERT(pbins,   probe_bins,       0xa320);
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
-V34PCMIF_RXASSERT(f258, f258, 0x4bc);
-V34PCMIF_RXASSERT(f25a, f25a, 0x4be);
-V34PCMIF_RXASSERT(f25c, f25c, 0x4c0);
+V34PCMIF_RXASSERT(bad_run, bad_run, 0x4bc);
+V34PCMIF_RXASSERT(bad_long_run, bad_long_run, 0x4be);
+V34PCMIF_RXASSERT(good_run, good_run, 0x4c0);
 
 /*
  * The doubles are the first floating-point member the struct has ever had,

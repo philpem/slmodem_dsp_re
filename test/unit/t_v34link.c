@@ -538,7 +538,7 @@ run_v34(struct dp_operations *ops, int nblock)
 			       | (unsigned)(unsigned char)peek16(ep, O_TXSTATE);
 			if (verbose && trip != last[ep]) {
 				printf("  %5d %-9s mst %3d rx %3d tx %3d  "
-				       "mode %d  counter %d f3588 %d\n", blk,
+				       "mode %d  counter %d short_3588 %d\n", blk,
 				       ep_name[ep], peek16(ep, O_MICROSTATE),
 				       peek16(ep, O_RXSTATE),
 				       peek16(ep, O_TXSTATE),

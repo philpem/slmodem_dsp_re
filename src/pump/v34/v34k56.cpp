@@ -40,19 +40,19 @@
  * ways that all move the constellation point:
  *
  *   - `V34scrambler`'s mode argument is the LITERAL 1.  `txmitdibit` passes
- *     `tx_scrambler_mode(o)`, which reads bit 0 of `f25c2`; nothing in these
+ *     `tx_scrambler_mode(o)`, which reads bit 0 of `tx_flags`; nothing in these
  *     721 bytes loads +0x25c2 at all, so the generator here does not follow
  *     the calling/answering flag the rest of the transmitter obeys.
  *   - there is NO differential encoding.  `txmitdibit` forms
- *     `(d + f25c6) & 3`; this stores the scrambler's two bits straight into
- *     `f25c8` and indexes `vect4` with them.
- *   - `f25c6` is not written, so the quadrant the rest of the handshake
+ *     `(d + prev_quadrant) & 3`; this stores the scrambler's two bits straight into
+ *     `cur_quadrant` and indexes `vect4` with them.
+ *   - `prev_quadrant` is not written, so the quadrant the rest of the handshake
  *     carries does not advance.
  *
  * The quadbit arm differs the same way: two two-bit scrambler requests, the
- * first into `f25c8` and the second selecting within it, with the sum
+ * first into `cur_quadrant` and the second selecting within it, with the sum
  * `d2 + q * 4` -- which is `txmitquadbit`'s index expression -- but again
- * with no differential add and no `f25c6` write.  A reconstruction that
+ * with no differential add and no `prev_quadrant` write.  A reconstruction that
  * called the two published emitters would compile, link, and be wrong; the
  * mutation suite's first two entries are exactly that substitution.
  *
@@ -117,15 +117,15 @@ k56FlexPhase34(void *objp)
 
 	if (!(rx->flags & V34_RX_FLAG_DATA)) {
 		/*
-		 * Ja.  The bit source writes the dibit into `f25c8` -- the
+		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
 		 * same field the emitters use as their quadrant register --
 		 * and returns non-zero on the symbol that ends the sequence.
 		 * The dibit is transmitted either way, so the last one is
 		 * sent and then acted on.
 		 */
-		int done = (short)k56->getK56FlexJaBits(&o->f25c8);
+		int done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);
 
-		txmitdibit(o, o->f25c8);
+		txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -172,9 +172,9 @@ k56FlexPhase34(void *objp)
 			return 0;
 
 		/* The word is spent: reset the transmitter and advance. */
-		o->f25c6 = 0;
-		o->f25c0 = 0;
-		o->f25cc = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
 		o->k56flex_receiver = 4;
 		return 0;
 	}
@@ -183,26 +183,26 @@ k56FlexPhase34(void *objp)
 		/* The idle symbol.  See the note at the top of this file. */
 		int q;
 
-		if (o->f382 == OB_CONSTEL_16) {
+		if (o->short_382 == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->f25cc,
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						1, 3, 2);
-			o->f25c8 = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->f25cc,
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						1, 3, 2);
-			q = o->f25c8;
+			q = o->cur_quadrant;
 			o->txpoint.word = vect16[d + q * 4];
 		} else {
-			q = (short)V34scrambler((unsigned *)&o->f25cc,
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						1, 3, 2);
-			o->f25c8 = (short)q;
+			o->cur_quadrant = (short)q;
 			o->txpoint.word = vect4[q];
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->f25c0 = (short)((unsigned)(unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);
 		return 0;
 	}
 
@@ -213,12 +213,12 @@ k56FlexPhase34(void *objp)
 		 * they are scrambled and differentially encoded the way the
 		 * rest of the handshake is.
 		 */
-		int done = (short)k56->getK56FlexMpBits(&o->f25c8);
+		int done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);
 
-		if (o->f382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->f25c8);
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
 		else
-			txmitdibit(o, o->f25c8);
+			txmitdibit(o, o->cur_quadrant);
 
 		if (done == 0)
 			return 0;

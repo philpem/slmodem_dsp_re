@@ -298,13 +298,13 @@
  },
  {
   "label": "V.34 does not set +0xa23c",
-  "find": "\t\tobj->fa23c = 1;",
+  "find": "\t\tobj->far_echo_enable = 1;",
   "replace": "\t\t(void)0;"
  },
  {
   "label": "V.34 does not share the default arm's tail",
-  "find": "\t\tobj->fa23c = 1;\n\t\t/* FALLTHROUGH -- the object shares the default arm's tail. */\n\tdefault:",
-  "replace": "\t\tobj->fa23c = 1;\n\t\tbreak;\n\tdefault:"
+  "find": "\t\tobj->far_echo_enable = 1;\n\t\t/* FALLTHROUGH -- the object shares the default arm's tail. */\n\tdefault:",
+  "replace": "\t\tobj->far_echo_enable = 1;\n\t\tbreak;\n\tdefault:"
  },
  {
   "label": "the default arm leaves the K56flex counter alone",
@@ -317,14 +317,14 @@
   "replace": "\tv34handshakinit(obj, 2);"
  },
  {
-  "label": "f0004 becomes 6",
-  "find": "\tobj->f0004 = 7;\n\tobj->status = 0;",
-  "replace": "\tobj->f0004 = 6;\n\tobj->status = 0;"
+  "label": "progress becomes 6",
+  "find": "\tobj->progress = 7;\n\tobj->status = 0;",
+  "replace": "\tobj->progress = 6;\n\tobj->status = 0;"
  },
  {
   "label": "status is not cleared",
-  "find": "\tobj->f0004 = 7;\n\tobj->status = 0;",
-  "replace": "\tobj->f0004 = 7;\n\t(void)0;"
+  "find": "\tobj->progress = 7;\n\tobj->status = 0;",
+  "replace": "\tobj->progress = 7;\n\t(void)0;"
  },
  {
   "label": "+0x2218 becomes 5",
@@ -333,7 +333,7 @@
  },
  {
   "label": "the three receiver scalars are left alone",
-  "find": "\t*(int *)(m + OB_F2218) = 2;\n\n\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;",
+  "find": "\t*(int *)(m + OB_F2218) = 2;\n\n\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;",
   "replace": "\t*(int *)(m + OB_F2218) = 2;\n\n\t(void)rx;"
  },
  {
@@ -360,38 +360,38 @@
  },
  {
   "label": "+0xac24 is cleared as a short rather than an int",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(short *)(st + 0x08) = 0;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(short *)(st + 0x08) = 0;"
  },
  {
   "label": "+0xac2e is cleared as well",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\t\t*(short *)(st + 0x12) = 0;"
  },
  {
   "label": "+0xac30 is left alone",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t(void)0;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t(void)0;"
  },
  {
   "label": "the two roles are swapped",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x65) {"
  },
  {
   "label": "0x39c3 goes in on the answering role only",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t} else if (role == 0x66) {"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t} else if (role == 0x66) {"
  },
  {
   "label": "the quadrature pair is swapped",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;"
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x5a82;\n\t\t\t*(short *)(st + 0x0e) = (short)0x55fc;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;\n\n\t\t*(short *)(st + 0x00) = 0;\n\t\t*(short *)(st + 0x02) = 0;\n\t\t*(short *)(st + 0x04) = 0;\n\t\t*(short *)(st + 0x06) = 0;\n\t\t*(int *)(st + 0x08) = 0;\n\t\t*(int *)(st + 0x14) = 0;\n\t\t*(int *)(st + 0x18) = 0;\n\t\t*(int *)(st + 0x1c) = 0;\n\n\t\tif (role == 0x65) {\n\t\t\t*(short *)(st + 0x0c) = 0;\n\t\t\t*(short *)(st + 0x0e) = 0;\n\t\t\t*(short *)(st + 0x10) = (short)0x39c3;\n\t\t} else if (role == 0x66) {\n\t\t\t*(short *)(st + 0x0c) = (short)0x55fc;\n\t\t\t*(short *)(st + 0x0e) = (short)0x5a82;"
  },
  {
   "label": "the role is read unsigned",
-  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->f359c;",
-  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tint role = (unsigned short)obj->f359c;",
+  "find": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tshort role = obj->role;",
+  "replace": "\t */\n\t{\n\t\tunsigned char *st = m + OB_FAC1C;\n\t\tint role = (unsigned short)obj->role;",
   "equivalent": true,
   "why": "`role` is used for nothing but equality with 0x65 and 0x66, both of which are in [0, 0x7fff].  A signed short equals 0x65 exactly when its low sixteen bits do, so the sign of the load cannot change either answer.  The sweep drives -1 and 0x7fff as well as the two live values.  Written signed because `movswl` is what the object emits, and because v34hshak.c reads the same field signed."
  }

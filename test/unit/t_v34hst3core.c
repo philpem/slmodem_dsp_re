@@ -603,7 +603,7 @@ main(void)
 	 * `coeff` points at a library table, so side A holds ours and side B
 	 * the blob's and no address comparison can tell two copies from two
 	 * tables (finding F324).  What CAN be checked on one side is that
-	 * f359c 0x64 and f359c 0x65 select different tables at all -- which a
+	 * role 0x64 and role 0x65 select different tables at all -- which a
 	 * reconstruction that always picked one would fail.
 	 */
 	begin(V34HS_MOH_TONE, V34HS_MOH_SILENCE);
@@ -625,7 +625,7 @@ main(void)
 		     && v34hs_peek_short(0, T3T_DET_THI) == 0x400), 1, 605);
 	diff_eq_int("79, MHfrr: the detector is armed at +0x356a",
 		    v34hs_peek_short(0, T3T_DET_ARMED), 1, 605);
-	diff_eq_int("79, MHfrr: f359c 0x64 selects the 1200 Hz descriptor",
+	diff_eq_int("79, MHfrr: role 0x64 selects the 1200 Hz descriptor",
 		    det_coeff(0) == c1200_, 1, 605);
 
 	begin(V34HS_MOH_TONE, V34HS_MOH_SILENCE);
@@ -636,7 +636,7 @@ main(void)
 	v34hs_poke_short(T3T_F359C, 0x65);
 	step("79, MHfrr, originating", 606, 45, 2, V34HS_MOH_TONE_DROP,
 	     V34HS_TX_DPSK);
-	diff_eq_int("79, MHfrr: f359c 0x65 selects the 2400 Hz descriptor",
+	diff_eq_int("79, MHfrr: role 0x65 selects the 2400 Hz descriptor",
 		    det_coeff(0) == c2400_, 1, 606);
 
 	/*

@@ -65,15 +65,15 @@
  },
  {
   "label": "mode 0 tests 0x65 rather than 0x66",
-  "find": "\t\tif (obj->f359c == 0x66)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
-  "replace": "\t\tif (obj->f359c == 0x65)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
+  "find": "\t\tif (obj->role == 0x66)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
+  "replace": "\t\tif (obj->role == 0x65)\n\t\t\tV34SetINFO0dBits(obj, (short *)(m + 0xa97c));",
   "note": "Anchored with the line around it because microstate 46's arm at 0x65d6d now spells the same test/store, at one tab where this one is at three.  A one-line anchor matched twice and read as `unusable` rather than as a failure.  Finding F325.",
   "fn": "v34handshakinit"
  },
  {
   "label": "mode 4 detector pair the other way round",
-  "find": "(obj->f359c == 0x65) ? c2400_ : c1200_,",
-  "replace": "(obj->f359c == 0x65) ? c1200_ : c2400_,",
+  "find": "(obj->role == 0x65) ? c2400_ : c1200_,",
+  "replace": "(obj->role == 0x65) ? c1200_ : c2400_,",
   "fn": "v34handshakinit"
  },
  {
@@ -92,20 +92,20 @@
  },
  {
   "label": "mode 2 txflags mask ~0x4018 becomes ~0x4010",
-  "find": "(obj->f25c2 & ~0x4018) | 0x2000",
-  "replace": "(obj->f25c2 & ~0x4010) | 0x2000",
+  "find": "(obj->tx_flags & ~0x4018) | 0x2000",
+  "replace": "(obj->tx_flags & ~0x4010) | 0x2000",
   "fn": "v34handshakinit"
  },
  {
   "label": "prologue txflags mask dropped entirely",
-  "find": "obj->f25c2 = (short)(obj->f25c2 & 0x7fff);",
+  "find": "obj->tx_flags = (short)(obj->tx_flags & 0x7fff);",
   "replace": "",
   "fn": "v34handshakinit"
  },
  {
   "label": "prologue txflags 0x7fff becomes 0x3fff",
-  "find": "obj->f25c2 & 0x7fff",
-  "replace": "obj->f25c2 & 0x3fff",
+  "find": "obj->tx_flags & 0x7fff",
+  "replace": "obj->tx_flags & 0x3fff",
   "fn": "v34handshakinit"
  },
  {
@@ -426,20 +426,20 @@
  },
  {
   "label": "txlevel: the reduction field is bits 4..6",
-  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 4) & 7), 3);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 4) & 7), 3);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the reduction field is four bits",
-  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 0xf), 4);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 0xf), 4);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the reduction field is not reversed",
-  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)((w >> 5) & 7);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)((w >> 5) & 7);",
   "fn": "settxlevel"
  },
  {
@@ -456,8 +456,8 @@
  },
  {
   "label": "txlevel: the two fields are swapped",
-  "find": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
-  "replace": "\tobj->f25dc = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
+  "find": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);",
+  "replace": "\tobj->tx_pwr_reduction = (short)bitreverse((unsigned short)((w >> 2) & 7), 3);\n\n\textra = (short)bitreverse((unsigned short)((w >> 5) & 7), 3);",
   "fn": "settxlevel"
  },
  {
@@ -474,14 +474,14 @@
  },
  {
   "label": "txlevel: the addition is not added",
-  "find": "\tobj->f25dc = (short)(extra + (unsigned short)obj->f25dc);",
-  "replace": "\tobj->f25dc = (short)(unsigned short)obj->f25dc;",
+  "find": "\tobj->tx_pwr_reduction = (short)(extra + (unsigned short)obj->tx_pwr_reduction);",
+  "replace": "\tobj->tx_pwr_reduction = (short)(unsigned short)obj->tx_pwr_reduction;",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the addition replaces the reduction",
-  "find": "\tobj->f25dc = (short)(extra + (unsigned short)obj->f25dc);",
-  "replace": "\tobj->f25dc = extra;",
+  "find": "\tobj->tx_pwr_reduction = (short)(extra + (unsigned short)obj->tx_pwr_reduction);",
+  "replace": "\tobj->tx_pwr_reduction = extra;",
   "fn": "settxlevel"
  },
  {
@@ -504,20 +504,20 @@
  },
  {
   "label": "txlevel: a negative minimum is a floor like the rest",
-  "find": "\t\tif (minpr < 0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)",
-  "replace": "\t\tif (0)\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);\n\t\telse if (obj->f25dc < minpr)",
+  "find": "\t\tif (minpr < 0)\n\t\t\tobj->tx_pwr_reduction = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->tx_pwr_reduction);\n\t\telse if (obj->tx_pwr_reduction < minpr)",
+  "replace": "\t\tif (0)\n\t\t\tobj->tx_pwr_reduction = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->tx_pwr_reduction);\n\t\telse if (obj->tx_pwr_reduction < minpr)",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: a non-negative minimum is added rather than floored",
-  "find": "\t\telse if (obj->f25dc < minpr)\n\t\t\tobj->f25dc = minpr;",
-  "replace": "\t\telse\n\t\t\tobj->f25dc = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->f25dc);",
+  "find": "\t\telse if (obj->tx_pwr_reduction < minpr)\n\t\t\tobj->tx_pwr_reduction = minpr;",
+  "replace": "\t\telse\n\t\t\tobj->tx_pwr_reduction = (short)(minpr\n\t\t\t\t\t     + (unsigned short)obj->tx_pwr_reduction);",
   "fn": "settxlevel"
  },
  {
   "label": "txlevel: the floor is a ceiling",
-  "find": "\t\telse if (obj->f25dc < minpr)\n\t\t\tobj->f25dc = minpr;",
-  "replace": "\t\telse if (obj->f25dc > minpr)\n\t\t\tobj->f25dc = minpr;",
+  "find": "\t\telse if (obj->tx_pwr_reduction < minpr)\n\t\t\tobj->tx_pwr_reduction = minpr;",
+  "replace": "\t\telse if (obj->tx_pwr_reduction > minpr)\n\t\t\tobj->tx_pwr_reduction = minpr;",
   "fn": "settxlevel"
  },
  {
@@ -525,7 +525,7 @@
   "find": "\t\tif (minpr < 0)",
   "replace": "\t\tif (minpr <= 0)",
   "equivalent": true,
-  "why": "At `minpr == 0` the two arms differ only when `f25dc` is negative, and it cannot be: it is the sum of two bit-reversals of three-bit fields, one of them clamped, so it is 0..10 when this test is reached.  The `< 0` versus `<= 0` distinction is real in the object and unobservable through this function's own inputs.",
+  "why": "At `minpr == 0` the two arms differ only when `tx_pwr_reduction` is negative, and it cannot be: it is the sum of two bit-reversals of three-bit fields, one of them clamped, so it is 0..10 when this test is reached.  The `< 0` versus `<= 0` distinction is real in the object and unobservable through this function's own inputs.",
   "fn": "settxlevel"
  },
  {
@@ -592,7 +592,7 @@
  },
  {
   "label": "txlevel: the first report prints the clamped addition",
-  "find": "\t\t\t\t     (int)obj->f25dc);",
+  "find": "\t\t\t\t     (int)obj->tx_pwr_reduction);",
   "replace": "\t\t\t\t     (int)extra);",
   "fn": "settxlevel"
  },
@@ -652,34 +652,34 @@
  },
  {
   "label": "setuptxmit: the receive state goes to RECEIVE, not WAIT",
-  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_RECEIVE);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit state goes to SBARSEG, not SSEG",
-  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->f25c0 = 0;",
-  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SBARSEG);\n\n\tobj->f25c0 = 0;",
+  "find": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SSEG);\n\n\tobj->seg_symcount = 0;",
+  "replace": "\ths_setstate(obj, HS_RXSTATE, V34HS_WAIT);\n\ths_setstate(obj, HS_TXSTATE, V34HS_SBARSEG);\n\n\tobj->seg_symcount = 0;",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit flag word is set, not or-ed",
-  "find": "\tobj->f25c2 = (short)(obj->f25c2 | 0x200);",
-  "replace": "\tobj->f25c2 = (short)0x200;",
+  "find": "\tobj->tx_flags = (short)(obj->tx_flags | 0x200);",
+  "replace": "\tobj->tx_flags = (short)0x200;",
   "fn": "v34setuptxmit"
  },
  {
   "label": "setuptxmit: the transmit flag bit is 0x100",
-  "find": "\tobj->f25c2 = (short)(obj->f25c2 | 0x200);",
-  "replace": "\tobj->f25c2 = (short)(obj->f25c2 | 0x100);",
+  "find": "\tobj->tx_flags = (short)(obj->tx_flags | 0x200);",
+  "replace": "\tobj->tx_flags = (short)(obj->tx_flags | 0x100);",
   "fn": "v34setuptxmit"
  },
  {
-  "label": "setuptxmit: f25c0 is left alone",
-  "find": "\tobj->f25c0 = 0;\n\tobj->f25c2",
-  "replace": "\tobj->f25c2",
+  "label": "setuptxmit: seg_symcount is left alone",
+  "find": "\tobj->seg_symcount = 0;\n\tobj->tx_flags",
+  "replace": "\tobj->tx_flags",
   "equivalent": true,
-  "why": "`txinit`, which this tail-calls, sets `f25c0` to 0 itself (v34rx.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field.",
+  "why": "`txinit`, which this tail-calls, sets `seg_symcount` to 0 itself (v34rx.c) -- so the store here is dead however it is written.  It is reproduced because the object performs it; a mutation of it being CAUGHT would mean txinit had stopped clearing the field.",
   "fn": "v34setuptxmit"
  },
  {
@@ -900,14 +900,14 @@
  },
  {
   "label": "probe: the AGC ceiling is 0x1b57",
-  "find": "\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;",
-  "replace": "\tif (rx->f262 > 0x1b57)\n\t\trx->f262 = 0x1b57;",
+  "find": "\tif (rx->agc_start_gain > 0x1b58)\n\t\trx->agc_start_gain = 0x1b58;",
+  "replace": "\tif (rx->agc_start_gain > 0x1b57)\n\t\trx->agc_start_gain = 0x1b57;",
   "fn": "probeselect"
  },
  {
   "label": "probe: the AGC ceiling applies to the sensitive arms too",
   "find": "\tprobe_backoff(rx, n);\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
-  "replace": "\tprobe_backoff(rx, n);\n\tif (rx->f262 > 0x1b58)\n\t\trx->f262 = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
+  "replace": "\tprobe_backoff(rx, n);\n\tif (rx->agc_start_gain > 0x1b58)\n\t\trx->agc_start_gain = 0x1b58;\n\n\tif (DSPLIB_DEBUG_ON())\n\t\tdsplibs_debug_printf(\"V34PROBE, asking for a power reduction \"\n\t\t\t\t     \"of %d\\n\", n);",
   "fn": "probe_ask"
  },
  {

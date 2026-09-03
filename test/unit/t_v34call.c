@@ -48,7 +48,7 @@
  *
  * HOW A CALL IS DRIVEN, read off the object rather than invented:
  *
- *   per sample   `obj->f260` is the sample off the line and `obj->f25e` the
+ *   per sample   `obj->echo_residual` is the sample off the line and `obj->tx_sample` the
  *                sample onto it -- v34fsk.h names the pair, and
  *                `modem_serrint` reads the first, cancels the echo, pushes
  *                the residual onto the receive queue, and pops the next
@@ -356,7 +356,7 @@ ep_slot(int ep)
 /* --- the alarm ------------------------------------------------------------ */
 
 /*
- * `datapumpv34`'s handshake loop is `while (txq.count < f2aa0 || rxq.count >
+ * `datapumpv34`'s handshake loop is `while (txq.count < short_2aa0 || rxq.count >
  * 5) v34handshak(obj)`, and `v34handshak`'s own default arm inside the
  * per-sample loop is the loop bottom (finding F287, D59), so neither is
  * guaranteed to terminate.  Outside `v34hs_step` this file has to arm its own

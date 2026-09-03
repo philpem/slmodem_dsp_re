@@ -47,7 +47,7 @@
  * is replaced by its byte offset from the receiver base, which is stronger
  * than skipping it -- t_v34rx skips `rx_samples` in four places, and a cursor
  * left one short behind is exactly the defect that field can have.  `carrier`
- * is the same pointer on both sides by construction, and `f2a4` is left at
+ * is the same pointer on both sides by construction, and `fir_coeff` is left at
  * the fill on both, so neither needs anything.
  */
 
@@ -142,14 +142,14 @@ prime(struct v34_object *o, int amp, int gain, int step, int freeze)
 	rx->agc_level = 0;
 	rx->agc_accum = 0;
 	rx->agc_step = 0x3333;
-	rx->f19c = 0;
+	rx->rms_idx = 0;
 	rx->f12a = 0;
 	rx->energy.sum = 0;
 	for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 		rx->rms_buf[b] = 0;
 
 	rx->carrier = carrier_table;
-	rx->f1ba = QUARTER;
+	rx->half_len = QUARTER;
 	rx->f1b8 = (short)step;
 	rx->f1bc = 0;
 	rx->f240 = 0;

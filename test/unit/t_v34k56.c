@@ -139,14 +139,14 @@ blank_pointers(struct v34_object *o)
 /*
  * Two objects, identically seeded, differing only in which buffers they own.
  *
- * `state` goes into `k56flex_receiver`, `constel` into `f382`, `vidx` into
- * `vect_idx` and `txbits` into the word at +0x25d6.  `f25c2` carries the
+ * `state` goes into `k56flex_receiver`, `constel` into `short_382`, `vidx` into
+ * `vect_idx` and `txbits` into the word at +0x25d6.  `tx_flags` carries the
  * scrambler generator in bit 0 and `txmit`'s echo feed in bit 9, so it is
  * swept over both.
  */
 static void
 setup(int dataflag, int state, short constel, short vidx, short txbits,
-      short f25c2, unsigned seed)
+      short tx_flags, unsigned seed)
 {
 	struct v34_receiver *ra, *rb;
 	int i;
@@ -181,7 +181,7 @@ setup(int dataflag, int state, short constel, short vidx, short txbits,
 
 	oa.prefilter.coeff = ob.prefilter.coeff = V34TimingPrefilterCoeff;
 	oa.prefilter.shift = ob.prefilter.shift = 14;
-	oa.f25d4 = ob.f25d4 = 0x4000;
+	oa.tx_scale = ob.tx_scale = 0x4000;
 	/*
 	 * The bulk-delay ring, and the two cursors into it.  A varied fill
 	 * leaves those cursors holding a pseudo-random int, and `txmit`
@@ -195,14 +195,14 @@ setup(int dataflag, int state, short constel, short vidx, short txbits,
 	oa.bulk_tail = ob.bulk_tail = 17;
 
 	/* A scrambler register that is neither zero nor all ones. */
-	oa.f25cc = ob.f25cc = 0x2f6b3d51;
-	oa.f25c6 = ob.f25c6 = 2;
-	oa.f25c8 = ob.f25c8 = 1;
-	oa.f25c0 = ob.f25c0 = 0x1234;
-	oa.f25c2 = ob.f25c2 = f25c2;
+	oa.tx_scr_sr = ob.tx_scr_sr = 0x2f6b3d51;
+	oa.prev_quadrant = ob.prev_quadrant = 2;
+	oa.cur_quadrant = ob.cur_quadrant = 1;
+	oa.seg_symcount = ob.seg_symcount = 0x1234;
+	oa.tx_flags = ob.tx_flags = tx_flags;
 
 	oa.k56flex_receiver = ob.k56flex_receiver = state;
-	oa.f382 = ob.f382 = constel;
+	oa.short_382 = ob.short_382 = constel;
 	oa.vect_idx = ob.vect_idx = vidx;
 	*(short *)((char *)&oa + OB_TXBITS) = txbits;
 	*(short *)((char *)&ob + OB_TXBITS) = txbits;
@@ -255,10 +255,10 @@ compare(long t)
  * The idle symbol's three claims, checked against our side alone so that they
  * hold whatever the blob does.
  *
- *   - `f25c6` is untouched.  `txmitdibit` and `txmitquadbit` both write it.
- *   - `f25c8` is the scrambler's raw two bits, 0..3.
- *   - the point is `vect4[f25c8]` exactly, or one of the four `vect16`
- *     entries of quadrant `f25c8` -- NOT `vect4[(d + f25c6) & 3]`.
+ *   - `prev_quadrant` is untouched.  `txmitdibit` and `txmitquadbit` both write it.
+ *   - `cur_quadrant` is the scrambler's raw two bits, 0..3.
+ *   - the point is `vect4[cur_quadrant]` exactly, or one of the four `vect16`
+ *     entries of quadrant `cur_quadrant` -- NOT `vect4[(d + prev_quadrant) & 3]`.
  *
  * Together these are what distinguishes the object's inlined idle symbol from
  * a call to either published emitter; see src/pump/v34/v34k56.cpp.
@@ -266,10 +266,10 @@ compare(long t)
 static void
 check_idle(int quad, short f25c6_before, long t)
 {
-	int q = oa.f25c8;
+	int q = oa.cur_quadrant;
 	int pt = oa.txpoint.word;
 
-	diff_eq_int("idle leaves f25c6 alone %ld", oa.f25c6, f25c6_before, t);
+	diff_eq_int("idle leaves prev_quadrant alone %ld", oa.prev_quadrant, f25c6_before, t);
 	diff_eq_int("idle quadrant in range %ld", q >= 0 && q <= 3, 1, t);
 	if (q < 0 || q > 3)
 		return;
@@ -279,9 +279,9 @@ check_idle(int quad, short f25c6_before, long t)
 		for (i = 0; i < 4; i++)
 			if (pt == vect16[q * 4 + i])
 				hit = 1;
-		diff_eq_int("idle point is vect16 of f25c8 %ld", hit, 1, t);
+		diff_eq_int("idle point is vect16 of cur_quadrant %ld", hit, 1, t);
 	} else {
-		diff_eq_int("idle point is vect4[f25c8] %ld", pt, vect4[q], t);
+		diff_eq_int("idle point is vect4[cur_quadrant] %ld", pt, vect4[q], t);
 	}
 }
 
@@ -311,7 +311,7 @@ main(void)
 	 * `state` covers the three arms the object names and five values it
 	 * does not, because the object has no default arm and "does nothing"
 	 * is a claim about every other value and not only about the ones
-	 * next door.  `constel` covers both documented values of `f382` and
+	 * next door.  `constel` covers both documented values of `short_382` and
 	 * one that is neither, since both readers test for equality with
 	 * 0x89b0 and nothing privileges 0x8990.
 	 *
@@ -339,8 +339,8 @@ main(void)
 			for (it = 0; it < 12; it++) {
 				struct v34_receiver *ra = (struct v34_receiver *)
 					((char *)&oa + OB_RECEIVER);
-				short before_c6 = oa.f25c6;
-				short before_c0 = oa.f25c0;
+				short before_c6 = oa.prev_quadrant;
+				short before_c0 = oa.seg_symcount;
 				int before_state = oa.k56flex_receiver;
 				int r, rr;
 
@@ -372,14 +372,14 @@ main(void)
 					if (oa.k56flex_receiver == 4) {
 						n_s3_wrap++;
 						diff_eq_int("wrap zeroes "
-							    "f25c6 %ld",
-							    oa.f25c6, 0, tag);
+							    "prev_quadrant %ld",
+							    oa.prev_quadrant, 0, tag);
 						diff_eq_int("wrap zeroes "
-							    "f25c0 %ld",
-							    oa.f25c0, 0, tag);
+							    "seg_symcount %ld",
+							    oa.seg_symcount, 0, tag);
 						diff_eq_int("wrap zeroes "
-							    "f25cc %ld",
-							    oa.f25cc, 0, tag);
+							    "tx_scr_sr %ld",
+							    oa.tx_scr_sr, 0, tag);
 					}
 				} else if (before_state == 4) {
 					if (quad)
@@ -387,8 +387,8 @@ main(void)
 					else
 						n_s4_dibit++;
 					check_idle(quad, before_c6, tag);
-					diff_eq_int("idle bumps f25c0 %ld",
-						    (unsigned short)oa.f25c0,
+					diff_eq_int("idle bumps seg_symcount %ld",
+						    (unsigned short)oa.seg_symcount,
 						    (unsigned short)
 						    (before_c0 + 1), tag);
 					diff_eq_int("idle leaves state %ld",
@@ -484,7 +484,7 @@ main(void)
 
 	/*
 	 * ------------------------------------------------------------------
-	 * The generator does not follow `f25c2` bit 0.
+	 * The generator does not follow `tx_flags` bit 0.
 	 *
 	 * `txmitdibit` and `txmitquadbit` pass `tx_scrambler_mode(o)`, which
 	 * is that bit; the idle symbol passes the literal 1.  So flipping the
@@ -497,7 +497,7 @@ main(void)
 	 * would move the object for a reason that has nothing to do with the
 	 * scrambler.
 	 */
-	diff_begin("k56FlexPhase34 idle generator is not f25c2");
+	diff_begin("k56FlexPhase34 idle generator is not tx_flags");
 	{
 		static const short constels[2] = { (short)0x89b0,
 						   (short)0x8990 };
@@ -522,15 +522,15 @@ main(void)
 					tag++;
 				}
 				if (gpc == 0) {
-					f25cc0 = oa.f25cc;
-					f25c80 = oa.f25c8;
+					f25cc0 = oa.tx_scr_sr;
+					f25c80 = oa.cur_quadrant;
 					pt0 = oa.txpoint.word;
 				} else {
-					diff_eq_int("gpc does not move f25cc "
-						    "%ld", oa.f25cc, f25cc0,
+					diff_eq_int("gpc does not move tx_scr_sr "
+						    "%ld", oa.tx_scr_sr, f25cc0,
 						    c);
-					diff_eq_int("gpc does not move f25c8 "
-						    "%ld", oa.f25c8, f25c80,
+					diff_eq_int("gpc does not move cur_quadrant "
+						    "%ld", oa.cur_quadrant, f25c80,
 						    c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",

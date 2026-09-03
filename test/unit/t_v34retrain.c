@@ -179,7 +179,7 @@ static const unsigned ptr_skip[] = {
 	0x0268, 0x026c,			/* rxq read and write cursors    */
 	0x0394,				/* receiver +0x130 rx_samples    */
 	0x0418,				/* receiver +0x1b4 carrier       */
-	0x0508,				/* receiver +0x2a4 f2a4          */
+	0x0508,				/* receiver +0x2a4 fir_coeff          */
 	0x0a28, 0x0e48,			/* receive shell context         */
 	0x1460,				/* modulator +0x10 sine          */
 	0x2074,				/* modulator +0xc24 shaped       */
@@ -281,8 +281,8 @@ struct rt_case {
 	unsigned char	cfg_isp;	/* cfg +0x50, bit 3 is set here    */
 	int		sens;		/* pcm receiver +0x4f8             */
 	int		status;		/* obj +0x00                       */
-	short		f359c;		/* obj +0x359c, originate/answer   */
-	short		f35a4;		/* obj +0x35a4                     */
+	short		role;		/* obj +0x359c, originate/answer   */
+	short		short_35a4;		/* obj +0x35a4                     */
 	int		mside;		/* session +0x6114, V90Modem::side */
 	int		timer_base;	/* obj +0x238, for the handshake   */
 	int		timer_mark;	/* obj +0x248                      */
@@ -310,8 +310,8 @@ static const struct rt_case rt_base = {
 	0x41,			/* cfg_isp: bit 3 clear, other bits set     */
 	0,			/* sens                                     */
 	0,			/* status                                   */
-	0x65,			/* f359c                                    */
-	3,			/* f35a4                                    */
+	0x65,			/* role                                    */
+	3,			/* short_35a4                                    */
 	2,			/* mside                                    */
 	0, 0,			/* timer_base, timer_mark                   */
 	0x0000,			/* rxflags                                  */
@@ -451,8 +451,8 @@ drive(const struct rt_case *c)
 	poke_int(OB_K56RX, c->k56rx);
 	poke_int(OB_TIMER_BASE, c->timer_base);
 	poke_int(OB_TIMER_MARK, c->timer_mark);
-	poke_short(OB_F359C, c->f359c);
-	poke_short(OB_F35A4, c->f35a4);
+	poke_short(OB_F359C, c->role);
+	poke_short(OB_F35A4, c->short_35a4);
 	poke_short(OB_RXFLAGS, (short)c->rxflags);
 	poke_byte(OB_AC17, c->ac17);
 
@@ -877,8 +877,8 @@ main(void)
 		for (j = 0; j < sizeof(scale_in) / sizeof(scale_in[0]); j++) {
 			struct rt_case c = rt_base;
 
-			c.f359c = role_in[i];
-			c.f35a4 = scale_in[j];
+			c.role = role_in[i];
+			c.short_35a4 = scale_in[j];
 			run_case(&c, tag++);
 		}
 
@@ -891,13 +891,13 @@ main(void)
 			struct rt_case c = rt_base;
 			unsigned char n65[8], n66[8], nother[8];
 
-			c.f359c = 0x65;
+			c.role = 0x65;
 			drive(&c);
 			memcpy(n65, (unsigned char *)&oa + OB_FAC1C + 0x0c, 8);
-			c.f359c = 0x66;
+			c.role = 0x66;
 			drive(&c);
 			memcpy(n66, (unsigned char *)&oa + OB_FAC1C + 0x0c, 8);
-			c.f359c = 0x64;
+			c.role = 0x64;
 			drive(&c);
 			memcpy(nother, (unsigned char *)&oa + OB_FAC1C + 0x0c,
 			       8);
@@ -915,10 +915,10 @@ main(void)
 			struct rt_case c = rt_base;
 			short s0, s1;
 
-			c.f35a4 = 0;
+			c.short_35a4 = 0;
 			drive(&c);
 			s0 = get_short_a(OB_F0254);
-			c.f35a4 = 1;
+			c.short_35a4 = 1;
 			drive(&c);
 			s1 = get_short_a(OB_F0254);
 			diff_eq_int("+0x254 is 10000 at scale 0", (int)s0,

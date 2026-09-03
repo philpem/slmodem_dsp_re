@@ -35,7 +35,7 @@
  * Bring the digital half up.
  *
  * Everything here is a clear except the last four stores, and those are the
- * only thing in the function that depends on anything: `f359c` picks which
+ * only thing in the function that depends on anything: `role` picks which
  * polynomial goes which way.
  */
 void
@@ -72,7 +72,7 @@ preinitdigital(void *objp)
 
 	rx->state_idx = 0;
 	obj->data_enable = 0;
-	obj->faa74 = 0;
+	obj->train_symcount = 0;
 
 	/*
 	 * THE ONE DECISION IN THE FUNCTION.  The two ends of a V.34 call
@@ -81,7 +81,7 @@ preinitdigital(void *objp)
 	 * reads the same field to pick between two timing ramps, which is
 	 * the second use that makes the first one legible.  Finding F177.
 	 */
-	if (obj->f359c == 0x65) {
+	if (obj->role == 0x65) {
 		tx->scramble = scrambleGPC;
 		rx->scramble = (v34_scramble_fn)descrambleGPA;
 	} else {
@@ -100,13 +100,13 @@ preinitdigital(void *objp)
 	typedef char v34dig_off_##name[ \
 		((int)__builtin_offsetof(type, field) == (off)) ? 1 : -1]
 
-V34DIG_ASSERT(fa08,  struct v34_shell,  fa08,       0x0a08);
-V34DIG_ASSERT(fa16,  struct v34_shell,  fa16,       0x0a16);
+V34DIG_ASSERT(wide_accum,  struct v34_shell,  wide_accum,       0x0a08);
+V34DIG_ASSERT(feedback_mask,  struct v34_shell,  feedback_mask,       0x0a16);
 V34DIG_ASSERT(hist,  struct v34_shell,  hist,       0x0a18);
 V34DIG_ASSERT(conv,  struct v34_shell,  conv,       0x0a28);
-V34DIG_ASSERT(fa2c,  struct v34_shell,  fa2c,       0x0a2c);
+V34DIG_ASSERT(conv_sr,  struct v34_shell,  conv_sr,       0x0a2c);
 V34DIG_ASSERT(prevk, struct v34_shell,  prev_k,     0x0a38);
-V34DIG_ASSERT(fa3c,  struct v34_shell,  fa3c,       0x0a3c);
+V34DIG_ASSERT(subframe_count,  struct v34_shell,  subframe_count,       0x0a3c);
 V34DIG_ASSERT(t1,    struct v34_shell,  t1,         0x0a48);
 V34DIG_ASSERT(t3,    struct v34_shell,  t3,         0x0c48);
 V34DIG_ASSERT(latch, struct v34_shell,  latched,    0x0e4c);

@@ -139,7 +139,7 @@ struct trial {
 	int	zero_acc;	/* clear the three bins' accumulators   */
 	short	mst, txst;	/* the two state words that are levers  */
 	short	toggle;		/* +0x358c                              */
-	short	f3588;		/* +0x3588                              */
+	short	short_3588;		/* +0x3588                              */
 	/*
 	 * THE FOUR FIELDS THE ACTION BLOCK CLEARS, SEEDED NON-ZERO.
 	 *
@@ -173,7 +173,7 @@ setup(const struct trial *t)
 	v34hs_poke_short(FSK_QUIET_RUNS, t->quiet_runs);
 	v34hs_poke_short(FSK_TONE_RUNS, t->tone_runs);
 	v34hs_poke_short(FSK_TOGGLE, t->toggle);
-	v34hs_poke_short(FSK_F3588, t->f3588);
+	v34hs_poke_short(FSK_F3588, t->short_3588);
 	v34hs_poke_short(FSK_VECT_IDX, t->vect_idx);
 	v34hs_poke_short(FSK_COUNTER, t->counter);
 	v34hs_poke_short(FSK_NBITS, t->nbits);
@@ -503,7 +503,7 @@ suite_fired(void)
 	tr.thresh_hi = -1;
 	tr.runs = 8;
 	tr.tone_runs = 9;
-	tr.f3588 = 0;
+	tr.short_3588 = 0;
 	tr.toggle = 0;
 	fired_case(&tr, "the action block, from a cold seed", tag++);
 
@@ -539,13 +539,13 @@ suite_fired(void)
 	 * +0x3588 IS A READ-MODIFY-WRITE and not a store.  Seeded with bit 0
 	 * set, an `= 2` would lose it and an `|= 2` would not.
 	 */
-	tr.f3588 = 1;
+	tr.short_3588 = 1;
 	fired_case(&tr, "the action block, +0x3588 already holding bit 0",
 		   tag);
 	diff_eq_int("+0x3588 |= 2 keeps the bit that was there",
 		    v34hs_peek_short(0, FSK_F3588), 3, tag++);
 
-	tr.f3588 = 2;
+	tr.short_3588 = 2;
 	fired_case(&tr, "the action block, +0x3588 already holding bit 1",
 		   tag);
 	diff_eq_int("+0x3588 |= 2 on a value that already has it",
@@ -559,7 +559,7 @@ suite_fired(void)
 	 * ever -- the gate is reached only with rxstate 43 -- which is
 	 * finding F722 and is why there is no trial for its other side.
 	 */
-	tr.f3588 = 0;
+	tr.short_3588 = 0;
 	tr.mst = FSK_NEXT_MST;
 	fired_case(&tr, "the action block with the microstate already 46",
 		   tag++);

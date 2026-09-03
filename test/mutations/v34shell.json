@@ -95,12 +95,12 @@
  },
  {
   "label": "the non-linear encoder sets the wrong flag bit",
-  "find": "o->f25c2 = (short)((unsigned short)o->f25c2 | 0x4000);",
-  "replace": "o->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000);"
+  "find": "o->tx_flags = (short)((unsigned short)o->tx_flags | 0x4000);",
+  "replace": "o->tx_flags = (short)((unsigned short)o->tx_flags | 0x2000);"
  },
  {
   "label": "the non-linear encoder is never cleared",
-  "find": "\telse\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~0x4000);",
+  "find": "\telse\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~0x4000);",
   "replace": ""
  },
  {

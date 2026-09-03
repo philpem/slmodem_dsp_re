@@ -79,8 +79,8 @@ struct TAG_DiagnosticResults {
 	 * +0x06c  V.34 and the two ANALOG PCM arms only, and the derivation
 	 * is complete without the unit being settled.
 	 *
-	 * The V.34 arm stores `-12.0f - (float)v34_object::f25dc`, and
-	 * `f25dc` is "the transmit power reduction in WHOLE dB" -- its own
+	 * The V.34 arm stores `-12.0f - (float)v34_object::tx_pwr_reduction`, and
+	 * `tx_pwr_reduction` is "the transmit power reduction in WHOLE dB" -- its own
 	 * diagnostic says so, "power reduction requested by remote modem is
 	 * %d dB".  The V.92 analog arm stores the constant -12.0f with no
 	 * reduction subtracted at all.  So this is a transmit level in dB,
@@ -104,7 +104,7 @@ struct TAG_DiagnosticResults {
 	 *
 	 * V.34: the integer dB count `VPcmV34GetSNR` returns, converted to
 	 * float.  `VPcmV34GetDiagnostics` inlines that function's body
-	 * verbatim -- the same `f248 / f21a` ratio, the same 0x1013 and
+	 * verbatim -- the same `f248 / equerr` ratio, the same 0x1013 and
 	 * 0x32d6 reciprocal steps -- and the object's own name for the
 	 * function computing it is `GetSNR`, so larger means a BETTER line.
 	 *
@@ -335,16 +335,17 @@ struct TAG_DiagnosticResults {
 	 * reason the record is known to run to 0x22c.
 	 *
 	 * V.34 only, and the store is conditional in a way worth keeping in
-	 * one place: `v34_object::fac0c` is tested as a short and, when it is
+	 * one place: `v34_object::v90_timing_offset` is tested as a short and, when it is
 	 * non-zero, sign-extended into this word; when it is zero, -1 is
-	 * stored instead.  `fac0c` is where the V.90 side is told the
+	 * stored instead.  `v90_timing_offset` is where the V.90 side is told the
 	 * recovered timing offset -- `VPcmV34LogTimingOffset` is its writer
 	 * and names it -- so -1 here is "no timing offset has been logged"
 	 * rather than a value.
 	 *
-	 * OFFSET-NAMED: `fac0c` itself is offset-named in v34fsk.h, and a
-	 * field whose only source carries an offset name cannot inherit one
-	 * it does not have.
+	 * OFFSET-NAMED HERE STILL, even though `v90_timing_offset` itself has
+	 * since been named in v34fsk.h (it was `fac0c` when this paragraph was
+	 * written): nothing in this tree reads this word back, so there is no
+	 * caller here to derive a name for it from, only for its source.
 	 */
 	unsigned int word_228;
 };

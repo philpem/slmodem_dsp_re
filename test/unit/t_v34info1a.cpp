@@ -27,9 +27,9 @@
  *   - the PCM law int at `pac18 + 0xc` to 0, 1, 2 and 0x10000.  One branch
  *     tests it `!= 0` and the other `== 1`; with only {0, 1} the two are
  *     indistinguishable, and 0x10000 additionally catches a 16-bit misread.
- *   - `f35a4` across the seven-bit boundary and negative -- 0, 0x7f, 0x80,
+ *   - `short_35a4` across the seven-bit boundary and negative -- 0, 0x7f, 0x80,
  *     0x1234 and -1 -- because it is `movswl`-loaded and then truncated.
- *   - `fabce`, `fabd0` and `fabd2` with bits above 7 set, because the object
+ *   - `short_abce`, `short_abd0` and `short_abd2` with bits above 7 set, because the object
  *     reads them with `testb` and those bits must NOT reach the message.
  *   - `bits[7]` with a non-zero high byte on the INFO1d-clear path, because
  *     the clear is `and $0xdf` on a zero-extended short and not `&= ~0x20`.
@@ -341,7 +341,7 @@ set_level(unsigned int lvl)
  *
  * `shape` picks which of the four prologue arms runs and whether the tail
  * runs at all; `tail` picks the path through it.  They are crossed with each
- * other and with the PCM law and `f35a4`, so every prologue arm is seen with
+ * other and with the PCM law and `short_35a4`, so every prologue arm is seen with
  * every tail and every law value.
  *
  * `v90` and `k56` take values other than 1 where they are meant to be
@@ -471,12 +471,12 @@ main(void)
 
 				o->v90_receiver = sh->v90;
 				o->k56flex_receiver = sh->k56;
-				o->f359c = sh->role;
-				o->f35a4 = f35a4_v[f];
+				o->role = sh->role;
+				o->short_35a4 = f35a4_v[f];
 				o->is_short = ta->isshort;
-				o->fabce = flag_v[trial % NFLAG];
-				o->fabd0 = flag_v[(trial + 2) % NFLAG];
-				o->fabd2 = flag_v[(trial + 5) % NFLAG];
+				o->short_abce = flag_v[trial % NFLAG];
+				o->short_abd0 = flag_v[(trial + 2) % NFLAG];
+				o->short_abd2 = flag_v[(trial + 5) % NFLAG];
 
 				*(int *)(pcm[side] + PCM_LAW) = law_v[l];
 

@@ -312,7 +312,7 @@ seed_moh_wrap(void)
 }
 
 /*
- * The two 32-bit companions 0x66d85 reads, driven both ways.  `fabec` at
+ * The two 32-bit companions 0x66d85 reads, driven both ways.  `moh_org` at
  * +0xabec is set to 0x10001 and not to 1: the low half is one either way, so
  * a 16-bit read of it agrees with a 32-bit read on the value 1 and cannot be
  * told apart -- this is the seed that separates them.
@@ -398,10 +398,10 @@ suite_exits(void)
  * because 65 was tried first: 65 moves the machine to 18 when bit 3 of the
  * receiver's flags is set, and the two arms then wrote the SAME sixteen bytes
  * for four passes -- a hand-over that the object cannot see is no test at
- * all.  SSEG counts `f25c0` up and at 0x40 hands over to 19 SBARSEG, which is
+ * all.  SSEG counts `seg_symcount` up and at 0x40 hands over to 19 SBARSEG, which is
  * 991 bytes against SSEG's 251 and writes quite different things.
  *
- * So: seed `f25c0` one below the threshold and the FIRST pass hands over.
+ * So: seed `seg_symcount` one below the threshold and the FIRST pass hands over.
  *
  * SEVENTY-TWO IS THE BUDGET AND TWENTY-FOUR IS NOT, which is the second thing
  * the mutation tier had to say here.  SSEG calls `txmit` twice and the queue

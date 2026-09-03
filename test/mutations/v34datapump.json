@@ -14,8 +14,8 @@
  },
  {
   "label": "the stale-clock compare is >= rather than >",
-  "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)\n\t\tobj->f0004 = 5;",
-  "replace": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) >= DP_TIMER_STALE)\n\t\tobj->f0004 = 5;",
+  "find": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) > DP_TIMER_STALE)\n\t\tobj->progress = 5;",
+  "replace": "\t    - (unsigned)t3c_geti(obj, DP_TIMER_MARK) >= DP_TIMER_STALE)\n\t\tobj->progress = 5;",
   "fn": "datapumpv34"
  },
  {
@@ -26,8 +26,8 @@
  },
  {
   "label": "the stale clock reports 4 rather than 5",
-  "find": "\t\tobj->f0004 = 5;",
-  "replace": "\t\tobj->f0004 = 4;",
+  "find": "\t\tobj->progress = 5;",
+  "replace": "\t\tobj->progress = 4;",
   "fn": "datapumpv34"
  },
  {
@@ -56,20 +56,20 @@
  },
  {
   "label": "the handshake loop needs both conditions rather than either",
-  "find": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)",
-  "replace": "\t\twhile (obj->txq.count < obj->f2aa0 && obj->rxq.count > 5)",
+  "find": "\t\twhile (obj->txq.count < obj->short_2aa0 || obj->rxq.count > 5)",
+  "replace": "\t\twhile (obj->txq.count < obj->short_2aa0 && obj->rxq.count > 5)",
   "fn": "datapumpv34"
  },
  {
   "label": "the handshake loop runs while the cursor is at the limit",
-  "find": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)",
-  "replace": "\t\twhile (obj->txq.count <= obj->f2aa0 || obj->rxq.count > 5)",
+  "find": "\t\twhile (obj->txq.count < obj->short_2aa0 || obj->rxq.count > 5)",
+  "replace": "\t\twhile (obj->txq.count <= obj->short_2aa0 || obj->rxq.count > 5)",
   "fn": "datapumpv34"
  },
  {
   "label": "the handshake loop runs while the queue is at five",
-  "find": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count > 5)",
-  "replace": "\t\twhile (obj->txq.count < obj->f2aa0 || obj->rxq.count >= 5)",
+  "find": "\t\twhile (obj->txq.count < obj->short_2aa0 || obj->rxq.count > 5)",
+  "replace": "\t\twhile (obj->txq.count < obj->short_2aa0 || obj->rxq.count >= 5)",
   "fn": "datapumpv34"
  },
  {
@@ -80,26 +80,26 @@
  },
  {
   "label": "the modulator loop runs one call too many",
-  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
-  "replace": "\twhile (obj->txq.count <= obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "find": "\twhile (obj->txq.count < obj->short_2aa0)\n\t\tmodulatevector(obj);",
+  "replace": "\twhile (obj->txq.count <= obj->short_2aa0)\n\t\tmodulatevector(obj);",
   "fn": "datapumpv34"
  },
  {
   "label": "the modulator loop is a do-while, so it always runs once",
-  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
-  "replace": "\tdo\n\t\tmodulatevector(obj);\n\twhile (obj->txq.count < obj->f2aa0);",
+  "find": "\twhile (obj->txq.count < obj->short_2aa0)\n\t\tmodulatevector(obj);",
+  "replace": "\tdo\n\t\tmodulatevector(obj);\n\twhile (obj->txq.count < obj->short_2aa0);",
   "fn": "datapumpv34"
  },
  {
   "label": "the modulator loop compares the cursor against the receive count",
-  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
-  "replace": "\twhile (obj->rxq.count < obj->f2aa0)\n\t\tmodulatevector(obj);",
+  "find": "\twhile (obj->txq.count < obj->short_2aa0)\n\t\tmodulatevector(obj);",
+  "replace": "\twhile (obj->rxq.count < obj->short_2aa0)\n\t\tmodulatevector(obj);",
   "fn": "datapumpv34"
  },
  {
   "label": "the receiver loop runs before the modulator loop",
-  "find": "\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);\n\n\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
-  "replace": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->f2aa0)\n\t\tmodulatevector(obj);\n",
+  "find": "\twhile (obj->txq.count < obj->short_2aa0)\n\t\tmodulatevector(obj);\n\n\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n",
+  "replace": "\twhile (obj->rxq.count > 5) {\n\t\tunsigned span;\n\t\tshort err;\n\n\t\tif (dp_rxget(obj, DP_RX_BLOCKS) <= DP_RX_BLOCK_CAP)\n\t\t\tdp_rxput(obj, DP_RX_BLOCKS,\n\t\t\t\t (short)(dp_rxget(obj, DP_RX_BLOCKS) + 1));\n\n\t\treceiver(obj);\n\n\t\terr = dp_rxget(obj, DP_RX_ERR);\n\t\tdp_run(obj, DP_RX_BAD, err > dp_rxget(obj, DP_RX_THR_A));\n\n\t\tspan = (unsigned)t3c_geti(obj, DP_TIMER)\n\t\t     - (unsigned)t3c_geti(obj, DP_TIMER_MARK);\n\n\t\tif (span > DP_TIMER_MID)\n\t\t\tdp_run(obj, DP_RX_BAD_LONG,\n\t\t\t       err > dp_rxget(obj, DP_RX_THR_B));\n\t\tif (span > DP_TIMER_LONG)\n\t\t\tdp_run(obj, DP_RX_GOOD,\n\t\t\t       err < dp_rxget(obj, DP_RX_THR_C));\n\t}\n\n\twhile (obj->txq.count < obj->short_2aa0)\n\t\tmodulatevector(obj);\n",
   "fn": "datapumpv34"
  },
  {

@@ -15,38 +15,38 @@
 
  {
   "label": "the counter is not incremented at all",
-  "find": "\tobj->faa78 = (short)(obj->faa78 + 1);",
-  "replace": "\tobj->faa78 = (short)(obj->faa78 + 0);",
+  "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
+  "replace": "\tobj->short_aa78 = (short)(obj->short_aa78 + 0);",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the counter is incremented by two",
-  "find": "\tobj->faa78 = (short)(obj->faa78 + 1);",
-  "replace": "\tobj->faa78 = (short)(obj->faa78 + 2);",
+  "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
+  "replace": "\tobj->short_aa78 = (short)(obj->short_aa78 + 2);",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the branch is taken on the value BEFORE the store",
-  "find": "\tobj->faa78 = (short)(obj->faa78 + 1);\n\n\tif (obj->faa78 <= 0x440) {",
-  "replace": "\tif ((short)(obj->faa78 + 1) <= 0x440) {\n\t\tobj->faa78 = (short)(obj->faa78 + 1);",
+  "find": "\tobj->short_aa78 = (short)(obj->short_aa78 + 1);\n\n\tif (obj->short_aa78 <= 0x440) {",
+  "replace": "\tif ((short)(obj->short_aa78 + 1) <= 0x440) {\n\t\tobj->short_aa78 = (short)(obj->short_aa78 + 1);",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the ladder guard is `<` rather than `<=`",
-  "find": "\tif (obj->faa78 <= 0x440) {",
-  "replace": "\tif (obj->faa78 < 0x440) {",
+  "find": "\tif (obj->short_aa78 <= 0x440) {",
+  "replace": "\tif (obj->short_aa78 < 0x440) {",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the ladder guard's constant is 0x441",
-  "find": "\tif (obj->faa78 <= 0x440) {",
-  "replace": "\tif (obj->faa78 <= 0x441) {",
+  "find": "\tif (obj->short_aa78 <= 0x440) {",
+  "replace": "\tif (obj->short_aa78 <= 0x441) {",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the entry compare reads the counter UNSIGNED",
-  "find": "\tif (obj->faa78 <= 0x440) {",
-  "replace": "\tif ((unsigned short)obj->faa78 <= 0x440) {",
+  "find": "\tif (obj->short_aa78 <= 0x440) {",
+  "replace": "\tif ((unsigned short)obj->short_aa78 <= 0x440) {",
   "fn": "t72_rx_l1"
  },
  {
@@ -57,20 +57,20 @@
  },
  {
   "label": "the originate/answer test is inverted",
-  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c != 0x65) {",
-  "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c == 0x65) {",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role != 0x65) {",
+  "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role == 0x65) {",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the originate/answer flag is 0x66",
-  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c != 0x65) {",
-  "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->f359c != 0x66) {",
+  "find": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role != 0x65) {",
+  "replace": "\tV34agc(rx);\t\t\t\t\t/* 0x650ee */\n\n\tif (obj->role != 0x66) {",
   "fn": "t72_rx_l1"
  },
  {
   "label": "the one extra block is at 0x440 rather than 0x441",
-  "find": "\tif (obj->faa78 == 0x441) {",
-  "replace": "\tif (obj->faa78 == 0x440) {",
+  "find": "\tif (obj->short_aa78 == 0x441) {",
+  "replace": "\tif (obj->short_aa78 == 0x440) {",
   "fn": "t72_rx_l1"
  },
  {
@@ -165,14 +165,14 @@
  },
  {
   "label": "+0x358c is SET rather than toggled",
-  "find": "\t\t\t\tobj->f358c ^= 1;\t/* 0x6afe8 */",
-  "replace": "\t\t\t\tobj->f358c |= 1;\t/* 0x6afe8 */",
+  "find": "\t\t\t\tobj->short_358c ^= 1;\t/* 0x6afe8 */",
+  "replace": "\t\t\t\tobj->short_358c |= 1;\t/* 0x6afe8 */",
   "fn": "t72_rx_l1"
  },
  {
   "label": "+0x358c's toggle is of bit 1",
-  "find": "\t\t\t\tobj->f358c ^= 1;\t/* 0x6afe8 */",
-  "replace": "\t\t\t\tobj->f358c ^= 2;\t/* 0x6afe8 */",
+  "find": "\t\t\t\tobj->short_358c ^= 1;\t/* 0x6afe8 */",
+  "replace": "\t\t\t\tobj->short_358c ^= 2;\t/* 0x6afe8 */",
   "fn": "t72_rx_l1"
  },
  {
@@ -195,7 +195,7 @@
  },
  {
   "label": "giving up does not restart the counter",
-  "find": "\t\t\t\tobj->faa78 = 0;\t\t/* 0x6c9fa */",
+  "find": "\t\t\t\tobj->short_aa78 = 0;\t\t/* 0x6c9fa */",
   "replace": "\t\t\t\t/* 0x6c9fa */;",
   "fn": "t72_rx_l1"
  },
@@ -286,7 +286,7 @@
  },
  {
   "label": "the answering end does not restart the counter",
-  "find": "\t\tobj->faa78 = 0;\t\t\t\t\t /* 0x67f74 */",
+  "find": "\t\tobj->short_aa78 = 0;\t\t\t\t\t /* 0x67f74 */",
   "replace": "\t\t/* 0x67f74 */;",
   "fn": "t72_rx_l1"
  },
@@ -531,8 +531,8 @@
  },
  {
   "label": "the ladder reads the counter BEFORE the increment",
-  "find": "\tcount = obj->faa78;",
-  "replace": "\tcount = (short)(obj->faa78 - 1);",
+  "find": "\tcount = obj->short_aa78;",
+  "replace": "\tcount = (short)(obj->short_aa78 - 1);",
   "fn": "t72_ladder"
  },
  {
@@ -616,7 +616,7 @@
  {
   "label": "the upper window bumps the receiver's counter too",
   "find": "\t\tt72_update_both(obj, rx, n);\n\t} else if (count == 0x180) {",
-  "replace": "\t\tt72_update_both(obj, rx, n);\n\t\trx->f124 = (short)(rx->f124 + 1);\n\t} else if (count == 0x180) {",
+  "replace": "\t\tt72_update_both(obj, rx, n);\n\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\n\t} else if (count == 0x180) {",
   "fn": "t72_ladder"
  },
  {
@@ -665,14 +665,14 @@
  },
  {
   "label": "the lower window does not bump the receiver's counter",
-  "find": "\t\trx->f124 = (short)(rx->f124 + 1);\t/* 0x699fd */",
+  "find": "\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\t/* 0x699fd */",
   "replace": "\t\t/* 0x699fd */;",
   "fn": "t72_ladder"
  },
  {
   "label": "the receiver's counter is bumped by two",
-  "find": "\t\trx->f124 = (short)(rx->f124 + 1);\t/* 0x699fd */",
-  "replace": "\t\trx->f124 = (short)(rx->f124 + 2);\t/* 0x699fd */",
+  "find": "\t\trx->rx_blocks = (short)(rx->rx_blocks + 1);\t/* 0x699fd */",
+  "replace": "\t\trx->rx_blocks = (short)(rx->rx_blocks + 2);\t/* 0x699fd */",
   "fn": "t72_ladder"
  },
  {
@@ -713,25 +713,25 @@
  },
  {
   "label": "the substituted gain is 0x6001",
-  "find": "\t\t\trx->f262 = 0x6000;\t\t/* 0x6aed9 */",
-  "replace": "\t\t\trx->f262 = 0x6001;\t\t/* 0x6aed9 */",
+  "find": "\t\t\trx->agc_start_gain = 0x6000;\t\t/* 0x6aed9 */",
+  "replace": "\t\t\trx->agc_start_gain = 0x6001;\t\t/* 0x6aed9 */",
   "fn": "t72_ladder"
  },
  {
   "label": "the error path writes nothing",
-  "find": "\t\t\trx->f262 = 0x6000;\t\t/* 0x6aed9 */",
+  "find": "\t\t\trx->agc_start_gain = 0x6000;\t\t/* 0x6aed9 */",
   "replace": "\t\t\t/* 0x6aed9 */;",
   "fn": "t72_ladder"
  },
  {
   "label": "the gain is not doubled",
-  "find": "\t\t\trx->f262 = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
-  "replace": "\t\t\trx->f262 = rx->agc_gain;\t\t/* 0x6a525 */",
+  "find": "\t\t\trx->agc_start_gain = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "replace": "\t\t\trx->agc_start_gain = rx->agc_gain;\t\t/* 0x6a525 */",
   "fn": "t72_ladder"
  },
  {
   "label": "the doubled gain goes to +0x264, not +0x262",
-  "find": "\t\t\trx->f262 = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
+  "find": "\t\t\trx->agc_start_gain = (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
   "replace": "\t\t\t*(short *)((char *)rx + 0x264) =\n\t\t\t    (short)(rx->agc_gain * 2);\t/* 0x6a525 */",
   "fn": "t72_ladder"
  },
@@ -744,13 +744,13 @@
  {
   "label": "the gain line prints the substituted value",
   "find": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->agc_gain);",
-  "replace": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->f262);",
+  "replace": "\t\t\tdsplibs_debug_printf(\"V34AGC, rx->gain = 0x%x, at \"\n\t\t\t\t\t     \"the beginning of RX_L1\\n\",\n\t\t\t\t\t     rx->agc_start_gain);",
   "fn": "t72_ladder"
  },
  {
   "label": "the gain line is inside the else and not after it",
   "find": "\t\tif (DSPLIB_DEBUG_ON())\t\t\t/* 0x6a531 */",
-  "replace": "\t\tif (DSPLIB_DEBUG_ON() && rx->f262 != 0x6000)\t/* 0x6a531 */",
+  "replace": "\t\tif (DSPLIB_DEBUG_ON() && rx->agc_start_gain != 0x6000)\t/* 0x6a531 */",
   "fn": "t72_ladder"
  },
  {

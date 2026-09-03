@@ -86,8 +86,8 @@
  },
  {
   "label": "the channel-verification progress code is 9",
-  "find": "\t\t\tobj->f0004 = 10;",
-  "replace": "\t\t\tobj->f0004 = 9;"
+  "find": "\t\t\tobj->progress = 10;",
+  "replace": "\t\t\tobj->progress = 9;"
  },
  {
   "label": "session type 0 and the negatives join arm 1",
@@ -106,8 +106,8 @@
  },
  {
   "label": "the side-to-role polarity is reversed",
-  "find": "\tobj->f359c = (short)(side != 0 ? 0x66 : 0x65);",
-  "replace": "\tobj->f359c = (short)(side != 0 ? 0x65 : 0x66);"
+  "find": "\tobj->role = (short)(side != 0 ? 0x66 : 0x65);",
+  "replace": "\tobj->role = (short)(side != 0 ? 0x65 : 0x66);"
  },
  {
   "label": "the rate ceiling starts at 0 rather than 14",
@@ -126,8 +126,8 @@
  },
  {
   "label": "the receiver's +0x262 is 0x610 rather than 0x600",
-  "find": "\trx->f262 = 0x600;",
-  "replace": "\trx->f262 = 0x610;"
+  "find": "\trx->agc_start_gain = 0x600;",
+  "replace": "\trx->agc_start_gain = 0x610;"
  },
  {
   "label": "the handshake is started in retrain mode rather than cold",
@@ -136,8 +136,8 @@
  },
  {
   "label": "+0x3558 is one less",
-  "find": "\tobj->f3558 = 0x7fdf;",
-  "replace": "\tobj->f3558 = 0x7fde;"
+  "find": "\tobj->echo_decay_fact = 0x7fdf;",
+  "replace": "\tobj->echo_decay_fact = 0x7fde;"
  },
  {
   "label": "the hardware entrance-filter test is inverted",
@@ -156,13 +156,13 @@
  },
  {
   "label": "the TX MD announcement is dropped",
-  "find": "\t\tdsplibs_debug_printf(\"On Create: Setting desired TX MD\"\n\t\t\t\t     \" (%d mSec)!\\n\", (int)obj->f35a4);",
+  "find": "\t\tdsplibs_debug_printf(\"On Create: Setting desired TX MD\"\n\t\t\t\t     \" (%d mSec)!\\n\", (int)obj->short_35a4);",
   "replace": "\t\t(void)0;"
  },
  {
   "label": "+0xa23c is left at zero",
-  "find": "\tobj->fa23c = 1;",
-  "replace": "\tobj->fa23c = 0;"
+  "find": "\tobj->far_echo_enable = 1;",
+  "replace": "\tobj->far_echo_enable = 0;"
  },
  {
   "label": "the channel-verification status is 3 rather than 4",

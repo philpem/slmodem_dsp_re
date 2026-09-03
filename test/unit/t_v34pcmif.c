@@ -1060,12 +1060,12 @@ run_rate(const struct pwr_case *c, long tag)
 /*
  * The four pointers `preinitdigital` installs, checked the way t_v34digital.c
  * checks them: by which function or table each side selected, which is the
- * thing `f359c` decides and the thing an address comparison cannot see.
+ * thing `role` decides and the thing an address comparison cannot see.
  */
 static void
-check_shell_ptrs(short f359c, long tag)
+check_shell_ptrs(short role, long tag)
 {
-	int orig = (f359c == 0x65);
+	int orig = (role == 0x65);
 	const short *ca = ptr_at(&oa, 0x0a28);
 	const short *cb = ptr_at(ob, 0x0a28);
 	int k, diffs = 0;
@@ -1112,7 +1112,7 @@ struct req_case {
 	int		rate_want;
 	short		rrn_local;
 	short		rrn_remote;
-	short		f359c;
+	short		role;
 	short		mst;		/* +0x3592 */
 	short		rxst;		/* +0x3594 */
 	short		txst;		/* +0x3596 */
@@ -1121,7 +1121,7 @@ struct req_case {
 	unsigned short	txflags;	/* +0x25c2 */
 	unsigned short	rxflags;	/* receiver +0x122 */
 	int		v90_receiver;	/* +0x24c */
-	short		f382;
+	short		short_382;
 };
 
 /*
@@ -1133,14 +1133,14 @@ static const struct req_case req_base = {
 	3,			/* status: not 1 or 2, so the V.34 arm      */
 	4, 12, 8, 7,		/* rate min, max, now, want                 */
 	0x0033, 0x0044,		/* rrn local, remote                        */
-	0x65,			/* f359c                                    */
+	0x65,			/* role                                    */
 	V34HS_PHASE1,		/* mst  = 33                                */
 	V34HS_PHASE2,		/* rxst = 34                                */
 	V34HS_TONE_AB,		/* txst = 60                                */
 	0x1111, 0x2222,		/* [1], [2]                                 */
 	0x0000, 0x0000,		/* txflags, rxflags                         */
 	6,			/* v90_receiver                             */
-	0x1234			/* f382                                     */
+	0x1234			/* short_382                                     */
 };
 
 static void
@@ -1157,7 +1157,7 @@ seed_object(const struct req_case *c)
 	poke_int(0x024c, c->v90_receiver);
 	poke_short(0xac0e, c->rrn_local);
 	poke_short(0xac10, c->rrn_remote);
-	poke_short(0x359c, c->f359c);
+	poke_short(0x359c, c->role);
 	poke_short(0x3592, c->mst);
 	poke_short(0x3594, c->rxst);
 	poke_short(0x3596, c->txst);
@@ -1165,7 +1165,7 @@ seed_object(const struct req_case *c)
 	poke_short(0xaa78, c->trace2);
 	poke_short(0x25c2, (short)c->txflags);
 	poke_short(0x264 + 0x122, (short)c->rxflags);
-	poke_short(0x0382, c->f382);
+	poke_short(0x0382, c->short_382);
 }
 
 /* Did this case take the PCM arm? */
@@ -1216,7 +1216,7 @@ run_hangup(const struct req_case *c, long tag)
 	compare("InitiateHangUp", tag);
 	check_session_chain("InitiateHangUp chain", pcm_arm(c), 2, 1, tag);
 	if (!pcm_arm(c)) {
-		check_shell_ptrs(c->f359c, tag);
+		check_shell_ptrs(c->role, tag);
 		/*
 		 * The three clears happen on both arms, and `rate_now` must
 		 * survive -- seeded non-zero so that a reconstruction which
@@ -1241,7 +1241,7 @@ run_reneg(const struct req_case *c, int req, long tag)
 	check_session_chain("InitiateRateRenegotiation chain", pcm_arm(c),
 			    req, 0, tag);
 	if (!pcm_arm(c)) {
-		check_shell_ptrs(c->f359c, tag);
+		check_shell_ptrs(c->role, tag);
 		diff_eq_int("InitiateRateRenegotiation rate_want",
 			    oa.rate_want, want_after(c, req), tag);
 		diff_eq_int("InitiateRateRenegotiation counted",
@@ -1262,7 +1262,7 @@ run_setv90(const struct req_case *c, short rrn_type, unsigned char constel,
 	ref_VPcmV34SetV90RateReneg(ob, rrn_type, constel);
 
 	compare("SetV90RateReneg", tag);
-	check_shell_ptrs(c->f359c, tag);
+	check_shell_ptrs(c->role, tag);
 	/*
 	 * The two polarities a plausible-but-wrong reconstruction gets
 	 * backwards, asserted against the value rather than only against the
@@ -1271,8 +1271,8 @@ run_setv90(const struct req_case *c, short rrn_type, unsigned char constel,
 	 */
 	diff_eq_int("SetV90RateReneg v90_receiver",
 		    oa.v90_receiver, rrn_type != 0 ? 15 : 11, tag);
-	diff_eq_int("SetV90RateReneg f382",
-		    (int)(unsigned short)oa.f382,
+	diff_eq_int("SetV90RateReneg short_382",
+		    (int)(unsigned short)oa.short_382,
 		    constel != 0 ? 0x89b0 : 0x8990, tag);
 	/* And it goes nowhere near the session object. */
 	check_session_chain("SetV90RateReneg chain", 0, 0, 0, tag);
@@ -1415,7 +1415,7 @@ get_short_a(unsigned off)
 
 /*
  * FOUR DIFFERENT PREDICATES, NOT FOUR COPIES.  All four open on
- * `f359c == 0x66` and all four differ inside it, so `role` and `status` are
+ * `role == 0x66` and all four differ inside it, so `role` and `status` are
  * CROSSED: a version that took the receive pair's role test for the transmit
  * pair's agrees with the object on every case where the two happen to select
  * the same arm, and differs on exactly the cases this cross contains.
@@ -1913,7 +1913,7 @@ compare_k56_table(const char *what, unsigned off, long tag)
 static int saw_k56_constel[2], saw_k56_txstate[2];
 
 static void
-run_k56jd(const struct pwr_case *pc, unsigned char constel, short f35a4,
+run_k56jd(const struct pwr_case *pc, unsigned char constel, short short_35a4,
 	  short txstate, short baud, short carrier, short preemp,
 	  unsigned short rxflags, long tag)
 {
@@ -1938,7 +1938,7 @@ run_k56jd(const struct pwr_case *pc, unsigned char constel, short f35a4,
 	poke_short(0xaa78, (short)0x2222);
 	poke_short(0x264 + 0x122, (short)rxflags);
 	poke_short(0x25c2, (short)0x1234);
-	poke_short(OB_F35A4, f35a4);
+	poke_short(OB_F35A4, short_35a4);
 	poke_short(0x382, (short)0x4321);
 
 	V34XF_IndicateK56FlexJdReceived(&oa, constel);
@@ -1957,18 +1957,18 @@ run_k56jd(const struct pwr_case *pc, unsigned char constel, short f35a4,
 	 * The three things the object comparison cannot see on its own,
 	 * against the value rather than only against the blob.  The
 	 * constellation test is `== 0x10` and NOT `!= 0`, which is what makes
-	 * 1 and 0xff interesting; the DC seed is `336 * f35a4 + 10000`
+	 * 1 and 0xff interesting; the DC seed is `336 * short_35a4 + 10000`
 	 * truncated to a short, which is where a version that kept 32 bits
 	 * differs; and bit 3 of the receiver's flags is SET rather than
 	 * assigned.
 	 */
-	diff_eq_int("IndicateK56FlexJdReceived f382",
+	diff_eq_int("IndicateK56FlexJdReceived short_382",
 		    (int)(unsigned short)get_short_a(0x382),
 		    constel == 0x10 ? 0x89b0 : 0x8990, tag);
 	saw_k56_constel[constel == 0x10] = 1;
 	diff_eq_int("IndicateK56FlexJdReceived seeded the DC estimator",
 		    (int)get_short_a(0x254),
-		    (int)(short)(336 * (int)f35a4 + 10000), tag);
+		    (int)(short)(336 * (int)short_35a4 + 10000), tag);
 	diff_eq_int("...and cleared the two behind it",
 		    get_short_a(0x256) == 0 && get_int_a(0x258) == 0, 1, tag);
 	diff_eq_int("IndicateK56FlexJdReceived set the AGC bit",
@@ -2193,7 +2193,7 @@ main(void)
 	 * reconstruction that returned the index and left it alone passes
 	 * every single-call check there is.
 	 *
-	 * The index is swept SIGNED and past its ring bound.  `f2aa6` is a
+	 * The index is swept SIGNED and past its ring bound.  `hist2_idx` is a
 	 * `short` and the object reads it with `movswl`, so 0x8000 and 0xffff
 	 * are the two values that separate that from a `movzwl`, and the two
 	 * agree over every value the ring actually produces -- which is
@@ -2952,7 +2952,7 @@ main(void)
 		for (b = 0; b < sizeof(cst) / sizeof(cst[0]); b++) {
 			struct req_case c = req_base;
 
-			c.f359c = which[w];
+			c.role = which[w];
 			/*
 			 * A different starting `txflags` per case: the mask
 			 * is `& ~0x4018 | 0x2000`, and a case whose flags

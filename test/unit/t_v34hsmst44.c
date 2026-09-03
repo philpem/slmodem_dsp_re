@@ -21,8 +21,8 @@
  *     0x668c0   the bit clock, all five of its exits
  *     0x6c133   the CRC step without the xor
  *     0x6bda0   the restart a failed CRC takes, and its three sub-branches
- *     0x718fc   f359c == 0x66, the answering side
- *     0x71920   f359c == 0x65 with a V.90 receiver
+ *     0x718fc   role == 0x66, the answering side
+ *     0x71920   role == 0x65 with a V.90 receiver
  *     0x6e534   the accept path, and all four of its arms: the default at
  *               0x6e552 and the three selected by a message length --
  *               0x6f438 (0x4d bits, INFO1c), 0x6ed17 (0x26, INFO1a) and
@@ -664,12 +664,12 @@ main(void)
 		    v34hs_peek_short(0, T44T_F358A), 0x7abc, 137);
 
 	/*
-	 * THE ANSWERING SIDE, `f359c == 0x66`.  One extra store -- the
+	 * THE ANSWERING SIDE, `role == 0x66`.  One extra store -- the
 	 * record's length becomes 0x1e -- and one extra diagnostic line.
 	 *
 	 * AND NO V.90 RECEIVER, WHICH IS THE POINT OF THE CASE.  `v34info.c`'s
 	 * `V34SetINFO0dBits` writes 30 into index 12 of the SAME record and
-	 * `v34handshakinit` mode 0 calls it under the SAME `f359c == 0x66`
+	 * `v34handshakinit` mode 0 calls it under the SAME `role == 0x66`
 	 * test -- but it returns early when `v90_receiver` is zero, and this
 	 * inlined copy at 0x718fc has no such guard: 0x71903's store sits
 	 * before the diagnostic check and is reached unconditionally.  The two
@@ -684,7 +684,7 @@ main(void)
 	check_restart(132, 0x1e, 0x11);
 
 	/*
-	 * THE ORIGINATING SIDE, `f359c == 0x65`, and the V.90 receiver
+	 * THE ORIGINATING SIDE, `role == 0x65`, and the V.90 receiver
 	 * decides ONE FIELD: the installed record's length is 0x1e when there
 	 * is one and 0x11 when there is not.  Both are driven, so the
 	 * condition is pinned from both sides.
@@ -706,7 +706,7 @@ main(void)
 	check_restart(134, 24, 0x11);
 
 	/*
-	 * AND `f359c == 0x66` DOES NOT REACH THE SECOND BRANCH.  The two
+	 * AND `role == 0x66` DOES NOT REACH THE SECOND BRANCH.  The two
 	 * tests are 0x66 for the record's length and 0x65 for the installed
 	 * one, and a reconstruction that used one value for both would pass
 	 * every case above; this is the case that separates them, because it
@@ -804,7 +804,7 @@ main(void)
 		    v34hs_peek_short(0, T44T_REC + 8), 0x00ff, 161);
 
 	/*
-	 * THE ORIGINATING SIDE SKIPS TWO STORES.  `f359c == 0x65` goes to its
+	 * THE ORIGINATING SIDE SKIPS TWO STORES.  `role == 0x65` goes to its
 	 * own state and reaches neither 0x6e814's `sr` reset nor 0x6e8ac's
 	 * counter reload -- so the byte the clock then stores comes from the
 	 * sr the message arrived in, 0x1234, and not from 0xffff.  That one
@@ -824,7 +824,7 @@ main(void)
 	 * SAME +0xaa7c AS THE CASE ABOVE, and it does not arrive: 0x6e8ac is
 	 * reached only by falling out of the short-phase-2 branch, so the
 	 * counter stays at the zero 0x6e750 left and the byte clock stores
-	 * nothing.  The two cases differ in `f359c` alone.
+	 * nothing.  The two cases differ in `role` alone.
 	 */
 	diff_eq_int("accept: and the counter is NOT reloaded",
 		    v34hs_peek_short(0, T44T_COUNT), 0, 162);
@@ -1268,7 +1268,7 @@ main(void)
 	{
 		static const struct {
 			short baud;
-			short f1b0, f1ae, f1be, f1ac;
+			short phase_wrap, phase_inc, symbol_period, phase_frac;
 		} rates[] = {
 			{ 0x960, 0x3e80, 0x3e80, 0x3e80, 0x1f40 },
 			{ 0xab7, 0x3e80, 0x36b0, 0x36b0, 0x1f40 },
@@ -1281,7 +1281,7 @@ main(void)
 		static const struct {
 			short carrier;
 			const short *tbl;
-			short f1ba;
+			short half_len;
 			int taps;
 		} carriers[] = {
 			{ 0x640, hsine1600,  6, 12 },
@@ -1316,16 +1316,16 @@ main(void)
 			v34hs_compare(what, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1b0",
 				    v34hs_peek_short(0, T44T_RX_F1B0),
-				    rates[k].f1b0, 200 + (long)k);
+				    rates[k].phase_wrap, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1ae",
 				    v34hs_peek_short(0, T44T_RX_F1AE),
-				    rates[k].f1ae, 200 + (long)k);
+				    rates[k].phase_inc, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1be",
 				    v34hs_peek_short(0, T44T_RX_F1BE),
-				    rates[k].f1be, 200 + (long)k);
+				    rates[k].symbol_period, 200 + (long)k);
 			diff_eq_int("0x26 bits: +0x1ac",
 				    v34hs_peek_short(0, T44T_RX_F1AC),
-				    rates[k].f1ac, 200 + (long)k);
+				    rates[k].phase_frac, 200 + (long)k);
 		}
 
 		for (k = 0; k < sizeof(carriers) / sizeof(carriers[0]); k++) {
@@ -1345,7 +1345,7 @@ main(void)
 			v34hs_compare(what, 210 + (long)k);
 			diff_eq_int("0x26 bits: the half-sine count",
 				    v34hs_peek_short(0, T44T_RX_F1BA),
-				    carriers[k].f1ba, 210 + (long)k);
+				    carriers[k].half_len, 210 + (long)k);
 			if (carriers[k].tbl != NULL) {
 				diff_eq_int("0x26 bits: the half-sine table",
 					    peek_ptr_a(T44T_RX_CARRIER)
@@ -1353,7 +1353,7 @@ main(void)
 					    1, 210 + (long)k);
 				diff_eq_int("0x26 bits: and its count is half "
 					    "the table's length",
-					    2 * (int)carriers[k].f1ba,
+					    2 * (int)carriers[k].half_len,
 					    carriers[k].taps, 210 + (long)k);
 			}
 		}

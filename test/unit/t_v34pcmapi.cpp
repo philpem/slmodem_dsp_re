@@ -260,7 +260,7 @@ static const unsigned moh_ptr[] = {
 	0x0268, 0x026c,			/* rxq read and write cursors    */
 	0x0394,				/* receiver +0x130 rx_samples    */
 	0x0418,				/* receiver +0x1b4 carrier       */
-	0x0508,				/* receiver +0x2a4 f2a4          */
+	0x0508,				/* receiver +0x2a4 fir_coeff          */
 	/*
 	 * NOT the timing filters' two coefficient pointers at +0x620 and
 	 * +0x624: `V34TimingFiltersInit` installs those and only
@@ -514,7 +514,7 @@ struct api_case {
 	int		ext_delay;	/* cfg +0x68                        */
 	unsigned char	cfg_flags3;	/* cfg +0x03, bit 2 is the retrain  */
 	int		status;		/* obj +0x00                        */
-	short		f359c;		/* obj +0x359c, originate/answer    */
+	short		role;		/* obj +0x359c, originate/answer    */
 	int		mside;		/* session +0x6114                  */
 	int		sens;		/* pcm receiver +0x4f8              */
 	int		rate_min;	/* obj +0x220, seeded not zero      */
@@ -538,7 +538,7 @@ static const struct api_case api_base = {
 	64, 200,		/* filt_delay, ext_delay                    */
 	0xff,			/* cfg_flags3: every bit set                */
 	3,			/* status                                   */
-	0x65,			/* f359c                                    */
+	0x65,			/* role                                    */
 	2,			/* mside                                    */
 	0,			/* sens                                     */
 	0x1111, 0x2222,		/* rate_min, rate_max: distinct, non-zero   */
@@ -617,7 +617,7 @@ seed(const struct api_case *c, int handshake)
 	poke_int(OB_RATE_MIN, c->rate_min);
 	poke_int(OB_RATE_MAX, c->rate_max);
 	poke_short(OB_F359A, c->f359a);
-	poke_short(OB_F359C, c->f359c);
+	poke_short(OB_F359C, c->role);
 
 	poke_short(OB_MICROSTATE, V34HS_PHASE1);
 	poke_short(OB_RXSTATE, V34HS_PHASE2);
@@ -965,12 +965,12 @@ run_initmoh(const struct api_case *c, int message, unsigned char late,
 		short w0e = get_short_a(OB_FAC1C + 0x0e);
 		short w10 = get_short_a(OB_FAC1C + 0x10);
 
-		if (c->f359c == 0x65) {
+		if (c->role == 0x65) {
 			diff_eq_int("InitMOH notch, originate",
 				    w0c == 0 && w0e == 0
 				    && w10 == (short)0x39c3, 1, tag);
 			saw_moh_notch[0] = 1;
-		} else if (c->f359c == 0x66) {
+		} else if (c->role == 0x66) {
 			diff_eq_int("InitMOH notch, answer",
 				    w0c == (short)0x5a82
 				    && w0e == (short)0x55fc
@@ -1067,7 +1067,7 @@ main(void)
 		for (j = 0; j < sizeof(st_in) / sizeof(st_in[0]); j++) {
 			struct api_case c = api_base;
 
-			c.f359c = role_in[i];
+			c.role = role_in[i];
 			c.status = st_in[j];
 			run_upstream(&c, tag++);
 		}
@@ -1258,7 +1258,7 @@ main(void)
 		for (l = 0; l < sizeof(role_in) / sizeof(role_in[0]); l++) {
 			struct api_case c = api_base;
 
-			c.f359c = role_in[l];
+			c.role = role_in[l];
 			run_initmoh(&c, msg_in[i], late_in[j], flag_in[k],
 				    tag++);
 		}

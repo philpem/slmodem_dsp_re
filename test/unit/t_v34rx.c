@@ -432,7 +432,7 @@ main(void)
 				    ((unsigned char *)&ob)[b], b);
 		}
 		diff_eq_int("baud starts at 2400",
-			    ((struct v34_receiver *)((char *)&oa + 0x264))->f1d2,
+			    ((struct v34_receiver *)((char *)&oa + 0x264))->report_interval,
 			    2400, 0);
 	}
 	rc |= diff_end();
@@ -513,8 +513,8 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.f25d4 = ob.f25d4 = 0x4000;
-			oa.f25c2 = ob.f25c2 = (short)(gate ? 0x200 : 0);
+			oa.tx_scale = ob.tx_scale = 0x4000;
+			oa.tx_flags = ob.tx_flags = (short)(gate ? 0x200 : 0);
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
@@ -598,7 +598,7 @@ main(void)
 			ra.agc_level = rb.agc_level = 0;
 			ra.agc_accum = rb.agc_accum = 0;
 			ra.agc_step = rb.agc_step = 0x3333;
-			ra.f19c = rb.f19c = 0;
+			ra.rms_idx = rb.rms_idx = 0;
 			ra.energy.sum = rb.energy.sum = 0;
 			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 				ra.rms_buf[b] = rb.rms_buf[b] = 0;
@@ -721,7 +721,7 @@ main(void)
 
 			ra->carrier = rb->carrier = carrier;
 			ra->f1b8 = rb->f1b8 = 3;
-			ra->f1ba = rb->f1ba = 64;
+			ra->half_len = rb->half_len = 64;
 			ra->f1bc = rb->f1bc = 5;
 
 			/*
@@ -731,16 +731,16 @@ main(void)
 			 * the fixture stands in for them; left at the fill it
 			 * would be -23131 and index 46 KB below rms_buf.
 			 */
-			ra->f19c = rb->f19c = 0;
+			ra->rms_idx = rb->rms_idx = 0;
 
-			ra->f1ac = rb->f1ac = 17;
-			ra->f1ae = rb->f1ae = steps[sw];
-			ra->f1b0 = rb->f1b0 = 1024;
+			ra->phase_frac = rb->phase_frac = 17;
+			ra->phase_inc = rb->phase_inc = steps[sw];
+			ra->phase_wrap = rb->phase_wrap = 1024;
 			/*
 			 * THE BOUND, and it is far tighter than timing_out[]
 			 * suggests.  V34demodulate appends one gained sample
 			 * per pull starting at +0x10c, and the very next
-			 * fields are the receiver's own bookkeeping: f128 at
+			 * fields are the receiver's own bookkeeping: out_count at
 			 * +0x128, f12a at +0x12a, the energy sum at +0x12c
 			 * and rx_samples itself at +0x130.  So there are
 			 * fourteen shorts of headroom, and the fifteenth pull
@@ -751,7 +751,7 @@ main(void)
 			 * not something to test past: driving it further
 			 * measures the overrun, not the interpolator.
 			 */
-			ra->f128 = rb->f128 = 6;
+			ra->out_count = rb->out_count = 6;
 			ra->agc_gain = rb->agc_gain = 0x400;
 			ra->agc_step = rb->agc_step = 0x3333;
 
@@ -762,11 +762,11 @@ main(void)
 				rxtiming(&oa);
 				ref_rxtiming(&ob);
 
-				/* It must not have reached f128. */
+				/* It must not have reached out_count. */
 				if ((char *)ra->rx_samples
-				    > (char *)&ra->f128) {
+				    > (char *)&ra->out_count) {
 					printf("FIXTURE: the burst reached "
-					       "+0x128 -- lower f128\n");
+					       "+0x128 -- lower out_count\n");
 					return 1;
 				}
 
@@ -928,7 +928,7 @@ main(void)
 		V34InitializeImplementationSpecific(&oa);
 		ref_V34InitializeImplementationSpecific(&ob);
 		txinit(&oa); ref_txinit(&ob);
-		oa.f25c2 = ob.f25c2 = 0x0102;
+		oa.tx_flags = ob.tx_flags = 0x0102;
 
 		v34FreezeEcho(&oa);
 		ref_v34FreezeEcho(&ob);
@@ -953,9 +953,9 @@ main(void)
 					    ((unsigned char *)&oa)[b],
 					    ((unsigned char *)&ob)[b], b);
 		}
-		diff_eq_int("freeze set bit 2", oa.f25c2 & V34_EC_FROZEN,
+		diff_eq_int("freeze set bit 2", oa.tx_flags & V34_EC_FROZEN,
 			    V34_EC_FROZEN, 0);
-		diff_eq_int("freeze kept the rest", oa.f25c2 & ~V34_EC_FROZEN,
+		diff_eq_int("freeze kept the rest", oa.tx_flags & ~V34_EC_FROZEN,
 			    0x0102, 0);
 	}
 	rc |= diff_end();
@@ -1015,7 +1015,7 @@ main(void)
 			{
 				int k;
 
-				for (k = 0; k < 2 * (int)ra->f1ba; k++)
+				for (k = 0; k < 2 * (int)ra->half_len; k++)
 					diff_eq_int("carrier entry",
 						    ra->carrier[k],
 						    rb->carrier[k],
@@ -1028,13 +1028,13 @@ main(void)
 
 	/*
 	 * The quarter-cycle relation the demodulator depends on: every
-	 * carrier table is exactly 2 * f1ba shorts, so carrier[i + f1ba] is
+	 * carrier table is exactly 2 * half_len shorts, so carrier[i + half_len] is
 	 * carrier[i] shifted a quarter period.  A property check, not a
 	 * differential one -- but it is the invariant that makes
 	 * V34demodulate's two reads a cosine and a sine, and it would catch a
 	 * table paired with the wrong length.
 	 */
-	diff_begin("v34 carrier tables are 2 x f1ba");
+	diff_begin("v34 carrier tables are 2 x half_len");
 	{
 		static struct v34_object o;
 		static const struct { short c; unsigned len; } tab[] = {
@@ -1050,7 +1050,7 @@ main(void)
 			V34SetupDemodulator(&o, 2400, tab[i].c);
 			r = (struct v34_receiver *)((char *)&o + 0x264);
 			diff_eq_int("2 x half length",
-				    2 * (unsigned)r->f1ba, tab[i].len,
+				    2 * (unsigned)r->half_len, tab[i].len,
 				    tab[i].c);
 		}
 	}
@@ -1059,7 +1059,7 @@ main(void)
 	/*
 	 * adaptecho: 200 calls, which crosses every schedule boundary --
 	 * the 0x8f energy-gathering burst, the one-shot measurement at 0x90,
-	 * and the every-tenth-call step recompute past f3554.  A shorter run
+	 * and the every-tenth-call step recompute past echo_decay_start.  A shorter run
 	 * would exercise only the first and prove almost nothing.
 	 *
 	 * Run with the debug transcript captured too, since adaptecho reaches
@@ -1083,30 +1083,30 @@ main(void)
 			ref_V34InitializeImplementationSpecific(&ob);
 			txinit(&oa); ref_txinit(&ob);
 
-			oa.f25c2 = ob.f25c2 = 0;
-			oa.f260  = ob.f260  = 0;
-			oa.fa23e = ob.fa23e = 0;
-			oa.f3550 = ob.f3550 = -0x2000;
-			oa.f3554 = ob.f3554 = 0x95;
-			oa.f3558 = ob.f3558 = 0x7000;
+			oa.tx_flags = ob.tx_flags = 0;
+			oa.echo_residual  = ob.echo_residual  = 0;
+			oa.echo_correction = ob.echo_correction = 0;
+			oa.echo_alpha = ob.echo_alpha = -0x2000;
+			oa.echo_decay_start = ob.echo_decay_start = 0x95;
+			oa.echo_decay_fact = ob.echo_decay_fact = 0x7000;
 			/*
 			 * THE THIRD ARM OF THE STEP-SIZE CHOICE, which
-			 * nothing reached.  It is picked when `f355c > 2` and
+			 * nothing reached.  It is picked when `echo_beta > 2` and
 			 * neither of the two arms above it applies, and all
-			 * three compare `f3560` UNSIGNED -- so the case that
+			 * three compare `echo_energy` UNSIGNED -- so the case that
 			 * tells the unsigned compare from a signed one is a
 			 * NEGATIVE energy, which as unsigned is above every
 			 * threshold and as signed is below all of them.
 			 *
-			 * `f355c` must be 5 or less or the second arm takes
-			 * it first, and `f354c` starts at 0x8f so the very
+			 * `echo_beta` must be 5 or less or the second arm takes
+			 * it first, and `echo_calls` starts at 0x8f so the very
 			 * next call is 0x90 -- the one call that runs this
-			 * block -- with `f3560` still exactly as seeded
+			 * block -- with `echo_energy` still exactly as seeded
 			 * rather than 143 calls of accumulation on top.
 			 */
-			oa.f355c = ob.f355c = (short)(beta ? 5 : 6);
-			oa.f3560 = ob.f3560 = beta ? -1 : 0;
-			oa.f354c = ob.f354c = beta ? 0x8f : 0;
+			oa.echo_beta = ob.echo_beta = (short)(beta ? 5 : 6);
+			oa.echo_energy = ob.echo_energy = beta ? -1 : 0;
+			oa.echo_calls = ob.echo_calls = beta ? 0x8f : 0;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 
 			/*
@@ -1126,7 +1126,7 @@ main(void)
 			dsplib_debug_capture_reset();
 
 			for (it = 0; it < 200; it++) {
-				oa.fa23e = ob.fa23e = (short)(it * 37 - 900);
+				oa.echo_correction = ob.echo_correction = (short)(it * 37 - 900);
 				adaptecho(&oa);
 				ref_adaptecho(&ob);
 			}
@@ -1189,7 +1189,7 @@ main(void)
 	 * canceller's 0x90 measurement and the far one's 0x2bb offset, and
 	 * the flag sweep covers all three ways it builds the complex sample.
 	 *
-	 * `fir` needs coefficients at f2a4 and uses ECHO1's fractional array
+	 * `fir` needs coefficients at fir_coeff and uses ECHO1's fractional array
 	 * as its delay line -- the finding-100 overlay, third reader.  The
 	 * coefficient block must live OUTSIDE the object: pointing it inside
 	 * collides with what V34InitializeImplementationSpecific set up, and
@@ -1210,9 +1210,9 @@ main(void)
 		 * `cnt` and `lag` are separate loops, and they are what
 		 * reaches three sites the sweep never touched: the NEC start
 		 * announcement needs the counter to WRAP to zero (`count =
-		 * f354c + 1`), the stop announcement fires exactly at 0x4650,
-		 * and the error path needs a negative lag.  With f354c pinned
-		 * at 0 and f25c at 0x40 none of the three was reachable, so
+		 * echo_calls + 1`), the stop announcement fires exactly at 0x4650,
+		 * and the error path needs a negative lag.  With echo_calls pinned
+		 * at 0 and good_run at 0x40 none of the three was reachable, so
 		 * their strings had never been compared and their gates could
 		 * not be tested.  Two loops rather than one, because two
 		 * inputs swept from one variable cannot be told apart.
@@ -1237,20 +1237,20 @@ main(void)
 
 			ra->flags = rb->flags = (unsigned short)
 			    (mode == 0 ? 0x8000 : mode == 1 ? 0x0800 : 0);
-			ra->f2a4 = rb->f2a4 = coeff;
+			ra->fir_coeff = rb->fir_coeff = coeff;
 
 			oa.dmadelay  = ob.dmadelay  = (short)(lag ? 8 : 0x40);
-			oa.f25c2 = ob.f25c2 = (short)(feed ? V34_EC_FEED : 0);
-			oa.f260  = ob.f260  = 1234;
-			oa.fa23c = ob.fa23c = (short)(far ? 1 : 0);
-			oa.fa23e = ob.fa23e = 0;
-			oa.fa240 = ob.fa240 = 0;
-			oa.f2aa4 = ob.f2aa4 = 0;
-			oa.f2aa6 = ob.f2aa6 = 0;
+			oa.tx_flags = ob.tx_flags = (short)(feed ? V34_EC_FEED : 0);
+			oa.echo_residual  = ob.echo_residual  = 1234;
+			oa.far_echo_enable = ob.far_echo_enable = (short)(far ? 1 : 0);
+			oa.echo_correction = ob.echo_correction = 0;
+			oa.echo_resid_energy = ob.echo_resid_energy = 0;
+			oa.hist1_idx = ob.hist1_idx = 0;
+			oa.hist2_idx = ob.hist2_idx = 0;
 			/*
 			 * EACH SEED IS ONE COUNT BELOW A BOUNDARY, because
 			 * the function increments before it tests: `count =
-			 * f354c + 1`.  Seeding the boundary itself lands one
+			 * echo_calls + 1`.  Seeding the boundary itself lands one
 			 * past it and proves nothing.
 			 *
 			 *   -1      count wraps to 0 -- the NEC start
@@ -1277,9 +1277,9 @@ main(void)
 			 * exactly right.
 			 */
 
-			oa.f354c = ob.f354c = cnt_seed[cnt];
-			oa.f3550 = ob.f3550 = -0x1800;
-			oa.f3552 = ob.f3552 = -0x1400;
+			oa.echo_calls = ob.echo_calls = cnt_seed[cnt];
+			oa.echo_alpha = ob.echo_alpha = -0x1800;
+			oa.short_3552 = ob.short_3552 = -0x1400;
 			oa.echo0.adapt_count = ob.echo0.adapt_count = 0;
 			oa.echo1.adapt_count = ob.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
@@ -1383,7 +1383,7 @@ main(void)
 			memset(&ob, HARNESS_MALLOC_FILL, sizeof(ob));
 			VPcmV34LogTimingOffset(&oa, (short)v);
 			ref_VPcmV34LogTimingOffset(&ob, (short)v);
-			diff_eq_int("timing offset", oa.fac0c, ob.fac0c, v);
+			diff_eq_int("timing offset", oa.v90_timing_offset, ob.v90_timing_offset, v);
 		}
 	}
 	rc |= diff_end();
@@ -1455,28 +1455,28 @@ main(void)
 				sa->state_idx = sb->state_idx = 0;
 				sa->divisor = sb->divisor = 1;
 				sa->wrap = sb->wrap = 1;
-				sa->fa14 = sb->fa14 = 2;
-				sa->fa44 = sb->fa44 = 2;
+				sa->idx_width = sb->idx_width = 2;
+				sa->cost_shift = sb->cost_shift = 2;
 				sa->invert = sb->invert = 0;
-				sa->fa00 = sb->fa00 = 3;
-				sa->fa02 = sb->fa02 = 4;
-				sa->fa3c = sb->fa3c = 0;
-				sa->fa3e = sb->fa3e = 0;
-				sa->fa40 = sb->fa40 = 3;
+				sa->span = sb->span = 3;
+				sa->subframe_limit = sb->subframe_limit = 4;
+				sa->subframe_count = sb->subframe_count = 0;
+				sa->frame_count = sb->frame_count = 0;
+				sa->frame_limit = sb->frame_limit = 3;
 				sa->latched = sb->latched = 1;
 				sa->count = sb->count = 9;
-				sa->fa06 = sb->fa06 = 3;
-				sa->fa08 = sb->fa08 = 0;
-				sa->fa0e = sb->fa0e = 8;
-				sa->fa10 = sb->fa10 = 8;
-				sa->fa04 = sb->fa04 = 7;
+				sa->remainder = sb->remainder = 3;
+				sa->wide_accum = sb->wide_accum = 0;
+				sa->wide_bits = sb->wide_bits = 8;
+				sa->wide_bits_alt = sb->wide_bits_alt = 8;
+				sa->group_count = sb->group_count = 7;
 				sa->prev_k = sb->prev_k = 0;
 			}
 
 			ra->flags = rb->flags = flags;
-			ra->f266 = rb->f266 = 0;
+			ra->subframe_idx = rb->subframe_idx = 0;
 			ra->f1aa = rb->f1aa = 0;
-			ra->f124 = rb->f124 = 20;
+			ra->rx_blocks = rb->rx_blocks = 20;
 			ra->f798 = rb->f798 = (short)(-60 - (re / 3000));
 			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
 			oa.baud_rate = ob.baud_rate = 40;
@@ -1494,7 +1494,7 @@ main(void)
 
 				diff_eq_int("dec best", ra->best_index,
 					    rb->best_index, tag);
-				diff_eq_int("dec f218", ra->f218, rb->f218,
+				diff_eq_int("dec equ_step", ra->equ_step, rb->equ_step,
 					    tag);
 				diff_eq_int("dec flags", ra->flags, rb->flags,
 					    tag);
@@ -1584,8 +1584,8 @@ main(void)
 
 					diff_eq_int("reneg flags", ra->flags,
 						    rb->flags, tag);
-					diff_eq_int("reneg f218", ra->f218,
-						    rb->f218, tag);
+					diff_eq_int("reneg equ_step", ra->equ_step,
+						    rb->equ_step, tag);
 					diff_eq_int("reneg f798", ra->f798,
 						    rb->f798, tag);
 					diff_eq_int("reneg transcripts agree",
@@ -1682,8 +1682,8 @@ main(void)
 				ra->timing_out[k] = rb->timing_out[k] = v;
 			}
 
-			ra->f1ac = rb->f1ac = (short)(ph * 700);
-			ra->f1b0 = rb->f1b0 = (short)(wrap * 0x1f40);
+			ra->phase_frac = rb->phase_frac = (short)(ph * 700);
+			ra->phase_wrap = rb->phase_wrap = (short)(wrap * 0x1f40);
 			ra->f1ec = rb->f1ec = 0;
 			ra->f1ee = rb->f1ee = 0;
 
@@ -1710,7 +1710,7 @@ main(void)
 				} else if (dsplib_debug_capture_text(1)[0]) {
 					saw_sip_said = 1;
 				}
-				diff_eq_int("phase", ra->f1ac, rb->f1ac, tag);
+				diff_eq_int("phase", ra->phase_frac, rb->phase_frac, tag);
 				diff_eq_int("idx lo", ra->f1ec, rb->f1ec, tag);
 				diff_eq_int("idx hi", ra->f1ee, rb->f1ee, tag);
 			}
@@ -1750,15 +1750,15 @@ main(void)
 			ra = (struct v34_receiver *)((char *)&oa + 0x264);
 			rb = (struct v34_receiver *)((char *)&ob + 0x264);
 
-			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
+			oa.role = ob.role = (short)(var ? 0x65 : 0x11);
 			oa.baud_rate = ob.baud_rate = 400;
-			ra->f1c0 = rb->f1c0 = states[si];
-			ra->f1d0 = rb->f1d0 = (short)d0;
+			ra->pllcnt = rb->pllcnt = states[si];
+			ra->timing_offset = rb->timing_offset = (short)d0;
 			ra->f232 = rb->f232 = 0;
 			ra->f234 = rb->f234 = 0;
 			ra->f236 = rb->f236 = 0;
-			ra->f1d2 = rb->f1d2 = 0;
-			oa.fac0c = ob.fac0c = 0;
+			ra->report_interval = rb->report_interval = 0;
+			oa.v90_timing_offset = ob.v90_timing_offset = 0;
 
 			setTimingStateParameters(&oa);
 			ref_setTimingStateParameters(&ob);
@@ -1766,8 +1766,8 @@ main(void)
 			diff_eq_int("sts f232", ra->f232, rb->f232, tag);
 			diff_eq_int("sts f234", ra->f234, rb->f234, tag);
 			diff_eq_int("sts f236", ra->f236, rb->f236, tag);
-			diff_eq_int("sts f1d2", ra->f1d2, rb->f1d2, tag);
-			diff_eq_int("sts offset", oa.fac0c, ob.fac0c, tag);
+			diff_eq_int("sts report_interval", ra->report_interval, rb->report_interval, tag);
+			diff_eq_int("sts offset", oa.v90_timing_offset, ob.v90_timing_offset, tag);
 		}
 	}
 	rc |= diff_end();
@@ -1775,7 +1775,7 @@ main(void)
 	/*
 	 * TimingV34: the state machine, the detector and the integrator, run
 	 * long enough for the dwell counters to advance states and for the
-	 * ppm report to fire.  f1c0 == -1 (done) and the f1c8 branch out of
+	 * ppm report to fire.  pllcnt == -1 (done) and the f1c8 branch out of
 	 * state 1 are both driven.
 	 */
 	diff_begin("v34 TimingV34");
@@ -1808,21 +1808,21 @@ main(void)
 				    (short)(k <= 2 ? 900 - k * 40
 						   : -700 + k * 30);
 
-			oa.f359c = ob.f359c = (short)(var ? 0x65 : 0x11);
+			oa.role = ob.role = (short)(var ? 0x65 : 0x11);
 			oa.baud_rate = ob.baud_rate = 400;
-			oa.fac0c = ob.fac0c = 0;
-			ra->f1c0 = rb->f1c0 = (short)st;
+			oa.v90_timing_offset = ob.v90_timing_offset = 0;
+			ra->pllcnt = rb->pllcnt = (short)st;
 			ra->f1c8 = rb->f1c8 = skip;
 			ra->f1ec = rb->f1ec = 1;
 			ra->f1ee = rb->f1ee = 2;
-			ra->f1ac = rb->f1ac = 700;
-			ra->f1ae = rb->f1ae = 0x3e80;
-			ra->f1b0 = rb->f1b0 = 0x3e80;
-			ra->f1be = rb->f1be = 0x3e80;
+			ra->phase_frac = rb->phase_frac = 700;
+			ra->phase_inc = rb->phase_inc = 0x3e80;
+			ra->phase_wrap = rb->phase_wrap = 0x3e80;
+			ra->symbol_period = rb->symbol_period = 0x3e80;
 			ra->f1cc = rb->f1cc = 0;
 			ra->f1ce = rb->f1ce = 0;
-			ra->f1d0 = rb->f1d0 = 0;
-			ra->f1d2 = rb->f1d2 = 40;
+			ra->timing_offset = rb->timing_offset = 0;
+			ra->report_interval = rb->report_interval = 40;
 			ra->f1d8 = rb->f1d8 = 0;
 			ra->f1e0 = rb->f1e0 = 0;
 			ra->f230 = rb->f230 = 0;
@@ -1861,15 +1861,15 @@ main(void)
 					saw_tv_said = 1;
 				}
 
-				diff_eq_int("tv state", ra->f1c0, rb->f1c0, tag);
-				diff_eq_int("tv step",  ra->f1ae, rb->f1ae, tag);
+				diff_eq_int("tv state", ra->pllcnt, rb->pllcnt, tag);
+				diff_eq_int("tv step",  ra->phase_inc, rb->phase_inc, tag);
 				diff_eq_int("tv acc",  (long)ra->f1d8,
 					    (long)rb->f1d8, tag);
 				diff_eq_int("tv int",  (long)ra->f1e0,
 					    (long)rb->f1e0, tag);
-				diff_eq_int("tv ppm",   ra->f1d0, rb->f1d0, tag);
+				diff_eq_int("tv ppm",   ra->timing_offset, rb->timing_offset, tag);
 				diff_eq_int("tv dwell", ra->f230, rb->f230, tag);
-				diff_eq_int("tv phase", ra->f1ac, rb->f1ac, tag);
+				diff_eq_int("tv phase", ra->phase_frac, rb->phase_frac, tag);
 			}
 		}
 
@@ -1889,16 +1889,16 @@ main(void)
 	 * rxvect4, drive the carrier NCO, adapt the centre taps.
 	 *
 	 * DRIVEN THROUGH V34SetupDemodulator, not by hand.  `receiver` calls
-	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
-	 * hand-set step survives exactly one call: with f1be left at the fill
+	 * TimingV34, which recomputes phase_inc from symbol_period every symbol, so a
+	 * hand-set step survives exactly one call: with symbol_period left at the fill
 	 * the step becomes garbage, every output wraps twice, and twelve
 	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
-	 * f124 and best_index, which are the fields `receiver` then reads.
+	 * rx_blocks and best_index, which are the fields `receiver` then reads.
 	 * That is finding F123's overrun, and it makes both sides agree on
-	 * nonsense.  The real rates keep f1ae below f1b0, which is what
+	 * nonsense.  The real rates keep phase_inc below phase_wrap, which is what
 	 * bounds the pulls at one per output.
 	 *
-	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
+	 * TWO CONSTRAINTS ON out_count, AND THEY AGREE.  timing_out[] holds seven
 	 * entries before the predictor's coefficients begin at +0x288, and
 	 * finding F123 measured fourteen shorts of receive-burst headroom.
 	 * Seven outputs at up to two pulls each is fourteen samples, so one
@@ -1913,21 +1913,21 @@ main(void)
 	 * only ever one is set.
 	 *
 	 * DRIVEN THROUGH V34SetupDemodulator, not by hand.  `receiver` calls
-	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
-	 * hand-set step survives exactly one call: with f1be left at the fill
+	 * TimingV34, which recomputes phase_inc from symbol_period every symbol, so a
+	 * hand-set step survives exactly one call: with symbol_period left at the fill
 	 * the step becomes garbage, every output wraps twice, and twelve
 	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
-	 * f124 and best_index, which are the fields `receiver` then reads.
-	 * Both sides then agree on nonsense.  The real rates keep f1ae below
-	 * f1b0, which is what bounds the pulls at one per output.
+	 * rx_blocks and best_index, which are the fields `receiver` then reads.
+	 * Both sides then agree on nonsense.  The real rates keep phase_inc below
+	 * phase_wrap, which is what bounds the pulls at one per output.
 	 *
-	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
+	 * TWO CONSTRAINTS ON out_count, AND THEY AGREE.  timing_out[] holds seven
 	 * entries before the predictor's coefficients begin at +0x288, and
 	 * finding F123 measured fourteen shorts of receive-burst headroom.
 	 * Seven outputs at up to two pulls each is fourteen samples, so one
 	 * bound implies the other; both are asserted below.
 	 *
-	 * f124 IS DRIVEN, NOT OBSERVED.  It is `rxsymcnt`, and every
+	 * rx_blocks IS DRIVEN, NOT OBSERVED.  It is `rxsymcnt`, and every
 	 * threshold in the function is a comparison against it -- 0x11, 0x40,
 	 * 0x68, 0x132, 0x143, 0x152, 0x153, 0x332, 0x7530.  Nothing inside
 	 * `receiver` advances it past 2, so the sweep sets it outright.
@@ -1941,21 +1941,21 @@ main(void)
 	 * only ever one is set.
 	 *
 	 * DRIVEN THROUGH V34SetupDemodulator, not by hand.  `receiver` calls
-	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
-	 * hand-set step survives exactly one call: with f1be left at the fill
+	 * TimingV34, which recomputes phase_inc from symbol_period every symbol, so a
+	 * hand-set step survives exactly one call: with symbol_period left at the fill
 	 * the step becomes garbage, every output wraps twice, and twelve
 	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
-	 * f124 and best_index, which are the fields `receiver` then reads.
-	 * Both sides then agree on nonsense.  The real rates keep f1ae below
-	 * f1b0, which is what bounds the pulls at one per output.
+	 * rx_blocks and best_index, which are the fields `receiver` then reads.
+	 * Both sides then agree on nonsense.  The real rates keep phase_inc below
+	 * phase_wrap, which is what bounds the pulls at one per output.
 	 *
-	 * TWO CONSTRAINTS ON f128, AND THEY AGREE.  timing_out[] holds seven
+	 * TWO CONSTRAINTS ON out_count, AND THEY AGREE.  timing_out[] holds seven
 	 * entries before the predictor's coefficients begin at +0x288, and
 	 * finding F123 measured fourteen shorts of receive-burst headroom.
 	 * Seven outputs at up to two pulls each is fourteen samples, so one
 	 * bound implies the other; both are asserted below.
 	 *
-	 * f124 IS DRIVEN, NOT OBSERVED.  It is `rxsymcnt`, and every
+	 * rx_blocks IS DRIVEN, NOT OBSERVED.  It is `rxsymcnt`, and every
 	 * threshold in the function is a comparison against it -- 0x11, 0x40,
 	 * 0x68, 0x132, 0x143, 0x152, 0x153, 0x332, 0x7530.  Nothing inside
 	 * `receiver` advances it past 2, so the sweep sets it outright.
@@ -1987,7 +1987,7 @@ main(void)
 			0x154, 0x212, 0x213, 0x332, 0x333, 0x400,
 			0x7530, 0x7531,
 		};
-#define RXT_WIDE_STEP	0x01	/* f1ae > f1b0: the two-pull path        */
+#define RXT_WIDE_STEP	0x01	/* phase_inc > phase_wrap: the two-pull path        */
 #define RXT_DEAD_EQ	0x02	/* zero taps: the point stops moving     */
 #define RXT_RTN_UP	0x04	/* seed rtncount just under its trip     */
 #define RXT_RTN_DOWN	0x08	/* and inside the renegotiation band     */
@@ -2073,7 +2073,7 @@ main(void)
 			 * The RMS index, as in the rxtiming fixture: neither
 			 * init writes it, dpskinit and v34modeminit do.
 			 */
-			ra->f19c = rb->f19c = 0;
+			ra->rms_idx = rb->rms_idx = 0;
 			ra->agc_gain = rb->agc_gain = cases[cs].gain;
 			ra->agc_step = rb->agc_step = 0x3333;
 
@@ -2083,7 +2083,7 @@ main(void)
 			 * dwell.  At 1 or below `receiver` returns before the
 			 * slicer, which would leave two thirds of it untested.
 			 */
-			ra->f1c0 = rb->f1c0 = 4;
+			ra->pllcnt = rb->pllcnt = 4;
 			ra->f232 = rb->f232 = -1;
 			ra->f234 = rb->f234 = 0x1000;
 			ra->f236 = rb->f236 = 0x0800;
@@ -2123,8 +2123,8 @@ main(void)
 				 * TimingV34 will keep reproducing.  Eight
 				 * pulls at four outputs still fits the burst.
 				 */
-				ra->f1be = rb->f1be = 20000;
-				ra->f1ae = rb->f1ae = 20000;
+				ra->symbol_period = rb->symbol_period = 20000;
+				ra->phase_inc = rb->phase_inc = 20000;
 			}
 			if (tweak & RXT_DEAD_EQ) {
 				memset(qa2->re, 0, sizeof qa2->re);
@@ -2138,9 +2138,9 @@ main(void)
 					qa2->im[k] = qb2->im[k] = -0x1800;
 				}
 			if (tweak & RXT_REPORT)
-				ra->f21c = rb->f21c = 0x3fd;
+				ra->err_symcount = rb->err_symcount = 0x3fd;
 			if (tweak & RXT_SATURATE) {
-				ra->f220 = rb->f220 = 0x7ffffff0;
+				ra->equerr_accum = rb->equerr_accum = 0x7ffffff0;
 				ra->f228 = rb->f228 = 0x7ffffff0;
 			}
 
@@ -2157,7 +2157,7 @@ main(void)
 				 * the S-S1 reset writes 0, so leaving it
 				 * alone would collapse the sweep to those.
 				 */
-				ra->f124 = rb->f124 =
+				ra->rx_blocks = rb->rx_blocks =
 				    syms[it % (sizeof(syms) / sizeof(syms[0]))];
 				if (tweak & RXT_RTN_UP)
 					ra->f798 = rb->f798 = 0x8c;
@@ -2175,8 +2175,8 @@ main(void)
 					       "flags, not spare buffer\n");
 					return 1;
 				}
-				if (ra->f128 > 7) {
-					printf("FIXTURE: f128 > 7 runs "
+				if (ra->out_count > 7) {
+					printf("FIXTURE: out_count > 7 runs "
 					       "timing_out into the "
 					       "predictor\n");
 					return 1;
@@ -2187,7 +2187,7 @@ main(void)
 					  { 0x264 + 0x04, 8 },   /* rxq rd/wr */
 					  { 0x264 + 0x130, 4 },  /* samples   */
 					  { 0x264 + 0x1b4, 4 },  /* carrier   */
-					  { 0x264 + 0x2a4, 4 },  /* f2a4      */
+					  { 0x264 + 0x2a4, 4 },  /* fir_coeff      */
 					  { 0x50c + __builtin_offsetof(
 					      struct v34_timing,
 					      prefilter_coeff), 8 },
@@ -2247,7 +2247,7 @@ main(void)
 		static struct v34_object oa, ob;
 		/*
 		 * 0x7530 IS THE BOUNDARY, and it was missing: the equaliser
-		 * report is gated `f124 <= 0x7530` and the sweep ran 0x7531,
+		 * report is gated `rx_blocks <= 0x7530` and the sweep ran 0x7531,
 		 * one past it, so tightening the test to `<` changed nothing
 		 * any case could see.
 		 */
@@ -2303,10 +2303,10 @@ main(void)
 			((struct v34_queue *)ra)->count =
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 
-			ra->f19c = rb->f19c = 0;
+			ra->rms_idx = rb->rms_idx = 0;
 			ra->agc_gain = rb->agc_gain = 0x4000;
 			ra->agc_step = rb->agc_step = 0x3333;
-			ra->f1c0 = rb->f1c0 = 4;
+			ra->pllcnt = rb->pllcnt = 4;
 			ra->f232 = rb->f232 = -1;
 			ra->f234 = rb->f234 = 0x1000;
 			ra->f236 = rb->f236 = 0x0800;
@@ -2317,7 +2317,7 @@ main(void)
 			ra->f268 = rb->f268 = 0; ra->f26a = rb->f26a = 0;
 			ra->f26c = rb->f26c = 0; ra->f26e = rb->f26e = 0;
 			ra->f798 = rb->f798 = 0;
-			ra->f21c = rb->f21c = 0x3fd;
+			ra->err_symcount = rb->err_symcount = 0x3fd;
 			oa.status = ob.status = 0;
 
 			/*
@@ -2358,7 +2358,7 @@ main(void)
 			for (it = 0; it < 32; it++) {
 				long tag = (long)cs * 1000 + it;
 
-				ra->f124 = rb->f124 =
+				ra->rx_blocks = rb->rx_blocks =
 				    syms[it % (sizeof(syms)/sizeof(syms[0]))];
 				if (cs == 1)
 					ra->f798 = rb->f798 = 0x8c;
@@ -2547,7 +2547,7 @@ main(void)
 			ra2.agc_level = rb2.agc_level = 0;
 			ra2.agc_accum = rb2.agc_accum = 0;
 			ra2.agc_step = rb2.agc_step = 0x3333;
-			ra2.f19c = rb2.f19c = 0;
+			ra2.rms_idx = rb2.rms_idx = 0;
 			ra2.energy.sum = rb2.energy.sum = 0;
 			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 				ra2.rms_buf[b] = rb2.rms_buf[b] = 0;
@@ -2579,16 +2579,16 @@ main(void)
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 			ra->agc_gain = rb->agc_gain = 0x4000;
 			ra->agc_step = rb->agc_step = 0x3333;
-			ra->f1c0 = rb->f1c0 = 4;
-			ra->f19c = rb->f19c = 0;
+			ra->pllcnt = rb->pllcnt = 4;
+			ra->rms_idx = rb->rms_idx = 0;
 			ra->f232 = rb->f232 = -1;
 			ra->f234 = rb->f234 = 0x1000;
 			ra->f236 = rb->f236 = 0x0800;
 			ra->f1ec = rb->f1ec = 1;
 			ra->f1ee = rb->f1ee = 2;
 			ra->f798 = rb->f798 = 0;
-			ra->f21c = rb->f21c = 0x3fd;
-			ra->f124 = rb->f124 = 0x40;
+			ra->err_symcount = rb->err_symcount = 0x3fd;
+			ra->rx_blocks = rb->rx_blocks = 0x40;
 			ra->flags = rb->flags =
 			    (unsigned short)V34_RX_FLAG_DET_PENDING;
 			oa2.status = ob2.status = 0;
@@ -2615,25 +2615,25 @@ main(void)
 			/*
 			 * `adaptecho` and `modem_serrint` want the echo and
 			 * transmit state their own sections seed; the fill
-			 * leaves `f25c` -- the lag -- garbage, and it is used
+			 * leaves `good_run` -- the lag -- garbage, and it is used
 			 * as an index.
 			 */
-			ra->f2a4 = rb->f2a4 = coeff2;
+			ra->fir_coeff = rb->fir_coeff = coeff2;
 			oa2.dmadelay  = ob2.dmadelay  = 0x40;
-			oa2.f25c2 = ob2.f25c2 = V34_EC_FEED;
-			oa2.f260  = ob2.f260  = 1234;
-			oa2.fa23c = ob2.fa23c = 1;
-			oa2.fa23e = ob2.fa23e = 0;
-			oa2.fa240 = ob2.fa240 = 0;
-			oa2.f2aa4 = ob2.f2aa4 = 0;
-			oa2.f2aa6 = ob2.f2aa6 = 0;
-			oa2.f354c = ob2.f354c = 0;
-			oa2.f3550 = ob2.f3550 = -0x1800;
-			oa2.f3552 = ob2.f3552 = -0x1400;
-			oa2.f3554 = ob2.f3554 = 0x95;
-			oa2.f3558 = ob2.f3558 = 0x7000;
-			oa2.f355c = ob2.f355c = 6;
-			oa2.f3560 = ob2.f3560 = 0;
+			oa2.tx_flags = ob2.tx_flags = V34_EC_FEED;
+			oa2.echo_residual  = ob2.echo_residual  = 1234;
+			oa2.far_echo_enable = ob2.far_echo_enable = 1;
+			oa2.echo_correction = ob2.echo_correction = 0;
+			oa2.echo_resid_energy = ob2.echo_resid_energy = 0;
+			oa2.hist1_idx = ob2.hist1_idx = 0;
+			oa2.hist2_idx = ob2.hist2_idx = 0;
+			oa2.echo_calls = ob2.echo_calls = 0;
+			oa2.echo_alpha = ob2.echo_alpha = -0x1800;
+			oa2.short_3552 = ob2.short_3552 = -0x1400;
+			oa2.echo_decay_start = ob2.echo_decay_start = 0x95;
+			oa2.echo_decay_fact = ob2.echo_decay_fact = 0x7000;
+			oa2.echo_beta = ob2.echo_beta = 6;
+			oa2.echo_energy = ob2.echo_energy = 0;
 			oa2.echo0.adapt_count = ob2.echo0.adapt_count = 0;
 			oa2.echo1.adapt_count = ob2.echo1.adapt_count = 0;
 			for (b = 0; b < 0x12c; b++)
@@ -2660,21 +2660,21 @@ main(void)
 				ra->timing_out[b] = rb->timing_out[b] =
 				    (short)(b <= 2 ? 900 - (int)b * 40
 						   : -700 + (int)b * 30);
-			ra->f1ac = rb->f1ac = 700;
-			ra->f1ae = rb->f1ae = 0x3e80;
-			ra->f1b0 = rb->f1b0 = 0x3e80;
-			ra->f1be = rb->f1be = 0x3e80;
+			ra->phase_frac = rb->phase_frac = 700;
+			ra->phase_inc = rb->phase_inc = 0x3e80;
+			ra->phase_wrap = rb->phase_wrap = 0x3e80;
+			ra->symbol_period = rb->symbol_period = 0x3e80;
 			ra->f1c8 = rb->f1c8 = 0;
 			ra->f1cc = rb->f1cc = 0;
 			ra->f1ce = rb->f1ce = 0;
-			ra->f1d0 = rb->f1d0 = 0;
-			ra->f1d2 = rb->f1d2 = 40;
+			ra->timing_offset = rb->timing_offset = 0;
+			ra->report_interval = rb->report_interval = 40;
 			ra->f1d8 = rb->f1d8 = 0;
 			ra->f1e0 = rb->f1e0 = 0;
 			ra->f230 = rb->f230 = 0;
-			oa2.f359c = ob2.f359c = 0x65;
+			oa2.role = ob2.role = 0x65;
 			oa2.baud_rate = ob2.baud_rate = 400;
-			oa2.fac0c = ob2.fac0c = 0;
+			oa2.v90_timing_offset = ob2.v90_timing_offset = 0;
 
 			setInitialPhase(&oa2);
 			ref_setInitialPhase(&ob2);
@@ -2712,7 +2712,7 @@ main(void)
 	 * THE S-S1 THRESHOLD, PLACED EXACTLY.  `receiver` gives up on the
 	 * equaliser and restarts when the slicing error passes 0x600:
 	 *
-	 *      if ((short)err > 0x600) { ... rx->f124 = 0; ... }
+	 *      if ((short)err > 0x600) { ... rx->rx_blocks = 0; ... }
 	 *
 	 * and moving that bound by one is observable ONLY when err is 0x601.
 	 * Nothing in the sweeps above ever produced it -- err is
@@ -2725,11 +2725,11 @@ main(void)
 	 * reachable, and each was learned by getting it wrong:
 	 *
 	 *   V34_RX_FLAG_DATA MUST BE CLEAR.  The site is the else-branch of
-	 *   data mode, taken when `f1c0 > 1`.  With DATA set it is never
+	 *   data mode, taken when `pllcnt > 1`.  With DATA set it is never
 	 *   reached at all.
 	 *
 	 *   THE DELAY LINE HAS TO BE FULL.  `V34EqualizerUpdateDelayLine` runs
-	 *   on odd `i` of the `f128` loop, so a call pushes two of the 80
+	 *   on odd `i` of the `out_count` loop, so a call pushes two of the 80
 	 *   entries and a fresh object needs forty calls before the middle
 	 *   taps multiply anything but zero.  The queue is refilled before
 	 *   every one of them, or it empties and the line fills with silence.
@@ -2805,14 +2805,14 @@ main(void)
 
 				ra->agc_gain = rb->agc_gain = 0x4000;
 				ra->agc_step = rb->agc_step = 0x3333;
-				ra->f124 = rb->f124 = 0x100;
-				ra->f1c0 = rb->f1c0 = 4;
+				ra->rx_blocks = rb->rx_blocks = 0x100;
+				ra->pllcnt = rb->pllcnt = 4;
 				ra->f1f2 = rb->f1f2 = 0x4000;
 				ra->f1f4 = rb->f1f4 = 0;
-				ra->f19c = rb->f19c = 0;
+				ra->rms_idx = rb->rms_idx = 0;
 				ra->f1ec = rb->f1ec = 1;
 				ra->f1ee = rb->f1ee = 2;
-				ra->f21c = rb->f21c = 0x3fd;
+				ra->err_symcount = rb->err_symcount = 0x3fd;
 				ra->flags = rb->flags =
 				    (unsigned short)V34_RX_FLAG_TRAINED;
 
@@ -2830,15 +2830,15 @@ main(void)
 			}
 
 			/*
-			 * `f124` is zeroed by the restart and by nothing else
+			 * `rx_blocks` is zeroed by the restart and by nothing else
 			 * on this path, so it says whether the bound was
 			 * crossed -- and it is the object's own answer, not
 			 * this fixture's arithmetic.
 			 */
 			diff_eq_int("the reference crossed the bound",
-				    ra->f124 == 0, ss1[c].cross,
+				    ra->rx_blocks == 0, ss1[c].cross,
 				    (long)ss1[c].err);
-			diff_eq_int("and so did ours", rb->f124 == 0,
+			diff_eq_int("and so did ours", rb->rx_blocks == 0,
 				    ss1[c].cross, (long)ss1[c].err);
 			if (ss1[c].cross)
 				saw_ss1 = 1;
