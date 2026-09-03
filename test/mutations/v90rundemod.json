@@ -22,17 +22,17 @@
  },
  {
   "label": "dispatch 1 case 3 ignores the parameter block",
-  "find": "\t\t\t&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {\n\t\t\tbyte_6118 = 4;",
-  "replace": "\t\t\t)) {\n\t\t\tbyte_6118 = 4;"
+  "find": "\t\t\t&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {\n\t\t\tprogressState = 4;",
+  "replace": "\t\t\t)) {\n\t\t\tprogressState = 4;"
  },
  {
   "label": "dispatch 1 case 3 latches 3 rather than 4",
-  "find": "\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */",
-  "replace": "\t\t\tbyte_6118 = 3;\n\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */"
+  "find": "\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */",
+  "replace": "\t\t\tprogressState = 3;\n\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */"
  },
  {
   "label": "dispatch 1 case 3 does not latch at all",
-  "find": "\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */",
+  "find": "\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */",
   "replace": "\t\t\tret = 3;\n\t\t} else {\n\t\t\tret = 2;\n\t\t}\n\t\tbreak;\n\n\tcase 4:\t\t\t\t/* 0xda4d, and it is 3's tail */"
  },
  {
@@ -56,14 +56,14 @@
   "replace": "\t/* 0xd890.  Unconditional; there is no gate in front of it. */\n\tmodem.progress(rxbits, *(unsigned int *)nrx, in, n - 1);"
  },
  {
-  "label": "the SD arm does not latch byte_6118",
-  "find": "\t\tbyte_6118 = 1;\n\t\tret = 0;\n\t\tedprintf(\"VPcmFloModem (V90): DemodSdDetected\\r\\n\");",
+  "label": "the SD arm does not latch progressState",
+  "find": "\t\tprogressState = 1;\n\t\tret = 0;\n\t\tedprintf(\"VPcmFloModem (V90): DemodSdDetected\\r\\n\");",
   "replace": "\t\tret = 0;\n\t\tedprintf(\"VPcmFloModem (V90): DemodSdDetected\\r\\n\");"
  },
  {
   "label": "the SD arm latches 2 rather than 1",
-  "find": "\t\tbyte_6118 = 1;\n\t\tret = 0;\n\t\tedprintf",
-  "replace": "\t\tbyte_6118 = 2;\n\t\tret = 0;\n\t\tedprintf"
+  "find": "\t\tprogressState = 1;\n\t\tret = 0;\n\t\tedprintf",
+  "replace": "\t\tprogressState = 2;\n\t\tret = 0;\n\t\tedprintf"
  },
  {
   "label": "the SD arm clears the Ja flag rather than raising it",
@@ -71,9 +71,9 @@
   "replace": "\t\tsetTerminateJaFlag(0);"
  },
  {
-  "label": "the TRN1d arm restores the SAS detector whatever byte_6119 says",
-  "find": "\t\tif (byte_6119 != 0) {\n\t\t\tedprintf(\"VPcmFloModem (V90): ON Start TRN1d \"",
-  "replace": "\t\tif (byte_6119 == 0) {\n\t\t\tedprintf(\"VPcmFloModem (V90): ON Start TRN1d \""
+  "label": "the TRN1d arm restores the SAS detector whatever retrainLatch says",
+  "find": "\t\tif (retrainLatch != 0) {\n\t\t\tedprintf(\"VPcmFloModem (V90): ON Start TRN1d \"",
+  "replace": "\t\tif (retrainLatch == 0) {\n\t\t\tedprintf(\"VPcmFloModem (V90): ON Start TRN1d \""
  },
  {
   "label": "the TRN1d arm clears the retrain bit rather than setting it",
@@ -156,24 +156,24 @@
   "replace": "\t\t\t\t\t     \"DemodPhase3Error !!! \\r\\n\");\n\t\tret = 6;"
  },
  {
-  "label": "arm 0x16 does not latch byte_6118",
-  "find": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
+  "label": "arm 0x16 does not latch progressState",
+  "find": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tprogressState = 2;\n\t\tret = 1;",
   "replace": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tret = 1;"
  },
  {
   "label": "arm 0x16 latches 3 rather than 2",
-  "find": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tbyte_6118 = 2;",
-  "replace": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tbyte_6118 = 3;"
+  "find": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tprogressState = 2;",
+  "replace": "\tcase 0x16:\t\t\t/* 0xdacc */\n\t\tprogressState = 3;"
  },
  {
   "label": "arm 0x17 clears the CPnot flag rather than raising it",
-  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (byte_6119 != 0)",
-  "replace": "\t\tsetTerminateCpNotFlag(0);\n\t\tif (byte_6119 != 0)"
+  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch != 0)",
+  "replace": "\t\tsetTerminateCpNotFlag(0);\n\t\tif (retrainLatch != 0)"
  },
  {
-  "label": "arm 0x17's byte_6119 test is inverted",
-  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=",
-  "replace": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (byte_6119 == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |="
+  "label": "arm 0x17's retrainLatch test is inverted",
+  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=",
+  "replace": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (retrainLatch == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |="
  },
  {
   "label": "the TRN2d arm raises the additional-CP-info word rather than clearing it",
@@ -186,8 +186,8 @@
   "replace": "\tcase 0x19:\n\t\tmodem.additionalCPinfo.word_00 = 0;\n\t\tcpNofBits = V90CPPacker(&modem.mappingParams,"
  },
  {
-  "label": "the TRN2d arm packs CP with a literal cleardown rather than flag_173e",
-  "find": "\t\t\t\t\tcpBitVector, flag_173e);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): Building \"\n\t\t\t    \"CP, CP length = %d (clr=%d)\\r\\n\",",
+  "label": "the TRN2d arm packs CP with a literal cleardown rather than clr",
+  "find": "\t\t\t\t\tcpBitVector, clr);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): Building \"\n\t\t\t    \"CP, CP length = %d (clr=%d)\\r\\n\",",
   "replace": "\t\t\t\t\tcpBitVector, 0);\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): Building \"\n\t\t\t    \"CP, CP length = %d (clr=%d)\\r\\n\","
  },
  {
@@ -196,14 +196,14 @@
   "replace": "\t\tresetBitPointer();\n\t\tV34XF_IndicateTrn2dReceived(v34Object);"
  },
  {
-  "label": "MP: the packer is handed a literal 0 rather than flag_173e -- MPnot's shape",
-  "find": "\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, flag_173e);",
+  "label": "MP: the packer is handed a literal 0 rather than clr -- MPnot's shape",
+  "find": "\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, clr);",
   "replace": "\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, 0);"
  },
  {
-  "label": "MPnot: the packer is handed flag_173e rather than a literal 0 -- MP's shape",
+  "label": "MPnot: the packer is handed clr rather than a literal 0 -- MP's shape",
   "find": "\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, 0);",
-  "replace": "\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, flag_173e);"
+  "replace": "\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, clr);"
  },
  {
   "label": "MPnot: the sensitive-ISP tail is never taken",
@@ -232,8 +232,8 @@
  },
  {
   "label": "MP: the gate is inverted",
-  "find": "\t\tcopyMpInfoForInterface();\n\t\tif (terminateCp == 0) {\n\t\t\tmodem.additionalCPinfo.word_00 = 1;\n\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, flag_173e);",
-  "replace": "\t\tcopyMpInfoForInterface();\n\t\tif (terminateCp != 0) {\n\t\t\tmodem.additionalCPinfo.word_00 = 1;\n\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, flag_173e);"
+  "find": "\t\tcopyMpInfoForInterface();\n\t\tif (terminateCp == 0) {\n\t\t\tmodem.additionalCPinfo.word_00 = 1;\n\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, clr);",
+  "replace": "\t\tcopyMpInfoForInterface();\n\t\tif (terminateCp != 0) {\n\t\t\tmodem.additionalCPinfo.word_00 = 1;\n\t\t\tnofBits = V90CPPacker(&modem.mappingParamsAlt,\n\t\t\t\t\t      &modem.additionalCPinfo,\n\t\t\t\t\t      bitVector, clr);"
  },
  {
   "label": "MP: the message is not copied out for the interface",
@@ -242,38 +242,38 @@
  },
  {
   "label": "the Ed arm does not require one transmission",
-  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tsetMinNofTransmitSequences(1);\n\t\tif (flag_173e != 0) {",
-  "replace": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (flag_173e != 0) {"
+  "find": "\t\tsetTerminateCpNotFlag(1);\n\t\tsetMinNofTransmitSequences(1);\n\t\tif (clr != 0) {",
+  "replace": "\t\tsetTerminateCpNotFlag(1);\n\t\tif (clr != 0) {"
  },
  {
   "label": "the Ed arm's cleardown test is inverted",
-  "find": "\t\tif (flag_173e != 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \"\n\t\t\t\t    \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;",
-  "replace": "\t\tif (flag_173e == 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \"\n\t\t\t\t    \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;"
+  "find": "\t\tif (clr != 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \"\n\t\t\t\t    \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;",
+  "replace": "\t\tif (clr == 0) {\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\"VPcmFloModem (V90): \"\n\t\t\t\t    \"Indicating Cleardown !\\r\\n\");\n\t\t\tret = 8;"
  },
  {
-  "label": "the data-phase arm does not raise byte_6119",
-  "find": "\t\tbyte_6118 = 3;\n\t\tret = 2;\n\t\tbyte_6119 = 1;",
-  "replace": "\t\tbyte_6118 = 3;\n\t\tret = 2;"
+  "label": "the data-phase arm does not raise retrainLatch",
+  "find": "\t\tprogressState = 3;\n\t\tret = 2;\n\t\tretrainLatch = 1;",
+  "replace": "\t\tprogressState = 3;\n\t\tret = 2;"
  },
  {
   "label": "the data-phase arm latches 2 rather than 3",
-  "find": "\t\tbyte_6118 = 3;\n\t\tret = 2;\n\t\tbyte_6119 = 1;\n",
-  "replace": "\t\tbyte_6118 = 2;\n\t\tret = 2;\n\t\tbyte_6119 = 1;\n"
+  "find": "\t\tprogressState = 3;\n\t\tret = 2;\n\t\tretrainLatch = 1;\n",
+  "replace": "\t\tprogressState = 2;\n\t\tret = 2;\n\t\tretrainLatch = 1;\n"
  },
  {
   "label": "the V.34 fallback arm uses the V.90 baud set",
-  "find": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tsetV34BaudForV34();",
-  "replace": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tsetV34BaudForV90();"
+  "find": "\t\tdroppedToV34 = 1;\n\t\tret = 7;\n\t\tsetV34BaudForV34();",
+  "replace": "\t\tdroppedToV34 = 1;\n\t\tret = 7;\n\t\tsetV34BaudForV90();"
  },
  {
-  "label": "the V.34 fallback arm does not raise flag_173d",
-  "find": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tsetV34BaudForV34();\n",
+  "label": "the V.34 fallback arm does not raise droppedToV34",
+  "find": "\t\tdroppedToV34 = 1;\n\t\tret = 7;\n\t\tsetV34BaudForV34();\n",
   "replace": "\t\tret = 7;\n\t\tsetV34BaudForV34();\n"
  },
  {
   "label": "the local rate-reneg arm indicates a REMOTE one",
-  "find": "\t\tVPcmV34IndicateLocalRRN(v34Object);\n\t\tbyte_6118 = 2;",
-  "replace": "\t\tVPcmV34IndicateRemoteRRN(v34Object);\n\t\tbyte_6118 = 2;"
+  "find": "\t\tVPcmV34IndicateLocalRRN(v34Object);\n\t\tprogressState = 2;",
+  "replace": "\t\tVPcmV34IndicateRemoteRRN(v34Object);\n\t\tprogressState = 2;"
  },
  {
   "label": "the local rate-reneg arm does not raise the latch",

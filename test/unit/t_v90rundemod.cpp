@@ -47,7 +47,7 @@
  * Each is a place where the object's own near-twin would pass a weaker suite:
  *
  *   1. DISPATCH 1 CASE 3's POLARITY.  `runPcmModem` returns 2 when
- *      `info0Layout` is zero and this function latches `byte_6118 = 4` and
+ *      `info0Layout` is zero and this function latches `progressState = 4` and
  *      returns 3.  All four corners of (layout, inPhase3, ENABLE_ERROR_
  *      CORRECTION_RRN) are trialled, because three of them agree between the
  *      two readings and only `layout == 0` parts them.
@@ -561,7 +561,7 @@ static const struct trial trial_v[] = {
 	D(0x23), D(0x24), D(0x25), D(0x26), D(0x27), D(0x28), D(0x29),
 	D(0x2a), D(0x2b), D(0x2c),
 
-	/* Arm 0x03 and arm 0x17, both gated on `byte_6119`. */
+	/* Arm 0x03 and arm 0x17, both gated on `retrainLatch`. */
 	{ "0x03, no 6119", 0, 1, 4, 1, 0x03, 0, 0, 0, 0, 1,
 	  0, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL },
 	{ "0x17, no 6119", 0, 1, 4, 1, 0x17, 0, 0, 0, 0, 1,
@@ -635,7 +635,7 @@ static const struct trial trial_v[] = {
 	 * THE FOUR AXES THE MUTATION SET ASKED FOR, each named with the row
 	 * that was uncaught without it.
 	 */
-	/* `the data-phase arm does not raise byte_6119`. */
+	/* `the data-phase arm does not raise retrainLatch`. */
 	{ "0x1e, no 6119",	0, 1, 4, 1, 0x1e, 0, 0, 0, 0, 1,
 	  0, 0, 0, 0, 1, 0x40, 0x20, 0 TAIL },
 	/*

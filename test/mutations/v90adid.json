@@ -21,22 +21,22 @@
  },
  {
   "label": "leave the byte at +0x280c alone",
-  "find": "\t\tuint_9d30[phase] = 0;\n\t\tbyte_280c[phase] = 0;",
-  "replace": "\t\tuint_9d30[phase] = 0;\n\t\t/* deliberately removed */"
+  "find": "\t\taltMagnitudeCount[phase] = 0;\n\t\tbyte_280c[phase] = 0;",
+  "replace": "\t\taltMagnitudeCount[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the int at +0x9d30 alone",
-  "find": "\t\tshort_2800[phase] = 0;\n\t\tuint_9d30[phase] = 0;",
+  "find": "\t\tshort_2800[phase] = 0;\n\t\taltMagnitudeCount[phase] = 0;",
   "replace": "\t\tshort_2800[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the float at +0x9d18 alone",
-  "find": "\t\tbyte_280c[phase] = 0;\n\t\tfloat_9d18[phase] = 0.0f;",
+  "find": "\t\tbyte_280c[phase] = 0;\n\t\taltMagnitudeSum[phase] = 0.0f;",
   "replace": "\t\tbyte_280c[phase] = 0;\n\t\t/* deliberately removed */"
  },
  {
   "label": "leave the int at +0x9100 alone",
-  "find": "\t\tint_9100[phase] = 0;",
+  "find": "\t\tsampleCount[phase] = 0;",
   "replace": "\t\t/* deliberately removed */"
  },
  {
@@ -175,13 +175,13 @@
  },
  {
   "label": "leave the alternate sum in clearCamulativeAltVal",
-  "find": "\tuint_9d30[phase] = 0;\n\tfloat_9d18[phase] = 0.0f;\n}",
-  "replace": "\tuint_9d30[phase] = 0;\n}"
+  "find": "\taltMagnitudeCount[phase] = 0;\n\taltMagnitudeSum[phase] = 0.0f;\n}",
+  "replace": "\taltMagnitudeCount[phase] = 0;\n}"
  },
  {
   "label": "use clearCamulativeAltVal's second argument, which the object ignores",
-  "find": "clearCamulativeAltVal(short phase, short)\n{\n\tuint_9d30[phase] = 0;",
-  "replace": "clearCamulativeAltVal(short phase, short code)\n{\n\tuint_9d30[code & 5] = 0;"
+  "find": "clearCamulativeAltVal(short phase, short)\n{\n\taltMagnitudeCount[phase] = 0;",
+  "replace": "clearCamulativeAltVal(short phase, short code)\n{\n\taltMagnitudeCount[code & 5] = 0;"
  },
  {
   "label": "copy the max-ucode array off by one",
@@ -205,12 +205,12 @@
  },
  {
   "label": "accumulate the signed value rather than the magnitude (Alt)",
-  "find": "\tfloat_9d18[phase] += adid_abs(v);",
-  "replace": "\tfloat_9d18[phase] += v;"
+  "find": "\taltMagnitudeSum[phase] += adid_abs(v);",
+  "replace": "\taltMagnitudeSum[phase] += v;"
  },
  {
   "label": "leave the alternate count alone",
-  "find": "\tuint_9d30[phase]++;",
+  "find": "\taltMagnitudeCount[phase]++;",
   "replace": "\t/* deliberately removed */"
  },
  {
@@ -270,18 +270,18 @@
  },
  {
   "label": "invert updateLinMappMeanAndVarAlt's empty-phase test",
-  "find": "\tif (uint_9d30[phase] == 0)\n\t\treturn;",
-  "replace": "\tif (uint_9d30[phase] != 0)\n\t\treturn;"
+  "find": "\tif (altMagnitudeCount[phase] == 0)\n\t\treturn;",
+  "replace": "\tif (altMagnitudeCount[phase] != 0)\n\t\treturn;"
  },
  {
   "label": "multiply by a reciprocal where the object divides",
-  "find": "\t    (short)(float_9d18[phase] / uint_9d30[phase] + 0.5f);",
-  "replace": "\t    (short)(float_9d18[phase] * (1.0f / uint_9d30[phase]) + 0.5f);"
+  "find": "\t    (short)(altMagnitudeSum[phase] / altMagnitudeCount[phase] + 0.5f);",
+  "replace": "\t    (short)(altMagnitudeSum[phase] * (1.0f / altMagnitudeCount[phase]) + 0.5f);"
  },
  {
   "label": "write the alternate mean into the plain table",
-  "find": "\tlinMappAlt[phase][code] =\n\t    (short)(float_9d18[phase]",
-  "replace": "\tlinMapp[phase][code] =\n\t    (short)(float_9d18[phase]"
+  "find": "\tlinMappAlt[phase][code] =\n\t    (short)(altMagnitudeSum[phase]",
+  "replace": "\tlinMapp[phase][code] =\n\t    (short)(altMagnitudeSum[phase]"
  },
  {
   "label": "take the sample's magnitude after the subtraction, not before",
@@ -305,8 +305,8 @@
  },
  {
   "label": "do not advance the store index",
-  "find": "\tint_9100[phase] = n + 1;",
-  "replace": "\tint_9100[phase] = n;"
+  "find": "\tsampleCount[phase] = n + 1;",
+  "replace": "\tsampleCount[phase] = n;"
  },
  {
   "label": "store the signed sample rather than its magnitude",
@@ -320,13 +320,13 @@
  },
  {
   "label": "leave the code histogram alone",
-  "find": "\tshort_8b00[phase][code]++;",
+  "find": "\tcodeHistogram[phase][code]++;",
   "replace": "\t/* deliberately removed */"
  },
  {
   "label": "pre-increment the store index rather than post-incrementing it",
-  "find": "\tint n = int_9100[phase];",
-  "replace": "\tint n = int_9100[phase] + 1;"
+  "find": "\tint n = sampleCount[phase];",
+  "replace": "\tint n = sampleCount[phase] + 1;"
  },
  {
   "label": "multiply by the pad gain rather than dividing by it",
@@ -385,13 +385,13 @@
  },
  {
   "label": "drop updateUrefAlt's flag test",
-  "find": "\t\tif (short_2800[phase] != 0 && uint_9d30[phase] != 0)",
-  "replace": "\t\tif (uint_9d30[phase] != 0)"
+  "find": "\t\tif (short_2800[phase] != 0 && altMagnitudeCount[phase] != 0)",
+  "replace": "\t\tif (altMagnitudeCount[phase] != 0)"
  },
  {
   "label": "clear the alternate accumulators only when the phase updated",
-  "find": "\t\t\t\t    * (1.0f / uint_9d30[phase]) + 0.5f);\n\n\t\tfloat_9d18[phase] = 0.0f;",
-  "replace": "\t\t\t\t    * (1.0f / uint_9d30[phase]) + 0.5f);\n\t\telse\n\t\t\tcontinue;\n\n\t\tfloat_9d18[phase] = 0.0f;"
+  "find": "\t\t\t\t    * (1.0f / altMagnitudeCount[phase]) + 0.5f);\n\n\t\taltMagnitudeSum[phase] = 0.0f;",
+  "replace": "\t\t\t\t    * (1.0f / altMagnitudeCount[phase]) + 0.5f);\n\t\telse\n\t\t\tcontinue;\n\n\t\taltMagnitudeSum[phase] = 0.0f;"
  },
  {
   "label": "write updateUrefAlt's mean into the plain table",
@@ -400,8 +400,8 @@
  },
  {
   "label": "divide in updateUrefAlt where the object multiplies by a reciprocal",
-  "find": "\t\t\t\t    * (1.0f / uint_9d30[phase]) + 0.5f);",
-  "replace": "\t\t\t\t    / uint_9d30[phase] + 0.5f);"
+  "find": "\t\t\t\t    * (1.0f / altMagnitudeCount[phase]) + 0.5f);",
+  "replace": "\t\t\t\t    / altMagnitudeCount[phase] + 0.5f);"
  },
  {
   "label": "invert calculateLinearMeanAndVar's companding test",
@@ -1204,8 +1204,8 @@
  },
  {
   "label": "count the last sample of a code as a run of its own",
-  "find": "\t\t\tfor (m = 0; m < short_8b00[phase][at] - 1; m++) {",
-  "replace": "\t\t\tfor (m = 0; m < short_8b00[phase][at]; m++) {"
+  "find": "\t\t\tfor (m = 0; m < codeHistogram[phase][at] - 1; m++) {",
+  "replace": "\t\t\tfor (m = 0; m < codeHistogram[phase][at]; m++) {"
  },
  {
   "label": "start the run length at zero rather than at one",
@@ -1229,8 +1229,8 @@
  },
  {
   "label": "give every code a verdict, not only the ones with samples",
-  "find": "\t\t\tif (short_8b00[phase][at] != 0) {",
-  "replace": "\t\t\tif (short_8b00[phase][at] != 1) {"
+  "find": "\t\t\tif (codeHistogram[phase][at] != 0) {",
+  "replace": "\t\t\tif (codeHistogram[phase][at] != 1) {"
  },
  {
   "label": "swap the two arms of the alternate mapping's verdict",
@@ -1244,8 +1244,8 @@
  },
  {
   "label": "leave the sample cursor where it was",
-  "find": "\t\t\t\tbase += short_8b00[phase][at];",
-  "replace": "\t\t\t\tbase += 0 * short_8b00[phase][at];"
+  "find": "\t\t\t\tbase += codeHistogram[phase][at];",
+  "replace": "\t\t\t\tbase += 0 * codeHistogram[phase][at];"
  },
  {
   "label": "report only the codes the scan order visits",

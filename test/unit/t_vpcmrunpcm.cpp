@@ -441,7 +441,7 @@ static int nregion_last;
  * IT IS NAMED RATHER THAN INFERRED, AND THE MUTATION SET IS WHY.  A general
  * rule -- "a differing word neither side can resolve is a static pointer" --
  * was tried first and it silently swallowed SEVEN real mutations, because
- * `byte_6118` and `byte_6119` share a word with two bytes the constructor
+ * `progressState` and `retrainLatch` share a word with two bytes the constructor
  * leaves uninitialised, so a mutant latching 2 where the object latches 3
  * produced two large differing values that the rule could not tell from a
  * pair of addresses.  Tightening the rule to "both values look like
@@ -598,7 +598,7 @@ static const struct trial trial_v[] = {
 	/*
 	 * Case 3's three exits: the retrain, the phase-4 test failing, and
 	 * the parameter test failing.  All three must move `ret` and only the
-	 * first may move `byte_6118`.
+	 * first may move `progressState`.
 	 */
 	{ "b6118=3 retrain",	3, 1, 0, 0, 3, 1, 0, 0, 4, 1, 1, 0, 0 TAIL },
 	{ "b6118=3 not p4",	3, 1, 0, 0, 3, 1, 0, 0, 3, 1, 1, 0, 0 TAIL },

@@ -338,7 +338,7 @@ public:
 	 * Zeroed by `resetDetector`, and so by `reset` and the constructor,
 	 * which is state 0 -- waiting for the seventeen-one preamble.
 	 */
-	unsigned int word_114;
+	unsigned int rxState;
 
 	/* +0x118  `infoToBits` copies `char_01` here whole, and nothing
 	 * written reads it. */
@@ -397,7 +397,7 @@ public:
 	 * collecting -- 17 for the CRC, `gamma` and `delta` for the two
 	 * variable-length mask blocks.  Zeroed by `resetDetector`.
 	 */
-	int word_120;
+	int stateBitCount;
 
 	/*
 	 * +0x124  THE READ CURSOR, and the counterpart of `word_11c`.
@@ -411,10 +411,10 @@ public:
 	 * FOUR BYTES is forced by the `incl` and by the 32-bit loads; the
 	 * SIGNEDNESS is not, because every use is either an index into `bits`
 	 * or an increment and neither reading differs over any value it holds.
-	 * Spelled `int` to match `word_11c` and `word_120`, the two cursors
+	 * Spelled `int` to match `word_11c` and `stateBitCount`, the two cursors
 	 * beside it, and not because anything measures it.
 	 *
-	 * It is NOT reset by `resetDetector`, where `word_11c` and `word_120`
+	 * It is NOT reset by `resetDetector`, where `word_11c` and `stateBitCount`
 	 * both are, so a detector restart leaves it where the last decode left
 	 * it.  Every arm that reads a variable-length block sets it first, so
 	 * nothing written depends on that -- but it is the object's own

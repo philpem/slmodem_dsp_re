@@ -8,7 +8,7 @@
  },
  {
   "label": "NOTE: SEVEN ROWS ARE UNCAUGHT, AND EACH IS NAMED HERE WITH ITS REASON RATHER THAN LEFT AS A COUNT.",
-  "why": "95 mutations, 88 caught, 7 NOT caught, 0 unusable, 0 equivalent.  NONE IS REGISTERED `equivalent`, deliberately, so the count stays honest -- one of the seven is argued below to be equivalent to any MEMORY comparison, which is a narrower claim than equivalent.  The seven, and what each would need. (1) `the ramp value is stored before the step, not after` needs a non-zero echo-canceller coefficient set: with a zeroed filter the sentinel arm and the FILTER_ONLY arm both produce out[i] = in[i].  (2) `the non-ramp arm leaves the receive buffer's first sample alone` -- the constructor memsets block_6c0c, so rx[0] is already 0.0f and the store is a no-op; needs a trial that pre-loads 177.0f there.  (3, 4, 5) `the silence arm does not stop the Ja transmission`, `the Jd arm does not leave the SU second` and `TRN1u does not leave the second` -- exitJa, exitSuSecond and exitTRN1uSecond are each guarded on a sub-modulator state the fixture leaves at the constructor's value.  (6) `the FPE arm starts FPE whatever phase it is in` (and its rate-renegotiation twin) -- initiateFPE and initiateRRN return -1 at once when phase != V92MOD_PHASE_DATA and print only above level 1, so at level 0 nothing they do reaches memory.  (7) `the fallback test is against 0x21 rather than 0x20` is EQUIVALENT TO ANY MEMORY COMPARISON, and that is exactly why it is not registered equivalent: reaching the fallback needs word_3c == 0x20 at the RE-READ, which needs enterPhase3 to take its early return, which means the first read saw 0x20 too and arm 0x20 has already set the return to 6.  The two readings part company only in the edprintf transcript, which this tier does not compare.  THE SET HAS ALREADY PAID FOR ITSELF THREE TIMES OVER THIS BINARY, which is the reading these seven should be given -- a named list for the next batch, not rows argued away.  It caught a pointer-excusal rule swallowing seven real mutations, because byte_6118 shares a word with two bytes the constructor leaves uninitialised and a mutant latching the wrong value was indistinguishable from a pair of addresses; twelve V92Phase4Modulator members being called and observing nothing, because every one returns early unless five gates are right (7458's shape); and every timing-offset trial saturating, because getTimingOffsetPPM puts a whole-number offset in the millions and fistps answers the x87 indefinite for ppm*10 and ppm*1 alike."
+  "why": "95 mutations, 88 caught, 7 NOT caught, 0 unusable, 0 equivalent.  NONE IS REGISTERED `equivalent`, deliberately, so the count stays honest -- one of the seven is argued below to be equivalent to any MEMORY comparison, which is a narrower claim than equivalent.  The seven, and what each would need. (1) `the ramp value is stored before the step, not after` needs a non-zero echo-canceller coefficient set: with a zeroed filter the sentinel arm and the FILTER_ONLY arm both produce out[i] = in[i].  (2) `the non-ramp arm leaves the receive buffer's first sample alone` -- the constructor memsets block_6c0c, so rx[0] is already 0.0f and the store is a no-op; needs a trial that pre-loads 177.0f there.  (3, 4, 5) `the silence arm does not stop the Ja transmission`, `the Jd arm does not leave the SU second` and `TRN1u does not leave the second` -- exitJa, exitSuSecond and exitTRN1uSecond are each guarded on a sub-modulator state the fixture leaves at the constructor's value.  (6) `the FPE arm starts FPE whatever phase it is in` (and its rate-renegotiation twin) -- initiateFPE and initiateRRN return -1 at once when phase != V92MOD_PHASE_DATA and print only above level 1, so at level 0 nothing they do reaches memory.  (7) `the fallback test is against 0x21 rather than 0x20` is EQUIVALENT TO ANY MEMORY COMPARISON, and that is exactly why it is not registered equivalent: reaching the fallback needs word_3c == 0x20 at the RE-READ, which needs enterPhase3 to take its early return, which means the first read saw 0x20 too and arm 0x20 has already set the return to 6.  The two readings part company only in the edprintf transcript, which this tier does not compare.  THE SET HAS ALREADY PAID FOR ITSELF THREE TIMES OVER THIS BINARY, which is the reading these seven should be given -- a named list for the next batch, not rows argued away.  It caught a pointer-excusal rule swallowing seven real mutations, because progressState shares a word with two bytes the constructor leaves uninitialised and a mutant latching the wrong value was indistinguishable from a pair of addresses; twelve V92Phase4Modulator members being called and observing nothing, because every one returns early unless five gates are right (7458's shape); and every timing-offset trial saturating, because getTimingOffsetPPM puts a whole-number offset in the millions and fistps answers the x87 indefinite for ppm*10 and ppm*1 alike."
  },
  {
   "label": "the master gate is inverted: the body runs when info0Layout is zero",
@@ -21,17 +21,17 @@
   "replace": "\tif (info0Layout == 0)\t\t/* 0xe470 */\n\t\treturn 0;"
  },
  {
-  "label": "byte_6118 0 and 1 do not share an arm",
+  "label": "progressState 0 and 1 do not share an arm",
   "find": "\tcase 0:\t\t\t\t/* 0xe6a0 */\n\tcase 1:\n\t\tret = 0;",
   "replace": "\tcase 0:\n\t\tret = 0;\n\t\tbreak;\n\tcase 1:\n\t\tret = 1;"
  },
  {
-  "label": "byte_6118 == 2 seeds 2 rather than 1",
+  "label": "progressState == 2 seeds 2 rather than 1",
   "find": "\tcase 2:\t\t\t\t/* 0xe6ab */\n\t\tret = 1;",
   "replace": "\tcase 2:\t\t\t\t/* 0xe6ab */\n\t\tret = 2;"
  },
  {
-  "label": "byte_6118 == 4 seeds 2 rather than 3",
+  "label": "progressState == 4 seeds 2 rather than 3",
   "find": "\tcase 4:\t\t\t\t/* 0xe460, and it falls through */\n\t\tret = 3;",
   "replace": "\tcase 4:\t\t\t\t/* 0xe460, and it falls through */\n\t\tret = 2;"
  },
@@ -46,14 +46,14 @@
   "replace": "\t\t    ) {"
  },
  {
-  "label": "the rate-reneg arm does not latch byte_6118",
-  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
+  "label": "the rate-reneg arm does not latch progressState",
+  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
   "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tret = 3;\n\t\t} else {\n"
  },
  {
   "label": "the rate-reneg arm latches 3 rather than 4",
-  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tbyte_6118 = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
-  "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tbyte_6118 = 3;\n\t\t\tret = 3;\n\t\t} else {\n"
+  "find": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 4;\n\t\t\tret = 3;\n\t\t} else {\n",
+  "replace": "\t\t    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {\n\t\t\tprogressState = 3;\n\t\t\tret = 3;\n\t\t} else {\n"
  },
  {
   "label": "the rate-reneg arm's other exit seeds 3 rather than 2",
@@ -62,13 +62,13 @@
  },
  {
   "label": "the echo sentinel ramp runs past 0xb1",
-  "find": "\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;",
-  "replace": "\t\tword_7f64++;"
+  "find": "\t\tif (ecRampCounter != VPCM_EC_RAMP_SENTINEL)\n\t\t\tecRampCounter++;",
+  "replace": "\t\tecRampCounter++;"
  },
  {
   "label": "the ramp value is stored before the step, not after",
-  "find": "\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;\n\t\trx[0] = (float)word_7f64;",
-  "replace": "\t\trx[0] = (float)word_7f64;\n\t\tif (word_7f64 != VPCM_EC_RAMP_SENTINEL)\n\t\t\tword_7f64++;"
+  "find": "\t\tif (ecRampCounter != VPCM_EC_RAMP_SENTINEL)\n\t\t\tecRampCounter++;\n\t\trx[0] = (float)ecRampCounter;",
+  "replace": "\t\trx[0] = (float)ecRampCounter;\n\t\tif (ecRampCounter != VPCM_EC_RAMP_SENTINEL)\n\t\t\tecRampCounter++;"
  },
  {
   "label": "the ramp mode is 0x20, one below the object's",
@@ -117,13 +117,13 @@
  },
  {
   "label": "the silence-on arm seeds 1 rather than 0",
-  "find": "\t\tbyte_6118 = 1;\n\t\tret = 0;\n\t\tv92modem.modulator->exitJa();",
-  "replace": "\t\tbyte_6118 = 1;\n\t\tret = 1;\n\t\tv92modem.modulator->exitJa();"
+  "find": "\t\tprogressState = 1;\n\t\tret = 0;\n\t\tv92modem.modulator->exitJa();",
+  "replace": "\t\tprogressState = 1;\n\t\tret = 1;\n\t\tv92modem.modulator->exitJa();"
  },
  {
   "label": "the silence-off arm leaves the mode at the ramp value",
-  "find": "\t\tword_7f60 = 1;\n\t\tword_7f64 = VPCM_EC_RAMP_START;",
-  "replace": "\t\tword_7f60 = VPCM_EC_RAMP_MODE;\n\t\tword_7f64 = VPCM_EC_RAMP_START;"
+  "find": "\t\tecMode = 1;\n\t\tecRampCounter = VPCM_EC_RAMP_START;",
+  "replace": "\t\tecMode = VPCM_EC_RAMP_MODE;\n\t\tecRampCounter = VPCM_EC_RAMP_START;"
  },
  {
   "label": "the ramp starts at zero rather than 0xaa",
@@ -181,49 +181,49 @@
   "replace": ""
  },
  {
-  "label": "the CPt arm does not latch byte_6118",
-  "find": "\tcase 0x16:\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
+  "label": "the CPt arm does not latch progressState",
+  "find": "\tcase 0x16:\n\t\tprogressState = 2;\n\t\tret = 1;",
   "replace": "\tcase 0x16:\n\t\tret = 1;"
  },
  {
   "label": "the CPt arm seeds 2 rather than 1",
-  "find": "\tcase 0x16:\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
-  "replace": "\tcase 0x16:\n\t\tbyte_6118 = 2;\n\t\tret = 2;"
+  "find": "\tcase 0x16:\n\t\tprogressState = 2;\n\t\tret = 1;",
+  "replace": "\tcase 0x16:\n\t\tprogressState = 2;\n\t\tret = 2;"
  },
  {
-  "label": "the CPt arm sets the retrain bit whatever byte_6119 says",
-  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n",
+  "label": "the CPt arm sets the retrain bit whatever retrainLatch says",
+  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n",
   "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;\n\t\tbreak;\n"
  },
  {
   "label": "the CPt arm's flag test is inverted",
-  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (byte_6119 != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n",
-  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tif (byte_6119 == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n"
+  "find": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch != 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n",
+  "replace": "\t\tv92modem.modulator->exitCPt();\n\t\tif (retrainLatch == 0)\n\t\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t\t    CFG_FLAG3_RETRAIN;\n"
  },
  {
   "label": "the retrain arm seeds 3 rather than 2",
-  "find": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;",
-  "replace": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 3;"
+  "find": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;",
+  "replace": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 3;"
  },
  {
   "label": "the retrain arm latches 2 rather than 3",
-  "find": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;",
-  "replace": "\tcase 0x1e:\n\t\tbyte_6118 = 2;\n\t\tret = 2;"
+  "find": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;",
+  "replace": "\tcase 0x1e:\n\t\tprogressState = 2;\n\t\tret = 2;"
  },
  {
   "label": "the retrain arm does not set the retrain bit",
-  "find": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;",
-  "replace": "\tcase 0x1e:\n\t\tbyte_6118 = 3;\n\t\tret = 2;"
+  "find": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;\n\t\tmodem.ptr_49b4->modemParams->unnamed_0003 |=\n\t\t    CFG_FLAG3_RETRAIN;",
+  "replace": "\tcase 0x1e:\n\t\tprogressState = 3;\n\t\tret = 2;"
  },
  {
-  "label": "the V.34 fallback arm does not raise flag_173d",
-  "find": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n",
+  "label": "the V.34 fallback arm does not raise droppedToV34",
+  "find": "\t\tdroppedToV34 = 1;\n\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n",
   "replace": "\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n"
  },
  {
   "label": "the V.34 fallback arm seeds 6 rather than 7",
-  "find": "\t\tflag_173d = 1;\n\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n",
-  "replace": "\t\tflag_173d = 1;\n\t\tret = 6;\n\t\tv34BaudAllow[0] = 1;\n"
+  "find": "\t\tdroppedToV34 = 1;\n\t\tret = 7;\n\t\tv34BaudAllow[0] = 1;\n",
+  "replace": "\t\tdroppedToV34 = 1;\n\t\tret = 6;\n\t\tv34BaudAllow[0] = 1;\n"
  },
  {
   "label": "the fallback arm allows the second baud as well",
@@ -277,12 +277,12 @@
  },
  {
   "label": "0x24 and 0x25 do not share an arm",
-  "find": "\tcase 0x24:\n\tcase 0x25:\n\t\tbyte_6118 = 2;",
-  "replace": "\tcase 0x24:\n\t\tbreak;\n\tcase 0x25:\n\t\tbyte_6118 = 2;"
+  "find": "\tcase 0x24:\n\tcase 0x25:\n\t\tprogressState = 2;",
+  "replace": "\tcase 0x24:\n\t\tbreak;\n\tcase 0x25:\n\t\tprogressState = 2;"
  },
  {
-  "label": "the FPE arm does not latch byte_6118",
-  "find": "\tcase 0x24:\n\tcase 0x25:\n\t\tbyte_6118 = 2;\n\t\tret = 1;",
+  "label": "the FPE arm does not latch progressState",
+  "find": "\tcase 0x24:\n\tcase 0x25:\n\t\tprogressState = 2;\n\t\tret = 1;",
   "replace": "\tcase 0x24:\n\tcase 0x25:\n\t\tret = 1;"
  },
  {
@@ -426,14 +426,14 @@
   "replace": "\tevent = (int)(v92modem.modulator->word_34 + 1);"
  },
  {
-  "label": "status 2 does not latch byte_6118",
-  "find": "\tcase 2:\n\t\tbyte_6118 = 1;\n\t\tif (DSPLIB_DEBUG_ON())",
+  "label": "status 2 does not latch progressState",
+  "find": "\tcase 2:\n\t\tprogressState = 1;\n\t\tif (DSPLIB_DEBUG_ON())",
   "replace": "\tcase 2:\n\t\tif (DSPLIB_DEBUG_ON())"
  },
  {
   "label": "status 2 latches 2 rather than 1",
-  "find": "\tcase 2:\n\t\tbyte_6118 = 1;\n\t\tif (DSPLIB_DEBUG_ON())",
-  "replace": "\tcase 2:\n\t\tbyte_6118 = 2;\n\t\tif (DSPLIB_DEBUG_ON())"
+  "find": "\tcase 2:\n\t\tprogressState = 1;\n\t\tif (DSPLIB_DEBUG_ON())",
+  "replace": "\tcase 2:\n\t\tprogressState = 2;\n\t\tif (DSPLIB_DEBUG_ON())"
  },
  {
   "label": "status 2 freezes the canceller instead of starting it",
@@ -467,18 +467,18 @@
  },
  {
   "label": "status 10 latches 2 rather than 3",
-  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;",
-  "replace": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 2;"
+  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tprogressState = 3;",
+  "replace": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tprogressState = 2;"
  },
  {
   "label": "status 10 is 9",
-  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;",
-  "replace": "\tcase 9:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;"
+  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tprogressState = 3;",
+  "replace": "\tcase 9:\t\t\t/* 0xe518 */\n\t\tprogressState = 3;"
  },
  {
-  "label": "every status above 3 latches byte_6118",
-  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tbyte_6118 = 3;\n\t\tbreak;\n\n\tdefault:\n\t\tbreak;\n\t}\n\n\treturn ret;",
-  "replace": "\tdefault:\n\t\tif (event > 3)\n\t\t\tbyte_6118 = 3;\n\t\tbreak;\n\t}\n\n\treturn ret;"
+  "label": "every status above 3 latches progressState",
+  "find": "\tcase 10:\t\t\t/* 0xe518 */\n\t\tprogressState = 3;\n\t\tbreak;\n\n\tdefault:\n\t\tbreak;\n\t}\n\n\treturn ret;",
+  "replace": "\tdefault:\n\t\tif (event > 3)\n\t\t\tprogressState = 3;\n\t\tbreak;\n\t}\n\n\treturn ret;"
  },
  {
   "label": "the seeded return value is discarded at the end",

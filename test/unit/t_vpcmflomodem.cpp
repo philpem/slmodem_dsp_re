@@ -754,7 +754,7 @@ run_uinfo(void)
 					setup(k * 13 + u * 5 + f +
 					      lvl * 211 + 3);
 					for (int s = 0; s < 2; s++) {
-						M(s)->flag_173d =
+						M(s)->droppedToV34 =
 						    (unsigned char)f;
 						M(s)->info0Layout = 1;
 						M(s)->pcmSessionType = f;

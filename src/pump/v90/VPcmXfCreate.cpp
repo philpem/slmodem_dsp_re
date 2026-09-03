@@ -189,8 +189,8 @@ VPCMXF_Create(int digitalSide, void *v34Object,
 	self->flags_173a[0] = 0;
 	self->flags_173a[1] = 0;
 	self->flags_173a[2] = 0;
-	self->flag_173d = 0;
-	self->flag_173e = 0;
+	self->droppedToV34 = 0;
+	self->clr = 0;
 
 	self->v34BaudAllow[0] = 1;
 	self->v34BaudAllow[1] = 0;

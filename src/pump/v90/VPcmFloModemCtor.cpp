@@ -169,8 +169,8 @@ VPCMC_OFF(ansam,		0x6f5c, ansam);
 VPCMC_OFF(sineWave,		0x6f9c, sinewave);
 VPCMC_OFF(entFilt,		0x7f28, entfilt);
 VPCMC_OFF(byte_7f5c,		0x7f5c, byte7f5c);
-VPCMC_OFF(word_7f60,		0x7f60, word7f60);
-VPCMC_OFF(word_7f64,		0x7f64, word7f64);
+VPCMC_OFF(ecMode,		0x7f60, word7f60);
+VPCMC_OFF(ecRampCounter,		0x7f64, word7f64);
 
 typedef char vpcmc_size[(sizeof(VPcmFloModem) == 0x7f68) ? 1 : -1];
 #endif
@@ -242,7 +242,7 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	 */
 	nofBitsPerSymbol = 0;
 
-	byte_6119 = 0;
+	retrainLatch = 0;
 	minNofTransmitSequences = 0;
 	cpNofBits = 0;
 	nofTransmitSequences = 0;
@@ -269,9 +269,9 @@ VPcmFloModem::VPcmFloModem(void *v34Obj, V90ModemSide side,
 	 */
 	info0Layout = (side == V90_MODEM_SIDE_ANALOG);
 	pcmSessionType = 0;
-	byte_6118 = 0;
+	progressState = 0;
 
 	byte_7f5c = 0;
-	word_7f60 = 0;
-	word_7f64 = 0;
+	ecMode = 0;
+	ecRampCounter = 0;
 }

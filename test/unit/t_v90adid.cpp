@@ -883,8 +883,8 @@ run_setdildescriptor(void)
  *
  * WHAT IS CLAMPED, AND WHY THAT IS NOT A WEAKENING.  Three of these methods
  * index the object with a value the object does not bound: the phase, the
- * code, and `int_9100[phase]`, which is `addReceivedSampleToStorage`'s store
- * index.  A seeded 32-bit `int_9100` is about four thousand million, and both
+ * code, and `sampleCount[phase]`, which is `addReceivedSampleToStorage`'s store
+ * index.  A seeded 32-bit `sampleCount` is about four thousand million, and both
  * sides would then write four thousand million shorts past their own object
  * -- into two different pieces of the test's own memory.  That is not a
  * comparison of anything, and the crash it produces is the test's fault and
@@ -929,7 +929,7 @@ sane_sample_counts(int trial)
 	for (p = 0; p < NPHASE; p++) {
 		int n = (int)((unsigned)(trial * 37 + p * 131) % 0x600);
 
-		ours_o.int_9100[p] = theirs_o.int_9100[p] = n;
+		ours_o.sampleCount[p] = theirs_o.sampleCount[p] = n;
 	}
 }
 
@@ -1204,8 +1204,8 @@ run_accumulate(void)
 		if (memcmp(before, ours.raw, SLOT) != 0)
 			moved = 1;
 		if (trial == 0)
-			first = ours_o.float_9d18[0];
-		else if (ours_o.float_9d18[0] != first)
+			first = ours_o.altMagnitudeSum[0];
+		else if (ours_o.altMagnitudeSum[0] != first)
 			distinct = 1;
 	}
 
@@ -1247,7 +1247,7 @@ run_means(void)
 
 		if ((trial & 3) == 0) {
 			BOTH(uint_1c00[phase][code], 0u);
-			BOTH(uint_9d30[phase], 0u);
+			BOTH(altMagnitudeCount[phase], 0u);
 			zerocount = 1;
 		} else if ((trial & 3) == 2) {
 			/*
@@ -1284,14 +1284,14 @@ run_means(void)
 			BOTH(float_1000[phase][code], 143.5f);
 			BOTH(float_9118[phase][code], 600.0f);
 			for (q = 0; q < NPHASE; q++) {
-				BOTH(uint_9d30[q], 41u);
-				BOTH(float_9d18[q], 143.5f);
+				BOTH(altMagnitudeCount[q], 41u);
+				BOTH(altMagnitudeSum[q], 143.5f);
 			}
 			nonzerocount = 1;
 		} else {
 			BOTH(uint_1c00[phase][code],
 			     (unsigned)(trial * 7 + 1));
-			BOTH(uint_9d30[phase], (unsigned)(trial + 1));
+			BOTH(altMagnitudeCount[phase], (unsigned)(trial + 1));
 			nonzerocount = 1;
 		}
 
@@ -1304,7 +1304,7 @@ run_means(void)
 		if ((trial & 3) == 1) {
 			BOTH(float_1000[phase][code], 1234.5f);
 			BOTH(float_9118[phase][code], 4000000.0f);
-			BOTH(float_9d18[phase], -987.25f);
+			BOTH(altMagnitudeSum[phase], -987.25f);
 		}
 
 		for (p = 0; p < NPHASE; p++) {
@@ -1698,7 +1698,7 @@ run_signal(void)
 				/*
 				 * SEVEN BITS HERE, DELIBERATELY, and the
 				 * eighth is what D259 is about:
-				 * `short_8b00[5][128]` is `int_9100[0]`, so
+				 * `codeHistogram[5][128]` is `sampleCount[0]`, so
 				 * a phase of 5 with a code of 128 or more
 				 * increments the sample-store index of phase
 				 * 0 instead of a histogram bin.  Both sides
@@ -2064,7 +2064,7 @@ run_signal(void)
 
 	diff_eq_int("the sequence changed the object", moved, 1, 0);
 	diff_eq_int("the mapping moved while the sequence ran", changed, 1, 0);
-	diff_eq_int("the sample store filled", ours_o.int_9100[0], 240, 0);
+	diff_eq_int("the sample store filled", ours_o.sampleCount[0], 240, 0);
 	diff_eq_int("the run made the calls it says it did",
 		    calls > 1000, 1, calls);
 
@@ -3347,7 +3347,7 @@ run_firststudy(void)
  * THE DIL BATCH: `updateAltRbsPhaseInDil` and the two members that call it.
  *
  * THE SAMPLE-STORE CURSOR IS THE THING TO BE CAREFUL WITH.
- * `updateAltRbsPhaseInDil` walks a cursor forward by `short_8b00[phase][code]`
+ * `updateAltRbsPhaseInDil` walks a cursor forward by `codeHistogram[phase][code]`
  * for each of the 115 codes in its scan order and writes
  * `sampleStore[phase][cursor + j]`, and nothing anywhere compares the cursor
  * against the row's 0x83e entries -- D287.  A seeded histogram holds random
@@ -3381,7 +3381,7 @@ sane_histogram(int trial)
 			short n = (short)((unsigned)(trial * 7 + p * 13
 						     + c * 5) % 17u);
 
-			ours_o.short_8b00[p][c] = theirs_o.short_8b00[p][c] = n;
+			ours_o.codeHistogram[p][c] = theirs_o.codeHistogram[p][c] = n;
 		}
 }
 
@@ -3482,7 +3482,7 @@ run_dilrepair(void)
 				continue;
 
 			for (c = 2; c <= 116; c++) {
-				if (ours_o.short_8b00[p][c] == 0) {
+				if (ours_o.codeHistogram[p][c] == 0) {
 					empty = 1;
 					continue;
 				}
@@ -3531,10 +3531,10 @@ run_dilrepair(void)
 		for (p = 0; p < NPHASE; p++) {
 			BOTH(short_2800[p], (short)(p >= 4 ? 1 : 0));
 			for (c = 0; c < V90ADID_CODES; c++)
-				BOTH(short_8b00[p][c], 0);
+				BOTH(codeHistogram[p][c], 0);
 		}
-		BOTH(short_8b00[4][63], 5);
-		BOTH(short_8b00[5][63], 2);
+		BOTH(codeHistogram[4][63], 5);
+		BOTH(codeHistogram[5][63], 2);
 
 		for (c = 0; c < V90ADID_CODES; c++)
 			BOTH(linMapp[1][c], (short)(c <= 60 ? 100 : 5000));
@@ -3741,7 +3741,7 @@ run_secondstudy(void)
 				BOTH(byte_280c[p], (unsigned char)(p == 0 ? 0
 								   : 1));
 				for (c = 0; c < V90ADID_CODES; c++)
-					BOTH(short_8b00[p][c], 0);
+					BOTH(codeHistogram[p][c], 0);
 			}
 
 			for (c = 0; c < V90ADID_CODES; c++) {
@@ -3936,7 +3936,7 @@ run_qcmapping(void)
 			BOTH(short_2800[p], (short)(p == 0 ? 1 : 0));
 			BOTH(byte_280c[p], (unsigned char)(p == 1 ? 1 : 0));
 			for (c = 0; c < V90ADID_CODES; c++) {
-				BOTH(short_8b00[p][c], 0);
+				BOTH(codeHistogram[p][c], 0);
 				BOTH(uint_1c00[p][c], 0u);
 				BOTH(linMapp[p][c], (short)(1000 + c + p * 7));
 			}
@@ -5061,8 +5061,8 @@ run_studyuref(void)
 			BOTH(float_1000[p][at], (float)((int)n * 143));
 			BOTH(float_9118[p][at], (float)((int)n * 4001));
 			BOTH(float_9d48[p][at], 0.5f * (float)p + (float)trial);
-			BOTH(uint_9d30[p], counts[(trial + p + 3) % 8]);
-			BOTH(float_9d18[p], (float)(trial * 11 + p));
+			BOTH(altMagnitudeCount[p], counts[(trial + p + 3) % 8]);
+			BOTH(altMagnitudeSum[p], (float)(trial * 11 + p));
 
 			was[p] = ours_o.short_2800[p];
 			if (n == 0)
@@ -5297,8 +5297,8 @@ run_studyuref(void)
 			int c;
 
 			BOTH(short_2800[p], 0);
-			BOTH(uint_9d30[p], 0u);
-			BOTH(float_9d18[p], 0.0f);
+			BOTH(altMagnitudeCount[p], 0u);
+			BOTH(altMagnitudeSum[p], 0.0f);
 			for (c = 0; c < V90ADID_CODES; c++) {
 				BOTH(uint_1c00[p][c], 0u);
 				BOTH(float_1000[p][c], 0.0f);
@@ -5437,8 +5437,8 @@ run_studyuref(void)
 		for (p = 0; p < NPHASE; p++) {
 			BOTH(short_2800[p], (short)(p >= 3 ? 1 : 0));
 			BOTH(uint_1c00[p][at], 0u);
-			BOTH(uint_9d30[p], 0u);
-			BOTH(float_9d18[p], 0.0f);
+			BOTH(altMagnitudeCount[p], 0u);
+			BOTH(altMagnitudeSum[p], 0.0f);
 			BOTH(linMapp[p][at], (short)(p * 1000));
 			BOTH(linMappAlt[p][at], (short)(p * 1000));
 			BOTH(float_9d48[p][at], (p < 2) ? 1.0f : 0.0f);
@@ -5501,8 +5501,8 @@ run_studyuref(void)
 				     (float)(300 * (p + 1)));
 				BOTH(float_9118[p][0x21 + k],
 				     (float)(91000 * (p + 1)));
-				BOTH(uint_9d30[p], (unsigned)(k + p));
-				BOTH(float_9d18[p], (float)(k * 100 + p));
+				BOTH(altMagnitudeCount[p], (unsigned)(k + p));
+				BOTH(altMagnitudeSum[p], (float)(k * 100 + p));
 			}
 
 			dsplib_debug_capture_reset();
@@ -5657,8 +5657,8 @@ run_studyuref(void)
 				BOTH(short_2800[p],
 				     (short)((p == 1 || p == 2) ? 1 : 0));
 				BOTH(uint_1c00[p][at], 0u);
-				BOTH(uint_9d30[p], 0u);
-				BOTH(float_9d18[p], 0.0f);
+				BOTH(altMagnitudeCount[p], 0u);
+				BOTH(altMagnitudeSum[p], 0.0f);
 				BOTH(linMapp[p][at], 1234);
 				BOTH(linMappAlt[p][at], 1234);
 			}

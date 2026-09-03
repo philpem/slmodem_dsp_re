@@ -266,14 +266,14 @@
   "replace": ""
  },
  {
-  "label": "word_7f64 is not cleared",
-  "find": "\tword_7f60 = 0;\n\tword_7f64 = 0;",
-  "replace": "\tword_7f60 = 0;"
+  "label": "ecRampCounter is not cleared",
+  "find": "\tecMode = 0;\n\tecRampCounter = 0;",
+  "replace": "\tecMode = 0;"
  },
  {
-  "label": "word_7f60 is not cleared",
-  "find": "\tword_7f60 = 0;\n\tword_7f64 = 0;",
-  "replace": "\tword_7f64 = 0;"
+  "label": "ecMode is not cleared",
+  "find": "\tecMode = 0;\n\tecRampCounter = 0;",
+  "replace": "\tecRampCounter = 0;"
  },
  {
   "label": "the phase-2 bit is withdrawn instead of the retrain one",
@@ -297,13 +297,13 @@
  },
  {
   "label": "the dispatch byte is left where it was",
-  "find": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 1;",
+  "find": "\tsineWave.phase = 0.0f;\n\tprogressState = 1;",
   "replace": "\tsineWave.phase = 0.0f;"
  },
  {
   "label": "the dispatch byte is set to 0 rather than 1",
-  "find": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 1;",
-  "replace": "\tsineWave.phase = 0.0f;\n\tbyte_6118 = 0;"
+  "find": "\tsineWave.phase = 0.0f;\n\tprogressState = 1;",
+  "replace": "\tsineWave.phase = 0.0f;\n\tprogressState = 0;"
  },
  {
   "label": "the demod-over arm does not narrow the status to sixteen bits",

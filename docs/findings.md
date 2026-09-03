@@ -112482,3 +112482,162 @@ added no new `.text 0xNNNNN` banner mentions), `tools/refcheck.py` (13107
 references, 0 dangling) all clean. `make period` left for the parent
 session's gate, per this wave's own brief -- this session has no docker.
 (2026-09-03)
+
+## F10130. A naming-only pass over `V90AutoDigitalImpDetector`, `V92CP` and `VPcmFloModem` -- and one header caught stale relative to its own `.cpp`
+
+Not a reconstruction batch: every one of these three classes was already
+complete and differentially green (`t_v90adid`, `t_v92cp*`,
+`t_vpcmflomodem`/`t_vpcmrunpcm`/`t_v90rundemod`/`t_vpcmqcline`/`t_vpcmep3`/
+`t_vpcmctor`/`t_v34info1a`). The brief was to find `type_NNNN`/`pad_NNNN`
+fields with enough evidence to name, per CLAUDE.md's "Naming: fields, and
+flags" section, and leave the rest alone rather than guess. **Renamed
+twelve fields across the three classes; left roughly forty declining, most
+of them because a PRIOR batch had already looked and explicitly said so.**
+
+**V90AutoDigitalImpDetector -- four fields, all single-home.** Before
+touching anything, every remaining `type_NNNN` was checked for callers
+OUTSIDE this class's own two files, because the class's own naming
+convention (`short_2800`, `byte_0d00`, `float_1000`, ...) is offset-derived
+and therefore COINCIDENTALLY IDENTICAL to unrelated fields of unrelated
+classes at the same numeric offset -- `V90ConstellationDesigner.h` names its
+own, independent local table `byte_0d00` for exactly that reason, and
+`V90Demapper.cpp` genuinely does dereference `adiDetector->float_1000` and
+`->uint_1c00`, `->short_2800`, `->byte_280c` and `->byte_0d00` as the SAME
+field. Those five, plus `float_9118`/`float_9d48`/`short_a9a4`/`short_a9a6`
+(already covered by F1425's "spelled in N files, a rename buys nothing the
+comment does not"), were left alone: the cost of a correct multi-file rename
+is real and the existing comments already say everything the identifier
+would. Renamed instead the four that `grep -rl` showed live ONLY in
+`V90AutoDigitalImpDetector.h`, the one `.cpp` and `t_v90adid.cpp`:
+
+  - `int_9100` -> `sampleCount` -- `addReceivedSampleToStorage`'s own store
+    index into `sampleStore[phase][sampleCount[phase]++]`, already spelled
+    out in English in the header before this batch touched anything.
+  - `short_8b00` -> `codeHistogram` -- incremented once per stored sample,
+    indexed by the received PCM code.
+  - `float_9d18`/`uint_9d30` -> `altMagnitudeSum`/`altMagnitudeCount` --
+    the alternate-RBS, per-phase (not per-code) pair to `float_1000`/
+    `uint_1c00`, filled by `calculateLinearMeanAndVarAlt` and divided by
+    `updateLinMappMeanAndVarAlt`/`updateUrefAlt`.
+
+All four are CLAUDE.md's usage-inference tier (no format string, no typed
+callee) but an unambiguous one: the field's whole behaviour is already
+narrated in the header's prose, and a rename could not introduce a new
+claim the comment did not already make. `test/mutations/v90adid.json`
+carries the same four identifiers inside literal `find`/`replace` source
+snippets and needed the same substitution -- plain substring, not `\b`,
+because the file's `\t` is two literal characters (backslash, t) and a
+tab-adjacent identifier does not cross a regex word boundary there. Found
+by `make refs` failing with twenty `NOT UNIQUE ... matches 0 time(s)`
+anchor rows after the source-only rename; fixed and reconfirmed clean.
+
+**V92CP -- two fields, one coincidental-name trap found and dodged.**
+`word_114` looked like a one-file rename -- `V92CP.h`'s own text calls it
+"THE STATE" in capitals, dispatched by both `bitsToInfo` (0..10 over an
+eleven-entry table) and `evaluateInfo` (a `sub $0x3; cmp $0x5` over a
+six-entry one) -- until `grep -rl` turned up `V90MP::word_114` at the SAME
+literal name in a COMPLETELY UNRELATED class (`include/dsplib/V90MP.h`),
+meaning "the group size `calcSequenceLength` divides by", touched from
+`V90Modulator.cpp`, `V90Phase4Modulator.cpp`, `V90Phase4Demodulator.cpp`,
+`V90MP.cpp` and four unit tests. Renaming by grep-and-replace across the
+repository would have silently retitled a field of a different class.
+Scoped the rename to the four files that actually dereference `V92CP`'s own
+member (`V92CP.h`, `V92CP.cpp`, `t_v92cpb2i.cpp`, `t_v92cpeval.cpp`, plus
+the `v92cp*.json`/`snapshot.json` mutation anchors) and confirmed by reading
+every hit rather than trusting the name:
+
+  - `word_114` -> `rxState` -- the receive detector's own state, 0
+    (idle) through 10.
+  - `word_120` -> `stateBitCount` -- bits taken so far in the current
+    state, compared against 17 for the CRC block and against `gamma`/
+    `delta` for the two variable-length mask blocks.
+
+`word_11c`, `word_124` and `word_914` were left alone: the header already
+states, explicitly, that each is "kept neutral" or keeps its offset name on
+purpose (F6601, F6606), which is a decision this pass had no new evidence to
+overturn.
+
+**VPcmFloModem -- six fields, and the header text for them was WRONG, not
+just absent.** This class's `pad_`/`type_` fields were mapped in an earlier
+batch, before `runPcmModem` and `v90RunDemodulator` -- the two entry points
+`VPcmV34Progress` calls every block -- existed in `src/`. Both are now
+written (2,041 and 3,013 bytes) and their own comments already fully
+explain six fields the header still called unsettled or unread:
+
+  - `byte_6118`/`byte_6119` -> `progressState`/`retrainLatch`. The header
+    said "which object they belong to is not settled -- V90Modem's size is
+    a floor, not a measurement". It is settled: both entry points, both
+    members of THIS class, read and write `progressState` first thing on
+    every call as a five-value (0..4) dispatch that seeds their own return
+    code, and `retrainLatch` records that the data phase was entered with
+    `CFG_FLAG3_RETRAIN` freshly asserted so a later TRN1d restart knows to
+    re-assert it. Usage inference over the whole of both entry points, not
+    a printed name.
+  - `flag_173d` -> `droppedToV34`. The header only knew `getUinfoValue`'s
+    effect ("skips the lookup ... takes the default-flags path"); both
+    entry points' own diagnostic at the site that SETS it is `"drop to V34
+    requested !!"`, which is what the byte actually records and the
+    `getUinfoValue` behaviour is a consequence of, not its whole meaning.
+  - `flag_173e` -> `clr`. **Tier 1 evidence, not inference**: `runPcmModem`'s
+    MP arm prints `"... CP length = %d (clr=%d)\r\n"` with exactly this
+    field as the second argument -- the object's own abbreviation, spelled
+    out where four of `V90CPPacker`'s five call sites pass this field as
+    its "the clear flag" fourth argument and the fifth passes a literal 0
+    (the one token that separates the otherwise-identical MP/MPnot arms).
+  - `word_7f60`/`word_7f64` -> `ecMode`/`ecRampCounter`. The three
+    `VPCM_EC_RAMP_*` constants were already named in the `.cpp`
+    (`runPcmModem`'s own silence-ramp logic); the header still called the
+    pair "Offset-named" two screens away from the code that names them.
+
+`flags_173a` was READ in full (elements 0/1 are the two constellation-size
+values `V90Jd`/`V92Jd`'s `getConstelationSize` hands back, element 2 is a
+local-request/remote-report RRN latch) but NOT renamed or split: F7583
+already ruled element 2 keeps its offset name, for a reason unrelated to
+whether the role is known, and splitting a two-purpose three-byte array
+cleared as one run by three different callers is a bigger change than a
+naming pass should make unilaterally. `byte_7f5c`, `pad_*`, `block_6c0c` and
+the three undifferentiated `array_7dd8`/`array_7e2c`/`array_7ed4` stay
+exactly as the header already, correctly, says: no evidence read touches
+them beyond a clearing store. Scope for the six renamed fields: `VPcmFloModem.h`,
+`VPcmFloModem.cpp`, `VPcmFloModemCtor.cpp`, `VPcmXfCreate.cpp`,
+`t_v90rundemod.cpp`, `t_vpcmrunpcm.cpp`, `t_vpcmep3.cpp`, `t_vpcmqcline.cpp`,
+`t_vpcmflomodem.cpp`, `t_v34info1a.cpp` (one assignment site; the test's OWN
+unrelated `ta->flag173d` local field, no underscore, was left as it is) and
+the matching `v90rundemod.json`/`vpcmctor.json`/`vpcmflomodem.json`/
+`vpcmep3.json`/`vpcmqcline.json`/`vpcmrunpcm.json`/`snapshot.json` mutation
+anchors.
+
+**Verification.** Pure identifier substitution -- a `struct` field rename
+or a `#define`, never a reordering, a type change or a value change -- so
+no differential test could have moved and none did: `t_v90adid` (13,744+
+checks over forty blocks), `t_v92cpb2i` (22,934 + 8,000), `t_v92cpeval`
+(696 + 1,200), `t_v92cpcrc`, `t_vpcmflomodem`, `t_v90rundemod` (95,714),
+`t_vpcmrunpcm` (155,541), `t_vpcmep3`, `t_vpcmqcline`, `t_vpcmctor` and
+`t_v34info1a` (68,561) all green, unchanged pass counts. `t_v90adidnan`
+fails identically on this branch BEFORE this pass touched anything (verified
+by `git stash`) -- CLAUDE.md's own declared GCC-13-vs-3.4.2 NaN divergence
+(F2300/F2304), not a regression. `make refs` (anchor uniqueness over all
+228 mutation suites), `tools/onedef.py` (301 types, 1 known duplicate),
+`tools/refcheck.py` (13,111 references, 0 dangling) and
+`tools/bannercheck.py src/pump/v90` (3/3 banners agree) all clean.
+**`make period` is left for a session with docker** -- this one has none,
+the same gap F10121 records for the same reason; nothing here should move
+under it, since GCC 3.4.2 never sees a C++ identifier's spelling as
+anything but a symbol-table entry, but the rule is to say so rather than
+claim a gate that did not run.
+
+**What this leaves for the next naming pass, honestly bucketed.** Of roughly
+fifty `type_`/`pad_` fields surveyed across the three classes: twelve
+renamed this batch; about a dozen already renamed or explicitly declined by
+prior batches (F1425, F1434, F1435, F6601, F6602, F6606, F7583) with reasons
+that still hold; the rest are true alignment padding, a handful of
+constructor-cleared scalars nothing yet reads (`byte_6118`'s sibling
+`byte_7f5c`, VPcmFloModem's `array_7dd8`/`array_7e2c`/`array_7ed4`,
+V90AutoDigitalImpDetector's own `int_a960`, all already correctly hedged),
+and the two V92CP cursors (F6601/F6606) that are understood but deliberately
+kept neutral. No field was renamed on inference alone where a wrong guess
+was plausible; where a name looked temptingly close by adjacency
+(`V92CPUnPck`'s printed names onto `V92CP`, `V90ConstellationDesigner`'s own
+`byte_0d00` onto this class's) it was checked against the actual
+dereferencing code and, where it did not resolve to the same object,
+left alone. (2026-09-04)

@@ -113,12 +113,12 @@ VPCM_OFF(bitVector,		0x021e, bitvec);
 VPCM_OFF(nofBits,		0x1736, nofbits);
 VPCM_OFF(bitPointer,		0x1738, bitptr);
 VPCM_OFF(flags_173a,		0x173a, flags173a);
-VPCM_OFF(flag_173d,		0x173d, flag173d);
-VPCM_OFF(flag_173e,		0x173e, flag173e);
+VPCM_OFF(droppedToV34,		0x173d, flag173d);
+VPCM_OFF(clr,		0x173e, flag173e);
 VPCM_OFF(modem,			0x1758, modem);
 VPCM_OFF(pcmSessionType,	0x611c, sesstype);
-VPCM_OFF(byte_6118,		0x6118, byte6118);
-VPCM_OFF(byte_6119,		0x6119, byte6119);
+VPCM_OFF(progressState,		0x6118, byte6118);
+VPCM_OFF(retrainLatch,		0x6119, byte6119);
 VPCM_OFF(info0Layout,		0x6120, layout);
 VPCM_OFF(v92modem.parameters,	0x6128, v92params);
 VPCM_OFF(qcVerifyState,		0x6f98, qcstate);
@@ -583,12 +583,12 @@ VPcmFloModem::getUinfoValue(short skipProbe)
 	setPhaseIIinfo(info0, rtd);
 
 	/*
-	 * The value, if the modem has one.  `flag_173d` short-circuits the
+	 * The value, if the modem has one.  `droppedToV34` short-circuits the
 	 * lookup entirely; so does a zero coming back from it, and both fall
 	 * into the same six default flags.
 	 */
 	uinfo = 0;
-	if (flag_173d == 0) {
+	if (droppedToV34 == 0) {
 		uinfo = *(short *)((unsigned char *)modem.ptr_49b4 + 0x20);
 		if (uinfo != 0)
 			return uinfo;
@@ -690,7 +690,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
  * THE LAST TWO STORES ARE THE HAND-BACK TO THE V.34 SIDE.  `CFG_FLAG3_RETRAIN`
  * is cleared out of `_tagModemParameters::unnamed_0003` -- `andb $0xfb,0x3
  * (%edx)` at 0xf27e, through TWO pointers, `modem.ptr_49b4->modemParams` --
- * which withdraws any retrain this session had asked for, and `byte_6118` is
+ * which withdraws any retrain this session had asked for, and `progressState` is
  * set to 1, which is the dispatch value `runPcmModem` and `v90RunDemodulator`
  * both read first and both turn into a return of 1.
  *
@@ -702,7 +702,7 @@ VPcmFloModem::getUinfoValue(short skipProbe)
  * TONEq oscillator, which `qcLineVerification` is the only caller of.
  *
  * ORDER.  0xf277's `mov $0x0,%eax` is a second zero register, not a store,
- * and 0xf271 and 0xf282 write `word_7f60` and `sineWave.phase` from two
+ * and 0xf271 and 0xf282 write `ecMode` and `sineWave.phase` from two
  * different registers holding the same zero.
  *
  * AND THE ORDER OF THE TWO `word_7f6x` STORES IS DECODED, NOT TRANSCRIBED --
@@ -731,12 +731,12 @@ VPcmFloModem::vPcmResetPhase3Modem()
 	v92modem.reset();
 	echoCanceller.reset();
 
-	word_7f60 = 0;
-	word_7f64 = 0;
+	ecMode = 0;
+	ecRampCounter = 0;
 	modem.ptr_49b4->modemParams->unnamed_0003 &=
 	    (unsigned char)~CFG_FLAG3_RETRAIN;
 	sineWave.phase = 0.0f;
-	byte_6118 = 1;
+	progressState = 1;
 }
 
 void
@@ -745,8 +745,8 @@ VPcmFloModem::enterPhase3()
 	flags_173a[0] = 0;
 	flags_173a[1] = 0;
 	flags_173a[2] = 0;
-	flag_173d = 0;
-	flag_173e = 0;
+	droppedToV34 = 0;
+	clr = 0;
 
 	v34BaudAllow[0] = 1;
 	v34BaudAllow[1] = 0;
@@ -842,8 +842,8 @@ VPcmFloModem::externalReset()
 	bitPointer = 0;			/* +0x1738 */
 	flags_173a[1] = 0;		/* +0x173b */
 	flags_173a[2] = 0;		/* +0x173c */
-	flag_173d = 0;			/* +0x173d */
-	flag_173e = 0;			/* +0x173e */
+	droppedToV34 = 0;			/* +0x173d */
+	clr = 0;			/* +0x173e */
 
 	/* The second of the two runs; the same six values as above. */
 	v34BaudAllow[0] = 1;		/* +0x217 again */
@@ -864,8 +864,8 @@ VPcmFloModem::externalReset()
 	if (info0Layout != 0)
 		modem.demodulator->reInit();
 
-	byte_6118 = 0;
-	byte_6119 = 0;
+	progressState = 0;
+	retrainLatch = 0;
 	qcVerifyState = 0;
 	qcTerminateRequested = 0;
 	qcSampleCount = 0;
@@ -1269,8 +1269,8 @@ VPcmFloModem::internalReset()
 	flags_173a[0] = 0;		/* +0x173a */
 	flags_173a[1] = 0;		/* +0x173b */
 	flags_173a[2] = 0;		/* +0x173c */
-	flag_173d = 0;			/* +0x173d */
-	flag_173e = 0;			/* +0x173e */
+	droppedToV34 = 0;			/* +0x173d */
+	clr = 0;			/* +0x173e */
 	v34BaudAllow[0] = 1;		/* +0x217: the V.90 run of six  */
 	v34BaudAllow[1] = 0;		/* +0x218 */
 	v34BaudAllow[2] = 1;		/* +0x219 */
@@ -1361,7 +1361,7 @@ VPcmFloModem::copyMpInfoForInterface()
  *     entries at .rodata+0x3fc, against `runPcmModem`'s 0x00..0x35, 54 entries
  *     at .rodata+0x4c0.  Twenty-three of the 44 are live here.  No case label
  *     means the same thing in both: 0x16 is "end of CPt" for the V.92 driver
- *     and "byte_6118 = 2, return 1" here, and the arms this function's own
+ *     and "progressState = 2, return 1" here, and the arms this function's own
  *     table sends somewhere are 0x1a, 0x1b, 0x28 and 0x2a, which the V.92
  *     table sends to its default.
  *
@@ -1373,7 +1373,7 @@ VPcmFloModem::copyMpInfoForInterface()
  * THE SHAPE IS TWO DISPATCHES
  * ===========================================================================
  *
- *   1. `byte_6118`, 0..4, the jump table at .rodata+0x3e8 -- five entries,
+ *   1. `progressState`, 0..4, the jump table at .rodata+0x3e8 -- five entries,
  *      `[0]` and `[1]` sharing an arm, `[4]` entering `[3]`'s tail one store
  *      in.  It runs BEFORE anything else, its only job is to seed the return
  *      value, and nothing above 4 is an error: the `ja` at 0xd875 falls
@@ -1401,9 +1401,9 @@ VPcmFloModem::copyMpInfoForInterface()
  *
  *   arm    params           info.word_00  destination        the clear flag
  *   0x12   mappingParams    left alone    cpBitVector        0
- *   0x19   mappingParamsAlt 0             cpBitVector        flag_173e
- *   0x2a   mappingParamsAlt 0, and +0x10  cpBitVector        flag_173e
- *   0x1a   mappingParamsAlt 1             bitVector          flag_173e
+ *   0x19   mappingParamsAlt 0             cpBitVector        clr
+ *   0x2a   mappingParamsAlt 0, and +0x10  cpBitVector        clr
+ *   0x1a   mappingParamsAlt 1             bitVector          clr
  *   0x1b   mappingParamsAlt 1             bitVector          0
  *
  * The two destinations are the two vectors `getV90CpBits` and `getV90JaBits`
@@ -1447,7 +1447,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	unsigned char silenceScr;
 	int ret = 0;
 
-	switch (byte_6118) {
+	switch (progressState) {
 	case 0:				/* 0xda57 */
 	case 1:
 		ret = 0;
@@ -1468,7 +1468,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 *
 	 *     da18  mov 0x6120(%ebx),%eax ; test %eax,%eax ; je 0xda46
 	 *
-	 * and 0xda46 sets `byte_6118` to 4 and the return to 3.  So a session
+	 * and 0xda46 sets `progressState` to 4 and the return to 3.  So a session
 	 * with no INFO0 layout selected takes the RETRAIN exit here and the
 	 * plain one there, and the two functions are one `!` apart at a site
 	 * where the surrounding twelve instructions are the same.  Neither a
@@ -1480,7 +1480,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		if (info0Layout == 0
 		    || (modem.demodulator->inPhase3 == 4
 			&& modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0)) {
-			byte_6118 = 4;
+			progressState = 4;
 			ret = 3;
 		} else {
 			ret = 2;
@@ -1505,7 +1505,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * own names for the two outcomes.
 	 */
 	case 0x01:
-		byte_6118 = 1;
+		progressState = 1;
 		ret = 0;
 		edprintf("VPcmFloModem (V90): DemodSdDetected\r\n");
 		setTerminateJaFlag(1);
@@ -1516,12 +1516,12 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		break;
 
 	/*
-	 * 0xde1a.  TRN1d has started.  `byte_6119` is the same "the retrain
+	 * 0xde1a.  TRN1d has started.  `retrainLatch` is the same "the retrain
 	 * bit has to go back on" latch `runPcmModem`'s CPt arm uses, and arm
 	 * 0x1e below is what sets it.
 	 */
 	case 0x03:
-		if (byte_6119 != 0) {
+		if (retrainLatch != 0) {
 			edprintf("VPcmFloModem (V90): ON Start TRN1d "
 				 "restoring SAS detector\n");
 			modem.ptr_49b4->modemParams->unnamed_0003 |=
@@ -1614,7 +1614,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		break;
 
 	case 0x16:			/* 0xdacc */
-		byte_6118 = 2;
+		progressState = 2;
 		ret = 1;
 		break;
 
@@ -1624,7 +1624,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 */
 	case 0x17:
 		setTerminateCpNotFlag(1);
-		if (byte_6119 != 0)
+		if (retrainLatch != 0)
 			modem.ptr_49b4->modemParams->unnamed_0003 |=
 			    CFG_FLAG3_RETRAIN;
 		break;
@@ -1637,11 +1637,11 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		modem.additionalCPinfo.word_00 = 0;
 		cpNofBits = V90CPPacker(&modem.mappingParamsAlt,
 					&modem.additionalCPinfo,
-					cpBitVector, flag_173e);
+					cpBitVector, clr);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V90): Building "
 			    "CP, CP length = %d (clr=%d)\r\n",
-			    cpNofBits, flag_173e);
+			    cpNofBits, clr);
 		resetBitPointer();
 		setMinNofTransmitSequences(1);
 		V34XF_IndicateTrn2dReceived(v34Object);
@@ -1658,7 +1658,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 	 * build CPnot into `bitVector`.  Four things differ and every one of
 	 * them is one token:
 	 *
-	 *   - the clear flag handed to the packer is `flag_173e` for MP and a
+	 *   - the clear flag handed to the packer is `clr` for MP and a
 	 *     literal 0 for MPnot (0xe0e3 against 0xe2a0);
 	 *   - the diagnostic says "on MP receive" or "on MPnot receive";
 	 *   - MPnot goes on to test `SENSITIVE_ISP_DETECTED` and terminate
@@ -1675,7 +1675,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			modem.additionalCPinfo.word_00 = 1;
 			nofBits = V90CPPacker(&modem.mappingParamsAlt,
 					      &modem.additionalCPinfo,
-					      bitVector, flag_173e);
+					      bitVector, clr);
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFloModem (V90): "
 				    "Building CPnot on MP receive, CPnot "
@@ -1735,7 +1735,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		break;
 
 	/*
-	 * 0xddc0.  Ed received.  `flag_173e` -- the same byte three of the
+	 * 0xddc0.  Ed received.  `clr` -- the same byte three of the
 	 * packer calls hand across as the clear flag -- is what turns this
 	 * into a cleardown report rather than a silent one.
 	 */
@@ -1745,7 +1745,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 					     "Ed Received !!!\r\n");
 		setTerminateCpNotFlag(1);
 		setMinNofTransmitSequences(1);
-		if (flag_173e != 0) {
+		if (clr != 0) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf("VPcmFloModem (V90): "
 				    "Indicating Cleardown !\r\n");
@@ -1760,16 +1760,16 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		break;
 
 	/*
-	 * 0xde7b.  The data phase.  `byte_6119` is raised here and nowhere
+	 * 0xde7b.  The data phase.  `retrainLatch` is raised here and nowhere
 	 * else in this function, and arms 0x03 and 0x17 are its two readers.
 	 */
 	case 0x1e:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V90): "
 					     "Enter Data Phase\r\n");
-		byte_6118 = 3;
+		progressState = 3;
 		ret = 2;
-		byte_6119 = 1;
+		retrainLatch = 1;
 		modem.ptr_49b4->modemParams->unnamed_0003 |= CFG_FLAG3_RETRAIN;
 		VPcmV34LogTimingOffset(v34Object,
 		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
@@ -1788,7 +1788,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V90): "
 					     "drop to V34 requested !! \r\n");
-		flag_173d = 1;
+		droppedToV34 = 1;
 		ret = 7;
 		setV34BaudForV34();
 		break;
@@ -1840,7 +1840,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		setNofBitsPhase4(flags_173a[1]);
 		flags_173a[2] = 1;
 		VPcmV34IndicateLocalRRN(v34Object);
-		byte_6118 = 2;
+		progressState = 2;
 		ret = 1;
 		break;
 
@@ -1858,7 +1858,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 			setNofBitsPhase4(flags_173a[1]);
 			VPcmV34IndicateRemoteRRN(v34Object);
 			modem.demodulator->indicateRemoteRateReneg();
-			byte_6118 = 2;
+			progressState = 2;
 			ret = 1;
 		}
 		break;
@@ -1889,7 +1889,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
 		modem.additionalCPinfo.word_10 = 0;
 		cpNofBits = V90CPPacker(&modem.mappingParamsAlt,
 					&modem.additionalCPinfo,
-					cpBitVector, flag_173e);
+					cpBitVector, clr);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V90): Rebuilding "
 			    "CP after silence rrn, CP length = %d\r\n",
@@ -1928,7 +1928,7 @@ VPcmFloModem::v90RunDemodulator(float *in, unsigned int n, int *rxbits,
  *
  * THE SHAPE IS THREE DISPATCHES, and only the middle one is large:
  *
- *   1. `byte_6118`, 0..4, the jump table at .rodata+0x4ac -- five entries,
+ *   1. `progressState`, 0..4, the jump table at .rodata+0x4ac -- five entries,
  *      `[0]` and `[1]` sharing an arm.  It runs BEFORE anything else and its
  *      only job is to seed the return value; nothing above 4 is an error and
  *      the `ja` falls straight through.
@@ -2011,7 +2011,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	int event;
 	int ret = 0;
 
-	switch (byte_6118) {
+	switch (progressState) {
 	case 0:				/* 0xe6a0 */
 	case 1:
 		ret = 0;
@@ -2030,7 +2030,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		if (info0Layout != 0
 		    && modem.demodulator->inPhase3 == 4
 		    && modem.ptr_49b4->ENABLE_ERROR_CORRECTION_RRN != 0) {
-			byte_6118 = 4;
+			progressState = 4;
 			ret = 3;
 		} else {
 			ret = 2;
@@ -2048,10 +2048,10 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	if (info0Layout == 0)		/* 0xe470 */
 		return ret;
 
-	if (word_7f60 == VPCM_EC_RAMP_MODE) {			/* 0xe53c */
-		if (word_7f64 != VPCM_EC_RAMP_SENTINEL)
-			word_7f64++;
-		rx[0] = (float)word_7f64;
+	if (ecMode == VPCM_EC_RAMP_MODE) {			/* 0xe53c */
+		if (ecRampCounter != VPCM_EC_RAMP_SENTINEL)
+			ecRampCounter++;
+		rx[0] = (float)ecRampCounter;
 	} else {						/* 0xe48b */
 		rx[0] = 0.0f;
 	}
@@ -2075,9 +2075,9 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	case 1:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(" *** Echo Silence ON *** \n");
-		word_7f60 = VPCM_EC_RAMP_MODE;
-		word_7f64 = VPCM_EC_RAMP_START;
-		byte_6118 = 1;
+		ecMode = VPCM_EC_RAMP_MODE;
+		ecRampCounter = VPCM_EC_RAMP_START;
+		progressState = 1;
 		ret = 0;
 		v92modem.modulator->exitJa();
 		break;
@@ -2086,8 +2086,8 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	case 6:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(" *** Echo Silence Off *** \n");
-		word_7f60 = 1;
-		word_7f64 = VPCM_EC_RAMP_START;
+		ecMode = 1;
+		ecRampCounter = VPCM_EC_RAMP_START;
 		v92modem.modulator->exitSilence();
 		VPcmV34LogTimingOffset(v34Object,
 		    (short)(modem.demodulator->resampler.getTimingOffsetPPM()
@@ -2140,14 +2140,14 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		break;
 
 	/*
-	 * 0xe83c.  End of CPt.  `byte_6119` is the flag that says the retrain
+	 * 0xe83c.  End of CPt.  `retrainLatch` is the flag that says the retrain
 	 * bit has to go back on in the shared byte.
 	 */
 	case 0x16:
-		byte_6118 = 2;
+		progressState = 2;
 		ret = 1;
 		v92modem.modulator->exitCPt();
-		if (byte_6119 != 0)
+		if (retrainLatch != 0)
 			modem.ptr_49b4->modemParams->unnamed_0003 |=
 			    CFG_FLAG3_RETRAIN;
 		break;
@@ -2169,7 +2169,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 
 	/* 0xe8c6.  Retrain: set the bit unconditionally this time. */
 	case 0x1e:
-		byte_6118 = 3;
+		progressState = 3;
 		ret = 2;
 		modem.ptr_49b4->modemParams->unnamed_0003 |=
 		    CFG_FLAG3_RETRAIN;
@@ -2185,7 +2185,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	 * barred and index 5 is allowed, which is the opposite of both.
 	 */
 	case 0x1f:
-		flag_173d = 1;
+		droppedToV34 = 1;
 		ret = 7;
 		v34BaudAllow[0] = 1;
 		v34BaudAllow[1] = 0;
@@ -2207,7 +2207,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	 * connection evaluator.
 	 */
 	case 0x22:
-		byte_6118 = 2;
+		progressState = 2;
 		ret = 1;
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
 			v92modem.modulator->initiateRRN();
@@ -2218,7 +2218,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		break;
 
 	case 0x23:
-		byte_6118 = 2;
+		progressState = 2;
 		ret = 1;
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA) {
 			v92modem.modulator->initiateRRN();
@@ -2231,7 +2231,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	/* 0xe759.  Fast phase exchange, and the same phase-3 guard. */
 	case 0x24:
 	case 0x25:
-		byte_6118 = 2;
+		progressState = 2;
 		ret = 1;
 		if (v92modem.modulator->phase == V92MOD_PHASE_DATA)
 			v92modem.modulator->initiateFPE();
@@ -2349,7 +2349,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 	 * begin measuring the delay.
 	 */
 	case 2:
-		byte_6118 = 1;
+		progressState = 1;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmFloModem (V92): Starting "
 					     "echo canceller training...\r\n");
@@ -2375,7 +2375,7 @@ VPcmFloModem::runPcmModem(float *in, float *out, unsigned int n, int *rxbits,
 		break;
 
 	case 10:			/* 0xe518 */
-		byte_6118 = 3;
+		progressState = 3;
 		break;
 
 	default:
