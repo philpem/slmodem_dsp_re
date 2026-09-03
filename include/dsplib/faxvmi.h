@@ -605,9 +605,9 @@ typedef char faxvmi_ctl_size[(sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
 
 /*
  * The object's own instance: 24 bytes of zero at `.rodata` 0x9478,
- * referenced from many places inside the still-unwritten per-modulation
- * `v??tx_control`/`v??rx_control` functions (`class1tx.c`'s span, not this
- * file's) -- every one of those references reads as passing `&FAXVMI_CTL`
+ * referenced from many places inside the per-modulation
+ * `v??tx_control`/`v??rx_control` functions (`faxadapt.c`, all eight now
+ * written) -- every one of those references reads as passing `&FAXVMI_CTL`
  * where `FAXVMI_control`'s `ctl == NULL` path is not what is wanted:
  * `FAXVMI_control` itself returns -1 immediately on a null `ctl` without
  * ever touching this object, so a caller wanting the all-fields-quiescent
@@ -616,6 +616,49 @@ typedef char faxvmi_ctl_size[(sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
  * instead of NULL.  `R`, global, in the object; global here too.
  */
 extern const struct faxvmi_ctl FAXVMI_CTL;
+
+/*
+ * `vxx_control[slot]`, `.rodata` 0x9560 -- the last of the six 13-slot
+ * tables.  Same slot order as the rest (0..4 null_control, 5 v21tx_control,
+ * 6 v21rx_control, 7 v27tx_control, 8 v27rx_control, 9 v29tx_control,
+ * 10 v29rx_control, 11 v17tx_control, 12 v17rx_control), read off this
+ * table's own relocations (0x9560..0x9590).  Every entry already returns
+ * `int` (`faxadapt.h`, `nulldp.h`), so unlike `vxx_process` this table needs
+ * no return-type cast -- only the argument-pointer casts six of the eight
+ * typed entries carry, the same shape `vxx_status`/`vxx_create` already use.
+ */
+typedef int (*faxvmi_control_fn)(struct faxvmi_link *dp, void *arg);
+extern faxvmi_control_fn const vxx_control[13];
+
+/*
+ * `FAXVMI_control`, 0x095650, 338 bytes.  Applies `ctl`'s effects to `vmi`
+ * in the object's own order:
+ *
+ *   1. `ctl == NULL` returns -1 immediately, nothing touched.
+ *   2. `ctl->int_0014` nonzero recurses FIRST, before anything else applies:
+ *      `vxx_control[vmi->slot](vmi->link, (void *)(long)ctl->int_0014)`,
+ *      and that call's return becomes this function's own return (0
+ *      otherwise) -- confirmed independently against `dis.py`, matching
+ *      F10108's own trace of this same site.
+ *   3. `ctl->int_000c` nonzero AND `ctl->short_0010 <= 2` (unsigned; an
+ *      out-of-range mode is treated as if `int_000c` were zero, the whole
+ *      block skipped) -- a full framer reset to `FAXVMI_create`'s own
+ *      initial values (frame buffer zeroed to `frame_size`, then
+ *      `pack_frame_left`/`frame_len`/`ones`/`in_frame` cleared,
+ *      `flags_wanted` = 2, `pack_flagging` = 1; then `pack_bit` = 0 and the
+ *      dword-reload trick `unpack_bit = pack_bit; short_002e = pad_001e;`
+ *      `FAXVMI_create` itself uses; `zero_run_bits` = 0 -- overwritten again
+ *      at step 5 below if `ctl->short_0008` also applies; `unpack_mask` = 0,
+ *      `unpack_word`/`unpack_acc` = -1, `async_hunt` = 1, `zero_run_send` = 0,
+ *      `zero_run_seen` = 0, `pack_mask` = 0, `pack_word`/`pack_acc` = -1) --
+ *      and sets `vmi->mode = ctl->short_0010`.
+ *   4. `ctl->ptr_0000` nonzero empties the ring: `fifo[]` zeroed to
+ *      `fifo_size`, then `rd`/`wr`/`count`/`residue` = 0.
+ *   5. Unconditionally: `zero_run_send = ctl->int_0004`,
+ *      `zero_run_bits = ctl->short_0008`.
+ *   6. Returns whatever step 2 left (0 if `int_0014` was zero).
+ */
+int FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl);
 
 /*
  * `vxx_process[slot]`, `.rodata` 0x9520.  Same 13-slot order, read off this

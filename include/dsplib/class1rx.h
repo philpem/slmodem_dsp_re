@@ -80,4 +80,11 @@ void init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 struct fax_class1;
 void _delete_data_rx_modem(struct fax_class1 *ctx);
 
+/*
+ * `_init_receiver`, 0x094240, 1,583 bytes -- see `class1rx.c` for the full
+ * derivation.  `rate_code` is a T.30 modem-rate code, the same code space
+ * `_set_modem_rate` (`class1.c`) recognises.
+ */
+void _init_receiver(struct fax_class1 *ctx, int rate_code);
+
 #endif /* DSPLIB_CLASS1RX_H */

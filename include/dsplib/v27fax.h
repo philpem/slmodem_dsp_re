@@ -1233,6 +1233,32 @@ int V27RX_status(void *rx, void *status);
  *                  the handle's own first 28 bytes ARE its config, so this
  *                  reinitialises from whatever is already there
  */
+/*
+ * `V27RX_CTL`'s own type, added for a DIFFERENT reader than `V27RX_control`
+ * itself: `_init_receiver`'s reinit path (`class1rx.c`) builds its own
+ * request from this `.data` object (`.data` 0x7b80, 20 bytes) as a template,
+ * so IT needs a type even though `V27RX_control` correctly stays untyped
+ * above (its own evidence never reaches past what the macros already name).
+ * Same shape `v17fax.h`'s `struct v17rx_ctl` uses for the identical reason:
+ * an `unmapped_NNNN` name where nothing establishes the field, a real name
+ * where the `V27RXCTL_*` macros above already do.  `unmapped_0000`'s own
+ * upper 16 bits hold a per-modulation PLACEHOLDER bit rate the caller
+ * overwrites with the live one (`class1rx.c`'s own derivation); `flags`'s
+ * `V27RXCTL_FLAGS_REINIT` bit is OR'd in at runtime, not baked into the
+ * constant.  `unmapped_0010` is read by neither `V27RX_control` nor
+ * `_init_receiver` -- the object still reserves it, all zero, matching
+ * `v17rx_ctl`'s `int_0010` sitting at the identical offset.
+ */
+struct v27rx_ctl {
+	unsigned char	unmapped_0000[4];
+	int		int_0004;
+	unsigned char	unmapped_0008[4];
+	unsigned char	mask;
+	unsigned char	flags;
+	unsigned char	unmapped_000e[2];
+	unsigned char	unmapped_0010[4];
+};
+
 #define V27RXCTL_INT_0004		0x04
 #define V27RXCTL_MASK			0x0c
 #define V27RXCTL_FLAGS			0x0d
@@ -1274,6 +1300,27 @@ int V27RX_control(void *rx, void *req);
  *                  self-reinit idiom `V27RX_control` uses
  *   +0x10  int     copied straight into the handle's own `int_0018`
  */
+/*
+ * `V27TX_CTL`'s own type, the transmit twin of `struct v27rx_ctl` above and
+ * for the identical reason: `_init_transmitter`'s reinit path builds its own
+ * request from this `.data` object (`.data` 0x7d40, 20 bytes) as a template.
+ * `unmapped_0000`'s own LOW 16 bits hold the placeholder rate here (the
+ * transmit-side templates put it low, the receive-side ones put it high --
+ * `class1tx.c`'s own derivation); `flags`'s `V27TXCTL_FLAGS_REINIT` bit is
+ * OR'd in at runtime, not baked into the constant.  `int_0010` IS read by
+ * `V27TX_control` (unlike the receive twin's own unmapped final dword), so
+ * it is a real field here, matching the macro below.
+ */
+struct v27tx_ctl {
+	unsigned char	unmapped_0000[4];
+	int		int_0004;
+	int		scale_mul;
+	unsigned char	mask;
+	unsigned char	flags;
+	unsigned char	unmapped_000e[2];
+	int		int_0010;
+};
+
 #define V27TXCTL_INT_0004		0x04
 #define V27TXCTL_SCALE_MUL		0x08
 #define V27TXCTL_MASK			0x0c
