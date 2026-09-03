@@ -42,10 +42,14 @@
  *     0x1a10 FAX_process
  *
  * `FAX_delete` and `FAX_process` are written -- `FAX_create` and
- * `FAX_class1_command` are blocked on `FAXVMI_create`/`FAXVMI_control`,
- * still unwritten in `faxvmi.c` (another agent's closure).  See `fax.h` for
+ * `FAX_class1_command` are blocked, RE-VERIFIED this wave (F10111):
+ * `FAXVMI_create` has since landed and is no longer the reason, but
+ * `FAXVMI_control` (`faxvmi.c`) is still unwritten and still the shared
+ * chokepoint, alongside four `class1tx.c` leaf inits and
+ * `_init_receiver`/`_init_transmitter` (`class1rx.c`/`class1tx.c`), which
+ * are themselves blocked on the same `FAXVMI_control`.  See `fax.h` for
  * `struct fax_ctx`, which is NOT `struct voice_ctx` despite sharing this TU,
- * and docs/findings.md F10105.
+ * and docs/findings.md F10105/F10111.
  *
  * The TU is otherwise complete for voice: nothing in the `voice.c#1..#3`
  * spans but these three is unwritten.

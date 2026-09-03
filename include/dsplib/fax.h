@@ -156,13 +156,20 @@
  * (`add %eax,0x94(%esp)`, no `*2`) -- a real, faithfully-reproduced property
  * of the object, not resolved further here.
  *
- * NEITHER FAX_create NOR FAX_class1_command IS WRITTEN.  Both call
- * `fax_class1_create` (FAX_create) or `fax_class1_command` (FAX_class1_
- * command), and BOTH of those are themselves blocked on `FAXVMI_create`/
- * `FAXVMI_control` -- unwritten, another agent's `faxvmi.c` closure this
- * wave.  Per CLAUDE.md's own trap, a reference from `src/` to an unwritten
- * blob symbol fails EVERY test binary at link, so their bodies are left out
- * rather than written-and-broken; see docs/findings.md for the exact chain.
+ * NEITHER FAX_create NOR FAX_class1_command IS WRITTEN, RE-VERIFIED with
+ * `dis.py`/`nm` rather than trusted from the prior wave's own note (F10111).
+ * `FAXVMI_create` landed since that note was written and is NO LONGER the
+ * blocker; the chain now bottoms out at `FAXVMI_control` (`faxvmi.c`, still
+ * unwritten, assigned to nobody this wave) and at four `class1tx.c` leaf
+ * inits (`_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
+ * `cHDLCtx_preamble_state_init`, `_rx_look_carrier_init`) that are
+ * themselves either direct callers of `FAXVMI_control` or callers of
+ * `_init_receiver`/`_init_transmitter`, which are ALSO blocked on
+ * `FAXVMI_control` (and, per `_cHDLCrx_init_from_idle`'s own `V21RX_CTL`
+ * load, on at least one `.data` request template besides).  Per CLAUDE.md's
+ * own trap, a reference from `src/` to an unwritten blob symbol fails EVERY
+ * test binary at link, so both bodies are left out rather than
+ * written-and-broken; see docs/findings.md F10111 for the exact chain.
  */
 
 #ifndef DSPLIB_FAX_H
@@ -221,10 +228,11 @@ struct fax_ctx {
 
 /*
  * NOT WRITTEN.  `.text` 0x001500, 564 bytes -- calls the still-unwritten
- * `fax_class1_create` (itself blocked on `FAXVMI_create`), so a body here
- * would fail every test binary at link (CLAUDE.md's trap).  The argument
- * shape is read off the object's own stack layout, matching `VOICE_create`'s
- * -- see this file's own banner for the derivation.
+ * `fax_class1_create` (blocked on `FAXVMI_control`, not `FAXVMI_create`,
+ * which has since landed -- F10111), so a body here would fail every test
+ * binary at link (CLAUDE.md's trap).  The argument shape is read off the
+ * object's own stack layout, matching `VOICE_create`'s -- see this file's
+ * own banner for the derivation.
  */
 struct fax_ctx *FAX_create(void *modem, unsigned int rate);
 
@@ -239,9 +247,12 @@ void FAX_delete(struct fax_ctx *ctx);
 
 /*
  * NOT WRITTEN.  `.text` 0x001740, 708 bytes -- calls the still-unwritten
- * `fax_class1_command`, itself blocked on four of its own leaves which are
- * in turn blocked on `FAXVMI_control`/`_init_receiver`/`_init_transmitter`.
- * See docs/findings.md for the full chain.
+ * `fax_class1_command`, itself blocked on four of its own leaves
+ * (`_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
+ * `cHDLCtx_preamble_state_init`, `_rx_look_carrier_init`, all
+ * `class1tx.c`), which are in turn blocked on `FAXVMI_control`/
+ * `_init_receiver`/`_init_transmitter`.  See docs/findings.md F10111 for
+ * the full chain, re-verified this wave.
  */
 int FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg);
 

@@ -111851,3 +111851,100 @@ state`, `cHDLCtx_off` -- 35/88/80 checks), `t_class1rxstates.c`
 second, narrower pass over the RX pair -- 21/15/15/20/20/24/10/15/12
 checks) all pass. `tools/onedef.py`, `tools/bannercheck.py src/fax` and
 `tools/refcheck.py` clean. (2026-09-03)
+
+## F10111. The wave-11 top-level fax entry points -- `fax_class1_create`, `fax_class1_command`, `_answer_tone_state`, `FAX_create`, `FAX_class1_command` -- RE-VERIFIED still blocked, but the reason has moved off `FAXVMI_create` onto `FAXVMI_control` alone, itself now writable in isolation
+
+Task brief for this wave: write `fax_class1_create` (1,532 B),
+`fax_class1_command` (615 B), `_answer_tone_state` (94 B) in `class1.c`, and
+`FAX_class1_command` (708 B), `FAX_create` (564 B) in `voice.c` -- the last
+of Class 1's top-level entry points, five of the fax closure's remaining
+twelve symbols.  A different agent this same wave was assigned
+`_init_receiver`/`_init_transmitter` (`class1rx.c`/`class1tx.c`).
+
+**Started from a STALE worktree, caught before any code was written.**
+`git worktree list` and `git merge-base HEAD master` showed this session's
+branch was strictly behind `master` -- three merged branches behind,
+missing all of wave 10 (`V17TX_control`/`V29TX_control` landing,
+`faxadapt.c`'s full `*_control` adapter set, the twelve `class1tx.c`
+handlers).  A fast-forward `git merge master` brought it current before any
+`dis.py`/`nm` reading was trusted, per CLAUDE.md's own warning about this
+exact hazard (wave 10's `_init_receiver` collision, `docs/remaining.md`).
+Every claim below is against the POST-MERGE tree, not the pre-merge one --
+several of them would have been wrong against the branch this session
+started on.
+
+**ALL FIVE ARE STILL BLOCKED, and F10105's old conclusion --
+"`FAXVMI_create`/`FAXVMI_control`" -- is now half stale.** `FAXVMI_create`
+landed (wave 7/9) and is no longer in the picture.  Re-tracing every call
+AND data relocation with `dis.py`/`objdump -r` against the current tree
+(never trusted from the old finding):
+
+    fax_class1_create (0x92e20, 1532B)
+        -> FAXVMI_create x2                             (written)
+        -> FPM_TONE_create x2                            (written)
+        -> _cHDLCrx_init_from_idle (0x9d790, 226B)
+              -> FAXVMI_control                          [UNWRITTEN]
+              -> V21RX_CTL (.data load)                  [UNWRITTEN]
+
+    fax_class1_command (0x93420, 615B)
+        -> _delete_data_rx_modem, _delete_data_tx_modem,
+           _hdlc_receive_state_init                      (all written)
+        -> cHDLCtx_preamble_state_init (0x9e380, 193B)
+              -> FAXVMI_control                          [UNWRITTEN]
+              -> _handle_hdlc_input_open                  (written)
+        -> _cHDLCrx_init_from_idle                        [blocked above]
+        -> _tx_scrambled_ones_init (0x9cf70, 193B)
+              -> _init_transmitter (0x94bf0, 1326B)
+                    -> FAXVMI_create (written), FAXVMI_control [UNWRITTEN]
+        -> _rx_look_carrier_init (0x9cb00, 45B)
+              -> _init_receiver (0x94240, 1583B)
+                    -> FAXVMI_create/_delete (written), FAXVMI_control
+                       [UNWRITTEN]
+
+    _answer_tone_state (0x92d60, 94B)
+        -> FPM_TONE_generate                              (written)
+        -> cHDLCtx_preamble_state_init                    [blocked above]
+
+    FAX_create (0x1500, 564B)          -> fax_class1_create  [blocked above]
+    FAX_class1_command (0x1740, 708B)  -> fax_class1_command [blocked above]
+
+So **every one of the five bottoms out at `FAXVMI_control`** (`faxvmi.c`,
+338 B, still unwritten and assigned to nobody this wave), reached either
+directly or through `_init_receiver`/`_init_transmitter` -- which means the
+parallel agent's own two assigned functions are ALSO blocked on it, not
+just mine.  `fax_class1_create` and `fax_class1_command` carry a SECOND,
+independent blocker besides: `_cHDLCrx_init_from_idle` loads `V21RX_CTL`,
+a `.data` request-template object (F8493's data-relocation trap, not a
+call) that is still unwritten and lives with `_init_receiver`'s own
+sibling templates in `class1rx.c`, per `docs/remaining.md`'s wave-9 note.
+
+**`FAXVMI_control` ITSELF IS RE-VERIFIED AS LIKELY WRITABLE NOW, IN
+ISOLATION -- but it is not this session's file and was not written, to
+avoid the exact collision wave 10 already recorded once** (`docs/
+remaining.md`'s "Neither landed" row: two agents independently deriving
+the identical unblocking chain from two stale worktrees).  Its own
+disassembly (0x95650..0x957a2) has exactly one external reference, a call
+through the `vxx_control` (0x9560, 13 x 4-byte `.rodata` table) function
+pointer table -- no other call, no other unresolved data reference.
+`objdump -r` on that table's 13 slots resolves to `null_control` x5,
+`v21tx_control`, `v21rx_control`, `v27tx_control`, `v27rx_control`,
+`v29tx_control`, `v29rx_control`, `v17tx_control`, `v17rx_control` --
+and EVERY one of those nine distinct symbols is now defined
+(`nulldp.c`/`faxadapt.c`), confirmed by `grep -n "^NAME("` on each, not
+assumed from the table's mere existence.  So `FAXVMI_control` plus a new
+`vxx_control` table definition in `faxvmi.c` is very likely a clean,
+self-contained unblock -- but it sits in a THIRD file this wave's brief
+did not assign to either agent working this pass, and the honest move
+per CLAUDE.md's own trap section ("a symbol whose referents are
+unwritten is BLOCKED, not hard... the honest move is to leave it and say
+so") is to report it rather than write outside scope on a guess about
+who else might also be reaching for it in the same turn.
+
+**NOTHING WRITTEN THIS WAVE.**  `class1.c` and `voice.c` banners updated
+to replace the stale `FAXVMI_create`/`FAXVMI_control` phrasing with the
+re-verified chain above (`include/dsplib/fax.h`, `src/service/voice.c`).
+`tools/onedef.py`, `tools/bannercheck.py src/fax src/service` and
+`tools/refcheck.py` all clean; no `make one`/`make period` run since no
+`src/` bodies changed.  Fax remains 12 symbols / 7,417 bytes unless the
+parallel agent's `_init_receiver`/`_init_transmitter` or a future pass
+lands `FAXVMI_control`. (2026-09-03)
