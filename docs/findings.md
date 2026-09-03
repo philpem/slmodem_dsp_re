@@ -111126,3 +111126,305 @@ were recorded as seeded once, by `V29RX_create`, and read only; `V29RX_control`
 is a second writer of each, and the only place either is ever turned back off.
 Neither correction changes what either field is UNDERSTOOD to mean --  both
 stay neutral -- only what is known to write them.  (2026-09-03)
+
+## F10104. `fax_class1_status` written, once `FAXVMI_status` unblocked it, plus its zeroed `FAXVMI_STS` template
+
+(Numbered F10058 by the branch that wrote it, before merge -- collided with
+the unrelated `FAXVMI_create`/`FAXVMI_process` finding, also numbered F10058
+by a concurrent branch this same wave. Renumbered F10104-F10106 at merge
+(was F10058-F10060); content unchanged.)
+
+`.text` 0x0093b50, 150 bytes.  Reports the active VMI handle's status for
+whichever of two directions `ctx->state` says is live -- `vmi_a` for states
+4..6, `vmi_b` for 12..13 (tested `(unsigned)(state - 12) <= 1`, the same
+idiom `_set_modem_rate` already uses for its own two-code ranges), nothing
+for anything else.  A matching range always returns 1, never the wrapped
+`FAXVMI_status` call's own result; no match returns 0 and touches nothing.
+
+`FAXVMI_STS` (`.rodata` 0x945c, 28 bytes) is the object's own zeroed
+`struct faxvmi_status` template -- confirmed all-zero with
+`tabdump.py --sym FAXVMI_STS --type u32 --count 7`.  A local copy is
+seeded from it and its `modem_status` field is then overwritten with this
+function's own second argument, forwarded unchanged into
+`struct faxvmi_status`'s documented "IN" field.  The object's own
+disassembly only copies SIX of the template's seven dwords (0x93b55..
+0x93b8b) -- GCC 3.4.2 at -O3 proves the seventh is dead on arrival, since
+it is overwritten before any read, and drops that one store.  Written as a
+plain `struct faxvmi_status st = FAXVMI_STS;` rather than six hand-picked
+field copies, trusting the same optimisation to reproduce the object's own
+omission.
+
+Declared in `faxvmi.h` next to `FAXVMI_CTL` (same "object's own zeroed
+record" shape) but DEFINED in `class1.c`, not `faxvmi.c`, on the same
+footing as `states_names`/`status_names`: `fax_class1_status` is its first
+writer, and the one other site that reaches it (`class1tx.c`'s span,
+`_send_hdlc_buffer_state` and neighbours near 0x9e4b6) is still
+unwritten.
+
+`class1.h`'s long-standing note on `vmi_a`/`vmi_b` -- "receive-side for
+states 4..6, transmit-side for 12..13, which side is which is NOT
+settled" -- is UNCHANGED by this finding: this function proves WHICH
+FIELD each state range reads, not which physical direction (RX/TX) either
+field is wired to.
+
+`t_class1status.c`: every state 0..14 plus two out-of-range neighbours,
+`modem_status` both NULL and non-NULL (against the null dispatch slot
+only, `t_faxvmids.c`'s own "already proven safe" technique -- the real
+per-modulation `vxx_status` entries are still blocked this wave), and FOUR
+distinct role objects per case (`vmi_a`/`vmi_b` x ours/blob) so that the
+untouched field's framer staying byte-identical to its own pre-call
+original is proof the wrong field was not read, not just that both sides
+agree.
+
+## F10105. `FAX_delete` written, `struct fax_ctx` opened in a new `fax.h`, and the REAL call graph for the rest of `voice.c#3 +3` -- almost all of it blocked on `FAXVMI_create`/`FAXVMI_control`, not on Class 1 leaves
+
+Task brief for this wave: reconstruct `FAX_process`, `FAX_class1_command`,
+`FAX_create`, `FAX_delete` (`voice.c#3 +3` span), `fax_class1_create`,
+`fax_class1_command`, `fax_class1_status`, `_answer_tone_state` (`class1.c`)
+and `_init_receiver` (`class1rx.c`).  `tools/relocscan.py`/`tools/dis.py`
+against `ref/slmodemd/dsplibs.o` (never the decompiler) settled the REAL
+call graph first, per CLAUDE.md; it does not match the brief's hypothesis
+that Class 1's own leaves would be the blocker.
+
+**THE SPAN LABEL CONFIRMED.** `nm -S --size-sort` over `.text 0x1450..
+0x2121` shows, in order: `FAX_delete`(0x1450,172), `FAX_create`(0x1500,564),
+`FAX_class1_command`(0x1740,708), `FAX_process`(0x1a10,1809), then
+`RD_create`(0x2130) -- all four sit in `src/service/voice.c`, right after
+the already-written `VOICE_*`/`STRM_VCE_*` group and before the ring
+detector, confirming the brief's own hint that the span name is not the
+module name here in a different way than usual: these ARE genuinely FAX
+service entry points, just filed in `voice.c` because that is where the
+object put them.
+
+**ONLY THREE OF THE NINE ASSIGNED SYMBOLS ARE UNBLOCKED THIS WAVE**:
+`FAX_delete` (written, this finding), `fax_class1_status` (written, F10104),
+and `FAX_process` (clean call graph, deferred to its own pass for size --
+1,809 bytes with an 11-way jump table -- not for a blocker). The other six
+are BLOCKED, and every path bottoms out at the SAME two unwritten symbols,
+`FAXVMI_create` and `FAXVMI_control` -- `faxvmi.c`'s own closure, a
+DIFFERENT agent's territory this wave, never touched here per the brief.
+The full chain, from `tools/dis.py`'s own relocations:
+
+    fax_class1_create (0x92e20, 1532B)
+        -> FAXVMI_create x2                          [UNWRITTEN]
+        -> _cHDLCrx_init_from_idle (0x9d790, 226B)
+              -> FAXVMI_control                       [UNWRITTEN]
+        -> FPM_TONE_create x2                         (written)
+
+    fax_class1_command (0x93420, 615B)
+        -> _cHDLCrx_init_from_idle x2  -> FAXVMI_control      [UNWRITTEN]
+        -> _tx_scrambled_ones_init (0x9cf70, 193B)
+              -> _init_transmitter (0x94bf0, 1326B)
+                    -> FAXVMI_create, FAXVMI_control   [UNWRITTEN]
+        -> _rx_look_carrier_init (0x9cb00, 45B)
+              -> _init_receiver (0x94240, 1583B)
+                    -> FAXVMI_create, FAXVMI_control   [UNWRITTEN]
+        -> cHDLCtx_preamble_state_init (0x9e380, 193B)
+              -> FAXVMI_control                        [UNWRITTEN]
+        -> _hdlc_receive_state_init, _delete_data_tx_modem,
+           _delete_data_rx_modem                       (all written)
+
+    _init_receiver (0x94240, 1583B)
+        -> FAXVMI_create, FAXVMI_control, FAXVMI_delete(written) [2 unwritten]
+
+    _answer_tone_state (0x92d60, 94B)
+        -> cHDLCtx_preamble_state_init -> FAXVMI_control [UNWRITTEN]
+        -> FPM_TONE_generate                            (written)
+
+    FAX_create (0x1500, 564B)   -> fax_class1_create     [blocked above]
+    FAX_class1_command (0x1740, 708B) -> fax_class1_command [blocked above]
+
+So `fax_class1_create`, `_init_receiver` and `_answer_tone_state` (all
+three Group-2/3 targets besides `fax_class1_status`) are blocked
+DIRECTLY; `fax_class1_command` is blocked FOUR SEPARATE WAYS through its
+own leaf callees (`_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
+`_rx_look_carrier_init`, `cHDLCtx_preamble_state_init`), none of which
+belongs to another agent's assigned file (they are `class1tx.c`-span
+leaves) but every one of which is itself blocked on the same two
+`faxvmi.c` symbols -- so writing them would not unblock anything, only
+move the undefined reference one hop further out. `FAX_create` and
+`FAX_class1_command` (`voice.c`) are blocked transitively through
+`fax_class1_create`/`fax_class1_command`.  **Per CLAUDE.md's trap, none of
+these six is written this wave** -- a reference from `src/` to an unwritten
+blob symbol fails every test binary at link, not just the one function.
+
+**`FAX_delete` (0x001450, 172 bytes) is written**, the only one of the four
+`voice.c#3 +3` symbols whose full callee set was already reconstructed
+(`fax_class1_delete`, `RcFixed_Delete` x2, `sysdep_free`,
+`dsplibs_debug_printf`, `dsplibs_debug_level`). The object's own order:
+print `"fax: delete...\n"` (`.rodata.str1.1` 0x1be) when
+`dsplibs_debug_level > 1`, then unconditionally check-and-delete `rc_a`,
+`rc_b` and `class1` in that order (independent ifs, no early return),
+clear `class1`, free `ctx`. Written as the straight-line form; the
+object's own interleaving of the debug branch with the fallthrough chain
+is the compiler's, not a logic difference (traced instruction by
+instruction, both paths reach the same three checks in the same order).
+
+**`struct fax_ctx` opens `include/dsplib/fax.h`, a NEW header, separate
+from `struct voice_ctx` (`voice.h`)** despite both being reached from
+`voice.c`: they are two unrelated session objects for two unrelated
+entry-point families that merely share a translation unit, on the same
+footing `class1.h` vs `class1rx.h` already established for two different
+Class-1-adjacent structs. Three fields settled, all evidence class 2
+(typed by the callee that consumes them):
+
+  - `+0x004 class1` -- `struct fax_class1 *`, `fax_class1_delete`'s own
+    argument type.
+  - `+0x2010 rc_a` / `+0x2014 rc_b` -- two `struct rc *` (fixedrc.h),
+    typed by `RcFixed_Delete`'s own signature, checked and deleted in that
+    order.
+
+`FAX_create`'s own disassembly (read, not written) gives the allocation
+size -- `movl $0x28bc,(%esp)` ahead of `sysdep_malloc`, so `sizeof` is at
+least 0x28bc and `FAX_MODELLED_BYTES` (0x2018) is a bound, not a claim --
+and the first two arguments' stack positions, which match
+`VOICE_create(void *modem, unsigned int rate)`'s exactly; `FAX_create`'s
+own (unwritten) prototype in `fax.h` carries that shape on that evidence.
+
+**`t_faxdelete.c`, IN TWO HALVES, because `class1` and `rc_a`/`rc_b` are not
+observable the same way.** The `class1` field gets the full allocation-log
+treatment (`t_class1delete.c`'s own technique -- both sides build an
+identically shaped `fax_ctx` inside one `harness_alloc_reset()` window and
+the test compares `frees`/`live`/`bad_free`), across presence x three debug
+levels. `rc_a`/`rc_b` do NOT: `src/core/fixedrc.c`'s `RcFixed_Create`/
+`RcFixed_Delete` call plain `calloc`/`free`, not `sysdep_malloc`/
+`sysdep_free`, so neither side's traffic through them shows up in
+`harness_alloc` at all when `ours` calls them -- but `ref_RcFixed_Create`/
+`_Delete`, the BLOB's own compiled code, DOES route through the tracked
+`sysdep_malloc`/`sysdep_free`, so an `ours`-vs-`blob` frees comparison
+across a real handle shows 0 vs 2 for reasons entirely internal to
+`fixedrc.c`, already-merged code this pass does not touch. **THIS IS AN
+EXISTING PROPERTY OF `fixedrc.c`, REPORTED HERE AND NOT FIXED** -- it is
+outside this wave's three files, and CLAUDE.md's own register (`docs/
+method/compilers.md`) is the right place for whoever owns that TU to weigh
+whether it is a deviation worth recording. The `rc_a`/`rc_b` half of
+`t_faxdelete.c` therefore uses REAL `RcFixed_Create` handles (a fabricated
+pointer is unsafe: `RcFixed_Delete` dereferences `h->state` unconditionally
+on a non-NULL `h`, and `struct rc` is opaque outside `fixedrc.c`) and only
+proves the run completes with no bad free and no TRACKED leak (`ctx`
+itself) across all four presence combinations -- which still catches a
+skipped call, an early return, or a wrong pointer crash; it does not, and
+cannot without touching `fixedrc.c`, cross-check the exact free count for
+this half.
+
+**NOTHING HERE CONTRADICTS THE BRIEF'S OWN HYPOTHESIS ABOUT ORDERING** --
+Group 1 does call into Group 2, and Group 2 does reach toward Group 3 and
+`FAXVMI_*` -- it is the SEVERITY that was unmeasured: five of nine symbols
+share one two-symbol root cause, not five independent blockers.
+
+## F10106. `FAX_process` written: two ping-pong ring buffers, an eleven-way dispatch on `fax_class1_progress`'s own return, and a return-value accumulator that is the LAST nonzero forced status seen
+
+`.text` 0x001a10, 1,809 bytes, `src/service/voice.c`, deferred to its own
+pass this wave for size alone (F10105) -- every callee was already written.
+`struct fax_ctx` (`fax.h`) gains fourteen new named fields plus the
+`pad_000` -> `modem` rename; see that header's own struct banner for the
+field-by-field evidence, not repeated here.
+
+**THE SHAPE, in one paragraph.** Two SEPARATE double-buffered sample rings
+(`in_ring`/`out_ring`, `2*0xa0` shorts each), each with its own write/read
+cursor and a 0/`host_frame_samples` ping-pong half-selector toggled once per
+flush cycle. The outer loop batches the caller's `count` into
+`host_frame_samples`-sized chunks; the inner loop copies into `in_ring` at a
+rate bounded by BOTH rings' remaining room (so neither memcpy ever needs to
+wrap mid-copy), drains `out_ring` into the caller's `out` EVERY inner pass,
+and -- only once `in_pending` reaches a full frame -- runs one FLUSH: an
+optional `RcFixed_Resample` (`rc_a`) into a scratch buffer or (when
+`rc_a == NULL`) the ring position used directly, a poll of
+`modem_recv_from_tty` gated on two struct fields, the `fax_class1_progress`
+call itself, an optional `modem_send_to_tty`, and the eleven-way dispatch on
+`fax_class1_progress`'s own `FAX_CLASS1_*` return.
+
+**THE DISPATCH TABLE**, resolved by `tools/relocscan.py` against the raw
+`.rodata` bytes at the jump table's own reloc target (the `jmp
+*0x78(,%ebx,4)` at 0x1e19's in-place addend, an `R_386_32` REL relocation
+against the `.rodata` section symbol) and cross-checked against every
+case's own debug string (`.rodata.str1.1`/`.rodata.str1.4`, pulled directly
+with pyelftools and matched against the `<== R_386_32 .rodata.str1.N`
+annotations `tools/dis.py` already prints):
+
+    status                             forced   host_rx_enable
+    FAX_CLASS1_NO_MESSAGE          0    (same)   untouched
+    FAX_CLASS1_OK                   1    1        = 0
+    FAX_CLASS1_ERROR                2    2        = 0
+    FAX_CLASS1_OK_NO_CARRIER        3    1        = 0
+    FAX_CLASS1_ERROR_NO_CARRIER     4    2        = 0
+    FAX_CLASS1_ERROR_ON_HOOK        5    2        = 0
+    FAX_CLASS1_CONNECT              6    3        = 1
+    FAX_CLASS1_NO_CARRIER           7    4        = 0
+    FAX_CLASS1_NO_CARRIER_NO_MESSAGE 8   0        = 0
+    FAX_CLASS1_OTHER_CARRIER        9    0        = 0
+    FAX_CLASS1_ACCEPT_RATE         10    0        untouched
+    (ebx > 10, invalid)                  2        untouched, logs
+                                                    "fax: process: Unknown
+                                                    status %d\n"
+
+`FAX_CLASS1_NO_MESSAGE`'s own table entry lands mid-way into the shared
+"reload and continue" tail the out-of-range default case also falls into
+after forcing its own value -- which is why it has no dedicated code of its
+own, and a first pass at this table (transcribed by hand before the
+differential test existed) miscounted it as "leaves `forced` unmodified"
+without noticing `forced` and the INCOMING status share no variable in the
+object -- an early C draft used one `ebx` for both and failed 18 of 792
+checks on exactly cases 8 and 9 (`NO_CARRIER_NO_MESSAGE`/`OTHER_CARRIER`,
+the two cases with no `forced` write of their own) before the fix, which
+is exactly the class of mistake CLAUDE.md's "naming something wrongly is
+worse than leaving it padded" warns about, one level down: REUSING a
+variable wrongly is the same hazard applied to control flow instead of a
+name, and the differential test caught it immediately rather than shipping
+a plausible-looking wrong return value.
+
+**THE RETURN VALUE** is the LAST NONZERO forced status seen across the
+WHOLE call: `last_status` resets to 0 at the top of every OUTER iteration,
+is overwritten by each flush's own `forced` value only when that value is
+nonzero, and the function's own running `ret` only updates from
+`last_status` at an outer iteration's end when THAT iteration produced at
+least one nonzero flush -- so an iteration that never flushed, or whose
+flushes were all `NO_MESSAGE`, leaves the previous iteration's answer
+standing rather than resetting to 0.
+
+**A SAMPLE-COUNT MISMATCH IS A REAL, REACHABLE PATH, not a guard.** When
+the resample step's own output count (identity path: `host_frame_samples`
+itself; real path: `RcFixed_Resample`'s own `*out_count`) is not exactly
+`0xa0`, `FAX_process` logs "fax: process: samples count %d != %d\n" and
+carries a `-1` sentinel through to the return-value accumulator, WITHOUT
+calling `fax_class1_progress` at all for that flush -- reached in practice
+whenever `host_frame_samples != 0xa0` on the identity path, or whenever a
+real resampler's ratio doesn't map an `0xa0`-heavy input to an exactly-`0xa0`
+output, both exercised in `test/unit/t_faxprocess.c`.
+
+**`a2`/`a3` (the function's own second/third parameters) are `void *`, not
+`short *`.** `FAX_process` itself never dereferences either as a sample
+array -- only hands each to `sysdep_memcpy` with an explicit byte length --
+and the top-level per-outer-iteration pointer advance is UNSCALED against
+the same sample-granular value subtracted from `count`
+(`add %eax,0x94(%esp)`, no `*2`), which would be wrong for a `short *`
+walked by samples. Not resolved further than that; `fax.h`'s own struct
+banner and `FAX_process`'s prototype comment both flag it as a faithfully-
+reproduced property of the object rather than a modelling choice.
+
+**Differential test**: `test/unit/t_faxprocess.c`, 1,650 checks, four
+groups -- all eleven `FAX_CLASS1_*` codes plus one invalid (driven through
+`fax_class1_progress`'s own documented `delayed_status`/
+`delayed_status_countdown` mechanism against the ALREADY-TESTED
+`_idle_state` handler, `class1.h`'s step 6, rather than a real T.30
+session), outer/inner loop mechanics across seven sample counts and five
+host-read-request sizes (exercising both ring buffers' wraparound), a real
+`rc_a`/`rc_b` pair from `RcFixed_Check_Combination(9600, 8000)` (lands on
+the sample-count-mismatch path on both sides, since feeding exactly
+`0xa0` host-rate samples through a non-identity ratio essentially never
+resamples to exactly `0xa0` pump-rate samples out -- a real path, not a
+gap; see the mismatch paragraph above), and the identity path with
+`host_frame_samples != 0xa0` forcing that same mismatch path
+deterministically. `make one T=t_faxprocess` (GCC 14, host compiler) is
+green at all 1,650; `make period` (GCC 3.4.2) was not run by this pass --
+the parent session runs that gate.
+
+**NOT DRIVEN**: a real resampler configuration that maps a genuine
+`host_frame_samples`-sample input to exactly `0xa0` output samples end to
+end (finding the exact ratio/chunk-size pair that lands there is left for
+whoever wants to spend the effort; the mismatch path it would otherwise
+exercise is already covered as described above).
+
+**`tools/onedef.py`, `tools/bannercheck.py src/fax src/service` and
+`tools/refcheck.py`** all clean after this pass (295 types / 1 known
+duplicate unchanged; 273/273 banners agree; 13,061 references, 0 dangling).

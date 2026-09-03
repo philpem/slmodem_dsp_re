@@ -32,8 +32,23 @@
  * should try the faithful order and keep it if nothing above regresses.
  * Findings F8773 and F8835.
  *
- * The TU is now complete for voice: nothing in the `voice.c#1..#3` spans is
- * unwritten.
+ * FOUR MORE FOLLOW `STRM_VCE_GetFDSPEnvironmentalParams` IN THE OBJECT,
+ * `voice.c#3 +3`'s own symbols despite the `FAX_` names -- this is the fax
+ * SERVICE dispatcher's own entry points, not the Class 1 fax machine
+ * (`class1.c`/`class1rx.c`/`class1tx.c`), which they call into:
+ *
+ *     0x1450 FAX_delete          0x1740 FAX_class1_command (NOT written)
+ *     0x1500 FAX_create (NOT written)
+ *     0x1a10 FAX_process
+ *
+ * `FAX_delete` and `FAX_process` are written -- `FAX_create` and
+ * `FAX_class1_command` are blocked on `FAXVMI_create`/`FAXVMI_control`,
+ * still unwritten in `faxvmi.c` (another agent's closure).  See `fax.h` for
+ * `struct fax_ctx`, which is NOT `struct voice_ctx` despite sharing this TU,
+ * and docs/findings.md F10105.
+ *
+ * The TU is otherwise complete for voice: nothing in the `voice.c#1..#3`
+ * spans but these three is unwritten.
  *
  * WHAT THE DETECTOR IS.  A hysteretic zero-crossing counter run over the
  * incoming 16-bit samples.  `RD_create` picks a threshold from the codec type
@@ -61,7 +76,9 @@
 
 #include "dsplib/ringdet.h"
 #include "dsplib/vce.h"
+#include "dsplib/class1.h"
 #include "dsplib/debug.h"
+#include "dsplib/fax.h"
 #include "dsplib/fixedrc.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/modem_params.h"
@@ -1288,4 +1305,363 @@ STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
 		dsplibs_debug_printf(
 		    "voice: StrmVCE new: *psFarEchoDelay %d ,*psNearEchoDelay %d \n",
 		    *psFarEchoDelay, *psNearEchoDelay);
+}
+
+/*
+ * `.text` 0x001450, 172 bytes -- see `fax.h` for `struct fax_ctx` and why
+ * this sits in a separate header from `struct voice_ctx` despite living in
+ * the same TU.  `FAX_create` and `FAX_class1_command`, the object's own
+ * neighbours on either side of this group (0x001500 and 0x001740), are NOT
+ * written: both are blocked on `FAXVMI_create`/`FAXVMI_control`, several
+ * hops down their own call chains -- see docs/findings.md F10105.
+ *
+ * The object's own order: print "fax: delete...\n" (`.rodata.str1.1`
+ * 0x1be) when `dsplibs_debug_level > 1`, then unconditionally check and
+ * delete `rc_a`, `rc_b` and `class1` in that order, clear `class1`, and
+ * free `ctx`.  Every check is independent -- there is no early return, and
+ * the debug branch rejoins the same three checks rather than skipping any
+ * of them.
+ */
+void
+FAX_delete(struct fax_ctx *ctx)
+{
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("fax: delete...\n");
+
+	if (ctx->rc_a != NULL)
+		RcFixed_Delete(ctx->rc_a);
+	if (ctx->rc_b != NULL)
+		RcFixed_Delete(ctx->rc_b);
+	if (ctx->class1 != NULL)
+		fax_class1_delete(ctx->class1);
+
+	ctx->class1 = NULL;
+	sysdep_free(ctx);
+}
+
+/*
+ * `.text` 0x001a10, 1,809 bytes.  See `fax.h`'s struct banner for the
+ * field-by-field evidence on every `fax_ctx` member this function reaches;
+ * this banner is the CONTROL-FLOW account.
+ *
+ * OUTER LOOP: while `count > 0`, take `chunk = min(count, ctx->
+ * host_frame_samples)` samples' worth of `in`/`out`, process them (below),
+ * then `count -= chunk` and advance `in`/`out` by `chunk` -- UNSCALED, the
+ * same raw value subtracted from `count`, which is why `in`/`out` are
+ * `void *` (`fax.h`'s own note).
+ *
+ * INNER LOOP, once per outer chunk: copy up to `host_frame_samples` samples
+ * from the current `in` position into `in_ring` at `in_write_cursor`
+ * (`sysdep_memcpy`), bounded so the copy never runs past `in_ring`'s own
+ * end (`2 * host_frame_samples` samples) OR past `out_ring`'s end at the
+ * `out_read_cursor` THIS OUTER ITERATION STARTED WITH -- that snapshot is
+ * taken once per outer iteration and reused for every inner pass even
+ * though the live cursor advances each time, a faithfully-reproduced
+ * property of the object and not resolved further.  `in_pending` and
+ * `in_write_cursor` are updated to match.
+ *
+ * When `in_pending` reaches a full `host_frame_samples`, FLUSH:
+ *
+ *   - Resample `in_ring` (at `in_read_half`) into `rx_resampled` via
+ *     `RcFixed_Resample`/`rc_a` when `rc_a != NULL`; when NULL, use the
+ *     `in_ring` position directly as `rx` (identity: no rate conversion
+ *     needed) and pass `out_ring` (at `out_write_half`) directly as `tx`
+ *     instead of the `tx_pump_rate` scratch.
+ *   - If the resample's own output count didn't come back as exactly 0xa0
+ *     (only reachable when `rc_a != NULL` and `host_frame_samples != 0xa0`,
+ *     an edge configuration), log the mismatch and skip `fax_class1_
+ *     progress` entirely for this flush, carrying a -1 sentinel through to
+ *     the accumulator below.
+ *   - Otherwise: poll `modem_recv_from_tty` for up to `host_rx_want`
+ *     (clamped to 0x1000) bytes into `host_rx_buf`, gated on `host_rx_
+ *     enable` and `host_rx_want` both being nonzero; call `fax_class1_
+ *     progress`; store its `word8` result back into `host_rx_want`; and,
+ *     when `host_rx_enable` is set and `word7` came back positive, forward
+ *     `word7` bytes of `host_tx_buf` via `modem_send_to_tty`.  Dispatch the
+ *     call's own `FAX_CLASS1_*` return (table below) to get this flush's
+ *     forced status and any `host_rx_enable` transition.
+ *   - When `rc_b != NULL`, resample `tx_pump_rate` into the `out_ring`
+ *     position via `rc_b` (a no-op when `rc_a == NULL`, since `tx_pump_rate`
+ *     was never the target `fax_class1_progress` wrote into).
+ *   - A nonzero forced status becomes this OUTER iteration's `last_status`;
+ *     `in_pending -= host_frame_samples`, `in_read_half` and `out_
+ *     write_half` both toggle between 0 and `host_frame_samples`, and
+ *     `out_produced += host_frame_samples`.
+ *
+ * Then, EVERY inner pass regardless of whether it flushed: drain the same
+ * sample count back out of `out_ring` at `out_read_cursor` into the
+ * current `out` position, and advance `out_read_cursor`/`out_produced`/
+ * `out`/`count` to match.
+ *
+ * At each outer iteration's end, if that iteration's `last_status` is
+ * nonzero, it becomes the function's own running return value -- so the
+ * return is the LAST nonzero forced status seen across the whole call, and
+ * an iteration that never flushed (or whose flushes were all
+ * `FAX_CLASS1_NO_MESSAGE`) leaves the previous iteration's answer standing.
+ *
+ * THE DISPATCH TABLE, on `fax_class1_progress`'s own return (`class1.h`'s
+ * `FAX_CLASS1_*`).  Every debug string below is gated on
+ * `DSPLIB_DEBUG_ON()`; the two right columns are the flush's own forced
+ * status and its effect on `host_rx_enable`:
+ *
+ *     status                          forced   host_rx_enable
+ *     FAX_CLASS1_NO_MESSAGE       0    (same)   untouched
+ *     FAX_CLASS1_OK                1    1        = 0
+ *     FAX_CLASS1_ERROR             2    2        = 0
+ *     FAX_CLASS1_OK_NO_CARRIER     3    1        = 0
+ *     FAX_CLASS1_ERROR_NO_CARRIER  4    2        = 0
+ *     FAX_CLASS1_ERROR_ON_HOOK     5    2        = 0
+ *     FAX_CLASS1_CONNECT           6    3        = 1
+ *     FAX_CLASS1_NO_CARRIER        7    4        = 0
+ *     FAX_CLASS1_NO_CARRIER_NO_MESSAGE 8  0      = 0
+ *     FAX_CLASS1_OTHER_CARRIER     9    0        = 0
+ *     FAX_CLASS1_ACCEPT_RATE      10    0        untouched
+ *     (anything else)                   2        untouched, logs
+ *                                                 "fax: process: Unknown
+ *                                                 status %d\n"
+ *
+ * `FAX_CLASS1_NO_MESSAGE` prints nothing and changes nothing -- its own
+ * table entry lands mid-way into the shared "reload and continue" tail the
+ * out-of-range default case also falls into, which is why both share no
+ * dedicated code of their own.
+ */
+int
+FAX_process(struct fax_ctx *ctx, const void *in, void *out, int count)
+{
+	int ret;
+
+	ret = 0;
+	while (count > 0) {
+		int host_frame, chunk, remaining;
+		int out_read_cursor_snap;
+		const unsigned char *in_cur;
+		unsigned char *out_cur;
+		int last_status;
+
+		host_frame = ctx->host_frame_samples;
+		chunk = (count < host_frame) ? count : host_frame;
+
+		in_cur = (const unsigned char *)in;
+		out_cur = (unsigned char *)out;
+		remaining = chunk;
+		last_status = 0;
+		out_read_cursor_snap = ctx->out_read_cursor;
+
+		while (remaining > 0) {
+			int cap, copy, room;
+			short *in_ptr, *out_ptr;
+			short *rx_buf, *tx_buf;
+			int rx_count;
+			int ebx;
+
+			cap = 2 * host_frame;
+
+			copy = host_frame;
+			if (copy > remaining)
+				copy = remaining;
+			room = cap - ctx->in_write_cursor;
+			if (copy > room)
+				copy = room;
+			room = cap - out_read_cursor_snap;
+			if (copy > room)
+				copy = room;
+
+			sysdep_memcpy(&ctx->in_ring[ctx->in_write_cursor],
+			    in_cur, copy * (int)sizeof(short));
+			in_cur += copy * (int)sizeof(short);
+
+			ctx->in_pending += copy;
+			ctx->in_write_cursor =
+			    (ctx->in_write_cursor + copy) % cap;
+
+			if (ctx->in_pending >= host_frame) {
+				in_ptr = &ctx->in_ring[ctx->in_read_half];
+				out_ptr = &ctx->out_ring[ctx->out_write_half];
+
+				if (ctx->rc_a != NULL) {
+					int oc = 0xa0;
+
+					RcFixed_Resample(ctx->rc_a, in_ptr,
+					    host_frame, ctx->rx_resampled,
+					    &oc);
+					rx_buf = ctx->rx_resampled;
+					rx_count = oc;
+					tx_buf = ctx->tx_pump_rate;
+				} else {
+					rx_buf = in_ptr;
+					rx_count = host_frame;
+					tx_buf = out_ptr;
+				}
+
+				if (rx_count != 0xa0) {
+					if (DSPLIB_DEBUG_ON())
+						dsplibs_debug_printf(
+						    "fax: process: samples count %d != %d\n",
+						    rx_count, 0xa0);
+					ebx = -1;
+				} else {
+					int rxc, txc, w7, recv_n;
+
+					rxc = 0xa0;
+					txc = 0xa0;
+					w7 = 0;
+					recv_n = 0;
+
+					if (ctx->host_rx_enable != 0 &&
+					    ctx->host_rx_want != 0) {
+						int want = ctx->host_rx_want;
+
+						if (want > 0x1000)
+							want = 0x1000;
+						recv_n = modem_recv_from_tty(
+						    ctx->modem,
+						    ctx->host_rx_buf, want);
+						if (recv_n > 0 &&
+						    DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: snd: %d (%d)\n",
+							    recv_n,
+							    ctx->host_rx_want);
+					}
+
+					int status, forced;
+
+					status = fax_class1_progress(
+					    ctx->class1, rx_buf, tx_buf,
+					    (int)(long)ctx->host_tx_buf,
+					    (int)(long)ctx->host_rx_buf,
+					    &rxc, &txc, &w7, &recv_n);
+					ctx->host_rx_want = recv_n;
+
+					if (ctx->host_rx_enable != 0 &&
+					    w7 > 0) {
+						modem_send_to_tty(ctx->modem,
+						    ctx->host_tx_buf, w7);
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: rcv: %d (%d)\n",
+							    recv_n, w7);
+					}
+
+					forced = 0;
+					switch (status) {
+					case FAX_CLASS1_NO_MESSAGE:
+						break;
+					case FAX_CLASS1_OK:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_OK\n");
+						forced = 1;
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_ERROR:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_ERROR\n");
+						forced = 2;
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_OK_NO_CARRIER:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_OK_NO_CARRIER\n");
+						forced = 1;
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_ERROR_NO_CARRIER:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_ERROR_NO_CARRIER\n");
+						forced = 2;
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_ERROR_ON_HOOK:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_ERROR_ON_HOOK\n");
+						forced = 2;
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_CONNECT:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_CONNECT\n");
+						forced = 3;
+						ctx->host_rx_enable = 1;
+						break;
+					case FAX_CLASS1_NO_CARRIER:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_NO_CARRIER\n");
+						forced = 4;
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_NO_CARRIER_NO_MESSAGE:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_NO_CARRIER_NO_MESSAGE\n");
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_OTHER_CARRIER:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_OTHER_CARRIER\n");
+						ctx->host_rx_enable = 0;
+						break;
+					case FAX_CLASS1_ACCEPT_RATE:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: FAX_CLASS1_ACCEPT_RATE\n");
+						break;
+					default:
+						if (DSPLIB_DEBUG_ON())
+							dsplibs_debug_printf(
+							    "fax: process: Unknown status %d\n",
+							    status);
+						forced = 2;
+						break;
+					}
+					ebx = forced;
+				}
+
+				if (ctx->rc_b != NULL) {
+					int oc2 = 0xa0;
+
+					RcFixed_Resample(ctx->rc_b,
+					    ctx->tx_pump_rate, host_frame,
+					    out_ptr, &oc2);
+				}
+
+				if (ebx != 0)
+					last_status = ebx;
+
+				ctx->in_pending -= host_frame;
+				ctx->in_read_half =
+				    (ctx->in_read_half != 0) ? 0 : host_frame;
+				ctx->out_produced += host_frame;
+				ctx->out_write_half =
+				    (ctx->out_write_half != 0) ? 0 :
+				    host_frame;
+			}
+
+			sysdep_memcpy(out_cur,
+			    &ctx->out_ring[ctx->out_read_cursor],
+			    copy * (int)sizeof(short));
+			out_cur += copy * (int)sizeof(short);
+			ctx->out_produced -= copy;
+			ctx->out_read_cursor =
+			    (ctx->out_read_cursor + copy) % cap;
+
+			remaining -= copy;
+		}
+
+		if (last_status != 0)
+			ret = last_status;
+
+		count -= chunk;
+		in = (const unsigned char *)in + chunk;
+		out = (unsigned char *)out + chunk;
+	}
+
+	return ret;
 }

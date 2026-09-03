@@ -14,6 +14,7 @@
  *   _idle_state_init              .text 0x092dc0     3
  *   _idle_state                   .text 0x092dd0    72
  *   fax_class1_progress           .text 0x0936d0  1145
+ *   fax_class1_status             .text 0x0093b50   150
  *   fax_class1_delete             .text 0x0093bf0   347
  *   fax_class1_info               .text 0x093690    56
  *   fax_class1_GetConstalation    .text 0x093d50     3
@@ -25,9 +26,15 @@
  * progress` and `fax_class1_delete` are the first two symbols in this file
  * that ARE reached from elsewhere in the object (each other, and the
  * `_delete_data_*_modem` pair), landing once their own blockers cleared.
- * `fax_class1_status` remains out of scope: it calls the unreconstructed
- * `FAXVMI_status`, and this tree links no scaffold (F215).  See
- * docs/findings.md F8492.
+ * `fax_class1_status` landed the same way, once `FAXVMI_status` did
+ * (finding F10104) -- the note that it was out of scope, calling an
+ * unreconstructed callee with no link scaffold (F215), is history now, not
+ * a live blocker. `fax_class1_status` sits at the FILE's end, after
+ * `fax_class1_progress`, rather than between `fax_class1_progress` and
+ * `fax_class1_delete` as the object has it: this file already has
+ * `fax_class1_delete` before `fax_class1_progress`, out of address order,
+ * and reordering either pair without a period-compiler re-measurement in
+ * hand would risk the byte identity already banked. F10104.
  *
  * The spelling `_recieve_...` is the AUTHOR'S, from the symbol table; do
  * not fix it.
@@ -680,4 +687,53 @@ fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 	}
 
 	return ctx->status;
+}
+
+/*
+ * The object's own zeroed `struct faxvmi_status` template -- `.rodata`
+ * 0x0945c, 28 bytes, all-zero (`tabdump.py --sym FAXVMI_STS --type u32
+ * --count 7`).  Declared in `faxvmi.h` alongside `FAXVMI_CTL`; defined
+ * here because `fax_class1_status`, below, is its first writer.  See F10104.
+ */
+const struct faxvmi_status FAXVMI_STS = { 0 };
+
+/*
+ * `.text` 0x0093b50, 150 bytes.  Report the active VMI handle's status,
+ * for whichever of two directions `ctx->state` says is live.
+ *
+ * A local `struct faxvmi_status` starts as `FAXVMI_STS` (all zero) and has
+ * its `modem_status` overwritten with `modem_status` -- the SECOND
+ * argument's raw value, forwarded through unmodified, exactly the "IN:
+ * forwarded to vxx_status[slot] when non-NULL" contract `faxvmi.h`
+ * documents for that field.  The object copies only the template's other
+ * six dwords into the local before that overwrite (0x93b55..0x93b8b): the
+ * seventh would be dead on arrival, and GCC 3.4.2 at -O3 proves that and
+ * drops the copy, which is why this is written as a plain struct
+ * assignment rather than six hand-picked field copies.
+ *
+ * `ctx->state` selects the handle exactly as class1.h's own note on
+ * `vmi_a`/`vmi_b` already recorded, from THIS function's evidence: states
+ * 4..6 use `vmi_a`, states 12..13 use `vmi_b` (tested as
+ * `(unsigned)(state - 12) <= 1`, the same idiom `_set_modem_rate` uses for
+ * its own two-code ranges).  Anything else touches nothing and returns 0;
+ * either matching range calls `FAXVMI_status` once and returns 1 -- the
+ * object's own `mov $0x1,%edx` on both paths, never the call's own return
+ * value.
+ */
+int
+fax_class1_status(struct fax_class1 *ctx, void *modem_status)
+{
+	struct faxvmi_status st = FAXVMI_STS;
+
+	st.modem_status = modem_status;
+
+	if (ctx->state >= 4 && ctx->state <= 6) {
+		FAXVMI_status(ctx->vmi_a, &st);
+		return 1;
+	}
+	if ((unsigned)(ctx->state - 12) <= 1) {
+		FAXVMI_status(ctx->vmi_b, &st);
+		return 1;
+	}
+	return 0;
 }
