@@ -2840,6 +2840,50 @@ TxHdxDataV17(void *modem, unsigned short *in, short *out, short *budget)
 	return nsamples;
 }
 
+/*
+ * ---------------------------------------------------------------------------
+ * V17TX_control -- .text 0x0a1b30, 148 bytes.  See v17fax.h for the five
+ * effects, the request type's derivation and the `params` identity this
+ * function settles for `V17TX_status`.
+ */
+int
+V17TX_control(void *fp, const struct v17tx_control_req *req)
+{
+	void *priv;
+	void *block;
+	struct fpm_pps *pps;
+	short mode;
+
+	if (req == 0)
+		return 0;
+
+	priv = FIELD_PTR(fp, V17TX_OBJ_PARAMS);
+	block = FIELD_PTR(fp, V17TX_OBJ_FP);
+	mode = AT_S(priv, V17TXP_MODE);
+
+	pps = (struct fpm_pps *)(void *)FIELD(block, V17FP_PPS);
+	pps->cfg.scale = req->int_0008;
+	pps->cfg.scale = V17TX_PPS_SCALE[mode] * req->int_0008;
+
+	((struct v17tx_cfg *)fp)->int_0018 = req->int_0010;
+	((struct v17tx_cfg *)fp)->int_0008 = req->int_0004;
+
+	if (req->ctl0 & V17TXCTL_CTL0_BIT2)
+		AT_B(fp, 0x10) |= V17_STATUS_FLAG_04;	/* struct v17tx_cfg::
+							 * int_0010's low byte */
+
+	AT_I(priv, V17TXP_INT_0008) = 0;
+	if (req->ctl1 & V17TXCTL_CTL1_BIT4)
+		AT_I(priv, V17TXP_INT_0008) = 1;
+
+	if (req->ctl1 & V17TXCTL_CTL1_BIT1) {
+		V17TX_create(fp, fp);
+		return 1;
+	}
+
+	return 1;
+}
+
 /* --------------------------------------------------------------------- */
 
 int

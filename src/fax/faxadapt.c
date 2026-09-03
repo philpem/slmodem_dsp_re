@@ -157,9 +157,14 @@ v17rx_status(struct faxvmi_link *dp, struct v17_status *status)
 }
 
 /*
- * v17tx_control, 0x09c220.  BLOCKED: V17TX_control is not written.  Not
- * declared in faxadapt.h.
+ * v17tx_control, 0x09c220.  Same tail-call shape as v17rx_control --
+ * unblocked by `V17TX_control` landing (F10107).
  */
+int
+v17tx_control(struct faxvmi_link *dp, const struct v17tx_control_req *arg)
+{
+	return V17TX_control((void *)(long)dp->int_0014, arg);
+}
 
 /*
  * v17rx_control, 0x09c230.  A tail call and nothing else (0x09c230..0x09c23b):
@@ -520,9 +525,27 @@ v29rx_status(struct faxvmi_link *dp, void *status)
 }
 
 /*
- * v29tx_control, 0x09ca80, and v29rx_control, 0x09ca90.  BLOCKED: neither
- * V29TX_control nor V29RX_control is written.  Not declared in faxadapt.h.
+ * v29tx_control, 0x09ca80.  Same tail-call shape as v17rx_control --
+ * unblocked by `V29TX_control` landing (F10107).
  */
+int
+v29tx_control(struct faxvmi_link *dp, const struct v29tx_control_req *arg)
+{
+	return V29TX_control((void *)(long)dp->int_0014, arg);
+}
+
+/*
+ * v29rx_control, 0x09ca90.  Same tail-call shape as v17rx_control --
+ * `V29RX_control` itself landed in wave 9 (F10103); this forwarder's own
+ * "BLOCKED" comment was stale by the time this pass re-checked it, the same
+ * shelf-life failure `docs/remaining.md`'s wave-9 prose had for the two
+ * `*TX_create` constructors (F10107).
+ */
+int
+v29rx_control(struct faxvmi_link *dp, const struct v29rx_control_req *arg)
+{
+	return V29RX_control((void *)(long)dp->int_0014, arg);
+}
 
 /*
  * v29tx_message, 0x09caa0, and v29rx_message, 0x09cad0, are already written

@@ -145,6 +145,20 @@ extern int ref_v21rx_control(struct faxvmi_link *dp,
 extern int ref_v27tx_control(struct faxvmi_link *dp, void *req);
 extern int ref_v27rx_control(struct faxvmi_link *dp, void *req);
 
+/*
+ * The last three `*_control` adapters, unblocked by `V17TX_control`/
+ * `V29TX_control` landing (finding F10107).  `v29rx_control` was ALSO
+ * blocked in this file's own comments even though `V29RX_control` itself
+ * had already landed in wave 9 (F10103) -- the same stale-comment shape
+ * F10107 corrected in `faxadapt.h`.
+ */
+extern int ref_v17tx_control(struct faxvmi_link *dp,
+			     const struct v17tx_control_req *arg);
+extern int ref_v29tx_control(struct faxvmi_link *dp,
+			     const struct v29tx_control_req *arg);
+extern int ref_v29rx_control(struct faxvmi_link *dp,
+			     const struct v29rx_control_req *arg);
+
 /* The underlying constructors/destructors, both sides, for RX handles. */
 extern void *ref_V17RX_create(void *modem, const struct v17rx_cfg *params);
 extern void *ref_V21RX_create(void *modem, const struct v21rx_cfg *params);
@@ -1673,6 +1687,131 @@ run_control(void)
 
 		V27RX_delete((void *)(long)la.int_0014);
 		ref_V27RX_delete((void *)(long)lb.int_0014);
+	}
+	tag++;
+
+	/*
+	 * The last three, F10107: `v17tx_control`/`v29tx_control`/
+	 * `v29rx_control`.  Unlike the fixtures above the TX handle here comes
+	 * from a REAL `v??tx_create` -- unblocked in the same wave `run_tx_
+	 * create_v17`/`v29` already proved correct, so this file's own
+	 * "TX side has no create" intro comment no longer applies to these
+	 * three; a real handle is simpler and stronger than a hand-built one.
+	 */
+	{
+		struct v17tx_cfg c = V17TX_CFG;
+		struct v17tx_control_req arg;
+		struct faxvmi_link la, lb, la0, lb0;
+		struct v17_status sa, sb;
+		int reta, retb;
+
+		poison_link(&la, 0xc5);
+		poison_link(&lb, 0xc5);
+		v17tx_create(&la, &c);
+		ref_v17tx_create(&lb, &c);
+
+		memset(&arg, 0, sizeof arg);
+		arg.int_0004 = 4321;
+		arg.int_0008 = 5;
+		arg.int_0010 = 999;
+		arg.ctl0 = V17TXCTL_CTL0_BIT2;
+		arg.ctl1 = V17TXCTL_CTL1_BIT4;
+		la0 = la;
+		lb0 = lb;
+		reta = v17tx_control(&la, &arg);
+		retb = ref_v17tx_control(&lb, &arg);
+		diff_eq_int("v17tx_control: return (%ld)", reta, retb, tag);
+		diff_eq_int("v17tx_control: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v17tx_control: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+
+		memset(&sa, 0x5a, sizeof sa);
+		memset(&sb, 0x5a, sizeof sb);
+		v17tx_status(&la, &sa);
+		ref_v17tx_status(&lb, &sb);
+		diff_eq_int("v17tx_control: status readback identical (%ld)",
+			    memcmp(&sa, &sb, sizeof sa), 0, tag);
+
+		V17TX_delete((void *)(long)la.int_0014);
+		ref_V17TX_delete((void *)(long)lb.int_0014);
+	}
+	tag++;
+
+	{
+		struct v29tx_cfg c = V29TX_CFG;
+		struct v29tx_control_req arg;
+		struct faxvmi_link la, lb, la0, lb0;
+		unsigned char sa[64], sb[64];
+		int reta, retb;
+
+		poison_link(&la, 0xc6);
+		poison_link(&lb, 0xc6);
+		v29tx_create(&la, &c);
+		ref_v29tx_create(&lb, &c);
+
+		memset(&arg, 0, sizeof arg);
+		arg.int_0004 = 1234;
+		arg.int_0008 = 3;
+		arg.ctl0 = V29TXCTL_CTL0_BIT2;
+		arg.ctl1 = V29TXCTL_CTL1_BIT4;
+		la0 = la;
+		lb0 = lb;
+		reta = v29tx_control(&la, &arg);
+		retb = ref_v29tx_control(&lb, &arg);
+		diff_eq_int("v29tx_control: return (%ld)", reta, retb, tag);
+		diff_eq_int("v29tx_control: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v29tx_control: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+
+		memset(sa, 0x5a, sizeof sa);
+		memset(sb, 0x5a, sizeof sb);
+		v29tx_status(&la, sa);
+		ref_v29tx_status(&lb, sb);
+		diff_eq_int("v29tx_control: status readback identical (%ld)",
+			    memcmp(sa, sb, sizeof sa), 0, tag);
+
+		V29TX_delete((void *)(long)la.int_0014);
+		ref_V29TX_delete((void *)(long)lb.int_0014);
+	}
+	tag++;
+
+	{
+		struct v29rx_cfg c = V29RX_CFG;
+		struct v29rx_control_req arg;
+		struct faxvmi_link la, lb, la0, lb0;
+		unsigned char sa[64], sb[64];
+		int reta, retb;
+
+		poison_link(&la, 0xc7);
+		poison_link(&lb, 0xc7);
+		v29rx_create(&la, &c);
+		ref_v29rx_create(&lb, &c);
+
+		memset(&arg, 0, sizeof arg);
+		arg.int_0004 = 6789;
+		arg.ctl0 = V29RXCTL_CTL0_BIT3;
+		arg.ctl1 = V29RXCTL_CTL1_BIT4;
+		la0 = la;
+		lb0 = lb;
+		reta = v29rx_control(&la, &arg);
+		retb = ref_v29rx_control(&lb, &arg);
+		diff_eq_int("v29rx_control: return (%ld)", reta, retb, tag);
+		diff_eq_int("v29rx_control: dp unchanged, ours (%ld)",
+			    memcmp(&la, &la0, sizeof la), 0, tag);
+		diff_eq_int("v29rx_control: dp unchanged, ref (%ld)",
+			    memcmp(&lb, &lb0, sizeof lb), 0, tag);
+
+		memset(sa, 0x5a, sizeof sa);
+		memset(sb, 0x5a, sizeof sb);
+		v29rx_status(&la, sa);
+		ref_v29rx_status(&lb, sb);
+		diff_eq_int("v29rx_control: status readback identical (%ld)",
+			    memcmp(sa, sb, sizeof sa), 0, tag);
+
+		V29RX_delete((void *)(long)la.int_0014);
+		ref_V29RX_delete((void *)(long)lb.int_0014);
 	}
 	tag++;
 

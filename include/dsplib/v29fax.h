@@ -1244,6 +1244,69 @@ void SetEncoderV29(void *modem, short which);
 int V29TX_status(void *tx, void *status);
 
 /*
+ * ---------------------------------------------------------------------------
+ * V29TX_control -- .text 0x0a4fb0, 126 bytes.
+ *
+ * A NULL request does nothing and returns 0; anything else is applied and the
+ * function returns 1.  Five effects, none of them exclusive of the others --
+ * `V17TX_control`'s own shape, one level of indirection different
+ * (`V29TX_OBJ_PARAMS` = 0x20 supplies the rate at +0xc, matching
+ * `V29TXP_RATE`; `V29TX_OBJ_FP`/`V29_OBJ_TX` = 0x24 is the private block; the
+ * request's own `+0x08` plays `V17TX_control`'s `+0x08`, with NO `+0x10`
+ * field touched):
+ *
+ *   - the request's `+0x04` is copied straight into the HANDLE's own
+ *     `struct v29tx_cfg::int_0008` (neutral there; see v29data.h) -- the same
+ *     shape `V29RX_control`'s own `+0x04` -> `V29_OBJ_INT_0008` copy takes
+ *     (F10103);
+ *   - the request's `+0x08`, multiplied by `V29TX_PPS_SCALE[rate]`, becomes
+ *     the pulse shaper's `scale` (`V29FP_PPS`'s own `struct fpm_pps_cfg::
+ *     scale`, at `V29TX(fp)->pps.cfg.scale`, the private block's +0x6c) -- a
+ *     runtime GAIN OVERRIDE on top of the constructor's own per-rate table
+ *     lookup, the same role `V17TX_control` gives its own `+0x08`.  THE
+ *     OBJECT WRITES `scale` TWICE here too (`mov %eax,0x6c(%ecx)` at
+ *     0x0a4fda, then again at 0x0a4fe5 after the `imul`) -- the first write
+ *     is dead, the object's own, reproduced on the same D1032/F8878 ground as
+ *     `V17TX_control`'s;
+ *   - the request's FIRST control byte, bit 2, sets `V29TXS_10_BIT2` in the
+ *     handle's own `V29TXS_FLAGS_10` -- the identical bit `V29TX_status`
+ *     already reads back out (v29data.h), so this is a confirmed field and
+ *     not a new one;
+ *   - the request's SECOND control byte: bit 4 sets the parameter block's
+ *     `V29TXP_INT_0008` (0 or 1, from `setne`, matching `V29RX_control`'s own
+ *     style for the equivalent bit -- UNLIKE `V17TX_control`'s literal-store
+ *     version of the same field); bit 1, if set, calls `V29TX_create(fp,
+ *     fp)` -- BOTH ARGUMENTS THE SAME REGISTER (`mov %esi,0x4(%esp)` then
+ *     `mov %esi,(%esp)` at 0x0a5020/0x0a5024), the same self-referential
+ *     reinit shape `V29RX_control`/`V17TX_control` use.
+ *
+ * THE REQUEST TYPE IS NEW, the same footing as `V29RX_control`'s and
+ * `V17TX_control`'s: nothing else reconstructed reads this argument, so every
+ * field below is established from this function alone.  `+0x04` and `+0x08`
+ * are each a 32-bit load; the two control bytes at `+0x0c`/`+0x0d` are each
+ * `movzbl`.  Nothing here establishes what precedes `+0x04` or separates the
+ * fields from each other, so the gaps stay padding.  Finding F10107.
+ */
+struct v29tx_control_req {
+	unsigned char	pad_0000[0x04];
+	int		int_0004;	/* +0x04 -> handle's v29tx_cfg::int_0008 */
+	int		int_0008;	/* +0x08 scales the PPS shaper's gain    */
+	unsigned char	ctl0;		/* +0x0c */
+	unsigned char	ctl1;		/* +0x0d */
+};
+
+/* Bits of `ctl0`, named by value; see V29TX_control's own derivation. */
+#define V29TXCTL_CTL0_BIT2	(1 << 2)	/* -> V29TXS_10_BIT2 of the
+						   handle's own V29TXS_FLAGS_10,
+						   read back by V29TX_status  */
+
+/* Bits of `ctl1`, named by value. */
+#define V29TXCTL_CTL1_BIT1	(1 << 1)	/* re-runs V29TX_create        */
+#define V29TXCTL_CTL1_BIT4	(1 << 4)	/* -> V29TXP_INT_0008 (0 or 1) */
+
+int V29TX_control(void *fp, const struct v29tx_control_req *req);
+
+/*
  * The receiver's half of the same report, and NOT a mirror of it.
  *
  * It reads the RECEIVE handle rather than the transmit one, puts the bit rate

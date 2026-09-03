@@ -182,6 +182,12 @@ void GenEQTrnSequenceV29(void *modem, unsigned short *out, unsigned short n);
  * 60000 in `V29TX_CFG`, `v21tx_cfg`'s own value at the same offset -- named
  * on that precedent, not re-derived.  The rest are usage inference: nothing
  * reconstructed reads them back.
+ *
+ * `int_0008` GETS A SECOND WRITER: `V29TX_control` (`v29fax.h`) copies its
+ * own request's `+0x04` straight into this field, independently of the
+ * constructor's whole-struct copy -- the same shape `V29RX_control` gave
+ * `V29_OBJ_INT_0008` (F10103).  Still nothing reconstructed reads it back.
+ * Finding F10107.
  */
 struct v29tx_cfg {
 	short	protocol;	/* +0x00  0                                  */

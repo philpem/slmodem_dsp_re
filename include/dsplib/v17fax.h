@@ -177,6 +177,12 @@ struct v17_status {
  * The one bit of `params + 0x10` that reaches `flags`.  Named by its VALUE per
  * CLAUDE.md; what it INDICATES is not established, and neither `v22_status`
  * nor `v32_status` names their equivalent either.
+ *
+ * `params` IS THE TOP-LEVEL TX HANDLE (see the note above `V17TX_status`'s own
+ * declaration, settled by `V17TX_control`), so this is the same bit
+ * `V17TX_control`'s own `ctl0` bit 2 sets in `struct v17tx_cfg::int_0010`'s
+ * low byte -- a writer for a bit this header had previously recorded only as
+ * read.  Finding F10107.
  */
 #define V17_STATUS_FLAG_04	0x04
 
@@ -489,18 +495,37 @@ struct v17_status {
  * because V.17's config carries one more dword than V.29's (`int_0010`,
  * below, which nothing traced reads at all).
  *
- * `short_0004`, `short_0006` and `int_0008`/`int_000c`/`int_0010` are copied
- * in and never read back by anything in this closure -- neutral, the same
- * ground `V29TX_CFG`'s own untouched fields stand on.
+ * `short_0004`, `short_0006` and `int_000c` are copied in and never read back
+ * by anything in this closure -- neutral, the same ground `V29TX_CFG`'s own
+ * untouched fields stand on.
+ *
+ * `int_0008` GETS A SECOND WRITER: `V17TX_control` (v17tx_control_req above)
+ * copies its own request's `+0x04` straight into this field, independently
+ * of the constructor's whole-struct copy -- the same shape `V29RX_control`
+ * gave `V29_OBJ_INT_0008` (F10103).  Still nothing reconstructed reads it
+ * back, so it stays neutral in that sense; it is not neutral in the sense of
+ * "only ever written once".  Finding F10107.
+ *
+ * `int_0010` IS READ, AT BYTE GRANULARITY, BY `V17TX_status` -- `p[0x10] &
+ * V17_STATUS_FLAG_04` above, not a full 32-bit read -- and gets an
+ * independent WRITER of that same bit from `V17TX_control`'s own `ctl0` bit
+ * 2.  The "copied, never read here" comment this field carried before
+ * `V17TX_control` was written was about THIS function's own closure only,
+ * and did not cross-reference `V17_STATUS_FLAG_04` above; corrected here
+ * rather than silently, per this file's own convention for a second writer.
+ * Finding F10107.
  */
 struct v17tx_cfg {
 	short		protocol;	/* +0x00 <- V17TX_status's own read  */
 	short		bitrate;	/* +0x02 <- V17TX_status's own read  */
 	short		short_0004;	/* +0x04 copied, never read here     */
 	short		short_0006;	/* +0x06 copied, never read here     */
-	int		int_0008;	/* +0x08 copied, never read here     */
+	int		int_0008;	/* +0x08 <- V17TX_control's own +0x04;
+					 * never read back                   */
 	int		int_000c;	/* +0x0c copied, never read here     */
-	int		int_0010;	/* +0x10 copied, never read here --
+	int		int_0010;	/* +0x10 bit 2 <-> V17_STATUS_FLAG_04,
+					 * V17TX_status's own read and
+					 * V17TX_control's own ctl0 bit 2 --
 					 * the dword V.29's own cfg lacks    */
 	int		int_0014;	/* +0x14 the FIFO's size factor      */
 	int		int_0018;	/* +0x18 -> V17TXP_INT_000C          */
@@ -1665,6 +1690,88 @@ void SetEncoderV17(void *modem, short which, short arg);
  * is deviation D1032, and three sibling functions do the same thing.
  */
 int V17TX_status(void *params, struct v17_status *status);
+
+/*
+ * `V17TX_control` (below) SETTLES WHAT THE NOTE ABOVE LEFT OPEN: `params` IS
+ * THE TOP-LEVEL TX HANDLE, THE SAME OBJECT `V17TX_create`/`V17TX_control`
+ * TAKE AS THEIR OWN FIRST ARGUMENT -- neither `V17TX_OBJ_FP`'s private block
+ * nor `V17TX_OBJ_PARAMS`'s parameter block, the two candidates the note above
+ * left undecided.  `V17TX_control` writes the SAME FOUR OFFSETS this function
+ * reads, directly on its own first argument and not through either of those
+ * two pointers (both of which it also dereferences, separately, from that
+ * same argument): +0x00/+0x02 are `struct v17tx_cfg::protocol`/`::bitrate`,
+ * already named "V17TX_status's own read" at that struct's own field
+ * comments below; +0x10's bit 2 is the same `V17_STATUS_FLAG_04` this
+ * function reads out, set here by `V17TX_control`'s own `ctl0` bit 2; +0x18
+ * is `struct v17tx_cfg::int_0018`, written here from `V17TX_control`'s own
+ * `int_0010` request field.  Finding F10107.
+ */
+
+/*
+ * ---------------------------------------------------------------------------
+ * V17TX_control -- .text 0x0a1b30, 148 bytes.
+ *
+ * A NULL request does nothing and returns 0; anything else is applied and the
+ * function returns 1.  Five effects, none of them exclusive of the others:
+ *
+ *   - the request's `+0x04` is copied straight into the HANDLE's own
+ *     `struct v17tx_cfg::int_0008` (neutral there; see v17data.h) -- the same
+ *     shape `V29RX_control`'s own `+0x04` -> `V29_OBJ_INT_0008` copy takes
+ *     (F10103);
+ *   - the request's `+0x08`, multiplied by `V17TX_PPS_SCALE[mode]` (the
+ *     transmit rate index `V17TX_create` derives, read back here from the
+ *     parameter block's own `V17TXP_MODE`), becomes the pulse shaper's
+ *     `scale` (`V17FP_PPS`'s own `struct fpm_pps_cfg::scale`, at the private
+ *     block's +0x50) -- a runtime GAIN OVERRIDE on top of the constructor's
+ *     own per-rate table lookup.  THE OBJECT WRITES `scale` TWICE, the
+ *     caller's raw `+0x08` first and the scaled product second (`mov
+ *     %eax,0x50(%ecx)` at 0x0a1b5a, then again at 0x0a1b6b after the `imul`)
+ *     -- the first write is dead, the object's own, and reproduced rather
+ *     than simplified away, the same "aliasing keeps a provably-dead store"
+ *     shape D1032/F8878 record for the two sibling `*TX_status` functions;
+ *   - the request's `+0x10` is copied straight into the HANDLE's own
+ *     `struct v17tx_cfg::int_0018` -- the SAME field `V17TX_create` reads
+ *     back into `V17TXP_INT_000C` on (re)initialisation, so setting it here
+ *     and then triggering the reinit arm below is how a caller changes it;
+ *   - the request's FIRST control byte, bit 2, sets `V17_STATUS_FLAG_04` in
+ *     the handle's own +0x10 -- the identical bit `V17TX_status` reads back
+ *     out as `flags` bit 2, corroborating the field identity settled above;
+ *   - the request's SECOND control byte: bit 4 sets the parameter block's
+ *     `V17TXP_INT_0008` (0 or 1, from a LITERAL store gated on the bit --
+ *     `movl $0x0,0x8(%esi)` then conditionally `movl $0x1,0x8(%esi)`, not
+ *     `setne`, unlike `V29TX_control`'s own version of this same field);
+ *     bit 1, if set, calls `V17TX_create(fp, fp)` -- BOTH ARGUMENTS THE SAME
+ *     REGISTER (`mov %edi,0x4(%esp)` then `mov %edi,(%esp)` at
+ *     0x0a1bb6/0x0a1bba), the same self-referential reinit shape
+ *     `V29RX_control`/`V29TX_control` use.
+ *
+ * THE REQUEST TYPE IS NEW, the same footing as `V29RX_control`'s: nothing
+ * else reconstructed reads this argument, so every field below is
+ * established from this function alone.  `+0x04`, `+0x08` and `+0x10` are
+ * each a 32-bit load; the two control bytes at `+0x0c`/`+0x0d` are each
+ * `movzbl`.  Nothing here establishes what precedes `+0x04` or separates the
+ * fields from each other, so the gaps stay padding.  Finding F10107.
+ */
+struct v17tx_control_req {
+	unsigned char	pad_0000[0x04];
+	int		int_0004;	/* +0x04 -> handle's v17tx_cfg::int_0008 */
+	int		int_0008;	/* +0x08 scales the PPS shaper's gain    */
+	unsigned char	ctl0;		/* +0x0c */
+	unsigned char	ctl1;		/* +0x0d */
+	unsigned char	pad_000e[0x02];
+	int		int_0010;	/* +0x10 -> handle's v17tx_cfg::int_0018 */
+};
+
+/* Bits of `ctl0`, named by value; see V17TX_control's own derivation. */
+#define V17TXCTL_CTL0_BIT2	(1 << 2)	/* -> V17_STATUS_FLAG_04 of the
+						   handle's own +0x10, read back
+						   by V17TX_status            */
+
+/* Bits of `ctl1`, named by value. */
+#define V17TXCTL_CTL1_BIT1	(1 << 1)	/* re-runs V17TX_create        */
+#define V17TXCTL_CTL1_BIT4	(1 << 4)	/* -> V17TXP_INT_0008 (0 or 1) */
+
+int V17TX_control(void *fp, const struct v17tx_control_req *req);
 
 /*
  * Report whether a carrier is present.
