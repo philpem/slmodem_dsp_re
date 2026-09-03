@@ -5,17 +5,17 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured post-wave-7-merge, 2026-09-03:
+Measured post-wave-8-merge, 2026-09-03:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 94.8%  (696,705 bytes / 1,792 symbols)   was 76.6% / 1,296
-remaining  22,491 bytes /   57 symbols
-  fax only              54 sym   21,297 B   <-- 95% of what remains
+translated 95.3%  (700,276 bytes / 1,811 symbols)   was 76.6% / 1,296
+remaining  17,726 bytes /   38 symbols (35 fax + 3 leaves)
+  fax only              35 sym   17,726 B   <-- 96% of what remains
   no-entry-point leaves  3 sym    1,194 B
 ```
 
-Merged master period-green at **355 passed, 0 failed**, onedef/banners/check64
+Merged master period-green at **360 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
@@ -717,3 +717,57 @@ wave (need counts have been falling: 122→85 and 125→88 over waves 5-6) as
 their hundred-plus-symbol dependency trees get cleared from underneath by
 other work landing. Expect them to become tractable within one or two more
 waves rather than needing a dedicated assault.
+
+## Wave 8 — faxadapt.c's last ready forwarders, class1.c quick wins, `fax_class1_progress` closed on the third try
+
+Two branches landed, gated individually then on the merged tree:
+
+| agent | delivered |
+|---|---|
+| adapter forwarders (`faxadapt.c`) | 9 symbols / 744 bytes: `v21tx_create`, `v27tx_create`, `v29tx_create` (177/229/196 B), `v27tx_process` (62 B), and five `*_control` one-line forwarders (`v17rx`, `v21tx`, `v21rx`, `v27tx`, `v27rx`, 16 B each). Confirmed by address evidence that `init_vmi_v17tx`/`v27tx`/`v29tx` belong to `class1tx.c`'s span (0x94870-0xac960), not this TU's or `class1rx.c`'s — correctly left for the other agent |
+| class1 quick wins | 10 symbols: `_put_silence` (28 B), `_delete_data_rx_modem`/`_delete_data_tx_modem` (149/117 B), `fax_class1_progress` (1,145 B — **declined twice before, F9802; closed this wave** once the per-modulation quality-latch chain resolved through the now-complete V17/V27/V29 RX object headers), `fax_class1_delete` (347 B), `init_vmi_v17tx`/`v27tx`/`v29tx` (address-confirmed above), `_t30_silence_before_tx_state` (194 B), `_tx_silence_before_scrm_ones` (111 B). Two real bugs caught by the differential test rather than by re-reading bytes: a hardcoded `cfg->int_0014` in the TX VMI constructors (F10054) and a mis-tracked register in the silence-before-tx-state return computation (F10056) |
+
+Both gated on `make period` alone (355/0, then 360/0 on the merged tree — the
++5 matches the wave's five new test files exactly). Structural gates
+(`onedef`, `bannercheck`, `refcheck`) clean throughout.
+
+**A `docs/coverage.md` partial-build artefact recurred and was caught before
+merge (F3055/F3110's known shape).** The adapter branch's own `make coverage`
+ran against a tree with only 3 of 357 test binaries built, committing
+`tested 0.9%, 8 of 1792` in place of the true ~99.9%. Diagnosed by comparing
+the branch's committed figure against master's, confirmed by counting
+`build/test`'s entries (3, not ~355), and reverted before gating — the same
+discipline every prior wave has needed here. `translated`, unlike `tested`,
+does not depend on the test tree being complete and read correctly on both
+branches, which is what made the artefact obvious rather than merely
+suspicious.
+
+**Both waves' foreground-wait stall recurred once, exactly as documented,
+and self-corrected once resumed.** The class1 agent parked itself waiting on
+a background monitor for its own test suite with no live children to
+re-invoke it; one `SendMessage` telling it to drive the build itself in the
+foreground was enough, and it also correctly declined to run `make period`
+itself (no docker group membership in its shell) rather than silently skip
+the gate or fake a result — flagged the conflict with the resume instruction
+instead of picking one side unasked.
+
+**The FAXVMI dispatch-table agent from earlier in this wave never committed
+anything** — its worktree was clean, 6 commits behind master, and was
+removed with nothing to merge. Its banked address evidence
+(`.rodata` 0x9520 `vxx_process`, 0x9560 `vxx_control`, 0x9620 `vxx_create`,
+all three sharing the same 13-slot order: `null_*` x5, then `v21tx`,
+`v21rx`, `v27tx`, `v27rx`, `v29tx`, `v29rx`, `v17tx`, `v17rx`) is now
+directly actionable: with this wave's landings, **`vxx_process` and
+`vxx_create` have all 8 real slots present** (`v17tx_control` is the only
+`*_control` still missing among the eight, and neither table needs
+`*_control`), so both tables and `FAXVMI_create`/`FAXVMI_process` are
+unblocked. `vxx_control` still needs `v17tx_control`, `v29tx_control` and
+`v29rx_control`, none of which exist yet.
+
+### What's left, measured
+
+Fax is **35 symbols / 17,726 bytes** — 96% of everything remaining. Next
+wave: the two now-unblocked FAXVMI dispatch tables plus `FAXVMI_create`/
+`FAXVMI_process`, the three missing `*_control` forwarders unblocking
+`vxx_control`/`FAXVMI_control`, and `_hdlc_emulate_receive_state` (452 B,
+flagged READY in `class1tx.c` by this wave's agent but left for time reasons).
