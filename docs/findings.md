@@ -110341,3 +110341,293 @@ the twelve debug strings) are in `src/fax/v17.c`'s own comment on
 `TxNextStateV17`, and the state numbering, the handler-sharing and the
 status constants are in `include/dsplib/v17fax.h`. See F9910 for the batch
 this landed with. (2026-09-02)
+
+## F10050. `_put_silence` written: the TU's first global, a 28-byte fill loop, and its return value is the loop counter, not the argument
+
+`.text` 0x092b70, 28 bytes -- `class1.c`'s first global, immediately before
+`_send_silence_state_init` (F1410's method anchor). It was declined by a
+CID-area agent several waves ago as out of scope (correctly: `src/fax/**`
+was fenced from that agent), and this wave is the first with `src/fax/**`
+open and `_put_silence` itself blocking nothing but two `class1tx.c` state
+inits (`_t30_silence_before_tx_state`, `_tx_silence_before_scrm_ones`) plus
+roughly a dozen more handlers alongside `FAXVMI_process` and
+`v27tx_process`/`vxx_process`.
+
+`dis.py` over 0x92b70..0x92b8b is one loop: `ecx` = the first argument
+(`buf`), `eax` = 0 (the loop counter), `edx` = the second argument
+(`count`), then `movw $0,(%ecx,%eax,2); inc %eax; cmp %edx,%eax; jl`. `eax`
+is never reloaded from `count` before `ret`, so the object returns
+WHATEVER THE COUNTER REACHED -- `count` on a normal exit, but 0 (not a
+negative `count`) when the loop never ran because `count` was not
+positive. Written as `int i; for (i = 0; i < count; i++) buf[i] = 0; return
+i;` for exactly that reason -- `return count;` would diverge on a
+negative-or-zero argument that the differential test does not currently
+drive but that a future caller might. No caller reconstructed so far reads
+the return value.
+
+## F10051. `ctx->0x1254` is a T.30 modem RATE CODE, in `_set_modem_rate`'s own code space -- `fax_class1_progress`'s central blocker is settled
+
+Finding F9802 (referenced by this wave's brief; not independently
+re-verified beyond what is quoted there) declined `fax_class1_progress`
+(`class1.c`, 1,145 bytes) on `ctx->0x1254`'s meaning being unclear. `dis.py`
+over 0x9938f0..0x93957 (and the two sibling arms at 0x93a64 and 0x93938)
+settles it: the function loads `ebx = ctx->0x1254` as a 32-bit value and
+compares it, in sequence, against 0x91, 0x79, 0x61, 0x49 (one arm), 0x60,
+0x48 (a second) and 0x30, 0x18 (a third) -- EXACTLY `_set_modem_rate`'s own
+eight recognised codes (`class1.c`'s existing, already-committed
+`_set_modem_rate`), in the same grouping (the four V.17 rate pairs, the two
+V.29 codes, the two V.27ter codes). `ctx->0x1254` is therefore the
+negotiated T.30 rate code, not a fax-service-level struct of any kind --
+the brief's feared shape does not occur. Named `modem_rate_code` where
+`fax_class1_progress` is eventually written; `class1.h`'s `pad_1254[0x20]`
+is not touched by this finding (the function reads more of that padded
+region than just this one field, and only this one field's role is
+established so far).
+
+## F10052. `fax_class1_progress`'s per-modulation chain is ALSO settled: `V17RX_OBJ_STATE`, `V29_OBJ_RX`, `V27_OBJ_RX` and their own already-named quality-latch fields
+
+Continuing F10051: each of the three rate-code arms, when
+`ctx->0x1244 == 1`, walks `ctx->0x1208` (a `struct faxvmi *`, F10053) ->
+`link` (+0x28, `struct faxvmi_link *`) -> `int_0014` (+0x14, "the wrapped
+vxx handle" per `faxadapt.h`'s own comment on the identical field) to reach
+the ACTIVE data modem's instance, then reads a pointer at a modulation-
+specific offset of THAT instance and tests/clears a `short` at a further
+offset of what it points to:
+
+  V.17 (codes 0x91/0x79/0x61/0x49): `*(modem + 0x60)`, then `+0x4fb2`
+  V.29 (codes 0x60/0x48):           `*(modem + 0x50)`, then `+0x4f62`
+  V.27ter (codes 0x30/0x18):        `*(modem + 0x54)`, then `+0x4f4e`
+
+All six offsets are ALREADY NAMED in the three modulations' own headers,
+independently of this batch: `V17RX_OBJ_STATE` (0x60, "the demodulator
+state ... DemodDataV17 reaches +0x4fa8") and `V17RXS_SHORT_4FB2` (0x4fb2,
+"latched to 1 if the average has NOT stayed above" a threshold);
+`V29_OBJ_RX` (0x50) and `V29RX_SHORT_4F62` (0x4f62, "set to 1 if it did NOT
+come out higher"); `V27_OBJ_RX` (0x54) and `V27RX_Q_FLAG` (0x4f4e, "set if
+it did NOT exceed" a limit). All three are the same shape: a receive
+quality/error-average verdict, latched nonzero when the block did not meet
+its threshold. `fax_class1_progress`, on finding the latch set, clears it
+and sets `ctx->status = FAX_CLASS1_ACCEPT_RATE` (10) -- consistent with a
+rate-fallback signal to the host. The brief's central open question (are
+V.17/V.21/V.27/V.29's structs settled enough to use) is answered yes for
+all three modulations this function touches; `fax_class1_progress` itself
+is NOT written by this batch (see the parent report for why -- it is a
+large, multi-branch function better handed to a fresh session with this
+finding as its starting point, per CLAUDE.md's "delegate a large function"
+guidance, not a further decline).
+
+## F10053. `struct fax_class1` gains a settled field at +0x1214 (`modem_vmi`) and two type upgrades (`vmi_a`/`vmi_b` to `struct faxvmi *`, `f1288` to `struct fax_fifo *`), all from `_delete_data_rx_modem`/`_delete_data_tx_modem`
+
+`dis.py` over 0x0941a0..0x094235 (`_delete_data_rx_modem`) and
+0x094b70..0x094be4 (`_delete_data_tx_modem`) types three fields by their own
+calls (CLAUDE.md's evidence-order rule, class 2):
+
+  - `ctx->0x1214` is read, and freed with `sysdep_free`, as a
+    `struct faxvmi_cfg *` in BOTH functions -- the CURRENT data modem's VMI
+    config block, one field reused across directions because Class 1 fax is
+    half-duplex. `_delete_data_rx_modem` additionally frees, for a V.17
+    receiver only (`slot == VMI_SLOT_V17RX`), three sub-allocations of the
+    `struct v17rx_cfg` the block owns (`ptr_0020`, `ptr_001c`, `ptr_0018`,
+    in that order) before freeing the block itself and its config; every
+    reload of `ctx->0x1214`/`vmi->modem_cfg` between frees is the object's
+    own conservative re-read across an opaque `sysdep_free` call, not
+    cached in `src/`.
+  - `ctx->0x1208` (already named `vmi_b`) is handed directly to
+    `FAXVMI_delete(struct faxvmi *)` in both functions, typing it
+    `struct faxvmi *` rather than `void *`. `ctx->0x1204` (`vmi_a`) is typed
+    the same way on the strength of class1.h's own existing comment calling
+    the pair "two handles" of the same kind -- not independently confirmed
+    by a call in this batch.
+  - `ctx->0x1288` (already named `f1288`) is handed to
+    `FIFO_delete(struct fax_fifo *)` in `_delete_data_tx_modem`, guarded on
+    non-null (`_delete_data_rx_modem` never touches it).
+
+The field ordering that falls out: `+0x120c` pad shrinks from 0x10 to 8
+bytes, `modem_vmi` occupies +0x1214..+0x1217, and a new `pad_1218[4]` covers
++0x1218..+0x121b before `state` at +0x121c -- unchanged.
+
+## F10054. `init_vmi_v17tx`/`init_vmi_v27tx`/`init_vmi_v29tx` belong in `class1tx.c`, by address, and are `int`-returning (not `void`) unlike their RX siblings
+
+`nm -S` places all three (0x094870, 0x094970, 0x094a70) immediately AFTER
+`class1rx.c`'s `_init_receiver` (0x094240, ending 0x09486f) and immediately
+BEFORE `_delete_data_tx_modem` (0x094b70) and `_init_transmitter`
+(0x094bf0) -- i.e. one span later than the RX trio + `_delete_data_rx_modem`
++ `_init_receiver` run, not interleaved with it. `readyqueue.py --span
+'class1tx.c'` already filed all three there before this batch touched
+anything, on the same address evidence a concurrent agent (owning
+`faxadapt.c`) was independently checking; this batch's own `nm -S` run
+confirms it and no conflicting claim was found.
+
+Each is the RX trio's shape (allocate a config of exactly its table's size,
+announce at `DSPLIB_DEBUG_VERBOSE()`, copy the table over the allocation,
+override `bitrate` and the caller's fourth argument, copy `FAXVMI_CFG` over
+the caller's VMI and override `short_0008`/`short_000a`/`slot`) plus two
+departures: the fourth argument is ALSO stored into the config's own last
+field (`int_001c` for V.17/V.27ter, `int_0018` for V.29 -- one field
+earlier, per `v27fax.h`'s own comment on why V.29's config is one dword
+shorter), through the `(void *)(long)` idiom `faxadapt.h` already names for
+the same role elsewhere; and each function RELOADS `cfg->bitrate` into
+`%eax` immediately before `ret` -- dead under `-O3` unless the C source has
+an explicit `return`, so all three are `int`, not `void` like the RX trio.
+`init_vmi_v17tx` additionally hardcodes `cfg->int_0018 = 0` rather than
+reading the table's own copy there at all (V.27ter's and V.29's
+constructors both take the table's value unmodified at the matching
+offset).
+
+**A THIRD DEPARTURE, MISSED ON THE FIRST PASS OVER THE DISASSEMBLY AND
+CAUGHT BY THE DIFFERENTIAL TEST, NOT ASSUMED ABSENT.** All three ALSO
+override `cfg->int_0014`'s low 16 bits with a literal `movw` after the
+table copy: `0x1` for V.17, `0x2` for V.27ter and V.29. `t_class1txvmi.c`'s
+first run disagreed with the blob on exactly this field for V.27ter and
+V.29 (got 1, blob 2) while V.17 passed -- because V.17's table default is
+already 1, so its override is invisible to a value check and only V.27ter's
+and V.29's (both defaulting to 1 per `tabdump.py` read directly off the
+blob's `.data`, independent of either reconstructed table) expose the
+literal 2. Reproduced as a plain `cfg->int_0014 = <value>;` assignment
+after the table copy -- behaviourally identical to the object's narrower
+16-bit store, since the upper half is already zero from the dword copy.
+This is the exact shape CLAUDE.md warns about for `fax_class1_progress`
+(F10052): a plausible-looking value that happens to be right for one of
+three symmetric cases and wrong for the other two, caught only because the
+test compared against the blob rather than asserting the derived value.
+
+Slots planted: V.17 TX 0x0b (11), V.29 TX 0x09 (9), V.27ter TX 0x07 (7) --
+all three match `faxvmi.h`'s independently-derived slot map
+(`5 v21tx, 6 v21rx, 7 v27tx, 8 v27rx, 9 v29tx, 10 v29rx, 11 v17tx, 12
+v17rx`) exactly.
+
+## F10055. `fax_class1_delete` written: eight fields torn down in the object's own order, four of them new, and `f1244` explains HOW `modem_vmi` is reused across directions
+
+`.text` 0x0093bf0, 347 bytes, READY the moment `_delete_data_rx_modem` and
+`_delete_data_tx_modem` (F10053) landed. `dis.py` over the whole range
+establishes four fields `class1.h` did not have before this batch:
+
+  - `ctx->0x1200` (`vmi_c`) -- a THIRD `struct faxvmi *`, torn down by its
+    own `FAXVMI_delete` call, same typing evidence as `vmi_a`/`vmi_b`
+    (F10053). Which of the three roles it plays (V.21? a third data-modem
+    slot? something else) is not established.
+  - `ctx->0x120c` and `ctx->0x1210` (`f120c`, `f1210`) -- the SAME shape
+    twice: a pointer owning one sub-allocation at +0x10 of what it points
+    to, freed first, then the pointer itself. Neither the outer nor the
+    inner object's type is established beyond that shape.
+  - `ctx->0x1244` (`f1244`) -- READ, not written, here: `fax_class1_delete`
+    compares it against 1 to choose `_delete_data_rx_modem` (when equal) or
+    `_delete_data_tx_modem` (otherwise) for tearing down `modem_vmi`/
+    `vmi_b`. This is the first function to explain HOW the caller is
+    supposed to know which direction the shared `modem_vmi` field
+    (F10053) currently holds -- `f1244` is the discriminator.
+  - `ctx->0x1258` (`f1258`) -- a `struct fpm_tone *`, typed by its own
+    `FPM_TONE_delete(struct fpm_tone *)` call (evidence class 2), sitting
+    inside the SAME `pad_1254` region F10051 placed `modem_rate_code` in
+    (`+0x1254`, four bytes earlier) -- so that pad is now split into the
+    rate code, this tone handle, and a smaller remaining pad.
+
+The data-modem guard is a SINGLE test on the PAIR (`modem_vmi != NULL &&
+vmi_b != NULL`), not two separate guards -- `dis.py` shows one `je` past
+both checks before the `f1244` compare, confirmed by `t_class1delete.c`'s
+allocation-log test (RX and TX cases, with and without the tone object,
+matching the blob's `frees`/`live`/`bad_free` in every combination).
+
+Returns 1 unconditionally (`mov $0x1,%eax` before both `ret`s); nothing
+reconstructed reads it.
+
+## F10056. Two more state handlers land once `_put_silence` unblocks them, and one of them corrects a first misreading of its own disassembly
+
+`_tx_silence_before_scrm_ones` (`.text` 0x09d720, 111 bytes) and
+`_t30_silence_before_tx_state` (`.text` 0x09e590, 194 bytes), both in
+`class1tx.c` and both needing nothing but `_put_silence` per
+`readyqueue.py`. Both use only fields `class1.h` already had.
+
+`_t30_silence_before_tx_state`'S FIRST READING GOT THE FINAL STORE WRONG,
+caught by `t_class1delete.c` disagreeing with the blob (320 vs the blob's
+160) rather than trusted from the disassembly. The mistake: `_put_silence`
+IS called with its return value apparently in `%eax`, but the VERY NEXT
+instruction (`mov 0x1228(%ebx),%eax`, reloading `ctx->countdown` for the
+threshold compare) overwrites that register before anything reads it, on
+every path -- so the return value is computed and genuinely discarded, and
+the final `ctx->countdown += *tx_count` is a plain accumulation of the
+PRE-EXISTING countdown, not the assignment `n + *tx_count` the first
+reading took it for. On the transition path (`countdown` over 400,
+unsigned) `countdown` is explicitly zeroed first, so the accumulation
+there degenerates to a plain reset to `CLASS1_BLOCK_SAMPLES` (160). This
+is the same class of error F10054 already caught once this wave --
+plausible register tracking that turns out to miss an intervening reload
+-- and the same remedy: the differential test caught it, not a closer
+reading of the bytes.
+
+
+## F10057. `fax_class1_progress` written: declined twice, settled by F10051/F10052, and passes 813 checks over real handlers and a synthetic quality-latch chain
+
+`.text` 0x0936d0, 1,145 bytes -- the session dispatcher, and the largest
+symbol this wave lands. F9802 (wave 6) declined it on `ctx->0x1254`'s
+meaning; F10051/F10052 (this wave) settled that as a T.30 rate code
+selecting one of three already-complete modulations' quality latch, which
+is what makes writing this function possible now.
+
+**THE NINE-ARGUMENT SIGNATURE IS THE SAME SHAPE AS `class1_state_fn`**,
+confirmed by tracing every stack slot of the marshalling call
+(0x0937b7..0x0937f8) back to this function's own arguments in the
+identical position -- ctx, rx, tx, word3, word4, rx_count, tx_count,
+word7, word8. Two of those get a NEW type from this function specifically,
+where the individual state handlers already reconstructed give the
+LEAST claim:
+
+  - `rx` is `short *`, not `const short *` -- this function (not any
+    handler) hands it to `FPM_iir_filt_II`, which filters in place.
+  - `word7` is `int *`, not a bare `int` -- `*word7 = 0` on every call is
+    the first evidence anywhere in this tree that position 8 is ever
+    dereferenced. Forwarded to the handler through `class1_state_fn`'s own
+    (unchanged, least-claim) `int` slot via `(int)(long)word7` -- the same
+    idiom `faxadapt.h` already names for a pointer riding an `int` field,
+    not a claim that any handler treats it as a pointer.
+
+**SIX NEW FIELDS, PLUS TWO TYPE UPGRADES, ALL FROM THIS ONE FUNCTION:**
+
+  - `f127c` (+0x127c) -- a nonzero-sample counter over up to `*rx_count/8`
+    samples of `rx`, reset to 0 past `*rx_count/16`. Purpose not
+    established; nothing traced reads it back outside this function.
+  - `prev_state` (+0x1220, exactly filling the old `pad_1220[4]`) -- the
+    state as of the last call, compared after each dispatch to log a
+    transition.
+  - `delayed_status` (+0x123c) and `delayed_status_countdown` (+0x1240,
+    together exactly filling the old `pad_123c[8]`) -- the object's OWN
+    words, "STATUS = DELAYED_STATUS", its debug line when the countdown
+    reaches 0 and `status` is set from the delayed value. Rank-1 evidence.
+  - `f12dc` (+0x12dc, was `pad_12dc[4]`) retyped `const short *` -- typed
+    by its own call, `FPM_iir_filt_II`'s `coeff` argument.
+  - `iir_state[8]` (+0x12e0, a NEW extension past the previous
+    `CLASS1_MODELLED_BYTES` bound of 0x12e0) and `f12f0` (+0x12f0, the
+    tick's enable gate) -- `iir_state`'s size is not guessed: `fpm_iir.h`
+    fixes `FPM_IIR_II_STATE_PER_SECTION` at 4 words/section and this
+    function's own call passes the literal `sections = 2`, so 8 shorts is
+    the callee's own contract, not an estimate. `CLASS1_MODELLED_BYTES`
+    moves to 0x12f4.
+
+**THE RATE-CODE SWITCH TESTS FOUR SEPARATE EQUALITIES for V.17's own long-
+training codes (0x91, 0x79, 0x61, 0x49), NOT the two-code RANGES
+`_set_modem_rate` uses for the same rates** -- `_set_modem_rate`'s
+`(unsigned)(code - 0x91) <= 1` matches BOTH the long- and short-training
+codes for one rate; this function's four separate `cmp` instructions match
+only the long-training ones. A short-training code (0x92 and siblings)
+reaches none of the three `if`s and leaves `status` at
+`FAX_CLASS1_NO_MESSAGE`. `t_class1progress.c` has a dedicated case for
+this (code 0x92, latch armed) that would crash on a NULL `vmi_b` if the
+production code wrongly matched it -- it does not.
+
+**`class1_state_functions[19]` IS NOW A REAL DEFINITION**, not just a
+comment's description -- `class1_state_fn class1_state_functions[19];` in
+`class1.c`, all-NULL until `fax_class1_create` (unwritten) installs
+handlers, same D1053/D1081 shape as the other file-local-in-the-object
+functions this tree has made global and testable ahead of their real
+caller/writer.
+
+**TESTED WITH FIVE REAL, ALREADY-VERIFIED HANDLERS INSTALLED**
+(`_t30_silence_before_tx_state`, `_idle_state`, `_send_silence_state`,
+`_recieve_silence_state`, `_tx_silence_before_scrm_ones`), not a stub --
+`t_class1progress.c` drives genuine state transitions, the sample-scan
+loop (positive and negative `*rx_count`, small and large `f127c`), the IIR
+tick, the delayed-status mechanism (expiring and not), and all three
+quality-latch chains via a SYNTHETIC modem object shaped exactly like
+`V17RX_OBJ_STATE`/`V29_OBJ_RX`/`V27_OBJ_RX` and their own latch offsets
+(not a real V17RX/V27RX/V29RX instance, which is a different agent's
+closure). 813 checks, three debug levels, all passing against the blob.

@@ -10,10 +10,22 @@
  *
  * What is already established about the object from this batch's reads:
  *
+ *   +0x1200 / +0x120c / +0x1210
+ *                       three more torn-down-by-`fax_class1_delete` fields
+ *                       (vmi_c, f120c, f1210) -- see that function's own
+ *                       comment in class1.c for what little is established
  *   +0x1204 / +0x1208   two handles handed to FAXVMI_status by
  *                       fax_class1_status -- receive-side for states 4..6,
  *                       transmit-side for 12..13 (which side is which is
- *                       NOT settled; the state numbers are)
+ *                       NOT settled; the state numbers are).  +0x1208 is also
+ *                       what `_delete_data_rx_modem` and `_delete_data_tx_
+ *                       modem` hand `FAXVMI_delete`, which types both as
+ *                       `struct faxvmi *`
+ *   +0x1214             the current data modem's `struct faxvmi_cfg *`, freed
+ *                       by whichever of `_delete_data_rx_modem` /
+ *                       `_delete_data_tx_modem` tears the modem down -- ONE
+ *                       field, reused across directions, since Class 1 fax
+ *                       is half-duplex
  *   +0x121c             the session state machine's state number.  0x0f and
  *                       0x10 are the send/receive silence states (their
  *                       init functions store exactly those), 4..6 and
@@ -33,19 +45,68 @@
 #ifndef DSPLIB_CLASS1_H
 #define DSPLIB_CLASS1_H
 
+struct faxvmi;
+struct faxvmi_cfg;
+struct fax_fifo;
+struct fpm_tone;
+
 struct fax_class1 {
 	short f000;			/* +0x0000 <- f1250 - 1, by
 					 * _handle_hdlc_input_close         */
 	unsigned char pad_002[2];	/* +0x0002                          */
 	unsigned char flags004;		/* +0x0004 bit 4 gates f1224        */
-	unsigned char pad_005[0x11ff];	/* +0x0005                          */
-	void *vmi_a;			/* +0x1204 FAXVMI handle, states
-					 * 4..6 of fax_class1_status        */
-	void *vmi_b;			/* +0x1208 FAXVMI handle, states
-					 * 12..13                           */
-	unsigned char pad_120c[0x10];	/* +0x120c                          */
+	unsigned char pad_005[0x11fb];	/* +0x0005                          */
+	struct faxvmi *vmi_c;		/* +0x1200 a THIRD FAXVMI handle,
+						 * torn down by `fax_class1_delete`
+						 * before `vmi_a`/`vmi_b` -- typed
+						 * the same way, by its own
+						 * `FAXVMI_delete` call.  Nothing
+						 * reconstructed so far establishes
+						 * which of the three roles
+						 * (V.21, data, or something else)
+						 * this one plays                   */
+	struct faxvmi *vmi_a;		/* +0x1204 FAXVMI handle, states
+					 * 4..6 of fax_class1_status.  Typed
+					 * `struct faxvmi *` on vmi_b's own
+					 * evidence -- the comment above
+					 * calls the two "two handles" of
+					 * the same kind                     */
+	struct faxvmi *vmi_b;		/* +0x1208 FAXVMI handle, states
+					 * 12..13.  Typed from
+					 * `_delete_data_rx_modem`'s and
+					 * `_delete_data_tx_modem`'s own
+					 * call, `FAXVMI_delete(struct
+					 * faxvmi *)` -- evidence class 2    */
+	void *f120c;			/* +0x120c a pointer `fax_class1_delete`
+						 * frees at TWO offsets when non-null
+						 * -- `*(p+0x10)` first, then `p`
+						 * itself -- so it owns exactly one
+						 * sub-allocation at +0x10.  Neither
+						 * the outer nor the inner object's
+						 * shape is established beyond that */
+	void *f1210;			/* +0x1210 the same shape as `f120c`,
+						 * torn down the same way, one field
+						 * later -- `fax_class1_delete`'s own
+						 * order is f120c, vmi_c, f1210,
+						 * vmi_a                            */
+	struct faxvmi_cfg *modem_vmi;	/* +0x1214 the CURRENT data modem's
+					 * VMI config block -- one field,
+					 * reused for whichever direction is
+					 * active, since Class 1 fax is
+					 * half-duplex.  `_delete_data_rx_
+					 * modem` frees it (and, for a V.17
+					 * receiver, three sub-allocations of
+					 * the `struct v17rx_cfg` it owns
+					 * first) and `_delete_data_tx_modem`
+					 * frees it the same way with no
+					 * sub-frees                         */
+	unsigned char pad_1218[4];	/* +0x1218                          */
 	int state;			/* +0x121c the session state        */
-	unsigned char pad_1220[4];	/* +0x1220                          */
+	int prev_state;			/* +0x1220 the state as of the LAST
+					 * call to `fax_class1_progress` --
+					 * compared against `state` after each
+					 * dispatch to log a transition, then
+					 * updated to match                 */
 	int f1224;			/* +0x1224 set 1 on hdlc close when
 					 * flags004 bit 4                   */
 	int countdown;			/* +0x1228 armed by the state inits */
@@ -58,7 +119,27 @@ struct fax_class1 {
 					 * _handle_data_input was handed,
 					 * kept whether or not the block is
 					 * consumed                         */
-	unsigned char pad_123c[0x10];	/* +0x123c                          */
+	int delayed_status;		/* +0x123c the object's OWN word,
+					 * "STATUS = DELAYED_STATUS" (its
+					 * debug line, rank-1 evidence):
+					 * applied to `status` when
+					 * `delayed_status_countdown` reaches
+					 * zero                              */
+	int delayed_status_countdown;	/* +0x1240 decremented once per
+					 * `fax_class1_progress` call while
+					 * nonzero; on the call it reaches
+					 * zero, `status` is set from
+					 * `delayed_status`                 */
+	int f1244;			/* +0x1244 `fax_class1_delete` reads
+						 * this to choose `_delete_data_rx_
+						 * modem` (when == 1) or `_delete_
+						 * data_tx_modem` (otherwise) for
+						 * `modem_vmi`/`vmi_b` -- so it marks
+						 * which direction the CURRENT data
+						 * modem is, but whether it is a
+						 * plain boolean or carries other
+						 * values is not established        */
+	unsigned char pad_1248[4];	/* +0x1248                          */
 	int dle_seen;			/* +0x124c a DLE has been seen and
 					 * the next byte is its argument.
 					 * Both _handle_data_input and
@@ -71,7 +152,21 @@ struct fax_class1 {
 					 * to 1 and both _..._input and
 					 * _..._close report `f1250 - 1` as
 					 * the length in f000               */
-	unsigned char pad_1254[0x20];	/* +0x1254                          */
+	int modem_rate_code;		/* +0x1254 the negotiated T.30 modem
+						 * rate code -- `_set_modem_rate`'s
+						 * own code space, exactly (finding
+						 * F10051): `fax_class1_progress`
+						 * switches on it to pick which
+						 * modulation's quality latch to
+						 * test.  NOT YET the name of a
+						 * writer, only of this one reader   */
+	struct fpm_tone *f1258;	/* +0x1258 torn down by
+						 * `fax_class1_delete`'s own
+						 * `FPM_TONE_delete` call -- a tone
+						 * detector, plausibly for
+						 * `CLASS1_ANSWER_TONE_STATE`, not
+						 * otherwise established             */
+	unsigned char pad_125c[0x18];	/* +0x125c                          */
 	/*
 	 * A timestamp pair.  The object prints them together as
 	 * "At %2d.%02d[sec]" -- in _hdlc_receive_state_init and twice in
@@ -80,9 +175,19 @@ struct fax_class1 {
 	 */
 	int clock_sec;			/* +0x1274                          */
 	int clock_frac;			/* +0x1278                          */
-	unsigned char pad_127c[0xc];	/* +0x127c                          */
-	void *f1288;			/* +0x1288 fax_class1_info(1) reads
-					 * an unsigned short at +0xc of it  */
+	int f127c;			/* +0x127c a nonzero-sample counter
+					 * `fax_class1_progress` maintains
+					 * over up to `*rx_count / 8` samples
+					 * of `rx` per call, resetting to 0
+					 * when it exceeds `*rx_count / 16` --
+					 * nothing traced reads it back, so
+					 * what it is FOR is not established */
+	unsigned char pad_1280[8];	/* +0x1280                          */
+	struct fax_fifo *f1288;	/* +0x1288 fax_class1_info(1) reads
+					 * an unsigned short at +0xc of it.
+					 * Typed from `_delete_data_tx_modem`'s
+					 * own call, `FIFO_delete(struct
+					 * fax_fifo *)` -- evidence class 2  */
 	unsigned char pad_128c[0x10];	/* +0x128c                          */
 	int async_locked;		/* +0x129c the start-bit search has
 					 * succeeded and the alignment
@@ -112,10 +217,25 @@ struct fax_class1 {
 	unsigned char pad_12be[0x1a];	/* +0x12be                          */
 	int f12d8;			/* +0x12d8 fax_class1_info(0);
 					 * create clears it                 */
-	unsigned char pad_12dc[4];	/* +0x12dc create: a .rodata ptr    */
+	const short *f12dc;		/* +0x12dc create: a .rodata ptr.
+					 * Typed from `fax_class1_progress`'s
+					 * own call, `FPM_iir_filt_II(short *,
+					 * const short *coeff, ...)` -- the
+					 * coefficient table for the 2-section
+					 * filter below (evidence class 2)   */
+	short iir_state[8];		/* +0x12e0 `FPM_iir_filt_II`'s own
+					 * state, 4 words/section per
+					 * `fpm_iir.h` times the 2 sections
+					 * `fax_class1_progress` passes as a
+					 * literal -- sized from the callee's
+					 * own contract, not guessed          */
+	int f12f0;			/* +0x12f0 gates whether
+					 * `fax_class1_progress` runs the IIR
+					 * filter tick at all this call.
+					 * Usage inference only               */
 };
 
-#define CLASS1_MODELLED_BYTES	0x12e0
+#define CLASS1_MODELLED_BYTES	0x12f4
 
 /*
  * THE STATE NUMBERS ARE THE AUTHOR'S OWN, read out of `states_names`
@@ -273,6 +393,16 @@ typedef int (*class1_state_fn)(struct fax_class1 *ctx, const short *rx,
 			       int *word8);
 
 /*
+ * `.bss` (COMMON in the object, 0x4c bytes = 19 * 4), installed by
+ * `fax_class1_create` (unwritten) and indexed with no bounds check by
+ * `fax_class1_progress`'s own dispatch (`call *class1_state_functions
+ * (,%edx,4)`).  Declared here so a test can install handlers into it
+ * without a writer in `src/` yet -- it starts all-NULL, same as the
+ * object's own COMMON storage.
+ */
+extern class1_state_fn class1_state_functions[19];
+
+/*
  * IDLE_STATE.  Zero `*rx_count` samples of `tx` and report that many -- or,
  * when `*rx_count` is not positive, a whole block of 160.  Reads no field of
  * the session at all.
@@ -309,6 +439,15 @@ int _recieve_silence_state(struct fax_class1 *ctx, const short *rx, short *tx,
 			   int word7, int *word8);
 
 /*
+ * Zero `count` elements of `buf`.  The object's own return value is whatever
+ * the loop counter (`i`) holds on exit -- `count` on a normal completion,
+ * 0 if `count` was not positive -- rather than the argument itself; no
+ * caller reconstructed here reads it.  `.text` 0x092b70, 28 bytes, and the
+ * TU's first global -- immediately before `_send_silence_state_init`.
+ */
+int _put_silence(short *buf, int count);
+
+/*
  * T.30 rate code -> (modulation, bit rate).  The four two-code ranges are
  * V.17 (with/without short training); the singles below them select V.29
  * (mod 1) and V.27ter (mod 0).  A code outside the table writes NOTHING --
@@ -334,5 +473,74 @@ int fax_class1_info(struct fax_class1 *ctx, int sel, int *out);
  * name.
  */
 int fax_class1_GetConstalation(void *ctx);
+
+/*
+ * Tear the whole session down, in the object's own order: `f120c` (and its
+ * one sub-allocation at +0x10), `vmi_c`, `f1210` (the same sub-allocation
+ * shape as `f120c`), `vmi_a` -- then, when both `modem_vmi` and `vmi_b` are
+ * non-null, the current data modem (`_delete_data_rx_modem` when
+ * `f1244 == 1`, `_delete_data_tx_modem` otherwise) -- then `f1288` (a FIFO)
+ * and `f1258` (a tone detector), and finally the session object itself.
+ * Returns 1, always -- `.text` 0x0093bf0, 347 bytes.
+ */
+int fax_class1_delete(struct fax_class1 *ctx);
+
+/*
+ * The session dispatcher.  `.text` 0x0936d0, 1,145 bytes.  Declined twice
+ * before this wave (F9802, referenced by the wave-6 ledger) on
+ * `ctx->0x1254`'s meaning; findings F10051/F10052 settle it as a T.30 rate
+ * code selecting which of three already-complete modulations' quality latch
+ * to test.
+ *
+ * SAME NINE-ARGUMENT SHAPE AS `class1_state_fn` -- ctx, rx, tx, word3,
+ * word4, rx_count, tx_count, word7, word8 -- confirmed by tracing every
+ * stack slot of the marshalling call at 0x0937b7..0x0937f8 back to this
+ * function's OWN arguments in the same positions.  `rx` is `short *`, not
+ * `const`, because this function (not any state handler) hands it to
+ * `FPM_iir_filt_II`, which filters in place; `word7` is `int *`, not a bare
+ * int, because this function writes `*word7 = 0` on every call, the first
+ * evidence anywhere in this tree that it is a pointer at all.
+ *
+ * WHAT IT DOES, in the object's own order:
+ *
+ *   1. When `ctx->f127c` is nonzero, scan up to `*rx_count / 8` samples of
+ *      `rx`, counting the nonzero ones into `ctx->f127c`; if that exceeds
+ *      `*rx_count / 16`, reset it to 0.  Debug-level-gated per-sample
+ *      printing throughout (the object's own strings).
+ *   2. Advance the clock: `clock_frac += 2`, rolling into `clock_sec` past
+ *      99.  Clear `*word7` and `status` unconditionally.  When `f12f0` is
+ *      nonzero, run one `FPM_iir_filt_II` tick over `rx` (2 sections,
+ *      `(short)*rx_count` samples, coefficients `f12dc`, state
+ *      `iir_state`).
+ *   3. Dispatch: `class1_state_functions[ctx->state](ctx, rx, tx, word3,
+ *      word4, &local_rx_count, tx_count, word7, word8)`, where
+ *      `local_rx_count` is THIS function's own copy of `*rx_count` (D-shape:
+ *      the handler never sees the caller's pointer). No bounds check on
+ *      `ctx->state` -- reproduced, not guarded.
+ *   4. If `ctx->state` changed across the dispatch, log the transition
+ *      (`states_names`, both old and new) at debug level > 1.  Update
+ *      `prev_state`.
+ *   5. If `*tx_count != CLASS1_BLOCK_SAMPLES`, log "ERROR: TxSmpCnt != 160
+ *      !!!" at debug level > 1 (class1.h's own long-established note).
+ *   6. Apply a delayed status: if `delayed_status_countdown` is nonzero and
+ *      reaches 0 on THIS call, `status = delayed_status` (the object's own
+ *      words, "STATUS = DELAYED_STATUS").
+ *   7. If `status` is still FAX_CLASS1_NO_MESSAGE, switch on
+ *      `modem_rate_code` -- the four V.17 LONG-TRAINING codes only (0x91,
+ *      0x79, 0x61, 0x49; the short-training codes `_set_modem_rate` also
+ *      recognises are NOT tested here), the two V.29 codes, or the two
+ *      V.27ter codes -- and, only when `f1244 == 1`, walk `vmi_b->link->
+ *      int_0014` to the active modem and test/clear that modulation's own
+ *      quality latch (`V17RXS_SHORT_4FB2` at `V17RX_OBJ_STATE`,
+ *      `V29RX_SHORT_4F62` at `V29_OBJ_RX`, `V27RX_Q_FLAG` at `V27_OBJ_RX`).
+ *      A set latch becomes `status = FAX_CLASS1_ACCEPT_RATE`.
+ *   8. If `status` is non-zero at this point (from the dispatch, the
+ *      delayed-status apply, or step 7), log it (`status_names`) at debug
+ *      level > 1.
+ *   9. Return `status`.
+ */
+int fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
+			int word3, int word4, int *rx_count, int *tx_count,
+			int *word7, int *word8);
 
 #endif /* DSPLIB_CLASS1_H */

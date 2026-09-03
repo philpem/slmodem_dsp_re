@@ -22,6 +22,10 @@
 #define DSPLIB_CLASS1TX_H
 
 struct fax_class1;
+struct faxvmi_cfg;
+struct v17tx_cfg;
+struct v27tx_cfg;
+struct v29tx_cfg;
 
 /* The tables: the author's strings, verbatim (typos included). */
 extern char *V17RX_MESG[10];
@@ -131,5 +135,86 @@ int _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
  */
 int cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
 			      unsigned char *dst, int count, int terminate);
+
+/*
+ * ------------------------------------------------------------------
+ * The transmit-side VMI constructors.  By ADDRESS, not by span name: they
+ * sit at 0x094870..0x094b6f, immediately after `class1rx.c`'s own
+ * `_init_receiver` (0x094240) and immediately before `_delete_data_tx_modem`
+ * and `_init_transmitter` -- so this run of `.text` is the TX twin of
+ * `class1rx.c`'s RX trio, one span later, and `tools/readyqueue.py` already
+ * files all three under `class1tx.c +94` on that same address evidence. See
+ * class1tx.c for the derivation.
+ *
+ * ALL THREE ARE `t` IN THE OBJECT -- file-local, only called from
+ * `_init_transmitter`, still 336+ unwritten symbols away -- AND ARE GLOBAL
+ * HERE, for the identical reason `class1rx.h`'s RX trio already gives
+ * (D1081): a `static` spelling would be three functions this tree could
+ * neither reach nor test. D1450 records it for this trio; the pass that
+ * writes `_init_transmitter` should take all three back to `static`.
+ *
+ * SAME SHAPE AS THE RX TRIO, with three differences.  `init_vmi_v29tx`'s
+ * config is `struct v29tx_cfg`, whose `int_0018` the table's own default (0)
+ * fills unread; `init_vmi_v17tx` OVERRIDES its `int_0018` with a hardcoded 0
+ * rather than reading the table's copy there at all -- so the two constants
+ * end up equal but by different means, and `init_vmi_v17tx` is the one
+ * spelled as an explicit store.  ALL THREE also hardcode `cfg->int_0014`
+ * after the table copy -- 1 for V.17 (equal to its table default, so
+ * invisible to a value-only check), 2 for V.27ter and V.29 (whose tables
+ * both default to 1, confirmed against the blob's own `.data` with
+ * `tabdump.py` independently of either reconstructed table) -- caught by
+ * `t_class1txvmi.c` disagreeing with the blob rather than assumed absent
+ * on a first pass over the disassembly. All three RETURN `(int)cfg->bitrate`
+ * -- the object reloads it from the freshly-built config right before
+ * `ret`, which nothing declared `void` would do -- so unlike the RX trio
+ * these are `int`, not `void`.
+ */
+int init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+		   int arg_2, void *arg_3);
+int init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+		   int arg_2, void *arg_3);
+int init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+		   int arg_2, void *arg_3);
+
+/* The `slot` each of the three plants, from `faxvmi.h`'s slot map. */
+#define VMI_SLOT_V21TX		5
+#define VMI_SLOT_V27TX		7
+#define VMI_SLOT_V29TX		9
+#define VMI_SLOT_V17TX		11
+
+/*
+ * Tear the transmit-side data modem down: the config, the VMI block, the
+ * FAXVMI handle -- and, when `ctx->f1288` (a FIFO) is non-null, that too.
+ * Unlike the RX twin, no modulation ever needs a sub-allocation freed first.
+ */
+void _delete_data_tx_modem(struct fax_class1 *ctx);
+
+/*
+ * ------------------------------------------------------------------
+ * Two more of the nineteen state handlers, unblocked once `_put_silence`
+ * landed. `.text` 0x09e590 (194 bytes) and 0x09d720 (111 bytes).
+ *
+ * TX_SILENCE_BEFORE_SCRM_ONES: add 20 to `countdown`, transmit a block of
+ * silence, and move to TX_SCRAMBLED_ONES_STATE once `countdown` (unsigned)
+ * reaches `silence_blocks`. `*word8` is always cleared to 0.
+ */
+int _tx_silence_before_scrm_ones(struct fax_class1 *ctx, const short *rx,
+				 short *tx, int word3, int word4,
+				 int *rx_count, int *tx_count, int word7,
+				 int *word8);
+
+/*
+ * T30_SILENCE_BEFORE_TX_STATE: transmit a block of silence (its return
+ * value unused -- see class1tx.c), and once `countdown` (unsigned) exceeds
+ * 400, log a "50MS second, send preamble" line at debug level > 1, move to
+ * T30_PREAMBLE_STATE, set FAX_CLASS1_CONNECT and reset `countdown` to 0.
+ * Either way, `countdown += CLASS1_BLOCK_SAMPLES` unconditionally at the
+ * end -- a plain accumulation, not the assignment an earlier reading of
+ * this function mistook it for (class1tx.c's own note).
+ */
+int _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
+				 short *tx, int word3, int word4,
+				 int *rx_count, int *tx_count, int word7,
+				 int *word8);
 
 #endif /* DSPLIB_CLASS1TX_H */

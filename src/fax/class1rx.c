@@ -32,8 +32,12 @@
  * the strongest evidence in the file about what they are for.
  */
 
+#include <stddef.h>
+
+#include "dsplib/class1.h"
 #include "dsplib/class1rx.h"
 #include "dsplib/faxcfg.h"
+#include "dsplib/faxvmi.h"
 #include "dsplib/debug.h"
 #include "dsplib/sysdep.h"
 
@@ -123,4 +127,49 @@ init_vmi_v27rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 	vmi->short_000c = 0;
 	vmi->slot = VMI_SLOT_V27RX;
 	vmi->modem_cfg = cfg;
+}
+
+/*
+ * Tear the receive-side data modem down: free the config `_init_receiver`
+ * built (a V.17 receiver's three sub-allocations first -- `ptr_0018`,
+ * `ptr_001c`, `ptr_0020`, in that order, none of it read back afterwards),
+ * then the config itself, then the VMI block that held it, then the FAXVMI
+ * handle at `ctx->vmi_b`.  `ctx->modem_vmi` is cleared BEFORE the
+ * `FAXVMI_delete` call and `ctx->vmi_b` AFTER it, which is the object's own
+ * order and not incidental: `FAXVMI_delete` is handed the value read out of
+ * `ctx->vmi_b` before either field is touched.
+ *
+ * Every reload of `ctx->modem_vmi`/`vmi->modem_cfg` between frees is the
+ * object's own -- `sysdep_free` is an opaque call as far as the compiler
+ * knows, so it re-reads both pointers from memory after each one rather than
+ * keeping them live across it.  Written the same way here rather than
+ * cached in a local that would survive the calls.
+ */
+void
+_delete_data_rx_modem(struct fax_class1 *ctx)
+{
+	struct faxvmi_cfg *vmi = ctx->modem_vmi;
+	struct faxvmi *handle;
+
+	if (vmi->slot == VMI_SLOT_V17RX) {
+		struct v17rx_cfg *cfg = vmi->modem_cfg;
+
+		sysdep_free(cfg->ptr_0020);
+		vmi = ctx->modem_vmi;
+		cfg = vmi->modem_cfg;
+		sysdep_free(cfg->ptr_001c);
+		vmi = ctx->modem_vmi;
+		cfg = vmi->modem_cfg;
+		sysdep_free(cfg->ptr_0018);
+		vmi = ctx->modem_vmi;
+	}
+
+	sysdep_free(vmi->modem_cfg);
+	vmi = ctx->modem_vmi;
+	sysdep_free(vmi);
+
+	handle = ctx->vmi_b;
+	ctx->modem_vmi = NULL;
+	FAXVMI_delete(handle);
+	ctx->vmi_b = NULL;
 }

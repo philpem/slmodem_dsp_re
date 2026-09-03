@@ -6,7 +6,7 @@
  *   init_vmi_v17rx         .text 0x093e80   308   written
  *   init_vmi_v29rx         .text 0x093fc0   225   written
  *   init_vmi_v27rx         .text 0x0940b0   230   written
- *   _delete_data_rx_modem  .text 0x0941a0   149   NOT written (16 unwritten)
+ *   _delete_data_rx_modem  .text 0x0941a0   149   written
  *   _init_receiver         .text 0x094240  1583   NOT written (336 unwritten)
  *
  * The order above is the object's, taken from `nm -S` and not from a span
@@ -69,5 +69,15 @@ void init_vmi_v29rx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 #define VMI_SLOT_V27RX		8
 #define VMI_SLOT_V29RX		10
 #define VMI_SLOT_V17RX		12
+
+/*
+ * Tear the receive-side data modem down: the config one of the three
+ * constructors above built (a V.17 receiver's three sub-allocations first),
+ * the VMI block that held it, and the `struct fax_class1`'s FAXVMI handle.
+ * `struct fax_class1` is `class1.h`'s, not this file's -- this is the one
+ * declaration in `class1rx.h` that needs it.
+ */
+struct fax_class1;
+void _delete_data_rx_modem(struct fax_class1 *ctx);
 
 #endif /* DSPLIB_CLASS1RX_H */

@@ -43,7 +43,14 @@
 #include "dsplib/class1.h"
 #include "dsplib/class1tx.h"
 #include "dsplib/debug.h"
+#include "dsplib/faxcfg.h"
+#include "dsplib/faxfifo.h"
+#include "dsplib/faxvmi.h"
+#include "dsplib/sysdep.h"
 #include "dsplib/t30frame.h"
+#include "dsplib/v17fax.h"
+#include "dsplib/v27fax.h"
+#include "dsplib/v29data.h"
 
 /*
  * `aReversedCharsArray` -- .rodata 0xba40, 256 bytes, GLOBAL.  Entry `i` is
@@ -594,4 +601,249 @@ cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
 		out += 2;
 	}
 	return out;
+}
+
+/*
+ * ------------------------------------------------------------------
+ * The transmit-side VMI constructors, `.text` 0x094870/0x094970/0x094a70 --
+ * see class1tx.h for why they belong here rather than in `class1rx.c`
+ * beside their RX siblings.
+ *
+ * SAME SHAPE AS `class1rx.c`'s trio: allocate a config of exactly its
+ * table's size, announce at `DSPLIB_DEBUG_VERBOSE()`, copy the table over
+ * the allocation, override `bitrate` and the caller's fourth argument, then
+ * copy `FAXVMI_CFG` over the caller's VMI and override seven fields
+ * (`short_0008`/`short_000a` differ by modulation; `slot` is what makes
+ * them three functions).  Neither allocation is checked for NULL, as on
+ * the RX side.
+ *
+ * WHAT DIFFERS FROM THE RX TRIO.  Every RX constructor stores the fourth
+ * argument into the VMI's own `ptr_0014` (and, for V.17, into a *config*
+ * field too); all three TX constructors ALSO store it into the config's
+ * OWN LAST FIELD (`int_001c`/`int_0018`, `struct v29tx_cfg`'s `int_0018`
+ * one field earlier, per `v27fax.h`'s own comment on the shape) -- the
+ * `(void *)(long)` idiom faxadapt.h names, since that field is declared
+ * `int` in each config struct and not a pointer.  And each RETURNS
+ * `(int)cfg->bitrate`, reloaded from the freshly-built config right before
+ * `ret` -- dead code under `-O3` unless the source has an explicit `return`,
+ * so unlike the RX trio (`void`) these three are `int`.
+ *
+ * A SECOND HARDCODED FIELD, missed on the first read of the disassembly and
+ * caught by `t_class1txvmi.c` disagreeing with the blob rather than assumed
+ * absent: after the six/seven-dword table copy, all three OVERRIDE
+ * `cfg->int_0014`'s low 16 bits with a literal 16-bit store (`movw`) --
+ * `0x1` for V.17, `0x2` for V.27ter and V.29.  V.17's table default is
+ * already 1, so that one is invisible to any test that only checks the
+ * FINAL value; V.27ter's and V.29's tables are also 1 (`tabdump.py` over
+ * the blob's own `.data` confirms it, independent of either reconstructed
+ * table), so their override to 2 is a real, visible change from the
+ * default. `cfg->int_0014 = <value>;` after the table copy reproduces this
+ * -- a plain `int` assignment stores the same final 32 bits as the
+ * object's narrower `movw`, since the upper 16 bits are already zero from
+ * the dword copy, so no encoding trick is needed for behavioural fidelity.
+ */
+int
+init_vmi_v17tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+	       int arg_2, void *arg_3)
+{
+	struct v17tx_cfg *cfg = sysdep_malloc(sizeof(struct v17tx_cfg));
+
+	(void)arg_2;
+
+	if (DSPLIB_DEBUG_VERBOSE())
+		dsplibs_debug_printf(
+			"Initializing VMI_V17_TX Modem No ECM "
+			"(Simple Packing)\n");
+
+	*cfg = V17TX_CFG;
+	cfg->bitrate = bit_rate;
+	cfg->int_0014 = 1;
+	cfg->int_0018 = 0;
+	cfg->int_001c = (int)(long)arg_3;
+
+	*vmi = FAXVMI_CFG;
+	vmi->ptr_0014 = arg_3;
+	vmi->short_0000 = 0;
+	vmi->int_0004 = 1;
+	vmi->short_0008 = 0x60;
+	vmi->short_000a = 0x30;
+	vmi->short_000c = 0;
+	vmi->slot = VMI_SLOT_V17TX;
+	vmi->modem_cfg = cfg;
+
+	return cfg->bitrate;
+}
+
+int
+init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+	       int arg_2, void *arg_3)
+{
+	struct v29tx_cfg *cfg = sysdep_malloc(sizeof(struct v29tx_cfg));
+
+	(void)arg_2;
+
+	if (DSPLIB_DEBUG_VERBOSE())
+		dsplibs_debug_printf(
+			"Initializing VMI_V29_TX Modem No ECM "
+			"(Simple Packing)\n");
+
+	*cfg = V29TX_CFG;
+	cfg->bitrate = bit_rate;
+	cfg->int_0014 = 2;
+	cfg->int_0018 = (int)(long)arg_3;
+
+	*vmi = FAXVMI_CFG;
+	vmi->ptr_0014 = arg_3;
+	vmi->short_0000 = 0;
+	vmi->int_0004 = 1;
+	vmi->short_0008 = 0x60;
+	vmi->short_000a = 0x35;
+	vmi->short_000c = 0;
+	vmi->slot = VMI_SLOT_V29TX;
+	vmi->modem_cfg = cfg;
+
+	return cfg->bitrate;
+}
+
+int
+init_vmi_v27tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
+	       int arg_2, void *arg_3)
+{
+	struct v27tx_cfg *cfg = sysdep_malloc(sizeof(struct v27tx_cfg));
+
+	(void)arg_2;
+
+	if (DSPLIB_DEBUG_VERBOSE())
+		dsplibs_debug_printf(
+			"Initializing VMI_V27_TX Modem No ECM "
+			"(Simple Packing)\n");
+
+	*cfg = V27TX_CFG;
+	cfg->bitrate = bit_rate;
+	cfg->int_0014 = 2;
+	cfg->int_001c = (int)(long)arg_3;
+
+	*vmi = FAXVMI_CFG;
+	vmi->ptr_0014 = arg_3;
+	vmi->short_0000 = 0;
+	vmi->int_0004 = 1;
+	vmi->short_0008 = 0x40;
+	vmi->short_000a = 0x25;
+	vmi->short_000c = 0;
+	vmi->slot = VMI_SLOT_V27TX;
+	vmi->modem_cfg = cfg;
+
+	return cfg->bitrate;
+}
+
+/*
+ * Tear the transmit-side data modem down.  The object's own order: free the
+ * config, free the VMI block, clear `ctx->modem_vmi`, `FAXVMI_delete` the
+ * handle at `ctx->vmi_b`, clear `ctx->vmi_b`, and only THEN look at
+ * `ctx->f1288` (a FIFO) -- `FIFO_delete` it and clear the field when it is
+ * non-null, or just clear it when it is already null.  No modulation's
+ * config here needs a sub-allocation freed first, unlike the RX side's
+ * V.17.
+ */
+void
+_delete_data_tx_modem(struct fax_class1 *ctx)
+{
+	struct faxvmi_cfg *vmi = ctx->modem_vmi;
+	struct faxvmi *handle;
+
+	sysdep_free(vmi->modem_cfg);
+	vmi = ctx->modem_vmi;
+	sysdep_free(vmi);
+
+	handle = ctx->vmi_b;
+	ctx->modem_vmi = NULL;
+	FAXVMI_delete(handle);
+	ctx->vmi_b = NULL;
+
+	if (ctx->f1288 != NULL)
+		FIFO_delete(ctx->f1288);
+	ctx->f1288 = NULL;
+}
+
+/*
+ * TX_SILENCE_BEFORE_SCRM_ONES.  `.text` 0x09d720, 111 bytes.  Nothing but a
+ * countdown bump, an optional debug line (the object's own literal string,
+ * no format arguments), a silence block, and a state transition once
+ * `countdown` catches up with `silence_blocks` -- both compared as
+ * `unsigned` (the object's `cmp`/`jb`), which the usual arithmetic
+ * conversions give for free since `silence_blocks` is already
+ * `unsigned int`.
+ */
+int
+_tx_silence_before_scrm_ones(struct fax_class1 *ctx, const short *rx,
+			     short *tx, int word3, int word4,
+			     int *rx_count, int *tx_count, int word7,
+			     int *word8)
+{
+	(void)rx;
+	(void)word3;
+	(void)word4;
+	(void)rx_count;
+	(void)word7;
+
+	ctx->countdown += 20;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("Tx silence before scrambled ones ...\n");
+
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+
+	if (ctx->countdown >= ctx->silence_blocks)
+		ctx->state = CLASS1_TX_SCRAMBLED_ONES_STATE;
+
+	*word8 = 0;
+	return 0;
+}
+
+/*
+ * T30_SILENCE_BEFORE_TX_STATE.  `.text` 0x09e590, 194 bytes.
+ *
+ * `_put_silence`'s return value is COMPUTED and then discarded -- the very
+ * next instruction (`mov 0x1228(%ebx),%eax`, ctx->countdown reloaded for
+ * the threshold compare below) overwrites the register holding it before
+ * anything reads it, on every path.  An earlier reading of this function
+ * mistook that reload for the call's return value surviving to the final
+ * store and got `n + *tx_count` (320 on the common path) where the object
+ * gives a plain accumulation (160) -- caught by `t_class1delete.c`
+ * disagreeing with the blob, not assumed correct from the disassembly
+ * alone.
+ *
+ * The comparison against 400 is `unsigned` (`cmp`/`jbe`/`ja`), the same
+ * shape `_recieve_silence_state`'s own `countdown` compare already
+ * established needs an explicit cast to reach from a plain `int`.
+ */
+int
+_t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
+			     short *tx, int word3, int word4,
+			     int *rx_count, int *tx_count, int word7,
+			     int *word8)
+{
+	(void)rx;
+	(void)word3;
+	(void)word4;
+	(void)rx_count;
+	(void)word7;
+	(void)word8;
+
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+
+	if ((unsigned int)ctx->countdown > 400) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec], Elapsed 50MS second, "
+			    "send preamble\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_T30_PREAMBLE_STATE;
+		ctx->countdown = 0;
+		ctx->status = FAX_CLASS1_CONNECT;
+	}
+	ctx->countdown += *tx_count;
+	return 0;
 }

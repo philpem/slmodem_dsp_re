@@ -12726,3 +12726,17 @@ only on `sym_bits` and `hist_len`, which nothing here touches.
 **Status:** ✅ reproduced faithfully, by the same argument and the same
 exclusion D1291 already established -- recorded separately because it is a
 different symbol and a different object, not because the shape differs.
+
+## D1450 ⚠ the three `init_vmi_*tx` constructors are file-local in the object and global here, D1081's move again
+
+`nm` gives `t init_vmi_v17tx`, `t init_vmi_v27tx`, `t init_vmi_v29tx` -- all
+three `static` in the original, same as their RX siblings D1081 already
+covers, and their only caller (`_init_transmitter`, `.text` 0x094bf0) is
+still 336+ unwritten symbols away by the same measure. Made global for the
+identical reason D1081 gives -- a `static` spelling would be three functions
+with no caller in the tree and no way for the differential tier to reach
+them -- and `t_class1txvmi.c` drives all three against `ref_init_vmi_*tx`.
+
+**Status:** ours, not the author's, and marked in `class1tx.h`. The pass
+that writes `_init_transmitter` should take all three back to `static` in
+the same commit, exactly as D1081 prescribes for the RX trio.
