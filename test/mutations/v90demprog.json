@@ -234,8 +234,8 @@
  },
  {
   "label": "the alt-RBS flag is a store of ONE into +0xb2",
-  "find": "\t\t\t\t\t\tconnectionEvaluator->short_b2 =\n\t\t\t\t\t\t    1;",
-  "replace": "\t\t\t\t\t\tconnectionEvaluator->short_b2 =\n\t\t\t\t\t\t    0;"
+  "find": "\t\t\t\t\t\tconnectionEvaluator->altRbsDetectedOnQc =\n\t\t\t\t\t\t    1;",
+  "replace": "\t\t\t\t\t\tconnectionEvaluator->altRbsDetectedOnQc =\n\t\t\t\t\t\t    0;"
  },
  {
   "label": "the phase 3 evaluator is disabled inside probing mode, not outside it",

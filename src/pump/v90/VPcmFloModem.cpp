@@ -294,7 +294,7 @@ VPcmFloModem::getV90CpBits(short *bits)
 	nofTransmitSequences++;
 
 	seen = modem.demodulator->connectionEvaluator;
-	seen->word_7c = seen->word_78;
+	seen->delayedRetrainArmed = seen->delayedRetrainRequest;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("End of CP #%d tx.... (terminateCp=%d, "

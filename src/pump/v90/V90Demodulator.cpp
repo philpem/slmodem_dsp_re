@@ -759,10 +759,11 @@ V90Demodulator::enterPhase4()
  * the call widens with `movzbl`.
  *
  * THE FAILURE ARM RAISES A DELAYED RETRAIN.  A zero from `V90TRN2Design`
- * stores 1 into `connectionEvaluator->word_78` and prints, at level > 1,
- * "V90Demodulator::exitPhase3() delayedRetrainRequest !!!" -- which is the
- * author's own name for that slot and the third function to touch the pair.
- * See V90ConnectionEvaluator.h for why the field is not renamed here.
+ * stores 1 into `connectionEvaluator->delayedRetrainRequest` and prints, at
+ * level > 1, "V90Demodulator::exitPhase3() delayedRetrainRequest !!!" --
+ * which is the author's own name for that slot and the third function to
+ * touch the pair.  See V90ConnectionEvaluator.h for the derivation and
+ * finding F9480 for the naming pass that carried it into the field.
  */
 void
 V90Demodulator::exitPhase3()
@@ -817,7 +818,7 @@ V90Demodulator::exitPhase3()
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("V90Demodulator::exitPhase3() "
 					     "delayedRetrainRequest !!!\r\n");
-		connectionEvaluator->word_78 = 1;
+		connectionEvaluator->delayedRetrainRequest = 1;
 	}
 
 	edprintf("V90Demodulator: TRN2d spectral parameters:\r\n");
@@ -1382,7 +1383,7 @@ V90Demodulator::progress(int *out, unsigned int &nofOut, float *in,
 				if (quickConnect != 0) {
 					if (autoDigitalImpDetector->
 					    isThereAnyAltRbsPhase() != 0) {
-						connectionEvaluator->short_b2 =
+						connectionEvaluator->altRbsDetectedOnQc =
 						    1;
 						edprintf("V90Demodulator: "
 							 "setAltRbsDetectedOnQC "

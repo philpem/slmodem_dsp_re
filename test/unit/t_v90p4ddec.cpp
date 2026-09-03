@@ -2033,7 +2033,7 @@ run_exit_phase3(void)
 		 * is planted away from one -- the fill never produces a zero
 		 * byte, but 1 is a value it could hold.
 		 */
-		CEV->word_78 = 0xd7d70000u + (unsigned int)trial;
+		CEV->delayedRetrainRequest = 0xd7d70000u + (unsigned int)trial;
 
 		memcpy(x3_acp_pre, x3_acp[1], X3_ACP_SLOT);
 		x3_arena_save();
@@ -2136,13 +2136,13 @@ run_exit_phase3(void)
 				sawJd92++;
 			else
 				sawJd++;
-			if (CEV->word_78 == 1u)
+			if (CEV->delayedRetrainRequest == 1u)
 				sawFail++;
 			else
 				sawOk++;
 			if (dsplib_debug_capture_lines(1) > 0)
 				printed++;
-			if (lvl == 2 && CEV->word_78 == 1u)
+			if (lvl == 2 && CEV->delayedRetrainRequest == 1u)
 				gated++;
 			if (ratio_v[ri] > 0.0f)
 				sawPlus++;

@@ -108923,3 +108923,86 @@ reading V.27ter's onto V.21 would have scheduled a subset that cannot link at
 all. `tools/relocscan.py` is the tool for the data-reference half and was fixed
 the same day (F9280); `objdump -r` piped through a grep for the family's names
 is the cheap whole-object form and is what was used here.  (2026-09-01)
+
+### F9480. Five `V90ConnectionEvaluator` fields carried rule-1 evidence for years without a name; the naming pass closed the coordination gap rather than finding new evidence
+
+A pure naming pass over `V90Demodulator`, `V90CP` and `V90ConnectionEvaluator`
+(no behaviour changed; `make period` unmoved) found that most of the
+`word_`/`short_`/`byte_`-named fields in all three classes were already at the
+end of the line CLAUDE.md's evidence ladder allows: either genuinely
+unrecoverable (a store with no reader, a role bounded by two call sites but
+named by no string) or already named. `V90CP.h`'s own file comment records
+that its remaining offset names -- `word_ca4`, `word_cac`, `word_cb0`,
+`byte_ca9`, `byte_caa` -- are a DELIBERATE precedent from the sibling `V90MP`
+class: a role can be fully understood (state, cursor, per-block count, run
+lengths) and still correctly keep its offset name when no string or typed
+callee ever names the VALUE, only the mechanism. Nothing in this pass overrides
+that precedent, and none of `V90CP`'s fields were renamed.
+
+**Five fields in `V90ConnectionEvaluator.h` were a different case: the evidence
+was already rule 1 (a format string naming the field, or in one case the
+class's own documented reasoning) and the ONLY thing standing between the
+offset name and the real one was five-way coordination cost, recorded
+explicitly at each site:**
+
+- `word_78` -> `delayedRetrainRequest`.  `V90Demodulator::exitPhase3` stores 1
+  into it and its own `dsplibs_debug_printf` beside that store reads
+  "V90Demodulator::exitPhase3() delayedRetrainRequest !!!" -- the author's own
+  name for the slot, finding F7485's derivation, never acted on.
+- `word_7c` -> `delayedRetrainArmed`.  Weaker: usage inference only, no string
+  of its own.  It is the copy `VPcmFloModem::getV90CpBits` makes of +0x78, and
+  `evaluatePhase4`'s delayed-retrain arm fires only once BOTH are non-zero --
+  so the copy "arms" the request rather than restating it. Named on the
+  strength of that mechanism, not a string, and said so in the header.
+- `short_9c` -> `initDmin`, `short_b2` -> `altRbsDetectedOnQc`, `short_b4` ->
+  `echoRrnState`.  All three are rule 1: `evaluateConnection` prints
+  "curDmin = %d, initDmin = %d" verbatim, `evaluatePhase3`'s first arm prints
+  "altRbsDetectedOnQc => initiating Retrain" on the exact store that clears the
+  flag it names, and `evaluateConnection` prints "V90-mod3 CHANGE echoRrnState
+  = %d" beside the store that just changed it.
+
+**The blocker every one of these recorded was the SAME shape and not new
+uncertainty**: `t_v90leaves.cpp`, `t_v90conneval.cpp`, `t_v90p4ddec.cpp`,
+`VPcmFloModem.cpp` and this class's own offset-assert macros all spelled the
+field by its old name, so a rename in the header alone would not compile.
+This pass carried the rename through every one of those referrers (checked by
+grep, scoped to member-access sites on a `V90ConnectionEvaluator *`/object, not
+a blind identifier substitution -- `V90Equalizer` has an UNRELATED `word_78`
+and `word_7c` at its own +0x78/+0x7c, confirmed left untouched) plus the
+mutation suites in `test/mutations/v90conneval.json`, `v90demprog.json`,
+`v90exit3.json` and `vpcmflomodem.json`, whose `find`/`replace` anchors are
+literal source text and stopped matching the moment the identifiers moved.
+
+**One trap in the mutation JSON files is worth recording on its own.** Their
+`find`/`replace` strings are JSON-escaped source text, so a real tab is the
+two literal characters `\` and `t`. A `\b` (or `(?<![A-Za-z0-9_])`) word
+boundary anchored on the character immediately before an identifier is FOOLED
+by this: `\tshort_b2` has the letter `t` (a word character) directly
+abutting `s`, so no regex word-boundary check ever fires there even though the
+two are semantically separated by a tab. Renaming with `sed 's/\bshort_b2\b/.../g'`
+silently skipped every occurrence immediately preceded by an escaped `\t` or
+`\n` and left three stale identifiers in `v90conneval.json` that a first
+`make one` run caught as "0 anchor(s) match" and two now-uncaught LIVE
+MUTANTs. Fixed with a script that treats a literal backslash followed by `t`
+or `n` as an additional valid left boundary. Anyone renaming an identifier
+inside one of these JSON files needs the same care; a plain text editor's
+"whole word" search-and-replace has the identical blind spot for the same
+reason.
+
+**One stale claim was caught and corrected in passing, not introduced by this
+pass**: `V90ConnectionEvaluator.h`'s old comment on +0xb2 said "nothing
+reconstructed so far SETS it", which was already false by the time it was
+last edited -- `V90Demodulator::progress`'s phase-3 leg (`case 0x05`/`0x06`)
+sets it from `autoDigitalImpDetector->isThereAnyAltRbsPhase()` at quick
+connect, and that code was already in the tree. CLAUDE.md's own rule about a
+paragraph stating a live fact applies to a batch's own prior comments as much
+as to this file.
+
+Net count for the three-class pass: 5 fields renamed (4 on rule-1 evidence, 1
+on usage inference, said so explicitly), 0 bit flags found needing a named
+constant, 0 `pad_` regions split (`V90CP` and `V90ConnectionEvaluator` already
+carry no unmodelled bytes per their own file comments; `V90Demodulator`'s
+remaining `pad_281[3]` is a three-byte alignment gap with no access anywhere in
+the object to bound it further). `make period`'s test count is unchanged by
+this pass -- a rename cannot add or remove a check -- and `tools/onedef.py`,
+`tools/refcheck.py` and `tools/bannercheck.py` are clean.  (2026-09-03)
