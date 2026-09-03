@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [#################################.]  96.8%    710735 bytes, 1835 symbols
-  tested      [##################################]  99.9%    710347 bytes, 1829 of 1835 that can be
+  translated  [#################################.]  97.2%    713982 bytes, 1838 symbols
+  tested      [##################################]  99.5%    710347 bytes, 1829 of 1838 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,6 +17,9 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 42 of ours (16648 bytes).
 
   translated, alias exists, and NOT tested:
+    _init_receiver                                 1583 bytes
+    _init_transmitter                              1326 bytes
+    FAXVMI_control                                  338 bytes
     TxNoCarrierV27                                  151 bytes
     GenEQTrnSequenceV29                              99 bytes
     SetScramblerV27                                  92 bytes
@@ -85,11 +88,10 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                  2470 bytes     7 symbols
     class1.c                                        2241 bytes     3 symbols
-    class1rx.c                                      1583 bytes     1 symbols
     voice.c#3 +3                                    1272 bytes     2 symbols
     v22.c                                            929 bytes     3 symbols
     Dialer.c +18                                     895 bytes     1 symbols
+    class1tx.c +94                                   806 bytes     5 symbols
     pow.S#279 +1                                       0 bytes     9 symbols
 ```
