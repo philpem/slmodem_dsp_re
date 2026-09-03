@@ -2168,16 +2168,16 @@ static const unsigned short HDLC_LOOK_CARRIER_LEVELS[4] = {
  *
  * `FAXVMI_RESULT_BIT_2000` SET: skip the S7 check, go straight to the
  * tone-cadence tail.  CLEAR: if `limit != 0` and `ctx->countdown > limit`
- * (unsigned) and `ctx->f1264 == 0`, log ("S7 time elapsed in look
- * carrier\n"), FAX_CLASS1_NO_CARRIER, IDLE_STATE, `ctx->f1264 = 0`
+ * (unsigned) and `ctx->cng_enabled == 0`, log ("S7 time elapsed in look
+ * carrier\n"), FAX_CLASS1_NO_CARRIER, IDLE_STATE, `ctx->cng_enabled = 0`
  * (redundant, already 0); either way fall to the tone-cadence tail.
  *
- * THE TONE-CADENCE TAIL (see class1.h for `f125c`/`f1260`/`f1264`).
- *   `f1264 == 0`: plain `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`.
- *   `f1264 != 0`, `f125c == 0` (silence phase): `_put_silence`, then
+ * THE TONE-CADENCE TAIL (see class1.h for `f125c`/`f1260`/`cng_enabled`).
+ *   `cng_enabled == 0`: plain `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`.
+ *   `cng_enabled != 0`, `f125c == 0` (silence phase): `_put_silence`, then
  *     accumulate `f1260 += CLASS1_BLOCK_SAMPLES`; once it exceeds 0x5dc0
  *     (24000), reset `f1260 = 0` and flip `f125c = 1`.
- *   `f1264 != 0`, `f125c != 0` (tone phase): `FPM_TONE_generate(ctx->f1258,
+ *   `cng_enabled != 0`, `f125c != 0` (tone phase): `FPM_TONE_generate(ctx->f1258,
  *     tx, CLASS1_BLOCK_SAMPLES)` instead of silence, then accumulate
  *     `f1260` the same way against 0xfa0 (4000), flipping `f125c` back to 0
  *     on overflow.  Either phase sets `*tx_count = CLASS1_BLOCK_SAMPLES`.
@@ -2202,7 +2202,7 @@ static const unsigned short HDLC_LOOK_CARRIER_LEVELS[4] = {
  * _hdlc_receive_look_carrier_state\n"), `ctx->status = FAX_CLASS1_CONNECT`,
  * log ("At %2d.%02d[sec] hdlc_receive_state_init\n" -- narrating a
  * transition this function inlines rather than calling out to), `ctx->
- * countdown = 0`, `ctx->state = CLASS1_HDLC_RECEIVE_STATE`, `ctx->f1264 =
+ * countdown = 0`, `ctx->state = CLASS1_HDLC_RECEIVE_STATE`, `ctx->cng_enabled =
  * 0`, and the SAME `ctx->vmi_a->link->int_0014`/+0x50 chase
  * `_hdlc_receive_state` makes, but reading +0x2c this time (once, not per
  * table entry) -- discarded here, spent only on the table scan above; no
@@ -2271,7 +2271,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 			    ctx->clock_sec, ctx->clock_frac);
 		ctx->countdown = 0;
 		ctx->state = CLASS1_HDLC_RECEIVE_STATE;
-		ctx->f1264 = 0;
+		ctx->cng_enabled = 0;
 
 		/*
 		 * THE SCAN.  Re-chased every iteration (the object re-reads
@@ -2298,7 +2298,7 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 			}
 		}
 	} else if (limit != 0 && (unsigned int)ctx->countdown >
-		   (unsigned int)limit && ctx->f1264 == 0) {
+		   (unsigned int)limit && ctx->cng_enabled == 0) {
 		if (dsplibs_debug_level > 1)
 			dsplibs_debug_printf(
 			    "At %2d.%02d[sec], curent_timeout = %d, No "
@@ -2308,10 +2308,10 @@ _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 			    ctx->s7_timeout);
 		ctx->status = FAX_CLASS1_NO_CARRIER;
 		ctx->state = CLASS1_IDLE_STATE;
-		ctx->f1264 = 0;
+		ctx->cng_enabled = 0;
 	}
 
-	if (ctx->f1264 == 0) {
+	if (ctx->cng_enabled == 0) {
 		_put_silence(tx, CLASS1_BLOCK_SAMPLES);
 	} else if (ctx->f125c == 0) {
 		_put_silence(tx, CLASS1_BLOCK_SAMPLES);

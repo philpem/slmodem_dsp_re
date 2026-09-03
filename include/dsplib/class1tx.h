@@ -363,7 +363,7 @@ int cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx,
  * side lacked until now).  See class1tx.c for the full derivation of each,
  * including the S7 (carrier-wait) timeout math shared by the look-carrier
  * state and `_rx_look_carrier_state`, and the tone-cadence machine
- * (`f125c`/`f1260`/`f1264`, class1.h) unique to the look-carrier state.
+ * (`f125c`/`f1260`/`cng_enabled`, class1.h) unique to the look-carrier state.
  */
 int _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
 				     short *tx, int word3, int word4,

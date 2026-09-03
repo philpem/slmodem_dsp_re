@@ -112255,3 +112255,118 @@ failed on the first run -- no defect found needing a second pass.
 src/fax src/service` (273/273 agree), `tools/refcheck.py` (13102 references,
 0 dangling) all clean. `make period` left for the parent session's gate, per
 this wave's own brief. (2026-09-03)
+
+## F10120. `class1.c`'s own last three land -- `fax_class1_create`, `fax_class1_command`, `_answer_tone_state` -- closing fax's core service to nine-of-nine
+
+Continuing the same wave as F10119 (the `class1tx.c` cluster), now that
+`FAXVMI_control`, `_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
+`cHDLCtx_preamble_state_init` and `_rx_look_carrier_init` all exist. These
+three close `class1.c` entirely and, with F10119's four and voice.c's two
+(next finding), complete fax's 4,170-byte core-service closure.
+
+**`fax_class1_create` (0x092e20, 1,532 bytes), read whole with `dis.py` before
+anything went into `src/`, per CLAUDE.md's own budget note that this size is
+~3,200 tokens of disassembly, not the 131K a function the size of
+`v34handshak` would cost.**
+
+    fax_class1_create(existing, cfg)
+        existing == NULL:
+            malloc CLASS1_MODELLED_BYTES; zero eight pointer fields
+            build vmi_c (V.21 TX faxvmi_cfg, slot 5, V21TX_CFG-based modem
+                cfg) -> FAXVMI_create(NULL, ...)
+            build vmi_a (V.21 RX faxvmi_cfg, slot 6 [new: VMI_SLOT_V21RX],
+                V21RX_CFG-based modem cfg) -> FAXVMI_create(NULL, ...)
+        (both paths converge here)
+        ctx->s7_timeout = cfg->s7_timeout; ctx->f12d4 = cfg->f08;
+        ctx->f12dc = FAX_HP_COEFF [new, 10-short table, the object's OWN
+            .rodata symbol name]; zero iir_state; f12f0 from cfg->iir_enable
+        ctx->answer_tone_blocks = cfg->answer_tone_ms/20, or 150 default
+        install all nineteen class1_state_functions[], states_names' order
+        clock/rate-code/f127c/dle_seen/cng_enabled/delayed_status reset
+        cfg->mode == CLASS1_ANS_ORG_ANSWER (2):
+            state = ANSWER_TONE_STATE; tone at 2100 Hz; ans_org = 2
+        else:
+            state = HDLC_RECEIVE_LOOK_CARRIER_STATE
+            cng_enabled = (cfg->disable_cng == 0) [overrides the
+                unconditional 0 both paths already got]
+            tone at 1100 Hz; _cHDLCrx_init_from_idle(ctx, 3); ans_org = 1
+        return ctx (never NULL, even down a path with no traceable
+            allocation-failure check)
+
+**`struct fax_class1_cfg` is NEW** -- `fax_class1_create`'s own second
+argument, a 0x18-byte record read at six fixed offsets and named by nothing
+in the object as a struct (no `.data`/`.rodata` template; `FAX_create`,
+voice.c's own next finding, builds one on its stack). Declared in
+`class1.h`. Two fields carry RANK-1 evidence, the object's own words: `mode`
+from `FAX_create`'s own debug line naming it "ans_org" ("fax: fax_class1
+will created (ans_org=%d, s7=%d)\n"), `answer_tone_ms` from this function's
+own "Answer tone length %d ms" (no trailing newline -- checked against
+`tools/relocscan.py`'s invented-string firewall, which caught a `\n` this
+session mistakenly added on a first pass before the string checker rejected
+it). The rest are usage inference.
+
+**THREE FIELDS PROMOTED FROM PAD, one RENAMED on rank-1 evidence:**
+
+- `ans_org` (`+0x1218`, was `pad_1218[4]`) -- the object writes a LITERAL 1
+  or 2 on each of the two finishes, not `cfg->mode` copied through; the two
+  happen to agree for every value `FAX_create` actually passes, and the
+  source is written to match the object's own choice rather than the
+  equivalent-under-valid-input shortcut.
+- `answer_tone_blocks` (`+0x1268`, was `pad_1268[4]`) -- the countdown
+  threshold `_answer_tone_state` compares `countdown` against; independently
+  re-derived divisor 20 (`imul $0x66666667`/`sar $3` reciprocal, verified in
+  Python against the object's exact instruction sequence rather than
+  assumed from the round number).
+- `cng_enabled` (RENAMED from the neutral `f1264`) -- the object's own debug
+  line, "CNG generation disabled", fires exactly when this ends up 0 at the
+  override site.  **A FIRST DRAFT MISSED THE UNCONDITIONAL EARLY CLEAR** --
+  `fax_class1_create` zeroes it BEFORE the `cfg->mode` branch, common to
+  both finishes, and only the ordinary-session finish later overrides it
+  from `cfg->disable_cng`; the answer-tone finish never touches it again.
+  Missing that clear cost one differential failure (`t_class1create.c`'s
+  own "fresh, answer-tone" case: our side read the harness's
+  uninitialised-malloc fill pattern where the object's own compiled code,
+  and hence `ref_`, read 0) -- caught by the harness's own deliberate
+  non-zero fill discipline (`test/harness/runtime.c`'s own comment: "fresh
+  pages are zero, which is the one value that makes an uninitialised field
+  look deliberate"), not by inspection.
+
+**`fax_class1_command` (0x093420, 615 bytes)** dispatches six ops
+(`command_names`, new `.rodata` 0x9400, six `{int, char*}` pairs, the
+object's own T.30 AT-command mnemonics TH/TM/RM/RH/TS/RS) via a `switch`,
+after an unconditional debug-only search-and-log of `cmd`'s own name (kept
+scanning to the LAST match, `class1_state_name`'s own established idiom) and
+an unconditional `f12d0` clear for every `cmd` except `RH`. TH/RH require
+`arg3 == 3` at the `FAX_class1_command` (voice.c) layer, not here -- this
+function trusts its caller. RH's own branch is the one with real control
+flow: already `HDLC_RECEIVE_BETWEEN_BUFFERS_STATE` AND the rate is unchanged
+restarts `HDLC_RECEIVE_STATE`; otherwise an empty `f12d0` goes through
+`_cHDLCrx_init_from_idle`, a non-empty one jumps straight to
+`HDLC_EMULATE_RECEIVE_STATE`. TS/RS duplicate `_send_silence_state_init`/
+`_recieve_silence_state_init`'s own halving-with-floor arithmetic inline
+rather than calling them (no relocation to either in this range -- the
+`_init_receiver`/`_sym_size` duplication precedent, F10117). ALWAYS returns
+1, even for `cmd` outside 0..5.
+
+**`_answer_tone_state` (0x092d60, 94 bytes)**, `CLASS1_ANSWER_TONE_STATE`'s
+own handler: count `countdown` up; once it EXCEEDS `answer_tone_blocks`,
+hand off to `cHDLCtx_preamble_state_init` (return discarded) instead of
+generating another block. Otherwise `FPM_TONE_generate(ctx->f1258, tx, ...)`.
+Confirms `f1258`'s long-standing "plausibly for ANSWER_TONE_STATE" note
+(class1.h) to evidence class 2.
+
+Tested with `test/unit/t_class1create.c` (fresh normal, fresh answer-tone,
+three `answer_tone_ms` derivations, reinit -- proving `vmi_c`/`vmi_a`
+survive unchanged -- debug-level-on, plus a structural check that every one
+of the nineteen `class1_state_functions` slots equals the correctly-named
+local handler) and `t_class1cmd.c` (all six commands including both RH
+sub-branches and the TM/RM cross-teardown pair, two out-of-range `cmd`
+cases, debug-level-on including the genuinely-uninitialised `name` read, and
+`_answer_tone_state` run three times against a real `fax_class1_create`-built
+answer-tone session to cross its own threshold and reach the real
+`cHDLCtx_preamble_state_init` hand-off). `make one T="t_class1create
+t_class1cmd"` green, 47+ checks per case, 0 failed after the `cng_enabled`
+fix above. `tools/onedef.py` (301 types, 1 known duplicate),
+`tools/bannercheck.py src/fax src/service` (276/276 agree),
+`tools/refcheck.py` (13107 references, 0 dangling) all clean. `make period`
+left for the parent session's gate. (2026-09-03)

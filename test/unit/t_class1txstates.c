@@ -169,7 +169,7 @@ plant(int state, int prev_state, int with_fifo)
 	ctx_a.f1250 = ctx_b.f1250 = 1;
 	ctx_a.f12d0 = ctx_b.f12d0 = 0;
 	ctx_a.s7_timeout = ctx_b.s7_timeout = 60;
-	ctx_a.f1264 = ctx_b.f1264 = 0;
+	ctx_a.cng_enabled = ctx_b.cng_enabled = 0;
 	ctx_a.f125c = ctx_b.f125c = 0;
 	ctx_a.f1260 = ctx_b.f1260 = 0;
 	ctx_a.transmit_enabled = ctx_b.transmit_enabled = 0;

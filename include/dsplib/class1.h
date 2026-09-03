@@ -118,7 +118,21 @@ struct fax_class1 {
 					 * first) and `_delete_data_tx_modem`
 					 * frees it the same way with no
 					 * sub-frees                         */
-	unsigned char pad_1218[4];	/* +0x1218                          */
+	int ans_org;			/* +0x1218 `fax_class1_create`'s own
+						 * word, PROMOTED FROM `pad_1218`:
+						 * its debug line names the local
+						 * this field is copied from
+						 * verbatim, "fax: fax_class1 will
+						 * created (ans_org=%d, s7=%d)\n"
+						 * (evidence class 1).  1 for the
+						 * ordinary session
+						 * (`struct fax_class1_cfg`'s own
+						 * `mode == 1`), 2 for the
+						 * answer-tone-only one (`mode ==
+						 * 2`) -- so this is `mode`'s own
+						 * value, copied through unchanged.
+						 * Nothing reconstructed reads it
+						 * back yet                        */
 	int state;			/* +0x121c the session state        */
 	int prev_state;			/* +0x1220 the state as of the LAST
 					 * call to `fax_class1_progress` --
@@ -213,9 +227,19 @@ struct fax_class1 {
 	struct fpm_tone *f1258;	/* +0x1258 torn down by
 						 * `fax_class1_delete`'s own
 						 * `FPM_TONE_delete` call -- a tone
-						 * detector, plausibly for
-						 * `CLASS1_ANSWER_TONE_STATE`, not
-						 * otherwise established             */
+						 * generator/detector, CONFIRMED for
+						 * `CLASS1_ANSWER_TONE_STATE` now
+						 * that `_answer_tone_state` is
+						 * written: it hands this straight
+						 * to `FPM_TONE_generate`, evidence
+						 * class 2.  `fax_class1_create`
+						 * builds it at one of two
+						 * frequencies (1100 Hz ordinary
+						 * session, 2100 Hz -- the T.30 CED
+						 * answer tone -- the
+						 * `ans_org == 2` one), both with
+						 * `scale = 6400` and phase
+						 * reversals disabled            */
 	int f125c;			/* +0x125c a 0/1 phase flag in
 					 * `_hdlc_receive_look_carrier_state`'s
 					 * own tone-cadence machine: 0 is the
@@ -230,18 +254,57 @@ struct fax_class1 {
 					 * bumped by `CLASS1_BLOCK_SAMPLES` per
 					 * call in EITHER phase, never both at
 					 * once.  Usage inference only          */
-	int f1264;			/* +0x1264 a gate: 0 disables the whole
-					 * `f1260`/`f125c` tone-cadence machine
-					 * (plain silence only) and is also what
-					 * decides whether a look-carrier timeout
-					 * is reported as NO_CARRIER (f1264==0)
-					 * or silently absorbed into the
-					 * tone-cadence path (f1264!=0).  Cleared
-					 * both on a fresh entry to HDLC_RECEIVE_
-					 * LOOK_CARRIER_STATE and on a hard
-					 * timeout; no reconstructed writer sets
-					 * it nonzero yet.  Usage inference only */
-	unsigned char pad_1268[4];	/* +0x1268                          */
+	int cng_enabled;		/* +0x1264 PROMOTED FROM the neutral
+					 * `f1264`, and renamed on rank-1
+					 * evidence: `fax_class1_create`
+					 * UNCONDITIONALLY clears it to 0
+					 * first (both `cfg->mode` finishes
+					 * reach that store), then the
+					 * ORDINARY-session finish alone
+					 * overrides it to `(cfg->disable_cng
+					 * == 0)` -- the `mode ==
+					 * CLASS1_ANS_ORG_ANSWER` finish never
+					 * touches it again, so it stays 0
+					 * (disabled) on that path regardless
+					 * of `cfg->disable_cng`.  The
+					 * object's OWN debug line at the
+					 * override site is "CNG generation
+					 * disabled" (no trailing newline --
+					 * the object's own), printed exactly
+					 * when the override ends up 0.  Reused
+					 * as a general
+					 * tone-cadence gate everywhere else it
+					 * is read: 0 disables the whole
+					 * `f1260`/`f125c` cadence machine
+					 * (plain silence only) and decides
+					 * whether a look-carrier timeout is
+					 * reported as NO_CARRIER (gate==0) or
+					 * silently absorbed into the cadence
+					 * path (gate!=0).  Cleared both on a
+					 * fresh entry to HDLC_RECEIVE_LOOK_
+					 * CARRIER_STATE and on a hard timeout;
+					 * `fax_class1_create` is the only
+					 * reconstructed writer that can set it
+					 * nonzero                             */
+	int answer_tone_blocks;	/* +0x1268 PROMOTED FROM `pad_1268`:
+					 * the countdown threshold
+					 * `_answer_tone_state` compares
+					 * `countdown` against.  `fax_class1_
+					 * create` derives it from
+					 * `cfg->answer_tone_ms / 20` (block
+					 * period at the implied 8 kHz/160-
+					 * sample rate; independently re-
+					 * derived via the object's own
+					 * `imul $0x66666667`/`sar $3`
+					 * reciprocal, not guessed) when
+					 * `cfg->answer_tone_ms` is nonzero,
+					 * else a literal default of 150 (3
+					 * seconds).  The object's own debug
+					 * line for the derived case is
+					 * "Answer tone length %d ms" --
+					 * evidence class 1 for the FIELD's
+					 * unit, usage inference for the name
+					 * itself                              */
 	int tx_rate;			/* +0x126c written once by
 						 * `_init_transmitter`
 						 * (class1tx.c): the same
@@ -477,6 +540,54 @@ struct fax_class1 {
 #define CLASS1_MODELLED_BYTES	0x12f4
 
 /*
+ * `fax_class1_create`'s SECOND ARGUMENT -- a 0x18-byte configuration record
+ * read at six fixed offsets (`dis.py`, 0x92e4d..0x92fbf) and nowhere named
+ * by the object as a struct (`FAX_create` builds one on its own stack, not
+ * from a `.data`/`.rodata` template).  Every field here is usage inference
+ * except `answer_tone_ms`, which the object's own debug line types
+ * ("Answer tone length %d ms") and `mode`, which the object's own debug line
+ * NAMES ("ans_org", `FAX_create`'s print -- see fax.h): both rank-1
+ * evidence, the strongest this tree recognises.  `s7_timeout` is named for
+ * the ALREADY-ESTABLISHED `struct fax_class1::s7_timeout` field it is copied
+ * into unconditionally, one field over.
+ */
+struct fax_class1_cfg {
+	int mode;		/* +0x00 1: ordinary session (state starts
+				 * at CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE).
+				 * 2: answer-tone-only (state starts at
+				 * CLASS1_ANSWER_TONE_STATE, the tone
+				 * generator is built at 2100 Hz -- the T.30
+				 * CED tone -- instead of 1100, and
+				 * `_cHDLCrx_init_from_idle` is never called).
+				 * Copied verbatim into `ctx->ans_org`     */
+	int s7_timeout;		/* +0x04 -> ctx->s7_timeout, unconditional  */
+	int f08;		/* +0x08 -> ctx->f12d4, unconditional.  No
+				 * reconstructed reader beyond that field's
+				 * own (F10116/F10117); kept neutral         */
+	int iir_enable;		/* +0x0c nonzero -> ctx->f12f0 = 1.  Every
+				 * traced caller (`FAX_create`) sets this,
+				 * so no reconstructed caller leaves the IIR
+				 * tick off; usage inference on the NAME,
+				 * not the effect (class1.h's own `f12f0`
+				 * note)                                     */
+	int answer_tone_ms;	/* +0x10 nonzero -> ctx->answer_tone_blocks =
+				 * this / 20 (block period).  Zero -> the
+				 * object's own literal default, 150 blocks
+				 * (3 seconds).  Rank-1 evidence: "Answer
+				 * tone length %d ms" is the object's own
+				 * debug line at the site that derives it   */
+	int disable_cng;	/* +0x14 -> ctx->cng_enabled = (this == 0).
+				 * Rank-1 evidence: "CNG generation
+				 * disabled\n" is the object's own debug
+				 * line, printed exactly when this is
+				 * nonzero                                   */
+};
+
+/* `struct fax_class1_cfg::mode` -- see the struct's own field comment. */
+#define CLASS1_ANS_ORG_NORMAL	1
+#define CLASS1_ANS_ORG_ANSWER	2
+
+/*
  * THE STATE NUMBERS ARE THE AUTHOR'S OWN, read out of `states_names`
  * (.rodata 0x9360, twenty {int, char *} pairs that `fax_class1_progress`
  * searches at 0x93826 to log a transition).  That is the strongest class of
@@ -525,10 +636,11 @@ struct fax_class1 {
 #define FAX_CLASS1_ACCEPT_RATE			10
 
 /*
- * `states_names` (twenty entries) and `status_names` (eleven) -- see
- * class1.c for the derivation and D1330 for why they are global here where
- * the object has them file-local.  Declared here so a test can compare them
- * against the blob's own copy without a reader in `src/` yet.
+ * `states_names` (twenty entries), `status_names` (eleven) and
+ * `command_names` (six) -- see class1.c for the derivation and D1330 for why
+ * they are global here where the object has them file-local.  Declared here
+ * so a test can compare them against the blob's own copy without a reader in
+ * `src/` yet.
  */
 struct class1_name {
 	int id;
@@ -537,6 +649,29 @@ struct class1_name {
 
 extern struct class1_name states_names[20];
 extern struct class1_name status_names[11];
+extern struct class1_name command_names[6];
+
+/*
+ * The high-pass filter `fax_class1_progress`'s IIR tick runs (`f12dc`,
+ * above) -- `.rodata` 0x9430, ten shorts, the object's OWN symbol name
+ * (`nm`: `r FAX_HP_COEFF`).  `fax_class1_create` is its only writer.
+ */
+extern const short FAX_HP_COEFF[10];
+
+/*
+ * `fax_class1_command`'s own `cmd` argument -- `command_names`'s six ids,
+ * the object's own strings verbatim (.rodata 0x9400, six {int, char *}
+ * pairs).  Rank-1 evidence, the strongest class this tree recognises.  Not
+ * to be confused with `FAXC1_FTS`/etc (`fax.h`), `FAX_class1_command`'s OWN
+ * `cmd` numbering, which is a DIFFERENT space that `voice.c` remaps into
+ * this one.
+ */
+#define FAX_CLASS1_TH_COMMAND	0
+#define FAX_CLASS1_TM_COMMAND	1
+#define FAX_CLASS1_RM_COMMAND	2
+#define FAX_CLASS1_RH_COMMAND	3
+#define FAX_CLASS1_TS_COMMAND	4
+#define FAX_CLASS1_RS_COMMAND	5
 
 /*
  * The silence detector's threshold, and the block it emits.  Both are
@@ -813,5 +948,52 @@ int fax_class1_status(struct fax_class1 *ctx, void *modem_status);
 int fax_class1_progress(struct fax_class1 *ctx, short *rx, short *tx,
 			int word3, int word4, int *rx_count, int *tx_count,
 			int *word7, int *word8);
+
+/*
+ * ANSWER_TONE_STATE (14).  `.text` 0x092d60, 94 bytes.  Count one block off
+ * `countdown` (armed by `fax_class1_create`'s own `answer_tone_ms`-derived
+ * `answer_tone_blocks`); once `countdown` EXCEEDS it, hand off to
+ * `cHDLCtx_preamble_state_init` (its return discarded) instead of
+ * generating another block.  Otherwise generate one block of the session's
+ * tone (`ctx->f1258`, `FPM_TONE_generate`) and report
+ * `*tx_count = CLASS1_BLOCK_SAMPLES`.  Returns 0 on both paths.
+ */
+int _answer_tone_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		       int word3, int word4, int *rx_count, int *tx_count,
+		       int word7, int *word8);
+
+/*
+ * The session dispatcher (control side).  `.text` 0x093420, 615 bytes.
+ * `cmd` is one of the six `FAX_CLASS1_*_COMMAND` codes above; `arg3` is a
+ * T.30 rate code (TH/TM/RM/RH) or a raw sample count (TS/RS, the same
+ * argument `_send_silence_state_init`/`_recieve_silence_state_init` take);
+ * `arg4` is read ONLY by the TM command, into `silence_blocks`.  Logs the
+ * incoming command (its own name, off `command_names`) and, unless `cmd ==
+ * FAX_CLASS1_RH_COMMAND`, clears `f12d0` -- both unconditionally, before
+ * dispatching.  A `cmd` outside 0..5 does the log-and-clear and returns 1
+ * without dispatching anything.  ALWAYS returns 1; nothing reconstructed
+ * reads back any other value.  See class1.c for each command's own
+ * derivation.
+ */
+int fax_class1_command(struct fax_class1 *ctx, int cmd, int arg3, int arg4);
+
+/*
+ * Build (or reinitialise) a Class 1 fax session.  `.text` 0x092e20, 1,532
+ * bytes -- the largest single piece of `class1.c`.  `existing` NULL
+ * allocates a fresh `sizeof(struct fax_class1)`-ish object
+ * (`CLASS1_MODELLED_BYTES`, though the real object extends past what this
+ * batch models); non-NULL reinitialises it in place, INCLUDING re-installing
+ * the global `class1_state_functions` table and rebuilding the session's
+ * tone generator -- but NOT rebuilding `vmi_c`/`vmi_a` (the V.21 handles),
+ * which only the fresh path builds.  `cfg` is never NULL in any traced
+ * caller and this function does not check it either.  Returns the (possibly
+ * freshly allocated) session, or the same `existing` on every path (never
+ * NULL, even on an internal allocation failure this batch could not trace a
+ * check for).  See class1.c for the full derivation, including the
+ * `cfg->mode == 2` answer-tone-only branch and the nineteen `class1_state_
+ * functions` installs (all in `states_names`' own order).
+ */
+struct fax_class1 *fax_class1_create(struct fax_class1 *existing,
+				     const struct fax_class1_cfg *cfg);
 
 #endif /* DSPLIB_CLASS1_H */
