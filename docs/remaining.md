@@ -988,3 +988,78 @@ entirely, leaving only the two no-entry-point leaves in fax and whatever
 `FAX_process`'s eleven-way dispatch or similar already-written functions
 still route into stub arms (see the "also on the board" note near the top
 of this file).
+
+## Wave 12 — fax's core service closure completes: all nine land, `service.py --list fax` is now empty
+
+One session, all nine. Landed in three commits, bottom-up through the real
+dependency chain rather than file-by-file: `class1tx.c`'s four remaining
+leaves first (F10119), then `class1.c`'s own last three (F10120, which
+depend on the `class1tx.c` four), then `voice.c`'s two (F10121, which depend
+on `fax_class1_create`/`fax_class1_command`).
+
+**The `cHDLCtx_off_init` ambiguity F10111 flagged is RESOLVED: it is not one
+of the nine, and `service.py` was right.** `worklist.py` lists it under
+`class1tx.c +94` on ADDRESS alone; `objdump -r` over the whole 1.2 MB shows
+zero relocations of either kind (F8493's call/data-store pair) naming it —
+CLAUDE.md's own worked example from F8320's no-entry-point bucket, applied
+rather than re-derived. It remains unwritten, on its own merit, alongside
+`GetNextDigitAndReturnNextState` (895 B, an unrelated dialer symbol) as the
+object's last two no-entry-point leaves — `service.py --list none` now
+names exactly these two and nothing else.
+
+**Two real corrections landed with the code, both from checking the tool
+rather than trusting an inherited reading:**
+
+- `_cHDLCrx_init_from_idle` takes TWO arguments, not one — a first pass
+  inside that one function alone misread its second stack slot as a stray
+  caller pointer, corrected before commit by re-tracing the exact register
+  with `dis.py --plain` at the real call site (F10119).
+- `FAX_create` takes THREE arguments, not two — `fax.h`'s own prior banner
+  (written when the function was still blocked) said its first two stack
+  slots matched `VOICE_create`'s, and they don't: a real third argument
+  (`originate`) sits between `modem` and `rate`. Corrected in `fax.h`
+  itself rather than left to drift a second time (F10121).
+
+**`service.py`'s own summary, re-run after the merge:**
+
+```
+  DATA MODE  V.90/V.92/V.34/V.32/V.22/B.103/V.23/V.8      0 symbols       0 bytes
+  FAX only   nothing in data mode reaches it              0 symbols       0 bytes
+  voice / Caller ID / ring detect only                    0 symbols       0 bytes
+  no entry point reaches it                               2 symbols    1044 bytes
+```
+
+Fax's core service closure is COMPLETE. What remains in the whole object is
+the two no-entry-point leaves above and whatever `docs/coverage.md`'s next
+regeneration shows for already-written functions' own stub arms (FAX_process's
+eleven-way dispatch or similar) — neither is fax-closure work, both are
+already-noted "also on the board" items near the top of this file.
+
+Individually built and `make one`-green on every new test file
+(`t_class1txcplinit`, `t_class1create`, `t_class1cmd`, `t_faxcreate`), plus a
+re-run of fourteen pre-existing fax/voice test files this wave's field
+renames (`f1264` -> `cng_enabled`, new `ans_org`/`answer_tone_blocks`) could
+have touched — all green, no regressions. `tools/onedef.py`,
+`tools/bannercheck.py src/fax src/service` and `tools/refcheck.py` all clean
+after every commit. `make period` not run (no docker in this session) —
+left for the parent session's gate, per this wave's own brief.
+
+### What this wave established
+
+- **A dependency-respecting order inside one session works as well as
+  splitting across sessions, when the dependency graph is already known.**
+  This wave's brief itself named the real chain (`class1tx.c`'s four ->
+  `class1.c`'s three -> `voice.c`'s two); landing bottom-up in one session
+  meant every later piece could be tested against REAL handles the earlier
+  pieces built (`cHDLCtx_preamble_state_init`'s real `vmi_c`, then
+  `fax_class1_command`'s real session from `fax_class1_create`, then
+  `FAX_class1_command`'s real session from `FAX_create`) rather than
+  synthetic fixtures.
+- **The harness's own non-zero malloc-fill discipline caught a real
+  omission, not a cosmetic one.** `fax_class1_create` unconditionally
+  clears `cng_enabled` before its `mode` branch and only the ordinary-
+  session path re-derives it from `cfg->disable_cng`; a first draft of the
+  answer-tone path left the clear out, and the harness's `HARNESS_MALLOC_
+  FILL` pattern turned that into an immediate, unambiguous differential
+  failure rather than a silent zero that happened to agree by luck of a
+  fresh page.

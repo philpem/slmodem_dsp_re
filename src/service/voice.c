@@ -1315,9 +1315,8 @@ STRM_VCE_GetFDSPEnvironmentalParams(short *psFarEchoDelay,
  * `.text` 0x001450, 172 bytes -- see `fax.h` for `struct fax_ctx` and why
  * this sits in a separate header from `struct voice_ctx` despite living in
  * the same TU.  `FAX_create` and `FAX_class1_command`, the object's own
- * neighbours on either side of this group (0x001500 and 0x001740), are NOT
- * written: both are blocked on `FAXVMI_create`/`FAXVMI_control`, several
- * hops down their own call chains -- see docs/findings.md F10105.
+ * neighbours on either side of this group (0x001500 and 0x001740), are now
+ * both written too (F10121), below.
  *
  * The object's own order: print "fax: delete...\n" (`.rodata.str1.1`
  * 0x1be) when `dsplibs_debug_level > 1`, then unconditionally check and
@@ -1341,6 +1340,237 @@ FAX_delete(struct fax_ctx *ctx)
 
 	ctx->class1 = NULL;
 	sysdep_free(ctx);
+}
+
+/*
+ * slmodemd's own S-register reader -- NOT the voice service's own
+ * `voice_get_sreg`-shaped function a few hundred lines up in this same file
+ * (that one's own banner already says so: "this is NOT a call into it").
+ * `FAX_create` is the one traced caller, asking for register 7 (T.30's own
+ * S7, the carrier-wait timeout `struct fax_class1_cfg::s7_timeout` carries
+ * straight through).  No dsplib header owns it, the same reason
+ * `modem_recv_from_tty`/`modem_send_to_tty` are declared locally above.
+ */
+extern long modem_get_sreg(void *modem, unsigned int reg);
+
+/*
+ * `.text` 0x001500, 564 bytes.  See `fax.h`'s own prototype comment for
+ * `originate`/`rate`'s meaning; this banner is the CONTROL-FLOW account.
+ *
+ *   1. Debug print ("fax: create...\n", `.rodata.str1.1` 0x1ce) at debug
+ *      level > 1, BEFORE anything else -- even the allocation.
+ *   2. `sysdep_malloc(sizeof(struct fax_ctx))`; NULL returns NULL directly
+ *      (no debug line, no cleanup -- there is nothing yet to clean up).
+ *      `sysdep_memset` the whole thing to 0, then `ctx->modem = modem`.
+ *   3. `rate == 8000`: skip step 4 entirely, `rc_a`/`rc_b` stay NULL (the
+ *      memset's own zero). Any other value: build `rc_a` (9600 -> converter
+ *      3, 48000 -> converter 5, anything else -> NULL) and, if that
+ *      succeeded, `rc_b` the same way (9600 -> 2, 48000 -> 4). A NULL
+ *      resampler where one was expected -- including the "anything else"
+ *      case, which builds neither and always fails here -- jumps straight
+ *      to the teardown at step 6.
+ *   4. `ctx->host_frame_samples = ctx->out_produced = ctx->out_write_half =
+ *      rate * CLASS1_BLOCK_SAMPLES / 8000` (unsigned; the object's own
+ *      `mul`/`shr` reciprocal, re-derived rather than assumed to be `/50`
+ *      even though the arithmetic reduces to that for every rate this
+ *      function accepts).
+ *   5. Build the Class 1 session: `local` is a `struct fax_class1_cfg`,
+ *      zeroed, with `mode` from `originate` (nonzero ->
+ *      `CLASS1_ANS_ORG_NORMAL`, zero -> `CLASS1_ANS_ORG_ANSWER`),
+ *      `s7_timeout` from `modem_get_sreg(modem, 7)`, and `iir_enable = 1`
+ *      (`answer_tone_ms`/`f08`/`disable_cng` all stay 0, the zeroed
+ *      default). Debug-print "fax: fax_class1 will created (ans_org=%d,
+ *      s7=%d)\n" at level > 1 with `local.mode` and the raw S7 value, THEN
+ *      `ctx->class1 = fax_class1_create(NULL, &local)`. A NULL result also
+ *      falls to step 6.
+ *   6. TEARDOWN, only reached by a step-3/5 failure: debug-print "fax:
+ *      delete...\n" (`FAX_delete`'s own string) at level > 1, delete `rc_a`/
+ *      `rc_b`/`class1` exactly as `FAX_delete` does -- INLINE, not by
+ *      calling it (no relocation to `FAX_delete` in this range) -- and
+ *      `sysdep_free(ctx)`.  Returns NULL.
+ *   7. Otherwise returns `ctx`.
+ */
+struct fax_ctx *
+FAX_create(void *modem, int originate, unsigned int rate)
+{
+	struct fax_ctx *ctx;
+	struct fax_class1_cfg local;
+	int s7;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("fax: create...\n");
+
+	ctx = sysdep_malloc(sizeof(struct fax_ctx));
+	if (ctx == NULL)
+		return NULL;
+	sysdep_memset(ctx, 0, sizeof(struct fax_ctx));
+	ctx->modem = modem;
+
+	if (rate != 8000) {
+		if (rate == 9600)
+			ctx->rc_a = RcFixed_Create(3);
+		else if (rate == 48000)
+			ctx->rc_a = RcFixed_Create(5);
+		else
+			ctx->rc_a = NULL;
+		if (ctx->rc_a == NULL)
+			goto fail;
+
+		if (rate == 9600)
+			ctx->rc_b = RcFixed_Create(2);
+		else if (rate == 48000)
+			ctx->rc_b = RcFixed_Create(4);
+		else
+			ctx->rc_b = NULL;
+		if (ctx->rc_b == NULL)
+			goto fail;
+	}
+
+	ctx->host_frame_samples =
+	    (int)((rate * (unsigned int)CLASS1_BLOCK_SAMPLES) / 8000U);
+	ctx->out_produced = ctx->host_frame_samples;
+	ctx->out_write_half = ctx->host_frame_samples;
+
+	sysdep_memset(&local, 0, sizeof(local));
+	s7 = modem_get_sreg(modem, 7);
+	local.mode = (originate != 0) ? CLASS1_ANS_ORG_NORMAL
+				      : CLASS1_ANS_ORG_ANSWER;
+	local.s7_timeout = s7;
+	local.iir_enable = 1;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(
+		    "fax: fax_class1 will created (ans_org=%d, s7=%d)\n",
+		    local.mode, s7);
+
+	ctx->class1 = fax_class1_create(NULL, &local);
+	if (ctx->class1 != NULL)
+		return ctx;
+
+fail:
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("fax: delete...\n");
+	if (ctx->rc_a != NULL)
+		RcFixed_Delete(ctx->rc_a);
+	if (ctx->rc_b != NULL)
+		RcFixed_Delete(ctx->rc_b);
+	if (ctx->class1 != NULL)
+		fax_class1_delete(ctx->class1);
+	ctx->class1 = NULL;
+	sysdep_free(ctx);
+	return NULL;
+}
+
+/*
+ * `.text` 0x001740, 708 bytes.  `cmd` is one of the six `FAXC1_*` codes
+ * (`fax.h`), a DIFFERENT numbering from `fax_class1_command`'s own
+ * `FAX_CLASS1_*_COMMAND` (class1.h) that this function remaps into via its
+ * own `switch`.  `arg` rides through as a plain int (`(int)(long)arg`,
+ * never dereferenced) -- a T.30 rate code for FTM/FRM, or a raw millisecond/
+ * sample count for FTS/FRS (`fax_class1_command`'s own `arg3`).
+ *
+ *   1. `ctx == NULL || ctx->class1 == NULL` returns -1 immediately.
+ *   2. Debug print ("fax: FAX_class1_command: %x\n", `cmd`) at level > 1,
+ *      unconditionally, before validating `cmd` at all.
+ *   3. `(unsigned)cmd > 5`: debug print ("fax: bad command: %x\n") at
+ *      level > 1, return -1.
+ *   4. Otherwise dispatch on `cmd`:
+ *      FAXC1_FTS/FAXC1_FRS: no validation on `rate` at all; debug print
+ *        ("fax:  FAXC1_FTS, %x\n"/"...FRS...") at level > 1 with the raw
+ *        value, remap to FAX_CLASS1_TS_COMMAND/RS_COMMAND.
+ *      FAXC1_FTM/FAXC1_FRM: debug print FIRST (unconditionally, if level >
+ *        1 -- FTM's own print always shows 0 for its second `%d`, since
+ *        `extra` is not yet computed at that point), THEN validate `rate`
+ *        against the twelve T.30 codes `_set_modem_rate` recognises
+ *        (0x18/0x30/0x48/0x49/0x4a/0x60/0x61/0x62/0x79/0x7a/0x91/0x92);
+ *        anything else returns -1.  FTM alone also sets a fourth argument
+ *        to the LITERAL 80 (`fax_class1_command`'s own `arg4`, read only by
+ *        its TM command, into `silence_blocks`) -- every other remap leaves
+ *        that argument at whatever this function's own caller happened to
+ *        leave in the register, a genuinely uninitialised value the object
+ *        itself never reads back for those five commands.
+ *      FAXC1_FTH/FAXC1_FRH: debug print FIRST at level > 1, THEN require
+ *        `rate == 3` exactly (the V.21 control-channel sentinel); anything
+ *        else returns -1.
+ *   5. `fax_class1_command(ctx->class1, remapped_cmd, rate, extra)`'s own
+ *      return is DISCARDED; this function always returns 1 on a validated
+ *      dispatch.
+ */
+int
+FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg)
+{
+	int rate = (int)(long)arg;
+	int inner_cmd;
+	int extra;
+
+	if (ctx == NULL || ctx->class1 == NULL)
+		return -1;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("fax: FAX_class1_command: %x\n", cmd);
+
+	if ((unsigned)cmd > 5) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax: bad command: %x\n", cmd);
+		return -1;
+	}
+
+	switch (cmd) {
+	case FAXC1_FTS:
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax:  FAXC1_FTS, %x\n", rate);
+		inner_cmd = FAX_CLASS1_TS_COMMAND;
+		break;
+
+	case FAXC1_FRS:
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax:  FAXC1_FRS, %x\n", rate);
+		inner_cmd = FAX_CLASS1_RS_COMMAND;
+		break;
+
+	case FAXC1_FTM:
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax:  FAXC1_FTM, %x, %d\n",
+					     rate, 0);
+		if (rate != 0x18 && rate != 0x30 && rate != 0x48 &&
+		    rate != 0x49 && rate != 0x4a && rate != 0x60 &&
+		    rate != 0x61 && rate != 0x62 && rate != 0x79 &&
+		    rate != 0x7a && rate != 0x91 && rate != 0x92)
+			return -1;
+		inner_cmd = FAX_CLASS1_TM_COMMAND;
+		extra = 0x50;
+		break;
+
+	case FAXC1_FRM:
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax:  FAXC1_FRM, %x\n", rate);
+		if (rate != 0x18 && rate != 0x30 && rate != 0x48 &&
+		    rate != 0x49 && rate != 0x4a && rate != 0x60 &&
+		    rate != 0x61 && rate != 0x62 && rate != 0x79 &&
+		    rate != 0x7a && rate != 0x91 && rate != 0x92)
+			return -1;
+		inner_cmd = FAX_CLASS1_RM_COMMAND;
+		break;
+
+	case FAXC1_FTH:
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax:  FAXC1_FTH, %x\n", rate);
+		if (rate != 3)
+			return -1;
+		inner_cmd = FAX_CLASS1_TH_COMMAND;
+		break;
+
+	default:	/* FAXC1_FRH */
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("fax:  FAXC1_FRH %x\n", rate);
+		if (rate != 3)
+			return -1;
+		inner_cmd = FAX_CLASS1_RH_COMMAND;
+		break;
+	}
+
+	(void)fax_class1_command(ctx->class1, inner_cmd, rate, extra);
+	return 1;
 }
 
 /*

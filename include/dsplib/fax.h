@@ -31,16 +31,24 @@
  *   +0x2014 rc_b     `struct rc *`, the second `RcFixed_Delete` call
  *
  * `FAX_create` (0x001500, 564 bytes) and `FAX_class1_command` (0x001740,
- * 708 bytes) are NOT written this wave -- see the blocked-symbols note
- * below -- but `FAX_create`'s own disassembly is read here anyway, for the
- * struct evidence it carries as `rc_a`/`rc_b`'s own constructor: it branches
- * on a sample-rate argument (0x1f40 = 8000, 0x2580 = 9600, 0xbb80 = 48000)
- * before calling `RcFixed_Create` twice, matching `fixedrc.h`'s own
- * "the pumps run at 8 kHz, the host at 9600" note, and its first two
- * arguments -- `mov 0x40(%esp),%edi` / `mov 0x48(%esp),%esi` after a
- * three-register push + `sub $0x30` frame -- are in the exact same stack
- * positions `VOICE_create(void *modem, unsigned int rate)` uses, which is
- * why `FAX_create`'s own (unwritten) prototype below carries that shape.
+ * 708 bytes) are NOW WRITTEN (F10121) -- for the struct evidence
+ * `FAX_create` carries as `rc_a`/`rc_b`'s own constructor: it branches on a
+ * sample-rate argument (0x1f40 = 8000, 0x2580 = 9600, 0xbb80 = 48000) before
+ * calling `RcFixed_Create` twice, matching `fixedrc.h`'s own "the pumps run
+ * at 8 kHz, the host at 9600" note.
+ *
+ * `FAX_create` TAKES THREE ARGUMENTS, NOT TWO -- an earlier reading of this
+ * banner said its first two stack slots matched `VOICE_create(void *modem,
+ * unsigned int rate)`'s, and that was wrong: `mov 0x40(%esp),%edi` (modem)
+ * is followed not by `0x44(%esp)` (as `VOICE_create`'s own `mov
+ * 0x44(%esp),%ebx` reads its second argument) but by `mov 0x48(%esp),%esi`
+ * (rate) -- a 4-byte gap at `+0x44` that only a genuine THIRD formal
+ * parameter explains.  It IS read, just far down the function
+ * (`cmpl $0x1,0x44(%esp)` at 0x15e1, well after the resamplers are built),
+ * as a boolean the object's own debug line names: "fax: fax_class1 will
+ * created (ans_org=%d, s7=%d)\n" -- `ans_org` is exactly this argument's own
+ * derived value, `struct fax_class1_cfg::mode` (class1.h). `FAX_create`'s
+ * own prototype below carries the corrected three-argument shape.
  *
  * `FAX_process` (0x001a10, 1,809 bytes) is now WRITTEN, and the fields
  * below are its own derivation:
@@ -156,20 +164,12 @@
  * (`add %eax,0x94(%esp)`, no `*2`) -- a real, faithfully-reproduced property
  * of the object, not resolved further here.
  *
- * NEITHER FAX_create NOR FAX_class1_command IS WRITTEN, RE-VERIFIED with
- * `dis.py`/`nm` rather than trusted from the prior wave's own note (F10111).
- * `FAXVMI_create` landed since that note was written and is NO LONGER the
- * blocker; the chain now bottoms out at `FAXVMI_control` (`faxvmi.c`, still
- * unwritten, assigned to nobody this wave) and at four `class1tx.c` leaf
- * inits (`_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
- * `cHDLCtx_preamble_state_init`, `_rx_look_carrier_init`) that are
- * themselves either direct callers of `FAXVMI_control` or callers of
- * `_init_receiver`/`_init_transmitter`, which are ALSO blocked on
- * `FAXVMI_control` (and, per `_cHDLCrx_init_from_idle`'s own `V21RX_CTL`
- * load, on at least one `.data` request template besides).  Per CLAUDE.md's
- * own trap, a reference from `src/` to an unwritten blob symbol fails EVERY
- * test binary at link, so both bodies are left out rather than
- * written-and-broken; see docs/findings.md F10111 for the exact chain.
+ * `FAX_create` AND `FAX_class1_command` ARE NOW BOTH WRITTEN (F10121), the
+ * chain F10111 traced -- `FAXVMI_control`, the four `class1tx.c` leaf inits,
+ * `fax_class1_create`/`fax_class1_command` -- having landed in the same
+ * wave (F10115, F10119, F10120).  See `src/service/voice.c`'s own banner on
+ * each function for the full derivation; this file's own struct/prototype
+ * comments carry only what changed here.
  */
 
 #ifndef DSPLIB_FAX_H
@@ -191,8 +191,9 @@ struct fax_ctx {
 					 * modem_send_to_tty as their own first
 					 * argument -- see this file's banner */
 	struct fax_class1 *class1;	/* +0x004 the Class 1 session,
-					 * created by (unwritten) FAX_create,
-					 * torn down by FAX_delete's own
+					 * created by `FAX_create`'s own
+					 * `fax_class1_create(NULL, &local)`
+					 * call, torn down by FAX_delete's own
 					 * `fax_class1_delete` call          */
 	int host_rx_enable;		/* +0x008 see this file's banner      */
 	int host_rx_want;		/* +0x00c likewise                    */
@@ -227,14 +228,28 @@ struct fax_ctx {
 #define FAX_MODELLED_BYTES	0x283c
 
 /*
- * NOT WRITTEN.  `.text` 0x001500, 564 bytes -- calls the still-unwritten
- * `fax_class1_create` (blocked on `FAXVMI_control`, not `FAXVMI_create`,
- * which has since landed -- F10111), so a body here would fail every test
- * binary at link (CLAUDE.md's trap).  The argument shape is read off the
- * object's own stack layout, matching `VOICE_create`'s -- see this file's
- * own banner for the derivation.
+ * `.text` 0x001500, 564 bytes.  `originate` is FAX_create's own third
+ * argument (this file's banner above has the derivation): nonzero builds a
+ * SESSION-INITIATED (originating) Class 1 session, zero builds an
+ * ANSWER-INITIATED one whose FIRST state generates the T.30 CED tone
+ * (`struct fax_class1_cfg::mode`, class1.h, values `CLASS1_ANS_ORG_NORMAL`/
+ * `CLASS1_ANS_ORG_ANSWER`).  `rate` selects the resampler pair (8000: none,
+ * identity; 9600 or 48000: `RcFixed_Create`, four distinct converter IDs
+ * across the two -- 3/2 for 9600, 5/4 for 48000, `rc_a` then `rc_b`); any
+ * other value builds neither resampler and fails allocation-style (see
+ * below). `s7` (the config's `s7_timeout`) comes from `modem_get_sreg(modem,
+ * 7)` -- slmodemd's own S-register accessor, declared `extern` in
+ * `voice.c` the same way `modem_recv_from_tty`/`modem_send_to_tty` already
+ * are, since no dsplib header owns it.
+ *
+ * ON FAILURE (an unrecognised `rate`, either resampler returning NULL, or
+ * `fax_class1_create` returning NULL) the object tears down whatever it
+ * already built -- `rc_a`, `rc_b`, `class1` -- in that order, INLINE rather
+ * than by calling `FAX_delete` (no relocation to it in this range), even
+ * reusing `FAX_delete`'s own debug string ("fax: delete...\n") at the same
+ * site, and returns NULL.
  */
-struct fax_ctx *FAX_create(void *modem, unsigned int rate);
+struct fax_ctx *FAX_create(void *modem, int originate, unsigned int rate);
 
 /*
  * `.text` 0x001450, 172 bytes.  In the object's own order: print a debug
@@ -246,15 +261,34 @@ struct fax_ctx *FAX_create(void *modem, unsigned int rate);
 void FAX_delete(struct fax_ctx *ctx);
 
 /*
- * NOT WRITTEN.  `.text` 0x001740, 708 bytes -- calls the still-unwritten
- * `fax_class1_command`, itself blocked on four of its own leaves
- * (`_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
- * `cHDLCtx_preamble_state_init`, `_rx_look_carrier_init`, all
- * `class1tx.c`), which are in turn blocked on `FAXVMI_control`/
- * `_init_receiver`/`_init_transmitter`.  See docs/findings.md F10111 for
- * the full chain, re-verified this wave.
+ * `.text` 0x001740, 708 bytes.  `cmd` is one of the six `FAXC1_*` codes
+ * below -- the OUTER numbering, a DIFFERENT space from `fax_class1_command`'s
+ * own `FAX_CLASS1_*_COMMAND` (class1.h), which this function remaps into
+ * after validating `arg` (cast through `(int)(long)`, never dereferenced --
+ * a rate code for FTM/FRM against the twelve `_set_modem_rate` recognises,
+ * or exactly 3 for FTH/FRH, the V.21 control-channel sentinel
+ * `_cHDLCrx_init_from_idle` itself tests for). `ctx == NULL` or
+ * `ctx->class1 == NULL` returns -1 immediately; an invalid `cmd` or a
+ * rejected `arg` also returns -1, each logged at debug level > 1 with the
+ * object's own per-command string ("fax:  FAXC1_FTH, %x\n" and five
+ * siblings). A validated call always returns 1 -- `fax_class1_command`'s
+ * own return is discarded.
  */
 int FAX_class1_command(struct fax_ctx *ctx, int cmd, void *arg);
+
+/*
+ * `FAX_class1_command`'s OWN `cmd` numbering -- the object's own debug
+ * strings ("fax:  FAXC1_FTS, %x\n" etc, rank-1 evidence), in the jump
+ * table's own order (`.rodata` 0x60, six entries).  NOT
+ * `FAX_CLASS1_*_COMMAND` (class1.h): FTS=0 there is TS=4 here, and the
+ * remap is total, not merely offset.
+ */
+#define FAXC1_FTS	0
+#define FAXC1_FRS	1
+#define FAXC1_FTM	2
+#define FAXC1_FRM	3
+#define FAXC1_FTH	4
+#define FAXC1_FRH	5
 
 /*
  * `.text` 0x001a10, 1,809 bytes.  The largest of the four: a read/resample/

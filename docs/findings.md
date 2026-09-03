@@ -112370,3 +112370,115 @@ fix above. `tools/onedef.py` (301 types, 1 known duplicate),
 `tools/bannercheck.py src/fax src/service` (276/276 agree),
 `tools/refcheck.py` (13107 references, 0 dangling) all clean. `make period`
 left for the parent session's gate. (2026-09-03)
+
+## F10121. `FAX_create` and `FAX_class1_command` land -- the last two of fax's nine, closing fax's core service closure entirely
+
+Final piece of the same wave as F10119/F10120. Both were traced twice
+before, from two different starting directions (F10105, F10111), and both
+times correctly declined as blocked; this time `fax_class1_create`/
+`fax_class1_command` (F10120) exist, so nothing blocks them.
+
+**`FAX_create` TAKES THREE ARGUMENTS, NOT TWO -- and this file's OWN prior
+banner was wrong about it, a real instance of the shelf-life hazard
+CLAUDE.md's own `V90Parameters` example warns about.** F10111's wave read
+its first two stack slots (`mov 0x40(%esp),%edi` / `mov 0x48(%esp),%esi`) as
+matching `VOICE_create(void *modem, unsigned int rate)`'s own `0x40`/`0x44`
+pair, without noticing the SECOND slot sits at a different offset --
+`0x48`, not `0x44` -- than `VOICE_create`'s genuinely does (independently
+re-checked both functions' prologues side by side with `dis.py --plain` this
+time, not trusted from memory). The 4-byte gap at `+0x44` is a real THIRD
+formal parameter (`originate`), read far down the function
+(`cmpl $0x1,0x44(%esp)` at 0x15e1, well after both resamplers are already
+built) as a boolean this function's OWN debug line names: "fax: fax_class1
+will created (ans_org=%d, s7=%d)\n" -- `ans_org` IS `struct fax_class1_cfg::
+mode` (class1.h, F10120), computed from `originate` right there
+(`(originate != 0) ? CLASS1_ANS_ORG_NORMAL : CLASS1_ANS_ORG_ANSWER`) and
+handed through unchanged. `fax.h`'s own prototype and struct banner
+corrected; `docs/remaining.md`/earlier findings that quoted the two-argument
+reading are history, not corrected in place, per this project's own
+renumber-don't-rewrite convention.
+
+**`FAX_create`'s own control flow, in the object's order** (`.text`
+0x001500, 564 bytes): debug print ("fax: create...\n") before the
+allocation; `sysdep_malloc(sizeof(struct fax_ctx))` + zero, `ctx->modem =
+modem`; `rate == 8000` skips resampler construction entirely (both stay
+NULL, the zeroed default) -- any OTHER value builds `rc_a` (9600 -> converter
+3, 48000 -> converter 5, anything else -> NULL, which always fails the
+following NULL check) then, only if that succeeded, `rc_b` the same way
+(9600 -> 2, 48000 -> 4); `host_frame_samples`/`out_produced`/
+`out_write_half` all set to `rate * CLASS1_BLOCK_SAMPLES / 8000` (unsigned
+`mul`/`shr` reciprocal, independently re-derived rather than assumed to
+reduce to `/50`); `modem_get_sreg(modem, 7)` for the Class 1 session's own
+`s7_timeout`, then `fax_class1_create(NULL, &local)`. ANY failure (bad rate,
+either resampler NULL, `fax_class1_create` NULL) falls to a TEARDOWN that
+reuses `FAX_delete`'s own debug string ("fax: delete...\n") and does exactly
+what `FAX_delete` does, INLINE rather than by calling it -- no relocation to
+`FAX_delete` in this range, the same "genuinely duplicates rather than
+factors out" shape `_init_receiver` established for `_set_modem_rate`
+(F10117).
+
+**`modem_get_sreg` IS ALREADY IN THE TEST HARNESS**
+(`test/harness/runtime.c`, `long modem_get_sreg(void *m, unsigned sreg)`,
+backed by a 256-slot `harness_sreg[]` array both `modem_get_sreg` and
+`ref_modem_get_sreg` read identically) -- found by grepping for it before
+writing a stub, not assumed absent. `voice.c` declares it `extern` locally,
+the same way `modem_recv_from_tty`/`modem_send_to_tty` already are (no
+dsplib header owns any of the three) -- and NOT to be confused with the
+voice service's OWN `S7`-shaped register reader a few hundred lines up in
+the same file, whose own banner already says "this is NOT a call into it".
+
+**`FAX_class1_command` (0x001740, 708 bytes) remaps a THIRD command
+numbering onto `fax_class1_command`'s own** (`FAXC1_FTS/FRS/FTM/FRM/FTH/FRH`
+= 0..5, `fax.h`, the object's own debug strings "fax:  FAXC1_FTS, %x\n" etc,
+in the jump table's own order -- NOT `fax_class1_command`'s own
+`FAX_CLASS1_*_COMMAND`, a DIFFERENT space entirely, TH=0 there vs FTH=4
+here). `arg` rides through as `(int)(long)arg`, never dereferenced, despite
+its `void *` declared type (the least claim compatible with the object,
+`faxadapt.h`'s own precedent for a pointer-shaped slot carrying a plain
+int). FTH/FRH require `arg == 3` exactly (the V.21 sentinel
+`_cHDLCrx_init_from_idle` itself tests, F10119); FTM/FRM validate against
+the twelve T.30 rate codes `_set_modem_rate` recognises; FTS/FRS validate
+nothing. FTM alone sets a fourth, hidden argument to the LITERAL 80
+(`fax_class1_command`'s own `arg4`, read only by its TM command into
+`silence_blocks`) -- every other command leaves that argument holding
+WHATEVER THIS FUNCTION'S OWN CALLER left in the register, a genuinely
+uninitialised value the object itself never reads back for those five
+commands, reproduced as an uninitialised local rather than defended against
+(same shape as `fax_class1_command`'s own `name` search, F10120).
+`fax_class1_command`'s own return is discarded; this function always
+returns 1 on a validated dispatch, -1 on `ctx`/`class1` NULL or any
+rejection.
+
+Tested with new `test/unit/t_faxcreate.c`: `FAX_create` across all three
+recognised rates, both `originate` values, an unrecognised rate (both
+resamplers fail, full teardown, NULL), and debug-level-on -- STRUCTURAL
+comparison only (`rc_a`/`rc_b`/`class1` NULL-ness, `host_frame_samples`/
+`out_produced`/`out_write_half`), since `RcFixed_Create`'s own untracked
+`calloc` and `fax_class1_create`'s own `sysdep_malloc` never hand back
+matching addresses across `ref_`/`ours` (`t_faxdelete.c`'s own established
+reasoning, cited rather than rediscovered). `FAX_class1_command` across all
+six `FAXC1_*` commands (through a REAL session `FAX_create` built), the two
+NULL guards, three rejection cases (bad `cmd`, FTH with the wrong `arg`, FTM
+with a non-rate `arg`) and a debug-level-on pass. `make one T=t_faxcreate`
+green, 65 checks total, 0 failed on the first run once a C89
+mixed-declaration slip (`int rc = diff_end();` mid-block) was caught by
+compiling the test file under `-std=gnu89` locally BEFORE running `make
+one` -- the period compiler (GCC 3.4.2) rejects that construct and this
+tree has no docker in this session to catch it any other way; CLAUDE.md's
+own warning that a rejection under the period compiler is a finding about
+the SOURCE applies to `test/` too, as plumbing to fix freely rather than
+apparatus to declare.
+
+Re-ran every fax/voice-adjacent test this wave's field renames could have
+touched (fourteen files, `t_class1handlers` through `t_faxprocess`) --
+all green, no regressions from `f1264` -> `cng_enabled` or the new
+`ans_org`/`answer_tone_blocks` fields.
+
+**Fax's core service closure is COMPLETE: all nine symbols / 4,170 bytes
+this wave's brief named are now written and differentially green.**
+`tools/onedef.py` (301 types, 1 known duplicate), `tools/bannercheck.py
+src/fax src/service` (276/276 agree, unchanged since F10120 -- this finding
+added no new `.text 0xNNNNN` banner mentions), `tools/refcheck.py` (13107
+references, 0 dangling) all clean. `make period` left for the parent
+session's gate, per this wave's own brief -- this session has no docker.
+(2026-09-03)
