@@ -111586,3 +111586,44 @@ committed (verified `git log`: no commits on that branch), so there is
 nothing to reconcile there. This correction is the one piece of that
 session salvageable on its own merit, re-verified independently before
 being applied rather than taken on the agent's word. (2026-09-03)
+
+## F10109. `_init_receiver`/`_init_transmitter`'s per-modulation dispatch tables, verified: `init_vmi_data_rx_modem`/`init_vmi_data_tx_modem`
+
+Neither `_init_receiver` (`.text` 0x094240, 1,583 B, `class1rx.c` span) nor
+`_init_transmitter` (`.text` 0x094bf0, 1,326 B, `class1tx.c` span) is
+written yet -- a wave-10 agent traced both while working a different
+assignment, found each dispatches through a 3-entry, index-0/1/2 `.data`
+table on the fresh-create path before falling through to `FAXVMI_control`
+with a per-modulation request template on the reinit path, but did not
+commit either function (see F10108 for why -- duplicated a concurrent
+sibling's work). The dispatch tables themselves are independently
+re-verified here via `objdump -r`/`nm`, not taken on the agent's report:
+
+```
+.data 0x7920  init_vmi_data_rx_modem[3] = { init_vmi_v27rx, init_vmi_v29rx,
+                                             init_vmi_v17rx }
+.data 0x792c  init_vmi_data_tx_modem[3] = { init_vmi_v27tx, init_vmi_v29tx,
+                                             init_vmi_v17tx }
+```
+
+Six `R_386_32` relocations across the two tables, each resolved by name via
+`nm` against its `.text` target -- both tables in modulation order
+27/29/17, RX and TX index the same way. A new `ctx` field (reported at
+`+0x1248`, "current modulation", 0/1/2 -- not independently reverified
+here, re-check before trusting) selects which slot. The reinit path was
+reported to use six already-decoded `.data` request templates
+(`V17RX_CTL`/`V27RX_CTL`/`V29RX_CTL`/`V17TX_CTL`/`V27TX_CTL`/`V29TX_CTL`,
+zero relocations, byte values not reproduced here) against `FAXVMI_control`
+-- also not independently reverified, and `FAXVMI_control` itself is not
+yet written, so that path cannot be tested until it lands.
+
+**What stopped the reporting agent from finishing:** past the dispatch,
+each function was reported to write two new, currently-unnamed fields
+(`+0xd8`/`+0xda` on the wrapped per-modulation object, for V.17) with
+evidence judged too thin to commit a name — declined rather than guessed,
+per CLAUDE.md's "wrong name is worse than a pad" rule. Whoever picks this
+up next should re-verify the `.data` request templates and the `+0x1248`
+field independently before relying on them, same as this finding did for
+the dispatch tables, and should coordinate with `FAXVMI_control`'s own
+status first (F10108) since the reinit path is dead code until that lands.
+(2026-09-03)
