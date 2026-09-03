@@ -7,8 +7,8 @@ dsplibs.o reconstruction coverage
 
   .text                          734605 bytes, 1861 symbols
 
-  translated  [################################..]  94.8%    696705 bytes, 1792 symbols
-  tested      [##################################]  99.9%    696317 bytes, 1786 of 1792 that can be
+  translated  [################################..]  94.9%    697449 bytes, 1801 symbols
+  tested      [##################################]  99.8%    696317 bytes, 1786 of 1801 that can be
 
   `tested` is the share of what we have translated that some test drives
   against the blob itself, not a self-consistency check.  Its denominator
@@ -17,10 +17,19 @@ dsplibs.o reconstruction coverage
   the file-local symbols too -- 39 of ours (15912 bytes).
 
   translated, alias exists, and NOT tested:
+    v27tx_create                                    229 bytes
+    v29tx_create                                    196 bytes
+    v21tx_create                                    177 bytes
     TxNoCarrierV27                                  151 bytes
     GenEQTrnSequenceV29                              99 bytes
     SetScramblerV27                                  92 bytes
+    v27tx_process                                    62 bytes
     _handle_status                                   44 bytes
+    v27tx_control                                    16 bytes
+    v27rx_control                                    16 bytes
+    v21tx_control                                    16 bytes
+    v21rx_control                                    16 bytes
+    v17rx_control                                    16 bytes
     _ZN5V92JdD2Ev                                     1 bytes
     _ZN5V90JdD2Ev                                     1 bytes
 
@@ -85,7 +94,7 @@ dsplibs.o reconstruction coverage
     vpcm_unwritten_reset
 
   what is left, by translation-unit span:
-    class1tx.c +94                                 12700 bytes    43 symbols
+    class1tx.c +94                                 11956 bytes    34 symbols
     class1.c                                        3883 bytes     6 symbols
     voice.c#3 +3                                    3253 bytes     4 symbols
     class1rx.c                                      1732 bytes     2 symbols
