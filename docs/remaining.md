@@ -5,17 +5,17 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured post-wave-8-merge, 2026-09-03:
+Measured post-wave-9-merge, 2026-09-03:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 95.3%  (700,276 bytes / 1,811 symbols)   was 76.6% / 1,296
-remaining  17,726 bytes /   38 symbols (35 fax + 3 leaves)
-  fax only              35 sym   17,726 B   <-- 96% of what remains
-  no-entry-point leaves  3 sym    1,194 B
+translated 95.8%  (704,001 bytes / 1,818 symbols)   was 76.6% / 1,296
+remaining  15,195 bytes /   31 symbols (29 fax + 2 leaves)
+  fax only              29 sym   14,151 B   <-- 93% of what remains
+  no-entry-point leaves  2 sym    1,044 B
 ```
 
-Merged master period-green at **360 passed, 0 failed**, onedef/banners/check64
+Merged master period-green at **365 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
@@ -771,3 +771,70 @@ wave: the two now-unblocked FAXVMI dispatch tables plus `FAXVMI_create`/
 `FAXVMI_process`, the three missing `*_control` forwarders unblocking
 `vxx_control`/`FAXVMI_control`, and `_hdlc_emulate_receive_state` (452 B,
 flagged READY in `class1tx.c` by this wave's agent but left for time reasons).
+
+## Wave 9 — FAXVMI dispatch tables close, `V29RX_control` lands, `_hdlc_emulate_receive_state` closes, top-level fax entry points open
+
+Four branches, each independently period-gated then gated again on the fully
+merged tree:
+
+| agent | delivered |
+|---|---|
+| FAXVMI dispatch tables | `FAXVMI_create` (705 B) and `FAXVMI_process` (327 B), plus the `vxx_create`/`vxx_process` 13-slot tables that had blocked them — the last two of the object's six `vxx_*` tables. Confirmed the table layout independently against `ref/slmodemd/dsplibs.o` rather than trusting the brief's inherited evidence |
+| control functions | `V29RX_control` (110 B, `src/fax/v29.c`) landed; `V17TX_control`/`V29TX_control` correctly DECLINED as genuinely link-blocked on unwritten `V17TX_create`/`V29TX_create` (413/1,162 B — real construction work, out of scope this pass), full derivations banked for the next agent that picks them up |
+| class1tx.c HDLC/data-pump cluster | `_hdlc_emulate_receive_state` (452 B) closed; the other 15 of 16 assigned symbols were traced and found ALL still blocked, on a small shared set of callees (`FAXVMI_process`, `FAXVMI_control`, `_init_receiver`, `_init_transmitter`) rather than on each other — a real bug in the already-committed `cTOOLS_handle_hdlc_output` (wrong terminator-write gating condition) was caught and fixed along the way, by a NEW test disagreeing with the blob rather than by re-reading disassembly |
+| top-level fax entry points | `fax_class1_status` (150 B), `FAX_delete` (172 B), `FAX_process` (1,809 B) landed; `fax_class1_create`, `fax_class1_command`, `_init_receiver`, `_answer_tone_state`, `FAX_create`, `FAX_class1_command` all traced and confirmed blocked, five of six on `FAXVMI_create`/`FAXVMI_control` alone. New `include/dsplib/fax.h` opens `struct fax_ctx`, the FAX service's outer session object |
+
+Merged in dependency order (FAXVMI tables first), then the HDLC cluster,
+`V29RX_control`, then the top-level entry points last since it depended on
+`FAXVMI_create` having landed to correctly diagnose its own blockers.
+Individually period-green (361, 361, 343, 363 passed / 0 failed — the third
+figure is lower only because that branch was furthest behind master and
+built fewer objects); the fully merged tree gates at **365 passed, 0
+failed**, onedef/bannercheck/refcheck all clean.
+
+### What this wave established
+
+- **A chokepoint cleared mid-wave and unblocked a sibling agent's work.**
+  The class1tx.c cluster agent found all 15 of its remaining symbols
+  blocked on `FAXVMI_process`/`FAXVMI_control` — written by a DIFFERENT
+  agent in the same wave, landed only after the cluster agent had already
+  finished tracing. 11 of the 15 need only `FAXVMI_process` (now landed);
+  the other 4 also need `FAXVMI_control`, still blocked. This is the same
+  "closure measured, not assumed" discipline as wave 7's FAXVMI chokepoint,
+  recurring one layer further down the same call graph.
+- **A finding-number collision recurred, twice in one merge sequence, and
+  both times because a worktree branched before a sibling's commit landed.**
+  Two different agents both wrote a finding numbered F10058 (ac745b11's
+  FAXVMI landing and a9c621ca's fax_class1_status), and a THIRD, unrelated
+  finding (aa507e2's V29RX_control, self-numbered F9500) collided with a
+  pre-existing F9500 about `FIFO_CFG` from wave 5 — the same collision
+  class CLAUDE.md's numbering section already names, now with a concrete
+  example of a branch reusing an OLD number rather than clashing on a
+  fresh one. Both resolved by renumbering the later-merged branch's
+  findings (F10104-F10106, F10103) and fixing every in-source
+  cross-reference (`grep`, not memory) rather than trusting the branch's
+  own citations were still correct after renumbering.
+- **The foreground-wait stall recurred on two of four branches this wave**
+  (the control-functions agent and the class1tx.c cluster agent), each
+  resolved with one `SendMessage` telling the agent to drive its own build
+  loop rather than wait on a monitor with no live children. The other two
+  branches self-corrected or never hit it. Still not eliminated by briefing
+  alone, but the fix is now fast and reliable.
+- **Disk exhaustion from over-parallelising the gate, not the agents.**
+  Running all four branches' `make period` concurrently filled the disk to
+  100% (four ~1.8 GB `build/` trees at once on a ~6 GB-free machine) and
+  had to be aborted and re-run sequentially. The agents themselves ran fine
+  in parallel — only their GATES compete for disk, and that competition is
+  real even though each one individually fits comfortably.
+
+### What's left, measured
+
+Fax is **29 symbols / 14,151 bytes** — 93% of everything remaining. Next
+wave: the now-11-of-15-unblocked class1tx.c cluster (needs only
+`FAXVMI_process`, already landed), `FAXVMI_control` (338 B, needs
+`V17TX_control`/`V29TX_control`/`V29RX_control` — two of those three are
+still blocked on unwritten `V17TX_create`/`V29TX_create` constructors,
+themselves real work on the order of hundreds of bytes each, derivations
+banked in F9500/F10103), and `_init_receiver`/`_init_transmitter`
+(1,583/1,326 B), which between them unblock most of what remains once
+either lands.
