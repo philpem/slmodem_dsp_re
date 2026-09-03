@@ -110342,6 +110342,79 @@ the twelve debug strings) are in `src/fax/v17.c`'s own comment on
 status constants are in `include/dsplib/v17fax.h`. See F9910 for the batch
 this landed with. (2026-09-02)
 
+## F10010. The last nine `faxadapt.c` adapters land: three TX creates, `v27tx_process`, and five `*_control` forwarders
+
+`src/fax/faxadapt.c` held 27 of the 48-symbol adapter TU (F9271) coming
+into this wave; the other 21 were BLOCKED on real constructors this
+session's `class1*.c`/`v17.c`/`v21.c`/`v27.c`/`v29.c` waves had since
+landed. `python3 tools/readyqueue.py --span 'class1tx.c +94'` re-measured
+READY at 16 symbols, 1,981 bytes, of which 9 belong to this file (the
+other 7 -- `init_vmi_v17tx`/`init_vmi_v27tx`/`init_vmi_v29tx` and
+`V17TX_control`/`V29TX_control`/`V29RX_control`/`_delete_data_tx_modem`
+-- are `class1tx.c`'s own span, not `faxadapt.c`'s, and this wave's file
+ownership excludes that file):
+
+  - `v21tx_create` (0x09c2a0, 177 B), `v27tx_create` (0x09c540, 229 B),
+    `v29tx_create` (0x09c840, 196 B) -- the copy-or-default idiom every
+    other create in this file already uses, now over `V21TX_create`,
+    `V27TX_create` and `V29TX_create`, all landed by other waves this
+    session. `v27tx_create` is the one member of the four TX creates whose
+    `pack_count` ITSELF varies by rate (24 for 2400, 32 otherwise) rather
+    than being a fixed literal -- every other TX create in this file
+    (`v17tx_create`'s 0x30, `v21tx_create`'s 6, `v29tx_create`'s 0x30) is
+    not. `pack_width` follows the same 2400-vs-not split V.27's own
+    `unpack_width` already uses one modulation side over.
+  - `v27tx_process` (0x09c720, 62 B) -- byte-identical in shape to
+    `v17tx_process`/`v21tx_process`/`v29tx_process`, now that `V27TX_modem`
+    is written: `V27TX_modem(dp->int_0014, dp->buf, out, count); *result =
+    *count; *count = 0;`.
+  - `v17rx_control`, `v21tx_control`, `v21rx_control`, `v27tx_control`,
+    `v27rx_control` (0x09c230/0x09c4c0/0x09c4d0/0x09c7c0/0x09c7d0, 16 B
+    each) -- all five are the SAME three-instruction tail call
+    (`dis.py`: `mov 0x4(%esp),%edx; mov 0x14(%edx),%eax; mov
+    %eax,0x4(%esp); jmp V??_control`), differing only in callee name and
+    the argument's type (a typed struct for V.17/V.21, an untyped `void *`
+    for V.27 per `v27fax.h`'s own declarations). `v17tx_control`,
+    `v29tx_control` and `v29rx_control` remain BLOCKED: `V17TX_control`,
+    `V29TX_control` and `V29RX_control` are not written by any wave yet.
+
+**`init_vmi_v17tx`/`init_vmi_v27tx`/`init_vmi_v29tx` ARE NOT THIS FILE'S,
+BY ADDRESS, NOT BY GUESSING FROM THE NAME.** `nm -S` on the blob puts
+`init_vmi_v17rx`/`init_vmi_v29rx`/`init_vmi_v27rx` at 0x93e80-0x94196 and
+the TX-named siblings at 0x94870-0x94b68 -- two DIFFERENT address runs, not
+one. `tools/tumap.py`'s own span table resolves the first three to the
+`class1rx.c` span (0x93e80..0x94870) and the second three to the
+`class1tx.c` span (0x94870..0xac960), which starts exactly where
+`class1rx.c`'s ends -- adjacent spans, and `readyqueue.py` already
+attributes all three TX-named `init_vmi_*` to `class1tx.c`, never to
+`class1rx.c` and never to `faxadapt.c`'s own range (0x09bf20..0x9cafd, far
+from either). So despite the "rx"-suggestive naming coincidence with their
+siblings, they belong with the rest of the TX-side machinery in
+`class1tx.c` -- owned this wave by the agent working `class1*.c`, not by
+this file. Declined here on address evidence, not written, and nothing for
+a `class1rx.c` owner to "pick up": `class1tx.c`'s owner already has them.
+
+**36 of the 48-symbol TU's non-message functions are now written** (36 of
+40; the 8 message adapters were always `class1tx.c`'s, F8320). Only the
+`v17tx_control`/`v29tx_control`/`v29rx_control` trio remains, each blocked
+on its own single unwritten `V??_control`.
+
+`test/unit/t_faxadapt.c` gained `run_tx_create_v21`/`run_tx_create_v27`/
+`run_tx_create_v29` (mirroring the existing `run_tx_create_v17`), a
+`v27tx_process` case in `run_tx_process` (both the "ours" and the
+blob-probe halves), and a new `run_control` covering all five
+`*_control` adapters: each is driven off a REAL handle from the matching
+create adapter, and its effect is read back through the matching,
+already-tested status adapter, so a wrong handle or argument offset shows
+up either as a differing return code, a differing status readback, or a
+crash (`make one` reporting the whole binary failed) -- the same D955/F8587
+canary discipline (`dp` poisoned, checked unchanged after every call) the
+file's delete/status tests already use. `v27tx_control`'s and
+`v27rx_control`'s request buffers are built from `V27TXCTL_*`/the
+`t_v27rxcontrol.c` request shape rather than passed as NULL, so the test
+exercises `V27TX_control`/`V27RX_control`'s bodies and not just their
+`req == 0` early return. (2026-09-03)
+
 ## F10050. `_put_silence` written: the TU's first global, a 28-byte fill loop, and its return value is the loop counter, not the argument
 
 `.text` 0x092b70, 28 bytes -- `class1.c`'s first global, immediately before

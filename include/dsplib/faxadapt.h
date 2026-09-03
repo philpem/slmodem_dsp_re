@@ -58,12 +58,12 @@
  *   0x09c1c0 v17rx_process  WRITTEN
  *   0x09c200 v17tx_status   WRITTEN
  *   0x09c210 v17rx_status   WRITTEN
- *   0x09c220 v17tx_control  BLOCKED: V17TX_control (unwritten; needs 33 more)
- *   0x09c230 v17rx_control  BLOCKED: V17RX_control (unwritten)
+ *   0x09c220 v17tx_control  BLOCKED: V17TX_control (unwritten)
+ *   0x09c230 v17rx_control  WRITTEN (F10010)
  *   0x09c240 v17tx_message  already in class1tx.c
  *   0x09c270 v17rx_message  already in class1tx.c
  *
- *   0x09c2a0 v21tx_create   BLOCKED: V21TX_create and closure (needs 8)
+ *   0x09c2a0 v21tx_create   WRITTEN (F10010)
  *   0x09c360 v21rx_create   WRITTEN
  *   0x09c400 v21tx_delete   WRITTEN
  *   0x09c410 v21rx_delete   WRITTEN
@@ -71,26 +71,25 @@
  *   0x09c460 v21rx_process  WRITTEN
  *   0x09c4a0 v21tx_status   WRITTEN
  *   0x09c4b0 v21rx_status   WRITTEN
- *   0x09c4c0 v21tx_control  BLOCKED: V21TX_control and closure (needs 9)
- *   0x09c4d0 v21rx_control  BLOCKED: V21RX_control (unwritten)
+ *   0x09c4c0 v21tx_control  WRITTEN (F10010)
+ *   0x09c4d0 v21rx_control  WRITTEN (F10010)
  *   0x09c4e0 v21tx_message  already in class1tx.c
  *   0x09c510 v21rx_message  already in class1tx.c
  *
- *   0x09c540 v27tx_create   BLOCKED: V27TX_create and closure (needs 46)
+ *   0x09c540 v27tx_create   WRITTEN (F10010)
  *   0x09c630 v27rx_create   WRITTEN
  *   0x09c700 v27tx_delete   WRITTEN
  *   0x09c710 v27rx_delete   WRITTEN
- *   0x09c720 v27tx_process  BLOCKED: V27TX_modem and V27TX_FRMSIZE (the only
- *                           TX modem of the four not yet written)
+ *   0x09c720 v27tx_process  WRITTEN (F10010)
  *   0x09c760 v27rx_process  WRITTEN
  *   0x09c7a0 v27tx_status   WRITTEN
  *   0x09c7b0 v27rx_status   WRITTEN
- *   0x09c7c0 v27tx_control  BLOCKED: V27TX_control and closure (needs 47)
- *   0x09c7d0 v27rx_control  BLOCKED: V27RX_control (unwritten)
+ *   0x09c7c0 v27tx_control  WRITTEN (F10010)
+ *   0x09c7d0 v27rx_control  WRITTEN (F10010)
  *   0x09c7e0 v27tx_message  already in class1tx.c
  *   0x09c810 v27rx_message  already in class1tx.c
  *
- *   0x09c840 v29tx_create   BLOCKED: V29TX_create and closure (needs 23)
+ *   0x09c840 v29tx_create   WRITTEN (F10010)
  *   0x09c910 v29rx_create   WRITTEN
  *   0x09c9c0 v29tx_delete   WRITTEN
  *   0x09c9d0 v29rx_delete   WRITTEN
@@ -98,18 +97,24 @@
  *   0x09ca20 v29rx_process  WRITTEN
  *   0x09ca60 v29tx_status   WRITTEN
  *   0x09ca70 v29rx_status   WRITTEN
- *   0x09ca80 v29tx_control  BLOCKED: V29TX_control and closure (needs 24)
+ *   0x09ca80 v29tx_control  BLOCKED: V29TX_control (unwritten)
  *   0x09ca90 v29rx_control  BLOCKED: V29RX_control (unwritten)
  *   0x09caa0 v29tx_message  already in class1tx.c
  *   0x09cad0 v29rx_message  already in class1tx.c
  *
- * 27 of the 40 non-message symbols are written here; 13 remain (4 tx_create,
- * 8 *_control, 1 v27tx_process), all named above with what each needs.  All
- * four `*_control` adapters are blocked on the matching `V??_control`, which
- * is not written by ANY modulation yet -- `readyqueue.py` shows them
- * individually ready to schedule (131/125/110/75 bytes) but this wave leaves
- * them for whoever writes the first `V??_control`, since that lands in
- * `v17.c`/`v21.c`/`v27.c`/`v29.c`, files this batch does not own.
+ * 36 of the 40 non-message symbols are written here; 4 remain (v17tx_control,
+ * v29tx_control, v29rx_control, all `*_control` adapters blocked on their own
+ * matching `V??_control`, which lives in `v17.c`/`v29.c` -- files this file's
+ * owner does not touch).  `init_vmi_v17tx`/`init_vmi_v27tx`/`init_vmi_v29tx`
+ * (F9271's "check with nm -S" question, F10010) are NOT in this file and
+ * never were candidates for it: their addresses (0x94870, 0x94a70, 0x94970)
+ * fall in the `class1tx.c` span (0x94870..0xac960), immediately AFTER the
+ * `class1rx.c` span (0x93e80..0x94870) that holds their RX siblings
+ * `init_vmi_v17rx`/`init_vmi_v27rx`/`init_vmi_v29rx` -- adjacent spans, not
+ * the same one, and neither is this file's own range (0x9bf20..0x9cafd).
+ * `readyqueue.py --span 'class1tx.c +94'` already attributes all three to
+ * `class1tx.c`, which is owned this wave by the agent working `class1*.c`,
+ * not by this file.
  */
 
 #ifndef DSPLIB_FAXADAPT_H
@@ -118,21 +123,27 @@
 struct faxvmi_link;
 struct v17tx_cfg;
 struct v17rx_cfg;
+struct v21tx_cfg;
 struct v21rx_cfg;
+struct v27tx_cfg;
 struct v27rx_cfg;
+struct v29tx_cfg;
 struct v29rx_cfg;
 struct v17_status;
 struct v21_status;
+struct v17rx_ctl;
+struct v21tx_ctl;
+struct v21rx_ctl;
 
-/*
- * ---- create.  V.17's TX side is written; V.21/V.27/V.29's TX sides remain
- * BLOCKED, see above -- this is the RX side for those three, plus V.17 TX.
- */
+/* ---- create: every `*_create` in the 48-symbol TU is now written -------- */
 
 void v17tx_create(struct faxvmi_link *dp, const struct v17tx_cfg *cfg);
 void v17rx_create(struct faxvmi_link *dp, const struct v17rx_cfg *cfg);
+void v21tx_create(struct faxvmi_link *dp, const struct v21tx_cfg *cfg);
 void v21rx_create(struct faxvmi_link *dp, const struct v21rx_cfg *cfg);
+void v27tx_create(struct faxvmi_link *dp, const struct v27tx_cfg *cfg);
 void v27rx_create(struct faxvmi_link *dp, const struct v27rx_cfg *cfg);
+void v29tx_create(struct faxvmi_link *dp, const struct v29tx_cfg *cfg);
 void v29rx_create(struct faxvmi_link *dp, const struct v29rx_cfg *cfg);
 
 /* ---- delete: `V??_delete(dp->int_0014)`, tail-called in the object ----- */
@@ -182,11 +193,28 @@ void v21tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		   unsigned short *result);
 void v21rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
+void v27tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
+		   unsigned short *result);
 void v27rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
 void v29tx_process(struct faxvmi_link *dp, short *out, unsigned short *count,
 		   unsigned short *result);
 void v29rx_process(struct faxvmi_link *dp, short *in, unsigned short *result,
 		   unsigned short *count);
+
+/*
+ * ---- control: `V??_control(dp->int_0014, arg)`, tail-called ------------
+ *
+ * `v17tx_control`, `v29tx_control` and `v29rx_control` remain BLOCKED --
+ * `V17TX_control`, `V29TX_control` and `V29RX_control` are not written; see
+ * the address map above.  `V27TX_control`/`V27RX_control` take an untyped
+ * `void *`, not a struct pointer (v27fax.h).
+ */
+
+int v17rx_control(struct faxvmi_link *dp, const struct v17rx_ctl *arg);
+int v21tx_control(struct faxvmi_link *dp, const struct v21tx_ctl *arg);
+int v21rx_control(struct faxvmi_link *dp, const struct v21rx_ctl *arg);
+int v27tx_control(struct faxvmi_link *dp, void *req);
+int v27rx_control(struct faxvmi_link *dp, void *req);
 
 #endif /* DSPLIB_FAXADAPT_H */
