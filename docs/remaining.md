@@ -5,17 +5,17 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured post-wave-9-merge, 2026-09-03:
+Measured post-wave-10-merge, 2026-09-03:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 95.8%  (704,001 bytes / 1,818 symbols)   was 76.6% / 1,296
-remaining  15,195 bytes /   31 symbols (29 fax + 2 leaves)
-  fax only              29 sym   14,151 B   <-- 93% of what remains
+translated 96.8%  (710,735 bytes / 1,835 symbols)   was 76.6% / 1,296
+remaining   8,461 bytes /   14 symbols (12 fax + 2 leaves)
+  fax only              12 sym    7,417 B   <-- 88% of what remains
   no-entry-point leaves  2 sym    1,044 B
 ```
 
-Merged master period-green at **365 passed, 0 failed**, onedef/banners/check64
+Merged master period-green at **368 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
@@ -851,3 +851,81 @@ re-measured with `tools/closure.py`: **`V17TX_control` (148 B) and
 `V29TX_control` (126 B) are blocked on nothing but themselves now.** Exactly
 the shelf-life hazard CLAUDE.md's own `V90Parameters` example warns about,
 happening to this file's own prose rather than a source comment.
+
+## Wave 10 — all 12 remaining class1tx.c handlers close, `V17TX_control`/`V29TX_control` land, fax down to 12 symbols
+
+Three branches, plus one important non-event: the assigned `V17TX_create`/
+`V29TX_create` agent found both constructors ALREADY on `master` (landed
+waves 6/7) and made no commits — see the correction below.
+
+| agent | delivered |
+|---|---|
+| class1tx.c cluster | The remaining twelve `class1tx.c +94` state handlers from F10102's list — `_rx_look_carrier_state`, `_rx_data_state`, `_tx_nulls_state`, `_tx_scrambled_ones_state`, `_tx_data_state`, `_hdlc_receive_state`, `_hdlc_receive_between_buffers_state`, `_hdlc_receive_look_carrier_state`, `_send_hdlc_buffer_state`, `_t30_preabmle_state`, `_send_hdlc_between_buffer_state`, `cHDLCtx_off` — 5,412 bytes. A real crash root-caused via core-dump register analysis: `ctx->f1290` was modelled two bytes narrower than the object's own 32-bit load, so uninitialised "padding" fed a loop bound and walked a write off the struct |
+| control functions (redirected mid-wave) | `V17TX_control`/`V29TX_control` (148/126 B), once the constructor question was settled — see correction below. Both had a real sixth effect (a second writer of a previously-neutral `int_0008` field) that neither the banked derivation nor the brief predicted |
+| `_init_receiver`/`_init_transmitter` | Neither landed — the agent, working from a worktree branched before the control-functions redirect happened, independently wrote the same `V17TX_control`/`V29TX_control` chain to unblock its own assignment, discovered the collision itself, and committed NOTHING rather than risk it. One real, independently-reverified correction (F10108, `FAXVMI_control`'s `int_0014` recursion argument was documented as a literal -1; it's `int_0014` itself) and one independently-reverified piece of evidence (F10109, the `init_vmi_data_rx_modem`/`init_vmi_data_tx_modem` dispatch tables) were salvaged and committed directly rather than lost |
+
+**CORRECTION: `docs/remaining.md`'s own wave-9 text was stale the moment it
+was written**, and this wave is what caught it. `V17TX_create`/`V29TX_create`
+landed in waves 6/7 — wave 9's control-functions agent declined
+`V17TX_control`/`V29TX_control` from a worktree branched 32 commits behind
+master, where its own `grep` genuinely found nothing; this file repeated
+that as a forward-looking blocker without anyone re-checking `master`
+directly. Exactly the shelf-life hazard CLAUDE.md's `V90Parameters` example
+warns about, now demonstrated against this file's own prose rather than a
+source comment. **Read this file's status as of its last edit, not as
+received wisdom — check the tool before repeating a claim, every time,**
+same discipline as everywhere else in this project.
+
+Each branch individually period-green (368, 365, and no commits to gate
+for the third); the fully merged tree gates at **368 passed, 0 failed**,
+onedef/bannercheck/refcheck all clean. One finding-number collision this
+wave (F10107, used by both the control-functions branch and the class1tx
+cluster branch, each unaware of the other) — renumbered the later-merged
+branch's finding to F10110, same procedure as wave 9's two collisions.
+
+### What this wave established
+
+- **A wrong forward-looking claim in this very file cost a full agent
+  turn before being caught, and the agent that caught it did the right
+  thing:** verified against `master` directly rather than trusting the
+  brief, made no commits once it found nothing to do, and said so plainly.
+  Redirecting it to the now-genuinely-unblocked task cost one message.
+- **Working from a stale worktree caused a real collision, not just a
+  close call.** The `_init_receiver` agent branched before the
+  control-functions redirect happened, so it never saw a sibling was
+  already assigned `V17TX_control`/`V29TX_control` — it derived and wrote
+  the identical chain independently to unblock its own two functions,
+  found the overlap itself via `git log` before committing, and discarded
+  its own duplicate work rather than risk a silent collision. Nothing was
+  lost except the wasted derivation effort, and even that yielded two
+  keepable, independently-reverified findings.
+- **Salvaging evidence from discarded work is worth doing, and worth
+  re-verifying rather than copying.** Both F10108 and F10109 came from a
+  branch whose CODE was discarded entirely; re-deriving each claim from
+  `dis.py`/`objdump -r`/`nm` before committing it (rather than trusting the
+  agent's report) is the same discipline CLAUDE.md's evidence-order section
+  asks of every other claim in this tree, applied to a subagent's report
+  exactly as it would be to a stale comment.
+
+### What's left, measured
+
+Fax is **12 symbols / 7,417 bytes** — 88% of everything remaining, and for
+the first time smaller than the two no-entry-point leaves combined with
+everything else outside fax. What remains, by span:
+
+    class1tx.c +94   _init_transmitter (1,326), FAXVMI_control (338),
+                      _cHDLCrx_init_from_idle (226),
+                      _tx_scrambled_ones_init (193),
+                      cHDLCtx_preamble_state_init (193),
+                      cHDLCtx_off_init (149), _rx_look_carrier_init (45)
+    class1.c          fax_class1_create (1,532), fax_class1_command (615),
+                      _answer_tone_state (94)
+    class1rx.c        _init_receiver (1,583)
+    voice.c#3 +3       FAX_class1_command (708), FAX_create (564)
+
+`_init_receiver`/`_init_transmitter` are the clearest next targets — F10109
+already banks their dispatch-table evidence, and five of the remaining
+twelve symbols unblock directly once one or both land. `FAXVMI_control`
+needs three of `_init_receiver`/`_init_transmitter`'s siblings
+(`V21RX_CTL`/`V21TX_CTL`, per-modulation `.data` request templates F10109
+also reports but does not independently confirm) rather than more code.
