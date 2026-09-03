@@ -110704,3 +110704,194 @@ quality-latch chains via a SYNTHETIC modem object shaped exactly like
 `V17RX_OBJ_STATE`/`V29_OBJ_RX`/`V27_OBJ_RX` and their own latch offsets
 (not a real V17RX/V27RX/V29RX instance, which is a different agent's
 closure). 813 checks, three debug levels, all passing against the blob.
+
+## F10100. `cTOOLS_handle_hdlc_output`'s terminator write was gated on `count != 0`, and the object gates it on `terminate` alone
+
+A real defect in an already-committed function, found by a NEW caller's
+differential test rather than by re-reading the disassembly a second time.
+`_hdlc_emulate_receive_state` (F10101, this wave) calls
+`cTOOLS_handle_hdlc_output(ctx, &f1000[...], dst, 0, 1)` for a genuine
+zero-length record -- `count == 0`, `terminate == 1` -- and `t_class1hdlcemu.c`
+disagreed with the blob: word7 (the byte count) came back 0 where the blob
+left 2.
+
+`dis.py` over 0x09ef10..0x09f0a3 settles it. `count == 0` branches STRAIGHT
+to 0x9ef90 (`test %ebp,%ebp; je 0x9ef90`), and 0x9ef90 is exactly the
+`terminate` test (`mov 0x30(%esp),%ecx; test %ecx,%ecx; je 0x9efa8`) -- so
+the DLE ETX write at 0x9ef98-0x9efa5 is reached, and runs, whenever
+`terminate != 0`, whatever `count` is. The COMBINED condition
+`count != 0 && terminate != 0` (`setne`/`setne`/`test` at
+0x9ef6b-0x9ef78) gates something narrower: only the two TRAILING debug
+prints ("%02X," / "%02X\n" for the terminator bytes), which are folded into
+the same `je 0x9ef90` for scheduling reasons but are not the same condition
+as the write.
+
+The function as first committed (wave 6, F9600's neighbourhood) wrapped
+both the debug prints AND the write in the combined condition, so a
+zero-length terminated record silently lost its two-byte terminator. Fixed
+in `src/fax/class1tx.c` to split the two: the debug prints keep the combined
+guard, the write is gated on `terminate != 0` alone.
+
+**Why the existing test never caught it.** `t_class1handlers.c`'s
+`run_hdlc_output` sweeps `count = p % (IN_MAX + 1)` for `p` in 0..19 with
+`IN_MAX == 64`, so `count == p` outright; the only `p` giving `count == 0` is
+`p == 0`, which is even, so `terminate` is always false there too. The
+`count == 0, terminate != 0` cell was never in the denominator. Both tests
+now cover it: `t_class1handlers.c` gained a dedicated four-case loop (one
+per debug level) asserting the return is exactly 2, and
+`t_class1hdlcemu.c`'s own case 5 (a one-record buffer whose random length
+happened to land on 0) exercises it as a side effect of testing
+`_hdlc_emulate_receive_state` at all record lengths rather than only
+nonzero ones. (2026-09-03)
+
+## F10101. `_hdlc_emulate_receive_state` closes: HDLC_EMULATE_RECEIVE_STATE replays pre-loaded, length-prefixed records out to the host
+
+`.text` 0x09e1b0, 452 bytes -- state 7, flagged READY by wave 8's agent once
+`_put_silence` and `cTOOLS_handle_hdlc_output` landed, and left for time
+(`docs/remaining.md`'s wave-8 ledger). Both landed since; this wave closes
+it, along with the bugfix F10100 needed underneath it.
+
+**THREE NEW FIELDS AND A 512-BYTE BUFFER, all read/written by this one
+function only.** `class1.h` carves them out of the previously-unmodelled
+`pad_005`/`pad_12be` regions:
+
+  - `f1000[0x100]` (+0x1000, `unsigned short`) -- a run of LENGTH-PREFIXED
+    records: entry `i` is a length, the next `i+1` entries are its content
+    (read as bytes -- every access is `movzwl` then truncated to
+    `(unsigned char)` by its one consumer, `cTOOLS_handle_hdlc_output`), and
+    the next record starts right after. Sized from ADDRESS CONTIGUITY alone
+    -- it runs right up to `vmi_c`'s own +0x1200 with no access this batch
+    saw past that -- rather than a size constant, so this is usage
+    inference, the weakest evidence class, and is recorded as such.
+  - `f12c8` (+0x12c8, `int`) -- a between-record countdown, decremented once
+    per call; a value that was <= 0 BEFORE the decrement is what fires the
+    next record. Reset to 2.
+  - `f12cc` (+0x12cc, `int`) -- the index of the next record to emit, into
+    the COUNT the parse below finds (not a byte offset). Reset to 0.
+  - `f12d0` (+0x12d0, `int`) -- the valid byte length of `f1000` for this
+    batch of records; the parse loop below runs while `idx < f12d0`. Reset
+    to 0.
+
+**`CLASS1_EMU_MAX_FRAMES` (12) is the object's own stack table, unguarded.**
+The function parses `f1000` into a LOCAL array of record lengths before
+re-walking it to find where record `next` starts; `sub $0x50,%esp` reserves
+0x50 bytes, the largest outgoing call (`cTOOLS_handle_hdlc_output`, five
+arguments) uses the first 0x14 of them for its own marshalling, and the
+table itself is indexed at `0x20(%esp,%ecx,4)` -- 0x20 to 0x50, 0x30 bytes
+of 4-byte entries, twelve. Nothing in the object bounds the PARSE loop
+against this count; more than twelve records in one call overruns the
+stack table exactly as it would in the object. Reproduced with the same
+fixed-size array and the same absence of a guard -- the test keeps every
+case at or under twelve records for the obvious reason (both sides would
+smash their own stack past that, not just disagree).
+
+**THE CONTROL FLOW, thirty-eight distinct branch targets that turn out to
+be four decisions:**
+
+  1. Parse `f1000` from the start: `count` records, each length banked into
+     the local table so the second walk (finding where record `next`
+     starts) does not have to re-read the buffer.
+  2. `ctx->prev_state != CLASS1_HDLC_EMULATE_RECEIVE_STATE` -- the first
+     tick since some OTHER state entered this one -- is when a still-unsent
+     record (`next < count`) reports `FAX_CLASS1_CONNECT`, once. A
+     continuation tick skips this.
+  3. The between-record countdown: `old = f12c8; f12c8 = old - 1;` runs on
+     EVERY call (first tick or continuation alike -- the object has two
+     copies of the identical three instructions, one per predecessor, not
+     one shared block, which is why this reads as thirty-eight targets
+     before it reads as four decisions). `old <= 0` is what fires the next
+     step:
+       - nothing left (`next >= count`) -- `status = NO_CARRIER_NO_MESSAGE`,
+         `state = IDLE_STATE`. Both spelled `8` in the object (one a state,
+         one a status), which is why a single `mov $0x8` in the
+         disassembly feeds two different stores and looked, on a first
+         read, like the same value twice.
+       - a record is waiting (`next < count`) -- re-walk the local length
+         table to find where record `next` starts, call
+         `cTOOLS_handle_hdlc_output(ctx, &f1000[start+1], word3, f1000[start],
+         1)`, write the byte count through `word7`, arm a two-tick delayed
+         status (`delayed_status = 1`, `delayed_status_countdown = 2`),
+         advance `f12cc`, and also move to `IDLE_STATE`.
+  4. Whether or not step 3 fired: once `next` has caught up to `count`
+     EXACTLY (`je`, not `next >= count` -- an overshoot from a stale
+     `f12cc` does NOT reset), the whole buffer resets (`f12d0 = 0`,
+     `f12c8 = 2`, `f12cc = 0`). Every path ends the same way: a block of
+     silence out, `*tx_count` set to it, return 0.
+
+**`word3` AND `word7` GET THEIR FIRST REAL TYPE FROM THIS FUNCTION.** No
+other `class1_state_fn` this tree has written reads either one --
+`class1.h`'s own comment on the shared typedef said so before this batch.
+Here, `word3` is the host-facing output buffer `cTOOLS_handle_hdlc_output`
+writes through (`unsigned char *`) and `word7` is an `int *` the byte count
+is written through -- the same `(T *)(long)word` idiom `fax_class1_progress`
+(F10057) already uses for `word7` in ITS OWN signature, applied here to the
+shared, still-`int`, `class1_state_fn` slot rather than widening the shared
+typedef (which every other already-tested handler would then have to
+tolerate for no benefit of its own).
+
+**Uncovered while writing this function's test: F10100**, a real defect in
+`cTOOLS_handle_hdlc_output` this function's own zero-length-record case
+walks straight into. Fixed there, not worked around here.
+
+`t_class1hdlcemu.c`: fifteen cases sweeping every combination of record
+count (0, 1, 3, 12), `next`, `f12c8`'s sign, and `prev_state`, asserting
+from the run that the CONNECT write, the IDLE/NO_CARRIER_NO_MESSAGE
+transition, an emitted record, and the buffer reset each fired at least
+once (F134). 140 checks per run, all passing. (2026-09-03)
+
+## F10102. The other fifteen symbols of this wave's HDLC/TX/RX state-machine batch are ALL still blocked, and on a small, shared set of callees
+
+The brief named sixteen symbols in the `class1tx.c +94` span:
+`_tx_scrambled_ones_state`, `_rx_look_carrier_state`, `_tx_data_state`,
+`_hdlc_receive_between_buffers_state`, `_hdlc_emulate_receive_state`,
+`_tx_nulls_state`, `_rx_data_state`, `_send_hdlc_between_buffer_state`,
+`_t30_preabmle_state`, `_send_hdlc_buffer_state`, `cHDLCtx_off`,
+`_cHDLCrx_init_from_idle`, `_tx_scrambled_ones_init`,
+`cHDLCtx_preamble_state_init`, `cHDLCtx_off_init`, `_rx_look_carrier_init`.
+Every blob address and byte count in the brief checked out exactly against
+`nm -S` (confirmed before anything else). `_hdlc_emulate_receive_state`
+(F10101) is the only one of the sixteen this wave lands; the other fifteen
+were traced with `dis.py` (every `call` and every `movl $handler,field`
+relocation, per F8493's warning that a stored address pins a symbol the
+same way a call does) and are ALL still blocked, on six callees:
+
+    FAXVMI_process       .text 0x095470  327 B   unwritten
+    FAXVMI_control       .text 0x095650  338 B   unwritten
+    _init_receiver        .text 0x094240 1583 B   unwritten (class1rx.c span)
+    _init_transmitter     .text 0x094bf0  1326 B  unwritten (class1tx.c span,
+                                                    per D1450's own note)
+    V21RX_CTL / V21TX_CTL  .data                   unwritten (per-modulation
+                                                    control records, the same
+                                                    shape as the now-written
+                                                    `FAXVMI_CTL`)
+
+    _rx_look_carrier_init          -> _init_receiver
+    _rx_look_carrier_state         -> FAXVMI_process
+    _rx_data_state                 -> FAXVMI_process
+    _tx_scrambled_ones_init        -> _init_transmitter, FIFO_create*
+    _tx_nulls_state                -> FAXVMI_process
+    _tx_scrambled_ones_state       -> FAXVMI_process
+    _tx_data_state                 -> FAXVMI_process
+    _cHDLCrx_init_from_idle        -> FAXVMI_control, V21RX_CTL, FAXVMI_CTL*
+    _hdlc_receive_between_buffers_state -> FAXVMI_process
+    cHDLCtx_preamble_state_init    -> FAXVMI_control, V21TX_CTL, FAXVMI_CTL*
+    _send_hdlc_buffer_state        -> FAXVMI_process, FAXVMI_status*
+    _send_hdlc_between_buffer_state -> FAXVMI_process
+    _t30_preabmle_state            -> FAXVMI_process
+    cHDLCtx_off_init                -> FAXVMI_control, V21RX_CTL, FAXVMI_CTL*
+    cHDLCtx_off                     -> FAXVMI_process
+
+`*` marks a callee that landed DURING this wave (`FIFO_create`,
+`FAXVMI_CTL`, `FAXVMI_status` were all unwritten when the brief was issued,
+merged from master partway through) -- so every one of the fifteen has
+exactly ONE unwritten blocker left after that merge: `FAXVMI_process`
+(eleven of them), `FAXVMI_control` (three, all also wanting
+`V21RX_CTL`/`V21TX_CTL`), `_init_receiver` (one), or `_init_transmitter`
+(one, alongside the now-cleared `FIFO_create`). `docs/remaining.md`'s
+wave-8 ledger already names `FAXVMI_create`/`FAXVMI_process` and the
+`*_control` forwarders as its own "next wave" -- unclaimed at the time this
+wave started, per that ledger's own account of what wave 8 left. Not
+written here to avoid duplicating whatever agent this wave assigned to
+`faxvmi.c`; each of the fifteen becomes writable the moment its one
+remaining blocker lands, and is otherwise unchanged from the brief's own
+description. (2026-09-03)

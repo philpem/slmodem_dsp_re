@@ -212,8 +212,8 @@ run_class1(void)
 		fill(blk_a, (unsigned)sizeof(blk_a));
 		memcpy(blk_b, blk_a, sizeof(blk_a));
 		if (i & 1) {
-			ctx_a.f1288 = blk_a;
-			ctx_b.f1288 = blk_b;
+			ctx_a.f1288 = (struct fax_fifo *)blk_a;
+			ctx_b.f1288 = (struct fax_fifo *)blk_b;
 		} else {
 			ctx_a.f1288 = NULL;
 			ctx_b.f1288 = NULL;

@@ -55,7 +55,25 @@ struct fax_class1 {
 					 * _handle_hdlc_input_close         */
 	unsigned char pad_002[2];	/* +0x0002                          */
 	unsigned char flags004;		/* +0x0004 bit 4 gates f1224        */
-	unsigned char pad_005[0x11fb];	/* +0x0005                          */
+	unsigned char pad_005[0xffb];	/* +0x0005                          */
+	unsigned short f1000[0x100];	/* +0x1000 `_hdlc_emulate_receive_
+						 * state`'s own buffer: a run of
+						 * LENGTH-PREFIXED records -- entry
+						 * `i` is a length, the next `i+1`
+						 * entries are the record's own
+						 * (byte-valued) elements, and the
+						 * NEXT record starts right after
+						 * -- read only up to `f12d0` bytes
+						 * of it, in the same shape
+						 * `_handle_hdlc_input_close`
+						 * leaves a frame in.  Sized from
+						 * ADDRESS CONTIGUITY alone (it runs
+						 * right up to `vmi_c`'s own +0x1200,
+						 * the next already-established
+						 * field, with no access this batch
+						 * saw past that) rather than a size
+						 * constant anywhere -- usage
+						 * inference, the weakest class     */
 	struct faxvmi *vmi_c;		/* +0x1200 a THIRD FAXVMI handle,
 						 * torn down by `fax_class1_delete`
 						 * before `vmi_a`/`vmi_b` -- typed
@@ -214,7 +232,25 @@ struct fax_class1 {
 					 * The author's word: the object
 					 * prints exactly this value as
 					 * "Energy %d"                      */
-	unsigned char pad_12be[0x1a];	/* +0x12be                          */
+	unsigned char pad_12be[0xa];	/* +0x12be                          */
+	int f12c8;			/* +0x12c8 `_hdlc_emulate_receive_
+						 * state`'s own between-record
+						 * countdown: decremented once per
+						 * call, and a value that was <= 0
+						 * BEFORE the decrement is what
+						 * fires the next record (or the
+						 * idle transition once `f1000`
+						 * is exhausted).  Reset to 2      */
+	int f12cc;			/* +0x12cc the same function's "next
+						 * record to emit" index into the
+						 * record COUNT `f1000` parses to
+						 * (not a byte offset).  Reset to 0 */
+	int f12d0;			/* +0x12d0 and the valid byte length
+						 * of `f1000` for this batch of
+						 * records.  Reset to 0.  All three
+						 * are read-and-written by that one
+						 * function only, this batch        */
+	unsigned char pad_12d4[4];	/* +0x12d4                          */
 	int f12d8;			/* +0x12d8 fax_class1_info(0);
 					 * create clears it                 */
 	const short *f12dc;		/* +0x12dc create: a .rodata ptr.
@@ -331,6 +367,18 @@ extern struct class1_name status_names[11];
  */
 #define CLASS1_ETX_PAD_ELEMENTS		20
 #define CLASS1_ETX_PAD_LIMIT		0x7ff
+
+/*
+ * `_hdlc_emulate_receive_state`'s own stack table of record lengths, sized
+ * from the function's OWN stack frame: `sub $0x50,%esp` reserves 0x50 bytes,
+ * the largest outgoing call (`cTOOLS_handle_hdlc_output`, five arguments)
+ * uses the first 0x14 of them, and the table itself is indexed at
+ * `0x20(%esp,%ecx,4)` -- so it runs from 0x20 to 0x50, 0x30 bytes of 4-byte
+ * entries, twelve.  Nothing bounds the PARSE loop that fills it against this
+ * count; more than twelve records in one call overruns it exactly as it
+ * would in the object, and is reproduced rather than guarded.
+ */
+#define CLASS1_EMU_MAX_FRAMES		12
 
 /*
  * The state-init family: (object, an argument) -> int.  The silence pair's
