@@ -39,6 +39,7 @@
  */
 
 #include <stddef.h>
+#include <unistd.h>
 
 #include "dsplib/class1.h"
 #include "dsplib/class1tx.h"
@@ -46,6 +47,7 @@
 #include "dsplib/faxcfg.h"
 #include "dsplib/faxfifo.h"
 #include "dsplib/faxvmi.h"
+#include "dsplib/fpm_tone.h"
 #include "dsplib/sysdep.h"
 #include "dsplib/t30frame.h"
 #include "dsplib/v17fax.h"
@@ -951,6 +953,1466 @@ _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 		ctx->f12d0 = 0;
 		ctx->f12c8 = 2;
 		ctx->f12cc = 0;
+	}
+
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+	return 0;
+}
+
+/*
+ * ------------------------------------------------------------------
+ * THE REMAINING TWELVE.  Inserted here, after `_hdlc_emulate_receive_state`
+ * (this file's last function by both position and, until now, by address) --
+ * this file is not in whole-file address order already (the VMI-constructor
+ * trio above sits far out of the order its own 0x0948xx addresses would
+ * imply, per that section's own comment), so a single clean append at EOF is
+ * the insertion point that disturbs the least of what is already here.
+ * Internally the twelve are grouped by RELATED FUNCTION rather than strict
+ * ascending address (`_tx_scrambled_ones_state` and `_tx_data_state` in
+ * particular share the `DATAtx_counter` static and sit together for that
+ * reason, out of strict order) -- each function's own `.text` address and
+ * size is stated in its own comment below and is what is authoritative, not
+ * its position in the file.  Every one of the twelve is a `class1_state_fn`
+ * (class1.h); addresses and sizes are confirmed against
+ * `nm -S ref/slmodemd/dsplibs.o`.
+ *
+ * A raw status bit shared by five of them (`_rx_look_carrier_state` twice,
+ * `_rx_data_state`, `cHDLCtx_off`, `_hdlc_receive_state`, `_hdlc_receive_
+ * between_buffers_state`): `test $0x20,%ah` on `FAXVMI_process`'s raw `int`
+ * return, i.e. bit 0x2000.  `faxvmi.h`'s own note on `FAXVMI_process` says
+ * the low 24 bits of that return are the WRAPPED MODULATION's own result
+ * word, untouched by `FAXVMI_process` itself -- so this is some status bit
+ * of whichever modem the VMI handle in play currently wraps.  Its ROLE is
+ * not uniform across call sites (in `cHDLCtx_off` it swaps which of two
+ * countdown thresholds applies; elsewhere SET reads as "carrier/frame still
+ * present", CLEAR as "lost"), so it is named only as a bit position, not a
+ * meaning -- evidence class 3, usage inference, corroborated by nothing
+ * stronger.
+ */
+#define FAXVMI_RESULT_BIT_2000	0x2000
+
+/*
+ * RX_LOOK_CARRIER (12).  `.text` 0x0009cb30, 624 bytes.
+ *
+ * Drives `ctx->vmi_b` every call and, only when `vmi_b`'s own
+ * `FAXVMI_RESULT_BIT_2000` comes back CLEAR, polls `ctx->vmi_a` too (both
+ * calls pass `ctx` itself, cast `(unsigned short *)(void *)ctx`, as
+ * FAXVMI_process's `data` argument with `count` seeded 0 -- inert, the same
+ * idiom `cHDLCtx_off` already established).  If `vmi_a`'s own bit comes back
+ * SET, that reads as "an HDLC frame arrived while looking for a DATA
+ * carrier" (the object's own debug line, quoted below) -- transition to
+ * HDLC_RECEIVE_STATE with FAX_CLASS1_OTHER_CARRIER, but keep going: the
+ * object falls through into the SAME `status1`-bit-8/9 test below whichever
+ * way the `vmi_a` poll went, using `status1` (the FIRST call's return, never
+ * overwritten by the second).
+ *
+ * `(status1 >> 8) & 0x3 == 1` reads as "V.21 detected a valid start of
+ * protocol" -- one call site, one value tested, so this stays a bare
+ * expression rather than a named bit (usage inference, too weak to
+ * generalise).  On a match: FAX_CLASS1_CONNECT, RX_DATA_STATE.
+ *
+ * THE S7 (CARRIER-WAIT) TIMEOUT.  `ctx->s7_timeout * 8000 / *rx_count`
+ * (or, when `*rx_count == 0`, the object's own divide-by-zero guard,
+ * `ctx->s7_timeout * 50` -- exactly what the general formula reduces to at
+ * the usual 160-sample block and an implied 8 kHz rate, corroborating
+ * rather than a second derivation) is compared against `ctx->countdown`
+ * (incremented once per call, UNSIGNED per the object's own `cmp`/`jbe`);
+ * once countdown exceeds it AND `status1`'s bit is still clear, the object's
+ * own line is "S7 time elapsed in look carrier\n" -- FAX_CLASS1_NO_CARRIER,
+ * IDLE_STATE.  A zero limit skips this block entirely (object's own `test
+ * edi,edi`/`je`).
+ *
+ * `*word8 != 0` on entry aborts to the host: IDLE_STATE, `_idle_state_init`,
+ * a zero-length `cTOOLS_handle_hdlc_output` (DLE ETX only, from `ctx+2` --
+ * inert, `count` is 0) whose byte count goes through `word7`
+ * (`(int *)(long)word7`, the same idiom `_hdlc_emulate_receive_state`
+ * established), and FAX_CLASS1_OK.
+ *
+ * Every path ends the same: `*word8 = 5` (the SAME magic value
+ * `_recieve_silence_state` already writes there, per class1.h's own
+ * unresolved note on what word8 is -- corroborating, not resolving, that
+ * note), `_put_silence(tx, *rx_count)` -- NOT the `CLASS1_BLOCK_SAMPLES`
+ * constant, the caller's own count -- and `*tx_count = *rx_count`.
+ *
+ * FORMAT STRINGS, verified byte for byte against `.rodata.str1.4`:
+ *   0x12210  "TxDatCnt !=0 in _rx_look_carrier_state... abort to command mode\n"
+ *   0x12254  "At %2d.%02d[sec] Data RX connect in _rx_look_carrier_state\n"
+ *   0x12290  "At %2d.%02d[sec] HDLC frame detected during look for DATA carrier !!!\n"
+ *   0x122d8  "S7 time elapsed in look carrier\n"
+ */
+int
+_rx_look_carrier_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		       int word3, int word4, int *rx_count, int *tx_count,
+		       int word7, int *word8)
+{
+	short cnt1 = 0, cnt2 = 0;
+	unsigned short result1 = (unsigned short)*rx_count;
+	unsigned short result2 = (unsigned short)*rx_count;
+	int status1, status2;
+	int limit;
+	int sub;
+
+	(void)word4;
+
+	limit = (*rx_count == 0) ? ctx->s7_timeout * 50
+				: ctx->s7_timeout * 8000 / *rx_count;
+	ctx->countdown++;
+
+	status1 = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx,
+				 (short *)rx, &cnt1, &result1);
+
+	if (!(status1 & FAXVMI_RESULT_BIT_2000)) {
+		status2 = FAXVMI_process(ctx->vmi_a,
+					 (unsigned short *)(void *)ctx,
+					 (short *)rx, &cnt2, &result2);
+		if (status2 & FAXVMI_RESULT_BIT_2000) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] HDLC frame detected "
+				    "during look for DATA carrier !!!\n",
+				    ctx->clock_sec, ctx->clock_frac);
+			_hdlc_receive_state_init(ctx);
+			ctx->state = CLASS1_HDLC_RECEIVE_STATE;
+			ctx->status = FAX_CLASS1_OTHER_CARRIER;
+		}
+	}
+
+	sub = (status1 >> 8) & 0x3;
+	if (sub == 1) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Data RX connect in "
+			    "_rx_look_carrier_state\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->status = FAX_CLASS1_CONNECT;
+		ctx->state = CLASS1_RX_DATA_STATE;
+	}
+
+	if (limit != 0 &&
+	    (unsigned int)ctx->countdown > (unsigned int)limit &&
+	    !(status1 & FAXVMI_RESULT_BIT_2000)) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf("S7 time elapsed in look "
+					     "carrier\n");
+		ctx->status = FAX_CLASS1_NO_CARRIER;
+		ctx->state = CLASS1_IDLE_STATE;
+	}
+
+	if (*word8 != 0) {
+		int n;
+
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "TxDatCnt !=0 in _rx_look_carrier_state... "
+			    "abort to command mode\n");
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
+		n = cTOOLS_handle_hdlc_output(ctx,
+		    (const unsigned short *)((char *)ctx + 2),
+		    (unsigned char *)(long)word3, 0, 1);
+		*(int *)(long)word7 = n;
+		ctx->status = FAX_CLASS1_OK;
+	}
+
+	*word8 = 5;
+	_put_silence(tx, *rx_count);
+	*tx_count = *rx_count;
+	return 0;
+}
+
+/*
+ * RX_DATA_STATE (13).  `.text` 0x0009cda0, 433 bytes.
+ *
+ * Drives `ctx->vmi_b` with `ctx` as `data` (the same idiom, but NOT inert
+ * here: `word7`'s target seeds the call's `count`, so `FAXVMI_process`'s
+ * unpack step really does write demodulated elements into `ctx`'s own
+ * leading bytes -- `_handle_data_output` then reads them straight back out
+ * as its own `src`, both within `pad_005[0xffb]` for any plausible block
+ * size).  `word7` is read (`*(int *)(long)word7`) to seed the call, and
+ * WRITTEN at the end with the byte count `_handle_data_output`/
+ * `cTOOLS_handle_hdlc_output` returns -- the same `int *` role
+ * `_hdlc_emulate_receive_state` established, confirmed here independently.
+ *
+ * `FAXVMI_RESULT_BIT_2000` SET reads as "carrier present, keep streaming":
+ * `_handle_data_output(ctx, ctx, word3, cnt, terminate=0)`.  CLEAR reads as
+ * "carrier lost": log, IDLE_STATE, `_idle_state_init`, the SAME call with
+ * `terminate=1` (closing the host stream with DLE ETX), a delayed
+ * FAX_CLASS1_NO_CARRIER two calls out, and -- ONLY on this branch, nested
+ * inside it, not a sibling -- the same `*word8 != 0` "abort to command mode"
+ * block `_rx_look_carrier_state` has (IDLE_STATE, `_idle_state_init`, a
+ * zero-length `cTOOLS_handle_hdlc_output` from `ctx+2`, FAX_CLASS1_OK).  The
+ * object's own control flow makes the abort check UNREACHABLE when the bit
+ * is SET, and this is written the same way.
+ *
+ * Same tail as `_rx_look_carrier_state`: `*word8 = 5`,
+ * `_put_silence(tx, *rx_count)`, `*tx_count = *rx_count`.
+ *
+ * FORMAT STRINGS:
+ *   0x122fc  "At %2d.%02d[sec] No carrier in _rx_data_state, move to idle\n"
+ *   0x1233c  "TxDatCnt !=0 in _rx_data_state... abort to command mode\n"
+ */
+int
+_rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
+	      int word3, int word4, int *rx_count, int *tx_count,
+	      int word7, int *word8)
+{
+	short cnt = (short)*(int *)(long)word7;
+	unsigned short result = (unsigned short)*rx_count;
+	int status;
+	int n;
+
+	(void)word4;
+
+	ctx->countdown++;
+	status = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx,
+				(short *)rx, &cnt, &result);
+
+	if (status & FAXVMI_RESULT_BIT_2000) {
+		n = _handle_data_output(ctx, (unsigned short *)(void *)ctx,
+		    (unsigned char *)(long)word3, cnt, 0);
+		cnt = (short)n;
+	} else {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] No carrier in _rx_data_state, "
+			    "move to idle\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
+
+		n = _handle_data_output(ctx, (unsigned short *)(void *)ctx,
+		    (unsigned char *)(long)word3, cnt, 1);
+		cnt = (short)n;
+
+		ctx->delayed_status_countdown = 2;
+		ctx->delayed_status = FAX_CLASS1_NO_CARRIER;
+
+		if (*word8 != 0) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "TxDatCnt !=0 in _rx_data_state... "
+				    "abort to command mode\n");
+			ctx->state = CLASS1_IDLE_STATE;
+			_idle_state_init(ctx);
+			n = cTOOLS_handle_hdlc_output(ctx,
+			    (const unsigned short *)((char *)ctx + 2),
+			    (unsigned char *)(long)word3, 0, 1);
+			cnt = (short)n;
+			ctx->status = FAX_CLASS1_OK;
+		}
+	}
+
+	*(int *)(long)word7 = cnt;
+	*word8 = 5;
+	_put_silence(tx, *rx_count);
+	*tx_count = *rx_count;
+	return 0;
+}
+
+/*
+ * TX_NULLS_STATE (11).  `.text` 0x0009d040, 435 bytes.
+ *
+ * REPLACES A FIRST INTEGRATION PASS whose cited format strings did not
+ * survive an `objdump -s -j .rodata.str1.4` re-check (they read as
+ * plausible paraphrases, not the object's own bytes) -- rewritten from a
+ * fresh `dis.py` trace with every string confirmed by address.
+ *
+ * `ctx->countdown++`; past 250 (unsigned), log ("CURRENT_STATE_TIMER > "
+ * "FIVE_SECONDS in _tx_nulls_state\n", 0 args) and set IDLE_STATE /
+ * FAX_CLASS1_ERROR_ON_HOOK -- but keep going into the block below either way
+ * (this is not a return).
+ *
+ * `*word8 > 0`: log ("Back to TX_DATA_STATE in _tx_nulls_state\n"), set
+ * `ctx->state = CLASS1_TX_DATA_STATE`, unstuff `word4` through
+ * `_handle_data_input` into `ctx` itself (the scratch-buffer idiom, `dst`
+ * cast from `ctx`) with `count = word8`, then `FIFO_write` the just-decoded
+ * run into `ctx->f1288`, logging a shortfall ("Fifo is full in
+ * _tx_nulls_state\n"), THEN -- still inside this same block, not a shared
+ * step -- `FIFO_read(ctx->f1288, ctx, ctx->f1290)` back into `ctx`, `*word8`
+ * set to the return, a shortfall against `ctx->f1290` logged ("class1
+ * object fifo under run in _tx_nulls_state !!!\n").  On the `*word8 <= 0`
+ * path NONE of this runs -- the object's own `jle` jumps straight past the
+ * whole block (confirmed by address: `9d088`'s `jle` target is `9d120`, the
+ * `FAXVMI_process`-setup label, not `9d0e2` where `FIFO_read` lives) -- so
+ * `*word8` there is left holding whatever the CALLER passed in, unread.
+ *
+ * Either way: `FAXVMI_process(ctx->vmi_b, ctx, tx, &cnt, &result)` with
+ * `cnt` seeded from the CURRENT `*word8` (freshly read, or the caller's
+ * original value) and `result` from `*tx_count`.
+ *
+ * Tail: `*word8 = ctx->f1288->size - ctx->f1288->count - 1` (the free-room-
+ * minus-one formula `_tx_data_state`/`_tx_scrambled_ones_state` also end
+ * with).  `*tx_count` is READ, never written, on any path.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.4` (`objdump -s`):
+ *   0x12378  "Fifo is full in _tx_nulls_state\n"
+ *   0x1239c  "At %2d.%02d[sec] Back to TX_DATA_STATE in _tx_nulls_state\n"
+ *   0x123d8  "CURRENT_STATE_TIMER > FIVE_SECONDS in _tx_nulls_state\n"
+ *   0x12410  "class1 object fifo under run in _tx_nulls_state !!!\n"
+ */
+int
+_tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		int word3, int word4, int *rx_count, int *tx_count,
+		int word7, int *word8)
+{
+	short cnt;
+	unsigned short result;
+
+	(void)rx;
+	(void)word3;
+	(void)rx_count;
+	(void)word7;
+
+	ctx->countdown++;
+	if ((unsigned int)ctx->countdown > 250) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "CURRENT_STATE_TIMER > FIVE_SECONDS in "
+			    "_tx_nulls_state\n");
+		ctx->state = CLASS1_IDLE_STATE;
+		ctx->status = FAX_CLASS1_ERROR_ON_HOOK;
+	}
+
+	if (*word8 > 0) {
+		int n;
+
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Back to TX_DATA_STATE in "
+			    "_tx_nulls_state\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_TX_DATA_STATE;
+
+		_handle_data_input(ctx, (const unsigned char *)(long)word4,
+		    (unsigned short *)(void *)ctx, word8);
+
+		n = FIFO_write(ctx->f1288, (unsigned short *)(void *)ctx,
+		    (unsigned short)*word8);
+		if (*word8 > n) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "Fifo is full in _tx_nulls_state\n");
+		}
+
+		/*
+		 * `FIFO_read` is INSIDE this block, not a shared unconditional
+		 * step -- the object's own `jle` at `*word8 <= 0` jumps
+		 * straight past it to the `FAXVMI_process` setup, so on that
+		 * path `cnt` below is seeded from `*word8`'s ORIGINAL
+		 * (unread) value, not a fresh read.  A first version of this
+		 * function ran `FIFO_read` unconditionally, which reads as
+		 * "ctx (as data) is FIFO-read-filled on every call" and is
+		 * wrong on any call where `*word8 <= 0` -- caught by this
+		 * wave's own `t_class1txstates.c` disagreeing with the blob
+		 * (a zeroed ctx-as-buffer where the object leaves it
+		 * untouched), not assumed correct from a first disassembly
+		 * pass.
+		 */
+		*word8 = FIFO_read(ctx->f1288, (unsigned short *)(void *)ctx,
+		    ctx->f1290);
+		if (*word8 < ctx->f1290) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "class1 object fifo under run in "
+				    "_tx_nulls_state !!!\n");
+		}
+	}
+
+	cnt = (short)*word8;
+	result = (unsigned short)*tx_count;
+	FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx, &cnt,
+	    &result);
+
+	*word8 = ctx->f1288->size - ctx->f1288->count - 1;
+	return 0;
+}
+
+/*
+ * TX_DATA_STATE (10).  `.text` 0x0009d4b0, 618 bytes.
+ *
+ * `*word8 > 0` unstuffs `word4` through `_handle_data_input` into `ctx`,
+ * `count = word8`, then `FIFO_write`s it into `ctx->f1288`; a shortfall
+ * ("Fifo is full in _tx_data_state(%d=>%d>%d)\n") is logged but does NOT
+ * skip the read below (falls straight through).  Either way, `FIFO_read`s
+ * `ctx->f1290` elements from `ctx->f1288` into `ctx`, logs a shortfall
+ * ("fifo underrun in _tx_data_state, count %d < %d\n") but keeps going, and
+ * drives `FAXVMI_process(ctx->vmi_b, ctx, tx, &count, &result)` with
+ * `count` seeded from the read and `result` seeded from `*tx_count` (NOT
+ * zero -- the one difference from the TX pair above).
+ *
+ * The raw status is tested against the two ALREADY-NAMED `FAXVMI_STATUS_*`
+ * bits (`faxvmi.h`): `FAXVMI_STATUS_UNDERRUN` (0x01000000) takes priority
+ * over `FAXVMI_STATUS_FULL` (0x02000000), which is only checked (for a log
+ * line, "Queue is full in _tx_data_state\n") when underrun is clear.
+ *
+ * UNDERRUN, `ctx->last_in_byte != 0` (an ALREADY-established field): log
+ * ("Queue underrun, Stop TX\n"), IDLE_STATE, FAX_CLASS1_OK_NO_CARRIER.
+ * UNDERRUN, `ctx->last_in_byte == 0`: log ("Queue underrun, Continue
+ * NULLS\n"), TX_NULLS_STATE, `ctx->countdown = 0`, FAX_CLASS1_CONNECT.
+ * Both then fall through to the (possibly-logged) FULL check before the
+ * common tail.
+ *
+ * Tail: the SAME free-room-minus-one formula, `*word8 = ctx->f1288->size -
+ * ctx->f1288->count - 1`.  `*tx_count` is never written past its `result`
+ * seed being read back into it -- i.e. never explicitly re-stored, matching
+ * the object, which only ever writes `*word8`.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.1`/`.rodata.str1.4`:
+ *   0x48c2 (.str1.1)  "cDATAtx_counter %d\n" (shares `DATAtx_counter` above)
+ *   0x12504  "At %2d.%02d[sec] Fifo is full in _tx_data_state(%d=>%d>%d)\n"
+ *   0x12540  "At %2d.%02d[sec] Queue is full in _tx_data_state\n"
+ *   0x12574  "At %2d.%02d[sec] fifo underrun in _tx_data_state, "
+ *            "count %d < %d\n"
+ *   0x125b8  "At %2d.%02d[sec] Queue underrun, Stop TX\n"
+ *   0x125e4  "At %2d.%02d[sec] Queue underrun, Continue NULLS\n"
+ */
+
+/*
+ * A `.bss` counter shared by `_tx_scrambled_ones_state` (below) and
+ * `_tx_data_state` (here) -- one relocation from each, both against the
+ * SAME four-byte object.  The object's own debug line names it:
+ * "cDATAtx_counter %d\n" (evidence class 1; the leading `c` is the line's
+ * own first character, kept verbatim).  `_tx_scrambled_ones_state` also
+ * reads it back to fire a one-time CONNECT on the session's first call
+ * into this pair; `_tx_data_state` only increments it.
+ */
+static int DATAtx_counter;
+
+int
+_tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
+	       int word3, int word4, int *rx_count, int *tx_count,
+	       int word7, int *word8)
+{
+	short cnt;
+	unsigned short result = (unsigned short)*tx_count;
+	int status;
+	int orig_word8 = *word8;
+
+	(void)rx;
+	(void)word3;
+	(void)rx_count;
+	(void)word7;
+
+	if (dsplibs_debug_level > 2)
+		dsplibs_debug_printf("cDATAtx_counter %d\n", DATAtx_counter);
+	DATAtx_counter++;
+
+	if (*word8 > 0) {
+		int n;
+
+		_handle_data_input(ctx, (const unsigned char *)(long)word4,
+		    (unsigned short *)(void *)ctx, word8);
+
+		n = (short)FIFO_write(ctx->f1288, (unsigned short *)(void *)ctx,
+		    (unsigned short)*word8);
+		if (n < *word8) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] Fifo is full in "
+				    "_tx_data_state(%d=>%d>%d)\n",
+				    ctx->clock_sec, ctx->clock_frac,
+				    orig_word8, *word8, n);
+		}
+	}
+
+	{
+		int rd = (short)FIFO_read(ctx->f1288,
+		    (unsigned short *)(void *)ctx, ctx->f1290);
+
+		if (rd < ctx->f1290) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] fifo underrun in "
+				    "_tx_data_state, count %d < %d\n",
+				    ctx->clock_sec, ctx->clock_frac, rd,
+				    ctx->f1290);
+		}
+		cnt = (short)rd;
+	}
+
+	status = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx,
+	    &cnt, &result);
+
+	if (status & FAXVMI_STATUS_UNDERRUN) {
+		if (ctx->last_in_byte != 0) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] Queue underrun, Stop "
+				    "TX\n",
+				    ctx->clock_sec, ctx->clock_frac);
+			ctx->state = CLASS1_IDLE_STATE;
+			ctx->status = FAX_CLASS1_OK_NO_CARRIER;
+		} else {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] Queue underrun, "
+				    "Continue NULLS\n",
+				    ctx->clock_sec, ctx->clock_frac);
+			ctx->state = CLASS1_TX_NULLS_STATE;
+			ctx->countdown = 0;
+			ctx->status = FAX_CLASS1_CONNECT;
+		}
+	}
+
+	if (status & FAXVMI_STATUS_FULL) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Queue is full in "
+			    "_tx_data_state\n",
+			    ctx->clock_sec, ctx->clock_frac);
+	}
+
+	*word8 = ctx->f1288->size - ctx->f1288->count - 1;
+	return 0;
+}
+
+/*
+ * HDLC_RECEIVE_STATE (5).  `.text` 0x0009d8d0, 738 bytes.
+ *
+ * A previous entry via HDLC_RECEIVE_BETWEEN_BUFFERS_STATE
+ * (`ctx->prev_state == CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE`)
+ * pre-sets `ctx->status = FAX_CLASS1_CONNECT` before falling into the
+ * common body.  `ctx->countdown++` guards against the object's own
+ * (essentially unreachable in practice -- it requires `countdown == -1`
+ * going in) `!= 0` check; reproduced as written rather than simplified,
+ * since simplifying it would be editing the object's logic rather than its
+ * expression.
+ *
+ * `ctx->f000` is cleared to 0, then `FAXVMI_process(ctx->vmi_a, ctx, rx,
+ * &count, &result)` is driven with `result` seeded from `*rx_count` and
+ * `count` seeded 0 -- so a nonzero `count` on return means the unpack step
+ * really did write a length-prefixed record into `ctx` (element 0 is the
+ * length, matching the SAME convention `ctx->f1000` uses for
+ * `_hdlc_emulate_receive_state`).
+ *
+ * `FAXVMI_RESULT_BIT_2000` CLEAR: log ("No carrier in HDLC receive
+ * state\n"), IDLE_STATE, a zero-length `cTOOLS_handle_hdlc_output` (DLE ETX
+ * only) whose count goes through `word7`, a delayed FAX_CLASS1_NO_CARRIER
+ * two calls out -- then re-tests `count` exactly as the SET arm below (the
+ * object's own `jmp` back into that test).
+ *
+ * BIT SET, `count == 0`: nothing more to do this call.
+ * BIT SET, `count != 0`, `ctx->f000 == 0` (the length prefix, now the
+ * FIRST unpacked element): a framing/CRC ERROR -- log ("Receive buffer with
+ * error in _hdlc_receive_state\n"), a delayed FAX_CLASS1_ERROR two calls
+ * out, then join the OK arm's tail (state = HDLC_RECEIVE_BETWEEN_BUFFERS_
+ * STATE) WITHOUT the `f12c0`/`f12c4` pointer chase below.
+ * BIT SET, `count != 0`, `ctx->f000 != 0`: OK -- log ("Receive buffer OK in
+ * _hdlc_receive_state\n"), `cTOOLS_handle_hdlc_output(ctx, ctx+2, word3,
+ * ctx->f000, 1)` (the frame's own bytes, length-prefixed the same way
+ * `_hdlc_emulate_receive_state`'s records are) whose count goes through
+ * `word7`, a delayed FAX_CLASS1_OK two calls out, THEN the pointer chase:
+ * `ctx->vmi_a->link->int_0014` (an untyped "active modem" handle per
+ * `faxvmi.h`'s own note) to its own +0x50, and the sign-extended shorts at
+ * +0x30/+0x32 of THAT into `ctx->f12c0`/`f12c4` -- V.21RX's internal layout
+ * at those two offsets is out of this batch's scope, so this is raw offset
+ * arithmetic, not a named struct access; evidence class 3.  Either way,
+ * `ctx->state = CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE`.
+ *
+ * `*word8 != 0` (checked AFTER all of the above): IDLE_STATE, `_idle_state_
+ * init`, a zero-length `cTOOLS_handle_hdlc_output`, FAX_CLASS1_OK.  Tail:
+ * `*word8 = 5`, `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`, `*tx_count =
+ * CLASS1_BLOCK_SAMPLES`.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.4`:
+ *   0x12698  "%2d.%02d[sec] TxDatCnt>0 in _hdlc_receive_state... "
+ *            "abort command mode\n"
+ *   0x126e0  "At %2d.%02d[sec] No carrier in HDLC receive state\n"
+ *   0x12714  "%2d.%02d[sec] Receive buffer OK in _hdlc_receive_state\n"
+ *   0x1274c  "%2d.%02d[sec] Receive buffer with error in "
+ *            "_hdlc_receive_state\n"
+ */
+int
+_hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		    int word3, int word4, int *rx_count, int *tx_count,
+		    int word7, int *word8)
+{
+	short cnt = 0;
+	unsigned short result = (unsigned short)*rx_count;
+	int status;
+
+	(void)word4;
+	(void)rx_count;
+
+	if (ctx->prev_state == CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE)
+		ctx->status = FAX_CLASS1_CONNECT;
+
+	if (++ctx->countdown != 0) {
+		ctx->f000 = 0;
+
+		status = FAXVMI_process(ctx->vmi_a,
+		    (unsigned short *)(void *)ctx, (short *)rx, &cnt, &result);
+
+		if (!(status & FAXVMI_RESULT_BIT_2000)) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] No carrier in HDLC "
+				    "receive state\n",
+				    ctx->clock_sec, ctx->clock_frac);
+			ctx->state = CLASS1_IDLE_STATE;
+			*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+			    (const unsigned short *)((char *)ctx + 2),
+			    (unsigned char *)(long)word3, 0, 1);
+			ctx->delayed_status_countdown = 2;
+			ctx->delayed_status = FAX_CLASS1_NO_CARRIER;
+		}
+
+		if (cnt != 0) {
+			unsigned short len = *(unsigned short *)(void *)ctx;
+
+			if (len == 0) {
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "%2d.%02d[sec] Receive buffer "
+					    "with error in "
+					    "_hdlc_receive_state\n",
+					    ctx->clock_sec, ctx->clock_frac);
+				ctx->delayed_status_countdown = 2;
+				ctx->delayed_status = FAX_CLASS1_ERROR;
+			} else {
+				void *modem;
+				char *p;
+
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "%2d.%02d[sec] Receive buffer OK "
+					    "in _hdlc_receive_state\n",
+					    ctx->clock_sec, ctx->clock_frac);
+				*(int *)(long)word7 =
+				    cTOOLS_handle_hdlc_output(ctx,
+				    (const unsigned short *)((char *)ctx + 2),
+				    (unsigned char *)(long)word3, len, 1);
+				ctx->delayed_status_countdown = 2;
+				ctx->delayed_status = FAX_CLASS1_OK;
+
+				modem = (void *)(long)ctx->vmi_a->link->int_0014;
+				p = *(char **)((char *)modem + 0x50);
+				ctx->f12c0 = *(short *)(p + 0x30);
+				ctx->f12c4 = *(short *)(p + 0x32);
+			}
+			ctx->state = CLASS1_HDLC_RECEIVE_BETWEEN_BUFFERS_STATE;
+		}
+	}
+
+	if (*word8 != 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] TxDatCnt>0 in "
+			    "_hdlc_receive_state... abort command mode\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
+		*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+		    (const unsigned short *)((char *)ctx + 2),
+		    (unsigned char *)(long)word3, 0, 1);
+		ctx->status = FAX_CLASS1_OK;
+	}
+
+	*word8 = 5;
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+	return 0;
+}
+
+/*
+ * HDLC_RECEIVE_BETWEEN_BUFFERS_STATE (6).  `.text` 0x0009dbc0, 566 bytes.
+ *
+ * `ctx->f000 = 0` unconditionally, BEFORE the call -- the SAME pre-clear
+ * `_hdlc_receive_state` does (a first integration pass read this as "NOT
+ * pre-cleared here", which a fresh `dis.py` re-check does not support: see
+ * this function's own code comment for the address).  Then
+ * `FAXVMI_process(ctx->vmi_a, ctx, rx, &count, &result)`, `result` seeded
+ * from `*rx_count`, `count` seeded 0.
+ *
+ * `count != 0`: this is the WRITER side of `ctx->f1000`'s length-prefixed
+ * record convention `_hdlc_emulate_receive_state` already reads --
+ * append the just-unpacked record (length `ctx->f000`, elements from
+ * `ctx+2`) to `ctx->f1000` at cursor `ctx->f12d0`, bounds-checked against
+ * 0xff total bytes (the object's own limit; over it, log "SuperFrame full,
+ * skipping HDLC frame!\n" -- the author's own name for `ctx->f1000`,
+ * `.rodata` evidence -- and drop the record without advancing the cursor).
+ *
+ * `FAXVMI_RESULT_BIT_2000` CLEAR: FAX_CLASS1_NO_CARRIER_NO_MESSAGE (8),
+ * IDLE_STATE (8) -- the SAME coincidence `_hdlc_emulate_receive_state`'s own
+ * comment already notes.
+ *
+ * `*word8 != 0`: log ("Missing HDLC frame of %d during command mode(%d
+ * already in)!\n" -- printed EARLIER, gated on `count != 0` and debug > 1,
+ * with `ctx->f000` and the PRE-append `ctx->f12d0` as its two `%d`s; kept
+ * here as a plain debug line since it does not gate any behaviour), then
+ * IDLE_STATE, `_idle_state_init`, a zero-length `cTOOLS_handle_hdlc_output`,
+ * FAX_CLASS1_OK.
+ *
+ * Tail: `*word8 = 5`, `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`, `*tx_count =
+ * CLASS1_BLOCK_SAMPLES`.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.4`:
+ *   0x1278c  "SuperFrame full, skipping HDLC frame!\n"
+ *   0x127b4  "%2d.%02d[sec] Missing HDLC frame of %d during command "
+ *            "mode(%d already in)!\n"
+ *   0x12800  "%2d.%02d[sec] No carrier during command mode, "
+ *            "NO MESSAGE****\n"
+ *   0x12840  "%2d.%02d[sec] TxDatCnt>0 in "
+ *            "_hdlc_receive_between_buffers_state abort command mode.\n"
+ */
+int
+_hdlc_receive_between_buffers_state(struct fax_class1 *ctx, const short *rx,
+				    short *tx, int word3, int word4,
+				    int *rx_count, int *tx_count, int word7,
+				    int *word8)
+{
+	short cnt = 0;
+	unsigned short result = (unsigned short)*rx_count;
+	int status;
+
+	(void)word4;
+	(void)rx_count;
+
+	/*
+	 * `ctx->f000 = 0` unconditionally, BEFORE the call -- confirmed by a
+	 * fresh `dis.py` re-check (`9dbea: movw $0x0,(%edi)`, %edi = ctx,
+	 * ahead of the `FAXVMI_process` setup).  A first integration pass
+	 * read this as "not pre-cleared here, unlike `_hdlc_receive_state`",
+	 * which is wrong -- caught by this wave's own `t_class1txstates.c`
+	 * disagreeing with the blob (garbage `fill()` bytes surviving at
+	 * ctx+0 where the object leaves zero), not assumed correct from a
+	 * first disassembly pass.
+	 */
+	ctx->f000 = 0;
+
+	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
+				&cnt, &result);
+
+	if (cnt != 0) {
+		unsigned short len = *(unsigned short *)(void *)ctx;
+		int new_len = ctx->f12d0 + len + 1;
+
+		/*
+		 * Printed whenever `cnt != 0`, BEFORE the bounds check below
+		 * -- the object's own debug line is not conditional on
+		 * whether the copy that follows actually fits (traced
+		 * instruction by instruction: the `call` to
+		 * `dsplibs_debug_printf` precedes the `cmp`/bounds branch in
+		 * the object).  A first integration pass had this nested
+		 * inside the "fits" arm only, which is wrong -- fixed here.
+		 */
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] Missing HDLC frame of "
+			    "%d during command mode(%d already in)!\n",
+			    ctx->clock_sec, ctx->clock_frac, len,
+			    ctx->f12d0);
+
+		if (new_len > 0xff) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "SuperFrame full, skipping HDLC "
+				    "frame!\n");
+		} else {
+			unsigned short *sf = ctx->f1000 + ctx->f12d0;
+			unsigned short *src = (unsigned short *)(void *)ctx
+					     + 1;
+			int i;
+
+			*sf = len;
+			for (i = 0; i < len; i++)
+				sf[1 + i] = src[i];
+			ctx->f12d0 += len + 1;
+		}
+	}
+
+	if (!(status & FAXVMI_RESULT_BIT_2000)) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] No carrier during command "
+			    "mode, NO MESSAGE****\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->status = FAX_CLASS1_NO_CARRIER_NO_MESSAGE;
+		ctx->state = CLASS1_IDLE_STATE;
+	}
+
+	if (*word8 != 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] TxDatCnt>0 in "
+			    "_hdlc_receive_between_buffers_state abort "
+			    "command mode.\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
+		*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+		    (const unsigned short *)((char *)ctx + 2),
+		    (unsigned char *)(long)word3, 0, 1);
+		ctx->status = FAX_CLASS1_OK;
+	}
+
+	*word8 = 5;
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+	return 0;
+}
+
+/*
+ * A signal-level threshold table, `.rodata` 0xba22, four `unsigned short`
+ * entries -- `514, 727, 1026, 1450` -- read off the object's own bytes
+ * (`objdump -s`).  Referenced only from `_hdlc_receive_look_carrier_state`
+ * this batch, so kept `static` rather than declared in a header; nothing
+ * else here reaches it.
+ */
+static const unsigned short HDLC_LOOK_CARRIER_LEVELS[4] = {
+	514, 727, 1026, 1450,
+};
+
+/*
+ * HDLC_RECEIVE_LOOK_CARRIER_STATE (4).  `.text` 0x0009de00, 943 bytes -- the
+ * largest of the twelve.
+ *
+ * THE S7 TIMEOUT.  Same formula and same field as `_rx_look_carrier_state`:
+ * `ctx->s7_timeout * 8000 / *rx_count` (or `* 50` when `*rx_count == 0`).
+ * `ctx->countdown++`, then `FAXVMI_process(ctx->vmi_a, ctx, rx, &count,
+ * &result)`, `result` seeded from `*rx_count`, `count` seeded 0.
+ *
+ * `FAXVMI_RESULT_BIT_2000` SET: skip the S7 check, go straight to the
+ * tone-cadence tail.  CLEAR: if `limit != 0` and `ctx->countdown > limit`
+ * (unsigned) and `ctx->f1264 == 0`, log ("S7 time elapsed in look
+ * carrier\n"), FAX_CLASS1_NO_CARRIER, IDLE_STATE, `ctx->f1264 = 0`
+ * (redundant, already 0); either way fall to the tone-cadence tail.
+ *
+ * THE TONE-CADENCE TAIL (see class1.h for `f125c`/`f1260`/`f1264`).
+ *   `f1264 == 0`: plain `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`.
+ *   `f1264 != 0`, `f125c == 0` (silence phase): `_put_silence`, then
+ *     accumulate `f1260 += CLASS1_BLOCK_SAMPLES`; once it exceeds 0x5dc0
+ *     (24000), reset `f1260 = 0` and flip `f125c = 1`.
+ *   `f1264 != 0`, `f125c != 0` (tone phase): `FPM_TONE_generate(ctx->f1258,
+ *     tx, CLASS1_BLOCK_SAMPLES)` instead of silence, then accumulate
+ *     `f1260` the same way against 0xfa0 (4000), flipping `f125c` back to 0
+ *     on overflow.  Either phase sets `*tx_count = CLASS1_BLOCK_SAMPLES`.
+ *
+ * `FAXVMI_RESULT_BIT_2000` SET (checked separately, right after the
+ * countdown/`FAXVMI_process` call, BEFORE the S7 logic above -- the object's
+ * own branch order): if the raw status's bit 0/1 pair `(status >> 8) & 0x3`
+ * -- no, this function does NOT read that pair; instead it walks
+ * `ctx->vmi_a->link->int_0014`'s own +0x50, up to FOUR signed 16-bit reads
+ * at +0x2c of the pointer chain (re-chased each iteration, since the object
+ * re-reads it every loop pass rather than hoisting it), each compared
+ * against `HDLC_LOOK_CARRIER_LEVELS[i]` -- the FIRST index `i` (0..3) where
+ * the chased value is LESS than the table entry stops the scan; ELSE (no
+ * match in 4 tries) the scan is abandoned silently and this whole "CONNECT"
+ * arm is skipped.  On a match: `ctx->f12d8 = 12 - 3*i` (the object's own
+ * countdown, ecx, of 12/9/6/3/0) is stored (an ALREADY-established field,
+ * `fax_class1_info(0)`'s own; this is a SECOND writer, evidence class 3 --
+ * see class1.h's existing note on it), logged ("Gain Attenuation Reuqest:
+ * +%d[dB], avg_rms = %d.\n", `ecx`, sign-extended low byte of the chased
+ * value -- object's own typo "Reuqest" kept verbatim), and THEN (whether or
+ * not that inner debug line fired): log ("Carrier Detected in
+ * _hdlc_receive_look_carrier_state\n"), `ctx->status = FAX_CLASS1_CONNECT`,
+ * log ("At %2d.%02d[sec] hdlc_receive_state_init\n" -- narrating a
+ * transition this function inlines rather than calling out to), `ctx->
+ * countdown = 0`, `ctx->state = CLASS1_HDLC_RECEIVE_STATE`, `ctx->f1264 =
+ * 0`, and the SAME `ctx->vmi_a->link->int_0014`/+0x50 chase
+ * `_hdlc_receive_state` makes, but reading +0x2c this time (once, not per
+ * table entry) -- discarded here, spent only on the table scan above; no
+ * ctx field receives it in THIS function.
+ *
+ * `*word8 != 0`: IDLE_STATE, `_idle_state_init`, a zero-length
+ * `cTOOLS_handle_hdlc_output` from `ctx+2` whose count goes through
+ * `word7`, FAX_CLASS1_OK.  Tail: `*word8 = 5`, return 0.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.4`:
+ *   0x1266c  "At %2d.%02d[sec] hdlc_receive_state_init\n"
+ *   0x12898  "Gain Attenuation Reuqest: +%d[dB], avg_rms = %d"
+ *   0x128c8  "At %2d.%02d[sec] Carrier Detected in "
+ *            "_hdlc_receive_look_carrier_state\n"
+ *   0x12910  "At %2d.%02d[sec] TxDatCnt>0 in "
+ *            "_hdlc_receive_look_carrier_state abort command mode.\n"
+ *   0x12968  "At %2d.%02d[sec], curent_timeout = %d, No carrier in "
+ *            "_hdlc_receive_look_carrier_state, S7 = %d[sec]\n"
+ *
+ * THE POINTER CHASE (`ctx->vmi_a->link->int_0014`, then that pointer's own
+ * +0x50, then +0x2c or +0x30/+0x32 of THAT) is the same shape
+ * `_hdlc_receive_state` uses; see that function's own note.  V.21RX's
+ * internal layout at these offsets is out of this batch's scope, so this is
+ * raw offset arithmetic, not a named struct access -- evidence class 3.
+ */
+int
+_hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
+				 short *tx, int word3, int word4,
+				 int *rx_count, int *tx_count, int word7,
+				 int *word8)
+{
+	short cnt = 0;
+	unsigned short result = (unsigned short)*rx_count;
+	int status;
+	int limit;
+
+	(void)word4;
+
+	limit = (*rx_count == 0) ? ctx->s7_timeout * 50
+				: ctx->s7_timeout * 8000 / *rx_count;
+	ctx->countdown++;
+
+	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
+				&cnt, &result);
+
+	if (status & FAXVMI_RESULT_BIT_2000) {
+		void *modem;
+		char *p;
+		int i;
+
+		/*
+		 * UNCONDITIONAL on entering this arm, regardless of whether
+		 * the table scan below finds anything -- the object sets
+		 * these BEFORE the scan even starts (0x9df14..0x9df5f), not
+		 * as a consequence of a match.
+		 */
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Carrier Detected in "
+			    "_hdlc_receive_look_carrier_state\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->status = FAX_CLASS1_CONNECT;
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] hdlc_receive_state_init\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->countdown = 0;
+		ctx->state = CLASS1_HDLC_RECEIVE_STATE;
+		ctx->f1264 = 0;
+
+		/*
+		 * THE SCAN.  Re-chased every iteration (the object re-reads
+		 * the whole pointer chain each pass rather than hoisting
+		 * it).  A match stores `f12d8` and logs; running out of
+		 * table entries (4 tries) abandons the scan silently -- either
+		 * way execution falls through to the tone-cadence tail below.
+		 */
+		for (i = 0; i <= 3; i++) {
+			short v;
+
+			modem = (void *)(long)ctx->vmi_a->link->int_0014;
+			p = *(char **)((char *)modem + 0x50);
+			v = *(short *)(p + 0x2c);
+
+			if (v < (short)HDLC_LOOK_CARRIER_LEVELS[i]) {
+				ctx->f12d8 = 12 - 3 * i;
+				if (dsplibs_debug_level > 1)
+					dsplibs_debug_printf(
+					    "Gain Attenuation Reuqest: "
+					    "+%d[dB], avg_rms = %d",
+					    ctx->f12d8, (int)(signed char)v);
+				break;
+			}
+		}
+	} else if (limit != 0 && (unsigned int)ctx->countdown >
+		   (unsigned int)limit && ctx->f1264 == 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec], curent_timeout = %d, No "
+			    "carrier in _hdlc_receive_look_carrier_state, "
+			    "S7 = %d[sec]\n",
+			    ctx->clock_sec, ctx->clock_frac, limit,
+			    ctx->s7_timeout);
+		ctx->status = FAX_CLASS1_NO_CARRIER;
+		ctx->state = CLASS1_IDLE_STATE;
+		ctx->f1264 = 0;
+	}
+
+	if (ctx->f1264 == 0) {
+		_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	} else if (ctx->f125c == 0) {
+		_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+		ctx->f1260 += CLASS1_BLOCK_SAMPLES;
+		if (ctx->f1260 > 0x5dc0) {
+			ctx->f1260 = 0;
+			ctx->f125c = 1;
+		}
+	} else {
+		FPM_TONE_generate(ctx->f1258, tx, CLASS1_BLOCK_SAMPLES);
+		ctx->f1260 += CLASS1_BLOCK_SAMPLES;
+		if (ctx->f1260 > 0xfa0) {
+			ctx->f1260 = 0;
+			ctx->f125c = 0;
+		}
+	}
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+
+	if (*word8 != 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] TxDatCnt>0 in "
+			    "_hdlc_receive_look_carrier_state abort command "
+			    "mode.\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
+		*(int *)(long)word7 = cTOOLS_handle_hdlc_output(ctx,
+		    (const unsigned short *)((char *)ctx + 2),
+		    (unsigned char *)(long)word3, 0, 1);
+		ctx->status = FAX_CLASS1_OK;
+	}
+
+	*word8 = 5;
+	return 0;
+}
+
+/*
+ * TX_SCRAMBLED_ONES_STATE (9).  `.text` 0x0009d200, 681 bytes.
+ *
+ * THE CRASH THAT BLOCKED THIS FUNCTION WAS `ctx->f1290`'S WIDTH, NOT
+ * ANYTHING HERE (finding in this batch's own entry).  `ref__tx_scrambled_
+ * ones_state`'s own fill loop reads `ctx->f1290` with a plain 32-bit `mov`
+ * (0x9d200+0xa0) and uses the whole register as a loop bound; modelled as
+ * `unsigned short` plus two bytes of `pad_1292`, a test's random fill of
+ * those two "pad" bytes turned the bound into a value near 2^29 and walked
+ * the write loop off the end of the struct.  `class1.h`'s `f1290` is now a
+ * full `int` (matching a second, independent access in `_tx_nulls_state` at
+ * the same offset -- see that field's own comment) and the crash is gone;
+ * this function itself was correctly decoded from the start.
+ *
+ * `DATAtx_counter` (above, shared with `_tx_data_state`) gates a ONE-TIME
+ * `ctx->status = FAX_CLASS1_CONNECT` on the session's very first call into
+ * this pair.
+ *
+ * `ctx->f1270` is a one-shot countdown, decremented once per call while
+ * positive; reaching exactly 0 fires "At %2d.%02d[sec] ENABLE_TRANSMIT in
+ * _tx_scrambled_ones_state\n" and sets `ctx->transmit_enabled = 1`.
+ *
+ * `*word8 > 0` unstuffs `word4` through `_handle_data_input` into `ctx`
+ * (the shared scratch-buffer idiom), then `FIFO_write`s the result into
+ * `ctx->f1288`, logging a shortfall ("Fifo is full in
+ * _tx_scrambled_ones_state").  `ctx->f1298` is then recomputed: 1 when
+ * `ctx->f1288->count >= ctx->f1290` (the FIFO already holds a whole read's
+ * worth), else 0 -- but ONLY inside this `*word8 > 0` block; on a call
+ * where it does not run, `f1298` is left at whatever the last call set.
+ *
+ * `ctx->f1290` elements of `ctx` are then filled with the literal `0xff`
+ * (the "scrambled ones" this state's name promises) UNCONDITIONALLY, and
+ * `*word8` is set to that same count.
+ *
+ * If `ctx->transmit_enabled != 0 && ctx->f1298 != 0`: `ctx->state` becomes
+ * `CLASS1_TX_DATA_STATE`, and the 0xFF filler is immediately overwritten by
+ * a REAL `FIFO_read` into the same buffer -- `*word8` becomes that read's
+ * return, logging an underrun ("class1 object fifo under run in
+ * _tx_scrambled_ones_state !!!") without undoing the state change.
+ *
+ * `cnt` (FAXVMI_process's `count`) is seeded from `*word8` AS IT STANDS AT
+ * THAT POINT -- the fill count or the FIFO_read's return, whichever path
+ * ran -- read directly off the object's own `mov %ax,0x22(%esp)` at
+ * 0x9d2e7, which is fed by whatever is still in `%eax` from the join above
+ * it (NOT a fresh reload of `ctx->f1290`, which an earlier draft of this
+ * function assumed).  `result` is seeded from `*tx_count` (`mov
+ * 0x48(%esp),%ecx; mov (%ecx),%edx; mov %dx,0x20(%esp)`, 0x9d2ec-0x9d2fe),
+ * the same convention `_tx_data_state` already uses -- NOT a literal 0, an
+ * earlier draft's other assumption.
+ *
+ * A NEW RAW BIT: `test $0x1,%ah` on `FAXVMI_process`'s raw return, i.e. bit
+ * 0x100 -- DIFFERENT from `FAXVMI_RESULT_BIT_2000` this wave's HDLC-side
+ * functions use.  SET (and `ctx->f1294 == 0`) fires "At %2d.%02d[sec] Tx
+ * connect\n", arms `ctx->f1270 = 2`, and latches `ctx->f1294 = 1` so the
+ * bit is never re-tested once caught.
+ *
+ * Tail, unconditional: `*word8 = ctx->f1288->size - ctx->f1288->count - 1`
+ * -- the same free-room-minus-one formula `_tx_nulls_state`/`_tx_data_state`
+ * end with.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.1`/`.rodata.str1.4`:
+ *   0x48c2 (.str1.1)  "cDATAtx_counter %d\n" (shares `DATAtx_counter`)
+ *   0x48d6 (.str1.1)  "At %2d.%02d[sec] Tx connect\n"
+ *   0x12448  "class1 object fifo under run in _tx_scrambled_ones_state !!!\n"
+ *   0x12488  "At %2d.%02d[sec] ENABLE_TRANSMIT in _tx_scrambled_ones_state\n"
+ *   0x124c8  "At %2d.%02d[sec] Fifo is full in _tx_scrambled_ones_state\n"
+ */
+#define FAXVMI_PROCESS_BIT_0100	0x100
+
+int
+_tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx, short *tx,
+			 int word3, int word4, int *rx_count, int *tx_count,
+			 int word7, int *word8)
+{
+	short cnt;
+	unsigned short result = (unsigned short)*tx_count;
+	int status;
+	int i;
+
+	(void)rx;
+	(void)word3;
+	(void)rx_count;
+	(void)word7;
+
+	if (dsplibs_debug_level > 2)
+		dsplibs_debug_printf("cDATAtx_counter %d\n", DATAtx_counter);
+	DATAtx_counter++;
+	if (DATAtx_counter == 1)
+		ctx->status = FAX_CLASS1_CONNECT;
+
+	if (ctx->f1270 > 0) {
+		ctx->f1270--;
+		if (ctx->f1270 == 0) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] ENABLE_TRANSMIT in "
+				    "_tx_scrambled_ones_state\n",
+				    ctx->clock_sec, ctx->clock_frac);
+			ctx->transmit_enabled = 1;
+		}
+	}
+
+	if (*word8 > 0) {
+		int n;
+
+		_handle_data_input(ctx, (const unsigned char *)(long)word4,
+		    (unsigned short *)(void *)ctx, word8);
+
+		n = (unsigned short)FIFO_write(ctx->f1288,
+		    (unsigned short *)(void *)ctx, (unsigned short)*word8);
+		if (*word8 > n) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] Fifo is full in "
+				    "_tx_scrambled_ones_state\n",
+				    ctx->clock_sec, ctx->clock_frac);
+		}
+
+		ctx->f1298 = (ctx->f1288->count >= (unsigned)ctx->f1290) ? 1
+									  : 0;
+	}
+
+	for (i = 0; i < ctx->f1290; i++)
+		((unsigned short *)(void *)ctx)[i] = 0xff;
+	*word8 = ctx->f1290;
+
+	if (ctx->transmit_enabled != 0 && ctx->f1298 != 0) {
+		int rd;
+
+		ctx->state = CLASS1_TX_DATA_STATE;
+		rd = FIFO_read(ctx->f1288, (unsigned short *)(void *)ctx,
+		    (unsigned short)ctx->f1290);
+		*word8 = rd;
+		if (rd < ctx->f1290) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "class1 object fifo under run in "
+				    "_tx_scrambled_ones_state !!!\n");
+		}
+	}
+
+	cnt = (short)*word8;
+	status = FAXVMI_process(ctx->vmi_b, (unsigned short *)(void *)ctx, tx,
+	    &cnt, &result);
+
+	if (ctx->f1294 == 0 && (status & FAXVMI_PROCESS_BIT_0100) != 0) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Tx connect\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->f1270 = 2;
+		ctx->f1294 = 1;
+	}
+
+	*word8 = (int)(unsigned short)ctx->f1288->size
+	       - (int)(unsigned short)ctx->f1288->count - 1;
+	return 0;
+}
+
+/*
+ * SEND_HDLC_BUFFER_STATE (2).  `.text` 0x0009e470, 282 bytes.
+ *
+ * Drives `ctx->vmi_c` -- purely for its side effects: the call's own
+ * `count`/`result` locals (`count` seeded 0, `result` seeded from
+ * `*tx_count`) are read by nothing after the call.  Immediately follows
+ * with `FAXVMI_status(ctx->vmi_c, &st)`, `st` seeded from `FAXVMI_STS`
+ * (class1.h/faxvmi.h's own all-zero template -- the SECOND reference to it
+ * this tree reconstructs, per faxvmi.h's own note pointing here).
+ *
+ * `st.underrun == 1`: log ("%2d.%02d[sec] End of HDLC buffer "
+ * "transmission\n"), `ctx->state = CLASS1_SEND_HDLC_BETWEEN_BUFFER_STATE`,
+ * `ctx->countdown = 0`, `_handle_hdlc_input_open(ctx)`.  Either way,
+ * `*word8 = 0x200` and return 0.  `*tx_count` is NEVER written by this
+ * function on ANY path -- confirmed, not an oversight.
+ *
+ * FORMAT STRING: 0x12a10 "%2d.%02d[sec] End of HDLC buffer "
+ * "transmission\n"
+ */
+int
+_send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx, short *tx,
+			int word3, int word4, int *rx_count, int *tx_count,
+			int word7, int *word8)
+{
+	short cnt = 0;
+	unsigned short result = (unsigned short)*tx_count;
+	struct faxvmi_status st = FAXVMI_STS;
+
+	(void)rx;
+	(void)word3;
+	(void)word4;
+	(void)rx_count;
+	(void)word7;
+
+	FAXVMI_process(ctx->vmi_c, (unsigned short *)(void *)ctx, tx, &cnt,
+		       &result);
+	FAXVMI_status(ctx->vmi_c, &st);
+
+	if (st.underrun == 1) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] End of HDLC buffer "
+			    "transmission\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->state = CLASS1_SEND_HDLC_BETWEEN_BUFFER_STATE;
+		ctx->countdown = 0;
+		_handle_hdlc_input_open(ctx);
+	}
+
+	*word8 = 0x200;
+	return 0;
+}
+
+/*
+ * T30_PREAMBLE_STATE (1).  `.text` 0x0009e660, 421 bytes.
+ *
+ * `*tx_count = CLASS1_BLOCK_SAMPLES` is set FIRST, unconditionally, and
+ * never changed again -- so `ctx->countdown += *tx_count` at the end always
+ * adds `CLASS1_BLOCK_SAMPLES`, whatever path was taken.
+ *
+ * `*word8 > 0`: (debug>2 log, "Collect data with %d bytes.\n") unstuff
+ * `word4` through `_handle_hdlc_input(ctx, word4, ctx, word8)` (dst=`ctx`,
+ * the same scratch-buffer idiom) and bank the frame-complete flag (0/1)
+ * into `ctx->hdlc_frame_done`.  If it completed a frame,
+ * `ctx->buffers_sent++`.
+ *
+ * `ctx->countdown > 8000` (unsigned) AND `ctx->hdlc_frame_done != 0`: log
+ * ("Elapsed 1 second, send %d buffers\n", `ctx->buffers_sent`),
+ * `ctx->state = CLASS1_SEND_HDLC_BUFFER_STATE`, and seed the
+ * FAXVMI_process `count` local from `ctx->buffers_sent`; on every other
+ * path it stays at its ZERO-INITIALISED value (the object's own stack slot
+ * IS zeroed by the compiler's usual "cnt = 0" prologue for this local, not
+ * left as stack garbage -- a first integration pass claimed the opposite
+ * and left this local truly uninitialised in the C, which is undefined
+ * behaviour in our reconstruction even where the object's own asm has a
+ * definite zero; fixed here).
+ *
+ * `ctx->countdown > 40000` (unsigned): log ("Elapsed 5 second in "
+ * "_t30_preabmle_state\n"), `ctx->status = FAX_CLASS1_ERROR_NO_CARRIER`,
+ * `ctx->state = CLASS1_IDLE_STATE`.
+ *
+ * Either way, `FAXVMI_process(ctx->vmi_c, ctx, tx, &count, &result)` --
+ * `result` seeded 0.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.4`:
+ *   0x12a74  "%2d.%02d[sec] Collect data with %d bytes.\n"
+ *   0x12aa0  "At %2d.%02d[sec] Elapsed 1 second, send %d buffers\n"
+ *   0x12ad4  "At %2d.%02d[sec] Elapsed 5 second in _t30_preabmle_state\n"
+ */
+int
+_t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		    int word3, int word4, int *rx_count, int *tx_count,
+		    int word7, int *word8)
+{
+	short cnt = 0;
+	unsigned short result = 0;
+
+	(void)rx;
+	(void)word3;
+	(void)rx_count;
+	(void)word7;
+
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+
+	if (*word8 > 0) {
+		if (dsplibs_debug_level > 2)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] Collect data with %d bytes.\n",
+			    ctx->clock_sec, ctx->clock_frac, *word8);
+		ctx->hdlc_frame_done = _handle_hdlc_input(ctx,
+		    (const unsigned char *)(long)word4,
+		    (unsigned short *)(void *)ctx, word8);
+		if (ctx->hdlc_frame_done)
+			ctx->buffers_sent++;
+	}
+
+	if ((unsigned int)ctx->countdown > 0x1f40) {
+		if (ctx->hdlc_frame_done != 0) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "At %2d.%02d[sec] Elapsed 1 second, "
+				    "send %d buffers\n",
+				    ctx->clock_sec, ctx->clock_frac,
+				    ctx->buffers_sent);
+			ctx->state = CLASS1_SEND_HDLC_BUFFER_STATE;
+			cnt = (short)ctx->buffers_sent;
+		}
+	}
+
+	if ((unsigned int)ctx->countdown > 0x9c40) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec] Elapsed 5 second in "
+			    "_t30_preabmle_state\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->status = FAX_CLASS1_ERROR_NO_CARRIER;
+		ctx->state = CLASS1_IDLE_STATE;
+	}
+
+	FAXVMI_process(ctx->vmi_c, (unsigned short *)(void *)ctx, tx, &cnt,
+		       &result);
+
+	ctx->countdown += *tx_count;
+	*word8 = 0x200;
+	return 0;
+}
+
+/*
+ * SEND_HDLC_BETWEEN_BUFFER_STATE (3).  `.text` 0x0009e810, 433 bytes.
+ *
+ * REPLACES A FIRST INTEGRATION PASS that read this function as driven by
+ * `*rx_count`; re-derived from a fresh `dis.py` trace of the function's own
+ * argument-offset arithmetic (push esi,ebx; sub $0x24 -> ctx=0x30, tx=0x38,
+ * word4=0x40, tx_count=0x48, word8=0x50) and it is driven by `ctx->countdown`
+ * and `*word8`, NOT `*rx_count` -- `rx_count` is never read by this function
+ * at all.
+ *
+ * `*tx_count = CLASS1_BLOCK_SAMPLES` first, unconditionally.
+ *
+ * `ctx->countdown == 2` is a ONE-TIME LATCH (only true on the third call
+ * after `_send_hdlc_between_buffer_state_init` zeroes it, since this
+ * function increments it by exactly one per call and nothing else here
+ * writes it): `ctx->f1224 == 1` (the frame-end latch) -> log ("Idle
+ * state\n"), OK_NO_CARRIER, IDLE_STATE, `_idle_state_init`; otherwise ->
+ * `ctx->status = FAX_CLASS1_CONNECT`.  Either way, falls through into the
+ * body below on the SAME call.
+ *
+ * BODY: reads more host data only when `*word8 > 0` (signed) AND
+ * `(unsigned)countdown > 1`.  `_handle_hdlc_input`'s `src` is `word4`, its
+ * `count` is `word8` ITSELF (reused directly, not through a local), and its
+ * `dst` is `ctx` (the scratch-buffer idiom, real bytes land there this time
+ * since `count` is not forced to zero).  A completed frame (return 1):
+ * `state = SEND_HDLC_BUFFER_STATE`, and the LOCAL count fed to the trailing
+ * `FAXVMI_process` call below is bumped by one.
+ *
+ * TAIL (reached from three places -- the body's own fallthrough, and both
+ * arms of the host-read branch): `FAXVMI_process(ctx->vmi_c, ctx, tx,
+ * &cnt, &result)` (`cnt` 0 unless just bumped, `result` 0); `countdown++`;
+ * once `(unsigned)countdown > 250`: log ("CURRENT_STATE_TIMER > 5[sec]\n"),
+ * FAX_CLASS1_ERROR_ON_HOOK, IDLE_STATE, `_idle_state_init`.
+ *
+ * `*word8 = 0x200` unconditionally at the very end, exactly like
+ * `_send_hdlc_buffer_state`.
+ *
+ * FORMAT STRINGS, verified against `.rodata.str1.1`/`.rodata.str1.4`:
+ *   0x48f3   "%2d.%02d[sec] Idle state\n"            (.str1.1)
+ *   0x12b10  "At %2d.%02d[sec], CURRENT_STATE_TIMER > 5[sec]\n"  (.str1.4)
+ */
+int
+_send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
+				short *tx, int word3, int word4,
+				int *rx_count, int *tx_count, int word7,
+				int *word8)
+{
+	short cnt = 0;
+	unsigned short result = 0;
+
+	(void)rx;
+	(void)word3;
+	(void)rx_count;
+	(void)word7;
+
+	*tx_count = CLASS1_BLOCK_SAMPLES;
+
+	if (ctx->countdown == 2) {
+		if (ctx->f1224 == 1) {
+			if (dsplibs_debug_level > 1)
+				dsplibs_debug_printf(
+				    "%2d.%02d[sec] Idle state\n",
+				    ctx->clock_sec, ctx->clock_frac);
+			ctx->status = FAX_CLASS1_OK_NO_CARRIER;
+			ctx->state = CLASS1_IDLE_STATE;
+			_idle_state_init(ctx);
+		} else {
+			ctx->status = FAX_CLASS1_CONNECT;
+		}
+	}
+
+	if (*word8 > 0 && (unsigned int)ctx->countdown > 1) {
+		int done = _handle_hdlc_input(ctx,
+		    (const unsigned char *)(long)word4,
+		    (unsigned short *)(void *)ctx, word8);
+
+		if (done != 0) {
+			ctx->state = CLASS1_SEND_HDLC_BUFFER_STATE;
+			cnt++;
+		}
+	}
+
+	FAXVMI_process(ctx->vmi_c, (unsigned short *)(void *)ctx, tx, &cnt,
+	    &result);
+
+	ctx->countdown++;
+	if ((unsigned int)ctx->countdown > 250) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "At %2d.%02d[sec], CURRENT_STATE_TIMER > "
+			    "5[sec]\n",
+			    ctx->clock_sec, ctx->clock_frac);
+		ctx->status = FAX_CLASS1_ERROR_ON_HOOK;
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
+	}
+
+	*word8 = 0x200;
+	return 0;
+}
+
+/*
+ * CHDLCTX_OFF_STATE (17).  `.text` 0x0009ea70, 238 bytes.
+ *
+ * `ctx->countdown++` BEFORE the call.  `FAXVMI_process(ctx->vmi_a, ctx, rx,
+ * &count, &result)` -- `count` seeded 0, `result` seeded from `*rx_count`.
+ *
+ * The raw status's bit 0x2000 (`FAXVMI_RESULT_BIT_2000`) swaps which of TWO
+ * countdown thresholds applies -- 15 when SET, 2 when CLEAR -- both
+ * against the JUST-incremented `ctx->countdown`.  Either threshold
+ * crossed: log ("End of off state, COUNTER %d\n", `ctx->countdown`),
+ * `ctx->status = FAX_CLASS1_OK_NO_CARRIER`, `ctx->state =
+ * CLASS1_IDLE_STATE`, `_idle_state_init(ctx)`.  Neither: nothing.
+ *
+ * Tail, unconditional: `_put_silence(tx, CLASS1_BLOCK_SAMPLES)`, `*tx_count
+ * = CLASS1_BLOCK_SAMPLES`.
+ *
+ * FORMAT STRING: 0x12b40 "%2d.%02d[sec] End of off state, COUNTER %d\n"
+ */
+int
+cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx, int word3,
+	   int word4, int *rx_count, int *tx_count, int word7, int *word8)
+{
+	short cnt = 0;
+	unsigned short result = (unsigned short)*rx_count;
+	int status;
+	int over;
+
+	(void)word3;
+	(void)word4;
+	(void)word7;
+	(void)word8;
+
+	ctx->countdown++;
+
+	status = FAXVMI_process(ctx->vmi_a, (unsigned short *)(void *)ctx, (short *)rx,
+				&cnt, &result);
+
+	if (status & FAXVMI_RESULT_BIT_2000)
+		over = ctx->countdown > 15;
+	else
+		over = ctx->countdown > 2;
+
+	if (over) {
+		if (dsplibs_debug_level > 1)
+			dsplibs_debug_printf(
+			    "%2d.%02d[sec] End of off state, COUNTER %d\n",
+			    ctx->clock_sec, ctx->clock_frac, ctx->countdown);
+		ctx->status = FAX_CLASS1_OK_NO_CARRIER;
+		ctx->state = CLASS1_IDLE_STATE;
+		_idle_state_init(ctx);
 	}
 
 	_put_silence(tx, CLASS1_BLOCK_SAMPLES);

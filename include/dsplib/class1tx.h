@@ -240,4 +240,96 @@ int _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
 				int *rx_count, int *tx_count, int word7,
 				int *word8);
 
+/*
+ * ------------------------------------------------------------------
+ * THE V.21 HDLC CONTROL-CHANNEL STATE HANDLERS -- SEND_HDLC_BUFFER_STATE (2),
+ * SEND_HDLC_BETWEEN_BUFFER_STATE (3) and CHDLCTX_OFF_STATE (17).  All three
+ * drive `ctx->vmi_c` (SEND_HDLC_BUFFER_STATE) or `ctx->vmi_a` (the other
+ * two) through `FAXVMI_process` with `ctx` itself cast to `unsigned short *`
+ * as the "data" argument and a zero (or, for cHDLCtx_off, *rx_count-seeded)
+ * "count" -- so the call's own unpack step never touches memory, and the
+ * call exists purely for its FAXVMI_process/FAXVMI_status side effects.  See
+ * class1tx.c for each function's own derivation and cited evidence.
+ */
+int _send_hdlc_buffer_state(struct fax_class1 *ctx, const short *rx,
+			    short *tx, int word3, int word4, int *rx_count,
+			    int *tx_count, int word7, int *word8);
+int _send_hdlc_between_buffer_state(struct fax_class1 *ctx, const short *rx,
+				    short *tx, int word3, int word4,
+				    int *rx_count, int *tx_count, int word7,
+				    int *word8);
+int cHDLCtx_off(struct fax_class1 *ctx, const short *rx, short *tx,
+		int word3, int word4, int *rx_count, int *tx_count,
+		int word7, int *word8);
+
+/*
+ * ------------------------------------------------------------------
+ * THE V.21 HDLC RECEIVE MACHINE -- HDLC_RECEIVE_LOOK_CARRIER_STATE (4),
+ * HDLC_RECEIVE_STATE (5) and HDLC_RECEIVE_BETWEEN_BUFFERS_STATE (6).  Drive
+ * `ctx->vmi_a` (or, for the look-carrier state, also `ctx->vmi_b` when
+ * `vmi_a`'s own carrier bit is clear).  `_hdlc_receive_state` and
+ * `_hdlc_receive_between_buffers_state` both unpack a length-prefixed HDLC
+ * frame into `ctx` itself (the same scratch-buffer idiom `_hdlc_emulate_
+ * receive_state` uses on `ctx->f1000`, here applied to `ctx`'s own leading
+ * bytes) and either hand it straight to the host (`_hdlc_receive_state`) or
+ * bank it into `ctx->f1000` for later replay (`_hdlc_receive_between_
+ * buffers_state` -- the WRITER `_hdlc_emulate_receive_state`'s own reader
+ * side lacked until now).  See class1tx.c for the full derivation of each,
+ * including the S7 (carrier-wait) timeout math shared by the look-carrier
+ * state and `_rx_look_carrier_state`, and the tone-cadence machine
+ * (`f125c`/`f1260`/`f1264`, class1.h) unique to the look-carrier state.
+ */
+int _hdlc_receive_look_carrier_state(struct fax_class1 *ctx, const short *rx,
+				     short *tx, int word3, int word4,
+				     int *rx_count, int *tx_count, int word7,
+				     int *word8);
+int _hdlc_receive_state(struct fax_class1 *ctx, const short *rx, short *tx,
+			int word3, int word4, int *rx_count, int *tx_count,
+			int word7, int *word8);
+int _hdlc_receive_between_buffers_state(struct fax_class1 *ctx,
+					const short *rx, short *tx, int word3,
+					int word4, int *rx_count,
+					int *tx_count, int word7,
+					int *word8);
+
+/*
+ * T30_PREAMBLE_STATE (1).  Feeds `_handle_hdlc_input`-decoded elements
+ * banked at `ctx` itself into `FAXVMI_process(ctx->vmi_c, ...)` once a
+ * frame has completed and the S7-style countdown (in raw sample units this
+ * time, not the `f12b4`/`s7_timeout` conversion the RX-side states use)
+ * clears 8000.  See class1tx.c.
+ */
+int _t30_preabmle_state(struct fax_class1 *ctx, const short *rx, short *tx,
+			int word3, int word4, int *rx_count, int *tx_count,
+			int word7, int *word8);
+
+/*
+ * ------------------------------------------------------------------
+ * THE DATA-MODE STATE HANDLERS -- RX_LOOK_CARRIER (12), RX_DATA_STATE (13),
+ * TX_NULLS_STATE (11), TX_SCRAMBLED_ONES_STATE (9) and TX_DATA_STATE (10).
+ * All five drive `ctx->vmi_b`, the CURRENT data modem's handle (shared with
+ * `modem_vmi`/`f1244` per class1.h, half-duplex), except `_rx_look_carrier_
+ * state`'s own second poll of `ctx->vmi_a` when `vmi_b`'s carrier bit is
+ * clear.  `_rx_look_carrier_state` and `_rx_data_state` share the low-24-bit
+ * FAXVMI_process status convention `cHDLCtx_off` already established
+ * (`FAXVMI_RESULT_BIT_2000`, class1tx.c); the TX trio drive `ctx->f1288`
+ * (the tx FIFO) and `ctx->f1290` directly around the FAXVMI_process call.
+ * See class1tx.c for each function's own derivation.
+ */
+int _rx_look_carrier_state(struct fax_class1 *ctx, const short *rx,
+			   short *tx, int word3, int word4, int *rx_count,
+			   int *tx_count, int word7, int *word8);
+int _rx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		   int word3, int word4, int *rx_count, int *tx_count,
+		   int word7, int *word8);
+int _tx_nulls_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		    int word3, int word4, int *rx_count, int *tx_count,
+		    int word7, int *word8);
+int _tx_scrambled_ones_state(struct fax_class1 *ctx, const short *rx,
+			     short *tx, int word3, int word4, int *rx_count,
+			     int *tx_count, int word7, int *word8);
+int _tx_data_state(struct fax_class1 *ctx, const short *rx, short *tx,
+		   int word3, int word4, int *rx_count, int *tx_count,
+		   int word7, int *word8);
+
 #endif /* DSPLIB_CLASS1TX_H */

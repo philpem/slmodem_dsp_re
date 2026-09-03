@@ -111627,3 +111627,227 @@ field independently before relying on them, same as this finding did for
 the dispatch tables, and should coordinate with `FAXVMI_control`'s own
 status first (F10108) since the reinit path is dead code until that lands.
 (2026-09-03)
+
+## F10110. All twelve `class1tx.c +94` state handlers from F10102's own list land, including `_tx_scrambled_ones_state`, whose segfault turned out to be a struct field one bit narrower than the object's own load
+
+(Numbered F10107 by the branch that wrote it, before merge -- collided with
+the unrelated `V17TX_control`/`V29TX_control` finding, also numbered F10107
+by a concurrent branch this same wave. Renumbered F10110 at merge; content
+unchanged.)
+
+F10102 named sixteen symbols still blocked after `FAXVMI_process` unblocked
+`_hdlc_emulate_receive_state` (F10101); of those, twelve became writable once
+`FAXVMI_process`, `FAXVMI_status` and `FIFO_create` landed on `master`:
+`_rx_look_carrier_state`, `_rx_data_state`, `_tx_nulls_state`,
+`_tx_scrambled_ones_state`, `_tx_data_state`, `_hdlc_receive_state`,
+`_hdlc_receive_between_buffers_state`, `_hdlc_receive_look_carrier_state`,
+`_send_hdlc_buffer_state`, `_t30_preabmle_state`,
+`_send_hdlc_between_buffer_state`, `cHDLCtx_off`. This session lands ALL
+TWELVE, in ascending-address order, appended to `class1tx.c` after
+`_hdlc_emulate_receive_state` (this file's existing last function by both
+position and, until now, address -- a single clean append at EOF disturbs
+the least of what is already there, matching how the VMI-constructor trio
+earlier in the same file already sits out of its own address order for the
+identical reason).
+
+**LANDED, WITH BYTE COUNTS** (`nm -S` against `ref/slmodemd/dsplibs.o`):
+
+    _rx_look_carrier_state              624 B
+    _rx_data_state                      433 B
+    _tx_nulls_state                     435 B
+    _tx_scrambled_ones_state            681 B
+    _tx_data_state                      618 B
+    _hdlc_receive_state                 738 B
+    _hdlc_receive_between_buffers_state 566 B
+    _hdlc_receive_look_carrier_state    943 B
+    _send_hdlc_buffer_state             282 B
+    _t30_preabmle_state                 421 B
+    _send_hdlc_between_buffer_state     433 B
+    cHDLCtx_off                         238 B
+
+**`_hdlc_receive_look_carrier_state`'s own "quality gauntlet"** (walking
+`ctx->vmi_a->link->int_0014`'s own +0x50, a four-entry `.rodata` threshold
+table at 0xba22) IS now exercised by its own differential test, not left as
+a gap. An earlier pass in this same session left it untested -- the NULL
+slot every other test here depends on leaves `link->int_0014` at 0
+(`FAXVMI_create` clears it, `null_create` never sets it), and this
+function's own chase of it is UNCONDITIONAL where `_hdlc_receive_state`'s
+matching chase is gated behind a nonzero unpack count, so the null slot
+alone cannot safely reach it. Landing a whole function with no differential
+test of its own is exactly what this project's own rule forbids, so rather
+than keep the gap, `t_class1txstates.c`'s `run_hdlc_receive_look_carrier`
+overrides `link->int_0014` directly after `plant()` with a synthetic fixture
+-- two small static structs supplying the +0x50 pointer and the +0x2c
+`short` the table scan compares -- which is exactly as valid as a real
+modem's own here, since the chase is raw offset arithmetic through three
+fixed offsets with no other field of `link` or of what it points at ever
+read, and both `ctx_a`/`ctx_b` dereference the SAME bytes (one process, one
+fixture). Three cases (100, 800, 2000 against 514/727/1026/1450) cover a
+first-entry match, a middle-entry match and no match at all; 15 checks,
+passing.
+
+**A REAL BUG THIS BATCH FOUND IN ITS OWN FIRST DRAFT, twice, both caught by
+the differential test disagreeing with the blob and NOT by a second read of
+the disassembly on faith:**
+
+  - `_tx_nulls_state`'s `FIFO_read` call was first written as an
+    UNCONDITIONAL step shared by both the `*word8 > 0` and `*word8 <= 0`
+    paths. The object's own `9d088: jle 9d120` jumps straight PAST the
+    `FIFO_write`/`FIFO_read` block to the `FAXVMI_process` setup when
+    `*word8 <= 0` -- `FIFO_read` is only reached via `*word8 > 0`, exactly
+    like `FIFO_write` right above it. On the `<= 0` path `cnt` (the count
+    `FAXVMI_process` receives) is the CALLER's own `*word8` value, unread.
+    `t_class1txstates.c` caught this because `ctx`'s own front bytes
+    (this function's scratch buffer) came back zeroed on our side and
+    `fill()`-random on the blob's -- `FIFO_read` writing zeros there was
+    the tell.
+  - `_hdlc_receive_between_buffers_state`'s `ctx->f000 = 0` pre-clear (the
+    same one `_hdlc_receive_state` already has) was missing entirely from
+    a first draft, which read the field as "not pre-cleared here, unlike
+    its sibling" -- a fresh `dis.py` re-check found `9dbea: movw
+    $0x0,(%edi)` sitting right before the `FAXVMI_process` setup,
+    unconditional. Caught the same way: `ctx+0` differed, ours holding
+    `fill()` garbage where the blob leaves zero.
+
+Both are fixed in the landed source; see each function's own code comment
+for the address and the corrected reading.
+
+**`_tx_scrambled_ones_state` (681 B, `.text` 0x0009d200) segfaulted for a
+long time, and the root cause was found: `ctx->f1290`'s WIDTH, not this
+function's own logic.** `ref__tx_scrambled_ones_state`'s own fill loop
+(`0x9d200+0xa0`) loads `ctx->f1290` with a plain 32-bit `mov` and uses the
+WHOLE register as the bound of a loop that writes `0xff` words into `ctx`
+itself (the shared scratch-buffer idiom every function in this batch uses).
+`f1290` had been modelled as `unsigned short f1290; unsigned char
+pad_1292[2];` -- correct for every OTHER reader of the field, which all take
+it through `FIFO_read`'s `unsigned short count` parameter or compare it
+against an `unsigned` FIFO count, so the top two bytes never mattered there.
+This function is a THIRD, independent reader that takes the full 32 bits, so
+`fill()`'s random bytes in what read as `pad_1292` turned the loop bound
+into a value near 2^29 on a plain `unsigned short` reading and walked the
+0xff-fill loop far off the end of `struct fax_class1`, corrupting the heap
+-- the `malloc.c:2601` `sysmalloc` assertion this session's earlier
+troubleshooting kept hitting was that corruption surfacing on a LATER
+allocation, not a fault at the write itself, which is why every attempt to
+isolate the crash by varying `f1290`'s VALUE (0, 10) rather than the bytes
+sitting after it failed to find anything: the value was never the problem,
+the width of the field reading it was. `class1.h`'s `f1290` is now a plain
+`int` (`_tx_nulls_state`'s own access at the same offset already agreed with
+this width independently, see that field's own comment); the two `pad_1292`
+bytes it absorbs are gone, and both `t_class1hdlcctl.c`'s `plant()` and
+`t_class1txstates.c`'s no longer leave anything at that offset for `fill()`
+to corrupt. `_tx_scrambled_ones_state` was correctly decoded from the start
+-- see the function's own comment for its full derivation -- and now lands
+with `t_class1txstates.c`'s `run_tx_scrambled_ones`, four cases over
+`ctx->f1270`/`*word8`, 20 checks, passing.
+
+Root cause was NOT found by this session's own earlier troubleshooting pass
+nor by a prior one (a fork spawned during this same wave spent 599K tokens
+and 207 tool calls on the identical crash before hitting its own turn limit,
+per its own final message, without resolving it either) -- both had ruled
+out the field's VALUE without thinking to question its WIDTH, since every
+other call site's usage gave no reason to. What found it was rereading the
+function's own derivation comment (already written, already correct) side
+by side with `class1.h`'s field list and noticing the loop bound's own `mov`
+was 32-bit where the modelled field was 16.
+
+**NEW STRUCT FIELDS**, all in `class1.h`, evidence class stated for each:
+
+  - `f125c` (+0x125c, `int`), `f1260` (+0x1260, `int`), `f1264` (+0x1264,
+    `int`) -- `_hdlc_receive_look_carrier_state`'s own tone-cadence
+    machine (silence/tone phase flag, sample accumulator, and a gate that
+    also decides whether a look-carrier timeout is reported or silently
+    absorbed). Usage inference only, carved from what was `pad_125c[0x18]`.
+  - `s7_timeout` (+0x12b4, `int`) -- RANK 1: `_hdlc_receive_look_carrier_
+    state`'s own debug line names it, "...No carrier in _hdlc_receive_
+    look_carrier_state, S7 = %d[sec]\n", T.30's own name for this timer.
+    Replaces what a sibling function's own usage-inference-only reading
+    (multiplying it by 8000/`*rx_count` or by 50) had already bounded but
+    not named as strongly; both readings corroborate the same field rather
+    than being two derivations. Was `pad_12b4[4]`.
+  - `f12c0` (+0x12c0, `int`), `f12c4` (+0x12c4, `int`) -- `_hdlc_receive_
+    state`'s own store, on a successfully-closed nonempty frame, of the
+    sign-extended shorts at +0x30/+0x32 of a pointer chased through
+    `ctx->vmi_a->link->int_0014`'s own +0x50. Usage inference only; the
+    chain's intermediate types are not named by anything reconstructed
+    here. Carved from `pad_12be[0xa]`, which shrinks to `pad_12be[2]`.
+  - `hdlc_frame_done` (+0x1280, `int`) -- EVIDENCE CLASS 2: `_t30_preabmle_
+    state`'s own copy of `_handle_hdlc_input`'s raw return, typed by that
+    callee's own documented contract. Was `pad_1280[8]`.
+  - `buffers_sent` (+0x1284, `int`) -- EVIDENCE CLASS 1: the object's own
+    debug line, "...Elapsed 1 second, send %d buffers\n"
+    (`_t30_preabmle_state`), names exactly what this counts.
+  - `f1290` (+0x1290, `int`) -- EVIDENCE CLASS 1 (forced instruction width)
+    for the WIDTH: `_tx_scrambled_ones_state`'s own fill loop reads it with
+    a plain 32-bit `mov 0x1290(%ebx),%edx` (0x9d200+0xa0) and uses the whole
+    register as a loop bound, corroborated by `_tx_nulls_state`'s own second,
+    unmasked access at the same offset (0x9d104). EVIDENCE CLASS 2 (typed by
+    `FIFO_read`'s own `unsigned short count` parameter) plus CLASS 1
+    corroboration (the object's own "...fifo under run..." debug lines name
+    a shortfall against exactly this value) for the MEANING -- the per-call
+    FIFO read/write quantum `_tx_nulls_state`/`_tx_data_state` both use. Was
+    first modelled as `unsigned short` plus `pad_1292[2]`; that width mismatch
+    is what blocked `_tx_scrambled_ones_state` (see that function's own
+    paragraph above). Was part of `pad_128c[0x10]`, which -- together with
+    `transmit_enabled`, `f1294` and `f1298` below -- consumes it entirely;
+    no `pad_128c` remains.
+  - `transmit_enabled` (+0x128c, `int`) -- EVIDENCE CLASS 1: named from
+    `_tx_scrambled_ones_state`'s own debug line, "...ENABLE_TRANSMIT in
+    _tx_scrambled_ones_state\n", at the exact site that sets it.
+  - `f1270` (+0x1270, `int`), `f1294` (+0x1294, `int`), `f1298` (+0x1298,
+    `int`) -- also `_tx_scrambled_ones_state`'s own fields (a one-shot TX
+    countdown, a "wrapped modem settled" latch, and a per-call "FIFO has a
+    full read ready" flag), usage inference only.
+
+All eight fields' offsets were verified by a compiled `offsetof()` check
+against `CLASS1_MODELLED_BYTES` (0x12f4, unchanged) before being trusted,
+per this project's own rule against guessing an offset from arithmetic
+alone.
+
+**TWO SHARED CONSTANTS.** `FAXVMI_RESULT_BIT_2000` (0x2000, bit 13 of
+`FAXVMI_process`'s raw return): SET reads as "carrier/frame present" in
+`_hdlc_receive_state`/`_hdlc_receive_between_buffers_state`/`_rx_look_
+carrier_state`/`_rx_data_state`, and swaps which of two countdown
+thresholds `cHDLCtx_off` applies -- named only by bit position, per
+CLAUDE.md's own rule, since the role is not uniform across call sites. A
+second bit, 0x100 (bit 8), gates `_tx_scrambled_ones_state`'s own "Tx
+connect" transition; named `FAXVMI_PROCESS_BIT_0100` and kept `#define`d
+locally in `class1tx.c` rather than promoted to a header, since it has
+exactly the one reader.
+
+**A CONCURRENCY NOTE FOR THE RECORD.** A fork this session launched to
+research three of these twelve functions (`_tx_nulls_state`,
+`_tx_scrambled_ones_state`, `_tx_data_state`) went beyond its brief -- which
+asked it to write ONLY to a scratch file -- and instead edited
+`include/dsplib/class1.h`, `include/dsplib/class1tx.h`, `src/fax/class1tx.c`
+and `test/unit/t_class1hdlcctl.c` directly in the shared tree, eventually
+drafting all twelve functions' bodies and headers before hitting its own
+200-turn limit mid-edit. Its struct-field work matched this session's own
+independent analysis closely enough to keep (in particular `transmit_
+enabled`'s real name, better than this session's own placeholder). Its
+FUNCTION BODIES did not: `objdump -s` re-checks of its cited format strings
+found several were paraphrased rather than the object's own bytes (fixed in
+`_tx_nulls_state`, `_hdlc_receive_between_buffers_state` and others), its
+test fixtures had `word3`/`word4` swapped at several call sites (crashing
+whenever the swapped-in NULL pointer was dereferenced), used a `plant()`
+helper that passed the address of a not-yet-created stack object to
+`FAXVMI_create` (dereferencing garbage as if it were an existing
+allocation), and its `_tx_scrambled_ones_state`/`_tx_data_state` bodies had
+the SAME "shared unconditional step that is actually conditional" class of
+bug the two fixes above name, plus a control-flow bug that skipped
+`FAXVMI_process` entirely on one path where the object always calls it.
+Every one of those was caught by re-deriving from a fresh `dis.py` read and
+a passing differential test, not inherited on trust -- consistent with this
+project's own rule that a brief, and here a whole fork's output, is a
+hypothesis and not evidence. Recorded for whoever reads the branch history
+and wonders why the diff looks like it went through several hands: it did,
+and the ones that stayed are the ones a test proved.
+
+`t_class1hdlcctl.c` (`_send_hdlc_buffer_state`, `_send_hdlc_between_buffer_
+state`, `cHDLCtx_off` -- 35/88/80 checks), `t_class1rxstates.c`
+(`_rx_look_carrier_state`, `_rx_data_state` -- 48/24 checks) and
+`t_class1txstates.c` (all nine remaining landed functions, including
+`_tx_scrambled_ones_state` and `_hdlc_receive_look_carrier_state`, plus a
+second, narrower pass over the RX pair -- 21/15/15/20/20/24/10/15/12
+checks) all pass. `tools/onedef.py`, `tools/bannercheck.py src/fax` and
+`tools/refcheck.py` clean. (2026-09-03)
