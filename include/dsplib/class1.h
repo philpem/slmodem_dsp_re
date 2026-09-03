@@ -184,7 +184,41 @@ struct fax_class1 {
 						 * detector, plausibly for
 						 * `CLASS1_ANSWER_TONE_STATE`, not
 						 * otherwise established             */
-	unsigned char pad_125c[0x18];	/* +0x125c                          */
+	int f125c;			/* +0x125c a 0/1 phase flag in
+					 * `_hdlc_receive_look_carrier_state`'s
+					 * own tone-cadence machine: 0 is the
+					 * silence phase (accumulate `f1260` to
+					 * 0x5dc0/24000 then flip to 1), 1 is
+					 * the tone phase (`FPM_TONE_generate`
+					 * instead of `_put_silence`, accumulate
+					 * `f1260` to 0xfa0/4000 then flip back
+					 * to 0).  Usage inference only         */
+	int f1260;			/* +0x1260 the sample accumulator that
+					 * phase flips on -- reset to 0 and
+					 * bumped by `CLASS1_BLOCK_SAMPLES` per
+					 * call in EITHER phase, never both at
+					 * once.  Usage inference only          */
+	int f1264;			/* +0x1264 a gate: 0 disables the whole
+					 * `f1260`/`f125c` tone-cadence machine
+					 * (plain silence only) and is also what
+					 * decides whether a look-carrier timeout
+					 * is reported as NO_CARRIER (f1264==0)
+					 * or silently absorbed into the
+					 * tone-cadence path (f1264!=0).  Cleared
+					 * both on a fresh entry to HDLC_RECEIVE_
+					 * LOOK_CARRIER_STATE and on a hard
+					 * timeout; no reconstructed writer sets
+					 * it nonzero yet.  Usage inference only */
+	unsigned char pad_1268[8];	/* +0x1268                          */
+	int f1270;			/* +0x1270 `_tx_scrambled_ones_state`'s
+					 * own one-shot countdown: decremented
+					 * once per call while positive, and
+					 * reaching exactly 0 on the way down
+					 * fires a debug line ("At %2d.%02d[sec]
+					 * Tx connect\n") and sets
+					 * `transmit_enabled`.  See that
+					 * function's own comment in class1tx.c.
+					 * Usage inference only                 */
 	/*
 	 * A timestamp pair.  The object prints them together as
 	 * "At %2d.%02d[sec]" -- in _hdlc_receive_state_init and twice in
@@ -200,13 +234,95 @@ struct fax_class1 {
 					 * when it exceeds `*rx_count / 16` --
 					 * nothing traced reads it back, so
 					 * what it is FOR is not established */
-	unsigned char pad_1280[8];	/* +0x1280                          */
+	int hdlc_frame_done;		/* +0x1280 `_t30_preabmle_state`'s own
+					 * copy of `_handle_hdlc_input`'s raw
+					 * return (0 or 1, but stored as the
+					 * full 32-bit `eax`) -- evidence
+					 * class 2, typed by the callee whose
+					 * return it holds verbatim           */
+	int buffers_sent;		/* +0x1284 incremented once per call
+					 * `hdlc_frame_done` came back nonzero.
+					 * Evidence class 1: the object's own
+					 * debug line names it, "At
+					 * %2d.%02d[sec] Elapsed 1 second, send
+					 * %d buffers\n" (`_t30_preabmle_state`)
+					 */
 	struct fax_fifo *f1288;	/* +0x1288 fax_class1_info(1) reads
 					 * an unsigned short at +0xc of it.
 					 * Typed from `_delete_data_tx_modem`'s
 					 * own call, `FIFO_delete(struct
 					 * fax_fifo *)` -- evidence class 2  */
-	unsigned char pad_128c[0x10];	/* +0x128c                          */
+	int transmit_enabled;		/* +0x128c `_tx_scrambled_ones_state`'s
+					 * own latch: 0 until `f1270` (above)
+					 * reaches its one-shot zero, then 1 for
+					 * the rest of the session.  Gates a
+					 * second check (`f1298`, below) that
+					 * decides between the ordinary
+					 * FAXVMI_process path and a raw
+					 * FIFO_read path.  Evidence class 1:
+					 * the object's own debug line at the
+					 * site that sets it is "At %2d.%02d
+					 * [sec] ENABLE_TRANSMIT in _tx_
+					 * scrambled_ones_state\n"              */
+	int f1290;			/* +0x1290 the `count` `_tx_nulls_
+					 * state` asks `FIFO_read(ctx->f1288,
+					 * ...)` for on every call.  A FULL
+					 * 32-bit field, NOT `unsigned short`:
+					 * `_tx_scrambled_ones_state`'s own fill
+					 * loop reads it with a plain `mov
+					 * 0x1290(%ebx),%edx` (0x9d200+0xa0)
+					 * and uses the whole register directly
+					 * as a loop bound and in an unmasked
+					 * `cmp` against a FIFO count -- not
+					 * `movzwl`, so the field itself is
+					 * 32 bits wide, corroborated by `_tx_
+					 * nulls_state`'s own SECOND access at
+					 * the same offset (0x9d104, a plain
+					 * `cmp 0x1290(%ebx),%eax`) alongside
+					 * its first, narrower `movzwl` one
+					 * (0x9d0e2) that merely narrows the
+					 * RESULT for a 16-bit call argument
+					 * (class1tx.c's own "dead extension
+					 * follows the destination, not the
+					 * field" rule).  A test that modelled
+					 * this as `unsigned short` plus two
+					 * bytes of `pad_1292` left those two
+					 * bytes as fill()-random garbage,
+					 * which this loop-bound read turned
+					 * into a value near 2^29 and walked
+					 * off the struct -- segfault, not a
+					 * defect in the callee (finding in
+					 * this batch's own entry).  The
+					 * object's own writer of a small
+					 * value into a genuine `int` leaves
+					 * the upper 16 bits zero, which is
+					 * why nothing FIRST caught this on
+					 * the object's own side; the evidence
+					 * class is 1 (forced instruction
+					 * width) for the WIDTH, usage
+					 * inference for the MEANING          */
+	int f1294;			/* +0x1294 `_tx_data_state`'s and
+					 * `_tx_scrambled_ones_state`'s own
+					 * one-shot latch, set to 1 the first
+					 * time FAXVMI_process's raw return has
+					 * bit 0 of its second byte set (an
+					 * unnamed bit of the wrapped
+					 * modulation's own status word --
+					 * `faxvmi.h`'s note on the low 24 bits
+					 * applies) while it was still 0; gates
+					 * `f1270`'s own arming and a one-time
+					 * debug line.  Usage inference only    */
+	int f1298;			/* +0x1298 `_tx_scrambled_ones_state`'s
+					 * own per-call flag: 1 when
+					 * `ctx->f1288->count >= ctx->f1290`
+					 * (the tx FIFO already holds at least
+					 * one read-quantum's worth), computed
+					 * fresh every call via `setge` on that
+					 * comparison.  When this AND
+					 * `transmit_enabled` are both set, the
+					 * function takes a raw `FIFO_read` path
+					 * instead of driving FAXVMI_process.
+					 * Usage inference only                 */
 	int async_locked;		/* +0x129c the start-bit search has
 					 * succeeded and the alignment
 					 * below is frozen                  */
@@ -223,7 +339,22 @@ struct fax_class1 {
 					 * DLE ETX; every later call
 					 * consumes nothing and reports
 					 * zero                             */
-	unsigned char pad_12b4[4];	/* +0x12b4                          */
+	int s7_timeout;			/* +0x12b4 T.30's own name for this:
+					 * `_hdlc_receive_look_carrier_state`'s
+					 * own debug line is "...curent_timeout
+					 * = %d, No carrier in _hdlc_receive_
+					 * look_carrier_state, S7 = %d[sec]\n"
+					 * with this field as the last arg
+					 * (evidence class 1).  That function
+					 * multiplies it by 50, or by 8000 and
+					 * divides by `*rx_count`, to get a
+					 * block-count timeout threshold; the
+					 * `*rx_count == 0` fallback (`* 50`) is
+					 * exactly what the general formula
+					 * reduces to at the usual 160-sample
+					 * block and an implied 8 kHz rate --
+					 * corroborating, not a second
+					 * derivation                          */
 	unsigned int silence_blocks;	/* +0x12b8 blocks seen below the
 					 * silence threshold; compared
 					 * against `countdown` UNSIGNED
@@ -232,7 +363,22 @@ struct fax_class1 {
 					 * The author's word: the object
 					 * prints exactly this value as
 					 * "Energy %d"                      */
-	unsigned char pad_12be[0xa];	/* +0x12be                          */
+	unsigned char pad_12be[2];	/* +0x12be                          */
+	int f12c0;			/* +0x12c0 `_hdlc_receive_state`, on a
+					 * successfully-closed nonempty frame,
+					 * walks `ctx->vmi_a->link->int_0014` to
+					 * a pointer, then that pointer's own
+					 * +0x50 to another, and stores the
+					 * sign-extended shorts at +0x30/+0x32 of
+					 * THAT into f12c0/f12c4 (widened to the
+					 * full 32-bit store the object makes).
+					 * The chain's intermediate types are not
+					 * named anywhere reconstructed yet, so
+					 * this is usage inference only --
+					 * plausibly a measured baud rate or
+					 * frequency pair given the HDLC/V.21
+					 * context, but that is not asserted    */
+	int f12c4;			/* +0x12c4 see f12c0                    */
 	int f12c8;			/* +0x12c8 `_hdlc_emulate_receive_
 						 * state`'s own between-record
 						 * countdown: decremented once per
