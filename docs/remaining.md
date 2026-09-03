@@ -832,9 +832,22 @@ failed**, onedef/bannercheck/refcheck all clean.
 Fax is **29 symbols / 14,151 bytes** — 93% of everything remaining. Next
 wave: the now-11-of-15-unblocked class1tx.c cluster (needs only
 `FAXVMI_process`, already landed), `FAXVMI_control` (338 B, needs
-`V17TX_control`/`V29TX_control`/`V29RX_control` — two of those three are
-still blocked on unwritten `V17TX_create`/`V29TX_create` constructors,
-themselves real work on the order of hundreds of bytes each, derivations
-banked in F9500/F10103), and `_init_receiver`/`_init_transmitter`
-(1,583/1,326 B), which between them unblock most of what remains once
-either lands.
+`V17TX_control`/`V29TX_control`/`V29RX_control`), and
+`_init_receiver`/`_init_transmitter` (1,583/1,326 B), which between them
+unblock most of what remains once either lands.
+
+**CORRECTION, wave 10: `V17TX_create`/`V29TX_create` were NOT still
+unwritten — this paragraph's own claim above was already stale the moment
+it was written.** Both constructors (and their `V17TX_PPS_SCALE`/
+`V29TX_PPS_SCALE` tables) landed in waves 6 and 7, well before wave 9 ran.
+The wave-9 control-functions agent declined `V17TX_control`/`V29TX_control`
+from a worktree branched 32 commits behind master — its own `grep` for the
+constructors genuinely found nothing IN ITS OWN TREE, which was correct for
+that tree and wrong about the object as a whole, and this file repeated the
+claim without anyone re-checking `master` directly. A wave-10 agent
+assigned to write the constructors found the same thing on `master` at the
+start of its own turn, made no commits (fast-forward merge only), and
+re-measured with `tools/closure.py`: **`V17TX_control` (148 B) and
+`V29TX_control` (126 B) are blocked on nothing but themselves now.** Exactly
+the shelf-life hazard CLAUDE.md's own `V90Parameters` example warns about,
+happening to this file's own prose rather than a source comment.
