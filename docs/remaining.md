@@ -5,18 +5,32 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured post-wave-11-merge, 2026-09-03:
+Measured post-wave-12-merge, 2026-09-03:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 97.2%  (713,982 bytes / 1,838 symbols)   was 76.6% / 1,296
-remaining   5,214 bytes /   11 symbols (9 fax + 2 leaves)
-  fax only               9 sym    4,170 B   <-- 80% of what remains
-  no-entry-point leaves  2 sym    1,044 B
+translated 97.8%  (718,152 bytes / 1,847 symbols)   was 76.6% / 1,296
+service.py --list fax:  0 symbols, 0 bytes  <-- FAX'S CORE SERVICE IS DONE
+remaining, by name-match, 14 symbols / 1,973 bytes:
+  no-entry-point leaves      2 sym   1,044 B  -- genuinely unwritten
+  v22.c (create/delete/process)  3 sym   929 B  -- ALREADY WRITTEN, invisible
+                                                   to this count (see below)
+  pow.S leaves                9 sym       0 B  -- libm glue, no bytes at stake
 ```
 
-Merged master period-green at **370 passed, 0 failed**, onedef/banners/check64
+Merged master period-green at **374 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
+
+**The `translated` percentage undercounts real completeness, and it is
+DELIBERATE, not a defect — read F221-F224 before re-deriving this.**
+`coverage.py`'s `our_symbols()` only counts `T`-kind (global) symbols in
+our own build; a function this tree correctly keeps `static` (matching the
+blob's own local visibility) is invisible to it. `v22_create`/`v22_delete`/
+`v22_process` are exactly this shape — confirmed by reading `src/pump/v22/
+v22.c` directly (`static struct dp *v22_create(...)`, `nm` shows lowercase
+`t` in both our build and the blob) — genuinely complete, not remaining
+work. **The only symbols with real, verified-independently work left in
+the entire object are the two no-entry-point leaves.**
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
 ## blocked, and the reasoning that said it was applies to fewer of F9058's
