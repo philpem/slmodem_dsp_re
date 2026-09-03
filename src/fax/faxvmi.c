@@ -21,12 +21,16 @@
  *   vmi_reverse           .rodata 0x94c0     12  (3 slots)
  *   vxx_message           .rodata 0x94e0     52  (13 slots)
  *
- * NOT written, and read only as evidence: FAXVMI_control (0x095650) -- still
- * blocked on the closures two concurrent strands are writing in v17.c/v27.c
- * this wave (`vxx_control` is still missing v17tx_control, v29tx_control and
- * v29rx_control).  The five dispatch tables `vmi_pack`, `vmi_unpack`,
- * `vmi_reverse`, `vxx_delete` and `vxx_status` were already written by prior
- * waves; every entry of all of them now exists, so the link constraint
+ * THIS BATCH ALSO ADDS `FAXVMI_control` (0x095650, 338 bytes) and the last of
+ * the six 13-slot `vxx_*` tables, `vxx_control` (.rodata, 52 bytes) -- unblocked
+ * once `V17TX_control`/`V29TX_control`/`V29RX_control` landed on `master` in
+ * waves 9/10, closing the gap this banner used to describe.  `FAXVMI_control`
+ * itself is a direct dependency of `_init_receiver`/`_init_transmitter`
+ * (`class1rx.c`/`class1tx.c`), whose own reinit path calls it; see findings
+ * F10108/F10109 for the prior tracing this confirms independently against
+ * `dis.py`.  The five dispatch tables `vmi_pack`, `vmi_unpack`, `vmi_reverse`,
+ * `vxx_delete` and `vxx_status` were already written by prior waves; every
+ * entry of all six `vxx_*` tables now exists, so the link constraint
  * F8492/F8493 no longer blocks any of them.
  *
  * THIS BATCH ADDS `FAXVMI_create` and `FAXVMI_process` and the two dispatch
@@ -392,6 +396,31 @@ faxvmi_process_fn const vxx_process[13] = {
 };
 
 /*
+ * `vxx_control`, `.rodata` 0x9560 -- the sixth and last 13-slot table, same
+ * slot order as every other one (0..4 null, 5 v21tx, 6 v21rx, 7 v27tx,
+ * 8 v27rx, 9 v29tx, 10 v29rx, 11 v17tx, 12 v17rx).  `null_control`
+ * (`nulldp.h`) and `v27tx_control`/`v27rx_control` (`faxadapt.h`, already
+ * untyped `void *req`) match the table's own untyped signature; the other
+ * six take a typed request pointer and need the same explicit cast
+ * `vxx_status`/`vxx_create` already carry for their own mismatched entries.
+ */
+faxvmi_control_fn const vxx_control[13] = {
+	null_control,
+	null_control,
+	null_control,
+	null_control,
+	null_control,
+	(faxvmi_control_fn)v21tx_control,
+	(faxvmi_control_fn)v21rx_control,
+	v27tx_control,
+	v27rx_control,
+	(faxvmi_control_fn)v29tx_control,
+	(faxvmi_control_fn)v29rx_control,
+	(faxvmi_control_fn)v17tx_control,
+	(faxvmi_control_fn)v17rx_control,
+};
+
+/*
  * `FAXVMI_control`'s own quiescent instance -- see `faxvmi.h` for the full
  * derivation.  All 24 bytes are zero in the object.
  */
@@ -511,6 +540,80 @@ FAXVMI_status(struct faxvmi *vmi, struct faxvmi_status *status)
 	status->overflow = vmi->overflow;
 	status->zero_run_seen = fr->zero_run_seen;
 	status->flag_0014 = (fr->flags_wanted <= 1);
+
+	return ret;
+}
+
+/*
+ * `FAXVMI_control`, 0x095650.  See `faxvmi.h` for the full six-step
+ * derivation; this is the object's own control flow read straight off
+ * `dis.py`, not tidied.  The recursion (step 2) happens before anything
+ * else so `ret` (the object's own `%edi`) is fixed before the reset/empty
+ * steps run, matching the object's own register lifetime rather than being
+ * moved for readability.
+ */
+int
+FAXVMI_control(struct faxvmi *vmi, const struct faxvmi_ctl *ctl)
+{
+	struct faxvmi_framer *fr;
+	int ret = 0;
+	int i;
+
+	if (ctl == NULL)
+		return -1;
+
+	if (ctl->int_0014 != 0)
+		ret = vxx_control[(unsigned short)vmi->slot](
+			vmi->link, (void *)(long)ctl->int_0014);
+
+	if (ctl->int_000c != 0 && ctl->short_0010 <= 2) {
+		fr = vmi->framer;
+
+		if (fr->frame_size != 0) {
+			for (i = 0; i < fr->frame_size; i++)
+				fr->frame[i] = 0;
+		}
+		fr->pack_frame_left = 0;
+		fr->frame_len = 0;
+		fr->flags_wanted = 2;
+		fr->ones = 0;
+		fr->pack_flagging = 1;
+		fr->in_frame = 0;
+
+		fr = vmi->framer;
+		fr->pack_bit = 0;
+		fr->unpack_bit = fr->pack_bit;		/* dword reload, see
+							 * FAXVMI_create's own
+							 * comment            */
+		fr->short_002e = fr->pad_001e;
+		fr->zero_run_bits = 0;
+		fr->unpack_mask = 0;
+		fr->unpack_word = (unsigned int)-1;
+		fr->unpack_acc = (unsigned int)-1;
+		fr->async_hunt = 1;
+		fr->zero_run_send = 0;
+		fr->zero_run_seen = 0;
+		fr->pack_mask = 0;
+		fr->pack_word = (unsigned int)-1;
+		fr->pack_acc = (unsigned int)-1;
+
+		vmi->mode = ctl->short_0010;
+	}
+
+	fr = vmi->framer;
+	if (ctl->ptr_0000 != NULL) {
+		if (fr->fifo_size != 0) {
+			for (i = 0; i < fr->fifo_size; i++)
+				fr->fifo[i] = 0;
+		}
+		fr->rd = 0;
+		fr->wr = 0;
+		fr->count = 0;
+		fr->residue = 0;
+	}
+
+	fr->zero_run_bits = (unsigned short)ctl->short_0008;
+	fr->zero_run_send = ctl->int_0004;
 
 	return ret;
 }

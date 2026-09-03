@@ -1,19 +1,21 @@
 /*
- * t_faxvmicp.c -- differential test of FAXVMI_create, FAXVMI_process, and the
- * vxx_create/vxx_process dispatch tables they complete.  See faxvmi.h for
- * what each is; this file's own job is the orchestration -- allocation,
- * (re)initialisation, and the pack/process/unpack/reverse pipeline -- not the
- * per-modulation adapters or the framing functions, which are tested
+ * t_faxvmicp.c -- differential test of FAXVMI_create, FAXVMI_process,
+ * FAXVMI_control, and the vxx_create/vxx_process/vxx_control dispatch
+ * tables they complete.  See faxvmi.h for what each is; this file's own job
+ * is the orchestration -- allocation, (re)initialisation, the
+ * pack/process/unpack/reverse pipeline, and the six control effects -- not
+ * the per-modulation adapters or the framing functions, which are tested
  * elsewhere (t_faxadapt.c, t_nulldp.c, t_faxpack.c, t_faxframing.c,
  * t_faxunframe.c).
  *
  * WHY THE NON-NULL SLOTS ARE NOT INVOKED, same reasoning as t_faxvmids.c:
- * `vxx_create[5..12]`/`vxx_process[5..12]` wrap real per-modulation
- * constructors/processors that need a fully-formed modem instance this file
- * has no route to build safely.  Wiring is proven by pointer identity
- * (mirroring t_faxvmids.c's `run_tables`); CALLS are made only through the
- * five NULL slots, which are already proven safe (t_nulldp.c) and behave
- * identically at every slot value 0..4.
+ * `vxx_create[5..12]`/`vxx_process[5..12]`/`vxx_control[5..12]` wrap real
+ * per-modulation constructors/processors/controllers that need a
+ * fully-formed modem instance this file has no route to build safely.
+ * Wiring is proven by pointer identity (mirroring t_faxvmids.c's
+ * `run_tables`); CALLS are made only through the five NULL slots, which are
+ * already proven safe (t_nulldp.c) and behave identically at every slot
+ * value 0..4.
  */
 
 #include <stddef.h>
@@ -33,8 +35,12 @@ extern struct faxvmi *ref_FAXVMI_create(struct faxvmi *vmi,
 extern int ref_FAXVMI_process(struct faxvmi *vmi, unsigned short *data,
 			      short *pcm, short *count,
 			      unsigned short *result);
+extern int ref_FAXVMI_control(struct faxvmi *vmi,
+			      const struct faxvmi_ctl *ctl);
 extern void *ref_vxx_create[13];
 extern void *ref_vxx_process[13];
+extern void *ref_vxx_control[13];
+extern const unsigned char ref_FAXVMI_CTL[24];
 
 extern void ref_null_create(void);
 extern void ref_v21tx_create(void), ref_v21rx_create(void);
@@ -47,6 +53,12 @@ extern void ref_v21tx_process(void), ref_v21rx_process(void);
 extern void ref_v27tx_process(void), ref_v27rx_process(void);
 extern void ref_v29tx_process(void), ref_v29rx_process(void);
 extern void ref_v17tx_process(void), ref_v17rx_process(void);
+
+extern void ref_null_control(void);
+extern void ref_v21tx_control(void), ref_v21rx_control(void);
+extern void ref_v27tx_control(void), ref_v27rx_control(void);
+extern void ref_v29tx_control(void), ref_v29rx_control(void);
+extern void ref_v17tx_control(void), ref_v17rx_control(void);
 
 static unsigned long seed = 20260903UL;
 
@@ -144,6 +156,45 @@ run_tables(void)
 		    (long)(vxx_create[4] != vxx_create[5]), 1, 0);
 	diff_eq_int("vxx_process: null != v21tx (%ld)",
 		    (long)(vxx_process[4] != vxx_process[5]), 1, 0);
+
+	diff_eq_int("vxx_control[0..4] (%ld)",
+		    (long)(vxx_control[0] == null_control
+			   && vxx_control[1] == null_control
+			   && vxx_control[2] == null_control
+			   && vxx_control[3] == null_control
+			   && vxx_control[4] == null_control),
+		    1, 0);
+	diff_eq_int("vxx_control[5..12] (%ld)",
+		    (long)(vxx_control[5] == (faxvmi_control_fn)v21tx_control
+			   && vxx_control[6] == (faxvmi_control_fn)v21rx_control
+			   && vxx_control[7] == (faxvmi_control_fn)v27tx_control
+			   && vxx_control[8] == (faxvmi_control_fn)v27rx_control
+			   && vxx_control[9] == (faxvmi_control_fn)v29tx_control
+			   && vxx_control[10] == (faxvmi_control_fn)v29rx_control
+			   && vxx_control[11] == (faxvmi_control_fn)v17tx_control
+			   && vxx_control[12] == (faxvmi_control_fn)v17rx_control),
+		    1, 0);
+
+	diff_eq_int("ref_vxx_control[0..4] (%ld)",
+		    (long)(ref_vxx_control[0] == (void *)ref_null_control
+			   && ref_vxx_control[1] == (void *)ref_null_control
+			   && ref_vxx_control[2] == (void *)ref_null_control
+			   && ref_vxx_control[3] == (void *)ref_null_control
+			   && ref_vxx_control[4] == (void *)ref_null_control),
+		    1, 0);
+	diff_eq_int("ref_vxx_control[5..12] (%ld)",
+		    (long)(ref_vxx_control[5] == (void *)ref_v21tx_control
+			   && ref_vxx_control[6] == (void *)ref_v21rx_control
+			   && ref_vxx_control[7] == (void *)ref_v27tx_control
+			   && ref_vxx_control[8] == (void *)ref_v27rx_control
+			   && ref_vxx_control[9] == (void *)ref_v29tx_control
+			   && ref_vxx_control[10] == (void *)ref_v29rx_control
+			   && ref_vxx_control[11] == (void *)ref_v17tx_control
+			   && ref_vxx_control[12] == (void *)ref_v17rx_control),
+		    1, 0);
+
+	diff_eq_int("vxx_control: null != v21tx (%ld)",
+		    (long)(vxx_control[4] != vxx_control[5]), 1, 0);
 
 	return diff_end();
 }
@@ -418,6 +469,117 @@ run_process(void)
 	return diff_end();
 }
 
+/*
+ * FAXVMI_control, over a fresh slot-0 (null) instance -- the same "only the
+ * NULL slots are safe to actually invoke through" reasoning run_tables' own
+ * comment gives for vxx_create/vxx_process, since a real modulation's
+ * `int_0014` recursion target needs a fully-formed modem handle this file
+ * has no route to build.  Six cases: ctl==NULL, the all-zero FAXVMI_CTL
+ * (quiescent), ptr_0000-only (ring empty), int_000c+short_0010 in range
+ * (full reset + mode change), int_000c+short_0010 OUT of range (treated as
+ * quiescent for the reset, per faxvmi.h step 3), and int_0014 (recursion
+ * through the null slot, ret == -1).  Every case also exercises the
+ * unconditional zero_run_send/zero_run_bits copy from int_0004/short_0008.
+ */
+static int
+run_control(void)
+{
+	static const struct faxvmi_cfg cfg = { 0, 0, 0, 32, 10, 20, 0, NULL,
+						NULL };
+	struct faxvmi *va, *vb;
+	struct faxvmi_ctl ctl;
+	int ra, rb;
+
+	diff_begin("FAXVMI_control");
+
+	va = ref_FAXVMI_create(NULL, &cfg);
+	vb = FAXVMI_create(NULL, &cfg);
+
+	/* ctl == NULL: untouched, both return -1. */
+	ra = ref_FAXVMI_control(va, NULL);
+	rb = FAXVMI_control(vb, NULL);
+	diff_eq_int("ctl==NULL: return (%ld)", rb, ra, 0);
+	cmp_vmi_scalars("ctl==NULL", va, vb, 0);
+	cmp_framer("ctl==NULL framer", va->framer, vb->framer, 0);
+
+	/* The quiescent all-zero record: no-op except the unconditional copy. */
+	ra = ref_FAXVMI_control(va, (const struct faxvmi_ctl *)ref_FAXVMI_CTL);
+	rb = FAXVMI_control(vb, &FAXVMI_CTL);
+	diff_eq_int("FAXVMI_CTL: return (%ld)", rb, ra, 1);
+	cmp_vmi_scalars("FAXVMI_CTL", va, vb, 1);
+	cmp_framer("FAXVMI_CTL framer", va->framer, vb->framer, 1);
+
+	/* ptr_0000 nonzero: empty the ring, scribbled first on both sides. */
+	va->framer->rd = vb->framer->rd = 7;
+	va->framer->wr = vb->framer->wr = 3;
+	va->framer->count = vb->framer->count = 2;
+	va->framer->residue = vb->framer->residue = 9;
+	{
+		unsigned i;
+
+		for (i = 0; i < va->framer->fifo_size; i++)
+			va->framer->fifo[i] = vb->framer->fifo[i] =
+			    (unsigned short)(0x5000 + i);
+	}
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.ptr_0000 = &ctl;		/* any nonzero pointer */
+	ctl.int_0004 = 111;
+	ctl.short_0008 = 22;
+	ra = ref_FAXVMI_control(va, &ctl);
+	rb = FAXVMI_control(vb, &ctl);
+	diff_eq_int("ptr_0000: return (%ld)", rb, ra, 2);
+	cmp_vmi_scalars("ptr_0000", va, vb, 2);
+	cmp_framer("ptr_0000 framer", va->framer, vb->framer, 2);
+	cmp_u16("ptr_0000 fifo[%ld]", vb->framer->fifo, va->framer->fifo,
+		va->framer->fifo_size, 2);
+
+	/* int_000c + short_0010 == 1 (in range): full reset + mode change. */
+	va->framer->pack_bit = vb->framer->pack_bit = 6;
+	va->framer->pack_mask = vb->framer->pack_mask = 0x55;
+	va->framer->async_hunt = vb->framer->async_hunt = 0;
+	va->framer->ones = vb->framer->ones = 4;
+	va->framer->in_frame = vb->framer->in_frame = 1;
+	va->mode = vb->mode = 0;
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.int_000c = 1;
+	ctl.short_0010 = 1;
+	ctl.int_0004 = 222;
+	ctl.short_0008 = 33;
+	ra = ref_FAXVMI_control(va, &ctl);
+	rb = FAXVMI_control(vb, &ctl);
+	diff_eq_int("int_000c in-range: return (%ld)", rb, ra, 3);
+	cmp_vmi_scalars("int_000c in-range", va, vb, 3);
+	cmp_framer("int_000c in-range framer", va->framer, vb->framer, 3);
+
+	/* int_000c + short_0010 == 3 (out of range): treated as quiescent. */
+	va->framer->pack_bit = vb->framer->pack_bit = 6;
+	va->mode = vb->mode = 1;
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.int_000c = 1;
+	ctl.short_0010 = 3;
+	ctl.int_0004 = 44;
+	ctl.short_0008 = 55;
+	ra = ref_FAXVMI_control(va, &ctl);
+	rb = FAXVMI_control(vb, &ctl);
+	diff_eq_int("int_000c out-of-range: return (%ld)", rb, ra, 4);
+	cmp_vmi_scalars("int_000c out-of-range", va, vb, 4);
+	cmp_framer("int_000c out-of-range framer", va->framer, vb->framer, 4);
+
+	/* int_0014 nonzero: recurse through vxx_control[slot] (slot 0, null). */
+	memset(&ctl, 0, sizeof(ctl));
+	ctl.int_0014 = 0x1234;
+	ctl.int_0004 = 66;
+	ctl.short_0008 = 77;
+	ra = ref_FAXVMI_control(va, &ctl);
+	rb = FAXVMI_control(vb, &ctl);
+	diff_eq_int("int_0014: return (%ld)", rb, ra, 5);
+	diff_eq_int("int_0014: return is null_control's -1 (%ld)", rb, -1, 5);
+	cmp_vmi_scalars("int_0014", va, vb, 5);
+	cmp_framer("int_0014 framer", va->framer, vb->framer, 5);
+
+	return diff_end();
+}
+
 int
 main(void)
 {
@@ -427,5 +589,6 @@ main(void)
 	rc |= run_create_fresh();
 	rc |= run_create_reinit();
 	rc |= run_process();
+	rc |= run_control();
 	return rc;
 }
