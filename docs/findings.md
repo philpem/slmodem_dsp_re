@@ -111550,3 +111550,39 @@ both sides, a `struct faxvmi_link` canary unchanged either way (D955/F8587),
 and a status readback confirming the effect landed on the right object.
 `make one T=t_faxadapt` green, 32 checks over all eight `*_control`
 adapters (up from the prior five).  (2026-09-03)
+
+## F10108. `FAXVMI_control`'s `int_0014` recursion argument was wrong: `int_0014` itself, not a literal -1
+
+An earlier comment on `struct faxvmi_ctl::int_0014` claimed the `int_0014`
+nonzero path recurses through `vxx_control[vmi->slot]` passing a literal
+`-1`. A wave-10 agent working `_init_receiver`/`_init_transmitter` traced
+`FAXVMI_control` directly and found this wrong, before it had cost anything
+downstream -- no code depends on the literal-`-1` reading yet, only the
+struct comment did. Independently re-verified rather than trusted:
+
+```
+95669: mov  0x14(%ebx),%eax     ; eax = ctl->int_0014
+9566c: test %eax,%eax
+9566e: jne  95786                ; straight to the call site, no other
+                                  ; write to %eax on this path
+95786: movzwl 0xe(%esi),%edx
+9578a: mov  %eax,0x4(%esp)       ; second arg = whatever test just checked
+9578e: mov  0x28(%esi),%eax
+95791: mov  %eax,(%esp)
+95794: call *0x0(,%edx,4)  <== R_386_32 vxx_control
+```
+
+`test %eax,%eax; jne` lands directly on the argument setup with nothing
+between that could clobber `%eax`, so the value passed IS `int_0014`,
+loaded once and reused -- `(void *)(long)ctl->int_0014`, not a synthesized
+constant. `include/dsplib/faxvmi.h` corrected in both the struct comment
+and the prose above it.
+
+The agent that found this had independently written `V17TX_control`/
+`V29TX_control`/the `vxx_control` table/`FAXVMI_control` itself while
+tracing its own assignment's blockers, duplicating a concurrent sibling's
+in-flight work on the same files -- none of that duplicate work was
+committed (verified `git log`: no commits on that branch), so there is
+nothing to reconcile there. This correction is the one piece of that
+session salvageable on its own merit, re-verified independently before
+being applied rather than taken on the agent's word. (2026-09-03)

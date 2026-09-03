@@ -562,7 +562,11 @@ int FAXVMI_status(struct faxvmi *vmi, struct faxvmi_status *status);
  * `short_0010` at most 2) additionally resets the whole HDLC receiver to
  * `FAXVMI_create`'s own initial values and sets `vmi->mode` from
  * `short_0010`; `int_0014` nonzero makes `FAXVMI_control` recurse through
- * `vxx_control[vmi->slot]` with a literal -1 before applying anything else.
+ * `vxx_control[vmi->slot](vmi->link, (void *)(long)ctl->int_0014)` before
+ * applying anything else -- `int_0014` ITSELF cast to a pointer, not a
+ * literal -1: `dis.py` shows `mov 0x14(%ebx),%eax; test %eax,%eax; jne
+ * 0x95786` landing directly on the call site's argument setup with no
+ * intervening write to `%eax`, so the tested value is what's passed.
  * Four of the eight fields already have a habitable name; the rest are
  * usage inference only, hedged as such, and left neutral rather than guessed
  * further -- CLAUDE.md's "naming wrongly is worse than padding" ground.
@@ -584,8 +588,9 @@ struct faxvmi_ctl {
 	unsigned short short_0010;	/* +0x10 new vmi->mode, 0..2       */
 	unsigned short pad_0012;	/* +0x12                           */
 	int int_0014;		/* +0x14 nonzero: also call
-				 * vxx_control[vmi->slot](vmi->link, -1)
-				 * before anything else applies         */
+				 * vxx_control[vmi->slot](vmi->link,
+				 * (void *)(long)int_0014) before anything
+				 * else applies                          */
 };
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
