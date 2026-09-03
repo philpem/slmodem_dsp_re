@@ -146,6 +146,7 @@ extern void  ref_SeedScramblerV29(void *modem, int seed);
 extern void  ref_SetEncoderV29(void *modem, short which);
 extern int   ref_V29TX_status(void *tx, void *status);
 extern int   ref_V29RX_status(void *modem, void *status);
+extern int   ref_V29RX_control(void *modem, const struct v29rx_control_req *req);
 extern void  ref_ScrambleDataV29(void *modem, unsigned short *data,
 				 unsigned short count);
 extern void  ref_DescrambleDataV29(void *modem, unsigned short *data,
@@ -4572,6 +4573,188 @@ run_create(void)
 }
 
 /* --------------------------------------------------------------------- */
+/* V29RX_control                                                         */
+
+/*
+ * Four independent effects (v29fax.h has the derivation), exercised over the
+ * sixteen combinations of the two bits of each control byte that this
+ * function reads -- `ctl0` bits 3 and 5, `ctl1` bits 1 and 4 -- with every
+ * OTHER bit of both bytes driven both ways across two passes, so a defect
+ * that reacts to one of the eleven untested bits is caught rather than
+ * assumed away.
+ *
+ * THE RECREATE ARM (`ctl1` bit 1) IS TESTED AGAINST A MARKER, not just
+ * against the blob.  `V29RX_INT_0000` and `V29RX_INT_0020` are poked to a
+ * value neither the constructor nor a NULL trial could produce (0x11223300+i
+ * and 0x33445500+i) before the call; `V29RX_create` reseeds both to 1
+ * unconditionally, so a control call that actually reaches it must show 1
+ * (or 0, if the matching `ctl0` bit also fired) and NEVER the marker.  A
+ * build that skipped the call would leave the marker in place whenever the
+ * `ctl0` bit was clear, which is exactly the reading `rxctl_create_sep`
+ * below is counting trials against.
+ *
+ * WRONG READINGS NAMED:
+ *   - the top-level `+0x04` copy landing anywhere else, or not landing at all
+ *   - `V29DET_INT_0008` set from the wrong bit, or from the raw bit value
+ *     rather than 0/1
+ *   - `V29RX_INT_0000` / `V29RX_INT_0020` cleared by the wrong `ctl0` bit, or
+ *     by `||` of both instead of each independently
+ *   - the recreate call skipped, or fired on the wrong bit
+ *   - a null request doing anything other than returning 0
+ */
+static long rxctl_obj8_sep, rxctl_det8_sep, rxctl_rx0000_sep, rxctl_rx0020_sep;
+static long rxctl_create_sep, rxctl_null_trials;
+
+static int
+run_rxcontrol(void)
+{
+	int pass, i;
+
+	diff_begin("V29RX_control");
+
+	for (pass = 0; pass < 2; pass++) {
+		unsigned char noise0 = pass ? (unsigned char)~(0x08 | 0x20) : 0;
+		unsigned char noise1 = pass ? (unsigned char)~(0x02 | 0x10) : 0;
+
+		for (i = 0; i < 16; i++) {
+			void *ma, *mb, *da, *db, *ra, *rb;
+			struct v29rx_control_req reqa, reqb;
+			int ret_a, ret_b;
+			int marker0000, marker0020, before_obj8;
+			int bit3 = (i & 1) != 0;
+			int bit5 = (i & 2) != 0;
+			int bit1 = (i & 4) != 0;	/* recreate */
+			int bit4 = (i & 8) != 0;
+			long where = 2000 + pass * 100 + i;
+
+			harness_alloc_reset();
+			ma = ref_V29RX_create(0, 0);
+			mb = V29RX_create(0, 0);
+			diff_eq_int("at %ld: both constructed", mb != 0, ma != 0,
+				    where);
+			if (ma == 0 || mb == 0)
+				continue;
+
+			ra = get_ptr((unsigned char *)ma, V29_OBJ_RX);
+			rb = get_ptr((unsigned char *)mb, V29_OBJ_RX);
+
+			rng_seed(0x51de0000u + (unsigned)(pass * 16 + i));
+			marker0000 = 0x11223300 + pass * 16 + i;
+			marker0020 = 0x33445500 + pass * 16 + i;
+			put_int((unsigned char *)ra, V29RX_INT_0000, marker0000);
+			put_int((unsigned char *)rb, V29RX_INT_0000, marker0000);
+			put_int((unsigned char *)ra, V29RX_INT_0020, marker0020);
+			put_int((unsigned char *)rb, V29RX_INT_0020, marker0020);
+
+			memset(&reqa, 0, sizeof(reqa));
+			reqa.int_0004 = (int)rng_next();
+			reqa.ctl0 = (unsigned char)
+				((bit3 ? V29RXCTL_CTL0_BIT3 : 0)
+				 | (bit5 ? V29RXCTL_CTL0_BIT5 : 0) | noise0);
+			reqa.ctl1 = (unsigned char)
+				((bit1 ? V29RXCTL_CTL1_BIT1 : 0)
+				 | (bit4 ? V29RXCTL_CTL1_BIT4 : 0) | noise1);
+			reqb = reqa;
+
+			before_obj8 = get_int((unsigned char *)ma,
+					       V29_OBJ_INT_0008);
+			ret_a = ref_V29RX_control(ma, &reqa);
+			ret_b = V29RX_control(mb, &reqb);
+
+			diff_eq_int("at %ld: returned", ret_b, ret_a, where);
+
+			/* Re-fetch: the recreate arm does not move either block
+			 * (D1173's re-entrant shape), but read them fresh anyway
+			 * rather than assume it. */
+			da = get_ptr((unsigned char *)ma, V29_OBJ_DET);
+			db = get_ptr((unsigned char *)mb, V29_OBJ_DET);
+			ra = get_ptr((unsigned char *)ma, V29_OBJ_RX);
+			rb = get_ptr((unsigned char *)mb, V29_OBJ_RX);
+			diff_eq_int("at %ld: sub-blocks stayed put",
+				    (db == 0) + (rb == 0), (da == 0) + (ra == 0),
+				    where);
+			if (da == 0 || db == 0 || ra == 0 || rb == 0)
+				continue;
+
+			diff_eq_int("at %ld: handle +0x08",
+				    get_int((unsigned char *)mb, V29_OBJ_INT_0008),
+				    get_int((unsigned char *)ma, V29_OBJ_INT_0008),
+				    where);
+			diff_eq_int("at %ld: V29DET_INT_0008",
+				    get_int((unsigned char *)db, V29DET_INT_0008),
+				    get_int((unsigned char *)da, V29DET_INT_0008),
+				    where);
+			diff_eq_int("at %ld: V29RX_INT_0000",
+				    get_int((unsigned char *)rb, V29RX_INT_0000),
+				    get_int((unsigned char *)ra, V29RX_INT_0000),
+				    where);
+			diff_eq_int("at %ld: V29RX_INT_0020",
+				    get_int((unsigned char *)rb, V29RX_INT_0020),
+				    get_int((unsigned char *)ra, V29RX_INT_0020),
+				    where);
+
+			/*
+			 * ARM COVERAGE, taken from the REFERENCE's own answer:
+			 * each counts a trial where the field actually ended
+			 * up DIFFERENT from what a "this write never happens"
+			 * bug would have left in place, so each is a trial the
+			 * check above could actually have caught something on.
+			 */
+			if (get_int((unsigned char *)ma, V29_OBJ_INT_0008)
+			    != before_obj8)
+				rxctl_obj8_sep++;
+			if (get_int((unsigned char *)da, V29DET_INT_0008) != bit4)
+				rxctl_det8_sep++;
+			if (bit3
+			    && get_int((unsigned char *)ra, V29RX_INT_0000)
+			       != marker0000)
+				rxctl_rx0000_sep++;
+			if (bit5
+			    && get_int((unsigned char *)ra, V29RX_INT_0020)
+			       != marker0020)
+				rxctl_rx0020_sep++;
+			if (bit1 && !bit3
+			    && get_int((unsigned char *)ra, V29RX_INT_0000)
+			       != marker0000)
+				rxctl_create_sep++;
+		}
+	}
+
+	/* A null request: returns 0 and touches nothing. */
+	{
+		void *ma, *mb, *ra, *rb;
+		int ret_a, ret_b;
+		int before_a, before_b;
+
+		harness_alloc_reset();
+		ma = ref_V29RX_create(0, 0);
+		mb = V29RX_create(0, 0);
+		diff_eq_int("null: both constructed", mb != 0, ma != 0, 0);
+		if (ma != 0 && mb != 0) {
+			ra = get_ptr((unsigned char *)ma, V29_OBJ_RX);
+			rb = get_ptr((unsigned char *)mb, V29_OBJ_RX);
+			before_a = get_int((unsigned char *)ra, V29RX_INT_0000);
+			before_b = get_int((unsigned char *)rb, V29RX_INT_0000);
+
+			ret_a = ref_V29RX_control(ma, 0);
+			ret_b = V29RX_control(mb, 0);
+
+			diff_eq_int("a null request returns %ld", ret_b, ret_a,
+				    (long)ret_a);
+			diff_eq_int("a null request returns zero", ret_a, 0, 0);
+			diff_eq_int("a null request left V29RX_INT_0000 alone",
+				    get_int((unsigned char *)ra, V29RX_INT_0000),
+				    before_a, 0);
+			(void)before_b;
+			rxctl_null_trials++;
+		}
+	}
+
+	harness_alloc_reset();
+	return diff_end();
+}
+
+/* --------------------------------------------------------------------- */
 
 int
 main(void)
@@ -4603,6 +4786,7 @@ main(void)
 	rc |= run_slicers();
 	rc |= run_states();
 	rc |= run_create();
+	rc |= run_rxcontrol();
 
 	/*
 	 * The separating counts.  Each is the number of trials on which a
@@ -4866,6 +5050,18 @@ main(void)
 		    1, cr_rate[2]);
 	diff_eq_int("D1174's split reset flags were driven (%ld)",
 		    cr_reset_split > 0, 1, cr_reset_split);
+	diff_eq_int("V29RX_control's handle +0x08 copy separates (%ld)",
+		    rxctl_obj8_sep > 0, 1, rxctl_obj8_sep);
+	diff_eq_int("V29RX_control's V29DET_INT_0008 write separates (%ld)",
+		    rxctl_det8_sep > 0, 1, rxctl_det8_sep);
+	diff_eq_int("V29RX_control's V29RX_INT_0000 clear separates (%ld)",
+		    rxctl_rx0000_sep > 0, 1, rxctl_rx0000_sep);
+	diff_eq_int("V29RX_control's V29RX_INT_0020 clear separates (%ld)",
+		    rxctl_rx0020_sep > 0, 1, rxctl_rx0020_sep);
+	diff_eq_int("V29RX_control's recreate call separates (%ld)",
+		    rxctl_create_sep > 0, 1, rxctl_create_sep);
+	diff_eq_int("V29RX_control's null request was driven (%ld)",
+		    rxctl_null_trials > 0, 1, rxctl_null_trials);
 
 	rc |= diff_end();
 

@@ -1760,6 +1760,33 @@ V29RX_status(void *modem, void *status)
 
 /*
  * ---------------------------------------------------------------------------
+ * V29RX_control -- .text 0x0a4580, 110 bytes.  See v29fax.h for the four
+ * effects, the request type's derivation and the two corrections it makes to
+ * V29DET_INT_0008 and to V29RX_INT_0000/V29RX_INT_0020's writer sets.
+ */
+int
+V29RX_control(void *modem, const struct v29rx_control_req *req)
+{
+	if (req == 0)
+		return 0;
+
+	FIELD_INT(modem, V29_OBJ_INT_0008) = req->int_0004;
+	FIELD_INT(DET(modem), V29DET_INT_0008) =
+		(req->ctl1 & V29RXCTL_CTL1_BIT4) != 0;
+
+	if (req->ctl1 & V29RXCTL_CTL1_BIT1)
+		V29RX_create(modem, modem);
+
+	if (req->ctl0 & V29RXCTL_CTL0_BIT3)
+		FIELD_INT(RX(modem), V29RX_INT_0000) = 0;
+	if (req->ctl0 & V29RXCTL_CTL0_BIT5)
+		FIELD_INT(RX(modem), V29RX_INT_0020) = 0;
+
+	return 1;
+}
+
+/*
+ * ---------------------------------------------------------------------------
  * V29TX_modem -- .text 0x0a46b0, 182 bytes.  See v29fax.h for the two arms,
  * the budget and why `in` does not advance while `out` does.
  *

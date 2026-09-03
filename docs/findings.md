@@ -111036,3 +111036,93 @@ written here to avoid duplicating whatever agent this wave assigned to
 `faxvmi.c`; each of the fifteen becomes writable the moment its one
 remaining blocker lands, and is otherwise unchanged from the brief's own
 description. (2026-09-03)
+
+### F10103. `V29RX_control` written, 110 bytes; its request type is new and two existing NEUTRAL fields get a second writer; and `V17TX_control`/`V29TX_control` are BLOCKED on their unwritten `*TX_create`
+
+(Numbered F9500 by the branch that wrote it, before merge -- collided with
+the pre-existing, unrelated `FIFO_CFG` finding of the same number. Renumbered
+F10103 at merge; content unchanged. See CLAUDE.md's numbering-collision note.)
+
+Three symbols were assigned together -- `V17TX_control` (148 bytes),
+`V29TX_control` (126) and `V29RX_control` (110) -- as the last blocker on the
+trivial one-line forwarders in `faxadapt.c` and the `vxx_control` dispatch in
+`faxvmi.c`.  Only the third could be written this pass.
+
+**`V17TX_control` and `V29TX_control` are BLOCKED, not merely unwritten.**
+Both disassemble to the same shape: set two fields from the request, then --
+gated on one bit of the request's second control byte -- `call
+V17TX_create(fp, fp)` / `call V29TX_create(fp, fp)`, both arguments the same
+register.  Neither callee exists anywhere in `src/` or `include/` (`grep -rn
+V17TX_create src/ include/` and the same for `V29TX_create` return nothing but
+comments), and both are real `R_386_PC32` relocations in the disassembly --
+0x0a1bbd against `V17TX_create` (0x000989e0, 413 bytes) and 0x0a5027 against
+`V29TX_create` (0x0009ba00, 0x48a = 1,162 bytes).  This is exactly the trap
+CLAUDE.md names: "AN UNWRITTEN CALLEE DOES NOT RESOLVE TO THE BLOB.  IT FAILS
+TO LINK."  Every test binary links all of `$(OBJ_REPRO)`, so committing either
+function as written below would break `make phase` for the WHOLE SUITE, not
+just its own test, regardless of whether the call's controlling bit is ever
+set in a trial.  `v17data.h` and `v17fax.h` already say `V17TX_create` "is not
+reconstructed, so naming its fields now would mean guessing" -- writing it (and
+`V29TX_create`, the same shape for V.29) is real, unmodelled-instance work on
+the order of hundreds of bytes each and was judged out of this pass's scope.
+Both are left out, with their derivation recorded here so the block is
+removable the moment either constructor lands:
+
+```
+V17TX_control(void *fp, struct req *r)
+{
+	if (r == 0) return 0;
+	priv = *(void **)(fp + V17TX_OBJ_PARAMS /* 0x24 */);
+	block = *(void **)(fp + V17TX_OBJ_FP /* 0x28 */);
+	rate = *(short *)(priv + 0x10);
+	block[0x50] = r->int_08;                       /* dead store, object's own */
+	block[0x50] = V17TX_PPS_SCALE[rate] * r->int_08;
+	fp[0x18] = r->int_10;
+	if (r->byte_0c & 0x04) fp[0x10] |= 0x04;
+	priv[0x08] = 0;
+	if (r->byte_0d & 0x10) priv[0x08] = 1;
+	if (r->byte_0d & 0x02) { V17TX_create(fp, fp); return 1; }
+	return 1;
+}
+```
+
+and the V.29 transmit one is the same shape one level of indirection
+different (`V29TX_OBJ_PARAMS` = 0x20 supplies the rate at `+0xc`, matching
+`V29TXP_RATE` below; `V29_OBJ_TX` = 0x24 is the block written; the request's
+`+0x8` plays `V17TX_control`'s `+0x08`, with no `+0x10` field touched).  Both
+also need `V17TX_PPS_SCALE` (`.rodata`, 0x0000a060, 16 bytes = 4 `int`) and
+`V29TX_PPS_SCALE` (`.data`, 0x000080d0, 8 bytes = 2 `int`) written as tables,
+which is comparatively cheap and blocked on nothing -- but pointless without
+the constructors that are their only other reader.  **`V29TXP_RATE` (0xc of
+`V29TX_OBJ_PARAMS`) is confirmed here**: `V29TX_control`'s `movswl
+0xc(%edi),%edx` where `%edi` is `V29TX_OBJ_PARAMS`, feeding
+`V29TX_PPS_SCALE[rate]` exactly as `v17data.h` records for V.17's own `+0x10`.
+
+**`V29RX_control` -- .text 0x0a4580, 110 bytes -- links and is written.**  Its
+callee, `V29RX_create`, already exists (`src/fax/v29.c:187`), so this one was
+clear the moment the call graph was checked, which is the general lesson: the
+same-shaped sibling in a family is not always in the same state, and each of
+the three needed its own callee check rather than one verdict for all three.
+`src/fax/v29.c` (after `V29RX_status`) has the function; `include/dsplib/
+v29fax.h` has `struct v29rx_control_req`, the four bit macros and the full
+derivation of all four effects (the handle's own `+0x08`, `V29DET_INT_0008`
+from `ctl1` bit 4, a same-register `V29RX_create(modem, modem)` re-init call
+from `ctl1` bit 1, and `V29RX_INT_0000`/`V29RX_INT_0020` cleared from `ctl0`
+bits 3 and 5).  `test/unit/t_v29fax.c`'s new `run_rxcontrol()` drives all
+sixteen combinations of those four bits, over two passes that also drive
+every OTHER bit of both control bytes both ways, and separately proves the
+recreate arm actually calls `V29RX_create` (not merely reads its own bit) by
+poking `V29RX_INT_0000`/`_0020` to a marker value neither the constructor nor
+any other path can produce and confirming the recreate arm alone clears it
+back to the constructor's seed.
+
+**Two previously-NEUTRAL fields get a second writer, and the corrections are
+in `v29fax.h` beside the original claims rather than replacing them
+silently**, per this file's own convention: `V29DET_INT_0008` was recorded as
+having no writer this tree had reconstructed ("`V29RX_delete` does not free
+it... no other `*V29` function touches +0x08 of the detection block at all");
+`V29RX_control` is that writer now.  `V29RX_INT_0000` and `V29RX_INT_0020`
+were recorded as seeded once, by `V29RX_create`, and read only; `V29RX_control`
+is a second writer of each, and the only place either is ever turned back off.
+Neither correction changes what either field is UNDERSTOOD to mean --  both
+stay neutral -- only what is known to write them.  (2026-09-03)
