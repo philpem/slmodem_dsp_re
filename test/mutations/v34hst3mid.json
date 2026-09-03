@@ -1276,7 +1276,7 @@
   "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);\n\trxtiminginit(f->obj);",
   "replace": "\trxtiminginit(f->obj);\n\tV34SetupDemodulator(f->obj, 2400, 1800);",
   "equivalent": true,
-  "why": "the two write disjoint sets of receiver fields -- `V34SetupDemodulator` writes f128, f1ac, f1ae, f1b0, f1ba, f1be and carrier, `rxtiminginit` writes f124, f1b8, f1bc..f1f0, rx_samples, f208, f20a, dp.point, f22e, f230, f244 and f246 -- and only the first prints, so nothing this fixture reads can order them.  The order in the object is 0x66766 before 0x667c7 and it is recorded, not proved.",
+  "why": "the two write disjoint sets of receiver fields -- `V34SetupDemodulator` writes f128, f1ac, f1ae, f1b0, f1ba, f1be and carrier, `rxtiminginit` writes f124, mix_carrier_step, mix_carrier_phase..f1f0, rx_samples, f208, f20a, dp.point, f22e, dwell_count, demod_i_prev and demod_q_prev -- and only the first prints, so nothing this fixture reads can order them.  The order in the object is 0x66766 before 0x667c7 and it is recorded, not proved.",
   "fn": "t3m_micro50"
  },
  {

@@ -598,7 +598,7 @@ main(void)
 			ra.agc_level = rb.agc_level = 0;
 			ra.agc_accum = rb.agc_accum = 0;
 			ra.agc_step = rb.agc_step = 0x3333;
-			ra.f19c = rb.f19c = 0;
+			ra.rms_idx = rb.rms_idx = 0;
 			ra.energy.sum = rb.energy.sum = 0;
 			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 				ra.rms_buf[b] = rb.rms_buf[b] = 0;
@@ -720,9 +720,9 @@ main(void)
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 
 			ra->carrier = rb->carrier = carrier;
-			ra->f1b8 = rb->f1b8 = 3;
+			ra->mix_carrier_step = rb->mix_carrier_step = 3;
 			ra->f1ba = rb->f1ba = 64;
-			ra->f1bc = rb->f1bc = 5;
+			ra->mix_carrier_phase = rb->mix_carrier_phase = 5;
 
 			/*
 			 * The RMS index is NOT set by rxinit or
@@ -731,7 +731,7 @@ main(void)
 			 * the fixture stands in for them; left at the fill it
 			 * would be -23131 and index 46 KB below rms_buf.
 			 */
-			ra->f19c = rb->f19c = 0;
+			ra->rms_idx = rb->rms_idx = 0;
 
 			ra->f1ac = rb->f1ac = 17;
 			ra->f1ae = rb->f1ae = steps[sw];
@@ -741,7 +741,7 @@ main(void)
 			 * suggests.  V34demodulate appends one gained sample
 			 * per pull starting at +0x10c, and the very next
 			 * fields are the receiver's own bookkeeping: f128 at
-			 * +0x128, f12a at +0x12a, the energy sum at +0x12c
+			 * +0x128, agc_pair_count at +0x12a, the energy sum at +0x12c
 			 * and rx_samples itself at +0x130.  So there are
 			 * fourteen shorts of headroom, and the fifteenth pull
 			 * overwrites THIS LOOP'S OWN BOUND -- see finding F123.
@@ -1475,9 +1475,9 @@ main(void)
 
 			ra->flags = rb->flags = flags;
 			ra->f266 = rb->f266 = 0;
-			ra->f1aa = rb->f1aa = 0;
+			ra->prev_quadrant = rb->prev_quadrant = 0;
 			ra->f124 = rb->f124 = 20;
-			ra->f798 = rb->f798 = (short)(-60 - (re / 3000));
+			ra->rtncount = rb->rtncount = (short)(-60 - (re / 3000));
 			ra->scrambler_sr = rb->scrambler_sr = 0x2a2a2a2a;
 			oa.baud_rate = ob.baud_rate = 40;
 
@@ -1534,10 +1534,10 @@ main(void)
 			 * THE RENEGOTIATION WINDOW, which this sweep misses by
 			 * three.
 			 *
-			 * decoderv34 sets the 0x100 flag whenever f798 is
+			 * decoderv34 sets the 0x100 flag whenever rtncount is
 			 * below -64, and announces it only in the open window
-			 * -70 < f798 < -64.  The seed above is
-			 * `-60 - re / 3000`, and `re` stops at 8400, so f798
+			 * -70 < rtncount < -64.  The seed above is
+			 * `-60 - re / 3000`, and `re` stops at 8400, so rtncount
 			 * never goes below -62 -- close enough to look
 			 * deliberate and never inside the window.
 			 *
@@ -1569,7 +1569,7 @@ main(void)
 						    * 1000 + reneg[q] + 100)
 						   * 10 + lv;
 
-					ra->f798 = rb->f798 = reneg[q];
+					ra->rtncount = rb->rtncount = reneg[q];
 					ra->flags = rb->flags = flags;
 
 					dsplibs_debug_level = lv;
@@ -1586,8 +1586,8 @@ main(void)
 						    rb->flags, tag);
 					diff_eq_int("reneg f218", ra->f218,
 						    rb->f218, tag);
-					diff_eq_int("reneg f798", ra->f798,
-						    rb->f798, tag);
+					diff_eq_int("reneg rtncount", ra->rtncount,
+						    rb->rtncount, tag);
 					diff_eq_int("reneg transcripts agree",
 						    strcmp(
 						      dsplib_debug_capture_text(0),
@@ -1600,7 +1600,7 @@ main(void)
 					 * whole block sits inside
 					 * `(flags & 0x98) == 0x98`, which
 					 * only fl == 7 produces.  Then the
-					 * open window -70 < f798 < -64, which
+					 * open window -70 < rtncount < -64, which
 					 * -64 and -75 sit outside.  Then a
 					 * level above 1.
 					 */
@@ -1684,8 +1684,8 @@ main(void)
 
 			ra->f1ac = rb->f1ac = (short)(ph * 700);
 			ra->f1b0 = rb->f1b0 = (short)(wrap * 0x1f40);
-			ra->f1ec = rb->f1ec = 0;
-			ra->f1ee = rb->f1ee = 0;
+			ra->timing_idx_a = rb->timing_idx_a = 0;
+			ra->timing_idx_b = rb->timing_idx_b = 0;
 
 			dsplibs_debug_level = lvl;
 			ref_dsplibs_debug_level = lvl;
@@ -1711,8 +1711,8 @@ main(void)
 					saw_sip_said = 1;
 				}
 				diff_eq_int("phase", ra->f1ac, rb->f1ac, tag);
-				diff_eq_int("idx lo", ra->f1ec, rb->f1ec, tag);
-				diff_eq_int("idx hi", ra->f1ee, rb->f1ee, tag);
+				diff_eq_int("idx lo", ra->timing_idx_a, rb->timing_idx_a, tag);
+				diff_eq_int("idx hi", ra->timing_idx_b, rb->timing_idx_b, tag);
 			}
 		}
 
@@ -1754,18 +1754,18 @@ main(void)
 			oa.baud_rate = ob.baud_rate = 400;
 			ra->f1c0 = rb->f1c0 = states[si];
 			ra->f1d0 = rb->f1d0 = (short)d0;
-			ra->f232 = rb->f232 = 0;
-			ra->f234 = rb->f234 = 0;
-			ra->f236 = rb->f236 = 0;
+			ra->dwell_limit = rb->dwell_limit = 0;
+			ra->timing_p_gain = rb->timing_p_gain = 0;
+			ra->timing_i_gain = rb->timing_i_gain = 0;
 			ra->f1d2 = rb->f1d2 = 0;
 			oa.fac0c = ob.fac0c = 0;
 
 			setTimingStateParameters(&oa);
 			ref_setTimingStateParameters(&ob);
 
-			diff_eq_int("sts f232", ra->f232, rb->f232, tag);
-			diff_eq_int("sts f234", ra->f234, rb->f234, tag);
-			diff_eq_int("sts f236", ra->f236, rb->f236, tag);
+			diff_eq_int("sts dwell_limit", ra->dwell_limit, rb->dwell_limit, tag);
+			diff_eq_int("sts timing_p_gain", ra->timing_p_gain, rb->timing_p_gain, tag);
+			diff_eq_int("sts timing_i_gain", ra->timing_i_gain, rb->timing_i_gain, tag);
 			diff_eq_int("sts f1d2", ra->f1d2, rb->f1d2, tag);
 			diff_eq_int("sts offset", oa.fac0c, ob.fac0c, tag);
 		}
@@ -1775,7 +1775,7 @@ main(void)
 	/*
 	 * TimingV34: the state machine, the detector and the integrator, run
 	 * long enough for the dwell counters to advance states and for the
-	 * ppm report to fire.  f1c0 == -1 (done) and the f1c8 branch out of
+	 * ppm report to fire.  f1c0 == -1 (done) and the slow_ramp branch out of
 	 * state 1 are both driven.
 	 */
 	diff_begin("v34 TimingV34");
@@ -1812,23 +1812,23 @@ main(void)
 			oa.baud_rate = ob.baud_rate = 400;
 			oa.fac0c = ob.fac0c = 0;
 			ra->f1c0 = rb->f1c0 = (short)st;
-			ra->f1c8 = rb->f1c8 = skip;
-			ra->f1ec = rb->f1ec = 1;
-			ra->f1ee = rb->f1ee = 2;
+			ra->slow_ramp = rb->slow_ramp = skip;
+			ra->timing_idx_a = rb->timing_idx_a = 1;
+			ra->timing_idx_b = rb->timing_idx_b = 2;
 			ra->f1ac = rb->f1ac = 700;
 			ra->f1ae = rb->f1ae = 0x3e80;
 			ra->f1b0 = rb->f1b0 = 0x3e80;
 			ra->f1be = rb->f1be = 0x3e80;
-			ra->f1cc = rb->f1cc = 0;
-			ra->f1ce = rb->f1ce = 0;
+			ra->ppm_acc = rb->ppm_acc = 0;
+			ra->ppm_count = rb->ppm_count = 0;
 			ra->f1d0 = rb->f1d0 = 0;
 			ra->f1d2 = rb->f1d2 = 40;
 			ra->f1d8 = rb->f1d8 = 0;
-			ra->f1e0 = rb->f1e0 = 0;
-			ra->f230 = rb->f230 = 0;
-			ra->f232 = rb->f232 = 0;
-			ra->f234 = rb->f234 = 0;
-			ra->f236 = rb->f236 = 0;
+			ra->timing_integrator = rb->timing_integrator = 0;
+			ra->dwell_count = rb->dwell_count = 0;
+			ra->dwell_limit = rb->dwell_limit = 0;
+			ra->timing_p_gain = rb->timing_p_gain = 0;
+			ra->timing_i_gain = rb->timing_i_gain = 0;
 
 			for (it = 0; it < 120; it++) {
 				long tag = (((long)(st + 1) * 10 + skip) * 10
@@ -1865,10 +1865,10 @@ main(void)
 				diff_eq_int("tv step",  ra->f1ae, rb->f1ae, tag);
 				diff_eq_int("tv acc",  (long)ra->f1d8,
 					    (long)rb->f1d8, tag);
-				diff_eq_int("tv int",  (long)ra->f1e0,
-					    (long)rb->f1e0, tag);
+				diff_eq_int("tv int",  (long)ra->timing_integrator,
+					    (long)rb->timing_integrator, tag);
 				diff_eq_int("tv ppm",   ra->f1d0, rb->f1d0, tag);
-				diff_eq_int("tv dwell", ra->f230, rb->f230, tag);
+				diff_eq_int("tv dwell", ra->dwell_count, rb->dwell_count, tag);
 				diff_eq_int("tv phase", ra->f1ac, rb->f1ac, tag);
 			}
 		}
@@ -1892,7 +1892,7 @@ main(void)
 	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
 	 * hand-set step survives exactly one call: with f1be left at the fill
 	 * the step becomes garbage, every output wraps twice, and twelve
-	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
+	 * pulls run the receive burst over +0x120..+0x126 -- vectpp_idx, `flags`,
 	 * f124 and best_index, which are the fields `receiver` then reads.
 	 * That is finding F123's overrun, and it makes both sides agree on
 	 * nonsense.  The real rates keep f1ae below f1b0, which is what
@@ -1916,7 +1916,7 @@ main(void)
 	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
 	 * hand-set step survives exactly one call: with f1be left at the fill
 	 * the step becomes garbage, every output wraps twice, and twelve
-	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
+	 * pulls run the receive burst over +0x120..+0x126 -- vectpp_idx, `flags`,
 	 * f124 and best_index, which are the fields `receiver` then reads.
 	 * Both sides then agree on nonsense.  The real rates keep f1ae below
 	 * f1b0, which is what bounds the pulls at one per output.
@@ -1944,7 +1944,7 @@ main(void)
 	 * TimingV34, which recomputes f1ae from f1be every symbol, so a
 	 * hand-set step survives exactly one call: with f1be left at the fill
 	 * the step becomes garbage, every output wraps twice, and twelve
-	 * pulls run the receive burst over +0x120..+0x126 -- f120, `flags`,
+	 * pulls run the receive burst over +0x120..+0x126 -- vectpp_idx, `flags`,
 	 * f124 and best_index, which are the fields `receiver` then reads.
 	 * Both sides then agree on nonsense.  The real rates keep f1ae below
 	 * f1b0, which is what bounds the pulls at one per output.
@@ -2073,22 +2073,22 @@ main(void)
 			 * The RMS index, as in the rxtiming fixture: neither
 			 * init writes it, dpskinit and v34modeminit do.
 			 */
-			ra->f19c = rb->f19c = 0;
+			ra->rms_idx = rb->rms_idx = 0;
 			ra->agc_gain = rb->agc_gain = cases[cs].gain;
 			ra->agc_step = rb->agc_step = 0x3333;
 
 			/*
 			 * Past state 1, so TimingV34 neither re-seeds the
-			 * phase nor advances a state; f232 == -1 disables the
+			 * phase nor advances a state; dwell_limit == -1 disables the
 			 * dwell.  At 1 or below `receiver` returns before the
 			 * slicer, which would leave two thirds of it untested.
 			 */
 			ra->f1c0 = rb->f1c0 = 4;
-			ra->f232 = rb->f232 = -1;
-			ra->f234 = rb->f234 = 0x1000;
-			ra->f236 = rb->f236 = 0x0800;
-			ra->f1ec = rb->f1ec = 1;
-			ra->f1ee = rb->f1ee = 2;
+			ra->dwell_limit = rb->dwell_limit = -1;
+			ra->timing_p_gain = rb->timing_p_gain = 0x1000;
+			ra->timing_i_gain = rb->timing_i_gain = 0x0800;
+			ra->timing_idx_a = rb->timing_idx_a = 1;
+			ra->timing_idx_b = rb->timing_idx_b = 2;
 
 			/*
 			 * The predictor's own state.  Nothing in either init
@@ -2107,11 +2107,11 @@ main(void)
 				ra->pred_i[k] = rb->pred_i[k] =
 				ra->pred_q[k] = rb->pred_q[k] = 0;
 
-			ra->f268 = rb->f268 = 0;
-			ra->f26a = rb->f26a = 0;
-			ra->f26c = rb->f26c = 0;
-			ra->f26e = rb->f26e = 0;
-			ra->f798 = rb->f798 = 0;
+			ra->eq_out_i1 = rb->eq_out_i1 = 0;
+			ra->eq_out_q1 = rb->eq_out_q1 = 0;
+			ra->eq_out_i2 = rb->eq_out_i2 = 0;
+			ra->eq_out_q2 = rb->eq_out_q2 = 0;
+			ra->rtncount = rb->rtncount = 0;
 
 			oa.rx_energy_floor = ob.rx_energy_floor =
 			    (tweak & RXT_NO_SIGNAL) ? 0x40000000 : 900;
@@ -2141,7 +2141,7 @@ main(void)
 				ra->f21c = rb->f21c = 0x3fd;
 			if (tweak & RXT_SATURATE) {
 				ra->f220 = rb->f220 = 0x7ffffff0;
-				ra->f228 = rb->f228 = 0x7ffffff0;
+				ra->preerr_acc = rb->preerr_acc = 0x7ffffff0;
 			}
 
 			ra->flags = rb->flags = cases[cs].flags;
@@ -2160,16 +2160,16 @@ main(void)
 				ra->f124 = rb->f124 =
 				    syms[it % (sizeof(syms) / sizeof(syms[0]))];
 				if (tweak & RXT_RTN_UP)
-					ra->f798 = rb->f798 = 0x8c;
+					ra->rtncount = rb->rtncount = 0x8c;
 				if (tweak & RXT_RTN_DOWN)
-					ra->f798 = rb->f798 =
+					ra->rtncount = rb->rtncount =
 					    (short)((it & 1) ? -0x7c : -0x85);
 
 				receiver(&oa);
 				ref_receiver(&ob);
 
 				if ((char *)ra->rx_samples
-				    > (char *)&ra->f120) {
+				    > (char *)&ra->vectpp_idx) {
 					printf("FIXTURE: the burst reached "
 					       "+0x120 -- it is eating "
 					       "flags, not spare buffer\n");
@@ -2303,20 +2303,20 @@ main(void)
 			((struct v34_queue *)ra)->count =
 			((struct v34_queue *)rb)->count = V34_RXQ_RING;
 
-			ra->f19c = rb->f19c = 0;
+			ra->rms_idx = rb->rms_idx = 0;
 			ra->agc_gain = rb->agc_gain = 0x4000;
 			ra->agc_step = rb->agc_step = 0x3333;
 			ra->f1c0 = rb->f1c0 = 4;
-			ra->f232 = rb->f232 = -1;
-			ra->f234 = rb->f234 = 0x1000;
-			ra->f236 = rb->f236 = 0x0800;
-			ra->f1ec = rb->f1ec = 1;
-			ra->f1ee = rb->f1ee = 2;
+			ra->dwell_limit = rb->dwell_limit = -1;
+			ra->timing_p_gain = rb->timing_p_gain = 0x1000;
+			ra->timing_i_gain = rb->timing_i_gain = 0x0800;
+			ra->timing_idx_a = rb->timing_idx_a = 1;
+			ra->timing_idx_b = rb->timing_idx_b = 2;
 			memset(ra->pred_b, 0, 12); memset(rb->pred_b, 0, 12);
 			memset(ra->pred_i, 0, 16); memset(rb->pred_i, 0, 16);
-			ra->f268 = rb->f268 = 0; ra->f26a = rb->f26a = 0;
-			ra->f26c = rb->f26c = 0; ra->f26e = rb->f26e = 0;
-			ra->f798 = rb->f798 = 0;
+			ra->eq_out_i1 = rb->eq_out_i1 = 0; ra->eq_out_q1 = rb->eq_out_q1 = 0;
+			ra->eq_out_i2 = rb->eq_out_i2 = 0; ra->eq_out_q2 = rb->eq_out_q2 = 0;
+			ra->rtncount = rb->rtncount = 0;
 			ra->f21c = rb->f21c = 0x3fd;
 			oa.status = ob.status = 0;
 
@@ -2361,7 +2361,7 @@ main(void)
 				ra->f124 = rb->f124 =
 				    syms[it % (sizeof(syms)/sizeof(syms[0]))];
 				if (cs == 1)
-					ra->f798 = rb->f798 = 0x8c;
+					ra->rtncount = rb->rtncount = 0x8c;
 				if (cs == 2) {
 					/*
 					 * BOTH EDGES OF THE WINDOW.  It is
@@ -2383,7 +2383,7 @@ main(void)
 						-0x85	/* -133, outside      */
 					};
 
-					ra->f798 = rb->f798 = rrn[it & 3];
+					ra->rtncount = rb->rtncount = rrn[it & 3];
 				}
 
 				dsplib_debug_capture_reset();
@@ -2547,7 +2547,7 @@ main(void)
 			ra2.agc_level = rb2.agc_level = 0;
 			ra2.agc_accum = rb2.agc_accum = 0;
 			ra2.agc_step = rb2.agc_step = 0x3333;
-			ra2.f19c = rb2.f19c = 0;
+			ra2.rms_idx = rb2.rms_idx = 0;
 			ra2.energy.sum = rb2.energy.sum = 0;
 			for (b = 0; b < V34_AGC_RMS_TAPS; b++)
 				ra2.rms_buf[b] = rb2.rms_buf[b] = 0;
@@ -2580,13 +2580,13 @@ main(void)
 			ra->agc_gain = rb->agc_gain = 0x4000;
 			ra->agc_step = rb->agc_step = 0x3333;
 			ra->f1c0 = rb->f1c0 = 4;
-			ra->f19c = rb->f19c = 0;
-			ra->f232 = rb->f232 = -1;
-			ra->f234 = rb->f234 = 0x1000;
-			ra->f236 = rb->f236 = 0x0800;
-			ra->f1ec = rb->f1ec = 1;
-			ra->f1ee = rb->f1ee = 2;
-			ra->f798 = rb->f798 = 0;
+			ra->rms_idx = rb->rms_idx = 0;
+			ra->dwell_limit = rb->dwell_limit = -1;
+			ra->timing_p_gain = rb->timing_p_gain = 0x1000;
+			ra->timing_i_gain = rb->timing_i_gain = 0x0800;
+			ra->timing_idx_a = rb->timing_idx_a = 1;
+			ra->timing_idx_b = rb->timing_idx_b = 2;
+			ra->rtncount = rb->rtncount = 0;
 			ra->f21c = rb->f21c = 0x3fd;
 			ra->f124 = rb->f124 = 0x40;
 			ra->flags = rb->flags =
@@ -2664,14 +2664,14 @@ main(void)
 			ra->f1ae = rb->f1ae = 0x3e80;
 			ra->f1b0 = rb->f1b0 = 0x3e80;
 			ra->f1be = rb->f1be = 0x3e80;
-			ra->f1c8 = rb->f1c8 = 0;
-			ra->f1cc = rb->f1cc = 0;
-			ra->f1ce = rb->f1ce = 0;
+			ra->slow_ramp = rb->slow_ramp = 0;
+			ra->ppm_acc = rb->ppm_acc = 0;
+			ra->ppm_count = rb->ppm_count = 0;
 			ra->f1d0 = rb->f1d0 = 0;
 			ra->f1d2 = rb->f1d2 = 40;
 			ra->f1d8 = rb->f1d8 = 0;
-			ra->f1e0 = rb->f1e0 = 0;
-			ra->f230 = rb->f230 = 0;
+			ra->timing_integrator = rb->timing_integrator = 0;
+			ra->dwell_count = rb->dwell_count = 0;
 			oa2.f359c = ob2.f359c = 0x65;
 			oa2.baud_rate = ob2.baud_rate = 400;
 			oa2.fac0c = ob2.fac0c = 0;
@@ -2807,11 +2807,11 @@ main(void)
 				ra->agc_step = rb->agc_step = 0x3333;
 				ra->f124 = rb->f124 = 0x100;
 				ra->f1c0 = rb->f1c0 = 4;
-				ra->f1f2 = rb->f1f2 = 0x4000;
-				ra->f1f4 = rb->f1f4 = 0;
-				ra->f19c = rb->f19c = 0;
-				ra->f1ec = rb->f1ec = 1;
-				ra->f1ee = rb->f1ee = 2;
+				ra->cloop_cos = rb->cloop_cos = 0x4000;
+				ra->cloop_sin = rb->cloop_sin = 0;
+				ra->rms_idx = rb->rms_idx = 0;
+				ra->timing_idx_a = rb->timing_idx_a = 1;
+				ra->timing_idx_b = rb->timing_idx_b = 2;
 				ra->f21c = rb->f21c = 0x3fd;
 				ra->flags = rb->flags =
 				    (unsigned short)V34_RX_FLAG_TRAINED;

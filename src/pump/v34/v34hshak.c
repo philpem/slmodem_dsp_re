@@ -413,7 +413,7 @@ dpskinit(void *objp, short mode, short high)
 		for (i = 0; i <= 0x2f; i++)
 			w[i] = 0;
 	}
-	rx->f19c = 0;
+	rx->rms_idx = 0;
 	rx->f19e = 0;
 }
 
@@ -546,7 +546,7 @@ v34modeminit(void *objp)
 		for (i = 0; i <= 0x2f; i++)
 			w[i] = 0;
 	}
-	rx->f19c = 0;
+	rx->rms_idx = 0;
 	rx->f19e = 0;
 
 	preinitdigital(obj);
@@ -10125,7 +10125,7 @@ V34HS_OFF(flags,   struct v34_receiver, flags,      0x122);
 V34HS_OFF(gain,    struct v34_receiver, agc_gain,   0x136);
 V34HS_OFF(step,    struct v34_receiver, agc_step,   0x13a);
 V34HS_OFF(rms,     struct v34_receiver, rms_buf,    0x13c);
-V34HS_OFF(f19c,    struct v34_receiver, f19c,       0x19c);
+V34HS_OFF(rms_idx, struct v34_receiver, rms_idx,    0x19c);
 V34HS_OFF(f19e,    struct v34_receiver, f19e,       0x19e);
 V34HS_OFF(f1ac,    struct v34_receiver, f1ac,       0x1ac);
 V34HS_OFF(f1ae,    struct v34_receiver, f1ae,       0x1ae);

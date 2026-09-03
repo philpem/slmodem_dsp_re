@@ -330,8 +330,8 @@ struct v34_object {
 	 * flag.  The two differ by 32, which is the only structure visible.
 	 *
 	 * As a `struct v34_receiver` offset this is +0x11e, immediately below
-	 * that struct's `f120`/`flags` pair; named here rather than there
-	 * because every caller has the whole object in hand.
+	 * that struct's `vectpp_idx`/`flags` pair; named here rather than
+	 * there because every caller has the whole object in hand.
 	 */
 	short f382;					/* +0x0382 */
 	unsigned char unmapped_0384[0x402 - 0x384];
