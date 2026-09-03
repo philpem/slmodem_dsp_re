@@ -544,6 +544,17 @@ _handle_data_output(struct fax_class1 *ctx, const unsigned short *src,
  * and 0x09eff0 -- a direct compare-to-memory in one arm, a load into a
  * register first in the other) rather than one shared test after an
  * if/else, which is why the level is checked twice below rather than once.
+ *
+ * THE TERMINATOR WRITE IS GATED BY `terminate` ALONE, NOT BY `count` TOO
+ * (F10100).  `count == 0` jumps STRAIGHT to the terminator check
+ * (0x09ef21 `test %ebp,%ebp; je 0x9ef90`, and 0x9ef90 is exactly the
+ * `terminate` test) -- `count != 0 && terminate != 0` gates only the LAST
+ * TWO debug prints, a narrower condition folded from `setne`/`setne`/`test`
+ * at 0x9ef6b-0x9ef7a.  A first pass wrote the write itself under the same
+ * combined condition as the debug prints, which is wrong whenever `count`
+ * is 0 and `terminate` is not -- caught by `t_class1hdlcemu.c` disagreeing
+ * with the blob (word7 0 where the blob leaves 2: a zero-length record
+ * still gets its DLE ETX), not by re-reading the disassembly a second time.
  */
 int
 cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
@@ -589,13 +600,11 @@ cTOOLS_handle_hdlc_output(struct fax_class1 *ctx, const unsigned short *src,
 		}
 	}
 
-	if (count != 0 && terminate != 0) {
-		if (dsplibs_debug_level > 1) {
-			dsplibs_debug_printf("%02X,",
-			    aReversedCharsArray[CLASS1_DLE]);
-			dsplibs_debug_printf("%02X\n",
-			    aReversedCharsArray[CLASS1_ETX]);
-		}
+	if (count != 0 && terminate != 0 && dsplibs_debug_level > 1) {
+		dsplibs_debug_printf("%02X,", aReversedCharsArray[CLASS1_DLE]);
+		dsplibs_debug_printf("%02X\n", aReversedCharsArray[CLASS1_ETX]);
+	}
+	if (terminate != 0) {
 		dst[out] = CLASS1_DLE;
 		dst[out + 1] = CLASS1_ETX;
 		out += 2;
@@ -845,5 +854,106 @@ _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
 		ctx->status = FAX_CLASS1_CONNECT;
 	}
 	ctx->countdown += *tx_count;
+	return 0;
+}
+
+/*
+ * HDLC_EMULATE_RECEIVE_STATE.  `.text` 0x09e1b0, 452 bytes.  See class1tx.h
+ * for the shape and class1.h for `f1000`/`f12c8`/`f12cc`/`f12d0`.
+ *
+ * FIRST, PARSE.  Walk `ctx->f1000` from the start, `count` records of
+ * `ctx->f12d0` bytes total -- entry `i` is a length, the data follows, the
+ * next record starts right after.  Each length is banked into `lens[]` (see
+ * `CLASS1_EMU_MAX_FRAMES`'s own comment for why it is exactly twelve long
+ * and unguarded) so the SECOND walk below, to find where record `next`
+ * starts, does not have to re-read the buffer.
+ *
+ * `ctx->prev_state != CLASS1_HDLC_EMULATE_RECEIVE_STATE` is "is this the
+ * first tick since some other state entered this one" -- on that tick only,
+ * a still-unsent record (`next < count`) reports FAX_CLASS1_CONNECT once.
+ *
+ * THE COUNTDOWN, next.  `old` is `f12c8` BEFORE this call's decrement; a
+ * value that was already <= 0 is what fires the next record (or, with
+ * nothing left to send, the transition to IDLE_STATE with
+ * FAX_CLASS1_NO_CARRIER_NO_MESSAGE -- both spelled `8` in the object, one
+ * a state and the other a status, and that coincidence is why a single
+ * `mov $0x8` in the disassembly feeds two different stores).  Emitting a
+ * record calls `cTOOLS_handle_hdlc_output` on it, writes the byte count
+ * through `word7`, arms a two-tick delayed status, advances `f12cc`, and
+ * also moves to IDLE_STATE.
+ *
+ * FINALLY, the object's own tail runs whether or not anything fired above:
+ * once `next` has caught up to `count`, the whole buffer resets (`f12d0` to
+ * 0, `f12c8` to 2, `f12cc` to 0) -- note this is an EQUALITY test in the
+ * object (`je`), not `next >= count`, so it is written that way here too --
+ * and every path ends the same: a block of silence out, `*tx_count` set to
+ * it, return 0.
+ */
+int
+_hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
+			    short *tx, int word3, int word4, int *rx_count,
+			    int *tx_count, int word7, int *word8)
+{
+	int total = ctx->f12d0;
+	int idx = 0;
+	int count = 0;
+	int lens[CLASS1_EMU_MAX_FRAMES];
+	int next;
+	int old;
+
+	(void)rx;
+	(void)word4;
+	(void)rx_count;
+	(void)word8;
+
+	while (idx < total) {
+		int len = ctx->f1000[idx];
+
+		lens[count] = len;
+		count++;
+		idx += len + 1;
+	}
+
+	next = ctx->f12cc;
+	if (ctx->prev_state != CLASS1_HDLC_EMULATE_RECEIVE_STATE) {
+		if (next < count)
+			ctx->status = FAX_CLASS1_CONNECT;
+	}
+
+	old = ctx->f12c8;
+	ctx->f12c8 = old - 1;
+
+	if (old <= 0) {
+		if (next >= count) {
+			ctx->status = FAX_CLASS1_NO_CARRIER_NO_MESSAGE;
+			ctx->state = CLASS1_IDLE_STATE;
+		} else {
+			int start = 0, i;
+			int n;
+
+			for (i = 0; i < next; i++)
+				start += lens[i] + 1;
+
+			n = cTOOLS_handle_hdlc_output(ctx,
+			    &ctx->f1000[start + 1],
+			    (unsigned char *)(long)word3,
+			    ctx->f1000[start], 1);
+			*(int *)(long)word7 = n;
+			ctx->delayed_status = 1;
+			ctx->delayed_status_countdown = 2;
+			next++;
+			ctx->f12cc = next;
+			ctx->state = CLASS1_IDLE_STATE;
+		}
+	}
+
+	if (next == count) {
+		ctx->f12d0 = 0;
+		ctx->f12c8 = 2;
+		ctx->f12cc = 0;
+	}
+
+	_put_silence(tx, CLASS1_BLOCK_SAMPLES);
+	*tx_count = CLASS1_BLOCK_SAMPLES;
 	return 0;
 }

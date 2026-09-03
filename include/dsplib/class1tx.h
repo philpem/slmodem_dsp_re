@@ -217,4 +217,27 @@ int _t30_silence_before_tx_state(struct fax_class1 *ctx, const short *rx,
 				 int *rx_count, int *tx_count, int word7,
 				 int *word8);
 
+/*
+ * ------------------------------------------------------------------
+ * HDLC_EMULATE_RECEIVE_STATE.  `.text` 0x09e1b0, 452 bytes -- flagged READY
+ * by wave 8's agent once `_put_silence` and `cTOOLS_handle_hdlc_output`
+ * landed, and left for time; both are in now, and this batch closes it.
+ *
+ * Replays whatever length-prefixed records sit in `ctx->f1000` (see
+ * class1.h) OUT to the host, one per call, gated by a two-tick countdown --
+ * so it looks like the modem RECEIVED an HDLC frame without a real
+ * demodulator running, which is the function's own name.  `word3` is the
+ * host-facing output buffer (cast from the shared `int` slot, the same
+ * `(T *)(long)` idiom the VMI constructors above already use) and `word7`
+ * is an `int *` the byte count is written through -- both established HERE,
+ * by this function, for the first time in this batch; no other
+ * `class1_state_fn` this tree has written reads either one.
+ *
+ * `rx`, `word4`, `rx_count` and `word8` are read nowhere in the object.
+ */
+int _hdlc_emulate_receive_state(struct fax_class1 *ctx, const short *rx,
+				short *tx, int word3, int word4,
+				int *rx_count, int *tx_count, int word7,
+				int *word8);
+
 #endif /* DSPLIB_CLASS1TX_H */

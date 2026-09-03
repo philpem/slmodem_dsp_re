@@ -438,15 +438,46 @@ run_hdlc_output(void)
 
 			if (ra > count)
 				doubled++;
-			if (terminate && count != 0)
+			if (terminate)
 				terminated++;
-			if (!terminate || count == 0)
+			else
 				untermed++;
 			if (count > 2 && level > 1)
 				framed++;
 			if (count > 0 && count <= 2)
 				short_c++;
 		}
+	}
+
+	/*
+	 * `count == 0 && terminate != 0` is the combination the loop above
+	 * never reaches (`p == 0` is the only `count == 0` case, and it is
+	 * always even, so `terminate` is always false there) -- and it is
+	 * exactly where a first pass had the terminator write gated by
+	 * `count != 0 && terminate != 0` instead of `terminate != 0` alone,
+	 * so a zero-length record lost its DLE ETX.  F10100.
+	 */
+	for (level = 0; level < 4; level++) {
+		unsigned char dst_a2[GUARD + 4], dst_b2[GUARD + 4];
+		int ra, rb;
+		long tag = (long)(1000 + level);
+
+		ctx_plant();
+		memset(dst_a2, 0x5a, sizeof(dst_a2));
+		memcpy(dst_b2, dst_a2, sizeof(dst_a2));
+		dsplibs_debug_level = ref_dsplibs_debug_level = level;
+
+		ra = ref_cTOOLS_handle_hdlc_output(&ctx_a, src, dst_a2, 0, 1);
+		rb = cTOOLS_handle_hdlc_output(&ctx_b, src, dst_b2, 0, 1);
+
+		diff_eq_int("hdlc_output, count==0 terminate!=0: return (%ld)",
+			    rb, ra, tag);
+		diff_eq_int("hdlc_output, count==0 terminate!=0: dst (%ld)",
+			    memcmp(dst_a2, dst_b2, sizeof(dst_a2)), 0, tag);
+		diff_eq_int("hdlc_output, count==0 terminate!=0: "
+			    "the terminator was still appended (%ld)",
+			    ra, 2, tag);
+		ctx_compare("hdlc_output, count==0 terminate!=0", tag);
 	}
 	dsplibs_debug_level = ref_dsplibs_debug_level = 0;
 
