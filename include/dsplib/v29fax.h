@@ -297,6 +297,15 @@ struct v29rx_cfg;
 #define V29_OBJ_PROTOCOL	0x00
 #define V29_OBJ_BITRATE		0x04
 
+/*
+ * The one field `V29RX_control` writes on the HANDLE itself rather than on
+ * either sub-object -- `mov 0x4(%ebx),%edx` / `mov %edx,0x8(%esi)` at
+ * 0x0a4593/0x0a459b, a straight 32-bit copy of the request's own `+0x04`.
+ * NEUTRAL: nothing else reconstructed reads or writes handle+0x08, so what it
+ * records is not established.
+ */
+#define V29_OBJ_INT_0008	0x08
+
 /* --- the transmit handle: SeedScramblerV29 and SetEncoderV29 ------------- */
 
 /*
@@ -409,12 +418,16 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
  * up AND this int is zero (`mov 0x8(%ecx),%edx; test %edx,%edx` at 0x0a4016).
  * Loaded 32 bits wide, so it is an `int` and that is forced.
  *
- * NEUTRAL, AND IT HAS TO BE.  Nothing reconstructed writes it -- `V29RX_delete`
- * does not free it, `V29TX_create` does not reach this block, and no other
- * `*V29` function touches +0x08 of the detection block at all -- so what it
- * records is not established, only what it gates.  `v21fax.h` says the same of
- * `struct v21_rx_hdx`'s `int_0000`, which is the identical field in the
- * identical position of V.21's own half-duplex context.
+ * IT HAS ONE WRITER, AND THE LINE THAT SAID IT HAD NONE IS WITHDRAWN.
+ * `V29RX_control` sets it from bit 4 of its own request's second control
+ * byte -- `movzbl 0xd(%ebx),%edx` / `test $0x10,%dl` / `setne %al` / `mov
+ * %eax,0x8(%ecx)` at 0x0a459e..0x0a45a8 -- so a caller can gate the
+ * demodulator on or off through this entry point; `V29RX_delete` still does
+ * not free it and `V29TX_create` still does not reach this block.  What the
+ * bit itself indicates beyond that gate is not established.  `v21fax.h` says
+ * the same of `struct v21_rx_hdx`'s `int_0000`, which is the identical field
+ * in the identical position of V.21's own half-duplex context.  Finding
+ * F9500.
  */
 #define V29DET_INT_0008		0x08	/* int                               */
 
@@ -554,6 +567,13 @@ typedef short (*v29tx_process_fn)(void *modem, unsigned short *in, short *out,
  *     +0x1c  0
  *     +0x20  1   V29RX_INT_0020, the FSE's coefficient-adaptation enable
  *     +0x24  0
+ *
+ * TWO OF THEM GET A SECOND WRITER.  `V29RX_control` clears +0x00 and +0x20 to
+ * zero, each gated on its own bit of the request's FIRST control byte --
+ * `movzbl 0xc(%ebx),%edx` then `test $0x8,%dl` for +0x00 (`movl
+ * $0x0,(%ebx)` at 0x0a45d6) and `test $0x20,%dl` for +0x20 (`movl
+ * $0x0,0x20(%ecx)` at 0x0a45c1).  `V29RX_create` is still the only seed to 1;
+ * this is the only place either is turned back off.  Finding F9500.
  */
 #define V29RX_INT_000C		0x000c
 #define V29RX_INT_0010		0x0010
@@ -1150,6 +1170,57 @@ int V29TX_status(void *tx, void *status);
  * bits are determined before the function returns.  See F9130 and D1097.
  */
 int V29RX_status(void *modem, void *status);
+
+/*
+ * ---------------------------------------------------------------------------
+ * V29RX_control -- .text 0x0a4580, 110 bytes.
+ *
+ * A NULL request does nothing and returns 0; anything else is applied and the
+ * function returns 1.  Four independent effects, none of them exclusive of
+ * the others:
+ *
+ *   - the request's `+0x04` is copied straight into the HANDLE's own
+ *     `V29_OBJ_INT_0008` (neutral; see there);
+ *   - the request's second control byte, bit 4, becomes the demodulator gate
+ *     `V29DET_INT_0008` (0 or 1, from `setne`, not the bit itself);
+ *   - that same byte's bit 1, if set, calls `V29RX_create(modem, modem)` --
+ *     BOTH ARGUMENTS ARE THE SAME REGISTER (`mov %esi,0x4(%esp)` then `mov
+ *     %esi,(%esp)` at 0x0a45e0/0x0a45e4), so this re-runs the constructor's
+ *     "reuse an existing handle" path over the live instance rather than
+ *     allocating a second one -- `V29RX_create` takes `(modem, params)` and
+ *     treats a non-NULL `params` as `*(struct v29rx_cfg *)modem =
+ *     *(struct v29rx_cfg *)modem`, a self-copy of the config block that
+ *     precedes everything else the constructor does;
+ *   - the request's FIRST control byte, bits 3 and 5, each independently
+ *     clear one of `V29RX_INT_0000` / `V29RX_INT_0020` back to zero -- see
+ *     the correction above.
+ *
+ * THE REQUEST TYPE IS NEW: nothing else reconstructed reads this argument, so
+ * every field below is established from this function alone.  `+0x04` is a
+ * 32-bit load (`mov 0x4(%ebx),%edx`) and forced to be `int`.  The two control
+ * bytes at `+0x0c`/`+0x0d` are each loaded once with `movzbl` and match
+ * `v32fp.h`'s `struct v32fp_ctl::ctl0`/`ctl1` in shape and position --
+ * corroboration, not derivation, since that struct belongs to an unrelated
+ * modem family.  Nothing here establishes what precedes `+0x04` or separates
+ * it from `+0x0c`, so both gaps stay padding.  Finding F9500.
+ */
+struct v29rx_control_req {
+	unsigned char pad_0000[0x04];
+	int int_0004;			/* +0x04 -> handle's V29_OBJ_INT_0008 */
+	unsigned char pad_0008[0x04];
+	unsigned char ctl0;		/* +0x0c */
+	unsigned char ctl1;		/* +0x0d */
+};
+
+/* Bits of `ctl0`, named by value; see V29RX_control's own derivation. */
+#define V29RXCTL_CTL0_BIT3	(1 << 3)	/* clears V29RX_INT_0000      */
+#define V29RXCTL_CTL0_BIT5	(1 << 5)	/* clears V29RX_INT_0020      */
+
+/* Bits of `ctl1`, named by value. */
+#define V29RXCTL_CTL1_BIT1	(1 << 1)	/* re-runs V29RX_create        */
+#define V29RXCTL_CTL1_BIT4	(1 << 4)	/* -> V29DET_INT_0008 (0 or 1) */
+
+int V29RX_control(void *modem, const struct v29rx_control_req *req);
 
 /*
  * The scrambler pair, two instructions and a tail jump each.
