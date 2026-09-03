@@ -486,6 +486,26 @@ int fax_class1_GetConstalation(void *ctx);
 int fax_class1_delete(struct fax_class1 *ctx);
 
 /*
+ * Report the active VMI handle's status.  `.text` 0x0093b50, 150 bytes,
+ * between `fax_class1_progress` and `fax_class1_delete` in the object
+ * (written after both, at the end of `class1.c` -- see that file's own
+ * banner for why the file does not follow address order here).
+ *
+ * `modem_status` is forwarded unchanged into the local status record's
+ * `modem_status` field -- `struct faxvmi_status`'s own "IN" contract, see
+ * `faxvmi.h` -- so it is `void *` here, the least claim; `FAXVMI_status`
+ * treats a non-NULL value as a pointer into the wrapped modulation's own
+ * status buffer and does nothing with it otherwise itself.
+ *
+ * Selects `vmi_a` for `state` 4..6 and `vmi_b` for 12..13 (matching
+ * class1.h's own note on those two fields, now from this function's own
+ * evidence rather than inferred); anything else touches nothing and
+ * returns 0.  A matching range always returns 1, never the wrapped call's
+ * own result.  F10058.
+ */
+int fax_class1_status(struct fax_class1 *ctx, void *modem_status);
+
+/*
  * The session dispatcher.  `.text` 0x0936d0, 1,145 bytes.  Declined twice
  * before this wave (F9802, referenced by the wave-6 ledger) on
  * `ctx->0x1254`'s meaning; findings F10051/F10052 settle it as a T.30 rate

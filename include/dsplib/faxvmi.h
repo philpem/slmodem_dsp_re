@@ -567,6 +567,21 @@ typedef char faxvmi_ctl_size[(sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
  */
 extern const struct faxvmi_ctl FAXVMI_CTL;
 
+/*
+ * The object's own zeroed `struct faxvmi_status` template, `.rodata`
+ * 0x945c, 28 bytes -- `tabdump.py --sym FAXVMI_STS --type u32 --count 7`
+ * reads every dword 0.  `fax_class1_status` (`class1.c`) copies it into a
+ * local, overwrites `modem_status` with its own second argument, and hands
+ * the local to `FAXVMI_status` -- the compiler proves the template's own
+ * `modem_status` dword is dead (about to be overwritten) and omits copying
+ * it, which is why only six of the seven dwords move in that function's
+ * disassembly.  Referenced from one other, still-unwritten site
+ * (`class1tx.c`'s span, `_send_hdlc_buffer_state` at 0x9e4b6 and neighbours)
+ * -- defined in `class1.c`, its first writer, not here and not in
+ * `faxvmi.c`, on the same footing as `FAXVMI_CTL`.
+ */
+extern const struct faxvmi_status FAXVMI_STS;
+
 /* --------------------------------------------------------------------- */
 /* The packers: `vmi_pack[mode]`.                                         */
 
