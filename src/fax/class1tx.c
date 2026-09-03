@@ -42,6 +42,7 @@
 #include <unistd.h>
 
 #include "dsplib/class1.h"
+#include "dsplib/class1rx.h"
 #include "dsplib/class1tx.h"
 #include "dsplib/debug.h"
 #include "dsplib/faxcfg.h"
@@ -51,6 +52,7 @@
 #include "dsplib/sysdep.h"
 #include "dsplib/t30frame.h"
 #include "dsplib/v17fax.h"
+#include "dsplib/v21fax.h"
 #include "dsplib/v27fax.h"
 #include "dsplib/v29data.h"
 #include "dsplib/v29fax.h"
@@ -262,6 +264,175 @@ _send_hdlc_between_buffer_state_init(struct fax_class1 *ctx)
 {
 	ctx->countdown = 0;
 	return _handle_hdlc_input_open(ctx);
+}
+
+/*
+ * ------------------------------------------------------------------
+ * The four remaining leaves, unblocked once `FAXVMI_control` landed
+ * (F10115).  `V21RX_CTL` (0x7aa4, 16 bytes) and `V21TX_CTL` (0x7ae4, 20
+ * bytes) are their own REINIT request templates, the V.21 control channel's
+ * counterpart to `class1rx.c`'s `V17RX_CTL`/`V27RX_CTL`/`V29RX_CTL` -- raw
+ * bytes taken with `objdump -s -j .data` against `ref/slmodemd/dsplibs.o`
+ * and matched field-by-field against `v21fax.h`'s already-established
+ * `struct v21rx_ctl`/`struct v21tx_ctl` (both typed from `V21RX_control`'s
+ * and `V21TX_control`'s own reads, an earlier wave).  Zero relocations in
+ * either template.  `unmapped_0000`'s leading dword is 300 (0x12c) on BOTH
+ * -- V.21's own fixed 300 baud/bps rate, not a per-modulation placeholder
+ * the caller overwrites the way the data modes' own templates are (F10116);
+ * nothing here patches it.
+ */
+const struct v21rx_ctl V21RX_CTL = {
+	{ 0x00, 0x00, 0x2c, 0x01 },	/* unmapped_0000 */
+	60000,				/* int_0004      */
+	{ 0, 0, 0, 0, 0 },		/* unmapped_0008 */
+	0x00,				/* flags_0d      */
+};
+
+const struct v21tx_ctl V21TX_CTL = {
+	{ 0x2c, 0x01, 0x00, 0x00 },	/* unmapped_0000 */
+	60000,				/* int_0004      */
+	3200,				/* int_0008      */
+	0x00,				/* flags_0c      */
+	0x00,				/* flags_0d      */
+	{ 0, 0 },			/* unmapped_000e */
+	{ 0, 0, 0, 0 },			/* unmapped_0010 */
+};
+
+/*
+ * `_rx_look_carrier_init`, 0x9cb00, 45 bytes.  Three calls and one store,
+ * nothing else: reinit the data-mode receiver, reset the async octet
+ * recovery search, clear `countdown`.  Returns 0.
+ */
+int
+_rx_look_carrier_init(struct fax_class1 *ctx, int rate_code)
+{
+	_init_receiver(ctx, rate_code);
+	cTOOLS_handle_data_output_reset(ctx);
+	ctx->countdown = 0;
+	return 0;
+}
+
+/*
+ * Forward tentative definition of `DATAtx_counter` -- its full comment and
+ * the OTHER two readers/writers sharing it (`_tx_scrambled_ones_state`,
+ * `_tx_data_state`) sit much further down this file, near where the object
+ * itself is address-contiguous with them.  `_tx_scrambled_ones_init` needs
+ * to clear it and is written up here beside the rest of the newly-landed
+ * leaves; a second file-scope tentative definition of the same static is
+ * ordinary C and resolves to the one object either way.
+ */
+static int DATAtx_counter;
+
+/*
+ * `_tx_scrambled_ones_init`, 0x9cf70, 193 bytes.  Reinit the data-mode
+ * transmitter, then (re)build the transmit FIFO at a fixed 0x800-element
+ * capacity -- `local = FIFO_CFG; local.size = 0x800; local.fill = 0;` is the
+ * object's own field-by-field shape (a 32-bit copy of `FIFO_CFG`'s leading
+ * `word0`/`size` pair, THEN both overridden, matching `faxfifo.h`'s own note
+ * on that struct's aligned pair) -- and derive `ctx->f1290` from the just-set
+ * `ctx->tx_rate` as a plain signed divide by 400 (the object's own
+ * `imul $0x51eb851f` / `sar $7` / sign-correct reciprocal for exactly that
+ * divisor, independently re-derived rather than guessed).  Clears `f1270`
+ * (one-shot connect countdown), `f1294`, `transmit_enabled`, `f1298`,
+ * `data_input_closed` and the file-static `DATAtx_counter`
+ * (`_tx_scrambled_ones_state`'s own counter, above).
+ */
+int
+_tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code)
+{
+	struct fifo_cfg local = FIFO_CFG;
+
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf("_tx_scrambled_ones_init\n");
+
+	_init_transmitter(ctx, rate_code);
+
+	local.size = 0x800;
+	local.fill = 0;
+	ctx->f1270 = 0;
+	ctx->f1288 = FIFO_create(ctx->f1288, &local);
+
+	ctx->f1294 = 0;
+	ctx->transmit_enabled = 0;
+	ctx->f1298 = 0;
+	ctx->f1290 = ctx->tx_rate / 400;
+	ctx->data_input_closed = 0;
+	DATAtx_counter = 0;
+	return 0;
+}
+
+/*
+ * `cHDLCtx_preamble_state_init`, 0x9e380, 193 bytes.  Merge `V21TX_CTL`
+ * (REINIT bit OR'd into `flags_0d`) into a plain copy of `FAXVMI_CTL` --
+ * `int_0014` is the only field this one touches, so no ring-clear, framer
+ * reset or mode change reaches `FAXVMI_control`, unlike the RX-side sibling
+ * below -- and send it to `ctx->vmi_c`, the V.21 TX handle.  Opens an HDLC
+ * frame (return discarded) and resets the session to
+ * `CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE`.
+ */
+int
+cHDLCtx_preamble_state_init(struct fax_class1 *ctx)
+{
+	struct v21tx_ctl req = V21TX_CTL;
+	struct faxvmi_ctl ctl = FAXVMI_CTL;
+
+	req.flags_0d |= V21TXCTL_REINIT;
+	ctl.int_0014 = (int)(long)&req;
+
+	FAXVMI_control(ctx->vmi_c, &ctl);
+	_handle_hdlc_input_open(ctx);
+
+	ctx->countdown = 0;
+	ctx->state = CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE;
+	ctx->hdlc_frame_done = 0;
+	ctx->buffers_sent = 0;
+	ctx->f1224 = 0;
+	return 0;
+}
+
+/*
+ * `_cHDLCrx_init_from_idle`, 0x9d790, 226 bytes.  TWO ARGUMENTS -- both
+ * callers (`fax_class1_create`, `fax_class1_command`) supply a real second
+ * one, and it is read: `arg2 == 3` both sets `state` to
+ * `CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE` (4) AND becomes this function's
+ * own return value, discarding whatever `FAXVMI_control` returned -- a real
+ * property of the object (`mov $0x4,%eax` on that path, untouched before
+ * either `ret`), not a guess.  Merges `V21RX_CTL` (REINIT bit OR'd in) into a
+ * `FAXVMI_ctl` that ALSO forces a full framer reset (`int_000c = 1`,
+ * `short_0010 = 2`) and empties the ring (`ptr_0000 = (void *)1`), unlike the
+ * TX-side sibling above, and sends it to `ctx->vmi_a`, the V.21 RX handle.
+ * Clears `countdown` and `delayed_status_countdown` unconditionally and logs
+ * "At %2d.%02d[sec]  HDLCrx_init_from_idle\n" (double space, the object's
+ * own) at debug level > 1.
+ */
+int
+_cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2)
+{
+	struct v21rx_ctl req = V21RX_CTL;
+	struct faxvmi_ctl ctl = FAXVMI_CTL;
+	int ret;
+
+	req.flags_0d |= V21RXCTL_REINIT;
+
+	ctl.ptr_0000 = (void *)1;
+	ctl.int_000c = 1;
+	ctl.short_0010 = 2;
+	ctl.int_0014 = (int)(long)&req;
+
+	ret = FAXVMI_control(ctx->vmi_a, &ctl);
+
+	if (arg2 == 3) {
+		ctx->state = CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE;
+		ret = 4;
+	}
+
+	ctx->countdown = 0;
+	ctx->delayed_status_countdown = 0;
+	if (dsplibs_debug_level > 1)
+		dsplibs_debug_printf(
+		    "At %2d.%02d[sec]  HDLCrx_init_from_idle\n",
+		    ctx->clock_sec, ctx->clock_frac);
+	return ret;
 }
 
 /*

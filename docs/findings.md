@@ -112157,3 +112157,101 @@ duplicate, unchanged), `tools/bannercheck.py src/fax` (230/230 agree),
 `tools/refcheck.py` (13099 references, 0 dangling) all clean. `make period`
 not run here (no docker in this session's shell); left for the parent
 session's gate. (2026-09-03)
+
+## F10119. The four remaining `class1tx.c +94` leaves land -- `_rx_look_carrier_init`, `_tx_scrambled_ones_init`, `cHDLCtx_preamble_state_init`, `_cHDLCrx_init_from_idle` -- and `cHDLCtx_off_init`'s worklist/service.py ambiguity resolves to "not this closure"
+
+Wave-12 brief: nine remaining fax core-service symbols across `class1.c`,
+`voice.c` and `class1tx.c`. This finding covers the `class1tx.c` cluster;
+`class1.c`/`voice.c` follow separately. Re-verified the whole tree was
+current before touching anything -- `git merge master` first (this worktree's
+base was three commits behind, missing the F10115-F10118 `FAXVMI_control`/
+`_init_receiver`/`_init_transmitter` landing), per CLAUDE.md's own repeated
+warning about exactly this hazard.
+
+**`cHDLCtx_off_init` RESOLVED: it is NOT part of this closure, and
+`service.py` is the one to trust.** `worklist.py` lists it under
+`class1tx.c +94` (0x9e9d0, 149 bytes) purely on ADDRESS -- it sits in that
+span physically -- but `objdump -r` over the WHOLE 1.2 MB object shows **zero
+relocations of either kind naming `cHDLCtx_off_init`** (neither an
+`R_386_PC32` call nor an `R_386_32` `movl $handler,field` data reference,
+F8493's pair). Nothing calls it and nothing stores its address. This is
+exactly CLAUDE.md's own worked example in its "leaves before fax" section --
+`cHDLCtx_off_init` is one of the 139 no-entry-point-bucket symbols F8320
+already named by this exact evidence. `service.py --list fax` correctly
+omits it; `service.py --list none` correctly places it. It is scheduled on
+its own merit, separately, per CLAUDE.md's own ruling, and is NOT one of the
+nine.
+
+**The real call graph, re-traced with `dis.py`/`objdump -r` against the
+current (post-merge) tree, not assumed from F10111's older trace:**
+
+    _rx_look_carrier_init (0x9cb00, 45B)
+        -> _init_receiver, cTOOLS_handle_data_output_reset   (both written)
+
+    _tx_scrambled_ones_init (0x9cf70, 193B)
+        -> _init_transmitter, FIFO_create                     (both written)
+
+    cHDLCtx_preamble_state_init (0x9e380, 193B)
+        -> FAXVMI_control (ctx->vmi_c), _handle_hdlc_input_open  (both written)
+
+    _cHDLCrx_init_from_idle (0x9d790, 226B)
+        -> FAXVMI_control (ctx->vmi_a)                         (written)
+        -> V21RX_CTL (.data load, F8493's trap)                [landed here]
+
+All four link now that `FAXVMI_control` (F10115) exists; `V21RX_CTL` and
+`V21TX_CTL` (the fifth and sixth per-modulation REINIT templates, alongside
+F10116's six data-mode ones) land in this same commit, in `class1tx.c`
+beside their readers -- the V.21 control channel's own counterpart to
+`class1rx.c`'s `V17RX_CTL`/`V27RX_CTL`/`V29RX_CTL`.
+
+**`_cHDLCrx_init_from_idle` TAKES TWO ARGUMENTS, not one -- both callers
+(`fax_class1_command`, `fax_class1_create`, both landing separately this
+wave) pass a real second value, and it is read.** A first pass over this
+function IN ISOLATION misread the second stack slot as the caller's cfg
+pointer riding along unused (a plausible-looking artefact of shared stack
+space under `-maccumulate-outgoing-args`); re-checking with `dis.py --plain`
+over the exact range the register was last written in `fax_class1_create`
+found an explicit `mov $0x3,%edi` immediately before the call, discarding
+that reading -- the same "re-verify before trusting a first trace" discipline
+CLAUDE.md's own worked examples (7770, 7785) describe. `arg2 == 3` both sets
+`ctx->state = CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE` (4) AND becomes the
+function's own return value in place of whatever `FAXVMI_control` returned --
+a real, forced property (`mov $0x4,%eax`, untouched before either `ret`), not
+free register reuse. `3` is not arbitrary: it is the same T.30 rate-code
+value `fax_class1_command`'s own `FAXC1_FTH`/`FAXC1_FRH` commands validate
+their own third argument against (`class1.c`, this wave's other finding), so
+the sentinel is "was this the V.21 control-channel path" rather than a real
+data rate, which no genuine rate code ever equals.
+
+**`_cHDLCrx_init_from_idle` and `cHDLCtx_preamble_state_init` are NOT
+symmetric, and the difference is real.** The RX side's merged `faxvmi_ctl`
+forces `ptr_0000 = (void *)1` (empty the ring), `int_000c = 1` and
+`short_0010 = 2` (full framer reset + mode change) on top of the
+`int_0014`-triggered `v21rx_control` recursion every caller gets; the TX
+side's touches `int_0014` alone. Read off `dis.py` directly rather than
+assumed from the shared shape.
+
+**`struct v21tx_ctl` (`v21fax.h`) gained a trailing `unmapped_000e[2]`/
+`unmapped_0010[4]`, taking it from 16 to 20 bytes**, matching `V21TX_CTL`'s
+own `nm -S` size -- the same move F10116 made for `struct v17rx_ctl`'s own
+trailing `unmapped_000e`/`int_0010`, and for the identical reason:
+`cHDLCtx_preamble_state_init` copies the WHOLE template
+(`struct v21tx_ctl req = V21TX_CTL;`) even though nothing reconstructed reads
+past `+0x0d`. `struct v21rx_ctl` needed no change -- its 14 logical bytes
+already round up to `V21RX_CTL`'s own 16 under ordinary `int`-alignment
+padding. `VMI_SLOT_V21RX` (6) is new in `class1tx.h`, read off `faxvmi.h`'s
+own already-established `vxx_*` slot table rather than guessed.
+
+Tested against real V.21 TX/RX `faxvmi` handles built the same way
+`fax_class1_create` builds `vmi_c`/`vmi_a` (`FAXVMI_create` over a
+`faxvmi_cfg` wrapping a `V21TX_CFG`/`V21RX_CFG`-based config, `V21TX_create`/
+`V21RX_create`/`V21TX_control`/`V21RX_control` all already reconstructed and
+tested elsewhere) -- new `test/unit/t_class1txcplinit.c`, 13 cases covering
+fresh/reinit for the preamble init, both branches of `_cHDLCrx_init_from_idle`'s
+`arg2 == 3` sentinel, a repeated `_tx_scrambled_ones_init` call, and a
+debug-level-on pass. `make one T=t_class1txcplinit` green, 220 checks, 0
+failed on the first run -- no defect found needing a second pass.
+`tools/onedef.py` (300 types, 1 known duplicate), `tools/bannercheck.py
+src/fax src/service` (273/273 agree), `tools/refcheck.py` (13102 references,
+0 dangling) all clean. `make period` left for the parent session's gate, per
+this wave's own brief. (2026-09-03)

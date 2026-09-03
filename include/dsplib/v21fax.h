@@ -187,7 +187,20 @@ struct v21tx_ctl {
 	int		int_0008;	/* +0x08 -> dsp->fsm.cfg.scale, narrowed */
 	unsigned char	flags_0c;	/* +0x0c                            */
 	unsigned char	flags_0d;	/* +0x0d                            */
+	unsigned char	unmapped_000e[0x02];	/* +0x0e                     */
+	unsigned char	unmapped_0010[0x04];	/* +0x10                     */
 };
+
+/*
+ * `class1tx.c`'s own `V21TX_CTL` -- the REINIT request template
+ * `cHDLCtx_preamble_state_init` merges with `FAXVMI_CTL` -- is 20 bytes
+ * (`nm -S`), four past `flags_0d`, matching `v17fax.h`'s `struct v17rx_ctl`
+ * own trailing `unmapped_000e`/`int_0010` shape for the identical reason: the
+ * object's `.data` template is genuinely that size and `cHDLCtx_preamble_
+ * state_init` copies all of it (a whole-struct assignment reproduces that),
+ * even though nothing reconstructed reads past `+0x0d`.  `unmapped_000e` and
+ * `unmapped_0010` carry no claim beyond size.
+ */
 
 /*
  * `flags_0c` bit 2 is ORed into `V21TX_FLAGS(modem)`; nothing pairs that

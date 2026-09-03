@@ -82,6 +82,74 @@ int _hdlc_receive_state_init(struct fax_class1 *ctx);
 int _send_hdlc_between_buffer_state_init(struct fax_class1 *ctx);
 
 /*
+ * ------------------------------------------------------------------
+ * The four remaining `class1tx.c +94` leaves, unblocked once `FAXVMI_control`
+ * landed (F10115).  Each merges a per-modulation V.21 `.data` REINIT request
+ * template with the all-zero `FAXVMI_CTL` and calls `FAXVMI_control` -- the
+ * exact shape `class1rx.c`'s `_init_receiver` already established for the
+ * three data modulations, here applied to the fixed-rate V.21 control
+ * channel.  See class1tx.c for the full per-function derivation and for
+ * `V21RX_CTL`/`V21TX_CTL`, defined there.
+ *
+ * `cHDLCtx_off_init` (0x9e9d0, 149 bytes) is NOT one of these four: it is
+ * reached from NOWHERE in the object -- `objdump -r` over the whole 1.2 MB
+ * shows zero relocations of either kind (F8493's call/data-store pair)
+ * naming it -- so it sits in finding F8320's no-entry-point bucket rather
+ * than in this fax-reachable closure, matching `service.py`'s own
+ * reachability count over `worklist.py`'s span listing.  It is scheduled on
+ * its own merit, separately, and is not written here.
+ */
+
+/*
+ * `_rx_look_carrier_init`, 0x9cb00, 45 bytes.  Reinit the data-mode receiver
+ * through `_init_receiver` (class1rx.c), reset the async octet-recovery
+ * search (`cTOOLS_handle_data_output_reset`), and clear `countdown`.  Returns
+ * 0 (`xor %eax,%eax` is both the store's value and, unmodified, the return).
+ */
+int _rx_look_carrier_init(struct fax_class1 *ctx, int rate_code);
+
+/*
+ * `_tx_scrambled_ones_init`, 0x9cf70, 193 bytes.  Reinit the data-mode
+ * transmitter through `_init_transmitter` (class1tx.c), (re)build the
+ * transmit FIFO (`ctx->f1288`) at a fixed 0x800-element capacity, and derive
+ * `ctx->f1290` as `ctx->tx_rate / 400` (signed division; the object's own
+ * `imul $0x51eb851f` / `sar $7` / sign-correct reciprocal, confirmed against
+ * every rate class1.c's `_sym_size` recognises).  Clears `f1270`, `f1294`,
+ * `transmit_enabled`, `f1298`, `data_input_closed` and the file-static
+ * `DATAtx_counter` (`_tx_scrambled_ones_state`'s own counter, class1tx.c).
+ * Returns 0.
+ */
+int _tx_scrambled_ones_init(struct fax_class1 *ctx, int rate_code);
+
+/*
+ * `cHDLCtx_preamble_state_init`, 0x9e380, 193 bytes.  Merge `V21TX_CTL` (the
+ * REINIT bit OR'd into `flags_0d`) into `FAXVMI_CTL` and send it through
+ * `FAXVMI_control(ctx->vmi_c, ...)` -- no ring-clear, no framer reset, no
+ * mode change; only `int_0014` (the recursion into `v21tx_control`) is
+ * nonzero.  Opens an HDLC frame (`_handle_hdlc_input_open`, return discarded)
+ * and resets `countdown`, `state` (to
+ * `CLASS1_T30_SILENCE_BEFORE_PREAMBLE_STATE`), `hdlc_frame_done`,
+ * `buffers_sent` and `f1224`.  Returns 0.
+ */
+int cHDLCtx_preamble_state_init(struct fax_class1 *ctx);
+
+/*
+ * `_cHDLCrx_init_from_idle`, 0x9d790, 226 bytes.  TWO ARGUMENTS -- both
+ * callers (`fax_class1_create`, `fax_class1_command`) pass their own second
+ * one straight through, and the second is read: `arg2 == 3` both sets
+ * `ctx->state` to `CLASS1_HDLC_RECEIVE_LOOK_CARRIER_STATE` (4) AND becomes
+ * the function's own return value, overriding whatever `FAXVMI_control`
+ * returned (a real property, not a guess: the object sets `%eax = 4` on that
+ * path and never touches it again before either `ret`).  Merges `V21RX_CTL`
+ * (REINIT bit OR'd in) into a `FAXVMI_ctl` that ALSO forces a full framer
+ * reset (`int_000c = 1`, `short_0010 = 2`) and empties the ring (`ptr_0000 =
+ * (void *)1`) -- unlike the TX-side sibling above, which forces none of
+ * that -- and sends it through `FAXVMI_control(ctx->vmi_a, ...)`.  Clears
+ * `countdown` and `delayed_status_countdown` unconditionally.
+ */
+int _cHDLCrx_init_from_idle(struct fax_class1 *ctx, int arg2);
+
+/*
  * THE HOST LINK IS DLE-STUFFED BYTES ONE WAY AND 16-BIT ELEMENTS THE OTHER.
  * `_handle_data_input` and `_handle_hdlc_input` take `unsigned char *` at a
  * stride of one and write `unsigned short *` at a stride of two;
@@ -181,6 +249,17 @@ int init_vmi_v29tx(struct faxvmi_cfg *vmi, unsigned short bit_rate,
 #define VMI_SLOT_V27TX		7
 #define VMI_SLOT_V29TX		9
 #define VMI_SLOT_V17TX		11
+
+/*
+ * `VMI_SLOT_V21RX` (6) is not in the three-constructor group above -- V.21
+ * receive has no `init_vmi_v21rx` counterpart written here, since
+ * `fax_class1_create` builds its one V.21 RX `faxvmi_cfg` inline rather than
+ * through a shared constructor (see class1.c).  Declared beside its TX twin
+ * because `faxvmi.h`'s own slot table (0..4 null, 5 v21tx, 6 v21rx, 7 v27tx,
+ * 8 v27rx, 9 v29tx, 10 v29rx, 11 v17tx, 12 v17rx) already establishes it, and
+ * class1rx.h's RX trio does not cover V.21 at all.
+ */
+#define VMI_SLOT_V21RX		6
 
 /*
  * Tear the transmit-side data modem down: the config, the VMI block, the
