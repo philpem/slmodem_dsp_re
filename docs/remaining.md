@@ -5,17 +5,17 @@
 the *order* (a decision) and the *status* (a ledger). Where a byte count here
 disagrees with the tool, the tool is right — see CLAUDE.md on shelf-life.
 
-Measured post-wave-10-merge, 2026-09-03:
+Measured post-wave-11-merge, 2026-09-03:
 
 ```
 .text 734,605 bytes / 1,861 symbols
-translated 96.8%  (710,735 bytes / 1,835 symbols)   was 76.6% / 1,296
-remaining   8,461 bytes /   14 symbols (12 fax + 2 leaves)
-  fax only              12 sym    7,417 B   <-- 88% of what remains
+translated 97.2%  (713,982 bytes / 1,838 symbols)   was 76.6% / 1,296
+remaining   5,214 bytes /   11 symbols (9 fax + 2 leaves)
+  fax only               9 sym    4,170 B   <-- 80% of what remains
   no-entry-point leaves  2 sym    1,044 B
 ```
 
-Merged master period-green at **368 passed, 0 failed**, onedef/banners/check64
+Merged master period-green at **370 passed, 0 failed**, onedef/banners/check64
 clean, duplicate-symbol sweep clean.
 
 ## A correction that overturns three findings: `FIFO_CFG` was never actually
@@ -929,3 +929,62 @@ twelve symbols unblock directly once one or both land. `FAXVMI_control`
 needs three of `_init_receiver`/`_init_transmitter`'s siblings
 (`V21RX_CTL`/`V21TX_CTL`, per-modulation `.data` request templates F10109
 also reports but does not independently confirm) rather than more code.
+
+## Wave 11 — `FAXVMI_control` chokepoint clears, `_init_receiver`/`_init_transmitter` land, fax down to 9 symbols
+
+Two branches this wave, and the second is the one that mattered:
+
+| agent | delivered |
+|---|---|
+| top-level entry points (`fax_class1_create` etc.) | Re-verified all five assigned symbols still blocked, but the reason had moved: `FAXVMI_create` (which the old trace blamed) landed two waves ago and was no longer in the picture — every one of the five now bottomed out on `FAXVMI_control` alone, itself confirmed writable in isolation (all nine of its own callees already existed). Correctly declined to write a third file outside its own scope and said so plainly (F10111) |
+| `_init_receiver`/`_init_transmitter` | Traced both, found each calls `FAXVMI_control` directly on its reinit path — the exact same blocker the parallel agent had independently found from a different direction. Wrote `FAXVMI_control` + the `vxx_control` table itself as necessary infrastructure, in its own commit, explicitly flagged as outside its assigned scope before being asked — then landed both assigned functions (2,909 B) on top of it |
+
+Both branches independently converged on `FAXVMI_control` as the sole
+remaining chokepoint from two different angles (one by re-tracing five
+top-level callers, one by tracing two low-level callees) without
+coordinating — the second agent wrote it because it had no other way to
+finish its own two functions, reported the scope deviation immediately and
+clearly rather than folding it in silently, and it turned out to be exactly
+what the first agent's re-trace had already identified as the single
+remaining blocker for its own five symbols too. Individually period-green
+(368, 370 passed / 0 failed); the fully merged tree gates at **370 passed,
+0 failed**, onedef/bannercheck/refcheck all clean. One more finding-number
+collision (F10111, used by both branches independently) — renumbered the
+later-merged branch's four findings to F10115-F10118, same procedure as
+every prior collision this project.
+
+### What this wave established
+
+- **A chokepoint can be found from either end, and finding it twice is not
+  wasted work when both agents say so honestly.** Neither branch was
+  assigned `FAXVMI_control`. One declined to write it and reported exactly
+  why it was blocked; the other wrote it because it had no choice and said
+  so immediately, unprompted, rather than folding a scope deviation in
+  silently. Both reports independently confirmed the same fact from
+  different directions, which is stronger evidence than either alone.
+- **This closes the loop on wave 10's `_init_receiver` collision**, where
+  the same two functions were independently (and wastefully) re-derived by
+  two agents at once because one worked from a stale worktree. This time,
+  explicit collision warnings in both briefs meant the SAME kind of
+  overlap (two agents both finding `FAXVMI_control`) produced a converging
+  confirmation instead of a wasted duplicate — the difference was timing
+  (sequential redirect vs. simultaneous parallel drift) and the explicit
+  instruction to report a scope deviation rather than hide it.
+
+### What's left, measured
+
+Fax is **9 symbols / 4,170 bytes** — smaller than the two no-entry-point
+leaves' combined weight relative to everything else remaining in the whole
+object. By span: `class1.c` (`fax_class1_create` 1,532, `fax_class1_command`
+615, `_answer_tone_state` 94 — 2,241 B), `voice.c#3 +3` (`FAX_class1_command`
+708, `FAX_create` 564 — 1,272 B), `class1tx.c +94` (`_cHDLCrx_init_from_idle`
+226, `_tx_scrambled_ones_init` 193, `cHDLCtx_preamble_state_init` 193,
+`_rx_look_carrier_init` 45 — 657 B reachable; `cHDLCtx_off_init`, 149 B,
+worklist still lists it in this span but `service.py`'s own reachability
+count no longer does — check which bucket it actually falls in before
+scheduling it). `FAXVMI_control` having landed should unblock all of these
+directly or transitively; the next wave should close fax's core service
+entirely, leaving only the two no-entry-point leaves in fax and whatever
+`FAX_process`'s eleven-way dispatch or similar already-written functions
+still route into stub arms (see the "also on the board" note near the top
+of this file).
