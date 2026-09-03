@@ -388,6 +388,51 @@ struct faxvmi {
 };
 
 /*
+ * `vxx_create[slot]`, `.rodata` 0x9620 -- the FIRST of the six 13-slot tables
+ * in address order and the one `FAXVMI_create` (below) itself dispatches
+ * through.  Same 13-slot order as every other vxx table, read straight off
+ * this table's own relocations (`objdump -r`, 0x9620..0x9650): 0..4
+ * null_create, 5 v21tx_create, 6 v21rx_create, 7 v27tx_create,
+ * 8 v27rx_create, 9 v29tx_create, 10 v29rx_create, 11 v17tx_create,
+ * 12 v17rx_create.
+ *
+ * `null_create` takes an untyped `const void *cfg` (`nulldp.h`); the eight
+ * `v??tx_create`/`v??rx_create` each take a typed `const struct v??[tr]x_cfg
+ * *` (`faxadapt.h`).  The table's own caller passes `vmi->int_0010` --
+ * plain `int` -- straight into the argument slot with no type-specific
+ * handling (`FAXVMI_create`, 0x952be..0x952cf), so the table's element type
+ * is the untyped form and the eight typed entries need the same kind of
+ * explicit cast `vxx_status` already carries for its own typed four.
+ */
+typedef void (*faxvmi_create_fn)(struct faxvmi_link *dp, const void *cfg);
+extern faxvmi_create_fn const vxx_create[13];
+
+/*
+ * `struct faxvmi`'s own constructor, 0x095120, 705 bytes -- the FIRST of the
+ * five entry points in address order.  Two behaviours share one function:
+ *
+ *   `vmi == NULL`   a FRESH create.  `vmi`, `vmi->framer` and `vmi->link` are
+ *                   allocated here (`sysdep_malloc(0x2c)`/`(0x58)`/`(0x18)`,
+ *                   0x953ab/0x953c0/0x953d4) and every heap block below is
+ *                   allocated too.
+ *   `vmi != NULL`   a REINIT of an existing instance.  Nothing is
+ *                   (re)allocated; the ring, the frame buffer and the link's
+ *                   two buffers are cleared/refilled in place instead.
+ *
+ * `cfg == NULL` copies `FAXVMI_CFG` over `vmi`'s leading six dwords instead
+ * of the caller's own (0x95376..0x953a6); both arms rejoin at the exact same
+ * six stores (0x95141..0x95160), which is why they are written here as one
+ * assignment from a selected source rather than as two branches.
+ *
+ * The ring's capacity is `max(cfg->fifo_size, cfg->max_frame + 3)`
+ * (0x9516b..0x95185) -- the `+ 3` is `faxvmi_write_frame`'s own per-frame
+ * overhead, confirmed independently in `faxvmi_framer`'s own comment above.
+ * `vmi->underrun` is left set to 1 on every path (create has written
+ * nothing yet); `vmi->overflow` and `vmi->status` are cleared.
+ */
+struct faxvmi *FAXVMI_create(struct faxvmi *vmi, const struct faxvmi_cfg *cfg);
+
+/*
  * The dispatch contract every vxx_* table entry follows: (handle, code,
  * out-parameter).  The message form answers a string or NULL.
  */
@@ -566,6 +611,88 @@ typedef char faxvmi_ctl_size[(sizeof(struct faxvmi_ctl) == 0x18) ? 1 : -1];
  * instead of NULL.  `R`, global, in the object; global here too.
  */
 extern const struct faxvmi_ctl FAXVMI_CTL;
+
+/*
+ * `vxx_process[slot]`, `.rodata` 0x9520.  Same 13-slot order, read off this
+ * table's own relocations (0x9520..0x9550): 0..4 null_process, 5
+ * v21tx_process, 6 v21rx_process, 7 v27tx_process, 8 v27rx_process, 9
+ * v29tx_process, 10 v29rx_process, 11 v17tx_process, 12 v17rx_process.
+ *
+ * THE RETURN VALUE IS NOT DECORATIVE.  `null_process` is declared `int` and
+ * returns -1 always (`nulldp.h`); the eight `v??tx_process`/`v??rx_process`
+ * are declared `void` (`faxadapt.h`) -- but `FAXVMI_process` (below) reads
+ * `%eax` straight out of every one of these calls and folds it into the
+ * status word it returns (0x954ec..0x95564), so the table's element type is
+ * `int`-returning and the eight `void` entries need the same cast
+ * `vxx_status` already carries for ITS mismatched four.  For those eight,
+ * this reproduces whatever their own last-touched register happened to hold
+ * (typically the wrapped `V??[TR]X_modem`'s own return, since nothing after
+ * that call inside them touches `%eax`) -- an UNSPECIFIED value by C's own
+ * rules that only the exact compiler which built both sides can be trusted
+ * to reproduce identically; see `make period` vs the modern tier in
+ * CLAUDE.md.
+ *
+ * The four formal arguments are untyped here for the same reason: TX and RX
+ * entries share the same four PHYSICAL slots (`faxvmi_link *`, `short *`,
+ * `unsigned short *`, `unsigned short *`) but disagree on which of the last
+ * three is `out`/`in` and which is `count`/`result` (`faxadapt.h`'s own
+ * comment on the mirrored shapes).  `FAXVMI_process` calls through this
+ * table without ever caring which is which, so it is written that way here
+ * too, and the TX/RX declarations in `faxadapt.h`/`nulldp.h` remain the
+ * typed record of what each entry actually does with them.
+ */
+typedef int (*faxvmi_process_fn)(struct faxvmi_link *dp, short *a,
+				 unsigned short *b, unsigned short *c);
+extern faxvmi_process_fn const vxx_process[13];
+
+/*
+ * `vmi->status`'s own bits, read off `FAXVMI_process` (0x9550a..0x95561).
+ * `vxx_process[slot]`'s raw return supplies the low 24 bits and whatever it
+ * left in bits 29..31 UNCHANGED; these five are the only bits FAXVMI_process
+ * itself computes, by masking them all to 0 first (`and $0xe0ffffff`,
+ * 0x9550f) and then setting four of them with an `or` when their own
+ * condition holds.  The fifth, ZERORUN, is the odd one out: the object
+ * clears it (`and $0xefffffff`, 0x9555b) rather than sets it, WHEN
+ * `zero_run_seen` is true -- redundant against the initial mask (the bit is
+ * already 0), but it is what is there, so it is reproduced rather than
+ * folded away.
+ */
+#define FAXVMI_STATUS_UNDERRUN	0x01000000	/* vmi->underrun            */
+#define FAXVMI_STATUS_FULL	0x02000000	/* room < vmi->max_frame    */
+#define FAXVMI_STATUS_RESIDUE	0x04000000	/* framer->residue != 0     */
+#define FAXVMI_STATUS_OVERFLOW	0x08000000	/* vmi->overflow            */
+#define FAXVMI_STATUS_ZERORUN	0x10000000	/* CLEARED, not set, when
+						 * framer->zero_run_seen     */
+
+/*
+ * `struct faxvmi`'s own per-block driver, 0x095470, 327 bytes.  One call
+ * moves one block both ways through the wrapped modulation:
+ *
+ *   1. `vmi->reverse`: `vmi_reverse[mode](data, *count)` -- bit-reverse the
+ *      caller's buffer IN PLACE before anything else touches it.
+ *   2. `n = vmi_pack[mode](vmi, data, *count)` -- frame `*count` elements of
+ *      `data` into `vmi->link->buf`; `n` is `link->pack_count`.
+ *   3. `ret = vxx_process[slot](vmi->link, pcm, &n, result)` -- drive one
+ *      block through the wrapped modem.  `n` is passed BY REFERENCE and the
+ *      table's own entries (`faxadapt.h`) both copy it to `*result` and then
+ *      zero it, so by step 4 it is 0 for every real modulation and UNCHANGED
+ *      (still `link->pack_count`) for the null slot, which never touches it.
+ *   4. `m = vmi_unpack[mode](vmi, data, n)` -- unframe `n` elements back out
+ *      of `vmi->link->buf` into `data`.  `*count` is then set to `m`.
+ *   5. `vmi->reverse`: `vmi_reverse[mode](data, m)` -- bit-reverse the
+ *      result, symmetric with step 1.
+ *   6. `vmi->status` is composed from `ret` and the FAXVMI_STATUS_* bits
+ *      above, stored, and returned.
+ *
+ * Read off the object with the register names spelled out because five
+ * arguments cross two calls apiece: `data` is `vmi_pack`/`vmi_unpack`'s own
+ * `src`/`dst` and `vmi_reverse`'s `buf`; `pcm` and `result` are passed
+ * straight through to `vxx_process` as its own 2nd and 4th arguments;
+ * `count` is read signed on entry (feeds step 2), then overwritten with `m`
+ * on exit (0x9549a, 0x954fc).
+ */
+int FAXVMI_process(struct faxvmi *vmi, unsigned short *data, short *pcm,
+		    short *count, unsigned short *result);
 
 /* --------------------------------------------------------------------- */
 /* The packers: `vmi_pack[mode]`.                                         */

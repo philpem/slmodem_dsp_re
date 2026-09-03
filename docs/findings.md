@@ -110704,3 +110704,144 @@ quality-latch chains via a SYNTHETIC modem object shaped exactly like
 `V17RX_OBJ_STATE`/`V29_OBJ_RX`/`V27_OBJ_RX` and their own latch offsets
 (not a real V17RX/V27RX/V29RX instance, which is a different agent's
 closure). 813 checks, three debug levels, all passing against the blob.
+
+## F10058. `FAXVMI_create` and `FAXVMI_process` land, closing `vxx_create` and `vxx_process` -- the last two of the six 13-slot `vxx_*` tables
+
+This session's own worktree branched before `faxadapt.c` (F9271/F10010)
+landed on `master`, so its first act was `git merge master` to pick up the
+48-symbol adapter TU -- all eight real `v??tx_create`/`v??rx_create` and
+`v??tx_process`/`v??rx_process` slots these two tables need were already
+written there, and nowhere in this worktree before the merge. Confirmed
+with `nm build/src/fax/faxadapt.o` before relying on it, per brief.
+
+**THE TABLE EVIDENCE, CONFIRMED INDEPENDENTLY RATHER THAN TRUSTED.**
+`objdump -r -j .rodata ref/slmodemd/dsplibs.o`, filtered to the byte
+ranges, gives all thirteen relocations of both tables directly -- not
+inferred from `vxx_message`'s own layout:
+
+    vxx_process  .rodata 0x9520  null_process x5, v21tx_process,
+                                  v21rx_process, v27tx_process,
+                                  v27rx_process, v29tx_process,
+                                  v29rx_process, v17tx_process,
+                                  v17rx_process
+    vxx_create   .rodata 0x9620  null_create x5, v21tx_create,
+                                  v21rx_create, v27tx_create,
+                                  v27rx_create, v29tx_create,
+                                  v29rx_create, v17tx_create,
+                                  v17rx_create
+
+Same 13-slot order as every other `vxx_*` table (`vxx_message`,
+`vxx_delete`, `vxx_status`, and `vxx_control`'s still-blocked entries) --
+confirmed again here, not assumed from the brief's description.
+
+**`FAXVMI_create` (0x095120, 705 B) IS TWO BEHAVIOURS IN ONE FUNCTION, AND
+THE OBJECT'S OWN `%ebp` IS THE SWITCH.** `vmi == NULL` is a fresh create
+(the object allocates `vmi`/`framer`/`link` itself, 0x953ab/0x953c0/
+0x953d4); `vmi != NULL` is a reinit of an existing instance, and nothing
+is reallocated -- only cleared/refilled in place. `%ebp` is 0 throughout
+unless the fresh-allocate branch was taken, in which case it is set to 1
+right after `vmi`/`vmi->framer` are allocated (0x953c8) and tested three
+more times (0x95165, 0x9521f, 0x95278) to gate every OTHER allocation.
+**A fourth read, at 0x951b9, survives eleven `mov`/`movw`/`movl`
+instructions with no test in between** -- none of those three mnemonics
+touch EFLAGS -- to be consumed by the THIRD of those jumps; this is the
+same "flags survive a run of plain stores" reading CLAUDE.md's own
+evidence-order section describes for statement-order recovery, applied
+here to a boolean instead. The ring/frame-buffer/link-buffer CONTENTS are
+cleared or refilled UNCONDITIONALLY either way -- reused on reinit, freshly
+malloc'd on create, then the exact same zero-fill/refill code runs on
+both paths (0x951b0 onward is one shared target both branches jump into).
+
+**THE DWORD RELOAD IS REPRODUCED LITERALLY, NOT SYNTHESISED AS ZERO.**
+0x951d4/0x95201: the object reloads the whole dword at `framer+0x1c`
+(`pack_bit` + the unnamed `pad_001e`, just zeroed) and stores it whole to
+`framer+0x2c` (`unpack_bit` + `short_002e`). Written here as
+`fr->unpack_bit = fr->pack_bit; fr->short_002e = fr->pad_001e;` rather
+than two zero-assignments, because `pad_001e` is NOT necessarily zero on
+a REINIT call (nothing else in this tree ever writes it, so on a fresh
+`sysdep_malloc` it carries the test harness's fixed fill pattern) -- and
+the differential test's own `run_create_fresh` catches this directly:
+`short_002e` compares equal to `pad_001e`'s pattern value on both sides,
+not to zero, which a naive "just zero it" reading would have gotten wrong
+silently (no test would fail on a *cleared* pad, only reading its actual
+carried value proves the dword copy rather than two independent stores).
+
+**`FAXVMI_process` (0x095470, 327 B) PIPELINES REVERSE / PACK / WRAPPED-
+PROCESS / UNPACK / REVERSE, AND THE STATUS WORD IS BUILT FROM THE WRAPPED
+CALL'S OWN RETURN.** `vxx_process[slot]`'s raw return (`%eax` after
+0x954d9's `call`) supplies the status word's low 24 bits and bits 29..31
+UNCHANGED; only bits 24..28 (`and $0xe0ffffff`, 0x9550f) are FAXVMI's own,
+four set with `or` on their own condition (underrun, room < max_frame,
+residue, overflow) and the fifth -- zero-run-seen -- CLEARED with `and`
+rather than set, which is redundant against the initial 5-bit mask and
+reproduced anyway (`faxvmi.h`'s own FAXVMI_STATUS_* comment has the
+detail). **THE RETURN TYPE MISMATCH IS THE POINT, NOT AN OVERSIGHT:**
+`null_process` is declared `int` (`nulldp.h`) and the eight real
+`v??[tr]x_process` adapters are declared `void` (`faxadapt.h`), so the
+table's own element type has to be `int`-returning and the eight need the
+SAME kind of cast `vxx_status` already carries for its own mismatched
+four (F9850). For the eight `void` entries this reproduces
+whatever their own last-touched register held -- typically the wrapped
+`V??[TR]X_modem`'s own return, since nothing after that call inside them
+touches `%eax` -- an UNSPECIFIED value by C's rules that only the SAME
+compiler on both sides can be trusted to reproduce identically. Declined
+to chase further: this is exactly the `make period`-vs-modern distinction
+CLAUDE.md already names, and the differential test below only exercises
+the five NULL slots, where `null_process` returns a literal `-1` and the
+question does not arise.
+
+**`n` DOUBLES AS THE `count` PASSED BY REFERENCE TO `vxx_process`.** It
+starts as `vmi_pack`'s own return (`link->pack_count`, truncated to 16
+bits at 0x954ba: only `%ax` is stored), and `vmi_unpack`'s own `count`
+argument is READ BACK OUT OF THE SAME LOCAL after the `vxx_process` call
+(0x954e0), not recomputed. Every real `v??[tr]x_process` zeroes its own
+`count` argument before returning (`faxadapt.h`), so `n` is 0 by the time
+`vmi_unpack` runs for every real modulation slot -- but `null_process`
+maps this same physical argument slot to ITS OWN unused `result` formal
+(`nulldp.h`'s own RX-shaped declaration) and never touches it, so for the
+NULL slots this session's own tests exercise, `n` survives unchanged as
+`link->pack_count` into the unpack call. Both readings are the object's;
+neither is chosen, and `faxvmi.h`'s own comment on `vxx_process` spells
+out the argument-slot mapping that makes this fall out rather than being
+asserted.
+
+**DECLINED, PER BRIEF: `vxx_control`/`FAXVMI_control`.** `vxx_control`
+(0x9560) is still missing `v17tx_control`/`v29tx_control`/`v29rx_control`
+-- a different session's own closure this wave -- so `FAXVMI_create`'s
+`vxx_create[slot]` call and `FAXVMI_process`'s `vxx_process[slot]` call
+are the only two `vxx_*` dispatches this file now makes; `FAXVMI_control`
+remains read-only evidence, unchanged from the prior wave's own note.
+
+**TEST: `test/unit/t_faxvmicp.c`, new file.** Same non-null-slot
+discipline as `t_faxvmids.c` (`vxx_create[5..12]`/`vxx_process[5..12]`
+proven by pointer identity only, both sides; CALLS made only through the
+five already-proven-safe NULL slots): table wiring (10 checks), fresh
+create over five `faxvmi_cfg` rows plus the `cfg == NULL` default,
+comparing every allocated block's CONTENT byte-for-byte against the blob
+(struct scalars, `framer`/`link` substructs with their own two pointer
+fields nulled out before `diff_eq_obj`, and the ring/frame/`buf`/
+`ptr_0000` array contents) (1,635 checks), reinit over the same five
+instances with their runtime state scribbled to a non-zero pattern first
+so the test proves the clear/refill actually happens and that no new
+`sysdep_malloc` call occurs (1,636 checks), and 60 iterations of
+`FAXVMI_process` cycling every framing mode and both `reverse` settings,
+comparing the return, `vmi->status`, `*count`, `*result`, the `data`/`pcm`
+buffer contents and both substructs (19,560 checks). **`data`'s fill is
+CLAMPED to 0..7, not full 16-bit random** -- with `reverse` set and `mode`
+HDLC, `vmi_reverse[2]` is `faxvmi_frame_reverse`, which reads the first
+element of a run as a frame LENGTH and walks that many further elements;
+a full-range random value there walked off the end of any buffer size
+tried and crashed the FIRST version of this test with a segfault before
+the clamp was added -- caught by running the test, not reasoned around in
+advance, and recorded here because CLAUDE.md's "any tool must be shown to
+fire" cuts both ways: a test that crashes on its own fixture is doing its
+job.
+
+All four groups PASS under `make one T=t_faxvmicp` (host GCC 14) and
+every already-existing `t_faxvmi*`/`t_faxadapt`/`t_nulldp`/`t_faxpack`/
+`t_faxframing`/`t_faxunframe`/`t_faxcfg` test still passes individually
+after this change. **`make period` was not run by this session** -- no
+docker access in this worktree; the parent session gates on it before
+merge, per CLAUDE.md's ruling that `make period` alone decides. `python3
+tools/onedef.py`, `tools/bannercheck.py src/fax` and `tools/refcheck.py`
+are all clean. (2026-09-03)
