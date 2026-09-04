@@ -120,7 +120,33 @@ struct tagV90AdditionalCPinfo {
 	 * of in a name every later reader would believe.
 	 */
 	short short_14;				/* +0x14                  */
-	unsigned char pad_16[2];		/* +0x16 not modelled     */
+	/*
+	 * +0x16 was `pad_16[2]`, the struct's LAST member -- REMOVED
+	 * (finding F10151).  This is trailing padding rather than a gap
+	 * before a named field: the struct's own alignment (forced to 4 by
+	 * its four `unsigned int`/`float` members) rounds `sizeof` up from
+	 * `short_14`'s end at +0x16 to +0x18 with no member needed to name
+	 * the gap.  `V90Modem.h` embeds this struct BY VALUE immediately
+	 * followed by `V90MP mp` with no pad between them, and
+	 * `V90ModemCtor.cpp`'s existing `V90M_OFF(additionalCPinfo, 0x0cb8,
+	 * cpinfo)`/`V90M_OFF(mp, 0x0cd0, mp)` pair is a stronger proof than a
+	 * hand-added `sizeof` assertion would be: if the compiler's natural
+	 * padding did not land `sizeof(tagV90AdditionalCPinfo)` at exactly
+	 * 0x18, `mp`'s offset assertion would fail to compile outright.
+	 * This does not resolve the file's own "size is adjacency, not
+	 * asserted" caveat about whether 0x18 is the ORIGINAL author's size
+	 * -- that question is unchanged by this edit either way.
+	 *
+	 * Negative check found one false-positive worth recording: `dis.py`
+	 * over `V90CPPacker` shows a `movswl 0x16(%ebx)` at .text+0x3c8ea,
+	 * but tracing `%ebx` (set at +0x3c8b8..+0x3c8bf as `arg3 + 0x22`,
+	 * the caller's `short *` output buffer) shows it is unrelated to
+	 * this struct's own pointer (arg2, loaded separately from
+	 * `0x184(%esp)`).  No genuine access to offset 0x16/0x17 of a
+	 * `tagV90AdditionalCPinfo *` was found in `V90CPPacker`,
+	 * `setV92CPpckFromParamsInfo`, `V90Demodulator::enterRRN`, or either
+	 * `V90Modulator`/`V90Demodulator` constructor.
+	 */
 };
 
 #endif /* DSPLIB_TAGV90ADDITIONALCPINFO_H */

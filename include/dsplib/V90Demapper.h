@@ -397,7 +397,17 @@ public:
 	 * and every sign bit goes through this one decoder instead.
 	 */
 	SerialDifferentialDecoder<unsigned char> signDecoder;
-	unsigned char pad_665[3];
+	/*
+	 * +0x665 was `pad_665[3]` -- REMOVED (finding F10151): a 1-byte
+	 * `signDecoder` ending at +0x665 leaves exactly 3 bytes of compiler
+	 * alignment ahead of `signBits`, a `V90SignBitsExtractor` whose
+	 * first member is a 4-byte `unsigned int` and needs 4-byte
+	 * alignment.  Both ends already asserted in the .cpp
+	 * (`DEM_OFF(signDecoder, 0x0664, signdec)`, `DEM_OFF(signBits,
+	 * 0x0668, signbits)`), and `dis.py` over every `V90Demapper` method
+	 * plus the `V90Equalizer`/`V90Phase4Demodulator` constructors that
+	 * receive a `V90Demapper *` finds no access to 0x665/0x666/0x667.
+	 */
 
 	/*
 	 * +0x668  The sign-bit extractor, embedded.  The constructor runs its
@@ -466,7 +476,14 @@ public:
 	 * something that happens twice" is right and this is what it counts.
 	 */
 	short short_1e9c;
-	unsigned char pad_1e9e[2];
+	/*
+	 * +0x1e9e was `pad_1e9e[2]` -- REMOVED (finding F10151): the same
+	 * short-to-pointer-sized-field alignment gap as +0x665 above, ahead
+	 * of `adiDetector` at +0x1ea0.  Both ends already asserted
+	 * (`DEM_OFF(short_1e9c, 0x1e9c, short1e9c)`, `DEM_OFF(adiDetector,
+	 * 0x1ea0, adi)`), and the same `dis.py` sweep finds no access to
+	 * 0x1e9e/0x1e9f.
+	 */
 
 	/*
 	 * +0x1ea0  The automatic digital-impairment detector: the
@@ -627,7 +644,20 @@ public:
 	 * reaches them.
 	 */
 	short linearMappStudyEnabled;
-	unsigned char pad_1eb6[2];
+	/*
+	 * +0x1eb6 was `pad_1eb6[2]`, the struct's LAST member -- REMOVED
+	 * (finding F10151).  This one is trailing padding rather than a gap
+	 * before a named field: `linearMappStudyEnabled` (0x1eb4, 2 bytes)
+	 * ends at 0x1eb6, and the class's own alignment (forced to 4 by its
+	 * many `int`/pointer members elsewhere) means the compiler rounds
+	 * `sizeof` up to 0x1eb8 on its own with no member needed to name the
+	 * gap. The existing size assertion
+	 * (`typedef char v90dem_size[(sizeof(V90Demapper) == 0x1eb8) ? 1 :
+	 * -1]`) is a hard compile-time proof of this, not just a spot check,
+	 * and `dis.py` over every `V90Demapper` method plus the
+	 * `V90Equalizer`/`V90Phase4Demodulator` constructors finds no access
+	 * to 0x1eb6/0x1eb7.
+	 */
 };
 
 #endif /* DSPLIB_V90DEMAPPER_H */

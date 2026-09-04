@@ -149,7 +149,15 @@ public:
 	 * of the word at +0x10.
 	 */
 	unsigned char bits[V90SBE_DECODER_SIZE];
-	unsigned char pad_0e[2];
+	/*
+	 * +0x0e was `pad_0e[2]` -- REMOVED (finding F10151).  The old comment
+	 * already called it correctly: "the two trailing bytes are the
+	 * alignment of the word at +0x10" -- exactly the compiler-inserted
+	 * gap a 6-byte array ending at +0x0e leaves ahead of the 4-byte-
+	 * aligned `unsigned int state` below, already proved by
+	 * `SBE_OFF(state, 0x10, state)` in the .cpp.  `dis.py` over every
+	 * `V90SignBitsExtractor` method finds no access to offset 0x0e.
+	 */
 
 	/*
 	 * +0x10  THE TWO-STATE MACHINE `process` runs, and `reset`'s second
@@ -191,7 +199,15 @@ public:
 	 * run on all of them: `test $0x1,%bl; je` skips it for even `i`.
 	 */
 	SerialDifferentialDecoder<unsigned char> oddDecoder;
-	unsigned char pad_19[3];
+	/*
+	 * +0x19 was `pad_19[3]` -- REMOVED (finding F10151): a 1-byte
+	 * `oddDecoder` ending at +0x19 leaves exactly 3 bytes of compiler
+	 * alignment ahead of `decoder`, a `ParallelDifferentialDecoder
+	 * <unsigned char>` whose first member is a pointer and needs 4-byte
+	 * alignment (DiffCoder.h).  `SBE_OFF(decoder, 0x1c, decoder)` in the
+	 * .cpp already proves the target offset, and `dis.py` over every
+	 * `V90SignBitsExtractor` method finds no access to 0x19/0x1a/0x1b.
+	 */
 
 	/*
 	 * +0x1c  The per-position sign-bit memory, capacity SIX -- one per

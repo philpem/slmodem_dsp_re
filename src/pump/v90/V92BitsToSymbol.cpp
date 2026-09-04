@@ -103,7 +103,8 @@ V92BTOS_OFF(symbolsDone,	0x10, symbolsdone);
 V92BTOS_OFF(bitsPerFrame,	0x14, bitsperframe);
 V92BTOS_OFF(symbolsBlockSize,	0x18, blocksize);
 V92BTOS_OFF(flag_1c,		0x1c, flag1c);
-V92BTOS_OFF(pad_1d,		0x1d, pad1d);
+/* pad_1d[3] removed (finding F10151); v92btos_size below is what proves the
+ * trailing three bytes are still there. */
 
 typedef char v92btos_size[(sizeof(V92BitsToSymbol) == 0x20) ? 1 : -1];
 typedef char v92btos_tx_size[(sizeof(V92Transmitter) == 0x60) ? 1 : -1];

@@ -215,9 +215,17 @@ public:
 	 */
 	unsigned char flag_1c;
 
-	/* +0x1d  Three bytes of alignment inside the 0x20 the allocation
-	 * gives.  Nothing writes them. */
-	unsigned char pad_1d[3];
+	/*
+	 * +0x1d was `pad_1d[3]`, the struct's LAST member -- REMOVED
+	 * (finding F10151).  Already correctly described as alignment
+	 * inside the 0x20 the allocation gives; `flag_1c` ends at +0x1d and
+	 * the class's own 4-byte alignment (forced by its leading pointers/
+	 * ints) rounds `sizeof` up to +0x20 on its own, already proved by
+	 * the existing `v92btos_size[(sizeof(V92BitsToSymbol) == 0x20) ? 1 :
+	 * -1]` hard compile assertion. `dis.py` over all ten
+	 * `V92BitsToSymbol` methods finds no access to offset
+	 * 0x1d/0x1e/0x1f.
+	 */
 };
 
 #endif /* DSPLIB_V92BITSTOSYMBOL_H */

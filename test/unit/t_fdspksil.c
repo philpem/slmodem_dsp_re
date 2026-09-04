@@ -257,8 +257,14 @@ main(void)
 				    (long)ci);
 			diff_eq_int("create energy %ld", sb.energy == 0.0f, 1,
 				    (long)ci);
-			/* the hole at +0x0e keeps the fill on both sides */
-			diff_eq_int("create pad kept %ld", sb.pad_0e[0], 0x3c,
+			/*
+			 * the hole at +0x0e keeps the fill on both sides.
+			 * `pad_0e` was removed from struct silence as
+			 * compiler-inserted alignment (finding F10151), so
+			 * this reads the same physical byte by offset.
+			 */
+			diff_eq_int("create pad kept %ld",
+				    ((unsigned char *)&sb)[0x0e], 0x3c,
 				    (long)ci);
 		}
 	}

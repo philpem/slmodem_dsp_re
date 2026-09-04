@@ -115093,3 +115093,462 @@ this sandbox; left for the parent's gate, same as every prior wave -- a
 compile-time-only layout change that leaves every assertion green should also
 leave the ratchet's 736/1852 floor unchanged, and the differential suites
 above are the closest local proxy for that claim. (2026-09-04)
+
+## F10151. Safe pad-region removal, long-tail sweep: every `pad_NNNN` outside the four active naming clusters, checked two ways and four removed so far
+
+New workstream, distinct from field naming: per the user's explicit decision
+(`docs/fieldnaming.md`'s "New workstream: safe pad-region removal"), a
+`pad_NNNN[N]` struct member is REMOVED, not just named, where it can be
+PROVEN per-instance that (1) its offset and width exactly match what the C
+compiler's own implicit alignment would insert between the declared types on
+either side if the member were simply deleted, and (2) nothing in the whole
+1.2 MB object reads or writes those bytes -- verified with `dis.py` over
+every function of the owning class/struct, not just the ones already
+reconstructed. Both must hold; either failing keeps the pad explicit. An
+`offsetof`-based compile-time assertion is added at the point of removal,
+following this tree's own existing idiom (`TONE_ASSERT_OFF` in
+`src/service/fdspkrnl.c`, the same shape as `onedef.py`'s own macros
+elsewhere) rather than inventing a new one.
+
+**Scope: the long tail.** Four sibling agents this session are covering the
+V.90 phase-3/4 and equalizer cluster, the VPcmFloModem/V92CP/V90CP/
+AutoDigitalImp/SessionFlag/Phase3-4Modulator cluster, the V.34 cluster
+(`v34recv.h` etc.), and the fax cluster (`faxvmi.h`/`class1.h`/`fax.h`/
+`v29fax.h`/`v17fax.h`/`v29data.h`/`faxfifo.h`) in their own worktrees. This
+finding covers every OTHER file in the tree carrying a live `pad_NNNN`
+struct member -- confirmed by `grep -rlE '\bpad_[0-9a-fA-F]+\b' include/
+src/`, filtered to files not in those four clusters. A first naive pass over
+that grep counted 44 files; **15 of the 44 have no actual live `pad_NNNN`
+struct member at all** -- the grep hit is a `V9*_OFF`/`V92TX_OFF`-style
+offset-assertion macro invocation whose first argument reuses an
+already-renamed field's old `pad_` label (`V92Transmitter.cpp`,
+`V92Phase3Modulator.cpp`, `V92Mapper.cpp`, `V92BitsToSymbol.cpp`), or a
+comment mentioning a `pad_` name for a field that has since been named
+elsewhere (`V92Precoder.cpp`, `V90Modulator.h`, `V90Modem.h`,
+`V90MappingParams.h`, `V92EchoCanceller.h`, `V92Phase2Info.cpp`,
+`V92ModulusEncoder.cpp`, `V90MappingParamsInt.cpp`, `detector.c`,
+`cid_mtd.c`, `beepgen.c`) -- the same over-count `docs/fieldnaming.md`'s own
+header already warns about and F10142 already hit once for `VPcmFloModem.h`/
+`V92CP.h`. Confirmed by grep for the exact declaration pattern
+(`^\s*(unsigned char|...) pad_[0-9a-f]+`), not assumed.
+
+### `fdspkrnl.h` / `src/service/fdspkrnl.c`: 4 of 7 removed
+
+`struct fdsp_buffers::pad_1f40[0x7d0]` and `struct fdsp_tone::pad_10[4]`/
+`pad_22[0xe]` fail the arithmetic test outright -- their width is far larger
+than what natural alignment between their neighbours would insert (a 2000-
+short array ending 4-aligned needs 0 bytes before a 4-aligned `int`, not
+0x7d0; a 4-byte-aligned `float` ending at +0x010 needs 0 bytes before another
+4-aligned `float` at +0x014, not 4; a `short` ending at +0x022 needs 2 bytes
+before a 4-aligned `float` at +0x030, not 0xe). These are real unmodelled
+space, not alignment slop, and CLAUDE.md's own header comment on this file
+already says so ("gaps stay pads and no field here is known to be the whole
+story"). Left untouched.
+
+Four pass both tests and were removed:
+
+- `struct fdsp_tone::pad_46[2]` (+0x046, between `short fir_idx` at +0x044
+  and `float det_coef[3]` at +0x048): exact 2-byte short-to-float alignment
+  gap. `dis.py` over `TONE_create` (the only writer -- it zeroes `fir_idx`
+  with a standalone `movw $0x0,0x44(%ebp)` and touches nothing at +0x046)
+  and over `TONE_delete`/`TONE_detect`/`TONE_filter`/`TONE_kill`/
+  `TONE_generate` finds zero references to offset 0x046 in any of them.
+  New assertion `TONE_ASSERT_OFF(det_coef, 0x048)`.
+- `struct fdsp_tone::pad_66[2]` (+0x066, between `short short_0064` and
+  `int int_0068`): same shape, same verification method, zero hits for
+  0x066 anywhere. The existing `TONE_ASSERT_OFF(int_0068, 0x068)` already
+  proved the target offset; no new assertion needed for the far side.
+- `struct fdsp_tone::pad_1b2[2]` (+0x1b2, between `short short_01b0` and
+  `float *ptr_01b4`): same shape. `ptr_01b4`/`ptr_01b8` are each set by
+  their own `sysdep_malloc` call in `TONE_create` (`mov %eax,0x1b4(%ebp)`
+  / `0x1b8(%ebp)`, two separate instructions, not a bulk store that could
+  have reached into the gap), and zero hits for 0x1b2 across all five
+  TONE_* functions. Existing `TONE_ASSERT_OFF(ptr_01b4, 0x1b4)` covers the
+  target offset.
+- `struct fdsp_tone_cfg::pad_22[2]` (+0x022, between `short fir_len` and
+  `int int_0024`): same 2-byte short-to-int shape. This one needed a
+  different kind of check, because `fdsp_tone_cfg`/`TONE_CFG` is static
+  `.data`, never touched field-by-field -- `TONE_create` moves the whole
+  0x30-byte struct over `fdsp_tone`'s head with one `rep movsl $0xc`
+  (48 bytes), so there is no per-field store or load to grep for. Checked
+  the static initialiser's own bytes instead (`objdump -s -j .data
+  --start-address=0x83c0 --stop-address=0x83f0`): the two bytes at +0x022
+  are `00 00`, consistent with pad. New assertion added:
+  `TONE_ASSERT_OFF_CFG(int_0024, 0x024)`, a new macro alongside the
+  existing `TONE_ASSERT_OFF`/`TONE_ASSERT_CFG` since `int_0024` has no
+  same-named counterpart in `fdsp_tone` to cross-check against -- it lands
+  inside the 14 bytes `fdsp_tone::pad_22[0xe]` (above) still leaves as one
+  undifferentiated span. That asymmetry (one struct sees three named ints
+  where its sibling sees one unresolved gap) is flagged in a comment as a
+  field-naming question for `int_0024`/`int_0028`/`int_002c`'s own types,
+  not a reason to keep THIS alignment gap explicit -- the removal's
+  arithmetic depends only on `int_0024` needing 4-byte alignment, which
+  holds whatever its final type turns out to be.
+
+`make one T="t_fdspkrnl t_tonecreate t_fdspdp t_fdspkfifo t_fdspksil
+t_mtkphasor"` green after the four removals (see below for the run that
+caught this finding's own forward reference and the run after it was
+added). `tools/onedef.py`/`tools/refcheck.py` clean.
+
+(more files below as this sweep continues; the sweep is not yet complete
+when this paragraph is first appended -- see the closing paragraph for the
+final file list and totals.) (2026-09-04)
+
+### `V90SignBitsExtractor.h`/`V90Phase2Info.h`/`V90Mapper.h`/`V90Demapper.h`: 6 more removed, `pad_14[4]` stays
+
+`V90SignBitsExtractor::pad_0e[2]` (before `state`, exact short-to-int gap,
+already described by its own comment as alignment) and `pad_19[3]` (before
+`decoder`, a `ParallelDifferentialDecoder<unsigned char>` whose first member
+is a pointer, exact 1-byte-to-4-byte gap) both removed; existing `SBE_OFF`
+assertions already prove both target offsets (`state` at 0x10, `decoder` at
+0x1c). `pad_14[4]` stays -- the gap between `state` (ends +0x14) and
+`oddDecoder` (a 1-byte class needing no alignment at all) is 4 bytes where
+natural insertion would be 0, so it fails the arithmetic test outright and
+the header's own comment already says "NOT MODELLED. Nothing... touches it."
+
+`V90Phase2Info::pad_0a[2]` removed (between `maxTxPower` and
+`txPowerMeasurementPoint`, exact byte-to-int gap, comment already said
+"Alignment before the word at +0x0c"); existing `V90P2I_OFF` assertions
+prove both ends.
+
+`V90Mapper::pad_656[2]` (before `constellationSize`) and `pad_6fd[3]`
+(before `word_700`) both removed, both already commented "alignment" by an
+earlier pass, both ends already asserted by `V90MAPPER_OFF`.
+
+`V90Demapper::pad_665[3]` (before `signBits`), `pad_1e9e[2]` (before
+`adiDetector`) and `pad_1eb6[2]` (the struct's LAST member, trailing padding
+to the class's own 4-byte alignment rather than a gap before a named field --
+the existing `sizeof(V90Demapper) == 0x1eb8` assertion is a hard compile-time
+proof of this case rather than a spot check) all removed; every boundary
+already asserted by `DEM_OFF`.
+
+Negative check for all six: `dis.py` over every method of the owning class
+PLUS, for `V90Demapper`, the `V90Equalizer`/`V90Phase4Demodulator`
+constructors that receive a `V90Demapper *` (both classes are in a sibling
+agent's excluded cluster, so their headers are not touched, but their
+disassembly still has to be checked since they hold a pointer to the struct
+being edited) -- zero hits for any removed offset in any function. No
+aggregate initializer of any of these four types exists anywhere in the tree
+(`grep -rn "ClassName\s*=\s*{"` over `src/`/`include/`/`test/`), so none of
+this batch could repeat the `TONE_CFG` positional-initializer bug the first
+file in this sweep hit.
+
+`make one T="t_v90demap t_v90demapctor t_v90leaves t_v90sbereset
+t_v90modchain t_v90p4ddec t_v90btsproc t_v90modprog t_v90p4seq t_v90dataph
+t_v90demctor t_v90demprog t_v90equproc t_v90p4dnan"` run; the only two FAILs
+(`t_v90equproc`'s RESET arm, 731/120974, and `t_v90p4dnan`'s keep-rate flag,
+2/9) are pre-existing on the unmodified tree, confirmed by a `git stash`/
+`git stash pop` A/B producing byte-identical failure counts -- F6203's
+declared x87-excess-precision divergence and the `t_v90p4dnan` declared NaN
+check, both unrelated to this sweep and both already declared in
+`tools/gccdiverge.json`. Every other suite green. `tools/onedef.py`/
+`tools/refcheck.py` clean. (2026-09-04)
+
+### `V90CPUnPck.h`/`V92Transmitter.h`: checked, none removed; `V92Phase2Info.h`/`V92CPUnPck.h`/`V90SpectralShaper.h`/`V90MP.h`: 5 more removed
+
+`V90CPUnPck::pad_00[0x14]` (leading, no preceding field to align against),
+`pad_37[3]` (3 actual bytes where a `short` array's 2-byte alignment need
+would insert only 1) and `pad_9a[2]` (2 actual bytes where an already
+4-aligned offset needs 0) all fail the arithmetic test and stay explicit --
+the file's own comments already call the latter two unexplained gaps, not
+alignment. `V92Transmitter::pad_00[4]` (leading) and `pad_5c[4]` (trailing,
+but the class's own 4-byte alignment would insert 0 bytes after an already
+4-aligned `byte_58`; the actual 4-byte gap is explained only by an EXTERNAL
+allocation size the comment already flags, `sizeof` 0x5c vs the caller's
+0x60) both fail too and stay explicit.
+
+`V92Phase2Info::pad_0a[2]` (same shape as the already-removed
+`V90Phase2Info::pad_0a`) removed; both ends already asserted by
+`V92P2I_OFF`. Negative check swept `V92Modulator`'s two constructors (which
+hold a `V92Phase2Info *`) in addition to the class's own four methods -- the
+only hit near the offset is an unrelated `add $0xa,%eax` allocation-size
+immediate in `V92ModulatorC1/C2`, not a memory access, confirmed by reading
+the surrounding instructions.
+
+`V92CPUnPck::pad_13[1]` removed -- this struct is a plain C aggregate, not
+in `tools/offcheck.py`'s `SKIP_HEADERS`, so its neighbours' own `/* +0xNN */`
+annotations are ALREADY the compile-time proof (offcheck.py checks every one
+against the compiler's `offsetof` on every build/test run) rather than
+needing a hand-added assertion macro; `dis.py` over
+`V92setParamsInfoFromCPUnPck`, the only reconstructed function that touches
+this struct, finds no access to 0x13.
+
+`V90SpectralShaper::pad_1e[2]` (before `state`) and `pad_39[3]` (before
+`pde`, a `ParallelDifferentialEncoder<unsigned char>` needing 4-byte
+alignment) both removed; both already commented "alignment", both ends
+already asserted by `V90SS_OFF`, `dis.py` over all ten class methods finds
+no access to either offset.
+
+`V90MP::pad_112[2]` (before `word_114`) and `pad_11a[2]` (before
+`nofRecievedMp`) both removed; both already commented "alignment", both
+ends already asserted by `V90MP_OFF`, `dis.py` over all thirteen class
+methods finds no access to either offset (the six enclosing-class
+constructors that hold a `V90MP *` were not separately swept since they take
+it by pointer and the class's OWN compiled methods are what any embedding
+site calls -- the same reasoning already used for `V90SpectralShaper`
+embedded in `V90Mapper`).
+
+`make one T="t_v92unpck t_v92p2info t_v92mpunpck t_v92mod t_v92modem
+t_vpcmflomodem t_v90spectral t_v90shapeact t_v90shapereset t_v90spectrellis
+t_v90mp t_v90cp t_jdmpleaves t_v90conneval t_v90modemctor t_v90rundemod
+t_v90p4mgen"` all green, no FAIL line across either run.
+`tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py` all clean (2127
+annotations unchanged in count, all still matching `offsetof`). (2026-09-04)
+
+### `tagV90AdditionalCPinfo.h`/`dtmf.h`/`cid.h`: 3 more removed, all TRAILING padding with a stronger-than-usual proof
+
+Three more, all the struct's LAST member rather than a gap before a named
+field -- the same shape as `V90Demapper::pad_1eb6` above, and each one
+found a pre-existing, independent compile-time size proof stronger than
+anything this sweep would need to add:
+
+- `tagV90AdditionalCPinfo::pad_16[2]`: `short_14` ends at +0x16, and the
+  class's own 4-byte alignment (forced by its `unsigned int`/`float`
+  members) rounds `sizeof` to +0x18. The file's own header comment
+  explicitly flags "THE SIZE IS ADJACENCY AND IS NOT ASSERTED" -- this
+  removal does not resolve that pre-existing external uncertainty (whether
+  0x18 is the ORIGINAL author's true size) either way, but `V90Modem.h`
+  embeds this struct BY VALUE immediately before `V90MP mp` with no pad
+  between them, and `V90ModemCtor.cpp`'s existing `V90M_OFF
+  (additionalCPinfo, 0x0cb8, cpinfo)`/`V90M_OFF(mp, 0x0cd0, mp)` pair is a
+  hard INTERNAL-CONSISTENCY proof: if natural compiler padding did not land
+  `sizeof(tagV90AdditionalCPinfo)` at exactly 0x18, `mp`'s own offset
+  assertion would fail to compile. The negative check found one
+  false-positive worth recording in the header's own comment: `dis.py`
+  over `V90CPPacker` shows a `movswl 0x16(%ebx)`, but tracing `%ebx` (set
+  three instructions earlier as `arg3 + 0x22`, the caller's output buffer)
+  shows it is unrelated to this struct's own pointer, which the function
+  loads separately from `0x184(%esp)` into other registers throughout. No
+  genuine access to 0x16/0x17 of a `tagV90AdditionalCPinfo *` exists in
+  `V90CPPacker`, `setV92CPpckFromParamsInfo`, `V90Demodulator::enterRRN`,
+  or either `V90Modulator`/`V90Demodulator` constructor.
+- `dtmf::pad_96[2]`: `easy` ends at +0x96, alignment forced to 4 by the
+  leading `float` arrays rounds `sizeof` to +0x98. Here the proof is
+  stronger still -- `src/service/dtmf.c` already has `dtmf_size_check
+  [sizeof(struct dtmf) == 0x98 ? 1 : -1]`, and 0x98 is also the literal
+  `sysdep_malloc(sizeof(struct dtmf))` allocation size in `create_dtmf`,
+  not adjacency. `dis.py` over all nine `dtmf`-touching functions finds no
+  access to 0x96/0x97. `dtmf::pad_80[0x10]` (before `held`) fails the
+  arithmetic test outright (16 actual bytes where 0 bytes of natural
+  alignment would be inserted after an already 4-aligned `bias_state`) and
+  stays explicit, matching its own comment ("create_dtmf does not touch
+  these").
+- `cid::pad_00a`/`cid::pad_15e[2]`: `struct cid` had one of each shape.
+  `pad_00a` (a bare `short`, not an array) sits between `short_008` (ends
+  +0x00a) and `mrf`, a `struct fpm_mrf` whose first member holds a pointer
+  and needs 4-byte alignment -- exact 2-byte match, already commented
+  "alignment; never written". `pad_15e[2]` is the struct's LAST member,
+  trailing padding after `pack_len` (ends +0x15e) to the struct's own
+  4-byte alignment; `src/service/cid_mtd.c` already has `cid_size_check
+  [sizeof(struct cid) == 0x160 ? 1 : -1]`, and 0x160 is `create_cid`'s
+  literal allocation size. `dis.py` over `cid_modem`/`create_cid`/
+  `reset_cid`/`pack_next_bit` (the only four reconstructed functions
+  that take a `struct cid *` directly -- `CID_FSD_demodulate`/
+  `CID_MTD_detect` take a bare buffer pointer per the file's own comment)
+  finds no access to either offset pair.
+
+`make one T="t_v90cmask t_v90dataph t_v90demctor t_v90modchain
+t_v90demprog t_v90modemctor t_v90shapereset t_v90unpck t_vpcmrunpcm
+t_v90p4ddec t_v90rundemod t_beepgen t_detector t_dtmf t_cid_fsd
+t_cidleaves t_cidsvc t_cid_mtd t_datafmt t_rxcid t_cidprog"` all green (179
+PASS, 0 FAIL). `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py`
+all clean. (2026-09-04)
+
+### V92Modulator/V92Jd/V92BitsToSymbol/V90RDetector/V90Jd/V90BitsToSymbol/V92Mapper/V92Phase3Modulator: 6 more removed, 2 checked and declined, plus a SECOND positional-initializer bug caught and a test-apparatus ripple fixed
+
+`V92Phase3Modulator::pad_44[8]` and `V92Mapper::pad_03[0x23]` both checked
+and DECLINED -- the first is real unmodelled space the class's own comment
+already attributes to a DIFFERENT class's writer (`V92Modulator`, "what
+wrote them, if anything, is V92Modulator's business"), not alignment (8
+actual bytes where an already-4-aligned offset needs 0); the second is 35
+actual bytes where a 2-byte-aligned `short` after an odd offset would need
+only 1, and the header already says so ("NOT REFERENCED... nothing here
+names it").
+
+Six removed, all the same exact-width alignment-gap shape as the rest of
+this sweep, all already commented as alignment, all with both boundaries
+already asserted by an existing `_OFF` macro pair: `V92Modulator::pad_0e[2]`
+(before `phase2Info`), `V92Jd::pad_92[2]` (before `crc`),
+`V90RDetector::pad_22[2]` (before `int_24`), `V90Jd::pad_4a[2]` (before
+`crc`). Two are trailing (LAST member, struct's own alignment rounding
+`sizeof` up rather than a gap before a named field), each backed by a
+PRE-EXISTING hard `sizeof(...) == N` compile assertion rather than an
+adjacency claim: `V92BitsToSymbol::pad_1d[3]` (`v92btos_size[(sizeof
+(V92BitsToSymbol) == 0x20)...]`) and `V90BitsToSymbol::pad_21[3]`
+(`v90bts_size[(sizeof(V90BitsToSymbol) == 0x24)...]`). Negative check via
+`dis.py` over every method of each owning class (nine, twenty-one, ten,
+nine, fourteen and eleven methods respectively) finds no access to any
+removed offset.
+
+**A second instance of the exact positional-initializer bug F10151's first
+entry (fdspkrnl.h) already found and fixed, caught before it could reach a
+test.** `src/service/detector.c` has its OWN static `struct fdsp_tone_cfg
+TONEamode_CFG` initializer, separate from `fdspkrnl.c`'s `TONE_CFG`, and it
+still had the same `{ 0, 0 }, /* pad_22 */` positional slot for the member
+this sweep's very first removal deleted from the struct declaration --
+found by grepping every removed pad name across the whole tree for live
+(non-comment) references before treating any removal as done, which is now
+this sweep's standing method rather than a one-off catch. Fixed the same
+way: the slot removed, the three following values now land on
+`int_0024`/`int_0028`/`int_002c` as intended. Caught by inspection, not by
+a test failure, because `TONEamode_CFG` has no differential test exercising
+it in the suites run so far -- worth flagging for whoever next touches
+`detector.c`'s tone paths.
+
+**Removing `V92BitsToSymbol::pad_1d` broke two test files that referenced
+the field BY NAME, both fixed the same way.** `t_v92btosproc.cpp` and
+`t_v92p4gen.cpp` each zeroed `bts->pad_1d` for determinism (poisoning
+hygiene between two compared instances, not read by any actual check in
+either file, confirmed by grepping both for `memcmp`/`diff_eq_obj` over the
+whole object) before every trial; both now zero the same physical three
+bytes by pointer offset (`memset((char *)bts + 0x1d, 0, sizeof(*bts) -
+0x1d)`) instead of by field name. A THIRD hit on the same grep,
+`V92Phase4Modulator.h`/`.cpp` and `t_v92p4reset.cpp`/
+`test/mutations/v92p4reset.json`, is a completely different, unrelated
+`pad_1d` belonging to `V92Phase4Modulator` (cluster 2, a sibling agent's
+scope) and was correctly left untouched -- traced by reading each hit's
+surrounding code rather than trusting the name match, which is exactly the
+discipline this cluster's short, offset-derived pad names demand: `pad_0e`,
+`pad_0a`, `pad_22`, `pad_1d`, `pad_16`, `pad_39` each independently occur in
+more than one unrelated struct across this tree, so EVERY removal in this
+sweep now gets a whole-tree grep for its exact name checked line by line for
+struct identity before being called done, not just a spot check of the
+owning class's own files.
+
+`make one` over the full batch (`t_jdmpleaves t_v34diag t_v90btsproc t_v90cp
+t_v90designers t_v90equproc t_v90jd t_v90modchain t_v90modemctor
+t_v90modprog t_v90p3ddec t_v90p3dreset t_v90p3mod t_v90p4ddec t_v90p4dleaf
+t_v90p4mgen t_v90p4seq t_v90packdata t_v90rundemod t_v92btosproc t_v92dec
+t_v92jd t_v92mod t_v92modem t_v92modstate t_v92p4gen t_v92p4reset t_v92p4sym
+t_v92precoder t_v92tx t_vpcmrunpcm`): 314 PASS, the only FAIL is
+`t_v90equproc`'s pre-existing declared RESET-arm divergence (731/120974,
+F6203, already confirmed unrelated to this sweep by an earlier A/B in this
+same finding). `tools/onedef.py`/`tools/refcheck.py`/`tools/offcheck.py`/
+`tools/anchorcheck.py` all clean. (2026-09-04)
+
+### `silence.h`/`mohdet.h`/`dtmf_rx.h`/`detector.h`: 4 more removed, `cadence::pad_2c0` re-confirmed as genuinely dead space and left alone
+
+Four more small structs, closing out this sweep's tail:
+
+- `struct silence::pad_0e[2]`: `saw_signal` ends at +0x0e, alignment forced
+  to 4 by `obj`/`query` leaves exactly this gap ahead of `energy` (float).
+  `dis.py` over all four `silence_*` functions finds no access.
+  `test/unit/t_fdspksil.c` had a LIVE reference by name --
+  `sb.pad_0e[0]`, a deliberate differential check that `silence_create`
+  leaves a seeded fill byte (0x3c) untouched at this exact offset, useful
+  and specific evidence this pad really is inert -- fixed to read the same
+  physical byte via `((unsigned char *)&sb)[0x0e]` rather than by field
+  name.
+- `struct tag_retrainReqDet::pad_12` (mohdet.h, a bare `short`): `a2_q14`
+  ends at +0x12, alignment forced to 4 by three trailing `int` members
+  leaves exactly this gap ahead of `energyInp`. `dis.py` over
+  `retrainDetector`/`resetRetrainDetector` finds no access.
+- `struct dtmf_rx::pad_002[1]`: `short_000` ends at +0x002, alignment
+  forced to 4 by `int_004` leaves exactly this gap. `dis.py` over the four
+  functions that touch this struct (`reset_dtmf`, `create_cid_dtmf`,
+  `band_pass`, `dtmf_modem`) found one candidate hit, traced and excluded:
+  `band_pass`'s `lea 0x2(%edi,%edi,2),%eax` is an `edi*3+2` arithmetic
+  index computation with no single struct-pointer base register, not a
+  field read -- the same false-positive shape `tagV90AdditionalCPinfo`'s
+  entry above already worked through once.
+- `struct detector::pad_0002[2]`: `enable` ends at +0x02, alignment forced
+  to 4 by `dtmf` and every pointer/int after it leaves exactly this gap.
+  `dis.py` over the four `detector_*` functions found and traced a second
+  false positive of the same shape: `detector_progress`'s
+  `lea 0x2(%edx),%eax` is `dtmf_progress`'s RETURN VALUE plus 2 (`%edx` was
+  just loaded from `movswl %ax,%edx` off that call's result), not a struct
+  field -- corroborated by the same function's genuine `mov 0x4(%esi),%edx`
+  three instructions earlier, which IS the `dtmf` field read at its
+  asserted +0x04.
+
+`cadence::pad_2c0[16]` (the one `pad_NNNN` this sweep's earlier
+`f_10137` finding already investigated) was re-checked against this
+sweep's arithmetic test rather than assumed: `pattern[4]` ends at +0x2c0
+already 4-aligned, so natural alignment ahead of the next `int` field
+(`fixed_pattern` at +0x2d0) would insert ZERO bytes, not sixteen. Fails
+outright, independently confirming the earlier session's finding that this
+is real (if unidentified) dead space and not a compiler gap. Left
+untouched, as it already was.
+
+`make one T="t_beepgen t_cidleaves t_cidprog t_cidsvc t_detector t_dtmfrx
+t_fdspksil t_voicedp t_voicedpdel t_voicedprx t_voiceproc t_voicesvc
+t_mohdet"`: 122 PASS, 0 FAIL. `tools/onedef.py`/`tools/refcheck.py`/
+`tools/offcheck.py`/`tools/anchorcheck.py` all clean.
+
+## Sweep complete: file list, totals, and reconciliation notes for sibling agents
+
+**Every file this session's `grep -rlE '\bpad_[0-9a-fA-F]+\b' include/ src/`
+turned up, outside the four excluded clusters, was read and either changed
+or explicitly checked and declined.** No file in the assigned tail was left
+unexamined.
+
+**Files touched (18 headers + 5 `.cpp`/`.c` + 3 test files):**
+
+    include/dsplib/fdspkrnl.h              4 removed
+    src/service/fdspkrnl.c                 (assertions + initializer fix)
+    include/dsplib/V90SignBitsExtractor.h  2 removed, 1 declined (pad_14)
+    include/dsplib/V90Phase2Info.h         1 removed
+    include/dsplib/V90Mapper.h             2 removed
+    include/dsplib/V90Demapper.h           3 removed
+    include/dsplib/V92Phase2Info.h         1 removed
+    include/dsplib/V92CPUnPck.h            1 removed
+    include/dsplib/V90SpectralShaper.h     2 removed
+    include/dsplib/V90MP.h                 2 removed
+    include/dsplib/tagV90AdditionalCPinfo.h 1 removed
+    include/dsplib/dtmf.h                  1 removed, 1 declined (pad_80)
+    include/dsplib/cid.h                   2 removed
+    include/dsplib/V92Modulator.h          1 removed
+    include/dsplib/V92Jd.h                 1 removed
+    include/dsplib/V92BitsToSymbol.h       1 removed
+    src/pump/v90/V92BitsToSymbol.cpp       (assertion removed)
+    include/dsplib/V90RDetector.h          1 removed
+    include/dsplib/V90Jd.h                 1 removed
+    include/dsplib/V90BitsToSymbol.h       1 removed
+    include/dsplib/silence.h               1 removed
+    include/dsplib/mohdet.h                1 removed
+    include/dsplib/dtmf_rx.h               1 removed
+    include/dsplib/detector.h              1 removed
+    src/service/detector.c                 (initializer fix, TONEamode_CFG)
+    test/unit/t_v92btosproc.cpp            (pad_1d name -> offset)
+    test/unit/t_v92p4gen.cpp               (pad_1d name -> offset)
+    test/unit/t_fdspksil.c                 (pad_0e name -> offset)
+
+**28 `pad_NNNN` regions removed, 6 checked and explicitly declined** (with
+the arithmetic mismatch or non-alignment reason recorded at each site):
+`V90SignBitsExtractor::pad_14`, `V90CPUnPck`'s three (`pad_00`, `pad_37`,
+`pad_9a`), `V92Transmitter`'s two (`pad_00`, `pad_5c`), `dtmf::pad_80`,
+`V92Phase3Modulator::pad_44`, `V92Mapper::pad_03`, `fdsp_buffers::pad_1f40`
+and `fdsp_tone`'s two (`pad_10`, `pad_22[0xe]`), and `cadence::pad_2c0`
+(re-confirmed rather than re-derived, per standing instruction not to
+repeat an already-declined result without new evidence). **15 files in the
+naive grep list turned out to have no LIVE `pad_NNNN` struct member at
+all** (a `V9*_OFF`-style assertion macro reusing an old field's `pad_`
+label as its tag argument, or a comment mentioning a renamed field's former
+name) -- listed in this finding's opening paragraph, not repeated here.
+
+**Files NOT in this sweep's scope, and why**, so the parent can reconcile
+against the four sibling agents' own reports: every file the task brief's
+exclusion list named (`V90Equalizer.h`, `V90ConstellationDesigner.h`,
+`V90Demodulator.h`, `V90Phase3Demodulator.h`, `V90Phase4Demodulator.h`,
+`V90ConnectionEvaluator.h`/`.cpp`; `VPcmFloModem.h`, `V92CP.h`, `V90CP.h`,
+`V90AutoDigitalImpDetector.h`, `V90SessionFlag.h`, `V90Phase3Modulator.h`,
+`V90Phase4Modulator.h`/`.cpp`, `V92Phase4Modulator.h`/`.cpp`; `v34recv.h`,
+`v34shell.h`, `v34fsk.h`, `v34pcmmain.cpp`, `v34hstx1.cpp`, `v34hshak.c`,
+`v34filt.h`, `v34rx.h`; `faxvmi.h`/`.c`, `class1.h`, `fax.h`, `class1tx.c`,
+`class1rx.c`, `v29fax.h`, `v17fax.h`, `v29data.h`, `faxfifo.h`) was left
+strictly alone -- not read, not grepped into a candidate list, not touched.
+Two borderline files were skipped on the "if in doubt, skip" instruction
+rather than the letter of the exclusion list: `VPcmFloModem.cpp` and
+`V90Demodulator.cpp` (their headers are excluded and each is clearly the
+same class's own implementation file, even though the `.cpp` spelling
+itself was not named).
+
+**Real regression gate.** `tools/toolchain/byteident.py --ratchet` needs
+docker, unavailable in this sandbox; left for the parent's post-merge gate
+per every prior wave's precedent. Every change in this sweep is either a
+struct-member deletion relying on standard C/C++ implicit alignment (which
+`make period`'s own compiler reproduces byte-for-byte by construction, not
+by hope) or a comment/assertion/test-apparatus edit that cannot move
+generated code, so the ratchet is expected to hold at 736/1852 EXACT
+unchanged -- but "expected" is not "measured," and the parent's own run is
+what decides. (2026-09-04)

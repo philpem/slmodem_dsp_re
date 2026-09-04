@@ -125,7 +125,13 @@ public:
 	unsigned char unpack[2];		/* +0x00 shared unpack state  */
 	unsigned char bits[V90JD_BITS];		/* +0x02 the data message     */
 	unsigned char phaseBits[V90JD_BITS];	/* +0x4a the phase message    */
-	unsigned char pad_92[2];		/* +0x92 ahead of crc         */
+	/*
+	 * +0x92 was `pad_92[2]` -- REMOVED (finding F10151).  Already
+	 * correctly described as alignment ahead of `crc`; proved
+	 * mechanically by the existing `V92JD_OFF(phaseBits, 0x4a, ...)`/
+	 * `V92JD_OFF(crc, 0x94, ...)` and by `dis.py` over all twenty-one
+	 * `V92Jd` methods finding no access to offset 0x92/0x93.
+	 */
 	int crc[16];				/* +0x94 shared by both packs */
 	int unpackWord;				/* +0xd4                      */
 	int unpackPhaseWord;			/* +0xd8                      */

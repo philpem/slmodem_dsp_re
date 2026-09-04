@@ -143,7 +143,15 @@ public:
 	unsigned int extraSymbols;	/* +0x18 NOT set by the constructor */
 	unsigned int symbolsBlockSize;	/* +0x1c zeroed by ctor and reset   */
 	unsigned char extraSymbolsPending; /* +0x20 set to 1 by both         */
-	unsigned char pad_21[3];	/* +0x21 tail padding               */
+	/*
+	 * +0x21 was `pad_21[3]`, the struct's LAST member -- REMOVED
+	 * (finding F10151).  Already correctly described as tail padding;
+	 * `extraSymbolsPending` ends at +0x21 and the class's own 4-byte
+	 * alignment rounds `sizeof` up to +0x24 on its own, already proved
+	 * by the existing `v90bts_size[(sizeof(V90BitsToSymbol) == 0x24) ?
+	 * 1 : -1]` hard compile assertion. `dis.py` over all eleven
+	 * `V90BitsToSymbol` methods finds no access to 0x21/0x22/0x23.
+	 */
 };
 
 #endif /* DSPLIB_V90BITSTOSYMBOL_H */

@@ -250,7 +250,13 @@ public:
 	/* +0x102  The CRC register, one byte per bit; `resetCRC` sets all. */
 	unsigned char crc[V90MP_CRC];
 
-	unsigned char pad_112[2];	/* +0x112 alignment               */
+	/*
+	 * +0x112 was `pad_112[2]` -- REMOVED (finding F10151).  Already
+	 * correctly described as alignment; proved mechanically by the
+	 * existing `V90MP_OFF(crc, 0x102, ...)`/`V90MP_OFF(word_114, 0x114,
+	 * ...)` and by `dis.py` over every `V90MP` method finding no access
+	 * to 0x112/0x113.
+	 */
 
 	/* +0x114  `calcSequenceLength`'s divisor: the group size. */
 	unsigned int word_114;
@@ -268,7 +274,13 @@ public:
 	 */
 	unsigned char byte_119;
 
-	unsigned char pad_11a[2];	/* +0x11a alignment               */
+	/*
+	 * +0x11a was `pad_11a[2]` -- REMOVED (finding F10151).  Already
+	 * correctly described as alignment; proved mechanically by the
+	 * existing `V90MP_OFF(byte_119, 0x119, ...)`/`V90MP_OFF
+	 * (nofRecievedMp, 0x11c, ...)` and by `dis.py` finding no access to
+	 * 0x11a/0x11b.
+	 */
 
 	/*
 	 * +0x11c  MP frames received, by the debug string's own words.
