@@ -326,7 +326,7 @@ prog_wire(int side, int trial)
 	e->linearEquMmxCoefsSkew = e->array_d8Skew = e->array_ecSkew = 1;
 	e->dfeMmxCoefsSkew = e->array_118Skew = e->array_12cSkew = 1;
 	e->linearEquLength = PROG_LELEN;
-	e->word_1c = PROG_M;
+	e->linearEquHistoryLength = PROG_M;
 	e->dfeLength = PROG_DFELEN;
 	e->mmxMode = 0;
 	e->mmxArraysPresent = 0;

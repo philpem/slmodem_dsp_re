@@ -1999,7 +1999,7 @@ run_exit_phase3(void)
 			e->dfeCoefs = x3_dfe[s];
 			e->linearEquLength = X3_COEFS;
 			e->dfeLength = X3_COEFS;
-			e->word_1c = X3_COEFS;
+			e->linearEquHistoryLength = X3_COEFS;
 			e->state = eqs ? V90EQU_STATE_PHASE4
 				       : (int)(1 + trial % 5);
 			e->stateCount = 0x5c5c0000 + (int)(trial & 0xff);

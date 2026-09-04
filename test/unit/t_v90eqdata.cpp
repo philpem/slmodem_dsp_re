@@ -268,9 +268,9 @@ mmx_setup(long tag, unsigned int le, unsigned int dfe, unsigned int w1c,
 
 	OURS.linearEquLength = THEIRS.linearEquLength = le;
 	OURS.dfeLength = THEIRS.dfeLength = dfe;
-	OURS.word_1c = THEIRS.word_1c = w1c;
-	OURS.word_20 = THEIRS.word_20 = 0x5a5a0000u + (unsigned)pat;
-	OURS.word_20Saved = THEIRS.word_20Saved = 0xdeadbeefu;
+	OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = w1c;
+	OURS.historyIndex = THEIRS.historyIndex = 0x5a5a0000u + (unsigned)pat;
+	OURS.historyIndexSaved = THEIRS.historyIndexSaved = 0xdeadbeefu;
 	OURS.maxLeCoefValue = THEIRS.maxLeCoefValue = ml;
 	OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = md;
 	OURS.linearEquBeta = THEIRS.linearEquBeta = beta;

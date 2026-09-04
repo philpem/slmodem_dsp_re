@@ -54,7 +54,7 @@
  * the mangling is what types them.  `+0x08` and `+0x38` are bytes by their
  * store encodings (`c6 40 08 00` and `c6 40 38 16`, neither with an
  * operand-size prefix), seeded 0 and 22.  The constructor also writes the
- * two rate defaults documented above and zeroes `word_48`, so `reset()` is
+ * two rate defaults documented above and zeroes `rateAction`, so `reset()` is
  * not the only thing that clears it.
  *
  * `reset()` (task #88, the lifecycle batch) added the seven fields it writes.
@@ -114,6 +114,19 @@ class V90MappingParams;
  * definition, because `process` reads two of its fields.
  */
 class V90AutoDigitalImpDetector;
+
+/*
+ * `rateAction`'s (+0x48) values, from `setConstellationToNoise`'s own
+ * four-way `switch` and the diagnostic each arm prints -- "NoRestriction",
+ * "KeepRate", "dMin calc OneRateUp" and "dMin calc OneRateDown" -- which is
+ * class-1 evidence under CLAUDE.md's ordering.  The constructor and `reset`
+ * both seed 0 (NoRestriction); the KeepRate case is what the field is left
+ * holding after every `setConstellationToNoise` call, for the next one.
+ */
+#define V90CD_RATE_NONE		0	/* "NoRestriction"           */
+#define V90CD_RATE_KEEP		1	/* "KeepRate"                */
+#define V90CD_RATE_UP		2	/* "dMin calc OneRateUp"     */
+#define V90CD_RATE_DOWN		3	/* "dMin calc OneRateDown"   */
 
 class V90ConstellationDesigner {
 public:
@@ -315,9 +328,18 @@ public:
 	/*
 	 * +0x08  `movb $0x0,0x8(%eax)` in the constructor, and a BYTE: the
 	 * encoding is `c6 40 08 00`, which has no operand-size prefix and no
-	 * 32-bit immediate.  Nothing reconstructed here reads it, so it is
-	 * offset-named; what the constructor proves is the width and the
-	 * initial value, not the meaning.  It used to be inside `pad_04`.
+	 * 32-bit immediate.  It is offset-named; what the constructor proves
+	 * is the width and the initial value, not the meaning.  It used to be
+	 * inside `pad_04`.
+	 *
+	 * NOW HAS A WRITER AND A READER, and neither names it.  `process`
+	 * stores `42 - (unsigned char)mappingParams->word_0`, rounded up by
+	 * one above 4, into it (`byte_08 from 42 - d` at the site's own
+	 * comment); `adjustConstellationsPower` reads it once, to force the
+	 * per-round removal count to 1 once it exceeds 13.  So it is a scaled
+	 * distance from the constellation table's `word_0` ceiling, used only
+	 * as a threshold -- which bounds the role without a name for the
+	 * quantity itself, so it keeps its offset name.
 	 */
 	unsigned char byte_08;		/* +0x08                            */
 
@@ -341,21 +363,38 @@ public:
 	 * the reconstruction, `reset`'s zeroing aside:
 	 *
 	 *     +0x0a  dMin         read as `filds 0xa(%edx)`, and copied into
-	 *                         both of the others; still written by
-	 *                         nothing this tree has reconstructed
+	 *                         both of the others; also printed directly
+	 *                         by `setConstellationToNoise` ("current dMin
+	 *                         = %d", "final dMin = %d")
 	 *     +0x0c  rrnDownDmin  "V90ConstellationDesigner:: rrnDownDmin =
 	 *                         %d" prints `movswl 0xc(%edx)`
 	 *     +0x0e  rrnUpDmin    the same message and load, at +0x0e
 	 *
-	 * They keep their offset names.  A name out of a diagnostic is the
-	 * author's word for the QUANTITY, and these names are for the SLOTS
-	 * the offset assertions pin; the mapping is recorded here, which is
-	 * where a later batch can act on it.
+	 * NOW NAMED, PROMOTED FROM THE OFFSET SPELLING.  Wave 2's field-naming
+	 * pass left these offset-named on the ground that "a name out of a
+	 * diagnostic is the author's word for the QUANTITY, and these names
+	 * are for the SLOTS the offset assertions pin" -- but the mapping
+	 * between quantity and slot is exactly what the evidence above
+	 * establishes, one-to-one and unambiguous, so wave 3 acts on it.
+	 * Class-1 evidence (a format string naming the field) under CLAUDE.md's
+	 * ordering.
 	 */
-	short short_0a;			/* +0x0a  the author's `dMin`        */
-	short short_0c;			/* +0x0c  the author's `rrnDownDmin` */
-	short short_0e;			/* +0x0e  the author's `rrnUpDmin`   */
-	short short_10;			/* +0x10 */
+	short dMin;			/* +0x0a  the author's `dMin`        */
+	short rrnDownDmin;		/* +0x0c  the author's `rrnDownDmin` */
+	short rrnUpDmin;		/* +0x0e  the author's `rrnUpDmin`   */
+
+	/*
+	 * +0x10  `dMin * 1.25`, computed once in `setConstellationToNoise`
+	 * (`short_10 = (short)(dMin * 1.25f);` there) and used only as an
+	 * upper threshold in `findNextUcodeToAdd` and
+	 * `adjustConstellationsToNewK` -- the same additive role `dMin` plays
+	 * on the narrower comparisons beside it (compare the two arms at
+	 * `+0x10`'s three use sites against the `dMin`-only ones next to
+	 * them).  No format string or callee names the quantity itself, so it
+	 * stays offset-named; the formula is recorded here for the next
+	 * reader rather than guessed into a name.
+	 */
+	short short_10;			/* +0x10 = dMin * 1.25             */
 
 	unsigned char pad_12[2];	/* +0x12                            */
 
@@ -402,7 +441,7 @@ public:
 	/*
 	 * +0x18 .. +0x20  Three floats, and `setConstellationToNoise` is the
 	 * first reader OR writer of any of them.  It writes all three in each
-	 * of three of its four `word_48` arms --
+	 * of three of its four `rateAction` arms --
 	 *
 	 *     +0x18 = noiseEnergy * 0.45f
 	 *     +0x1c = noiseEnergy * 1.4125f
@@ -421,27 +460,33 @@ public:
 	 *     +0x1c  pdSnrThreshForRateDown
 	 *     +0x20  pdSnrThreshForRetrain
 	 *
-	 * They keep their offset names for the reason `short_0c` and
-	 * `short_0e` do: a name out of a diagnostic is the author's word for
-	 * the QUANTITY and these names are for the SLOTS the offset
-	 * assertions pin.  The mapping is recorded here, which is where a
-	 * later batch can act on it.
+	 * NOW NAMED, for the same reason `dMin`, `rrnDownDmin` and
+	 * `rrnUpDmin` are: the mapping between quantity and slot is exactly
+	 * what the format strings establish, one-to-one.  Class-1 evidence.
 	 */
-	float float_18;			/* +0x18  pdSnrThreshForRateUp      */
-	float float_1c;			/* +0x1c  pdSnrThreshForRateDown    */
-	float float_20;			/* +0x20  pdSnrThreshForRetrain     */
+	float pdSnrThreshForRateUp;	/* +0x18                            */
+	float pdSnrThreshForRateDown;	/* +0x1c                            */
+	float pdSnrThreshForRetrain;	/* +0x20                            */
 
 	/*
 	 * +0x24  Seeded by `reset` from the parameter block's +0x39c, which
 	 * `tools/vparse.py` reports as `unnamed_39c`: `setToDefault` writes it
 	 * and `loadParams` never reads it, so the original has no name for it
 	 * either (finding F878).
+	 *
+	 * `process` is now known to write it too, but only once: `if (word_24
+	 * == 0) word_24 = currentRate;` after the design loop settles, so the
+	 * slot latches the FIRST rate a design ever converged on and then
+	 * stops changing.  `setConstellationToNoise`'s `case 0` (NoRestriction)
+	 * also reads it, as a "has a rate been established yet" gate on its one
+	 * clamp.  That bounds the ROLE, not the name -- the parameter it is
+	 * seeded from has none either -- so it keeps its offset name.
 	 */
 	unsigned int word_24;		/* +0x24 = params->w[0x39c / 4]     */
 
 	/*
-	 * +0x28  FOUR BYTES BECAUSE IT IS COMPARED AGAINST `word_2c`, and
-	 * that is the only thing about it the object fixes:
+	 * +0x28  FOUR BYTES BECAUSE IT IS COMPARED AGAINST `compandingLaw`,
+	 * and that is the only thing about it the object fixes:
 	 * `setConstellationToNoise` loads `mov 0x2c(%ecx),%edx` and then
 	 * `cmp 0x28(%ecx),%edx`, a 32-bit compare with no operand-size
 	 * prefix, so the two slots are the same width.  It used to be
@@ -454,15 +499,16 @@ public:
 	 *     mov 0xa960(%edi),%esi ; mov %esi,0x2c(%ebp)   int_a960
 	 *
 	 * So the "nothing anywhere in the object writes it" sentence that used
-	 * to stand here is retracted for both, `word_28` is the session's
-	 * companding law as `V90AutoDigitalImpDetector::reset` stored it, and
-	 * the equality test between the two asks whether the detector's second
-	 * flag agrees with it.  The types stay as the widths measure them: what
-	 * the object forces is four bytes and a 32-bit compare, and naming
-	 * `PcmType` here would make this header depend on the one that defines
-	 * the enum for no measured gain.
+	 * to stand here is retracted for both.  NOW NAMED from the writer's own
+	 * comment above (`= detector->pcmType`), which is class-2/3 evidence --
+	 * a typed source field plus the whole-function reading of what the
+	 * comparison does.  The equality test between the two asks whether the
+	 * detector's companding law agrees with its own recorded PCM type.
+	 * Stays `int` and not `PcmType`: what the object forces is four bytes
+	 * and a 32-bit compare, and naming the type would make this header
+	 * depend on the one that defines the enum for no measured gain.
 	 */
-	int word_28;			/* +0x28 = detector->pcmType        */
+	int pcmType;			/* +0x28 = detector->pcmType        */
 
 	/*
 	 * +0x2c  The companding law, and a four-byte load: `mov 0x2c(%edx),%esi
@@ -474,15 +520,17 @@ public:
 	 * rather than `PcmType` because the only thing the object forces is
 	 * the width and the `!= 0`, and naming the type would make this header
 	 * depend on the one that defines the enum for no measured gain.  It
-	 * used to be inside `pad_28`.
+	 * used to be inside `pad_28`.  NOW NAMED `compandingLaw` from that
+	 * same reading -- class-2/3 evidence, the two callees' laws plus the
+	 * `PcmType` convention it matches.
 	 *
 	 * IT IS ALSO WHAT THE THREE NEW MEMBERS HAND TO `getPower` as its
 	 * `PcmType` argument, which is the same reading from a second
 	 * direction: `mov 0x2c(%ebp),%edx ; mov %edx,0xc(%esp)` ahead of every
 	 * one of the five `V90ConstellationPower::getPower` calls.  See
-	 * `word_28` above for where `process` gets it from.
+	 * `pcmType` above for where `process` gets it from.
 	 */
-	int word_2c;			/* +0x2c = detector->int_a960       */
+	int compandingLaw;		/* +0x2c = detector->int_a960       */
 
 	/*
 	 * +0x30 and +0x44  The constructor's third and second arguments,
@@ -508,11 +556,12 @@ public:
 	 * argument an `unsigned char`), and `adjustConstellationsPower` reads
 	 * it as the index into `V90ConstellationPower::averagePowerLimits` --
 	 * clamped by `cmp $0x15,%al; ja` to the constructor's own 22, which is
-	 * why the seed is that value.  So the field is a power-ladder index and
-	 * the default is the ladder entry the design starts from; it keeps its
-	 * offset name because nothing in the object names the quantity.
+	 * why the seed is that value.  NOW NAMED `powerLadderIndex`: the role
+	 * is unambiguous from the whole of `adjustConstellationsPower` (class-3,
+	 * usage inference over the enclosing algorithm), even though no format
+	 * string or callee types the quantity itself.
 	 */
-	unsigned char byte_38;		/* +0x38 a power-ladder index, 22   */
+	unsigned char powerLadderIndex;	/* +0x38 a power-ladder index, 22 */
 
 	unsigned char pad_39[3];	/* +0x39                            */
 
@@ -531,7 +580,16 @@ public:
 
 	V90PreFilter *preFilter;	/* +0x44 = constructor argument 2   */
 
-	unsigned int word_48;		/* +0x48 zeroed by reset            */
+	/*
+	 * +0x48  Four-way action code, zeroed by the constructor and by
+	 * `reset`.  `setConstellationToNoise`'s own `switch` over it and the
+	 * diagnostic each arm prints name the four values -- see
+	 * `V90CD_RATE_*` above.  Every call ends by leaving it at
+	 * `V90CD_RATE_KEEP`, which is what the "next call is a KeepRate one"
+	 * comment at the end of that function is about.  Class-1 evidence
+	 * (format strings matching the case labels).
+	 */
+	unsigned int rateAction;	/* +0x48 see V90CD_RATE_* above     */
 
 	unsigned int maxRate;		/* +0x4c defaults to 56000          */
 	unsigned int minRate;		/* +0x50 defaults to 28000          */

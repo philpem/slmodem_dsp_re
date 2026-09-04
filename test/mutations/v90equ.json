@@ -26,8 +26,8 @@
   },
   {
     "label": "the history length is not rounded down to a multiple of two",
-    "find": "\tword_1c = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);",
-    "replace": "\tword_1c = (unsigned int)params->LINEAR_EQU_HISTORY_LENGTH;"
+    "find": "\tlinearEquHistoryLength = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);",
+    "replace": "\tlinearEquHistoryLength = (unsigned int)params->LINEAR_EQU_HISTORY_LENGTH;"
   },
   {
     "label": "the DFE's window is sized by the DFE's length, not the equaliser's",
@@ -41,7 +41,7 @@
   },
   {
     "label": "array_ec is sized like the equaliser's arrays rather than the history's",
-    "find": "\t\tarray_ec = (short *)sysdep_malloc(\n\t\t    (word_1c + 8) * sizeof(short));",
+    "find": "\t\tarray_ec = (short *)sysdep_malloc(\n\t\t    (linearEquHistoryLength + 8) * sizeof(short));",
     "replace": "\t\tarray_ec = (short *)sysdep_malloc(\n\t\t    (linearEquLength + 8) * sizeof(short));"
   },
   {
@@ -120,8 +120,8 @@
     "why": "EXPECTED UNCAUGHT.  Nothing between the store and the call reads +0xb0 -- `edprintf` takes one argument and touches only the encoder's own state -- and the field is compared after both sides have returned.  The order is read off 37ced against 37cfa and transcribed for that reason and not for an observable one."
   },
   {
-    "label": "the linear history is bounded by linearEquLength rather than word_1c",
-    "find": "\tfor (i = 0; i < word_1c; i++) {\n\t\tshort s = (short)array_18[i];",
+    "label": "the linear history is bounded by linearEquLength rather than linearEquHistoryLength",
+    "find": "\tfor (i = 0; i < linearEquHistoryLength; i++) {\n\t\tshort s = (short)array_18[i];",
     "replace": "\tfor (i = 0; i < linearEquLength; i++) {\n\t\tshort s = (short)array_18[i];"
   }
 ]

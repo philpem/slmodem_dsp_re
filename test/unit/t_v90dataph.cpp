@@ -1026,7 +1026,7 @@ run_accessors(void)
 			compare_all("indicateRemoteRateReneg", tag);
 			diff_eq_int("the designer's flag (%ld)",
 				    (long)((V90ConstellationDesigner *)cd[1])
-					->word_48, 1L, tag);
+					->rateAction, 1L, tag);
 
 			/* --- getAT_UD --- */
 			dsplib_debug_capture_reset();

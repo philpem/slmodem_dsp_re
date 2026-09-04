@@ -85,22 +85,22 @@ V90CD_OFF(params,    0x00, params);
 V90CD_OFF(mappingParams, 0x04, mappingparams);
 V90CD_OFF(byte_08,   0x08, byte08);
 V90CD_OFF(constelTable, 0x14, consteltable);
-V90CD_OFF(float_18,  0x18, float18);
-V90CD_OFF(float_1c,  0x1c, float1c);
-V90CD_OFF(float_20,  0x20, float20);
-V90CD_OFF(word_28,   0x28, word28);
-V90CD_OFF(word_2c,   0x2c, word2c);
-V90CD_OFF(short_0a,  0x0a, short0a);
-V90CD_OFF(short_0c,  0x0c, short0c);
-V90CD_OFF(short_0e,  0x0e, short0e);
+V90CD_OFF(pdSnrThreshForRateUp,  0x18, float18);
+V90CD_OFF(pdSnrThreshForRateDown,  0x1c, float1c);
+V90CD_OFF(pdSnrThreshForRetrain,  0x20, float20);
+V90CD_OFF(pcmType,   0x28, word28);
+V90CD_OFF(compandingLaw,   0x2c, word2c);
+V90CD_OFF(dMin,  0x0a, short0a);
+V90CD_OFF(rrnDownDmin,  0x0c, short0c);
+V90CD_OFF(rrnUpDmin,  0x0e, short0e);
 V90CD_OFF(short_10,  0x10, short10);
 V90CD_OFF(word_24,   0x24, word24);
 V90CD_OFF(power,     0x30, power);
-V90CD_OFF(byte_38,   0x38, byte38);
+V90CD_OFF(powerLadderIndex,   0x38, byte38);
 V90CD_OFF(codecType, 0x3c, codectype);
 V90CD_OFF(word_40,   0x40, word40);
 V90CD_OFF(preFilter, 0x44, prefilter);
-V90CD_OFF(word_48,   0x48, word48);
+V90CD_OFF(rateAction,   0x48, word48);
 V90CD_OFF(maxRate, 0x4c, maxrate);
 V90CD_OFF(minRate, 0x50, minrate);
 typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
@@ -132,7 +132,7 @@ typedef char v90cd_size[(sizeof(V90ConstellationDesigner) == 0x54) ? 1 : -1];
  */
 #define FORCERATE_ENCODE(k, idx)					\
 	do {								\
-		if (word_2c != 0)					\
+		if (compandingLaw != 0)					\
 			mappingParams->codecConstellation[k][idx] =	\
 			    (unsigned char)(linear2alaw(__builtin_abs(	\
 				(int)ucode[k][mappingParams		\
@@ -219,13 +219,13 @@ V90ConstellationDesigner::V90ConstellationDesigner(V90Parameters *p,
 						   V90ConstellationPower *cp)
 {
 	/*
-	 * `byte_38 = 0x16;` SITS BELOW THE TWO POINTER STORES, AND THAT MUCH
+	 * `powerLadderIndex = 0x16;` SITS BELOW THE TWO POINTER STORES, AND THAT MUCH
 	 * IS DECODED FROM THE OBJECT -- the slot it occupies inside the run
 	 * below them is not.
 	 *
 	 * All 8! = 40,320 orders of these eight statements were compiled with
 	 * the period compiler in a stand-alone model of this class, validated
-	 * first by checking that the order below-but-one (`byte_38` third,
+	 * first by checking that the order below-but-one (`powerLadderIndex` third,
 	 * which is what this constructor used to say) reproduces our own
 	 * object's thirteen instructions exactly.  The 40,320 cells give 6,624
 	 * DISTINCT emissions -- so the map is very far from constant, which is
@@ -236,25 +236,25 @@ V90ConstellationDesigner::V90ConstellationDesigner(V90Parameters *p,
 	 * The pairwise relations true in all thirteen are
 	 *
 	 *     byte_08   before  everything else
-	 *     power     before  params, byte_38, minRate, maxRate, preFilter
-	 *     params    before  byte_38, minRate, maxRate, preFilter
-	 *     word_48   before  minRate, maxRate, preFilter
+	 *     power     before  params, powerLadderIndex, minRate, maxRate, preFilter
+	 *     params    before  powerLadderIndex, minRate, maxRate, preFilter
+	 *     rateAction   before  minRate, maxRate, preFilter
 	 *     minRate   before  maxRate;  preFilter LAST in all thirteen
 	 *
-	 * and the only two our old order broke were the two naming `byte_38`:
+	 * and the only two our old order broke were the two naming `powerLadderIndex`:
 	 * it has to follow BOTH pointer stores.  Moving it to just after
 	 * `params` is the smallest edit that lands in the set; the other two
-	 * cells reachable without moving anything else (`byte_38` after
+	 * cells reachable without moving anything else (`powerLadderIndex` after
 	 * `minRate`, or after `maxRate`) are equally exact and there is
 	 * nothing in the object to separate the three.  It was 34 differing
 	 * bytes of 54 on both clones, rejected at row 2, `mov 0x10(%esp),%edx`
 	 * against `movb $0x16,0x38(%eax)`.
 	 */
 	byte_08 = 0;
-	word_48 = 0;
+	rateAction = 0;
 	power = cp;
 	params = p;
-	byte_38 = 0x16;
+	powerLadderIndex = 0x16;
 	minRate = 28000;
 	maxRate = 56000;
 	preFilter = pf;
@@ -561,10 +561,10 @@ V90ConstellationDesigner::calcMtoMatchKtarget(float kTarget, float m)
  * where every name below comes from: `pParams->m[1..6]` for
  * `V90MappingParams::constellationSize`, `phase` for the chosen constellation,
  * `maxM`, `nofUcodes`, `prevNofUcodes`, `tempDmin`, `prevDmin`, `dMin`,
- * `rrnDownDmin` and `rrnUpDmin`.  The last three are `short_0a`, `short_0c`
- * and `short_0e`, and THIS IS THE FIRST READER OR WRITER OF `short_0c` AND
- * `short_0e` anywhere in the reconstruction: `reset` zeroes both and nothing
- * else had touched them.  `short_0a` is `dMin` -- read here, written by
+ * `rrnDownDmin` and `rrnUpDmin`.  The last three are `dMin`, `rrnDownDmin`
+ * and `rrnUpDmin`, and THIS IS THE FIRST READER OR WRITER OF `rrnDownDmin` AND
+ * `rrnUpDmin` anywhere in the reconstruction: `reset` zeroes both and nothing
+ * else had touched them.  `dMin` is `dMin` -- read here, written by
  * nothing reconstructed yet.
  *
  * WHAT IT RETURNS IS NOTHING, and the argument is stronger than "no path sets
@@ -706,7 +706,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 		 */
 		nofUcodes = (unsigned char)
 			    mappingParams->constellationSize[phase];
-		tempDmin = short_0a;
+		tempDmin = dMin;
 		nofIterations = 0;
 		while (nofUcodes >= rrnDownMaxM && nofIterations <= 99) {
 			prevNofUcodes = nofUcodes;
@@ -728,14 +728,14 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 			    tempDmin, prevDmin);
 
 		if (prevNofUcodes == rrnDownMaxM)
-			short_0c = prevDmin;
+			rrnDownDmin = prevDmin;
 		else if (calcK(nofUcodes, mm) >= rrn - 0.8f
 			 || calcK(prevNofUcodes, mm) >= rrn - 0.3f)
-			short_0c = tempDmin;
+			rrnDownDmin = tempDmin;
 		else
-			short_0c = prevDmin;
+			rrnDownDmin = prevDmin;
 	} else {
-		short_0c = (short)(short_0a * 1.25f + 0.5f);
+		rrnDownDmin = (short)(dMin * 1.25f + 0.5f);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner:: maxM>pParams->m[phase]"
@@ -744,7 +744,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90ConstellationDesigner:: rrnDownDmin = %d\r\n",
-		    short_0c);
+		    rrnDownDmin);
 
 	/* And the rate-up target, which divides where its twin multiplied. */
 	{
@@ -788,7 +788,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 		    mappingParams->constellationSize[phase], rrnUpMaxM);
 
 	if (failed) {
-		short_0e = short_0a;
+		rrnUpDmin = dMin;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner:: failed to find"
@@ -800,7 +800,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 
 		nofUcodes = (unsigned char)
 			    mappingParams->constellationSize[phase];
-		tempDmin = short_0a;
+		tempDmin = dMin;
 		nofIterations = 0;
 		while (nofUcodes < rrnUpMaxM && nofIterations <= 99) {
 			tempDmin = (short)(tempDmin * 0.95f);
@@ -819,23 +819,23 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 
 		/*
 		 * THE FIRST STORE IS NOT DEAD, and that is what proves it is
-		 * in the source: 0x48b4a writes `tempDmin` into `short_0e`,
+		 * in the source: 0x48b4a writes `tempDmin` into `rrnUpDmin`,
 		 * calls the diagnostic, and 0x487e0 then overwrites it with
 		 * `dMin`.  A store to a member cannot be removed across an
 		 * external call, so the compiler kept it on the arm that has
 		 * one and sank it into 0x48ab9 on the arm that does not.
 		 */
-		short_0e = tempDmin;
+		rrnUpDmin = tempDmin;
 		if (calcK(nofUcodes, mm) > rrn + 1.7f) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90ConstellationDesigner:: tempDmin might"
 				    " cause 2 rates up => rrnUpDmin = dMin"
 				    "\r\n");
-			short_0e = short_0a;
+			rrnUpDmin = dMin;
 		}
 	} else {
-		short_0e = (short)(short_0a * 0.9f + 0.5f);
+		rrnUpDmin = (short)(dMin * 0.9f + 0.5f);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner:: maxM<pParams->m[phase]"
@@ -843,7 +843,7 @@ V90ConstellationDesigner::determineDminForRrn(unsigned int rrn)
 	}
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
-		    "V90ConstellationDesigner:: rrnUpDmin = %d\r\n", short_0e);
+		    "V90ConstellationDesigner:: rrnUpDmin = %d\r\n", rrnUpDmin);
 }
 
 /*
@@ -903,7 +903,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	float dMinHighRates = __builtin_nanf("");
 	float dMinLowRates = __builtin_nanf("");
 	float retrainFactor;
-	short keptDmin = short_0a;
+	short keptDmin = dMin;
 	unsigned char picked[128];
 	unsigned int nofPicked;
 	unsigned short maxM;
@@ -911,18 +911,18 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	unsigned int i;
 
 	/*
-	 * `keptDmin` above is read BEFORE either arm writes `short_0a`, and
+	 * `keptDmin` above is read BEFORE either arm writes `dMin`, and
 	 * that is what the KeepRate case restores.  The object keeps it in
 	 * %ebx from 0x48b96 all the way to 0x4946c.
 	 */
 	if (params->USE_RESTRICED_DMIN) {
 		dMinHighRates = noiseEnergy * 3.3330500f + 80.0f;
 		dMinLowRates = noiseEnergy * 8.2135878f + 12.0f;
-		short_0a = (short)(dMinLowRates >= dMinHighRates
+		dMin = (short)(dMinLowRates >= dMinHighRates
 				   ? dMinLowRates : dMinHighRates);
 		retrainFactor = 2.0f;
 	} else {
-		short_0a = (short)(noiseEnergy * 6.7762098f + 9.9f);
+		dMin = (short)(noiseEnergy * 6.7762098f + 9.9f);
 		retrainFactor = 4.0f;
 	}
 
@@ -961,12 +961,12 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf(
 		    "V90ConstellationDesigner: current dMin = %d\r\n",
-		    short_0a);
+		    dMin);
 
 	/*
 	 * FOUR CASES AND NO DEFAULT, and the object's decision tree is what
 	 * says so: `cmp $1; je / jle -> test for 0 / cmp $2; je / cmp $3; je`
-	 * is a balanced tree over {0,1,2,3}, and a `word_48` of 4 or more --
+	 * is a balanced tree over {0,1,2,3}, and a `rateAction` of 4 or more --
 	 * or a negative one -- falls out of the switch having written
 	 * nothing.  Three of the four end by writing the three thresholds and
 	 * KeepRate is the one that does not, which is exactly what its own
@@ -978,54 +978,54 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	 * helper would leave three calls and a symbol the blob has no
 	 * counterpart for.
 	 */
-	switch (word_48) {
-	case 1:
-		short_0a = keptDmin;
+	switch (rateAction) {
+	case V90CD_RATE_KEEP:
+		dMin = keptDmin;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: KeepRate => keep dMin"
 			    " and pdsnr thresh\r\n");
 		break;
 
-	case 2: {
+	case V90CD_RATE_UP: {
 		/*
 		 * One rate up wants the SMALLER of the two minimum distances,
 		 * and a zero `rrnUpDmin` means there is nothing to take.  The
 		 * condition code is what fixes the sense: `cmp %dx,%ax; jle`
-		 * keeps `short_0e` when it is less than OR EQUAL, so the
+		 * keeps `rrnUpDmin` when it is less than OR EQUAL, so the
 		 * source's test is on the other one being greater.
 		 */
 		short d;
 
-		if (short_0e != 0)
-			d = (short_0e > short_0a) ? short_0a : short_0e;
+		if (rrnUpDmin != 0)
+			d = (rrnUpDmin > dMin) ? dMin : rrnUpDmin;
 		else
-			d = short_0a;
-		short_0a = d;
+			d = dMin;
+		dMin = d;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: dMin calc OneRateUp\r\n");
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: rrnUpDmin = %d\r\n",
-			    short_0e);
-		float_18 = noiseEnergy * 0.45f;
-		float_1c = noiseEnergy * 1.4125f;
-		float_20 = retrainFactor * noiseEnergy;
+			    rrnUpDmin);
+		pdSnrThreshForRateUp = noiseEnergy * 0.45f;
+		pdSnrThreshForRateDown = noiseEnergy * 1.4125f;
+		pdSnrThreshForRetrain = retrainFactor * noiseEnergy;
 		break;
 	}
 
-	case 3: {
+	case V90CD_RATE_DOWN: {
 		/* And one rate down wants the larger; `jge` where the other
 		 * arm has `jle`, and that one condition code is the whole
 		 * difference between the two bodies. */
 		short d;
 
-		if (short_0c != 0)
-			d = (short_0c < short_0a) ? short_0a : short_0c;
+		if (rrnDownDmin != 0)
+			d = (rrnDownDmin < dMin) ? dMin : rrnDownDmin;
 		else
-			d = short_0a;
-		short_0a = d;
+			d = dMin;
+		dMin = d;
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: dMin calc"
@@ -1033,34 +1033,34 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: rrnDownDmin = %d\r\n",
-			    short_0c);
-		float_18 = noiseEnergy * 0.45f;
-		float_1c = noiseEnergy * 1.4125f;
-		float_20 = retrainFactor * noiseEnergy;
+			    rrnDownDmin);
+		pdSnrThreshForRateUp = noiseEnergy * 0.45f;
+		pdSnrThreshForRateDown = noiseEnergy * 1.4125f;
+		pdSnrThreshForRetrain = retrainFactor * noiseEnergy;
 		break;
 	}
 
-	case 0:
+	case V90CD_RATE_NONE:
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf(
 			    "V90ConstellationDesigner: dMin calc"
 			    " NoRestriction\r\n");
-		float_18 = noiseEnergy * 0.45f;
-		float_1c = noiseEnergy * 1.4125f;
-		float_20 = retrainFactor * noiseEnergy;
+		pdSnrThreshForRateUp = noiseEnergy * 0.45f;
+		pdSnrThreshForRateDown = noiseEnergy * 1.4125f;
+		pdSnrThreshForRetrain = retrainFactor * noiseEnergy;
 		/*
 		 * THE ONLY CLAMP IN THE FUNCTION, and its window is open at
 		 * the bottom and closed at the top: `cmp $0x43; jg` first and
 		 * `cmp $0x3e; jle` second, both SIGNED 16-bit, so the source
 		 * tests the upper bound first.
 		 */
-		if (word_24 == 0 && short_0a <= 0x43 && short_0a > 0x3e) {
+		if (word_24 == 0 && dMin <= 0x43 && dMin > 0x3e) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 				    "V90ConstellationDesigner: adjusting dMin"
 				    " for rate>=53k. Orig dMin=%d Modified"
-				    " dMin=%d\r\n", short_0a, 0x3e);
-			short_0a = 0x3e;
+				    " dMin=%d\r\n", dMin, 0x3e);
+			dMin = 0x3e;
 		}
 		break;
 	}
@@ -1071,8 +1071,8 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	 * `movzwl 0xa(%ecx)` after the KeepRate diagnostic's call, which a
 	 * local would have spilled to the stack instead.
 	 */
-	word_48 = 1;
-	short_10 = (short)(short_0a * 1.25f);
+	rateAction = 1;
+	short_10 = (short)(dMin * 1.25f);
 
 	/*
 	 * The configuration file can pin dMin, and -1 is how it says it does
@@ -1080,30 +1080,30 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	 * 32-bit parameter, so a forced value above 0x7fff arrives truncated.
 	 */
 	if (params->FORCED_DMIN > -1) {
-		short_0a = (short)params->FORCED_DMIN;
+		dMin = (short)params->FORCED_DMIN;
 		edprintf("V90ConstellationDesigner: dMin Forced to: %d\r\n",
-			 short_0a);
+			 dMin);
 	}
-	edprintf("V90ConstellationDesigner: final dMin = %d\r\n", short_0a);
+	edprintf("V90ConstellationDesigner: final dMin = %d\r\n", dMin);
 	edprintf("V90ConstellationDesigner: USE_RESTRICED_DMIN = %d\r\n",
 		 params->USE_RESTRICED_DMIN);
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp ="
 		 " %c%d.%02d\r\n",
-		 !(0.0f >= float_18) ? '+' : '-',
-		 (int)__builtin_fabsf(float_18),
-		 __builtin_abs((int)((float_18 - (float)(int)float_18)
+		 !(0.0f >= pdSnrThreshForRateUp) ? '+' : '-',
+		 (int)__builtin_fabsf(pdSnrThreshForRateUp),
+		 __builtin_abs((int)((pdSnrThreshForRateUp - (float)(int)pdSnrThreshForRateUp)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateDown ="
 		 " %c%d.%02d\r\n",
-		 !(0.0f >= float_1c) ? '+' : '-',
-		 (int)__builtin_fabsf(float_1c),
-		 __builtin_abs((int)((float_1c - (float)(int)float_1c)
+		 !(0.0f >= pdSnrThreshForRateDown) ? '+' : '-',
+		 (int)__builtin_fabsf(pdSnrThreshForRateDown),
+		 __builtin_abs((int)((pdSnrThreshForRateDown - (float)(int)pdSnrThreshForRateDown)
 				     * 100.0)));
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRetrain ="
 		 " %c%d.%02d\r\n",
-		 !(0.0f >= float_20) ? '+' : '-',
-		 (int)__builtin_fabsf(float_20),
-		 __builtin_abs((int)((float_20 - (float)(int)float_20)
+		 !(0.0f >= pdSnrThreshForRetrain) ? '+' : '-',
+		 (int)__builtin_fabsf(pdSnrThreshForRetrain),
+		 __builtin_abs((int)((pdSnrThreshForRetrain - (float)(int)pdSnrThreshForRetrain)
 				     * 100.0)));
 
 	/*
@@ -1115,7 +1115,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 	 * the same discriminator and the same argument `findNextUcodeToAdd`
 	 * takes.  They differ in two things and not one: the non-zero arm
 	 * seeds its threshold from `short_10` and requires BOTH tables to
-	 * clear it, the zero arm seeds from `short_0a` and looks at the first
+	 * clear it, the zero arm seeds from `dMin` and looks at the first
 	 * table only.
 	 *
 	 * THE INDICES COME OUT BACKWARDS.  The staging buffer is filled
@@ -1143,14 +1143,14 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 				}
 			}
 		} else {
-			short thresh = (short)(short_0a / 2);
+			short thresh = (short)(dMin / 2);
 
 			for (i = params->unnamed_360; i <= lastUcode[k]; i++) {
 				short a = ucode[k][i];
 
 				if (a > thresh && allow[k][i] != 0) {
 					picked[nofPicked++] = (unsigned char)i;
-					thresh = (short)(a + short_0a);
+					thresh = (short)(a + dMin);
 				}
 			}
 		}
@@ -1177,12 +1177,12 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 			 * like once the compiler has it.  Nothing writes the
 			 * byte in between, so the two readings cannot differ.
 			 */
-			if (word_2c == word_28) {
+			if (compandingLaw == pcmType) {
 				unsigned char c =
 				    mappingParams->constellation[k][i];
 				unsigned char e;
 
-				if (word_2c != 0)
+				if (compandingLaw != 0)
 					e = (unsigned char)
 					    (linear2alaw(__builtin_abs(
 						(int)ucode[k][c])) ^ 0xd5);
@@ -1195,7 +1195,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 					unsigned char d =
 					    mappingParams->constellation[k][i];
 
-					if (word_2c != 0)
+					if (compandingLaw != 0)
 						mappingParams
 						  ->codecConstellation[k][i] =
 						    (unsigned char)
@@ -1220,7 +1220,7 @@ V90ConstellationDesigner::setConstellationToNoise(float noiseEnergy,
 				unsigned char c =
 				    mappingParams->constellation[k][i];
 
-				if (word_2c != 0)
+				if (compandingLaw != 0)
 					mappingParams
 					  ->codecConstellation[k][i] =
 					    (unsigned char)
@@ -1452,13 +1452,13 @@ V90ConstellationDesigner::setConstellationToNoise_forceRate(float noiseEnergy,
 		phaseDmin[k] = (short)(ucode[k][topUcode[k]]
 				       * (1.0f / (nofUcodeInPhase[k] - 0.5f)));
 
-	float_18 = noiseEnergy * 0.1f;
-	float_1c = noiseEnergy * 10.0f;
-	float_20 = noiseEnergy * 10.0f;
+	pdSnrThreshForRateUp = noiseEnergy * 0.1f;
+	pdSnrThreshForRateDown = noiseEnergy * 10.0f;
+	pdSnrThreshForRetrain = noiseEnergy * 10.0f;
 
 	edprintf("V90ConstellationDesigner: pdSnrThreshForRateUp = %d"
 		 " pdSnrThreshForRateDown = %d pdSnrThreshForRetrain = %d\r\n",
-		 (int)float_18, (int)float_1c, (int)float_20);
+		 (int)pdSnrThreshForRateUp, (int)pdSnrThreshForRateDown, (int)pdSnrThreshForRetrain);
 	edprintf("V90ConstellationDesigner: requested rate force is %d\n",
 		 params->RATE_FORCE);
 	edprintf("V90ConstellationDesigner: initial nofUcodeInPhase[1..6] ="
@@ -1787,10 +1787,10 @@ V90ConstellationDesigner::realK(V90MappingParams *p)
 void
 V90ConstellationDesigner::reset()
 {
-	word_48 = 0;
-	short_0a = 0;
-	short_0c = 0;
-	short_0e = 0;
+	rateAction = 0;
+	dMin = 0;
+	rrnDownDmin = 0;
+	rrnUpDmin = 0;
 	short_10 = 0;
 	word_24 = params->unnamed_39c;
 }
@@ -1841,9 +1841,9 @@ V90ConstellationDesigner::findConstelMaxValueIndex(V90MappingParams *p)
 
 /*
  * adjustConstellationsPower -- drop constellation points until the frame's
- * average power is at or under the ladder entry `byte_38` selects.
+ * average power is at or under the ladder entry `powerLadderIndex` selects.
  *
- * The ladder index the design is aiming at is `byte_38` clamped to 22, which
+ * The ladder index the design is aiming at is `powerLadderIndex` clamped to 22, which
  * is also what the constructor seeds it with, and the target power is
  * `V90ConstellationPower::averagePowerLimits[target]` converted as UNSIGNED
  * (`push $0; push val; fildll`, the idiom that header's finding measures).
@@ -1883,7 +1883,7 @@ V90ConstellationDesigner::adjustConstellationsPower()
 
 	first = power->getPower(mappingParams,
 				V90_TX_POWER_OVER_CODEC_CONSTELLATION,
-				(PcmType)word_2c);
+				(PcmType)compandingLaw);
 	index = power->getPowerIndexForPower(first);
 
 	edprintf("--------------------------------------\r\n");
@@ -1908,13 +1908,13 @@ V90ConstellationDesigner::adjustConstellationsPower()
 	 * `cmp $0x15,%al; ja` over a `movzbl` of the byte, so the bound is 21
 	 * and the fallback is the constructor's own 22.
 	 */
-	target = (byte_38 <= 21) ? byte_38 : 22;
+	target = (powerLadderIndex <= 21) ? powerLadderIndex : 22;
 	targetPower = (float)V90ConstellationPower::averagePowerLimits[target];
 	delta = target - index;
 
 	p = power->getPower(mappingParams,
 			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
-			    (PcmType)word_2c);
+			    (PcmType)compandingLaw);
 
 	while (p > targetPower && more != 0) {
 		int count;
@@ -2010,14 +2010,14 @@ V90ConstellationDesigner::adjustConstellationsPower()
 
 		p = power->getPower(mappingParams,
 				    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
-				    (PcmType)word_2c);
+				    (PcmType)compandingLaw);
 		index = power->getPowerIndexForPower(p);
 		delta = target - index;
 	}
 
 	p = power->getPower(mappingParams,
 			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
-			    (PcmType)word_2c);
+			    (PcmType)compandingLaw);
 	index = power->getPowerIndexForPower(p);
 
 	edprintf("V90ConstellationDesigner: nof points removed %d, "
@@ -2093,7 +2093,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
  * the only regions that are the same code are the maximum at 0x4a755..0x4a77d
  * against 0x492d0..0x492f2, the four banners and the eighteen-argument ucode
  * line at 0x4a7b2..0x4aaa2 against 0x4949b..0x49771, and the two `ret` paths.
- * Everything before that is its own function: there is no `word_48` switch, no
+ * Everything before that is its own function: there is no `rateAction` switch, no
  * `dMin`, no `USE_RESTRICED_DMIN`, no 53k clamp, and the constellation build is
  * a downward walk with a feedback loop rather than a single forward pass.
  *
@@ -2161,7 +2161,7 @@ V90ConstellationDesigner::findMinValueIndex(V90MappingParams *p)
  *                   the entry must clear BOTH `ucode[start] + short_10` and
  *                   `alt[start] + short_10`
  *   dmin zero       bound `(signed char)i >= 0`, a SIGNED test (`js`/`jns`),
- *                   and one threshold, `ucode[start] + short_0a`
+ *                   and one threshold, `ucode[start] + dMin`
  *
  * so the same byte is compared unsigned in one arm and signed in the other,
  * which is what the two spellings below say.
@@ -2199,7 +2199,7 @@ V90ConstellationDesigner::findNextUcodeToAdd(unsigned char *out,
 			i++;
 		}
 	} else {
-		int lo = ucode[which][start] + short_0a;
+		int lo = ucode[which][start] + dMin;
 
 		while ((signed char)i >= 0) {
 			short v = ucode[which][i];
@@ -2212,7 +2212,7 @@ V90ConstellationDesigner::findNextUcodeToAdd(unsigned char *out,
 
 	out[0] = i;
 	sample = __builtin_abs((int)ucode[which][i]);
-	if (word_2c != 0)
+	if (compandingLaw != 0)
 		out[1] = (unsigned char)(linear2alaw(sample) ^ 0xd5);
 	else
 		out[1] = (unsigned char)~linear2ulaw(sample);
@@ -2316,7 +2316,7 @@ V90ConstellationDesigner::reconstructInitialConditions(V90MappingParams *p,
  * non-zero dmin the scan runs to 113 and stops at the first code whose ucode
  * clears BOTH `ucode[k][u0] + short_10` and `alt[k][u0] + short_10`; with a
  * zero dmin it runs to 127 and stops at the first that clears
- * `ucode[k][u0] + short_0a`.  Both bounds are the byte's own: `cmp $0x71,%bl;
+ * `ucode[k][u0] + dMin`.  Both bounds are the byte's own: `cmp $0x71,%bl;
  * ja` for the first and a sign test on the byte -- which is `u < 128` on an
  * `unsigned char` -- for the second.
  *
@@ -2368,7 +2368,7 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 	power->getPowerIndexForPower(
 	    power->getPower(mappingParams,
 			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
-			    (PcmType)word_2c));
+			    (PcmType)compandingLaw));
 
 	edprintf("--------------------------------------------------"
 		 "-------------\r\n");
@@ -2400,7 +2400,7 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 			u = mappingParams->constellation[minIndex][0];
 
 			if (dmin[minIndex] == 0) {
-				short lim = ucode[minIndex][u] + short_0a;
+				short lim = ucode[minIndex][u] + dMin;
 
 				while (u < 128) {
 					if (ucode[minIndex][u] >= lim)
@@ -2419,7 +2419,7 @@ V90ConstellationDesigner::adjustConstellationsToNewK(short (*ucode)[128],
 				}
 			}
 
-			if (word_2c != 0)
+			if (compandingLaw != 0)
 				companded = (unsigned char)
 				    (linear2alaw(__builtin_abs(
 					(int)ucode[minIndex][u])) ^ 0xd5);
@@ -2571,7 +2571,7 @@ reduce:
 
 	p = power->getPower(mappingParams,
 			    V90_TX_POWER_OVER_CODEC_CONSTELLATION,
-			    (PcmType)word_2c);
+			    (PcmType)compandingLaw);
 	index = power->getPowerIndexForPower(p);
 
 	/*
@@ -2707,11 +2707,11 @@ V90ConstellationDesigner::process(unsigned int rate,
 	unsigned int currentRate;
 
 	constelTable = detector->linMapp;
-	word_28 = detector->pcmType;
+	pcmType = detector->pcmType;
 	word_40 = arg13;
 	codecType = codec;
-	word_2c = detector->int_a960;
-	byte_38 = powerIndex;
+	compandingLaw = detector->int_a960;
+	powerLadderIndex = powerIndex;
 	mappingParams = mapp;
 	mapp->word_61c = 1;
 

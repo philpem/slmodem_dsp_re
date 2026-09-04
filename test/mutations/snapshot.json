@@ -5765,7 +5765,7 @@
     "adjustConstellationsToNewK starts its scan one code late": "caught",
     "adjustConstellationsToNewK stops removing one round early": "caught",
     "adjustConstellationsToNewK swaps the two dmin arms": "caught",
-    "adjustConstellationsToNewK uses short_10 where the zero-dmin scan uses short_0a": "caught",
+    "adjustConstellationsToNewK uses short_10 where the zero-dmin scan uses dMin": "caught",
     "constellationDesign passes its FIFTH argument where the object passes its sixth": "caught",
     "constellationDesign runs the power pass on the redundancy flag": "caught",
     "constellationDesign swaps the two short (*)[128] tables in its tail call": "caught",
@@ -5795,7 +5795,7 @@
     "the pre-filter and the power model are swapped": "caught",
     "the pre-filter is not stored": "caught",
     "the two rate defaults are swapped": "caught",
-    "word_48 is left as the constructor found it": "caught"
+    "rateAction is left as the constructor found it": "caught"
    }
   },
   "v90conneval": {

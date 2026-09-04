@@ -495,7 +495,7 @@ run_enterphase3(void)
  * single member instead of to a whole datapump block.
  *
  * WHAT THE ARENA HAS TO BE BIG ENOUGH FOR.  `reset` clears
- * `linearEquLength`, `word_1c`, `dfeLength` and each of those plus eight
+ * `linearEquLength`, `linearEquHistoryLength`, `dfeLength` and each of those plus eight
  * entries; it plants 1.0f at `linearEquCoefs[cursor]` with the cursor clamped
  * in UNSIGNED arithmetic -- so a zero-length equaliser does not clamp at all
  * and the cursor lands wherever it was asked to -- and it hammings
@@ -613,7 +613,7 @@ run_reset(void)
 				unsigned int cursor = cur_v[ci];
 				unsigned int want;
 
-				/* array_18 runs down from word_1c. */
+				/* array_18 runs down from linearEquHistoryLength. */
 				if (m < len)
 					continue;
 
@@ -625,7 +625,7 @@ run_reset(void)
 
 				OURS.linearEquLength =
 				    THEIRS.linearEquLength = len;
-				OURS.word_1c = THEIRS.word_1c = m;
+				OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = m;
 				OURS.dfeLength = THEIRS.dfeLength =
 				    dfe_v[di];
 				OURS.mmxArraysPresent =
@@ -677,8 +677,8 @@ run_reset(void)
 					    (long)THEIRS.flag_146, 1, tag);
 				diff_eq_int("mmxMode (%ld)", THEIRS.mmxMode,
 					    0, tag);
-				diff_eq_int("word_20 = word_1c - len - 1 "
-					    "(%ld)", (long)THEIRS.word_20,
+				diff_eq_int("historyIndex = linearEquHistoryLength - len - 1 "
+					    "(%ld)", (long)THEIRS.historyIndex,
 					    (long)(unsigned int)(m - len - 1u),
 					    tag);
 				diff_eq_int("errorEnergyMeanBlockLen (%ld)",
@@ -752,7 +752,7 @@ run_reset(void)
 			wire(&OURS);
 			wire(&THEIRS);
 			OURS.linearEquLength = THEIRS.linearEquLength = 16;
-			OURS.word_1c = THEIRS.word_1c = 24;
+			OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = 24;
 			OURS.dfeLength = THEIRS.dfeLength = 8;
 			OURS.mmxArraysPresent =
 			    THEIRS.mmxArraysPresent = 0;
@@ -1131,7 +1131,7 @@ run_ctor(void)
 
 					/*
 					 * `reset` clears `array_18` from
-					 * `word_1c` downwards over
+					 * `linearEquHistoryLength` downwards over
 					 * `linearEquLength` entries, so a
 					 * history shorter than the equaliser
 					 * would run off the front of it.  The
@@ -1242,8 +1242,8 @@ run_ctor(void)
 					diff_eq_int("dfeLength (%ld)",
 						    (long)THEIRS.dfeLength,
 						    (long)dfelen, trial);
-					diff_eq_int("word_1c (%ld)",
-						    (long)THEIRS.word_1c,
+					diff_eq_int("linearEquHistoryLength (%ld)",
+						    (long)THEIRS.linearEquHistoryLength,
 						    (long)hist, trial);
 					diff_eq_int("mmxArraysPresent (%ld)",
 						    THEIRS.mmxArraysPresent,
@@ -2086,10 +2086,10 @@ run_restoretofloat(void)
 
 			OURS.linearEquLength = THEIRS.linearEquLength = len;
 			OURS.dfeLength = THEIRS.dfeLength = len;
-			OURS.word_1c = THEIRS.word_1c = len;
-			OURS.word_20Saved = THEIRS.word_20Saved =
+			OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = len;
+			OURS.historyIndexSaved = THEIRS.historyIndexSaved =
 			    0xa5a50000u + (unsigned)li;
-			OURS.word_20 = THEIRS.word_20 = 0x5a5a1111u;
+			OURS.historyIndex = THEIRS.historyIndex = 0x5a5a1111u;
 			OURS.mmxMode = THEIRS.mmxMode = mmx;
 			OURS.linearEquMmxConversionFactor =
 			    THEIRS.linearEquMmxConversionFactor = scale_p[si];
@@ -2116,15 +2116,15 @@ run_restoretofloat(void)
 				saw_work = 1;
 				diff_eq_int("the mode was cleared (%ld)",
 					    (long)THEIRS.mmxMode, 0, tag);
-				diff_eq_int("word_20 came back from +0xf8 "
-					    "(%ld)", (long)THEIRS.word_20,
+				diff_eq_int("historyIndex came back from +0xf8 "
+					    "(%ld)", (long)THEIRS.historyIndex,
 					    (long)(0xa5a50000u
 						   + (unsigned)li), tag);
 			} else {
 				saw_skip = 1;
 				diff_eq_int("nothing happened without the "
 					    "mode (%ld)",
-					    (long)(THEIRS.word_20
+					    (long)(THEIRS.historyIndex
 						   == 0x5a5a1111u), 1, tag);
 			}
 		}
@@ -2340,7 +2340,7 @@ run_enterrrnfpe(void)
 				OURS.linearEquLength =
 				    THEIRS.linearEquLength = len;
 				OURS.dfeLength = THEIRS.dfeLength = len;
-				OURS.word_1c = THEIRS.word_1c = len;
+				OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = len;
 				OURS.mmxMode = THEIRS.mmxMode = mmx;
 				OURS.maxLeCoefValue =
 				    THEIRS.maxLeCoefValue = 1.0f;
@@ -2674,7 +2674,7 @@ run_enterphase4(void)
 				OURS.linearEquLength =
 				    THEIRS.linearEquLength = len;
 				OURS.dfeLength = THEIRS.dfeLength = len;
-				OURS.word_1c = THEIRS.word_1c = len;
+				OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = len;
 				OURS.mmxMode = THEIRS.mmxMode = mmx;
 				OURS.meanErrorCount = THEIRS.meanErrorCount =
 				    17u;
@@ -2821,7 +2821,7 @@ run_enterphase4(void)
  *
  * THE THREE LENGTHS ARE SET APART FROM ONE ANOTHER IN EVERY TRIAL.
  * `linearEquLength` bounds the linear coefficients, `dfeLength` the DFE's and
- * its history, and `word_1c` the linear history -- three different fields, and
+ * its history, and `linearEquHistoryLength` the linear history -- three different fields, and
  * `fill_arena` leaves garbage in all three, so a trial that left one alone
  * would be a wild write and not a wrong answer.
  */
@@ -2903,9 +2903,9 @@ mmx_setup(long tag, unsigned int le, unsigned int dfe, unsigned int w1c,
 
 	OURS.linearEquLength = THEIRS.linearEquLength = le;
 	OURS.dfeLength = THEIRS.dfeLength = dfe;
-	OURS.word_1c = THEIRS.word_1c = w1c;
-	OURS.word_20 = THEIRS.word_20 = 0x5a5a0000u + (unsigned)pat;
-	OURS.word_20Saved = THEIRS.word_20Saved = 0xdeadbeefu;
+	OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = w1c;
+	OURS.historyIndex = THEIRS.historyIndex = 0x5a5a0000u + (unsigned)pat;
+	OURS.historyIndexSaved = THEIRS.historyIndexSaved = 0xdeadbeefu;
 	OURS.maxLeCoefValue = THEIRS.maxLeCoefValue = ml;
 	OURS.maxDfeCoefValue = THEIRS.maxDfeCoefValue = md;
 	OURS.linearEquBeta = THEIRS.linearEquBeta = beta;
@@ -3006,7 +3006,7 @@ run_converttommx(void)
 
 			mmx_run(tag, 1);
 			diff_eq_int("nothing was converted (%ld)",
-				    (long)(THEIRS.word_20Saved == 0xdeadbeefu),
+				    (long)(THEIRS.historyIndexSaved == 0xdeadbeefu),
 				    1, tag);
 		}
 
@@ -3044,9 +3044,9 @@ run_converttommx(void)
 					  THEIRS.dfeMmxConversionFactor,
 					  THEIRS.dfeMmxOutputConversionFactor,
 					  tag);
-			diff_eq_int("word_20 was parked in +0xf8 (%ld)",
-				    (long)THEIRS.word_20Saved,
-				    (long)THEIRS.word_20, tag);
+			diff_eq_int("historyIndex was parked in +0xf8 (%ld)",
+				    (long)THEIRS.historyIndexSaved,
+				    (long)THEIRS.historyIndex, tag);
 			if (beta_v[bi] == 0.0f) {
 				diff_eq_int("a zero step size is zero (%ld)",
 					    (long)THEIRS.linearEquMmxBeta, 0,

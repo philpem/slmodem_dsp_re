@@ -68,7 +68,7 @@
  *
  *   `constellationSize[k]` ABOVE 128, which is the other half of
  *   `adjustConstellationsToNewK`'s failure test.  The `u >= 128` half IS
- *   driven -- one trial in seven raises `short_0a` past anything the ramp
+ *   driven -- one trial in seven raises `dMin` past anything the ramp
  *   reaches -- but the length half cannot be, and that is a property of the
  *   OBJECT and not of this fixture.  At a length of exactly 128 the shift
  *   that follows writes `constellation[k][128]`, which is
@@ -706,12 +706,12 @@ adj_state(int trial, int useDetector, int bigDmin)
 	cdB->power = cpB;
 	cdA->byte_08 = cur.byte08;
 	cdB->byte_08 = cur.byte08;
-	cdA->byte_38 = cur.byte38;
-	cdB->byte_38 = cur.byte38;
-	cdA->word_28 = cur.w28;
-	cdB->word_28 = cur.w28;
-	cdA->word_2c = cur.w2c;
-	cdB->word_2c = cur.w2c;
+	cdA->powerLadderIndex = cur.byte38;
+	cdB->powerLadderIndex = cur.byte38;
+	cdA->pcmType = cur.w28;
+	cdB->pcmType = cur.w28;
+	cdA->compandingLaw = cur.w2c;
+	cdB->compandingLaw = cur.w2c;
 	cdA->word_24 = cur.word24;
 	cdB->word_24 = cur.word24;
 	cdA->minRate = cur.minRate;
@@ -719,14 +719,14 @@ adj_state(int trial, int useDetector, int bigDmin)
 	cdA->maxRate = cur.maxRate;
 	cdB->maxRate = cur.maxRate;
 	/*
-	 * A LARGE `short_0a` ON ONE TRIAL IN SEVEN, and that is what drives the
+	 * A LARGE `dMin` ON ONE TRIAL IN SEVEN, and that is what drives the
 	 * `u >= 128` half of `adjustConstellationsToNewK`'s failure test: no
 	 * entry of a ramped `ucode` row clears a threshold 12,000 above the one
 	 * the scan started from, so the scan runs off the end of the row and
 	 * the member takes its "reached Max constellation length" exit.
 	 */
 	/*
-	 * A LARGE `short_0a` ON ONE TRIAL IN SEVEN, and only where the caller
+	 * A LARGE `dMin` ON ONE TRIAL IN SEVEN, and only where the caller
 	 * asks for it: it drives the `u >= 128` half of
 	 * `adjustConstellationsToNewK`'s failure test, because no entry of a
 	 * ramped `ucode` row clears a threshold 12,000 above the one the scan
@@ -735,9 +735,9 @@ adj_state(int trial, int useDetector, int bigDmin)
 	 * slope large against the dMin it derives or it too fails to
 	 * terminate (D338).
 	 */
-	cdA->short_0a = (short)((bigDmin && trial % 7 == 3)
+	cdA->dMin = (short)((bigDmin && trial % 7 == 3)
 				? 12000 : (3 + (trial % 40)));
-	cdB->short_0a = cdA->short_0a;
+	cdB->dMin = cdA->dMin;
 	cdA->short_10 = (short)(2 + (trial % 27));
 	cdB->short_10 = cdA->short_10;
 
@@ -1007,12 +1007,12 @@ run_process(void)
 		diff_eq_int("word_40 is argument 13 (trial %ld)",
 			    (long)cdA->word_40, (long)(0x1000u + (unsigned)trial),
 			    trial);
-		diff_eq_int("byte_38 is argument 11 (trial %ld)",
-			    cdA->byte_38, cur.byte38, trial);
-		diff_eq_int("word_28 is the detector's pcmType (trial %ld)",
-			    cdA->word_28, cur.w28, trial);
-		diff_eq_int("word_2c is the detector's int_a960 (trial %ld)",
-			    cdA->word_2c, cur.w2c, trial);
+		diff_eq_int("powerLadderIndex is argument 11 (trial %ld)",
+			    cdA->powerLadderIndex, cur.byte38, trial);
+		diff_eq_int("pcmType is the detector's pcmType (trial %ld)",
+			    cdA->pcmType, cur.w28, trial);
+		diff_eq_int("compandingLaw is the detector's int_a960 (trial %ld)",
+			    cdA->compandingLaw, cur.w2c, trial);
 		diff_eq_int("the mapping block's +0x61c is 1 (trial %ld)",
 			    (long)mpA.word_61c, 1, trial);
 

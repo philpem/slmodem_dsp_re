@@ -64,8 +64,8 @@
  },
  {
   "label": "process plants the detector's two fields the other way round",
-  "find": "\tword_28 = detector->pcmType;",
-  "replace": "\tword_28 = detector->int_a960;"
+  "find": "\tpcmType = detector->pcmType;",
+  "replace": "\tpcmType = detector->int_a960;"
  },
  {
   "label": "process leaves the mapping block's +0x61c alone",
@@ -89,10 +89,10 @@
  },
  {
   "label": "adjustConstellationsPower clamps the ladder index at 22 rather than 21 -- EXPECTED TO SURVIVE",
-  "find": "\ttarget = (byte_38 <= 21) ? byte_38 : 22;",
-  "replace": "\ttarget = (byte_38 <= 22) ? byte_38 : 22;",
+  "find": "\ttarget = (powerLadderIndex <= 21) ? powerLadderIndex : 22;",
+  "replace": "\ttarget = (powerLadderIndex <= 22) ? powerLadderIndex : 22;",
   "equivalent": true,
-  "note": "`(byte_38 <= 21) ? byte_38 : 22` and `(byte_38 <= 22) ? byte_38 : 22` agree everywhere: below 22 both give byte_38, at 22 both give 22, above 22 both give 22.  Kept because the BOUND is what the object encodes (`cmp $0x15,%al; ja`) and a reader will wonder; the mutation records that no input can tell."
+  "note": "`(powerLadderIndex <= 21) ? powerLadderIndex : 22` and `(powerLadderIndex <= 22) ? powerLadderIndex : 22` agree everywhere: below 22 both give powerLadderIndex, at 22 both give 22, above 22 both give 22.  Kept because the BOUND is what the object encodes (`cmp $0x15,%al; ja`) and a reader will wonder; the mutation records that no input can tell."
  },
  {
   "label": "adjustConstellationsPower swaps the one-point and ten-point rounds",
@@ -116,8 +116,8 @@
  },
  {
   "label": "adjustConstellationsPower takes the power over the plain constellation",
-  "find": "\tfirst = power->getPower(mappingParams,\n\t\t\t\tV90_TX_POWER_OVER_CODEC_CONSTELLATION,\n\t\t\t\t(PcmType)word_2c);",
-  "replace": "\tfirst = power->getPower(mappingParams,\n\t\t\t\tV90_TX_POWER_OVER_CONSTELLATION,\n\t\t\t\t(PcmType)word_2c);"
+  "find": "\tfirst = power->getPower(mappingParams,\n\t\t\t\tV90_TX_POWER_OVER_CODEC_CONSTELLATION,\n\t\t\t\t(PcmType)compandingLaw);",
+  "replace": "\tfirst = power->getPower(mappingParams,\n\t\t\t\tV90_TX_POWER_OVER_CONSTELLATION,\n\t\t\t\t(PcmType)compandingLaw);"
  },
  {
   "label": "adjustConstellationsToNewK swaps the two dmin arms",
@@ -125,8 +125,8 @@
   "replace": "\t\t\tif (dmin[minIndex] != 0) {"
  },
  {
-  "label": "adjustConstellationsToNewK uses short_10 where the zero-dmin scan uses short_0a",
-  "find": "\t\t\t\tshort lim = ucode[minIndex][u] + short_0a;",
+  "label": "adjustConstellationsToNewK uses short_10 where the zero-dmin scan uses dMin",
+  "find": "\t\t\t\tshort lim = ucode[minIndex][u] + dMin;",
   "replace": "\t\t\t\tshort lim = ucode[minIndex][u] + short_10;"
  },
  {
@@ -162,8 +162,8 @@
  },
  {
   "label": "adjustConstellationsToNewK compands the ucode with the other law",
-  "find": "\t\t\tif (word_2c != 0)\n\t\t\t\tcompanded = (unsigned char)\n\t\t\t\t    (linear2alaw(__builtin_abs(",
-  "replace": "\t\t\tif (word_2c == 0)\n\t\t\t\tcompanded = (unsigned char)\n\t\t\t\t    (linear2alaw(__builtin_abs("
+  "find": "\t\t\tif (compandingLaw != 0)\n\t\t\t\tcompanded = (unsigned char)\n\t\t\t\t    (linear2alaw(__builtin_abs(",
+  "replace": "\t\t\tif (compandingLaw == 0)\n\t\t\t\tcompanded = (unsigned char)\n\t\t\t\t    (linear2alaw(__builtin_abs("
  },
  {
   "label": "adjustConstellationsToNewK stops removing one round early",

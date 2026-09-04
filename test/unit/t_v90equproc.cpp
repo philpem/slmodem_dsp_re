@@ -32,16 +32,16 @@
  *     A grid with a zero-length DFE, or with zero DFE coefficients, cannot
  *     tell them apart -- so `dfeLength >= 2` and the coefficients are planted
  *     non-zero on every trial that drives the update.
- *   - THE SQUARED ERROR'S 64-BIT CONVERT.  `word_78 += (unsigned)(long
- *     long)(err * err)` and `word_78 += (unsigned)(err * err)` agree for
+ *   - THE SQUARED ERROR'S 64-BIT CONVERT.  `blockErrorEnergySum += (unsigned)(long
+ *     long)(err * err)` and `blockErrorEnergySum += (unsigned)(err * err)` agree for
  *     every |err| below 65536.  RESET's slicer is `(short)soft`, so a `soft`
  *     outside a short's range wraps the decision and makes |err| enormous;
  *     that is what the large-amplitude rows are for.
- *   - THE SECOND `word_20` DECREMENT, which is unconditional.  Trials that
+ *   - THE SECOND `historyIndex` DECREMENT, which is unconditional.  Trials that
  *     skip the coefficient update still have to retreat the cursor twice,
  *     and the wrap has to fire from both paths.
  *   - THE CLEAN-SYMBOL COUNTER'S ASYMMETRY.  A burst that ends with
- *     `word_94 <= 2` leaves `updateCoefs` at zero for the rest of the call.
+ *     `highErrorCount <= 2` leaves `updateCoefs` at zero for the rest of the call.
  *
  * WHAT THIS BINARY DELIBERATELY DOES NOT DRIVE, and why it is a property of
  * the object rather than a gap in the grid:
@@ -115,7 +115,7 @@ guard_equal(void)
 }
 
 /*
- * ARR_F has to hold `word_1c`, which is `linearEquLength + 8` at its widest
+ * ARR_F has to hold `linearEquHistoryLength`, which is `linearEquLength + 8` at its widest
  * here, and the sample buffers have to hold `n` plus the two floats
  * RECONVERT-D steps past the end of what the loop consumed.
  */
@@ -356,18 +356,18 @@ run_reset_arm(void)
 					OURS.linearEquLength =
 					    THEIRS.linearEquLength = le;
 					OURS.dfeLength = THEIRS.dfeLength = dfe;
-					OURS.word_1c = THEIRS.word_1c = w1c;
+					OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = w1c;
 					/*
 					 * Start one symbol short of the wrap on
 					 * every fourth trial, so the wrap fires
 					 * from both the update and the
 					 * update-skipped path.
 					 */
-					OURS.word_20 = THEIRS.word_20 =
+					OURS.historyIndex = THEIRS.historyIndex =
 					    (int)(w1c - le - 1u)
 					    - (int)((unsigned)tag % 3u);
-					OURS.word_20Saved =
-					    THEIRS.word_20Saved = 0x5a5a;
+					OURS.historyIndexSaved =
+					    THEIRS.historyIndexSaved = 0x5a5a;
 					OURS.state = THEIRS.state =
 					    V90EQU_STATE_RESET;
 					OURS.stateCount = THEIRS.stateCount =
@@ -408,24 +408,24 @@ run_reset_arm(void)
 					    (ai >= 4) ? 0.0f : 0.0009765625f;
 					OURS.dfeBeta = THEIRS.dfeBeta =
 					    (ai >= 4) ? 0.0f : 0.00048828125f;
-					OURS.word_94 = THEIRS.word_94 =
+					OURS.highErrorCount = THEIRS.highErrorCount =
 					    w94_v[w94i];
-					OURS.word_68 = THEIRS.word_68 =
+					OURS.holdoverPending = THEIRS.holdoverPending =
 					    (unsigned)held;
-					OURS.word_6c = THEIRS.word_6c =
+					OURS.holdoverSample = THEIRS.holdoverSample =
 					    amp_v[ai] * 0.5f;
-					OURS.word_70 = THEIRS.word_70 =
+					OURS.blockSampleCount = THEIRS.blockSampleCount =
 					    (unsigned)(tag % 3);
-					OURS.word_78 = THEIRS.word_78 =
+					OURS.blockErrorEnergySum = THEIRS.blockErrorEnergySum =
 					    0xfffff000u;
-					OURS.word_7c = THEIRS.word_7c = 3.5f;
+					OURS.blockErrorEnergyRms = THEIRS.blockErrorEnergyRms = 3.5f;
 					OURS.errorEnergyMeanBlockLen =
 					    THEIRS.errorEnergyMeanBlockLen = 4;
 					OURS.errorEnergyMeanK =
 					    THEIRS.errorEnergyMeanK = 0.75f;
 					OURS.meanErrorEnergyCurrent =
 					    THEIRS.meanErrorEnergyCurrent = 2.25f;
-					OURS.word_a4 = THEIRS.word_a4 =
+					OURS.meanErrorRecordEnable = THEIRS.meanErrorRecordEnable =
 					    (unsigned)(tag & 1);
 					OURS.meanErrorCount =
 					    THEIRS.meanErrorCount =
@@ -433,7 +433,7 @@ run_reset_arm(void)
 					    ? V90EQU_MEAN_ERROR_LEN - 1u : 3u;
 					OURS.meanErrorFull =
 					    THEIRS.meanErrorFull = 0;
-					OURS.word_34 = THEIRS.word_34 =
+					OURS.fadeEdgesCounter = THEIRS.fadeEdgesCounter =
 					    (unsigned)(tag % 4);
 					ARENA_PARAMS->LINEAR_EQU_FADE_EDGES_CYCLE
 					    = 3;
@@ -559,13 +559,13 @@ run_reset_arm(void)
 					 * F3509).
 					 */
 					if (le > 0 && w1c > le
-					    && THEIRS.word_20
+					    && THEIRS.historyIndex
 					       > (int)(w1c - le - 1u)
 						 - (int)((unsigned)tag % 3u))
 						saw_wrap = 1;
-					if (THEIRS.word_70 == 0 && no_b != 0)
+					if (THEIRS.blockSampleCount == 0 && no_b != 0)
 						saw_close = 1;
-					if (THEIRS.word_34 == 0)
+					if (THEIRS.fadeEdgesCounter == 0)
 						saw_fade = 1;
 					if (dsplib_debug_capture_lines(1) > 0)
 						saw_burst = 1;
@@ -573,7 +573,7 @@ run_reset_arm(void)
 					 * THE HIGH-ERROR ARM IS GUARDED ON
 					 * `state > 1` AND RESET IS STATE 0, so
 					 * a symbol whose error is past the
-					 * threshold must leave `word_94`
+					 * threshold must leave `highErrorCount`
 					 * ALONE.  The error is recomputed from
 					 * the reference's own two outputs --
 					 * `outFloat[j] - (float)outSym[j]` is
@@ -613,7 +613,7 @@ run_reset_arm(void)
 						}
 					}
 					/*
-					 * `word_94` counts high-error events and
+					 * `highErrorCount` counts high-error events and
 					 * only the guarded arm increments it,
 					 * so in state 0 it can fall to zero
 					 * when a burst closes and can never
@@ -621,10 +621,10 @@ run_reset_arm(void)
 					 */
 					diff_eq_int("state 0 never raises the "
 						    "high-error count (%ld)",
-						    (long)(THEIRS.word_94
+						    (long)(THEIRS.highErrorCount
 							   <= w94_v[w94i]), 1,
 						    tag);
-					if (THEIRS.word_94 == 0
+					if (THEIRS.highErrorCount == 0
 					    && w94_v[w94i] != 0)
 						saw_clean_close = 1;
 					if (ai == NAMP - 1 && no_b > 0)
@@ -1223,10 +1223,10 @@ p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
 
 	OURS.linearEquLength = THEIRS.linearEquLength = le;
 	OURS.dfeLength = THEIRS.dfeLength = dfe;
-	OURS.word_1c = THEIRS.word_1c = w1c;
-	OURS.word_20 = THEIRS.word_20 =
+	OURS.linearEquHistoryLength = THEIRS.linearEquHistoryLength = w1c;
+	OURS.historyIndex = THEIRS.historyIndex =
 	    (int)(w1c - le - 1u) - (int)((unsigned)tag % 3u);
-	OURS.word_20Saved = THEIRS.word_20Saved =
+	OURS.historyIndexSaved = THEIRS.historyIndexSaved =
 	    (int)(w1c - le - 1u) - (int)((unsigned)tag % 3u);
 	OURS.mmxMode = THEIRS.mmxMode = mmx;
 	OURS.mmxArraysPresent = THEIRS.mmxArraysPresent = 1;
@@ -1241,7 +1241,7 @@ p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
 	 * and the product's rounding then depends on whether the compiler kept
 	 * the intermediate at 80 bits.  Measured: with these left to the fill,
 	 * one DATA trial of 48 disagreed with the blob on GCC 13 in
-	 * `linearEquCoefs[0..3]` and `word_94`, and the SAME trial was green on
+	 * `linearEquCoefs[0..3]` and `highErrorCount`, and the SAME trial was green on
 	 * the period compiler -- a fixture defect wearing finding F6203's
 	 * clothes.  A power of two makes the reciprocal exact.
 	 */
@@ -1256,25 +1256,25 @@ p4_equ_plant(long tag, unsigned int le, unsigned int dfe, int mmx)
 	OURS.linearEquMmxShift = THEIRS.linearEquMmxShift = 12;
 	OURS.dfeMmxBeta = THEIRS.dfeMmxBeta = 2;
 	OURS.dfeMmxShift = THEIRS.dfeMmxShift = 10;
-	OURS.word_68 = THEIRS.word_68 = 0;
-	OURS.word_6c = THEIRS.word_6c = 12.5f;
-	OURS.word_70 = THEIRS.word_70 = (unsigned)(tag % 3);
-	OURS.word_78 = THEIRS.word_78 = 0x1000u;
-	OURS.word_7c = THEIRS.word_7c = 3.5f;
-	OURS.word_94 = THEIRS.word_94 = (unsigned)(tag % 4);
+	OURS.holdoverPending = THEIRS.holdoverPending = 0;
+	OURS.holdoverSample = THEIRS.holdoverSample = 12.5f;
+	OURS.blockSampleCount = THEIRS.blockSampleCount = (unsigned)(tag % 3);
+	OURS.blockErrorEnergySum = THEIRS.blockErrorEnergySum = 0x1000u;
+	OURS.blockErrorEnergyRms = THEIRS.blockErrorEnergyRms = 3.5f;
+	OURS.highErrorCount = THEIRS.highErrorCount = (unsigned)(tag % 4);
 	OURS.errorEnergyMeanBlockLen = THEIRS.errorEnergyMeanBlockLen = 4;
 	OURS.errorEnergyMeanK = THEIRS.errorEnergyMeanK = 0.75f;
 	OURS.meanErrorEnergyCurrent = THEIRS.meanErrorEnergyCurrent = 2.25f;
 	OURS.meanErrorEnergyMean = THEIRS.meanErrorEnergyMean = 1.5f;
-	OURS.word_a4 = THEIRS.word_a4 = (unsigned)(tag & 1);
+	OURS.meanErrorRecordEnable = THEIRS.meanErrorRecordEnable = (unsigned)(tag & 1);
 	OURS.meanErrorCount = THEIRS.meanErrorCount = 3u;
 	OURS.meanErrorFull = THEIRS.meanErrorFull = 0;
-	OURS.word_34 = THEIRS.word_34 = (unsigned)(tag % 4);
+	OURS.fadeEdgesCounter = THEIRS.fadeEdgesCounter = (unsigned)(tag % 4);
 	OURS.linearEquWindowHalf = THEIRS.linearEquWindowHalf =
 	    le > 2u ? 2u : 1u;
 	OURS.dfeWindowHalf = THEIRS.dfeWindowHalf = dfe > 2u ? 2u : 1u;
 	OURS.timingOffset = THEIRS.timingOffset = 0.125f;
-	OURS.short_08 = THEIRS.short_08 = 2;
+	OURS.dfeProtectionOnDil = THEIRS.dfeProtectionOnDil = 2;
 	OURS.savedBllState = THEIRS.savedBllState = 0;
 	OURS.ph4MeanErrorEnergyBeforeUpdate =
 	    THEIRS.ph4MeanErrorEnergyBeforeUpdate = 1.0f;
@@ -1402,12 +1402,12 @@ run_p4_arms(void)
 				/*
 				 * THE MMX PROLOGUE'S HELD-SAMPLE ARM, which is
 				 * four lines no float trial can reach: with
-				 * `word_68` set it plants `(short)word_6c` at
+				 * `holdoverPending` set it plants `(short)holdoverSample` at
 				 * `block_b4[0]`, rewinds `cur` and makes `n`
 				 * odd.  The float arm's own carry is the RESET
 				 * group's; this is the fixed-point twin.
 				 */
-				OURS.word_68 = THEIRS.word_68 =
+				OURS.holdoverPending = THEIRS.holdoverPending =
 				    (unsigned)held;
 
 				OURS.state = THEIRS.state = est_v[ei];
@@ -1444,7 +1444,7 @@ run_p4_arms(void)
 					 * 80-bit intermediates are
 					 * `V90Demapper`'s divergence to own,
 					 * not this binary's: three trials of
-					 * 720 failed on `word_7c` and one
+					 * 720 failed on `blockErrorEnergyRms` and one
 					 * `array_d8` word with the study
 					 * running, and the arm being driven
 					 * here is `process`'s.  `t_v90demap`
@@ -1592,11 +1592,11 @@ run_p4_arms(void)
 				    != 1.0f)
 					saw_ratio = 1;
 				if (le > 0
-				    && THEIRS.word_20
+				    && THEIRS.historyIndex
 				       > (int)(le + 8u - le - 1u)
 					 - (int)((unsigned)tag % 3u))
 					saw_wrap = 1;
-				if (THEIRS.word_70 == 0 && no_b != 0)
+				if (THEIRS.blockSampleCount == 0 && no_b != 0)
 					saw_close = 1;
 
 				if (prev_sym >= 0
@@ -1728,8 +1728,8 @@ run_data_arm(void)
 				 * fixture's own -- which is finding F6203's
 				 * subtraction, in the one group that is
 				 * otherwise clear of it.  Measured: three
-				 * trials of 48 disagreed on `word_78` and
-				 * `word_7c` on GCC 13 and were green on the
+				 * trials of 48 disagreed on `blockErrorEnergySum` and
+				 * `blockErrorEnergyRms` on GCC 13 and were green on the
 				 * period compiler.  Firing on the LAST symbol
 				 * drives the whole inverse block, its `b8`
 				 * loop and its `in` step, and stops before the
@@ -1747,7 +1747,7 @@ run_data_arm(void)
 				p4_setup(tag, dly);
 				plant_params();
 				p4_equ_plant(tag, le, dfe, mmx);
-				OURS.word_68 = THEIRS.word_68 =
+				OURS.holdoverPending = THEIRS.holdoverPending =
 				    (unsigned)(mmx ? held : 0);
 
 				OURS.state = THEIRS.state = V90EQU_STATE_DATA;
@@ -1764,7 +1764,7 @@ run_data_arm(void)
 				 * (gccdiverge.json, "enterRRN / enterFPE"),
 				 * not this binary's.  Measured: with word_28
 				 * at 2 the group failed 38 of 1209 on GCC 13,
-				 * in `word_94` and the restored linear
+				 * in `highErrorCount` and the restored linear
 				 * coefficients.  The EIA-6 arm is still
 				 * driven, because both its setters are handed
 				 * 0.0f against a step size already 0.0f, which
@@ -2010,7 +2010,7 @@ run_reconvert_wide(void)
 		p4_setup(tag, 0);
 		plant_params();
 		p4_equ_plant(tag, le, dfe, 0);
-		OURS.word_68 = THEIRS.word_68 = 0;
+		OURS.holdoverPending = THEIRS.holdoverPending = 0;
 
 		/*
 		 * Wide enough that `(short)y` and `(int)y` cannot agree, and

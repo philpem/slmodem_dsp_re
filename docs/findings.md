@@ -113590,3 +113590,164 @@ and `t_v8hs`/`t_v8util` are green with their check counts unchanged. This is a
 promotion from bare fields to a properly modelled sub-object, licensed by the
 existing cast (evidence rank 2, typed callee) rather than by the field names'
 shape.  (2026-09-04)
+
+### F10137. Wave 3 field naming: `V90Equalizer` and `V90ConstellationDesigner`, twelve type_ fields each
+
+Wave 3 of the field-naming phase (`docs/fieldnaming.md`), scoped to the two
+V.90/V.92 phase-4 receive classes left most concentrated after wave 2:
+`V90Equalizer.{h,cpp}` (12 `type_NNNN`, 2 live `pad_NNNN`) and
+`V90ConstellationDesigner.{h,cpp}` (11 declared `type_NNNN`, 4 `pad_NNNN`).
+Both headers already carried extensive per-field derivation comments from
+earlier reconstruction work -- some fields were named `short_0a`-style purely
+because a prior pass explicitly declined to promote a name it had already
+derived ("a name out of a diagnostic is the author's word for the QUANTITY...
+the mapping is recorded here, which is where a later batch can act on it").
+This wave acted on those recorded derivations plus new ones from reading
+`V90Equalizer::process` and `V90ConstellationDesigner::setConstellationToNoise`
+as whole algorithms.
+
+**Named on a format string (class 1, strongest):**
+
+- `V90Equalizer::dfeProtectionOnDil` (short, +0x08) -- `process`'s DIL arm
+  prints `"V90Equalizer: DfeProtectionOnDil = %d \r\n"` off exactly this slot
+  before using it as a divisor.
+- `V90ConstellationDesigner::dMin` (+0x0a), `rrnDownDmin` (+0x0c),
+  `rrnUpDmin` (+0x0e) -- `determineDminForRrn` and `setConstellationToNoise`
+  print "current dMin", "final dMin", "rrnDownDmin = %d" and
+  "rrnUpDmin = %d" off these three slots respectively; this promotes wave 2's
+  own withheld derivation rather than deriving anything new.
+- `V90ConstellationDesigner::pdSnrThreshForRateUp` (+0x18),
+  `pdSnrThreshForRateDown` (+0x1c), `pdSnrThreshForRetrain` (+0x20) --
+  `setConstellationToNoise`'s three unconditional `edprintf`s name them
+  directly, same promotion pattern.
+- `V90ConstellationDesigner::rateAction` (+0x48) and its four values, named
+  `V90CD_RATE_NONE`/`_KEEP`/`_UP`/`_DOWN` -- the field's own `switch` and each
+  arm's diagnostic ("NoRestriction", "KeepRate", "dMin calc OneRateUp", "dMin
+  calc OneRateDown") give both the field's role and its four cases by name,
+  so this is a bit-flag-naming-rule case where the "bit" is a four-way
+  discriminant rather than a single bit -- same treatment as F10133's
+  `CLASS1_MODEM_DIR_RX`/`_TX`. No bitfield conversion: the object dispatches
+  it with a `cmp`/`je` chain, not a mask.
+
+**Named on a typed caller/callee plus whole-algorithm reading (class 2/3):**
+
+- `V90ConstellationDesigner::pcmType` (+0x28, `int`) and `compandingLaw`
+  (+0x2c, `int`) -- `process` copies these from `detector->pcmType` and
+  `detector->int_a960`, and both feed `(PcmType)` casts into
+  `V90ConstellationPower::getPower` and the `linear2ulaw`/`linear2alaw`
+  branch in `findNextUcodeToAdd`. Types stay `int`, not `PcmType`: the object
+  forces only the width and the `!= 0` test, and including the enum's header
+  here would create a dependency for no measured gain -- the same reasoning
+  wave 2 already applied to `V90Phase3Modulator`.
+- `V90ConstellationDesigner::powerLadderIndex` (+0x38, `unsigned char`) --
+  `adjustConstellationsPower` reads it, clamped to 21, as the index into
+  `V90ConstellationPower::averagePowerLimits`; the constructor's default of
+  22 is that same clamp's ceiling.
+- `V90Equalizer::linearEquHistoryLength` (+0x1c) -- the constructor computes
+  it as `2 * (unsigned)(params->LINEAR_EQU_HISTORY_LENGTH / 2)`, the
+  parameter's own name (finding F861's pattern), rounded to an even count.
+
+**Named on usage inference over the whole enclosing algorithm (class 4,
+weakest, used only where the role is unambiguous):**
+
+- `V90Equalizer::historyIndex` (+0x20, was `word_20`) and
+  `historyIndexSaved` (+0xf8, was `word_20Saved`) -- read the whole of
+  `process`: it is the write position into the linear delay line
+  (`array_18`, and in fixed-point mode `array_ecAligned`), retreating by two
+  samples per symbol and wrapping to `linearEquHistoryLength -
+  linearEquLength - 1`. Deliberately NOT named after `reset`'s `cursor`
+  parameter (a different, unrelated write into `linearEquCoefs`) despite the
+  shared word, to avoid implying a connection the object does not have.
+- `V90Equalizer::fadeEdgesCounter` (+0x34) -- a call-count divider:
+  incremented once per `process` call, compared against
+  `params->LINEAR_EQU_FADE_EDGES_CYCLE`, resetting to zero and calling
+  `linearEquFadeEdges()` when it hits that count.
+- `V90Equalizer::holdoverPending`/`holdoverSample` (+0x68/+0x6c, were
+  `word_68`/`word_6c`) -- the two-samples-per-symbol pairing's carry between
+  calls when `n` comes out odd; wave 2 had already fully derived and
+  documented this role but left the flag offset-named on the "diagnostic
+  names the quantity, not the slot" ground. Promoted here since the role is
+  established from the algorithm itself, not a diagnostic guess.
+- `V90Equalizer::blockSampleCount`/`blockErrorEnergySum`/`blockErrorEnergyRms`
+  (+0x70/+0x78/+0x7c) -- the error-energy block accumulator: a sample count
+  against `errorEnergyMeanBlockLen`, the block's accumulated squared error,
+  and its computed r.m.s., in that relationship.
+- `V90Equalizer::highErrorCount` (+0x94) -- a high-error burst counter:
+  incremented (and `updateCoefs` suspended) on a >300 error past state RESET,
+  and once above 2 it takes four consecutive clean symbols to clear.
+- `V90Equalizer::meanErrorRecordEnable` (+0xa4) -- gates whether `process`
+  appends the block r.m.s. error to `meanErrorEnergy[]`; set after a fixed
+  count of clean DD symbols in state 4, cleared on states 10 and 13.
+
+**Left bare, and why:**
+
+- `V90ConstellationDesigner::byte_08` (+0x08) and `word_40` (+0x40) -- the
+  former now has a reader and a writer (`process` computes it as a scaled
+  distance from the constellation table's ceiling; `adjustConstellationsPower`
+  uses it only as a >13 threshold), but no diagnostic or callee names the
+  quantity itself, so it stays offset-named with the derivation recorded in
+  the header. `word_40` is a stored constructor/`process` argument
+  (`arg13`/13th `process` argument) read by nothing reconstructed.
+- `V90ConstellationDesigner::word_24` (+0x24) -- seeded from the parameter
+  block's own `unnamed_39c` (finding F878: the ORIGINAL has no name for that
+  parameter either), and `process` now known to write it too, but only once
+  (`if (word_24 == 0) word_24 = currentRate;`), latching the first rate a
+  design ever converged on. The role is bounded (a "has a rate been
+  established" gate feeding one clamp in `setConstellationToNoise`) but not
+  named with confidence, so it keeps its offset name -- the same call wave 2
+  made on `dtmf_rx`'s and `cadence`'s multi-role fields.
+- `V90ConstellationDesigner::short_10` (+0x10) -- `dMin * 1.25`, used only as
+  a threshold alongside `dMin` itself in `findNextUcodeToAdd` and
+  `adjustConstellationsToNewK`. No format string or callee names it, and
+  "dMin margin" would be a guess past what the formula establishes, so the
+  formula is recorded in the header comment and the name stays neutral.
+- `pad_0a[2]`, `pad_138[4]` (`V90Equalizer`) and `pad_09`, `pad_12[2]`,
+  `pad_34[4]`, `pad_39[3]` (`V90ConstellationDesigner`) -- true unmodelled
+  space or plain alignment; no member reconstructed here touches them.
+
+**No bitfield conversions.** Every renamed field is a scalar counter, flag,
+or scaled index; `rateAction`'s four values are a `cmp`/`je` dispatch, not a
+bitmask, so it took named constants rather than bitfield treatment (see
+above). Consistent with the tree-wide measurement that explicit mask tests
+dominate over bitfields.
+
+**Propagation and verification.** Both classes' fields are reached from
+outside their own `.cpp`/test files -- `V90Demodulator.cpp` holds a
+`constellationDesigner`/`equalizer` member and writes `rateAction` directly at
+several call sites (`indicateRemoteRateReneg`, the silence-RRN redesign arm,
+`evaluateConnection`'s verdict switch) and `dfeProtectionOnDil` once (the AGC
+DIL-protection scaling in `progress`); `t_v90demprog.cpp`, `t_v90demod.cpp`
+and `t_v90p4ddec.cpp` each seed `linearEquHistoryLength` through a bare `e->`
+accessor; `t_v90dataph.cpp` and `t_v90demod.cpp` each reach `rateAction`
+through an explicit `(V90ConstellationDesigner *)` cast. All of these were
+found by grepping for the OLD field names across the whole tree rather than
+assumed absent, and were the actual source of every compile break hit while
+verifying -- the two classes' own files and their four/three dedicated test
+files never had a break. Three `test/mutations/*.json` files needed their
+`find`/`replace` text and one their `label` updated to match
+(`v90cd.json`, `v90cdadjust.json`, `v90cdctor.json`, plus two `label` keys in
+`test/mutations/snapshot.json`); `v90equ.json` needed three `word_1c`
+occurrences updated. One mechanical trap repeated from F10135's V.8 wave:
+`test/mutations/*.json` escape a source tab as the literal two characters `\`
+and `t`, so a `\bword_28\b`-style rename script silently fails to match
+`\tword_28` in that format (the `t` defeats the boundary) -- caught here by
+`tools/anchorcheck.py` reporting a clean run only after each such miss was
+found by direct `grep` and fixed by hand, not by trusting the script's own
+"updated" count.
+
+`tools/onedef.py`, `tools/refcheck.py`, `tools/anchorcheck.py` and
+`tools/bannercheck.py` all clean. `make one` run in four batches (docker and
+the CPU contention of a concurrent sibling-worktree `make period` made one
+full-suite invocation impractically slow): `t_v90equ`/`t_v90equproc` reproduce
+the PRE-EXISTING failure counts of unmodified `master` byte-for-byte
+(784/86026, 2/2396, 2/480, 1/1244, 1/1092, 36/4778, 731/120974 -- verified by
+`git stash`/`git stash pop` A/B against this exact tree, not assumed), which
+is `docs/v90equprocess.md`'s own documented "MOSTLY DRIVEN, NOT CLOSED"
+status and unrelated to this wave; `t_v90eqdata` and the four-member CD
+cluster (`t_v90cdesign`/`t_v90cdnoise`/`t_v90cdadjust`/`t_v90designers`) are
+100% green, 0 failures; the seven Demodulator-family accessor files
+(`t_v90demctor`, `t_v90p4ddec`, `t_v34diag`, `t_v90dataph`, `t_v90leaves`,
+`t_v90demprog`, `t_v90demod`) are 100% green, 0 failures, confirming every
+external field-access fix above. `make period`/`byteident.py --ratchet` need
+docker at the tree level and were not re-run standalone; left for the
+parent's gate per this phase's standing note.  (2026-09-04)

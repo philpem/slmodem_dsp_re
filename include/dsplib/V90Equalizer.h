@@ -312,8 +312,20 @@ public:
 	 */
 	int savedBllState;		/* +0x04 */
 
-	/* +0x08  Zeroed by `reset` with a `movw`, so two bytes and not four. */
-	short short_08;			/* +0x08 */
+	/*
+	 * +0x08  Zeroed by `reset` with a `movw`, so two bytes and not four.
+	 *
+	 * NAMED FROM THE FORMAT STRING THAT PRINTS IT.  `process`'s DIL
+	 * ("digital in-line", the German-PBX arm) state 10 prints
+	 * `"V90Equalizer: DfeProtectionOnDil = %d \r\n"` off exactly this
+	 * slot before using it as a divisor for `DFE_DIL_HIGH_UCODE_BETA`.
+	 * Class-1 evidence.  Nothing in this class writes it; the one
+	 * external writer is `V90Demodulator::progress`, which computes it
+	 * from how far the AGC gain has fallen below a parameter threshold
+	 * (`equalizer->dfeProtectionOnDil = (short)((1.0f - agc.gain /
+	 * threshold) * 250.0f) + 1`).
+	 */
+	short dfeProtectionOnDil;	/* +0x08 */
 
 	unsigned char pad_0a[2];	/* +0x0a alignment                */
 
@@ -346,25 +358,37 @@ public:
 	/*
 	 * +0x18  Cleared in the SAME loop as `linearEquCoefs` and from the
 	 * far end: the store is `movl $0x0,-0x4(%esi,%eax,4)` with
-	 * `%eax = word_1c - i`, so index `word_1c - 1 - i` runs downwards
-	 * while the first array runs up.  Two arrays walked in opposite
-	 * directions by one counter; what the second holds is not established
-	 * here, so it is offset-named.
+	 * `%eax = linearEquHistoryLength - i`, so index
+	 * `linearEquHistoryLength - 1 - i` runs downwards while the first
+	 * array runs up.  Two arrays walked in opposite directions by one
+	 * counter; what the second holds is not established here, so it is
+	 * offset-named.
+	 *
+	 * `process` IS WHAT SAYS WHAT IT IS: this is the linear equaliser's
+	 * sample delay line, read at `array_18[historyIndex + i]` as the FIR
+	 * sum's history and shifted down by `linearEquLength` samples every
+	 * time `historyIndex` wraps.
 	 */
-	float *array_18;		/* +0x18 */
+	float *array_18;		/* +0x18  the linear delay line     */
 
 	/*
 	 * +0x1c  The bound the descending clear counts down from, and the
 	 * length (plus eight) of the fixed-point array at +0xec.  Unsigned:
 	 * `lea 0x8(%ebp),%eax / cmp %edx,%eax / ja` is the unsigned form.
+	 *
+	 * NAMED FROM ITS SOURCE.  The constructor computes it as
+	 * `2 * (unsigned)(params->LINEAR_EQU_HISTORY_LENGTH / 2)` -- the
+	 * parameter's own name, rounded down to an even count -- and this is
+	 * the only field that value reaches.  Class-2/3 evidence (a named
+	 * parameter, read over the whole constructor).
 	 */
-	unsigned int word_1c;		/* +0x1c */
+	unsigned int linearEquHistoryLength;	/* +0x1c */
 
 	/*
-	 * +0x20  Derived, not copied: `reset` computes `word_1c -
-	 * linearEquLength - 1` and stores it here BEFORE the guard that skips
-	 * the clearing loops, so it is written even when the equaliser has no
-	 * taps.
+	 * +0x20  Derived, not copied: `reset` computes
+	 * `linearEquHistoryLength - linearEquLength - 1` and stores it here
+	 * BEFORE the guard that skips the clearing loops, so it is written
+	 * even when the equaliser has no taps.
 	 *
 	 * SIGNED, AND `process` IS WHAT SETTLES IT.  The cursor retreats by
 	 * two per symbol and the second step is `dec %eax; js 3a2d4` at
@@ -373,10 +397,19 @@ public:
 	 * wrap never runs, so the only two readings are an `int` field or a
 	 * cast at the test; a cast is a claim that the declaration is wrong
 	 * (docs/cleanup.md §3a) and the declaration is what this batch owns.
-	 * `reset`'s `word_1c - linearEquLength - 1` still computes in unsigned
-	 * and converts, which is why nothing else moved.  Finding F6200.
+	 * `reset`'s `linearEquHistoryLength - linearEquLength - 1` still
+	 * computes in unsigned and converts, which is why nothing else moved.
+	 * Finding F6200.
+	 *
+	 * NAMED FROM READING `process` AS ONE ALGORITHM (usage inference,
+	 * class-4): it is the write position into `array_18` (and, in fixed-
+	 * point mode, `array_ecAligned`) that the linear FIR sum reads
+	 * forward from, retreating by two samples per symbol and wrapping
+	 * back to the value above when it goes negative -- a delay-line
+	 * index, not a cursor in `reset`'s sense (that parameter seeds
+	 * `linearEquCoefs`, a different array entirely).
 	 */
-	int word_20;			/* +0x20 */
+	int historyIndex;		/* +0x20 */
 
 	/*
 	 * +0x24, +0x28  The two windows.  `reset` ends by calling
@@ -395,7 +428,14 @@ public:
 	unsigned int linearEquWindowHalf;	/* +0x2c */
 	unsigned int dfeWindowHalf;		/* +0x30 */
 
-	unsigned int word_34;		/* +0x34 zeroed by reset          */
+	/*
+	 * +0x34  Zeroed by `reset`.  `process` increments it once per call
+	 * and compares it against `params->LINEAR_EQU_FADE_EDGES_CYCLE`,
+	 * calling `linearEquFadeEdges()` and resetting to zero when it hits
+	 * that count -- a call-count divider, named from reading `process`
+	 * as one algorithm (usage inference).
+	 */
+	unsigned int fadeEdgesCounter;	/* +0x34 zeroed by reset          */
 
 	/*
 	 * +0x38  The decision-feedback filter's tap count, the same role
@@ -450,16 +490,29 @@ public:
 	 * +0x68, +0x6c  THE HELD-OVER ODD SAMPLE AND ITS VALUE, and `process`
 	 * is what says so: the epilogue sets the flag exactly when `n` came
 	 * out odd and stores the sample the loop could not pair, and the
-	 * prologue consumes both.  The flag stays offset-named; the VALUE is
-	 * a `float`, because the float arm assigns it straight into
-	 * `array_18[]` and the epilogue fills it from `*in` -- a raw 32-bit
-	 * `mov` either way, which is exactly what GCC emits for a float copy
-	 * that does no arithmetic.  `reset` writes zero, and a store of zero
-	 * cannot tell an int from a float (the +0x80..+0x8c argument again).
+	 * prologue consumes both.  The VALUE is a `float`, because the float
+	 * arm assigns it straight into `array_18[]` and the epilogue fills it
+	 * from `*in` -- a raw 32-bit `mov` either way, which is exactly what
+	 * GCC emits for a float copy that does no arithmetic.  `reset` writes
+	 * zero, and a store of zero cannot tell an int from a float (the
+	 * +0x80..+0x8c argument again).
+	 *
+	 * NOW NAMED, from the same reading -- usage inference over the whole
+	 * of `process`'s prologue and epilogue, which is unambiguous even
+	 * without a format string: this is the two-samples-per-symbol
+	 * pairing's carry between calls.
 	 */
-	unsigned int word_68;		/* +0x68 */
-	float word_6c;			/* +0x6c */
-	unsigned int word_70;		/* +0x70 */
+	unsigned int holdoverPending;	/* +0x68 */
+	float holdoverSample;		/* +0x6c */
+
+	/*
+	 * +0x70  Zeroed by `reset`, incremented by `nOut` at the end of every
+	 * `process` call, and compared against `errorEnergyMeanBlockLen`;
+	 * once it reaches that count the block's r.m.s. error is computed
+	 * from +0x78 and both counters reset to zero.  A sample count within
+	 * the current error-energy block (usage inference, class-4).
+	 */
+	unsigned int blockSampleCount;	/* +0x70 */
 
 	/* +0x74  = params->ERROR_ENERGY_MEAN_BLOCK_LEN */
 	int errorEnergyMeanBlockLen;	/* +0x74 */
@@ -473,9 +526,12 @@ public:
 	 * writes it with `fsts 0x7c(%ebp)` -- a four-byte x87 store, not an
 	 * integer move -- and reads it back to append to `meanErrorEnergy[]`.
 	 * `reset` writes zero, which is the same word either way.
+	 *
+	 * NOW NAMED, matching `blockSampleCount` above and the roles the
+	 * surrounding comments already established (usage inference).
 	 */
-	unsigned int word_78;		/* +0x78 */
-	float word_7c;			/* +0x7c */
+	unsigned int blockErrorEnergySum;	/* +0x78 */
+	float blockErrorEnergyRms;		/* +0x7c */
 
 	/*
 	 * +0x80 .. +0x8c  FOUR FLOATS, AND THE AUTHOR'S OWN NAMES FOR THEM.
@@ -503,7 +559,16 @@ public:
 	 */
 	float errorEnergyMeanK;		/* +0x90 */
 
-	unsigned int word_94;		/* +0x94 */
+	/*
+	 * +0x94  A high-error burst counter, zeroed by `reset`.  `process`
+	 * increments it (and zeroes `updateCoefs`, suspending adaptation)
+	 * whenever a symbol's error exceeds 300 in a state past `RESET`; once
+	 * it is above 2, coefficient updates stay suspended until FOUR clean
+	 * symbols in a row bring it back to zero.  Usage inference over the
+	 * whole of `process`'s error-handling arm (class-4); no format string
+	 * or callee names the quantity.
+	 */
+	unsigned int highErrorCount;	/* +0x94 */
 
 	/*
 	 * +0x98  THREE HUNDRED FLOATS, AND THE ONLY BLOCK THE CONSTRUCTOR
@@ -527,7 +592,15 @@ public:
 	float *meanErrorEnergy;		/* +0x98  300 floats */
 	unsigned int meanErrorCount;	/* +0x9c */
 	unsigned int meanErrorFull;	/* +0xa0 */
-	unsigned int word_a4;		/* +0xa4 */
+
+	/*
+	 * +0xa4  A gate on whether `process` appends the block r.m.s. error
+	 * (+0x7c) to `meanErrorEnergy[]`.  `process`'s PHASE3 arm sets it once
+	 * a fixed count of clean symbols has passed in state 4 and clears it
+	 * on states 10 and 13; the block-boundary code at the epilogue only
+	 * writes the buffer when it is set.  Usage inference (class-4).
+	 */
+	unsigned int meanErrorRecordEnable;	/* +0xa4 */
 
 	/*
 	 * +0xa8  The parameter block.  Not owned; the constructor is handed
@@ -636,22 +709,26 @@ public:
 	unsigned int linearEquMmxCoefsSkew;	/* +0xe4 */
 	unsigned int array_d8Skew;		/* +0xe8 */
 
-	/* +0xec  `word_1c + 8` shorts, cleared under the same condition. */
+	/*
+	 * +0xec  `linearEquHistoryLength + 8` shorts, cleared under the same
+	 * condition -- the fixed-point mode's own delay line, the counterpart
+	 * of `array_18`.
+	 */
 	short *array_ec;		/* +0xec raw    */
 	short *array_ecAligned;		/* +0xf0 */
 	unsigned int array_ecSkew;	/* +0xf4 */
 
 	/*
-	 * +0xf8  WHERE `word_20` IS PARKED WHILE THE EQUALISER IS IN ITS
+	 * +0xf8  WHERE `historyIndex` IS PARKED WHILE THE EQUALISER IS IN ITS
 	 * FIXED-POINT MODE.  `convertEqualizerToMmx` copies +0x20 here
 	 * (`mov 0x20(%ebp),%ebx; mov %ebx,0xf8(%ebp)`) and
 	 * `restoreEqualizerToFloat` copies it straight back
 	 * (`mov 0xf8(%ebx),%ecx; mov %ecx,0x20(%ebx)`); `process` reads and
 	 * writes it in the fixed-point arms.  It used to be `pad_f8`.
 	 */
-	/* SIGNED, for the reason `word_20` above is: 0x39457 is the same
+	/* SIGNED, for the reason `historyIndex` above is: 0x39457 is the same
 	 * `dec %eax; js` on this slot. */
-	int word_20Saved;		/* +0xf8 */
+	int historyIndexSaved;		/* +0xf8 */
 
 	/*
 	 * The same four for the decision-feedback filter, +0x40 further on --

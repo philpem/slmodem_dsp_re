@@ -6,8 +6,8 @@
  },
  {
   "label": "+0x38 defaults to 0x15 rather than 0x16",
-  "find": "\tbyte_38 = 0x16;",
-  "replace": "\tbyte_38 = 0x15;"
+  "find": "\tpowerLadderIndex = 0x16;",
+  "replace": "\tpowerLadderIndex = 0x15;"
  },
  {
   "label": "the pre-filter and the power model are swapped",
@@ -21,12 +21,12 @@
  },
  {
   "label": "+0x08 is cleared four bytes wide rather than one",
-  "find": "\tbyte_08 = 0;\n\tword_48 = 0;",
-  "replace": "\t*(int *)&byte_08 = 0;\n\tword_48 = 0;"
+  "find": "\tbyte_08 = 0;\n\trateAction = 0;",
+  "replace": "\t*(int *)&byte_08 = 0;\n\trateAction = 0;"
  },
  {
-  "label": "word_48 is left as the constructor found it",
-  "find": "\tbyte_08 = 0;\n\tword_48 = 0;",
+  "label": "rateAction is left as the constructor found it",
+  "find": "\tbyte_08 = 0;\n\trateAction = 0;",
   "replace": "\tbyte_08 = 0;"
  },
  {

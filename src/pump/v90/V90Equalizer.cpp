@@ -145,30 +145,30 @@
 
 V90EQU_OFF(resampler,			0x000, resampler);
 V90EQU_OFF(savedBllState,		0x004, savedbll);
-V90EQU_OFF(short_08,			0x008, short08);
+V90EQU_OFF(dfeProtectionOnDil,			0x008, short08);
 V90EQU_OFF(linearEquLength,		0x00c, linearequlength);
 V90EQU_OFF(linearEquBeta,		0x010, linearequbeta);
 V90EQU_OFF(linearEquCoefs,		0x014, linearequcoefs);
 V90EQU_OFF(array_18,			0x018, array18);
-V90EQU_OFF(word_1c,			0x01c, word1c);
-V90EQU_OFF(word_20,			0x020, word20);
+V90EQU_OFF(linearEquHistoryLength,			0x01c, word1c);
+V90EQU_OFF(historyIndex,			0x020, word20);
 V90EQU_OFF(linearEquWindow,		0x024, lewindow);
 V90EQU_OFF(dfeWindow,			0x028, dfewindow);
 V90EQU_OFF(linearEquWindowHalf,		0x02c, lewindowhalf);
 V90EQU_OFF(dfeWindowHalf,		0x030, dfewindowhalf);
-V90EQU_OFF(word_34,			0x034, word34);
+V90EQU_OFF(fadeEdgesCounter,			0x034, word34);
 V90EQU_OFF(dfeLength,			0x038, dfelength);
 V90EQU_OFF(dfeBeta,			0x03c, dfebeta);
 V90EQU_OFF(dfeCoefs,			0x040, dfecoefs);
 V90EQU_OFF(array_44,			0x044, array44);
 V90EQU_OFF(state,			0x060, state);
 V90EQU_OFF(stateCount,			0x064, statecount);
-V90EQU_OFF(word_68,			0x068, word68);
-V90EQU_OFF(word_6c,			0x06c, word6c);
-V90EQU_OFF(word_70,			0x070, word70);
+V90EQU_OFF(holdoverPending,			0x068, word68);
+V90EQU_OFF(holdoverSample,			0x06c, word6c);
+V90EQU_OFF(blockSampleCount,			0x070, word70);
 V90EQU_OFF(errorEnergyMeanBlockLen,	0x074, eemblocklen);
-V90EQU_OFF(word_78,			0x078, word78);
-V90EQU_OFF(word_7c,			0x07c, word7c);
+V90EQU_OFF(blockErrorEnergySum,			0x078, word78);
+V90EQU_OFF(blockErrorEnergyRms,			0x07c, word7c);
 V90EQU_OFF(meanErrorEnergyCurrent,	0x080, meecurrent);
 V90EQU_OFF(meanErrorEnergyMean,		0x084, meemean);
 V90EQU_OFF(meanErrorEnergyMin,		0x088, meemin);
@@ -180,11 +180,11 @@ V90EQU_OFF(demapper,			0x050, demapper);
 V90EQU_OFF(connEval,			0x054, conneval);
 V90EQU_OFF(spectralVerifier,		0x058, specverif);
 V90EQU_OFF(preFilter,			0x05c, prefilter);
-V90EQU_OFF(word_94,			0x094, word94);
+V90EQU_OFF(highErrorCount,			0x094, word94);
 V90EQU_OFF(meanErrorEnergy,		0x098, meebuf);
 V90EQU_OFF(meanErrorCount,		0x09c, meecount);
 V90EQU_OFF(meanErrorFull,		0x0a0, meefull);
-V90EQU_OFF(word_a4,			0x0a4, worda4);
+V90EQU_OFF(meanErrorRecordEnable,			0x0a4, worda4);
 V90EQU_OFF(params,			0x0a8, params);
 V90EQU_OFF(mmxArraysPresent,		0x0ac, mmxarrays);
 V90EQU_OFF(mmxMode,			0x0b0, mmxmode);
@@ -205,7 +205,7 @@ V90EQU_OFF(array_d8Skew,		0x0e8, arrayd8skew);
 V90EQU_OFF(array_ec,			0x0ec, arrayec);
 V90EQU_OFF(array_ecAligned,		0x0f0, arrayecalign);
 V90EQU_OFF(array_ecSkew,		0x0f4, arrayecskew);
-V90EQU_OFF(word_20Saved,		0x0f8, word20saved);
+V90EQU_OFF(historyIndexSaved,		0x0f8, word20saved);
 V90EQU_OFF(maxDfeCoefValue,		0x0fc, maxdfecoef);
 V90EQU_OFF(minDfeCoefValue,		0x100, mindfecoef);
 V90EQU_OFF(dfeMmxConversionFactor,		0x104, dfescale);
@@ -1260,7 +1260,7 @@ V90Equalizer::convertEqualizerToMmx()
 	edprintf("V90Equalizer: short high LE coeffs max value = %d\r\n", maxHi);
 
 	/*
-	 * The history, `word_1c` entries of it, with no scaling and a
+	 * The history, `linearEquHistoryLength` entries of it, with no scaling and a
 	 * two-byte conversion.  `(short)__builtin_abs(s)` is the object's
 	 * `cltd; xor; sub; cwtl`, and the truncation is what makes the
 	 * magnitude of -32768 negative again.
@@ -1268,7 +1268,7 @@ V90Equalizer::convertEqualizerToMmx()
 	maxHist = 0;
 	minHist = 0x8000;
 
-	for (i = 0; i < word_1c; i++) {
+	for (i = 0; i < linearEquHistoryLength; i++) {
 		short s = (short)array_18[i];
 		short a;
 
@@ -1293,7 +1293,7 @@ V90Equalizer::convertEqualizerToMmx()
 	 * does it here, in the middle of the DFE half's scaling, because that
 	 * is where GCC scheduled a copy with no floating-point dependency.
 	 */
-	word_20Saved = word_20;
+	historyIndexSaved = historyIndex;
 
 	dfeMmxConversionFactor = (float)conv;
 	dfeMmxOutputConversionFactor = (int)((1.0f / 65536.0f) * conv);
@@ -1515,10 +1515,10 @@ V90Equalizer::restoreEqualizerToFloat()
 		    * (float)mmx_coef_get(linearEquMmxCoefsAligned,
 					  array_d8Aligned, i);
 
-	for (i = 0; i < word_1c; i++)
+	for (i = 0; i < linearEquHistoryLength; i++)
 		array_18[i] = (float)array_ecAligned[i];
 
-	word_20 = word_20Saved;
+	historyIndex = historyIndexSaved;
 
 	for (i = 0; i < dfeLength; i++) {
 		dfeCoefs[i] = (1.0f / dfeMmxConversionFactor)
@@ -1685,7 +1685,7 @@ V90Equalizer::enterChannelVerification()
  * ONE CALL CARRIES A BLOCK OF RECEIVER SAMPLES THROUGH THE EQUALISER AND OUT
  * AS SYMBOLS.  Two input samples make one T/2-spaced symbol, so `nOut` comes
  * back as `n >> 1`, and an odd sample is held over to the next call in
- * `word_68`/`word_6c`.  Each symbol is
+ * `holdoverPending`/`holdoverSample`.  Each symbol is
  *
  *      y    = linear equaliser over the delay line at `array_18`
  *      d    = decision-feedback filter over `array_44`
@@ -1712,7 +1712,7 @@ V90Equalizer::enterChannelVerification()
  *
  * WHAT A READER SHOULD KNOW BEFORE CHANGING ANYTHING HERE:
  *
- *   - `word_20` retreats by TWO per symbol and the second step is
+ *   - `historyIndex` retreats by TWO per symbol and the second step is
  *     UNCONDITIONAL.  The path that skips the coefficient update rejoins the
  *     history shift inside it, not before it, so a reading that made the
  *     second decrement part of the update is wrong on exactly that path.
@@ -1721,7 +1721,7 @@ V90Equalizer::enterChannelVerification()
  *     slot.  It starts at 1, the PHASE3 arm loads it from
  *     `phase3Demod->word_408`, a high-error symbol zeroes it, and four clean
  *     symbols in a row close the burst.  When a burst ends with
- *     `word_94 <= 2` the closing arm never fires, so `updateCoefs` stays 0
+ *     `highErrorCount <= 2` the closing arm never fires, so `updateCoefs` stays 0
  *     and the equaliser stops adapting for the rest of the call.  That
  *     asymmetry is the object's and is reproduced.  Finding F5700 §3.
  *   - `state` is WIDER than the seven `V90EQU_STATE_*` values.  The dispatch
@@ -1870,16 +1870,16 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			*cur++ = (short)*s++;
 			i--;
 		}
-		if (word_68) {
-			((short *)block_b4)[0] = (short)word_6c;
-			word_68 = 0;
+		if (holdoverPending) {
+			((short *)block_b4)[0] = (short)holdoverSample;
+			holdoverPending = 0;
 			cur = (short *)block_b4;
 			n++;
 		} else {
 			((short *)block_b4)[0] = 0;
 			cur = (short *)block_b4 + 1;
 		}
-	} else if (word_68) {
+	} else if (holdoverPending) {
 		/* `cmp $1,%ebx; sbbl $-1,n` -- the borrow idiom for `n++`. */
 		n++;
 	}
@@ -1905,10 +1905,10 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			s1 = (unsigned short)cur[1];
 			cur += 2;
 			ec = array_ecAligned;
-			k = word_20Saved;
+			k = historyIndexSaved;
 			ec[k] = (short)s0;
 			k--;
-			word_20Saved = k;
+			historyIndexSaved = k;
 			ec[k] = (short)s1;
 
 			/*
@@ -1928,20 +1928,20 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			softInt = (short)(leSum - dfeSum);
 		} else {
 			/* --------------------------- 0x390d0, floating */
-			if (word_68) {
-				array_18[word_20] = word_6c;
-				word_68 = 0;
-				word_20--;
-				array_18[word_20] = *in++;
+			if (holdoverPending) {
+				array_18[historyIndex] = holdoverSample;
+				holdoverPending = 0;
+				historyIndex--;
+				array_18[historyIndex] = *in++;
 			} else {
-				array_18[word_20] = in[0];
-				word_20--;
-				array_18[word_20] = in[1];
+				array_18[historyIndex] = in[0];
+				historyIndex--;
+				array_18[historyIndex] = in[1];
 				in += 2;
 			}
 			d = v90equ_narrow(fdot(array_44, dfeCoefs,
 					       dfeLength));
-			y = v90equ_narrow(fdot(&array_18[word_20],
+			y = v90equ_narrow(fdot(&array_18[historyIndex],
 					       linearEquCoefs,
 					       linearEquLength));
 			/* `fsubrs 0xb0(%esp)`: memory minus st(0), so y - d. */
@@ -2087,12 +2087,12 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			if (phase4Demod->state == 3
 			    && phase4Demod->linearMappStudyStart
 			       == phase4Demod->countInState) {
-				word_a4 = 1;
+				meanErrorRecordEnable = 1;
 				meanErrorCount = 0;
 				meanErrorFull = 0;
 			}
 			if (phase4Demod->state == 5 || phase4Demod->state == 4)
-				word_a4 = 0;
+				meanErrorRecordEnable = 0;
 			break;
 		}
 
@@ -2241,7 +2241,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			if (phase4Demod->state == 3) {
 				if (phase4Demod->linearMappStudyStart
 				    == phase4Demod->countInState)
-					word_a4 = 1;
+					meanErrorRecordEnable = 1;
 				if (phase4Demod->demapper->short_1ea4
 				    && flag_144) {
 					flag_144 = 0;
@@ -2266,7 +2266,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				}
 			}
 			if (phase4Demod->state == 5 || phase4Demod->state == 4)
-				word_a4 = 0;
+				meanErrorRecordEnable = 0;
 			break;
 		}
 
@@ -2331,10 +2331,10 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					setLinearEquBeta(params->GERMAN_PBX_LINEAR_EQU_DIL_HIGH_UCODE_BETA);
 					if (dsplibs_debug_level > 1)
 						dsplibs_debug_printf("V90Equalizer: DfeProtectionOnDil = %d \r\n",
-						    (int)short_08);
-					if (short_08)
+						    (int)dfeProtectionOnDil);
+					if (dfeProtectionOnDil)
 						setDfeBeta(params->DFE_DIL_HIGH_UCODE_BETA
-						    / (float)short_08);
+						    / (float)dfeProtectionOnDil);
 					else
 						setDfeBeta(params->DFE_DIL_HIGH_UCODE_BETA);
 					if (resampler->bllState) {
@@ -2397,14 +2397,14 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			if (phase3Demod->state == 0 && phase3Demod->byte_424) {
 				if (mmxMode) {
 					resampler->SdHalfBaudDft((float)
-					    array_ecAligned[word_20Saved + 1]);
+					    array_ecAligned[historyIndexSaved + 1]);
 					resampler->SdHalfBaudDft((float)
-					    array_ecAligned[word_20Saved]);
+					    array_ecAligned[historyIndexSaved]);
 				} else {
 					resampler->SdHalfBaudDft(
-					    array_18[word_20 + 1]);
+					    array_18[historyIndex + 1]);
 					resampler->SdHalfBaudDft(
-					    array_18[word_20]);
+					    array_18[historyIndex]);
 				}
 			}
 			if (phase3Demod->state == 3
@@ -2438,10 +2438,10 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			else if (phase3Demod->state == 4
 				 && params->NOF_DD_SYMBOLS_BEFORE_MEAN_ERROR_DIAG_PHASE3
 				    == phase3Demod->word_2c)
-				word_a4 = 1;
+				meanErrorRecordEnable = 1;
 			if (phase3Demod->state == 10
 			    || phase3Demod->state == 13)
-				word_a4 = 0;
+				meanErrorRecordEnable = 0;
 			break;
 		}
 
@@ -2467,19 +2467,19 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 
 			e = (short)(softInt - decision);
 			if (__builtin_abs(e) > 300 && state > 1) {
-				if (word_94 <= 1)
+				if (highErrorCount <= 1)
 					edprintf("V90Equalizer: High momentary error, symbol#%d, error %d, soft Decision %d\r\n",
 						 j, e, softInt);
-				word_94++;
+				highErrorCount++;
 				updateCoefs = 0;
 			} else if (state != 10 && state != 11 && state != 12
 				   && state != 16 && state != 13
 				   && state != 14 && state != 15
-				   && word_94 > 2) {
+				   && highErrorCount > 2) {
 				if (++updateCoefs == 4) {
 					edprintf("V90Equalizer: nof consecutive errors = %d\r\n",
-						 word_94);
-					word_94 = 0;
+						 highErrorCount);
+					highErrorCount = 0;
 				}
 			}
 
@@ -2498,7 +2498,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				 */
 				hi = linearEquMmxCoefsAligned;
 				lo = array_d8Aligned;
-				x = &array_ecAligned[word_20Saved];
+				x = &array_ecAligned[historyIndexSaved];
 				beta = -linearEquMmxBeta * diff;
 				for (i = 0; i < (int)linearEquLength; i++) {
 					int c = ((int)hi[i] << 16)
@@ -2537,15 +2537,15 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 					    array_12cAligned[u - 1];
 			}
 			array_12cAligned[0] = (short)diff;
-			word_20Saved--;
-			if (word_20Saved < 0) {
+			historyIndexSaved--;
+			if (historyIndexSaved < 0) {
 				/* 0x398f5 */
 				unsigned int u;
 
-				word_20Saved = (int)(word_1c - linearEquLength
+				historyIndexSaved = (int)(linearEquHistoryLength - linearEquLength
 						     - 1);
 				for (u = linearEquLength; u-- > 0; )
-					array_ecAligned[word_1c
+					array_ecAligned[linearEquHistoryLength
 					    - linearEquLength + u] =
 					    array_ecAligned[u];
 			}
@@ -2557,7 +2557,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * not need to and a cast here would be claiming
 			 * something the object does not do.
 			 */
-			word_78 += (unsigned int)(e * e);
+			blockErrorEnergySum += (unsigned int)(e * e);
 			((short *)block_b8)[j] = (short)softInt;
 		} else {
 			/* --------------------------- 0x394e1, floating */
@@ -2591,7 +2591,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * `soft` reaches 10**5 while `fdec` is a short, so
 			 * the exact difference needs one bit more than a
 			 * `float` carries and the two spellings part company
-			 * there.  `err` is squared into `word_78` and both
+			 * there.  `err` is squared into `blockErrorEnergySum` and both
 			 * feed an LMS step, so half an ulp here is hundreds
 			 * of counts there.  Finding F6203.
 			 */
@@ -2605,7 +2605,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 */
 			aerr = __builtin_fabsl((long double)err);
 			if (aerr > 300.0 && state > 1) {
-				if (word_94 <= 1)
+				if (highErrorCount <= 1)
 					edprintf("V90Equalizer: High momentary error, symbol#%d, error = %c%d.%03d,   soft Decision = %c%d.%03d\r\n",
 						 j,
 						 V90EQU_ERRSIGN(err),
@@ -2614,16 +2614,16 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 						 V90EQU_ERRSIGN(soft),
 						 (int)__builtin_fabsl((long double)soft),
 						 V90EQU_ERRFRAC(soft));
-				word_94++;
+				highErrorCount++;
 				updateCoefs = 0;
 			} else if (state != 10 && state != 11 && state != 12
 				   && state != 16 && state != 13
 				   && state != 14 && state != 15
-				   && word_94 > 2) {
+				   && highErrorCount > 2) {
 				if (++updateCoefs == 4) {
 					edprintf("V90Equalizer: nof consecutive errors = %d\r\n",
-						 word_94);
-					word_94 = 0;
+						 highErrorCount);
+					highErrorCount = 0;
 				}
 			}
 
@@ -2641,20 +2641,20 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 				for (i = 0; i < linearEquLength; i++)
 					linearEquCoefs[i] +=
 					    (-linearEquBeta * lerr)
-					    * array_18[word_20 + i];
+					    * array_18[historyIndex + i];
 			}
 
 			/* 0x39830, and the update path rejoins at 0x39840. */
 			for (i = dfeLength - 1; i != 0; i--)
 				array_44[i] = array_44[i - 1];
 			array_44[0] = (float)lerr;
-			word_20--;
-			if (word_20 < 0) {
+			historyIndex--;
+			if (historyIndex < 0) {
 				/* 0x3a2d4 -- the same expression `reset`
 				 * plants at construction. */
-				word_20 = (int)(word_1c - linearEquLength - 1);
+				historyIndex = (int)(linearEquHistoryLength - linearEquLength - 1);
 				for (i = linearEquLength; i-- > 0; )
-					array_18[word_1c - linearEquLength + i]
+					array_18[linearEquHistoryLength - linearEquLength + i]
 					    = array_18[i];
 			}
 
@@ -2667,7 +2667,7 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 			 * through `long long` is what makes our side defined
 			 * over the same domain (D561's shape).
 			 */
-			word_78 += (unsigned int)(long long)(err * err);
+			blockErrorEnergySum += (unsigned int)(long long)(err * err);
 			outFloat[j] = soft;
 		}
 	}
@@ -2677,8 +2677,8 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		for (j = 0; j < nOut; j++)
 			outFloat[j] = (float)((short *)block_b8)[j];
 
-	word_70 += nOut;
-	if (word_70 >= (unsigned int)errorEnergyMeanBlockLen) {
+	blockSampleCount += nOut;
+	if (blockSampleCount >= (unsigned int)errorEnergyMeanBlockLen) {
 		/*
 		 * 0x399d1.  Both `fildll`s push a zero high word first, so
 		 * both counters are read UNSIGNED; `1.0f - K` is `dc eb`,
@@ -2693,21 +2693,21 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 		 * the value still on the stack.  So the block's r.m.s. error
 		 * reaches the field rounded to `float` and reaches the
 		 * smoothing UNROUNDED, and reading the field back instead --
-		 * which is what a literal `word_7c` in the second expression
+		 * which is what a literal `blockErrorEnergyRms` in the second expression
 		 * would do -- is one rounding too many.
 		 */
-		long double rms = v90equ_x87_fsqrt((long double)word_78
-						   / (long double)word_70);
+		long double rms = v90equ_x87_fsqrt((long double)blockErrorEnergySum
+						   / (long double)blockSampleCount);
 
-		word_7c = (float)rms;
+		blockErrorEnergyRms = (float)rms;
 		meanErrorEnergyCurrent = errorEnergyMeanK
 		    * meanErrorEnergyCurrent
 		    + (1.0f - errorEnergyMeanK) * rms;
-		connEval->updateAvePdsnr(meanErrorEnergyCurrent, word_70);
-		word_70 = 0;
-		word_78 = 0;
-		if (word_a4) {
-			meanErrorEnergy[meanErrorCount] = word_7c;
+		connEval->updateAvePdsnr(meanErrorEnergyCurrent, blockSampleCount);
+		blockSampleCount = 0;
+		blockErrorEnergySum = 0;
+		if (meanErrorRecordEnable) {
+			meanErrorEnergy[meanErrorCount] = blockErrorEnergyRms;
 			if (++meanErrorCount == V90EQU_MEAN_ERROR_LEN) {
 				meanErrorCount = 0;
 				meanErrorFull = 1;
@@ -2716,22 +2716,22 @@ V90Equalizer::process(float *in, unsigned int n, short *outSym,
 	}
 
 	if (n & 1) {
-		word_68 = 1;
+		holdoverPending = 1;
 		/*
-		 * `n == 0` WITH `word_68` ALREADY SET reads `in[0]` here:
+		 * `n == 0` WITH `holdoverPending` ALREADY SET reads `in[0]` here:
 		 * the prologue made `n` odd, the loop ran zero times, and
 		 * this is the object's behaviour.  A caller must pass a
 		 * buffer with at least one element (D561).
 		 */
 		if (mmxMode)
-			word_6c = (float)*cur;
+			holdoverSample = (float)*cur;
 		else
-			word_6c = *in;
+			holdoverSample = *in;
 	}
 
-	word_34++;
-	if (word_34 == (unsigned int)params->LINEAR_EQU_FADE_EDGES_CYCLE) {
-		word_34 = 0;
+	fadeEdgesCounter++;
+	if (fadeEdgesCounter == (unsigned int)params->LINEAR_EQU_FADE_EDGES_CYCLE) {
+		fadeEdgesCounter = 0;
 		linearEquFadeEdges();
 	}
 }
@@ -2783,7 +2783,7 @@ V90Equalizer::setLinearEquEdgesFadingParams(float left, float right)
  *    is what the object does; it is not defended against here.
  *
  * 3. THE TWO FLOAT ARRAYS ARE CLEARED IN ONE LOOP, IN OPPOSITE DIRECTIONS.
- *    One counter, `linearEquCoefs[i]` ascending and `array_18[word_1c - 1 -
+ *    One counter, `linearEquCoefs[i]` ascending and `array_18[linearEquHistoryLength - 1 -
  *    i]` descending.
  *
  * 4. THE FIXED-POINT ARRAYS ARE ALL `+ 8` LONGER than the filter they belong
@@ -2805,7 +2805,7 @@ V90Equalizer::reset(unsigned int cursor)
 
 	edprintf("V90Equalizer: reset\r\n");
 
-	short_08 = 0;
+	dfeProtectionOnDil = 0;
 	linearEquBeta = 1e-14f;
 	dfeBeta = 1e-14f;
 	mmxMode = 0;
@@ -2820,11 +2820,11 @@ V90Equalizer::reset(unsigned int cursor)
 	state = V90EQU_STATE_RESET;
 	stateCount = 0;
 
-	word_20 = word_1c - linearEquLength - 1;
+	historyIndex = linearEquHistoryLength - linearEquLength - 1;
 
 	for (i = 0; i < linearEquLength; i++) {
 		linearEquCoefs[i] = 0;
-		array_18[word_1c - 1 - i] = 0;
+		array_18[linearEquHistoryLength - 1 - i] = 0;
 	}
 
 	if (linearEquLength - 1 < cursor)
@@ -2870,7 +2870,7 @@ V90Equalizer::reset(unsigned int cursor)
 			array_d8[i] = 0;
 		}
 
-		for (i = 0; i < word_1c + 8; i++)
+		for (i = 0; i < linearEquHistoryLength + 8; i++)
 			array_ec[i] = 0;
 
 		for (i = 0; i < dfeLength + 8; i++) {
@@ -2880,8 +2880,8 @@ V90Equalizer::reset(unsigned int cursor)
 		}
 	}
 
-	word_6c = 0;
-	word_7c = 0;
+	holdoverSample = 0;
+	blockErrorEnergyRms = 0;
 	meanErrorEnergyCurrent = 0;
 	meanErrorEnergyMean = 0;
 	meanErrorEnergyMin = 0;
@@ -2889,17 +2889,17 @@ V90Equalizer::reset(unsigned int cursor)
 	ph4MeanErrorEnergyBeforeUpdate = 0.0f;
 	ph4MeanErrorEnergyBeforeToAfterUpdateRatio = 0.0f;
 	errorEnergyMeanK = params->ERROR_ENERGY_MEAN_K;
-	word_68 = 0;
-	word_70 = 0;
+	holdoverPending = 0;
+	blockSampleCount = 0;
 	errorEnergyMeanBlockLen = params->ERROR_ENERGY_MEAN_BLOCK_LEN;
 	meanErrorCount = 0;
-	word_78 = 0;
+	blockErrorEnergySum = 0;
 	meanErrorFull = 0;
-	word_a4 = 0;
-	word_94 = 0;
+	meanErrorRecordEnable = 0;
+	highErrorCount = 0;
 	flag_144 = 1;
 	flag_146 = 1;
-	word_34 = 0;
+	fadeEdgesCounter = 0;
 
 	left = clamp_fade_ratio(params->LINEAR_EQU_FADE_LEFT_EDGE_RATIO);
 	right = clamp_fade_ratio(params->LINEAR_EQU_FADE_RIGHT_EDGE_RATIO);
@@ -2923,7 +2923,7 @@ V90Equalizer::reset(unsigned int cursor)
  * `shr $2` then a scale by four is `& ~3u` written so the quotient can be
  * reused as the malloc's scale -- `shl $4` on the same register is
  * `length * sizeof(float)` -- and it is a LOGICAL shift, which is what makes
- * both arguments unsigned as the mangling already said.  `word_1c` is rounded
+ * both arguments unsigned as the mangling already said.  `linearEquHistoryLength` is rounded
  * to a multiple of two instead, and from a SIGNED divide:
  *
  *      c1 ea 1f    shr $0x1f,%edx      ; sign bit
@@ -2968,8 +2968,8 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 	linearEquCoefs = (float *)sysdep_malloc(linearEquLength *
 						sizeof(float));
 
-	word_1c = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);
-	array_18 = (float *)sysdep_malloc(word_1c * sizeof(float));
+	linearEquHistoryLength = 2 * (unsigned int)(params->LINEAR_EQU_HISTORY_LENGTH / 2);
+	array_18 = (float *)sysdep_malloc(linearEquHistoryLength * sizeof(float));
 
 	linearEquWindow = (float *)sysdep_malloc(linearEquLength *
 						 sizeof(float));
@@ -2999,7 +2999,7 @@ V90Equalizer::V90Equalizer(unsigned int linearEquLen, unsigned int dfeLen,
 		array_d8 = (short *)sysdep_malloc(
 		    (linearEquLength + 8) * sizeof(short));
 		array_ec = (short *)sysdep_malloc(
-		    (word_1c + 8) * sizeof(short));
+		    (linearEquHistoryLength + 8) * sizeof(short));
 		dfeMmxCoefs = (short *)sysdep_malloc(
 		    (dfeLength + 8) * sizeof(short));
 		array_118 = (short *)sysdep_malloc(

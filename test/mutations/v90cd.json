@@ -11,6 +11,6 @@
  {"label": "the +0x0a store is 32 bits wide",
   "equivalent": true,
   "why": "0x4abdd is `66 c7 40 0a 00 00` -- `movw $0x0,0xa(%eax)`, a 16-bit store, so the object writes two bytes and this writes four. The two it also writes are +0x0c, which the very next statement sets to 0 anyway. EQUIVALENT ONLY BECAUSE OF THAT ORDER: swap the +0x0a and +0x0c statements, or put a read of +0x0c between them, and this becomes a real defect. It will then be CAUGHT and reported MIScounted, which is why it is registered rather than left as a note in a finding.",
-  "find": "\tshort_0a = 0;\n\tshort_0c = 0;",
-  "replace": "\t*(int *)&short_0a = 0;\n\tshort_0c = 0;"}
+  "find": "\tdMin = 0;\n\trrnDownDmin = 0;",
+  "replace": "\t*(int *)&dMin = 0;\n\trrnDownDmin = 0;"}
 ]
