@@ -52,12 +52,12 @@ V92CP_OFF(word_104,	0x104, word104);
 V92CP_OFF(suv,		0x108, suv);
 V92CP_OFF(word_10c,	0x10c, word10c);
 V92CP_OFF(word_110,	0x110, word110);
-V92CP_OFF(word_114,	0x114, word114);
+V92CP_OFF(rxState,	0x114, word114);
 V92CP_OFF(byte_118,	0x118, byte118);
 V92CP_OFF(byte_119,	0x119, byte119);
 V92CP_OFF(byte_11a,	0x11a, byte11a);
 V92CP_OFF(word_11c,	0x11c, word11c);
-V92CP_OFF(word_120,	0x120, word120);
+V92CP_OFF(stateBitCount,	0x120, word120);
 V92CP_OFF(word_124,	0x124, word124);
 V92CP_OFF(bitsPerSymbol,	0x128, byte128);
 V92CP_OFF(bits,		0x129, bits);
@@ -72,11 +72,11 @@ V92CP::V92CP()
 {
 	byte_04 = 0;
 
-	word_114 = 0;
+	rxState = 0;
 	byte_119 = 0;
 	byte_11a = 0;
 	word_11c = 18;
-	word_120 = 0;
+	stateBitCount = 0;
 
 	word_914 = -1;
 }
@@ -160,8 +160,8 @@ void
 V92CP::resetDetector()
 {
 	word_11c = 18;
-	word_120 = 0;
-	word_114 = 0;
+	stateBitCount = 0;
+	rxState = 0;
 	byte_119 = 0;
 	byte_11a = 0;
 }
@@ -776,7 +776,7 @@ int binaryTable[16] = {
  * V92CP::evaluateInfo (.text+0x4f400, 1,124 bytes)
  *
  * The receive half's decoder, and the exact inverse of `infoToBits`: one
- * switch over `word_114` and nothing else, with each arm lifting ONE BLOCK of
+ * switch over `rxState` and nothing else, with each arm lifting ONE BLOCK of
  * the message back out of `bits` into the fields at +0x000..+0x10c.  The
  * dispatch is `sub $0x3; cmp $0x5; ja` over a six-entry table at
  * .rodata+0xe0c whose entries are 0x4f420, 0x4f45f, 0x4f508, 0x4f56d,
@@ -830,7 +830,7 @@ V92CP::evaluateInfo()
 	int i;
 	unsigned int j, k, n;
 
-	switch (word_114) {
+	switch (rxState) {
 	case 3:
 		/*
 		 * The short form.  Five bits of `word_104`, then the two whole
@@ -1151,7 +1151,7 @@ V92CP::evaluateInfo()
  * the same way whichever order they are declared in, and the way it lays them
  * out is not the blob's.  Each holds the bit length of one mask
  * block, computed once `evaluateInfo` has decoded the group count and
- * compared against `word_120` while the block arrives:
+ * compared against `stateBitCount` while the block arrives:
  *
  *      gamma = 136 * word_10c     set entering state 7, tested in state 7
  *      delta = 136 * word_10c     set entering state 8, tested in state 8
@@ -1266,17 +1266,17 @@ V92CP::bitsToInfo(unsigned char bit)
 	if (byte_11a == frameBits && word_11c == 18)
 		rc = 5;
 
-	switch (word_114) {
+	switch (rxState) {
 	case 0:
 		/* Seventeen ones is the preamble; sixteen are not enough. */
 		if (byte_119 > 16)
-			word_114 = 1;
+			rxState = 1;
 		break;
 
 	case 1:
 		/* The framing zero, or start again. */
 		if (bit == 0)
-			word_114 = 2;
+			rxState = 2;
 		else
 			resetDetector();
 		break;
@@ -1291,7 +1291,7 @@ V92CP::bitsToInfo(unsigned char bit)
 		 */
 		byte_00 = bit;
 		V92CP_PUT_BIT(bit);
-		word_114 = (bit == 1) ? 3 : 5;
+		rxState = (bit == 1) ? 3 : 5;
 		break;
 
 	case 3:
@@ -1302,8 +1302,8 @@ V92CP::bitsToInfo(unsigned char bit)
 		V92CP_PUT_BIT(bit);
 		if (word_11c == 34) {
 			evaluateInfo();
-			word_114 = 9;
-			word_120 = 0;
+			rxState = 9;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1324,8 +1324,8 @@ V92CP::bitsToInfo(unsigned char bit)
 		V92CP_PUT_BIT(bit);
 		if (word_11c == 34) {
 			evaluateInfo();
-			word_114 = (char_01 > 1) ? 9 : 6;
-			word_120 = 0;
+			rxState = (char_01 > 1) ? 9 : 6;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1337,8 +1337,8 @@ V92CP::bitsToInfo(unsigned char bit)
 		V92CP_PUT_BIT(bit);
 		if (word_11c == 136) {
 			evaluateInfo();
-			word_114 = 7;
-			word_120 = 0;
+			rxState = 7;
+			stateBitCount = 0;
 			gamma = 136u * word_10c;
 		}
 		break;
@@ -1349,11 +1349,11 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * second only if `byte_24` asked for one.
 		 */
 		V92CP_PUT_BIT(bit);
-		word_120++;
-		if ((unsigned int)word_120 == gamma) {
+		stateBitCount++;
+		if ((unsigned int)stateBitCount == gamma) {
 			evaluateInfo();
-			word_114 = (byte_24 != 0) ? 8 : 9;
-			word_120 = 0;
+			rxState = (byte_24 != 0) ? 8 : 9;
+			stateBitCount = 0;
 			delta = 136u * word_10c;
 		}
 		break;
@@ -1361,11 +1361,11 @@ V92CP::bitsToInfo(unsigned char bit)
 	case 8:
 		/* The second mask block, `delta` positions of it. */
 		V92CP_PUT_BIT(bit);
-		word_120++;
-		if ((unsigned int)word_120 == delta) {
+		stateBitCount++;
+		if ((unsigned int)stateBitCount == delta) {
 			evaluateInfo();
-			word_114 = 9;
-			word_120 = 0;
+			rxState = 9;
+			stateBitCount = 0;
 		}
 		break;
 
@@ -1390,12 +1390,12 @@ V92CP::bitsToInfo(unsigned char bit)
 		 * A BAD CRC RESTARTS THE DETECTOR, and says so.
 		 */
 		V92CP_PUT_BIT(bit);
-		word_120++;
-		if (word_120 == 17) {
+		stateBitCount++;
+		if (stateBitCount == 17) {
 			msgLen = (unsigned int)word_11c;
 
 			if (evaluateCRC()) {
-				word_114 = 10;
+				rxState = 10;
 			} else {
 				resetDetector();
 				if (DSPLIB_DEBUG_ON())

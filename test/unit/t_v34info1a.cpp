@@ -482,7 +482,7 @@ main(void)
 
 				M(side)->info0Layout = ta->layout;
 				M(side)->pcmSessionType = ta->sesstype;
-				M(side)->flag_173d = ta->flag173d;
+				M(side)->droppedToV34 = ta->flag173d;
 				*(short *)(u49[side] + U49_UINFO) = ta->uinfo;
 			}
 

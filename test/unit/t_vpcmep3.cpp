@@ -206,8 +206,8 @@ static const struct site site_v[] = {
 	{ "flags_173a[0]",		0x173a, 1, 0 },
 	{ "flags_173a[1]",		0x173b, 1, 0 },
 	{ "flags_173a[2]",		0x173c, 1, 0 },
-	{ "flag_173d",			0x173d, 1, 0 },
-	{ "flag_173e",			0x173e, 1, 0 },
+	{ "droppedToV34",			0x173d, 1, 0 },
+	{ "clr",			0x173e, 1, 0 },
 	{ "v34BaudAllow[0]",		0x0217, 1, 1 },
 	{ "v34BaudAllow[1]",		0x0218, 1, 0 },
 	{ "v34BaudAllow[2]",		0x0219, 1, 1 },
@@ -696,8 +696,8 @@ run_externalreset(void)
 					    (long)V(1)->qcVerifyState, 0, tag);
 				diff_eq_int("verificationStatus (%ld)",
 					    (long)V(1)->verificationStatus, 0, tag);
-				diff_eq_int("byte_6118 (%ld)",
-					    (long)V(1)->byte_6118, 0, tag);
+				diff_eq_int("progressState (%ld)",
+					    (long)V(1)->progressState, 0, tag);
 
 				/*
 				 * THE BRANCH.  `reInit` clears the phase 3

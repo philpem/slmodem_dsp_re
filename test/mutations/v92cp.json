@@ -11,64 +11,64 @@
  },
  {
   "label": "the detector's counter left alone",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "the detector's first flag left alone",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "the detector's second flag left alone",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "the two flags are one 16-bit field",
   "equivalent": true,
   "why": "This is the code the compiler emits from the two byte stores anyway: `mov %dx,0x119(%eax)`.  It is only the blob's own GCC 3.4 that keeps them apart, as two `movb $0x0` at 0x4e8c4 and 0x4e8cb, and both orders of that choice leave the same two bytes at zero.",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\t*(unsigned short *)&byte_119 = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\t*(unsigned short *)&byte_119 = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "the two flags are one 32-bit field",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\t*(unsigned int *)&byte_119 = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\t*(unsigned int *)&byte_119 = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "+0x11c starts at 17, not 18",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 17;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 17;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "+0x11c written as a byte",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\t*(unsigned char *)&word_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\t*(unsigned char *)&word_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "+0x120 left alone",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\n\tword_914 = -1;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\n\tword_914 = -1;\n"
  },
  {
   "label": "+0x914 starts at 0, not -1",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = 0;\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = 0;\n"
  },
  {
   "label": "+0x914 left alone",
-  "find": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n\tword_914 = -1;\n",
-  "replace": "\tbyte_04 = 0;\n\n\tword_114 = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tword_120 = 0;\n\n"
+  "find": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n\tword_914 = -1;\n",
+  "replace": "\tbyte_04 = 0;\n\n\trxState = 0;\n\tbyte_119 = 0;\n\tbyte_11a = 0;\n\tword_11c = 18;\n\tstateBitCount = 0;\n\n"
  },
  {
   "label": "the destructor clears the detector",
   "find": "V92CP::~V92CP()\n{\n}",
-  "replace": "V92CP::~V92CP()\n{\n\tword_114 = 0;\n}"
+  "replace": "V92CP::~V92CP()\n{\n\trxState = 0;\n}"
  },
  {
   "label": "the destructor clears the detector, volatile so it survives",
   "find": "V92CP::~V92CP()\n{\n}",
-  "replace": "V92CP::~V92CP()\n{\n\t*(volatile unsigned int *)&word_114 = 0;\n}"
+  "replace": "V92CP::~V92CP()\n{\n\t*(volatile unsigned int *)&rxState = 0;\n}"
  }
 ]

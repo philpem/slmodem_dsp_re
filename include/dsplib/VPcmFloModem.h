@@ -442,8 +442,29 @@ public:
 
 	/*
 	 * +0x173a  Three bytes `enterPhase3` clears, immediately before
-	 * `flag_173d` and `flag_173e`, which it clears in the same run of
-	 * five `movb $0x0`.  Offset-named: nothing reads them here.
+	 * `droppedToV34` and `clr`, which it clears in the same run of
+	 * five `movb $0x0`.
+	 *
+	 * THIS PARAGRAPH USED TO SAY "nothing reads them here" -- true of
+	 * `enterPhase3` alone and false of the class.  `runPcmModem` and
+	 * `v90RunDemodulator` read and write all three: `[0]` and `[1]` are
+	 * the two values `V90Jd::getConstelationSize`/`V92Jd`'s twin hand
+	 * back -- a training and a data constellation size, used to tell
+	 * the V.34 interface what was received (`V34XF_IndicateJdReceived`,
+	 * `V34XF_IndicateDilReceived`) and to seed `setNofBitsPhase4` and the
+	 * V.92 modulator's own copies (`v92modem.modulator->byte_0c`/
+	 * `byte_0d`).  `[2]` is a one-shot latch: the rate-renegotiation arm
+	 * that finds OUR OWN request outstanding sets it, and the arm that
+	 * later sees the FAR END's report of the same event clears it and
+	 * swallows the report rather than acting on it twice.
+	 *
+	 * `[2]` KEEPS ITS OFFSET NAME.  What is established is the latch's
+	 * behaviour above, which is finding F7583; splitting the array is a
+	 * separate change from fixing this comment and is not made here.
+	 * `[0]`/`[1]` are left with it rather than split out on their own,
+	 * since the array is cleared as one run of three by `enterPhase3`,
+	 * `externalReset` and `VPcmXfCreate` and a partial split would still
+	 * leave a two-purpose array under one name.
 	 */
 	unsigned char flags_173a[3];
 
@@ -451,15 +472,36 @@ public:
 	 * +0x173d  A byte `getUinfoValue` tests: non-zero skips the lookup
 	 * through the modem entirely and takes the default-flags path.
 	 * `enterPhase3` clears it, so entering phase 3 restores the lookup.
-	 * Offset-named.
+	 *
+	 * NAMED FROM THE OBJECT'S OWN WORDS.  `runPcmModem` and
+	 * `v90RunDemodulator` both set it, at the one arm each has for
+	 * falling back to V.34 -- `edprintf("... drop to V34 requested
+	 * !!\r\n")` immediately beside the store in each -- which is also
+	 * where `v34BaudAllow` is rewritten to the fallback's own pattern
+	 * (index 1 barred, index 5 allowed, neither `setV34BaudForV90`'s nor
+	 * `setV34BaudForV34`'s).  So the byte is not a bare "skip the
+	 * lookup" switch; it is the record that this session gave up on
+	 * V.90/V.92 and dropped to V.34, and `getUinfoValue`'s short-circuit
+	 * is a consequence of that rather than the byte's whole meaning.
 	 */
-	unsigned char flag_173d;
+	unsigned char droppedToV34;
 
 	/*
 	 * +0x173e  The fifth of `enterPhase3`'s run of five cleared bytes.
-	 * Offset-named; nothing else this tree has read touches it.
+	 *
+	 * THIS PARAGRAPH USED TO SAY "nothing else this tree has read
+	 * touches it".  `runPcmModem`'s CP/CPnot/MP/MPnot/Ed arms are five
+	 * calls to the free function `V90CPPacker`, whose fourth argument is
+	 * "the clear flag", and this field is what four of the five pass --
+	 * the fifth passes a literal 0 instead, which is the one-token
+	 * difference between the otherwise-identical MP and MPnot arms.  The
+	 * OBJECT NAMES IT: the MP arm's own diagnostic is
+	 * `"... CP length = %d (clr=%d)\r\n"` with exactly this field as the
+	 * second argument, so `clr` is the object's own abbreviation and not
+	 * offset-derived.  The Ed-received arm also tests it directly to
+	 * decide whether to report a cleardown (`ret = 8`) or stay silent.
 	 */
-	unsigned char flag_173e;
+	unsigned char clr;
 
 	unsigned char pad_173f[1];			/* +0x173f         */
 
@@ -543,14 +585,43 @@ public:
 
 	/*
 	 * +0x6118  Four bytes between the end of V90Modem's modelled prefix
-	 * and the first field after it.  Which object they belong to is not
-	 * settled -- V90Modem's size is a floor, not a measurement -- and
-	 * `externalReset` does not settle it either: it clears the first two
-	 * with two `movb $0x0`, through the VPcmFloModem and not through the
-	 * V90Modem, which is what the compiler emits either way.
+	 * and the first field after it.
+	 *
+	 * THIS PARAGRAPH USED TO SAY "which object they belong to is not
+	 * settled".  It is now: `runPcmModem` and `v90RunDemodulator`, both
+	 * members of THIS class, read and write the first two on every call,
+	 * so they are VPcmFloModem's own and not an overrun into V90Modem's
+	 * unmeasured tail.  (`externalReset` clearing them through the
+	 * VPcmFloModem is what the compiler emits either way and never did
+	 * settle the question; the two entry points are what does.)
+	 *
+	 * `progressState` IS THE FIRST OF THE CLASS'S TWO DISPATCHES.  Both
+	 * entry points switch on it before anything else, seeding the return
+	 * value they otherwise only refine: 0 and 1 both mean "nothing to
+	 * report yet", 2 means the session is running normally, 3 means a
+	 * rate-renegotiation retrain is outstanding and becomes a report of
+	 * 3 only if the receiver is in phase 4 and the parameter block's
+	 * `ENABLE_ERROR_CORRECTION_RRN` allows it (arm 3 then advances the
+	 * state to 4 itself), and 4 is that retrain in progress.  Every
+	 * other value falls through and reports 0, which is not an error the
+	 * object detects.  The two functions' case 3 differ in the ONE
+	 * place documented at their own call site: `runPcmModem` takes the
+	 * retrain exit when `info0Layout` is non-zero AND the other two
+	 * conditions hold, `v90RunDemodulator` takes it when `info0Layout`
+	 * is zero OR they do -- a single `!` that a mnemonic-only comparison
+	 * of the two functions cannot see.  Usage inference, over the whole
+	 * of both entry points' bodies.
+	 *
+	 * `retrainLatch` records that the session reached the data phase
+	 * with `CFG_FLAG3_RETRAIN` freshly asserted, so that TRN1d restarting
+	 * later knows to re-assert it (`v90RunDemodulator`'s own diagnostic:
+	 * "ON Start TRN1d restoring SAS detector") and so that ending CPt or
+	 * CPnot knows whether to put the retrain bit back.  Set once, on
+	 * entering the data phase, and read by nothing that ever clears it
+	 * again within this class.
 	 */
-	unsigned char byte_6118;
-	unsigned char byte_6119;
+	unsigned char progressState;
+	unsigned char retrainLatch;
 	unsigned char pad_611a[2];
 
 	/*
@@ -769,12 +840,29 @@ public:
 	 * clears last, after every member is built.  They are the reason
 	 * `sizeof` is 0x7f68 and not 0x7f5c, and they are what turns the
 	 * allocation size into a field map: the three of them plus three
-	 * bytes of alignment fill the object exactly.  Offset-named.
+	 * bytes of alignment fill the object exactly.
+	 *
+	 * `byte_7f5c` STAYS OFFSET-NAMED: nothing this tree has read touches
+	 * it beyond the constructor's clear.
+	 *
+	 * `ecMode` AND `ecRampCounter` ARE NOT: `runPcmModem` reads and
+	 * writes both, and `VPCM_EC_RAMP_MODE`/`_START`/`_SENTINEL` below are
+	 * the object's own three constants for them.  `ecMode` selects
+	 * whether the echo canceller's input this block is the real
+	 * receive sample (any other value) or a synthetic ramp
+	 * (`VPCM_EC_RAMP_MODE`, entered when the demodulator reports
+	 * rate-renegotiation silence); `ecRampCounter` is the ramp's own
+	 * position, reset to `VPCM_EC_RAMP_START` on every mode change and
+	 * stepped by one per block while the ramp runs, capped at
+	 * `VPCM_EC_RAMP_SENTINEL` -- which `V92EchoCanceller::process` is
+	 * documented (at the ramp's definition, below) to treat as "pass the
+	 * input through untouched".  Usage inference: the object never
+	 * prints either field's name.
 	 */
 	unsigned char byte_7f5c;			/* +0x7f5c         */
 	unsigned char pad_7f5d[3];			/* +0x7f5d         */
-	unsigned int word_7f60;				/* +0x7f60         */
-	unsigned int word_7f64;				/* +0x7f64         */
+	unsigned int ecMode;				/* +0x7f60         */
+	unsigned int ecRampCounter;			/* +0x7f64         */
 };
 
 #endif /* DSPLIB_VPCMFLOMODEM_H */

@@ -98,7 +98,7 @@
  *      TRIALS.  With it zero, "passes the session type to `setSessionFlag`"
  *      and "passes 0" are the same program (findings F7458 and F7105) -- and
  *      the same seeding rule puts `sweepCounter`, `sineWave.phase`,
- *      `word_7f60`, `word_7f64`, `byte_6118` and the retrain bit away from
+ *      `ecMode`, `ecRampCounter`, `progressState` and the retrain bit away from
  *      the values the function writes.
  */
 
@@ -1008,9 +1008,9 @@ rp3_poke(int s, const struct rp3_trial *t)
 	 * until its poke() moved them.
 	 */
 	m->sweepCounter = t->sweepCounter;
-	m->word_7f60 = 0xa5a5a5a5u;
-	m->word_7f64 = 0x5a5a5a5au;
-	m->byte_6118 = 0x37;
+	m->ecMode = 0xa5a5a5a5u;
+	m->ecRampCounter = 0x5a5a5a5au;
+	m->progressState = 0x37;
 	m->sineWave.phase = t->phase;
 	m->modem.sessionFlag = 0xdeadbeefu;
 	MPARAMS(s)->unnamed_0003 = t->cfg3;
@@ -1086,11 +1086,11 @@ run_rp3(void)
 		 */
 		diff_eq_int("sweepCounter (%ld)", (long)V(1)->sweepCounter, 0,
 			    trial);
-		diff_eq_int("word_7f64 (%ld)", (long)V(1)->word_7f64, 0,
+		diff_eq_int("ecRampCounter (%ld)", (long)V(1)->ecRampCounter, 0,
 			    trial);
-		diff_eq_int("word_7f60 (%ld)", (long)V(1)->word_7f60, 0,
+		diff_eq_int("ecMode (%ld)", (long)V(1)->ecMode, 0,
 			    trial);
-		diff_eq_int("byte_6118 (%ld)", (long)V(1)->byte_6118, 1,
+		diff_eq_int("progressState (%ld)", (long)V(1)->progressState, 1,
 			    trial);
 		diff_eq_int("sineWave.phase is restarted (%ld)",
 			    V(1)->sineWave.phase == 0.0f, 1, trial);

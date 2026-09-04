@@ -18,8 +18,8 @@
  },
  {
   "label": "the run of cleared bytes stops before +0x173e",
-  "find": "\tflag_173d = 0;\n\tflag_173e = 0;",
-  "replace": "\tflag_173d = 0;"
+  "find": "\tdroppedToV34 = 0;\n\tclr = 0;",
+  "replace": "\tdroppedToV34 = 0;"
  },
  {
   "label": "the run of cleared bytes starts at +0x173b",

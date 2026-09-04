@@ -15,13 +15,13 @@
  },
  {
   "label": "resetDetector seeds the counter with seventeen",
-  "find": "\tword_11c = 18;\n\tword_120 = 0;\n\tword_114 = 0;",
-  "replace": "\tword_11c = 17;\n\tword_120 = 0;\n\tword_114 = 0;"
+  "find": "\tword_11c = 18;\n\tstateBitCount = 0;\n\trxState = 0;",
+  "replace": "\tword_11c = 17;\n\tstateBitCount = 0;\n\trxState = 0;"
  },
  {
   "label": "resetDetector leaves +0x120 alone",
-  "find": "\tword_11c = 18;\n\tword_120 = 0;\n\tword_114 = 0;",
-  "replace": "\tword_11c = 18;\n\tword_114 = 0;"
+  "find": "\tword_11c = 18;\n\tstateBitCount = 0;\n\trxState = 0;",
+  "replace": "\tword_11c = 18;\n\trxState = 0;"
  },
  {
   "label": "resetDetector leaves the two flag bytes alone",

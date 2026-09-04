@@ -371,20 +371,20 @@ public:
 	 * THE RECEIVED-SAMPLE STORE, and the only field in the object big
 	 * enough to be interesting on its own: 2,110 shorts per phase,
 	 * 25,320 bytes.  `addReceivedSampleToStorage` writes
-	 * `sampleStore[phase][int_9100[phase]++]` and there is no bound on
+	 * `sampleStore[phase][sampleCount[phase]++]` and there is no bound on
 	 * that index anywhere in the method -- see docs/deviations.md D256.
 	 */
 	short sampleStore[V90ADID_PHASES][V90ADID_SAMPLES];	/* +0x2818 */
 
 	/*
 	 * A histogram: `addReceivedSampleToStorage` increments
-	 * `short_8b00[phase][code]` once per stored sample, indexed by the
+	 * `codeHistogram[phase][code]` once per stored sample, indexed by the
 	 * received PCM code rather than by the sample number.
 	 */
-	short short_8b00[V90ADID_PHASES][V90ADID_CODES];	/* +0x8b00 */
+	short codeHistogram[V90ADID_PHASES][V90ADID_CODES];	/* +0x8b00 */
 
 	/* How many samples phase `p` has in `sampleStore`. */
-	int int_9100[V90ADID_PHASES];				/* +0x9100 */
+	int sampleCount[V90ADID_PHASES];			/* +0x9100 */
 
 	/*
 	 * Float from every other user -- `fadds`, `fstps`, `fmuls` -- and
@@ -403,8 +403,8 @@ public:
 	 * `updateUrefAlt` clear both.  Unsigned for the same `fildll` reason
 	 * as +0x1c00.
 	 */
-	float float_9d18[V90ADID_PHASES];			/* +0x9d18 */
-	unsigned int uint_9d30[V90ADID_PHASES];			/* +0x9d30 */
+	float altMagnitudeSum[V90ADID_PHASES];			/* +0x9d18 */
+	unsigned int altMagnitudeCount[V90ADID_PHASES];	/* +0x9d30 */
 
 	/*
 	 * The variance `updateLinMappMeanAndVar` and `updateUref` store.

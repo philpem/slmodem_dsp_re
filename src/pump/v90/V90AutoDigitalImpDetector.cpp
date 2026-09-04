@@ -56,11 +56,11 @@ ADID_OFF(uint_1c00,    0x1c00, uint1c00);
 ADID_OFF(short_2800,   0x2800, short2800);
 ADID_OFF(byte_280c,    0x280c, byte280c);
 ADID_OFF(params,       0x2814, params);
-ADID_OFF(short_8b00,   0x8b00, short8b00);
-ADID_OFF(int_9100,     0x9100, int9100);
-ADID_OFF(float_9118,   0x9118, float9118);
-ADID_OFF(float_9d18,   0x9d18, float9d18);
-ADID_OFF(uint_9d30,    0x9d30, uint9d30);
+ADID_OFF(codeHistogram,     0x8b00, short8b00);
+ADID_OFF(sampleCount,       0x9100, int9100);
+ADID_OFF(float_9118,        0x9118, float9118);
+ADID_OFF(altMagnitudeSum,   0x9d18, float9d18);
+ADID_OFF(altMagnitudeCount, 0x9d30, uint9d30);
 ADID_OFF(float_9d48,   0x9d48, float9d48);
 ADID_OFF(short_a948,   0xa948, shorta948);
 ADID_OFF(pcmType,      0xa95c, pcmtype);
@@ -441,8 +441,8 @@ V90AutoDigitalImpDetector::clearCamulativeVal(short phase, short code)
 void
 V90AutoDigitalImpDetector::clearCamulativeAltVal(short phase, short)
 {
-	uint_9d30[phase] = 0;
-	float_9d18[phase] = 0.0f;
+	altMagnitudeCount[phase] = 0;
+	altMagnitudeSum[phase] = 0.0f;
 }
 
 /*
@@ -498,15 +498,15 @@ V90AutoDigitalImpDetector::reset(unsigned char code, PcmType law, short altRbs)
 			float_1000[phase][ci] = 0.0f;
 			float_9118[phase][ci] = 0.0f;
 			float_9d48[phase][ci] = 0.0f;
-			short_8b00[phase][ci] = 0;
+			codeHistogram[phase][ci] = 0;
 			byte_0d00[phase][ci] = 1;
 		}
 
-		int_9100[phase] = 0;
+		sampleCount[phase] = 0;
 		short_2800[phase] = 0;
-		uint_9d30[phase] = 0;
+		altMagnitudeCount[phase] = 0;
 		byte_280c[phase] = 0;
-		float_9d18[phase] = 0.0f;
+		altMagnitudeSum[phase] = 0.0f;
 	}
 
 	float_a970 = short_a96e != 0 ? 5.0f : 1.5f;
@@ -817,8 +817,8 @@ void
 V90AutoDigitalImpDetector::calculateLinearMeanAndVarAlt(short v,
 							unsigned int phase)
 {
-	float_9d18[phase] += adid_abs(v);
-	uint_9d30[phase]++;
+	altMagnitudeSum[phase] += adid_abs(v);
+	altMagnitudeCount[phase]++;
 }
 
 void
@@ -1058,11 +1058,11 @@ V90AutoDigitalImpDetector::updateUref()
 void
 V90AutoDigitalImpDetector::updateLinMappMeanAndVarAlt(short phase, short code)
 {
-	if (uint_9d30[phase] == 0)
+	if (altMagnitudeCount[phase] == 0)
 		return;
 
 	linMappAlt[phase][code] =
-	    (short)(float_9d18[phase] / uint_9d30[phase] + 0.5f);
+	    (short)(altMagnitudeSum[phase] / altMagnitudeCount[phase] + 0.5f);
 }
 
 /*
@@ -1084,13 +1084,13 @@ V90AutoDigitalImpDetector::updateUrefAlt()
 	short phase;
 
 	for (phase = 0; phase < V90ADID_PHASES; phase++) {
-		if (short_2800[phase] != 0 && uint_9d30[phase] != 0)
+		if (short_2800[phase] != 0 && altMagnitudeCount[phase] != 0)
 			linMappAlt[phase][ucode] =
-			    (short)(float_9d18[phase]
-				    * (1.0f / uint_9d30[phase]) + 0.5f);
+			    (short)(altMagnitudeSum[phase]
+				    * (1.0f / altMagnitudeCount[phase]) + 0.5f);
 
-		float_9d18[phase] = 0.0f;
-		uint_9d30[phase] = 0;
+		altMagnitudeSum[phase] = 0.0f;
+		altMagnitudeCount[phase] = 0;
 	}
 }
 
@@ -1532,13 +1532,13 @@ V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
 			 * calling it is a factoring difference and not a
 			 * behavioural one.
 			 */
-			for (j = 0; j < short_8b00[phase][at]; j++)
+			for (j = 0; j < codeHistogram[phase][at]; j++)
 				sampleStore[phase][base + j] =
 				    unSuspectedPhaseNearestLinMapp(
 					    sampleStore[phase][base + j],
 					    unSuspectedPhase);
 
-			for (m = 0; m < short_8b00[phase][at] - 1; m++) {
+			for (m = 0; m < codeHistogram[phase][at] - 1; m++) {
 				short v = sampleStore[phase][base + m];
 				unsigned short count;
 				unsigned short q;
@@ -1551,7 +1551,7 @@ V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
 				count = 1;
 
 				for (q = (unsigned short)(m + 1);
-				     q < short_8b00[phase][at]; q++) {
+				     q < codeHistogram[phase][at]; q++) {
 					short w = sampleStore[phase][base + q];
 
 					if (w != v)
@@ -1579,12 +1579,12 @@ V90AutoDigitalImpDetector::updateAltRbsPhaseInDil()
 				}
 			}
 
-			if (short_8b00[phase][at] != 0) {
+			if (codeHistogram[phase][at] != 0) {
 				linMapp[phase][at] =
 				    linMapp[unSuspectedPhase][at];
 				linMappAlt[phase][at] = maxCount != 0
 				    ? maxValue : linMapp[unSuspectedPhase][at];
-				base += short_8b00[phase][at];
+				base += codeHistogram[phase][at];
 			}
 		}
 
@@ -1773,7 +1773,7 @@ V90AutoDigitalImpDetector::porcessSecondStudy()
 /*
  * File one received sample under its phase, and count its code.
  *
- * THE STORE INDEX IS UNBOUNDED.  `int_9100[phase]` is incremented once per
+ * THE STORE INDEX IS UNBOUNDED.  `sampleCount[phase]` is incremented once per
  * call and nothing in these 149 bytes compares it against 0x83e, so a caller
  * that offers more than 2,110 samples for one phase writes past that phase's
  * row and eventually past the object.  That is the object's behaviour and it
@@ -1789,12 +1789,12 @@ V90AutoDigitalImpDetector::addReceivedSampleToStorage(short phase,
 						      unsigned char code,
 						      float v)
 {
-	int n = int_9100[phase];
+	int n = sampleCount[phase];
 	short q = (short)(v + 0.5f);
 
-	int_9100[phase] = n + 1;
+	sampleCount[phase] = n + 1;
 	sampleStore[phase][n] = (short)adid_abs(q);
-	short_8b00[phase][code]++;
+	codeHistogram[phase][code]++;
 }
 
 /*

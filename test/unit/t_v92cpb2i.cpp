@@ -26,7 +26,7 @@
  * WHAT MAKES THEM OBSERVABLE ANYWAY is that they are the LENGTHS the state
  * machine counts to.  `gamma` decides the bit at which state 7 hands over, and
  * `delta` the bit at which state 8 does, so a wrong value moves a state change
- * -- and `word_114`, `word_11c` and `word_120` are compared after every bit.
+ * -- and `rxState`, `word_11c` and `stateBitCount` are compared after every bit.
  * A stale `gamma` cannot hide: it ends the block early or late and the whole
  * object diverges on that bit.
  *
@@ -270,7 +270,7 @@ static int state_at_16;
 static void
 feed(unsigned char v, long tag)
 {
-	unsigned int before = B->word_114;
+	unsigned int before = B->rxState;
 	int ra = A->bitsToInfo(v);
 	int rb = ref_cp_bitstoinfo(cp_b, v);
 
@@ -281,16 +281,16 @@ feed(unsigned char v, long tag)
 		answermask |= S((unsigned int)rb & 31u);
 	}
 
-	statemask |= S(B->word_114 & 31u);
+	statemask |= S(B->rxState & 31u);
 
 	diff_eq_obj("after one bit", V92CP, A, B, tag);
 	diff_eq_int("the tail past the class is untouched (%ld)",
 		    (long)(memcmp(cp_a + sizeof(V92CP),
 				  cp_b + sizeof(V92CP), TAIL) == 0), 1, tag);
 
-	if (B->word_114 != before)
+	if (B->rxState != before)
 		diff_eq_int("the state agrees at a change (%ld)",
-			    (long)A->word_114, (long)B->word_114, tag);
+			    (long)A->rxState, (long)B->rxState, tag);
 }
 
 /*
@@ -315,7 +315,7 @@ run_one(int c, long tag)
 
 	fresh();
 
-	statemask = S(B->word_114 & 31u);
+	statemask = S(B->rxState & 31u);
 	reports = 0;
 	answermask = 0;
 	state_at_16 = -1;
@@ -329,7 +329,7 @@ run_one(int c, long tag)
 	 */
 	for (i = 0; i < 16u; i++)
 		feed(1, tag);
-	state_at_16 = (int)B->word_114;
+	state_at_16 = (int)B->rxState;
 	feed(0, tag);
 
 	for (i = 0; i < len; i++)
@@ -557,7 +557,7 @@ run_poked(void)
 				A->bitsPerSymbol = B->bitsPerSymbol = 3;
 				A->byte_00 = B->byte_00 = (unsigned char)b0;
 				A->byte_04 = B->byte_04 = (unsigned char)b4;
-				A->word_114 = B->word_114 = 10;
+				A->rxState = B->rxState = 10;
 				A->word_11c = B->word_11c = 35;
 				A->word_914 = B->word_914 = holds[h];
 
@@ -597,7 +597,7 @@ run_poked(void)
 			blank(A);
 			blank(B);
 			A->bitsPerSymbol = B->bitsPerSymbol = 2;
-			A->word_114 = B->word_114 = 5;
+			A->rxState = B->rxState = 5;
 			A->word_11c = B->word_11c = 33;
 			A->bits[19] = B->bits[19] = 1;
 			A->bits[20] = B->bits[20] = hi[k];
@@ -610,7 +610,7 @@ run_poked(void)
 			diff_eq_obj("after the header decode", V92CP, A, B,
 				    tag);
 			diff_eq_int("the state agrees (%ld)",
-				    (long)A->word_114, (long)B->word_114, tag);
+				    (long)A->rxState, (long)B->rxState, tag);
 		}
 	}
 
@@ -636,7 +636,7 @@ run_poked(void)
 				blank(A);
 				blank(B);
 				A->bitsPerSymbol = B->bitsPerSymbol = 3;
-				A->word_114 = B->word_114 = st[k];
+				A->rxState = B->rxState = st[k];
 				A->word_11c = B->word_11c = 20;
 				A->byte_119 = B->byte_119 = 4;
 
@@ -701,7 +701,7 @@ main(void)
 
 	diff_begin("the class's map");
 	diff_eq_int("sizeof(V92CP) is %ld", (long)sizeof(V92CP), 0x918, 0x918);
-	diff_eq_int("word_114 is at +0x%lx", (long)offsetof(V92CP, word_114),
+	diff_eq_int("rxState is at +0x%lx", (long)offsetof(V92CP, rxState),
 		    0x114, 0x114);
 	diff_eq_int("word_11c is at +0x%lx", (long)offsetof(V92CP, word_11c),
 		    0x11c, 0x11c);

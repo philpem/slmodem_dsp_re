@@ -40,18 +40,18 @@
  },
  {
   "label": "state 0 goes straight to the type bit",
-  "find": "\t\tif (byte_119 > 16)\n\t\t\tword_114 = 1;",
-  "replace": "\t\tif (byte_119 > 16)\n\t\t\tword_114 = 2;"
+  "find": "\t\tif (byte_119 > 16)\n\t\t\trxState = 1;",
+  "replace": "\t\tif (byte_119 > 16)\n\t\t\trxState = 2;"
  },
  {
   "label": "state 1 takes a ONE as the framing bit",
-  "find": "\t\tif (bit == 0)\n\t\t\tword_114 = 2;\n\t\telse\n\t\t\tresetDetector();",
-  "replace": "\t\tif (bit != 0)\n\t\t\tword_114 = 2;\n\t\telse\n\t\t\tresetDetector();"
+  "find": "\t\tif (bit == 0)\n\t\t\trxState = 2;\n\t\telse\n\t\t\tresetDetector();",
+  "replace": "\t\tif (bit != 0)\n\t\t\trxState = 2;\n\t\telse\n\t\t\tresetDetector();"
  },
  {
   "label": "state 2 chooses the two forms the other way round",
-  "find": "\t\tword_114 = (bit == 1) ? 3 : 5;",
-  "replace": "\t\tword_114 = (bit == 1) ? 5 : 3;"
+  "find": "\t\trxState = (bit == 1) ? 3 : 5;",
+  "replace": "\t\trxState = (bit == 1) ? 5 : 3;"
  },
  {
   "label": "state 2 does not store the type bit into the vector",
@@ -60,33 +60,33 @@
  },
  {
   "label": "state 2 tests the type bit for non-zero rather than one",
-  "find": "\t\tword_114 = (bit == 1) ? 3 : 5;\n",
-  "replace": "\t\tword_114 = (bit != 0) ? 3 : 5;\n"
+  "find": "\t\trxState = (bit == 1) ? 3 : 5;\n",
+  "replace": "\t\trxState = (bit != 0) ? 3 : 5;\n"
  },
  {
   "label": "state 3 ends one position early",
-  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = 9;",
-  "replace": "\t\tif (word_11c == 33) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = 9;"
+  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;",
+  "replace": "\t\tif (word_11c == 33) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;"
  },
  {
   "label": "state 3 does not decode before moving on",
-  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = 9;\n\t\t\tword_120 = 0;\n\t\t}",
-  "replace": "\t\tif (word_11c == 34) {\n\t\t\tword_114 = 9;\n\t\t\tword_120 = 0;\n\t\t}"
+  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = 9;\n\t\t\tstateBitCount = 0;\n\t\t}",
+  "replace": "\t\tif (word_11c == 34) {\n\t\t\trxState = 9;\n\t\t\tstateBitCount = 0;\n\t\t}"
  },
  {
   "label": "state 5 chooses the long and short bodies the other way round",
-  "find": "\t\t\tword_114 = (char_01 > 1) ? 9 : 6;",
-  "replace": "\t\t\tword_114 = (char_01 > 1) ? 6 : 9;"
+  "find": "\t\t\trxState = (char_01 > 1) ? 9 : 6;",
+  "replace": "\t\t\trxState = (char_01 > 1) ? 6 : 9;"
  },
  {
   "label": "state 5 tests char_01 unsigned",
-  "find": "\t\t\tword_114 = (char_01 > 1) ? 9 : 6;\n",
-  "replace": "\t\t\tword_114 = ((unsigned char)char_01 > 1) ? 9 : 6;\n"
+  "find": "\t\t\trxState = (char_01 > 1) ? 9 : 6;\n",
+  "replace": "\t\t\trxState = ((unsigned char)char_01 > 1) ? 9 : 6;\n"
  },
  {
   "label": "state 5 ends one position late",
-  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = (char_01 > 1) ? 9 : 6;",
-  "replace": "\t\tif (word_11c == 35) {\n\t\t\tevaluateInfo();\n\t\t\tword_114 = (char_01 > 1) ? 9 : 6;"
+  "find": "\t\tif (word_11c == 34) {\n\t\t\tevaluateInfo();\n\t\t\trxState = (char_01 > 1) ? 9 : 6;",
+  "replace": "\t\tif (word_11c == 35) {\n\t\t\tevaluateInfo();\n\t\t\trxState = (char_01 > 1) ? 9 : 6;"
  },
  {
   "label": "state 6 ends at the group boundary above 136",
@@ -115,33 +115,33 @@
  },
  {
   "label": "state 7 counts the first block against delta",
-  "find": "\t\tif ((unsigned int)word_120 == gamma) {",
-  "replace": "\t\tif ((unsigned int)word_120 == delta) {"
+  "find": "\t\tif ((unsigned int)stateBitCount == gamma) {",
+  "replace": "\t\tif ((unsigned int)stateBitCount == delta) {"
  },
  {
   "label": "state 8 counts the second block against gamma",
-  "find": "\t\tif ((unsigned int)word_120 == delta) {",
-  "replace": "\t\tif ((unsigned int)word_120 == gamma) {"
+  "find": "\t\tif ((unsigned int)stateBitCount == delta) {",
+  "replace": "\t\tif ((unsigned int)stateBitCount == gamma) {"
  },
  {
   "label": "state 7 gates the second block the other way round",
-  "find": "\t\t\tword_114 = (byte_24 != 0) ? 8 : 9;",
-  "replace": "\t\t\tword_114 = (byte_24 != 0) ? 9 : 8;"
+  "find": "\t\t\trxState = (byte_24 != 0) ? 8 : 9;",
+  "replace": "\t\t\trxState = (byte_24 != 0) ? 9 : 8;"
  },
  {
   "label": "state 7 always sends the second block",
-  "find": "\t\t\tword_114 = (byte_24 != 0) ? 8 : 9;\n",
-  "replace": "\t\t\tword_114 = 8;\n"
+  "find": "\t\t\trxState = (byte_24 != 0) ? 8 : 9;\n",
+  "replace": "\t\t\trxState = 8;\n"
  },
  {
   "label": "state 7 counts positions against the cursor rather than the count",
-  "find": "\t\tword_120++;\n\t\tif ((unsigned int)word_120 == gamma) {",
+  "find": "\t\tstateBitCount++;\n\t\tif ((unsigned int)stateBitCount == gamma) {",
   "replace": "\t\tif ((unsigned int)word_11c == gamma) {"
  },
  {
   "label": "the closing frame is sixteen positions",
-  "find": "\t\tif (word_120 == 17) {",
-  "replace": "\t\tif (word_120 == 16) {"
+  "find": "\t\tif (stateBitCount == 17) {",
+  "replace": "\t\tif (stateBitCount == 16) {"
  },
  {
   "label": "msgLen is one short of the cursor",
@@ -150,13 +150,13 @@
  },
  {
   "label": "the closing frame is eighteen positions",
-  "find": "\t\tif (word_120 == 17) {\n\t\t\tmsgLen = (unsigned int)word_11c;",
-  "replace": "\t\tif (word_120 == 18) {\n\t\t\tmsgLen = (unsigned int)word_11c;"
+  "find": "\t\tif (stateBitCount == 17) {\n\t\t\tmsgLen = (unsigned int)word_11c;",
+  "replace": "\t\tif (stateBitCount == 18) {\n\t\t\tmsgLen = (unsigned int)word_11c;"
  },
  {
   "label": "the CRC verdict is inverted",
-  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\tword_114 = 10;",
-  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\tword_114 = 10;"
+  "find": "\t\t\tif (evaluateCRC()) {\n\t\t\t\trxState = 10;",
+  "replace": "\t\t\tif (!evaluateCRC()) {\n\t\t\t\trxState = 10;"
  },
  {
   "label": "a bad CRC does not restart the detector",
@@ -165,8 +165,8 @@
  },
  {
   "label": "a good CRC goes back to the preamble instead of state 10",
-  "find": "\t\t\t\tword_114 = 10;",
-  "replace": "\t\t\t\tword_114 = 0;"
+  "find": "\t\t\t\trxState = 10;",
+  "replace": "\t\t\t\trxState = 0;"
  },
  {
   "label": "state 10 restarts on a ZERO rather than a ONE",

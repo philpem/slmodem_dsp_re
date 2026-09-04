@@ -4,7 +4,7 @@
  *
  * SEPARATE FROM t_v92cpb2i.cpp, which drives the same member through the
  * state machine that calls it.  That test reaches every arm too, but only
- * along the paths a well-formed message takes; this one sets `word_114`,
+ * along the paths a well-formed message takes; this one sets `rxState`,
  * `word_124` and `word_10c` by hand and hands the arm a bit vector it would
  * never see in service.  The two answer different questions and a defect that
  * only shows on a malformed vector is visible to this one alone.
@@ -58,12 +58,12 @@
  *               what each reaches first is:
  *
  *                 case 7, word_10c   7..12  short_a2, and at [12][5] `word_10c`
- *                                    13     `word_114`, `word_11c`, `word_120`
- *                                    14     the top half of `word_120`
+ *                                    13     `rxState`, `word_11c`, `stateBitCount`
+ *                                    14     the top half of `stateBitCount`
  *                                    15     `word_124` -- THE CURSOR
  *
  *                 case 8, word_10c   1..7   `word_104`, `suv`, `word_10c`,
- *                                           `word_114`..`word_120`
+ *                                           `rxState`..`stateBitCount`
  *                                    8      `word_124` at [8][1], and `bits`
  *                                           itself at [8][4]
  *
@@ -227,7 +227,7 @@ setup(int c, int fill, unsigned int seed)
 	     i + offsetof(V92CP, bits) < SLOT; i++)
 		cp[0][offsetof(V92CP, bits) + i] = bitval(fill, i);
 
-	o->word_114 = cases[c].state;
+	o->rxState = cases[c].state;
 	o->word_124 = cases[c].cursor;
 	o->word_10c = cases[c].w10c;
 
@@ -385,7 +385,7 @@ run_sweep(void)
 			cp[0][i] = nextbyte();
 
 		o = C(0);
-		o->word_114 = s;
+		o->rxState = s;
 		o->word_124 = (int)(100u + (n % 37u));
 		o->word_10c = (unsigned short)(n % 9u);	/* see D922 */
 
@@ -407,7 +407,7 @@ main(void)
 
 	diff_begin("the class's map");
 	diff_eq_int("sizeof(V92CP) is %ld", (long)sizeof(V92CP), 0x918, 0x918);
-	diff_eq_int("word_114 is at +0x%lx", (long)offsetof(V92CP, word_114),
+	diff_eq_int("rxState is at +0x%lx", (long)offsetof(V92CP, rxState),
 		    0x114, 0x114);
 	diff_eq_int("word_124 is at +0x%lx", (long)offsetof(V92CP, word_124),
 		    0x124, 0x124);

@@ -221,8 +221,8 @@
  },
  {
   "label": "Uinfo: the +0x173d gate is inverted",
-  "find": "\tif (flag_173d == 0) {",
-  "replace": "\tif (flag_173d != 0) {"
+  "find": "\tif (droppedToV34 == 0) {",
+  "replace": "\tif (droppedToV34 != 0) {"
  },
  {
   "label": "Uinfo: the second default flag is 1",
