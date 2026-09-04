@@ -64,4 +64,56 @@ Each agent was briefed to:
 - Gate every batch on the relevant `make one` tests staying green, since a pure rename must not move codegen.
 - Never touch `docs/coverage.md` or run `make coverage` (irrelevant to this phase, and a known partial-build artifact magnet — F3055/F3110).
 
+### Results
+
+All four landed, merged, period-green (374/0 on the fully merged tree),
+structural gates clean. One real merge conflict (two branches independently
+named overlapping fields in the shared `struct v34_receiver` — resolved by a
+fork that checked which side had actually threaded its rename through every
+referencing file, judged one genuine disagreement on evidence quality, and
+caught two pre-existing stale bare names as a bonus; F10131) and three
+finding-number collisions (F9480 used twice, F10107/F10111-style pattern
+continuing — all resolved by renumbering the later-merged branch, same
+procedure as every prior wave this session).
+
+Post-wave-1 counts: `pad_NNNN` 165 (unchanged — this wave mostly promoted
+bare→typed rather than splitting pad regions), `type_NNNN` 289→298 (+9, from
+promotions), bare `fNNNN` 222→149 (−73). Real names landed: ~126 fields.
+Promoted bare→typed without a final name: ~40 more.
+
+**A regression gate for byte-identity (tier-0) now exists** —
+`tools/toolchain/byteident.py --ratchet` (new, mirrors `compare.py`'s own
+ratchet; `make byteident-ratchet`), since nothing previously caught the
+reconstruction moving away from the blob's own code generation while
+`make period` stayed green. Floor set from this tree: **736/1852 EXACT
+(39.7%), 796/1852 grade 0-or-1 (43.0%)**. Not wired into `make phase` —
+matching `compare.py --ratchet`'s own placement, manually invoked.
+
+## Wave 2 — two new clusters, plus a standards-informed second pass
+
+Launched 2026-09-04. Two new areas (fax, V.8 — neither touched in wave 1),
+and a second pass over the two clusters wave 1 left most incomplete
+(V.90 CP/Demodulator/ConnectionEvaluator, V.34 receive), this time explicitly
+using two additional evidence-gathering methods the user asked for:
+
+- **Read the whole surrounding algorithm**, not just the field's own access
+  sites — several of wave 1's best names (`agc_pair_count`, `retrain_gate`)
+  came from understanding what the enclosing function was doing as a whole
+  step, not from the field in isolation.
+- **Cross-reference the applicable ITU-T Recommendation** (V.34, V.90, V.92,
+  V.8/V.8bis, T.30 + V.17/V.21/V.27ter/V.29 for fax) for its own terminology.
+  Ranked as strong-but-not-definitive: below a literal format string or a
+  typed callee (a standard's term can map onto code more than one plausible
+  way), above plain usage inference when the match to a specific, named
+  quantity in the standard is unambiguous. Agents were told to say explicitly
+  which fields were resolved via the standard vs. pure code-reading, so this
+  evidence class stays traceable the same way the other three already are.
+
+| agent | scope |
+|---|---|
+| Fax cluster | `class1.h`/`class1tx.{c,h}`/`class1.c`/`faxvmi.h`/`fax.h`/`v17fax.h`/`v17.c` |
+| V.8 cluster | `v8.h`/`v8hs.c`/`v8hsrx.c`/`v8util.c`/`v8handshak.c`/`v8sig.c`/`v8proc.c`/`v8jm.c` |
+| V.90 CP/Demod/ConnEval, second pass | Same three classes as wave 1's first agent, focused on what wave 1 left unnamed |
+| V.34 receive, second pass | `v34recv.h`/`v34rx.c`, focused on what wave 1 left bare/padded |
+
 Results pending.
