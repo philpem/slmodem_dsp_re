@@ -1,23 +1,23 @@
 [
  {
-  "label": "the idle generator follows f25c2 bit 0 (dibit arm)",
-  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)((o->f25c2 & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
+  "label": "the idle generator follows tx_flags bit 0 (dibit arm)",
+  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t(short)((o->tx_flags & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
-  "label": "the idle generator follows f25c2 bit 0 (quadbit arm)",
-  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler",
-  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)((o->f25c2 & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler"
+  "label": "the idle generator follows tx_flags bit 0 (quadbit arm)",
+  "find": "\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t1, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler",
+  "replace": "\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t(short)((o->tx_flags & 1) == 0),\n\t\t\t\t\t\t3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler"
  },
  {
-  "label": "the idle symbol encodes differentially against f25c6",
+  "label": "the idle symbol encodes differentially against prev_quadrant",
   "find": "\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\to->txpoint.word =\n\t\t\t\tvect4[(q + (unsigned short)o->f25c6) & 3];"
+  "replace": "\t\t\to->txpoint.word =\n\t\t\t\tvect4[(q + (unsigned short)o->prev_quadrant) & 3];"
  },
  {
-  "label": "the idle symbol writes the quadrant back to f25c6",
-  "find": "\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
+  "label": "the idle symbol writes the quadrant back to prev_quadrant",
+  "find": "\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t\to->cur_quadrant = (short)q;\n\t\t\to->prev_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
   "label": "the quadbit index is q + d * 4 rather than d + q * 4",
@@ -45,9 +45,9 @@
   "replace": "\t\to->k56flex_receiver = 5;"
  },
  {
-  "label": "case 3's wrap leaves f25c6 alone",
-  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
-  "replace": "\t\to->f25c0 = 0;"
+  "label": "case 3's wrap leaves prev_quadrant alone",
+  "find": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\to->seg_symcount = 0;"
  },
  {
   "label": "the word at +0x25d6 is read signed",
@@ -55,24 +55,24 @@
   "replace": "\t\tint w = *(short *)(m + OB_TXBITS);"
  },
  {
-  "label": "case 4 does not bump f25c0",
-  "find": "\t\to->f25c0 = (short)((unsigned)(unsigned short)o->f25c0 + 1);",
+  "label": "case 4 does not bump seg_symcount",
+  "find": "\t\to->seg_symcount = (short)((unsigned)(unsigned short)o->seg_symcount + 1);",
   "replace": "\t\t(void)0;"
  },
  {
   "label": "case 5 picks the emitter the other way round",
-  "find": "\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitdibit(o, o->f25c8);",
-  "replace": "\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitquadbit(o, o->f25c8);"
+  "find": "\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);",
+  "replace": "\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitquadbit(o, o->cur_quadrant);"
  },
  {
-  "label": "the Ja dibit comes from f25c6 rather than f25c8",
-  "find": "\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)",
-  "replace": "\t\ttxmitdibit(o, o->f25c6);\n\t\tif (done == 0)"
+  "label": "the Ja dibit comes from prev_quadrant rather than cur_quadrant",
+  "find": "\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)",
+  "replace": "\t\ttxmitdibit(o, o->prev_quadrant);\n\t\tif (done == 0)"
  },
  {
   "label": "case 4's constellation test is inverted",
-  "find": "\t\tif (o->f382 == OB_CONSTEL_16) {\n\t\t\tint d;",
-  "replace": "\t\tif (o->f382 != OB_CONSTEL_16) {\n\t\t\tint d;"
+  "find": "\t\tif (o->short_382 == OB_CONSTEL_16) {\n\t\t\tint d;",
+  "replace": "\t\tif (o->short_382 != OB_CONSTEL_16) {\n\t\t\tint d;"
  },
  {
   "label": "the shift count is not masked to five bits",
@@ -90,13 +90,13 @@
  },
  {
   "label": "the Ja arm does not consult the bit source at all",
-  "find": "\t\tint done = (short)k56->getK56FlexJaBits(&o->f25c8);",
+  "find": "\t\tint done = (short)k56->getK56FlexJaBits(&o->cur_quadrant);",
   "replace": "\t\tint done = 0;",
   "why_uncaught": "the stub returns 0 and writes nothing through the pointer, so the call has no observable effect; witnessed instead by the mangled undefined symbol in build/src/pump/v34/v34k56.o, not by any test"
  },
  {
   "label": "the MP arm does not consult the bit source at all",
-  "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->f25c8);",
+  "find": "\t\tint done = (short)k56->getK56FlexMpBits(&o->cur_quadrant);",
   "replace": "\t\tint done = 0;",
   "why_uncaught": "as above, for getK56FlexMpBits"
  },

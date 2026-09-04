@@ -50,6 +50,32 @@ extern "C" {
 #define V34_RETRAIN_BINS	3	/* DFT bins at +0xa81c */
 
 /*
+ * The calling/answering role, `struct v34_object::role` at +0x359c.  Two
+ * other files already carry the same two values under file-local names --
+ * `v34diag.cpp`'s `VDIAG_ROLE_CALL`/`VDIAG_ROLE_ANSWER` and
+ * `v34pcmmain.cpp`'s `PROG_ROLE_ORIGINATE` -- kept where they are rather
+ * than consolidated; these are a third spelling for this header's own use.
+ */
+#define V34_ROLE_CALL		0x65
+#define V34_ROLE_ANSWER		0x66
+
+/*
+ * `struct v34_object::tx_flags` at +0x25c2.  See the field's own comment for
+ * what each bit does and for the two (8, 10) deliberately left unnamed.
+ *
+ * Three of the eight named bits ALREADY HAD NAMES, from readers this tree
+ * wrote before this field did -- bit 2 is `V34_EC_FROZEN`, bit 4 is
+ * `v34pcmmain.cpp`'s own `PROG_TXBIT_DATA`, and bit 9 is `V34_EC_FEED`, all
+ * in `v34rx.h` or beside their one reader.  Kept where they are rather than
+ * duplicated or moved -- "one type, one home" is about the struct, not
+ * about which header a flag constant sits beside its user in.
+ */
+#define V34_TXFLAG_CALLER	(1u << 0)
+#define V34_TXFLAG_SEG4A	(1u << 13)
+#define V34_TXFLAG_NLENCODE	(1u << 14)
+#define V34_TXFLAG_PPSEG	(1u << 15)
+
+/*
  * The three interpolator phases, and the post-detection low-pass.
  *
  * All four are the original's own symbols.  intcoef1 and intcoef3 are exact
@@ -167,7 +193,7 @@ struct v34_object {
 	 * 10 and then 0.
 	 * Nothing reconstructed reads it, so the values are all this says.
 	 */
-	int f0004;					/* +0x0004 */
+	int progress;					/* +0x0004 */
 	/*
 	 * +0x0008 and +0x0010, both named by initdigital's own debug string:
 	 * "for tx data rate - %d, PTC - %d, setting nofTxBits to %d".  `ptc`
@@ -244,7 +270,7 @@ struct v34_object {
 	 * and only two of the four have a reader to name them from.
 	 *
 	 * `datapumpv34` reads +0x238 and +0x248 at their TRUE offsets and
-	 * puts 5 in `f0004` when the difference passes 287,488; `v34handshak`
+	 * puts 5 in `progress` when the difference passes 287,488; `v34handshak`
 	 * copies +0x238 into +0x248 to restart the span.  Between them those
 	 * are the second and third readings that settle finding F179's
 	 * register-relative offsets as four low.
@@ -296,19 +322,19 @@ struct v34_object {
 	/*
 	 * adaptecho's three scalars, immediately before the receiver.
 	 * `dmadelay` is the base the echo filter's lag is measured from,
-	 * f25e the transmit sample it just dequeued, f260 the running
+	 * tx_sample the transmit sample it just dequeued, echo_residual the running
 	 * residual.
 	 *
 	 * +0x25c IS `V34dmadelay`, and it is the object's own spelling:
 	 * `VPcmV34SetDelays` computes `0x610 - cfg[0x68]`, stores it here and
 	 * reports it as "V34FEC, V34dmadelay set to %d, (ext delay=%d)" with
-	 * the stored value first and the configured one second.  Was `f25c`.
+	 * the stored value first and the configured one second.  Was `good_run`.
 	 * `VPcmV34Create` and `VPcmV34InitiateRetrain` already carried the
 	 * same expression against the same offset.
 	 */
 	short dmadelay;					/* +0x25c */
-	short f25e;					/* +0x25e */
-	short f260;					/* +0x260 */
+	short tx_sample;					/* +0x25e */
+	short echo_residual;					/* +0x260 */
 	/*
 	 * +0x262.  `VPcmV34NotifyDP` sets it to 1 under "VPcmV34
 	 * Notification: Valid in samples..." and to 0 under "...Invalid in
@@ -333,7 +359,7 @@ struct v34_object {
 	 * that struct's `vectpp_idx`/`flags` pair; named here rather than
 	 * there because every caller has the whole object in hand.
 	 */
-	short f382;					/* +0x0382 */
+	short short_382;					/* +0x0382 */
 	unsigned char unmapped_0384[0x402 - 0x384];
 	/*
 	 * Non-zero makes fskdemodulate return without doing anything -- not
@@ -384,30 +410,65 @@ struct v34_object {
 	 * not a facility something outside the core operates.
 	 */
 	short data_enable;				/* +0x2214 */
-	unsigned char unmapped_2216[0x221c - 0x2216];
+	unsigned char unmapped_2216[0x2218 - 0x2216];
+	/*
+	 * +0x2218.  `v34hshak.c`'s own `DP_MODE`/`T3C_MODE`: the recovery
+	 * supervisor in `datapumpv34` reads it as "handshake above 1" and
+	 * `v90p34`'s table-2 tail is the same int's other reader (`v34hstx1.cpp`
+	 * calls it the same offset, unnamed, before this).  Was inside
+	 * `unmapped_2216`, which was 6 bytes; this int accounts for 4 of them and
+	 * the other 2 (+0x2216/+0x2217) are still unmapped.
+	 */
+	int hs_mode;					/* +0x2218 */
 	struct v34_queue txq;				/* +0x221c */
 	int txq_ring_tail[V34_TXQ_RING - 1];		/* to +0x25c0 */
-	short f25c0;					/* +0x25c0 */
+	short seg_symcount;					/* +0x25c0 */
 	/*
-	 * +0x25c2.  Bit 9 gates the echo feed and bit 2 says both cancellers
-	 * are frozen; BIT 0 picks the scrambler generator -- set for the
-	 * calling station's, clear for the answering one.  txmitdibit and
-	 * txmitquadbit are what pin the last of those.
+	 * +0x25c2.  The transmit-side flag word `v34hstx1.cpp` and `v34shell.c`
+	 * both test directly, bit by bit, rather than through a name for the
+	 * whole field -- eight bits with an established meaning and two with
+	 * none yet:
+	 *
+	 *   bit 0   V34_TXFLAG_CALLER       set for the calling station's
+	 *           scrambler generator, clear for the answering one --
+	 *           `txmitdibit`/`txmitquadbit` pin this one.
+	 *   bit 2   V34_EC_FROZEN (v34rx.h) both echo cancellers frozen; the
+	 *           echo-adapt start/stop reports clear and set it.
+	 *   bit 4   PROG_TXBIT_DATA (v34pcmmain.cpp) set by `modulatevector`
+	 *           once the training-to-data symbol count (`train_symcount`
+	 *           against `span`) expires; gates the shell mapper's
+	 *           non-idle input.
+	 *   bit 8   set once the segment counter passes a threshold during echo
+	 *           adaptation (`v34hstx1.cpp`); no established name.
+	 *   bit 9   V34_EC_FEED (v34rx.h) gates the echo feed.
+	 *   bit 10  set on one baud-ratio branch of the echo-adapt ladder,
+	 *           alongside clearing bit 15; no established name.
+	 *   bit 13  V34_TXFLAG_SEG4A        raised entering TRNSEG4A/SSEG.
+	 *   bit 14  V34_TXFLAG_NLENCODE     `initdigital`'s own comment names
+	 *           it: "Bit 13 of the same word is modulatevector's
+	 *           non-linear encoder" (bit 13 of the INFO word, stored here
+	 *           at bit 14); selects `V34nlencoder` over a plain point copy.
+	 *   bit 15  V34_TXFLAG_PPSEG        raised for PPSEG, read as the
+	 *           field's sign.
+	 *
+	 * Bits 8 and 10 are usage inference only -- a single write site each,
+	 * no format string, no reader that types them -- and are left as bare
+	 * hex rather than guessed into a name.
 	 */
-	short f25c2;					/* +0x25c2 */
+	short tx_flags;					/* +0x25c2 */
 	unsigned char unmapped_25c4[0x25c6 - 0x25c4];
 	/*
 	 * The differentially-encoded quadrant, carried from one symbol to the
-	 * next: f25c6 is the previous one and f25c8 the current.  In the
-	 * dibit case the two end up equal; in the quadbit case f25c8 is set
-	 * first and f25c6 only catches up at the end, because the second
+	 * next: prev_quadrant is the previous one and cur_quadrant the current.  In the
+	 * dibit case the two end up equal; in the quadbit case cur_quadrant is set
+	 * first and prev_quadrant only catches up at the end, because the second
 	 * dibit indexes off the first one's quadrant.
 	 */
-	short f25c6;					/* +0x25c6 */
-	short f25c8;					/* +0x25c8 */
+	short prev_quadrant;					/* +0x25c6 */
+	short cur_quadrant;					/* +0x25c8 */
 	unsigned char unmapped_25ca[0x25cc - 0x25ca];
 	/* The transmit scrambler's shift register. */
-	int f25cc;					/* +0x25cc */
+	int tx_scr_sr;					/* +0x25cc */
 	/*
 	 * +0x25d0.  The point being transmitted: two shorts, real then
 	 * imaginary, and EVERY ARM THAT SENDS A CONSTELLATION POINT WRITES
@@ -442,12 +503,12 @@ struct v34_object {
 		int word;				/* +0x25d0 both at once */
 		short c[2];				/* [0] real, [1] imag  */
 	} txpoint;
-	short f25d4;					/* +0x25d4 tx scale  */
+	short tx_scale;					/* +0x25d4 tx scale  */
 	unsigned char unmapped_25d6[0x25dc - 0x25d6];
 	/*
 	 * +0x25dc.  The transmit power reduction in WHOLE dB, which
 	 * `settxlevel` assembles from the far end's MP message and then
-	 * applies to `f25d4` above -- so this is the request and that is the
+	 * applies to `tx_scale` above -- so this is the request and that is the
 	 * result.  Its own diagnostic names it: "power reduction requested by
 	 * remote modem is %d dB".
 	 *
@@ -460,7 +521,7 @@ struct v34_object {
 	 * request rather than compared with it, and the result drives
 	 * `settxlevel`'s other loop -- the one that raises the scale.
 	 */
-	short f25dc;					/* +0x25dc */
+	short tx_pwr_reduction;					/* +0x25dc */
 	unsigned char unmapped_25de[0x2a54 - 0x25de];
 	/* The scrambler's shift register; see `struct v34_scrambler`. */
 	struct v34_scrambler scrambler;			/* +0x2a54 */
@@ -495,13 +556,13 @@ struct v34_object {
 		short vect[16];				/* +0x2a80 */
 		int vectp[8];				/* +0x2a80, one per point */
 	};
-	short f2aa0;					/* +0x2aa0 */
+	short short_2aa0;					/* +0x2aa0 */
 	short vect_idx;					/* +0x2aa2 */
-	short f2aa4;					/* +0x2aa4 */
-	short f2aa6;					/* +0x2aa6 */
+	short hist1_idx;					/* +0x2aa4 */
+	short hist2_idx;					/* +0x2aa6 */
 	/*
-	 * Two per-symbol history rings modem_serrint fills, indexed by f2aa4
-	 * and f2aa6 and wrapping at 0x12b and 0x257 respectively.  The first
+	 * Two per-symbol history rings modem_serrint fills, indexed by hist1_idx
+	 * and hist2_idx and wrapping at 0x12b and 0x257 respectively.  The first
 	 * holds each residual TWICE, as both halves of its entry -- so it is
 	 * a complex buffer being written with a real value.
 	 *
@@ -534,30 +595,30 @@ struct v34_object {
 	 */
 	void *p3548;					/* +0x3548 */
 	/*
-	 * adaptecho's adaptation state.  f354c counts calls and gates the
-	 * whole slow path; f3550 is the LMS step (updateAlpha's alpha, and
-	 * the only short here); f3558 its decay; f355c a shift the step is
+	 * adaptecho's adaptation state.  echo_calls counts calls and gates the
+	 * whole slow path; echo_alpha is the LMS step (updateAlpha's alpha, and
+	 * the only short here); echo_decay_fact its decay; echo_beta a shift the step is
 	 * scaled by, which the ladder at 0x90 moves between 2, 4 and 5; and
-	 * f3560 the energy accumulated over the first 0x8f calls.
+	 * echo_energy the energy accumulated over the first 0x8f calls.
 	 *
 	 * AND THREE OF THEM ARE NAMED BY THEIR OTHER WRITER.
-	 * `GetVPcmMinimalTxPowerReduction` sets f3554, f3558 and f355c
+	 * `GetVPcmMinimalTxPowerReduction` sets echo_decay_start, echo_decay_fact and echo_beta
 	 * together and then prints what it set: "setting echo: decay start =
-	 * %d, decay fact = %d, beta = %d".  So f3554 is the call count decay
+	 * %d, decay fact = %d, beta = %d".  So echo_decay_start is the call count decay
 	 * starts at -- which is exactly what `adaptecho` compares it against
-	 * -- f3558 is the decay factor and f355c is beta.
+	 * -- echo_decay_fact is the decay factor and echo_beta is beta.
 	 *
 	 * The two writers do not agree on beta's range: `adaptecho`'s ladder
 	 * moves it between 2, 4 and 5, and the PCM side sets 2, 4 or 6.  Both
 	 * readings are the object's; nothing here reconciles them.
 	 */
-	int f354c;					/* +0x354c */
-	short f3550;					/* +0x3550 */
-	short f3552;					/* +0x3552 */
-	int f3554;					/* +0x3554 */
-	int f3558;					/* +0x3558 */
-	int f355c;					/* +0x355c */
-	int f3560;					/* +0x3560 */
+	int echo_calls;					/* +0x354c */
+	short echo_alpha;					/* +0x3550 */
+	short short_3552;					/* +0x3552 */
+	int echo_decay_start;					/* +0x3554 */
+	int echo_decay_fact;					/* +0x3558 */
+	int echo_beta;					/* +0x355c */
+	int echo_energy;					/* +0x3560 */
 	/*
 	 * +0x3564 IS THE OBJECT'S OWN `struct v34_detector`, and the two
 	 * ends meet exactly: `sizeof(struct v34_detector)` is 0x24 and
@@ -605,8 +666,8 @@ struct v34_object {
 	 * v34hshak.c knows them as `T3M_F3588` and `T3M_F358A` and records
 	 * what each use does.
 	 */
-	short f3588;					/* +0x3588 */
-	short f358a;					/* +0x358a */
+	short short_3588;					/* +0x3588 */
+	short short_358a;					/* +0x358a */
 	/*
 	 * +0x358c.  SIGNED short, and the sign is FORCED: 0x62d48 loads it
 	 * `movswl`, masks bit 0 and indexes a table with scale 8, and
@@ -616,7 +677,7 @@ struct v34_object {
 	 * accesses, all sixteen bits wide.  `v34handshak`'s microstate 48
 	 * inverts bit 0 of it -- v34hshak.c's `T3M_TOGGLE` and `T3C_F358C`.
 	 */
-	short f358c;					/* +0x358c */
+	short short_358c;					/* +0x358c */
 	unsigned char unmapped_358e[0x3592 - 0x358e];
 	/*
 	 * THE THREE STATE WORDS.  `v34handshak` is not one state machine but
@@ -674,12 +735,22 @@ struct v34_object {
 	short txstate;					/* +0x3596 */
 	unsigned char unmapped_3598[0x359c - 0x3598];
 	/*
-	 * 0x65 here selects setTimingStateParameters' second parameter
-	 * table.  The two differ only in states 5, 6 and 7 -- the fast part
-	 * of the acquisition ramp -- so this is a variant tuning rather than
-	 * a different algorithm.
+	 * +0x359c.  THE CALLING/ANSWERING ROLE, and the evidence is a whole
+	 * local variable's worth: `v34hshak.c` reads it once into a variable it
+	 * names `originate` (`originate = (obj->role == 0x65)`), and forty-odd
+	 * call sites elsewhere compare it against 0x65/0x66 directly to choose
+	 * everything from the scrambler polynomial to which of a pair of debug
+	 * constants to print.  `v34diag.cpp` carries the same two values under
+	 * its own names, `VDIAG_ROLE_CALL` (0x65) and `VDIAG_ROLE_ANSWER`
+	 * (0x66) -- reused here as `V34_ROLE_CALL`/`V34_ROLE_ANSWER` rather than
+	 * a third pair of names for the same two constants.
+	 *
+	 * IT ALSO PICKS A TIMING VARIANT.  `0x65` (the calling role) selects
+	 * `setTimingStateParameters`' second parameter table; the two differ
+	 * only in states 5, 6 and 7 -- the fast part of the acquisition ramp --
+	 * so this is a per-role tuning rather than a second, unrelated flag.
 	 */
-	short f359c;					/* +0x359c */
+	short role;					/* +0x359c */
 	unsigned char unmapped_359e[0x35a4 - 0x359e];
 	/*
 	 * A short `VPcmV34Create` clears and three functions read, always
@@ -694,8 +765,15 @@ struct v34_object {
 	 * reconstructed, they write through different base registers, and
 	 * nothing establishes that their destinations are the same field.
 	 */
-	short f35a4;					/* +0x35a4 */
-	unsigned char unmapped_35a6[0x35a8 - 0x35a6];
+	short short_35a4;					/* +0x35a4 */
+	/*
+	 * +0x35a6.  `v34hstx1.cpp`'s own `TX1_SEGLEN`: txstate 86 compares
+	 * `vect_idx` against it to decide when the modulator is reconfigured,
+	 * and sets it from `short_35a4 * 0x53` first.  Nothing else in the tree
+	 * reads it.  Was inside `unmapped_35a6`, which was exactly these two
+	 * bytes.
+	 */
+	short seg_len;					/* +0x35a6 */
 	/*
 	 * The bulk-delay ring feeding the second echo canceller.  Its wrap is
 	 * BRANCHLESS -- idx &= -(len > idx), resetting to zero rather than
@@ -738,15 +816,15 @@ struct v34_object {
 	 * and adapts echo1 only when this is set, and adaptecho never looks
 	 * at it because it only ever drives the near one.
 	 */
-	short fa23c;					/* +0xa23c */
+	short far_echo_enable;					/* +0xa23c */
 	/*
 	 * adaptecho reads this, adds it to the residual, and clears it -- so
 	 * it is a one-shot correction somebody upstream deposits.  Whoever
 	 * writes it has not been reconstructed yet.
 	 */
-	short fa23e;					/* +0xa23e */
+	short echo_correction;					/* +0xa23e */
 	/* A leaky estimate of the residual's energy, updated per symbol. */
-	short fa240;					/* +0xa240 */
+	short echo_resid_energy;					/* +0xa240 */
 	unsigned char unmapped_a242[0xa24a - 0xa242];
 	/*
 	 * The retrain-request detector's five scalars, all five written by
@@ -881,7 +959,7 @@ struct v34_object {
 	void *paa6c;					/* +0xaa6c */
 	void *paa70;					/* +0xaa70 */
 	/* Cleared by preinitdigital; nothing reconstructed reads it. */
-	int faa74;					/* +0xaa74 */
+	int train_symcount;					/* +0xaa74 */
 	/*
 	 * +0xaa78.  SIGNED short, and both halves of that are forced.
 	 *
@@ -895,13 +973,20 @@ struct v34_object {
 	 * are the increment-and-compare sites (0x65c4e: load, `inc`, `cmp
 	 * $0x2a,%dx`, store back), where the upper half never survives.
 	 *
-	 * `faa78` and not `counter`: what it COUNTS differs per arm -- ticks
+	 * `short_aa78` and not `counter`: what it COUNTS differs per arm -- ticks
 	 * in one, symbols in another -- and a name that says "counter" would
 	 * read as measured when only the width and the sign are.
 	 * v34hshak.c knows it as `T3M_COUNTER` / `T3C_COUNT`.  Finding F633.
 	 */
-	short faa78;					/* +0xaa78 */
-	unsigned char unmapped_aa7a[0xaa7c - 0xaa7a];
+	short short_aa78;					/* +0xaa78 */
+	/*
+	 * +0xaa7a.  `v34hshak.c`'s own `T41_FAA7A`: cleared unconditionally on
+	 * entry to microstate 41's DET_SYNC arm.  No other reader or writer in
+	 * this tree, so what it signals downstream is not established -- only
+	 * that this one arm resets it.  Was `unmapped_aa7a`, which was exactly
+	 * these two bytes.
+	 */
+	short short_aa7a;				/* +0xaa7a */
 	/*
 	 * +0xaa7c.  THE NAME IS THE OBJECT'S OWN.  0x709d7 prints "On
 	 * RX_PHASE1_ANS: is short=%d, bulkDelay=%d, filtDelay=%d" and this
@@ -924,8 +1009,8 @@ struct v34_object {
 	short rtd;					/* +0xaa7e */
 	unsigned char unmapped_aa80[0xaa96 - 0xaa80];
 	/*
-	 * decoderv34 compares f124 against this and against half of it, and
-	 * sets f218 accordingly -- so it is a frame length in symbols and the
+	 * decoderv34 compares rx_blocks against this and against half of it, and
+	 * sets equ_step accordingly -- so it is a frame length in symbols and the
 	 * two tests are "half way" and "at the end".
 	 */
 	/*
@@ -965,7 +1050,7 @@ struct v34_object {
 	 *
 	 * +0xabc2 IS DECLARED SEPARATELY because the object writes it
 	 * separately: 0x6cc72 stores it with its own instruction after the
-	 * loop has ended.  `short fabae[11]` with the loop stopping one
+	 * loop has ended.  `short short_abae[11]` with the loop stopping one
 	 * short would compile to the same code, so eleven is a reading the
 	 * object does not force; ten plus one is what it shows.
 	 *
@@ -974,8 +1059,8 @@ struct v34_object {
 	 * the struct's convention, not a measurement.  v34hshak.c knows them
 	 * as `T3M_FABAE` and `T3M_FABC2`.  Finding F635.
 	 */
-	short fabae[10];				/* +0xabae */
-	short fabc2;					/* +0xabc2 */
+	short short_abae[10];				/* +0xabae */
+	short short_abc2;					/* +0xabc2 */
 	unsigned char unmapped_abc4[0xabc6 - 0xabc4];
 	/*
 	 * The V.92 short-phase-2 negotiation, four shorts, and the object
@@ -1000,9 +1085,9 @@ struct v34_object {
 	 * bit7 + 2*bit6, bit5 + 2*bit4, bit3 + 2*bit2 -- and nothing here
 	 * names what the pairs mean.
 	 */
-	short fabce;					/* +0xabce */
-	short fabd0;					/* +0xabd0 */
-	short fabd2;					/* +0xabd2 */
+	short short_abce;					/* +0xabce */
+	short short_abd0;					/* +0xabd0 */
+	short short_abd2;					/* +0xabd2 */
 	unsigned char unmapped_abd4[0xabd8 - 0xabd4];
 	/*
 	 * +0xabd8 and +0xabdc, the modem-on-hold timer and its limit.
@@ -1026,7 +1111,7 @@ struct v34_object {
 	 * a hold-time code, and the field carries it in both directions: the
 	 * one we received and the one we will send back.
 	 */
-	short fabe0;					/* +0xabe0 */
+	short moh_holdtime_code;					/* +0xabe0 */
 	/*
 	 * +0xabe2.  Set to 3 by exactly one arriving message -- the 0x75
 	 * MHnack that says the far end may NOT initiate MOH later -- and
@@ -1037,8 +1122,25 @@ struct v34_object {
 	 * 80's disconnect at 0x6c8f8, beside +0xabe4, when the far end never
 	 * sent its MH sequence under MHfrr.  Still read by nothing here.
 	 */
-	short fabe2;					/* +0xabe2 */
-	unsigned char unmapped_abe4[0xabec - 0xabe4];
+	short short_abe2;					/* +0xabe2 */
+	/*
+	 * +0xabe4 and +0xabe6, two of the four halfwords of what was
+	 * `unmapped_abe4` (0xabe4..0xabec, 8 bytes).  `v34hstx1.cpp`'s own
+	 * `TX1_FABE4`/`TX1_FABE6`: the hold tail's clear-down raises
+	 * `short_abe4` on the way out, and the two `v34handshakinit` paths that
+	 * start a fresh cycle raise `short_abe6`.  Neither is read anywhere in
+	 * this tree, so what either SIGNALS downstream is not established.
+	 *
+	 * +0xabe8 is `moh_active`, three fields on: `v34hstx1.cpp`'s
+	 * `TX1_FABE8`, the same region's Modem-on-Hold flag -- while it is set,
+	 * 24 `TX_DPSK`'s clock ticks `vect_idx` once per call, and `v34hshak.c`'s
+	 * microstate 41 reaches the same offset as `T41_FABE8`.  +0xabea is
+	 * still unmapped.
+	 */
+	short short_abe4;				/* +0xabe4 */
+	short short_abe6;				/* +0xabe6 */
+	short moh_active;				/* +0xabe8 */
+	unsigned char unmapped_abea[0xabec - 0xabea];
 	/*
 	 * +0xabec.  READ THIRTY-TWO BITS WIDE -- `cmpl $0x1,0xabec(%esi)` at
 	 * 0x66dac -- which is what makes it an `int` and not two more
@@ -1054,7 +1156,7 @@ struct v34_object {
 	 *
 	 * Nothing else this tree has reconstructed reads or writes it.
 	 */
-	int fabec;					/* +0xabec */
+	int moh_org;					/* +0xabec */
 	/*
 	 * +0xabf0.  Which Modem-on-Hold message to build, 0..5, and the six
 	 * are named by the object's own strings: 0 MHreq, 1 MHfrr, 2 MHclrd,
@@ -1079,7 +1181,17 @@ struct v34_object {
 	 * reconstructed so far.
 	 */
 	int moh_recvd;					/* +0xabf4 */
-	unsigned char unmapped_abf8[0xabfa - 0xabf8];
+	/*
+	 * +0xabf8 and +0xabf9, the two bytes of what was `unmapped_abf8`.
+	 * `v34hstx1.cpp`'s own `TX1_FABF8`/`TX1_FABF9`, read with `cmpb`: while
+	 * `moh_msg_pending` is set, 24 `TX_DPSK`'s hold tail runs the message
+	 * dispatch and clears it, and once it is clear the arm re-arms the
+	 * reader instead.  `moh_path_sel` is read twice more -- which message
+	 * is built, and which of the tail's three exits is taken.  Neither has
+	 * another reader here.
+	 */
+	unsigned char moh_msg_pending;			/* +0xabf8 */
+	unsigned char moh_path_sel;			/* +0xabf9 */
 	/*
 	 * +0xabfa.  A byte that picks between three MHclrd codes -- 0x95,
 	 * 0x96 and 0x9a for values 0, 1 and anything else -- and the same
@@ -1088,7 +1200,7 @@ struct v34_object {
 	 * So 0 is incoming, 1 outgoing and 2 other, and the sending side's
 	 * three codes line up with the three the receiver recognises.
 	 */
-	unsigned char fabfa;				/* +0xabfa */
+	unsigned char moh_clrd_sel;				/* +0xabfa */
 	/*
 	 * +0xabfe, inside the run below.  `v34handshakinit` clears it and
 	 * `v90Phase34` sets it to 1 on the one path whose own diagnostic
@@ -1111,7 +1223,7 @@ struct v34_object {
 	int tx_bps;					/* +0xac04 */
 	int rx_bps;					/* +0xac08 */
 	/* Where the V.90 side is told the recovered timing offset. */
-	short fac0c;					/* +0xac0c */
+	short v90_timing_offset;					/* +0xac0c */
 	/*
 	 * The two rate-renegotiation counters, and the only fields here whose
 	 * names come from a whole function rather than from a string:

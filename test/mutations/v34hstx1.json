@@ -10,9 +10,9 @@
   "replace": "\tif (rx->flags & 0x10) {"
  },
  {
-  "label": "65: the segment bit raised in f25c2 is 0x1000",
-  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x1000u);"
+  "label": "65: the segment bit raised in tx_flags is 0x1000",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x2000u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x1000u);"
  },
  {
   "label": "65: only the first half of the silent point is cleared",
@@ -25,58 +25,58 @@
   "replace": "\ttxmit(o);\n\to->txpoint.c[0] = 0;\n\to->txpoint.c[1] = 0;"
  },
  {
-  "label": "65: f25cc is left alone when the segment is armed",
-  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
-  "replace": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;"
+  "label": "65: tx_scr_sr is left alone when the segment is armed",
+  "find": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
+  "replace": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;"
  },
  {
-  "label": "65: f25c6 is left alone when the segment is armed",
-  "find": "\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
-  "replace": "\t\to->f25c0 = 0;\n\t\to->f25cc = 0;"
+  "label": "65: prev_quadrant is left alone when the segment is armed",
+  "find": "\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
+  "replace": "\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;"
  },
  {
-  "label": "65: f25c0 is left alone when the segment is armed",
-  "find": "\t\to->f25c0 = 0;\n\t\to->f25cc = 0;\n\t}\n\treturn V34TX1_LOOP;",
-  "replace": "\t\to->f25cc = 0;\n\t}\n\treturn V34TX1_LOOP;"
+  "label": "65: seg_symcount is left alone when the segment is armed",
+  "find": "\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;\n\t}\n\treturn V34TX1_LOOP;",
+  "replace": "\t\to->tx_scr_sr = 0;\n\t}\n\treturn V34TX1_LOOP;"
  },
  {
   "label": "65: the transmit machine is not moved to SSEG",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c6 = 0;",
-  "replace": "\t\to->f25c6 = 0;"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->prev_quadrant = 0;",
+  "replace": "\t\to->prev_quadrant = 0;"
  },
  {
   "label": "71/86: the generator select is inverted",
-  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
-  "replace": "\t\t\t\t   (short)(o->f359c != 0x65), 3, 2);"
+  "find": "\t\t\t\t   (short)(o->role == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->role != 0x65), 3, 2);"
  },
  {
   "label": "71/86: the generator select compares against 0x64",
-  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
-  "replace": "\t\t\t\t   (short)(o->f359c == 0x64), 3, 2);"
+  "find": "\t\t\t\t   (short)(o->role == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->role == 0x64), 3, 2);"
  },
  {
   "label": "71/86: one bit is scrambled rather than two",
-  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
-  "replace": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 1);"
+  "find": "\t\t\t\t   (short)(o->role == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->role == 0x65), 3, 1);"
  },
  {
   "label": "71/86: the scrambler is fed 1 rather than 3",
-  "find": "\t\t\t\t   (short)(o->f359c == 0x65), 3, 2);",
-  "replace": "\t\t\t\t   (short)(o->f359c == 0x65), 1, 2);"
+  "find": "\t\t\t\t   (short)(o->role == 0x65), 3, 2);",
+  "replace": "\t\t\t\t   (short)(o->role == 0x65), 1, 2);"
  },
  {
   "label": "71: TXLEVEL sends the point the scrambler chose, as TXMD does",
-  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
-  "replace": "\tshort q71 = tx1_scramble2(o);\n\n\to->f25c8 = q71;\n\ttx1_put_point(o, vect4[q71]);"
+  "find": "\to->cur_quadrant = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "replace": "\tshort q71 = tx1_scramble2(o);\n\n\to->cur_quadrant = q71;\n\ttx1_put_point(o, vect4[q71]);"
  },
  {
-  "label": "71: the quadrant is not recorded in f25c8",
-  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "label": "71: the quadrant is not recorded in cur_quadrant",
+  "find": "\to->cur_quadrant = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
   "replace": "\t(void)tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);"
  },
  {
   "label": "71: the register is not advanced at all",
-  "find": "\to->f25c8 = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
+  "find": "\to->cur_quadrant = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[0]);",
   "replace": "\ttx1_put_point(o, vect4[0]);"
  },
  {
@@ -92,17 +92,17 @@
  {
   "label": "78/85: the completion bit is 8 rather than 4",
   "find": "\tv34FreezeEcho(o);\n\treturn 1;",
-  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);\n\treturn 1;"
+  "replace": "\to->tx_flags = (short)((unsigned short)o->tx_flags | 8u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo1);\n\treturn 1;"
  },
  {
   "label": "78/85: only the first echo canceller is reported",
   "find": "\tv34FreezeEcho(o);\n\treturn 1;",
-  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
+  "replace": "\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
  },
  {
   "label": "78/85: the second report is of the first canceller again",
   "find": "\tv34FreezeEcho(o);\n\treturn 1;",
-  "replace": "\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
+  "replace": "\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\tV34EchoReportCoeff(&o->echo0);\n\tV34EchoReportCoeff(&o->echo0);\n\treturn 1;"
  },
  {
   "label": "78: JaTXMIT hands the sample to the K56flex half",
@@ -191,17 +191,17 @@
  },
  {
   "label": "86: the reconfiguration raises 0x8000 and not 0x8004",
-  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x8004u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x8000u);"
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x8004u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x8000u);"
  },
  {
-  "label": "86: f25c0 is not cleared before it is counted",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
-  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25cc = 0;"
+  "label": "86: seg_symcount is not cleared before it is counted",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->tx_scr_sr = 0;"
  },
  {
   "label": "86: the shared block at 0x6430c does not count the symbol",
-  "find": "\t/* 0x6430c */\n\to->f25c0 = (short)(o->f25c0 + 1);",
+  "find": "\t/* 0x6430c */\n\to->seg_symcount = (short)(o->seg_symcount + 1);",
   "replace": "\t/* 0x6430c */"
  },
  {
@@ -216,8 +216,8 @@
  },
  {
   "label": "86: the transmit machine is not moved to SSEG",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->f25c0 = 0;",
-  "replace": "\t\to->f25c0 = 0;"
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SSEG);\n\t\to->seg_symcount = 0;",
+  "replace": "\t\to->seg_symcount = 0;"
  },
  {
   "label": "60: the index is not scaled by two",
@@ -283,12 +283,12 @@
  },
  {
   "label": "18: the count is not advanced",
-  "find": "\tn = (unsigned short)((unsigned short)o->f25c0 + 1);\n\to->f25c0 = (short)n;",
-  "replace": "\tn = (unsigned short)o->f25c0;"
+  "find": "\tn = (unsigned short)((unsigned short)o->seg_symcount + 1);\n\to->seg_symcount = (short)n;",
+  "replace": "\tn = (unsigned short)o->seg_symcount;"
  },
  {
   "label": "18: the count is not cleared when the segment ends",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);\n\t\to->f25c0 = 0;",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);\n\t\to->seg_symcount = 0;",
   "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);"
  },
  {
@@ -310,22 +310,22 @@
  },
  {
   "label": "70: the data-path test is inverted",
-  "find": "\tif (!(o->f25c2 & 0x10))",
-  "replace": "\tif (o->f25c2 & 0x10)"
+  "find": "\tif (!(o->tx_flags & 0x10))",
+  "replace": "\tif (o->tx_flags & 0x10)"
  },
  {
   "label": "70: the data-path flag is bit 3",
-  "find": "\tif (!(o->f25c2 & 0x10))",
-  "replace": "\tif (!(o->f25c2 & 8))"
+  "find": "\tif (!(o->tx_flags & 0x10))",
+  "replace": "\tif (!(o->tx_flags & 8))"
  },
  {
   "label": "70: the receiver's +0x220 is left alone",
-  "find": "\trx->f220 = 0;\n",
+  "find": "\trx->equerr_accum = 0;\n",
   "replace": ""
  },
  {
   "label": "70: the receiver's +0x21c is left alone",
-  "find": "\trx->f21c = 0;\n",
+  "find": "\trx->err_symcount = 0;\n",
   "replace": ""
  },
  {
@@ -395,20 +395,20 @@
  },
  {
   "label": "51: the scale is read unsigned",
-  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
-  "replace": "\t\tbuf[i] = (short)((v * (unsigned short)o->f25d4) >> 14);"
+  "find": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((v * (unsigned short)o->tx_scale) >> 14);"
  },
  {
   "label": "51: the shift is logical rather than arithmetic",
-  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
-  "replace": "\t\tbuf[i] = (short)((unsigned)(v * o->f25d4) >> 14);",
+  "find": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((unsigned)(v * o->tx_scale) >> 14);",
   "equivalent": true,
   "why": "only the low sixteen bits are stored, and a logical shift right by 14 exceeds an arithmetic one by exactly 2^18 on a negative product -- a multiple of 2^16, so the two are equal in a short for EVERY input.  The object's `sar $0xe` at 0x62cbe and 0x652c4 is therefore unobservable at the store; recorded as equivalent rather than as a gap"
  },
  {
   "label": "51: the shift is by 15",
-  "find": "\t\tbuf[i] = (short)((v * o->f25d4) >> 14);",
-  "replace": "\t\tbuf[i] = (short)((v * o->f25d4) >> 15);"
+  "find": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 14);",
+  "replace": "\t\tbuf[i] = (short)((v * o->tx_scale) >> 15);"
  },
  {
   "label": "51: vect_idx is not advanced inside the loop",
@@ -476,63 +476,63 @@
  },
  {
   "label": "19: the segment is four pairs long",
-  "find": "\tif (n != 8) {\n\t\to->f25c0 = (short)n;",
-  "replace": "\tif (n != 4) {\n\t\to->f25c0 = (short)n;"
+  "find": "\tif (n != 8) {\n\t\to->seg_symcount = (short)n;",
+  "replace": "\tif (n != 4) {\n\t\to->seg_symcount = (short)n;"
  },
  {
   "label": "19: the segment ends at or past eight",
-  "find": "\tif (n != 8) {\n\t\to->f25c0 = (short)n;",
-  "replace": "\tif (n < 8) {\n\t\to->f25c0 = (short)n;"
+  "find": "\tif (n != 8) {\n\t\to->seg_symcount = (short)n;",
+  "replace": "\tif (n < 8) {\n\t\to->seg_symcount = (short)n;"
  },
  {
   "label": "19: the count is stored on the completing path too",
-  "find": "\t/* 0x671f0 */\n\to->f25c0 = 0;",
-  "replace": "\t/* 0x671f0 */\n\to->f25c0 = (short)n;"
+  "find": "\t/* 0x671f0 */\n\to->seg_symcount = 0;",
+  "replace": "\t/* 0x671f0 */\n\to->seg_symcount = (short)n;"
  },
  {
-  "label": "19: the completion does not clear f25c0",
-  "find": "\t/* 0x671f0 */\n\to->f25c0 = 0;\n",
+  "label": "19: the completion does not clear seg_symcount",
+  "find": "\t/* 0x671f0 */\n\to->seg_symcount = 0;\n",
   "replace": "\t/* 0x671f0 */\n"
  },
  {
-  "label": "19: the first guard is bit 5 of f25c2",
-  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {",
-  "replace": "\tif ((unsigned short)o->f25c2 & 0x0020u) {"
+  "label": "19: the first guard is bit 5 of tx_flags",
+  "find": "\tif ((unsigned short)o->tx_flags & 0x2000u) {",
+  "replace": "\tif ((unsigned short)o->tx_flags & 0x0020u) {"
  },
  {
   "label": "19: the first guard is inverted",
-  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {",
-  "replace": "\tif (!((unsigned short)o->f25c2 & 0x2000u)) {"
+  "find": "\tif ((unsigned short)o->tx_flags & 0x2000u) {",
+  "replace": "\tif (!((unsigned short)o->tx_flags & 0x2000u)) {"
  },
  {
   "label": "19: the sign guard is bit 14",
-  "find": "\t} else if ((unsigned short)o->f25c2 & 0x8000u) {",
-  "replace": "\t} else if ((unsigned short)o->f25c2 & 0x4000u) {"
+  "find": "\t} else if ((unsigned short)o->tx_flags & 0x8000u) {",
+  "replace": "\t} else if ((unsigned short)o->tx_flags & 0x4000u) {"
  },
  {
-  "label": "19: f35a4 is tested for non-zero",
+  "label": "19: short_35a4 is tested for non-zero",
   "find": "\t} else if (tx1_get(o, TX1_F35A4) == 0) {",
   "replace": "\t} else if (tx1_get(o, TX1_F35A4) != 0) {"
  },
  {
   "label": "19: the bit-13 path moves to TRNSEG4",
-  "find": "\tif ((unsigned short)o->f25c2 & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\tif ((unsigned short)o->f25c2 & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+  "find": "\tif ((unsigned short)o->tx_flags & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\tif ((unsigned short)o->tx_flags & 0x2000u) {\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
  },
  {
-  "label": "19: the f35a4-zero path moves to TXMD",
+  "label": "19: the short_35a4-zero path moves to TXMD",
   "find": "\t\t/* 0x68375 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_PPSEG);",
   "replace": "\t\t/* 0x68375 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TXMD);"
  },
  {
-  "label": "19: the sign path does not copy f35a6 into f25c0",
-  "find": "\t\t/* 0x69eca */\n\t\to->f25c0 = tx1_get(o, TX1_SEGLEN);\n",
+  "label": "19: the sign path does not copy f35a6 into seg_symcount",
+  "find": "\t\t/* 0x69eca */\n\t\to->seg_symcount = tx1_get(o, TX1_SEGLEN);\n",
   "replace": "\t\t/* 0x69eca */\n"
  },
  {
-  "label": "19: the sign path copies f35a4 into f25c0",
-  "find": "\t\to->f25c0 = tx1_get(o, TX1_SEGLEN);",
-  "replace": "\t\to->f25c0 = tx1_get(o, TX1_F35A4);"
+  "label": "19: the sign path copies short_35a4 into seg_symcount",
+  "find": "\t\to->seg_symcount = tx1_get(o, TX1_SEGLEN);",
+  "replace": "\t\to->seg_symcount = tx1_get(o, TX1_F35A4);"
  },
  {
   "label": "19: the segment length scales by 0x52",
@@ -540,7 +540,7 @@
   "replace": "\t\t\t(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x52));"
  },
  {
-  "label": "19: f35a4 is read signed for the scale",
+  "label": "19: short_35a4 is read signed for the scale",
   "find": "\t\t\t(short)((unsigned short)tx1_get(o, TX1_F35A4) * 0x53));",
   "replace": "\t\t\t(short)(tx1_get(o, TX1_F35A4) * 0x53));",
   "equivalent": true,
@@ -688,13 +688,13 @@
   "replace": "\t\t\to->vect_idx = 0;"
  },
  {
-  "label": "20: f25c0 is bumped on the segment's end as well",
+  "label": "20: seg_symcount is bumped on the segment's end as well",
   "find": "\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}",
-  "replace": "\t\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}"
+  "replace": "\t\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\t\t\treturn V34TX1_LOOP;\t\t/* 0x63da2 */\n\t\t}\n\t}"
  },
  {
-  "label": "20: f25c0 is not bumped on the counting paths",
-  "find": "\t/* 0x6430c */\n\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */",
+  "label": "20: seg_symcount is not bumped on the counting paths",
+  "find": "\t/* 0x6430c */\n\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */",
   "replace": "\t/* 0x6430c */\n\treturn V34TX1_LOOP;\t\t\t/* 0x6431f */"
  },
  {
@@ -783,27 +783,27 @@
  },
  {
   "label": "20: the counter's literal one is dropped",
-  "find": "\t\t\t\t+ (unsigned short)o->f25c0 + 1;",
-  "replace": "\t\t\t\t+ (unsigned short)o->f25c0;"
+  "find": "\t\t\t\t+ (unsigned short)o->seg_symcount + 1;",
+  "replace": "\t\t\t\t+ (unsigned short)o->seg_symcount;"
  },
  {
   "label": "20: +0xaa7c is not added into the counter",
-  "find": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C)\n\t\t\t\t+ (unsigned short)o->f25c0 + 1;",
-  "replace": "\t\t\tacc = q + (unsigned short)o->f25c0 + 1;"
+  "find": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C)\n\t\t\t\t+ (unsigned short)o->seg_symcount + 1;",
+  "replace": "\t\t\tacc = q + (unsigned short)o->seg_symcount + 1;"
  },
  {
-  "label": "20: f25c0 is not added into the counter",
-  "find": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C)\n\t\t\t\t+ (unsigned short)o->f25c0 + 1;",
+  "label": "20: seg_symcount is not added into the counter",
+  "find": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C)\n\t\t\t\t+ (unsigned short)o->seg_symcount + 1;",
   "replace": "\t\t\tacc = q + (unsigned short)tx1_get(o, TX1_FAA7C) + 1;"
  },
  {
-  "label": "20: rtd is added into the counter at f359c 0x64",
-  "find": "\t\t\tif (o->f359c == 0x65)\t\t\t/* 0x6926d */",
-  "replace": "\t\t\tif (o->f359c == 0x64)\t\t\t/* 0x6926d */"
+  "label": "20: rtd is added into the counter at role 0x64",
+  "find": "\t\t\tif (o->role == 0x65)\t\t\t/* 0x6926d */",
+  "replace": "\t\t\tif (o->role == 0x64)\t\t\t/* 0x6926d */"
  },
  {
   "label": "20: rtd is always added into the counter",
-  "find": "\t\t\tif (o->f359c == 0x65)\t\t\t/* 0x6926d */\n\t\t\t\tacc += (unsigned short)o->rtd;",
+  "find": "\t\t\tif (o->role == 0x65)\t\t\t/* 0x6926d */\n\t\t\t\tacc += (unsigned short)o->rtd;",
   "replace": "\t\t\tacc += (unsigned short)o->rtd;"
  },
  {
@@ -875,23 +875,23 @@
  },
  {
   "label": "54: the record's lead is 0x11 on the V.90 path",
-  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
   "replace": "\t\tshort lead = 0x11;"
  },
  {
-  "label": "54: the lead turns on f359c alone",
-  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
-  "replace": "\t\tshort lead = o->f359c == 0x65 ? 0x1e : 0x11;"
+  "label": "54: the lead turns on role alone",
+  "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "replace": "\t\tshort lead = o->role == 0x65 ? 0x1e : 0x11;"
  },
  {
   "label": "54: the lead turns on v90_receiver alone",
-  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
   "replace": "\t\tshort lead = o->v90_receiver != 0 ? 0x1e : 0x11;"
  },
  {
   "label": "54: the lead reads the K56flex receiver too",
-  "find": "\t\tshort lead = (o->f359c == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
-  "replace": "\t\tshort lead = (o->f359c == 0x65\n\t\t\t      && (o->v90_receiver != 0\n\t\t\t\t  || o->k56flex_receiver != 0))\n\t\t\t     ? 0x1e : 0x11;"
+  "find": "\t\tshort lead = (o->role == 0x65 && o->v90_receiver != 0)\n\t\t\t     ? 0x1e : 0x11;",
+  "replace": "\t\tshort lead = (o->role == 0x65\n\t\t\t      && (o->v90_receiver != 0\n\t\t\t\t  || o->k56flex_receiver != 0))\n\t\t\t     ? 0x1e : 0x11;"
  },
  {
   "label": "54: the record's +0x14 is cleared rather than set to -1",
@@ -924,7 +924,7 @@
   "replace": "\t\t*(short *)(r + 0x2c) = (short)0xff72;"
  },
  {
-  "label": "54: f358c is not cleared",
+  "label": "54: short_358c is not cleared",
   "find": "\ttx1_put(o, TX1_F358C, 0);\n\treturn V34TX1_LOOP;\t\t\t\t/* 0x640a1 */",
   "replace": "\treturn V34TX1_LOOP;\t\t\t\t/* 0x640a1 */"
  },
@@ -956,14 +956,14 @@
   "replace": "\t\t\twant = V34HS_MOH_TONE_DROP;"
  },
  {
-  "label": "74: the two f359c microstates are swapped",
-  "find": "\t\t\twant = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
-  "replace": "\t\t\twant = o->f359c == 0x65 ? V34HS_TX_PHASE1_ANS\n\t\t\t\t\t\t: V34HS_RX_PHASE1_CALL;"
+  "label": "74: the two role microstates are swapped",
+  "find": "\t\t\twant = o->role == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
+  "replace": "\t\t\twant = o->role == 0x65 ? V34HS_TX_PHASE1_ANS\n\t\t\t\t\t\t: V34HS_RX_PHASE1_CALL;"
  },
  {
-  "label": "74: f359c is compared against 0x64",
-  "find": "\t\t\twant = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
-  "replace": "\t\t\twant = o->f359c == 0x64 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;"
+  "label": "74: role is compared against 0x64",
+  "find": "\t\t\twant = o->role == 0x65 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;",
+  "replace": "\t\t\twant = o->role == 0x64 ? V34HS_RX_PHASE1_CALL\n\t\t\t\t\t\t: V34HS_TX_PHASE1_ANS;"
  },
  {
   "label": "74: the microstate is not moved",
@@ -988,7 +988,7 @@
   "replace": "\t\t/* 0x66c10 */\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TONE_AB_CALL);"
  },
  {
-  "label": "74: f358c is not cleared by the retrain",
+  "label": "74: short_358c is not cleared by the retrain",
   "find": "\t\t/* 0x66c32 */\n\t\ttx1_put(o, TX1_F358C, 0);\n\t\to->vect_idx = 0;",
   "replace": "\t\t/* 0x66c32 */\n\t\to->vect_idx = 0;"
  },
@@ -1014,18 +1014,18 @@
  },
  {
   "label": "69/64: the quadrant is not added to the one last sent",
-  "find": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "find": "\tshort k = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
   "replace": "\tshort k = (short)(q & 3);"
  },
  {
   "label": "69/64: the quadrant sum is masked with seven",
-  "find": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 7);"
+  "find": "\tshort k = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tshort k = (short)((q + (unsigned short)o->prev_quadrant) & 7);"
  },
  {
   "label": "69/64: the quadrant sum is not masked",
-  "find": "\tshort k = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tshort k = (short)(q + (unsigned short)o->f25c6);"
+  "find": "\tshort k = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tshort k = (short)(q + (unsigned short)o->prev_quadrant);"
  },
  {
   "label": "69/64: the point is the scrambler's two bits, undifferenced",
@@ -1034,23 +1034,23 @@
  },
  {
   "label": "69/64: the chosen quadrant is not carried forward",
-  "find": "\to->f25c8 = k;\n\to->f25c6 = k;",
-  "replace": "\to->f25c8 = k;"
+  "find": "\to->cur_quadrant = k;\n\to->prev_quadrant = k;",
+  "replace": "\to->cur_quadrant = k;"
  },
  {
-  "label": "69/64: the chosen quadrant is not stored in f25c8",
-  "find": "\to->f25c8 = k;\n\to->f25c6 = k;",
-  "replace": "\to->f25c6 = k;"
+  "label": "69/64: the chosen quadrant is not stored in cur_quadrant",
+  "find": "\to->cur_quadrant = k;\n\to->prev_quadrant = k;",
+  "replace": "\to->prev_quadrant = k;"
  },
  {
-  "label": "69/64: f25c6 keeps the scrambler's output rather than the sum",
-  "find": "\to->f25c8 = k;\n\to->f25c6 = k;",
-  "replace": "\to->f25c8 = k;\n\to->f25c6 = q;"
+  "label": "69/64: prev_quadrant keeps the scrambler's output rather than the sum",
+  "find": "\to->cur_quadrant = k;\n\to->prev_quadrant = k;",
+  "replace": "\to->cur_quadrant = k;\n\to->prev_quadrant = q;"
  },
  {
   "label": "69/64: the point is not transmitted",
-  "find": "\to->f25c6 = k;\n\ttx1_put_point(o, point);",
-  "replace": "\to->f25c6 = k;"
+  "find": "\to->prev_quadrant = k;\n\ttx1_put_point(o, point);",
+  "replace": "\to->prev_quadrant = k;"
  },
  {
   "label": "69: the constellation selector is inverted",
@@ -1074,18 +1074,18 @@
  },
  {
   "label": "69: the generator select is inverted",
-  "find": "\tshort mode = (short)((o->f25c2 & 1) == 0);\n\tshort q;",
-  "replace": "\tshort mode = (short)((o->f25c2 & 1) != 0);\n\tshort q;"
+  "find": "\tshort mode = (short)((o->tx_flags & 1) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)((o->tx_flags & 1) != 0);\n\tshort q;"
  },
  {
-  "label": "69: the generator select is bit 1 of f25c2",
-  "find": "\tshort mode = (short)((o->f25c2 & 1) == 0);\n\tshort q;",
-  "replace": "\tshort mode = (short)((o->f25c2 & 2) == 0);\n\tshort q;"
+  "label": "69: the generator select is bit 1 of tx_flags",
+  "find": "\tshort mode = (short)((o->tx_flags & 1) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)((o->tx_flags & 2) == 0);\n\tshort q;"
  },
  {
-  "label": "69: the generator select is f359c, as 71 and 86's is",
-  "find": "\tshort mode = (short)((o->f25c2 & 1) == 0);\n\tshort q;",
-  "replace": "\tshort mode = (short)(o->f359c == 0x65);\n\tshort q;"
+  "label": "69: the generator select is role, as 71 and 86's is",
+  "find": "\tshort mode = (short)((o->tx_flags & 1) == 0);\n\tshort q;",
+  "replace": "\tshort mode = (short)(o->role == 0x65);\n\tshort q;"
  },
  {
   "label": "69: the sixteen-point half sends a vect4 point",
@@ -1109,40 +1109,40 @@
  },
  {
   "label": "69: the first scrambler's quadrant is not stored",
-  "find": "\t\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
+  "find": "\t\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
   "replace": "\t\t(void)0;"
  },
  {
   "label": "69: the first scrambler's quadrant is not differenced",
-  "find": "\t\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\t\to->f25c8 = (short)(q & 3);"
+  "find": "\t\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\t\to->cur_quadrant = (short)(q & 3);"
  },
  {
-  "label": "69: the sixteen-point half re-reads f25c6 rather than f25c8",
-  "find": "\t\tk = o->f25c8;\t\t\t/* re-read, 0x67131 */",
-  "replace": "\t\tk = o->f25c6;\t\t\t/* re-read, 0x67131 */"
+  "label": "69: the sixteen-point half re-reads prev_quadrant rather than cur_quadrant",
+  "find": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */",
+  "replace": "\t\tk = o->prev_quadrant;\t\t\t/* re-read, 0x67131 */"
  },
  {
   "label": "69: the sixteen-point half does not carry the row forward",
-  "find": "\t\tk = o->f25c8;\t\t\t/* re-read, 0x67131 */\n\t\to->f25c6 = k;",
-  "replace": "\t\tk = o->f25c8;\t\t\t/* re-read, 0x67131 */"
+  "find": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */\n\t\to->prev_quadrant = k;",
+  "replace": "\t\tk = o->cur_quadrant;\t\t\t/* re-read, 0x67131 */"
  },
  {
   "label": "69: the first scrambler is passed three rather than 0xf",
-  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 2);",
-  "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);",
+  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);",
+  "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);",
   "equivalent": true,
   "why": "`nbits` is two, so `V34scrambler` consumes bits 0 and 1 of `bits` and no others -- both are set in 3 and in 0xf, and the register advances identically.  A proof over every input rather than over the ones driven; the object's own 0xf is what is written"
  },
  {
   "label": "69: the first scrambler scrambles one bit",
-  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 2);",
-  "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 1);"
+  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);",
+  "replace": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 1);"
  },
  {
   "label": "69: the sixteen-point half scrambles once",
-  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);\n\t\tk = o->f25c8;",
-  "replace": "\t\tk = o->f25c8;"
+  "find": "\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);\n\t\tk = o->cur_quadrant;",
+  "replace": "\t\tk = o->cur_quadrant;"
  },
  {
   "label": "69: the sixteen-point half advances vect_idx by two",
@@ -1239,23 +1239,23 @@
  },
  {
   "label": "64/68: the generator select is inverted",
-  "find": "\tmode = (short)((o->f25c2 & 1) == 0);",
-  "replace": "\tmode = (short)((o->f25c2 & 1) != 0);"
+  "find": "\tmode = (short)((o->tx_flags & 1) == 0);",
+  "replace": "\tmode = (short)((o->tx_flags & 1) != 0);"
  },
  {
-  "label": "64/68: the generator select is f359c, as 71 and 86's is",
-  "find": "\tmode = (short)((o->f25c2 & 1) == 0);",
-  "replace": "\tmode = (short)(o->f359c == 0x65);"
+  "label": "64/68: the generator select is role, as 71 and 86's is",
+  "find": "\tmode = (short)((o->tx_flags & 1) == 0);",
+  "replace": "\tmode = (short)(o->role == 0x65);"
  },
  {
   "label": "64/68: three bits are scrambled rather than two",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 3);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 3);"
  },
  {
   "label": "64/68: the scrambler is fed a literal three",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);"
  },
  {
   "label": "64/68: vect_idx is masked with fifteen",
@@ -1273,14 +1273,14 @@
   "replace": "\tidx = (unsigned short)((unsigned short)o->vect_idx & 7);"
  },
  {
-  "label": "64/68: f359c is compared against 0x65",
-  "find": "\tif (o->f359c == 0x66) {",
-  "replace": "\tif (o->f359c == 0x65) {"
+  "label": "64/68: role is compared against 0x65",
+  "find": "\tif (o->role == 0x66) {",
+  "replace": "\tif (o->role == 0x65) {"
  },
  {
-  "label": "64/68: the wrap is tested before f359c",
-  "find": "\tif (o->f359c == 0x66) {",
-  "replace": "\tif (o->f359c == 0x66 && idx != 0) {"
+  "label": "64/68: the wrap is tested before role",
+  "find": "\tif (o->role == 0x66) {",
+  "replace": "\tif (o->role == 0x66 && idx != 0) {"
  },
  {
   "label": "64/68: 0x66ca8's flag is bit 3 of the receiver's flags",
@@ -1340,34 +1340,34 @@
   "replace": "\tif (tx1_get(o, TX1_TXSTATE) == V34HS_JTXMIT) {"
  },
  {
-  "label": "68: f25cc is not cleared at the segment's end",
-  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "label": "68: tx_scr_sr is not cleared at the segment's end",
+  "find": "\t\to->tx_scr_sr = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
   "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
  },
  {
-  "label": "68: f25cc is cleared as a halfword",
-  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "label": "68: tx_scr_sr is cleared as a halfword",
+  "find": "\t\to->tx_scr_sr = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
   "replace": "\t\ttx1_put(o, 0x25cc, 0);\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);"
  },
  {
-  "label": "68: f25c6 is not cleared at the segment's end",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
-  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c0 = 0;"
+  "label": "68: prev_quadrant is not cleared at the segment's end",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->seg_symcount = 0;"
  },
  {
-  "label": "68: f25c0 is not cleared at the segment's end",
-  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
-  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->f25c6 = 0;"
+  "label": "68: seg_symcount is not cleared at the segment's end",
+  "find": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);\n\t\to->prev_quadrant = 0;"
  },
  {
   "label": "68: the transmit machine moves to TRNSEG4",
-  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
+  "find": "\t\to->tx_scr_sr = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->tx_scr_sr = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4);"
  },
  {
   "label": "68: the segment's end stores without comparing",
-  "find": "\t\to->f25cc = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
-  "replace": "\t\to->f25cc = 0;\n\t\ths_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "find": "\t\to->tx_scr_sr = 0;\n\t\ths_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
+  "replace": "\t\to->tx_scr_sr = 0;\n\t\ths_put(o, TX1_TXSTATE, V34HS_TRNSEG4A);",
   "why": "NOT EQUIVALENT ANY MORE, and neither the argument nor the code moved: the ORACLE did.  This entry was recorded unable to fail while `t_v34hstx1.c` ran at debug level 0; task #37 turned the diagnostics on and hs_setstate's own transition line separates the two.  The argument below is still true of the OBJECT, which is why it is kept.  0x65653 has NO compare where every other state change in this arm has one, and whether one is there cannot change the answer: the block is reached only because 0x636ff found `txstate` was 68, which is not 66.  It is written as `hs_setstate` for the diagnostic (finding F572) and this mutation takes the compare back out, which is the object's own shape.  Recorded so that the asymmetry is on the record rather than tidied away.  `hs_put` and `hs_setstate` are the same code at debug level 0 -- the print sits inside `DSPLIB_DEBUG_ON()` -- so this holds for the suite as run; under `V34TX1_TRACE` the mutant would drop a line the blob prints (finding F571)",
   "fn": "v34tx1_jtxmit"
  },
@@ -1434,9 +1434,9 @@
   "replace": "\tif (tx1_get(o, TX1_COUNT) == 0) {"
  },
  {
-  "label": "64: bit 3 of f25c2 is raised at the segment's end",
+  "label": "64: bit 3 of tx_flags is raised at the segment's end",
   "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: no flag is raised at the segment's end",
@@ -1456,12 +1456,12 @@
  {
   "label": "64: the segment's end reports only the first echo canceller",
   "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "64: the segment's end reports the first echo canceller twice",
   "find": "\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x64326 */"
  },
  {
   "label": "67: the four-point half collects one bit",
@@ -1494,29 +1494,29 @@
   "replace": "\t\tif (n > 3)\n\t\t\tbreak;"
  },
  {
-  "label": "67: f25c8 is not cleared before the loop",
-  "find": "\to->f25c8 = 0;\t\t\t\t\t/* 0x639ab */",
+  "label": "67: cur_quadrant is not cleared before the loop",
+  "find": "\to->cur_quadrant = 0;\t\t\t\t\t/* 0x639ab */",
   "replace": "\t/* 0x639ab, deleted */"
  },
  {
   "label": "67: the bits are not accumulated",
-  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-  "replace": "\t\to->f25c8 = (short)((unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));"
+  "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->cur_quadrant = (short)((unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));"
  },
  {
   "label": "67: every bit lands in bit 0",
-  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-  "replace": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)((unsigned)(int)bit));"
+  "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)((unsigned)(int)bit));"
  },
  {
   "label": "67: the bits are shifted one place too far",
-  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-  "replace": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << (((unsigned)(unsigned char)n + 1u) & 31u)));"
+  "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << (((unsigned)(unsigned char)n + 1u) & 31u)));"
  },
  {
   "label": "67: the bits go in highest first",
-  "find": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
-  "replace": "\t\to->f25c8 = (short)((unsigned short)o->f25c8\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((3u - (unsigned)(unsigned char)n) & 31u)));"
+  "find": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((unsigned)(unsigned char)n & 31u)));",
+  "replace": "\t\to->cur_quadrant = (short)((unsigned short)o->cur_quadrant\n\t\t\t\t   | (unsigned short)\n\t\t\t\t     ((unsigned)(int)bit\n\t\t\t\t      << ((3u - (unsigned)(unsigned char)n) & 31u)));"
  },
  {
   "label": "67: the constellation selector is inverted",
@@ -1540,13 +1540,13 @@
  },
  {
   "label": "67: the two mappers are the other way round",
-  "find": "\tif (wide)\n\t\ttx1_mp16(o, o->f25c8);\n\telse\n\t\ttx1_mp4(o, o->f25c8);",
-  "replace": "\tif (wide)\n\t\ttx1_mp4(o, o->f25c8);\n\telse\n\t\ttx1_mp16(o, o->f25c8);"
+  "find": "\tif (wide)\n\t\ttx1_mp16(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp4(o, o->cur_quadrant);",
+  "replace": "\tif (wide)\n\t\ttx1_mp4(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp16(o, o->cur_quadrant);"
  },
  {
-  "label": "67: the mapper is fed f25c6 rather than the collected bits",
-  "find": "\tif (wide)\n\t\ttx1_mp16(o, o->f25c8);\n\telse\n\t\ttx1_mp4(o, o->f25c8);",
-  "replace": "\tif (wide)\n\t\ttx1_mp16(o, o->f25c6);\n\telse\n\t\ttx1_mp4(o, o->f25c6);"
+  "label": "67: the mapper is fed prev_quadrant rather than the collected bits",
+  "find": "\tif (wide)\n\t\ttx1_mp16(o, o->cur_quadrant);\n\telse\n\t\ttx1_mp4(o, o->cur_quadrant);",
+  "replace": "\tif (wide)\n\t\ttx1_mp16(o, o->prev_quadrant);\n\telse\n\t\ttx1_mp4(o, o->prev_quadrant);"
  },
  {
   "label": "67: the symbol is not transmitted",
@@ -1555,138 +1555,138 @@
  },
  {
   "label": "67: the four-point half is fed a literal three",
-  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);",
-  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, 3, 2);"
+  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);",
+  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, 3, 2);"
  },
  {
   "label": "67: the four-point half scrambles one bit",
-  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);",
-  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 1);"
+  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);",
+  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 1);"
  },
  {
   "label": "67: the four-point half scrambles three bits",
-  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);",
-  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 3);"
+  "find": "\tshort q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);",
+  "replace": "\tshort q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 3);"
  },
  {
   "label": "67: the four-point generator select is inverted",
-  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort q = (short)V34scrambler",
-  "replace": "\tshort pick = (short)((o->f25c2 & 1) != 0);\n\tshort q = (short)V34scrambler"
+  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)((o->tx_flags & 1) != 0);\n\tshort q = (short)V34scrambler"
  },
  {
-  "label": "67: the four-point generator select is f359c, as 71 and 86's is",
-  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort q = (short)V34scrambler",
-  "replace": "\tshort pick = (short)(o->f359c == 0x65);\n\tshort q = (short)V34scrambler"
+  "label": "67: the four-point generator select is role, as 71 and 86's is",
+  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)(o->role == 0x65);\n\tshort q = (short)V34scrambler"
  },
  {
-  "label": "67: the four-point generator select is bit 1 of f25c2",
-  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort q = (short)V34scrambler",
-  "replace": "\tshort pick = (short)((o->f25c2 & 2) == 0);\n\tshort q = (short)V34scrambler"
+  "label": "67: the four-point generator select is bit 1 of tx_flags",
+  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort q = (short)V34scrambler",
+  "replace": "\tshort pick = (short)((o->tx_flags & 2) == 0);\n\tshort q = (short)V34scrambler"
  },
  {
   "label": "67: the sixteen-point generator select is inverted",
-  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort k, q;",
-  "replace": "\tshort pick = (short)((o->f25c2 & 1) != 0);\n\tshort k, q;"
+  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)((o->tx_flags & 1) != 0);\n\tshort k, q;"
  },
  {
-  "label": "67: the sixteen-point generator select is f359c",
-  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort k, q;",
-  "replace": "\tshort pick = (short)(o->f359c == 0x65);\n\tshort k, q;"
+  "label": "67: the sixteen-point generator select is role",
+  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)(o->role == 0x65);\n\tshort k, q;"
  },
  {
-  "label": "67: the sixteen-point generator select is bit 1 of f25c2",
-  "find": "\tshort pick = (short)((o->f25c2 & 1) == 0);\n\tshort k, q;",
-  "replace": "\tshort pick = (short)((o->f25c2 & 2) == 0);\n\tshort k, q;"
+  "label": "67: the sixteen-point generator select is bit 1 of tx_flags",
+  "find": "\tshort pick = (short)((o->tx_flags & 1) == 0);\n\tshort k, q;",
+  "replace": "\tshort pick = (short)((o->tx_flags & 2) == 0);\n\tshort k, q;"
  },
  {
   "label": "67: the sixteen-point half's first dibit is a literal 0xf",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, 0xf, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, 0xf, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);"
  },
  {
   "label": "67: the sixteen-point half's first dibit is the high one",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);"
  },
  {
   "label": "67: the first quadrant is not differenced",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)(q & 3);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)(q & 3);"
  },
  {
   "label": "67: the first quadrant sum is not masked",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)(q + (unsigned short)o->f25c6);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)(q + (unsigned short)o->prev_quadrant);"
  },
  {
   "label": "67: the first quadrant sum is masked with seven",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);\n\to->f25c8 = (short)((q + (unsigned short)o->f25c6) & 7);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);\n\to->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 7);"
  },
  {
   "label": "67: the two dibits are the same one",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\tsrc, 2);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\tsrc, 2);"
  },
  {
   "label": "67: the second dibit starts at bit 1",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 1), 2);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 1), 2);"
  },
  {
   "label": "67: the second dibit starts at bit 3",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 3), 2);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 3), 2);"
  },
  {
   "label": "67: the second dibit is a literal three",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t3, 2);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t3, 2);"
  },
  {
   "label": "67: the sixteen-point half scrambles once",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);",
   "replace": "\t/* the second scrambler step deleted */"
  },
  {
   "label": "67: the second scrambler step scrambles one bit",
-  "find": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 2);",
-  "replace": "\tq = (short)V34scrambler((unsigned *)&o->f25cc, pick,\n\t\t\t\t(short)(src >> 2), 1);"
+  "find": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 2);",
+  "replace": "\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,\n\t\t\t\t(short)(src >> 2), 1);"
  },
  {
-  "label": "67: the sixteen-point half re-reads f25c6 rather than f25c8",
-  "find": "\tk = o->f25c8;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->f25c6 = k;",
-  "replace": "\tk = o->f25c6;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->f25c6 = k;"
+  "label": "67: the sixteen-point half re-reads prev_quadrant rather than cur_quadrant",
+  "find": "\tk = o->cur_quadrant;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->prev_quadrant = k;",
+  "replace": "\tk = o->prev_quadrant;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->prev_quadrant = k;"
  },
  {
   "label": "67: the sixteen-point half does not carry the row forward",
-  "find": "\tk = o->f25c8;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->f25c6 = k;",
-  "replace": "\tk = o->f25c8;\t\t\t\t\t/* re-read, 0x63c72 */"
+  "find": "\tk = o->cur_quadrant;\t\t\t\t\t/* re-read, 0x63c72 */\n\to->prev_quadrant = k;",
+  "replace": "\tk = o->cur_quadrant;\t\t\t\t\t/* re-read, 0x63c72 */"
  },
  {
   "label": "67: the vect16 row and column are swapped",
-  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
-  "replace": "\to->f25c6 = k;\n\tpoint = vect16[k + 4 * q];"
+  "find": "\to->prev_quadrant = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->prev_quadrant = k;\n\tpoint = vect16[k + 4 * q];"
  },
  {
   "label": "67: the vect16 index is not scaled by four",
-  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
-  "replace": "\to->f25c6 = k;\n\tpoint = vect16[q + k];"
+  "find": "\to->prev_quadrant = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->prev_quadrant = k;\n\tpoint = vect16[q + k];"
  },
  {
   "label": "67: the sixteen-point half sends a vect4 point",
-  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
-  "replace": "\to->f25c6 = k;\n\tpoint = vect4[k];"
+  "find": "\to->prev_quadrant = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->prev_quadrant = k;\n\tpoint = vect4[k];"
  },
  {
   "label": "67: the sixteen-point column is the row again",
-  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];",
-  "replace": "\to->f25c6 = k;\n\tpoint = vect16[k + 4 * k];"
+  "find": "\to->prev_quadrant = k;\n\tpoint = vect16[q + 4 * k];",
+  "replace": "\to->prev_quadrant = k;\n\tpoint = vect16[k + 4 * k];"
  },
  {
   "label": "67: the sixteen-point symbol is not stored",
-  "find": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];\n\ttx1_put_point(o, point);",
-  "replace": "\to->f25c6 = k;\n\tpoint = vect16[q + 4 * k];\n\t(void)point;"
+  "find": "\to->prev_quadrant = k;\n\tpoint = vect16[q + 4 * k];\n\ttx1_put_point(o, point);",
+  "replace": "\to->prev_quadrant = k;\n\tpoint = vect16[q + 4 * k];\n\t(void)point;"
  },
  {
   "label": "67: the stuff point with bit 5 set is 0x54",
@@ -1841,7 +1841,7 @@
  {
   "label": "67: the checkpoints read the transmitter's flags",
   "find": "\t\tflags = rx->flags;\n\n\t\tif (idx == ",
-  "replace": "\t\tflags = (unsigned short)o->f25c2;\n\n\t\tif (idx == "
+  "replace": "\t\tflags = (unsigned short)o->tx_flags;\n\n\t\tif (idx == "
  },
  {
   "label": "67: the reader is the record at +0xaa3c rather than the pointer",
@@ -2483,23 +2483,23 @@
  },
  {
   "label": "24: the message's stamp is written whatever +0xabe2 held",
-  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
-  "replace": "\to->fabe2 = 1;"
+  "find": "\tif (o->short_abe2 != 3)\n\t\to->short_abe2 = 1;",
+  "replace": "\to->short_abe2 = 1;"
  },
  {
   "label": "24: the message's stamp is not written",
-  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
+  "find": "\tif (o->short_abe2 != 3)\n\t\to->short_abe2 = 1;",
   "replace": ""
  },
  {
   "label": "24: the message's stamp is three",
-  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
-  "replace": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 3;"
+  "find": "\tif (o->short_abe2 != 3)\n\t\to->short_abe2 = 1;",
+  "replace": "\tif (o->short_abe2 != 3)\n\t\to->short_abe2 = 3;"
  },
  {
   "label": "24: the message's stamp guard is == 3",
-  "find": "\tif (o->fabe2 != 3)\n\t\to->fabe2 = 1;",
-  "replace": "\tif (o->fabe2 == 3)\n\t\to->fabe2 = 1;"
+  "find": "\tif (o->short_abe2 != 3)\n\t\to->short_abe2 = 1;",
+  "replace": "\tif (o->short_abe2 == 3)\n\t\to->short_abe2 = 1;"
  },
  {
   "label": "24: +0xabf9 picks the two messages the other way round",
@@ -2652,13 +2652,13 @@
  },
  {
   "label": "24: the hold tail does not stamp +0xabe2",
-  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 1;",
+  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->short_abe2 = 1;",
   "replace": "\t\ttx1_moh_cleardown(o);"
  },
  {
   "label": "24: the hold tail stamps +0xabe2 with three",
-  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 1;",
-  "replace": "\t\ttx1_moh_cleardown(o);\n\t\to->fabe2 = 3;"
+  "find": "\t\ttx1_moh_cleardown(o);\n\t\to->short_abe2 = 1;",
+  "replace": "\t\ttx1_moh_cleardown(o);\n\t\to->short_abe2 = 3;"
  },
  {
   "label": "24: the hold tail's message range is == 2",
@@ -2683,98 +2683,98 @@
  },
  {
   "label": "21: the quadrant is stored but the point is vect4[0]",
-  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);",
-  "replace": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[0]);",
+  "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
+  "replace": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[0]);",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the quadrant is not stored in f25c8",
-  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);",
+  "label": "21: the quadrant is not stored in cur_quadrant",
+  "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
   "replace": "\tq = tx1_scramble2(o);\n\ttx1_put_point(o, vect4[q]);",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the quadrant goes to f25c6 rather than f25c8",
-  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);",
-  "replace": "\tq = tx1_scramble2(o);\n\to->f25c6 = q;\n\ttx1_put_point(o, vect4[q]);",
+  "label": "21: the quadrant goes to prev_quadrant rather than cur_quadrant",
+  "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
+  "replace": "\tq = tx1_scramble2(o);\n\to->prev_quadrant = q;\n\ttx1_put_point(o, vect4[q]);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the sample is sent before the point is stored",
-  "find": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttx1_put_point(o, vect4[q]);\n\ttxmit(o);",
-  "replace": "\tq = tx1_scramble2(o);\n\to->f25c8 = q;\n\ttxmit(o);\n\ttx1_put_point(o, vect4[q]);",
+  "find": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttx1_put_point(o, vect4[q]);\n\ttxmit(o);",
+  "replace": "\tq = tx1_scramble2(o);\n\to->cur_quadrant = q;\n\ttxmit(o);\n\ttx1_put_point(o, vect4[q]);",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: f25c0 is not incremented",
-  "find": "\t/* 0x643dc */\n\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "label": "21: seg_symcount is not incremented",
+  "find": "\t/* 0x643dc */\n\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
   "replace": "\t/* 0x643dc */",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: f25c0 is incremented by two",
-  "find": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\n\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
-  "replace": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 2);\n\n\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "label": "21: seg_symcount is incremented by two",
+  "find": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\n\tif (tx1_get(o, TX1_COUNT) == o->seg_symcount) {",
+  "replace": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 2);\n\n\tif (tx1_get(o, TX1_COUNT) == o->seg_symcount) {",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: f25c0 is incremented after the count is compared",
-  "find": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\n\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
-  "replace": "\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
+  "label": "21: seg_symcount is incremented after the count is compared",
+  "find": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\n\tif (tx1_get(o, TX1_COUNT) == o->seg_symcount) {",
+  "replace": "\tif (tx1_get(o, TX1_COUNT) == o->seg_symcount) {",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the echo-adapt start compares against +0xaa86 rather than +0xaa78",
-  "find": "\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
-  "replace": "\tif (tx1_get(o, TX1_FAA86) == o->f25c0) {",
+  "find": "\tif (tx1_get(o, TX1_COUNT) == o->seg_symcount) {",
+  "replace": "\tif (tx1_get(o, TX1_FAA86) == o->seg_symcount) {",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start fires whenever the count is above f25c0",
-  "find": "\tif (tx1_get(o, TX1_COUNT) == o->f25c0) {",
-  "replace": "\tif (tx1_get(o, TX1_COUNT) >= o->f25c0) {",
+  "label": "21: the echo-adapt start fires whenever the count is above seg_symcount",
+  "find": "\tif (tx1_get(o, TX1_COUNT) == o->seg_symcount) {",
+  "replace": "\tif (tx1_get(o, TX1_COUNT) >= o->seg_symcount) {",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start leaves f354c alone",
-  "find": "\t\to->f354c = 0;\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
+  "label": "21: the echo-adapt start leaves echo_calls alone",
+  "find": "\t\to->echo_calls = 0;\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start leaves f3550 alone",
-  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
+  "label": "21: the echo-adapt start leaves echo_alpha alone",
+  "find": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start leaves f3552 alone",
-  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3550 = 0;\n\t\to->f3560 = 0;",
+  "label": "21: the echo-adapt start leaves short_3552 alone",
+  "find": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->echo_alpha = 0;\n\t\to->echo_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start leaves f3560 alone",
-  "find": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3550 = 0;\n\t\to->f3552 = 0;",
+  "label": "21: the echo-adapt start leaves echo_energy alone",
+  "find": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->echo_alpha = 0;\n\t\to->short_3552 = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start writes f3560 as a halfword",
-  "find": "\t\to->f3552 = 0;\n\t\to->f3560 = 0;",
-  "replace": "\t\to->f3552 = 0;\n\t\t*(short *)&o->f3560 = 0;",
+  "label": "21: the echo-adapt start writes echo_energy as a halfword",
+  "find": "\t\to->short_3552 = 0;\n\t\to->echo_energy = 0;",
+  "replace": "\t\to->short_3552 = 0;\n\t\t*(short *)&o->echo_energy = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start raises bit 2 of f25c2 rather than clearing it",
-  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);",
+  "label": "21: the echo-adapt start raises bit 2 of tx_flags rather than clearing it",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the echo-adapt start clears bit 3 of f25c2",
-  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & ~8u);",
+  "label": "21: the echo-adapt start clears bit 3 of tx_flags",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & ~8u);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2791,40 +2791,40 @@
  },
  {
   "label": "21: the period flag is not guarded on bit 8 already being clear",
-  "find": "\tif (((unsigned short)o->f25c2 & 0x100u) == 0\n\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
-  "replace": "\tif (o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "find": "\tif (((unsigned short)o->tx_flags & 0x100u) == 0\n\t    && o->seg_symcount >= tx1_get(o, TX1_FAA86))",
+  "replace": "\tif (o->seg_symcount >= tx1_get(o, TX1_FAA86))",
   "fn": "v34tx1_trnseg4",
   "equivalent": true,
   "why": "raising a bit that is already raised writes the value already there, so the guard at 0x643ff can change nothing the object holds -- it is a branch and no more.  It is written as the object writes it"
  },
  {
   "label": "21: the period flag's guard is on bit 8 being SET",
-  "find": "\tif (((unsigned short)o->f25c2 & 0x100u) == 0\n\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
-  "replace": "\tif (((unsigned short)o->f25c2 & 0x100u) != 0\n\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
+  "find": "\tif (((unsigned short)o->tx_flags & 0x100u) == 0\n\t    && o->seg_symcount >= tx1_get(o, TX1_FAA86))",
+  "replace": "\tif (((unsigned short)o->tx_flags & 0x100u) != 0\n\t    && o->seg_symcount >= tx1_get(o, TX1_FAA86))",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the period flag needs f25c0 strictly above +0xaa86",
-  "find": "\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
-  "replace": "\t    && o->f25c0 > tx1_get(o, TX1_FAA86))",
+  "label": "21: the period flag needs seg_symcount strictly above +0xaa86",
+  "find": "\t    && o->seg_symcount >= tx1_get(o, TX1_FAA86))",
+  "replace": "\t    && o->seg_symcount > tx1_get(o, TX1_FAA86))",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the period flag compares f25c0 unsigned",
-  "find": "\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
-  "replace": "\t    && (unsigned short)o->f25c0 >= (unsigned short)tx1_get(o, TX1_FAA86))",
+  "label": "21: the period flag compares seg_symcount unsigned",
+  "find": "\t    && o->seg_symcount >= tx1_get(o, TX1_FAA86))",
+  "replace": "\t    && (unsigned short)o->seg_symcount >= (unsigned short)tx1_get(o, TX1_FAA86))",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the period flag reads the counter rather than +0xaa86",
-  "find": "\t    && o->f25c0 >= tx1_get(o, TX1_FAA86))",
-  "replace": "\t    && o->f25c0 >= tx1_get(o, TX1_COUNT))",
+  "find": "\t    && o->seg_symcount >= tx1_get(o, TX1_FAA86))",
+  "replace": "\t    && o->seg_symcount >= tx1_get(o, TX1_COUNT))",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the period flag is bit 9",
-  "find": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x100u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x200u);",
+  "find": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x100u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x200u);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2846,9 +2846,9 @@
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: f25c0 is compared zero-extended",
-  "find": "\tn = o->f25c0;\n\tspan = tx1_get_int(o, TX1_FA244);",
-  "replace": "\tn = (unsigned short)o->f25c0;\n\tspan = tx1_get_int(o, TX1_FA244);",
+  "label": "21: seg_symcount is compared zero-extended",
+  "find": "\tn = o->seg_symcount;\n\tspan = tx1_get_int(o, TX1_FA244);",
+  "replace": "\tn = (unsigned short)o->seg_symcount;\n\tspan = tx1_get_int(o, TX1_FA244);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2883,24 +2883,24 @@
  },
  {
   "label": "21: the period point raises 0x400 without clearing bit 15",
-  "find": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x400u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 0x400u);",
+  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 0x400u);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the period point clears bit 15 without raising 0x400",
-  "find": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x400u);",
-  "replace": "\t\to->f25c2 = (short)((unsigned short)o->f25c2 & 0x7fffu);",
+  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->tx_flags = (short)((unsigned short)o->tx_flags & 0x7fffu);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the period point raises 0x800",
-  "find": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x400u);",
-  "replace": "\t\to->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)\n\t\t\t\t   | 0x800u);",
+  "find": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x400u);",
+  "replace": "\t\to->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)\n\t\t\t\t   | 0x800u);",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the segment ends whenever f25c0 is at or past +0xa244",
+  "label": "21: the segment ends whenever seg_symcount is at or past +0xa244",
   "find": "\tif (n != span)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
   "replace": "\tif (n < span)\n\t\treturn V34TX1_LOOP;\t\t\t/* 0x629c8 */",
   "fn": "v34tx1_trnseg4"
@@ -2936,15 +2936,15 @@
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the boundary arm does not raise bit 2 of f25c2",
+  "label": "21: the boundary arm does not raise bit 2 of tx_flags",
   "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "replace": "\t\t/* 0x6801e */\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: the boundary arm raises bit 3 of f25c2",
+  "label": "21: the boundary arm raises bit 3 of tx_flags",
   "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
-  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
+  "replace": "\t\t/* 0x6801e */\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 8u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo1);\n\t\ttx1_put(o, TX1_COUNT, 0);\n\t} else {\n\t\tif (o->v90_receiver",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -2956,13 +2956,13 @@
  {
   "label": "21: the boundary arm reports only the first canceller",
   "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
-  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
+  "replace": "\t\t/* 0x6801e */\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);",
   "fn": "v34tx1_trnseg4"
  },
  {
   "label": "21: the boundary arm reports the first canceller twice",
   "find": "\t\t/* 0x6801e */\n\t\tv34FreezeEcho(o);",
-  "replace": "\t\t/* 0x6801e */\n\t\to->f25c2 = (short)((unsigned short)o->f25c2 | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);",
+  "replace": "\t\t/* 0x6801e */\n\t\to->tx_flags = (short)((unsigned short)o->tx_flags | 4u);\n\t\tV34EchoReportCoeff(&o->echo0);\n\t\tV34EchoReportCoeff(&o->echo0);",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3023,20 +3023,20 @@
  },
  {
   "label": "21: +0x25d6 is not reloaded",
-  "find": "\ttx1_put(o, TX1_F25D6, (short)0x8990);\n\to->f25c6 = o->f25c8;",
-  "replace": "\to->f25c6 = o->f25c8;",
+  "find": "\ttx1_put(o, TX1_F25D6, (short)0x8990);\n\to->prev_quadrant = o->cur_quadrant;",
+  "replace": "\to->prev_quadrant = o->cur_quadrant;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: f25c6 is cleared rather than taking the quadrant",
-  "find": "\to->f25c6 = o->f25c8;",
-  "replace": "\to->f25c6 = 0;",
+  "label": "21: prev_quadrant is cleared rather than taking the quadrant",
+  "find": "\to->prev_quadrant = o->cur_quadrant;",
+  "replace": "\to->prev_quadrant = 0;",
   "fn": "v34tx1_trnseg4"
  },
  {
-  "label": "21: f25c8 takes f25c6 rather than the other way round",
-  "find": "\to->f25c6 = o->f25c8;",
-  "replace": "\to->f25c8 = o->f25c6;",
+  "label": "21: cur_quadrant takes prev_quadrant rather than the other way round",
+  "find": "\to->prev_quadrant = o->cur_quadrant;",
+  "replace": "\to->cur_quadrant = o->prev_quadrant;",
   "fn": "v34tx1_trnseg4"
  },
  {
@@ -3231,8 +3231,8 @@
  },
  {
   "label": "66: the sixteen-point half scrambles once",
-  "find": "\t\to->f25c8 = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
-  "replace": "\t\to->f25c8 = k;\n\t\tq = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "find": "\t\to->cur_quadrant = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\to->cur_quadrant = k;\n\t\tq = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3242,41 +3242,41 @@
   "fn": "v34tx1_trnseg4a"
  },
  {
-  "label": "66: f25c8 holds the SECOND dibit of the sixteen-point half",
-  "find": "\t\to->f25c8 = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
-  "replace": "\t\tq = tx1_scramble2(o);\n\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "label": "66: cur_quadrant holds the SECOND dibit of the sixteen-point half",
+  "find": "\t\to->cur_quadrant = k;\n\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\tq = tx1_scramble2(o);\n\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
   "fn": "v34tx1_trnseg4a"
  },
  {
-  "label": "66: the sixteen-point half also writes f25c6",
+  "label": "66: the sixteen-point half also writes prev_quadrant",
   "find": "\t\tq = tx1_scramble2(o);\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
-  "replace": "\t\tq = tx1_scramble2(o);\n\t\to->f25c6 = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
+  "replace": "\t\tq = tx1_scramble2(o);\n\t\to->prev_quadrant = k;\n\t\ttx1_put_point(o, vect16[q + 4 * k]);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the four-point half sends vect4[0]",
-  "find": "\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect4[q]);",
-  "replace": "\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect4[0]);",
+  "find": "\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect4[q]);",
+  "replace": "\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect4[0]);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the four-point half differentially encodes",
-  "find": "\t\tshort q = tx1_scramble2(o);\n\n\t\to->f25c8 = q;\n\t\ttx1_put_point(o, vect4[q]);",
+  "find": "\t\tshort q = tx1_scramble2(o);\n\n\t\to->cur_quadrant = q;\n\t\ttx1_put_point(o, vect4[q]);",
   "replace": "\t\tshort q = tx1_scramble2(o);\n\n\t\t(void)tx1_dpsk4(o, q);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the symbol is sent before txmit and the count after",
-  "find": "\ttxmit(o);\n\n\t/* 0x62edc */\n\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
-  "replace": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\ttxmit(o);\n\n\t/* 0x62edc */",
+  "find": "\ttxmit(o);\n\n\t/* 0x62edc */\n\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
+  "replace": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\ttxmit(o);\n\n\t/* 0x62edc */",
   "fn": "v34tx1_trnseg4a",
   "equivalent": true,
   "why": "`txmit` (v34rx.c) reads +0x25d0/+0x25d2, the modulator at +0x1450, the queue at +0x221c and the two echo cancellers, and writes none of +0x25c0 -- so the increment and the call commute for EVERY object.  The object does the call first and it is written that way"
  },
  {
   "label": "66: the count is advanced after the segment test, as 86 advances it",
-  "find": "\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\tn = o->f25c0;",
-  "replace": "\tn = (short)((unsigned short)o->f25c0 + 1);",
+  "find": "\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\tn = o->seg_symcount;",
+  "replace": "\tn = (short)((unsigned short)o->seg_symcount + 1);",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3331,19 +3331,19 @@
  },
  {
   "label": "66: the settled error may equal the mark plus ten",
-  "find": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)",
-  "replace": "\t\t\tif ((int)rx->f21a >= (int)tx1_get(o, TX1_RX250) + 10)",
+  "find": "\t\t\tif ((int)rx->equerr > (int)tx1_get(o, TX1_RX250) + 10)",
+  "replace": "\t\t\tif ((int)rx->equerr >= (int)tx1_get(o, TX1_RX250) + 10)",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the settled error's window is eleven",
-  "find": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)",
-  "replace": "\t\t\tif ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 11)",
+  "find": "\t\t\tif ((int)rx->equerr > (int)tx1_get(o, TX1_RX250) + 10)",
+  "replace": "\t\t\tif ((int)rx->equerr > (int)tx1_get(o, TX1_RX250) + 11)",
   "fn": "v34tx1_trnseg4a"
  },
  {
-  "label": "66: f25c6 does not take f25c8 at the completion",
-  "find": "\to->f25c6 = (short)(unsigned short)o->f25c8;\n\tmemcpy",
+  "label": "66: prev_quadrant does not take cur_quadrant at the completion",
+  "find": "\to->prev_quadrant = (short)(unsigned short)o->cur_quadrant;\n\tmemcpy",
   "replace": "\tmemcpy",
   "fn": "v34tx1_trnseg4a"
  },
@@ -3367,20 +3367,20 @@
  },
  {
   "label": "66: the short snapshot leaves the record's word 0",
-  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
-  "replace": "\t\trec[2] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equerr);",
+  "replace": "\t\trec[2] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equerr);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the short snapshot leaves the record's word 2",
-  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
-  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "find": "\t\trec[2] = 0;\n\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equerr);",
+  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equerr);",
   "fn": "v34tx1_trnseg4a"
  },
  {
   "label": "66: the short snapshot moves the mark to the predictor error",
-  "find": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f21a);",
-  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->f224);",
+  "find": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->equerr);",
+  "replace": "\t\trec[0] = 0;\n\t\ttx1_put(o, TX1_RX250, rx->preerr);",
   "fn": "v34tx1_trnseg4a"
  },
  {
@@ -3409,52 +3409,52 @@
  },
  {
   "label": "66: the difference is taken signed",
-  "find": "\tt = (short)((unsigned short)rx->f21a - (unsigned short)rx->f224);",
-  "replace": "\tt = rx->f21a - rx->f224;",
+  "find": "\tt = (short)((unsigned short)rx->equerr - (unsigned short)rx->preerr);",
+  "replace": "\tt = rx->equerr - rx->preerr;",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: a difference of zero is kept",
-  "find": "\tif (t <= 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
-  "replace": "\tif (t < 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
+  "find": "\tif (t <= 0)\n\t\tt = rx->preerr;\t\t\t\t/* 0x6874c */",
+  "replace": "\tif (t < 0)\n\t\tt = rx->preerr;\t\t\t\t/* 0x6874c */",
   "fn": "tx1_ts_snapshot",
   "equivalent": true,
   "why": "`t == 0` means the two errors are equal in sixteen bits, and the fourth condition below requires +0x224 STRICTLY below +0x21a -- so on every object where the substitution could matter the predictor is thrown away anyway, whatever the force does to the sum.  The two readings are separable in no object at all"
  },
  {
   "label": "66: the substitute for a non-positive difference is the equaliser error",
-  "find": "\tif (t <= 0)\n\t\tt = rx->f224;\t\t\t\t/* 0x6874c */",
-  "replace": "\tif (t <= 0)\n\t\tt = rx->f21a;\t\t\t\t/* 0x6874c */",
+  "find": "\tif (t <= 0)\n\t\tt = rx->preerr;\t\t\t\t/* 0x6874c */",
+  "replace": "\tif (t <= 0)\n\t\tt = rx->equerr;\t\t\t\t/* 0x6874c */",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the threshold subtracts half the error rather than a quarter",
-  "find": "\tt = (short)(t - (rx->f21a >> 2));",
-  "replace": "\tt = (short)(t - (rx->f21a >> 1));",
+  "find": "\tt = (short)(t - (rx->equerr >> 2));",
+  "replace": "\tt = (short)(t - (rx->equerr >> 1));",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force fires at 0x1f40 exactly",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
-  "replace": "\tif (sum >= 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "find": "\tif (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)",
+  "replace": "\tif (sum >= 0x1f40 && rx->equerr > 0xc8 && t > 0)",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force ignores the equaliser error",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
+  "find": "\tif (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)",
   "replace": "\tif (sum > 0x1f40 && t > 0)",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force ignores the threshold",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
-  "replace": "\tif (sum > 0x1f40 && rx->f21a > 0xc8)",
+  "find": "\tif (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && rx->equerr > 0xc8)",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the force's error test is at or above 0xc8",
-  "find": "\tif (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)",
-  "replace": "\tif (sum > 0x1f40 && rx->f21a >= 0xc8 && t > 0)",
+  "find": "\tif (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)",
+  "replace": "\tif (sum > 0x1f40 && rx->equerr >= 0xc8 && t > 0)",
   "fn": "tx1_ts_snapshot"
  },
  {
@@ -3465,26 +3465,26 @@
  },
  {
   "label": "66: the snapshot ignores +0x359a",
-  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\tif (rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->equerr <= 0x1ff\n\t    && rx->preerr < rx->equerr && sum <= 0x3fff) {",
+  "replace": "\tif (rx->equerr <= 0x1ff\n\t    && rx->preerr < rx->equerr && sum <= 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the snapshot's error bound is exclusive",
-  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->f21a < 0x1ff\n\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
+  "find": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->equerr <= 0x1ff\n\t    && rx->preerr < rx->equerr && sum <= 0x3fff) {",
+  "replace": "\tif (tx1_get(o, TX1_F359A) == 0 && rx->equerr < 0x1ff\n\t    && rx->preerr < rx->equerr && sum <= 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the predictor error may equal the equaliser error",
-  "find": "\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\t    && rx->f224 <= rx->f21a && sum <= 0x3fff) {",
+  "find": "\t    && rx->preerr < rx->equerr && sum <= 0x3fff) {",
+  "replace": "\t    && rx->preerr <= rx->equerr && sum <= 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
   "label": "66: the magnitude bound is exclusive",
-  "find": "\t    && rx->f224 < rx->f21a && sum <= 0x3fff) {",
-  "replace": "\t    && rx->f224 < rx->f21a && sum < 0x3fff) {",
+  "find": "\t    && rx->preerr < rx->equerr && sum <= 0x3fff) {",
+  "replace": "\t    && rx->preerr < rx->equerr && sum < 0x3fff) {",
   "fn": "tx1_ts_snapshot"
  },
  {
@@ -3561,8 +3561,8 @@
  },
  {
   "label": "66: the kept path moves the mark to the equaliser error",
-  "find": "\t\ttx1_put(o, TX1_RX250, rx->f224);",
-  "replace": "\t\ttx1_put(o, TX1_RX250, rx->f21a);",
+  "find": "\t\ttx1_put(o, TX1_RX250, rx->preerr);",
+  "replace": "\t\ttx1_put(o, TX1_RX250, rx->equerr);",
   "fn": "tx1_ts_snapshot"
  },
  {
@@ -3707,14 +3707,14 @@
  },
  {
   "label": "66: the clamps run at +0x25e of one",
-  "find": "\tif (rx->f25e > 1) {",
-  "replace": "\tif (rx->f25e >= 1) {",
+  "find": "\tif (rx->short_25e > 1) {",
+  "replace": "\tif (rx->short_25e >= 1) {",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: the down clamp is selected by +0x25e of three",
-  "find": "\t\tif (rx->f25e == 2 && rate > d - 1)",
-  "replace": "\t\tif (rx->f25e == 3 && rate > d - 1)",
+  "find": "\t\tif (rx->short_25e == 2 && rate > d - 1)",
+  "replace": "\t\tif (rx->short_25e == 3 && rate > d - 1)",
   "fn": "tx1_ts_rates"
  },
  {
@@ -3731,8 +3731,8 @@
  },
  {
   "label": "66: a rate at or below +0x260 - 1 is left alone",
-  "find": "\t\tif (rx->f25e == 2 && rate > d - 1) {\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\t\tif (dsplibs_debug_level > 1)\t/* 0x68334 */\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\" TRNSEG4A : returning from local rrn\"\n\t\t\t\t\t\" down => forcing rate down\\n\");\n\t\t} else if (rate < d + 1) {",
-  "replace": "\t\tif (rx->f25e == 2) {\n\t\t\tif (rate > d - 1) {\n\t\t\t\trate = (short)(d - 1);\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\" TRNSEG4A : returning from\"\n\t\t\t\t\t\t\" local rrn down => forcing\"\n\t\t\t\t\t\t\" rate down\\n\");\n\t\t\t}\n\t\t} else if (rate < d + 1) {",
+  "find": "\t\tif (rx->short_25e == 2 && rate > d - 1) {\n\t\t\trate = (short)(d - 1);\t\t/* 0x68308 */\n\t\t\tif (dsplibs_debug_level > 1)\t/* 0x68334 */\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\" TRNSEG4A : returning from local rrn\"\n\t\t\t\t\t\" down => forcing rate down\\n\");\n\t\t} else if (rate < d + 1) {",
+  "replace": "\t\tif (rx->short_25e == 2) {\n\t\t\tif (rate > d - 1) {\n\t\t\t\trate = (short)(d - 1);\n\t\t\t\tif (dsplibs_debug_level > 1)\n\t\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\t\" TRNSEG4A : returning from\"\n\t\t\t\t\t\t\" local rrn down => forcing\"\n\t\t\t\t\t\t\" rate down\\n\");\n\t\t\t}\n\t\t} else if (rate < d + 1) {",
   "fn": "tx1_ts_rates"
  },
  {
@@ -3743,43 +3743,43 @@
  },
  {
   "label": "66: +0x252 takes the term unscaled",
-  "find": "\trx->f252 = (short)(2 * term);",
-  "replace": "\trx->f252 = (short)term;",
+  "find": "\trx->bad_thresh = (short)(2 * term);",
+  "replace": "\trx->bad_thresh = (short)term;",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x254 is not averaged with the term",
-  "find": "\t\trx->f254 = (short)((rx->f254 + term) >> 1);\n",
+  "find": "\t\trx->bad_long_thresh = (short)((rx->bad_long_thresh + term) >> 1);\n",
   "replace": "",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x254's other term is the ladder's own offset",
-  "find": "\t\trx->f254 = tx1_ts_scale(cfg, rate, -2);",
-  "replace": "\t\trx->f254 = tx1_ts_scale(cfg, rate, -1);",
+  "find": "\t\trx->bad_long_thresh = tx1_ts_scale(cfg, rate, -2);",
+  "replace": "\t\trx->bad_long_thresh = tx1_ts_scale(cfg, rate, -1);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x254's fallback scales the mark by four",
-  "find": "\t\trx->f254 = (short)(tx1_get(o, TX1_RX250) << 3);",
-  "replace": "\t\trx->f254 = (short)(tx1_get(o, TX1_RX250) << 2);",
+  "find": "\t\trx->bad_long_thresh = (short)(tx1_get(o, TX1_RX250) << 3);",
+  "replace": "\t\trx->bad_long_thresh = (short)(tx1_get(o, TX1_RX250) << 2);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x256 is computed when txbits equals the rate",
-  "find": "\tif ((short)cfg->txbits > (short)rate)\n\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
-  "replace": "\tif ((short)cfg->txbits >= (short)rate)\n\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
+  "find": "\tif ((short)cfg->txbits > (short)rate)\n\t\trx->good_thresh = tx1_ts_scale(cfg, rate, 0);",
+  "replace": "\tif ((short)cfg->txbits >= (short)rate)\n\t\trx->good_thresh = tx1_ts_scale(cfg, rate, 0);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x256's term is the ladder's",
-  "find": "\t\trx->f256 = tx1_ts_scale(cfg, rate, 0);",
-  "replace": "\t\trx->f256 = tx1_ts_scale(cfg, rate, -1);",
+  "find": "\t\trx->good_thresh = tx1_ts_scale(cfg, rate, 0);",
+  "replace": "\t\trx->good_thresh = tx1_ts_scale(cfg, rate, -1);",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: +0x258 is left alone",
-  "find": "\trx->f258 = 0;\n",
+  "find": "\trx->bad_run = 0;\n",
   "replace": "",
   "fn": "tx1_ts_rates"
  },
@@ -3868,14 +3868,14 @@
   "fn": "tx1_ts_rates"
  },
  {
-  "label": "66: f358c takes the receive rate",
+  "label": "66: short_358c takes the receive rate",
   "find": "\t\t(short)bitreverse((unsigned short)cfg->txbits, 4));",
   "replace": "\t\t(short)bitreverse((unsigned short)cfg->rxbits, 4));",
   "fn": "tx1_ts_rates"
  },
  {
   "label": "66: the two nibbles do not swap by role",
-  "find": "\tif (o->f359c == 0x65)\n\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)tx1_get(o, TX1_F358C) << 10)\n\t\t\t\t | ((unsigned)rate << 6));\n\telse {",
+  "find": "\tif (o->role == 0x65)\n\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)tx1_get(o, TX1_F358C) << 10)\n\t\t\t\t | ((unsigned)rate << 6));\n\telse {",
   "replace": "\tif (0)\n\t\trec[0] = (short)((unsigned)(unsigned short)rec[0]\n\t\t\t\t | ((unsigned)tx1_get(o, TX1_F358C) << 10)\n\t\t\t\t | ((unsigned)rate << 6));\n\telse {",
   "fn": "tx1_ts_rates"
  },
@@ -4072,74 +4072,74 @@
  {
   "label": "81: the wrap's diagnostic is dropped",
   "fn": "v34tx1_moh_silence",
-  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->fabec, o->moh_message);\n\n",
+  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_org, o->moh_message);\n\n",
   "replace": ""
  },
  {
   "label": "81: the wrap's diagnostic prints moh_message twice",
   "fn": "v34tx1_moh_silence",
-  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->fabec, o->moh_message);",
+  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_org, o->moh_message);",
   "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_message);"
  },
  {
   "label": "81: the wrap's diagnostic prints its two arguments the other way round",
   "fn": "v34tx1_moh_silence",
-  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->fabec, o->moh_message);",
-  "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->fabec);"
+  "find": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_org, o->moh_message);",
+  "replace": "\tif (dsplibs_debug_level > 1)\t\t\t/* 0x66d98 */\n\t\tdsplibs_debug_printf(\n\t\t\t\"V34F MOH: After 192 silence, org = %d ,\"\n\t\t\t\" act = %d\\r\\n\",\n\t\t\to->moh_message, o->moh_org);"
  },
  {
   "label": "81: the wrap reads only moh_message",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
   "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: the wrap reads only +0xabec",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: the wrap needs BOTH message fields at 1",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 && o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 && o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: +0xabec is read sixteen bits wide",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (*(const short *)&o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (*(const short *)&o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: +0xabec is tested for non-zero rather than for 1",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec != 0 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org != 0 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: moh_message is tested for non-zero rather than for 1",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message != 0)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message != 0)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: the two Modem-on-Hold states are exchanged",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_ON_HOLD : V34HS_MOH_FRR);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_ON_HOLD : V34HS_MOH_FRR);"
  },
  {
   "label": "81: the wrap always leaves MOH_ON_HOLD",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
   "replace": "\ths_setstate(o, TX1_TXSTATE, V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: the wrap stores the transmit state without the trace",
   "fn": "v34tx1_moh_silence",
-  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
-  "replace": "\ths_put(o, TX1_TXSTATE,\n\t\t    (o->fabec == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
+  "find": "\ths_setstate(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);",
+  "replace": "\ths_put(o, TX1_TXSTATE,\n\t\t    (o->moh_org == 1 || o->moh_message == 1)\n\t\t    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);"
  },
  {
   "label": "81: the wrap does not clear the symbol counter",
@@ -4154,47 +4154,47 @@
   "replace": "\to->vect_idx = 1;\t\t\t\t/* 0x66dec */"
  },
  {
-  "label": "86: the echo block does not clear f354c",
+  "label": "86: the echo block does not clear echo_calls",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
-  "label": "86: the echo block raises bit 2 of f25c2 rather than clearing it",
+  "label": "86: the echo block raises bit 2 of tx_flags rather than clearing it",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 | 4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags | 4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
-  "label": "86: the echo block clears bit 3 of f25c2",
+  "label": "86: the echo block clears bit 3 of tx_flags",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~8u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~8u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
-  "label": "86: the echo block leaves f3550 alone",
+  "label": "86: the echo block leaves echo_alpha alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */"
  },
  {
-  "label": "86: the echo block leaves f3552 alone",
+  "label": "86: the echo block leaves short_3552 alone",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n"
  },
  {
-  "label": "86: the echo block clears f3560 too, as 21's does",
+  "label": "86: the echo block clears echo_energy too, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->f3560 = 0;",
-  "note": "0x67613 in 21 TRNSEG4 clears the same four AND f3560; 0x66fe9 does not."
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\to->echo_energy = 0;",
+  "note": "0x67613 in 21 TRNSEG4 clears the same four AND echo_energy; 0x66fe9 does not."
  },
  {
   "label": "86: the echo block reports the start of echo adaptation, as 21's does",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\tVPcmV34ReportStartOfEchoAdapt(o);"
  },
  {
   "label": "86: the echo diagnostic is dropped",
@@ -4205,8 +4205,8 @@
  {
   "label": "86: the segment end returns rather than falling into the reconfiguration",
   "fn": "v34tx1_txmd",
-  "find": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
-  "replace": "\t\to->f354c = 0;\t\t\t\t/* 0x6700e */\n\t\to->f25c2 =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->f25c2 & ~4u);\n\t\to->f3550 = 0;\t\t\t\t/* 0x6701e */\n\t\to->f3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
+  "find": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t}",
+  "replace": "\t\to->echo_calls = 0;\t\t\t\t/* 0x6700e */\n\t\to->tx_flags =\t\t\t\t/* 0x67017 */\n\t\t\t(short)((unsigned short)o->tx_flags & ~4u);\n\t\to->echo_alpha = 0;\t\t\t\t/* 0x6701e */\n\t\to->short_3552 = 0;\t\t\t\t/* 0x67025 */\n\t\treturn V34TX1_LOOP;\n\t}",
   "note": "This is exactly what this file did before 0x66fe9 was written: 0x66fe9 ends `jmp 63e7f`, which is the fall-through of the block that jumped to it, so the two bodies are not exclusive."
  }
 ]

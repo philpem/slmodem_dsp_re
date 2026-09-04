@@ -260,13 +260,13 @@
  },
  {
   "label": "0x6f90c calls the INFO0d builder on +0x359c == 0x65",
-  "find": "\tif (obj->f359c == 0x66)\n\t\tV34SetINFO0dBits(obj,",
-  "replace": "\tif (obj->f359c == 0x65)\n\t\tV34SetINFO0dBits(obj,",
+  "find": "\tif (obj->role == 0x66)\n\t\tV34SetINFO0dBits(obj,",
+  "replace": "\tif (obj->role == 0x65)\n\t\tV34SetINFO0dBits(obj,",
   "fn": "t46_body_retrain"
  },
  {
   "label": "0x6f90c calls the INFO0d builder unconditionally",
-  "find": "\tif (obj->f359c == 0x66)\n\t\tV34SetINFO0dBits(obj,",
+  "find": "\tif (obj->role == 0x66)\n\t\tV34SetINFO0dBits(obj,",
   "replace": "\tif (1)\n\t\tV34SetINFO0dBits(obj,",
   "fn": "t46_body_retrain"
  },
@@ -361,19 +361,19 @@
  },
  {
   "label": "the record's +0x18 depends on 0x66 rather than 0x65",
-  "find": "\tshort arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\tshort arm = (obj->f359c == 0x66 && obj->v90_receiver != 0)",
+  "find": "\tshort arm = (obj->role == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tshort arm = (obj->role == 0x66 && obj->v90_receiver != 0)",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x18 ignores the V.90 receiver",
-  "find": "\tshort arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\tshort arm = (obj->f359c == 0x65)",
+  "find": "\tshort arm = (obj->role == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\tshort arm = (obj->role == 0x65)",
   "fn": "t46_init_record"
  },
  {
   "label": "the record's +0x18 ignores +0x359c",
-  "find": "\tshort arm = (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "find": "\tshort arm = (obj->role == 0x65 && obj->v90_receiver != 0)",
   "replace": "\tshort arm = (obj->v90_receiver != 0)",
   "fn": "t46_init_record"
  },

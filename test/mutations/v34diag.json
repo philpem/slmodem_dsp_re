@@ -54,8 +54,8 @@
  },
  {
   "label": "V.90 arm: the transmit level adds the power reduction",
-  "find": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB -\n\t\t\t\t\t     obj->f25dc;",
-  "replace": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB +\n\t\t\t\t\t     obj->f25dc;"
+  "find": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB -\n\t\t\t\t\t     obj->tx_pwr_reduction;",
+  "replace": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB +\n\t\t\t\t\t     obj->tx_pwr_reduction;"
  },
  {
   "label": "V.92 arm: the upstream symbol rate is not 8000",
@@ -65,7 +65,7 @@
  {
   "label": "V.92 arm: the transmit level carries a power reduction",
   "find": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB;",
-  "replace": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->f25dc;"
+  "replace": "\t\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->tx_pwr_reduction;"
  },
  {
   "label": "V.92 arm: the upstream mode test is a range",
@@ -124,8 +124,8 @@
  },
  {
   "label": "V.34 arm: the transmit level adds the power reduction",
-  "find": "\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->f25dc;",
-  "replace": "\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB + obj->f25dc;"
+  "find": "\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->tx_pwr_reduction;",
+  "replace": "\t\tresults->float_06c = V34DIAG_TX_LEVEL_BASE_DB + obj->tx_pwr_reduction;"
  },
  {
   "label": "V.34 arm: the round trip delay is scaled the V.90 way",
@@ -184,12 +184,12 @@
  },
  {
   "label": "+0x228's zero test is inverted",
-  "find": "\tif (obj->fac0c != 0)\n\t\tresults->word_228 = (unsigned int)obj->fac0c;",
-  "replace": "\tif (obj->fac0c == 0)\n\t\tresults->word_228 = (unsigned int)obj->fac0c;"
+  "find": "\tif (obj->v90_timing_offset != 0)\n\t\tresults->word_228 = (unsigned int)obj->v90_timing_offset;",
+  "replace": "\tif (obj->v90_timing_offset == 0)\n\t\tresults->word_228 = (unsigned int)obj->v90_timing_offset;"
  },
  {
   "label": "+0x228 is widened unsigned",
-  "find": "\t\tresults->word_228 = (unsigned int)obj->fac0c;",
-  "replace": "\t\tresults->word_228 = (unsigned int)(unsigned short)obj->fac0c;"
+  "find": "\t\tresults->word_228 = (unsigned int)obj->v90_timing_offset;",
+  "replace": "\t\tresults->word_228 = (unsigned int)(unsigned short)obj->v90_timing_offset;"
  }
 ]

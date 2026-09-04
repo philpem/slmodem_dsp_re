@@ -44,7 +44,7 @@
  * demodulator to point at.  With `word_3c` zero the dispatch takes its
  * default, `qcVerifyState` is zero so the silence half runs, and the member
  * returns 0, which is the same 0 the guard used to return.  Every assertion
- * below it is therefore unchanged, including `f0004`.
+ * below it is therefore unchanged, including `progress`.
  *
  * That is t_v90rundemod.cpp's `side = 2` device for the same reason: keep the
  * real demodulator out of a binary that is not about it.
@@ -376,7 +376,7 @@ main(void)
 	diff_eq_int("...and so is the output queue", root.outq.count, 0, 0);
 	/*
 	 * AND VPcmV34Progress ITSELF RAN.  The line-verification arm sets
-	 * `f0004` to 10 when the unwritten member "returns" 0, and then walks
+	 * `progress` to 10 when the unwritten member "returns" 0, and then walks
 	 * the whole block into the echo history at +0x2f58 -- so the progress
 	 * word and the history cursor are what say the arm was entered rather
 	 * than skipped.  `VPcmV34GetCleanedSamples` is called by `vpcm_run`
@@ -384,7 +384,7 @@ main(void)
 	 * assertion is on the samples it reported rather than on the field.
 	 */
 	diff_eq_int("...the line-verification arm set the progress code",
-		    ((struct v34_object *)&root.v34)->f0004,
+		    ((struct v34_object *)&root.v34)->progress,
 		    VPCM_PROG_SAME_LINE, 0);
 	diff_eq_int("...and the echo history took the whole block",
 		    ((struct v34_object *)&root.v34)->hist_2f58[FRAG - 1],

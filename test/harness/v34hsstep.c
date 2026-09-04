@@ -334,7 +334,7 @@ in_padding(unsigned off)
 static const unsigned holes[] = {
 	0x0394,		/* receiver +0x130 rx_samples  -- rxinit, interior  */
 	0x0418,		/* receiver +0x1b4 carrier     -- setupreceiver     */
-	0x0508,		/* receiver +0x2a4 f2a4        -- dpskinit          */
+	0x0508,		/* receiver +0x2a4 fir_coeff        -- dpskinit          */
 	0x0620, 0x0624,	/* timing +0x114, +0x118      -- mode 0 only       */
 	0x1460,		/* modulator +0x10 sine        -- V34SetupModulator */
 	0x2074,		/* modulator +0xc24 shaped     -- seeded here       */

@@ -236,18 +236,18 @@
  },
  {
   "label": "moh rx: MHack's time-out code keeps five bits",
-  "find": "\t\tobj->fabe0 = (short)(w & 0xf);",
-  "replace": "\t\tobj->fabe0 = (short)(w & 0x1f);"
+  "find": "\t\tobj->moh_holdtime_code = (short)(w & 0xf);",
+  "replace": "\t\tobj->moh_holdtime_code = (short)(w & 0x1f);"
  },
  {
   "label": "moh rx: MHack stores the whole message rather than its nibble",
-  "find": "\t\tobj->fabe0 = (short)(w & 0xf);",
-  "replace": "\t\tobj->fabe0 = (short)w;"
+  "find": "\t\tobj->moh_holdtime_code = (short)(w & 0xf);",
+  "replace": "\t\tobj->moh_holdtime_code = (short)w;"
  },
  {
   "label": "moh rx: MHack's nibble goes to the disconnect reason",
-  "find": "\t\tobj->fabe0 = (short)(w & 0xf);",
-  "replace": "\t\tobj->fabfa = (unsigned char)(w & 0xf);"
+  "find": "\t\tobj->moh_holdtime_code = (short)(w & 0xf);",
+  "replace": "\t\tobj->moh_clrd_sel = (unsigned char)(w & 0xf);"
  },
  {
   "label": "moh rx: MHack prints the whole message",
@@ -260,44 +260,44 @@
   "replace": "\tif (w == 0x77) {\n\t\tif (DSPLIB_DEBUG_ON())\n\t\t\tdsplibs_debug_printf(\"MHnack message detected (modem \"\n\t\t\t\t\t     \"may NOT init MOH in the future) \""
  },
  {
-  "label": "moh rx: the weak MHnack sets fabe2 as well",
+  "label": "moh rx: the weak MHnack sets short_abe2 as well",
   "find": "\t\tobj->moh_recvd = 5;\n\t\treturn;\n\t}\n\tif (w == 0x75) {",
-  "replace": "\t\tobj->fabe2 = 3;\n\t\tobj->moh_recvd = 5;\n\t\treturn;\n\t}\n\tif (w == 0x75) {"
+  "replace": "\t\tobj->short_abe2 = 3;\n\t\tobj->moh_recvd = 5;\n\t\treturn;\n\t}\n\tif (w == 0x75) {"
  },
  {
-  "label": "moh rx: the strong MHnack does not set fabe2",
-  "find": "\t\tobj->fabe2 = 3;\n\t\tobj->moh_recvd = 5;",
+  "label": "moh rx: the strong MHnack does not set short_abe2",
+  "find": "\t\tobj->short_abe2 = 3;\n\t\tobj->moh_recvd = 5;",
   "replace": "\t\tobj->moh_recvd = 5;"
  },
  {
-  "label": "moh rx: fabe2 gets 1 rather than 3",
-  "find": "\t\tobj->fabe2 = 3;",
-  "replace": "\t\tobj->fabe2 = 1;"
+  "label": "moh rx: short_abe2 gets 1 rather than 3",
+  "find": "\t\tobj->short_abe2 = 3;",
+  "replace": "\t\tobj->short_abe2 = 1;"
  },
  {
-  "label": "moh rx: fabe2 is fabe0",
-  "find": "\t\tobj->fabe2 = 3;",
-  "replace": "\t\tobj->fabe0 = 3;"
+  "label": "moh rx: short_abe2 is moh_holdtime_code",
+  "find": "\t\tobj->short_abe2 = 3;",
+  "replace": "\t\tobj->moh_holdtime_code = 3;"
  },
  {
   "label": "moh rx: incoming and outgoing cleardown reasons swapped",
-  "find": "\t\tcase 5:\n\t\t\tobj->fabfa = 0;",
-  "replace": "\t\tcase 5:\n\t\t\tobj->fabfa = 1;"
+  "find": "\t\tcase 5:\n\t\t\tobj->moh_clrd_sel = 0;",
+  "replace": "\t\tcase 5:\n\t\t\tobj->moh_clrd_sel = 1;"
  },
  {
   "label": "moh rx: the outgoing cleardown code is 7",
-  "find": "\t\tcase 6:\n\t\t\tobj->fabfa = 1;",
-  "replace": "\t\tcase 7:\n\t\t\tobj->fabfa = 1;"
+  "find": "\t\tcase 6:\n\t\t\tobj->moh_clrd_sel = 1;",
+  "replace": "\t\tcase 7:\n\t\t\tobj->moh_clrd_sel = 1;"
  },
  {
   "label": "moh rx: the other-reason code is 0xb",
-  "find": "\t\tcase 0xa:\n\t\t\tobj->fabfa = 2;",
-  "replace": "\t\tcase 0xb:\n\t\t\tobj->fabfa = 2;"
+  "find": "\t\tcase 0xa:\n\t\t\tobj->moh_clrd_sel = 2;",
+  "replace": "\t\tcase 0xb:\n\t\t\tobj->moh_clrd_sel = 2;"
  },
  {
   "label": "moh rx: the reserved cleardown reason is 3, not 2",
-  "find": "\t\t\tobj->fabfa = 2;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"MHcld message detected ! , reserved \"",
-  "replace": "\t\t\tobj->fabfa = 3;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"MHcld message detected ! , reserved \""
+  "find": "\t\t\tobj->moh_clrd_sel = 2;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"MHcld message detected ! , reserved \"",
+  "replace": "\t\t\tobj->moh_clrd_sel = 3;\n\t\t\tif (DSPLIB_DEBUG_ON())\n\t\t\t\tdsplibs_debug_printf(\n\t\t\t\t\t\"MHcld message detected ! , reserved \""
  },
  {
   "label": "moh rx: the reserved arm says other reason",

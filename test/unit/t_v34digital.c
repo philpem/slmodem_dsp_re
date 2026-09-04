@@ -6,7 +6,7 @@
  * only the five installed POINTERS skipped -- and those are checked by which
  * function or table they select, which is the thing that matters.
  *
- * The pointer check is the point of the test, not an aside: `f359c` decides
+ * The pointer check is the point of the test, not an aside: `role` decides
  * which polynomial goes which way, and getting that backwards would swap the
  * two ends of the call while leaving every other byte identical.
  */
@@ -164,7 +164,7 @@ main(void)
 			diff_eq_int("t3 is -1", rx->t3[0], -1, 0);
 			diff_eq_int("t3 is -1 throughout", rx->t3[0x7f], -1, 0);
 			diff_eq_int("t1 is zero", rx->t1[0x7f], 0, 0);
-			diff_eq_int("fa16 is 0x18", rx->fa16, 0x18, 0);
+			diff_eq_int("feedback_mask is 0x18", rx->feedback_mask, 0x18, 0);
 		}
 	}
 	rc |= diff_end();

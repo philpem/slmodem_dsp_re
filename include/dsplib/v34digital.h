@@ -13,7 +13,7 @@ extern "C" {
 /*
  * Clear both shell contexts and both halves of the scrambler pair, and
  * install the polynomial each direction gets.  Which way round that goes is
- * `f359c == 0x65`, the originate/answer flag.
+ * `role == 0x65`, the originate/answer flag.
  */
 void preinitdigital(void *obj);
 

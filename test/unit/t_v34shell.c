@@ -328,7 +328,7 @@ main(void)
 	/*
 	 * putFrame: the three ways it sends the wide field, including the
 	 * one that sends nothing and narrows the last group instead.  `nb`
-	 * comes from fa0e or fa10 depending on how fa00 compares with the
+	 * comes from wide_bits or wide_bits_alt depending on how span compares with the
 	 * running sum, so both of those are swept as well as the widths.
 	 */
 	diff_begin("v34 putFrame");
@@ -344,17 +344,17 @@ main(void)
 
 			a.put_bits = sink_a;
 			b.put_bits = sink_b;
-			a.fa14 = b.fa14 = 3;
-			a.fa04 = b.fa04 = (short)a04;
-			a.fa06 = b.fa06 = 100;
-			a.fa08 = b.fa08 = 200;
+			a.idx_width = b.idx_width = 3;
+			a.group_count = b.group_count = (short)a04;
+			a.remainder = b.remainder = 100;
+			a.wide_accum = b.wide_accum = 200;
 			/*
 			 * `wide` picks which branch supplies nb, by making
-			 * fa00 larger or smaller than fa06 + fa08.
+			 * span larger or smaller than remainder + wide_accum.
 			 */
-			a.fa00 = b.fa00 = (short)(wide ? 1000 : 10);
-			a.fa10 = b.fa10 = (short)nb;
-			a.fa0e = b.fa0e = (short)nb;
+			a.span = b.span = (short)(wide ? 1000 : 10);
+			a.wide_bits_alt = b.wide_bits_alt = (short)nb;
+			a.wide_bits = b.wide_bits = (short)nb;
 
 			for (k = 0; k < 18; k++)
 				a.frame[k] = b.frame[k] =
@@ -375,8 +375,8 @@ main(void)
 				diff_eq_int("putFrame nbits", log_a[i].nbits,
 					    log_b[i].nbits, tag);
 			}
-			/* fa08 is folded back into the object. */
-			diff_eq_int("putFrame fa08", a.fa08, b.fa08,
+			/* wide_accum is folded back into the object. */
+			diff_eq_int("putFrame wide_accum", a.wide_accum, b.wide_accum,
 				    (long)(nb + 6) * 100 + wide * 10 + a04);
 			for (i = 0; i < (int)sizeof(a); i++) {
 				unsigned pb = __builtin_offsetof(
@@ -494,7 +494,7 @@ main(void)
 			a.state_idx = b.state_idx = (short)(si * 7 + 1);
 			a.divisor = b.divisor = (short)(si);   /* 0 -> 1 */
 			a.wrap = b.wrap = (short)w;
-			a.fa14 = b.fa14 = (short)(w + 1);
+			a.idx_width = b.idx_width = (short)(w + 1);
 			a.prev_k = b.prev_k = (short)si;
 			a.coeff = coeffs;
 			b.coeff = coeffs;
@@ -590,22 +590,22 @@ main(void)
 			a.state_idx = b.state_idx = (short)(base * 5);
 			a.divisor = b.divisor = 1;
 			a.wrap = b.wrap = (short)w;
-			a.fa14 = b.fa14 = (short)(w + 1);
-			a.fa44 = b.fa44 = 2;
+			a.idx_width = b.idx_width = (short)(w + 1);
+			a.cost_shift = b.cost_shift = 2;
 			a.invert = b.invert = (short)inv;
-			a.fa00 = b.fa00 = 3;
-			a.fa02 = b.fa02 = 4;
-			a.fa3c = b.fa3c = 0;
-			a.fa3e = b.fa3e = 0;
-			a.fa40 = b.fa40 = 3;
+			a.span = b.span = 3;
+			a.subframe_limit = b.subframe_limit = 4;
+			a.subframe_count = b.subframe_count = 0;
+			a.frame_count = b.frame_count = 0;
+			a.frame_limit = b.frame_limit = 3;
 			a.latched = b.latched = 0;
 			a.prev_k = b.prev_k = 0;
 			a.count = b.count = 9;
-			a.fa08 = b.fa08 = 0;
-			a.fa06 = b.fa06 = 3;
-			a.fa0e = b.fa0e = 8;
-			a.fa10 = b.fa10 = 8;
-			a.fa04 = b.fa04 = 7;
+			a.wide_accum = b.wide_accum = 0;
+			a.remainder = b.remainder = 3;
+			a.wide_bits = b.wide_bits = 8;
+			a.wide_bits_alt = b.wide_bits_alt = 8;
+			a.group_count = b.group_count = 7;
 
 			nlog_a = nlog_b = 0;
 
@@ -719,13 +719,13 @@ main(void)
 
 			sa->get_bits = bitsrc_a;
 			sb->get_bits = bitsrc_b;
-			sa->fa14 = sb->fa14 = 3;
-			sa->fa04 = sb->fa04 = (short)a04;
-			sa->fa06 = sb->fa06 = 100;
-			sa->fa08 = sb->fa08 = 200;
-			sa->fa00 = sb->fa00 = (short)(wide ? 1000 : 10);
-			sa->fa10 = sb->fa10 = (short)nb;
-			sa->fa0e = sb->fa0e = (short)nb;
+			sa->idx_width = sb->idx_width = 3;
+			sa->group_count = sb->group_count = (short)a04;
+			sa->remainder = sb->remainder = 100;
+			sa->wide_accum = sb->wide_accum = 200;
+			sa->span = sb->span = (short)(wide ? 1000 : 10);
+			sa->wide_bits_alt = sb->wide_bits_alt = (short)nb;
+			sa->wide_bits = sb->wide_bits = (short)nb;
 			sa->bitbuf = sb->bitbuf = (int)0x5a3c7e91;
 			sa->bitpos = sb->bitpos = 0;
 			for (k = 0; k < 18; k++)
@@ -786,12 +786,12 @@ main(void)
 			memset(obj, 0, sizeof(obj));
 			tx = (struct v34_shell *)(obj + V34_SHELL_TX);
 
-			tx->fa14 = (short)w;
-			tx->fa04 = (short)a04;
-			tx->fa06 = 100;
-			tx->fa08 = 200;
-			tx->fa00 = 10;		/* takes the fa0e branch */
-			tx->fa0e = tx->fa10 = (short)nb;
+			tx->idx_width = (short)w;
+			tx->group_count = (short)a04;
+			tx->remainder = 100;
+			tx->wide_accum = 200;
+			tx->span = 10;		/* takes the wide_bits branch */
+			tx->wide_bits = tx->wide_bits_alt = (short)nb;
 
 			/*
 			 * A frame whose every field is inside its width.
@@ -825,7 +825,7 @@ main(void)
 			putFrame(tx);
 
 			memset(tx->frame, 0, sizeof(tx->frame));
-			tx->fa08 = 200;		/* putFrame advanced it */
+			tx->wide_accum = 200;		/* putFrame advanced it */
 			rt_rd = -16;
 			tx->get_bits = rt_source;
 			tx->bitbuf = 0;
@@ -1139,7 +1139,7 @@ main(void)
 		for (role = 0; role < 2; role++) {
 			memset(oa, HARNESS_MALLOC_FILL, sizeof(oa));
 			memset(ob, HARNESS_MALLOC_FILL, sizeof(ob));
-			ja->f359c = jb->f359c = (short)(role ? 0x65 : 0x12);
+			ja->role = jb->role = (short)(role ? 0x65 : 0x12);
 
 			preinitdigital(oa);
 			ref_preinitdigital(ob);
@@ -1255,12 +1255,12 @@ main(void)
 			oa.prefilter.coeff = ob.prefilter.coeff =
 				V34TimingPrefilterCoeff;
 			oa.prefilter.shift = ob.prefilter.shift = 14;
-			oa.f25d4 = ob.f25d4 = 0x4000;
+			oa.tx_scale = ob.tx_scale = 0x4000;
 			oa.bulk_ring = bra;  ob.bulk_ring = brb;
 			oa.bulk_len  = ob.bulk_len = 64;
 
 			/* The role decides which scrambler drives getFrame. */
-			oa.f359c = ob.f359c = (short)(role ? 0x65 : 0x12);
+			oa.role = ob.role = (short)(role ? 0x65 : 0x12);
 			preinitdigital(&oa); ref_preinitdigital(&ob);
 
 			ta = (struct v34_shell *)((char *)&oa + V34_SHELL_TX);
@@ -1285,7 +1285,7 @@ main(void)
 			 * training counter instead of the data path, and
 			 * `latched` is what lets that counter run at all.
 			 */
-			oa.f25c2 = ob.f25c2 = (short)(nle ? 0x4000 : 0);
+			oa.tx_flags = ob.tx_flags = (short)(nle ? 0x4000 : 0);
 			((struct v34_shell *)&oa)->latched = 1;
 			((struct v34_shell *)&ob)->latched = 1;
 
@@ -1426,7 +1426,7 @@ mv_next:		;
 			ca = (struct v34_ratecfg *)((char *)&oa + V34_RATECFG);
 			cb = (struct v34_ratecfg *)((char *)&ob + V34_RATECFG);
 
-			oa.f359c = ob.f359c = (short)((c & 1) ? 0x65 : 0x12);
+			oa.role = ob.role = (short)((c & 1) ? 0x65 : 0x12);
 			oa.info_rates = ob.info_rates = (short)info;
 			oa.info_caps  = ob.info_caps  = (short)caps;
 			oa.rate_mask  = ob.rate_mask  = (short)mask;
@@ -1446,7 +1446,7 @@ mv_next:		;
 			 * rather than this sharing one: two inputs driven
 			 * from one variable cannot be told apart.
 			 */
-			oa.f25c2 = ob.f25c2 =
+			oa.tx_flags = ob.tx_flags =
 				(short)(((c >> 9) & 1) ? 0x4000 : 0);
 
 			ca->baud = cb->baud = bauds[c & 3];

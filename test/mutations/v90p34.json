@@ -31,12 +31,12 @@
  },
  {
   "label": "the Ja arm does not consult the bit source",
-  "find": "\t\tint done = (short)vp->getV90JaBits(&o->f25c8);",
+  "find": "\t\tint done = (short)vp->getV90JaBits(&o->cur_quadrant);",
   "replace": "\t\tint done = 0;"
  },
  {
   "label": "the Ja arm transmits a fixed dibit",
-  "find": "\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\trx->flags",
+  "find": "\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\trx->flags",
   "replace": "\t\ttxmitdibit(o, 0);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\trx->flags"
  },
  {
@@ -66,8 +66,8 @@
  },
  {
   "label": "the Ja completion arm does not transmit the last dibit",
-  "find": "\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\trx->flags",
-  "replace": "\t\tif (done == 0) {\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\t\treturn 0;\n\t\t}\n\n\t\trx->flags"
+  "find": "\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\n\t\trx->flags",
+  "replace": "\t\tif (done == 0) {\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\t\treturn 0;\n\t\t}\n\n\t\trx->flags"
  },
  {
   "label": "the arming gate tests bit 5 rather than bit 4",
@@ -85,8 +85,8 @@
   "replace": "\t\tif ((unsigned)o->v90_receiver <= 2u)\n\t\t\treturn 0;"
  },
  {
-  "label": "the arming arm does not zero f25c0",
-  "find": "\t\t\t\t\t     | V34_RX_FLAG_TRN_WATCH);\n\t\to->f25c0 = 0;",
+  "label": "the arming arm does not zero seg_symcount",
+  "find": "\t\t\t\t\t     | V34_RX_FLAG_TRN_WATCH);\n\t\to->seg_symcount = 0;",
   "replace": "\t\t\t\t\t     | V34_RX_FLAG_TRN_WATCH);"
  },
  {
@@ -103,17 +103,17 @@
  },
  {
   "label": "case 3 advances to state 7",
-  "find": "\t\to->v90_receiver = 4;\n\t\to->f25c0 = 0;",
-  "replace": "\t\to->v90_receiver = 7;\n\t\to->f25c0 = 0;"
+  "find": "\t\to->v90_receiver = 4;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\to->v90_receiver = 7;\n\t\to->seg_symcount = 0;"
  },
  {
   "label": "case 6 advances to state 4",
-  "find": "\t\to->v90_receiver = 7;\n\t\to->f25c0 = 0;",
-  "replace": "\t\to->v90_receiver = 4;\n\t\to->f25c0 = 0;"
+  "find": "\t\to->v90_receiver = 7;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\to->v90_receiver = 4;\n\t\to->seg_symcount = 0;"
  },
  {
-  "label": "case 3 does not zero f25c0 on the way out",
-  "find": "\t\to->v90_receiver = 4;\n\t\to->f25c0 = 0;\n\t\treturn 0;",
+  "label": "case 3 does not zero seg_symcount on the way out",
+  "find": "\t\to->v90_receiver = 4;\n\t\to->seg_symcount = 0;\n\t\treturn 0;",
   "replace": "\t\to->v90_receiver = 4;\n\t\treturn 0;"
  },
  {
@@ -123,8 +123,8 @@
  },
  {
   "label": "case 3's second point is vect4[1]",
-  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */",
-  "replace": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);\n\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */"
+  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */",
+  "replace": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);\n\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the two counts. */"
  },
  {
   "label": "case 6's first point is vect4[2]",
@@ -138,33 +138,33 @@
  },
  {
   "label": "case 7's second point is vect4[3]",
-  "find": "\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;",
-  "replace": "\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;"
+  "find": "\t\to->txpoint.word = vect4[1];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->seg_symcount + 1);\n\t\tif (n != 0x10) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;",
+  "replace": "\t\to->txpoint.word = vect4[3];\n\t\ttxmit(o);\n\t\tn = (short)((unsigned short)o->seg_symcount + 1);\n\t\tif (n != 0x10) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 8;"
  },
  {
   "label": "case 3 counts to 0x10 exactly, as cases 4 and 7 do",
-  "find": "\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n <= 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {",
-  "replace": "\t\tn = (short)((unsigned short)o->f25c0 + 1);\n\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {"
+  "find": "\t\tn = (short)((unsigned short)o->seg_symcount + 1);\n\t\tif (n <= 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {",
+  "replace": "\t\tn = (short)((unsigned short)o->seg_symcount + 1);\n\t\tif (n != 0x10) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {"
  },
  {
   "label": "case 3's count is compared unsigned",
-  "find": "\t\tif (n <= 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {",
-  "replace": "\t\tif ((unsigned short)n <= 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {"
+  "find": "\t\tif (n <= 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {",
+  "replace": "\t\tif ((unsigned short)n <= 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {"
  },
  {
   "label": "case 3's count passes at 0x7f rather than above it",
-  "find": "\t\tif (n <= 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {",
-  "replace": "\t\tif (n < 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {"
+  "find": "\t\tif (n <= 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {",
+  "replace": "\t\tif (n < 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\tif (DSPLIB_DEBUG_ON()) {"
  },
  {
   "label": "case 6 counts to 0x10 exactly",
-  "find": "\t\tif (n <= 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 7;",
-  "replace": "\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 7;"
+  "find": "\t\tif (n <= 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 7;",
+  "replace": "\t\tif (n != 0x10) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 7;"
  },
  {
   "label": "case 4 counts past 0x7f, as cases 3 and 6 do",
-  "find": "\t\tif (n != 0x10) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 5;",
-  "replace": "\t\tif (n > 0x7f) {\n\t\t\to->f25c0 = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 5;"
+  "find": "\t\tif (n != 0x10) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 5;",
+  "replace": "\t\tif (n > 0x7f) {\n\t\t\to->seg_symcount = n;\n\t\t\treturn 0;\n\t\t}\n\t\to->v90_receiver = 5;"
  },
  {
   "label": "case 4 advances to state 8, as case 7 does",
@@ -173,53 +173,53 @@
  },
  {
   "label": "case 7 advances to state 5, as case 4 does",
-  "find": "\t\to->v90_receiver = 8;\n\t\to->f25c6 = 0;",
-  "replace": "\t\to->v90_receiver = 5;\n\t\to->f25c6 = 0;"
+  "find": "\t\to->v90_receiver = 8;\n\t\to->prev_quadrant = 0;",
+  "replace": "\t\to->v90_receiver = 5;\n\t\to->prev_quadrant = 0;"
  },
  {
-  "label": "case 4's reset leaves f25c6 alone",
-  "find": "\t\t/* Reset the transmitter for the idle symbols that follow. */\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;",
-  "replace": "\t\t/* Reset the transmitter for the idle symbols that follow. */\n\t\to->f25c0 = 0;"
+  "label": "case 4's reset leaves prev_quadrant alone",
+  "find": "\t\t/* Reset the transmitter for the idle symbols that follow. */\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;",
+  "replace": "\t\t/* Reset the transmitter for the idle symbols that follow. */\n\t\to->seg_symcount = 0;"
  },
  {
-  "label": "case 7's reset leaves f25cc alone",
-  "find": "\t\to->v90_receiver = 8;\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;\n\t\to->f25cc = 0;",
-  "replace": "\t\to->v90_receiver = 8;\n\t\to->f25c6 = 0;\n\t\to->f25c0 = 0;"
+  "label": "case 7's reset leaves tx_scr_sr alone",
+  "find": "\t\to->v90_receiver = 8;\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;\n\t\to->tx_scr_sr = 0;",
+  "replace": "\t\to->v90_receiver = 8;\n\t\to->prev_quadrant = 0;\n\t\to->seg_symcount = 0;"
  },
  {
-  "label": "the first of each pair does not bump f25c0",
-  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "label": "the first of each pair does not bump seg_symcount",
+  "find": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
   "replace": "\tcase 3:\n\t\to->txpoint.word = vect4[0];\n\t\ttxmit(o);"
  },
  {
   "label": "case 5's scrambler mode is the K56flex twin's literal 1",
-  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);",
-  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t1, 3, 2);"
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t1, 3, 2);"
  },
  {
-  "label": "case 5's generator follows f25c2 bit 0 (four-point arm)",
-  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);",
-  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t(short)(o->f25c2 & 1),\n\t\t\t\t\t\t3, 2);"
+  "label": "case 5's generator follows tx_flags bit 0 (four-point arm)",
+  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);",
+  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t(short)(o->tx_flags & 1),\n\t\t\t\t\t\t3, 2);"
  },
  {
-  "label": "case 5 encodes differentially against f25c6",
-  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word =\n\t\t\t    vect4[(q + (unsigned short)o->f25c6) & 3];"
+  "label": "case 5 encodes differentially against prev_quadrant",
+  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word =\n\t\t\t    vect4[(q + (unsigned short)o->prev_quadrant) & 3];"
  },
  {
-  "label": "case 5 writes the quadrant back to f25c6",
-  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
-  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\to->f25c6 = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
+  "label": "case 5 writes the quadrant back to prev_quadrant",
+  "find": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];",
+  "replace": "\t\t} else if (c == OB_CONSTEL_4) {\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\to->prev_quadrant = (short)q;\n\t\t\to->txpoint.word = vect4[q];"
  },
  {
   "label": "case 5's quadbit index is q + d * 4",
-  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[d + q * 4]",
-  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[q + d * 4]"
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->cur_quadrant;\n\t\t\to->txpoint.word = vect16[d + q * 4]",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->cur_quadrant;\n\t\t\to->txpoint.word = vect16[q + d * 4]"
  },
  {
   "label": "case 5 scrambles three bits rather than two",
-  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);",
-  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 3);"
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 3);"
  },
  {
   "label": "case 5 takes the four-point arm for any code but 0x89b0",
@@ -237,41 +237,41 @@
   "replace": "\t\t} else {\n\t\t\to->txpoint.c[0] = 0;\n\t\t}"
  },
  {
-  "label": "case 5 does not bump f25c0",
-  "find": "\t\t\to->txpoint.c[1] = 0;\n\t\t}\n\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the load and the store. */\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
+  "label": "case 5 does not bump seg_symcount",
+  "find": "\t\t\to->txpoint.c[1] = 0;\n\t\t}\n\n\t\ttxmit(o);\n\t\t/* Re-read: `txmit` is between the load and the store. */\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
   "replace": "\t\t\to->txpoint.c[1] = 0;\n\t\t}\n\n\t\ttxmit(o);"
  },
  {
-  "label": "case 5's quadbit arm uses the first read of f25c8",
+  "label": "case 5's quadbit arm uses the first read of cur_quadrant",
   "equivalent": true,
-  "why": "`q` was just stored into f25c8 and the only thing between the store and the re-read is V34scrambler, which is handed &o->f25cc and a mode, a bit count and a bit width -- it cannot reach f25c8.  So the re-read returns the value stored, and (short)q for a q that came from a (short) cast is q.  Held fixed: V34scrambler's argument list, which is v34rx.c's and not this function's.  The re-read is transcribed because the object performs it, a call sitting between the two accesses.",
-  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->f25c8;\n\t\t\to->txpoint.word = vect16[d + q * 4];",
-  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->f25c8 = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->f25cc,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->txpoint.word = vect16[d + q * 4];"
+  "why": "`q` was just stored into cur_quadrant and the only thing between the store and the re-read is V34scrambler, which is handed &o->tx_scr_sr and a mode, a bit count and a bit width -- it cannot reach cur_quadrant.  So the re-read returns the value stored, and (short)q for a q that came from a (short) cast is q.  Held fixed: V34scrambler's argument list, which is v34rx.c's and not this function's.  The re-read is transcribed because the object performs it, a call sitting between the two accesses.",
+  "find": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\tq = o->cur_quadrant;\n\t\t\to->txpoint.word = vect16[d + q * 4];",
+  "replace": "\t\tif (c == OB_CONSTEL_16) {\n\t\t\tint d;\n\n\t\t\tq = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->cur_quadrant = (short)q;\n\t\t\td = (short)V34scrambler((unsigned *)&o->tx_scr_sr,\n\t\t\t\t\t\t0, 3, 2);\n\t\t\to->txpoint.word = vect16[d + q * 4];"
  },
  {
   "label": "case 9's quadbit is 0 rather than 15",
-  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
-  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 0);"
+  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
+  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 0);"
  },
  {
   "label": "case 9's dibit is 1 rather than 3",
-  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);",
-  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 1);"
+  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);",
+  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 1);"
  },
  {
   "label": "case 9 selects the sixteen-point map on 0x8990",
-  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
-  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_4)\n\t\t\ttxmitquadbit(o, 15);"
+  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);",
+  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_4)\n\t\t\ttxmitquadbit(o, 15);"
  },
  {
-  "label": "case 9 does not bump f25c0",
-  "find": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);\n\t\to->f25c0 = (short)((unsigned short)o->f25c0 + 1);",
-  "replace": "\t\t */\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);"
+  "label": "case 9 does not bump seg_symcount",
+  "find": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);\n\t\to->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);",
+  "replace": "\t\t */\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, 15);\n\t\telse\n\t\t\ttxmitdibit(o, 3);"
  },
  {
   "label": "case 8 does not consult the bit source",
-  "find": "\t\tint done = (short)vp->getV90CpBits(&o->f25c8);\n\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
-  "replace": "\t\tint done = 0;\n\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
+  "find": "\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
+  "replace": "\t\tint done = 0;\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
  },
  {
   "label": "case 8 advances to state 10",
@@ -280,12 +280,12 @@
  },
  {
   "label": "case 8 advances whether or not the sequence ended",
-  "find": "\t\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
-  "replace": "\t\t\ttxmitdibit(o, o->f25c8);\n\t\t(void)done;\n\t\to->v90_receiver = 9;"
+  "find": "\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
+  "replace": "\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\t(void)done;\n\t\to->v90_receiver = 9;"
  },
  {
   "label": "case 10 does not consult the bit source",
-  "find": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->f25c8);",
+  "find": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);",
   "replace": "\tcase 10: {\n\t\tint done = 0;"
  },
  {
@@ -322,8 +322,8 @@
  },
  {
   "label": "the two CP arms use two different bit sources",
-  "find": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->f25c8);",
-  "replace": "\tcase 10: {\n\t\tint done = (short)vp->getV90JaBits(&o->f25c8);"
+  "find": "\tcase 10: {\n\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);",
+  "replace": "\tcase 10: {\n\t\tint done = (short)vp->getV90JaBits(&o->cur_quadrant);"
  },
  {
   "label": "case 3's diagnostic gate is >= 1 rather than > 1",
@@ -347,15 +347,15 @@
  },
  {
   "label": "case 3's diagnostic prints the count before this call's increment",
-  "find": "\t\t\to->f25c0 = n;\n\t\t\tdsplibs_debug_printf(\"Entered v34m->v90Receiver == \"",
+  "find": "\t\t\to->seg_symcount = n;\n\t\t\tdsplibs_debug_printf(\"Entered v34m->v90Receiver == \"",
   "replace": "\t\t\tdsplibs_debug_printf(\"Entered v34m->v90Receiver == \"",
   "equivalent": true,
-  "why": "The store is the ONLY write to f25c0 on this path other than the `o->f25c0 = 0` eight lines below, which happens whether or not the diagnostic ran; and nothing between the two reads the field -- dsplibs_debug_printf is handed two ints and no pointer into the object.  So the store is dead on every path that reaches it.  Held fixed: that the printf takes its arguments by value, which is debug.h's signature and not this function's.  It is transcribed because the object performs it, and it is the one place the two arms of the gate write different memory before converging."
+  "why": "The store is the ONLY write to seg_symcount on this path other than the `o->seg_symcount = 0` eight lines below, which happens whether or not the diagnostic ran; and nothing between the two reads the field -- dsplibs_debug_printf is handed two ints and no pointer into the object.  So the store is dead on every path that reaches it.  Held fixed: that the printf takes its arguments by value, which is debug.h's signature and not this function's.  It is transcribed because the object performs it, and it is the one place the two arms of the gate write different memory before converging."
  },
  {
   "label": "case 3's diagnostic reads the count zero-extended",
   "equivalent": true,
-  "why": "`n` is a short and the gate above prints only when `n > 0x7f` as a SIGNED comparison, so every value that reaches the call is in [0x80, 0x7fff] and sign extension and zero extension agree on all of them.  Held fixed: the gate, which the sweep drives at 0x7ffe and 0xfffe precisely because those are the two f25c0 values that make the increment negative or zero -- and both of those take the return above rather than this call.  The sign extension is transcribed because the object does `movswl`.",
+  "why": "`n` is a short and the gate above prints only when `n > 0x7f` as a SIGNED comparison, so every value that reaches the call is in [0x80, 0x7fff] and sign extension and zero extension agree on all of them.  Held fixed: the gate, which the sweep drives at 0x7ffe and 0xfffe precisely because those are the two seg_symcount values that make the increment negative or zero -- and both of those take the return above rather than this call.  The sign extension is transcribed because the object does `movswl`.",
   "find": "\t\t\t\t\t     (int)n,",
   "replace": "\t\t\t\t\t     (int)(unsigned short)n,"
  },
@@ -363,13 +363,13 @@
   "label": "the bit sources' return is not truncated to a short",
   "equivalent": true,
   "why": "Both members return 0 or 1 -- `done` is an int initialised to 0 and set only to the literal 1 in either body -- so truncating to short and sign-extending is the identity on every value they produce.  Held fixed: those two bodies, which are VPcmFloModem.cpp's claim and t_vpcmflomodem's; the cast is transcribed because the object does `movswl %ax` and `cwtl` rather than using %eax whole.",
-  "find": "\t\tint done = (short)vp->getV90JaBits(&o->f25c8);",
-  "replace": "\t\tint done = vp->getV90JaBits(&o->f25c8);"
+  "find": "\t\tint done = (short)vp->getV90JaBits(&o->cur_quadrant);",
+  "replace": "\t\tint done = vp->getV90JaBits(&o->cur_quadrant);"
  },
  {
-  "label": "the two bit sources are handed f25c6 rather than f25c8",
-  "find": "\t\tint done = (short)vp->getV90CpBits(&o->f25c8);\n\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
-  "replace": "\t\tint done = (short)vp->getV90CpBits(&o->f25c6);\n\n\t\tif (o->f382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->f25c8);\n\t\telse\n\t\t\ttxmitdibit(o, o->f25c8);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
+  "label": "the two bit sources are handed prev_quadrant rather than cur_quadrant",
+  "find": "\t\tint done = (short)vp->getV90CpBits(&o->cur_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;",
+  "replace": "\t\tint done = (short)vp->getV90CpBits(&o->prev_quadrant);\n\n\t\tif (o->short_382 == OB_CONSTEL_16)\n\t\t\ttxmitquadbit(o, o->cur_quadrant);\n\t\telse\n\t\t\ttxmitdibit(o, o->cur_quadrant);\n\t\tif (done == 0)\n\t\t\treturn 0;\n\t\to->v90_receiver = 9;"
  },
  {
   "label": "the dispatch reads k56flex_receiver rather than v90_receiver",
@@ -378,7 +378,7 @@
  },
  {
   "label": "the constellation code is read at +0x384",
-  "find": "\t\tshort c = o->f382;",
+  "find": "\t\tshort c = o->short_382;",
   "replace": "\t\tshort c = *(const short *)((const unsigned char *)o + 0x384);"
  },
  {

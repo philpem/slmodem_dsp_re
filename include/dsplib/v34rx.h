@@ -120,7 +120,7 @@ void rxinit(void *obj);
 #define V34_RXTIMING_IIR_A2	(-0x3eba)
 
 /*
- * Resample onto the recovered clock, producing f128 timing estimates.
+ * Resample onto the recovered clock, producing out_count timing estimates.
  * Takes the whole object: it reaches both the receiver and the timing
  * filters at +0x50c.
  */
@@ -180,7 +180,7 @@ void V34demodulate(struct v34_receiver *rx);
  */
 void txrxdmainit(short *dst, const short *src);
 
-/* Bit 2 of f25c2: both echo cancellers have stopped adapting. */
+/* Bit 2 of tx_flags: both echo cancellers have stopped adapting. */
 #define V34_EC_FROZEN	0x0004
 /* Bit 9: feed the transmit sample through the cancellers at all. */
 #define V34_EC_FEED	0x0200
@@ -229,7 +229,7 @@ int polyValue(short k);
  */
 void setInitialPhase(void *obj);
 
-/* Install the timing loop's gains for the current state in f1c0. */
+/* Install the timing loop's gains for the current state in pllcnt. */
 void setTimingStateParameters(void *obj);
 
 /* One step of the timing recovery loop: state machine, detector, integrator. */

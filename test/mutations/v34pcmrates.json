@@ -4,8 +4,8 @@
  },
  {
   "label": "the receiver takes its PCM arm when the role is NOT 0x66 -- the fork read backwards",
-  "find": "\tif (obj->f359c == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
-  "replace": "\tif (obj->f359c != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
+  "find": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
+  "replace": "\tif (obj->role != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
  },
  {
   "label": "the receiver's PCM window is statuses 1..3 rather than 1..2",
@@ -54,8 +54,8 @@
  },
  {
   "label": "the transmitter takes its V.90 arm when the role IS 0x66 -- the fork read backwards",
-  "find": "\tif (obj->f359c != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
-  "replace": "\tif (obj->f359c == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
+  "find": "\tif (obj->role != PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {",
+  "replace": "\tif (obj->role == PCM_ROLE) {\n\t\tif ((unsigned)(obj->status - 1) <= 1) {"
  },
  {
   "label": "the transmitter's V.90 window is statuses 1..3",
@@ -178,7 +178,7 @@
   "replace": "\treturn (int)(unsigned short)cfg->txbits * (int)RATE_STEP;"
  },
  {
-  "label": "the role both functions fork on is 0x65, the other value f359c takes",
+  "label": "the role both functions fork on is 0x65, the other value role takes",
   "find": "#define PCM_ROLE\t\t0x66",
   "replace": "#define PCM_ROLE\t\t0x65"
  },

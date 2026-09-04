@@ -117,14 +117,14 @@
  },
  {
   "label": "the body is chosen by 0x66",
-  "find": "\tif (obj->f359c == 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
-  "replace": "\tif (obj->f359c == 0x66) {\n\t\t/*\n\t\t * 0x6b138.",
+  "find": "\tif (obj->role == 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
+  "replace": "\tif (obj->role == 0x66) {\n\t\t/*\n\t\t * 0x6b138.",
   "fn": "t53_rx_det_ab"
  },
  {
   "label": "the body choice is inverted",
-  "find": "\tif (obj->f359c == 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
-  "replace": "\tif (obj->f359c != 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
+  "find": "\tif (obj->role == 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
+  "replace": "\tif (obj->role != 0x65) {\n\t\t/*\n\t\t * 0x6b138.",
   "fn": "t53_rx_det_ab"
  },
  {

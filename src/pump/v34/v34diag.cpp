@@ -45,7 +45,7 @@
  * ===========================================================================
  *
  * .text+0x76a8..0x76f0 is `VPcmV34GetSNR`'s body verbatim -- the same
- * `f248 / f21a` ratio off the receiver, the same two reciprocal loops with
+ * `f248 / equerr` ratio off the receiver, the same two reciprocal loops with
  * 0x1013 (a -6 dB step, counted six at a time) and 0x32d6 (a -1 dB step,
  * counted one at a time), and the same `>> 14`.  The two functions are in one
  * translation unit in the original and `-O3` inlined the callee.
@@ -76,7 +76,7 @@
  *    the 0.5 added first is the source's own rounding rather than the
  *    hardware's.
  *
- * 3. `-12.0f - f25dc` IS A REVERSED SUBTRACT AND THE OPERAND ORDER IS THE
+ * 3. `-12.0f - tx_pwr_reduction` IS A REVERSED SUBTRACT AND THE OPERAND ORDER IS THE
  *    OBJECT'S.  `filds` puts the power reduction on the stack and `fsubrs`
  *    against the constant computes `constant - st(0)`.  (The FSUBR trap of
  *    finding F245 is the `DE` POP encodings; this is `d8 /5`, which objdump
@@ -89,7 +89,7 @@
  * 5. +0x228's ZERO TEST IS ON THE SHORT AND THE STORE IS SIGN-EXTENDED.  The
  *    load is `movzwl` and the widening is `cwtl`, so the upper half of the
  *    load never survives -- finding F614's case, and the value stored is
- *    `(int)(short)fac0c`.
+ *    `(int)(short)v90_timing_offset`.
  */
 
 #include "dsplib/debug.h"
@@ -184,7 +184,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 			results->txDataRate =
 			    V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;
 			results->float_06c = V34DIAG_TX_LEVEL_BASE_DB -
-					     obj->f25dc;
+					     obj->tx_pwr_reduction;
 		} else if (DSPLIB_DEBUG_ON()) {
 			dsplibs_debug_printf("...It is diagnostics of V.90 "
 					     "Digital...\r\n");
@@ -238,7 +238,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 		results->rxCarrier = cfg->rx_carrier;
 		results->txDataRate = V34DIAG_BPS_PER_RATE_UNIT * cfg->txbits;
 		results->dataRate   = V34DIAG_BPS_PER_RATE_UNIT * cfg->rxbits;
-		results->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->f25dc;
+		results->float_06c = V34DIAG_TX_LEVEL_BASE_DB - obj->tx_pwr_reduction;
 
 		/*
 		 * The round-trip delay goes in unscaled, into both offsets.
@@ -260,8 +260,8 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 	results->word_0e8 = results->word_100 = results->word_0f0 =
 	    (unsigned int)obj->short_ac12;
 
-	if (obj->fac0c != 0)
-		results->word_228 = (unsigned int)obj->fac0c;
+	if (obj->v90_timing_offset != 0)
+		results->word_228 = (unsigned int)obj->v90_timing_offset;
 	else
 		results->word_228 = (unsigned int)-1;
 }
@@ -287,12 +287,12 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
  * FOUR SOURCES PER SELECTOR, AND THE SAME THREE-WAY TEST PICKS BETWEEN THEM.
  * `v34_object::status` says which datapump is running -- 1 V.90, 2 V.92, 3
  * K56flex, 0 plain V.34 -- and for status 1 and 3 the answer ALSO depends on
- * `f359c`, this modem's role.  Written out, the shape the first three
+ * `role`, this modem's role.  Written out, the shape the first three
  * selectors share is
  *
  *     status == 2                             -> the VPcmFloModem
- *     status == 1 && f359c == PCMIF_ROLE_ANSWER-> the VPcmFloModem
- *     status == 3 && f359c == VDIAG_ROLE_CALL  -> the K56FlexFloModem
+ *     status == 1 && role == PCMIF_ROLE_ANSWER-> the VPcmFloModem
+ *     status == 3 && role == VDIAG_ROLE_CALL  -> the K56FlexFloModem
  *     otherwise                                -> V.34's own state, or none
  *
  * The role test is why a V.90 CALLER falls through to the V.34 arm: on that
@@ -331,7 +331,7 @@ VPcmV34GetDiagnostics(void *objp, struct TAG_DiagnosticResults *results)
 #define V34DIAG_STATUS_K56FLEX	3
 
 /*
- * `f359c` on the side that ORIGINATES.  `PCMIF_ROLE_ANSWER` is 0x66 and lives
+ * `role` on the side that ORIGINATES.  `PCMIF_ROLE_ANSWER` is 0x66 and lives
  * in v34pcmif.c, which is a different translation unit with no shared private
  * header; 0x65 is the value this function tests for on every K56flex arm, and
  * `V34SetINFO1aBits`, `preinitdigital`, `initdigital`, `v34modeminit` and
@@ -401,23 +401,23 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 	case VDIAG_CONSTELLATION:
 		if (obj->status == V34DIAG_STATUS_V92 ||
 		    (obj->status == V34DIAG_STATUS_V90 &&
-		     obj->f359c == VDIAG_ROLE_ANSWER)) {
+		     obj->role == VDIAG_ROLE_ANSWER)) {
 			n = xf->getConstellation(points, maxCount);
 		} else if (obj->status == V34DIAG_STATUS_K56FLEX &&
-			   obj->f359c == VDIAG_ROLE_CALL) {
+			   obj->role == VDIAG_ROLE_CALL) {
 			n = (unsigned long)k56->getConstellation(points,
 								 maxCount);
 		} else {
 			/*
 			 * V.34's own residual ring, and reading it EMPTIES
-			 * it: `f2aa4` is the write cursor `modem_serrint`
+			 * it: `hist1_idx` is the write cursor `modem_serrint`
 			 * advances and it is cleared here whether or not any
 			 * point comes out.
 			 */
-			n = (unsigned int)obj->f2aa4;
+			n = (unsigned int)obj->hist1_idx;
 			if (n > maxCount)
 				n = maxCount;
-			obj->f2aa4 = 0;
+			obj->hist1_idx = 0;
 
 			for (i = 0; i < n; i++) {
 				points[i].re = VDIAG_V34_POINT_SCALE *
@@ -431,10 +431,10 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 	case VDIAG_LINEAR_EQUALIZER:
 		if (obj->status == V34DIAG_STATUS_V92 ||
 		    (obj->status == V34DIAG_STATUS_V90 &&
-		     obj->f359c == VDIAG_ROLE_ANSWER)) {
+		     obj->role == VDIAG_ROLE_ANSWER)) {
 			n = xf->getLinearEqualizer(points, maxCount);
 		} else if (obj->status == V34DIAG_STATUS_K56FLEX &&
-			   obj->f359c == VDIAG_ROLE_CALL) {
+			   obj->role == VDIAG_ROLE_CALL) {
 			n = (unsigned long)k56->getLinearEqualizer(points,
 								   maxCount);
 		} else {
@@ -456,10 +456,10 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 	case VDIAG_DFE:
 		if (obj->status == V34DIAG_STATUS_V92 ||
 		    (obj->status == V34DIAG_STATUS_V90 &&
-		     obj->f359c == VDIAG_ROLE_ANSWER)) {
+		     obj->role == VDIAG_ROLE_ANSWER)) {
 			n = xf->getDFE(points, maxCount);
 		} else if (obj->status == V34DIAG_STATUS_K56FLEX &&
-			   obj->f359c == VDIAG_ROLE_CALL) {
+			   obj->role == VDIAG_ROLE_CALL) {
 			n = (unsigned long)k56->getDFE(points, maxCount);
 		}
 		/* V.34 has no decision-feedback filter to report. */
@@ -474,7 +474,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 		if (obj->status != V34DIAG_STATUS_V90 &&
 		    obj->status != V34DIAG_STATUS_V92) {
 			if (obj->status == V34DIAG_STATUS_K56FLEX &&
-			    obj->f359c == VDIAG_ROLE_CALL)
+			    obj->role == VDIAG_ROLE_CALL)
 				(void)k56->getResamplerPhase(points, maxCount);
 			else
 				points[0].re = rx->f1d8;
@@ -488,10 +488,10 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 		if (obj->status != V34DIAG_STATUS_V90 &&
 		    obj->status != V34DIAG_STATUS_V92) {
 			if (obj->status == V34DIAG_STATUS_K56FLEX &&
-			    obj->f359c == VDIAG_ROLE_CALL)
+			    obj->role == VDIAG_ROLE_CALL)
 				(void)k56->getResamplerOffset(points, maxCount);
 			else
-				points[0].re = rx->f1d0;
+				points[0].re = rx->timing_offset;
 		}
 		points[0].im = 0;
 		n = 1;
@@ -560,7 +560,7 @@ VPcmV34GetVisualDiagnostics(void *objp, int what, struct int_complex *points,
 		 */
 		if ((unsigned int)(obj->status - 1) > 1u &&
 		    obj->status == V34DIAG_STATUS_K56FLEX &&
-		    obj->f359c == VDIAG_ROLE_CALL)
+		    obj->role == VDIAG_ROLE_CALL)
 			n = (unsigned long)k56->getDecisionErrors(points,
 								  maxCount);
 		break;

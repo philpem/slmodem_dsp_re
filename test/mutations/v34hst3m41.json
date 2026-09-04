@@ -28,8 +28,8 @@
  },
  {
   "label": "the two doors into the junction are ORed, not ANDed",
-  "find": "\tif (abe8 == 0 && f358a == 0) {",
-  "replace": "\tif (abe8 == 0 || f358a == 0) {",
+  "find": "\tif (abe8 == 0 && short_358a == 0) {",
+  "replace": "\tif (abe8 == 0 || short_358a == 0) {",
   "fn": "t41_micro_det_sync"
  },
  {
@@ -52,8 +52,8 @@
  },
  {
   "label": "+0x358a's 1 and 2 select each other's body",
-  "find": "\tif (f358a == 2) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (f358a == 1) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */",
-  "replace": "\tif (f358a == 1) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (f358a == 2) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */",
+  "find": "\tif (short_358a == 2) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (short_358a == 1) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */",
+  "replace": "\tif (short_358a == 1) {\n\t\tt41_info_marks(obj, aae2, abe8);\t/* 0x6ce8b */\n\t\treturn;\n\t}\n\tif (short_358a == 2) {\n\t\tt41_tone_ab(obj);\t\t\t/* 0x6da9c */",
   "fn": "t41_micro_det_sync"
  },
  {
@@ -224,26 +224,26 @@
  },
  {
   "label": "the long warm-up needs only the marker",
-  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\t */\n\tif (obj->f359c == 0x65)",
+  "find": "\t */\n\tif (obj->role == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->role == 0x65)",
   "fn": "t41_tone_search"
  },
  {
   "label": "the long warm-up needs only the V.90 receiver",
-  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
+  "find": "\t */\n\tif (obj->role == 0x65 && obj->v90_receiver != 0)",
   "replace": "\t */\n\tif (obj->v90_receiver != 0)",
   "fn": "t41_tone_search"
  },
  {
   "label": "the marker is compared against 0x66",
-  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\t */\n\tif (obj->f359c == 0x66 && obj->v90_receiver != 0)",
+  "find": "\t */\n\tif (obj->role == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->role == 0x66 && obj->v90_receiver != 0)",
   "fn": "t41_tone_search"
  },
  {
   "label": "the V.90 receiver is read at +0x248, not through obj+4",
-  "find": "\t */\n\tif (obj->f359c == 0x65 && obj->v90_receiver != 0)",
-  "replace": "\t */\n\tif (obj->f359c == 0x65\n\t    && *(const int *)((const char *)obj + 0x248) != 0)",
+  "find": "\t */\n\tif (obj->role == 0x65 && obj->v90_receiver != 0)",
+  "replace": "\t */\n\tif (obj->role == 0x65\n\t    && *(const int *)((const char *)obj + 0x248) != 0)",
   "fn": "t41_tone_search"
  },
  {
@@ -314,14 +314,14 @@
  },
  {
   "label": "the tone body's two answers are the other way round",
-  "find": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->f359c != 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "find": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->role == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->role != 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
   "fn": "t41_tone_ab"
  },
  {
   "label": "the tone body invalidates +0xaae2 on both answers",
-  "find": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
-  "replace": "\ths_put(obj, T41_COUNT, 0);\n\n\tobj->fsk.sr = -1;\n\tif (obj->f359c == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "find": "\ths_put(obj, T41_COUNT, 0);\n\n\tif (obj->role == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
+  "replace": "\ths_put(obj, T41_COUNT, 0);\n\n\tobj->fsk.sr = -1;\n\tif (obj->role == 0x65) {\n\t\ths_setstate(obj, HS_MICROSTATE, V34HS_RX_PHASE1_CALL);",
   "fn": "t41_tone_ab"
  },
  {
@@ -374,8 +374,8 @@
  },
  {
   "label": "the late half's two answers are the other way round",
-  "find": "\tif (obj->f359c != 0x65) {\n\t\tif (obj->retrain_state != 1) {",
-  "replace": "\tif (obj->f359c == 0x65) {\n\t\tif (obj->retrain_state != 1) {",
+  "find": "\tif (obj->role != 0x65) {\n\t\tif (obj->retrain_state != 1) {",
+  "replace": "\tif (obj->role == 0x65) {\n\t\tif (obj->retrain_state != 1) {",
   "fn": "t41_marks_late"
  },
  {

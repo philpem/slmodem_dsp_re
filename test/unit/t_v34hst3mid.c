@@ -192,7 +192,7 @@ struct seed {
 	 * so a trial that cannot tell the two apart proves nothing.
 	 */
 	int	set_sr;		short	sr;
-	int	set_f3588;	short	f3588;
+	int	set_f3588;	short	short_3588;
 	int	set_pcmrx;	int	v90rx, k56rx;
 	int	set_ptc;	int	ptc;
 	int	set_p3;		int	p3gate;	int	p3count;
@@ -229,19 +229,19 @@ struct seed {
 	int	set_prevbd;	short	prevbd;
 	int	set_gain;	short	gain;
 	/*
-	 * Arm 59's.  `f358a` is the OTHER half of the 32-bit word its last
+	 * Arm 59's.  `short_358a` is the OTHER half of the 32-bit word its last
 	 * block compares against 0x20002, so a suite that sets +0x3588 and
 	 * leaves +0x358a as the fixture filled it is a suite whose last block
 	 * fires or does not on one pseudorandom halfword.
 	 *
-	 * `f19e` gates whether the tone detector is consulted at all, and
+	 * `short_19e` gates whether the tone detector is consulted at all, and
 	 * `det` seeds the detector itself: without it `tone_detect` returns
 	 * whatever the fill happens to make it return, and "59 retrains when
 	 * the detector asserts" is a claim about an unknown.  Both answers are
 	 * driven -- finding F277's question, asked of a called function.
 	 */
-	int	set_f358a;	short	f358a;
-	int	set_f19e;	short	f19e;
+	int	set_f358a;	short	short_358a;
+	int	set_f19e;	short	short_19e;
 	int	set_det;	int	det_assert;
 	/*
 	 * `v34handshakinit`'s mode-1 body bumps one of two counters on
@@ -350,7 +350,7 @@ apply(const struct seed *s)
 	if (s->set_sr)
 		v34hs_poke_short(T3MT_FSK_SR, s->sr);
 	if (s->set_f3588)
-		v34hs_poke_short(T3MT_F3588, s->f3588);
+		v34hs_poke_short(T3MT_F3588, s->short_3588);
 	if (s->set_pcmrx) {
 		v34hs_poke_int(T3MT_V90RX, s->v90rx);
 		v34hs_poke_int(T3MT_K56RX, s->k56rx);
@@ -385,9 +385,9 @@ apply(const struct seed *s)
 	if (s->set_isshort)
 		v34hs_poke_short(T3MT_ISSHORT, s->isshort);
 	if (s->set_f358a)
-		v34hs_poke_short(T3MT_F358A, s->f358a);
+		v34hs_poke_short(T3MT_F358A, s->short_358a);
 	if (s->set_f19e)
-		v34hs_poke_short(T3MT_RX_F19E, s->f19e);
+		v34hs_poke_short(T3MT_RX_F19E, s->short_19e);
 	if (s->set_det)
 		det_seed(s->det_assert);
 	if (s->set_retrainq) {
@@ -702,7 +702,7 @@ micro47_counter(short mst, short counter, short after, int moved, long tag)
 	s.set_sr = 1;
 	s.sr = 0x5aae;			/* low nibble 0xe: no reset */
 	s.set_f3588 = 1;
-	s.f3588 = 0;			/* and the OTHER guard satisfied */
+	s.short_3588 = 0;			/* and the OTHER guard satisfied */
 	both_seeded(mst, &s, tag);
 
 	snprintf(what, sizeof(what), "47 at counter 0x%04x leaves 0x%04x",
@@ -784,7 +784,7 @@ micro47(void)
 		s.set_sr = 1;
 		s.sr = sr[i];
 		s.set_f3588 = 1;
-		s.f3588 = g[i];
+		s.short_3588 = g[i];
 		s.set_answer = 1;
 		s.answer = ans[i];
 		s.set_errrec = 1;
@@ -958,7 +958,7 @@ micro47_56(void)
 	s = plain;
 	s.counter = 0x005e;
 	s.set_sr = 1;	s.sr = 0x5aae;
-	s.set_f3588 = 1; s.f3588 = 0;
+	s.set_f3588 = 1; s.short_3588 = 0;
 	collide(&s, "below the threshold", 4700);
 
 	/* The high arm, where it is overwritten with TX_L1 and announced. */
@@ -1293,7 +1293,7 @@ micro59(void)
 	 * this arm from that one, and 0x15f is the value both accept.
 	 */
 	static const struct {
-		short	counter, sr, f3588;
+		short	counter, sr, short_3588;
 		int	reset;
 		const char *why;
 	} rr[] = {
@@ -1320,7 +1320,7 @@ micro59(void)
 	};
 	/* The third. */
 	static const struct {
-		short	counter, f19e;
+		short	counter, short_19e;
 		int	assertit, retrain, entered;
 		const char *why;
 	} tg[] = {
@@ -1361,7 +1361,7 @@ micro59(void)
 	};
 	/* The fifth: ONE 32-bit compare of two halfwords, then the mask. */
 	static const struct {
-		short	counter, sr, f3588, f358a;
+		short	counter, sr, short_3588, short_358a;
 		int	armed;
 		const char *why;
 	} ar[] = {
@@ -1384,8 +1384,8 @@ micro59(void)
 
 		s.counter = rr[i].counter;
 		s.set_sr = 1;		s.sr = rr[i].sr;
-		s.set_f3588 = 1;	s.f3588 = rr[i].f3588;
-		s.set_f358a = 1;	s.f358a = 5;	/* block 5 off */
+		s.set_f3588 = 1;	s.short_3588 = rr[i].short_3588;
+		s.set_f358a = 1;	s.short_358a = 5;	/* block 5 off */
 		s.set_filt = 1;		s.filt = 0x2000; /* block 4 off */
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
@@ -1425,8 +1425,8 @@ micro59(void)
 		 */
 		diff_eq_int("59's reset ORs bit 0 into +0x3588",
 			    v34hs_peek_short(1, T3MT_F3588),
-			    rr[i].reset ? (short)(rr[i].f3588 | 1)
-					: rr[i].f3588, tag);
+			    rr[i].reset ? (short)(rr[i].short_3588 | 1)
+					: rr[i].short_3588, tag);
 		/*
 		 * AND IT CLEARS THE COUNTER TO ZERO, not to one.  55's copy of
 		 * this same block jumps back INTO the increment and leaves
@@ -1456,10 +1456,10 @@ micro59(void)
 
 		s.counter = i ? 0x1300 : 0x0029;
 		s.set_sr = 1;		s.sr = 0x0157;	/* the reset fires */
-		s.set_f3588 = 1;	s.f3588 = 2;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 2;
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = 0x2000;
-		s.set_f19e = 1;		s.f19e = 0x33;
+		s.set_f19e = 1;		s.short_19e = 0x33;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
 		tag += 2;
@@ -1481,8 +1481,8 @@ micro59(void)
 		s.txstate = sc[i].txstate;
 		s.counter = sc[i].counter;
 		s.set_sr = 1;		s.sr = 0x0155;
-		s.set_f3588 = 1;	s.f3588 = 4;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = 0x2000;
 		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
 		tag += 2;
@@ -1510,10 +1510,10 @@ micro59(void)
 
 		s.counter = tg[i].counter;
 		s.set_sr = 1;		s.sr = 0x0155;
-		s.set_f3588 = 1;	s.f3588 = 4;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = 0x2000;
-		s.set_f19e = 1;		s.f19e = tg[i].f19e;
+		s.set_f19e = 1;		s.short_19e = tg[i].short_19e;
 		s.set_det = 1;		s.det_assert = tg[i].assertit;
 		/*
 		 * NO 0x40 IN THE FLAGS AND NOTHING IN +0xac17, which is what
@@ -1531,7 +1531,7 @@ micro59(void)
 			 tg[i].why);
 		diff_eq_int(what, blob_said(retrain_msg), tg[i].retrain, tag);
 
-		if (tg[i].entered && tg[i].f19e != 0)
+		if (tg[i].entered && tg[i].short_19e != 0)
 			/*
 			 * DID THE FILTER LOOP RUN?  `tone_detect`'s window is
 			 * the receiver's +0x10c to its sample pointer, and
@@ -1574,8 +1574,8 @@ micro59(void)
 		 */
 		diff_eq_int("59 sets the receiver's +0x19e once it is past "
 			    "0x125f", v34hs_peek_short(1, T3MT_RX_F19E),
-			    tg[i].entered ? 1 : tg[i].f19e, tag);
-		if (tg[i].entered && tg[i].f19e == 0)
+			    tg[i].entered ? 1 : tg[i].short_19e, tag);
+		if (tg[i].entered && tg[i].short_19e == 0)
 			saw_59_gate = 1;
 		else if (tg[i].entered)
 			saw_59_noretrain = 1;
@@ -1588,8 +1588,8 @@ micro59(void)
 		s.counter = dc[i].counter;
 		s.set_filt = 1;		s.filt = dc[i].filt;
 		s.set_sr = 1;		s.sr = dc[i].sr;
-		s.set_f3588 = 1;	s.f3588 = 4;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;
+		s.set_f358a = 1;	s.short_358a = 5;
 		/* 0x200 and 0x800 must go and 0x155 must stay. */
 		s.set_flags = 1;	s.flags = 0x0b55;
 		s.set_gain = 1;		s.gain = dc[i].gain;
@@ -1639,7 +1639,7 @@ micro59(void)
 		 * AND THE CARRIER TABLE IT SELECTED, by what it points at:
 		 * side A holds ours and side B the blob's, so the addresses
 		 * differ for ever and only the contents are comparable
-		 * (finding F324).  `f1ba` shorts twice over is the whole table.
+		 * (finding F324).  `half_len` shorts twice over is the whole table.
 		 */
 		same_table("59 selects the 1800-Hz carrier table",
 			   T3MT_RX_CARRIER, 2 * 0x10, tag);
@@ -1659,8 +1659,8 @@ micro59(void)
 
 		s.counter = ar[i].counter;
 		s.set_sr = 1;		s.sr = ar[i].sr;
-		s.set_f3588 = 1;	s.f3588 = ar[i].f3588;
-		s.set_f358a = 1;	s.f358a = ar[i].f358a;
+		s.set_f3588 = 1;	s.short_3588 = ar[i].short_3588;
+		s.set_f358a = 1;	s.short_358a = ar[i].short_358a;
 		s.set_filt = 1;		s.filt = 0x2000;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		both_seeded(V34HS_RX_PHASE2_CALL, &s, tag);
@@ -1686,10 +1686,10 @@ micro59(void)
 		diff_eq_int("59's second reset ORs bit 0 into what "
 			    "v34handshakinit left, not into what it found",
 			    v34hs_peek_short(1, T3MT_F3588),
-			    ar[i].armed ? 1 : ar[i].f3588, tag);
+			    ar[i].armed ? 1 : ar[i].short_3588, tag);
 		diff_eq_int("59's second reset leaves 1 in +0x358a",
 			    v34hs_peek_short(1, T3MT_F358A),
-			    ar[i].armed ? 1 : ar[i].f358a, tag);
+			    ar[i].armed ? 1 : ar[i].short_358a, tag);
 		/*
 		 * THE COUNTER COMES BACK ZERO AND THAT IS NOT THE ARM'S DOING.
 		 * `v34handshakinit` clears +0xaa78 itself, so unlike the first
@@ -1773,7 +1773,7 @@ struct resetcase {
 	short	counter;	/* what the counter is seeded with     */
 	short	filt;		/* and +0xaa7c                         */
 	short	sr;		/* and the FSK shift register          */
-	short	f3588;
+	short	short_3588;
 	int	reset;		/* is the reset expected to fire?      */
 	const char *why;
 };
@@ -1791,7 +1791,7 @@ reset_family(short mst, const struct resetcase *c, int n, const char *msg,
 		s.counter = c[i].counter;
 		s.set_filt = 1;		s.filt = c[i].filt;
 		s.set_sr = 1;		s.sr = c[i].sr;
-		s.set_f3588 = 1;	s.f3588 = c[i].f3588;
+		s.set_f3588 = 1;	s.short_3588 = c[i].short_3588;
 		/*
 		 * The thirteen words the reset clears, filled with varied
 		 * non-zero values: `v34handshakinit` already leaves several of
@@ -1821,7 +1821,7 @@ reset_family(short mst, const struct resetcase *c, int n, const char *msg,
 			    c[i].reset ? V34HS_TX_DPSK : T3MT_TXSTATE, tag);
 		diff_eq_int("the reset arms +0x3588",
 			    v34hs_peek_short(1, T3MT_F3588),
-			    c[i].reset ? 4 : c[i].f3588, tag);
+			    c[i].reset ? 4 : c[i].short_3588, tag);
 		/*
 		 * AND THE COUNTER SURVIVES IT.  47's copy of this same block
 		 * clears the counter as its last act and these two do not, so
@@ -1913,7 +1913,7 @@ micro49(void)
 		s.counter = dc[i].counter;
 		s.set_filt = 1;		s.filt = dc[i].filt;
 		s.set_sr = 1;		s.sr = dc[i].sr;
-		s.set_f3588 = 1;	s.f3588 = 0;
+		s.set_f3588 = 1;	s.short_3588 = 0;
 		s.set_isshort = 1;	s.isshort = dc[i].isshort;
 		s.set_prevbd = 1;	s.prevbd = dc[i].prevbd;
 		s.set_flags = 1;	s.flags = 0x0155;
@@ -1997,7 +1997,7 @@ micro49(void)
 		s.counter = 0x0087;
 		s.set_filt = 1;		s.filt = 0x10;
 		s.set_sr = 1;		s.sr = i ? 0x0155 : 0x0154;
-		s.set_f3588 = 1;	s.f3588 = 0;
+		s.set_f3588 = 1;	s.short_3588 = 0;
 		s.set_isshort = 1;	s.isshort = 0;
 		s.set_flags = 1;	s.flags = 0x0155;
 		both_seeded(V34HS_RX_PHASE1_ANS, &s, tag);
@@ -2079,7 +2079,7 @@ micro50(void)
 		s.counter = dc[i].counter;
 		s.set_filt = 1;		s.filt = dc[i].filt;
 		s.set_sr = 1;		s.sr = dc[i].sr;
-		s.set_f3588 = 1;	s.f3588 = 0;
+		s.set_f3588 = 1;	s.short_3588 = 0;
 		/*
 		 * 0x0b55 has BOTH the bits 50 clears and one it must not:
 		 * 0x200 and 0x800 go and 0x155 stays, so a mask of ~0x200 or
@@ -2577,7 +2577,7 @@ micro55(void)
 	};
 	/* The 32-bit word at +0x3588, and the mask on the shift register. */
 	static const struct {
-		short	f3588, f358a, sr;
+		short	short_3588, short_358a, sr;
 		int	armed;
 		const char *why;
 	} ar[] = {
@@ -2608,8 +2608,8 @@ micro55(void)
 		char what[192];
 
 		s.counter = 0x0010;		/* far below 0x5f */
-		s.set_f3588 = 1;	s.f3588 = 4;	/* block C off */
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;	/* block C off */
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		s.set_fsk = 1;			/* the demodulator RUNS */
 		s.set_bitclk = 1;
@@ -2693,8 +2693,8 @@ micro55(void)
 		s.set_sr = 1;		s.sr = 0x0157;	/* & 7 == 7, and the
 							   demodulator is off,
 							   so it cannot matter */
-		s.set_f3588 = 1;	s.f3588 = 4;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		both_seeded(V34HS_TX_PHASE1_CALL, &s, tag);
 		tag += 2;
@@ -2740,8 +2740,8 @@ micro55(void)
 
 		s.counter = 0x0010;
 		s.set_sr = 1;		s.sr = ar[i].sr;
-		s.set_f3588 = 1;	s.f3588 = ar[i].f3588;
-		s.set_f358a = 1;	s.f358a = ar[i].f358a;
+		s.set_f3588 = 1;	s.short_3588 = ar[i].short_3588;
+		s.set_f358a = 1;	s.short_358a = ar[i].short_358a;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		s.set_rec = 1;		s.rec_at = T3MT_INFOREC;
 		s.rec20 = 0x1234;	s.rec22 = 0x5678;
@@ -2762,7 +2762,7 @@ micro55(void)
 		diff_eq_int("55's second reset sets bit 0 of +0x3588 after "
 			    "the init has rewritten it",
 			    v34hs_peek_short(1, T3MT_F3588) & 1,
-			    ar[i].armed ? 1 : (ar[i].f3588 & 1), tag);
+			    ar[i].armed ? 1 : (ar[i].short_3588 & 1), tag);
 		/*
 		 * `v34handshakinit` CLEARS THE COUNTER ITSELF (finding F375),
 		 * so a step whose second reset ran comes back with 0 where an
@@ -2793,8 +2793,8 @@ micro55(void)
 		struct seed s = plain;
 
 		s.counter = 0x0010;
-		s.set_f3588 = 1;	s.f3588 = 2;
-		s.set_f358a = 1;	s.f358a = 2;
+		s.set_f3588 = 1;	s.short_3588 = 2;
+		s.set_f358a = 1;	s.short_358a = 2;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		s.set_fsk = 1;
 		s.set_bitclk = 1;
@@ -2907,7 +2907,7 @@ micro58(void)
 	};
 	/* Block 2, and the branch inside it that calls `v34handshakinit`. */
 	static const struct {
-		short	counter, f3588, f358a, sr;
+		short	counter, short_3588, short_358a, sr;
 		int	armed, init;
 		const char *why;
 	} ar[] = {
@@ -2927,7 +2927,7 @@ micro58(void)
 	};
 	/* Block 3, which is `t3m_errrec_reset` and stores the constant 4. */
 	static const struct {
-		short	counter, f3588, sr;
+		short	counter, short_3588, sr;
 		int	reset;
 		const char *why;
 	} rs[] = {
@@ -2950,8 +2950,8 @@ micro58(void)
 		s.txstate = hd[i].txstate;
 		s.counter = 0x0100;		/* below every threshold */
 		s.set_sr = 1;		s.sr = 0x0155;
-		s.set_f3588 = 1;	s.f3588 = 4;	/* both resets off */
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;	/* both resets off */
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = 0x2000;
 		s.set_rec = 1;		s.rec_at = T3MT_INFOREC;
 		s.rec20 = hd[i].rec20;	s.rec22 = hd[i].rec22;
@@ -2994,8 +2994,8 @@ micro58(void)
 
 		s.counter = dp[i].counter;
 		s.set_sr = 1;		s.sr = dp[i].sr;
-		s.set_f3588 = 1;	s.f3588 = 4;	/* both resets off */
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 4;	/* both resets off */
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = dp[i].filt;
 		s.set_gain = 1;		s.gain = dp[i].gain;
 		s.set_flags = 1;	s.flags = 0x0115;  /* 0x200 clear */
@@ -3061,8 +3061,8 @@ micro58(void)
 
 		s.counter = ar[i].counter;
 		s.set_sr = 1;		s.sr = ar[i].sr;
-		s.set_f3588 = 1;	s.f3588 = ar[i].f3588;
-		s.set_f358a = 1;	s.f358a = ar[i].f358a;
+		s.set_f3588 = 1;	s.short_3588 = ar[i].short_3588;
+		s.set_f358a = 1;	s.short_358a = ar[i].short_358a;
 		s.set_filt = 1;		s.filt = 0x2000;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		s.set_rec = 1;		s.rec_at = T3MT_INFOREC;
@@ -3090,7 +3090,7 @@ micro58(void)
 		if (ar[i].armed && !ar[i].init)
 			diff_eq_int("58's second reset ORs bit 0 into +0x3588",
 				    v34hs_peek_short(1, T3MT_F3588),
-				    (short)(ar[i].f3588 | 1), tag);
+				    (short)(ar[i].short_3588 | 1), tag);
 		else if (ar[i].armed)
 			diff_eq_int("and bit 0 is set after the init too",
 				    v34hs_peek_short(1, T3MT_F3588) & 1, 1,
@@ -3098,7 +3098,7 @@ micro58(void)
 		else
 			diff_eq_int("and a declined reset leaves +0x3588",
 				    v34hs_peek_short(1, T3MT_F3588),
-				    ar[i].f3588, tag);
+				    ar[i].short_3588, tag);
 		/*
 		 * THE COUNTER IS READ A THIRD TIME AFTER THE RESET.  On the
 		 * branch that calls `v34handshakinit` the counter comes back
@@ -3136,8 +3136,8 @@ micro58(void)
 
 		s.counter = rs[i].counter;
 		s.set_sr = 1;		s.sr = rs[i].sr;
-		s.set_f3588 = 1;	s.f3588 = rs[i].f3588;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = rs[i].short_3588;
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = 0x2000;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
@@ -3154,7 +3154,7 @@ micro58(void)
 		 */
 		diff_eq_int("58's first reset stores 4 into +0x3588, not bit 0",
 			    v34hs_peek_short(1, T3MT_F3588),
-			    rs[i].reset ? 4 : rs[i].f3588, tag);
+			    rs[i].reset ? 4 : rs[i].short_3588, tag);
 		diff_eq_int("58's first reset does not clear the counter",
 			    (unsigned short)v34hs_peek_short(1, T3MT_COUNTER),
 			    n, tag);
@@ -3191,8 +3191,8 @@ micro58(void)
 
 		s.counter = 0x0500;
 		s.set_sr = 1;		s.sr = 0x0372;
-		s.set_f3588 = 1;	s.f3588 = 6;
-		s.set_f358a = 1;	s.f358a = 2;
+		s.set_f3588 = 1;	s.short_3588 = 6;
+		s.set_f358a = 1;	s.short_358a = 2;
 		s.set_filt = 1;		s.filt = 0x2000;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		both_seeded(V34HS_RX_PHASE1_CALL, &s, tag);
@@ -3224,8 +3224,8 @@ micro58(void)
 
 		s.counter = 0x0500;
 		s.set_sr = 1;		s.sr = 0x0372;
-		s.set_f3588 = 1;	s.f3588 = 0;
-		s.set_f358a = 1;	s.f358a = 5;
+		s.set_f3588 = 1;	s.short_3588 = 0;
+		s.set_f358a = 1;	s.short_358a = 5;
 		s.set_filt = 1;		s.filt = 0x2000;
 		s.set_errrec = 1;	s.errrec = 0x2f1d;
 		s.set_answer = 1;	s.answer = ans[i];

@@ -119,8 +119,8 @@
  },
  {
   "label": "the tail's mode-1 arm scales the baud rate by 2",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
-  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->baud_rate);",
+  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->baud_rate);",
   "fn": "t3m_tail"
  },
  {
@@ -269,13 +269,13 @@
  },
  {
   "label": "table 2's SSEG arm tests the answer flag against 0x66",
-  "find": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 2;",
-  "replace": "\t\tif (f->obj->f359c == 0x66)\n\t\t\t*f->progress = 2;",
+  "find": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 2;",
+  "replace": "\t\tif (f->obj->role == 0x66)\n\t\t\t*f->progress = 2;",
   "fn": "t3m_txblock"
  },
  {
   "label": "table 2's SSEG arm ignores the answer flag",
-  "find": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 2;\n\t\telse\n\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
+  "find": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 2;\n\t\telse\n\t\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
   "replace": "\t\t*f->progress = (f->rx->flags >> 3) & 1 ? 3 : 2;",
   "fn": "t3m_txblock"
  },
@@ -314,8 +314,8 @@
  },
  {
   "label": "the entry compares the cursor against the limit the other way",
-  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
-  "replace": "\twhile (obj->txq.count > obj->f2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->short_2aa0) {",
+  "replace": "\twhile (obj->txq.count > obj->short_2aa0) {",
   "fn": "v34handshak"
  },
  {
@@ -494,20 +494,20 @@
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 ignores the V.90 receiver",
-  "find": "\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t(f->obj->f359c == 0x65)",
+  "find": "\t\t(f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\t\t(f->obj->role == 0x65)",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 reads the K56flex receiver",
-  "find": "\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t(f->obj->f359c == 0x65 && f->obj->k56flex_receiver != 0)",
+  "find": "\t\t(f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\t\t(f->obj->role == 0x65 && f->obj->k56flex_receiver != 0)",
   "fn": "t3m_errrec_core"
  },
  {
   "label": "the shared reset's record (47, 49, 50) +0x18 takes 0x1e on the answer side",
-  "find": "\t\t(f->obj->f359c == 0x65 && f->obj->v90_receiver != 0)",
-  "replace": "\t\t(f->obj->f359c == 0x66 && f->obj->v90_receiver != 0)",
+  "find": "\t\t(f->obj->role == 0x65 && f->obj->v90_receiver != 0)",
+  "replace": "\t\t(f->obj->role == 0x66 && f->obj->v90_receiver != 0)",
   "fn": "t3m_errrec_core"
  },
  {
@@ -727,14 +727,14 @@
  },
  {
   "label": "63 does not store the counter before it announces",
-  "find": "\t\tT3M_U16(f, T3M_COUNTER) = n;\n\n\t\tif (f->obj->f359c == 0x65) {",
-  "replace": "\t\tif (f->obj->f359c == 0x65) {",
+  "find": "\t\tT3M_U16(f, T3M_COUNTER) = n;\n\n\t\tif (f->obj->role == 0x65) {",
+  "replace": "\t\tif (f->obj->role == 0x65) {",
   "fn": "t3m_micro63"
  },
  {
   "label": "63 takes the two-transition ending on the answer side",
-  "find": "\t\tif (f->obj->f359c == 0x65) {",
-  "replace": "\t\tif (f->obj->f359c == 0x66) {",
+  "find": "\t\tif (f->obj->role == 0x65) {",
+  "replace": "\t\tif (f->obj->role == 0x66) {",
   "fn": "t3m_micro63"
  },
  {
@@ -1276,7 +1276,7 @@
   "find": "\tV34SetupDemodulator(f->obj, 2400, 1800);\n\trxtiminginit(f->obj);",
   "replace": "\trxtiminginit(f->obj);\n\tV34SetupDemodulator(f->obj, 2400, 1800);",
   "equivalent": true,
-  "why": "the two write disjoint sets of receiver fields -- `V34SetupDemodulator` writes f128, f1ac, f1ae, f1b0, f1ba, f1be and carrier, `rxtiminginit` writes f124, mix_carrier_step, mix_carrier_phase..f1f0, rx_samples, f208, f20a, dp.point, f22e, dwell_count, demod_i_prev and demod_q_prev -- and only the first prints, so nothing this fixture reads can order them.  The order in the object is 0x66766 before 0x667c7 and it is recorded, not proved.",
+  "why": "the two write disjoint sets of receiver fields -- `V34SetupDemodulator` writes out_count, phase_frac, phase_inc, phase_wrap, half_len, symbol_period and carrier, `rxtiminginit` writes rx_blocks, mix_carrier_step, mix_carrier_phase..f1f0, rx_samples, f208, f20a, dp.point, f22e, dwell_count, demod_i_prev and demod_q_prev -- and only the first prints, so nothing this fixture reads can order them.  The order in the object is 0x66766 before 0x667c7 and it is recorded, not proved.",
   "fn": "t3m_micro50"
  },
  {
@@ -1402,44 +1402,44 @@
  },
  {
   "label": "51 exchanges the two carrier tables",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c1200_ : c2400_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c1200_ : c2400_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 tests the role flag against 0x66",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x66 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x66 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector limit is 0x65",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x65, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x65, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector warm-up is 0x33",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x33, 0x800, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x33, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector threshold is 0x801",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x801, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x801, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51's detector polarity is 1",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
   "label": "51 runs the detector on the object rather than on +0x3564",
-  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
-  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR + 4),\n\t\t\t     f->obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "find": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
+  "replace": "\t\tdetectorinit((struct v34_detector *)(f->m + T3M_DETECTOR + 4),\n\t\t\t     f->obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0x64, 0x32, 0x800, 0);",
   "fn": "t3m_micro51"
  },
  {
@@ -1868,14 +1868,14 @@
  },
  {
   "label": "59 consults the detector whatever +0x19e says",
-  "find": "\t\tif (f->rx->f19e != 0\n\t\t    && tone_detect(f->rx,",
+  "find": "\t\tif (f->rx->retrain_gate != 0\n\t\t    && tone_detect(f->rx,",
   "replace": "\t\tif (tone_detect(f->rx,",
   "fn": "t3m_micro59"
  },
  {
   "label": "59's retrain gate wants +0x19e clear",
-  "find": "\t\tif (f->rx->f19e != 0\n\t\t    && tone_detect(f->rx,",
-  "replace": "\t\tif (f->rx->f19e == 0\n\t\t    && tone_detect(f->rx,",
+  "find": "\t\tif (f->rx->retrain_gate != 0\n\t\t    && tone_detect(f->rx,",
+  "replace": "\t\tif (f->rx->retrain_gate == 0\n\t\t    && tone_detect(f->rx,",
   "fn": "t3m_micro59"
  },
  {
@@ -1916,14 +1916,14 @@
  },
  {
   "label": "59 clears the receiver's +0x19e rather than setting it",
-  "find": "\t\tf->rx->f19e = 1;\n\t\tc = (short)T3M_U16(f, T3M_COUNTER);",
-  "replace": "\t\tf->rx->f19e = 0;\n\t\tc = (short)T3M_U16(f, T3M_COUNTER);",
+  "find": "\t\tf->rx->retrain_gate = 1;\n\t\tc = (short)T3M_U16(f, T3M_COUNTER);",
+  "replace": "\t\tf->rx->retrain_gate = 0;\n\t\tc = (short)T3M_U16(f, T3M_COUNTER);",
   "fn": "t3m_micro59"
  },
  {
   "label": "59 sets +0x19e before consulting the detector",
-  "find": "\t\t/* 0x662fc and 0x6bb57. */\n\t\tif (f->rx->f19e != 0",
-  "replace": "\t\t/* 0x662fc and 0x6bb57. */\n\t\tf->rx->f19e = 1;\n\t\tif (f->rx->f19e != 0",
+  "find": "\t\t/* 0x662fc and 0x6bb57. */\n\t\tif (f->rx->retrain_gate != 0",
+  "replace": "\t\t/* 0x662fc and 0x6bb57. */\n\t\tf->rx->retrain_gate = 1;\n\t\tif (f->rx->retrain_gate != 0",
   "fn": "t3m_micro59"
  },
  {

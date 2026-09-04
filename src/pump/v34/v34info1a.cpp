@@ -67,7 +67,7 @@
  * The two multi-short fields are laid out MOST-SIGNIFICANT-BIT-FIRST ACROSS
  * ASCENDING INDICES, after a bit reversal:
  *
- *   f35a4, seven bits    rev7 bits 6..5 -> bits[0] 1..0
+ *   short_35a4, seven bits    rev7 bits 6..5 -> bits[0] 1..0
  *                        rev7 bits 4..0 -> bits[1] 7..3
  *   Uinfo, seven bits    rev7 bits 6..4 -> bits[1] 2..0
  *                        rev7 bits 3..0 -> bits[2] 7..4
@@ -219,10 +219,10 @@ V34SetINFO1aBits(void *objp, short *bits)
 	 * has touched.
 	 */
 	if (obj->v90_receiver == 0 && obj->k56flex_receiver == 0)
-		put_rev7_high(bits, bitreverse((unsigned short)obj->f35a4, 7));
+		put_rev7_high(bits, bitreverse((unsigned short)obj->short_35a4, 7));
 
 	/*
-	 * K56FLEX, AND THE ROLE FLAG SPLITS IT.  `f359c == 0x65` is the
+	 * K56FLEX, AND THE ROLE FLAG SPLITS IT.  `role == 0x65` is the
 	 * originating end everywhere else in the tree, and the object's two
 	 * strings agree: INFO1c for "Caller-Analog", INFO1a for
 	 * "Answer-Digital".
@@ -249,14 +249,14 @@ V34SetINFO1aBits(void *objp, short *bits)
 		 */
 		int law = *(const int *)(pcm + PCM_LAW);
 
-		if (obj->f359c == 0x65) {
+		if (obj->role == 0x65) {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"V34SetINFO1aBits: Setting INFO1c for "
 					"K56Flex (Caller-Analog)...\r\n");
 
 			put_rev7_high(bits,
-				      bitreverse((unsigned short)obj->f35a4,
+				      bitreverse((unsigned short)obj->short_35a4,
 						 7));
 
 			bits[8] = (short)(((unsigned short)bits[8] & ~0xeu)
@@ -302,7 +302,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 	/*
 	 * SHORT PHASE 2 SKIPS THE RATE NEGOTIATION, so the rate configuration
 	 * is written here instead of arriving from `setfinalrate`, and the
-	 * upstream goes back to V.34.  `f25dc` is the transmit power
+	 * upstream goes back to V.34.  `tx_pwr_reduction` is the transmit power
 	 * reduction v34hshak.c computes; this clears it.
 	 */
 	if (obj->is_short != 0) {
@@ -317,7 +317,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		cfg->baud = SHORT_PHASE2_BAUD;
 		cfg->carrier = SHORT_PHASE2_CARRIER;
 		cfg->preemp = 0;
-		obj->f25dc = 0;
+		obj->tx_pwr_reduction = 0;
 	}
 
 	/*
@@ -338,23 +338,23 @@ V34SetINFO1aBits(void *objp, short *bits)
 
 		/*
 		 * SIX FLAGS, THREE FIELDS, READ AS BYTES.  The object tests
-		 * `fabce`, `fabd0` and `fabd2` with `testb`, so only the low
+		 * `short_abce`, `short_abd0` and `short_abd2` with `testb`, so only the low
 		 * byte of each short can reach the message; the pairs go out
 		 * high bit first, which is the same reversal
 		 * `V34GiveINFO1aBits` undoes when it fills them in.
 		 */
 		r = 0;
-		if (obj->fabce & 1)
+		if (obj->short_abce & 1)
 			r = 0x80;
-		if (obj->fabce & 2)
+		if (obj->short_abce & 2)
 			r |= 0x40;
-		if (obj->fabd0 & 1)
+		if (obj->short_abd0 & 1)
 			r |= 0x20;
-		if (obj->fabd0 & 2)
+		if (obj->short_abd0 & 2)
 			r |= 0x10;
-		if (obj->fabd2 & 1)
+		if (obj->short_abd2 & 1)
 			r |= 8;
-		if (obj->fabd2 & 2)
+		if (obj->short_abd2 & 2)
 			r |= 4;
 		bits[0] = (short)r;
 
@@ -391,7 +391,7 @@ V34SetINFO1aBits(void *objp, short *bits)
 		int baud = obj->is_short != 0 ? INFO1A_BAUD_SHORT
 					      : recover_baud(bits);
 
-		r = bitreverse((unsigned short)obj->f35a4, 7);
+		r = bitreverse((unsigned short)obj->short_35a4, 7);
 		bits[1] = (short)(((short)r << 3) & 0xf8);
 		bits[0] = (short)(((short)r >> 5) & 3);
 
@@ -439,8 +439,8 @@ V34SetINFO1aBits(void *objp, short *bits)
 	typedef char v34info1a_off_##name[ \
 	    ((int)__builtin_offsetof(type, field) == (off)) ? 1 : -1]
 
-V34INFO1A_ASSERT(f35a4,   struct v34_object,  f35a4,		0x35a4);
-V34INFO1A_ASSERT(f25dc,   struct v34_object,  f25dc,		0x25dc);
+V34INFO1A_ASSERT(short_35a4,   struct v34_object,  short_35a4,		0x35a4);
+V34INFO1A_ASSERT(tx_pwr_reduction,   struct v34_object,  tx_pwr_reduction,		0x25dc);
 V34INFO1A_ASSERT(baud,    struct v34_ratecfg, baud,		0x00);
 V34INFO1A_ASSERT(preemp,  struct v34_ratecfg, preemp,		0x06);
 V34INFO1A_ASSERT(carrier, struct v34_ratecfg, carrier,		0x10);

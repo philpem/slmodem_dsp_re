@@ -326,7 +326,7 @@ run_case(short txst, int (*arm)(void *), int want, const char *what, long tag,
 /*
  * Bit 3 of the receiver's flags word is the arm's only branch, and the fill
  * leaves it clear, so both runs are needed to reach both halves.  With it set
- * the arm raises 0x2000 in `f25c2`, moves the transmit machine to SSEG and
+ * the arm raises 0x2000 in `tx_flags`, moves the transmit machine to SSEG and
  * clears three counters.
  */
 static void
@@ -363,7 +363,7 @@ case_xmit0(void)
 /* --- 71 TXLEVEL ----------------------------------------------------------- */
 
 /*
- * `f359c == 0x65` picks the second scrambler generator.  Both values are
+ * `role == 0x65` picks the second scrambler generator.  Both values are
  * driven because the object carries the loop twice, and a reconstruction
  * using one tap for both would pass on whichever the fill happens to select.
  */
@@ -397,13 +397,13 @@ case_txlevel(void)
 /*
  * Three counter values, because the arm has three paths: zero does nothing,
  * two decrements and leaves, and one decrements TO zero and is the only path
- * that raises bit 2 of `f25c2` and calls `V34EchoReportCoeff` twice.
+ * that raises bit 2 of `tx_flags` and calls `V34EchoReportCoeff` twice.
  */
 static void
 case_ja(short txst, int (*arm)(void *), const char *name, long tag)
 {
 	/*
-	 * `f25c2` is seeded with bit 2 CLEAR, which is what makes the
+	 * `tx_flags` is seeded with bit 2 CLEAR, which is what makes the
 	 * completion's one visible act visible: the bring-up leaves the bit
 	 * already set, and against that a reconstruction raising it on every
 	 * step rather than only at zero writes nothing and passes.
@@ -540,7 +540,7 @@ static const struct tx1_poke txmd_b[] = {
 /*
  * THE ECHO-ADAPTATION BLOCK'S FOUR STORES ARE INVISIBLE AGAINST A COLD
  * OBJECT unless the fields already hold something else, which is finding
- * F345's list in this file's own currency: `f25c2` is seeded with bit 2 SET,
+ * F345's list in this file's own currency: `tx_flags` is seeded with bit 2 SET,
  * so the `& ~4` has something to clear, and the other three non-zero.
  */
 static const struct tx1_poke txmd_done[] = {
@@ -579,7 +579,7 @@ static const struct tx1_poke txmd_both[] = {
  * With 2400 baud they are the same call twice and the argument is untested;
  * finding F216 and v34filters.c's 3200 case.
  *
- * `f25c0` and `f25c2` are seeded for the same reason as 65's counters: the
+ * `seg_symcount` and `tx_flags` are seeded for the same reason as 65's counters: the
  * reconfiguration clears one and raises 0x8004 in the other, and both are
  * invisible against a zero and against a word that already holds bit 2.
  */
@@ -684,7 +684,7 @@ case_tone_ab(void)
 /* --- 18 SSEG -------------------------------------------------------------- */
 
 /*
- * Two symbols and one tick.  `f25c0` is seeded away from both 0x3f and 0 so
+ * Two symbols and one tick.  `seg_symcount` is seeded away from both 0x3f and 0 so
  * that the counting run's increment and the completing run's clear are both
  * visible against what was there.
  *
@@ -725,15 +725,15 @@ case_sseg(void)
  * seeded away from what it stores:
  *
  *   +0x25d0    to neither `vect4[2]` nor `vect4[1]`
- *   f25c0      to 7 on the completing runs, so the clear at 0x671f2 shows,
+ *   seg_symcount      to 7 on the completing runs, so the clear at 0x671f2 shows,
  *              and away from 7 on the counting ones
- *   +0x35a6    to a value that is neither zero nor `f35a4 * 0x53`, which is
- *              what makes the bit-15 run's `f25c0 = f35a6` visible AND the
+ *   +0x35a6    to a value that is neither zero nor `short_35a4 * 0x53`, which is
+ *              what makes the bit-15 run's `seg_symcount = f35a6` visible AND the
  *              TXMD run's recomputation visible
  *   +0xaa78    to a value the counter arithmetic does not produce
  *   `vect_idx` and +0x358e non-zero, because 0x67236 clears both
  *
- * `f25c2` carries the two guard bits and is seeded with a third bit set that
+ * `tx_flags` carries the two guard bits and is seeded with a third bit set that
  * neither path touches, so a reconstruction that assigned the word rather
  * than testing it is caught by the byte comparison.
  *
@@ -758,12 +758,12 @@ static struct tx1_poke sbarseg[] = {
 #define SB_25C	8
 
 static void
-run_sbarseg(int c0, int c2, int a4, int f25c, const char *what, long tag)
+run_sbarseg(int c0, int c2, int a4, int good_run, const char *what, long tag)
 {
 	sbarseg[SB_C0].val = c0;
 	sbarseg[SB_C2].val = c2;
 	sbarseg[SB_A4].val = a4;
-	sbarseg[SB_25C].val = f25c;
+	sbarseg[SB_25C].val = good_run;
 	run_case(V34HS_SBARSEG, v34tx1_sbarseg, V34TX1_LOOP, what, tag,
 		 sbarseg, NP(sbarseg));
 }
@@ -772,7 +772,7 @@ static void
 case_sbarseg(void)
 {
 	/*
-	 * Counting.  The second run is at f25c0 == 8, which is the run that
+	 * Counting.  The second run is at seg_symcount == 8, which is the run that
 	 * tells the object's `== 8` after the increment from a `>= 8`: the
 	 * count goes to 9 and the segment does NOT end.
 	 */
@@ -783,18 +783,18 @@ case_sbarseg(void)
 
 	/*
 	 * The four completions, in the order the object tests them.  The
-	 * first is bit 13 of f25c2 -- `test $0x20,%dh`, which is bit 5 of the
+	 * first is bit 13 of tx_flags -- `test $0x20,%dh`, which is bit 5 of the
 	 * HIGH byte -- and a reading of it as bit 5 of the word would take
 	 * the wrong branch on 0x0121 as well as on 0x2101.
 	 */
 	run_sbarseg(7, 0x2101, 0x1234, 0x0100,
-		    "19 SBARSEG, complete, f25c2 bit 13 -> TRNSEG4A", 1902);
+		    "19 SBARSEG, complete, tx_flags bit 13 -> TRNSEG4A", 1902);
 	run_sbarseg(7, 0x0121, 0x1234, 0x0100,
 		    "19 SBARSEG, complete, bit 13 clear with bit 5 set", 1903);
 	run_sbarseg(7, 0x0101, 0, 0x0100,
-		    "19 SBARSEG, complete, f35a4 zero -> PPSEG", 1904);
+		    "19 SBARSEG, complete, short_35a4 zero -> PPSEG", 1904);
 	run_sbarseg(7, 0x8101, 0x1234, 0x0100,
-		    "19 SBARSEG, complete, f25c2 bit 15 -> PPSEG, f25c0 = f35a6",
+		    "19 SBARSEG, complete, tx_flags bit 15 -> PPSEG, seg_symcount = f35a6",
 		    1905);
 
 	/*
@@ -837,7 +837,7 @@ case_sbarseg(void)
 	 * 0x1234 * 0x53 is 0x5e71c and the object stores 0xe71c.
 	 */
 	run_sbarseg(7, 0x0101, 0x0203, 0x0100,
-		    "19 SBARSEG, complete -> TXMD, small f35a4", 1910);
+		    "19 SBARSEG, complete -> TXMD, small short_35a4", 1910);
 }
 
 /* --- 20 PPSEG ------------------------------------------------------------- */
@@ -849,10 +849,10 @@ case_sbarseg(void)
  * than a failure, and a fault has no offset in it.
  *
  * Everything the arm writes is seeded away from what it stores: the point at
- * +0x25d0 to a word that is no entry of `vectpp`; f25c0, +0x358e, +0xaa78 and
+ * +0x25d0 to a word that is no entry of `vectpp`; seg_symcount, +0x358e, +0xaa78 and
  * +0xaa86 to values none of the three paths produces.
  *
- * The three paths are told apart by f25c0 as much as by anything else -- the
+ * The three paths are told apart by seg_symcount as much as by anything else -- the
  * two that do not end the segment bump it at 0x6430c and the one that does
  * leaves through 0x63da2, which writes nothing.
  */
@@ -873,15 +873,15 @@ static struct tx1_poke ppseg[] = {
 #define PP_59C	10
 
 static void
-run_ppseg(int idx, int f358e, int rtd, int baud, int f359c, int f25c,
+run_ppseg(int idx, int f358e, int rtd, int baud, int role, int good_run,
 	  const char *what, long tag)
 {
-	ppseg[5].val = f25c;			/* the last of PPSEG_SEED */
+	ppseg[5].val = good_run;			/* the last of PPSEG_SEED */
 	ppseg[PP_IDX].val = idx;
 	ppseg[PP_58E].val = f358e;
 	ppseg[PP_RTD].val = rtd;
 	ppseg[PP_BAUD].val = baud;
-	ppseg[PP_59C].val = f359c;
+	ppseg[PP_59C].val = role;
 	run_case(V34HS_PPSEG, v34tx1_ppseg, V34TX1_LOOP, what, tag,
 		 ppseg, NP(ppseg));
 }
@@ -905,7 +905,7 @@ case_ppseg(void)
 
 	/*
 	 * The pass ends at 48.  +0x358e counts, `vect_idx` is cleared, and
-	 * f25c0 is still bumped.  The second run is at +0x358e == 6, which
+	 * seg_symcount is still bumped.  The second run is at +0x358e == 6, which
 	 * separates the object's `== 6` after the increment from a `>= 6`.
 	 */
 	run_ppseg(0x2f, 2, 0x11, 3200, 0x64, 0x0100,
@@ -933,12 +933,12 @@ case_ppseg(void)
 		  "20 PPSEG, the segment ends at an unknown baud", 2010);
 
 	/*
-	 * `f359c == 0x65` adds `rtd` into the counter a SECOND time, having
+	 * `role == 0x65` adds `rtd` into the counter a SECOND time, having
 	 * already put it into `vect_idx`, so a run at 0x65 with the same
 	 * `rtd` is what separates the two uses.
 	 */
 	run_ppseg(0x2f, 5, 0x11, 3200, 0x65, 0x0100,
-		  "20 PPSEG, the segment ends, f359c 0x65", 2011);
+		  "20 PPSEG, the segment ends, role 0x65", 2011);
 
 	/*
 	 * `rtd + 0x90` NEGATIVE, which is the `cwtl` at 0x6928e and friends:
@@ -968,7 +968,7 @@ case_ppseg(void)
 
 	/*
 	 * And the counter's division, which is 19's with the baud in place of
-	 * the shift: 0x1388 makes `0x5e8 - f25c` negative and inexact, so the
+	 * the shift: 0x1388 makes `0x5e8 - good_run` negative and inexact, so the
 	 * object's truncation toward zero and a floor differ by one.
 	 */
 	run_ppseg(0x2f, 5, 0x11, 3200, 0x64, 5000,
@@ -1090,11 +1090,11 @@ static struct tx1_poke silence[] = {
 };
 
 static void
-run_silence(short txst, int idx, int f359c, int v90, int abe8,
+run_silence(short txst, int idx, int role, int v90, int abe8,
 	    const char *what, long tag)
 {
 	silence[SI_IDX].val = idx;
-	silence[SI_59C].val = f359c;
+	silence[SI_59C].val = role;
 	silence[SI_V90].val = v90;
 	silence[SI_E8].val = abe8;
 	fixup = v90 != 0 ? aim_session : NULL;
@@ -1122,22 +1122,22 @@ case_silence(void)
 	run_silence(V34HS_SILENCEINFO, 0xa, 0x64, 0, 0,
 		    "54 SILENCEINFO, counting past ten", 5401);
 	run_silence(V34HS_SILENCEINFO, 9, 0x64, 0, 0,
-		    "54 SILENCEINFO, the tenth block, f359c 0x64", 5402);
+		    "54 SILENCEINFO, the tenth block, role 0x64", 5402);
 	/*
-	 * The 0x1e store needs BOTH `f359c == 0x65` and `v90_receiver`
+	 * The 0x1e store needs BOTH `role == 0x65` and `v90_receiver`
 	 * non-zero, so three more runs: neither half of the conjunction can
 	 * stand in for it.  It is `v90_receiver` ALONE and not the
 	 * `+0x24c || +0x250` pair 86 computes, which is why there is no
 	 * K56flex run here.
 	 */
 	run_silence(V34HS_SILENCEINFO, 9, 0x65, 0, 0,
-		    "54 SILENCEINFO, the tenth block, f359c 0x65, no V.90",
+		    "54 SILENCEINFO, the tenth block, role 0x65, no V.90",
 		    5403);
 	run_silence(V34HS_SILENCEINFO, 9, 0x65, 1, 0,
-		    "54 SILENCEINFO, the tenth block, f359c 0x65 and V.90",
+		    "54 SILENCEINFO, the tenth block, role 0x65 and V.90",
 		    5404);
 	run_silence(V34HS_SILENCEINFO, 9, 0x64, 1, 0,
-		    "54 SILENCEINFO, the tenth block, V.90 without f359c",
+		    "54 SILENCEINFO, the tenth block, V.90 without role",
 		    5405);
 
 	/*
@@ -1157,12 +1157,12 @@ case_silence(void)
 		    "74 SILENCERETRAIN, retrain -> MOH_TONE", 7404);
 	/*
 	 * NOT A FIFTH BEHAVIOUR, and named rather than counted: +0xabe8
-	 * non-zero wins over `f359c`, so this run must produce exactly what
+	 * non-zero wins over `role`, so this run must produce exactly what
 	 * 7404 produces.  It separates "the flag is tested first" from "the
 	 * two are combined", and it cannot fail while 7404 passes.
 	 */
 	run_silence(V34HS_SILENCERETRAIN, 0xb3, 0x65, 0, 1,
-		    "74 SILENCERETRAIN, retrain, the flag beats f359c", 7405);
+		    "74 SILENCERETRAIN, retrain, the flag beats role", 7405);
 }
 
 /*
@@ -1282,7 +1282,7 @@ case_dataxmit(void)
  * and both values are driven because the object carries the loop twice and a
  * reconstruction with one copy would pass on whichever the fixture picked.
  *
- * `f25d4` is the transmit scale and it is poked rather than left to the fill,
+ * `tx_scale` is the transmit scale and it is poked rather than left to the fill,
  * because the fill's value decides whether the doubling in the second copy is
  * visible at all: at a scale of zero every sample comes out zero and the two
  * copies agree.  0x16a1 is `v34pcmif.c`'s own value and is not a power of
@@ -1388,14 +1388,14 @@ case_probe_table(void)
  *
  * Everything the arm writes is seeded away from what it stores:
  *
- *   f25cc      TX1_SRSEED, which separates the two generators (see 71)
- *   f25c6      NON-ZERO and inside 0..3, or `(q + f25c6) & 3` cannot be told
- *              from `q & 3`; two values, so "add f25c6" is not "add two"
- *   f25c8      to a word that is no quadrant, so the store shows
+ *   tx_scr_sr      TX1_SRSEED, which separates the two generators (see 71)
+ *   prev_quadrant      NON-ZERO and inside 0..3, or `(q + prev_quadrant) & 3` cannot be told
+ *              from `q & 3`; two values, so "add prev_quadrant" is not "add two"
+ *   cur_quadrant      to a word that is no quadrant, so the store shows
  *   +0x25d0    to a word that is neither a `vect4` nor a `vect16` entry
  *   vect_idx   set per run; the completion reloads it with 8
  *
- * `f25c2` carries the generator select in bit 0 -- NOT `f359c == 0x65`, which
+ * `tx_flags` carries the generator select in bit 0 -- NOT `role == 0x65`, which
  * is 71 and 86's -- and is seeded with other bits set so a reconstruction
  * that assigned the word rather than reading one bit of it is caught.
  */
@@ -1412,9 +1412,9 @@ static struct tx1_poke exmit[] = {
 };
 
 static void
-run_exmit(int f382, int c2, int idx, int c6, const char *what, long tag)
+run_exmit(int short_382, int c2, int idx, int c6, const char *what, long tag)
 {
-	exmit[EX_F382].val = f382;
+	exmit[EX_F382].val = short_382;
 	exmit[EX_C2].val = c2;
 	exmit[EX_IDX].val = idx;
 	exmit[EX_C6].val = c6;
@@ -1504,14 +1504,14 @@ case_exmit(void)
  *              values, so the shift by twice `vect_idx` is live and a wrong
  *              shift picks a different symbol.  0x899f is what the segment's
  *              end stores, so the seed is away from that too
- *   f25cc      TX1_SRSEED for the generators, and 68's tail clears it
- *   f25c6      non-zero and inside 0..3, and 68's tail clears it
- *   f25c8      to a word that is no quadrant
- *   f25c0      non-zero, because only 68's tail clears it
+ *   tx_scr_sr      TX1_SRSEED for the generators, and 68's tail clears it
+ *   prev_quadrant      non-zero and inside 0..3, and 68's tail clears it
+ *   cur_quadrant      to a word that is no quadrant
+ *   seg_symcount      non-zero, because only 68's tail clears it
  *   +0x25d0    to a word that is no `vect4` entry
  *   +0xaa78    per run: 0 is "no countdown", 1 completes it, 2 leaves it
  *              running AND is what the segment's end needs to report
- *   f25c2      bit 0 the generator, bit 2 CLEAR so both echo-report blocks'
+ *   tx_flags      bit 0 the generator, bit 2 CLEAR so both echo-report blocks'
  *              one visible act is visible
  */
 #define JT_IDX		0
@@ -1537,7 +1537,7 @@ static struct tx1_poke jtxmit[] = {
 
 /*
  * The defaults: a pass that does not wrap, no countdown, the generator with
- * bit 0 set, `f359c` away from 0x66, and 64's two companions already holding
+ * bit 0 set, `role` away from 0x66, and 64's two companions already holding
  * what its tail wants so that a run reaching the wrap ends the segment unless
  * it says otherwise.
  */
@@ -1616,7 +1616,7 @@ case_jtxmit(void)
 	/*
 	 * The countdown at the top, which is 78 and 85's `tx1_ja_common`: 0
 	 * does nothing (6400 above), 2 decrements and leaves, 1 decrements TO
-	 * zero and is the path that raises bit 2 of f25c2 and reports both
+	 * zero and is the path that raises bit 2 of tx_flags and reports both
 	 * cancellers before falling back into the body.
 	 */
 	jt_reset();
@@ -1636,10 +1636,10 @@ case_jtxmit(void)
 	run_jtxmit(V34HS_J1TXMIT, "68 J1TXMIT, a pass, the same body", 6800);
 
 	/*
-	 * 68's TAIL, and it is independent: at the wrap the arm clears f25cc,
-	 * f25c6 and f25c0 and moves the transmit machine to TRNSEG4A.  All
+	 * 68's TAIL, and it is independent: at the wrap the arm clears tx_scr_sr,
+	 * prev_quadrant and seg_symcount and moves the transmit machine to TRNSEG4A.  All
 	 * three are seeded non-zero; the second run is at the other generator
-	 * so the clear of f25cc is measured against two different registers.
+	 * so the clear of tx_scr_sr is measured against two different registers.
 	 */
 	jt_reset();
 	jtxmit[JT_IDX].val = 7;
@@ -1704,7 +1704,7 @@ case_jtxmit(void)
 
 	/*
 	 * The segment's end with the counter still running, which is the only
-	 * path to the SECOND pair of echo reports: it raises bit 2 of f25c2
+	 * path to the SECOND pair of echo reports: it raises bit 2 of tx_flags
 	 * and zeroes +0xaa78.  The two pairs are mutually exclusive on one
 	 * pass -- reaching zero at the top leaves nothing here to do -- so
 	 * 6416 is the second pair and 6417 is the first pair and no second.
@@ -1720,7 +1720,7 @@ case_jtxmit(void)
 	 * three paths give only two states: at counter 1 the countdown reaches
 	 * zero and does the reporting, and the segment's end then finds the
 	 * counter already zero and declines -- so the object ends where the
-	 * counter-2 run ends it, +0xaa78 zero and bit 2 of f25c2 up, by the
+	 * counter-2 run ends it, +0xaa78 zero and bit 2 of tx_flags up, by the
 	 * other route.  It cannot fail while 6416 passes.  It is kept because
 	 * its MUTATION value differs: `the second pair is guarded the other
 	 * way` fails 6416 alone, and only running both says which.
@@ -1733,7 +1733,7 @@ case_jtxmit(void)
 		   6417);
 
 	/*
-	 * `f359c == 0x66` -- 0x66ca8, reachable from either txstate and tested
+	 * `role == 0x66` -- 0x66ca8, reachable from either txstate and tested
 	 * BEFORE the wrap.  Four runs, because it is a three-test conjunction
 	 * whose first arm short-circuits the other two, and only the arm that
 	 * gets through writes: it moves the transmit machine to XMIT0 and
@@ -1751,24 +1751,24 @@ case_jtxmit(void)
 	jtxmit[JT_FLAGS].val = 0x0400;		/* V34_RX_FLAG_DATA */
 	jtxmit[JT_A2].val = 0;
 	jtxmit[JT_DA].val = 0;
-	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, the data flag", 6420);
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, role 0x66, the data flag", 6420);
 	jt_reset();
 	jtxmit[JT_59C].val = 0x66;
 	jtxmit[JT_A2].val = 0;
-	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, +0x35a2 zero", 6421);
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, role 0x66, +0x35a2 zero", 6421);
 	jt_reset();
 	jtxmit[JT_59C].val = 0x66;
 	jtxmit[JT_DA].val = 0;
-	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, +0x25da zero", 6422);
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, role 0x66, +0x25da zero", 6422);
 	jt_reset();
 	jtxmit[JT_59C].val = 0x66;
-	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, f359c 0x66, both companions set",
+	run_jtxmit(V34HS_JTXMIT, "64 JTXMIT, role 0x66, both companions set",
 		   6423);
 
 	/*
 	 * AND ONE THAT ORDERS THE TWO DECISIONS.  At txstate 68 with the index
 	 * at the wrap, 0x65653 and 0x66ca8 want two different things; the
-	 * object tests `f359c` first (0x636ea, before 0x636f0), so this run
+	 * object tests `role` first (0x636ea, before 0x636f0), so this run
 	 * must move the transmit machine to XMIT0 and NOT to TRNSEG4A.  It is
 	 * an independent check: a reconstruction testing the wrap first passes
 	 * every other run here.
@@ -1777,7 +1777,7 @@ case_jtxmit(void)
 	jtxmit[JT_IDX].val = 7;
 	jtxmit[JT_59C].val = 0x66;
 	jtxmit[JT_FLAGS].val = 0x0400;
-	run_jtxmit(V34HS_J1TXMIT, "68 J1TXMIT, f359c 0x66 beats the wrap",
+	run_jtxmit(V34HS_J1TXMIT, "68 J1TXMIT, role 0x66 beats the wrap",
 		   6424);
 }
 
@@ -1843,9 +1843,9 @@ case_vect16_table(void)
  * instead and drive the two bits apart; the run with the record back at
  * +0xaa3c is a CONTROL and is named as one below.
  *
- * Everything the arm writes is seeded away from what it stores: `f25c8` to a
+ * Everything the arm writes is seeded away from what it stores: `cur_quadrant` to a
  * word that is no quadrant (the arm clears it first, so a reconstruction that
- * only ORed would keep the seed), `f25c6` non-zero and inside 0..3, `f25cc`
+ * only ORed would keep the seed), `prev_quadrant` non-zero and inside 0..3, `tx_scr_sr`
  * to TX1_SRSEED, +0x25d0 to a word that is no `vect4` or `vect16` entry,
  * +0x3590 away from 0x22, +0x3598 away from 1, +0x359e non-zero, and every
  * one of the reader's thirteen fields away from what 0x64635 reloads it with.
@@ -2030,7 +2030,7 @@ case_xmitmp(void)
 	 * refill run folds the CRC as well, so the record moves in five
 	 * fields rather than one; the restart is the arm that does NOT inline
 	 * in the object (0x6484c is a real `call getbit`); and the exhausted
-	 * one returns -1, which is the only input that puts a value in `f25c8`
+	 * one returns -1, which is the only input that puts a value in `cur_quadrant`
 	 * no successful pass produces -- every bit of it set, and the mapper
 	 * then reads a negative halfword.
 	 */
@@ -2192,7 +2192,7 @@ case_xmitmp(void)
 	 * AND THE SAME EXIT ON THE FIRST BIT OF THE PASS, which is the run that
 	 * says it LEAVES the loop.  On 6724 the exit falls on the last bit, so
 	 * a reconstruction that carried on would end the pass at the same place
-	 * anyway; here the object stops with one bit in `f25c8` and one that
+	 * anyway; here the object stops with one bit in `cur_quadrant` and one that
 	 * carried on would collect a second out of the reader and advance
 	 * `vect_idx` past the zero the exit just wrote.
 	 */
@@ -2567,23 +2567,23 @@ static void
 case_dpsk_cold(void)
 {
 	const unsigned char *o;
-	short f358c;
+	short short_358c;
 	int point;
 
 	apply(V34HS_TX_DPSK, NULL, 0);
 	o = (const unsigned char *)v34hs_object(0);
 	diff_eq_int("24 TX_DPSK cold: the fill leaves +0xabe8 clear",
 		    o[TX1_FABE8], 0, 2490);
-	memcpy(&f358c, o + TX1_F358C, sizeof(f358c));
+	memcpy(&short_358c, o + TX1_F358C, sizeof(short_358c));
 
 	(void)v34tx1_tx_dpsk(v34hs_object(0));
 	diff_eq_int("24 TX_DPSK cold: the message is not over",
 		    v34hs_peek_short(0, V34HS_TXSTATE), V34HS_TX_DPSK, 2491);
 	diff_eq_int("24 TX_DPSK cold: +0x358c is unchanged, so the bit was zero",
-		    v34hs_peek_short(0, TX1_F358C), f358c, 2492);
+		    v34hs_peek_short(0, TX1_F358C), short_358c, 2492);
 	memcpy(&point, o + TX1_F25D0, sizeof(point));
 	diff_eq_int("24 TX_DPSK cold: the tone is 60 TONE_AB's",
-		    point, vect4[2 * (f358c & 1)], 2493);
+		    point, vect4[2 * (short_358c & 1)], 2493);
 	memcpy(before, o, sizeof(before));
 
 	apply(V34HS_TX_DPSK, NULL, 0);
@@ -2988,7 +2988,7 @@ case_tx_dpsk(void)
 /*
  * THE FOUR COMPARES ARE HELD APART BY CONSTRUCTION, and that is what makes a
  * mutation of one of them fail rather than fall through to the next one's
- * answer.  With `n` the value of `f25c0` AFTER the arm's increment:
+ * answer.  With `n` the value of `seg_symcount` AFTER the arm's increment:
  *
  *     TRN_SPAN     0x100    so the middle point is 0x80 and the end 0x100
  *     TRN_BAUD     3200     so the period point is 4800
@@ -2998,7 +2998,7 @@ case_tx_dpsk(void)
  * is deliberate: `VPcmV34ReportMiddleOfEchoAdapt` only prints, so at debug
  * level 0 taking that arm and falling through it write the same object.  That
  * run therefore makes the middle point and the PERIOD point the same number,
- * so a reconstruction that dropped the middle test raises 0x400 in `f25c2`
+ * so a reconstruction that dropped the middle test raises 0x400 in `tx_flags`
  * and fails.  Nothing else here can see the difference.
  */
 #define TRN_SPAN	0x0100
@@ -3191,9 +3191,9 @@ case_trnseg4(void)
 
 	/*
 	 * THE ECHO-ADAPT START IS NOT AN EXIT.  0x67613 clears four fields and
-	 * bit 2 of `f25c2` and then jumps BACK into the compare chain at
+	 * bit 2 of `tx_flags` and then jumps BACK into the compare chain at
 	 * 0x643f8, so this run must still reach the same rejoin the two above
-	 * do.  `f25c2` carries bit 2 here and not in any other run.
+	 * do.  `tx_flags` carries bit 2 here and not in any other run.
 	 */
 	trn_reset();
 	trn[T4_COUNT].val = TRN_N;
@@ -3242,7 +3242,7 @@ case_trnseg4(void)
 
 	/*
 	 * The period point, which clears bit 15 as well as raising bit 10 --
-	 * `and $0x7fff ; or $0x400`, two halves of one store and `f25c2` is
+	 * `and $0x7fff ; or $0x400`, two halves of one store and `tx_flags` is
 	 * seeded with bit 15 set so both are visible.
 	 */
 	trn_reset();
@@ -3273,7 +3273,7 @@ case_trnseg4(void)
 
 	/*
 	 * ---------------------------------------------------------------
-	 * THE COMPLETION.  `f25c0` reaches +0xa244 exactly; the middle point
+	 * THE COMPLETION.  `seg_symcount` reaches +0xa244 exactly; the middle point
 	 * (0x80) and the period point (4800) are both away from it, so a
 	 * mutation of either of the two earlier compares takes a different
 	 * exit and fails here rather than agreeing by accident.
@@ -3330,7 +3330,7 @@ case_trnseg4(void)
 	run_trn("21 TRNSEG4, both receivers: the V.90 tail wins", 2117);
 
 	/*
-	 * A NEGATIVE COUNT, which is where two sign questions meet.  `f25c0`
+	 * A NEGATIVE COUNT, which is where two sign questions meet.  `seg_symcount`
 	 * is `movswl`-sign-extended before the three compares (0x64aeb) and
 	 * compared SIGNED against +0xaa86 (0x64423), so at -2 against a
 	 * +0xaa86 of one the period flag stays down and the segment ends;
@@ -3416,7 +3416,7 @@ case_trnseg4a_entry(void)
  * The rate configuration's `baud` and `period` are the segment's LENGTH here
  * and the fill leaves them arbitrary: `lim` is `baud + (baud >> 1) + period`,
  * so 100 and 20 make it 170 and the short threshold `baud + period` 120.
- * Both are then reached by moving `f25c0` alone.
+ * Both are then reached by moving `seg_symcount` alone.
  *
  * AND `rx_baud` IS PINNED ON EVERY RUN.  The completion's five-way at
  * 0x62f9c has no default and is the only writer of the two locals the rest of
@@ -3426,15 +3426,15 @@ case_trnseg4a_entry(void)
  * hold fixed.
  */
 #define TS_11E		0	/* receiver +0x11e: four points or sixteen  */
-#define TS_59C		1	/* f359c, the generator select AND the role */
-#define TS_SR		2	/* f25cc, the scrambler's shift register    */
-#define TS_C0		3	/* f25c0, the count this arm advances       */
+#define TS_59C		1	/* role, the generator select AND the role */
+#define TS_SR		2	/* tx_scr_sr, the scrambler's shift register    */
+#define TS_C0		3	/* seg_symcount, the count this arm advances       */
 #define TS_BAUD		4	/* rate configuration +0x00                 */
 #define TS_PER		5	/* rate configuration +0x02                 */
 #define TS_2218		6	/* the int that gates both long exits       */
 #define TS_21A		7	/* receiver +0x21a, the equaliser error     */
 #define TS_250		8	/* receiver +0x250, the mark                */
-#define TS_C6		9	/* f25c6, written from f25c8 at 0x62f31     */
+#define TS_C6		9	/* prev_quadrant, written from cur_quadrant at 0x62f31     */
 #define TS_FLAGS	10	/* receiver +0x122: bit 5, 12 and 14        */
 #define TS_RXB		11	/* rate configuration +0x12, the rx baud    */
 #define TS_A97E		12	/* byte: gates the one rate adjustment      */
@@ -3993,7 +3993,7 @@ case_trnseg4a(void)
 	 * THE LADDER WALKING DOWN.  With the mark high the term for every
 	 * rate stays under it and the rate falls to its floor, which is the
 	 * only run here that turns the loop more than once and the only one
-	 * that reaches `f254`'s averaging by the other door.
+	 * that reaches `bad_long_thresh`'s averaging by the other door.
 	 */
 	/*
 	 * THE MARK THE LADDER READS IS THE ONE THE SNAPSHOT JUST WROTE, not
@@ -4141,7 +4141,7 @@ case_trnseg4a(void)
 	/* --- the capability word ------------------------------------------ */
 
 	/*
-	 * THE TWO NIBBLES SWAP BY ROLE.  `f359c == 0x65` puts the receive rate
+	 * THE TWO NIBBLES SWAP BY ROLE.  `role == 0x65` puts the receive rate
 	 * at bit 6 and the transmit rate at bit 10; anything else the other
 	 * way round.  The two runs differ in that one field and the record's
 	 * first word is what separates them.

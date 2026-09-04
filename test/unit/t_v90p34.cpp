@@ -307,15 +307,15 @@ static const struct vpcm_cfg CFG_LD  = { 11, 12, 0, 16, 4, 1, 0, 0, 9, 3 };
  * in which blocks they own.
  *
  * `dataflag` and `armed` are the two bits of the receiver's flags word that
- * gate the dispatch; `state` goes into `v90_receiver`, `constel` into `f382`,
- * `symcnt` into `f25c0` -- which is what the two symbol counts are compared
- * against -- and `f25c2` carries the scrambler generator in bit 0 and
+ * gate the dispatch; `state` goes into `v90_receiver`, `constel` into `short_382`,
+ * `symcnt` into `seg_symcount` -- which is what the two symbol counts are compared
+ * against -- and `tx_flags` carries the scrambler generator in bit 0 and
  * `txmit`'s echo feed in bit 9, so it is swept over both.  `backclear` is bit
  * 2 of the configuration byte the Ja completion tail tests.
  */
 static void
 setup(int dataflag, int armed, int state, short constel, short symcnt,
-      short f25c2, const struct vpcm_cfg *cfg, int backclear, unsigned seed)
+      short tx_flags, const struct vpcm_cfg *cfg, int backclear, unsigned seed)
 {
 	struct v34_receiver *ra, *rb;
 	int i, side;
@@ -415,7 +415,7 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 
 	oa.prefilter.coeff = ob.prefilter.coeff = V34TimingPrefilterCoeff;
 	oa.prefilter.shift = ob.prefilter.shift = 14;
-	oa.f25d4 = ob.f25d4 = 0x4000;
+	oa.tx_scale = ob.tx_scale = 0x4000;
 	/*
 	 * The bulk-delay ring and its two cursors -- `txmit` indexes it with
 	 * them unchecked, so these three are seeded rather than filled.  That
@@ -427,11 +427,11 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 	oa.bulk_tail = ob.bulk_tail = 17;
 
 	/* A scrambler register that is neither zero nor all ones. */
-	oa.f25cc = ob.f25cc = 0x2f6b3d51;
-	oa.f25c6 = ob.f25c6 = 2;
-	oa.f25c8 = ob.f25c8 = 1;
-	oa.f25c0 = ob.f25c0 = symcnt;
-	oa.f25c2 = ob.f25c2 = f25c2;
+	oa.tx_scr_sr = ob.tx_scr_sr = 0x2f6b3d51;
+	oa.prev_quadrant = ob.prev_quadrant = 2;
+	oa.cur_quadrant = ob.cur_quadrant = 1;
+	oa.seg_symcount = ob.seg_symcount = symcnt;
+	oa.tx_flags = ob.tx_flags = tx_flags;
 
 	oa.p3548 = vp[0];    ob.p3548 = vp[1];
 	oa.pac3c = cfgbuf[0]; ob.pac3c = cfgbuf[1];
@@ -439,7 +439,7 @@ setup(int dataflag, int armed, int state, short constel, short symcnt,
 
 	oa.v90_receiver = ob.v90_receiver = state;
 	oa.k56flex_receiver = ob.k56flex_receiver = 0;
-	oa.f382 = ob.f382 = constel;
+	oa.short_382 = ob.short_382 = constel;
 	*(short *)((char *)&oa + OB_TXSTATE) = 20;
 	*(short *)((char *)&ob + OB_TXSTATE) = 20;
 	((unsigned char *)&oa)[OB_BACKCLEAR] = 0;
@@ -532,10 +532,10 @@ set_level(unsigned int lvl)
  * Case 5's three claims, checked against our side alone so that they hold
  * whatever the blob does:
  *
- *   - `f25c6` is untouched.  Both published emitters write it.
- *   - `f25c8` is the scrambler's raw two bits, 0..3.
- *   - the point is `vect4[f25c8]` exactly, or one of the four `vect16`
- *     entries of quadrant `f25c8` -- NOT `vect4[(d + f25c6) & 3]`.
+ *   - `prev_quadrant` is untouched.  Both published emitters write it.
+ *   - `cur_quadrant` is the scrambler's raw two bits, 0..3.
+ *   - the point is `vect4[cur_quadrant]` exactly, or one of the four `vect16`
+ *     entries of quadrant `cur_quadrant` -- NOT `vect4[(d + prev_quadrant) & 3]`.
  *
  * and, for the third arm, that a constellation code which is neither of the
  * two named values transmits the ZERO point without touching the scrambler
@@ -545,16 +545,16 @@ static void
 check_idle(short constel, short c6_before, short c8_before, int cc_before,
 	   long t)
 {
-	int q = oa.f25c8;
+	int q = oa.cur_quadrant;
 	int pt = oa.txpoint.word;
 
-	diff_eq_int("idle leaves f25c6 alone %ld", oa.f25c6, c6_before, t);
+	diff_eq_int("idle leaves prev_quadrant alone %ld", oa.prev_quadrant, c6_before, t);
 	if (constel != (short)0x89b0 && constel != (short)0x8990) {
 		diff_eq_int("no-constel point re %ld", oa.txpoint.c[0], 0, t);
 		diff_eq_int("no-constel point im %ld", oa.txpoint.c[1], 0, t);
-		diff_eq_int("no-constel leaves f25c8 %ld", oa.f25c8,
+		diff_eq_int("no-constel leaves cur_quadrant %ld", oa.cur_quadrant,
 			    c8_before, t);
-		diff_eq_int("no-constel leaves the scrambler %ld", oa.f25cc,
+		diff_eq_int("no-constel leaves the scrambler %ld", oa.tx_scr_sr,
 			    cc_before, t);
 		return;
 	}
@@ -567,9 +567,9 @@ check_idle(short constel, short c6_before, short c8_before, int cc_before,
 		for (i = 0; i < 4; i++)
 			if (pt == vect16[q * 4 + i])
 				hit = 1;
-		diff_eq_int("idle point is vect16 of f25c8 %ld", hit, 1, t);
+		diff_eq_int("idle point is vect16 of cur_quadrant %ld", hit, 1, t);
 	} else {
-		diff_eq_int("idle point is vect4[f25c8] %ld", pt, vect4[q], t);
+		diff_eq_int("idle point is vect4[cur_quadrant] %ld", pt, vect4[q], t);
 	}
 }
 
@@ -631,7 +631,7 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			diff_eq_int("high state arms %ld",
 				    (long)(ra->flags & V34_RX_FLAG_TRN_WATCH)
 				    != 0, 1, tag);
-			diff_eq_int("arming zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("arming zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
 		}
 		diff_eq_int("the arming arm leaves the state %ld",
@@ -646,7 +646,7 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s3_adv++;
 			diff_eq_int("case 3 advances to 4 %ld",
 				    oa.v90_receiver, 4, tag);
-			diff_eq_int("case 3 zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("case 3 zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
 		}
 		break;
@@ -656,7 +656,7 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s6_adv++;
 			diff_eq_int("case 6 advances to 7 %ld",
 				    oa.v90_receiver, 7, tag);
-			diff_eq_int("case 6 zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("case 6 zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
 		}
 		break;
@@ -666,11 +666,11 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s4_adv++;
 			diff_eq_int("case 4 advances to 5 %ld",
 				    oa.v90_receiver, 5, tag);
-			diff_eq_int("case 4 zeroes f25c6 %ld", oa.f25c6, 0,
+			diff_eq_int("case 4 zeroes prev_quadrant %ld", oa.prev_quadrant, 0,
 				    tag);
-			diff_eq_int("case 4 zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("case 4 zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
-			diff_eq_int("case 4 zeroes f25cc %ld", oa.f25cc, 0,
+			diff_eq_int("case 4 zeroes tx_scr_sr %ld", oa.tx_scr_sr, 0,
 				    tag);
 		}
 		break;
@@ -680,11 +680,11 @@ account(int df, int armed, int before_state, short constel, short before_c6,
 			n_s7_adv++;
 			diff_eq_int("case 7 advances to 8 %ld",
 				    oa.v90_receiver, 8, tag);
-			diff_eq_int("case 7 zeroes f25c6 %ld", oa.f25c6, 0,
+			diff_eq_int("case 7 zeroes prev_quadrant %ld", oa.prev_quadrant, 0,
 				    tag);
-			diff_eq_int("case 7 zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("case 7 zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
-			diff_eq_int("case 7 zeroes f25cc %ld", oa.f25cc, 0,
+			diff_eq_int("case 7 zeroes tx_scr_sr %ld", oa.tx_scr_sr, 0,
 				    tag);
 		}
 		break;
@@ -765,8 +765,8 @@ run(short constel, int iters)
 		int df = (before_flags & V34_RX_FLAG_DATA) != 0;
 		int armed = (before_flags & V34_RX_FLAG_TRN_WATCH) != 0;
 		int before_state = oa.v90_receiver;
-		short before_c6 = oa.f25c6, before_c8 = oa.f25c8;
-		int before_cc = oa.f25cc;
+		short before_c6 = oa.prev_quadrant, before_c8 = oa.cur_quadrant;
+		int before_cc = oa.tx_scr_sr;
 
 		memcpy(&snap, &oa, sizeof(snap));
 		memcpy(snap_shp, shp_a, sizeof(snap_shp));
@@ -831,18 +831,18 @@ step_rrn(int silence)
  *   - there is NO third arm.  Anything that is not 0x89b0 is the four-point
  *     arm, where case 5 gives 0x8990 an arm of its own and everything else
  *     the zero point.
- *   - `f25c6` IS written, from `f25c8`, where case 5 leaves it alone.
+ *   - `prev_quadrant` IS written, from `cur_quadrant`, where case 5 leaves it alone.
  */
 static void
 check_idle_rrn(short constel, int cc_before, long t)
 {
-	int q = oa.f25c8;
+	int q = oa.cur_quadrant;
 	int pt = oa.txpoint.word;
 
-	diff_eq_int("silence idle advances the quadrant %ld", oa.f25c6,
-		    oa.f25c8, t);
+	diff_eq_int("silence idle advances the quadrant %ld", oa.prev_quadrant,
+		    oa.cur_quadrant, t);
 	diff_eq_int("silence idle clocks the scrambler %ld",
-		    oa.f25cc != cc_before, 1, t);
+		    oa.tx_scr_sr != cc_before, 1, t);
 	diff_eq_int("silence idle quadrant in range %ld",
 		    q >= 0 && q <= 3, 1, t);
 	if (q < 0 || q > 3)
@@ -853,10 +853,10 @@ check_idle_rrn(short constel, int cc_before, long t)
 		for (i = 0; i < 4; i++)
 			if (pt == vect16[q * 4 + i])
 				hit = 1;
-		diff_eq_int("silence idle point is vect16 of f25c8 %ld", hit,
+		diff_eq_int("silence idle point is vect16 of cur_quadrant %ld", hit,
 			    1, t);
 	} else {
-		diff_eq_int("silence idle point is vect4[f25c8] %ld", pt,
+		diff_eq_int("silence idle point is vect4[cur_quadrant] %ld", pt,
 			    vect4[q], t);
 	}
 }
@@ -876,8 +876,8 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 				n_r11_adv++;
 				diff_eq_int("state 11 advances to 12 %ld",
 					    oa.v90_receiver, 12, tag);
-				diff_eq_int("state 11 zeroes f25c0 %ld",
-					    oa.f25c0, 0, tag);
+				diff_eq_int("state 11 zeroes seg_symcount %ld",
+					    oa.seg_symcount, 0, tag);
 			}
 			break;
 		case 12:
@@ -886,12 +886,12 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 				n_r12_adv++;
 				diff_eq_int("state 12 advances to 13 %ld",
 					    oa.v90_receiver, 13, tag);
-				diff_eq_int("state 12 zeroes f25c6 %ld",
-					    oa.f25c6, 0, tag);
-				diff_eq_int("state 12 zeroes f25c0 %ld",
-					    oa.f25c0, 0, tag);
-				diff_eq_int("state 12 zeroes f25cc %ld",
-					    oa.f25cc, 0, tag);
+				diff_eq_int("state 12 zeroes prev_quadrant %ld",
+					    oa.prev_quadrant, 0, tag);
+				diff_eq_int("state 12 zeroes seg_symcount %ld",
+					    oa.seg_symcount, 0, tag);
+				diff_eq_int("state 12 zeroes tx_scr_sr %ld",
+					    oa.tx_scr_sr, 0, tag);
 			}
 			break;
 		case 13:
@@ -932,7 +932,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			n_s15_adv++;
 			diff_eq_int("state 15 advances to 16 %ld",
 				    oa.v90_receiver, 16, tag);
-			diff_eq_int("state 15 zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("state 15 zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
 		}
 		break;
@@ -942,11 +942,11 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			n_s16_adv++;
 			diff_eq_int("state 16 advances to 17 %ld",
 				    oa.v90_receiver, 17, tag);
-			diff_eq_int("state 16 zeroes f25c6 %ld", oa.f25c6, 0,
+			diff_eq_int("state 16 zeroes prev_quadrant %ld", oa.prev_quadrant, 0,
 				    tag);
-			diff_eq_int("state 16 zeroes f25c0 %ld", oa.f25c0, 0,
+			diff_eq_int("state 16 zeroes seg_symcount %ld", oa.seg_symcount, 0,
 				    tag);
-			diff_eq_int("state 16 zeroes f25cc %ld", oa.f25cc, 0,
+			diff_eq_int("state 16 zeroes tx_scr_sr %ld", oa.tx_scr_sr, 0,
 				    tag);
 		}
 		break;
@@ -961,10 +961,10 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			diff_eq_int("state 18 goes to the idle state %ld",
 				    oa.v90_receiver, 19, tag);
 			diff_eq_int("state 18 lifts the freeze %ld",
-				    (long)(oa.f25c2 & V34_EC_FROZEN), 0, tag);
-			diff_eq_int("state 18 leaves the rest of f25c2 %ld",
+				    (long)(oa.tx_flags & V34_EC_FROZEN), 0, tag);
+			diff_eq_int("state 18 leaves the rest of tx_flags %ld",
 				    (long)(unsigned short)
-				    (oa.f25c2 ^ before_f25c2),
+				    (oa.tx_flags ^ before_f25c2),
 				    (long)(before_f25c2 & V34_EC_FROZEN), tag);
 			diff_eq_int("state 18 clears the SAS detector %ld",
 				    (long)(cfg[CFG_FLAGS03] & CFG_SAS_DETECT),
@@ -992,8 +992,8 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 			 * agree with the blob on every advancing call and
 			 * disagree here.
 			 */
-			diff_eq_int("state 18 leaves f25c2 alone %ld",
-				    (long)(unsigned short)oa.f25c2,
+			diff_eq_int("state 18 leaves tx_flags alone %ld",
+				    (long)(unsigned short)oa.tx_flags,
 				    (long)(unsigned short)before_f25c2, tag);
 			diff_eq_int("state 18 leaves the SAS detector %ld",
 				    (long)(cfg[CFG_FLAGS03] & CFG_SAS_DETECT)
@@ -1017,7 +1017,7 @@ account_rrn(int silence, int before_state, short constel, short before_c6,
 		 * check above.
 		 */
 		diff_eq_int("state 20 sets the freeze %ld",
-			    (long)(oa.f25c2 & V34_EC_FROZEN) != 0, 1, tag);
+			    (long)(oa.tx_flags & V34_EC_FROZEN) != 0, 1, tag);
 		if ((before_f25c2 & V34_EC_FROZEN) == 0)
 			n_s20_freeze++;
 		if (oa.v90_receiver != 20) {
@@ -1047,9 +1047,9 @@ run_rrn(int silence, short constel, int iters)
 
 	for (it = 0; it < iters; it++) {
 		int before_state = oa.v90_receiver;
-		short before_c6 = oa.f25c6;
-		short before_f25c2 = oa.f25c2;
-		int before_cc = oa.f25cc;
+		short before_c6 = oa.prev_quadrant;
+		short before_f25c2 = oa.tx_flags;
+		int before_cc = oa.tx_scr_sr;
 		int before_sas =
 		    ((const unsigned char *)oa.pac3c)[CFG_FLAGS03]
 		    & CFG_SAS_DETECT;
@@ -1092,9 +1092,9 @@ main(void)
 	 *
 	 * `state` covers the eight values the object names and five it does
 	 * not, because there is no default arm and "does nothing" is a claim
-	 * about every other value.  `constel` covers both values `f382` is
+	 * about every other value.  `constel` covers both values `short_382` is
 	 * documented to take and one that is neither -- which for case 5 is
-	 * an ARM and not a fall-through, unlike the K56flex twin.  `f25c2`
+	 * an ARM and not a fall-through, unlike the K56flex twin.  `tx_flags`
 	 * sweeps the scrambler generator in bit 0 and `txmit`'s echo feed in
 	 * bit 9.
 	 */
@@ -1270,10 +1270,10 @@ main(void)
 
 	/*
 	 * ------------------------------------------------------------------
-	 * The idle symbol's generator is not `f25c2`.
+	 * The idle symbol's generator is not `tx_flags`.
 	 *
 	 * Both published emitters pass `tx_scrambler_mode(o)`, which is bit 0
-	 * of `f25c2`; case 5 passes the LITERAL 0.  So flipping that bit with
+	 * of `tx_flags`; case 5 passes the LITERAL 0.  So flipping that bit with
 	 * everything else held fixed must leave case 5's outputs IDENTICAL --
 	 * a claim about our side alone, and the one a reconstruction calling
 	 * either emitter would fail even though the blob agreed with it on
@@ -1285,7 +1285,7 @@ main(void)
 	 * would move the object for reasons that have nothing to do with the
 	 * scrambler.
 	 */
-	diff_begin("v90Phase34 idle generator is not f25c2");
+	diff_begin("v90Phase34 idle generator is not tx_flags");
 	{
 		static const short constels[2] = { (short)0x89b0,
 						   (short)0x8990 };
@@ -1299,14 +1299,14 @@ main(void)
 				      0x7000u + (unsigned)c);
 				run(constels[c], 6);
 				if (gpc == 0) {
-					cc0 = oa.f25cc;
-					c80 = oa.f25c8;
+					cc0 = oa.tx_scr_sr;
+					c80 = oa.cur_quadrant;
 					pt0 = oa.txpoint.word;
 				} else {
-					diff_eq_int("gpc does not move f25cc "
-						    "%ld", oa.f25cc, cc0, c);
-					diff_eq_int("gpc does not move f25c8 "
-						    "%ld", oa.f25c8, c80, c);
+					diff_eq_int("gpc does not move tx_scr_sr "
+						    "%ld", oa.tx_scr_sr, cc0, c);
+					diff_eq_int("gpc does not move cur_quadrant "
+						    "%ld", oa.cur_quadrant, c80, c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
 						    oa.txpoint.word,
@@ -1395,7 +1395,7 @@ main(void)
 	 * swept 0, 1 and 2 -- level 1 being the only value that separates the
 	 * object's `> 1` gate from the `>= 1` a reader would write.  The SAS
 	 * bit is driven both ways so that "clears it" and "leaves it clear"
-	 * are two different trials, and `f25c2` carries the freeze both set
+	 * are two different trials, and `tx_flags` carries the freeze both set
 	 * and clear so that state 18's clear and state 20's set each have a
 	 * trial in which they change something.
 	 */
@@ -1433,7 +1433,7 @@ main(void)
 	 * ------------------------------------------------------------------
 	 * State 19's idle symbol carries the literal 0 as its scrambler mode,
 	 * exactly as `v90Phase34`'s case 5 does -- so flipping bit 0 of
-	 * `f25c2` with everything else held fixed must leave its outputs
+	 * `tx_flags` with everything else held fixed must leave its outputs
 	 * IDENTICAL.  A claim about our side alone, and the one a
 	 * reconstruction that called `txmitdibit` here would fail even though
 	 * the blob agreed with it on every other sweep.
@@ -1442,7 +1442,7 @@ main(void)
 	 * the object for reasons that have nothing to do with the scrambler.
 	 */
 	who = "v90RateRenegSilence";
-	diff_begin("silence idle generator is not f25c2");
+	diff_begin("silence idle generator is not tx_flags");
 	{
 		static const short constels[3] = { (short)0x89b0,
 						   (short)0x8990, 0x1234 };
@@ -1457,17 +1457,17 @@ main(void)
 				set_sas(1);
 				run_rrn(1, constels[c], 6);
 				if (gpc == 0) {
-					cc0 = oa.f25cc;
-					c80 = oa.f25c8;
-					c60 = oa.f25c6;
+					cc0 = oa.tx_scr_sr;
+					c80 = oa.cur_quadrant;
+					c60 = oa.prev_quadrant;
 					pt0 = oa.txpoint.word;
 				} else {
-					diff_eq_int("gpc does not move f25cc "
-						    "%ld", oa.f25cc, cc0, c);
-					diff_eq_int("gpc does not move f25c8 "
-						    "%ld", oa.f25c8, c80, c);
-					diff_eq_int("gpc does not move f25c6 "
-						    "%ld", oa.f25c6, c60, c);
+					diff_eq_int("gpc does not move tx_scr_sr "
+						    "%ld", oa.tx_scr_sr, cc0, c);
+					diff_eq_int("gpc does not move cur_quadrant "
+						    "%ld", oa.cur_quadrant, c80, c);
+					diff_eq_int("gpc does not move prev_quadrant "
+						    "%ld", oa.prev_quadrant, c60, c);
 					diff_eq_int("gpc does not move the "
 						    "point %ld",
 						    oa.txpoint.word, pt0, c);
@@ -1486,7 +1486,7 @@ main(void)
 	 *     the FOUR-POINT arm here and the ZERO-POINT arm there, so the
 	 *     transmitted point and the scrambler both move here and neither
 	 *     moves there;
-	 *   - `f25c6` follows `f25c8` here and is untouched there.
+	 *   - `prev_quadrant` follows `cur_quadrant` here and is untouched there.
 	 *
 	 * Both are driven from the same object with the same seed, one call
 	 * each, so the only difference between the two runs is which function
@@ -1500,8 +1500,8 @@ main(void)
 		set_sas(1);
 		who = "v90Phase34";
 		run(0x1234, 1);
-		cc5 = oa.f25cc;
-		c65 = oa.f25c6;
+		cc5 = oa.tx_scr_sr;
+		c65 = oa.prev_quadrant;
 		pt5 = oa.txpoint.word;
 
 		setup(1, 1, 19, 0x1234, 0x1234, 1, &CFG_RUN, 0, 0xc001u);
@@ -1512,12 +1512,12 @@ main(void)
 		diff_eq_int("case 5 leaves the scrambler on an unknown "
 			    "constellation %ld", cc5, 0x2f6b3d51, 0);
 		diff_eq_int("state 19 clocks it %ld",
-			    oa.f25cc != 0x2f6b3d51, 1, 0);
+			    oa.tx_scr_sr != 0x2f6b3d51, 1, 0);
 		diff_eq_int("the two transmit different points %ld",
 			    oa.txpoint.word != pt5, 1, 0);
-		diff_eq_int("case 5 leaves f25c6 at its seed %ld", c65, 2, 0);
-		diff_eq_int("state 19 advances f25c6 %ld", oa.f25c6,
-			    oa.f25c8, 0);
+		diff_eq_int("case 5 leaves prev_quadrant at its seed %ld", c65, 2, 0);
+		diff_eq_int("state 19 advances prev_quadrant %ld", oa.prev_quadrant,
+			    oa.cur_quadrant, 0);
 	}
 	rc |= diff_end();
 

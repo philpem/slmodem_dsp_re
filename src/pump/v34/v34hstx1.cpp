@@ -26,8 +26,8 @@
  *     0x74(%esp)  the object + 0x264    -- the receiver
  *
  * so `0x3a6(%esi)` with `esi` from 0x4c(%esp) is +0x25c2 in the object, not
- * +0x3a6.  The six fields that region carries are `f25c0`, `f25c2`, `f25c6`,
- * `f25c8`, `f25cc` and `f25d0`, and they are named in `struct v34_object`.
+ * +0x3a6.  The six fields that region carries are `seg_symcount`, `tx_flags`, `prev_quadrant`,
+ * `cur_quadrant`, `tx_scr_sr` and `f25d0`, and they are named in `struct v34_object`.
  *
  * ---------------------------------------------------------------------------
  * TWO PAIRS THAT LOOK LIKE ONE ARM AND ARE NOT.
@@ -41,7 +41,7 @@
  * 71 `TXLEVEL` and 86 `TXMD` share the scrambler step and differ in what they
  * transmit: 71 always sends `vect4[0]` and 86 sends `vect4[q]`, the point the
  * scrambler just chose.  71 advances the register and throws the result away
- * except as `f25c8`.
+ * except as `cur_quadrant`.
  *
  * ---------------------------------------------------------------------------
  * AND ONE PAIR THAT AGREES COLD AND IS STILL NOT ONE ARM.
@@ -185,7 +185,7 @@
  * hands the bottom two bits to the scrambler, so it is sixteen bits read as
  * eight dibits, and the end of 64's segment reloads it with 0x899f.  +0x25d8
  * counts one per pass and ends the segment past 0x80.  +0x25da is a mode
- * word: 64 goes no further unless it holds 2, and the `f359c == 0x66` path
+ * word: 64 goes no further unless it holds 2, and the `role == 0x66` path
  * declines to move on when it holds 0.  No other site in this tree reads any
  * of the three.
  */
@@ -197,7 +197,7 @@
  * +0x35a2, one halfword of `unmapped_359e`, and +0x382, which is the
  * RECEIVER's +0x11e -- `0x74(%esp)` plus 0x11e -- and lands in that
  * structure's `pad_000`, so neither is a named field anywhere in this tree.
- * 64/68 tests +0x35a2 against zero on its `f359c == 0x66` path and 69 tests
+ * 64/68 tests +0x35a2 against zero on its `role == 0x66` path and 69 tests
  * +0x382 against 0x89b0 to choose between four points and sixteen.
  */
 #define TX1_F35A2	0x35a2
@@ -330,7 +330,7 @@ tx1_put_int(void *objp, unsigned off, int v)
  * Send one silent symbol -- `f25d0` and `f25d2` are the two halves of the
  * point `txmit` transmits, and both are cleared before the call -- and then,
  * if the receiver is holding bit 3 of its flags word, arm the segment:
- * raise 0x2000 in `f25c2`, move the transmit machine to SSEG, and clear the
+ * raise 0x2000 in `tx_flags`, move the transmit machine to SSEG, and clear the
  * three fields the next segment counts in.
  *
  * BIT 3 IS THE ONLY THING THAT SEPARATES THE TWO PATHS and the fixture's
@@ -359,11 +359,11 @@ v34tx1_xmit0(void *objp)
 	txmit(o);
 
 	if (rx->flags & V34_RX_FLAG_LATE_TRN) {
-		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x2000u);
+		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x2000u);
 		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
-		o->f25c6 = 0;
-		o->f25c0 = 0;
-		o->f25cc = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
 	}
 	return V34TX1_LOOP;
 }
@@ -373,14 +373,14 @@ v34tx1_xmit0(void *objp)
  * The scrambler step 71 and 86 share, 0x641de..0x6424e and 0x63db5..0x63e2e.
  *
  * Both arms carry the loop twice -- once with the 0x04000000 tap and once
- * with 0x00002000 -- and choose between the copies with `f359c == 0x65`.
+ * with 0x00002000 -- and choose between the copies with `role == 0x65`.
  * That is `V34scrambler`'s `mode` argument exactly: v34rx.c hoists the same
  * branch out of the same loop, over the same register at +0x25cc, with the
  * same two generators.  `bits` is the literal 3 and `nbits` is 2, so two
  * scrambled bits come out and the register advances twice.
  *
  * WHY THE RETURN VALUE IS USABLE THOUGH THE OBJECT DOES NOT MASK.  The arms
- * store `reg >> 29` into `f25c8` unmasked where `V34scrambler` returns
+ * store `reg >> 29` into `cur_quadrant` unmasked where `V34scrambler` returns
  * `(reg >> 29) & 3`.  The two agree for every input: the loop's last act is
  * `reg >>= 1`, so bit 31 is clear on exit and `reg >> 29` is already 0..3.
  * The masked form is used here because it is the published function; nothing
@@ -389,8 +389,8 @@ v34tx1_xmit0(void *objp)
 static short
 tx1_scramble2(struct v34_object *o)
 {
-	return (short)V34scrambler((unsigned *)&o->f25cc,
-				   (short)(o->f359c == 0x65), 3, 2);
+	return (short)V34scrambler((unsigned *)&o->tx_scr_sr,
+				   (short)(o->role == 0x65), 3, 2);
 }
 
 /*
@@ -399,7 +399,7 @@ tx1_scramble2(struct v34_object *o)
  *
  * One scrambler step, and then a symbol that is ALWAYS `vect4[0]`: the load
  * at 0x64257 has no index register, where 86's at 0x63e40 scales the
- * scrambler's output by four.  The quadrant still lands in `f25c8`, so the
+ * scrambler's output by four.  The quadrant still lands in `cur_quadrant`, so the
  * register and the quadrant advance while the transmitted point does not --
  * which is what a level-measurement segment wants.
  */
@@ -408,7 +408,7 @@ v34tx1_txlevel(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
 
-	o->f25c8 = tx1_scramble2(o);
+	o->cur_quadrant = tx1_scramble2(o);
 	tx1_put_point(o, vect4[0]);
 	txmit(o);
 	return V34TX1_LOOP;
@@ -420,7 +420,7 @@ v34tx1_txlevel(void *objp)
  *
  * Count +0xaa78 down.  On the step that reaches zero -- not before, and not
  * again afterwards, because zero is also the "do nothing" test at the top --
- * raise bit 2 of `f25c2` and report both echo cancellers' coefficients.
+ * raise bit 2 of `tx_flags` and report both echo cancellers' coefficients.
  * Then hand the sample itself to the phase 3/4 half, which is where the
  * transmitting is done: neither arm calls `txmit`.
  *
@@ -550,11 +550,11 @@ v34tx1_moh_silence(void *objp)
 		dsplibs_debug_printf(
 			"V34F MOH: After 192 silence, org = %d ,"
 			" act = %d\r\n",
-			o->fabec, o->moh_message);
+			o->moh_org, o->moh_message);
 
 	/* 0x66dac */
 	hs_setstate(o, TX1_TXSTATE,
-		    (o->fabec == 1 || o->moh_message == 1)
+		    (o->moh_org == 1 || o->moh_message == 1)
 		    ? V34HS_MOH_FRR : V34HS_MOH_ON_HOLD);
 
 	o->vect_idx = 0;				/* 0x66dec */
@@ -580,9 +580,9 @@ v34tx1_moh_silence(void *objp)
  * This file used to report 0x66fe9 as a transfer (`V34TX1_TXMD_DONE`) and
  * stop; the transfer does not exist.
  *
- * WHAT 0x66fe9 DOES is clear bit 2 of `f25c2` and zero `f354c`, `f3550` and
- * `f3552` -- the four that gate and seed `adaptecho`'s slow path.  The same
- * four are cleared at 0x67613 in 21 `TRNSEG4`, which ALSO zeroes `f3560`
+ * WHAT 0x66fe9 DOES is clear bit 2 of `tx_flags` and zero `echo_calls`, `echo_alpha` and
+ * `short_3552` -- the four that gate and seed `adaptecho`'s slow path.  The same
+ * four are cleared at 0x67613 in 21 `TRNSEG4`, which ALSO zeroes `echo_energy`
  * and calls `VPcmV34ReportStartOfEchoAdapt`; the two are near-twins and not
  * one body, so they are written twice rather than factored.  The
  * reconstruction's own diagnostic names what it is for: "On MD - enabling
@@ -596,7 +596,7 @@ v34tx1_moh_silence(void *objp)
  * +0x06, which is the same triple v34hshak.c:522 reads.
  *
  * THE ARM ENDS AT 0x6430c, WHICH IS SHARED, and its one instruction --
- * `f25c0 += 1` -- is written here rather than in the caller because it is
+ * `seg_symcount += 1` -- is written here rather than in the caller because it is
  * the last thing this arm does on both of its in-loop paths.  Another table-1
  * arm reaching 0x6430c will want the same line; the eventual `v34handshak`
  * may factor it.
@@ -607,7 +607,7 @@ v34tx1_txmd(void *objp)
 	struct v34_object *o = (struct v34_object *)objp;
 	short q = tx1_scramble2(o);
 
-	o->f25c8 = q;
+	o->cur_quadrant = q;
 	tx1_put_point(o, vect4[q]);
 	txmit(o);
 
@@ -619,11 +619,11 @@ v34tx1_txmd(void *objp)
 			dsplibs_debug_printf(
 				"On MD - enabling echo adaptation...\r\n");
 
-		o->f354c = 0;				/* 0x6700e */
-		o->f25c2 =				/* 0x67017 */
-			(short)((unsigned short)o->f25c2 & ~4u);
-		o->f3550 = 0;				/* 0x6701e */
-		o->f3552 = 0;				/* 0x67025 */
+		o->echo_calls = 0;				/* 0x6700e */
+		o->tx_flags =				/* 0x67017 */
+			(short)((unsigned short)o->tx_flags & ~4u);
+		o->echo_alpha = 0;				/* 0x6701e */
+		o->short_3552 = 0;				/* 0x67025 */
 	}
 
 	if ((unsigned short)o->vect_idx
@@ -642,13 +642,13 @@ v34tx1_txmd(void *objp)
 				  cfg->baud, cfg->carrier, cfg->preemp, pcm, 0);
 
 		hs_setstate(o, TX1_TXSTATE, V34HS_SSEG);
-		o->f25c0 = 0;
-		o->f25cc = 0;
-		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x8004u);
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
+		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x8004u);
 	}
 
 	/* 0x6430c */
-	o->f25c0 = (short)(o->f25c0 + 1);
+	o->seg_symcount = (short)(o->seg_symcount + 1);
 	return V34TX1_LOOP;
 }
 
@@ -690,7 +690,7 @@ v34tx1_tone_ab(void *objp)
  *
  * TWO symbols per pass of the loop, not one: `vect4[0]` then `vect4[3]`, each
  * with its own `txmit`, which is the only arm in this file that transmits
- * twice.  Then one tick of `f25c0`, the segment's symbol count, and at 0x40
+ * twice.  Then one tick of `seg_symcount`, the segment's symbol count, and at 0x40
  * the segment is over.
  *
  * `vect4[3]` is the (-,+) point and `vect4[0]` is (+,+), so the pair is one
@@ -723,12 +723,12 @@ v34tx1_sseg(void *objp)
 	tx1_put_point(o, vect4[3]);
 	txmit(o);
 
-	n = (unsigned short)((unsigned short)o->f25c0 + 1);
-	o->f25c0 = (short)n;
+	n = (unsigned short)((unsigned short)o->seg_symcount + 1);
+	o->seg_symcount = (short)n;
 	if (n == 0x40) {
 		/* 0x66d11 */
 		hs_setstate(o, TX1_TXSTATE, V34HS_SBARSEG);
-		o->f25c0 = 0;
+		o->seg_symcount = 0;
 	}
 	return V34TX1_LOOP;
 }
@@ -739,7 +739,7 @@ v34tx1_sseg(void *objp)
  *
  * `modulatevector` does all of the transmitting -- it maps one point out of
  * the vector it holds and tail-calls `txmit` -- and the rest of the arm is
- * conditional on bit 4 of `f25c2`.
+ * conditional on bit 4 of `tx_flags`.
  *
  * That bit is the mapper's own "the data path is on" flag: v34shell.c raises
  * it inside `modulatevector`, on the pass that regenerates the vector, when
@@ -777,11 +777,11 @@ v34tx1_dataxmit(void *objp)
 
 	modulatevector(o);
 
-	if (!(o->f25c2 & 0x10))
+	if (!(o->tx_flags & 0x10))
 		return V34TX1_LOOP;
 
-	rx->f220 = 0;
-	rx->f21c = 0;
+	rx->equerr_accum = 0;
+	rx->err_symcount = 0;
 	tx1_put_int(o, TX1_TIMER_MARK, tx1_get_int(o, TX1_TIMER));
 
 	idx = tx1_get(o, TX1_RATEIDX);
@@ -815,7 +815,7 @@ v34tx1_dataxmit(void *objp)
  * and a mutation of the truncation is equivalent -- a property of the table's
  * values, not of the code.  It is written as the object writes it.
  *
- * THE SCALE IS SIGNED AND THE SHIFT IS ARITHMETIC.  `f25d4` comes in through
+ * THE SCALE IS SIGNED AND THE SHIFT IS ARITHMETIC.  `tx_scale` comes in through
  * `movswl` and the product is closed with `sar $0xe`; `probe` is half
  * negative, so both readings are exercised by any run at all -- which is why
  * neither needs a case of its own and a `movzwl` or `shr` mutation dies on
@@ -848,7 +848,7 @@ v34tx1_tx_l1(void *objp)
 
 		if (doubled)
 			v = (short)(2 * v);
-		buf[i] = (short)((v * o->f25d4) >> 14);
+		buf[i] = (short)((v * o->tx_scale) >> 14);
 		o->vect_idx = (short)(idx + 1);
 	}
 
@@ -876,7 +876,7 @@ v34tx1_tx_l1(void *objp)
  * segment and the S-bar segment are the same alternation with both points
  * negated, which is what the bar in the name is.
  *
- * The segment is eight symbol PAIRS long, `f25c0` counting them, and the
+ * The segment is eight symbol PAIRS long, `seg_symcount` counting them, and the
  * count is compared as sixteen bits BEFORE the store -- the object stores
  * `%ax` only on the path that does not reach eight, and the completing path
  * clears the field at 0x671f2 instead.  So a reconstruction that stored first
@@ -884,16 +884,16 @@ v34tx1_tx_l1(void *objp)
  *
  * FOUR WAYS OUT OF THE COMPLETION, tested in this order and no other:
  *
- *   f25c2 & 0x2000      -> TRNSEG4A                          (0x67209)
- *   f35a4 == 0          -> PPSEG                             (0x68375)
- *   f25c2 & 0x8000      -> PPSEG, and f25c0 = f35a6 first    (0x69eca)
- *   otherwise           -> TXMD, after f35a6 = f35a4 * 0x53,
+ *   tx_flags & 0x2000      -> TRNSEG4A                          (0x67209)
+ *   short_35a4 == 0          -> PPSEG                             (0x68375)
+ *   tx_flags & 0x8000      -> PPSEG, and seg_symcount = f35a6 first    (0x69eca)
+ *   otherwise           -> TXMD, after f35a6 = short_35a4 * 0x53,
  *                          the modulator and the counter     (0x6783e)
  *
  * and all four converge on 0x67236, which zeroes `vect_idx` and +0x358e.
  * The first test is `test $0x20,%dh` on the halfword loaded at 0x671f9, which
  * is bit 13 and not bit 5; the third is `test %dx,%dx` / `js` on the SAME
- * register, so it is bit 15 of `f25c2` read as a sign.
+ * register, so it is bit 15 of `tx_flags` read as a sign.
  *
  * THE MODULATOR'S SIX ARGUMENTS ARE ALL LITERALS -- 4800 baud, 2400 carrier,
  * no pre-emphasis, `v90` zero, no reset (0x67890..0x678be).  There is no rate
@@ -906,15 +906,15 @@ v34tx1_tx_l1(void *objp)
  * THE COUNTER AT +0xaa78 IS A TIME, and the object computes it in fixed point
  * without touching the FPU:
  *
- *     67878..678db   esi = (0x5e8 - f25c) << 14
+ *     67878..678db   esi = (0x5e8 - good_run) << 14
  *     678dd..678e7   the 0x1b4e81b5 / `sar $0xa` / `sub` sequence, which is
  *                    signed division by 9600 truncating toward zero
  *     678e9          movswl %dx  -- the quotient is TRUNCATED TO A SHORT
  *     678ec..67909   * 0x960, >> 14, + 0x96
  *
- * so it is `(1512 - f25c) * 2400 / 9600 + 150` carried through a sixteen-bit
+ * so it is `(1512 - good_run) * 2400 / 9600 + 150` carried through a sixteen-bit
  * intermediate.  1512 and 9600 are sample counts at 9600 Hz; the truncation is
- * reachable, because the quotient leaves a short once `1512 - f25c` passes
+ * reachable, because the quotient leaves a short once `1512 - good_run` passes
  * 19,200, and `t_v34hstx1.c` drives it there.
  *
  * ONE STORE IS NOT MODELLED AND CANNOT BE.  0x6784d spills 0x53 to
@@ -933,22 +933,22 @@ v34tx1_sbarseg(void *objp)
 	tx1_put_point(o, vect4[1]);
 	txmit(o);
 
-	n = (unsigned short)((unsigned short)o->f25c0 + 1);
+	n = (unsigned short)((unsigned short)o->seg_symcount + 1);
 	if (n != 8) {
-		o->f25c0 = (short)n;
+		o->seg_symcount = (short)n;
 		return V34TX1_LOOP;		/* 0x629c8 */
 	}
 
 	/* 0x671f0 */
-	o->f25c0 = 0;
-	if ((unsigned short)o->f25c2 & 0x2000u) {
+	o->seg_symcount = 0;
+	if ((unsigned short)o->tx_flags & 0x2000u) {
 		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
 	} else if (tx1_get(o, TX1_F35A4) == 0) {
 		/* 0x68375 */
 		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
-	} else if ((unsigned short)o->f25c2 & 0x8000u) {
+	} else if ((unsigned short)o->tx_flags & 0x8000u) {
 		/* 0x69eca */
-		o->f25c0 = tx1_get(o, TX1_SEGLEN);
+		o->seg_symcount = tx1_get(o, TX1_SEGLEN);
 		hs_setstate(o, TX1_TXSTATE, V34HS_PPSEG);
 	} else {
 		/* 0x6783e */
@@ -965,7 +965,7 @@ v34tx1_sbarseg(void *objp)
 				  4800, 2400, 0, 0, 0);
 
 		/*
-		 * `(0x5e8 - f25c) << 14` with the subtraction done in an int.
+		 * `(0x5e8 - good_run) << 14` with the subtraction done in an int.
 		 * Spelled through `unsigned` because the left shift of a
 		 * negative int is undefined in C and the object's `shl` is
 		 * not; the bits are the same either way.
@@ -1006,13 +1006,13 @@ v34tx1_sbarseg(void *objp)
  *
  *   vect_idx  0..0x30    one pass of the PP sequence
  *   +0x358e   0..6       six passes make the segment
- *   f25c0                bumped at 0x6430c on the two paths that do NOT end
+ *   seg_symcount                bumped at 0x6430c on the two paths that do NOT end
  *                        the segment, and NOT on the one that does
  *
  * That last asymmetry is the arm's shape.  0x6430c is the shared block 86
  * also rejoins through (finding F340), and the segment's end leaves through
  * 0x63da2 instead, which writes nothing -- so a reconstruction that bumped
- * f25c0 on every path is wrong on exactly one of the three.
+ * seg_symcount on every path is wrong on exactly one of the three.
  *
  * WHAT THE SEGMENT'S END DOES, at 0x680ac.  `vect_idx` is reloaded from `rtd`
  * plus 0x90 -- not cleared -- and then +0xaa86 is set from a SCALED COPY of
@@ -1028,11 +1028,11 @@ v34tx1_sbarseg(void *objp)
  * still read three instructions later.
  *
  * THE COUNTER AT +0xaa78 IS 19'S ARITHMETIC WITH THE BAUD IN PLACE OF THE
- * SHIFT.  19 computes `(0x5e8 - f25c) << 14` and this computes
- * `(0x5e8 - f25c) * baud`, both divided by 9600 through the same
+ * SHIFT.  19 computes `(0x5e8 - good_run) << 14` and this computes
+ * `(0x5e8 - good_run) * baud`, both divided by 9600 through the same
  * 0x1b4e81b5 / `sar $0xa` sequence -- signed, truncating toward zero.  Then
- * three terms are added: f25c0, +0xaa7c, and a literal one, plus `rtd` again
- * when `f359c == 0x65`.  The quotient is NOT truncated to a short here, where
+ * three terms are added: seg_symcount, +0xaa7c, and a literal one, plus `rtd` again
+ * when `role == 0x65`.  The quotient is NOT truncated to a short here, where
  * 19 truncates it; the object stores it through `%dx` but keeps the 32-bit
  * value in `%edx` for the sum, which is the difference.
  *
@@ -1107,8 +1107,8 @@ v34tx1_ppseg(void *objp)
 			tx1_put(o, TX1_COUNT, (short)q);	/* 0x6818d */
 
 			acc = q + (unsigned short)tx1_get(o, TX1_FAA7C)
-				+ (unsigned short)o->f25c0 + 1;
-			if (o->f359c == 0x65)			/* 0x6926d */
+				+ (unsigned short)o->seg_symcount + 1;
+			if (o->role == 0x65)			/* 0x6926d */
 				acc += (unsigned short)o->rtd;
 			tx1_put(o, TX1_COUNT, (short)acc);
 
@@ -1128,7 +1128,7 @@ v34tx1_ppseg(void *objp)
 	}
 
 	/* 0x6430c */
-	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 	return V34TX1_LOOP;			/* 0x6431f */
 }
 
@@ -1163,7 +1163,7 @@ v34tx1_ppseg(void *objp)
  * first three shorts -- before writing eleven more fields of it directly.
  *
  * ONE OF THOSE ELEVEN IS CONDITIONAL and the rest are not: +0x18 is 0x1e when
- * `f359c == 0x65` AND `v90_receiver` is non-zero (0x69fcf), and 0x11
+ * `role == 0x65` AND `v90_receiver` is non-zero (0x69fcf), and 0x11
  * otherwise (0x685eb).  The two blocks are otherwise the same twelve stores
  * in the same order and rejoin at 0x68616, which is why they are one body
  * here.  `v90_receiver` is read as `*(int *)(obj+0x24c)` off `0x78(%esp)`,
@@ -1184,9 +1184,9 @@ v34tx1_ppseg(void *objp)
  *     sete %bl ; movzbl %bl,%eax ; dec %eax ; and $0xfffffff4,%eax
  *     lea 0x3a(%eax),%ebx
  *
- * from `f359c == 0x65`, which is 0x3a when the compare held and 0x2e when it
+ * from `role == 0x65`, which is 0x3a when the compare held and 0x2e when it
  * did not: RX_PHASE1_CALL for the originating side and TX_PHASE1_ANS for the
- * answering one, which is the same `f359c` reading probeselect uses.
+ * answering one, which is the same `role` reading probeselect uses.
  *
  * THE txstate COMPARE AT 0x66c10 CANNOT BE FALSE and is written as the object
  * writes it: it tests the value read at 0x640f4, which is 0x4a on this path
@@ -1226,7 +1226,7 @@ v34tx1_silence(void *objp)
 		if (*((unsigned char *)o + TX1_FABE8) != 0)
 			want = V34HS_MOH_TONE;
 		else					/* 0x68a7c */
-			want = o->f359c == 0x65 ? V34HS_RX_PHASE1_CALL
+			want = o->role == 0x65 ? V34HS_RX_PHASE1_CALL
 						: V34HS_TX_PHASE1_ANS;
 		hs_setstate(o, TX1_MICROSTATE, want);
 
@@ -1246,7 +1246,7 @@ v34tx1_silence(void *objp)
 				"V34RETRAIN, SILENCERETRAIN finished,"
 				" rx->rxflgs,=0x%x,rx->gain=0x%x,"
 				"gainestimate=0x%x\n",
-				rx->flags, rx->agc_gain, rx->f262);
+				rx->flags, rx->agc_gain, rx->agc_start_gain);
 		return V34TX1_LOOP;			/* 0x63941 */
 	}
 
@@ -1285,7 +1285,7 @@ v34tx1_silence(void *objp)
 		 * so nothing observable turns on it.
 		 */
 		char *r = (char *)*(short **)((char *)o + TX1_PTR_AA6C);
-		short lead = (o->f359c == 0x65 && o->v90_receiver != 0)
+		short lead = (o->role == 0x65 && o->v90_receiver != 0)
 			     ? 0x1e : 0x11;
 
 		*(short *)(r + 0x14) = -1;
@@ -1314,24 +1314,24 @@ v34tx1_silence(void *objp)
  *
  * The scrambler's two bits are not transmitted directly: they are ADDED to
  * the quadrant last sent, modulo four, and the sum is both the point's index
- * and the new "last".  `f25c8` is the quadrant chosen and `f25c6` the one
+ * and the new "last".  `cur_quadrant` is the quadrant chosen and `prev_quadrant` the one
  * carried forward, and the object writes them with two stores of the same
  * register either side of the table load.
  *
  * The two sites are instruction for instruction the same -- the same three
  * fields, the same mask, the same order -- so this is one static rather than
- * two copies, for the reason 78 and 85 share `tx1_ja_common`.  `f25c6` is
+ * two copies, for the reason 78 and 85 share `tx1_ja_common`.  `prev_quadrant` is
  * read with `movzwl` and the sum is masked to two bits, so a fixture value
  * outside 0..3 cannot change the answer.
  */
 static short
 tx1_dpsk4(struct v34_object *o, short q)
 {
-	short k = (short)((q + (unsigned short)o->f25c6) & 3);
+	short k = (short)((q + (unsigned short)o->prev_quadrant) & 3);
 	int point = vect4[k];
 
-	o->f25c8 = k;
-	o->f25c6 = k;
+	o->cur_quadrant = k;
+	o->prev_quadrant = k;
 	tx1_put_point(o, point);
 	return k;
 }
@@ -1347,7 +1347,7 @@ tx1_dpsk4(struct v34_object *o, short q)
  * through `vect16`, four at a time.  Everything else about the two halves is
  * the same shape: scramble, add to the quadrant last sent, transmit, count.
  *
- * THE GENERATOR SELECT IS `f25c2 & 1` AND NOT `f359c == 0x65`.  71 and 86
+ * THE GENERATOR SELECT IS `tx_flags & 1` AND NOT `role == 0x65`.  71 and 86
  * choose their scrambler polynomial on the state word (finding F340); this arm
  * chooses on bit 0 of the transmitter's flags, and the sense is inverted --
  * the bit SET takes the 0x04000000 tap, which is `V34scrambler`'s `mode` 0.
@@ -1360,7 +1360,7 @@ tx1_dpsk4(struct v34_object *o, short q)
  * both are set either way.  It is written as the object writes it and the
  * mutation that makes them equal is recorded as equivalent, with that proof.
  *
- * The first call's quadrant goes into `f25c8` and is READ BACK FROM THERE
+ * The first call's quadrant goes into `cur_quadrant` and is READ BACK FROM THERE
  * (0x67131) to index `vect16` as the row, with the second call's two bits as
  * the column -- `vect16[q2 + 4 * k]`, the same packing v34k56.cpp and
  * v34pcmmain.cpp use.  So the sixteen-point symbol carries four bits and the
@@ -1379,7 +1379,7 @@ int
 v34tx1_exmit(void *objp)
 {
 	struct v34_object *o = (struct v34_object *)objp;
-	short mode = (short)((o->f25c2 & 1) == 0);
+	short mode = (short)((o->tx_flags & 1) == 0);
 	short q;
 
 	if ((unsigned short)tx1_get(o, TX1_F382) == 0x89b0u) {
@@ -1387,19 +1387,19 @@ v34tx1_exmit(void *objp)
 		short k;
 		int point;
 
-		q = (short)V34scrambler((unsigned *)&o->f25cc, mode, 0xf, 2);
-		o->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);
+		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 0xf, 2);
+		o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
 
-		q = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);
-		k = o->f25c8;			/* re-read, 0x67131 */
-		o->f25c6 = k;
+		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);
+		k = o->cur_quadrant;			/* re-read, 0x67131 */
+		o->prev_quadrant = k;
 		point = vect16[q + 4 * k];
 		tx1_put_point(o, point);
 		txmit(o);
 		o->vect_idx = (short)((unsigned short)o->vect_idx + 4);
 	} else {
 		/* 0x6386b */
-		q = (short)V34scrambler((unsigned *)&o->f25cc, mode, 3, 2);
+		q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, 3, 2);
 		(void)tx1_dpsk4(o, q);
 		txmit(o);
 		o->vect_idx = (short)((unsigned short)o->vect_idx + 2);
@@ -1422,7 +1422,7 @@ v34tx1_exmit(void *objp)
 /*
  * ---------------------------------------------------------------------------
  * 64 `JTXMIT` and 68 `J1TXMIT`, 0x635cc, with 68's tail at 0x65653, 64's at
- * 0x6372e and the `f359c == 0x66` path at 0x66ca8.
+ * 0x6372e and the `role == 0x66` path at 0x66ca8.
  *
  * ONE TABLE ENTRY, ONE BODY, TWO TAILS -- a third shape beside the file's
  * other two.  `.rodata+0x2da0` gives indices 59 and 63 the identical address
@@ -1445,13 +1445,13 @@ v34tx1_exmit(void *objp)
  *     eight dibits and the eight passes of a wrap send all of them.  The
  *     shift count is `%cl` and the hardware masks it to five bits, which is
  *     why it is written `& 31` here;
- *   - the scrambler, on `f25c2 & 1` as 69's is;
+ *   - the scrambler, on `tx_flags & 1` as 69's is;
  *   - the differential quadrant and one `vect4` point;
  *   - `vect_idx = (vect_idx + 1) & 7`, stored before anything branches.
  *
  * THEN THREE WAYS OUT, tested in this order and no other:
  *
- *   f359c == 0x66       -> 0x66ca8, from EITHER txstate
+ *   role == 0x66       -> 0x66ca8, from EITHER txstate
  *   vect_idx != 0       -> the loop, which is most passes
  *   txstate == 68       -> 0x65653, the segment's end
  *   otherwise (64)      -> 0x6370d, +0x25da and +0x25d8
@@ -1473,7 +1473,7 @@ v34tx1_exmit(void *objp)
  * was not 68 and nothing between the two writes it.
  *
  * AND THEN THE SECOND FREEZE.  If +0xaa78 is still non-zero the arm raises
- * bit 2 of `f25c2`, reports both cancellers and ZEROES the counter -- the
+ * bit 2 of `tx_flags`, reports both cancellers and ZEROES the counter -- the
  * same flag and the same pair of reports as the countdown's own completion,
  * on a different condition.  The two are mutually exclusive on one pass:
  * reaching zero at the top leaves nothing for this to do.  That flag-then-
@@ -1482,8 +1482,8 @@ v34tx1_exmit(void *objp)
  * blob prints `V34HSHAK: Freeze EC` and both report headers here and this
  * file emitted none of the three while it inlined the pair.
  *
- * 68's TAIL, 0x65653, CLEARS RATHER THAN COUNTS: `f25cc` (a 32-bit store),
- * `f25c6` and `f25c0` all go to zero and the transmit machine moves to
+ * 68's TAIL, 0x65653, CLEARS RATHER THAN COUNTS: `tx_scr_sr` (a 32-bit store),
+ * `prev_quadrant` and `seg_symcount` all go to zero and the transmit machine moves to
  * TRNSEG4A.  THE OBJECT DOES NOT COMPARE FIRST here -- there is no
  * `if (txstate != ...)` guard the way every other state change in this file
  * has one.  It is written as `hs_setstate` anyway, because the enclosing
@@ -1514,15 +1514,15 @@ v34tx1_jtxmit(void *objp)
 	shift = (unsigned)(2 * (int)o->vect_idx) & 31u;
 	bits = (short)((unsigned)(unsigned short)tx1_get(o, TX1_F25D6) >> shift);
 
-	mode = (short)((o->f25c2 & 1) == 0);
-	q = (short)V34scrambler((unsigned *)&o->f25cc, mode, bits, 2);
+	mode = (short)((o->tx_flags & 1) == 0);
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, mode, bits, 2);
 	(void)tx1_dpsk4(o, q);
 	txmit(o);
 
 	idx = (unsigned short)(((unsigned short)o->vect_idx + 1) & 7);
 	o->vect_idx = (short)idx;
 
-	if (o->f359c == 0x66) {
+	if (o->role == 0x66) {
 		/* 0x66ca8 */
 		if (!(rx->flags & V34_RX_FLAG_DATA)) {
 			if (tx1_get(o, TX1_F35A2) == 0)
@@ -1542,10 +1542,10 @@ v34tx1_jtxmit(void *objp)
 
 	if (tx1_get(o, TX1_TXSTATE) == V34HS_J1TXMIT) {
 		/* 0x65653 */
-		o->f25cc = 0;
+		o->tx_scr_sr = 0;
 		hs_setstate(o, TX1_TXSTATE, V34HS_TRNSEG4A);
-		o->f25c6 = 0;
-		o->f25c0 = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
 		return V34TX1_LOOP;			/* 0x640a1 */
 	}
 
@@ -1598,13 +1598,13 @@ v34tx1_jtxmit(void *objp)
  * arm takes around it.
  *
  * ---------------------------------------------------------------------------
- * THE SHAPE.  Two or four bits are collected into `f25c8`, lowest first, and
+ * THE SHAPE.  Two or four bits are collected into `cur_quadrant`, lowest first, and
  * then ONE symbol is mapped out of them:
  *
- *     f25c8 = 0
+ *     cur_quadrant = 0
  *     n = 0
  *     while (n <= (receiver +0x11e == 0x89b0 ? 3 : 1)) {
- *             f25c8 |= getbit(*(obj+0xaa6c)) << n;
+ *             cur_quadrant |= getbit(*(obj+0xaa6c)) << n;
  *             vect_idx += 1;
  *             ... the three checkpoints ...
  *             n += 1;
@@ -1701,7 +1701,7 @@ tx1_mp_reload(struct v34_object *o, struct v34_bitsource *b,
 		dsplibs_debug_printf(
 			"V34MP, Starting txmit MP again(%d),"
 			" rxflgs=0x%x,txflags=0x%x\n",
-			tx1_get(o, TX1_F359E), flags, o->f25c2);
+			tx1_get(o, TX1_F359E), flags, o->tx_flags);
 }
 
 /*
@@ -1784,14 +1784,14 @@ tx1_mp_sequence_end(struct v34_object *o, struct v34_receiver *rx)
 
 /*
  * 0x64929 -- two bits, one differential quadrant, one `vect4` point.  This is
- * 69's four-point half with the scrambler's `bits` coming out of `f25c8`
+ * 69's four-point half with the scrambler's `bits` coming out of `cur_quadrant`
  * instead of a literal three, so `tx1_dpsk4` carries the rest of it.
  */
 static void
 tx1_mp4(struct v34_object *o, short src)
 {
-	short pick = (short)((o->f25c2 & 1) == 0);
-	short q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);
+	short pick = (short)((o->tx_flags & 1) == 0);
+	short q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
 
 	(void)tx1_dpsk4(o, q);
 }
@@ -1800,13 +1800,13 @@ tx1_mp4(struct v34_object *o, short src)
  * 0x63b62 -- four bits, two scrambler steps, one `vect16` point.  Instruction
  * for instruction this is 69's sixteen-point block at 0x67031 with two
  * differences and no others: the two `bits` arguments are the low and the high
- * dibit of `f25c8` where 69 passes the literals 0xf and 3, and this one does
+ * dibit of `cur_quadrant` where 69 passes the literals 0xf and 3, and this one does
  * not advance `vect_idx` (the bit loop already did, once per bit).  It is
  * written out rather than shared with 69 because sharing would have to rewrite
  * 69's body, and the mutations already aimed at that text are what say 69 is
  * right.
  *
- * `f25c8` IS READ SIGNED (`movswl`, 0x63b83) AND IT CANNOT MATTER.  0x639ab
+ * `cur_quadrant` IS READ SIGNED (`movswl`, 0x63b83) AND IT CANNOT MATTER.  0x639ab
  * clears the field before the loop and the loop only ORs bits in, so the two
  * readings can differ only when bit 15 is set -- which needs the reader's
  * exhausted arm, whose -1 fills every bit.  Even then the scrambler consumes
@@ -1814,23 +1814,23 @@ tx1_mp4(struct v34_object *o, short src)
  * four are ones under either reading.  So it is a proof and not a run.
  *
  * The second call takes the SAVED halfword shifted down by two, not the value
- * `f25c8` now holds: 0x63c03 restores the register before 0x63c12 shifts it,
+ * `cur_quadrant` now holds: 0x63c03 restores the register before 0x63c12 shifts it,
  * and 0x63c05 has already overwritten the field with the first quadrant.
  */
 static void
 tx1_mp16(struct v34_object *o, short src)
 {
-	short pick = (short)((o->f25c2 & 1) == 0);
+	short pick = (short)((o->tx_flags & 1) == 0);
 	short k, q;
 	int point;
 
-	q = (short)V34scrambler((unsigned *)&o->f25cc, pick, src, 2);
-	o->f25c8 = (short)((q + (unsigned short)o->f25c6) & 3);
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick, src, 2);
+	o->cur_quadrant = (short)((q + (unsigned short)o->prev_quadrant) & 3);
 
-	q = (short)V34scrambler((unsigned *)&o->f25cc, pick,
+	q = (short)V34scrambler((unsigned *)&o->tx_scr_sr, pick,
 				(short)(src >> 2), 2);
-	k = o->f25c8;					/* re-read, 0x63c72 */
-	o->f25c6 = k;
+	k = o->cur_quadrant;					/* re-read, 0x63c72 */
+	o->prev_quadrant = k;
 	point = vect16[q + 4 * k];
 	tx1_put_point(o, point);
 }
@@ -1844,7 +1844,7 @@ v34tx1_xmitmp(void *objp)
 	int wide = 0;
 	int n = 0;
 
-	o->f25c8 = 0;					/* 0x639ab */
+	o->cur_quadrant = 0;					/* 0x639ab */
 
 	for (;;) {
 		struct v34_bitsource *b;
@@ -1862,9 +1862,9 @@ v34tx1_xmitmp(void *objp)
 		/*
 		 * 0x63ab1.  `n` reaches the shift through `movzbl`, and the
 		 * bit reaches it sign-extended -- so the reader's -1 fills
-		 * `f25c8` from bit `n` up rather than setting one bit.
+		 * `cur_quadrant` from bit `n` up rather than setting one bit.
 		 */
-		o->f25c8 = (short)((unsigned short)o->f25c8
+		o->cur_quadrant = (short)((unsigned short)o->cur_quadrant
 				   | (unsigned short)
 				     ((unsigned)(int)bit
 				      << ((unsigned)(unsigned char)n & 31u)));
@@ -1908,9 +1908,9 @@ v34tx1_xmitmp(void *objp)
 	}
 
 	if (wide)
-		tx1_mp16(o, o->f25c8);
+		tx1_mp16(o, o->cur_quadrant);
 	else
-		tx1_mp4(o, o->f25c8);
+		tx1_mp4(o, o->cur_quadrant);
 
 	txmit(o);				/* 0x62d5f and 0x64a42 */
 	return V34TX1_LOOP;			/* 0x62d70 and 0x640a1 */
@@ -1946,7 +1946,7 @@ v34tx1_xmitmp(void *objp)
  *
  *     if (fabe8)  vect_idx += 1        the Modem-on-Hold clock
  *     bit = getbit(*(obj + 0xaa6c))
- *     if (bit >= 0)  {  f358c ^= bit; vect4[2 * (f358c & 1)]; txmit;  }
+ *     if (bit >= 0)  {  short_358c ^= bit; vect4[2 * (short_358c & 1)]; txmit;  }
  *     else if (!fabe8)      txstate = 60 TONE_AB and nothing else
  *     else if (!fabf8)      re-arm the reader BY HAND, take one more bit,
  *                           send it, and fall into the hold tail
@@ -2121,8 +2121,8 @@ tx1_moh_send(struct v34_object *o)
 {
 	struct v34_bitsource *b;
 
-	if (o->fabe2 != 3)
-		o->fabe2 = 1;
+	if (o->short_abe2 != 3)
+		o->short_abe2 = 1;
 	if (*((unsigned char *)o + TX1_FABF9) == 0) {
 		if (dsplibs_debug_level > 1)	/* 0x7041b */
 			dsplibs_debug_printf(
@@ -2184,7 +2184,7 @@ tx1_moh_hold(struct v34_object *o)
 				" MHreq, disconnecting...\r\n");
 		/* 0x688b4 */
 		tx1_moh_cleardown(o);
-		o->fabe2 = 1;
+		o->short_abe2 = 1;
 		return V34TX1_LOOP;			/* 0x629cf */
 	}
 
@@ -2306,21 +2306,21 @@ v34tx1_tx_dpsk(void *objp)
  * segment's completion at 0x62f22.
  *
  * THE SYMBOL IS 71's AND 86's, NOT 69's.  The generator is chosen on
- * `f359c == 0x65` -- the object carries the scrambler loop twice, at 0x62e70
+ * `role == 0x65` -- the object carries the scrambler loop twice, at 0x62e70
  * with the 0x04000000 tap and at 0x6358c with 0x00002000, and picks between
  * the copies exactly as 71 and 86 do -- so `tx1_scramble2` is the same call
- * here.  69 chooses on bit 0 of `f25c2` instead (finding F340 against 423);
+ * here.  69 chooses on bit 0 of `tx_flags` instead (finding F340 against 423);
  * one halfword apart and it is the whole difference between the two shapes.
  *
  * THE CONSTELLATION IS 69's.  The receiver's +0x11e against 0x89b0 is the
  * arm's first instruction, and the sixteen-point half scrambles TWICE: the
- * first call's two bits go into `f25c8` and are READ BACK FROM THERE
+ * first call's two bits go into `cur_quadrant` and are READ BACK FROM THERE
  * (0x66f4d) as `vect16`'s row, with the second call's as the column.  Where
  * 69 differs is that neither half here differentially encodes and neither
- * writes `f25c6` -- the quadrant this arm carries is the raw scrambler
- * output, and `f25c6` is written once, at the completion, out of `f25c8`.
+ * writes `prev_quadrant` -- the quadrant this arm carries is the raw scrambler
+ * output, and `prev_quadrant` is written once, at the completion, out of `cur_quadrant`.
  *
- * AND NEITHER HALF ADVANCES `vect_idx`.  This arm counts in `f25c0`, and it
+ * AND NEITHER HALF ADVANCES `vect_idx`.  This arm counts in `seg_symcount`, and it
  * counts BEFORE the segment-end compare rather than after it: 0x62edc reads
  * +0x25c0, increments, stores, and the STORED value is what 0x62f09 tests.
  * 86 increments last, at the shared 0x6430c; do not read the two as one
@@ -2333,7 +2333,7 @@ v34tx1_tx_dpsk(void *objp)
  *     n == lim                                        the segment is over
  *     n  > lim  and  f2218 > 3                        likewise
  *     n  < lim  and  f2218 > 3  and  n >= baud+period
- *               and  rx->f21a <= rx+0x250 + 10        likewise (0x6559c)
+ *               and  rx->equerr <= rx+0x250 + 10        likewise (0x6559c)
  *
  * so a run that has passed the nominal length finishes at once, and a run
  * that has passed the SHORTER threshold finishes early when the equaliser
@@ -2388,7 +2388,7 @@ v34tx1_tx_dpsk(void *objp)
 /*
  * +0x4b4, which is the RECEIVER's +0x250 -- `0x74(%esp)` plus 0x250 -- and
  * lands in that structure's `pad_250`, so it is not a named field anywhere in
- * this tree.  The completion writes it out of `f224` or `f21a`; the early
+ * this tree.  The completion writes it out of `preerr` or `equerr`; the early
  * finish above reads it as the mark the equaliser error is measured against,
  * and the ladder reads it as the level a rate has to stay under.
  */
@@ -2479,15 +2479,15 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		sum += (v < 0) ? -v : v;
 	}
 
-	t = (short)((unsigned short)rx->f21a - (unsigned short)rx->f224);
+	t = (short)((unsigned short)rx->equerr - (unsigned short)rx->preerr);
 	if (t <= 0)
-		t = rx->f224;				/* 0x6874c */
-	t = (short)(t - (rx->f21a >> 2));
-	if (sum > 0x1f40 && rx->f21a > 0xc8 && t > 0)
+		t = rx->preerr;				/* 0x6874c */
+	t = (short)(t - (rx->equerr >> 2));
+	if (sum > 0x1f40 && rx->equerr > 0xc8 && t > 0)
 		sum = 0x5000;
 
-	if (tx1_get(o, TX1_F359A) == 0 && rx->f21a <= 0x1ff
-	    && rx->f224 < rx->f21a && sum <= 0x3fff) {
+	if (tx1_get(o, TX1_F359A) == 0 && rx->equerr <= 0x1ff
+	    && rx->preerr < rx->equerr && sum <= 0x3fff) {
 		/* 0x6738c */
 		if (dsplibs_debug_level > 1)		/* 0x6adf6 */
 			dsplibs_debug_printf(
@@ -2525,7 +2525,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 
 		rx->flags = (unsigned short)(rx->flags | 0x4000u);
 		sysdep_memset(&rx->pred_i[0], 0, 0x10);
-		tx1_put(o, TX1_RX250, rx->f224);
+		tx1_put(o, TX1_RX250, rx->preerr);
 	} else {
 		/* 0x674e5 */
 		if (dsplibs_debug_level > 1)		/* 0x683b2 */
@@ -2544,7 +2544,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
 		rec[5] = 0;
 		rec[6] = 0;
 		rec[7] = 0;
-		tx1_put(o, TX1_RX250, rx->f21a);
+		tx1_put(o, TX1_RX250, rx->equerr);
 	}
 
 	/* 0x674c8 */
@@ -2565,7 +2565,7 @@ tx1_ts_snapshot(struct v34_object *o, struct v34_receiver *rx, short *rec)
  * bit-reversed into the capability word beside the transmit rate.
  *
  * THE TWO NIBBLES SWAP BY ROLE, exactly as `initdigital` swaps them
- * (v34shell.c:1568): `f359c == 0x65` puts the receive rate at bit 6 and the
+ * (v34shell.c:1568): `role == 0x65` puts the receive rate at bit 6 and the
  * transmit rate at bit 10, and any other value the other way round.  The
  * object open-codes `bitreverse(..., 4)` at 0x6346b and 0x677a8 as a chain of
  * shifts and adds; the two forms agree over all 65,536 inputs and the call is
@@ -2641,10 +2641,10 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 	}
 
 	/* 0x630e9 */
-	if (rx->f25e > 1) {
-		int d = rx->f260;
+	if (rx->short_25e > 1) {
+		int d = rx->baud_copy;
 
-		if (rx->f25e == 2 && rate > d - 1) {
+		if (rx->short_25e == 2 && rate > d - 1) {
 			rate = (short)(d - 1);		/* 0x68308 */
 			if (dsplibs_debug_level > 1)	/* 0x68334 */
 				dsplibs_debug_printf(
@@ -2669,27 +2669,27 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			(unsigned short)tx1_get(o, TX1_F382), term);
 	if (dsplibs_debug_level > 1)			/* 0x675e6 */
 		dsplibs_debug_printf("V34DATARATE, equerr = %d,preerr=%d\n",
-				     rx->f21a, rx->f224);
+				     rx->equerr, rx->preerr);
 
-	rx->f252 = (short)(2 * term);
+	rx->bad_thresh = (short)(2 * term);
 	if ((short)rate > (short)ratemin) {
-		rx->f254 = tx1_ts_scale(cfg, rate, -2);
-		rx->f254 = (short)((rx->f254 + term) >> 1);
+		rx->bad_long_thresh = tx1_ts_scale(cfg, rate, -2);
+		rx->bad_long_thresh = (short)((rx->bad_long_thresh + term) >> 1);
 	} else {
 		/* 0x672ad */
-		rx->f254 = (short)(tx1_get(o, TX1_RX250) << 3);
+		rx->bad_long_thresh = (short)(tx1_get(o, TX1_RX250) << 3);
 	}
 
 	/* 0x63234 */
 	if ((short)cfg->txbits > (short)rate)
-		rx->f256 = tx1_ts_scale(cfg, rate, 0);
+		rx->good_thresh = tx1_ts_scale(cfg, rate, 0);
 	else
-		rx->f256 = 0;				/* 0x6729b */
+		rx->good_thresh = 0;				/* 0x6729b */
 
 	/* 0x63299 */
-	rx->f25a = 0;
-	rx->f25c = 0;
-	rx->f258 = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
+	rx->bad_run = 0;
 	rec[1] = (short)0xfffd;
 	if ((unsigned)tx1_get_int(o, TX1_TIMER)
 	    < (unsigned)(tx1_get_int(o, TX1_TIMER_MARK) + 0x17700)
@@ -2741,10 +2741,10 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 			"V34DATARATE, Final choice data rate = %d,"
 			" retrainThresh = %d, renegDownthresh = %d,"
 			" renegUpthresh = %d\n",
-			cfg->rxbits, rx->f252, rx->f254, rx->f256);
+			cfg->rxbits, rx->bad_thresh, rx->bad_long_thresh, rx->good_thresh);
 
 	/* 0x6340f */
-	if (o->f359c == 0x65)
+	if (o->role == 0x65)
 		rec[0] = (short)((unsigned)(unsigned short)rec[0]
 				 | ((unsigned)tx1_get(o, TX1_F358C) << 10)
 				 | ((unsigned)rate << 6));
@@ -2757,7 +2757,7 @@ tx1_ts_rates(struct v34_object *o, struct v34_receiver *rx,
 
 	/* 0x63453 */
 	cap = VPcmV34GetMaxUpstreamRateIndex(o);
-	if (o->f359c == 0x65) {
+	if (o->role == 0x65) {
 		/* 0x677a8 */
 		v = bitreverse((unsigned short)
 			       (((unsigned)(unsigned short)rec[0] >> 10) & 0xf),
@@ -2833,14 +2833,14 @@ v34tx1_trnseg4a(void *objp)
 		short k = tx1_scramble2(o);
 		short q;
 
-		o->f25c8 = k;
+		o->cur_quadrant = k;
 		q = tx1_scramble2(o);
 		tx1_put_point(o, vect16[q + 4 * k]);
 	} else {
 		/* 0x62e3b */
 		short q = tx1_scramble2(o);
 
-		o->f25c8 = q;
+		o->cur_quadrant = q;
 		tx1_put_point(o, vect4[q]);
 	}
 
@@ -2848,8 +2848,8 @@ v34tx1_trnseg4a(void *objp)
 	txmit(o);
 
 	/* 0x62edc */
-	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
-	n = o->f25c0;
+	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
+	n = o->seg_symcount;
 	baud = cfg->baud;
 	period = cfg->period;
 	lim = baud + (baud >> 1) + period;
@@ -2861,21 +2861,21 @@ v34tx1_trnseg4a(void *objp)
 			/* 0x6559c */
 			if (n < baud + period)
 				return V34TX1_LOOP;	/* 0x6409a */
-			if ((int)rx->f21a > (int)tx1_get(o, TX1_RX250) + 10)
+			if ((int)rx->equerr > (int)tx1_get(o, TX1_RX250) + 10)
 				return V34TX1_LOOP;	/* 0x6431f */
 		}
 	}
 
 	/* 0x62f22 */
 	rec = (short *)((char *)objp + TX1_FAA3C);
-	o->f25c6 = (short)(unsigned short)o->f25c8;
+	o->prev_quadrant = (short)(unsigned short)o->cur_quadrant;
 	memcpy((char *)objp + TX1_PTR_AA6C, &rec, sizeof(rec));
 
 	if (rx->flags & 0x20u) {
 		/* 0x62f5f */
 		rec[2] = 0;
 		rec[0] = 0;
-		tx1_put(o, TX1_RX250, rx->f21a);
+		tx1_put(o, TX1_RX250, rx->equerr);
 	} else {
 		tx1_ts_snapshot(o, rx, rec);
 	}
@@ -2891,13 +2891,13 @@ v34tx1_trnseg4a(void *objp)
  *
  * ONE SCRAMBLED SYMBOL PER PASS AND A COUNTER READ FOUR WAYS.  The head is
  * 71 `TXLEVEL`'s and 86 `TXMD`'s: two bits of the literal 3 through the
- * shift register at +0x25cc, the quadrant into `f25c8`, one `vect4` point
+ * shift register at +0x25cc, the quadrant into `cur_quadrant`, one `vect4` point
  * out.  The object carries the loop twice -- 0x6436e with the 0x04000000 tap
  * and 0x64440 with 0x00002000 -- and picks between the copies on
- * `f359c == 0x65`, which is `V34scrambler`'s `mode` exactly, so it is the
+ * `role == 0x65`, which is `V34scrambler`'s `mode` exactly, so it is the
  * same `tx1_scramble2` the other two use.
  *
- * Then `f25c0` is incremented and compared against FOUR different things, in
+ * Then `seg_symcount` is incremented and compared against FOUR different things, in
  * this order, and only the last of them ends the segment:
  *
  *     +0xaa78            the echo-adapt START point -- clear four fields
@@ -2910,7 +2910,7 @@ v34tx1_trnseg4a(void *objp)
  * THE FIRST IS NOT AN EXIT AND THE OTHER FOUR ARE, which is the shape a
  * reconstruction can get wrong without any test noticing: 0x67613 ends in a
  * `jmp 0x643f8`, back into the chain, where 0x67278 and 0x67734 end in loop
- * rejoins.  `+0xa244` is read as an INT and `f25c0` is sign-extended before
+ * rejoins.  `+0xa244` is read as an INT and `seg_symcount` is sign-extended before
  * every one of the three compares against it, so the arithmetic is 32-bit
  * even though both fields are written as halfwords.
  *
@@ -2922,9 +2922,9 @@ v34tx1_trnseg4a(void *objp)
  * ---------------------------------------------------------------------------
  * THE COMPLETION IS `setupreceiver` INLINED, and recognising that is what
  * turns 0x64c04..0x64d4a into one call.  Store for store it is that function:
- * `rxinit`, `f128 = 4`, the six-way switch on +0xaa96 that sets f1b0, f1ae,
- * f1be and f1ac, the eight-way switch on +0xaaa8 that sets `carrier` and
- * f1ba, `agc_step = 0x2000`, `agc_gain = f262`, `flags &= 0xf0ff`,
+ * `rxinit`, `out_count = 4`, the six-way switch on +0xaa96 that sets phase_wrap, phase_inc,
+ * symbol_period and phase_frac, the eight-way switch on +0xaaa8 that sets `carrier` and
+ * half_len, `agc_step = 0x2000`, `agc_gain = agc_start_gain`, `flags &= 0xf0ff`,
  * `detectorinit(obj+0x3564, *(obj+0xaab0), 0, 8, 10, 0x600, 0)` and
  * `flags |= 0x200` -- the same literals, the same two diagnostics, and both
  * switches without a default.  So the eight `hsine*` tables this arm reaches
@@ -2978,30 +2978,30 @@ v34tx1_trnseg4(void *objp)
 
 	/* 0x64339: the scrambler, the quadrant and one sample. */
 	q = tx1_scramble2(o);
-	o->f25c8 = q;
+	o->cur_quadrant = q;
 	tx1_put_point(o, vect4[q]);
 	txmit(o);
 
 	/* 0x643dc */
-	o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+	o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 
-	if (tx1_get(o, TX1_COUNT) == o->f25c0) {
+	if (tx1_get(o, TX1_COUNT) == o->seg_symcount) {
 		/* 0x67613, and this one FALLS BACK INTO THE CHAIN */
-		o->f354c = 0;
-		o->f25c2 = (short)((unsigned short)o->f25c2 & ~4u);
-		o->f3550 = 0;
-		o->f3552 = 0;
-		o->f3560 = 0;
+		o->echo_calls = 0;
+		o->tx_flags = (short)((unsigned short)o->tx_flags & ~4u);
+		o->echo_alpha = 0;
+		o->short_3552 = 0;
+		o->echo_energy = 0;
 		VPcmV34ReportStartOfEchoAdapt(o);
 	}
 
 	/* 0x643f8 */
-	if (((unsigned short)o->f25c2 & 0x100u) == 0
-	    && o->f25c0 >= tx1_get(o, TX1_FAA86))
-		o->f25c2 = (short)((unsigned short)o->f25c2 | 0x100u);
+	if (((unsigned short)o->tx_flags & 0x100u) == 0
+	    && o->seg_symcount >= tx1_get(o, TX1_FAA86))
+		o->tx_flags = (short)((unsigned short)o->tx_flags | 0x100u);
 
 	/* 0x64ae4 */
-	n = o->f25c0;
+	n = o->seg_symcount;
 	span = tx1_get_int(o, TX1_FA244);
 
 	if (n == (span >> 1)) {
@@ -3012,7 +3012,7 @@ v34tx1_trnseg4(void *objp)
 	baud = cfg->baud;
 	if (n == baud + (baud >> 1)) {
 		/* 0x67278 */
-		o->f25c2 = (short)(((unsigned short)o->f25c2 & 0x7fffu)
+		o->tx_flags = (short)(((unsigned short)o->tx_flags & 0x7fffu)
 				   | 0x400u);
 		return V34TX1_LOOP;			/* 0x63da2 */
 	}
@@ -3053,7 +3053,7 @@ v34tx1_trnseg4(void *objp)
 
 	/* 0x64bb2 */
 	tx1_put(o, TX1_F25D6, (short)0x8990);
-	o->f25c6 = o->f25c8;
+	o->prev_quadrant = o->cur_quadrant;
 	hs_setstate(o, TX1_RXSTATE, V34HS_RECEIVE);
 	setupreceiver(o);				/* 0x64c04 */
 

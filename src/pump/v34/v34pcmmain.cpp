@@ -480,18 +480,18 @@ getMPrecvdBits(struct tagV34Object *objp)
  *
  *   - `V34scrambler`'s mode argument is the LITERAL 0 here, where the
  *     K56flex twin passes the literal 1.  Both emitters pass
- *     `tx_scrambler_mode(o)`, which is bit 0 of `f25c2`; nothing in these
+ *     `tx_scrambler_mode(o)`, which is bit 0 of `tx_flags`; nothing in these
  *     1,358 bytes loads +0x25c2 at all.  Mode 0 is the CALLING station's
  *     polynomial (v34hshak.c), so a reconstruction that called an emitter
- *     here agrees with the blob for every object whose `f25c2` bit 0 is
+ *     here agrees with the blob for every object whose `tx_flags` bit 0 is
  *     clear and disagrees for every one where it is set.
  *   - there is NO differential encoding: the scrambler's two bits go
- *     straight into `f25c8` and index the table.
- *   - `f25c6` is not written, so the quadrant the handshake carries does not
+ *     straight into `cur_quadrant` and index the table.
+ *   - `prev_quadrant` is not written, so the quadrant the handshake carries does not
  *     advance across an idle symbol.
  *
  * AND THE CONSTELLATION DISCRIMINATOR IS READ THREE WAYS, NOT TWO.  Case 5
- * tests `f382` against 0x89b0 AND against 0x8990 and has a third arm for
+ * tests `short_382` against 0x89b0 AND against 0x8990 and has a third arm for
  * everything else, which transmits the ZERO point.  The K56flex twin has two
  * arms and privileges neither value; here 0x8990 is privileged, and a value
  * that is neither reaches code no other arm does.  Cases 8, 9 and 10 test
@@ -501,7 +501,7 @@ getMPrecvdBits(struct tagV34Object *objp)
  * NEITHER `vect_idx` (+0x2aa2) NOR THE SHIFT REGISTER AT +0x25d6 APPEARS IN
  * THIS FUNCTION.  The K56flex twin's case 3 shifts that word out two bits at
  * a time and its Ja completion arm reloads it; the V.90 sequence carries its
- * bits in the `VPcmFloModem` instead and counts symbols in `f25c0`.  So none
+ * bits in the `VPcmFloModem` instead and counts symbols in `seg_symcount`.  So none
  * of finding F282's shift-count masking applies here and no `& 31` is
  * written: there is no variable shift.
  */
@@ -554,7 +554,7 @@ v90Phase34(void *objp)
 
 	if (!(fl & V34_RX_FLAG_DATA)) {
 		/*
-		 * Ja.  The bit source writes the dibit into `f25c8` -- the
+		 * Ja.  The bit source writes the dibit into `cur_quadrant` -- the
 		 * same field the emitters use as their quadrant register --
 		 * and returns non-zero on the symbol that ends the sequence.
 		 * The dibit is transmitted either way, so the last one is
@@ -564,9 +564,9 @@ v90Phase34(void *objp)
 		 * K56flex twin's three-byte stub, so everything below here is
 		 * reachable and is tested.
 		 */
-		int done = (short)vp->getV90JaBits(&o->f25c8);
+		int done = (short)vp->getV90JaBits(&o->cur_quadrant);
 
-		txmitdibit(o, o->f25c8);
+		txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -595,7 +595,7 @@ v90Phase34(void *objp)
 			return 0;
 		rx->flags = (unsigned short)(rx->flags
 					     | V34_RX_FLAG_TRN_WATCH);
-		o->f25c0 = 0;
+		o->seg_symcount = 0;
 		return 0;
 	}
 
@@ -611,13 +611,13 @@ v90Phase34(void *objp)
 	case 3:
 		o->txpoint.word = vect4[0];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		if (DSPLIB_DEBUG_ON()) {
@@ -626,7 +626,7 @@ v90Phase34(void *objp)
 			 * zeroes it again below; the store is unobservable
 			 * either way, and it is here because it is there.
 			 */
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			dsplibs_debug_printf("Entered v34m->v90Receiver == "
 					     "V90RCV_P3_THIRD_S with "
 					     "tx->symcnt = %d period = %d\n",
@@ -635,78 +635,78 @@ v90Phase34(void *objp)
 					     (m + OB_PERIOD));
 		}
 		o->v90_receiver = 4;
-		o->f25c0 = 0;
+		o->seg_symcount = 0;
 		return 0;
 
 	case 6:
 		o->txpoint.word = vect4[0];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[3];
 		txmit(o);
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 7;
-		o->f25c0 = 0;
+		o->seg_symcount = 0;
 		return 0;
 
 	case 4:
 		o->txpoint.word = vect4[2];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n != 0x10) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 5;
 		/* Reset the transmitter for the idle symbols that follow. */
-		o->f25c6 = 0;
-		o->f25c0 = 0;
-		o->f25cc = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
 		return 0;
 
 	case 7:
 		o->txpoint.word = vect4[2];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n != 0x10) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 8;
-		o->f25c6 = 0;
-		o->f25c0 = 0;
-		o->f25cc = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
 		return 0;
 
 	case 5: {
 		/* The idle symbol.  See the note at the top of this block. */
-		short c = o->f382;
+		short c = o->short_382;
 		int q;
 
 		if (c == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->f25cc,
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						0, 3, 2);
-			o->f25c8 = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->f25cc,
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						0, 3, 2);
-			q = o->f25c8;
+			q = o->cur_quadrant;
 			o->txpoint.word = vect16[d + q * 4];
 		} else if (c == OB_CONSTEL_4) {
-			q = (short)V34scrambler((unsigned *)&o->f25cc,
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						0, 3, 2);
-			o->f25c8 = (short)q;
+			o->cur_quadrant = (short)q;
 			o->txpoint.word = vect4[q];
 		} else {
 			o->txpoint.c[0] = 0;
@@ -715,7 +715,7 @@ v90Phase34(void *objp)
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		return 0;
 	}
 
@@ -724,14 +724,14 @@ v90Phase34(void *objp)
 		 * A constant symbol, and the one arm that uses the published
 		 * emitters with a literal: all four bits set for the sixteen-
 		 * point map, both bits set for the four-point one.  So it IS
-		 * scrambled with `f25c2`'s polynomial and IS differentially
+		 * scrambled with `tx_flags`'s polynomial and IS differentially
 		 * encoded, unlike case 5.
 		 */
-		if (o->f382 == OB_CONSTEL_16)
+		if (o->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		return 0;
 
 	case 8: {
@@ -742,12 +742,12 @@ v90Phase34(void *objp)
 		 * reports the end of the sequence, and the symbol carrying it
 		 * is transmitted before the state moves.
 		 */
-		int done = (short)vp->getV90CpBits(&o->f25c8);
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->f382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->f25c8);
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
 		else
-			txmitdibit(o, o->f25c8);
+			txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 		o->v90_receiver = 9;
@@ -755,12 +755,12 @@ v90Phase34(void *objp)
 	}
 
 	case 10: {
-		int done = (short)vp->getV90CpBits(&o->f25c8);
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->f382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->f25c8);
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
 		else
-			txmitdibit(o, o->f25c8);
+			txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -832,9 +832,9 @@ v90Phase34(void *objp)
  * ---------------------------------------------------------------------------
  * THE IDLE SYMBOL IN STATE 19 HAS TWO ARMS, NOT `v90Phase34`'s THREE.  Case 5
  * there privileges 0x8990 and has a third arm transmitting the zero point;
- * here `f382 != 0x89b0` IS the four-point arm, whatever it holds.  Everything
+ * here `short_382 != 0x89b0` IS the four-point arm, whatever it holds.  Everything
  * else about it is the same -- mode 0, no differential encoding, the tables
- * indexed unmasked -- with ONE addition: `f25c6` IS written, from `f25c8`,
+ * indexed unmasked -- with ONE addition: `prev_quadrant` IS written, from `cur_quadrant`,
  * which `v90Phase34`'s note explicitly records as not happening there.  So
  * the quadrant the handshake carries DOES advance across a silence idle
  * symbol and does not across a phase 3/4 one.
@@ -858,9 +858,9 @@ v90Phase34(void *objp)
  *
  * THE OFFSET IS OFFSET-NAMED AND THE BIT IS NOT, which is deliberate.  The
  * diagnostic is the author's own word for what the clear does, but the same
- * statement clears TWO bits -- this one and `V34_EC_FROZEN` in `f25c2` -- so
+ * statement clears TWO bits -- this one and `V34_EC_FROZEN` in `tx_flags` -- so
  * "SAS detector" names one of the two and the message does not say which.
- * It is this one by elimination: bit 2 of `f25c2` already has a name from an
+ * It is this one by elimination: bit 2 of `tx_flags` already has a name from an
  * independent reader (v34rx.h, and `v34FreezeEcho` is its writer), and
  * nothing about an echo canceller is a detector of anything.  That is
  * inference, which is CLAUDE.md's weakest rank, and it is why the byte itself
@@ -882,17 +882,17 @@ v90RateReneg(void *objp)
 		/* `v90Phase34`'s case 6, counted to 0x7f. */
 		o->txpoint.word = vect4[0];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[3];
 		txmit(o);
 		/* Re-read: `txmit` is between the two counts. */
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 12;
-		o->f25c0 = 0;
+		o->seg_symcount = 0;
 		return 0;
 	}
 
@@ -900,41 +900,41 @@ v90RateReneg(void *objp)
 		/* `v90Phase34`'s case 7, counted to 0x10. */
 		o->txpoint.word = vect4[2];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n != 0x10) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 13;
 		/* Reset the transmitter for the symbols that follow. */
-		o->f25c6 = 0;
-		o->f25c0 = 0;
-		o->f25cc = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
 		return 0;
 	}
 
 	if (r == 13) {
 		/* `v90Phase34`'s case 9: the constant symbol, scrambled and
 		 * differentially encoded through the published emitters. */
-		if (o->f382 == OB_CONSTEL_16)
+		if (o->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		return 0;
 	}
 
 	if (r == 14) {
 		/* `v90Phase34`'s case 10, and the end of the ladder. */
-		int done = (short)vp->getV90CpBits(&o->f25c8);
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->f382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->f25c8);
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
 		else
-			txmitdibit(o, o->f25c8);
+			txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -961,43 +961,43 @@ v90RateRenegSilence(void *objp)
 	if (r == 15) {
 		o->txpoint.word = vect4[0];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[3];
 		txmit(o);
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n <= 0x7f) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 16;
-		o->f25c0 = 0;
+		o->seg_symcount = 0;
 		return 0;
 	}
 
 	if (r == 16) {
 		o->txpoint.word = vect4[2];
 		txmit(o);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		o->txpoint.word = vect4[1];
 		txmit(o);
-		n = (short)((unsigned short)o->f25c0 + 1);
+		n = (short)((unsigned short)o->seg_symcount + 1);
 		if (n != 0x10) {
-			o->f25c0 = n;
+			o->seg_symcount = n;
 			return 0;
 		}
 		o->v90_receiver = 17;
-		o->f25c6 = 0;
-		o->f25c0 = 0;
-		o->f25cc = 0;
+		o->prev_quadrant = 0;
+		o->seg_symcount = 0;
+		o->tx_scr_sr = 0;
 		return 0;
 	}
 
 	if (r == 17) {
-		if (o->f382 == OB_CONSTEL_16)
+		if (o->short_382 == OB_CONSTEL_16)
 			txmitquadbit(o, 15);
 		else
 			txmitdibit(o, 3);
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		return 0;
 	}
 
@@ -1009,12 +1009,12 @@ v90RateRenegSilence(void *objp)
 		 * and 19 then transmits scrambled idle symbols until something
 		 * outside moves it on.
 		 */
-		int done = (short)vp->getV90CpBits(&o->f25c8);
+		int done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->f382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->f25c8);
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
 		else
-			txmitdibit(o, o->f25c8);
+			txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -1023,7 +1023,7 @@ v90RateRenegSilence(void *objp)
 					     "(disabling SAS detector on "
 					     "silence)\r\n");
 		o->v90_receiver = 19;
-		o->f25c2 = (short)((unsigned short)o->f25c2 & ~V34_EC_FROZEN);
+		o->tx_flags = (short)((unsigned short)o->tx_flags & ~V34_EC_FROZEN);
 		((unsigned char *)o->pac3c)[CFG_FLAGS03] &= ~CFG_SAS_DETECT;
 		return 0;
 	}
@@ -1035,28 +1035,28 @@ v90RateRenegSilence(void *objp)
 		 */
 		int q;
 
-		if (o->f382 == OB_CONSTEL_16) {
+		if (o->short_382 == OB_CONSTEL_16) {
 			int d;
 
-			q = (short)V34scrambler((unsigned *)&o->f25cc,
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						0, 3, 2);
-			o->f25c8 = (short)q;
-			d = (short)V34scrambler((unsigned *)&o->f25cc,
+			o->cur_quadrant = (short)q;
+			d = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						0, 3, 2);
-			q = o->f25c8;
+			q = o->cur_quadrant;
 			o->txpoint.word = vect16[d + q * 4];
 		} else {
-			q = (short)V34scrambler((unsigned *)&o->f25cc,
+			q = (short)V34scrambler((unsigned *)&o->tx_scr_sr,
 						0, 3, 2);
-			o->f25c8 = (short)q;
+			o->cur_quadrant = (short)q;
 			o->txpoint.word = vect4[q];
 		}
 
 		txmit(o);
 		/* Re-read: `txmit` is between the load and the store. */
-		o->f25c0 = (short)((unsigned short)o->f25c0 + 1);
+		o->seg_symcount = (short)((unsigned short)o->seg_symcount + 1);
 		/* And the quadrant DOES advance here.  See the note above. */
-		o->f25c6 = o->f25c8;
+		o->prev_quadrant = o->cur_quadrant;
 		return 0;
 	}
 
@@ -1069,13 +1069,13 @@ v90RateRenegSilence(void *objp)
 		 */
 		int done;
 
-		o->f25c2 = (short)((unsigned short)o->f25c2 | V34_EC_FROZEN);
-		done = (short)vp->getV90CpBits(&o->f25c8);
+		o->tx_flags = (short)((unsigned short)o->tx_flags | V34_EC_FROZEN);
+		done = (short)vp->getV90CpBits(&o->cur_quadrant);
 
-		if (o->f382 == OB_CONSTEL_16)
-			txmitquadbit(o, o->f25c8);
+		if (o->short_382 == OB_CONSTEL_16)
+			txmitquadbit(o, o->cur_quadrant);
 		else
-			txmitdibit(o, o->f25c8);
+			txmitdibit(o, o->cur_quadrant);
 		if (done == 0)
 			return 0;
 
@@ -1119,7 +1119,7 @@ v90RateRenegSilence(void *objp)
  *     So the same argument means opposite things according to a field the
  *     caller does not pass.
  *   - 34 is accepted by the validation and then falls into the dispatch's
- *     default: `fa23c` set, both counters cleared.  It shares the tail in the
+ *     default: `far_echo_enable` set, both counters cleared.  It shares the tail in the
  *     object and shares it here.
  *
  * ---------------------------------------------------------------------------
@@ -1371,7 +1371,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 		break;
 
 	case DP_V34:
-		obj->fa23c = 1;
+		obj->far_echo_enable = 1;
 		/* FALLTHROUGH -- the object shares the default arm's tail. */
 	default:
 		obj->v90_receiver = 0;
@@ -1381,13 +1381,13 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 
 	v34handshakinit(obj, 1);
 
-	obj->f0004 = 7;
+	obj->progress = 7;
 	obj->status = 0;
 	*(int *)(m + OB_F2218) = 2;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
 
 	/*
 	 * +0x254, and 336 is `x * 21 * 16` written as two `lea`s and a shift.
@@ -1417,7 +1417,7 @@ VPcmV34InitiateRetrain(void *objp, unsigned char requestedDp)
 	 */
 	{
 		unsigned char *st = m + OB_FAC1C;
-		short role = obj->f359c;
+		short role = obj->role;
 
 		*(short *)(st + 0x00) = 0;
 		*(short *)(st + 0x02) = 0;
@@ -1655,7 +1655,7 @@ indicateJaTransmission(void *objp)
  * bytes against 213, with three arms on one side and five on the other.
  *
  * Both open on the same pair of tests, and the pair is CROSSED rather than
- * nested -- `f359c` picks which question is asked of `status`, and the two
+ * nested -- `role` picks which question is asked of `status`, and the two
  * questions are different:
  *
  *     6f48  cmpw   $0x66,0x359c(%edx)          Rx
@@ -1666,7 +1666,7 @@ indicateJaTransmission(void *objp)
  *     6fb5  je     6fd1                          == 0x66 -> status 2, then 3
  *     6fb7  mov    (%edx),%eax; dec; cmp $1; ja  != 0x66 -> status in 1..2
  *
- * `f359c` is the field v34fsk.h describes as selecting
+ * `role` is the field v34fsk.h describes as selecting
  * `setTimingStateParameters`' second parameter table and `VPcmV34InitiateRetrain`
  * reads as `role`; 0x66 is the value its other readers pair with V.90 being
  * available.  `(unsigned)(status - 1) <= 1` is the SAME test the three
@@ -1682,7 +1682,7 @@ indicateJaTransmission(void *objp)
  */
 
 /*
- * `f359c`'s PCM value.  `VPcmV34InitiateRetrain` already switches on 0x65 and
+ * `role`'s PCM value.  `VPcmV34InitiateRetrain` already switches on 0x65 and
  * 0x66 of the same field a few hundred lines above and spells them inline;
  * this is 0x66 given a name because two functions here now compare against
  * it and a bare 0x66 in four places is four chances to transcribe 0x65.
@@ -1731,7 +1731,7 @@ VPcmV34GetCurrentRxBitRate(void *objp)
 	const struct v34_ratecfg *cfg =
 	    (const struct v34_ratecfg *)((unsigned char *)obj + V34_RATECFG);
 
-	if (obj->f359c == PCM_ROLE) {
+	if (obj->role == PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
 			VPcmFloModem *sess = (VPcmFloModem *)obj->p3548;
 
@@ -1753,13 +1753,13 @@ VPcmV34GetCurrentRxBitRate(void *objp)
  * is a code-generation fact and not a source one; what the source has to have
  * is one expression written twice, which is what is below.
  *
- *   f359c != 0x66, status 1 or 2   the V.90 modulator at `modem.modulator`,
+ *   role != 0x66, status 1 or 2   the V.90 modulator at `modem.modulator`,
  *                                  its +0x40, one indirection, +0x04 of that,
  *                                  times 8000/6
- *   f359c == 0x66, status 2        the object at the session's +0x6124, its
+ *   role == 0x66, status 2        the object at the session's +0x6124, its
  *                                  +0x4c, one indirection, +0x04 of that,
  *                                  times 8000/12
- *   f359c == 0x66, status 3        a flat 0x7530 -- 30000
+ *   role == 0x66, status 3        a flat 0x7530 -- 30000
  *   everything else                `txbits` * 2400
  *
  * BOTH CHAINS ARE GATED ON `+0x2c == 3` AND RETURN ZERO OTHERWISE, and the
@@ -1812,7 +1812,7 @@ VPcmV34GetCurrentTxBitRate(void *objp)
 	 * a second thing to keep in step, and the mutation that made it read
 	 * `txbits` unsigned found only one of them.
 	 */
-	if (obj->f359c != PCM_ROLE) {
+	if (obj->role != PCM_ROLE) {
 		if ((unsigned)(obj->status - 1) <= 1) {
 			tx = (const unsigned char *)sess->modem.modulator;
 			if (*(const int *)(tx + PCMTX_STATE) != PCMTX_READY)
@@ -1861,15 +1861,15 @@ VPcmV34GetCurrentTxBitRate(void *objp)
  *      says so ("Illegal Modem State").
  *   2. the modem's own answer -- `runPcmModem`, `k56FlexRunDemodulator` and
  *      `v90RunDemodulator` each return a small code that the tables at
- *      +0x300, +0x324 and +0x3bc turn into a new `f0004` or a retrain.
- *   3. `obj->f0004` itself, the table at +0x340, reached only from the V.34
+ *      +0x300, +0x324 and +0x3bc turn into a new `progress` or a retrain.
+ *   3. `obj->progress` itself, the table at +0x340, reached only from the V.34
  *      arm -- five of its seventeen entries do anything, and one of those is
  *      a fourth table (+0x384) that turns a modem-on-hold code into a timeout
  *      in seconds.
  *
- * `f0004` IS THE RETURN VALUE AND IS ALSO A LOCAL.  The object reads it into
+ * `progress` IS THE RETURN VALUE AND IS ALSO A LOCAL.  The object reads it into
  * %esi at the top of each arm, switches on that copy, and returns THAT --
- * `obj->f0004` is written by several arms after the copy is taken and the
+ * `obj->progress` is written by several arms after the copy is taken and the
  * function still returns the older value.  `ret` below is that copy, assigned
  * exactly where the object assigns it and nowhere else.  Two arms re-read it
  * only when the debug level is up, which changes what the function returns;
@@ -2018,10 +2018,10 @@ extern int alias_toneDetectorProcess(GenericToneDetector *, float *,
 #define O_CLR_DONE	0xac48
 
 /* +0x25c2, `testb $0x10` -- transmit through the datapump rather than the
- * handshake.  v34fsk.h names it `f25c2`. */
+ * handshake.  v34fsk.h names it `tx_flags`. */
 #define PROG_TXBIT_DATA		0x10
 
-/* The two `f359c` roles, `cmpw $0x65` and `$0x66` at 0xb50c and 0xb522. */
+/* The two `role` roles, `cmpw $0x65` and `$0x66` at 0xb50c and 0xb522. */
 #define PROG_ROLE_ORIGINATE	0x65
 #define PROG_ROLE_ANSWER	0x66
 
@@ -2103,7 +2103,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	 * last progress code is repeated.
 	 */
 	if (PROG_S16(obj, O_RUNNING) == 0)
-		return obj->f0004;
+		return obj->progress;
 
 	PROG_S32(obj, O_SAMPLES) = (PROG_S32(obj, O_SAMPLES) + n) & 0x7fffffff;
 
@@ -2114,8 +2114,8 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	 */
 	st = obj->status;
 	if (st == 0
-	    || (st == 1 && obj->f359c == PROG_ROLE_ANSWER)
-	    || (st == 3 && obj->f359c == PROG_ROLE_ORIGINATE)) {
+	    || (st == 1 && obj->role == PROG_ROLE_ANSWER)
+	    || (st == 3 && obj->role == PROG_ROLE_ORIGINATE)) {
 		int nwords = *nbits >> 4;
 
 		if (nwords > 0) {
@@ -2158,24 +2158,24 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 
 	/* --- 0: V.34, and the only arm that reaches the +0x340 table ----- */
 	case 0:
-		ret = obj->f0004;
+		ret = obj->progress;
 		prev = ret;
 		if (n != 0) {
 			int left = n;
 
 			do {
-				obj->f260 = (short)*in++;
+				obj->echo_residual = (short)*in++;
 				modem_serrint(obj);
-				*out++ = (float)obj->f25e;
-				if (obj->txq.count < obj->f2aa0
+				*out++ = (float)obj->tx_sample;
+				if (obj->txq.count < obj->short_2aa0
 				    || obj->rxq.count > 5) {
-					if (obj->f25c2 & PROG_TXBIT_DATA)
+					if (obj->tx_flags & PROG_TXBIT_DATA)
 						datapumpv34(obj);
 					else
 						v34handshak(obj);
 				}
 			} while (--left != 0);
-			ret = obj->f0004;
+			ret = obj->progress;
 		}
 		/*
 		 * 0xc100.  A code that CHANGED to 4 or 5 during the block --
@@ -2186,7 +2186,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			if ((unsigned int)(ret - 4) <= 1) {
 				PROG_U8(obj->pac3c, CFG_FLAGS3)
 				    |= CFG_FLAG3_RETRAIN;
-				ret = obj->f0004;
+				ret = obj->progress;
 			}
 		}
 		/*
@@ -2208,7 +2208,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					    "\r\n", since);
 				PROG_U8(obj->pac3c, CFG_FLAGS3)
 				    &= (unsigned char)~CFG_FLAG3_RETRAIN;
-				ret = obj->f0004;
+				ret = obj->progress;
 			}
 		}
 
@@ -2405,7 +2405,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		{
 			int secs;
 
-			switch ((unsigned short)obj->fabe0) {
+			switch ((unsigned short)obj->moh_holdtime_code) {
 			case 1:		secs = 0xa;	break;
 			case 2:		secs = 0x14;	break;
 			case 3:		secs = 0x1e;	break;
@@ -2428,7 +2428,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				    "VPcmV34Main: Modem On Hold approved by "
 				    "phase2 (ISP timeout is %d seconds) !!\r\n",
 				    secs);
-				ret = obj->f0004;
+				ret = obj->progress;
 				secs = PROG_S32(obj, O_MOHLIMIT);
 			}
 			if (secs > 0)
@@ -2443,16 +2443,16 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			int lim;
 
 			obj->status = 8;
-			lim = ((unsigned short)obj->fabe2 < 1u ? 0xbb80 : 0)
+			lim = ((unsigned short)obj->short_abe2 < 1u ? 0xbb80 : 0)
 			      + 0x2580;
-			obj->faa74 = 0;
+			obj->train_symcount = 0;
 			PROG_S32(obj, O_MOHCOUNT) = lim;
-			obj->f0004 = 0;
+			obj->progress = 0;
 			/*
 			 * 0xc2a8, `xor %esi,%esi`, and it is easy to miss:
 			 * this arm returns 0 and not the 13 it switched on.
 			 * The debug path reaches the same 0 by re-reading
-			 * `f0004` at 0xb53d, which is the only reason the two
+			 * `progress` at 0xb53d, which is the only reason the two
 			 * paths agree.
 			 */
 			ret = 0;
@@ -2481,20 +2481,20 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	case 1:
 		r = obj->v90_receiver;
 		if (r <= 1) {
-			ret = obj->f0004;
+			ret = obj->progress;
 			goto wrongstate;
 		}
-		ret = obj->f0004;
+		ret = obj->progress;
 		if (ret <= 1)
 			goto wrongstate;
-		obj->f2aa0 = (short)n;
-		while (obj->txq.count < obj->f2aa0) {
+		obj->short_2aa0 = (short)n;
+		while (obj->txq.count < obj->short_2aa0) {
 			r = obj->v90_receiver;
 			if (r > 14) {
 				v90RateRenegSilence(obj);
 			} else if (r > 10) {
 				v90RateReneg(obj);
-			} else if (obj->f25c2 & PROG_TXBIT_DATA) {
+			} else if (obj->tx_flags & PROG_TXBIT_DATA) {
 				modulatevector(obj);
 			} else {
 				v34handshak(obj);
@@ -2508,9 +2508,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int s;
 				int idx;
 
-				obj->f260 = (short)*in;
+				obj->echo_residual = (short)*in;
 				adaptecho(obj);
-				s = obj->f260;
+				s = obj->echo_residual;
 				if (PROG_U16(obj, O_DCCOUNT) != 0) {
 					int acc = PROG_S32(obj, O_DCACC) + s;
 
@@ -2534,17 +2534,17 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					} else {
 						PROG_S32(obj, O_DCACC) = acc;
 					}
-					s = obj->f260;
+					s = obj->echo_residual;
 				}
 				s = (short)(s - PROG_S16(obj, O_DCEST));
-				idx = obj->f2aa6;
+				idx = obj->hist2_idx;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-					obj->f2aa6 = (short)(idx + 1);
+					obj->hist2_idx = (short)(idx + 1);
 				else
-					obj->f2aa6 = 0;
+					obj->hist2_idx = 0;
 				*in++ = (float)(short)s;
-				*out++ = (float)obj->f25e;
+				*out++ = (float)obj->tx_sample;
 			} while (--left != 0);
 		}
 		in -= n;
@@ -2557,7 +2557,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		}
 		switch ((unsigned int)r) {
 		case 1:
-			obj->f0004 = 3;
+			obj->progress = 3;
 			break;
 		case 2:
 			PROG_S16(obj, O_MODEMUP) = 1;
@@ -2576,11 +2576,11 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		case 3:
 			PROG_S16(obj, O_MODEMUP) = 1;
-			obj->f0004 = 5;
+			obj->progress = 5;
 			PROG_S16(obj, O_HDSET) = 0;
 			break;
 		case 4:
-			obj->f0004 = 0xb;
+			obj->progress = 0xb;
 			obj->status = 5;
 			PROG_S32(obj, O_SAMPLES) = 0;
 			break;
@@ -2592,10 +2592,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		case 8:
 			obj->status = 10;
-			obj->f0004 = 0x10;
+			obj->progress = 0x10;
 			break;
 		default:
-			obj->f0004 = 2;
+			obj->progress = 2;
 			break;
 		}
 		/* 0xc91b, requestOutputSampleClear. */
@@ -2630,7 +2630,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		}
 		switch ((unsigned int)r) {
 		case 1:
-			obj->f0004 = 3;
+			obj->progress = 3;
 			break;
 		case 2:
 			if (obj->rates_latched == 0) {
@@ -2658,16 +2658,16 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				obj->rates_latched = 1;
 			}
 			PROG_S16(obj, O_PCMCHOSEN) = 1;
-			obj->f0004 = 4;
+			obj->progress = 4;
 			PROG_S16(obj, O_HDSET) = 0;
 			break;
 		case 3:
 			PROG_S16(obj, O_PCMCHOSEN) = 1;
-			obj->f0004 = 5;
+			obj->progress = 5;
 			PROG_S16(obj, O_HDSET) = 0;
 			break;
 		case 4:
-			obj->f0004 = 0xb;
+			obj->progress = 0xb;
 			obj->status = 5;
 			PROG_S32(obj, O_SAMPLES) = 0;
 			break;
@@ -2682,32 +2682,32 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		case 8:
 			obj->status = 10;
-			obj->f0004 = 0x10;
+			obj->progress = 0x10;
 			break;
 		default:
-			obj->f0004 = 2;
+			obj->progress = 2;
 			break;
 		}
 		/* 0xc564: the modem's own output block goes into the echo
 		 * history, not the caller's input. */
 		for (i = 0; i < n; i++) {
-			int idx = obj->f2aa6;
+			int idx = obj->hist2_idx;
 
 			obj->hist_2f58[idx] = (short)
 			    ((const float *)((unsigned char *)sess
 					     + SESS_OUTBLOCK))[i];
 			if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-				obj->f2aa6 = (short)(idx + 1);
+				obj->hist2_idx = (short)(idx + 1);
 			else
-				obj->f2aa6 = 0;
+				obj->hist2_idx = 0;
 		}
 		goto reload;
 
 	/* --- 3: K56flex ----------------------------------------------- */
 	case 3:
-		obj->f2aa0 = (short)n;
-		while (obj->txq.count < obj->f2aa0) {
-			if (obj->f25c2 & PROG_TXBIT_DATA)
+		obj->short_2aa0 = (short)n;
+		while (obj->txq.count < obj->short_2aa0) {
+			if (obj->tx_flags & PROG_TXBIT_DATA)
 				modulatevector(obj);
 			else
 				v34handshak(obj);
@@ -2720,9 +2720,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				int s;
 				int idx;
 
-				obj->f260 = (short)*in;
+				obj->echo_residual = (short)*in;
 				adaptecho(obj);
-				s = obj->f260;
+				s = obj->echo_residual;
 				if (PROG_U16(obj, O_DCCOUNT) != 0) {
 					int acc = PROG_S32(obj, O_DCACC) + s;
 
@@ -2746,17 +2746,17 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					} else {
 						PROG_S32(obj, O_DCACC) = acc;
 					}
-					s = obj->f260;
+					s = obj->echo_residual;
 				}
 				s = (short)(s - PROG_S16(obj, O_DCEST));
-				idx = obj->f2aa6;
+				idx = obj->hist2_idx;
 				obj->hist_2f58[idx] = (short)s;
 				if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-					obj->f2aa6 = (short)(idx + 1);
+					obj->hist2_idx = (short)(idx + 1);
 				else
-					obj->f2aa6 = 0;
+					obj->hist2_idx = 0;
 				*in++ = (float)(short)s;
-				*out++ = (float)obj->f25e;
+				*out++ = (float)obj->tx_sample;
 			} while (--left != 0);
 		}
 		in -= n;
@@ -2764,10 +2764,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					       nrx);
 		switch ((unsigned int)r) {
 		case 1:
-			obj->f0004 = 3;
+			obj->progress = 3;
 			break;
 		case 3:
-			obj->f0004 = 5;
+			obj->progress = 5;
 			/* FALLTHROUGH -- 0xc8c1 falls into 0xc8cc. */
 		case 2:
 			PROG_S16(obj, O_MODEMUP) = 1;
@@ -2785,10 +2785,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			break;
 		case 6:
 			obj->status = 10;
-			obj->f0004 = 0x10;
+			obj->progress = 0x10;
 			break;
 		default:
-			obj->f0004 = 2;
+			obj->progress = 2;
 			break;
 		}
 		goto compact;
@@ -2804,7 +2804,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 						     nbits);
 		}
 		if (r == 0) {
-			obj->f0004 = 10;
+			obj->progress = 10;
 		} else {
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
@@ -2840,7 +2840,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				sess->modem.ptr_49b4->init();
 			}
 			obj->status = 0;
-			obj->f0004 = 0;
+			obj->progress = 0;
 		}
 		goto hist_from_in;
 
@@ -2856,7 +2856,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			VPcmV34InitiateRetrain(obj, 0);
 		}
 		*nrx = 0;
-		obj->f0004 = 0xc;
+		obj->progress = 0xc;
 		*nbits = 0;
 		goto hist_from_in;
 
@@ -2864,10 +2864,10 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 	case 6:
 	{
 		int held = PROG_S32(obj, O_MOHCOUNT);
-		int want = obj->faa74;
+		int want = obj->train_symcount;
 
 		if (held < want) {
-			obj->f0004 = 0xd;
+			obj->progress = 0xd;
 		} else {
 			if ((unsigned int)(held - n) < (unsigned int)want
 			    && DSPLIB_DEBUG_ON()) {
@@ -2877,7 +2877,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 				    "supported !\r\n");
 				st = obj->status;
 			}
-			obj->f0004 = 0xe;
+			obj->progress = 0xe;
 		}
 		goto on_hold;
 	}
@@ -2890,7 +2890,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		*nrx = 0;
 		*nbits = 0;
 		if (st == 7)
-			obj->f0004 = 0xd;
+			obj->progress = 0xd;
 		{
 			int held = PROG_S32(obj, O_MOHCOUNT);
 			int lim = PROG_S32(obj, O_MOHLIMIT);
@@ -2902,7 +2902,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					    "VPcmV34Main: Modem On Hold "
 					    "Timeout expired , ending session"
 					    " !!!\r\n");
-				obj->f0004 = 0x10;
+				obj->progress = 0x10;
 				obj->status = 0xa;
 			}
 		}
@@ -2925,7 +2925,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 						    "call (later case, after "
 						    "%d smp) ! assuming no "
 						    "3-way call...\r\n", held);
-					obj->fabe2 = 2;
+					obj->short_abe2 = 2;
 				} else if (DSPLIB_DEBUG_ON()) {
 					dsplibs_debug_printf(
 					    "VPcmV34Main: ANSam detected on "
@@ -2938,9 +2938,9 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 					    "VPcmV34Main: ANSam detected on "
 					    "out going call ! assuming no "
 					    "3-way call...\r\n");
-				obj->fabe2 = 2;
+				obj->short_abe2 = 2;
 			}
-			obj->f0004 = 0xf;
+			obj->progress = 0xf;
 			obj->status = 9;
 		}
 		goto hist_from_in;
@@ -2951,22 +2951,22 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 			out[i] = 0.0f;
 		*nrx = 0;
 		*nbits = 0;
-		t = obj->faa74 + n;
-		obj->faa74 = t;
+		t = obj->train_symcount + n;
+		obj->train_symcount = t;
 		if (t < PROG_S32(obj, O_MOHCOUNT)) {
-			obj->f0004 = 0;
+			obj->progress = 0;
 			ret = 0;
 			goto done;
 		}
 		obj->status = 9;
 		if (DSPLIB_DEBUG_ON()) {
-			obj->f0004 = 0;
+			obj->progress = 0;
 			dsplibs_debug_printf("VPcmV34Main: Delay ended, "
 					     "indicating reconnect request..."
 					     "\r\n");
 		}
 		ret = 0xf;
-		obj->f0004 = 0xf;
+		obj->progress = 0xf;
 		goto done;
 
 	/* --- 9: reconnect requested ----------------------------------- */
@@ -2976,7 +2976,7 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		*nrx = 0;
 		*nbits = 0;
 		ret = 0xf;
-		obj->f0004 = 0xf;
+		obj->progress = 0xf;
 		goto done;
 
 	/* --- 10: the session is over ---------------------------------- */
@@ -2986,19 +2986,19 @@ VPcmV34Progress(void *objp, float *in, float *out, int nin, int *rxbits,
 		*nrx = 0;
 		*nbits = 0;
 		ret = 0x10;
-		obj->f0004 = 0x10;
+		obj->progress = 0x10;
 		goto done;
 	}
 
 hist_from_in:
 	for (i = 0; i < n; i++) {
-		int idx = obj->f2aa6;
+		int idx = obj->hist2_idx;
 
 		obj->hist_2f58[idx] = (short)in[i];
 		if ((unsigned short)(idx + 1) <= PROG_HIST_LAST)
-			obj->f2aa6 = (short)(idx + 1);
+			obj->hist2_idx = (short)(idx + 1);
 		else
-			obj->f2aa6 = 0;
+			obj->hist2_idx = 0;
 	}
 	goto reload;
 
@@ -3023,7 +3023,7 @@ compact:
 		obj->tx_rd = 0;
 		obj->tx_n = k;
 	}
-	ret = obj->f0004;
+	ret = obj->progress;
 	if (ret <= 3) {
 		*nbits = 0;
 	} else {
@@ -3041,7 +3041,7 @@ compact:
 	goto done;
 
 reload:
-	ret = obj->f0004;
+	ret = obj->progress;
 
 done:
 	/*
@@ -3053,7 +3053,7 @@ done:
 	 */
 	if ((unsigned int)(ret - 3) <= 3) {
 		const short *hist = obj->hist_2f58;
-		int limit = obj->f2aa6;
+		int limit = obj->hist2_idx;
 		int k0 = PROG_S16(obj, O_NOTCH_K0);
 		int k1 = PROG_S16(obj, O_NOTCH_K1);
 		int k2 = PROG_S16(obj, O_NOTCH_K2);
@@ -3132,7 +3132,7 @@ done:
 				    "detector !\r\n");
 			VPcmV34InitiateRetrain(obj, 0);
 		}
-		return obj->f0004;
+		return obj->progress;
 	}
 
 	return ret;
@@ -3395,7 +3395,7 @@ VPcmV34SetTimeOut(struct tagV34Object *objp, int secs)
  * Found by `test/unit/t_v34pcmapi.cpp` crossing `message` with `flag`.
  *
  * AFTER THAT IT IS `VPcmV34InitiateRetrain`'S TAIL, mode 4 rather than 1:
- * the same `v34handshakinit`, the same `f0004 = 7`, the same three receiver
+ * the same `v34handshakinit`, the same `progress = 7`, the same three receiver
  * scalars, the same +0x2218, the same `status = 0` and the same notch reset
  * at +0xac1c with the same 0x5a82/0x55fc/0x39c3 by role.  What is here and
  * not there is `GenericToneDetector::reset` on the session's detector at
@@ -3415,7 +3415,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 
 	PROG_U8(obj->pac3c, CFG_FLAGS3) &= (unsigned char)~CFG_FLAG3_RETRAIN;
 
-	obj->fabec = message;
+	obj->moh_org = message;
 
 	if (message == 1) {
 		if (DSPLIB_DEBUG_ON())
@@ -3430,22 +3430,22 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 	}
 
 	obj->moh_recvd = 5;
-	obj->fabfa = (unsigned char)(late != 0);
+	obj->moh_clrd_sel = (unsigned char)(late != 0);
 	PROG_U8(obj, O_ANSAMLATE) = late;
 
-	obj->fabe2 = 0;
+	obj->short_abe2 = 0;
 	PROG_S16(obj, OB_MOH_W6) = 0;
 	PROG_S16(obj, OB_MOH_W4) = 0;
-	obj->fabe0 = 0;
+	obj->moh_holdtime_code = 0;
 	obj->moh_limit = 0;
 
 	v34handshakinit(obj, 4);
 
-	obj->f0004 = 7;
+	obj->progress = 7;
 
-	rx->f258 = 0;
-	rx->f25a = 0;
-	rx->f25c = 0;
+	rx->bad_run = 0;
+	rx->bad_long_run = 0;
+	rx->good_run = 0;
 
 	PROG_S32(obj, OB_F2218) = 2;
 	obj->status = 0;
@@ -3454,7 +3454,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 
 	{
 		unsigned char *st = m + OB_FAC1C;
-		short role = obj->f359c;
+		short role = obj->role;
 
 		*(short *)(st + 0x00) = 0;
 		*(short *)(st + 0x02) = 0;
@@ -3493,7 +3493,7 @@ VPcmV34InitMOH(void *objp, int message, unsigned char late,
 		? 1 : -1]
 
 V34PCMMAIN_ASSERT(status,  status,           0x0000);
-V34PCMMAIN_ASSERT(f0004,   f0004,            0x0004);
+V34PCMMAIN_ASSERT(progress,   progress,            0x0004);
 V34PCMMAIN_ASSERT(rmin,    rate_min,         0x0220);
 V34PCMMAIN_ASSERT(rmax,    rate_max,         0x0224);
 V34PCMMAIN_ASSERT(floor,   rx_energy_floor,  0x0230);
@@ -3501,8 +3501,8 @@ V34PCMMAIN_ASSERT(v90rx,   v90_receiver,     0x024c);
 V34PCMMAIN_ASSERT(k56rx,   k56flex_receiver, 0x0250);
 V34PCMMAIN_ASSERT(dmadly,  dmadelay,             0x025c);
 V34PCMMAIN_ASSERT(p3548,   p3548,            0x3548);
-V34PCMMAIN_ASSERT(f359c,   f359c,            0x359c);
-V34PCMMAIN_ASSERT(fa23c,   fa23c,            0xa23c);
+V34PCMMAIN_ASSERT(role,   role,            0x359c);
+V34PCMMAIN_ASSERT(far_echo_enable,   far_echo_enable,            0xa23c);
 V34PCMMAIN_ASSERT(lshort,  local_short,      0xabca);
 V34PCMMAIN_ASSERT(isshort, is_short,         0xabcc);
 V34PCMMAIN_ASSERT(pac18,   pac18,            0xac18);
@@ -3515,9 +3515,9 @@ V34PCMMAIN_ASSERT(pac3c,   pac3c,            0xac3c);
 		       + __builtin_offsetof(struct v34_receiver, field)) \
 		 == (off)) ? 1 : -1]
 
-V34PCMMAIN_RXASSERT(f258, f258, 0x4bc);
-V34PCMMAIN_RXASSERT(f25a, f25a, 0x4be);
-V34PCMMAIN_RXASSERT(f25c, f25c, 0x4c0);
+V34PCMMAIN_RXASSERT(bad_run, bad_run, 0x4bc);
+V34PCMMAIN_RXASSERT(bad_long_run, bad_long_run, 0x4be);
+V34PCMMAIN_RXASSERT(good_run, good_run, 0x4c0);
 
 /*
  * The two classes this file constructs a `this` for by adding a constant, and

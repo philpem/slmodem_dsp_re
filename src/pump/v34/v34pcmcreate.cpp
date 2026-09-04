@@ -277,7 +277,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 
 	V34InitializeImplementationSpecific(obj);
 
-	obj->fa23c = 1;
+	obj->far_echo_enable = 1;
 	obj->bulk_tail = 0;
 	obj->bulk_head = 0;
 	obj->bulk_ring = (short *)(m + OB_BULK_RING);
@@ -285,15 +285,15 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 
 	*(int *)(m + OB_FABD8) = 0;
 	*(int *)(m + OB_FABDC) = 0;
-	obj->fabe0 = 0;
-	obj->fabe2 = 0;
+	obj->moh_holdtime_code = 0;
+	obj->short_abe2 = 0;
 	*(short *)(m + OB_FABE4) = 0;
 	*(short *)(m + OB_FABE6) = 0;
-	obj->f35a4 = 0;
+	obj->short_35a4 = 0;
 
 	if (DSPLIB_DEBUG_ON())
 		dsplibs_debug_printf("On Create: Setting desired TX MD"
-				     " (%d mSec)!\n", (int)obj->f35a4);
+				     " (%d mSec)!\n", (int)obj->short_35a4);
 
 	/*
 	 * `x * 2.4`, and the object spells it as an unsigned divide of `x * 24`
@@ -320,13 +320,13 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->remote_v92 = 0;
 	obj->local_short = 0;
 	obj->is_short = 0;
-	obj->fabce = 0;
-	obj->fabd0 = 0;
-	obj->fabd2 = 0;
+	obj->short_abce = 0;
+	obj->short_abd0 = 0;
+	obj->short_abd2 = 0;
 	*(short *)(m + OB_FABD4) = 0;
 
 	obj->status = 0;
-	obj->f0004 = 0;
+	obj->progress = 0;
 	obj->k56flex_receiver = 0;
 
 	/*
@@ -349,9 +349,9 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		 */
 		v92 = *(unsigned char **)(sess + SESS_PCMV92);
 		*(short *)(m + OB_FABD4) = v92[PCMV92_COPIED + 3];
-		obj->fabd2 = v92[PCMV92_COPIED + 2];
-		obj->fabd0 = v92[PCMV92_COPIED + 1];
-		obj->fabce = v92[PCMV92_COPIED + 0];
+		obj->short_abd2 = v92[PCMV92_COPIED + 2];
+		obj->short_abd0 = v92[PCMV92_COPIED + 1];
+		obj->short_abce = v92[PCMV92_COPIED + 0];
 		v92[PCMV92_FLAG11] = 1;
 
 		v92 = *(unsigned char **)(sess + SESS_PCMV92);
@@ -368,7 +368,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 			(*(V90Demodulator **)(sess + SESS_DEMOD))
 				->enterChannelVerification((short)uqts,
 							   (short)ansLevel);
-			obj->f0004 = 10;
+			obj->progress = 10;
 		}
 
 		if (side == 0) {
@@ -403,7 +403,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		obj->v90_receiver = 0;
 	}
 
-	obj->f359c = (short)(side != 0 ? 0x66 : 0x65);
+	obj->role = (short)(side != 0 ? 0x66 : 0x65);
 
 	obj->ptc = ptc;
 	obj->rx_n = 0;
@@ -418,7 +418,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	*(int *)(m + OB_F0238) = 0;
 	*(int *)(m + OB_F0248) = (int)0xfffe8900;
 	*(short *)(m + OB_FORCE_LOW_BAUD) = 0;
-	rx->f262 = 0x600;
+	rx->agc_start_gain = 0x600;
 	*(int *)((unsigned char *)rx + RX_F238) = 0;
 	*(int *)(m + OB_F000C) = 0;
 	obj->nof_tx_bits = 0;
@@ -434,7 +434,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 */
 	*(short *)(m + OB_F0254) =
 		(short)(336 * (int)*(const short *)(m + OB_F35A4) + 10000);
-	obj->f2aa6 = 0;
+	obj->hist2_idx = 0;
 	*(short *)(m + OB_F0254 + 2) = 0;
 	*(int *)(m + OB_F0254 + 4) = 0;
 
@@ -445,7 +445,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	 */
 	{
 		unsigned char *st = m + OB_FAC1C;
-		short role = obj->f359c;
+		short role = obj->role;
 
 		*(short *)(st + 0x00) = 0;
 		*(short *)(st + 0x02) = 0;
@@ -468,7 +468,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	}
 
 	obj->rates_latched = 0;
-	obj->fac0c = 0;
+	obj->v90_timing_offset = 0;
 	m[OB_FAC17] = 0;
 	*(short *)(m + OB_F0262) = 1;
 	obj->tx_bps = 0;
@@ -477,10 +477,10 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 	obj->rrn_remote = 0;
 	*(short *)(m + OB_FAC12) = 0;
 	*(short *)(m + OB_FAC14) = 0;
-	obj->f3554 = 0x7d0;
+	obj->echo_decay_start = 0x7d0;
 	*(short *)(m + OB_FA248) = 0;
-	obj->f3558 = 0x7fdf;
-	obj->f355c = 2;
+	obj->echo_decay_fact = 0x7fdf;
+	obj->echo_beta = 2;
 
 	/*
 	 * THE RATE BLOCK, and it is `VPcmV34InitiateRetrain`'s to the
@@ -628,7 +628,7 @@ VPcmV34Create(void *objp, int side, int ptc, void *runtime, int sessionType)
 		? 1 : -1]
 
 V34PCMCREATE_ASSERT(status,   status,           0x0000);
-V34PCMCREATE_ASSERT(f0004,    f0004,            0x0004);
+V34PCMCREATE_ASSERT(progress,    progress,            0x0004);
 V34PCMCREATE_ASSERT(ptc,      ptc,              0x0008);
 V34PCMCREATE_ASSERT(nofbits,  nof_tx_bits,      0x0010);
 V34PCMCREATE_ASSERT(rxn,      rx_n,             0x0114);
@@ -642,31 +642,31 @@ V34PCMCREATE_ASSERT(floor,    rx_energy_floor,  0x0230);
 V34PCMCREATE_ASSERT(v90rx,    v90_receiver,     0x024c);
 V34PCMCREATE_ASSERT(k56rx,    k56flex_receiver, 0x0250);
 V34PCMCREATE_ASSERT(dmadly,   dmadelay,             0x025c);
-V34PCMCREATE_ASSERT(f2aa6,    f2aa6,            0x2aa6);
+V34PCMCREATE_ASSERT(hist2_idx,    hist2_idx,            0x2aa6);
 V34PCMCREATE_ASSERT(p3548,    p3548,            0x3548);
-V34PCMCREATE_ASSERT(f3554,    f3554,            0x3554);
-V34PCMCREATE_ASSERT(f3558,    f3558,            0x3558);
-V34PCMCREATE_ASSERT(f355c,    f355c,            0x355c);
-V34PCMCREATE_ASSERT(f359c,    f359c,            0x359c);
-V34PCMCREATE_ASSERT(f35a4,    f35a4,            0x35a4);
+V34PCMCREATE_ASSERT(echo_decay_start,    echo_decay_start,            0x3554);
+V34PCMCREATE_ASSERT(echo_decay_fact,    echo_decay_fact,            0x3558);
+V34PCMCREATE_ASSERT(echo_beta,    echo_beta,            0x355c);
+V34PCMCREATE_ASSERT(role,    role,            0x359c);
+V34PCMCREATE_ASSERT(short_35a4,    short_35a4,            0x35a4);
 V34PCMCREATE_ASSERT(bhead,    bulk_head,        0x35a8);
 V34PCMCREATE_ASSERT(btail,    bulk_tail,        0x35ac);
 V34PCMCREATE_ASSERT(bring,    bulk_ring,        0x35b0);
 V34PCMCREATE_ASSERT(blen,     bulk_len,         0x35b4);
-V34PCMCREATE_ASSERT(fa23c,    fa23c,            0xa23c);
+V34PCMCREATE_ASSERT(far_echo_enable,    far_echo_enable,            0xa23c);
 V34PCMCREATE_ASSERT(filtdly,  filtdelay,        0xaa7c);
 V34PCMCREATE_ASSERT(lv92,     local_v92,        0xabc6);
 V34PCMCREATE_ASSERT(rv92,     remote_v92,       0xabc8);
 V34PCMCREATE_ASSERT(lshort,   local_short,      0xabca);
 V34PCMCREATE_ASSERT(isshort,  is_short,         0xabcc);
-V34PCMCREATE_ASSERT(fabce,    fabce,            0xabce);
-V34PCMCREATE_ASSERT(fabd0,    fabd0,            0xabd0);
-V34PCMCREATE_ASSERT(fabd2,    fabd2,            0xabd2);
-V34PCMCREATE_ASSERT(fabe0,    fabe0,            0xabe0);
-V34PCMCREATE_ASSERT(fabe2,    fabe2,            0xabe2);
+V34PCMCREATE_ASSERT(short_abce,    short_abce,            0xabce);
+V34PCMCREATE_ASSERT(short_abd0,    short_abd0,            0xabd0);
+V34PCMCREATE_ASSERT(short_abd2,    short_abd2,            0xabd2);
+V34PCMCREATE_ASSERT(moh_holdtime_code,    moh_holdtime_code,            0xabe0);
+V34PCMCREATE_ASSERT(short_abe2,    short_abe2,            0xabe2);
 V34PCMCREATE_ASSERT(txbps,    tx_bps,           0xac04);
 V34PCMCREATE_ASSERT(rxbps,    rx_bps,           0xac08);
-V34PCMCREATE_ASSERT(fac0c,    fac0c,            0xac0c);
+V34PCMCREATE_ASSERT(v90_timing_offset,    v90_timing_offset,            0xac0c);
 V34PCMCREATE_ASSERT(rrnl,     rrn_local,        0xac0e);
 V34PCMCREATE_ASSERT(rrnr,     rrn_remote,       0xac10);
 V34PCMCREATE_ASSERT(latched,  rates_latched,    0xac16);
@@ -682,7 +682,7 @@ V34PCMCREATE_ASSERT(pac3c,    pac3c,            0xac3c);
 typedef char v34pcmcreate_rxsize[
 	((int)sizeof(struct v34_receiver) == 0x79c) ? 1 : -1];
 typedef char v34pcmcreate_rxf262[
-	((int)__builtin_offsetof(struct v34_receiver, f262) == 0x262)
+	((int)__builtin_offsetof(struct v34_receiver, agc_start_gain) == 0x262)
 	? 1 : -1];
 
 /* And the V.34 object's own extent, which is the first memset's length. */

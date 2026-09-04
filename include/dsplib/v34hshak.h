@@ -321,7 +321,7 @@ void dpskinit(void *obj, short mode, short high);
  */
 /*
  * Set the whole object up for phase 2.  Two configurations in one function,
- * chosen by `f359c == 0x65`: the originate end signals on 1200 Hz through
+ * chosen by `role == 0x65`: the originate end signals on 1200 Hz through
  * the upper receive band, the answer end on 2400 through the lower.
  */
 void v34modeminit(void *obj);
@@ -434,7 +434,7 @@ extern const int vect16[16];
 /*
  * The line probe's one period, 64 signed shorts at `.rodata + 0x2c00`, and
  * NOT a constellation: `v34handshak`'s txstate 51 `TX_L1` indexes it with the
- * low six bits of `vect_idx`, scales each sample by `f25d4` and hands four at
+ * low six bits of `vect_idx`, scales each sample by `tx_scale` and hands four at
  * a time to `txwritequeue`.  Sixty-four is what the mask `0x3f` admits; the
  * object checks no length anywhere.
  */
@@ -526,7 +526,7 @@ void indicateJaTransmission(void *obj);
  * per rate.  Writes the rate config at +0xaa84 and the outgoing message at
  * +0xa9ac, and nothing else; takes no arguments beyond the object.
  *
- * `f359c == 0x65` -- the originating side -- offers every rate the probe
+ * `role == 0x65` -- the originating side -- offers every rate the probe
  * allows.  Any other value picks one and fills the rate config in.
  */
 void probeselect(void *obj);
@@ -540,8 +540,8 @@ void probeselect(void *obj);
  * Apply the far end's requested power reduction to the transmit scale.
  *
  * `mp` is the received MP message; only its first short is read, and the one
- * call site passes `obj + 0xa9dc`.  Writes `f25dc` with the reduction in dB
- * and `f25d4` with the scale that comes out of it.
+ * call site passes `obj + 0xa9dc`.  Writes `tx_pwr_reduction` with the reduction in dB
+ * and `tx_scale` with the scale that comes out of it.
  */
 void settxlevel(void *obj, const short *mp);
 

@@ -1,41 +1,41 @@
 [
  {
-  "note": "`v34handshak`'s table-2 dispatch: seven arms deciding one int, and a tail that can overwrite what they decided.  Almost every mutation here is a constant, because that is what this dispatch is -- the arms hold no arithmetic.  What the set has to prove is that each of the seven arms is separately driven, that the five branches out of the table's own range are reached, and that the three signedness decisions in the tail are the ones the object makes.  IT NOW ANCHORS INTO `src/pump/v34/v34hshak.c`.  The set was written against `src/pump/v34/v34hstxblock.c`, the third of three reconstructions of this dispatch; finding F591 collapsed that file onto `t3m_txblock`/`t3m_tail` and every anchor was rewritten to the survivor's spelling -- `obj->f0004` to `*f->progress`, `TB_INT(obj, TB_F2218)` to `T3M_I32(f, T3M_MODE)`, and so on -- with the claim each makes unchanged.  Twenty-six of them share their find text with an anchor in `v34hst3mid` or `v34hst3core`; that is not a duplicate, because the binary is what a mutation set is tested by and `t_v34hstbl2` is the only one that drives table 2's arms directly."
+  "note": "`v34handshak`'s table-2 dispatch: seven arms deciding one int, and a tail that can overwrite what they decided.  Almost every mutation here is a constant, because that is what this dispatch is -- the arms hold no arithmetic.  What the set has to prove is that each of the seven arms is separately driven, that the five branches out of the table's own range are reached, and that the three signedness decisions in the tail are the ones the object makes.  IT NOW ANCHORS INTO `src/pump/v34/v34hshak.c`.  The set was written against `src/pump/v34/v34hstxblock.c`, the third of three reconstructions of this dispatch; finding F591 collapsed that file onto `t3m_txblock`/`t3m_tail` and every anchor was rewritten to the survivor's spelling -- `obj->progress` to `*f->progress`, `TB_INT(obj, TB_F2218)` to `T3M_I32(f, T3M_MODE)`, and so on -- with the claim each makes unchanged.  Twenty-six of them share their find text with an anchor in `v34hst3mid` or `v34hst3core`; that is not a duplicate, because the binary is what a mutation set is tested by and `t_v34hstbl2` is the only one that drives table 2's arms directly."
  },
  {
   "label": "txstate 5's microstate branch tests 0x65 rather than 0x66",
-  "find": "\t\t\tif (mst == 0x3f && f->obj->f359c == 0x66)",
-  "replace": "\t\t\tif (mst == 0x3f && f->obj->f359c == 0x65)",
+  "find": "\t\t\tif (mst == 0x3f && f->obj->role == 0x66)",
+  "replace": "\t\t\tif (mst == 0x3f && f->obj->role == 0x65)",
   "fn": "t3m_txblock"
  },
  {
   "label": "txstate 5's rxstate-4 branch tests 0x66 rather than 0x65",
-  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)",
-  "replace": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x66)",
+  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->role == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->role == 0x66)",
   "fn": "t3m_txblock"
  },
  {
   "label": "txstate 5's rxstate-35 branch tests 0x66 rather than 0x65",
-  "find": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
-  "replace": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x66)",
+  "find": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x66)",
   "fn": "t3m_txblock"
  },
  {
   "label": "txstate 5's rxstate-4 branch wants microstate 63 not 44",
-  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)",
-  "replace": "\t\t\telse if (rx == 0x04 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->role == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x04 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x65)",
   "fn": "t3m_txblock"
  },
  {
   "label": "txstate 5's two rxstate values transposed",
-  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)\n\t\t\t\t*f->progress = 1;\n\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
-  "replace": "\t\t\telse if (rx == 0x23 && mst == 0x2c\n\t\t\t\t && f->obj->f359c == 0x65)\n\t\t\t\t*f->progress = 1;\n\t\t\telse if (rx == 0x04 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "find": "\t\t\telse if (rx == 0x04 && mst == 0x2c\n\t\t\t\t && f->obj->role == 0x65)\n\t\t\t\t*f->progress = 1;\n\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x23 && mst == 0x2c\n\t\t\t\t && f->obj->role == 0x65)\n\t\t\t\t*f->progress = 1;\n\t\t\telse if (rx == 0x04 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x65)",
   "fn": "t3m_txblock"
  },
  {
   "label": "txstate 5's second rxstate value 0x23 becomes 0x24",
-  "find": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
-  "replace": "\t\t\telse if (rx == 0x24 && mst == 0x3f\n\t\t\t\t && f->obj->f359c == 0x65)",
+  "find": "\t\t\telse if (rx == 0x23 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x65)",
+  "replace": "\t\t\telse if (rx == 0x24 && mst == 0x3f\n\t\t\t\t && f->obj->role == 0x65)",
   "fn": "t3m_txblock"
  },
  {
@@ -52,14 +52,14 @@
  },
  {
   "label": "txstate 18's branch out gives 3 rather than 2",
-  "find": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 2;",
-  "replace": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 3;",
+  "find": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 2;",
+  "replace": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 3;",
   "fn": "t3m_txblock"
  },
  {
   "label": "txstate 18's branch out tests 0x66 rather than 0x65",
-  "find": "\t\tif (f->obj->f359c == 0x65)\n\t\t\t*f->progress = 2;",
-  "replace": "\t\tif (f->obj->f359c == 0x66)\n\t\t\t*f->progress = 2;",
+  "find": "\t\tif (f->obj->role == 0x65)\n\t\t\t*f->progress = 2;",
+  "replace": "\t\tif (f->obj->role == 0x66)\n\t\t\t*f->progress = 2;",
   "fn": "t3m_txblock"
  },
  {
@@ -147,14 +147,14 @@
  },
  {
   "label": "the tail doubles +0xaa96 rather than tripling it",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
-  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->baud_rate);",
+  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->baud_rate);",
   "fn": "t3m_tail"
  },
  {
   "label": "the tail keeps the tripling at full width",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
-  "replace": "\t\t*(int *)&f->rx->f1d2 = 3 * (int)f->obj->baud_rate;",
+  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\t*(int *)&f->rx->report_interval = 3 * (int)f->obj->baud_rate;",
   "fn": "t3m_tail"
  },
  {
@@ -302,8 +302,8 @@
  },
  {
   "label": "the txstate reload at 0x62b5f, taken out",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);\n\t\ttx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);\n\t\t*f->progress = 4;",
-  "replace": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);\n\t\t*f->progress = 4;",
+  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->baud_rate);\n\t\ttx = (short)T3M_U16(f, V34HS_TXSTATE_OFF);\n\t\t*f->progress = 4;",
+  "replace": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->baud_rate);\n\t\t*f->progress = 4;",
   "fn": "t3m_tail",
   "equivalent": true,
   "why": "0x62b5f reloads +0x3596 into %cx before rejoining the tail -- the block entered at 0x62b45, whose `movzwl 0x3596(%ebx),%ecx` is at 0x62b5f (592 re-fixes the address 550's table header moved), and `t3m_tail` models it -- which is the one thing the reconstruction this set was written against could not, its entry taking only the object.  Taking it out is still equivalent IN THIS TREE, and that is measured rather than argued: every one of the forty-odd sites that reaches the dispatch either passes the object's own +0x3596 or, in arms 48 and 63, stores the value into +0x3596 before passing it, so the reloaded and the passed txstate are equal everywhere.  Removing it was run against all eight suites that touch this file and NOT CAUGHT by any of them (591).  It stops being equivalent the first time an arm passes a value it did not store while +0x3596 holds 0x4a, 0x52, 0x53 or 0x54 -- which is why the parameter exists.  Held fixed: nothing."

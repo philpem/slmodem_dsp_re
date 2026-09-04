@@ -103,27 +103,27 @@ extern const signed char MMinTable[32];
 
 struct v34_shell {
 	unsigned char pad_000[0xa00];
-	short           fa00;			/* +0xa00 */
-	short           fa02;			/* +0xa02 sub-frame limit  */
-	short           fa04;			/* +0xa04 */
-	short           fa06;			/* +0xa06 */
-	short           fa08;			/* +0xa08 an accumulator putFrame
+	short           span;			/* +0xa00 */
+	short           subframe_limit;			/* +0xa02 sub-frame limit  */
+	short           group_count;			/* +0xa04 */
+	short           remainder;			/* +0xa06 */
+	short           wide_accum;			/* +0xa08 an accumulator putFrame
 						 *  advances and folds back */
 	/*
 	 * +0xa0a.  initV34 sets it to 15 minus the group size -- 8 for the
 	 * two rates that use a group of 7, 7 for the five that use 8.
 	 */
-	short           fa0a;			/* +0xa0a */
+	short           short_a0a;			/* +0xa0a */
 	unsigned char pad_a0c[0xa0e - 0xa0c];
-	short           fa0e;			/* +0xa0e width, one branch  */
-	short           fa10;			/* +0xa10 width, the other   */
+	short           wide_bits;			/* +0xa0e width, one branch  */
+	short           wide_bits_alt;			/* +0xa10 width, the other   */
 	/*
 	 * One past the largest index the demapper will consider: every
 	 * comparison in shellDemapper is against `count - 1`, and a count of
 	 * 1 makes it return zero without reading anything else.
 	 */
 	short           count;			/* +0xa12 */
-	short           fa14;			/* +0xa14 the repeated width */
+	short           idx_width;			/* +0xa14 the repeated width */
 	/*
 	 * +0xa16.  The convolutional encoder's FEEDBACK MASK -- the generator
 	 * polynomial, XORed back in when the bit shifted out is set.  24 out
@@ -133,7 +133,7 @@ struct v34_shell {
 	 * `conv`'s recurrence.  modulatevector also compares it against 64 to
 	 * pick a hand-unrolled form of the same step.  Retracted D47.
 	 */
-	short           fa16;			/* +0xa16 */
+	short           feedback_mask;			/* +0xa16 */
 	/*
 	 * decodeDepth's delay line: three COMPLEX taps, shifted a pair at a
 	 * time.  hist[2..3] take hist[0..1] and hist[4..5] take hist[2..3];
@@ -152,14 +152,14 @@ struct v34_shell {
 	 */
 	const short *   conv;			/* +0xa28 */
 	/* Six shorts preinitV34 clears and nothing read so far touches. */
-	short           fa2c[6];		/* +0xa2c */
+	short           conv_sr[6];		/* +0xa2c */
 	short           prev_k;			/* +0xa38 last quadrant   */
 	short           invert;			/* +0xa3a picks kkInvert  */
-	short           fa3c;			/* +0xa3c sub-frame count */
-	short           fa3e;			/* +0xa3e frame count     */
-	short           fa40;			/* +0xa40 its limit       */
+	short           subframe_count;			/* +0xa3c sub-frame count */
+	short           frame_count;			/* +0xa3e frame count     */
+	short           frame_limit;			/* +0xa40 its limit       */
 	short           divisor;		/* +0xa42 zero means one  */
-	short           fa44;			/* +0xa44 cost shift      */
+	short           cost_shift;			/* +0xa44 cost shift      */
 	short           wrap;			/* +0xa46 sets the masks  */
 	unsigned char pad_a48_[0xa48 - 0xa48];
 	short           t1[0x80];		/* +0xa48 */
@@ -201,7 +201,7 @@ struct v34_shell {
 	unsigned char pad_e4e[0xe50 - 0xe4e];
 	/*
 	 * The frame putFrame emits: one wide value, then four groups of
-	 * (1 bit, a small width, and two of `fa14`).
+	 * (1 bit, a small width, and two of `idx_width`).
 	 *
 	 * THE WIDE VALUE IS `frame[0..1]` AS ONE 32-BIT QUANTITY, and
 	 * `getFrame` stores it that way -- `mov %eax,0x2a30(%esi)` at
@@ -383,7 +383,7 @@ int shellDemapper(void *shell);
 
 /*
  * Emit one mapped frame through `put_bits`: a wide shell index followed by
- * four groups of (1 bit, a small field, and two `fa14`-wide fields).
+ * four groups of (1 bit, a small field, and two `idx_width`-wide fields).
  */
 void putFrame(void *shell);
 
@@ -399,7 +399,7 @@ void getFrame(void *obj);
  * Walk the trellis back 31 steps and decode one 8D frame.
  *
  * `quad` receives four shorts (two quadrant deltas and two masked grid
- * values) and `idx` two -- the grid values shifted down by `fa14`.
+ * values) and `idx` two -- the grid values shifted down by `idx_width`.
  */
 void decodeDepth(void *shell, short *quad, short *idx);
 

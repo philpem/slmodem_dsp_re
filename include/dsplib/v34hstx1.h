@@ -40,7 +40,7 @@
  *
  * WHAT AN ARM IS.  The loop is
  *
- *     while (txq.count < f2aa0)
+ *     while (txq.count < short_2aa0)
  *             switch (txstate) { ... }
  *
  * and every one of these ends by rejoining that test, so an arm is a
@@ -119,7 +119,7 @@ enum v34tx1_exit {
  * of 64/68's five exits passes through it.  51 reaches the same block.
  *
  * 0x6430c IS PART OF 20 AND NOT OF ITS REJOIN.  20's two counting paths pass
- * through it and bump f25c0; the path that ends the segment leaves through
+ * through it and bump seg_symcount; the path that ends the segment leaves through
  * 0x63da2, which does not.  86 rejoins through 0x6430c as well (finding F340).
  */
 
@@ -180,7 +180,7 @@ int v34tx1_dataxmit(void *obj);
  *                 clear-down at 0x67613 and the completion at 0x64b24.
  *
  * One scrambled `vect4` point per pass -- 71 and 86's head -- and then
- * `f25c0` against FOUR different fields, of which the first is not an exit
+ * `seg_symcount` against FOUR different fields, of which the first is not an exit
  * and the other three are.  The segment's end is `setupreceiver` INLINED, a
  * twelve-field blank of the +0xaa0c record, and one of three tails chosen by
  * the two PCM receivers.
@@ -192,7 +192,7 @@ int v34tx1_trnseg4(void *obj);
  *
  * Two bits per symbol or four, out of the message reader at +0xaa6c -- the
  * whole of 0x639db..0x63aae is `getbit` INLINED and one arm of it, the
- * restart, is a real call at 0x6484c.  The bits are collected into `f25c8`
+ * restart, is a real call at 0x6484c.  The bits are collected into `cur_quadrant`
  * lowest first and then mapped through `vect4` or `vect16`, chosen by the
  * same receiver halfword against the same constant that 69 uses.
  */
@@ -214,7 +214,7 @@ int v34tx1_txmd(void *obj);
  * The largest single run of straight-line code in the table -- 1,956 bytes
  * from 0x62e28 to 0x635cc without a gap.  One symbol out of `vect4` or
  * `vect16`, chosen by the receiver's +0x11e as 69 chooses it, with the
- * generator chosen on `f359c` as 71 and 86 choose it; then `f25c0` is
+ * generator chosen on `role` as 71 and 86 choose it; then `seg_symcount` is
  * counted UP and tested against `baud + baud/2 + period` out of the rate
  * configuration.  Three of the four exits are the loop; the fourth is the
  * completion, which rebuilds the receive half of that configuration.

@@ -38,15 +38,15 @@
  *                                      `V92MOD_PHASE_DATA`; the arm below
  *                                      uses 7, which is no phase at all, to
  *                                      say "definitely not the data phase".
- *   f21a, f248      a table            the two dB loops.  `f21a <= 0` skips
+ *   equerr, f248      a table            the two dB loops.  `equerr <= 0` skips
  *                                      both; the pairs below make the -6 dB
  *                                      loop run 0, 1 and many times and the
  *                                      -1 dB loop likewise, which is the only
  *                                      way the `+= 6` and the `+= 1` are
  *                                      separately observable.
- *   fac0c           0 / +ve / -ve      +0x228's zero test and its sign
+ *   v90_timing_offset           0 / +ve / -ve      +0x228's zero test and its sign
  *                                      extension.
- *   f25dc           a table            the transmit level's subtrahend, both
+ *   tx_pwr_reduction           a table            the transmit level's subtrahend, both
  *                                      signs, because `-12 - x` and `-12 + x`
  *                                      are the same instruction.
  *   K               a table            the V.92 upstream rate, including
@@ -271,18 +271,18 @@ static const float lvl_v[] = {
 #define NLVL		((int)(sizeof lvl_v / sizeof lvl_v[0]))
 
 /*
- * THE dB LADDER.  `f248 / f21a` is the ratio and the two loops step it down
+ * THE dB LADDER.  `f248 / equerr` is the ratio and the two loops step it down
  * by 0.2511597 (a -6 dB step, `+= 6`) and then by 0.79418945 (a -1 dB step,
  * `+= 1`), both as `(x * k) >> 14`, until it reaches zero.
  *
  * The pairs below are chosen so that BOTH loop trip counts take the values 0,
- * 1 and many across the table, and so that `f21a <= 0` skips the pair
+ * 1 and many across the table, and so that `equerr <= 0` skips the pair
  * entirely.  Without the zero-trip rows a mutation that deletes either `+=`
  * survives on every row where the other loop dominates the answer.
  */
 static const struct {
 	int	num;	/* v34_receiver::f248 */
-	short	den;	/* v34_receiver::f21a */
+	short	den;	/* v34_receiver::equerr */
 } snr_v[] = {
 	{	   0,	  1 },	/* ratio 0: neither loop runs           */
 	{	   1,	  1 },	/* ratio 1: no -6 dB step, no -1 dB step */
@@ -294,8 +294,8 @@ static const struct {
 	{	 999,	999 },	/* ratio exactly 1                       */
 	{	1000,	  3 },
 	{	  -5,	  1 },	/* a negative ratio: neither loop runs   */
-	{  1000000,	  0 },	/* f21a == 0: the outer test fails       */
-	{  1000000,	 -3 }	/* f21a < 0                              */
+	{  1000000,	  0 },	/* equerr == 0: the outer test fails       */
+	{  1000000,	 -3 }	/* equerr < 0                              */
 };
 #define NSNR		((int)(sizeof snr_v / sizeof snr_v[0]))
 
@@ -303,7 +303,7 @@ static const struct {
 static const short fac_v[] = { 0, 1, -1, 0x7fff, (short)0x8000, 0x1234 };
 #define NFAC		((int)(sizeof fac_v / sizeof fac_v[0]))
 
-/* `-12.0f - f25dc`: both signs, because the instruction cannot tell them. */
+/* `-12.0f - tx_pwr_reduction`: both signs, because the instruction cannot tell them. */
 static const short pr_v[] = { 0, 1, 3, -1, -6, 0x7fff, (short)0x8000 };
 #define NPR		((int)(sizeof pr_v / sizeof pr_v[0]))
 
@@ -358,11 +358,11 @@ setup(int n, const struct trial *t)
 
 		o->status = t->status;
 		o->p3548 = x;
-		o->f25dc = pr_v[t->pi];
-		o->fac0c = fac_v[t->fi];
+		o->tx_pwr_reduction = pr_v[t->pi];
+		o->v90_timing_offset = fac_v[t->fi];
 
 		RX(side)->f248 = snr_v[t->si].num;
-		RX(side)->f21a = snr_v[t->si].den;
+		RX(side)->equerr = snr_v[t->si].den;
 
 		x->info0Layout = t->analog;
 		x->modem.demodulator = d;
@@ -664,7 +664,7 @@ run_separation(void)
 
 	other = base;
 	other.fi = 0;
-	diff_eq_int("fac0c separates", saw_records_differ(&base, &other, n++),
+	diff_eq_int("v90_timing_offset separates", saw_records_differ(&base, &other, n++),
 		    1, 0);
 
 	/* The V.34 arm's own axes, on the V.34 arm. */
@@ -786,7 +786,7 @@ run_transcript(void)
  *
  * NINE SELECTORS, FOUR SOURCES EACH, AND A TENTH SELECTOR THAT MUST DO
  * NOTHING.  The grid sweeps `what` 0..9 -- one past the jump table -- against
- * `status` 0..3 and `f359c` over both roles and a third value that is
+ * `status` 0..3 and `role` over both roles and a third value that is
  * neither, because three of the arms test the role and three do not.
  *
  * THE OUTPUT ARRAY IS SEEDED AND HAS A GUARD PAST `maxCount`.  Both matter:
@@ -807,7 +807,7 @@ run_transcript(void)
  * THE THREE MUTATING ARMS ARE WHY THE OBJECTS ARE COMPARED AND NOT JUST THE
  * POINTS.  `VPcmFloModem::sweepCounter` moves once per point in both
  * constellation arms and not at all when none come out, and selector 0's V.34
- * arm clears `v34_object::f2aa4` unconditionally -- reading the residual ring
+ * arm clears `v34_object::hist1_idx` unconditionally -- reading the residual ring
  * EMPTIES it, even when the caller asked for no points.
  */
 
@@ -903,7 +903,7 @@ static const int sweep_v[] = {
 };
 #define NSWEEP	((int)(sizeof sweep_v / sizeof sweep_v[0]))
 
-/* `v34_object::f359c`: both roles the object tests for, and a third value. */
+/* `v34_object::role`: both roles the object tests for, and a third value. */
 static const short role_v[] = { 0x65, 0x66, 0x12 };
 #define NROLE	((int)(sizeof role_v / sizeof role_v[0]))
 
@@ -956,10 +956,10 @@ setup_visual(int n, const struct vtrial *t)
 		o->status = t->status;
 		o->p3548 = x;
 		o->pac18 = k56_[side];
-		o->f359c = role_v[t->ri];
+		o->role = role_v[t->ri];
 
 		/* Selector 0's V.34 arm: the ring's write cursor. */
-		o->f2aa4 = (short)len_v[t->li];
+		o->hist1_idx = (short)len_v[t->li];
 
 		o->echo0.taps = len_v[t->li];
 		o->echo0.coeff = scoef_[side][0];
@@ -1102,7 +1102,7 @@ run_visual(void)
 			sawNone = 1;
 
 		/* The ring drain, which happens even when nothing comes out. */
-		if (what == 0 && O(1)->f2aa4 == 0 &&
+		if (what == 0 && O(1)->hist1_idx == 0 &&
 		    len_v[li] != 0u && (short)len_v[li] != 0)
 			sawDrain = 1;
 

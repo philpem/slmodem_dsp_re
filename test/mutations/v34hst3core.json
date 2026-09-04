@@ -167,8 +167,8 @@
  },
  {
   "label": "the tail doubles +0xaa96 instead of tripling it",
-  "find": "\t\tf->rx->f1d2 = (short)(3 * (int)f->obj->baud_rate);",
-  "replace": "\t\tf->rx->f1d2 = (short)(2 * (int)f->obj->baud_rate);",
+  "find": "\t\tf->rx->report_interval = (short)(3 * (int)f->obj->baud_rate);",
+  "replace": "\t\tf->rx->report_interval = (short)(2 * (int)f->obj->baud_rate);",
   "fn": "t3m_tail"
  },
  {
@@ -228,8 +228,8 @@
  },
  {
   "label": "the prologue's cursor/limit guard is inclusive",
-  "find": "\twhile (obj->txq.count < obj->f2aa0) {",
-  "replace": "\twhile (obj->txq.count <= obj->f2aa0) {",
+  "find": "\twhile (obj->txq.count < obj->short_2aa0) {",
+  "replace": "\twhile (obj->txq.count <= obj->short_2aa0) {",
   "fn": "v34handshak"
  },
  {
@@ -258,44 +258,44 @@
  },
  {
   "label": "79's MOH guard tests moh_message for non-zero",
-  "find": "\tif (obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\tif (obj->moh_message != 0) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+  "find": "\tif (obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\tif (obj->moh_message != 0) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
  },
  {
   "label": "79's MOH guard reads moh_message sixteen bits wide",
-  "find": "\tif (obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\tif (*(const short *)&obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+  "find": "\tif (obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\tif (*(const short *)&obj->moh_message == 1) {\n\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
  },
  {
   "label": "79's detector limit is 0x64, as microstate 44's is",
-  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0x400);",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0x64, 0x32, 0x800, 0x400);",
   "note": "The one constant that separates 0x6d57c's call from 0x6ebed's."
  },
  {
   "label": "79's detector carrier select is inverted",
-  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c1200_ : c2400_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c1200_ : c2400_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
  },
  {
-  "label": "79's detector carrier select tests f359c against 0x66",
-  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x66 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
+  "label": "79's detector carrier select tests role against 0x66",
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x66 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);"
  },
  {
   "label": "79's detector polarity is zero",
-  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0xf0, 0x32, 0x800, 0x400);"
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     0, 0xf0, 0x32, 0x800, 0x400);"
  },
  {
   "label": "79's detector warm-up is 0x64",
-  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x64, 0x800, 0x400);"
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x64, 0x800, 0x400);"
  },
  {
   "label": "79's detector thresholds are exchanged",
-  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
-  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->f359c == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x400, 0x800);"
+  "find": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x800, 0x400);",
+  "replace": "\t\tdetectorinit(T3C_DET(obj),\n\t\t\t     obj->role == 0x65 ? c2400_ : c1200_,\n\t\t\t     1, 0xf0, 0x32, 0x400, 0x800);"
  },
  {
   "label": "79 does not arm the detector at +0x356a",
@@ -380,13 +380,13 @@
  },
  {
   "label": "80's disconnect leaves +0xabe2 alone",
-  "find": "\t\tobj->fabe2 = 1;\t\t\t\t/* 0x6c98a */\n",
+  "find": "\t\tobj->short_abe2 = 1;\t\t\t\t/* 0x6c98a */\n",
   "replace": ""
  },
  {
   "label": "80's disconnect sets +0xabe2 to 3",
-  "find": "\t\tobj->fabe2 = 1;\t\t\t\t/* 0x6c98a */",
-  "replace": "\t\tobj->fabe2 = 3;\t\t\t\t/* 0x6c98a */"
+  "find": "\t\tobj->short_abe2 = 1;\t\t\t\t/* 0x6c98a */",
+  "replace": "\t\tobj->short_abe2 = 3;\t\t\t\t/* 0x6c98a */"
  },
  {
   "label": "80 retrains as well as disconnecting",

@@ -156,19 +156,19 @@
   "replace": ""
  },
  {
-  "label": "setv90: f25c2 mask ~0x4018 becomes ~0x4010",
+  "label": "setv90: tx_flags mask ~0x4018 becomes ~0x4010",
   "find": "~0x4018",
   "replace": "~0x4010",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {
-  "label": "setv90: f25c2 mask ~0x4018 becomes ~0x0018",
+  "label": "setv90: tx_flags mask ~0x4018 becomes ~0x0018",
   "find": "~0x4018",
   "replace": "~0x0018",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {
-  "label": "setv90: f25c2 OR 0x2000 becomes 0x4000",
+  "label": "setv90: tx_flags OR 0x2000 becomes 0x4000",
   "find": "| 0x2000)",
   "replace": "| 0x4000)",
   "fn": "VPcmV34SetV90RateReneg"
@@ -187,77 +187,77 @@
  },
  {
   "label": "setv90: preinitdigital before the mask rather than after",
-  "find": "\tobj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);\n\n\tpreinitdigital(obj);",
-  "replace": "\tpreinitdigital(obj);\n\n\tobj->f25c2 = (short)((obj->f25c2 & ~0x4018) | 0x2000);",
+  "find": "\tobj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);\n\n\tpreinitdigital(obj);",
+  "replace": "\tpreinitdigital(obj);\n\n\tobj->tx_flags = (short)((obj->tx_flags & ~0x4018) | 0x2000);",
   "equivalent": true,
   "why": "`preinitdigital` does not touch +0x25c2 -- which this mutation surviving a whole-object comparison is itself the evidence for.",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {
-  "label": "hangup: f0004 gets 5",
-  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;"
+  "label": "hangup: progress gets 5",
+  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;",
+  "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;"
  },
  {
-  "label": "reneg: f0004 gets 5",
-  "find": "\tobj->f0004 = 6;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 5;\n\n\trx->f258 = 0;",
+  "label": "reneg: progress gets 5",
+  "find": "\tobj->progress = 6;\n\n\trx->bad_run = 0;",
+  "replace": "\tobj->progress = 5;\n\n\trx->bad_run = 0;",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
-  "label": "setv90: f0004 gets 5",
-  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
-  "replace": "\tobj->f0004 = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
+  "label": "setv90: progress gets 5",
+  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->short_382",
+  "replace": "\tobj->progress = 5;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->short_382",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {
   "label": "hangup: 0x2218 gets 6",
-  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->f258 = 0;",
-  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->f258 = 0;"
+  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\trx->bad_run = 0;",
+  "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\trx->bad_run = 0;"
  },
  {
   "label": "reneg: 0x2218 gets 6",
-  "find": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
-  "replace": "\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
+  "find": "\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218) = 5;",
+  "replace": "\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218) = 6;",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "setv90: 0x2218 gets 6",
-  "find": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->f382",
-  "replace": "\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->f382",
+  "find": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 5;\n\n\tobj->short_382",
+  "replace": "\tobj->progress = 6;\n\t*(int *)(m + 0x2218) = 6;\n\n\tobj->short_382",
   "fn": "VPcmV34SetV90RateReneg"
  },
  {
-  "label": "hangup: rx f258 not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Which of the four",
-  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Which of the four"
+  "label": "hangup: rx bad_run not cleared",
+  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n\n/*\n * Which of the four",
+  "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n\n/*\n * Which of the four"
  },
  {
-  "label": "hangup: rx f25c not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n}\n\n/*\n * Which of the four",
-  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n}\n\n/*\n * Which of the four"
+  "label": "hangup: rx good_run not cleared",
+  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n}\n\n/*\n * Which of the four",
+  "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n}\n\n/*\n * Which of the four"
  },
  {
-  "label": "reneg: rx f258 not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
+  "label": "reneg: rx bad_run not cleared",
+  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
+  "replace": "\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
-  "label": "reneg: rx f25c not cleared",
-  "find": "\trx->f258 = 0;\n\trx->f25a = 0;\n\trx->f25c = 0;\n\n\t*(int *)(m + 0x2218)",
-  "replace": "\trx->f258 = 0;\n\trx->f25a = 0;\n\n\t*(int *)(m + 0x2218)",
+  "label": "reneg: rx good_run not cleared",
+  "find": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\trx->good_run = 0;\n\n\t*(int *)(m + 0x2218)",
+  "replace": "\trx->bad_run = 0;\n\trx->bad_long_run = 0;\n\n\t*(int *)(m + 0x2218)",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
   "label": "hangup: handshakinit asked for mode 1",
-  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218)",
-  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\t*(int *)(m + 0x2218)"
+  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\t*(int *)(m + 0x2218)",
+  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\t*(int *)(m + 0x2218)"
  },
  {
   "label": "reneg: handshakinit asked for mode 1",
-  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
-  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->f0004 = 6;\n\n\trx->f258",
+  "find": "\tv34handshakinit(obj, 2);\n\n\tobj->progress = 6;\n\n\trx->bad_run",
+  "replace": "\tv34handshakinit(obj, 1);\n\n\tobj->progress = 6;\n\n\trx->bad_run",
   "fn": "VPcmV34InitiateRateRenegotiation"
  },
  {
@@ -605,38 +605,38 @@
  },
  {
   "label": "power: the positive arm's decay factor is the negative arm's",
-  "find": "\t\tobj->f3558 = 0x7fdf;",
-  "replace": "\t\tobj->f3558 = 0x7fcb;"
+  "find": "\t\tobj->echo_decay_fact = 0x7fdf;",
+  "replace": "\t\tobj->echo_decay_fact = 0x7fcb;"
  },
  {
   "label": "power: the positive arm's beta is four",
-  "find": "\t\tobj->f355c = 2;",
-  "replace": "\t\tobj->f355c = 4;"
+  "find": "\t\tobj->echo_beta = 2;",
+  "replace": "\t\tobj->echo_beta = 4;"
  },
  {
   "label": "power: decay start differs between the arms",
-  "find": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->f3554 = 0x7d0;",
-  "replace": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->f3554 = 0x7d1;"
+  "find": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_decay_start = 0x7d0;",
+  "replace": "\t\t*(int *)(pcm + 0x4f4) = 1;\n\t\tobj->echo_decay_start = 0x7d1;"
  },
  {
   "label": "power: the beta choice tests the wrong constant",
-  "find": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
+  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 5) ? 4 : 6;"
  },
  {
   "label": "power: the beta choice is inverted",
-  "find": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 6 : 4;"
+  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 6 : 4;"
  },
  {
   "label": "power: beta's other value is five, as adaptecho's ladder has it",
-  "find": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
-  "replace": "\t\tobj->f355c = (*(const int *)(cfg + 0x54) == 4) ? 4 : 5;"
+  "find": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 6;",
+  "replace": "\t\tobj->echo_beta = (*(const int *)(cfg + 0x54) == 4) ? 4 : 5;"
  },
  {
   "label": "power: the returned value is the unclamped one",
-  "find": "\t\t (int)red, obj->f3554, obj->f3558, obj->f355c);",
-  "replace": "\t\t (int)want, obj->f3554, obj->f3558, obj->f355c);"
+  "find": "\t\t (int)red, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);",
+  "replace": "\t\t (int)want, obj->echo_decay_start, obj->echo_decay_fact, obj->echo_beta);"
  },
  {
   "label": "power: the second report prints the flag before the write",

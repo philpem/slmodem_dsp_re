@@ -521,19 +521,19 @@ V34GiveINFO1aBits(void *objp, const short *bits)
 		 * in the object and then copied on as bytes, which is the
 		 * only reason they are stored at all.
 		 */
-		obj->fabce = (short)((((unsigned short)bits[0] & 0x80) >> 7)
+		obj->short_abce = (short)((((unsigned short)bits[0] & 0x80) >> 7)
 				     + (((unsigned short)bits[0] & 0x40) >> 5));
-		obj->fabd0 = (short)((((unsigned short)bits[0] & 0x20) >> 5)
+		obj->short_abd0 = (short)((((unsigned short)bits[0] & 0x20) >> 5)
 				     + (((unsigned short)bits[0] & 0x10) >> 3));
-		obj->fabd2 = (short)((((unsigned short)bits[0] & 0x08) >> 3)
+		obj->short_abd2 = (short)((((unsigned short)bits[0] & 0x08) >> 3)
 				     + (((unsigned short)bits[0] & 0x04) >> 1));
 
 		caps = session_ptr(sess, SESSION_CAPS);
-		*((char *)caps + 0x14) = (char)obj->fabce;
+		*((char *)caps + 0x14) = (char)obj->short_abce;
 		caps = session_ptr(sess, SESSION_CAPS);
-		*((char *)caps + 0x15) = (char)(unsigned short)obj->fabd0;
+		*((char *)caps + 0x15) = (char)(unsigned short)obj->short_abd0;
 		caps = session_ptr(sess, SESSION_CAPS);
-		*((char *)caps + 0x16) = (char)(unsigned short)obj->fabd2;
+		*((char *)caps + 0x16) = (char)(unsigned short)obj->short_abd2;
 	}
 
 	/*
@@ -570,7 +570,7 @@ out:
  * strings rather than by anything this reconstruction supplies:
  *
  *     0  MHreq   0x33          3  MHcda   0xbb
- *     1  MHfrr   0xdd          4  MHack   0x50 + fabe0
+ *     1  MHfrr   0xdd          4  MHack   0x50 + moh_holdtime_code
  *     2  MHclrd  0x95/96/9a    5  MHnack  0x77
  *
  * OUT OF RANGE DOES NOTHING AT ALL -- not even the debug line -- and the
@@ -580,7 +580,7 @@ out:
  * and defaulting, which needs no cast to agree.
  *
  * TWO CASES STORE TWICE.  MHack writes 0x50 and then overwrites it with
- * `0x50 + fabe0`; MHclrd writes 0x90 and then one of three values.  Both
+ * `0x50 + moh_holdtime_code`; MHclrd writes 0x90 and then one of three values.  Both
  * intermediate stores are to the same short and are immediately replaced, so
  * only the final value is written here -- there is no observable difference
  * and the object's own compiler would have been free to drop them too.
@@ -607,9 +607,9 @@ VPcmV34SetMohMessageBits(void *objp, short *bits)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
 					     "Building MHclrd message...\r\n");
-		if (obj->fabfa == 0)
+		if (obj->moh_clrd_sel == 0)
 			bits[0] = (short)0x95;
-		else if (obj->fabfa == 1)
+		else if (obj->moh_clrd_sel == 1)
 			bits[0] = (short)0x96;
 		else
 			bits[0] = (short)0x9a;
@@ -624,7 +624,7 @@ VPcmV34SetMohMessageBits(void *objp, short *bits)
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("VPcmV34SetMohMessageBits: "
 					     "Building MHack message...\r\n");
-		bits[0] = (short)((unsigned short)obj->fabe0 + 0x50);
+		bits[0] = (short)((unsigned short)obj->moh_holdtime_code + 0x50);
 		break;
 	case 5:
 		if (DSPLIB_DEBUG_ON())
@@ -647,13 +647,13 @@ VPcmV34SetMohMessageBits(void *objp, short *bits)
  *
  * THREE MESSAGES CARRY A NIBBLE AND THE OTHERS DO NOT:
  *
- *     0x5X  MHack   X is a time-out period code   -> fabe0
- *     0x9X  MHcld   X is a disconnect reason      -> fabfa, recoded 0/1/2
- *     0x75  MHnack  no nibble, but sets fabe2 = 3
+ *     0x5X  MHack   X is a time-out period code   -> moh_holdtime_code
+ *     0x9X  MHcld   X is a disconnect reason      -> moh_clrd_sel, recoded 0/1/2
+ *     0x75  MHnack  no nibble, but sets short_abe2 = 3
  *
  * `0x75` and `0x77` are both MHnack and both decode to 5.  The difference is
  * in the strings -- "may NOT init MOH in the future" against "may" -- and in
- * `fabe2`, which only 0x75 writes.  The sending side has one MHnack and
+ * `short_abe2`, which only 0x75 writes.  The sending side has one MHnack and
  * always builds 0x77, so this end can say the stronger thing and cannot
  * hear itself say it.
  *
@@ -678,7 +678,7 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 		return;
 	}
 	if ((w & 0xf0) == 0x50) {
-		obj->fabe0 = (short)(w & 0xf);
+		obj->moh_holdtime_code = (short)(w & 0xf);
 		if (DSPLIB_DEBUG_ON())
 			dsplibs_debug_printf("MHack message detected ! , "
 					     "Time out period code = %d\r\n",
@@ -699,28 +699,28 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 			dsplibs_debug_printf("MHnack message detected (modem "
 					     "may NOT init MOH in the future) "
 					     "!\r\n");
-		obj->fabe2 = 3;
+		obj->short_abe2 = 3;
 		obj->moh_recvd = 5;
 		return;
 	}
 	if ((w & 0xf0) == 0x90) {
 		switch (w & 0xf) {
 		case 5:
-			obj->fabfa = 0;
+			obj->moh_clrd_sel = 0;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"MHcld message detected ! , disconnect "
 					"reason is incoming call\r\n");
 			break;
 		case 6:
-			obj->fabfa = 1;
+			obj->moh_clrd_sel = 1;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"MHcld message detected ! , disconnect "
 					"reason is outgoing call\r\n");
 			break;
 		case 0xa:
-			obj->fabfa = 2;
+			obj->moh_clrd_sel = 2;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"MHcld message detected ! , disconnect "
@@ -732,7 +732,7 @@ VPcmV34InterpretMohMessageBits(void *objp, const short *bits)
 			 * string says why: a reserved code is assumed to mean
 			 * other.  Two arms, one value.
 			 */
-			obj->fabfa = 2;
+			obj->moh_clrd_sel = 2;
 			if (DSPLIB_DEBUG_ON())
 				dsplibs_debug_printf(
 					"MHcld message detected ! , reserved "
@@ -800,14 +800,14 @@ V34INFO_ASSERT(lv92,   local_v92,       0xabc6);
 V34INFO_ASSERT(rv92,   remote_v92,      0xabc8);
 V34INFO_ASSERT(lshort, local_short,     0xabca);
 V34INFO_ASSERT(isshrt, is_short,        0xabcc);
-V34INFO_ASSERT(abce,   fabce,           0xabce);
-V34INFO_ASSERT(abd0,   fabd0,           0xabd0);
-V34INFO_ASSERT(abd2,   fabd2,           0xabd2);
-V34INFO_ASSERT(mohv,   fabe0,           0xabe0);
+V34INFO_ASSERT(abce,   short_abce,           0xabce);
+V34INFO_ASSERT(abd0,   short_abd0,           0xabd0);
+V34INFO_ASSERT(abd2,   short_abd2,           0xabd2);
+V34INFO_ASSERT(mohv,   moh_holdtime_code,           0xabe0);
 V34INFO_ASSERT(mohm,   moh_message,     0xabf0);
 V34INFO_ASSERT(mohrx,  moh_recvd,       0xabf4);
-V34INFO_ASSERT(abe2,   fabe2,           0xabe2);
-V34INFO_ASSERT(mohr,   fabfa,           0xabfa);
+V34INFO_ASSERT(abe2,   short_abe2,           0xabe2);
+V34INFO_ASSERT(mohr,   moh_clrd_sel,           0xabfa);
 V34INFO_ASSERT(bulk,   prev_bulk_delay, 0xac02);
 V34INFO_ASSERT(pac18,  pac18,           0xac18);
 

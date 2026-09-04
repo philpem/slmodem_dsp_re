@@ -58,16 +58,17 @@ struct v34_receiver {
 	 * `v34hshak.c` and two mutation fixtures (`v34hsrx4.json`,
 	 * `v34hsrx72.json`) match this field's text verbatim.
 	 */
-	short           f124;            /* +0x124 */
+	short           rx_blocks;            /* +0x124 */
 	short           best_index;      /* +0x126 */
 	/*
 	 * +0x128.  `rxtiming`'s and `receiver`'s own output count -- always 4,
 	 * set uniformly by `V34SetupDemodulator` whatever the baud rate.
-	 *
-	 * -- derived: pulls_per_call, withheld (F10123): seven references in
-	 * `v34hshak.c`/`v34hstx1.cpp` and two mutation fixtures.
+	 * Named `out_count` and threaded through `v34hshak.c` (including its
+	 * own `V34HS_OFF` offset assertion) by the handshake-cluster naming
+	 * pass; kept here rather than this file's own `pulls_per_call`
+	 * candidate since that work is complete and verified (F9480/F10123).
 	 */
-	short           f128;            /* +0x128 */
+	short           out_count;            /* +0x128 */
 	short           agc_pair_count;  /* +0x12a V34demodulate: how many of
 					  the four samples-per-AGC-tick have
 					  landed (was f12a) */
@@ -104,19 +105,19 @@ struct v34_receiver {
 					  mutation fixture (F10123). */
 	/*
 	 * +0x19e.  NOT "the RMS window's second scalar and nothing reads it
-	 * back" -- that claim was wrong and is corrected here (F10123).
+	 * back" -- that was the handshake-cluster pass's own first reading
+	 * (applied here as `short_19e`) and it is wrong, corrected on merge:
 	 * `dpskinit`/its re-arm clear it alongside rms_idx, but `v34hshak.c`'s
-	 * RX_PHASE2_CALL step reads it as a one-shot latch: the first time
-	 * the phase-2 symbol counter passes 0x125f it is still zero, so the
-	 * retrain tone-detector is SKIPPED and the field is set to 1;
-	 * every call after that it runs the detector for real.  So it is a
-	 * "have we already passed this gate once" flag, not an RMS scalar.
-	 *
-	 * -- derived: retrain_gate, withheld (F10123): six references in
-	 * `v34hshak.c` plus a mutation fixture (`v34hst3mid.json`) that
-	 * mutates two of them.
+	 * own RX_PHASE2_CALL step (already reconstructed on that branch) reads
+	 * it as a one-shot latch: the first time the phase-2 symbol counter
+	 * passes 0x125f it is still zero, so the retrain tone-detector is
+	 * SKIPPED and the field is set to 1; every call after that it runs the
+	 * detector for real.  So it is a "have we already passed this gate
+	 * once" flag, not an RMS scalar -- renamed `retrain_gate` and threaded
+	 * through every one of `short_19e`'s own sites in `v34hshak.c`
+	 * (F10123/F9480).
 	 */
-	short           f19e;
+	short           retrain_gate;    /* +0x19e */
 	int             trn_ref_sr;      /* +0x1a0 the TRN reference
 					  generator's own scrambler register,
 					  distinct from `scrambler_sr` below
@@ -128,57 +129,49 @@ struct v34_receiver {
 					  * differential decode (was f1aa) */
 	/*
 	 * +0x1ac..0x1b0.  The shared interpolator's phase, step and wrap,
-	 * read by both `rxtiming` and `receiver`.
-	 *
-	 * -- derived: interp_phase (f1ac), interp_step (f1ae), interp_wrap
-	 * (f1b0), withheld (F10123): all three are written by
-	 * `V34SetupDemodulator` and read throughout `v34hshak.c`'s handshake
-	 * steps, and are matched verbatim by four mutation fixtures
-	 * (`v34hsmst44.json`, `v34hst3mid.json`, plus the handshake source
-	 * itself).
+	 * read by both `rxtiming` and `receiver`.  Named `phase_frac`/
+	 * `phase_inc`/`phase_wrap` and threaded through `v34hshak.c`'s
+	 * handshake steps and four mutation fixtures (`v34hsmst44.json`,
+	 * `v34hst3mid.json`, plus the handshake source itself) by the
+	 * handshake-cluster naming pass (F10123/F9480).
 	 */
-	short           f1ac;            /* +0x1ac rxtiming: fractional phase */
-	short           f1ae;            /* +0x1ae   its increment */
-	short           f1b0;            /* +0x1b0   its wrap */
+	short           phase_frac;      /* +0x1ac rxtiming: fractional phase */
+	short           phase_inc;       /* +0x1ae   its increment */
+	short           phase_wrap;      /* +0x1b0   its wrap */
 	unsigned char pad_1b2[0x1b4 - 0x1b2];
 	const short *   carrier;         /* +0x1b4 V34demodulate: sin then cos */
 	short           mix_carrier_step;    /* +0x1b8 the down-mix carrier's
 					      phase increment (was f1b8) */
 	/*
 	 * +0x1ba.  Half the down-mix carrier table's length -- a quarter
-	 * cycle, since `carrier[i]` and `carrier[i + f1ba]` are cosine and
-	 * sine of the same running phase (see `carrier` above).
-	 *
-	 * -- derived: mix_carrier_half_len, withheld (F10123): twenty-one
-	 * references in `v34hshak.c`, one in `v34hstx1.cpp`, and two
-	 * mutation fixtures.
+	 * cycle, since `carrier[i]` and `carrier[i + half_len]` are cosine and
+	 * sine of the same running phase (see `carrier` above).  Named
+	 * `half_len` and threaded through `v34hshak.c` (twenty-one references)
+	 * and `v34hstx1.cpp` by the handshake-cluster naming pass
+	 * (F10123/F9480).
 	 */
-	short           f1ba;            /* +0x1ba   half-length */
+	short           half_len;        /* +0x1ba */
 	short           mix_carrier_phase;   /* +0x1bc the down-mix carrier's
 					      running phase (was f1bc) */
 	/*
 	 * +0x1be.  `V34SetupDemodulator`'s unmodified symbol period, kept
-	 * beside f1ae which the timing loop then slews.
-	 *
-	 * -- derived: interp_step_base, withheld (F10123): same blast radius
-	 * as f1ac/f1ae/f1b0 above -- `v34hshak.c` and two mutation fixtures.
+	 * beside `phase_inc` which the timing loop then slews.  Named
+	 * `symbol_period` and threaded through `v34hshak.c` by the
+	 * handshake-cluster naming pass (F10123/F9480).
 	 */
-	short           f1be;            /* +0x1be V34SetupDemodulator: the
+	short           symbol_period;   /* +0x1be
 					 * unmodified symbol period, kept
-					 * beside f1ae which the timing loop
+					 * beside phase_inc which the timing loop
 					 * then slews */
 	/*
-	 * +0x1c0.  `pllcnt`, from the same debug string as f124, AND the
-	 * timing-recovery state machine's own state (`TimingV34`,
+	 * +0x1c0.  `pllcnt`, from the same debug string as `rx_blocks`, AND
+	 * the timing-recovery state machine's own state (`TimingV34`,
 	 * `setTimingStateParameters`): -1 done, 1 start, 2..8 the ramp.  One
 	 * field serving both roles, the same overlay pattern as the AGC
-	 * freeze bit above.
-	 *
-	 * -- derived: timing_state, withheld (F10123): three references in
-	 * `v34hshak.c`, a comment in `v34rx.h`, and a mutation fixture
-	 * (`v34hsrx4.json`) that mutates it seven times.
+	 * freeze bit above -- kept as `pllcnt` (rank-1, its own debug string)
+	 * rather than the timing-state role's weaker inferred name.
 	 */
-	short           f1c0;            /* +0x1c0 */
+	short           pllcnt;            /* +0x1c0 */
 	unsigned char pad_1c2[0x1c8 - 0x1c2];
 	/*
 	 * +0x1c8.  `TimingV34`'s ramp selector: 1 takes the full nine-state
@@ -196,14 +189,13 @@ struct v34_receiver {
 					  window so far (was f1ce) */
 	/*
 	 * +0x1d0.  `setTimingStateParameters` reports this onward via
-	 * `VPcmV34LogTimingOffset` as `f1d0 * 10`; `TimingV34` computes it
-	 * every f1d2 symbols by converting the accumulated timing slip to
-	 * parts per million.
-	 *
-	 * -- derived: ppm_offset, withheld (F10123): two references in
-	 * `v34hshak.c`, one in `v34diag.cpp`, and two mutation fixtures.
+	 * `VPcmV34LogTimingOffset` as `timing_offset * 10`; `TimingV34`
+	 * computes it every `report_interval` symbols by converting the
+	 * accumulated timing slip to parts per million.  Named
+	 * `timing_offset` and threaded through `v34hshak.c`/`v34diag.cpp` by
+	 * the handshake-cluster naming pass (F10123/F9480).
 	 */
-	short           f1d0;            /* +0x1d0 */
+	short           timing_offset;   /* +0x1d0 */
 	/*
 	 * +0x1d2.  Named `baud` when rxtiminginit was the only thing seen
 	 * writing it (2400, the slowest V.34 rate).  It is not:
@@ -215,7 +207,7 @@ struct v34_receiver {
 	 * -- derived: ppm_period, withheld (F10123): two references in
 	 * `v34hshak.c` and three mutation fixtures.
 	 */
-	short           f1d2;            /* +0x1d2 */
+	short           report_interval;            /* +0x1d2 */
 	short           f1d4;            /* +0x1d4 */
 	unsigned char pad_1d6[0x1d8 - 0x1d6];
 	/*
@@ -305,50 +297,42 @@ struct v34_receiver {
 	/*
 	 * +0x218.  `receiver`'s own comment already names it: the
 	 * equaliser's step, Q15, selected by `decoderv34` (0x2000 or
-	 * 0x4000) from how far into the frame the symbol count is.
-	 *
-	 * -- derived: eq_step, withheld (F10123): two references in
-	 * `v34hshak.c`, one in `v34fsk.h`, and a mutation fixture.
+	 * 0x4000) from how far into the frame the symbol count is.  Named
+	 * `equ_step` and threaded through `v34hshak.c`/`v34fsk.h` by the
+	 * handshake-cluster naming pass (F10123/F9480).
 	 */
-	short           f218;            /* +0x218 the equaliser's step, Q15 */
+	short           equ_step;        /* +0x218 */
 	/*
 	 * +0x21a.  `equerr` -- receiver's own debug string, "V34EQU, equerr
-	 * = %d, preerr = %d".  Republished from f220 every 1024 symbols.
-	 *
-	 * -- derived: equerr, withheld (F10123): `v34hstx1.cpp` inlines the
-	 * SNR computation over this field eleven times, and its mutation
-	 * fixture mutates it 34 times.
+	 * = %d, preerr = %d".  Republished from `equerr_accum` every 1024
+	 * symbols.  `v34hstx1.cpp` inlines the SNR computation over this
+	 * field eleven times; both naming passes agreed on `equerr`.
 	 */
-	short           f21a;            /* +0x21a `equerr` -- see f220 */
+	short           equerr;          /* +0x21a */
 	/*
 	 * +0x21c.  The 1024-symbol counter that publishes equerr/preerr and
-	 * resets their accumulators.
-	 *
-	 * -- derived: eq_err_counter, withheld (F10123): one reference in
-	 * `v34hstx1.cpp` and its mutation fixture.
+	 * resets their accumulators.  Named `err_symcount` and threaded
+	 * through `v34hstx1.cpp` by the handshake-cluster naming pass
+	 * (F10123/F9480).
 	 */
-	short           f21c;            /* +0x21c the 1024-symbol counter
+	short           err_symcount;    /* +0x21c the 1024-symbol counter
 					  * that publishes them */
 	unsigned char pad_21e[0x220 - 0x21e];
 	/*
 	 * Two error energies accumulated over 1024 symbols and republished as
 	 * shorts when the counter wraps.  receiver's own names, from
-	 * "V34EQU, equerr = %d, preerr = %d": f220 -> f21a is the EQUALISER
-	 * error and f228 -> f224 the PREDICTOR error, so the pair says which
-	 * of the two stages is failing to converge.
-	 *
-	 * -- derived: equerr_acc (f220), withheld (F10123): same
-	 * `v34hstx1.cpp`/fixture blast radius as f21a.
+	 * "V34EQU, equerr = %d, preerr = %d": `equerr_accum` -> equerr is the
+	 * EQUALISER error and `preerr_acc` -> preerr the PREDICTOR error, so
+	 * the pair says which of the two stages is failing to converge.
+	 * `equerr_accum`/`preerr` named and threaded through `v34hstx1.cpp`
+	 * (same blast radius as `err_symcount` above) by the handshake-cluster
+	 * naming pass (F10123/F9480).
 	 */
-	int             f220;            /* +0x220 */
-	/*
-	 * -- derived: preerr, withheld (F10123): six references in
-	 * `v34hstx1.cpp`, fifteen mutations in its fixture.
-	 */
-	short           f224;            /* +0x224 `preerr` */
+	int             equerr_accum;    /* +0x220 */
+	short           preerr;          /* +0x224 */
 	unsigned char pad_226[0x228 - 0x226];
 	int             preerr_acc;      /* +0x228 the predictor-error
-					  accumulator paired with f224/preerr
+					  accumulator paired with preerr
 					  (was f228) */
 	unsigned char pad_22c[0x22e - 0x22c];
 	short           f22e;            /* +0x22e */
@@ -378,14 +362,14 @@ struct v34_receiver {
 					  accumulator paired with f248 (was
 					  f24c) */
 	unsigned char pad_250[0x252 - 0x250];
-	short           f252;            /* +0x252 */
-	short           f254;            /* +0x254 */
-	short           f256;            /* +0x256 */
-	short           f258;            /* +0x258 */
-	short           f25a;            /* +0x25a */
-	short           f25c;            /* +0x25c */
-	short           f25e;            /* +0x25e */
-	short           f260;            /* +0x260 */
+	short           bad_thresh;            /* +0x252 */
+	short           bad_long_thresh;            /* +0x254 */
+	short           good_thresh;            /* +0x256 */
+	short           bad_run;            /* +0x258 */
+	short           bad_long_run;            /* +0x25a */
+	short           good_run;            /* +0x25c */
+	short           short_25e;            /* +0x25e */
+	short           baud_copy;            /* +0x260 */
 	/*
 	 * +0x262.  The AGC's STARTING GAIN, copied into `agc_gain` by both
 	 * `dpskinit` and `setupreceiver` -- the two functions that bring a
@@ -397,15 +381,15 @@ struct v34_receiver {
 	 * `v34hshak.c`, two more each in `v34hstx1.cpp`/`v34pcmcreate.cpp`,
 	 * and four mutation fixtures.
 	 */
-	short           f262;            /* +0x262 */
+	short           agc_start_gain;            /* +0x262 */
 	unsigned char pad_264[0x266 - 0x264];
 	/*
 	 * +0x266.  demapFrame's sub-frame counter, stepped by decoderv34.
-	 *
-	 * -- derived: subframe_count, withheld (F10123): one reference in
-	 * `v34hshak.c` and a mutation fixture that mutates it five times.
+	 * Named `subframe_idx` and threaded through `v34hshak.c` (and its
+	 * mutation fixture) by the handshake-cluster naming pass
+	 * (F10123/F9480).
 	 */
-	short           f266;            /* +0x266 demapFrame's sub-frame
+	short           subframe_idx;    /* +0x266 demapFrame's sub-frame
 					  * counter, stepped by decoderv34 */
 	/*
 	 * +0x268.  The equaliser output one and two symbols ago, which
@@ -427,7 +411,7 @@ struct v34_receiver {
 	 * Two unrelated constraints land on the same number.  Finding F123
 	 * measured fourteen shorts of headroom in the receive burst before
 	 * it eats rxtiming's own loop bound, and seven outputs at up to two
-	 * pulls each is exactly fourteen.  So f128 <= 7 is both what fits
+	 * pulls each is exactly fourteen.  So out_count <= 7 is both what fits
 	 * here and what the burst survives, and the fixtures assert both.
 	 */
 	short           timing_out[7];   /* +0x27a rxtiming's metric */
@@ -451,13 +435,11 @@ struct v34_receiver {
 	short           pred_q[4];       /* +0x29c */
 	/*
 	 * +0x2a4.  modem_serrint's 60-tap receive filter's coefficients.
-	 *
-	 * -- derived: fir_coeffs, withheld (F10123): four references in
-	 * `v34hshak.c` and four in various `test/unit/t_v34*` fixtures, none
-	 * of them a byte-matched mutation but still outside this pass's
-	 * verified-safe set.
+	 * Named `fir_coeff` and threaded through `v34hshak.c` (including its
+	 * own offset assertion) by the handshake-cluster naming pass
+	 * (F10123/F9480).
 	 */
-	const short *   f2a4;            /* +0x2a4 modem_serrint: the 60-tap
+	const short *   fir_coeff;       /* +0x2a4 modem_serrint: the 60-tap
 					  * receive filter's coefficients */
 	unsigned char pad_2a8[0x798 - 0x2a8];
 	/*
@@ -499,10 +481,10 @@ struct v34_receiver {
  */
 #define V34_RX_FLAG_RENEG	0x0020	/* RRN request seen: see rtncount */
 #define V34_RX_FLAG_RETRAIN	0x0040	/* retrain request seen           */
-#define V34_RX_FLAG_LATE_TRN	0x0008	/* shifts f124's decoder threshold
+#define V34_RX_FLAG_LATE_TRN	0x0008	/* shifts rx_blocks's decoder threshold
 					 * on by 0x120 symbols            */
 #define V34_RX_FLAG_TRN_WATCH	0x0010	/* run the shifted-TRN2 check     */
-#define V34_RX_FLAG_TRAINED	0x0100	/* set at f124 > 0x68; suppresses
+#define V34_RX_FLAG_TRAINED	0x0100	/* set at rx_blocks > 0x68; suppresses
 					 * the carrier loop's error term  */
 #define V34_RX_FLAG_DATA	0x0400	/* the decoder, not the handshake
 					 * slicer; and the loss-of-signal

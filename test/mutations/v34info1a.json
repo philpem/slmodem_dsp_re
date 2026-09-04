@@ -18,14 +18,14 @@
   "replace": "\tbits[1] = (short)(((short)r << 3) & 0xf8);\n}"
  },
  {
-  "label": "f35a4 is reversed over five bits, not seven",
-  "find": "\t\tr = bitreverse((unsigned short)obj->f35a4, 7);\n\t\tbits[1] = (short)(((short)r << 3) & 0xf8);",
-  "replace": "\t\tr = bitreverse((unsigned short)obj->f35a4, 5);\n\t\tbits[1] = (short)(((short)r << 3) & 0xf8);"
+  "label": "short_35a4 is reversed over five bits, not seven",
+  "find": "\t\tr = bitreverse((unsigned short)obj->short_35a4, 7);\n\t\tbits[1] = (short)(((short)r << 3) & 0xf8);",
+  "replace": "\t\tr = bitreverse((unsigned short)obj->short_35a4, 5);\n\t\tbits[1] = (short)(((short)r << 3) & 0xf8);"
  },
  {
   "label": "the K56Flex role test is inverted, so the two arms swap",
-  "find": "\t\tif (obj->f359c == 0x65) {",
-  "replace": "\t\tif (obj->f359c != 0x65) {"
+  "find": "\t\tif (obj->role == 0x65) {",
+  "replace": "\t\tif (obj->role != 0x65) {"
  },
  {
   "label": "the caller arm tests the PCM law the way the answer arm does",
@@ -99,7 +99,7 @@
  },
  {
   "label": "the short phase 2 does not clear the transmit power reduction",
-  "find": "\t\tobj->f25dc = 0;\n",
+  "find": "\t\tobj->tx_pwr_reduction = 0;\n",
   "replace": ""
  },
  {
@@ -119,18 +119,18 @@
  },
  {
   "label": "the first flag pair goes out low bit first",
-  "find": "\t\tif (obj->fabce & 1)\n\t\t\tr = 0x80;\n\t\tif (obj->fabce & 2)\n\t\t\tr |= 0x40;",
-  "replace": "\t\tif (obj->fabce & 2)\n\t\t\tr = 0x80;\n\t\tif (obj->fabce & 1)\n\t\t\tr |= 0x40;"
+  "find": "\t\tif (obj->short_abce & 1)\n\t\t\tr = 0x80;\n\t\tif (obj->short_abce & 2)\n\t\t\tr |= 0x40;",
+  "replace": "\t\tif (obj->short_abce & 2)\n\t\t\tr = 0x80;\n\t\tif (obj->short_abce & 1)\n\t\t\tr |= 0x40;"
  },
  {
   "label": "the second and third flag fields change places",
-  "find": "\t\tif (obj->fabd0 & 1)\n\t\t\tr |= 0x20;\n\t\tif (obj->fabd0 & 2)\n\t\t\tr |= 0x10;\n\t\tif (obj->fabd2 & 1)\n\t\t\tr |= 8;\n\t\tif (obj->fabd2 & 2)\n\t\t\tr |= 4;",
-  "replace": "\t\tif (obj->fabd2 & 1)\n\t\t\tr |= 0x20;\n\t\tif (obj->fabd2 & 2)\n\t\t\tr |= 0x10;\n\t\tif (obj->fabd0 & 1)\n\t\t\tr |= 8;\n\t\tif (obj->fabd0 & 2)\n\t\t\tr |= 4;"
+  "find": "\t\tif (obj->short_abd0 & 1)\n\t\t\tr |= 0x20;\n\t\tif (obj->short_abd0 & 2)\n\t\t\tr |= 0x10;\n\t\tif (obj->short_abd2 & 1)\n\t\t\tr |= 8;\n\t\tif (obj->short_abd2 & 2)\n\t\t\tr |= 4;",
+  "replace": "\t\tif (obj->short_abd2 & 1)\n\t\t\tr |= 0x20;\n\t\tif (obj->short_abd2 & 2)\n\t\t\tr |= 0x10;\n\t\tif (obj->short_abd0 & 1)\n\t\t\tr |= 8;\n\t\tif (obj->short_abd0 & 2)\n\t\t\tr |= 4;"
  },
  {
   "label": "the flag fields are read from bit 8 rather than bit 0",
-  "find": "\t\tif (obj->fabce & 1)",
-  "replace": "\t\tif (obj->fabce & 0x100)"
+  "find": "\t\tif (obj->short_abce & 1)",
+  "replace": "\t\tif (obj->short_abce & 0x100)"
  },
  {
   "label": "the transmitted upstream baud index is 5, not 6",

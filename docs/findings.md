@@ -112892,3 +112892,198 @@ was plausible; where a name looked temptingly close by adjacency
 `byte_0d00` onto this class's) it was checked against the actual
 dereferencing code and, where it did not resolve to the same object,
 left alone. (2026-09-04)
+
+### F9341. Naming pass over the V.34 handshake/FSK cluster: 84 declared fields plus 8 carved out of four pad regions, none left as a bare `fNNNN`
+
+Scope was `include/dsplib/v34fsk.h`, `src/pump/v34/v34hshak.c`,
+`src/pump/v34/v34hstx1.cpp` and `src/pump/v34/v34shell.c` -- the four files
+whose bare `fNNNN` identifiers this pass was asked to resolve -- and the
+identifiers turned out to name fields in THREE shared structs, only one of
+which (`struct v34_object`) lives in one of the four files. `struct
+v34_receiver` (`v34recv.h`) and `struct v34_shell` (`v34shell.h`) are reached
+from the same four files by pointer, and CLAUDE.md's "one type, one home"
+rule puts the field's name at its declaration, not at its use site -- so both
+headers were edited too, plus every OTHER file in the tree that names the
+same field, tree-wide, or the build would not link. That turned out to be 39
+more files (`v34diag.cpp`, `v34digital.c`, `v34pcmif.c`, `v34pcmmain.cpp`,
+`v34rx.c`, `VPcmFloModem.cpp`, `TAG_DiagnosticResults.h` and 24 `test/unit/`
+files that construct `struct v34_object`/`struct v34_receiver` directly), plus
+25 `test/mutations/*.json` files whose `find`/`replace` anchors are literal
+source text and went stale the moment the identifiers under them changed --
+exactly finding F7002's shape, on this rename rather than the one that
+finding was written about; `tools/anchorcheck.py` is what found the 497 that
+broke and confirmed all were repaired.
+
+**THE COUNT.** 84 already-declared bare fields were resolved: 41 in
+`struct v34_object`, 28 in `struct v34_receiver` (26 `f*` plus `f25e`/`f260`,
+which collide in NAME but not in OFFSET with two `v34_object` fields of the
+same spelling -- the rename script handled the two structs' `f25e`/`f260`
+separately, keyed on the `rx->`/`obj->` prefix at each use site, because a
+blind tree-wide substitution would have put the object's names on the
+receiver's fields or vice versa) and 15 in `struct v34_shell`. A further 8
+fields were carved out of four regions that were previously `unmapped_*`
+padding, because the accessor macros in `v34hshak.c` and `v34hstx1.cpp`
+(`DP_MODE`, `TX1_SEGLEN`, `TX1_FABE4`/`FABE6`/`FABE8`, `TX1_FABF8`/`FABF9`,
+`T41_FAA7A`) were already reaching into those spans by raw offset without a
+struct member to show for it -- `hs_mode` (+0x2218, was 4 of
+`unmapped_2216`'s 6 bytes), `seg_len` (+0x35a6, was the whole of
+`unmapped_35a6`), `short_abe4`/`short_abe6`/`moh_active` (+0xabe4/6/8, were 6
+of `unmapped_abe4`'s 8 bytes) and `moh_msg_pending`/`moh_path_sel` (+0xabf8/9,
+was the whole of `unmapped_abf8`). Every split was checked by confirming the
+new members' combined size equals the pad they replace and that the object's
+next named field keeps its offset; `make one` over the whole cluster (~450
+checks across `t_v34hshak`, `t_v34hstx1`, `t_v34shell`, `t_v34rx`,
+`t_v34pcmif`, `t_v90p34` and sixteen smaller suites) passed unchanged before
+and after, which a struct-layout mistake could not have survived.
+
+**72 OF THE 92 GOT A REAL NAME; 20 WERE PROMOTED TO `type_NNNN` AND LEFT
+THERE.** The 20 are exactly CLAUDE.md's second state -- shape and size known,
+meaning not -- and eleven of them (`short_3588`, `short_358a`, `short_358c`,
+`short_35a4`, `short_aa78`, `short_abae`, `short_abc2`, `short_abce`,
+`short_abd0`, `short_abd2`, `short_a0a` in `v34_shell`) already carried a
+comment from a previous pass explicitly declining a name -- F633, F634 and
+F635's "OFFSET-NAMED ON PURPOSE" fields. This pass did not revisit those
+rulings, only converted them from a bare offset to a typed placeholder, which
+is a pure rename. The other eight (`short_382`, `short_2aa0`, `short_3552`,
+`short_25e` in `v34_receiver`, `short_abe2`, and the three new
+pad-split fields `short_aa7a`/`short_abe4`/`short_abe6`) had no comment at all
+before this pass and got none now beyond what a single write site or a
+"nothing reads this" note supports -- usage inference at most, stated as such
+in each field's comment, and in two cases (`short_aa7a`, and the
+`short_abe4`/`short_abe6` pair) not even usage: a single write and no reader
+anywhere in the tree.
+
+**MERGE-TIME CORRECTION: `short_19e` moved from this pass's 20-promoted
+bucket into the 73 real names, as `retrain_gate`.** This branch's own copy of
+`v34recv.h` promoted `f19e`/`short_19e` to a typed placeholder only, but the
+concurrently-merged V.34 receive-cluster branch (F10123) had independently
+derived a real, corrected role for the SAME field -- a one-shot retrain-gate
+latch, not "the RMS window's second scalar and nothing reads it back" as this
+branch's own header comment had it -- from exactly the `v34hshak.c`
+RX_PHASE2_CALL logic this pass had just reconstructed. The merge kept the
+corrected name and re-threaded it through every `short_19e` site this pass
+had created (two zero-inits, the two-site retrain check, and the
+`V34HS_OFF` assertion), so the true count is **73 real names, 19 left as
+`type_NNNN`**. See F10123's own merge note for the full derivation.
+
+**ONE FIELD'S EVIDENCE OVERTURNED ITS OWN HEADER'S CLAIM.** `v34fsk.h` had
+`f359c` down as "0x65 here selects `setTimingStateParameters`' second
+parameter table" -- true, but not the field's primary role. `v34hshak.c`
+reads it once into a local variable it names `originate`
+(`originate = (obj->f359c == 0x65)`), and forty-odd sites elsewhere compare
+it against 0x65/0x66 directly for everything from the scrambler polynomial to
+which debug constant to print. It is `role`, the calling/answering flag, and
+the timing-table selection is a consequence of the role rather than a second
+fact about the field. Two constants, `V34_ROLE_CALL` (0x65) and
+`V34_ROLE_ANSWER` (0x66), are declared beside it in `v34fsk.h` -- the
+THIRD spelling of the same two values in this tree, after `v34diag.cpp`'s
+`VDIAG_ROLE_CALL`/`VDIAG_ROLE_ANSWER` and `v34pcmmain.cpp`'s
+`PROG_ROLE_ORIGINATE`, kept separate rather than consolidated because
+consolidating them was not this pass's job and the three files each already
+compile against their own copy.
+
+**BIT FLAGS: FOUR NEW, THREE ALREADY NAMED AND NEARLY DUPLICATED.**
+`tx_flags` (`v34_object::f25c2`) carries at least ten meaningful bits, of
+which eight are established and two (bits 8 and 10) are one write site each
+with no reader and are left as bare hex. Of the eight, four are named here
+for the first time -- `V34_TXFLAG_CALLER` (bit 0, the scrambler generator
+select), `V34_TXFLAG_SEG4A` (bit 13, TRNSEG4A/SSEG), `V34_TXFLAG_NLENCODE`
+(bit 14, `initdigital`'s own comment: "Bit 13 of the same word is
+modulatevector's non-linear encoder" -- bit 13 of the INFO word lands at bit
+14 here) and `V34_TXFLAG_PPSEG` (bit 15, read as the field's sign) -- and
+THREE (bits 2, 4 and 9) already had names this pass nearly duplicated before
+a tree-wide grep for the bit values turned up `V34_EC_FROZEN` and
+`V34_EC_FEED` in `v34rx.h` and `PROG_TXBIT_DATA` in `v34pcmmain.cpp`, all
+three already in active use in `v34rx.c`, `v34pcmmain.cpp` and two test
+files. The near-duplicates were deleted rather than kept; the field's own
+comment in `v34fsk.h` now cites all seven by name and says which header owns
+each. This is the same lesson F604 states for names generally, applied to
+flag constants specifically: grep for the VALUE, not just the field, before
+minting a name.
+
+**WHAT DID NOT CHANGE.** No `src/` behaviour: every rename is an identifier
+substitution and every pad split replaces bytes nothing in `src/` read as a
+struct member with a named member of the same total size at the same offset,
+so nothing a differential test can observe moved. `make one` across the
+cluster's own suites plus every other test binary the renamed structs reach
+(`t_v34diag`, `t_v34digital`, `t_v34info1a`, `t_v34info1d`, `t_v34k56`,
+`t_v34link`, `t_v34pcmapi`, `t_v34retrain`, `t_vpcmguard`, `t_v34call`,
+`t_v34demod`, `t_v34hsmst44`, `t_v34hsrx72`, `t_v34hst3core`, `t_v34hst3mid`,
+`t_v34hstb1`, `t_v90p34`) passed with unchanged check counts throughout.
+`tools/onedef.py` and `tools/refcheck.py` are clean, and `tools/anchorcheck.py`
+went from 497 broken anchors (mid-rename) to 0. `make period`/`make phase`
+could not be run in this sandbox -- `docker` is present but the daemon socket
+refuses this user's connection -- so the codegen-matching tier this class of
+change cannot move (a name or a struct-member split is compile-time-only) was
+not re-verified by the tier CLAUDE.md says decides; the modern-compiler
+differential suite is what stands behind this entry until that tier runs.
+`python3 tools/bannercheck.py src/pump/v34` reports zero banners either side
+of this change -- the V.34 module was reconstructed under the fast pass
+(`docs/fastpass.md`) rather than the per-function banner convention, so this
+is the tool correctly finding nothing to check rather than a clean run of a
+live one; confirmed by running it against `src/pump/v22`, which does carry
+banners and reports 47 agreeing.  (2026-09-03)
+
+## F10131. Reconciling two field-naming branches that independently renamed the same shared struct: `struct v34_receiver`, F10123 vs F9341/F10123
+
+Two wave-1 field-naming agents worked disjoint FILE assignments (the V.34
+receive cluster: `v34recv.h`/`v34rx.c`; the V.34 handshake/FSK cluster:
+`v34fsk.h`/`v34hshak.c`/`v34hstx1.cpp`/`v34shell.c`) that both reached into
+the SAME struct, `struct v34_receiver`, because it is shared infrastructure
+neither pass could avoid touching. Unlike every prior finding-number
+collision this project has hit (two branches independently choosing the
+same NUMBER), this was a content collision: two branches choosing different
+NAMES for the same FIELD, at real volume -- 7 conflicting files, ~35
+individual field-name disagreements across `v34recv.h`, `v34hshak.c`,
+`v34rx.c`, two test files and one mutation fixture.
+
+**The resolution rule, applied uniformly:** for each disputed field, check
+which side actually THREADED its name through the full cross-file blast
+radius (every call site, every offset-assertion macro, every mutation
+fixture) versus which side merely APPLIED a name locally in `v34recv.h`
+and left it bare everywhere the other branch's files touched it. Whichever
+side did the complete, verified work wins the name, confirmed with `grep`
+across the whole tree before deciding, not assumed from either branch's own
+report. This produced a clean split along the two branches' own actual
+scope: the receive-cluster branch's names won for fields ONLY it touched
+(`agc_pair_count`, `mix_carrier_step`/`_phase`, `slow_ramp`, `ppm_acc`/
+`_count`, `pred_err_re`/`_im`, `trn_ref_sr`, `cloop_integrator`/`_phase_err`,
+timing_idx_a`/`_b`); the handshake-cluster branch's names won for fields it
+had threaded through `v34hshak.c` (`out_count`, `phase_frac`/`_inc`/`_wrap`,
+`half_len`, `symbol_period`, `timing_offset`, `equ_step`, `err_symcount`,
+`equerr_accum`, `subframe_idx`, `fir_coeff`).
+
+**One field needed a real decision rather than a mechanical pick.** `+0x19e`
+(`f19e`/`short_19e`) had the receive-cluster branch's WITHHELD derivation
+(`retrain_gate`, with a full trace through `v34hshak.c`'s RX_PHASE2_CALL
+logic showing a prior header comment on this field was flatly wrong) against
+the handshake-cluster branch's APPLIED but weaker name (`short_19e`, a bare
+type promotion carrying the same wrong prior claim forward). The
+receive-cluster branch's evidence was checked against the handshake-cluster
+branch's own (already-merged, unconflicted) usage of the field at its
+retrain-gate call site and found to match exactly -- so `retrain_gate` was
+adopted as the final name and threaded through every site the
+handshake-cluster branch had already touched (two zero-inits, the two-site
+gate check, the `V34HS_OFF` assertion), rather than either branch's name
+being kept unmodified. See F9341's own merge-time correction note.
+
+**A leftover inconsistency in the ALREADY-MERGED receive-cluster branch was
+also caught and fixed during this reconciliation**, not introduced by it:
+several call sites in `v34rx.c` used the bare `f124`/`f1c0` for `rx_blocks`/
+`pllcnt` even though both fields had been correctly named everywhere else in
+the same file by an earlier pass, predating both of this wave's branches.
+Fixed to the established names rather than left as a wrong "HEAD is always
+right" default.
+
+**Verification**: `python3 tools/onedef.py`, `tools/refcheck.py` clean;
+`make one T=t_v34rx`/`T=t_v34demod` unchanged check counts; a tree-wide grep
+for every retired bare name (`f124`, `f1a0`, `f1b8`, `f1bc`, `f1c0`, `f1c8`,
+`f1cc`, `f1ce`, `f1d0`, `f1d2`, `f1e0`, `f1ec`, `f1ee`, `f1f2`, `f1f4`,
+`f1f8`, `f1fc`, `f206`, `f204`, `f214`, `f216`, `f218`, `f21a`, `f21c`,
+`f220`, `f224`, `f228`, `f230`, `f232`, `f234`, `f236`, `f240`, `f242`,
+`f244`, `f246`, `f266`, `f268`, `f26a`, `f26c`, `f26e`, `f2a4`, `f798`,
+`f128`, `f12a`, `f1ba`, `f120`, `short_19e`) across `src/`, `include/` and
+`test/` returned only the fields the two source pads (`f208`/`f20a`/`f248`)
+were already, deliberately, left bare for -- no stray reference to a retired
+name survived the merge. `make period` was left for the parent session's
+gate, per this wave's own standing instruction. (2026-09-04)
