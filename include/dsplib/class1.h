@@ -500,7 +500,6 @@ struct fax_class1 {
 					 * The author's word: the object
 					 * prints exactly this value as
 					 * "Energy %d"                      */
-	unsigned char pad_12be[2];	/* +0x12be                          */
 	int rx_agc_mult;		/* +0x12c0 `_hdlc_receive_state`, on a
 					 * successfully-closed nonempty frame,
 					 * walks `ctx->vmi_a->link->int_0014` to
@@ -595,6 +594,26 @@ struct fax_class1 {
 					 * filter tick at all this call.
 					 * Usage inference only               */
 };
+
+/*
+ * `pad_12be[2]` is gone (pad-region removal audit, F10145): `energy` (a
+ * `short`) ends at +0x12be and `rx_agc_mult` needs 4-byte alignment, so the
+ * compiler inserts the same 2-byte gap on its own; nothing in this tree
+ * ever named the field.  `pad_002[2]`, `pad_005[0xffb]` and `pad_12ac[4]`
+ * elsewhere in this struct are NOT the same shape -- each would put its
+ * following field at a DIFFERENT offset than the object's if simply
+ * deleted (`flags004`, a `char`, needs no alignment at all; `async_mask`
+ * already ends 4-byte aligned) -- so those three stay explicit, on the same
+ * ground this file's own banner already gives them: real, unmodelled
+ * content, not compiler padding.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define CLASS1_ASSERT_OFF(field, off) \
+	typedef char fax_class1_off_##field[ \
+		((int)__builtin_offsetof(struct fax_class1, field) \
+			== (off)) ? 1 : -1]
+CLASS1_ASSERT_OFF(rx_agc_mult, 0x12c0);
+#endif
 
 #define CLASS1_MODELLED_BYTES	0x12f4
 

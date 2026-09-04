@@ -209,7 +209,6 @@ struct faxvmi_framer {
 					 * a BREAK is, but the object gives
 					 * no word for it and neither does
 					 * this                             */
-	unsigned short pad_0036;	/* +0x36                            */
 	int zero_run_send;		/* +0x38 nonzero while that run is
 					 * being sent; faxvmi_asyc_pack
 					 * clears it when the count reaches
@@ -263,12 +262,32 @@ struct faxvmi_framer {
 	short ones;			/* +0x50 the run of consecutive one
 					 * bits: 5 destuffs the next zero,
 					 * 6 is a flag                     */
-	short pad_0052;			/* +0x52                            */
 	int in_frame;			/* +0x54 set when an octet is stored
 					 * into `frame`, cleared at every
 					 * flag.  A closing flag with this
 					 * set is a complete frame          */
 };
+
+/*
+ * `pad_0036` and `pad_0052` are gone (pad-region removal audit, F10145):
+ * both were exactly the 2-byte gap the compiler inserts on its own ahead of
+ * the following 4-byte-aligned `int` (`zero_run_send` at +0x38,
+ * `in_frame` at +0x54), never read or written anywhere in this tree, and
+ * unlike `pad_001e` above there is no dword-reload trick that names either
+ * one.  These assertions are what proves it -- `__builtin_offsetof` against
+ * the struct as it stands NOW, so a future edit that reintroduces a real
+ * gap fails to compile rather than silently shifting these two fields.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define FRAMER_ASSERT_OFF(field, off) \
+	typedef char faxvmi_framer_off_##field[ \
+		((int)__builtin_offsetof(struct faxvmi_framer, field) \
+			== (off)) ? 1 : -1]
+FRAMER_ASSERT_OFF(zero_run_send, 0x38);
+FRAMER_ASSERT_OFF(in_frame, 0x54);
+typedef char faxvmi_framer_size[
+	(sizeof(struct faxvmi_framer) == 0x58) ? 1 : -1];
+#endif
 
 /*
  * THE LINK BLOCK, `vmi->link` (+0x28).  `sysdep_malloc(0x18)` at 0x953d4, so
@@ -312,9 +331,29 @@ struct faxvmi_link {
 	unsigned short unpack_width;	/* +0x10 significant bits per input
 					 * element: every unpacker starts its
 					 * mask at 1 << (unpack_width - 1)   */
-	unsigned short pad_0012;	/* +0x12                             */
 	int int_0014;			/* +0x14 create zeroes it            */
 };
+
+/*
+ * `pad_0012` is gone (pad-region removal audit, F10145): `unpack_width` ends
+ * at +0x12 and `int_0014` needs 4-byte alignment, so the compiler inserts
+ * the same 2-byte gap on its own; nothing in this tree ever names the field.
+ * `pad_0008[4]` above is NOT the same shape and stays explicit -- `buf` ends
+ * already 4-byte aligned at +0x0c, where `pack_count` (a `short`, needing no
+ * more than 2-byte alignment) would land with no gap at all if the pad were
+ * deleted, so those four bytes are a real, unexplained gap and not
+ * alignment filler; CLAUDE.md's `VPcmFloModem::pad_6fb8[4]` is the exact
+ * precedent for leaving a shape like this alone.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define LINK_ASSERT_OFF(field, off) \
+	typedef char faxvmi_link_off_##field[ \
+		((int)__builtin_offsetof(struct faxvmi_link, field) \
+			== (off)) ? 1 : -1]
+LINK_ASSERT_OFF(int_0014, 0x14);
+typedef char faxvmi_link_size[
+	(sizeof(struct faxvmi_link) == 0x18) ? 1 : -1];
+#endif
 
 /*
  * `struct faxvmi` itself: `sysdep_malloc(0x2c)` at 0x953ab, so 44 bytes.
@@ -502,8 +541,16 @@ extern faxvmi_status_fn const vxx_status[13];
 struct faxvmi_status {
 	unsigned short room;		/* +0x00 fifo_size - count: elements
 					 * of the ring still free           */
-	unsigned short pad_0002;	/* +0x02                             */
-	int residue;			/* +0x04 = framer->residue           */
+	int residue;			/* +0x04 = framer->residue -- the
+					 * 2-byte gap `room` leaves ahead of
+					 * this 4-byte-aligned field is the
+					 * compiler's own doing now, not a
+					 * named `pad_0002`: FAXVMI_status
+					 * never wrote it (pad-region removal
+					 * audit, F10145), and the existing
+					 * STATUS_ASSERT_OFF(residue, 0x04)
+					 * below still holds, which is the
+					 * proof                             */
 	int underrun;			/* +0x08 = vmi->underrun             */
 	int overflow;			/* +0x0c = vmi->overflow             */
 	int zero_run_seen;		/* +0x10 = framer->zero_run_seen     */
@@ -567,9 +614,13 @@ int FAXVMI_status(struct faxvmi *vmi, struct faxvmi_status *status);
  * literal -1: `dis.py` shows `mov 0x14(%ebx),%eax; test %eax,%eax; jne
  * 0x95786` landing directly on the call site's argument setup with no
  * intervening write to `%eax`, so the tested value is what's passed.
- * Four of the eight fields already have a habitable name; the rest are
- * usage inference only, hedged as such, and left neutral rather than guessed
- * further -- CLAUDE.md's "naming wrongly is worse than padding" ground.
+ * Four of the six real fields already have a habitable name (the struct
+ * carried eight members before the pad-region removal audit, F10145, took
+ * out `pad_000a` and `pad_0012` -- both were the compiler's own alignment
+ * gap ahead of `int_000c`/`int_0014`, confirmed by the CTL_ASSERT_OFF
+ * entries below still holding); the rest are usage inference only, hedged
+ * as such, and left neutral rather than guessed further -- CLAUDE.md's
+ * "naming wrongly is worse than padding" ground.
  */
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
 #define CTL_ASSERT_OFF(field, off) \
@@ -582,15 +633,24 @@ struct faxvmi_ctl {
 	void *ptr_0000;		/* +0x00 nonzero: also empty the ring */
 	int int_0004;		/* +0x04 -> framer->zero_run_send     */
 	unsigned short short_0008;	/* +0x08 -> framer->zero_run_bits */
-	unsigned short pad_000a;	/* +0x0a                          */
 	int int_000c;		/* +0x0c nonzero: full framer reset + mode
-				 * change from short_0010              */
+				 * change from short_0010.  The 2-byte gap
+				 * `short_0008` leaves ahead of this is the
+				 * compiler's own alignment now, not a named
+				 * `pad_000a` -- FAXVMI_control never read it
+				 * (pad-region removal audit, F10145), and
+				 * the CTL_ASSERT_OFF(int_000c, 0x0c) below
+				 * still holds, which is the proof          */
 	unsigned short short_0010;	/* +0x10 new vmi->mode, 0..2       */
-	unsigned short pad_0012;	/* +0x12                           */
 	int int_0014;		/* +0x14 nonzero: also call
 				 * vxx_control[vmi->slot](vmi->link,
 				 * (void *)(long)int_0014) before anything
-				 * else applies                          */
+				 * else applies.  Same removal as
+				 * `int_000c`'s own note above: `pad_0012`
+				 * is gone, `short_0010` ends at +0x12 and
+				 * this field's own 4-byte alignment
+				 * reproduces the gap, CTL_ASSERT_OFF(
+				 * int_0014, 0x14) below is the proof       */
 };
 
 #if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4

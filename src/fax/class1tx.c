@@ -1038,7 +1038,6 @@ const struct v17tx_control_req V17TX_CTL = {
 	1,				/* scale_mul */
 	0x00,				/* ctl0      */
 	0x00,				/* ctl1      */
-	{ 0, 0 },			/* pad_000e  */
 	0,				/* int_0010  */
 };
 

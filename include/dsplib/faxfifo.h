@@ -51,13 +51,37 @@ struct fax_fifo {
 					 * the FIFO runs dry (usage
 					 * inference -- it is the only read
 					 * of this field anywhere here)    */
-	unsigned char pad_06[2];	/* +0x06                            */
-	unsigned short *buf;		/* +0x08 `size` elements            */
+	unsigned short *buf;		/* +0x08 `size` elements.  The 2-byte
+					 * gap `fill` leaves ahead of this
+					 * 4-byte-aligned pointer used to be a
+					 * named `pad_06[2]`; removed by the
+					 * pad-region removal audit (F10145)
+					 * -- nothing reconstructed here ever
+					 * read or wrote it, and the compiler's
+					 * own alignment reproduces the gap
+					 * exactly (FAXFIFO_ASSERT_OFF below) */
 	unsigned short count;		/* +0x0c elements held              */
 	unsigned short rd;		/* +0x0e read cursor, in elements   */
 	unsigned short wr;		/* +0x10 write cursor, in elements  */
-	unsigned char pad_12[2];	/* +0x12 pads the 0x14 allocation   */
 };
+/*
+ * The trailing `pad_12[2]` is gone the same way (F10145): `wr` ends at
+ * +0x12 and the struct's own alignment (4 bytes, forced by `buf`) rounds
+ * `sizeof` up to +0x14 whether or not a member fills the tail, matching
+ * `FIFO_create`'s own `sysdep_malloc(0x14)` for the object -- the
+ * `fax_fifo_size` assertion below is what proves it stayed 0x14.
+ */
+#if defined(__SIZEOF_POINTER__) && __SIZEOF_POINTER__ == 4
+#define FAXFIFO_ASSERT_OFF(field, off) \
+	typedef char fax_fifo_off_##field[ \
+		((int)__builtin_offsetof(struct fax_fifo, field) \
+			== (off)) ? 1 : -1]
+FAXFIFO_ASSERT_OFF(buf, 0x08);
+FAXFIFO_ASSERT_OFF(count, 0x0c);
+FAXFIFO_ASSERT_OFF(rd, 0x0e);
+FAXFIFO_ASSERT_OFF(wr, 0x10);
+typedef char fax_fifo_size[(sizeof(struct fax_fifo) == 0x14) ? 1 : -1];
+#endif
 
 /*
  * Occupancy in Q14: 14747 / 16384 is 0.90008..., so this answers "at least
